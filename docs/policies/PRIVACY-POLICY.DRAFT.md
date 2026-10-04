@@ -29,7 +29,7 @@ BARO는 만 14세 이상만 이용할 수 있습니다. 가입 시 만 14세 이
 
 | 목적 | 처리 항목 | 수집 방법 |
 | --- | --- | --- |
-| 가입·로그인·계정 관리 | OAuth 공급자 식별값, 이름 또는 프로필명, 이메일, 프로필 이미지(공급 시), 세션 정보 | Google/Kakao OAuth |
+| 가입·로그인·계정 관리 | OAuth 공급자 식별값, 이름 또는 프로필명, 이메일, 프로필 이미지(공급 시), 세션 정보 | Google/Naver/Kakao OAuth |
 | 필수 동의 확인 | 동의한 정책 버전, 만 14세 이상 확인, 동의 시각 | 이용자 입력 |
 | 사건 정리·AI 분석 | 이용자가 입력한 사건 서술, 추가 답변, 생성 결과, 분석 상태와 출처 | 이용자 입력 및 서비스 생성 |
 | 저장·재열람·삭제 | 사건 ID, 생성·수정 시각, 비민감 상태·제목 | 서비스 생성 |
@@ -69,9 +69,10 @@ BARO는 만 14세 이상만 이용할 수 있습니다. 가입 시 만 14세 이
 | 수령/수탁자 | 목적 | 항목 | 국가·시점·방법 | 보유 기간 |
 | --- | --- | --- | --- | --- |
 | Google | Google 로그인 | OAuth 식별·인증 정보 | `[PUBLICATION_BLOCKER: Google 실제 계약 및 국외 이전 세부사항 확정]` | 공급자 정책 및 계정 연결 기간 |
+| Naver | Naver 로그인 | OAuth 식별·인증 정보 | `[PUBLICATION_BLOCKER: Naver 실제 계약 및 처리 위치 확인]` | 공급자 정책 및 계정 연결 기간 |
 | Kakao | Kakao 로그인 | OAuth 식별·인증 정보 | `[PUBLICATION_BLOCKER: Kakao 실제 계약 및 처리 위치 확인]` | 공급자 정책 및 계정 연결 기간 |
 | Cloudflare | 웹 호스팅, DB, 보안, Workflow, AI Gateway | 계정·사건·기술 정보 중 운영에 필요한 정보 | `[PUBLICATION_BLOCKER: Cloudflare 계약 법인·국가·이전 방식·보유 기간 확정]` | 회사 설정 및 계약에 따른 기간 |
-| OpenAI | AI 분석 | 최소화된 사건 정보와 분석 지시 | `[PUBLICATION_BLOCKER: OpenAI 계약 법인·국가·이전 방식·API 데이터 보유 조건 확정]` | `[PUBLICATION_BLOCKER: 실제 API 보유 설정과 계약 확인]` |
+| AI Gateway가 중계하는 모델 공급자(초기 OpenAI) | AI 분석 | 최소화된 사건 정보와 분석 지시 | `[PUBLICATION_BLOCKER: Unified Billing의 실제 모델 공급자·계약 법인·국가·이전 방식 확정]` | `[PUBLICATION_BLOCKER: AI Gateway와 모델 공급자의 실제 보유 설정·계약 확인]` |
 
 AI Gateway의 요청·응답 본문 로깅은 끄고, 외부 AI에 보내는 정보는 분석에 필요한 범위로
 제한합니다. 법률상 동의가 필요한 국외 이전은 필요한 동의와 고지를 갖추기 전 수행하지

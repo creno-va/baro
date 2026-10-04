@@ -17,7 +17,7 @@ MVP는 대한민국에 거주하거나 대한민국 법률이 적용되는 만 1
 다음 흐름을 제공합니다.
 
 ```text
-Google/Kakao 로그인
+Google/Naver/Kakao 로그인
   -> 필수 동의와 만 14세 이상 확인
   -> 개인 간 금전 대여 사건 입력
   -> 범위·긴급성 확인
@@ -40,8 +40,8 @@ Google/Kakao 로그인
 | Runtime | Cloudflare Workers (`workerd`) |
 | Database | Cloudflare D1, Drizzle ORM |
 | Long-running jobs | Cloudflare Workflows |
-| Authentication | Better Auth, Google/Kakao OAuth |
-| AI | Cloudflare AI Gateway, OpenAI Responses API |
+| Authentication | Better Auth, Google/Naver/Kakao OAuth |
+| AI | Cloudflare AI Gateway Unified Billing, provider-keyless model access |
 | Legal source | 국가법령정보 공동활용 Open API |
 | Delivery | GitHub Actions, fixed preview, production environment |
 

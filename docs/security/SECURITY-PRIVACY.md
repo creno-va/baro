@@ -96,7 +96,7 @@ frame embedding 차단을 배포 테스트한다. CSP는 OAuth와 Turnstile의 �
 
 - 정책 초안의 사업자 주소·등록번호와 국외 이전 세부사항 확정
 - 개인정보 처리방침·이용약관·AI 고지 법률 검토
-- Google/Kakao/OpenAI/Cloudflare 실제 계약·콘솔 설정과 공개 문구 일치 확인
+- Google/Naver/Kakao/Cloudflare AI Gateway 실제 계약·콘솔 설정과 공개 문구 일치 확인
 - 삭제·키 회전·backup 복구 drill 완료
 - SAST/dependency/secret scan, IDOR/CSRF/XSS, rate limit, prompt injection 테스트 통과
 

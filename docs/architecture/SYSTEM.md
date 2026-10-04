@@ -10,10 +10,12 @@ flowchart LR
   U[사용자 브라우저] -->|HTTPS| W[BARO Cloudflare Worker]
   W --> D1[(Cloudflare D1)]
   W --> WF[Cloudflare Workflows]
-  WF --> GW[Cloudflare AI Gateway]
-  GW --> OA[OpenAI Responses API]
+  WF --> AI[Cloudflare AI binding]
+  AI --> GW[Cloudflare AI Gateway]
+  GW --> UB[Unified Billing model]
   WF --> LAW[국가법령정보 API]
   W --> G[Google OAuth]
+  W --> N[Naver OAuth]
   W --> K[Kakao OAuth]
   W --> TS[Cloudflare Turnstile]
 ```
@@ -48,7 +50,7 @@ tests/fixtures/legal/     verified non-production legal fixtures
 ```
 
 의존성 방향은 `UI/API -> application modules -> repositories/adapters`다. 도메인 모듈은
-Astro, Hono, Drizzle, OpenAI SDK 객체를 직접 반환하지 않는다. `llm-gateway`만 모델
+Astro, Hono, Drizzle, Cloudflare AI binding 객체를 직접 반환하지 않는다. `llm-gateway`만 모델
 클라이언트를 알고 `legal-retrieval`만 국가법령정보 adapter를 안다.
 
 ## 요청 경로
@@ -80,11 +82,12 @@ Astro, Hono, Drizzle, OpenAI SDK 객체를 직접 반환하지 않는다. `llm-g
 | `DB` | D1 binding | 전부 | 애플리케이션 DB |
 | `ANALYSIS_WORKFLOW` | Workflow binding | 전부 | 분석 인스턴스 시작·이벤트 |
 | `RATE_LIMITER` | Rate limit binding | preview/prod | 짧은 구간 남용 방지 |
-| `AI_GATEWAY_BASE_URL` | var | 전부 | 환경별 Gateway endpoint |
-| `OPENAI_API_KEY` | secret | 전부 | Gateway upstream 인증 |
+| `AI` | AI binding | 전부 | AI Gateway를 통한 Unified Billing 모델 호출 |
+| `AI_GATEWAY_ID` | var | 전부 | 환경별 Gateway 식별자 |
 | `TURNSTILE_SECRET_KEY` | secret | preview/prod | 서버 토큰 검증 |
 | `BETTER_AUTH_SECRET` | secret | 전부 | 세션·인증 서명 |
 | `GOOGLE_CLIENT_ID/SECRET` | var/secret | preview/prod | Google OAuth |
+| `NAVER_CLIENT_ID/SECRET` | var/secret | preview/prod | Naver OAuth |
 | `KAKAO_CLIENT_ID/SECRET` | var/secret | preview/prod | Kakao OAuth |
 | `CASE_DATA_KEY_V1` | secret | 전부 | AES-GCM 데이터 키 |
 | `LAW_API_OC` | secret | preview/prod | 국가법령정보 API 식별값 |

@@ -2,6 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-10-04
+- Amended: 2026-10-05 — Naver OAuth 추가
 - Owners: Engineering, Product
 
 ## 맥락
@@ -13,7 +14,8 @@
 ## 결정
 
 - Better Auth를 자체 호스팅하고 Drizzle adapter로 D1에 연결한다.
-- 로그인 공급자는 Google과 Kakao다. 비밀번호 인증과 게스트 사건은 제공하지 않는다.
+- 로그인 공급자는 Google, Naver, Kakao다. 비밀번호 인증과 게스트 사건은 제공하지
+  않는다.
 - 이용자는 만 14세 이상을 스스로 확인한다. 생년월일은 저장하지 않는다.
 - 계정과 사건은 최초 출시부터 저장한다.
 - 사건 원문, 추가 답변, AI 결과는 AES-256-GCM으로 애플리케이션 계층에서 암호화한다.
@@ -46,4 +48,5 @@
 
 - [Better Auth Astro](https://better-auth.com/docs/examples/astro)
 - [Better Auth Drizzle adapter](https://better-auth.com/docs/adapters/drizzle)
+- [Better Auth Naver](https://better-auth.com/docs/authentication/naver)
 - [Better Auth Kakao](https://better-auth.com/docs/authentication/kakao)

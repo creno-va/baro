@@ -6,7 +6,7 @@
 ## P0 — 공개 베타
 
 - 대한민국, 만 14세 이상, 개인 간 금전 대여
-- Google·Kakao OAuth와 계정 저장
+- Google·Naver·Kakao OAuth와 계정 저장
 - 사건 입력, 최대 5개 질문, 검증된 법령 인용, 구조화 결과
 - 사건·계정 삭제, 하루 10회, Turnstile
 - Cloudflare 기반 배포·관측·장애 복구

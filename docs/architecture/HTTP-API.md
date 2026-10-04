@@ -37,7 +37,7 @@
 
 ## 인증
 
-`/api/auth/*`는 Better Auth handler에 위임한다. 지원 공급자는 Google과 Kakao다.
+`/api/auth/*`는 Better Auth handler에 위임한다. 지원 공급자는 Google, Naver, Kakao다.
 redirect URL은 환경별 allowlist만 허용한다.
 
 ## 사용자와 동의

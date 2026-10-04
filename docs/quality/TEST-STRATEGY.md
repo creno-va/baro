@@ -12,7 +12,7 @@ BARO의 테스트는 단순 동작뿐 아니라 소유권, 삭제, 사실 구분
 | 정적 검사 | TypeScript strict, lint, format, Worker 호환성, secret/fixture import | 모든 PR |
 | 단위 | 상태 전이, Zod, 암호화, 정책, 인용, KST quota | 모든 PR |
 | 통합 | D1 repository/migration, Better Auth adapter, Hono route, Workflow step | 모든 PR |
-| 계약 | OpenAI schema, AI Gateway headers, 법률 API fixture/schema | 모든 PR + 주기적 live |
+| 계약 | AI Gateway 모델 schema·과금 설정, 법률 API fixture/schema | 모든 PR + 주기적 live |
 | E2E | 로그인 이후 입력·질문·결과·삭제·오류·접근성 | PR의 mocked auth, preview smoke |
 | AI eval | 구조화, 사실성, 근거, 안전, 회귀 | AI 변경과 production 배포 |
 | 보안 | IDOR, CSRF, XSS, injection, abuse, dependency/secret | PR + 출시 전 |
@@ -48,7 +48,7 @@ non-critical 표현 품질 점수는 추세를 보되 위 안전 게이트를 �
 
 ### 인증·권한
 
-- Google/Kakao 성공, 취소, state 불일치, 만료 세션
+- Google/Naver/Kakao 성공, 취소, state 불일치, 만료 세션
 - 미동의·정책 버전 변경·만 14세 확인 실패
 - 사건 ID, analysis ID, cursor, retry endpoint의 교차 사용자 접근
 

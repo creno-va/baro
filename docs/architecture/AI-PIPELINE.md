@@ -1,8 +1,8 @@
 # AI 분석 파이프라인
 
 - Orchestrator: Cloudflare Workflows
-- Model path: Cloudflare AI Gateway -> OpenAI Responses API
-- Initial model: `gpt-6.1-sol`, reasoning `medium`
+- Model path: Cloudflare AI binding -> AI Gateway Unified Billing -> third-party model
+- Initial model: `openai/gpt-6-sol`, reasoning `medium`
 
 ## 단계
 
@@ -61,8 +61,10 @@ Structured Outputs는 형식을 보장하는 도구일 뿐 사실성과 안전�
 
 ## Gateway 개인정보 설정
 
-OpenAI 호출은 AI Gateway endpoint로 보내고 `cf-aig-collect-log-payload: false`를
-명시한다. Gateway와 앱 로그에는 request ID, 단계, model, latency, token count,
+모델 호출은 Worker의 AI binding과 환경별 `AI_GATEWAY_ID`를 사용해 AI Gateway
+Unified Billing으로 보낸다. 모델 공급자 API key는 발급하거나 저장하지 않는다.
+Gateway의 payload logging은 비활성화하고 Gateway·사용자·모델 단위 spend limit을
+설정한다. Gateway와 앱 로그에는 request ID, 단계, model, latency, token count,
 status, failure code만 허용한다. 사용자 입력·답변·결과·prompt 본문·법률 검색어에
 개인 식별 내용이 있으면 기록하지 않는다.
 
