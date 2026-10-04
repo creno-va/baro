@@ -1,0 +1,97 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "baro-preview",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-10-04",
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS"
+  },
+  "observability": {
+    "enabled": true,
+    "logs": {
+      "enabled": true,
+      "invocation_logs": true
+    }
+  },
+  "vars": {
+    "APP_ENV": "local"
+  },
+  "kv_namespaces": [
+    {
+      "binding": "SESSION",
+      "id": "bdb1ef93af2b424fa4bdf55a59a4e296"
+    }
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "baro-preview",
+      "database_id": "e8cdcf75-5bd8-469e-848e-f31816df4327",
+      "migrations_dir": "drizzle"
+    }
+  ],
+  "workflows": [
+    {
+      "name": "baro-analysis-preview",
+      "binding": "ANALYSIS_WORKFLOW",
+      "class_name": "AnalysisWorkflow"
+    }
+  ],
+  "env": {
+    "preview": {
+      "name": "baro-preview",
+      "vars": {
+        "APP_ENV": "preview"
+      },
+      "kv_namespaces": [
+        {
+          "binding": "SESSION",
+          "id": "bdb1ef93af2b424fa4bdf55a59a4e296"
+        }
+      ],
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "baro-preview",
+          "database_id": "e8cdcf75-5bd8-469e-848e-f31816df4327",
+          "migrations_dir": "drizzle"
+        }
+      ],
+      "workflows": [
+        {
+          "name": "baro-analysis-preview",
+          "binding": "ANALYSIS_WORKFLOW",
+          "class_name": "AnalysisWorkflow"
+        }
+      ]
+    },
+    "production": {
+      "name": "baro-production",
+      "vars": {
+        "APP_ENV": "production"
+      },
+      "kv_namespaces": [
+        {
+          "binding": "SESSION",
+          "id": "f42c32b464ae4a92b62214a63f091148"
+        }
+      ],
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "baro-production",
+          "database_id": "d315e93f-2fac-4cc2-bf99-e9d6eb31523f",
+          "migrations_dir": "drizzle"
+        }
+      ],
+      "workflows": [
+        {
+          "name": "baro-analysis-production",
+          "binding": "ANALYSIS_WORKFLOW",
+          "class_name": "AnalysisWorkflow"
+        }
+      ]
+    }
+  }
+}

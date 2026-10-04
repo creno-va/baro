@@ -11,6 +11,9 @@
 환경 간 DB, OAuth client, 암호화 키, API key를 공유하지 않는다. preview는 고정 hostname을
 사용한다. PR별 build는 가능하지만 OAuth callback을 동적으로 추가하지 않는다.
 
+현재 고정 preview URL은 `https://baro-preview.creno-va-baro.workers.dev`다. Worker,
+D1, Workflow, SESSION KV는 `preview`와 `production` 이름으로 각각 분리한다.
+
 ## 브랜치와 배포
 
 - pull request: 정적·테스트·build, 필요 시 고정 preview 후보 배포

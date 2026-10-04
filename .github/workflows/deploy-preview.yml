@@ -73,7 +73,8 @@ jobs:
         if: steps.application.outputs.present == 'true'
         run: |
           bun ci
-          bun run build
+          bun run db:migrate:preview
+          bun run build:preview
 
       - name: Deploy preview
         if: steps.application.outputs.present == 'true'
@@ -82,5 +83,5 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ env.CLOUDFLARE_ACCOUNT_ID }}
           wranglerVersion: "4.147.0"
-          command: deploy --env preview
+          command: deploy
           gitHubToken: ${{ secrets.GITHUB_TOKEN }}

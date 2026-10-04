@@ -1,0 +1,63 @@
+---
+// biome-ignore lint/correctness/noUnusedImports: Astro resolves component imports in the template.
+import { FoundationStatus } from "../components/FoundationStatus";
+// biome-ignore lint/correctness/noUnusedImports: Astro resolves component imports in the template.
+import BaseLayout from "../layouts/BaseLayout.astro";
+---
+
+<BaseLayout
+  title="BARO — 상황을 정리하는 첫 단계"
+  description="개인 간 금전 대여 문제의 사실관계와 준비 자료를 정리하는 BARO"
+>
+  <main>
+    <nav aria-label="주요 탐색">
+      <a class="brand" href="/" aria-label="BARO 홈">BARO</a>
+      <a class="document-link" href="https://github.com/creno-va/baro">GitHub</a>
+    </nav>
+
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="eyebrow">대한민국 · 개인 간 금전 대여</div>
+      <h1 id="hero-title">복잡한 상황을<br />차분하게 정리합니다.</h1>
+      <p class="lede">
+        BARO는 사용자가 알려준 내용을 바탕으로 사건의 흐름, 확인할 쟁점, 준비할 자료와
+        공식 법령 출처를 정리하는 서비스입니다.
+      </p>
+      <div class="actions">
+        <span class="primary-action" aria-disabled="true">공개 베타 준비 중</span>
+        <a class="secondary-action" href="https://github.com/creno-va/baro/blob/main/docs/PRD.md">
+          제품 명세 보기
+        </a>
+      </div>
+      <FoundationStatus client:idle />
+    </section>
+
+    <section class="principles" aria-labelledby="principles-title">
+      <h2 id="principles-title">BARO가 지키는 기준</h2>
+      <div class="principle-grid">
+        <article>
+          <span>01</span>
+          <h3>사실을 더하지 않습니다</h3>
+          <p>사용자가 알려준 내용, AI가 정리한 내용, 아직 확인이 필요한 내용을 구분합니다.</p>
+        </article>
+        <article>
+          <span>02</span>
+          <h3>공식 출처를 확인합니다</h3>
+          <p>확인된 국가법령정보 출처만 연결하며 근거를 확인하지 못하면 결과를 만들지 않습니다.</p>
+        </article>
+        <article>
+          <span>03</span>
+          <h3>판단을 대신하지 않습니다</h3>
+          <p>법률 자문이나 승소 가능성 대신 상황 구조화와 다음 확인 사항에 집중합니다.</p>
+        </article>
+      </div>
+    </section>
+
+    <aside class="notice" aria-label="AI 이용 고지">
+      <strong>AI 생성 서비스 안내</strong>
+      <p>
+        BARO의 결과는 일반 정보이며 법률 자문이나 사건 결과의 보장이 아닙니다. 중요한
+        결정과 기한은 공식 원문 또는 자격 있는 전문가를 통해 다시 확인해야 합니다.
+      </p>
+    </aside>
+  </main>
+</BaseLayout>
