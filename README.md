@@ -102,7 +102,8 @@ bun run cf:dry-run
 4. `Quality gate` 통과와 대화 해결 후 squash merge합니다.
 5. 병합된 브랜치는 자동 삭제합니다.
 
-PR과 Issue 작성 기준은 [GitHub repository setup](./.github/README.md)을 참고하세요.
+PR과 Issue 작성 기준은
+[GitHub repository setup](./.github/REPOSITORY-SETUP.md)을 참고하세요.
 
 ## 배포
 
