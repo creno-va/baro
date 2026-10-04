@@ -1,0 +1,86 @@
+name: Deploy preview
+
+on:
+  workflow_run:
+    workflows:
+      - CI
+    types:
+      - completed
+
+permissions:
+  contents: read
+  deployments: write
+
+concurrency:
+  group: cloudflare-preview
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Cloudflare preview
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: preview
+    env:
+      CLOUDFLARE_ACCOUNT_ID: 9e844969d0c44b2449f3951d1f301654
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+    steps:
+      - name: Checkout verified commit
+        uses: actions/checkout@v6.0.3
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+
+      - name: Detect deployable application
+        id: application
+        shell: bash
+        run: |
+          if [[ -f package.json ]]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "Application has not been scaffolded; preview deployment skipped."
+          fi
+
+      - name: Validate deployment configuration
+        if: steps.application.outputs.present == 'true'
+        shell: bash
+        run: |
+          test -f bun.lock || {
+            echo "::error::bun.lock is required."
+            exit 1
+          }
+          if [[ ! -f wrangler.jsonc && ! -f wrangler.json && ! -f wrangler.toml ]]; then
+            echo "::error::Wrangler configuration is required."
+            exit 1
+          fi
+          if [[ -z "$CLOUDFLARE_API_TOKEN" ]]; then
+            echo "::error::Set CLOUDFLARE_API_TOKEN in the preview GitHub Environment."
+            exit 1
+          fi
+
+      - name: Setup Bun
+        if: steps.application.outputs.present == 'true'
+        uses: oven-sh/setup-bun@v2.2.0
+        with:
+          bun-version-file: .bun-version
+
+      - name: Install and build
+        if: steps.application.outputs.present == 'true'
+        run: |
+          bun ci
+          bun run build
+
+      - name: Deploy preview
+        if: steps.application.outputs.present == 'true'
+        uses: cloudflare/wrangler-action@v4.0.0
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ env.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: "4.147.0"
+          command: deploy --env preview
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}

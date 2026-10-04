@@ -1,0 +1,51 @@
+name: 구현 작업
+description: 승인된 명세를 작은 구현 단위로 나눕니다.
+title: "[Task] "
+labels: []
+body:
+  - type: input
+    id: parent
+    attributes:
+      label: 상위 이슈 또는 명세
+      placeholder: "#123 또는 docs/..."
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: 범위
+      description: 이번 PR에서 완료할 것과 하지 않을 것을 적어 주세요.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 인수 조건
+      placeholder: |
+        - [ ] Given/When/Then ...
+        - [ ] 실패 상태 ...
+        - [ ] 테스트 ...
+    validations:
+      required: true
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: 의존성과 선행 작업
+  - type: textarea
+    id: deployment
+    attributes:
+      label: 데이터·설정·배포 영향
+      description: migration, binding, secret, 외부 서비스, rollback 영향이 없으면 "없음"으로 적어 주세요.
+    validations:
+      required: true
+  - type: checkboxes
+    id: definition
+    attributes:
+      label: 완료 정의
+      options:
+        - label: 테스트와 실패 상태가 인수 조건에 포함되었습니다.
+          required: true
+        - label: 개인정보·로그·권한·삭제 영향을 확인했습니다.
+          required: true
+        - label: 문서 또는 ADR 변경 필요 여부를 확인했습니다.
+          required: true

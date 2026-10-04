@@ -1,0 +1,50 @@
+name: 기능 제안
+description: 사용자 문제와 검증 가능한 결과를 중심으로 기능을 제안합니다.
+title: "[Feature] "
+labels: []
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: 해결하려는 문제
+      description: 특정 구현보다 사용자가 겪는 문제를 설명해 주세요.
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: 기대 결과와 성공 기준
+    validations:
+      required: true
+  - type: dropdown
+    id: scope
+    attributes:
+      label: 영역
+      options:
+        - 사건 입력과 질문
+        - 분석 결과와 출처
+        - 인증과 계정
+        - 보안과 개인정보
+        - 접근성과 UX
+        - 개발자 경험과 운영
+        - MVP 범위 밖 제안
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 고려한 대안
+  - type: textarea
+    id: risks
+    attributes:
+      label: 보안·개인정보·법률·AI 위험
+      description: 새 데이터, 외부 공급자, 법률 판단 또는 범위 확장이 있다면 적어 주세요.
+  - type: checkboxes
+    id: boundaries
+    attributes:
+      label: 제품 경계 확인
+      options:
+        - label: 법률 자문·유불리·승소 가능성·전문가 알선 기능이 아님을 확인했습니다.
+          required: true
+        - label: 실제 사용자 사건 정보나 개인정보를 포함하지 않았습니다.
+          required: true

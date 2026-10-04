@@ -1,0 +1,97 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Quality gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.3
+        with:
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2.2.0
+        with:
+          bun-version-file: .bun-version
+
+      - name: Validate documentation
+        run: bun .github/scripts/check-docs.ts
+
+      - name: Detect application
+        id: application
+        shell: bash
+        run: |
+          if [[ -f package.json ]]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "Application has not been scaffolded yet; documentation checks only."
+          fi
+
+      - name: Require Bun lockfile and CI scripts
+        if: steps.application.outputs.present == 'true'
+        shell: bash
+        run: |
+          test -f bun.lock || {
+            echo "::error::package.json exists but bun.lock is missing."
+            exit 1
+          }
+          bun -e '
+            const manifest = await Bun.file("package.json").json();
+            const required = ["lint", "typecheck", "test", "build"];
+            const missing = required.filter((name) => !manifest.scripts?.[name]);
+            if (missing.length) {
+              console.error(`Missing package scripts: ${missing.join(", ")}`);
+              process.exit(1);
+            }
+          '
+
+      - name: Install dependencies
+        if: steps.application.outputs.present == 'true'
+        run: bun ci
+
+      - name: Lint
+        if: steps.application.outputs.present == 'true'
+        run: bun run lint
+
+      - name: Typecheck
+        if: steps.application.outputs.present == 'true'
+        run: bun run typecheck
+
+      - name: Test
+        if: steps.application.outputs.present == 'true'
+        run: bun run test
+
+      - name: Build
+        if: steps.application.outputs.present == 'true'
+        run: bun run build
+
+      - name: Validate Cloudflare bundle
+        if: steps.application.outputs.present == 'true'
+        shell: bash
+        run: |
+          if [[ -f wrangler.jsonc || -f wrangler.json || -f wrangler.toml ]]; then
+            bunx wrangler deploy --dry-run --outdir .wrangler/dry-run
+          else
+            echo "::error::Application exists but a Wrangler configuration file is missing."
+            exit 1
+          fi

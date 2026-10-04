@@ -1,0 +1,78 @@
+name: 버그 보고
+description: 재현 가능한 제품 또는 개발 환경의 오동작을 보고합니다.
+title: "[Bug] "
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        실제 사건 내용, 이름, 이메일, 전화번호, 계좌번호, OAuth 토큰 등 민감정보를 입력하지 마세요.
+  - type: textarea
+    id: summary
+    attributes:
+      label: 문제 요약
+      description: 기대와 달랐던 동작을 간결하게 설명해 주세요.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 재현 절차
+      placeholder: |
+        1. ...
+        2. ...
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 기대한 결과
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: 실제 결과
+    validations:
+      required: true
+  - type: dropdown
+    id: environment
+    attributes:
+      label: 환경
+      options:
+        - production
+        - preview
+        - local
+    validations:
+      required: true
+  - type: input
+    id: release
+    attributes:
+      label: Release 또는 commit
+      description: 화면이나 로그의 release SHA가 있으면 입력해 주세요.
+  - type: dropdown
+    id: severity
+    attributes:
+      label: 영향도
+      options:
+        - P0 — 개인정보, 권한 우회, 삭제 실패, 허위 인용 또는 전체 장애
+        - P1 — 핵심 흐름을 완료할 수 없음
+        - P2 — 우회 가능한 기능 오류
+        - P3 — 표현 또는 사소한 사용성 문제
+    validations:
+      required: true
+  - type: textarea
+    id: safe_evidence
+    attributes:
+      label: 비민감 증거
+      description: 사건 내용이 없는 request ID, 화면 캡처 또는 정제한 로그만 첨부해 주세요.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: 확인
+      options:
+        - label: 민감정보와 secret을 제거했습니다.
+          required: true
+        - label: 기존 이슈를 검색했습니다.
+          required: true
