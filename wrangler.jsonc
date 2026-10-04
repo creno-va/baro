@@ -3,6 +3,12 @@
   "name": "baro-preview",
   "main": "src/worker.ts",
   "compatibility_date": "2026-10-04",
+  "routes": [
+    {
+      "pattern": "preview.baro.site",
+      "custom_domain": true
+    }
+  ],
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS"
@@ -15,7 +21,8 @@
     }
   },
   "vars": {
-    "APP_ENV": "local"
+    "APP_ENV": "local",
+    "BETTER_AUTH_URL": "https://preview.baro.site"
   },
   "kv_namespaces": [
     {
@@ -41,8 +48,15 @@
   "env": {
     "preview": {
       "name": "baro-preview",
+      "routes": [
+        {
+          "pattern": "preview.baro.site",
+          "custom_domain": true
+        }
+      ],
       "vars": {
-        "APP_ENV": "preview"
+        "APP_ENV": "preview",
+        "BETTER_AUTH_URL": "https://preview.baro.site"
       },
       "kv_namespaces": [
         {
@@ -68,8 +82,15 @@
     },
     "production": {
       "name": "baro-production",
+      "routes": [
+        {
+          "pattern": "baro.site",
+          "custom_domain": true
+        }
+      ],
       "vars": {
-        "APP_ENV": "production"
+        "APP_ENV": "production",
+        "BETTER_AUTH_URL": "https://baro.site"
       },
       "kv_namespaces": [
         {

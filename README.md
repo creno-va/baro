@@ -109,7 +109,8 @@ PR과 Issue 작성 기준은
 
 - main의 CI가 성공하면 고정 `preview` Cloudflare Environment 배포가 시작됩니다.
 - production은 GitHub Actions에서 명시적으로 실행하고 Environment 승인을 거칩니다.
-- preview URL: <https://baro-preview.creno-va-baro.workers.dev>
+- preview URL: <https://preview.baro.site>
+- production URL: <https://baro.site>
 - 환경별 D1, Workflow, OAuth client, 암호화 키와 API secret을 공유하지 않습니다.
 - 현재 Accepted 설계에는 R2가 필요하지 않습니다. 사용 요구가 생기면 별도 ADR과
   개인정보 보존·삭제 정책을 먼저 승인합니다.

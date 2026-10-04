@@ -1,4 +1,5 @@
 # Copy to .dev.vars for local development. Never commit real values.
+BETTER_AUTH_URL=http://localhost:4321
 BETTER_AUTH_SECRET=replace-with-at-least-32-random-characters
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
@@ -9,3 +10,4 @@ KAKAO_CLIENT_SECRET=
 TURNSTILE_SECRET_KEY=
 CASE_DATA_KEY_V1=
 LAW_API_OC=
+AI_GATEWAY_ID=

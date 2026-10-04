@@ -85,6 +85,7 @@ Astro, Hono, Drizzle, Cloudflare AI binding 객체를 직접 반환하지 않는
 | `AI` | AI binding | 전부 | AI Gateway를 통한 Unified Billing 모델 호출 |
 | `AI_GATEWAY_ID` | var | 전부 | 환경별 Gateway 식별자 |
 | `TURNSTILE_SECRET_KEY` | secret | preview/prod | 서버 토큰 검증 |
+| `BETTER_AUTH_URL` | var | 전부 | 환경별 OAuth origin과 callback 기준 URL |
 | `BETTER_AUTH_SECRET` | secret | 전부 | 세션·인증 서명 |
 | `GOOGLE_CLIENT_ID/SECRET` | var/secret | preview/prod | Google OAuth |
 | `NAVER_CLIENT_ID/SECRET` | var/secret | preview/prod | Naver OAuth |

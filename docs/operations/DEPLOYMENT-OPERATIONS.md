@@ -14,6 +14,10 @@
 현재 고정 preview URL은 `https://baro-preview.creno-va-baro.workers.dev`다. Worker,
 D1, Workflow, SESSION KV는 `preview`와 `production` 이름으로 각각 분리한다.
 
+공식 Custom Domain은 production `https://baro.site`, preview
+`https://preview.baro.site`다. `workers.dev` 주소는 장애 확인용 보조 endpoint로만
+유지하고 OAuth callback과 사용자 공개 URL은 Custom Domain을 기준으로 등록한다.
+
 ## 브랜치와 배포
 
 - pull request: 정적·테스트·build, 필요 시 고정 preview 후보 배포
