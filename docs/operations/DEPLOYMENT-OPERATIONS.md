@@ -44,6 +44,7 @@ schema/prompt를 사용할 수 있으므로 호환 기간을 둔다.
 - 모든 binding/secret이 환경별로 존재하고 placeholder가 아님
 - OAuth callback과 allowed origin이 정확한 HTTPS URL임
 - AI Gateway payload logging이 꺼짐
+- AI Gateway Unified Billing credit 잔액과 Gateway·사용자·모델 spend limit이 설정됨
 - production에서 법률 fixture adapter와 source map 원문 노출이 비활성화됨
 - CSP가 OAuth와 Turnstile을 막거나 과도하게 열지 않음
 - current policy version이 게시된 문서 버전과 일치함
@@ -90,7 +91,7 @@ P0 incident로 분류하고 신규 삭제 요청을 기록 가능한 안전한 �
 ## 공개 베타 체크리스트
 
 - [ ] P0 기능·보안·AI eval 모두 통과
-- [ ] 실제 Google/Kakao OAuth, Turnstile, 법률 API 검증
+- [ ] 실제 Google/Naver/Kakao OAuth, Turnstile, 법률 API 검증
 - [ ] 암호화 키 회전과 D1 복구 drill 완료
 - [ ] 사건·계정 삭제 E2E 완료
 - [ ] 경보 on-call 수신과 rollback 권한 확인

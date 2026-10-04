@@ -50,7 +50,7 @@ errorCode, policyFindingCode, citationCount
 
 1. 사용자 흐름: case submitted -> clarification -> completed -> result viewed
 2. 신뢰·안전: schema/policy/citation finding과 버전별 회귀
-3. 의존성: OAuth, Turnstile, D1, Workflow, AI Gateway/OpenAI, 법률 API
+3. 의존성: OAuth, Turnstile, D1, Workflow, AI Gateway/Unified Billing, 법률 API
 4. 개인정보 운영: 삭제, 로그 보존, 키 버전 분포
 5. release: 배포 marker 전후 오류·latency 비교
 

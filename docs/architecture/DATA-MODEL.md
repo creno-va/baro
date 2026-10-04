@@ -50,7 +50,7 @@ Better Auth의 현재 Drizzle adapter가 생성하는 `user`, `session`, `accoun
 | `status` | text | 아래 분석 enum |
 | `encrypted_answers` | text nullable | 추가 답변 envelope |
 | `encrypted_result` | text nullable | 최종 결과 envelope |
-| `model_id` | text nullable | 예: `gpt-6.1-sol` |
+| `model_id` | text nullable | 예: `openai/gpt-6-sol` |
 | `prompt_version`, `schema_version`, `policy_version` | text nullable | 재현 메타데이터 |
 | `failure_code` | text nullable | 허용 목록의 비민감 코드 |
 | `started_at`, `completed_at` | text nullable | UTC |
