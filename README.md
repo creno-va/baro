@@ -5,7 +5,7 @@
 BARO는 대한민국의 개인 간 금전 대여 문제를 겪는 사용자가 자신의 상황을 정리하고,
 확인할 쟁점·준비할 자료·일반적인 다음 행동을 이해하도록 돕는 웹 서비스입니다.
 
-> 현재 상태: 제품·아키텍처 명세 완료, 애플리케이션 구현 시작 전
+> 현재 상태: 제품·아키텍처 명세와 Cloudflare 기반 scaffold 완료, 기능 구현 시작 전
 
 BARO는 변호사나 법률사무소가 아니며 법률 자문, 승소 가능성 판단, 사건 수임 또는
 전문가 추천을 제공하지 않습니다. AI 결과는 공식 법령 출처와 함께 제공되는 일반
@@ -66,10 +66,18 @@ Bun은 패키지 관리·스크립트·테스트에 사용합니다. 배포 코�
 공개 정책 문서는 [정책 초안 디렉터리](./docs/policies/)에 있습니다. 법률 검토와 문서에
 표시된 publication blocker 해소 전에는 공개본으로 사용하지 않습니다.
 
-## 개발 상태와 시작 계약
+## 로컬 개발
 
-아직 애플리케이션 scaffold와 `package.json`은 없습니다. 첫 구현 PR은 Accepted ADR을
-기준으로 프로젝트 구조를 만들고 다음 명령 계약을 제공해야 합니다.
+사전 요구사항은 [`.bun-version`](./.bun-version)에 고정된 Bun과 Cloudflare 계정입니다.
+의존성을 설치하고 로컬 D1 schema를 적용한 뒤 개발 서버를 시작합니다.
+
+```bash
+bun ci
+bun run db:migrate:local
+bun run dev
+```
+
+품질 검사는 다음 명령으로 동일하게 재현할 수 있습니다.
 
 ```bash
 bun ci
@@ -77,12 +85,12 @@ bun run lint
 bun run typecheck
 bun run test
 bun run build
-bunx wrangler deploy --dry-run
+bun run cf:dry-run
 ```
 
-사용하는 Bun 버전은 [`.bun-version`](./.bun-version)에 고정합니다. 앱 구현이 추가되면
-CI가 `bun.lock`, 위 네 개의 package script, Wrangler 설정과 dry-run을 자동으로
-검사합니다.
+환경 변수와 secret 이름은 [`.env.example`](./.env.example)과
+[`.dev.vars.example`](./.dev.vars.example)을 참고하세요. 실제 값은 Git에 커밋하지
+않습니다. CI는 `bun.lock`, package script, Wrangler 설정과 dry-run을 자동 검사합니다.
 
 ## 기여 흐름
 
@@ -100,6 +108,7 @@ PR과 Issue 작성 기준은 [GitHub repository setup](./.github/README.md)을 �
 
 - main의 CI가 성공하면 고정 `preview` Cloudflare Environment 배포가 시작됩니다.
 - production은 GitHub Actions에서 명시적으로 실행하고 Environment 승인을 거칩니다.
+- preview URL: <https://baro-preview.creno-va-baro.workers.dev>
 - 환경별 D1, Workflow, OAuth client, 암호화 키와 API secret을 공유하지 않습니다.
 - 현재 Accepted 설계에는 R2가 필요하지 않습니다. 사용 요구가 생기면 별도 ADR과
   개인정보 보존·삭제 정책을 먼저 승인합니다.

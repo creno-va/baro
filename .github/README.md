@@ -11,9 +11,8 @@
 4. GitHub `production` Environment의 reviewer 승인을 추가하면 실제 배포 전 승인을 한 번
    더 강제할 수 있다.
 
-앱 scaffold 전에는 문서 검사만 실행하고 배포는 성공 상태로 건너뛴다. `package.json`이
-생기면 CI는 `bun.lock`, `lint`, `typecheck`, `test`, `build`, Wrangler dry-run을 요구하며
-CD도 실제 배포를 시도한다.
+현재 앱 scaffold가 존재하므로 CI는 `bun.lock`, `lint`, `typecheck`, `test`, `build`,
+Wrangler dry-run을 요구하며 CD는 D1 migration 후 실제 배포를 시도한다.
 
 ## 저장소 설정
 
@@ -44,7 +43,7 @@ Cloudflare account ID는 공개 식별자이며 workflow에
 
 ## 앱 scaffold 계약
 
-루트 `package.json`은 다음 script를 제공해야 한다.
+루트 `package.json`은 다음 script를 제공한다.
 
 ```json
 {
@@ -58,8 +57,14 @@ Cloudflare account ID는 공개 식별자이며 workflow에
 ```
 
 `bun.lock`과 `wrangler.jsonc`를 커밋한다. Wrangler 설정에는 `preview`와 `production`
-환경을 선언하고 D1, Workflow, rate limiter 등 환경별 binding을 분리한다. secret은
+환경을 선언하고 D1, Workflow, rate limiter 등 환경별 binding을 분리한다. Astro 6+
+Cloudflare adapter는 build 시 환경을 고정하므로 각각 `CLOUDFLARE_ENV=preview`와
+`CLOUDFLARE_ENV=production`으로 별도 build한 뒤 `wrangler deploy`한다. secret은
 Wrangler 설정이나 Git에 쓰지 않는다.
+
+현재 Cloudflare 리소스는 `baro-preview`/`baro-production` D1,
+`baro-analysis-preview`/`baro-analysis-production` Workflow, 환경별 `SESSION` KV로
+분리되어 있다. 계정 workers.dev 서브도메인은 `creno-va-baro`다.
 
 ## R2
 

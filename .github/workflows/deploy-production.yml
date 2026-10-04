@@ -75,7 +75,8 @@ jobs:
           bun run lint
           bun run typecheck
           bun run test
-          bun run build
+          bun run db:migrate:production
+          bun run build:production
 
       - name: Deploy production
         if: steps.application.outputs.present == 'true'
@@ -84,5 +85,5 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ env.CLOUDFLARE_ACCOUNT_ID }}
           wranglerVersion: "4.147.0"
-          command: deploy --env production
+          command: deploy
           gitHubToken: ${{ secrets.GITHUB_TOKEN }}
