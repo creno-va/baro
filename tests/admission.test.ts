@@ -37,7 +37,7 @@ test("Turnstile validates exact hostname/action, fails closed and never stores r
     { success: true, hostname: "localhost.attacker.test", action: "case_create" },
     { success: true, hostname: "localhost", action: "other" },
   ]) {
-    const transport = (async (_url, init) => {
+    const transport = (async (_url: RequestInfo | URL, init?: RequestInit) => {
       expect(init?.signal).toBeDefined();
       return Response.json(data);
     }) as unknown as typeof fetch;
