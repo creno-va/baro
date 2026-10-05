@@ -20,10 +20,64 @@ test("fresh migrations enforce auth FK, cascade and consent age constraints", as
     sqlite.exec("DELETE FROM user WHERE id='u'");
     expect(sqlite.query("SELECT * FROM user_consents").all()).toEqual([]);
     expect(sqlite.query("SELECT value FROM app_metadata WHERE key='schema_version'").get()).toEqual(
-      { value: "0003_domain_foundation" },
+      { value: "0004_case_feedback" },
     );
   } finally {
     database.close();
+  }
+});
+
+test("feedback upgrade preserves domain/auth rows, restricts boolean and cascades primary deletion", async () => {
+  const sqlite = new Database(":memory:");
+  try {
+    sqlite.exec("PRAGMA foreign_keys=ON");
+    for (const file of [
+      "0000_foundation",
+      "0001_auth_and_consent",
+      "0002_oauth_session_security",
+      "0003_domain_foundation",
+    ])
+      sqlite.exec(await Bun.file(`drizzle/${file}.sql`).text());
+    sqlite.exec(
+      "INSERT INTO user(id,name,email,created_at,updated_at) VALUES('u','Synthetic','synthetic@example.test',1,2)",
+    );
+    sqlite.exec(
+      "INSERT INTO cases(id,user_id,status,encrypted_input,current_analysis_id,created_at,updated_at) VALUES('c','u','screening','synthetic-ciphertext','a','2026-10-05T00:00:00Z','2026-10-05T00:00:00Z')",
+    );
+    sqlite.exec(
+      "INSERT INTO analyses(id,case_id,workflow_instance_id,input_revision,status,created_at,updated_at) VALUES('a','c','a-1',1,'queued','2026-10-05T00:00:00Z','2026-10-05T00:00:00Z')",
+    );
+    sqlite.exec("INSERT INTO daily_usage VALUES('u','2026-10-05',1,'2026-10-05T00:00:00Z')");
+    const tables = [
+      "user",
+      "cases",
+      "analyses",
+      "daily_usage",
+      "idempotency_records",
+      "dispatch_outbox",
+      "citations",
+      "legal_source_cache",
+      "deletion_jobs",
+      "session",
+      "account",
+      "user_consents",
+      "verification",
+    ];
+    const before = tables.map((table) => sqlite.query(`SELECT * FROM ${table}`).all());
+    sqlite.exec(await Bun.file("drizzle/0004_case_feedback.sql").text());
+    expect(tables.map((table) => sqlite.query(`SELECT * FROM ${table}`).all())).toEqual(before);
+    expect(() =>
+      sqlite.exec("INSERT INTO case_feedback VALUES('c','a',2,'2026-10-05T00:00:00Z')"),
+    ).toThrow();
+    expect(() =>
+      sqlite.exec("INSERT INTO case_feedback VALUES('missing','a',1,'2026-10-05T00:00:00Z')"),
+    ).toThrow();
+    sqlite.exec("INSERT INTO case_feedback VALUES('c','a',1,'2026-10-05T00:00:00Z')");
+    sqlite.exec("DELETE FROM cases WHERE id='c'");
+    expect(sqlite.query("SELECT * FROM case_feedback").all()).toEqual([]);
+    expect(sqlite.query("PRAGMA foreign_key_check").all()).toEqual([]);
+  } finally {
+    sqlite.close();
   }
 });
 
