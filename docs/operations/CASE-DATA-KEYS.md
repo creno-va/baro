@@ -121,3 +121,30 @@ AAD/128bit tag 상호 검증, 행·소유자·열 transplant, IV/ciphertext/tag 
 
 - [Cloudflare Workers Web Crypto](https://developers.cloudflare.com/workers/runtime-apis/web-crypto/)
 - [Cloudflare Workers secrets](https://developers.cloudflare.com/workers/configuration/secrets/)
+
+## v2 key/envelope 확장 목표 (#55/#58/#59/#67)
+
+기존 v1 envelope·네 암호화 열·ID1 reader를 보존한다. 문서 승인만으로 현재 wrapper가 다중
+키나 대용량 blob을 지원한다고 표현하지 않는다. v2 text field/AAD allowlist는 공유 계약과
+DB 소유 이슈가 먼저 통합하고 migration 번호를 운영자가 임의 생성하지 않는다.
+
+큰 원본/파생/PDF/ZIP는 기존 UTF-8 256KiB text envelope에 넣지 않는다. 별도 versioned
+chunk AEAD와 원본 part 최대8MiB, per-file 무작위 DEK, 환경 master key로 wrapped DEK를
+사용한다. part별 unique IV, owner/file/revision/part-index/plaintext-length AAD와 검증 manifest가
+순서·누락·truncation·transplant를 거부해야 한다. 원래 파일명/metadata도 private 암호화하며
+원본 hash는 owner 확인 용도로만 제공한다. 잘못된 manifest/key는 평문 fallback 없이 실패한다.
+
+파일 upload/download Worker가 owner/revision/tombstone을 검증하고 암복호화한다. Container에는
+환경 master key·다른 file DEK 목록·full case snapshot을 전달하지 않고 job-scoped stream/
+capability만 제공한다. 심사자용 credential 자료 scope와 사건 scope를 분리한다. public approved
+asset은 공개 의도가 확인된 정제 copy이며 private 암호화를 해제해 bucket 전체를 공개하지 않는다.
+
+회전/복구 시 text·wrapped DEK·진행 Workflow/job·R2 object manifest·backup과 이전 Worker/
+Container version의 키 의존성을 함께 확인한다. master key 회전은 작은 batch의 DEK rewrap을
+우선하되 실제 envelope 설계가 이를 지원하는지 계약 테스트로 검증한다. 동일 ID 키 덮어쓰기나
+다른 환경 키 복사는 금지다. 삭제 tombstone·revision CAS 후에만 rewrap/암호문 commit한다.
+
+복구 담당자/secret 보관·접근 권한·정확한 key ID·보존 창을 실제 지정하고 [격리 drill](./BETA-DRILLS.md)로
+기존/새 text와 여러 part blob 복호화, 잘못된 owner/AAD/순서·끊긴 stream 거부를 확인한다.
+private 자료를 정상 운영자 화면에 표시해 검증하지 않고 합성 결과의 pass/fail만 기록한다.
+구키 제거는 현재 행/객체뿐 아니라 복구 대상·rollback·진행 job의 의존성이0임을 확인한 뒤 진행한다.

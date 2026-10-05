@@ -1,5 +1,37 @@
 # P0.3 환경 readiness 기록
 
+## v2 목표와 현재 증거 경계 (#53)
+
+아래 P0.3 관측은 날짜/환경별 역사적 증거다. #53의 설계 승인으로 실제 OAuth·법률·AI·키 복구
+성공이나 정책 승인으로 바뀌지 않는다. v2 목표는 [파일 처리](./FILE-PROCESSING.md),
+[월 비용](./COST-CONTROLS.md), [배포](./DEPLOYMENT-OPERATIONS.md)를 따르며 아래 자원은
+아직 제품에 구성/검증됐다고 표시하지 않는다.
+
+| v2 항목 | 현재 상태 | 완료에 필요한 행동/증거 |
+| --- | --- | --- |
+| Private/public R2 | 제품 binding/버킷/원격 삭제 미검증 | #58 환경별 분리·private공개OFF·승인 revision copy·owner download·quota·실제 upload/delete |
+| Containers/DO | 제품 파일 처리 미구현 | #59 image digest/plan/resource/idle/network/job capability·실제 문서/media 처리·취소·temporary disk 정리 |
+| Whisper/vision | 문서상 지원과 계정 호출 미분리 | #59/#71 실제 계정/모델 경로·합성 audio/video full구간 및 sampled frame coverage/gaps |
+| 지속 workspace/roles | v2 미구현 | #60~#67 actual DB/UI·relogin/resume·moderation revision·private/public 분리·PDF/ZIP·삭제 |
+| 전역 비용/제품 quota | v1 제한과 다름 | #57 day3/30/60min·10GB계정·100files/5GB사건·100만 원 ledger/실제 meter reconciliation |
+| 공식 출처 확장 | 승인 OC local HTTP200upstream-error 유지 | #63/#71 승인 credential/요청 조건 해결·Worker 실제 법령/판례/기관 guide type별검증 |
+| 운영/공개 | foundation 배포 권한 있음, 정책 승인 없음 | #70 human/business/provider근거, #71 sameSHA UI/live/drill·Environment승인·공개gate |
+
+2026-10-06 후속 읽기 전용 콘솔 관측: 임시 AI probe main Worker invocations27/errors0,
+logs/traces 비활성; probe DO HTTP3 중 success2/error1이며 `Worker threw exception` 1이었다.
+CPU/memory/client-disconnect/internal error counter는0, 당시 activeversion
+`8b9e5ad6`은0requests/sec였다. 완료 report는 없고 durable 예약1이 남는다. 이는 이전 POST가
+terminal 예외였음을 확인하지만 모델 실제 실행/청구/strict 응답·품질 성공을 증명하지 않는다.
+새 요청을 자동으로 재시작하거나0비용으로 처리하지 않고 reservation/billing과 같은 handle을
+대조한다. logs를 켜거나 실제 payload를 수집한 증거가 아니며 제품 full-readiness와 분리한다.
+
+후속 관측에서는 authenticated probe가 HTTP200 완료 report를 반환했으나 candidate SHA와
+`probeSourceSha256`가 기대값과 달라 같은 코드의 성공 증거로 거부했다. Gateway overview에는
+request1/token347/error0과 반올림된 Cost$0.00이 관측됐다. 이는 계정 트래픽이 있었음을
+증명하지만 정확히 무료였다거나 모델 품질/현재 release 검증이 통과했다는 뜻은 아니다.
+기존 `345c085` 예약1의 결과를 이 다른 candidate report로 성공 처리하지 않는다. 실제 billing,
+배포 version/vars/source digest를 대조한 뒤 동일 candidate의 새 증거를 확보해야 한다.
+
 ## 2026-10-06 추가 진행
 
 - Goal 세션이 이전 작업을 인계받았다. 이전 checkout은 clean `345c085`이며 실행 중인

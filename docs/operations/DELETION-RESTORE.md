@@ -67,3 +67,56 @@ bun test tests/account-deletion.test.ts tests/analysis-execution.test.ts tests/c
 SQLite-backed D1 batch, 서명 세션, provider-exchange 대역을 통한 실제 callback route,
 late create/응답, rollback, restore 뒤 별도 journal replay, failure budget을 검증한다.
 이는 실제 OAuth/provider/platform 저장 상태 제거 또는 실제 bookmark restore 증거가 아니다.
+
+## v2 사건·자료·프로필 삭제 목표 (#67/#71)
+
+v1의 SQL/session/Workflow journal을 보존하고 additive하게 R2 객체/part·Container job·download
+capability·리포트 version·public copy/cache까지 삭제 범위를 늘린다. 사건과 자료는 사용자가
+삭제할 때까지 보관하되 삭제 후 primary 접근을 즉시 막고 원격 cleanup 완료를 추적한다.
+202 접수/즉시 접근 차단과 모든 원격 객체·backup 범위의 처리 완료는 다른 상태다.
+
+1. 현재 owner/role·Origin·최근 OAuth와 명시적 확인을 검증한다. 계정 삭제는 모든 세션을
+   revoke한다. 자료 삭제는 해당 파일 revision과 파생물/리포트 의존 관계를 잠근다.
+2. 동일 transaction에 opaque tombstone·job/객체 inventory와 현재 row 접근 철회를 기록한다.
+   AI/chat/upload/processing/export/public revision의 기존 lease·capability를 무효화한다.
+3. job abort→모든 original/part/derivative/PDF/ZIP·비공개 자격 자료→공개 copy·pointer/CDN purge
+   순서와 재시도 cursor를 durable하게 관리한다. 어느 단계든 실패하면 tombstone을 유지한다.
+   public page 철회는 원격 파일 cleanup이 끝날 때까지 기다리지 않고 즉시 수행한다.
+4. 완료 뒤 늦게 도착한 업로드 part/Container result/AI 응답/리포트 생성/심사 승인이 삭제된
+   owner/file/revision을 부활시키지 못하도록 commit 전에 tombstone을 다시 확인한다.
+5. quota의 logical 예약을 해제해도 미삭제 R2·미종료 Container의 실제 비용을 지우지 않는다.
+   content snapshot 없이 job/byte/상태·비용만 보존하고 단계를 완료 확인한 뒤 journal 정책을 적용한다.
+
+계정 삭제는 개인 소유 사건·회사 사건(단일 작성자 계정)·messages/summary/actions/timeline·
+파일/결과/리포트·변호사 초안/공개 자산·credential 자료·심사 입력도 정리한다. 필요한 법정
+별도 보존은 항목/근거/기간을 human 검토로 확정하기 전 임의 설정하지 않는다. 삭제 journal에는
+신분증/사건·키·원문 shadow copy를 넣지 않으며 opaque identifier도 가명정보로 취급한다.
+이미 사용자가 다운로드하거나 변호사에게 외부 전달한 copy를 BARO가 원격 삭제할 수 있다고 약속하지 않는다.
+
+## v2 D1/R2/Container 복구
+
+D1 bookmark는 R2 원본·공개 자산·Container temporary disk나 암호화 키를 함께 복구하지 않는다.
+DB와 별도로 접근 통제된 최신 삭제 journal/객체 inventory/키 복구 사본이 필요하다. R2 backup
+정책과 사본 개수·보존·지역은 실제 설정/비용/정책 승인에 따라 확정하고, 아직 존재하지 않는
+versioning이나 자동 snapshot을 복구 보장으로 쓰지 않는다. ephemeral 평문은 복구 대상으로 보존하지 않는다.
+
+복구는 production/일반 preview 대신 [격리 drill 자원](./BETA-DRILLS.md)에서 먼저 검증한다.
+DB restore 전 traffic/cron/dispatch/AI/file processing/public serving을 모두 닫는다. v2 최신
+opaque journal을 검증하고 **재개 전에** 복구 DB에서 다시 적용해 primary·session·R2/public
+pointer·job 상태를 제거한다. backup 이후에 생성되어 DB가 모르는 원격 객체는 inventory를
+대조해 orphan으로 정리한다. backup이 R2에 존재하지 않는 파일을 가리키면 unavailable로
+표시하고 가짜 정상/자동 과금 재분석으로 채우지 않는다.
+
+키는 환경과 version을 유지한 복구 사본만 사용한다. v1 envelope와 v2 chunk manifest의
+owner/file/revision/part AAD, key unwrap·decrypt, 부적절한 owner/순서/truncation 거부를 확인한다.
+다른 합성 owner의 원본/리포트가 보존되고 target의 private/public 객체·capability·session·
+Workflow/Container job이 모두 없어야 한다. public cache까지 삭제 상태를 확인한 뒤 재개한다.
+journal 또는 키/객체 inventory가 누락되거나 cleanup/복호화/권한 검증이 실패하면 traffic을 닫은 채 유지한다.
+
+기존 `deletion-journal.ts` CLI는 v1 preview export/SQL 준비 도구이며 v2 restore 실행기가 아니다.
+독립 isolated manifest 계약은 환경/합성 전용 resource·candidate SHA·export window·SHA256·
+중복/보존 구간을 검증한다. checksum은 integrity만 증명하며 실제 자원 격리·export provenance·
+최신 삭제 포함 여부는 trusted configuration/실제 platform evidence로 추가 검증한다.
+
+완료 증거에는 같은 SHA·환경·합성 fixture ID·단계별 pass/fail·개수·manifest checksum·run URL을
+남긴다. opaque journal 원본/SQL·신분 자료·file hash/원문·key·signed URL을 GitHub artifact에 넣지 않는다.

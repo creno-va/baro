@@ -1,12 +1,16 @@
 # 배포 및 운영
 
+- v1 실제 배포와 v2 구현 목표를 구분한다. #53은 문서 변경이며 리소스/공개 상태를 바꾸지 않는다.
+- v2 자원·파일 처리·예산은 [자료 처리](./FILE-PROCESSING.md), [비용 통제](./COST-CONTROLS.md),
+  [삭제/복구](./DELETION-RESTORE.md)를 함께 따른다.
+
 ## 환경
 
 | 환경 | 목적 | 데이터·외부 연결 |
 | --- | --- | --- |
 | local | 개발·단위/통합 테스트 | local D1, 법률 fixture, 개발 OAuth 또는 mock |
 | preview | 통합·실제 OAuth smoke | 전용 D1/Workflow/Gateway/OAuth, 실제 법률 API |
-| production | 공개 베타 | 전용 리소스와 secret, 실제 법률 API |
+| production | 현재 foundation; 승인 후 공개 서비스 | 전용 리소스와 secret, 실제 연동은 별도 검증 |
 
 환경 간 DB, OAuth client, 암호화 키, API key를 공유하지 않는다. preview는 고정 hostname을
 사용한다. PR별 build는 가능하지만 OAuth callback을 동적으로 추가하지 않는다.
@@ -127,3 +131,53 @@ P0 incident로 분류하고 신규 삭제 요청을 기록 가능한 안전한 �
 - [Cloudflare Workers best practices](https://developers.cloudflare.com/workers/best-practices/workers-best-practices/)
 - [Workers rate limiting binding](https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/)
 - [Turnstile 시작 가이드](https://developers.cloudflare.com/turnstile/get-started/)
+
+## v2 지속 배포와 공개 게이트
+
+사용자는 검증된 PR 병합·preview/production 코드 배포·승인 요건 충족 후 최초 공개를 허용했다.
+이를 production Environment 보호 규칙 삭제나 법률 승인으로 해석하지 않는다. P0.3 #19/#20/#27은
+실제 인수 조건 완료 전 OPEN이다. 구현 가능한 선행 기술 작업 이후 human/account 조건만 남으면
+독립 v2 구현·preview·production foundation 배포는 계속할 수 있다. #19의 runtime 통합은
+#27 완료/선행 PR 병합 후이며 문서/독립 계약 준비와 구분한다.
+
+새 서비스 전체 완료는 #71과 milestone5의 **모든 역할·기능을 실제 UI에서 시연 가능**한 상태다.
+새 API/page/storage를 점진적으로 배포하되 feature gate는 제품·AI·업로드·공개 디렉터리별로
+명시하고 아직 준비되지 않은 기능을 가짜 성공·placeholder 버튼으로 공개하지 않는다. 실제
+가상 변호사/테스트 계정은 preview에만 두며 production bundle/seed/환경에 섞이지 않게 검증한다.
+
+각 수직 기능의 배포 순서:
+
+1. #53 문서와 해당 계약/DB/구현 선행 PR이 병합됐는지 확인하고 immutable full SHA를 선택한다.
+2. `bun ci`, `bun run check`, `bun run build`, `bun run cf:dry-run`과 이슈별 UI/E2E/fixture를 수행한다.
+   DB 변경은 생성 drift·fresh/upgrade/FK·기존 v1 데이터 보존 검증을 추가한다.
+3. schema·file envelope·API·prompt/job version 및 이전 Worker/Container image와 호환성을 확인한다.
+   같은 버전 tag를 덮어쓰지 않고 Container image digest를 고정한다.
+4. 대상 D1 bookmark, DB 밖 최신 삭제 journal, R2 object inventory와 키 복구 상태를 확인한다.
+   R2가 D1 Time Travel로 함께 복구된다고 가정하지 않는다.
+5. build/dry-run 성공 후 additive migration→환경별 Worker/Workflow/Container 배포 순서를 지킨다.
+   준비되지 않은 binding/secret/자원/모델 capability는 gate를 닫아 실패를 명확히 표시한다.
+6. preview health/ready SHA/schema/image 및 실제 사용자·변호사·심사자 흐름과 실패 복구를 시연한다.
+   public edit 심사 중 approved revision 유지, 사건 원문 운영자 접근 거부, download 파일 내용을 확인한다.
+7. CI/preview 증거와 같은 SHA로 production foundation을 Environment 승인 후 배포하고 health/ready를
+   확인한다. 화면/링크가 떠 있다는 사실을 production 사용자 API 공개 성공으로 표현하지 않는다.
+8. 공개 전환은 #70의 실제 사업자/법률/정책/국외 처리 근거와 #71의 same-SHA live/UI/drill/cost
+   증거를 trusted gate가 확인한 뒤 진행한다. 공개 직후 역할별 smoke와 비용/삭제/오류를 관찰한다.
+
+legacy `check-release.ts`의 boolean 문서는 실제 receipt가 아니다. #19/#71 통합 전 public-beta를
+수동 true로 통과시키지 않는다. 새 candidate는 repo/workflow/event/SHA/환경/완료/success/해시/
+check/critical-zero를 검증한 artifact와 policy 승인 문서 hash·version을 연결한다. 기존 release
+증거는 역사적 회귀 기록으로만 유지하며 최신 코드 전체의 통과를 대신하지 않는다.
+
+## v2 rollback·장애 조치
+
+Container 오류면 새 processing admission을 중단하고 실패/고립 attempt의 durable 상태와
+비용을 먼저 확인한다. 이전 digest로 돌아가도 불명확한 원격 작업을 다시 실행하지 않는다.
+private 자료 leak 의심은 download/upload capability revoke와 해당 경로 봉쇄, 로그/cache/
+공개 copy 점검을 우선한다. 공개 프로필 오게시에는 approved pointer 철회·cache purge·객체
+삭제를 수행하되 사건 private 자료를 운영자가 열어 조사하지 않는다.
+
+Worker/Container rollback은 DB·R2·정책·job schema를 되돌리지 않는다. 이전 버전이 v2 object
+manifest/키/revision을 읽지 못하면 해당 기능을 닫고 forward-fix한다. 파일·리포트를 자동 재생성하거나
+기존 사건을 자동 재분석하지 않는다. 법률 source 실패 시 검증되지 않은 법률 행동은 닫되 사용자가
+확인한 사실 정리·자료/리포트 접근은 유지할 수 있다. [삭제/복구](./DELETION-RESTORE.md)의 차단
+조건이 남으면 traffic을 다시 열지 않는다.

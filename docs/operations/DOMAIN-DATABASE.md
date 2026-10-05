@@ -65,3 +65,33 @@ batch에 포함해야 하며 별도 후속 쓰기로 조합해서는 안 된다.
 35일 journal 보존 목표와 정리는 #17/#20의 정책 및 운영 구현을 따른다.
 공개 법령 cache는 계정 삭제와 독립적이며 body hash를 확인하고 TTL을 최대 24시간으로 제한한다.
 #14가 실제 공식 응답·시행일·출처 검증을 구현한다.
+
+## v2 additive 적용 목표 (#55)
+
+위 schema/one-batch 질문/day10 quota는 기존 v1 계약이다. v2는 #54의 strict 계약 다음 #55가
+단일 소유자로 workspace/intake/summary revisions/messages/actions/timeline/files/jobs/lawyers/
+revisions/moderation/reports/quota/cost와 삭제 inventory를 additive하게 통합한다. 기존 migration
+0000~0005와 기존 사건 암호문·읽기 동작을 보존하고 기존 사건을 자동 재분석/마이그레이션하지 않는다.
+v1과 v2 contract version/조회 경로를 명시해 새 UI에서 오래된 사건을 정상 재열람할 수 있게 한다.
+
+schema 생성 번호·테이블/column 이름은 실제 #55 PR이 정본이다. 목표 table 이름을 SQL에
+넣고 원격 적용하거나 각 작업자가 별도 번호를 만들지 않는다. 다른 모듈은 공통 repository/
+schema PR 병합 이후 사용한다. 모든 새 write는 owner/role/current revision/idempotency/
+expected status/tombstone을 같은 transaction에서 검증한다.
+
+intake의 새 question batch·summary confirm·chat·file finalize·moderation decision은 CAS로
+진행한다. pending profile revision은 approved public revision을 덮어쓰지 않는다. 비용·사용자
+quota reservation/outbox·row 생성은 원자적으로 처리하고 실제 external attempt와 분리해
+crash/retry 때 중복 차감·중복 호출을 막는다. 운영자 역할은 trusted 지정으로만 부여한다.
+
+적용 전 fresh/upgrade는 v1 auth/consent/cases/analysis/feedback/journal row와 모든 FK/암호문을
+비교한다. migration 후 같은 SHA의 health schema/version, 실제 workspace upload/chat/export/
+moderation/reload를 검증한다. 로그에는 aggregate schema/FK/count만 남기고 원문·SQL dump를
+artifact에 올리지 않는다. quota는 [비용 계약](./COST-CONTROLS.md)의 KST3/30/60min/10GB와
+atomic reservation을 적용하며 기존 v1의 `<10` 검사 통과를 v2 quota 성공으로 취급하지 않는다.
+
+R2 bytes와 DB inventory, job lease·object revision·public pointer를 함께 reconcile한다. R2
+commit 실패 때 DB ready를 남기지 않고 staging/outbox로 복구하며 source of truth는 실제
+검증된 manifest다. orphan cleanup은 tombstone·pending reservation을 대조해 정상 객체를
+이름/age만으로 지우지 않는다. 모든 schema forward-fix/rollback은 [배포](./DEPLOYMENT-OPERATIONS.md),
+restore는 [DB 밖 최신 journal 재적용](./DELETION-RESTORE.md)을 따른다.
