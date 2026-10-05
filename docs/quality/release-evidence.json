@@ -3,11 +3,10 @@
   "offlineEvidence": [
     {
       "candidateSha": "3a63b54b5b46e76720d8cb484fa596c0581a6977",
-      "mode": "deterministic-product-pipeline-and-ui",
+      "mode": "deterministic-detail-ui",
       "runUrl": "https://github.com/creno-va/baro/actions/runs/37324983800",
       "pullRequestUrl": "https://github.com/creno-va/baro/pull/49",
       "fixtureCount": 50,
-      "criticalFindings": 0,
       "automatedAccessibilityFindings": 0,
       "liveModelVerified": false
     }

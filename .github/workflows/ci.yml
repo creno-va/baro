@@ -24,6 +24,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
           fetch-depth: 0
 
@@ -105,7 +106,7 @@ jobs:
       - name: AI change detection and deterministic product eval
         env:
           EVAL_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
-          GITHUB_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          EVAL_CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           bun scripts/ai-change.ts
           bun run eval:offline

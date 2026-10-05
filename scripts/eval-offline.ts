@@ -11,8 +11,13 @@ for (const fixture of parsed.fixtures) {
   reports.push(result.report);
   result.db.close();
 }
-const sha = process.env.GITHUB_SHA ?? "local";
+const sha = process.env.EVAL_CANDIDATE_SHA ?? "local";
 if (!/^(local|[a-f0-9]{40})$/.test(sha)) throw new Error("INVALID_CANDIDATE_SHA");
+if (sha !== "local") {
+  const child = Bun.spawn(["git", "rev-parse", "HEAD"], { stdout: "pipe", stderr: "pipe" });
+  const actual = (await new Response(child.stdout).text()).trim();
+  if ((await child.exited) || actual !== sha) throw new Error("EVAL_CANDIDATE_CHECKOUT_MISMATCH");
+}
 await Bun.write(
   ".wrangler/eval/offline.json",
   JSON.stringify(
