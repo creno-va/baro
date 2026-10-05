@@ -1,5 +1,57 @@
 # P0.3 환경 readiness 기록
 
+## 2026-10-06 추가 진행
+
+- 사용자 승인에 따라 preview 전용 `BETTER_AUTH_SECRET`, `CASE_DATA_KEY_V1`(키 ID `1`),
+  승인된 `LAW_API_OC`, 새 `TURNSTILE_SECRET_KEY`를 GitHub `preview` 환경과 Cloudflare
+  `baro-preview` secret에 등록했다. 값은 출력하거나 artifact/Git에 저장하지 않았다.
+  로컬 전달/복구 파일은 ignored 경로에 있고 현재 사용자와 SYSTEM만 읽도록 제한했다.
+  GitHub encrypted secret은 승인된 복구 보관 위치이나 별도 복구 담당자와 실제 drill은 미확정이다.
+- `BARO preview` Turnstile widget: `preview.baro.site`만 허용, Managed, pre-clearance 없음.
+  공개 site key는 GitHub preview 변수 `PUBLIC_TURNSTILE_SITE_KEY`에 등록했다.
+  preview 빌드가 해당 변수를 읽도록 연결한다. 실제 성공·만료·재사용/action 검증은 아직 남았다.
+- `baro-preview` AI Gateway를 생성했다. 인증 필수, payload logging/cache/retry 비활성화,
+  Unified Billing을 선택했다. preview Worker 설정에 Gateway ID를 연결한다.
+  콘솔에서 기존 credit `$10.00`, auto recharge OFF, 사용량 0을 확인했다. 새 구매나 자동 충전은
+  수행하지 않았다. 실제 호출은 별도 비용 한도 승인과 검증 뒤에만 실행한다.
+- 로컬 Wrangler OAuth로 Gateway 목록 조회는 HTTP 403이었다. 자원 부재로 해석하지 않는다.
+  아래 수동 workflow는 기존 preview API token의 조회 가능 여부를 별도 기록한다.
+- 실제 공식 법령 adapter smoke: `/DRF/lawSearch.do` HTTP 200 JSON이었으나 `LawSearch`
+  대신 `result`/`msg` 오류 envelope를 반환해 실패했다. 원문·OC·요청 URL은 기록하지 않았다.
+  요청/승인 진단과 Worker에서의 실제 성공 증거가 필요하다. HTTP 200을 법령 검증 통과로 취급하지 않는다.
+- Google Cloud 콘솔은 로그인 화면에 도달했다. preview OAuth 앱 생성·callback·테스터 승인과
+  성공/취소 검증은 아직 미완료이며 production 값을 복제하지 않았다.
+- production foundation: [배포 run](https://github.com/creno-va/baro/actions/runs/37349619316),
+  release `1f755a1bfeef8e2ff67a61677e067aff33b0124d`, health/ready/schema `0005` 통과.
+  정상 GitHub Environment 승인 절차를 사용했다. 공개 베타 API는 `BETA_NOT_OPEN`으로 닫혀 있다.
+- 실제 랜딩 수정은 [PR 1](https://github.com/creno-va/baro-landing/pull/1)로 병합했고
+  [Pages 배포](https://github.com/creno-va/baro-landing/actions/runs/37354136276)가 성공했다.
+  공개 문구 감사 증거는 [콘텐츠 감사](../product/PUBLIC-CONTENT-AUDIT.md)를 따른다.
+
+## 수동 읽기 전용 관측
+
+`gh workflow run environment-readiness.yml --repo creno-va/baro --ref main`은 기존 GitHub
+preview API token으로 Worker settings, 지정 Gateway, Turnstile 목록을 **GET**으로만 조회한다.
+main에서만 실행되고 `deployment: false`로 실제 preview 배포 증거를 만들지 않는다.
+관측 artifact에는 candidate/deployed SHA, 허용된 secret 이름의 존재 여부, origin/Gateway 일치,
+로그/cache/auth boolean, preview hostname widget 건수 및 조회 실패 status만 포함한다.
+site key/secret, 원문 응답, 오류 body/stack은 제외한다. 잘못된 응답이나 권한 부족은
+`parsed: false`/`forbidden`/`unavailable`이며 존재 여부는 `null`(미확인)이다. 목록 건수는
+관측된 첫 페이지에 한정하고 100개 이상이면 truncation 가능성을 표시한다. live gate 통과가 아니다. artifact의 `unverified`
+항목은 이 workflow의 성공 여부와 무관하게 남는다.
+
+같은 run의 법령 단계는 승인된 preview OC와 합성 `loan`/`interest`/`repayment` 개념으로
+실제 `legal-retrieval` parser/date/hash 검증을 최대 4개 request 예약 안에서 수행한다.
+cache는 메모리 대역이며 D1에 쓰지 않는다. 성공/실패와 시행일/hash만 별도 artifact로 남긴다.
+이 단계는 CI runner의 adapter 증거이며 Worker 전체 smoke를 대신하지 않는다. 법령 검증이
+실패하면 workflow도 실패하고 관측 artifact는 보존한다.
+
+조회 범위는 [Gateway 목록 API](https://developers.cloudflare.com/api/resources/ai_gateway/methods/list/),
+[Turnstile 목록 API](https://developers.cloudflare.com/api/resources/turnstile/subresources/widgets/methods/list/),
+배포 기록 분리는 [GitHub deployment 제어](https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/control-deployments)를 따른다.
+
+## 이전 관측 (아래 표는 provisioning 전 상태)
+
 - 점검: 2026-10-06 KST (2026-10-05T17:19:57.603Z), 읽기 전용 Cloudflare Worker settings/secret 이름 조회
 - 대상: 기존 `baro-preview`. production secret 값은 읽거나 preview/local에 복제하지 않았다.
 - 점검 release: `a95ae916f5309d8318776d2553ed783207060e5a`

@@ -93,6 +93,7 @@
       ],
       "vars": {
         "APP_ENV": "preview",
+        "AI_GATEWAY_ID": "baro-preview",
         "PUBLIC_BETA_ENABLED": "false",
         "RELEASE_SHA": "unknown",
         "BETTER_AUTH_URL": "https://preview.baro.site"
