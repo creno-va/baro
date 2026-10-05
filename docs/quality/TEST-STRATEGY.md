@@ -172,6 +172,12 @@ remote lifecycle/실제 model/account access는 별도 live run으로 확인한�
 보호 경계를 깨뜨리는 fault가 gate를 실패시키는지 확인한다. 법률·공개 승인 근거와 생산
 환경 보호 규칙은 코드 테스트로 우회하지 않는다.
 
+모바일 가로 overflow는 `innerWidth` 대신 `document.documentElement.clientWidth`와
+비교한다. #82 회귀 검사는 headless Chromium의 `--hide-scrollbars`만 해제하고 stable
+gutter와 세로 스크롤을 예약해 320px viewport 안의 실제 305px 너비를 확인한다. 측정은
+full-page screenshot이 viewport 높이를 임시 변경하기 전에 수행한다. 메뉴 Enter/Escape·
+focus 복원·200% layout과 정상 built Worker의 CSP 위반 없음도 함께 검증한다.
+
 공유 UI fixture의 버튼은 React hydration 전에 SSR로 보일 수 있다. 브라우저 검사는 fixture
 화면을 확인하고 `astro-island[ssr]`가 사라진 뒤 첫 상호작용을 수행한다. 임의 sleep이나
 실패 재시도로 첫 클릭 경합을 숨기지 않으며 모달·중첩 unmount·포커스·탭 assertion은 유지한다.

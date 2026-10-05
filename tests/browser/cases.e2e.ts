@@ -180,7 +180,9 @@ test("real signed session submits admission into SQL and reloads owner-scoped li
     await page.reload();
     await expect(page.getByRole("link", { name: "금전 대여 사건" })).toBeVisible();
     expect(
-      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+      ),
     ).toBe(true);
     await page.screenshot({ path: ".wrangler/cases-320.png" });
     await page.setViewportSize({ width: 1280, height: 900 });
@@ -188,7 +190,9 @@ test("real signed session submits admission into SQL and reloads owner-scoped li
       document.documentElement.style.zoom = "2";
     });
     expect(
-      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+      ),
     ).toBe(true);
     await page.screenshot({ path: ".wrangler/cases-zoom.png" });
   } finally {

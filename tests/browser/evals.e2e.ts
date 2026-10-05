@@ -74,7 +74,9 @@ test("all 50 pipeline fixtures render actual owner-scoped details with zero auto
         }),
       ).toBeVisible();
       expect(
-        await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+        ),
         entry.id,
       ).toBe(true);
       if (entry.category === "guidance") {
