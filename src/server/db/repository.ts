@@ -356,6 +356,22 @@ export function createDomainRepository(binding: D1Database, cipher: EnvelopeCiph
         return result.meta.changes === 1;
       });
     },
+    compareAndSetCheckpoint(
+      input: AnalysisGuard,
+      previous: string | null,
+      plaintext: string,
+      now: string,
+    ) {
+      return safe(async () => {
+        const g = parse(guardSchema, input);
+        const encrypted = await cipher.encrypt(plaintext, field(g, "encrypted_context"));
+        const result = await statement(
+          `UPDATE analyses SET encrypted_context=?,updated_at=?,started_at=COALESCE(started_at,?),model_id='openai/gpt-6-sol',prompt_version='1.0.0',schema_version='1',policy_version='1.0.0' WHERE id=? AND encrypted_context IS ? AND ${currentGuard}`,
+          [encrypted, parse(nowSchema, now), now, g.analysisId, previous, ...guardValues(g)],
+        ).run();
+        return result.meta.changes === 1;
+      });
+    },
     saveCitation(input: AnalysisGuard, value: Citation) {
       return safe(async () => {
         const g = parse(guardSchema, input);
@@ -454,6 +470,25 @@ export function createDomainRepository(binding: D1Database, cipher: EnvelopeCiph
         // Case status and analysis status share the old guard; the single-batch question count
         // is written last under the newly committed analysis status and operation timestamp.
         const result = await binding.batch([
+          ...(p.result?.kind === "guidance"
+            ? p.result.citations.map((c) =>
+                statement(
+                  `INSERT INTO citations(id,analysis_id,source_type,source_id,law_name,article,effective_date,verified_at,source_url,content_hash) SELECT ?,?,'statute',?,?,?,?,?,?,? WHERE ${transitionGuard} ON CONFLICT(id) DO NOTHING`,
+                  [
+                    `${g.analysisId}_${c.id}`,
+                    g.analysisId,
+                    c.sourceId,
+                    c.lawName,
+                    c.article,
+                    c.effectiveDate,
+                    c.verifiedAt,
+                    c.url,
+                    c.contentHash,
+                    ...transitionValues,
+                  ],
+                ),
+              )
+            : []),
           statement(`UPDATE cases SET status=?,updated_at=? WHERE id=? AND ${transitionGuard}`, [
             caseStatus,
             at,
@@ -659,6 +694,7 @@ export function createDomainRepository(binding: D1Database, cipher: EnvelopeCiph
         outboxId: string;
         input: string;
         answers: string;
+        idempotency?: { key: string; requestHash: string };
       },
       now: string,
     ) {
@@ -671,6 +707,9 @@ export function createDomainRepository(binding: D1Database, cipher: EnvelopeCiph
             outboxId: uuidSchema,
             input: z.string(),
             answers: z.string(),
+            idempotency: z
+              .strictObject({ key: idempotencyKeySchema, requestHash: hashSchema })
+              .optional(),
           }),
           replacement,
         );
@@ -693,6 +732,14 @@ export function createDomainRepository(binding: D1Database, cipher: EnvelopeCiph
         const claimed = `EXISTS (SELECT 1 FROM cases c WHERE c.id=? AND c.user_id=? AND c.current_analysis_id=? AND c.input_revision=?)`;
         const claimValues = [g.caseId, g.ownerId, p.analysisId, nextRevision];
         const result = await binding.batch([
+          ...(p.idempotency
+            ? [
+                statement(
+                  "DELETE FROM idempotency_records WHERE user_id=? AND method='POST' AND route=? AND key=? AND expires_at<=?",
+                  [g.ownerId, `/api/cases/${g.caseId}/answers`, p.idempotency.key, at],
+                ),
+              ]
+            : []),
           statement(
             `UPDATE cases SET current_analysis_id=?,input_revision=?,encrypted_input=?,status='queued',updated_at=?
             WHERE id=? AND status='needs_clarification' AND ${currentGuard}
@@ -722,6 +769,111 @@ export function createDomainRepository(binding: D1Database, cipher: EnvelopeCiph
             `INSERT INTO dispatch_outbox(id,analysis_id,attempt,instance_id,revision,state,attempts,next_attempt_at,created_at)
             SELECT ?,?,1,?,?,'pending',0,?,? WHERE ${claimed}`,
             [p.outboxId, p.analysisId, `${p.analysisId}-1`, nextRevision, at, at, ...claimValues],
+          ),
+          ...(p.idempotency
+            ? [
+                statement(
+                  `INSERT INTO idempotency_records(user_id,method,route,key,request_hash,response_status,response_json,created_at,expires_at) SELECT ?,'POST',?,?,?,202,?,?,? WHERE ${claimed}`,
+                  [
+                    g.ownerId,
+                    `/api/cases/${g.caseId}/answers`,
+                    p.idempotency.key,
+                    p.idempotency.requestHash,
+                    JSON.stringify({
+                      caseId: g.caseId,
+                      analysisId: p.analysisId,
+                      inputRevision: nextRevision,
+                      status: "queued",
+                    }),
+                    at,
+                    new Date(Date.parse(at) + DAY_MS).toISOString(),
+                    ...claimValues,
+                  ],
+                ),
+              ]
+            : []),
+        ]);
+        return result.at(-1)?.meta.changes === 1;
+      });
+    },
+    retryAnalysis(
+      ownerId: string,
+      caseId: string,
+      analysisId: string,
+      revision: number,
+      attempt: number,
+      key: string,
+      requestHash: string,
+      now: string,
+    ) {
+      return safe(async () => {
+        parse(ownerSchema, ownerId);
+        parse(uuidSchema, caseId);
+        parse(uuidSchema, analysisId);
+        parse(revisionSchema, revision);
+        parse(z.number().int().min(1).max(2), attempt);
+        parse(idempotencyKeySchema, key);
+        parse(hashSchema, requestHash);
+        parse(nowSchema, now);
+        const instance = `${analysisId}-${attempt + 1}`;
+        const old = `id=? AND attempt=? AND status='failed' AND failure_code IN ('DISPATCH_FAILED','MODEL_UNAVAILABLE','LEGAL_SOURCE_UNAVAILABLE','ANALYSIS_TIMEOUT','INTERNAL_ERROR') AND EXISTS(SELECT 1 FROM cases WHERE id=? AND user_id=? AND current_analysis_id=? AND input_revision=?)`;
+        const requestClaim = `EXISTS(SELECT 1 FROM idempotency_records WHERE user_id=? AND method='POST' AND route=? AND key=? AND request_hash=?)`;
+        const requestValues = [ownerId, `/api/cases/${caseId}/retry`, key, requestHash];
+        const claimed = `EXISTS(SELECT 1 FROM analyses a JOIN cases c ON c.current_analysis_id=a.id WHERE a.id=? AND a.attempt=? AND a.status='queued' AND a.workflow_instance_id=? AND c.user_id=? AND c.id=? AND c.input_revision=?) AND ${requestClaim}`;
+        const values = [
+          analysisId,
+          attempt + 1,
+          instance,
+          ownerId,
+          caseId,
+          revision,
+          ...requestValues,
+        ];
+        const result = await binding.batch([
+          statement(
+            "DELETE FROM idempotency_records WHERE user_id=? AND method='POST' AND route=? AND key=? AND expires_at<=?",
+            [ownerId, `/api/cases/${caseId}/retry`, key, now],
+          ),
+          statement(
+            `INSERT INTO idempotency_records(user_id,method,route,key,request_hash,response_status,response_json,created_at,expires_at) SELECT ?,'POST',?,?,?,202,?,?,? WHERE EXISTS(SELECT 1 FROM analyses WHERE ${old})`,
+            [
+              ownerId,
+              `/api/cases/${caseId}/retry`,
+              key,
+              requestHash,
+              JSON.stringify({ analysisId, inputRevision: revision, status: "queued" }),
+              now,
+              new Date(Date.parse(now) + DAY_MS).toISOString(),
+              analysisId,
+              attempt,
+              caseId,
+              ownerId,
+              analysisId,
+              revision,
+            ],
+          ),
+          statement(
+            `UPDATE analyses SET attempt=attempt+1,workflow_instance_id=?,status='queued',failure_code=NULL,encrypted_context=NULL,started_at=NULL,completed_at=NULL,updated_at=? WHERE ${old} AND ${requestClaim}`,
+            [
+              instance,
+              now,
+              analysisId,
+              attempt,
+              caseId,
+              ownerId,
+              analysisId,
+              revision,
+              ...requestValues,
+            ],
+          ),
+          statement(`UPDATE cases SET status='queued',updated_at=? WHERE id=? AND ${claimed}`, [
+            now,
+            caseId,
+            ...values,
+          ]),
+          statement(
+            `INSERT INTO dispatch_outbox(id,analysis_id,attempt,instance_id,revision,state,attempts,next_attempt_at,created_at) SELECT ?,?,?,?,?,'pending',0,?,? WHERE ${claimed}`,
+            [crypto.randomUUID(), analysisId, attempt + 1, instance, revision, now, now, ...values],
           ),
         ]);
         return result.at(-1)?.meta.changes === 1;

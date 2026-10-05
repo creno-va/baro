@@ -1,11 +1,13 @@
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { getAuth } from "../auth";
+import { answersApi } from "./answers";
 import { caseCreateApi } from "./case-create";
 import { casesApi } from "./cases";
 import { type ApiEnvironment, errorBody } from "./errors";
 import { healthApi } from "./health";
 import { meApi } from "./me";
+import { retryApi } from "./retry";
 
 export const api = new Hono<ApiEnvironment>()
   .onError((_error, context) =>
@@ -43,6 +45,8 @@ export const api = new Hono<ApiEnvironment>()
   .route("/health", healthApi)
   .route("/me", meApi)
   .route("/cases", caseCreateApi)
-  .route("/cases", casesApi);
+  .route("/cases", casesApi)
+  .route("/cases", answersApi)
+  .route("/cases", retryApi);
 
 export type AppType = typeof api;

@@ -75,6 +75,7 @@ export function createLlmGateway(
       input: unknown,
       requestId: string,
       reserve: () => Promise<boolean>,
+      reserveCorrection: () => Promise<boolean> = async () => true,
     ): Promise<unknown> {
       if (!env.AI || !env.AI_GATEWAY_ID || !/^[A-Za-z0-9_-]{1,128}$/.test(requestId))
         throw new ModelError("MODEL_UNAVAILABLE");
@@ -207,6 +208,7 @@ export function createLlmGateway(
           return output;
         }
         if (correction || call === 2) throw new ModelError("MODEL_SCHEMA_INVALID");
+        if (!(await reserveCorrection())) throw new ModelError("MODEL_SCHEMA_INVALID");
         correction = true;
       }
       throw new ModelError("MODEL_UNAVAILABLE");
