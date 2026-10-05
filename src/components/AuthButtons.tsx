@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { authClient } from "../client/auth";
 
 type Provider = "google" | "naver" | "kakao";
@@ -12,6 +12,10 @@ const providers: Array<{ id: Provider; label: string }> = [
 export function AuthButtons() {
   const [pendingProvider, setPendingProvider] = useState<Provider | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const lastButton = useRef<HTMLButtonElement | null>(null);
+  useEffect(() => {
+    if (error && pendingProvider === null) lastButton.current?.focus();
+  }, [error, pendingProvider]);
 
   async function signIn(provider: Provider) {
     setPendingProvider(provider);
@@ -32,13 +36,16 @@ export function AuthButtons() {
   }
 
   return (
-    <div className="auth-options">
+    <div className="auth-options" aria-busy={pendingProvider !== null}>
       {providers.map((provider) => (
         <button
           className={`auth-provider auth-provider--${provider.id}`}
           disabled={pendingProvider !== null}
           key={provider.id}
-          onClick={() => signIn(provider.id)}
+          onClick={(event) => {
+            lastButton.current = event.currentTarget;
+            void signIn(provider.id);
+          }}
           type="button"
         >
           {pendingProvider === provider.id ? "연결 중…" : provider.label}

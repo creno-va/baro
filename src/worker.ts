@@ -3,6 +3,7 @@ import { actions, i18n, middleware, pages } from "astro/hono";
 import { Hono } from "hono";
 import { secureHeaders } from "hono/secure-headers";
 import { api } from "./server/api";
+import { cleanupAuthData } from "./server/auth/cleanup";
 
 export { AnalysisWorkflow } from "./workflows/analysis";
 
@@ -21,4 +22,9 @@ app.use(middleware());
 app.use(pages());
 app.use(i18n());
 
-export default app;
+export default {
+  fetch: app.fetch,
+  async scheduled(_controller: ScheduledController, env: Env): Promise<void> {
+    await cleanupAuthData(env.DB);
+  },
+};

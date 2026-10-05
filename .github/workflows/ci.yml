@@ -93,6 +93,11 @@ jobs:
         if: steps.application.outputs.present == 'true'
         run: bun run build
 
+      - name: Synthetic browser keyboard and error flows
+        run: |
+          bunx playwright install --with-deps chromium
+          bun run test:ui
+
       - name: Validate Cloudflare bundle
         if: steps.application.outputs.present == 'true'
         shell: bash

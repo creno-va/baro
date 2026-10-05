@@ -1,7 +1,13 @@
 import { expect, test } from "bun:test";
 import { CURRENT_POLICY_VERSIONS } from "../src/contracts/consent";
 import { api } from "../src/server/api";
+import {
+  RECENT_OAUTH_MS,
+  SESSION_EXPIRES_SECONDS,
+  SESSION_UPDATE_SECONDS,
+} from "../src/server/auth/policy";
 import { createTestDatabase, signedSessionCookie, testEnvironment } from "./helpers/d1";
+import { createOAuthFixture, responseCookies } from "./helpers/oauth";
 
 test("real SQL sessions and consent routes enforce authentication, origin and policy versions", async () => {
   const database = await createTestDatabase();
@@ -40,10 +46,19 @@ test("real SQL sessions and consent routes enforce authentication, origin and po
       );
     const consent = { ...CURRENT_POLICY_VERSIONS, over14Confirmed: true };
     expect((await put("https://attacker.example", consent)).status).toBe(403);
+    expect((await put("", consent)).status).toBe(403);
     expect((await put(env.BETTER_AUTH_URL, { ...consent, termsVersion: "old" })).status).toBe(400);
+    expect((await put(env.BETTER_AUTH_URL, { ...consent, over14Confirmed: false })).status).toBe(
+      400,
+    );
+    expect((await put(env.BETTER_AUTH_URL, { ...consent, extra: true })).status).toBe(400);
     expect((await put(env.BETTER_AUTH_URL, consent)).status).toBe(200);
     const after = await api.request("/me/consent", { headers: { cookie } }, env);
     expect(((await after.json()) as { needsConsent: boolean }).needsConsent).toBe(false);
+    database.sqlite.exec("UPDATE user_consents SET privacy_version='old'");
+    const changedPolicy = await api.request("/me/consent", { headers: { cookie } }, env);
+    expect(changedPolicy.status).toBe(200);
+    expect(((await changedPolicy.json()) as { needsConsent: boolean }).needsConsent).toBe(true);
 
     database.sqlite.exec("UPDATE session SET expires_at=1");
     expect((await api.request("/me/consent", { headers: { cookie } }, env)).status).toBe(401);
@@ -92,4 +107,65 @@ test("unexpected database errors do not leak SQL or credentials", async () => {
   const body = await response.text();
   expect(body).not.toContain("SQL credential");
   expect(body).toContain("INTERNAL_ERROR");
+});
+
+test("consent routes forward sliding and expired cookies while preserving the actual OAuth timestamp", async () => {
+  const fixture = await createOAuthFixture("google");
+  try {
+    const start = await fixture.begin();
+    const callback = await fixture.callback(start.state, start.cookie);
+    const cookie = responseCookies(callback);
+    const oauthTimestamp = Date.now() - RECENT_OAUTH_MS - 1;
+    fixture.database.sqlite
+      .query("UPDATE session SET oauth_authenticated_at=?")
+      .run(oauthTimestamp);
+    for (const method of ["GET", "PUT"] as const) {
+      const now = Date.now();
+      fixture.database.sqlite
+        .query("UPDATE session SET updated_at=?,expires_at=?")
+        .run(
+          now - SESSION_UPDATE_SECONDS * 1_000 - 1,
+          now + (SESSION_EXPIRES_SECONDS - SESSION_UPDATE_SECONDS) * 1_000 - 1,
+        );
+      const response = await api.request(
+        "/me/consent",
+        {
+          method,
+          headers: {
+            cookie,
+            origin: fixture.env.BETTER_AUTH_URL,
+            "content-type": "application/json",
+          },
+          ...(method === "PUT"
+            ? { body: JSON.stringify({ ...CURRENT_POLICY_VERSIONS, over14Confirmed: true }) }
+            : {}),
+        },
+        fixture.env,
+      );
+      expect(response.status).toBe(200);
+      expect(response.headers.get("cache-control")).toBe("no-store");
+      const sessionCookie = response.headers
+        .getSetCookie()
+        .find((value) => value.startsWith("better-auth.session_token="));
+      expect(sessionCookie).toContain(`Max-Age=${SESSION_EXPIRES_SECONDS}`);
+      expect(sessionCookie).toContain("HttpOnly");
+      expect(sessionCookie).toContain("SameSite=Lax");
+      const row = fixture.database.sqlite
+        .query("SELECT updated_at,expires_at,oauth_authenticated_at FROM session")
+        .get() as { updated_at: number; expires_at: number; oauth_authenticated_at: number };
+      expect(row.updated_at).toBeGreaterThanOrEqual(now);
+      expect(row.expires_at).toBeGreaterThanOrEqual(now + SESSION_EXPIRES_SECONDS * 1_000);
+      expect(row.oauth_authenticated_at).toBe(oauthTimestamp);
+    }
+    fixture.database.sqlite.exec("UPDATE session SET expires_at=1");
+    const expired = await api.request("/me/consent", { headers: { cookie } }, fixture.env);
+    expect(expired.status).toBe(401);
+    expect(
+      expired.headers
+        .getSetCookie()
+        .find((value) => value.startsWith("better-auth.session_token=")),
+    ).toContain("Max-Age=0");
+  } finally {
+    fixture.database.close();
+  }
 });
