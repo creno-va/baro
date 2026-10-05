@@ -8,6 +8,21 @@ export default defineConfig({
   adapter: cloudflare({ imageService: "passthrough", remoteBindings: false }),
   integrations: [react()],
   devToolbar: { enabled: false },
+  security: {
+    csp: {
+      directives: [
+        "default-src 'self'",
+        "object-src 'none'",
+        "base-uri 'self'",
+        "form-action 'self'",
+        "connect-src 'self' https://challenges.cloudflare.com",
+        "frame-src https://challenges.cloudflare.com",
+        "img-src 'self' data:",
+        "font-src 'self'",
+      ],
+      scriptDirective: { resources: ["'self'", "https://challenges.cloudflare.com"] },
+    },
+  },
   vite: {
     plugins: [tailwindcss()],
   },

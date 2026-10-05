@@ -5,7 +5,8 @@
     "tests/**/*.ts",
     ".github/scripts/**/*.ts",
     "src/env.d.ts",
-    "playwright.config.ts"
+    "playwright.config.ts",
+    "playwright.csp.config.ts"
   ],
   "exclude": ["node_modules", ".wrangler", "dist"]
 }

@@ -81,6 +81,10 @@ lint/typecheck/unit/integration, production build/bundle 검사와 dry-run을 �
 키보드/320px/200% 흐름도 실행한다. `evals.e2e.ts`는 50개 모두의 실제 owner-scoped API
 결과를 상세 UI에 표시하고 axe WCAG 2/2.1 A/AA 위반 0을 요구한다. 자동 axe 성공은
 모든 장애 유형에 대한 수동 보조공학 검증 완료를 뜻하지 않는다.
+`bun run build:production && bun run test:csp`는 build된 workerd의 Astro hash CSP와
+frame-ancestors header, React hydration/키보드 오류 복구, inline script 차단 및 허용된
+Turnstile origin(script 대역)을 검증한다. Astro dev는 hash CSP를 지원하지 않으므로 별도로
+실행한다. 실제 Turnstile 성공은 #27이다. [Astro CSP](https://docs.astro.build/en/reference/configuration-reference/#securitycsp)
 
 `bun run eval:offline`은 50개(20/15/5/5/5)의 intake→암호화 repository→실제 execution
 phase→captured 공식 법령 adapter→strict 결과→read API를 실행한다. 모델 응답은 기대

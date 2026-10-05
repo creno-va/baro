@@ -19,6 +19,12 @@ app.use(
     xFrameOptions: "DENY",
   }),
 );
+// Astro SSR supplies per-response script/style hashes. Preserve that policy.
+app.use(async (context, next) => {
+  await next();
+  const policy = context.res.headers.get("content-security-policy");
+  context.header("content-security-policy", `${policy ? `${policy}; ` : ""}frame-ancestors 'none'`);
+});
 app.route("/api", api);
 app.use(actions());
 app.use(middleware());

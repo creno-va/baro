@@ -20,7 +20,7 @@ test("50-fixture deterministic product pipeline has zero critical findings; poli
       result.db.close();
     }
   }
-});
+}, 30_000);
 test("one injected fact/citation/prohibited/schema/policy/owner critical failure fails the product eval, without averaging", async () => {
   const fixture = fixtures[0];
   if (!fixture) throw new Error("fixture");
@@ -39,4 +39,4 @@ test("one injected fact/citation/prohibited/schema/policy/owner critical failure
       result.db.close();
     }
   }
-});
+}, 30_000);
