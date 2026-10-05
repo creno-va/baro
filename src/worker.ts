@@ -4,6 +4,7 @@ import { Hono } from "hono";
 import { secureHeaders } from "hono/secure-headers";
 import { api } from "./server/api";
 import { cleanupAuthData } from "./server/auth/cleanup";
+import { reconcileDispatch } from "./server/modules/dispatch/service";
 
 export { AnalysisWorkflow } from "./workflows/analysis";
 
@@ -26,5 +27,6 @@ export default {
   fetch: app.fetch,
   async scheduled(_controller: ScheduledController, env: Env): Promise<void> {
     await cleanupAuthData(env.DB);
+    await reconcileDispatch(env);
   },
 };
