@@ -1,7 +1,7 @@
 # BARO v2 검증 증거 기록
 
 - 기준일: 2026-10-06
-- 상태: #53 명세 완료, #54 계약·#56 UI 시스템 진행 중. v2 전체 제품·실제 UI·외부 연동·공개 완료 증거 없음.
+- 상태: #53 명세·#54 strict 계약·#56 공통 UI 시스템 완료. #55 DB 구현과 후속 기능은 진행 중이며 v2 전체 제품·실제 외부 연동·공개 완료 증거 없음.
 - 마일스톤: [전체 서비스 개발](https://github.com/creno-va/baro/milestone/5)
 - 실행 정본: [V2 실행 계획](./V2-EXECUTION.md), 개정 PRD/UX와 실제 GitHub 이슈
 
@@ -36,7 +36,7 @@ cookie·token·secret·인증 URL·stack/SQL은 증거에 포함하지 않는다
 | moderator 심사·신고·비민감 상태 | #60/#62 | #69/#71 case plaintext 접근 금지·IDOR/CSRF | 미구현 |
 | 사건/자료/계정 삭제·부활 방지 | #67 | #69/#71 원본/파생/대화/작업/report/public asset·late processing | 미구현 |
 | restore/delete replay·rollback·alert | #19/#67/#71 | #71 실제 격리 drill·latest journal·수신 ack | 미검증 |
-| shadcn/blue/Lucide/Pretendard/SVG | #56/#61/#62/#65/#66 | #69 브라우저 visual/mobile/keyboard/focus/modal/200%/built CSP | 미구현 |
+| shadcn/blue/Lucide/Pretendard/SVG | #56/#61/#62/#65/#66 | #69 브라우저 visual/mobile/keyboard/focus/modal/200%/built CSP | #56 공통 시스템·#80 경합 수정 완료, 후속 역할별 기능 화면 미구현; #82 보완 진행 |
 | 법률/정책·사업자·처리 계약 | #20/#68/#70 | 책임자 사실/승인·게시/동의 버전·provider 증거 | 근거 없음 |
 | preview/production·최초 공개 | #71 | exact SHA CI→preview→live→Environment→production→승인 public flag | 미완료 |
 
@@ -57,7 +57,45 @@ screening은 실제 Worker/strict schema/provenance/replay를 통과했지만 v2
 [exact-head CI](https://github.com/creno-va/baro/actions/runs/37365995710) 성공 후 main
 `b75429de3af2d04cf001041a3aafada631c2489a`에 병합됐다. 문서56개/ADR13개, 필수 검사,
 browser20/CSP1 및 polling 경계 5회 반복을 확인했다. 이는 명세와 기존 v1 회귀 증거다.
-#54/#56은 별도 checkout에서 진행하며 미완료 기능의 상태를 위 ledger에 유지한다.
+#54는 [PR75](https://github.com/creno-va/baro/pull/75)의 strict 계약·합성 fixture로 완료됐고,
+#56은 [PR77](https://github.com/creno-va/baro/pull/77)의 공통 UI 시스템으로 완료됐다.
+이 완료는 DB·적응형 질문·자료 처리·변호사 화면의 구현 또는 실제 외부 성공을 뜻하지 않는다.
+
+## 공통 UI와 실제 foundation 배포
+
+#56 head `abc028f77bb1f8cc884dc76d12c6f585d00944fe`는
+[PR CI](https://github.com/creno-va/baro/actions/runs/37375973374)를 통과해 main
+`ee42126eb969e5eb6f3ee569a2d94d94af521a15`에 병합됐다.
+공통 blue tokens·self-hosted Pretendard·Lucide·단일 SVG, 표시용 role navigation,
+상태·탭·native modal/sheet 및 기존 화면의 스타일을 검증했다. 인증·역할을 부여하는 대역은 없다.
+
+같은 main SHA의 [main CI](https://github.com/creno-va/baro/actions/runs/37376755285),
+[preview 배포·smoke](https://github.com/creno-va/baro/actions/runs/37377129500),
+[production foundation 배포·smoke](https://github.com/creno-va/baro/actions/runs/37377554912)가 성공했다.
+preview deployment `6869922819`와 production deployment `6869976048`의 최신 status도 success다.
+2026-10-06 KST에 두 실제 도메인의 live/ready에서 같은 SHA와 schema `0005`를 재확인했다.
+production `/api/cases`는 HTTP503/`BETA_NOT_OPEN`이며 정상 Environment reviewer 승인 절차를 사용했다.
+
+실제 preview의 홈과 모바일 메뉴를 브라우저로 직접 확인했다. 320px viewport에서 classic
+세로 스크롤바가 공간을 차지하면 clientWidth305·bodyWidth320으로 가로 넘침이 발생해
+[#82](https://github.com/creno-va/baro/issues/82)를 등록했다. 기존 자동 검사의 innerWidth 비교만으로
+이 경계를 입증할 수 없으므로 수정·재검증 전 통과로 표시하지 않는다.
+별도 fixture CI에서 hydration 전 첫 클릭이 유실된 경합은
+[#80](https://github.com/creno-va/baro/issues/80)의 [PR81](https://github.com/creno-va/baro/pull/81)에서
+실제 island 준비 후 상호작용하도록 보완했고
+[exact-head CI](https://github.com/creno-va/baro/actions/runs/37378342169)를 통과해 병합됐다.
+로컬 해당 모달 5회 반복·전체 browser26·normal built CSP3개가 통과했다.
+실제 preview 로그인 화면의 Google 시작은 안전한 실패 안내를 표시하고 버튼 포커스를 유지했다.
+이 실패 상태는 실제 OAuth callback 성공 증거가 아니며 preview client 준비/승인은 여전히 필요하다.
+이 배포·공통 UI 증거는 v2 모든 기능·실제 OAuth·법률/미디어 처리·공개 승인 증거가 아니다.
+
+## 사용량·비용과 독립 준비의 경계
+
+[#57 문서 PR](https://github.com/creno-va/baro/pull/79)은 KST quota·logical operation 재시도,
+실제 호출별 비용·불명확한 과금 보존·삭제 이후 장부, 환경별 예산 allocation의 합계 한도,
+실제 quote/FX/funding 및 bounded DB staging 실행 계약을 명시한다.
+문서 정합성은 실제 quota 경합·외부 청구·계정 유료 capability 검증의 증거가 아니다.
+#57 runtime은 #55 선행 PR 병합 뒤 진행한다.
 
 ## 최종 감사
 
