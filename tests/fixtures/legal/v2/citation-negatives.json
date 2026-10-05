@@ -1,0 +1,87 @@
+[
+  {
+    "id": "statute_impossible_date",
+    "citation": {
+      "id": "statute_synthetic_10",
+      "sourceId": "source_statute_synthetic_10",
+      "title": "합성 법률",
+      "verifiedAt": "2026-10-06T00:00:00.000Z",
+      "contentHash": "6fc8ae50389af50370664c47e43d159cf22659f36001fd388070f5ebe71f28d4",
+      "kind": "statute",
+      "officialId": "90000000001",
+      "article": "제10조",
+      "effectiveDate": "2026-02-30",
+      "url": "https://law.go.kr/LSW/lsInfoP.do?lsiSeq=90000000101"
+    },
+    "expectedSharedSchemaAccepted": false
+  },
+  {
+    "id": "precedent_effective_date",
+    "citation": {
+      "id": "precedent_synthetic",
+      "sourceId": "source_precedent_synthetic",
+      "title": "합성 자료 사건",
+      "verifiedAt": "2026-10-06T00:00:00.000Z",
+      "contentHash": "6e4f486e953813316cddc002c4ffead6657a1262942ad97f88b4868c23256443",
+      "kind": "precedent",
+      "officialId": "90000000201",
+      "court": "합성 법원",
+      "caseNumber": "2026합성1",
+      "decisionDate": "2026-01-02",
+      "url": "https://www.law.go.kr/LSW/precInfoP.do?precSeq=90000000201",
+      "effectiveDate": "2026-01-01"
+    },
+    "expectedSharedSchemaAccepted": false
+  },
+  {
+    "id": "guide_unknown_field",
+    "citation": {
+      "id": "guide_synthetic",
+      "sourceId": "source_guide_synthetic",
+      "title": "합성 절차 안내",
+      "verifiedAt": "2026-10-06T00:00:00.000Z",
+      "contentHash": "3fe13c416e3d7553ab5f32a9ccbde9547c71949b72e6b9c2fcce0b8f06414604",
+      "kind": "official_guide",
+      "institutionId": "moleg_easylaw",
+      "endpointId": "easylaw_text_section",
+      "section": "자료 확인",
+      "publishedDate": "2026-09-15",
+      "url": "https://www.easylaw.go.kr/CSP/CnpClsMain.laf?csmSeq=90000000301&ccfNo=1&cciNo=1&cnpClsNo=1",
+      "winProbability": 0.9
+    },
+    "expectedSharedSchemaAccepted": false
+  },
+  {
+    "id": "citation_key_url",
+    "citation": {
+      "id": "statute_synthetic_10",
+      "sourceId": "source_statute_synthetic_10",
+      "title": "합성 법률",
+      "verifiedAt": "2026-10-06T00:00:00.000Z",
+      "contentHash": "6fc8ae50389af50370664c47e43d159cf22659f36001fd388070f5ebe71f28d4",
+      "kind": "statute",
+      "officialId": "90000000001",
+      "article": "제10조",
+      "effectiveDate": "2026-01-01",
+      "url": "https://law.go.kr/LSW/lsInfoP.do?key=synthetic_marker"
+    },
+    "expectedSharedSchemaAccepted": false
+  },
+  {
+    "id": "guide_spoof_host",
+    "citation": {
+      "id": "guide_synthetic",
+      "sourceId": "source_guide_synthetic",
+      "title": "합성 절차 안내",
+      "verifiedAt": "2026-10-06T00:00:00.000Z",
+      "contentHash": "3fe13c416e3d7553ab5f32a9ccbde9547c71949b72e6b9c2fcce0b8f06414604",
+      "kind": "official_guide",
+      "institutionId": "moleg_easylaw",
+      "endpointId": "easylaw_text_section",
+      "section": "자료 확인",
+      "publishedDate": "2026-09-15",
+      "url": "https://www.easylaw.go.kr.attacker.invalid/CSP/CnpClsMain.laf"
+    },
+    "expectedSharedSchemaAccepted": false
+  }
+]
