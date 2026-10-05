@@ -1,0 +1,410 @@
+[
+  {
+    "id": "statute_detail_verified",
+    "origin": "synthetic",
+    "captureStatus": "not_captured",
+    "adapterValidation": "not_run",
+    "sourceKind": "statute",
+    "request": {
+      "endpointId": "moleg_eflaw_detail",
+      "parametersWithoutCredential": {
+        "target": "eflaw",
+        "type": "JSON",
+        "MST": "90000000101",
+        "efYd": "20260101",
+        "JO": "001000"
+      },
+      "untrustedUrl": null
+    },
+    "response": {
+      "status": 200,
+      "mediaType": "application/json",
+      "body": "{\"법령\":{\"기본정보\":{\"법령ID\":\"90000000001\",\"법령명_한글\":\"합성 법률\",\"시행일자\":\"20260101\"},\"조문\":{\"조문단위\":{\"조문번호\":\"10\",\"조문가지번호\":\"0\",\"조문여부\":\"조문\",\"조문내용\":\"합성 조문 제10조: 이 문장은 adapter 계약 검증용이며 실제 법률 내용이 아닙니다.\",\"조문시행일자\":\"20260101\"}}}}",
+      "bodySha256": "df08dfd1d56758424eb7e0f2499743a1fccbf684d1133705be5fa64ee878a751"
+    },
+    "expected": {
+      "availability": "verified",
+      "reason": null,
+      "canonicalIdentity": {
+        "officialId": "90000000001",
+        "version": "90000000101",
+        "date": "2026-01-01",
+        "section": "제10조"
+      },
+      "normalizedText": "합성 조문 제10조: 이 문장은 adapter 계약 검증용이며 실제 법률 내용이 아닙니다.",
+      "citation": {
+        "id": "statute_synthetic_10",
+        "sourceId": "source_statute_synthetic_10",
+        "title": "합성 법률",
+        "verifiedAt": "2026-10-06T00:00:00.000Z",
+        "contentHash": "6fc8ae50389af50370664c47e43d159cf22659f36001fd388070f5ebe71f28d4",
+        "kind": "statute",
+        "officialId": "90000000001",
+        "article": "제10조",
+        "effectiveDate": "2026-01-01",
+        "url": "https://law.go.kr/LSW/lsInfoP.do?lsiSeq=90000000101"
+      },
+      "span": {
+        "section": "제10조",
+        "startUtf16": 0,
+        "endUtf16": 50,
+        "text": "합성 조문 제10조: 이 문장은 adapter 계약 검증용이며 실제 법률 내용이 아닙니다.",
+        "contentHash": "6fc8ae50389af50370664c47e43d159cf22659f36001fd388070f5ebe71f28d4"
+      }
+    }
+  },
+  {
+    "id": "statute_list_singleton",
+    "origin": "synthetic",
+    "captureStatus": "not_captured",
+    "adapterValidation": "not_run",
+    "sourceKind": "statute",
+    "request": {
+      "endpointId": "moleg_eflaw_list",
+      "parametersWithoutCredential": {
+        "target": "eflaw",
+        "type": "JSON",
+        "query": "합성 법률",
+        "nw": "1,3",
+        "sort": "efdes",
+        "display": "100",
+        "page": "1",
+        "efYd": "00010101~20261006"
+      },
+      "untrustedUrl": null
+    },
+    "response": {
+      "status": 200,
+      "mediaType": "application/json",
+      "body": "{\"LawSearch\":{\"law\":{\"법령ID\":\"90000000001\",\"법령일련번호\":\"90000000101\",\"법령명한글\":\"합성 법률\",\"시행일자\":\"20260101\"},\"totalCnt\":\"1\",\"page\":\"1\"}}",
+      "bodySha256": "1840fad609683dfa54f7ad44470092a982b594dd8a37e516ad7811104146a479"
+    },
+    "expected": {
+      "availability": "candidate_only",
+      "reason": "detail_required",
+      "canonicalIdentity": {
+        "officialId": "90000000001",
+        "version": "90000000101",
+        "date": "2026-01-01",
+        "section": "제10조"
+      },
+      "normalizedText": null,
+      "citation": null,
+      "span": null
+    }
+  },
+  {
+    "id": "statute_list_array",
+    "origin": "synthetic",
+    "captureStatus": "not_captured",
+    "adapterValidation": "not_run",
+    "sourceKind": "statute",
+    "request": {
+      "endpointId": "moleg_eflaw_list",
+      "parametersWithoutCredential": {
+        "target": "eflaw",
+        "type": "JSON",
+        "query": "합성 법률",
+        "nw": "1,3",
+        "sort": "efdes",
+        "display": "100",
+        "page": "1",
+        "efYd": "00010101~20261006"
+      },
+      "untrustedUrl": null
+    },
+    "response": {
+      "status": 200,
+      "mediaType": "application/json",
+      "body": "{\"LawSearch\":{\"law\":[{\"법령ID\":\"90000000001\",\"법령일련번호\":\"90000000101\",\"법령명한글\":\"합성 법률\",\"시행일자\":\"20260101\"}],\"totalCnt\":\"1\",\"page\":\"1\"}}",
+      "bodySha256": "f31eaeb14328d355b9fd2b2dc0bc71192d72dbe9b4e2cd508f6aaa211ce1ef8b"
+    },
+    "expected": {
+      "availability": "candidate_only",
+      "reason": "detail_required",
+      "canonicalIdentity": {
+        "officialId": "90000000001",
+        "version": "90000000101",
+        "date": "2026-01-01",
+        "section": "제10조"
+      },
+      "normalizedText": null,
+      "citation": null,
+      "span": null
+    }
+  },
+  {
+    "id": "statute_history_incomplete",
+    "origin": "synthetic",
+    "captureStatus": "not_captured",
+    "adapterValidation": "not_run",
+    "sourceKind": "statute",
+    "request": {
+      "endpointId": "moleg_eflaw_list",
+      "parametersWithoutCredential": {
+        "target": "eflaw",
+        "type": "JSON",
+        "LID": "90000000001",
+        "display": "100",
+        "page": "1"
+      },
+      "untrustedUrl": null
+    },
+    "response": {
+      "status": 200,
+      "mediaType": "application/json",
+      "body": "{\"LawSearch\":{\"law\":[{\"법령ID\":\"90000000001\",\"법령일련번호\":\"90000000101\",\"법령명한글\":\"합성 법률\",\"시행일자\":\"20260101\"}],\"totalCnt\":\"101\",\"page\":\"1\"}}",
+      "bodySha256": "a7ffb0d5e4cfbe81f58c7fd80643cf19ffadd7c57c7037bc8ad6f953767c5244"
+    },
+    "expected": {
+      "availability": "unavailable",
+      "reason": "incomplete_version_history",
+      "canonicalIdentity": null,
+      "normalizedText": null,
+      "citation": null,
+      "span": null
+    }
+  },
+  {
+    "id": "statute_history_conflict",
+    "origin": "synthetic",
+    "captureStatus": "not_captured",
+    "adapterValidation": "not_run",
+    "sourceKind": "statute",
+    "request": {
+      "endpointId": "moleg_eflaw_list",
+      "parametersWithoutCredential": {
+        "target": "eflaw",
+        "type": "JSON",
+        "LID": "90000000001"
+      },
+      "untrustedUrl": null
+    },
+    "response": {
+      "status": 200,
+      "mediaType": "application/json",
+      "body": "{\"LawSearch\":{\"law\":[{\"법령ID\":\"90000000001\",\"법령일련번호\":\"90000000101\",\"법령명한글\":\"합성 법률\",\"시행일자\":\"20260101\"},{\"법령ID\":\"90000000001\",\"법령일련번호\":\"90000000102\",\"법령명한글\":\"합성 법률\",\"시행일자\":\"20260101\"}],\"totalCnt\":\"2\"}}",
+      "bodySha256": "7cdf1a66f99a0399448bc4dcbdf7796d5e57e4c34b9e5c0a039c99088fcbdfb9"
+    },
+    "expected": {
+      "availability": "unavailable",
+      "reason": "ambiguous_same_day_version",
+      "canonicalIdentity": null,
+      "normalizedText": null,
+      "citation": null,
+      "span": null
+    }
+  },
+  {
+    "id": "statute_future",
+    "origin": "synthetic",
+    "captureStatus": "not_captured",
+    "adapterValidation": "not_run",
+    "sourceKind": "statute",
+    "request": {
+      "endpointId": "moleg_eflaw_detail",
+      "parametersWithoutCredential": {
+        "target": "eflaw",
+        "type": "JSON",
+        "MST": "90000000102",
+        "efYd": "20270101",
+        "JO": "001000"
+      },
+      "untrustedUrl": null
+    },
+    "response": {
+      "status": 200,
+      "mediaType": "application/json",
+      "body": "{\"법령\":{\"기본정보\":{\"법령ID\":\"90000000001\",\"법령명_한글\":\"합성 법률\",\"시행일자\":\"20270101\"},\"조문\":{\"조문단위\":{\"조문번호\":\"10\",\"조문가지번호\":\"0\",\"조문여부\":\"조문\",\"조문내용\":\"합성 조문 제10조: 이 문장은 adapter 계약 검증용이며 실제 법률 내용이 아닙니다.\",\"조문시행일자\":\"20270101\"}}}}",
+      "bodySha256": "5a91874b673c774741ba8e1e9282c3862acdfc1f022dc6042e76d2e732243b8b"
+    },
+    "expected": {
+      "availability": "rejected",
+      "reason": "future_effective_date",
+      "canonicalIdentity": null,
+      "normalizedText": null,
+      "citation": null,
+      "span": null
+    }
+  },
+  {
+    "id": "statute_wrong_id",
+    "origin": "synthetic",
+    "captureStatus": "not_captured",
+    "adapterValidation": "not_run",
+    "sourceKind": "statute",
+    "request": {
+      "endpointId": "moleg_eflaw_detail",
+      "parametersWithoutCredential": {
+        "target": "eflaw",
+        "type": "JSON",
+        "MST": "90000000101",
+        "efYd": "20260101",
+        "JO": "001000"
+      },
+      "untrustedUrl": null
+    },
+    "response": {
+      "status": 200,
+      "mediaType": "application/json",
+      "body": "{\"법령\":{\"기본정보\":{\"법령ID\":\"90000000009\",\"법령명_한글\":\"합성 법률\",\"시행일자\":\"20260101\"},\"조문\":{\"조문단위\":{\"조문번호\":\"10\",\"조문가지번호\":\"0\",\"조문여부\":\"조문\",\"조문내용\":\"합성 조문 제10조: 이 문장은 adapter 계약 검증용이며 실제 법률 내용이 아닙니다.\",\"조문시행일자\":\"20260101\"}}}}",
+      "bodySha256": "0a5b5b123644f0435d6b80486a0009684eb0d7258061263288e9e88d4f6c81dd"
+    },
+    "expected": {
+      "availability": "rejected",
+      "reason": "identity_mismatch",
+      "canonicalIdentity": null,
+      "normalizedText": null,
+      "citation": null,
+      "span": null
+    }
+  },
+  {
+    "id": "statute_invalid_date",
+    "origin": "synthetic",
+    "captureStatus": "not_captured",
+    "adapterValidation": "not_run",
+    "sourceKind": "statute",
+    "request": {
+      "endpointId": "moleg_eflaw_detail",
+      "parametersWithoutCredential": {
+        "target": "eflaw",
+        "type": "JSON",
+        "MST": "90000000101",
+        "efYd": "20260101",
+        "JO": "001000"
+      },
+      "untrustedUrl": null
+    },
+    "response": {
+      "status": 200,
+      "mediaType": "application/json",
+      "body": "{\"법령\":{\"기본정보\":{\"법령ID\":\"90000000001\",\"법령명_한글\":\"합성 법률\",\"시행일자\":\"20260101\"},\"조문\":{\"조문단위\":{\"조문번호\":\"10\",\"조문가지번호\":\"0\",\"조문여부\":\"조문\",\"조문내용\":\"합성 조문 제10조: 이 문장은 adapter 계약 검증용이며 실제 법률 내용이 아닙니다.\",\"조문시행일자\":\"20260230\"}}}}",
+      "bodySha256": "b2165dc2350fb1442a7c5d67f60515407f6dbca354cba8b25fde1f58fac5e053"
+    },
+    "expected": {
+      "availability": "rejected",
+      "reason": "invalid_calendar_date",
+      "canonicalIdentity": null,
+      "normalizedText": null,
+      "citation": null,
+      "span": null
+    }
+  },
+  {
+    "id": "statute_deleted_article",
+    "origin": "synthetic",
+    "captureStatus": "not_captured",
+    "adapterValidation": "not_run",
+    "sourceKind": "statute",
+    "request": {
+      "endpointId": "moleg_eflaw_detail",
+      "parametersWithoutCredential": {
+        "target": "eflaw",
+        "type": "JSON",
+        "MST": "90000000101",
+        "efYd": "20260101",
+        "JO": "001000"
+      },
+      "untrustedUrl": null
+    },
+    "response": {
+      "status": 200,
+      "mediaType": "application/json",
+      "body": "{\"법령\":{\"기본정보\":{\"법령ID\":\"90000000001\",\"법령명_한글\":\"합성 법률\",\"시행일자\":\"20260101\"},\"조문\":{\"조문단위\":{\"조문번호\":\"10\",\"조문가지번호\":\"0\",\"조문여부\":\"조문\",\"조문내용\":\"제10조 삭제\",\"조문시행일자\":\"20260101\"}}}}",
+      "bodySha256": "50ed825bf2fbb497484fbad89f3c8bfc2faeb00be29e51ef0c420f2c3ddb931c"
+    },
+    "expected": {
+      "availability": "unavailable",
+      "reason": "deleted_article_not_substantive_basis",
+      "canonicalIdentity": null,
+      "normalizedText": null,
+      "citation": null,
+      "span": null
+    }
+  },
+  {
+    "id": "statute_branch_nested",
+    "origin": "synthetic",
+    "captureStatus": "not_captured",
+    "adapterValidation": "not_run",
+    "sourceKind": "statute",
+    "request": {
+      "endpointId": "moleg_eflaw_detail",
+      "parametersWithoutCredential": {
+        "target": "eflaw",
+        "type": "JSON",
+        "MST": "90000000101",
+        "efYd": "20260101",
+        "JO": "001002"
+      },
+      "untrustedUrl": null
+    },
+    "response": {
+      "status": 200,
+      "mediaType": "application/json",
+      "body": "{\"법령\":{\"기본정보\":{\"법령ID\":\"90000000001\",\"법령명_한글\":\"합성 법률\",\"시행일자\":\"20260101\"},\"조문\":{\"조문단위\":{\"조문번호\":\"10\",\"조문가지번호\":\"2\",\"조문여부\":\"조문\",\"조문내용\":\"합성 제10조의2\",\"조문시행일자\":\"20260101\",\"항\":{\"항내용\":\"합성 제1항\",\"호\":[{\"호내용\":\"합성 제1호\",\"목\":{\"목내용\":\"합성 가목\"}}]}}}}}",
+      "bodySha256": "3c3ec5e184f0a843494a3789cbebe1037635c97cb27e308ec7a27f42ae3292bf"
+    },
+    "expected": {
+      "availability": "verified",
+      "reason": null,
+      "canonicalIdentity": {
+        "officialId": "90000000001",
+        "version": "90000000101",
+        "date": "2026-01-01",
+        "section": "제10조의2 제1항 제1호 가목"
+      },
+      "normalizedText": "합성 제10조의2\n합성 제1항\n합성 제1호\n합성 가목",
+      "citation": {
+        "id": "statute_synthetic_branch",
+        "sourceId": "source_statute_synthetic_branch",
+        "title": "합성 법률",
+        "verifiedAt": "2026-10-06T00:00:00.000Z",
+        "contentHash": "63392d6b4d78ddcfc7eadf0fa7cde7705a7c25396cd8e41b54a200a0f1ef756c",
+        "kind": "statute",
+        "officialId": "90000000001",
+        "article": "제10조의2 제1항 제1호 가목",
+        "effectiveDate": "2026-01-01",
+        "url": "https://law.go.kr/LSW/lsInfoP.do?lsiSeq=90000000101"
+      },
+      "span": {
+        "section": "제10조의2 제1항 제1호 가목",
+        "startUtf16": 0,
+        "endUtf16": 29,
+        "text": "합성 제10조의2\n합성 제1항\n합성 제1호\n합성 가목",
+        "contentHash": "63392d6b4d78ddcfc7eadf0fa7cde7705a7c25396cd8e41b54a200a0f1ef756c"
+      }
+    }
+  },
+  {
+    "id": "statute_empty_search",
+    "origin": "synthetic",
+    "captureStatus": "not_captured",
+    "adapterValidation": "not_run",
+    "sourceKind": "statute",
+    "request": {
+      "endpointId": "moleg_eflaw_list",
+      "parametersWithoutCredential": {
+        "target": "eflaw",
+        "type": "JSON",
+        "query": "합성 검색어"
+      },
+      "untrustedUrl": null
+    },
+    "response": {
+      "status": 200,
+      "mediaType": "application/json",
+      "body": "{\"LawSearch\":{\"totalCnt\":\"0\",\"page\":\"1\"}}",
+      "bodySha256": "3374d1217f7b81c80317ceef2017452ae7881fe458a6d081561f699f58f97533"
+    },
+    "expected": {
+      "availability": "unavailable",
+      "reason": "no_candidates",
+      "canonicalIdentity": null,
+      "normalizedText": null,
+      "citation": null,
+      "span": null
+    }
+  }
+]
