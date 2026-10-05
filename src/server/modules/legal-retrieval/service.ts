@@ -54,6 +54,36 @@ export class LegalSourceError extends Error {
 }
 type Transport = (url: string, init: RequestInit) => Promise<Response>;
 type Repo = ReturnType<typeof createDomainRepository>;
+export type LegalRetrievalDiagnostic = {
+  stage: "configuration" | "list" | "article" | "retrieval";
+  category:
+    | "credential-missing"
+    | "request-budget-exhausted"
+    | "access-denied"
+    | "rate-limited"
+    | "server-unavailable"
+    | "http-error"
+    | "response-too-large"
+    | "invalid-json"
+    | "upstream-registration-rejected"
+    | "upstream-credential-rejected"
+    | "upstream-error"
+    | "transport-unavailable"
+    | "schema-mismatch"
+    | "verification-failed";
+  httpStatus?: number;
+};
+function upstreamError(value: unknown): LegalRetrievalDiagnostic["category"] | null {
+  if (typeof value !== "object" || value === null || !("result" in value) || !("msg" in value))
+    return null;
+  // Inspect upstream wording only in memory. Never forward the message, code, URL or credential.
+  const message = typeof value.msg === "string" ? value.msg : "";
+  if (/아이피|\bIP\b|유관기관|등록된 사용자|등록상태/i.test(message))
+    return "upstream-registration-rejected";
+  if (/인증|\bOC\b.*(?:없|확인|오류|유효|등록)/i.test(message))
+    return "upstream-credential-rejected";
+  return "upstream-error";
+}
 const conceptSchema = z.enum(["loan", "interest", "repayment"]);
 const articleNumbers = { loan: ["598"], interest: ["600"], repayment: ["603"] } as const;
 export async function textHash(text: string) {
@@ -130,13 +160,25 @@ export function createLegalRetrieval(
   repo: Repo,
   transport: Transport = fetch,
   sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
+  observe?: (diagnostic: LegalRetrievalDiagnostic) => void,
 ) {
+  function diagnostic(value: LegalRetrievalDiagnostic) {
+    try {
+      observe?.(value);
+    } catch {
+      // Diagnostics cannot change retrieval, retry or fail-closed behavior.
+    }
+  }
   async function request(
     path: string,
     params: Record<string, string>,
     reserve: () => Promise<boolean> = async () => true,
   ) {
-    if (!env.LAW_API_OC) throw new LegalSourceError();
+    const stage = path === "lawSearch.do" ? "list" : "article";
+    if (!env.LAW_API_OC) {
+      diagnostic({ stage: "configuration", category: "credential-missing" });
+      throw new LegalSourceError();
+    }
     const url = new URL(`https://www.law.go.kr/DRF/${path}`);
     url.search = new URLSearchParams({
       OC: env.LAW_API_OC,
@@ -145,24 +187,53 @@ export function createLegalRetrieval(
       ...params,
     }).toString();
     for (let attempt = 0; attempt < 3; attempt++) {
-      if (!(await reserve())) throw new LegalSourceError();
+      if (!(await reserve())) {
+        diagnostic({ stage, category: "request-budget-exhausted" });
+        throw new LegalSourceError();
+      }
       try {
         const response = await transport(url.toString(), {
           signal: AbortSignal.timeout(10_000),
           redirect: "error",
         });
         if (response.status === 429 || response.status >= 500) {
+          diagnostic({
+            stage,
+            category: response.status === 429 ? "rate-limited" : "server-unavailable",
+            httpStatus: response.status,
+          });
           if (attempt < 2) {
             await sleep(1000 * 2 ** attempt);
             continue;
           }
           throw new LegalSourceError();
         }
-        if (!response.ok) throw new LegalSourceError();
+        if (!response.ok) {
+          diagnostic({
+            stage,
+            category: [401, 403].includes(response.status) ? "access-denied" : "http-error",
+            httpStatus: response.status,
+          });
+          throw new LegalSourceError();
+        }
         const raw = await response.text();
-        if (new TextEncoder().encode(raw).length > 2 * 1024 * 1024) throw new LegalSourceError();
-        return JSON.parse(raw) as unknown;
+        if (new TextEncoder().encode(raw).length > 2 * 1024 * 1024) {
+          diagnostic({ stage, category: "response-too-large", httpStatus: response.status });
+          throw new LegalSourceError();
+        }
+        const value: unknown = JSON.parse(raw);
+        const category = upstreamError(value);
+        if (category) {
+          diagnostic({ stage, category, httpStatus: response.status });
+          throw new LegalSourceError();
+        }
+        return value;
       } catch (error) {
+        if (!(error instanceof LegalSourceError))
+          diagnostic({
+            stage,
+            category: error instanceof SyntaxError ? "invalid-json" : "transport-unavailable",
+          });
         if (error instanceof LegalSourceError || error instanceof SyntaxError || attempt === 2)
           throw new LegalSourceError();
         await sleep(1000 * 2 ** attempt);
@@ -252,7 +323,12 @@ export function createLegalRetrieval(
           chunks,
           retrievalHash: await textHash(JSON.stringify(chunks.map((c) => c.citation.sourceId))),
         });
-      } catch {
+      } catch (error) {
+        if (!(error instanceof LegalSourceError))
+          diagnostic({
+            stage: "retrieval",
+            category: error instanceof z.ZodError ? "schema-mismatch" : "verification-failed",
+          });
         throw new LegalSourceError();
       }
     },
