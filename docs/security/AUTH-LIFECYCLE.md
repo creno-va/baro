@@ -1,5 +1,8 @@
 # 인증 수명과 offline 검증
 
+기존 세션/OAuth 수명은 v2에서도 보존한다. v2 role/심사 확장은 마지막 섹션의 목표이며
+role UI나 test seed가 실제 자격 확인·production 권한 부여 완료를 뜻하지 않는다.
+
 ## 서버 계약
 
 - Better Auth D1 세션은 기본 7일, 마지막 갱신 기준 1일 간격으로 갱신한다. 쿠키 cache는 사용하지 않는다.
@@ -41,3 +44,25 @@ CSRF, 로그아웃 폐기, 정책 변경·만 14세 gate, fresh/upgrade migratio
 Playwright는 로컬 페이지의 API 응답만 합성하여 network/provider/callback/loading 오류와
 Tab/Space/Enter 흐름, 제출 중 비활성화, 재시도 초점 복귀를 검증한다. 실제 OAuth 성공을
 주장하는 증거가 아니며 콘솔 승인·실제 callback smoke는 외부 gate #27에 남는다.
+
+## v2 역할·심사·계정 삭제 목표
+
+public directory 조회는 로그인 없이 가능하지만 사건/변호사 신청은 실제 session과 현재
+동의를 요구한다. 역할은 verified server record에 연결하며 `user`, `lawyer_applicant`,
+`verified_lawyer`, `moderator`의 능력을 분리한다. client/body/header·공개 profile edit로
+moderator나 verified 권한을 얻을 수 없다. 같은 이메일의 다른 OAuth를 암묵적으로 연결하지 않는다.
+
+가입·신청은 자격 확인 완료가 아니다. verified role의 부여/철회, 프로필 승인/반려에는 actor·
+대상 revision·시각·허용된 reason을 기록한다. moderator decision은 최근 OAuth10분을 요구하며
+sliding refresh는 인증 시각을 갱신하지 않는다. 자기 승인·철회 후 승인·role 철회 후 저장·
+cross-applicant verification access를 route+SQL 양쪽에서 검증한다.
+
+역할을 가진 계정 삭제는 최근 OAuth와 명시적 DELETE 확인 후 session 폐기·사용자 사건·
+법률가 신청/비공개 revision·인증서류·portfolio·public pointer 삭제를 원자적으로 예약한다.
+private/public R2와 CDN cleanup 완료는 별도로 확인한다. role이나 consent 만료가 자기 데이터
+읽기/삭제를 막지 않으며 policy 변경은 신규 AI/업로드 작업 admission에 적용한다.
+
+preview synthetic role/사용자 fixture는 test-only adapter/provisioning에서 명시적으로 만들고
+production bundle에서 차단한다. 실제 OAuth session으로 역할별 UI와 권한을 검증한 기록은
+합성 session 테스트와 구분한다. [v2 API](../architecture/V2-HTTP-API.md),
+[v2 시연 증거](../quality/V2-UI-EVIDENCE.md)

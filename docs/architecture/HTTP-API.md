@@ -1,5 +1,9 @@
 # HTTP API 계약
 
+이 문서의 아래 경로·quota·결과 union은 기존 v1 계약이다. 새 사건 작업 공간·파일·변호사·
+심사 API는 별도 [v2 HTTP API](./V2-HTTP-API.md)의 목표 계약이며 현재 구현 상태가 아니다.
+v2 도입으로 기존 사용자 읽기·삭제와 `/api/auth/*`를 제거하지 않는다.
+
 - Base path: `/api`
 - Transport: HTTPS JSON
 - Server: Hono in the Astro Worker

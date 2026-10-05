@@ -5,6 +5,7 @@
 - Owners: Engineering
 - Supersedes: ADR-0004의 외부 호출 중복 방지 해석을 보완, 나머지 결정 유지
 - Related: [실행 계약](../architecture/DOMAIN-LIFECYCLE.md)
+- Partial supersession (2026-10-06): workspace는 [ADR-0006](./0006-continuous-case-workspace-and-navigation.md), 객체 정리는 [ADR-0008](./0008-private-files-and-report-handoff.md), 비용 admission은 [ADR-0013](./0013-resource-admission-and-budget.md)으로 확장한다. CAS·outbox·삭제·공개 gate는 유지한다.
 
 ## 맥락
 

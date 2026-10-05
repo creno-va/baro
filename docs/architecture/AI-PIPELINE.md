@@ -4,6 +4,10 @@
 - Model path: Cloudflare AI binding -> AI Gateway Unified Billing -> third-party model
 - Initial model: `openai/gpt-6-sol`, reasoning `medium`
 
+아래 기존 단일 사건 분석은 v1이다. v2의 연속 작업과 multimodal 목표는 마지막 확장을
+따르며 실제 모델 지원/응답/안전 품질은 live 증거로 확인한다. model 이름이나 문서만으로
+vision·ASR·공급자 개인정보 조건을 통과한 것으로 기록하지 않는다.
+
 ## 단계
 
 ```mermaid
@@ -103,3 +107,60 @@ provider 보존/무학습 설정은 Gateway 로그 설정과 별도로 법률/�
 통과해야 `completed`가 된다. 테스트 전략의 50개 이상 고정 평가셋에서 critical
 failure가 하나라도 있으면 배포를 막는다. 샘플·프롬프트·예상 정책 결과는 버전 관리하되
 실제 사용자 데이터를 평가셋으로 복사하지 않는다.
+
+## v2 연속 사건 이해와 navigation
+
+[ADR-0006](../adr/0006-continuous-case-workspace-and-navigation.md)의 상태와
+[v2 실행 계약](./V2-CONTRACTS.md)을 사용한다. workspace를 완료 terminal로 닫지 않고
+intake/question job, summary review, confirmed summary, chat/action job, file interpretation,
+report snapshot을 독립 versioned operation으로 나눈다. 기본 intake 3묶음×최대5문항 후
+사용자 요약 확인을 받는다. 이후에도 질문·사실 수정·자료 추가를 계속 처리한다.
+
+| 단계 | 최소 입력·출력 | 확정/실패 경계 |
+| --- | --- | --- |
+| intake understanding | broad category/당사자·목표·사건 경위·unknown | 모든 한국 법률 분야를 수용, 불명확한 taxonomy가 자동 범위 탈락을 만들지 않음 |
+| adaptive questions | 현재 facts/답변/누락 → 한 묶음 question IDs/types | unknown/skipped 유지, 이미 답한 질문 반복 제한, partial draft 재개 |
+| summary review | 사용자 진술·자료 관찰·추정·상충/불리한 사실 분리 | 최신 revision 사용자 확인 전 navigation 없음 |
+| chat/navigation | 확정 snapshot+새 message+선택자료 → facts/action diff+응답 | source attribution, 안전한 action catalog, 법률 결론·승패/협상/소송 전략 차단 |
+| file interpretation | 추출 text/frame/ASR 구간 → 관찰·불확실성·source reference | 원본 진정성·모든frame완전판독·음성발화자 신원 확정 주장 금지 |
+| report assembly | 검증 snapshot+사용자 편집/선택 → factual report | 저장 결과를 재현, 법률 주장만 공식 source 검증, 실패 법률 문장 제거 |
+
+공식 인용이 없는 사실 정리와 단순 파일 목록/PDF는 모델 지식으로 법률 결론을 보충하지
+않고 진행할 수 있다. 공식 source 장애가 있는 법률 설명은 제외하거나 확인 불가로 표시한다.
+policy/citation/fact critical failure가 있는 초안을 채팅에 그대로 streaming하지 않는다.
+operation이 실패해도 사용자 message·원본 자료·이전 확정 결과는 보존하고 재시도/보완을 안내한다.
+
+## v2 multimodal 경로와 실제 지원 확인
+
+모든 모델 호출은 `llm-gateway`가 소유한다. 기존 pinned text/vision 후보 모델의 Gateway
+Unified Billing 경로와 reasoning medium을 유지한다. vision은 실제 account/model의 입력
+shape·이미지 byte/token 제한·응답 schema·개인정보/저장 조건을 합성 이미지로 먼저 검증한다.
+문서에서 명시하지 않은 raw PDF/동영상 업로드 기능이나 자동 fallback 모델은 가정하지 않는다.
+검증 실패는 capability blocker이며 텍스트만 처리한 결과를 완전한 영상 분석으로 표시하지 않는다.
+
+[ADR-0010](../adr/0010-multimodal-ai-and-transcription.md)의 ASR 목표는
+`@cf/openai/whisper-large-v3-turbo`이며 audio 분할/합성 입력은 Container에서 준비하고
+Workers의 `llm-gateway` adapter가 호출한다. Cloudflare-hosted Workers AI 경로를 기존
+third-party text Gateway와 구분해 실제 호출·과금·log/보존·처리 국가를 검증한다. 공식
+출력의 text/segments/VTT를 source 구간으로 파싱하되 timestamp·한국어 인식·silence/오인식
+안전 처리는 실제 fixture와 live로 확인한다. [ASR 모델](https://developers.cloudflare.com/workers-ai/models/whisper-large-v3-turbo/)
+
+영상은 전체 오디오를 구간별로 전사하고 매1초+장면전환 frame을 batch로 해석한다. timestamp
+offset·frame index·관찰/추출 source 위치를 유지하고 전체 길이 대비 processed/failed 구간을
+manifest에 기록한다. 비슷한 frame dedup은 원래 timestamp coverage를 지우지 않는다.
+다운샘플·빈 frame·silence·부분 실패는 UI/PDF에도 남긴다. 법원 유불리·증거능력·발화자
+식별·위변조 여부 판단은 변호사 검토 대상으로 남긴다.
+
+## 처리 격리·quota·삭제
+
+Container는 문서/OCR/office 변환·오디오/영상 추출·PDF/ZIP 구성의 독립 Node 런타임이며
+직접 AI/법률 API key나 영구 사건 키를 받지 않는다. job-scoped gateway의 제한된 자료를
+일시 복호화하고 암호화 파생물만 반환한다. 원본 파일 안의 지시·링크·매크로·HTML은 실행
+명령이 아니며 외부 network/SSRF·prompt injection을 막는다.
+
+logical visible response를 하루30회 reservation에 묶고 internal phase/교정/retry는 사용자
+quota를 반복 차감하지 않는다. 모든 provider/ASR/Container attempt 비용은 월100만원 ledger에
+별도 반영한다. bounded phaseattempt·joblease·global 비용 예약과 snapshot 재사용을 둔다.
+원본/계정 삭제 또는 revision 변경 후 늦은 completion은 source guard로 거부하며 Workflow
+step/Container state에서 plaintext를 삭제한다. 제한 수치와 재개/cleanup은
+[v2 실행 계약](./V2-CONTRACTS.md)의 정본을 따른다.

@@ -1,5 +1,9 @@
 # 테스트 및 출시 품질 전략
 
+아래 기존 corpus·누적5질문·일일10회는 v1 회귀 계약이다. v2의3개 신규 사건/30응답/60분,
+연속 질문·자료·모든 역할·전체 법률군 검증은 마지막 확장과 [v2 시연 증거](./V2-UI-EVIDENCE.md)를
+따른다. 기존 green check와 health를 새 기능의 성공으로 승격하지 않는다.
+
 ## 목표
 
 BARO의 테스트는 단순 동작뿐 아니라 소유권, 삭제, 사실 구분, 출처 무결성, 금지 출력을
@@ -128,3 +132,42 @@ release-evidence 항목을 요구하며 법률 검토를 자동 수행하지 않
 배포 직후 로그인 콜백, 사건 생성, Workflow 시작, 법률 검색, 완료 결과, 삭제를 합성 사건으로
 확인한다. 합성 데이터에는 실제 인물·연락처를 쓰지 않는다. 오류율이나 안전 경보가 기준을
 넘으면 [배포·운영 문서](../operations/DEPLOYMENT-OPERATIONS.md)에 따라 rollback한다.
+
+## v2 전체 개발 게이트
+
+[v2 시연 증거](./V2-UI-EVIDENCE.md)의 U/L/M/P/Q 행마다 실제 구현 PR·UI 시나리오·독립
+실패 테스트·외부 증거를 연결한다. 대표 화면 설계와 공통DS만 완료하고 전체 UI 완료로
+보고하지 않는다. 사용자·변호사·심사자 전 기능은 실제 browser action→저장→새로고침→
+재접속까지 시연해야 한다. loading/error/empty/quota/role/review 상태와 mobile320px/
+desktop/200%/keyboard·built Worker CSP·시각 QA를 포함한다. download PDF 실제 render와
+ZIP 선택/원본 byte 검증, Pretendard font·single sharedSVG 참조도 인수 조건이다.
+
+| 검증 그룹 | 추가 필수 경계 |
+| --- | --- |
+| 계약/DB | v2 discriminated unions·role/approval·partial intake·summary confirmation·version compatibility·단일 migration 소유·fresh/upgrade/drift |
+| quota/cost | 3/4cases·30/31responses·60min·KST reset·사건원본100/101files·원본합계5GB·계정전체10GB(파생물/report포함)·pendingbytes·global100만원·reservation race/ambiguous provider·legacy bypass |
+| 파일/미디어 | DOCX/HWP/HWPX/PDF500page·legacyoffice·imageOCR·audio·video60min/1GB·실제duration/magic·zipbomb/SSRF·8MiB upload/resume·coverage |
+| 암호화/삭제 | v1 envelope와chunkAEAD·DEK/IV/AAD/order/truncation·file/report/ZIP keys·lateupload/Container/modeljob·orphan·private/public R2/CDN·journal-first restore |
+| 프로필/심사 | manualverification·everypublicedit·immutable submitted·oldapprovedrevision 유지·selfapprove/revoke/concurrentdecision·privateverification 분리 |
+| AI/출처 | adaptive3×5·unknown/skipped·userconfirmedsummary·continuouschat·불리/상충사실·no legalstrategy/ranking·officialprecedent/guide typedcitations |
+| 런타임 | Worker boundary unchanged·top-level Containers standaloneNode package·image digest·privatejobcapability·ephemeraldisk/log/snapshot·remote readiness |
+| 환경/공개 | actualOAuth/Turnstile/Gateway/Whisper/vision/source/R2/Container·sameSHApreview/prod·humanpolicy/legal/businessreceipts·productionnoQAdata |
+
+v1 50개 corpus와 validator oracle를 보존하고 v2 corpus에 주요 법률군(민사·형사·가사·노동·
+행정·기업/상사·도산 등)과 개인/기업 singleowner, 자료 modality·상충/불리한 사실·소송전략
+유도·사용자filepromptinjection·미승인profileleak·source/date/hash위조를 분포시킨다. 법률군
+전체 지원과 legal conclusion 금지를 동시에 검증하며 범위 밖 처리로 v2 corpus를 단순화하지 않는다.
+caption/ASR/frame 해석은 source 위치와 coverage에 대한 assertion을 갖춘다. fixture는 합성이며
+실제 사용자 데이터·법률가 자격 서류를 넣지 않는다. provider 대역은 형식/복구 증거이고
+모델 한국어 이해/vision/Whisper 정확도·법률검토 성공을 증명하지 않는다.
+
+Container는 별도 pinned image build·tool/dependency scan·악성/손상/timeout/kill fixture를
+실행한다. Worker scanner의 Node/Bun 금지와 fixture boundary를 완화해 함께 import하지 않는다.
+remote lifecycle/실제 model/account access는 별도 live run으로 확인한다. 비용 장부 예약만
+있고 report가 없는 call을 successful로 기록하지 않으며 unknown 실제 과금을 보수적으로 남긴다.
+
+완료에는 기존 mandatory `bun ci`, `bun run check`, `bun run build`, `bun run cf:dry-run`,
+필요한 migration/schema drift, UI/CSP/security/eval과 실제 외부/운영 evidence가 필요하다.
+자동 테스트를 문서/manifest 배열과 동일하게 만들어 자기 검증으로 끝내지 않는다. 실제
+보호 경계를 깨뜨리는 fault가 gate를 실패시키는지 확인한다. 법률·공개 승인 근거와 생산
+환경 보호 규칙은 코드 테스트로 우회하지 않는다.

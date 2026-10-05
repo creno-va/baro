@@ -2,35 +2,45 @@
 
 [![CI](https://github.com/creno-va/baro/actions/workflows/ci.yml/badge.svg)](https://github.com/creno-va/baro/actions/workflows/ci.yml)
 
-BARO는 대한민국의 개인 간 금전 대여 문제를 겪는 사용자가 자신의 상황을 정리하고,
-확인할 쟁점·준비할 자료·일반적인 다음 행동을 이해하도록 돕는 웹 서비스입니다.
+BARO는 사용자가 변호사의 프로필을 살펴보고 직접 연락하며, AI 와 사건의 사실관계·
+자료·타임라인·준비할 행동을 정리하는 대한민국 웹 서비스입니다. 사용자가 확인한
+PDF 리포트와 선택한 원본을 직접 전달해 변호사의 초기 사건 이해를 돕습니다.
 
-> 현재 상태: OAuth·동의, 암호화 DB, 사건 분석 API·Workflow·UI, 계정 삭제와 cleanup을 구현했습니다.
-> 50개 합성 입력의 제품 파이프라인·상세 화면을 PR CI에서 검사합니다. 실제 외부 서비스와
-> 공개 정책 승인은 진행 중이며 공개 베타 API는 기본 비활성화입니다.
+> 현재 구현은 v1 개인 간 금전 대여 분석·저장·삭제입니다. v2 변호사 디렉터리·
+> 적응형 질문·지속 채팅·자료 처리·리포트 전달은 전체 개발 목표입니다.
+> P0.3 실제 외부 연동·운영·정책 승인과 v2 전체 시연은 미완료이며 공개 API는
+> 기본 비활성화입니다. 문서 개정은 구현이나 법률 승인 완료를 뜻하지 않습니다.
 
-BARO는 변호사나 법률사무소가 아니며 법률 자문, 승소 가능성 판단, 사건 수임 또는
-전문가 추천을 제공하지 않습니다. AI 결과는 공식 법령 출처와 함께 제공되는 일반
-정보이며, 중요한 결정과 기한은 공식 원문 또는 자격 있는 전문가를 통해 확인해야 합니다.
+초기 서비스는 무료이며 소개·중개 수수료를 받지 않습니다. 수수료가 없다는 이유만으로
+적법성을 보장하지 않습니다. BARO는 변호사나 법률사무소가 아니며 승소 가능성·확정
+법률 판단·소송 전략·사건 수임을 대신하지 않습니다. 변호사 선택과 실제 연락·자료
+전달은 사용자가 직접 수행합니다.
 
-## MVP
+## v2 전체 서비스 목표
 
-MVP는 대한민국에 거주하거나 대한민국 법률이 적용되는 만 14세 이상 사용자를 대상으로
-다음 흐름을 제공합니다.
+대한민국 법률이 적용되는 만 14세 이상 개인과 기업을 대상으로 모든 사건 가족의
+사실 정리와 변호사 탐색을 지원합니다. 기업 사건도 한 계정이 소유하며 팀 공동 편집은
+제공하지 않습니다. 공개 디렉터리는 비로그인으로 탐색하고 사건은 로그인 후 이용합니다.
 
 ```text
-Google/Naver/Kakao 로그인
-  -> 필수 동의와 만 14세 이상 확인
-  -> 개인 간 금전 대여 사건 입력
-  -> 범위·긴급성 확인
-  -> 필요한 경우 최대 5개의 추가 질문
-  -> 공식 법령 검색과 인용 검증
-  -> 사건 요약·쟁점·증거 체크리스트·일반 절차
-  -> 저장·재열람·사건 또는 계정 삭제
+변호사 목록·객관적 필터 → 승인 프로필 → 사용자의 직접 외부 연락
+        ↘ 로그인·동의 → 적응형 질문·모름/건너뛰기·저장/재개
+              → 사용자 요약 확인 → 채팅·사실·자료·타임라인·다음 행동
+              → 리포트 검토·마스킹/제외 → PDF·선택 원본 ZIP
+              → 사용자 직접 전달 → 이후 정리와 리포트 갱신
 ```
 
-다른 법역과 사건 유형, 승소 가능성, 확정적인 법률 판단, 변호사 연결, 제출 문서 자동
-작성은 MVP 범위에 포함되지 않습니다.
+개인 변호사의 본인·자격·사무실을 수동 확인하고 모든 공개 편집을 심사합니다.
+사건 분석 기반 AI 변호사 순위·유료 우선 노출·플랫폼 내부 상담은 만들지 않습니다.
+운영 화면은 자격·게시물·신고만 심사하며 사건 원문을 열람하지 않습니다.
+
+문서·이미지·음성·영상의 실제 처리와 coverage, private 원본/파생물/리포트의 삭제,
+사용량·기술 월 100 만원 예산을 검증합니다. 세부 한도와 완료 기준은 [PRD](./docs/PRD.md),
+[MVP](./docs/product/MVP-SPEC.md), [실제 UI 시연 행렬](./docs/product/UI-DEMONSTRATION.md)이 정본입니다.
+
+기존 v1 사건·schemaVersion 1·분석 결과·읽기·삭제는 보존하고 사용자 승인 없이 재분석하지 않습니다.
+전체 개발 완료는 모든 역할의 실제 UI 시연과 외부 연동·preview/production 배포·공개 승인
+증거가 갖춰진 상태입니다. 승인되지 않은 기능/정책을 공개 완료로 표시하지 않습니다.
 
 ## 기술 방향
 
@@ -38,53 +48,48 @@ Google/Naver/Kakao 로그인
 | --- | --- |
 | Toolchain | Bun |
 | Web | Astro 7, React islands, Tailwind CSS |
+| Design system | shadcn 기반, blue primary, Lucide, Pretendard, shared SVG |
 | API | Hono, Zod, Hono RPC |
-| Runtime | Cloudflare Workers (`workerd`) |
-| Database | Cloudflare D1, Drizzle ORM |
-| Long-running jobs | Cloudflare Workflows |
+| Runtime | Cloudflare Workers; 격리된 heavy file processor만 Containers |
+| Database / jobs | D1·Drizzle, Workflows |
+| Files / reports | R2 private 원본·파생물·리포트 / 승인된 public profile 자산 분리 |
 | Authentication | Better Auth, Google/Naver/Kakao OAuth |
-| AI | Cloudflare AI Gateway Unified Billing, provider-keyless model access |
-| Legal source | 국가법령정보 공동활용 Open API |
-| Delivery | GitHub Actions, fixed preview, production environment |
+| AI | 기존 AI Gateway Unified Billing pinned model·medium 유지, Cloudflare Whisper ASR 확장 |
+| Legal source | 공식 법령·공식 판례·공식기관 안내의 검증된 원문 |
+| Delivery | GitHub Actions, fixed preview, approved immutable production release |
 
-Bun은 패키지 관리·스크립트·테스트에 사용합니다. 배포 코드는 `Bun.*` 또는 Node 전용
-런타임 API에 의존하지 않고 Cloudflare Workers의 Web API와 binding을 사용합니다.
+웹/API 제품 코드는 Workers Web API 와 binding을 사용합니다. Bun은 도구·테스트용이며
+Node filesystem/process는 별도 Container 처리 서비스에만 허용합니다. v2 저장소/
+처리/모델 capability는 아직 live 미검증입니다. [ADR](./docs/adr/README.md)이 기존
+결정의 유지 범위와 v2 부분 대체를 설명합니다.
 
-## 문서
+## 문서와 작업
 
-구현 전에는 아래 순서로 읽는 것을 권장합니다.
-
-작업을 맡는 에이전트는 먼저 [AGENTS.md](./AGENTS.md)와
-[실행 기준](./docs/development/EXECUTION.md)을 읽고 `bun run work:next`로 선행 이슈를 확인합니다.
+에이전트는 [AGENTS.md](./AGENTS.md), [실행 기준](./docs/development/EXECUTION.md)을 먼저 읽고
+`bun run work:next`로 실제 선행 상태와 다른 작업을 확인합니다.
 
 1. [문서 지도](./docs/README.md)
-2. [제품 요구사항](./docs/PRD.md)
-3. [MVP 기능 명세](./docs/product/MVP-SPEC.md)
-4. [UX 및 화면 상태](./docs/product/UX-SPEC.md)
-5. [Architecture Decision Records](./docs/adr/README.md)
-6. [시스템 설계](./docs/architecture/SYSTEM.md)
-7. [데이터 모델](./docs/architecture/DATA-MODEL.md)과 [HTTP API](./docs/architecture/HTTP-API.md)
-8. [AI 파이프라인](./docs/architecture/AI-PIPELINE.md)과 [법률정보 검색](./docs/architecture/LEGAL-RETRIEVAL.md)
-9. [보안·개인정보](./docs/security/SECURITY-PRIVACY.md)와 [테스트 전략](./docs/quality/TEST-STRATEGY.md)
-10. [배포·운영](./docs/operations/DEPLOYMENT-OPERATIONS.md)
+2. [PRD](./docs/PRD.md), [MVP](./docs/product/MVP-SPEC.md), [UX](./docs/product/UX-SPEC.md)
+3. [시연 행렬](./docs/product/UI-DEMONSTRATION.md), [로드맵](./docs/product/ROADMAP.md)
+4. [ADR](./docs/adr/README.md), [시스템](./docs/architecture/SYSTEM.md)
+5. [데이터](./docs/architecture/DATA-MODEL.md), [API](./docs/architecture/HTTP-API.md), [실행 계약](./docs/architecture/DOMAIN-LIFECYCLE.md)
+6. [AI](./docs/architecture/AI-PIPELINE.md), [공식 출처](./docs/architecture/LEGAL-RETRIEVAL.md)
+7. [보안](./docs/security/SECURITY-PRIVACY.md), [테스트](./docs/quality/TEST-STRATEGY.md), [배포](./docs/operations/DEPLOYMENT-OPERATIONS.md)
 
-공개 정책 문서는 [정책 초안 디렉터리](./docs/policies/)에 있습니다. 법률 검토와 문서에
-표시된 publication blocker 해소 전에는 공개본으로 사용하지 않습니다.
+[공개 정책 초안](./docs/policies/)은 법률 검토·사업자 사실·게시 버전 승인 전 공개본으로
+사용하지 않습니다. 기술적으로 production에 배포하는 것과 일반 사용자 공개 전환을 구분합니다.
 
-## 로컬 개발
+## 로컬 개발과 검증
 
-사전 요구사항은 [`.bun-version`](./.bun-version)에 고정된 Bun과 Cloudflare 계정입니다.
-의존성을 설치하고 로컬 D1 schema를 적용한 뒤 개발 서버를 시작합니다.
-`.env.example`과 `.dev.vars.example`을 각각 `.env`, `.dev.vars`로 복사합니다.
-키 없는 개발은 합성 test adapter로 가능하며 실제 OAuth는 개발용 client만 사용합니다.
+`.bun-version`의 Bun을 사용합니다. `.env.example`과 `.dev.vars.example`을 각각
+로컬 파일로 복사하고 secret은 커밋하지 않습니다. 실제 OAuth 에는 개발용 client만 쓰고,
+키 없는 개발·CI 에는 합성 test adapter를 사용합니다. 제품에 인증/모델 fallback을 추가하지 않습니다.
 
 ```bash
 bun ci
 bun run db:migrate:local
 bun run dev
 ```
-
-품질 검사는 다음 명령으로 동일하게 재현할 수 있습니다.
 
 ```bash
 bun ci
@@ -98,36 +103,25 @@ bun run build:production
 bun run bundle:check
 ```
 
-환경 변수와 secret 이름은 [`.env.example`](./.env.example)과
-[`.dev.vars.example`](./.dev.vars.example)을 참고하세요. 실제 값은 Git에 커밋하지
-않습니다. CI는 `bun.lock`, package script, Wrangler 설정과 dry-run을 자동 검사합니다.
+DB 변경은 generation drift·fresh/upgrade 검증을 추가합니다. Container·R2·ASR 와 모든
+역할의 실제 시연은 downstream 이슈의 검증이며 기존 offline 통과로 대체하지 않습니다.
 
-## 기여 흐름
+## 기여·배포
 
-`main`에 직접 push하지 않습니다.
+`main`에 직접 push 하지 않습니다. 이슈의 범위/인수 조건과 작업 시작을 기록하고
+깨끗한 main 에서 `codex/<issue>-<purpose>` 브랜치를 만듭니다. 다른 작업자는 별도
+worktree를 사용합니다. PR 검사·실패 시나리오와 리뷰를 마친 뒤 권한 범위에서 병합합니다.
+설정은 [repository setup](./.github/REPOSITORY-SETUP.md)을 따릅니다.
 
-1. GitHub Issue에서 범위와 인수 조건을 정합니다.
-2. `codex/` 또는 작업 목적을 나타내는 브랜치를 만듭니다.
-3. 작고 검토 가능한 Pull Request를 엽니다.
-4. `Quality gate` 통과와 대화 해결 후 squash merge합니다.
-5. 병합된 브랜치는 자동 삭제합니다.
-
-PR과 Issue 작성 기준은
-[GitHub repository setup](./.github/REPOSITORY-SETUP.md)을 참고하세요.
-
-## 배포
-
-- main의 CI가 성공하면 고정 `preview` Cloudflare Environment 배포가 시작됩니다.
-- production은 성공한 main CI·preview smoke의 immutable SHA를 지정하고 Environment
-  승인을 거칩니다. `foundation` 모드는 공개 API를 닫고 `public-beta`는 별도 출시 증거가 필요합니다.
-- preview URL: <https://preview.baro.site>
-- production URL: <https://baro.site>
-- 환경별 D1, Workflow, OAuth client, 암호화 키와 API secret을 공유하지 않습니다.
-- 현재 Accepted 설계에는 R2가 필요하지 않습니다. 사용 요구가 생기면 별도 ADR과
-  개인정보 보존·삭제 정책을 먼저 승인합니다.
+- main CI 성공 후 고정 preview로 자동 배포합니다.
+- production은 성공한 CI·preview smoke의 immutable SHA 와 Environment 승인을 요구합니다.
+- foundation 코드는 공개 API를 닫고 배포할 수 있습니다. 공개 전환은 실제 연동·운영·정책/법률 조건을 충족한 후에만 합니다.
+- preview: <https://preview.baro.site>, production: <https://baro.site>.
+- 환경별 DB·Workflow·R2·Container·OAuth·Gateway·키와 secret은 분리합니다.
+- 전체 개발은 [마일스톤 5](https://github.com/creno-va/baro/milestone/5)에서 추적하고 실제 시연 증거로 판정합니다.
 
 ## 보안 문제
 
-실제 사건 내용, 개인정보, OAuth token 또는 secret을 공개 Issue에 올리지 마세요.
-민감한 취약점은 저장소의 [Security](https://github.com/creno-va/baro/security) 채널을
-사용하고, 일반 버그에는 비민감 request ID와 재현 절차만 첨부해 주세요.
+실제 사건·자료·개인정보·OAuth token·secret을 공개 이슈/PR/artifact에 올리지 않습니다.
+민감 취약점은 저장소 [Security](https://github.com/creno-va/baro/security), 일반 오류는
+비민감 request ID 와 재현 절차만 사용합니다.

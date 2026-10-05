@@ -4,6 +4,7 @@
 - Date: 2026-10-04
 - Amended: 2026-10-05 — Naver OAuth 추가
 - Owners: Engineering, Product
+- Partial supersession (2026-10-06): 공개 역할은 [ADR-0007](./0007-lawyer-directory-verification-and-moderation.md), R2/파생물/리포트의 저장·삭제는 [ADR-0008](./0008-private-files-and-report-handoff.md)으로 확장한다. 기존 인증·owner·암호화·삭제까지 보관은 유지한다.
 
 ## 맥락
 

@@ -1,45 +1,51 @@
 # Architecture Decision Records
 
-BARO의 중요한 기술 결정을 기록한다.
+ADR은 제품 목표가 아니라 중요한 기술 선택·맥락·대안·결과를 기록한다.
+범위는 [PRD](../PRD.md), 동작은 [MVP](../product/MVP-SPEC.md), 실행 shape는 architecture,
+운영 절차는 runbook에 둔다.
 
-ADR은 하나의 결정과 그 결정의 맥락, 대안, 결과만 다룬다. 제품의 목표와
-기능 범위는 PRD에, 반복 가능한 운영 절차는 runbook에, 구현 세부사항은 코드와
-기술 문서에 둔다.
+## 상태와 변경
 
-## 상태
-
-- `Proposed`: 검토 중이며 아직 구현의 기준이 아니다.
-- `Accepted`: 팀이 채택했으며 구현의 기준이다.
-- `Superseded`: 새로운 ADR로 대체되었다.
+- `Proposed`: 검토 중이며 구현 기준이 아니다.
+- `Accepted`: 채택한 구현 목표다. 실제 구현·외부 지원·법률 승인 완료를 뜻하지 않는다.
+- `Superseded`: 새 결정으로 전체 대체되었다.
 - `Deprecated`: 더 이상 적용하지 않는다.
 
-Accepted ADR의 내용이 바뀌어야 하면 기존 문서를 고치기보다 새 ADR을 만들고
-`Superseded by`를 연결한다. 오탈자와 링크 수정은 예외로 한다.
+Accepted 내용을 바꿀 때 새 ADR을 만들고 대체 범위를 명시한다. 기존 결정 내용은
+역사로 보존한다. 부분 대체는 이전 ADR의 status를 무조건 Superseded로 바꾸지 않고
+`Partial supersession`/연결 metadata로 범위를 표시한다. 기존 v1에 유효한 불변조건은
+계속 적용한다. 0003/0004의 2026-10-05 amendment는 당시 사용자 지시에 따른 기록이다.
 
-## 작성 규칙
+파일명은 `NNNN-kebab-case-title.md`이며 번호를 재사용하지 않는다. 모든 ADR은 상태·
+날짜·맥락·결정·대안·결과·후속/미결 사항을 포함한다. 미검증 capability는 미검증으로 쓴다.
 
-파일명은 `NNNN-kebab-case-title.md` 형식을 사용한다. 번호는 생성 순서대로
-증가시키며 재사용하지 않는다.
-
-각 ADR에는 다음 항목을 둔다.
-
-1. 상태와 날짜
-2. 맥락
-3. 결정
-4. 고려한 대안
-5. 결과
-6. 후속 결정 또는 미결 사항
-
-## 목록
+## 결정 목록
 
 | 번호 | 제목 | 상태 |
 | --- | --- | --- |
-| [0001](./0001-mvp-system-boundaries-and-ai-pipeline.md) | MVP 시스템 경계와 AI 응답 파이프라인 | Accepted |
-| [0002](./0002-web-stack-and-cloudflare-runtime.md) | 웹 스택과 Cloudflare 런타임 | Accepted |
-| [0003](./0003-identity-data-and-privacy.md) | 인증, 데이터와 개인정보 보호 | Accepted |
-| [0004](./0004-ai-provider-and-legal-retrieval.md) | AI 공급자와 법률정보 검색 | Accepted |
-| [0005](./0005-durable-execution-and-release-gates.md) | durable 실행·개인정보 경계와 출시 게이트 | Accepted |
+| [0001](./0001-mvp-system-boundaries-and-ai-pipeline.md) | MVP 시스템 경계와 AI 응답 파이프라인 | Accepted; 안전/모듈 유지 |
+| [0002](./0002-web-stack-and-cloudflare-runtime.md) | 웹 스택과 Cloudflare 런타임 | Accepted; web/API Workers 유지 |
+| [0003](./0003-identity-data-and-privacy.md) | 인증, 데이터와 개인정보 보호 | Accepted; 암호화/보관/삭제 유지 |
+| [0004](./0004-ai-provider-and-legal-retrieval.md) | AI 공급자와 법률정보 검색 | Accepted; 기존 모델/Gateway 유지 |
+| [0005](./0005-durable-execution-and-release-gates.md) | durable 실행·개인정보 경계와 출시 게이트 | Accepted; CAS/삭제/공개 gate 유지 |
+| [0006](./0006-continuous-case-workspace-and-navigation.md) | 지속적 사건 작업 공간과 준비 내비게이션 | Accepted v2 target |
+| [0007](./0007-lawyer-directory-verification-and-moderation.md) | 변호사 디렉터리·자격 확인·공개 심사 | Accepted v2 target |
+| [0008](./0008-private-files-and-report-handoff.md) | 비공개 자료와 리포트 전달의 저장·삭제 경계 | Accepted v2 target |
+| [0009](./0009-isolated-container-file-processing.md) | 격리된 Containers 자료 처리 | Accepted v2 target |
+| [0010](./0010-multimodal-ai-and-transcription.md) | 멀티모달 분석과 음성 전사의 모델 경계 | Accepted v2 target |
+| [0011](./0011-verified-official-source-expansion.md) | 검증된 공식 법률 출처의 확대 | Accepted v2 target |
+| [0012](./0012-shared-ui-system-and-brand-assets.md) | 공통 UI 시스템·한글 폰트·브랜드 자산 | Accepted v2 target |
+| [0013](./0013-resource-admission-and-budget.md) | 자료·AI 사용량과 기술 예산 admission | Accepted v2 target |
 
-0005는 0001~0004의 모듈·스택·인증·Unified Billing 선택을 유지한다. 실행/저장/출시 보장만
-구체화하며 상세 계약의 모호함은 DOMAIN-LIFECYCLE에서 해결한다. 0003/0004의 기록된
-amendment는 사용자 지시에 따른 과거 변경이며 이후 결정 변경은 신규 ADR을 사용한다.
+## v2 부분 대체 관계
+
+| 기존 | 새 ADR | 바뀌는 범위 / 유지하는 범위 |
+| --- | --- | --- |
+| 0001 | 0006 | 새 사건을 지속 workspace로 확장 / 모듈·사실·안전·검증 파이프라인 유지 |
+| 0002 | 0009,0012 | 격리 파일 processor 런타임 예외·UI 시스템 / Workers web/API·Astro/React/Tailwind 유지 |
+| 0003 | 0007,0008 | 공개 프로필 역할·R2/파생물/리포트 삭제 범위 추가 / 기존 계정·owner·암호화·삭제까지 보관 유지 |
+| 0004 | 0010,0011 | ASR/multimodal·공식 판례/기관 안내 추가 / pinned text model·medium·Gateway·자동 fallback 금지 유지 |
+| 0005 | 0006,0008,0013 | workspace·객체 삭제·다차원 사용량/예산 확장 / guardedwrite·outbox·비중복 userquota·실제 retry 비용·공개 gate 유지 |
+
+v1 데이터·계약·읽기/삭제는 그대로 유지하고 v2 추가 schema/contract는 선행 PR을 통합한다.
+신규 ADR의 Accepted는 사용자가 승인한 방향이며 P0.3 또는 v2 마일스톤 완료의 증거가 아니다.

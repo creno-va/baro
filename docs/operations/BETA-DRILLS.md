@@ -35,3 +35,44 @@ D1 Time Travel은 paid 30일/free 7일이며 실제 account plan 확인이 필�
 검증 명령: `bun test tests/release-candidate.test.ts tests/alert-contract.test.ts`, `bun run check`, `bun run build`, `bun run cf:dry-run`. 실제 외부 실행 뒤 candidate SHA, CI/preview/full-product smoke/live eval/drill의 immutable run URL과 artifact hash를 함께 기록한다.
 
 공식 근거: [D1 복구](https://developers.cloudflare.com/d1/reference/time-travel/), [Wrangler rollback](https://developers.cloudflare.com/workers/wrangler/commands/#rollback), [Workflow Worker API](https://developers.cloudflare.com/workflows/build/workers-api/).
+
+## v2 격리 drill 목표 (#71)
+
+#53의 아래 계획은 실제 실행 성공 증거가 아니다. P0.3 #19/#27의 dependency와 기존 증거를
+보존하고 v2 R2·Container·role·budget 범위를 추가한다. 자원 생성/실제 비용은 월100만 원
+승인 범위에서 가능하지만 production/일반 preview DB 덮어쓰기는 이 drill에 포함하지 않는다.
+
+먼저 allowlist 자원 등록부로 계정·D1 ID/이름·private/public R2·Worker/Workflow/DO/Container
+이름·image digest·키 version·관리자를 확인한다. `baro-drill-*` 이름만 보고 격리를 추정하지 않는다.
+실제 preview/production resource ID와 겹치면 중단한다. 독립 isolated journal manifest 계약은
+현재 알려진 보호 DB ID의 대소문자 우회도 거부하지만 신규 보호 자원도 등록부에 반영해야 한다.
+이 계약이 기존 CLI를 v2 restore 도구로 자동 전환하지 않는다.
+
+| Drill | 안전한 수행 | 실제 완료 증거 |
+| --- | --- | --- |
+| 원격 삭제 | 두 합성 owner·원본/파생/PDF/ZIP·진행 job과 approved profile/public cache 생성 후 한 owner 삭제 | 남은 owner 보존, target 객체/세션/job/capability 접근 없음, cleanup 완료 |
+| Late race | upload part·AI/Container 완료·export·심사 승인 응답을 삭제와 경쟁시킴 | primary/R2/public pointer 부활 없음, orphan 정리 |
+| Restore | baseline bookmark 후 삭제, 최신 journal을 DB 밖 보관, ingress/cron/dispatch 중단 후 격리 restore | journal replay 전 재개 금지, FK0/대상0·정상 owner decrypt·R2 orphan/누락 처리 |
+| Worker/Image rollback | 이전 검증 Worker version 및 Container digest로 복귀 | SHA/image/schema/key/manifest 양립, 진행 job 중복 실행·실제 비용 없음 |
+| 알림 | cleanup/crypto/source/timeout/budget/role 실패를 제한적으로 발생 | strict metadata만 수신, ack·dedup·복구·미수신 실패 판정 |
+| 비용 | 병렬 reservation·retry·unknown charge·월 경계·직전 상한을 테스트 | userquota 중복 차감 없음, actual비용 누락 없음, 초과 admission 닫힘 |
+
+삭제 drill의 Container는 종료 여부와 temporary disk/재사용 instance 흔적을 확인한다. R2의
+original/part/derived/export·public copy와 CDN cache를 검사한다. D1 restore 결과만으로 R2
+삭제/복구도 성공했다고 쓰지 않는다. key recovery 관리자는 키 값 없이 version과 접근/복호화
+결과만 기록하고 다른 환경 키를 복사하지 않는다.
+
+Runtime alert 수신처·담당자·발송 권한·ack timeout을 실제 지정해야 한다. 테스트 계약은 event와
+errorCode 조합 및 UUIDv4를 검사하고 unknown payload/production event를 거부한다. 외부
+email/Slack 메시지는 명시적 발송 권한이 있을 때만 보낸다. 내부 테스트 receiver와 실제 on-call
+수신을 구분하며 미수신/미ack는 실패다. 발송·ack·복구를 같은 drill receipt에 연결한다.
+
+run evidence는 repo/workflow/event·candidate SHA·환경·image digest·artifact hash·완료/success·
+각 check·critical-zero를 trusted resolver로 검증한다. human policy review는 검토자/범위/문서
+hash/버전·공개 승인 근거를 별도로 연결한다. 수동 체크표/가짜 receipt/다른 SHA/과거 offline
+50 fixture를 새 candidate의 live 결과로 쓰지 않는다. 실패·부분 완료·비용 unknown을 보존하고
+기존 handle 상태를 재조회하며 timeout만으로 job을 새로 시작하지 않는다.
+
+모든 drill 종료 후 합성 자료/임시 capability·test secret을 정리하고 자원 잔존·idle 비용을 확인한다.
+재현에 필요한 image digest/config version과 비민감 결과만 남긴다. 공개 전환과 일반 사용자
+실데이터 restore는 별도 승인된 운영 절차이며 이 문서의 시험 권한을 확대 해석하지 않는다.
