@@ -1,6 +1,10 @@
 ---
+// biome-ignore lint/correctness/noUnusedImports: Astro template reads icons.
+import { BookOpenCheck, Files, ListChecks } from "lucide-react";
 // biome-ignore lint/correctness/noUnusedImports: Astro resolves component imports in the template.
 import { FoundationStatus } from "../components/FoundationStatus";
+// biome-ignore lint/correctness/noUnusedImports: Astro template reads component.
+import { AppNavigation } from "../components/ui/app-navigation";
 // biome-ignore lint/correctness/noUnusedImports: Astro resolves component imports in the template.
 import BaseLayout from "../layouts/BaseLayout.astro";
 ---
@@ -9,13 +13,10 @@ import BaseLayout from "../layouts/BaseLayout.astro";
   title="BARO — 상황을 정리하는 첫 단계"
   description="개인 간 금전 대여 문제의 사실관계와 준비 자료를 정리하는 BARO"
 >
-  <main>
-    <nav aria-label="주요 탐색">
-      <a class="brand" href="/" aria-label="BARO 홈">BARO</a>
-      <a class="document-link" href="https://github.com/creno-va/baro">GitHub</a>
-    </nav>
-
+  <AppNavigation pathname="/" availableRoutes={["/"]} showLogin client:load />
+  <main id="main-content" tabindex="-1">
     <section class="hero" aria-labelledby="hero-title">
+      <div>
       <div class="eyebrow">대한민국 · 개인 간 금전 대여</div>
       <h1 id="hero-title">복잡한 상황을<br />차분하게 정리합니다.</h1>
       <p class="lede">
@@ -29,6 +30,14 @@ import BaseLayout from "../layouts/BaseLayout.astro";
         </a>
       </div>
       <FoundationStatus client:idle />
+      </div>
+      <aside class="hero-preview" aria-label="상황 정리 안내">
+        <p class="eyebrow">확인할 내용을 한곳에</p>
+        <h2>차근차근, 빠짐없이</h2>
+        <div class="hero-preview__row"><span class="hero-preview__icon"><Files size={22} aria-hidden="true" /></span><div><strong>사실관계 정리</strong><p>누가, 언제, 어떤 일이 있었는지</p></div></div>
+        <div class="hero-preview__row"><span class="hero-preview__icon"><ListChecks size={22} aria-hidden="true" /></span><div><strong>준비 자료 확인</strong><p>가지고 있는 자료와 확인할 내용</p></div></div>
+        <div class="hero-preview__row"><span class="hero-preview__icon"><BookOpenCheck size={22} aria-hidden="true" /></span><div><strong>공식 출처 검토</strong><p>중요한 결정은 원문과 전문가에게</p></div></div>
+      </aside>
     </section>
 
     <section class="principles" aria-labelledby="principles-title">

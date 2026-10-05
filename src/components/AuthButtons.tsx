@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { authClient } from "../client/auth";
+import { Button } from "./ui/button";
 
 type Provider = "google" | "naver" | "kakao";
 
@@ -38,7 +39,8 @@ export function AuthButtons() {
   return (
     <div className="auth-options" aria-busy={pendingProvider !== null}>
       {providers.map((provider) => (
-        <button
+        <Button
+          variant="outline"
           className={`auth-provider auth-provider--${provider.id}`}
           disabled={pendingProvider !== null}
           key={provider.id}
@@ -49,7 +51,7 @@ export function AuthButtons() {
           type="button"
         >
           {pendingProvider === provider.id ? "연결 중…" : provider.label}
-        </button>
+        </Button>
       ))}
       {error ? (
         <p className="form-error" role="alert">

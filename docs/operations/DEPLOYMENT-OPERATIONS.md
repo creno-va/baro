@@ -40,6 +40,11 @@ production dispatch에는 `confirmation=production`, `target_sha=<full40sha>`,
 `release_mode=foundation|public-beta`를 지정한다. 기본 foundation은 API 공개를 닫는다.
 성공한 main push CI와 해당 SHA의 preview Deployment success가 없으면 실패한다.
 preview success 기록은 동일 RELEASE_SHA의 health/ready smoke 뒤에만 만든다.
+foundation smoke는 캐시 없는 read-only 요청으로 배포 전파를 최대 7회 기다린다.
+대기 간격은 2/4/8/16/16/16초, 요청별 timeout은 최대10초, 전체 deadline은90초다.
+매 시도에서 live와 ready 둘 다 정확한 full SHA·환경·서비스·상태·correlation을 확인하고,
+ready에는 schema version도 필요하다. 서로 다른 시도의 부분 성공을 합쳐 통과시키지 않는다.
+실패 출력은 endpoint·유한 오류 코드·시도 수만 포함하며 응답 원문이나 stack을 남기지 않는다.
 public-beta는 `bun run release:check`로 정책 Approved 상태와 release-evidence를 확인한다.
 향후 #18/#19의 실제 eval/E2E/live smoke artifact를 해당 증거 URL에 연결해야 하며
 boolean 수동 변경만으로 실제 검증을 대신하지 않는다.
