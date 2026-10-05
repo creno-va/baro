@@ -4,6 +4,7 @@
 - Date: 2026-10-04
 - Owners: Engineering
 - Related: [ADR-0001](./0001-mvp-system-boundaries-and-ai-pipeline.md)
+- Partial supersession (2026-10-06): 격리 processor 런타임만 [ADR-0009](./0009-isolated-container-file-processing.md), UI 시스템은 [ADR-0012](./0012-shared-ui-system-and-brand-assets.md)를 따른다. web/API의 Workers 스택은 유지한다.
 
 ## 맥락
 

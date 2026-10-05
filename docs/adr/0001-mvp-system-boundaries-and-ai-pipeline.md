@@ -4,6 +4,7 @@
 - Date: 2026-10-04
 - Owners: Product, Engineering
 - Related: [BARO PRD](../PRD.md)
+- Partial supersession (2026-10-06): v2 지속 workspace는 [ADR-0006](./0006-continuous-case-workspace-and-navigation.md)으로 확장한다. 이 ADR의 모듈·사실·안전·검증 경계는 유지한다.
 
 ## 맥락
 

@@ -5,6 +5,7 @@
 - Owners: Engineering, Product
 - Last verified: 2026-10-05
 - Amended: 2026-10-05 — AI Gateway Unified Billing 채택
+- Partial supersession (2026-10-06): ASR/multimodal은 [ADR-0010](./0010-multimodal-ai-and-transcription.md), 공식 출처는 [ADR-0011](./0011-verified-official-source-expansion.md)로 확장한다. 기존 pinned model·medium·Gateway·자동 fallback 금지는 유지한다.
 
 ## 맥락
 
