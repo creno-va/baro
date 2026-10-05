@@ -118,6 +118,16 @@ test("polling delays stop while hidden or terminal; policy results and bounded r
   page,
 }) => {
   await page.clock.install();
+  await page.addInitScript(() => {
+    const browser = window as unknown as { pollSchedules: number[] };
+    browser.pollSchedules = [];
+    const original = window.setTimeout.bind(window);
+    window.setTimeout = ((callback: TimerHandler, delay?: number, ...args: unknown[]) => {
+      if ([1000, 2000, 4000, 8000, 15000].includes(delay ?? 0))
+        browser.pollSchedules.push(delay ?? 0);
+      return original(callback, delay, ...args);
+    }) as typeof window.setTimeout;
+  });
   let current = state("queued"),
     reads = 0;
   await page.route(`**/api/cases/${caseId}`, async (route) => {
@@ -149,13 +159,38 @@ test("polling delays stop while hidden or terminal; policy results and bounded r
   await page.goto(`/cases/${caseId}`);
   await expect(page.getByRole("heading", { name: "분석 대기" })).toBeVisible();
   const initial = reads;
+  await expect
+    .poll(() =>
+      page.evaluate(() => (window as unknown as { pollSchedules: number[] }).pollSchedules.at(-1)),
+    )
+    .toBe(1000);
   await page.clock.runFor(1000);
   await expect.poll(() => reads).toBe(initial + 1);
+  await expect
+    .poll(() =>
+      page.evaluate(() => (window as unknown as { pollSchedules: number[] }).pollSchedules.at(-1)),
+    )
+    .toBe(2000);
   await page.clock.runFor(1999);
   expect(reads).toBe(initial + 1);
   await page.clock.runFor(1);
   await expect.poll(() => reads).toBe(initial + 2);
+  let schedules = 2;
   for (const delay of [4000, 8000, 15000]) {
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          (window as unknown as { pollSchedules: number[] }).pollSchedules.at(-1),
+        ),
+      )
+      .toBe(delay);
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () => (window as unknown as { pollSchedules: number[] }).pollSchedules.length,
+        ),
+      )
+      .toBe(++schedules);
     const before = reads;
     await page.clock.runFor(delay - 1);
     expect(reads).toBe(before);
