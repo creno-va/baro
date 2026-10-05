@@ -1,6 +1,6 @@
 # 에이전트 실행 기준
 
-- Reviewed: 2026-10-05
+- Reviewed: 2026-10-06
 - 목적: 사용자의 매 작업 지시 없이 이슈 선택부터 검증된 PR까지 진행할 수 있게 한다.
 
 ## 현재 구현과 목표 구분
@@ -12,6 +12,7 @@ schema는 additive `0005_deletion_cleanup`이며 기존 migration/인증/사건 
 합성 adapter는 테스트에만 사용하며 제품의 모델/인증 fallback이 아니다. 선택 지표는
 동의 후 해당 탭의 세션 저장소에만 기록하고 외부 공급자를 도입하지 않는다.
 검증 경계와 인수 조건별 증거는 [P0.2 검증 기록](./P0.2-VALIDATION.md)을 따른다.
+P0.3의 인수 조건별 구현/외부 미검증 증거는 [P0.3 검증 기록](./P0.3-VALIDATION.md)을 따른다.
 P0.3 #18은 50개 제품 runner/상세 UI와 자동 접근성, dependency/secret/source/bundle
 검사 및 AI 변경 감지 eval을 PR CI에 연결한다. 실행 명령과 합성/외부 검증 경계는
 [테스트 전략](../quality/TEST-STRATEGY.md)에 기록한다. 실제 모델 품질은 여전히 #27이다.
@@ -61,12 +62,21 @@ P0.3 #18은 50개 제품 runner/상세 UI와 자동 접근성, dependency/secret
 | --- | --- | --- |
 | 도메인·D1·Workflow·KV | preview/prod scaffold 배포 완료 | #19의 health/ready smoke |
 | 운영 OAuth | 운영 Worker secret 7개 등록, 실제 callback 미검증 | 환경 readiness 이슈, 공급자 callback·테스터 승인 |
-| 개발/preview OAuth | preview Worker secret 0개, 별도 client 미제공 | offline synthetic auth로 개발, 실제 preview client는 human-required |
+| 개발/preview OAuth | 2026-10-05 읽기 전용 점검: preview secret 0개, auth origin만 일치 | 별도 secret/client, 공급자별 callback·tester·앱 승인 후 성공/취소 검증 |
 | 법률 OC | `crenova` 승인 정보 수신 | #14 live schema/응답 검증; 요청 URL 로그에 OC를 남기지 않음 |
-| Turnstile | widget/site key 미확인 | 환경 readiness 이슈, hostname/action 확인 |
-| AI Gateway | ID/credit/예산/logging 미확인 | 환경 readiness 이슈; credit 구매·auto-top-up은 사용자 결정 |
-| 암호화 키 | 환경별 provisioning 미완료 | #9: 개발 키 생성 가능, 운영 생성·등록 및 복구 계획 |
-| 정책 | 공개 초안의 blocker 존재 | #20: 사실정보·법률 검토 필요 |
+| Turnstile | preview widget/site key/secret 없음 | preview hostname, case_create action, 담당자 확인 |
+| AI Gateway | AI binding 존재, preview Gateway ID 없음, credit/예산/provider ZDR 미확인 | 기존 승인 한도·logging/cache·provider 계약 확인. 구매·auto-top-up 변경 안 함 |
+| 암호화 키 | preview V1 provisioning·관리자 미확정 | wrapper는 V1만 연결. 다중 read-key unit 테스트와 실제 rotation/복구를 구분, 통합·관리자·live 증거 필요 |
+| 플랫폼 로그/백업 | invocationLogs false, observability enabled/sampling1/tail0. plan·보존 미확정 | payload 예외/retention·접근, D1 paid30/free7와 journal 목표35일 대조 |
+| 정책/랜딩 | Draft blocker 및 실제 랜딩 범위 밖 주장 6종 유지 | 사업자 사실·법률 검토·게시/버전 승인·별도 랜딩 소유자 수정 |
+| #19 통합/drill | #18 완료, #27 OPEN이므로 BLOCKED | 독립 candidate/경보 계약·격리 runbook만 완료. 환경/합성 전용 자원/테스트 수신처·발송 권한 확보 뒤 통합 |
+
+실제 관측 시각·필요 secret/담당 행동은 [환경 readiness](../operations/ENVIRONMENT-READINESS.md),
+격리 복구·rollback·경보 절차는 [Beta drills](../operations/BETA-DRILLS.md)에 기록한다.
+foundation health 성공은 OAuth→사건→Workflow→법령→결과→삭제 또는 live model 평가의
+증거가 아니다. 기존 release checker의 boolean 형태를 새 candidate의 증거로 인정하지
+않으며, #27 뒤 trusted receipt resolver와 배포 gate 통합이 필요하다. 정책은 Draft,
+reviewedAt은 null, 모든 external check는 false다. P0.3 milestone과 Epic #6은 OPEN 유지한다.
 
 ## 표준 검증
 

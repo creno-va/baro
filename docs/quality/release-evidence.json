@@ -2,13 +2,14 @@
   "reviewedAt": null,
   "offlineEvidence": [
     {
-      "candidateSha": "a1033f7b5e767a81b3181fe5679ce77470b8b2d1",
+      "candidateSha": "f86a0c026719262e2a58117551ca1d950fd8dc9c",
       "mode": "deterministic-product-pipeline-and-ui",
-      "runUrl": "https://github.com/creno-va/baro/actions/runs/37325828117",
+      "runUrl": "https://github.com/creno-va/baro/actions/runs/37329092723",
       "pullRequestUrl": "https://github.com/creno-va/baro/pull/49",
       "fixtureCount": 50,
       "criticalFindings": 0,
       "automatedAccessibilityFindings": 0,
+      "builtWorkerCspPassed": true,
       "liveModelVerified": false
     }
   ],
