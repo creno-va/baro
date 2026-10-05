@@ -35,7 +35,11 @@ SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name IN
 ORDER BY name;
 ```
 
-예상 schema는 `0003_domain_foundation`, 테이블 수는 14, foreign key 위반은 0이다.
+예상 schema는 `0004_case_feedback`, 테이블 수는 15, foreign key 위반은 0이다.
+`0004`는 선택적 도움 여부 boolean/analysis reference/timestamp만 저장하는 additive
+테이블이며 기존 인증·사건·암호문을 변경하지 않는다. 사건/분석 삭제 시 FK cascade된다.
+제품 분석 event 또는 자유 텍스트를 저장하지 않는다. upgrade 데이터 보존과 fresh/drift를
+CI에서 검증하며 자동 preview migration 뒤 health/ready의 schema를 다시 확인한다.
 업그레이드 회귀 검증은 인증 5개 테이블의 모든 기존 행과 별도 metadata sentinel의 보존을 비교한다.
 
 ## Repository 사용 계약
