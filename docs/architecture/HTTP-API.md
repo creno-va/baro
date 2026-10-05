@@ -74,6 +74,9 @@ production의 `PUBLIC_BETA_ENABLED=false`에서는 health 외 API는 503 BETA_NO
 최근 인증 확인과 본문 `{ "confirmation": "DELETE" }`를 요구한다. 202 Accepted 후
 세션을 즉시 폐기하며, 삭제 workflow 상태를 외부에 장기 노출하지 않는다. 삭제 실패는
 운영 경보의 P0다.
+응답은 `{ "status": "accepted" }`다. `GET /api/me/deletion`은 settings용
+동일 계정 확인 tag, 공급자 enum, callback 인증 시각과 최근 여부만 반환한다.
+삭제 API는 별도로 실제 SQL 세션/OAuth 10분을 batch 조건으로 재확인한다.
 
 ## 사건
 

@@ -8,12 +8,14 @@
 main은 P0.1의 shared 계약·암호화·OAuth/동의·도메인 repository·offline harness에 더해
 P0.2의 admission/read/delete/answers/retry API, 공식 법령 검색, pinned AI Gateway,
 암호화 checkpoint Workflow, 목록/입력/상세/결과 UI와 선택 비민감 지표/피드백을 포함한다.
-schema는 additive `0004_case_feedback`이며 기존 migration/인증/사건 데이터를 보존한다.
+schema는 additive `0005_deletion_cleanup`이며 기존 migration/인증/사건 데이터를 보존한다.
 합성 adapter는 테스트에만 사용하며 제품의 모델/인증 fallback이 아니다. 선택 지표는
 동의 후 해당 탭의 세션 저장소에만 기록하고 외부 공급자를 도입하지 않는다.
 검증 경계와 인수 조건별 증거는 [P0.2 검증 기록](./P0.2-VALIDATION.md)을 따른다.
-실제 모델 품질·platform Workflow timing·외부 OAuth/Turnstile/Gateway 성공, 계정 삭제와
-복구/rollback 및 공개 정책은 P0.3 #17/#18/#19/#20/#27이다. `Implementation-ready`는
+계정 삭제와 settings, 공유 cleanup scheduler, restore journal 재적용의 offline 검증은
+#17이며 [삭제/복구 절차](../operations/DELETION-RESTORE.md)를 따른다.
+실제 모델 품질·platform Workflow timing·외부 OAuth/Turnstile/Gateway 성공,
+복구/rollback 및 공개 정책은 P0.3 #18/#19/#20/#27이다. `Implementation-ready`는
 목표 계약이며 외부 승인 완료를 뜻하지 않는다. 원격 schema는 배포 health로 확인한다.
 
 실제 진행 상태의 정본은 GitHub 이슈/PR이며 의존성과 소유 경계는 [작업 그래프](./work-items.json)다. PR이 병합되어 선행 이슈가 완료되기 전에는 후속 제품 코드가 ready가 아니다. 마일스톤은 실행자 배정이 아니라 완료 게이트다.

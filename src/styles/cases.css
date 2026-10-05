@@ -119,6 +119,23 @@
   width: 100%;
   min-height: 70px;
 }
+.account-settings p {
+  line-height: 1.7;
+  margin: 12px 0;
+}
+.account-settings input {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  padding: 12px;
+  font: inherit;
+  border: 1px solid #66786c;
+  border-radius: 10px;
+  margin-bottom: 20px;
+}
+.account-settings .case-actions button + button {
+  margin-left: 0;
+}
 .case-shell time {
   font-size: 0.9rem;
   color: #53635a;

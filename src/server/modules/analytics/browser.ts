@@ -111,6 +111,10 @@ export function analyticsOptOut() {
 export function analyticsOptedIn() {
   return sdk.isOptedIn();
 }
+export async function accountDeleted() {
+  if (!session) return false;
+  return emit("account_deleted", crypto.randomUUID());
+}
 async function hashId(id: string) {
   if (!session) return null;
   const key = await crypto.subtle.importKey(

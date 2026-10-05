@@ -5,6 +5,7 @@ import { secureHeaders } from "hono/secure-headers";
 import { api } from "./server/api";
 import { cleanupAuthData } from "./server/auth/cleanup";
 import { reconcileAnalysisTimeouts } from "./server/modules/case-structure/execution";
+import { reconcileDeletion } from "./server/modules/deletion/service";
 import { reconcileDispatch } from "./server/modules/dispatch/service";
 
 export { AnalysisWorkflow } from "./workflows/analysis";
@@ -27,6 +28,7 @@ app.use(i18n());
 export default {
   fetch: app.fetch,
   async scheduled(_controller: ScheduledController, env: Env): Promise<void> {
+    await reconcileDeletion(env);
     await cleanupAuthData(env.DB);
     await reconcileDispatch(env);
     await reconcileAnalysisTimeouts(env);
