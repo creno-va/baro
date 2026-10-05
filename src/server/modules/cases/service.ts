@@ -98,6 +98,9 @@ export async function readCase(
     inputRevision: record.inputRevision,
     analysisId: analysis.id,
     questions,
+    startedAt: analysis.startedAt,
+    completedAt: analysis.completedAt,
+    questionCount: record.questionsAsked,
     result,
     error,
   });

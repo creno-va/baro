@@ -72,7 +72,25 @@ export function CaseList() {
       <ul className="case-list">
         {list?.items.map((item) => (
           <li key={item.id}>
-            <a href={`/cases/${item.id}`}>{item.title}</a>
+            <a
+              href={`/cases/${item.id}`}
+              onClick={(event) => {
+                if (
+                  event.button !== 0 ||
+                  event.ctrlKey ||
+                  event.metaKey ||
+                  event.shiftKey ||
+                  event.altKey
+                )
+                  return;
+                event.preventDefault();
+                void noteExistingCase(item.id, item.createdAt)
+                  .catch(() => undefined)
+                  .finally(() => window.location.assign(`/cases/${item.id}`));
+              }}
+            >
+              {item.title}
+            </a>
             <p>{statusLabels[item.status]}</p>
             <time dateTime={item.createdAt}>
               {new Date(item.createdAt).toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul" })}
@@ -92,3 +110,5 @@ export function CaseList() {
     </section>
   );
 }
+
+import { noteExistingCase } from "../../server/modules/analytics/browser";

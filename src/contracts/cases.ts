@@ -77,6 +77,9 @@ export const caseDetailResponseSchema = z
     status: caseStatusSchema,
     ...analysisIdentity,
     questions: questionsSchema,
+    startedAt: timestampSchema.nullable().optional(),
+    completedAt: timestampSchema.nullable().optional(),
+    questionCount: z.number().int().min(0).max(5).optional(),
     result: resultSchema.nullable(),
     error: errorSchema.nullable(),
   })

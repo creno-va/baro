@@ -5,6 +5,7 @@ import { answersApi } from "./answers";
 import { caseCreateApi } from "./case-create";
 import { casesApi } from "./cases";
 import { type ApiEnvironment, errorBody } from "./errors";
+import { feedbackApi } from "./feedback";
 import { healthApi } from "./health";
 import { meApi } from "./me";
 import { retryApi } from "./retry";
@@ -47,6 +48,7 @@ export const api = new Hono<ApiEnvironment>()
   .route("/cases", caseCreateApi)
   .route("/cases", casesApi)
   .route("/cases", answersApi)
-  .route("/cases", retryApi);
+  .route("/cases", retryApi)
+  .route("/cases", feedbackApi);
 
 export type AppType = typeof api;
