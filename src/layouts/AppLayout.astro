@@ -1,0 +1,21 @@
+---
+// biome-ignore lint/correctness/noUnusedImports: Astro reads the island.
+import { AppNavigation, type NavigationRole } from "../components/ui/app-navigation";
+// biome-ignore lint/correctness/noUnusedImports: Astro reads the layout.
+import BaseLayout from "./BaseLayout.astro";
+
+interface Props {
+  title: string;
+  description: string;
+  role: NavigationRole;
+  availableRoutes: readonly string[];
+  contentClass?: string;
+}
+// Display-only role configuration: callers enforce authentication and authorization on the server.
+// biome-ignore lint/correctness/noUnusedVariables: Astro reads these props in the template.
+const { title, description, role, availableRoutes, contentClass = "app-main" } = Astro.props;
+---
+<BaseLayout title={title} description={description}>
+  <AppNavigation role={role} pathname={Astro.url.pathname} availableRoutes={availableRoutes} client:load />
+  <main id="main-content" tabindex="-1" class={contentClass}><slot /></main>
+</BaseLayout>

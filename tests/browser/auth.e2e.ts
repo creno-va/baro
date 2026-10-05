@@ -25,7 +25,7 @@ test("keyboard OAuth initiation blocks duplicates and restores focus on a networ
   });
   await page.goto("/login");
   await page.locator("astro-island[ssr]").waitFor({ state: "detached" });
-  await page.keyboard.press("Tab");
+  await page.getByRole("link", { name: "BARO 홈" }).focus();
   await page.keyboard.press("Tab");
   await expect(page.getByRole("button", { name: "Google로 계속하기" })).toBeFocused();
   await page.keyboard.press("Enter");

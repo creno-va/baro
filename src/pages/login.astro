@@ -1,6 +1,8 @@
 ---
 // biome-ignore lint/correctness/noUnusedImports: Astro resolves component imports in the template.
 import { AuthButtons } from "../components/AuthButtons";
+// biome-ignore lint/correctness/noUnusedImports: Astro template reads component.
+import { Brand } from "../components/ui/brand";
 // biome-ignore lint/correctness/noUnusedImports: Astro resolves component imports in the template.
 import BaseLayout from "../layouts/BaseLayout.astro";
 
@@ -16,8 +18,8 @@ const errorMessage =
 ---
 
 <BaseLayout title="로그인 — BARO" description="Google, Naver 또는 Kakao 계정으로 BARO에 로그인합니다.">
-  <main class="auth-shell">
-    <a class="brand" href="/" aria-label="BARO 홈">BARO</a>
+  <main id="main-content" tabindex="-1" class="auth-shell">
+    <Brand />
     <section class="auth-card" aria-labelledby="login-title">
       <p class="eyebrow">로그인</p>
       <h1 id="login-title">계정으로 계속하기</h1>

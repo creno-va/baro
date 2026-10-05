@@ -1,13 +1,15 @@
 ---
 // biome-ignore lint/correctness/noUnusedImports: Astro resolves component imports in the template.
 import { ConsentForm } from "../components/ConsentForm";
+// biome-ignore lint/correctness/noUnusedImports: Astro template reads component.
+import { Brand } from "../components/ui/brand";
 // biome-ignore lint/correctness/noUnusedImports: Astro resolves component imports in the template.
 import BaseLayout from "../layouts/BaseLayout.astro";
 ---
 
 <BaseLayout title="필수 확인 — BARO" description="BARO 이용 전 필수 정책과 연령을 확인합니다.">
-  <main class="auth-shell">
-    <a class="brand" href="/" aria-label="BARO 홈">BARO</a>
+  <main id="main-content" tabindex="-1" class="auth-shell">
+    <Brand />
     <section class="auth-card" aria-labelledby="consent-title">
       <p class="eyebrow">최초 1회</p>
       <h1 id="consent-title">시작 전에 확인해 주세요</h1>

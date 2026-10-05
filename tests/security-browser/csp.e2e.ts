@@ -48,3 +48,92 @@ test("built Worker hash CSP blocks injected script while React and allowlisted T
     )
     .toBe(true);
 });
+
+test("built Worker mobile menu, brand, local font and error state work without CSP violations", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const browser = window as unknown as {
+      uiCspViolations: Array<{ directive: string; blockedURI: string; lineNumber: number }>;
+    };
+    browser.uiCspViolations = [];
+    document.addEventListener("securitypolicyviolation", (event) =>
+      browser.uiCspViolations.push({
+        directive: event.violatedDirective,
+        blockedURI: event.blockedURI,
+        lineNumber: event.lineNumber,
+      }),
+    );
+  });
+  await page.route("**/api/cases", (route) => route.fulfill({ status: 503, json: {} }));
+  await page.setViewportSize({ width: 320, height: 760 });
+  await page.goto("/cases");
+  await expect(page.getByRole("alert")).toContainText("목록을 불러오지 못했어요");
+  const opener = page.getByRole("button", { name: "메뉴 열기" });
+  await opener.press("Enter");
+  const dialog = page.getByRole("dialog", { name: "메뉴", exact: true });
+  await expect(dialog).toBeVisible();
+  await page.screenshot({ path: ".wrangler/built-ui-menu-320.png" });
+  await expect(dialog.getByRole("button", { name: "닫기", exact: true })).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  await expect(dialog.getByRole("link", { name: "계정 설정" })).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(dialog.getByRole("button", { name: "닫기", exact: true })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(opener).toBeFocused();
+  await page.evaluate(() => document.fonts.load('16px "Pretendard Variable"'));
+  await page.evaluate(() => document.fonts.ready);
+  expect(
+    await page.evaluate(() =>
+      [...document.fonts].some(
+        (font) =>
+          font.family.replaceAll('"', "") === "Pretendard Variable" && font.status === "loaded",
+      ),
+    ),
+  ).toBe(true);
+  expect(await page.locator(".brand img").first().getAttribute("src")).toBe("/brand/logo.svg");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  expect(
+    await page.evaluate(() => (window as unknown as { uiCspViolations: string[] }).uiCspViolations),
+  ).toEqual([]);
+});
+
+test("normal deployment bundle excludes the synthetic UI fixture", async ({ request }) => {
+  test.skip(
+    process.env.BARO_UI_TEST_FIXTURE === "true",
+    "Fixture-specific build is explicitly enabled for local tests.",
+  );
+  expect((await request.get("/__design-system")).status()).toBe(404);
+});
+
+test("explicit test build hydrates shared tabs and modal under the Worker hash CSP", async ({
+  page,
+}) => {
+  test.skip(
+    process.env.BARO_UI_TEST_FIXTURE !== "true",
+    "Synthetic fixture is absent from normal deployment builds.",
+  );
+  await page.addInitScript(() => {
+    const browser = window as unknown as { uiCspViolations: string[] };
+    browser.uiCspViolations = [];
+    document.addEventListener("securitypolicyviolation", (event) =>
+      browser.uiCspViolations.push(event.violatedDirective),
+    );
+  });
+  await page.goto("/__design-system");
+  const overview = page.getByRole("tab", { name: "개요", exact: true });
+  await overview.focus();
+  await page.keyboard.press("ArrowRight");
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("tabpanel", { name: "자료", exact: true })).toContainText(
+    "합성 자료 목록입니다.",
+  );
+  const opener = page.getByRole("button", { name: "검토 안내 열기" });
+  await opener.press("Enter");
+  await expect(page.getByRole("dialog", { name: "검토 안내", exact: true })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(opener).toBeFocused();
+  expect(
+    await page.evaluate(() => (window as unknown as { uiCspViolations: string[] }).uiCspViolations),
+  ).toEqual([]);
+});

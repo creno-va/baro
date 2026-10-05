@@ -6,6 +6,7 @@
     "jsx": "react-jsx",
     "lib": ["ES2024", "DOM", "DOM.Iterable"],
     "noUncheckedIndexedAccess": true,
+    "paths": { "@/*": ["./src/*"] },
     "types": ["./worker-configuration.d.ts", "bun", "@types/react", "@types/react-dom"]
   },
   "include": [".astro/types.d.ts", "src/**/*", "astro.config.ts", "drizzle.config.ts"],
