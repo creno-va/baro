@@ -17,4 +17,7 @@ interface Env {
   CASE_DATA_KEY_V1: string;
   LAW_API_OC: string;
   AI_GATEWAY_ID: string;
+  CASE_IP_LIMIT: RateLimit;
+  CASE_ACCOUNT_LIMIT: RateLimit;
+  ANALYSIS_ACCOUNT_LIMIT: RateLimit;
 }
