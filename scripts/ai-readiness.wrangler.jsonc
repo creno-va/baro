@@ -4,9 +4,31 @@
   "main": "ai-readiness-worker.ts",
   "compatibility_date": "2026-10-04",
   "workers_dev": true,
-  "ai": { "binding": "AI" },
-  "vars": { "AI_GATEWAY_ID": "baro-preview", "READINESS_CANDIDATE_SHA": "unset" },
-  "observability": { "enabled": false },
-  "durable_objects": { "bindings": [{ "name": "PROBE", "class_name": "SyntheticProbe" }] },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["SyntheticProbe"] }]
+  "ai": {
+    "binding": "AI"
+  },
+  "vars": {
+    "AI_GATEWAY_ID": "baro-preview",
+    "READINESS_CANDIDATE_SHA": "unset"
+  },
+  "observability": {
+    "enabled": false
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "PROBE",
+        "class_name": "SyntheticProbe"
+      }
+    ],
+    "code_update_strategy": {
+      "mode": "immediate"
+    }
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["SyntheticProbe"]
+    }
+  ]
 }
