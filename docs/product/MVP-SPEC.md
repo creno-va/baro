@@ -99,7 +99,7 @@ revision 기록이며 새 사실/자료가 핵심 요약을 바꾸면 변경 표
 요청 재생·자동 retry로 사용자 quota를 다시 소비하지 않는다. 새로운 사용자 메시지/
 새 자료와 동일 작업 retry는 논리 operation ID로 구분한다. 내부 질문 생성은 사용자
 AI 응답을 따로 늘리지 않지만 실제 비용은 모두 계산한다. quota 차감/반환 시점은
-[실행 계약](../architecture/DOMAIN-LIFECYCLE.md)의 v2 정본을 따른다.
+[실행 계약](../architecture/DOMAIN-LIFECYCLE.md#v2-사용량과-비용)의 v2 정본을 따른다.
 
 리포트는 사실성·출처·참조 자료의 고정 revision 으로 만든다. 식별자가 있는 PDF 와
 마스킹하지 않은 원본 ZIP을 구분해 설명한다. 사용자가 이름 등을 가리면 PDF 생성
