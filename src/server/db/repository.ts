@@ -235,6 +235,26 @@ export function createDomainRepository(binding: D1Database, cipher: EnvelopeCiph
         return record && record.expiresAt > parse(nowSchema, now) ? record : null;
       });
     },
+    findIdempotency(
+      ownerId: string,
+      method: "POST" | "DELETE",
+      route: string,
+      key: string,
+      now: string,
+    ) {
+      return safe(async () => {
+        parse(ownerSchema, ownerId);
+        parse(idempotencyKeySchema, key);
+        parse(nowSchema, now);
+        parse(z.string().regex(/^\/api\/cases\/[a-f0-9-]{36}(\/(answers|retry))?$/), route);
+        return await binding
+          .prepare(
+            "SELECT request_hash AS requestHash,response_status AS responseStatus,response_json AS responseJson FROM idempotency_records WHERE user_id=? AND method=? AND route=? AND key=? AND expires_at>?",
+          )
+          .bind(ownerId, method, route, key, now)
+          .first<{ requestHash: string; responseStatus: number; responseJson: string }>();
+      });
+    },
     getUsage(ownerId: string, date: string) {
       return safe(
         async () =>
@@ -569,14 +589,33 @@ export function createDomainRepository(binding: D1Database, cipher: EnvelopeCiph
       });
     },
     // Primary storage primitive only. #12/#17 add route idempotency and Workflow cleanup.
-    deleteOwnedCase(ownerId: string, caseId: string, jobId: string, now: string) {
+    deleteOwnedCase(
+      ownerId: string,
+      caseId: string,
+      jobId: string,
+      now: string,
+      idempotency?: { key: string; requestHash: string },
+    ) {
       return safe(async () => {
         const owner = parse(ownerSchema, ownerId);
         const id = parse(uuidSchema, caseId);
         const job = parse(uuidSchema, jobId);
         const at = parse(nowSchema, now);
         const expiry = new Date(Date.parse(at) + 35 * DAY_MS).toISOString();
+        if (idempotency) {
+          parse(idempotencyKeySchema, idempotency.key);
+          parse(hashSchema, idempotency.requestHash);
+        }
+        const route = `/api/cases/${id}`;
         const result = await binding.batch([
+          ...(idempotency
+            ? [
+                statement(
+                  "DELETE FROM idempotency_records WHERE user_id=? AND method='DELETE' AND route=? AND key=? AND expires_at<=?",
+                  [owner, route, idempotency.key, at],
+                ),
+              ]
+            : []),
           statement(
             `INSERT INTO deletion_jobs(id,target_type,target_id,deleted_at,workflow_instance_ids,primary_state,cleanup_state,attempts,expires_at)
             SELECT ?,'case',c.id,?,(SELECT json_group_array(instance_id) FROM (
@@ -585,6 +624,25 @@ export function createDomainRepository(binding: D1Database, cipher: EnvelopeCiph
             )),'deleted','pending',0,? FROM cases c WHERE c.id=? AND c.user_id=?`,
             [job, at, expiry, id, owner],
           ),
+          ...(idempotency
+            ? [
+                statement(
+                  `INSERT INTO idempotency_records(user_id,method,route,key,request_hash,response_status,response_json,created_at,expires_at) SELECT ?,'DELETE',?,?,?,204,'null',?,? WHERE EXISTS(SELECT 1 FROM cases WHERE id=? AND user_id=?) AND EXISTS(SELECT 1 FROM deletion_jobs WHERE id=? AND target_id=?)`,
+                  [
+                    owner,
+                    route,
+                    idempotency.key,
+                    idempotency.requestHash,
+                    at,
+                    new Date(Date.parse(at) + DAY_MS).toISOString(),
+                    id,
+                    owner,
+                    job,
+                    id,
+                  ],
+                ),
+              ]
+            : []),
           statement(
             `DELETE FROM cases WHERE id=? AND user_id=? AND EXISTS(SELECT 1 FROM deletion_jobs
             WHERE id=? AND target_type='case' AND target_id=? AND deleted_at=?)`,
