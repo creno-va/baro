@@ -17,6 +17,8 @@ import {
   failureCodeSchema,
 } from "../../contracts";
 
+export * from "./v2-schema";
+
 export const appMetadata = sqliteTable("app_metadata", {
   key: text("key").primaryKey(),
   value: text("value").notNull(),

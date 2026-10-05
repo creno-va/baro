@@ -7,11 +7,59 @@ const MAX_CIPHERTEXT_BYTES = MAX_PLAINTEXT_BYTES + TAG_BYTES;
 const MAX_CIPHERTEXT_CHARACTERS = Math.ceil((MAX_CIPHERTEXT_BYTES * 4) / 3);
 export const MAX_ENVELOPE_CHARACTERS = 2 + 3 + MAX_KEY_ID_LENGTH + 16 + MAX_CIPHERTEXT_CHARACTERS;
 
+export const V2_PRIVATE_TABLES = [
+  "v2_workspaces",
+  "v2_intakes",
+  "v2_question_batches",
+  "v2_answers",
+  "v2_facts",
+  "v2_parties",
+  "v2_messages",
+  "v2_actions",
+  "v2_timeline",
+  "v2_files",
+  "v2_file_derivatives",
+  "v2_file_observations",
+  "v2_applications",
+  "v2_profile_revisions",
+  "v2_moderation_decisions",
+  "v2_assets",
+  "v2_reports",
+  "v2_consents",
+  "v2_job_checkpoints",
+  "v2_private_snapshots",
+  "v2_moderation_reports",
+  "v2_upload_parts",
+  "v2_upload_sessions",
+  "v2_upgrade_stages",
+  "v2_file_edit_stages",
+  "v2_summary_edit_stages",
+  "v2_summary_edit_cursors",
+  "v2_blobs",
+  "v2_report_selections",
+] as const;
+export const V2_SNAPSHOT_PURPOSES = [
+  "summary",
+  "report",
+  "file_coverage",
+  "file_manifest",
+  "legacy_snapshot",
+  "profile_revision",
+] as const;
 type EncryptedField =
   | { table: "cases"; column: "encrypted_input" }
   | {
       table: "analyses";
       column: "encrypted_context" | "encrypted_answers" | "encrypted_result";
+    }
+  | { table: (typeof V2_PRIVATE_TABLES)[number]; column: "encrypted_payload"; revision: number }
+  | {
+      table: "v2_private_parts";
+      column: "encrypted_payload";
+      revision: number;
+      targetId: string;
+      purpose: (typeof V2_SNAPSHOT_PURPOSES)[number];
+      part: number;
     };
 
 export type EncryptionContext = EncryptedField & { rowId: string; userId: string };
@@ -70,6 +118,40 @@ function decodeBase64url(encoded: string, maxBytes: number): Uint8Array<ArrayBuf
 }
 
 function additionalData(context: EncryptionContext): Uint8Array<ArrayBuffer> {
+  if (context.table.startsWith("v2_")) {
+    const v2 = context as Extract<EncryptionContext, { revision: number }>;
+    const allowedKeys =
+      v2.table === "v2_private_parts"
+        ? ["table", "column", "rowId", "userId", "revision", "targetId", "purpose", "part"]
+        : ["table", "column", "rowId", "userId", "revision"];
+    if (
+      Object.keys(v2).length !== allowedKeys.length ||
+      Object.keys(v2).some((key) => !allowedKeys.includes(key)) ||
+      typeof v2.rowId !== "string" ||
+      typeof v2.userId !== "string" ||
+      !opaqueIdPattern.test(v2.rowId) ||
+      !opaqueIdPattern.test(v2.userId) ||
+      v2.column !== "encrypted_payload" ||
+      !Number.isSafeInteger(v2.revision) ||
+      v2.revision < 1
+    )
+      throw new Error();
+    if (v2.table === "v2_private_parts") {
+      if (
+        typeof v2.targetId !== "string" ||
+        !opaqueIdPattern.test(v2.targetId) ||
+        !V2_SNAPSHOT_PURPOSES.includes(v2.purpose) ||
+        !Number.isSafeInteger(v2.part) ||
+        v2.part < 0
+      )
+        throw new Error();
+      return encoder.encode(
+        `v2:${v2.table}:${v2.rowId}:${v2.column}:${v2.userId}:${v2.revision}:${v2.purpose}:${v2.targetId}:${v2.part}`,
+      );
+    }
+    if (!V2_PRIVATE_TABLES.includes(v2.table)) throw new Error();
+    return encoder.encode(`v2:${v2.table}:${v2.rowId}:${v2.column}:${v2.userId}:${v2.revision}`);
+  }
   const validField =
     (context.table === "cases" && context.column === "encrypted_input") ||
     (context.table === "analyses" &&
