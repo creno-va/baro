@@ -1,0 +1,78 @@
+# 에이전트 실행 기준
+
+- Reviewed: 2026-10-05
+- 목적: 사용자의 매 작업 지시 없이 이슈 선택부터 검증된 PR까지 진행할 수 있게 한다.
+
+## 현재 구현과 목표 구분
+
+main에는 Astro/Hono Worker, health, D1 foundation, Workflow skeleton과 CD가 있다. 2026-10-05 원격 health 확인 시 preview/prod 모두 schema `0000_foundation`이며 OAuth 기능은 아직 배포되지 않았다. OAuth·동의 기반은 [PR #25](https://github.com/creno-va/baro/pull/25)에서 진행 중이다. `Implementation-ready`는 목표 계약의 상태이며 기능 완료를 뜻하지 않는다. 사건·AI·법률 검색·삭제·E2E는 아직 구현되지 않았다.
+
+실제 진행 상태의 정본은 GitHub 이슈/PR이며 의존성과 소유 경계는 [작업 그래프](./work-items.json)다. PR이 병합되어 선행 이슈가 완료되기 전에는 후속 제품 코드가 ready가 아니다. 마일스톤은 실행자 배정이 아니라 완료 게이트다.
+
+## 작업 선택·인계
+
+`bun run work:next`는 GitHub open 이슈, 실제 선행 상태, 열린 PR과 로컬 그래프를 비교한다. ready 중 P0와 번호 순으로 하나를 택한다. 시작 시 이슈에 브랜치와 작업 범위를 적고 `status:in-progress`를 붙인다. 이 라벨이 붙은 작업은 다른 에이전트가 시작하지 않는다. 작업을 멈출 때 재현 명령, 남은 인수 조건, blocker, PR을 남기고 라벨을 제거한다.
+
+명세·테스트 대역으로 가능한 구현과 실제 콘솔/정책 승인 검증을 분리한다. 외부 승인 대기 때문에 offline 개발 전체를 멈추지 않는다. 독립된 ready 이슈가 없을 때만 구체적인 외부 blocker를 보고한다. 이 문서나 CLI는 모델을 자동 실행하거나 GitHub issue를 agent에게 자동 배정하지 않는다. 그런 상시 실행은 별도의 실행기·스케줄과 사용자 권한이 필요하다.
+
+## 작업 경계
+
+| 영역 | 소유 이슈/기준 | 충돌 방지 |
+| --- | --- | --- |
+| 인증 테이블·user_consents·세션 middleware | #10, PR #25 | #8은 기존 auth migration을 재작성하지 않음 |
+| 도메인 DB·repository·migration | #8 | 모든 후속 schema 요청을 먼저 통합 |
+| 암호화 | #9 | envelope 계약으로 #8과 독립 개발 |
+| 사건 생성·quota·outbox | #11 | read/delete API #12와 파일 분리 |
+| AI adapter | #15 | Workflow와 순환 의존 없이 shared contract와 대역 사용 |
+| 법률 adapter | #14 | AI 생성과 독립, 공식 schema fixture로 검증 |
+| screening·질문·Workflow | #13 | #11/#14/#15 통합 후 시작 |
+| 사건 UI | #16 | 로그인·동의 UI는 #10 소유, UI 상태는 UX 명세 정본 |
+| 상세·질문·결과 UI | #29 | #16은 목록·입력만 소유 |
+| shared 계약 | #28 | 후속 모듈이 서로 다른 타입을 재정의하지 않음 |
+| offline fixture/harness | #31 | #18의 출시 검증 도구를 선행 구축 |
+| 성공 지표·선택 피드백 | #30 | opt-in과 allowlist, #20 정책과 동기화 |
+| eval/E2E | #18 | 합성 fixture·harness는 즉시, live gate는 통합 뒤 |
+| 배포·외부 검증 | #19 | 코드 완료와 환경 readiness를 구분 |
+| 공개 정책/외부 랜딩 | #20 | 법률 승인과 사업자 사실은 human-required |
+
+## 마일스톤 exit 기준
+
+- P0.1: #8/#9/#10/#26/#28/#31 offline 인수 조건 + migration/암호화/세션/동의 통합 검증. OAuth 콘솔 승인·실제 callback은 #27이며 이 단계의 offline 개발을 막지 않는다.
+- P0.2: #11~#16/#29/#30 계약·실패·중복·삭제 가드 테스트, 합성 흐름으로 입력→질문→검증된 결과 통합.
+- P0.3: #17~#20/#27 완료, 실제 provider smoke와 eval 증거, 공개 정책 확정, 복구/삭제 drill. 여기서만 공개 베타 전환한다.
+
+## 외부 readiness
+
+| 항목 | 확인된 상태 | 완료 증거/담당 |
+| --- | --- | --- |
+| 도메인·D1·Workflow·KV | preview/prod scaffold 배포 완료 | #19의 health/ready smoke |
+| 운영 OAuth | 운영 Worker secret 7개 등록, 실제 callback 미검증 | 환경 readiness 이슈, 공급자 callback·테스터 승인 |
+| 개발/preview OAuth | preview Worker secret 0개, 별도 client 미제공 | offline synthetic auth로 개발, 실제 preview client는 human-required |
+| 법률 OC | `crenova` 승인 정보 수신 | #14 live schema/응답 검증; 요청 URL 로그에 OC를 남기지 않음 |
+| Turnstile | widget/site key 미확인 | 환경 readiness 이슈, hostname/action 확인 |
+| AI Gateway | ID/credit/예산/logging 미확인 | 환경 readiness 이슈; credit 구매·auto-top-up은 사용자 결정 |
+| 암호화 키 | 환경별 provisioning 미완료 | #9: 개발 키 생성 가능, 운영 생성·등록 및 복구 계획 |
+| 정책 | 공개 초안의 blocker 존재 | #20: 사실정보·법률 검토 필요 |
+
+## 표준 검증
+
+```bash
+bun ci
+bun run check
+bun run build
+bun run cf:dry-run
+bun run db:generate
+git status --short
+```
+
+마지막 generate는 schema drift가 없으면 파일을 만들지 않는다. migration은 append-only다. secret 없는 CI가 외부 서비스에 접속하거나 모델 비용을 발생시키지 않아야 한다. 리뷰 브랜치의 prod API는 `PUBLIC_BETA_ENABLED=false`로 닫히며 병합/배포 전 원격에 적용된 것으로 해석하지 않는다. framework health 확인은 공개 기능 인수 조건을 대신하지 않는다.
+
+## 환경과 local 설정
+
+`.env.example`을 `.env`, `.dev.vars.example`을 `.dev.vars`로 복사한다. `.env`는 브라우저에 노출 가능한 `PUBLIC_*`만, `.dev.vars`는 Worker 설정만 포함한다. 운영 OAuth 키가 입력된 현재 로컬 파일은 dev 전용 값으로 교체하기 전 실제 OAuth 개발에 쓰지 않는다. 현재 PC의 다른 앱과 4321 포트가 충돌하면 `bun run dev -- --port 4322`를 쓰고 개발용 `BETTER_AUTH_URL`과 callback도 같은 port로 맞춘다.
+
+현재 consent 버전은 개발 검증용이며 공개 초안의 승인 버전이 아니다. #20의 공개 승인 시 게시 문서의 버전과 `CURRENT_POLICY_VERSIONS`를 함께 확정한다. release gate가 일치 여부를 검사한다.
+
+## 사용자 개입이 필요한 범위
+
+기능 구현·테스트 대역·PR 수정·기존 계약의 모호함 해소는 에이전트가 수행한다. OAuth 테스터/공급자 앱 승인, 법률 검토·사업자 사실, 새 지출·한도, production 공개 승인은 외부 책임으로 남는다. `Quality gate`는 코드 게이트이고 법률/실서비스 승인 증거를 대신하지 않는다. 현재 GitHub production Environment는 `hyunhomon` 승인 1회가 필요하다.

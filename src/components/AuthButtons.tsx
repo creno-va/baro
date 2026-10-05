@@ -17,16 +17,18 @@ export function AuthButtons() {
     setPendingProvider(provider);
     setError(null);
 
-    const result = await authClient.signIn.social({
-      provider,
-      callbackURL: "/consent",
-      errorCallbackURL: "/login?error=oauth",
-    });
-
-    if (result.error) {
-      setError("로그인을 시작하지 못했어요. 잠시 뒤 다시 시도해 주세요.");
-      setPendingProvider(null);
+    try {
+      const result = await authClient.signIn.social({
+        provider,
+        callbackURL: "/consent",
+        errorCallbackURL: "/login?error=oauth",
+      });
+      if (!result.error) return;
+    } catch {
+      // Network failures use the same recoverable UI as provider failures.
     }
+    setError("로그인을 시작하지 못했어요. 잠시 뒤 다시 시도해 주세요.");
+    setPendingProvider(null);
   }
 
   return (

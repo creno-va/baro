@@ -5,7 +5,8 @@
 BARO는 대한민국의 개인 간 금전 대여 문제를 겪는 사용자가 자신의 상황을 정리하고,
 확인할 쟁점·준비할 자료·일반적인 다음 행동을 이해하도록 돕는 웹 서비스입니다.
 
-> 현재 상태: 제품·아키텍처 명세와 Cloudflare 기반 scaffold 완료, 기능 구현 시작 전
+> 현재 상태: Cloudflare scaffold 배포 완료. OAuth·동의는 PR #25에서 구현 중이며,
+> 사건·AI·삭제 기능은 미구현입니다. 공개 베타 API는 기본 비활성화입니다.
 
 BARO는 변호사나 법률사무소가 아니며 법률 자문, 승소 가능성 판단, 사건 수임 또는
 전문가 추천을 제공하지 않습니다. AI 결과는 공식 법령 출처와 함께 제공되는 일반
@@ -52,6 +53,9 @@ Bun은 패키지 관리·스크립트·테스트에 사용합니다. 배포 코�
 
 구현 전에는 아래 순서로 읽는 것을 권장합니다.
 
+작업을 맡는 에이전트는 먼저 [AGENTS.md](./AGENTS.md)와
+[실행 기준](./docs/development/EXECUTION.md)을 읽고 `bun run work:next`로 선행 이슈를 확인합니다.
+
 1. [문서 지도](./docs/README.md)
 2. [제품 요구사항](./docs/PRD.md)
 3. [MVP 기능 명세](./docs/product/MVP-SPEC.md)
@@ -70,6 +74,8 @@ Bun은 패키지 관리·스크립트·테스트에 사용합니다. 배포 코�
 
 사전 요구사항은 [`.bun-version`](./.bun-version)에 고정된 Bun과 Cloudflare 계정입니다.
 의존성을 설치하고 로컬 D1 schema를 적용한 뒤 개발 서버를 시작합니다.
+`.env.example`과 `.dev.vars.example`을 각각 `.env`, `.dev.vars`로 복사합니다.
+키 없는 개발은 합성 test adapter로 가능하며 실제 OAuth는 개발용 client만 사용합니다.
 
 ```bash
 bun ci
@@ -81,9 +87,7 @@ bun run dev
 
 ```bash
 bun ci
-bun run lint
-bun run typecheck
-bun run test
+bun run check
 bun run build
 bun run cf:dry-run
 ```
@@ -108,7 +112,8 @@ PR과 Issue 작성 기준은
 ## 배포
 
 - main의 CI가 성공하면 고정 `preview` Cloudflare Environment 배포가 시작됩니다.
-- production은 GitHub Actions에서 명시적으로 실행하고 Environment 승인을 거칩니다.
+- production은 성공한 main CI·preview smoke의 immutable SHA를 지정하고 Environment
+  승인을 거칩니다. `foundation` 모드는 공개 API를 닫고 `public-beta`는 별도 출시 증거가 필요합니다.
 - preview URL: <https://preview.baro.site>
 - production URL: <https://baro.site>
 - 환경별 D1, Workflow, OAuth client, 암호화 키와 API secret을 공유하지 않습니다.

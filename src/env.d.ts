@@ -3,6 +3,8 @@
 /// <reference types="astro/client" />
 
 interface Env {
+  PUBLIC_BETA_ENABLED: string;
+  RELEASE_SHA: string;
   BETTER_AUTH_URL: string;
   BETTER_AUTH_SECRET: string;
   GOOGLE_CLIENT_ID: string;

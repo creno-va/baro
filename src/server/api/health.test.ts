@@ -12,6 +12,7 @@ describe("health API", () => {
       status: "ok",
       service: "baro",
       environment: "test",
+      release: "local",
     });
   });
 

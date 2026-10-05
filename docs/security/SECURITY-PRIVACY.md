@@ -38,6 +38,8 @@ injection, 모델의 데이터 재노출, 로그 유출, secret 유출, 자동�
 - 전송은 HTTPS만 허용하고 HSTS를 적용한다.
 - Restricted 본문은 [데이터 모델](../architecture/DATA-MODEL.md)의 AES-256-GCM envelope를
   사용한다.
+- Workflow event/params/step 저장 결과도 저장 경계다. 평문 대신 ID/revision/reference
+  또는 envelope만 사용한다. Gateway caching도 끄고 provider 보존 조건은 따로 확인한다.
 - 환경마다 별도 키를 쓰고 키는 코드·D1·로그에 저장하지 않는다.
 - 키 ID만 행에 저장하며 최소 연 1회 또는 노출 의심 시 즉시 회전한다.
 - production secret을 local/preview에서 사용할 수 없다.
@@ -75,6 +77,8 @@ cookie, 프롬프트 본문, 사건 제목·원문·결과, 전체 IP. IP가 보
 - 공개 법령 캐시: 개인정보가 아니며 최신성 정책에 따라 유지
 - 삭제 요청은 primary D1에서 즉시 처리하고 platform backup의 만료·복구 시 재삭제
   절차를 운영 정책에 기록한다.
+- 비민감 deletion journal은 backup 범위+5일 목표로 남겨 restore 시 재삭제한다. 목표
+  35일과 실제 보존·Workflow 상태 제거는 #17/#20의 구현·정책 검증 조건이다.
 
 ## 보안 헤더
 
@@ -82,6 +86,9 @@ cookie, 프롬프트 본문, 사건 제목·원문·결과, 전체 IP. IP가 보
 nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, 제한적 `Permissions-Policy`,
 frame embedding 차단을 배포 테스트한다. CSP는 OAuth와 Turnstile의 필요한 origin만
 허용하고 inline script 예외를 일반화하지 않는다.
+scaffold는 secure headers와 API body limit를 제공하며 CSP/Turnstile script 정책은
+#18/#19에서 실제 Astro islands 및 widget과 함께 검증한다. Workers 자동 invocation log는
+OAuth callback query의 code/state 노출을 피하도록 끄고, 향후 로그는 allowlist만 출력한다.
 
 ## 사고 대응
 

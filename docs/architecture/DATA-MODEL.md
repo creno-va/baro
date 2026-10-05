@@ -2,15 +2,18 @@
 
 - Database: Cloudflare D1 (SQLite)
 - ORM/migrations: Drizzle
-- Identifiers: application-generated UUIDv7 strings
-- Time: UTC ISO-8601 text; 일일 사용량 경계만 `Asia/Seoul`
+- Identifiers: `crypto.randomUUID()` UUIDv4 strings; 목록 순서는 시각+ID로 결정
+- Time: 앱은 UTC ISO-8601 text; Better Auth date는 timestamp_ms integer; 일일 경계 `Asia/Seoul`
+- 상태·원자성·삭제의 상세 계약: [DOMAIN-LIFECYCLE](./DOMAIN-LIFECYCLE.md)
 
 ## 인증 테이블
 
 Better Auth의 현재 Drizzle adapter가 생성하는 `user`, `session`, `account`,
 `verification` 테이블을 그대로 사용한다. 애플리케이션 코드는 이 테이블을 직접
-변형하지 않고 인증 adapter를 거친다. `account`의 provider token 저장 정책은 실제
-기능에 필요한 최소 scope로 제한하고 refresh token이 필요 없으면 저장하지 않는다.
+변형하지 않고 인증 adapter를 거친다. provider access/refresh/ID token과 expiry는 계정
+create/update hook에서 null로 제거한다. 필요한 최소 profile/email scope만 요청한다.
+Auth 기본 스키마의 IP/User Agent 평문은 별도 보안 데이터이며 #10에서 비활성화/최소화,
+만료 세션·verification cleanup과 30일 상한을 검증한다. 사건 envelope 대상과 혼동하지 않는다.
 
 ## 애플리케이션 테이블
 
@@ -29,7 +32,7 @@ Better Auth의 현재 Drizzle adapter가 생성하는 `user`, `session`, `accoun
 
 | 열 | 형식 | 규칙 |
 | --- | --- | --- |
-| `id` | text PK | UUIDv7 |
+| `id` | text PK | UUIDv4 |
 | `user_id` | text FK | owner, cascade delete |
 | `category` | text | `personal_loan`만 허용 |
 | `jurisdiction` | text | `KR`만 허용 |
@@ -37,16 +40,21 @@ Better Auth의 현재 Drizzle adapter가 생성하는 `user`, `session`, `accoun
 | `status` | text | 아래 상태 enum |
 | `encrypted_input` | text | 암호화 envelope |
 | `input_revision` | integer | 1부터 증가 |
+| `current_analysis_id` | text nullable | 현재 revision의 정본 분석 ID, guarded repository로 검증 |
+| `questions_asked` | integer | 누적 0~5, MVP 질문 묶음 1회 |
 | `created_at`, `updated_at` | text | UTC |
 
 ### `analyses`
 
 | 열 | 형식 | 규칙 |
 | --- | --- | --- |
-| `id` | text PK | UUIDv7 |
+| `id` | text PK | UUIDv4 |
 | `case_id` | text FK | cascade delete |
 | `workflow_instance_id` | text UNIQUE | Workflow 멱등성 ID |
 | `input_revision` | integer | 분석한 사건 revision |
+| `attempt` | integer | 1부터, 명시적 retry로 최대3 |
+| `encrypted_context` | text nullable | 구조화·질문·phase checkpoint envelope |
+| `clarification_expires_at` | text nullable | 질문 생성 후24시간 |
 | `status` | text | 아래 분석 enum |
 | `encrypted_answers` | text nullable | 추가 답변 envelope |
 | `encrypted_result` | text nullable | 최종 결과 envelope |
@@ -60,7 +68,7 @@ Better Auth의 현재 Drizzle adapter가 생성하는 `user`, `session`, `accoun
 
 | 열 | 형식 | 규칙 |
 | --- | --- | --- |
-| `id` | text PK | UUIDv7 |
+| `id` | text PK | UUIDv4 |
 | `analysis_id` | text FK | cascade delete |
 | `source_type` | text | `statute` |
 | `source_id` | text | 공식 API의 안정 식별자 |
@@ -80,18 +88,32 @@ Better Auth의 현재 Drizzle adapter가 생성하는 `user`, `session`, `accoun
 | `analysis_count` | integer | 0~10 |
 | `updated_at` | text | UTC |
 
-복합 PK는 `(user_id, usage_date_kst)`다. 사건 생성 트랜잭션 안에서 UPSERT 조건
-`analysis_count < 10`으로 증가시키며 시스템 재시도는 증가시키지 않는다.
+복합 PK는 `(user_id, usage_date_kst)`다. 사건 생성 D1 batch 안에서 조건부 UPSERT로
+증가시키며 모든 종속 쓰기도 동일 admission 조건을 따른다. 조건부 UPDATE 0행은 자동
+rollback이 아니므로 부분 사건 생성이 없음을 동시 10/11번째 요청으로 검증한다.
+
+### `idempotency_records`, `dispatch_outbox`, `deletion_jobs`
+
+- idempotency: 복합 unique `(user_id, method, route, key)`, canonical body hash,
+  response_status와 비민감 response_json, created/expires_at(24시간). user FK cascade.
+- outbox: UUID PK, analysis FK cascade, unique `(analysis_id, attempt)`, instance_id,
+  revision, state pending/dispatched, attempts, next_attempt_at, created_at. 원문 payload 없음.
+- deletion job: UUID PK, target_type case/account, opaque target_id, 삭제 시각,
+  workflow ID 목록, primary/cleanup state, attempts, expires_at. cascade FK를 두지 않아
+  primary 삭제 후 정리 기록이 남는다. 원문·이메일·토큰·계정 프로필은 저장하지 않는다.
+
+outbox reconciliation은 #11, 삭제/backup journal은 #17이 소유한다. pending 작업의
+재전달은 비민감 scheduler로 실행하며 schema·GC·복구 검증은 #8/#17 계약을 따른다.
 
 ### `legal_source_cache`
 
-공개 법령 원문의 일시적 캐시다. `source_id + effective_date + article`을 복합 unique로
+공개 법령 원문의 일시적 캐시다. `source_id + effective_date + article + content_hash`를 복합 unique로
 두고 공식 메타데이터, 본문, `content_hash`, `fetched_at`, `expires_at`을 저장한다. 사건
 원문과 연결하지 않으며 삭제 대상 개인정보가 아니다.
 
 ## 상태 값
 
-- Case: `draft`, `screening`, `needs_clarification`, `queued`, `analyzing`, `completed`,
+- Case (persisted): `screening`, `needs_clarification`, `queued`, `analyzing`, `completed`,
   `failed`, `out_of_scope`, `urgent_redirect`
 - Analysis: `queued`, `screening`, `waiting_for_answers`, `retrieving`, `generating`,
   `validating`, `completed`, `failed`, `superseded`
@@ -103,6 +125,7 @@ DB check constraint와 애플리케이션 상태 전이 테스트를 함께 둔�
 - `cases(user_id, created_at DESC)`
 - `analyses(case_id, created_at DESC)`
 - `analyses(workflow_instance_id)` unique
+- active analysis의 `case_id` partial unique (queued/screening/waiting/retrieving/generating/validating)
 - `citations(analysis_id)`
 - 모든 FK는 활성화하고 소유 데이터는 cascade delete한다.
 - 완료 분석은 `encrypted_result`, 실패 분석은 `failure_code`를 요구하는 논리 제약을
@@ -125,3 +148,5 @@ DB check constraint와 애플리케이션 상태 전이 테스트를 함께 둔�
 - production migration 전 D1 backup/bookmark를 기록하고 preview에서 동일 migration을
   검증한다.
 - 정책과 다른 보존용 shadow table을 만들지 않는다.
+- Drizzle의 `drizzle/meta/*_snapshot.json`과 `_journal.json`도 함께 커밋한다.
+  `bun run db:generate` 뒤 diff가 없어야 schema와 baseline이 일치한다.

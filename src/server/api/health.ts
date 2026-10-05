@@ -6,6 +6,7 @@ export const healthApi = new Hono<{ Bindings: Env }>()
       status: "ok" as const,
       service: "baro",
       environment: context.env?.APP_ENV ?? "test",
+      release: context.env?.RELEASE_SHA ?? "local",
     });
   })
   .get("/ready", async (context) => {
@@ -33,6 +34,7 @@ export const healthApi = new Hono<{ Bindings: Env }>()
         service: "baro",
         environment: context.env.APP_ENV,
         schemaVersion: metadata.value,
+        release: context.env.RELEASE_SHA,
       });
     } catch {
       return context.json(

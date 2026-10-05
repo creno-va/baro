@@ -2,8 +2,6 @@ name: CI
 
 on:
   pull_request:
-    branches:
-      - main
   push:
     branches:
       - main
@@ -24,12 +22,12 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v2.2.0
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: .bun-version
 
@@ -68,6 +66,16 @@ jobs:
       - name: Install dependencies
         if: steps.application.outputs.present == 'true'
         run: bun ci
+
+      - name: Validate work graph and product boundaries
+        run: |
+          bun run work:check
+          bun run boundaries:check
+
+      - name: Validate schema drift and SQL migrations
+        run: |
+          bun run db:check
+          bunx wrangler d1 migrations apply DB --local --persist-to .wrangler/ci-migration
 
       - name: Lint
         if: steps.application.outputs.present == 'true'

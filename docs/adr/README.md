@@ -38,3 +38,8 @@ Accepted ADR의 내용이 바뀌어야 하면 기존 문서를 고치기보다 �
 | [0002](./0002-web-stack-and-cloudflare-runtime.md) | 웹 스택과 Cloudflare 런타임 | Accepted |
 | [0003](./0003-identity-data-and-privacy.md) | 인증, 데이터와 개인정보 보호 | Accepted |
 | [0004](./0004-ai-provider-and-legal-retrieval.md) | AI 공급자와 법률정보 검색 | Accepted |
+| [0005](./0005-durable-execution-and-release-gates.md) | durable 실행·개인정보 경계와 출시 게이트 | Accepted |
+
+0005는 0001~0004의 모듈·스택·인증·Unified Billing 선택을 유지한다. 실행/저장/출시 보장만
+구체화하며 상세 계약의 모호함은 DOMAIN-LIFECYCLE에서 해결한다. 0003/0004의 기록된
+amendment는 사용자 지시에 따른 과거 변경이며 이후 결정 변경은 신규 ADR을 사용한다.

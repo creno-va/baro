@@ -25,6 +25,8 @@ function createConfiguredAuth(env: Env) {
     baseURL: config.BETTER_AUTH_URL,
     secret: config.BETTER_AUTH_SECRET,
     trustedOrigins: [origin],
+    // Adapter errors can include SQL parameters and provider tokens; keep them out of logs.
+    logger: { disabled: true },
     database: drizzleAdapter(database, {
       provider: "sqlite",
       schema: authSchema,

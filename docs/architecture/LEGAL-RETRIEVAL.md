@@ -3,12 +3,17 @@
 - Canonical source: 국가법령정보 공동활용 Open API
 - Scope: 대한민국 현행 법령의 조문
 - Out of scope for MVP: 판례, 행정해석, 블로그, 언론, 모델 기억
+- 승인된 OC: `crenova` (환경 secret에 등록, query/로그에서 값 노출 금지)
 
 ## 정본과 기준일
 
 분석마다 `asOfDate`를 한국 날짜로 고정한다. 검색 결과에서 법령 ID와 시행 이력을
 확인하고 그 날짜에 시행 중인 조문 원문을 상세 API로 다시 가져온다. 단순 검색 snippet,
 검색 엔진 캐시, 생성 모델의 법률 지식은 인용 원문이 아니다.
+MVP 기준일은 사건 발생일이 아니라 신규 분석 admission 당일 KST다. 과거 행위에 적용될
+법령·시효·기한의 확정 판단은 하지 않고 시점 적용의 불확실성을 표시한다. 법령 목록·상세
+adapter의 target/type/ID와 시행일 query는 #14에서 공식 가이드·실응답으로 fixture에 고정한다.
+문서만으로 확인되지 않은 endpoint shape를 구현자가 추측하지 않는다.
 
 ## 검색 절차
 
@@ -37,6 +42,9 @@ statute:<official-law-id>:<effective-date>:<article-path>:<content-sha256>
 
 - 공개 법령 원문만 `legal_source_cache`에 저장한다.
 - TTL 만료 시 조건부 재검증하고 내용 hash가 바뀌면 새 버전으로 저장한다.
+- TTL은24시간이며 stale cache를 새로운 분석에 쓰지 않는다. API가 조건부 요청을
+  지원하지 않으면 다시 조회하고 동일 hash로 검증한다. 오래된 버전은 완료 인용 참조가
+  있는 동안 유지한다. unique key에 content_hash도 포함해 기존 버전을 덮어쓰지 않는다.
 - 완료된 분석의 citation은 당시 검증한 effective date와 hash를 유지한다.
 - 재열람 시 원문이 바뀌었으면 `이후 변경될 수 있음`을 표시하고, 최신 분석을 자동으로
   덮어쓰지 않는다.
@@ -54,7 +62,9 @@ API 승인 전 local/CI는 `tests/fixtures/legal/`의 snapshot을 쓴다. 각 fi
 
 fixture는 비운영 환경의 명시적 adapter에서만 읽는다. production build는 fixture import를
 정적 검사로 금지하고, `LAW_API_OC`가 없으면 시작 또는 분석을 실패시킨다. 최초 사건에
-필요할 것으로 예상되는 조문도 법률 전문가의 범위 검토를 통과한 뒤 fixture에 넣는다.
+필요할 것으로 예상되는 조문의 **공개 적용 범위**는 #20의 법률 검토를 통과해야 한다.
+offline adapter fixture는 공식 응답 출처·hash 검증과 synthetic 입력만으로 준비할 수 있으며
+법률 적용의 승인을 뜻하지 않는다. 외부 전문가 대기가 schema/adapter 개발 전체를 막지 않는다.
 
 ## 실패 처리
 

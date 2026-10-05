@@ -11,7 +11,7 @@
 환경 간 DB, OAuth client, 암호화 키, API key를 공유하지 않는다. preview는 고정 hostname을
 사용한다. PR별 build는 가능하지만 OAuth callback을 동적으로 추가하지 않는다.
 
-현재 고정 preview URL은 `https://baro-preview.creno-va-baro.workers.dev`다. Worker,
+고정 preview URL은 `https://preview.baro.site`다. Worker,
 D1, Workflow, SESSION KV는 `preview`와 `production` 이름으로 각각 분리한다.
 
 공식 Custom Domain은 production `https://baro.site`, preview
@@ -20,7 +20,7 @@ D1, Workflow, SESSION KV는 `preview`와 `production` 이름으로 각각 분리
 
 ## 브랜치와 배포
 
-- pull request: 정적·테스트·build, 필요 시 고정 preview 후보 배포
+- pull request: 정적·테스트·build (stacked PR도 CI 실행), PR에서는 고정 preview를 덮어쓰지 않음
 - `main`: 승인된 변경을 preview에 자동 배포
 - production: preview smoke와 출시 체크 통과 후 GitHub Environment 수동 승인
 - hotfix도 같은 테스트를 거치며 직접 콘솔 편집은 장애 봉쇄 외 금지
@@ -28,17 +28,37 @@ D1, Workflow, SESSION KV는 `preview`와 `production` 이름으로 각각 분리
 GitHub Actions는 최소 권한 OIDC 또는 환경별 제한 secret을 사용한다. production 승인자와
 배포 실행자는 가능하면 분리한다.
 
+현재 GitHub 설정: main은 Quality gate·최신 base·대화 해결·linear history를 요구하고
+승인 review 수는0이다. production Environment에는 `hyunhomon` 승인자가 있다.
+CODEOWNERS 알림은 별도 강제 승인과 같지 않다. 에이전트의 merge 권한은 사용자 지시를 따른다.
+
+production dispatch에는 `confirmation=production`, `target_sha=<full40sha>`,
+`release_mode=foundation|public-beta`를 지정한다. 기본 foundation은 API 공개를 닫는다.
+성공한 main push CI와 해당 SHA의 preview Deployment success가 없으면 실패한다.
+preview success 기록은 동일 RELEASE_SHA의 health/ready smoke 뒤에만 만든다.
+public-beta는 `bun run release:check`로 정책 Approved 상태와 release-evidence를 확인한다.
+향후 #18/#19의 실제 eval/E2E/live smoke artifact를 해당 증거 URL에 연결해야 하며
+boolean 수동 변경만으로 실제 검증을 대신하지 않는다.
+
 ## 배포 순서
 
 1. 문서/계약과 migration 일치 검사
 2. preview D1 backup 식별자 기록
-3. additive migration 적용 및 검증
-4. Worker/Workflow 배포
+3. immutable SHA의 offline 검사·build/dry-run 성공 후 additive migration 적용 및 검증
+4. Worker/Workflow 배포, health/ready의 SHA 확인
 5. preview 실제 OAuth·Turnstile·법률 API smoke
 6. production D1 backup 식별자 기록
 7. 역호환 migration 적용
 8. Worker/Workflow 배포 및 합성 smoke
 9. 지표를 집중 관찰한 뒤 완료 선언
+
+현재 자동 smoke는 foundation health/ready와 SHA뿐이다. 단계5/8의 전체 제품 smoke와
+backup/bookmark 기록·복구 drill 자동화는 #19에서 완료한다. migration 검증 없이 build보다
+먼저 remote DB를 바꾸지 않는다. preview migration/deploy는 cancel하지 않고 순차 실행하며
+적용 직전에 main SHA와 비교해 뒤늦게 끝난 오래된 CI 배포를 거부한다.
+
+같은 커밋에 공개 기능을 추가할 때 필요한 env/binding/secret이 준비되지 않았으면 공개
+전환을 하지 않는다. 실제 등록 상태는 [실행 기준](../development/EXECUTION.md)와 #27을 따른다.
 
 파괴적 schema 변경은 최소 두 번의 배포로 분리한다. 오래 실행 중인 Workflow가 이전
 schema/prompt를 사용할 수 있으므로 호환 기간을 둔다.

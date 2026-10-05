@@ -54,7 +54,18 @@ export function ConsentForm() {
   }
 
   if (state === "loading") {
-    return <p aria-live="polite">동의 상태를 확인하고 있어요.</p>;
+    return error ? (
+      <div>
+        <p className="form-error" role="alert">
+          {error}
+        </p>
+        <button type="button" onClick={() => window.location.reload()}>
+          다시 불러오기
+        </button>
+      </div>
+    ) : (
+      <p aria-live="polite">동의 상태를 확인하고 있어요.</p>
+    );
   }
 
   if (state === "complete") {
