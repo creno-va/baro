@@ -4,7 +4,7 @@
 - Decision: [ADR-0005](../adr/0005-durable-execution-and-release-gates.md)
 - Owners: #28 shared contract, #8 schema, #11 admission, #13 execution, #17 deletion
 
-이 계약은 아직 구현되지 않은 목표다. #28이 Zod와 합성 fixture로 먼저 고정하며 이후 작업은 같은 타입을 import한다.
+#28의 Zod shared 계약과 합성 fixture는 구현되었다. #8은 저장 primitive를 구현하며 admission·Workflow·삭제 운영 흐름은 후속 #11/#13/#17의 목표다. 이후 작업은 같은 타입을 import한다.
 
 ## 값과 한도
 

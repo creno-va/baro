@@ -22,6 +22,13 @@
       "when": 1791187617543,
       "tag": "0002_oauth_session_security",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1791190327767,
+      "tag": "0003_domain_foundation",
+      "breakpoints": true
     }
   ]
 }
