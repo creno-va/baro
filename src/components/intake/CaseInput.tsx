@@ -26,6 +26,12 @@ declare global {
   }
 }
 export function CaseInput({ siteKey }: { siteKey: string }) {
+  useEffect(() => {
+    void beginInput();
+    const begin = () => void beginInput();
+    window.addEventListener("baro-analytics-change", begin);
+    return () => window.removeEventListener("baro-analytics-change", begin);
+  }, []);
   const [narrative, setNarrative] = useState("");
   const [token, setToken] = useState("");
   const [state, setState] = useState<"loading" | "ready" | "consent" | "error">("loading");
@@ -142,6 +148,7 @@ export function CaseInput({ siteKey }: { siteKey: string }) {
         );
       }
       const result = createCaseResponseSchema.parse(await response.json());
+      void admittedCase(result.caseId, result.analysisId, count);
       setNarrative("");
       setSaved(result.caseId);
     } catch (cause) {
@@ -221,3 +228,5 @@ export function CaseInput({ siteKey }: { siteKey: string }) {
     </section>
   );
 }
+
+import { admittedCase, beginInput } from "../../server/modules/analytics/browser";

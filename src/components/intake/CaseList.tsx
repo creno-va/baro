@@ -72,7 +72,7 @@ export function CaseList() {
       <ul className="case-list">
         {list?.items.map((item) => (
           <li key={item.id}>
-            <a href={`/cases/${item.id}`}>{item.title}</a>
+            <a href={`/cases/${item.id}`} onClick={()=>void noteExistingCase(item.id,item.createdAt)}>{item.title}</a>
             <p>{statusLabels[item.status]}</p>
             <time dateTime={item.createdAt}>
               {new Date(item.createdAt).toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul" })}
@@ -92,3 +92,5 @@ export function CaseList() {
     </section>
   );
 }
+
+import { noteExistingCase } from "../../server/modules/analytics/browser";

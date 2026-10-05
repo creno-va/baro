@@ -23,7 +23,7 @@ export function createAnalyticsSdk(adapter: AnalyticsAdapter) {
   let optedIn = false,
     generation = 0;
   const sent = new Set<string>(),
-    viewed = new Set<string>();
+    viewed = new Set<string>(),lifecycle=new Set<string>();
   return {
     optIn() {
       optedIn = true;
@@ -33,6 +33,7 @@ export function createAnalyticsSdk(adapter: AnalyticsAdapter) {
       generation++;
       sent.clear();
       viewed.clear();
+      lifecycle.clear();
       adapter.clear();
     },
     isOptedIn() {
@@ -43,10 +44,13 @@ export function createAnalyticsSdk(adapter: AnalyticsAdapter) {
       const parsed = analyticsEventSchema.safeParse(value);
       if (!parsed.success || sent.has(parsed.data.eventId)) return false;
       const event = parsed.data;
+      const once=["analysis_started","analysis_completed","analysis_failed","clarification_viewed","clarification_completed","case_revisited"].includes(event.name)&&event.analysisIdHash?`${event.name}:${event.analysisIdHash}`:null;
+      if(once&&lifecycle.has(once))return false;
       if (event.name === "result_viewed" && viewed.has(event.analysisIdHash)) return false;
       if (sent.size >= 500) return false;
       const epoch = generation;
       sent.add(event.eventId);
+      if(once)lifecycle.add(once);
       if (event.name === "result_viewed") viewed.add(event.analysisIdHash);
       try {
         await adapter.send(event);
@@ -57,6 +61,7 @@ export function createAnalyticsSdk(adapter: AnalyticsAdapter) {
         return true;
       } catch {
         sent.delete(event.eventId);
+        if(once)lifecycle.delete(once);
         if (event.name === "result_viewed") viewed.delete(event.analysisIdHash);
         return false;
       }
@@ -134,7 +139,8 @@ export function aggregateMetrics(
     );
   const trust = events.filter((e) => e.name === "trust_answered");
   const elapsed: number[] = [];
-  for (const view of events.filter((e) => e.name === "result_viewed")) {
+  const uniqueViews=new Map<string,AnalyticsEvent>();for(const view of events.filter(e=>e.name==="result_viewed").sort((a,b)=>Date.parse(a.occurredAt)-Date.parse(b.occurredAt))){if(view.analysisIdHash&&!uniqueViews.has(view.analysisIdHash))uniqueViews.set(view.analysisIdHash,view);}
+  for (const view of uniqueViews.values()) {
     const start = events
       .filter(
         (e) =>
@@ -149,10 +155,10 @@ export function aggregateMetrics(
   elapsed.sort((a, b) => a - b);
   return {
     cohort: collectionAvailable ? "opt_in" : "unknown",
-    events: events.length,
-    admissions: admitted.size,
-    views: viewedAdmitted.size,
-    inputUsers: distinct("case_input_viewed", "anonymousUserId").size,
+    events: collectionAvailable?events.length:null,
+    admissions: collectionAvailable?admitted.size:null,
+    views: collectionAvailable?viewedAdmitted.size:null,
+    inputUsers: collectionAvailable?distinct("case_input_viewed", "anonymousUserId").size:null,
     activationRate: ratio(
       distinct("case_submitted", "anonymousUserId").size,
       distinct("case_input_viewed", "anonymousUserId").size,
@@ -167,8 +173,8 @@ export function aggregateMetrics(
       collectionAvailable && elapsed.length
         ? (elapsed[Math.ceil(elapsed.length * 0.75) - 1] ?? null)
         : null,
-    durationObservations: elapsed.length,
-    period: events.length
+    durationObservations: collectionAvailable?elapsed.length:null,
+    period: collectionAvailable&&events.length
       ? {
           from: events.map((e) => e.occurredAt).sort()[0],
           to: events
