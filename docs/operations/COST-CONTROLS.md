@@ -12,8 +12,11 @@
 
 월 기술 예산은 **1,000,000 KRW**이며 실제 cloud 리소스 생성과 처리 비용 사용을 사용자가
 허용했다. 법률 검토 비용은 별도다. 새 결제수단·자동 충전·예산 확대·새 모델/공급자 도입은
-이 승인에 포함되지 않는다. 기존 credit 잔액은 월 예산과 별개의 funding 상태이며 잔액 부족을
-예산이 남았다는 이유로 자동 구매로 해결하지 않는다. 무료 플랜/credit을 사용하더라도 실제
+이 승인에 포함되지 않는다. 합의한 리소스·plan과 실제 처리 비용은 검증된 기존 결제 경로,
+신선한 quote/funding, 환경 allocation과 maintenance 여유를 확보하면 기존 승인으로 진행한다.
+이 범위의 plan 전환·일회성 credit 구매마다 재승인을 요구하지 않는다. 기존 credit 잔액은 월
+예산과 별개의 funding 상태이며 예산이 남았다는 이유만으로 무검증 구매를 하지 않는다.
+무료 플랜/credit을 사용하더라도 실제
 metered usage와 원가를 기록한다. 공개 사용자는 누구나 가입할 수 있고 모두 같은 전역 budget을 공유한다.
 
 Gateway 기존 credit $10/auto recharge OFF와 과거 probe의 예약1/완료 report 없음은 날짜별
@@ -155,7 +158,8 @@ paid 작업은 보류한다. shared reserve도 최초 manifest에 이미 배정�
 예산 보류 때 조회·download·삭제·프로필 철회·보안 복구는 유지할 reserve를 사전에 배정한다.
 보존 중인 파일의 다음 월 storage 비용까지 예측하고, 자동 삭제로 비용 문제를 숨기지 않는다.
 필수 운영 비용조차 예산에 맞지 않을 것으로 예상되면 신규 업로드/AI를 일찍 닫고 운영자에게
-보관량·예상액·필요 행동을 알린다. funding/payment/한도 변화는 사용자 결정으로 남긴다.
+보관량·예상액·필요 행동을 알린다. 기존 승인 범위를 벗어난 새 결제수단·자동 충전·예산 확대는
+사용자 결정으로 남긴다.
 
 Gateway per-user/model spend controls·rate limit·Container max instances와 timeout을 함께
 설정하되 platform soft limit을 절대 지출 보장으로 표현하지 않는다. 공식 [spend limits](https://developers.cloudflare.com/ai-gateway/features/spend-limits/)
@@ -163,7 +167,11 @@ Gateway per-user/model spend controls·rate limit·Container max instances와 ti
 드문 credit 음수 잔액을 기존 결제수단에 청구할 수 있으므로 auto recharge OFF나 credit 잔액을
 절대 과금 상한으로 표현하지 않는다. 예약보다 실제 비용이
 커지거나 unknown charge가 발생하면 circuit breaker로 새 job을 멈추고 reconcile한다.
-기존 credit 충전·auto recharge ON·plan upgrade 버튼은 자동으로 실행하지 않는다.
+합의한 plan 전환·일회성 credit 구매·리소스 비용은 위 권한과 예산의 검증 조건을 충족한 뒤
+기존 승인으로 진행한다. 새 결제수단 등록·auto recharge ON·예산 확대는 별도 승인이 필요하다.
+실제 실행 화면에서 새 계약 조건에 대한 사람의 동의·OTP·본인 확인 등이 요구되면 그 시점의
+환경/작업·필수 필드·사람이 할 행동을 구체적으로 기록한다. 발생하지 않은 승인 단계를
+미리 blocker로 추가하지 않는다. OTP·결제 정보·인증 값은 로그/이슈/artifact에 기록하지 않는다.
 
 Containers는 실행 중 memory/disk provision과 CPU 사용량뿐 아니라 network·Worker·DO·로그도
 비용 대상이다. sleep과 instance limit을 설정하고 idle 인스턴스가 실제로 종료되는지 확인한다.
