@@ -1,0 +1,121 @@
+{
+  "schemaVersion": "synthetic-legal-v2-1",
+  "origin": "synthetic",
+  "reviewedAt": "2026-10-06",
+  "capturedAt": null,
+  "liveEvidence": false,
+  "adapterValidation": "not_run",
+  "shapeStatus": "provisional_documented_fields_not_captured_json_shape",
+  "asOfDate": "2026-10-06",
+  "normalizationVersion": "synthetic-extraction-v1",
+  "spanUnit": "UTF-16 code units, half-open [start,end)",
+  "files": [
+    {
+      "name": "statutes.json",
+      "entries": 11
+    },
+    {
+      "name": "precedents.json",
+      "entries": 9
+    },
+    {
+      "name": "guides.json",
+      "entries": 10
+    },
+    {
+      "name": "failures.json",
+      "entries": 13
+    },
+    {
+      "name": "families.json",
+      "entries": 16
+    },
+    {
+      "name": "citation-negatives.json",
+      "entries": 5
+    }
+  ],
+  "credentialContract": {
+    "parameter": "OC",
+    "documentedDescription": "신청한 API인증값",
+    "kind": "required string",
+    "emailPrefixAssumption": false,
+    "storedInCorpus": false,
+    "authorization": "per-service application approved before use; current account activation unverified",
+    "observedRequiredTermsError": "HTTP200 required-term error does not establish account or IP rejection"
+  },
+  "officialDocumentation": [
+    "https://open.law.go.kr/LSO/openApi/guideResult.do?htmlName=lsEfYdListGuide",
+    "https://open.law.go.kr/LSO/openApi/guideResult.do?htmlName=lsEfYdInfoGuide",
+    "https://open.law.go.kr/LSO/openApi/guideResult.do?htmlName=precListGuide",
+    "https://open.law.go.kr/LSO/openApi/guideResult.do?htmlName=precInfoGuide",
+    "https://open.law.go.kr/LSO/information/guide.do",
+    "https://easylaw.go.kr/CSP/InfoCopyright.laf",
+    "https://www.klac.or.kr/disclosure/openingPublicData.do"
+  ],
+  "testOnlyGuideRegistry": [
+    {
+      "institutionId": "moleg_easylaw",
+      "endpointId": "easylaw_text_section",
+      "host": "easylaw.go.kr",
+      "pathPrefix": "/CSP/CnpClsMain.laf"
+    },
+    {
+      "institutionId": "moleg_easylaw",
+      "endpointId": "easylaw_text_section",
+      "host": "www.easylaw.go.kr",
+      "pathPrefix": "/CSP/CnpClsMain.laf"
+    }
+  ],
+  "registryCandidates": [
+    {
+      "id": "moleg_eflaw",
+      "state": "existing_official_endpoint_live_expansion_unverified",
+      "host": "www.law.go.kr",
+      "paths": ["/DRF/lawSearch.do", "/DRF/lawService.do"],
+      "target": "eflaw"
+    },
+    {
+      "id": "moleg_prec",
+      "state": "official_documented_endpoint_permission_and_shape_unverified",
+      "host": "www.law.go.kr",
+      "paths": ["/DRF/lawSearch.do", "/DRF/lawService.do"],
+      "target": "prec"
+    },
+    {
+      "id": "moleg_easylaw",
+      "state": "proposed_unapproved",
+      "hosts": ["easylaw.go.kr", "www.easylaw.go.kr"],
+      "path": "/CSP/CnpClsMain.laf",
+      "identityParameters": ["csmSeq", "ccfNo", "cciNo", "cnpClsNo"],
+      "rights": "official policy permits commercial use except third-party works; exact admitted text requires review",
+      "datePolicy": "page-authored basis date distinct from fetchedAt; null or pending revision limits claims"
+    },
+    {
+      "id": "klac_summary_candidate",
+      "state": "corpus_disabled_rights_pending",
+      "host": "www.klac.or.kr",
+      "path": "/legalstruct/summary.do",
+      "rights": "The cited public-data page applies KOGL type2 to its relevant works; this is not a site-wide rights conclusion."
+    },
+    {
+      "id": "scourt_help_candidate",
+      "state": "adapter_unsupported",
+      "host": "ecfs.scourt.go.kr",
+      "path": "/psp/index.on",
+      "identityParameters": ["m"],
+      "reason": "Public document fetch returned no readable body; extractor and rights not verified."
+    }
+  ],
+  "unexecutedAcceptanceCases": [
+    "bounded-stream oversize and wrong Content-Length",
+    "timeout and cancellation before/after authorization guard",
+    "cross-owner or moderator private workspace access",
+    "consent/revision/deletion race",
+    "request reservation on every retry; visible response quota charged once",
+    "fresh cache and immutable content-version change",
+    "span mismatch/hash mismatch and semantically unrelated claim",
+    "private-query exclusion from public cache",
+    "no prompt execution or image coverage inference"
+  ]
+}

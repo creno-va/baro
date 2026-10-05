@@ -1,0 +1,328 @@
+[
+  {
+    "id": "precedent_verified",
+    "origin": "synthetic",
+    "captureStatus": "not_captured",
+    "adapterValidation": "not_run",
+    "sourceKind": "precedent",
+    "request": {
+      "endpointId": "moleg_prec_detail",
+      "parametersWithoutCredential": {
+        "target": "prec",
+        "type": "JSON",
+        "ID": "90000000201"
+      },
+      "untrustedUrl": null
+    },
+    "response": {
+      "status": 200,
+      "mediaType": "application/json",
+      "body": "{\"판례정보\":{\"판례정보일련번호\":\"90000000201\",\"사건명\":\"합성 자료 사건\",\"사건번호\":\"2026합성1\",\"선고일자\":\"20260102\",\"법원명\":\"합성 법원\",\"판결요지\":\"합성 판례 요지: 실제 사건이나 법적 결론을 나타내지 않습니다.\",\"판례내용\":\"합성 전문. 실제 재판 내용이 아닙니다.\"}}",
+      "bodySha256": "edcd987a5ea1e379cfe62fa8d0fa9a2d79c77427629303ed08319b6282809ed6"
+    },
+    "expected": {
+      "availability": "verified",
+      "reason": null,
+      "canonicalIdentity": {
+        "officialId": "90000000201",
+        "version": "decision_2026_01_02",
+        "date": "2026-01-02",
+        "section": "판결요지"
+      },
+      "normalizedText": "합성 판례 요지: 실제 사건이나 법적 결론을 나타내지 않습니다.",
+      "citation": {
+        "id": "precedent_synthetic",
+        "sourceId": "source_precedent_synthetic",
+        "title": "합성 자료 사건",
+        "verifiedAt": "2026-10-06T00:00:00.000Z",
+        "contentHash": "6e4f486e953813316cddc002c4ffead6657a1262942ad97f88b4868c23256443",
+        "kind": "precedent",
+        "officialId": "90000000201",
+        "court": "합성 법원",
+        "caseNumber": "2026합성1",
+        "decisionDate": "2026-01-02",
+        "url": "https://www.law.go.kr/LSW/precInfoP.do?precSeq=90000000201"
+      },
+      "span": {
+        "section": "판결요지",
+        "startUtf16": 0,
+        "endUtf16": 35,
+        "text": "합성 판례 요지: 실제 사건이나 법적 결론을 나타내지 않습니다.",
+        "contentHash": "6e4f486e953813316cddc002c4ffead6657a1262942ad97f88b4868c23256443"
+      }
+    }
+  },
+  {
+    "id": "precedent_list_candidate",
+    "origin": "synthetic",
+    "captureStatus": "not_captured",
+    "adapterValidation": "not_run",
+    "sourceKind": "precedent",
+    "request": {
+      "endpointId": "moleg_prec_list",
+      "parametersWithoutCredential": {
+        "target": "prec",
+        "type": "JSON",
+        "search": "2",
+        "query": "합성 개념",
+        "display": "20",
+        "page": "1",
+        "sort": "ddes",
+        "prncYd": "00010101~20261006"
+      },
+      "untrustedUrl": null
+    },
+    "response": {
+      "status": 200,
+      "mediaType": "application/json",
+      "body": "{\"PrecSearch\":{\"prec\":[{\"판례일련번호\":\"90000000201\",\"사건명\":\"합성 자료 사건\",\"사건번호\":\"2026합성1\",\"선고일자\":\"20260102\",\"법원명\":\"합성 법원\",\"데이터출처명\":\"대법원\"}],\"totalCnt\":\"1\",\"page\":\"1\"}}",
+      "bodySha256": "a5b52a71f623c86f01932b924432a2d777852a0d5a2d66574d214b3a66c6e55b"
+    },
+    "expected": {
+      "availability": "candidate_only",
+      "reason": "detail_required",
+      "canonicalIdentity": {
+        "officialId": "90000000201",
+        "version": "decision_2026_01_02",
+        "date": "2026-01-02",
+        "section": "판결요지"
+      },
+      "normalizedText": null,
+      "citation": null,
+      "span": null
+    }
+  },
+  {
+    "id": "precedent_wrong_id",
+    "origin": "synthetic",
+    "captureStatus": "not_captured",
+    "adapterValidation": "not_run",
+    "sourceKind": "precedent",
+    "request": {
+      "endpointId": "moleg_prec_detail",
+      "parametersWithoutCredential": {
+        "target": "prec",
+        "type": "JSON",
+        "ID": "90000000201"
+      },
+      "untrustedUrl": null
+    },
+    "response": {
+      "status": 200,
+      "mediaType": "application/json",
+      "body": "{\"판례정보\":{\"판례정보일련번호\":\"90000000999\",\"사건명\":\"합성 자료 사건\",\"사건번호\":\"2026합성1\",\"선고일자\":\"20260102\",\"법원명\":\"합성 법원\",\"판결요지\":\"합성 판례 요지: 실제 사건이나 법적 결론을 나타내지 않습니다.\",\"판례내용\":\"합성 전문. 실제 재판 내용이 아닙니다.\"}}",
+      "bodySha256": "1eede0524ddda528b8b491e380d0d6417b9f223242ff28699bb712f2f7039525"
+    },
+    "expected": {
+      "availability": "rejected",
+      "reason": "identity_mismatch",
+      "canonicalIdentity": null,
+      "normalizedText": null,
+      "citation": null,
+      "span": null
+    }
+  },
+  {
+    "id": "precedent_wrong_court",
+    "origin": "synthetic",
+    "captureStatus": "not_captured",
+    "adapterValidation": "not_run",
+    "sourceKind": "precedent",
+    "request": {
+      "endpointId": "moleg_prec_detail",
+      "parametersWithoutCredential": {
+        "target": "prec",
+        "type": "JSON",
+        "ID": "90000000201"
+      },
+      "untrustedUrl": null
+    },
+    "response": {
+      "status": 200,
+      "mediaType": "application/json",
+      "body": "{\"판례정보\":{\"판례정보일련번호\":\"90000000201\",\"사건명\":\"합성 자료 사건\",\"사건번호\":\"2026합성1\",\"선고일자\":\"20260102\",\"법원명\":\"다른 합성 법원\",\"판결요지\":\"합성 판례 요지: 실제 사건이나 법적 결론을 나타내지 않습니다.\",\"판례내용\":\"합성 전문. 실제 재판 내용이 아닙니다.\"}}",
+      "bodySha256": "1ac59816a41b002dbcf65c90b0c7b427f872ec86d67d476e6d06e3a505167a65"
+    },
+    "expected": {
+      "availability": "rejected",
+      "reason": "identity_mismatch",
+      "canonicalIdentity": null,
+      "normalizedText": null,
+      "citation": null,
+      "span": null
+    }
+  },
+  {
+    "id": "precedent_wrong_number",
+    "origin": "synthetic",
+    "captureStatus": "not_captured",
+    "adapterValidation": "not_run",
+    "sourceKind": "precedent",
+    "request": {
+      "endpointId": "moleg_prec_detail",
+      "parametersWithoutCredential": {
+        "target": "prec",
+        "type": "JSON",
+        "ID": "90000000201"
+      },
+      "untrustedUrl": null
+    },
+    "response": {
+      "status": 200,
+      "mediaType": "application/json",
+      "body": "{\"판례정보\":{\"판례정보일련번호\":\"90000000201\",\"사건명\":\"합성 자료 사건\",\"사건번호\":\"2026합성999\",\"선고일자\":\"20260102\",\"법원명\":\"합성 법원\",\"판결요지\":\"합성 판례 요지: 실제 사건이나 법적 결론을 나타내지 않습니다.\",\"판례내용\":\"합성 전문. 실제 재판 내용이 아닙니다.\"}}",
+      "bodySha256": "ecb5544dd3a4340c25dc3d022237e26fde48a4ce1decc73118aaf6a7e24eba9c"
+    },
+    "expected": {
+      "availability": "rejected",
+      "reason": "identity_mismatch",
+      "canonicalIdentity": null,
+      "normalizedText": null,
+      "citation": null,
+      "span": null
+    }
+  },
+  {
+    "id": "precedent_wrong_date",
+    "origin": "synthetic",
+    "captureStatus": "not_captured",
+    "adapterValidation": "not_run",
+    "sourceKind": "precedent",
+    "request": {
+      "endpointId": "moleg_prec_detail",
+      "parametersWithoutCredential": {
+        "target": "prec",
+        "type": "JSON",
+        "ID": "90000000201"
+      },
+      "untrustedUrl": null
+    },
+    "response": {
+      "status": 200,
+      "mediaType": "application/json",
+      "body": "{\"판례정보\":{\"판례정보일련번호\":\"90000000201\",\"사건명\":\"합성 자료 사건\",\"사건번호\":\"2026합성1\",\"선고일자\":\"20260103\",\"법원명\":\"합성 법원\",\"판결요지\":\"합성 판례 요지: 실제 사건이나 법적 결론을 나타내지 않습니다.\",\"판례내용\":\"합성 전문. 실제 재판 내용이 아닙니다.\"}}",
+      "bodySha256": "9e0b1f63f4aad476cd10dbeef8dce0bfd8d41091f31bf74ee072de62c52d6585"
+    },
+    "expected": {
+      "availability": "rejected",
+      "reason": "identity_mismatch",
+      "canonicalIdentity": null,
+      "normalizedText": null,
+      "citation": null,
+      "span": null
+    }
+  },
+  {
+    "id": "precedent_summary_only",
+    "origin": "synthetic",
+    "captureStatus": "not_captured",
+    "adapterValidation": "not_run",
+    "sourceKind": "precedent",
+    "request": {
+      "endpointId": "moleg_prec_detail",
+      "parametersWithoutCredential": {
+        "target": "prec",
+        "type": "JSON",
+        "ID": "90000000201"
+      },
+      "untrustedUrl": null
+    },
+    "response": {
+      "status": 200,
+      "mediaType": "application/json",
+      "body": "{\"판례정보\":{\"판례정보일련번호\":\"90000000201\",\"사건명\":\"합성 자료 사건\",\"사건번호\":\"2026합성1\",\"선고일자\":\"20260102\",\"법원명\":\"합성 법원\",\"판결요지\":\"합성 판례 요지: 실제 사건이나 법적 결론을 나타내지 않습니다.\",\"판례내용\":\"\"}}",
+      "bodySha256": "802a1e276dd87f1d3679ce716a77ac8d7f7f7fff4152906ee2dc2f3cd3a24865"
+    },
+    "expected": {
+      "availability": "limited",
+      "reason": "summary_only_no_full_text",
+      "canonicalIdentity": {
+        "officialId": "90000000201",
+        "version": "decision_2026_01_02",
+        "date": "2026-01-02",
+        "section": "판결요지"
+      },
+      "normalizedText": "합성 판례 요지: 실제 사건이나 법적 결론을 나타내지 않습니다.",
+      "citation": {
+        "id": "precedent_synthetic",
+        "sourceId": "source_precedent_synthetic",
+        "title": "합성 자료 사건",
+        "verifiedAt": "2026-10-06T00:00:00.000Z",
+        "contentHash": "6e4f486e953813316cddc002c4ffead6657a1262942ad97f88b4868c23256443",
+        "kind": "precedent",
+        "officialId": "90000000201",
+        "court": "합성 법원",
+        "caseNumber": "2026합성1",
+        "decisionDate": "2026-01-02",
+        "url": "https://www.law.go.kr/LSW/precInfoP.do?precSeq=90000000201"
+      },
+      "span": {
+        "section": "판결요지",
+        "startUtf16": 0,
+        "endUtf16": 35,
+        "text": "합성 판례 요지: 실제 사건이나 법적 결론을 나타내지 않습니다.",
+        "contentHash": "6e4f486e953813316cddc002c4ffead6657a1262942ad97f88b4868c23256443"
+      }
+    }
+  },
+  {
+    "id": "precedent_html_only_exception",
+    "origin": "synthetic",
+    "captureStatus": "not_captured",
+    "adapterValidation": "not_run",
+    "sourceKind": "precedent",
+    "request": {
+      "endpointId": "moleg_prec_detail",
+      "parametersWithoutCredential": {
+        "target": "prec",
+        "type": "JSON",
+        "ID": "90000000201"
+      },
+      "untrustedUrl": null
+    },
+    "response": {
+      "status": 200,
+      "mediaType": "text/html",
+      "body": "<html><body><p>합성 HTML 전용 예외 자료</p></body></html>",
+      "bodySha256": "b4d37a54d7851707799317e8cf91f7a0542f5e872a180021abc52be8a6264913"
+    },
+    "expected": {
+      "availability": "unavailable",
+      "reason": "html_only_adapter_unverified",
+      "canonicalIdentity": null,
+      "normalizedText": null,
+      "citation": null,
+      "span": null
+    }
+  },
+  {
+    "id": "precedent_schema_drift",
+    "origin": "synthetic",
+    "captureStatus": "not_captured",
+    "adapterValidation": "not_run",
+    "sourceKind": "precedent",
+    "request": {
+      "endpointId": "moleg_prec_detail",
+      "parametersWithoutCredential": {
+        "target": "prec",
+        "type": "JSON",
+        "ID": "90000000201"
+      },
+      "untrustedUrl": null
+    },
+    "response": {
+      "status": 200,
+      "mediaType": "application/json",
+      "body": "{\"ChangedPrecedent\":{\"판례정보일련번호\":\"90000000201\",\"사건명\":\"합성 자료 사건\",\"사건번호\":\"2026합성1\",\"선고일자\":\"20260102\",\"법원명\":\"합성 법원\",\"판결요지\":\"합성 판례 요지: 실제 사건이나 법적 결론을 나타내지 않습니다.\",\"판례내용\":\"합성 전문. 실제 재판 내용이 아닙니다.\"}}",
+      "bodySha256": "aa50b00361b3b6e7729937522a0f6de6c2c9a01b88a63029cf221e54f05f4395"
+    },
+    "expected": {
+      "availability": "rejected",
+      "reason": "schema_changed",
+      "canonicalIdentity": null,
+      "normalizedText": null,
+      "citation": null,
+      "span": null
+    }
+  }
+]
