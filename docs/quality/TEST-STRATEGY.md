@@ -145,7 +145,7 @@ ZIP 선택/원본 byte 검증, Pretendard font·single sharedSVG 참조도 인�
 | 검증 그룹 | 추가 필수 경계 |
 | --- | --- |
 | 계약/DB | v2 discriminated unions·role/approval·partial intake·summary confirmation·version compatibility·단일 migration 소유·fresh/upgrade/drift |
-| quota/cost | 3/4cases·30/31responses·60min·KST reset·100/101files·5GB/10GB·pendingbytes·global100만원·reservation race/ambiguous provider·legacy bypass |
+| quota/cost | 3/4cases·30/31responses·60min·KST reset·사건원본100/101files·원본합계5GB·계정전체10GB(파생물/report포함)·pendingbytes·global100만원·reservation race/ambiguous provider·legacy bypass |
 | 파일/미디어 | DOCX/HWP/HWPX/PDF500page·legacyoffice·imageOCR·audio·video60min/1GB·실제duration/magic·zipbomb/SSRF·8MiB upload/resume·coverage |
 | 암호화/삭제 | v1 envelope와chunkAEAD·DEK/IV/AAD/order/truncation·file/report/ZIP keys·lateupload/Container/modeljob·orphan·private/public R2/CDN·journal-first restore |
 | 프로필/심사 | manualverification·everypublicedit·immutable submitted·oldapprovedrevision 유지·selfapprove/revoke/concurrentdecision·privateverification 분리 |

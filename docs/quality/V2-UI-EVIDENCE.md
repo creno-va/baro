@@ -45,7 +45,7 @@ assertion만으로 시각적 품질을 완료하지 않고 대표 화면 screens
 | U05 | 친숙한 채팅→재접속 후 history→새 자료/사실의 diff | stale job·중복 send·provider outage·검증 전 token 노출 금지 | #64/#65 |
 | U06 | timeline/행동 todo·done·skip 수정→저장 유지 | 법적 결론·승패/협상/소송전략·자동 상대방 연락 없음 | #64/#65 |
 | U07 | 문서/이미지/음성/영상 업로드→자동 처리·상태·원본 열람 | 동의·MIME위조·악성/암호/손상·취소·timeout·중복part | #58/#59/#65 |
-| U08 | PDF500페이지·100MB 문서, 1GB/60분 media 허용 경계 | 각 상한+1 및 case100/101files·5GB·account10GB 동시reservation | #57/#58/#59 |
+| U08 | PDF500페이지·100MB 문서, 1GB/60분 media 허용 경계 | 각 상한+1·사건원본100/101files·원본합계5GB·계정전체10GB 동시예약. 파생물/report는 계정에만 저장차감 | #57/#58/#59 |
 | U09 | 추출 문단/페이지·ASR timestamp·영상frame 확인/수정/제외 | OCR 오류·silence·speaker 불확실성·누락구간·1초+장면coverage | #59/#65 |
 | U10 | 한국법 모든 분야의 합성 사례를 입력·정리 | 지식/근거 부족은 불확실성, 법률군 자동 탈락/허구 법률결론 없음 | #63/#64/#69 |
 | U11 | 공식 법령/판례/기관 guide 인용 열기·근거 확인 | wrong ID/date/hash·staleguide·API장애·비공식 source 차단 | #63/#64 |

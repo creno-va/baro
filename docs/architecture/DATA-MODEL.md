@@ -189,9 +189,11 @@ public pointer·공개 asset purge와 신고 처리는 감사 가능한 비민�
 projection은 사건/인증자료 FK와 조회 join을 포함하지 않는다. moderated draft와 승인본을
 같은 row의 덮어쓰기 값으로 표현하지 않는다.
 
-v2 storage 합계는 원본·파생물·report·ZIP·portfolio staging/공개본·진행 중 reservation을
+v2 계정 storage 합계는 원본·파생물·report·ZIP·portfolio staging/공개본·진행 중 reservation을
 반영한다. 실제 object 삭제 전 사용량을 반환하지 않으며 double cleanup·실패·orphan reconciliation을
-검사한다. 원본 개수 100과 저장 byte 합계를 구분한다. 가격·환율 quote와 user quota는 별도
+검사한다. 사건 원본 개수 100과 원본 byte 합계 5GB는 별도 counter이며 pending 원본 예약을
+포함한다. 파생물·report·ZIP은 계정 전체10GB와 처리 상한에 포함하고 사건 원본5GB에서는
+제외한다. 가격·환율 quote와 user quota는 별도
 ledger이며 provider crash ambiguity를 비용0으로 처리하지 않는다.
 
 대형 blob의 key format/AEAD는 v1 text envelope를 변경하지 않는 별도 version으로 추가한다.
