@@ -3,6 +3,7 @@
   "name": "baro-preview",
   "main": "src/worker.ts",
   "compatibility_date": "2026-10-04",
+  "compatibility_flags": ["nodejs_compat"],
   "routes": [
     {
       "pattern": "preview.baro.site",
