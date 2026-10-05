@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { api } from "../../src/server/api";
 import { createCaseApi } from "../../src/server/api/case-create";
+import { syntheticWorkflow } from "../adapters/analysis-pipeline";
 import { createTestDatabase } from "./d1";
 import { seedTestSession } from "./session";
 
@@ -16,13 +17,16 @@ if (
 )
   throw new Error("Synthetic browser harness requires a loopback HTTP origin");
 const database = await createTestDatabase();
-const caseMode = Bun.argv[3] === "cases";
+const caseMode = ["cases", "analysis"].includes(Bun.argv[3] ?? "");
 const session = await seedTestSession(database, { consent: caseMode });
 session.env.BETTER_AUTH_URL = browserOrigin.origin;
 session.browserCookie.url = browserOrigin.origin;
 session.env.CASE_DATA_KEY_V1 = btoa("x".repeat(32)).replace(/=+$/, "");
 session.env.CASE_ACCOUNT_LIMIT = { limit: async () => ({ success: true }) } as RateLimit;
 session.env.CASE_IP_LIMIT = { limit: async () => ({ success: true }) } as RateLimit;
+session.env.ANALYSIS_ACCOUNT_LIMIT = { limit: async () => ({ success: true }) } as RateLimit;
+if (Bun.argv[3] === "analysis")
+  session.env.ANALYSIS_WORKFLOW = await syntheticWorkflow(session.env);
 const app = new Hono<{ Bindings: Env }>();
 if (caseMode)
   app.route(
