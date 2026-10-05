@@ -44,6 +44,7 @@ injection, 모델의 데이터 재노출, 로그 유출, secret 유출, 자동�
 - 키 ID만 행에 저장하며 최소 연 1회 또는 노출 의심 시 즉시 회전한다.
 - production secret을 local/preview에서 사용할 수 없다.
 - backup/복구 검증에는 복호화 가능성과 접근 통제를 모두 포함한다.
+- 키 생성·등록·회전·분실 대응은 [사건 데이터 키 운영](../operations/CASE-DATA-KEYS.md)을 따른다.
 
 ## AI와 prompt injection
 
