@@ -5,6 +5,10 @@
 - Out of scope for MVP: 판례, 행정해석, 블로그, 언론, 모델 기억
 - 승인된 OC: `crenova` (환경 secret에 등록, query/로그에서 값 노출 금지)
 
+위 범위는 v1의 법령 전용 adapter 계약이다. v2는 아래 공식 출처 확장을 목표로 하며
+기존 adapter와 승인 OC의 live 성공을 자동 가정하지 않는다. private credential 오류 진단은
+안전한 category만 남기고 raw 오류 메시지·OC·요청 URL은 기록하지 않는다.
+
 ## 정본과 기준일
 
 분석마다 `asOfDate`를 한국 날짜로 고정한다. 검색 결과에서 법령 ID와 시행 이력을
@@ -87,3 +91,39 @@ offline adapter fixture는 공식 응답 출처·hash 검증과 synthetic 입력
 
 - [국가법령정보 공동활용 Open API 가이드](https://open.law.go.kr/LSO/openApi/guideList.do)
 - [공동활용 이용·신청 안내](https://open.law.go.kr/LSO/information/guide.do)
+
+## v2 공식 출처 확장
+
+[ADR-0011](../adr/0011-verified-official-source-expansion.md)에 따라 법령·공식 판례·공공기관
+절차 안내를 별도 source type으로 검증한다. 모든 조회는 `legal-retrieval` 밖에서 호출하지
+않는다. 임의 웹 검색·블로그·법무법인 마케팅·모델 기억을 official source로 바꾸지 않는다.
+
+| type | 정본 식별·시간 | 인용 검증 |
+| --- | --- | --- |
+| `statute` | 법령ID·시행일·조항·hash | 기준일 시행 이력과 원문, 기존 v1 source ID 보존 |
+| `precedent` | 공식 판례일련번호·법원·사건번호·선고일·원문 위치·hash | 목록 뒤 상세 원문 재조회, 사건명/법원/선고일 일치, 법령 시행일로 표기하지 않음 |
+| `official_guide` | 승인된 기관/URL·문서ID·개정/게시/확인일·section·hash | 공식 host+redirect allowlist·문서 내용 최신성, 날짜 없으면 불확실성 표시 |
+
+국가법령정보 `target=prec`의 목록과 상세 `ID` 경로는 공식 가이드에 존재하지만 account
+권한/응답/필드 구조·이용 조건은 실제 승인 OC로 확인한다. HTML 전용 예외 자료를 JSON이
+있다고 가정하지 않는다. 판례는 비슷한 사실에 동일 결과를 보장하거나 AI 승소 예측의 근거로
+쓰지 않고 변호사에게 확인할 자료의 공식 reference로 제공한다.
+[판례 목록](https://open.law.go.kr/LSO/openApi/guideResult.do?htmlName=precListGuide),
+[판례 본문](https://open.law.go.kr/LSO/openApi/guideResult.do?htmlName=precInfoGuide)
+
+source metadata는 type별 strict discriminated union으로 확장하고 lawName/article/
+effectiveDate 필수인 v1 citation을 억지로 guide/판례에 적용하지 않는다. fetchedAt,
+verifiedAt, hash, canonicalUrl, exact text span은 공통이며 `confidence`는 실제 검증 수준을
+넘지 않는다. 사용자 파일 관찰은 `user_material`로 별도 처리하고 official citation으로
+승격하지 않는다. query는 최소화된 법률 개념만 쓰며 이름·회사 고유정보·연락처·계좌를 넣지 않는다.
+
+기관 안내 adapter는 승인된 기관/endpoint/문서 형식 allowlist와 timeout/body-size/HTML
+safe extraction을 갖추고 redirect·사설IP·임의 URL을 거부한다. raw corpus의 개인정보와
+active content는 공개 cache에도 그대로 복사하지 않는다. 기준일/본문/hash가 불명확하면
+사용자에게 확인 필요를 표시하고 단순 검색 snippet으로 인용하지 않는다.
+
+공식 출처 unavailable 시 사실 정리·자료 목록·선택 원본 내보내기는 유지할 수 있다.
+법적 판단·기한·전략은 생성하지 않고 검증 못한 법률 설명은 PDF/채팅에서 제외한다.
+source cache의 hash mismatch, 잘못된 판례 ID/선고일, stale guide, redirect 위조,
+구조 변경·등록/IP/credential 오류와 live Worker 성공을 각각 검증한다. 실제 출처 확장,
+업데이트 운영과 공개 법률 범주는 downstream 구현/승인 이슈의 미완료 조건이다.

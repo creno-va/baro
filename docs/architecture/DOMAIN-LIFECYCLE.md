@@ -1,6 +1,10 @@
 # 사건·분석 실행 계약
 
 - Contract: v1, 2026-10-05
+
+이 문서는 v1의 누적5문항/단일 분석 실행 계약을 보존한다. v2의 연속 사건 작업 공간,
+반복 질문·채팅·자료·심사·한도는 [v2 실행 계약](./V2-CONTRACTS.md)을 따른다. 기존 완료
+결과의 읽기·삭제를 유지하고 명시적 전환 없이 v1 사건을 자동 재분석하지 않는다.
 - Decision: [ADR-0005](../adr/0005-durable-execution-and-release-gates.md)
 - Owners: #28 shared contract, #8 schema, #11 admission, #13 execution, #17 deletion
 

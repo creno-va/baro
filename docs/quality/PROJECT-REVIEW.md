@@ -1,5 +1,9 @@
 # 프로젝트 전체 리뷰 — 자율 개발 준비도
 
+아래는 2026-10-05의 역사적 리뷰/검증 기록이며 현재 배포 상태가 아니다. v2의 전체 기능
+완료 기준은 [v2 시연 증거](./V2-UI-EVIDENCE.md), 목표 계약은 [v2 실행 계약](../architecture/V2-CONTRACTS.md)를
+따른다. 이전 준비도 리뷰와 v1 offline 결과를 v2 UI·실제 외부·법률 승인으로 해석하지 않는다.
+
 - Reviewed: 2026-10-05
 - Tracking: [#26](https://github.com/creno-va/baro/issues/26)
 - Scope: main `8e66629`, OAuth draft [PR #25](https://github.com/creno-va/baro/pull/25), open issues/milestones/protection/environments, 전체 docs, scaffold, CI/CD

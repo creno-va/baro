@@ -1,5 +1,8 @@
 # 데이터 모델
 
+아래 기존 테이블·값은 v1의 구현/운영 계약이다. v2 목표는 마지막 확장 표와
+[v2 실행 계약](./V2-CONTRACTS.md)에 정의하며 migration이 이미 존재한다고 해석하지 않는다.
+
 - Database: Cloudflare D1 (SQLite)
 - ORM/migrations: Drizzle
 - Identifiers: `crypto.randomUUID()` UUIDv4 strings; 목록 순서는 시각+ID로 결정
@@ -158,3 +161,41 @@ DB check constraint와 애플리케이션 상태 전이 테스트를 함께 둔�
   `bun run db:generate` 뒤 diff가 없어야 schema와 baseline이 일치한다.
 
 #8의 additive migration과 저장 primitive 사용 경계는 [도메인 DB 운영](../operations/DOMAIN-DATABASE.md)을 따른다.
+
+## v2 additive 정본 목표
+
+schema 소유 이슈 [#55](https://github.com/creno-va/baro/issues/55)가 strict 계약 [#54](https://github.com/creno-va/baro/issues/54)를
+통합한 뒤 migration 번호·CHECK·FK·인덱스를 하나의 PR로 확정한다. 다른 이슈가 migration을
+병렬 생성하지 않는다. 기존 case/analysis/result와 `schemaVersion:"1"`은 보존하고 읽기/삭제
+회귀를 검사한다. 새 workspace는 v1 case의 명시적 전환 reference 또는 신규 v2 사건에 연결한다.
+
+| 목표 테이블 그룹 | 정본 metadata | 암호화 대상·핵심 제약 |
+| --- | --- | --- |
+| `case_workspaces` | case/owner FK, contractVersion, state, revision, intakeRevision, confirmedSummaryRevision | company/individual context와 서술은 encrypted; owner+CAS, company 공동 소유 없음 |
+| `intake_batches`, `intake_answers`, `case_summaries` | workspace/revision/batch index/question IDs/confirmedAt | 질문·답변·요약 encrypted, unknown/skipped에는 value 없음, 최신 summary만 확인 |
+| `case_messages`, `case_actions`, `case_timeline` | owner/workspace FK, ordinal, revision, operation ID, status | text/확인 이유/날짜·인물·source 위치 encrypted, 입력 사실과 AI 추정 구분 |
+| `case_files`, `file_parts`, `file_derivatives` | opaque file/blob key, owner/workspace FK, byte counts, format/status/revision | filename·내용·coverage/source positions encrypted, 부분 순서/총byte/hash manifest 검증 |
+| `processing_jobs`, `job_outbox` | target ID, revision, kind, lease, attempt, failure enum | 평문 payload 금지, tombstone 검사, bounded retry·CAS, 늦은 결과 거부 |
+| `case_reports`, `report_file_links` | report version, workspace snapshot, selected file/revision, ready status | edited/masked contents·PDF/ZIP encrypted, 고정 snapshot, 소유 file만 참조 |
+| `lawyer_applications`, `verification_assets` | applicant FK, review revision/state, reviewer ID/time | 본인·자격·사무실 확인 서류 private/encrypted, 심사 권한과 사건 소유권 분리 |
+| `lawyer_profiles`, `profile_revisions`, `portfolio_assets` | owner FK, approved revision pointer, state, approvedAt | draft/심사 reasons private, submitted 불변, approved content만 공개 projection |
+| `moderation_decisions`, `public_reports` | target type/revision, decision enum, actor/time | 심사 기록/신고 내용 제한, 자기 승인 금지, public pointer와 승인 outbox 원자적 변경 |
+| `usage_reservations`, `daily_usage_v2`, `storage_usage` | operation/user/KST day, caseCount/responseCount/mediaSeconds/reservedBytes | logical operation unique, pending upload 포함, quota 종속 쓰기 동일 predicate |
+| `cost_attempts`, `monthly_budget` | opaque operation/attempt, cost category, quoteVersion, reserved/actual/ambiguous KRW | 모델·ASR·compute·storage 모두 포함, 사용자 내용·원본 URL 없음, 월 global reservation |
+| extended `deletion_jobs` | opaque target/blob/job references, revocation state, cleanup progress/attempt | 삭제 후 FK cascade와 분리, 개인정보 shadow copy 없음, backup+R2 restore 재삭제 |
+
+role binding은 검증된 account에만 부여하고 client role 값을 쓰지 않는다. role 철회·변호사
+public pointer·공개 asset purge와 신고 처리는 감사 가능한 비민감 기록으로 남긴다. 공개
+projection은 사건/인증자료 FK와 조회 join을 포함하지 않는다. moderated draft와 승인본을
+같은 row의 덮어쓰기 값으로 표현하지 않는다.
+
+v2 storage 합계는 원본·파생물·report·ZIP·portfolio staging/공개본·진행 중 reservation을
+반영한다. 실제 object 삭제 전 사용량을 반환하지 않으며 double cleanup·실패·orphan reconciliation을
+검사한다. 원본 개수 100과 저장 byte 합계를 구분한다. 가격·환율 quote와 user quota는 별도
+ledger이며 provider crash ambiguity를 비용0으로 처리하지 않는다.
+
+대형 blob의 key format/AEAD는 v1 text envelope를 변경하지 않는 별도 version으로 추가한다.
+file DEK wrap, part IV/AAD, ordered manifest와 hash는 blob revision에 묶으며 원본 hash·filename을
+로그/public metadata로 노출하지 않는다. DB backup 단독 복구가 R2 원본·public CDN·삭제 정리
+완료를 증명하지 않는다. 삭제 journal 적용 후 전체 object/reference 대조와 회전키 복호화
+검증을 수행한다. detail은 [v2 실행 계약](./V2-CONTRACTS.md)을 따른다.

@@ -85,3 +85,43 @@ PUT으로 D1에 upsert하며 사건/분석 삭제 때 cascade한다. 지표 거�
 독립적이다. account_deleted SDK 계약은 준비됐지만 계정 삭제 화면/서버 연결은 #17이다.
 외부 production cohort 수집을 완료했다고 주장하지 않는다. 공개 목적/보존/쿠키 고지의
 승인은 #20에서 확인하며 이 문서가 법률 승인이나 새 공급자 도입 승인을 대신하지 않는다.
+
+## v2 이벤트와 사업 목표의 구분
+
+핵심 목표는 변호사 탐색/직접 연락과 사건 준비·인계다. 연락 클릭은 상담 성사·계약·수임·
+법적 효과를 증명하지 않는다. 매출·중개 수수료·유료 순위 모델은 미정이며 지표로 허위
+전환/수수료 수입을 생성하지 않는다. 기존 v1 eventVersion을 보존하고 v2 이벤트는 별도
+strict schema/version으로 추가한다. 수집 opt-in·bounded session storage·opt-out 삭제를
+유지하고 새 외부 수집 공급자를 이 변경만으로 도입하지 않는다.
+
+| v2 목표 이벤트 | 발생 증거 | 허용된 추가 값 |
+| --- | --- | --- |
+| `directory_viewed` | 목록 실제 표시 | filterUsed:boolean, resultCountBucket; 분야/지역/검색어 원문 없음 |
+| `lawyer_profile_viewed` | 승인 프로필 실제 표시 | entryPoint enum; 이름/사무실/공개 lawyer ID 없음 |
+| `lawyer_contact_clicked` | 사용자가 외부 연락 수단 선택 | channel:phone/email/consult_link; URL·주소·사건 연결 ID 없음 |
+| `intake_batch_completed` | 서버 답변 묶음 저장/advance 승인 | batchIndex, questionCount, unknownCount, skippedCount |
+| `summary_confirmed` | 최신 summary revision 확인 저장 | bounded revision, intakeDurationBucket |
+| `chat_response_viewed` | 검증된 응답 실제 표시 | bounded response ordinal, citationCount; message내용 없음 |
+| `material_processed` | job 검증 terminal | fileKind enum, coverageBucket, durationBucket; 파일명/hash/원문 없음 |
+| `action_updated` | owner가 상태 변경 저장 | actionKind/status enum; 행동 label·source position 없음 |
+| `report_export_requested` | 고정 snapshot/선택 확인 후 admission | format enum, selectedCount, maskingUsed:boolean |
+| `report_downloaded` | 권한 검증된 파일 transfer 완료 관측 | format enum; 내용/이름/원본object key/외부수신처 없음 |
+| `profile_submitted` | 자신의 revision 심사 admission | revisionCountBucket; 자격서류·변호사명 없음 |
+| `profile_review_completed` | 승인/반려 transaction 완료 | decision enum, queueDurationBucket; reason 자유문구 없음 |
+
+directory/profile/contact 이벤트를 사건 hash/세션 사실과 연결해 AI 맞춤 순위나 광고 targeting에
+사용하지 않는다. 필요한 event/flow ID는 analytics 전용이며 직접 account/lawyer/case identity를
+전송하지 않는다. 외부 연락 링크에 analytics tag와 사건 내용 query를 붙이지 않는다.
+공개 프로필 내용도 analytics payload에 복사하지 않는다.
+
+intake 활성화율은 distinct confirmed summary / distinct admitted v2 intake이고, 준비 인계율은
+distinct report download / distinct confirmed workspace다. directory→profile→contact click은
+opt-in cohort의 별도 funnel이며 실제 상담 전환율이 아니다. 원본 download 200만으로 사용자
+전달 완료를 추정하지 않는다. intake 지표·반복 채팅·report 생성 시간은 operation별 start/end
+동일 짝으로 계산하고 v1 단일 analysis denominator와 혼합하지 않는다. sample 부족/수집 거절/
+짝 누락은 null이며 preview/test 데이터는 production 지표에서 제외한다.
+
+정확한 quota/cost/삭제 관측은 선택 analytics가 아닌 제한된 운영 ledger다. 운영 데이터에
+서술·채팅·파일명·report본문·full URL·cookie를 넣지 않고 공개 정책의 목적/기간을 맞춘다.
+event schema·dedup·opt-out·샘플지표는 [시연 증거](../quality/V2-UI-EVIDENCE.md)와 별도
+개인정보 검토를 통과해야 하며 목표 이벤트 table은 수집 구현 완료 증거가 아니다.
