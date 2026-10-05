@@ -1,5 +1,12 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
+
+async function openInteractiveFixture(page: Page) {
+  await page.goto("/__design-system");
+  await expect(page.getByRole("heading", { name: "공유 UI 구성 요소" })).toBeVisible();
+  // SSR buttons are visible before their React handlers are attached.
+  await page.locator("astro-island[ssr]").waitFor({ state: "detached" });
+}
 
 test("current landing, login and case screens share local brand and remain usable at 320px", async ({
   page,
@@ -40,8 +47,7 @@ test("current landing, login and case screens share local brand and remain usabl
 test("synthetic role menus omit dormant routes; form and keyboard tabs remain accessible", async ({
   page,
 }) => {
-  await page.goto("/__design-system");
-  await page.locator("astro-island[ssr]").waitFor({ state: "detached" });
+  await openInteractiveFixture(page);
   const navigation = page.getByRole("navigation", { name: "주 메뉴", exact: true });
   await expect(navigation.getByRole("link", { name: "내 사건", exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "변호사 찾기" })).toHaveCount(0);
@@ -72,7 +78,7 @@ test("synthetic role menus omit dormant routes; form and keyboard tabs remain ac
 test("missing or disabled defaults and rerendered tabs retain a reachable selected panel", async ({
   page,
 }) => {
-  await page.goto("/__design-system");
+  await openInteractiveFixture(page);
   const first = page.getByRole("tab", { name: "첫 항목", exact: true });
   await expect(first).toHaveAttribute("aria-selected", "true");
   await expect(first).toHaveAttribute("tabindex", "0");
@@ -93,9 +99,10 @@ test("missing or disabled defaults and rerendered tabs retain a reachable select
 test("unmounting a nested dialog retains parent scroll lock and restores valid focus", async ({
   page,
 }) => {
-  await page.goto("/__design-system");
+  await openInteractiveFixture(page);
   await page.getByRole("button", { name: "검토 안내 열기" }).click();
   const parent = page.getByRole("dialog", { name: "검토 안내", exact: true });
+  await expect(parent).toBeVisible();
   await parent.getByRole("button", { name: "추가 안내 열기" }).click();
   const nested = page.getByRole("dialog", { name: "추가 안내", exact: true });
   await expect(nested).toBeVisible();
@@ -116,7 +123,7 @@ test("unmounting a nested dialog retains parent scroll lock and restores valid f
 test("modal traps focus, closes with Escape, restores opener and uses visible focus", async ({
   page,
 }) => {
-  await page.goto("/__design-system");
+  await openInteractiveFixture(page);
   const opener = page.getByRole("button", { name: "검토 안내 열기" });
   await opener.focus();
   await opener.press("Enter");
@@ -138,7 +145,7 @@ test("modal traps focus, closes with Escape, restores opener and uses visible fo
 
 test("320px mobile sheet and 200% layout preserve all states and local font", async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 760 });
-  await page.goto("/__design-system");
+  await openInteractiveFixture(page);
   await page.getByRole("button", { name: "메뉴 열기" }).click();
   const menu = page.getByRole("dialog", { name: "메뉴", exact: true });
   await expect(menu).toBeVisible();
