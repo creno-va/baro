@@ -1,0 +1,64 @@
+import ts from "typescript";
+
+// A conservative source gate, not a proof of safety or a general-purpose SAST.
+export function productBoundaryFindings(file: string, content: string): string[] {
+  const findings: string[] = [];
+  const source = ts.createSourceFile(
+    file,
+    content,
+    ts.ScriptTarget.Latest,
+    true,
+    file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+  );
+  const approvedLog =
+    'console.error(JSON.stringify({event:"deletion_cleanup_failed",jobId:row.id,attempts:Math.min(attempt,CLEANUP_ATTEMPTS),}),)';
+  function visit(node: ts.Node) {
+    if (ts.isStringLiteralLike(node)) {
+      const value = node.text;
+      // Also catches require(), dynamic import(), and aliased import sources.
+      if (
+        /^(?:node:)?(?:fs(?:\/promises)?|child_process|process|cluster|worker_threads|bun:sqlite)$/.test(
+          value,
+        )
+      )
+        findings.push("development_runtime_import");
+      if (/(?:^|\/)(?:tests|fixtures)\//.test(value)) findings.push("fixture_import");
+    }
+    if (
+      ts.isIdentifier(node) &&
+      [
+        "Bun",
+        "process",
+        "MOCK_AUTH",
+        "TEST_USER_ID",
+        "OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY",
+      ].includes(node.text)
+    )
+      findings.push("runtime_or_auth_bypass");
+    // Forbid references as well as calls, so aliases/destructuring/computed access fail.
+    if (ts.isIdentifier(node) && ["console", "logger"].includes(node.text)) {
+      const parent = node.parent;
+      const call = parent?.parent;
+      if (
+        ts.isPropertyAssignment(parent) &&
+        parent.name === node &&
+        parent.getText(source).replace(/\s+/g, "") === "logger:{disabled:true}"
+      )
+        return;
+      if (
+        !(
+          ts.isCallExpression(call) &&
+          file.replaceAll("\\", "/") === "src/server/modules/deletion/service.ts" &&
+          call.getText(source).replace(/\s+/g, "") === approvedLog
+        )
+      )
+        findings.push("unapproved_payload_log");
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(source);
+  if (/collectLog:\s*true|skipCache:\s*false|store:\s*true/.test(content))
+    findings.push("provider_payload_logging_or_cache");
+  return [...new Set(findings)];
+}

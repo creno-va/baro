@@ -7,6 +7,7 @@ export default defineConfig({
   output: "server",
   adapter: cloudflare({ imageService: "passthrough", remoteBindings: false }),
   integrations: [react()],
+  devToolbar: { enabled: false },
   vite: {
     plugins: [tailwindcss()],
   },

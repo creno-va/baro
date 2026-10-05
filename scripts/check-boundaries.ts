@@ -1,10 +1,11 @@
-const errors: string[] = [];
+import { productBoundaryFindings } from "./product-boundaries";
 
-export {};
+const errors: string[] = [];
 
 for await (const file of new Bun.Glob("src/**/*.{ts,tsx,astro}").scan(".")) {
   if (file.endsWith(".test.ts")) continue;
   const content = await Bun.file(file).text();
+  for (const finding of productBoundaryFindings(file, content)) errors.push(`${file}: ${finding}`);
   if (
     /\bBun\./.test(content) ||
     /from\s+["'](?:node:)?(?:fs|child_process|bun:sqlite)[/"']/.test(content)
