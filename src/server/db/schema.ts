@@ -375,3 +375,24 @@ export const legalSourceCache = sqliteTable(
     ),
   ],
 );
+
+// Explicit optional boolean feedback only. No free text or analytics identifiers.
+export const caseFeedback = sqliteTable(
+  "case_feedback",
+  {
+    caseId: text("case_id")
+      .primaryKey()
+      .references(() => cases.id, { onDelete: "cascade" }),
+    analysisId: text("analysis_id")
+      .notNull()
+      .references(() => analyses.id, { onDelete: "cascade" }),
+    helpful: integer("helpful", { mode: "boolean" }).notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    check(
+      "case_feedback_helpful_check",
+      sql`typeof(${table.helpful})='integer' AND ${table.helpful} IN (0,1)`,
+    ),
+  ],
+);
