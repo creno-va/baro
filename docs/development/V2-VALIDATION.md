@@ -36,7 +36,7 @@ cookie·token·secret·인증 URL·stack/SQL은 증거에 포함하지 않는다
 | moderator 심사·신고·비민감 상태 | #60/#62 | #69/#71 case plaintext 접근 금지·IDOR/CSRF | 미구현 |
 | 사건/자료/계정 삭제·부활 방지 | #67 | #69/#71 원본/파생/대화/작업/report/public asset·late processing | 미구현 |
 | restore/delete replay·rollback·alert | #19/#67/#71 | #71 실제 격리 drill·latest journal·수신 ack | 미검증 |
-| shadcn/blue/Lucide/Pretendard/SVG | #56/#61/#62/#65/#66 | #69 브라우저 visual/mobile/keyboard/focus/modal/200%/built CSP | #56 공통 시스템 완료, 후속 역할별 기능 화면 미구현; #80/#82 보완 진행 |
+| shadcn/blue/Lucide/Pretendard/SVG | #56/#61/#62/#65/#66 | #69 브라우저 visual/mobile/keyboard/focus/modal/200%/built CSP | #56 공통 시스템·#80 경합 수정 완료, 후속 역할별 기능 화면 미구현; #82 보완 진행 |
 | 법률/정책·사업자·처리 계약 | #20/#68/#70 | 책임자 사실/승인·게시/동의 버전·provider 증거 | 근거 없음 |
 | preview/production·최초 공개 | #71 | exact SHA CI→preview→live→Environment→production→승인 public flag | 미완료 |
 
@@ -81,7 +81,12 @@ production `/api/cases`는 HTTP503/`BETA_NOT_OPEN`이며 정상 Environment revi
 [#82](https://github.com/creno-va/baro/issues/82)를 등록했다. 기존 자동 검사의 innerWidth 비교만으로
 이 경계를 입증할 수 없으므로 수정·재검증 전 통과로 표시하지 않는다.
 별도 fixture CI에서 hydration 전 첫 클릭이 유실된 경합은
-[#80](https://github.com/creno-va/baro/issues/80)에서 실제 island 준비 후 상호작용하도록 보완한다.
+[#80](https://github.com/creno-va/baro/issues/80)의 [PR81](https://github.com/creno-va/baro/pull/81)에서
+실제 island 준비 후 상호작용하도록 보완했고
+[exact-head CI](https://github.com/creno-va/baro/actions/runs/37378342169)를 통과해 병합됐다.
+로컬 해당 모달 5회 반복·전체 browser26·normal built CSP3개가 통과했다.
+실제 preview 로그인 화면의 Google 시작은 안전한 실패 안내를 표시하고 버튼 포커스를 유지했다.
+이 실패 상태는 실제 OAuth callback 성공 증거가 아니며 preview client 준비/승인은 여전히 필요하다.
 이 배포·공통 UI 증거는 v2 모든 기능·실제 OAuth·법률/미디어 처리·공개 승인 증거가 아니다.
 
 ## 사용량·비용과 독립 준비의 경계
