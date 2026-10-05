@@ -36,7 +36,8 @@ main에서만 실행되고 `deployment: false`로 실제 preview 배포 증거�
 관측 artifact에는 candidate/deployed SHA, 허용된 secret 이름의 존재 여부, origin/Gateway 일치,
 로그/cache/auth boolean, preview hostname widget 건수 및 조회 실패 status만 포함한다.
 site key/secret, 원문 응답, 오류 body/stack은 제외한다. 잘못된 응답이나 권한 부족은
-`parsed: false`/`forbidden`/`unavailable`이며 live gate 통과가 아니다. artifact의 `unverified`
+`parsed: false`/`forbidden`/`unavailable`이며 존재 여부는 `null`(미확인)이다. 목록 건수는
+관측된 첫 페이지에 한정하고 100개 이상이면 truncation 가능성을 표시한다. live gate 통과가 아니다. artifact의 `unverified`
 항목은 이 workflow의 성공 여부와 무관하게 남는다.
 
 같은 run의 법령 단계는 승인된 preview OC와 합성 `loan`/`interest`/`repayment` 개념으로

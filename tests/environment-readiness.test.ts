@@ -33,7 +33,7 @@ test("readiness excludes credentials, raw errors and unrelated account resources
   expect(JSON.stringify(report)).not.toContain(secret);
   expect(report.worker.deployedSha).toBe(sha);
   expect(report.worker.secrets.find((s) => s.name === "BETTER_AUTH_SECRET")?.present).toBe(true);
-  expect(report.turnstile.exclusivePreviewWidgetCount).toBe(1);
+  expect(report.turnstile.observedExclusivePreviewWidgetCount).toBe(1);
   expect(report.gateway.authentication).toBe(true);
   expect(requests).toHaveLength(3);
 });
@@ -47,8 +47,11 @@ test("forbidden or malformed responses never become passed live gates or expose 
     throw new Error("private-error-stack");
   }) as typeof fetch);
   expect(report.worker.parsed).toBe(false);
+  expect(report.worker.secrets.every((s) => s.present === null)).toBe(true);
   expect(report.gateway.status).toBe("forbidden");
+  expect(report.gateway.exists).toBeNull();
   expect(report.turnstile.status).toBe("unavailable");
+  expect(report.turnstile.observedPreviewWidgetCount).toBeNull();
   expect(JSON.stringify(report)).not.toContain("private-");
   expect(report.unverified).toContain("live-model-eval");
 });

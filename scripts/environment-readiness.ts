@@ -67,7 +67,9 @@ export async function inspectPreview(
     configured.find((b) => b.name === name && b.type === "plain_text")?.text;
   const secrets = secretNames.map((name) => ({
     name,
-    present: configured.some((b) => b.name === name && b.type === "secret_text"),
+    present: bindings?.success
+      ? configured.some((b) => b.name === name && b.type === "secret_text")
+      : null,
   }));
   const gatewayList =
     gateways.status === "available" ? z.array(object).safeParse(gateways.result) : null;
@@ -96,15 +98,19 @@ export async function inspectPreview(
       ...status(settings),
       parsed: bindings?.success === true,
       deployedSha: typeof release === "string" && /^[a-f0-9]{40}$/.test(release) ? release : null,
-      authOriginMatches: text("BETTER_AUTH_URL") === "https://preview.baro.site",
-      gatewayIdMatches: text("AI_GATEWAY_ID") === "baro-preview",
-      aiBindingPresent: configured.some((b) => b.name === "AI" && b.type === "ai"),
+      authOriginMatches: bindings?.success
+        ? text("BETTER_AUTH_URL") === "https://preview.baro.site"
+        : null,
+      gatewayIdMatches: bindings?.success ? text("AI_GATEWAY_ID") === "baro-preview" : null,
+      aiBindingPresent: bindings?.success
+        ? configured.some((b) => b.name === "AI" && b.type === "ai")
+        : null,
       secrets,
     },
     gateway: {
       ...status(gateways),
       parsed: gatewayList?.success === true,
-      exists: !!gateway,
+      exists: gatewayList?.success ? !!gateway : null,
       collectLogs: boolean(gateway?.collect_logs),
       cacheTtl: number(gateway?.cache_ttl),
       authentication: boolean(gateway?.authentication),
@@ -112,10 +118,11 @@ export async function inspectPreview(
     turnstile: {
       ...status(widgets),
       parsed: widgetList?.success === true,
-      previewWidgetCount: previewWidgets.length,
-      exclusivePreviewWidgetCount: previewWidgets.filter(
-        (w) => Array.isArray(w.domains) && w.domains.length === 1,
-      ).length,
+      observedPreviewWidgetCount: widgetList?.success ? previewWidgets.length : null,
+      possiblyTruncated: widgetList?.success ? widgetList.data.length >= 100 : null,
+      observedExclusivePreviewWidgetCount: widgetList?.success
+        ? previewWidgets.filter((w) => Array.isArray(w.domains) && w.domains.length === 1).length
+        : null,
     },
     // Configuration presence is never live OAuth/model/restore or human approval evidence.
     unverified: [
@@ -142,7 +149,9 @@ if (import.meta.main) {
         worker: report.worker.status,
         gateway: report.gateway.status,
         turnstile: report.turnstile.status,
-        missingSecrets: report.worker.secrets.filter((s) => !s.present).map((s) => s.name),
+        missingSecrets: report.worker.parsed
+          ? report.worker.secrets.filter((s) => s.present === false).map((s) => s.name)
+          : null,
       }),
     );
   } catch {
