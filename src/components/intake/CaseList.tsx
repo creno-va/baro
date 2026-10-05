@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { type CaseStatus, caseListResponseSchema, type CaseList as List } from "../../contracts";
+import { Button } from "../ui/button";
+import { StatePanel } from "../ui/state-panel";
 export const statusLabels: Record<CaseStatus, string> = {
   screening: "입력 확인",
   needs_clarification: "추가 질문",
@@ -54,20 +56,24 @@ export function CaseList() {
           새 사건 입력
         </a>
       </div>
-      <p className="status-text" aria-live="polite">
-        {loading
-          ? "사건 목록을 불러오고 있어요."
-          : list?.items.length === 0
-            ? "아직 입력한 사건이 없어요."
-            : ""}
-      </p>
+      {loading && <StatePanel variant="loading" title="사건 목록을 불러오고 있어요." />}
+      {!loading && !error && list?.items.length === 0 && (
+        <StatePanel
+          variant="empty"
+          title="아직 입력한 사건이 없어요."
+          description="새 사건을 입력하면 진행 상황을 여기에서 확인할 수 있어요."
+        />
+      )}
       {error && (
-        <div role="alert">
-          <p className="error-text">{error}</p>
-          <button type="button" onClick={() => void load()}>
-            다시 불러오기
-          </button>
-        </div>
+        <StatePanel
+          variant="error"
+          title={error}
+          action={
+            <Button variant="outline" onClick={() => void load()}>
+              다시 불러오기
+            </Button>
+          }
+        />
       )}
       <ul className="case-list">
         {list?.items.map((item) => (

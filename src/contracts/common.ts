@@ -1,5 +1,9 @@
 import { z } from "zod";
 
+// Workers and the browser hash CSP prohibit eval. Configure before constructing schemas:
+// even Zod's caught capability probe otherwise emits a browser CSP violation.
+z.config({ jitless: true });
+
 export const CONTRACT_VERSION = "1" as const;
 export const MAX_REQUEST_BYTES = 64 * 1024;
 export const schemaVersionSchema = z.literal(CONTRACT_VERSION);
