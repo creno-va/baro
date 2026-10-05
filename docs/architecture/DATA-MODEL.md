@@ -100,7 +100,7 @@ rollback이 아니므로 부분 사건 생성이 없음을 동시 10/11번째 �
 - idempotency: 복합 unique `(user_id, method, route, key)`, canonical body hash,
   response_status와 비민감 response_json, created/expires_at(24시간). user FK cascade.
 - outbox: UUID PK, analysis FK cascade, unique `(analysis_id, attempt)`, instance_id,
-  revision, state pending/dispatched, attempts, next_attempt_at, created_at. 원문 payload 없음.
+  revision, state pending/dispatched/failed, attempts, next_attempt_at, created_at. 원문 payload 없음.
 - deletion job: UUID PK, target_type case/account, opaque target_id, 삭제 시각,
   workflow ID 목록, primary/cleanup state, attempts, expires_at. cascade FK를 두지 않아
   primary 삭제 후 정리 기록이 남는다. 원문·이메일·토큰·계정 프로필은 저장하지 않는다.
@@ -132,7 +132,7 @@ DB check constraint와 애플리케이션 상태 전이 테스트를 함께 둔�
 - `citations(analysis_id)`
 - 모든 FK는 활성화하고 소유 데이터는 cascade delete한다.
 - 완료 분석은 `encrypted_result`, 실패 분석은 `failure_code`를 요구하는 논리 제약을
-  repository에서 검증한다.
+  DB CHECK와 repository에서 검증한다.
 
 ## 암호화 envelope
 
@@ -156,3 +156,5 @@ DB check constraint와 애플리케이션 상태 전이 테스트를 함께 둔�
 - 정책과 다른 보존용 shadow table을 만들지 않는다.
 - Drizzle의 `drizzle/meta/*_snapshot.json`과 `_journal.json`도 함께 커밋한다.
   `bun run db:generate` 뒤 diff가 없어야 schema와 baseline이 일치한다.
+
+#8의 additive migration과 저장 primitive 사용 경계는 [도메인 DB 운영](../operations/DOMAIN-DATABASE.md)을 따른다.

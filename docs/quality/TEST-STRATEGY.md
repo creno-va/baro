@@ -74,11 +74,12 @@ non-critical 표현 품질 점수는 추세를 보되 위 안전 게이트를 �
 
 ## CI 파이프라인
 
-현재 실제 PR CI: docs/work graph/boundary 검사, Drizzle drift, fresh SQL+upgrade 검사,
-local workerd D1 migration, lint/typecheck/test/build/dry-run이다. E2E/AI eval/SAST/전체
-dependency·secret scanner는 #31/#18의 후속 인수 조건이며 현재 CI 통과가 이를 뜻하지 않는다.
-아래 흐름은 공개 베타까지 완성할 목표다. 도구·fixtures는 #31로 선행 구축한다.
-
+현재 실제 PR CI는 docs/work graph/boundary 검사, Drizzle drift, fresh SQL+upgrade 검사,
+local workerd D1 migration, lint/typecheck/test/build, 인증·동의 Playwright 6개와 dry-run을 실행한다.
+#31의 50개 합성 corpus와 deterministic 외부 adapter는 offline 회귀 기반이다. Oracle 자체 검증은
+실제 모델의 critical-zero 평가 증거가 아니다. 전체 사건 흐름 E2E·AI eval·SAST·전체
+dependency/secret scanner와 실제 OAuth smoke는 #18/#19/#27의 후속 인수 조건이다.
+아래 흐름은 공개 베타까지 완성할 목표다.
 ```text
 install --frozen-lockfile
 -> format/lint/typecheck

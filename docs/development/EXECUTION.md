@@ -5,7 +5,7 @@
 
 ## 현재 구현과 목표 구분
 
-main에는 Astro/Hono Worker, health, D1 foundation, Workflow skeleton과 CD가 있다. 2026-10-05 원격 health 확인 시 preview/prod 모두 schema `0000_foundation`이며 OAuth 기능은 아직 배포되지 않았다. OAuth·동의 기반은 [PR #25](https://github.com/creno-va/baro/pull/25)에서 진행 중이다. `Implementation-ready`는 목표 계약의 상태이며 기능 완료를 뜻하지 않는다. 사건·AI·법률 검색·삭제·E2E는 아직 구현되지 않았다.
+main에는 Astro/Hono Worker, health, D1 foundation, Workflow skeleton과 CD가 있다. P0.1의 shared 계약 [PR #33](https://github.com/creno-va/baro/pull/33), 암호화 [PR #34](https://github.com/creno-va/baro/pull/34), OAuth·동의 hardening [PR #35](https://github.com/creno-va/baro/pull/35), offline harness [PR #36](https://github.com/creno-va/baro/pull/36)가 병합되었다. #8은 additive `0003_domain_foundation`과 owner-scoped repository를 추가한다. 인증·동의 브라우저 검증과 50개 합성 oracle 회귀 검증은 구현되었으며 사건 분석 API·UI, 실제 모델 평가와 외부 OAuth 성공은 후속 범위다. `Implementation-ready`는 목표 계약의 상태이며 기능 완료를 뜻하지 않는다. 원격 schema 버전은 배포 health 증거로 별도 확인한다.
 
 실제 진행 상태의 정본은 GitHub 이슈/PR이며 의존성과 소유 경계는 [작업 그래프](./work-items.json)다. PR이 병합되어 선행 이슈가 완료되기 전에는 후속 제품 코드가 ready가 아니다. 마일스톤은 실행자 배정이 아니라 완료 게이트다.
 
@@ -19,7 +19,7 @@ main에는 Astro/Hono Worker, health, D1 foundation, Workflow skeleton과 CD가 
 
 | 영역 | 소유 이슈/기준 | 충돌 방지 |
 | --- | --- | --- |
-| 인증 테이블·user_consents·세션 middleware | #10, PR #25 | #8은 기존 auth migration을 재작성하지 않음 |
+| 인증 테이블·user_consents·세션 middleware | #10, PR #35 | #8은 기존 auth migration을 재작성하지 않음 |
 | 도메인 DB·repository·migration | #8 | 모든 후속 schema 요청을 먼저 통합 |
 | 암호화 | #9 | envelope 계약으로 #8과 독립 개발 |
 | 사건 생성·quota·outbox | #11 | read/delete API #12와 파일 분리 |
@@ -65,7 +65,7 @@ bun run db:generate
 git status --short
 ```
 
-마지막 generate는 schema drift가 없으면 파일을 만들지 않는다. migration은 append-only다. secret 없는 CI가 외부 서비스에 접속하거나 모델 비용을 발생시키지 않아야 한다. 리뷰 브랜치의 prod API는 `PUBLIC_BETA_ENABLED=false`로 닫히며 병합/배포 전 원격에 적용된 것으로 해석하지 않는다. framework health 확인은 공개 기능 인수 조건을 대신하지 않는다.
+마지막 generate는 schema drift가 없으면 파일을 만들지 않는다. migration은 append-only다. #8의 적용 순서와 비민감 preview 검증 쿼리는 [도메인 DB 운영](../operations/DOMAIN-DATABASE.md)을 따른다. secret 없는 CI가 외부 서비스에 접속하거나 모델 비용을 발생시키지 않아야 한다. 리뷰 브랜치의 prod API는 `PUBLIC_BETA_ENABLED=false`로 닫히며 병합/배포 전 원격에 적용된 것으로 해석하지 않는다. framework health 확인은 공개 기능 인수 조건을 대신하지 않는다.
 
 ## 환경과 local 설정
 

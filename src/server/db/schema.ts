@@ -1,5 +1,21 @@
-import { sql } from "drizzle-orm";
-import { check, index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { desc, sql } from "drizzle-orm";
+import {
+  check,
+  index,
+  integer,
+  primaryKey,
+  sqliteTable,
+  text,
+  uniqueIndex,
+} from "drizzle-orm/sqlite-core";
+import {
+  type AnalysisStatus,
+  analysisStatusSchema,
+  type CaseStatus,
+  caseStatusSchema,
+  type FailureCode,
+  failureCodeSchema,
+} from "../../contracts";
 
 export const appMetadata = sqliteTable("app_metadata", {
   key: text("key").primaryKey(),
@@ -89,3 +105,273 @@ export const userConsents = sqliteTable(
 );
 
 export const authSchema = { user, session, account, verification };
+
+// Shared enums are code-owned; no user input is interpolated into these constraints.
+const enumSql = (values: readonly string[]) =>
+  sql.raw(values.map((value) => `'${value}'`).join(","));
+export const ACTIVE_ANALYSIS_STATUSES = [
+  "queued",
+  "screening",
+  "waiting_for_answers",
+  "retrieving",
+  "generating",
+  "validating",
+] as const;
+
+export const cases = sqliteTable(
+  "cases",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    category: text("category").notNull().default("personal_loan"),
+    jurisdiction: text("jurisdiction").notNull().default("KR"),
+    title: text("title").notNull().default("금전 대여 사건"),
+    status: text("status").$type<CaseStatus>().notNull(),
+    encryptedInput: text("encrypted_input").notNull(),
+    inputRevision: integer("input_revision").notNull().default(1),
+    // Cross-table ownership/revision is enforced by the guarded repository, avoiding a circular FK.
+    currentAnalysisId: text("current_analysis_id"),
+    questionsAsked: integer("questions_asked").notNull().default(0),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    index("cases_owner_created_idx").on(table.userId, desc(table.createdAt), desc(table.id)),
+    check("cases_category_check", sql`${table.category} = 'personal_loan'`),
+    check("cases_jurisdiction_check", sql`${table.jurisdiction} = 'KR'`),
+    check("cases_title_check", sql`length(${table.title}) BETWEEN 1 AND 80`),
+    check("cases_status_check", sql`${table.status} IN (${enumSql(caseStatusSchema.options)})`),
+    check(
+      "cases_revision_check",
+      sql`typeof(${table.inputRevision}) = 'integer' AND ${table.inputRevision} BETWEEN 1 AND 9007199254740991`,
+    ),
+    check(
+      "cases_questions_check",
+      sql`typeof(${table.questionsAsked}) = 'integer' AND ${table.questionsAsked} BETWEEN 0 AND 5`,
+    ),
+  ],
+);
+
+export const analyses = sqliteTable(
+  "analyses",
+  {
+    id: text("id").primaryKey(),
+    caseId: text("case_id")
+      .notNull()
+      .references(() => cases.id, { onDelete: "cascade" }),
+    workflowInstanceId: text("workflow_instance_id").notNull(),
+    inputRevision: integer("input_revision").notNull(),
+    attempt: integer("attempt").notNull().default(1),
+    encryptedContext: text("encrypted_context"),
+    clarificationExpiresAt: text("clarification_expires_at"),
+    status: text("status").$type<AnalysisStatus>().notNull(),
+    encryptedAnswers: text("encrypted_answers"),
+    encryptedResult: text("encrypted_result"),
+    modelId: text("model_id"),
+    promptVersion: text("prompt_version"),
+    schemaVersion: text("schema_version"),
+    policyVersion: text("policy_version"),
+    failureCode: text("failure_code").$type<FailureCode>(),
+    startedAt: text("started_at"),
+    completedAt: text("completed_at"),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    index("analyses_case_created_idx").on(table.caseId, desc(table.createdAt), desc(table.id)),
+    uniqueIndex("analyses_workflow_unique").on(table.workflowInstanceId),
+    uniqueIndex("analyses_active_case_unique")
+      .on(table.caseId)
+      .where(sql`${table.status} IN (${enumSql(ACTIVE_ANALYSIS_STATUSES)})`),
+    check(
+      "analyses_status_check",
+      sql`${table.status} IN (${enumSql(analysisStatusSchema.options)})`,
+    ),
+    check(
+      "analyses_revision_check",
+      sql`typeof(${table.inputRevision}) = 'integer' AND ${table.inputRevision} BETWEEN 1 AND 9007199254740991`,
+    ),
+    check(
+      "analyses_attempt_check",
+      sql`typeof(${table.attempt}) = 'integer' AND ${table.attempt} BETWEEN 1 AND 3`,
+    ),
+    check(
+      "analyses_failure_code_check",
+      sql`${table.failureCode} IS NULL OR ${table.failureCode} IN (${enumSql(failureCodeSchema.options)})`,
+    ),
+    check(
+      "analyses_completed_result_check",
+      sql`${table.status} != 'completed' OR ${table.encryptedResult} IS NOT NULL`,
+    ),
+    check(
+      "analyses_failed_code_check",
+      sql`${table.status} != 'failed' OR ${table.failureCode} IS NOT NULL`,
+    ),
+  ],
+);
+
+export const citations = sqliteTable(
+  "citations",
+  {
+    id: text("id").primaryKey(),
+    analysisId: text("analysis_id")
+      .notNull()
+      .references(() => analyses.id, { onDelete: "cascade" }),
+    sourceType: text("source_type").notNull().default("statute"),
+    sourceId: text("source_id").notNull(),
+    lawName: text("law_name").notNull(),
+    article: text("article").notNull(),
+    effectiveDate: text("effective_date").notNull(),
+    verifiedAt: text("verified_at").notNull(),
+    sourceUrl: text("source_url").notNull(),
+    contentHash: text("content_hash").notNull(),
+  },
+  (table) => [
+    index("citations_analysis_idx").on(table.analysisId),
+    check("citations_source_type_check", sql`${table.sourceType} = 'statute'`),
+    check(
+      "citations_hash_check",
+      sql`length(${table.contentHash}) = 64 AND ${table.contentHash} NOT GLOB '*[^0-9a-f]*'`,
+    ),
+  ],
+);
+
+export const dailyUsage = sqliteTable(
+  "daily_usage",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    usageDateKst: text("usage_date_kst").notNull(),
+    analysisCount: integer("analysis_count").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.userId, table.usageDateKst] }),
+    check(
+      "daily_usage_count_check",
+      sql`typeof(${table.analysisCount}) = 'integer' AND ${table.analysisCount} BETWEEN 0 AND 10`,
+    ),
+  ],
+);
+
+export const idempotencyRecords = sqliteTable(
+  "idempotency_records",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    method: text("method").notNull(),
+    route: text("route").notNull(),
+    key: text("key").notNull(),
+    requestHash: text("request_hash").notNull(),
+    responseStatus: integer("response_status").notNull(),
+    responseJson: text("response_json").notNull(),
+    createdAt: text("created_at").notNull(),
+    expiresAt: text("expires_at").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.userId, table.method, table.route, table.key] }),
+    index("idempotency_expiry_idx").on(table.expiresAt),
+    check(
+      "idempotency_response_check",
+      sql`typeof(${table.responseStatus}) = 'integer' AND ${table.responseStatus} BETWEEN 200 AND 299 AND json_valid(${table.responseJson})`,
+    ),
+    check(
+      "idempotency_hash_check",
+      sql`length(${table.requestHash}) = 64 AND ${table.requestHash} NOT GLOB '*[^0-9a-f]*'`,
+    ),
+  ],
+);
+
+export const dispatchOutbox = sqliteTable(
+  "dispatch_outbox",
+  {
+    id: text("id").primaryKey(),
+    analysisId: text("analysis_id")
+      .notNull()
+      .references(() => analyses.id, { onDelete: "cascade" }),
+    attempt: integer("attempt").notNull(),
+    instanceId: text("instance_id").notNull(),
+    revision: integer("revision").notNull(),
+    state: text("state", { enum: ["pending", "dispatched", "failed"] })
+      .notNull()
+      .default("pending"),
+    attempts: integer("attempts").notNull().default(0),
+    nextAttemptAt: text("next_attempt_at").notNull(),
+    createdAt: text("created_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("dispatch_analysis_attempt_unique").on(table.analysisId, table.attempt),
+    index("dispatch_pending_idx").on(table.state, table.nextAttemptAt),
+    check("dispatch_state_check", sql`${table.state} IN ('pending','dispatched','failed')`),
+    check(
+      "dispatch_attempt_check",
+      sql`typeof(${table.attempt}) = 'integer' AND ${table.attempt} BETWEEN 1 AND 3 AND typeof(${table.attempts}) = 'integer' AND ${table.attempts} >= 0`,
+    ),
+    check(
+      "dispatch_revision_check",
+      sql`typeof(${table.revision}) = 'integer' AND ${table.revision} BETWEEN 1 AND 9007199254740991`,
+    ),
+  ],
+);
+
+// Deliberately no user/case FK: this opaque cleanup journal survives primary deletion.
+export const deletionJobs = sqliteTable(
+  "deletion_jobs",
+  {
+    id: text("id").primaryKey(),
+    targetType: text("target_type", { enum: ["case", "account"] }).notNull(),
+    targetId: text("target_id").notNull(),
+    deletedAt: text("deleted_at").notNull(),
+    workflowInstanceIds: text("workflow_instance_ids").notNull(),
+    primaryState: text("primary_state", { enum: ["pending", "deleted"] }).notNull(),
+    cleanupState: text("cleanup_state", { enum: ["pending", "completed", "failed"] })
+      .notNull()
+      .default("pending"),
+    attempts: integer("attempts").notNull().default(0),
+    expiresAt: text("expires_at").notNull(),
+  },
+  (table) => [
+    index("deletion_cleanup_idx").on(table.cleanupState, table.deletedAt),
+    index("deletion_expiry_idx").on(table.expiresAt),
+    check("deletion_target_check", sql`${table.targetType} IN ('case','account')`),
+    check("deletion_primary_check", sql`${table.primaryState} IN ('pending','deleted')`),
+    check("deletion_cleanup_check", sql`${table.cleanupState} IN ('pending','completed','failed')`),
+    check(
+      "deletion_attempt_check",
+      sql`typeof(${table.attempts}) = 'integer' AND ${table.attempts} >= 0`,
+    ),
+    check(
+      "deletion_workflows_check",
+      sql`json_valid(${table.workflowInstanceIds}) AND json_type(${table.workflowInstanceIds}) = 'array'`,
+    ),
+  ],
+);
+
+export const legalSourceCache = sqliteTable(
+  "legal_source_cache",
+  {
+    sourceId: text("source_id").notNull(),
+    effectiveDate: text("effective_date").notNull(),
+    article: text("article").notNull(),
+    contentHash: text("content_hash").notNull(),
+    lawName: text("law_name").notNull(),
+    sourceUrl: text("source_url").notNull(),
+    body: text("body").notNull(),
+    fetchedAt: text("fetched_at").notNull(),
+    expiresAt: text("expires_at").notNull(),
+  },
+  (table) => [
+    primaryKey({
+      columns: [table.sourceId, table.effectiveDate, table.article, table.contentHash],
+    }),
+    index("legal_cache_expiry_idx").on(table.expiresAt),
+    check(
+      "legal_cache_hash_check",
+      sql`length(${table.contentHash}) = 64 AND ${table.contentHash} NOT GLOB '*[^0-9a-f]*'`,
+    ),
+  ],
+);
