@@ -1,4 +1,4 @@
-import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { type SyntheticEvent, useCallback, useEffect, useRef, useState } from "react";
 import {
   createCaseRequestSchema,
   createCaseResponseSchema,
@@ -96,7 +96,7 @@ export function CaseInput({ siteKey }: { siteKey: string }) {
     script.onload = mount;
     script.onerror = () => setError("보안 확인을 불러오지 못했어요. 다시 시도해 주세요.");
     if (window.turnstile) mount();
-    else document.head.append(script);
+    else document.head.appendChild(script);
     return () => {
       disposed = true;
       if (id) window.turnstile?.remove(id);
@@ -104,7 +104,7 @@ export function CaseInput({ siteKey }: { siteKey: string }) {
       widgetId.current = undefined;
     };
   }, [state, siteKey]);
-  async function submit(event: FormEvent<HTMLFormElement>) {
+  async function submit(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
     if (pending.current || !valid || !token || saved) return;
     const input = createCaseRequestSchema.safeParse({ narrative, turnstileToken: token });
