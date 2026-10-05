@@ -409,3 +409,59 @@ test("concurrent distinct retry keys claim only one attempt; failed idempotency 
   expect(responses.map((r) => r.status).sort()).toEqual([202, 409]);
   expect((await f.repo.findCurrentAnalysis(f.session.userId, f.caseId))?.attempt).toBe(2);
 });
+test("durable legal request budgets and unknown checkpoint version fail closed", async () => {
+  const f = await analysisFixture();
+  for (const phase of phases.slice(0, 5)) await f.execute().phase(phase);
+  const a = await f.repo.findCurrentAnalysis(f.session.userId, f.caseId);
+  if (!a?.encryptedContext) throw new Error("fixture");
+  const cipher = await createCaseDataCipher(f.env),
+    aad = {
+      table: "analyses" as const,
+      column: "encrypted_context" as const,
+      rowId: a.id,
+      userId: f.session.userId,
+    };
+  const cp = JSON.parse(await cipher.decrypt(a.encryptedContext, aad));
+  cp.counts["legal:list"] = 3;
+  await f.repo.saveCheckpoint(
+    {
+      ownerId: f.session.userId,
+      caseId: f.caseId,
+      analysisId: a.id,
+      inputRevision: 1,
+      attempt: 1,
+      expectedStatus: "retrieving",
+    },
+    JSON.stringify(cp),
+    new Date().toISOString(),
+  );
+  expect((await f.execute().phase("retrieval")).status).toBe("failed");
+  expect((await f.repo.findCurrentAnalysis(f.session.userId, f.caseId))?.failureCode).toBe(
+    "LEGAL_SOURCE_UNAVAILABLE",
+  );
+  const g = await analysisFixture();
+  await g.execute().phase("initialize");
+  await g.execute().phase("minimize");
+  const row = await g.repo.findCurrentAnalysis(g.session.userId, g.caseId);
+  if (!row?.encryptedContext) throw new Error("fixture");
+  const decoded = JSON.parse(
+    await cipher.decrypt(row.encryptedContext, { ...aad, rowId: row.id, userId: g.session.userId }),
+  );
+  decoded.schemaVersion = "2";
+  await g.repo.saveCheckpoint(
+    {
+      ownerId: g.session.userId,
+      caseId: g.caseId,
+      analysisId: row.id,
+      inputRevision: 1,
+      attempt: 1,
+      expectedStatus: "screening",
+    },
+    JSON.stringify(decoded),
+    new Date().toISOString(),
+  );
+  expect((await g.execute().phase("minimize")).status).toBe("failed");
+  expect((await g.repo.findCurrentAnalysis(g.session.userId, g.caseId))?.failureCode).toBe(
+    "MODEL_SCHEMA_INVALID",
+  );
+});

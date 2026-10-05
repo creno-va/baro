@@ -47,6 +47,7 @@ type Retrieval = {
     concepts: unknown,
     asOfDate: string,
     now: string,
+    reserveRequest?: (key: string) => Promise<boolean>,
   ): Promise<z.infer<typeof retrievalOutputSchema>>;
 };
 export type ExecutionPhase = "initialize" | Phase | "retrieval" | "finish";
@@ -147,12 +148,19 @@ export function createAnalysisExecution(
   async function reserve(phase: string) {
     try {
       await mutate((cp) => {
-        if (Date.parse(clock()) - Date.parse(cp.startedAt) >= 600_000)
+        const maximumCallMs = phase.startsWith("legal:")
+          ? 10000
+          : phase === "retrieval" || phase.endsWith("Correction")
+            ? 0
+            : 60000;
+        if (Date.parse(clock()) - Date.parse(cp.startedAt) + maximumCallMs >= 600_000)
           throw new Error("ANALYSIS_TIMEOUT");
-        if ((cp.counts[phase] ?? 0) >= (phase.endsWith("Correction") ? 1 : 3))
+        if ((cp.counts[phase] ?? 0) >= (phase.endsWith("Correction") ? 1 : 3)) {
+          if (phase === "retrieval" || phase.startsWith("legal:")) throw new LegalSourceError();
           throw new ModelError(
             phase.endsWith("Correction") ? "MODEL_SCHEMA_INVALID" : "MODEL_UNAVAILABLE",
           );
+        }
         cp.counts[phase] = (cp.counts[phase] ?? 0) + 1;
       });
       return true;
@@ -296,7 +304,12 @@ export function createAnalysisExecution(
         if (name === "retrieval") {
           if (!cp.retrieval) {
             await reserve(name);
-            const value = await retrieval.retrieve(["loan", "repayment"], cp.asOfDate, clock());
+            const value = await retrieval.retrieve(
+              ["loan", "repayment"],
+              cp.asOfDate,
+              clock(),
+              (key) => reserve(`legal:${key}`),
+            );
             await mutate((next) => {
               next.retrieval = value;
             });
@@ -360,9 +373,11 @@ export function createAnalysisExecution(
           ? error.code
           : error instanceof LegalSourceError
             ? "LEGAL_SOURCE_UNAVAILABLE"
-            : error instanceof Error && error.message === "ANALYSIS_TIMEOUT"
-              ? "ANALYSIS_TIMEOUT"
-              : "INTERNAL_ERROR";
+            : error instanceof z.ZodError
+              ? "MODEL_SCHEMA_INVALID"
+              : error instanceof Error && error.message === "ANALYSIS_TIMEOUT"
+                ? "ANALYSIS_TIMEOUT"
+                : "INTERNAL_ERROR";
       await load(false)
         .then((s) =>
           s.repo.compareAndSetAnalysis(s.guard, { status: "failed", failureCode: code }, clock()),

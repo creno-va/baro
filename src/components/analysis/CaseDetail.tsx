@@ -8,7 +8,9 @@ import {
   errorResponseSchema,
   type Question,
 } from "../../contracts";
+import { observeResult, trackCase } from "../../server/modules/analytics/browser";
 import { statusLabels } from "../intake/CaseList";
+import { Feedback } from "./Feedback";
 
 const terminal = new Set(["completed", "out_of_scope", "urgent_redirect", "failed"]);
 const delays = [1000, 2000, 4000, 8000, 15000];
@@ -131,8 +133,31 @@ function Questions({
     </section>
   );
 }
-function ResultView({ result }: { result: NonNullable<Detail["result"]> }) {
+function ResultView({
+  result,
+  caseId,
+  analysisId,
+}: {
+  result: NonNullable<Detail["result"]>;
+  caseId: string;
+  analysisId: string;
+}) {
   const [checked, setChecked] = useState<Record<string, boolean>>({});
+  const summary = useRef<HTMLElement>(null);
+  useEffect(() => {
+    let stop: (() => void) | undefined;
+    const start = () => {
+      stop?.();
+      if (summary.current && result.kind === "guidance")
+        stop = observeResult(summary.current, caseId, analysisId, result.citations.length);
+    };
+    start();
+    window.addEventListener("baro-analytics-change", start);
+    return () => {
+      stop?.();
+      window.removeEventListener("baro-analytics-change", start);
+    };
+  }, [result, caseId, analysisId]);
   if (result.kind !== "guidance")
     return (
       <section className="case-panel">
@@ -146,7 +171,7 @@ function ResultView({ result }: { result: NonNullable<Detail["result"]> }) {
     );
   return (
     <>
-      <section className="case-panel" aria-labelledby="result-summary">
+      <section className="case-panel" aria-labelledby="result-summary" ref={summary}>
         <h2 id="result-summary">상황 정리</h2>
         <p>
           AI가 만든 일반 정보이며 법률 자문이 아니에요. 고지 버전 {result.noticeVersion} · 기준일{" "}
@@ -210,14 +235,18 @@ function ResultView({ result }: { result: NonNullable<Detail["result"]> }) {
       <section className="case-panel">
         <h2>자료 체크리스트</h2>
         <p>체크는 이 화면에서만 유지되며 법적 완료를 뜻하지 않아요.</p>
-        {result.evidenceChecklist.map((item) => (
+        {result.evidenceChecklist.map((item, index) => (
           <label className="evidence-choice" key={item.id}>
             <input
               type="checkbox"
               checked={!!checked[item.id]}
-              onChange={(event) =>
-                setChecked((current) => ({ ...current, [item.id]: event.target.checked }))
-              }
+              onChange={(event) => {
+                setChecked((current) => ({ ...current, [item.id]: event.target.checked }));
+                void trackCase("evidence_checked", caseId, analysisId, {
+                  itemIndex: index,
+                  checked: event.target.checked,
+                });
+              }}
             />
             <span>
               {item.label} ·{" "}
@@ -252,9 +281,19 @@ function ResultView({ result }: { result: NonNullable<Detail["result"]> }) {
           시행일과 실제 사건에 적용되는 시점은 다를 수 있어요. 원문과 적용 여부를 확인해 주세요.
         </p>
         <ul>
-          {result.citations.map((citation) => (
+          {result.citations.map((citation, index) => (
             <li id={`source-${citation.id}`} key={citation.id}>
-              <a href={citation.url} target="_blank" rel="noopener noreferrer">
+              <a
+                href={citation.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() =>
+                  void trackCase("citation_opened", caseId, analysisId, {
+                    sourceType: "statute",
+                    itemIndex: index,
+                  })
+                }
+              >
                 {citation.lawName} {citation.article} 공식 원문 (새 탭)
               </a>
               <p>
@@ -302,6 +341,33 @@ export function CaseDetail({ caseId }: { caseId: string }) {
       current.current = body.data;
       setDetail(body.data);
       setStage(statusLabels[body.data.status]);
+      const value = body.data;
+      if (value.startedAt)
+        void trackCase("analysis_started", caseId, value.analysisId, {
+          occurredAt: value.startedAt,
+        });
+      if (value.status === "needs_clarification")
+        void trackCase("clarification_viewed", caseId, value.analysisId, {
+          questionCount: value.questions.length,
+        });
+      else if (value.result)
+        void trackCase("analysis_completed", caseId, value.analysisId, {
+          ...(value.completedAt ? { occurredAt: value.completedAt } : {}),
+          questionCount: value.questionCount ?? 0,
+          resultStatus: value.status,
+          citationCount: value.result.kind === "guidance" ? value.result.citations.length : 0,
+        });
+      else if (value.status === "failed")
+        void trackCase("analysis_failed", caseId, value.analysisId, {
+          ...(value.completedAt ? { occurredAt: value.completedAt } : {}),
+          errorCategory:
+            value.error?.code === "LEGAL_SOURCE_UNAVAILABLE"
+              ? "legal_source"
+              : value.error?.code === "ANALYSIS_TIMEOUT"
+                ? "timeout"
+                : "internal",
+          retryable: value.error?.retryable ?? false,
+        });
       return body.data;
     },
     [caseId],
@@ -398,9 +464,17 @@ export function CaseDetail({ caseId }: { caseId: string }) {
         throw new Error(problem?.message ?? "저장하지 못했어요. 다시 시도해 주세요.");
       }
       if (action === "delete") {
+        void trackCase("case_deleted", caseId, detail.analysisId);
         setDeleted(true);
         current.current = null;
       } else {
+        if (action === "answers") {
+          const value = body as { answers: { status: string }[] };
+          void trackCase("clarification_completed", caseId, detail.analysisId, {
+            questionCount: value.answers.length,
+            unknownCount: value.answers.filter((answer) => answer.status === "unknown").length,
+          });
+        }
         const data = await load();
         if (data && !terminal.has(data.status)) refreshSignal.current?.();
       }
@@ -464,7 +538,17 @@ export function CaseDetail({ caseId }: { caseId: string }) {
           <p>화면을 떠나도 입력은 저장돼요. 내 사건에서 다시 확인할 수 있어요.</p>
         </section>
       )}
-      {detail?.result && <ResultView key={detail.analysisId} result={detail.result} />}
+      {detail?.result && (
+        <ResultView
+          key={detail.analysisId}
+          result={detail.result}
+          caseId={caseId}
+          analysisId={detail.analysisId}
+        />
+      )}
+      {detail?.result?.kind === "guidance" && (
+        <Feedback caseId={caseId} analysisId={detail.analysisId} />
+      )}
       {detail?.status === "failed" && (
         <section className="case-panel">
           <h2>분석을 완료하지 못했어요</h2>

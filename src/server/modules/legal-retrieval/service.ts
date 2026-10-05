@@ -131,7 +131,11 @@ export function createLegalRetrieval(
   transport: Transport = fetch,
   sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
 ) {
-  async function request(path: string, params: Record<string, string>) {
+  async function request(
+    path: string,
+    params: Record<string, string>,
+    reserve: () => Promise<boolean> = async () => true,
+  ) {
     if (!env.LAW_API_OC) throw new LegalSourceError();
     const url = new URL(`https://www.law.go.kr/DRF/${path}`);
     url.search = new URLSearchParams({
@@ -141,6 +145,7 @@ export function createLegalRetrieval(
       ...params,
     }).toString();
     for (let attempt = 0; attempt < 3; attempt++) {
+      if (!(await reserve())) throw new LegalSourceError();
       try {
         const response = await transport(url.toString(), {
           signal: AbortSignal.timeout(10_000),
@@ -166,20 +171,29 @@ export function createLegalRetrieval(
     throw new LegalSourceError();
   }
   return {
-    async retrieve(concepts: unknown, asOfDate: string, now: string) {
+    async retrieve(
+      concepts: unknown,
+      asOfDate: string,
+      now: string,
+      reserveRequest?: (key: string) => Promise<boolean>,
+    ) {
       try {
         const selected = z.array(conceptSchema).min(1).max(3).parse(concepts);
         dateSchema.parse(asOfDate);
         timestampSchema.parse(now);
         const numbers = [...new Set(selected.flatMap((c) => [...articleNumbers[c]]))];
         const candidate = selectLaw(
-          await request("lawSearch.do", {
-            query: "민법",
-            nw: "1,3",
-            sort: "efdes",
-            display: "100",
-            efYd: `00010101~${asOfDate.replaceAll("-", "")}`,
-          }),
+          await request(
+            "lawSearch.do",
+            {
+              query: "민법",
+              nw: "1,3",
+              sort: "efdes",
+              display: "100",
+              efYd: `00010101~${asOfDate.replaceAll("-", "")}`,
+            },
+            () => reserveRequest?.("list") ?? Promise.resolve(true),
+          ),
           asOfDate,
         );
         if (!candidate) throw new LegalSourceError();
@@ -211,11 +225,15 @@ export function createLegalRetrieval(
             });
             continue;
           }
-          const detail = await request("lawService.do", {
-            MST: candidate.법령일련번호,
-            efYd: candidate.시행일자.replaceAll("-", ""),
-            JO: `${number.padStart(4, "0")}00`,
-          });
+          const detail = await request(
+            "lawService.do",
+            {
+              MST: candidate.법령일련번호,
+              efYd: candidate.시행일자.replaceAll("-", ""),
+              JO: `${number.padStart(4, "0")}00`,
+            },
+            () => reserveRequest?.(`article_${number}`) ?? Promise.resolve(true),
+          );
           const parsed = await parseOfficialDetail(detail, candidate, [number], asOfDate, now);
           if (parsed.length !== 1) throw new LegalSourceError();
           for (const chunk of parsed) {

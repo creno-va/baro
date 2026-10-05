@@ -6,6 +6,8 @@ Before each external model attempt the checkpoint CAS consumes its durable phase
 
 External success and D1 checkpoint commit are not atomic. A crash in between can incur duplicate cost, bounded by durable reservations and Gateway spend limits. `exactly once` provider billing is not claimed. Workflow retries are disabled for model phases; adapters own bounded transient retries. A user retry deliberately authorizes a fresh attempt budget.
 
+Official law HTTP requests additionally reserve a durable budget by fixed list/article reference before each transport attempt. Each reference permits at most three calls across adapter retries and Workflow replay, so the budgets do not multiply after a checkpoint crash. Model/law calls are refused when the remaining execution window cannot accommodate their60s/10s timeout. Unknown checkpoint versions fail closed as non-retryable schema failures.
+
 Answers authenticate, require current consent and abuse allowance, then validate ownership, current questions/options, revision, waiting state and the 24h deadline. The new case revision/input, superseding old analysis/answers, new analysis/outbox and replayable 202 are one D1 batch. The event contains only the new analysis reference; delivery failure cannot undo the admission or lose its outbox.
 
 Validated result/citations and terminal case/analysis state commit together. Owner/current revision/attempt/status guards and cascading foreign keys prevent resurrection during deletion. Output provenance checks compare quoted user facts with the locally masked original; model validation additionally audits semantic claims and official citation support.

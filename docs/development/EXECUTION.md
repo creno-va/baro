@@ -5,7 +5,16 @@
 
 ## 현재 구현과 목표 구분
 
-main에는 Astro/Hono Worker, health, D1 foundation, Workflow skeleton과 CD가 있다. P0.1의 shared 계약 [PR #33](https://github.com/creno-va/baro/pull/33), 암호화 [PR #34](https://github.com/creno-va/baro/pull/34), OAuth·동의 hardening [PR #35](https://github.com/creno-va/baro/pull/35), offline harness [PR #36](https://github.com/creno-va/baro/pull/36)가 병합되었다. #8은 additive `0003_domain_foundation`과 owner-scoped repository를 추가한다. 인증·동의 브라우저 검증과 50개 합성 oracle 회귀 검증은 구현되었으며 사건 분석 API·UI, 실제 모델 평가와 외부 OAuth 성공은 후속 범위다. `Implementation-ready`는 목표 계약의 상태이며 기능 완료를 뜻하지 않는다. 원격 schema 버전은 배포 health 증거로 별도 확인한다.
+main은 P0.1의 shared 계약·암호화·OAuth/동의·도메인 repository·offline harness에 더해
+P0.2의 admission/read/delete/answers/retry API, 공식 법령 검색, pinned AI Gateway,
+암호화 checkpoint Workflow, 목록/입력/상세/결과 UI와 선택 비민감 지표/피드백을 포함한다.
+schema는 additive `0004_case_feedback`이며 기존 migration/인증/사건 데이터를 보존한다.
+합성 adapter는 테스트에만 사용하며 제품의 모델/인증 fallback이 아니다. 선택 지표는
+동의 후 해당 탭의 세션 저장소에만 기록하고 외부 공급자를 도입하지 않는다.
+검증 경계와 인수 조건별 증거는 [P0.2 검증 기록](./P0.2-VALIDATION.md)을 따른다.
+실제 모델 품질·platform Workflow timing·외부 OAuth/Turnstile/Gateway 성공, 계정 삭제와
+복구/rollback 및 공개 정책은 P0.3 #17/#18/#19/#20/#27이다. `Implementation-ready`는
+목표 계약이며 외부 승인 완료를 뜻하지 않는다. 원격 schema는 배포 health로 확인한다.
 
 실제 진행 상태의 정본은 GitHub 이슈/PR이며 의존성과 소유 경계는 [작업 그래프](./work-items.json)다. PR이 병합되어 선행 이슈가 완료되기 전에는 후속 제품 코드가 ready가 아니다. 마일스톤은 실행자 배정이 아니라 완료 게이트다.
 

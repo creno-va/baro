@@ -1,18 +1,19 @@
 import { type AnalyticsEvent, analyticsEventSchema } from "../../../contracts/analytics";
 export interface AnalyticsAdapter {
   send(event: AnalyticsEvent): Promise<void>;
-  clear(): void;
+  clear(eventId?: string): void;
 }
-/** Bounded, consent-scoped synthetic collector. No provider/network is implied. */
-export function syntheticAnalyticsAdapter() {
+/** Bounded session collector for real opt-in events. No external provider/network. */
+export function sessionAnalyticsAdapter() {
   const events = new Map<string, AnalyticsEvent>();
   return {
     async send(value: AnalyticsEvent) {
       const event = analyticsEventSchema.parse(value);
       if (!events.has(event.eventId) && events.size < 500) events.set(event.eventId, event);
     },
-    clear() {
-      events.clear();
+    clear(eventId?: string) {
+      if (eventId) events.delete(eventId);
+      else events.clear();
     },
     events() {
       return [...events.values()];
@@ -23,7 +24,8 @@ export function createAnalyticsSdk(adapter: AnalyticsAdapter) {
   let optedIn = false,
     generation = 0;
   const sent = new Set<string>(),
-    viewed = new Set<string>(),lifecycle=new Set<string>();
+    viewed = new Set<string>(),
+    lifecycle = new Set<string>();
   return {
     optIn() {
       optedIn = true;
@@ -44,25 +46,37 @@ export function createAnalyticsSdk(adapter: AnalyticsAdapter) {
       const parsed = analyticsEventSchema.safeParse(value);
       if (!parsed.success || sent.has(parsed.data.eventId)) return false;
       const event = parsed.data;
-      const once=["analysis_started","analysis_completed","analysis_failed","clarification_viewed","clarification_completed","case_revisited"].includes(event.name)&&event.analysisIdHash?`${event.name}:${event.analysisIdHash}`:null;
-      if(once&&lifecycle.has(once))return false;
+      const once =
+        [
+          "analysis_started",
+          "analysis_completed",
+          "analysis_failed",
+          "clarification_viewed",
+          "clarification_completed",
+          "case_revisited",
+        ].includes(event.name) && event.analysisIdHash
+          ? `${event.name}:${event.analysisIdHash}`
+          : null;
+      if (once && lifecycle.has(once)) return false;
       if (event.name === "result_viewed" && viewed.has(event.analysisIdHash)) return false;
       if (sent.size >= 500) return false;
       const epoch = generation;
       sent.add(event.eventId);
-      if(once)lifecycle.add(once);
+      if (once) lifecycle.add(once);
       if (event.name === "result_viewed") viewed.add(event.analysisIdHash);
       try {
         await adapter.send(event);
         if (!optedIn || epoch !== generation) {
-          adapter.clear();
+          adapter.clear(event.eventId);
           return false;
         }
         return true;
       } catch {
-        sent.delete(event.eventId);
-        if(once)lifecycle.delete(once);
-        if (event.name === "result_viewed") viewed.delete(event.analysisIdHash);
+        if (epoch === generation) {
+          sent.delete(event.eventId);
+          if (once) lifecycle.delete(once);
+          if (event.name === "result_viewed") viewed.delete(event.analysisIdHash);
+        }
         return false;
       }
     },
@@ -139,7 +153,13 @@ export function aggregateMetrics(
     );
   const trust = events.filter((e) => e.name === "trust_answered");
   const elapsed: number[] = [];
-  const uniqueViews=new Map<string,AnalyticsEvent>();for(const view of events.filter(e=>e.name==="result_viewed").sort((a,b)=>Date.parse(a.occurredAt)-Date.parse(b.occurredAt))){if(view.analysisIdHash&&!uniqueViews.has(view.analysisIdHash))uniqueViews.set(view.analysisIdHash,view);}
+  const uniqueViews = new Map<string, AnalyticsEvent>();
+  for (const view of events
+    .filter((e) => e.name === "result_viewed")
+    .sort((a, b) => Date.parse(a.occurredAt) - Date.parse(b.occurredAt))) {
+    if (view.analysisIdHash && !uniqueViews.has(view.analysisIdHash))
+      uniqueViews.set(view.analysisIdHash, view);
+  }
   for (const view of uniqueViews.values()) {
     const start = events
       .filter(
@@ -155,10 +175,10 @@ export function aggregateMetrics(
   elapsed.sort((a, b) => a - b);
   return {
     cohort: collectionAvailable ? "opt_in" : "unknown",
-    events: collectionAvailable?events.length:null,
-    admissions: collectionAvailable?admitted.size:null,
-    views: collectionAvailable?viewedAdmitted.size:null,
-    inputUsers: collectionAvailable?distinct("case_input_viewed", "anonymousUserId").size:null,
+    events: collectionAvailable ? events.length : null,
+    admissions: collectionAvailable ? admitted.size : null,
+    views: collectionAvailable ? viewedAdmitted.size : null,
+    inputUsers: collectionAvailable ? distinct("case_input_viewed", "anonymousUserId").size : null,
     activationRate: ratio(
       distinct("case_submitted", "anonymousUserId").size,
       distinct("case_input_viewed", "anonymousUserId").size,
@@ -173,15 +193,16 @@ export function aggregateMetrics(
       collectionAvailable && elapsed.length
         ? (elapsed[Math.ceil(elapsed.length * 0.75) - 1] ?? null)
         : null,
-    durationObservations: collectionAvailable?elapsed.length:null,
-    period: collectionAvailable&&events.length
-      ? {
-          from: events.map((e) => e.occurredAt).sort()[0],
-          to: events
-            .map((e) => e.occurredAt)
-            .sort()
-            .at(-1),
-        }
-      : null,
+    durationObservations: collectionAvailable ? elapsed.length : null,
+    period:
+      collectionAvailable && events.length
+        ? {
+            from: events.map((e) => e.occurredAt).sort()[0],
+            to: events
+              .map((e) => e.occurredAt)
+              .sort()
+              .at(-1),
+          }
+        : null,
   };
 }

@@ -11,12 +11,15 @@ interface Props {
 }
 // biome-ignore lint/correctness/noUnusedVariables: Astro template reads frontmatter.
 const { title } = Astro.props;
+// biome-ignore lint/correctness/noUnusedVariables: Astro template reads frontmatter.
+const environment =
+  env.APP_ENV === "production" ? "production" : env.APP_ENV === "preview" ? "preview" : "local";
 ---
 <BaseLayout title={`${title} · BARO`} description="대한민국 개인 간 금전 대여 상황 정리">
   <main class="case-shell">
     <nav aria-label="주 메뉴"><a class="brand" href="/">BARO</a><a href="/cases">내 사건</a></nav>
     <slot />
-    <AnalyticsChoice environment={env.APP_ENV} release={env.RELEASE_SHA} client:load />
+    <AnalyticsChoice environment={environment} release={env.RELEASE_SHA} client:load />
     <aside class="case-notice">BARO는 법률 자문을 제공하지 않습니다. AI 결과와 중요한 결정·기한은 공식 원문 또는 자격 있는 전문가를 통해 확인해 주세요.</aside>
   </main>
 </BaseLayout>

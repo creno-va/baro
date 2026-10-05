@@ -60,3 +60,28 @@ DB ID를 노출하지 않는다. anonymousUserId/hash도 가명정보이며 완�
 이벤트 속성 추가는 allowlist schema와 개인정보 검토를 요구한다. 의미 변경은 기존
 이벤트를 덮어쓰지 않고 `eventVersion`을 올린다. 자유 텍스트가 필요한 피드백 기능은
 별도 PRD와 보안·보존 정책 없이는 추가하지 않는다.
+
+## P0.2 구현 경계와 증거
+
+엄격한 `src/contracts/analytics.ts` allowlist와 주입식 SDK를 구현한다. 테스트는
+`tests/adapters/analytics.ts` synthetic sink를 사용한다. 제품에는 외부 수집 endpoint나
+새 공급자를 추가하지 않으며 명시적 opt-in 후 실제 비민감 이벤트만 해당 탭의
+sessionStorage에 보관하는 bounded adapter(최대500 event)를 사용한다. 동의 철회는
+event/ID/salt/flow mapping을 모두 삭제한다. 입력·답변·결과·인증 ID는 저장하지 않는다.
+analytics 전용 환경별 random salt로 case/analysis ID를 HMAC-SHA256 처리한다.
+가명정보이며 완전한 익명성을 주장하지 않는다.
+
+flowId와 admission의 논리적 analysis hash는 답변 revision의 새 DB analysis ID에서도
+이어 사용해 제출 분모와 결과 numerator가 어긋나지 않는다. 새로고침에서 eventId 및
+analysis당 view 중복을 제거한다. 시작·완료 이벤트는 API의 실제 Workflow 시작/terminal
+commit timestamp를 사용하고 view timestamp는 실제50%/연속1초 관찰 시각이다.
+완료 시간은 같은 flow의 최초 input view와 result view의 개별 차이를 구한 뒤 p75를
+계산한다. 서로 다른 시각의 percentile을 빼지 않는다. local/preview와 명시된 QA/bot
+cohort는 production 집계에서 제외한다. 수집 불가/분모 없음/대응 시작 시각 없음은
+unknown(null)이며 aggregate에는 개별 ID/hash가 없다.
+
+도움 여부 선택 자체가 독립적인 선택 피드백 요청이다. `{helpful:boolean}`만 owner-gated
+PUT으로 D1에 upsert하며 사건/분석 삭제 때 cascade한다. 지표 거부와 분석 기능은
+독립적이다. account_deleted SDK 계약은 준비됐지만 계정 삭제 화면/서버 연결은 #17이다.
+외부 production cohort 수집을 완료했다고 주장하지 않는다. 공개 목적/보존/쿠키 고지의
+승인은 #20에서 확인하며 이 문서가 법률 승인이나 새 공급자 도입 승인을 대신하지 않는다.

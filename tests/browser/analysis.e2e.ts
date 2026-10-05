@@ -364,6 +364,7 @@ test("real signed session/API/SQL admission → questions → validated official
       };
     });
     await page.goto("/cases/new");
+    await page.getByRole("button", { name: "사용 지표 동의", exact: true }).click();
     await page
       .getByRole("textbox")
       .fill("합성 사용자 A는 지인에게 금전을 대여했다고 진술했습니다.");
@@ -375,6 +376,25 @@ test("real signed session/API/SQL admission → questions → validated official
     await page.getByRole("button", { name: "답변 보내기" }).click();
     await expect(page.getByRole("heading", { name: "상황 정리" })).toBeVisible({ timeout: 15000 });
     await expect(page.getByRole("link", { name: /민법 제598조 공식 원문/ })).toBeVisible();
+    await page.getByRole("heading", { name: "상황 정리" }).scrollIntoViewIfNeeded();
+    const events = () =>
+      page.evaluate(
+        () =>
+          JSON.parse(sessionStorage.getItem("baro.optional-analytics.v1") ?? '{"events":[]}')
+            .events as { name: string; flowId: string; analysisIdHash: string }[],
+      );
+    await expect
+      .poll(async () => (await events()).filter((e) => e.name === "result_viewed").length)
+      .toBe(1);
+    const samples = await events(),
+      submitted = samples.find((e) => e.name === "case_submitted"),
+      viewed = samples.find((e) => e.name === "result_viewed");
+    expect(submitted?.flowId).toBe(viewed?.flowId);
+    expect(submitted?.analysisIdHash).toBe(viewed?.analysisIdHash);
+    expect(samples.some((e) => e.name === "analysis_started")).toBe(true);
+    expect(samples.some((e) => e.name === "analysis_completed")).toBe(true);
+    await page.getByRole("button", { name: "도움이 됐어요", exact: true }).click();
+    await expect(page.getByText("도움 여부를 저장했어요", { exact: false })).toBeVisible();
     const url = page.url();
     await page.reload();
     await expect(page.getByRole("heading", { name: "상황 정리" })).toBeVisible();

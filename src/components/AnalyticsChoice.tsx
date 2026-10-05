@@ -14,24 +14,27 @@ export function AnalyticsChoice({
   release: string;
 }) {
   const [opted, setOpted] = useState(false),
-    [decided, setDecided] = useState(false);
+    [decided, setDecided] = useState(false),
+    [ready, setReady] = useState(false);
   useEffect(() => {
     configureAnalytics({ environment, release });
     setOpted(analyticsOptedIn());
     setDecided(analyticsOptedIn());
+    setReady(true);
   }, [environment, release]);
   return (
     <aside className="case-panel" aria-label="선택 사용 지표">
       <h2>선택 사용 지표</h2>
       <p>
         동의하면 이 브라우저 세션에서 화면·제출·결과 열람 같은 비민감 이벤트를 기록해요. 사건 내용과
-        인증 ID는 기록하지 않으며 외부로 전송하지 않아요. 탭을 닫거나 동의를 철회하면 지워져요.
-        거부해도 모든 사건 기능을 사용할 수 있어요.
+        인증 ID는 기록하지 않으며 외부로 전송하지 않아요. 이 탭의 세션 저장소에 보관하며 동의를
+        철회하면 지워져요. 거부해도 모든 사건 기능을 사용할 수 있어요.
       </p>
       {!decided ? (
         <>
           <button
             type="button"
+            disabled={!ready}
             onClick={() => {
               analyticsOptIn();
               setOpted(true);
@@ -42,6 +45,7 @@ export function AnalyticsChoice({
           </button>
           <button
             type="button"
+            disabled={!ready}
             onClick={() => {
               analyticsOptOut();
               setDecided(true);

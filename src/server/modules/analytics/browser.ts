@@ -4,27 +4,27 @@ import {
   createAnalyticsSdk,
   durationBucket,
   resultVisibilityTracker,
-  syntheticAnalyticsAdapter,
+  sessionAnalyticsAdapter,
 } from "./sdk";
 
 const storageKey = "baro.optional-analytics.v1";
 const sessionSchema = z.strictObject({
-  salt: z.string().uuid(),
-  anonymousUserId: z.string().uuid(),
-  sessionId: z.string().uuid(),
-  startedAt: z.string().datetime(),
+  salt: z.uuid(),
+  anonymousUserId: z.uuid(),
+  sessionId: z.uuid(),
+  startedAt: z.iso.datetime(),
   environment: z.enum(["local", "preview", "production"]),
-  flowId: z.string().uuid().nullable(),
+  flowId: z.uuid().nullable(),
   cases: z.record(
     z.string().regex(/^[a-f0-9]{64}$/),
     z.strictObject({
-      flowId: z.string().uuid(),
+      flowId: z.uuid(),
       analysisHash: z
         .string()
         .regex(/^[a-f0-9]{64}$/)
         .optional(),
-      createdAt: z.string().datetime(),
-      createdSession: z.string().uuid().nullable(),
+      createdAt: z.iso.datetime(),
+      createdSession: z.uuid().nullable(),
     }),
   ),
   events: z.array(analyticsEventSchema).max(500),
@@ -33,17 +33,23 @@ type Session = z.infer<typeof sessionSchema>;
 let session: Session | null = null,
   environment: AnalyticsEvent["environment"] = "local",
   release = "local";
-const collector = syntheticAnalyticsAdapter();
+const collector = sessionAnalyticsAdapter();
 const sdk = createAnalyticsSdk({
   async send(event) {
+    if (!session || session.anonymousUserId !== event.anonymousUserId) return;
     await collector.send(event);
-    if (session) {
+    if (session && session.anonymousUserId === event.anonymousUserId) {
       session.events = collector.events();
       save();
     }
   },
-  clear() {
-    collector.clear();
+  clear(eventId?: string) {
+    collector.clear(eventId);
+    if (eventId && session) {
+      session.events = collector.events();
+      save();
+      return;
+    }
     try {
       sessionStorage.removeItem(storageKey);
     } catch {}
@@ -72,6 +78,7 @@ export function configureAnalytics(config: {
         session = stored.data;
         sdk.optIn();
         for (const event of session.events) void sdk.track(event);
+        window.dispatchEvent(new Event("baro-analytics-change"));
       } else sessionStorage.removeItem(storageKey);
     }
   } catch {
@@ -195,12 +202,23 @@ export async function trackCase(
   entry.analysisHash ??= actualHash;
   epoch.cases[caseHash] = entry;
   save();
-  if(name==="result_viewed"){
-    const first=epoch.events.filter(e=>e.name==="case_input_viewed"&&e.flowId===entry.flowId).sort((a,b)=>Date.parse(a.occurredAt)-Date.parse(b.occurredAt))[0];
-    if(first)properties.durationBucket=durationBucket(Date.now()-Date.parse(first.occurredAt));
-    if(entry.createdSession!==epoch.sessionId&&Date.parse(entry.createdAt)<Date.parse(epoch.startedAt)){
-      const days=Math.max(0,Math.floor((Date.now()-Date.parse(entry.createdAt))/86400000));
-      void emit("case_revisited",entry.flowId,{caseIdHash:caseHash,analysisIdHash:entry.analysisHash,daysSinceCreationBucket:days===0?"same_day":days<=7?"1_7":days<=30?"8_30":"over_30"});
+  if (name === "result_viewed") {
+    const first = epoch.events
+      .filter((e) => e.name === "case_input_viewed" && e.flowId === entry.flowId)
+      .sort((a, b) => Date.parse(a.occurredAt) - Date.parse(b.occurredAt))[0];
+    if (first)
+      properties.durationBucket = durationBucket(Date.now() - Date.parse(first.occurredAt));
+    if (
+      entry.createdSession !== epoch.sessionId &&
+      Date.parse(entry.createdAt) < Date.parse(epoch.startedAt)
+    ) {
+      const days = Math.max(0, Math.floor((Date.now() - Date.parse(entry.createdAt)) / 86400000));
+      void emit("case_revisited", entry.flowId, {
+        caseIdHash: caseHash,
+        analysisIdHash: entry.analysisHash,
+        daysSinceCreationBucket:
+          days === 0 ? "same_day" : days <= 7 ? "1_7" : days <= 30 ? "8_30" : "over_30",
+      });
     }
   }
   // Revision analyses share the original admission identity for a coherent denominator.
@@ -219,7 +237,7 @@ export function observeResult(
   let ratio = 0,
     timer: ReturnType<typeof setInterval> | undefined;
   const tracker = resultVisibilityTracker(() => {
-    void trackCase("result_viewed", caseId, analysisId, {citationCount});
+    void trackCase("result_viewed", caseId, analysisId, { citationCount });
   });
   function tick() {
     tracker.observe(ratio, !document.hidden && analyticsOptedIn(), performance.now());
