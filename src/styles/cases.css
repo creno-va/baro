@@ -1,0 +1,125 @@
+.case-shell {
+  max-width: 860px;
+}
+.case-shell h1 {
+  font-size: clamp(1.8rem, 5vw, 3rem);
+  line-height: 1.3;
+  letter-spacing: -0.04em;
+  overflow-wrap: anywhere;
+}
+.case-shell h2 {
+  font-size: 1.4rem;
+  line-height: 1.4;
+}
+.case-panel {
+  background: #fff;
+  border: 1px solid #d3dbd5;
+  border-radius: 20px;
+  padding: clamp(16px, 4vw, 32px);
+  margin: 24px 0;
+  overflow-wrap: anywhere;
+}
+.case-shell button,
+.case-shell .button-link {
+  font: inherit;
+  min-height: 44px;
+  border: 1px solid #bdc9c0;
+  border-radius: 10px;
+  padding: 12px 16px;
+  background: #fff;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+.case-shell button.primary,
+.case-shell .button-link.primary {
+  background: #17211b;
+  color: #fff;
+  border-color: #17211b;
+}
+.case-shell button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+.case-shell :focus-visible {
+  outline: 3px solid #3e6b51;
+  outline-offset: 3px;
+}
+.case-shell textarea {
+  display: block;
+  width: 100%;
+  min-height: 220px;
+  padding: 12px;
+  border: 1px solid #66786c;
+  border-radius: 10px;
+  font: inherit;
+  line-height: 1.7;
+  resize: vertical;
+}
+.case-shell label {
+  display: block;
+  line-height: 1.5;
+  margin: 12px 0;
+}
+.case-shell fieldset {
+  min-width: 0;
+  border: 1px solid #bdc9c0;
+  padding: 16px;
+  margin: 16px 0;
+}
+.case-shell input[type="radio"],
+.case-shell input[type="checkbox"] {
+  margin-right: 8px;
+}
+.case-shell .choice {
+  min-height: 44px;
+  padding: 10px 0;
+}
+.case-shell .case-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 20px;
+}
+.case-notice,
+.case-muted {
+  color: #53635a;
+  line-height: 1.7;
+}
+.case-notice {
+  padding: 24px 0;
+  font-size: 0.9rem;
+}
+.case-list {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+.case-list li {
+  border-bottom: 1px solid #d3dbd5;
+  padding: 16px 0;
+}
+.case-list a {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+}
+.case-shell .status-text {
+  padding: 12px 0;
+  min-height: 44px;
+}
+.case-shell .error-text {
+  color: #9f3025;
+  line-height: 1.6;
+}
+.case-shell .turnstile-widget {
+  width: 100%;
+  min-height: 70px;
+}
+.case-shell time {
+  font-size: 0.9rem;
+  color: #53635a;
+}
