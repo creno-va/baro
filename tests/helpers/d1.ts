@@ -10,8 +10,24 @@ export async function createTestDatabase() {
     .sort()) {
     sqlite.exec(await Bun.file(`drizzle/${file}`).text());
   }
+  const executions = new WeakMap<
+    object,
+    () => {
+      results: unknown[];
+      success: true;
+      meta: { changes: number };
+    }
+  >();
   function prepare(sql: string, values: SQLQueryBindings[] = []) {
-    return {
+    const execute = () => {
+      const before = (sqlite.query("SELECT total_changes() AS count").get() as { count: number })
+        .count;
+      const results = sqlite.query(sql).all(...values);
+      const after = (sqlite.query("SELECT total_changes() AS count").get() as { count: number })
+        .count;
+      return { results, success: true as const, meta: { changes: after - before } };
+    };
+    const statement = {
       bind(...parameters: SQLQueryBindings[]) {
         return prepare(sql, parameters);
       },
@@ -19,7 +35,7 @@ export async function createTestDatabase() {
         return sqlite.query(sql).values(...values);
       },
       async all() {
-        return { results: sqlite.query(sql).all(...values), success: true, meta: {} };
+        return execute();
       },
       async first(column?: string) {
         const row = sqlite.query(sql).get(...values) as Record<string, unknown> | null;
@@ -30,8 +46,21 @@ export async function createTestDatabase() {
         return { results: [], success: true, meta: { changes: result.changes } };
       },
     };
+    executions.set(statement, execute);
+    return statement;
   }
-  const binding = { prepare } as unknown as D1Database;
+  const binding = {
+    prepare,
+    async batch(statements: object[]) {
+      return sqlite.transaction(() =>
+        statements.map((statement) => {
+          const execute = executions.get(statement);
+          if (!execute) throw new Error("Statement belongs to another test database");
+          return execute();
+        }),
+      )();
+    },
+  } as unknown as D1Database;
   return { sqlite, binding, close: () => sqlite.close() };
 }
 
