@@ -13,7 +13,7 @@ BARO의 테스트는 단순 동작뿐 아니라 소유권, 삭제, 사실 구분
 | 단위 | 상태 전이, Zod, 암호화, 정책, 인용, KST quota | 모든 PR |
 | 통합 | D1 repository/migration, Better Auth adapter, Hono route, Workflow step | 모든 PR |
 | 계약 | AI Gateway 모델 schema·과금 설정, 법률 API fixture/schema | 모든 PR + 주기적 live |
-| E2E | 로그인 이후 입력·질문·결과·삭제·오류·접근성 | PR의 mocked auth, preview smoke |
+| E2E | 로그인 이후 입력·질문·결과·삭제·오류·접근성 | PR의 합성 서명 세션/API/SQL, 별도 실제 preview smoke |
 | AI eval | 구조화, 사실성, 근거, 안전, 회귀 | AI 변경과 production 배포 |
 | 보안 | IDOR, CSRF, XSS, injection, abuse, dependency/secret | PR + 출시 전 |
 
@@ -74,22 +74,46 @@ non-critical 표현 품질 점수는 추세를 보되 위 안전 게이트를 �
 
 ## CI 파이프라인
 
-현재 실제 PR CI는 docs/work graph/boundary 검사, Drizzle drift, fresh SQL+upgrade 검사,
-local workerd D1 migration, lint/typecheck/test/build, 인증·동의 Playwright 6개와 dry-run을 실행한다.
-#31의 50개 합성 corpus와 deterministic 외부 adapter는 offline 회귀 기반이다. Oracle 자체 검증은
-실제 모델의 critical-zero 평가 증거가 아니다. 전체 사건 흐름 E2E·AI eval·SAST·전체
-dependency/secret scanner와 실제 OAuth smoke는 #18/#19/#27의 후속 인수 조건이다.
-아래 흐름은 공개 베타까지 완성할 목표다.
+PR CI는 docs/work graph/AST boundary, `bun audit`(모든 severity), 고정 버전 Gitleaks의
+전체 Git 이력 검사(redact=100), Drizzle drift/fresh/upgrade/local workerd migration,
+lint/typecheck/unit/integration, production build/bundle 검사와 dry-run을 실행한다.
+기존 IDOR/CSRF/quota/idempotency/deletion race 테스트와 Playwright의 refresh/back/
+키보드/320px/200% 흐름도 실행한다. `evals.e2e.ts`는 50개 모두의 실제 owner-scoped API
+결과를 상세 UI에 표시하고 axe WCAG 2/2.1 A/AA 위반 0을 요구한다. 자동 axe 성공은
+모든 장애 유형에 대한 수동 보조공학 검증 완료를 뜻하지 않는다.
+`bun run build:production && bun run test:csp`는 build된 workerd의 Astro hash CSP와
+frame-ancestors header, React hydration/키보드 오류 복구, inline script 차단 및 허용된
+Turnstile origin(script 대역)을 검증한다. Astro dev는 hash CSP를 지원하지 않으므로 별도로
+실행한다. 실제 Turnstile 성공은 #27이다. [Astro CSP](https://docs.astro.build/en/reference/configuration-reference/#securitycsp)
+
+`bun run eval:offline`은 50개(20/15/5/5/5)의 intake→암호화 repository→실제 execution
+phase→captured 공식 법령 adapter→strict 결과→read API를 실행한다. 모델 응답은 기대
+분기를 만드는 scripted provider이므로 모델이 입력을 이해하거나 공격을 거부한다는
+증거가 아니다. 허구 사실/citation/금지 출력/schema/policy/소유권 fault 각각 한 건도
+검사 실패로 만들며 평균으로 상쇄하지 않는다. Oracle 자체 테스트도 계속 유지한다.
+`scripts/ai-change.ts`는 base SHA와 diff로 AI 관련 변경을 감지하며 eval은 모든 PR/main
+candidate에서 필수다. 실패 시 artifact 업로드·배포 전에 멈춘다.
+
+CI artifact의 `offline.json`/`ui.json`은 candidate SHA, mode, corpus 버전/checksum,
+fixture ID/version/finding 코드만 포함한다. 페이지 HTML/원문/응답/세션/trace는 업로드하지
+않는다. Gitleaks 원문 보고서는 artifact로 만들지 않는다. source gate는 동적 import와
+log alias도 차단하되 포괄적인 SAST 증명을 제공하지 않는다. product bundle 검사는 알려진
+test/auth-bypass sentinel과 import 경로를 검사하며 module graph는 src boundary로 제한한다.
+
+실제 모델 critical-zero 평가와 Google/Naver/Kakao callback, Turnstile, 원격 Workflow,
+법령 live 및 provider logging/보존 설정은 #27, 전체 smoke/drill과 release 증거는 #19다.
+같은 immutable candidate SHA로 아래 외부 게이트까지 완료해야 공개 베타를 검토할 수 있다.
 ```text
 install --frozen-lockfile
 -> format/lint/typecheck
 -> secret + dependency + Worker compatibility scan
 -> unit/integration/contract
 -> build
--> mocked-auth E2E + accessibility
--> AI eval (변경 감지 또는 production)
+-> 합성 signed-session E2E + 자동 accessibility
+-> deterministic product eval (모든 candidate, AI 변경 감지 포함)
 -> preview deploy + migration
 -> preview smoke/manual OAuth
+-> 실제 모델 critical-zero eval + 격리된 restore/rollback/alert drill
 -> production approval and deploy
 ```
 

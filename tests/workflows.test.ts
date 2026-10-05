@@ -24,6 +24,35 @@ test("all workflow actions use immutable commits and valid YAML", async () => {
   }
 });
 
+test("quality CI checks out exact candidate and uses dedicated artifact SHA rather than reserved GITHUB_SHA", async () => {
+  const ci = Bun.YAML.parse(await Bun.file(".github/workflows/ci.yml").text()) as {
+    jobs: {
+      quality: {
+        steps: {
+          name: string;
+          with?: { ref?: string };
+          env?: Record<string, string>;
+          run?: string;
+        }[];
+      };
+    };
+  };
+  const steps = ci.jobs.quality.steps;
+  expect(steps.find((s) => s.name === "Checkout")?.with?.ref).toBe(
+    "${{ github.event.pull_request.head.sha || github.sha }}",
+  );
+  for (const name of [
+    "AI change detection and deterministic product eval",
+    "Synthetic browser keyboard and error flows",
+  ]) {
+    const step = steps.find((s) => s.name === name);
+    expect(step?.env?.EVAL_CANDIDATE_SHA).toBe(
+      "${{ github.event.pull_request.head.sha || github.sha }}",
+    );
+    expect(step?.env?.GITHUB_SHA).toBeUndefined();
+  }
+});
+
 test("CD builds before migration and production verifies immutable preview evidence", async () => {
   for (const file of ["deploy-preview.yml", "deploy-production.yml"]) {
     const content = await Bun.file(`.github/workflows/${file}`).text();

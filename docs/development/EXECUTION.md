@@ -12,6 +12,9 @@ schema는 additive `0005_deletion_cleanup`이며 기존 migration/인증/사건 
 합성 adapter는 테스트에만 사용하며 제품의 모델/인증 fallback이 아니다. 선택 지표는
 동의 후 해당 탭의 세션 저장소에만 기록하고 외부 공급자를 도입하지 않는다.
 검증 경계와 인수 조건별 증거는 [P0.2 검증 기록](./P0.2-VALIDATION.md)을 따른다.
+P0.3 #18은 50개 제품 runner/상세 UI와 자동 접근성, dependency/secret/source/bundle
+검사 및 AI 변경 감지 eval을 PR CI에 연결한다. 실행 명령과 합성/외부 검증 경계는
+[테스트 전략](../quality/TEST-STRATEGY.md)에 기록한다. 실제 모델 품질은 여전히 #27이다.
 계정 삭제와 settings, 공유 cleanup scheduler, restore journal 재적용의 offline 검증은
 #17이며 [삭제/복구 절차](../operations/DELETION-RESTORE.md)를 따른다.
 실제 모델 품질·platform Workflow timing·외부 OAuth/Turnstile/Gateway 성공,

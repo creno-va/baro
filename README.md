@@ -5,8 +5,9 @@
 BARO는 대한민국의 개인 간 금전 대여 문제를 겪는 사용자가 자신의 상황을 정리하고,
 확인할 쟁점·준비할 자료·일반적인 다음 행동을 이해하도록 돕는 웹 서비스입니다.
 
-> 현재 상태: OAuth·동의, shared 계약, 암호화, 도메인 DB와 offline 검증 기반을 구현했습니다.
-> 사건 분석 API·UI와 실제 외부 서비스 검증은 후속 단계입니다. 공개 베타 API는 기본 비활성화입니다.
+> 현재 상태: OAuth·동의, 암호화 DB, 사건 분석 API·Workflow·UI, 계정 삭제와 cleanup을 구현했습니다.
+> 50개 합성 입력의 제품 파이프라인·상세 화면을 PR CI에서 검사합니다. 실제 외부 서비스와
+> 공개 정책 승인은 진행 중이며 공개 베타 API는 기본 비활성화입니다.
 
 BARO는 변호사나 법률사무소가 아니며 법률 자문, 승소 가능성 판단, 사건 수임 또는
 전문가 추천을 제공하지 않습니다. AI 결과는 공식 법령 출처와 함께 제공되는 일반
@@ -90,6 +91,11 @@ bun ci
 bun run check
 bun run build
 bun run cf:dry-run
+bun run eval:offline
+bun run test:ui
+bun audit
+bun run build:production
+bun run bundle:check
 ```
 
 환경 변수와 secret 이름은 [`.env.example`](./.env.example)과

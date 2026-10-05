@@ -10,11 +10,12 @@
     "build:preview": "cross-env CLOUDFLARE_ENV=preview astro build",
     "build:production": "cross-env CLOUDFLARE_ENV=production astro build",
     "preview": "astro preview",
-    "lint": "biome check src scripts tests .github/scripts astro.config.ts drizzle.config.ts playwright.config.ts package.json tsconfig.json tsconfig.tools.json wrangler.jsonc",
-    "lint:fix": "biome check --write src scripts tests .github/scripts astro.config.ts drizzle.config.ts playwright.config.ts package.json tsconfig.json tsconfig.tools.json wrangler.jsonc",
+    "lint": "biome check src scripts tests .github/scripts astro.config.ts drizzle.config.ts playwright.config.ts playwright.csp.config.ts package.json tsconfig.json tsconfig.tools.json wrangler.jsonc",
+    "lint:fix": "biome check --write src scripts tests .github/scripts astro.config.ts drizzle.config.ts playwright.config.ts playwright.csp.config.ts package.json tsconfig.json tsconfig.tools.json wrangler.jsonc",
     "typecheck": "astro check && tsc --noEmit && tsc --noEmit -p tsconfig.tools.json",
     "test": "bun test",
     "test:ui": "playwright test",
+    "test:csp": "playwright test --config playwright.csp.config.ts",
     "cf:types": "wrangler types --strict-vars false",
     "cf:dry-run": "wrangler deploy --dry-run --outdir .wrangler/dry-run",
     "db:generate": "drizzle-kit generate",
@@ -24,6 +25,8 @@
     "work:next": "bun scripts/work-items.ts --live",
     "release:check": "bun scripts/check-release.ts",
     "boundaries:check": "bun scripts/check-boundaries.ts",
+    "eval:offline": "bun scripts/eval-offline.ts",
+    "bundle:check": "bun scripts/check-bundle.ts",
     "check": "bun run docs:check && bun run work:check && bun run boundaries:check && bun run lint && bun run typecheck && bun test && bun run db:check",
     "db:migrate:local": "wrangler d1 migrations apply DB --local",
     "db:migrate:preview": "wrangler d1 migrations apply DB --env preview --remote",
@@ -44,6 +47,7 @@
   },
   "devDependencies": {
     "@astrojs/check": "0.9.10",
+    "@axe-core/playwright": "4.13.0",
     "@biomejs/biome": "2.5.15",
     "@playwright/test": "1.63.0",
     "@types/bun": "1.4.2",
@@ -53,5 +57,8 @@
     "drizzle-kit": "0.31.11",
     "typescript": "6.0.3",
     "wrangler": "4.147.0"
+  },
+  "overrides": {
+    "esbuild": "0.28.2"
   }
 }

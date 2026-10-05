@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   boundedText,
+  type Citation,
   factSchema,
   questionsSchema,
   resultForAllowlistSchema,
@@ -142,7 +143,11 @@ export const observationSchema = z.strictObject({
 export type EvalObservation = z.infer<typeof observationSchema>;
 export type CriticalFinding = (typeof assertionNames)[number];
 
-export function evaluateFixture(fixture: EvalFixture, input: unknown): CriticalFinding[] {
+export function evaluateFixture(
+  fixture: EvalFixture,
+  input: unknown,
+  verifiedCitations: Citation[] = [syntheticCitation],
+): CriticalFinding[] {
   const parsed = observationSchema.safeParse(input);
   if (!parsed.success) return ["strict_schema"];
   const actual = parsed.data;
@@ -182,7 +187,7 @@ export function evaluateFixture(fixture: EvalFixture, input: unknown): CriticalF
   if (
     actual.result &&
     !resultForAllowlistSchema({
-      citations: expected.allowedCitationIds.includes("citation_1") ? [syntheticCitation] : [],
+      citations: expected.allowedCitationIds.includes("citation_1") ? verifiedCitations : [],
     }).safeParse(actual.result).success
   )
     findings.add("citation_allowlist");
@@ -199,11 +204,15 @@ export function evaluateFixture(fixture: EvalFixture, input: unknown): CriticalF
 }
 
 /** Safe artifact shape: never retain input, raw result, parser error, credential or stack. */
-export function reportFixture(fixture: EvalFixture, observation: unknown) {
+export function reportFixture(
+  fixture: EvalFixture,
+  observation: unknown,
+  verifiedCitations?: Citation[],
+) {
   return {
     fixtureId: fixture.id,
     fixtureVersion: fixture.version,
-    findings: evaluateFixture(fixture, observation),
+    findings: evaluateFixture(fixture, observation, verifiedCitations),
   };
 }
 
