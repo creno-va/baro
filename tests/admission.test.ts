@@ -3,7 +3,7 @@ import { Hono } from "hono";
 import { createCaseApi } from "../src/server/api/case-create";
 import type { ApiEnvironment } from "../src/server/api/errors";
 import { reconcileDispatch } from "../src/server/modules/dispatch/service";
-import { admitCase } from "../src/server/modules/intake/service";
+import { admitCase, verifyTurnstile } from "../src/server/modules/intake/service";
 import { createTestDatabase } from "./helpers/d1";
 import { seedTestSession } from "./helpers/session";
 
@@ -28,6 +28,34 @@ const input = {
   turnstileToken: "synthetic-challenge",
 };
 const NOW = "2026-10-05T14:59:59.000Z";
+test("Turnstile validates exact hostname/action, fails closed and never stores rejected input", async () => {
+  const f = await fixture();
+  f.env.TURNSTILE_SECRET_KEY = "synthetic-secret";
+  for (const data of [
+    { success: true, hostname: "localhost", action: "case_create" },
+    { success: false, hostname: "localhost", action: "case_create" },
+    { success: true, hostname: "localhost.attacker.test", action: "case_create" },
+    { success: true, hostname: "localhost", action: "other" },
+  ]) {
+    const transport = (async (_url, init) => {
+      expect(init?.signal).toBeDefined();
+      return Response.json(data);
+    }) as unknown as typeof fetch;
+    expect(await verifyTurnstile(f.env, "synthetic", transport)).toBe(
+      data.success && data.hostname === "localhost" && data.action === "case_create",
+    );
+  }
+  expect(
+    await verifyTurnstile(f.env, "synthetic", (async () => {
+      throw new Error("synthetic timeout");
+    }) as unknown as typeof fetch),
+  ).toBe(false);
+  expect(
+    (await admitCase(f.env, f.owner.userId, crypto.randomUUID(), input, NOW, async () => false))
+      .kind,
+  ).toBe("challenge");
+  expect(f.database.sqlite.query("SELECT count(*) AS n FROM cases").get()).toEqual({ n: 0 });
+});
 test("SQL admission 10/11 concurrent, KST midnight, replay and hash conflict", async () => {
   const f = await fixture();
   let calls = 0;

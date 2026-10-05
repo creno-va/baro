@@ -12,10 +12,14 @@ export async function requestHash(value: unknown): Promise<string> {
 export async function domainRepository(env: Env) {
   return createDomainRepository(env.DB, await createCaseDataCipher(env));
 }
-export async function verifyTurnstile(env: Env, token: string): Promise<boolean> {
+export async function verifyTurnstile(
+  env: Env,
+  token: string,
+  transport: typeof fetch = fetch,
+): Promise<boolean> {
   if (!env.TURNSTILE_SECRET_KEY) return false;
   try {
-    const response = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
+    const response = await transport("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
       method: "POST",
       body: new URLSearchParams({ secret: env.TURNSTILE_SECRET_KEY, response: token }),
       signal: AbortSignal.timeout(10_000),

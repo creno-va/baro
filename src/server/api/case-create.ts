@@ -13,7 +13,7 @@ export function createCaseApi(verify = verifyTurnstile) {
     const key = idempotencyKeySchema.safeParse(context.req.header("idempotency-key"));
     if (!input.success || !key.success)
       return context.json(
-        errorBody(context, "INVALID_INPUT", "입력과 요청 키를 확인해 주세요."),
+        errorBody(context, "VALIDATION_ERROR", "입력과 요청 키를 확인해 주세요."),
         400,
       );
     if (!(await abuseAllowed(context, access.ownerId, true))) {
@@ -47,7 +47,7 @@ export function createCaseApi(verify = verifyTurnstile) {
         403,
       );
     return context.json(
-      errorBody(context, "DAILY_QUOTA_EXCEEDED", "오늘은 새 사건을 10개까지 입력할 수 있어요."),
+      errorBody(context, "QUOTA_EXCEEDED", "오늘은 새 사건을 10개까지 입력할 수 있어요."),
       429,
     );
   });
