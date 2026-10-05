@@ -477,6 +477,29 @@ export function createDomainRepository(binding: D1Database, cipher: EnvelopeCiph
       });
     },
     // Public source cache has no user/case relationship. #14 owns retrieval and source verification.
+    findLatestLegalSource(lawId: string, article: string, asOfDate: string, now: string) {
+      return safe(async () => {
+        parse(z.string().regex(/^\d{1,12}$/), lawId);
+        parse(dateSchema, asOfDate);
+        parse(nowSchema, now);
+        return await binding
+          .prepare(
+            "SELECT source_id AS sourceId,effective_date AS effectiveDate,article,content_hash AS contentHash,law_name AS lawName,source_url AS sourceUrl,body,fetched_at AS fetchedAt,expires_at AS expiresAt FROM legal_source_cache WHERE source_id LIKE ? AND article=? AND effective_date<=? AND fetched_at<=? AND expires_at>? ORDER BY effective_date DESC,fetched_at DESC LIMIT 1",
+          )
+          .bind(`statute:${lawId}:%`, article, asOfDate, now, now)
+          .first<{
+            sourceId: string;
+            effectiveDate: string;
+            article: string;
+            contentHash: string;
+            lawName: string;
+            sourceUrl: string;
+            body: string;
+            fetchedAt: string;
+            expiresAt: string;
+          }>();
+      });
+    },
     putLegalSource(metadata: Citation, body: string, fetchedAt: string, expiresAt: string) {
       return safe(async () => {
         const c = parse(citationSchema, metadata);
