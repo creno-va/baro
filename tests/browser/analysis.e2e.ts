@@ -117,7 +117,9 @@ test("questions duplicate/error/replay and stale revision restore server state, 
 test("polling delays stop while hidden or terminal; policy results and bounded retry/deletion", async ({
   page,
 }) => {
-  await page.clock.install();
+  // Keep wall time during route/expect awaits out of the exact polling boundaries.
+  await page.clock.install({ time: new Date("2026-01-01T00:00:00Z") });
+  await page.clock.pauseAt(new Date("2026-01-01T00:00:01Z"));
   await page.addInitScript(() => {
     const browser = window as unknown as { pollSchedules: number[] };
     browser.pollSchedules = [];

@@ -14,6 +14,12 @@ preview foundation 배포와 대역 회귀를 실제 OAuth·모델·법령·운�
 [PR CI](https://github.com/creno-va/baro/actions/runs/37361905703)는 성공했다.
 이 CI는 실제 외부 성공이나 새 main 배포의 증거가 아니다.
 
+같은 main `b41c00ce8d9955c5922b1e65d95d0c59cdc7b90b`의
+[preview 배포](https://github.com/creno-va/baro/actions/runs/37363116441)는 재실행 후 성공했다.
+이는 foundation 배포·SHA smoke 증거이며 P0.3 전체 외부 연동 성공은 아니다.
+#53 PR의 폴링 경계 검사는 테스트 clock의 자연 진행을 중단해 실제 지연 경계를
+수동 검증하도록 수정했고, 해당 시나리오 5회 반복을 통과했다. 전체 CI 결과는 별도 확인한다.
+
 사용자 Goal은 가능한 P0.3 기술 작업을 우선 마무리하고 외부·사람 조건만 남으면 그 조건과
 독립인 후속 문서·개발·preview 검증을 허용한다. #19 제품 운영 통합은 기존 #27 선행 조건을
 유지한다. 새 제품 코드는 #53의 PR 병합과 완료 후 시작한다. v1을 재작성하거나 데이터를 삭제해
