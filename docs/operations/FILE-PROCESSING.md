@@ -43,9 +43,10 @@ draft/pending/rejected 객체를 public에 먼저 올리지 않는다.
 ## Upload와 저장
 
 파일 크기는 decimal byte 기준이다. 문서·이미지 100,000,000 bytes, audio/video 1,000,000,000 bytes와
-60분, PDF 500 pages를 허용한다. 사건당 원본 100개/저장 5,000,000,000 bytes, 계정 저장
-10,000,000,000 bytes다. 저장량은 원본·파생·리포트·ZIP 및 pending reservation을 포함하고 계정에는
-프로필 자산도 포함한다. 실제 암호화 overhead와 중복 보관 비용은 별도 비용 ledger에도 반영한다.
+60분, PDF 500 pages를 허용한다. 사건당 원본 100개/원본 합계 5,000,000,000 bytes이며
+pending 원본 예약도 포함한다. 계정 저장 10,000,000,000 bytes에는 원본·파생·리포트·ZIP·
+프로필 자산과 pending reservation이 포함된다. 파생물·리포트는 사건 원본 5GB를 차감하지 않는다.
+실제 암호화 overhead와 중복 보관 비용은 별도 비용 ledger에도 반영한다.
 파일 MIME/확장자만 신뢰하지 않고 실측 byte·format·duration/pages를 검사한다.
 
 Workers 요청 body 제한 때문에 1GB 파일을 단일 HTTP 요청이나 메모리에 담지 않는다.

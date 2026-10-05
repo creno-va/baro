@@ -22,6 +22,12 @@
 9. [삭제/복구](./operations/DELETION-RESTORE.md), [데이터키](./operations/CASE-DATA-KEYS.md), [운영 drill](./operations/BETA-DRILLS.md)
 10. [이벤트](./analytics/EVENTS.md), [정책초안](./policies/), [공개문구감사](./product/PUBLIC-CONTENT-AUDIT.md)
 
+v2 구현을 시작할 때는 [실행 계획](./development/V2-EXECUTION.md)과
+[현재 검증 상태](./development/V2-VALIDATION.md), [상세 계약](./architecture/V2-CONTRACTS.md),
+[v2 HTTP API](./architecture/V2-HTTP-API.md), [UI 증거 계약](./quality/V2-UI-EVIDENCE.md)을 함께 읽는다.
+자료·미디어는 [파일 처리 운영](./operations/FILE-PROCESSING.md),
+사용량과 월 예산은 [비용 제어](./operations/COST-CONTROLS.md)를 따른다.
+
 ## 책임과 우선순위
 
 | 정본 | 답하는 질문 |
