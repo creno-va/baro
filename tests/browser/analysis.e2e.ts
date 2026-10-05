@@ -92,13 +92,21 @@ test("questions duplicate/error/replay and stale revision restore server state, 
   await source.focus();
   await expect(source).toBeFocused();
   await page.setViewportSize({ width: 320, height: 800 });
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+    ),
+  ).toBe(true);
   await page.screenshot({ path: ".wrangler/detail-320.png", fullPage: true });
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.evaluate(() => {
     document.documentElement.style.zoom = "2";
   });
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+    ),
+  ).toBe(true);
   await page.screenshot({ path: ".wrangler/detail-zoom.png", fullPage: true });
   current = {
     ...state("failed"),

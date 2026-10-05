@@ -29,9 +29,11 @@ test("current landing, login and case screens share local brand and remain usabl
   for (const path of ["/login", "/cases", "/cases/new"]) {
     await page.goto(path);
     await expect(page.locator(".brand img").first()).toHaveAttribute("src", "/brand/logo.svg");
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
-      true,
-    );
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+      ),
+    ).toBe(true);
   }
   await page.screenshot({ path: ".wrangler/intake-320.png", fullPage: true });
   expect(
@@ -150,7 +152,11 @@ test("320px mobile sheet and 200% layout preserve all states and local font", as
   const menu = page.getByRole("dialog", { name: "메뉴", exact: true });
   await expect(menu).toBeVisible();
   await page.screenshot({ path: ".wrangler/design-system-sheet-320.png" });
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+    ),
+  ).toBe(true);
   await page.keyboard.press("Escape");
   await expect(page.getByRole("button", { name: "메뉴 열기" })).toBeFocused();
   for (const state of ["loading", "empty", "error", "limit", "permission", "pending"])
@@ -162,7 +168,11 @@ test("320px mobile sheet and 200% layout preserve all states and local font", as
   await page.evaluate(() => {
     document.documentElement.style.zoom = "2";
   });
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+    ),
+  ).toBe(true);
   await page.screenshot({ path: ".wrangler/design-system-200.png", fullPage: true });
   await page.emulateMedia({ reducedMotion: "reduce" });
   expect(

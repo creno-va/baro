@@ -121,7 +121,11 @@ test("settings reauth needs a newer callback for same owner and a fresh explicit
   await page.evaluate(() => {
     document.body.style.zoom = "2";
   });
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+    ),
+  ).toBe(true);
   await page.screenshot({ path: ".wrangler/settings-200.png", fullPage: true });
   expect(deletes).toBe(0);
   await confirm.fill("DELETE");
@@ -135,7 +139,11 @@ test("settings reauth needs a newer callback for same owner and a fresh explicit
   await expect(page.getByRole("heading", { name: "계정 삭제를 접수했어요" })).toBeVisible();
   expect(deletes).toBe(1);
   expect(await page.evaluate((key) => sessionStorage.getItem(key), marker)).toBeNull();
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+    ),
+  ).toBe(true);
 });
 test("loading/error/cancel, expired callback and switched account never arm deletion", async ({
   page,

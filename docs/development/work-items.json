@@ -22,6 +22,7 @@
     { "issue": 31, "milestone": 2, "kind": "implementation", "dependsOn": [28], "owns": ["tests/helpers", "tests/fixtures/evals", "tests/adapters"], "docs": ["docs/quality/TEST-STRATEGY.md"], "validation": "50 synthetic fixture distributions/checksum, offline test adapters, no production auth bypass" },
     { "issue": 74, "milestone": 4, "kind": "implementation", "dependsOn": [18], "owns": ["scripts/foundation-smoke.ts", "scripts/smoke.ts", "tests/foundation-smoke.test.ts"], "docs": ["docs/operations/DEPLOYMENT-OPERATIONS.md"], "validation": "bounded propagation backoff, exact SHA live+ready in one attempt, environment/status/schema/correlation/timeout failures; independent deployment tool fix, not #19/#27 completion" },
     { "issue": 80, "milestone": 5, "kind": "implementation", "dependsOn": [56], "owns": ["tests/browser/design-system.e2e.ts"], "docs": ["docs/quality/TEST-STRATEGY.md"], "validation": "explicit React island hydration before first interaction, nested modal repeated checks and unchanged full UI/CSP assertions" },
+    { "issue": 82, "milestone": 5, "kind": "implementation", "dependsOn": [56], "owns": ["src/styles/global.css", "tests/browser/mobile-scrollbar.e2e.ts", "mobile overflow browser assertions"], "docs": ["docs/quality/TEST-STRATEGY.md"], "validation": "320px clientWidth with classic scrollbar gutter, unchanged keyboard and 200% layouts, built Worker CSP and visual screenshots" },
     {
       "issue": 53,
       "milestone": 5,

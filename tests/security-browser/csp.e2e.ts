@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+test.use({ launchOptions: { ignoreDefaultArgs: ["--hide-scrollbars"] } });
+
 test("built Worker hash CSP blocks injected script while React and allowlisted Turnstile script work", async ({
   page,
 }) => {
@@ -69,6 +71,15 @@ test("built Worker mobile menu, brand, local font and error state work without C
   await page.setViewportSize({ width: 320, height: 760 });
   await page.goto("/cases");
   await expect(page.getByRole("alert")).toContainText("목록을 불러오지 못했어요");
+  await page.locator("astro-island[ssr]").waitFor({ state: "detached" });
+  await page.evaluate(() => {
+    document.documentElement.style.scrollbarGutter = "stable";
+    document.body.style.minHeight = "calc(100vh + 1px)";
+  });
+  expect(await page.evaluate(() => document.documentElement.clientWidth)).toBeLessThan(320);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+    await page.evaluate(() => document.documentElement.clientWidth),
+  );
   const opener = page.getByRole("button", { name: "메뉴 열기" });
   await opener.press("Enter");
   const dialog = page.getByRole("dialog", { name: "메뉴", exact: true });
@@ -92,7 +103,11 @@ test("built Worker mobile menu, brand, local font and error state work without C
     ),
   ).toBe(true);
   expect(await page.locator(".brand img").first().getAttribute("src")).toBe("/brand/logo.svg");
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+    ),
+  ).toBe(true);
   expect(
     await page.evaluate(() => (window as unknown as { uiCspViolations: string[] }).uiCspViolations),
   ).toEqual([]);

@@ -9,7 +9,6 @@ async function reserveScrollbarGutter(page: Page) {
   // boundary deterministic even on machines where page height varies.
   await page.evaluate(() => {
     document.documentElement.style.scrollbarGutter = "stable";
-    document.documentElement.style.overflowY = "scroll";
     document.body.style.minHeight = "calc(100vh + 1px)";
   });
   await page.evaluate(() => document.fonts.ready);
@@ -45,8 +44,9 @@ test("320px pages fit clientWidth including a classic vertical scrollbar gutter"
     await reserveScrollbarGutter(page);
     await expect(page.locator(".brand img").first()).toBeVisible();
     await expectAvailableWidth(page);
+    const label = path === "/" ? "home" : path.slice(1).replaceAll("/", "-");
     await page.screenshot({
-      path: `.wrangler/mobile-scrollbar-320-${path.replaceAll("/", "-") || "home"}.png`,
+      path: `.wrangler/mobile-scrollbar-320-${label}.png`,
     });
   }
 });
