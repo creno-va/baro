@@ -87,6 +87,9 @@ patch로 받고 출처·확실성·userEdited 정본을 서버가 갱신한다. 
 
 ## 저장·사용량·비용 admission
 
+차감/반환·논리 작업·실제 시도·삭제 후 정산은 [사용량·비용 실행 정본](./DOMAIN-LIFECYCLE.md#v2-사용량과-비용),
+quote/funding·환경별 할당과 안전한 전환은 [비용 운영 계약](../operations/COST-CONTROLS.md)을 따른다.
+
 제품 MB/GB는 십진 byte(MB=1,000,000, GB=1,000,000,000)다. 플랫폼 MiB와 혼동하지 않는다.
 
 | 범위 | 상한 | 검증 |

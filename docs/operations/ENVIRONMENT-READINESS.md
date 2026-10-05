@@ -10,12 +10,36 @@
 | v2 항목 | 현재 상태 | 완료에 필요한 행동/증거 |
 | --- | --- | --- |
 | Private/public R2 | 제품 binding/버킷/원격 삭제 미검증 | #58 환경별 분리·private공개OFF·승인 revision copy·owner download·quota·실제 upload/delete |
-| Containers/DO | 제품 파일 처리 미구현 | #59 image digest/plan/resource/idle/network/job capability·실제 문서/media 처리·취소·temporary disk 정리 |
+| Containers/DO | 제품 파일 처리 미구현, 실제 Workers Free plan에서 Paid upgrade 안내 관측 | #59 실제 plan/funding/allocation 확인 뒤 provisioning·image digest/resource/idle/network/job capability·문서/media 처리·취소·temporary disk 정리 |
 | Whisper/vision | 문서상 지원과 계정 호출 미분리 | #59/#71 실제 계정/모델 경로·합성 audio/video full구간 및 sampled frame coverage/gaps |
 | 지속 workspace/roles | v2 미구현 | #60~#67 actual DB/UI·relogin/resume·moderation revision·private/public 분리·PDF/ZIP·삭제 |
-| 전역 비용/제품 quota | v1 제한과 다름 | #57 day3/30/60min·10GB계정·100files/5GB사건·100만 원 ledger/실제 meter reconciliation |
+| 전역 비용/제품 quota | v1 제한과 다름; #57 독립 문서 계약 준비, runtime 미검증 | #55/#57 원자적 day3/30/60min·10GB계정·100files/5GB사건·환경 allocation/가격/환율/funding·100만 원 ledger/실제 meter reconciliation |
 | 공식 출처 확장 | 승인 OC local HTTP200upstream-error 유지 | #63/#71 승인 credential/요청 조건 해결·Worker 실제 법령/판례/기관 guide type별검증 |
 | 운영/공개 | foundation 배포 권한 있음, 정책 승인 없음 | #70 human/business/provider근거, #71 sameSHA UI/live/drill·Environment승인·공개gate |
+
+## 2026-10-06 읽기 전용 plan·비용 관측
+
+인증된 Cloudflare 콘솔에서 Workers는 `Free / Current plan`, Paid 옵션은 `$5 / month + usage`였다.
+Containers 화면은 `Enable Containers`와 Workers Paid upgrade 필요 안내를 표시했다.
+subscription 변경·Containers 활성화/생성은 하지 않았다. 당시 기록은
+[#27 관측](https://github.com/creno-va/baro/issues/27#issuecomment-6002618673),
+[#59 관측](https://github.com/creno-va/baro/issues/59#issuecomment-6002619099)이며 로컬 원본은
+ignored `.wrangler/goal/workers-plan-readiness.md`다. 실제 계정 plan 관측과 공식 가격표는
+다른 증거다. 문서상의 Containers/Paid 가격·허용된 예산은 실제 활성화/호출 성공을 뜻하지 않는다.
+
+[사용량·비용 실행 정본](../architecture/DOMAIN-LIFECYCLE.md#v2-사용량과-비용)과
+[quote/환경 할당 전환](./COST-CONTROLS.md)은 #57의 독립 구현 목표다. 아직 검증된 USD/KRW
+환율·최종 청구/세금·신선한 funding·환경별 immutable allocation 배포/감소 ack·실제 meter 대조
+증거가 없다. 이 값들을 임의/0원으로 채워 paid admission을 열지 않는다. #55 선행 schema/저장
+계약과 #57 runtime·동시성·복구 검증 뒤 실제 단계별 증거를 연결한다.
+
+Workers Free의 CPU/D1 쿼리·row 한도는 큰 입력을 한 번에 처리할 수 있다는 증거가 아니다.
+대형 자료는 bounded staging·고정 revision manifest·원자적 publication·멱등 cleanup으로
+검증하며, 실제 retry/추출/보관 비용은 유지한다. R2 원격 삭제/복구·Whisper full coverage·
+Containers deadline/종료는 #58/#59/#71의 실제 환경 증거가 필요하다. 이 plan 관측은
+공개 법률/정책 승인이나 production 공개 전환을 승인하지 않는다.
+
+## 이전 probe의 미확정 예약 관측
 
 2026-10-06 후속 읽기 전용 콘솔 관측: 임시 AI probe main Worker invocations27/errors0,
 logs/traces 비활성; probe DO HTTP3 중 success2/error1이며 `Worker threw exception` 1이었다.
