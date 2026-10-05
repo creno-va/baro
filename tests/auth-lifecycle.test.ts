@@ -230,8 +230,7 @@ test("cleanup failure remains observable without exposing adapter SQL, tokens or
   expect(error).toBeInstanceOf(Error);
   expect((error as Error).message).toBe("AUTH_CLEANUP_FAILED");
   expect((error as Error).cause).toBeUndefined();
-  expect((error as Error).stack).not.toContain("synthetic-token");
-  expect((error as Error).stack).not.toContain("private-parameters");
+  expect((error as Error).stack).toBeUndefined();
 });
 
 test("ordinary session creation cannot impersonate OAuth and server updates cannot refresh authentication", async () => {

@@ -3,6 +3,7 @@
 ## 서버 계약
 
 - Better Auth D1 세션은 기본 7일, 마지막 갱신 기준 1일 간격으로 갱신한다. 쿠키 cache는 사용하지 않는다.
+- Hono API는 `getSession(context)` helper를 사용해 갱신/폐기 `Set-Cookie`를 클라이언트 응답에 전달하고 개인화 응답에 `Cache-Control: no-store`를 설정한다. DB 만료와 브라우저 쿠키 만료가 함께 갱신되어야 한다.
 - `session.oauth_authenticated_at`는 Google/Naver/Kakao의 검증된 callback으로 새 세션을 만들 때만 기록한다. 세션 갱신은 이를 바꾸지 않는다. 클라이언트 입력은 허용하지 않는다.
 - `hasRecentOAuthAuthentication(session, now)`는 유효한 세션과 현재부터 10분 이내의 OAuth 시각을 요구한다. 없음·미래·잘못된 날짜·만료는 false다. 계정 삭제 #17은 이 helper를 사용하고 재인증 후에도 명시적 삭제 확인을 다시 요구한다.
 - 계정의 access/refresh/ID token과 expiry는 create/update 모두 null 처리한다. IP 수집을 끄고 User Agent/IP도 session create/update에서 null 처리한다. provider 계정의 암묵적 이메일 연결을 허용하지 않는다.

@@ -19,7 +19,7 @@ function hasAllowedOrigin(request: Request, expectedBaseUrl: string): boolean {
 
 export const meApi = new Hono<ApiEnvironment>()
   .get("/consent", async (context) => {
-    const session = await getSession(context.env, context.req.raw.headers);
+    const session = await getSession(context);
     if (!session) {
       return context.json(errorBody(context, "UNAUTHENTICATED", "로그인이 필요해요."), 401);
     }
@@ -44,7 +44,7 @@ export const meApi = new Hono<ApiEnvironment>()
       );
     }
 
-    const session = await getSession(context.env, context.req.raw.headers);
+    const session = await getSession(context);
     if (!session) {
       return context.json(errorBody(context, "UNAUTHENTICATED", "로그인이 필요해요."), 401);
     }

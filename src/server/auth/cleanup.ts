@@ -13,6 +13,8 @@ export async function cleanupAuthData(database: D1Database, now = Date.now()): P
   } catch {
     // Cron failures must remain observable without retaining the adapter's SQL,
     // parameter values or original stack/cause in platform exception logging.
-    throw new Error("AUTH_CLEANUP_FAILED");
+    const failure = new Error("AUTH_CLEANUP_FAILED");
+    delete failure.stack;
+    throw failure;
   }
 }
