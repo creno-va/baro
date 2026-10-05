@@ -144,6 +144,12 @@ test("quote fails closed for missing/stale/wrong environment/zero-price/new-mode
       v.pricing.fx.asOf = END;
     },
     (v) => {
+      v.pricing.fx.referenceUrl = "https://user:private@www.bok.or.kr/";
+    },
+    (v) => {
+      v.pricing.fx.referenceUrl = "https://www.bok.or.kr/?token=private";
+    },
+    (v) => {
       v.funding.validUntil = NOW;
     },
     (v) => {

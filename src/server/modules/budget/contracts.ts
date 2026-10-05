@@ -107,7 +107,16 @@ export const pricingProofSchema = z
     fx: z.strictObject({
       krwPerUsd: positiveDecimal,
       authority: z.string().min(1).max(200),
-      referenceUrl: z.url().refine((value) => new URL(value).protocol === "https:"),
+      referenceUrl: z.url().refine((value) => {
+        const reference = new URL(value);
+        return (
+          reference.protocol === "https:" &&
+          !reference.username &&
+          !reference.password &&
+          !reference.search &&
+          !reference.hash
+        );
+      }),
       asOf: timestampSchema,
       ...freshSchema,
     }),
