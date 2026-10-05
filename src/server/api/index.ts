@@ -1,5 +1,7 @@
 import { Hono } from "hono";
+import { getAuth } from "../auth";
 import { healthApi } from "./health";
+import { meApi } from "./me";
 
 export const api = new Hono<{ Bindings: Env }>()
   .use("*", async (context, next) => {
@@ -7,6 +9,8 @@ export const api = new Hono<{ Bindings: Env }>()
     context.header("x-request-id", requestId);
     await next();
   })
-  .route("/health", healthApi);
+  .all("/auth/*", async (context) => getAuth(context.env).handler(context.req.raw))
+  .route("/health", healthApi)
+  .route("/me", meApi);
 
 export type AppType = typeof api;
