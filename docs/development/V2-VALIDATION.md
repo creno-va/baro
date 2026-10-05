@@ -1,7 +1,7 @@
 # BARO v2 검증 증거 기록
 
 - 기준일: 2026-10-06
-- 상태: 명세 작업 #53 진행 중. v2 제품·실제 UI·외부 연동·공개 완료 증거 없음.
+- 상태: #53 명세 완료, #54 계약·#56 UI 시스템 진행 중. v2 전체 제품·실제 UI·외부 연동·공개 완료 증거 없음.
 - 마일스톤: [전체 서비스 개발](https://github.com/creno-va/baro/milestone/5)
 - 실행 정본: [V2 실행 계획](./V2-EXECUTION.md), 개정 PRD/UX와 실제 GitHub 이슈
 
@@ -47,9 +47,17 @@ cookie·token·secret·인증 URL·stack/SQL은 증거에 포함하지 않는다
 독립 진단/계약 검증이며 v2 화면·모델·미디어·변호사·공개 정책을 증명하지 않는다.
 
 현재 법령 adapter는 승인 정보 credential로 HTTP 200 upstream-error를 반환했다.
-격리 AI는 durable 예약 1회 뒤 report가 없어 결과/비용이 미확인이다. OAuth의 preview 전용 여부와
+이전 격리 AI의 누락/다른 코드 report는 미확인으로 보존한다. 후속 clean e9dee3b의 단일
+screening은 실제 Worker/strict schema/provenance/replay를 통과했지만 v2 모델·미디어·전체
+사건군 eval의 증거가 아니다. OAuth의 preview 전용 여부와
 실제 callback, Turnstile token/action, 복구 관리자와 live drill, 사업자/법률 승인도 남아 있다.
 예산과 production 코드 배포 허용은 실제 성공/승인 증거를 대체하지 않는다.
+
+#53은 [PR72](https://github.com/creno-va/baro/pull/72)와
+[exact-head CI](https://github.com/creno-va/baro/actions/runs/37365995710) 성공 후 main
+`b75429de3af2d04cf001041a3aafada631c2489a`에 병합됐다. 문서56개/ADR13개, 필수 검사,
+browser20/CSP1 및 polling 경계 5회 반복을 확인했다. 이는 명세와 기존 v1 회귀 증거다.
+#54/#56은 별도 checkout에서 진행하며 미완료 기능의 상태를 위 ledger에 유지한다.
 
 ## 최종 감사
 

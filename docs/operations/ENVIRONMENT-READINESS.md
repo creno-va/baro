@@ -32,7 +32,32 @@ request1/token347/error0과 반올림된 Cost$0.00이 관측됐다. 이는 계�
 기존 `345c085` 예약1의 결과를 이 다른 candidate report로 성공 처리하지 않는다. 실제 billing,
 배포 version/vars/source digest를 대조한 뒤 동일 candidate의 새 증거를 확보해야 한다.
 
-## 2026-10-06 추가 진행
+## 2026-10-06 후속 검증: 동일 코드의 격리 AI 호출
+
+이전 candidate의 예약·누락·잘못된 provenance 보고서는 보존하며 아래 결과로 성공 처리하지 않는다.
+수정한 protocol2 도구는 clean HEAD와 source manifest SHA256, 활성 DO의 candidate/hash를
+GET으로 확인한 뒤에만 POST한다. DO는 요청 provenance를 acquire/과금 예약 전에 확인한다.
+Wrangler immediate code update를 사용하고 불명확한 POST는 자동 재시도하지 않는다.
+실제 예약과 관측 지표의 누락은 `metricCoverage`로 구분한다.
+
+- 실제 검증 시각: `2026-10-05T19:59:27.054Z` (2026-10-06 KST).
+- clean candidate: `e9dee3b201ec7b08c8a7b2a46cb16c1f46b60e56`.
+- probe source manifest digest: `1defc000ba080376da14e13ee642952d6672079b052286c24d0b66885eb9ca58`.
+- 환경: application DB/OAuth가 없는 `isolated-synthetic-worker`, 고정 합성 대여 진술만 사용.
+- 실제 `openai/gpt-6-sol` screening strict 결과와 기대값 통과, durable 예약1/관측1,
+  latency4923ms/input287tokens/output56tokens, `metricCoverage:complete`.
+- unauthenticated POST403, authenticated active SHA/hash 일치, 완료 후 replay409
+  `already-attempted` 및 GET의 동일 report/call count를 확인했다.
+- 실행 전 콘솔의 기존 credit `$10.00`와 auto recharge OFF를 다시 확인했다.
+  반올림된 금액은 정확한 실제 청구액이나 무료 증거가 아니며 비용 정산은 남는다.
+- metadata report/source manifest는 ignored `.wrangler/goal/ai-e9dee3b-verified.json`에
+  보존했다. secret·원문 응답·사건·stack은 report에 없다.
+
+이는 한 합성 screening의 실제 Worker binding/strict schema/provenance/replay 성공이다.
+full-product smoke, 전체 live corpus eval, OAuth, 법률 API, 공개 정책 승인은 미검증이다.
+이 isolated SHA는 preview/production 제품 릴리스 SHA가 아니며 release gate의 성공 receipt로 쓰지 않는다.
+
+## 2026-10-06 추가 진행 (이전 관측 포함)
 
 - Goal 세션이 이전 작업을 인계받았다. 이전 checkout은 clean `345c085`이며 실행 중인
   프로세스나 미병합 변경은 없었다. [main CI](https://github.com/creno-va/baro/actions/runs/37357253307)와
@@ -72,6 +97,12 @@ request1/token347/error0과 반올림된 Cost$0.00이 관측됐다. 이는 계�
 - production foundation: [배포 run](https://github.com/creno-va/baro/actions/runs/37349619316),
   release `1f755a1bfeef8e2ff67a61677e067aff33b0124d`, health/ready/schema `0005` 통과.
   정상 GitHub Environment 승인 절차를 사용했다. 공개 베타 API는 `BETA_NOT_OPEN`으로 닫혀 있다.
+- 후속 foundation `b41c00ce8d9955c5922b1e65d95d0c59cdc7b90b`의
+  [main CI](https://github.com/creno-va/baro/actions/runs/37362678080),
+  [preview](https://github.com/creno-va/baro/actions/runs/37363116441),
+  [production](https://github.com/creno-va/baro/actions/runs/37365800076)가 성공했다.
+  두 실제 도메인의 live/ready를 같은 SHA로 재확인했으며 production 사건 API는
+  HTTP503/`BETA_NOT_OPEN`이다. 지정 reviewer의 정상 Environment 승인을 사용했다.
 - 실제 랜딩 수정은 [PR 1](https://github.com/creno-va/baro-landing/pull/1)로 병합했고
   [Pages 배포](https://github.com/creno-va/baro-landing/actions/runs/37354136276)가 성공했다.
   공개 문구 감사 증거는 [콘텐츠 감사](../product/PUBLIC-CONTENT-AUDIT.md)를 따른다.
