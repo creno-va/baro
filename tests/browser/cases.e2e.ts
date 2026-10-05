@@ -171,7 +171,11 @@ test("real signed session submits admission into SQL and reloads owner-scoped li
       .fill("합성 브라우저 사건입니다. 지인에게 돈을 빌려준 뒤 반환을 기다립니다.");
     await page.getByRole("button", { name: "상황 정리 시작" }).press("Enter");
     await expect(page.getByRole("link", { name: "분석 상태 확인" })).toBeFocused();
-    await page.getByRole("link", { name: "내 사건", exact: true }).click();
+    await page.getByRole("button", { name: "메뉴 열기" }).click();
+    await page
+      .getByRole("dialog", { name: "메뉴", exact: true })
+      .getByRole("link", { name: "내 사건", exact: true })
+      .click();
     await expect(page.getByRole("link", { name: "금전 대여 사건" })).toBeVisible();
     await page.reload();
     await expect(page.getByRole("link", { name: "금전 대여 사건" })).toBeVisible();
