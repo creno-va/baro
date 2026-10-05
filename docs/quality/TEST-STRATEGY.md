@@ -171,3 +171,7 @@ remote lifecycle/실제 model/account access는 별도 live run으로 확인한�
 자동 테스트를 문서/manifest 배열과 동일하게 만들어 자기 검증으로 끝내지 않는다. 실제
 보호 경계를 깨뜨리는 fault가 gate를 실패시키는지 확인한다. 법률·공개 승인 근거와 생산
 환경 보호 규칙은 코드 테스트로 우회하지 않는다.
+
+공유 UI fixture의 버튼은 React hydration 전에 SSR로 보일 수 있다. 브라우저 검사는 fixture
+화면을 확인하고 `astro-island[ssr]`가 사라진 뒤 첫 상호작용을 수행한다. 임의 sleep이나
+실패 재시도로 첫 클릭 경합을 숨기지 않으며 모달·중첩 unmount·포커스·탭 assertion은 유지한다.
