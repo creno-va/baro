@@ -1,0 +1,361 @@
+[
+  {
+    "id": "url_spoof",
+    "origin": "synthetic",
+    "captureStatus": "not_captured",
+    "adapterValidation": "not_run",
+    "sourceKind": "official_guide",
+    "request": {
+      "endpointId": "easylaw_text_section",
+      "parametersWithoutCredential": {},
+      "untrustedUrl": "https://www.easylaw.go.kr.attacker.invalid/CSP/CnpClsMain.laf"
+    },
+    "response": {
+      "status": 200,
+      "mediaType": "text/html",
+      "body": "",
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "expected": {
+      "availability": "rejected",
+      "reason": "unapproved_url",
+      "canonicalIdentity": null,
+      "normalizedText": null,
+      "citation": null,
+      "span": null
+    }
+  },
+  {
+    "id": "url_userinfo",
+    "origin": "synthetic",
+    "captureStatus": "not_captured",
+    "adapterValidation": "not_run",
+    "sourceKind": "official_guide",
+    "request": {
+      "endpointId": "easylaw_text_section",
+      "parametersWithoutCredential": {},
+      "untrustedUrl": "https://user@www.easylaw.go.kr/CSP/CnpClsMain.laf"
+    },
+    "response": {
+      "status": 200,
+      "mediaType": "text/html",
+      "body": "",
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "expected": {
+      "availability": "rejected",
+      "reason": "unapproved_url",
+      "canonicalIdentity": null,
+      "normalizedText": null,
+      "citation": null,
+      "span": null
+    }
+  },
+  {
+    "id": "url_port",
+    "origin": "synthetic",
+    "captureStatus": "not_captured",
+    "adapterValidation": "not_run",
+    "sourceKind": "official_guide",
+    "request": {
+      "endpointId": "easylaw_text_section",
+      "parametersWithoutCredential": {},
+      "untrustedUrl": "https://www.easylaw.go.kr:8443/CSP/CnpClsMain.laf"
+    },
+    "response": {
+      "status": 200,
+      "mediaType": "text/html",
+      "body": "",
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "expected": {
+      "availability": "rejected",
+      "reason": "unapproved_url",
+      "canonicalIdentity": null,
+      "normalizedText": null,
+      "citation": null,
+      "span": null
+    }
+  },
+  {
+    "id": "url_private_ip",
+    "origin": "synthetic",
+    "captureStatus": "not_captured",
+    "adapterValidation": "not_run",
+    "sourceKind": "official_guide",
+    "request": {
+      "endpointId": "easylaw_text_section",
+      "parametersWithoutCredential": {},
+      "untrustedUrl": "https://127.0.0.1/CSP/CnpClsMain.laf"
+    },
+    "response": {
+      "status": 200,
+      "mediaType": "text/html",
+      "body": "",
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "expected": {
+      "availability": "rejected",
+      "reason": "unapproved_url",
+      "canonicalIdentity": null,
+      "normalizedText": null,
+      "citation": null,
+      "span": null
+    }
+  },
+  {
+    "id": "url_encoded_path",
+    "origin": "synthetic",
+    "captureStatus": "not_captured",
+    "adapterValidation": "not_run",
+    "sourceKind": "official_guide",
+    "request": {
+      "endpointId": "easylaw_text_section",
+      "parametersWithoutCredential": {},
+      "untrustedUrl": "https://www.easylaw.go.kr/CSP/%2e%2e/private.laf"
+    },
+    "response": {
+      "status": 200,
+      "mediaType": "text/html",
+      "body": "",
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "expected": {
+      "availability": "rejected",
+      "reason": "unapproved_url",
+      "canonicalIdentity": null,
+      "normalizedText": null,
+      "citation": null,
+      "span": null
+    }
+  },
+  {
+    "id": "url_duplicate_query",
+    "origin": "synthetic",
+    "captureStatus": "not_captured",
+    "adapterValidation": "not_run",
+    "sourceKind": "official_guide",
+    "request": {
+      "endpointId": "easylaw_text_section",
+      "parametersWithoutCredential": {},
+      "untrustedUrl": "https://www.easylaw.go.kr/CSP/CnpClsMain.laf?csmSeq=1&csmSeq=2"
+    },
+    "response": {
+      "status": 200,
+      "mediaType": "text/html",
+      "body": "",
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "expected": {
+      "availability": "rejected",
+      "reason": "unapproved_url",
+      "canonicalIdentity": null,
+      "normalizedText": null,
+      "citation": null,
+      "span": null
+    }
+  },
+  {
+    "id": "transport_access_denied",
+    "origin": "synthetic",
+    "captureStatus": "not_captured",
+    "adapterValidation": "not_run",
+    "sourceKind": "statute",
+    "request": {
+      "endpointId": "moleg_eflaw_list",
+      "parametersWithoutCredential": {
+        "target": "eflaw",
+        "type": "JSON"
+      },
+      "untrustedUrl": null
+    },
+    "response": {
+      "status": 403,
+      "mediaType": "application/json",
+      "body": "",
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "expected": {
+      "availability": "unavailable",
+      "reason": "access_denied",
+      "canonicalIdentity": null,
+      "normalizedText": null,
+      "citation": null,
+      "span": null
+    }
+  },
+  {
+    "id": "transport_rate_limit",
+    "origin": "synthetic",
+    "captureStatus": "not_captured",
+    "adapterValidation": "not_run",
+    "sourceKind": "statute",
+    "request": {
+      "endpointId": "moleg_eflaw_list",
+      "parametersWithoutCredential": {
+        "target": "eflaw",
+        "type": "JSON"
+      },
+      "untrustedUrl": null
+    },
+    "response": {
+      "status": 429,
+      "mediaType": "application/json",
+      "body": "",
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "expected": {
+      "availability": "unavailable",
+      "reason": "rate_limited",
+      "canonicalIdentity": null,
+      "normalizedText": null,
+      "citation": null,
+      "span": null
+    }
+  },
+  {
+    "id": "transport_upstream_5xx",
+    "origin": "synthetic",
+    "captureStatus": "not_captured",
+    "adapterValidation": "not_run",
+    "sourceKind": "statute",
+    "request": {
+      "endpointId": "moleg_eflaw_list",
+      "parametersWithoutCredential": {
+        "target": "eflaw",
+        "type": "JSON"
+      },
+      "untrustedUrl": null
+    },
+    "response": {
+      "status": 503,
+      "mediaType": "application/json",
+      "body": "",
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "expected": {
+      "availability": "unavailable",
+      "reason": "server_unavailable",
+      "canonicalIdentity": null,
+      "normalizedText": null,
+      "citation": null,
+      "span": null
+    }
+  },
+  {
+    "id": "transport_required_terms_error",
+    "origin": "synthetic",
+    "captureStatus": "not_captured",
+    "adapterValidation": "not_run",
+    "sourceKind": "statute",
+    "request": {
+      "endpointId": "moleg_eflaw_list",
+      "parametersWithoutCredential": {
+        "target": "eflaw",
+        "type": "JSON"
+      },
+      "untrustedUrl": null
+    },
+    "response": {
+      "status": 200,
+      "mediaType": "application/json",
+      "body": "{\"result\":\"synthetic_required_terms\",\"msg\":\"합성 필수 항목 오류\"}",
+      "bodySha256": "35e52a4e03fde1d8d554c3199a9380dadba9e51dca3e16b8425cd03467f516f2"
+    },
+    "expected": {
+      "availability": "unavailable",
+      "reason": "upstream_error_unclassified",
+      "canonicalIdentity": null,
+      "normalizedText": null,
+      "citation": null,
+      "span": null
+    }
+  },
+  {
+    "id": "transport_registration_error",
+    "origin": "synthetic",
+    "captureStatus": "not_captured",
+    "adapterValidation": "not_run",
+    "sourceKind": "statute",
+    "request": {
+      "endpointId": "moleg_eflaw_list",
+      "parametersWithoutCredential": {
+        "target": "eflaw",
+        "type": "JSON"
+      },
+      "untrustedUrl": null
+    },
+    "response": {
+      "status": 200,
+      "mediaType": "application/json",
+      "body": "{\"result\":\"synthetic_registration\",\"msg\":\"합성 등록 오류\"}",
+      "bodySha256": "c53692a0aebccb9307e09705e7ca2b856a3901a11ff34e7101a14ce0ad163e4a"
+    },
+    "expected": {
+      "availability": "unavailable",
+      "reason": "upstream_error_unclassified",
+      "canonicalIdentity": null,
+      "normalizedText": null,
+      "citation": null,
+      "span": null
+    }
+  },
+  {
+    "id": "transport_malformed_json",
+    "origin": "synthetic",
+    "captureStatus": "not_captured",
+    "adapterValidation": "not_run",
+    "sourceKind": "statute",
+    "request": {
+      "endpointId": "moleg_eflaw_list",
+      "parametersWithoutCredential": {
+        "target": "eflaw",
+        "type": "JSON"
+      },
+      "untrustedUrl": null
+    },
+    "response": {
+      "status": 200,
+      "mediaType": "application/json",
+      "body": "{\"LawSearch\":",
+      "bodySha256": "80eb52c90c76a15a304b15d308d7657a7c961b2e9277b42f7658d5364bee8e1d"
+    },
+    "expected": {
+      "availability": "unavailable",
+      "reason": "invalid_json",
+      "canonicalIdentity": null,
+      "normalizedText": null,
+      "citation": null,
+      "span": null
+    }
+  },
+  {
+    "id": "transport_html_error",
+    "origin": "synthetic",
+    "captureStatus": "not_captured",
+    "adapterValidation": "not_run",
+    "sourceKind": "statute",
+    "request": {
+      "endpointId": "moleg_eflaw_list",
+      "parametersWithoutCredential": {
+        "target": "eflaw",
+        "type": "JSON"
+      },
+      "untrustedUrl": null
+    },
+    "response": {
+      "status": 200,
+      "mediaType": "text/html",
+      "body": "<html><body>합성 오류 페이지</body></html>",
+      "bodySha256": "ad287e1dfe3eb6a7e3f005ae12086f36d5f1b909fc9e823a6f5a4260f754d0aa"
+    },
+    "expected": {
+      "availability": "unavailable",
+      "reason": "unexpected_content_type",
+      "canonicalIdentity": null,
+      "normalizedText": null,
+      "citation": null,
+      "span": null
+    }
+  }
+]
