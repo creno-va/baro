@@ -35,7 +35,9 @@ SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name IN
 ORDER BY name;
 ```
 
-예상 schema는 `0004_case_feedback`, 테이블 수는 15, foreign key 위반은 0이다.
+예상 schema는 `0005_deletion_cleanup`, 테이블 수는 15, foreign key 위반은 0이다.
+0005는 기존 opaque deletion journal에 cleanup cursor와 다음 시도/lease 시각만 추가한다.
+기존 primary/auth/domain 데이터와 Workflow ID 목록을 변경하지 않는다.
 `0004`는 선택적 도움 여부 boolean/analysis reference/timestamp만 저장하는 additive
 테이블이며 기존 인증·사건·암호문을 변경하지 않는다. 사건/분석 삭제 시 FK cascade된다.
 제품 분석 event 또는 자유 텍스트를 저장하지 않는다. upgrade 데이터 보존과 fresh/drift를

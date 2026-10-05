@@ -333,6 +333,8 @@ export const deletionJobs = sqliteTable(
       .default("pending"),
     attempts: integer("attempts").notNull().default(0),
     expiresAt: text("expires_at").notNull(),
+    cleanupCursor: integer("cleanup_cursor").notNull().default(0),
+    nextAttemptAt: text("next_attempt_at").notNull().default("1970-01-01T00:00:00.000Z"),
   },
   (table) => [
     index("deletion_cleanup_idx").on(table.cleanupState, table.deletedAt),

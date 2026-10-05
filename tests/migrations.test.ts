@@ -2,6 +2,39 @@ import { Database } from "bun:sqlite";
 import { expect, test } from "bun:test";
 import { createTestDatabase } from "./helpers/d1";
 
+test("cleanup upgrade preserves opaque journals and auth/domain data with safe scheduling defaults", async () => {
+  const sqlite = new Database(":memory:");
+  try {
+    sqlite.exec("PRAGMA foreign_keys=ON");
+    for (const name of [
+      "0000_foundation",
+      "0001_auth_and_consent",
+      "0002_oauth_session_security",
+      "0003_domain_foundation",
+      "0004_case_feedback",
+    ])
+      sqlite.exec(await Bun.file(`drizzle/${name}.sql`).text());
+    sqlite.exec(
+      "INSERT INTO user(id,name,email,created_at,updated_at) VALUES('u','Synthetic','synthetic@example.test',1,2)",
+    );
+    sqlite.exec(
+      "INSERT INTO deletion_jobs VALUES('j','account','opaque','2026-10-05T00:00:00Z','[\"opaque-1\"]','deleted','pending',2,'2026-11-09T00:00:00Z')",
+    );
+    const before = sqlite.query("SELECT * FROM user").all();
+    const journal = sqlite.query("SELECT * FROM deletion_jobs").get();
+    sqlite.exec(await Bun.file("drizzle/0005_deletion_cleanup.sql").text());
+    expect(sqlite.query("SELECT * FROM user").all()).toEqual(before);
+    expect(sqlite.query("SELECT * FROM deletion_jobs WHERE id='j'").get()).toEqual({
+      ...(journal as object),
+      cleanup_cursor: 0,
+      next_attempt_at: "1970-01-01T00:00:00.000Z",
+    });
+    expect(sqlite.query("PRAGMA foreign_key_check").all()).toEqual([]);
+  } finally {
+    sqlite.close();
+  }
+});
+
 test("fresh migrations enforce auth FK, cascade and consent age constraints", async () => {
   const database = await createTestDatabase();
   try {
@@ -20,7 +53,7 @@ test("fresh migrations enforce auth FK, cascade and consent age constraints", as
     sqlite.exec("DELETE FROM user WHERE id='u'");
     expect(sqlite.query("SELECT * FROM user_consents").all()).toEqual([]);
     expect(sqlite.query("SELECT value FROM app_metadata WHERE key='schema_version'").get()).toEqual(
-      { value: "0004_case_feedback" },
+      { value: "0005_deletion_cleanup" },
     );
   } finally {
     database.close();
