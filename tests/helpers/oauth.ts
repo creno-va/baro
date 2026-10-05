@@ -12,9 +12,14 @@ export function responseCookies(response: Response): string {
 
 // Only provider exchange/profile methods are replaced. Better Auth's real state,
 // cookie verification, callback route, database hooks and D1 SQL remain in use.
-export async function createOAuthFixture(providerId: SyntheticProvider, email?: string) {
+export async function createOAuthFixture(
+  providerId: SyntheticProvider,
+  email?: string,
+  origin?: string,
+) {
   const database = await createTestDatabase();
   const env = testEnvironment(database.binding);
+  if (origin) env.BETTER_AUTH_URL = origin;
   const auth = getAuth(env);
   const context = await auth.$context;
   const provider = context.socialProviders.find((candidate) => candidate.id === providerId);

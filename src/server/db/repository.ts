@@ -654,7 +654,7 @@ export function createDomainRepository(binding: D1Database, cipher: EnvelopeCiph
           statement(
             `INSERT INTO deletion_jobs(id,target_type,target_id,deleted_at,workflow_instance_ids,primary_state,cleanup_state,attempts,expires_at)
             SELECT ?,'case',c.id,?,(SELECT json_group_array(instance_id) FROM (
-              SELECT workflow_instance_id AS instance_id FROM analyses WHERE case_id=c.id
+              SELECT a.id || '-' || n.attempt AS instance_id FROM analyses a JOIN (SELECT 1 AS attempt UNION SELECT 2 UNION SELECT 3) n ON n.attempt<=a.attempt WHERE a.case_id=c.id
               UNION SELECT o.instance_id FROM dispatch_outbox o JOIN analyses a ON a.id=o.analysis_id WHERE a.case_id=c.id
             )),'deleted','pending',0,? FROM cases c WHERE c.id=? AND c.user_id=?`,
             [job, at, expiry, id, owner],

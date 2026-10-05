@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { getAuth } from "../auth";
+import { accountDeleteApi } from "./account-delete";
 import { answersApi } from "./answers";
 import { caseCreateApi } from "./case-create";
 import { casesApi } from "./cases";
@@ -45,6 +46,7 @@ export const api = new Hono<ApiEnvironment>()
   .all("/auth/*", async (context) => getAuth(context.env).handler(context.req.raw))
   .route("/health", healthApi)
   .route("/me", meApi)
+  .route("/me", accountDeleteApi)
   .route("/cases", caseCreateApi)
   .route("/cases", casesApi)
   .route("/cases", answersApi)

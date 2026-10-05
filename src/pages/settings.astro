@@ -1,0 +1,7 @@
+---
+// biome-ignore lint/correctness/noUnusedImports: Astro template reads component.
+import { AccountSettings } from "../components/AccountSettings";
+// biome-ignore lint/correctness/noUnusedImports: Astro template reads component.
+import CaseLayout from "../layouts/CaseLayout.astro";
+---
+<CaseLayout title="계정 설정"><h1>계정 설정</h1><AccountSettings client:load /></CaseLayout>

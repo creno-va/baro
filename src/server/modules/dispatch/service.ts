@@ -1,3 +1,5 @@
+import { removeWorkflow } from "../deletion/service";
+
 type Pending = {
   id: string;
   analysis_id: string;
@@ -61,6 +63,20 @@ export async function reconcileDispatch(env: Env, now = new Date().toISOString()
       } catch {
         const instance = await env.ANALYSIS_WORKFLOW.get(row.instance_id);
         await instance.status();
+      }
+      const current = await env.DB.prepare(`SELECT 1 AS alive WHERE ${guard}`)
+        .bind(row.analysis_id, row.revision, row.attempt)
+        .first();
+      if (!current) {
+        // A deletion may commit while platform create is in flight. Persist a
+        // renewed cleanup request before doing external work (including completed jobs).
+        await env.DB.prepare(
+          `UPDATE deletion_jobs SET cleanup_state='pending',cleanup_cursor=0,next_attempt_at=? WHERE EXISTS(SELECT 1 FROM json_each(workflow_instance_ids) WHERE value=?)`,
+        )
+          .bind(now, row.instance_id)
+          .run();
+        await removeWorkflow(env, row.instance_id);
+        continue;
       }
       await env.DB.prepare(
         "UPDATE dispatch_outbox SET state='dispatched' WHERE id=? AND state='pending' AND attempts=?",
