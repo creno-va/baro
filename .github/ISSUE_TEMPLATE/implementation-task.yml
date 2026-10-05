@@ -1,7 +1,7 @@
 name: 구현 작업
 description: 승인된 명세를 작은 구현 단위로 나눕니다.
 title: "[Task] "
-labels: []
+labels: ["type:task"]
 body:
   - type: input
     id: parent
@@ -31,6 +31,17 @@ body:
     id: dependencies
     attributes:
       label: 의존성과 선행 작업
+      description: Depends on 번호를 적고, 없으면 없음이라고 명시하세요. work-items.json에도 반영합니다.
+      placeholder: "Depends on #8, #28 (CLOSED + main merge 필요)"
+    validations:
+      required: true
+  - type: textarea
+    id: ownership
+    attributes:
+      label: 소유 경계와 검증
+      description: 담당 경로, 제외 범위, offline 검증 명령, 외부 승인/증거가 필요한 항목을 구분하세요.
+    validations:
+      required: true
   - type: textarea
     id: deployment
     attributes:

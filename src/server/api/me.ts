@@ -4,22 +4,7 @@ import { CURRENT_POLICY_VERSIONS, consentInputSchema } from "../../contracts/con
 import { getSession } from "../auth/session";
 import * as schema from "../db/schema";
 import { hasCurrentConsent, readConsent, saveConsent } from "../modules/consent/service";
-
-function errorBody(
-  context: { req: { header(name: string): string | undefined } },
-  code: string,
-  message: string,
-) {
-  return {
-    error: {
-      code,
-      message,
-      requestId: context.req.header("x-request-id") ?? "unknown",
-      retryable: false,
-      details: {},
-    },
-  };
-}
+import { type ApiEnvironment, errorBody } from "./errors";
 
 function hasAllowedOrigin(request: Request, expectedBaseUrl: string): boolean {
   const origin = request.headers.get("origin");
@@ -32,7 +17,7 @@ function hasAllowedOrigin(request: Request, expectedBaseUrl: string): boolean {
   }
 }
 
-export const meApi = new Hono<{ Bindings: Env }>()
+export const meApi = new Hono<ApiEnvironment>()
   .get("/consent", async (context) => {
     const session = await getSession(context.env, context.req.raw.headers);
     if (!session) {

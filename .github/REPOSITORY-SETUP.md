@@ -5,14 +5,15 @@
 
 ## 자동화된 흐름
 
-1. PR이 main을 대상으로 열리면 `CI / Quality gate`가 실행된다.
+1. 모든 PR(stack 포함)에 `CI / Quality gate`가 실행된다.
 2. main에 merge된 commit의 CI가 성공하면 고정 `preview` 환경 배포가 실행된다.
-3. production은 `Deploy production` workflow에서 `production`을 입력해 수동 실행한다.
+3. production은 `Deploy production`에 확인 문자열, 검증된 target_sha, release_mode를 지정한다.
 4. GitHub `production` Environment의 reviewer 승인을 추가하면 실제 배포 전 승인을 한 번
    더 강제할 수 있다.
 
 현재 앱 scaffold가 존재하므로 CI는 `bun.lock`, `lint`, `typecheck`, `test`, `build`,
-Wrangler dry-run을 요구하며 CD는 D1 migration 후 실제 배포를 시도한다.
+Wrangler dry-run을 요구한다. CD는 build/dry-run 뒤 D1 migration과 배포·SHA smoke를 수행한다.
+public-beta는 실제 출시 증거 게이트를 추가로 통과해야 한다.
 
 ## 저장소 설정
 
@@ -24,7 +25,7 @@ GitHub Settings에서 다음을 설정한다.
 - `production`: production Worker용 secret과 required reviewer
 
 각 Environment에 `CLOUDFLARE_API_TOKEN` secret을 추가한다. 토큰은 대상 Cloudflare
-계정의 BARO Worker와 필요한 D1/Workflow/R2 리소스에만 권한을 제한한다. 로컬
+계정의 BARO Worker와 필요한 D1/Workflow/KV 리소스에만 권한을 제한한다. R2는 현재 불필요하다. 로컬
 `wrangler login` OAuth token을 복사하지 않는다.
 
 Cloudflare account ID는 공개 식별자이며 workflow에
@@ -40,6 +41,9 @@ Cloudflare account ID는 공개 식별자이며 workflow에
 - 관리자 우회는 긴급상황 외 금지
 
 첫 CI run으로 check 이름이 생성된 뒤 `Quality gate`를 required status check로 선택한다.
+2026-10-05 확인: 위 보호 설정 적용됨, required approving review count=0,
+CODEOWNERS review 강제 없음, 관리자 우회 방지 활성. production Environment reviewer는
+`hyunhomon`이다. 자동 merge가 켜져 있어도 사용자 작업 권한을 자동 부여하지 않는다.
 
 ## 앱 scaffold 계약
 

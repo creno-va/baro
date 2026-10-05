@@ -1,5 +1,5 @@
 import { readdir, readFile, stat } from "node:fs/promises";
-import { dirname, extname, join, resolve } from "node:path";
+import { dirname, extname, join, relative as relativePath, resolve } from "node:path";
 
 const repositoryRoot = process.cwd();
 const docsRoot = join(repositoryRoot, "docs");
@@ -29,6 +29,10 @@ const requiredDocuments = [
   "policies/PRIVACY-POLICY.DRAFT.md",
   "policies/TERMS.DRAFT.md",
   "policies/AI-NOTICE.md",
+  "development/EXECUTION.md",
+  "quality/PROJECT-REVIEW.md",
+  "architecture/DOMAIN-LIFECYCLE.md",
+  "adr/0005-durable-execution-and-release-gates.md",
 ];
 
 const publicationBlockerAllowlist = new Set([
@@ -59,7 +63,7 @@ async function exists(path: string): Promise<boolean> {
 }
 
 function relativeDocumentPath(path: string): string {
-  return path.slice(docsRoot.length + 1).replaceAll("\\", "/");
+  return relativePath(docsRoot, path).replaceAll("\\", "/");
 }
 
 const errors: string[] = [];
@@ -70,7 +74,12 @@ for (const required of requiredDocuments) {
   }
 }
 
-const documents = await listMarkdownFiles(docsRoot);
+const documents = [
+  ...(await listMarkdownFiles(docsRoot)),
+  join(repositoryRoot, "README.md"),
+  join(repositoryRoot, "AGENTS.md"),
+  ...(await listMarkdownFiles(join(repositoryRoot, ".github"))),
+];
 const markdownLinkPattern = /\[[^\]]+\]\(([^)]+)\)/g;
 
 for (const document of documents) {
@@ -91,6 +100,7 @@ for (const document of documents) {
   });
 
   if (
+    document.startsWith(docsRoot) &&
     content.includes("[PUBLICATION_BLOCKER:") &&
     !publicationBlockerAllowlist.has(relative)
   ) {
@@ -98,7 +108,7 @@ for (const document of documents) {
   }
 
   for (const match of content.matchAll(markdownLinkPattern)) {
-    let target = match[1].trim().split("#", 1)[0];
+    let target = match[1]?.trim().split("#", 1)[0];
     if (!target || /^(https?:|mailto:|#|\/)/i.test(target)) continue;
     if (target.startsWith("<") && target.endsWith(">")) {
       target = target.slice(1, -1);
@@ -110,13 +120,16 @@ for (const document of documents) {
   }
 }
 
-const adrDocuments = documents.filter((document) =>
-  /[\\/]adr[\\/]\d{4}-.*\.md$/.test(document),
-);
+const adrDocuments = documents.filter((document) => /[\\/]adr[\\/]\d{4}-.*\.md$/.test(document));
 for (const adr of adrDocuments) {
   const content = await readFile(adr, "utf8");
-  if (!content.includes("- Status: Accepted")) {
-    errors.push(`docs/${relativeDocumentPath(adr)}: ADR이 Accepted 상태가 아닙니다.`);
+  if (
+    !/^- Status: (Proposed|Accepted|Superseded|Deprecated)$/m.test(content.replaceAll("\r", ""))
+  ) {
+    errors.push(`docs/${relativeDocumentPath(adr)}: 유효한 ADR 상태가 없습니다.`);
+  }
+  if (!/^- Date: \d{4}-\d{2}-\d{2}$/m.test(content.replaceAll("\r", ""))) {
+    errors.push(`docs/${relativeDocumentPath(adr)}: ADR 날짜가 없습니다.`);
   }
 }
 
@@ -125,4 +138,4 @@ if (errors.length > 0) {
   process.exit(1);
 }
 
-console.log(`문서 검사 통과: ${documents.length}개 Markdown, ${adrDocuments.length}개 Accepted ADR`);
+console.log(`문서 검사 통과: ${documents.length}개 Markdown, ${adrDocuments.length}개 ADR`);

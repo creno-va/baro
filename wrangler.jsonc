@@ -18,11 +18,13 @@
     "enabled": true,
     "logs": {
       "enabled": true,
-      "invocation_logs": true
+      "invocation_logs": false
     }
   },
   "vars": {
     "APP_ENV": "local",
+    "PUBLIC_BETA_ENABLED": "false",
+    "RELEASE_SHA": "local",
     "BETTER_AUTH_URL": "https://preview.baro.site"
   },
   "kv_namespaces": [
@@ -57,6 +59,8 @@
       ],
       "vars": {
         "APP_ENV": "preview",
+        "PUBLIC_BETA_ENABLED": "false",
+        "RELEASE_SHA": "unknown",
         "BETTER_AUTH_URL": "https://preview.baro.site"
       },
       "kv_namespaces": [
@@ -91,6 +95,8 @@
       ],
       "vars": {
         "APP_ENV": "production",
+        "PUBLIC_BETA_ENABLED": "false",
+        "RELEASE_SHA": "unknown",
         "BETTER_AUTH_URL": "https://baro.site"
       },
       "kv_namespaces": [

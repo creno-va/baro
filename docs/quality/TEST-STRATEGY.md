@@ -74,6 +74,11 @@ non-critical 표현 품질 점수는 추세를 보되 위 안전 게이트를 �
 
 ## CI 파이프라인
 
+현재 실제 PR CI: docs/work graph/boundary 검사, Drizzle drift, fresh SQL+upgrade 검사,
+local workerd D1 migration, lint/typecheck/test/build/dry-run이다. E2E/AI eval/SAST/전체
+dependency·secret scanner는 #31/#18의 후속 인수 조건이며 현재 CI 통과가 이를 뜻하지 않는다.
+아래 흐름은 공개 베타까지 완성할 목표다. 도구·fixtures는 #31로 선행 구축한다.
+
 ```text
 install --frozen-lockfile
 -> format/lint/typecheck
@@ -90,6 +95,10 @@ install --frozen-lockfile
 Bun 버전은 고정한다. lockfile 변경 없는 설치와 재현 가능한 fixture checksum을 요구한다.
 
 ## 출시 후 검증
+
+scaffold smoke는 health/ready와 배포 SHA만 검사한다. 전체 제품 synthetic smoke와
+정책 승인·외부 증거는 #19/#27에서 완성한다. `bun run release:check`는 승인된 정책과
+release-evidence 항목을 요구하며 법률 검토를 자동 수행하지 않는다.
 
 배포 직후 로그인 콜백, 사건 생성, Workflow 시작, 법률 검색, 완료 결과, 삭제를 합성 사건으로
 확인한다. 합성 데이터에는 실제 인물·연락처를 쓰지 않는다. 오류율이나 안전 경보가 기준을

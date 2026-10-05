@@ -1,0 +1,15 @@
+{
+  "reviewedAt": null,
+  "checks": {
+    "oauth": { "passed": false, "evidenceUrl": null },
+    "turnstile": { "passed": false, "evidenceUrl": null },
+    "gateway": { "passed": false, "evidenceUrl": null },
+    "legalApi": { "passed": false, "evidenceUrl": null },
+    "aiEval": { "passed": false, "evidenceUrl": null },
+    "deletionRace": { "passed": false, "evidenceUrl": null },
+    "accessibility": { "passed": false, "evidenceUrl": null },
+    "restoreRollback": { "passed": false, "evidenceUrl": null },
+    "alerts": { "passed": false, "evidenceUrl": null },
+    "publishedPolicies": { "passed": false, "evidenceUrl": null }
+  }
+}

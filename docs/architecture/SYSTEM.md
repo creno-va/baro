@@ -45,7 +45,7 @@ src/
       response/
   workflows/              analysis workflow entry and steps
   contracts/              shared Zod request/result schemas
-drizzle/                  generated SQL migrations
+drizzle/                  generated SQL migrations + meta snapshots/journal
 tests/fixtures/legal/     verified non-production legal fixtures
 ```
 
@@ -65,8 +65,8 @@ Astro, Hono, Drizzle, Cloudflare AI binding 객체를 직접 반환하지 않는
 
 ### 분석 요청
 
-1. 사건 생성 시 Turnstile, 길이, 일일 사용량을 원자적으로 확인한다.
-2. 암호화된 사건과 `analysis` 레코드를 만들고 Workflow instance ID를 저장한다.
+1. 사건 생성 시 인증·동의·Turnstile·길이를 확인한 뒤 D1 batch로 quota와 관련 쓰기를 원자적으로 승인한다.
+2. 암호화된 사건과 analysis, idempotency 응답, dispatch outbox를 함께 commit한다.
 3. Workflow가 범위·긴급성·질문 필요 여부를 계산한다.
 4. 질문이 필요하면 `needs_clarification` 상태로 이벤트를 기다린다.
 5. 답변 후 법률 검색, 근거 제한 생성, 안전·인용 검사를 거친다.
@@ -74,12 +74,15 @@ Astro, Hono, Drizzle, Cloudflare AI binding 객체를 직접 반환하지 않는
 7. 브라우저는 상태 API를 지수 backoff로 조회한다.
 
 세부 단계는 [AI 파이프라인](./AI-PIPELINE.md)을 따른다.
+revision·CAS·outbox·삭제 규칙은 [실행 계약](./DOMAIN-LIFECYCLE.md)을 따른다.
 
 ## Cloudflare bindings와 secrets
 
 | 이름 | 종류 | 환경 | 용도 |
 | --- | --- | --- | --- |
 | `DB` | D1 binding | 전부 | 애플리케이션 DB |
+| `SESSION` | KV binding | 전부 | Astro adapter session; Better Auth 세션 정본은 D1 |
+| `PUBLIC_BETA_ENABLED` | var | production | 공개 기능 gate, 기본 false |
 | `ANALYSIS_WORKFLOW` | Workflow binding | 전부 | 분석 인스턴스 시작·이벤트 |
 | `RATE_LIMITER` | Rate limit binding | preview/prod | 짧은 구간 남용 방지 |
 | `AI` | AI binding | 전부 | AI Gateway를 통한 Unified Billing 모델 호출 |
@@ -87,9 +90,9 @@ Astro, Hono, Drizzle, Cloudflare AI binding 객체를 직접 반환하지 않는
 | `TURNSTILE_SECRET_KEY` | secret | preview/prod | 서버 토큰 검증 |
 | `BETTER_AUTH_URL` | var | 전부 | 환경별 OAuth origin과 callback 기준 URL |
 | `BETTER_AUTH_SECRET` | secret | 전부 | 세션·인증 서명 |
-| `GOOGLE_CLIENT_ID/SECRET` | var/secret | preview/prod | Google OAuth |
-| `NAVER_CLIENT_ID/SECRET` | var/secret | preview/prod | Naver OAuth |
-| `KAKAO_CLIENT_ID/SECRET` | var/secret | preview/prod | Kakao OAuth |
+| `GOOGLE_CLIENT_ID/SECRET` | secret/secret | preview/prod | Google OAuth |
+| `NAVER_CLIENT_ID/SECRET` | secret/secret | preview/prod | Naver OAuth |
+| `KAKAO_CLIENT_ID/SECRET` | secret/secret | preview/prod | Kakao OAuth |
 | `CASE_DATA_KEY_V1` | secret | 전부 | AES-GCM 데이터 키 |
 | `LAW_API_OC` | secret | preview/prod | 국가법령정보 API 식별값 |
 
@@ -108,6 +111,7 @@ OAuth client, D1, Gateway, 키를 공유하지 않는다.
 
 - 외부 의존성 timeout은 명시적으로 설정하고 무한 재시도하지 않는다.
 - 재시도 단계는 `analysisId + inputRevision + step` 멱등성 키를 사용한다.
-- Workflow 재개는 완료된 외부 호출을 중복 과금하거나 usage를 중복 차감하지 않는다.
+- Workflow 재개는 checkpoint를 재사용하고 usage를 중복 차감하지 않는다. 외부 호출 성공과
+  commit 사이 crash의 중복 과금은 보장할 수 없으므로 bounded attempt와 예산으로 제한한다.
 - 법률 출처·안전 검사 실패는 결과 축소 또는 전체 실패로 닫는다.
 - 알 수 없는 사건과 타인 사건은 모두 동일한 404 응답으로 존재를 숨긴다.

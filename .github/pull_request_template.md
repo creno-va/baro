@@ -4,7 +4,9 @@
 
 ## 연결된 이슈
 
-Closes #
+Refs #
+
+<!-- 모든 인수 조건 완료/검증 뒤에만 Closes #N. 부분 PR은 Refs와 남은 blocker를 적습니다. -->
 
 ## 변경 유형
 
@@ -36,6 +38,7 @@ Closes #
 
 ## 검증
 
+- [ ] `bun run check` (docs/work/boundaries/migration 포함)
 - [ ] `bun run lint`
 - [ ] `bun run typecheck`
 - [ ] `bun run test`
@@ -44,6 +47,8 @@ Closes #
 - [ ] 관련 E2E/접근성/수동 smoke
 
 검증 결과와 재현 방법:
+
+<!-- offline synthetic 검증과 실제 공급자 smoke를 구분하고, 미실행 검증은 이유/후속 이슈를 적습니다. -->
 
 ## 배포와 롤백
 

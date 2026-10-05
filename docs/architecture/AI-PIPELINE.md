@@ -35,6 +35,8 @@ flowchart TD
 
 각 출력은 `schemaVersion`이 있는 strict JSON Schema이며 Zod로 다시 파싱한다.
 Structured Outputs는 형식을 보장하는 도구일 뿐 사실성과 안전성을 보장하지 않는다.
+질문 묶음·24시간 대기·revision·결과 union의 한도는 [실행 계약](./DOMAIN-LIFECYCLE.md)
+정본을 따른다. #28이 strict schema와 합성 fixture를 선행 제공하며 다른 모듈은 재정의하지 않는다.
 
 ## 프롬프트·모델 버전
 
@@ -67,13 +69,20 @@ Gateway의 payload logging은 비활성화하고 Gateway·사용자·모델 단�
 설정한다. Gateway와 앱 로그에는 request ID, 단계, model, latency, token count,
 status, failure code만 허용한다. 사용자 입력·답변·결과·prompt 본문·법률 검색어에
 개인 식별 내용이 있으면 기록하지 않는다.
+모든 호출에서 `gateway:{id,collectLog:false,skipCache:true}`를 명시하고 Gateway 설정도
+검증한다. 호출 shape는 초기 모델의 Chat Completions와 `response_format`으로 고정하며
+reasoning은 `medium`, 출력 상한은 단계별로 둔다. Responses 형식을 혼합하지 않는다.
+모델 catalog 지원과 실제 JSON Schema 응답은 #15/#27의 live 합성 요청으로 검증한다.
+provider 보존/무학습 설정은 Gateway 로그 설정과 별도로 법률/계약 검증 대상이다.
 
 ## 재시도와 timeout
 
 - 네트워크, 429, 명시적 5xx만 제한 횟수의 지수 backoff로 재시도한다.
 - schema 실패는 같은 단계에서 1회 교정 시도 후 실패한다.
 - policy/citation 실패는 같은 초안을 반복 호출하지 않고 안전하게 축소하거나 실패한다.
-- Workflow step은 멱등 키와 결과 hash를 저장해 재개 시 외부 호출을 중복하지 않는다.
+- Workflow step은 암호화 checkpoint/reference와 결과 hash를 재사용한다. 외부 호출 성공과
+  checkpoint commit 사이의 crash는 중복 과금이 가능하므로 exactly-once를 보장하지 않는다.
+  최대 attempt·timeout·quota 규칙은 DOMAIN-LIFECYCLE을 따른다.
 - 모델 fallback은 없다. 공급자 장애는 `MODEL_UNAVAILABLE`로 종료하고 사용자 재시도를
   허용한다.
 
