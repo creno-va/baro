@@ -879,5 +879,18 @@ export function createDomainRepository(binding: D1Database, cipher: EnvelopeCiph
         return result.at(-1)?.meta.changes === 1;
       });
     },
+    saveFeedback(ownerId: string, caseId: string, helpful: boolean, now: string) {
+      return safe(async () => {
+        parse(ownerSchema, ownerId);
+        parse(uuidSchema, caseId);
+        parse(z.boolean(), helpful);
+        parse(nowSchema, now);
+        const result = await statement(
+          `INSERT INTO case_feedback(case_id,analysis_id,helpful,updated_at) SELECT c.id,a.id,?,? FROM cases c JOIN analyses a ON a.id=c.current_analysis_id AND a.case_id=c.id AND a.input_revision=c.input_revision WHERE c.user_id=? AND c.id=? AND c.status='completed' AND a.status='completed' ON CONFLICT(case_id) DO UPDATE SET analysis_id=excluded.analysis_id,helpful=excluded.helpful,updated_at=excluded.updated_at`,
+          [helpful ? 1 : 0, now, ownerId, caseId],
+        ).run();
+        return result.meta.changes === 1;
+      });
+    },
   };
 }
