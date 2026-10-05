@@ -1,7 +1,7 @@
 # BARO v2 검증 증거 기록
 
 - 기준일: 2026-10-06
-- 상태: #53 명세·#54 strict 계약·#56 공통 UI 시스템 완료. #55 DB 구현과 후속 기능은 진행 중이며 v2 전체 제품·실제 외부 연동·공개 완료 증거 없음.
+- 상태: #53 명세·#54 strict 계약·#55 additive DB·#56 공통 UI 시스템 완료. 후속 서비스 실행·화면·외부 연동·공개는 진행 중이며 전체 완료 증거 없음.
 - 마일스톤: [전체 서비스 개발](https://github.com/creno-va/baro/milestone/5)
 - 실행 정본: [V2 실행 계획](./V2-EXECUTION.md), 개정 PRD/UX와 실제 GitHub 이슈
 
@@ -155,6 +155,17 @@ fresh/upgrade 기본6개/29 assertions를 확인했다. foundation smoke8개는 
 별도 local workerd D1에서도0000~0006 migration 모두 적용을 통과했다. 원격 배포 전
 preview/production Time Travel bookmark는 비공개 workspace 파일에 보존하며 공개 증거에
 실제 bookmark 값을 포함하지 않는다. 이 확보는 restore/replay drill 성공 증거가 아니다.
+
+[PR86](https://github.com/creno-va/baro/pull/86)의 head
+`e5c9ea9d1d42a57f029477200031caf571f45e25`는
+[필수 CI](https://github.com/creno-va/baro/actions/runs/37387674210)를 통과했다. migration·secret/
+dependency·unit·offline eval·build/bundle·synthetic browser/CSP까지 성공했으며 main
+`606987e040070932f263fbd0b6c6b2b4cf45266a`에 병합되어 #55는 CLOSED다.
+새 main CI·preview/production migration과 smoke는 해당 릴리스의 실제 결과로 별도 연결한다.
+
+#57 서비스/#63 retrieval에서 새로 확인한 실행 연결점은 [#87](https://github.com/creno-va/baro/issues/87)로
+추적한다. DB 소유자가 fresh source cache·atomic paid admission/dispatch·durable 가격/funding/
+usage·allocation/carryover를 확장하고 소비자는 새 primitive의 공유 PR을 먼저 통합한다.
 
 이 증거는 저장 primitive와 migration의 검증이다. 아직 HTTP/UI가 연결되지 않은 v2 기능,
 실제 외부 처리·운영 drill·공개 승인·전체 서비스 배포 완료를 주장하지 않는다.
