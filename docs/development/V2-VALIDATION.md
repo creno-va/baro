@@ -163,6 +163,17 @@ dependency·unit·offline eval·build/bundle·synthetic browser/CSP까지 성공
 `606987e040070932f263fbd0b6c6b2b4cf45266a`에 병합되어 #55는 CLOSED다.
 새 main CI·preview/production migration과 smoke는 해당 릴리스의 실제 결과로 별도 연결한다.
 
+같은 main SHA `606987e040070932f263fbd0b6c6b2b4cf45266a`의
+[main CI](https://github.com/creno-va/baro/actions/runs/37388194130),
+[preview migration/deploy](https://github.com/creno-va/baro/actions/runs/37388786082),
+[production foundation migration/deploy](https://github.com/creno-va/baro/actions/runs/37388976910)가
+모두 성공했다. 정상 Environment reviewer 승인을 사용했고 production deployment
+`6871792005`의 최종 status는 success다. 2026-10-06 KST의 독립 smoke는 두 도메인의
+full SHA와 candidate journal tag `0006_v2_domain_foundation`을 확인했다. 별도 원격 aggregate
+SQL에서도 양 환경의 v2 선언 테이블67개와 foreign key 위반0을 확인했다. 원문 행은 읽지 않았다.
+production `/api/cases`는 HTTP503/`BETA_NOT_OPEN`이다. 이 결과는 실제 DB migration과
+foundation 배포이며 실제 OAuth·사건 전체 흐름·v2 역할별 UI·공개 승인 성공이 아니다.
+
 #57 서비스/#63 retrieval에서 새로 확인한 실행 연결점은 [#87](https://github.com/creno-va/baro/issues/87)로
 추적한다. DB 소유자가 fresh source cache·atomic paid admission/dispatch·durable 가격/funding/
 usage·allocation/carryover를 확장하고 소비자는 새 primitive의 공유 PR을 먼저 통합한다.
