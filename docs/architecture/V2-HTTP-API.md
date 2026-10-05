@@ -54,7 +54,7 @@ idempotency를 동일 guarded batch로 승인한다. 202에는 `{operationId,job
 | `GET /cases/:caseId/intake` | 저장된 질문 묶음·답변·진행 상태 | owner |
 | `PUT /cases/:caseId/intake/answers` | partial 답변 저장, `{expectedRevision,answers}` | strict question IDs·answer types·CAS, 저장만으로 AI quota 없음 |
 | `POST /cases/:caseId/intake/advance` | 현재 묶음 완료 확인 → 새 질문 또는 확인용 요약 job | 모든 질문 answered/unknown/skipped, AI operation admission |
-| `PUT /cases/:caseId/summary` | 사용자 편집/보완, attribution/reference 유지 | owner·revision, 사용자 편집을 공식 자료 verified로 승격하지 않음 |
+| `PUT /cases/:caseId/summary` | `{expectedRevision,overview?,factEdits?:[{factId,text}],unknowns?}`의 typed patch | owner·revision·현재 fact ID. attribution/reference/확인 flag는 서버 정본이며 사용자 편집을 공식 자료 verified로 승격하지 않음 |
 | `POST /cases/:caseId/summary/confirm` | `{expectedRevision,summaryRevision}` → active workspace | 최신 요약 확인, 늦은 job 결과를 확인한 것으로 취급하지 않음 |
 | `GET /cases/:caseId/messages` | 안정 cursor의 user/검증된 assistant 메시지와 job 상태 | owner, raw unvalidated provider stream 없음 |
 | `POST /cases/:caseId/messages` | `{expectedRevision,text,selectedFileIds}` → 저장 message+AI job | active·동의·선택자료 owner·AI quota·budget |
@@ -78,7 +78,7 @@ idempotency를 동일 guarded batch로 승인한다. 202에는 `{operationId,job
 | `PUT /cases/:caseId/files/:fileId/observations` | 추출 내용 수정·제외·사용자 확인 | source position+revision을 보존, 원본 byte 수정 없음 |
 | `DELETE /cases/:caseId/files/:fileId` | 접근 폐기·job 취소·모든 파생물/보고서 참조 정리 | owner·삭제 race 검증 |
 | `GET /jobs/:jobId` | phase/progress bucket/coverage/failure enum/retry 가능 여부 | job의 사건/프로필 owner, internal key·signed URL·원문 없음 |
-| `POST /cases/:caseId/reports` | `{expectedRevision,selectedFileIds,editedFields,maskingChoices,includeOriginals}` → 고정 snapshot job | owner·selected files 검증·storage/budget·자료 사전 검토 |
+| `POST /cases/:caseId/reports` | `{expectedRevision,selectedFileIds,editedFields,maskingChoices,includeOriginals,reviewConfirmed:true}` → 고정 snapshot job. 원본 포함 시 `selectedOriginalFileIds` 부분집합과 `originalsUnmaskedAcknowledged:true` 필수 | owner·selected files 검증·storage/budget·자료 사전 검토. PDF 근거와 ZIP 선택 분리 |
 | `GET /cases/:caseId/reports` | 버전·생성 시각·snapshot revision·obsolete 표시 | owner |
 | `GET /cases/:caseId/reports/:reportId` | 사용자 검토용 본문·선택자료·마스킹/제외 내역 | owner |
 | `GET /cases/:caseId/reports/:reportId/download?kind=pdf|originals` | 완료된 PDF 또는 선택 원본 ZIP | owner·tombstone·완료 상태 재확인, blob stream·no-store |
@@ -94,6 +94,7 @@ report 다운로드 URL을 public 공유 URL로 만들지 않는다. 명시적 �
 | Method/path | 업무 계약 | Gate |
 | --- | --- | --- |
 | `GET/POST /me/lawyer/application` | 본인·자격·사무실 정보, 신청/확인 상태 | 자신의 계정; 개인 프로필만 |
+| `PUT /me/lawyer/application` | `{expectedRevision,content}`의 typed partial draft 저장; 불완전한 office/빈 asset 목록 허용 | 자신의 계정·CAS. 제출은 완전한 신청과 ready private 자산을 따로 검증 |
 | `POST/GET/DELETE /me/lawyer/verification-assets` | 인증 전용 private 파일·제출/철회 | applicant 또는 해당 심사 담당자만; 사건 파일 namespace 금지 |
 | `GET/PUT /me/lawyer/profile` | draft·승인본·revision 조회/편집 | owner·CAS. approved revision을 직접 UPDATE하지 않음 |
 | `POST/DELETE /me/lawyer/portfolio-assets` | text/image/PDF staging 처리/선택 제거 | owner, 공개 요청이 아닌 비공개 업로드 |
