@@ -15,6 +15,13 @@
       "when": 1791183396841,
       "tag": "0001_auth_and_consent",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1791187617543,
+      "tag": "0002_oauth_session_security",
+      "breakpoints": true
     }
   ]
 }

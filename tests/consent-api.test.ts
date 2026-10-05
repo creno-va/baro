@@ -40,10 +40,19 @@ test("real SQL sessions and consent routes enforce authentication, origin and po
       );
     const consent = { ...CURRENT_POLICY_VERSIONS, over14Confirmed: true };
     expect((await put("https://attacker.example", consent)).status).toBe(403);
+    expect((await put("", consent)).status).toBe(403);
     expect((await put(env.BETTER_AUTH_URL, { ...consent, termsVersion: "old" })).status).toBe(400);
+    expect((await put(env.BETTER_AUTH_URL, { ...consent, over14Confirmed: false })).status).toBe(
+      400,
+    );
+    expect((await put(env.BETTER_AUTH_URL, { ...consent, extra: true })).status).toBe(400);
     expect((await put(env.BETTER_AUTH_URL, consent)).status).toBe(200);
     const after = await api.request("/me/consent", { headers: { cookie } }, env);
     expect(((await after.json()) as { needsConsent: boolean }).needsConsent).toBe(false);
+    database.sqlite.exec("UPDATE user_consents SET privacy_version='old'");
+    const changedPolicy = await api.request("/me/consent", { headers: { cookie } }, env);
+    expect(changedPolicy.status).toBe(200);
+    expect(((await changedPolicy.json()) as { needsConsent: boolean }).needsConsent).toBe(true);
 
     database.sqlite.exec("UPDATE session SET expires_at=1");
     expect((await api.request("/me/consent", { headers: { cookie } }, env)).status).toBe(401);

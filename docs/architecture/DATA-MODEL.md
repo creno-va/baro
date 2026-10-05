@@ -12,8 +12,11 @@ Better Auth의 현재 Drizzle adapter가 생성하는 `user`, `session`, `accoun
 `verification` 테이블을 그대로 사용한다. 애플리케이션 코드는 이 테이블을 직접
 변형하지 않고 인증 adapter를 거친다. provider access/refresh/ID token과 expiry는 계정
 create/update hook에서 null로 제거한다. 필요한 최소 profile/email scope만 요청한다.
-Auth 기본 스키마의 IP/User Agent 평문은 별도 보안 데이터이며 #10에서 비활성화/최소화,
-만료 세션·verification cleanup과 30일 상한을 검증한다. 사건 envelope 대상과 혼동하지 않는다.
+Auth 기본 스키마의 IP/User Agent는 session create/update hook에서 null로 제거한다.
+session의 `oauth_authenticated_at` nullable timestamp_ms는 성공한 OAuth callback만 기록하며
+sliding update나 클라이언트 입력으로 변경하지 않는다. 기존 세션에는 최근 인증을 소급하지 않는다.
+7일 만료/1일 갱신, 10분 최근 OAuth gate 및 보안 데이터 정리는
+[인증 수명과 offline 검증](../security/AUTH-LIFECYCLE.md)을 따른다. 사건 envelope 대상과 혼동하지 않는다.
 
 ## 애플리케이션 테이블
 

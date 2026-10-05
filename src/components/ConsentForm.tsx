@@ -1,4 +1,4 @@
-import { type SyntheticEvent, useEffect, useState } from "react";
+import { type SyntheticEvent, useEffect, useRef, useState } from "react";
 import { CURRENT_POLICY_VERSIONS } from "../contracts/consent";
 
 type ConsentState = "loading" | "required" | "complete";
@@ -9,12 +9,18 @@ export function ConsentForm() {
   const [over14, setOver14] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const submitButton = useRef<HTMLButtonElement | null>(null);
+  const completedLink = useRef<HTMLAnchorElement | null>(null);
+  useEffect(() => {
+    if (state === "complete") completedLink.current?.focus();
+    else if (error && !submitting) submitButton.current?.focus();
+  }, [state, error, submitting]);
 
   useEffect(() => {
     fetch("/api/me/consent", { credentials: "same-origin" })
       .then(async (response) => {
         if (response.status === 401) {
-          window.location.assign("/login");
+          window.location.assign("/login?error=session_expired");
           return null;
         }
         if (!response.ok) throw new Error("CONSENT_LOAD_FAILED");
@@ -43,6 +49,10 @@ export function ConsentForm() {
       }),
     }).catch(() => null);
 
+    if (response?.status === 401) {
+      window.location.assign("/login?error=session_expired");
+      return;
+    }
     if (!response?.ok) {
       setError("동의를 저장하지 못했어요. 다시 시도해 주세요.");
       setSubmitting(false);
@@ -72,7 +82,7 @@ export function ConsentForm() {
     return (
       <div className="consent-complete">
         <p>필수 확인이 완료됐어요.</p>
-        <a className="primary-action" href="/">
+        <a className="primary-action" href="/" ref={completedLink}>
           홈으로 돌아가기
         </a>
       </div>
@@ -80,10 +90,11 @@ export function ConsentForm() {
   }
 
   return (
-    <form className="consent-form" onSubmit={submit}>
+    <form className="consent-form" onSubmit={submit} aria-busy={submitting}>
       <label>
         <input
           checked={accepted}
+          disabled={submitting}
           onChange={(event) => setAccepted(event.currentTarget.checked)}
           type="checkbox"
         />
@@ -92,6 +103,7 @@ export function ConsentForm() {
       <label>
         <input
           checked={over14}
+          disabled={submitting}
           onChange={(event) => setOver14(event.currentTarget.checked)}
           type="checkbox"
         />
@@ -99,6 +111,7 @@ export function ConsentForm() {
       </label>
       <button
         className="primary-action"
+        ref={submitButton}
         disabled={!accepted || !over14 || submitting}
         type="submit"
       >
