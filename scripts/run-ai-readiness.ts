@@ -1,40 +1,105 @@
 import { resolve } from "node:path";
-import { z } from "zod";
+import {
+  assertGitCandidate,
+  controlSchema,
+  PROBE_PROTOCOL_VERSION,
+  ProbeControlError,
+  type ProbeReply,
+  verifyProbeExchange,
+} from "./ai-readiness-control";
 
-const candidate = process.env.READINESS_CANDIDATE_SHA ?? "";
-if (!/^[a-f0-9]{40}$/.test(candidate)) throw new Error("Full candidate SHA required");
-const config = ".wrangler/goal/ai-readiness.config.json";
-const definition = await Bun.file("scripts/ai-readiness.wrangler.jsonc").json();
-definition.main = resolve("scripts/ai-readiness-worker.ts");
-definition.$schema = resolve("node_modules/wrangler/config-schema.json");
-definition.vars.READINESS_CANDIDATE_SHA = candidate;
-await Bun.write(config, `${JSON.stringify(definition, null, 2)}\n`);
-async function wrangler(args: string[], input?: string) {
-  const child = Bun.spawn(["bunx", "wrangler", ...args, "--config", config], {
-    stdin: "pipe",
-    stdout: "pipe",
-    stderr: "pipe",
-    env: { ...process.env, CI: "true" },
-  });
-  if (input) child.stdin.write(`${input}\n`);
-  await child.stdin.end();
-  const [stdout, stderr, exit] = await Promise.all([
-    new Response(child.stdout).text(),
-    new Response(child.stderr).text(),
-    child.exited,
-  ]);
-  if (exit !== 0) {
-    const codes = [...`${stdout}\n${stderr}`.matchAll(/\[code:\s*(\d+)\]/g)].map((m) => m[1]);
-    console.error(
-      JSON.stringify({ operation: args[0], platformExitCode: exit, errorCodes: codes }),
-    );
-    throw new Error("Isolated probe platform operation failed");
-  }
+async function git(args: string[]): Promise<string> {
+  const child = Bun.spawn(["git", ...args], { stdout: "pipe", stderr: "pipe" });
+  const [stdout, exit] = await Promise.all([new Response(child.stdout).text(), child.exited]);
+  if (exit !== 0) throw new Error("Local source verification unavailable");
   return stdout;
 }
-let stage = "deploy";
+let stage = "source-verification";
 try {
-  const deployment = await wrangler(["deploy", "--var", `READINESS_CANDIDATE_SHA:${candidate}`]);
+  const candidate = process.env.READINESS_CANDIDATE_SHA ?? "";
+  assertGitCandidate(
+    candidate,
+    await git(["rev-parse", "HEAD"]),
+    await git(["status", "--porcelain", "--untracked-files=normal"]),
+  );
+  // Bind the probe entry/control/config and its complete application import closure
+  // to the exact clean commit, rather than labelling a dirty probe as another SHA.
+  const sourcePaths = (
+    await git([
+      "ls-files",
+      "scripts/ai-readiness-worker.ts",
+      "scripts/ai-readiness-control.ts",
+      "scripts/ai-readiness.wrangler.jsonc",
+      "src/server/modules/llm-gateway",
+      "src/contracts",
+    ])
+  )
+    .trim()
+    .split("\n")
+    .filter(Boolean)
+    .sort();
+  for (const required of [
+    "scripts/ai-readiness-worker.ts",
+    "scripts/ai-readiness-control.ts",
+    "scripts/ai-readiness.wrangler.jsonc",
+    "src/server/modules/llm-gateway/service.ts",
+  ]) {
+    if (!sourcePaths.includes(required)) throw new Error("Tracked probe source unavailable");
+  }
+  const sourceManifest = await Promise.all(
+    sourcePaths.map(async (path) => ({
+      path,
+      sha256: new Bun.CryptoHasher("sha256")
+        .update(await Bun.file(path).arrayBuffer())
+        .digest("hex"),
+    })),
+  );
+  const probeHash = new Bun.CryptoHasher("sha256")
+    .update(
+      JSON.stringify({
+        candidateSha: candidate,
+        protocolVersion: PROBE_PROTOCOL_VERSION,
+        sourceManifest,
+      }),
+    )
+    .digest("hex");
+  const provenance = { candidateSha: candidate, probeSourceSha256: probeHash };
+  const config = ".wrangler/goal/ai-readiness.config.json";
+  const definition = await Bun.file("scripts/ai-readiness.wrangler.jsonc").json();
+  definition.main = resolve("scripts/ai-readiness-worker.ts");
+  definition.$schema = resolve("node_modules/wrangler/config-schema.json");
+  definition.vars.READINESS_CANDIDATE_SHA = candidate;
+  definition.vars.READINESS_PROBE_SHA256 = probeHash;
+  definition.durable_objects.code_update_strategy = { mode: "immediate" };
+  await Bun.write(config, `${JSON.stringify(definition, null, 2)}\n`);
+  async function wrangler(args: string[], input?: string) {
+    const child = Bun.spawn(
+      ["bun", "node_modules/wrangler/bin/wrangler.js", ...args, "--config", config],
+      {
+        stdin: "pipe",
+        stdout: "pipe",
+        stderr: "pipe",
+        env: { ...process.env, CI: "true" },
+      },
+    );
+    if (input) child.stdin.write(`${input}\n`);
+    await child.stdin.end();
+    const [stdout, stderr, exit] = await Promise.all([
+      new Response(child.stdout).text(),
+      new Response(child.stderr).text(),
+      child.exited,
+    ]);
+    if (exit !== 0) {
+      const codes = [...`${stdout}\n${stderr}`.matchAll(/\[code:\s*(\d+)\]/g)].map((m) => m[1]);
+      console.error(
+        JSON.stringify({ operation: args[0], platformExitCode: exit, errorCodes: codes }),
+      );
+      throw new Error("Isolated probe platform operation failed");
+    }
+    return stdout;
+  }
+  stage = "deploy";
+  const deployment = await wrangler(["deploy", "--durable-objects-code-update-mode", "immediate"]);
   const origin = deployment.match(
     /https:\/\/baro-synthetic-ai-readiness\.[a-z0-9-]+\.workers\.dev/,
   )?.[0];
@@ -45,114 +110,45 @@ try {
   stage = "token-registration";
   await wrangler(["secret", "put", "READINESS_TOKEN"], token);
   stage = "authentication-check";
-  const unauthenticated = await fetch(`${origin}/probe`, { method: "POST" });
+  const unauthenticated = await fetch(`${origin}/probe`, {
+    method: "POST",
+    signal: AbortSignal.timeout(10_000),
+  });
   if (unauthenticated.status !== 403) throw new Error("Probe authentication failed");
-  stage = "model-and-schema-check";
-  let previous: Response | undefined;
-  // Secret deployments can propagate after the CLI returns. GET never spends model quota.
+  const send = async (method: "GET" | "POST"): Promise<ProbeReply> => {
+    const response = await fetch(`${origin}/probe`, {
+      method,
+      headers: { authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(method === "POST" ? 190_000 : 10_000),
+    });
+    return { status: response.status, body: await response.json().catch(() => null) };
+  };
+  stage = "active-provenance-check";
+  let previous: ProbeReply | undefined;
+  // Poll only a read: secret/DO propagation can lag deployment. Never retry a POST.
   for (const delay of [0, 1000, 2000, 4000, 8000, 16000]) {
     if (delay) await new Promise((resolve) => setTimeout(resolve, delay));
-    previous = await fetch(`${origin}/probe`, {
-      headers: { authorization: `Bearer ${token}` },
-      signal: AbortSignal.timeout(10_000),
-    });
-    if (previous.status !== 403) break;
+    previous = await send("GET");
+    if (previous.status === 403) continue;
+    const state = controlSchema.safeParse(previous.body);
+    if (
+      previous.status === 200 &&
+      state.success &&
+      (state.data.activeCandidateSha !== candidate ||
+        state.data.activeProbeSourceSha256 !== probeHash)
+    )
+      continue;
+    // A legacy response, non-200, persisted report or started state is not
+    // permission to run again. The exchange validator decides fail-closed.
+    break;
   }
-  if (!previous) throw new Error("Probe status unavailable");
-  const previousBody = z
-    .record(z.string(), z.unknown())
-    .nullable()
-    .parse(await previous.json().catch(() => null));
-  if (previous.status === 403) {
-    console.error(
-      JSON.stringify({
-        check: "probe-authentication",
-        probeVersion: previousBody?.probeVersion === 1 ? 1 : null,
-        configurationReady: previousBody?.configurationReady === true,
-      }),
-    );
-    throw new Error("Authenticated probe rejected");
-  }
-  if (previous.status !== 200) {
-    console.error(
-      JSON.stringify({
-        check: "probe-durable-state",
-        httpStatus: previous.status,
-        transportStage: ["binding", "dispatch"].includes(String(previousBody?.transportStage))
-          ? previousBody?.transportStage
-          : null,
-      }),
-    );
-    throw new Error("Durable probe state unavailable");
-  }
-  if (previousBody?.status === "no-completed-report" && previousBody.started) {
-    console.error(
-      JSON.stringify({
-        check: "probe-state",
-        started: true,
-        attempts: typeof previousBody.attempts === "number" ? previousBody.attempts : null,
-        completedReport: false,
-      }),
-    );
-    throw new Error("Previous probe outcome is incomplete");
-  }
-  const response =
-    previousBody?.runtimeWorker === true
-      ? previous
-      : await fetch(`${origin}/probe`, {
-          method: "POST",
-          headers: { authorization: `Bearer ${token}` },
-          signal: AbortSignal.timeout(190_000),
-        });
-  const responseBody: Record<string, unknown> | null =
-    previousBody?.runtimeWorker === true
-      ? previousBody
-      : z
-          .record(z.string(), z.unknown())
-          .nullable()
-          .parse(await response.json().catch(() => null));
-  console.log(
-    JSON.stringify({
-      check: "probe-response",
-      httpStatus: response.status,
-      reportPresent: responseBody?.runtimeWorker === true,
-      transportFailed: responseBody?.status === "probe-transport-failed",
-    }),
-  );
-  const report = z
-    .object({
-      version: z.literal(1),
-      candidateSha: z.literal(candidate),
-      environment: z.literal("isolated-synthetic-worker"),
-      checkedAt: z.string(),
-      status: z.enum(["passed", "failed"]),
-      failure: z.enum(["MODEL_UNAVAILABLE", "MODEL_SCHEMA_INVALID", "POLICY_REJECTED"]).nullable(),
-      runtimeWorker: z.literal(true),
-      attempts: z.number().int().min(1).max(3),
-      metrics: z.array(
-        z.strictObject({
-          requestId: z.literal("00000000-0000-4000-8000-000000000027"),
-          phase: z.literal("screening"),
-          model: z.literal("openai/gpt-6-sol"),
-          latencyMs: z.number(),
-          inputTokens: z.number().nullable(),
-          outputTokens: z.number().nullable(),
-          status: z.enum(["success", "failed"]),
-        }),
-      ),
-      unverified: z.array(z.string()),
-    })
-    .strict()
-    .parse(responseBody);
-  stage = "durable-replay-check";
-  const replay = await fetch(`${origin}/probe`, {
-    method: "POST",
-    headers: { authorization: `Bearer ${token}` },
+  if (!previous) throw new ProbeControlError("STATUS_UNAVAILABLE");
+  const report = await verifyProbeExchange(previous, provenance, send, (next) => {
+    stage = next;
   });
-  if (replay.status !== 409) throw new Error("Probe durable replay guard failed");
   await Bun.write(
     ".wrangler/readiness/ai.json",
-    `${JSON.stringify({ ...report, authenticationChecked: true, replayRejected: true }, null, 2)}\n`,
+    `${JSON.stringify({ ...report, authenticationChecked: true, replayRejected: true, sourceManifest }, null, 2)}\n`,
   );
   console.log(
     JSON.stringify({
@@ -160,11 +156,20 @@ try {
       status: report.status,
       failure: report.failure,
       attempts: report.attempts,
+      candidateMatches: true,
+      probeHashMatches: true,
       replayRejected: true,
     }),
   );
   if (report.status !== "passed") process.exitCode = 1;
-} catch {
-  console.error(JSON.stringify({ check: "isolated-ai-readiness", status: "failed", stage }));
+} catch (error) {
+  console.error(
+    JSON.stringify({
+      check: "isolated-ai-readiness",
+      status: "failed",
+      stage,
+      ...(error instanceof ProbeControlError ? { reason: error.code } : {}),
+    }),
+  );
   process.exitCode = 1;
 }

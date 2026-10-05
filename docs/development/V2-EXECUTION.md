@@ -20,6 +20,12 @@ preview foundation 배포와 대역 회귀를 실제 OAuth·모델·법령·운�
 #53 PR의 폴링 경계 검사는 테스트 clock의 자연 진행을 중단해 실제 지연 경계를
 수동 검증하도록 수정했고, 해당 시나리오 5회 반복을 통과했다. 전체 CI 결과는 별도 확인한다.
 
+#53 [PR72](https://github.com/creno-va/baro/pull/72)는
+[exact-head CI](https://github.com/creno-va/baro/actions/runs/37365995710)를 통과해
+main `b75429de3af2d04cf001041a3aafada631c2489a`에 병합되고 이슈도 CLOSED가 됐다.
+#54 strict 계약과 #56 공통 UI 시스템을 별도 checkout에서 시작했다. 이 명세 완료는
+P0.3 외부 gate나 v2 실제 전체 시연 완료를 뜻하지 않는다.
+
 사용자 Goal은 가능한 P0.3 기술 작업을 우선 마무리하고 외부·사람 조건만 남으면 그 조건과
 독립인 후속 문서·개발·preview 검증을 허용한다. #19 제품 운영 통합은 기존 #27 선행 조건을
 유지한다. 새 제품 코드는 #53의 PR 병합과 완료 후 시작한다. v1을 재작성하거나 데이터를 삭제해
