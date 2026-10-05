@@ -2,6 +2,22 @@
 
 ## 2026-10-06 추가 진행
 
+- Goal 세션이 이전 작업을 인계받았다. 이전 checkout은 clean `345c085`이며 실행 중인
+  프로세스나 미병합 변경은 없었다. [main CI](https://github.com/creno-va/baro/actions/runs/37357253307)와
+  [preview 배포](https://github.com/creno-va/baro/actions/runs/37357603021)는 같은
+  `345c08565fdc0bb5157f9aaf9bdc69912702ace5`에서 성공했다. foundation 성공이며 외부 전체 흐름 성공은 아니다.
+- 사용자 목표는 월 기술 예산 100만 원 내 합의한 리소스 생성과 실제 처리 비용을 승인한다.
+  새 결제수단·자동 충전·예산 확대는 승인 범위 밖이다. 기존 `$1` smoke 승인 대기는 이 승인으로
+  대체되지만 계정의 실제 credit/spend limit과 호출 결과는 별도 검증한다.
+- 현재 승인 정보 OC의 로컬 합성 adapter 재검증은 request 1개에서 HTTP 200
+  `upstream-error`로 실패했다. 안전한 진단 enum만 기록했으며 원문·인증 URL·OC는 기록하지 않았다.
+  이는 upstream 오류의 존재를 확인하며 등록/IP/자격 중 어느 원인인지 확정하지 않는다.
+  담당자는 공동활용 신청의 승인 상태·요청 조건을 확인한 뒤 같은 parser/date/hash 검증을 다시 수행해야 한다.
+- 실제 AI binding 검증은 별도 합성 전용 Worker와 durable 최대 3회 호출 예약으로 준비했다.
+  secret 배포 직후 authenticated GET은 HTTP 403이었으며 bounded GET polling으로 인증 전파를 확인했다.
+  이후 POST는 transport 실패했고 현재 durable GET은 started=true·예약 1회·완료 report 없음이다.
+  이미 예약된 호출의 결과와 실제 비용은 미확인이다. 자동 재호출하지 않으며 strict 응답·모델 품질
+  성공으로 취급하지 않는다. GET 상태 확인은 비용을 사용하지 않는다. 이 임시 도구 실행은 product release 증거가 아니다.
 - 사용자 승인에 따라 preview 전용 `BETTER_AUTH_SECRET`, `CASE_DATA_KEY_V1`(키 ID `1`),
   승인된 `LAW_API_OC`, 새 `TURNSTILE_SECRET_KEY`를 GitHub `preview` 환경과 Cloudflare
   `baro-preview` secret에 등록했다. 값은 출력하거나 artifact/Git에 저장하지 않았다.
@@ -13,7 +29,7 @@
 - `baro-preview` AI Gateway를 생성했다. 인증 필수, payload logging/cache/retry 비활성화,
   Unified Billing을 선택했다. preview Worker 설정에 Gateway ID를 연결한다.
   콘솔에서 기존 credit `$10.00`, auto recharge OFF, 사용량 0을 확인했다. 새 구매나 자동 충전은
-  수행하지 않았다. 실제 호출은 별도 비용 한도 승인과 검증 뒤에만 실행한다.
+  수행하지 않았다. 현재 Goal의 월 기술 예산 승인 아래 실제 합성 검증을 준비한다.
 - 로컬 Wrangler OAuth로 Gateway 목록 조회는 HTTP 403이었다. 자원 부재로 해석하지 않는다.
   아래 수동 workflow는 기존 preview API token의 조회 가능 여부를 별도 기록한다.
 - 실제 공식 법령 adapter smoke: `/DRF/lawSearch.do` HTTP 200 JSON이었으나 `LawSearch`
@@ -75,7 +91,7 @@ cache는 메모리 대역이며 D1에 쓰지 않는다. 성공/실패와 시행�
 
 ## Accepted 모델과 실제 계정 검증의 경계
 
-공식 문서는 Accepted `openai/gpt-6-sol`의 Chat Completions/Responses와 structured output, reasoning 지원을 설명한다. 모델이나 공급자를 변경하지 않았다. Workers binding의 Gateway ID는 같은 account에 존재해야 한다. 문서상 지원은 이 account의 Unified Billing 활성·credit·strict schema wire 응답·실제 critical-zero eval 성공을 증명하지 않는다. 등록된 preview 전용 설정과 기존 승인된 비용 한도 확인 후에만 합성 입력으로 #27의 live 검증을 시작한다.
+공식 문서는 Accepted `openai/gpt-6-sol`의 Chat Completions/Responses와 structured output, reasoning 지원을 설명한다. 모델이나 공급자를 변경하지 않았다. Workers binding의 Gateway ID는 같은 account에 존재해야 한다. 문서상 지원은 이 account의 Unified Billing 활성·credit·strict schema wire 응답·실제 critical-zero eval 성공을 증명하지 않는다. 현재 예산 승인을 사용하되 호출별 제한과 안전한 합성 입력으로 #27의 live 검증을 수행한다.
 
 재현: `bunx wrangler secret list --env preview`는 이름만 확인한다. Worker settings 조회도 binding 이름/type, origin 일치 여부, release, logging boolean만 출력한다. credential·token·cookie·인증 URL·원문 응답을 artifact로 보내지 않는다. 전체 제품 smoke/eval의 성공 run URL은 현재 없다. readiness가 확보되면 #27 완료 후 #19 통합을 시작한다.
 

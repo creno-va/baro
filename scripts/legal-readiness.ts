@@ -1,5 +1,8 @@
 import type { createDomainRepository } from "../src/server/db/repository";
-import { createLegalRetrieval } from "../src/server/modules/legal-retrieval/service";
+import {
+  createLegalRetrieval,
+  type LegalRetrievalDiagnostic,
+} from "../src/server/modules/legal-retrieval/service";
 
 // Synthetic concepts, real retrieval/parser, ephemeral cache. No D1 writes or case payloads.
 if (import.meta.main) {
@@ -13,6 +16,7 @@ if (import.meta.main) {
     runtimeWorker: false;
     status: "passed" | "failed";
     requests: number;
+    diagnostics: LegalRetrievalDiagnostic[];
     citations: { effectiveDate: string; contentHash: string }[];
   } = {
     candidateSha,
@@ -21,17 +25,21 @@ if (import.meta.main) {
     runtimeWorker: false,
     status: "failed",
     requests: 0,
+    diagnostics: [],
     citations: [],
   };
   try {
-    if (!/^[a-f0-9]{40}$/.test(candidateSha) || !process.env.LAW_API_OC) throw new Error();
+    if (!/^[a-f0-9]{40}$/.test(candidateSha)) throw new Error();
     const repository = {
       findLatestLegalSource: async () => null,
       putLegalSource: async () => {},
     } as unknown as ReturnType<typeof createDomainRepository>;
     const result = await createLegalRetrieval(
-      { LAW_API_OC: process.env.LAW_API_OC },
+      { LAW_API_OC: process.env.LAW_API_OC ?? "" },
       repository,
+      undefined,
+      undefined,
+      (diagnostic) => report.diagnostics.push(diagnostic),
     ).retrieve(
       ["loan", "interest", "repayment"],
       checkedAt.slice(0, 10),
@@ -53,6 +61,7 @@ if (import.meta.main) {
       check: "official-legal-schema-date-hash",
       status: report.status,
       requests,
+      diagnostics: report.diagnostics,
       runtimeWorker: false,
     }),
   );
