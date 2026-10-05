@@ -3,6 +3,7 @@ import { foundationSmoke } from "../scripts/foundation-smoke";
 
 const origin = "https://preview.baro.site";
 const sha = "a".repeat(40);
+const schemaVersion = "0006_v2_domain_foundation";
 function health(path: string, patch: Record<string, unknown> = {}, requestId = "synthetic-smoke") {
   return Response.json(
     {
@@ -10,7 +11,7 @@ function health(path: string, patch: Record<string, unknown> = {}, requestId = "
       service: "baro",
       environment: "preview",
       status: path.endsWith("ready") ? "ready" : "ok",
-      ...(path.endsWith("ready") ? { schemaVersion: "0005_deletion_cleanup" } : {}),
+      ...(path.endsWith("ready") ? { schemaVersion } : {}),
       ...patch,
     },
     { headers: requestId ? { "x-request-id": requestId } : {} },
@@ -55,7 +56,10 @@ test("propagation beyond the old 4s window waits and verifies live AND ready at 
   const h = harness((path, _call, time) =>
     health(path, { release: time < 10_000 ? "b".repeat(40) : sha }),
   );
-  expect(await foundationSmoke(origin, sha, h.dependencies)).toEqual({ passed: true, attempts: 4 });
+  expect(await foundationSmoke(origin, sha, schemaVersion, h.dependencies)).toEqual({
+    passed: true,
+    attempts: 4,
+  });
   expect(h.sleeps).toEqual([2_000, 4_000, 8_000]);
   expect(h.calls.slice(-2)).toEqual(["/api/health/live", "/api/health/ready"]);
 });
@@ -68,7 +72,7 @@ test("live and ready from DIFFERENT attempts cannot be combined into a success",
       release: path.endsWith("live") === (attempt % 2 === 1) ? sha : "b".repeat(40),
     });
   });
-  expect((await foundationSmoke(origin, sha, h.dependencies)).passed).toBe(false);
+  expect((await foundationSmoke(origin, sha, schemaVersion, h.dependencies)).passed).toBe(false);
   expect(h.sleeps.reduce((total, duration) => total + duration, 0)).toBe(62_000);
   expect(h.calls.length).toBeLessThanOrEqual(14);
 });
@@ -80,6 +84,8 @@ test("ready rejects wrong environment/service/status/schema/release/correlation 
     () => health("ready", { status: "ok" }),
     () => health("ready", { schemaVersion: "" }),
     () => health("ready", { schemaVersion: undefined }),
+    () => health("ready", { schemaVersion: "0005_deletion_cleanup" }),
+    () => health("ready", { schemaVersion: "0007_unverified_future" }),
     () => health("ready", { release: "b".repeat(40) }),
     () => health("ready", {}, ""),
     () => health("ready", {}, "unsafe request id"),
@@ -88,7 +94,7 @@ test("ready rejects wrong environment/service/status/schema/release/correlation 
   ];
   for (const reply of invalid) {
     const h = harness((path) => (path.endsWith("live") ? health(path) : reply()));
-    const result = await foundationSmoke(origin, sha, h.dependencies);
+    const result = await foundationSmoke(origin, sha, schemaVersion, h.dependencies);
     expect(result.passed).toBe(false);
     if (!result.passed) expect(result.path).toBe("/api/health/ready");
     expect(h.calls.length).toBe(14);
@@ -99,7 +105,7 @@ test("network failures are bounded; the last remaining deadline constrains reque
   const h = harness(() => {
     throw new Error("synthetic private upstream detail");
   });
-  const result = await foundationSmoke(origin, sha, h.dependencies);
+  const result = await foundationSmoke(origin, sha, schemaVersion, h.dependencies);
   expect(result).toEqual({
     passed: false,
     attempts: 7,
@@ -113,7 +119,7 @@ test("network failures are bounded; the last remaining deadline constrains reque
     deadline.advance(90_001);
     return health(path);
   });
-  expect(await foundationSmoke(origin, sha, deadline.dependencies)).toEqual({
+  expect(await foundationSmoke(origin, sha, schemaVersion, deadline.dependencies)).toEqual({
     passed: false,
     attempts: 1,
     path: "/api/health/live",
@@ -143,7 +149,7 @@ test("a ready request is aborted within the remaining total deadline and retains
       );
     });
   });
-  expect(await foundationSmoke(origin, sha, h.dependencies)).toEqual({
+  expect(await foundationSmoke(origin, sha, schemaVersion, h.dependencies)).toEqual({
     passed: false,
     attempts: 1,
     path: "/api/health/ready",
@@ -156,7 +162,16 @@ test("a ready request is aborted within the remaining total deadline and retains
 
 test("production requires production health at the exact candidate", async () => {
   const h = harness((path) => health(path, { environment: "production" }));
-  expect(await foundationSmoke("https://baro.site", sha, h.dependencies)).toEqual({
+  expect(await foundationSmoke("https://baro.site", sha, schemaVersion, h.dependencies)).toEqual({
+    passed: true,
+    attempts: 1,
+  });
+});
+
+test("the expected schema belongs to the checked-out candidate, including an older foundation", async () => {
+  const previous = "0005_deletion_cleanup";
+  const h = harness((path) => health(path, { schemaVersion: previous }));
+  expect(await foundationSmoke(origin, sha, previous, h.dependencies)).toEqual({
     passed: true,
     attempts: 1,
   });
@@ -170,8 +185,12 @@ test("invalid origins or candidate SHAs fail BEFORE any network call", async () 
     `${origin}/`,
     `${origin}@attacker.example`,
   ])
-    await expect(foundationSmoke(base, sha, h.dependencies)).rejects.toThrow();
+    await expect(foundationSmoke(base, sha, schemaVersion, h.dependencies)).rejects.toThrow();
   for (const candidate of ["main", "a".repeat(39), "A".repeat(40)])
-    await expect(foundationSmoke(origin, candidate, h.dependencies)).rejects.toThrow();
+    await expect(
+      foundationSmoke(origin, candidate, schemaVersion, h.dependencies),
+    ).rejects.toThrow();
+  for (const migration of ["", "0006", "../0006_v2_domain_foundation"])
+    await expect(foundationSmoke(origin, sha, migration, h.dependencies)).rejects.toThrow();
   expect(h.calls).toHaveLength(0);
 });

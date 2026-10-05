@@ -1,7 +1,8 @@
 # 데이터 모델
 
-아래 기존 테이블·값은 v1의 구현/운영 계약이다. v2 목표는 마지막 확장 표와
-[v2 실행 계약](./V2-CONTRACTS.md)에 정의하며 migration이 이미 존재한다고 해석하지 않는다.
+아래 기존 테이블·값은 v1의 구현/운영 계약이다. v2는 마지막 확장 표와
+[v2 실행 계약](./V2-CONTRACTS.md), `src/server/db/v2-schema.ts`의 additive 계약을 따른다.
+`0006_v2_domain_foundation`의 코드·로컬 검증과 실제 환경 적용·기능 시연은 별도 증거다.
 
 - Database: Cloudflare D1 (SQLite)
 - ORM/migrations: Drizzle
@@ -162,10 +163,12 @@ DB check constraint와 애플리케이션 상태 전이 테스트를 함께 둔�
 
 #8의 additive migration과 저장 primitive 사용 경계는 [도메인 DB 운영](../operations/DOMAIN-DATABASE.md)을 따른다.
 
-## v2 additive 정본 목표
+## v2 additive 계약과 구현
 
-schema 소유 이슈 [#55](https://github.com/creno-va/baro/issues/55)가 strict 계약 [#54](https://github.com/creno-va/baro/issues/54)를
-통합한 뒤 migration 번호·CHECK·FK·인덱스를 하나의 PR로 확정한다. 다른 이슈가 migration을
+schema 소유 이슈 [#55](https://github.com/creno-va/baro/issues/55)는 strict 계약 [#54](https://github.com/creno-va/baro/issues/54)를
+통합한 `0006_v2_domain_foundation` SQL·snapshot·journal을 소유한다. fresh 적용 시 기존15개에
+`v2_` 접두사의67개 테이블이 추가되어 총82개가 된다. 아래 표는 개념별 그룹이며 실제 이름·
+CHECK·FK·인덱스는 `src/server/db/v2-schema.ts`와 migration이 정본이다. 다른 이슈가 migration을
 병렬 생성하지 않는다. 기존 case/analysis/result와 `schemaVersion:"1"`은 보존하고 읽기/삭제
 회귀를 검사한다. 새 workspace는 v1 case의 명시적 전환 reference 또는 신규 v2 사건에 연결한다.
 
@@ -201,3 +204,30 @@ file DEK wrap, part IV/AAD, ordered manifest와 hash는 blob revision에 묶으�
 로그/public metadata로 노출하지 않는다. DB backup 단독 복구가 R2 원본·public CDN·삭제 정리
 완료를 증명하지 않는다. 삭제 journal 적용 후 전체 object/reference 대조와 회전키 복호화
 검증을 수행한다. detail은 [v2 실행 계약](./V2-CONTRACTS.md)을 따른다.
+
+### 저장·조회와 대용량 실행 경계
+
+`src/server/db/v2.ts`의 `createV2Repository`는 환경별 preview/production 예산 allocation을
+명시적으로 받아 typed repository를 연결한다. schema 적용이나 외부 호출은 수행하지 않는다.
+HTTP/Workflow는 세션·동의·abuse gate를 적용한 뒤 이 저장 primitive를 사용한다.
+
+- 모든 새 v2 INTEGER metadata는 비음수·정확한 JS safe integer 범위를 INSERT/UPDATE
+  trigger로 제한한다. fractional media duration과 FX 등 명시적 REAL은 별도 계약을 따른다.
+- 작은 직접 snapshot 저장은96KiB까지다. 큰 JSON은64KiB 이하의 암호화 part와 ordered
+  receipt/hash를 durable staging에 저장한다. D1 batch는40 statements 이하, statement별100
+  parameters 이하, SQL과 bound values 합계2MiB 이하로 제한한다.
+- 전체 JSON 재구성 convenience API는4MiB까지이며 초과하면 `SNAPSHOT_STREAM_REQUIRED`를
+  반환한다. 큰 자료는 paged metadata·검증된 part stream과 bounded step API로 처리한다.
+  Workflow adapter는 step을 여러 invocation에 나누어 호출해야 하며100MiB를 한 batch로 저장하지 않는다.
+- 자료 목록의 metadata page는 최대50개와2회 SQL로 제한한다. 전체 DTO를 복호화하는
+  기존 `files.list`는 최대4개다. 요약은 사실300개/관계자30개를 유지하고 사용자 편집은
+  최대100개 항목을 bounded step으로 반영하며 원래 배열 순서와 이전 snapshot을 보존한다.
+- 자료의 관찰10,000개·파생물20,000개도 paged metadata와 part stream으로 읽는다.
+  조회·복호화·stream yield 뒤에도 현재 owner/revision/pointer/tombstone을 검사한다.
+- 기존 v1 전환은 사용자 opt-in이다. 원래 서술·nested answers·질문·ciphertext를 보존하고
+  자동 AI 실행이나 신규 사건 quota 차감을 하지 않는다. source sealing과 최종 publication은
+  별도 원자적 단계이며 SQL 실패 시 재개 가능한 sealed checkpoint를 유지한다. 기존 사건
+  삭제는 아직 공개되지 않은 sealed checkpoint도 정리한다.
+
+위 primitive의 SQLite/AES 검증은 실제 R2·Containers·Whisper 호출, HTTP 연결이나 배포된
+전체 UI 시연을 대신하지 않는다. 환경 적용과 후속 기능 증거는 [검증 기록](../development/V2-VALIDATION.md)에 남긴다.

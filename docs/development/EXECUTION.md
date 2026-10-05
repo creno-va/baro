@@ -16,7 +16,9 @@ v2 제품 코드를 시작하지 않는다. P0.3의 사람/외부 blocker를 허
 main은 P0.1의 shared 계약·암호화·OAuth/동의·도메인 repository·offline harness에 더해
 P0.2의 admission/read/delete/answers/retry API, 공식 법령 검색, pinned AI Gateway,
 암호화 checkpoint Workflow, 목록/입력/상세/결과 UI와 선택 비민감 지표/피드백을 포함한다.
-schema는 additive `0005_deletion_cleanup`이며 기존 migration/인증/사건 데이터를 보존한다.
+기존 v1 schema baseline은 `0005_deletion_cleanup`이다. #55의 additive
+`0006_v2_domain_foundation`은 v2 저장소를 추가하며 기존 migration/인증/사건 데이터를 보존한다.
+원격 적용은 해당 릴리스의 ready schema와 연결된 배포 증거로 별도 확인한다.
 합성 adapter는 테스트에만 사용하며 제품의 모델/인증 fallback이 아니다. 선택 지표는
 동의 후 해당 탭의 세션 저장소에만 기록하고 외부 공급자를 도입하지 않는다.
 검증 경계와 인수 조건별 증거는 [P0.2 검증 기록](./P0.2-VALIDATION.md)을 따른다.
