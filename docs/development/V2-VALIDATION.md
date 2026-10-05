@@ -36,7 +36,7 @@ cookie·token·secret·인증 URL·stack/SQL은 증거에 포함하지 않는다
 | moderator 심사·신고·비민감 상태 | #60/#62 | #69/#71 case plaintext 접근 금지·IDOR/CSRF | 미구현 |
 | 사건/자료/계정 삭제·부활 방지 | #67 | #69/#71 원본/파생/대화/작업/report/public asset·late processing | 미구현 |
 | restore/delete replay·rollback·alert | #19/#67/#71 | #71 실제 격리 drill·latest journal·수신 ack | 미검증 |
-| shadcn/blue/Lucide/Pretendard/SVG | #56/#61/#62/#65/#66 | #69 브라우저 visual/mobile/keyboard/focus/modal/200%/built CSP | #56 공통 시스템·#80 경합 수정 완료, 후속 역할별 기능 화면 미구현; #82 보완 진행 |
+| shadcn/blue/Lucide/Pretendard/SVG | #56/#61/#62/#65/#66 | #69 브라우저 visual/mobile/keyboard/focus/modal/200%/built CSP | #56 공통 시스템·#80 경합·#82 모바일 보완 완료, 후속 역할별 기능 화면 미구현 |
 | 법률/정책·사업자·처리 계약 | #20/#68/#70 | 책임자 사실/승인·게시/동의 버전·provider 증거 | 근거 없음 |
 | preview/production·최초 공개 | #71 | exact SHA CI→preview→live→Environment→production→승인 public flag | 미완료 |
 
@@ -79,7 +79,7 @@ production `/api/cases`는 HTTP503/`BETA_NOT_OPEN`이며 정상 Environment revi
 실제 preview의 홈과 모바일 메뉴를 브라우저로 직접 확인했다. 320px viewport에서 classic
 세로 스크롤바가 공간을 차지하면 clientWidth305·bodyWidth320으로 가로 넘침이 발생해
 [#82](https://github.com/creno-va/baro/issues/82)를 등록했다. 기존 자동 검사의 innerWidth 비교만으로
-이 경계를 입증할 수 없으므로 수정·재검증 전 통과로 표시하지 않는다.
+이 경계를 입증할 수 없었으며 아래 별도 수정·재검증으로 해당 결함을 완료했다.
 별도 fixture CI에서 hydration 전 첫 클릭이 유실된 경합은
 [#80](https://github.com/creno-va/baro/issues/80)의 [PR81](https://github.com/creno-va/baro/pull/81)에서
 실제 island 준비 후 상호작용하도록 보완했고
@@ -88,6 +88,29 @@ production `/api/cases`는 HTTP503/`BETA_NOT_OPEN`이며 정상 Environment revi
 실제 preview 로그인 화면의 Google 시작은 안전한 실패 안내를 표시하고 버튼 포커스를 유지했다.
 이 실패 상태는 실제 OAuth callback 성공 증거가 아니며 preview client 준비/승인은 여전히 필요하다.
 이 배포·공통 UI 증거는 v2 모든 기능·실제 OAuth·법률/미디어 처리·공개 승인 증거가 아니다.
+
+### 모바일 가용 너비 수정과 동일 릴리스 배포
+
+#82의 [PR83](https://github.com/creno-va/baro/pull/83)은 최신 main 통합 head
+`4367d51545fbd147487752f7855dab7589169d2f`의
+[필수 CI](https://github.com/creno-va/baro/actions/runs/37380575300)를 통과하고 main
+`015ece8f64abc9e179dc8733bc1ff1eea18d0cfd`에 병합됐다. body의 최소 너비를 가용 폭에 맞췄고
+기존 모바일 검사를 clientWidth 기준으로 강화했다. 로컬 필수 unit219/3654 assertions·migration6/29,
+전체 browser28, normal built CSP3 PASS/fixture 전용1 SKIP 및 320px·200% 화면을 확인했다.
+
+동일 main SHA의 [CI](https://github.com/creno-va/baro/actions/runs/37380924065),
+[preview 배포](https://github.com/creno-va/baro/actions/runs/37381292381),
+[production foundation 배포](https://github.com/creno-va/baro/actions/runs/37381428402)가 성공했다.
+정상 Environment reviewer 승인을 사용했고 production deployment `6870615398`의 최종 status는
+success다. 두 도메인의 독립 live/ready smoke도 같은 full SHA를 확인했다.
+
+실제 preview 브라우저 홈에서 viewport320/client305/body305/scroll305/bodyScroll305로 가로 넘침이
+없음을 확인했다. Enter로 메뉴를 열면 닫기 버튼으로 포커스가 이동했고 Escape 뒤 opener로 복귀했다.
+로그인 화면은 viewport/client/body/scroll320으로 맞았다. 실제 화면도 직접 확인했으며 브라우저의
+임시 viewport와 검증 탭은 정리했다. 이는 실제 OAuth callback 성공 증거가 아니다.
+
+production 사건 API는 HTTP503/`BETA_NOT_OPEN`으로 유지했다. #82만 CLOSED이며
+#19/#20/#27과 v2 전체 시연·외부 연동·법률/정책 승인·최초 공개 조건은 미완료다.
 
 ## 사용량·비용과 독립 준비의 경계
 
