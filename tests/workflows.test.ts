@@ -12,7 +12,12 @@ const workflowSchema = z.object({
 });
 
 test("all workflow actions use immutable commits and valid YAML", async () => {
-  for (const file of ["ci.yml", "deploy-preview.yml", "deploy-production.yml"]) {
+  for (const file of [
+    "ci.yml",
+    "deploy-preview.yml",
+    "deploy-production.yml",
+    "environment-readiness.yml",
+  ]) {
     const workflow = workflowSchema.parse(
       Bun.YAML.parse(await Bun.file(`.github/workflows/${file}`).text()),
     );
@@ -22,6 +27,29 @@ test("all workflow actions use immutable commits and valid YAML", async () => {
       }
     }
   }
+});
+
+test("readiness is manual, main-only and cannot create deployment evidence", async () => {
+  const workflow = Bun.YAML.parse(
+    await Bun.file(".github/workflows/environment-readiness.yml").text(),
+  ) as {
+    on: Record<string, unknown>;
+    permissions: Record<string, string>;
+    jobs: {
+      inspect: {
+        if: string;
+        environment: { name: string; deployment: boolean };
+        steps: { env?: Record<string, string> }[];
+      };
+    };
+  };
+  expect(Object.keys(workflow.on)).toEqual(["workflow_dispatch"]);
+  expect(workflow.permissions).toEqual({ contents: "read" });
+  expect(workflow.jobs.inspect.if).toBe("github.ref == 'refs/heads/main'");
+  expect(workflow.jobs.inspect.environment).toEqual({ name: "preview", deployment: false });
+  expect(
+    workflow.jobs.inspect.steps.some((s) => s.env?.READINESS_CANDIDATE_SHA === "${{ github.sha }}"),
+  ).toBe(true);
 });
 
 test("quality CI checks out exact candidate and uses dedicated artifact SHA rather than reserved GITHUB_SHA", async () => {

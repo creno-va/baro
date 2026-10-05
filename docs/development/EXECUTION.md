@@ -62,13 +62,13 @@ P0.3 #18은 50개 제품 runner/상세 UI와 자동 접근성, dependency/secret
 | --- | --- | --- |
 | 도메인·D1·Workflow·KV | preview/prod scaffold 배포 완료 | #19의 health/ready smoke |
 | 운영 OAuth | 운영 Worker secret 7개 등록, 실제 callback 미검증 | 환경 readiness 이슈, 공급자 callback·테스터 승인 |
-| 개발/preview OAuth | 2026-10-05 읽기 전용 점검: preview secret 0개, auth origin만 일치 | 별도 secret/client, 공급자별 callback·tester·앱 승인 후 성공/취소 검증 |
+| 개발/preview OAuth | preview signing secret 생성·양쪽 등록, auth origin 일치. 공급자 client 6개 미등록 | 별도 client/callback·tester·앱 승인과 성공/취소 검증. Google 콘솔 로그인 필요 |
 | 법률 OC | `crenova` 승인 정보 수신 | #14 live schema/응답 검증; 요청 URL 로그에 OC를 남기지 않음 |
-| Turnstile | preview widget/site key/secret 없음 | preview hostname, case_create action, 담당자 확인 |
-| AI Gateway | AI binding 존재, preview Gateway ID 없음, credit/예산/provider ZDR 미확인 | 기존 승인 한도·logging/cache·provider 계약 확인. 구매·auto-top-up 변경 안 함 |
-| 암호화 키 | preview V1 provisioning·관리자 미확정 | wrapper는 V1만 연결. 다중 read-key unit 테스트와 실제 rotation/복구를 구분, 통합·관리자·live 증거 필요 |
+| Turnstile | preview 전용 widget·site key 변수·secret 등록, Managed/pre-clearance 없음 | case_create action과 실제 성공·실패·재사용 검증 |
+| AI Gateway | baro-preview 생성, 인증 필수/logging·cache OFF/Unified Billing, 기존 credit $10/auto recharge OFF | preview binding 배포, 호출 한도 승인·live eval·provider ZDR 확인. 새 구매 안 함 |
+| 암호화 키 | preview V1 생성·GitHub preview/Worker 등록, private 전달 파일 ACL 제한 | wrapper는 V1만 연결. 별도 복구 관리자·rotation 통합·live 복구 증거 필요 |
 | 플랫폼 로그/백업 | invocationLogs false, observability enabled/sampling1/tail0. plan·보존 미확정 | payload 예외/retention·접근, D1 paid30/free7와 journal 목표35일 대조 |
-| 정책/랜딩 | Draft blocker 및 실제 랜딩 범위 밖 주장 6종 유지 | 사업자 사실·법률 검토·게시/버전 승인·별도 랜딩 소유자 수정 |
+| 정책/랜딩 | Draft blocker 유지. 별도 랜딩 PR 1 병합·Pages 반영, 범위 밖 주장 6종 제거 | 사업자 사실·법률 검토·게시/버전 승인 |
 | #19 통합/drill | #18 완료, #27 OPEN이므로 BLOCKED | 독립 candidate/경보 계약·격리 runbook만 완료. 환경/합성 전용 자원/테스트 수신처·발송 권한 확보 뒤 통합 |
 
 실제 관측 시각·필요 secret/담당 행동은 [환경 readiness](../operations/ENVIRONMENT-READINESS.md),

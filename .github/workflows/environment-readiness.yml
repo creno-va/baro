@@ -1,0 +1,53 @@
+name: Preview environment readiness
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloudflare-preview-readiness
+  cancel-in-progress: false
+
+jobs:
+  inspect:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment:
+      name: preview
+      deployment: false
+    steps:
+      - name: Checkout main candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: .bun-version
+      - name: Install frozen dependencies
+        run: bun ci
+      - name: Read preview metadata only
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          READINESS_CANDIDATE_SHA: ${{ github.sha }}
+        run: bun scripts/environment-readiness.ts
+      - name: Verify official legal adapter with synthetic concepts
+        if: always()
+        env:
+          LAW_API_OC: ${{ secrets.LAW_API_OC }}
+          READINESS_CANDIDATE_SHA: ${{ github.sha }}
+        run: bun scripts/legal-readiness.ts
+      - name: Save allowlisted readiness observation
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v7.0.1
+        with:
+          name: preview-readiness-${{ github.sha }}
+          path: |
+            .wrangler/readiness/preview.json
+            .wrangler/readiness/legal.json
+          if-no-files-found: error
+          retention-days: 7
