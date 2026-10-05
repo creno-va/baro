@@ -120,6 +120,45 @@ production 사건 API는 HTTP503/`BETA_NOT_OPEN`으로 유지했다. #82만 CLOS
 문서 정합성은 실제 quota 경합·외부 청구·계정 유료 capability 검증의 증거가 아니다.
 #57 runtime은 #55 선행 PR 병합 뒤 진행한다.
 
+## #55 DB 통합 candidate와 실제 로컬 검증
+
+DB 소유자의 보존 commit `71ac9f859225c2ea766220883e877b0826e07147`은
+`0006_v2_domain_foundation`·typed repository·v2 AAD와 테스트를 포함한다. 최신 main
+`16e7dc38f6a37b3e489aa035cf7e11a5bdb72e65`에 별도 통합 브랜치로 병합했으며,
+최종 통합 검사·exact-head PR CI·main 병합·원격 migration/deploy는 별도 증거로 남긴다.
+#55 완료 전 후속 제품 이슈를 시작하지 않는다.
+
+소유자 checkout의 bun ci/check/build/cf:dry-run과 generated drift/fresh/upgrade가 통과했다.
+full check는48개 파일/515개 테스트/123,830 assertions이며 다음 실제 SQLite/AES 경계를
+포함한다. 입력은 합성이며 OAuth·모델·법률·R2·Containers·Whisper를 실제 호출하지 않았다.
+
+| 저장소 검증 | 결과와 경계 |
+| --- | --- |
+| additive migration·기존 v1 | 총82개 테이블, populated0005→0006 데이터/FK/AAD 보존, 기존 API read/answers/retry/delete 회귀 |
+| legacy opt-in 전환 | 38개/535 assertions, 실제 v1 nested JSON 서술 추출·구키 read·quota/AI 미사용·256KiB stream·citation/source CAS·SQL 실패 재개·sealed 삭제 |
+| 요약 사용자 편집 | 19개/1,580 assertions, 4MiB 초과300facts/30parties/항목별100근거·100항목 편집, 순서/Unicode/이전 snapshot·metadata/pointer CAS·rollback·동시 cursor·삭제 경합 |
+| 자료 사용자 편집 | 32개/43,569 assertions, 10,000 observations/20,000 derivatives·1GB 원본/120chunks·255 Unicode 파일명·bounded copy·삭제·SQL rollback |
+| metadata·큰 snapshot 읽기 | 17개/535 assertions, 최대 page·4MiB 초과 및20,000frame part stream·owner/tombstone·복호화 중 교체·삭제 뒤 stream 중단 |
+| quota·비용·자료·reports·directory·lawyers·jobs·삭제·공식 source | 8개 suite 통합185개/68,938 assertions, 실제 SQL/AES·lease·ownership·CAS·immutable source·공개 승인본 분리·비용 ambiguity·cleanup |
+| 기존 v1 별도 회귀 | 26개 파일149개/1,737 assertions, auth/consent/API·분석·암호화·migration·offline eval·Workflow |
+
+full-check 수치와 부분 suite 수치는 중복 집계하지 않는다. 발견한 receipt SQL placeholder,
+normalized target metadata 검증, legacy 서술/wrong digest/sealed cleanup와 late job pointer
+검증 결함을 수정한 뒤 통과했다. bounded 실행 계약은 [데이터 모델](../architecture/DATA-MODEL.md),
+적용/사용 경계는 [DB 운영](../operations/DOMAIN-DATABASE.md)을 따른다.
+
+최신 main을 통합한 root checkout에서도 bun ci/check/build/cf:dry-run이 통과했다.
+통합 full check는50개 파일/530개 테스트/125,381 assertions이며 migration drift 없음과
+fresh/upgrade 기본6개/29 assertions를 확인했다. foundation smoke8개는 candidate의
+정확한 schema marker·이전/미검증 marker 거부·환경·SHA·상관관계·전파 deadline을 검증한다.
+이 수치는 PR CI나 실제 원격 migration/deploy 결과를 미리 포함하지 않는다.
+별도 local workerd D1에서도0000~0006 migration 모두 적용을 통과했다. 원격 배포 전
+preview/production Time Travel bookmark는 비공개 workspace 파일에 보존하며 공개 증거에
+실제 bookmark 값을 포함하지 않는다. 이 확보는 restore/replay drill 성공 증거가 아니다.
+
+이 증거는 저장 primitive와 migration의 검증이다. 아직 HTTP/UI가 연결되지 않은 v2 기능,
+실제 외부 처리·운영 drill·공개 승인·전체 서비스 배포 완료를 주장하지 않는다.
+
 ## 최종 감사
 
 각 원래 Goal 항목과 PRD 요구사항을 위 ledger 및 UX 시연에 대응시킨다. 누락된 기능이나

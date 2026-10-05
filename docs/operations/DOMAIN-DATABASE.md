@@ -66,13 +66,18 @@ batch에 포함해야 하며 별도 후속 쓰기로 조합해서는 안 된다.
 공개 법령 cache는 계정 삭제와 독립적이며 body hash를 확인하고 TTL을 최대 24시간으로 제한한다.
 #14가 실제 공식 응답·시행일·출처 검증을 구현한다.
 
-## v2 additive 적용 목표 (#55)
+## v2 additive 적용 계약 (#55)
 
 위 schema/one-batch 질문/day10 quota는 기존 v1 계약이다. v2는 #54의 strict 계약 다음 #55가
 단일 소유자로 workspace/intake/summary revisions/messages/actions/timeline/files/jobs/lawyers/
 revisions/moderation/reports/quota/cost와 삭제 inventory를 additive하게 통합한다. 기존 migration
 0000~0005와 기존 사건 암호문·읽기 동작을 보존하고 기존 사건을 자동 재분석/마이그레이션하지 않는다.
 v1과 v2 contract version/조회 경로를 명시해 새 UI에서 오래된 사건을 정상 재열람할 수 있게 한다.
+
+`0006_v2_domain_foundation.sql`과 같은 번호의 snapshot/journal이 기존0000~0005 뒤에
+적용된다. fresh는 애플리케이션 선언 테이블82개와 foreign key 위반0, metadata의 schema version
+`0006_v2_domain_foundation`을 요구한다. 위15개/0005 검증은 이전 v1 baseline이며
+0006 적용 뒤의 health 기대값으로 재사용하지 않는다. 원격 적용·배포 결과는 별도로 기록한다.
 
 schema 생성 번호·테이블/column 이름은 실제 #55 PR이 정본이다. 목표 table 이름을 SQL에
 넣고 원격 적용하거나 각 작업자가 별도 번호를 만들지 않는다. 다른 모듈은 공통 repository/
@@ -95,3 +100,29 @@ commit 실패 때 DB ready를 남기지 않고 staging/outbox로 복구하며 so
 검증된 manifest다. orphan cleanup은 tombstone·pending reservation을 대조해 정상 객체를
 이름/age만으로 지우지 않는다. 모든 schema forward-fix/rollback은 [배포](./DEPLOYMENT-OPERATIONS.md),
 restore는 [DB 밖 최신 journal 재적용](./DELETION-RESTORE.md)을 따른다.
+
+### 후속 서비스의 bounded repository 사용
+
+`createV2Repository(DB, cipher, { environment })`의 환경을 실제 배포 환경과 일치시킨다.
+route/Workflow가 인증·동의와 dispatch를 맡고 저장소는 owner/CAS/idempotency/lease/
+tombstone·transaction을 맡는다. repository 자체는 외부 API나 R2를 호출하지 않는다.
+
+직접 snapshot helper는96KiB, full-read convenience는4MiB까지다. 초과 입력은
+`SNAPSHOT_STREAM_REQUIRED`로 분기하여64KiB parts·ordered receipts·metadata paging을
+사용한다. 각 batch는40 SQL statements/statement별100 parameters/SQL+values2MiB 이하다.
+요약·coverage·사용자 편집·리포트·legacy 전환은 durable staging을 bounded step으로 처리하고
+다음 invocation에서 저장된 cursor로 재개한다. 원본100MiB 이상을 한 D1 batch에 넣지 않는다.
+
+큰 사건/자료 목록은 metadata API를 사용한다. 자료 metadata 최대50개 page는2회 SQL이며
+전체 DTO `files.list`는4개까지다. 큰 snapshot stream은 part 순서·bytes·digest를 검증하고
+삭제·pointer 변경을 다시 검사한다. 미완료 part나 변경된 source를 최종 published로 전환하지 않는다.
+legacy 전환의 sealing과 publication은 별도 transaction이므로 실패 뒤 sealed checkpoint를
+재사용할 수 있다. 원래 v1 사건 삭제는 staging/sealed 전환 모두 정리한다.
+
+수동 safe-integer triggers는 새 v2 INTEGER column 모두에 적용한다. Drizzle 생성 snapshot과
+수동 CHECK/trigger SQL이 함께 유지되어야 하며 db:generate의 drift 없음만으로 SQL 제약
+검증을 대신하지 않는다. 실제 fractional/negative/unsafe INSERT·UPDATE 실패와 최대 safe
+integer 보존은 SQLite 테스트로 확인한다. migration 뒤 rollback은 additive 테이블을 보존한다.
+D1 내부 관리 테이블은 애플리케이션82개 집계에서 제외한다. 새 릴리스 smoke는 candidate의
+최신 journal tag를 정확히 확인한다. 이전 Worker rollback은 DB를 이전 tag로 되돌리지 않고,
+남아 있는0006 marker와 이전 Worker의 read/write·삭제 호환성을 별도 drill로 확인한다.

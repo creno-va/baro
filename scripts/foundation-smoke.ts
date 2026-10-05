@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 const releaseSchema = z.string().regex(/^[a-f0-9]{40}$/);
+const migrationTagSchema = z.string().regex(/^[0-9]{4}_[a-z0-9_]+$/);
 const originSchema = z.enum(["https://preview.baro.site", "https://baro.site"]);
 const requestIdSchema = z
   .string()
@@ -31,14 +32,16 @@ interface SmokeDependencies {
   sleep: (milliseconds: number) => Promise<void>;
 }
 
-/** Read-only propagation wait. A successful attempt must verify BOTH endpoints at one SHA. */
+/** Read-only propagation wait. Both endpoints must match one SHA and its migration baseline. */
 export async function foundationSmoke(
   base: string,
   sha: string,
+  expectedSchemaVersion: string,
   dependencies: Partial<SmokeDependencies> = {},
 ): Promise<FoundationSmokeResult> {
   const origin = originSchema.parse(base);
   const release = releaseSchema.parse(sha);
+  const schemaVersion = migrationTagSchema.parse(expectedSchemaVersion);
   const network = dependencies.fetch ?? fetch;
   const now = dependencies.now ?? Date.now;
   const sleep =
@@ -79,7 +82,7 @@ export async function foundationSmoke(
               service: z.literal("baro"),
               status: z.literal(path.endsWith("ready") ? "ready" : "ok"),
               environment: z.literal(origin.includes("preview.") ? "preview" : "production"),
-              ...(path.endsWith("ready") ? { schemaVersion: z.string().min(1) } : {}),
+              ...(path.endsWith("ready") ? { schemaVersion: z.literal(schemaVersion) } : {}),
             })
             .safeParse(await response.json());
           if (!body.success) failure = { path, reason: "invalid-health" };

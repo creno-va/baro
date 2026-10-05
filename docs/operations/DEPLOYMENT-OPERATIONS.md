@@ -43,7 +43,9 @@ preview success 기록은 동일 RELEASE_SHA의 health/ready smoke 뒤에만 만
 foundation smoke는 캐시 없는 read-only 요청으로 배포 전파를 최대 7회 기다린다.
 대기 간격은 2/4/8/16/16/16초, 요청별 timeout은 최대10초, 전체 deadline은90초다.
 매 시도에서 live와 ready 둘 다 정확한 full SHA·환경·서비스·상태·correlation을 확인하고,
-ready에는 schema version도 필요하다. 서로 다른 시도의 부분 성공을 합쳐 통과시키지 않는다.
+ready의 schema version은 checkout한 candidate의 Drizzle journal 마지막 tag와 정확히
+일치해야 한다. 새 Worker SHA와 이전 DB schema가 섞이면 검증된 배포로 기록하지 않는다.
+서로 다른 시도의 부분 성공을 합쳐 통과시키지 않는다.
 실패 출력은 endpoint·유한 오류 코드·시도 수만 포함하며 응답 원문이나 stack을 남기지 않는다.
 public-beta는 `bun run release:check`로 정책 Approved 상태와 release-evidence를 확인한다.
 향후 #18/#19의 실제 eval/E2E/live smoke artifact를 해당 증거 URL에 연결해야 하며
@@ -61,7 +63,7 @@ boolean 수동 변경만으로 실제 검증을 대신하지 않는다.
 8. Worker/Workflow 배포 및 합성 smoke
 9. 지표를 집중 관찰한 뒤 완료 선언
 
-현재 자동 smoke는 foundation health/ready와 SHA뿐이다. 단계5/8의 전체 제품 smoke와
+현재 자동 smoke는 foundation health/ready·SHA·candidate schema다. 단계5/8의 전체 제품 smoke와
 backup/bookmark 기록·복구 drill 자동화는 #19에서 완료한다. migration 검증 없이 build보다
 먼저 remote DB를 바꾸지 않는다. preview migration/deploy는 cancel하지 않고 순차 실행하며
 적용 직전에 main SHA와 비교해 뒤늦게 끝난 오래된 CI 배포를 거부한다.
@@ -93,6 +95,9 @@ schema/prompt를 사용할 수 있으므로 호환 기간을 둔다.
 
 D1에 대한 임의 역마이그레이션이나 데이터 덮어쓰기는 하지 않는다. 복구 여부는 row count,
 FK, 암호화 복호화 표본, 삭제 tombstone/요청 목록으로 검증한다.
+새 배포의 candidate schema smoke를 이전 Worker rollback의 완료 증거로 재사용하지 않는다.
+additive DB는 최신 marker를 유지하므로 rollback drill은 현재 DB marker·이전 Worker SHA와
+read/write·삭제 호환성을 함께 기록한다. 구 Worker의 schema 기대값을 맞추려고 DB를 downgrade하지 않는다.
 
 ## 운영 runbook
 
