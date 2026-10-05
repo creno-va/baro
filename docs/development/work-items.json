@@ -19,6 +19,422 @@
     { "issue": 28, "milestone": 2, "kind": "implementation", "dependsOn": [4], "owns": ["src/contracts", "tests/fixtures/contracts"], "docs": ["docs/architecture/DOMAIN-LIFECYCLE.md", "docs/architecture/HTTP-API.md"], "validation": "strict unions, limits, invalid/unknown fields, fact/citation shape, synthetic fixtures" },
     { "issue": 29, "milestone": 3, "kind": "implementation", "dependsOn": [12, 13, 14, 15, 28], "owns": ["src/pages/cases/[caseId].astro", "src/components/analysis"], "docs": ["docs/product/UX-SPEC.md", "docs/architecture/DOMAIN-LIFECYCLE.md"], "validation": "questions/result/retry polling, refresh/back, 24h expiry, keyboard and live status" },
     { "issue": 30, "milestone": 3, "kind": "implementation", "dependsOn": [12, 28], "owns": ["src/server/modules/analytics", "src/server/api/feedback.ts"], "docs": ["docs/analytics/EVENTS.md"], "validation": "opt-in, event dedup, allowlist, ownership, no sensitive/free-text collection" },
-    { "issue": 31, "milestone": 2, "kind": "implementation", "dependsOn": [28], "owns": ["tests/helpers", "tests/fixtures/evals", "tests/adapters"], "docs": ["docs/quality/TEST-STRATEGY.md"], "validation": "50 synthetic fixture distributions/checksum, offline test adapters, no production auth bypass" }
+    { "issue": 31, "milestone": 2, "kind": "implementation", "dependsOn": [28], "owns": ["tests/helpers", "tests/fixtures/evals", "tests/adapters"], "docs": ["docs/quality/TEST-STRATEGY.md"], "validation": "50 synthetic fixture distributions/checksum, offline test adapters, no production auth bypass" },
+    {
+      "issue": 53,
+      "milestone": 5,
+      "kind": "implementation",
+      "dependsOn": [],
+      "owns": [
+        "README.md",
+        "docs"
+      ],
+      "docs": [
+        "docs/PRD.md",
+        "docs/product/MVP-SPEC.md",
+        "docs/development/EXECUTION.md"
+      ],
+      "validation": "v2 agreed requirements, ADR partial supersession, role/UI evidence matrix, all related docs and task DAG; no product code"
+    },
+    {
+      "issue": 54,
+      "milestone": 5,
+      "kind": "implementation",
+      "dependsOn": [
+        53
+      ],
+      "owns": [
+        "src/contracts/v2",
+        "tests/fixtures/contracts/v2"
+      ],
+      "docs": [
+        "docs/PRD.md",
+        "docs/product/UX-SPEC.md",
+        "docs/architecture/SYSTEM.md",
+        "docs/quality/TEST-STRATEGY.md"
+      ],
+      "validation": "schema acceptance/rejection tests; existing v1 regression"
+    },
+    {
+      "issue": 55,
+      "milestone": 5,
+      "kind": "implementation",
+      "dependsOn": [
+        54
+      ],
+      "owns": [
+        "src/server/db",
+        "drizzle"
+      ],
+      "docs": [
+        "docs/PRD.md",
+        "docs/product/UX-SPEC.md",
+        "docs/architecture/SYSTEM.md",
+        "docs/quality/TEST-STRATEGY.md"
+      ],
+      "validation": "actual SQL migration/fresh/upgrade/concurrency/ownership tests; schema drift"
+    },
+    {
+      "issue": 56,
+      "milestone": 5,
+      "kind": "implementation",
+      "dependsOn": [
+        53
+      ],
+      "owns": [
+        "src/components/ui",
+        "src/layouts",
+        "src/styles",
+        "public/brand",
+        "public/fonts"
+      ],
+      "docs": [
+        "docs/PRD.md",
+        "docs/product/UX-SPEC.md",
+        "docs/architecture/SYSTEM.md",
+        "docs/quality/TEST-STRATEGY.md"
+      ],
+      "validation": "browser visual/accessibility/CSP and responsive checks"
+    },
+    {
+      "issue": 57,
+      "milestone": 5,
+      "kind": "implementation",
+      "dependsOn": [
+        55
+      ],
+      "owns": [
+        "src/server/modules/usage",
+        "src/server/modules/budget"
+      ],
+      "docs": [
+        "docs/PRD.md",
+        "docs/product/UX-SPEC.md",
+        "docs/architecture/SYSTEM.md",
+        "docs/quality/TEST-STRATEGY.md"
+      ],
+      "validation": "boundary/concurrency/KST/idempotency/failure/reconciliation tests; actual costs verified in V18"
+    },
+    {
+      "issue": 58,
+      "milestone": 5,
+      "kind": "implementation",
+      "dependsOn": [
+        55,
+        57
+      ],
+      "owns": [
+        "src/server/modules/files",
+        "src/server/api/v2/files",
+        "R2 configuration"
+      ],
+      "docs": [
+        "docs/PRD.md",
+        "docs/product/UX-SPEC.md",
+        "docs/architecture/SYSTEM.md",
+        "docs/quality/TEST-STRATEGY.md"
+      ],
+      "validation": "upload/download/ownership/quota/failure tests; actual R2 smoke linked to V18"
+    },
+    {
+      "issue": 59,
+      "milestone": 5,
+      "kind": "implementation",
+      "dependsOn": [
+        58,
+        57
+      ],
+      "owns": [
+        "services/file-processor",
+        "src/server/modules/file-processing",
+        "src/workflows/file-processing"
+      ],
+      "docs": [
+        "docs/PRD.md",
+        "docs/product/UX-SPEC.md",
+        "docs/architecture/SYSTEM.md",
+        "docs/quality/TEST-STRATEGY.md"
+      ],
+      "validation": "container build and processor fixture/timeout/retry/deletion tests; live media smoke V18"
+    },
+    {
+      "issue": 60,
+      "milestone": 5,
+      "kind": "implementation",
+      "dependsOn": [
+        55,
+        58
+      ],
+      "owns": [
+        "src/server/modules/lawyers",
+        "src/server/modules/moderation",
+        "src/server/api/v2/lawyers",
+        "src/server/auth"
+      ],
+      "docs": [
+        "docs/PRD.md",
+        "docs/product/UX-SPEC.md",
+        "docs/architecture/SYSTEM.md",
+        "docs/quality/TEST-STRATEGY.md"
+      ],
+      "validation": "SQL role/revision/approval/rejection/concurrency/ownership tests"
+    },
+    {
+      "issue": 61,
+      "milestone": 5,
+      "kind": "implementation",
+      "dependsOn": [
+        56,
+        60,
+        59
+      ],
+      "owns": [
+        "src/pages/lawyers",
+        "src/components/lawyers",
+        "src/server/api/v2/directory"
+      ],
+      "docs": [
+        "docs/PRD.md",
+        "docs/product/UX-SPEC.md",
+        "docs/architecture/SYSTEM.md",
+        "docs/quality/TEST-STRATEGY.md"
+      ],
+      "validation": "directory/detail/browser/mobile/keyboard/link and pending-revision non-disclosure checks"
+    },
+    {
+      "issue": 62,
+      "milestone": 5,
+      "kind": "implementation",
+      "dependsOn": [
+        56,
+        60,
+        59
+      ],
+      "owns": [
+        "src/pages/lawyer",
+        "src/pages/moderation",
+        "src/components/moderation"
+      ],
+      "docs": [
+        "docs/PRD.md",
+        "docs/product/UX-SPEC.md",
+        "docs/architecture/SYSTEM.md",
+        "docs/quality/TEST-STRATEGY.md"
+      ],
+      "validation": "all-role browser demonstration and persisted reload/permission tests"
+    },
+    {
+      "issue": 63,
+      "milestone": 5,
+      "kind": "implementation",
+      "dependsOn": [
+        54,
+        55
+      ],
+      "owns": [
+        "src/server/modules/legal-retrieval",
+        "src/server/modules/citation",
+        "tests/fixtures/legal/v2"
+      ],
+      "docs": [
+        "docs/PRD.md",
+        "docs/product/UX-SPEC.md",
+        "docs/architecture/SYSTEM.md",
+        "docs/quality/TEST-STRATEGY.md"
+      ],
+      "validation": "captured official fixtures/schema/date/hash/URL/claim rejection tests; credentials/live sources separately V18"
+    },
+    {
+      "issue": 64,
+      "milestone": 5,
+      "kind": "implementation",
+      "dependsOn": [
+        55,
+        59,
+        63,
+        57
+      ],
+      "owns": [
+        "src/server/modules/workspace",
+        "src/server/api/v2/workspaces",
+        "src/workflows/workspace",
+        "src/server/modules/llm-gateway"
+      ],
+      "docs": [
+        "docs/PRD.md",
+        "docs/product/UX-SPEC.md",
+        "docs/architecture/SYSTEM.md",
+        "docs/quality/TEST-STRATEGY.md"
+      ],
+      "validation": "pipeline/concurrency/quota/revision/false-fact/strategy boundary eval; live model V18"
+    },
+    {
+      "issue": 65,
+      "milestone": 5,
+      "kind": "implementation",
+      "dependsOn": [
+        56,
+        58,
+        59,
+        64
+      ],
+      "owns": [
+        "src/pages/workspaces",
+        "src/components/workspace",
+        "src/pages/cases"
+      ],
+      "docs": [
+        "docs/PRD.md",
+        "docs/product/UX-SPEC.md",
+        "docs/architecture/SYSTEM.md",
+        "docs/quality/TEST-STRATEGY.md"
+      ],
+      "validation": "real browser user flow including reload/mobile/keyboard/200%/CSP and failure states"
+    },
+    {
+      "issue": 66,
+      "milestone": 5,
+      "kind": "implementation",
+      "dependsOn": [
+        59,
+        64,
+        65
+      ],
+      "owns": [
+        "src/server/modules/reports",
+        "src/server/api/v2/reports",
+        "src/components/reports"
+      ],
+      "docs": [
+        "docs/PRD.md",
+        "docs/product/UX-SPEC.md",
+        "docs/architecture/SYSTEM.md",
+        "docs/quality/TEST-STRATEGY.md"
+      ],
+      "validation": "actual browser PDF/ZIP download and rendered Korean/content/authorization checks"
+    },
+    {
+      "issue": 67,
+      "milestone": 5,
+      "kind": "implementation",
+      "dependsOn": [
+        60,
+        58,
+        64,
+        66
+      ],
+      "owns": [
+        "src/server/modules/deletion",
+        "src/server/api/account-delete.ts",
+        "src/server/api/v2/delete",
+        "cleanup workflows"
+      ],
+      "docs": [
+        "docs/PRD.md",
+        "docs/product/UX-SPEC.md",
+        "docs/architecture/SYSTEM.md",
+        "docs/quality/TEST-STRATEGY.md"
+      ],
+      "validation": "actual SQL/race/late-job/R2 adapter/restore-journal tests; real platform drill V18"
+    },
+    {
+      "issue": 68,
+      "milestone": 5,
+      "kind": "implementation",
+      "dependsOn": [
+        53,
+        60,
+        59,
+        63,
+        66
+      ],
+      "owns": [
+        "docs/policies",
+        "src/server/modules/consent",
+        "public policy pages",
+        "landing content"
+      ],
+      "docs": [
+        "docs/PRD.md",
+        "docs/product/UX-SPEC.md",
+        "docs/architecture/SYSTEM.md",
+        "docs/quality/TEST-STRATEGY.md"
+      ],
+      "validation": "draft/consent/version/content contract checks; human approval evidence V19"
+    },
+    {
+      "issue": 69,
+      "milestone": 5,
+      "kind": "implementation",
+      "dependsOn": [
+        61,
+        62,
+        65,
+        66,
+        67,
+        68
+      ],
+      "owns": [
+        "tests/e2e",
+        "tests/evals",
+        "docs/development/V2-VALIDATION.md",
+        "quality CI"
+      ],
+      "docs": [
+        "docs/PRD.md",
+        "docs/product/UX-SPEC.md",
+        "docs/architecture/SYSTEM.md",
+        "docs/quality/TEST-STRATEGY.md"
+      ],
+      "validation": "all mandatory checks plus end-to-end browser demos and source/bundle/security gates"
+    },
+    {
+      "issue": 70,
+      "milestone": 5,
+      "kind": "external",
+      "dependsOn": [
+        68
+      ],
+      "owns": [
+        "policy approval evidence",
+        "business facts",
+        "provider retention agreements"
+      ],
+      "docs": [
+        "docs/PRD.md",
+        "docs/product/UX-SPEC.md",
+        "docs/architecture/SYSTEM.md",
+        "docs/quality/TEST-STRATEGY.md"
+      ],
+      "validation": "human-approved documents, versions and verifiable receipts; do not substitute automated tests"
+    },
+    {
+      "issue": 71,
+      "milestone": 5,
+      "kind": "implementation",
+      "dependsOn": [
+        59,
+        63,
+        67,
+        69,
+        70,
+        19,
+        20,
+        27
+      ],
+      "owns": [
+        "scripts/live-smoke",
+        ".github/workflows",
+        "docs/operations",
+        "release evidence"
+      ],
+      "docs": [
+        "docs/PRD.md",
+        "docs/product/UX-SPEC.md",
+        "docs/architecture/SYSTEM.md",
+        "docs/quality/TEST-STRATEGY.md"
+      ],
+      "validation": "trusted same-SHA CI/preview/production/live receipts, actual demonstrations and full completion audit"
+    }
   ]
 }
