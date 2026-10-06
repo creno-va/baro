@@ -198,13 +198,14 @@ test("self directory advances filtered empty pages and returns profiles beyond t
     profiles.push(await service.publishMine(user.userId, true, saved.revision));
   }
   profiles.sort((a, b) => a.id.localeCompare(b.id));
+  const firstProfile = profiles[0];
   const wanted = profiles[1];
-  if (!wanted) throw new Error("Expected second synthetic profile");
+  if (!firstProfile || !wanted) throw new Error("Expected two synthetic profiles");
   const first = selfDirectoryPageSchema.parse(
     await (await f.request(`/v2/lawyers/self-service?limit=1&name=${wanted.name}`)).json(),
   );
   expect(first.items).toEqual([]);
-  expect(first.nextCursor).toBe(profiles[0]?.id);
+  expect(first.nextCursor).toBe(firstProfile.id);
   const second = selfDirectoryPageSchema.parse(
     await (
       await f.request(
