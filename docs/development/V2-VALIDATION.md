@@ -259,6 +259,16 @@ CSP3개와 필수 검사 성공이다. 같은 소스의 로컬 bun ci/check/buil
 통과했다. main 통합의 소유 제품/테스트/fixture 직접 diff는0이다. 실제 configured OC와
 외부 원문 조회·품질 검증은 #69/#71에 남아 있으며 #63은 OPEN이다.
 
+같은 main `f46424c59ed498ddb76163bf45fb1b2bdfd38b1e`의
+[main CI](https://github.com/creno-va/baro/actions/runs/37410453836),
+[preview 배포](https://github.com/creno-va/baro/actions/runs/37410934633),
+[production foundation 배포](https://github.com/creno-va/baro/actions/runs/37411162473)가
+성공했다. production은 기존 Environment reviewer의 정상 승인을 거쳤고 deployment
+`6875267235`에 연결된다. 독립 실제 preview/production smoke가 같은 full SHA와
+`0007_runtime_paid_execution`을 확인했고 production `/api/cases`는
+HTTP503/`BETA_NOT_OPEN`이다. 이는 #57/#63 구현의 foundation 배포이며 실제 전체 UI·
+파일 처리·funding/청구·OAuth·운영 drill·공개 승인 성공을 대신하지 않는다.
+
 #58의 preview/production private/public R2 버킷4개를 실제 생성했다. 두 private 버킷에
 임시 합성 암호문을 실제 업로드·다운로드해 바이트 일치를 확인하고 삭제했다. 공개 도메인은
 활성화하지 않았다. 이 검증은 R2 리소스/CLI roundtrip 증거이며 사용자 로그인·파일 API·
