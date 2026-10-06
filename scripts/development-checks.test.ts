@@ -53,6 +53,19 @@ test("shared UI excludes corpus flows and a missing feature test fails explicitl
   );
 });
 
+test("explicit corpus harness changes select its compiled owner-session browser regression", () => {
+  for (const file of [
+    "tests/helpers/eval-browser-server.ts",
+    "tests/browser/evals.e2e.ts",
+    "tests/browser/evals.config.ts",
+    "tests/evals/pipeline.ts",
+  ])
+    expect(browserTargets([file], browserTests)).toContain("tests/browser/evals.e2e.ts");
+  expect(() => browserTargets(["tests/helpers/eval-browser-server.ts"], [])).toThrow(
+    "BROWSER_FEATURE_TEST_MISSING",
+  );
+});
+
 test("source-only report and global router changes include the real download consumer", () => {
   const download = "tests/browser/report-real-download.e2e.ts";
   const available = [...browserTests, download];

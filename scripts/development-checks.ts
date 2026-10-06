@@ -18,6 +18,16 @@ export function validationScope(files: string[]) {
 /** HTTP browser flows require an explicit route map. Shared UI affects all non-corpus flows. */
 export function browserTargets(files: string[], available: string[]): string[] {
   const selected = new Set(files.filter((file) => /^tests\/browser\/.*\.e2e\.ts$/.test(file)));
+  const corpusChanged = files.some((file) =>
+    /^tests\/(?:browser\/evals\.(?:e2e|config)\.ts|helpers\/eval-browser-server\.ts|evals\/pipeline\.ts)$/.test(
+      file,
+    ),
+  );
+  if (corpusChanged) {
+    const corpus = available.find((path) => path.endsWith("/evals.e2e.ts"));
+    if (!corpus) throw new Error("BROWSER_FEATURE_TEST_MISSING");
+    selected.add(corpus);
+  }
   if (files.some((file) => /^scripts\/(development-checks|full-browser)\.ts$/.test(file)))
     for (const path of available) selected.add(path);
   const rules: [RegExp, RegExp][] = [
@@ -52,7 +62,7 @@ export function browserTargets(files: string[], available: string[]): string[] {
     if (!matched.length) throw new Error("BROWSER_FEATURE_TEST_MISSING");
     for (const path of matched) selected.add(path);
   }
-  return [...selected].filter((path) => !path.endsWith("/evals.e2e.ts")).sort();
+  return [...selected].filter((path) => corpusChanged || !path.endsWith("/evals.e2e.ts")).sort();
 }
 
 /** Follow relative imports/re-exports to select existing consumer tests even

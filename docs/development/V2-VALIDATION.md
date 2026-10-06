@@ -730,3 +730,46 @@ skip이므로 최종 Full validation(manual)에서 실제 실행을 요구한다
 작성 시 아직 진행 중이다. 마지막 독립 preview smoke c6b9665와 production foundation ca6e15b의
 실제 성공 기록을 새 main 병합만으로 갱신하지 않는다. 문서까지 포함한 최종 candidate와 검증은
 현재 #71 journal에서 참조한다.
+
+최종 candidate18316a2의 [main CI37503235338](https://github.com/creno-va/baro/actions/runs/37503235338),
+[preview37503586211](https://github.com/creno-va/baro/actions/runs/37503586211), 독립 smoke의 full SHA/
+schema0009는 SUCCESS다. 그러나 [Full37503242587](https://github.com/creno-va/baro/actions/runs/37503242587)은
+Linux native 실제 build/fixture·전체 unit·production bundle·regular browser46 PASS 뒤 v1 corpus
+첫 상세에서 FAILURE였다. 이 실패를 보존하며 production 제출 조건으로 쓰지 않는다.
+
+최신 고객 boundary는 `/api/me/session`을 실제 확인하지만 corpus loopback 서버는 case ID가 있는
+요청만 격리 환경을 선택해 session 요청을404로 반환했다. native auth/session endpoint가 signed
+cookie의 해당 SQL DB에서 검증하도록 test-only 환경 선택을 연결했다. 익명은 실제 null session,
+50개 각 owner는 customer/current consent를 응답하는지 확인한 뒤 기존 실제 상세·공식 링크·
+320px·WCAG A/AA 검사를 수행한다. cookie/token/HTML은 artifact에 남기지 않는다. 제품 UI·
+역할·동의/auth를 완화하지 않았다. 고친 harness의 fresh production build/compiled Worker에서
+50개 모두 접근성 findings0으로 통과했다. corpus/harness/config/pipeline 변경 자체도 PR browser
+선택에 포함해 해당 테스트 변경을 CI가 조용히 skip하지 않게 했다. 새 head 필수/CI와 새 최종
+main Full은 [current release journal](https://github.com/creno-va/baro/issues/71#issuecomment-6021564076)에 연결한다.
+
+18316a2의 [metadata-only readiness37503944457](https://github.com/creno-va/baro/actions/runs/37503944457)은
+동일 deployed SHA·publicBetaClosed·processing7개 존재, OAuth6필드/bounds 부재를 확인했다.
+Gateway/법률은 조건 변경 없어 not_requested이며 성공으로 표시하지 않는다. allowlisted JSON을
+`docs/quality/integration-2026-10-07/preview-readiness-18316a2.json`에 보존했다. 02:28 KST 인증된
+production D1의 읽기 전용 count 집계에서 runtime proof/allocation/workspace/profile/file/job/
+report/maintenance evidence 각0행을 확인했다. payload·사용자 정보·SQL/DB 식별자는 증거로
+보내지 않았으며 실제 유료 처리·삭제/복구나 새 production 배포 성공을 대신하지 않는다.
+
+18316a2 실제 IAB에서 합성 고객 login/기존 동의→새 사건·답변/모름/skip→요약 확인→chat·합성
+TXT 원본/처리 범위→리포트 검토/마스킹 저장/reload·미리보기를 확인했다. ZIP 원본은 reload 후
+재선택하고 직접 확인해야 한다. PDF/ZIP 시작 안내는 관측했지만 IAB download event는 관측되지
+않아 파일 저장 성공으로 기록하지 않는다. 별도 Chromium/SQL 다운로드 byte 증거와 구분한다.
+자료 modal Escape는 닫히고 trigger로 focus가 복원됐다. screenshot은 ignored
+`.wrangler/integration/preview-18316a2-report.png`에 보존했다.
+
+corpus 보완 작업 트리의 frozen ci/check1261 PASS/133365 assertions, drift/fresh/upgrade6/29,
+production bundle139 files, build/dry-run도 통과했다. 실제 IAB의 명명된 합성 비운영 workflow에서
+사건 삭제 접수 뒤 재접속은 내용을 비우고 NOT_FOUND를 표시했으며, 합성 계정 삭제 접수 뒤
+세션과 최근 사건 UI가 제거됐다. 이는 API 예시 adapter의 접근 차단 검증이며 실제 원격 정리/
+late workflow/복구 증거가 아니다. 후자는 기존 SQL 회귀와 외부 운영 gate로 별도 보존한다.
+
+자료 선택 안내의50MB/300MB와 settings/실제 V2_LIMITS100MB/1GB가 달라
+[고객 Workspace 담당](https://github.com/creno-va/baro/pull/128#issuecomment-6021889675)과
+[파일 담당](https://github.com/creno-va/baro/pull/130#issuecomment-6021890274)에 계약 재사용·동일
+copy 수정을 요청했다. 모듈 UI 충돌을 피하기 위해 통합 세션은 해당 화면을 직접 수정하지 않았다.
+작은 합성 입력의 성공을 한도 전체 성공이나 이 미수정 안내의 해결로 표시하지 않는다.
