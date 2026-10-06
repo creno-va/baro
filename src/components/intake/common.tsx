@@ -1,4 +1,5 @@
 import { ArrowLeft, Check, Circle } from "lucide-react";
+import { ApiError } from "../../client/api/core";
 import type { CaseView } from "../../client/api/types";
 import { Button, ButtonLink } from "../ui/button";
 import { StatePanel } from "../ui/state-panel";
@@ -48,7 +49,7 @@ export function ErrorPanel({
   retry?: () => void;
   disabled?: boolean;
 }) {
-  const value = error as { code?: string; message?: string };
+  const value = error instanceof ApiError ? error : null;
   const code = value?.code;
   return (
     <StatePanel

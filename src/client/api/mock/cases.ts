@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { V2_LIMITS } from "../../../contracts/v2";
 import {
   answersInputSchema,
   createInputSchema,
@@ -16,13 +17,16 @@ export const casesFixtures: Record<string, CaseView> = {};
 function owner() {
   const session = requireSession();
   if (!session.user) throw new ApiError("UNAUTHENTICATED", "로그인이 필요해요.");
+  if (readStore<string[]>("deletedAccountIds", []).includes(session.user.id))
+    throw new ApiError("UNAUTHENTICATED", "로그인이 필요해요.");
   return session.user.id;
 }
 function owned(id: string): CaseView {
   const user = owner(),
     owners = readStore<Record<string, string>>("caseOwners", {}),
     item = readStore<Record<string, CaseView>>("cases", casesFixtures)[id];
-  if (!item || owners[id] !== user) throw new ApiError("NOT_FOUND", "사건을 찾을 수 없어요.");
+  if (!item || owners[id] !== user || readStore<string[]>("deletedCaseIds", []).includes(id))
+    throw new ApiError("NOT_FOUND", "사건을 찾을 수 없어요.");
   return item;
 }
 function intake(id: string): Intake {
@@ -59,7 +63,7 @@ function parse<T>(schema: z.ZodType<T>, raw: unknown): T {
   if (!value.success) throw new ApiError("VALIDATION_ERROR", "입력한 내용을 확인해 주세요.");
   return value.data;
 }
-function replay(operation: string, raw: unknown, key: string, run: () => unknown) {
+function replay<T>(operation: string, raw: unknown, key: string, run: () => T): T {
   const user = owner(),
     identity = `${user}:${operation}:${key}`,
     fingerprint = JSON.stringify(raw),
@@ -68,7 +72,7 @@ function replay(operation: string, raw: unknown, key: string, run: () => unknown
   if (previous) {
     if (previous.fingerprint !== fingerprint)
       throw new ApiError("CONFLICT", "같은 요청 키에 다른 내용이 포함됐어요.");
-    return previous.result;
+    return previous.result as T;
   }
   const response = run();
   receipts[identity] = { ownerId: user, fingerprint, result: response };
@@ -111,7 +115,10 @@ export const casesMockHandlers = {
     const user = owner(),
       owners = readStore<Record<string, string>>("caseOwners", {});
     return Object.values(readStore<Record<string, CaseView>>("cases", casesFixtures))
-      .filter((item) => owners[item.id] === user)
+      .filter(
+        (item) =>
+          owners[item.id] === user && !readStore<string[]>("deletedCaseIds", []).includes(item.id),
+      )
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   },
   "cases.get": (raw: unknown) => owned(parse(idInput, raw).id),
@@ -121,10 +128,16 @@ export const casesMockHandlers = {
         user = owner(),
         records = readStore<Record<string, CaseView>>("cases", {}),
         owners = readStore<Record<string, string>>("caseOwners", {});
-      if (Object.values(records).filter((item) => owners[item.id] === user).length >= 10)
+      if (
+        Object.values(records).filter(
+          (item) =>
+            owners[item.id] === user &&
+            !readStore<string[]>("deletedCaseIds", []).includes(item.id),
+        ).length >= V2_LIMITS.dailyCases
+      )
         throw new ApiError(
           "QUOTA_EXCEEDED",
-          "예시에서는 사건을 10개까지 만들 수 있어요. 저장한 사건을 정리해 주세요.",
+          "예시에서는 사건을 3개까지 만들 수 있어요. 저장한 사건을 정리해 주세요.",
         );
       const item: CaseView = {
         id: crypto.randomUUID(),
@@ -190,6 +203,8 @@ export const casesMockHandlers = {
         item = owned(id),
         value = intake(id);
       guard(item, input.expectedRevision);
+      if (item.stage === "archived")
+        throw new ApiError("CONFLICT", "보관한 사건은 사건 화면에서 확인해 주세요.");
       if (item.stage === "summary" || item.stage === "active") return result(item, value);
       if (!value.questions.every((q) => q.answerState))
         throw new ApiError(
@@ -209,10 +224,11 @@ export const casesMockHandlers = {
               : "건너뛰기 — 아직 확인하지 않았어요.",
           "",
         ]),
-      ]
-        .join("\n")
-        .slice(0, 5000);
-      const next = changed(item, { stage: "summary", summary });
+      ].join("\n");
+      const next = changed(item, {
+        stage: "summary",
+        summary: [...summary].slice(0, 5000).join(""),
+      });
       store(next);
       return result(next, value);
     }),
