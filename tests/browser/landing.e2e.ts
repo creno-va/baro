@@ -1607,34 +1607,11 @@ for (const viewport of [
   });
 }
 
-test("the simplicity page presents the focused explanation and preserves its login entry", async ({
-  page,
-}) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.emulateMedia({ reducedMotion: "reduce" });
+test("the retired simplicity page is absent from home and returns not found", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.locator('a[href="/simplicity"], a[href^="/simplicity#"]')).toHaveCount(0);
   const response = await page.goto("/simplicity");
-  expect(response?.status()).toBe(200);
-  for (const id of ["our-beginning", "time-experience", "from-our-ceo", "start-with-baro"])
-    await expect(page.locator(`#${id}`)).toBeVisible();
-  await expect(page.locator(".origin-photo-stage")).toBeVisible();
-  await expect(page.locator(".time-clock-stage")).toBeVisible();
-  await expect(page.locator("[data-finale-replay]")).toBeHidden();
-  await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
-  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-  const scene = page.locator("[data-clarity]");
-  await expect(scene).toHaveCount(1);
-  await scene.locator('[data-clarity-topic="money"]').click();
-  await scene.locator("[data-clarity-play]").click();
-  await expect(scene.locator('[data-clarity-result="0"]')).toContainText("돈을 보낸 날");
-  expect(
-    await page.evaluate(
-      () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
-    ),
-  ).toBe(true);
-  const login = page.getByRole("link", { name: "로그인", exact: true });
-  await expect(login).toHaveAttribute("href", "/login");
-  await login.click();
-  await expect(page).toHaveURL(/\/login$/);
+  expect(response?.status()).toBe(404);
 });
 
 test("core landing content, login and FAQs work when JavaScript is unavailable", async ({

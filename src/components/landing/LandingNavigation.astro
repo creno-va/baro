@@ -5,54 +5,27 @@ import { ArrowRight, ArrowUpRight, Menu, X } from "lucide-react";
 import { Brand } from "../ui/brand";
 import "../../styles/landing-navigation.css";
 
-interface Props {
-  variant?: "home" | "simplicity";
-}
-const { variant = "home" } = Astro.props;
 // biome-ignore lint/correctness/noUnusedVariables: Astro renders both navigation sizes.
-const links =
-  variant === "home"
-    ? [
-        { href: "#our-beginning", label: "BARO의 시작" },
-        { href: "#blue-app-reveal", label: "앱 둘러보기" },
-        { href: "#try-baro", label: "직접 체험하기" },
-        { href: "#everyday-future", label: "우리가 바꾸는 일상" },
-        { href: "#from-our-ceo", label: "CEO 인사말" },
-        { href: "/simplicity", label: "Simplicity" },
-      ]
-    : [
-        { href: "/", label: "홈" },
-        { href: "#clarity", label: "변화의 시작" },
-        { href: "#blue-app-reveal", label: "앱 둘러보기" },
-        { href: "#try-baro", label: "직접 체험하기" },
-        { href: "#from-our-ceo", label: "CEO 인사말" },
-      ];
+const links = [
+  { href: "#our-beginning", label: "BARO의 시작" },
+  { href: "#blue-app-reveal", label: "앱 둘러보기" },
+  { href: "#try-baro", label: "직접 체험하기" },
+  { href: "#everyday-future", label: "우리가 바꾸는 일상" },
+  { href: "#from-our-ceo", label: "CEO 인사말" },
+];
 // biome-ignore lint/correctness/noUnusedVariables: Astro renders the chapter rail.
-const chapters =
-  variant === "home"
-    ? [
-        { href: "#our-beginning", label: "BARO의 시작" },
-        { href: "#blue-app-reveal", label: "앱 둘러보기" },
-        { href: "#logo-experience", label: "로고 속 기능" },
-        { href: "#try-baro", label: "직접 체험" },
-        { href: "#clarity", label: "걱정에서 준비로" },
-        { href: "#phone-story", label: "내 손안의 BARO" },
-        { href: "#time-experience", label: "당신의 시간" },
-        { href: "#from-our-ceo", label: "CEO 인사말" },
-        { href: "#everyday-future", label: "달라지는 일상" },
-        { href: "#start-with-baro", label: "더 간단한 시작" },
-      ]
-    : [
-        { href: "#clarity", label: "걱정에서 준비로" },
-        { href: "#our-beginning", label: "BARO의 시작" },
-        { href: "#blue-app-reveal", label: "앱 둘러보기" },
-        { href: "#logo-experience", label: "로고 속 기능" },
-        { href: "#try-baro", label: "직접 체험" },
-        { href: "#phone-story", label: "내 손안의 BARO" },
-        { href: "#time-experience", label: "당신의 시간" },
-        { href: "#from-our-ceo", label: "CEO 인사말" },
-        { href: "#start-with-baro", label: "더 간단한 시작" },
-      ];
+const chapters = [
+  { href: "#our-beginning", label: "BARO의 시작" },
+  { href: "#blue-app-reveal", label: "앱 둘러보기" },
+  { href: "#logo-experience", label: "로고 속 기능" },
+  { href: "#try-baro", label: "직접 체험" },
+  { href: "#clarity", label: "걱정에서 준비로" },
+  { href: "#phone-story", label: "내 손안의 BARO" },
+  { href: "#time-experience", label: "당신의 시간" },
+  { href: "#from-our-ceo", label: "CEO 인사말" },
+  { href: "#everyday-future", label: "달라지는 일상" },
+  { href: "#start-with-baro", label: "더 간단한 시작" },
+];
 ---
 <header class="landing-header">
   <div class="landing-nav-wrap">
