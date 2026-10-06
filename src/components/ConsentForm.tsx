@@ -1,5 +1,6 @@
 import { type SyntheticEvent, useEffect, useRef, useState } from "react";
 import { api, roleStart } from "../client/api";
+import { ApiError } from "../client/api/errors";
 import { CURRENT_POLICY_VERSIONS } from "../contracts/consent";
 
 type ConsentState = "loading" | "required" | "complete";
@@ -46,7 +47,11 @@ export function ConsentForm() {
         over14Confirmed: true,
       });
       setStartPath(roleStart(session));
-    } catch {
+    } catch (failure) {
+      if (failure instanceof ApiError && failure.code === "UNAUTHENTICATED") {
+        window.location.assign("/login?error=session_expired");
+        return;
+      }
       setError("동의를 저장하지 못했어요. 다시 시도해 주세요.");
       setSubmitting(false);
       return;
@@ -104,7 +109,7 @@ export function ConsentForm() {
       </label>
       <p className="case-muted">
         <a href="/policies/terms">이용약관</a> · <a href="/policies/privacy">개인정보 처리방침</a> ·{" "}
-        <a href="/policies/ai-notice">AI 이용 고지</a>
+        <a href="/policies/ai">AI 이용 고지</a>
       </p>
       <a href="/login" className="secondary-action">
         취소하고 돌아가기

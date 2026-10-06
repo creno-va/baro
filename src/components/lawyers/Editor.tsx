@@ -457,6 +457,7 @@ export function Editor() {
                           <input
                             type="url"
                             placeholder="https:// (선택)"
+                            maxLength={2000}
                             value={item.url ?? ""}
                             onChange={(e) =>
                               patch(

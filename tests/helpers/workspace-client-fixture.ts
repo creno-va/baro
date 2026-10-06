@@ -42,9 +42,8 @@ const runtime: WorkspaceMockRuntime = {
 };
 const handlers = [createWorkspaceMock(runtime), createFilesMock(runtime)];
 async function request(path: string, init?: RequestInit) {
-  const incoming = new Request(new URL(path, window.location.origin), init);
   for (const handler of handlers) {
-    const result = await handler(incoming.clone());
+    const result = await handler(new Request(new URL(path, window.location.origin), init));
     if (result) return result;
   }
   return Response.json({ error: { code: "NOT_FOUND", retryable: false } }, { status: 404 });

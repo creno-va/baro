@@ -148,21 +148,23 @@ export function ensureMockWorkspace(state: WorkspaceMockState, id: string) {
   };
   state.files[id] ??= [];
   const data = state.workspace[id];
+  let changed = false;
   for (const [messageId, pending] of Object.entries(data.pending ?? {})) {
     if (pending.at > Date.now()) continue;
     const message = data.messages.find((value) => value.id === messageId);
     if (message) {
+      changed = true;
       message.status = pending.failed ? "failed" : "complete";
       message.text = pending.failed
         ? "예시 응답 생성에 실패했어요."
         : "추가한 내용을 저장했어요. 날짜·당사자·자료 원본을 확인하고, 불확실하거나 불리할 수 있는 사실도 함께 정리해 주세요. 이 응답은 합성 API 예시이며 실제 AI 분석이나 법률 판단이 아닙니다.";
     }
     delete data.pending?.[messageId];
-    item.updatedAt = new Date().toISOString();
   }
   for (const file of state.files[id]) {
     const pending = state.fileProcessing?.[file.id];
     if (pending && pending.at <= Date.now()) {
+      changed = true;
       file.status = pending.failed ? "failed" : "ready";
       file.extractedText = pending.failed ? "" : (state.fileExtractions?.[file.id] ?? "");
       file.coverage = pending.failed
@@ -171,6 +173,7 @@ export function ensureMockWorkspace(state: WorkspaceMockState, id: string) {
       delete state.fileProcessing?.[file.id];
     }
   }
+  if (changed) touchMockCase(state, id);
   return {
     case: item,
     messages: data.messages,
