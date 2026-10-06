@@ -24,8 +24,8 @@ cookie·token·secret·인증 URL·stack/SQL은 증거에 포함하지 않는다
 | 지속 chat·사실/인물/timeline/actions | #55/#64/#65 | #69/#71 실제 대화·완료·저장·재로그인 | 미구현 |
 | AI 사실 경계·불리한 사실·모순·근거 | #63/#64 | #69/#71 실제 모델·전체 사건군·critical zero | 미검증 |
 | 자료 업로드·동의·원본 접근 | #57/#58/#65 | #69/#71 actual R2·권한/크기/중단/실패 | 미구현 |
-| 문서/이미지/음성/영상 처리 | #59/#64/#65 | #69/#71 actual processor/Whisper/model·coverage/timestamps/gaps | 미검증 |
-| quota·월100만원·실제 비용·retry | #57/#58/#59/#64 | #69/#71 동시성·KST·usage/cost reconciliation | 미구현 |
+| 문서/이미지/음성/영상 처리 | #59/#64/#65 | #69/#71 actual processor/Whisper/model·coverage/timestamps/gaps | 합성 fixture 준비; 실제 처리 미검증 |
+| quota·월100만원·실제 비용·retry | #57/#58/#59/#64 | #69/#71 동시성·KST·usage/cost reconciliation | Gateway 연결 준비 중; trusted factory·실제 정산 미검증 |
 | 한글 PDF·검토/수정/마스킹/제외 | #66 | #69/#71 실제 다운로드·렌더·내용·revision | 미구현 |
 | 선택 원본 ZIP | #66 | #69/#71 다운로드 실제 원본·권한·제외 파일 | 미구현 |
 | 변호사 등록·자격/소속 수동 확인 | #60/#62 | #69/#71 신청·반려·재신청·승인·역할 | 미구현 |
@@ -180,6 +180,28 @@ usage·allocation/carryover를 확장하고 소비자는 새 primitive의 공유
 
 이 증거는 저장 primitive와 migration의 검증이다. 아직 HTTP/UI가 연결되지 않은 v2 기능,
 실제 외부 처리·운영 drill·공개 승인·전체 서비스 배포 완료를 주장하지 않는다.
+
+## 후속 Gateway와 미디어 검증 준비
+
+Gateway [draft PR88](https://github.com/creno-va/baro/pull/88)의 head
+`59c08eadd43349a0ded6389dae59177d562b2747`는
+[필수 CI](https://github.com/creno-va/baro/actions/runs/37402610309)를 통과했다.
+544개 테스트/125,535 assertions와 synthetic browser28개/CSP3개, schema drift·dependency/
+secret·offline eval·build/bundle 성공이다. 별도 로컬 집중17개/180 assertions와 제품·도구
+TypeScript 검사가 통과했다. 각 실제 시도의 receipt·ambiguous exposure와 미호출 CAS 경계를
+검증하며 private 전체 binding input digest로 같은 크기의 다른 prompt/correction을 구분한다.
+digest는 token/vision 상한 증거가 아니다. #87 공유 DB와 #57 trusted factory·실제 가격/funding/
+청구 대조는 아직 미완료이고 PR은 draft다. 최대 자료 검사의 전체 host harness 시간을 조정한
+#87 통합 후 최신 source의 로컬 mandatory를 순차 재검증한다. 제품의 단계별 제한과 자료
+크기·검증 항목은 줄이지 않는다.
+
+미디어 [draft PR89](https://github.com/creno-va/baro/pull/89)의 head
+`230273e3bd9e2c7a8d4113e60f6b1dfbec8a771b`는11개 합성 입력(644,318bytes)을 보존한다.
+PDF/TXT/PNG/JPEG/WAV/MP4와 형식 불일치·잘린 컨테이너 입력을 포함하며 repository 구조
+검사와 private receipt 대조·Git 원본 바이트 비교를 통과했다. 제작 과정의 PDF 전체 페이지
+렌더/본문·이미지·PCM·전체 영상 decode·장면/트랙 확인과 한계는 fixture README에 기록했다.
+이는 #59의 독립 fixture 준비이며 #57/#58 선행이나 최대 크기/포맷 전체 지원 검증을 대체하지
+않는다. 실제 ASR/OCR/vision/Containers/R2/preview 처리는 미검증이고 #59는 OPEN이다.
 
 ## 최종 감사
 
