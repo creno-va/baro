@@ -1,12 +1,17 @@
 import { z } from "zod";
-import { caseDetailResponseSchema, caseListResponseSchema, questionSchema } from "../../contracts";
+import {
+  boundedText,
+  caseDetailResponseSchema,
+  caseListResponseSchema,
+  displayText,
+} from "../../contracts";
 import { v2QuestionBatchSchema, v2SummarySchema, v2WorkspaceSchema } from "../../contracts/v2";
 import { ApiError, apiMode, request } from "./core";
 import type { CaseView, QuestionView } from "./types";
 import "./mock/cases";
 
 export const createInputSchema = z.object({
-  narrative: z.string().trim().min(20).max(5000),
+  narrative: boundedText(20, 5000),
   subjectContext: z.enum(["individual", "company"]),
 });
 export const answersInputSchema = z
@@ -18,7 +23,7 @@ export const answersInputSchema = z
           z.object({
             questionId: z.string().min(1),
             state: z.literal("answered"),
-            value: z.string().trim().min(1).max(1000),
+            value: boundedText(1, 1000),
           }),
           z.object({ questionId: z.string().min(1), state: z.literal("unknown") }),
           z.object({ questionId: z.string().min(1), state: z.literal("skipped") }),
@@ -30,7 +35,7 @@ export const answersInputSchema = z
   .refine((input) => new Set(input.answers.map((a) => a.questionId)).size === input.answers.length);
 export const summaryInputSchema = z.object({
   expectedRevision: z.number().int().min(1),
-  summary: z.string().trim().min(1).max(5000),
+  summary: displayText(5000),
 });
 export const revisionInputSchema = z.object({ expectedRevision: z.number().int().min(1) });
 export type AnswersInput = z.infer<typeof answersInputSchema>;
@@ -55,6 +60,7 @@ type Metadata = z.infer<typeof metadataSchema>;
 type Workspace = z.infer<typeof v2WorkspaceSchema>;
 const path = (id: string, suffix: string) => `/api/v2/cases/${encodeURIComponent(id)}/${suffix}`;
 const keyMemory = new Map<string, string>();
+const keyIdentities = new Map<string, string>();
 async function mutationKey(operation: string, input: unknown) {
   const bytes = await crypto.subtle.digest(
     "SHA-256",
@@ -76,7 +82,19 @@ async function mutationKey(operation: string, input: unknown) {
       /* No raw input is stored here. */
     }
   }
+  keyIdentities.set(key, identity);
   return key;
+}
+function forgetMutation(key: string) {
+  const identity = keyIdentities.get(key);
+  if (!identity) return;
+  keyMemory.delete(identity);
+  keyIdentities.delete(key);
+  try {
+    sessionStorage.removeItem(identity);
+  } catch {
+    /* Optional browser storage. */
+  }
 }
 function validate<T>(schema: z.ZodType<T>, raw: unknown): T {
   const parsed = schema.safeParse(raw);
@@ -260,7 +278,15 @@ export const casesApi = {
               path: `/api/v2/cases?limit=50${cursor ? `&before=${encodeURIComponent(cursor)}` : ""}`,
             }),
           );
-        items.push(...page.items.map((item) => view(item)));
+        for (let start = 0; start < page.items.length; start += 5) {
+          items.push(
+            ...(await Promise.all(
+              page.items
+                .slice(start, start + 5)
+                .map(async (item) => view(item, await metadata(item.id))),
+            )),
+          );
+        }
         cursor = page.nextCursor;
       } while (cursor);
     } catch (cause) {
@@ -273,7 +299,11 @@ export const casesApi = {
   async create(raw: z.infer<typeof createInputSchema>): Promise<CaseView> {
     const input = validate(createInputSchema, raw),
       key = await mutationKey("cases.create", input);
-    if (apiMode === "mock") return request("cases.create", input, { key });
+    if (apiMode === "mock") {
+      const item = await request<CaseView>("cases.create", input, { key });
+      forgetMutation(key);
+      return item;
+    }
     const turnstileToken = await securityToken();
     const w = v2WorkspaceSchema.parse(
       await request("cases.create", input, {
@@ -283,7 +313,9 @@ export const casesApi = {
         key,
       }),
     );
-    return view(w, await metadata(w.id));
+    const item = view(w, await metadata(w.id));
+    forgetMutation(key);
+    return item;
   },
   async get(id: string): Promise<CaseView> {
     if (apiMode === "mock") return request("cases.get", { id });
@@ -317,6 +349,9 @@ export const casesApi = {
     const input = validate(answersInputSchema, raw),
       key = await mutationKey(`cases.saveAnswers:${id}`, input);
     if (apiMode === "mock") return request("cases.saveAnswers", { id, ...input }, { key });
+    const [w, m] = await Promise.all([workspace(id), metadata(id)]);
+    if (w.workspaceRevision !== input.expectedRevision)
+      throw new ApiError("CONFLICT", "답변이 변경됐어요. 최신 내용을 확인해 주세요.");
     await request(
       "cases.saveAnswers",
       { id, ...input },
@@ -324,7 +359,7 @@ export const casesApi = {
         path: path(id, "intake/answers"),
         method: "PUT",
         body: {
-          expectedRevision: input.expectedRevision,
+          expectedRevision: m.revision,
           answers: input.answers.map((a) => ({
             questionId: a.questionId,
             status: a.state,
@@ -386,8 +421,7 @@ export const casesApi = {
     const body = { expectedRevision: m.summary.revision, overview: input.summary };
     for (let attempt = 0; attempt < 30; attempt++) {
       const result = z
-        .object({ edit: z.object({ status: z.string(), retryAfter: z.number() }).optional() })
-        .passthrough()
+        .looseObject({ edit: z.object({ status: z.string(), retryAfter: z.number() }).optional() })
         .parse(
           await request(
             "cases.saveSummary",
@@ -426,7 +460,3 @@ export const casesApi = {
     return this.get(id);
   },
 };
-// Validate a question once at the mock boundary as well as on the real wire.
-export function validateQuestion(question: unknown) {
-  return questionSchema.parse(question);
-}

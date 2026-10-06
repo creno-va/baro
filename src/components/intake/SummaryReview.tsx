@@ -163,7 +163,7 @@ export function SummaryReview({ caseId }: { caseId: string }) {
                 </Button>
                 <ButtonLink
                   variant="ghost"
-                  href={`/cases/${encodeURIComponent(caseId)}/intake?question=0`}
+                  href={`/cases/${encodeURIComponent(caseId)}/intake?question=0&edit=1`}
                 >
                   질문으로 돌아가기
                 </ButtonLink>

@@ -19,6 +19,7 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
   const [error, setError] = useState<unknown>(null);
   const [notice, setNotice] = useState("");
   const [exit, setExit] = useState(false);
+  const [editing, setEditing] = useState(false);
   const pending = useRef(false);
   const heading = useRef<HTMLHeadingElement>(null);
   const question = result?.questions[index];
@@ -31,6 +32,7 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
         api.cases.getQuestions(caseId),
       ]);
       setItem(current);
+      setEditing(new URLSearchParams(window.location.search).get("edit") === "1");
       setResult(questions);
       const requested = Number(new URLSearchParams(window.location.search).get("question"));
       const unanswered = questions.questions.findIndex((q) => !q.answerState);
@@ -120,11 +122,9 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
       const next = await api.cases.saveAnswers(caseId, {
         expectedRevision: result.revision,
         answers: [
-          {
-            questionId: question.id,
-            state,
-            ...(state === "answered" ? { value: value.trim() } : {}),
-          },
+          state === "answered"
+            ? { questionId: question.id, state, value: value.trim() }
+            : { questionId: question.id, state },
         ],
       });
       setResult(next);
@@ -132,8 +132,6 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
       setNotice("답변이 저장됐어요. 내 사건에서 다시 이어갈 수 있어요.");
       if (move && index < next.questions.length - 1) setIndex(index + 1);
       else if (move) {
-        pending.current = false;
-        setBusy(false);
         const advanced = await api.cases.advance(caseId, { expectedRevision: next.revision });
         setResult(advanced);
         if (advanced.complete)
@@ -183,7 +181,7 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
                 <ButtonLink href={`/cases/${encodeURIComponent(caseId)}`}>사건 열기</ButtonLink>
               }
             />
-          ) : result.complete ? (
+          ) : result.complete && !editing ? (
             <StatePanel
               variant="pending"
               title="질문 정리가 끝났어요. 요약을 확인해 주세요."
