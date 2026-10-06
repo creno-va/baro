@@ -20,6 +20,8 @@ export interface ProcessingCosts {
       identity: string;
       byteLength: number;
       durationSeconds: number | null;
+      model?: string;
+      wire?: Readonly<Record<string, unknown>>;
     },
     access: ProcessingAccess,
   ): Promise<ProcessingCostPermit | null>;
@@ -47,6 +49,7 @@ export function createProcessorTransport(options: {
       contentHash: string;
       open: () => ReadableStream<Uint8Array>;
       unit?: number;
+      frameOffset?: number;
     },
     access: ProcessingAccess,
   ) => {
@@ -54,7 +57,7 @@ export function createProcessorTransport(options: {
     const permit = await options.costs.before(
       {
         service: "container",
-        identity: `${kind}:${input.contentHash}:${input.unit ?? 0}`,
+        identity: `${kind}:${input.contentHash}:${input.unit ?? 0}:${input.frameOffset ?? 0}`,
         byteLength: input.byteLength,
         durationSeconds: null,
       },
@@ -75,6 +78,7 @@ export function createProcessorTransport(options: {
           "x-baro-bytes": String(input.byteLength),
           "x-baro-hash": input.contentHash,
           "x-baro-unit": String(input.unit ?? 0),
+          "x-baro-frame-offset": String(input.frameOffset ?? 0),
         },
         body: input.open(),
         signal: access.signal,
@@ -147,6 +151,7 @@ export function createProcessorTransport(options: {
         contentHash: string;
         open: () => ReadableStream<Uint8Array>;
         unit?: number;
+        frameOffset?: number;
       },
       access: ProcessingAccess,
       sinks: {
@@ -165,7 +170,11 @@ export function createProcessorTransport(options: {
           if (record.type === "manifest") {
             if (manifest || index) throw new ProcessingError("FILE_REJECTED");
             manifest = record.value;
-            if (manifest.probe.byteLength !== input.byteLength)
+            if (
+              manifest.probe.byteLength !== input.byteLength ||
+              manifest.unit !== (input.unit ?? 0) ||
+              manifest.frameOffset !== (input.frameOffset ?? 0)
+            )
               throw new ProcessingError("FILE_REJECTED");
             await sinks.manifest(manifest);
           } else if (record.type === "artifact") {
