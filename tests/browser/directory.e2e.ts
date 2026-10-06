@@ -90,3 +90,60 @@ test("directory transport failure can be retried without stale results", async (
   await page.getByRole("button", { name: "다시 검색", exact: true }).click();
   await expect(page.getByText("조건에 맞는 공개 프로필이 없어요.")).toBeVisible();
 });
+
+test("URL restores before input; a slow initial response cannot erase fast edits and back/forward filters", async ({
+  page,
+}) => {
+  let releaseModule: () => void = () => {};
+  const moduleGate = new Promise<void>((resolve) => {
+    releaseModule = resolve;
+  });
+  await page.route("**/src/components/lawyers/Directory.tsx*", async (route) => {
+    await moduleGate;
+    await route.continue();
+  });
+  let releaseInitial: () => void = () => {};
+  const initialGate = new Promise<void>((resolve) => {
+    releaseInitial = resolve;
+  });
+  await page.route("**/api/v2/lawyers**", async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname.endsWith("self-service"))
+      return route.fulfill({ json: { items: [], nextCursor: null } });
+    if (url.searchParams.get("name") === "URL 초기 조건") await initialGate;
+    return route.fulfill({
+      json: {
+        schemaVersion: "2",
+        snapshotId: "synthetic-search",
+        rotation: "disclosed_rotation",
+        expiresAt: "2026-10-07T00:05:00Z",
+        items: [],
+        nextCursor: null,
+      },
+    });
+  });
+  await page.goto("/lawyers?name=URL%20초기%20조건&region=busan&legalField=civil", {
+    waitUntil: "commit",
+  });
+  const name = page.getByLabel("이름 또는 사무실", { exact: true });
+  await expect(name).toBeVisible();
+  await expect(name).toBeDisabled();
+  releaseModule();
+  await expect(name).toBeEnabled();
+  await expect(name).toHaveValue("URL 초기 조건");
+  await name.fill("빠른 입력 유지");
+  await page.getByRole("button", { name: "검색", exact: true }).click();
+  releaseInitial();
+  await expect(name).toHaveValue("빠른 입력 유지");
+  await expect(page).toHaveURL(/name=.*&region=busan&legalField=civil/);
+  await expect(page.getByText("조건에 맞는 공개 프로필이 없어요.")).toBeVisible();
+  await page.goBack();
+  await expect(name).toHaveValue("URL 초기 조건");
+  await expect(page.getByRole("combobox", { name: "지역", exact: true })).toHaveValue("busan");
+  await page.goForward();
+  await expect(name).toHaveValue("빠른 입력 유지");
+  await page.getByRole("button", { name: "조건 초기화" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(name).toHaveValue("");
+  await expect(page).toHaveURL(/\/lawyers$/);
+});

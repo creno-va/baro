@@ -1,15 +1,21 @@
+import { drizzle } from "drizzle-orm/d1";
 import { Hono } from "hono";
 import { z } from "zod";
 import { idempotencyKeySchema, opaqueIdSchema, revisionSchema } from "../../../contracts";
 import type { V2ErrorCode } from "../../../contracts/v2";
+import { getAuth } from "../../auth";
 import { readAccountType } from "../../auth/account-type";
 import { lawyerAccess } from "../../auth/roles";
 import { createCaseDataCipher } from "../../crypto";
+import * as schema from "../../db/schema";
 import { createV2Core, type V2Core } from "../../db/v2-core";
+import { hasCurrentConsent } from "../../modules/consent/service";
 import { AssetBinaryError } from "../../modules/lawyers/asset-binary";
 import { createLawyerAssetsService } from "../../modules/lawyers/assets";
+import type { OpenSanitizedAsset } from "../../modules/lawyers/sanitized";
+import { createSelfAssetReader, selfAssetResponse } from "../../modules/lawyers/self-assets";
 import { createSelfProfileService } from "../../modules/lawyers/self-profile";
-import { selfProfileSchema } from "../../modules/lawyers/self-profile-contract";
+import { selfAssetUrl, selfProfileSchema } from "../../modules/lawyers/self-profile-contract";
 import {
   createLawyersService,
   type LawyerDependencies,
@@ -56,6 +62,7 @@ export const expectedRevisionBody = z.strictObject({ expectedRevision: revisionS
 export function createLawyersApi(
   options: {
     dependencies?: (env: Env, core: V2Core, ownerId: string) => Promise<LawyerDependencies>;
+    selfAssetDecoder?: OpenSanitizedAsset;
   } = {},
 ) {
   const app = privateLawyerApi();
@@ -79,7 +86,76 @@ export function createLawyersApi(
     const a = await selfAccess(c);
     if (a.response) return a.response;
     z.strictObject({}).parse(c.req.query());
-    return c.json(await (await selfService(c.env)).getMine(a.ownerId));
+    const profile = await (await selfService(c.env)).getMine(a.ownerId);
+    const after = await selfAccess(c);
+    if (after.response) return after.response;
+    if (after.ownerId !== a.ownerId)
+      return c.json(errorBody(c, "NOT_FOUND", "프로필을 찾을 수 없어요."), 404);
+    return c.json(profile);
+  });
+  app.get("/lawyer/self-profile/assets", async (c) => {
+    const a = await selfAccess(c);
+    if (a.response) return a.response;
+    const rows = await c.env.DB.prepare(
+      "SELECT a.id,a.revision,a.state AS status,a.purpose FROM v2_assets a JOIN v2_profiles p ON p.id=a.profile_id WHERE a.owner_id=? AND p.owner_id=a.owner_id AND a.purpose IN ('profile_photo','portfolio') AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE (target_kind='asset' AND target_id=a.id) OR (target_kind='profile' AND target_id=a.profile_id) OR (target_kind='account' AND target_id=a.owner_id)) ORDER BY a.created_at DESC LIMIT 50",
+    )
+      .bind(a.ownerId)
+      .all<{ id: string; revision: number; status: string; purpose: string }>();
+    const after = await selfAccess(c);
+    if (after.response) return after.response;
+    if (after.ownerId !== a.ownerId)
+      return c.json(errorBody(c, "NOT_FOUND", "자료를 찾을 수 없어요."), 404);
+    return c.json({
+      items: rows.results.map((row) => ({
+        id: row.id,
+        revision: row.revision,
+        status: row.status,
+        purpose: row.purpose,
+      })),
+    });
+  });
+  app.get("/lawyer/self-profile/assets/:assetId/content", async (c) => {
+    const a = await selfAccess(c);
+    if (a.response) return a.response;
+    const core = createV2Core(c.env.DB, await createCaseDataCipher(c.env));
+    const service = createSelfProfileService(core);
+    const profile = await service.getMine(a.ownerId);
+    const assetId = c.req.param("assetId");
+    const purpose = await core
+      .statement(
+        "SELECT purpose FROM v2_assets WHERE id=? AND owner_id=? AND profile_id=? AND purpose IN ('profile_photo','portfolio')",
+        [assetId, a.ownerId, profile.id],
+      )
+      .first<string>("purpose");
+    if (!purpose) throw new LawyerError("NOT_FOUND");
+    // Own ready uploads can be previewed before saving; public reads still require a persisted reference.
+    const preview =
+      purpose === "profile_photo"
+        ? { ...profile, photoAssetId: assetId, photoUrl: selfAssetUrl(profile.id, assetId) }
+        : {
+            ...profile,
+            portfolio: [
+              { id: assetId, title: "자료", assetId, url: selfAssetUrl(profile.id, assetId) },
+            ],
+          };
+    const read = createSelfAssetReader(core, {
+      environment: c.env.APP_ENV === "production" ? "production" : "preview",
+      bucket: c.env.CASE_PRIVATE_R2,
+      ...(options.selfAssetDecoder ? { openSanitized: options.selfAssetDecoder } : {}),
+    });
+    return selfAssetResponse(
+      await read(a.ownerId, preview, assetId, async () => {
+        // Stream checks read auth without rewriting response headers after the body starts.
+        const access = await getAuth(c.env).api.getSession({ headers: c.req.raw.headers });
+        return (
+          access?.user.id === a.ownerId &&
+          access.session.id === a.sessionId &&
+          (await readAccountType(c.env.DB, a.ownerId)) === "lawyer" &&
+          (await hasCurrentConsent(drizzle(c.env.DB, { schema }), a.ownerId)) &&
+          (await service.getMine(a.ownerId)).revision === profile.revision
+        );
+      }),
+    );
   });
   app.put("/lawyer/self-profile", async (c) => {
     const a = await selfAccess(c, true);
@@ -93,6 +169,7 @@ export function createLawyersApi(
     const body = z
       .strictObject({
         published: z.boolean(),
+        profileId: opaqueIdSchema.optional(),
         expectedRevision: revisionSchema,
         consent: z.boolean(),
       })
@@ -103,6 +180,7 @@ export function createLawyersApi(
         a.ownerId,
         body.published,
         body.expectedRevision,
+        body.profileId,
       ),
     );
   });

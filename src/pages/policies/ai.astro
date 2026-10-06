@@ -1,6 +1,12 @@
 ---
-// biome-ignore lint/correctness/noUnusedImports: Astro template reads layout.
-import CaseLayout from "../../layouts/CaseLayout.astro";
-import "../../styles/settings.css";
+// biome-ignore lint/correctness/noUnusedImports: Astro template reads the component.
+import PolicyDocument from "../../components/PolicyDocument.astro";
+// biome-ignore lint/correctness/noUnusedImports: Astro template reads the title and description.
+import { policyDrafts } from "../../content/policy-drafts";
+// biome-ignore lint/correctness/noUnusedImports: Astro template reads the component.
+import AppLayout from "../../layouts/AppLayout.astro";
+import "../../styles/policies.css";
 ---
-<CaseLayout title="AI 이용 고지 초안"><article class="account-settings"><h1>AI 이용 고지 초안</h1><p role="status" class="settings-error">검토 중 · 2026-10-06-v2-draft · 법률·처리 경로·게시 승인이 필요합니다.</p><section class="settings-card"><h2>AI를 사용한 사실 정리</h2><p>BARO는 AI로 사건의 사실과 자료를 정리하고 변호사 상담 준비를 돕습니다. 질문·요약·대화·파일 해석·준비 행동은 오류·누락이 있을 수 있으므로 직접 확인하세요. 중요한 결정과 임박한 기한은 공식 기관이나 자격 있는 전문가에게 확인하세요.</p><h2>처리 범위 확인</h2><p>문서 text·이미지 OCR·음성 전사·영상 음성과 선택 frame을 분석하는 처리 범위를 확인하세요. 모든 영상 frame을 확인한 것으로 표시하지 않으며 미처리 구간·품질·coverage를 원본과 대조하세요. 예시 API 응답은 실제 모델·OCR·전사·R2 성공이 아닙니다.</p><h2>리포트와 원본</h2><p>사실·주장·미확인·상반 진술과 출처를 검토하세요. 식별정보는 기본으로 유지하며 사용자가 수정·가림·제외·선택 원본을 확인합니다. PDF 가림은 ZIP 원본에 적용되지 않습니다. 원본의 진정성·법적 효력·승소 가능성·법률 판단을 보장하지 않습니다.</p><h2>처리자와 공개 승인</h2><p>필요한 입력은 합의한 AI·파일 처리 경로에서 읽힐 수 있습니다. 공급자별 국외 처리와 보존 조건은 실제 계약·법률 검토로 확정해야 합니다. 이 고지는 법률 준수나 공개 게시 승인 완료를 의미하지 않습니다.</p></section><nav class="settings-links"><a href="/help">도움말</a><a href="/policies/privacy">개인정보 초안</a><a href="/settings">설정</a></nav></article></CaseLayout>
+<AppLayout title={policyDrafts.ai.title} description={policyDrafts.ai.description} role="visitor" availableRoutes={["/", "/lawyers", "/help"]}>
+  <PolicyDocument kind="ai" />
+</AppLayout>

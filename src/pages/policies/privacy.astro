@@ -1,6 +1,12 @@
 ---
-// biome-ignore lint/correctness/noUnusedImports: Astro template reads layout.
-import CaseLayout from "../../layouts/CaseLayout.astro";
-import "../../styles/settings.css";
+// biome-ignore lint/correctness/noUnusedImports: Astro template reads the component.
+import PolicyDocument from "../../components/PolicyDocument.astro";
+// biome-ignore lint/correctness/noUnusedImports: Astro template reads the title and description.
+import { policyDrafts } from "../../content/policy-drafts";
+// biome-ignore lint/correctness/noUnusedImports: Astro template reads the component.
+import AppLayout from "../../layouts/AppLayout.astro";
+import "../../styles/policies.css";
 ---
-<CaseLayout title="개인정보 처리방침 초안"><article class="account-settings"><h1>개인정보 처리방침 초안</h1><p role="status" class="settings-error">검토 중 · 2026-10-06-v2-draft · 법률·사업자·처리 경로·국외 이전·게시 승인이 필요합니다.</p><section class="settings-card"><h2>처리 목적과 항목</h2><p>로그인 식별정보·동의 기록, 사건 입력·질문·요약·대화·타임라인·자료와 처리 결과·리포트, 공개 프로필·사진·포트폴리오, 사용량·삭제 상태를 로그인·사실 정리·파일 처리·공개 프로필·내보내기·삭제에 사용합니다. 처리자 정보·책임자·문의처는 확인 후 확정합니다.</p><h2>예정 처리 경로</h2><p>로그인은 Google·Naver·Kakao, 서비스와 저장은 Cloudflare Workers·D1·Workflows·R2, 파일 임시 처리는 Containers, 음성 전사는 합의한 Whisper 경로, 생성은 AI Gateway와 합의한 모델 공급자 경로를 사용하도록 설계했습니다. 사건과 자료의 필요한 내용은 처리 과정에서 읽힐 수 있습니다. 모든 공급자의 보존·학습 없음이나 국내 전용 처리를 보장하지 않습니다.</p><p>처리 법인·국가·항목·시점·방법·근거·보존 기간·거부 방법과 서비스 영향은 실제 계약 및 법률 검토로 확정해야 합니다. 예시 API 모드에서는 실제 외부 처리와 비용이 발생하지 않습니다.</p><h2>공개와 직접 전달</h2><p>변호사는 공개할 자기 프로필을 선택합니다. 공개 프로필은 제3자가 확인하거나 저장할 수 있으므로 권리와 식별정보를 확인하세요. BARO는 사건 자료를 변호사에게 자동 전달하지 않습니다. PDF·선택 원본 ZIP의 외부 전달은 이용자가 직접 결정합니다.</p><h2>보관·삭제·백업</h2><p>사건·자료·결과는 이용자 삭제까지 보관하는 것을 목표로 합니다. 계정 삭제 후 세션을 종료하고 원격 자료·처리 작업·public 자산을 정리합니다. 백업 복구 후 재삭제를 위한 최소 삭제 journal을 유지하는 절차를 설계했습니다. 실제 로그·임시 파일·백업·journal 기간과 보호조치는 확정 전입니다.</p><h2>권리와 확인할 사항</h2><p>설정에서 조회·수정·내보내기·삭제를 진행할 수 있습니다. 법률상 동의 구조·철회 영향·권리 행사 문의처·국외 처리·처리위탁과 제3자 제공의 구분은 검토 중입니다. 이 초안의 버전은 동의 승인이나 공개 시행일을 의미하지 않습니다.</p></section><nav class="settings-links"><a href="/help#deletion">삭제 도움말</a><a href="/policies/terms">이용약관 초안</a><a href="/settings">설정</a></nav></article></CaseLayout>
+<AppLayout title={policyDrafts.privacy.title} description={policyDrafts.privacy.description} role="visitor" availableRoutes={["/", "/lawyers", "/help"]}>
+  <PolicyDocument kind="privacy" />
+</AppLayout>

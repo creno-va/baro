@@ -1,35 +1,40 @@
-import { UserRound } from "lucide-react";
 import { useEffect, useState } from "react";
-import { api, type LawyerView, lawyerErrorMessage } from "../../client/api/lawyers";
+import { api, LawyerApiError, type LawyerView, lawyerErrorMessage } from "../../client/api/lawyers";
 import type { V2Office } from "../../contracts/v2";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { PageHeader } from "../ui/page-header";
 import { StatePanel } from "../ui/state-panel";
 import { ApiModeNotice } from "./ApiModeNotice";
+import { AssetPhoto, downloadLawyerAsset } from "./AssetPhoto";
 import { FIELD_LABELS } from "./labels";
 import { contactLinks, directionLinks } from "./links";
 export function Profile({ id, preview = false }: { id: string; preview?: boolean }) {
   const [lawyer, setLawyer] = useState<LawyerView | null>(null);
   const [error, setError] = useState("");
+  const [missing, setMissing] = useState(false);
   const [reload, setReload] = useState(0);
   // biome-ignore lint/correctness/useExhaustiveDependencies: An explicit retry must refetch the current profile.
   useEffect(() => {
     const controller = new AbortController();
     setError("");
+    setMissing(false);
     setLawyer(null);
     void (async () => {
       try {
         const result = await api.lawyers.get(id);
         if (!controller.signal.aborted) setLawyer(result);
       } catch (cause) {
-        if (!controller.signal.aborted) setError(lawyerErrorMessage(cause));
+        if (!controller.signal.aborted) {
+          setMissing(cause instanceof LawyerApiError && cause.code === "NOT_FOUND");
+          setError(lawyerErrorMessage(cause));
+        }
       }
     })();
     return () => controller.abort();
   }, [id, reload]);
   return (
-    <div className="space-y-6">
+    <div className="lawyer-public-detail space-y-6">
       <a className="ui-button ui-button--ghost" href="/lawyers">
         변호사 목록으로
       </a>
@@ -37,7 +42,12 @@ export function Profile({ id, preview = false }: { id: string; preview?: boolean
       {error ? (
         <StatePanel
           variant="error"
-          title={error}
+          title={missing ? "현재 공개된 프로필이 아니에요." : error}
+          description={
+            missing
+              ? "비공개로 전환했거나 삭제된 프로필일 수 있어요. 목록에서 다른 공개 프로필을 확인하세요."
+              : "연결 상태를 확인한 뒤 다시 불러와 주세요."
+          }
           action={<Button onClick={() => setReload(reload + 1)}>다시 불러오기</Button>}
         />
       ) : !lawyer ? (
@@ -48,25 +58,26 @@ export function Profile({ id, preview = false }: { id: string; preview?: boolean
     </div>
   );
 }
-export function ProfileContent({ lawyer }: { lawyer: LawyerView }) {
+export function ProfileContent({
+  lawyer,
+  privateRead = false,
+}: {
+  lawyer: LawyerView;
+  privateRead?: boolean;
+}) {
+  const [assetError, setAssetError] = useState("");
   return (
     <div className="space-y-6 lawyer-profile">
       <PageHeader title={lawyer.name || "프로필 미리보기"} description={lawyer.officeName} />
-      {lawyer.photoUrl ? (
-        <img
-          className="h-36 w-36 rounded-xl object-cover"
-          src={lawyer.photoUrl}
-          alt={`${lawyer.name} 프로필 사진`}
-          width={144}
-          height={144}
-        />
-      ) : (
-        <UserRound className="lawyer-avatar" size={100} aria-hidden="true" />
-      )}
+      <AssetPhoto
+        profileId={lawyer.id}
+        assetId={lawyer.photoAssetId}
+        fallback={lawyer.photoUrl}
+        alt={`${lawyer.name} 프로필 사진`}
+        privateRead={privateRead}
+      />
       <p className="text-sm text-muted-foreground">
-        {lawyer.verificationStatus === "verified"
-          ? "본인·변호사 자격·사무실을 수동 확인했습니다. 확인 표시는 능력이나 성과를 보증하지 않습니다."
-          : "본인 작성 정보입니다. 역할 선택과 프로필 등록은 변호사 자격 확인을 의미하지 않습니다."}
+        본인 작성 정보입니다. 역할 선택과 프로필 등록은 변호사 자격 확인을 의미하지 않습니다.
       </p>
       <Card>
         <CardHeader>
@@ -89,8 +100,8 @@ export function ProfileContent({ lawyer }: { lawyer: LawyerView }) {
         </CardHeader>
         <CardContent>
           <p>
-            상담 여부와 조건은 변호사에게 직접 확인해 주세요. 사건이나 자료는 자동으로 전송되지
-            않습니다.
+            상담 여부와 조건은 변호사에게 직접 확인해 주세요. BARO 이용과 별개로 상담·위임 비용이
+            발생할 수 있어요. 사건이나 자료는 자동으로 전송되지 않습니다.
           </p>
           <div className="mt-4 flex flex-wrap gap-3">
             {contactLinks({
@@ -144,6 +155,7 @@ export function ProfileContent({ lawyer }: { lawyer: LawyerView }) {
           </div>
         </CardContent>
       </Card>
+      {assetError && <StatePanel variant="error" title={assetError} />}
       <Card>
         <CardHeader>
           <CardTitle>포트폴리오</CardTitle>
@@ -163,11 +175,25 @@ export function ProfileContent({ lawyer }: { lawyer: LawyerView }) {
                   <a
                     className="ui-button ui-button--outline"
                     href={item.url}
+                    onClick={
+                      item.assetId
+                        ? (event) => {
+                            event.preventDefault();
+                            setAssetError("");
+                            void downloadLawyerAsset(
+                              lawyer.id,
+                              item.assetId as string,
+                              privateRead,
+                              item.title,
+                            ).catch((cause) => setAssetError(lawyerErrorMessage(cause)));
+                          }
+                        : undefined
+                    }
                     target="_blank"
                     rel="noopener noreferrer"
                     referrerPolicy="no-referrer"
                   >
-                    포트폴리오 보기
+                    {item.assetId ? `${item.title} 자료 다운로드` : `${item.title} 포트폴리오 보기`}
                   </a>
                 )}
               </div>

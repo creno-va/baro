@@ -91,3 +91,67 @@
     align-items: flex-start;
   }
 }
+
+/* Match PR125's quiet blue surfaces while retaining the shared shell. */
+.lawyer-editor,
+.lawyer-directory,
+.lawyer-public-detail {
+  width: min(100%, 62rem);
+  margin-inline: auto;
+  padding-block: clamp(0.5rem, 2vw, 1.5rem);
+  overflow-wrap: anywhere;
+}
+.lawyer-editor .ui-card,
+.lawyer-directory .ui-card,
+.lawyer-profile .ui-card {
+  border-color: #dce5f1;
+  border-radius: 1.25rem;
+  box-shadow: 0 5px 24px #204d8706;
+}
+.lawyer-directory form input,
+.lawyer-directory form select {
+  width: 100%;
+  min-width: 0;
+}
+.lawyer-editor input:focus-visible,
+.lawyer-editor select:focus-visible,
+.lawyer-editor textarea:focus-visible,
+.lawyer-directory input:focus-visible,
+.lawyer-directory select:focus-visible {
+  outline: 3px solid var(--color-ring);
+  outline-offset: 3px;
+}
+.lawyer-editor input:disabled,
+.lawyer-directory input:disabled,
+.lawyer-directory select:disabled {
+  opacity: 0.65;
+}
+.lawyer-photo {
+  max-width: 100%;
+  aspect-ratio: 1;
+}
+.lawyer-assets {
+  display: grid;
+  gap: 0.75rem;
+  margin-block: 1rem;
+  padding: 0;
+  list-style: none;
+}
+.lawyer-assets li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: 0.75rem;
+}
+@media (max-width: 600px) {
+  .lawyer-directory form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .lawyer-directory form .ui-button {
+    width: 100%;
+  }
+}

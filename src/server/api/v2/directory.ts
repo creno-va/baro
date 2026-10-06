@@ -10,11 +10,15 @@ import {
   publicProfileQuerySchema,
 } from "../../modules/lawyers/directory";
 import { readPublicAsset } from "../../modules/lawyers/public-read";
+import type { OpenSanitizedAsset } from "../../modules/lawyers/sanitized";
+import { createSelfAssetReader, selfAssetResponse } from "../../modules/lawyers/self-assets";
 import { createSelfProfileService } from "../../modules/lawyers/self-profile";
 import { LawyerError } from "../../modules/lawyers/service";
 import { type ApiEnvironment, errorBody } from "../errors";
 
-export function createDirectoryApi(options: { clock?: () => string } = {}) {
+export function createDirectoryApi(
+  options: { clock?: () => string; selfAssetDecoder?: OpenSanitizedAsset } = {},
+) {
   const app = new Hono<ApiEnvironment>();
   app.use("*", async (c, next) => {
     c.header("cache-control", "no-store");
@@ -57,6 +61,30 @@ export function createDirectoryApi(options: { clock?: () => string } = {}) {
     });
     const core = createV2Core(c.env.DB, await createCaseDataCipher(c.env));
     return c.json(await createSelfProfileService(core, options.clock).list(query));
+  });
+  app.get("/self-service/:id/assets/:assetId", async (c) => {
+    publicProfileQuerySchema.parse(c.req.query());
+    const core = createV2Core(c.env.DB, await createCaseDataCipher(c.env));
+    const service = createSelfProfileService(core, options.clock);
+    const profile = await service.get(c.req.param("id"));
+    const ownerId = await core
+      .statement("SELECT owner_id FROM v2_profiles WHERE id=?", [profile.id])
+      .first<string>("owner_id");
+    if (!ownerId) throw new LawyerError("NOT_FOUND");
+    const read = createSelfAssetReader(core, {
+      environment: c.env.APP_ENV === "production" ? "production" : "preview",
+      bucket: c.env.CASE_PRIVATE_R2,
+      ...(options.selfAssetDecoder ? { openSanitized: options.selfAssetDecoder } : {}),
+    });
+    return selfAssetResponse(
+      await read(ownerId, profile, c.req.param("assetId"), async () => {
+        try {
+          return (await service.get(profile.id)).revision === profile.revision;
+        } catch {
+          return false;
+        }
+      }),
+    );
   });
   app.get("/self-service/:id", async (c) => {
     publicProfileQuerySchema.parse(c.req.query());

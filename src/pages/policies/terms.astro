@@ -1,6 +1,12 @@
 ---
-// biome-ignore lint/correctness/noUnusedImports: Astro template reads layout.
-import CaseLayout from "../../layouts/CaseLayout.astro";
-import "../../styles/settings.css";
+// biome-ignore lint/correctness/noUnusedImports: Astro template reads the component.
+import PolicyDocument from "../../components/PolicyDocument.astro";
+// biome-ignore lint/correctness/noUnusedImports: Astro template reads the title and description.
+import { policyDrafts } from "../../content/policy-drafts";
+// biome-ignore lint/correctness/noUnusedImports: Astro template reads the component.
+import AppLayout from "../../layouts/AppLayout.astro";
+import "../../styles/policies.css";
 ---
-<CaseLayout title="이용약관 초안"><article class="account-settings"><h1>이용약관 초안</h1><p role="status" class="settings-error">검토 중 · 2026-10-06-v2-draft · 시행일과 공개 게시 승인은 확정되지 않았습니다.</p><section class="settings-card"><h2>서비스와 대상</h2><p>BARO는 만 14세 이상 개인·기업 이용자의 사실·자료 정리와 변호사 상담 준비를 지원합니다. 기업 사건도 한 계정이 소유하며 공동 편집을 제공하지 않습니다. 고객·변호사 역할은 이용자가 선택하며 선택만으로 자격을 확인한 것으로 표시하지 않습니다.</p><h2>AI와 연락의 범위</h2><p>AI는 법률 판단·소송 전략·승소 가능성·결과를 보장하지 않습니다. 프로필을 보고 이용자가 직접 외부로 연락하고 자료를 전달합니다. 플랫폼 내 상담·수임 결제·소개 수수료·유료 우선 노출은 제공하지 않습니다. 수수료가 없다는 사실만으로 적법성을 보장하지 않습니다.</p><h2>자료와 이용 책임</h2><p>업로드와 공개 프로필에 필요한 권리를 확인하고 타인의 불필요한 개인정보를 제외하세요. OCR·전사·요약의 누락과 오류, 출처·기한은 원문과 전문가에게 확인하세요. 리포트는 공식 제출 문서나 원본 진정성 인증이 아닙니다.</p><h2>삭제와 이용 제한</h2><p>이용자가 삭제할 때까지 사건을 보관하는 것을 목표로 합니다. 한도·예산·처리 용량에 따라 새 처리가 대기할 수 있습니다. 삭제 접수 후 접근 차단과 정리 절차를 진행하며 이미 외부에 전달한 자료는 삭제할 수 없습니다.</p><h2>게시 전 확인 항목</h2><p>사업자 실체·대표자·주소·등록번호·문의처, 법률 검토, 책임과 분쟁 조항, 시행일과 게시 버전 승인은 아직 확정되지 않았습니다. 이 화면은 승인본이나 법률 검토 완료 증거가 아닙니다.</p></section><nav class="settings-links"><a href="/help">도움말</a><a href="/policies/privacy">개인정보 초안</a><a href="/settings">설정</a></nav></article></CaseLayout>
+<AppLayout title={policyDrafts.terms.title} description={policyDrafts.terms.description} role="visitor" availableRoutes={["/", "/lawyers", "/help"]}>
+  <PolicyDocument kind="terms" />
+</AppLayout>

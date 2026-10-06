@@ -259,6 +259,12 @@ test("self directory advances filtered empty pages and returns profiles beyond t
   const f = await fixture();
   const service = createSelfProfileService(f.core);
   const profiles = [];
+  // This directory fixture needs current consent for both publishing owners.
+  f.db.sqlite
+    .query(
+      "INSERT INTO user_consents SELECT ?,terms_version,privacy_version,ai_notice_version,over_14_confirmed,consented_at FROM user_consents WHERE user_id=?",
+    )
+    .run(f.noConsent.userId, f.owner.userId);
   for (const user of [f.owner, f.noConsent]) {
     const blank = await service.getMine(user.userId);
     const saved = await service.saveMine(user.userId, { ...blank, ...complete, name: user.userId });
@@ -317,4 +323,47 @@ test("self API denies wrong role, missing consent, cross-owner, origin and produ
       )
     ).status,
   ).toBe(503);
+});
+
+test("publication is bound to the displayed profile and current consent, including role changes", async () => {
+  const f = await fixture();
+  await saveAccountType(f.db.binding, f.other.userId, "lawyer");
+  const mine = selfProfileSchema.parse(
+    await (await f.request("/v2/me/lawyer/self-profile")).json(),
+  );
+  const saved = selfProfileSchema.parse(
+    await (
+      await f.request("/v2/me/lawyer/self-profile", f.owner, "PUT", {
+        profile: { ...mine, ...complete },
+      })
+    ).json(),
+  );
+  const other = selfProfileSchema.parse(
+    await (await f.request("/v2/me/lawyer/self-profile", f.other)).json(),
+  );
+  expect(
+    (
+      await f.request("/v2/me/lawyer/self-profile/publication", f.other, "POST", {
+        profileId: saved.id,
+        published: false,
+        expectedRevision: other.revision,
+        consent: false,
+      })
+    ).status,
+  ).toBe(404);
+  expect(
+    (
+      await f.request("/v2/me/lawyer/self-profile/publication", f.owner, "POST", {
+        profileId: saved.id,
+        published: true,
+        expectedRevision: saved.revision,
+        consent: true,
+      })
+    ).status,
+  ).toBe(200);
+  f.db.sqlite
+    .query("UPDATE user_consents SET privacy_version='old-version' WHERE user_id=?")
+    .run(f.owner.userId);
+  expect((await f.request(`/v2/lawyers/self-service/${saved.id}`)).status).toBe(404);
+  expect((await f.request("/v2/me/lawyer/self-profile", f.owner)).status).toBe(403);
 });
