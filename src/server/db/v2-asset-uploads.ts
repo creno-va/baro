@@ -30,7 +30,9 @@ export interface AssetUploadCleanupIntent {
   readonly reservationId: string;
   readonly objectKey: string;
   readonly logicalBytes: number;
-  readonly keyVersion: string;
+  readonly keyVersion: string | null;
+  readonly kind: string;
+  readonly visibility: "private" | "public";
 }
 const from =
   "FROM v2_assets a JOIN v2_profiles profile ON profile.id=a.profile_id JOIN v2_storage_reservations r ON r.entity_id=a.id JOIN v2_billing_principals p ON p.id=r.principal_id JOIN v2_operations o ON o.id=r.operation_id";
@@ -47,12 +49,21 @@ function kind(purpose: string) {
 // A server-only capability captured before PUT. It cannot be reconstructed from
 // request JSON, and remains bound to the retained billing owner after deletion.
 export function captureAssetUploadIntent(core: V2Core, actor: Actor, blobId: string) {
+  return captureUploadIntent(core, actor, blobId, false);
+}
+export function captureApprovedPublicCopyIntent(core: V2Core, actor: Actor, blobId: string) {
+  return captureUploadIntent(core, actor, blobId, true);
+}
+function captureUploadIntent(core: V2Core, actor: Actor, blobId: string, publicCopy: boolean) {
   return safe(async () => {
     actor = parse(actorSchema, actor);
     parse(opaqueIdSchema, blobId);
+    const captureFrom = publicCopy
+      ? from.replace(" JOIN v2_operations o ON o.id=r.operation_id", "")
+      : from;
     const row = await core
       .statement(
-        `SELECT b.principal_id,b.reservation_id,b.object_key,b.logical_bytes,b.key_version ${from} JOIN v2_blobs b ON b.reservation_id=r.id AND b.principal_id=p.id WHERE b.id=? AND a.owner_id=? AND profile.owner_id=a.owner_id AND p.owner_id=a.owner_id AND a.state='reserved' AND a.original_blob_id IS NULL AND r.kind='lawyer_asset' AND r.state='reserved' AND r.target_id=a.id AND r.byte_length=b.logical_bytes AND b.state='pending' AND b.visibility='private' AND b.kind IN ('verification','portfolio_original','profile_photo_original') AND b.key_version='asset_binary_v1' AND b.cipher_hash IS NULL AND b.cipher_bytes=0 AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE (target_kind='account' AND target_id=a.owner_id) OR (target_kind='profile' AND target_id=profile.id) OR (target_kind='asset' AND target_id=a.id))`,
+        `SELECT b.principal_id,b.reservation_id,b.object_key,b.logical_bytes,b.key_version,b.kind,b.visibility ${captureFrom} JOIN v2_blobs b ON b.reservation_id=r.id AND b.principal_id=p.id WHERE b.id=? AND a.owner_id=? AND profile.owner_id=a.owner_id AND p.owner_id=a.owner_id AND r.kind='lawyer_asset' AND r.state='reserved' AND r.byte_length=b.logical_bytes AND b.state='pending' AND b.cipher_hash IS NULL AND b.cipher_bytes=0 AND ${publicCopy ? "a.state='ready' AND r.target_id=b.id AND b.visibility='public' AND b.kind='public_copy' AND b.key_version IS NULL AND b.source_asset_revision=a.revision AND b.source_blob_id=a.sanitized_blob_id AND EXISTS(SELECT 1 FROM v2_profile_revisions revision WHERE revision.id=b.approved_revision_id AND revision.profile_id=profile.id AND revision.status='approved') AND EXISTS(SELECT 1 FROM v2_role_bindings WHERE owner_id=a.owner_id AND role='verified_lawyer')" : "a.state='reserved' AND a.original_blob_id IS NULL AND r.target_id=a.id AND b.visibility='private' AND b.kind IN ('verification','portfolio_original','profile_photo_original') AND b.key_version='asset_binary_v1'"} AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE (target_kind='account' AND target_id=a.owner_id) OR (target_kind='profile' AND target_id=profile.id) OR (target_kind='asset' AND target_id=a.id))`,
         [blobId, actor.ownerId],
       )
       .first<{
@@ -60,7 +71,9 @@ export function captureAssetUploadIntent(core: V2Core, actor: Actor, blobId: str
         reservation_id: string;
         object_key: string;
         logical_bytes: number;
-        key_version: string;
+        key_version: string | null;
+        kind: string;
+        visibility: "private" | "public";
       }>();
     if (!row) return null;
     const value: AssetUploadCleanupIntent = Object.freeze({
@@ -71,6 +84,8 @@ export function captureAssetUploadIntent(core: V2Core, actor: Actor, blobId: str
       objectKey: row.object_key,
       logicalBytes: row.logical_bytes,
       keyVersion: row.key_version,
+      kind: row.kind,
+      visibility: row.visibility,
     });
     capturedIntents.add(value);
     return value;
@@ -94,10 +109,12 @@ export function requeueAssetUploadCleanup(
       captured.objectKey,
       captured.logicalBytes,
       captured.keyVersion,
+      captured.kind,
+      captured.visibility,
       actor.ownerId,
       actor.ownerId,
     ];
-    const guard = `b.id=? AND b.principal_id=? AND r.id=? AND b.object_key=? AND b.logical_bytes=? AND b.key_version=? AND b.kind IN ('verification','portfolio_original','profile_photo_original') AND b.visibility='private' AND b.state IN ('deleting','deleted') AND b.cipher_hash IS NULL AND b.cipher_bytes=0 AND r.kind='lawyer_asset' AND r.byte_length=b.logical_bytes AND (p.owner_id=? OR (p.owner_id IS NULL AND EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='account' AND target_id=?)))`;
+    const guard = `b.id=? AND b.principal_id=? AND r.id=? AND b.object_key=? AND b.logical_bytes=? AND b.key_version IS ? AND b.kind=? AND b.visibility=? AND b.state IN ('deleting','deleted') AND b.cipher_hash IS NULL AND b.cipher_bytes=0 AND r.kind='lawyer_asset' AND r.byte_length=b.logical_bytes AND (p.owner_id=? OR (p.owner_id IS NULL AND EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='account' AND target_id=?)))`;
     const source =
       "FROM v2_blobs b JOIN v2_storage_reservations r ON r.id=b.reservation_id JOIN v2_billing_principals p ON p.id=b.principal_id";
     if (!(await core.statement(`SELECT b.id ${source} WHERE ${guard}`, values).first()))

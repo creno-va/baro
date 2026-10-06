@@ -16,6 +16,7 @@ import {
   type AssetUploadCleanupIntent,
   type AssetUploadIntent,
   abandonAssetUpload,
+  captureApprovedPublicCopyIntent,
   captureAssetUploadIntent,
   commitAssetUpload,
   prepareAssetUpload,
@@ -34,6 +35,12 @@ import {
   type WorkspaceGuard,
 } from "./v2-core";
 import { type CleanupLease, cleanupLeaseSchema } from "./v2-deletion";
+import {
+  abandonApprovedPublicCopy,
+  commitPreparedPublicCopy,
+  type PublicCopyIntent,
+  prepareApprovedPublicCopy,
+} from "./v2-public-copies";
 import type { JobLease } from "./v2-workspace";
 
 export function storagePredicate(
@@ -121,6 +128,12 @@ const reservationAlive = `((r.kind='case_original' AND EXISTS(SELECT 1 FROM v2_f
 export function createV2StorageRepository(core: V2Core) {
   const accounting = createV2AccountingRepository(core);
   return {
+    prepareApprovedPublicCopy(actor: Actor, input: PublicCopyIntent) {
+      return prepareApprovedPublicCopy(core, actor, input);
+    },
+    abandonApprovedPublicCopy(actor: Actor, blobId: string) {
+      return abandonApprovedPublicCopy(core, actor, blobId);
+    },
     prepareAssetUpload(actor: Actor, input: AssetUploadIntent) {
       return prepareAssetUpload(core, actor, input);
     },
@@ -135,6 +148,14 @@ export function createV2StorageRepository(core: V2Core) {
     },
     captureAssetUploadIntent(actor: Actor, blobId: string) {
       return captureAssetUploadIntent(core, actor, blobId);
+    },
+    captureApprovedPublicCopyIntent(actor: Actor, blobId: string) {
+      return captureApprovedPublicCopyIntent(core, actor, blobId);
+    },
+    requeueApprovedPublicCopyCleanup(actor: Actor, captured: AssetUploadCleanupIntent) {
+      return captured.kind === "public_copy" && captured.visibility === "public"
+        ? requeueAssetUploadCleanup(core, actor, captured)
+        : Promise.resolve(null);
     },
     requeueAssetUploadCleanup(actor: Actor, captured: AssetUploadCleanupIntent) {
       return requeueAssetUploadCleanup(core, actor, captured);
@@ -346,6 +367,13 @@ export function createV2StorageRepository(core: V2Core) {
           parse(opaqueIdSchema, id);
         parse(z.number().int().positive(), provenance.assetRevision);
         if (b.kind !== "public_copy" || b.visibility !== "public") return false;
+        const existing = await core
+          .statement("SELECT state FROM v2_blobs WHERE id=?", [b.id])
+          .first<{ state: string }>();
+        if (existing)
+          return existing.state === "pending"
+            ? commitPreparedPublicCopy(core, actor, b, provenance)
+            : false;
         const source = await core
           .statement(
             "SELECT b.encrypted_payload,b.logical_bytes FROM v2_blobs b JOIN v2_storage_reservations r ON r.id=b.reservation_id JOIN v2_billing_principals p ON p.id=b.principal_id JOIN v2_assets a ON a.id=r.entity_id WHERE b.id=? AND p.owner_id=? AND a.id=? AND a.revision=? AND a.sanitized_blob_id=b.id AND b.visibility='staging' AND b.state='stored'",
@@ -555,7 +583,7 @@ export function createV2StorageRepository(core: V2Core) {
         parse(hashSchema.nullable(), confirmation.cipherHash);
         const row = await core
           .statement(
-            "SELECT reservation_id FROM v2_blobs WHERE id=? AND state='deleting' AND object_key=? AND cipher_hash IS ? AND (cipher_hash IS NOT NULL OR (cipher_bytes=0 AND visibility='private' AND kind IN ('verification','profile_photo_original','portfolio_original')))",
+            "SELECT reservation_id FROM v2_blobs WHERE id=? AND state='deleting' AND object_key=? AND cipher_hash IS ? AND (cipher_hash IS NOT NULL OR (cipher_bytes=0 AND ((visibility='private' AND kind IN ('verification','profile_photo_original','portfolio_original')) OR (visibility='public' AND kind='public_copy' AND key_version IS NULL AND source_blob_id IS NOT NULL AND approved_revision_id IS NOT NULL))))",
             [blobId, confirmation.objectKey, confirmation.cipherHash],
           )
           .first<{ reservation_id: string }>();
@@ -578,7 +606,7 @@ export function createV2StorageRepository(core: V2Core) {
           // every write on a newly admitted receipt, including deleted accounts
           // that cannot own an ephemeral user-FK mutation claim anymore.
           core.statement(
-            "UPDATE v2_deletion_journals SET lease_token=? WHERE id=? AND lease_token=? AND fencing=? AND lease_until>? AND state='running' AND EXISTS(SELECT 1 FROM v2_deletion_targets t JOIN v2_blobs b ON b.id=t.target_id WHERE t.journal_id=v2_deletion_journals.id AND t.kind='blob' AND t.state='pending' AND b.id=? AND b.state='deleting' AND b.object_key=? AND b.cipher_hash IS ? AND (b.cipher_hash IS NOT NULL OR (b.cipher_bytes=0 AND b.visibility='private' AND b.kind IN ('verification','profile_photo_original','portfolio_original')))) AND NOT EXISTS(SELECT 1 FROM v2_deletion_targets WHERE journal_id=v2_deletion_journals.id AND kind IN ('job','legacy_workflow') AND state='pending') AND NOT EXISTS(SELECT 1 FROM v2_cleanup_receipts WHERE id=? OR (journal_id=v2_deletion_journals.id AND kind='blob' AND target_id=?))",
+            "UPDATE v2_deletion_journals SET lease_token=? WHERE id=? AND lease_token=? AND fencing=? AND lease_until>? AND state='running' AND EXISTS(SELECT 1 FROM v2_deletion_targets t JOIN v2_blobs b ON b.id=t.target_id WHERE t.journal_id=v2_deletion_journals.id AND t.kind='blob' AND t.state='pending' AND b.id=? AND b.state='deleting' AND b.object_key=? AND b.cipher_hash IS ? AND (b.cipher_hash IS NOT NULL OR (b.cipher_bytes=0 AND ((b.visibility='private' AND b.kind IN ('verification','profile_photo_original','portfolio_original')) OR (b.visibility='public' AND b.kind='public_copy' AND b.key_version IS NULL AND b.source_blob_id IS NOT NULL AND b.approved_revision_id IS NOT NULL))))) AND NOT EXISTS(SELECT 1 FROM v2_deletion_targets WHERE journal_id=v2_deletion_journals.id AND kind IN ('job','legacy_workflow') AND state='pending') AND NOT EXISTS(SELECT 1 FROM v2_cleanup_receipts WHERE id=? OR (journal_id=v2_deletion_journals.id AND kind='blob' AND target_id=?))",
             [
               receiptClaim,
               lease.journalId,
@@ -593,7 +621,7 @@ export function createV2StorageRepository(core: V2Core) {
             ],
           ),
           core.statement(
-            "INSERT INTO v2_cleanup_receipts(id,journal_id,kind,target_id,confirmed_at) SELECT ?,j.id,'blob',b.id,? FROM v2_deletion_journals j JOIN v2_deletion_targets t ON t.journal_id=j.id JOIN v2_blobs b ON b.id=t.target_id WHERE j.id=? AND j.lease_token=? AND j.fencing=? AND j.lease_until>? AND j.state='running' AND t.kind='blob' AND t.state='pending' AND b.id=? AND b.state='deleting' AND b.object_key=? AND b.cipher_hash IS ? AND (b.cipher_hash IS NOT NULL OR (b.cipher_bytes=0 AND b.visibility='private' AND b.kind IN ('verification','profile_photo_original','portfolio_original'))) AND NOT EXISTS(SELECT 1 FROM v2_deletion_targets WHERE journal_id=j.id AND kind IN ('job','legacy_workflow') AND state='pending') ON CONFLICT(journal_id,kind,target_id) DO NOTHING",
+            "INSERT INTO v2_cleanup_receipts(id,journal_id,kind,target_id,confirmed_at) SELECT ?,j.id,'blob',b.id,? FROM v2_deletion_journals j JOIN v2_deletion_targets t ON t.journal_id=j.id JOIN v2_blobs b ON b.id=t.target_id WHERE j.id=? AND j.lease_token=? AND j.fencing=? AND j.lease_until>? AND j.state='running' AND t.kind='blob' AND t.state='pending' AND b.id=? AND b.state='deleting' AND b.object_key=? AND b.cipher_hash IS ? AND (b.cipher_hash IS NOT NULL OR (b.cipher_bytes=0 AND ((b.visibility='private' AND b.kind IN ('verification','profile_photo_original','portfolio_original')) OR (b.visibility='public' AND b.kind='public_copy' AND b.key_version IS NULL AND b.source_blob_id IS NOT NULL AND b.approved_revision_id IS NOT NULL)))) AND NOT EXISTS(SELECT 1 FROM v2_deletion_targets WHERE journal_id=j.id AND kind IN ('job','legacy_workflow') AND state='pending') ON CONFLICT(journal_id,kind,target_id) DO NOTHING",
             [
               confirmation.receiptId,
               actor.now,
