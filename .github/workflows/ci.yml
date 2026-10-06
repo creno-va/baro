@@ -152,7 +152,7 @@ jobs:
         shell: bash
         run: |
           if [[ -f wrangler.jsonc || -f wrangler.json || -f wrangler.toml ]]; then
-            bunx wrangler deploy --dry-run --outdir .wrangler/dry-run
+            bun run cf:dry-run
           else
             echo "::error::Application exists but a Wrangler configuration file is missing."
             exit 1
