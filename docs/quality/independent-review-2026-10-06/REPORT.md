@@ -1,6 +1,6 @@
 # BARO 독립 통합 검토 · 2026-10-06
 
-검토 시작 21:41 KST, 최종 GitHub 재확인 21:56 KST. 60분 제한 내 독립 수행. 새 chat·Goal·추가 agent 없음. A~E 제품 파일을 직접 수정하지 않고 독립 검증과 재현 기록만 작성했다.
+검토 시작 21:41 KST, 최종 GitHub 재확인 21:59 KST. 60분 제한 내 독립 수행. 새 chat·Goal·추가 agent 없음. A~E 제품 파일을 직접 수정하지 않고 독립 검증과 재현 기록만 작성했다.
 
 고객/변호사 각각의 **동일 제품 UI mock 완주**는 통과했다. **다른 탭의 계정 전환 후 이전 owner 내용이 남는3건** 때문에 계정 전환을 포함한 M0 통합 완료로 판정할 수 없다. 실제 외부 OAuth·AI·OCR/ASR·R2·원격 cleanup 성공은 검증하지 않았으며 #70/#71 및 기존 P0.3 공개 gate를 유지한다.
 
@@ -13,11 +13,13 @@ AGENTS.md, README.md, EXECUTION.md, PARALLEL-UI-SPRINT.md, CLIENT-API-CONTRACT.m
 | PR | 확인 상태 | 통합 의미 |
 | --- | --- | --- |
 | #100 | main MERGED, head1bce704, CI SUCCESS, merge b6cfdfe | 기존 real workspace backend 사용 가능. 외부 성공 증거 아님 |
-| #110 | main 대상 OPEN, 최신 확인539a3cc, CI FAILURE/BLOCKED | 실제 통합 후보. UI main/preview 완료로 표시하지 않음 |
+| #110 | main 대상 OPEN, 최신 확인9dda100, CI 진행 중 | 실제 통합 후보. 검증 실행 기준은 dc22c26/539a3cc. UI main/preview 완료로 표시하지 않음 |
 | #111/#112/#113 | A branch에 MERGED; 각 PR 당시 CI 실패 | D/C/E stacked 병합. main 병합/green으로 취급하지 않음 |
 | #115 | main 대상 OPEN, head7cc4e28, CI FAILURE/BEHIND | B 소스는 A merge에서 확인. standalone 상태와 분리 |
 
 `dc22c26`의 CI는 타입이 아니라 기존 `analysis.e2e.ts`4개에서 실패했다(run37465349621). A가 이후 fixture/config를 보완했다. 최종 `539a3cc` [run37466327829](https://github.com/creno-va/baro/actions/runs/37466327829)은 C 공통 UI 검사 `workspace-shared.e2e.ts:17`에서 로그인 후 consent 대신 login에 남아 실패했다. 원격 CI 관측이며 본 독립 검사에서 재현한 신규 제품 blocker로 중복 등록하지 않는다. 최소 확인 위치는 C의 login 초기 hydration 대기와 전용 mock server 설정이다. 독립 4350 검사의 같은 로그인은 통과했다.
+
+최종 인계 직전 A가 `9dda100`으로 AuthButtons의 hydration 전 제어를 보완했고 [CI run37466884899](https://github.com/creno-va/baro/actions/runs/37466884899)가 진행 중이다. 이 commit의 변경은 `src/components/AuthButtons.tsx` 하나이며 아래 계정 전환/real 재시도 결함의 소스는 동일하다. 이 head의 전체 browser를 실행했다고 주장하지 않는다. 앞선 C login CI 실패를 새 제품 blocker로 올리지 않는다.
 
 과거 session 반환/type generic/E narrowing/facade cache/E role 연결 문제는 수정 코드와 최신 댓글을 확인했으므로 새 blocker로 등록하지 않았다. CSP 후속 PR119는 별도 담당자가 수정했고 [원격 CI SUCCESS](https://github.com/creno-va/baro/actions/runs/37466069757)를 확인했다. A 후보 통합은 별도이며 기존 CSP 결함을 신규 blocker로 올리지 않는다.
 

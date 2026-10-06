@@ -1,5 +1,6 @@
 {
-  "observedAt": "2026-10-06T12:56:00Z",
+  "observedAt": "2026-10-06T12:59:00Z",
+  "note": "Issues and PRs queried at 12:56 UTC; PR110 refreshed at final handoff.",
   "entries": [
     {
       "kind": "issue",
@@ -387,7 +388,7 @@
       "number": 110,
       "data": {
         "baseRefName": "main",
-        "headRefOid": "539a3cc1771b0c28bafe01272cab75fff77e48f9",
+        "headRefOid": "9dda1005542efdd4ae6099b54e5ff40f7535ddb8",
         "mergeStateStatus": "BLOCKED",
         "mergedAt": null,
         "number": 110,
@@ -395,36 +396,26 @@
         "statusCheckRollup": [
           {
             "__typename": "CheckRun",
-            "completedAt": "2026-10-06T12:51:35Z",
+            "completedAt": "2026-10-06T12:56:03Z",
             "conclusion": "SUCCESS",
-            "detailsUrl": "https://github.com/creno-va/baro/actions/runs/37466327829/job/112278163772",
+            "detailsUrl": "https://github.com/creno-va/baro/actions/runs/37466884899/job/112280051006",
             "name": "Isolated native media fixtures",
-            "startedAt": "2026-10-06T12:51:29Z",
+            "startedAt": "2026-10-06T12:55:57Z",
             "status": "COMPLETED",
             "workflowName": "CI"
           },
           {
             "__typename": "CheckRun",
-            "completedAt": "2026-10-06T12:54:43Z",
-            "conclusion": "FAILURE",
-            "detailsUrl": "https://github.com/creno-va/baro/actions/runs/37466327829/job/112278164115",
+            "completedAt": "0001-01-01T00:00:00Z",
+            "conclusion": "",
+            "detailsUrl": "https://github.com/creno-va/baro/actions/runs/37466884899/job/112280050748",
             "name": "Source and browser checks",
-            "startedAt": "2026-10-06T12:51:29Z",
-            "status": "COMPLETED",
-            "workflowName": "CI"
-          },
-          {
-            "__typename": "CheckRun",
-            "completedAt": "2026-10-06T12:54:49Z",
-            "conclusion": "FAILURE",
-            "detailsUrl": "https://github.com/creno-va/baro/actions/runs/37466327829/job/112279550233",
-            "name": "Quality gate",
-            "startedAt": "2026-10-06T12:54:46Z",
-            "status": "COMPLETED",
+            "startedAt": "2026-10-06T12:55:57Z",
+            "status": "IN_PROGRESS",
             "workflowName": "CI"
           }
         ],
-        "updatedAt": "2026-10-06T12:53:49Z"
+        "updatedAt": "2026-10-06T12:55:49Z"
       }
     },
     {
