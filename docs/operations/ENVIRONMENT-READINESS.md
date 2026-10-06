@@ -17,6 +17,16 @@ main 병합만으로 두 환경의 배포 성공을 갱신하지 않는다. 실�
 
 ### 실제 API 전환 관측 (2026-10-07)
 
+사용자의 운영 API 배포 후속 지시에 따라 제공된 소셜6필드를 GitHub `production`
+Environment secret으로만 저장하고, `Deploy production`의 `sync_oauth=true`로 기존
+`baro-production` Worker에 적용한다. Environment reviewer 승인·immutable CI/preview
+검증은 기존대로 필수다. 옵션 기본값은 false이며 요청 시6필드가 모두 있는지 먼저 검사한다.
+`BETTER_AUTH_SECRET`, preview client와 공개 gate는 변경하지 않는다. 실제 값은 command
+인자·로그·PR·artifact에 보내지 않는다. 기존 키 등록과 새 값 적용은 실제 callback 성공과
+구분하고, 운영 callback URL은 `https://baro.site/api/auth/callback/{google,naver,kakao}`다.
+공급자 앱 관리자에게 해당 URL 등록과 tester/audience 권한 확인을 요구한다.
+실제 배포 결과·Worker 버전·적용된 필드 이름은 정본 journal에 보존한다.
+
 PR136 main73cc78324bcaa9302339c3f8e6da51aa1a8915a3의 CI37510886700과
 preview37511081159는 SUCCESS이며 독립 fullSHA/schema0009 smoke를 통과했다.
 실제 브라우저는 기존 local 예시 계정/사건을 표시하지 않고 실제 API 오류를 반환했다.
