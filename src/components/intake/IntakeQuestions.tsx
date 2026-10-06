@@ -67,7 +67,7 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
     if (!result?.processing || busy) return;
     const timer = window.setTimeout(() => void load(), 2500);
     return () => window.clearTimeout(timer);
-  }, [result?.processing, busy, load]);
+  }, [result, busy, load]);
   useEffect(() => {
     const warn = (event: BeforeUnloadEvent) => {
       if (value !== (question?.answer ?? "") || answerState !== question?.answerState)
