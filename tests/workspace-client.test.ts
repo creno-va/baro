@@ -2,7 +2,11 @@ import { expect, test } from "bun:test";
 import { createFilesApi } from "../src/client/api/files";
 import { createFilesMock } from "../src/client/api/mock/files";
 import { createWorkspaceMock, type WorkspaceMockRuntime } from "../src/client/api/mock/workspace";
-import { createWorkspaceApi, workspaceMutation } from "../src/client/api/workspace";
+import {
+  createWorkspaceApi,
+  workspaceMutation,
+  workspaceResponse,
+} from "../src/client/api/workspace";
 import {
   action,
   assistantMessage,
@@ -280,13 +284,21 @@ test("chunk upload retries reuse reservation and preserve exact original bytes a
 
 test("real workspace DTOs preserve server-validated text and use entity revisions for edits", async () => {
   const writes: { path: string; body: unknown }[] = [];
+  const reads: string[] = [];
   let validated = true;
   const transport = async (path: string, init?: RequestInit) => {
     if (init?.method === "PUT") {
       writes.push({ path, body: JSON.parse(String(init.body)) });
       return Response.json({ saved: true });
     }
-    if (path.endsWith("/workspace")) return Response.json(workspace);
+    reads.push(path);
+    if (path.endsWith("/workspace"))
+      return Response.json({
+        ...workspace,
+        workspaceRevision: validated
+          ? workspace.workspaceRevision
+          : workspace.workspaceRevision + 1,
+      });
     if (path.endsWith("/intake")) return Response.json(intake);
     if (path.endsWith("/summary")) return Response.json(summary);
     if (path.includes("/messages?"))
@@ -313,6 +325,11 @@ test("real workspace DTOs preserve server-validated text and use entity revision
   const view = await api.get(workspace.id);
   expect(view.case.summary).toBe(summary.overview);
   expect(view.messages[1]?.text).toBe(assistantMessage.text);
+  await api.get(workspace.id);
+  expect(reads.filter((path) => path.includes("/messages?"))).toHaveLength(1);
+  expect(reads.filter((path) => path.endsWith("/timeline"))).toHaveLength(1);
+  expect(reads.filter((path) => path.endsWith("/workspace"))).toHaveLength(2);
+  expect(reads.filter((path) => path.endsWith("/files"))).toHaveLength(2);
   await api.setAction(workspace.id, action.id, true);
   await api.saveTimeline(workspace.id, {
     id: timeline.id,
@@ -419,4 +436,53 @@ test("real accepted chat job restores failed response after reload and retries c
   status = "completed";
   await resumed.get(workspace.id);
   expect(stored.size).toBe(0);
+});
+
+test("a denied/deleted v2 resource remains NOT_FOUND even when legacy transport is unavailable", async () => {
+  let denied = false;
+  const f = fixture();
+  const transport = async (path: string, init?: RequestInit) => {
+    if (path.startsWith("/api/cases/"))
+      return Response.json({ error: { code: "UNAVAILABLE" } }, { status: 503 });
+    if (denied && path.endsWith("/workspace"))
+      return Response.json({ error: { code: "NOT_FOUND" } }, { status: 404 });
+    return f.transport(path, init);
+  };
+  const client = createWorkspaceApi(transport, null);
+  await client.get("synthetic-case");
+  denied = true;
+  await expect(client.get("synthetic-case")).rejects.toMatchObject({ code: "NOT_FOUND" });
+  await expect(createWorkspaceApi(transport, null).get("synthetic-case")).rejects.toMatchObject({
+    code: "NOT_FOUND",
+  });
+});
+
+test("shared ROLE_REQUIRED denies access instead of presenting a temporary outage", async () => {
+  await expect(
+    workspaceResponse(Response.json({ error: { code: "ROLE_REQUIRED" } }, { status: 403 })),
+  ).rejects.toMatchObject({ code: "NOT_FOUND", retryable: false });
+});
+
+test("known v1 records still read and preserve UNAVAILABLE during temporary legacy outages", async () => {
+  const id = crypto.randomUUID();
+  let unavailable = false;
+  const client = createWorkspaceApi(async (path) => {
+    if (path.endsWith("/workspace"))
+      return Response.json({ error: { code: "NOT_FOUND" } }, { status: 404 });
+    return unavailable
+      ? Response.json({ error: { code: "UNAVAILABLE" } }, { status: 503 })
+      : Response.json({
+          caseId: id,
+          analysisId: crypto.randomUUID(),
+          title: "기존 합성 사건",
+          status: "queued",
+          inputRevision: 2,
+          questions: [],
+          result: null,
+          error: null,
+        });
+  }, null);
+  expect((await client.get(id)).case.schemaVersion).toBe("1");
+  unavailable = true;
+  await expect(client.get(id)).rejects.toMatchObject({ code: "UNAVAILABLE" });
 });

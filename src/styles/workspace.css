@@ -20,6 +20,7 @@
 }
 .workspace-header {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
   gap: 20px;
@@ -27,6 +28,7 @@
 }
 .workspace-header > div {
   min-width: 0;
+  flex: 1 1 16rem;
 }
 .workspace-header h1 {
   font-size: clamp(1.2rem, 2.5vw, 1.6rem);
@@ -756,8 +758,8 @@
   color: var(--muted-foreground);
 }
 .workspace-dialog {
-  width: min(640px, calc(100vw - 32px));
-  max-height: calc(100dvh - 40px);
+  width: min(640px, calc(var(--workspace-viewport-width, 100vw) - 32px));
+  max-height: calc(var(--workspace-viewport-height, 100dvh) - 40px);
   border: 1px solid var(--border);
   border-radius: 22px;
   padding: 24px;
@@ -1028,4 +1030,41 @@
   .workspace-composer {
     position: static;
   }
+}
+
+.workspace-facts {
+  display: grid;
+  gap: 14px;
+  list-style: none;
+  padding: 0;
+  margin: 12px 0;
+  overflow-wrap: anywhere;
+}
+.workspace-facts small,
+.workspace-fact-source {
+  display: block;
+  color: var(--muted-foreground);
+  font-size: 0.8rem;
+}
+.workspace-dialog input,
+.workspace-dialog textarea,
+.workspace-composer textarea {
+  font-size: max(1rem, 16px);
+}
+.workspace-composer {
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
+}
+.workspace-messages {
+  overflow-anchor: auto;
+}
+.workspace-dialog input,
+.workspace-dialog textarea {
+  scroll-margin-block: 80px;
+}
+
+.workspace-dialog .workspace-buttons {
+  position: sticky;
+  bottom: 0;
+  padding-block: 12px;
+  background: var(--card);
 }

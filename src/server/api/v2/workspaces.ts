@@ -1,7 +1,8 @@
-import { Hono } from "hono";
+import { type Context, Hono } from "hono";
 import { z } from "zod";
 import { idempotencyKeySchema, opaqueIdSchema, timestampSchema } from "../../../contracts";
 import { v2CreateCaseRequestSchema } from "../../../contracts/v2";
+import { readAccountType } from "../../auth/account-type";
 import { createCaseDataCipher } from "../../crypto";
 import { createV2Core, type V2Core, V2RepositoryError } from "../../db/v2-core";
 import { verifyTurnstile } from "../../modules/intake/service";
@@ -28,6 +29,13 @@ function before(value?: string) {
 }
 const afterQuery = z.strictObject({ after: opaqueIdSchema.optional() });
 const emptyQuery = z.strictObject({});
+async function customerAccess(c: Context<ApiEnvironment>, mutation = false, consent = false) {
+  const access = await caseAccess(c, mutation, consent);
+  if (access.response) return access;
+  if ((await readAccountType(c.env.DB, access.ownerId)) !== "customer")
+    return { response: c.json(errorBody(c, "NOT_FOUND", "고객 사건을 찾을 수 없어요."), 404) };
+  return access;
+}
 export function createWorkspacesApi(
   options: {
     dependencies?: (env: Env, core: V2Core, ownerId: string) => Promise<WorkspaceDependencies>;
@@ -77,18 +85,16 @@ export function createWorkspacesApi(
     return createWorkspaceService(core, await options.dependencies?.(env, core, ownerId));
   };
   app.get("/", async (c) => {
-    const a = await caseAccess(c);
+    const a = await customerAccess(c);
     if (a.response) return a.response;
     const q = pageQuery.parse(c.req.query());
-    const items = await (await service(c.env, a.ownerId)).list(
-      a.ownerId,
-      q.limit,
-      before(q.before),
-    );
+    const s = await service(c.env, a.ownerId);
+    const items = await s.list(a.ownerId, q.limit, before(q.before));
     const last = items.at(-1);
     return c.json({
       schemaVersion: "2",
       items,
+      previews: await s.previews(a.ownerId, items),
       nextCursor:
         items.length === q.limit && last
           ? btoa(JSON.stringify({ createdAt: last.createdAt, id: last.id }))
@@ -96,7 +102,7 @@ export function createWorkspacesApi(
     });
   });
   app.post("/", async (c) => {
-    const a = await caseAccess(c, true, true);
+    const a = await customerAccess(c, true, true);
     if (a.response) return a.response;
     emptyQuery.parse(c.req.query());
     const request = v2CreateCaseRequestSchema.parse(await c.req.json());
@@ -111,19 +117,19 @@ export function createWorkspacesApi(
     return c.json(await s.create(a.ownerId, key, request), 201);
   });
   app.get("/:id/workspace", async (c) => {
-    const a = await caseAccess(c);
+    const a = await customerAccess(c);
     if (a.response) return a.response;
     emptyQuery.parse(c.req.query());
     return c.json(await (await service(c.env, a.ownerId)).find(a.ownerId, c.req.param("id")));
   });
   app.get("/:id/intake", async (c) => {
-    const a = await caseAccess(c);
+    const a = await customerAccess(c);
     if (a.response) return a.response;
     emptyQuery.parse(c.req.query());
     return c.json(await (await service(c.env, a.ownerId)).intake(a.ownerId, c.req.param("id")));
   });
   app.get("/:id/summary", async (c) => {
-    const a = await caseAccess(c);
+    const a = await customerAccess(c);
     if (a.response) return a.response;
     emptyQuery.parse(c.req.query());
     const s = await service(c.env, a.ownerId);
@@ -176,7 +182,7 @@ export function createWorkspacesApi(
     const method =
       name === "answers" || name === "editSummary" || name === "state" ? "put" : "post";
     app[method](`/:id/${path}`, async (c) => {
-      const a = await caseAccess(c, true, true);
+      const a = await customerAccess(c, true, true);
       if (a.response) return a.response;
       emptyQuery.parse(c.req.query());
       const key = idempotencyKeySchema.parse(c.req.header("idempotency-key"));
@@ -198,7 +204,7 @@ export function createWorkspacesApi(
     });
   }
   app.get("/:id/messages", async (c) => {
-    const a = await caseAccess(c);
+    const a = await customerAccess(c);
     if (a.response) return a.response;
     const q = pageQuery.parse(c.req.query());
     const items = await (await service(c.env, a.ownerId)).messages(
@@ -218,7 +224,7 @@ export function createWorkspacesApi(
   });
   for (const name of ["actions", "timeline"] as const)
     app.get(`/:id/${name}`, async (c) => {
-      const a = await caseAccess(c);
+      const a = await customerAccess(c);
       if (a.response) return a.response;
       const q = afterQuery.parse(c.req.query());
       const items = await (await service(c.env, a.ownerId))[name](
@@ -230,7 +236,7 @@ export function createWorkspacesApi(
     });
   for (const name of ["actions", "timeline"] as const)
     app.put(`/:id/${name}/:entityId`, async (c) => {
-      const a = await caseAccess(c, true, true);
+      const a = await customerAccess(c, true, true);
       if (a.response) return a.response;
       emptyQuery.parse(c.req.query());
       const key = idempotencyKeySchema.parse(c.req.header("idempotency-key"));
@@ -246,8 +252,28 @@ export function createWorkspacesApi(
         ),
       );
     });
+  app.post("/:id/timeline", async (c) => {
+    const a = await customerAccess(c, true, true);
+    if (a.response) return a.response;
+    emptyQuery.parse(c.req.query());
+    return c.json(
+      await (await service(c.env, a.ownerId)).createTimeline(
+        a.ownerId,
+        c.req.param("id"),
+        idempotencyKeySchema.parse(c.req.header("idempotency-key")),
+        await c.req.json(),
+      ),
+      201,
+    );
+  });
+  app.get("/:id/workspace-jobs/latest", async (c) => {
+    const a = await customerAccess(c);
+    if (a.response) return a.response;
+    emptyQuery.parse(c.req.query());
+    return c.json(await (await service(c.env, a.ownerId)).latestJob(a.ownerId, c.req.param("id")));
+  });
   app.get("/:id/workspace-jobs/:jobId", async (c) => {
-    const a = await caseAccess(c);
+    const a = await customerAccess(c);
     if (a.response) return a.response;
     emptyQuery.parse(c.req.query());
     return c.json(
@@ -259,7 +285,7 @@ export function createWorkspacesApi(
     );
   });
   app.post("/:id/workspace-jobs/:jobId/retry", async (c) => {
-    const a = await caseAccess(c, true, true);
+    const a = await customerAccess(c, true, true);
     if (a.response) return a.response;
     emptyQuery.parse(c.req.query());
     idempotencyKeySchema.parse(c.req.header("idempotency-key"));

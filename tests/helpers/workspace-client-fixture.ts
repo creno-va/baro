@@ -48,4 +48,8 @@ async function request(path: string, init?: RequestInit) {
   }
   return Response.json({ error: { code: "NOT_FOUND", retryable: false } }, { status: 404 });
 }
-export const api = { workspace: createWorkspaceApi(request), files: createFilesApi(request) };
+export const api = {
+  session: { get: async () => runtime.read().session },
+  workspace: createWorkspaceApi(request),
+  files: createFilesApi(request),
+};

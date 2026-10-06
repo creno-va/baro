@@ -1,0 +1,54 @@
+# 고객 사건 연결 회귀 검증 (#64, #65)
+
+- 기준: main `ca6e15b` (UI PR125 병합), `codex/65-customer-workspace`.
+- 경로: 기존 `/cases`, `/cases/:id/intake`, `/cases/:id/summary`, `/cases/:id`와 자료·타임라인·할 일 탭.
+- 공유 contracts/schema/migration/router/auth/session/CI는 수정하지 않았다.
+- 기존 workspace execution engine과 llm-gateway를 재사용한다. 새 공급자·모델·품질 corpus는 추가하지 않는다.
+
+## 재현과 수정
+
+| 실패 조건 | 결과와 증거 |
+| --- | --- |
+| 요약 PUT 또는 확인 POST가 실제 저장 후 응답만 유실 | 원래 intake/summary revision, 본문, idempotency key로 재전송한다. 성공 응답과 authoritative 조회가 끝나기 전에는 요청을 해제하지 않는다. 요약 화면의 background refresh도 실패한 요청 revision을 교체하지 않는다. |
+| 같은 key의 변경된 본문 / 새 key의 오래된 revision / 다른 owner | 실제 Hono API가 각각 409 / 409 / 404를 반환한다. 저장 revision이 다시 증가하지 않는다. |
+| 다른 탭의 로그아웃·계정 변경·역할 변경 | 고객 screen boundary가 identity epoch를 폐기하고 요약·확인 checkbox·메시지·자료·파일 input·초안·대화상자를 지운다. mutation 전후 세션을 확인하고 이전 epoch의 늦은 결과를 적용하지 않는다. |
+| session 조회의 일시적 네트워크 장애 | 정상 owner의 초안을 보존하고 쓰기를 보내지 않는다. 실제 401/동의 거부/404와 구분한다. |
+| 작업 도중 customer→lawyer 변경 | runtime은 admission, execution, 각 gateway reserve와 게시 전 권한을 재검사한다. 실제 account-type API로 합성 모델 실행 도중 역할을 바꾼 회귀에서 결과가 게시되지 않고 이후 작업은 stopped가 된다. 비용 receipt는 지우지 않는다. 공유 403/ROLE_REQUIRED도 고객 adapter에서 접근 거부로 매핑한다. |
+| 타임라인 생성 저장 후 응답 유실 | POST receipt와 결정적인 entity ID를 재사용한다. 생성은 workspace revision, 편집은 entity revision을 검사한다. 새로고침 후 1개 항목만 남는다. |
+| 이전 batch 질문 수정 | 질문 ID로 원래 batch를 찾고 해당 batch 계약으로 검증한다. 요약을 무효화하고 다른 batch 답변은 보존한다. |
+| 처리 ACK/job ID 유실 뒤 currentJobId 해제 | owner-scoped latest job을 조회해 실패/진행 상태를 복구한다. browser storage가 없어도 실패한 intake/chat job을 찾는다. |
+| chat ACK는 받았지만 뒤의 workspace 조회가 실패 | client의 원래 RequestInit을 유지해 동일 key/body로 receipt를 복구한다. 사용자 메시지 1개를 보존한다. |
+| 반복 polling/focus | workspace 권한 조회는 유지하되 같은 workspace revision의 요약·메시지·행동·타임라인 목록을 재사용한다. 자료 목록과 job 상태는 갱신한다. 사건 목록은 optional previews로 항목별 HTTP intake 조회를 줄인다. |
+| 작은 화면·키보드·200% 확대 | 읽던 채팅 위치를 유지하고, dialog를 visualViewport/zoom에 맞추며 저장 버튼을 보이게 한다. 입력 글꼴 16px, safe-area composer, 키보드 Enter 저장을 검사한다. |
+
+## 재실행 가능한 증거
+
+아래 명령은 같은 checkout에서 순차 실행한다. Bun 1.3.14와 Node를 PATH에 둔다.
+
+```sh
+bun ci
+bun run check
+bun test ./tests/independent-review/intake-real-retry.repro.ts
+bunx playwright test --config tests/browser/intake103.config.ts
+bunx playwright test --config tests/helpers/customer-mock.playwright.config.ts --grep 'intake summary|workspace clears|owner API boundaries'
+bunx playwright test --config tests/browser/customer-real.config.ts
+bun run build
+bun run cf:dry-run
+bun run test:csp
+```
+
+- `tests/customer-workspace-api.test.ts`: 실제 Hono route, 서명된 합성 session, migrated SQLite D1 binding, 실제 암호화 repository와 execution engine을 사용한다. 응답을 버리기 전에 서버 응답 성공과 저장 revision을 확인한다. 모델 admission/응답은 명시적 합성 fixture다.
+- `tests/browser/customer-real.e2e.ts`: 제품 UI의 real domain adapter를 loopback Hono 서버에 연결한다. 저장/확인/타임라인 응답을 commit 후 중단하고 wire body/key, 새로고침, cookie owner 변경, 동일 owner의 실제 역할 저장, network 실패 시 초안을 검사한다. 390×844, 200% browser 확대에 해당하는 640×450 CSS viewport reflow, 별도의 1280×900 CSS zoom 2 스트레스 검사를 순차 실행한다. CSS zoom은 media query가 유지되는 점에서 browser 확대와 다르다. screenshot은 Playwright test-results에 생성한다.
+- 기존 intake browser 6개 및 independent-review의 해당 결함 3개를 보존하고 회귀 검사한다. 다른 소유 영역의 전체 independent-review를 이 결과로 대체하지 않는다.
+- `tests/workspace-client.test.ts`: 기존 v1 fallback, owner/deleted-case 404와 일시적 503 구분, revision 캐시 invalidation, 파일 upload의 합성 재접속 증거를 보존한다.
+
+이 증거는 실제 OAuth provider 로그인·실제 유료 모델·R2/Containers/Whisper 처리 성공을 뜻하지 않는다. 실제 기기의 OS 키보드, 외부 장애 복구 및 공개 승인 gate는 별도 검증이다.
+
+## 통합 세션 인계
+
+- 고객 namespace에 POST `/api/v2/cases/:id/timeline`을 추가했다. 기존 `v2TimelineEditRequestSchema`를 사용하며 create의 expectedRevision은 workspace revision이다. 201에는 기존 timeline entry 계약을 반환한다. PUT 편집 계약은 유지한다.
+- GET `/api/v2/cases/:id/workspace-jobs/latest`은 기존 Job 또는 null을 반환한다. owner/workspace로 제한하며 intake/chat만 선택한다. client는 구버전 route의 404를 허용한다.
+- 사건 목록 응답의 optional `previews: { id, title, hasSummary }[]`는 기존 items/cursor를 유지한다. 고객 workspace view의 optional facts/people/unknowns/notices는 기존 Summary 계약에서 읽는다. 정식 공유 facade/type 문서 정리는 4번에 요청했다.
+- shared session의 `baro-session-changed` peer-tab marker는 4번에 요청했다. 현재 고객 boundary는 Better Auth의 `better-auth.message`, focus/pageshow/visibility와 15초 session 검사를 사용하며 marker도 수신한다. 동일 owner의 lawyer 전환은 고객 API namespace에서 즉시 거부한다.
+- 자료 처리 POST `/api/v2/cases/:id/files/:fileId/retry` 연결은 2번 소유이며 [요청 코멘트](https://github.com/creno-va/baro/issues/59#issuecomment-6018985215)에 기록했다. 자료 API/처리/report/삭제는 이 PR에서 변경하지 않는다. 처리 요청의 실제 외부 성공을 합성 upload 증거로 대신하지 않는다.
+- #64/#65 및 #70/#71 외부·정책·공개 조건은 OPEN으로 보존한다. PR은 Refs만 사용한다. 병합·배포는 4번 통합 세션에 맡긴다.

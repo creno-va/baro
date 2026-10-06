@@ -5,7 +5,12 @@ import {
   caseListResponseSchema,
   displayText,
 } from "../../contracts";
-import { v2QuestionBatchSchema, v2SummarySchema, v2WorkspaceSchema } from "../../contracts/v2";
+import {
+  v2JobSchema,
+  v2QuestionBatchSchema,
+  v2SummarySchema,
+  v2WorkspaceSchema,
+} from "../../contracts/v2";
 import { ApiError, apiMode, request } from "./core";
 import type { CaseView, QuestionView } from "./types";
 import "./mock/cases";
@@ -96,6 +101,63 @@ function forgetMutation(key: string) {
     /* Optional browser storage. */
   }
 }
+// Only revisions and opaque owner IDs persist; request text remains in the editor.
+const wireRevisions = new Map<
+  string,
+  { owner: string; revision: number; summaryRevision: number }
+>();
+async function summaryRequest(operation: string, id: string, input: { expectedRevision: number }) {
+  const session = z
+    .object({
+      user: z.object({ id: z.string(), accountType: z.string() }).nullable(),
+      needsConsent: z.boolean(),
+    })
+    .parse(await request("cases.owner", undefined, { path: "/api/me/session" }));
+  if (!session.user) throw new ApiError("UNAUTHENTICATED", "로그인이 필요해요.");
+  if (session.needsConsent) throw new ApiError("CONSENT_REQUIRED", "필수 동의를 확인해 주세요.");
+  if (session.user.accountType !== "customer")
+    throw new ApiError("NOT_FOUND", "사건을 찾을 수 없어요.");
+  const owner = session.user.id;
+  const key = await mutationKey(`${operation}:${owner}:${id}`, input);
+  let saved = wireRevisions.get(key);
+  try {
+    if (!saved) {
+      const stored = sessionStorage.getItem(`baro-cases-wire:${key}`);
+      if (stored)
+        saved = z
+          .object({
+            owner: z.string(),
+            revision: z.number().int().positive(),
+            summaryRevision: z.number().int().positive(),
+          })
+          .parse(JSON.parse(stored));
+    }
+  } catch {
+    /* Browser storage is optional. */
+  }
+  // Replays still reach owner checks on the real API; never preflight a committed revision again.
+  if (saved?.owner === owner) return { key, saved };
+  const [w, m] = await Promise.all([workspace(id), metadata(id)]);
+  if (w.workspaceRevision !== input.expectedRevision || !m.summary)
+    throw new ApiError("CONFLICT", "요약이 변경됐어요. 최신 내용을 확인해 주세요.");
+  saved = { owner, revision: m.revision, summaryRevision: m.summary.revision };
+  wireRevisions.set(key, saved);
+  try {
+    sessionStorage.setItem(`baro-cases-wire:${key}`, JSON.stringify(saved));
+  } catch {
+    /* Optional. */
+  }
+  return { key, saved };
+}
+function finishSummary(key: string) {
+  wireRevisions.delete(key);
+  try {
+    sessionStorage.removeItem(`baro-cases-wire:${key}`);
+  } catch {
+    /* Optional. */
+  }
+  forgetMutation(key);
+}
 function validate<T>(schema: z.ZodType<T>, raw: unknown): T {
   const parsed = schema.safeParse(raw);
   if (!parsed.success) throw new ApiError("VALIDATION_ERROR", "입력한 내용을 확인해 주세요.");
@@ -122,23 +184,24 @@ function view(w: Workspace, m?: Metadata, summary = ""): CaseView {
   };
 }
 function questions(m: Metadata, revision: number): QuestionsResult {
-  const batch = m.batches.at(-1);
   return {
-    questions: (batch?.questions ?? []).map((q) => {
-      const answer = batch?.answers.find((a) => a.questionId === q.id);
-      return {
-        id: q.id,
-        text: q.prompt,
-        kind: q.answerType,
-        options: q.options,
-        ...(answer
-          ? {
-              answerState: answer.status,
-              ...(answer.status === "answered" ? { answer: answer.value } : {}),
-            }
-          : {}),
-      };
-    }),
+    questions: m.batches.flatMap((batch) =>
+      batch.questions.map((q) => {
+        const answer = batch.answers.find((a) => a.questionId === q.id);
+        return {
+          id: q.id,
+          text: q.prompt,
+          kind: q.answerType,
+          options: q.options,
+          ...(answer
+            ? {
+                answerState: answer.status,
+                ...(answer.status === "answered" ? { answer: answer.value } : {}),
+              }
+            : {}),
+        };
+      }),
+    ),
     complete: m.summary !== null,
     revision,
     processing: m.currentJobId !== null,
@@ -148,14 +211,22 @@ async function getQuestions(id: string): Promise<QuestionsResult> {
   if (apiMode === "mock") return request("cases.getQuestions", { id });
   const [w, m] = await Promise.all([workspace(id), metadata(id)]);
   const result = questions(m, w.workspaceRevision);
-  if (m.currentJobId) {
+  const recovered = m.currentJobId
+    ? null
+    : v2JobSchema
+        .nullable()
+        .parse(
+          await request("cases.latestJob", { id }, { path: path(id, "workspace-jobs/latest") }),
+        );
+  const jobId = m.currentJobId ?? (recovered?.status === "failed" ? recovered.id : null);
+  if (jobId) {
     const job = z
       .object({ status: z.string(), retryable: z.boolean() })
       .parse(
         await request(
           "cases.job",
           { id },
-          { path: path(id, `workspace-jobs/${encodeURIComponent(m.currentJobId)}`) },
+          { path: path(id, `workspace-jobs/${encodeURIComponent(jobId)}`) },
         ),
       );
     result.processing = !["failed", "cancelled", "superseded"].includes(job.status);
@@ -272,20 +343,38 @@ export const casesApi = {
       cursor = null;
       do {
         const page = z
-          .object({ items: z.array(v2WorkspaceSchema), nextCursor: z.string().nullable() })
+          .object({
+            items: z.array(v2WorkspaceSchema),
+            nextCursor: z.string().nullable(),
+            previews: z
+              .array(z.object({ id: z.string(), title: z.string(), hasSummary: z.boolean() }))
+              .optional(),
+          })
           .parse(
             await request("cases.listV2", undefined, {
               path: `/api/v2/cases?limit=50${cursor ? `&before=${encodeURIComponent(cursor)}` : ""}`,
             }),
           );
-        for (let start = 0; start < page.items.length; start += 5) {
-          items.push(
-            ...(await Promise.all(
-              page.items
-                .slice(start, start + 5)
-                .map(async (item) => view(item, await metadata(item.id))),
-            )),
-          );
+        if (page.previews) {
+          for (const item of page.items) {
+            const preview = page.previews.find((entry) => entry.id === item.id);
+            if (preview)
+              items.push({
+                ...view(item),
+                title: preview.title,
+                stage: item.status === "intake" && preview.hasSummary ? "summary" : item.status,
+              });
+          }
+        } else {
+          // Older reviewed servers remain readable until the projection deploys.
+          for (let start = 0; start < page.items.length; start += 5)
+            items.push(
+              ...(await Promise.all(
+                page.items
+                  .slice(start, start + 5)
+                  .map(async (item) => view(item, await metadata(item.id))),
+              )),
+            );
         }
         cursor = page.nextCursor;
       } while (cursor);
@@ -381,14 +470,22 @@ export const casesApi = {
       );
     const m = await metadata(id);
     let suffix = "intake/advance";
-    if (m.currentJobId) {
+    const recovered = m.currentJobId
+      ? null
+      : v2JobSchema
+          .nullable()
+          .parse(
+            await request("cases.latestJob", { id }, { path: path(id, "workspace-jobs/latest") }),
+          );
+    const jobId = m.currentJobId ?? (recovered?.status === "failed" ? recovered.id : null);
+    if (jobId) {
       const job = z
         .object({ status: z.string(), retryable: z.boolean() })
         .parse(
           await request(
             "cases.job",
             { id },
-            { path: path(id, `workspace-jobs/${encodeURIComponent(m.currentJobId)}`) },
+            { path: path(id, `workspace-jobs/${encodeURIComponent(jobId)}`) },
           ),
         );
       if (job.status !== "failed") return getQuestions(id);
@@ -397,7 +494,7 @@ export const casesApi = {
           "UNAVAILABLE",
           "이 작업을 다시 준비할 수 없어요. 저장한 답변은 보존돼요.",
         );
-      suffix = `workspace-jobs/${encodeURIComponent(m.currentJobId)}/retry`;
+      suffix = `workspace-jobs/${encodeURIComponent(jobId)}/retry`;
     }
     await request(
       "cases.advance",
@@ -412,13 +509,15 @@ export const casesApi = {
     return getQuestions(id);
   },
   async saveSummary(id: string, raw: z.infer<typeof summaryInputSchema>): Promise<CaseView> {
-    const input = validate(summaryInputSchema, raw),
-      key = await mutationKey(`cases.saveSummary:${id}`, input);
-    if (apiMode === "mock") return request("cases.saveSummary", { id, ...input }, { key });
-    const [w, m] = await Promise.all([workspace(id), metadata(id)]);
-    if (w.workspaceRevision !== input.expectedRevision || !m.summary)
-      throw new ApiError("CONFLICT", "요약이 변경됐어요. 최신 내용을 확인해 주세요.");
-    const body = { expectedRevision: m.summary.revision, overview: input.summary };
+    const input = validate(summaryInputSchema, raw);
+    if (apiMode === "mock")
+      return request(
+        "cases.saveSummary",
+        { id, ...input },
+        { key: await mutationKey(`cases.saveSummary:${id}`, input) },
+      );
+    const { key, saved } = await summaryRequest("cases.saveSummary", id, input);
+    const body = { expectedRevision: saved.summaryRevision, overview: input.summary };
     for (let attempt = 0; attempt < 30; attempt++) {
       const result = z
         .looseObject({ edit: z.object({ status: z.string(), retryAfter: z.number() }).optional() })
@@ -429,7 +528,11 @@ export const casesApi = {
             { path: path(id, "summary"), method: "PUT", body, key },
           ),
         );
-      if (!result.edit) return casesApi.get(id);
+      if (!result.edit) {
+        const next = await casesApi.get(id);
+        finishSummary(key);
+        return next;
+      }
       await new Promise((resolve) =>
         setTimeout(resolve, Math.min(result.edit?.retryAfter ?? 1, 3) * 1000),
       );
@@ -441,22 +544,26 @@ export const casesApi = {
     );
   },
   async confirmSummary(id: string, raw: { expectedRevision: number }): Promise<CaseView> {
-    const input = validate(revisionInputSchema, raw),
-      key = await mutationKey(`cases.confirmSummary:${id}`, input);
-    if (apiMode === "mock") return request("cases.confirmSummary", { id, ...input }, { key });
-    const [w, m] = await Promise.all([workspace(id), metadata(id)]);
-    if (w.workspaceRevision !== input.expectedRevision || !m.summary)
-      throw new ApiError("CONFLICT", "요약이 변경됐어요. 최신 내용을 확인해 주세요.");
+    const input = validate(revisionInputSchema, raw);
+    if (apiMode === "mock")
+      return request(
+        "cases.confirmSummary",
+        { id, ...input },
+        { key: await mutationKey(`cases.confirmSummary:${id}`, input) },
+      );
+    const { key, saved } = await summaryRequest("cases.confirmSummary", id, input);
     await request(
       "cases.confirmSummary",
       { id, ...input },
       {
         path: path(id, "summary/confirm"),
         method: "POST",
-        body: { expectedRevision: m.revision, summaryRevision: m.summary.revision },
+        body: { expectedRevision: saved.revision, summaryRevision: saved.summaryRevision },
         key,
       },
     );
-    return casesApi.get(id);
+    const next = await casesApi.get(id);
+    finishSummary(key);
+    return next;
   },
 };
