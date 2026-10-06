@@ -8,6 +8,7 @@ import {
 } from "../src/server/db/v2-official-sources";
 import { citation, guide, precedent } from "./fixtures/contracts/v2";
 import { createTestDatabase } from "./helpers/d1";
+import { seedTestSession } from "./helpers/session";
 
 const NOW = "2026-10-06T00:00:00.000Z";
 const EXPIRES = "2026-10-06T00:10:00.000Z";
@@ -15,6 +16,120 @@ const BODY = "공식 자료 저장소를 검증하는 합성 원문입니다. �
 const databases: Awaited<ReturnType<typeof createTestDatabase>>[] = [];
 afterEach(() => {
   for (const database of databases.splice(0)) database.close();
+});
+
+test("discovered public identity hits cache without a private query/sourceId/hash and uses the bounded discovery index", async () => {
+  const f = await fixture();
+  expect(await f.repo.put(f.source, f.c)).toBe(true);
+  const { sourceType, officialId, version, section, extractorVersion } = f.source;
+  const identity = { sourceType, officialId, version, section, extractorVersion };
+  expect(await f.repo.findLatestByIdentity(identity, NOW)).toEqual(f.source);
+  expect(await f.repo.findLatestByIdentity({ ...identity, version: "other" }, NOW)).toBeNull();
+  await expect(
+    f.repo.findLatestByIdentity(
+      { ...identity, privateQuery: "synthetic-secret" } as typeof identity,
+      NOW,
+    ),
+  ).rejects.toMatchObject({ code: "REPOSITORY_INPUT_INVALID" });
+  const plan = f.database.sqlite
+    .query(
+      "EXPLAIN QUERY PLAN SELECT * FROM v2_official_sources WHERE source_type=? AND official_id=? AND version=? AND section=? AND extractor_version=? AND fetched_at<=? AND verified_at<=? AND expires_at>? ORDER BY fetched_at DESC,verified_at DESC,source_id ASC LIMIT 1",
+    )
+    .all(sourceType, officialId, version, section, extractorVersion, NOW, NOW, NOW);
+  expect(JSON.stringify(plan)).toContain("v2_official_discovery_idx");
+  expect(f.count()).toBe(1);
+});
+test("newer fetched body wins over delayed verification of older immutable content and equal times have deterministic sourceId order", async () => {
+  const f = await fixture();
+  expect(await f.repo.put(f.source, f.c)).toBe(true);
+  const body = `${BODY} new synthetic public revision`;
+  const hash = Array.from(
+    new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(body))),
+    (b) => b.toString(16).padStart(2, "0"),
+  ).join("");
+  const source = {
+    ...f.source,
+    sourceId: "new-source",
+    body,
+    contentHash: hash,
+    fetchedAt: "2026-10-06T00:00:01.000Z",
+    verifiedAt: "2026-10-06T00:00:02.000Z",
+  };
+  const c = { ...f.c, sourceId: source.sourceId, contentHash: hash, verifiedAt: source.verifiedAt };
+  expect(await f.repo.put(source, c)).toBe(true);
+  const old = { ...f.source, verifiedAt: "2026-10-06T00:00:05.000Z" };
+  expect(await f.repo.put(old, { ...f.c, verifiedAt: old.verifiedAt })).toBe(true);
+  const { sourceType, officialId, version, section, extractorVersion } = source;
+  const found = await f.repo.findLatestByIdentity(
+    { sourceType, officialId, version, section, extractorVersion },
+    "2026-10-06T00:00:06Z",
+  );
+  expect(found?.sourceId).toBe("new-source");
+  expect(found?.body).toBe(body);
+  expect(f.count()).toBe(2);
+  expect(await f.repo.put(f.source, f.c)).toBe(false);
+  const tiedBody = `${body} tied synthetic content`;
+  const tiedHash = Array.from(
+    new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(tiedBody))),
+    (b) => b.toString(16).padStart(2, "0"),
+  ).join("");
+  const tied = { ...source, sourceId: "a-tied-source", body: tiedBody, contentHash: tiedHash };
+  expect(await f.repo.put(tied, { ...c, sourceId: tied.sourceId, contentHash: tiedHash })).toBe(
+    true,
+  );
+  expect(
+    (
+      await f.repo.findLatestByIdentity(
+        { sourceType, officialId, version, section, extractorVersion },
+        "2026-10-06T00:00:06Z",
+      )
+    )?.sourceId,
+  ).toBe("a-tied-source");
+});
+test("discovered source enforces exact fractional expiry and bodyhash/official URL despite same-key persisted drift", async () => {
+  const f = await fixture();
+  expect(await f.repo.put(f.source, f.c)).toBe(true);
+  const { sourceType, officialId, version, section, extractorVersion } = f.source,
+    identity = { sourceType, officialId, version, section, extractorVersion };
+  expect(await f.repo.findLatestByIdentity(identity, "2026-10-06T00:10:00Z")).toBeNull();
+  f.database.sqlite
+    .query("UPDATE v2_official_sources SET body=? WHERE source_id=?")
+    .run("synthetic forged plaintext", f.source.sourceId);
+  expect(await f.repo.findLatestByIdentity(identity, NOW)).toBeNull();
+  f.database.sqlite
+    .query("UPDATE v2_official_sources SET body=?,canonical_url=? WHERE source_id=?")
+    .run(BODY, "https://example.test/foreign", f.source.sourceId);
+  expect(await f.repo.findLatestByIdentity(identity, NOW)).toBeNull();
+});
+test("bindCitation normalizes nonfractional actor time, rejects 1ms future verification and exact expiry without partial binding", async () => {
+  const f = await fixture();
+  const user = await seedTestSession(f.database, { now: Date.parse(NOW), consent: true });
+  const id = crypto.randomUUID();
+  f.database.sqlite
+    .query(
+      "INSERT INTO v2_workspaces(id,owner_id,status,encrypted_payload,created_at,updated_at) VALUES(?,?,'intake','synthetic-private-envelope',?,?)",
+    )
+    .run(id, user.userId, NOW, NOW);
+  const future = "2026-10-06T00:00:00.001Z",
+    source = { ...f.source, verifiedAt: future },
+    c = { ...f.c, verifiedAt: future };
+  expect(await f.repo.put(source, c)).toBe(true);
+  const g = {
+    ownerId: user.userId,
+    now: "2026-10-06T00:00:00Z",
+    workspaceId: id,
+    expectedRevision: 1,
+  };
+  expect(await f.repo.bindCitation(g, c)).toBe(false);
+  expect(f.database.sqlite.query("SELECT * FROM v2_citation_bindings").all()).toEqual([]);
+  expect(await f.repo.bindCitation({ ...g, now: future }, c)).toBe(true);
+  expect(
+    await f.repo.bindCitation(
+      { ...g, now: "2026-10-06T00:10:00Z" },
+      { ...c, id: crypto.randomUUID() },
+    ),
+  ).toBe(false);
+  expect(f.database.sqlite.query("PRAGMA foreign_key_check").all()).toEqual([]);
 });
 
 async function fixture(inputCitation: V2OfficialCitation = citation) {

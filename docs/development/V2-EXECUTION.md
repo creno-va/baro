@@ -42,6 +42,7 @@ v2에 맞추지 않는다. additive 계약과 migration을 단일 DB 소유자�
 | #53 | PRD·ADR·전체 문서·실행 계약 | 독립 명세 | 전체 합의 반영, 승인/현재 구현 구분, 링크·DAG 검증 |
 | #54 | v2 strict shared 계약·합성 fixture | #53 | 불가능한 상태·unknown field 거부, v1 계약 보존 |
 | #55 | additive DB·repository·migration | #54 | 실제 SQL 소유권/CAS, fresh/upgrade/drift |
+| #87 | 후속 실행 DB 계약 확장 | #55 | fresh source cache·유료 admission/lease 비용 hold·가격/funding/usage 근거·allocation/carryover, 새 primitive 사용 전 공유 PR 병합 |
 | #56 | 디자인 시스템·공통 shell | #53 | shadcn/blue/Lucide/Pretendard/단일 SVG, 실제 화면·CSP |
 | #57 | quota·월 예산·비용 ledger | #55 | 동시 예약/KST/중복/실패/실제 비용 정산 |
 | #58 | private/public R2·자료 admission | #55/#57 | 크기/수량/소유권/동의/streaming/cleanup |
@@ -61,6 +62,11 @@ v2에 맞추지 않는다. additive 계약과 migration을 단일 DB 소유자�
 
 #55가 공유 schema와 migration 번호를 소유한다. 다른 이슈는 schema 변경 요청을 먼저 통합한다.
 여러 작업자는 별도 checkout/worktree를 사용하고 같은 파일의 동시 수정을 피한다.
+#55는 [PR86](https://github.com/creno-va/baro/pull/86)의 exact-head CI를 통과하고 main
+`606987e040070932f263fbd0b6c6b2b4cf45266a`에 병합되어 CLOSED다. #57/#63의 기존
+repository 기반 독립 경로를 시작한다. 후속 유료 실행·가격 근거와 최초 발견 source cache에
+필요한 새 저장 primitive는 #87에서 단일 DB 소유자가 구현하며 해당 경로는 공유 PR 병합 후 연결한다.
+이는 기존 #55 인수 조건을 취소하거나 전체 서비스 완료 기준을 낮추는 변경이 아니다.
 #53은 제품/ADR, architecture/security/quality, operations/policy, execution/DAG로 문서 소유를
 나누며 최종 통합자가 링크와 요구사항의 정합성을 직접 검토한다.
 

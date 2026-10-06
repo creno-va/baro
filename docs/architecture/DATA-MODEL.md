@@ -231,3 +231,34 @@ HTTP/Workflow는 세션·동의·abuse gate를 적용한 뒤 이 저장 primitiv
 
 위 primitive의 SQLite/AES 검증은 실제 R2·Containers·Whisper 호출, HTTP 연결이나 배포된
 전체 UI 시연을 대신하지 않는다. 환경 적용과 후속 기능 증거는 [검증 기록](../development/V2-VALIDATION.md)에 남긴다.
+
+### 후속 runtime 근거와 admission (#87)
+
+`0007_runtime_paid_execution`은 foundation82개 테이블을 보존하고9개를 추가한다. 정본은
+`v2-paid-contracts.ts`, `v2-paid-runtime.ts`, `v2-paid-statements.ts`와 동일 번호 migration이다.
+새 repository 소비는 공유 PR main 통합 뒤 진행한다. 실제 외부 성공은 별도 검증한다.
+
+| 저장소 | 보존할 계약 |
+| --- | --- |
+| `v2_runtime_proofs` | immutable versioned pricing/funding/allocation/drain, 공식 reference·canonical UTC·trusted verification digest/evidence |
+| `v2_runtime_plans`, `v2_paid_holds` | operation/invocation/attempt·target/revision·최대 SKU quantity와 가격/FX/수수료 상한, current lease/fence/dispatch token |
+| `v2_runtime_usage` | allowlisted usage와 provider correlation, 원래 proof 기반 정산·불완전 late evidence, 무과금 추정 금지 |
+| `v2_runtime_controls`, `v2_runtime_drains` | 환경 freeze/drain/version CAS·합계 한도·신뢰 가능한 전환 acknowledgement |
+| `v2_maintenance_exposure`, `v2_maintenance_evidence`, `v2_runtime_claims` | 필수 유지·이전 월 미확정 의무, immutable 근거와 원자적 financial claim |
+
+돈은 decimal string과 BigInt 유리수로 계산하고 KRW는 보수적으로 올림한다. pinned 모델은 입력
+short/long 각각 ordinary/cache-read/cache-write6개와 출력2개의 단가를 저장한다. 예약 단가는
+허용한 전체 matrix와 지역 배수의 최대값 이상이어야 한다. 전체 입력272,000tokens 초과 시 long,
+실제 일반 입력은 전체에서 cache-read/write를 뺀 값이다. 요청의 default tier와 실제 응답 등급을
+대조하며 누락·모순·미지원 등급은 ambiguous로 남긴다. 인증된 실제 청구 근거는 별도로 검증한다.
+
+paid admission은 비용 준비를 독립 INSERT한 뒤 quota/job을 쓰는 방식이 아니라 동일 claim/batch다.
+이미 dispatched인 시도의 not_sent 재생은 prepared/tokenless CAS로 거부한다. 삭제·lease 만료 뒤
+late receipt도 원래 attempt에 기록하며 case 원문은 비용 저장소에 포함하지 않는다. runtime control
+초기화 뒤 hold를 생략한 v2 admission/acquire도 차단한다. 실제 서비스의 price/funding/FX verifier가
+없으면 실행을 허용하지 않는다. 합성 테스트 verifier를 production 근거로 사용하지 않는다.
+
+공식 source discovery는 content hash를 아직 모르는 단계에서 공개 identity/version/section/
+extractor로 최신 유효 cache를 조회한다. private query를 저장하지 않으며 최대2회 indexed query,
+1MiB body hash·allowlist와 최종 최신 pointer 검증을 수행한다. 정확한 immutable source tuple 및
+citation의 시각 비교는 canonical UTC로 보존한다. 상세 적용·복구 경계는 [DB 운영](../operations/DOMAIN-DATABASE.md)을 따른다.
