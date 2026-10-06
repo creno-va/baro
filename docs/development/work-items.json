@@ -214,23 +214,10 @@
       "issue": 62,
       "milestone": 5,
       "kind": "implementation",
-      "dependsOn": [
-        56,
-        60,
-        59
-      ],
-      "owns": [
-        "src/pages/lawyer",
-        "src/pages/moderation",
-        "src/components/moderation"
-      ],
-      "docs": [
-        "docs/PRD.md",
-        "docs/product/UX-SPEC.md",
-        "docs/architecture/SYSTEM.md",
-        "docs/quality/TEST-STRATEGY.md"
-      ],
-      "validation": "all-role browser demonstration and persisted reload/permission tests"
+      "dependsOn": [56,60,102,106],
+      "owns": ["src/pages/lawyer","src/components/lawyer","lawyer self-service functional integration"],
+      "docs": ["docs/PRD.md","docs/product/UX-SPEC.md","docs/architecture/SYSTEM.md","docs/quality/TEST-STRATEGY.md"],
+      "validation": "customer/lawyer own profile persistence/reload/ownership, no moderator escalation and no approval/admin UX; mock #106 distinct"
     },
     {
       "issue": 63,
@@ -282,46 +269,19 @@
       "issue": 65,
       "milestone": 5,
       "kind": "implementation",
-      "dependsOn": [
-        56,
-        58,
-        59,
-        64
-      ],
-      "owns": [
-        "src/pages/workspaces",
-        "src/components/workspace",
-        "src/pages/cases"
-      ],
-      "docs": [
-        "docs/PRD.md",
-        "docs/product/UX-SPEC.md",
-        "docs/architecture/SYSTEM.md",
-        "docs/quality/TEST-STRATEGY.md"
-      ],
-      "validation": "real browser user flow including reload/mobile/keyboard/200%/CSP and failure states"
+      "dependsOn": [56,58,59,64,103,104],
+      "owns": ["src/pages/workspaces","src/components/workspace","src/pages/cases"],
+      "docs": ["docs/PRD.md","docs/product/UX-SPEC.md","docs/architecture/SYSTEM.md","docs/quality/TEST-STRATEGY.md"],
+      "validation": "same-client B/C mock UI integrated with real backend: customer persistence/relogin/resume/files/permissions; #64 PR100 reused"
     },
     {
       "issue": 66,
       "milestone": 5,
       "kind": "implementation",
-      "dependsOn": [
-        59,
-        64,
-        65
-      ],
-      "owns": [
-        "src/server/modules/reports",
-        "src/server/api/v2/reports",
-        "src/components/reports"
-      ],
-      "docs": [
-        "docs/PRD.md",
-        "docs/product/UX-SPEC.md",
-        "docs/architecture/SYSTEM.md",
-        "docs/quality/TEST-STRATEGY.md"
-      ],
-      "validation": "actual browser PDF/ZIP download and rendered Korean/content/authorization checks"
+      "dependsOn": [59,64,65,105],
+      "owns": ["src/server/modules/reports","src/server/api/v2/reports","real report functional integration"],
+      "docs": ["docs/PRD.md","docs/product/UX-SPEC.md","docs/architecture/SYSTEM.md","docs/quality/TEST-STRATEGY.md"],
+      "validation": "actual Korean PDF rendered content and selected-original ZIP download/ownership; UI mock #105 distinct"
     },
     {
       "issue": 67,
@@ -376,27 +336,10 @@
       "issue": 69,
       "milestone": 5,
       "kind": "implementation",
-      "dependsOn": [
-        61,
-        62,
-        65,
-        66,
-        67,
-        68
-      ],
-      "owns": [
-        "tests/e2e",
-        "tests/evals",
-        "docs/development/V2-VALIDATION.md",
-        "quality CI"
-      ],
-      "docs": [
-        "docs/PRD.md",
-        "docs/product/UX-SPEC.md",
-        "docs/architecture/SYSTEM.md",
-        "docs/quality/TEST-STRATEGY.md"
-      ],
-      "validation": "all mandatory checks plus end-to-end browser demos and source/bundle/security gates"
+      "dependsOn": [61,62,65,66,67,68],
+      "owns": ["tests/e2e","tests/evals","docs/development/V2-VALIDATION.md","quality CI"],
+      "docs": ["docs/PRD.md","docs/product/UX-SPEC.md","docs/architecture/SYSTEM.md","docs/quality/TEST-STRATEGY.md"],
+      "validation": "customer/lawyer full functional UX persistence/roles/download/delete/mobile/CSP; mock and real evidence distinct; broad AI quality improvements after UX"
     },
     {
       "issue": 70,
@@ -463,29 +406,64 @@
       "issue": 71,
       "milestone": 5,
       "kind": "implementation",
-      "dependsOn": [
-        59,
-        63,
-        67,
-        69,
-        70,
-        19,
-        20,
-        27
-      ],
-      "owns": [
-        "scripts/live-smoke",
-        ".github/workflows",
-        "docs/operations",
-        "release evidence"
-      ],
-      "docs": [
-        "docs/PRD.md",
-        "docs/product/UX-SPEC.md",
-        "docs/architecture/SYSTEM.md",
-        "docs/quality/TEST-STRATEGY.md"
-      ],
-      "validation": "trusted same-SHA CI/preview/production/live receipts, actual demonstrations and full completion audit"
+      "dependsOn": [59,63,67,69,70,19,20,27],
+      "owns": ["scripts/live-smoke",".github/workflows","docs/operations","release evidence"],
+      "docs": ["docs/PRD.md","docs/product/UX-SPEC.md","docs/architecture/SYSTEM.md","docs/quality/TEST-STRATEGY.md"],
+      "validation": "trusted same-SHA customer/lawyer live/CI/preview/production receipts, real external/policy/public gates; mock UI is not live evidence"
+    },
+    {
+      "issue": 101,
+      "milestone": 6,
+      "kind": "implementation",
+      "dependsOn": [102,103,104,105,106],
+      "owns": ["docs/development/PARALLEL-UI-SPRINT.md","UI API-mock evidence index"],
+      "docs": ["docs/development/CLIENT-API-CONTRACT.md","docs/development/PARALLEL-UI-SPRINT.md","docs/adr/0014-mvp-two-roles-and-api-mock-first.md"],
+      "validation": "same product client UI with API mock; five session launch +2h, full customer/lawyer clickable UX; no live-success claim"
+    },
+    {
+      "issue": 102,
+      "milestone": 6,
+      "kind": "implementation",
+      "dependsOn": [],
+      "owns": ["src/client/api/core.ts","src/client/api/types.ts","src/client/api/index.ts","src/client/api/session.ts","src/client/api/mock/runtime.ts","src/client/api/mock/session.ts","common registration","src/pages/index.astro","src/pages/login.astro","src/pages/consent.astro","src/layouts","src/components/AuthButtons.tsx","src/components/ConsentForm.tsx","src/components/ui/app-navigation.tsx","src/styles/global.css","src/server/auth","me/consent/accountType API","integrated router/CI/preview"],
+      "docs": ["docs/development/CLIENT-API-CONTRACT.md","docs/development/PARALLEL-UI-SPRINT.md","docs/adr/0014-mvp-two-roles-and-api-mock-first.md"],
+      "validation": "first20min facade minimal mock/real adapters shell PR; same-client customer/lawyer login; no moderator escalation; integration and preview"
+    },
+    {
+      "issue": 103,
+      "milestone": 6,
+      "kind": "implementation",
+      "dependsOn": [],
+      "owns": ["src/pages/cases/index.astro","src/pages/cases/new.astro","src/pages/cases/[caseId]/intake.astro","src/pages/cases/[caseId]/summary.astro","src/components/intake","src/client/api/cases.ts","src/client/api/mock/cases.ts","src/styles/intake.css"],
+      "docs": ["docs/development/CLIENT-API-CONTRACT.md","docs/development/PARALLEL-UI-SPRINT.md","docs/adr/0014-mvp-two-roles-and-api-mock-first.md"],
+      "validation": "mock case list/create/intake unknown skip/save/summary confirm routes; isolated UI scaffold without A/backend gate; real adapter reuse"
+    },
+    {
+      "issue": 104,
+      "milestone": 6,
+      "kind": "implementation",
+      "dependsOn": [],
+      "owns": ["src/pages/cases/[caseId].astro","src/pages/cases/[caseId]/files.astro","src/pages/cases/[caseId]/timeline.astro","src/pages/cases/[caseId]/actions.astro","src/components/workspace","src/components/analysis","src/client/api/workspace.ts","src/client/api/files.ts","src/client/api/mock/workspace.ts","src/client/api/mock/files.ts","src/styles/workspace.css","src/server/modules/workspace","src/server/runtime/workspace.ts","src/server/api/v2/workspaces.ts","existing files API/modules"],
+      "docs": ["docs/development/CLIENT-API-CONTRACT.md","docs/development/PARALLEL-UI-SPRINT.md","docs/adr/0014-mvp-two-roles-and-api-mock-first.md"],
+      "validation": "same-client mock workspace chat/file/timeline/actions with progress/failure/retry; D report route link; PR100 reused real integration"
+    },
+    {
+      "issue": 105,
+      "milestone": 6,
+      "kind": "implementation",
+      "dependsOn": [],
+      "owns": ["src/pages/cases/[caseId]/reports.astro","src/components/reports","src/pages/settings.astro","src/components/AccountSettings.tsx","help/policy views","src/client/api/reports.ts","src/client/api/account.ts","src/client/api/mock/reports.ts","src/client/api/mock/account.ts","src/styles/reports.css","src/styles/settings.css","reports modules/API","deletion modules/account delete API"],
+      "docs": ["docs/development/CLIENT-API-CONTRACT.md","docs/development/PARALLEL-UI-SPRINT.md","docs/adr/0014-mvp-two-roles-and-api-mock-first.md"],
+      "validation": "same-client mock report mask/select/download/settings/usage/delete/help UX; actual PDF ZIP deletion gates #66 #67 #68 separate"
+    },
+    {
+      "issue": 106,
+      "milestone": 6,
+      "kind": "implementation",
+      "dependsOn": [],
+      "owns": ["src/pages/lawyer","src/pages/lawyers","src/components/lawyers","src/client/api/lawyers.ts","src/client/api/mock/lawyers.ts","src/styles/lawyers.css","lawyers/profile/directory modules/API"],
+      "docs": ["docs/development/CLIENT-API-CONTRACT.md","docs/development/PARALLEL-UI-SPRINT.md","docs/adr/0014-mvp-two-roles-and-api-mock-first.md"],
+      "validation": "mock lawyer own profile edit/save/preview directory/contact; existing #61 preserved; no approval/admin UX; real persistence #62"
     }
   ]
 }
