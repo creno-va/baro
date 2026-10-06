@@ -1,5 +1,6 @@
-import { Hono } from "hono";
+import { type Context, Hono, type Next } from "hono";
 import { getAuth } from "../auth";
+import { AuthConfigurationError } from "../auth/env";
 import { createStorageBudgetService } from "../modules/budget/storage-ledger";
 import { createAssetProcessingAdmission } from "../runtime/asset-admission";
 import { createFileProcessingAdmission } from "../runtime/file-admission";
@@ -24,13 +25,29 @@ import { createReportsApi } from "./v2/reports";
 import { usageApi } from "./v2/usage";
 import { createWorkspacesApi } from "./v2/workspaces";
 
+async function privateAuthResponse(context: Context<ApiEnvironment>, next: Next) {
+  await next();
+  context.header("cache-control", "private, no-store");
+  context.header("x-content-type-options", "nosniff");
+}
+
 export const api = new Hono<ApiEnvironment>()
-  .onError((_error, context) =>
-    context.json(errorBody(context, "INTERNAL_ERROR", "요청을 처리하지 못했어요.", true), 500),
-  )
+  .onError((error, context) => {
+    if (error instanceof AuthConfigurationError)
+      return context.json(
+        errorBody(context, "DEPENDENCY_UNAVAILABLE", "로그인 서비스를 준비하고 있어요.", true),
+        503,
+      );
+    return context.json(
+      errorBody(context, "INTERNAL_ERROR", "요청을 처리하지 못했어요.", true),
+      500,
+    );
+  })
   .notFound((context) =>
     context.json(errorBody(context, "NOT_FOUND", "요청한 경로를 찾을 수 없어요."), 404),
   )
+  .use("/me/*", privateAuthResponse)
+  .use("/auth/*", privateAuthResponse)
   .use("/v2/me/*", async (context, next) => {
     await next();
     context.header("cache-control", "private, no-store");

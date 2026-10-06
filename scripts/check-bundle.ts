@@ -1,6 +1,9 @@
 // Run after deployed real-API preview/production builds. Missing bundles fail closed.
 let count = 0;
-for await (const file of new Bun.Glob("dist/**/*.{js,mjs,cjs,map}").scan(".")) {
+for await (const file of new Bun.Glob("dist/**/*").scan({ dot: true, onlyFiles: true })) {
+  if (/(?:^|\/)(?:\.dev\.vars|\.env)(?:\..*)?$/.test(file))
+    throw new Error(`LOCAL_SECRETS_IN_BUNDLE: ${file}`);
+  if (!/\.(?:js|mjs|cjs|map)$/.test(file)) continue;
   count++;
   const content = await Bun.file(file).text();
   if (
