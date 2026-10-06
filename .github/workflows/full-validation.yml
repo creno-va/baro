@@ -1,10 +1,6 @@
-name: CI
+name: Full validation (manual)
 
 on:
-  pull_request:
-  push:
-    branches:
-      - main
   workflow_dispatch:
 
 permissions:
@@ -25,29 +21,12 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
-          fetch-depth: 0
-
-      - name: Detect native changes
-        id: scope
-        env:
-          CHECK_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
-          CHECK_CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-        run: |
-          base="$CHECK_BASE_SHA"
-          if [[ -z "$base" || "$base" =~ ^0+$ ]]; then base="$CHECK_CANDIDATE_SHA^"; fi
-          if git diff --name-only "$base" "$CHECK_CANDIDATE_SHA" | grep -Eq '^(services/file-processor/|tests/fixtures/media/)'; then
-            echo "native=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "native=false" >> "$GITHUB_OUTPUT"
-          fi
 
       - name: Build isolated file processor (linux/amd64)
-        if: steps.scope.outputs.native == 'true'
         timeout-minutes: 8
         run: docker build --platform linux/amd64 -f services/file-processor/Dockerfile -t baro-file-processor .
 
       - name: Execute native media fixtures with no network
-        if: steps.scope.outputs.native == 'true'
         timeout-minutes: 5
         run: >-
           docker run --rm --network none --memory 6g --cpus 1 --pids-limit 128
@@ -109,13 +88,6 @@ jobs:
         if: steps.application.outputs.present == 'true'
         run: bun ci
 
-      - name: Determine changed feature scope
-        id: scope
-        env:
-          CHECK_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
-          CHECK_CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-        run: bun scripts/development-checks.ts scope
-
       - name: Validate work graph and product boundaries
         run: |
           bun run work:check
@@ -134,7 +106,6 @@ jobs:
           /tmp/baro-gitleaks/gitleaks git --log-opts=HEAD --redact=100 --no-banner --log-level warn
 
       - name: Validate schema drift and SQL migrations
-        if: steps.scope.outputs.database == 'true'
         run: |
           bun run db:check
           bunx wrangler d1 migrations apply DB --local --persist-to .wrangler/ci-migration
@@ -147,12 +118,17 @@ jobs:
         if: steps.application.outputs.present == 'true'
         run: bun run typecheck
 
-      - name: Changed feature tests
+      - name: Test
         if: steps.application.outputs.present == 'true'
+        run: bun run test
+
+      - name: AI change detection and deterministic product eval
         env:
-          CHECK_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
-          CHECK_CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-        run: bun scripts/development-checks.ts unit
+          EVAL_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          EVAL_CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          bun scripts/ai-change.ts
+          bun run eval:offline
 
       - name: Build
         if: steps.application.outputs.present == 'true'
@@ -160,14 +136,21 @@ jobs:
           bun run build:production
           bun run bundle:check
 
-      - name: Changed feature browser flows
+      - name: Synthetic browser keyboard and error flows
         env:
-          CHECK_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
-          CHECK_CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          EVAL_CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           bunx playwright install --with-deps chromium
-          bun scripts/development-checks.ts browser
+          bun run test:ui
           bun run test:csp
+
+      - name: Non-sensitive deterministic eval evidence
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: deterministic-eval-${{ github.event.pull_request.head.sha || github.sha }}
+          path: .wrangler/eval/*.json
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Validate Cloudflare bundle
         if: steps.application.outputs.present == 'true'
