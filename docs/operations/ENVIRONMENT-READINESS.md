@@ -2,8 +2,11 @@
 
 ## 2026-10-07 통합 세션의 현재 readiness
 
-아래 이전 관측은 당시의 기록이며 현재 자원 상태를 대신하지 않는다. 최신 통합 기준은
-preview의 마지막 독립 smoke는 `c6b96656ee6e4d7c968486b47a994b2807bdeadd`이며
+최종 문서까지 포함한 immutable SHA별 CI·preview·독립 smoke·Full validation·browser·production은
+[현재 릴리스 journal](https://github.com/creno-va/baro/issues/71#issuecomment-6021564076)을 정본으로 확인한다.
+이 문서 작성 시 PR133까지 main에 병합됐지만 해당 배포 성공은 아직 미확인이다.
+아래 이전 관측은 당시의 기록이며 현재 자원 상태를 대신하지 않는다.
+문서 작성 시 마지막으로 입증된 preview의 독립 smoke는 `c6b96656ee6e4d7c968486b47a994b2807bdeadd`이며
 production foundation의 확인 SHA는 `ca6e15b1226ebdfaf3eee98b07b993cdb303f873`다.
 main 병합만으로 두 환경의 배포 성공을 갱신하지 않는다. 실제 사용자 기능/외부 성공과 분리한 증거는
 [V2 검증 기록](../development/V2-VALIDATION.md)에 연결한다.
