@@ -185,7 +185,7 @@ body {
 }
 .sidebar-story[aria-current="page"] {
   background: var(--secondary);
-  color: var(--primary);
+  color: var(--secondary-foreground);
 }
 .sidebar-story[aria-current="page"] .sidebar-story__icon {
   background: #dce8ff;
@@ -297,7 +297,7 @@ body {
   padding: 6px 0 0;
   border: 0;
   background: none;
-  color: #64748b;
+  color: var(--muted-foreground);
   font-size: 0.75rem;
 }
 .api-mode-notice > :where(span) {
