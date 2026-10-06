@@ -325,7 +325,25 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
     });
   }
 
-  if (ready && view?.case.schemaVersion === "1") return <CaseDetail caseId={caseId} />;
+  if (view?.case.schemaVersion === "1")
+    return (
+      <>
+        {!ready && (
+          <section className="workspace-error" role={error ? "alert" : "status"}>
+            <p>{error?.message ?? "계정을 확인하고 있어요."}</p>
+            {error && (
+              <Button variant="outline" onClick={() => void load()}>
+                다시 확인
+              </Button>
+            )}
+          </section>
+        )}
+        {/* Keep legacy drafts mounted during verification; deny() removes view. */}
+        <div hidden={!ready} inert={!ready}>
+          <CaseDetail caseId={caseId} />
+        </div>
+      </>
+    );
   const base = `/cases/${encodeURIComponent(caseId)}`;
   const readyFiles = view?.files.filter((file) => file.status === "ready") ?? [];
   const pendingResponse = view?.messages.some((message) => message.status === "pending");

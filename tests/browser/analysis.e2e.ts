@@ -92,6 +92,10 @@ test("questions duplicate/error/replay and stale revision restore server state, 
   await expect(page.getByText("2 / 최대 5개", { exact: false })).toBeVisible();
   await page.getByLabel("1번 답변 방식").selectOption("unknown");
   await page.getByLabel("2번 답변 방식").selectOption("skipped");
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect(page.getByLabel("1번 답변 방식")).toBeVisible();
+  await expect(page.getByLabel("1번 답변 방식")).toHaveValue("unknown");
+  await expect(page.getByLabel("2번 답변 방식")).toHaveValue("skipped");
   const submit = page.getByRole("button", { name: "답변 보내기" });
   await submit.focus();
   await page.keyboard.press("Enter");
