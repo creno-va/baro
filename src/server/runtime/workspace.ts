@@ -6,6 +6,7 @@ import * as schema from "../db/schema";
 import { createV2AccountingRepository } from "../db/v2-accounting";
 import { createV2Core, type V2Core } from "../db/v2-core";
 import { createV2OfficialSourceRepository } from "../db/v2-official-sources";
+import { reportProviderFailure } from "../dependency-diagnostics";
 import { paidHoldRequestSchema } from "../modules/budget/contracts";
 import {
   createGatewayExecutionPlanner,
@@ -274,14 +275,10 @@ export async function runWorkspaceRuntime(
               return { lease, expiresAt: r.lease_until };
             },
           });
-          return createLlmGateway(env, { attemptLedger: ledger }).call(
-            phase,
-            input,
-            requestId,
-            reserve,
-            reserveCorrection,
-            currentId,
-          );
+          return createLlmGateway(env, {
+            attemptLedger: ledger,
+            observeFailure: reportProviderFailure,
+          }).call(phase, input, requestId, reserve, reserveCorrection, currentId);
         },
       };
       return createWorkspacePipeline(gateway, {

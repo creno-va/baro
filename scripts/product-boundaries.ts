@@ -12,6 +12,11 @@ export function productBoundaryFindings(file: string, content: string): string[]
   );
   const approvedLog =
     'console.error(JSON.stringify({event:"deletion_cleanup_failed",jobId:row.id,attempts:Math.min(attempt,CLEANUP_ATTEMPTS),}),)';
+  // Only the reviewed enum-only diagnostics module may emit these exact fields.
+  const dependencyLogs = new Set([
+    'console.error(JSON.stringify({event:"workspace_dependency_failure",stage:failure?.stage??"unclassified",category:dependencyCategory(error),}),)',
+    'console.error(JSON.stringify({event:"workspace_provider_failure",phase,category,httpStatus}),)',
+  ]);
   function visit(node: ts.Node) {
     if (ts.isStringLiteralLike(node)) {
       const value = node.text;
@@ -49,8 +54,10 @@ export function productBoundaryFindings(file: string, content: string): string[]
       if (
         !(
           ts.isCallExpression(call) &&
-          file.replaceAll("\\", "/") === "src/server/modules/deletion/service.ts" &&
-          call.getText(source).replace(/\s+/g, "") === approvedLog
+          ((file.replaceAll("\\", "/") === "src/server/modules/deletion/service.ts" &&
+            call.getText(source).replace(/\s+/g, "") === approvedLog) ||
+            (file.replaceAll("\\", "/") === "src/server/dependency-diagnostics.ts" &&
+              dependencyLogs.has(call.getText(source).replace(/\s+/g, ""))))
         )
       )
         findings.push("unapproved_payload_log");
