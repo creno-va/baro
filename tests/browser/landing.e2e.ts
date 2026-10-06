@@ -50,10 +50,8 @@ test("landing fits narrow screens and omits decorative scenes without removing t
       for (const decoration of await decorations.all()) await expect(decoration).toBeHidden();
     else await expect(decorations.first()).toBeVisible();
   }
-  await page.setViewportSize({ width: 1280, height: 900 });
-  await page.evaluate(() => {
-    document.documentElement.style.zoom = "2";
-  });
+  // A 1280px display at 200% browser zoom has a 640 CSS-pixel layout viewport.
+  await page.setViewportSize({ width: 640, height: 450 });
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
