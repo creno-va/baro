@@ -237,7 +237,9 @@ export function createLawyersService(core: V2Core, deps: LawyerDependencies = {}
       if (
         !row ||
         row.revision !== body.expectedRevision ||
-        !(await repository.withdrawProfile(actor(ownerId), row.id, row.revision, body.kind))
+        !(body.kind === "publication"
+          ? await repository.withdrawApprovedProfile(actor(ownerId), row.id, row.revision)
+          : await repository.withdrawProfile(actor(ownerId), row.id, row.revision, body.kind))
       )
         throw new LawyerError("STALE_REVISION");
       return {

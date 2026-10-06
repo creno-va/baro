@@ -432,6 +432,34 @@ test("profile draft and rejected resubmission preserve the previous approved pub
   const rejected = viewSchema.parse(await (await f.request("/v2/me/lawyer/profile")).json());
   expect(rejected.current?.status).toBe("rejected");
   expect(rejected.published?.approvedRevision).toBe(2);
+  expect(
+    (
+      await f.request("/v2/me/lawyer/profile/withdraw", f.owner, "POST", {
+        expectedRevision: 2,
+        kind: "publication",
+      })
+    ).status,
+  ).toBe(409);
+  const withdrawal = await f.request("/v2/me/lawyer/profile/withdraw", f.owner, "POST", {
+    expectedRevision: 3,
+    kind: "publication",
+  });
+  expect(withdrawal.status).toBe(200);
+  expect(
+    z.object({ cleanupPending: z.boolean() }).parse(await withdrawal.json()).cleanupPending,
+  ).toBe(true);
+  const withdrawn = viewSchema.parse(await (await f.request("/v2/me/lawyer/profile")).json());
+  expect(withdrawn.published).toBeNull();
+  expect(withdrawn.current?.revision).toBe(3);
+  expect(withdrawn.current?.status).toBe("rejected");
+  expect(
+    (
+      await f.request("/v2/me/lawyer/profile/withdraw", f.owner, "POST", {
+        expectedRevision: 3,
+        kind: "publication",
+      })
+    ).status,
+  ).toBe(409);
 });
 test("incomplete owned profile remains editable and submit yields a domain error rather than internal failure", async () => {
   const f = await fixture();
