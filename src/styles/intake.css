@@ -711,7 +711,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  color: #657185;
+  color: var(--muted-foreground);
   font-size: 0.8rem;
 }
 .intake-flow .intake-scene-nav > span {
@@ -732,7 +732,7 @@
   margin-bottom: 22px;
 }
 .intake-scene-heading h1 {
-  color: #334158;
+  color: var(--foreground);
   font-size: clamp(1.8rem, 3.5vw, 2.6rem);
   font-weight: 600;
   line-height: 1.35;
@@ -740,25 +740,25 @@
   margin: 0;
 }
 .intake-scene .intake-scene-heading > p {
-  color: #657185;
+  color: var(--muted-foreground);
   line-height: 1.7;
   font-size: 0.95rem;
   margin: 16px 0 0;
 }
 .intake-scene-composer {
-  background: #fff;
-  border: 1px solid #e3eaf4;
+  background: var(--card);
+  border: 1px solid var(--border);
   border-radius: 28px;
   padding: 12px;
-  box-shadow: 0 12px 45px rgb(52 109 192 / 5%);
+  box-shadow: 0 12px 45px color-mix(in srgb, var(--primary) 5%, transparent);
   transition:
     border-color 180ms ease,
     box-shadow 180ms ease,
     background 240ms ease;
 }
 .intake-scene-composer:focus-within {
-  border-color: #8cbbff;
-  box-shadow: 0 0 0 3px rgb(49 130 246 / 7%);
+  border-color: var(--ring);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 12%, transparent);
 }
 .intake-scene .intake-scene-composer textarea {
   min-height: 136px;
@@ -768,17 +768,17 @@
   box-shadow: none;
   outline: none;
   background: transparent;
-  color: #202838;
+  color: var(--foreground);
   font-size: 1rem;
   line-height: 1.8;
   resize: vertical;
 }
 .intake-scene-composer textarea:disabled {
   opacity: 1;
-  -webkit-text-fill-color: #52657d;
+  -webkit-text-fill-color: var(--muted-foreground);
 }
 .intake-scene-composer textarea::placeholder {
-  color: #69778a;
+  color: var(--muted-foreground);
   opacity: 1;
 }
 .intake-scene .intake-options {
@@ -790,11 +790,11 @@
 }
 .intake-scene .intake-options label {
   margin: 0;
-  border-color: #e9edf3;
+  border-color: var(--border);
 }
 .intake-scene .intake-options label.selected {
-  background: #f1f7ff;
-  border-color: #9fc5ff;
+  background: var(--secondary);
+  border-color: var(--primary);
 }
 .intake-scene-options {
   display: flex;
@@ -802,7 +802,7 @@
   padding: 0 4px;
 }
 .intake-scene .intake-scene-options .ui-button {
-  color: #657185;
+  color: var(--muted-foreground);
   font-size: 0.8rem;
   min-height: 44px;
   padding-inline: 12px;
@@ -810,7 +810,7 @@
 .intake-scene .intake-scene-answer-state {
   margin: 0 16px 10px;
   font-size: 0.85rem;
-  color: #52657d;
+  color: var(--muted-foreground);
 }
 .intake-scene-action {
   margin-top: 20px;
@@ -839,7 +839,7 @@
   gap: 7px;
   min-height: 44px;
   padding: 8px 12px;
-  color: #657185;
+  color: var(--muted-foreground);
   font-size: 0.8rem;
   cursor: pointer;
   list-style: none;
@@ -861,7 +861,7 @@
   transform: translateY(2px) rotate(225deg);
 }
 .intake-scene-management > summary:focus-visible {
-  outline: 2px solid #3182f6;
+  outline: 2px solid var(--ring);
   outline-offset: 2px;
 }
 .intake-scene-tools {
@@ -881,7 +881,7 @@
 }
 .intake-scene-notice {
   text-align: center;
-  color: #657185;
+  color: var(--muted-foreground);
   font-size: 0.78rem;
   line-height: 1.7;
   margin: 14px 0 0;
@@ -904,7 +904,7 @@
   flex-wrap: wrap;
   gap: 10px;
   margin: 3px 0 0;
-  color: #42628e;
+  color: var(--muted-foreground);
   font-size: 0.9rem;
   line-height: 1.7;
 }
@@ -912,7 +912,7 @@
   display: inline-flex;
   gap: 4px;
   align-items: center;
-  color: #426c57;
+  color: var(--success);
   font-size: 0.75rem;
 }
 .intake-scene-dots {
@@ -923,7 +923,7 @@
   width: 4px;
   height: 4px;
   border-radius: 50%;
-  background: #6194da;
+  background: var(--primary);
   animation: intake-dot-breathe 1400ms ease-in-out infinite;
 }
 .intake-scene-dots i:nth-child(2) {
@@ -933,27 +933,10 @@
   animation-delay: 320ms;
 }
 .intake-scene-content[data-waiting="true"] .intake-scene-composer {
-  background: #f7faff;
+  background: var(--secondary);
 }
 .intake-scene-content[data-waiting="true"] .intake-scene-emblem {
   animation: intake-emblem-breathe 1800ms ease-in-out infinite;
-}
-.intake-scene .intake-exit {
-  border: 0;
-  background: #f3f7fc;
-  border-radius: 20px;
-  margin-top: 18px;
-  padding: 22px;
-  text-align: center;
-}
-.intake-scene .intake-exit h2 {
-  font-size: 1rem;
-  margin: 0 0 12px;
-}
-.intake-scene .intake-exit p {
-  font-size: 0.85rem;
-  line-height: 1.7;
-  color: #657185;
 }
 .intake-summary-scene #case-summary {
   min-height: 300px;
@@ -982,20 +965,20 @@
   margin-top: 16px;
   padding: 8px 13px;
   border-radius: 100px;
-  color: #2861a9;
-  background: #edf5ff;
+  color: var(--secondary-foreground);
+  background: var(--secondary);
   font-size: 0.8rem;
   font-weight: 550;
 }
 .conversation-entry .conversation-field-label {
   display: block;
   margin: 14px 18px 8px;
-  color: #3c4c63;
+  color: var(--foreground);
   font-size: 0.85rem;
   font-weight: 650;
 }
 .conversation-context-hint {
-  color: #69778a;
+  color: var(--muted-foreground);
   font-size: 0.75rem;
 }
 .conversation-primary-action {
@@ -1066,7 +1049,9 @@
 @view-transition {
   navigation: auto;
 }
-main#main-content {
+/* Keep page transitions on the intake flow, outside the shared service shell. */
+.conversation-home,
+.intake-flow:has(.intake-scene-nav) {
   view-transition-name: intake-page;
 }
 ::view-transition-old(root),

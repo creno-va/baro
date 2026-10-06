@@ -5,6 +5,7 @@ import type { QuestionsResult } from "../../client/api/cases";
 import type { CaseView, QuestionView } from "../../client/api/types";
 import { BrandMark } from "../ui/brand";
 import { Button, ButtonLink } from "../ui/button";
+import { Dialog } from "../ui/dialog";
 import { Textarea } from "../ui/form";
 import { StatePanel } from "../ui/state-panel";
 import { BackToCases, ErrorPanel } from "./common";
@@ -525,23 +526,19 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
                       </div>
                     </details>
                   </form>
-                  {exit ? (
-                    <div
-                      className="intake-exit"
-                      role="dialog"
-                      aria-modal="false"
-                      aria-labelledby="exit-title"
-                    >
-                      <h2 id="exit-title">내 사건에서 다시 이어갈 수 있어요</h2>
-                      <p>수정 중인 답변은 저장한 뒤 이동해 주세요.</p>
-                      <div className="intake-scene-tools">
-                        <ButtonLink href="/cases">목록으로 이동</ButtonLink>
-                        <Button variant="ghost" onClick={() => setExit(false)}>
-                          계속 답하기
-                        </Button>
-                      </div>
+                  <Dialog
+                    open={exit}
+                    onOpenChange={setExit}
+                    title="내 사건에서 다시 이어갈 수 있어요"
+                    description="수정 중인 답변은 저장한 뒤 이동해 주세요."
+                  >
+                    <div className="intake-actions">
+                      <ButtonLink href="/cases">목록으로 이동</ButtonLink>
+                      <Button variant="outline" onClick={() => setExit(false)}>
+                        계속 답하기
+                      </Button>
                     </div>
-                  ) : null}
+                  </Dialog>
                 </>
               )}
             </div>

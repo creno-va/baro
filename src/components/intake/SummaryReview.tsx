@@ -4,6 +4,7 @@ import { api } from "../../client/api";
 import type { CaseView } from "../../client/api/types";
 import { BrandMark } from "../ui/brand";
 import { Button, ButtonLink } from "../ui/button";
+import { Dialog } from "../ui/dialog";
 import { Textarea } from "../ui/form";
 import { StatePanel } from "../ui/state-panel";
 import { BackToCases, ErrorPanel } from "./common";
@@ -19,6 +20,8 @@ export function SummaryReview({ caseId }: { caseId: string }) {
   const [checked, setChecked] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const pending = useRef(false);
+  const confirmation = useRef<HTMLInputElement>(null);
+  const focusAfterSave = useRef(false);
   const savedItem = useRef(item);
   savedItem.current = item;
   const failedOperation = useRef<"save" | "confirm" | null>(null);
@@ -31,10 +34,17 @@ export function SummaryReview({ caseId }: { caseId: string }) {
     setNotice("");
     setError(null);
     pending.current = false;
+    focusAfterSave.current = false;
     failedOperation.current = null;
   }, setError);
   const { ticket, current, alive, verify, ready, version, deny } = access;
   const dirty = !!item && summary !== item.summary;
+  useEffect(() => {
+    if (focusAfterSave.current && ready && !busy && !dirty) {
+      focusAfterSave.current = false;
+      confirmation.current?.focus();
+    }
+  }, [ready, busy, dirty]);
   const load = useCallback(
     async (replaceDraft = false) => {
       // A background refresh must not advance the revision of a lost-response
@@ -102,6 +112,7 @@ export function SummaryReview({ caseId }: { caseId: string }) {
       });
       if (!(await verify()) || !current(epoch)) return;
       failedOperation.current = null;
+      focusAfterSave.current = true;
       setItem(next);
       setSummary(next.summary);
       setChecked(false);
@@ -265,6 +276,7 @@ export function SummaryReview({ caseId }: { caseId: string }) {
               </p>
               <label className="intake-confirm-check">
                 <input
+                  ref={confirmation}
                   type="checkbox"
                   checked={checked}
                   onChange={(event) => {
@@ -275,38 +287,29 @@ export function SummaryReview({ caseId }: { caseId: string }) {
                 />
                 <span>요약이 내가 이야기한 사실과 맞는지 확인했어요.</span>
               </label>
-              {confirming ? (
-                <div
-                  className="intake-exit"
-                  role="dialog"
-                  aria-modal="false"
-                  aria-labelledby="confirm-title"
-                >
-                  <h2 id="confirm-title">이제 사건 정리를 시작할까요?</h2>
-                  <Button
-                    className="intake-scene-primary"
-                    onClick={() => void confirm()}
-                    disabled={busy}
-                  >
+              <Button
+                className="intake-scene-primary"
+                onClick={() => setConfirming(true)}
+                disabled={busy || dirty || !checked || !summary.trim()}
+              >
+                요약 확인하고 계속
+                <ArrowRight size={18} aria-hidden="true" />
+              </Button>
+              <Dialog
+                open={confirming}
+                onOpenChange={setConfirming}
+                title="이제 사건 정리를 시작할까요?"
+              >
+                <div className="intake-actions">
+                  <Button onClick={() => void confirm()} disabled={busy}>
                     <Check size={18} aria-hidden="true" />
                     {busy ? "확인 중…" : "확인하고 사건 열기"}
                   </Button>
-                  <div className="intake-scene-tools">
-                    <Button variant="ghost" onClick={() => setConfirming(false)} disabled={busy}>
-                      취소
-                    </Button>
-                  </div>
+                  <Button variant="outline" onClick={() => setConfirming(false)} disabled={busy}>
+                    취소
+                  </Button>
                 </div>
-              ) : (
-                <Button
-                  className="intake-scene-primary"
-                  onClick={() => setConfirming(true)}
-                  disabled={busy || dirty || !checked || !summary.trim()}
-                >
-                  요약 확인하고 계속
-                  <ArrowRight size={18} aria-hidden="true" />
-                </Button>
-              )}
+              </Dialog>
               <div className="intake-scene-tools">
                 <ButtonLink
                   variant="ghost"

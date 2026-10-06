@@ -112,7 +112,9 @@ test("two-question mobile flow saves/reloads/resumes/back edits/skips and reache
   });
   await page.goto("/cases");
   await expect(page.getByRole("heading", { name: "아직 정리한 사건이 없어요" })).toBeVisible();
+  await expect(page.locator("#main-content")).toHaveCSS("view-transition-name", "none");
   await page.getByRole("link", { name: "첫 사건 만들기" }).click();
+  await expect(page.locator(".conversation-home")).toHaveCSS("view-transition-name", "intake-page");
   const narrative = page.getByRole("textbox", { name: "지금까지 있었던 일" });
   await narrative.fill(
     "합성 사건입니다. 지난달 지인에게 빌려준 돈을 약속한 날짜가 지나도 돌려받지 못했습니다.",
@@ -122,6 +124,8 @@ test("two-question mobile flow saves/reloads/resumes/back edits/skips and reache
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/intake/);
   await expect(page.getByRole("heading", { name: "이 일은 언제 시작됐나요?" })).toBeVisible();
+  await expect(page.locator("#main-content")).toHaveCSS("view-transition-name", "none");
+  await expect(page.locator(".intake-flow")).toHaveCSS("view-transition-name", "intake-page");
   await capture(page, "question-mobile");
   await page.setViewportSize({ width: 1280, height: 900 });
   await capture(page, "question-desktop");
@@ -141,7 +145,20 @@ test("two-question mobile flow saves/reloads/resumes/back edits/skips and reache
   await page.getByRole("textbox", { name: "답변", exact: true }).fill("2026년 8월");
   await page.getByRole("button", { name: "저장하고 다음 질문" }).click();
   await openAnswerTools(page);
-  await page.getByRole("button", { name: "나중에 이어하기" }).click();
+  const resumeLater = page.getByRole("button", { name: "나중에 이어하기" });
+  await resumeLater.click();
+  const exitDialog = page.getByRole("dialog", { name: "내 사건에서 다시 이어갈 수 있어요" });
+  await expect(exitDialog).toBeVisible();
+  await expect(exitDialog).toHaveJSProperty("open", true);
+  await expect(exitDialog.getByRole("button", { name: "닫기", exact: true })).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  await expect(exitDialog.getByRole("button", { name: "계속 답하기" })).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(exitDialog.getByRole("button", { name: "닫기", exact: true })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(exitDialog).toBeHidden();
+  await expect(resumeLater).toBeFocused();
+  await resumeLater.press("Enter");
   await page.getByRole("link", { name: "목록으로 이동" }).click();
   await page.getByRole("link").filter({ hasText: "이어 답하기" }).click();
   await expect(
@@ -182,13 +199,25 @@ test("two-question mobile flow saves/reloads/resumes/back edits/skips and reache
   await expect(
     page.getByRole("status").filter({ hasText: "수정한 요약이 저장됐어요" }),
   ).toBeVisible();
+  const confirmation = page.getByRole("checkbox", { name: "요약이 내가 이야기한 사실과 맞는지" });
+  await expect(confirmation).toBeFocused();
   await page.reload();
   await expect(summary).toHaveValue(/합성 추가 사실입니다/);
-  await page.getByRole("checkbox", { name: "요약이 내가 이야기한 사실과 맞는지" }).check();
-  await page.getByRole("button", { name: "요약 확인하고 계속" }).click();
+  await confirmation.check();
+  const reviewSummary = page.getByRole("button", { name: "요약 확인하고 계속" });
+  await reviewSummary.click();
+  const confirmDialog = page.getByRole("dialog", { name: "이제 사건 정리를 시작할까요?" });
+  await expect(confirmDialog).toBeVisible();
+  await expect(confirmDialog.getByRole("button", { name: "닫기", exact: true })).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  await expect(confirmDialog.getByRole("button", { name: "취소", exact: true })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(confirmDialog).toBeHidden();
+  await expect(reviewSummary).toBeFocused();
+  await reviewSummary.press("Enter");
   await page.getByRole("button", { name: "취소", exact: true }).click();
-  await expect(page.getByRole("button", { name: "요약 확인하고 계속" })).toBeVisible();
-  await page.getByRole("button", { name: "요약 확인하고 계속" }).click();
+  await expect(reviewSummary).toBeFocused();
+  await reviewSummary.press("Enter");
   await page.getByRole("button", { name: "확인하고 사건 열기" }).click();
   await expect(page).toHaveURL(/\/cases\/[^/]+$/);
   await page.goto("/cases");
