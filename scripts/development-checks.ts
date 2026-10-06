@@ -141,7 +141,7 @@ async function main() {
   const mockTargets =
     mode === "browser"
       ? targets.filter((path) =>
-          /\/(shell-integration|lawyer-api-mock|intake103)\.e2e\.ts$/.test(path),
+          /\/(shell-integration|lawyer-api-mock|intake103|workspace-shared)\.e2e\.ts$/.test(path),
         )
       : [];
   const regularTargets = targets.filter((path) => !mockTargets.includes(path));
@@ -158,18 +158,22 @@ async function main() {
     for (const [config, selected] of [
       [
         "tests/browser/integration.config.ts",
-        mockTargets.filter((path) => !path.endsWith("/intake103.e2e.ts")),
+        mockTargets.filter((path) => !/\/(intake103|workspace-shared)\.e2e\.ts$/.test(path)),
       ],
       [
         "tests/browser/intake103.config.ts",
         mockTargets.filter((path) => path.endsWith("/intake103.e2e.ts")),
+      ],
+      [
+        "tests/helpers/workspace.shared.playwright.config.ts",
+        mockTargets.filter((path) => path.endsWith("/workspace-shared.e2e.ts")),
       ],
     ] as const) {
       if (!selected.length) continue;
       const child = Bun.spawn(["bunx", "playwright", "test", "--config", config, ...selected], {
         stdout: "inherit",
         stderr: "inherit",
-        env: { ...process.env, PUBLIC_API_MODE: "mock" },
+        env: { ...process.env, PUBLIC_API_MODE: "mock", BARO_WORKSPACE_SHARED_UI: "true" },
       });
       if (await child.exited) process.exit(1);
     }
