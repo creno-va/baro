@@ -18,14 +18,14 @@ import { createSanitizedEncoder, decryptSanitizedFrame } from "./sanitized-binar
 import type { SanitizedManifest } from "./sanitized-protocol";
 import { authorize, type ProcessingCosts, type ProcessorTransport } from "./transport";
 
-const paramsSchema = z.strictObject({
+export const assetProcessingParamsSchema = z.strictObject({
   ownerId: opaqueIdSchema,
   profileId: opaqueIdSchema,
   assetId: opaqueIdSchema,
   assetRevision: z.number().int().positive(),
   jobId: opaqueIdSchema,
 });
-export type AssetProcessingParams = z.infer<typeof paramsSchema>;
+export type AssetProcessingParams = z.infer<typeof assetProcessingParamsSchema>;
 type OriginalInput = Pick<
   AssetProcessingParams,
   "ownerId" | "profileId" | "assetId" | "assetRevision"
@@ -68,7 +68,7 @@ export function createAssetProcessingService(
     if (!(await consent(params.ownerId)) || lease.jobId !== params.jobId) return null;
     const row = await core
       .statement(
-        `SELECT a.original_blob_id,a.purpose,a.encrypted_payload AS asset_payload,original.encrypted_payload AS source_payload,original.cipher_bytes,original.cipher_hash
+        `SELECT j.operation_id,a.original_blob_id,a.purpose,a.encrypted_payload AS asset_payload,original.encrypted_payload AS source_payload,original.cipher_bytes,original.cipher_hash
       FROM v2_jobs j JOIN v2_operations o ON o.id=j.operation_id JOIN v2_assets a ON a.id=j.target_id JOIN v2_profiles p ON p.id=a.profile_id
       JOIN v2_blobs original ON original.id=a.original_blob_id JOIN v2_billing_principals principal ON principal.id=original.principal_id
       WHERE j.id=? AND o.owner_id=? AND j.runtime_instance_id=? AND j.target_kind='profile_asset' AND j.kind='portfolio_sanitize'
@@ -90,6 +90,7 @@ export function createAssetProcessingService(
         ],
       )
       .first<{
+        operation_id: string;
         original_blob_id: string;
         purpose: "profile_photo" | "portfolio";
         asset_payload: string;
@@ -99,12 +100,259 @@ export function createAssetProcessingService(
       }>();
     return row && (await consent(params.ownerId)) ? row : null;
   };
+  const receiptId = (
+    params: AssetProcessingParams,
+    fencing: number,
+    operationId: string,
+    originalId: string,
+    originalPayload: string,
+    kind: string,
+    purpose: string,
+    blob: BlobRegistration,
+  ) =>
+    hex(
+      sha256(
+        new TextEncoder().encode(
+          JSON.stringify({
+            version: 1,
+            environment: options.environment,
+            params,
+            fencing,
+            operationId,
+            originalId,
+            originalPayloadHash: hex(sha256(new TextEncoder().encode(originalPayload))),
+            kind,
+            purpose,
+            blob,
+          }),
+        ),
+      ),
+    );
+  // The checkpoint retains only encrypted opaque IDs, including a content
+  // addressed receipt ID. Its actual job/fencing
+  // binds a stored receipt to this execution even after pending metadata is
+  // replaced with the verified stored content hash.
+  const storedReceipt = async (params: AssetProcessingParams, lease: JobLease | null) => {
+    if (!(await consent(params.ownerId)) || (lease && lease.jobId !== params.jobId)) return null;
+    const queryCheckpoint = () =>
+      core
+        .statement(
+          `SELECT c.id,c.revision,c.encrypted_payload,c.fencing FROM v2_job_checkpoints c
+      JOIN v2_jobs j ON j.id=c.job_id JOIN v2_operations o ON o.id=j.operation_id
+      JOIN v2_assets a ON a.id=j.target_id JOIN v2_profiles p ON p.id=a.profile_id
+      WHERE j.id=? AND o.owner_id=? AND j.runtime_instance_id=? AND j.target_kind='profile_asset' AND j.kind='portfolio_sanitize'
+      AND j.profile_id=? AND a.profile_id=j.profile_id AND a.owner_id=o.owner_id AND p.owner_id=o.owner_id
+      AND j.target_id=? AND j.target_revision=? AND c.fencing=j.fencing AND c.phase='assembling'
+      AND ${lease ? `j.lease_token=? AND j.fencing=? AND j.lease_until>? AND j.status IN ('running','validating') AND o.state IN ('admitted','ambiguous') AND a.revision=j.target_revision AND a.state='sanitizing' AND ${jobAlive}` : `j.status='completed' AND o.state='completed' AND a.revision=j.target_revision+1 AND a.state='ready' AND a.current_job_id IS NULL`}
+      AND NOT EXISTS(SELECT 1 FROM v2_tombstones t WHERE (t.target_kind='account' AND t.target_id=a.owner_id) OR (t.target_kind='profile' AND t.target_id=p.id) OR (t.target_kind='asset' AND t.target_id=a.id))
+      ORDER BY c.revision DESC LIMIT 1`,
+          [
+            params.jobId,
+            params.ownerId,
+            options.instanceId,
+            params.profileId,
+            params.assetId,
+            params.assetRevision,
+            ...(lease ? [lease.token, lease.fencing, actor(params.ownerId).now] : []),
+          ],
+        )
+        .first<{ id: string; revision: number; encrypted_payload: string; fencing: number }>();
+    const checkpoint = await queryCheckpoint();
+    if (!checkpoint) return null;
+    const {
+      opaqueIds: [blobId, originalId, expectedReceiptId],
+    } = await core.decrypt(
+      "v2_job_checkpoints",
+      checkpoint.id,
+      params.ownerId,
+      checkpoint.revision,
+      checkpoint.encrypted_payload,
+      z.strictObject({ opaqueIds: z.tuple([opaqueIdSchema, opaqueIdSchema, hashSchema]) }),
+    );
+    const state = await core
+      .statement("SELECT state FROM v2_blobs WHERE id=?", [blobId])
+      .first<string>("state");
+    if (state === "pending") return null;
+    const query = () =>
+      core
+        .statement(
+          `SELECT j.operation_id,b.reservation_id,a.encrypted_payload AS asset_payload,original.encrypted_payload AS original_payload,b.encrypted_payload AS blob_payload,
+      original.logical_bytes AS original_bytes,b.logical_bytes,b.cipher_bytes,b.cipher_hash,b.object_key,a.purpose
+      FROM v2_assets a JOIN v2_profiles p ON p.id=a.profile_id
+      JOIN v2_blobs b ON b.id=? JOIN v2_blobs original ON original.id=a.original_blob_id AND original.principal_id=b.principal_id
+      JOIN v2_billing_principals principal ON principal.id=b.principal_id JOIN v2_storage_reservations r ON r.id=b.reservation_id
+      JOIN v2_jobs j ON j.id=? JOIN v2_operations o ON o.id=j.operation_id
+      WHERE a.id=? AND a.owner_id=? AND a.profile_id=? AND p.owner_id=a.owner_id AND principal.owner_id=a.owner_id
+      AND a.original_blob_id=? AND b.source_blob_id=a.original_blob_id AND b.source_asset_revision=?
+      AND b.state='stored' AND b.visibility='staging' AND b.key_version='asset_sanitized_v1' AND b.object_key='private/'||b.id
+      AND original.state='stored' AND original.visibility='private'
+      AND r.principal_id=principal.id AND r.byte_length=b.logical_bytes AND r.kind='lawyer_asset' AND r.entity_id=a.id AND r.target_id=b.id AND r.state='stored' AND r.operation_id=o.id
+      AND ((a.purpose='profile_photo' AND b.kind='profile_photo_sanitized' AND original.kind='profile_photo_original') OR (a.purpose='portfolio' AND b.kind='portfolio_sanitized' AND original.kind='portfolio_original'))
+      AND ${lease ? `a.state='sanitizing' AND a.revision=? AND a.current_job_id=j.id` : `a.state='ready' AND a.revision=? AND a.sanitized_blob_id=b.id AND a.current_job_id IS NULL`}
+      AND NOT EXISTS(SELECT 1 FROM v2_tombstones t WHERE (t.target_kind='account' AND t.target_id=a.owner_id) OR (t.target_kind='profile' AND t.target_id=p.id) OR (t.target_kind='asset' AND t.target_id=a.id))`,
+          [
+            blobId,
+            params.jobId,
+            params.assetId,
+            params.ownerId,
+            params.profileId,
+            originalId,
+            params.assetRevision,
+            params.assetRevision + (lease ? 0 : 1),
+          ],
+        )
+        .first<{
+          operation_id: string;
+          reservation_id: string;
+          asset_payload: string;
+          original_payload: string;
+          blob_payload: string;
+          original_bytes: number;
+          logical_bytes: number;
+          cipher_bytes: number;
+          cipher_hash: string;
+          object_key: string;
+          purpose: string;
+        }>();
+    const row = await query();
+    if (
+      !row ||
+      !hashSchema.safeParse(row.cipher_hash).success ||
+      row.logical_bytes < 1 ||
+      row.logical_bytes > 100000000 ||
+      row.cipher_bytes <= row.logical_bytes ||
+      row.cipher_bytes > 128000000
+    )
+      throw new ProcessingError("STALE_REVISION");
+    const value = await core.decrypt(
+      "v2_assets",
+      params.assetId,
+      params.ownerId,
+      params.assetRevision + (lease ? 0 : 1),
+      row.asset_payload,
+      v2PortfolioAssetSchema,
+    );
+    const metadata = z.strictObject({ contentHash: hashSchema });
+    const stored = await core.decrypt(
+      "v2_blobs",
+      blobId,
+      params.ownerId,
+      1,
+      row.blob_payload,
+      metadata,
+    );
+    const original = await core.decrypt(
+      "v2_blobs",
+      originalId,
+      params.ownerId,
+      1,
+      row.original_payload,
+      metadata,
+    );
+    const format = value.kind === "pdf" ? ("pdf" as const) : ("jpeg" as const);
+    const actualReceiptId = receiptId(
+      params,
+      checkpoint.fencing,
+      row.operation_id,
+      originalId,
+      row.original_payload,
+      value.kind,
+      row.purpose,
+      {
+        id: blobId,
+        reservationId: row.reservation_id,
+        kind: row.purpose === "profile_photo" ? "profile_photo_sanitized" : "portfolio_sanitized",
+        visibility: "staging",
+        logicalBytes: row.logical_bytes,
+        cipherBytes: row.cipher_bytes,
+        cipherHash: row.cipher_hash,
+        contentHash: stored.contentHash,
+        keyVersion: "asset_sanitized_v1",
+      },
+    );
+    if (
+      actualReceiptId !== expectedReceiptId ||
+      value.originalHash !== original.contentHash ||
+      value.byteLength !== row.original_bytes ||
+      (value.kind !== "pdf" && value.kind !== "image") ||
+      (row.purpose === "profile_photo" && format !== "jpeg") ||
+      (lease === null &&
+        (value.status !== "ready" ||
+          value.sanitizedDerivative?.id !== blobId ||
+          value.sanitizedDerivative.contentHash !== stored.contentHash ||
+          value.sanitizedDerivative.byteLength !== row.logical_bytes ||
+          value.sanitizedDerivative.format !== format)) ||
+      !(await consent(params.ownerId)) ||
+      JSON.stringify(await queryCheckpoint()) !== JSON.stringify(checkpoint) ||
+      JSON.stringify(await query()) !== JSON.stringify(row)
+    )
+      throw new ProcessingError("STALE_REVISION");
+    return {
+      value,
+      originalId,
+      blobId,
+      contentHash: stored.contentHash,
+      byteLength: row.logical_bytes,
+      format,
+    };
+  };
+  const readyResult = (params: AssetProcessingParams) => ({
+    status: "ready" as const,
+    assetId: params.assetId,
+    revision: params.assetRevision + 1,
+  });
+  const completed = async (input: AssetProcessingParams) => {
+    const params = assetProcessingParamsSchema.parse(input);
+    return (await storedReceipt(params, null)) ? readyResult(params) : null;
+  };
   return {
+    completed,
     async sanitize(input: AssetProcessingParams, lease: JobLease, signal: AbortSignal) {
-      const params = paramsSchema.parse(input);
+      const params = assetProcessingParamsSchema.parse(input);
+      if (signal.aborted) throw new ProcessingError("STALE_REVISION");
+      const completedFence =
+        lease.jobId === params.jobId &&
+        (await core
+          .statement("SELECT id FROM v2_jobs WHERE id=? AND fencing=?", [
+            params.jobId,
+            lease.fencing,
+          ])
+          .first());
+      const done = completedFence ? await completed(params) : null;
+      if (done) return done;
       const access = { signal, authorize: async () => Boolean(await current(params, lease)) };
       const source = await current(params, lease);
       if (!source || signal.aborted) throw new ProcessingError("STALE_REVISION");
+      const recovered = await storedReceipt(params, lease);
+      if (recovered) {
+        if (
+          !(await authorize(access)) ||
+          recovered.originalId !== source.original_blob_id ||
+          !(await lawyers.saveAsset(
+            actor(params.ownerId),
+            params.assetId,
+            params.assetRevision,
+            {
+              ...recovered.value,
+              revision: params.assetRevision + 1,
+              status: "ready",
+              currentJobId: null,
+              failure: null,
+              sanitizedDerivative: {
+                id: recovered.blobId,
+                contentHash: recovered.contentHash,
+                byteLength: recovered.byteLength,
+                format: recovered.format,
+              },
+            },
+            recovered.originalId,
+            recovered.blobId,
+            lease,
+          ))
+        )
+          throw new ProcessingError("STALE_REVISION");
+        return readyResult(params);
+      }
       const renewalActor = actor(params.ownerId);
       if (
         !(await jobs.renew(
@@ -208,6 +456,36 @@ export function createAssetProcessingService(
           contentHash: manifest.contentHash,
           keyVersion: "asset_sanitized_v1",
         };
+        const checkpointRevision = await core
+          .statement(
+            "SELECT coalesce(max(revision),0)+1 AS revision FROM v2_job_checkpoints WHERE job_id=?",
+            [params.jobId],
+          )
+          .first<number>("revision");
+        if (
+          !checkpointRevision ||
+          !(await jobs.checkpoint(actor(params.ownerId), lease, {
+            id: crypto.randomUUID(),
+            revision: checkpointRevision,
+            phase: "assembling",
+            progress: 95,
+            opaqueIds: [
+              blobId,
+              source.original_blob_id,
+              receiptId(
+                params,
+                lease.fencing,
+                source.operation_id,
+                source.original_blob_id,
+                source.source_payload,
+                value.kind,
+                source.purpose,
+                prepared,
+              ),
+            ],
+          }))
+        )
+          throw new ProcessingError("STALE_REVISION");
         if (!(await storage.prepareSanitizedAssetBlob(actor(params.ownerId), lease, prepared)))
           throw new ProcessingError("STALE_REVISION");
         captured = await storage.captureSanitizedAssetBlobIntent(

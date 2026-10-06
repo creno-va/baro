@@ -33,6 +33,7 @@ async function setup(
     tamper?: boolean;
     advancingClock?: boolean;
     before?: (input: Parameters<ProcessingCosts["before"]>[0]) => void;
+    beforeReady?: () => void;
   } = {},
 ) {
   const f = await fixture();
@@ -157,16 +158,25 @@ async function setup(
       );
     },
   });
-  const processing = createAssetProcessingService(f.core, {
-    environment: "preview",
-    instanceId: `${jobId}-1`,
-    bucket,
-    processor,
-    costs,
-    clock,
-    fixedLength: fixed,
-    openOriginal: (input, authorized) => assets.openOriginal(input, authorized),
-  });
+  const processing = createAssetProcessingService(
+    {
+      ...f.core,
+      encrypt: async (...args: Parameters<typeof f.core.encrypt>) => {
+        if (args[0] === "v2_assets" && args[3] === 3) options.beforeReady?.();
+        return f.core.encrypt(...args);
+      },
+    },
+    {
+      environment: "preview",
+      instanceId: `${jobId}-1`,
+      bucket,
+      processor,
+      costs,
+      clock,
+      fixedLength: fixed,
+      openOriginal: (input, authorized) => assets.openOriginal(input, authorized),
+    },
+  );
   return {
     ...f,
     bucketPort: bucket,
@@ -320,4 +330,107 @@ test("deletion during actual late output PUT prevents ready and requeues capture
     .query("SELECT count(*) AS count FROM v2_deletion_journals")
     .get() as { count: number };
   expect(journals.count).toBeGreaterThan(0);
+});
+
+async function crashAfterStored(options: Parameters<typeof setup>[0] = {}) {
+  const f = await setup(options);
+  // Actual SQLite publication abort, after the actual encrypted R2 PUT and
+  // commitSanitizedAssetBlob transaction; no repository method is mocked.
+  f.db.sqlite.exec(`CREATE TEMP TRIGGER synthetic_ready_crash BEFORE UPDATE ON v2_assets
+    WHEN NEW.state='ready' BEGIN SELECT RAISE(ABORT,'synthetic publication crash'); END`);
+  await expect(f.processing.sanitize(f.params, f.lease, signal())).rejects.toThrow();
+  f.db.sqlite.exec("DROP TRIGGER synthetic_ready_crash");
+  const blob = f.db.sqlite
+    .query("SELECT id FROM v2_blobs WHERE visibility='staging' AND state='stored'")
+    .get() as { id: string };
+  expect(blob).toBeTruthy();
+  expect(
+    f.db.sqlite
+      .query("SELECT state,revision,current_job_id FROM v2_assets WHERE id=?")
+      .get(f.params.assetId),
+  ).toEqual({ state: "sanitizing", revision: 2, current_job_id: f.params.jobId });
+  return { ...f, storedBlobId: blob.id };
+}
+test("actual stored-before-ready SQL crash recovers from the same fenced receipt without R2/native/cost dispatch", async () => {
+  const f = await crashAfterStored();
+  const calls = { ...f.bucket.calls },
+    native = f.nativeCalls(),
+    costs = f.receipts.length;
+  expect(await f.processing.completed(f.params)).toBeNull();
+  expect(await f.processing.sanitize(f.params, f.lease, signal())).toMatchObject({
+    status: "ready",
+    revision: 3,
+  });
+  expect(f.bucket.calls).toEqual(calls);
+  expect(f.nativeCalls()).toBe(native);
+  expect(f.receipts.length).toBe(costs);
+  expect(await f.processing.completed(f.params)).toMatchObject({ status: "ready", revision: 3 });
+  expect(await f.processing.sanitize(f.params, f.lease, signal())).toMatchObject({
+    status: "ready",
+    revision: 3,
+  });
+  expect(await f.processing.completed({ ...f.params, ownerId: "foreign" })).toBeNull();
+  expect(await f.processing.completed({ ...f.params, assetRevision: 99 })).toBeNull();
+  await expect(
+    f.processing.sanitize(f.params, { ...f.lease, fencing: f.lease.fencing + 1 }, signal()),
+  ).rejects.toMatchObject({ code: "STALE_REVISION" });
+  expect(f.bucket.calls).toEqual(calls);
+  expect(f.nativeCalls()).toBe(native);
+  expect(f.receipts.length).toBe(costs);
+  expect(
+    f.db.sqlite.query("SELECT count(*) AS count FROM v2_blobs WHERE visibility='public'").get(),
+  ).toEqual({ count: 0 });
+});
+for (const column of ["source_asset_revision", "cipher_hash", "object_key"] as const) {
+  test(`stored recovery rejects drifted ${column} without another paid dispatch`, async () => {
+    const f = await crashAfterStored();
+    f.db.sqlite
+      .query(`UPDATE v2_blobs SET ${column}=? WHERE id=?`)
+      .run(
+        column === "source_asset_revision"
+          ? 99
+          : column === "cipher_hash"
+            ? "0".repeat(64)
+            : "private/foreign",
+        f.storedBlobId,
+      );
+    const calls = { ...f.bucket.calls },
+      native = f.nativeCalls(),
+      costs = f.receipts.length;
+    await expect(f.processing.sanitize(f.params, f.lease, signal())).rejects.toMatchObject({
+      code: "STALE_REVISION",
+    });
+    expect(f.bucket.calls).toEqual(calls);
+    expect(f.nativeCalls()).toBe(native);
+    expect(f.receipts.length).toBe(costs);
+  });
+}
+test("stored recovery cannot adopt another fence or a deleted asset", async () => {
+  const f = await crashAfterStored(),
+    calls = { ...f.bucket.calls };
+  await expect(
+    f.processing.sanitize(f.params, { ...f.lease, fencing: f.lease.fencing + 1 }, signal()),
+  ).rejects.toMatchObject({ code: "STALE_REVISION" });
+  expect(await createV2DeletionRepository(f.core).asset(f.actor, f.params.assetId, 2)).toBeTruthy();
+  expect(await f.processing.completed(f.params)).toBeNull();
+  await expect(f.processing.sanitize(f.params, f.lease, signal())).rejects.toMatchObject({
+    code: "STALE_REVISION",
+  });
+  expect(f.bucket.calls).toEqual(calls);
+  expect(f.nativeCalls()).toBe(1);
+});
+test("recovery ready publication final claim rejects stored provenance changed during actual AES", async () => {
+  let mutate: () => void = () => {};
+  const f = await crashAfterStored({ beforeReady: () => mutate() });
+  mutate = () => {
+    f.db.sqlite
+      .query("UPDATE v2_blobs SET source_asset_revision=99 WHERE id=?")
+      .run(f.storedBlobId);
+  };
+  await expect(f.processing.sanitize(f.params, f.lease, signal())).rejects.toMatchObject({
+    code: "STALE_REVISION",
+  });
+  expect(f.db.sqlite.query("SELECT state FROM v2_assets WHERE id=?").get(f.params.assetId)).toEqual(
+    { state: "sanitizing" },
+  );
 });
