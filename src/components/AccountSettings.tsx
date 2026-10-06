@@ -33,9 +33,15 @@ export function AccountSettings() {
       if (sequence !== loadSequence.current) return;
       const problems: string[] = [];
       if (results[0].status === "fulfilled") setUsage(results[0].value);
-      else problems.push("사용량을 확인하지 못했어요.");
+      else {
+        setUsage(null);
+        problems.push("사용량을 확인하지 못했어요.");
+      }
       if (results[1].status === "fulfilled") setCases(results[1].value);
-      else problems.push("사건 목록을 확인하지 못했어요.");
+      else {
+        setCases([]);
+        problems.push("사건 목록을 확인하지 못했어요.");
+      }
       if (results[2].status === "fulfilled") {
         const value = results[2].value;
         setAccess(value);
@@ -52,12 +58,16 @@ export function AccountSettings() {
           sessionStorage.removeItem(markerKey);
           problems.push("다른 계정으로 인증했어요. 삭제할 계정으로 다시 로그인해 주세요.");
         }
-      } else problems.push("계정 상태를 확인하지 못했어요. 다시 로그인하거나 재시도해 주세요.");
+      } else {
+        setAccess(null);
+        setReady(false);
+        problems.push("계정 상태를 확인하지 못했어요. 다시 로그인하거나 재시도해 주세요.");
+      }
       setError(problems.join(" "));
     } catch {
       setError("설정을 확인하지 못했어요. 다시 시도해 주세요.");
     } finally {
-      setBusy("");
+      if (sequence === loadSequence.current) setBusy("");
     }
   }, []);
   useEffect(() => {
@@ -84,7 +94,8 @@ export function AccountSettings() {
     }
   }
   async function remove() {
-    if (lock.current || !target || confirmation !== "DELETE") return;
+    if (lock.current || !target || confirmation !== "DELETE" || (target === "account" && !ready))
+      return;
     lock.current = true;
     setBusy("삭제 요청 중…");
     setError("");
@@ -93,9 +104,9 @@ export function AccountSettings() {
       if (target === "account") {
         await api.account.deleteAccount(confirmation);
         sessionStorage.removeItem(markerKey);
-        await accountDeleted();
         setDeleted(true);
         setTarget(null);
+        await accountDeleted().catch(() => false);
       } else {
         await api.account.deleteCase(target.id, confirmation, target.schemaVersion ?? "2");
         setCases(cases.filter((item) => item.id !== target.id));
@@ -112,6 +123,16 @@ export function AccountSettings() {
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "삭제를 확인하지 못했어요. 다시 확인해 주세요.");
+      if (
+        ["UNAUTHENTICATED", "REAUTHENTICATION_REQUIRED"].includes(
+          (e as { code?: string })?.code ?? "",
+        )
+      ) {
+        setReady(false);
+        setConfirmation("");
+        setTarget(null);
+        sessionStorage.removeItem(markerKey);
+      }
     } finally {
       lock.current = false;
       setBusy("");
@@ -146,7 +167,7 @@ export function AccountSettings() {
         </button>
       </header>
       {busy && <p role="status">{busy}</p>}
-      {error && (
+      {error && !target && (
         <p role="alert" className="settings-error">
           {error}
         </p>
@@ -276,6 +297,7 @@ export function AccountSettings() {
               ))}
             </div>
             {access && !access.providers.length && <a href="/login">다시 로그인</a>}
+            {!access && !busy && <a href="/login">로그인 상태 확인</a>}
           </>
         )}
         {ready && <p>계정 확인을 마쳤어요. 삭제할 내용을 한 번 더 확인해 주세요.</p>}

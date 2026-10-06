@@ -10,6 +10,11 @@ import type { CaseView, FileView, ReportView, SessionView, WorkspaceView } from 
 export type ReportMockState = {
   session: SessionView;
   cases: Record<string, CaseView>;
+  caseOwners?: Record<string, string>;
+  intake?: Record<string, unknown>;
+  caseRequests?: Record<string, { ownerId: string; fingerprint: string; result: unknown }>;
+  lawyers?: unknown;
+  deletedAccountIds?: string[];
   workspace: Record<string, Partial<WorkspaceView>>;
   files: Record<string, FileView[]>;
   reports: Record<string, ReportView>;
@@ -19,6 +24,9 @@ export type ReportMockState = {
   reportRequests?: Record<string, { fingerprint: string; value: ReportView }>;
   workspaceReceipts?: Record<string, unknown>;
   fileProcessing?: Record<string, unknown>;
+  fileExtractions?: Record<string, string>;
+  fileUploads?: Record<string, { caseId: string; ownerId: string }>;
+  fileUploadReceipts?: Record<string, { fileId: string; fingerprint: string }>;
 };
 export type ReportMockRuntime = {
   read: () => ReportMockState;
@@ -46,7 +54,11 @@ export function requireMockCase(state: ReportMockState, id: string, consent = tr
   if (consent) requireMockAccount(state);
   else requireMockSession(state);
   const item = state.cases[id];
-  if (!item || state.deletedCaseIds?.includes(id))
+  if (
+    !item ||
+    state.deletedCaseIds?.includes(id) ||
+    (state.caseOwners && state.caseOwners[id] !== state.session.user?.id)
+  )
     throw new ReportMockError(
       "NOT_FOUND",
       "사건을 찾을 수 없어요. 삭제했거나 접근할 수 없는 사건이에요.",

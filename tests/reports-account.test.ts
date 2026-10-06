@@ -153,15 +153,32 @@ test("stale source revisions are shown, excluded or removed originals cannot ent
 test("case deletion removes listing, workspace, files and every report version across reload; account deletion clears profile and session", async () => {
   const f = fixture();
   const report = await f.reports.get("case-demo");
+  f.update((state) => {
+    state.fileUploads = {
+      "pending-upload": { caseId: "case-demo", ownerId: "mock-owner" },
+      "other-upload": { caseId: "other-case", ownerId: "mock-owner" },
+    };
+    state.fileExtractions = { "file-demo": "합성 원문", "pending-upload": "예약 자료" };
+    state.fileProcessing = { "pending-upload": { at: 1 }, "other-upload": { at: 1 } };
+    state.fileUploadReceipts = {
+      "synthetic-owner/case-demo/key": { fileId: "pending-upload", fingerprint: "synthetic" },
+      "synthetic-owner/other-case/key": { fileId: "other-upload", fingerprint: "synthetic" },
+    };
+  });
   await expect(f.account.deleteCase("case-demo", "wrong")).rejects.toThrow("DELETE");
   await f.account.deleteCase("case-demo", "DELETE");
   expect(f.read().cases).toEqual({});
   expect(f.read().workspace).toEqual({});
+  expect(f.read().fileExtractions).toEqual({});
+  expect(Object.keys(f.read().fileUploads ?? {})).toEqual(["other-upload"]);
+  expect(Object.keys(f.read().fileProcessing ?? {})).toEqual(["other-upload"]);
+  expect(Object.keys(f.read().fileUploadReceipts ?? {})).toEqual([
+    "synthetic-owner/other-case/key",
+  ]);
   expect(f.read().files).toEqual({});
   expect(f.read().reports).toEqual({});
   expect(f.read().reportHistory).toEqual({});
   expect(f.read().workspaceReceipts).toEqual({});
-  expect(f.read().fileProcessing).toEqual({});
   expect(f.removed).toEqual(["case-demo"]);
   await expect(f.reports.get("case-demo")).rejects.toMatchObject({ code: "NOT_FOUND" });
   await expect(f.reports.pdf(report.id)).rejects.toMatchObject({ code: "NOT_FOUND" });
@@ -243,4 +260,84 @@ test("consent refusal blocks new processing but keeps owner deletion available",
   expect(f.read().cases).toEqual({});
   await f.account.deleteAccount("DELETE");
   expect(f.read().session.user).toBeNull();
+});
+
+test("failed binary cleanup preserves a retryable case and an account switch cannot clear another session", async () => {
+  const f = fixture();
+  let fail = true;
+  const account = createAccountClient(
+    createAccountMockHandler({
+      read: f.read,
+      update: f.update,
+      removeOriginals: async (ownerId, caseId) => {
+        expect(ownerId).toBe("synthetic-owner");
+        if (fail) throw new Error("원본 정리 실패");
+        expect(caseId).toBe("case-demo");
+      },
+    }),
+  );
+  await expect(account.deleteCase("case-demo", "DELETE")).rejects.toThrow("원본 정리 실패");
+  expect(f.read().cases["case-demo"]).toBeDefined();
+  fail = false;
+  await account.deleteCase("case-demo", "DELETE");
+  expect(f.read().cases["case-demo"]).toBeUndefined();
+  const other = createAccountClient(
+    createAccountMockHandler({
+      read: f.read,
+      update: f.update,
+      removeOriginals: async () =>
+        f.update((value) => {
+          if (value.session.user) value.session.user.id = "other-owner";
+        }),
+    }),
+  );
+  await expect(other.deleteAccount("DELETE")).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
+  expect(f.read().session.user?.id).toBe("other-owner");
+});
+
+test("canonical shared namespaces enforce ownership and deleting one account preserves another owner's case and profile", async () => {
+  const f = fixture();
+  f.update((state) => {
+    const own = state.cases["case-demo"];
+    if (!own) throw new Error("fixture missing");
+    state.cases["peer-case"] = { ...own, id: "peer-case" };
+    state.caseOwners = { "case-demo": "synthetic-owner", "peer-case": "peer-owner" };
+    state.intake = {
+      "case-demo": { narrative: "자기 합성 입력" },
+      "peer-case": { narrative: "다른 합성 입력" },
+    };
+    state.caseRequests = {
+      "own:create:key": { ownerId: "synthetic-owner", fingerprint: "{}", result: own },
+      "own:answers:key": {
+        ownerId: "synthetic-owner",
+        fingerprint: JSON.stringify({ id: "case-demo" }),
+        result: {},
+      },
+      "peer:create:key": {
+        ownerId: "peer-owner",
+        fingerprint: "{}",
+        result: state.cases["peer-case"],
+      },
+    };
+    state.lawyers = {
+      profiles: [{ id: "own-profile" }, { id: "peer-profile" }],
+      owners: { "synthetic-owner": "own-profile", "peer-owner": "peer-profile" },
+    };
+  });
+  await expect(f.reports.get("peer-case")).rejects.toMatchObject({ code: "NOT_FOUND" });
+  await expect(f.account.deleteCase("peer-case", "DELETE")).rejects.toMatchObject({
+    code: "NOT_FOUND",
+  });
+  expect((await f.account.usage()).newCases.used).toBe(1);
+  await f.account.deleteAccount("DELETE");
+  expect(Object.keys(f.read().cases)).toEqual(["peer-case"]);
+  expect(f.read().caseOwners).toEqual({ "peer-case": "peer-owner" });
+  expect(Object.keys(f.read().intake ?? {})).toEqual(["peer-case"]);
+  expect(Object.keys(f.read().caseRequests ?? {})).toEqual(["peer:create:key"]);
+  expect(f.read().lawyers).toEqual({
+    profiles: [{ id: "peer-profile" }],
+    owners: { "peer-owner": "peer-profile" },
+  });
+  expect(f.read().session.user).toBeNull();
+  expect(f.read().deletedAccountIds).toEqual(["synthetic-owner"]);
 });

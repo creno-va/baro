@@ -28,12 +28,14 @@ export function ConfirmDialog({
       ref={ref}
       className="report-modal"
       aria-labelledby={id}
+      aria-busy={busy}
       onCancel={(event) => {
         event.preventDefault();
         if (!busy) onCancel();
       }}
     >
       <h2 id={id}>{title}</h2>
+      {busy && <p role="status">요청을 처리하고 있어요…</p>}
       {children}
     </dialog>
   );

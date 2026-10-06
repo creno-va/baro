@@ -17,6 +17,7 @@ export function ReportReview({ caseId }: { caseId: string }) {
   const [notice, setNotice] = useState("");
   const [preview, setPreview] = useState(false);
   const [regenerate, setRegenerate] = useState(false);
+  const [reloadConfirm, setReloadConfirm] = useState(false);
   const [reviewed, setReviewed] = useState(false);
   const lock = useRef(false);
   const loadSequence = useRef(0);
@@ -41,9 +42,18 @@ export function ReportReview({ caseId }: { caseId: string }) {
       setFiles(materials);
       setSelected([]);
     } catch (e) {
+      if (sequence !== loadSequence.current) return;
       setError(e instanceof Error ? e.message : "리포트를 확인하지 못했어요.");
+      if (
+        ["UNAUTHENTICATED", "CONSENT_REQUIRED", "NOT_FOUND"].includes(
+          (e as { code?: string })?.code ?? "",
+        )
+      ) {
+        setReport(null);
+        setFiles([]);
+      }
     } finally {
-      setBusy("");
+      if (sequence === loadSequence.current) setBusy("");
     }
   }, [caseId, accept]);
   useEffect(() => {
@@ -104,10 +114,18 @@ export function ReportReview({ caseId }: { caseId: string }) {
         </p>
       </aside>
       {busy && <p role="status">{busy}</p>}
-      {error && (
+      {error && !regenerate && !reloadConfirm && (
         <div className="report-error" role="alert">
           <p>{error}</p>
-          <button type="button" disabled={Boolean(busy)} onClick={() => void load()}>
+          <button
+            type="button"
+            disabled={Boolean(busy)}
+            onClick={(event) => {
+              event.currentTarget.focus();
+              if (dirty) setReloadConfirm(true);
+              else void load();
+            }}
+          >
             다시 확인
           </button>
           <a href="/login">로그인</a>
@@ -309,6 +327,11 @@ export function ReportReview({ caseId }: { caseId: string }) {
             최신 사건과 자료로 새 초안을 만들어요. 편집한 내용은 현재 버전에 남고 새 초안을 다시
             검토해야 해요. 저장하지 않은 변경은 먼저 저장해 주세요.
           </p>
+          {error && (
+            <p role="alert" className="report-error">
+              {error}
+            </p>
+          )}
           <button type="button" onClick={() => setRegenerate(false)}>
             취소
           </button>
@@ -324,6 +347,28 @@ export function ReportReview({ caseId }: { caseId: string }) {
             }
           >
             새 버전 생성
+          </button>
+        </ConfirmDialog>
+      )}
+      {reloadConfirm && (
+        <ConfirmDialog
+          title="저장 내용을 다시 불러올까요?"
+          busy={Boolean(busy)}
+          onCancel={() => setReloadConfirm(false)}
+        >
+          <p>저장하지 않은 편집 내용은 사라져요. 현재 편집 내용을 보관하려면 취소해 주세요.</p>
+          <button type="button" onClick={() => setReloadConfirm(false)}>
+            취소
+          </button>
+          <button
+            type="button"
+            disabled={Boolean(busy)}
+            onClick={() => {
+              setReloadConfirm(false);
+              void load();
+            }}
+          >
+            편집을 버리고 다시 불러오기
           </button>
         </ConfirmDialog>
       )}

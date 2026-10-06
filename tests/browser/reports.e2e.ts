@@ -173,6 +173,24 @@ test("mobile layout, keyboard cancel, failure and retry use the same components"
   });
   await page.getByRole("button", { name: "다시 확인" }).click();
   await expect(page.getByRole("textbox", { name: "리포트 내용 편집" })).toBeVisible();
+  const editor = page.getByRole("textbox", { name: "리포트 내용 편집" });
+  await editor.fill("저장되지 않은 검토 내용");
+  await page.evaluate(() => {
+    const key = "baro.reports.browser-test.v1";
+    const state = JSON.parse(localStorage.getItem(key) ?? "{}");
+    state.reports["case-demo"].revision++;
+    state.reports["case-demo"].content = "다른 화면에서 저장한 내용";
+    localStorage.setItem(key, JSON.stringify(state));
+  });
+  await page.getByRole("button", { name: "검토 내용 저장" }).click();
+  await expect(page.getByRole("alert")).toBeVisible();
+  await page.getByRole("button", { name: "다시 확인" }).click();
+  await expect(page.getByRole("dialog")).toContainText("저장하지 않은 편집");
+  await page.getByRole("button", { name: "취소", exact: true }).click();
+  await expect(editor).toHaveValue("저장되지 않은 검토 내용");
+  await page.getByRole("button", { name: "다시 확인" }).click();
+  await page.getByRole("button", { name: "편집을 버리고 다시 불러오기" }).click();
+  await expect(editor).toHaveValue("다른 화면에서 저장한 내용");
   if (evidence)
     await page.screenshot({ path: resolve(evidence, "report-mobile.png"), fullPage: true });
 });
