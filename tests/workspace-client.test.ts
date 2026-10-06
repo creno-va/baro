@@ -8,6 +8,7 @@ import {
   assistantMessage,
   guide,
   intake,
+  job,
   summary,
   timeline,
   userMessage,
@@ -348,4 +349,68 @@ test("deletion during binary save rejects late publication and removes the saved
   ).rejects.toMatchObject({ code: "NOT_FOUND" });
   expect(originals.size).toBe(0);
   expect(f.runtime.read().cases["synthetic-case"]).toBeUndefined();
+});
+
+test("real accepted chat job restores failed response after reload and retries current workspace revision", async () => {
+  const stored = new Map<string, string>();
+  const storage = {
+    getItem: (key: string) => stored.get(key) ?? null,
+    setItem: (key: string, value: string) => {
+      stored.set(key, value);
+    },
+    removeItem: (key: string) => {
+      stored.delete(key);
+    },
+  };
+  let status: "failed" | "queued" | "completed" = "failed";
+  let currentJobId: string | null = null;
+  let expectedRetry: unknown;
+  const accepted = { operationId: job.operationId, jobId: job.id, status: "queued", retryAfter: 2 };
+  const request = async (path: string, init?: RequestInit) => {
+    if (init?.method === "POST" && path.endsWith("/messages"))
+      return Response.json(accepted, { status: 202 });
+    if (init?.method === "POST" && path.endsWith("/retry")) {
+      expectedRetry = JSON.parse(String(init.body));
+      status = "queued";
+      currentJobId = job.id;
+      return Response.json(accepted, { status: 202 });
+    }
+    if (path.endsWith("/workspace"))
+      return Response.json({ ...workspace, currentJobId, workspaceRevision: 4 });
+    if (path.endsWith(`/workspace-jobs/${job.id}`))
+      return Response.json({
+        ...job,
+        status,
+        phase: status === "completed" ? "finished" : "admission",
+        progressPercent: status === "completed" ? 100 : 0,
+        attempts: 1,
+        failure: status === "failed" ? "MODEL_UNAVAILABLE" : null,
+        retryable: status === "failed",
+      });
+    if (path.endsWith("/intake")) return Response.json(intake);
+    if (path.endsWith("/summary")) return Response.json(summary);
+    if (path.includes("/messages?"))
+      return Response.json({ items: [userMessage], nextCursor: null });
+    if (path.endsWith("/actions") || path.endsWith("/timeline"))
+      return Response.json({ items: [], nextCursor: null });
+    if (path.endsWith("/files")) return Response.json([]);
+    return Response.json({ error: { code: "NOT_FOUND" } }, { status: 404 });
+  };
+  const first = createWorkspaceApi(request, storage);
+  const view = await first.sendMessage(workspace.id, {
+    expectedRevision: 3,
+    text: "합성 질문",
+    selectedFileIds: [],
+  });
+  expect(view.messages.at(-1)?.status).toBe("failed");
+  const resumed = createWorkspaceApi(request, storage);
+  const restored = await resumed.get(workspace.id);
+  expect(restored.messages.at(-1)?.status).toBe("failed");
+  expect((await resumed.retryMessage(workspace.id, `job:${job.id}`)).messages.at(-1)?.status).toBe(
+    "pending",
+  );
+  expect(expectedRetry).toEqual({ expectedRevision: 4 });
+  status = "completed";
+  await resumed.get(workspace.id);
+  expect(stored.size).toBe(0);
 });
