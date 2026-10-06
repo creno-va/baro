@@ -125,35 +125,68 @@ export function createMediaGateway(
       access,
     );
     if (!permit) throw new ProcessingError("BUDGET_UNAVAILABLE");
-    if (!(await authorize(access)) || (permitted && !(await permitted()))) {
-      await options.costs.after(permit, { transport: "not_sent" });
-      throw new ProcessingError("STALE_REVISION");
-    }
     let timedOut = false,
-      settled = false;
-    // Reconstruct from the reserved bytes: even a trusted callback cannot alter
-    // the model payload between its digest/bounds proof and actual dispatch.
-    let remote: Promise<unknown>;
-    try {
-      remote = env.AI.run(model, JSON.parse(new TextDecoder().decode(serialized)), {
-        gateway: { id: env.AI_GATEWAY_ID, collectLog: false, skipCache: true },
-      });
-    } catch {
-      await options.costs.after(permit, { transport: "unknown" });
-      throw new ProcessingError("MODEL_UNAVAILABLE");
-    }
+      settled = false,
+      sent = false;
+    let resolveRemote!: (raw: unknown) => void,
+      rejectRemote!: (error: unknown) => void,
+      releaseForeground!: () => void;
+    const remote = new Promise<unknown>((resolve, reject) => {
+      resolveRemote = resolve;
+      rejectRemote = reject;
+    });
+    const foreground = new Promise<void>((resolve) => {
+      releaseForeground = resolve;
+    });
+    // Install the lifetime observer before any binding call. Its late receipt
+    // waits for the foreground unknown write (including failure) to finish.
     const late = remote.then(
       async (raw) => {
+        await foreground;
         if (timedOut) await options.costs.after(permit, { transport: "response", rawUsage: raw });
       },
       async () => {
-        if (timedOut) await options.costs.after(permit, { transport: "unknown" });
+        await foreground;
+        // The foreground already records unknown for a rejected binding or
+        // timeout; a late rejection adds no new usage receipt.
       },
     );
-    options.waitUntil(late.catch(() => {}));
+    try {
+      options.waitUntil(late.catch(() => {}));
+    } catch {
+      resolveRemote(undefined);
+      releaseForeground();
+      try {
+        await options.costs.after(permit, { transport: "not_sent" });
+      } catch {
+        // A local unsent candidate is not an authenticated zero-cost receipt.
+      }
+      throw new ProcessingError("MODEL_UNAVAILABLE");
+    }
+    // Reconstruct from the reserved bytes: even a trusted callback cannot alter
+    // the model payload between its digest/bounds proof and actual dispatch.
     let timer: ReturnType<typeof setTimeout> | undefined;
     let stop: (() => void) | undefined;
     try {
+      if (
+        (permitted && !(await permitted())) ||
+        !(await authorize(access)) ||
+        access.signal.aborted
+      ) {
+        await options.costs.after(permit, { transport: "not_sent" });
+        settled = true;
+        throw new ProcessingError("STALE_REVISION");
+      }
+      sent = true;
+      try {
+        resolveRemote(
+          env.AI.run(model, JSON.parse(new TextDecoder().decode(serialized)), {
+            gateway: { id: env.AI_GATEWAY_ID, collectLog: false, skipCache: true },
+          }),
+        );
+      } catch (error) {
+        rejectRemote(error);
+      }
       const raw = await Promise.race([
         remote,
         new Promise<never>((_, reject) => {
@@ -169,12 +202,18 @@ export function createMediaGateway(
       return raw;
     } catch (error) {
       if (!settled) {
-        timedOut = true;
-        await options.costs.after(permit, { transport: "unknown" });
+        timedOut = sent;
+        try {
+          await options.costs.after(permit, { transport: sent ? "unknown" : "not_sent" });
+        } catch {
+          throw new ProcessingError("MODEL_UNAVAILABLE");
+        }
       }
       if (error instanceof ProcessingError) throw error;
       throw new ProcessingError("MODEL_UNAVAILABLE");
     } finally {
+      if (!sent) resolveRemote(undefined);
+      releaseForeground();
       if (timer) clearTimeout(timer);
       if (stop) access.signal.removeEventListener("abort", stop);
     }
@@ -318,7 +357,9 @@ export function createMediaGateway(
         .safeParse(raw);
       if (!envelope.success) throw new ProcessingError("MODEL_SCHEMA_INVALID");
       try {
-        return visionSchema.parse(JSON.parse(envelope.data.choices[0]!.message.content));
+        const choice = envelope.data.choices[0];
+        if (!choice) throw new ProcessingError("MODEL_SCHEMA_INVALID");
+        return visionSchema.parse(JSON.parse(choice.message.content));
       } catch {
         throw new ProcessingError("MODEL_SCHEMA_INVALID");
       }

@@ -40,6 +40,8 @@ function setup(
     output?: unknown;
     run?: () => Promise<unknown>;
     timeoutMs?: number;
+    register?: () => void;
+    after?: (receipt: { transport: string; rawUsage?: unknown }) => Promise<void>;
   } = {},
 ) {
   let allowed = true,
@@ -59,6 +61,7 @@ function setup(
     },
     after: async (_, receipt) => {
       receipts.push(receipt);
+      await options.after?.(receipt);
     },
   };
   const gateway = createMediaGateway(
@@ -77,7 +80,10 @@ function setup(
     },
     {
       costs,
-      waitUntil: (p) => pending.push(p),
+      waitUntil: (p) => {
+        pending.push(p);
+        options.register?.();
+      },
       ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }),
       visionCapability: async () =>
         capable
@@ -201,4 +207,128 @@ test("WAV duration and PCM format are proven before any paid/provider call", asy
   });
   expect(s.state()).toBe(0);
   expect(s.receipts).toEqual([]);
+});
+
+for (const kind of ["asr", "vision"] as const)
+  test(`${kind} lifetime registration failure prevents actual binding dispatch`, async () => {
+    const s = setup({
+      register: () => {
+        throw new Error("synthetic registration detail");
+      },
+    });
+    const result =
+      kind === "asr"
+        ? s.gateway.transcribe(wav(), 0, 1, s.access)
+        : s.gateway.observe(new Uint8Array([255, 216, 255, 217]), s.access);
+    await expect(result).rejects.toMatchObject({ code: "MODEL_UNAVAILABLE" });
+    expect(s.state()).toBe(0);
+    expect(s.receipts).toEqual([{ transport: "not_sent" }]);
+    await Promise.all(s.pending);
+  });
+
+test("registration-side consent/capability revocation is rechecked before AI dispatch", async () => {
+  for (const kind of ["consent", "capability"] as const) {
+    let s!: ReturnType<typeof setup>;
+    s = setup({ register: () => (kind === "consent" ? s.revoke() : s.disableVision()) });
+    await expect(
+      s.gateway.observe(new Uint8Array([255, 216, 255, 217]), s.access),
+    ).rejects.toMatchObject({ code: "STALE_REVISION" });
+    expect(s.state()).toBe(0);
+    expect(s.receipts).toEqual([{ transport: "not_sent" }]);
+    await Promise.all(s.pending);
+  }
+});
+
+test("vision dispatch follows observer registration and preserves actual response receipt", async () => {
+  const events: string[] = [];
+  const output = { texts: ["synthetic visible text"], quality: "processed" as const };
+  const envelope = { choices: [{ message: { content: JSON.stringify(output) } }] };
+  const s = setup({
+    register: () => {
+      events.push("registered");
+    },
+    run: async () => {
+      events.push("run");
+      return envelope;
+    },
+  });
+  expect(await s.gateway.observe(new Uint8Array([255, 216, 255, 217]), s.access)).toEqual(output);
+  expect(events).toEqual(["registered", "run"]);
+  expect(s.models).toEqual([MODEL_ID]);
+  expect(s.wires[0]?.service_tier).toBe("default");
+  expect(s.receipts).toEqual([{ transport: "response", rawUsage: envelope }]);
+  await Promise.all(s.pending);
+});
+
+test("late usage waits for the in-flight timeout unknown write to finish", async () => {
+  let resolveRemote!: (raw: unknown) => void,
+    releaseUnknown!: () => void,
+    unknownStarted!: () => void;
+  const started = new Promise<void>((resolve) => {
+    unknownStarted = resolve;
+  });
+  const barrier = new Promise<void>((resolve) => {
+    releaseUnknown = resolve;
+  });
+  const events: string[] = [];
+  const s = setup({
+    timeoutMs: 1,
+    run: () =>
+      new Promise((resolve) => {
+        resolveRemote = resolve;
+      }),
+    after: async ({ transport }) => {
+      events.push(`${transport}:start`);
+      if (transport === "unknown") {
+        unknownStarted();
+        await barrier;
+      }
+      events.push(`${transport}:done`);
+    },
+  });
+  const result = s.gateway.transcribe(wav(), 0, 1, s.access);
+  const failure = result.then(
+    () => {
+      throw new Error("Synthetic timeout missing");
+    },
+    (error: unknown) => error,
+  );
+  await started;
+  resolveRemote(valid);
+  await Promise.resolve();
+  await Promise.resolve();
+  expect(events).toEqual(["unknown:start"]);
+  releaseUnknown();
+  expect(await failure).toMatchObject({ code: "JOB_TIMEOUT" });
+  await Promise.all(s.pending);
+  expect(events).toEqual(["unknown:start", "unknown:done", "response:start", "response:done"]);
+  expect(s.state()).toBe(1);
+});
+
+test("timeout and late persistence failures remain sanitized and contained in registered observer", async () => {
+  let resolveRemote!: (raw: unknown) => void;
+  const events: string[] = [];
+  const s = setup({
+    timeoutMs: 1,
+    run: () =>
+      new Promise((resolve) => {
+        resolveRemote = resolve;
+      }),
+    after: async ({ transport }) => {
+      events.push(transport);
+      throw new Error("synthetic private persistence detail");
+    },
+  });
+  let error: unknown;
+  try {
+    await s.gateway.transcribe(wav(), 0, 1, s.access);
+  } catch (caught) {
+    error = caught;
+  }
+  expect(error).toMatchObject({ code: "MODEL_UNAVAILABLE" });
+  expect(String(error)).not.toContain("private persistence");
+  resolveRemote(valid);
+  await expect(Promise.all(s.pending)).resolves.toEqual([undefined]);
+  expect(events).toEqual(["unknown", "response"]);
+  expect(s.state()).toBe(1);
 });
