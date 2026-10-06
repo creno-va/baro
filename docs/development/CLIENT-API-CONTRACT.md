@@ -18,9 +18,13 @@ HTTP wire 형식과 서버의 복잡한 저장 형식은 domain client가 아래
 mock과 real은 동일한 화면 DTO를 반환한다. 실제 구현되지 않은 API를 mock으로 자동 대체하지 않는다.
 
 local/격리된 preview에서 명시적으로 `PUBLIC_API_MODE=mock`을 선택한다. 기본은 `real`이다.
+2026-10-07 사용자 후속 지시에 따라 배포되는 preview도 `PUBLIC_API_MODE=real`을 사용하고
+production과 같은 bundle 검사를 거친다. mock은 명시적으로 선택한 local/격리된 검증에만 사용한다.
+실제 공급자 설정·가격/funding·승인 증거가 없으면 기존 API 오류를 그대로 처리하며 mock으로
+대체하지 않는다. preview는 해당 환경의 same-origin API를 쓰며 production credential·DB를 복제하지 않는다.
 production 빌드/실행에는 mock 응답을 허용하지 않는다. mock 페이지를 그리기 위한 local/preview
 client-side 진입은 기존 실제 API의 인증·동의·owner·public gate를 해제하지 않는다.
-화면에는 작은 `API 예시 응답으로 보기` 표시를 제공한다.
+명시적 mock 화면에는 작은 `API 예시 응답으로 보기` 표시를 제공한다.
 
 실 API에 미연결인 버튼도 mock API를 통해 상태 변화까지 끝내되, 제품 성공으로 기록하지 않는다.
 폼 입력·파일 선택·문답·프로필·선택 자료·삭제는 API mock 저장소에 보존해 새로고침 후 이어진다.

@@ -4,10 +4,14 @@
 
 최종 문서까지 포함한 immutable SHA별 CI·preview·독립 smoke·Full validation·browser·production은
 [현재 릴리스 journal](https://github.com/creno-va/baro/issues/71#issuecomment-6021564076)을 정본으로 확인한다.
-PR134까지 main18316a2의 CI·preview·독립 smoke는 성공했으나 Full validation이 corpus fixture에서 실패했다. 새 candidate의 완전 검증 전 production에 제출하지 않는다.
+PR135까지 main e8b18c72a88a31ec9d4ae0c6f6855c6a59dfd48f의 main CI·Full validation·preview와
+production foundation37507920363이 정상 Environment 승인 뒤 성공했다. 두 도메인의 독립
+fullSHA/schema0009 smoke와 운영 공개 gate/CSP/no-mock9검사를 확인했다. 실제 OAuth·AI·법률·
+처리/청구·복구/공개 성공은 미완료다. PR134 main18316a2의 corpus 실패는 보존한다.
 아래 이전 관측은 당시의 기록이며 현재 자원 상태를 대신하지 않는다.
-문서 작성 시 마지막으로 입증된 preview의 독립 smoke는 `18316a2cb8536b8e3e62f662bbcb5753ba93a8d1`이며
-production foundation의 확인 SHA는 `ca6e15b1226ebdfaf3eee98b07b993cdb303f873`다.
+문서 작성 시 두 환경의 독립 smoke 확인 SHA는 `e8b18c72a88a31ec9d4ae0c6f6855c6a59dfd48f`다.
+사용자 후속 요청으로 preview의 강제 mock 배포를 실제 API로 전환한다. 새 PR/head/main의 검사와
+실제 설정 오류는 release journal에서 갱신하며 e8b18c7 성공을 새 SHA의 증거로 재사용하지 않는다.
 main 병합만으로 두 환경의 배포 성공을 갱신하지 않는다. 실제 사용자 기능/외부 성공과 분리한 증거는
 [V2 검증 기록](../development/V2-VALIDATION.md)에 연결한다.
 

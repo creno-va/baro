@@ -773,3 +773,35 @@ late workflow/복구 증거가 아니다. 후자는 기존 SQL 회귀와 외부 
 [파일 담당](https://github.com/creno-va/baro/pull/130#issuecomment-6021890274)에 계약 재사용·동일
 copy 수정을 요청했다. 모듈 UI 충돌을 피하기 위해 통합 세션은 해당 화면을 직접 수정하지 않았다.
 작은 합성 입력의 성공을 한도 전체 성공이나 이 미수정 안내의 해결로 표시하지 않는다.
+
+## 실제 API 배포 전환 (2026-10-07 사용자 후속)
+
+통합 main `e8b18c72a88a31ec9d4ae0c6f6855c6a59dfd48f`의
+[main CI37506090574](https://github.com/creno-va/baro/actions/runs/37506090574),
+[Full37506109883](https://github.com/creno-va/baro/actions/runs/37506109883),
+[preview37507174492](https://github.com/creno-va/baro/actions/runs/37507174492),
+[production37507920363](https://github.com/creno-va/baro/actions/runs/37507920363)는 SUCCESS다.
+production은 지정 리뷰어 hyunhomon의 정상 Environment 승인으로 배포됐다. 두 도메인의
+독립 fullSHA/schema0009 smoke, 운영 report5verbs/session/directory의 BETA_NOT_OPEN503,
+login200/CSP/frame DENY/nosniff와 예시 배너·storage sentinel 부재를 확인했다.
+Full은 unit1261/133365, migration6/29, 실제 Linux native, browser73(corpus50사례1test 포함),
+CSP4/fixture전용1skip, production bundle139 및 dry-run을 통과했다. 비민감 JSON을
+[정본 journal](https://github.com/creno-va/baro/issues/71#issuecomment-6021564076)에 영구 보존했다.
+
+production은 이미 real transport이며 후속 변경은 preview workflow의 강제 mock을 제거한다.
+같은 UI/domain client가 해당 환경의 same-origin API를 호출하고 배포 전에 production과 같은
+bundle 검사를 통과해야 한다. local/격리 mock 검증과 기존 성공/실패 기록은 보존한다.
+missing OAuth/model bounds/가격·funding/공식 승인 오류를 합성 성공으로 대체하지 않는다.
+현재 preview OAuth6필드와 model bounds가 없으며 공개 정책·운영 drill 증거도 미완료다.
+이슈 종료는 각 인수 조건을 실제 구현·fixture·외부 증거의 요구 범위와 대조해 결정하며,
+#19/#20/#27/#70/#71 및 공개 gate를 외부 증거 없이 완료 표시하지 않는다.
+
+전환 PR의 로컬 frozen install/check(1261 tests/133365 assertions, drift 없음,
+fresh/upgrade6/29), real preview build/bundle139, 일반 build 및 Cloudflare dry-run은
+통과했다. 명시적 mock preview를 별도로 빌드하면 bundle 검사가 TEST_CODE_IN_BUNDLE로
+거부했고, 실제 preview build/bundle/dry-run을 다시 통과시켜 최종 산출물을 복원했다.
+schema/migration, 정책 버전, 공개 gate 및 공급자 설정은 변경하지 않았다.
+
+이슈 종료 감사에서 #66의 실제 SQL/native HTTP 브라우저 PDF/ZIP 성공은 원격 R2·D1
+CPU/청구/다운로드 증거와 구분했다. 담당자의 남은 원격 인수 조건은 아직 입증되지 않았으므로
+이슈를 닫지 않는다. #65/#69의 자료 한도 안내 불일치도 앞선 담당 수정 요청에 남아 있다.
