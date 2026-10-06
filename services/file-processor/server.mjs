@@ -23,6 +23,7 @@ export const server = createServer(async (req, res) => {
   const size = Number(req.headers["x-baro-bytes"]);
   const hash = req.headers["x-baro-hash"];
   const unit = Number(req.headers["x-baro-unit"] ?? 0);
+  const frameOffset = Number(req.headers["x-baro-frame-offset"] ?? 0);
   // Internal ingress only. Worker DO supplies a fresh per-request capability; no public route.
   if (
     req.method !== "POST" ||
@@ -32,7 +33,7 @@ export const server = createServer(async (req, res) => {
     !Number.isSafeInteger(size) ||
     size < 1 ||
     size > MAX_BYTES ||
-    !Number.isInteger(unit) ||
+    !Number.isInteger(frameOffset) || frameOffset < 0 || frameOffset > 10_000_000 || !Number.isInteger(unit) ||
     unit < 0 ||
     unit >= 100_000 ||
     typeof hash !== "string" ||
@@ -72,7 +73,7 @@ export const server = createServer(async (req, res) => {
       signal: abort.signal,
     });
     if (received !== size || hasher.digest("hex") !== hash) throw new Error("INVALID_REQUEST");
-    child = spawn("python3", ["/app/processor.py", root, req.url.slice(1), String(unit)], {
+    child = spawn("python3", ["/app/processor.py", root, req.url.slice(1), String(unit), String(frameOffset)], {
       stdio: ["ignore", "ignore", "ignore"],
       env: { PATH: "/usr/bin:/bin", PYTHONDONTWRITEBYTECODE: "1", HOME: root },
       detached: true,

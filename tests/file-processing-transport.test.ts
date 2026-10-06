@@ -32,6 +32,8 @@ async function fixture(
     version: 1 as const,
     unit: 0,
     totalUnits: 1,
+    frameOffset: 0,
+    decodedFrameCount: 0,
     probe,
     coverage: {
       category: "document" as const,

@@ -31,9 +31,11 @@ def command(args, timeout=60):
     return result.stdout
 
 
-def ffmpeg(source, args):
-    return command(["ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error",
-                    "-protocol_whitelist", "file,pipe", "-i", str(source)] + args)
+def ffmpeg(source, args, seek=None):
+    prefix = ["ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error", "-protocol_whitelist", "file,pipe"]
+    if seek is not None:
+        prefix += ["-ss", str(seek)]
+    return command(prefix + ["-i", str(source)] + args)
 
 
 def inspect(source):
@@ -77,13 +79,18 @@ def inspect(source):
             pass
     try:
         info = json.loads(command(["ffprobe", "-v", "error", "-protocol_whitelist", "file,pipe",
-                                   "-show_entries", "format=format_name,duration:stream=codec_type,width,height,r_frame_rate",
+                                   "-show_entries", "format=format_name,duration,start_time:stream=codec_type,width,height,r_frame_rate,start_time",
                                    "-of", "json", str(source)]))
     except (ValueError, Rejected):
         raise Rejected("INVALID_MEDIA") from None
     duration = float(info["format"].get("duration", 0))
     if not math.isfinite(duration) or duration <= 0 or duration > 3600:
         raise Rejected("LIMIT")
+    # This extractor currently requires a zero-based media timeline. Do not fabricate
+    # coverage for streams with edit-list/time-base offsets we have not normalized.
+    origin = float(info["format"].get("start_time", 0))
+    if not math.isfinite(origin) or abs(origin) > .001:
+        raise Rejected("UNSUPPORTED_TIMELINE")
     streams = info.get("streams", [])
     if len(streams) > 16:
         raise Rejected("LIMIT")
@@ -91,6 +98,9 @@ def inspect(source):
     has_audio = any(s.get("codec_type") == "audio" for s in streams)
     names = info["format"]["format_name"].split(",")
     if video:
+        start = float(video.get("start_time", 0))
+        if not math.isfinite(start) or abs(start) > .001:
+            raise Rejected("UNSUPPORTED_TIMELINE")
         if video.get("width", 0) * video.get("height", 0) > 40_000_000:
             raise Rejected("LIMIT")
         formats = [n for n in ["mp4", "mov", "webm", "avi", "matroska"] if n in names]
@@ -106,7 +116,7 @@ def inspect(source):
     return dict(category="audio", format=formats[0], byteLength=size, durationSeconds=duration)
 
 
-def process(source, root, probe, unit):
+def process(source, root, probe, unit, frame_offset):
     artifacts = []
     output_bytes = 0
 
@@ -173,8 +183,8 @@ def process(source, root, probe, unit):
             for start in [unit * 30]:
                 end = min(start + 30, duration)
                 path = root / ("artifact-%06d.wav" % len(artifacts))
-                ffmpeg(source, ["-ss", str(start), "-t", str(end - start), "-map", "0:a:0", "-vn",
-                                "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", "-f", "wav", str(path)])
+                ffmpeg(source, ["-t", str(end - start), "-map", "0:a:0", "-vn",
+                                "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", "-f", "wav", str(path)], seek=start)
                 artifact(path, "audio", dict(kind="audio", startSeconds=start, endSeconds=end))
         audio = dict(durationSeconds=duration, status="partial", intervals=[dict(startSeconds=0,
                      endSeconds=duration, status="missing")]) if category == "audio" or probe["hasAudio"] else None
@@ -183,9 +193,10 @@ def process(source, root, probe, unit):
         else:
             # Tiny scene detector output: select reduced grayscale frames and log only timestamp metadata.
             scene_meta = root / "scenes.txt"
-            ffmpeg(source, ["-an", "-vf", "scale=160:90,select='gt(scene,0.30)',metadata=print:file=" + str(scene_meta),
-                            "-f", "null", "-"])
-            timestamps = [float(t) for t in re.findall(r"pts_time:([0-9.]+)", scene_meta.read_text())]
+            scene_start = max(0, unit * 30 - 1)
+            ffmpeg(source, ["-t", str(min((unit + 1) * 30, duration) - scene_start), "-an", "-vf", "scale=160:90,select='gt(scene,0.30)',metadata=print:file=" + str(scene_meta),
+                            "-f", "null", "-"], seek=scene_start)
+            timestamps = [float(t) + scene_start for t in re.findall(r"pts_time:([0-9.]+)", (scene_meta.read_text() if scene_meta.exists() else ""))]
             timestamps = [t for t in timestamps if unit * 30 <= t < min((unit + 1) * 30, duration)]
             if len(timestamps) > 16_400 or any(not math.isfinite(t) or t < 0 or t >= duration for t in timestamps):
                 raise Rejected("OUTPUT_LIMIT")
@@ -193,17 +204,19 @@ def process(source, root, probe, unit):
             for sampling, times in [("one_second", range(unit * 30, min((unit + 1) * 30, math.ceil(duration)))), ("scene_change", timestamps)]:
                 for timestamp in times:
                     path = root / ("artifact-%06d.jpg" % len(artifacts))
-                    ffmpeg(source, ["-ss", str(timestamp), "-an", "-frames:v", "1", "-vf", "scale=640:-2",
-                                    "-q:v", "5", str(path)])
-                    # Actual decoder presentation index derived using ffprobe packet timestamps, not nominal fps.
-                    # Filled below from the full indexed decoder stream once, avoiding fabricated frame indices.
+                    ffmpeg(source, ["-an", "-frames:v", "1", "-vf", "scale=640:640:force_original_aspect_ratio=decrease",
+                                    "-q:v", "5", str(path)], seek=timestamp)
+                    # Actual index is resolved from this unit's decoder timestamps below.
+                    # The authenticated preceding unit count supplies the absolute offset.
                     position = dict(kind="video", timestampSeconds=timestamp, frameIndex=0, sampling=sampling)
                     artifact(path, "frame", position)
                     frames.append(dict(id="frame-%06d" % (len(artifacts) - 1), **{k: position[k] for k in ["timestampSeconds", "frameIndex", "sampling"]}, status="missing"))
-            # ffprobe frames are bounded to supported 1h; output uses a spool file, never captures source pixels.
+            # Decode only this 30-second interval, never the entire video per unit.
+            # A spool avoids capturing pixels or an unbounded subprocess stdout.
             frame_index = root / "frame-index.txt"
             with frame_index.open("wb") as spool:
                 result = subprocess.run(["ffprobe", "-v", "error", "-protocol_whitelist", "file,pipe", "-select_streams", "v:0",
+                                         "-read_intervals", "%s%%%s" % (unit * 30, min((unit + 1) * 30, duration)),
                                          "-show_entries", "frame=best_effort_timestamp_time", "-of", "csv=p=0", str(source)],
                                         stdout=spool, stderr=subprocess.DEVNULL, timeout=90)
             if result.returncode or frame_index.stat().st_size > 64_000_000:
@@ -216,13 +229,17 @@ def process(source, root, probe, unit):
                         t = float(value)
                         if not math.isfinite(t) or (indexed and t < indexed[-1]):
                             raise Rejected("INVALID_MEDIA")
+                        if t < unit * 30 or t >= min((unit + 1) * 30, duration):
+                            continue
                         indexed.append(t)
                         if len(indexed) > 10_000_000:
                             raise Rejected("OUTPUT_LIMIT")
+            if not indexed or frame_offset + len(indexed) > 10_000_000:
+                raise Rejected("OUTPUT_LIMIT")
             import bisect
             for record in artifacts:
                 if record["kind"] == "frame":
-                    record["position"]["frameIndex"] = max(0, bisect.bisect_left(indexed, record["position"]["timestampSeconds"]))
+                    record["position"]["frameIndex"] = frame_offset + max(0, min(len(indexed) - 1, bisect.bisect_left(indexed, record["position"]["timestampSeconds"])))
             for frame in frames:
                 frame["frameIndex"] = artifacts[int(frame["id"].split("-")[1])]["position"]["frameIndex"]
             sampled = {f["timestampSeconds"]: f for f in frames if f["sampling"] == "one_second"}
@@ -230,7 +247,7 @@ def process(source, root, probe, unit):
             all_frames += [f for f in frames if f["sampling"] == "scene_change"]
             coverage = dict(category="video", durationSeconds=duration, status="partial", hasAudio=probe["hasAudio"],
                             audio=audio, frames=all_frames, sceneDetection="failed", sceneFrameCount=None)
-    return dict(version=1, unit=unit, totalUnits=total_units, probe=probe, coverage=coverage, artifacts=artifacts, outputBytes=output_bytes)
+    return dict(version=1, unit=unit, totalUnits=total_units, frameOffset=frame_offset, decodedFrameCount=len(indexed) if category == "video" else 0, probe=probe, coverage=coverage, artifacts=artifacts, outputBytes=output_bytes)
 
 
 def main():
@@ -238,7 +255,7 @@ def main():
     source = root / "input"
     try:
         probe = inspect(source)
-        result = dict(version=1, probe=probe) if sys.argv[2] == "probe" else process(source, root, probe, int(sys.argv[3]))
+        result = dict(version=1, probe=probe) if sys.argv[2] == "probe" else process(source, root, probe, int(sys.argv[3]), int(sys.argv[4]) if len(sys.argv) > 4 else 0)
         (root / "manifest.json").write_text(json.dumps(result, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     except Exception as error:
         # Never expose native errors, filenames, extracted text, paths, or stack traces.

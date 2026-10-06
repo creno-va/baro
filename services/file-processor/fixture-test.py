@@ -51,6 +51,29 @@ for filename, category, fmt in CASES:
                 assert any(abs(a["position"]["timestampSeconds"] - 3.2) < .11 for a in scenes)
                 assert any(a["kind"] == "audio" for a in output["artifacts"]) == probe["hasAudio"]
         count += 1
+# A generated 31-second, 2-fps video crosses the durable unit boundary. This is
+# real local codec execution, not a nominal FPS/frame-index fixture assertion.
+with tempfile.TemporaryDirectory(prefix="baro-boundary-") as tmp:
+    root = Path(tmp)
+    made = subprocess.run(["ffmpeg", "-nostdin", "-v", "error", "-f", "lavfi", "-i",
+                           "color=c=blue:s=96x64:r=2:d=31", "-c:v", "libx264", "-g", "10",
+                           "-pix_fmt", "yuv420p", "-f", "mp4", str(root / "input")],
+                          capture_output=True, timeout=60)
+    assert made.returncode == 0
+    offset = 0
+    for unit in range(2):
+        result = subprocess.run(["python3", "/app/processor.py", str(root), "process", str(unit), str(offset)],
+                                capture_output=True, timeout=180)
+        assert result.returncode == 0
+        output = json.loads((root / "manifest.json").read_text())
+        assert output["frameOffset"] == offset
+        assert output["decodedFrameCount"] == (60 if unit == 0 else 2)
+        samples = [a for a in output["artifacts"] if a["kind"] == "frame" and a["position"]["sampling"] == "one_second"]
+        assert [a["position"]["timestampSeconds"] for a in samples] == list(range(unit * 30, min((unit + 1) * 30, 31)))
+        assert [a["position"]["frameIndex"] for a in samples] == list(range(unit * 60, min((unit + 1) * 60, 62), 2))
+        offset += output["decodedFrameCount"]
+    assert offset == 62
+    count += 1
 for filename in ["truncated-video.mp4"]:
     with tempfile.TemporaryDirectory(prefix="baro-fixture-") as tmp:
         root = Path(tmp)

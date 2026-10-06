@@ -36,14 +36,43 @@ export const processorManifestSchema = z
     coverage: v2CoverageSchema,
     unit: z.number().int().min(0).max(99999),
     totalUnits: z.number().int().positive().max(100000),
+    frameOffset: z.number().int().min(0).max(10000000),
+    decodedFrameCount: z.number().int().min(0).max(10000000),
     artifacts: z.array(artifactSchema).max(20000),
     outputBytes: z.number().int().min(0).max(536_870_912),
   })
   .refine(
     (m) =>
       m.unit < m.totalUnits &&
+      m.totalUnits ===
+        (m.probe.category === "document"
+          ? m.probe.pageCount
+          : m.probe.category === "image"
+            ? 1
+            : Math.ceil(m.probe.durationSeconds / 30)) &&
+      (m.probe.category === "video"
+        ? m.decodedFrameCount > 0 && m.frameOffset + m.decodedFrameCount <= 10000000
+        : m.frameOffset === 0 && m.decodedFrameCount === 0) &&
       m.probe.category === m.coverage.category &&
-      m.artifacts.every((a, i) => a.index === i && positionMatchesProbe(a.position, m.probe)) &&
+      m.artifacts.every((a, i) => {
+        if (a.index !== i || !positionMatchesProbe(a.position, m.probe)) return false;
+        const p = a.position;
+        if (p.kind === "document") return p.page === m.unit + 1;
+        if (p.kind === "audio")
+          return (
+            p.startSeconds === m.unit * 30 &&
+            (m.probe.category === "audio" || m.probe.category === "video") &&
+            p.endSeconds === Math.min((m.unit + 1) * 30, m.probe.durationSeconds)
+          );
+        if (p.kind === "video")
+          return (
+            p.timestampSeconds >= m.unit * 30 &&
+            p.timestampSeconds < (m.unit + 1) * 30 &&
+            p.frameIndex >= m.frameOffset &&
+            p.frameIndex < m.frameOffset + m.decodedFrameCount
+          );
+        return m.probe.category === "image" && m.unit === 0;
+      }) &&
       m.artifacts.reduce((n, a) => n + a.byteLength, 0) === m.outputBytes,
     "Dishonest artifact inventory",
   );
