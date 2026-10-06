@@ -1,0 +1,68 @@
+name: AI runtime preflight
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_sha:
+        description: Full deployed release SHA to inspect (read-only)
+        required: true
+        type: string
+      environment:
+        description: Environment to inspect
+        type: choice
+        options:
+          - preview
+          - production
+        default: preview
+  workflow_run:
+    workflows:
+      - Deploy preview
+    types:
+      - completed
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ai-preflight-${{ inputs.environment || 'preview' }}
+  cancel-in-progress: false
+
+jobs:
+  inspect:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: ${{ inputs.environment || 'preview' }}
+      deployment: false
+    steps:
+      - name: Checkout inspection implementation
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          persist-credentials: false
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: .bun-version
+      - name: Install frozen dependencies
+        run: bun ci
+      - name: Inspect AI configuration and durable funding
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: 9e844969d0c44b2449f3951d1f301654
+          PREFLIGHT_ENVIRONMENT: ${{ inputs.environment || 'preview' }}
+          PREFLIGHT_SHA: ${{ inputs.candidate_sha || github.event.workflow_run.head_sha }}
+        run: bun scripts/ai-preflight.ts "$PREFLIGHT_ENVIRONMENT" "$PREFLIGHT_SHA"
+      - name: Save sanitized AI preflight report
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v7.0.1
+        with:
+          name: ai-preflight-${{ inputs.environment || 'preview' }}-${{ inputs.candidate_sha || github.event.workflow_run.head_sha }}
+          path: .wrangler/readiness/ai-*.json
+          if-no-files-found: error
+          retention-days: 7

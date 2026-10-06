@@ -59,12 +59,31 @@ const boundsConfigSchema = z.strictObject({
   verifiedAt: z.string().datetime(),
 });
 /** Only a deployment-owned setting can supply authenticated model capability bounds. */
-function configuredBounds(env: Env) {
+export function configuredBounds(env: Env) {
   try {
     return boundsConfigSchema.parse(JSON.parse(env.AI_MODEL_TOKEN_BOUNDS_JSON ?? "null"));
   } catch {
     return null;
   }
+}
+
+/** The same complete-wire reservation is used by admission and configuration inspection. */
+export function workspaceTokenBounds(
+  config: ReturnType<typeof configuredBounds>,
+  outputCap: number,
+): TokenBounds | null {
+  if (!config) return null;
+  if (config.bounds.basis !== "verified_model_context_limit") return config.bounds as TokenBounds;
+  // A complete context reservation includes this exact output cap. No text/token heuristic.
+  const inputLimit = config.bounds.modelContextTokenLimit - outputCap;
+  if (inputLimit <= 0 || inputLimit > config.bounds.modelInputTokenLimit || config.bounds.vision)
+    return null;
+  return {
+    ...config.bounds,
+    textTokensUpperBound: inputLimit,
+    framingTokensUpperBound: 0,
+    modelInputTokenLimit: inputLimit,
+  } as TokenBounds;
 }
 const phaseFor = (kind: string): Phase =>
   kind === "intake_questions"
@@ -94,25 +113,7 @@ function budget(core: V2Core, env: Env, ownerId: string, input: unknown) {
   const config = configuredBounds(env);
   const planner = createGatewayExecutionPlanner({
     input: async () => input,
-    bounds: async (wire) => {
-      if (!config) return null;
-      if (config.bounds.basis !== "verified_model_context_limit")
-        return config.bounds as TokenBounds;
-      // A complete context reservation includes this exact output cap. No text/token heuristic.
-      const inputLimit = config.bounds.modelContextTokenLimit - wire.max_completion_tokens;
-      if (
-        inputLimit <= 0 ||
-        inputLimit > config.bounds.modelInputTokenLimit ||
-        config.bounds.vision
-      )
-        return null;
-      return {
-        ...config.bounds,
-        textTokensUpperBound: inputLimit,
-        framingTokensUpperBound: 0,
-        modelInputTokenLimit: inputLimit,
-      } as TokenBounds;
-    },
+    bounds: async (wire) => workspaceTokenBounds(config, wire.max_completion_tokens),
     verifyBounds: async (_descriptor, digest, now) =>
       config && Date.parse(config.verifiedAt) <= Date.parse(now)
         ? { digest, evidenceHash: config.evidenceHash, verifiedAt: config.verifiedAt }
@@ -132,7 +133,13 @@ export function createWorkspaceDependencies(core: V2Core, env: Env): WorkspaceDe
       createWorkspaceDispatcher(core, { binding: env.WORKSPACE_PROCESSING }).dispatch(4),
     async prepareJob(input) {
       if (!(await hasCustomerWorkspaceAccess(core, input.ownerId))) return null;
-      if (!env.WORKSPACE_PROCESSING || !env.AI || !configuredBounds(env)) return null;
+      if (
+        !env.WORKSPACE_PROCESSING ||
+        !env.AI ||
+        !env.AI_GATEWAY_ID?.trim() ||
+        !configuredBounds(env)
+      )
+        return null;
       const now = new Date().toISOString(),
         proofs = await readProcessingProofs(
           core,

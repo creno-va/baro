@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { inspectAiConfiguration } from "../runtime/ai-configuration";
 
 export const healthApi = new Hono<{ Bindings: Env }>()
   .get("/live", (context) => {
@@ -8,6 +9,11 @@ export const healthApi = new Hono<{ Bindings: Env }>()
       environment: context.env?.APP_ENV ?? "test",
       release: context.env?.RELEASE_SHA ?? "local",
     });
+  })
+  .get("/ai-configuration", async (context) => {
+    context.header("cache-control", "no-store");
+    const configuration = await inspectAiConfiguration(context.env);
+    return context.json(configuration, configuration.status === "ready" ? 200 : 503);
   })
   .get("/ready", async (context) => {
     try {
