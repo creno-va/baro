@@ -6,7 +6,9 @@ import {
   v2VerificationAssetSchema,
 } from "../../contracts/v2";
 import { type Actor, actorSchema, parse, safe, sqlClaim, type V2Core } from "./v2-core";
+import { findPendingSanitizedAssetBlob } from "./v2-sanitized-asset-blobs";
 import { type BlobRegistration, blobSchema } from "./v2-storage";
+import { type JobLease, leaseSchema } from "./v2-workspace";
 
 export interface AssetUploadIntent {
   assetId: string;
@@ -32,7 +34,9 @@ export interface AssetUploadCleanupIntent {
   readonly logicalBytes: number;
   readonly keyVersion: string | null;
   readonly kind: string;
-  readonly visibility: "private" | "public";
+  readonly visibility: "private" | "public" | "staging";
+  readonly cipherHash: string | null;
+  readonly cipherBytes: number;
 }
 const from =
   "FROM v2_assets a JOIN v2_profiles profile ON profile.id=a.profile_id JOIN v2_storage_reservations r ON r.entity_id=a.id JOIN v2_billing_principals p ON p.id=r.principal_id JOIN v2_operations o ON o.id=r.operation_id";
@@ -86,9 +90,65 @@ function captureUploadIntent(core: V2Core, actor: Actor, blobId: string, publicC
       keyVersion: row.key_version,
       kind: row.kind,
       visibility: row.visibility,
+      cipherHash: null,
+      cipherBytes: 0,
     });
     capturedIntents.add(value);
     return value;
+  });
+}
+
+export function captureSanitizedAssetBlobIntent(
+  core: V2Core,
+  actor: Actor,
+  lease: JobLease,
+  blobId: string,
+) {
+  return safe(async () => {
+    actor = parse(actorSchema, actor);
+    parse(leaseSchema, lease);
+    parse(opaqueIdSchema, blobId);
+    const pending = await findPendingSanitizedAssetBlob(core, actor, lease, blobId);
+    if (!pending || pending.preparedFencing !== lease.fencing) return null;
+    const b = pending.blob;
+    const row = await core
+      .statement(
+        `SELECT b.principal_id FROM v2_blobs b JOIN v2_storage_reservations r ON r.id=b.reservation_id JOIN v2_billing_principals p ON p.id=b.principal_id JOIN v2_assets a ON a.id=r.entity_id JOIN v2_profiles profile ON profile.id=a.profile_id JOIN v2_jobs j ON j.id=a.current_job_id JOIN v2_operations o ON o.id=j.operation_id WHERE b.id=? AND p.owner_id=? AND a.owner_id=p.owner_id AND profile.owner_id=p.owner_id AND r.principal_id=p.id AND r.kind='lawyer_asset' AND r.state='reserved' AND r.target_id=b.id AND r.id=? AND r.operation_id=j.operation_id AND r.byte_length=b.logical_bytes AND b.state='pending' AND b.visibility='staging' AND b.kind=? AND b.object_key=? AND b.key_version=? AND b.logical_bytes=? AND b.cipher_bytes=? AND b.cipher_hash=? AND b.source_blob_id=a.original_blob_id AND a.original_blob_id=? AND b.source_asset_revision=a.revision AND a.revision=? AND a.state='sanitizing' AND j.id=? AND j.profile_id=profile.id AND j.target_kind='profile_asset' AND j.target_id=a.id AND j.target_revision=a.revision AND j.lease_token=? AND j.fencing=? AND j.lease_until>? AND j.status IN ('running','validating') AND o.owner_id=p.owner_id AND o.state IN ('admitted','ambiguous') AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE (target_kind='account' AND target_id=a.owner_id) OR (target_kind='asset' AND target_id=a.id) OR (target_kind='profile' AND target_id=profile.id))`,
+        [
+          b.id,
+          actor.ownerId,
+          b.reservationId,
+          b.kind,
+          `private/${b.id}`,
+          b.keyVersion,
+          b.logicalBytes,
+          b.cipherBytes,
+          b.cipherHash,
+          pending.sourceBlobId,
+          pending.assetRevision,
+          lease.jobId,
+          lease.token,
+          lease.fencing,
+          actor.now,
+        ],
+      )
+      .first<{ principal_id: string }>();
+    if (!row) return null;
+    const captured: AssetUploadCleanupIntent = Object.freeze({
+      ownerId: actor.ownerId,
+      principalId: row.principal_id,
+      blobId: b.id,
+      reservationId: b.reservationId,
+      objectKey: `private/${b.id}`,
+      logicalBytes: b.logicalBytes,
+      keyVersion: b.keyVersion,
+      kind: b.kind,
+      visibility: "staging",
+      cipherHash: b.cipherHash,
+      cipherBytes: b.cipherBytes,
+    });
+    capturedIntents.add(captured);
+    return captured;
   });
 }
 
@@ -111,10 +171,12 @@ export function requeueAssetUploadCleanup(
       captured.keyVersion,
       captured.kind,
       captured.visibility,
+      captured.cipherHash,
+      captured.cipherBytes,
       actor.ownerId,
       actor.ownerId,
     ];
-    const guard = `b.id=? AND b.principal_id=? AND r.id=? AND b.object_key=? AND b.logical_bytes=? AND b.key_version IS ? AND b.kind=? AND b.visibility=? AND b.state IN ('deleting','deleted') AND b.cipher_hash IS NULL AND b.cipher_bytes=0 AND r.kind='lawyer_asset' AND r.byte_length=b.logical_bytes AND (p.owner_id=? OR (p.owner_id IS NULL AND EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='account' AND target_id=?)))`;
+    const guard = `b.id=? AND b.principal_id=? AND r.id=? AND b.object_key=? AND b.logical_bytes=? AND b.key_version IS ? AND b.kind=? AND b.visibility=? AND b.cipher_hash IS ? AND b.cipher_bytes=? AND b.state IN ('deleting','deleted') AND r.kind='lawyer_asset' AND r.byte_length=b.logical_bytes AND (p.owner_id=? OR (p.owner_id IS NULL AND EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='account' AND target_id=?)))`;
     const source =
       "FROM v2_blobs b JOIN v2_storage_reservations r ON r.id=b.reservation_id JOIN v2_billing_principals p ON p.id=b.principal_id";
     if (!(await core.statement(`SELECT b.id ${source} WHERE ${guard}`, values).first()))

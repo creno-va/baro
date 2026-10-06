@@ -18,6 +18,7 @@ import {
   abandonAssetUpload,
   captureApprovedPublicCopyIntent,
   captureAssetUploadIntent,
+  captureSanitizedAssetBlobIntent,
   commitAssetUpload,
   prepareAssetUpload,
   requeueAssetUploadCleanup,
@@ -41,6 +42,12 @@ import {
   type PublicCopyIntent,
   prepareApprovedPublicCopy,
 } from "./v2-public-copies";
+import {
+  abandonSanitizedAssetBlob,
+  commitSanitizedAssetBlob,
+  findPendingSanitizedAssetBlob,
+  prepareSanitizedAssetBlob,
+} from "./v2-sanitized-asset-blobs";
 import type { JobLease } from "./v2-workspace";
 
 export function storagePredicate(
@@ -128,6 +135,27 @@ const reservationAlive = `((r.kind='case_original' AND EXISTS(SELECT 1 FROM v2_f
 export function createV2StorageRepository(core: V2Core) {
   const accounting = createV2AccountingRepository(core);
   return {
+    captureSanitizedAssetBlobIntent(actor: Actor, lease: JobLease, blobId: string) {
+      return captureSanitizedAssetBlobIntent(core, actor, lease, blobId);
+    },
+    requeueSanitizedAssetBlobCleanup(actor: Actor, captured: AssetUploadCleanupIntent) {
+      return captured.visibility === "staging" &&
+        ["profile_photo_sanitized", "portfolio_sanitized"].includes(captured.kind)
+        ? requeueAssetUploadCleanup(core, actor, captured)
+        : Promise.resolve(null);
+    },
+    prepareSanitizedAssetBlob(actor: Actor, lease: JobLease, blob: BlobRegistration) {
+      return prepareSanitizedAssetBlob(core, actor, lease, blob);
+    },
+    commitSanitizedAssetBlob(actor: Actor, lease: JobLease, blob: BlobRegistration) {
+      return commitSanitizedAssetBlob(core, actor, lease, blob);
+    },
+    abandonSanitizedAssetBlob(actor: Actor, blobId: string) {
+      return abandonSanitizedAssetBlob(core, actor, blobId);
+    },
+    findPendingSanitizedAssetBlob(actor: Actor, lease: JobLease, blobId: string) {
+      return findPendingSanitizedAssetBlob(core, actor, lease, blobId);
+    },
     prepareApprovedPublicCopy(actor: Actor, input: PublicCopyIntent) {
       return prepareApprovedPublicCopy(core, actor, input);
     },
