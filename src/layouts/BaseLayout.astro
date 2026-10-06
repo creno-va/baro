@@ -10,7 +10,7 @@ interface Props {
 const { title, description } = Astro.props;
 const validationBootstrap = "Object.assign(globalThis, { __zod_globalConfig: { jitless: true } });";
 const bootstrapDigest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(validationBootstrap));
-Astro.csp.insertScriptHash(`sha256-${btoa(String.fromCharCode(...new Uint8Array(bootstrapDigest)))}`);
+Astro.csp?.insertScriptHash(`sha256-${btoa(String.fromCharCode(...new Uint8Array(bootstrapDigest)))}`);
 ---
 
 <!doctype html>
