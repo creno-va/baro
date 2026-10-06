@@ -9,8 +9,13 @@ registerMockHandlers({
   "session.signIn": ({ accountType }: { accountType: AccountType }) => {
     if (accountType !== "customer" && accountType !== "lawyer")
       throw new ApiError("VALIDATION_ERROR", "이용 유형을 선택해 주세요.");
-    const id = `example-${accountType}`,
-      consent = readStore<Record<string, unknown>>("consents", {});
+    const accounts = readStore<Record<string, string>>("accounts", {});
+    let id = accounts[accountType] ?? `example-${accountType}`;
+    if (readStore<string[]>("deletedAccountIds", []).includes(id))
+      id = `example-${accountType}-${crypto.randomUUID()}`;
+    accounts[accountType] = id;
+    writeStore("accounts", accounts);
+    const consent = readStore<Record<string, unknown>>("consents", {});
     const session: SessionView = {
       user: { id, name: accountType === "customer" ? "예시 고객" : "예시 변호사", accountType },
       needsConsent: !consent[id],

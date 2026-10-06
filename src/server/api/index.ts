@@ -15,6 +15,7 @@ import { healthApi } from "./health";
 import { meApi } from "./me";
 import { requestBodyLimit } from "./request-body-limit";
 import { retryApi } from "./retry";
+import { workspaceDeleteApi } from "./v2/delete";
 import { createDirectoryApi } from "./v2/directory";
 import { createFilesApi } from "./v2/files";
 import { createLawyersApi } from "./v2/lawyers";
@@ -113,6 +114,7 @@ export const api = new Hono<ApiEnvironment>()
       }),
     }),
   )
+  .route("/v2/cases", workspaceDeleteApi)
   .route("/me", meApi)
   .route("/me", accountDeleteApi)
   .route("/cases", caseCreateApi)

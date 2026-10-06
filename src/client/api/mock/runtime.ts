@@ -35,7 +35,8 @@ export function updateStore<T>(namespace: string, fallback: T, update: (value: T
 }
 export function requireSession(): SessionView {
   const session = readStore<SessionView>("session", { user: null, needsConsent: false });
-  if (!session.user) throw new ApiError("UNAUTHENTICATED", "로그인이 필요해요.");
+  if (!session.user || readStore<string[]>("deletedAccountIds", []).includes(session.user.id))
+    throw new ApiError("UNAUTHENTICATED", "로그인이 필요해요.");
   if (session.needsConsent)
     throw new ApiError("CONSENT_REQUIRED", "시작 전에 필수 확인을 완료해 주세요.");
   return session;
@@ -50,15 +51,34 @@ export async function mockRequest<T>(operation: string, input: unknown, key: str
       true,
     );
   const identity = `${readStore<SessionView>("session", { user: null, needsConsent: false }).user?.id ?? "visitor"}:${operation}:${key}`;
-  const previous = replay.get(identity),
+  const cacheable =
+    /\.(create|saveAnswers|saveSummary|confirmSummary|advance|sendMessage|retryMessage|setAction|saveTimeline|upload|retry|remove|save|generate|deleteCase|deleteAccount|saveMine|publishMine)$/.test(
+      operation,
+    );
+  const previous = cacheable ? replay.get(identity) : undefined,
     fingerprint = JSON.stringify(input ?? null);
+  if (previous && /^(cases|workspace|files|reports)\./.test(operation)) {
+    const session = requireSession();
+    const id =
+      (input as { id?: string } | undefined)?.id ??
+      (previous.value as { id?: string } | undefined)?.id;
+    if (
+      id &&
+      (readStore<string[]>("deletedCaseIds", []).includes(id) ||
+        readStore<Record<string, string>>("caseOwners", {})[id] !== session.user?.id)
+    )
+      throw new ApiError("NOT_FOUND", "삭제했거나 접근할 수 없는 사건이에요.");
+  }
   if (previous) {
     if (previous.input !== fingerprint)
       throw new ApiError("CONFLICT", "같은 요청에 다른 내용이 포함됐어요.");
     return structuredClone(previous.value) as T;
   }
   const value = await handler(input, { key });
-  replay.set(identity, { input: fingerprint, value });
+  if (cacheable) {
+    replay.set(identity, { input: fingerprint, value });
+    if (replay.size > 100) replay.delete(replay.keys().next().value ?? "");
+  }
   return value as T;
 }
 export function clearMockStore() {

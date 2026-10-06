@@ -138,12 +138,40 @@ async function main() {
   const targets = mode === "unit" ? await unitTargets(files, tests) : browserTargets(files, tests);
   if (targets.some((path) => !existsSync(path))) throw new Error("SELECTED_TEST_MISSING");
   console.log(`${mode}: ${targets.length ? targets.join(", ") : "no affected feature tests"}`);
-  if (targets.length) {
+  const mockTargets =
+    mode === "browser"
+      ? targets.filter((path) =>
+          /\/(shell-integration|lawyer-api-mock|intake103)\.e2e\.ts$/.test(path),
+        )
+      : [];
+  const regularTargets = targets.filter((path) => !mockTargets.includes(path));
+  if (regularTargets.length) {
     const child = Bun.spawn(
-      mode === "unit" ? ["bun", "test", ...targets] : ["bunx", "playwright", "test", ...targets],
+      mode === "unit"
+        ? ["bun", "test", ...regularTargets]
+        : ["bunx", "playwright", "test", ...regularTargets],
       { stdout: "inherit", stderr: "inherit" },
     );
     if (await child.exited) process.exit(1);
+  }
+  if (mockTargets.length) {
+    for (const [config, selected] of [
+      [
+        "tests/browser/integration.config.ts",
+        mockTargets.filter((path) => !path.endsWith("/intake103.e2e.ts")),
+      ],
+      [
+        "tests/browser/intake103.config.ts",
+        mockTargets.filter((path) => path.endsWith("/intake103.e2e.ts")),
+      ],
+    ] as const) {
+      if (!selected.length) continue;
+      const child = Bun.spawn(["bunx", "playwright", "test", "--config", config, ...selected], {
+        stdout: "inherit",
+        stderr: "inherit",
+      });
+      if (await child.exited) process.exit(1);
+    }
   }
 }
 

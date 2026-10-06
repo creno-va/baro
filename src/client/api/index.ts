@@ -23,7 +23,7 @@ let httpMocksReady: Promise<void> | undefined;
 async function initializeHttpMocks() {
   for (const name of ["workspace", "files", "reports", "account"]) {
     const mockLoader = mockModules[`./mock/${name}.ts`];
-    if (!mockLoader) throw new ApiError("UNAVAILABLE", "예시 API 연결을 준비하고 있어요.", true);
+    if (!mockLoader) continue;
     const mock = await mockLoader();
     const suffix = name[0]?.toUpperCase() + name.slice(1);
     const runtime = {
