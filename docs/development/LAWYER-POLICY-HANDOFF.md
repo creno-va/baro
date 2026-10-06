@@ -122,3 +122,11 @@ Candidate `af070a3`의 [CI](https://github.com/creno-va/baro/actions/runs/374865
 선택 wire 15 + integrated mock 1 성공, `build:production`/`bundle:check` 성공(147 files),
 `test:csp` 4 성공/1 test-fixture-only skip이다. 원격 CI 통과로 표시하지 않는다.
 공유 수정이 승인·인계되면 통합 후 audit와 전체 필수/관련 검사를 다시 수행한다.
+
+## 호환성과 롤백
+
+기존 inline JPEG/HTTPS 포트폴리오 snapshot은 새 reader로 계속 읽는다. 새 asset reference가 저장된
+snapshot은 이전 strict schema reader와 호환되지 않으므로 기능 commit 전체 revert를 바로 하지 않는다.
+UI를 rollback하더라도 확장된 self-profile schema/자산 reader·권한 가드를 유지한다. 이전 reader로
+돌려야 한다면 owner가 참조를 제외해 저장하고 optional asset 필드의 정리·재저장 검증을 먼저 수행한다.
+자료 삭제·restore journal 재적용은 2번/4번의 기존 운영 절차를 따른다.
