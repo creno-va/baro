@@ -16,6 +16,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test("callback cancellation and expired sessions show safe messages", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 568 });
   for (const [error, message] of [
     ["access_denied", "로그인을 취소했어요."],
     ["session_expired", "안전한 이용을 위해 다시 로그인해 주세요."],
@@ -24,6 +25,16 @@ test("callback cancellation and expired sessions show safe messages", async ({ p
     await page.goto(`/login?error=${error}&error_description=untrusted-raw-detail`);
     await expect(page.getByRole("alert")).toContainText(message);
     await expect(page.locator("body")).not.toContainText("untrusted-raw-detail");
+    const captionBounds = await page.locator(".login-intro__caption").boundingBox();
+    const errorBounds = await page.getByRole("alert").boundingBox();
+    const roleBounds = await page
+      .getByRole("group", { name: "어떤 목적으로 이용하시나요?" })
+      .boundingBox();
+    if (!captionBounds || !errorBounds || !roleBounds) {
+      throw new Error("Login caption, error and account choices must remain visible.");
+    }
+    expect(errorBounds.y).toBeGreaterThanOrEqual(captionBounds.y + captionBounds.height);
+    expect(roleBounds.y).toBeGreaterThanOrEqual(errorBounds.y + errorBounds.height);
   }
 });
 
