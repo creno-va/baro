@@ -1,0 +1,12 @@
+---
+// biome-ignore lint/correctness/noUnusedImports: Astro template reads the island.
+import { Directory } from "../../components/lawyers/Directory";
+// biome-ignore lint/correctness/noUnusedImports: Astro template reads the layout.
+import AppLayout from "../../layouts/AppLayout.astro";
+
+// biome-ignore lint/correctness/noUnusedVariables: Astro template reads the prop.
+const preview = Astro.url.hostname !== "baro.site";
+---
+<AppLayout title="변호사 찾기" description="분야와 지역으로 공개 프로필을 살펴보고 직접 연락하세요." role="visitor" availableRoutes={["/", "/lawyers"]}>
+  <Directory preview={preview} client:load />
+</AppLayout>

@@ -1,0 +1,21 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "baro-ui-test",
+  "main": "./src/worker.ts",
+  "compatibility_date": "2026-10-04",
+  "compatibility_flags": ["nodejs_compat"],
+  "vars": {
+    "APP_ENV": "local",
+    "PUBLIC_BETA_ENABLED": "false",
+    "RELEASE_SHA": "synthetic-ui",
+    "BETTER_AUTH_URL": "http://127.0.0.1:4337"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "baro-ui-test",
+      "database_id": "00000000-0000-0000-0000-000000000001",
+      "migrations_dir": "./drizzle"
+    }
+  ]
+}

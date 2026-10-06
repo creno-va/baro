@@ -1,0 +1,33 @@
+import type { V2LegalField, V2Region } from "../../contracts/v2";
+export const REGION_LABELS: Record<V2Region, string> = {
+  seoul: "서울",
+  busan: "부산",
+  daegu: "대구",
+  incheon: "인천",
+  gwangju: "광주",
+  daejeon: "대전",
+  ulsan: "울산",
+  sejong: "세종",
+  gyeonggi: "경기",
+  gangwon: "강원",
+  chungbuk: "충북",
+  chungnam: "충남",
+  jeonbuk: "전북",
+  jeonnam: "전남",
+  gyeongbuk: "경북",
+  gyeongnam: "경남",
+  jeju: "제주",
+};
+export const FIELD_LABELS: Record<V2LegalField, string> = {
+  civil: "민사",
+  criminal: "형사",
+  family: "가사",
+  administrative: "행정",
+  labor: "노동",
+  tax: "세무",
+  company: "기업",
+  intellectual_property: "지식재산",
+  real_estate: "부동산",
+  immigration: "출입국",
+  other: "기타",
+};
