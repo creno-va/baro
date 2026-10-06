@@ -38,6 +38,7 @@ import {
 } from "./v2-original-parts";
 import { createV2StagingRepository } from "./v2-staging";
 import { storagePredicate, storageReservationStatements } from "./v2-storage";
+import type { PreparedStoragePaidHold } from "./v2-storage-paid-runtime";
 import {
   type Admission,
   admissionSchema,
@@ -433,8 +434,11 @@ export function createV2FilesRepository(core: V2Core) {
     return core.changed(statements);
   };
   return {
-    prepareOriginalPart: (actor: Actor, input: OriginalPartRegistration) =>
-      prepareOriginalPart(core, actor, input),
+    prepareOriginalPart: (
+      actor: Actor,
+      input: OriginalPartRegistration,
+      paid?: PreparedStoragePaidHold,
+    ) => prepareOriginalPart(core, actor, input, paid),
     abandonOriginalPart: (actor: Actor, blobId: string) => abandonOriginalPart(core, actor, blobId),
     registerOriginalPart: (actor: Actor, input: OriginalPartRegistration) =>
       registerOriginalPart(core, actor, input),

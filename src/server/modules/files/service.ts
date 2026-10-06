@@ -26,6 +26,11 @@ import {
 import { type CleanupLease, createV2DeletionRepository } from "../../db/v2-deletion";
 import { createV2FilesRepository } from "../../db/v2-files";
 import { type BlobRegistration, createV2StorageRepository } from "../../db/v2-storage";
+import type { StoragePaidHoldRequest } from "../../db/v2-storage-paid-contracts";
+import {
+  isPreparedStoragePaidHold,
+  type PreparedStoragePaidHold,
+} from "../../db/v2-storage-paid-runtime";
 import { hasCurrentConsent } from "../consent/service";
 import {
   decryptPart,
@@ -39,19 +44,57 @@ import {
 } from "./binary";
 
 export type PrivateBucket = Pick<R2Bucket, "get" | "put" | "head" | "delete">;
+export type FileStorageInput = {
+  runId: string;
+  attemptOrdinal: number;
+  maximumAttempts: number;
+  deadlineAt: string;
+  action: "r2_put";
+  service: "requests";
+  operationId: string;
+  operationRevision: number;
+  requestHash: string;
+  targetKind: "file";
+  targetId: string;
+  targetRevision: number;
+  reservationId: string;
+  blobId: string;
+  pending: StoragePaidHoldRequest["pending"];
+  intent: Extract<StoragePaidHoldRequest["intent"], { kind: "case_original" }>;
+};
+export type FileStorageAdmission = {
+  readonly actor: Actor;
+  readonly paid: PreparedStoragePaidHold;
+  readonly request: StoragePaidHoldRequest;
+  readonly inputDigest: string;
+};
+export type FileStoragePermit = {
+  readonly attemptId: string;
+  readonly dispatchToken: string | null;
+};
+export type FileStorageCosts = {
+  prepare(input: FileStorageInput): Promise<FileStorageAdmission | null>;
+  beforeDispatch(
+    admission: FileStorageAdmission,
+    access: () => Promise<boolean>,
+  ): Promise<FileStoragePermit | null>;
+  after(
+    permit: FileStoragePermit,
+    transport: {
+      transport: "response" | "unknown" | "not_sent";
+      definitiveNoCharge: boolean;
+      observedAt: string;
+    },
+  ): Promise<void>;
+};
 export type FileServiceDependencies = {
   environment: "preview" | "production";
   bucket?: PrivateBucket;
   clock?: () => string;
-  /** Trusted sink reserves real R2/storage exposure; missing evidence denies new writes. */
-  storageAdmission?: (input: {
-    ownerId: string;
-    workspaceId: string;
-    fileId: string;
-    operationId: string;
-    byteLength: number;
-    kind: "upload" | "part" | "probe";
-  }) => Promise<boolean>;
+  /** Trusted #93 producer; no pricing, role, time or receipt comes from a client. */
+  paidStorage?: FileStorageCosts;
+  /** Explicit offline adapter, preview only. Never mounted by production composition. */
+  testOnlyUnmeteredStorage?: true;
   /** Server processor verifies actual magic, pages/duration, not a client-provided probe. */
   probe?: (input: {
     ownerId: string;
@@ -81,6 +124,9 @@ type Session = {
   reservation_id: string;
   operation_id: string;
   workspace_revision: number;
+  file_revision: number;
+  operation_revision: number;
+  request_hash: string;
 };
 type Part = {
   ordinal: number;
@@ -137,7 +183,7 @@ export function createFilesService(core: V2Core, deps: FileServiceDependencies) 
       parse(opaqueIdSchema, id);
     const row = await core
       .statement(
-        `SELECT u.*,r.id AS reservation_id,f.operation_id,w.revision AS workspace_revision FROM v2_upload_sessions u JOIN v2_files f ON f.id=u.file_id JOIN v2_workspaces w ON w.id=f.workspace_id JOIN v2_storage_reservations r ON r.entity_id=f.id AND r.kind='case_original' WHERE w.owner_id=? AND w.id=? AND f.id=? AND (? IS NULL OR u.id=?) AND ${aliveWorkspace} AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='file' AND target_id=f.id) ${writing ? "AND u.state='open' AND u.expires_at>? AND w.status!='archived' AND r.state!='released' AND EXISTS(SELECT 1 FROM v2_consents WHERE file_id=f.id AND owner_id=w.owner_id AND kind='auto_processing' AND version=?)" : ""}`,
+        `SELECT u.*,r.id AS reservation_id,f.operation_id,f.revision AS file_revision,o.revision AS operation_revision,(SELECT request_hash FROM v2_idempotency WHERE operation_id=o.id LIMIT 1) AS request_hash,w.revision AS workspace_revision FROM v2_upload_sessions u JOIN v2_files f ON f.id=u.file_id JOIN v2_operations o ON o.id=f.operation_id JOIN v2_workspaces w ON w.id=f.workspace_id JOIN v2_storage_reservations r ON r.entity_id=f.id AND r.kind='case_original' WHERE w.owner_id=? AND w.id=? AND f.id=? AND (? IS NULL OR u.id=?) AND ${aliveWorkspace} AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='file' AND target_id=f.id) ${writing ? "AND u.state='open' AND u.expires_at>? AND w.status!='archived' AND r.state!='released' AND EXISTS(SELECT 1 FROM v2_consents WHERE file_id=f.id AND owner_id=w.owner_id AND kind='auto_processing' AND version=?)" : ""}`,
         [
           ownerId,
           workspaceId,
@@ -305,25 +351,9 @@ export function createFilesService(core: V2Core, deps: FileServiceDependencies) 
       { highWaterMark: 0 },
     );
   };
-  const allowStorage = async (
-    ownerId: string,
-    workspaceId: string,
-    u: { file_id: string; operation_id: string },
-    byteLength: number,
-    kind: "upload" | "part" | "probe",
-  ) => {
-    if (
-      !deps.storageAdmission ||
-      !(await deps.storageAdmission({
-        ownerId,
-        workspaceId,
-        fileId: u.file_id,
-        operationId: u.operation_id,
-        byteLength,
-        kind,
-      }))
-    )
-      throw new FileError("PROCESSING_UNAVAILABLE");
+  const unmeteredTest = deps.environment === "preview" && deps.testOnlyUnmeteredStorage === true;
+  const requireStorage = () => {
+    if (!deps.paidStorage && !unmeteredTest) throw new FileError("PROCESSING_UNAVAILABLE");
   };
   return {
     async list(ownerId: string, workspaceId: string, afterId?: string) {
@@ -375,13 +405,7 @@ export function createFilesService(core: V2Core, deps: FileServiceDependencies) 
       }
       const fileId = crypto.randomUUID();
       const operationId = crypto.randomUUID();
-      await allowStorage(
-        ownerId,
-        workspaceId,
-        { file_id: fileId, operation_id: operationId },
-        request.byteLength,
-        "upload",
-      );
+      requireStorage();
       const result = await files.reserve({ ...g, now: now() }, request, {
         fileId,
         uploadId: crypto.randomUUID(),
@@ -414,7 +438,7 @@ export function createFilesService(core: V2Core, deps: FileServiceDependencies) 
         u.reserved_bytes - index * V2_LIMITS.chunkBytes,
       );
       const prior = await part(u, index);
-      if (!prior) await allowStorage(ownerId, workspaceId, u, byteLength, "part");
+      if (!prior) requireStorage();
       let wrappedKey: string | undefined;
       if (index !== 0) {
         const first = await part(u, 0);
@@ -446,25 +470,120 @@ export function createFilesService(core: V2Core, deps: FileServiceDependencies) 
         keyVersion: "binary_v1",
       };
       const objectKey = `private/${blob.id}`;
+      const admission = deps.paidStorage
+        ? await deps.paidStorage.prepare({
+            runId: blob.id,
+            attemptOrdinal: 1,
+            maximumAttempts: 1,
+            deadlineAt: new Date(Date.parse(now()) + 300000).toISOString(),
+            action: "r2_put",
+            service: "requests",
+            operationId: u.operation_id,
+            operationRevision: u.operation_revision,
+            requestHash: u.request_hash,
+            targetKind: "file",
+            targetId: fileId,
+            targetRevision: u.file_revision,
+            reservationId: blob.reservationId,
+            blobId: blob.id,
+            pending: {
+              logicalBytes: blob.logicalBytes,
+              cipherBytes: blob.cipherBytes,
+              cipherHash: blob.cipherHash,
+              keyVersion: blob.keyVersion,
+            },
+            intent: {
+              kind: "case_original",
+              uploadId: u.id,
+              uploadRevision: u.revision,
+              ordinal: index,
+            },
+          })
+        : null;
+      if (
+        deps.paidStorage &&
+        (!admission ||
+          !isPreparedStoragePaidHold(admission.paid) ||
+          admission.actor.ownerId !== ownerId)
+      )
+        throw new FileError("PROCESSING_UNAVAILABLE");
       let written = false;
       if (
-        !(await files.prepareOriginalPart(actor(ownerId), {
-          uploadId: u.id,
-          uploadRevision: u.revision,
-          ordinal: index,
-          blob,
-        }))
+        !(await files.prepareOriginalPart(
+          admission?.actor ?? actor(ownerId),
+          {
+            uploadId: u.id,
+            uploadRevision: u.revision,
+            ordinal: index,
+            blob,
+          },
+          admission?.paid,
+        ))
       )
         throw new FileError("CONFLICT");
+      const pendingPayload = await core
+        .statement("SELECT encrypted_payload FROM v2_blobs WHERE id=? AND state='pending'", [
+          blob.id,
+        ])
+        .first<string>("encrypted_payload");
+      let permit: FileStoragePermit | null = null;
+      let dispatched = false;
+      let recorded = false;
+      const authorize = async () => {
+        try {
+          await consent(ownerId);
+          const current = await session(ownerId, workspaceId, fileId, uploadId, true);
+          const pending =
+            pendingPayload &&
+            (await core
+              .statement(
+                "SELECT id FROM v2_blobs WHERE id=? AND state='pending' AND reservation_id=? AND encrypted_payload=? AND logical_bytes=? AND cipher_bytes=? AND cipher_hash=? AND key_version=?",
+                [
+                  blob.id,
+                  blob.reservationId,
+                  pendingPayload,
+                  blob.logicalBytes,
+                  blob.cipherBytes,
+                  blob.cipherHash,
+                  blob.keyVersion,
+                ],
+              )
+              .first());
+          return (
+            !!pending &&
+            current.revision === u.revision &&
+            current.file_revision === u.file_revision &&
+            current.operation_revision === u.operation_revision &&
+            current.operation_id === u.operation_id &&
+            (!admission || now() < admission.paid.request.plan.deadlineAt)
+          );
+        } catch {
+          return false;
+        }
+      };
       try {
-        await consent(ownerId);
-        await session(ownerId, workspaceId, fileId, uploadId, true);
-        const stored = await bucket().put(objectKey, bytes, {
+        if (admission && deps.paidStorage) {
+          permit = await deps.paidStorage.beforeDispatch(admission, authorize);
+          if (!permit) throw new FileError("PROCESSING_UNAVAILABLE");
+        }
+        // Recheck a fresh clock and source after the awaited dispatch CAS.
+        if (!(await authorize())) throw new FileError("CONFLICT");
+        const r2 = bucket();
+        dispatched = true;
+        const stored = await r2.put(objectKey, bytes, {
           httpMetadata: {
             contentType: "application/octet-stream",
             cacheControl: "private, no-store",
           },
         });
+        if (permit && deps.paidStorage) {
+          recorded = true;
+          await deps.paidStorage.after(permit, {
+            transport: "response",
+            definitiveNoCharge: false,
+            observedAt: now(),
+          });
+        }
         if (!stored || stored.key !== objectKey || stored.size !== bytes.byteLength)
           throw new FileError("STORAGE_UNAVAILABLE");
         written = true;
@@ -480,6 +599,18 @@ export function createFilesService(core: V2Core, deps: FileServiceDependencies) 
           throw new FileError("CONFLICT");
         return { index, byteLength, contentHash };
       } catch (error) {
+        let failure = error;
+        if (permit && !recorded && deps.paidStorage) {
+          try {
+            await deps.paidStorage.after(permit, {
+              transport: dispatched ? "unknown" : "not_sent",
+              definitiveNoCharge: !dispatched,
+              observedAt: now(),
+            });
+          } catch {
+            failure = new FileError("PROCESSING_UNAVAILABLE");
+          }
+        }
         // The pending intent already survives termination. Only terminal IO can be
         // abandoned here; no logical storage refund happens before actual cleanup.
         const retained = await files.abandonOriginalPart(actor(ownerId), blob.id);
@@ -494,7 +625,7 @@ export function createFilesService(core: V2Core, deps: FileServiceDependencies) 
             if (accepted.contentHash === contentHash) return { index, byteLength, contentHash };
           }
         }
-        throw error;
+        throw failure;
       }
     },
     async complete(ownerId: string, workspaceId: string, fileId: string, input: unknown) {
@@ -532,7 +663,6 @@ export function createFilesService(core: V2Core, deps: FileServiceDependencies) 
       const u = await session(ownerId, workspaceId, fileId, request.uploadSession, true);
       if (u.workspace_revision !== request.expectedRevision) throw new FileError("CONFLICT");
       if (!deps.probe) throw new FileError("PROCESSING_UNAVAILABLE");
-      await allowStorage(ownerId, workspaceId, u, u.reserved_bytes, "probe");
       const manifest = v2OriginalManifestSchema.parse(request.manifest);
       if (manifest.byteLength !== u.reserved_bytes) throw new FileError("INVALID_FILE");
       const reader = stream(ownerId, workspaceId, u, manifest).getReader();

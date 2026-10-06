@@ -104,7 +104,7 @@ async function fixture(
     environment: "preview",
     bucket: bucket.port,
     clock: () => currentNow,
-    storageAdmission: async () => true,
+    testOnlyUnmeteredStorage: true,
     probe: async (input) => ({
       category: "document",
       format: "txt",
@@ -113,7 +113,7 @@ async function fixture(
     }),
     ...overrides,
   };
-  if (disabled.admission) delete deps.storageAdmission;
+  if (disabled.admission) delete deps.testOnlyUnmeteredStorage;
   if (disabled.probe) delete deps.probe;
   const service = createFilesService(core, deps);
   const rev = () =>
