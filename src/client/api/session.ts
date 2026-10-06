@@ -7,7 +7,22 @@ export const roleStart = (session: SessionView) =>
   session.needsConsent ? "/consent" : session.user?.accountType === "lawyer" ? "/lawyer" : "/cases";
 export const sessionApi = {
   async get(): Promise<SessionView> {
-    return request("session.get", undefined, { path: "/api/me/session" });
+    const session = await request<SessionView>("session.get", undefined, {
+      path: "/api/me/session",
+    });
+    if (apiMode === "real" && session.user) {
+      const selected = sessionStorage.getItem("baro-account-type");
+      if (selected === "customer" || selected === "lawyer") {
+        await request(
+          "session.accountType",
+          { accountType: selected },
+          { path: "/api/me/account-type", method: "PUT", body: { accountType: selected } },
+        );
+        sessionStorage.removeItem("baro-account-type");
+        session.user.accountType = selected;
+      }
+    }
+    return session;
   },
   async signIn(provider: Provider, accountType: AccountType): Promise<SessionView | undefined> {
     if (apiMode === "mock") return request("session.signIn", { provider, accountType });
@@ -19,6 +34,7 @@ export const sessionApi = {
     });
     if (result.error)
       throw new ApiError("UNAVAILABLE", "로그인을 시작하지 못했어요. 다시 시도해 주세요.", true);
+    return undefined;
   },
   getConsent: () =>
     request<{ required: ConsentInput; consent: unknown; needsConsent: boolean }>(
