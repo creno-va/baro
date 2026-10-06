@@ -161,7 +161,63 @@ export function createV2LawyersRepository(core: V2Core) {
       ...(row.status === "withdrawn" ? { withdrawnAt: row.withdrawn_at } : {}),
     });
   };
-  return {
+  const repository = {
+    readSubmittedProfileById(
+      reviewer: Actor,
+      sessionId: string,
+      revisionId: string,
+    ): Promise<V2ProfileRevision | null> {
+      return safe(async () => {
+        reviewer = parse(actorSchema, reviewer);
+        parse(opaqueIdSchema, revisionId);
+        const row = await core
+          .statement(
+            `SELECT r.profile_id,r.revision FROM v2_profile_revisions r JOIN v2_profiles p ON p.id=r.profile_id WHERE r.id=? AND ${submittedProfileSql}`,
+            [revisionId, reviewer.ownerId, ...moderatorValues(reviewer, sessionId)],
+          )
+          .first<{ profile_id: string; revision: number }>();
+        if (!row) return null;
+        const value = await repository.readSubmittedProfile(
+          reviewer,
+          sessionId,
+          row.profile_id,
+          row.revision,
+        );
+        return value?.id === revisionId ? value : null;
+      });
+    },
+    revokeVerificationByApplication(
+      reviewer: Actor,
+      sessionId: string,
+      applicationId: string,
+      expectedRevision: number,
+    ): Promise<boolean> {
+      return safe(async () => {
+        reviewer = parse(actorSchema, reviewer);
+        parse(opaqueIdSchema, applicationId);
+        parse(revisionSchema, expectedRevision);
+        const row = await core
+          .statement(
+            `SELECT owner_id FROM v2_applications WHERE id=? AND revision=? AND status='approved' AND owner_id!=? AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='account' AND target_id=v2_applications.owner_id) AND ${moderatorSql}`,
+            [
+              applicationId,
+              expectedRevision,
+              reviewer.ownerId,
+              ...moderatorValues(reviewer, sessionId),
+            ],
+          )
+          .first<{ owner_id: string }>();
+        return row
+          ? repository.revokeVerification(
+              reviewer,
+              sessionId,
+              row.owner_id,
+              applicationId,
+              expectedRevision,
+            )
+          : false;
+      });
+    },
     submittedApplications(
       reviewer: Actor,
       sessionId: string,
@@ -411,7 +467,7 @@ export function createV2LawyersRepository(core: V2Core) {
         const claimId = crypto.randomUUID();
         return core.changed([
           core.statement(
-            `INSERT INTO v2_mutation_claims(id,owner_id,target_id,revision) SELECT ?,owner_id,id,revision FROM v2_applications WHERE id=? AND owner_id=? AND revision=? AND status='approved' AND ${moderatorSql}`,
+            `INSERT INTO v2_mutation_claims(id,owner_id,target_id,revision) SELECT ?,owner_id,id,revision FROM v2_applications WHERE id=? AND owner_id=? AND revision=? AND status='approved' AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='account' AND target_id=v2_applications.owner_id) AND ${moderatorSql}`,
             [
               claimId,
               applicationId,
@@ -1476,4 +1532,5 @@ export function createV2LawyersRepository(core: V2Core) {
       });
     },
   };
+  return repository;
 }

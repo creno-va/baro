@@ -288,3 +288,45 @@ test("qualification revocation and current profile revision changes revoke submi
   expect((await repo.submittedProfiles(reviewer, sessionId)).items).toEqual([]);
   expect(decrypts).toEqual([]);
 });
+
+test("route revision-id accessor delegates scoped submitted profile read and preserves post-decrypt authorization", async () => {
+  const p = await profile();
+  expect(await repo.readSubmittedProfileById(reviewer, sessionId, p.id)).toEqual(p);
+  expect(await repo.readSubmittedProfileById(reviewer, sessionId, "unknown_revision")).toBeNull();
+  onDecrypt = () => db.sqlite.query("DELETE FROM v2_role_bindings WHERE role='moderator'").run();
+  expect(await repo.readSubmittedProfileById(reviewer, sessionId, p.id)).toBeNull();
+});
+
+test("application-id revocation resolves trusted owner metadata, audits once, and rejects wrong status/revision/role", async () => {
+  const p = await profile();
+  expect(
+    await repo.revokeVerificationByApplication(reviewer, sessionId, `approved_${p.profileId}`, 2),
+  ).toBe(false);
+  expect(
+    await repo.revokeVerificationByApplication(reviewer, sessionId, `approved_${p.profileId}`, 1),
+  ).toBe(true);
+  expect(
+    await repo.revokeVerificationByApplication(reviewer, sessionId, `approved_${p.profileId}`, 1),
+  ).toBe(false);
+  expect(
+    db.sqlite.query("SELECT count(*) AS n FROM v2_role_audit WHERE action='revoke'").get(),
+  ).toEqual({ n: 1 });
+  expect((await repo.submittedProfiles(reviewer, sessionId)).items).toEqual([]);
+  const a = await app();
+  expect(await repo.revokeVerificationByApplication(reviewer, sessionId, a.id, 1)).toBe(false);
+  expect(decrypts).toEqual([]);
+});
+
+test("application-id revocation rejects stale authentication and deleted target without audit mutations", async () => {
+  const p = await profile();
+  db.sqlite.query("UPDATE session SET oauth_authenticated_at=?").run(epoch - 600001);
+  expect(
+    await repo.revokeVerificationByApplication(reviewer, sessionId, `approved_${p.profileId}`, 1),
+  ).toBe(false);
+  db.sqlite.query("UPDATE session SET oauth_authenticated_at=?").run(epoch);
+  tombstone("account", "lawyer_synthetic");
+  expect(
+    await repo.revokeVerificationByApplication(reviewer, sessionId, `approved_${p.profileId}`, 1),
+  ).toBe(false);
+  expect(db.sqlite.query("SELECT count(*) AS n FROM v2_role_audit").get()).toEqual({ n: 0 });
+});
