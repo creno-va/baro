@@ -805,3 +805,15 @@ schema/migration, 정책 버전, 공개 gate 및 공급자 설정은 변경하�
 이슈 종료 감사에서 #66의 실제 SQL/native HTTP 브라우저 PDF/ZIP 성공은 원격 R2·D1
 CPU/청구/다운로드 증거와 구분했다. 담당자의 남은 원격 인수 조건은 아직 입증되지 않았으므로
 이슈를 닫지 않는다. #65/#69의 자료 한도 안내 불일치도 앞선 담당 수정 요청에 남아 있다.
+
+### 자료 한도 안내 후속 수정
+
+사용자의 논스톱 통합 지시 뒤 담당 세션 비실행/열린 제품 PR 없음과
+[소유 조율](https://github.com/creno-va/baro/issues/65#issuecomment-6022704458)을 확인했다.
+통합 #69의 좁은 후속에서 Workspace의 50MB/300MB 고정 안내를 기존 V2_LIMITS의
+문서·이미지100MB/음성·영상1GB로 맞춘다. validation/admission/계약 한도를 확대하거나
+모듈 흐름을 수정하지 않는다. 큰 파일 전체의 실제 원격 처리 성공을 뜻하지 않는다.
+PR136은 exact head2c179f81e8525d7376321c32d7e8d8a5ba8f4e14의
+[CI37510574519](https://github.com/creno-va/baro/actions/runs/37510574519) 필수3jobs
+SUCCESS/CLEAN 확인 뒤 정상 병합됐으며 main은73cc78324bcaa9302339c3f8e6da51aa1a8915a3이다.
+native는 변경 없음에 따라 fixture 실행을 skip했다. 최종 통합 Full에서 실제 native를 재검증한다.
