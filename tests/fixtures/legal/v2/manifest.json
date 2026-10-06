@@ -4,7 +4,21 @@
   "reviewedAt": "2026-10-06",
   "capturedAt": null,
   "liveEvidence": false,
+  "publicStructureEvidence": [
+    {
+      "name": "captured-guide-structure.json",
+      "origin": "captured_public_structure_subset",
+      "scope": "Actual selectors, title/canonical/basis-date and first heading only; original body omitted"
+    },
+    {
+      "name": "captured-precedent-structure.json",
+      "origin": "captured_public_example_structure",
+      "scope": "Official public example root/key types and ID/date only; no legal body or credential request URL retained"
+    }
+  ],
   "adapterValidation": "not_run",
+  "preparationAnnotationsAreHistorical": true,
+  "executedRuntimeTestFiles": ["tests/legal-retrieval-v2.test.ts", "tests/citation-v2.test.ts"],
   "shapeStatus": "provisional_documented_fields_not_captured_json_shape",
   "asOfDate": "2026-10-06",
   "normalizationVersion": "synthetic-extraction-v1",
