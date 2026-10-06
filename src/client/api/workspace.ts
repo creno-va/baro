@@ -4,9 +4,9 @@ import {
   v2AcceptedOperationSchema,
   v2ActionSchema,
   v2JobSchema,
-  v2MessageSchema,
   v2SummarySchema,
   v2TimelineEntrySchema,
+  v2UserMessageSchema,
   v2WorkspaceSchema,
 } from "../../contracts/v2";
 import { createFilesApi } from "./files";
@@ -126,6 +126,21 @@ export function createWorkspaceApi(request: WorkspaceTransport) {
   const actionRevisions = new Map<string, number>();
   const timelineRevisions = new Map<string, number>();
   const messageJobs = new Map<string, { jobId: string; revision: number }>();
+  // This screen renders plain message text. Source validation and URL allowlists stay
+  // on the server; hidden citations must not be revalidated against an empty registry.
+  const messageTextSchema = z.discriminatedUnion("role", [
+    v2UserMessageSchema,
+    z.object({
+      schemaVersion: v2UserMessageSchema.shape.schemaVersion,
+      id: v2UserMessageSchema.shape.id,
+      operationId: v2UserMessageSchema.shape.operationId,
+      workspaceRevision: v2UserMessageSchema.shape.workspaceRevision,
+      createdAt: v2UserMessageSchema.shape.createdAt,
+      role: z.literal("assistant"),
+      safety: z.literal("validated"),
+      text: v2UserMessageSchema.shape.text,
+    }),
+  ]);
   async function get(id: string): Promise<WorkspaceView> {
     const response = await request(`${base(id)}/workspace`);
     if (response.status === 404) {
@@ -240,11 +255,11 @@ export function createWorkspaceApi(request: WorkspaceTransport) {
     return { case: caseView, messages, actions, timeline, files: fileViews };
   }
   async function allMessages(id: string) {
-    const items: z.infer<ReturnType<typeof v2MessageSchema>>[] = [];
+    const items: z.infer<typeof messageTextSchema>[] = [];
     let cursor: string | null = null;
     do {
       const page = z
-        .object({ items: z.array(v2MessageSchema()), nextCursor: z.string().nullable() })
+        .object({ items: z.array(messageTextSchema), nextCursor: z.string().nullable() })
         .parse(
           await workspaceJson(
             request,

@@ -29,6 +29,7 @@ test("chat failure/retry, reload, action checks and timeline editing on actual c
   const first = page.getByRole("checkbox").first();
   await first.check();
   await expect(first).toBeChecked();
+  await expect(page.getByText("완료 표시를 저장했어요.", { exact: true })).toBeVisible();
   await page.reload();
   await expect(page.getByRole("checkbox").first()).toBeChecked();
   await page.getByRole("link", { name: "타임라인", exact: true }).click();
@@ -39,8 +40,11 @@ test("chat failure/retry, reload, action checks and timeline editing on actual c
   await page.getByRole("button", { name: "편집", exact: true }).click();
   await page.getByLabel("날짜 (모르면 비워 두세요)").fill("2026-10-01");
   await page.getByRole("button", { name: "타임라인 저장" }).click();
+  await expect(page.getByText("타임라인을 저장했어요.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("dialog")).not.toBeVisible();
   await page.reload();
   await expect(page.getByText("2026-10-01", { exact: true })).toBeVisible();
+  await page.screenshot({ path: "test-results/workspace-desktop.png", fullPage: true });
   await expect(page.getByRole("link", { name: "리포트 보기" }).first()).toHaveAttribute(
     "href",
     `${base}/reports`,
@@ -57,7 +61,7 @@ test("file processing failure, retry, extracted text, original bytes, cancellati
   await expect(page.getByRole("heading", { name: "아직 자료가 없어요" })).toBeVisible();
   await page.evaluate((storageKey) => {
     const state = JSON.parse(localStorage.getItem(storageKey) ?? "{}");
-    state.faults = { "files.upload": ["file_failed"] };
+    state.faults = { "files.upload": ["file_failed"], "files.uploadPart": ["UNAVAILABLE"] };
     localStorage.setItem(storageKey, JSON.stringify(state));
   }, key);
   await page.getByLabel("선택 자료의 자동 처리에 동의합니다.").check();
@@ -65,6 +69,7 @@ test("file processing failure, retry, extracted text, original bytes, cancellati
   await page
     .getByLabel("업로드할 파일 선택", { exact: true })
     .setInputFiles({ name: "synthetic.txt", mimeType: "text/plain", buffer: Buffer.from(text) });
+  await page.getByRole("button", { name: "업로드 다시 시도" }).click();
   await expect(page.getByText("처리 실패", { exact: true })).toBeVisible();
   await page.reload();
   await page.getByRole("button", { name: "처리 다시 시도" }).click();
@@ -80,6 +85,7 @@ test("file processing failure, retry, extracted text, original bytes, cancellati
   await expect(page.getByRole("heading", { name: "synthetic.txt" })).toBeVisible();
   await page.getByRole("button", { name: "삭제", exact: true }).click();
   await page.getByRole("button", { name: "자료 삭제 확인" }).click();
+  await expect(page.getByText("자료를 삭제했어요.", { exact: true })).toBeVisible();
   await page.reload();
   await expect(page.getByRole("heading", { name: "아직 자료가 없어요" })).toBeVisible();
 });
@@ -88,6 +94,7 @@ test("mobile keyboard dialog, empty state, quota, stale input and safe image pre
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(base);
+  await expect(page.getByRole("heading", { name: "이어서 대화하기" })).toBeVisible();
   await page.evaluate((storageKey) => {
     const state = JSON.parse(localStorage.getItem(storageKey) ?? "{}");
     state.faults = { "workspace.sendMessage": ["QUOTA_EXCEEDED"] };
@@ -106,7 +113,7 @@ test("mobile keyboard dialog, empty state, quota, stale input and safe image pre
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true,
   );
-  await page.getByRole("link", { name: /자료 0/ }).click();
+  await page.getByRole("link", { name: "자료 0", exact: true }).click();
   await page.getByLabel("선택 자료의 자동 처리에 동의합니다.").check();
   const bytes = Buffer.from(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aXioAAAAASUVORK5CYII=",
@@ -119,4 +126,5 @@ test("mobile keyboard dialog, empty state, quota, stale input and safe image pre
   await page.getByRole("button", { name: "자료 확인" }).click();
   await page.getByRole("button", { name: "원본 확인 · 다운로드" }).click();
   await expect(page.getByAltText("synthetic.png 원본 미리보기")).toBeVisible();
+  await page.screenshot({ path: "test-results/workspace-mobile-preview.png", fullPage: true });
 });

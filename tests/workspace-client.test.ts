@@ -1,7 +1,18 @@
 import { expect, test } from "bun:test";
 import { createFilesApi } from "../src/client/api/files";
+import { createFilesMock } from "../src/client/api/mock/files";
 import { createWorkspaceMock, type WorkspaceMockRuntime } from "../src/client/api/mock/workspace";
 import { createWorkspaceApi, workspaceMutation } from "../src/client/api/workspace";
+import {
+  action,
+  assistantMessage,
+  guide,
+  intake,
+  summary,
+  timeline,
+  userMessage,
+  workspace,
+} from "./fixtures/contracts/v2";
 
 function fixture() {
   let stored = JSON.stringify({
@@ -34,8 +45,15 @@ function fixture() {
     },
   };
   const handler = createWorkspaceMock(runtime);
+  const originals = new Map<string, Blob>();
+  const filesHandler = createFilesMock(runtime, async (key, value) => {
+    if (value === null) originals.delete(key);
+    else if (value !== undefined) originals.set(key, value);
+    return originals.get(key) ?? null;
+  });
   const transport = async (path: string, init?: RequestInit) =>
     (await handler(new Request(`http://localhost${path}`, init))) ??
+    (await filesHandler(new Request(`http://localhost${path}`, init))) ??
     Response.json({ error: { code: "NOT_FOUND" } }, { status: 404 });
   return { runtime, transport, client: createWorkspaceApi(transport) };
 }
@@ -203,4 +221,111 @@ test("real file adapter surfaces unavailable processing API instead of generatin
     code: "NOT_FOUND",
   });
   expect(calls).toContain("/api/v2/cases/case/files/file/retry");
+});
+
+test("chunk upload retries reuse reservation and preserve exact original bytes after client reload", async () => {
+  const f = fixture();
+  await f.client.get("synthetic-case");
+  f.runtime.update((state) => {
+    state.faults = { "files.uploadPart": ["UNAVAILABLE"] };
+  });
+  const files = createFilesApi(f.transport),
+    source = new File(["합성 원본 자료입니다."], "synthetic.txt", { type: "text/plain" });
+  await expect(files.upload("synthetic-case", source)).rejects.toMatchObject({
+    code: "UNAVAILABLE",
+  });
+  const pending = await files.list("synthetic-case");
+  expect(pending).toHaveLength(1);
+  expect(pending[0]?.status).toBe("uploading");
+  const uploaded = await files.upload("synthetic-case", source);
+  expect(uploaded.id).toBe(pending[0]?.id ?? "");
+  expect(await files.list("synthetic-case")).toHaveLength(1);
+  const resumed = createFilesApi(f.transport);
+  expect(await (await resumed.original("synthetic-case", uploaded.id)).text()).toBe(
+    await source.text(),
+  );
+  await resumed.remove("synthetic-case", uploaded.id);
+  expect(await resumed.list("synthetic-case")).toEqual([]);
+  await expect(resumed.original("synthetic-case", uploaded.id)).rejects.toMatchObject({
+    code: "NOT_FOUND",
+  });
+});
+
+test("real workspace DTOs preserve server-validated text and use entity revisions for edits", async () => {
+  const writes: { path: string; body: unknown }[] = [];
+  let validated = true;
+  const transport = async (path: string, init?: RequestInit) => {
+    if (init?.method === "PUT") {
+      writes.push({ path, body: JSON.parse(String(init.body)) });
+      return Response.json({ saved: true });
+    }
+    if (path.endsWith("/workspace")) return Response.json(workspace);
+    if (path.endsWith("/intake")) return Response.json(intake);
+    if (path.endsWith("/summary")) return Response.json(summary);
+    if (path.includes("/messages?"))
+      return Response.json({
+        items: [
+          userMessage,
+          {
+            ...assistantMessage,
+            safety: validated ? "validated" : "unvalidated",
+            citations: [guide],
+            references: [{ kind: "official_source", citationId: guide.id }],
+          },
+        ],
+        nextCursor: null,
+      });
+    if (path.endsWith("/actions"))
+      return Response.json({ items: [{ ...action, revision: 7 }], nextCursor: null });
+    if (path.endsWith("/timeline"))
+      return Response.json({ items: [{ ...timeline, revision: 6 }], nextCursor: null });
+    if (path.endsWith("/files")) return Response.json([]);
+    return Response.json({ error: { code: "NOT_FOUND" } }, { status: 404 });
+  };
+  const api = createWorkspaceApi(transport);
+  const view = await api.get(workspace.id);
+  expect(view.case.summary).toBe(summary.overview);
+  expect(view.messages[1]?.text).toBe(assistantMessage.text);
+  await api.setAction(workspace.id, action.id, true);
+  await api.saveTimeline(workspace.id, {
+    id: timeline.id,
+    date: "",
+    title: "합성 편집",
+    detail: "",
+  });
+  expect(writes[0]?.body).toEqual({ expectedRevision: 7, status: "done" });
+  expect(writes[1]?.body).toEqual({
+    expectedRevision: 6,
+    date: null,
+    datePrecision: "unknown",
+    event: "합성 편집",
+  });
+  validated = false;
+  await expect(api.get(workspace.id)).rejects.toThrow();
+});
+
+test("deletion during binary save rejects late publication and removes the saved chunk", async () => {
+  const f = fixture();
+  await f.client.get("synthetic-case");
+  const originals = new Map<string, Blob>();
+  const handler = createFilesMock(f.runtime, async (key, value) => {
+    if (value === null) originals.delete(key);
+    else if (value) {
+      originals.set(key, value);
+      f.runtime.update((state) => {
+        delete state.cases["synthetic-case"];
+      });
+    }
+    return originals.get(key) ?? null;
+  });
+  const transport = async (path: string, init?: RequestInit) =>
+    (await handler(new Request(`http://localhost${path}`, init))) ?? f.transport(path, init);
+  await expect(
+    createFilesApi(transport).upload(
+      "synthetic-case",
+      new File(["합성 원본"], "synthetic.txt", { type: "text/plain" }),
+    ),
+  ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  expect(originals.size).toBe(0);
+  expect(f.runtime.read().cases["synthetic-case"]).toBeUndefined();
 });

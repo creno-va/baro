@@ -1,3 +1,8 @@
+import {
+  V2_LIMITS,
+  v2UploadCompleteRequestSchema,
+  v2UploadReservationRequestSchema,
+} from "../../../contracts/v2";
 import { validateUpload } from "../files";
 import type { FileView } from "../types";
 import {
@@ -71,32 +76,35 @@ export async function clearMockOriginals(ownerId: string, caseId?: string) {
     db.close();
   }
 }
-export function createFilesMock(runtime: WorkspaceMockRuntime) {
+async function blobHash(blob: Blob) {
+  return Array.from(
+    new Uint8Array(await crypto.subtle.digest("SHA-256", await blob.arrayBuffer())),
+    (byte) => byte.toString(16).padStart(2, "0"),
+  ).join("");
+}
+export function createFilesMock(runtime: WorkspaceMockRuntime, originals = mockOriginalStore) {
   return async function handleFilesMock(request: Request): Promise<Response | null> {
-    const match = /^\/api\/v2\/cases\/([^/]+)\/files(?:\/([^/]+)(?:\/(content|retry))?)?$/.exec(
-      new URL(request.url).pathname,
-    );
+    const match =
+      /^\/api\/v2\/cases\/([^/]+)\/files(?:\/([^/]+)(?:\/(content|retry|complete|parts\/(\d+)))?)?$/.exec(
+        new URL(request.url).pathname,
+      );
     if (!match) return null;
     const id = decodeURIComponent(match[1] ?? ""),
       fileId = match[2] ? decodeURIComponent(match[2]) : null,
       kind = match[3];
     try {
-      if (request.method === "OPTIONS")
-        return new Response(null, { status: 204, headers: { "x-baro-mock": "true" } });
       const state = runtime.read();
       requireMockCase(state, id, request.method !== "GET");
       const owner = state.session.user?.id;
       if (!owner) throw new WorkspaceMockError("UNAUTHENTICATED", "로그인이 필요해요.");
       if (request.method === "GET" && !fileId) {
         consumeMockFault(runtime, "files.list");
-        return runtime.update((value) => {
-          return mockResponse(ensureMockWorkspace(value, id).files);
-        });
+        return runtime.update((value) => mockResponse(ensureMockWorkspace(value, id).files));
       }
       const record = state.files?.[id]?.find((file) => file.id === fileId);
       if (request.method === "GET" && fileId && kind === "content") {
         if (!record) throw new WorkspaceMockError("NOT_FOUND", "자료를 찾을 수 없어요.");
-        const blob = await mockOriginalStore(`${owner}/${id}/${fileId}`);
+        const blob = await originals(`${owner}/${id}/${fileId}`);
         requireMockCase(runtime.read(), id);
         if (!runtime.read().files[id]?.some((file) => file.id === fileId))
           throw new WorkspaceMockError("NOT_FOUND", "자료가 삭제됐어요.");
@@ -113,54 +121,185 @@ export function createFilesMock(runtime: WorkspaceMockRuntime) {
         });
       }
       if (request.method === "POST" && !fileId) {
-        const form = await request.formData(),
-          file = form.get("file");
-        if (!(file instanceof File))
-          throw new WorkspaceMockError("VALIDATION_ERROR", "파일을 선택해 주세요.");
+        const input = v2UploadReservationRequestSchema.parse(await request.json());
         try {
-          validateUpload(file);
+          validateUpload({ name: input.name, size: input.byteLength, type: input.mediaType });
         } catch (cause) {
           throw new WorkspaceMockError(
             "VALIDATION_ERROR",
             cause instanceof Error ? cause.message : "파일을 확인해 주세요.",
           );
         }
+        const requestKey = `${owner}/${id}/${request.headers.get("idempotency-key") ?? ""}`;
+        const fingerprint = JSON.stringify({ input, revision: request.headers.get("if-match") });
+        const replay = state.fileUploadReceipts?.[requestKey];
+        if (replay) {
+          const upload = state.fileUploads?.[replay.fileId];
+          if (!upload || replay.fingerprint !== fingerprint)
+            throw new WorkspaceMockError("CONFLICT", "업로드 요청을 다시 확인해 주세요.");
+          return mockResponse(upload.session, 201);
+        }
         const fault = consumeMockFault(runtime, "files.upload");
-        const newId = crypto.randomUUID();
-        const key = `${owner}/${id}/${newId}`;
-        await mockOriginalStore(key, file);
-        const extracted =
-          file.type === "text/plain" || /\.txt$/i.test(file.name)
-            ? (await file.text()).slice(0, 20000)
-            : "이 자료의 실제 추출은 수행되지 않았어요. 원본 확인으로 파일을 검토해 주세요.";
+        return runtime.update((value) => {
+          const item = requireMockCase(value, id, true);
+          if (String(item.revision) !== request.headers.get("if-match"))
+            throw new WorkspaceMockError("CONFLICT", "최신 상태를 확인해 주세요.");
+          ensureMockWorkspace(value, id);
+          const newId = crypto.randomUUID();
+          const session = {
+            schemaVersion: "2" as const,
+            fileId: newId,
+            uploadSession: crypto.randomUUID(),
+            chunkBytes: V2_LIMITS.chunkBytes,
+            reservedBytes: input.byteLength,
+            expiresAt: new Date(Date.now() + 3600000).toISOString(),
+          };
+          const file: FileView = {
+            id: newId,
+            name: input.name,
+            mimeType: input.mediaType,
+            sizeBytes: input.byteLength,
+            status: "uploading",
+            coverage: "원본 업로드 중 · API 예시 응답",
+            extractedText: "",
+          };
+          value.files[id]?.push(file);
+          value.fileUploads ??= {};
+          value.fileUploads[newId] = {
+            session,
+            caseId: id,
+            ownerId: owner,
+            parts: {},
+            failedProcessing: fault === "file_failed",
+          };
+          value.fileUploadReceipts ??= {};
+          value.fileUploadReceipts[requestKey] = { fileId: newId, fingerprint };
+          touchMockCase(value, id);
+          return mockResponse(session, 201);
+        });
+      }
+      if (!record || !fileId) throw new WorkspaceMockError("NOT_FOUND", "자료를 찾을 수 없어요.");
+      const upload = state.fileUploads?.[fileId];
+      if (request.method === "PUT" && kind?.startsWith("parts/")) {
+        const index = Number(match[4]);
+        if (
+          !upload ||
+          upload.caseId !== id ||
+          upload.ownerId !== owner ||
+          upload.session.uploadSession !== request.headers.get("x-upload-session") ||
+          record.status !== "uploading" ||
+          Date.parse(upload.session.expiresAt) <= Date.now() ||
+          !Number.isInteger(index) ||
+          index < 0 ||
+          index >= 120 ||
+          request.headers.get("content-type") !== "application/octet-stream"
+        )
+          throw new WorkspaceMockError("CONFLICT", "업로드 세션을 확인해 주세요.");
+        consumeMockFault(runtime, "files.uploadPart");
+        const bytes = await request.blob();
+        if (
+          !bytes.size ||
+          bytes.size > V2_LIMITS.chunkBytes ||
+          index * V2_LIMITS.chunkBytes + bytes.size > record.sizeBytes
+        )
+          throw new WorkspaceMockError("VALIDATION_ERROR", "업로드 크기를 확인해 주세요.");
+        const contentHash = await blobHash(bytes),
+          partKey = `${owner}/${id}/${fileId}/part-${index}`;
+        if (upload.parts[index] && upload.parts[index]?.contentHash !== contentHash)
+          throw new WorkspaceMockError("CONFLICT", "업로드 내용이 달라졌어요.");
+        await originals(partKey, bytes);
         try {
           return runtime.update((value) => {
             requireMockCase(value, id, true);
-            ensureMockWorkspace(value, id);
-            const record: FileView = {
-              id: newId,
-              name: file.name,
-              mimeType: file.type || "application/octet-stream",
-              sizeBytes: file.size,
-              status: "processing",
-              coverage: "API 예시 처리 중 · 실제 OCR·ASR·영상 처리는 수행되지 않아요.",
-              extractedText: extracted,
-            };
-            value.files[id]?.push(record);
-            value.fileProcessing ??= {};
-            value.fileProcessing[newId] = {
-              at: Date.now() + 1500,
-              failed: fault === "file_failed",
-            };
-            touchMockCase(value, id);
-            return mockResponse(record, 201);
+            const current = value.fileUploads?.[fileId];
+            if (
+              value.session.user?.id !== owner ||
+              !current ||
+              !value.files[id]?.some((file) => file.id === fileId)
+            )
+              throw new WorkspaceMockError("NOT_FOUND", "자료가 삭제됐어요.");
+            current.parts[index] = { index, byteLength: bytes.size, contentHash };
+            return mockResponse({ index, byteLength: bytes.size, contentHash });
           });
         } catch (cause) {
-          await mockOriginalStore(key, null);
+          await originals(partKey, null);
           throw cause;
         }
       }
-      if (!record) throw new WorkspaceMockError("NOT_FOUND", "자료를 찾을 수 없어요.");
+      if (request.method === "POST" && kind === "complete") {
+        const input = v2UploadCompleteRequestSchema.parse(await request.json());
+        if (
+          !upload ||
+          upload.ownerId !== owner ||
+          upload.caseId !== id ||
+          upload.session.uploadSession !== input.uploadSession ||
+          input.manifest.byteLength !== record.sizeBytes
+        )
+          throw new WorkspaceMockError("CONFLICT", "업로드 요청을 확인해 주세요.");
+        if (record.status !== "uploading")
+          return mockResponse({
+            fileId,
+            revision: 1,
+            status: record.status,
+            processingQueued: record.status === "processing",
+          });
+        if (input.expectedRevision !== state.cases[id]?.revision)
+          throw new WorkspaceMockError("CONFLICT", "최신 상태를 확인해 주세요.");
+        consumeMockFault(runtime, "files.complete");
+        const parts: Blob[] = [];
+        for (const part of input.manifest.parts) {
+          if (JSON.stringify(upload.parts[part.index]) !== JSON.stringify(part))
+            throw new WorkspaceMockError("CONFLICT", "업로드 조각을 다시 확인해 주세요.");
+          const bytes = await originals(`${owner}/${id}/${fileId}/part-${part.index}`);
+          if (!bytes)
+            throw new WorkspaceMockError("UNAVAILABLE", "업로드 조각을 다시 보내 주세요.", true);
+          parts.push(bytes);
+        }
+        const original = new Blob(parts, { type: record.mimeType });
+        if (
+          (await blobHash(original)) !== input.manifest.contentHash ||
+          original.size !== record.sizeBytes
+        )
+          throw new WorkspaceMockError("VALIDATION_ERROR", "원본 내용을 확인해 주세요.");
+        await originals(`${owner}/${id}/${fileId}`, original);
+        const extracted =
+          record.mimeType === "text/plain" || /\.txt$/i.test(record.name)
+            ? (await original.text()).slice(0, 20000)
+            : "이 자료의 실제 추출은 수행되지 않았어요. 원본 확인으로 파일을 검토해 주세요.";
+        let result: Response;
+        try {
+          result = runtime.update((value) => {
+            const latest = requireMockCase(value, id, true);
+            const file = value.files[id]?.find((item) => item.id === fileId);
+            if (!file || value.session.user?.id !== owner)
+              throw new WorkspaceMockError("NOT_FOUND", "자료가 삭제됐어요.");
+            if (file.status !== "uploading" || latest.revision !== input.expectedRevision)
+              throw new WorkspaceMockError("CONFLICT", "최신 자료 상태를 확인해 주세요.");
+            file.status = "processing";
+            file.coverage = "API 예시 처리 중 · 실제 OCR·ASR·영상 처리는 수행되지 않아요.";
+            value.fileExtractions ??= {};
+            value.fileExtractions[fileId] = extracted;
+            value.fileProcessing ??= {};
+            value.fileProcessing[fileId] = {
+              at: Date.now() + 1500,
+              failed: upload.failedProcessing,
+            };
+            touchMockCase(value, id);
+            return mockResponse({
+              fileId,
+              revision: 1,
+              status: "uploaded",
+              processingQueued: true,
+            });
+          });
+        } catch (cause) {
+          await originals(`${owner}/${id}/${fileId}`, null);
+          throw cause;
+        }
+        for (const part of input.manifest.parts)
+          await originals(`${owner}/${id}/${fileId}/part-${part.index}`, null);
+        return result;
+      }
       if (request.method === "POST" && kind === "retry") {
         consumeMockFault(runtime, "files.retry");
         return runtime.update((value) => {
@@ -171,18 +310,24 @@ export function createFilesMock(runtime: WorkspaceMockRuntime) {
           file.status = "processing";
           file.coverage = "API 예시 재처리 중";
           value.fileProcessing ??= {};
-          value.fileProcessing[file.id] = { at: Date.now() + 1000, failed: false };
+          value.fileProcessing[fileId] = { at: Date.now() + 1000, failed: false };
           touchMockCase(value, id);
           return mockResponse(file);
         });
       }
       if (request.method === "DELETE" && !kind) {
         consumeMockFault(runtime, "files.remove");
-        await mockOriginalStore(`${owner}/${id}/${fileId}`, null);
+        await originals(`${owner}/${id}/${fileId}`, null);
+        for (const part of Object.values(upload?.parts ?? {}))
+          await originals(`${owner}/${id}/${fileId}/part-${part.index}`, null);
         return runtime.update((value) => {
           requireMockCase(value, id, true);
           value.files[id] = value.files[id]?.filter((file) => file.id !== fileId) ?? [];
-          if (fileId) delete value.fileProcessing?.[fileId];
+          delete value.fileProcessing?.[fileId];
+          delete value.fileUploads?.[fileId];
+          delete value.fileExtractions?.[fileId];
+          for (const [key, replay] of Object.entries(value.fileUploadReceipts ?? {}))
+            if (replay.fileId === fileId) delete value.fileUploadReceipts?.[key];
           if (value.reports?.[id])
             value.reports[id].excludedFileIds = value.reports[id].excludedFileIds.filter(
               (item) => item !== fileId,

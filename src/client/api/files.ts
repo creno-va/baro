@@ -62,7 +62,7 @@ async function hash(blob: Blob) {
     (b) => b.toString(16).padStart(2, "0"),
   ).join("");
 }
-export function validateUpload(file: File) {
+export function validateUpload(file: Pick<File, "name" | "size" | "type">) {
   const media =
     file.type.startsWith("audio/") ||
     file.type.startsWith("video/") ||
@@ -85,6 +85,10 @@ export function validateUpload(file: File) {
 }
 export function createFilesApi(request: WorkspaceTransport) {
   const revisions = new Map<string, number>();
+  const uploads = new Map<
+    string,
+    { expectedRevision: number; key: string; session?: z.infer<typeof v2UploadSessionSchema> }
+  >();
   const base = (id: string) => `/api/v2/cases/${encodeURIComponent(id)}`;
   async function workspaceRevision(id: string) {
     const value = z
@@ -146,35 +150,44 @@ export function createFilesApi(request: WorkspaceTransport) {
   }
   async function upload(id: string, file: File): Promise<FileView> {
     validateUpload(file);
-    const probe = await request(`${base(id)}/files`, { method: "OPTIONS" });
-    // Shared mock transport advertises multipart support; real upload uses the existing chunk contract.
-    if (probe.headers.get("x-baro-mock") === "true") {
-      const form = new FormData();
-      form.set("file", file);
-      return fileViewSchema.parse(
-        await workspaceJson(request, `${base(id)}/files`, {
-          method: "POST",
-          body: form,
-          headers: { "idempotency-key": crypto.randomUUID() },
-        }),
-      );
-    }
-    const expectedRevision = await workspaceRevision(id);
+    const contentHash = await hash(file);
+    const identity = `${id}:${file.name}:${file.size}:${contentHash}`;
+    const attempt = uploads.get(identity) ?? {
+      expectedRevision: await workspaceRevision(id),
+      key: crypto.randomUUID(),
+    };
+    uploads.set(identity, attempt);
     const input = {
       name: file.name,
       byteLength: file.size,
-      mediaType: file.type || "application/octet-stream",
+      mediaType: file.type.split(";")[0]?.trim().toLowerCase() || "application/octet-stream",
       autoProcessConsentVersion: CURRENT_POLICY_VERSIONS.aiNoticeVersion,
     };
-    const session = v2UploadSessionSchema.parse(
-      await workspaceJson(request, `${base(id)}/files`, {
-        ...workspaceMutation(`${base(id)}/files`, input),
-        headers: {
-          ...workspaceMutation(`${base(id)}/files`, input).headers,
-          "if-match": String(expectedRevision),
-        },
-      }),
-    );
+    let session = attempt.session;
+    if (!session) {
+      try {
+        session = v2UploadSessionSchema.parse(
+          await workspaceJson(request, `${base(id)}/files`, {
+            method: "POST",
+            body: JSON.stringify(input),
+            headers: {
+              "content-type": "application/json",
+              "idempotency-key": attempt.key,
+              "if-match": String(attempt.expectedRevision),
+            },
+          }),
+        );
+        attempt.session = session;
+      } catch (cause) {
+        if ((cause as { code?: string }).code === "CONFLICT") uploads.delete(identity);
+        throw cause;
+      }
+    }
+    const existing = (await list(id)).find((item) => item.id === session.fileId);
+    if (existing && existing.status !== "uploading") {
+      uploads.delete(identity);
+      return existing;
+    }
     const parts = [];
     for (let start = 0, index = 0; start < file.size; start += session.chunkBytes, index++) {
       const chunk = file.slice(start, start + session.chunkBytes);
@@ -193,7 +206,7 @@ export function createFilesApi(request: WorkspaceTransport) {
       );
       parts.push(part);
     }
-    const manifest = { byteLength: file.size, contentHash: await hash(file), parts };
+    const manifest = { byteLength: file.size, contentHash, parts };
     await workspaceJson(
       request,
       `${base(id)}/files/${encodeURIComponent(session.fileId)}/complete`,
@@ -205,6 +218,7 @@ export function createFilesApi(request: WorkspaceTransport) {
     );
     const result = (await list(id)).find((item) => item.id === session.fileId);
     if (!result) throw workspaceError("UNAVAILABLE", "파일 저장 상태를 다시 확인해 주세요.", true);
+    uploads.delete(identity);
     return result;
   }
   return {

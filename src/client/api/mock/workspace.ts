@@ -1,3 +1,5 @@
+import { ZodError } from "zod";
+import type { V2UploadPart, V2UploadSession } from "../../../contracts/v2";
 import type {
   ActionView,
   CaseView,
@@ -23,6 +25,18 @@ export type WorkspaceMockState = {
   faults?: Record<string, string[]>;
   workspaceReceipts?: Record<string, unknown>;
   fileProcessing?: Record<string, { at: number; failed: boolean }>;
+  fileExtractions?: Record<string, string>;
+  fileUploads?: Record<
+    string,
+    {
+      session: V2UploadSession;
+      caseId: string;
+      ownerId: string;
+      parts: Record<number, V2UploadPart>;
+      failedProcessing: boolean;
+    }
+  >;
+  fileUploadReceipts?: Record<string, { fileId: string; fingerprint: string }>;
   reports?: Record<string, { stale: boolean; excludedFileIds: string[] }>;
   [namespace: string]: unknown;
 };
@@ -46,7 +60,9 @@ export function mockFailure(cause: unknown) {
   const error =
     cause instanceof WorkspaceMockError
       ? cause
-      : new WorkspaceMockError("UNAVAILABLE", "예시 응답을 저장하지 못했어요.", true);
+      : cause instanceof ZodError || cause instanceof SyntaxError
+        ? new WorkspaceMockError("VALIDATION_ERROR", "입력 내용을 확인해 주세요.")
+        : new WorkspaceMockError("UNAVAILABLE", "예시 응답을 저장하지 못했어요.", true);
   const status =
     error.code === "UNAUTHENTICATED"
       ? 401
@@ -140,6 +156,7 @@ export function ensureMockWorkspace(state: WorkspaceMockState, id: string) {
     const pending = state.fileProcessing?.[file.id];
     if (pending && pending.at <= Date.now()) {
       file.status = pending.failed ? "failed" : "ready";
+      file.extractedText = pending.failed ? "" : (state.fileExtractions?.[file.id] ?? "");
       file.coverage = pending.failed
         ? "예시 처리 실패 · 추출 결과 없음"
         : "API 예시 처리 완료 · 실제 OCR·ASR·영상 처리는 수행되지 않았어요.";

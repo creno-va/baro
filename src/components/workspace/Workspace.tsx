@@ -34,9 +34,20 @@ const fileStatus: Record<FileView["status"], string> = {
 };
 function problem(cause: unknown) {
   const error = cause as { code?: string; message?: string; retryable?: boolean };
+  const known = [
+    "UNAUTHENTICATED",
+    "CONSENT_REQUIRED",
+    "NOT_FOUND",
+    "CONFLICT",
+    "QUOTA_EXCEEDED",
+    "VALIDATION_ERROR",
+    "UNAVAILABLE",
+  ].includes(error?.code ?? "");
   return {
-    code: error?.code ?? "UNAVAILABLE",
-    message: error?.message ?? "요청을 완료하지 못했어요. 잠시 후 다시 시도해 주세요.",
+    code: known ? (error.code ?? "UNAVAILABLE") : "UNAVAILABLE",
+    message: known
+      ? (error.message ?? "요청을 완료하지 못했어요.")
+      : "요청을 완료하지 못했어요. 잠시 후 다시 시도해 주세요.",
     retryable: error?.retryable !== false,
   };
 }
@@ -66,6 +77,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
   const [entry, setEntry] = useState<Partial<TimelineView> | null>(null);
   const [original, setOriginal] = useState<{ url: string; type: string } | null>(null);
   const [uploadConsent, setUploadConsent] = useState(false);
+  const [retryUploads, setRetryUploads] = useState<File[]>([]);
   const lock = useRef(false);
   const mounted = useRef(true);
   const uploadInput = useRef<HTMLInputElement>(null);
@@ -161,14 +173,23 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
       setNotice("메시지를 저장했어요.");
     });
   }
-  async function upload(files: FileList | null) {
+  async function upload(files: FileList | File[] | null) {
     if (!files?.length) return;
+    const chosen = Array.from(files);
     await run("upload", async () => {
-      for (const file of Array.from(files)) {
-        await api.files.upload(caseId, file);
-        await load();
+      let completed = 0;
+      try {
+        for (const file of chosen) {
+          await api.files.upload(caseId, file);
+          completed++;
+          await load();
+        }
+        setRetryUploads([]);
+        setNotice("자료를 저장했어요. 처리 상태와 확인 가능한 범위를 확인해 주세요.");
+      } catch (cause) {
+        setRetryUploads(chosen.slice(completed));
+        throw cause;
       }
-      setNotice("자료를 저장했어요. 처리 상태와 확인 가능한 범위를 확인해 주세요.");
     });
     if (uploadInput.current) uploadInput.current.value = "";
   }
@@ -239,6 +260,11 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                 : "입력한 내용은 이 화면에 남아 있어요."}
           </p>
           <div className="workspace-buttons">
+            {!!retryUploads.length && (
+              <Button variant="outline" disabled={!!busy} onClick={() => void upload(retryUploads)}>
+                업로드 다시 시도
+              </Button>
+            )}
             {error.code === "UNAUTHENTICATED" ? (
               <ButtonLink href={`/login?returnTo=${encodeURIComponent(base)}`}>로그인</ButtonLink>
             ) : error.code === "CONSENT_REQUIRED" ? (
@@ -593,11 +619,24 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                             disabled={!!busy || readonly}
                             onChange={(event) => {
                               const done = event.target.checked;
+                              if (lock.current) return;
+                              const previous = view;
+                              apply({
+                                ...view,
+                                actions: view.actions.map((item) =>
+                                  item.id === action.id ? { ...item, done } : item,
+                                ),
+                              });
                               void run(action.id, async () => {
-                                apply(await api.workspace.setAction(caseId, action.id, done));
-                                setNotice(
-                                  done ? "완료 표시를 저장했어요." : "완료 표시를 해제했어요.",
-                                );
+                                try {
+                                  apply(await api.workspace.setAction(caseId, action.id, done));
+                                  setNotice(
+                                    done ? "완료 표시를 저장했어요." : "완료 표시를 해제했어요.",
+                                  );
+                                } catch (cause) {
+                                  apply(previous);
+                                  throw cause;
+                                }
                               });
                             }}
                           />
