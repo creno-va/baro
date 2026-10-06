@@ -166,10 +166,15 @@ function validate<T>(schema: z.ZodType<T>, raw: unknown): T {
 async function metadata(id: string) {
   return metadataSchema.parse(await request("cases.intake", { id }, { path: path(id, "intake") }));
 }
+// Schema knowledge contains no case content or permissions. A confirmed v2
+// denial must not become an unrelated legacy request or its network failure.
+const knownV2 = new Set<string>();
 async function workspace(id: string) {
-  return v2WorkspaceSchema.parse(
+  const value = v2WorkspaceSchema.parse(
     await request("cases.workspace", { id }, { path: path(id, "workspace") }),
   );
+  knownV2.add(id);
+  return value;
 }
 function view(w: Workspace, m?: Metadata, summary = ""): CaseView {
   return {
@@ -413,6 +418,7 @@ export const casesApi = {
       w = await workspace(id);
     } catch (cause) {
       if (!(cause instanceof ApiError && cause.code === "NOT_FOUND")) throw cause;
+      if (knownV2.has(id)) throw cause;
       const old = caseDetailResponseSchema.parse(
         await request("cases.getLegacy", { id }, { path: `/api/cases/${encodeURIComponent(id)}` }),
       );

@@ -62,59 +62,65 @@ for (const viewport of [
       let droppedSave = false,
         droppedConfirm = false,
         droppedTimeline = false;
+      let apiInFlight = 0;
       const mutations: { path: string; body: string | null; key: string | undefined }[] = [];
       await context.route("**/api/**", async (route) => {
         const request = route.request();
         const path = new URL(request.url()).pathname;
-        if (path === "/api/me/session" && sessionUnavailable) {
-          await route.abort("failed");
-          return;
-        }
         if (!path.startsWith("/api/")) {
           await route.continue();
           return;
         }
-        const response = await context.request.fetch(
-          new URL(new URL(request.url()).pathname + new URL(request.url()).search, info.origin)
-            .href,
-          {
-            method: request.method(),
-            headers: { ...request.headers(), origin: browserOrigin },
-            ...(request.postData() ? { data: request.postData() ?? "" } : {}),
-          },
-        );
-        if (request.method() !== "GET")
-          mutations.push({
-            path,
-            body: request.postData(),
-            key: request.headers()["idempotency-key"],
-          });
-        if (
-          response.ok() &&
-          request.method() === "PUT" &&
-          path.endsWith("/summary") &&
-          !droppedSave
-        ) {
-          droppedSave = true;
-          await route.abort("failed");
-          return;
+        ++apiInFlight;
+        try {
+          if (path === "/api/me/session" && sessionUnavailable) {
+            await route.abort("failed");
+            return;
+          }
+          const response = await context.request.fetch(
+            new URL(new URL(request.url()).pathname + new URL(request.url()).search, info.origin)
+              .href,
+            {
+              method: request.method(),
+              headers: { ...request.headers(), origin: browserOrigin },
+              ...(request.postData() ? { data: request.postData() ?? "" } : {}),
+            },
+          );
+          if (request.method() !== "GET")
+            mutations.push({
+              path,
+              body: request.postData(),
+              key: request.headers()["idempotency-key"],
+            });
+          if (
+            response.ok() &&
+            request.method() === "PUT" &&
+            path.endsWith("/summary") &&
+            !droppedSave
+          ) {
+            droppedSave = true;
+            await route.abort("failed");
+            return;
+          }
+          if (response.ok() && path.endsWith("/summary/confirm") && !droppedConfirm) {
+            droppedConfirm = true;
+            await route.abort("failed");
+            return;
+          }
+          if (
+            response.ok() &&
+            request.method() === "POST" &&
+            path.endsWith("/timeline") &&
+            !droppedTimeline
+          ) {
+            droppedTimeline = true;
+            await route.abort("failed");
+            return;
+          }
+          await route.fulfill({ response });
+        } finally {
+          --apiInFlight;
         }
-        if (response.ok() && path.endsWith("/summary/confirm") && !droppedConfirm) {
-          droppedConfirm = true;
-          await route.abort("failed");
-          return;
-        }
-        if (
-          response.ok() &&
-          request.method() === "POST" &&
-          path.endsWith("/timeline") &&
-          !droppedTimeline
-        ) {
-          droppedTimeline = true;
-          await route.abort("failed");
-          return;
-        }
-        await route.fulfill({ response });
       });
       const base = `/cases/${info.id}`;
       await page.goto(`${base}/summary`);
@@ -143,10 +149,16 @@ for (const viewport of [
       await page.evaluate(() => window.dispatchEvent(new Event("focus")));
       await expect(editor).toHaveValue("네트워크 장애 후에도 보존할 요약 초안");
       await editor.fill("다른 계정으로 저장되면 안 되는 요약 초안");
+      // Finish the same-owner reload before replacing its signed cookie; the
+      // following focus is the account-change verification being asserted.
+      await expect.poll(() => apiInFlight, { timeout: 15000 }).toBe(0);
       await context.addCookies([info.foreignCookie]);
       await page.evaluate(() => window.dispatchEvent(new Event("focus")));
       await expect(editor).not.toBeVisible();
-      await expect(page.getByRole("alert")).toBeVisible();
+      await expect(page.getByRole("alert")).toContainText("요청한 내용을 찾지 못했어요.", {
+        timeout: 15000,
+      });
+      await expect.poll(() => apiInFlight, { timeout: 15000 }).toBe(0);
       await context.addCookies([info.ownerCookie]);
       await page.evaluate(() => window.dispatchEvent(new Event("focus")));
       await expect(editor).toHaveValue("직접 수정한 합성 브라우저 요약입니다.");

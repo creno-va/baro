@@ -13,6 +13,7 @@
 | --- | --- |
 | 요약 PUT 또는 확인 POST가 실제 저장 후 응답만 유실 | 원래 intake/summary revision, 본문, idempotency key로 재전송한다. 성공 응답과 authoritative 조회가 끝나기 전에는 요청을 해제하지 않는다. 요약 화면의 background refresh도 실패한 요청 revision을 교체하지 않는다. |
 | 같은 key의 변경된 본문 / 새 key의 오래된 revision / 다른 owner | 실제 Hono API가 각각 409 / 409 / 404를 반환한다. 저장 revision이 다시 증가하지 않는다. |
+| 확인된 v2 사건의 owner 접근 거부 | 요약/질문 adapter도 v1 fallback을 보내지 않고 실제 404를 유지한다. Hono의 foreign-owner GET 뒤 legacy 요청이 없음을 검사하며 기존 v1 사건 fallback은 보존한다. |
 | 다른 탭의 로그아웃·계정 변경·역할 변경 | 고객 screen boundary가 identity epoch를 폐기하고 요약·확인 checkbox·메시지·자료·파일 input·초안·대화상자를 지운다. mutation 전후 세션을 확인하고 이전 epoch의 늦은 결과를 적용하지 않는다. |
 | session 조회의 일시적 네트워크 장애 | 정상 owner의 초안을 보존하고 쓰기를 보내지 않는다. 외부 변경 재검증이 불가능하면 UI를 가린 채 초안을 보관하며 같은 owner를 확인한 뒤 복구한다. 실제 401/동의 거부/404와 구분한다. 명시적인 Better Auth signout 알림은 네트워크 상태와 관계없이 즉시 지운다. |
 | 기존 v1 질문의 저장 전 답변과 focus 재검증 | 기존 CaseDetail을 가리고 inert 상태로 보존해 같은 owner 확인 시 답변을 복구한다. 실제 계정 변경/접근 거부는 view를 없애 기존 subtree도 제거한다. 기존 analysis browser에서 모름/건너뛰기 답변의 focus 후 보존을 재현·검사한다. |

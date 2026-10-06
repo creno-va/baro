@@ -66,8 +66,11 @@ for (const operation of ["saveSummary", "confirmSummary"] as const) {
     };
     const original = globalThis.fetch;
     const writes: { path: string; init: RequestInit }[] = [];
+    const reads: string[] = [];
+    let cookie = f.owner.cookie;
     globalThis.fetch = (async (path, init) => {
-      const response = await f.transport(String(path), init);
+      const response = await f.transport(String(path), init, cookie);
+      if (!init?.method || init.method === "GET") reads.push(String(path));
       if (init?.method === "PUT" || init?.method === "POST") {
         expect(response.ok).toBe(true);
         writes.push({ path: String(path), init });
@@ -107,6 +110,9 @@ for (const operation of ["saveSummary", "confirmSummary"] as const) {
       ).toBe(409);
       const foreign = await seedTestSession(f.db, { consent: true });
       expect((await f.transport(first.path, first.init, foreign.cookie)).status).toBe(404);
+      cookie = foreign.cookie;
+      await expect(casesApi.get(id)).rejects.toMatchObject({ code: "NOT_FOUND" });
+      expect(reads).not.toContain(`/api/cases/${id}`);
       expect((await f.service.find(f.owner.userId, id)).workspaceRevision).toBe(
         committed.workspaceRevision,
       );
