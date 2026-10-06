@@ -52,3 +52,17 @@ test("shared UI excludes corpus flows and a missing feature test fails explicitl
     "BROWSER_FEATURE_TEST_MISSING",
   );
 });
+
+test("source-only report and global router changes include the real download consumer", () => {
+  const download = "tests/browser/report-real-download.e2e.ts";
+  const available = [...browserTests, download];
+  for (const file of [
+    "src/server/modules/reports/storage.ts",
+    "src/server/api/v2/reports.ts",
+    "src/server/api/index.ts",
+    "src/worker.ts",
+  ]) {
+    expect(browserTargets([file], available)).toContain(download);
+    expect(browserTargets([file], available)).not.toContain("tests/browser/evals.e2e.ts");
+  }
+});

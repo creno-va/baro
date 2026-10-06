@@ -22,7 +22,7 @@ export function browserTargets(files: string[], available: string[]): string[] {
     for (const path of available) selected.add(path);
   const rules: [RegExp, RegExp][] = [
     [
-      /src\/(layouts\/|styles\/(global|shell)|server\/router\.|components\/ui\/|client\/api\/(core|types|index|mock\/runtime))/,
+      /src\/(worker\.|layouts\/|styles\/(global|shell)|server\/(router\.|api\/index)|components\/ui\/|client\/api\/(core|types|index|mock\/runtime))/,
       /\.e2e\.ts$/,
     ],
     [
@@ -39,7 +39,7 @@ export function browserTargets(files: string[], available: string[]): string[] {
     ],
     [
       /src\/(styles\/(reports|settings)\.css|pages\/(settings|help|polic)|components\/reports\/|components\/AccountSettings|client\/api\/(?:mock\/)?(account|reports)|server\/(api\/(account-delete|v2\/reports)|modules\/(deletion|reports|usage)\/))/,
-      /\/(settings|reports|account)\.e2e\.ts$/,
+      /\/(settings|reports(?:-integrated)?|report-real-download|account)\.e2e\.ts$/,
     ],
     [
       /src\/(pages\/index|components\/AnalyticsChoice|server\/modules\/analytics\/)/,
@@ -115,11 +115,13 @@ export async function runBrowserTargets(targets: string[]) {
   );
   const corpusTargets = targets.filter((path) => path.endsWith("/evals.e2e.ts"));
   const customerRealTargets = targets.filter((path) => path.endsWith("/customer-real.e2e.ts"));
+  const reportRealTargets = targets.filter((path) => path.endsWith("/report-real-download.e2e.ts"));
   const regularTargets = targets.filter(
     (path) =>
       !mockTargets.includes(path) &&
       !corpusTargets.includes(path) &&
-      !customerRealTargets.includes(path),
+      !customerRealTargets.includes(path) &&
+      !reportRealTargets.includes(path),
   );
   if (regularTargets.length) {
     const child = Bun.spawn(["bunx", "playwright", "test", ...regularTargets], {
@@ -144,6 +146,20 @@ export async function runBrowserTargets(targets: string[]) {
         "--config",
         "tests/browser/customer-real.config.ts",
         ...customerRealTargets,
+      ],
+      { stdout: "inherit", stderr: "inherit" },
+    );
+    if (await child.exited) process.exit(1);
+  }
+  if (reportRealTargets.length) {
+    const child = Bun.spawn(
+      [
+        "bunx",
+        "playwright",
+        "test",
+        "--config",
+        "tests/browser/report-real-download.config.ts",
+        ...reportRealTargets,
       ],
       { stdout: "inherit", stderr: "inherit" },
     );
