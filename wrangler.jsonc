@@ -78,6 +78,11 @@
       "name": "baro-analysis-preview",
       "binding": "ANALYSIS_WORKFLOW",
       "class_name": "AnalysisWorkflow"
+    },
+    {
+      "name": "baro-file-processing-preview",
+      "binding": "FILE_PROCESSING",
+      "class_name": "FileProcessingWorkflow"
     }
   ],
   "env": {
@@ -147,6 +152,11 @@
           "name": "baro-analysis-preview",
           "binding": "ANALYSIS_WORKFLOW",
           "class_name": "AnalysisWorkflow"
+        },
+        {
+          "name": "baro-file-processing-preview",
+          "binding": "FILE_PROCESSING",
+          "class_name": "FileProcessingWorkflow"
         }
       ],
       "r2_buckets": [
@@ -255,6 +265,11 @@
           "name": "baro-analysis-production",
           "binding": "ANALYSIS_WORKFLOW",
           "class_name": "AnalysisWorkflow"
+        },
+        {
+          "name": "baro-file-processing-production",
+          "binding": "FILE_PROCESSING",
+          "class_name": "FileProcessingWorkflow"
         }
       ],
       "r2_buckets": [

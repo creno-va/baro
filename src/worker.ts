@@ -10,6 +10,7 @@ import { reconcileDispatch } from "./server/modules/dispatch/service";
 import { reconcileFileUploads } from "./server/modules/files/reconcile";
 
 export { AnalysisWorkflow } from "./workflows/analysis";
+export { FileProcessingWorkflow } from "./workflows/file-processing";
 export { FileProcessorContainer } from "./workflows/file-processor-container";
 
 const app = new Hono<{ Bindings: Env }>();

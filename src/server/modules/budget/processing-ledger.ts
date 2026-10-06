@@ -33,6 +33,7 @@ async function inputIdentity(input: Input): Promise<string | null> {
   return runtimeDigest({ ...descriptor, wireHash });
 }
 export type ProcessingAdmission = {
+  readonly actor: Actor;
   readonly request: PaidHoldRequest;
   readonly paid: PreparedPaidHold;
   readonly inputDigest: string;
@@ -172,7 +173,12 @@ export function createProcessingBudgetService(options: {
       executions.delete(hash);
     }
     if (!paid) return null;
-    const result = Object.freeze({ request: paid.request, paid, inputDigest });
+    const result = Object.freeze({
+      actor: Object.freeze(a),
+      request: paid.request,
+      paid,
+      inputDigest,
+    });
     admissions.add(result);
     return result;
   }
@@ -240,7 +246,7 @@ export function createProcessingBudgetService(options: {
             !admission ||
             admission.request.jobId !== lease.jobId ||
             !(await authorize(access)) ||
-            !(await runtime.reserveAttempt(actor(), lease, admission.paid))
+            !(await runtime.reserveAttempt(admission.actor, lease, admission.paid))
           )
             return null;
           request = admission.request;

@@ -298,6 +298,21 @@ Containers 조회는 최초 Workers Paid 필요 오류를 반환했다. 사용�
 resource 배포, 실제 처리/Whisper/vision, 비용·청구·최대 자료 측정 증거는 아니다.
 구독 API는 현재 Wrangler 인증 범위에서 HTTP403이며 개인 결제정보·인증값은 기록하지 않았다.
 
+## 2026-10-06 처리 이미지의 실제 Linux 검증
+
+#59 작업 소스 `0ef114d69194736719cd590e9d6ca1084f27cf8f`의
+[PR CI](https://github.com/creno-va/baro/actions/runs/37417158857)는 성공했다.
+linux/amd64 이미지의 실제 빌드와 네트워크를 차단한 native document/image/audio/video
+fixture가 성공했다. 장면 전환과 31초 영상의 두 처리 구간에서 절대 timestamp/frame index,
+구간 경계, 누락 없는 샘플을 검사했다. 장면 후보 threshold와 동일 임시 디렉터리의
+출력 재사용 오류를 수정한 실제 Linux 결과다. Source/browser 검사와 최종 Quality gate도
+같은 SHA에서 성공했다. Native 검사는 독립 CI job으로 병렬 실행하며 두 job 성공이
+최종 Quality gate의 필수 조건이다.
+
+이는 합성 자료의 실제 native 실행 증거다. 이후 추가한 비용·공개 사본·Workflow 연결의
+최종 소스 검증, Cloudflare Container resource 배포와 live 처리/ASR/vision, 실제 청구와
+전 역할 UI는 별도 검증이 필요하다. #59/#60을 완료하거나 외부 gate를 해제하지 않았다.
+
 ## 최종 감사
 
 각 원래 Goal 항목과 PRD 요구사항을 위 ledger 및 UX 시연에 대응시킨다. 누락된 기능이나

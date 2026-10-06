@@ -34,7 +34,14 @@ async function nativeFailure(response: Response): Promise<Response> {
       parsed !== null &&
       "code" in parsed &&
       typeof parsed.code === "string" &&
-      ["UNSUPPORTED_FORMAT", "INVALID_MEDIA", "LIMIT", "OUTPUT_LIMIT"].includes(parsed.code)
+      [
+        "UNSUPPORTED_FORMAT",
+        "UNSUPPORTED_TIMELINE",
+        "INVALID_UNIT",
+        "INVALID_MEDIA",
+        "LIMIT",
+        "OUTPUT_LIMIT",
+      ].includes(parsed.code)
     )
       return failure(parsed.code, 422);
     return failure("PROCESSOR_UNAVAILABLE", 503);
@@ -60,10 +67,11 @@ export async function proxyProcessorRequest(
     url.search ||
     (!ready &&
       (request.method !== "POST" ||
-        !["/probe", "/process"].includes(url.pathname) ||
+        !["/probe", "/process", "/sanitize"].includes(url.pathname) ||
         !bytes ||
         !/^[1-9]\d{0,9}$/.test(bytes) ||
         Number(bytes) > maximumBytes ||
+        (url.pathname === "/sanitize" && Number(bytes) > 100_000_000) ||
         !hash ||
         !/^[a-f0-9]{64}$/.test(hash) ||
         !request.body ||
@@ -122,7 +130,7 @@ export async function proxyProcessorRequest(
     }
     const contentType = response.headers.get("content-type") ?? "";
     if (
-      !(url.pathname === "/process"
+      !(["/process", "/sanitize"].includes(url.pathname)
         ? contentType === "application/x-ndjson"
         : contentType.startsWith("application/json"))
     ) {

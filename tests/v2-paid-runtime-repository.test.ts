@@ -308,17 +308,18 @@ async function uploadProbeFixture() {
   return { ...f, uploadId, fileId, probes, prepare, containerPricing: completePricing };
 }
 
-test("processing cost bridge dispatches only the actual attached hold and retains unmetered native exposure", async () => {
+test("processing cost bridge uses advancing time, restores actual admission and retains additive unknown exposure", async () => {
   const f = await uploadProbeFixture();
   const context = await f.probes.context(f.actor, f.uploadId, 1);
   if (!context) throw new Error("synthetic context missing");
   const jobId = crypto.randomUUID();
   const runId = crypto.randomUUID();
+  let ticks = 0;
   const options: Parameters<typeof createProcessingBudgetService>[0] = {
     core: f.core,
     environment: "preview",
     ownerId: f.actor.ownerId,
-    clock: () => NOW,
+    clock: () => new Date(Date.parse(NOW) + ++ticks).toISOString(),
     binding: async () => ({
       ...context,
       jobId,
@@ -357,7 +358,7 @@ test("processing cost bridge dispatches only the actual attached hold and retain
   if (!admission) throw new Error("synthetic admission missing");
   expect(f.db.sqlite.query("SELECT count(*) n FROM v2_paid_holds").get()).toEqual({ n: 0 });
   const lease = await f.probes.attach(
-    f.actor,
+    admission.actor,
     { uploadId: f.uploadId, uploadRevision: 1, leaseUntil: "2026-10-06T00:05:00.000Z" },
     admission.paid,
   );
@@ -374,6 +375,15 @@ test("processing cost bridge dispatches only the actual attached hold and retain
   expect(await service.costs(lease, admission).before(input, access)).toBeNull();
   await costs.after({ ...permit }, { transport: "response", rawUsage: { chargedUsd: "0" } });
   await costs.after(permit, { transport: "response" });
+  expect(await costs.before(input, access)).toBeNull();
+  const next = await costs.before(
+    { ...input, identity: `process:${HASH}:1:0`, action: "container_process" },
+    access,
+  );
+  expect(next).not.toBeNull();
+  expect(
+    f.db.sqlite.query("SELECT count(*) n FROM v2_cost_attempts WHERE state='reserved'").get(),
+  ).toEqual({ n: 2 });
   expect(
     f.db.sqlite.query("SELECT state FROM v2_cost_attempts WHERE id=?").get(permit.attemptId),
   ).toEqual({ state: "reserved" });
