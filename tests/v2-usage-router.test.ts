@@ -43,5 +43,5 @@ test("Worker production gate blocks usage before bindings and keeps private resp
   } as Env);
   expect(response.status).toBe(503);
   expect(response.headers.get("cache-control")).toBe("private, no-store");
-  expect((await response.json()).error.code).toBe("BETA_NOT_OPEN");
+  expect(await response.json()).toMatchObject({ error: { code: "BETA_NOT_OPEN" } });
 });
