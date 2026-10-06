@@ -28,13 +28,14 @@ function r2() {
   let getHook: (() => Promise<void>) | undefined;
   let deleteFails = false;
   let putAmbiguous = false;
+  let wrongReceipt = false;
   const port = {
     async put(key: string, value: Uint8Array<ArrayBuffer>) {
       calls.put++;
       objects.set(key, value.slice());
       await putHook?.();
       if (putAmbiguous) throw new Error("synthetic transport");
-      return { key, size: value.byteLength };
+      return { key, size: value.byteLength + (wrongReceipt ? 1 : 0) };
     },
     async get(key: string) {
       calls.get++;
@@ -67,6 +68,9 @@ function r2() {
     },
     setPutAmbiguous(v: boolean) {
       putAmbiguous = v;
+    },
+    setWrongReceipt(v: boolean) {
+      wrongReceipt = v;
     },
   };
 }
@@ -267,6 +271,23 @@ test("concurrent part admission publishes exactly one ciphertext/receipt without
   expect(f.db.sqlite.query("SELECT count(*) AS n FROM v2_upload_parts").get()).toEqual({ n: 1 });
   expect(f.bucket.calls.put).toBe(1);
   expect(await put()).toMatchObject({ index: 0, byteLength: 5 });
+});
+test("incorrect actual R2 put size cannot promote a pending intent to a stored receipt", async () => {
+  const f = await fixture();
+  const s = await reserved(f, 5);
+  f.bucket.setWrongReceipt(true);
+  await expect(
+    f.service.putPart(
+      f.actor.ownerId,
+      f.workspaceId,
+      s.fileId,
+      s.uploadSession,
+      0,
+      new Response(new Uint8Array(5)).body,
+    ),
+  ).rejects.toThrow("STORAGE_UNAVAILABLE");
+  expect(f.db.sqlite.query("SELECT count(*) AS n FROM v2_upload_parts").get()).toEqual({ n: 0 });
+  expect(f.db.sqlite.query("SELECT state FROM v2_blobs").get()).toEqual({ state: "deleting" });
 });
 test("prepared intent survives interruption, cleanup preserves live upload and retry resumes", async () => {
   const f = await fixture();

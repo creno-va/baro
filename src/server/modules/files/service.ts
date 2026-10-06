@@ -465,7 +465,8 @@ export function createFilesService(core: V2Core, deps: FileServiceDependencies) 
             cacheControl: "private, no-store",
           },
         });
-        if (!stored) throw new FileError("STORAGE_UNAVAILABLE");
+        if (!stored || stored.key !== objectKey || stored.size !== bytes.byteLength)
+          throw new FileError("STORAGE_UNAVAILABLE");
         written = true;
         await consent(ownerId);
         if (
