@@ -7,7 +7,7 @@ export default defineConfig({
   webServer: {
     env: { BARO_UI_TEST_FIXTURE: "true", BARO_C_TEST_API: "true" },
     command:
-      "bun run dev -- --config tests/helpers/workspace.astro.config.ts --host 127.0.0.1 --port 4342",
+      "bun run dev -- --ignore-lock --config tests/helpers/workspace.astro.config.ts --host 127.0.0.1 --port 4342",
     url: "http://127.0.0.1:4342/cases/synthetic-case",
     reuseExistingServer: true,
     timeout: 120000,
