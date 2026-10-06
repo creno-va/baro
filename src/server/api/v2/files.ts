@@ -7,6 +7,7 @@ import { createV2Core, type V2Core } from "../../db/v2-core";
 import { ProcessingError } from "../../modules/file-processing/protocol";
 import { FileError } from "../../modules/files/binary";
 import { createFilesService, type FileServiceDependencies } from "../../modules/files/service";
+import { readWorkspaceFile } from "../../modules/files/workspace-read";
 import { caseAccess } from "../case-access";
 import { type ApiEnvironment, errorBody } from "../errors";
 
@@ -107,6 +108,18 @@ export function createFilesApi(
       201,
     );
   });
+  app.get("/:caseId/files/:fileId/upload-session", async (c) => {
+    const access = await caseAccess(c, false, true);
+    if (access.response) return access.response;
+    z.strictObject({}).parse(c.req.query());
+    return c.json(
+      await (await service(c.env, access.ownerId)).resumeUpload(
+        access.ownerId,
+        c.req.param("caseId"),
+        c.req.param("fileId"),
+      ),
+    );
+  });
   app.put("/:caseId/files/:fileId/parts/:partNumber", async (c) => {
     const access = await caseAccess(c, true, true);
     if (access.response) {
@@ -142,6 +155,15 @@ export function createFilesApi(
         c.req.param("fileId"),
         await c.req.json(),
       ),
+    );
+  });
+  app.get("/:caseId/files/:fileId", async (c) => {
+    const access = await caseAccess(c);
+    if (access.response) return access.response;
+    z.strictObject({}).parse(c.req.query());
+    const core = createV2Core(c.env.DB, await createCaseDataCipher(c.env));
+    return c.json(
+      await readWorkspaceFile(core, access.ownerId, c.req.param("caseId"), c.req.param("fileId")),
     );
   });
   app.get("/:caseId/files/:fileId/content", async (c) => {

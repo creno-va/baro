@@ -1,14 +1,14 @@
 ---
 // biome-ignore lint/correctness/noUnusedImports: Astro template reads component.
-import { Workspace } from "../../components/workspace/Workspace";
-import { opaqueIdSchema } from "../../contracts";
+import { Workspace } from "../../../components/workspace/Workspace";
+import { opaqueIdSchema } from "../../../contracts";
 // biome-ignore lint/correctness/noUnusedImports: Astro template reads component.
-import CaseLayout from "../../layouts/CaseLayout.astro";
-import "../../styles/workspace.css";
+import CaseLayout from "../../../layouts/CaseLayout.astro";
+import "../../../styles/workspace.css";
 
 const identity = opaqueIdSchema.safeParse(Astro.params.caseId);
 if (!identity.success) return Astro.redirect("/cases");
 // biome-ignore lint/correctness/noUnusedVariables: Astro template reads frontmatter.
 const caseId = identity.data;
 ---
-<CaseLayout title="사건 작업 공간"><Workspace caseId={caseId} client:load /></CaseLayout>
+<CaseLayout title="다음 행동"><Workspace caseId={caseId} tab="actions" client:load /></CaseLayout>
