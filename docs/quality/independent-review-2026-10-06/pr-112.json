@@ -1,0 +1,46 @@
+{
+  "baseRefName": "codex/102-api-mock-shell",
+  "body": "확인한 사건에서 대화·자료·타임라인·다음 행동을 이어서 정리하는 동일 제품 화면을 추가합니다. `/cases/:id` 및 `/files`, `/timeline`, `/actions`에서 채팅 전송 실패/응답 실패 재시도, 업로드·처리 상태·추출 결과·원본 확인·삭제, 행동 체크와 일정 추가/편집이 저장된 API 상태를 공유합니다. 리포트는 D의 `/cases/:id/reports`, 변호사 탐색은 `/lawyers`로 연결하며 기존 v1 결과 UI를 보존합니다.\n\nC domain factories는 native Request/Response transport를 주입받습니다. UI에 mock 분기나 fixture import를 넣지 않았습니다. mock handlers는 공통 사건·자료·대화 namespace를 사용하고 원본 binary는 IndexedDB에 보존합니다. 업로드는 mock/real에서 동일한 JSON 예약→PUT parts→POST complete 흐름을 사용합니다. 전송 실패는 같은 예약으로 재시도하고, 새로고침 후 같은 원본을 재선택하면 기존 업로드 세션에서 재개합니다. `caseOwners`와 계정/사건 삭제 상태도 검사합니다.\n\n실제 adapter는 PR100 workspace API와 기존 파일 chunk API를 재사용합니다. 받은 chat job ID만 sessionStorage에 보존해 failed currentJobId가 해제된 뒤에도 기존 job GET/retry로 새로고침 재개합니다. 기존 암호화 repository에 기반한 자료 상세 GET과 기존 파일 서비스의 session 조회를 사용하는 upload-session GET을 추가했습니다. owner/workspace/삭제 상태, 만료와 최신 동의를 확인하며 새 DB/schema/migration·외부 비용은 없습니다. 실제 처리 재시도·새 타임라인 추가 및 job ID 수신이 유실된 경우의 실패 job 검색 경로는 #65에 남습니다.\n\n검증:\n- `bun ci` 통과. 담당 단위/기존 파일 API 권한 검증 17개, 106 assertions 통과. B 실제 mock handlers와 공통 readStore/writeStore에서 생성→요약 확인→C→B revision 반영→C reload/peer owner 차단을 검증했습니다. 실제 signed session + SQLite에서 자료 상세/업로드 재개 owner·다른 사건·만료·동의 실패도 확인했습니다.\n- 동일 Workspace 컴포넌트와 실제 제품 경로에서 독립 browser contract 검증 4개 통과: 채팅 실패/재시도·reload, 행동 저장·reload, 일정 추가/편집·reload, 전송/처리 실패·재시도·원본/삭제·reload, 모바일·Escape·CSP 이미지 미리보기, 공유 owner 변경 시 이전 화면/편집기 숨김.\n- `bun run build`, `bun run cf:dry-run`, `tsc --noEmit -p tsconfig.tools.json` 통과. `bun run check`의 docs/work graph/boundaries/lint 통과, typecheck는 A account-type.test.ts:66, B IntakeQuestions.tsx:123와 미등록 `api.workspace/api.files` 참조 9곳에서 중단됩니다. 이 shared 수정/등록은 소유자에게 요청했습니다. C의 추가 source 타입 오류는 없습니다.\n- 전체 통합 CI/M0 완료는 아직 주장하지 않습니다. 실제 OAuth/AI/OCR/ASR/영상/R2 외부 smoke는 #70/#71 gate를 유지합니다.\n\nA 인계:\n1. `createWorkspaceApi(requestRaw)` / `createFilesApi(requestRaw)`를 공통 api에 등록합니다. requestRaw는 same-origin path + RequestInit을 받아 Response를 반환해야 합니다. JSON, custom headers, Blob body/response를 보존해야 합니다.\n2. `createWorkspaceMock(runtime)` / `createFilesMock(runtime)`는 native Request→Response|null handler입니다. runtime.read/update는 `WorkspaceMockState`의 session/cases/caseOwners/workspace/files/reports와 C의 receipts/processing/extractions/upload namespaces를 공통 저장소에 연결합니다. update는 callback 결과를 반환해야 합니다.\n3. D 원본 다운로드는 `mockOriginalStore(ownerId/caseId/fileId)`, 삭제는 `clearMockOriginals(ownerId,caseId?)`를 사용합니다. 후자는 임시 part-*도 지웁니다.\n4. 공통 등록 commit 이후 이 PR을 rebase하고 통합 type/browser CI를 완료합니다. base는 A `fad82f0` (B 사건 UI 포함)인 stacked PR입니다. signIn 반환 오류 수정도 가져왔습니다.\n\n시작 경로: `http://127.0.0.1:4342/cases/synthetic-case` (독립 C contract harness, 합성 입력). harness는 전용 테스트 config의 import alias로 API 경계만 교체하며 별도 `/mock` 화면을 만들지 않습니다. 공통 등록 이후 같은 제품 UI를 PUBLIC_API_MODE=mock으로 시연합니다.\n\nRefs #104\nRefs #65\nRefs #71\n",
+  "headRefName": "codex/104-workspace-ui-api-mock",
+  "headRefOid": "86acb4b99c031a12f0f38e8c3f0552a3c327f2f5",
+  "mergeCommit": {
+    "oid": "62a9504e986211d8a9d7f75435e531abac972949"
+  },
+  "mergeStateStatus": "UNKNOWN",
+  "mergedAt": "2026-10-06T12:23:20Z",
+  "number": 112,
+  "state": "MERGED",
+  "statusCheckRollup": [
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-10-06T12:20:58Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/creno-va/baro/actions/runs/37462588602/job/112265592846",
+      "name": "Isolated native media fixtures",
+      "startedAt": "2026-10-06T12:20:52Z",
+      "status": "COMPLETED",
+      "workflowName": "CI"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-10-06T12:21:59Z",
+      "conclusion": "FAILURE",
+      "detailsUrl": "https://github.com/creno-va/baro/actions/runs/37462588602/job/112265592873",
+      "name": "Source and browser checks",
+      "startedAt": "2026-10-06T12:20:51Z",
+      "status": "COMPLETED",
+      "workflowName": "CI"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-10-06T12:22:03Z",
+      "conclusion": "FAILURE",
+      "detailsUrl": "https://github.com/creno-va/baro/actions/runs/37462588602/job/112266045343",
+      "name": "Quality gate",
+      "startedAt": "2026-10-06T12:22:01Z",
+      "status": "COMPLETED",
+      "workflowName": "CI"
+    }
+  ],
+  "url": "https://github.com/creno-va/baro/pull/112"
+}

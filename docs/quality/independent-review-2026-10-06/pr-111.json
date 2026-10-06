@@ -1,0 +1,46 @@
+{
+  "baseRefName": "codex/102-api-mock-shell",
+  "body": "리포트 내용을 편집·저장하고 식별정보 가림, 자료 제외와 ZIP 원본 선택을 별도로 확인한 뒤 PDF/ZIP을 다운로드합니다. 설정에서 사용량·한도·처리 대기를 확인하고 사건/계정 삭제를 명시적으로 확인합니다. 도움말과 정책은 미승인 초안으로 표시합니다.\n\n- D 소유 파일만 직접 변경했습니다. A 공통 기반 `e31a051`까지 통합해 이 PR은 A 브랜치를 base로 둡니다.\n- UI는 `api.reports`/`api.account`를 호출합니다. C 자료와 B 사건 목록은 동일 facade에서 조회합니다.\n- `createReportsApi/createAccountApi(request)`는 native apiRequest → DTO/Blob 검증을 수행합니다. `createReportsMock/createAccountMock(runtime)`는 동일 Request → Response 경계입니다.\n- mock 편집·버전 이력·중복 요청·삭제 상태는 영속 저장소에 기록합니다. 삭제는 목록/intake/workspace/files/모든 report 버전/receipt/processing/upload reservation 상태에 반영합니다. 계정 삭제는 본인 profile·session을 제거하고 shared namespace의 peer 계정을 보존합니다.\n- 합성 PDF는 한글 화면을 담은 유효한 PDF입니다. ZIP은 UTF-8 파일명·CRC·중앙 디렉터리와 선택 원본 binary를 담습니다. PDF 가림은 원본에 적용되지 않는다는 안내를 제공합니다.\n- 실제 사용량·v1 사건 삭제·계정 삭제와 최근 OAuth 재인증의 기존 wire 계약을 소비합니다. 신규 v2 사건 삭제 도메인은 기존 DB trigger/journal/tombstone/idempotency_records를 재사용하며 schema 변경이 없습니다. 실제 report renderer/endpoint는 #66 선행 구현(#64/#65)의 main 통합 뒤 연결할 계약을 준비했고, 원격 cleanup은 #67, 정책 승인/동의는 #68/#70/#71에 남습니다.\n\n검증:\n- `bun ci` 통과.\n- `bun test tests/reports-account.test.ts`: 13 tests, 85 assertions 통과.\n- `bunx playwright test --config tests/browser/reports.config.ts`: 3 tests 통과. 수정하지 않은 제품 컴포넌트와 D domain/mock factories를 독립 test harness에서 조합해 4343에서 검증했습니다. 별도 제품 mock UI가 아닙니다.\n- 브라우저 PDF/ZIP 다운로드 → Poppler A4 한글·가림 렌더 확인 → `unzip -t` 및 선택 합성 원본 내용 확인 통과.\n- 저장/가림/제외 새로고침 유지, 삭제 취소, 사건 삭제 후 목록·자료·리포트 재조회 차단, 계정 삭제 후 session/profile 종료와 새로고침 유지, 390px 모바일, Escape·초점 복귀, 동의 오류·재시도 통과. 외부 요청 없음.\n- 실제 signed-session + OAuth callback nonce + 기존 계정 SQL 삭제/session revoke 브라우저 검증 통과(provider exchange만 합성).\n- `bun test tests/v2-case-deletion-api.test.ts`: 5 tests, 29 assertions. 소유권/Origin/invalid/closed-production/중복202/SQL rollback·retry/늦은 id 재생성 방지 통과.\n- 변경 파일 Biome 검사·`git diff --check`, tools TypeScript, `bun run build`, `bun run cf:dry-run`, `bun run db:check`(drift 없음·fresh/upgrade6 tests) 통과.\n- 실제 Astro 도움말/정책4 경로: HTTP200, 390px overflow0, axe violations0.\n\n남은 통합:\nA의 `apiRequest`/canonical mockRuntime/lazy facade를 통합했습니다. C/D source와 workspaceDeleteApi router 등록이 필요합니다. 최근 전체 check는 C/D index 미등록과 A/B 타입 오류로 실패했으며 신규 e31a051에서 registration/계정 타입 테스트 수정이 들어와 재검증 중입니다. build와 cf:dry-run은 통과했습니다. 신규 workspaceDeleteApi router mount도 A에 요청했습니다. D 자체 adapter 타입 오류는 수정했고 A session.signIn return 경로 수정은 확인했습니다. 통합 뒤 실제 Astro 경로·필수 체크·CI를 재검증하고 draft를 해제합니다.\n\nRefs #105, #66, #67, #68, #101. mock 성공을 실제 OAuth/AI/R2/원격 삭제 성공으로 표시하지 않습니다.\n",
+  "headRefName": "codex/105-reports-settings-api-mock",
+  "headRefOid": "e6d179b01ee3bfc16bb9929df7d8eadca135e654",
+  "mergeCommit": {
+    "oid": "abdd2c366492b56b97b665c63aaba06cb4ac64a4"
+  },
+  "mergeStateStatus": "UNKNOWN",
+  "mergedAt": "2026-10-06T12:23:20Z",
+  "number": 111,
+  "state": "MERGED",
+  "statusCheckRollup": [
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-10-06T12:22:05Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/creno-va/baro/actions/runs/37462722839/job/112266041200",
+      "name": "Isolated native media fixtures",
+      "startedAt": "2026-10-06T12:22:00Z",
+      "status": "COMPLETED",
+      "workflowName": "CI"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-10-06T12:23:07Z",
+      "conclusion": "FAILURE",
+      "detailsUrl": "https://github.com/creno-va/baro/actions/runs/37462722839/job/112266041465",
+      "name": "Source and browser checks",
+      "startedAt": "2026-10-06T12:22:00Z",
+      "status": "COMPLETED",
+      "workflowName": "CI"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-10-06T12:23:13Z",
+      "conclusion": "FAILURE",
+      "detailsUrl": "https://github.com/creno-va/baro/actions/runs/37462722839/job/112266497600",
+      "name": "Quality gate",
+      "startedAt": "2026-10-06T12:23:10Z",
+      "status": "COMPLETED",
+      "workflowName": "CI"
+    }
+  ],
+  "url": "https://github.com/creno-va/baro/pull/111"
+}
