@@ -158,6 +158,36 @@
           "binding": "PROFILE_PUBLIC_R2",
           "bucket_name": "baro-preview-v2-public"
         }
+      ],
+      "durable_objects": {
+        "bindings": [
+          {
+            "name": "FILE_PROCESSOR",
+            "class_name": "FileProcessorContainer"
+          }
+        ]
+      },
+      "exports": {
+        "FileProcessorContainer": {
+          "type": "durable-object",
+          "storage": "sqlite"
+        }
+      },
+      "containers": [
+        {
+          "name": "baro-file-processor-preview",
+          "class_name": "FileProcessorContainer",
+          "image": "./services/file-processor/Dockerfile",
+          "image_build_context": ".",
+          "instance_type": "standard-2",
+          "max_instances": 1,
+          "observability": {
+            "enabled": false,
+            "logs": {
+              "enabled": false
+            }
+          }
+        }
       ]
     },
     "production": {
@@ -236,6 +266,36 @@
           "binding": "PROFILE_PUBLIC_R2",
           "bucket_name": "baro-production-v2-public"
         }
+      ],
+      "durable_objects": {
+        "bindings": [
+          {
+            "name": "FILE_PROCESSOR",
+            "class_name": "FileProcessorContainer"
+          }
+        ]
+      },
+      "exports": {
+        "FileProcessorContainer": {
+          "type": "durable-object",
+          "storage": "sqlite"
+        }
+      },
+      "containers": [
+        {
+          "name": "baro-file-processor-production",
+          "class_name": "FileProcessorContainer",
+          "image": "./services/file-processor/Dockerfile",
+          "image_build_context": ".",
+          "instance_type": "standard-2",
+          "max_instances": 1,
+          "observability": {
+            "enabled": false,
+            "logs": {
+              "enabled": false
+            }
+          }
+        }
       ]
     }
   },
@@ -247,6 +307,36 @@
     {
       "binding": "PROFILE_PUBLIC_R2",
       "bucket_name": "baro-preview-v2-public"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "FILE_PROCESSOR",
+        "class_name": "FileProcessorContainer"
+      }
+    ]
+  },
+  "exports": {
+    "FileProcessorContainer": {
+      "type": "durable-object",
+      "storage": "sqlite"
+    }
+  },
+  "containers": [
+    {
+      "name": "baro-file-processor-preview",
+      "class_name": "FileProcessorContainer",
+      "image": "./services/file-processor/Dockerfile",
+      "image_build_context": ".",
+      "instance_type": "standard-2",
+      "max_instances": 1,
+      "observability": {
+        "enabled": false,
+        "logs": {
+          "enabled": false
+        }
+      }
     }
   ]
 }

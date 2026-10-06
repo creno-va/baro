@@ -103,6 +103,20 @@ jobs:
         if: steps.application.outputs.present == 'true'
         run: bun run test
 
+      - name: Build isolated file processor (linux/amd64)
+        if: steps.application.outputs.present == 'true'
+        timeout-minutes: 8
+        run: docker build --platform linux/amd64 -f services/file-processor/Dockerfile -t baro-file-processor .
+
+      - name: Execute native media fixtures with no network
+        if: steps.application.outputs.present == 'true'
+        timeout-minutes: 5
+        run: >-
+          docker run --rm --network none --memory 6g --cpus 1 --pids-limit 128
+          -v "$PWD/tests/fixtures/media:/fixtures:ro"
+          -v "$PWD/services/file-processor/fixture-test.py:/app/fixture-test.py:ro"
+          baro-file-processor python3 /app/fixture-test.py
+
       - name: AI change detection and deterministic product eval
         env:
           EVAL_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}

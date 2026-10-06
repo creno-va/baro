@@ -76,7 +76,7 @@ async function fixture(
         { type: "artifact", index: 0, data: btoa(raw) },
         { type: "complete" },
       ];
-      return new Response(records.map((r) => JSON.stringify(r)).join("\n") + "\n", {
+      return new Response(`${records.map((r) => JSON.stringify(r)).join("\n")}\n`, {
         headers: { "content-type": "application/x-ndjson" },
       });
     },
@@ -121,13 +121,14 @@ test("actual AES artifact byte roundtrip binds owner/environment/file/revision/b
       "FILE_REJECTED",
     );
   const corrupted = encrypted.slice();
-  corrupted[corrupted.length - 1] ^= 1;
+  const finalIndex = corrupted.length - 1;
+  corrupted[finalIndex] = (corrupted[finalIndex] ?? 0) ^ 1;
   await expect(decryptArtifact(cipher, id, corrupted)).rejects.toThrow("FILE_REJECTED");
 });
 test("one artifact at a time with validated manifest/hash/order/completion", async () => {
   const f = await fixture();
   let artifacts = 0;
-  await f.transport.process(f.source, f.access, {
+  await f.transport.processUnit(f.source, f.access, {
     manifest: async (m) => {
       expect(m).toEqual(f.manifest);
     },
@@ -145,7 +146,10 @@ test("revocation while reservation awaits causes zero native calls and not_sent 
   const f = await fixture({ reserve: () => revoke() });
   revoke = () => f.setAllowed(false);
   await expect(
-    f.transport.process(f.source, f.access, { manifest: async () => {}, artifact: async () => {} }),
+    f.transport.processUnit(f.source, f.access, {
+      manifest: async () => {},
+      artifact: async () => {},
+    }),
   ).rejects.toThrow("STALE_REVISION");
   expect(f.state()).toEqual({ calls: 0, stops: 1, receipts: ["not_sent"] });
 });
@@ -157,7 +161,10 @@ test("authorization throw after paid reserve does not disclose bytes", async () 
     return true;
   };
   await expect(
-    f.transport.process(f.source, f.access, { manifest: async () => {}, artifact: async () => {} }),
+    f.transport.processUnit(f.source, f.access, {
+      manifest: async () => {},
+      artifact: async () => {},
+    }),
   ).rejects.toThrow("STALE_REVISION");
   expect(f.state().calls).toBe(0);
   expect(f.state().receipts).toEqual(["not_sent"]);
@@ -168,7 +175,7 @@ test("cancel after manifest prevents artifact sink and always stops native job",
   f.access.signal = signal.signal;
   let count = 0;
   await expect(
-    f.transport.process(f.source, f.access, {
+    f.transport.processUnit(f.source, f.access, {
       manifest: async () => {
         signal.abort();
       },
@@ -204,7 +211,7 @@ for (const kind of [
       records[1] = { type: "artifact", index: 0, data: raw, escapedUrl: "https://example.invalid" };
     const f = await fixture({ records });
     await expect(
-      f.transport.process(f.source, f.access, {
+      f.transport.processUnit(f.source, f.access, {
         manifest: async () => {},
         artifact: async () => {},
       }),
@@ -212,7 +219,7 @@ for (const kind of [
     expect(f.state().stops).toBe(1);
   });
 test("one-byte UTF-8 boundaries preserve supplementary Unicode and reject unfinished/oversized line", async () => {
-  const bytes = new TextEncoder().encode(JSON.stringify({ text: "한글💙" }) + "\n");
+  const bytes = new TextEncoder().encode(`${JSON.stringify({ text: "한글💙" })}\n`);
   const stream = new ReadableStream<Uint8Array>({
     start(c) {
       for (const byte of bytes) c.enqueue(Uint8Array.of(byte));
@@ -222,7 +229,7 @@ test("one-byte UTF-8 boundaries preserve supplementary Unicode and reject unfini
   const values = [];
   for await (const value of processorLines(stream, controller().signal)) values.push(value);
   expect(values).toEqual([{ text: "한글💙" }]);
-  for (const bad of ["{}", "x".repeat(MAX_LINE_BYTES + 1) + "\n"]) {
+  for (const bad of ["{}", `${"x".repeat(MAX_LINE_BYTES + 1)}\n`]) {
     await expect(
       (async () => {
         for await (const _ of processorLines(new Response(bad).body!, controller().signal)) {

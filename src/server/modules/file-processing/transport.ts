@@ -41,7 +41,7 @@ export function createProcessorTransport(options: {
   costs: ProcessingCosts;
 }) {
   const start = async (
-    kind: "probe" | "process",
+    kind: "probe" | "process_unit",
     input: {
       byteLength: number;
       contentHash: string;
@@ -67,7 +67,8 @@ export function createProcessorTransport(options: {
     }
     let sent = false;
     try {
-      const request = new Request(`http://processor.internal/${kind}`, {
+      const path = kind === "probe" ? "/probe" : "/process";
+      const request = new Request(`http://processor.internal${path}`, {
         method: "POST",
         headers: {
           "x-baro-capability": hex(crypto.getRandomValues(new Uint8Array(32))),
@@ -140,7 +141,7 @@ export function createProcessorTransport(options: {
         await options.stop();
       }
     },
-    async process(
+    async processUnit(
       input: {
         byteLength: number;
         contentHash: string;
@@ -157,7 +158,7 @@ export function createProcessorTransport(options: {
         index = 0,
         complete = false;
       try {
-        const response = await start("process", input, access);
+        const response = await start("process_unit", input, access);
         for await (const raw of processorLines(response.body!, access.signal)) {
           if (!(await authorize(access)) || complete) throw new ProcessingError("STALE_REVISION");
           const record = processorRecordSchema.parse(raw);
