@@ -92,6 +92,8 @@ export const server = createServer(async (req, res) => {
     if ((await stat(manifestFile)).size > MAX_LINE - 100) throw new Error("OUTPUT_LIMIT");
     const manifest = JSON.parse(await readFile(manifestFile, "utf8"));
     if (req.url === "/probe") {
+      await rm(root, { recursive: true, force: true });
+      root = undefined;
       res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" });
       return res.end(JSON.stringify(manifest));
     }
@@ -129,6 +131,9 @@ export const server = createServer(async (req, res) => {
     await write({ type: "complete" });
     res.end();
   } catch {
+    kill();
+    if (root) await rm(root, { recursive: true, force: true }).catch(() => {});
+    root = undefined;
     response(
       res,
       abort.signal.aborted ? 408 : 422,
@@ -137,7 +142,7 @@ export const server = createServer(async (req, res) => {
   } finally {
     clearTimeout(timer);
     kill();
-    if (root) await rm(root, { recursive: true, force: true });
+    if (root) await rm(root, { recursive: true, force: true }).catch(() => {});
     busy = false;
   }
 });
