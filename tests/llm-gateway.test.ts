@@ -4,6 +4,7 @@ import {
   createLlmGateway,
   ModelError,
   type ModelMetric,
+  prepareGatewayWireInput,
 } from "../src/server/modules/llm-gateway/service";
 import { assembleVerifiedResult } from "../src/server/modules/response/validate";
 import { guidance, syntheticCitation } from "./fixtures/contracts";
@@ -12,6 +13,14 @@ const screening = { schemaVersion: "1", inScope: true, urgency: "none", reasonCo
 const completion = (output: unknown) => ({
   choices: [{ message: { content: JSON.stringify({ output }) }, finish_reason: "stop" }],
   usage: { prompt_tokens: 10, completion_tokens: 20 },
+});
+test("question transport uses provider-supported nested unions and retains both discriminators", () => {
+  const format = JSON.stringify(prepareGatewayWireInput("workspace_questions", {}).response_format);
+  expect(format).not.toContain('"oneOf"');
+  expect(format).toContain('"anyOf"');
+  expect(format).toContain('"const":"text"');
+  expect(format).toContain('"const":"choice"');
+  expect(format).toContain('"additionalProperties":false');
 });
 test("Worker binding sends pinned structured model/privacy options and allowlisted metadata", async () => {
   const metrics: ModelMetric[] = [];

@@ -7,6 +7,7 @@ import {
   structuredCaseSchema,
   validationOutputSchema,
 } from "../../../contracts";
+import { type DependencyCategory, dependencyCategory } from "../../dependency-diagnostics";
 import {
   type GatewayAttemptHandle,
   type GatewayAttemptLedger,
@@ -77,7 +78,9 @@ function wireSchema(schema: unknown): unknown {
     return Object.fromEntries(
       Object.entries(input)
         .filter(([key]) => key !== "$schema")
-        .map(([key, value]) => [key, wireSchema(value)]),
+        // Zod discriminated unions emit oneOf; the provider supports anyOf.
+        // Server-side Zod parsing still enforces the original exact union.
+        .map(([key, value]) => [key === "oneOf" ? "anyOf" : key, wireSchema(value)]),
     );
   }
   return schema;
@@ -134,6 +137,11 @@ export function createLlmGateway(
   options: {
     sleep?: (ms: number) => Promise<void>;
     observe?: (metric: ModelMetric) => void;
+    observeFailure?: (failure: {
+      phase: Phase;
+      category: DependencyCategory;
+      httpStatus: number | null;
+    }) => void;
     timeoutMs?: number;
     attemptLedger?: GatewayAttemptLedger;
     requireAttemptLedger?: boolean;
@@ -277,6 +285,11 @@ export function createLlmGateway(
           ]);
         } catch (error) {
           const status = providerStatus(error);
+          options.observeFailure?.({
+            phase,
+            category: dependencyCategory(error),
+            httpStatus: status,
+          });
           try {
             await record(unavailableReceipt(status === null ? "unknown" : "provider_error"));
           } finally {
@@ -313,8 +326,14 @@ export function createLlmGateway(
           finishTimeoutRecord();
         }
         await record(responseReceipt(raw));
-        if (raw && typeof raw === "object" && "error" in raw)
+        if (raw && typeof raw === "object" && "error" in raw) {
+          options.observeFailure?.({
+            phase,
+            category: dependencyCategory(raw.error),
+            httpStatus: providerStatus(raw.error),
+          });
           throw new ModelError("MODEL_UNAVAILABLE");
+        }
         const completion = z
           .object({
             choices: z

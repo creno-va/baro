@@ -1,5 +1,13 @@
 # BARO v2 검증 증거 기록
 
+## 2026-10-07 원격 질문 재시도 503 추적
+
+PR144 최종 head0e934ff4441e2f2b926ec05ed9554da3442f1a27의 필수 CI37536532795와 main868fd09133f1006e2c526a539ea3f253b6f58f3f CI37536763090은 SUCCESS다. Preview37537064408 SUCCESS, Worker e62cc468-aaf3-4f28-b59c-1f0cc2547c6d의 health에서 동일 SHA/schema0009를 확인했다. 첫 신규 계정 원장 초기화 수정 뒤 실제 질문 작업은 MODEL_UNAVAILABLE로 실패했고 `/workspace-jobs/:jobId/retry`는 DEPENDENCY_UNAVAILABLE503을 반환했다. production37537388660은 지정 Environment 승인 대기이며 배포 성공으로 표시하지 않는다.
+
+원격 D1의 읽기 전용 집계에서 intake_questions failed/MODEL_UNAVAILABLE/retryable1 작업1개, model ambiguous 비용1개와 unknown hold1개를 확인했다. 고객 원문·ID·암호문·키·SQL 오류는 증거에 포함하지 않았다. 이전 unknown 비용을 환불/0원으로 바꾸거나 funding을 재초기화하지 않는다. 실제 migrated SQLite/coordinator/runtime에서 공급자401 후 같은 작업의 재시도와 질문·audit 정산이 성공하지만 원격 성공을 대신하지 않는다.
+
+질문 transport의 Zod discriminated union이 oneOf를 내보내는 것을 확인해 [공식 Structured Outputs 지원 규격](https://developers.openai.com/api/docs/guides/structured-outputs)의 anyOf로 낮춘다. 서버의 원래 Zod 검증은 유지한다. 아직 실제 공급자 실패 원인으로 확정하지 않는다. 원격 재시도 실패를 분리하기 위해 고정 단계/분류와 HTTP status만 로그에 남기며 payload/원래 오류/SQL/인증값은 기록하지 않는다. source gate의 로그 예외도 해당 모듈의 정확한 고정 필드 두 호출만 허용한다. 실제 원격 복구와 정산을 확인하기 전 #27/#57/#64/#71은 OPEN이다.
+
 ## 2026-10-07 AI 실행 예산 후속
 
 사용자는 BUDGET_UNAVAILABLE을 두 원격 환경 모두에서 해결하도록 지시한 뒤 하루 AI200회, 전체 월 예산 차단 해제, 기존 Cloudflare $10/$30 자동충전을 직접 승인했다. authenticated console에서 credit$40/autoRechargeON/threshold10/refill30을 확인했다. 운영 Gateway가 없음을 확인하고 baro-production을 별도로 생성하며 CollectLogs/Cache/Retry/SpendLimitOFF·Authentication/ZDRON·UnifiedBilling으로 연결했다. 실제 등록 완료와 실행 성공은 각각 관측 후 journal에 기록한다.

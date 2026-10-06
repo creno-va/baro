@@ -5,6 +5,7 @@ import { v2CreateCaseRequestSchema } from "../../../contracts/v2";
 import { readAccountType } from "../../auth/account-type";
 import { createCaseDataCipher } from "../../crypto";
 import { createV2Core, type V2Core, V2RepositoryError } from "../../db/v2-core";
+import { reportDependencyFailure } from "../../dependency-diagnostics";
 import { verifyTurnstile } from "../../modules/intake/service";
 import {
   createWorkspaceService,
@@ -78,6 +79,7 @@ export function createWorkspacesApi(
       };
       return c.json(errorBody(c, error.code, messages[error.code], status === 503), status);
     }
+    reportDependencyFailure(error);
     return c.json(errorBody(c, "DEPENDENCY_UNAVAILABLE", "사건을 불러오지 못했어요.", true), 503);
   });
   const service = async (env: Env, ownerId: string) => {
