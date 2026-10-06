@@ -49,6 +49,7 @@ v2에 맞추지 않는다. additive 계약과 migration을 단일 DB 소유자�
 | #54 | v2 strict shared 계약·합성 fixture | #53 | 불가능한 상태·unknown field 거부, v1 계약 보존 |
 | #55 | additive DB·repository·migration | #54 | 실제 SQL 소유권/CAS, fresh/upgrade/drift |
 | #87 | 후속 실행 DB 계약 확장 | #55 | fresh source cache·유료 admission/lease 비용 hold·가격/funding/usage 근거·allocation/carryover, 새 primitive 사용 전 공유 PR 병합 |
+| #93 | AI job 없는 원본/승인 공개 R2 비용 연결 | #55/#57/#87 | 실제 저장 intent·승인과 비용 예약/dispatch의 원자성, 가짜 job 없음, additive schema 및 늦은 receipt, 공유 PR main 병합 후 consumer 연결 |
 | #56 | 디자인 시스템·공통 shell | #53 | shadcn/blue/Lucide/Pretendard/단일 SVG, 실제 화면·CSP |
 | #57 | quota·월 예산·비용 ledger | #55 | 동시 예약/KST/중복/실패/실제 비용 정산 |
 | #58 | private/public R2·자료 admission | #55/#57 | 크기/수량/소유권/동의/streaming/cleanup |

@@ -252,3 +252,16 @@ schema-invalid/refusal usage 정산, late receipt 중복, 삭제 뒤 정산·실
 반환 금지, 환경 allocation 감소 전 증가 거부·ack 유실·partial rollback·restore·월 전환이다.
 문서/소스 경계 검사와 mandatory ci/check/build/cf:dry-run은 계약 PR의 검증이며, 실제 환경
 meter·청구 대조·Containers/Paid 활성화·공개 정책 승인 증거는 별도로 남는다.
+
+## 작업 없는 원본/공개 저장 실행 (#93)
+
+원본 업로드와 승인 public copy는 실제 AI job 없이 비용을 예약한다. 공유 DB의 typed prepared
+capability를 pending reservation/blob과 같은 D1 batch에 저장하고 실제 R2 전송 직전에
+`beforeDispatch`를 실행한다. consumer가 prepare 시각을 새 시각으로 바꾸거나 누락된 비용 증거를
+boolean·가짜 job·무료 사용 추정으로 대신하지 않는다. await 이후 실제 전송 직전에도 신선한
+시각/동의/삭제/승인 상태를 확인한다. 미확정 전송은 예약 전액을 유지하고 자동 유료 재시도하지 않는다.
+
+각 physical pending tuple은 immutable 가격/환율/funding과 요청·보관량 상한을 가진다. 실제 보관과
+읽기·삭제 비용의 조달 및 월 전환 maintenance 대조는 #71에 남는다. offline verifier는 실제 가격·
+계정 잔액·청구 증거로 배포하지 않는다. 이 공유 primitive의 PR CI와 main 병합 후 #58/#60 consumer를
+연결하고 실제 R2·비용·UI 증거를 별도로 기록한다.

@@ -262,3 +262,20 @@ late receipt도 원래 attempt에 기록하며 case 원문은 비용 저장소�
 extractor로 최신 유효 cache를 조회한다. private query를 저장하지 않으며 최대2회 indexed query,
 1MiB body hash·allowlist와 최종 최신 pointer 검증을 수행한다. 정확한 immutable source tuple 및
 citation의 시각 비교는 canonical UTC로 보존한다. 상세 적용·복구 경계는 [DB 운영](../operations/DOMAIN-DATABASE.md)을 따른다.
+
+### 작업 없는 저장 비용 실행 (#93)
+
+`0008_storage_paid_execution`은 기존 0000~0007을 보존하고 `v2_storage_paid_executions`를
+추가한다. 원본 chunk, 변호사 원본, 승인된 공개 copy의 실제 operation/revision·reservation/blob·
+physical tuple·가격/funding/plan을 연결한다. AI job이나 lease를 대신 만들어 사용하지 않는다.
+승인 공개 copy는 자료 정제 operation과 별개인 프로필 revision operation에 연결한다.
+
+서버의 frozen `PreparedStoragePaidHold.actor`와 predicate/statements를 실제 pending intent와
+같은 claim/batch에 조합한다. 정확한 pending envelope와 source가 없으면 claim의 verified CHECK가
+저장량·비용·intent 전체를 rollback한다. 비용 anchor에는 원본/프로필 ciphertext를 복제하지 않고
+opaque ID/revision/physical metadata와 SHA만 남긴다. 소비자는 이 공유 구현의 main 병합 뒤 연결한다.
+
+dispatch는 현재 정책·file 자동 처리 동의·소유권·revision·만료·삭제·공개 자격/수동 승인과 funding을
+재확인하는 일회 CAS다. 미확정 비용을 유지하고 실제 검증된 usage만 기존 정산 계약으로 반영한다.
+계정 삭제·월 전환 뒤 receipt도 원래 attempt/month에 정산한다. 합성 SQL/AES 검증은 실제 R2 청구,
+보관 비용 조달, 공개 UI·운영 검증의 완료 증거가 아니다.

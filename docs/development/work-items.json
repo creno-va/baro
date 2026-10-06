@@ -123,6 +123,7 @@
     },
     {
       "issue": 58,
+      "implementationPr": 92,
       "milestone": 5,
       "kind": "implementation",
       "dependsOn": [
@@ -414,6 +415,15 @@
         "docs/quality/TEST-STRATEGY.md"
       ],
       "validation": "human-approved documents, versions and verifiable receipts; do not substitute automated tests"
+    },
+    {
+      "issue": 93,
+      "milestone": 5,
+      "kind": "implementation",
+      "dependsOn": [55, 57, 87],
+      "owns": ["src/server/db/v2-storage-paid-runtime", "additive storage-paid schema", "storage-paid SQL tests"],
+      "docs": ["docs/architecture/DATA-MODEL.md", "docs/operations/COST-CONTROLS.md", "docs/development/V2-EXECUTION.md"],
+      "validation": "real jobless storage intent and approval guards, authenticated durable pricing/funding/plan, atomic additive budget and one-time dispatch, fresh/upgrade/drift; consumers await shared main merge"
     },
     {
       "issue": 71,
