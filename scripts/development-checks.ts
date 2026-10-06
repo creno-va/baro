@@ -141,7 +141,9 @@ async function main() {
   const mockTargets =
     mode === "browser"
       ? targets.filter((path) =>
-          /\/(shell-integration|lawyer-api-mock|intake103|workspace-shared)\.e2e\.ts$/.test(path),
+          /\/(shell-integration|lawyer-api-mock|intake103|workspace-shared|workspace|reports-integrated)\.e2e\.ts$/.test(
+            path,
+          ),
         )
       : [];
   const regularTargets = targets.filter((path) => !mockTargets.includes(path));
@@ -158,7 +160,10 @@ async function main() {
     for (const [config, selected] of [
       [
         "tests/browser/integration.config.ts",
-        mockTargets.filter((path) => !/\/(intake103|workspace-shared)\.e2e\.ts$/.test(path)),
+        mockTargets.filter(
+          (path) =>
+            !/\/(intake103|workspace-shared|workspace|reports-integrated)\.e2e\.ts$/.test(path),
+        ),
       ],
       [
         "tests/browser/intake103.config.ts",
@@ -167,6 +172,14 @@ async function main() {
       [
         "tests/helpers/workspace.shared.playwright.config.ts",
         mockTargets.filter((path) => path.endsWith("/workspace-shared.e2e.ts")),
+      ],
+      [
+        "tests/helpers/workspace.playwright.config.ts",
+        mockTargets.filter((path) => path.endsWith("/workspace.e2e.ts")),
+      ],
+      [
+        "tests/browser/reports-integrated.config.ts",
+        mockTargets.filter((path) => path.endsWith("/reports-integrated.e2e.ts")),
       ],
     ] as const) {
       if (!selected.length) continue;

@@ -27,11 +27,15 @@ export const sessionApi = {
   async signIn(provider: Provider, accountType: AccountType): Promise<SessionView | undefined> {
     if (apiMode === "mock") return request("session.signIn", { provider, accountType });
     sessionStorage.setItem("baro-account-type", accountType);
-    const result = await authClient.signIn.social({
-      provider,
-      callbackURL: "/consent",
-      errorCallbackURL: "/login?error=oauth",
-    });
+    const result = await authClient.signIn
+      .social({
+        provider,
+        callbackURL: "/consent",
+        errorCallbackURL: "/login?error=oauth",
+      })
+      .catch(() => {
+        throw new ApiError("UNAVAILABLE", "로그인을 시작하지 못했어요. 다시 시도해 주세요.", true);
+      });
     if (result.error)
       throw new ApiError("UNAVAILABLE", "로그인을 시작하지 못했어요. 다시 시도해 주세요.", true);
     return undefined;
