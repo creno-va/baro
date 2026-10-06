@@ -28,9 +28,11 @@ export async function reconcileV2Dispatch(env: Env) {
       .first();
     if (!control) return { available: false };
     const files = await createFileProcessingDispatcher(core, {
+      environment,
       binding: env.FILE_PROCESSING,
     }).dispatch(4);
     const assets = await createAssetProcessingDispatcher(core, {
+      environment,
       binding: env.ASSET_PROCESSING,
     }).dispatch(4);
     const profiles = await createProfilePublicationDispatcher(core, {

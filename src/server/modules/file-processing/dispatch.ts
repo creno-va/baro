@@ -2,11 +2,18 @@ import { z } from "zod";
 import { timestampSchema } from "../../../contracts";
 import { CURRENT_POLICY_VERSIONS } from "../../../contracts/consent";
 import type { V2Core } from "../../db/v2-core";
+import { stopExpiredUndispatchedJob } from "../../db/v2-expired-undispatched-job";
 import { jobAlive } from "../../db/v2-jobs";
 import { type AssetProcessingParams, assetProcessingParamsSchema } from "./assets";
 import { type FileProcessingParams, fileProcessingParamsSchema } from "./execution";
 
 type Instance = { id: string; status(): Promise<{ status: string }> };
+type DispatcherOptions<P> = {
+  binding?: ProcessingBinding<P>;
+  environment?: "preview" | "production";
+  clock?: () => string;
+  leaseMs?: number;
+};
 type ProcessingBinding<P> = {
   create(input: { id: string; params: P }): Promise<Instance>;
   get(id: string): Promise<Instance>;
@@ -54,7 +61,7 @@ type Row = {
 /** Metadata-only scheduler; acquisition belongs to the bounded Workflow. */
 function createProcessingDispatcher<P extends FileProcessingParams | AssetProcessingParams>(
   core: V2Core,
-  options: { binding?: ProcessingBinding<P>; clock?: () => string; leaseMs?: number },
+  options: DispatcherOptions<P>,
   scope: { joins: string; live: string; consentValues: string[]; params: (row: Row) => P },
 ) {
   const { joins, live, consentValues } = scope;
@@ -89,6 +96,16 @@ function createProcessingDispatcher<P extends FileProcessingParams | AssetProces
           continue;
         }
         const params = scope.params(row);
+        if (
+          options.environment &&
+          (await stopExpiredUndispatchedJob(core, options.environment, {
+            ownerId: row.owner_id,
+            jobId: row.job_id,
+            instanceId: id.data,
+            now: now(),
+          }))
+        )
+          continue;
         const claimedAt = now(),
           until = new Date(Date.parse(claimedAt) + leaseMs).toISOString();
         const claim = await core
@@ -192,7 +209,7 @@ function createProcessingDispatcher<P extends FileProcessingParams | AssetProces
 
 export function createFileProcessingDispatcher(
   core: V2Core,
-  options: { binding?: FileProcessingBinding; clock?: () => string; leaseMs?: number } = {},
+  options: DispatcherOptions<FileProcessingParams> = {},
 ) {
   return createProcessingDispatcher(core, options, {
     joins,
@@ -211,7 +228,7 @@ export function createFileProcessingDispatcher(
 
 export function createAssetProcessingDispatcher(
   core: V2Core,
-  options: { binding?: AssetProcessingBinding; clock?: () => string; leaseMs?: number } = {},
+  options: DispatcherOptions<AssetProcessingParams> = {},
 ) {
   return createProcessingDispatcher(core, options, {
     joins:
