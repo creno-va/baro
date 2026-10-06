@@ -1,0 +1,8 @@
+BARO SYNTHETIC FIXTURE - PAGE 1
+합성 문서 첫 번째 페이지
+처리 표식: BLUE BOX 17
+이 파일은 실제 사건이나 사람을 포함하지 않습니다.
+BARO SYNTHETIC FIXTURE - PAGE 2
+합성 문서 두 번째 페이지
+처리 표식: ORANGE CIRCLE 42
+문서 끝 표식: END OF SYNTHETIC DOCUMENT
