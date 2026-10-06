@@ -37,9 +37,6 @@
   font-weight: 760;
   letter-spacing: -0.05em;
 }
-.landing-mobile-menu {
-  display: none;
-}
 .landing-chapter-nav {
   position: fixed;
   z-index: 45;
@@ -101,21 +98,6 @@
   outline-offset: 3px;
   border-radius: 5px;
 }
-.landing-mobile-menu > summary {
-  list-style: none;
-}
-.landing-mobile-menu > summary::-webkit-details-marker {
-  display: none;
-}
-.landing-menu-close-icon {
-  display: none;
-}
-.landing-mobile-menu[open] .landing-menu-open-icon {
-  display: none;
-}
-.landing-mobile-menu[open] .landing-menu-close-icon {
-  display: block;
-}
 @media (max-width: 1199px) {
   .landing-chapter-nav {
     display: none;
@@ -128,58 +110,6 @@
 @media (max-width: 1023px) {
   .landing-nav .landing-nav-section {
     display: none;
-  }
-  .landing-mobile-menu {
-    display: block;
-  }
-  .landing-mobile-menu > summary {
-    display: grid;
-    place-items: center;
-    width: 44px;
-    height: 44px;
-    cursor: pointer;
-    border-radius: 12px;
-  }
-  .landing-mobile-menu > summary:hover {
-    background: #f1f5fb;
-  }
-  .landing-mobile-menu > summary:focus-visible {
-    outline: 3px solid #83b5ff;
-    outline-offset: 2px;
-  }
-  .landing-mobile-menu-panel {
-    position: absolute;
-    top: calc(100% + 8px);
-    left: 18px;
-    right: 18px;
-    max-height: calc(100dvh - 100px);
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    padding: 22px;
-    background: #fff;
-    border: 1px solid #e7edf6;
-    border-radius: 22px;
-    box-shadow: 0 18px 60px #12335725;
-  }
-  .landing-mobile-menu-panel > p {
-    margin: 0 0 12px;
-    color: #62738b;
-    font-size: 11px;
-    font-weight: 650;
-    letter-spacing: 0.06em;
-  }
-  .landing-mobile-menu-panel > a {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 15px 2px;
-    font-size: 17px;
-    font-weight: 600;
-    color: #253651;
-    border-bottom: 1px solid #edf1f7;
-  }
-  .landing-mobile-menu-panel > a:last-child {
-    border-bottom: 0;
   }
   .landing-nav {
     gap: 5px;

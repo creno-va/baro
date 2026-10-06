@@ -1,8 +1,9 @@
 ---
 // biome-ignore lint/correctness/noUnusedImports: Astro renders the icons.
-import { ArrowRight, Menu, X } from "lucide-react";
+import { ArrowRight, ArrowUpRight, Menu, X } from "lucide-react";
 // biome-ignore lint/correctness/noUnusedImports: Astro renders the brand.
 import { Brand } from "../ui/brand";
+import "../../styles/landing-navigation.css";
 
 interface Props {
   variant?: "home" | "simplicity";
@@ -58,15 +59,32 @@ const chapters =
     <Brand />
     <nav class="landing-nav" aria-label="메인 메뉴">
       {links.map((link) => <a class="landing-nav-section" href={link.href}>{link.label}</a>)}
+      <button class="landing-mobile-menu-trigger" type="button" data-landing-menu-trigger aria-label="페이지 메뉴" aria-haspopup="dialog" aria-controls="landing-menu-dialog" aria-expanded="false" hidden><Menu size={22} aria-hidden="true" /></button>
       <details class="landing-mobile-menu" data-landing-menu>
         <summary aria-label="페이지 메뉴"><Menu className="landing-menu-open-icon" size={22} aria-hidden="true" /><X className="landing-menu-close-icon" size={22} aria-hidden="true" /></summary>
-        <div class="landing-mobile-menu-panel"><p>BARO 둘러보기</p>{links.map((link) => <a href={link.href}>{link.label}<ArrowRight size={16} aria-hidden="true" /></a>)}<a href="#phone-story">내 손안의 BARO<ArrowRight size={16} aria-hidden="true" /></a><a href="#time-experience">당신의 시간<ArrowRight size={16} aria-hidden="true" /></a><a href="#start-with-baro">더 간단한 시작<ArrowRight size={16} aria-hidden="true" /></a><a href="/lawyers">변호사 살펴보기<ArrowRight size={16} aria-hidden="true" /></a></div>
+        <div class="landing-mobile-menu-panel" data-landing-menu-panel>
+          <div class="landing-menu-content">
+            <nav class="landing-menu-primary" aria-label="전체 메뉴">
+              {links.map((link) => <a href={link.href}>{link.label}{!link.href.startsWith("#") && <span class="landing-menu-link-arrow"><ArrowUpRight size={14} aria-hidden="true" /></span>}</a>)}
+            </nav>
+            <nav class="landing-menu-secondary" aria-label="더 둘러보기">
+              <a href="#phone-story">내 손안의 BARO</a><a href="#time-experience">당신의 시간</a><a href="#start-with-baro">더 간단한 시작</a><a href="/lawyers">변호사 살펴보기 <ArrowUpRight size={13} aria-hidden="true" /></a>
+            </nav>
+            <a class="landing-menu-login" href="/login">로그인하고 시작하기 <span class="landing-menu-link-arrow"><ArrowUpRight size={14} aria-hidden="true" /></span></a>
+          </div>
+        </div>
       </details>
       <a class="landing-login" href="/login">로그인 <ArrowRight size={16} aria-hidden="true" /></a>
     </nav>
   </div>
   <div class="landing-scroll-progress" aria-hidden="true"></div>
 </header>
+<dialog class="landing-menu-dialog" id="landing-menu-dialog" data-landing-menu-dialog aria-label="BARO 전체 메뉴">
+  <button class="landing-menu-dismiss" type="button" data-landing-menu-dismiss aria-label="메뉴 닫기"><X size={26} aria-hidden="true" /></button>
+</dialog>
 <nav class="landing-chapter-nav" aria-label="페이지 구간" data-chapter-nav>
   {chapters.map((chapter) => <a href={chapter.href} aria-label={`${chapter.label} 구간으로 이동`}><i aria-hidden="true"></i><span>{chapter.label}</span></a>)}
 </nav>
+<script>
+  import "../../client/landing-navigation";
+</script>

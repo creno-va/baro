@@ -170,36 +170,131 @@ test("shared landing navigation supports desktop chapters and a keyboard-operate
     await expect(link).toHaveAttribute("aria-current", "location");
   }
   await page.setViewportSize({ width: 390, height: 844 });
-  const menu = page.locator("[data-landing-menu]");
-  const summary = menu.locator("summary");
-  await summary.focus();
+  const trigger = page.locator("[data-landing-menu-trigger]");
+  await expect(trigger).toHaveAccessibleName("페이지 메뉴");
+  const menu = page.getByRole("dialog", { name: "BARO 전체 메뉴", exact: true });
+  await expect(page.locator("details[data-landing-menu]")).toBeHidden();
+  await trigger.focus();
   await page.keyboard.press("Enter");
   await expect(menu).toHaveAttribute("open", "");
+  await expect(trigger).toHaveAttribute("aria-expanded", "true");
   await page.keyboard.press("Escape");
-  await expect(menu).not.toHaveAttribute("open", "");
-  await expect(summary).toBeFocused();
+  await expect(menu).toBeHidden();
+  await expect(trigger).toHaveAttribute("aria-expanded", "false");
+  await expect(trigger).toBeFocused();
   await page.keyboard.press("Enter");
-  expect((await new AxeBuilder({ page }).include(".landing-header").analyze()).violations).toEqual(
-    [],
-  );
+  expect(
+    (await new AxeBuilder({ page }).include("[data-landing-menu-dialog]").analyze()).violations,
+  ).toEqual([]);
   await menu.getByRole("link", { name: "직접 체험하기", exact: true }).click();
   await expect(page).toHaveURL(/#try-baro$/);
-  await expect(menu).not.toHaveAttribute("open", "");
+  await expect(menu).toBeHidden();
+  await expect(page.locator("#try-baro")).toBeInViewport();
   await expect(navigation.getByRole("link", { name: "로그인", exact: true })).toBeVisible();
   await page.setViewportSize({ width: 640, height: 360 });
   for (const [label, id] of [
     ["당신의 시간", "time-experience"],
     ["더 간단한 시작", "start-with-baro"],
   ] as const) {
-    await summary.click();
+    await trigger.click();
     const link = menu.getByRole("link", { name: label, exact: true });
     await link.focus();
     await expect(link).toBeInViewport({ ratio: 1 });
     await page.keyboard.press("Enter");
     await expect(page).toHaveURL(new RegExp(`#${id}$`));
-    await expect(menu).not.toHaveAttribute("open", "");
+    await expect(menu).toBeHidden();
+    await expect(page.locator(`#${id}`)).toBeInViewport();
   }
 });
+
+for (const viewport of [
+  { width: 320, height: 568 },
+  { width: 390, height: 844 },
+  { width: 640, height: 360 },
+]) {
+  test(`full mobile navigation contains focus and scrolling at ${viewport.width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize(viewport);
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    await page.goto("/");
+    await page.evaluate(() => document.fonts.ready);
+    await page.evaluate(() => window.scrollTo({ top: 700, behavior: "instant" }));
+    const beforeOpen = await page.evaluate(() => scrollY);
+    const trigger = page.locator("[data-landing-menu-trigger]");
+    await expect(trigger).toHaveAccessibleName("페이지 메뉴");
+    const menu = page.getByRole("dialog", { name: "BARO 전체 메뉴", exact: true });
+    await trigger.click();
+    await expect(menu).toBeVisible();
+    await expect(trigger).toHaveAttribute("aria-expanded", "true");
+    await expect.poll(() => menu.evaluate((element) => element.matches(":modal"))).toBe(true);
+    await expect
+      .poll(() =>
+        menu.evaluate((element) => {
+          const bounds = element.getBoundingClientRect();
+          return (
+            Math.abs(bounds.x) <= 1 &&
+            Math.abs(bounds.y) <= 1 &&
+            bounds.width >= innerWidth - 1 &&
+            bounds.width <= innerWidth + 1 &&
+            bounds.height >= innerHeight - 1 &&
+            bounds.height <= innerHeight + 1
+          );
+        }),
+      )
+      .toBe(true);
+    await expect
+      .poll(() => menu.evaluate((element) => element.contains(document.activeElement)))
+      .toBe(true);
+    const focusable = menu.locator("a[href], button:enabled");
+    await focusable.last().focus();
+    await page.keyboard.press("Tab");
+    await expect(focusable.first()).toBeFocused();
+    await page.keyboard.press("Shift+Tab");
+    await expect(focusable.last()).toBeFocused();
+    const lockedScroll = await page.evaluate(() => scrollY);
+    await page.mouse.move(viewport.width / 2, viewport.height - 30);
+    await page.mouse.wheel(0, 1_000);
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+        ),
+    );
+    expect(Math.abs((await page.evaluate(() => scrollY)) - lockedScroll)).toBeLessThanOrEqual(1);
+    await menu.getByRole("button", { name: "메뉴 닫기", exact: true }).click();
+    await expect(menu).toBeHidden();
+    await expect(trigger).toBeFocused();
+    await expect(trigger).toHaveAttribute("aria-expanded", "false");
+    expect(Math.abs((await page.evaluate(() => scrollY)) - beforeOpen)).toBeLessThanOrEqual(1);
+    await trigger.click();
+    await expect(menu).toBeVisible();
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await expect(menu).toBeHidden();
+    await expect(trigger).toBeHidden();
+    await expect(page.locator("[data-landing-menu-trigger]")).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+    const afterResize = await page.evaluate(() => scrollY);
+    await page.mouse.move(900, 500);
+    await page.mouse.wheel(0, 400);
+    await expect.poll(() => page.evaluate(() => scrollY)).toBeGreaterThan(afterResize + 100);
+    const login = page
+      .getByRole("navigation", { name: "메인 메뉴", exact: true })
+      .getByRole("link", { name: "로그인", exact: true });
+    await login.focus();
+    await expect(login).toBeFocused();
+    await page.setViewportSize(viewport);
+    await expect(trigger).toBeVisible();
+    await expect(menu).toBeHidden();
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+      ),
+    ).toBe(true);
+  });
+}
 
 test("desktop visual progress follows scrolling and honors a changed motion preference", async ({
   page,

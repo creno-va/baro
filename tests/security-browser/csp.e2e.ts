@@ -375,12 +375,33 @@ test("the built simplicity page hydrates its compact explanation under hash CSP"
   await expect(blue.locator('[data-blue-panel="3"]')).toBeVisible();
   await blue.locator('[data-blue-demo="report"]').click();
   await expect(page.locator('[data-demo-tab="report"]')).toHaveAttribute("aria-selected", "true");
-  const menu = page.locator("[data-landing-menu]");
-  await menu.locator("summary").focus();
+  const trigger = page.locator("[data-landing-menu-trigger]");
+  await expect(trigger).toHaveAccessibleName("페이지 메뉴");
+  const menu = page.getByRole("dialog", { name: "BARO 전체 메뉴", exact: true });
+  await trigger.focus();
   await page.keyboard.press("Enter");
   await expect(menu).toHaveAttribute("open", "");
+  await expect(trigger).toHaveAttribute("aria-expanded", "true");
+  await expect.poll(() => menu.evaluate((element) => element.matches(":modal"))).toBe(true);
+  await expect(menu.getByRole("button", { name: "메뉴 닫기", exact: true })).toBeInViewport();
   await page.keyboard.press("Escape");
-  await expect(menu).not.toHaveAttribute("open", "");
+  await expect(menu).toBeHidden();
+  await expect(trigger).toBeFocused();
+  await expect(trigger).toHaveAttribute("aria-expanded", "false");
+  await trigger.click();
+  await menu.getByRole("link", { name: "CEO 인사말", exact: true }).click();
+  await expect(menu).toBeHidden();
+  await expect(page).toHaveURL(/#from-our-ceo$/);
+  await expect(page.locator("#from-our-ceo")).toBeInViewport();
+  await trigger.click();
+  await expect(menu).toBeVisible();
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await expect(menu).toBeHidden();
+  const login = page
+    .getByRole("navigation", { name: "메인 메뉴", exact: true })
+    .getByRole("link", { name: "로그인", exact: true });
+  await login.focus();
+  await expect(login).toBeFocused();
   expect(
     await page.evaluate(
       () => (window as unknown as { simplicityCspViolations: string[] }).simplicityCspViolations,
