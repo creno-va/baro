@@ -1,0 +1,4 @@
+# Synthetic negative-test object paths ("private/wrong"), not credentials.
+# Exact historical findings only; new findings and production paths remain scanned.
+6a7a222dc85a6b7f1e9d6436f8ad8d690448f09a:tests/v2-storage-capacity-repository.test.ts:generic-api-key:401
+6a7a222dc85a6b7f1e9d6436f8ad8d690448f09a:tests/v2-storage-capacity-repository.test.ts:generic-api-key:586
