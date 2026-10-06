@@ -144,8 +144,9 @@ cache는 durable cleanup으로 비동기 삭제한다. 202는 접수/primary 접
 환경별 key/secret·소유권/역할·전송 암호화·private text/chunk 저장 암호화·job-scoped capability·
 CSP·최소 권한·bounded 비용/삭제·취약점 검증을 적용하는 목표다. 앱 logs/artifact에는 원문·
 filename/file hash·OCR/transcript/frame·신분 자료·token/cookie·signed URL·SQL/stack을 넣지 않는다.
-변호사 역할로 고객 사건 원문에 접근하는 권한을 제공하지 않는 것을 목표로 한다. 동일 owner의 고객→변호사
-전환 후 사건/chat/private 자료 차단은 4번 공유 역할 가드 통합·검증이 남아 있으며 공개 전에 확인한다.
+변호사 역할로 고객 사건 원문에 접근하는 권한을 제공하지 않는다. 동일 owner의 고객→변호사
+전환 후 사건/chat/private 자료 차단은 공유 역할 가드와 합성 SQL/API 검증으로 확인했다.
+실제 OAuth 전환·운영 자료 접근 차단 smoke는 공개 전에 별도로 확인한다.
 MVP에 어드민/심사 UI를 추가하지 않는다.
 
 ## 8. 쿠키와 선택 지표

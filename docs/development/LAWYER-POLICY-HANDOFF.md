@@ -1,9 +1,10 @@
 # 변호사·공개 정책 인계 — #62/#68/#20/#70
 
 - Candidate base: `ca6e15b` (PR125 main)
+- Integrated main: `7943496` (PR127; required CI 3 jobs SUCCESS 후 4번 병합)
 - Branch: `codex/62-lawyer-public-polish`
 - Reviewed: 2026-10-07 KST
-- Status: 구현·로컬 검증 완료 / 공유 의존성 CI 차단·역할 가드 통합·외부 검증·게시 승인 대기
+- Status: 구현·공유 역할 가드/의존성 통합 완료 / 최신 후보 CI·외부 검증·게시 승인 대기
 - 변경 소유: lawyer/profile/directory 전용 UI/API/module/CSS/test, 도움말/정책/콘텐츠
 - 공유 인증·role/session/contracts/schema/router/CI·동의 버전은 4번, 저장/처리/계정 삭제는 2번.
 
@@ -70,9 +71,11 @@ contracts/ConsentForm·자료 자동 처리/공개 동의 범위·publishedPolic
 
 ## 소유자별 남은 통합 행동
 
-- 4번: 고객 사건/채팅/private API에 server accountType=customer guard를 적용하고, 변호사로
-  바꾼 동일 owner의 과거 고객 자료도 접근 금지인지 검증한다. 공유 `ROLE_REQUIRED` 오류 매핑을
-  포함한다. 이 PR은 공유 role/session/router/계정 삭제 UI를 편집하지 않는다.
+- 4번: PR127에서 고객 사건/채팅/private API의 server accountType=customer guard와 공유
+  `ROLE_REQUIRED` 오류 매핑을 구현해 main에 병합했다. 통합 후 동일 owner 전환/프로필/public asset/
+  shared mock/private replay 검증 17 tests/162 assertions를 확인했다. 공유 CLIENT-API-CONTRACT에는
+  publication body의 필수 profileId/expectedRevision/published/consent를 반영한다. 이 PR은 공유
+  role/session/router/계정 삭제 UI를 편집하지 않는다.
 - 2번: 실제 자산 reservation/upload/정제 admission·처리 재시도/대기·사용량/삭제·restore 재삭제와
   실제 R2/Containers byte/보존 근거를 확인한다. 정제 대기 자료는 업로드 성공과 공개 완료를 구분한다.
 - 4번: 기능 PR의 검증·관련 CI를 확인하고 병합한다. #70/#71과 production Environment/최초 공개
@@ -93,7 +96,7 @@ v2 두 역할/전 사건 준비 범위와 milestone 링크·새 브랜드는 아
 외부 랜딩 수정·게시 승인은 이번 코드 검증에 포함하지 않는다. 공개 전 랜딩 소유자가 실제 v2
 시연/승인 범위·정책 URL/버전과 동일 release를 대조해 교체한다.
 
-## 로컬 검증 결과 — 2026-10-07 KST
+## 공유 통합 전 로컬 검증 이력 — 2026-10-07 KST
 
 - `bun ci`: 380 installs/528 packages, lock 변경 없음.
 - `bun run check`: lint/typecheck 성공, 1205 tests/132600 assertions 성공. schema drift 없음,
@@ -110,10 +113,10 @@ v2 두 역할/전 사건 준비 범위와 milestone 링크·새 브랜드는 아
 - `bun run release:check`: 의도된 실패. 미승인 정책/게시·동의 버전 불일치와 미검토 release evidence를
   그대로 보고한다. 이번 검증 결과를 human receipt/공개 승인으로 입력하지 않는다.
 
-4번 공유 PR #127 통합 후 고객→변호사로 바꾼 동일 owner의 사건/chat/private 자료 403, usage/delete 접근 유지,
-기능 PR의 관련 CI와 새 full runner를 최신 main에서 재검증한다. 최종 병합은 4번이 맡는다.
+4번 공유 PR #127을 최신 main으로 통합했다. 고객→변호사로 바꾼 동일 owner의 사건/chat/private 자료
+403과 usage/delete 접근 유지, 프로필/자산 경계를 확인했다. 최종 head 관련 CI 후 병합은 4번이 맡는다.
 
-## PR #126의 실제 CI 상태
+## PR #126의 CI 이력과 공유 통합
 
 Candidate `af070a3`의 [CI](https://github.com/creno-va/baro/actions/runs/37486565424)는 native scope
 검사를 통과했지만 dependency audit에서 중단되어 후속 source/browser 단계는 실행되지 않았다.
@@ -126,6 +129,12 @@ Candidate `af070a3`의 [CI](https://github.com/creno-va/baro/actions/runs/374865
 선택 wire 15 + integrated mock 1 성공, `build:production`/`bundle:check` 성공(147 files),
 `test:csp` 4 성공/1 test-fixture-only skip이다. 원격 CI 통과로 표시하지 않는다.
 공유 수정이 승인·인계되면 통합 후 audit와 전체 필수/관련 검사를 다시 수행한다.
+
+위 차단은 PR127의 sharp 0.35.5 override/lock과 역할/session 변경을 CI 성공·main 병합 후 통합해
+해소했다. 최신 frozen `bun ci`는 377 installs/501 packages(변경 없음), `bun audit` 취약점0이다.
+최신 `bun run check`는 1209 tests/132675 assertions·migration 6/29 성공, build/cf:dry-run 성공이다.
+관련 CI-selector browser는 wire16 + integrated mock1 성공이며 계정 전환 후 실패 응답 폐기도 포함한다.
+현재 소스는 `2ec97ff` 후보이며 최신 PR head CI 결과는 #126/담당 이슈 댓글에 기록한다.
 
 ## 호환성과 롤백
 
