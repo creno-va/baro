@@ -1,54 +1,39 @@
-import { MapPin, ShieldCheck } from "lucide-react";
+import { MapPin, ShieldCheck, UserRound } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { type V2PublicLawyer, v2DirectorySnapshotSchema } from "../../contracts/v2";
+import { api, type LawyerView, lawyerErrorMessage } from "../../client/api/lawyers";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { PageHeader } from "../ui/page-header";
 import { StatePanel } from "../ui/state-panel";
+import { ApiModeNotice } from "./ApiModeNotice";
 import { FIELD_LABELS, REGION_LABELS } from "./labels";
 
 export function Directory({ preview = false }: { preview?: boolean }) {
-  const [items, setItems] = useState<V2PublicLawyer[]>([]);
-  const [cursor, setCursor] = useState<string | null>(null);
+  const [items, setItems] = useState<LawyerView[]>([]);
+  const [visibleCount, setVisibleCount] = useState(20);
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState("");
   const [filters, setFilters] = useState({ name: "", region: "", legalField: "" });
   const current = useRef<AbortController | null>(null);
   const query = useRef("");
-  const load = useCallback(async (params: URLSearchParams, append = false) => {
+  const load = useCallback(async (params: URLSearchParams) => {
     current.current?.abort();
     const controller = new AbortController();
     current.current = controller;
     setBusy(true);
     setError("");
-    if (!append) {
-      setItems([]);
-      setCursor(null);
-    }
+    setItems([]);
+    setVisibleCount(20);
     try {
-      const response = await fetch(`/api/v2/lawyers?${params}`, {
-        signal: controller.signal,
-        cache: "no-store",
+      const page = await api.lawyers.list({
+        query: params.get("name") ?? "",
+        region: params.get("region") ?? "",
+        practiceArea: params.get("legalField") ?? "",
       });
-      if (!response.ok)
-        throw new Error(
-          response.status === 409
-            ? "목록이 갱신됐어요. 다시 검색해 주세요."
-            : "목록을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.",
-        );
-      const parsed = v2DirectorySnapshotSchema.safeParse(await response.json());
-      if (!parsed.success) throw new Error("목록을 불러오지 못했어요. 다시 검색해 주세요.");
-      const page = parsed.data;
       if (controller.signal.aborted) return;
-      setItems((prior) =>
-        append
-          ? [...prior, ...page.items.filter((item) => !prior.some((old) => old.id === item.id))]
-          : page.items,
-      );
-      setCursor(page.nextCursor);
+      setItems(page);
     } catch (cause) {
-      if (!controller.signal.aborted)
-        setError(cause instanceof Error ? cause.message : "목록을 불러오지 못했어요.");
+      if (!controller.signal.aborted) setError(lawyerErrorMessage(cause));
     } finally {
       if (!controller.signal.aborted) setBusy(false);
     }
@@ -72,11 +57,7 @@ export function Directory({ preview = false }: { preview?: boolean }) {
         title="변호사 찾기"
         description="분야와 지역을 살펴보고, 원하는 변호사에게 직접 연락하세요."
       />
-      {preview && (
-        <p className="rounded-lg bg-secondary p-4 text-secondary-foreground">
-          Preview 환경입니다. 합성 프로필은 테스트용이며 실제 변호사가 아닙니다.
-        </p>
-      )}
+      <ApiModeNotice preview={preview} />
       <Card>
         <CardContent>
           <form
@@ -94,7 +75,7 @@ export function Directory({ preview = false }: { preview?: boolean }) {
             }}
           >
             <label className="grid gap-2">
-              이름
+              이름 또는 사무실
               <input
                 className="rounded-lg border border-input bg-card p-3"
                 maxLength={100}
@@ -141,9 +122,8 @@ export function Directory({ preview = false }: { preview?: boolean }) {
         </CardContent>
       </Card>
       <p className="text-sm text-muted-foreground">
-        마지막 승인 프로필만 표시합니다. 공개 프로필 ID 순서를 한국 시간 기준 매일 회전하며, 검색
-        중에는 순서를 유지합니다. 분야는 변호사가 기재한 정보이며 적합성이나 성과를 보증하지
-        않습니다.
+        변호사가 공개한 프로필을 표시합니다. 프로필 ID 순서를 한국 시간 기준 매일 회전합니다. 분야는
+        변호사가 기재한 정보이며 적합성이나 성과를 보증하지 않습니다.
       </p>
       {error && (
         <StatePanel
@@ -162,33 +142,44 @@ export function Directory({ preview = false }: { preview?: boolean }) {
         />
       )}
       <div className="grid gap-5 sm:grid-cols-2">
-        {items.map((lawyer) => (
+        {items.slice(0, visibleCount).map((lawyer) => (
           <Card key={lawyer.id}>
             <CardHeader>
-              <img
-                className="h-20 w-20 rounded-lg object-cover"
-                src={`/api/v2/lawyers/${encodeURIComponent(lawyer.id)}/assets/${encodeURIComponent(lawyer.content.photoAssetId)}`}
-                alt={`${lawyer.content.name} 프로필 사진`}
-                width={80}
-                height={80}
-                loading="lazy"
-              />
+              {lawyer.photoUrl ? (
+                <img
+                  className="h-20 w-20 rounded-lg object-cover"
+                  src={lawyer.photoUrl}
+                  alt={`${lawyer.name} 프로필 사진`}
+                  width={80}
+                  height={80}
+                  loading="lazy"
+                />
+              ) : (
+                <UserRound className="lawyer-avatar" size={80} aria-hidden="true" />
+              )}
               <CardTitle>
-                <a href={`/lawyers/${encodeURIComponent(lawyer.id)}`}>{lawyer.content.name}</a>
+                <a href={`/lawyers/${encodeURIComponent(lawyer.id)}`}>{lawyer.name}</a>
               </CardTitle>
               <p className="flex items-center gap-2 text-sm text-muted-foreground">
-                <ShieldCheck size={18} aria-hidden="true" />
-                본인·자격·사무실 수동 확인
+                {lawyer.verificationStatus === "verified" && (
+                  <ShieldCheck size={18} aria-hidden="true" />
+                )}
+                {lawyer.verificationStatus === "verified"
+                  ? "본인·자격·사무실 수동 확인"
+                  : "본인 작성 정보 · 자격 확인 표시 없음"}
               </p>
             </CardHeader>
             <CardContent>
               <p className="flex items-start gap-2">
                 <MapPin size={18} aria-hidden="true" />
-                {REGION_LABELS[lawyer.content.office.region]} · {lawyer.content.office.name}
+                {REGION_LABELS[lawyer.region as keyof typeof REGION_LABELS] ?? lawyer.region} ·{" "}
+                {lawyer.officeName}
               </p>
-              <p className="my-3 whitespace-pre-wrap break-words">{lawyer.content.introduction}</p>
+              <p className="my-3 whitespace-pre-wrap break-words">{lawyer.introduction}</p>
               <p className="text-sm text-muted-foreground">
-                {lawyer.content.legalFields.map((field) => FIELD_LABELS[field]).join(" · ")}
+                {lawyer.practiceAreas
+                  .map((field) => FIELD_LABELS[field as keyof typeof FIELD_LABELS] ?? field)
+                  .join(" · ")}
               </p>
               <a
                 className="ui-button ui-button--outline mt-4"
@@ -201,15 +192,11 @@ export function Directory({ preview = false }: { preview?: boolean }) {
         ))}
       </div>
       {busy && <StatePanel variant="loading" title="공개 프로필을 불러오고 있어요." />}
-      {cursor && !error && (
+      {items.length > visibleCount && !error && (
         <Button
           variant="outline"
           disabled={busy}
-          onClick={() => {
-            const params = new URLSearchParams(query.current);
-            params.set("cursor", cursor);
-            void load(params, true);
-          }}
+          onClick={() => setVisibleCount((count) => count + 20)}
         >
           더 보기
         </Button>

@@ -9,6 +9,10 @@ test("directory filters, empty supply, approved detail and office-only contact w
   await page.route("**/api/v2/lawyers**", (route) => {
     const url = new URL(route.request().url());
     seen.push(url);
+    if (url.pathname === "/api/v2/lawyers/self-service")
+      return route.fulfill({ json: { items: [], nextCursor: null } });
+    if (url.pathname.startsWith("/api/v2/lawyers/self-service/"))
+      return route.fulfill({ status: 404, json: {} });
     if (url.pathname.includes("/assets/"))
       return route.fulfill({
         contentType: "image/png",
@@ -64,18 +68,20 @@ test("directory filters, empty supply, approved detail and office-only contact w
 test("directory transport failure can be retried without stale results", async ({ page }) => {
   let fail = true;
   await page.route("**/api/v2/lawyers**", (route) =>
-    fail
-      ? route.fulfill({ status: 503, json: {} })
-      : route.fulfill({
-          json: {
-            schemaVersion: "2",
-            snapshotId: "synthetic-directory",
-            rotation: "disclosed_rotation",
-            expiresAt: "2026-10-06T00:05:00Z",
-            items: [],
-            nextCursor: null,
-          },
-        }),
+    new URL(route.request().url()).pathname === "/api/v2/lawyers/self-service"
+      ? route.fulfill({ json: { items: [], nextCursor: null } })
+      : fail
+        ? route.fulfill({ status: 503, json: {} })
+        : route.fulfill({
+            json: {
+              schemaVersion: "2",
+              snapshotId: "synthetic-directory",
+              rotation: "disclosed_rotation",
+              expiresAt: "2026-10-06T00:05:00Z",
+              items: [],
+              nextCursor: null,
+            },
+          }),
   );
   await page.goto("/lawyers");
   await expect(page.getByRole("alert")).toBeVisible();
