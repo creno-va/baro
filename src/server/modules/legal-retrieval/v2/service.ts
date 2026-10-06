@@ -1,9 +1,13 @@
 import { z } from "zod";
 import type { V2OfficialCitation } from "../../../../contracts/v2";
-import type { createV2OfficialSourceRepository } from "../../../db/v2-official-sources";
+import type {
+  createV2OfficialSourceRepository,
+  OfficialSourceIdentity,
+} from "../../../db/v2-official-sources";
 import { textHash } from "../service";
 import {
   type Access,
+  EXTRACTOR_VERSION,
   MAX_RESPONSE_BYTES,
   RetrievalFailure,
   type RetrievalOutput,
@@ -14,13 +18,12 @@ import {
 } from "./contracts";
 import { parseGuide } from "./guides";
 import { parsePrecedent, precedentCandidates } from "./precedents";
-import { assertCanonicalUrl, guideUrl } from "./registry";
+import { assertCanonicalUrl, guideUrl, OFFICIAL_CATALOG } from "./registry";
 import { makeChunk } from "./source";
 import { parseStatute, selectStatute } from "./statutes";
 import { createBoundedTransport, type Transport } from "./transport";
 
 type Repo = ReturnType<typeof createV2OfficialSourceRepository>;
-type CacheKey = Parameters<Repo["find"]>[0];
 export function createV2LegalRetrieval(
   env: Pick<Env, "LAW_API_OC">,
   repo: Repo,
@@ -28,7 +31,6 @@ export function createV2LegalRetrieval(
     transport?: Transport;
     timeoutMs?: number;
     sleep?: (ms: number, signal: AbortSignal) => Promise<void>;
-    knownSourceKeys?: readonly CacheKey[];
     bindCitation: (citation: V2OfficialCitation) => Promise<boolean>;
   },
 ) {
@@ -62,6 +64,56 @@ export function createV2LegalRetrieval(
     if (value && typeof value === "object" && ("result" in value || "msg" in value))
       throw new RetrievalFailure("upstream_rejected");
     return value;
+  }
+  async function cachedChunk(
+    identity: Omit<OfficialSourceIdentity, "extractorVersion">,
+    expected: {
+      canonicalUrl: string;
+      title: string;
+      court: string | null;
+      caseNumber: string | null;
+      sourceDate?: string;
+      rightsProvenance: string;
+    },
+    now: string,
+    asOfDate: string,
+  ): Promise<SourceChunk | null> {
+    // Identity comes only from the validated official list, never a model URL,
+    // private query, user source ID/hash, or an unverified previous citation.
+    const source = await repo.findLatestByIdentity(
+      { ...identity, extractorVersion: EXTRACTOR_VERSION },
+      now,
+    );
+    if (!source) return null;
+    if (
+      source.sourceType !== identity.sourceType ||
+      source.officialId !== identity.officialId ||
+      source.version !== identity.version ||
+      source.section !== identity.section ||
+      source.extractorVersion !== EXTRACTOR_VERSION ||
+      !assertCanonicalUrl(source.canonicalUrl, expected.canonicalUrl) ||
+      source.title !== expected.title ||
+      source.court !== expected.court ||
+      source.caseNumber !== expected.caseNumber ||
+      source.institutionId !== null ||
+      source.endpointId !== null ||
+      source.rightsProvenance !== expected.rightsProvenance ||
+      source.sourceDate === null ||
+      source.sourceDate > asOfDate ||
+      (expected.sourceDate !== undefined && source.sourceDate !== expected.sourceDate)
+    )
+      throw new RetrievalFailure("cache_invalid");
+    try {
+      const chunk = await makeChunk(source, asOfDate);
+      if (
+        chunk.citation.sourceId !== source.sourceId ||
+        chunk.citation.contentHash !== source.contentHash
+      )
+        throw new RetrievalFailure("cache_invalid");
+      return { ...chunk, source };
+    } catch {
+      throw new RetrievalFailure("cache_invalid");
+    }
   }
   return {
     async retrieve(input: unknown, access: Access): Promise<RetrievalOutput> {
@@ -110,28 +162,25 @@ export function createV2LegalRetrieval(
             );
             for (const article of plan.articles) {
               const section = `제${BigInt(article.number)}조${BigInt(article.branch) !== 0n ? `의${BigInt(article.branch)}` : ""}`;
-              const key = options.knownSourceKeys?.find(
-                (key) =>
-                  key.sourceType === "statute" &&
-                  key.officialId === candidate.법령ID &&
-                  key.version === candidate.법령일련번호 &&
-                  key.section === section,
+              const cached = await cachedChunk(
+                {
+                  sourceType: "statute",
+                  officialId: candidate.법령ID,
+                  version: candidate.법령일련번호,
+                  section,
+                },
+                {
+                  canonicalUrl: `https://law.go.kr/LSW/lsInfoP.do?lsiSeq=${candidate.법령일련번호}`,
+                  title: candidate.법령명한글,
+                  court: null,
+                  caseNumber: null,
+                  rightsProvenance: OFFICIAL_CATALOG[0].rights,
+                },
+                body.now,
+                body.asOfDate,
               );
-              const cached = key ? await repo.find(key, body.now) : null;
-              if (cached) {
-                const expected = `https://law.go.kr/LSW/lsInfoP.do?lsiSeq=${candidate.법령일련번호}`;
-                if (
-                  !assertCanonicalUrl(cached.canonicalUrl, expected) ||
-                  cached.sourceDate === null ||
-                  cached.sourceDate > body.asOfDate ||
-                  (await textHash(cached.body)) !== cached.contentHash
-                )
-                  throw new RetrievalFailure("cache_invalid");
-                const chunk = await makeChunk(cached, body.asOfDate);
-                if (chunk.citation.sourceId !== cached.sourceId)
-                  throw new RetrievalFailure("cache_invalid");
-                chunks.push({ ...chunk, source: cached });
-              } else
+              if (cached) chunks.push(cached);
+              else
                 chunks.push(
                   await parseStatute(
                     await json(
@@ -172,6 +221,28 @@ export function createV2LegalRetrieval(
             for (const candidate of candidates.rows) {
               if (candidate.데이터출처명 === "국세법령정보시스템") {
                 reason = "unsupported_format";
+                continue;
+              }
+              const cached = await cachedChunk(
+                {
+                  sourceType: "precedent",
+                  officialId: candidate.판례일련번호,
+                  version: `decision_${candidate.선고일자}`,
+                  section: "판례내용",
+                },
+                {
+                  canonicalUrl: `https://www.law.go.kr/LSW/precInfoP.do?precSeq=${candidate.판례일련번호}`,
+                  title: candidate.사건명,
+                  sourceDate: candidate.선고일자,
+                  court: candidate.법원명,
+                  caseNumber: candidate.사건번호,
+                  rightsProvenance: OFFICIAL_CATALOG[1].rights,
+                },
+                body.now,
+                body.asOfDate,
+              );
+              if (cached) {
+                chunks.push(cached);
                 continue;
               }
               const result = await parsePrecedent(

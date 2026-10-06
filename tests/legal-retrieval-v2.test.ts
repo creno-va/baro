@@ -163,7 +163,7 @@ test("captured official statute list/detail parse exact identity, dates, article
   expect(chunk.source.body).not.toContain("OC=");
 });
 
-test("actual SQL cache and citation bind preserve private-query exclusion and immutable public source versions", async () => {
+test("actual SQL discovery cache needs no caller source keys and preserves fresh workspace citations", async () => {
   const f = await fixture();
   const result = await f.service().retrieve(input(), f.access);
   expect(result.outcomes[0]?.availability).toBe("verified");
@@ -193,12 +193,242 @@ test("actual SQL cache and citation bind preserve private-query exclusion and im
     extractorVersion: source.extractorVersion,
   };
   f.calls.length = 0;
-  expect(
-    (await f.service({ knownSourceKeys: [key] }).retrieve(input(), f.access)).chunks,
-  ).toHaveLength(1);
+  const repeated = await f.service().retrieve(input(), f.access);
+  expect(repeated.chunks).toHaveLength(1);
+  expect(repeated.chunks[0]?.source).toEqual(source);
+  expect(repeated.chunks[0]?.citation.id).not.toBe(result.chunks[0]?.citation.id);
   expect(f.calls).toHaveLength(1);
   expect(await f.repo.find(key, "2026-10-07T00:00:00.000Z")).toBeNull();
 });
+
+test("discovery chooses newer fetched content over an older body with later verification", async () => {
+  const f = await fixture();
+  const candidate = parseStatuteCandidate(officialList.LawSearch.law[0]);
+  const newer = await parseStatute(
+    officialDetail,
+    candidate,
+    { number: "598", branch: "0" },
+    "2026-10-06",
+    NOW,
+  );
+  expect(await f.repo.put(newer.source, newer.citation)).toBe(true);
+  const olderDetail = structuredClone(officialDetail);
+  const article = olderDetail.법령.조문.조문단위.find((row) => row.조문번호 === "598");
+  if (!article) throw new Error("Missing article fixture");
+  article.조문내용 = "합성 이전 수집 본문이며 실제 법률 판단이 아닙니다.";
+  const older = await parseStatute(
+    olderDetail,
+    candidate,
+    { number: "598", branch: "0" },
+    "2026-10-06",
+    "2026-10-05T23:50:00Z",
+  );
+  expect(
+    await f.repo.put({ ...older.source, verifiedAt: NOW }, { ...older.citation, verifiedAt: NOW }),
+  ).toBe(true);
+  const output = await f.service().retrieve(input(), f.access);
+  expect(output.chunks[0]?.source.sourceId).toBe(newer.source.sourceId);
+  expect(output.chunks[0]?.source.body).toBe(newer.source.body);
+  expect(f.calls).toHaveLength(1);
+});
+
+test("source discovery preserves canonical UTC for equivalent precision and refreshes exact expiry", async () => {
+  const f = await fixture();
+  const first = await f.service().retrieve(input(), f.access);
+  f.calls.length = 0;
+  const sameInstant = await f
+    .service()
+    .retrieve({ ...input(), now: "2026-10-06T00:00:00Z" }, f.access);
+  expect(sameInstant.chunks[0]?.source).toEqual(first.chunks[0]?.source);
+  expect(sameInstant.chunks[0]?.citation.verifiedAt).toBe(NOW);
+  expect(f.calls).toHaveLength(1);
+  f.calls.length = 0;
+  const laterGuard = { ...f.guard, now: "2026-10-07T00:00:00.000Z" };
+  const refreshed = await f
+    .service({ bindCitation: (c) => f.repo.bindCitation(laterGuard, c) })
+    .retrieve(
+      { ...input(), now: laterGuard.now },
+      { ...f.access, authorize: createWorkspaceSourceAuthorization(f.db.binding, laterGuard) },
+    );
+  expect(refreshed.outcomes[0]?.availability).toBe("verified");
+  expect(refreshed.chunks[0]?.source.sourceId).toBe(first.chunks[0]?.source.sourceId);
+  expect(refreshed.chunks[0]?.source.fetchedAt).toBe(laterGuard.now);
+  expect(f.calls).toHaveLength(2);
+});
+
+test("changed official version requires new detail instead of reusing the prior article cache", async () => {
+  const f = await fixture();
+  const first = await f.service().retrieve(input(), f.access);
+  const changedList = structuredClone(syntheticCompleteList);
+  const row = changedList.LawSearch.law[0];
+  if (!row) throw new Error("Missing list fixture");
+  row.법령일련번호 = "999999";
+  let calls = 0;
+  const result = await f
+    .service({
+      transport: async (url) => {
+        calls++;
+        return response(
+          new URL(url).pathname.endsWith("lawSearch.do") ? changedList : officialDetail,
+        );
+      },
+    })
+    .retrieve(input(), f.access);
+  expect(calls).toBe(2);
+  expect(result.outcomes[0]?.availability).toBe("verified");
+  expect(result.chunks[0]?.source.version).toBe("999999");
+  expect(result.chunks[0]?.source.sourceId).not.toBe(first.chunks[0]?.source.sourceId);
+  expect(f.db.sqlite.query("SELECT count(*) AS n FROM v2_official_sources").get()).toEqual({
+    n: 2,
+  });
+});
+
+test("an article cache cannot satisfy another requested article or extractor revision", async () => {
+  const f = await fixture();
+  const first = await f.service().retrieve(input(), f.access);
+  const changed = structuredClone(officialDetail);
+  changed.법령.조문.조문단위 = changed.법령.조문.조문단위.filter(
+    (article) => article.조문번호 !== "599",
+  );
+  const row = changed.법령.조문.조문단위.find((article) => article.조문번호 === "598");
+  if (!row) throw new Error("Missing article fixture");
+  row.조문번호 = "599";
+  let details = 0;
+  const articleResult = await f
+    .service({
+      transport: async (url) => {
+        const request = new URL(url);
+        if (request.pathname.endsWith("lawSearch.do")) return response(syntheticCompleteList);
+        details++;
+        expect(request.searchParams.get("JO")).toBe("059900");
+        return response(changed);
+      },
+    })
+    .retrieve(input([{ ...statutePlan, articles: [{ number: "599", branch: "0" }] }]), f.access);
+  expect(articleResult.chunks[0]?.source.section).toBe("제599조");
+  expect(details).toBe(1);
+  const original = first.chunks[0]?.source;
+  if (!original) throw new Error("Missing source");
+  // Corruption deliberately exercises exact extractor isolation and immutable upsert rejection.
+  f.db.sqlite
+    .query("UPDATE v2_official_sources SET extractor_version='other_extractor' WHERE source_id=?")
+    .run(original.sourceId);
+  f.calls.length = 0;
+  const wrongExtractor = await f.service().retrieve(input(), f.access);
+  expect(wrongExtractor.outcomes[0]?.reason).toBe("cache_invalid");
+  expect(wrongExtractor.chunks).toEqual([]);
+  expect(f.calls).toHaveLength(2);
+});
+
+test.each([
+  ["canonical_url", "https://law.go.kr/LSW/lsInfoP.do?lsiSeq=999999"],
+  ["title", "다른 합성 법령 제목"],
+  ["source_date", "2027-01-01"],
+  ["rights_provenance", "확인되지 않은 합성 권리 표시"],
+  ["court", "법령에 잘못 연결된 합성 법원"],
+  ["institution_id", "unexpected_institution"],
+] as const)(
+  "discovered statute cache rejects %s drift without new citation binding",
+  async (column, value) => {
+    const f = await fixture();
+    const first = await f.service().retrieve(input(), f.access);
+    const source = first.chunks[0]?.source;
+    if (!source) throw new Error("Missing source");
+    // Deliberate unsupported SQLite metadata corruption, not a source-writing API.
+    f.db.sqlite
+      .query(`UPDATE v2_official_sources SET ${column}=? WHERE source_id=?`)
+      .run(value, source.sourceId);
+    f.calls.length = 0;
+    const result = await f.service().retrieve(input(), f.access);
+    expect(result.outcomes[0]?.reason).toBe("cache_invalid");
+    expect(result.chunks).toEqual([]);
+    expect(f.calls).toHaveLength(1);
+    expect(f.db.sqlite.query("SELECT count(*) AS n FROM v2_citation_bindings").get()).toEqual({
+      n: 1,
+    });
+  },
+);
+
+test("SQLite forbids null statute dates and keeps the previously verified cache intact", async () => {
+  const f = await fixture();
+  const first = await f.service().retrieve(input(), f.access);
+  const source = first.chunks[0]?.source;
+  if (!source) throw new Error("Missing source");
+  expect(() =>
+    f.db.sqlite
+      .query("UPDATE v2_official_sources SET source_date=NULL WHERE source_id=?")
+      .run(source.sourceId),
+  ).toThrow();
+  f.calls.length = 0;
+  const repeated = await f.service().retrieve(input(), f.access);
+  expect(repeated.outcomes[0]?.availability).toBe("verified");
+  expect(repeated.chunks[0]?.source).toEqual(source);
+  expect(f.calls).toHaveLength(1);
+});
+
+test("a matching body and official tuple do not legitimize a forged generated source identity", async () => {
+  const f = await fixture();
+  const chunk = await parseStatute(
+    officialDetail,
+    parseStatuteCandidate(officialList.LawSearch.law[0]),
+    { number: "598", branch: "0" },
+    "2026-10-06",
+    NOW,
+  );
+  const forged = `source_${"0".repeat(64)}`;
+  expect(
+    await f.repo.put(
+      { ...chunk.source, sourceId: forged },
+      {
+        ...chunk.citation,
+        sourceId: forged,
+        id: `cite_${crypto.randomUUID().replaceAll("-", "_")}`,
+      },
+    ),
+  ).toBe(true);
+  const result = await f.service().retrieve(input(), f.access);
+  expect(result.outcomes[0]?.reason).toBe("cache_invalid");
+  expect(result.chunks).toEqual([]);
+});
+
+test.each(["consent", "revision", "tombstone", "delete", "cancel"])(
+  "real %s change after actual cache lookup releases no cached chunk or new binding",
+  async (boundary) => {
+    const f = await fixture();
+    await f.service().retrieve(input(), f.access);
+    const controller = new AbortController();
+    const repo = {
+      ...f.repo,
+      findLatestByIdentity: async (...args: Parameters<typeof f.repo.findLatestByIdentity>) => {
+        const source = await f.repo.findLatestByIdentity(...args);
+        expect(source).not.toBeNull();
+        if (boundary === "consent")
+          f.db.sqlite.query("DELETE FROM user_consents WHERE user_id=?").run(f.actor.ownerId);
+        if (boundary === "revision") expect(await f.ws.changeState(f.guard, "archive")).toBe(true);
+        if (boundary === "tombstone")
+          f.db.sqlite.query("INSERT INTO v2_tombstones VALUES('workspace',?,?)").run(f.id, NOW);
+        if (boundary === "delete") expect(await f.deletion.workspace(f.guard)).toBe(true);
+        if (boundary === "cancel") controller.abort();
+        return source;
+      },
+    };
+    let calls = 0;
+    const service = createV2LegalRetrieval({ LAW_API_OC: "synthetic-private-test" }, repo, {
+      transport: async () => {
+        calls++;
+        return response(syntheticCompleteList);
+      },
+      bindCitation: (c) => f.repo.bindCitation(f.guard, c),
+    });
+    const result = await service.retrieve(input(), { ...f.access, signal: controller.signal });
+    expect(result.chunks).toEqual([]);
+    expect(result.outcomes[0]?.reason).toBe(boundary === "cancel" ? "cancelled" : "not_authorized");
+    expect(calls).toBe(1);
+    expect(f.db.sqlite.query("SELECT count(*) AS n FROM v2_citation_bindings").get()).toEqual({
+      n: boundary === "delete" ? 0 : 1,
+    });
+  },
+);
 
 test.each(["owner", "consent", "revision", "tombstone"])(
   "real SQL %s guard blocks before transport and leaves factual preparation available",
@@ -520,6 +750,98 @@ test("synthetic precedent full text and actual-selector guide flow through the r
     n: 2,
   });
 });
+
+test.each(["full", "summary", "tax"])(
+  "%s precedent discovery preserves full-text and unsupported source boundaries",
+  async (mode) => {
+    const f = await fixture();
+    const list = precedents.find((v) => v.id === "precedent_list_candidate");
+    const detail = precedents.find((v) => v.id === "precedent_verified");
+    if (!list || !detail) throw new Error("Missing synthetic precedent");
+    const detailBody = syntheticPrecedentDetail(detail.response.body);
+    if (mode === "summary") delete detailBody.PrecService.판례내용;
+    const listBody = JSON.parse(list.response.body);
+    let calls = 0;
+    const service = f.service({
+      transport: async (url) => {
+        calls++;
+        return response(new URL(url).pathname.endsWith("lawSearch.do") ? listBody : detailBody);
+      },
+    });
+    const plans = [{ kind: "precedent", query: "합성 개념", limit: 3 }];
+    const first = await service.retrieve(input(plans), f.access);
+    expect(first.chunks).toHaveLength(1);
+    if (mode === "tax") listBody.PrecSearch.prec[0].데이터출처명 = "국세법령정보시스템";
+    calls = 0;
+    const repeated = await service.retrieve(input(plans), f.access);
+    if (mode === "tax") {
+      expect(repeated.chunks).toEqual([]);
+      expect(repeated.outcomes[0]?.reason).toBe("unsupported_format");
+      expect(calls).toBe(1);
+    } else {
+      expect(repeated.chunks[0]?.source).toEqual(first.chunks[0]?.source);
+      expect(repeated.chunks[0]?.citation.id).not.toBe(first.chunks[0]?.citation.id);
+      expect(repeated.outcomes[0]?.availability).toBe(mode === "full" ? "verified" : "limited");
+      expect(calls).toBe(mode === "full" ? 1 : 2);
+    }
+  },
+);
+
+test.each(["court", "case_number", "source_date"])(
+  "precedent discovered cache rejects %s mismatch against the current official candidate",
+  async (column) => {
+    const f = await fixture();
+    const list = precedents.find((v) => v.id === "precedent_list_candidate");
+    const detail = precedents.find((v) => v.id === "precedent_verified");
+    if (!list || !detail) throw new Error("Missing synthetic precedent");
+    let calls = 0;
+    const service = f.service({
+      transport: async (url) => {
+        calls++;
+        return response(
+          new URL(url).pathname.endsWith("lawSearch.do")
+            ? JSON.parse(list.response.body)
+            : syntheticPrecedentDetail(detail.response.body),
+        );
+      },
+    });
+    const plans = [{ kind: "precedent", query: "합성 개념", limit: 3 }];
+    const first = await service.retrieve(input(plans), f.access);
+    const source = first.chunks[0]?.source;
+    if (!source) throw new Error("Missing source");
+    // Unsupported raw SQLite corruption verifies retrieval's type-specific metadata boundary.
+    f.db.sqlite
+      .query(`UPDATE v2_official_sources SET ${column}=? WHERE source_id=?`)
+      .run(column === "source_date" ? "2026-01-03" : "다른 합성 값", source.sourceId);
+    calls = 0;
+    const repeated = await service.retrieve(input(plans), f.access);
+    expect(repeated.chunks).toEqual([]);
+    expect(repeated.outcomes[0]?.reason).toBe("cache_invalid");
+    expect(calls).toBe(1);
+    expect(f.db.sqlite.query("SELECT count(*) AS n FROM v2_citation_bindings").get()).toEqual({
+      n: 1,
+    });
+  },
+);
+
+test("cached guide text never promotes pending-update coverage into verified availability", async () => {
+  const f = await fixture();
+  let calls = 0;
+  const service = f.service({
+    transport: async () => {
+      calls++;
+      return new Response(capturedGuide.body, { headers: { "content-type": "text/html" } });
+    },
+  });
+  const first = await service.retrieve(input([guidePlan]), f.access);
+  const repeated = await service.retrieve(input([guidePlan]), f.access);
+  expect(calls).toBe(2);
+  expect(repeated.chunks[0]?.source).toEqual(first.chunks[0]?.source);
+  expect(repeated.chunks[0]?.citation.id).not.toBe(first.chunks[0]?.citation.id);
+  expect(repeated.outcomes[0]?.availability).toBe("limited");
+  expect(repeated.outcomes[0]?.reason).toBe("update_pending");
+  expect(repeated.legalSourceStatus).toBe("unavailable");
+});
 test("cancel during fetch and retry backoff stops reservations; budget denial never sends request", async () => {
   let calls = 0;
   const controller = new AbortController();
@@ -740,7 +1062,7 @@ test("corrupted cached text is rejected and cannot refresh or bind a mismatched 
   f.db.sqlite
     .query("UPDATE v2_official_sources SET body=? WHERE source_id=?")
     .run("합성 캐시 변조", source.sourceId);
-  const result = await f.service({ knownSourceKeys: [source] }).retrieve(input(), f.access);
+  const result = await f.service().retrieve(input(), f.access);
   expect(result.outcomes[0]?.reason).toBe("cache_invalid");
   expect(result.chunks).toEqual([]);
   expect(f.db.sqlite.query("SELECT count(*) AS n FROM v2_citation_bindings").get()).toEqual({
