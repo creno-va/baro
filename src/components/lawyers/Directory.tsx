@@ -1,4 +1,4 @@
-import { MapPin } from "lucide-react";
+import { ArrowRight, ChevronDown, Info, MapPin, Search, UserRound } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, type LawyerView, lawyerErrorMessage } from "../../client/api/lawyers";
 import { Button } from "../ui/button";
@@ -64,16 +64,31 @@ export function Directory({ preview = false }: { preview?: boolean }) {
     };
   }, [load]);
   return (
-    <div className="lawyer-directory space-y-6">
-      <PageHeader
-        title="변호사 찾기"
-        description="분야와 지역을 살펴보고, 원하는 변호사에게 직접 연락하세요."
-      />
+    <div className="lawyer-directory">
+      <div className="directory-intro">
+        <PageHeader
+          eyebrow="함께할 전문가를 찾는 첫걸음"
+          title="변호사 찾기"
+          description="분야와 지역을 살펴보고, 원하는 변호사에게 직접 연락하세요."
+        />
+        <div className="directory-illustration" aria-hidden="true">
+          <div className="directory-illustration__profile">
+            <UserRound size={48} strokeWidth={1.5} />
+          </div>
+          <span className="directory-illustration__search">
+            <Search size={26} strokeWidth={2.2} />
+          </span>
+        </div>
+      </div>
       <ApiModeNotice preview={preview} />
-      <Card>
+      <Card className="directory-search">
+        <CardHeader>
+          <CardTitle>어떤 변호사를 찾고 계신가요?</CardTitle>
+          <p>필요한 분야와 가까운 지역부터 살펴보세요.</p>
+        </CardHeader>
         <CardContent>
           <form
-            className="grid gap-4 sm:grid-cols-4"
+            className="directory-search__form"
             onSubmit={(event) => {
               event.preventDefault();
               if (!ready) return;
@@ -89,60 +104,70 @@ export function Directory({ preview = false }: { preview?: boolean }) {
               void load(params);
             }}
           >
-            <label className="grid gap-2">
-              이름 또는 사무실
-              <input
-                className="rounded-lg border border-input bg-card p-3"
-                maxLength={100}
-                disabled={!ready}
-                value={filters.name}
-                onChange={(event) => setFilters({ ...filters, name: event.target.value })}
-              />
+            <label className="directory-search__field">
+              <span>이름 또는 사무실</span>
+              <span className="directory-search__input">
+                <Search size={19} aria-hidden="true" />
+                <input
+                  placeholder="이름 또는 사무실명 입력"
+                  maxLength={100}
+                  disabled={!ready}
+                  value={filters.name}
+                  onChange={(event) => setFilters({ ...filters, name: event.target.value })}
+                />
+              </span>
             </label>
-            <label className="grid gap-2">
-              지역
-              <select
-                className="rounded-lg border border-input bg-card p-3"
-                disabled={!ready}
-                value={filters.region}
-                onChange={(event) => setFilters({ ...filters, region: event.target.value })}
-              >
-                <option value="">전체 지역</option>
-                {Object.entries(REGION_LABELS).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
+            <label className="directory-search__field">
+              <span>지역</span>
+              <span className="directory-search__select">
+                <select
+                  disabled={!ready}
+                  value={filters.region}
+                  onChange={(event) => setFilters({ ...filters, region: event.target.value })}
+                >
+                  <option value="">전체 지역</option>
+                  {Object.entries(REGION_LABELS).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown size={18} aria-hidden="true" />
+              </span>
             </label>
-            <label className="grid gap-2">
-              분야
-              <select
-                className="rounded-lg border border-input bg-card p-3"
-                disabled={!ready}
-                value={filters.legalField}
-                onChange={(event) => setFilters({ ...filters, legalField: event.target.value })}
-              >
-                <option value="">전체 분야</option>
-                {Object.entries(FIELD_LABELS).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
+            <label className="directory-search__field">
+              <span>분야</span>
+              <span className="directory-search__select">
+                <select
+                  disabled={!ready}
+                  value={filters.legalField}
+                  onChange={(event) => setFilters({ ...filters, legalField: event.target.value })}
+                >
+                  <option value="">전체 분야</option>
+                  {Object.entries(FIELD_LABELS).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown size={18} aria-hidden="true" />
+              </span>
             </label>
-            <div className="flex items-end">
-              <Button type="submit" disabled={!ready}>
+            <div className="directory-search__submit">
+              <Button type="submit" disabled={!ready} className="directory-search__button">
+                <Search size={18} aria-hidden="true" />
                 검색
               </Button>
             </div>
           </form>
         </CardContent>
       </Card>
-      <p className="text-sm text-muted-foreground">
-        변호사가 공개한 프로필을 표시합니다. 목록 순서는 매일 바뀝니다. 분야는 변호사가 기재한
-        정보이며 적합성이나 성과를 보증하지 않습니다.
-      </p>
+      <div className="directory-results-heading">
+        <h2>공개 프로필</h2>
+        {!busy && !error && items.length > 0 && (
+          <p role="status">공개 프로필 {items.length}개를 찾았어요.</p>
+        )}
+      </div>
       {error && (
         <StatePanel
           variant="error"
@@ -172,46 +197,45 @@ export function Directory({ preview = false }: { preview?: boolean }) {
           }
         />
       )}
-      {!busy && !error && items.length > 0 && (
-        <p role="status" className="text-sm text-muted-foreground">
-          공개 프로필 {items.length}개를 찾았어요.
-        </p>
-      )}
-      <div className="grid gap-5 sm:grid-cols-2" aria-busy={busy}>
+      <div className="directory-results" aria-busy={busy}>
         {items.slice(0, visibleCount).map((lawyer) => (
-          <Card key={lawyer.id}>
-            <CardHeader>
-              <AssetPhoto
-                profileId={lawyer.id}
-                assetId={lawyer.photoAssetId}
-                fallback={lawyer.photoUrl}
-                alt={`${lawyer.name} 프로필 사진`}
-                size={80}
-              />
-              <CardTitle>
-                <a href={`/lawyers/${encodeURIComponent(lawyer.id)}`}>{lawyer.name}</a>
-              </CardTitle>
-              <p className="flex items-center gap-2 text-sm text-muted-foreground">
-                본인 작성 정보 · 자격 확인 표시 없음
-              </p>
+          <Card key={lawyer.id} className="directory-profile">
+            <CardHeader className="directory-profile__header">
+              <div className="directory-profile__photo">
+                <AssetPhoto
+                  profileId={lawyer.id}
+                  assetId={lawyer.photoAssetId}
+                  fallback={lawyer.photoUrl}
+                  alt={`${lawyer.name} 프로필 사진`}
+                  size={64}
+                />
+              </div>
+              <div className="directory-profile__identity">
+                <CardTitle>
+                  <a href={`/lawyers/${encodeURIComponent(lawyer.id)}`}>{lawyer.name}</a>
+                  <span>변호사</span>
+                </CardTitle>
+                <p>{lawyer.officeName}</p>
+              </div>
             </CardHeader>
-            <CardContent>
-              <p className="flex items-start gap-2">
-                <MapPin size={18} aria-hidden="true" />
-                {REGION_LABELS[lawyer.region as keyof typeof REGION_LABELS] ?? lawyer.region} ·{" "}
-                {lawyer.officeName}
+            <CardContent className="directory-profile__content">
+              <p className="directory-profile__location">
+                <MapPin size={16} aria-hidden="true" />
+                {REGION_LABELS[lawyer.region as keyof typeof REGION_LABELS] ?? lawyer.region}
               </p>
-              <p className="my-3 whitespace-pre-wrap break-words">{lawyer.introduction}</p>
-              <p className="text-sm text-muted-foreground">
-                {lawyer.practiceAreas
-                  .map((field) => FIELD_LABELS[field as keyof typeof FIELD_LABELS] ?? field)
-                  .join(" · ")}
-              </p>
+              <p className="directory-profile__introduction">{lawyer.introduction}</p>
+              <ul className="directory-profile__fields" aria-label="활동 분야">
+                {lawyer.practiceAreas.map((field) => (
+                  <li key={field}>{FIELD_LABELS[field as keyof typeof FIELD_LABELS] ?? field}</li>
+                ))}
+              </ul>
+              <p className="directory-profile__disclosure">본인 작성 정보 · 자격 확인 표시 없음</p>
               <a
-                className="ui-button ui-button--outline mt-4"
+                className="directory-profile__link"
                 href={`/lawyers/${encodeURIComponent(lawyer.id)}`}
               >
                 프로필과 연락처 보기
+                <ArrowRight size={18} aria-hidden="true" />
               </a>
             </CardContent>
           </Card>
@@ -221,12 +245,21 @@ export function Directory({ preview = false }: { preview?: boolean }) {
       {items.length > visibleCount && !error && (
         <Button
           variant="outline"
+          className="directory-more"
           disabled={busy}
           onClick={() => setVisibleCount((count) => count + 20)}
         >
           더 보기
+          <ChevronDown size={17} aria-hidden="true" />
         </Button>
       )}
+      <div className="directory-disclosure">
+        <Info size={18} aria-hidden="true" />
+        <p>
+          변호사가 공개한 프로필을 표시합니다. 목록 순서는 매일 바뀝니다. 분야는 변호사가 기재한
+          정보이며 적합성이나 성과를 보증하지 않습니다.
+        </p>
+      </div>
     </div>
   );
 }
