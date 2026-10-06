@@ -126,11 +126,14 @@ test("both environments use one real build and OAuth synchronization pipeline", 
     const workflow = await deploymentWorkflow(environment);
     const job = workflow.jobs.deploy;
     expect(job.environment).toBe(environment);
-    expect(job.env.PUBLIC_API_MODE).toBe("real");
-    expect(job.env.PUBLIC_TURNSTILE_SITE_KEY).toBe("${{ vars.PUBLIC_TURNSTILE_SITE_KEY }}");
-    for (const field of oauthFields) expect(job.env[field]).toBe("${{ secrets." + field + " }}");
     const deploy = job.steps.filter((step) => step.uses === "./.github/actions/deploy-worker");
     expect(deploy).toHaveLength(1);
+    expect(deploy[0]?.env?.PUBLIC_API_MODE).toBe("real");
+    expect(deploy[0]?.env?.PUBLIC_TURNSTILE_SITE_KEY).toBe("${{ vars.PUBLIC_TURNSTILE_SITE_KEY }}");
+    for (const field of oauthFields) {
+      expect(deploy[0]?.env?.[field]).toBe("${{ secrets." + field + " }}");
+      expect(job.env[field]).toBeUndefined();
+    }
     expect(deploy[0]?.with?.["target-environment"]).toBe(environment);
     expect(job.steps.some((step) => step.run?.includes("bun run build"))).toBe(false);
     expect(job.steps.some((step) => step.uses?.startsWith("cloudflare/"))).toBe(false);
