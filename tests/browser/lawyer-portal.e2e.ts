@@ -33,7 +33,9 @@ test("portal saves photo and portfolio, previews, publishes to directory, refres
         },
       });
     if (url.pathname === "/api/v2/lawyers/self-service")
-      return route.fulfill({ json: profile.published ? [profile] : [] });
+      return route.fulfill({
+        json: { items: profile.published ? [profile] : [], nextCursor: null },
+      });
     return route.fulfill(profile.published ? { json: profile } : { status: 404, json: {} });
   });
   await page.setViewportSize({ width: 320, height: 760 });

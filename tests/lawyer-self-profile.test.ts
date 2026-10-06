@@ -7,7 +7,10 @@ import { createLawyersApi } from "../src/server/api/v2/lawyers";
 import { createCaseDataCipher } from "../src/server/crypto";
 import { createV2Core } from "../src/server/db/v2-core";
 import { createSelfProfileService } from "../src/server/modules/lawyers/self-profile";
-import { selfProfileSchema } from "../src/server/modules/lawyers/self-profile-contract";
+import {
+  selfDirectoryPageSchema,
+  selfProfileSchema,
+} from "../src/server/modules/lawyers/self-profile-contract";
 import { createTestDatabase } from "./helpers/d1";
 import { seedTestSession } from "./helpers/session";
 
@@ -128,7 +131,7 @@ test("real API stores encrypted self profiles, records publication consent, hide
   expect(saved.verificationStatus).toBe("self_declared");
   expect((await f.request("/v2/lawyers/self-service")).status).toBe(200);
   expect(
-    selfProfileSchema.array().parse(await (await f.request("/v2/lawyers/self-service")).json()),
+    selfDirectoryPageSchema.parse(await (await f.request("/v2/lawyers/self-service")).json()).items,
   ).toEqual([]);
   const withoutConsent = await f.request(
     "/v2/me/lawyer/self-profile/publication",
@@ -145,13 +148,11 @@ test("real API stores encrypted self profiles, records publication consent, hide
   expect(publication.status).toBe(200);
   const published = selfProfileSchema.parse(await publication.json());
   expect(
-    selfProfileSchema
-      .array()
-      .parse(
-        await (
-          await f.request("/v2/lawyers/self-service?region=seoul&legalField=civil&name=합성")
-        ).json(),
-      ),
+    selfDirectoryPageSchema.parse(
+      await (
+        await f.request("/v2/lawyers/self-service?region=seoul&legalField=civil&name=합성")
+      ).json(),
+    ).items,
   ).toEqual([published]);
   expect(
     selfProfileSchema.parse(
@@ -176,7 +177,7 @@ test("real API stores encrypted self profiles, records publication consent, hide
   });
   expect(hidden.status).toBe(200);
   expect(
-    selfProfileSchema.array().parse(await (await f.request("/v2/lawyers/self-service")).json()),
+    selfDirectoryPageSchema.parse(await (await f.request("/v2/lawyers/self-service")).json()).items,
   ).toEqual([]);
   expect((await f.request(`/v2/lawyers/self-service/${published.id}`)).status).toBe(404);
   f.db.sqlite.query("DELETE FROM user WHERE id=?").run(f.owner.userId);
@@ -185,6 +186,34 @@ test("real API stores encrypted self profiles, records publication consent, hide
       .query("SELECT count(*) AS n FROM v2_private_snapshots WHERE target_id=?")
       .get(published.id),
   ).toEqual({ n: 0 });
+});
+
+test("self directory advances filtered empty pages and returns profiles beyond the first page", async () => {
+  const f = await fixture();
+  const service = createSelfProfileService(f.core);
+  const profiles = [];
+  for (const user of [f.owner, f.noConsent]) {
+    const blank = await service.getMine(user.userId);
+    const saved = await service.saveMine(user.userId, { ...blank, ...complete, name: user.userId });
+    profiles.push(await service.publishMine(user.userId, true, saved.revision));
+  }
+  profiles.sort((a, b) => a.id.localeCompare(b.id));
+  const wanted = profiles[1];
+  if (!wanted) throw new Error("Expected second synthetic profile");
+  const first = selfDirectoryPageSchema.parse(
+    await (await f.request(`/v2/lawyers/self-service?limit=1&name=${wanted.name}`)).json(),
+  );
+  expect(first.items).toEqual([]);
+  expect(first.nextCursor).toBe(profiles[0]?.id);
+  const second = selfDirectoryPageSchema.parse(
+    await (
+      await f.request(
+        `/v2/lawyers/self-service?limit=1&name=${wanted.name}&cursor=${first.nextCursor}`,
+      )
+    ).json(),
+  );
+  expect(second.items).toEqual([wanted]);
+  expect(second.nextCursor).toBeNull();
 });
 test("self API denies wrong role, missing consent, cross-owner, origin and production gate", async () => {
   const f = await fixture();

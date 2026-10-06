@@ -42,6 +42,7 @@ test("integrated lawyer login/consent/editor uses persistent API mock with no re
   await page.getByRole("button", { name: "동의하고 공개" }).click();
   await expect(page.getByText("공개 중", { exact: true })).toBeVisible();
   await page.getByRole("link", { name: "변호사 디렉터리" }).click();
+  await expect(page.locator("astro-island[ssr]")).toHaveCount(0);
   await page.getByLabel("이름 또는 사무실", { exact: true }).fill("E 통합 시연 변호사");
   await page.getByRole("combobox", { name: "지역", exact: true }).selectOption("seoul");
   await page.getByRole("combobox", { name: "분야", exact: true }).selectOption("civil");
@@ -66,6 +67,7 @@ test("integrated lawyer login/consent/editor uses persistent API mock with no re
   expect(snapshot.owners["example-lawyer"]).toBeTruthy();
   const id = snapshot.owners["example-lawyer"];
   await page.goto("/lawyer");
+  await expect(page.locator("astro-island[ssr]")).toHaveCount(0);
   await page.getByRole("button", { name: "비공개로 전환" }).click();
   await page.reload();
   await expect(page.getByText("비공개", { exact: true })).toBeVisible();

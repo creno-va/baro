@@ -9,7 +9,8 @@ test("directory filters, empty supply, approved detail and office-only contact w
   await page.route("**/api/v2/lawyers**", (route) => {
     const url = new URL(route.request().url());
     seen.push(url);
-    if (url.pathname === "/api/v2/lawyers/self-service") return route.fulfill({ json: [] });
+    if (url.pathname === "/api/v2/lawyers/self-service")
+      return route.fulfill({ json: { items: [], nextCursor: null } });
     if (url.pathname.startsWith("/api/v2/lawyers/self-service/"))
       return route.fulfill({ status: 404, json: {} });
     if (url.pathname.includes("/assets/"))
@@ -68,7 +69,7 @@ test("directory transport failure can be retried without stale results", async (
   let fail = true;
   await page.route("**/api/v2/lawyers**", (route) =>
     new URL(route.request().url()).pathname === "/api/v2/lawyers/self-service"
-      ? route.fulfill({ json: [] })
+      ? route.fulfill({ json: { items: [], nextCursor: null } })
       : fail
         ? route.fulfill({ status: 503, json: {} })
         : route.fulfill({

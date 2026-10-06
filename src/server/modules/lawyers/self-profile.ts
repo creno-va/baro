@@ -146,12 +146,20 @@ export function createSelfProfileService(core: V2Core, clock = () => new Date().
       name?: string | undefined;
       region?: string | undefined;
       legalField?: string | undefined;
+      cursor?: string | undefined;
+      limit?: number | undefined;
     }) {
+      const limit = filters.limit ?? 20;
       const rows = await core
-        .statement(`${latest} AND c.version=? AND ${role} ORDER BY p.id LIMIT 200`, [publicVersion])
+        .statement(`${latest} AND c.version=? AND ${role} AND p.id>? ORDER BY p.id LIMIT ?`, [
+          publicVersion,
+          filters.cursor ?? "",
+          limit + 1,
+        ])
         .all<Row>();
       const items: SelfProfile[] = [];
-      for (const row of rows.results) {
+      const page = rows.results.slice(0, limit);
+      for (const row of page) {
         let p: SelfProfile;
         try {
           p = await service.get(row.id);
@@ -168,7 +176,10 @@ export function createSelfProfileService(core: V2Core, clock = () => new Date().
         )
           items.push(p);
       }
-      return items;
+      return {
+        items,
+        nextCursor: rows.results.length > limit ? (page.at(-1)?.id ?? null) : null,
+      };
     },
   };
   return service;

@@ -5,6 +5,7 @@ import {
 } from "../../contracts/v2";
 import {
   type SelfProfile,
+  selfDirectoryPageSchema,
   selfProfileSchema,
 } from "../../server/modules/lawyers/self-profile-contract";
 import { apiMode, ApiError as LawyerApiError, request as sharedRequest } from "./core";
@@ -81,9 +82,15 @@ const real = {
       cursor = page.nextCursor;
     }
     params.delete("cursor");
-    const own = selfProfileSchema
-      .array()
-      .parse(await request(`/api/v2/lawyers/self-service?${params}`));
+    const own: SelfProfile[] = [];
+    do {
+      const page = selfDirectoryPageSchema.parse(
+        await request(`/api/v2/lawyers/self-service?${params}`),
+      );
+      own.push(...page.items);
+      cursor = page.nextCursor;
+      if (cursor) params.set("cursor", cursor);
+    } while (cursor);
     return rotateLawyers([...own, ...items.filter((p) => !own.some((s) => s.id === p.id))]);
   },
   async get(id: string): Promise<LawyerView> {
