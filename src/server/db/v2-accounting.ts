@@ -390,7 +390,7 @@ export function createV2AccountingRepository(core: V2Core, environment?: "previe
         const claimId = crypto.randomUUID();
         const statements = [
           core.statement(
-            `INSERT INTO v2_mutation_claims(id,owner_id,target_id,revision) SELECT ?,o.owner_id,o.id,o.revision FROM v2_operations o JOIN v2_billing_principals p ON p.owner_id=o.owner_id JOIN v2_cost_quotes q ON q.id=? JOIN v2_monthly_budget b ON b.month=? JOIN v2_budget_allocations a ON a.month=b.month AND a.version=b.allocation_version WHERE o.id=? AND o.owner_id=? AND o.state IN ('admitted','ambiguous') AND q.reviewed_at<=? AND q.valid_until>? AND q.estimated_krw=? AND b.settled_krw+b.reserved_krw+b.ambiguous_krw+b.fixed_maintenance_krw+?<=b.limit_krw AND b.environment=? AND a.reviewed_at<=? AND a.valid_until>? AND a.funding_valid_until>? AND a.funding_state IN ('funded','trial_credit') AND NOT EXISTS(SELECT 1 FROM v2_cost_attempts WHERE invocation_id=? AND attempt=?) AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='account' AND target_id=o.owner_id) AND (o.workspace_id IS NULL OR EXISTS(SELECT 1 FROM v2_workspaces w WHERE w.id=o.workspace_id AND w.owner_id=o.owner_id AND ${aliveWorkspace}))`,
+            `INSERT INTO v2_mutation_claims(id,owner_id,target_id,revision) SELECT ?,o.owner_id,o.id,o.revision FROM v2_operations o JOIN v2_billing_principals p ON p.owner_id=o.owner_id JOIN v2_cost_quotes q ON q.id=? JOIN v2_monthly_budget b ON b.month=? JOIN v2_budget_allocations a ON a.month=b.month AND a.version=b.allocation_version WHERE o.id=? AND o.owner_id=? AND o.state IN ('admitted','ambiguous') AND q.reviewed_at<=? AND q.valid_until>? AND q.estimated_krw=? AND b.settled_krw+b.reserved_krw+b.ambiguous_krw+b.fixed_maintenance_krw+?<=b.limit_krw AND b.environment=? AND NOT EXISTS(SELECT 1 FROM v2_runtime_controls c WHERE c.month=b.month) AND a.reviewed_at<=? AND a.valid_until>? AND a.funding_valid_until>? AND a.funding_state IN ('funded','trial_credit') AND NOT EXISTS(SELECT 1 FROM v2_cost_attempts WHERE invocation_id=? AND attempt=?) AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='account' AND target_id=o.owner_id) AND (o.workspace_id IS NULL OR EXISTS(SELECT 1 FROM v2_workspaces w WHERE w.id=o.workspace_id AND w.owner_id=o.owner_id AND ${aliveWorkspace}))`,
             [
               claimId,
               a.quoteId,
@@ -447,7 +447,10 @@ export function createV2AccountingRepository(core: V2Core, environment?: "previe
         if (chargedKrw !== null)
           parse(z.number().int().min(0).max(Number.MAX_SAFE_INTEGER), chargedKrw);
         const row = await core
-          .statement("SELECT * FROM v2_cost_attempts WHERE id=?", [attemptId])
+          .statement(
+            "SELECT * FROM v2_cost_attempts WHERE id=? AND NOT EXISTS(SELECT 1 FROM v2_paid_holds WHERE attempt_id=v2_cost_attempts.id)",
+            [attemptId],
+          )
           .first<{ state: string; month: string; reserved_krw: number }>();
         if (
           !row ||
@@ -462,7 +465,7 @@ export function createV2AccountingRepository(core: V2Core, environment?: "previe
         const receiptId = crypto.randomUUID();
         const results = await core.binding.batch([
           core.statement(
-            "INSERT INTO v2_cost_receipts(id,attempt_id,previous_state,next_state) SELECT ?,id,state,? FROM v2_cost_attempts WHERE id=? AND state=?",
+            "INSERT INTO v2_cost_receipts(id,attempt_id,previous_state,next_state) SELECT ?,id,state,? FROM v2_cost_attempts WHERE id=? AND state=? AND NOT EXISTS(SELECT 1 FROM v2_paid_holds WHERE attempt_id=v2_cost_attempts.id)",
             [receiptId, outcome, attemptId, row.state],
           ),
           core.statement(

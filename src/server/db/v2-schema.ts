@@ -1422,6 +1422,15 @@ export const v2OfficialSources = sqliteTable(
       t.extractorVersion,
     ),
     index("v2_official_expiry_idx").on(t.expiresAt),
+    index("v2_official_discovery_idx").on(
+      t.sourceType,
+      t.officialId,
+      t.version,
+      t.section,
+      t.extractorVersion,
+      t.fetchedAt,
+      t.verifiedAt,
+    ),
     check(
       "v2_official_source_type",
       sql`${t.sourceType} IN ('statute','precedent','official_guide') AND length(${t.contentHash}) = 64 AND ${t.contentHash} NOT GLOB '*[^0-9a-f]*' AND ${t.expiresAt} > ${t.verifiedAt} AND (${t.sourceType} != 'official_guide' OR (${t.institutionId} IS NOT NULL AND ${t.endpointId} IS NOT NULL)) AND (${t.sourceType} != 'precedent' OR (${t.court} IS NOT NULL AND ${t.caseNumber} IS NOT NULL AND ${t.sourceDate} IS NOT NULL)) AND (${t.sourceType} != 'statute' OR ${t.sourceDate} IS NOT NULL)`,
@@ -1505,6 +1514,216 @@ export const v2SummaryEditReceipts = sqliteTable(
     check(
       "v2_summary_receipt_bounds",
       sql`${t.kind} IN ('source_part','target_part','fact','party') AND ${t.ordinal} BETWEEN 0 AND 99999`,
+    ),
+  ],
+);
+
+// Server-verified public financial provenance and opaque execution identities.
+// These records deliberately have no cascading user/job/operation foreign key.
+export const v2RuntimeProofs = sqliteTable(
+  "v2_runtime_proofs",
+  {
+    id: id(),
+    kind: text("kind").notNull(),
+    environment: text("environment").notNull(),
+    digest: text("digest").notNull(),
+    payloadJson: text("payload_json").notNull(),
+    evidenceHash: text("evidence_hash").notNull(),
+    verificationMethod: text("verification_method").notNull(),
+    verifiedAt: text("verified_at").notNull(),
+    validUntil: text("valid_until").notNull(),
+  },
+  (t) => [
+    check(
+      "v2_runtime_proof_bounds",
+      sql`${t.kind} IN ('pricing','funding','allocation','drain') AND ${t.environment} IN ('preview','production') AND length(${t.digest})=64 AND length(${t.evidenceHash})=64 AND ${t.verificationMethod} IN ('official_document','authenticated_console','authenticated_coordinator','provider_receipt') AND ${t.validUntil}>${t.verifiedAt} AND length(CAST(${t.payloadJson} AS BLOB))<=65536`,
+    ),
+  ],
+);
+export const v2RuntimePlans = sqliteTable(
+  "v2_runtime_plans",
+  {
+    id: id(),
+    operationId: text("operation_id").notNull(),
+    operationRevision: integer("operation_revision").notNull(),
+    requestHash: text("request_hash").notNull(),
+    invocationId: text("invocation_id").notNull(),
+    pricingProofId: text("pricing_proof_id")
+      .notNull()
+      .references(() => v2RuntimeProofs.id),
+    fundingProofId: text("funding_proof_id")
+      .notNull()
+      .references(() => v2RuntimeProofs.id),
+    jobId: text("job_id").notNull(),
+    targetKind: text("target_kind").notNull(),
+    targetId: text("target_id").notNull(),
+    targetRevision: integer("target_revision").notNull(),
+    digest: text("digest").notNull(),
+    payloadJson: text("payload_json").notNull(),
+    evidenceHash: text("evidence_hash").notNull(),
+    verifiedAt: text("verified_at").notNull(),
+    maximumAttempts: integer("maximum_attempts").notNull(),
+    reservedKrw: integer("reserved_krw").notNull(),
+    deadlineAt: text("deadline_at").notNull(),
+    createdAt: created(),
+  },
+  (t) => [
+    check(
+      "v2_runtime_plan_bounds",
+      sql`typeof(${t.operationRevision})='integer' AND ${t.operationRevision} BETWEEN 1 AND 9007199254740991 AND typeof(${t.targetRevision})='integer' AND ${t.targetRevision} BETWEEN 1 AND 9007199254740991 AND typeof(${t.maximumAttempts})='integer' AND ${t.maximumAttempts} BETWEEN 1 AND 10 AND typeof(${t.reservedKrw})='integer' AND ${t.reservedKrw} BETWEEN 0 AND 1000000 AND length(${t.requestHash})=64 AND length(${t.digest})=64 AND ${t.deadlineAt}>${t.createdAt} AND ${t.targetKind} IN ('workspace','file','report','profile_asset') AND length(CAST(${t.payloadJson} AS BLOB))<=65536`,
+    ),
+  ],
+);
+export const v2PaidHolds = sqliteTable(
+  "v2_paid_holds",
+  {
+    attemptId: text("attempt_id")
+      .primaryKey()
+      .references(() => v2CostAttempts.id),
+    planId: text("plan_id")
+      .notNull()
+      .references(() => v2RuntimePlans.id),
+    jobId: text("job_id").notNull(),
+    state: text("state").notNull().default("prepared"),
+    leaseToken: text("lease_token"),
+    fencing: integer("fencing"),
+    dispatchToken: text("dispatch_token"),
+    dispatchedAt: text("dispatched_at"),
+  },
+  (t) => [
+    check(
+      "v2_paid_hold_state",
+      sql`${t.state} IN ('prepared','dispatched','unknown','final') AND (${t.fencing} IS NULL OR (typeof(${t.fencing})='integer' AND ${t.fencing} BETWEEN 1 AND 9007199254740991)) AND (${t.state} IN ('prepared','final') OR (${t.dispatchToken} IS NOT NULL AND ${t.leaseToken} IS NOT NULL AND ${t.fencing} IS NOT NULL AND ${t.dispatchedAt} IS NOT NULL))`,
+    ),
+  ],
+);
+export const v2RuntimeUsage = sqliteTable(
+  "v2_runtime_usage",
+  {
+    id: id(),
+    attemptId: text("attempt_id")
+      .notNull()
+      .references(() => v2CostAttempts.id),
+    digest: text("digest").notNull(),
+    payloadJson: text("payload_json").notNull(),
+    evidenceHash: text("evidence_hash").notNull(),
+    observedAt: text("observed_at").notNull(),
+    outcome: text("outcome").notNull(),
+    chargedKrw: integer("charged_krw"),
+  },
+  (t) => [
+    index("v2_runtime_usage_attempt_idx").on(t.attemptId),
+    check(
+      "v2_runtime_usage_bounds",
+      sql`length(${t.digest})=64 AND length(${t.evidenceHash})=64 AND length(CAST(${t.payloadJson} AS BLOB))<=65536 AND ${t.outcome} IN ('settled','ambiguous','released') AND ((${t.outcome}='settled' AND typeof(${t.chargedKrw})='integer' AND ${t.chargedKrw} BETWEEN 0 AND 9007199254740991) OR (${t.outcome}!='settled' AND ${t.chargedKrw} IS NULL))`,
+    ),
+  ],
+);
+export const v2RuntimeControls = sqliteTable(
+  "v2_runtime_controls",
+  {
+    month: text("month")
+      .primaryKey()
+      .references(() => v2MonthlyBudget.month),
+    environment: text("environment").notNull(),
+    revision: revision(),
+    phase: text("phase").notNull().default("frozen"),
+    allocationProofId: text("allocation_proof_id").references(() => v2RuntimeProofs.id),
+    pendingVersion: integer("pending_version"),
+    localDrainId: text("local_drain_id"),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (t) => [
+    check(
+      "v2_runtime_control_bounds",
+      sql`${t.environment} IN ('preview','production') AND ${t.phase} IN ('active','frozen','drained') AND typeof(${t.revision})='integer' AND ${t.revision} BETWEEN 1 AND 9007199254740991 AND (${t.pendingVersion} IS NULL OR (typeof(${t.pendingVersion})='integer' AND ${t.pendingVersion} BETWEEN 1 AND 9007199254740991))`,
+    ),
+  ],
+);
+export const v2RuntimeDrains = sqliteTable(
+  "v2_runtime_drains",
+  {
+    id: id(),
+    month: text("month").notNull(),
+    environment: text("environment").notNull(),
+    version: integer("version").notNull(),
+    controlRevision: integer("control_revision").notNull(),
+    manifestHash: text("manifest_hash").notNull(),
+    settledKrw: integer("settled_krw").notNull(),
+    fixedKrw: integer("fixed_krw").notNull(),
+    carryoverKrw: integer("carryover_krw").notNull(),
+    digest: text("digest").notNull(),
+    createdAt: created(),
+  },
+  (t) => [
+    uniqueIndex("v2_runtime_drain_version_unique").on(
+      t.month,
+      t.environment,
+      t.version,
+      t.controlRevision,
+    ),
+    check(
+      "v2_runtime_drain_bounds",
+      sql`${t.environment} IN ('preview','production') AND typeof(${t.version})='integer' AND ${t.version} BETWEEN 1 AND 9007199254740991 AND typeof(${t.controlRevision})='integer' AND ${t.controlRevision} BETWEEN 1 AND 9007199254740991 AND typeof(${t.settledKrw})='integer' AND ${t.settledKrw} BETWEEN 0 AND 9007199254740991 AND typeof(${t.fixedKrw})='integer' AND ${t.fixedKrw} BETWEEN 0 AND 9007199254740991 AND typeof(${t.carryoverKrw})='integer' AND ${t.carryoverKrw} BETWEEN 0 AND 9007199254740991 AND length(${t.digest})=64 AND length(${t.manifestHash})=64`,
+    ),
+  ],
+);
+export const v2MaintenanceExposure = sqliteTable(
+  "v2_maintenance_exposure",
+  {
+    id: id(),
+    month: text("month")
+      .notNull()
+      .references(() => v2MonthlyBudget.month),
+    referenceHash: text("reference_hash").notNull(),
+    amountKrw: integer("amount_krw").notNull(),
+    state: text("state").notNull(),
+    createdAt: created(),
+  },
+  (t) => [
+    uniqueIndex("v2_maintenance_reference_unique").on(t.month, t.referenceHash),
+    check(
+      "v2_maintenance_bounds",
+      sql`typeof(${t.amountKrw})='integer' AND ${t.amountKrw} BETWEEN 0 AND 9007199254740991 AND ${t.state} IN ('reserved','ambiguous','settled') AND length(${t.referenceHash})=64`,
+    ),
+  ],
+);
+
+// Financial CAS witnesses must survive deletion and must not reference a user.
+export const v2RuntimeClaims = sqliteTable(
+  "v2_runtime_claims",
+  {
+    id: id(),
+    ownerId: text("owner_id").notNull(),
+    targetId: text("target_id").notNull(),
+    revision: integer("revision").notNull(),
+    verified: integer("verified").notNull().default(1),
+  },
+  (t) => [
+    check(
+      "v2_runtime_claim_bounds",
+      sql`typeof(${t.revision})='integer' AND ${t.revision} BETWEEN 0 AND 9007199254740991 AND ${t.verified}=1`,
+    ),
+  ],
+);
+
+export const v2MaintenanceEvidence = sqliteTable(
+  "v2_maintenance_evidence",
+  {
+    id: id(),
+    maintenanceId: text("maintenance_id")
+      .notNull()
+      .references(() => v2MaintenanceExposure.id),
+    action: text("action").notNull(),
+    digest: text("digest").notNull(),
+    payloadJson: text("payload_json").notNull(),
+    evidenceHash: text("evidence_hash").notNull(),
+    verifiedAt: text("verified_at").notNull(),
+  },
+  (t) => [
+    check(
+      "v2_maintenance_evidence_bounds",
+      sql`${t.action} IN ('record','settle') AND length(${t.digest})=64 AND length(${t.evidenceHash})=64 AND length(CAST(${t.payloadJson} AS BLOB))<=65536`,
     ),
   ],
 );
