@@ -1,6 +1,6 @@
 /** The final story moves at the visitor's pace; the shared film controller owns playback. */
 for (const section of document.querySelectorAll<HTMLElement>("[data-everyday-future]")) {
-  const desktop = window.matchMedia("(min-width: 768px)");
+  const desktop = window.matchMedia("(min-width: 320px)");
   const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
   const clamp = (value: number) => Math.min(1, Math.max(0, value));
   const scenes = [...section.querySelectorAll<HTMLElement>("[data-future-scene]")].map((node) => ({
@@ -26,7 +26,7 @@ for (const section of document.querySelectorAll<HTMLElement>("[data-everyday-fut
       const bounds = scene.node.getBoundingClientRect();
       if (bounds.bottom < -150 || bounds.top > viewport + 150) continue;
       const progress = clamp((viewport - bounds.top) / (viewport + bounds.height));
-      const travel = (progress - 0.5) * 2;
+      const travel = (progress - 0.5) * (window.innerWidth < 768 ? 0.7 : 2);
       for (const layer of scene.layers) {
         layer.node.style.setProperty("--future-x", `${(travel * layer.x).toFixed(2)}px`);
         layer.node.style.setProperty("--future-y", `${(travel * layer.y).toFixed(2)}px`);

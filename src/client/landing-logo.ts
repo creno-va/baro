@@ -7,7 +7,9 @@ if (logoExperience) {
   const tiles = [...scene.querySelectorAll<HTMLButtonElement>("[data-logo-feature]")];
   const panels = [...scene.querySelectorAll<HTMLElement>("[data-logo-panel]")];
   const pieces = [...scene.querySelectorAll<SVGElement>("[data-logo-piece]")];
-  const desktop = window.matchMedia("(min-width: 900px) and (min-height: 720px)");
+  const motionViewport = window.matchMedia(
+    "(min-width: 900px) and (min-height: 720px), (min-width: 320px) and (max-width: 899px) and (min-height: 520px)",
+  );
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
   const positions = [
     [0, -182],
@@ -55,6 +57,8 @@ if (logoExperience) {
     const expand = ease((progress - 0.325) / 0.15);
     const reveal = clamp((progress - 0.36) / 0.065);
     const featureProgress = clamp((progress - 0.45) / 0.55);
+    const compact = window.innerWidth < 900;
+    const mobileSpan = Math.min(108, (scene.clientWidth - 32) * 0.32);
     const next = Math.min(5, Math.floor(featureProgress * 6));
     scene.style.setProperty("--logo-turn", `${(turn * 360).toFixed(2)}deg`);
     scene.style.setProperty("--logo-tilt", `${(Math.sin(turn * Math.PI * 2) * 12).toFixed(2)}deg`);
@@ -68,7 +72,9 @@ if (logoExperience) {
       piece.style.transform = `translate3d(${(x * split).toFixed(2)}px, ${(y * split).toFixed(2)}px, ${(split * 80).toFixed(2)}px) rotateZ(${(spin * split).toFixed(2)}deg)`;
     }
     for (const [index, tile] of tiles.entries()) {
-      const [x = 0, y = 0] = positions[index] ?? [];
+      const [x = 0, y = 0] = compact
+        ? [((index % 3) - 1) * mobileSpan, index < 3 ? -39 : 39]
+        : (positions[index] ?? []);
       const appear = ease((progress - 0.32 - index * 0.012) / 0.095);
       const individual = ease(featureProgress * 6 - index);
       tile.style.setProperty("--tile-x", `${(x * expand).toFixed(2)}px`);
@@ -98,7 +104,7 @@ if (logoExperience) {
   }
 
   function configure() {
-    moving = desktop.matches && !reduceMotion.matches;
+    moving = motionViewport.matches && !reduceMotion.matches;
     scene.classList.add("logo-experience-enhanced");
     scene.classList.toggle("logo-experience-motion", moving);
     manual = false;
@@ -170,7 +176,7 @@ if (logoExperience) {
   });
   window.addEventListener("resize", schedule, { passive: true });
   window.addEventListener("pageshow", configure);
-  desktop.addEventListener("change", configure);
+  motionViewport.addEventListener("change", configure);
   reduceMotion.addEventListener("change", configure);
   configure();
 }

@@ -3,7 +3,7 @@ const landing = document.querySelector<HTMLElement>(".landing");
 
 if (landing) {
   const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
-  const desktop = window.matchMedia("(min-width: 768px)");
+  const desktop = window.matchMedia("(min-width: 320px)");
   const clamp = (value: number) => Math.max(0, Math.min(1, value));
   const scenes = [...landing.querySelectorAll<HTMLElement>("[data-scroll-scene]")].map((node) => ({
     node,
@@ -164,7 +164,7 @@ if (landing) {
       const bounds = scene.node.getBoundingClientRect();
       if (bounds.bottom < -200 || bounds.top > viewport + 200) continue;
       const position = clamp((viewport - bounds.top) / (viewport + bounds.height));
-      const travel = (position - 0.5) * 2;
+      const travel = (position - 0.5) * (window.innerWidth < 768 ? 0.7 : 2);
       scene.node.style.setProperty("--scene-progress", position.toFixed(4));
       for (const layer of scene.layers) {
         layer.node.style.setProperty(

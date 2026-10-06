@@ -19,7 +19,9 @@ if (blueReveal) {
     "언제 어떤 일이 있었는지, 확인한 내용부터 차근차근.",
     "내가 검토한 이야기와 선택한 자료로 상담을 준비해요.",
   ];
-  const desktop = window.matchMedia("(min-width: 900px) and (min-height: 720px)");
+  const motionViewport = window.matchMedia(
+    "(min-width: 900px) and (min-height: 720px), (min-width: 320px) and (max-width: 899px) and (min-height: 520px)",
+  );
   const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
   const clamp = (value: number) => Math.max(0, Math.min(1, value));
   const ease = (value: number) => {
@@ -103,7 +105,7 @@ if (blueReveal) {
   }
 
   function configure() {
-    animated = desktop.matches && !reduced.matches;
+    animated = motionViewport.matches && !reduced.matches;
     root.classList.add("blue-reveal-enhanced");
     root.classList.toggle("blue-reveal-motion", animated);
     if (frame) cancelAnimationFrame(frame);
@@ -176,7 +178,7 @@ if (blueReveal) {
   });
   window.addEventListener("resize", schedule, { passive: true });
   window.addEventListener("pageshow", configure);
-  desktop.addEventListener("change", configure);
+  motionViewport.addEventListener("change", configure);
   reduced.addEventListener("change", configure);
   configure();
 }

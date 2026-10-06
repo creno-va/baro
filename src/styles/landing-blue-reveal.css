@@ -1255,6 +1255,256 @@
     font-size: 10px;
   }
 }
+
+@media (max-width: 899px) {
+  .blue-reveal-motion {
+    height: 340svh;
+    min-height: 0;
+  }
+  .blue-reveal-motion .blue-reveal-pin {
+    top: 66px;
+    height: calc(100svh - 66px);
+  }
+  .blue-reveal-motion .blue-reveal-opening {
+    top: 17%;
+  }
+  .blue-reveal-motion .blue-reveal-opening h2 {
+    font-size: clamp(30px, 7.6vw, 43px);
+  }
+  .blue-reveal-motion .blue-reveal-experience {
+    padding: 12px 15px;
+    max-width: 570px;
+  }
+  .blue-reveal-motion .blue-reveal-heading {
+    margin-bottom: 12px;
+  }
+  .blue-reveal-motion .blue-reveal-wordmark {
+    font-size: 10px;
+  }
+  .blue-reveal-motion .blue-reveal-heading > p {
+    margin: 8px 0 5px;
+    font-size: 23px;
+  }
+  .blue-reveal-motion .blue-reveal-heading > span:last-child {
+    font-size: 10px;
+    line-height: 1.5;
+  }
+  .blue-reveal-motion .blue-reveal-tabs {
+    margin-bottom: 12px;
+    gap: 6px;
+  }
+  .blue-reveal-motion .blue-reveal-tab-face {
+    min-height: 55px;
+    padding: 6px 3px;
+    gap: 2px;
+  }
+  .blue-reveal-motion .blue-reveal-tab-icon {
+    height: 23px;
+  }
+  .blue-reveal-motion .blue-reveal-tab-icon svg {
+    width: 19px;
+  }
+  .blue-reveal-motion .blue-reveal-tab-label {
+    font-size: 9px;
+  }
+  .blue-reveal-motion .blue-reveal-windowbar {
+    height: 28px;
+  }
+  .blue-reveal-motion .blue-reveal-app-top {
+    padding: 9px 12px;
+  }
+  .blue-reveal-motion .blue-reveal-panel {
+    padding: 11px 12px 0;
+  }
+  .blue-reveal-motion .blue-reveal-panel-title {
+    flex-direction: row;
+    gap: 8px;
+    margin-bottom: 12px;
+    align-items: center;
+  }
+  .blue-reveal-motion .blue-reveal-panel-title h3 {
+    font-size: 11px;
+  }
+  .blue-reveal-motion .blue-reveal-panel-title > span {
+    font-size: 8px;
+  }
+  .blue-reveal-motion .blue-app-chat,
+  .blue-reveal-motion .blue-app-files,
+  .blue-reveal-motion .blue-app-timeline,
+  .blue-reveal-motion .blue-app-report {
+    min-height: 204px;
+  }
+  .blue-reveal-motion .blue-app-greeting {
+    margin-bottom: 9px;
+  }
+  .blue-reveal-motion .blue-app-greeting > span {
+    width: 31px;
+    height: 31px;
+  }
+  .blue-reveal-motion .blue-app-greeting strong {
+    font-size: 11px;
+  }
+  .blue-reveal-motion .blue-app-greeting p {
+    font-size: 9px;
+    margin-top: 3px;
+  }
+  .blue-reveal-motion .blue-app-chat-bubble {
+    padding: 7px 10px;
+    margin-bottom: 9px;
+    font-size: 10px;
+  }
+  .blue-reveal-motion .blue-app-chat-reply {
+    margin-bottom: 9px;
+  }
+  .blue-reveal-motion .blue-app-chat-reply p {
+    font-size: 10px;
+  }
+  .blue-reveal-motion .blue-app-input {
+    margin-top: 9px;
+    padding: 6px 8px;
+    font-size: 9px;
+  }
+  .blue-reveal-motion .blue-app-file-row {
+    min-height: 48px;
+  }
+  .blue-reveal-motion .blue-app-file-row strong {
+    font-size: 10px;
+  }
+  .blue-reveal-motion .blue-app-file-row :where(div) > span {
+    font-size: 8px;
+  }
+  .blue-reveal-motion .blue-app-files-intro p,
+  .blue-reveal-motion .blue-app-material-note {
+    font-size: 8px;
+  }
+  .blue-reveal-motion .blue-app-timeline li {
+    padding: 6px 0 9px;
+  }
+  .blue-reveal-motion .blue-app-timeline p {
+    font-size: 9px;
+  }
+  .blue-reveal-motion .blue-app-report-paper {
+    padding: 11px 12px 6px;
+  }
+  .blue-reveal-motion .blue-app-report-paper h4 {
+    margin: 8px 0;
+    font-size: 16px;
+  }
+  .blue-reveal-motion .blue-app-report-paper > div {
+    padding: 8px 0;
+  }
+  .blue-reveal-motion .blue-reveal-panel-footer {
+    margin-top: 10px;
+    padding-top: 7px;
+    gap: 0;
+  }
+  .blue-reveal-motion .blue-reveal-panel-footer > a {
+    min-height: 44px;
+    font-size: 11px;
+  }
+  .blue-reveal-motion .blue-reveal-panel-footer > span {
+    font-size: 8px;
+  }
+  .blue-reveal-motion .blue-reveal-bottom {
+    margin-top: 9px;
+  }
+}
+@media (max-width: 899px) and (max-height: 650px) {
+  /* Keep the real tabs and CTA in a 502px pin; the window bar already names the workspace. */
+  .blue-reveal-motion .blue-reveal-heading,
+  .blue-reveal-motion .blue-reveal-tabs {
+    margin-bottom: 8px;
+  }
+  .blue-reveal-motion .blue-reveal-tab-face {
+    min-height: 50px;
+    padding-top: 4px;
+    padding-bottom: 4px;
+  }
+  .blue-reveal-motion .blue-reveal-heading > span:last-child {
+    display: none;
+  }
+  .blue-reveal-motion .blue-reveal-heading > p {
+    font-size: 19px;
+  }
+  .blue-reveal-motion .blue-reveal-wordmark {
+    display: none;
+  }
+  .blue-reveal-motion .blue-reveal-app-top {
+    display: none;
+  }
+  .blue-reveal-motion .blue-reveal-panel-title > span {
+    display: none;
+  }
+  .blue-reveal-motion .blue-reveal-experience {
+    padding-top: 9px;
+    padding-bottom: 9px;
+  }
+  .blue-reveal-motion .blue-reveal-panel-title {
+    margin-bottom: 9px;
+  }
+  .blue-reveal-motion .blue-app-chat,
+  .blue-reveal-motion .blue-app-files,
+  .blue-reveal-motion .blue-app-timeline,
+  .blue-reveal-motion .blue-app-report {
+    min-height: 184px;
+  }
+  .blue-reveal-motion .blue-app-greeting,
+  .blue-reveal-motion .blue-app-chat-bubble,
+  .blue-reveal-motion .blue-app-chat-reply {
+    margin-bottom: 6px;
+  }
+  .blue-reveal-motion .blue-app-input {
+    padding-top: 4px;
+    padding-bottom: 4px;
+    margin-top: 6px;
+  }
+  .blue-reveal-motion .blue-app-file-row {
+    min-height: 44px;
+  }
+  .blue-reveal-motion .blue-app-material-note {
+    margin-top: 6px;
+  }
+  .blue-reveal-motion .blue-app-timeline-intro {
+    margin-bottom: 8px;
+  }
+  .blue-reveal-motion .blue-app-timeline li {
+    padding-top: 4px;
+    padding-bottom: 6px;
+  }
+  .blue-reveal-motion .blue-app-timeline p {
+    margin-top: 3px;
+    margin-bottom: 3px;
+    line-height: 1.5;
+  }
+  .blue-reveal-motion .blue-app-report-paper > div {
+    padding-top: 6px;
+    padding-bottom: 6px;
+  }
+  .blue-reveal-motion .blue-reveal-panel-footer {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    margin-top: 7px;
+    padding-top: 3px;
+  }
+  .blue-reveal-motion .blue-reveal-panel-footer > span {
+    flex: 1;
+    min-width: 0;
+    line-height: 1.5;
+  }
+  .blue-reveal-motion .blue-reveal-panel-footer > span svg {
+    flex-shrink: 0;
+  }
+  .blue-reveal-motion .blue-reveal-panel-footer > a {
+    flex-shrink: 0;
+    font-size: 10px;
+    gap: 5px;
+  }
+  .blue-reveal-motion .blue-reveal-bottom {
+    margin-top: 6px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .blue-reveal-tab-face {
     transition: none;
@@ -1262,5 +1512,12 @@
   .blue-reveal-enhanced .blue-reveal-panel:not([hidden]),
   .blue-reveal-manual .blue-reveal-tab[aria-selected="true"] .blue-reveal-tab-face {
     animation: none;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 899px) {
+  .blue-reveal-motion .blue-reveal-pin {
+    top: 76px;
+    height: calc(100svh - 76px);
   }
 }

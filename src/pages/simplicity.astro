@@ -3,6 +3,8 @@
 import { ArrowDown, ArrowRight } from "lucide-react";
 // biome-ignore lint/correctness/noUnusedImports: Astro renders the blue app experience.
 import BlueAppReveal from "../components/landing/BlueAppReveal.astro";
+// biome-ignore lint/correctness/noUnusedImports: Astro renders the founder's greeting.
+import CeoGreeting from "../components/landing/CeoGreeting.astro";
 // biome-ignore lint/correctness/noUnusedImports: Astro renders the experience.
 import DemoLab from "../components/landing/DemoLab.astro";
 // biome-ignore lint/correctness/noUnusedImports: Astro renders the final experience.
@@ -46,6 +48,7 @@ import "../styles/landing-refinement.css";
       <DemoLab />
       <PhoneStory />
       <TimeExperience imageSrc="/landing/time-watch.webp" imageFocusX={42} imageFocusY={48} />
+      <CeoGreeting />
       <FinalExperience />
     </main>
     <footer class="landing-footer"><div class="landing-footer-inner"><div class="landing-footer-top"><Brand /><nav aria-label="하단 메뉴"><a href="/policies/privacy">개인정보 처리방침 초안</a><a href="/policies/ai">AI 이용 안내 초안</a></nav></div><p>체험에는 이해를 돕기 위한 예시가 사용됩니다. BARO는 사실 정리와 상담 준비를 도우며, 법률 판단은 전문가와 함께하세요.</p></div></footer>

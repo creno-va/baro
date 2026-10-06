@@ -76,8 +76,10 @@ for (const section of document.querySelectorAll<HTMLElement>("[data-clarity]")) 
   const action = section.querySelector<HTMLButtonElement>("[data-clarity-play]");
   if (!pin || !visual || !action) continue;
 
-  // Compact desktop styling retains the full scroll scene in a 1280 × 720 browser.
-  const desktop = window.matchMedia("(min-width: 768px) and (min-height: 640px)");
+  // The same story has a compact touch layout; short landscape screens use the static controls.
+  const motionViewport = window.matchMedia(
+    "(min-width: 768px) and (min-height: 640px), (min-width: 320px) and (max-width: 767px) and (min-height: 520px)",
+  );
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
   const inputs = [...section.querySelectorAll<HTMLElement>("[data-clarity-input]")].map((node) => ({
     node,
@@ -126,7 +128,7 @@ for (const section of document.querySelectorAll<HTMLElement>("[data-clarity]")) 
     const converge = clarityEase(clarityClamp((progress - 0.04) / 0.45));
     const opening = clarityEase(clarityClamp((progress - 0.54) / 0.3));
     const vanish = clarityEase(clarityClamp((progress - 0.37) / 0.13));
-    const width = Math.max(150, visual.clientWidth - 265);
+    const width = Math.max(150, visual.clientWidth - (window.innerWidth < 768 ? 135 : 265));
     const height = Math.max(160, visual.clientHeight - 104);
 
     section.style.setProperty("--clarity-progress", progress.toFixed(4));
@@ -164,7 +166,7 @@ for (const section of document.querySelectorAll<HTMLElement>("[data-clarity]")) 
   }
 
   function configure() {
-    animated = desktop.matches && !reducedMotion.matches;
+    animated = motionViewport.matches && !reducedMotion.matches;
     if (frame) window.cancelAnimationFrame(frame);
     frame = 0;
     section.classList.toggle("clarity-motion-ready", animated);
@@ -226,7 +228,7 @@ for (const section of document.querySelectorAll<HTMLElement>("[data-clarity]")) 
   window.addEventListener("scroll", schedule, { passive: true });
   window.addEventListener("resize", schedule, { passive: true });
   window.addEventListener("pageshow", configure);
-  desktop.addEventListener("change", configure);
+  motionViewport.addEventListener("change", configure);
   reducedMotion.addEventListener("change", configure);
   configure();
 }

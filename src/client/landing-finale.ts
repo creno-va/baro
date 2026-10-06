@@ -5,7 +5,9 @@ for (const root of document.querySelectorAll<HTMLElement>("[data-finale]")) {
   const replay = root.querySelector<HTMLButtonElement>("[data-finale-replay]");
   if (!pin || !scene) continue;
 
-  const desktop = window.matchMedia("(min-width: 768px) and (min-height: 640px)");
+  const motionViewport = window.matchMedia(
+    "(min-width: 768px) and (min-height: 640px), (min-width: 320px) and (max-width: 767px) and (min-height: 520px)",
+  );
   const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
   const clamp = (value: number) => Math.max(0, Math.min(1, value));
   const ease = (value: number) => value * value * (3 - 2 * value);
@@ -35,7 +37,10 @@ for (const root of document.querySelectorAll<HTMLElement>("[data-finale]")) {
     const open = ease(clamp((progress - 0.35) / 0.23));
     const end = ease(clamp((progress - 0.75) / 0.2));
     const fit = Math.min(1, Math.max(0.5, (scene.clientHeight - 14) / 440));
-    const spreadX = Math.max(200, scene.clientWidth - 300);
+    const spreadX =
+      window.innerWidth < 768
+        ? Math.max(130, scene.clientWidth - 126)
+        : Math.max(200, scene.clientWidth - 300);
     const spreadY = Math.max(130, scene.clientHeight - 116);
 
     root.style.setProperty("--finale-merge", merge.toFixed(4));
@@ -84,7 +89,7 @@ for (const root of document.querySelectorAll<HTMLElement>("[data-finale]")) {
   }
 
   function configure() {
-    enabled = desktop.matches && !reduced.matches;
+    enabled = motionViewport.matches && !reduced.matches;
     if (frame) window.cancelAnimationFrame(frame);
     frame = 0;
     stage = -1;
@@ -118,7 +123,7 @@ for (const root of document.querySelectorAll<HTMLElement>("[data-finale]")) {
   window.addEventListener("scroll", schedule, { passive: true });
   window.addEventListener("resize", schedule, { passive: true });
   window.addEventListener("pageshow", configure);
-  desktop.addEventListener("change", configure);
+  motionViewport.addEventListener("change", configure);
   reduced.addEventListener("change", configure);
   configure();
 }

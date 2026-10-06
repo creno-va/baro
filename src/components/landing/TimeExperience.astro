@@ -35,12 +35,18 @@ const benefits = [
 
 <section id="time-experience" class="time-experience" data-time-experience aria-labelledby="time-experience-title">
   <div class="time-experience-pin" data-time-pin>
+    <div class="time-introduction">
+      <div class="time-opening">
+        <p class="time-eyebrow">당신의 시간을 위해</p>
+        <p class="time-opening-title">찾는 시간은 짧게.<br /><strong>준비하는 마음은 가볍게.</strong></p>
+        <p class="time-opening-description">흩어진 기록을 모으고,<br />같은 이야기를 반복할 부담을 덜어요.</p>
+        <ul class="time-opening-chips" aria-label="상담 준비에 필요한 것"><li>편한 대화</li><li>모아 둔 자료</li><li>검토한 이야기</li></ul>
+      </div>
     <div class="time-clock-stage" aria-hidden="true">
       <div class:list={["time-clock", { "time-clock-photo": Boolean(imageSrc) }]} data-time-clock data-time-focus-x={imageFocusX} data-time-focus-y={imageFocusY}>
         {imageSrc ? (
           <picture>
-            <source media="(min-width: 768px) and (min-height: 600px)" srcset={imageSrc} />
-            <img class="time-watch-image" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 3 4'%3E%3C/svg%3E" width="900" height="1200" alt={imageAlt} loading="lazy" decoding="async" />
+            <img class="time-watch-image" src={imageSrc} width="900" height="1200" alt={imageAlt} loading="lazy" decoding="async" />
           </picture>
         ) : (
           <svg class="time-clock-drawing" viewBox="0 0 640 640" xmlns="http://www.w3.org/2000/svg" focusable="false" aria-hidden="true">
@@ -66,6 +72,7 @@ const benefits = [
           </svg>
         )}
       </div>
+    </div>
     </div>
 
     <div class="time-blue-wipe" aria-hidden="true" data-time-wipe></div>

@@ -20,92 +20,124 @@ async function scrollScene(scene: Locator, pinSelector: string, progress: number
   );
 }
 
-test("built origin, watch and ending load their real assets and transitions under hash CSP", async ({
-  page,
-}) => {
-  await page.addInitScript(() => {
-    const browser = window as unknown as { experienceCspViolations: string[] };
-    browser.experienceCspViolations = [];
-    document.addEventListener("securitypolicyviolation", (event) =>
-      browser.experienceCspViolations.push(event.violatedDirective),
-    );
-  });
-  await page.setViewportSize({ width: 1440, height: 900 });
-  await page.emulateMedia({ reducedMotion: "no-preference" });
-  const response = await page.goto("/");
-  const policy = response?.headers()["content-security-policy"];
-  expect(response?.status()).toBe(200);
-  expect(policy).toContain("sha256-");
-  expect(policy).not.toMatch(/unsafe-inline|unsafe-eval/);
-  const origin = page.locator("[data-origin-story]");
-  await expect(origin).toHaveClass(/origin-motion/);
-  await scrollScene(origin, ".origin-pin", 0);
-  for (const [selector, path] of [
-    [".origin-clean-background img", "/landing/origin-notes-clean.webp"],
-    [".origin-original-note-left img", "/landing/origin-notes-original.webp"],
-    [".origin-original-note-right img", "/landing/origin-notes-original.webp"],
-  ] as const) {
+for (const viewport of [
+  { width: 390, height: 844 },
+  { width: 1440, height: 900 },
+]) {
+  test(`built photos, transitions and CEO comparison work under hash CSP at ${viewport.width}px`, async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      const browser = window as unknown as { experienceCspViolations: string[] };
+      browser.experienceCspViolations = [];
+      document.addEventListener("securitypolicyviolation", (event) =>
+        browser.experienceCspViolations.push(event.violatedDirective),
+      );
+    });
+    await page.setViewportSize(viewport);
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    const response = await page.goto("/#our-beginning");
+    await expect.poll(() => page.evaluate(() => location.hash)).toBe("");
+    await expect.poll(() => page.evaluate(() => scrollY)).toBe(0);
+    await page.evaluate(() => document.fonts.ready);
+    const policy = response?.headers()["content-security-policy"];
+    expect(response?.status()).toBe(200);
+    expect(policy).toContain("sha256-");
+    expect(policy).not.toMatch(/unsafe-inline|unsafe-eval/);
+    const origin = page.locator("[data-origin-story]");
+    await expect(origin).toHaveClass(/origin-motion/);
+    await scrollScene(origin, ".origin-pin", 0);
+    for (const [selector, path] of [
+      [".origin-clean-background img", "/landing/origin-notes-clean.webp"],
+      [".origin-original-note-left img", "/landing/origin-notes-original.webp"],
+      [".origin-original-note-right img", "/landing/origin-notes-original.webp"],
+    ] as const) {
+      await expect
+        .poll(() =>
+          origin
+            .locator(selector)
+            .evaluate(
+              (element, pathname) =>
+                element instanceof HTMLImageElement &&
+                element.complete &&
+                element.naturalWidth > 1 &&
+                new URL(element.currentSrc).origin === location.origin &&
+                new URL(element.currentSrc).pathname === pathname,
+              path,
+            ),
+        )
+        .toBe(true);
+    }
+    await origin.getByRole("button", { name: "BARO로 들어가기" }).click();
+    await expect(origin.locator(".origin-arrival")).toHaveCSS("opacity", "1");
+    await origin.getByRole("link", { name: "BARO 안으로" }).click();
+    await expect(page).toHaveURL(/#blue-app-reveal$/);
+    const time = page.locator("[data-time-experience]");
+    await expect(time).toHaveClass(/time-experience-motion/);
+    await scrollScene(time, "[data-time-pin]", 0);
     await expect
       .poll(() =>
-        origin
-          .locator(selector)
+        time
+          .locator(".time-watch-image")
           .evaluate(
-            (element, pathname) =>
+            (element) =>
               element instanceof HTMLImageElement &&
               element.complete &&
               element.naturalWidth > 1 &&
               new URL(element.currentSrc).origin === location.origin &&
-              new URL(element.currentSrc).pathname === pathname,
-            path,
+              new URL(element.currentSrc).pathname === "/landing/time-watch.webp",
           ),
       )
       .toBe(true);
-  }
-  await origin.getByRole("button", { name: "BARO로 들어가기" }).click();
-  await expect(origin.locator(".origin-arrival")).toHaveCSS("opacity", "1");
-  await origin.getByRole("link", { name: "BARO 안으로" }).click();
-  await expect(page).toHaveURL(/#blue-app-reveal$/);
-  const time = page.locator("[data-time-experience]");
-  await expect(time).toHaveClass(/time-experience-motion/);
-  await scrollScene(time, "[data-time-pin]", 0);
-  await expect
-    .poll(() =>
-      time
-        .locator(".time-watch-image")
-        .evaluate(
-          (element) =>
-            element instanceof HTMLImageElement &&
-            element.complete &&
-            element.naturalWidth > 1 &&
-            new URL(element.currentSrc).origin === location.origin &&
-            new URL(element.currentSrc).pathname === "/landing/time-watch.webp",
-        ),
-    )
-    .toBe(true);
-  await scrollScene(time, "[data-time-pin]", 0.99);
-  await expect(time.locator("[data-time-message]")).toHaveCSS("opacity", "1");
-  await time.getByRole("link", { name: "직접 체험하기" }).click();
-  await expect(page).toHaveURL(/#try-baro$/);
-  const phone = page.locator("[data-phone-story]");
-  await scrollScene(phone, ".phone-story-sticky", 0.995);
-  await expect(phone.locator("[data-phone-arrival]")).toHaveCSS("opacity", "1");
-  await expect(phone.locator("[data-phone-arrival]")).toContainText("어떤 일이 있었나요?");
-  const finale = page.locator("[data-finale]");
-  await expect(finale).toHaveClass(/finale-motion-ready/);
-  await scrollScene(finale, "[data-finale-pin]", 0.74);
-  await expect(finale.locator("[data-finale-app]")).toHaveCSS("opacity", "1");
-  await scrollScene(finale, "[data-finale-pin]", 0.99);
-  await expect(finale.locator("[data-finale-message]")).toHaveCSS("opacity", "1");
-  await expect(finale.getByRole("link", { name: "내 이야기로 시작하기" })).toHaveAttribute(
-    "href",
-    "/app",
-  );
-  expect(
-    await page.evaluate(
-      () => (window as unknown as { experienceCspViolations: string[] }).experienceCspViolations,
-    ),
-  ).toEqual([]);
-});
+    await scrollScene(time, "[data-time-pin]", 0.99);
+    await expect(time.locator("[data-time-message]")).toHaveCSS("opacity", "1");
+    await time.getByRole("link", { name: "직접 체험하기" }).click();
+    await expect(page).toHaveURL(/#try-baro$/);
+    const phone = page.locator("[data-phone-story]");
+    await scrollScene(phone, ".phone-story-sticky", 0.995);
+    await expect(phone.locator("[data-phone-arrival]")).toHaveCSS("opacity", "1");
+    await expect(phone.locator("[data-phone-arrival]")).toContainText("어떤 일이 있었나요?");
+    const ceo = page.locator("[data-ceo-greeting]");
+    await expect(ceo).toHaveClass(/ceo-motion-ready/);
+    await scrollScene(ceo.locator("[data-ceo-scroll]"), "[data-ceo-visual]", 0);
+    for (const portrait of await ceo.locator("[data-ceo-photo] img").all()) {
+      await expect
+        .poll(() =>
+          portrait.evaluate(
+            (element) =>
+              element instanceof HTMLImageElement &&
+              element.complete &&
+              element.naturalWidth > 1 &&
+              new URL(element.currentSrc).origin === location.origin,
+          ),
+        )
+        .toBe(true);
+    }
+    await ceo.locator('[data-ceo-show="crenova"]').first().click();
+    await expect(ceo.locator('[data-ceo-message="crenova"]')).toHaveAttribute(
+      "aria-hidden",
+      "false",
+    );
+    await expect(ceo.locator('[data-ceo-message="suit"]')).toHaveAttribute("inert", "");
+    await ceo.locator('[data-ceo-show="suit"]').first().click();
+    await expect(ceo.locator('[data-ceo-photo="suit"]')).toHaveAttribute("aria-hidden", "false");
+    const finale = page.locator("[data-finale]");
+    await expect(finale).toHaveClass(/finale-motion-ready/);
+    await scrollScene(finale, "[data-finale-pin]", 0.74);
+    await expect(finale.locator("[data-finale-app]")).toHaveCSS("opacity", "1");
+    await scrollScene(finale, "[data-finale-pin]", 0.99);
+    await expect(finale.locator("[data-finale-message]")).toHaveCSS("opacity", "1");
+    await expect(finale.getByRole("link", { name: "내 이야기로 시작하기" })).toHaveAttribute(
+      "href",
+      "/app",
+    );
+    expect(
+      await page.evaluate(
+        () => (window as unknown as { experienceCspViolations: string[] }).experienceCspViolations,
+      ),
+    ).toEqual([]);
+  });
+}
 
 test("built landing loads local footage and its interactive scenes under the Worker hash CSP", async ({
   page,
@@ -334,7 +366,7 @@ test("the built simplicity page hydrates its compact explanation under hash CSP"
   await page.locator('[data-clarity-topic="money"]').click();
   await page.locator("[data-clarity-play]").click();
   await expect(page.locator('[data-clarity-result="0"]')).toContainText("돈을 보낸 날");
-  await expect(page.locator(".clarity-help")).toBeHidden();
+  await expect(page.locator(".clarity-help")).toBeVisible();
   const blue = page.locator("[data-blue-reveal]");
   await expect(blue).toHaveClass(/blue-reveal-enhanced/);
   await expect(blue).not.toHaveClass(/blue-reveal-motion/);

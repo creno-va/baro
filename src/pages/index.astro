@@ -11,6 +11,8 @@ import {
 } from "lucide-react";
 // biome-ignore lint/correctness/noUnusedImports: Astro renders the landing components.
 import BlueAppReveal from "../components/landing/BlueAppReveal.astro";
+// biome-ignore lint/correctness/noUnusedImports: Astro renders the founder's greeting.
+import CeoGreeting from "../components/landing/CeoGreeting.astro";
 // biome-ignore lint/correctness/noUnusedImports: Astro renders experiential sections.
 import DemoLab from "../components/landing/DemoLab.astro";
 // biome-ignore lint/correctness/noUnusedImports: Astro renders the closing films.
@@ -42,7 +44,7 @@ import "../styles/landing-film.css";
 import "../styles/landing-refinement.css";
 ---
 
-<BaseLayout title="BARO — 막막한 법률 문제, 정리부터 가볍게" description="어떤 일이 있었는지 편하게 들려주세요. BARO와 대화하며 사실과 자료를 정리하고, 변호사 상담을 차분하게 준비하세요.">
+<BaseLayout startAtTop title="BARO — 막막한 법률 문제, 정리부터 가볍게" description="어떤 일이 있었는지 편하게 들려주세요. BARO와 대화하며 사실과 자료를 정리하고, 변호사 상담을 차분하게 준비하세요.">
   <div class="landing">
     <LandingNavigation />
 
@@ -91,6 +93,8 @@ import "../styles/landing-refinement.css";
           <article data-reveal><span class="landing-principle-icon"><LockKeyhole size={27} aria-hidden="true" /></span><h3>판단을 대신하지 않아요</h3><p>BARO는 사실 정리와 상담 준비를 도와요.<br class="desktop-break" /> 법률 판단과 중요한 결정은 전문가와 함께해요.</p></article>
         </div>
       </section>
+
+      <CeoGreeting />
 
       <EverydayFuture />
 

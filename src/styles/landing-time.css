@@ -4,10 +4,12 @@
   background: #f4f3ef;
   scroll-margin-top: 76px;
   --time-blue: #155bea;
+  --time-top: 76px;
   --time-clock-scale: 1;
   --time-clock-opacity: 1;
-  --time-wipe-scale: 0;
-  --time-wipe-cover: 30;
+  --time-clock-blur: 0px;
+  --time-copy-opacity: 1;
+  --time-wipe-opacity: 0;
   --time-message-opacity: 0;
   --time-message-rise: 38px;
 }
@@ -18,16 +20,79 @@
   overflow: clip;
 }
 
+.time-introduction {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 45px;
+  max-width: 1320px;
+  padding: 90px 64px;
+  margin: auto;
+  color: #293746;
+}
+
+.time-eyebrow {
+  margin: 0 0 22px;
+  color: #6a6e6c;
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.05em;
+}
+
+.time-opening-title {
+  margin: 0;
+  font-size: clamp(33px, 3.8vw, 55px);
+  font-weight: 740;
+  line-height: 1.35;
+  letter-spacing: -0.055em;
+}
+
+.time-opening-title > strong {
+  color: #776d5b;
+  font-weight: inherit;
+}
+
+.time-opening-description {
+  margin: 24px 0 0;
+  color: #5e6770;
+  font-size: 16px;
+  line-height: 1.85;
+  letter-spacing: -0.025em;
+}
+
+.time-opening-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0;
+  margin: 26px 0 0;
+  list-style: none;
+}
+
+.time-opening-chips > li {
+  padding: 8px 11px;
+  border: 1px solid #dad9d1;
+  border-radius: 99px;
+  background: #ffffff70;
+  color: #616962;
+  font-size: 11px;
+  font-weight: 550;
+}
+
 .time-clock-stage {
   display: grid;
   place-items: center;
-  height: 355px;
-  padding: 35px 24px;
-  background: radial-gradient(ellipse at 50% 40%, #fffefa, #f4f3ef 72%);
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+  height: 450px;
+  overflow: clip;
+  border-radius: 24px;
 }
 
 .time-clock {
-  width: 260px;
+  width: min(100%, 430px);
   aspect-ratio: 1;
   flex-shrink: 0;
   transform-origin: var(--time-focus-x, 50%) var(--time-focus-y, 50%);
@@ -41,8 +106,9 @@
 }
 
 .time-clock-photo {
-  width: 205px;
-  aspect-ratio: 3 / 4;
+  width: 100%;
+  height: 100%;
+  aspect-ratio: auto;
 }
 
 .time-clock picture {
@@ -216,52 +282,47 @@
   outline-offset: 5px;
 }
 
-/* Only JavaScript-enabled, roomy screens receive the long pinned sequence. */
-@media (min-width: 900px) and (min-height: 720px) and (prefers-reduced-motion: no-preference) {
+/* Native scrolling drives the same sequence on desktop and portrait phones. */
+@media (min-height: 560px) and (prefers-reduced-motion: no-preference) {
   .time-experience-motion {
-    height: 280svh;
+    height: 265svh;
   }
 
   :where(.time-experience-motion) .time-experience-pin {
     position: sticky;
-    top: 76px;
-    height: calc(100svh - 76px);
+    top: var(--time-top);
+    height: calc(100svh - var(--time-top));
+  }
+
+  :where(.time-experience-motion) .time-introduction {
+    position: absolute;
+    inset: 0;
+    padding: 50px max(6vw, 40px);
+  }
+
+  :where(.time-experience-motion) .time-opening {
+    opacity: var(--time-copy-opacity);
+    transform: translateY(calc(var(--time-progress, 0) * -18px));
   }
 
   :where(.time-experience-motion) .time-clock-stage {
-    position: absolute;
-    inset: 0;
-    grid-template: minmax(0, 1fr) / minmax(0, 1fr);
-    height: auto;
-    padding: 0;
+    height: 100%;
+    max-height: 640px;
     opacity: var(--time-clock-opacity);
+    filter: blur(var(--time-clock-blur));
   }
 
   :where(.time-experience-motion) .time-clock {
-    width: clamp(300px, min(47vw, 62svh), 620px);
-    transform: translate3d(
-        calc(50% - var(--time-focus-x, 50%)),
-        calc(50% - var(--time-focus-y, 50%)),
-        0
-      )
-      scale(var(--time-clock-scale));
-  }
-
-  :where(.time-experience-motion) .time-clock-photo {
-    width: min(78vw, calc((100svh - 76px) * 1.12));
+    transform: scale(var(--time-clock-scale));
   }
 
   :where(.time-experience-motion) .time-blue-wipe {
     display: block;
     position: absolute;
     z-index: 1;
-    left: calc(50% - 40px);
-    top: calc(50% - 40px);
-    width: 80px;
-    height: 80px;
-    border-radius: 50%;
+    inset: 0;
     background: var(--time-blue);
-    transform: scale(var(--time-wipe-scale));
+    opacity: var(--time-wipe-opacity);
   }
 
   :where(.time-experience-motion) .time-message {
@@ -309,12 +370,13 @@
   }
 
   /* A keyboard visitor can reach the calls to action before the scroll reveal. */
-  :where(.time-experience-motion:has(:focus-visible)) .time-clock-stage {
+  :where(.time-experience-motion:has(:focus-visible)) .time-clock-stage,
+  :where(.time-experience-motion:has(:focus-visible)) .time-opening {
     opacity: 0;
   }
 
   :where(.time-experience-motion:has(:focus-visible)) .time-blue-wipe {
-    transform: scale(var(--time-wipe-cover));
+    opacity: 1;
   }
 
   :where(.time-experience-motion:has(:focus-visible)) .time-message,
@@ -341,8 +403,44 @@
 }
 
 @media (max-width: 767px), (max-height: 599px) {
+  .time-experience {
+    --time-top: 66px;
+  }
+
+  .time-introduction {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 25px;
+    padding: 58px 24px 45px;
+  }
+
+  .time-eyebrow {
+    margin-bottom: 14px;
+    font-size: 11px;
+  }
+
+  .time-opening-title {
+    font-size: clamp(28px, 7.4vw, 42px);
+  }
+
+  .time-opening-description {
+    margin-top: 18px;
+    font-size: 14px;
+  }
+
+  .time-opening-chips {
+    gap: 6px;
+    margin-top: 19px;
+  }
+
+  .time-opening-chips > li {
+    font-size: 10px;
+    padding: 7px 9px;
+  }
+
   .time-clock-stage {
-    display: none;
+    height: auto;
+    aspect-ratio: 4 / 3;
+    border-radius: 18px;
   }
 
   .time-message {
@@ -412,6 +510,114 @@
 @media (max-width: 390px) {
   .time-actions {
     flex-direction: column;
+  }
+}
+
+@media (max-width: 767px) and (min-height: 560px) and (prefers-reduced-motion: no-preference) {
+  .time-experience-motion {
+    height: 245svh;
+  }
+
+  :where(.time-experience-motion) .time-introduction {
+    grid-template-rows: auto minmax(0, 1fr);
+    align-items: stretch;
+    gap: 17px;
+    padding: 25px 24px 30px;
+  }
+
+  :where(.time-experience-motion) .time-eyebrow {
+    margin-bottom: 9px;
+    font-size: 10px;
+  }
+
+  :where(.time-experience-motion) .time-opening-title {
+    font-size: clamp(26px, 7vw, 35px);
+    line-height: 1.25;
+  }
+
+  :where(.time-experience-motion) .time-opening-description {
+    margin-top: 11px;
+    font-size: 12px;
+    line-height: 1.65;
+  }
+
+  :where(.time-experience-motion) .time-opening-chips {
+    margin-top: 11px;
+  }
+
+  :where(.time-experience-motion) .time-opening-chips > li {
+    padding: 5px 8px;
+    font-size: 9px;
+  }
+
+  :where(.time-experience-motion) .time-clock-stage {
+    aspect-ratio: auto;
+  }
+
+  :where(.time-experience-motion) .time-message {
+    padding: 20px 24px;
+    text-align: center;
+  }
+
+  :where(.time-experience-motion) .time-message h2 {
+    font-size: clamp(28px, 7.6vw, 37px);
+    line-height: 1.23;
+  }
+
+  :where(.time-experience-motion) .time-promise {
+    margin-top: 13px;
+    font-size: clamp(20px, 5.4vw, 26px);
+    line-height: 1.35;
+  }
+
+  :where(.time-experience-motion) .time-description {
+    margin: 15px auto 0;
+    font-size: 12px;
+    line-height: 1.7;
+  }
+
+  :where(.time-experience-motion) .time-benefits {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 7px;
+    margin-top: 20px;
+    text-align: center;
+  }
+
+  :where(.time-experience-motion) .time-benefit {
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    padding: 12px 2px 0;
+    border-left: 0;
+    border-top: 1px solid #ffffff40;
+  }
+
+  :where(.time-experience-motion) .time-benefit-icon {
+    width: 30px;
+    height: 30px;
+    border: 0;
+    background: transparent;
+  }
+
+  :where(.time-experience-motion) .time-benefit h3 {
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
+  :where(.time-experience-motion) .time-benefit p {
+    display: none;
+  }
+
+  :where(.time-experience-motion) .time-actions {
+    flex-direction: column;
+    gap: 7px;
+    margin-top: 20px;
+  }
+
+  :where(.time-experience-motion) .time-actions a {
+    min-height: 44px;
+    padding: 10px 16px;
+    font-size: 13px;
   }
 }
 

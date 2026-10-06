@@ -1258,6 +1258,150 @@
     margin-top: 20px;
   }
 }
+
+/* A small, complete device story rather than a text-only mobile substitute. */
+@media (max-width: 767px) {
+  .phone-story-ready {
+    height: 340svh;
+    min-height: 0;
+  }
+  .phone-story-ready .phone-story-sticky {
+    top: 66px;
+    height: calc(100svh - 66px);
+    min-height: 0;
+    padding: 10px 16px;
+  }
+  .phone-story-ready .phone-story-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    justify-content: center;
+  }
+  .phone-story-ready .phone-story-copy {
+    display: contents;
+  }
+  .phone-story-ready .phone-story-overline {
+    display: none;
+  }
+  .phone-story-ready .phone-story-copy > h2 {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: clip;
+    clip-path: inset(50%);
+    margin: 0;
+  }
+  .phone-story-ready .phone-story-chapters {
+    order: 0;
+    width: 100%;
+    min-height: 0;
+  }
+  .phone-story-ready .phone-story-chapter {
+    padding: 0;
+    border: 0;
+  }
+  .phone-story-ready .phone-story-kicker {
+    font-size: 10px;
+    margin-bottom: 5px;
+    gap: 5px;
+  }
+  .phone-story-ready .phone-story-kicker svg {
+    width: 13px;
+    height: 13px;
+  }
+  .phone-story-ready .phone-story-chapter h3 {
+    font-size: 25px;
+    line-height: 1.2;
+    letter-spacing: -1.3px;
+  }
+  .phone-story-ready .phone-story-description {
+    font-size: 12px;
+    line-height: 1.5;
+    margin-top: 8px;
+  }
+  .phone-story-ready .phone-story-description > span {
+    display: inline;
+  }
+  .phone-story-ready .phone-story-description > span::after {
+    content: " ";
+  }
+  .phone-story-ready .phone-story-note {
+    font-size: 10px;
+    margin-top: 5px;
+    gap: 4px;
+  }
+  .phone-story-ready .phone-story-note svg {
+    width: 12px;
+  }
+  .phone-story-ready .phone-story-visual {
+    order: 1;
+    width: 100%;
+    height: clamp(184px, calc(100svh - 340px), 390px);
+    min-height: 0;
+    --phone-scale: 0.4;
+    --phone-chip-span: 0.5;
+  }
+  .phone-story-ready .phone-story-controls {
+    order: 2;
+    margin: 0;
+    gap: 2px;
+    width: 100%;
+    justify-content: center;
+  }
+  .phone-story-controls button {
+    padding: 8px 9px;
+    min-height: 44px;
+    font-size: 10px;
+    gap: 4px;
+  }
+  .phone-story-ready .phone-story-link {
+    order: 3;
+    margin: 0;
+    min-height: 44px;
+    font-size: 12px;
+  }
+  .phone-story-service-chip {
+    width: 106px;
+    min-height: 49px;
+    gap: 6px;
+    padding: 8px;
+    border-radius: 14px;
+  }
+  .phone-story-service-icon {
+    width: 25px;
+    height: 25px;
+    border-radius: 8px;
+  }
+  .phone-story-ready .phone-story-service-icon svg {
+    width: 16px;
+  }
+  .phone-story-service-chip small {
+    font-size: 7px;
+    margin-bottom: 3px;
+  }
+  .phone-story-service-chip strong {
+    font-size: 9px;
+  }
+  .phone-story-floor {
+    bottom: 8px;
+  }
+  .phone-story-orbit-one {
+    width: 280px;
+    height: 190px;
+  }
+  .phone-story-orbit-two {
+    width: 210px;
+    height: 270px;
+  }
+  .phone-story-visual-caption {
+    bottom: 0;
+    font-size: 8px;
+  }
+  .phone-story-rotation {
+    display: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .phone-story-chapter,
   .phone-story-link > svg {

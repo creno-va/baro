@@ -11,7 +11,9 @@ if (journey) {
   const cue = scene.querySelector<HTMLElement>("[data-journey-cue]");
   const messages = [...scene.querySelectorAll<HTMLElement>("[data-journey-message]")];
   const chapters = [...scene.querySelectorAll<HTMLElement>(".journey-chapters > span")];
-  const desktop = window.matchMedia("(min-width: 768px) and (min-height: 600px)");
+  const motionViewport = window.matchMedia(
+    "(min-width: 768px) and (min-height: 600px), (min-width: 320px) and (max-width: 767px) and (min-height: 520px)",
+  );
   const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
   const saveData = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection
     ?.saveData;
@@ -78,6 +80,11 @@ if (journey) {
     frame = 0;
     if (!enabled || !pin) return;
     const bounds = scene.getBoundingClientRect();
+    if (window.innerWidth < 768)
+      scene.style.setProperty(
+        "--journey-mobile-scale",
+        Math.min(0.64, Math.max(0.38, (pin.clientHeight - 246) / 615)).toFixed(3),
+      );
     const top = Number.parseFloat(getComputedStyle(pin).top) || 76;
     const distance = Math.max(1, scene.offsetHeight - pin.offsetHeight);
     progress = clamp((top - bounds.top) / distance);
@@ -125,7 +132,7 @@ if (journey) {
     if (enabled && !frame) frame = requestAnimationFrame(render);
   }
   function configure() {
-    enabled = desktop.matches && !reduced.matches;
+    enabled = motionViewport.matches && !reduced.matches;
     scene.classList.toggle("journey-ready", enabled);
     if (button) button.hidden = !enabled;
     if (!enabled) {
@@ -201,7 +208,7 @@ if (journey) {
   window.addEventListener("pageshow", configure);
   window.addEventListener("pagehide", () => video?.pause());
   document.addEventListener("visibilitychange", reconcileVideo);
-  desktop.addEventListener("change", configure);
+  motionViewport.addEventListener("change", configure);
   reduced.addEventListener("change", configure);
   configure();
 }

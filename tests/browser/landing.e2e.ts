@@ -15,6 +15,7 @@ const landingSections = [
   "principles",
   "everyday-future",
   "faq",
+  "from-our-ceo",
   "start-with-baro",
 ];
 
@@ -71,7 +72,28 @@ test("public landing explains BARO and exposes the login and protected app entry
   await expect(page.getByRole("button", { name: "Google로 계속하기" })).toBeVisible();
 });
 
-test("landing fits narrow screens and omits decorative scenes without removing the content", async ({
+test("fresh home entries and reloads start at the hero while same-page chapter links still work", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/#our-beginning");
+  await expect.poll(() => page.evaluate(() => location.hash)).toBe("");
+  await expect.poll(() => page.evaluate(() => scrollY)).toBe(0);
+  await expect(page.getByRole("heading", { level: 1, name: heroTitle })).toBeInViewport();
+  await page
+    .getByRole("navigation", { name: "메인 메뉴", exact: true })
+    .getByRole("link", { name: "BARO의 시작", exact: true })
+    .click();
+  await expect(page).toHaveURL(/#our-beginning$/);
+  await expect(page.locator("[data-origin-story]")).toBeInViewport();
+  await page.reload();
+  await expect.poll(() => page.evaluate(() => location.hash)).toBe("");
+  await expect.poll(() => page.evaluate(() => scrollY)).toBe(0);
+  await expect(page.getByRole("heading", { level: 1, name: heroTitle })).toBeInViewport();
+});
+
+test("landing fits narrow screens while retaining its photographs and content", async ({
   page,
 }) => {
   await page.goto("/");
@@ -95,9 +117,7 @@ test("landing fits narrow screens and omits decorative scenes without removing t
       ".journey-film-stage, .everyday-photo-stage, .future-photo-window, .origin-photo-stage, .time-clock-stage",
     );
     expect(await decorations.count()).toBeGreaterThan(0);
-    if (width <= 767)
-      for (const decoration of await decorations.all()) await expect(decoration).toBeHidden();
-    else await expect(decorations.first()).toBeVisible();
+    for (const decoration of await decorations.all()) await expect(decoration).toBeVisible();
   }
   // A 1280px display at 200% browser zoom has a 640 CSS-pixel layout viewport.
   await page.setViewportSize({ width: 640, height: 450 });
@@ -139,6 +159,7 @@ test("shared landing navigation supports desktop chapters and a keyboard-operate
   for (const [label, id] of [
     ["BARO의 시작", "our-beginning"],
     ["당신의 시간", "time-experience"],
+    ["CEO 인사말", "from-our-ceo"],
     ["더 간단한 시작", "start-with-baro"],
   ] as const) {
     const link = page
@@ -365,9 +386,9 @@ test("hero footage plays continuously while idle, scroll changes only the framin
     .poll(() => heroFilm.evaluate((video) => video instanceof HTMLVideoElement && !video.paused))
     .toBe(true);
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect(toggle).toBeHidden();
+  await expect(toggle).toBeVisible();
   await expect
-    .poll(() => heroFilm.evaluate((video) => video instanceof HTMLVideoElement && video.paused))
+    .poll(() => heroFilm.evaluate((video) => video instanceof HTMLVideoElement && !video.paused))
     .toBe(true);
 });
 
@@ -447,96 +468,117 @@ test("the blue opening expands into selectable app features and hands the select
   await expect(page.locator('[data-demo-panel="report"]')).toBeVisible();
 });
 
-test("the founding note keeps both original handwritten layers while zooming into a working app entry", async ({
-  page,
-}) => {
-  await page.setViewportSize({ width: 1440, height: 900 });
-  await page.emulateMedia({ reducedMotion: "no-preference" });
-  await page.goto("/");
-  const origin = page.locator("[data-origin-story]");
-  await expect(origin).toHaveClass(/origin-motion/);
-  await scrollScene(origin, ".origin-pin", 0);
-  await expectLocalImage(
-    origin.locator(".origin-clean-background img"),
-    "/landing/origin-notes-clean.webp",
-  );
-  const originals = origin.locator(".origin-original-note");
-  await expect(originals).toHaveCount(2);
-  for (const layer of await originals.all()) {
-    await expectLocalImage(layer.locator("img"), "/landing/origin-notes-original.webp");
-    await expect(layer).not.toHaveCSS("clip-path", "none");
-  }
-  const photo = origin.locator("[data-origin-photo]");
-  const openingWidth = (await photo.boundingBox())?.width ?? 0;
-  expect(openingWidth).toBeGreaterThan(0);
-  await scrollScene(origin, ".origin-pin", 0.43);
-  await expect
-    .poll(async () => (await photo.boundingBox())?.width ?? 0)
-    .toBeGreaterThan(openingWidth * 2);
-  for (const layer of await originals.all())
-    await expectLocalImage(layer.locator("img"), "/landing/origin-notes-original.webp");
-  await scrollScene(origin, ".origin-pin", 0);
-  await origin.getByRole("button", { name: "BARO로 들어가기" }).click();
-  await expect(origin.locator(".origin-arrival")).toHaveCSS("opacity", "1");
-  const entry = origin.getByRole("link", { name: "BARO 안으로" });
-  await expect(entry).toBeInViewport({ ratio: 1 });
-  await entry.click();
-  await expect(page).toHaveURL(/#blue-app-reveal$/);
-  await expect(page.locator("[data-blue-reveal]")).toBeInViewport();
-});
+for (const viewport of [
+  { width: 320, height: 568 },
+  { width: 390, height: 844 },
+  { width: 1440, height: 900 },
+]) {
+  test(`the founding note keeps both original handwritten layers while zooming into a working app entry at ${viewport.width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize(viewport);
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    await page.goto("/");
+    await page.evaluate(() => document.fonts.ready);
+    const origin = page.locator("[data-origin-story]");
+    await expect(origin).toHaveClass(/origin-motion/);
+    await scrollScene(origin, ".origin-pin", 0);
+    await expectLocalImage(
+      origin.locator(".origin-clean-background img"),
+      "/landing/origin-notes-clean.webp",
+    );
+    const originals = origin.locator(".origin-original-note");
+    await expect(originals).toHaveCount(2);
+    for (const layer of await originals.all()) {
+      await expectLocalImage(layer.locator("img"), "/landing/origin-notes-original.webp");
+      await expect(layer).not.toHaveCSS("clip-path", "none");
+    }
+    const photo = origin.locator("[data-origin-photo]");
+    const openingWidth = (await photo.boundingBox())?.width ?? 0;
+    expect(openingWidth).toBeGreaterThan(0);
+    await scrollScene(origin, ".origin-pin", 0.43);
+    await expect
+      .poll(async () => (await photo.boundingBox())?.width ?? 0)
+      .toBeGreaterThan(openingWidth * 1.25);
+    for (const layer of await originals.all())
+      await expectLocalImage(layer.locator("img"), "/landing/origin-notes-original.webp");
+    expect((await photo.boundingBox())?.width ?? 0).toBeLessThan(openingWidth * 2.2);
+    await scrollScene(origin, ".origin-pin", 0.56);
+    await expect(origin.locator(".origin-photo-window")).not.toHaveCSS("filter", "blur(0px)");
+    await scrollScene(origin, ".origin-pin", 0);
+    await origin.getByRole("button", { name: "BARO로 들어가기" }).click();
+    await expect(origin.locator(".origin-arrival")).toHaveCSS("opacity", "1");
+    const entry = origin.getByRole("link", { name: "BARO 안으로" });
+    await expect(entry).toBeInViewport({ ratio: 1 });
+    await entry.click();
+    await expect(page).toHaveURL(/#blue-app-reveal$/);
+    await expect(page.locator("[data-blue-reveal]")).toBeInViewport();
+  });
+}
 
-test("the real watch zooms into a full blue message and its demo action remains usable", async ({
-  page,
-}) => {
-  await page.setViewportSize({ width: 1440, height: 900 });
-  await page.emulateMedia({ reducedMotion: "no-preference" });
-  await page.goto("/");
-  await page.evaluate(() => document.fonts.ready);
-  const time = page.locator("[data-time-experience]");
-  await expect(time).toHaveClass(/time-experience-motion/);
-  await scrollScene(time, "[data-time-pin]", 0);
-  await expectLocalImage(time.locator(".time-watch-image"), "/landing/time-watch.webp");
-  await expect(time.locator(".time-clock-drawing")).toHaveCount(0);
-  await expect(time.locator("[data-time-message]")).toHaveCSS("opacity", "0");
-  const clock = time.locator("[data-time-clock]");
-  const openingWidth = (await clock.boundingBox())?.width ?? 0;
-  expect(openingWidth).toBeGreaterThan(0);
-  await scrollScene(time, "[data-time-pin]", 0.42);
-  await expect
-    .poll(async () => (await clock.boundingBox())?.width ?? 0)
-    .toBeGreaterThan(openingWidth * 2);
-  await scrollScene(time, "[data-time-pin]", 0.99);
-  await expect(time.locator("[data-time-message]")).toHaveCSS("opacity", "1");
-  await expect(time.locator(".time-clock-stage")).toHaveCSS("opacity", "0");
-  const pin = await time.locator("[data-time-pin]").boundingBox();
-  const wipe = await time.locator("[data-time-wipe]").boundingBox();
-  expect(pin).not.toBeNull();
-  expect(wipe?.width ?? 0).toBeGreaterThanOrEqual(Math.hypot(pin?.width ?? 1, pin?.height ?? 1));
-  await expect(
-    time.getByRole("heading", { name: /법률 문제에서,\s*시간은 중요하니까\./ }),
-  ).toBeVisible();
-  await expect(time.locator(".time-promise")).toHaveText("당신의 시간을 지켜드립니다.");
-  for (const benefit of await time.locator("[data-time-benefit]").all())
-    await expect(benefit).toHaveCSS("opacity", "1");
-  await expect(time.getByRole("link", { name: "내 이야기 시작하기" })).toHaveAttribute(
-    "href",
-    "/app",
-  );
-  await time.getByRole("link", { name: "직접 체험하기" }).click();
-  await expect(page).toHaveURL(/#try-baro$/);
-  await expect(page.locator("[data-baro-demo]")).toBeInViewport();
+for (const viewport of [
+  { width: 320, height: 568 },
+  { width: 390, height: 844 },
+  { width: 1440, height: 900 },
+]) {
+  test(`the real watch zooms into a full blue message and its demo action remains usable at ${viewport.width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize(viewport);
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    await page.goto("/");
+    await page.evaluate(() => document.fonts.ready);
+    const time = page.locator("[data-time-experience]");
+    await expect(time).toHaveClass(/time-experience-motion/);
+    await scrollScene(time, "[data-time-pin]", 0);
+    await expectLocalImage(time.locator(".time-watch-image"), "/landing/time-watch.webp");
+    await expect(time.locator(".time-clock-drawing")).toHaveCount(0);
+    await expect(time.locator("[data-time-message]")).toHaveCSS("opacity", "0");
+    const clock = time.locator("[data-time-clock]");
+    const openingWidth = (await clock.boundingBox())?.width ?? 0;
+    expect(openingWidth).toBeGreaterThan(0);
+    await scrollScene(time, "[data-time-pin]", 0.42);
+    await expect
+      .poll(async () => (await clock.boundingBox())?.width ?? 0)
+      .toBeGreaterThan(openingWidth * 1.25);
+    expect((await clock.boundingBox())?.width ?? 0).toBeLessThan(openingWidth * 2.2);
+    await scrollScene(time, "[data-time-pin]", 0.56);
+    await expect(time.locator(".time-clock-stage")).not.toHaveCSS("filter", "blur(0px)");
+    await scrollScene(time, "[data-time-pin]", 0.99);
+    await expect(time.locator("[data-time-message]")).toHaveCSS("opacity", "1");
+    await expect(time.locator(".time-clock-stage")).toHaveCSS("opacity", "0");
+    const pin = await time.locator("[data-time-pin]").boundingBox();
+    const wipe = await time.locator("[data-time-wipe]").boundingBox();
+    expect(pin).not.toBeNull();
+    expect(wipe?.width ?? 0).toBeGreaterThanOrEqual(pin?.width ?? 1);
+    expect(wipe?.height ?? 0).toBeGreaterThanOrEqual(pin?.height ?? 1);
+    await expect(time.locator("[data-time-wipe]")).toHaveCSS("opacity", "1");
+    await expect(
+      time.getByRole("heading", { name: /법률 문제에서,\s*시간은 중요하니까\./ }),
+    ).toBeVisible();
+    await expect(time.locator(".time-promise")).toHaveText("당신의 시간을 지켜드립니다.");
+    for (const benefit of await time.locator("[data-time-benefit]").all())
+      await expect(benefit).toHaveCSS("opacity", "1");
+    await expect(time.getByRole("link", { name: "내 이야기 시작하기" })).toHaveAttribute(
+      "href",
+      "/app",
+    );
+    await time.getByRole("link", { name: "직접 체험하기" }).click();
+    await expect(page).toHaveURL(/#try-baro$/);
+    await expect(page.locator("[data-baro-demo]")).toBeInViewport();
 
-  // Reverse the scene, then reach the initially transparent action with the keyboard.
-  await scrollScene(time, "[data-time-pin]", 0);
-  const action = time.getByRole("link", { name: "직접 체험하기" });
-  await page.keyboard.press("Tab");
-  await action.focus();
-  await expect(action).toBeFocused();
-  await expect(time.locator("[data-time-message]")).toHaveCSS("opacity", "1");
-  await expect(action).toBeInViewport({ ratio: 1 });
-  await page.keyboard.press("Enter");
-  await expect(page).toHaveURL(/#try-baro$/);
-});
+    // Reverse the scene, then reach the initially transparent action with the keyboard.
+    await scrollScene(time, "[data-time-pin]", 0);
+    const action = time.getByRole("link", { name: "직접 체험하기" });
+    await page.keyboard.press("Tab");
+    await action.focus();
+    await expect(action).toBeFocused();
+    await expect(time.locator("[data-time-message]")).toHaveCSS("opacity", "1");
+    await expect(action).toBeInViewport({ ratio: 1 });
+    await page.keyboard.press("Enter");
+    await expect(page).toHaveURL(/#try-baro$/);
+  });
+}
 
 test("the ending gathers four features into the app, shows the final message and can replay or start", async ({
   page,
@@ -596,16 +638,11 @@ test("the ending gathers four features into the app, shows the final message and
   await expect(page.getByRole("button", { name: "Google로 계속하기" })).toBeVisible();
 });
 
-test("origin, time and ending remain readable on compact screens and when motion is reduced", async ({
+test("short screens and reduced motion retain the photos and readable origin, time and ending", async ({
   page,
 }) => {
-  const photoRequests: string[] = [];
-  page.on("request", (request) => {
-    if (/\/landing\/(?:origin-notes-[^/]+|time-watch)\.webp(?:\?|$)/.test(request.url()))
-      photoRequests.push(request.url());
-  });
   for (const viewport of [
-    { width: 320, height: 844, reducedMotion: "no-preference" as const },
+    { width: 320, height: 480, reducedMotion: "no-preference" as const },
     { width: 900, height: 500, reducedMotion: "no-preference" as const },
     { width: 1440, height: 900, reducedMotion: "reduce" as const },
   ]) {
@@ -634,11 +671,8 @@ test("origin, time and ending remain readable on compact screens and when motion
       "href",
       "/app",
     );
-    if (viewport.reducedMotion === "no-preference") {
-      await expect(origin.locator(".origin-photo-stage")).toBeHidden();
-      await expect(time.locator(".time-clock-stage")).toBeHidden();
-      expect(photoRequests).toEqual([]);
-    }
+    await expect(origin.locator(".origin-photo-stage")).toBeVisible();
+    await expect(time.locator(".time-clock-stage")).toBeVisible();
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
@@ -646,6 +680,52 @@ test("origin, time and ending remain readable on compact screens and when motion
     ).toBe(true);
   }
 });
+
+for (const viewport of [
+  { width: 320, height: 568 },
+  { width: 390, height: 844 },
+]) {
+  test(`mobile app scenes remain interactive and reach their final message at ${viewport.width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize(viewport);
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    await page.goto("/");
+    await page.evaluate(() => document.fonts.ready);
+    const phone = page.locator("[data-phone-story]");
+    await expect(phone).toHaveClass(/phone-story-ready/);
+    await scrollScene(phone, ".phone-story-sticky", 0.995);
+    await expect(phone.locator("[data-phone-arrival]")).toHaveCSS("opacity", "1");
+    await expect(phone.locator("[data-phone-arrival]")).toContainText("어떤 일이 있었나요?");
+    for (const service of await phone.locator("[data-phone-service]").all())
+      await expect(service).toHaveCSS("opacity", "0");
+    await scrollScene(phone, ".phone-story-sticky", 0.12);
+    for (const service of await phone.locator("[data-phone-service]").all())
+      await expect(service).toHaveCSS("opacity", "1");
+    const clarity = page.locator("[data-clarity]");
+    await expect(clarity).toHaveClass(/clarity-motion-ready/);
+    await scrollScene(clarity, "[data-clarity-pin]", 0.97);
+    await clarity.locator('[data-clarity-topic="work"]').click();
+    await expect(clarity.locator('[data-clarity-result="0"]')).toContainText("일이 있었던 날짜");
+    const finale = page.locator("[data-finale]");
+    await expect(finale).toHaveClass(/finale-motion-ready/);
+    await scrollScene(finale, "[data-finale-pin]", 0.74);
+    await expect(finale.locator("[data-finale-app]")).toHaveCSS("opacity", "1");
+    await scrollScene(finale, "[data-finale-pin]", 0.99);
+    await expect(finale.locator("[data-finale-message]")).toHaveCSS("opacity", "1");
+    const action = finale.getByRole("link", { name: "내 이야기로 시작하기", exact: true });
+    await expect(action).toHaveAttribute("href", "/app");
+    await expect(action).toBeInViewport({ ratio: 1 });
+    await finale.getByRole("button", { name: "처음부터 다시 보기" }).click();
+    await expect(finale.locator("[data-finale-message]")).toHaveCSS("opacity", "0");
+    await expect(finale.locator("[data-finale-feature]").first()).toHaveCSS("opacity", "1");
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+      ),
+    ).toBe(true);
+  });
+}
 
 test("mobile and reduced-motion blue previews keep keyboard tabs and working demo links", async ({
   page,
@@ -660,8 +740,13 @@ test("mobile and reduced-motion blue previews keep keyboard tabs and working dem
     await page.goto("/");
     const scene = page.locator("[data-blue-reveal]");
     await expect(scene).toHaveClass(/blue-reveal-enhanced/);
-    await expect(scene).not.toHaveClass(/blue-reveal-motion/);
-    await expect(scene.locator(".blue-reveal-circle")).toBeHidden();
+    if (viewport.reducedMotion === "reduce") {
+      await expect(scene).not.toHaveClass(/blue-reveal-motion/);
+      await expect(scene.locator(".blue-reveal-circle")).toBeHidden();
+    } else {
+      await expect(scene).toHaveClass(/blue-reveal-motion/);
+      await scrollScene(scene, ".blue-reveal-pin", 0.4);
+    }
     await scene.getByRole("tab", { name: /편한 대화/ }).focus();
     await page.keyboard.press("ArrowRight");
     await expect(scene.locator('[data-blue-tab="1"]')).toBeFocused();
@@ -757,27 +842,47 @@ test("the everyday story moves with scroll and its films play only while visible
     await expect(copy).toHaveCSS("opacity", "1");
 });
 
-test("the mobile everyday story keeps the message and next steps without requesting decorative media", async ({
+test("mobile everyday photos and films remain available and respect manual pause", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  const mediaRequests: string[] = [];
-  page.on("request", (request) => {
-    if (/\/landing\/future-[^/]+\.(?:mp4|webp)(?:\?|$)/.test(request.url()))
-      mediaRequests.push(request.url());
-  });
+  await page.emulateMedia({ reducedMotion: "no-preference" });
   await page.goto("/");
   const future = page.locator("[data-everyday-future]");
-  await expect(future).not.toHaveClass(/future-motion-ready/);
-  for (const window of await future
-    .locator(".future-photo-window, .future-film-media, .future-video-toggle")
-    .all())
-    await expect(window).toBeHidden();
-  for (const caption of await future.locator(".future-photo figcaption").all())
-    await expect(caption).toBeVisible();
-  await expect(future.locator("#future-everyday-title")).toBeVisible();
-  await expect(future.locator("#future-conversation-title")).toBeVisible();
-  await expect(future.locator("#future-vision-title")).toBeVisible();
+  await expect(future).toHaveClass(/future-motion-ready/);
+  const photo = future.locator(".future-photo-home img");
+  await photo.scrollIntoViewIfNeeded();
+  await expectLocalImage(photo, "/landing/future-home.webp");
+  const film = future.locator('video[data-film="future-everyday"]');
+  const toggle = future.locator('[data-film-toggle="future-everyday"]');
+  const showFilm = () =>
+    film.evaluate((element) => {
+      const container = element.closest("[data-film-container]");
+      if (!container) throw new Error("Missing mobile film");
+      window.scrollTo({
+        top: scrollY + container.getBoundingClientRect().top - 100,
+        behavior: "instant",
+      });
+    });
+  await showFilm();
+  await expect(toggle).toBeInViewport();
+  await expect
+    .poll(
+      () =>
+        film.evaluate(
+          (element) =>
+            element instanceof HTMLVideoElement && element.readyState >= 2 && !element.paused,
+        ),
+      { timeout: 15_000 },
+    )
+    .toBe(true);
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("data-playing", "false");
+  await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
+  await showFilm();
+  await expect
+    .poll(() => film.evaluate((element) => element instanceof HTMLVideoElement && element.paused))
+    .toBe(true);
   await expect(future.getByRole("link", { name: "내 이야기로 시작하기" })).toHaveAttribute(
     "href",
     "/app",
@@ -786,24 +891,19 @@ test("the mobile everyday story keeps the message and next steps without request
     "href",
     "/lawyers",
   );
-  await future.locator(".future-vision-actions").scrollIntoViewIfNeeded();
-  for (const film of await future.locator("video").all())
-    await expect(film).not.toHaveAttribute("src");
-  expect(mediaRequests).toEqual([]);
 });
 
-test("mobile and reduced-motion entry keep all phone chapters readable without downloading films", async ({
+test("reduced-motion entry keeps all phone chapters readable and does not autoplay films", async ({
   page,
 }) => {
   const videoRequests: string[] = [];
   page.on("request", (request) => {
     if (/\.mp4(?:\?|$)/.test(request.url())) videoRequests.push(request.url());
   });
-  for (const reducedMotion of ["no-preference", "reduce"] as const) {
-    // Changing the old page's viewport before its preference would briefly start its video.
+  for (const width of [390, 1440]) {
     await page.goto("about:blank");
-    await page.setViewportSize({ width: reducedMotion === "reduce" ? 1440 : 390, height: 900 });
-    await page.emulateMedia({ reducedMotion });
+    await page.setViewportSize({ width, height: 900 });
+    await page.emulateMedia({ reducedMotion: "reduce" });
     await page.goto("/");
     await expect(page.locator("[data-journey-hero]")).not.toHaveClass(/journey-ready/);
     await expect(page.locator("[data-journey-toggle]")).toBeHidden();
@@ -818,12 +918,9 @@ test("mobile and reduced-motion entry keep all phone chapters readable without d
         await film.evaluate((video) => video instanceof HTMLVideoElement && video.paused),
       ).toBe(true);
     }
-    if (reducedMotion === "no-preference") {
-      for (const photo of await page.locator(".everyday-photo-stage").all())
-        await expect(photo).toBeHidden();
-      await expect(page.locator(".journey-film-stage")).toBeHidden();
-      await expect(page.locator(".logo-experience-mark")).toBeHidden();
-    }
+    for (const photo of await page.locator(".everyday-photo-stage").all())
+      await expect(photo).toBeVisible();
+    await expect(page.locator(".journey-film-stage")).toBeVisible();
   }
   expect(videoRequests).toEqual([]);
 });
@@ -952,15 +1049,16 @@ test("the brand turns, separates, and reveals selectable features that open the 
   await expect(page.locator('[data-demo-panel="files"]')).toBeVisible();
 });
 
-test("mobile logo controls retain a working feature preview with no pinned logo stage", async ({
+test("mobile logo motion keeps keyboard feature selection and reduces to a static preview", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
   const scene = page.locator("[data-logo-experience]");
   await expect(scene).toHaveClass(/logo-experience-enhanced/);
-  await expect(scene).not.toHaveClass(/logo-experience-motion/);
-  await expect(scene.locator(".logo-experience-mark")).toBeHidden();
+  await expect(scene).toHaveClass(/logo-experience-motion/);
+  await scrollScene(scene, ".logo-experience-sticky", 0);
+  await expect(scene.locator(".logo-experience-mark")).toBeVisible();
   await scene.locator('[data-logo-feature="0"]').focus();
   await page.keyboard.press("ArrowRight");
   await expect(scene.locator('[data-logo-feature="1"]')).toBeFocused();
@@ -1120,31 +1218,81 @@ test("clarity topics change the actual story while scrolling gathers and then op
   await expect(scene.locator("[data-clarity-input]").first()).toHaveCSS("opacity", "1");
 });
 
-test("mobile clarity keeps its before/after controls while omitting the large photograph", async ({
+test("reduced-motion mobile clarity keeps its photo and working before/after controls", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  const photoRequests: string[] = [];
-  page.on("request", (request) => {
-    if (request.url().includes("/landing/help-clarity.webp")) photoRequests.push(request.url());
-  });
+  await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/");
   const scene = page.locator("[data-clarity]");
   await expect(scene).toHaveClass(/clarity-static-ready/);
   await expect(scene).not.toHaveClass(/clarity-motion-ready/);
-  await expect(scene.locator(".clarity-help")).toBeHidden();
+  await expect(scene.locator(".clarity-help")).toBeVisible();
   await scene.locator('[data-clarity-topic="work"]').click();
   await expect(scene.locator('[data-clarity-file="0"]')).toHaveText("근로 계약서.pdf");
   await scene.locator("[data-clarity-play]").click();
   await expect(scene).toHaveAttribute("data-clarity-view", "after");
   await expect(scene.locator("[data-clarity-results]")).toBeVisible();
   await expect(scene.locator('[data-clarity-result="1"]')).toContainText("직접 겪은 일");
-  await expect(scene.locator(".clarity-help")).toBeHidden();
+  await expect(scene.locator(".clarity-help")).toBeVisible();
   await scene.locator("[data-clarity-play]").click();
   await expect(scene).toHaveAttribute("data-clarity-view", "before");
   await expect(scene.locator("[data-clarity-results]")).toBeHidden();
-  expect(photoRequests).toEqual([]);
+  await scene.locator(".clarity-help").scrollIntoViewIfNeeded();
+  await expectLocalImage(scene.locator(".clarity-help img"), "/landing/help-clarity.webp");
 });
+
+for (const viewport of [
+  { width: 390, height: 844 },
+  { width: 1440, height: 900 },
+]) {
+  test(`CEO portraits and greetings follow scrolling and accessible selection at ${viewport.width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize(viewport);
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    await page.goto("/");
+    await page.evaluate(() => document.fonts.ready);
+    const ceo = page.locator("[data-ceo-greeting]");
+    await expect(ceo).toHaveClass(/ceo-motion-ready/);
+    const stage = ceo.locator("[data-ceo-scroll]");
+    await scrollScene(stage, "[data-ceo-visual]", 0.05);
+    await expectLocalImage(ceo.locator('[data-ceo-photo="suit"] img'), "/landing/ceo-suit.webp");
+    await expectLocalImage(
+      ceo.locator('[data-ceo-photo="crenova"] img'),
+      "/landing/ceo-crenova.webp",
+    );
+    await expect(ceo.locator('[data-ceo-message="suit"]')).toHaveAttribute("aria-hidden", "false");
+    const chooseCrenova = ceo.locator('[data-ceo-show="crenova"]').first();
+    await chooseCrenova.focus();
+    await page.keyboard.press("Enter");
+    for (const button of await ceo.locator('[data-ceo-show="crenova"]').all())
+      await expect(button).toHaveAttribute("aria-pressed", "true");
+    await expect(ceo.locator('[data-ceo-photo="crenova"]')).toHaveAttribute("aria-hidden", "false");
+    await expect(ceo.locator('[data-ceo-message="crenova"]')).toHaveAttribute(
+      "aria-hidden",
+      "false",
+    );
+    await expect(ceo.locator('[data-ceo-message="suit"]')).toHaveAttribute("inert", "");
+    await ceo.locator('[data-ceo-show="suit"]').first().click();
+    await expect(ceo.locator('[data-ceo-message="suit"]')).not.toHaveAttribute("inert");
+    await scrollScene(stage, "[data-ceo-visual]", 0.9);
+    await expect(ceo.locator('[data-ceo-message="crenova"]')).toHaveAttribute(
+      "aria-hidden",
+      "false",
+    );
+    await scrollScene(stage, "[data-ceo-visual]", 0.05);
+    await expect(ceo.locator('[data-ceo-message="suit"]')).toHaveAttribute("aria-hidden", "false");
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await expect(ceo).not.toHaveClass(/ceo-motion-ready/);
+    await ceo.locator('[data-ceo-show="crenova"]').last().click();
+    await expect(ceo.locator('[data-ceo-message="crenova"]')).not.toHaveAttribute("inert");
+    await expect(ceo.getByRole("link", { name: "BARO에서 시작하기" })).toHaveAttribute(
+      "href",
+      "/app",
+    );
+  });
+}
 
 test("the simplicity page presents the focused explanation and preserves its login entry", async ({
   page,
@@ -1153,10 +1301,10 @@ test("the simplicity page presents the focused explanation and preserves its log
   await page.emulateMedia({ reducedMotion: "reduce" });
   const response = await page.goto("/simplicity");
   expect(response?.status()).toBe(200);
-  for (const id of ["our-beginning", "time-experience", "start-with-baro"])
+  for (const id of ["our-beginning", "time-experience", "from-our-ceo", "start-with-baro"])
     await expect(page.locator(`#${id}`)).toBeVisible();
-  await expect(page.locator(".origin-photo-stage")).toBeHidden();
-  await expect(page.locator(".time-clock-stage")).toBeHidden();
+  await expect(page.locator(".origin-photo-stage")).toBeVisible();
+  await expect(page.locator(".time-clock-stage")).toBeVisible();
   await expect(page.locator("[data-finale-replay]")).toBeHidden();
   await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
@@ -1193,6 +1341,12 @@ test("core landing content, login and FAQs work when JavaScript is unavailable",
       await expect(chapter).toBeVisible();
     await expect(page.locator(".phone-story-controls")).toBeHidden();
     await expect(page.locator("[data-journey-toggle]")).toBeHidden();
+    for (const letter of await page.locator("[data-ceo-message]").all())
+      await expect(letter).toBeVisible();
+    for (const portrait of await page.locator("[data-ceo-photo]").all())
+      await expect(portrait).toBeVisible();
+    for (const controls of await page.locator("[data-ceo-controls]").all())
+      await expect(controls).toBeHidden();
     await expect(page.locator("[data-demo-fallback]")).toBeVisible();
     await expect(page.locator("[data-demo-interactive]")).toBeHidden();
     await expect(page.locator("[data-blue-tabs]")).toBeHidden();

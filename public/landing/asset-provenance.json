@@ -74,7 +74,7 @@
       "generationId": "64c98e17-0871-4121-9e09-225e43e4f31e",
       "generatedOn": "2026-10-07",
       "description": "Fictional adults reviewing a smartphone and household documents together. Illustrative scene, not a testimonial.",
-      "optimization": "1024x688 WebP quality84; desktop picture source only."
+      "optimization": "1024x688 WebP quality84; responsive picture source on mobile and desktop."
     },
     {
       "asset": "phone-journey.mp4",
@@ -123,7 +123,7 @@
       "generatedOn": "2026-10-07",
       "durationSeconds": 12,
       "description": "Continuous locked-off documentary-style shot of a fictional adult using a phone at home; natural subtle movement, no scroll seeking.",
-      "optimization": "1600x900 H.264 CRF25, audio removed, fast-start MP4, first-frame WebP poster. Lazy desktop playback, user pause control, motion/data-saving preferences respected."
+      "optimization": "1600x900 H.264 CRF25, audio removed, fast-start MP4, first-frame WebP poster. Lazy responsive playback, user pause control, motion/data-saving preferences respected."
     },
     {
       "asset": "future-everyday.mp4",
@@ -134,7 +134,7 @@
       "generatedOn": "2026-10-07",
       "durationSeconds": 10,
       "description": "Fictional adults organizing household paperwork together; illustrative preparation, not a legal outcome or testimonial.",
-      "optimization": "1600x900 H.264 CRF25, audio removed, fast-start MP4, first-frame WebP poster. Lazy desktop playback, user pause control, motion/data-saving preferences respected."
+      "optimization": "1600x900 H.264 CRF25, audio removed, fast-start MP4, first-frame WebP poster. Lazy responsive playback, user pause control, motion/data-saving preferences respected."
     },
     {
       "asset": "future-conversation.mp4",
@@ -145,13 +145,13 @@
       "generatedOn": "2026-10-07",
       "durationSeconds": 10,
       "description": "Fictional client and professional having a prepared conversation; not an actual consultation or testimonial.",
-      "optimization": "1600x900 H.264 CRF25, audio removed, fast-start MP4, first-frame WebP poster. Lazy desktop playback, user pause control, motion/data-saving preferences respected."
+      "optimization": "1600x900 H.264 CRF25, audio removed, fast-start MP4, first-frame WebP poster. Lazy responsive playback, user pause control, motion/data-saving preferences respected."
     },
     {
       "asset": "origin-notes-original.webp",
       "source": "User-supplied IMG_4378.jpeg",
       "description": "Original handwritten sticky notes. Handwriting is not regenerated: this image is clipped over the background retouch in two protected paper regions.",
-      "optimization": "EXIF orientation applied, 2048px wide WebP quality95; desktop picture source only."
+      "optimization": "EXIF orientation applied, 2048px wide WebP quality95; responsive picture source on mobile and desktop."
     },
     {
       "asset": "origin-notes-clean.webp",
@@ -160,7 +160,7 @@
       "generationId": "a484ea07-d31f-43b5-8833-693cf33dced0",
       "generatedOn": "2026-10-07",
       "description": "Monitor display, desk and surroundings tidied. Original photo layers replace the handwritten note regions in the page.",
-      "optimization": "1744x2325 WebP quality90; desktop picture source only."
+      "optimization": "1744x2325 WebP quality90; responsive picture source on mobile and desktop."
     },
     {
       "asset": "time-watch.webp",
@@ -169,7 +169,22 @@
       "generationId": "1466a42a-457a-409e-9e11-83bf23dca306",
       "generatedOn": "2026-10-07",
       "description": "Original wristwatch with dial text and emblem removed, hands and hour markers retained; surrounding ivory surface cleaned.",
-      "optimization": "1744x2336 WebP quality90; no mobile media request."
+      "optimization": "1744x2336 WebP quality90; responsive photo on mobile and desktop."
+    },
+    {
+      "asset": "ceo-suit.webp",
+      "source": "User-supplied founder portrait",
+      "description": "Original founder portrait in a suit, retained for the opening state of the greeting.",
+      "optimization": "814x964 WebP quality94; metadata removed."
+    },
+    {
+      "asset": "ceo-crenova.webp",
+      "source": "Higgsfield wardrobe edit of the user-supplied founder portrait and CRENOVA logo",
+      "model": "gpt_image_2_5",
+      "generationId": "d852b7fd-3bc0-4250-b288-1f28cbc57ee8",
+      "generatedOn": "2026-10-07",
+      "description": "Matching studio portrait wearing a black cotton T-shirt with a small CRENOVA symbol and wordmark on the wearer’s left chest. Reference identity, expression and pose preserved in the edit.",
+      "optimization": "1220px wide WebP quality93; metadata removed; lazy responsive image."
     }
   ]
 }

@@ -1,9 +1,11 @@
-/** A scroll-driven, full 360° device turn. Mobile and reduced motion use a static feature list. */
+/** A scroll-driven, full 360° device turn, with a compact touch layout and static reduced motion. */
 const phoneStory = document.querySelector<HTMLElement>("[data-phone-story]");
 
 if (phoneStory) {
   const scene = phoneStory;
-  const desktop = window.matchMedia("(min-width: 768px) and (min-height: 600px)");
+  const motionViewport = window.matchMedia(
+    "(min-width: 768px) and (min-height: 600px), (min-width: 320px) and (max-width: 767px) and (min-height: 520px)",
+  );
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
   const chapters = [...scene.querySelectorAll<HTMLElement>("[data-phone-chapter]")];
   const screens = [...scene.querySelectorAll<HTMLElement>("[data-phone-screen]")];
@@ -128,6 +130,22 @@ if (phoneStory) {
     if (!enabled) return;
     const bounds = scene.getBoundingClientRect();
     if (bounds.bottom < 0 || bounds.top > window.innerHeight) return;
+    const visual = scene.querySelector<HTMLElement>(".phone-story-visual");
+    if (visual) {
+      if (window.innerWidth < 768) {
+        visual.style.setProperty(
+          "--phone-scale",
+          Math.min(0.58, (visual.clientHeight - 24) / 586.56).toFixed(3),
+        );
+        visual.style.setProperty(
+          "--phone-chip-span",
+          Math.min(0.6, (visual.clientWidth - 116) / 348).toFixed(3),
+        );
+      } else {
+        visual.style.removeProperty("--phone-scale");
+        visual.style.removeProperty("--phone-chip-span");
+      }
+    }
     const pin = scene.querySelector<HTMLElement>(".phone-story-sticky");
     const stickyTop = pin ? Number.parseFloat(window.getComputedStyle(pin).top) || 0 : 0;
     const distance = Math.max(1, scene.offsetHeight - (pin?.offsetHeight || window.innerHeight));
@@ -166,10 +184,14 @@ if (phoneStory) {
       const intake = clamp((progress - (0.42 + index * 0.12)) / 0.105);
       const travel = smoothstep(intake);
       const drift = Math.sin(progress * Math.PI * 2 + index) * 9 * (1 - travel);
+      const verticalFit =
+        window.innerWidth < 768
+          ? Math.min(0.52, Math.max(0.3, ((visual?.clientHeight ?? 270) - 76) / 372))
+          : 1;
       service.style.setProperty("--phone-service-x", `${(origin[0] * (1 - travel)).toFixed(2)}px`);
       service.style.setProperty(
         "--phone-service-y",
-        `${(origin[1] * (1 - travel) - travel * 28 + drift).toFixed(2)}px`,
+        `${(origin[1] * verticalFit * (1 - travel) - travel * 28 + drift).toFixed(2)}px`,
       );
       service.style.setProperty("--phone-service-scale", (1 - travel * 0.86).toFixed(3));
       service.style.setProperty(
@@ -195,7 +217,7 @@ if (phoneStory) {
   }
 
   function configure() {
-    enabled = desktop.matches && !reduceMotion.matches;
+    enabled = motionViewport.matches && !reduceMotion.matches;
     scene.classList.toggle("phone-story-ready", enabled);
     if (frame) window.cancelAnimationFrame(frame);
     frame = 0;
@@ -242,7 +264,7 @@ if (phoneStory) {
   window.addEventListener("scroll", schedule, { passive: true });
   window.addEventListener("resize", schedule, { passive: true });
   window.addEventListener("pageshow", configure);
-  desktop.addEventListener("change", configure);
+  motionViewport.addEventListener("change", configure);
   reduceMotion.addEventListener("change", configure);
   buildShell();
   configure();

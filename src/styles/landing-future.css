@@ -675,6 +675,122 @@
     display: initial;
   }
 }
+
+@media (max-width: 767px) {
+  .everyday-future {
+    overflow: clip;
+  }
+  .future-collage {
+    padding-bottom: 20px;
+  }
+  .future-photo {
+    margin-bottom: 35px;
+  }
+  .future-photo-window,
+  .future-photo-work .future-photo-window {
+    display: block;
+    aspect-ratio: 4 / 5;
+    border-radius: 20px;
+    max-height: 510px;
+  }
+  .future-photo-index {
+    top: 20px;
+    left: 18px;
+    font-size: 8px;
+  }
+  .future-photo figcaption {
+    padding: 18px 0 8px;
+    border: 0;
+  }
+  .future-image-disclosure {
+    display: block;
+    padding: 0 24px 50px;
+    font-size: 9px;
+  }
+  .future-film-shell {
+    min-height: 480px;
+    aspect-ratio: 3 / 4;
+    padding: 0;
+    background: #304550;
+    color: #fff;
+  }
+  .future-film-media,
+  .future-film-shade,
+  .future-film-ai,
+  .future-conversation-film {
+    display: block;
+  }
+  .future-film-media {
+    inset: -32px -10px;
+  }
+  .future-film-media img,
+  .future-video {
+    object-position: 54% center;
+  }
+  .future-film-shade {
+    background: linear-gradient(0deg, #061727ed, #06172721 88%);
+  }
+  .future-film-copy {
+    position: absolute;
+    left: 20px;
+    right: 20px;
+    bottom: 100px;
+  }
+  .future-film-overline {
+    color: #dceafa;
+    font-size: 7px;
+  }
+  .everyday-future .future-film-copy h3 {
+    color: #fff;
+    font-size: 26px;
+    margin: 15px 0;
+    line-height: 1.4;
+  }
+  .future-film-copy > p {
+    color: #e4edf5;
+    font-size: 12px;
+    line-height: 1.75;
+  }
+  .future-film-caption {
+    color: #d6e6f5;
+    font-size: 10px;
+    margin-top: 15px;
+  }
+  .future-video-toggle {
+    display: inline-flex;
+    bottom: 15px;
+    right: 16px;
+    font-size: 10px;
+    padding: 10px 12px;
+    min-height: 44px;
+  }
+  .future-video-toggle[hidden] {
+    display: none;
+  }
+  .future-film-ai {
+    bottom: 67px;
+    left: 20px;
+    font-size: 8px;
+  }
+  .future-conversation-film {
+    margin-top: 30px;
+    aspect-ratio: 4 / 5;
+    min-height: 350px;
+    border-radius: 20px;
+  }
+  .future-conversation-film-label {
+    left: 20px;
+    right: 20px;
+    bottom: 111px;
+    font-size: 20px;
+  }
+  .future-conversation-film .future-film-ai {
+    left: 20px;
+    bottom: 88px;
+    font-size: 8px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .everyday-future *,
   .everyday-future *::before,
