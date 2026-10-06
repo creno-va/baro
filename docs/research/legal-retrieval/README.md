@@ -36,7 +36,7 @@ cold는 cache가 없는 상태, warm은 동일 입력으로 priming한 fresh cac
 - DB reads는 실행된 SELECT, writes는 public cache 쓰기와 citation binding transaction statement다. 동의·소유권·revision 가드도 포함하며, setup·priming·측정 뒤 integrity 검사는 제외한다.
 - upstream bytes는 합성 응답 본문의 UTF-8 길이다. 429 본문도 포함하고 응답이 없는 timeout은 0 bytes다. output bytes는 retrieval JSON의 UTF-8 길이이며 HTTP header는 제외한다.
 - `wallMs`는 로컬 총 경과 시간이다. 합성 지연은 0ms/5ms 두 profile을 실행하고 실제 기다린 interval을 기록한다. `waitWallMs`는 합성 latency와 실제 timeout deadline 구간의 합집합이다. 동시 요청의 대기를 중복 합산해 총 시간에서 빼지 않는다.
-- `nonWaitingWallMs`는 각 sample의 `wallMs - waitWallMs`다. CPU time으로 부르지 않는다. 합성 transport의 JSON 생성·Response 생성, 실제 parser/hash/SQL/권한 처리와 scheduler overhead를 포함한다. 0ms 성공 profile은 fake wait가 없어서 총 경과 시간이 곧 실제 로컬 실행 경과 시간이다.
+- `nonWaitingWallMs`는 각 sample의 `wallMs - waitWallMs`다. CPU time으로 부르지 않는다. 대기 구간 밖의 합성 JSON·Response 생성, parser/hash/SQL/권한 처리와 scheduler overhead를 포함한다. 동시성 profile에서는 한 worker의 코드 실행이 다른 worker의 대기와 겹칠 수 있어 이 차이가 전체 CPU 실행량을 나타내지 않는다. 0ms 성공 profile은 fake wait가 없어서 총 경과 시간이 곧 실제 로컬 실행 경과 시간이다.
 - retry backoff는 sleep 없이 virtualize하고 설정값 100ms/200ms, 누적 100ms/300ms를 별도로 기록한다. 따라서 timeout/retry 총 시간은 운영 기본 timeout 10초와 실제 backoff latency 예측치가 아니다. 시간 열의 중앙값은 각각 계산하므로 서로 더해 정확히 총 시간 중앙값이 되지는 않는다.
 
 ## 같은 법령과 cache 전후 수치
