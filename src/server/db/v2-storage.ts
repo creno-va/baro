@@ -7,10 +7,13 @@ import {
 } from "../../contracts/v2";
 import { createV2AccountingRepository } from "./v2-accounting";
 import {
+  type AssetUploadCleanupIntent,
   type AssetUploadIntent,
   abandonAssetUpload,
+  captureAssetUploadIntent,
   commitAssetUpload,
   prepareAssetUpload,
+  requeueAssetUploadCleanup,
 } from "./v2-asset-uploads";
 import {
   type Actor,
@@ -122,6 +125,12 @@ export function createV2StorageRepository(core: V2Core) {
     },
     abandonAssetUpload(actor: Actor, blobId: string) {
       return abandonAssetUpload(core, actor, blobId);
+    },
+    captureAssetUploadIntent(actor: Actor, blobId: string) {
+      return captureAssetUploadIntent(core, actor, blobId);
+    },
+    requeueAssetUploadCleanup(actor: Actor, captured: AssetUploadCleanupIntent) {
+      return requeueAssetUploadCleanup(core, actor, captured);
     },
     reserveArtifact(
       g: WorkspaceGuard,
@@ -521,6 +530,7 @@ export function createV2StorageRepository(core: V2Core) {
         const actor = parse(actorSchema, { ownerId: "cleanup", now });
         if (!confirmation) return false;
         const { lease } = confirmation;
+        const receiptClaim = crypto.randomUUID();
         parse(cleanupLeaseSchema, lease);
         parse(opaqueIdSchema, confirmation.receiptId);
         parse(hashSchema.nullable(), confirmation.cipherHash);
@@ -537,7 +547,7 @@ export function createV2StorageRepository(core: V2Core) {
           confirmation.receiptId,
           lease.journalId,
           blobId,
-          lease.token,
+          receiptClaim,
           lease.fencing,
           actor.now,
         ];
@@ -545,13 +555,31 @@ export function createV2StorageRepository(core: V2Core) {
         // Preserve the original reservation until that file is actually deleted.
         const releasable = `NOT EXISTS(SELECT 1 FROM v2_storage_reservations original LEFT JOIN v2_files f ON f.id=original.entity_id LEFT JOIN v2_workspaces w ON w.id=f.workspace_id LEFT JOIN v2_assets a ON a.id=original.entity_id LEFT JOIN v2_profiles profile ON profile.id=a.profile_id WHERE original.id=? AND ((original.kind='case_original' AND f.state!='deleting' AND ${aliveWorkspace} AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='file' AND target_id=f.id)) OR (original.kind='lawyer_asset' AND original.target_id=a.id AND a.state!='deleting' AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE (target_kind='account' AND target_id=a.owner_id) OR (target_kind='asset' AND target_id=a.id) OR (target_kind='profile' AND target_id=profile.id)))))`;
         const results = await core.binding.batch([
+          // Temporary lease-token CAS is confined to this atomic batch. It gates
+          // every write on a newly admitted receipt, including deleted accounts
+          // that cannot own an ephemeral user-FK mutation claim anymore.
+          core.statement(
+            "UPDATE v2_deletion_journals SET lease_token=? WHERE id=? AND lease_token=? AND fencing=? AND lease_until>? AND state='running' AND EXISTS(SELECT 1 FROM v2_deletion_targets t JOIN v2_blobs b ON b.id=t.target_id WHERE t.journal_id=v2_deletion_journals.id AND t.kind='blob' AND t.state='pending' AND b.id=? AND b.state='deleting' AND b.object_key=? AND b.cipher_hash IS ? AND (b.cipher_hash IS NOT NULL OR (b.cipher_bytes=0 AND b.visibility='private' AND b.kind IN ('verification','profile_photo_original','portfolio_original')))) AND NOT EXISTS(SELECT 1 FROM v2_deletion_targets WHERE journal_id=v2_deletion_journals.id AND kind IN ('job','legacy_workflow') AND state='pending') AND NOT EXISTS(SELECT 1 FROM v2_cleanup_receipts WHERE id=? OR (journal_id=v2_deletion_journals.id AND kind='blob' AND target_id=?))",
+            [
+              receiptClaim,
+              lease.journalId,
+              lease.token,
+              lease.fencing,
+              actor.now,
+              blobId,
+              confirmation.objectKey,
+              confirmation.cipherHash,
+              confirmation.receiptId,
+              blobId,
+            ],
+          ),
           core.statement(
             "INSERT INTO v2_cleanup_receipts(id,journal_id,kind,target_id,confirmed_at) SELECT ?,j.id,'blob',b.id,? FROM v2_deletion_journals j JOIN v2_deletion_targets t ON t.journal_id=j.id JOIN v2_blobs b ON b.id=t.target_id WHERE j.id=? AND j.lease_token=? AND j.fencing=? AND j.lease_until>? AND j.state='running' AND t.kind='blob' AND t.state='pending' AND b.id=? AND b.state='deleting' AND b.object_key=? AND b.cipher_hash IS ? AND (b.cipher_hash IS NOT NULL OR (b.cipher_bytes=0 AND b.visibility='private' AND b.kind IN ('verification','profile_photo_original','portfolio_original'))) AND NOT EXISTS(SELECT 1 FROM v2_deletion_targets WHERE journal_id=j.id AND kind IN ('job','legacy_workflow') AND state='pending') ON CONFLICT(journal_id,kind,target_id) DO NOTHING",
             [
               confirmation.receiptId,
               actor.now,
               lease.journalId,
-              lease.token,
+              receiptClaim,
               lease.fencing,
               actor.now,
               blobId,
@@ -585,6 +613,10 @@ export function createV2StorageRepository(core: V2Core) {
           core.statement(
             `UPDATE v2_deletion_targets SET state='completed' WHERE journal_id=? AND kind='blob' AND target_id=? AND ${receiptGuard}`,
             [lease.journalId, blobId, ...args],
+          ),
+          core.statement(
+            "UPDATE v2_deletion_journals SET lease_token=? WHERE id=? AND lease_token=? AND fencing=?",
+            [lease.token, lease.journalId, receiptClaim, lease.fencing],
           ),
         ]);
         return results[0]?.meta.changes === 1;

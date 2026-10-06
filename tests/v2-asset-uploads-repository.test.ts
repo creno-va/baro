@@ -407,3 +407,180 @@ test("deleted asset nullable intent cleanup releases storage only after identity
     { reserved_bytes: 0, stored_bytes: 0 },
   );
 });
+
+async function pendingCleanup() {
+  await reserve();
+  expect(await storage.prepareAssetUpload(actor, intent)).toBe(true);
+  const captured = await storage.captureAssetUploadIntent(actor, blob.id);
+  if (!captured) throw new Error("Synthetic captured intent missing");
+  expect(await storage.abandonAssetUpload(actor, blob.id)).toBe(true);
+  const journal = await deletion.findByTarget("blob", blob.id);
+  if (!journal) throw new Error("Synthetic journal missing");
+  const lease = await deletion.acquire(
+    journal.id,
+    "original_cleanup",
+    now,
+    "2026-10-06T00:01:00.000Z",
+  );
+  if (!lease) throw new Error("Synthetic lease missing");
+  return { captured, journal, lease };
+}
+const cleanupReceipt = (lease: Parameters<typeof deletion.finish>[0], receiptId: string) => ({
+  lease,
+  receiptId,
+  objectKey: `private/${blob.id}`,
+  cipherHash: null,
+});
+
+test("late PUT creates a fresh cleanup generation without rewriting completed history or replaying old receipts", async () => {
+  const { captured, journal, lease } = await pendingCleanup();
+  expect(await storage.captureAssetUploadIntent(stranger, blob.id)).toBeNull();
+  expect(await storage.requeueAssetUploadCleanup(actor, { ...captured })).toBeNull();
+  expect(await storage.confirmBlobDeleted(blob.id, now, cleanupReceipt(lease, "old_absence"))).toBe(
+    true,
+  );
+  expect(await deletion.finish(lease, now)).toBe(true);
+  const history = db.sqlite.query("SELECT * FROM v2_deletion_journals WHERE id=?").get(journal.id);
+  const receipts = db.sqlite.query("SELECT * FROM v2_cleanup_receipts").all();
+  // The consumer has observed the original PUT finishing and its object present.
+  const next = await storage.requeueAssetUploadCleanup(actor, captured);
+  expect(next).not.toBeNull();
+  if (!next) throw new Error("Synthetic generation missing");
+  expect(next).not.toBe(journal.id);
+  expect(
+    db.sqlite.query("SELECT target_id FROM v2_deletion_journals WHERE id=?").get(next),
+  ).not.toEqual({ target_id: blob.id });
+  expect(
+    db.sqlite.query("SELECT target_id,state FROM v2_deletion_targets WHERE journal_id=?").get(next),
+  ).toEqual({ target_id: blob.id, state: "pending" });
+  expect(db.sqlite.query("SELECT * FROM v2_deletion_journals WHERE id=?").get(journal.id)).toEqual(
+    history,
+  );
+  expect(db.sqlite.query("SELECT * FROM v2_cleanup_receipts").all()).toEqual(receipts);
+  expect(await storage.confirmBlobDeleted(blob.id, now, cleanupReceipt(lease, "old_absence"))).toBe(
+    false,
+  );
+  expect(await storage.requeueAssetUploadCleanup(actor, captured)).toBe(next);
+  expect(db.sqlite.query("SELECT reserved_bytes,stored_bytes FROM v2_storage_usage").get()).toEqual(
+    { reserved_bytes: 100, stored_bytes: 0 },
+  );
+  const current = await deletion.acquire(next, "fresh_cleanup", now, "2026-10-06T00:01:00.000Z");
+  if (!current) throw new Error("Synthetic fresh lease missing");
+  expect(
+    await storage.confirmBlobDeleted(blob.id, now, cleanupReceipt(current, "old_absence")),
+  ).toBe(false);
+  expect(
+    await storage.confirmBlobDeleted(blob.id, now, cleanupReceipt(current, "fresh_absence")),
+  ).toBe(true);
+  expect(await deletion.finish(current, now)).toBe(true);
+  expect(await storage.prepareAssetUpload(actor, { ...intent, blobId: "retry_after_late" })).toBe(
+    true,
+  );
+});
+
+test("requeued pending cleanup invalidates a running fence and admits no historical receipt replay", async () => {
+  const { captured, journal, lease } = await pendingCleanup();
+  expect(await storage.requeueAssetUploadCleanup(actor, captured)).toBe(journal.id);
+  expect(await storage.confirmBlobDeleted(blob.id, now, cleanupReceipt(lease, "stale_lease"))).toBe(
+    false,
+  );
+  const current = await deletion.acquire(
+    journal.id,
+    "fresh_lease",
+    now,
+    "2026-10-06T00:01:00.000Z",
+  );
+  if (!current) throw new Error("Synthetic current lease missing");
+  expect(
+    await storage.confirmBlobDeleted(blob.id, now, cleanupReceipt(current, "first_receipt")),
+  ).toBe(true);
+  // A completed target under a still-running historical header must not revive its old receipt authority.
+  const next = await storage.requeueAssetUploadCleanup(actor, captured);
+  expect(next).not.toBe(journal.id);
+  const before = snapshot();
+  expect(
+    await storage.confirmBlobDeleted(blob.id, now, cleanupReceipt(current, "first_receipt")),
+  ).toBe(false);
+  expect(snapshot()).toEqual(before);
+});
+
+for (const deleted of ["asset", "account"] as const)
+  test(`late ${deleted}-deleted PUT restores retained exposure once and requires a new actual deletion receipt`, async () => {
+    const { captured, lease } = await pendingCleanup();
+    if (deleted === "asset") expect(await deletion.asset(actor, intent.assetId, 1)).toBe(true);
+    else {
+      tombstone("account", actor.ownerId);
+      db.sqlite.query("DELETE FROM user WHERE id=?").run(actor.ownerId);
+    }
+    expect(
+      await storage.confirmBlobDeleted(blob.id, now, cleanupReceipt(lease, "initial_removed")),
+    ).toBe(true);
+    expect(await deletion.finish(lease, now)).toBe(true);
+    expect(
+      db.sqlite.query("SELECT reserved_bytes,stored_bytes FROM v2_storage_usage").get(),
+    ).toEqual({ reserved_bytes: 0, stored_bytes: 0 });
+    expect(await storage.requeueAssetUploadCleanup(stranger, captured)).toBeNull();
+    const next = await storage.requeueAssetUploadCleanup(actor, captured);
+    if (!next) throw new Error("Synthetic generation missing");
+    expect(await storage.requeueAssetUploadCleanup(actor, captured)).toBe(next);
+    expect(
+      db.sqlite.query("SELECT reserved_bytes,stored_bytes FROM v2_storage_usage").get(),
+    ).toEqual({ reserved_bytes: 0, stored_bytes: 100 });
+    const current = await deletion.acquire(next, "late_cleanup", now, "2026-10-06T00:01:00.000Z");
+    if (!current) throw new Error("Synthetic current lease missing");
+    expect(
+      await storage.confirmBlobDeleted(blob.id, now, cleanupReceipt(current, "late_removed")),
+    ).toBe(true);
+    expect(
+      db.sqlite.query("SELECT reserved_bytes,stored_bytes FROM v2_storage_usage").get(),
+    ).toEqual({ reserved_bytes: 0, stored_bytes: 0 });
+    expect(await deletion.finish(current, now)).toBe(true);
+  });
+
+test("late cleanup generation and receipt admission roll back atomically and never delete a stored winner", async () => {
+  const { captured, lease } = await pendingCleanup();
+  expect(await storage.confirmBlobDeleted(blob.id, now, cleanupReceipt(lease, "removed"))).toBe(
+    true,
+  );
+  expect(await deletion.finish(lease, now)).toBe(true);
+  const before = snapshot();
+  db.sqlite.exec(
+    "CREATE TRIGGER reject_generation BEFORE INSERT ON v2_deletion_targets BEGIN SELECT RAISE(ABORT,'synthetic rollback'); END",
+  );
+  await expect(storage.requeueAssetUploadCleanup(actor, captured)).rejects.toThrow(
+    "DB_OPERATION_FAILED",
+  );
+  expect(snapshot()).toEqual(before);
+  db.sqlite.exec("DROP TRIGGER reject_generation");
+  const next = await storage.requeueAssetUploadCleanup(actor, captured);
+  if (!next) throw new Error("Synthetic next generation missing");
+  const current = await deletion.acquire(next, "rollback_cleanup", now, "2026-10-06T00:01:00.000Z");
+  if (!current) throw new Error("Synthetic current lease missing");
+  const beforeReceipt = snapshot();
+  db.sqlite.exec(
+    "CREATE TRIGGER reject_blob_delete BEFORE UPDATE OF state ON v2_blobs WHEN NEW.state='deleted' BEGIN SELECT RAISE(ABORT,'synthetic rollback'); END",
+  );
+  await expect(
+    storage.confirmBlobDeleted(blob.id, now, cleanupReceipt(current, "rollback_receipt")),
+  ).rejects.toThrow("DB_OPERATION_FAILED");
+  expect(snapshot()).toEqual(beforeReceipt);
+  expect(
+    db.sqlite.query("SELECT lease_token FROM v2_deletion_journals WHERE id=?").get(next),
+  ).toEqual({ lease_token: current.token });
+  db.sqlite.exec("DROP TRIGGER reject_blob_delete");
+  expect(
+    await storage.confirmBlobDeleted(blob.id, now, cleanupReceipt(current, "retry_receipt")),
+  ).toBe(true);
+  expect(await storage.prepareAssetUpload(actor, { ...intent, blobId: "stored_winner" })).toBe(
+    true,
+  );
+  expect(
+    await storage.commitAssetUpload(actor, {
+      assetId: intent.assetId,
+      assetRevision: 1,
+      blob: { ...blob, id: "stored_winner" },
+    }),
+  ).toBe(true);
+  expect(await storage.captureAssetUploadIntent(actor, "stored_winner")).toBeNull();
+  expect(await storage.abandonAssetUpload(actor, "stored_winner")).toBe(false);
+});

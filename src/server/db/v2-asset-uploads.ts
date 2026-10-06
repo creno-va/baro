@@ -22,6 +22,16 @@ const intentSchema = z.strictObject({
   assetPayload: z.string(),
 });
 const requestSchema = z.strictObject({ request: v2LawyerAssetUploadRequestSchema });
+const capturedIntents = new WeakSet<object>();
+export interface AssetUploadCleanupIntent {
+  readonly ownerId: string;
+  readonly principalId: string;
+  readonly blobId: string;
+  readonly reservationId: string;
+  readonly objectKey: string;
+  readonly logicalBytes: number;
+  readonly keyVersion: string;
+}
 const from =
   "FROM v2_assets a JOIN v2_profiles profile ON profile.id=a.profile_id JOIN v2_storage_reservations r ON r.entity_id=a.id JOIN v2_billing_principals p ON p.id=r.principal_id JOIN v2_operations o ON o.id=r.operation_id";
 const eligible = `a.id=? AND a.revision=? AND a.owner_id=? AND profile.owner_id=a.owner_id AND a.state='reserved' AND a.current_job_id IS NULL AND a.original_blob_id IS NULL AND r.id=? AND r.kind='lawyer_asset' AND r.state='reserved' AND r.workspace_id IS NULL AND r.target_id=a.id AND p.owner_id=a.owner_id AND o.owner_id=a.owner_id AND o.kind='profile_asset' AND o.state='admitted' AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE (target_kind='account' AND target_id=a.owner_id) OR (target_kind='profile' AND target_id=profile.id) OR (target_kind='asset' AND target_id=a.id))`;
@@ -32,6 +42,132 @@ function kind(purpose: string) {
     : purpose === "portfolio"
       ? "portfolio_original"
       : "verification";
+}
+
+// A server-only capability captured before PUT. It cannot be reconstructed from
+// request JSON, and remains bound to the retained billing owner after deletion.
+export function captureAssetUploadIntent(core: V2Core, actor: Actor, blobId: string) {
+  return safe(async () => {
+    actor = parse(actorSchema, actor);
+    parse(opaqueIdSchema, blobId);
+    const row = await core
+      .statement(
+        `SELECT b.principal_id,b.reservation_id,b.object_key,b.logical_bytes,b.key_version ${from} JOIN v2_blobs b ON b.reservation_id=r.id AND b.principal_id=p.id WHERE b.id=? AND a.owner_id=? AND profile.owner_id=a.owner_id AND p.owner_id=a.owner_id AND a.state='reserved' AND a.original_blob_id IS NULL AND r.kind='lawyer_asset' AND r.state='reserved' AND r.target_id=a.id AND r.byte_length=b.logical_bytes AND b.state='pending' AND b.visibility='private' AND b.kind IN ('verification','portfolio_original','profile_photo_original') AND b.key_version='asset_binary_v1' AND b.cipher_hash IS NULL AND b.cipher_bytes=0 AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE (target_kind='account' AND target_id=a.owner_id) OR (target_kind='profile' AND target_id=profile.id) OR (target_kind='asset' AND target_id=a.id))`,
+        [blobId, actor.ownerId],
+      )
+      .first<{
+        principal_id: string;
+        reservation_id: string;
+        object_key: string;
+        logical_bytes: number;
+        key_version: string;
+      }>();
+    if (!row) return null;
+    const value: AssetUploadCleanupIntent = Object.freeze({
+      ownerId: actor.ownerId,
+      principalId: row.principal_id,
+      blobId,
+      reservationId: row.reservation_id,
+      objectKey: row.object_key,
+      logicalBytes: row.logical_bytes,
+      keyVersion: row.key_version,
+    });
+    capturedIntents.add(value);
+    return value;
+  });
+}
+
+// Called only after the original PUT has actually finished and HEAD proves the
+// captured object exists. A fresh journal preserves previous deletion receipts.
+export function requeueAssetUploadCleanup(
+  core: V2Core,
+  actor: Actor,
+  captured: AssetUploadCleanupIntent,
+) {
+  return safe(async () => {
+    actor = parse(actorSchema, actor);
+    if (!capturedIntents.has(captured) || actor.ownerId !== captured.ownerId) return null;
+    const values = [
+      captured.blobId,
+      captured.principalId,
+      captured.reservationId,
+      captured.objectKey,
+      captured.logicalBytes,
+      captured.keyVersion,
+      actor.ownerId,
+      actor.ownerId,
+    ];
+    const guard = `b.id=? AND b.principal_id=? AND r.id=? AND b.object_key=? AND b.logical_bytes=? AND b.key_version=? AND b.kind IN ('verification','portfolio_original','profile_photo_original') AND b.visibility='private' AND b.state IN ('deleting','deleted') AND b.cipher_hash IS NULL AND b.cipher_bytes=0 AND r.kind='lawyer_asset' AND r.byte_length=b.logical_bytes AND (p.owner_id=? OR (p.owner_id IS NULL AND EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='account' AND target_id=?)))`;
+    const source =
+      "FROM v2_blobs b JOIN v2_storage_reservations r ON r.id=b.reservation_id JOIN v2_billing_principals p ON p.id=b.principal_id";
+    if (!(await core.statement(`SELECT b.id ${source} WHERE ${guard}`, values).first()))
+      return null;
+    const pending = await core
+      .statement(
+        `SELECT j.id FROM v2_deletion_journals j JOIN v2_deletion_targets t ON t.journal_id=j.id WHERE t.kind='blob' AND t.target_id=? AND t.state='pending' AND j.target_kind='blob' AND j.state!='completed' AND NOT EXISTS(SELECT 1 FROM v2_deletion_targets other WHERE other.journal_id=j.id AND other.kind!='blob') AND NOT EXISTS(SELECT 1 FROM v2_cleanup_receipts WHERE journal_id=j.id AND kind='blob' AND target_id=?) ORDER BY j.created_at DESC,j.id LIMIT 1`,
+        [captured.blobId, captured.blobId],
+      )
+      .first<{ id: string }>();
+    if (pending) {
+      const token = crypto.randomUUID();
+      const claim = "EXISTS(SELECT 1 FROM v2_deletion_journals WHERE id=? AND lease_token=?)";
+      const args = [pending.id, token];
+      const updated = await core.binding.batch([
+        core.statement(
+          `UPDATE v2_deletion_journals SET state='pending',lease_token=?,lease_until=NULL,fencing=fencing+1,next_attempt_at=? WHERE id=? AND state!='completed' AND EXISTS(SELECT 1 ${source} WHERE ${guard}) AND EXISTS(SELECT 1 FROM v2_deletion_targets WHERE journal_id=v2_deletion_journals.id AND kind='blob' AND target_id=? AND state='pending') AND NOT EXISTS(SELECT 1 FROM v2_cleanup_receipts WHERE journal_id=v2_deletion_journals.id AND kind='blob' AND target_id=?)`,
+          [token, actor.now, pending.id, ...values, captured.blobId, captured.blobId],
+        ),
+        core.statement(
+          `UPDATE v2_storage_usage SET stored_bytes=stored_bytes+? WHERE principal_id=? AND EXISTS(SELECT 1 FROM v2_storage_reservations WHERE id=? AND state='released') AND ${claim}`,
+          [captured.logicalBytes, captured.principalId, captured.reservationId, ...args],
+        ),
+        core.statement(
+          `UPDATE v2_storage_reservations SET state='stored' WHERE id=? AND state='released' AND ${claim}`,
+          [captured.reservationId, ...args],
+        ),
+        core.statement(
+          `UPDATE v2_blobs SET state='deleting',deleted_at=NULL WHERE id=? AND ${claim}`,
+          [captured.blobId, ...args],
+        ),
+        core.statement(
+          `UPDATE v2_deletion_journals SET lease_token=NULL WHERE id=? AND lease_token=?`,
+          args,
+        ),
+      ]);
+      return updated[0]?.meta.changes === 1 ? pending.id : null;
+    }
+    const journalId = crypto.randomUUID(),
+      generationId = crypto.randomUUID();
+    const claim = `EXISTS(SELECT 1 FROM v2_deletion_journals WHERE id=? AND target_kind='blob' AND target_id=?)`;
+    const args = [journalId, generationId];
+    const result = await core.binding.batch([
+      core.statement(
+        `INSERT INTO v2_deletion_journals(id,target_kind,target_id,created_at,next_attempt_at) SELECT ?,'blob',?,?,? ${source} WHERE ${guard} AND NOT EXISTS(SELECT 1 FROM v2_deletion_targets t JOIN v2_deletion_journals j ON j.id=t.journal_id WHERE t.kind='blob' AND t.target_id=b.id AND t.state='pending' AND j.target_kind='blob' AND j.state!='completed' AND NOT EXISTS(SELECT 1 FROM v2_deletion_targets other WHERE other.journal_id=j.id AND other.kind!='blob') AND NOT EXISTS(SELECT 1 FROM v2_cleanup_receipts WHERE journal_id=j.id AND kind='blob' AND target_id=b.id))`,
+        [journalId, generationId, actor.now, actor.now, ...values],
+      ),
+      core.statement(
+        `INSERT INTO v2_deletion_targets(journal_id,ordinal,kind,target_id) SELECT ?,0,'blob',? WHERE ${claim}`,
+        [journalId, captured.blobId, ...args],
+      ),
+      core.statement(
+        `UPDATE v2_deletion_journals SET lease_token=NULL,lease_until=NULL,fencing=fencing+1 WHERE id!=? AND state!='completed' AND id IN (SELECT journal_id FROM v2_deletion_targets WHERE kind='blob' AND target_id=?) AND ${claim}`,
+        [journalId, captured.blobId, ...args],
+      ),
+      core.statement(
+        `UPDATE v2_storage_usage SET stored_bytes=stored_bytes+? WHERE principal_id=? AND EXISTS(SELECT 1 FROM v2_storage_reservations WHERE id=? AND state='released') AND ${claim}`,
+        [captured.logicalBytes, captured.principalId, captured.reservationId, ...args],
+      ),
+      core.statement(
+        `UPDATE v2_storage_reservations SET state='stored' WHERE id=? AND state='released' AND ${claim}`,
+        [captured.reservationId, ...args],
+      ),
+      core.statement(
+        `UPDATE v2_blobs SET state='deleting',deleted_at=NULL WHERE id=? AND ${claim}`,
+        [captured.blobId, ...args],
+      ),
+    ]);
+    return result[0]?.meta.changes === 1 ? journalId : null;
+  });
 }
 
 export function prepareAssetUpload(core: V2Core, actor: Actor, input: AssetUploadIntent) {
