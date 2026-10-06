@@ -11,6 +11,7 @@ import { reconcileFileUploads } from "./server/modules/files/reconcile";
 
 export { AnalysisWorkflow } from "./workflows/analysis";
 export { FileProcessingWorkflow } from "./workflows/file-processing";
+export { ProfilePublicationWorkflow } from "./workflows/profile-publication";
 export { FileProcessorContainer } from "./workflows/file-processor-container";
 
 const app = new Hono<{ Bindings: Env }>();
