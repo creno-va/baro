@@ -32,6 +32,7 @@ bun test ./tests/independent-review/intake-real-retry.repro.ts
 bunx playwright test --config tests/browser/intake103.config.ts
 bunx playwright test --config tests/helpers/customer-mock.playwright.config.ts --grep 'intake summary|workspace clears|owner API boundaries'
 bunx playwright test --config tests/browser/customer-real.config.ts
+BARO_C_TEST_API=true bunx playwright test --config tests/helpers/workspace.playwright.config.ts
 bun run build
 bun run cf:dry-run
 bun run test:csp
@@ -43,6 +44,8 @@ bun run test:csp
 - `tests/workspace-client.test.ts`: 기존 v1 fallback, owner/deleted-case 404와 일시적 503 구분, revision 캐시 invalidation, 파일 upload의 합성 재접속 증거를 보존한다.
 
 이 증거는 실제 OAuth provider 로그인·실제 유료 모델·R2/Containers/Whisper 처리 성공을 뜻하지 않는다. 실제 기기의 OS 키보드, 외부 장애 복구 및 공개 승인 gate는 별도 검증이다.
+
+최종 로컬 결과(2026-10-07 KST): `bun ci`, `bun run check`(1,210개 및 migration 6개), 기본/production build, bundle check, `cf:dry-run` 통과. 브라우저는 홈 7개, intake 6개, v1/실제 API/XSS 11개(실제 고객 Hono 연결 3개 포함), workspace fixture 4개, 알려진 결함 3개로 총 31개 통과했다. CSP는 production Worker 4개 통과, 별도 explicit fixture build 전용 1개는 정상 조건부 skip이다. 원래 summary 재시도 `.repro.ts` 2개도 통과했다. 기존 4350 포트는 다른 checkout이 사용 중이므로 홈 검사는 동일 config의 포트/cwd만 4357/고객 worktree로 바꿔 실행했다. 공유 CI config는 변경하지 않았다.
 
 ## 통합 세션 인계
 

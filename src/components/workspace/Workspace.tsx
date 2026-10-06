@@ -348,7 +348,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
           <a key={id} href={`${base}${path}`} aria-current={tab === id ? "page" : undefined}>
             <Icon size={17} />
             {label}
-            {id === "files" && view ? <span>{view.files.length}</span> : null}
+            {id === "files" && view && ready ? <span>{view.files.length}</span> : null}
           </a>
         ))}
       </nav>

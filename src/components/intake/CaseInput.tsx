@@ -43,6 +43,15 @@ export function CaseInput({ siteKey: _siteKey }: { siteKey?: string }) {
   const count = [...narrative.trim()].length;
   const valid = count >= 20 && count <= 5000;
   const canCreate = session?.user?.accountType === "customer" && !session.needsConsent;
+  const clearDraft = useCallback(() => {
+    ++operation.current;
+    pending.current = false;
+    setBusy(false);
+    setNarrative("");
+    setContext("individual");
+    setCreated(null);
+    setError(null);
+  }, []);
   const loadSession = useCallback(async () => {
     const ticket = ++sessionRequest.current;
     const current = () => mounted.current && ticket === sessionRequest.current;
@@ -56,13 +65,7 @@ export function CaseInput({ siteKey: _siteKey }: { siteKey?: string }) {
         next.needsConsent,
       ]);
       if (identity.current !== undefined && identity.current !== nextIdentity) {
-        ++operation.current;
-        pending.current = false;
-        setBusy(false);
-        setNarrative("");
-        setContext("individual");
-        setCreated(null);
-        setError(null);
+        clearDraft();
       }
       identity.current = nextIdentity;
       setSession(next);
@@ -78,7 +81,7 @@ export function CaseInput({ siteKey: _siteKey }: { siteKey?: string }) {
     } finally {
       if (current()) setLoading(false);
     }
-  }, []);
+  }, [clearDraft]);
   useEffect(() => {
     mounted.current = true;
     const refresh = () => void loadSession();
@@ -86,12 +89,35 @@ export function CaseInput({ siteKey: _siteKey }: { siteKey?: string }) {
       if (document.visibilityState === "visible") refresh();
     };
     const storage = (event: StorageEvent) => {
-      if (!event.key || event.key === "baro-api-mock-v1:session") refresh();
+      if (event.key === "better-auth.message") {
+        try {
+          const message = JSON.parse(event.newValue ?? "null");
+          if (message?.event === "session" && message?.data?.trigger === "signout") {
+            ++sessionRequest.current;
+            clearDraft();
+            identity.current = JSON.stringify([null, null, false]);
+            setSession({ user: null, needsConsent: false });
+            setLoading(false);
+            setSessionError(null);
+            return;
+          }
+        } catch {
+          /* Unknown messages only trigger server verification. */
+        }
+      }
+      if (
+        !event.key ||
+        ["baro-api-mock-v1:session", "better-auth.message", "baro-session-changed"].includes(
+          event.key,
+        )
+      )
+        refresh();
     };
     void loadSession();
     window.addEventListener("focus", refresh);
     window.addEventListener("pageshow", refresh);
     window.addEventListener("storage", storage);
+    window.addEventListener("baro-session-changed", refresh);
     document.addEventListener("visibilitychange", visible);
     return () => {
       mounted.current = false;
@@ -100,9 +126,10 @@ export function CaseInput({ siteKey: _siteKey }: { siteKey?: string }) {
       window.removeEventListener("focus", refresh);
       window.removeEventListener("pageshow", refresh);
       window.removeEventListener("storage", storage);
+      window.removeEventListener("baro-session-changed", refresh);
       document.removeEventListener("visibilitychange", visible);
     };
-  }, [loadSession]);
+  }, [clearDraft, loadSession]);
 
   async function create(event?: SyntheticEvent<HTMLFormElement>) {
     event?.preventDefault();
@@ -144,7 +171,7 @@ export function CaseInput({ siteKey: _siteKey }: { siteKey?: string }) {
         </h1>
         <p>어떤 일이 있었는지 편하게 들려주세요.</p>
       </header>
-      {created ? (
+      {created && canCreate && !loading && !sessionError ? (
         <div className="conversation-saved" role="status">
           <p>사건이 저장됐어요. 상황에 맞는 질문을 준비할게요.</p>
           <ButtonLink href={`/cases/${encodeURIComponent(created)}/intake`}>
@@ -176,7 +203,7 @@ export function CaseInput({ siteKey: _siteKey }: { siteKey?: string }) {
                         type="radio"
                         name="subject"
                         value={value}
-                        checked={subjectContext === value}
+                        checked={!loading && !sessionError && subjectContext === value}
                         onChange={() => setContext(value)}
                       />
                       {value === "individual" ? (
