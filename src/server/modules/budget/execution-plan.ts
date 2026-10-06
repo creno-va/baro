@@ -11,7 +11,18 @@ const count = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
 const positiveCount = count.refine((n) => n > 0);
 export const executionDescriptorSchema = z.strictObject({
   model: z.literal(MODEL_ID),
-  phase: z.enum(["minimize", "screening", "structure", "questions", "generation", "validation"]),
+  phase: z.enum([
+    "minimize",
+    "screening",
+    "structure",
+    "questions",
+    "generation",
+    "validation",
+    "workspace_questions",
+    "workspace_summary",
+    "workspace_chat",
+    "workspace_audit",
+  ]),
   correction: z.boolean(),
   wireInputSha256: v2HashSchema,
   inputBytes: positiveCount,

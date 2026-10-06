@@ -24,6 +24,7 @@ import {
   v2SummaryEditForFactsSchema,
   v2SummarySchema,
   v2TimelineEntrySchema,
+  v2UserMessageSchema,
   v2WorkspaceSchema,
 } from "../../contracts/v2";
 import type { EnvelopeCipher } from "../crypto";
@@ -51,6 +52,7 @@ import {
   V2RepositoryError,
   type WorkspaceGuard,
 } from "./v2-core";
+import { type MutationReceipt, mutationTools } from "./v2-mutation-receipts";
 import { createV2StagingRepository } from "./v2-staging";
 
 export interface Admission {
@@ -347,8 +349,10 @@ export function createV2WorkspaceRepository(
     summary: V2Summary,
     lease: JobLease | null,
     ownerEdit = false,
+    receipt?: MutationReceipt,
   ) => {
     g = parse(guardSchema, g);
+    const mutation = mutationTools(core, g, receipt);
     const value = parse(v2SummarySchema, summary);
     const current = await readIntake(g, g.workspaceId);
     if (
@@ -380,8 +384,7 @@ export function createV2WorkspaceRepository(
       : { sql: "w.current_job_id IS NULL", values: [] };
     const refGuard = referenceCommitPredicate(value.facts.flatMap((f) => f.references));
     const statements = [
-      core.claim(
-        g,
+      mutation.claim(
         claimId,
         `${execution.sql} AND w.status='intake' AND w.intake_revision=? AND ${refGuard.sql}`,
         [...execution.values, value.intakeRevision, ...refGuard.values],
@@ -471,7 +474,7 @@ export function createV2WorkspaceRepository(
       core.bump(g, claimId),
     );
     if (lease) statements.push(...completeLeaseStatements(core, lease, claimId, g.now));
-    statements.push(core.finish(claimId));
+    statements.push(...mutation.complete(claimId), core.finish(claimId));
     return core.changed(statements);
   };
   return {
@@ -757,14 +760,14 @@ export function createV2WorkspaceRepository(
         });
       });
     },
-    changeState(g: WorkspaceGuard, action: "archive" | "resume") {
+    changeState(g: WorkspaceGuard, action: "archive" | "resume", receipt?: MutationReceipt) {
       return safe(async () => {
         g = parse(guardSchema, g);
+        const mutation = mutationTools(core, g, receipt);
         parse(z.enum(["archive", "resume"]), action);
         const claimId = crypto.randomUUID();
         return core.changed([
-          core.claim(
-            g,
+          mutation.claim(
             claimId,
             action === "archive"
               ? "w.status IN ('intake','active') AND w.current_job_id IS NULL"
@@ -777,6 +780,7 @@ export function createV2WorkspaceRepository(
             [g.workspaceId, claimId],
           ),
           core.bump(g, claimId),
+          ...mutation.complete(claimId),
           core.finish(claimId),
         ]);
       });
@@ -831,9 +835,10 @@ export function createV2WorkspaceRepository(
         ]);
       });
     },
-    answer(g: WorkspaceGuard, batchId: string, request: unknown) {
+    answer(g: WorkspaceGuard, batchId: string, request: unknown, receipt?: MutationReceipt) {
       return safe(async () => {
         g = parse(guardSchema, g);
+        const mutation = mutationTools(core, g, receipt);
         parse(opaqueIdSchema, batchId);
         const current = await readIntake(g, g.workspaceId);
         const batch = current?.batches.find((b) => b.id === batchId);
@@ -842,8 +847,7 @@ export function createV2WorkspaceRepository(
         if (body.expectedRevision !== current.revision) return false;
         const claimId = crypto.randomUUID();
         const statements = [
-          core.claim(
-            g,
+          mutation.claim(
             claimId,
             "w.status='intake' AND w.current_job_id IS NULL AND w.intake_revision=?",
             [current.revision],
@@ -876,6 +880,7 @@ export function createV2WorkspaceRepository(
             [g.workspaceId, claimId],
           ),
           core.bump(g, claimId),
+          ...mutation.complete(claimId),
           core.finish(claimId),
         );
         return core.changed(statements);
@@ -883,7 +888,7 @@ export function createV2WorkspaceRepository(
     },
     writeSummary: (g: WorkspaceGuard, value: V2Summary, lease: JobLease) =>
       safe(() => writeSummary(g, value, lease)),
-    editSummary(g: WorkspaceGuard, request: V2SummaryEditRequest) {
+    editSummary(g: WorkspaceGuard, request: V2SummaryEditRequest, receipt?: MutationReceipt) {
       return safe(async () => {
         const current = await readIntake(g, g.workspaceId);
         if (!current?.summary) return false;
@@ -918,17 +923,18 @@ export function createV2WorkspaceRepository(
           },
           null,
           true,
+          receipt,
         );
       });
     },
-    confirmSummary(g: WorkspaceGuard, request: unknown) {
+    confirmSummary(g: WorkspaceGuard, request: unknown, receipt?: MutationReceipt) {
       return safe(async () => {
         g = parse(guardSchema, g);
+        const mutation = mutationTools(core, g, receipt);
         const value = parse(v2SummaryConfirmationRequestSchema, request);
         const claimId = crypto.randomUUID();
         return core.changed([
-          core.claim(
-            g,
+          mutation.claim(
             claimId,
             "w.status='intake' AND w.current_job_id IS NULL AND w.intake_revision=? AND EXISTS(SELECT 1 FROM v2_intakes i JOIN v2_summaries s ON s.id=i.summary_id WHERE i.id=w.id AND i.status='reviewing_summary' AND s.revision=? AND s.intake_revision=i.revision)",
             [value.expectedRevision, value.summaryRevision],
@@ -942,6 +948,7 @@ export function createV2WorkspaceRepository(
             [value.summaryRevision, g.workspaceId, claimId],
           ),
           core.bump(g, claimId),
+          ...mutation.complete(claimId),
           core.finish(claimId),
         ]);
       });
@@ -1018,6 +1025,33 @@ export function createV2WorkspaceRepository(
         return core.changed(statements);
       });
     },
+    userMessage(actor: Actor, workspaceId: string, operationId: string) {
+      return safe(async () => {
+        actor = parse(actorSchema, actor);
+        parse(opaqueIdSchema, operationId);
+        const current = await findWorkspace(actor, workspaceId);
+        if (!current) return null;
+        const row = await core
+          .statement(
+            "SELECT id,revision,encrypted_payload FROM v2_messages WHERE workspace_id=? AND operation_id=? AND role='user' LIMIT 1",
+            [workspaceId, operationId],
+          )
+          .first<{ id: string; revision: number; encrypted_payload: string }>();
+        if (!row) return null;
+        const message = await core.decrypt(
+          "v2_messages",
+          row.id,
+          actor.ownerId,
+          row.revision,
+          row.encrypted_payload,
+          v2UserMessageSchema,
+        );
+        return (await findWorkspace(actor, workspaceId))?.workspaceRevision ===
+          current.workspaceRevision
+          ? message
+          : null;
+      });
+    },
     messages(
       actor: Actor,
       workspaceId: string,
@@ -1057,9 +1091,15 @@ export function createV2WorkspaceRepository(
           : [];
       });
     },
-    writeAction(g: WorkspaceGuard, action: V2Action, expectedEntityRevision: number | null) {
+    writeAction(
+      g: WorkspaceGuard,
+      action: V2Action,
+      expectedEntityRevision: number | null,
+      receipt?: MutationReceipt,
+    ) {
       return safe(async () => {
         g = parse(guardSchema, g);
+        const mutation = mutationTools(core, g, receipt);
         const value = parse(v2ActionSchema, action);
         if (
           value.revision !== (expectedEntityRevision ?? 0) + 1 ||
@@ -1078,10 +1118,9 @@ export function createV2WorkspaceRepository(
         const claimId = crypto.randomUUID();
         const refGuard = referenceCommitPredicate(value.references);
         return core.changed([
-          core.claim(
-            g,
+          mutation.claim(
             claimId,
-            `w.status='active' AND ${refGuard.sql} AND (SELECT count(*) FROM v2_facts WHERE workspace_id=w.id AND summary_revision=w.confirmed_summary_revision AND entity_id IN (SELECT value FROM json_each(?)))=? AND ((? IS NULL AND NOT EXISTS(SELECT 1 FROM v2_actions WHERE workspace_id=w.id AND entity_id=?)) OR EXISTS(SELECT 1 FROM v2_actions WHERE workspace_id=w.id AND entity_id=? AND revision=?))`,
+            `w.status='active' AND w.current_job_id IS NULL AND ${refGuard.sql} AND (SELECT count(*) FROM v2_facts WHERE workspace_id=w.id AND summary_revision=w.confirmed_summary_revision AND entity_id IN (SELECT value FROM json_each(?)))=? AND ((? IS NULL AND NOT EXISTS(SELECT 1 FROM v2_actions WHERE workspace_id=w.id AND entity_id=?)) OR EXISTS(SELECT 1 FROM v2_actions WHERE workspace_id=w.id AND entity_id=? AND revision=?))`,
             [
               ...refGuard.values,
               JSON.stringify(value.factIds),
@@ -1106,6 +1145,7 @@ export function createV2WorkspaceRepository(
             ],
           ),
           core.bump(g, claimId),
+          ...mutation.complete(claimId),
           core.finish(claimId),
         ]);
       });
@@ -1114,9 +1154,11 @@ export function createV2WorkspaceRepository(
       g: WorkspaceGuard,
       entry: V2TimelineEntry,
       expectedEntityRevision: number | null,
+      receipt?: MutationReceipt,
     ) {
       return safe(async () => {
         g = parse(guardSchema, g);
+        const mutation = mutationTools(core, g, receipt);
         const value = parse(v2TimelineEntrySchema, entry);
         if (
           value.revision !== (expectedEntityRevision ?? 0) + 1 ||
@@ -1135,10 +1177,9 @@ export function createV2WorkspaceRepository(
         const claimId = crypto.randomUUID();
         const refGuard = referenceCommitPredicate(value.references);
         return core.changed([
-          core.claim(
-            g,
+          mutation.claim(
             claimId,
-            `w.status='active' AND ${refGuard.sql} AND (SELECT count(*) FROM v2_facts WHERE workspace_id=w.id AND summary_revision=w.confirmed_summary_revision AND entity_id IN (SELECT value FROM json_each(?)))=? AND ((? IS NULL AND NOT EXISTS(SELECT 1 FROM v2_timeline WHERE workspace_id=w.id AND entity_id=?)) OR EXISTS(SELECT 1 FROM v2_timeline WHERE workspace_id=w.id AND entity_id=? AND revision=?))`,
+            `w.status='active' AND w.current_job_id IS NULL AND ${refGuard.sql} AND (SELECT count(*) FROM v2_facts WHERE workspace_id=w.id AND summary_revision=w.confirmed_summary_revision AND entity_id IN (SELECT value FROM json_each(?)))=? AND ((? IS NULL AND NOT EXISTS(SELECT 1 FROM v2_timeline WHERE workspace_id=w.id AND entity_id=?)) OR EXISTS(SELECT 1 FROM v2_timeline WHERE workspace_id=w.id AND entity_id=? AND revision=?))`,
             [
               ...refGuard.values,
               JSON.stringify(value.factIds),
@@ -1154,6 +1195,7 @@ export function createV2WorkspaceRepository(
             [id, value.id, g.workspaceId, value.revision, envelope, claimId],
           ),
           core.bump(g, claimId),
+          ...mutation.complete(claimId),
           core.finish(claimId),
         ]);
       });
