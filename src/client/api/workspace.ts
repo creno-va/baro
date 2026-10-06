@@ -120,12 +120,44 @@ function parseView(value: unknown): WorkspaceView {
   const { schemaVersion, ...caseFields } = parsed.data.case;
   return { ...parsed.data, case: { ...caseFields, ...(schemaVersion ? { schemaVersion } : {}) } };
 }
-export function createWorkspaceApi(request: WorkspaceTransport) {
+export function createWorkspaceApi(
+  request: WorkspaceTransport,
+  jobStorage?: Pick<Storage, "getItem" | "setItem" | "removeItem"> | null,
+) {
+  let storage = jobStorage;
+  if (storage === undefined) {
+    try {
+      storage = typeof sessionStorage === "undefined" ? null : sessionStorage;
+    } catch {
+      storage = null;
+    }
+  }
   const files = createFilesApi(request);
   const base = (id: string) => `/api/v2/cases/${encodeURIComponent(opaqueIdSchema.parse(id))}`;
   const actionRevisions = new Map<string, number>();
   const timelineRevisions = new Map<string, number>();
   const messageJobs = new Map<string, { jobId: string; revision: number }>();
+  const knownJobs = new Map<string, string>();
+  function rememberJob(id: string, jobId: string | null) {
+    if (jobId) knownJobs.set(id, jobId);
+    else knownJobs.delete(id);
+    try {
+      // Only an opaque resource ID is retained; no message, case facts or auth token.
+      if (jobId) storage?.setItem(`baro-workspace-job:${id}`, jobId);
+      else storage?.removeItem(`baro-workspace-job:${id}`);
+    } catch {
+      /* The current page still keeps the job when storage is unavailable. */
+    }
+  }
+  function rememberedJob(id: string) {
+    if (knownJobs.has(id)) return knownJobs.get(id) ?? null;
+    try {
+      const parsed = opaqueIdSchema.safeParse(storage?.getItem(`baro-workspace-job:${id}`));
+      return parsed.success ? parsed.data : null;
+    } catch {
+      return null;
+    }
+  }
   // This screen renders plain message text. Source validation and URL allowlists stay
   // on the server; hidden citations must not be revalidated against an empty registry.
   const messageTextSchema = z.discriminatedUnion("role", [
@@ -195,18 +227,23 @@ export function createWorkspaceApi(request: WorkspaceTransport) {
       status: "complete",
       createdAt: m.createdAt,
     }));
-    if (w.currentJobId) {
-      const job = v2JobSchema.parse(
-        await workspaceJson(
-          request,
-          `${base(id)}/workspace-jobs/${encodeURIComponent(w.currentJobId)}`,
-        ),
-      );
+    const jobId = w.currentJobId ?? rememberedJob(id);
+    if (jobId) {
+      const response = await request(`${base(id)}/workspace-jobs/${encodeURIComponent(jobId)}`);
+      const job =
+        response.status === 404 && !w.currentJobId
+          ? null
+          : v2JobSchema.parse(await (await workspaceResponse(response)).json());
+      if (!job || ["completed", "cancelled", "superseded"].includes(job.status))
+        rememberJob(id, null);
       if (
+        job &&
         job.kind === "chat_response" &&
         job.target.kind === "workspace" &&
-        job.status !== "completed"
+        job.target.caseId === id &&
+        ["queued", "running", "validating", "failed"].includes(job.status)
       ) {
+        rememberJob(id, job.id);
         const messageId = `job:${job.id}`;
         messageJobs.set(messageId, { jobId: job.id, revision: w.workspaceRevision });
         messages.push({
@@ -300,11 +337,15 @@ export function createWorkspaceApi(request: WorkspaceTransport) {
   }
   return {
     get,
-    sendMessage(
+    async sendMessage(
       id: string,
       input: { expectedRevision: number; text: string; selectedFileIds: string[] },
     ) {
-      return mutation(id, "messages", input);
+      const path = `${base(id)}/messages`;
+      const value = await workspaceJson(request, path, workspaceMutation(path, input));
+      const accepted = v2AcceptedOperationSchema.safeParse(value);
+      if (accepted.success) rememberJob(id, accepted.data.jobId);
+      return get(id);
     },
     async retryMessage(id: string, messageId: string) {
       // mock has the same request route; real recovers current failed job after reload.
@@ -313,15 +354,16 @@ export function createWorkspaceApi(request: WorkspaceTransport) {
       const path = job
         ? `workspace-jobs/${encodeURIComponent(job.jobId)}/retry`
         : `messages/${encodeURIComponent(messageId)}/retry`;
-      if (job)
-        v2AcceptedOperationSchema.parse(
+      if (job) {
+        const accepted = v2AcceptedOperationSchema.parse(
           await workspaceJson(
             request,
             `${base(id)}/${path}`,
             workspaceMutation(`${base(id)}/${path}`, { expectedRevision: job.revision }),
           ),
         );
-      else return mutation(id, path, {});
+        rememberJob(id, accepted.jobId);
+      } else return mutation(id, path, {});
       return get(id);
     },
     async setAction(id: string, actionId: string, done: boolean) {
