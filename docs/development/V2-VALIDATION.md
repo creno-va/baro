@@ -840,5 +840,12 @@ Cloudflare adapter가 local preview용 dist/server/.dev.vars를 생성하는 것
 빌드 완료 후 dotenv 파일을 제거한다. guard는 숨김 dotenv 파일도 배포 전에 거부한다.
 실제 소셜 key/서명 key의 dist 검출0·tracked diff 검출0과 임시 dotenv 삽입의 실제
 guard 거부/제거 후 성공을 확인했다. source .dev.vars는 dev 서버에 보존한다.
-이는 공급자 secret의 유효성이나 최종 OAuth callback 성공을 뜻하지 않으며 실제 인증
-관측과 새 SHA의 CI/Full/배포 증거는 정본 journal에서 이어 기록한다.
+산출물 검사는 OAuth 성공과 별개다. 이후 실제 브라우저에서 제공된 local 앱의
+Google/Naver/Kakao callback → 기존 필수 확인 완료 화면 → 고객 화면 이동을 검증했다.
+각 공급자별 재로그인 직후 local native D1의 최근 oauth_authenticated_at 세션1개와
+공급자 access/refresh/id token 저장0을 집계로 확인했다. 계정·이메일·ID·토큰 값은
+증거에 포함하지 않았다. 로그아웃 후 다음 공급자로 전환했으며 예시 adapter나 세션
+seed는 사용하지 않았다. 사용자가 완료한 동의를 새로 대신 수락하지 않았다.
+이 결과는 localhost4321 앱·제공된 key의 실제 인증 성공이며 remote preview/production
+키·callback·공개 gate의 성공을 대신하지 않는다. 실제 관측과 새 SHA의 CI/Full/배포는
+[정본 journal](https://github.com/creno-va/baro/issues/71#issuecomment-6021564076)에 이어 기록한다.
