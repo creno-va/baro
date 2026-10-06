@@ -3,13 +3,16 @@ import { timestampSchema } from "../../../contracts";
 import { CURRENT_POLICY_VERSIONS } from "../../../contracts/consent";
 import type { V2Core } from "../../db/v2-core";
 import { jobAlive } from "../../db/v2-jobs";
+import { type AssetProcessingParams, assetProcessingParamsSchema } from "./assets";
 import { type FileProcessingParams, fileProcessingParamsSchema } from "./execution";
 
 type Instance = { id: string; status(): Promise<{ status: string }> };
-export type FileProcessingBinding = {
-  create(input: { id: string; params: FileProcessingParams }): Promise<Instance>;
+type ProcessingBinding<P> = {
+  create(input: { id: string; params: P }): Promise<Instance>;
   get(id: string): Promise<Instance>;
 };
+export type FileProcessingBinding = ProcessingBinding<FileProcessingParams>;
+export type AssetProcessingBinding = ProcessingBinding<AssetProcessingParams>;
 const instanceStatuses = new Set([
   "queued",
   "running",
@@ -38,8 +41,9 @@ type Row = {
   runtime_instance_id: string;
   owner_id: string;
   workspace_id: string;
-  file_id: string;
-  file_revision: number;
+  target_id: string;
+  target_revision: number;
+  profile_id: string | null;
   revision: number;
   attempts: number;
   next_attempt_at: string;
@@ -47,11 +51,13 @@ type Row = {
   status: string;
 };
 
-/** Metadata-only scheduler. It never acquires a model/native processing lease. */
-export function createFileProcessingDispatcher(
+/** Metadata-only scheduler; acquisition belongs to the bounded Workflow. */
+function createProcessingDispatcher<P extends FileProcessingParams | AssetProcessingParams>(
   core: V2Core,
-  options: { binding?: FileProcessingBinding; clock?: () => string; leaseMs?: number } = {},
+  options: { binding?: ProcessingBinding<P>; clock?: () => string; leaseMs?: number },
+  scope: { joins: string; live: string; consentValues: string[]; params: (row: Row) => P },
 ) {
+  const { joins, live, consentValues } = scope;
   const now = () =>
     new Date(
       timestampSchema.parse((options.clock ?? (() => new Date().toISOString()))()),
@@ -69,7 +75,7 @@ export function createFileProcessingDispatcher(
       const rows = (
         await core
           .statement(
-            `SELECT outbox.id,outbox.operation_id,outbox.job_id,j.runtime_instance_id,o.owner_id,j.workspace_id,f.id AS file_id,f.revision AS file_revision,outbox.revision,outbox.attempts,outbox.next_attempt_at,outbox.created_at,j.status ${joins} WHERE ${live} AND outbox.state IN ('pending','failed') AND outbox.next_attempt_at<=? ORDER BY outbox.created_at,outbox.id LIMIT ?`,
+            `SELECT outbox.id,outbox.operation_id,outbox.job_id,j.runtime_instance_id,o.owner_id,j.workspace_id,j.profile_id,j.target_id,j.target_revision,outbox.revision,outbox.attempts,outbox.next_attempt_at,outbox.created_at,j.status ${joins} WHERE ${live} AND outbox.state IN ('pending','failed') AND outbox.next_attempt_at<=? ORDER BY outbox.created_at,outbox.id LIMIT ?`,
             [...consentValues, now(), limit],
           )
           .all<Row>()
@@ -82,18 +88,12 @@ export function createFileProcessingDispatcher(
           pending++;
           continue;
         }
-        const params = fileProcessingParamsSchema.parse({
-          ownerId: row.owner_id,
-          workspaceId: row.workspace_id,
-          fileId: row.file_id,
-          fileRevision: row.file_revision,
-          jobId: row.job_id,
-        });
+        const params = scope.params(row);
         const claimedAt = now(),
           until = new Date(Date.parse(claimedAt) + leaseMs).toISOString();
         const claim = await core
           .statement(
-            `UPDATE v2_outbox SET attempts=attempts+1,next_attempt_at=? WHERE id=? AND kind='job_dispatch' AND operation_id=? AND job_id=? AND target_id=? AND revision=? AND attempts=? AND next_attempt_at=? AND next_attempt_at<=? AND state IN ('pending','failed') AND EXISTS(SELECT 1 ${joins} WHERE outbox.id=v2_outbox.id AND ${live} AND j.runtime_instance_id=? AND o.owner_id=? AND j.workspace_id=? AND f.id=? AND f.revision=?)`,
+            `UPDATE v2_outbox SET attempts=attempts+1,next_attempt_at=? WHERE id=? AND kind='job_dispatch' AND operation_id=? AND job_id=? AND target_id=? AND revision=? AND attempts=? AND next_attempt_at=? AND next_attempt_at<=? AND state IN ('pending','failed') AND EXISTS(SELECT 1 ${joins} WHERE outbox.id=v2_outbox.id AND ${live} AND j.runtime_instance_id=? AND o.owner_id=? AND j.target_id=? AND j.target_revision=?)`,
             [
               until,
               row.id,
@@ -107,9 +107,8 @@ export function createFileProcessingDispatcher(
               ...consentValues,
               id.data,
               params.ownerId,
-              params.workspaceId,
-              params.fileId,
-              params.fileRevision,
+              row.target_id,
+              row.target_revision,
             ],
           )
           .run();
@@ -129,7 +128,7 @@ export function createFileProcessingDispatcher(
           if (!known && canCreate && Date.parse(now()) < Date.parse(until)) {
             const active = await core
               .statement(
-                `SELECT outbox.id ${joins} WHERE outbox.id=? AND outbox.attempts=? AND outbox.next_attempt_at=? AND outbox.next_attempt_at>? AND outbox.state IN ('pending','failed') AND ${live} AND j.status='queued' AND j.runtime_instance_id=? AND o.owner_id=? AND j.workspace_id=? AND f.id=? AND f.revision=?`,
+                `SELECT outbox.id ${joins} WHERE outbox.id=? AND outbox.attempts=? AND outbox.next_attempt_at=? AND outbox.next_attempt_at>? AND outbox.state IN ('pending','failed') AND ${live} AND j.status='queued' AND j.runtime_instance_id=? AND o.owner_id=? AND j.target_id=? AND j.target_revision=?`,
                 [
                   row.id,
                   row.attempts + 1,
@@ -138,9 +137,8 @@ export function createFileProcessingDispatcher(
                   ...consentValues,
                   id.data,
                   params.ownerId,
-                  params.workspaceId,
-                  params.fileId,
-                  params.fileRevision,
+                  row.target_id,
+                  row.target_revision,
                 ],
               )
               .first();
@@ -167,7 +165,7 @@ export function createFileProcessingDispatcher(
         }
         const ack = await core
           .statement(
-            `UPDATE v2_outbox SET state='dispatched' WHERE id=? AND kind='job_dispatch' AND operation_id=? AND job_id=? AND target_id=? AND revision=? AND attempts=? AND next_attempt_at=? AND state IN ('pending','failed') AND EXISTS(SELECT 1 ${joins} WHERE outbox.id=v2_outbox.id AND ${live} AND j.runtime_instance_id=? AND o.owner_id=? AND j.workspace_id=? AND f.id=? AND f.revision=?)`,
+            `UPDATE v2_outbox SET state='dispatched' WHERE id=? AND kind='job_dispatch' AND operation_id=? AND job_id=? AND target_id=? AND revision=? AND attempts=? AND next_attempt_at=? AND state IN ('pending','failed') AND EXISTS(SELECT 1 ${joins} WHERE outbox.id=v2_outbox.id AND ${live} AND j.runtime_instance_id=? AND o.owner_id=? AND j.target_id=? AND j.target_revision=?)`,
             [
               row.id,
               row.operation_id,
@@ -179,9 +177,8 @@ export function createFileProcessingDispatcher(
               ...consentValues,
               id.data,
               params.ownerId,
-              params.workspaceId,
-              params.fileId,
-              params.fileRevision,
+              row.target_id,
+              row.target_revision,
             ],
           )
           .run();
@@ -191,4 +188,43 @@ export function createFileProcessingDispatcher(
       return { dispatched, pending, available: true };
     },
   };
+}
+
+export function createFileProcessingDispatcher(
+  core: V2Core,
+  options: { binding?: FileProcessingBinding; clock?: () => string; leaseMs?: number } = {},
+) {
+  return createProcessingDispatcher(core, options, {
+    joins,
+    live,
+    consentValues,
+    params: (row) =>
+      fileProcessingParamsSchema.parse({
+        ownerId: row.owner_id,
+        workspaceId: row.workspace_id,
+        fileId: row.target_id,
+        fileRevision: row.target_revision,
+        jobId: row.job_id,
+      }),
+  });
+}
+
+export function createAssetProcessingDispatcher(
+  core: V2Core,
+  options: { binding?: AssetProcessingBinding; clock?: () => string; leaseMs?: number } = {},
+) {
+  return createProcessingDispatcher(core, options, {
+    joins:
+      "FROM v2_outbox outbox JOIN v2_jobs j ON j.id=outbox.job_id AND j.operation_id=outbox.operation_id JOIN v2_operations o ON o.id=j.operation_id JOIN v2_assets a ON a.id=j.target_id AND a.profile_id=j.profile_id JOIN v2_profiles p ON p.id=a.profile_id AND p.owner_id=o.owner_id JOIN v2_blobs b ON b.id=a.original_blob_id",
+    live: `outbox.kind='job_dispatch' AND outbox.target_id=j.runtime_instance_id AND j.target_kind='profile_asset' AND j.kind='portfolio_sanitize' AND j.status IN ('queued','running','validating') AND j.target_revision=a.revision AND a.current_job_id=j.id AND a.state='sanitizing' AND a.purpose IN ('profile_photo','portfolio') AND o.kind='profile_asset' AND o.state IN ('admitted','ambiguous') AND a.owner_id=o.owner_id AND b.state='stored' AND b.visibility='private' AND ((a.purpose='profile_photo' AND b.kind='profile_photo_original') OR (a.purpose='portfolio' AND b.kind='portfolio_original')) AND ${jobAlive} AND EXISTS(SELECT 1 FROM user_consents WHERE user_id=o.owner_id AND terms_version=? AND privacy_version=? AND ai_notice_version=? AND over_14_confirmed=1)`,
+    consentValues: consentValues.slice(0, 3),
+    params: (row) =>
+      assetProcessingParamsSchema.parse({
+        ownerId: row.owner_id,
+        profileId: row.profile_id,
+        assetId: row.target_id,
+        assetRevision: row.target_revision,
+        jobId: row.job_id,
+      }),
+  });
 }

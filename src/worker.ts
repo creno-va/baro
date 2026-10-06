@@ -11,6 +11,7 @@ import { reconcileFileUploads } from "./server/modules/files/reconcile";
 import { reconcileV2Dispatch } from "./server/runtime/dispatch";
 
 export { AnalysisWorkflow } from "./workflows/analysis";
+export { AssetProcessingWorkflow } from "./workflows/asset-processing";
 export { FileProcessingWorkflow } from "./workflows/file-processing";
 export { FileProcessorContainer } from "./workflows/file-processor-container";
 export { ProfilePublicationWorkflow } from "./workflows/profile-publication";

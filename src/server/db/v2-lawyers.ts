@@ -1350,12 +1350,23 @@ export function createV2LawyersRepository(core: V2Core) {
             : row.purpose === "profile_photo"
               ? "profile_photo_original"
               : "verification";
+        // Capture the physical/source/reservation tuple as well as ciphertext.
+        // The final claim repeats this exact tuple after every encryption await.
+        const blobTuple = (blob: string, reservation: string) =>
+          `json_array(${blob}.reservation_id,${blob}.principal_id,${blob}.object_key,${blob}.cipher_bytes,${blob}.cipher_hash,${blob}.key_version,${blob}.logical_bytes,${blob}.source_blob_id,${blob}.source_asset_revision,${reservation}.operation_id,${reservation}.principal_id,${reservation}.state,${reservation}.byte_length,${reservation}.target_id,${reservation}.kind,${reservation}.entity_id)`;
+        type AssetBlob = {
+          encrypted_payload: string;
+          logical_bytes: number;
+          physical_tuple: string;
+          source_blob_id: string | null;
+          source_asset_revision: number | null;
+        };
         const original = await core
           .statement(
-            "SELECT b.encrypted_payload,b.logical_bytes FROM v2_blobs b JOIN v2_storage_reservations r ON r.id=b.reservation_id JOIN v2_billing_principals p ON p.id=b.principal_id WHERE b.id=? AND p.owner_id=? AND r.kind='lawyer_asset' AND r.entity_id=? AND b.kind=? AND b.visibility='private' AND b.state='stored'",
+            `SELECT b.encrypted_payload,b.logical_bytes,b.source_blob_id,b.source_asset_revision,${blobTuple("b", "r")} AS physical_tuple FROM v2_blobs b JOIN v2_storage_reservations r ON r.id=b.reservation_id JOIN v2_billing_principals p ON p.id=b.principal_id WHERE b.id=? AND p.owner_id=? AND r.kind='lawyer_asset' AND r.entity_id=? AND b.kind=? AND b.visibility='private' AND b.state='stored'`,
             [originalBlobId, actor.ownerId, id, originalKind],
           )
-          .first<{ encrypted_payload: string; logical_bytes: number }>();
+          .first<AssetBlob>();
         if (!original || original.logical_bytes !== asset.byteLength) return false;
         const originalHash = await core.decrypt(
           "v2_blobs",
@@ -1370,12 +1381,12 @@ export function createV2LawyersRepository(core: V2Core) {
           ("contentHash" in asset ? asset.contentHash : asset.originalHash)
         )
           return false;
-        let sanitized: { encrypted_payload: string; logical_bytes: number } | null = null;
+        let sanitized: AssetBlob | null = null;
         if ("sanitizedDerivative" in asset && asset.sanitizedDerivative) {
           if (!sanitizedBlobId) return false;
           sanitized = await core
             .statement(
-              "SELECT b.encrypted_payload,b.logical_bytes FROM v2_blobs b JOIN v2_storage_reservations r ON r.id=b.reservation_id JOIN v2_billing_principals p ON p.id=b.principal_id WHERE b.id=? AND p.owner_id=? AND r.kind='lawyer_asset' AND r.entity_id=? AND b.kind=? AND b.visibility='staging' AND b.state='stored'",
+              `SELECT b.encrypted_payload,b.logical_bytes,b.source_blob_id,b.source_asset_revision,${blobTuple("b", "r")} AS physical_tuple FROM v2_blobs b JOIN v2_storage_reservations r ON r.id=b.reservation_id JOIN v2_billing_principals p ON p.id=b.principal_id WHERE b.id=? AND p.owner_id=? AND r.kind='lawyer_asset' AND r.entity_id=? AND b.kind=? AND b.visibility='staging' AND b.state='stored'`,
               [
                 sanitizedBlobId,
                 actor.ownerId,
@@ -1383,8 +1394,14 @@ export function createV2LawyersRepository(core: V2Core) {
                 row.purpose === "profile_photo" ? "profile_photo_sanitized" : "portfolio_sanitized",
               ],
             )
-            .first();
+            .first<AssetBlob>();
           if (!sanitized || sanitized.logical_bytes !== asset.sanitizedDerivative.byteLength)
+            return false;
+          if (
+            lease &&
+            (sanitized.source_blob_id !== originalBlobId ||
+              sanitized.source_asset_revision !== expectedRevision)
+          )
             return false;
           const hash = await core.decrypt(
             "v2_blobs",
@@ -1417,7 +1434,7 @@ export function createV2LawyersRepository(core: V2Core) {
               };
         return core.changed([
           core.statement(
-            `INSERT INTO v2_mutation_claims(id,owner_id,target_id,revision) SELECT ?,a.owner_id,a.id,a.revision FROM v2_assets a JOIN v2_profiles p ON p.id=a.profile_id JOIN v2_blobs b ON b.id=? JOIN v2_storage_reservations br ON br.id=b.reservation_id JOIN v2_billing_principals principal ON principal.id=b.principal_id WHERE a.id=? AND a.owner_id=? AND a.revision=? AND a.state IN ('reserved','uploaded','sanitizing','failed') AND a.encrypted_payload=? AND ${execution.sql} AND principal.owner_id=a.owner_id AND br.kind='lawyer_asset' AND br.entity_id=a.id AND b.kind=? AND b.state='stored' AND b.visibility='private' AND b.encrypted_payload=? AND ${ownerAlive} AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE (target_kind='asset' AND target_id=a.id) OR (target_kind='profile' AND target_id=p.id)) AND (? IS NULL OR EXISTS(SELECT 1 FROM v2_blobs s JOIN v2_billing_principals sp ON sp.id=s.principal_id JOIN v2_storage_reservations sr ON sr.id=s.reservation_id WHERE s.id=? AND s.state='stored' AND s.visibility='staging' AND sp.owner_id=a.owner_id AND sr.kind='lawyer_asset' AND sr.entity_id=a.id AND s.kind=? AND s.encrypted_payload=?))`,
+            `INSERT INTO v2_mutation_claims(id,owner_id,target_id,revision) SELECT ?,a.owner_id,a.id,a.revision FROM v2_assets a JOIN v2_profiles p ON p.id=a.profile_id JOIN v2_blobs b ON b.id=? JOIN v2_storage_reservations br ON br.id=b.reservation_id JOIN v2_billing_principals principal ON principal.id=b.principal_id WHERE a.id=? AND a.owner_id=? AND a.revision=? AND a.state IN ('reserved','uploaded','sanitizing','failed') AND a.encrypted_payload=? AND ${execution.sql} AND principal.owner_id=a.owner_id AND br.kind='lawyer_asset' AND br.entity_id=a.id AND b.kind=? AND b.state='stored' AND b.visibility='private' AND b.encrypted_payload=? AND ${blobTuple("b", "br")}=? AND ${ownerAlive} AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE (target_kind='asset' AND target_id=a.id) OR (target_kind='profile' AND target_id=p.id)) AND (? IS NULL OR EXISTS(SELECT 1 FROM v2_blobs s JOIN v2_billing_principals sp ON sp.id=s.principal_id JOIN v2_storage_reservations sr ON sr.id=s.reservation_id WHERE s.id=? AND s.state='stored' AND s.visibility='staging' AND sp.owner_id=a.owner_id AND sr.kind='lawyer_asset' AND sr.entity_id=a.id AND s.kind=? AND s.encrypted_payload=? AND ${blobTuple("s", "sr")}=?))`,
             [
               claimId,
               originalBlobId,
@@ -1428,11 +1445,13 @@ export function createV2LawyersRepository(core: V2Core) {
               ...execution.values,
               originalKind,
               original.encrypted_payload,
+              original.physical_tuple,
               actor.ownerId,
               sanitizedBlobId,
               sanitizedBlobId,
               row.purpose === "profile_photo" ? "profile_photo_sanitized" : "portfolio_sanitized",
               sanitized?.encrypted_payload ?? null,
+              sanitized?.physical_tuple ?? null,
             ],
           ),
           core.statement(

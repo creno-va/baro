@@ -1,7 +1,10 @@
 import { createCaseDataCipher } from "../crypto";
 import { usageDateKst } from "../db/repository";
 import { createV2Core } from "../db/v2-core";
-import { createFileProcessingDispatcher } from "../modules/file-processing/dispatch";
+import {
+  createAssetProcessingDispatcher,
+  createFileProcessingDispatcher,
+} from "../modules/file-processing/dispatch";
 import { createProfilePublicationDispatcher } from "../modules/lawyers/publication-dispatch";
 
 /** Scheduled recovery only dispatches admitted immutable IDs. The coordinator
@@ -27,10 +30,13 @@ export async function reconcileV2Dispatch(env: Env) {
     const files = await createFileProcessingDispatcher(core, {
       binding: env.FILE_PROCESSING,
     }).dispatch(4);
+    const assets = await createAssetProcessingDispatcher(core, {
+      binding: env.ASSET_PROCESSING,
+    }).dispatch(4);
     const profiles = await createProfilePublicationDispatcher(core, {
       binding: env.PROFILE_PUBLICATION,
     }).dispatch(4);
-    return { available: true, files, profiles };
+    return { available: true, files, assets, profiles };
   } catch {
     // Payloads, SQL and provider failures must not enter scheduled logs.
     return { available: false };

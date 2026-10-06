@@ -85,6 +85,11 @@
       "class_name": "FileProcessingWorkflow"
     },
     {
+      "name": "baro-asset-processing-preview",
+      "binding": "ASSET_PROCESSING",
+      "class_name": "AssetProcessingWorkflow"
+    },
+    {
       "name": "baro-profile-publication-preview",
       "binding": "PROFILE_PUBLICATION",
       "class_name": "ProfilePublicationWorkflow"
@@ -162,6 +167,11 @@
           "name": "baro-file-processing-preview",
           "binding": "FILE_PROCESSING",
           "class_name": "FileProcessingWorkflow"
+        },
+        {
+          "name": "baro-asset-processing-preview",
+          "binding": "ASSET_PROCESSING",
+          "class_name": "AssetProcessingWorkflow"
         },
         {
           "name": "baro-profile-publication-preview",
@@ -280,6 +290,11 @@
           "name": "baro-file-processing-production",
           "binding": "FILE_PROCESSING",
           "class_name": "FileProcessingWorkflow"
+        },
+        {
+          "name": "baro-asset-processing-production",
+          "binding": "ASSET_PROCESSING",
+          "class_name": "AssetProcessingWorkflow"
         },
         {
           "name": "baro-profile-publication-production",
