@@ -1,0 +1,21 @@
+{
+  "origin": "captured_public_example_structure",
+  "source": "https://open.law.go.kr/LSO/openApi/guideResult.do?htmlName=precInfoGuide",
+  "capturedAt": "2026-10-05T23:52:16.619Z",
+  "scope": "Public documented example: root and documented field types only; original legal text and request URL/OC deliberately excluded",
+  "responseSha256": "07217729b65cf15ed8b35f461218e37fa9a7e84a80eae6d6233d44ec4850c44f",
+  "wrapper": "PrecService",
+  "fieldTypes": {
+    "판례정보일련번호": "string",
+    "사건명": "string",
+    "사건번호": "string",
+    "선고일자": "string",
+    "법원명": "string",
+    "판결요지": "string",
+    "판례내용": "string"
+  },
+  "identity": {
+    "officialId": "228541",
+    "decisionDate": "20220819"
+  }
+}

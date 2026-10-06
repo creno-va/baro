@@ -1,9 +1,9 @@
 # V2 legal source synthetic preparation corpus
 
 - Reviewed: 2026-10-06
-- Issue: #63, independent fixture preparation only; #55 must close with its PR merged before product implementation.
+- Original preparation: #63 independent fixtures; #55 had to close before product implementation. #63 implementation evidence is separately recorded below.
 - Base: ac756408155dd9d300129014b906984ff2f7a09f, including #54 shared v2 contracts.
-- Every response, identifier, sentence, HTML element and case narrative here is synthetic. Nothing was captured from an authenticated API. No actual OC or private case is included.
+- The six preparation groups indexed by `files` remain synthetic. No actual private OC or user case is included. The two separately indexed `publicStructureEvidence` files were added during #63 implementation and are described below.
 - `adapterValidation: not_run` means the expected upstream acceptance/rejection is a future adapter requirement, not an executed result. A fixture's expected `verified` status is conditional on a future adapter, authorized source registry and claim review; it is not a claim of verified live content.
 - The tests execute manifest/hash/span integrity and existing shared-schema boundaries only. They do not exercise retrieval, caching, authorization, AI, claim entailment, production registry admission or live services.
 
@@ -38,8 +38,16 @@ Detail profiles: `eflaw` needs ID or MST; ID retrieves current law and ignores e
 
 Existing shared URL checks are a minimum shape boundary, not complete SSRF protection or permission evidence. A future adapter additionally checks exact route, allowed query names/cardinality, numeric document identity, rights status and registered redirect hops. Sensitive search queries stay out of public cache. Publicly visible content is not automatically approved for caching or redistribution.
 
-## Remaining adapter and live acceptance
+## Implementation evidence added for #63
+
+`captured-guide-structure.json` contains a tiny verbatim public EasyLaw title/canonical/first-heading/basis-date subset, assembled inside a minimal wrapper. Its stored-body SHA-256 is independently tested. Original legal body, substantive images and downloads are omitted. `captured-precedent-structure.json` records the official public example's actual `PrecService` wrapper, documented field types, ID/date and response hash; legal original text, parties and the credential-bearing request URL are omitted. A hash does not permit reconstruction or attest to unpreserved text in future tests.
+
+The historical synthetic precedent `판례정보` wrapper was provisional and differed from the actual public example. Runtime tests explicitly wrap synthetic field values in observed `PrecService`; they also reject the old wrapper. The guide adapter uses observed `ovDiv`, `<title>`, canonical numeric document identity and the page-authored basis-date sentence, never the synthetic `data-fixture-*` attributes. Actual public EasyLaw full-page parsing was checked once without storing the full page; this is public-page parser evidence only.
+
+`tests/legal-retrieval-v2.test.ts` now executes actual generated SQLite/AES source/cache/binding and guard paths plus bounded transport, retry, stream, budget, cancellation and adapter counterexamples. `tests/citation-v2.test.ts` checks original text, half-open Unicode-safe spans, metadata/hash drift and required semantic/policy receipts. Preparation annotations and `adapterValidation: not_run` within the old groups remain historical expectations: these tests do not certify every malformed fixture through every adapter or any live credential.
+
+## Remaining live acceptance
 
 Manifest `unexecutedAcceptanceCases` tracks stream byte limits, timeouts/Content-Length deceit, request reservations, consent/owner/revision/deletion races, immutable cache versions, exact span/hash and unrelated-claim rejection, and prompt/active-content isolation. The malformed responses and URL counterexamples are expectations only. No test here pretends to execute those adapters.
 
-After #55 closes and its repository/cache PR merges, integrate bounded Workers transport, separate eflaw/prec/approved guide adapters, typed source availability and deterministic identity/span validation. #64 performs model semantic/policy review through llm-gateway; an intact citation never by itself proves applicability. Source gaps must retain factual preparation and prohibit model-memory legal fallback. #70/#71 retain policy/legal publication approval and same-SHA actual external evidence. This preparation does not close #63.
+#55 has merged; the separate runtime now implements bounded Workers transport, eflaw/prec/EasyLaw adapters, typed source availability and deterministic identity/span validation. The original corpus's remaining cases describe historical unexecuted preparation requirements; executed test files are the implementation evidence. #64 performs model semantic/policy review through llm-gateway; an intact citation never by itself proves applicability. Source gaps retain factual preparation and prohibit model-memory legal fallback. #70/#71 retain policy/legal publication approval and same-SHA actual external evidence. Public structures and local SQL evidence do not close those live gates.
