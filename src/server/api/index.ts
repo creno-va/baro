@@ -11,6 +11,8 @@ import { meApi } from "./me";
 import { requestBodyLimit } from "./request-body-limit";
 import { retryApi } from "./retry";
 import { createFilesApi } from "./v2/files";
+import { createLawyersApi } from "./v2/lawyers";
+import { createModerationApi } from "./v2/moderation";
 import { usageApi } from "./v2/usage";
 
 export const api = new Hono<ApiEnvironment>()
@@ -50,6 +52,14 @@ export const api = new Hono<ApiEnvironment>()
   .all("/auth/*", async (context) => getAuth(context.env).handler(context.req.raw))
   .route("/health", healthApi)
   .route("/v2/me", usageApi)
+  .route(
+    "/v2/me",
+    createLawyersApi({ dependencies: async (env) => ({ bucket: env.CASE_PRIVATE_R2 }) }),
+  )
+  .route(
+    "/v2/moderation",
+    createModerationApi({ dependencies: async (env) => ({ bucket: env.CASE_PRIVATE_R2 }) }),
+  )
   .route(
     "/v2/cases",
     createFilesApi({ dependencies: async (env) => ({ bucket: env.CASE_PRIVATE_R2 }) }),
