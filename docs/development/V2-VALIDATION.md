@@ -817,3 +817,28 @@ PR136은 exact head2c179f81e8525d7376321c32d7e8d8a5ba8f4e14의
 [CI37510574519](https://github.com/creno-va/baro/actions/runs/37510574519) 필수3jobs
 SUCCESS/CLEAN 확인 뒤 정상 병합됐으며 main은73cc78324bcaa9302339c3f8e6da51aa1a8915a3이다.
 native는 변경 없음에 따라 fixture 실행을 skip했다. 최종 통합 Full에서 실제 native를 재검증한다.
+
+### 실제 인증 설정·응답·산출물 경계 후속
+
+PR137 head a7e4eaa7f8b7f0820cd806e8bd34b1596b21ea26의
+[CI37511218163](https://github.com/creno-va/baro/actions/runs/37511218163) 필수3jobs
+SUCCESS/CLEAN 및 로컬 필수/자료 browser4/CUA 안내 확인 뒤 정상 병합했다.
+main d487ab1f4fecaf2cfb419622394ac0eb66adf6e7의
+[CI37513067434](https://github.com/creno-va/baro/actions/runs/37513067434)와
+[preview37513622882](https://github.com/creno-va/baro/actions/runs/37513622882)는 SUCCESS다.
+배포 단계 성공과 별도의 독립 SHA smoke/최종 Full/production을 구분한다.
+
+사용자가 제공한 local .dev.vars.txt의 소셜6필드·서명 key를 Git-ignored .dev.vars(0600)에
+적용했다. local callback은 localhost4321이며 remote preview/production에 복제하지 않았다.
+실제 값은 로그·PR·산출물에 기록하지 않는다. OAuth 설정 부족 오류를 typed safe503으로
+매핑하고 me/auth 정상·오류·공개 차단을 private,no-store/nosniff로 보완했다. 기존 쿠키
+갱신/만료/실제 OAuth timestamp·origin·역할·공개 gate 회귀를 보존했다.
+local frozen install/check1263·133388/driftfreshupgrade6·29/build/bundle137/dry-run과
+local migration0009를 통과했다. cleanup hook의 경로 보완 뒤 build/bundle/dry를 재검증했다.
+
+Cloudflare adapter가 local preview용 dist/server/.dev.vars를 생성하는 것을 확인했고,
+빌드 완료 후 dotenv 파일을 제거한다. guard는 숨김 dotenv 파일도 배포 전에 거부한다.
+실제 소셜 key/서명 key의 dist 검출0·tracked diff 검출0과 임시 dotenv 삽입의 실제
+guard 거부/제거 후 성공을 확인했다. source .dev.vars는 dev 서버에 보존한다.
+이는 공급자 secret의 유효성이나 최종 OAuth callback 성공을 뜻하지 않으며 실제 인증
+관측과 새 SHA의 CI/Full/배포 증거는 정본 journal에서 이어 기록한다.

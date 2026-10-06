@@ -15,6 +15,30 @@ fullSHA/schema0009 smoke와 운영 공개 gate/CSP/no-mock9검사를 확인했�
 main 병합만으로 두 환경의 배포 성공을 갱신하지 않는다. 실제 사용자 기능/외부 성공과 분리한 증거는
 [V2 검증 기록](../development/V2-VALIDATION.md)에 연결한다.
 
+### 실제 API 전환 관측 (2026-10-07)
+
+PR136 main73cc78324bcaa9302339c3f8e6da51aa1a8915a3의 CI37510886700과
+preview37511081159는 SUCCESS이며 독립 fullSHA/schema0009 smoke를 통과했다.
+실제 브라우저는 기존 local 예시 계정/사건을 표시하지 않고 실제 API 오류를 반환했다.
+디렉터리와 self-service 목록은 실제200/0건/no-store, 잘못된 origin의 account-type 요청은403,
+Google 로그인 시작은 설정 부족으로 실패했다. 예시 로그인으로 대체하지 않았다.
+이 관측은 실제 OAuth 성공이나 정책·공개 승인을 뜻하지 않는다.
+
+세션 설정 실패가500/INTERNAL_ERROR로 반환되고 오류에 no-store가 없던 공유 결함을
+후속에서 typed AuthConfigurationError→503/DEPENDENCY_UNAVAILABLE로 보완한다.
+me/auth 응답은 정상·오류·공개 차단 모두 private,no-store/nosniff를 사용하며 설정의
+필드/값·stack/SQL을 응답하지 않는다. 실제 공급자 key 등록과 최근 OAuth 조건을 우회하지 않는다.
+signed-session/auth/global report 회귀20tests/207assertions 및 설정 검증을 통과했고,
+최종 SHA의 필수 검증·preview 실제 HTTP 결과는 정본 journal에서 별도로 갱신한다.
+
+사용자가 제공한 .dev.vars.txt의 local callback4321용 소셜6필드와 서명 key를 Git-ignored
+.dev.vars(0600)에 적용했다. 실제 값은 로그/PR/산출물에 보존하지 않는다. 이는 preview나
+production secret 등록·공급자 callback 승인 완료를 뜻하지 않는다. 로컬 인증 검증은
+remoteBindings=false 및 local migration0009를 사용하며 실제 공급자 응답과 최종 callback을
+각각 구분한다. Cloudflare adapter의 local preview용 dist/server/.dev.vars 생성은 빌드 완료
+hook에서 제거하고 bundle guard는 dotenv 파일이 남으면 배포 전 실패한다. source .dev.vars는
+개발 서버에 보존한다. 로그인 성공·취소·만료·동의/역할/세션은 실제 확인된 범위만 journal에 기록한다.
+
 | 항목 | 현재 확인/제한 | 담당 행동과 필요한 증거 |
 | --- | --- | --- |
 | Cloudflare console | 사용자가 Safari 로그인 완료; 2026-10-07 00:05~00:15 KST 인증된 콘솔에서 읽기 전용 관측 | 현재 plan/resources/credit를 아래 기록. 로그인은 OAuth/법률 승인이나 제품 실제 처리 성공을 뜻하지 않음 |

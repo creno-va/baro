@@ -13,12 +13,19 @@ const authEnvironmentSchema = z.object({
 
 export type AuthEnvironment = z.infer<typeof authEnvironmentSchema>;
 
+export class AuthConfigurationError extends Error {
+  constructor(fields: string) {
+    super(`AUTH_CONFIGURATION_INVALID:${fields}`);
+    this.name = "AuthConfigurationError";
+  }
+}
+
 export function parseAuthEnvironment(env: Env): AuthEnvironment {
   const result = authEnvironmentSchema.safeParse(env);
 
   if (!result.success) {
     const missing = result.error.issues.map((issue) => issue.path.join(".")).join(", ");
-    throw new Error(`AUTH_CONFIGURATION_INVALID:${missing}`);
+    throw new AuthConfigurationError(missing);
   }
 
   return result.data;
