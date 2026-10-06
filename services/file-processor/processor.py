@@ -10,6 +10,7 @@ import math
 import os
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import sys
 import io
@@ -21,6 +22,8 @@ MAX_OUTPUT = 536_870_912
 # Technical scene candidates, not a claim that every semantic scene is detectable.
 # 0.05 catches the corpus's measured 0.097842/0.089128 changes after 160x90 scaling.
 SCENE_SCORE_THRESHOLD = 0.05
+TEXT_CHUNK = 65_536
+INVALID_TEXT_CONTROL = re.compile(r"[\x00-\x08\x0b\x0e-\x1f]")
 
 
 class Rejected(Exception):
@@ -41,6 +44,26 @@ def ffmpeg(source, args, seek=None):
     if seek is not None:
         prefix += ["-ss", str(seek)]
     return command(prefix + ["-i", str(source), "-threads", "1"] + args)
+
+
+def text_chunks(source):
+    # Preserve CR/LF and strip only the leading UTF-8 BOM, as the byte decoder did.
+    with source.open("r", encoding="utf-8-sig", errors="strict", newline="") as handle:
+        for chunk in iter(lambda: handle.read(TEXT_CHUNK), ""):
+            yield chunk
+
+
+def text_page_chunks(source, unit):
+    page = 0
+    for chunk in text_chunks(source):
+        parts = chunk.split("\f")
+        for index, part in enumerate(parts):
+            if page == unit:
+                yield part
+            if index < len(parts) - 1:
+                if page == unit:
+                    return
+                page += 1
 
 
 def inspect(source):
@@ -74,9 +97,14 @@ def inspect(source):
     # Text is detected by actual UTF-8/control validation, not extension or MIME.
     if size <= 100_000_000:
         try:
-            text = source.read_bytes().decode("utf-8-sig", errors="strict")
-            if text and not any(ord(c) < 32 and c not in "\n\r\t\f" for c in text):
-                pages = text.count("\f") + 1
+            pages, nonempty, valid = 1, False, True
+            for chunk in text_chunks(source):
+                nonempty = True
+                if INVALID_TEXT_CONTROL.search(chunk):
+                    valid = False
+                    break
+                pages += chunk.count("\f")
+            if nonempty and valid:
                 if pages > 100_000:
                     raise Rejected("LIMIT")
                 return dict(category="document", format="txt", byteLength=size, pageCount=pages)
@@ -135,12 +163,20 @@ def process(source, root, probe, unit, frame_offset):
                               contentHash=hashlib.sha256(path.read_bytes()).hexdigest(),
                               path=path.name, **extra))
 
-    def text_artifacts(text, position):
+    def text_artifacts(chunks, position):
         # Keep every character. Split on Unicode scalar boundaries below wire/artifact caps.
-        for start in range(0, len(text), 100_000):
+        pending = ""
+        def emit(text):
             path = root / ("artifact-%06d.txt" % len(artifacts))
-            path.write_text(text[start:start + 100_000], encoding="utf-8")
+            path.write_text(text, encoding="utf-8")
             artifact(path, "extracted_text", position)
+        for chunk in chunks:
+            pending += chunk
+            while len(pending) >= 100_000:
+                emit(pending[:100_000])
+                pending = pending[100_000:]
+        if pending:
+            emit(pending)
 
     category = probe["category"]
     total_units = probe["pageCount"] if category == "document" else 1 if category == "image" else math.ceil(probe["durationSeconds"] / 30)
@@ -148,18 +184,15 @@ def process(source, root, probe, unit, frame_offset):
         raise Rejected("INVALID_UNIT")
     pages = []
     if category == "document":
-        if probe["format"] == "txt":
-            texts = source.read_bytes().decode("utf-8-sig", errors="strict").split("\f")
-        else:
-            texts = None
+        is_text = probe["format"] == "txt"
         pages = [dict(page=unit + 1, status="missing")]
         for page in [unit + 1]:
             position = dict(kind="document", page=page, paragraph=None, table=None)
-            text = texts[page - 1] if texts is not None else command([
+            text = "" if is_text else command([
                 "pdftotext", "-f", str(page), "-l", str(page), "-enc", "UTF-8", str(source), "-"
             ]).decode("utf-8", errors="strict").rstrip("\f")
             status = "processed"
-            if not text.strip() and texts is None:
+            if not text.strip() and not is_text:
                 image_base = root / "ocr-page"
                 command(["pdftoppm", "-f", str(page), "-l", str(page), "-singlefile", "-scale-to", "1800",
                          "-png", str(source), str(image_base)])
@@ -167,17 +200,23 @@ def process(source, root, probe, unit, frame_offset):
                 (root / "ocr-page.png").unlink(missing_ok=True)
                 # OCR is uncertain; native text absence is never perfect page coverage.
                 status = "low_quality"
-            if text:
-                text_artifacts(text, position)
+            if is_text:
+                text_artifacts(text_page_chunks(source, unit), position)
+            elif text:
+                text_artifacts([text], position)
             pages[0] = dict(page=page, status=status)
         coverage = dict(category="document", status="complete" if all(p["status"] == "processed" for p in pages) else "partial",
                         pageCount=probe["pageCount"], pages=pages)
     elif category == "image":
         path = root / "artifact-000000.jpg"
         with Image.open(source) as image:
-            # Metadata/EXIF stripped; GIF/TIFF first frame only => explicit partial.
+            # EXIF/ICC are not passed to the JPEG encoder; GIF/TIFF first frame => partial.
             multi = getattr(image, "n_frames", 1) > 1
-            image = image.convert("RGB")
+            # Decode before thumbnail so JPEG draft/downsampling cannot change pixels.
+            # An already RGB raster needs no full-size copy from convert("RGB").
+            image.load()
+            if image.mode != "RGB":
+                image = image.convert("RGB")
             image.thumbnail((1600, 1600))
             image.save(path, "JPEG", quality=80)
         artifact(path, "image", dict(kind="image", region=None), multiFrame=multi)
@@ -206,11 +245,17 @@ def process(source, root, probe, unit, frame_offset):
             if len(timestamps) > 16_400 or any(not math.isfinite(t) or t < 0 or t >= duration for t in timestamps):
                 raise Rejected("OUTPUT_LIMIT")
             frames = []
+            rendered = {}
             for sampling, times in [("one_second", range(unit * 30, min((unit + 1) * 30, math.ceil(duration)))), ("scene_change", timestamps)]:
                 for timestamp in times:
                     path = root / ("artifact-%06d.jpg" % len(artifacts))
-                    ffmpeg(source, ["-an", "-frames:v", "1", "-vf", "scale=640:640:force_original_aspect_ratio=decrease",
-                                    "-q:v", "5", str(path)], seek=timestamp)
+                    if timestamp in rendered:
+                        # Keep both artifacts/coverage entries; only identical decoder work is reused.
+                        shutil.copyfile(rendered[timestamp], path)
+                    else:
+                        ffmpeg(source, ["-an", "-frames:v", "1", "-vf", "scale=640:640:force_original_aspect_ratio=decrease",
+                                        "-q:v", "5", str(path)], seek=timestamp)
+                        rendered[timestamp] = path
                     # Actual index is resolved from this unit's decoder timestamps below.
                     # The authenticated preceding unit count supplies the absolute offset.
                     position = dict(kind="video", timestampSeconds=timestamp, frameIndex=0, sampling=sampling)

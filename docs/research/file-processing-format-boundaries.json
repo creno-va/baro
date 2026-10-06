@@ -1,0 +1,516 @@
+{
+  "syntheticOnly": true,
+  "serial": true,
+  "repetitions": 1,
+  "maxSourceSeconds": 2,
+  "maxSourceBytes": 250000,
+  "scope": "secondary existing-format boundary exploration, not general codec/model proof",
+  "results": [
+    {
+      "case": "mp3",
+      "category": "audio",
+      "inputBytes": 6488,
+      "before": {
+        "exitCode": 1,
+        "processingSeconds": 0.03353429199978564,
+        "processorPeakRssBytes": 36978688,
+        "largestChildPeakRssBytes": 9486336,
+        "peakRssUpperBoundBytes": 46465024,
+        "nativeSubprocesses": {
+          "ffprobe": 1
+        }
+      },
+      "after": {
+        "exitCode": 1,
+        "processingSeconds": 0.03269266700044682,
+        "processorPeakRssBytes": 37158912,
+        "largestChildPeakRssBytes": 9543680,
+        "peakRssUpperBoundBytes": 46702592,
+        "nativeSubprocesses": {
+          "ffprobe": 1
+        }
+      },
+      "manifestEqual": true,
+      "status": "rejected-equally",
+      "safeError": "UNSUPPORTED_TIMELINE",
+      "coveragePublished": false
+    },
+    {
+      "case": "m4a",
+      "category": "audio",
+      "inputBytes": 14018,
+      "before": {
+        "exitCode": 0,
+        "processingSeconds": 0.059166208000533516,
+        "processorPeakRssBytes": 37060608,
+        "largestChildPeakRssBytes": 11526144,
+        "peakRssUpperBoundBytes": 48586752,
+        "nativeSubprocesses": {
+          "ffprobe": 1,
+          "ffmpeg": 1
+        }
+      },
+      "after": {
+        "exitCode": 0,
+        "processingSeconds": 0.05864195799949812,
+        "processorPeakRssBytes": 37224448,
+        "largestChildPeakRssBytes": 11501568,
+        "peakRssUpperBoundBytes": 48726016,
+        "nativeSubprocesses": {
+          "ffprobe": 1,
+          "ffmpeg": 1
+        }
+      },
+      "manifestEqual": true,
+      "status": "native-extraction-equal",
+      "reportedFormat": "m4a",
+      "durationSeconds": 2.0,
+      "outputBytes": 62030,
+      "artifactCount": 1,
+      "coverage": {
+        "category": "audio",
+        "audio": {
+          "durationSeconds": 2.0,
+          "status": "partial",
+          "intervals": [
+            {
+              "startSeconds": 0,
+              "endSeconds": 2.0,
+              "status": "missing"
+            }
+          ]
+        }
+      },
+      "artifactBytesEqual": true,
+      "artifactPcmSeconds": 1.936,
+      "independentDecodeControls": [
+        {
+          "variant": "service-seek-zero",
+          "decodedPcmSeconds": 1.936,
+          "samples": 30976
+        },
+        {
+          "variant": "no-seek-clipped",
+          "decodedPcmSeconds": 2.0,
+          "samples": 32000
+        },
+        {
+          "variant": "full-reference",
+          "decodedPcmSeconds": 2.0,
+          "samples": 32000
+        }
+      ]
+    },
+    {
+      "case": "ogg",
+      "category": "audio",
+      "inputBytes": 5157,
+      "before": {
+        "exitCode": 0,
+        "processingSeconds": 0.05678912500025035,
+        "processorPeakRssBytes": 37109760,
+        "largestChildPeakRssBytes": 10596352,
+        "peakRssUpperBoundBytes": 47706112,
+        "nativeSubprocesses": {
+          "ffprobe": 1,
+          "ffmpeg": 1
+        }
+      },
+      "after": {
+        "exitCode": 0,
+        "processingSeconds": 0.05718516599972645,
+        "processorPeakRssBytes": 37044224,
+        "largestChildPeakRssBytes": 10604544,
+        "peakRssUpperBoundBytes": 47648768,
+        "nativeSubprocesses": {
+          "ffprobe": 1,
+          "ffmpeg": 1
+        }
+      },
+      "manifestEqual": true,
+      "status": "native-extraction-equal",
+      "reportedFormat": "ogg",
+      "durationSeconds": 2.0,
+      "outputBytes": 64078,
+      "artifactCount": 1,
+      "coverage": {
+        "category": "audio",
+        "audio": {
+          "durationSeconds": 2.0,
+          "status": "partial",
+          "intervals": [
+            {
+              "startSeconds": 0,
+              "endSeconds": 2.0,
+              "status": "missing"
+            }
+          ]
+        }
+      },
+      "artifactBytesEqual": true,
+      "artifactPcmSeconds": 2.0
+    },
+    {
+      "case": "flac",
+      "category": "audio",
+      "inputBytes": 20400,
+      "before": {
+        "exitCode": 0,
+        "processingSeconds": 0.05620954099958908,
+        "processorPeakRssBytes": 36995072,
+        "largestChildPeakRssBytes": 9871360,
+        "peakRssUpperBoundBytes": 46866432,
+        "nativeSubprocesses": {
+          "ffprobe": 1,
+          "ffmpeg": 1
+        }
+      },
+      "after": {
+        "exitCode": 0,
+        "processingSeconds": 0.05597220799973002,
+        "processorPeakRssBytes": 37240832,
+        "largestChildPeakRssBytes": 9875456,
+        "peakRssUpperBoundBytes": 47116288,
+        "nativeSubprocesses": {
+          "ffprobe": 1,
+          "ffmpeg": 1
+        }
+      },
+      "manifestEqual": true,
+      "status": "native-extraction-equal",
+      "reportedFormat": "flac",
+      "durationSeconds": 2.0,
+      "outputBytes": 64078,
+      "artifactCount": 1,
+      "coverage": {
+        "category": "audio",
+        "audio": {
+          "durationSeconds": 2.0,
+          "status": "partial",
+          "intervals": [
+            {
+              "startSeconds": 0,
+              "endSeconds": 2.0,
+              "status": "missing"
+            }
+          ]
+        }
+      },
+      "artifactBytesEqual": true,
+      "artifactPcmSeconds": 2.0
+    },
+    {
+      "case": "aac",
+      "category": "audio",
+      "inputBytes": 13311,
+      "before": {
+        "exitCode": 0,
+        "processingSeconds": 0.05953533400042943,
+        "processorPeakRssBytes": 37060608,
+        "largestChildPeakRssBytes": 11214848,
+        "peakRssUpperBoundBytes": 48275456,
+        "nativeSubprocesses": {
+          "ffprobe": 1,
+          "ffmpeg": 1
+        }
+      },
+      "after": {
+        "exitCode": 0,
+        "processingSeconds": 0.060322791000544385,
+        "processorPeakRssBytes": 37240832,
+        "largestChildPeakRssBytes": 11182080,
+        "peakRssUpperBoundBytes": 48422912,
+        "nativeSubprocesses": {
+          "ffprobe": 1,
+          "ffmpeg": 1
+        }
+      },
+      "manifestEqual": true,
+      "status": "native-extraction-equal",
+      "reportedFormat": "aac",
+      "durationSeconds": 2.112019,
+      "outputBytes": 67662,
+      "artifactCount": 1,
+      "coverage": {
+        "category": "audio",
+        "audio": {
+          "durationSeconds": 2.112019,
+          "status": "partial",
+          "intervals": [
+            {
+              "startSeconds": 0,
+              "endSeconds": 2.112019,
+              "status": "missing"
+            }
+          ]
+        }
+      },
+      "artifactBytesEqual": true,
+      "artifactPcmSeconds": 2.112
+    },
+    {
+      "case": "mov",
+      "category": "video",
+      "inputBytes": 2086,
+      "before": {
+        "exitCode": 0,
+        "processingSeconds": 0.17674829099996714,
+        "processorPeakRssBytes": 37060608,
+        "largestChildPeakRssBytes": 14749696,
+        "peakRssUpperBoundBytes": 51810304,
+        "nativeSubprocesses": {
+          "ffprobe": 2,
+          "ffmpeg": 4
+        }
+      },
+      "after": {
+        "exitCode": 0,
+        "processingSeconds": 0.14637258400034625,
+        "processorPeakRssBytes": 37224448,
+        "largestChildPeakRssBytes": 15036416,
+        "peakRssUpperBoundBytes": 52260864,
+        "nativeSubprocesses": {
+          "ffprobe": 2,
+          "ffmpeg": 3
+        }
+      },
+      "manifestEqual": true,
+      "status": "native-extraction-equal",
+      "reportedFormat": "mp4",
+      "durationSeconds": 2.0,
+      "outputBytes": 5529,
+      "artifactCount": 3,
+      "coverage": {
+        "category": "video",
+        "durationSeconds": 2.0,
+        "status": "partial",
+        "hasAudio": false,
+        "audio": null,
+        "frames": [
+          {
+            "id": "frame-000000",
+            "timestampSeconds": 0,
+            "frameIndex": 0,
+            "sampling": "one_second",
+            "status": "missing"
+          },
+          {
+            "id": "frame-000001",
+            "timestampSeconds": 1,
+            "frameIndex": 10,
+            "sampling": "one_second",
+            "status": "missing"
+          },
+          {
+            "id": "frame-000002",
+            "timestampSeconds": 1.0,
+            "frameIndex": 10,
+            "sampling": "scene_change",
+            "status": "missing"
+          }
+        ],
+        "sceneDetection": "complete",
+        "sceneFrameCount": 1
+      },
+      "artifactBytesEqual": true
+    },
+    {
+      "case": "webm",
+      "category": "video",
+      "inputBytes": 1000,
+      "before": {
+        "exitCode": 0,
+        "processingSeconds": 0.16828112500024872,
+        "processorPeakRssBytes": 37044224,
+        "largestChildPeakRssBytes": 13303808,
+        "peakRssUpperBoundBytes": 50348032,
+        "nativeSubprocesses": {
+          "ffprobe": 2,
+          "ffmpeg": 4
+        }
+      },
+      "after": {
+        "exitCode": 0,
+        "processingSeconds": 0.14592016599999624,
+        "processorPeakRssBytes": 37158912,
+        "largestChildPeakRssBytes": 13299712,
+        "peakRssUpperBoundBytes": 50458624,
+        "nativeSubprocesses": {
+          "ffprobe": 2,
+          "ffmpeg": 3
+        }
+      },
+      "manifestEqual": true,
+      "status": "native-extraction-equal",
+      "reportedFormat": "webm",
+      "durationSeconds": 2.0,
+      "outputBytes": 5529,
+      "artifactCount": 3,
+      "coverage": {
+        "category": "video",
+        "durationSeconds": 2.0,
+        "status": "partial",
+        "hasAudio": false,
+        "audio": null,
+        "frames": [
+          {
+            "id": "frame-000000",
+            "timestampSeconds": 0,
+            "frameIndex": 0,
+            "sampling": "one_second",
+            "status": "missing"
+          },
+          {
+            "id": "frame-000001",
+            "timestampSeconds": 1,
+            "frameIndex": 10,
+            "sampling": "one_second",
+            "status": "missing"
+          },
+          {
+            "id": "frame-000002",
+            "timestampSeconds": 1.0,
+            "frameIndex": 10,
+            "sampling": "scene_change",
+            "status": "missing"
+          }
+        ],
+        "sceneDetection": "complete",
+        "sceneFrameCount": 1
+      },
+      "artifactBytesEqual": true
+    },
+    {
+      "case": "avi",
+      "category": "video",
+      "inputBytes": 6682,
+      "before": {
+        "exitCode": 0,
+        "processingSeconds": 0.18270333399959782,
+        "processorPeakRssBytes": 37076992,
+        "largestChildPeakRssBytes": 13467648,
+        "peakRssUpperBoundBytes": 50544640,
+        "nativeSubprocesses": {
+          "ffprobe": 2,
+          "ffmpeg": 4
+        }
+      },
+      "after": {
+        "exitCode": 0,
+        "processingSeconds": 0.1582538749999003,
+        "processorPeakRssBytes": 37371904,
+        "largestChildPeakRssBytes": 13537280,
+        "peakRssUpperBoundBytes": 50909184,
+        "nativeSubprocesses": {
+          "ffprobe": 2,
+          "ffmpeg": 3
+        }
+      },
+      "manifestEqual": true,
+      "status": "native-extraction-equal",
+      "reportedFormat": "avi",
+      "durationSeconds": 2.0,
+      "outputBytes": 5529,
+      "artifactCount": 3,
+      "coverage": {
+        "category": "video",
+        "durationSeconds": 2.0,
+        "status": "partial",
+        "hasAudio": false,
+        "audio": null,
+        "frames": [
+          {
+            "id": "frame-000000",
+            "timestampSeconds": 0,
+            "frameIndex": 0,
+            "sampling": "one_second",
+            "status": "missing"
+          },
+          {
+            "id": "frame-000001",
+            "timestampSeconds": 1,
+            "frameIndex": 10,
+            "sampling": "one_second",
+            "status": "missing"
+          },
+          {
+            "id": "frame-000002",
+            "timestampSeconds": 1.0,
+            "frameIndex": 10,
+            "sampling": "scene_change",
+            "status": "missing"
+          }
+        ],
+        "sceneDetection": "complete",
+        "sceneFrameCount": 1
+      },
+      "artifactBytesEqual": true
+    },
+    {
+      "case": "mkv",
+      "category": "video",
+      "inputBytes": 4109,
+      "before": {
+        "exitCode": 0,
+        "processingSeconds": 0.19570775000011054,
+        "processorPeakRssBytes": 37142528,
+        "largestChildPeakRssBytes": 14282752,
+        "peakRssUpperBoundBytes": 51425280,
+        "nativeSubprocesses": {
+          "ffprobe": 2,
+          "ffmpeg": 4
+        }
+      },
+      "after": {
+        "exitCode": 0,
+        "processingSeconds": 0.14776529099981417,
+        "processorPeakRssBytes": 37191680,
+        "largestChildPeakRssBytes": 13602816,
+        "peakRssUpperBoundBytes": 50794496,
+        "nativeSubprocesses": {
+          "ffprobe": 2,
+          "ffmpeg": 3
+        }
+      },
+      "manifestEqual": true,
+      "status": "native-extraction-equal",
+      "reportedFormat": "webm",
+      "durationSeconds": 2.0,
+      "outputBytes": 5529,
+      "artifactCount": 3,
+      "coverage": {
+        "category": "video",
+        "durationSeconds": 2.0,
+        "status": "partial",
+        "hasAudio": false,
+        "audio": null,
+        "frames": [
+          {
+            "id": "frame-000000",
+            "timestampSeconds": 0,
+            "frameIndex": 0,
+            "sampling": "one_second",
+            "status": "missing"
+          },
+          {
+            "id": "frame-000001",
+            "timestampSeconds": 1,
+            "frameIndex": 10,
+            "sampling": "one_second",
+            "status": "missing"
+          },
+          {
+            "id": "frame-000002",
+            "timestampSeconds": 1.0,
+            "frameIndex": 10,
+            "sampling": "scene_change",
+            "status": "missing"
+          }
+        ],
+        "sceneDetection": "complete",
+        "sceneFrameCount": 1
+      },
+      "artifactBytesEqual": true
+    }
+  ]
+}
