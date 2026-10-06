@@ -9,10 +9,11 @@ import {
   syntheticList,
   verify,
 } from "../scripts/benchmarks/retrieval/harness";
+import { createV2LegalRetrieval } from "../src/server/modules/legal-retrieval/v2/service";
 
 for (const variant of variants) {
   test(`${variant}: actual SQLite/hash/date output equals unmodified retrieval`, async () => {
-    const baseline = await loadFactory("baseline"),
+    const baseline = createV2LegalRetrieval,
       factory = await loadFactory(variant);
     for (const scenario of [
       "cold-multi",
