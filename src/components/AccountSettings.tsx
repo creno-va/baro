@@ -6,6 +6,10 @@ import { accountDeleted } from "../server/modules/analytics/browser";
 import { ConfirmDialog } from "./reports/ConfirmDialog";
 
 const markerKey = "baro.account-reauth.v1";
+const superseded = () =>
+  Object.assign(new Error("설정 확인 요청이 변경됐어요."), { code: "SETTINGS_READ_SUPERSEDED" });
+const isSuperseded = (error: unknown) =>
+  (error as { code?: string })?.code === "SETTINGS_READ_SUPERSEDED";
 type Access = Awaited<ReturnType<typeof api.account.deletionAccess>>;
 export function AccountSettings() {
   const [usage, setUsage] = useState<Awaited<ReturnType<typeof api.account.usage>> | null>(null);
@@ -20,16 +24,55 @@ export function AccountSettings() {
   const [deleted, setDeleted] = useState(false);
   const lock = useRef(false);
   const loadSequence = useRef(0);
+  const owner = useRef<string | null>(null);
+  const [checking, setChecking] = useState(true);
+  const clearOwnerState = useCallback(() => {
+    ++loadSequence.current;
+    lock.current = false;
+    owner.current = null;
+    setUsage(null);
+    setCases([]);
+    setAccess(null);
+    setReady(false);
+    setTarget(null);
+    setConfirmation("");
+    setNotice("");
+    setBusy("");
+    setChecking(false);
+    sessionStorage.removeItem(markerKey);
+  }, []);
+  const verifyOwner = useCallback(async () => {
+    const sequence = loadSequence.current;
+    try {
+      const value = await api.account.deletionAccess();
+      if (sequence !== loadSequence.current) throw superseded();
+      if (owner.current && owner.current !== value.ownerTag) {
+        throw new Error("계정이 변경됐어요. 설정을 다시 불러와 삭제할 계정을 확인해 주세요.");
+      }
+      owner.current = value.ownerTag;
+      setAccess(value);
+      setReady(value.canDelete);
+      return value;
+    } catch (error) {
+      if (isSuperseded(error) || sequence !== loadSequence.current) throw superseded();
+      clearOwnerState();
+      throw error;
+    }
+  }, [clearOwnerState]);
   const load = useCallback(async () => {
     const sequence = ++loadSequence.current;
+    setChecking(true);
     setBusy("설정 확인 중…");
     setError("");
     try {
+      await verifyOwner();
       const results = await Promise.allSettled([
         api.account.usage(),
         api.cases.list(),
         api.account.deletionAccess(),
       ]);
+      if (sequence !== loadSequence.current) return;
+      await verifyOwner();
       if (sequence !== loadSequence.current) return;
       const problems: string[] = [];
       if (results[0].status === "fulfilled") setUsage(results[0].value);
@@ -44,6 +87,10 @@ export function AccountSettings() {
       }
       if (results[2].status === "fulfilled") {
         const value = results[2].value;
+        if (value.ownerTag !== owner.current) {
+          clearOwnerState();
+          throw new Error("계정이 변경됐어요. 설정을 다시 불러와 주세요.");
+        }
         setAccess(value);
         const raw = sessionStorage.getItem(markerKey);
         let marker: { ownerTag?: string; startedAt?: number } | null = null;
@@ -64,43 +111,107 @@ export function AccountSettings() {
         problems.push("계정 상태를 확인하지 못했어요. 다시 로그인하거나 재시도해 주세요.");
       }
       setError(problems.join(" "));
-    } catch {
-      setError("설정을 확인하지 못했어요. 다시 시도해 주세요.");
+    } catch (error) {
+      if (isSuperseded(error)) return;
+      clearOwnerState();
+      setError(
+        `계정 상태를 확인하지 못했어요. ${error instanceof Error ? error.message : "다시 로그인하거나 재시도해 주세요."}`,
+      );
     } finally {
-      if (sequence === loadSequence.current) setBusy("");
+      if (sequence === loadSequence.current) {
+        setBusy("");
+        setChecking(false);
+      }
     }
-  }, []);
+  }, [verifyOwner, clearOwnerState]);
   useEffect(() => {
     void load();
-  }, [load]);
+    const check = () => {
+      if (document.visibilityState === "hidden" || lock.current) return;
+      const sequence = loadSequence.current;
+      setChecking(true);
+      void verifyOwner()
+        .catch((error: unknown) => {
+          if (!isSuperseded(error))
+            setError(
+              error instanceof Error ? error.message : "계정 접근 상태를 다시 확인해 주세요.",
+            );
+        })
+        .finally(() => {
+          if (sequence === loadSequence.current) setChecking(false);
+        });
+    };
+    const leaving = () => {
+      ++loadSequence.current;
+    };
+    const returned = (event: PageTransitionEvent) => {
+      if (!event.persisted) return;
+      lock.current = false;
+      setTarget(null);
+      setConfirmation("");
+      void load();
+    };
+    window.addEventListener("pageshow", returned);
+    window.addEventListener("pagehide", leaving);
+    window.addEventListener("focus", check);
+    window.addEventListener("storage", check);
+    document.addEventListener("visibilitychange", check);
+    return () => {
+      ++loadSequence.current;
+      window.removeEventListener("pageshow", returned);
+      window.removeEventListener("pagehide", leaving);
+      window.removeEventListener("focus", check);
+      window.removeEventListener("storage", check);
+      document.removeEventListener("visibilitychange", check);
+    };
+  }, [load, verifyOwner]);
   async function reauthenticate(provider: Access["providers"][number]) {
-    if (lock.current || !access) return;
+    if (lock.current || checking || !access) return;
     lock.current = true;
+    let sequence = loadSequence.current;
     setBusy("재인증 시작 중…");
     setError("");
     setReady(false);
     try {
+      await verifyOwner();
+      // Earlier load/focus reads cannot consume the new reauthentication marker.
+      sequence = ++loadSequence.current;
       sessionStorage.setItem(
         markerKey,
         JSON.stringify({ ownerTag: access.ownerTag, startedAt: Date.now() }),
       );
       await api.account.reauthenticate(provider);
     } catch (e) {
+      if (sequence !== loadSequence.current || isSuperseded(e)) return;
       sessionStorage.removeItem(markerKey);
       setError(e instanceof Error ? e.message : "재인증을 시작하지 못했어요.");
     } finally {
-      lock.current = false;
-      setBusy("");
+      if (sequence === loadSequence.current) {
+        lock.current = false;
+        setBusy("");
+      }
     }
   }
   async function remove() {
-    if (lock.current || !target || confirmation !== "DELETE" || (target === "account" && !ready))
+    if (
+      lock.current ||
+      checking ||
+      !target ||
+      confirmation !== "DELETE" ||
+      (target === "account" && !ready)
+    )
       return;
     lock.current = true;
     setBusy("삭제 요청 중…");
     setError("");
     setNotice("");
     try {
+      const verified = await verifyOwner();
+      if (target === "account" && !verified.canDelete)
+        throw Object.assign(new Error("삭제 전 같은 계정으로 다시 인증해 주세요."), {
+          code: "REAUTHENTICATION_REQUIRED",
+        });
+      const sequence = loadSequence.current;
       if (target === "account") {
         await api.account.deleteAccount(confirmation);
         sessionStorage.removeItem(markerKey);
@@ -109,13 +220,17 @@ export function AccountSettings() {
         await accountDeleted().catch(() => false);
       } else {
         await api.account.deleteCase(target.id, confirmation, target.schemaVersion ?? "2");
+        await verifyOwner();
+        if (sequence !== loadSequence.current) return;
         setCases(cases.filter((item) => item.id !== target.id));
         setTarget(null);
         setNotice(
           "사건 삭제를 접수하고 접근을 차단했어요. 원격 자료 정리는 별도 절차에 따라 진행돼요.",
         );
         try {
-          setUsage(await api.account.usage());
+          const refreshed = await api.account.usage();
+          await verifyOwner();
+          if (sequence === loadSequence.current) setUsage(refreshed);
         } catch {
           setUsage(null);
           setError("삭제는 접수했지만 사용량을 다시 확인하지 못했어요. ‘다시 확인’을 눌러 주세요.");
@@ -124,9 +239,13 @@ export function AccountSettings() {
     } catch (e) {
       setError(e instanceof Error ? e.message : "삭제를 확인하지 못했어요. 다시 확인해 주세요.");
       if (
-        ["UNAUTHENTICATED", "REAUTHENTICATION_REQUIRED"].includes(
-          (e as { code?: string })?.code ?? "",
-        )
+        [
+          "UNAUTHENTICATED",
+          "REAUTHENTICATION_REQUIRED",
+          "CONSENT_REQUIRED",
+          "NOT_FOUND",
+          "FORBIDDEN",
+        ].includes((e as { code?: string })?.code ?? "")
       ) {
         setReady(false);
         setConfirmation("");
@@ -155,18 +274,22 @@ export function AccountSettings() {
       </section>
     );
   return (
-    <div className="account-settings" aria-busy={Boolean(busy)}>
+    <div className="account-settings" aria-busy={Boolean(busy) || checking}>
       <header className="settings-heading">
         <div>
           <span className="settings-eyebrow">내 계정</span>
           <h1>설정과 사용량</h1>
           <p>이용 한도를 확인하고 보관한 사건을 관리하세요.</p>
         </div>
-        <button type="button" disabled={Boolean(busy)} onClick={() => void load()}>
+        <button type="button" disabled={Boolean(busy) || checking} onClick={() => void load()}>
           <RefreshCw aria-hidden="true" size={16} /> 다시 확인
         </button>
       </header>
-      {busy && <p role="status">{busy}</p>}
+      {(busy || checking) && (
+        <p role="status" className="settings-progress">
+          {busy || "계정 접근 상태 확인 중…"}
+        </p>
+      )}
       {error && !target && (
         <p role="alert" className="settings-error">
           {error}
@@ -183,7 +306,7 @@ export function AccountSettings() {
           하루 한도는 한국 시간 자정에 다시 이용할 수 있어요. 저장 공간은 자료를 삭제해 확보할 수
           있어요.
         </p>
-        {usage && (
+        {usage && !checking && (
           <div className="usage-grid">
             {(
               [
@@ -245,33 +368,34 @@ export function AccountSettings() {
       <section className="settings-card">
         <h2>보관한 사건</h2>
         <p>삭제하기 전에 필요한 PDF와 자료를 다운로드하세요. 삭제 후 되돌릴 수 없어요.</p>
-        {cases.length === 0 && (
+        {!busy && !checking && cases.length === 0 && (
           <p>
             보관한 사건이 없어요. <a href="/cases/new">새 사건 만들기</a>
           </p>
         )}
-        {cases.map((item) => (
-          <div className="settings-case" key={item.id}>
-            <div>
-              <a href={`/cases/${encodeURIComponent(item.id)}`}>{item.title}</a>
-              <p className="settings-muted">
-                {new Date(item.updatedAt).toLocaleDateString("ko-KR")} ·{" "}
-                {item.schemaVersion === "1" ? "기존 사건" : "사건 정리"}
-              </p>
-              <a href={`/cases/${encodeURIComponent(item.id)}/reports`}>리포트 확인</a>
+        {!checking &&
+          cases.map((item) => (
+            <div className="settings-case" key={item.id}>
+              <div>
+                <a href={`/cases/${encodeURIComponent(item.id)}`}>{item.title}</a>
+                <p className="settings-muted">
+                  {new Date(item.updatedAt).toLocaleDateString("ko-KR")} ·{" "}
+                  {item.schemaVersion === "1" ? "기존 사건" : "사건 정리"}
+                </p>
+                <a href={`/cases/${encodeURIComponent(item.id)}/reports`}>리포트 확인</a>
+              </div>
+              <button
+                type="button"
+                disabled={Boolean(busy) || checking}
+                onClick={(event) => {
+                  event.currentTarget.focus();
+                  open(item);
+                }}
+              >
+                <Trash2 size={16} aria-hidden="true" /> 사건 삭제
+              </button>
             </div>
-            <button
-              type="button"
-              disabled={Boolean(busy)}
-              onClick={(event) => {
-                event.currentTarget.focus();
-                open(item);
-              }}
-            >
-              <Trash2 size={16} aria-hidden="true" /> 사건 삭제
-            </button>
-          </div>
-        ))}
+          ))}
       </section>
       <section className="settings-card settings-danger">
         <h2>
@@ -289,7 +413,7 @@ export function AccountSettings() {
                 <button
                   key={provider}
                   type="button"
-                  disabled={Boolean(busy)}
+                  disabled={Boolean(busy) || checking}
                   onClick={() => void reauthenticate(provider)}
                 >
                   {provider}로 재인증
@@ -304,7 +428,7 @@ export function AccountSettings() {
         <button
           type="button"
           className="danger-button"
-          disabled={Boolean(busy) || !ready}
+          disabled={Boolean(busy) || checking || !ready}
           onClick={(event) => {
             event.currentTarget.focus();
             open("account");
@@ -350,7 +474,7 @@ export function AccountSettings() {
             id="delete-confirmation"
             autoComplete="off"
             value={confirmation}
-            disabled={Boolean(busy)}
+            disabled={Boolean(busy) || checking}
             onChange={(e) => setConfirmation(e.target.value)}
           />
           {error && (
@@ -359,13 +483,17 @@ export function AccountSettings() {
             </p>
           )}
           <div className="settings-actions">
-            <button type="button" disabled={Boolean(busy)} onClick={() => setTarget(null)}>
+            <button
+              type="button"
+              disabled={Boolean(busy) || checking}
+              onClick={() => setTarget(null)}
+            >
               취소
             </button>
             <button
               type="button"
               className="danger-button"
-              disabled={Boolean(busy) || confirmation !== "DELETE"}
+              disabled={Boolean(busy) || checking || confirmation !== "DELETE"}
               onClick={() => void remove()}
             >
               {busy ? "삭제 요청 중…" : "삭제 요청 확인"}

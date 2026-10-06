@@ -7,6 +7,8 @@ test("prepared replay is repeatable on isolated restore and rejects plaintext/in
   const db = await createTestDatabase();
   try {
     const owner = await seedTestSession(db);
+    const metadataKey = `account-type:${owner.userId}`;
+    db.sqlite.query("INSERT INTO app_metadata(key,value) VALUES(?,'lawyer')").run(metadataKey);
     const job = {
       id: crypto.randomUUID(),
       target_type: "account",
@@ -17,7 +19,14 @@ test("prepared replay is repeatable on isolated restore and rejects plaintext/in
     };
     const sql = prepareReplay([job]);
     db.sqlite.exec(sql);
+    expect(
+      db.sqlite.query("SELECT value FROM app_metadata WHERE key=?").get(metadataKey),
+    ).toBeNull();
+    db.sqlite.query("INSERT INTO app_metadata(key,value) VALUES(?,'lawyer')").run(metadataKey);
     db.sqlite.exec(sql);
+    expect(
+      db.sqlite.query("SELECT value FROM app_metadata WHERE key=?").get(metadataKey),
+    ).toBeNull();
     expect(db.sqlite.query("SELECT count(*) AS n FROM user").get()).toEqual({ n: 0 });
     expect(db.sqlite.query("SELECT count(*) AS n FROM deletion_jobs").get()).toEqual({ n: 1 });
     expect(() => prepareReplay([{ ...job, plaintext: "shadow copy" }])).toThrow();

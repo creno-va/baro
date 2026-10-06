@@ -167,3 +167,52 @@ finally:
         native_server.kill()
         native_server.wait(timeout=5)
 print("Linux native HTTP two-pass sanitizer: 2 PASS (synthetic loopback only)")
+
+# Regression: input zero-seek discards AAC encoder priming/edit-list samples.
+# Validate actual PCM and reported intervals for both the first unit and the
+# 30-second boundary, rather than asserting a nominal duration in metadata.
+import wave
+for fmt, codec in [("m4a", "aac"), ("wav", "pcm_s16le"), ("flac", "flac")]:
+    for duration in [2, 31]:
+        with tempfile.TemporaryDirectory(prefix="baro-audio-coverage-") as tmp:
+            root = Path(tmp)
+            source = root / ("synthetic." + fmt)
+            subprocess.run(["ffmpeg", "-nostdin", "-v", "error", "-f", "lavfi", "-i",
+                            "sine=frequency=523:sample_rate=16000:duration=" + str(duration),
+                            "-c:a", codec, "-threads", "1", str(source)], check=True, capture_output=True)
+            shutil.copyfile(source, root / "input")
+            sample_total = 0
+            previous_end = 0
+            for unit in range((duration + 29) // 30):
+                result = subprocess.run(["python3", "/app/processor.py", str(root), "process", str(unit)],
+                                        capture_output=True, timeout=180)
+                assert result.returncode == 0, {"format": fmt, "duration": duration, "unit": unit}
+                output = json.loads((root / "manifest.json").read_text())
+                audio = next(a for a in output["artifacts"] if a["kind"] == "audio")
+                with wave.open(str(root / audio["path"]), "rb") as pcm:
+                    assert (pcm.getframerate(), pcm.getnchannels(), pcm.getsampwidth()) == (16000, 1, 2)
+                    count = pcm.getnframes()
+                start = audio["position"]["startSeconds"]
+                end = audio["position"]["endSeconds"]
+                assert abs(start - previous_end) <= 1 / 16000
+                assert abs((end - start) * 16000 - count) <= 1
+                sample_total += count
+                previous_end = end
+            assert abs(sample_total - duration * 16000) <= 1
+print("Native audio PCM/interval regression: 6 PASS (synthetic local codecs only)")
+
+# A two-second video with only one second of sound must retain the real audio
+# gap as a failure. It must never pad PCM or report nominal full coverage.
+with tempfile.TemporaryDirectory(prefix="baro-audio-gap-") as tmp:
+    root = Path(tmp)
+    subprocess.run(["ffmpeg", "-nostdin", "-v", "error", "-f", "lavfi", "-i",
+                    "color=c=blue:s=96x64:r=2:d=2", "-f", "lavfi", "-i",
+                    "sine=frequency=523:sample_rate=16000:duration=1", "-c:v", "libx264",
+                    "-c:a", "aac", "-threads", "1", "-pix_fmt", "yuv420p", "-f", "mp4",
+                    str(root / "input")], check=True, capture_output=True)
+    result = subprocess.run(["python3", "/app/processor.py", str(root), "process", "0"],
+                            capture_output=True, timeout=180)
+    assert result.returncode != 0
+    assert json.loads((root / "error.json").read_text())["code"] == "AUDIO_COVERAGE_MISMATCH"
+    assert not (root / "manifest.json").exists()
+print("Native missing PCM coverage: 1 PASS (gap rejected, synthetic local codecs only)")

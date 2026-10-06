@@ -17,11 +17,11 @@
 .settings-eyebrow {
   font-size: 0.85rem;
   font-weight: 700;
-  color: #2159c8;
+  color: var(--primary, #226cdb);
 }
 .settings-card {
   background: var(--card, #fff);
-  border: 1px solid var(--border, #dbe4f0);
+  border: 1px solid var(--border, var(--border, #e6eaf0));
   border-radius: 16px;
   padding: 1.5rem;
   margin: 1.25rem 0;
@@ -43,28 +43,28 @@
 }
 .usage-item {
   padding: 1rem;
-  background: #f5f8fd;
+  background: var(--muted, #f4f6f9);
   border-radius: 10px;
 }
 .usage-item b {
   font-size: 1.6rem;
-  color: #2159c8;
+  color: var(--primary, #226cdb);
 }
 .usage-item progress {
   width: 100%;
   height: 10px;
-  accent-color: #2159c8;
+  accent-color: var(--primary, #226cdb);
 }
 .settings-muted {
   font-size: 0.875rem;
-  color: #52627a;
+  color: var(--muted-foreground, #626d80);
 }
 .settings-case {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 1rem;
-  border-top: 1px solid #dbe4f0;
+  border-top: 1px solid var(--border, #e6eaf0);
   padding: 1rem 0;
 }
 .settings-case a {
@@ -77,10 +77,10 @@
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--border, #e6eaf0);
   background: white;
-  color: #17233b;
-  border-radius: 9px;
+  color: var(--foreground, #202838);
+  border-radius: 12px;
   min-height: 44px;
   padding: 0.6rem 0.9rem;
   font: inherit;
@@ -122,7 +122,7 @@
   border-radius: 8px;
 }
 .account-settings :focus-visible {
-  outline: 3px solid #2159c8;
+  outline: 3px solid var(--primary, #226cdb);
   outline-offset: 3px;
 }
 @media (max-width: 650px) {
@@ -138,5 +138,35 @@
   .settings-case {
     align-items: flex-start;
     flex-direction: column;
+  }
+}
+
+/* Keep report/settings actions consistent with the conversation shell. */
+.settings-heading h1 {
+  font-size: clamp(1.5rem, 3vw, 1.85rem);
+  letter-spacing: -0.04em;
+}
+.settings-progress {
+  padding: 0.85rem 1rem;
+  background: var(--muted);
+  border-radius: 12px;
+  line-height: 1.6;
+}
+.settings-case {
+  gap: 1.25rem;
+}
+.account-settings button:not(:disabled):hover {
+  border-color: var(--primary);
+}
+.settings-case button {
+  flex-shrink: 0;
+}
+@media (max-width: 380px) {
+  .settings-actions {
+    flex-direction: column;
+  }
+  .settings-actions button {
+    width: 100%;
+    justify-content: center;
   }
 }

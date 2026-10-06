@@ -42,6 +42,7 @@ const initial: ReportMockState & { lawyers: unknown } = {
   reports: {},
   lawyers: { mine: { published: true } },
 };
+if (!localStorage.getItem(key)) localStorage.setItem(key, JSON.stringify(initial));
 function read(): ReportMockState {
   const raw = localStorage.getItem(key);
   return raw ? JSON.parse(raw) : structuredClone(initial);
@@ -71,6 +72,7 @@ async function request(path: string, init?: RequestInit) {
   return result;
 }
 export const api = {
+  session: { get: async () => read().session },
   reports: createReportsApi(request),
   account: createAccountApi(request),
   cases: {

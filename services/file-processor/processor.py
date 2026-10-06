@@ -14,6 +14,7 @@ import shutil
 import subprocess
 import sys
 import io
+import wave
 from PIL import Image
 
 Image.MAX_IMAGE_PIXELS = 40_000_000
@@ -41,7 +42,7 @@ def command(args, timeout=60):
 
 def ffmpeg(source, args, seek=None):
     prefix = ["ffmpeg", "-nostdin", "-y", "-hide_banner", "-loglevel", "error", "-protocol_whitelist", "file,pipe", "-threads", "1", "-filter_threads", "1", "-filter_complex_threads", "1"]
-    if seek is not None:
+    if seek is not None and seek > 0:
         prefix += ["-ss", str(seek)]
     return command(prefix + ["-i", str(source), "-threads", "1"] + args)
 
@@ -227,9 +228,21 @@ def process(source, root, probe, unit, frame_offset):
             for start in [unit * 30]:
                 end = min(start + 30, duration)
                 path = root / ("artifact-%06d.wav" % len(artifacts))
-                ffmpeg(source, ["-t", str(end - start), "-map", "0:a:0", "-vn",
-                                "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", "-f", "wav", str(path)], seek=start)
-                artifact(path, "audio", dict(kind="audio", startSeconds=start, endSeconds=end))
+                ffmpeg(source, ["-ss", str(start), "-t", str(end - start), "-map", "0:a:0", "-vn",
+                                "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", "-f", "wav", str(path)])
+                # AAC edit lists/encoder priming are lost when FFmpeg receives
+                # input -ss (including nonzero unit boundaries). Decode audio with
+                # output-side sample-accurate trimming, then measure
+                # actual PCM instead of labelling the requested interval complete.
+                with wave.open(str(path), "rb") as pcm:
+                    if pcm.getframerate() != 16000 or pcm.getnchannels() != 1 or pcm.getsampwidth() != 2:
+                        raise Rejected("INVALID_MEDIA")
+                    samples = pcm.getnframes()
+                expected = round((end - start) * 16000)
+                if samples < expected - 1 or samples > expected + 1:
+                    raise Rejected("AUDIO_COVERAGE_MISMATCH")
+                artifact(path, "audio", dict(kind="audio", startSeconds=start,
+                                            endSeconds=min(end, start + samples / 16000)))
         audio = dict(durationSeconds=duration, status="partial", intervals=[dict(startSeconds=unit * 30,
                      endSeconds=min((unit+1)*30,duration), status="missing")]) if category == "audio" or probe["hasAudio"] else None
         if category == "audio":

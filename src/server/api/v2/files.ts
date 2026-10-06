@@ -5,6 +5,7 @@ import type { V2ErrorCode } from "../../../contracts/v2";
 import { createCaseDataCipher } from "../../crypto";
 import { createV2Core, type V2Core } from "../../db/v2-core";
 import { ProcessingError } from "../../modules/file-processing/protocol";
+import { createFileRetry } from "../../modules/file-processing/retry";
 import { FileError } from "../../modules/files/binary";
 import { createFilesService, type FileServiceDependencies } from "../../modules/files/service";
 import { readWorkspaceFile } from "../../modules/files/workspace-read";
@@ -155,6 +156,21 @@ export function createFilesApi(
         c.req.param("fileId"),
         await c.req.json(),
       ),
+    );
+  });
+  app.post("/:caseId/files/:fileId/retry", async (c) => {
+    const access = await caseAccess(c, true, true);
+    if (access.response) return access.response;
+    const core = createV2Core(c.env.DB, await createCaseDataCipher(c.env));
+    const deps = (await options.dependencies?.(c.env, core, access.ownerId)) ?? {};
+    return c.json(
+      await createFileRetry(core, c.env, deps)(
+        access.ownerId,
+        c.req.param("caseId"),
+        c.req.param("fileId"),
+        await c.req.json(),
+      ),
+      202,
     );
   });
   app.get("/:caseId/files/:fileId", async (c) => {
