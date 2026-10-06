@@ -127,9 +127,76 @@ test("closed public gate, duplicate selection and JSON stream size fail with saf
     {
       method: "PATCH",
       headers: { cookie: f.cookie, origin: f.env.BETTER_AUTH_URL },
-      body: "x".repeat(65537),
+      body: "x".repeat(131073),
     },
     f.env,
   );
   expect(large.status).toBe(413);
+  const post = await f.app.request(
+    `/api/v2/cases/${f.workspaceId}/reports`,
+    {
+      method: "POST",
+      headers: { cookie: f.cookie, origin: f.env.BETTER_AUTH_URL },
+      body: "x".repeat(65537),
+    },
+    f.env,
+  );
+  expect(post.status).toBe(413);
+});
+
+test("signed SQL report review preserves 30,000 Korean characters above the generic JSON limit", async () => {
+  const f = await reportHttpFixture();
+  try {
+    const report = await f.reports.get(f.actor.ownerId, f.workspaceId);
+    const content = "한".repeat(30000);
+    const body = JSON.stringify({
+      expectedRevision: report.revision,
+      content,
+      maskIdentifiers: false,
+      excludedFileIds: [],
+    });
+    expect(new TextEncoder().encode(body).byteLength).toBeGreaterThan(65536);
+    const calls = { ...f.bucket.calls };
+    const key = crypto.randomUUID();
+    const headers = {
+      cookie: f.cookie,
+      origin: f.env.BETTER_AUTH_URL,
+      "content-type": "application/json",
+      "idempotency-key": key,
+    };
+    const response = await f.app.request(
+      `/api/v2/cases/${f.workspaceId}/reports`,
+      {
+        method: "PATCH",
+        headers,
+        body,
+      },
+      f.env,
+    );
+    expect(response.status).toBe(200);
+    const saved = await response.json();
+    expect(saved).toMatchObject({ content, revision: report.revision + 1 });
+    const replay = await f.app.request(
+      `/api/v2/cases/${f.workspaceId}/reports`,
+      { method: "PATCH", headers, body },
+      f.env,
+    );
+    expect(replay.status).toBe(200);
+    expect(await replay.json()).toEqual(saved);
+    const conflict = await f.app.request(
+      `/api/v2/cases/${f.workspaceId}/reports`,
+      {
+        method: "PATCH",
+        headers,
+        body: body.replace("한".repeat(30000), `${"한".repeat(29999)}글`),
+      },
+      f.env,
+    );
+    expect(conflict.status).toBe(409);
+    expect(await conflict.json()).toMatchObject({ error: { code: "IDEMPOTENCY_CONFLICT" } });
+    expect((await f.reports.get(f.actor.ownerId, f.workspaceId)).content).toBe(content);
+    expect(f.bucket.calls).toEqual(calls);
+  } finally {
+    f.db.close();
+  }
 });

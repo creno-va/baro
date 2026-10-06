@@ -390,8 +390,24 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
     async save(ownerId: string, caseId: string, key: string, input: unknown) {
       const value = saveReportSchema.parse(input),
         a = actor(ownerId),
-        path = `/api/v2/cases/${caseId}/reports`,
-        hash = await runtimeDigest({ method: "PATCH", ...value });
+        path = `/api/v2/cases/${caseId}/reports`;
+      const identity = { method: "PATCH", ...value };
+      // Retain existing small-request receipt identities. A 30,000-character
+      // Korean review exceeds the generic financial-proof bound; hash its exact
+      // UTF-8 content before composing a bounded, versioned request identity.
+      const hash =
+        utf8Bytes(JSON.stringify(identity)) <= 65536
+          ? await runtimeDigest(identity)
+          : await runtimeDigest({
+              ...identity,
+              format: "large_report_review_v1",
+              content: Array.from(
+                new Uint8Array(
+                  await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value.content)),
+                ),
+                (byte) => byte.toString(16).padStart(2, "0"),
+              ).join(""),
+            });
       const replay = await accounting.findOperation(a, path, key, hash);
       if (replay?.kind === "conflict") throw new ReportError("IDEMPOTENCY_CONFLICT");
       if (replay?.kind === "replay") {
