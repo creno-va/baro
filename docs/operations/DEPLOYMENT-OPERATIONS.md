@@ -53,6 +53,20 @@ public-beta는 `bun run release:check`로 정책 Approved 상태와 release-evid
 향후 #18/#19의 실제 eval/E2E/live smoke artifact를 해당 증거 URL에 연결해야 하며
 boolean 수동 변경만으로 실제 검증을 대신하지 않는다.
 
+## 2026-10-07 사용자 명시 공개 승인 예외
+
+사용자가 공개 조건을 모두 검증했다고 진술하고 운영을 즉시 공개하라고 명시했다.
+이 직접 승인은 독립 외부 receipt/법률 검토자·사업자 원문 검증과 구분해 기록한다.
+기존 `public-beta`의 `release:check`, 정책 Draft 및 미완료 release evidence는 수정하지 않는다.
+
+이번 공개는 `release_mode=operator-authorized`와 #71의 지정 운영자 `hwangeunchan`이
+기록한 직접 사용자 승인 receipt를 사용한다. `launch_authorization_comment`는 해당 댓글의
+숫자 ID이며 실행 script가 GitHub에서 읽어 issue/author/직접 사용자 지시·정확한 targetSHA·
+최대24시간 유효기간을 검사한다. 독립 external 완료와 혼동하는 receipt는 거부한다.
+SHA의 main CI/preview deployment, production Environment의 hyunhomon 승인은 그대로 필수다.
+사람 승인 없이 이 예외를 만들거나 future SHA에 재사용하지 않는다. 운영자가 공개를 승인한
+사실과 실제 OAuth/사건/프로필 및 외부·정책 증거의 확인 범위는 각각 journal에 기록한다.
+
 ## 배포 순서
 
 1. 문서/계약과 migration 일치 검사

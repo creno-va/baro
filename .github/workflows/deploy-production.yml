@@ -19,6 +19,11 @@ on:
         options:
           - foundation
           - public-beta
+          - operator-authorized
+      launch_authorization_comment:
+        description: Issue 71 comment receipt for explicit operator launch authorization of this exact SHA
+        type: string
+        default: ''
       sync_oauth:
         description: Apply the six production Environment OAuth credentials to the production Worker
         type: boolean
@@ -104,6 +109,12 @@ jobs:
         if: inputs.release_mode == 'public-beta'
         run: bun run release:check
 
+      - name: Check explicit operator launch authorization
+        if: inputs.release_mode == 'operator-authorized'
+        env:
+          LAUNCH_AUTHORIZATION_COMMENT: ${{ inputs.launch_authorization_comment }}
+        run: bun scripts/verify-launch-authorization.ts "$TARGET_SHA" "$LAUNCH_AUTHORIZATION_COMMENT"
+
       - name: Validate requested production OAuth credentials
         if: steps.application.outputs.present == 'true' && inputs.sync_oauth
         env:
@@ -134,7 +145,7 @@ jobs:
           accountId: ${{ env.CLOUDFLARE_ACCOUNT_ID }}
           environment: production
           wranglerVersion: "4.147.0"
-          command: deploy --var RELEASE_SHA:${{ inputs.target_sha }} --var PUBLIC_BETA_ENABLED:${{ inputs.release_mode == 'public-beta' && 'true' || 'false' }}
+          command: deploy --var RELEASE_SHA:${{ inputs.target_sha }} --var PUBLIC_BETA_ENABLED:${{ (inputs.release_mode == 'public-beta' || inputs.release_mode == 'operator-authorized') && 'true' || 'false' }}
           secrets: |
             ${{ inputs.sync_oauth && 'GOOGLE_CLIENT_ID' || '' }}
             ${{ inputs.sync_oauth && 'GOOGLE_CLIENT_SECRET' || '' }}

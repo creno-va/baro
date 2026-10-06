@@ -1,5 +1,23 @@
 # BARO v2 검증 증거 기록
 
+## 2026-10-07 운영 공개 승인과 Preview 실제 인증
+
+사용자는 Preview/Production 공유 소셜 앱을 명시 승인한 뒤 공개 조건을 모두 검증했다고
+진술하며 `BETA_NOT_OPEN` 해제와 즉시 운영 공개를 지시했다. 직접 사용자 공개 승인을
+운영자 attestation으로 기록한다. 독립 외부/정책·운영 증거의 미완료 기록을 성공으로 바꾸지 않는다.
+기존 strict public-beta release check는 유지하며 exact-SHA·24시간 제한 운영자 승인 경로와
+정상 protected production Environment로 이번 공개를 진행한다. #19/#20/#27/#70/#71의
+미입증 인수 조건은 그대로 OPEN이다.
+
+PR141 head4355634 CI37528074210 필수3SUCCESS → maind634675 CI37528346431 필수3SUCCESS →
+preview37528544832 SUCCESS. applicationSHA d63467501850ea474c876ceaed6d1867207d56cc,
+배포 로그의 Worker version0fabf8bc-3afd-473b-9b62-aa10eeddda18·소셜6필드 bulk upload 성공,
+독립 fullSHA/schema0009 smoke를 확인했다. 실제 Google 제품 UI 로그인은 Preview callback을
+완료하고 최초 동의 화면에 도착했다. session seed/mock/local SSO를 사용하지 않았다.
+동의 제출·역할/사건/프로필·NAVER/Kakao remote 성공은 이후 실제 관측만 추가한다.
+Python urllib 관측은403으로 실패했고 실제 브라우저 성공과 구분한다.
+
+
 ## 2026-10-07 원격 auth·503 후속 착수
 
 최신 main b1a6b6b/PR140 MERGED·필수3 CI SUCCESS 및 preview37525972574 SUCCESS를 확인했다.
