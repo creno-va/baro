@@ -333,7 +333,13 @@ test("same-owner role changes deny workspace reads and mutations without alterin
   });
   expect(changed.status).toBe(200);
   expect(await hasCustomerWorkspaceAccess(f.core, f.owner.userId)).toBe(false);
-  expect((await f.transport(`/api/v2/cases/${f.workspace.id}/workspace`)).status).toBe(404);
+  const denied = await f.transport(`/api/v2/cases/${f.workspace.id}/workspace`);
+  expect(denied.status).toBe(403);
+  expect(await denied.json()).toMatchObject({ error: { code: "ROLE_REQUIRED" } });
+  await expect(createWorkspaceApi(f.transport, null).get(f.workspace.id)).rejects.toMatchObject({
+    code: "NOT_FOUND",
+    retryable: false,
+  });
   expect(
     (
       await f.transport(`/api/v2/cases/${f.workspace.id}/summary/confirm`, {
@@ -345,7 +351,7 @@ test("same-owner role changes deny workspace reads and mutations without alterin
         }),
       })
     ).status,
-  ).toBe(404);
+  ).toBe(403);
   expect((await f.service.intake(f.owner.userId, f.workspace.id))?.revision).toBe(
     metadata?.revision,
   );

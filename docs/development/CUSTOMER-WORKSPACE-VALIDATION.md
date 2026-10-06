@@ -1,6 +1,7 @@
 # 고객 사건 연결 회귀 검증 (#64, #65)
 
 - 기준: main `ca6e15b` (UI PR125 병합), `codex/65-customer-workspace`.
+- 통합 기준: main `7943496` (공유 PR127의 역할 경계·session marker·dependency audit 수정 병합). 공유 수정은 해당 선행 PR에서 가져왔다.
 - 경로: 기존 `/cases`, `/cases/:id/intake`, `/cases/:id/summary`, `/cases/:id`와 자료·타임라인·할 일 탭.
 - 공유 contracts/schema/migration/router/auth/session/CI는 수정하지 않았다.
 - 기존 workspace execution engine과 llm-gateway를 재사용한다. 새 공급자·모델·품질 corpus는 추가하지 않는다.
@@ -45,13 +46,15 @@ bun run test:csp
 
 이 증거는 실제 OAuth provider 로그인·실제 유료 모델·R2/Containers/Whisper 처리 성공을 뜻하지 않는다. 실제 기기의 OS 키보드, 외부 장애 복구 및 공개 승인 gate는 별도 검증이다.
 
-최종 로컬 결과(2026-10-07 KST): `bun ci`, `bun run check`(1,210개 및 migration 6개), 기본/production build, bundle check, `cf:dry-run` 통과. 브라우저는 홈 7개, intake 6개, v1/실제 API/XSS 11개(실제 고객 Hono 연결 3개 포함), workspace fixture 4개, 알려진 결함 3개로 총 31개 통과했다. CSP는 production Worker 4개 통과, 별도 explicit fixture build 전용 1개는 정상 조건부 skip이다. 원래 summary 재시도 `.repro.ts` 2개도 통과했다. 기존 4350 포트는 다른 checkout이 사용 중이므로 홈 검사는 동일 config의 포트/cwd만 4357/고객 worktree로 바꿔 실행했다. 공유 CI config는 변경하지 않았다.
+PR127 통합 전 로컬 결과(2026-10-07 KST): `bun ci`, `bun run check`(1,210개 및 migration 6개), 기본/production build, bundle check, `cf:dry-run` 통과. 브라우저는 홈 7개, intake 6개, v1/실제 API/XSS 11개(실제 고객 Hono 연결 3개 포함), workspace fixture 4개, 알려진 결함 3개로 총 31개 통과했다. CSP는 production Worker 4개 통과, 별도 explicit fixture build 전용 1개는 정상 조건부 skip이다. 원래 summary 재시도 `.repro.ts` 2개도 통과했다. 기존 4350 포트는 다른 checkout이 사용 중이므로 홈 검사는 동일 config의 포트/cwd만 4357/고객 worktree로 바꿔 실행했다. 공유 CI config는 변경하지 않았다.
+
+PR127 통합 후 실제 API의 동일 owner 역할 거부는 403/ROLE_REQUIRED를 정확히 검사하고, 고객 adapter가 이를 NOT_FOUND로 매핑하는 것도 같은 Hono 응답으로 검사한다. 다른 owner는 기존 404, 실제 충돌은 409다. 통합 후 전체/browser/CI 결과는 PR128의 최종 head 증거로 기록한다.
 
 ## 통합 세션 인계
 
 - 고객 namespace에 POST `/api/v2/cases/:id/timeline`을 추가했다. 기존 `v2TimelineEditRequestSchema`를 사용하며 create의 expectedRevision은 workspace revision이다. 201에는 기존 timeline entry 계약을 반환한다. PUT 편집 계약은 유지한다.
 - GET `/api/v2/cases/:id/workspace-jobs/latest`은 기존 Job 또는 null을 반환한다. owner/workspace로 제한하며 intake/chat만 선택한다. client는 구버전 route의 404를 허용한다.
 - 사건 목록 응답의 optional `previews: { id, title, hasSummary }[]`는 기존 items/cursor를 유지한다. 고객 workspace view의 optional facts/people/unknowns/notices는 기존 Summary 계약에서 읽는다. 정식 공유 facade/type 문서 정리는 4번에 요청했다.
-- shared session의 `baro-session-changed` peer-tab marker는 4번에 요청했다. 현재 고객 boundary는 Better Auth의 `better-auth.message`, focus/pageshow/visibility와 15초 session 검사를 사용하며 marker도 수신한다. 동일 owner의 lawyer 전환은 고객 API namespace에서 즉시 거부한다.
+- shared session의 `baro-session-changed` peer-tab/same-tab marker는 4번의 PR127에서 병합됐다. 고객 boundary는 이 marker와 Better Auth의 `better-auth.message`, focus/pageshow/visibility 및 15초 session 검사를 사용한다. 동일 owner의 lawyer 전환은 공유 403/ROLE_REQUIRED 경계와 고객 API namespace 가드에서 거부한다.
 - 자료 처리 POST `/api/v2/cases/:id/files/:fileId/retry` 연결은 2번 소유이며 [요청 코멘트](https://github.com/creno-va/baro/issues/59#issuecomment-6018985215)에 기록했다. 자료 API/처리/report/삭제는 이 PR에서 변경하지 않는다. 처리 요청의 실제 외부 성공을 합성 upload 증거로 대신하지 않는다.
 - #64/#65 및 #70/#71 외부·정책·공개 조건은 OPEN으로 보존한다. PR은 Refs만 사용한다. 병합·배포는 4번 통합 세션에 맡긴다.
