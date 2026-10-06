@@ -156,6 +156,7 @@ export function createLawyerAssetsService(core: V2Core, deps: LawyerAssetDepende
     }
     return {
       byteLength: original.logical_bytes,
+      contentHash: receipt.contentHash,
       body: decryptAssetBinary(
         core.cipher,
         {
@@ -173,6 +174,28 @@ export function createLawyerAssetsService(core: V2Core, deps: LawyerAssetDepende
     };
   };
   return {
+    /** #59 lease-aware decoder; client routes never accept this capability. */
+    async openOriginal(
+      input: { ownerId: string; profileId: string; assetId: string; assetRevision: number },
+      authorized: () => Promise<boolean> = async () => true,
+    ) {
+      opaqueIdSchema.parse(input.profileId);
+      revisionSchema.parse(input.assetRevision);
+      const permitted = async () => {
+        if (!(await authorized())) return false;
+        try {
+          const current = await assetRow(input.ownerId, input.assetId);
+          return (
+            current.profile_id === input.profileId &&
+            current.revision === input.assetRevision &&
+            ["uploaded", "queued", "processing"].includes(current.state)
+          );
+        } catch {
+          return false;
+        }
+      };
+      return open(input.ownerId, input.assetId, permitted);
+    },
     async list(ownerId: string, group: "verification" | "portfolio", after?: string, limit = 20) {
       z.number().int().min(1).max(20).parse(limit);
       if (after) opaqueIdSchema.parse(after);

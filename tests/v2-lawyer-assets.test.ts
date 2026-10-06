@@ -167,7 +167,29 @@ test("original assets use real AES framed stream and atomic receipt/counters, ne
   expect(new TextDecoder().decode(stored)).not.toContain(input.name);
   expect(new TextDecoder().decode(stored)).not.toContain("Synthetic identity");
   const download = await f.service.open(f.owner.userId, reserved.assetId);
+  expect(download.contentHash).toBe(hex(sha256(bytes)));
   expect(new Uint8Array(await new Response(download.body).arrayBuffer())).toEqual(bytes);
+  const originalInput = {
+    ownerId: f.owner.userId,
+    profileId: f.profileId,
+    assetId: reserved.assetId,
+    assetRevision: 2,
+  };
+  const processingOriginal = await f.service.openOriginal(originalInput);
+  expect(processingOriginal.contentHash).toBe(hex(sha256(bytes)));
+  expect(new Uint8Array(await new Response(processingOriginal.body).arrayBuffer())).toEqual(bytes);
+  await expect(
+    f.service.openOriginal({ ...originalInput, profileId: crypto.randomUUID() }),
+  ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  await expect(
+    f.service.openOriginal({ ...originalInput, assetRevision: 1 }),
+  ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  let leaseAlive = true;
+  const guarded = await f.service.openOriginal(originalInput, async () => leaseAlive);
+  leaseAlive = false;
+  await expect(new Response(guarded.body).arrayBuffer()).rejects.toMatchObject({
+    message: "INVALID_ASSET_BINARY",
+  });
   await expect(f.service.open(f.other.userId, reserved.assetId)).rejects.toMatchObject({
     code: "NOT_FOUND",
   });
