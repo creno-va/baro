@@ -5,20 +5,37 @@
   "compatibility_date": "2026-10-04",
   "compatibility_flags": ["nodejs_compat"],
   "ratelimits": [
-    { "name": "CASE_IP_LIMIT", "namespace_id": "1001", "simple": { "limit": 20, "period": 60 } },
+    {
+      "name": "CASE_IP_LIMIT",
+      "namespace_id": "1001",
+      "simple": {
+        "limit": 20,
+        "period": 60
+      }
+    },
     {
       "name": "CASE_ACCOUNT_LIMIT",
       "namespace_id": "1002",
-      "simple": { "limit": 5, "period": 60 }
+      "simple": {
+        "limit": 5,
+        "period": 60
+      }
     },
     {
       "name": "ANALYSIS_ACCOUNT_LIMIT",
       "namespace_id": "1003",
-      "simple": { "limit": 10, "period": 60 }
+      "simple": {
+        "limit": 10,
+        "period": 60
+      }
     }
   ],
-  "ai": { "binding": "AI" },
-  "triggers": { "crons": ["* * * * *"] },
+  "ai": {
+    "binding": "AI"
+  },
+  "triggers": {
+    "crons": ["* * * * *"]
+  },
   "routes": [
     {
       "pattern": "preview.baro.site",
@@ -69,21 +86,34 @@
         {
           "name": "CASE_IP_LIMIT",
           "namespace_id": "1001",
-          "simple": { "limit": 20, "period": 60 }
+          "simple": {
+            "limit": 20,
+            "period": 60
+          }
         },
         {
           "name": "CASE_ACCOUNT_LIMIT",
           "namespace_id": "1002",
-          "simple": { "limit": 5, "period": 60 }
+          "simple": {
+            "limit": 5,
+            "period": 60
+          }
         },
         {
           "name": "ANALYSIS_ACCOUNT_LIMIT",
           "namespace_id": "1003",
-          "simple": { "limit": 10, "period": 60 }
+          "simple": {
+            "limit": 10,
+            "period": 60
+          }
         }
       ],
-      "ai": { "binding": "AI" },
-      "triggers": { "crons": ["* * * * *"] },
+      "ai": {
+        "binding": "AI"
+      },
+      "triggers": {
+        "crons": ["* * * * *"]
+      },
       "name": "baro-preview",
       "routes": [
         {
@@ -118,6 +148,16 @@
           "binding": "ANALYSIS_WORKFLOW",
           "class_name": "AnalysisWorkflow"
         }
+      ],
+      "r2_buckets": [
+        {
+          "binding": "CASE_PRIVATE_R2",
+          "bucket_name": "baro-preview-v2-private"
+        },
+        {
+          "binding": "PROFILE_PUBLIC_R2",
+          "bucket_name": "baro-preview-v2-public"
+        }
       ]
     },
     "production": {
@@ -125,21 +165,34 @@
         {
           "name": "CASE_IP_LIMIT",
           "namespace_id": "1001",
-          "simple": { "limit": 20, "period": 60 }
+          "simple": {
+            "limit": 20,
+            "period": 60
+          }
         },
         {
           "name": "CASE_ACCOUNT_LIMIT",
           "namespace_id": "1002",
-          "simple": { "limit": 5, "period": 60 }
+          "simple": {
+            "limit": 5,
+            "period": 60
+          }
         },
         {
           "name": "ANALYSIS_ACCOUNT_LIMIT",
           "namespace_id": "1003",
-          "simple": { "limit": 10, "period": 60 }
+          "simple": {
+            "limit": 10,
+            "period": 60
+          }
         }
       ],
-      "ai": { "binding": "AI" },
-      "triggers": { "crons": ["* * * * *"] },
+      "ai": {
+        "binding": "AI"
+      },
+      "triggers": {
+        "crons": ["* * * * *"]
+      },
       "name": "baro-production",
       "routes": [
         {
@@ -173,7 +226,27 @@
           "binding": "ANALYSIS_WORKFLOW",
           "class_name": "AnalysisWorkflow"
         }
+      ],
+      "r2_buckets": [
+        {
+          "binding": "CASE_PRIVATE_R2",
+          "bucket_name": "baro-production-v2-private"
+        },
+        {
+          "binding": "PROFILE_PUBLIC_R2",
+          "bucket_name": "baro-production-v2-public"
+        }
       ]
     }
-  }
+  },
+  "r2_buckets": [
+    {
+      "binding": "CASE_PRIVATE_R2",
+      "bucket_name": "baro-preview-v2-private"
+    },
+    {
+      "binding": "PROFILE_PUBLIC_R2",
+      "bucket_name": "baro-preview-v2-public"
+    }
+  ]
 }

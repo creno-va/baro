@@ -77,6 +77,14 @@ idempotency를 동일 guarded batch로 승인한다. 202에는 `{operationId,job
 | `GET /cases/:caseId/files/:fileId/content` | 원본/허용된 derivative 선택·다운로드 | 매 요청 owner/tombstone 확인, no-store·attachment·안전 filename |
 | `PUT /cases/:caseId/files/:fileId/observations` | 추출 내용 수정·제외·사용자 확인 | source position+revision을 보존, 원본 byte 수정 없음 |
 | `DELETE /cases/:caseId/files/:fileId` | 접근 폐기·job 취소·모든 파생물/보고서 참조 정리 | owner·삭제 race 검증 |
+
+#58 구현은 예약·조각 저장·원본 검증·목록·원본 다운로드·접근 폐기 경로를 연결한다.
+예약은 `If-Match` 사건 revision과 `Idempotency-Key`를 요구하고 조각은0부터 시작하며
+`Content-Type: application/octet-stream`, `X-Upload-Session`을 요구한다. 조각 본문은
+인증/소유권/동의/세션 확인 뒤 실제8MiB 이하로 읽고 나머지 JSON 요청은64KiB 이하를 유지한다.
+실제 storage admission과 trusted probe가 없는 환경은 쓰기/완료를 거절한다. 클라이언트가
+MIME·분량·비용 증거를 제출해 이 검증을 대체할 수 없다. 처리 enqueue/retry/observation은
+#59이며 전체 job 중단·reservation inventory·복구 재삭제는 #67의 후속 연결이다.
 | `GET /jobs/:jobId` | phase/progress bucket/coverage/failure enum/retry 가능 여부 | job의 사건/프로필 owner, internal key·signed URL·원문 없음 |
 | `POST /cases/:caseId/reports` | `{expectedRevision,selectedFileIds,editedFields,maskingChoices,includeOriginals,reviewConfirmed:true}` → 고정 snapshot job. 원본 포함 시 `selectedOriginalFileIds` 부분집합과 `originalsUnmaskedAcknowledged:true` 필수 | owner·selected files 검증·storage/budget·자료 사전 검토. PDF 근거와 ZIP 선택 분리 |
 | `GET /cases/:caseId/reports` | 버전·생성 시각·snapshot revision·obsolete 표시 | owner |

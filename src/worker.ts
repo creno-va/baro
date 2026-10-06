@@ -7,6 +7,7 @@ import { cleanupAuthData } from "./server/auth/cleanup";
 import { reconcileAnalysisTimeouts } from "./server/modules/case-structure/execution";
 import { reconcileDeletion } from "./server/modules/deletion/service";
 import { reconcileDispatch } from "./server/modules/dispatch/service";
+import { reconcileFileUploads } from "./server/modules/files/reconcile";
 
 export { AnalysisWorkflow } from "./workflows/analysis";
 
@@ -38,5 +39,6 @@ export default {
     await cleanupAuthData(env.DB);
     await reconcileDispatch(env);
     await reconcileAnalysisTimeouts(env);
+    await reconcileFileUploads(env);
   },
 };

@@ -6,14 +6,15 @@
 
 ## 현재 구현과 새 자원 구분
 
-v1은 텍스트 사건용 D1·Workflow이며 제품 R2·파일 처리 Containers는 아직 구현/등록되었다고
-볼 수 없다. 아래 이름·binding은 구현 목표다. Cloudflare 목록·binding·image digest·실제 smoke를
-확인한 환경만 readiness에 `configured`로 기록한다. 임시 AI probe Worker는 제품 파일 처리 자원이 아니다.
+v1은 텍스트 사건용 D1·Workflow다. #58은 아래 R2 버킷4개를 실제 생성하고 두 private 버킷의
+합성 암호문 쓰기·읽기·바이트 일치·삭제를 확인했다. `CASE_PRIVATE_R2`/`PROFILE_PUBLIC_R2`
+binding은 #58 소스에 연결됐으며 해당 릴리스의 Worker 배포로 별도 확인한다. Containers의
+binding·image digest·실제 처리 smoke는 아직 미검증이다. 임시 AI probe Worker는 제품 파일 처리 자원이 아니다.
 
 | 환경 | private bucket 목표 | public bucket 목표 | 처리 격리 |
 | --- | --- | --- | --- |
-| preview | baro-preview-private | baro-preview-public | preview 전용 Worker/DO/Container |
-| production | baro-production-private | baro-production-public | production 전용 Worker/DO/Container |
+| preview | baro-preview-v2-private | baro-preview-v2-public | preview 전용 Worker/DO/Container |
+| production | baro-production-v2-private | baro-production-v2-public | production 전용 Worker/DO/Container |
 | isolated-test | 운영자가 명시 지정한 baro-drill-* | 운영자가 명시 지정한 baro-drill-* | 합성 전용 D1/R2/Worker/DO/Container |
 
 local은 합성 파일과 개발 키만 사용한다. production 키/자료를 preview·local에 복제하지 않는다.
@@ -32,8 +33,8 @@ draft/pending/rejected 객체를 public에 먼저 올리지 않는다.
 3. 공개 자산도 초기에는 Worker의 approved-revision 검사 뒤 제공한다. 공개 전환 때만 허용된
    공개 경로/cache 정책을 활성화한다. bucket public access는 bucket 전체 인터넷 접근을 만들 수
    있으므로 공개 자료와 private 자료를 한 bucket에 섞지 않는다. [R2 공개 bucket](https://developers.cloudflare.com/r2/buckets/public-buckets/)
-4. Workers의 환경별 `PRIVATE_FILES`/`PUBLIC_PROFILE_ASSETS` 목표 binding과 최소 권한을 연결한다.
-   이름은 최종 계약 #54/#58에서 확정한다. root 계정 credential을 제품 Container에 전달하지 않는다.
+4. Workers의 환경별 `CASE_PRIVATE_R2`/`PROFILE_PUBLIC_R2` binding과 최소 권한을 연결한다.
+   root 계정 credential을 제품 Container에 전달하지 않는다.
 5. image를 고정 digest로 빌드/검사하고 처리 Worker/DO·Container binding을 환경별로 등록한다.
    instance type·최대 동시 실행·CPU/메모리/disk·실행 제한·idle 종료를 명시한다. 정확한 값은 실제
    최대 크기 fixture로 측정하여 #59에 기록하고 미설정 값은 fail-closed로 처리한다.
@@ -58,7 +59,8 @@ ready로 전환한다. 누락·중복·변조·truncation은 실패한다. [Work
 
 반복 요청은 upload idempotency/part 번호로 동일 예약을 재사용한다. 만료·중단 upload의 part와
 multipart 상태를 journal로 정리하고 예약을 해제한다. logical quota를 해제한 시각과 원격 객체가
-정말 삭제된 시각을 구분한다. R2 multipart API의 upload/complete/abort 순서를 준수한다.
+정말 삭제된 시각을 구분한다. #58은 암호화된 part를 각각 opaque 객체로 저장하고 application
+manifest로 완료한다. 별도 R2 multipart 전송을 도입할 때는 upload/complete/abort 순서를 준수한다.
 [R2 multipart](https://developers.cloudflare.com/r2/api/workers/workers-multipart-usage/)
 
 download는 현재 owner/role/revision과 삭제 상태를 다시 확인하는 Worker 경유다. 사건 원본과

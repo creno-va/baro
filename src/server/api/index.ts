@@ -1,5 +1,4 @@
 import { Hono } from "hono";
-import { bodyLimit } from "hono/body-limit";
 import { getAuth } from "../auth";
 import { accountDeleteApi } from "./account-delete";
 import { answersApi } from "./answers";
@@ -9,7 +8,9 @@ import { type ApiEnvironment, errorBody } from "./errors";
 import { feedbackApi } from "./feedback";
 import { healthApi } from "./health";
 import { meApi } from "./me";
+import { requestBodyLimit } from "./request-body-limit";
 import { retryApi } from "./retry";
+import { createFilesApi } from "./v2/files";
 import { usageApi } from "./v2/usage";
 
 export const api = new Hono<ApiEnvironment>()
@@ -22,6 +23,11 @@ export const api = new Hono<ApiEnvironment>()
   .use("/v2/me/*", async (context, next) => {
     await next();
     context.header("cache-control", "private, no-store");
+  })
+  .use("/v2/cases/*", async (context, next) => {
+    await next();
+    context.header("cache-control", "private, no-store");
+    context.header("x-content-type-options", "nosniff");
   })
   .use("*", async (context, next) => {
     const incomingId = context.req.header("x-request-id");
@@ -40,17 +46,14 @@ export const api = new Hono<ApiEnvironment>()
     await next();
     return;
   })
-  .use(
-    "*",
-    bodyLimit({
-      maxSize: 65_536,
-      onError: (context) =>
-        context.json(errorBody(context, "BODY_TOO_LARGE", "입력이 너무 커요."), 413),
-    }),
-  )
+  .use("*", requestBodyLimit)
   .all("/auth/*", async (context) => getAuth(context.env).handler(context.req.raw))
   .route("/health", healthApi)
   .route("/v2/me", usageApi)
+  .route(
+    "/v2/cases",
+    createFilesApi({ dependencies: async (env) => ({ bucket: env.CASE_PRIVATE_R2 }) }),
+  )
   .route("/me", meApi)
   .route("/me", accountDeleteApi)
   .route("/cases", caseCreateApi)

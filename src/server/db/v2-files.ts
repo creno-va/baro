@@ -30,6 +30,12 @@ import {
   V2RepositoryError,
   type WorkspaceGuard,
 } from "./v2-core";
+import {
+  abandonOriginalPart,
+  type OriginalPartRegistration,
+  prepareOriginalPart,
+  registerOriginalPart,
+} from "./v2-original-parts";
 import { createV2StagingRepository } from "./v2-staging";
 import { storagePredicate, storageReservationStatements } from "./v2-storage";
 import {
@@ -427,6 +433,11 @@ export function createV2FilesRepository(core: V2Core) {
     return core.changed(statements);
   };
   return {
+    prepareOriginalPart: (actor: Actor, input: OriginalPartRegistration) =>
+      prepareOriginalPart(core, actor, input),
+    abandonOriginalPart: (actor: Actor, blobId: string) => abandonOriginalPart(core, actor, blobId),
+    registerOriginalPart: (actor: Actor, input: OriginalPartRegistration) =>
+      registerOriginalPart(core, actor, input),
     read: (actor: Actor, id: string) => safe(() => read(actor, id)),
     metadata(actor: Actor, id: string) {
       return safe(async () => {

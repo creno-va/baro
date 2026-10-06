@@ -233,9 +233,50 @@ PDF/TXT/PNG/JPEG/WAV/MP4와 형식 불일치·잘린 컨테이너 입력을 포�
 이는 #59의 독립 fixture 준비이며 #57/#58 선행이나 최대 크기/포맷 전체 지원 검증을 대체하지
 않는다. 실제 ASR/OCR/vision/Containers/R2/preview 처리는 미검증이고 #59는 OPEN이다.
 
+## 2026-10-06 구현 병합과 저장소 검증
+
+사용자는 후속 개발을 선행 구현 PR의 CI 성공과 main 병합으로 진행하도록 승인했다.
+기존 Goal은 삭제됐고 기능 구현·검증·배포 루프로 진행한다. `implementationPr`는
+검토된 전체 구현에만 지정하며 남은 실제 외부 검증과 공개 승인 이슈는 OPEN으로 보존한다.
+
+#57은 [PR88](https://github.com/creno-va/baro/pull/88)의 최종 head
+`4d36fdf5b832649cdbc7d25721d50895e838a9ff`에서
+[CI](https://github.com/creno-va/baro/actions/runs/37408770362)를 통과했다.
+617개 테스트/126,730 assertions, migration6개/29 assertions, synthetic browser28개/
+CSP3개와 필수 검사 성공이다. 같은 소스의 로컬 bun ci/check/build/cf:dry-run도
+2026-10-06 03:31:49Z에 모두 실제 종료0을 확인했다. main
+`a255778b85e03682869df5609ddeeee1a2b055f7`에 병합했고
+[main CI](https://github.com/creno-va/baro/actions/runs/37409564355)와
+[preview 배포](https://github.com/creno-va/baro/actions/runs/37410054881)가 성공했다.
+독립 실제 preview smoke가 full SHA와 `0007_runtime_paid_execution`을 확인했다.
+실제 자금·처리 비용·청구 검증은 #71에 남아 있으며 #57은 OPEN이다.
+
+#63은 [PR91](https://github.com/creno-va/baro/pull/91)의 최신 통합 head
+`ce8f8cd4b0f1d8d92b1cff8008d6d969b377bc4c`에서
+[CI](https://github.com/creno-va/baro/actions/runs/37410046541)를 통과해 main
+`f46424c59ed498ddb76163bf45fb1b2bdfd38b1e`에 병합했다. 원본 소스의 로컬
+필수4개 명령은 모두0이며651개 테스트/126,530 assertions와 migration6개/29 assertions를
+통과했다. main 통합의 소유 제품/테스트/fixture 직접 diff는0이다. 실제 configured OC와
+외부 원문 조회·품질 검증은 #69/#71에 남아 있으며 #63은 OPEN이다.
+
+같은 main `f46424c59ed498ddb76163bf45fb1b2bdfd38b1e`의
+[main CI](https://github.com/creno-va/baro/actions/runs/37410453836),
+[preview 배포](https://github.com/creno-va/baro/actions/runs/37410934633),
+[production foundation 배포](https://github.com/creno-va/baro/actions/runs/37411162473)가
+성공했다. production은 기존 Environment reviewer의 정상 승인을 거쳤고 deployment
+`6875267235`에 연결된다. 독립 실제 preview/production smoke가 같은 full SHA와
+`0007_runtime_paid_execution`을 확인했고 production `/api/cases`는
+HTTP503/`BETA_NOT_OPEN`이다. 이는 #57/#63 구현의 foundation 배포이며 실제 전체 UI·
+파일 처리·funding/청구·OAuth·운영 drill·공개 승인 성공을 대신하지 않는다.
+
+#58의 preview/production private/public R2 버킷4개를 실제 생성했다. 두 private 버킷에
+임시 합성 암호문을 실제 업로드·다운로드해 바이트 일치를 확인하고 삭제했다. 공개 도메인은
+활성화하지 않았다. 이 검증은 R2 리소스/CLI roundtrip 증거이며 사용자 로그인·파일 API·
+전체 미디어 처리·승인된 public profile 게시 성공을 대신하지 않는다.
+
 ## 최종 감사
 
 각 원래 Goal 항목과 PRD 요구사항을 위 ledger 및 UX 시연에 대응시킨다. 누락된 기능이나
 승인·명령·artifact·실패 조건이 있으면 완료하지 않는다. 모든 역할의 실제 동작, 다운로드 내용,
 저장/삭제/복구, 외부 제공자, 같은 릴리스 배포, 공개 승인 근거까지 강한 증거로 확인한 뒤에만
-milestone 5와 Goal을 완료한다. 이번 명세 PR은 이후 실제 성공을 미리 기록하지 않는다.
+milestone 5를 완료한다. 기존 Goal은 삭제됐으며 이번 기록은 이후 실제 성공을 미리 기록하지 않는다.

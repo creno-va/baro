@@ -523,6 +523,9 @@ export function createV2StorageRepository(core: V2Core) {
           lease.fencing,
           actor.now,
         ];
+        // Removing a failed pending chunk does not cancel its live file upload.
+        // Preserve the original reservation until that file is actually deleted.
+        const releasable = `NOT EXISTS(SELECT 1 FROM v2_storage_reservations original JOIN v2_files f ON f.id=original.entity_id JOIN v2_workspaces w ON w.id=f.workspace_id WHERE original.id=? AND original.kind='case_original' AND f.state!='deleting' AND ${aliveWorkspace} AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='file' AND target_id=f.id))`;
         const results = await core.binding.batch([
           core.statement(
             "INSERT INTO v2_cleanup_receipts(id,journal_id,kind,target_id,confirmed_at) SELECT ?,j.id,'blob',b.id,? FROM v2_deletion_journals j JOIN v2_deletion_targets t ON t.journal_id=j.id JOIN v2_blobs b ON b.id=t.target_id WHERE j.id=? AND j.lease_token=? AND j.fencing=? AND j.lease_until>? AND j.state='running' AND t.kind='blob' AND t.state='pending' AND b.id=? AND b.state='deleting' AND b.object_key=? AND b.cipher_hash=? AND NOT EXISTS(SELECT 1 FROM v2_deletion_targets WHERE journal_id=j.id AND kind IN ('job','legacy_workflow') AND state='pending') ON CONFLICT(journal_id,kind,target_id) DO NOTHING",
@@ -543,8 +546,9 @@ export function createV2StorageRepository(core: V2Core) {
             [actor.now, blobId, ...args],
           ),
           core.statement(
-            `UPDATE v2_storage_usage SET stored_bytes=stored_bytes-coalesce((SELECT byte_length FROM v2_storage_reservations WHERE id=? AND state='stored'),0),reserved_bytes=reserved_bytes-coalesce((SELECT byte_length FROM v2_storage_reservations WHERE id=? AND state='reserved'),0) WHERE principal_id=(SELECT principal_id FROM v2_storage_reservations WHERE id=? AND state!='released') AND NOT EXISTS(SELECT 1 FROM v2_blobs WHERE reservation_id=? AND state!='deleted') AND ${receiptGuard}`,
+            `UPDATE v2_storage_usage SET stored_bytes=stored_bytes-coalesce((SELECT byte_length FROM v2_storage_reservations WHERE id=? AND state='stored'),0),reserved_bytes=reserved_bytes-coalesce((SELECT byte_length FROM v2_storage_reservations WHERE id=? AND state='reserved'),0) WHERE principal_id=(SELECT principal_id FROM v2_storage_reservations WHERE id=? AND state!='released') AND NOT EXISTS(SELECT 1 FROM v2_blobs WHERE reservation_id=? AND state!='deleted') AND ${releasable} AND ${receiptGuard}`,
             [
+              row.reservation_id,
               row.reservation_id,
               row.reservation_id,
               row.reservation_id,
@@ -553,12 +557,12 @@ export function createV2StorageRepository(core: V2Core) {
             ],
           ),
           core.statement(
-            `UPDATE v2_case_original_usage SET stored_count=stored_count-CASE WHEN r.state='stored' THEN 1 ELSE 0 END,reserved_count=reserved_count-CASE WHEN r.state='reserved' THEN 1 ELSE 0 END,stored_bytes=stored_bytes-CASE WHEN r.state='stored' THEN r.byte_length ELSE 0 END,reserved_bytes=reserved_bytes-CASE WHEN r.state='reserved' THEN r.byte_length ELSE 0 END FROM v2_storage_reservations r WHERE r.id=? AND r.workspace_id=v2_case_original_usage.workspace_id AND r.kind='case_original' AND r.state!='released' AND NOT EXISTS(SELECT 1 FROM v2_blobs WHERE reservation_id=r.id AND state!='deleted') AND ${receiptGuard}`,
-            [row.reservation_id, ...args],
+            `UPDATE v2_case_original_usage SET stored_count=stored_count-CASE WHEN r.state='stored' THEN 1 ELSE 0 END,reserved_count=reserved_count-CASE WHEN r.state='reserved' THEN 1 ELSE 0 END,stored_bytes=stored_bytes-CASE WHEN r.state='stored' THEN r.byte_length ELSE 0 END,reserved_bytes=reserved_bytes-CASE WHEN r.state='reserved' THEN r.byte_length ELSE 0 END FROM v2_storage_reservations r WHERE r.id=? AND r.workspace_id=v2_case_original_usage.workspace_id AND r.kind='case_original' AND r.state!='released' AND NOT EXISTS(SELECT 1 FROM v2_blobs WHERE reservation_id=r.id AND state!='deleted') AND ${releasable} AND ${receiptGuard}`,
+            [row.reservation_id, row.reservation_id, ...args],
           ),
           core.statement(
-            `UPDATE v2_storage_reservations SET state='released' WHERE id=? AND state!='released' AND NOT EXISTS(SELECT 1 FROM v2_blobs WHERE reservation_id=? AND state!='deleted') AND ${receiptGuard}`,
-            [row.reservation_id, row.reservation_id, ...args],
+            `UPDATE v2_storage_reservations SET state='released' WHERE id=? AND state!='released' AND NOT EXISTS(SELECT 1 FROM v2_blobs WHERE reservation_id=? AND state!='deleted') AND ${releasable} AND ${receiptGuard}`,
+            [row.reservation_id, row.reservation_id, row.reservation_id, ...args],
           ),
           core.statement(
             `UPDATE v2_deletion_targets SET state='completed' WHERE journal_id=? AND kind='blob' AND target_id=? AND ${receiptGuard}`,
