@@ -34,7 +34,7 @@ test("readiness excludes credentials, raw errors and unrelated account resources
           ];
     return Response.json({ success: true, result });
   }) as typeof fetch;
-  const report = await inspectPreview(secret, sha, fetcher);
+  const report = await inspectPreview(secret, sha, fetcher, { checkGateway: true });
   expect(JSON.stringify(report)).not.toContain(secret);
   expect(report.worker.deployedSha).toBe(sha);
   expect(report.worker.secrets.find((s) => s.name === "BETTER_AUTH_SECRET")?.present).toBe(true);
@@ -53,13 +53,18 @@ test("readiness excludes credentials, raw errors and unrelated account resources
 });
 
 test("forbidden or malformed responses never become passed live gates or expose errors", async () => {
-  const report = await inspectPreview("private-token", sha, (async (input) => {
-    if (String(input).includes("settings"))
-      return Response.json({ success: true, result: { bindings: "bad" } });
-    if (String(input).includes("ai-gateway"))
-      return new Response("private-error-body", { status: 403 });
-    throw new Error("private-error-stack");
-  }) as typeof fetch);
+  const report = await inspectPreview(
+    "private-token",
+    sha,
+    (async (input) => {
+      if (String(input).includes("settings"))
+        return Response.json({ success: true, result: { bindings: "bad" } });
+      if (String(input).includes("ai-gateway"))
+        return new Response("private-error-body", { status: 403 });
+      throw new Error("private-error-stack");
+    }) as typeof fetch,
+    { checkGateway: true },
+  );
   expect(report.worker.parsed).toBe(false);
   expect(report.worker.secrets.every((s) => s.present === null)).toBe(true);
   expect(report.worker.processingBindings.every((b) => b.present === null)).toBe(true);
@@ -70,4 +75,22 @@ test("forbidden or malformed responses never become passed live gates or expose 
   expect(report.turnstile.observedPreviewWidgetCount).toBeNull();
   expect(JSON.stringify(report)).not.toContain("private-");
   expect(report.unverified).toContain("live-model-eval");
+});
+
+test("default metadata observation does not repeat a known forbidden Gateway probe", async () => {
+  const requests: string[] = [];
+  const report = await inspectPreview("private-token", sha, (async (input) => {
+    const url = String(input);
+    requests.push(url);
+    if (url.includes("ai-gateway")) throw new Error("Gateway must not be requested");
+    return Response.json({
+      success: true,
+      result: url.includes("settings") ? { bindings: [] } : [],
+    });
+  }) as typeof fetch);
+  expect(requests).toHaveLength(2);
+  expect(requests.some((url) => url.includes("ai-gateway"))).toBe(false);
+  expect(report.gateway.status).toBe("not_requested");
+  expect(report.gateway.exists).toBeNull();
+  expect(report.gateway.authentication).toBeNull();
 });
