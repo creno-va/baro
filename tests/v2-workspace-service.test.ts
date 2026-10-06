@@ -36,7 +36,7 @@ test("case creation replays without consuming another quota and rejects changed 
 });
 test("saved answers, reviewed summary and ongoing chat commit with durable replay and atomic factual updates", async () => {
   const f = await fixture();
-  for (let index = 0; index < 3; index++) {
+  for (let index = 0; index < 2; index++) {
     expect((await run(f, "intake_questions")).result.status).toBe("completed");
     const intake = await f.service.intake(f.owner.userId, f.workspace.id),
       question = intake?.batches.at(-1)?.questions[0];

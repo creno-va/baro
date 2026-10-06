@@ -100,6 +100,29 @@ schema/prompt를 사용할 수 있으므로 호환 기간을 둔다.
 - CSP가 OAuth와 Turnstile을 막거나 과도하게 열지 않음
 - current policy version이 게시된 문서 버전과 일치함
 
+## 이미 공개된 production의 누락 runtime 설정 복구
+
+`Recover production runtime`은 main의 검증된 복구 코드로 현재 공개 중인 production SHA의
+누락 설정만 복구한다. `confirmation=production`, `expected_live_sha=<현재 full40 SHA>`를
+지정하고 기존 production Environment 승인을 받는다. 일반 배포와 같은
+`cloudflare-production` concurrency를 사용하며 공개 gate, Worker 코드, migration은 변경하지 않는다.
+새 production 배포 성공 증거를 만들지 않으며 이후 코드 배포는 기존 release 절차를 따른다.
+
+- `CASE_DATA_KEY_V1`은 GitHub production에 이미 보관된 동일 키만 사용한다. 생성·회전·다른
+  환경 키 복사는 하지 않는다. `LAW_API_OC`도 승인된 production secret을 사용한다.
+- `baro.site` 전용 Managed/no-clearance Turnstile widget을 재사용하거나 없으면 생성한다.
+  공유·중복 widget과 잘린 조회 결과는 거부하며 기존 widget secret을 회전하지 않는다.
+- 적용 직전마다 현재 release·origin·공개 gate·binding을 재확인하고 이미 있는 secret은 보존한다.
+  Cloudflare PUT은 원자적인 create-if-absent가 아니므로 복구 중 Dashboard/외부 API에서
+  같은 Worker 설정을 동시에 수정하지 않는다. 실패한 쓰기는 자동 재시도하거나 삭제하지 않는다.
+- artifact에는 공개 sitekey와 고정된 적용 상태만 기록한다. sitekey를 GitHub production의
+  `PUBLIC_TURNSTILE_SITE_KEY`에 등록한 뒤 승인된 공통 파이프라인으로 재빌드해야 client에 반영된다.
+- 완료 시 기존 SHA/schema와 익명 GET 9개를 확인한다. 실제 사용자 OAuth·Turnstile challenge·
+  법률 API·암호화 복호화 성공은 별도 검증이며 metadata 존재만으로 완료 처리하지 않는다.
+
+API 계약: [Worker secret 등록](https://developers.cloudflare.com/api/resources/workers/subresources/scripts/subresources/secrets/methods/update/),
+[Turnstile widget 생성](https://developers.cloudflare.com/api/resources/turnstile/subresources/widgets/methods/create/).
+
 ## rollback
 
 - 앱 문제: 직전 검증된 Worker deployment로 traffic rollback

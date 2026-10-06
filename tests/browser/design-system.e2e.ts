@@ -49,9 +49,8 @@ test("current landing, login and case screens share local brand and remain usabl
     route.fulfill({ json: { needsConsent: false } }),
   );
   await page.goto("/");
-  await expect(
-    page.getByRole("heading", { name: /복잡한 일도,\s*하나씩 풀어가요\./ }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "어떤 일이 있었나요?" })).toBeVisible();
+  await expect(page.locator("astro-island[ssr]")).toHaveCount(0);
   await page.screenshot({ path: ".wrangler/home-desktop.png", fullPage: true });
   await page.goto("/login");
   await expect(page.getByRole("button", { name: "Google로 계속하기" })).toBeVisible();
@@ -59,6 +58,7 @@ test("current landing, login and case screens share local brand and remain usabl
   await page.setViewportSize({ width: 320, height: 760 });
   for (const path of ["/login", "/cases", "/cases/new"]) {
     await page.goto(path);
+    await expect(page.locator("astro-island[ssr]")).toHaveCount(0);
     await expect(page.locator(".brand img").first()).toHaveAttribute("src", "/brand/logo.svg");
     expect(
       await page.evaluate(
@@ -70,10 +70,10 @@ test("current landing, login and case screens share local brand and remain usabl
   await page
     .getByRole("textbox", { name: "지금까지 있었던 일" })
     .fill("공통 디자인 확인을 위한 합성 사건입니다. 약속한 날짜가 지나도 대금을 받지 못했어요.");
-  await expect(page.getByRole("button", { name: "저장하고 질문 시작" })).toBeEnabled();
-  await expect(page.getByRole("button", { name: "저장하고 질문 시작" })).toHaveCSS(
+  await expect(page.getByRole("button", { name: "저장하고 계속" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "저장하고 계속" })).toHaveCSS(
     "background-color",
-    "rgb(49, 130, 246)",
+    "rgb(34, 108, 219)",
   );
   await page.goto("/cases");
   await expect(page.getByRole("heading", { name: "아직 정리한 사건이 없어요" })).toBeVisible();

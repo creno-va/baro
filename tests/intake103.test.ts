@@ -27,7 +27,8 @@ describe("B persistent API mock", () => {
       context(),
     ) as CaseView;
     let questions = handlers["cases.getQuestions"]({ id: item.id });
-    expect(questions.questions).toHaveLength(4);
+    expect(questions.questions).toHaveLength(2);
+    expect(questions.followupLimit).toBe(2);
     const first = questions.questions[0];
     if (!first) throw new Error();
     questions = handlers["cases.saveAnswers"](
@@ -70,7 +71,6 @@ describe("B persistent API mock", () => {
     let summary = handlers["cases.get"]({ id: item.id });
     expect(summary.summary).toContain("2026년 8월");
     expect(summary.summary).toContain("모름");
-    expect(summary.summary).toContain("건너뛰기");
     summary = handlers["cases.saveSummary"](
       {
         id: item.id,
@@ -112,7 +112,7 @@ describe("B persistent API mock", () => {
         {
           id: item.id,
           expectedRevision: 1,
-          answers: [{ questionId: q.questions[2]?.id, state: "answered", value: "없는 선택" }],
+          answers: [{ questionId: "missing-question", state: "answered", value: "없는 선택" }],
         },
         context(),
       ),
@@ -176,6 +176,61 @@ describe("B persistent API mock", () => {
     );
     expect(q.complete).toBe(false);
     expect(handlers["cases.get"]({ id: item.id }).summary).toBe("");
+  });
+  test("stored legacy questions remain editable and retain unknown, skipped and choice answers", () => {
+    const item = handlers["cases.create"]({ narrative, subjectContext: "individual" }, context());
+    const saved = readStore<
+      Record<
+        string,
+        { narrative: string; questions: import("../src/client/api/types").QuestionView[] }
+      >
+    >("intake", {});
+    const intake = saved[item.id];
+    if (!intake) throw new Error("Missing intake");
+    intake.questions.push(
+      { id: "legacy-choice", kind: "choice", text: "자료가 있나요?", options: ["예", "아니오"] },
+      { id: "legacy-text", kind: "text", text: "서로 다르게 기억하는 내용이 있나요?" },
+    );
+    writeStore("intake", saved);
+    let result = handlers["cases.getQuestions"]({ id: item.id });
+    expect(result.questions).toHaveLength(4);
+    expect(() =>
+      handlers["cases.saveAnswers"](
+        {
+          id: item.id,
+          expectedRevision: result.revision,
+          answers: [{ questionId: "legacy-choice", state: "answered", value: "없는 선택" }],
+        },
+        context(),
+      ),
+    ).toThrow(ApiError);
+    result = handlers["cases.saveAnswers"](
+      {
+        id: item.id,
+        expectedRevision: result.revision,
+        answers: result.questions.map((q, index) => ({
+          questionId: q.id,
+          state: index === 0 ? "unknown" : "skipped",
+        })),
+      },
+      context(),
+    );
+    result = handlers["cases.saveAnswers"](
+      {
+        id: item.id,
+        expectedRevision: result.revision,
+        answers: [{ questionId: "legacy-choice", state: "answered", value: "예" }],
+      },
+      context(),
+    );
+    result = handlers["cases.advance"](
+      { id: item.id, expectedRevision: result.revision },
+      context(),
+    );
+    expect(result.questions).toHaveLength(4);
+    expect(result.complete).toBe(true);
+    expect(handlers["cases.get"]({ id: item.id }).summary).toContain("모름");
+    expect(handlers["cases.get"]({ id: item.id }).summary).toContain("건너뛰기");
   });
 });
 
@@ -275,4 +330,42 @@ describe("PR100 real wire mapping", () => {
     });
     expect(writes[0]?.key).toBe(writes[1]?.key);
   });
+  for (const count of [2, 5])
+    test(`failed old question jobs with ${count} saved questions advance to summary and preserve answers`, async () => {
+      const transport = globalThis.fetch;
+      const questions = Array.from({ length: count }, (_, index) => ({
+        id: `saved-${index}`,
+        prompt: `저장한 질문 ${index}`,
+        answerType: "text",
+        options: [],
+      }));
+      globalThis.fetch = (async (input, init) => {
+        const url = String(input);
+        if (url.endsWith("/intake"))
+          return Response.json({
+            ...m,
+            status: "collecting",
+            summary: null,
+            currentJobId: "failed-questions",
+            batches: [
+              {
+                id: "saved-batch",
+                ordinal: 1,
+                generatedForIntakeRevision: 1,
+                questions,
+                answers: questions.map((q) => ({ questionId: q.id, status: "skipped" })),
+              },
+            ],
+          });
+        if (url.endsWith("/workspace-jobs/failed-questions"))
+          return Response.json({ status: "failed", retryable: false, kind: "intake_questions" });
+        return transport(input, init);
+      }) as typeof fetch;
+      const result = await casesApi.advance(id, { expectedRevision: 5 });
+      expect(writes[0]?.url).toBe(`/api/v2/cases/${id}/intake/advance`);
+      expect(result.followupLimit).toBe(2);
+      expect(result.processingStage).toBe("summary");
+      expect(result.questions).toHaveLength(count);
+      expect(result.questions.every((q) => q.answerState === "skipped")).toBe(true);
+    });
 });

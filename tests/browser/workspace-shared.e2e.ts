@@ -25,13 +25,13 @@ test("common login and B intake flow through C workspace and D report with origi
     .fill(
       "공통 API 검증을 위한 합성 사건입니다. 지인에게 빌려준 돈과 반환 약속을 확인하고 싶습니다.",
     );
-  await page.getByRole("button", { name: "저장하고 질문 시작" }).click();
-  for (let index = 1; index <= 4; index++) {
-    await expect(page.getByText(`질문 ${index} / 4`, { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "저장하고 계속" }).click();
+  for (let index = 1; index <= 2; index++) {
+    await expect(page.getByText(`질문 ${index} / 최대 2`, { exact: true })).toBeVisible();
     await page.getByRole("button", { name: "모름", exact: true }).click();
   }
   await expect(page).toHaveURL(/\/summary$/);
-  await page.getByLabel("저장한 요약을 읽고, 내가 제공한 사실과 맞는지 확인했어요.").check();
+  await page.getByLabel("요약이 내가 이야기한 사실과 맞는지 확인했어요.").check();
   await page.getByRole("button", { name: "요약 확인하고 계속" }).click();
   await page.getByRole("button", { name: "확인하고 사건 열기" }).click();
   await expect(page.getByRole("heading", { name: "이어서 대화하기" })).toBeVisible();

@@ -327,7 +327,7 @@ test("workerd D1 executes authenticated questions, retry, summary confirmation a
     expect(providerCalls).toBe(5);
     // Continue every paid product phase on native D1, including encrypted
     // staging/publishing of facts, parties, timeline and actions.
-    for (const batchIndex of [1, 2]) {
+    for (const batchIndex of [1]) {
       const currentIntake = await service.intake(ownerId, workspace.id);
       expect(
         (
@@ -348,7 +348,7 @@ test("workerd D1 executes authenticated questions, retry, summary confirmation a
       expect((await execute(accepted.jobId)).status).toBe("completed");
     }
     const summary = await service.intake(ownerId, workspace.id);
-    expect(summary?.batches).toHaveLength(3);
+    expect(summary?.batches).toHaveLength(2);
     expect(summary?.summary).toBeDefined();
     const summaryResponse = await request(`/api/v2/cases/${workspace.id}/summary`);
     expect(summaryResponse.status).toBe(200);
@@ -370,7 +370,7 @@ test("workerd D1 executes authenticated questions, retry, summary confirmation a
     expect(chat.status).toBe(202);
     const chatJob = (await chat.json()) as { jobId: string };
     expect((await execute(chatJob.jobId)).status).toBe("completed");
-    expect(providerCalls).toBe(11);
+    expect(providerCalls).toBe(9);
     const messages = await request(`/api/v2/cases/${workspace.id}/messages`);
     expect(messages.status).toBe(200);
     expect(await messages.json()).toMatchObject({
@@ -388,10 +388,10 @@ test("workerd D1 executes authenticated questions, retry, summary confirmation a
       await preview
         .prepare("SELECT count(*) AS n FROM v2_cost_attempts WHERE state='settled'")
         .first<number>("n"),
-    ).toBe(10);
+    ).toBe(8);
     // Replay cannot emit another model request or duplicate published entities.
     expect((await execute(chatJob.jobId)).status).toBe("completed");
-    expect(providerCalls).toBe(11);
+    expect(providerCalls).toBe(9);
   } finally {
     await mf.dispose();
   }

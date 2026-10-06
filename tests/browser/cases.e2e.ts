@@ -111,10 +111,10 @@ test("intake validates code points, blocks duplicates, preserves replay key and 
   );
   await page.goto("/cases/new");
   const input = page.getByRole("textbox");
-  const submit = page.getByRole("button", { name: "저장하고 질문 시작" });
+  const submit = page.getByRole("button", { name: "저장하고 계속" });
   await input.fill("짧은 입력");
   await expect(submit).toBeDisabled();
-  await expect(page.getByText("5,000자 · 최소 20자", { exact: false })).toBeVisible();
+  await expect(page.getByText("15자만 더 적어주세요", { exact: true })).toBeVisible();
   await input.fill("합성 사건입니다. 지인에게 빌려준 돈을 돌려받는 상황입니다.");
   await submit.focus();
   await page.keyboard.press("Enter");
