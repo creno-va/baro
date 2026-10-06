@@ -190,3 +190,34 @@ test("a new form with identical input creates a new case after the previous requ
   await page.goto("/cases");
   await expect(page.locator(".intake-case-card")).toHaveCount(2);
 });
+
+test("pending intake keeps polling until the API exposes a completed summary", async ({ page }) => {
+  await page.goto("/cases/new");
+  await page
+    .getByRole("textbox", { name: "지금까지 있었던 일" })
+    .fill("합성 비동기 테스트입니다. 질문과 요약을 준비하는 API 상태를 확인합니다.");
+  await page.getByRole("button", { name: "저장하고 질문 시작" }).click();
+  await expect(page).toHaveURL(/\/intake/);
+  await page.getByRole("textbox", { name: "답변", exact: true }).fill("합성 답변");
+  await page.evaluate(async () => {
+    const key = "baro-api-mock-v1:cases",
+      items = JSON.parse(localStorage.getItem(key) ?? "{}");
+    for (const item of Object.values(items) as { revision: number }[]) item.revision++;
+    localStorage.setItem(key, JSON.stringify(items));
+    const modulePath = "/src/client/api/core.ts";
+    const { registerMockHandlers } = await import(modulePath);
+    let calls = 0;
+    registerMockHandlers({
+      "cases.getQuestions": () => {
+        calls++;
+        return { questions: [], revision: 2, complete: calls >= 3, processing: calls < 3 };
+      },
+    });
+  });
+  await page.getByRole("button", { name: "답변 저장", exact: true }).click();
+  await page.getByRole("button", { name: "최신 내용 불러오기" }).click();
+  await expect(
+    page.getByText("저장한 답변으로 다음 내용을 준비하고 있어요.", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByRole("link", { name: "요약 확인하기" })).toBeVisible({ timeout: 10000 });
+});
