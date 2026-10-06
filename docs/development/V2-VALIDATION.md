@@ -668,3 +668,14 @@ CSP4 PASS/fixture 전용1skip이 통과했다. 같은 checkout에서 signed SQL 
 실행해 모두 통과했다. 다운로드 입력·SQL·D1 billing metadata는 합성이며 remote OAuth/R2/
 청구 증거가 아니다. production 배포 job에도 build 뒤·migration 전 `bundle:check`를 추가해
 승인된 job의 실제 산출물에서 동일 guard를 실행한다. 이 workflow 변경은 새 head에서 검증한다.
+
+main5a28053의 [CI37500203783](https://github.com/creno-va/baro/actions/runs/37500203783)는
+settings switched-account fixture1 FAIL이었다. 첫 deletionAccess 뒤 버튼 visible/삭제 disabled는
+전체 초기 load 완료를 뜻하지 않아 다음 callback marker를 이전 load가 소비할 수 있었다.
+expired callback의 재인증 버튼 enabled를 기다린 뒤 다음 marker를 주입하도록 fixture만 고쳤다.
+AccountSettings 제품 UI/owner·최근 OAuth·callback·삭제 보호는 변경하지 않았다. settings5개를
+3회 반복해15 PASS이며 이전 pagehide/늦은 access 오류/늦은 OAuth 오류가 새 marker를 지우지
+못하는 기존 지연 회귀도 유지했다. 실패 main CI는 보존하고 최종 head/main에서 재검증한다.
+signed SQL native report 다운로드 PDF는 pypdf/Poppler에서 한글·마스킹·버전·페이지·여백을
+확인했다. 합성 입력 PDF1페이지/3126732 bytes와 ZIP의 선택 원본 정확한 byte가 보존됐다.
+한글 폰트·마스킹·footer는 깨짐/겹침 없이 렌더됐으며 원격 제품 비용 증거가 아니다.
