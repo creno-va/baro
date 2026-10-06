@@ -201,13 +201,15 @@ export function Directory({ preview = false }: { preview?: boolean }) {
         {items.slice(0, visibleCount).map((lawyer) => (
           <Card key={lawyer.id} className="directory-profile">
             <CardHeader className="directory-profile__header">
-              <AssetPhoto
-                profileId={lawyer.id}
-                assetId={lawyer.photoAssetId}
-                fallback={lawyer.photoUrl}
-                alt={`${lawyer.name} 프로필 사진`}
-                size={64}
-              />
+              <div className="directory-profile__photo">
+                <AssetPhoto
+                  profileId={lawyer.id}
+                  assetId={lawyer.photoAssetId}
+                  fallback={lawyer.photoUrl}
+                  alt={`${lawyer.name} 프로필 사진`}
+                  size={64}
+                />
+              </div>
               <div className="directory-profile__identity">
                 <CardTitle>
                   <a href={`/lawyers/${encodeURIComponent(lawyer.id)}`}>{lawyer.name}</a>

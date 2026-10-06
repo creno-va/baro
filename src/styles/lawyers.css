@@ -160,7 +160,7 @@
 .lawyer-directory {
   width: min(100%, 66rem);
   padding-block: 22px 48px;
-  color: #191f28;
+  color: var(--foreground);
 }
 .directory-intro {
   display: flex;
@@ -176,7 +176,7 @@
 }
 .lawyer-directory .page-header .eyebrow {
   margin-bottom: 14px;
-  color: #2364e8;
+  color: var(--primary);
   font-size: 14px;
   font-weight: 650;
   letter-spacing: -0.02em;
@@ -190,7 +190,7 @@
 }
 .lawyer-directory .page-header__description {
   max-width: 31rem;
-  color: #6b7684;
+  color: var(--muted-foreground);
   font-size: 16px;
   line-height: 1.8;
   word-break: keep-all;
@@ -203,7 +203,7 @@
   height: 148px;
   margin-right: 22px;
   border-radius: 50%;
-  background: #f1f5ff;
+  background: var(--secondary);
 }
 .directory-illustration__profile {
   display: grid;
@@ -212,7 +212,7 @@
   place-items: center;
   border: 1px solid #e4eafb;
   border-radius: 25px;
-  background: #fff;
+  background: var(--card);
   color: #83a9ef;
   box-shadow: 0 8px 18px #2364e80a;
   transform: rotate(-8deg);
@@ -225,16 +225,16 @@
   width: 55px;
   height: 55px;
   place-items: center;
-  border: 4px solid #fff;
+  border: 4px solid var(--card);
   border-radius: 19px;
-  background: #2364e8;
-  color: #fff;
+  background: var(--primary);
+  color: var(--card);
   transform: rotate(7deg);
 }
 .lawyer-directory .directory-search {
-  border: 1px solid #edf0f3;
+  border: 1px solid var(--border);
   border-radius: 24px;
-  background: #fff;
+  background: var(--card);
   box-shadow: 0 6px 30px #191f2803;
 }
 .directory-search .ui-card__header {
@@ -246,7 +246,7 @@
 }
 .directory-search :where(.ui-card__header) p {
   margin: 8px 0 0;
-  color: #6b7684;
+  color: var(--muted-foreground);
   font-size: 14px;
   line-height: 1.6;
 }
@@ -263,7 +263,7 @@
   display: grid;
   min-width: 0;
   gap: 9px;
-  color: #4e5968;
+  color: var(--muted-foreground);
   font-size: 13px;
   font-weight: 550;
 }
@@ -289,11 +289,11 @@
 .lawyer-directory .directory-search input,
 .lawyer-directory .directory-search select {
   height: 54px;
-  border: 1px solid transparent;
+  border: 1px solid var(--input);
   border-radius: 12px;
-  background: #f5f6f8;
+  background: var(--muted);
   padding: 0 15px;
-  color: #333d4b;
+  color: var(--foreground);
   font-size: 14px;
   font-weight: 450;
   transition:
@@ -309,23 +309,23 @@
   cursor: pointer;
 }
 .directory-search input::placeholder {
-  color: #6b7684;
+  color: var(--muted-foreground);
 }
 .lawyer-directory .directory-search :is(input, select):hover:not(:disabled) {
   background: #eef1f5;
 }
 .lawyer-directory .directory-search :is(input, select):focus-visible {
-  border-color: #2364e8;
-  outline: 3px solid #2364e826;
-  outline-offset: 1px;
-  background: #fff;
+  border-color: var(--primary);
+  outline: 3px solid var(--ring);
+  outline-offset: 3px;
+  background: var(--card);
 }
 .lawyer-directory .directory-search__button {
   min-width: 102px;
   height: 54px;
   gap: 8px;
   border-radius: 12px;
-  background: #2364e8;
+  background: var(--primary);
   font-size: 15px;
   box-shadow: none;
 }
@@ -348,7 +348,7 @@
 }
 .directory-results-heading p {
   margin: 0;
-  color: #6b7684;
+  color: var(--muted-foreground);
   font-size: 13px;
 }
 .directory-results {
@@ -360,9 +360,9 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
-  border: 1px solid #edf0f3;
+  border: 1px solid var(--border);
   border-radius: 22px;
-  background: #fff;
+  background: var(--card);
   box-shadow: none;
   transition:
     border-color 0.2s,
@@ -378,8 +378,15 @@
   gap: 17px;
   padding: 26px 26px 0;
 }
-.directory-profile__header > :first-child {
-  flex-shrink: 0;
+.directory-profile__photo {
+  flex: 0 0 64px;
+  width: 64px;
+}
+.directory-profile__photo p {
+  margin: 8px 0 0;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.5;
 }
 .directory-profile .lawyer-avatar,
 .directory-profile .lawyer-photo {
@@ -394,6 +401,8 @@
 }
 .directory-profile__identity {
   min-width: 0;
+  align-self: flex-start;
+  padding-top: 4px;
 }
 .directory-profile .ui-card__title {
   display: flex;
@@ -406,20 +415,20 @@
   letter-spacing: -0.03em;
 }
 .directory-profile .ui-card__title a {
-  color: #191f28;
+  color: var(--foreground);
   text-decoration: none;
 }
 .directory-profile .ui-card__title a:hover {
-  color: #2364e8;
+  color: var(--primary);
 }
 .directory-profile .ui-card__title span {
-  color: #6b7684;
+  color: var(--muted-foreground);
   font-size: 13px;
   font-weight: 450;
 }
 .directory-profile__identity > p {
   margin: 4px 0 0;
-  color: #6b7684;
+  color: var(--muted-foreground);
   font-size: 13px;
   line-height: 1.5;
 }
@@ -434,12 +443,12 @@
   align-items: center;
   gap: 5px;
   margin: 0;
-  color: #6b7684;
+  color: var(--muted-foreground);
   font-size: 13px;
 }
 .directory-profile__introduction {
   margin: 11px 0 17px;
-  color: #4e5968;
+  color: var(--muted-foreground);
   font-size: 15px;
   line-height: 1.8;
   white-space: pre-wrap;
@@ -457,15 +466,15 @@
 .directory-profile__fields li {
   padding: 6px 11px;
   border-radius: 8px;
-  background: #f1f5ff;
-  color: #3b6fcb;
+  background: var(--secondary);
+  color: var(--secondary-foreground);
   font-size: 12px;
   font-weight: 550;
   line-height: 1.5;
 }
 .directory-profile__disclosure {
   margin: 0 0 18px;
-  color: #6b7684;
+  color: var(--muted-foreground);
   font-size: 11px;
   line-height: 1.7;
 }
@@ -475,8 +484,8 @@
   justify-content: space-between;
   gap: 12px;
   min-height: 60px;
-  border-top: 1px solid #f0f2f5;
-  color: #2364e8;
+  border-top: 1px solid var(--border);
+  color: var(--primary);
   font-size: 14px;
   font-weight: 600;
   text-decoration: none;
@@ -497,10 +506,10 @@
   min-height: 48px;
   gap: 9px;
   margin: 28px auto 0;
-  border-color: #e5e8ec;
+  border-color: var(--border);
   border-radius: 12px;
-  background: #fff;
-  color: #4e5968;
+  background: var(--card);
+  color: var(--muted-foreground);
 }
 .directory-disclosure {
   display: flex;
@@ -509,8 +518,8 @@
   margin-top: 26px;
   padding: 17px 20px;
   border-radius: 14px;
-  background: #f5f6f8;
-  color: #6b7684;
+  background: var(--muted);
+  color: var(--muted-foreground);
 }
 .directory-disclosure svg {
   flex-shrink: 0;

@@ -1,7 +1,7 @@
 .account-settings {
-  --settings-blue: #2364e8;
-  --settings-text: #191f28;
-  --settings-muted: #6b7684;
+  --settings-blue: var(--primary);
+  --settings-text: var(--foreground);
+  --settings-muted: var(--muted-foreground);
   container: account-settings / inline-size;
   max-width: 1120px;
   margin: 0 auto;
@@ -45,10 +45,10 @@
   gap: 7px;
   min-height: 44px;
   padding: 11px 16px;
-  border: 1px solid #e5e8ed;
+  border: 1px solid var(--border);
   border-radius: 12px;
-  background: #fff;
-  color: #4e5968;
+  background: var(--card);
+  color: var(--muted-foreground);
   font: inherit;
   font-size: 14px;
   font-weight: 600;
@@ -60,8 +60,8 @@
     border-color 0.18s;
 }
 .account-settings button:hover:not(:disabled) {
-  background: #f2f5f9;
-  color: #191f28;
+  background: var(--muted);
+  color: var(--foreground);
   border-color: #cfd7e2;
 }
 .account-settings button:disabled {
@@ -83,16 +83,16 @@
 }
 .settings-progress {
   padding: 0.85rem 1rem;
-  background: #f2f5f9;
+  background: var(--muted);
   border-radius: 12px;
   line-height: 1.6;
 }
 .settings-card {
   padding: 32px;
   margin: 0 0 24px;
-  border: 1px solid #edf0f3;
+  border: 1px solid var(--border);
   border-radius: 24px;
-  background: #fff;
+  background: var(--card);
 }
 .settings-section-heading {
   display: flex;
@@ -111,12 +111,12 @@
   width: 46px;
   height: 46px;
   border-radius: 15px;
-  background: #edf4ff;
-  color: #2364e8;
+  background: var(--secondary);
+  color: var(--primary);
 }
 .settings-section-icon-neutral {
-  background: #f2f4f6;
-  color: #6b7684;
+  background: var(--muted);
+  color: var(--muted-foreground);
 }
 .settings-section-icon-danger {
   background: #fff1f0;
@@ -124,7 +124,7 @@
 }
 .settings-card h2 {
   margin: 0 0 5px;
-  color: #191f28;
+  color: var(--foreground);
   font-size: 20px;
   line-height: 1.4;
   font-weight: 700;
@@ -132,7 +132,7 @@
 }
 .settings-section-heading p {
   margin: 0;
-  color: #6b7684;
+  color: var(--muted-foreground);
   font-size: 14px;
   line-height: 1.5;
 }
@@ -143,8 +143,8 @@
   margin-left: auto;
   padding: 7px 10px;
   border-radius: 8px;
-  background: #f7f8fa;
-  color: #6b7684;
+  background: var(--muted);
+  color: var(--muted-foreground);
   font-size: 12px;
   font-weight: 500;
   white-space: nowrap;
@@ -158,20 +158,20 @@
   min-width: 0;
   padding: 22px 18px;
   border-radius: 17px;
-  background: #f7f9fc;
+  background: var(--muted);
 }
 .usage-item-label {
   display: flex;
   align-items: center;
   gap: 8px;
-  color: #6b7684;
+  color: var(--muted-foreground);
 }
 .usage-item-label svg {
   flex-shrink: 0;
   color: #7c8ea8;
 }
 .usage-item-label strong {
-  color: #4e5968;
+  color: var(--muted-foreground);
   font-size: 13px;
   font-weight: 550;
 }
@@ -181,7 +181,7 @@
   gap: 4px;
   flex-wrap: wrap;
   margin: 18px 0 17px;
-  color: #2364e8;
+  color: var(--primary);
   font-size: 13px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
@@ -194,7 +194,7 @@
 }
 .usage-item-value .usage-item-limit {
   margin-left: 2px;
-  color: #6b7684;
+  color: var(--muted-foreground);
   font-size: 12px;
   font-weight: 450;
 }
@@ -206,8 +206,8 @@
   border: 0;
   border-radius: 20px;
   background: #e5eaf2;
-  color: #2364e8;
-  accent-color: #2364e8;
+  color: var(--primary);
+  accent-color: var(--primary);
 }
 .usage-item progress::-webkit-progress-bar {
   border-radius: 20px;
@@ -215,18 +215,18 @@
 }
 .usage-item progress::-webkit-progress-value {
   border-radius: 20px;
-  background: #2364e8;
+  background: var(--primary);
 }
 .usage-item progress::-moz-progress-bar {
   border-radius: 20px;
-  background: #2364e8;
+  background: var(--primary);
 }
 .settings-usage-notes {
   margin: 23px 0;
 }
 .settings-usage-notes p {
   margin: 5px 0;
-  color: #6b7684;
+  color: var(--muted-foreground);
   font-size: 13px;
   line-height: 1.7;
 }
@@ -235,10 +235,10 @@
   align-items: center;
   gap: 28px;
   padding-top: 21px;
-  border-top: 1px solid #f0f2f5;
+  border-top: 1px solid var(--border);
 }
 .settings-muted {
-  color: #6b7684;
+  color: var(--muted-foreground);
   font-size: 13px;
   line-height: 1.7;
 }
@@ -254,7 +254,7 @@
   justify-content: center;
   gap: 5px;
   min-height: 44px;
-  color: #2364e8;
+  color: var(--primary);
   font-size: 13px;
   font-weight: 600;
   text-decoration: none;
@@ -284,8 +284,8 @@
   margin-left: auto;
   padding: 3px 8px;
   border-radius: 9px;
-  background: #f2f5f9;
-  color: #6b7684;
+  background: var(--muted);
+  color: var(--muted-foreground);
   font-size: 13px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
@@ -295,7 +295,7 @@
   align-items: flex-start;
   gap: 13px;
   padding: 22px 0;
-  border-top: 1px solid #f0f2f5;
+  border-top: 1px solid var(--border);
 }
 .settings-case:first-child {
   padding-top: 5px;
@@ -310,7 +310,7 @@
   height: 42px;
   margin-top: 1px;
   border-radius: 11px;
-  background: #f5f7fa;
+  background: var(--muted);
   color: #8b98a9;
 }
 .settings-case-info {
@@ -324,13 +324,13 @@
 .settings-case-title {
   display: inline-block;
   padding: 2px 0 5px;
-  color: #333d4b;
+  color: var(--foreground);
   font-size: 15px;
   font-weight: 650;
   line-height: 1.6;
 }
 .settings-case-title:hover {
-  color: #2364e8;
+  color: var(--primary);
 }
 .settings-case-info p {
   margin: 0;
@@ -341,7 +341,7 @@
   align-items: center;
   gap: 3px;
   min-height: 38px;
-  color: #2364e8;
+  color: var(--primary);
   font-size: 12px;
   font-weight: 550;
 }
@@ -351,8 +351,8 @@
   padding: 7px 10px;
   min-height: 40px;
   border-color: transparent;
-  background: #f7f8fa;
-  color: #6b7684;
+  background: var(--muted);
+  color: var(--muted-foreground);
   font-size: 12px;
   font-weight: 500;
 }
@@ -365,8 +365,8 @@
 .settings-policy-note {
   margin: 0;
   padding-top: 18px;
-  border-top: 1px solid #f0f2f5;
-  color: #6b7684;
+  border-top: 1px solid var(--border);
+  color: var(--muted-foreground);
   font-size: 12px;
   line-height: 1.8;
 }
@@ -379,7 +379,7 @@
 }
 .settings-empty p {
   margin: 16px 0 3px;
-  color: #6b7684;
+  color: var(--muted-foreground);
   font-size: 14px;
 }
 .settings-help .settings-section-heading {
@@ -397,13 +397,13 @@
   min-height: 54px;
   padding: 12px;
   border-radius: 10px;
-  color: #4e5968;
+  color: var(--muted-foreground);
   font-size: 14px;
   text-decoration: none;
   transition: background 0.18s;
 }
 .settings-links a:hover {
-  background: #f7f9fc;
+  background: var(--muted);
 }
 .settings-links svg {
   flex-shrink: 0;
@@ -421,7 +421,7 @@
 }
 .settings-danger-content > p {
   margin: 0 0 18px;
-  color: #6b7684;
+  color: var(--muted-foreground);
   font-size: 14px;
   line-height: 1.8;
 }
@@ -429,7 +429,7 @@
   margin: 0 0 18px;
   padding: 16px;
   border-radius: 12px;
-  background: #f8f9fb;
+  background: var(--muted);
 }
 .settings-reauth > p,
 .settings-danger-content .settings-reauth-complete {
@@ -437,7 +437,7 @@
   align-items: flex-start;
   gap: 7px;
   margin: 0 0 12px;
-  color: #6b7684;
+  color: var(--muted-foreground);
   font-size: 13px;
   line-height: 1.7;
 }
@@ -468,11 +468,11 @@
 }
 .account-settings .report-modal .danger-button {
   background: #c13c3c;
-  color: #fff;
+  color: var(--card);
 }
 .account-settings .report-modal .danger-button:hover:not(:disabled) {
   background: #aa3030;
-  color: #fff;
+  color: var(--card);
 }
 .settings-error,
 .settings-usage-notes .settings-error {
@@ -503,11 +503,11 @@
 }
 .settings-deleted h1 {
   margin: 22px 0 18px;
-  color: #191f28;
+  color: var(--foreground);
   font-size: 30px;
 }
 .settings-deleted p {
-  color: #6b7684;
+  color: var(--muted-foreground);
   font-size: 15px;
   line-height: 1.8;
 }
@@ -519,9 +519,9 @@
   width: min(500px, calc(100% - 32px));
   max-height: calc(100dvh - 40px);
   padding: 30px;
-  border: 1px solid #e8edf3;
+  border: 1px solid var(--border);
   border-radius: 24px;
-  color: #333d4b;
+  color: var(--foreground);
   box-shadow: 0 24px 80px #172b4d26;
 }
 .account-settings .report-modal::backdrop {
@@ -529,41 +529,41 @@
   backdrop-filter: blur(3px);
 }
 .account-settings .report-modal h2 {
-  color: #191f28;
+  color: var(--foreground);
   font-size: 22px;
   line-height: 1.5;
 }
 .account-settings .report-modal p {
-  color: #6b7684;
+  color: var(--muted-foreground);
   font-size: 14px;
   line-height: 1.8;
 }
 .account-settings .report-modal label {
-  color: #4e5968;
+  color: var(--muted-foreground);
   font-size: 13px;
   font-weight: 600;
 }
 .account-settings .report-modal input {
   min-height: 48px;
   margin: 9px 0 24px;
-  border: 1px solid #d8dee7;
+  border: 1px solid var(--input);
   border-radius: 11px;
-  background: #f9fafb;
+  background: var(--muted);
 }
 .account-settings .report-modal .settings-actions {
   justify-content: flex-end;
 }
 .account-settings :focus-visible,
 .settings-deleted :focus-visible {
-  outline: 3px solid #2364e8;
+  outline: 3px solid var(--primary);
   outline-offset: 4px;
 }
 .settings-primary-link {
   gap: 12px;
   padding: 12px 18px;
   border-radius: 12px;
-  background: #2364e8;
-  color: #fff;
+  background: var(--primary);
+  color: var(--card);
   font-size: 14px;
 }
 .settings-primary-link:hover {
