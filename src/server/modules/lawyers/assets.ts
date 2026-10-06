@@ -14,6 +14,7 @@ import { createV2LawyersRepository } from "../../db/v2-lawyers";
 import { type BlobRegistration, createV2StorageRepository } from "../../db/v2-storage";
 import { isPreparedStoragePaidHold } from "../../db/v2-storage-paid-runtime";
 import type { StorageCosts, StoragePermit } from "../budget/storage-ledger";
+import { createStorageMaintenance } from "../budget/storage-maintenance";
 import { hasCurrentConsent } from "../consent/service";
 import { digest } from "../files/binary";
 import type { PrivateBucket } from "../files/service";
@@ -72,6 +73,7 @@ export function createLawyerAssetsService(core: V2Core, deps: LawyerAssetDepende
     new Date(
       timestampSchema.parse((deps.clock ?? (() => new Date().toISOString()))()),
     ).toISOString();
+  const maintenance = createStorageMaintenance(core, deps.environment, now);
   const actor = (ownerId: string) => actorSchema.parse({ ownerId, now: now() });
   const bucket = () => {
     if (!deps.bucket) throw new LawyerError("PROCESSING_UNAVAILABLE");
@@ -112,6 +114,8 @@ export function createLawyerAssetsService(core: V2Core, deps: LawyerAssetDepende
     additionalAuth: () => Promise<boolean> = async () => true,
   ) => {
     if (!(await additionalAuth())) throw new LawyerError("NOT_FOUND");
+    if (!(await hasCurrentConsent(drizzle(core.binding, { schema }), ownerId)))
+      throw new LawyerError("PROCESSING_UNAVAILABLE");
     const row = await assetRow(ownerId, id);
     const original = await blob(row, ownerId);
     const receipt = await core.decrypt(
@@ -122,13 +126,12 @@ export function createLawyerAssetsService(core: V2Core, deps: LawyerAssetDepende
       original.encrypted_payload,
       z.strictObject({ contentHash: hashSchema }),
     );
-    const object = await bucket().get(original.object_key);
-    if (!object || object.key !== original.object_key || object.size !== original.cipher_bytes) {
-      await object?.body.cancel().catch(() => {});
-      throw new LawyerError("NOT_FOUND");
-    }
     const authorized = async () => {
-      if (!(await additionalAuth())) return false;
+      if (
+        !(await additionalAuth()) ||
+        !(await hasCurrentConsent(drizzle(core.binding, { schema }), ownerId))
+      )
+        return false;
       try {
         const current = await assetRow(ownerId, id);
         const currentBlob = await blob(current, ownerId);
@@ -141,6 +144,17 @@ export function createLawyerAssetsService(core: V2Core, deps: LawyerAssetDepende
         return false;
       }
     };
+    if (
+      !(unmeteredTest
+        ? await authorized()
+        : await maintenance.admit(original.id, original.object_key, "get", authorized))
+    )
+      throw new LawyerError("PROCESSING_UNAVAILABLE");
+    const object = await bucket().get(original.object_key);
+    if (!object || object.key !== original.object_key || object.size !== original.cipher_bytes) {
+      await object?.body.cancel().catch(() => {});
+      throw new LawyerError("NOT_FOUND");
+    }
     if (!(await authorized())) {
       await object.body.cancel().catch(() => {});
       throw new LawyerError("NOT_FOUND");

@@ -160,3 +160,21 @@ canonical UTC milliseconds로 저장·비교한다. exact tuple와 immutable 본
 fresh와 populated0006→0007의 모든 기존82개 테이블 행·FK·암호문/AAD·snapshot·읽기/삭제를
 검증한다. DB rollback으로 새 테이블·비용 proof·hold를 DROP하지 않으며 restore 뒤에도 최신
 삭제 journal과 allocation·비용 상태를 재적용한다. 로컬 SQL/AES 성공은 실제 restore drill이 아니다.
+
+
+## SQL 파일 migration과 R2 maintenance 연결 (#108)
+
+preview의0009가 원격 query 경로에서 `incomplete input`으로 중단되어 배포 schema가0008에
+남았다. `db:migrate:preview`와 `db:migrate:production`은 기존 SQL을 수정하지 않고 원문과
+`d1_migrations` 기록을 같은 [D1 SQL 파일 import](https://developers.cloudflare.com/d1/best-practices/import-export-data/)로 적용한다.
+파일 import의 atomic rollback을 사용하며 trigger 본문을 세미콜론으로 분할하지 않는다.
+적용 기록은 알려진 migration의 연속 prefix여야 한다. 실패 시 배포를 중단하고 기록을 확인한
+뒤 재실행한다. ledger를 임의로 채우거나 기존 migration을 편집하지 않는다. 로컬 fresh import·
+실패 rollback·재실행 검사는 CI에 포함되며 원격 성공은 같은 SHA의 preview smoke로 확인한다.
+
+private 원본 파일과 변호사 원본 GET, private/publiccopy cleanup의 DELETE·HEAD는 실제 IO
+직전에 현재 월 storage projection과 capacity binding의 일회 permit을 소비한다. 한도 소진·
+proof 만료·동의/소유 변경 시 IO를 중단한다. cleanup은 현재 journal token·fencing·lease를
+확인하고 running writer를 보존한다. 불확실한 IO의 카운터는 반환하지 않으며 DELETE 이후
+HEAD까지 허용·확인된 경우에만 cleanup receipt를 기록한다. 업로드 완료는 처리기가 읽는
+한 번의 stream에서 모든 part·전체 hash를 검증하고, 끝까지 검증되지 않으면 완료하지 않는다.

@@ -225,3 +225,12 @@ mock 흐름 완성 뒤 #62 기능 트랙에서 본인 profile 저장·승인 없
 main 통합·preview는 A와 조율해. 다른 세션에 인계 메시지를 보내도 된다.
 새 세션/Goal/추가 에이전트·프롬프트 재작성 없이 구현해.
 ```
+
+
+## 리뷰 후속 검사 (#108)
+
+source-only auth/files 변경은 import 관계를 따라 기존 consumer unit test를 선택한다.
+v2 DB schema/repository와 migration runner 변경은 DB drift·fresh/upgrade 검사를 실행한다.
+화면·island·domain mock·스타일 변경은 현재 존재하는 담당 browser flow를 선택하며, 예정된
+`workspace.e2e.ts`가 없다는 이유로 사건 검사를 건너뛰지 않는다. 공통 UI 변경은 corpus를
+제외한 browser flow를 실행한다. 이 보강은 위 A~E 화면 구현과 기존 공개 gate를 유지한다.
