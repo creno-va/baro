@@ -76,10 +76,16 @@ test("saved conversation survives new client; failed response retries without du
     selectedFileIds: [],
   });
   expect(view.messages.map((m) => m.status)).toEqual(["complete", "pending"]);
+  f.runtime.update((state) => {
+    state.reports = { "synthetic-case": { stale: false, excludedFileIds: [] } };
+  });
+  const pendingRevision = view.case.revision;
   settle(f.runtime);
   const resumed = createWorkspaceApi(f.transport);
   view = await resumed.get("synthetic-case");
   expect(view.messages[1]?.status).toBe("failed");
+  expect(view.case.revision).toBe(pendingRevision + 1);
+  expect(f.runtime.read().reports?.["synthetic-case"]?.stale).toBe(true);
   view = await resumed.retryMessage("synthetic-case", view.messages[1]?.id ?? "");
   expect(view.messages[1]?.status).toBe("pending");
   settle(f.runtime);
