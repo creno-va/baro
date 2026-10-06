@@ -1,15 +1,18 @@
 import {
   BriefcaseBusiness,
+  CircleHelp,
   FileText,
   House,
+  LogOut,
   Menu,
+  MessageCircle,
   Plus,
   Settings,
   ShieldCheck,
   Users,
 } from "lucide-react";
-import { useEffect, useState } from "react";
-import type { SessionView } from "../../client/api";
+import { useEffect, useRef, useState } from "react";
+import type { CaseView, SessionView } from "../../client/api";
 import { api, apiMode } from "../../client/api";
 import { Brand } from "./brand";
 import { Button } from "./button";
@@ -32,12 +35,12 @@ const icons = {
 };
 export const ROLE_NAVIGATION: Record<NavigationRole, readonly NavigationItem[]> = {
   visitor: [
-    { href: "/", label: "홈", icon: "home" },
+    { href: "/", label: "새로운 이야기", icon: "new" },
     { href: "/lawyers", label: "변호사 찾기", icon: "lawyers" },
   ],
   user: [
+    { href: "/", label: "새 사건 입력", icon: "new" },
     { href: "/cases", label: "내 사건", icon: "cases" },
-    { href: "/cases/new", label: "새 사건 입력", icon: "new" },
     { href: "/lawyers", label: "변호사 찾기", icon: "lawyers" },
     { href: "/settings", label: "계정 설정", icon: "settings" },
   ],
@@ -54,7 +57,12 @@ export const ROLE_NAVIGATION: Record<NavigationRole, readonly NavigationItem[]> 
 export function availableNavigation(role: NavigationRole, availableRoutes: readonly string[]) {
   return ROLE_NAVIGATION[role].filter((item) => availableRoutes.includes(item.href));
 }
-
+function caseLink(item: CaseView) {
+  const base = `/cases/${encodeURIComponent(item.id)}`;
+  return item.schemaVersion === "1" || item.stage === "active" || item.stage === "archived"
+    ? base
+    : `${base}/${item.stage}`;
+}
 export function AppNavigation({
   role = "visitor",
   pathname = "/",
@@ -67,14 +75,65 @@ export function AppNavigation({
   showLogin?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const [ready, setReady] = useState(false);
   const [session, setSession] = useState<SessionView | null>(null);
+  const [recent, setRecent] = useState<CaseView[]>([]);
   const [error, setError] = useState("");
   const [signingOut, setSigningOut] = useState(false);
+  const sessionRequest = useRef(0);
+  const signingOutRef = useRef(false);
   useEffect(() => {
-    api.session
-      .get()
-      .then(setSession)
-      .catch(() => setSession({ user: null, needsConsent: false }));
+    let active = true;
+    let owner: string | undefined;
+    setReady(true);
+    async function refresh() {
+      if (signingOutRef.current) return;
+      const ticket = ++sessionRequest.current;
+      const current = () => active && ticket === sessionRequest.current;
+      try {
+        const next = await api.session.get();
+        if (!current()) return;
+        if (owner !== next.user?.id || next.needsConsent || next.user?.accountType !== "customer") {
+          setRecent([]);
+        }
+        owner = next.user?.id;
+        setSession(next);
+        if (next.user?.accountType !== "customer" || next.needsConsent) return;
+        try {
+          const items = await api.cases.list();
+          if (current())
+            setRecent(
+              [...items].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 5),
+            );
+        } catch {
+          if (current()) setRecent([]);
+        }
+      } catch {
+        if (!current()) return;
+        owner = undefined;
+        setRecent([]);
+        setSession({ user: null, needsConsent: false });
+      }
+    }
+    const visible = () => {
+      if (document.visibilityState === "visible") void refresh();
+    };
+    const storage = (event: StorageEvent) => {
+      if (!event.key || event.key === "baro-api-mock-v1:session") void refresh();
+    };
+    void refresh();
+    window.addEventListener("focus", refresh);
+    window.addEventListener("pageshow", refresh);
+    window.addEventListener("storage", storage);
+    document.addEventListener("visibilitychange", visible);
+    return () => {
+      active = false;
+      ++sessionRequest.current;
+      window.removeEventListener("focus", refresh);
+      window.removeEventListener("pageshow", refresh);
+      window.removeEventListener("storage", storage);
+      document.removeEventListener("visibilitychange", visible);
+    };
   }, []);
   const resolvedRole = session?.user
     ? session.user.accountType === "lawyer"
@@ -91,12 +150,17 @@ export function AppNavigation({
     "/settings",
   ]);
   async function signOut() {
+    signingOutRef.current = true;
+    ++sessionRequest.current;
+    setRecent([]);
     setSigningOut(true);
     setError("");
     try {
       await api.session.signOut();
+      setRecent([]);
       window.location.assign("/login");
     } catch {
+      signingOutRef.current = false;
       setError("로그아웃하지 못했어요. 다시 시도해 주세요.");
       setSigningOut(false);
     }
@@ -106,77 +170,135 @@ export function AppNavigation({
       const Icon = icons[item.icon];
       const active =
         pathname === item.href ||
+        (item.href === "/" && pathname === "/cases/new") ||
         (item.href === "/cases" && pathname.startsWith("/cases/") && pathname !== "/cases/new");
       return (
         <a
-          className="app-nav__link"
+          className={`app-nav__link${item.icon === "new" ? " app-nav__link--new" : ""}`}
           key={item.href}
           href={item.href}
           aria-current={active ? "page" : undefined}
         >
-          <Icon aria-hidden="true" size={18} strokeWidth={1.75} />
+          <Icon aria-hidden="true" size={19} strokeWidth={1.65} />
           <span>{item.label}</span>
         </a>
       );
     });
-  return (
-    <header className="app-header">
-      {apiMode === "mock" && (
-        <div className="api-mode-notice">
-          API 예시 응답으로 보기 · 합성 데이터로 이용 흐름을 확인하세요.
+  const renderRecent = () =>
+    resolvedRole === "user" && (
+      <div className="sidebar-recent">
+        <p className="sidebar-caption">최근 이야기</p>
+        {recent.length ? (
+          <nav aria-label="최근 사건">
+            {recent.map((item) => (
+              <a key={item.id} href={caseLink(item)} title={item.title}>
+                <MessageCircle size={16} aria-hidden="true" />
+                <span>{item.title}</span>
+              </a>
+            ))}
+          </nav>
+        ) : (
+          <p className="sidebar-empty">여기서 이야기를 이어갈 수 있어요.</p>
+        )}
+      </div>
+    );
+  const renderAccount = () => (
+    <div className="sidebar-account">
+      <a href="/help" className="sidebar-help">
+        <CircleHelp size={17} aria-hidden="true" />
+        도움말
+      </a>
+      {session?.user ? (
+        <div className="sidebar-account__row">
+          <a href="/settings" className="sidebar-profile">
+            <span className="sidebar-avatar" aria-hidden="true">
+              {session.user.name.slice(0, 1) || "B"}
+            </span>
+            <span>
+              <strong>{session.user.name || "내 계정"}</strong>
+              <small>{session.user.accountType === "lawyer" ? "변호사 계정" : "나의 BARO"}</small>
+            </span>
+          </a>
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label={signingOut ? "로그아웃 중…" : "로그아웃"}
+            title="로그아웃"
+            onClick={() => void signOut()}
+            disabled={signingOut}
+          >
+            <LogOut size={18} aria-hidden="true" />
+          </Button>
         </div>
+      ) : (
+        (showLogin || session !== null) && (
+          <a className="ui-button ui-button--primary sidebar-login" href="/login">
+            로그인하고 시작하기
+          </a>
+        )
+      )}
+      {apiMode === "mock" && (
+        <p className="api-mode-notice">
+          <span aria-hidden="true" />
+          API 예시 모드 · 합성 데이터
+        </p>
       )}
       {error && (
         <p role="alert" className="form-error">
           {error}
         </p>
       )}
-      <div className="app-header__inner">
-        <Brand />
-        <nav className="app-nav app-nav--desktop" aria-label="주 메뉴">
-          {renderLinks()}
-        </nav>
-        <div className="app-header__actions">
-          {session?.user ? (
-            <Button variant="outline" onClick={() => void signOut()} disabled={signingOut}>
-              {signingOut ? "로그아웃 중…" : "로그아웃"}
-            </Button>
-          ) : (
-            (showLogin || session !== null) && (
-              <a className="ui-button ui-button--primary" href="/login">
-                로그인
-              </a>
-            )
-          )}
+    </div>
+  );
+  return (
+    <>
+      <header className="app-header">
+        <div className="app-header__inner">
+          <Brand />
+          <span className="mobile-caption">생각이 정리되는 곳</span>
+          {apiMode === "mock" && <span className="mobile-mode">API 예시</span>}
           <Button
             className="app-menu-trigger"
-            variant="outline"
+            variant="ghost"
             size="icon"
             aria-label="메뉴 열기"
             aria-expanded={open}
             aria-haspopup="dialog"
+            disabled={!ready}
             onClick={() => setOpen(true)}
           >
-            <Menu aria-hidden="true" size={20} />
+            <Menu aria-hidden="true" size={22} />
           </Button>
         </div>
-      </div>
+        <div className="sidebar-desktop">
+          <nav className="app-nav app-nav--desktop" aria-label="주 메뉴">
+            {renderLinks()}
+          </nav>
+          {renderRecent()}
+          <div className="sidebar-note">
+            <span>조금 더 가벼운 마음으로.</span>
+            <p>
+              복잡한 일의 시작부터
+              <br />
+              BARO가 함께 정리해요.
+            </p>
+          </div>
+          {renderAccount()}
+        </div>
+      </header>
       <Sheet
         open={open}
         onOpenChange={setOpen}
         title="메뉴"
-        description="이용할 화면을 선택해 주세요."
+        description="이야기를 시작하거나 이어가세요."
       >
         <Brand />
         <nav className="app-nav app-nav--mobile" aria-label="모바일 주 메뉴">
           {renderLinks()}
-          {showLogin && (
-            <a className="app-nav__link" href="/login">
-              로그인
-            </a>
-          )}
         </nav>
+        {renderRecent()}
+        {renderAccount()}
       </Sheet>
-    </header>
+    </>
   );
 }

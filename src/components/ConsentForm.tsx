@@ -6,7 +6,7 @@ import { CURRENT_POLICY_VERSIONS } from "../contracts/consent";
 type ConsentState = "loading" | "required" | "complete";
 
 export function ConsentForm() {
-  const [startPath, setStartPath] = useState("/cases");
+  const [startPath, setStartPath] = useState("/");
   const [state, setState] = useState<ConsentState>("loading");
   const [accepted, setAccepted] = useState(false);
   const [over14, setOver14] = useState(false);
@@ -27,7 +27,7 @@ export function ConsentForm() {
           window.location.assign("/login?error=session_expired");
           return;
         }
-        setStartPath(session.user.accountType === "lawyer" ? "/lawyer" : "/cases");
+        setStartPath(session.user.accountType === "lawyer" ? "/lawyer" : "/");
         const consent = await api.session.getConsent();
         setState(consent.needsConsent ? "required" : "complete");
       })

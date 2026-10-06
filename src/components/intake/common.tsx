@@ -1,4 +1,4 @@
-import { ArrowLeft, Check, Circle } from "lucide-react";
+import { ArrowLeft, Check } from "lucide-react";
 import { ApiError } from "../../client/api/core";
 import type { CaseView } from "../../client/api/types";
 import { Button, ButtonLink } from "../ui/button";
@@ -22,11 +22,9 @@ export function IntakeProgress({ step }: { step: number }) {
           aria-current={index === step ? "step" : undefined}
           className={index <= step ? "is-current" : ""}
         >
-          {index < step ? (
-            <Check size={16} aria-hidden="true" />
-          ) : (
-            <Circle size={16} aria-hidden="true" />
-          )}
+          <span className="intake-step-number" aria-hidden="true">
+            {index < step ? <Check size={13} /> : index + 1}
+          </span>
           <span>{label}</span>
         </li>
       ))}

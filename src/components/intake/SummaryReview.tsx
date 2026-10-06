@@ -2,6 +2,7 @@ import { ArrowRight, Check, Pencil, Save } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../../client/api";
 import type { CaseView } from "../../client/api/types";
+import { BrandMark } from "../ui/brand";
 import { Button, ButtonLink } from "../ui/button";
 import { Textarea } from "../ui/form";
 import { StatePanel } from "../ui/state-panel";
@@ -92,8 +93,11 @@ export function SummaryReview({ caseId }: { caseId: string }) {
       {error ? <ErrorPanel error={error} retry={() => void load()} disabled={busy} /> : null}
       {item ? (
         <section className="intake-card" aria-busy={busy}>
-          <p className="intake-eyebrow">사건 요약</p>
-          <h1>내가 말한 내용이 맞나요?</h1>
+          <div className="intake-assistant-heading">
+            <BrandMark size={32} />
+            <p className="intake-eyebrow">지금까지 나눈 이야기</p>
+          </div>
+          <h1>이렇게 정리해 봤어요.</h1>
           <p className="intake-muted">
             틀리거나 빠진 내용, 불리한 사실도 수정해 주세요. 이 요약은 사실 정리이며 법률 판단이
             아니에요.
@@ -191,7 +195,7 @@ export function SummaryReview({ caseId }: { caseId: string }) {
                   aria-labelledby="confirm-title"
                 >
                   <h2 id="confirm-title">이 요약으로 사건 정리를 이어갈까요?</h2>
-                  <p>확인 후 대화·자료·타임라인·다음 행동을 정리하는 사건 화면으로 이동해요.</p>
+                  <p>이제 BARO와 대화하며 자료, 사건의 흐름, 다음 할 일을 함께 정리할 수 있어요.</p>
                   <div className="intake-actions">
                     <Button onClick={() => void confirm()} disabled={busy}>
                       <Check size={18} aria-hidden="true" />
