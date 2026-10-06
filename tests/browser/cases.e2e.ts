@@ -26,6 +26,14 @@ test("intake validates code points, blocks duplicates, preserves replay key and 
   page,
 }) => {
   await challenge(page);
+  await page.route("**/api/me/session", (route) =>
+    route.fulfill({
+      json: {
+        user: { id: "synthetic-owner", name: "합성 고객", accountType: "customer" },
+        needsConsent: false,
+      },
+    }),
+  );
   await page.route("**/api/me/consent", (route) =>
     route.fulfill({ json: { needsConsent: false } }),
   );

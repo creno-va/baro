@@ -41,6 +41,7 @@ test("decline leaves case flow usable with no optional storage/network; feedback
   await expect(page.getByRole("heading", { name: "상황 정리" })).toBeVisible();
   expect(await page.evaluate((key) => sessionStorage.getItem(key), storage)).toBeNull();
   expect(await page.evaluate(() => document.cookie)).not.toContain("analytics");
+  await page.getByText("개인정보와 이용 설정", { exact: true }).click();
   await page.getByRole("button", { name: "사용 지표 거부" }).click();
   await expect(page.getByText("선택 지표 수집 안 함")).toBeVisible();
   const helpful = page.getByRole("button", { name: "도움이 됐어요", exact: true });
@@ -78,6 +79,7 @@ test("opt-in records only hashed allowlisted events, 50%/1s view once, reload an
   );
   await page.route(`**/api/cases/${caseId}/feedback`, (route) => route.fulfill({ status: 204 }));
   await page.goto(`/cases/${caseId}`);
+  await page.getByText("개인정보와 이용 설정", { exact: true }).click();
   await page.getByRole("button", { name: "사용 지표 동의", exact: true }).click();
   await expect(page.getByText("선택 지표 동의됨")).toBeVisible();
   await page.getByRole("heading", { name: "상황 정리" }).scrollIntoViewIfNeeded();
@@ -109,6 +111,7 @@ test("opt-in records only hashed allowlisted events, 50%/1s view once, reload an
   expect(persisted).not.toContain("반환 약정");
   expect(persisted).not.toContain("better-auth");
   await page.reload();
+  await page.getByText("개인정보와 이용 설정", { exact: true }).click();
   await page.getByRole("heading", { name: "상황 정리" }).scrollIntoViewIfNeeded();
   await expect
     .poll(async () => (await events()).filter((e) => e.name === "result_viewed").length)

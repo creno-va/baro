@@ -4,7 +4,7 @@ import { ApiError, apiMode, request } from "./core";
 import type { AccountType, Provider, SessionView } from "./types";
 import "./mock/session";
 export const roleStart = (session: SessionView) =>
-  session.needsConsent ? "/consent" : session.user?.accountType === "lawyer" ? "/lawyer" : "/cases";
+  session.needsConsent ? "/consent" : session.user?.accountType === "lawyer" ? "/lawyer" : "/";
 export const sessionApi = {
   async get(): Promise<SessionView> {
     const session = await request<SessionView>("session.get", undefined, {

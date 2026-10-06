@@ -2,11 +2,13 @@ import {
   ArrowLeft,
   ArrowRight,
   CheckCheck,
+  ChevronDown,
   Clock3,
   FileText,
   FolderOpen,
   LoaderCircle,
   MessageSquare,
+  Paperclip,
   Plus,
   Send,
   Upload,
@@ -16,6 +18,7 @@ import { type SyntheticEvent, useCallback, useEffect, useRef, useState } from "r
 import { api } from "../../client/api";
 import type { FileView, TimelineView, WorkspaceView } from "../../client/api/types";
 import { CaseDetail } from "../analysis/CaseDetail";
+import { BrandMark } from "../ui/brand";
 import { Button, ButtonLink } from "../ui/button";
 
 export type WorkspaceTab = "chat" | "files" | "timeline" | "actions";
@@ -83,6 +86,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
   const uploadInput = useRef<HTMLInputElement>(null);
   const dialog = useRef<HTMLDialogElement>(null);
   const chatEnd = useRef<HTMLDivElement>(null);
+  const draftInput = useRef<HTMLTextAreaElement>(null);
   const latest = useRef(0);
   const showError = useCallback((cause: unknown) => {
     const next = problem(cause);
@@ -141,10 +145,25 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
     }, 1800);
     return () => clearTimeout(timer);
   }, [view, load, showError]);
+  const latestMessage = view?.messages.at(-1);
+  const latestMessageContent = latestMessage
+    ? `${latestMessage.id}:${latestMessage.status}:${latestMessage.text}`
+    : "";
   useEffect(() => {
-    if (tab === "chat" && view?.messages.length)
-      chatEnd.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
-  }, [view?.messages.length, tab]);
+    if (tab !== "chat" || !latestMessageContent) return;
+    chatEnd.current?.scrollIntoView({
+      block: "end",
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+        ? "instant"
+        : "smooth",
+    });
+  }, [latestMessageContent, tab]);
+  useEffect(() => {
+    const input = draftInput.current;
+    if (!input) return;
+    input.style.height = draft ? "auto" : "";
+    if (draft) input.style.height = `${Math.min(input.scrollHeight, 220)}px`;
+  }, [draft]);
   useEffect(() => {
     const open = !!(preview || deleteFile || entry);
     if (open && !dialog.current?.open) dialog.current?.showModal();
@@ -235,17 +254,15 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
   const pendingResponse = view?.messages.some((message) => message.status === "pending");
   const readonly = view?.case.stage !== "active";
   return (
-    <div className="workspace">
+    <div className={`workspace workspace--${tab}`}>
       <a className="workspace-back" href="/cases">
         <ArrowLeft size={16} /> 내 사건
       </a>
       <header className="workspace-header">
         <div>
-          <p className="workspace-eyebrow">나의 사건 작업 공간</p>
           <h1>{view?.case.title ?? "사건을 불러오는 중"}</h1>
-          <p className="workspace-muted">내용을 이어서 정리하고, 준비할 일을 하나씩 확인하세요.</p>
         </div>
-        <ButtonLink href={`${base}/reports`} variant="outline">
+        <ButtonLink href={`${base}/reports`} variant="ghost">
           <FileText size={17} /> 리포트 보기
         </ButtonLink>
       </header>
@@ -326,12 +343,9 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
             >
               {tab === "chat" && (
                 <>
-                  <div className="workspace-section-heading">
-                    <div>
-                      <h2>이어서 대화하기</h2>
-                      <p>사실을 보충하거나 확인이 필요한 내용을 물어보세요.</p>
-                    </div>
-                    <MessageSquare size={22} />
+                  <div className="workspace-chat-heading">
+                    <h2>이어서 대화하기</h2>
+                    <span>BARO와 함께 정리해요</span>
                   </div>
                   <div
                     className="workspace-messages"
@@ -340,10 +354,36 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                     aria-live="polite"
                   >
                     {!view.messages.length && (
-                      <div className="workspace-empty">
-                        <MessageSquare size={32} />
-                        <h3>함께 내용을 정리해 볼까요?</h3>
-                        <p>추가로 알게 된 사실이나 궁금한 내용을 남겨주세요.</p>
+                      <div className="workspace-chat-welcome">
+                        <div className="workspace-welcome-mark">
+                          <BrandMark size={52} />
+                        </div>
+                        <h3>이제, 하나씩 풀어가요.</h3>
+                        <p>
+                          기억나는 사실부터 궁금한 점까지.
+                          <br />
+                          BARO와 대화하며 다음을 준비해요.
+                        </p>
+                        <div className="workspace-suggestions">
+                          {[
+                            "지금까지 내용을 정리해 주세요",
+                            "어떤 자료를 준비하면 좋을까요?",
+                            "추가로 기억난 일이 있어요",
+                          ].map((prompt) => (
+                            <Button
+                              key={prompt}
+                              variant="outline"
+                              disabled={!!busy || readonly}
+                              onClick={() => {
+                                setDraft(prompt);
+                                draftInput.current?.focus();
+                              }}
+                            >
+                              {prompt}
+                              <ArrowRight size={15} />
+                            </Button>
+                          ))}
+                        </div>
                       </div>
                     )}
                     {view.messages.map((message) => (
@@ -352,7 +392,10 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                         key={message.id}
                       >
                         <div className="workspace-message-label">
-                          {message.role === "user" ? "나" : "BARO · AI 정리"}
+                          <span>
+                            {message.role !== "user" && <BrandMark size={25} />}
+                            {message.role === "user" ? "나" : "BARO"}
+                          </span>
                           <time dateTime={message.createdAt}>
                             {new Date(message.createdAt).toLocaleTimeString("ko-KR", {
                               hour: "2-digit",
@@ -387,56 +430,91 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                         )}
                       </article>
                     ))}
-                    <div ref={chatEnd} />
+                    <div className="workspace-chat-end" ref={chatEnd} />
                   </div>
                   <form className="workspace-composer" onSubmit={(event) => void send(event)}>
-                    {!!readyFiles.length && (
-                      <fieldset disabled={!!busy || readonly}>
-                        <legend>대화에 함께 사용할 자료</legend>
-                        <div className="workspace-file-choices">
-                          {readyFiles.map((file) => (
-                            <label key={file.id}>
-                              <input
-                                type="checkbox"
-                                checked={selected.includes(file.id)}
-                                onChange={(event) =>
-                                  setSelected((ids) =>
-                                    event.target.checked
-                                      ? [...ids, file.id]
-                                      : ids.filter((id) => id !== file.id),
-                                  )
-                                }
-                              />
-                              {file.name}
-                            </label>
-                          ))}
-                        </div>
-                      </fieldset>
-                    )}
-                    <label htmlFor="workspace-message">추가 사실 또는 질문</label>
-                    <textarea
-                      id="workspace-message"
-                      maxLength={10000}
-                      rows={3}
-                      value={draft}
-                      disabled={readonly}
-                      onChange={(event) => setDraft(event.target.value)}
-                      placeholder="예: 약속한 날짜 이후에 받은 연락도 정리하고 싶어요."
-                    />
-                    <div className="workspace-composer-footer">
-                      <small>중요한 사실과 기한은 원본 및 전문가와 확인해 주세요.</small>
-                      <Button
-                        type="submit"
-                        disabled={!!busy || !draft.trim() || readonly || pendingResponse}
-                      >
-                        {busy === "send" ? (
-                          <LoaderCircle className="workspace-spin" size={17} />
-                        ) : (
-                          <Send size={17} />
-                        )}
-                        {busy === "send" ? "저장 중" : "보내기"}
-                      </Button>
+                    <div className="workspace-composer-surface">
+                      {!!readyFiles.length && (
+                        <details className="workspace-evidence">
+                          <summary>
+                            <Paperclip size={15} /> 대화에 사용할 자료{" "}
+                            {selected.length > 0 && <span>{selected.length}개 선택</span>}
+                            <ChevronDown size={15} />
+                          </summary>
+                          <fieldset disabled={!!busy || readonly}>
+                            <legend>대화에 함께 사용할 자료</legend>
+                            <div className="workspace-file-choices">
+                              {readyFiles.map((file) => (
+                                <label key={file.id}>
+                                  <input
+                                    type="checkbox"
+                                    checked={selected.includes(file.id)}
+                                    onChange={(event) =>
+                                      setSelected((ids) =>
+                                        event.target.checked
+                                          ? [...ids, file.id]
+                                          : ids.filter((id) => id !== file.id),
+                                      )
+                                    }
+                                  />
+                                  {file.name}
+                                </label>
+                              ))}
+                            </div>
+                          </fieldset>
+                        </details>
+                      )}
+                      <label className="workspace-sr-only" htmlFor="workspace-message">
+                        추가 사실 또는 질문
+                      </label>
+                      <textarea
+                        ref={draftInput}
+                        id="workspace-message"
+                        maxLength={10000}
+                        rows={2}
+                        value={draft}
+                        disabled={readonly || busy === "send"}
+                        onChange={(event) => setDraft(event.target.value)}
+                        placeholder="추가로 기억나는 사실이나 궁금한 점을 이야기해 주세요."
+                        aria-describedby="workspace-chat-notice"
+                        onKeyDown={(event) => {
+                          if (
+                            event.key === "Enter" &&
+                            (event.metaKey || event.ctrlKey) &&
+                            !event.nativeEvent.isComposing &&
+                            !busy &&
+                            !pendingResponse &&
+                            !readonly &&
+                            draft.trim()
+                          ) {
+                            event.preventDefault();
+                            event.currentTarget.form?.requestSubmit();
+                          }
+                        }}
+                      />
+                      <div className="workspace-composer-footer">
+                        <a className="workspace-attach" href={`${base}/files`}>
+                          <Plus size={19} /> 자료 추가
+                        </a>
+                        <Button
+                          className="workspace-send"
+                          type="submit"
+                          disabled={!!busy || !draft.trim() || readonly || pendingResponse}
+                        >
+                          {busy === "send" ? (
+                            <LoaderCircle className="workspace-spin" size={17} />
+                          ) : (
+                            <Send size={17} />
+                          )}
+                          {busy === "send" ? "저장 중" : "보내기"}
+                        </Button>
+                      </div>
                     </div>
+                    <p className="workspace-chat-notice" id="workspace-chat-notice">
+                      BARO는 AI로 사실을 정리하며 법률 판단을 대신하지 않아요.
+                      <br className="workspace-mobile-break" /> 중요한 내용은 원본과 전문가에게
+                      확인해 주세요.
+                    </p>
                   </form>
                 </>
               )}
@@ -681,44 +759,59 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                 </>
               )}
             </section>
-            <aside className="workspace-sidebar">
-              <section>
-                <p className="workspace-eyebrow">확인한 사건 요약</p>
-                <h2>현재까지 정리한 내용</h2>
-                <p className="workspace-summary">
-                  {view.case.summary || "확인한 요약이 아직 없어요."}
+            <aside className="workspace-sidebar" aria-label="사건 요약 및 준비 현황">
+              <details className="workspace-context">
+                <summary>
+                  <FileText size={17} />
+                  <span>사건 요약과 준비 현황</span>
+                  <ChevronDown size={16} />
+                </summary>
+                <div className="workspace-context-content">
+                  <section>
+                    <h2>현재까지 정리한 내용</h2>
+                    <p className="workspace-summary">
+                      {view.case.summary || "확인한 요약이 아직 없어요."}
+                    </p>
+                    <a href={`${base}/summary`}>
+                      요약 검토하기 <ArrowRight size={14} />
+                    </a>
+                  </section>
+                  <section>
+                    <h2>준비 현황</h2>
+                    <a href={`${base}/files`}>
+                      자료 <span>{view.files.length}개</span>
+                    </a>
+                    <a href={`${base}/timeline`}>
+                      타임라인 <span>{view.timeline.length}개</span>
+                    </a>
+                    <a href={`${base}/actions`}>
+                      다음 행동{" "}
+                      <span>{view.actions.filter((action) => !action.done).length}개 남음</span>
+                    </a>
+                    <p>리포트에서 내용을 검토하고 전달할 자료를 직접 선택할 수 있어요.</p>
+                  </section>
+                </div>
+              </details>
+              <div className="workspace-context-footer">
+                <p className="workspace-saved">
+                  <CheckCheck size={14} />
+                  <time
+                    dateTime={view.case.updatedAt}
+                    title={new Date(view.case.updatedAt).toLocaleString("ko-KR")}
+                  >
+                    {new Date(view.case.updatedAt).toLocaleString("ko-KR", {
+                      month: "numeric",
+                      day: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}{" "}
+                    저장
+                  </time>
                 </p>
-                <a href={`${base}/summary`}>
-                  요약 검토하기 <ArrowRight size={14} />
-                </a>
-              </section>
-              <section>
-                <h2>준비 현황</h2>
-                <a href={`${base}/files`}>
-                  자료 <span>{view.files.length}개</span>
-                </a>
-                <a href={`${base}/timeline`}>
-                  타임라인 <span>{view.timeline.length}개</span>
-                </a>
-                <a href={`${base}/actions`}>
-                  다음 행동{" "}
-                  <span>{view.actions.filter((action) => !action.done).length}개 남음</span>
-                </a>
-              </section>
-              <section className="workspace-sidebar-help">
-                <h2>변호사에게 전달하기</h2>
-                <p>리포트에서 내용을 검토하고 전달할 자료를 직접 선택하세요.</p>
-                <ButtonLink href={`${base}/reports`} variant="outline">
-                  리포트 보기
-                </ButtonLink>
                 <a href="/lawyers">
                   변호사 탐색 <ArrowRight size={14} />
                 </a>
-              </section>
-              <p className="workspace-saved">
-                <CheckCheck size={15} />
-                {new Date(view.case.updatedAt).toLocaleString("ko-KR")} 저장
-              </p>
+              </div>
             </aside>
           </div>
         </>

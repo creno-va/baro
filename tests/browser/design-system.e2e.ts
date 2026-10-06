@@ -11,6 +11,14 @@ async function openInteractiveFixture(page: Page) {
 test("current landing, login and case screens share local brand and remain usable at 320px", async ({
   page,
 }) => {
+  await page.route("**/api/me/session", (route) =>
+    route.fulfill({
+      json: {
+        user: { id: "synthetic-owner", name: "합성 고객", accountType: "customer" },
+        needsConsent: false,
+      },
+    }),
+  );
   await page.route("**/api/cases?*", (route) =>
     route.fulfill({ json: { items: [], nextCursor: null } }),
   );
@@ -22,7 +30,7 @@ test("current landing, login and case screens share local brand and remain usabl
   );
   await page.goto("/");
   await expect(
-    page.getByRole("heading", { name: "복잡한 상황을 차분하게 정리합니다." }),
+    page.getByRole("heading", { name: /복잡한 일도,\s*하나씩 풀어가요\./ }),
   ).toBeVisible();
   await page.screenshot({ path: ".wrangler/home-desktop.png", fullPage: true });
   await page.goto("/login");
@@ -39,11 +47,14 @@ test("current landing, login and case screens share local brand and remain usabl
     ).toBe(true);
   }
   await page.screenshot({ path: ".wrangler/intake-320.png", fullPage: true });
-  expect(
-    await page
-      .getByRole("button", { name: "저장하고 질문 시작" })
-      .evaluate((element) => getComputedStyle(element).backgroundColor),
-  ).toBe("rgb(37, 99, 235)");
+  await page
+    .getByRole("textbox", { name: "지금까지 있었던 일" })
+    .fill("공통 디자인 확인을 위한 합성 사건입니다. 약속한 날짜가 지나도 대금을 받지 못했어요.");
+  await expect(page.getByRole("button", { name: "저장하고 질문 시작" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "저장하고 질문 시작" })).toHaveCSS(
+    "background-color",
+    "rgb(49, 130, 246)",
+  );
   await page.goto("/cases");
   await expect(page.getByRole("heading", { name: "아직 정리한 사건이 없어요" })).toBeVisible();
   await page.screenshot({ path: ".wrangler/case-list-320.png", fullPage: true });

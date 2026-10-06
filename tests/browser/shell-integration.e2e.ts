@@ -21,10 +21,14 @@ test("customer login consent logout share the product shell without external API
   await page.getByRole("checkbox", { name: "만 14세 이상입니다." }).check();
   await page.getByRole("button", { name: "동의하고 계속하기" }).click();
   await page.getByRole("link", { name: "내 화면으로 계속하기" }).click();
-  await expect(page).toHaveURL(/\/cases$/);
-  await expect(page.getByRole("heading", { name: "내 사건", exact: true })).toBeVisible();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole("textbox", { name: "지금까지 있었던 일" })).toBeVisible();
   await page.reload();
-  await page.getByRole("button", { name: "로그아웃", exact: true }).click();
+  await page.getByRole("button", { name: "메뉴 열기", exact: true }).click();
+  await page
+    .getByRole("dialog", { name: "메뉴", exact: true })
+    .getByRole("button", { name: "로그아웃", exact: true })
+    .click();
   await expect(page).toHaveURL(/\/login$/);
   await expect(page.getByRole("radio", { name: /고객/ })).toBeVisible();
   expect(requests).toEqual([]);
@@ -48,7 +52,7 @@ test("customer completes intake workspace original ZIP report and cascading dele
   await page.getByRole("checkbox", { name: "만 14세 이상입니다." }).check();
   await page.getByRole("button", { name: "동의하고 계속하기" }).click();
   await page.getByRole("link", { name: "내 화면으로 계속하기" }).click();
-  await page.getByRole("link", { name: "첫 사건 만들기" }).click();
+  await expect(page).toHaveURL(/\/$/);
   await page
     .getByLabel("지금까지 있었던 일")
     .fill("합성 시연 사건입니다. 지인에게 빌려준 돈을 약속한 날짜가 지나도 돌려받지 못했습니다.");

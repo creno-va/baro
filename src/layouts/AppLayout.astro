@@ -16,6 +16,10 @@ interface Props {
 const { title, description, role, availableRoutes, contentClass = "app-main" } = Astro.props;
 ---
 <BaseLayout title={title} description={description}>
-  <AppNavigation role={role} pathname={Astro.url.pathname} availableRoutes={availableRoutes} client:load />
-  <main id="main-content" tabindex="-1" class={contentClass}><slot /></main>
+  <div class="app-frame">
+    <AppNavigation role={role} pathname={Astro.url.pathname} availableRoutes={availableRoutes} client:load />
+    <div class="app-surface">
+      <main id="main-content" tabindex="-1" class={contentClass}><slot /></main>
+    </div>
+  </div>
 </BaseLayout>

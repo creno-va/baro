@@ -112,6 +112,14 @@ test("built Worker mobile menu, brand, local font and error state work without C
     );
   });
   await page.route("**/api/cases**", (route) => route.fulfill({ status: 503, json: {} }));
+  await page.route("**/api/me/session", (route) =>
+    route.fulfill({
+      json: {
+        user: { id: "synthetic-csp-customer", name: "합성 고객", accountType: "customer" },
+        needsConsent: false,
+      },
+    }),
+  );
   await page.setViewportSize({ width: 320, height: 760 });
   await page.goto("/cases");
   await expect(page.getByRole("alert")).toContainText(
@@ -133,7 +141,7 @@ test("built Worker mobile menu, brand, local font and error state work without C
   await page.screenshot({ path: ".wrangler/built-ui-menu-320.png" });
   await expect(dialog.getByRole("button", { name: "닫기", exact: true })).toBeFocused();
   await page.keyboard.press("Shift+Tab");
-  await expect(dialog.getByRole("link", { name: "계정 설정" })).toBeFocused();
+  await expect(dialog.getByRole("button", { name: "로그아웃", exact: true })).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(dialog.getByRole("button", { name: "닫기", exact: true })).toBeFocused();
   await page.keyboard.press("Escape");

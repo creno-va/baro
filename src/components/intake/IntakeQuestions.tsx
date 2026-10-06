@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../../client/api";
 import type { QuestionsResult } from "../../client/api/cases";
 import type { CaseView, QuestionView } from "../../client/api/types";
+import { BrandMark } from "../ui/brand";
 import { Button, ButtonLink } from "../ui/button";
 import { Textarea } from "../ui/form";
 import { StatePanel } from "../ui/state-panel";
@@ -162,7 +163,13 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
       {error ? <ErrorPanel error={error} retry={() => void load()} disabled={busy} /> : null}
       {item && result ? (
         <section className="intake-card" aria-busy={busy}>
-          <p className="intake-eyebrow">{item.title}</p>
+          <div className="intake-assistant-heading">
+            <BrandMark size={32} />
+            <div>
+              <p className="intake-eyebrow">조금만 더 알려주세요</p>
+              <p className="intake-case-caption">{item.title}</p>
+            </div>
+          </div>
           {item.schemaVersion === "1" ? (
             <StatePanel
               variant="pending"

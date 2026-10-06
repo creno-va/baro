@@ -17,8 +17,9 @@ test("mobile keyboard flow saves/reloads/resumes/back edits/unknown/skip/summary
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   const external: string[] = [];
+  const localOrigin = new URL(test.info().project.use.baseURL ?? "http://127.0.0.1:4341").origin;
   page.on("request", (request) => {
-    if (!request.url().startsWith("http://127.0.0.1:4341")) external.push(request.url());
+    if (new URL(request.url()).origin !== localOrigin) external.push(request.url());
   });
   await page.goto("/cases");
   await expect(page.getByRole("heading", { name: "아직 정리한 사건이 없어요" })).toBeVisible();
