@@ -11,6 +11,7 @@ export function useCustomerAccess(purge: () => void, report: (error: unknown) =>
   const epoch = useRef(0);
   const mounted = useRef(false);
   const request = useRef(0);
+  const sessionLookup = useRef<Promise<SessionView> | null>(null);
   const allowed = useRef(false);
   const [ready, setReady] = useState(false);
   const [version, setVersion] = useState(0);
@@ -32,8 +33,10 @@ export function useCustomerAccess(purge: () => void, report: (error: unknown) =>
         setReady(false);
       }
       let session: SessionView;
+      const lookup = api.session.get();
+      sessionLookup.current = lookup;
       try {
-        session = await api.session.get();
+        session = await lookup;
       } catch (cause) {
         if (serial !== request.current || !mounted.current) return false;
         if ((cause as { code?: string })?.code === "UNAUTHENTICATED")
@@ -45,6 +48,8 @@ export function useCustomerAccess(purge: () => void, report: (error: unknown) =>
           setReady(allowed.current);
           throw cause;
         }
+      } finally {
+        if (sessionLookup.current === lookup) sessionLookup.current = null;
       }
       if (serial !== request.current || !mounted.current) return false;
       const next = JSON.stringify([
@@ -92,7 +97,9 @@ export function useCustomerAccess(purge: () => void, report: (error: unknown) =>
     };
     // Real sessions use cookies; focus/visibility and periodic verification cover peer tabs.
     const timer = window.setInterval(() => {
-      if (!document.hidden)
+      // A background poll must not supersede a foreground verification and
+      // leave its read/retry silently cancelled without an authoritative load.
+      if (!document.hidden && !sessionLookup.current)
         void verify().catch((cause) => {
           if (mounted.current) callbacks.current.report(cause);
         });

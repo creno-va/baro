@@ -51,6 +51,17 @@ for (const viewport of [
       // 640x450 is the CSS viewport of a 1280x900 window at 200% browser zoom.
       // Also stress CSS zoom separately; unlike browser zoom it retains media queries.
       await page.setViewportSize(viewport);
+      // Invoke the customer's real periodic callback while a real session
+      // response is held; no session or API result is fabricated here.
+      await page.addInitScript(() => {
+        const original = window.setInterval;
+        window.setInterval = ((callback: TimerHandler, delay?: number, ...args: unknown[]) => {
+          if (delay === 15000 && typeof callback === "function")
+            (window as Window & { customerSessionPoll?: () => void }).customerSessionPoll = () =>
+              callback(...args);
+          return original(callback, delay, ...args);
+        }) as typeof window.setInterval;
+      });
       if (viewport.width === 1280)
         await page.addInitScript(() =>
           document.addEventListener("DOMContentLoaded", () => {
@@ -63,6 +74,9 @@ for (const viewport of [
         droppedConfirm = false,
         droppedTimeline = false;
       let apiInFlight = 0;
+      let workspaceReads = 0;
+      let holdNextSession = false;
+      let releaseSession: (() => void) | undefined;
       const mutations: { path: string; body: string | null; key: string | undefined }[] = [];
       await context.route("**/api/**", async (route) => {
         const request = route.request();
@@ -72,7 +86,14 @@ for (const viewport of [
           return;
         }
         ++apiInFlight;
+        if (path.endsWith("/workspace")) ++workspaceReads;
         try {
+          if (path === "/api/me/session" && holdNextSession) {
+            holdNextSession = false;
+            await new Promise<void>((resolve) => {
+              releaseSession = resolve;
+            });
+          }
           if (path === "/api/me/session" && sessionUnavailable) {
             await route.abort("failed");
             return;
@@ -146,7 +167,17 @@ for (const viewport of [
       await expect(editor).not.toBeVisible();
       await expect(page.getByRole("alert")).toContainText("연결하지 못했어요");
       sessionUnavailable = false;
-      await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+      await expect.poll(() => apiInFlight).toBe(0);
+      const readsBeforeRetry = workspaceReads;
+      holdNextSession = true;
+      await page.getByRole("button", { name: "다시 시도", exact: true }).click();
+      await expect.poll(() => !!releaseSession).toBe(true);
+      await page.evaluate(() =>
+        (window as Window & { customerSessionPoll?: () => void }).customerSessionPoll?.(),
+      );
+      releaseSession?.();
+      releaseSession = undefined;
+      await expect.poll(() => workspaceReads).toBeGreaterThan(readsBeforeRetry);
       await expect(editor).toHaveValue("네트워크 장애 후에도 보존할 요약 초안");
       await editor.fill("다른 계정으로 저장되면 안 되는 요약 초안");
       // Finish the same-owner reload before replacing its signed cookie; the
