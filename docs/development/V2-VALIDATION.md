@@ -488,3 +488,7 @@ detail/공개 asset은 anonymous 조회를 유지한다. 별도 reports DomainRe
 fresh production build/dry-run/bundle145 files, 공용 login/intake/workspace/report/delete 및
 lawyer mock browser3개, built CSP4개/fixture-only skip1로 통과했다. 새 role replay 테스트의
 임시 handler는 검사 뒤 복원하며 실제 도메인 handler를 다른 테스트에 남기지 않는다.
+
+고객 PR128의 구체적인 DTO 요청을 받은 뒤 WorkspaceView에 기존 V2Summary facts/parties를
+재사용한 optional facts/people와 unknowns/notices를 공용 types/facade 계약에 반영한다.
+고객의 local CustomerWorkspaceView는 호환되며 공유 서버 schema/migration은 바꾸지 않는다.

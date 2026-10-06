@@ -1,3 +1,5 @@
+import type { V2Summary } from "../../contracts/v2/intake";
+
 export type AccountType = "customer" | "lawyer";
 export type Provider = "google" | "naver" | "kakao";
 export type SessionView = {
@@ -46,6 +48,10 @@ export type WorkspaceView = {
   actions: ActionView[];
   timeline: TimelineView[];
   files: FileView[];
+  facts?: V2Summary["facts"];
+  people?: V2Summary["parties"];
+  unknowns?: string[];
+  notices?: string[];
 };
 export type ReportView = {
   id: string;
