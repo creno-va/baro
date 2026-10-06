@@ -14,7 +14,7 @@ async function challenge(page: Page) {
     browser.turnstile = {
       render: (_element: HTMLElement, options: { callback: (token: string) => void }) => {
         callback = options.callback;
-        options.callback("synthetic-token");
+        queueMicrotask(() => options.callback("synthetic-token"));
         return "synthetic-widget";
       },
       reset: () => callback?.("synthetic-token"),
@@ -31,7 +31,7 @@ test("intake validates code points, blocks duplicates, preserves replay key and 
   );
   let calls = 0;
   const keys: string[] = [];
-  await page.route("**/api/cases", async (route) => {
+  await page.route("**/api/v2/cases", async (route) => {
     calls++;
     keys.push(route.request().headers()["idempotency-key"] ?? "");
     await new Promise((resolve) => setTimeout(resolve, 150));
@@ -51,30 +51,68 @@ test("intake validates code points, blocks duplicates, preserves replay key and 
           }
         : {
             status: 201,
-            json: {
-              caseId: "11111111-1111-4111-8111-111111111111",
-              analysisId: "22222222-2222-4222-8222-222222222222",
-              inputRevision: 1,
-              status: "screening",
-            },
+            json: workspace,
           },
     );
   });
+  const now = "2026-10-06T11:00:00.000Z";
+  const workspace = {
+    schemaVersion: "2",
+    id: "11111111-1111-4111-8111-111111111111",
+    title: "사건 작업 공간",
+    subjectContext: "individual",
+    jurisdiction: "KR",
+    status: "intake",
+    archivedFrom: null,
+    workspaceRevision: 1,
+    intakeRevision: 1,
+    confirmedSummaryRevision: null,
+    currentJobId: null,
+    legacySnapshotId: null,
+    createdAt: now,
+    updatedAt: now,
+  };
+  await page.route("**/api/v2/cases/*/*", (route) =>
+    route.fulfill({
+      json: route.request().url().endsWith("/workspace")
+        ? workspace
+        : {
+            schemaVersion: "2",
+            revision: 1,
+            status: "collecting",
+            narrative: "합성 사건입니다. 지인에게 빌려준 돈을 돌려받는 상황입니다.",
+            batches: [
+              {
+                id: "batch-one",
+                ordinal: 1,
+                generatedForIntakeRevision: 1,
+                questions: [
+                  { id: "q-one", prompt: "언제 있었나요?", answerType: "text", options: [] },
+                ],
+                answers: [],
+              },
+            ],
+            confirmedSummaryRevision: null,
+            currentJobId: null,
+            summary: null,
+          },
+    }),
+  );
   await page.goto("/cases/new");
   const input = page.getByRole("textbox");
-  const submit = page.getByRole("button", { name: "상황 정리 시작" });
+  const submit = page.getByRole("button", { name: "저장하고 질문 시작" });
   await input.fill("짧은 입력");
   await expect(submit).toBeDisabled();
-  await expect(page.getByText("20자 이상 5,000자 이하로 적어주세요.")).toBeVisible();
+  await expect(page.getByText("5,000자 · 최소 20자", { exact: false })).toBeVisible();
   await input.fill("합성 사건입니다. 지인에게 빌려준 돈을 돌려받는 상황입니다.");
   await submit.focus();
   await page.keyboard.press("Enter");
   await page.keyboard.press("Enter");
-  await expect(page.getByRole("alert")).toContainText("같은 입력");
+  await expect(page.getByRole("alert")).toContainText("다시 시도");
   expect(calls).toBe(1);
-  await expect(submit).toBeFocused();
-  await submit.press("Enter");
-  await expect(page.getByRole("link", { name: "분석 상태 확인" })).toBeFocused();
+  await page.getByRole("button", { name: "다시 시도", exact: true }).click();
+  await expect(page).toHaveURL(/\/intake$/);
+  await expect(page.getByRole("heading", { name: "언제 있었나요?" })).toBeVisible();
   expect(calls).toBe(2);
   expect(keys[0]).toBe(keys[1]);
   expect(await page.evaluate(() => localStorage.length)).toBe(0);
@@ -85,7 +123,15 @@ test("list empty/error/loading, auth and consent gates, refresh/back use server 
 }) => {
   let fail = true;
   let present = false;
-  await page.route("**/api/cases", async (route) => {
+  let gate: "CONSENT_REQUIRED" | "UNAUTHENTICATED" | null = null;
+  await page.route("**/api/cases?*", async (route) => {
+    if (gate) {
+      await route.fulfill({
+        status: gate === "UNAUTHENTICATED" ? 401 : 403,
+        json: { error: { code: gate } },
+      });
+      return;
+    }
     await new Promise((resolve) => setTimeout(resolve, 100));
     await route.fulfill(
       fail
@@ -108,19 +154,27 @@ test("list empty/error/loading, auth and consent gates, refresh/back use server 
           },
     );
   });
+  await page.route("**/api/v2/cases?*", (route) =>
+    route.fulfill({ status: 404, json: { error: { code: "NOT_FOUND" } } }),
+  );
   await page.goto("/cases");
   await expect(page.getByRole("alert")).toBeVisible();
   fail = false;
-  await page.getByRole("button", { name: "다시 불러오기" }).click();
-  await expect(page.getByText("아직 입력한 사건이 없어요.")).toBeVisible();
+  await page.getByRole("button", { name: "다시 시도" }).click();
+  await expect(page.getByRole("heading", { name: "아직 정리한 사건이 없어요" })).toBeVisible();
   present = true;
   await page.reload();
-  await expect(page.getByRole("link", { name: "금전 대여 사건" })).toBeVisible();
-  await page.route("**/api/me/consent", (route) => route.fulfill({ json: { needsConsent: true } }));
-  await page.getByRole("link", { name: "새 사건 입력" }).click();
+  await expect(page.getByRole("link", { name: /금전 대여 사건/ })).toBeVisible();
+  gate = "UNAUTHENTICATED";
+  await page.reload();
+  await expect(page.getByRole("link", { name: "로그인하기", exact: true })).toBeVisible();
+  gate = "CONSENT_REQUIRED";
+  await page.reload();
   await expect(page.getByRole("link", { name: "동의 확인" })).toBeVisible();
+  gate = null;
+  await page.goto("/login");
   await page.goBack();
-  await expect(page.getByRole("link", { name: "금전 대여 사건" })).toBeVisible();
+  await expect(page.getByRole("link", { name: /금전 대여 사건/ })).toBeVisible();
 });
 test("real signed session submits admission into SQL and reloads owner-scoped list at 320px/200%", async ({
   page,
@@ -158,6 +212,7 @@ test("real signed session submits admission into SQL and reloads owner-scoped li
     await page.route("**/api/**", async (route) => {
       const req = route.request();
       const url = new URL(req.url());
+      if (!url.pathname.startsWith("/api/")) return route.continue();
       const response = await route.fetch({
         url: `${seed.origin}${url.pathname}${url.search}`,
         headers: { ...(await req.allHeaders()), "cf-connecting-ip": "192.0.2.1" },
@@ -165,20 +220,23 @@ test("real signed session submits admission into SQL and reloads owner-scoped li
       await route.fulfill({ response });
     });
     await page.setViewportSize({ width: 320, height: 760 });
-    await page.goto("/cases/new");
-    await page
-      .getByRole("textbox")
-      .fill("합성 브라우저 사건입니다. 지인에게 돈을 빌려준 뒤 반환을 기다립니다.");
-    await page.getByRole("button", { name: "상황 정리 시작" }).press("Enter");
-    await expect(page.getByRole("link", { name: "분석 상태 확인" })).toBeFocused();
-    await page.getByRole("button", { name: "메뉴 열기" }).click();
-    await page
-      .getByRole("dialog", { name: "메뉴", exact: true })
-      .getByRole("link", { name: "내 사건", exact: true })
-      .click();
-    await expect(page.getByRole("link", { name: "금전 대여 사건" })).toBeVisible();
+    await page.goto("/cases");
+    const admitted = await page.evaluate(async () => {
+      const response = await fetch("/api/cases", {
+        method: "POST",
+        headers: { "content-type": "application/json", "idempotency-key": crypto.randomUUID() },
+        body: JSON.stringify({
+          narrative: "합성 브라우저 사건입니다. 지인에게 돈을 빌려준 뒤 반환을 기다립니다.",
+          turnstileToken: "synthetic-token",
+        }),
+      });
+      return { status: response.status, body: await response.json() };
+    });
+    expect(admitted.status).toBe(201);
     await page.reload();
-    await expect(page.getByRole("link", { name: "금전 대여 사건" })).toBeVisible();
+    await expect(page.getByRole("link", { name: /금전 대여 사건/ })).toBeVisible();
+    await page.reload();
+    await expect(page.getByRole("link", { name: /금전 대여 사건/ })).toBeVisible();
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,

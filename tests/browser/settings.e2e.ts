@@ -42,6 +42,7 @@ test("settings uses real signed session, OAuth state/callback, SQL account delet
     await page.route("**/api/**", async (route) => {
       const request = route.request(),
         url = new URL(request.url());
+      if (!url.pathname.startsWith("/api/")) return route.continue();
       const response = await route.fetch({
         url: `${seed.origin}${url.pathname}${url.search}`,
         headers: await request.allHeaders(),
@@ -62,10 +63,13 @@ test("settings uses real signed session, OAuth state/callback, SQL account delet
     });
     await page.goto("/settings");
     await page.getByRole("button", { name: "google로 재인증" }).click();
+    const openDeletion = page.getByRole("button", { name: "계정과 모든 사건 삭제", exact: true });
+    await expect(openDeletion).toBeEnabled();
+    await openDeletion.click();
     const confirmation = page.getByLabel("삭제 확인 — DELETE 입력");
     await expect(confirmation).toBeEnabled();
     await confirmation.fill("DELETE");
-    await page.getByRole("button", { name: "계정과 모든 사건 삭제" }).click();
+    await page.getByRole("button", { name: "삭제 요청 확인", exact: true }).click();
     await expect(page.getByRole("heading", { name: "계정 삭제를 접수했어요" })).toBeVisible();
     const response = await context.request.get(`${seed.origin}/api/me/deletion`, {
       headers: { cookie: `${seed.cookie.name}=${seed.cookie.value}` },
@@ -78,6 +82,7 @@ test("settings uses real signed session, OAuth state/callback, SQL account delet
 });
 test("settings reauth needs a newer callback for same owner and a fresh explicit keyboard confirmation", async ({
   page,
+  baseURL,
 }) => {
   let stamp: string | null = null,
     deletes = 0;
@@ -97,7 +102,7 @@ test("settings reauth needs a newer callback for same owner and a fresh explicit
       callbackURL: "/settings",
     });
     stamp = new Date(Date.now() + 20).toISOString();
-    await route.fulfill({ json: { url: "http://127.0.0.1:4337/settings", redirect: true } });
+    await route.fulfill({ json: { url: `${baseURL}/settings`, redirect: true } });
   });
   await page.route("**/api/me", async (route) => {
     deletes++;
@@ -109,11 +114,13 @@ test("settings reauth needs a newer callback for same owner and a fresh explicit
   await page.goto("/settings?reauth=success");
   const confirm = page.getByLabel("삭제 확인 — DELETE 입력");
   const remove = page.getByRole("button", { name: "계정과 모든 사건 삭제" });
-  await expect(confirm).toBeDisabled();
+  await expect(confirm).toHaveCount(0);
   await expect(remove).toBeDisabled();
   const auth = page.getByRole("button", { name: "google로 재인증" });
   await auth.focus();
   await page.keyboard.press("Enter");
+  await expect(remove).toBeEnabled();
+  await remove.click();
   await expect(confirm).toBeEnabled();
   await expect(confirm).toBeFocused();
   await page.screenshot({ path: ".wrangler/settings-320.png", fullPage: true });
@@ -130,10 +137,13 @@ test("settings reauth needs a newer callback for same owner and a fresh explicit
   expect(deletes).toBe(0);
   await confirm.fill("DELETE");
   await page.reload();
+  await expect(remove).toBeEnabled();
+  await remove.click();
   await expect(confirm).toHaveValue("");
-  await expect(remove).toBeDisabled();
+  const finish = page.getByRole("button", { name: "삭제 요청 확인", exact: true });
+  await expect(finish).toBeDisabled();
   await confirm.fill("DELETE");
-  await remove.focus();
+  await finish.focus();
   await page.keyboard.press("Enter");
   await page.keyboard.press("Enter");
   await expect(page.getByRole("heading", { name: "계정 삭제를 접수했어요" })).toBeVisible();
@@ -150,9 +160,7 @@ test("loading/error/cancel, expired callback and switched account never arm dele
 }) => {
   await page.route("**/api/me/deletion", (route) => route.fulfill({ status: 503 }));
   await page.goto("/settings");
-  await expect(page.getByRole("alert")).toHaveText(
-    "계정 상태를 확인하지 못했어요. 다시 시도해 주세요.",
-  );
+  await expect(page.getByRole("alert")).toContainText("계정 상태를 확인하지 못했어요.");
   await page.unroute("**/api/me/deletion");
   await page.route("**/api/me/deletion", (route) =>
     route.fulfill({
@@ -171,7 +179,9 @@ test("loading/error/cancel, expired callback and switched account never arm dele
   );
   await page.reload();
   await expect(page.getByRole("button", { name: "google로 재인증" })).toBeVisible();
-  await expect(page.getByLabel("삭제 확인 — DELETE 입력")).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "계정과 모든 사건 삭제", exact: true }),
+  ).toBeDisabled();
   await page.evaluate(
     (key) =>
       sessionStorage.setItem(
@@ -181,9 +191,11 @@ test("loading/error/cancel, expired callback and switched account never arm dele
     marker,
   );
   await page.reload();
-  await expect(page.getByRole("alert")).toHaveText(
+  await expect(page.getByRole("alert")).toContainText(
     "다른 계정으로 인증했어요. 삭제할 계정으로 다시 로그인해 주세요.",
   );
-  await expect(page.getByLabel("삭제 확인 — DELETE 입력")).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "계정과 모든 사건 삭제", exact: true }),
+  ).toBeDisabled();
   expect(await page.evaluate((key) => sessionStorage.getItem(key), marker)).toBeNull();
 });

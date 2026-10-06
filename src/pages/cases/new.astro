@@ -3,9 +3,6 @@
 import { CaseInput } from "../../components/intake/CaseInput";
 // biome-ignore lint/correctness/noUnusedImports: Astro template reads component.
 import CaseLayout from "../../layouts/CaseLayout.astro";
-
-// biome-ignore lint/correctness/noUnusedVariables: Astro template reads frontmatter.
-const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY ?? "";
+import "../../styles/intake.css";
 ---
-<CaseLayout title="새 사건 입력"><h1>상황을 함께 정리해요</h1><p class="case-muted">현재는 대한민국의 개인 간 금전 대여 문제를 정리할 수 있어요.</p><CaseInput siteKey={siteKey} client:load /></CaseLayout>
-
+<CaseLayout title="새 사건"><CaseInput client:load /></CaseLayout>

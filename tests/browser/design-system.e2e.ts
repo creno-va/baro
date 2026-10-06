@@ -11,8 +11,11 @@ async function openInteractiveFixture(page: Page) {
 test("current landing, login and case screens share local brand and remain usable at 320px", async ({
   page,
 }) => {
-  await page.route("**/api/cases", (route) =>
+  await page.route("**/api/cases?*", (route) =>
     route.fulfill({ json: { items: [], nextCursor: null } }),
+  );
+  await page.route("**/api/v2/cases?*", (route) =>
+    route.fulfill({ status: 404, json: { error: { code: "NOT_FOUND" } } }),
   );
   await page.route("**/api/me/consent", (route) =>
     route.fulfill({ json: { needsConsent: false } }),
@@ -38,11 +41,11 @@ test("current landing, login and case screens share local brand and remain usabl
   await page.screenshot({ path: ".wrangler/intake-320.png", fullPage: true });
   expect(
     await page
-      .getByRole("button", { name: "상황 정리 시작" })
+      .getByRole("button", { name: "저장하고 질문 시작" })
       .evaluate((element) => getComputedStyle(element).backgroundColor),
   ).toBe("rgb(37, 99, 235)");
   await page.goto("/cases");
-  await expect(page.getByText("아직 입력한 사건이 없어요.")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "아직 정리한 사건이 없어요" })).toBeVisible();
   await page.screenshot({ path: ".wrangler/case-list-320.png", fullPage: true });
 });
 
@@ -52,7 +55,7 @@ test("synthetic role menus omit dormant routes; form and keyboard tabs remain ac
   await openInteractiveFixture(page);
   const navigation = page.getByRole("navigation", { name: "주 메뉴", exact: true });
   await expect(navigation.getByRole("link", { name: "내 사건", exact: true })).toBeVisible();
-  await expect(page.getByRole("link", { name: "변호사 찾기" })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "변호사 찾기" })).toHaveAttribute("href", "/lawyers");
   await page.getByLabel("메뉴 예시 역할").selectOption("lawyer");
   await expect(navigation.getByRole("link", { name: "내 사건", exact: true })).toHaveCount(0);
   await expect(navigation.getByRole("link", { name: "계정 설정" })).toBeVisible();

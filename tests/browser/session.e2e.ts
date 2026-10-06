@@ -49,6 +49,7 @@ test("signed SQL session completes the real consent API through the browser, the
     await page.route("**/api/**", async (route) => {
       const request = route.request();
       const path = new URL(request.url()).pathname;
+      if (!path.startsWith("/api/")) return route.continue();
       const response = await route.fetch({
         url: `${seed.origin}${path}`,
         headers: await request.allHeaders(),
@@ -60,7 +61,7 @@ test("signed SQL session completes the real consent API through the browser, the
     await page.getByRole("checkbox").nth(0).check();
     await page.getByRole("checkbox").nth(1).check();
     await page.getByRole("button", { name: "동의하고 계속하기" }).click();
-    await expect(page.getByRole("link", { name: "홈으로 돌아가기" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "내 화면으로 계속하기" })).toBeVisible();
     const saved = await page.evaluate(async () => (await fetch("/api/me/consent")).json());
     expect(saved).toMatchObject({ needsConsent: false });
     const signedOut = await page.evaluate(

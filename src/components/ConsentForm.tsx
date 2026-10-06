@@ -1,9 +1,12 @@
 import { type SyntheticEvent, useEffect, useRef, useState } from "react";
+import { api, roleStart } from "../client/api";
+import { ApiError } from "../client/api/errors";
 import { CURRENT_POLICY_VERSIONS } from "../contracts/consent";
 
 type ConsentState = "loading" | "required" | "complete";
 
 export function ConsentForm() {
+  const [startPath, setStartPath] = useState("/cases");
   const [state, setState] = useState<ConsentState>("loading");
   const [accepted, setAccepted] = useState(false);
   const [over14, setOver14] = useState(false);
@@ -17,19 +20,18 @@ export function ConsentForm() {
   }, [state, error, submitting]);
 
   useEffect(() => {
-    fetch("/api/me/consent", { credentials: "same-origin" })
-      .then(async (response) => {
-        if (response.status === 401) {
+    api.session
+      .get()
+      .then(async (session) => {
+        if (!session.user) {
           window.location.assign("/login?error=session_expired");
-          return null;
+          return;
         }
-        if (!response.ok) throw new Error("CONSENT_LOAD_FAILED");
-        return response.json() as Promise<{ needsConsent: boolean }>;
+        setStartPath(session.user.accountType === "lawyer" ? "/lawyer" : "/cases");
+        const consent = await api.session.getConsent();
+        setState(consent.needsConsent ? "required" : "complete");
       })
-      .then((body) => {
-        if (body) setState(body.needsConsent ? "required" : "complete");
-      })
-      .catch(() => setError("동의 상태를 불러오지 못했어요. 잠시 뒤 다시 시도해 주세요."));
+      .catch(() => setError("동의 상태를 불러오지 못했어요. 다시 불러와 주세요."));
   }, []);
 
   async function submit(event: SyntheticEvent<HTMLFormElement>) {
@@ -39,21 +41,17 @@ export function ConsentForm() {
     setSubmitting(true);
     setError(null);
 
-    const response = await fetch("/api/me/consent", {
-      method: "PUT",
-      credentials: "same-origin",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
+    try {
+      const session = await api.session.saveConsent({
         ...CURRENT_POLICY_VERSIONS,
         over14Confirmed: true,
-      }),
-    }).catch(() => null);
-
-    if (response?.status === 401) {
-      window.location.assign("/login?error=session_expired");
-      return;
-    }
-    if (!response?.ok) {
+      });
+      setStartPath(roleStart(session));
+    } catch (failure) {
+      if (failure instanceof ApiError && failure.code === "UNAUTHENTICATED") {
+        window.location.assign("/login?error=session_expired");
+        return;
+      }
       setError("동의를 저장하지 못했어요. 다시 시도해 주세요.");
       setSubmitting(false);
       return;
@@ -82,8 +80,8 @@ export function ConsentForm() {
     return (
       <div className="consent-complete">
         <p>필수 확인이 완료됐어요.</p>
-        <a className="primary-action" href="/" ref={completedLink}>
-          홈으로 돌아가기
+        <a className="primary-action" href={startPath} ref={completedLink}>
+          내 화면으로 계속하기
         </a>
       </div>
     );
@@ -109,6 +107,13 @@ export function ConsentForm() {
         />
         만 14세 이상입니다.
       </label>
+      <p className="case-muted">
+        <a href="/policies/terms">이용약관</a> · <a href="/policies/privacy">개인정보 처리방침</a> ·{" "}
+        <a href="/policies/ai">AI 이용 고지</a>
+      </p>
+      <a href="/login" className="secondary-action">
+        취소하고 돌아가기
+      </a>
       <button
         className="primary-action"
         ref={submitButton}
