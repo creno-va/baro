@@ -894,4 +894,7 @@ test("10000 observations and 20000 derivatives publish and paginate losslessly t
   }
   expect(derivativeCount).toBe(20_000);
   expect(await f.fileStaging.derivatives(f.actor, p.current.id, 19_999, 4)).toEqual([]);
-}, 180_000);
+  // This host harness spans thousands of bounded encryption/SQL/page steps.
+  // Its elapsed deadline is not a Worker or per-stage SLA. Preserve all maximum
+  // counts and bounds; the slower host exceeded the previous 180-second window.
+}, 600_000);

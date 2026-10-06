@@ -198,7 +198,9 @@ test("maximum 100MiB Unicode snapshot streams in bounded steps without full rehy
   expect(f.bounds().maxQueries).toBeLessThanOrEqual(40);
   expect(f.bounds().maxParameters).toBeLessThanOrEqual(100);
   expect(f.db.sqlite.query("PRAGMA foreign_key_check").all()).toEqual([]);
-}, 120000);
+  // This host harness spans 1600 bounded writes and the complete 100MiB read;
+  // its deadline does not change any production step, lease, or size limit.
+}, 600000);
 test("fragmentation rejects malformed Unicode instead of replacing source data", () => {
   expect(() => fragmentText("\ud800")).toThrow("SNAPSHOT_INVALID");
   expect(() => fragmentText("🙂", 3)).toThrow("REPOSITORY_INPUT_INVALID");

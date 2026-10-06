@@ -30,6 +30,7 @@ import {
   type WorkspaceGuard,
 } from "./v2-core";
 import { jobInsertStatements } from "./v2-jobs";
+import { isPreparedPaidHold, type PreparedPaidHold } from "./v2-paid-statements";
 import { createV2StagingRepository } from "./v2-staging";
 import {
   type Admission,
@@ -109,12 +110,25 @@ export function createV2ReportsRepository(core: V2Core, guideHosts: readonly str
       admission: Admission;
     },
     body?: V2Report["body"],
+    paid?: PreparedPaidHold,
   ) => {
     g = parse(guardSchema, g);
     const request = parse(v2ReportCreateRequestSchema, input.request);
     parse(admissionSchema, input.admission);
     parse(opaqueIdSchema, input.id);
     parse(opaqueIdSchema, input.jobId);
+    if (
+      paid &&
+      (!isPreparedPaidHold(paid) ||
+        paid.request.plan.operationId !== input.admission.operationId ||
+        paid.request.plan.operationRevision !== g.expectedRevision ||
+        paid.request.plan.requestHash !== input.admission.requestHash ||
+        paid.request.jobId !== input.jobId ||
+        paid.request.targetKind !== "report" ||
+        paid.request.targetId !== input.id ||
+        paid.request.targetRevision !== g.expectedRevision)
+    )
+      return false;
     if (
       request.expectedRevision !== g.expectedRevision ||
       input.selectedFiles.length !== request.selectedFileIds.length
@@ -145,10 +159,11 @@ export function createV2ReportsRepository(core: V2Core, guideHosts: readonly str
       core.claim(
         g,
         claimId,
-        `w.status='active' AND w.confirmed_summary_revision=? AND ${stageCondition} AND NOT EXISTS(SELECT 1 FROM v2_idempotency WHERE owner_id=w.owner_id AND route=? AND key=? AND expires_at>?)`,
+        `w.status='active' AND w.confirmed_summary_revision=? AND ${stageCondition} AND (${paid?.predicate.sql ?? "NOT EXISTS(SELECT 1 FROM v2_runtime_controls)"}) AND NOT EXISTS(SELECT 1 FROM v2_idempotency WHERE owner_id=w.owner_id AND route=? AND key=? AND expires_at>?)`,
         [
           input.summaryRevision,
           ...(body ? [] : [input.snapshotId, input.id]),
+          ...(paid?.predicate.values ?? []),
           route,
           input.admission.key,
           g.now,
@@ -355,6 +370,7 @@ export function createV2ReportsRepository(core: V2Core, guideHosts: readonly str
         claimId,
       ),
       core.bump(g, claimId),
+      ...(paid ? paid.statements(core, g, claimId) : []),
       core.finish(claimId),
     );
     return core.changed(statements);
@@ -566,7 +582,12 @@ export function createV2ReportsRepository(core: V2Core, guideHosts: readonly str
         return (await rowForOwner(actor, id)) ? values : [];
       });
     },
-    createSmall(g: WorkspaceGuard, report: V2Report, admission: Admission) {
+    createSmall(
+      g: WorkspaceGuard,
+      report: V2Report,
+      admission: Admission,
+      paid?: PreparedPaidHold,
+    ) {
       return safe(async () => {
         const value = parse(v2ReportSchema(guideHosts), report);
         if (value.status !== "queued" || !value.currentJobId) return false;
@@ -582,6 +603,7 @@ export function createV2ReportsRepository(core: V2Core, guideHosts: readonly str
             admission,
           },
           value.body,
+          paid,
         );
       });
     },

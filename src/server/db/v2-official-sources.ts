@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { opaqueIdSchema, timestampSchema } from "../../contracts";
-import { type V2OfficialCitation, v2OfficialCitationSchema } from "../../contracts/v2";
+import {
+  type V2OfficialCitation,
+  v2OfficialCitationSchema,
+  v2OfficialUrlSchema,
+} from "../../contracts/v2";
 import {
   guardSchema,
   hashSchema,
@@ -34,6 +38,14 @@ const sourceSchema = z.strictObject({
   caseNumber: z.string().nullable(),
 });
 export type OfficialSourceWrite = z.infer<typeof sourceSchema>;
+export const officialSourceIdentitySchema = sourceSchema.pick({
+  sourceType: true,
+  officialId: true,
+  version: true,
+  section: true,
+  extractorVersion: true,
+});
+export type OfficialSourceIdentity = z.infer<typeof officialSourceIdentitySchema>;
 type SourceRow = {
   source_id: string;
   source_type: OfficialSourceWrite["sourceType"];
@@ -104,6 +116,78 @@ function citationMatches(source: OfficialSourceWrite, citation: V2OfficialCitati
 }
 export function createV2OfficialSourceRepository(core: V2Core, guideHosts: readonly string[] = []) {
   return {
+    // Public discovered identity only; never a user's private search query.
+    findLatestByIdentity(input: OfficialSourceIdentity, now: string) {
+      return safe(async () => {
+        const identity = parse(officialSourceIdentitySchema, input);
+        now = new Date(parse(timestampSchema, now)).toISOString();
+        const row = await core
+          .statement(
+            "SELECT * FROM v2_official_sources WHERE source_type=? AND official_id=? AND version=? AND section=? AND extractor_version=? AND fetched_at<=? AND verified_at<=? AND expires_at>? ORDER BY fetched_at DESC,verified_at DESC,source_id ASC LIMIT 1",
+            [
+              identity.sourceType,
+              identity.officialId,
+              identity.version,
+              identity.section,
+              identity.extractorVersion,
+              now,
+              now,
+              now,
+            ],
+          )
+          .first<SourceRow>();
+        if (!row) return null;
+        const source = decodeSource(row);
+        if (
+          !v2OfficialUrlSchema(
+            source.sourceType === "official_guide"
+              ? guideHosts
+              : ["law.go.kr", "www.law.go.kr", "open.law.go.kr"],
+          ).safeParse(source.canonicalUrl).success ||
+          utf8Bytes(source.body) > 1048576 ||
+          Date.parse(source.fetchedAt) > Date.parse(source.verifiedAt)
+        )
+          return null;
+        const digest = Array.from(
+          new Uint8Array(
+            await crypto.subtle.digest("SHA-256", new TextEncoder().encode(source.body)),
+          ),
+          (b) => b.toString(16).padStart(2, "0"),
+        ).join("");
+        if (digest !== source.contentHash) return null;
+        // Avoid returning an old latest tuple if a fresher public revision arrives
+        // during verification. At most two indexed queries and one 1MiB digest.
+        const final = await core
+          .statement(
+            "SELECT source_id,content_hash,canonical_url,body,verified_at,expires_at FROM v2_official_sources WHERE source_type=? AND official_id=? AND version=? AND section=? AND extractor_version=? AND fetched_at<=? AND verified_at<=? AND expires_at>? ORDER BY fetched_at DESC,verified_at DESC,source_id ASC LIMIT 1",
+            [
+              identity.sourceType,
+              identity.officialId,
+              identity.version,
+              identity.section,
+              identity.extractorVersion,
+              now,
+              now,
+              now,
+            ],
+          )
+          .first<
+            Pick<
+              SourceRow,
+              "source_id" | "content_hash" | "canonical_url" | "body" | "verified_at" | "expires_at"
+            >
+          >();
+        return final &&
+          final.source_id === row.source_id &&
+          final.content_hash === row.content_hash &&
+          final.canonical_url === row.canonical_url &&
+          final.body === row.body &&
+          final.verified_at === row.verified_at &&
+          final.expires_at === row.expires_at
+          ? source
+          : null;
+      });
+    },
     put(input: OfficialSourceWrite, citation: V2OfficialCitation) {
       return safe(async () => {
         const source = parse(sourceSchema, input);
@@ -126,7 +210,7 @@ export function createV2OfficialSourceRepository(core: V2Core, guideHosts: reado
           (
             await core
               .statement(
-                "INSERT INTO v2_official_sources VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(source_id) DO UPDATE SET fetched_at=excluded.fetched_at,verified_at=excluded.verified_at,expires_at=excluded.expires_at WHERE v2_official_sources.source_type=excluded.source_type AND v2_official_sources.official_id=excluded.official_id AND v2_official_sources.version=excluded.version AND v2_official_sources.section=excluded.section AND v2_official_sources.content_hash=excluded.content_hash AND v2_official_sources.extractor_version=excluded.extractor_version AND v2_official_sources.canonical_url=excluded.canonical_url AND v2_official_sources.source_date IS excluded.source_date AND v2_official_sources.court IS excluded.court AND v2_official_sources.case_number IS excluded.case_number AND v2_official_sources.institution_id IS excluded.institution_id AND v2_official_sources.endpoint_id IS excluded.endpoint_id AND v2_official_sources.title=excluded.title AND v2_official_sources.body=excluded.body AND v2_official_sources.rights_provenance=excluded.rights_provenance",
+                "INSERT INTO v2_official_sources VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(source_id) DO UPDATE SET fetched_at=excluded.fetched_at,verified_at=excluded.verified_at,expires_at=excluded.expires_at WHERE v2_official_sources.fetched_at<=excluded.fetched_at AND v2_official_sources.verified_at<=excluded.verified_at AND v2_official_sources.source_type=excluded.source_type AND v2_official_sources.official_id=excluded.official_id AND v2_official_sources.version=excluded.version AND v2_official_sources.section=excluded.section AND v2_official_sources.content_hash=excluded.content_hash AND v2_official_sources.extractor_version=excluded.extractor_version AND v2_official_sources.canonical_url=excluded.canonical_url AND v2_official_sources.source_date IS excluded.source_date AND v2_official_sources.court IS excluded.court AND v2_official_sources.case_number IS excluded.case_number AND v2_official_sources.institution_id IS excluded.institution_id AND v2_official_sources.endpoint_id IS excluded.endpoint_id AND v2_official_sources.title=excluded.title AND v2_official_sources.body=excluded.body AND v2_official_sources.rights_provenance=excluded.rights_provenance",
                 [
                   source.sourceId,
                   source.sourceType,

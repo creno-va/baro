@@ -31,6 +31,11 @@ import {
   type V2Core,
   type WorkspaceGuard,
 } from "./v2-core";
+import {
+  isPreparedPaidHold,
+  type PreparedPaidHold,
+  paidAcquirePredicate,
+} from "./v2-paid-statements";
 import { type Admission, admissionSchema, type JobLease, leaseSchema } from "./v2-workspace";
 
 export const jobAlive = `NOT EXISTS(SELECT 1 FROM v2_tombstones t WHERE (t.target_kind='account' AND t.target_id=o.owner_id) OR (t.target_kind=CASE j.target_kind WHEN 'profile_asset' THEN 'asset' ELSE j.target_kind END AND t.target_id=j.target_id)) AND
@@ -156,11 +161,24 @@ export function jobInsertStatements(
 }
 export function createV2JobsRepository(core: V2Core) {
   return {
-    admitAsset(actor: Actor, input: { assetId: string; assetRevision: number; jobId: string }) {
+    admitAsset(
+      actor: Actor,
+      input: { assetId: string; assetRevision: number; jobId: string },
+      paid?: PreparedPaidHold,
+    ) {
       return safe(async () => {
         actor = parse(actorSchema, { ownerId: actor.ownerId, now: actor.now });
         for (const id of [input.assetId, input.jobId]) parse(opaqueIdSchema, id);
         parse(z.number().int().positive(), input.assetRevision);
+        if (
+          paid &&
+          (!isPreparedPaidHold(paid) ||
+            paid.request.jobId !== input.jobId ||
+            paid.request.targetKind !== "profile_asset" ||
+            paid.request.targetId !== input.assetId ||
+            paid.request.targetRevision !== input.assetRevision)
+        )
+          return false;
         const claimId = crypto.randomUUID();
         const row = await core
           .statement(
@@ -171,8 +189,15 @@ export function createV2JobsRepository(core: V2Core) {
         if (!row) return false;
         return core.changed([
           core.statement(
-            "INSERT INTO v2_mutation_claims(id,owner_id,target_id,revision) SELECT ?,a.owner_id,a.id,a.revision FROM v2_assets a JOIN v2_profiles p ON p.id=a.profile_id WHERE a.id=? AND a.owner_id=? AND a.revision=? AND a.state IN ('reserved','uploaded') AND a.current_job_id IS NULL AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE (target_kind='account' AND target_id=a.owner_id) OR (target_kind='profile' AND target_id=p.id) OR (target_kind='asset' AND target_id=a.id)) AND EXISTS(SELECT 1 FROM v2_storage_reservations r JOIN v2_blobs b ON b.reservation_id=r.id JOIN v2_operations o ON o.id=r.operation_id WHERE r.entity_id=a.id AND r.operation_id=? AND b.state='stored' AND b.visibility='private' AND ((a.purpose='portfolio' AND b.kind='portfolio_original') OR (a.purpose='profile_photo' AND b.kind='profile_photo_original')) AND o.state='admitted')",
-            [claimId, input.assetId, actor.ownerId, input.assetRevision, row.operation_id],
+            `INSERT INTO v2_mutation_claims(id,owner_id,target_id,revision) SELECT ?,a.owner_id,a.id,a.revision FROM v2_assets a JOIN v2_profiles p ON p.id=a.profile_id WHERE a.id=? AND a.owner_id=? AND a.revision=? AND a.state IN ('reserved','uploaded') AND a.current_job_id IS NULL AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE (target_kind='account' AND target_id=a.owner_id) OR (target_kind='profile' AND target_id=p.id) OR (target_kind='asset' AND target_id=a.id)) AND EXISTS(SELECT 1 FROM v2_storage_reservations r JOIN v2_blobs b ON b.reservation_id=r.id JOIN v2_operations o ON o.id=r.operation_id WHERE r.entity_id=a.id AND r.operation_id=? AND b.state='stored' AND b.visibility='private' AND ((a.purpose='portfolio' AND b.kind='portfolio_original') OR (a.purpose='profile_photo' AND b.kind='profile_photo_original')) AND o.state='admitted') AND (${paid?.predicate.sql ?? "NOT EXISTS(SELECT 1 FROM v2_runtime_controls)"})`,
+            [
+              claimId,
+              input.assetId,
+              actor.ownerId,
+              input.assetRevision,
+              row.operation_id,
+              ...(paid?.predicate.values ?? []),
+            ],
           ),
           ...jobInsertStatements(
             core,
@@ -202,11 +227,12 @@ export function createV2JobsRepository(core: V2Core) {
             `UPDATE v2_assets SET state='sanitizing',current_job_id=? WHERE id=? AND ${sqlClaim}`,
             [input.jobId, input.assetId, claimId],
           ),
+          ...(paid ? paid.statements(core, actor, claimId) : []),
           core.finish(claimId),
         ]);
       });
     },
-    retryAsset(actor: Actor, jobId: string) {
+    retryAsset(actor: Actor, jobId: string, paid?: PreparedPaidHold) {
       return safe(async () => {
         actor = parse(actorSchema, { ownerId: actor.ownerId, now: actor.now });
         parse(opaqueIdSchema, jobId);
@@ -217,12 +243,26 @@ export function createV2JobsRepository(core: V2Core) {
           )
           .first<JobRow>();
         if (!row) return false;
+        const bound = await core
+          .statement("SELECT attempt_id FROM v2_paid_holds WHERE job_id=? LIMIT 1", [jobId])
+          .first();
+        if (bound && !paid) return false;
+        if (
+          paid &&
+          (!isPreparedPaidHold(paid) ||
+            paid.request.jobId !== jobId ||
+            paid.request.plan.operationId !== row.operation_id ||
+            paid.request.targetKind !== row.target_kind ||
+            paid.request.targetId !== row.target_id ||
+            paid.request.targetRevision !== row.target_revision)
+        )
+          return false;
         const runtime = parse(opaqueIdSchema, `${jobId}-${row.attempts + 1}`);
         const claimId = crypto.randomUUID();
         return core.changed([
           core.statement(
-            `INSERT INTO v2_mutation_claims(id,owner_id,target_id,revision) SELECT ?,o.owner_id,j.id,j.target_revision FROM v2_jobs j JOIN v2_operations o ON o.id=j.operation_id JOIN v2_assets a ON a.id=j.target_id JOIN v2_profiles p ON p.id=a.profile_id WHERE j.id=? AND o.owner_id=? AND j.target_kind='profile_asset' AND j.status='failed' AND j.retryable=1 AND j.attempts<10 AND a.owner_id=o.owner_id AND a.revision=j.target_revision AND a.current_job_id IS NULL AND a.state='failed' AND ${quotaRetryPredicate} AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE (target_kind='account' AND target_id=o.owner_id) OR (target_kind='profile' AND target_id=p.id) OR (target_kind='asset' AND target_id=a.id))`,
-            [claimId, jobId, actor.ownerId],
+            `INSERT INTO v2_mutation_claims(id,owner_id,target_id,revision) SELECT ?,o.owner_id,j.id,j.target_revision FROM v2_jobs j JOIN v2_operations o ON o.id=j.operation_id JOIN v2_assets a ON a.id=j.target_id JOIN v2_profiles p ON p.id=a.profile_id WHERE j.id=? AND o.owner_id=? AND j.target_kind='profile_asset' AND j.status='failed' AND j.retryable=1 AND j.attempts<10 AND a.owner_id=o.owner_id AND a.revision=j.target_revision AND a.current_job_id IS NULL AND a.state='failed' AND ${quotaRetryPredicate} AND (${paid?.predicate.sql ?? "NOT EXISTS(SELECT 1 FROM v2_runtime_controls)"}) AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE (target_kind='account' AND target_id=o.owner_id) OR (target_kind='profile' AND target_id=p.id) OR (target_kind='asset' AND target_id=a.id))`,
+            [claimId, jobId, actor.ownerId, ...(paid?.predicate.values ?? [])],
           ),
           ...quotaRetryStatements(core, jobId, claimId),
           core.statement(
@@ -250,6 +290,7 @@ export function createV2JobsRepository(core: V2Core) {
               claimId,
             ],
           ),
+          ...(paid ? paid.statements(core, actor, claimId) : []),
           core.finish(claimId),
         ]);
       });
@@ -263,12 +304,25 @@ export function createV2JobsRepository(core: V2Core) {
         admission: Admission;
         quotas: readonly V2OperationQuota[];
       },
+      paid?: PreparedPaidHold,
     ) {
       return safe(async () => {
         g = parse(guardSchema, g);
         parse(admissionSchema, input.admission);
         for (const id of [input.fileId, input.jobId]) parse(opaqueIdSchema, id);
         parse(z.number().int().positive(), input.fileRevision);
+        if (
+          paid &&
+          (!isPreparedPaidHold(paid) ||
+            paid.request.plan.operationId !== input.admission.operationId ||
+            paid.request.plan.operationRevision !== g.expectedRevision + 1 ||
+            paid.request.plan.requestHash !== input.admission.requestHash ||
+            paid.request.jobId !== input.jobId ||
+            paid.request.targetKind !== "file" ||
+            paid.request.targetId !== input.fileId ||
+            paid.request.targetRevision !== input.fileRevision)
+        )
+          return false;
         const quotas = parse(z.array(v2OperationQuotaSchema).max(2), input.quotas);
         if (
           quotas.some(
@@ -314,9 +368,10 @@ export function createV2JobsRepository(core: V2Core) {
           core.claim(
             g,
             claimId,
-            `${predicates.map((p) => `(${p.sql})`).join(" AND ") || "1"} AND w.status!='archived' AND EXISTS(SELECT 1 FROM v2_files f WHERE f.id=? AND f.workspace_id=w.id AND f.revision=? AND f.encrypted_payload=? AND f.state='uploaded' AND f.current_job_id IS NULL) AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='file' AND target_id=?) AND NOT EXISTS(SELECT 1 FROM v2_idempotency WHERE owner_id=w.owner_id AND route=? AND key=? AND expires_at>?)`,
+            `${predicates.map((p) => `(${p.sql})`).join(" AND ") || "1"} AND (${paid?.predicate.sql ?? "NOT EXISTS(SELECT 1 FROM v2_runtime_controls)"}) AND w.status!='archived' AND EXISTS(SELECT 1 FROM v2_files f WHERE f.id=? AND f.workspace_id=w.id AND f.revision=? AND f.encrypted_payload=? AND f.state='uploaded' AND f.current_job_id IS NULL) AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='file' AND target_id=?) AND NOT EXISTS(SELECT 1 FROM v2_idempotency WHERE owner_id=w.owner_id AND route=? AND key=? AND expires_at>?)`,
             [
               ...predicates.flatMap((p) => p.values),
+              ...(paid?.predicate.values ?? []),
               input.fileId,
               input.fileRevision,
               row.encrypted_payload,
@@ -374,6 +429,7 @@ export function createV2JobsRepository(core: V2Core) {
             [input.jobId, input.admission.operationId, g.now, input.fileId, claimId],
           ),
           core.bump(g, claimId),
+          ...(paid ? paid.statements(core, g, claimId) : []),
           core.finish(claimId),
         ]);
       });
@@ -384,6 +440,7 @@ export function createV2JobsRepository(core: V2Core) {
       jobId: string,
       kind: "intake_questions" | "intake_summary" | "chat_response",
       chat?: { id: string; request: V2MessageRequest },
+      paid?: PreparedPaidHold,
     ) {
       return safe(async () => {
         g = parse(guardSchema, g);
@@ -391,6 +448,18 @@ export function createV2JobsRepository(core: V2Core) {
         parse(opaqueIdSchema, jobId);
         parse(z.enum(["intake_questions", "intake_summary", "chat_response"]), kind);
         const nextRevision = g.expectedRevision + 1;
+        if (
+          paid &&
+          (!isPreparedPaidHold(paid) ||
+            paid.request.plan.operationId !== admission.operationId ||
+            paid.request.plan.operationRevision !== nextRevision ||
+            paid.request.plan.requestHash !== admission.requestHash ||
+            paid.request.jobId !== jobId ||
+            paid.request.targetKind !== "workspace" ||
+            paid.request.targetId !== g.workspaceId ||
+            paid.request.targetRevision !== nextRevision)
+        )
+          return false;
         const responseKind: "question_batch" | "summary" | "chat" =
           kind === "intake_questions"
             ? "question_batch"
@@ -441,8 +510,8 @@ export function createV2JobsRepository(core: V2Core) {
           core.claim(
             g,
             claimId,
-            `${predicate.sql} AND ${lifecycle} AND w.current_job_id IS NULL AND NOT EXISTS(SELECT 1 FROM v2_idempotency WHERE owner_id=w.owner_id AND route=? AND key=? AND expires_at>?)`,
-            [...predicate.values, route, admission.key, g.now],
+            `${predicate.sql} AND (${paid?.predicate.sql ?? "NOT EXISTS(SELECT 1 FROM v2_runtime_controls)"}) AND ${lifecycle} AND w.current_job_id IS NULL AND NOT EXISTS(SELECT 1 FROM v2_idempotency WHERE owner_id=w.owner_id AND route=? AND key=? AND expires_at>?)`,
+            [...predicate.values, ...(paid?.predicate.values ?? []), route, admission.key, g.now],
           ),
           ...operationStatements(
             core,
@@ -507,6 +576,7 @@ export function createV2JobsRepository(core: V2Core) {
               ["generating_questions", jobId, g.workspaceId, claimId],
             ),
           );
+        if (paid) statements.push(...paid.statements(core, g, claimId));
         statements.push(core.finish(claimId));
         return core.changed(statements);
       });
@@ -524,7 +594,13 @@ export function createV2JobsRepository(core: V2Core) {
         return row ? jobDto(row) : null;
       });
     },
-    acquire(actor: Actor, jobId: string, token: string, leaseUntil: string) {
+    acquire(
+      actor: Actor,
+      jobId: string,
+      token: string,
+      leaseUntil: string,
+      paidAttemptId: string | null = null,
+    ) {
       return safe(async () => {
         actor = parse(actorSchema, { ownerId: actor.ownerId, now: actor.now });
         parse(opaqueIdSchema, jobId);
@@ -536,11 +612,13 @@ export function createV2JobsRepository(core: V2Core) {
           Date.parse(leaseUntil) - Date.parse(actor.now) > 300000
         )
           return null;
+        if (paidAttemptId) parse(opaqueIdSchema, paidAttemptId);
+        const paid = paidAcquirePredicate(paidAttemptId, actor.now);
         const claimId = crypto.randomUUID();
         const acquired = await core.changed([
           core.statement(
-            `INSERT INTO v2_mutation_claims(id,owner_id,target_id,revision) SELECT ?,o.owner_id,j.id,j.target_revision FROM v2_jobs j JOIN v2_operations o ON o.id=j.operation_id WHERE j.id=? AND o.owner_id=? AND j.attempts<10 AND (j.status='queued' OR (j.status IN ('running','validating') AND j.lease_until<=?)) AND ${jobAlive}`,
-            [claimId, jobId, actor.ownerId, actor.now],
+            `INSERT INTO v2_mutation_claims(id,owner_id,target_id,revision) SELECT ?,o.owner_id,j.id,j.target_revision FROM v2_jobs j JOIN v2_operations o ON o.id=j.operation_id WHERE j.id=? AND o.owner_id=? AND j.attempts<10 AND (j.status='queued' OR (j.status IN ('running','validating') AND j.lease_until<=?)) AND (${paid.sql}) AND ${jobAlive}`,
+            [claimId, jobId, actor.ownerId, actor.now, ...paid.values],
           ),
           core.statement(
             `UPDATE v2_jobs SET status='running',lease_token=?,lease_until=?,fencing=fencing+1,attempts=attempts+1,updated_at=? WHERE id=? AND ${sqlClaim}`,
@@ -672,7 +750,7 @@ export function createV2JobsRepository(core: V2Core) {
         ]);
       });
     },
-    retry(g: WorkspaceGuard, jobId: string) {
+    retry(g: WorkspaceGuard, jobId: string, paid?: PreparedPaidHold) {
       return safe(async () => {
         g = parse(guardSchema, g);
         parse(opaqueIdSchema, jobId);
@@ -683,6 +761,21 @@ export function createV2JobsRepository(core: V2Core) {
           )
           .first<JobRow>();
         if (!row || row.attempts >= 10) return false;
+        const bound = await core
+          .statement("SELECT attempt_id FROM v2_paid_holds WHERE job_id=? LIMIT 1", [jobId])
+          .first();
+        if (bound && !paid) return false;
+        if (
+          paid &&
+          (!isPreparedPaidHold(paid) ||
+            paid.request.jobId !== jobId ||
+            paid.request.plan.operationId !== row.operation_id ||
+            paid.request.targetKind !== row.target_kind ||
+            paid.request.targetId !== row.target_id ||
+            paid.request.targetRevision !==
+              (row.target_kind === "workspace" ? g.expectedRevision + 1 : row.target_revision))
+        )
+          return false;
         const target =
           row.target_kind === "workspace"
             ? "w.current_job_id IS NULL AND w.status IN ('intake','active')"
@@ -697,8 +790,8 @@ export function createV2JobsRepository(core: V2Core) {
           core.claim(
             g,
             claimId,
-            `EXISTS(SELECT 1 FROM v2_jobs j WHERE j.id=? AND j.status='failed' AND j.retryable=1 AND ${quotaRetryPredicate} AND ${target} AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind=j.target_kind AND target_id=j.target_id))`,
-            [jobId],
+            `EXISTS(SELECT 1 FROM v2_jobs j WHERE j.id=? AND j.status='failed' AND j.retryable=1 AND ${quotaRetryPredicate} AND (${paid?.predicate.sql ?? "NOT EXISTS(SELECT 1 FROM v2_runtime_controls)"}) AND ${target} AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind=j.target_kind AND target_id=j.target_id))`,
+            [jobId, ...(paid?.predicate.values ?? [])],
           ),
           ...quotaRetryStatements(core, jobId, claimId),
           core.statement(
@@ -745,6 +838,7 @@ export function createV2JobsRepository(core: V2Core) {
             ],
           ),
           core.bump(g, claimId),
+          ...(paid ? paid.statements(core, g, claimId) : []),
           core.finish(claimId),
         ]);
       });
