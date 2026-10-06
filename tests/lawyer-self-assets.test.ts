@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { Hono } from "hono";
+import type { z } from "zod";
 import type { ApiEnvironment } from "../src/server/api/errors";
 import { createDirectoryApi } from "../src/server/api/v2/directory";
 import { createLawyersApi } from "../src/server/api/v2/lawyers";
@@ -169,9 +170,16 @@ test("stream revision fences avoid snapshot decryption and support own uploads b
   const service = createSelfProfileService(
     {
       ...f.core,
-      decrypt: async (...args: Parameters<typeof f.core.decrypt>) => {
+      decrypt: async <T>(
+        table: Parameters<typeof f.core.decrypt>[0],
+        rowId: string,
+        ownerId: string,
+        revision: number,
+        envelope: string,
+        schema: z.ZodType<T>,
+      ) => {
         decryptions++;
-        return f.core.decrypt(...args);
+        return f.core.decrypt(table, rowId, ownerId, revision, envelope, schema);
       },
     },
     () => f.actor.now,
