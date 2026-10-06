@@ -9,8 +9,13 @@ interface Props {
 // biome-ignore lint/correctness/noUnusedVariables: Astro resolves frontmatter variables in the template.
 const { title, description } = Astro.props;
 const validationBootstrap = "Object.assign(globalThis, { __zod_globalConfig: { jitless: true } });";
-const bootstrapDigest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(validationBootstrap));
-Astro.csp?.insertScriptHash(`sha256-${btoa(String.fromCharCode(...new Uint8Array(bootstrapDigest)))}`);
+const bootstrapDigest = await crypto.subtle.digest(
+  "SHA-256",
+  new TextEncoder().encode(validationBootstrap),
+);
+Astro.csp?.insertScriptHash(
+  `sha256-${btoa(String.fromCharCode(...new Uint8Array(bootstrapDigest)))}`,
+);
 ---
 
 <!doctype html>
