@@ -1,8 +1,10 @@
 import { afterEach, expect, test } from "bun:test";
 import { Hono } from "hono";
 import { CURRENT_POLICY_VERSIONS } from "../src/contracts/consent";
+import { v2ErrorSchema } from "../src/contracts/v2";
 import type { ApiEnvironment } from "../src/server/api/errors";
 import { attachmentFilename, createFilesApi } from "../src/server/api/v2/files";
+import { FileError } from "../src/server/modules/files/binary";
 import { createTestDatabase } from "./helpers/d1";
 import { seedTestSession } from "./helpers/session";
 
@@ -115,4 +117,42 @@ test("attachment filenames escape punctuation/Unicode and never form executable 
   expect(header).not.toContain("hostile()");
   expect(header).toContain("%22%3B");
   expect(header).toContain("%F0%9F%92%99");
+});
+
+test("file failures expose only the shared v2 error contract", async () => {
+  const db = await createTestDatabase();
+  databases.push(db);
+  const owner = await seedTestSession(db, { consent: true });
+  const env = { ...owner.env, CASE_DATA_KEY_V1: btoa("k".repeat(32)).replace(/=+$/, "") };
+  for (const code of [
+    "NOT_FOUND",
+    "CONFLICT",
+    "BODY_TOO_LARGE",
+    "INVALID_FILE",
+    "STORAGE_UNAVAILABLE",
+    "PROCESSING_UNAVAILABLE",
+  ] as const) {
+    const failing = new Hono<ApiEnvironment>()
+      .use("*", async (c, next) => {
+        c.set("requestId", "synthetic-error");
+        await next();
+      })
+      .route(
+        "/v2/cases",
+        createFilesApi({
+          dependencies: async () => {
+            throw new FileError(code);
+          },
+        }),
+      );
+    const response = await failing.request(
+      "/v2/cases/case/files",
+      { headers: { cookie: owner.cookie } },
+      env,
+    );
+    expect(response.status).toBeGreaterThanOrEqual(400);
+    const body = (await response.json()) as { error: unknown };
+    expect(v2ErrorSchema.safeParse(body.error).success).toBe(true);
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
+  }
 });

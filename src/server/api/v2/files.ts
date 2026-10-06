@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { idempotencyKeySchema, opaqueIdSchema, revisionSchema } from "../../../contracts";
+import type { V2ErrorCode } from "../../../contracts/v2";
 import { createCaseDataCipher } from "../../crypto";
 import { createV2Core } from "../../db/v2-core";
 import { FileError } from "../../modules/files/binary";
@@ -15,6 +16,14 @@ const deleteSchema = z.strictObject({
   expectedRevision: revisionSchema,
   fileRevision: revisionSchema,
 });
+const publicFileError: Record<FileError["code"], V2ErrorCode> = {
+  NOT_FOUND: "NOT_FOUND",
+  CONFLICT: "INVALID_STATE",
+  BODY_TOO_LARGE: "BODY_TOO_LARGE",
+  INVALID_FILE: "FILE_REJECTED",
+  STORAGE_UNAVAILABLE: "STORAGE_UNAVAILABLE",
+  PROCESSING_UNAVAILABLE: "FILE_PROCESSING_FAILED",
+};
 /** Mounted at /v2/cases. Dependencies are server composition, never request fields. */
 export function createFilesApi(
   options: {
@@ -46,7 +55,7 @@ export function createFilesApi(
                 ? 400
                 : 503;
       return c.json(
-        errorBody(c, error.code, "자료 요청을 처리하지 못했어요.", status === 503),
+        errorBody(c, publicFileError[error.code], "자료 요청을 처리하지 못했어요.", status === 503),
         status,
       );
     }
