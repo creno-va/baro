@@ -24,7 +24,7 @@ test("v2 schema and repository changes cannot skip the migration gate", () => {
   expect(validationScope(["src/components/intake/CaseInput.tsx"]).database).toBe(false);
 });
 
-test("case pages and input islands select existing browser flows, never a missing workspace file", () => {
+test("case pages and input islands select existing browser flows, including the workspace flow", () => {
   for (const file of [
     "src/pages/cases/new.astro",
     "src/components/intake/CaseInput.tsx",
@@ -33,7 +33,7 @@ test("case pages and input islands select existing browser flows, never a missin
     const selected = browserTargets([file], browserTests);
     expect(selected).toContain("tests/browser/cases.e2e.ts");
     expect(selected).toContain("tests/browser/analysis.e2e.ts");
-    expect(selected).not.toContain("tests/browser/workspace.e2e.ts");
+    expect(selected).toContain("tests/browser/workspace.e2e.ts");
   }
   expect(browserTargets(["src/server/auth/session.ts"], browserTests)).toContain(
     "tests/browser/session.e2e.ts",

@@ -1,0 +1,93 @@
+.lawyer-editor,
+.lawyer-profile {
+  overflow-wrap: anywhere;
+}
+.lawyer-field {
+  display: grid;
+  gap: 0.5rem;
+  min-width: 0;
+}
+.lawyer-field input:not([type="checkbox"]),
+.lawyer-field select,
+.lawyer-field textarea {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--color-input);
+  background: var(--color-card);
+  border-radius: 0.6rem;
+  padding: 0.75rem;
+  color: inherit;
+}
+.lawyer-fields {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.lawyer-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+.lawyer-checkboxes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  margin-top: 0.8rem;
+}
+.lawyer-checkboxes label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.lawyer-photo-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+}
+.lawyer-photo {
+  object-fit: cover;
+  border-radius: 0.75rem;
+}
+.lawyer-avatar {
+  color: var(--color-muted-foreground);
+  background: var(--color-secondary);
+  border-radius: 0.75rem;
+  padding: 1rem;
+}
+.lawyer-portfolio-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 0.75rem;
+  align-items: end;
+  margin-bottom: 1rem;
+}
+.lawyer-notice,
+.lawyer-publication-confirm {
+  background: var(--color-secondary);
+  padding: 1rem;
+  border-radius: 0.75rem;
+}
+.lawyer-publication-confirm {
+  margin-top: 1rem;
+}
+.lawyer-editor fieldset {
+  min-width: 0;
+}
+.lawyer-editor input[type="file"] {
+  max-width: 100%;
+}
+.lawyer-editor .ui-button {
+  gap: 0.4rem;
+}
+@media (max-width: 600px) {
+  .lawyer-fields,
+  .lawyer-portfolio-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .lawyer-toolbar {
+    align-items: flex-start;
+  }
+}

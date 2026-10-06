@@ -2,11 +2,14 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { idempotencyKeySchema, opaqueIdSchema, revisionSchema } from "../../../contracts";
 import type { V2ErrorCode } from "../../../contracts/v2";
+import { readAccountType } from "../../auth/account-type";
 import { lawyerAccess } from "../../auth/roles";
 import { createCaseDataCipher } from "../../crypto";
 import { createV2Core, type V2Core } from "../../db/v2-core";
 import { AssetBinaryError } from "../../modules/lawyers/asset-binary";
 import { createLawyerAssetsService } from "../../modules/lawyers/assets";
+import { createSelfProfileService } from "../../modules/lawyers/self-profile";
+import { selfProfileSchema } from "../../modules/lawyers/self-profile-contract";
 import {
   createLawyersService,
   type LawyerDependencies,
@@ -56,6 +59,53 @@ export function createLawyersApi(
   } = {},
 ) {
   const app = privateLawyerApi();
+  const selfService = async (env: Env) =>
+    createSelfProfileService(createV2Core(env.DB, await createCaseDataCipher(env)));
+  const selfAccess = async (c: import("hono").Context<ApiEnvironment>, mutation = false) => {
+    const a = await lawyerAccess(c, { mutation, consent: true });
+    if (a.response) return a;
+    const row = await c.env.DB.prepare(
+      "SELECT id FROM user WHERE id=? AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='account' AND target_id=user.id)",
+    )
+      .bind(a.ownerId)
+      .first();
+    if (!row || (await readAccountType(c.env.DB, a.ownerId)) !== "lawyer")
+      return {
+        response: c.json(errorBody(c, "ROLE_REQUIRED", "변호사 역할로 로그인해 주세요."), 403),
+      };
+    return a;
+  };
+  app.get("/lawyer/self-profile", async (c) => {
+    const a = await selfAccess(c);
+    if (a.response) return a.response;
+    z.strictObject({}).parse(c.req.query());
+    return c.json(await (await selfService(c.env)).getMine(a.ownerId));
+  });
+  app.put("/lawyer/self-profile", async (c) => {
+    const a = await selfAccess(c, true);
+    if (a.response) return a.response;
+    const body = z.strictObject({ profile: selfProfileSchema }).parse(await c.req.json());
+    return c.json(await (await selfService(c.env)).saveMine(a.ownerId, body.profile));
+  });
+  app.post("/lawyer/self-profile/publication", async (c) => {
+    const a = await selfAccess(c, true);
+    if (a.response) return a.response;
+    const body = z
+      .strictObject({
+        published: z.boolean(),
+        expectedRevision: revisionSchema,
+        consent: z.boolean(),
+      })
+      .refine((b) => !b.published || b.consent)
+      .parse(await c.req.json());
+    return c.json(
+      await (await selfService(c.env)).publishMine(
+        a.ownerId,
+        body.published,
+        body.expectedRevision,
+      ),
+    );
+  });
   const service = async (env: Env, ownerId: string) => {
     const core = createV2Core(env.DB, await createCaseDataCipher(env));
     return createLawyersService(core, await options.dependencies?.(env, core, ownerId));

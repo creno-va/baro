@@ -1,0 +1,11 @@
+---
+// biome-ignore lint/correctness/noUnusedImports: Astro template reads component.
+import { IntakeQuestions } from "../../../components/intake/IntakeQuestions";
+// biome-ignore lint/correctness/noUnusedImports: Astro template reads component.
+import CaseLayout from "../../../layouts/CaseLayout.astro";
+import "../../../styles/intake.css";
+
+// biome-ignore lint/correctness/noUnusedVariables: Astro template reads variable.
+const caseId = Astro.params.caseId ?? "";
+---
+<CaseLayout title="질문 답하기"><IntakeQuestions caseId={caseId} client:load /></CaseLayout>

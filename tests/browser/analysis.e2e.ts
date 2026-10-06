@@ -25,6 +25,12 @@ function state(status: string, result: unknown = null, revision = 1) {
         : null,
   };
 }
+test.beforeEach(async ({ page }) => {
+  // These tests retain the signed v1 analysis flow through the workspace compatibility route.
+  await page.route("**/api/v2/cases/*/workspace", (route) =>
+    route.fulfill({ status: 404, json: { error: { code: "NOT_FOUND" } } }),
+  );
+});
 test("questions duplicate/error/replay and stale revision restore server state, keyboard and expiry", async ({
   page,
 }) => {
@@ -120,7 +126,7 @@ test("questions duplicate/error/replay and stale revision restore server state, 
   };
   await page.reload();
   await expect(page.getByText("질문 대기 시간이 지나", { exact: false })).toBeVisible();
-  await expect(page.getByRole("link", { name: "새 사건 입력" })).toBeVisible();
+  await expect(page.getByRole("main").getByRole("link", { name: "새 사건 입력" })).toBeVisible();
 });
 test("polling delays stop while hidden or terminal; policy results and bounded retry/deletion", async ({
   page,
@@ -243,8 +249,14 @@ test("failed read retries, stale/late answers recover the latest revision and ex
 }) => {
   let current = state("needs_clarification"),
     failedRead = true,
+    initialMetadataRead = true,
     expired = false;
   await page.route(`**/api/cases/${caseId}`, async (route) => {
+    if (initialMetadataRead) {
+      initialMetadataRead = false;
+      await route.fulfill({ json: current });
+      return;
+    }
     if (failedRead) {
       failedRead = false;
       await route.fulfill({
@@ -316,10 +328,10 @@ test("failed read retries, stale/late answers recover the latest revision and ex
   for (const label of ["1번 답변 방식", "2번 답변 방식"])
     await page.getByLabel(label).selectOption("skipped");
   await page.getByRole("button", { name: "답변 보내기" }).click();
-  await expect(page.getByRole("link", { name: "새 사건 입력" })).toBeVisible();
+  await expect(page.getByRole("main").getByRole("link", { name: "새 사건 입력" })).toBeVisible();
   await expect(page.getByText("질문 대기 시간이 지나", { exact: false })).toBeVisible();
 });
-test("real signed session/API/SQL admission → questions → validated official result → revisit → delete", async ({
+test("real signed session/API/SQL legacy admission → questions → validated official result → revisit → delete", async ({
   page,
   context,
 }) => {
@@ -352,8 +364,12 @@ test("real signed session/API/SQL admission → questions → validated official
     });
     await context.addCookies([metadata.cookie]);
     await page.route("**/api/**", async (route) => {
+      const target = new URL(route.request().url());
+      if (!target.pathname.startsWith("/api/")) return route.continue();
+      if (target.pathname.match(/^\/api\/v2\/cases\/[^/]+\/workspace$/))
+        return route.fulfill({ status: 404, json: { error: { code: "NOT_FOUND" } } });
       const response = await route.fetch({
-        url: metadata.origin + new URL(route.request().url()).pathname,
+        url: metadata.origin + target.pathname + target.search,
         headers: {
           ...route.request().headers(),
           origin: "http://127.0.0.1:4337",
@@ -373,13 +389,22 @@ test("real signed session/API/SQL admission → questions → validated official
         remove: () => {},
       };
     });
-    await page.goto("/cases/new");
+    await page.goto("/cases");
+    await expect(page.locator("astro-island[ssr]")).toHaveCount(0);
     await page.getByRole("button", { name: "사용 지표 동의", exact: true }).click();
-    await page
-      .getByRole("textbox")
-      .fill("합성 사용자 A는 지인에게 금전을 대여했다고 진술했습니다.");
-    await page.getByRole("button", { name: "상황 정리 시작" }).click();
-    await page.getByRole("link", { name: "분석 상태 확인" }).click();
+    const admission = await page.evaluate(async () => {
+      const response = await fetch("/api/cases", {
+        method: "POST",
+        headers: { "content-type": "application/json", "idempotency-key": crypto.randomUUID() },
+        body: JSON.stringify({
+          narrative: "합성 사용자 A는 지인에게 금전을 대여했다고 진술했습니다.",
+          turnstileToken: "synthetic-token",
+        }),
+      });
+      return { status: response.status, body: (await response.json()) as { caseId: string } };
+    });
+    expect(admission.status).toBe(201);
+    await page.goto(`/cases/${admission.body.caseId}`);
     await expect(page.getByRole("heading", { name: "확인이 필요한 내용" })).toBeVisible();
     await page.getByLabel("1번 답변 방식").selectOption("unknown");
     await page.getByLabel("2번 답변 방식").selectOption("skipped");
@@ -397,10 +422,10 @@ test("real signed session/API/SQL admission → questions → validated official
       .poll(async () => (await events()).filter((e) => e.name === "result_viewed").length)
       .toBe(1);
     const samples = await events(),
-      submitted = samples.find((e) => e.name === "case_submitted"),
+      started = samples.find((e) => e.name === "analysis_started"),
       viewed = samples.find((e) => e.name === "result_viewed");
-    expect(submitted?.flowId).toBe(viewed?.flowId);
-    expect(submitted?.analysisIdHash).toBe(viewed?.analysisIdHash);
+    expect(started?.flowId).toBe(viewed?.flowId);
+    expect(started?.analysisIdHash).toBe(viewed?.analysisIdHash);
     expect(samples.some((e) => e.name === "analysis_started")).toBe(true);
     expect(samples.some((e) => e.name === "analysis_completed")).toBe(true);
     await page.getByRole("button", { name: "도움이 됐어요", exact: true }).click();
@@ -408,7 +433,7 @@ test("real signed session/API/SQL admission → questions → validated official
     const url = page.url();
     await page.reload();
     await expect(page.getByRole("heading", { name: "상황 정리" })).toBeVisible();
-    await page.getByRole("link", { name: "내 사건", exact: true }).click();
+    await page.getByRole("link", { name: "내 사건", exact: true }).first().click();
     await page.goBack();
     await expect(page.getByRole("heading", { name: "상황 정리" })).toBeVisible();
     expect(page.url()).toBe(url);
@@ -418,7 +443,7 @@ test("real signed session/API/SQL admission → questions → validated official
       page.getByRole("heading", { name: "사건과 관련 분석을 삭제했어요." }),
     ).toBeVisible();
     await page.reload();
-    await expect(page.getByRole("alert")).toContainText("사건을 찾을 수 없어요.");
+    await expect(page.getByRole("alert")).toContainText("사건 또는 자료를 찾을 수 없어요.");
     expect(await page.evaluate(() => localStorage.length)).toBe(0);
   } finally {
     child.stdin.end();

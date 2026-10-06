@@ -3,6 +3,6 @@
 import { CaseList } from "../../components/intake/CaseList";
 // biome-ignore lint/correctness/noUnusedImports: Astro template reads component.
 import CaseLayout from "../../layouts/CaseLayout.astro";
+import "../../styles/intake.css";
 ---
-<CaseLayout title="내 사건"><h1>내 사건</h1><p class="case-muted">입력한 상황과 진행 상태를 다시 확인할 수 있어요.</p><CaseList client:load /></CaseLayout>
-
+<CaseLayout title="내 사건"><header class="intake-page-header"><p class="intake-eyebrow">MY CASES</p><h1>내 사건</h1><p class="intake-muted">흩어진 사실을 정리하고, 다음에 할 일을 함께 살펴봐요.</p></header><CaseList client:load /></CaseLayout>

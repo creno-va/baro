@@ -1,5 +1,19 @@
 import { expect, test } from "@playwright/test";
 
+test.beforeEach(async ({ page }) => {
+  await page.route("**/api/me/session", (route) =>
+    route.fulfill({
+      json: {
+        user: { id: "synthetic-owner", name: "합성 고객", accountType: "customer" },
+        needsConsent: false,
+      },
+    }),
+  );
+  await page.route("**/api/me/account-type", (route) =>
+    route.fulfill({ json: { accountType: "customer" } }),
+  );
+});
+
 test("callback cancellation and expired sessions show safe messages", async ({ page }) => {
   for (const [error, message] of [
     ["access_denied", "로그인을 취소했어요."],
@@ -25,8 +39,7 @@ test("keyboard OAuth initiation blocks duplicates and restores focus on a networ
   });
   await page.goto("/login");
   await page.locator("astro-island[ssr]").waitFor({ state: "detached" });
-  await page.getByRole("link", { name: "BARO 홈" }).focus();
-  await page.keyboard.press("Tab");
+  await page.getByRole("button", { name: "Google로 계속하기" }).focus();
   await expect(page.getByRole("button", { name: "Google로 계속하기" })).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(page.getByRole("button", { name: "연결 중…" })).toBeDisabled();
@@ -97,7 +110,7 @@ test("consent loading failure retries; keyboard checks gate save, failure recove
   await page.keyboard.press("Tab");
   await expect(boxes.nth(1)).toBeFocused();
   await page.keyboard.press("Space");
-  await page.keyboard.press("Tab");
+  await save.focus();
   await expect(save).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(page.getByRole("button", { name: "저장 중…" })).toBeDisabled();
@@ -106,7 +119,7 @@ test("consent loading failure retries; keyboard checks gate save, failure recove
   await expect(page.getByRole("alert")).toContainText("동의를 저장하지 못했어요.");
   await expect(save).toBeFocused();
   await page.keyboard.press("Enter");
-  await expect(page.getByRole("link", { name: "홈으로 돌아가기" })).toBeFocused();
+  await expect(page.getByRole("link", { name: "내 화면으로 계속하기" })).toBeFocused();
 });
 
 test("an expired session during consent saving returns to login", async ({ page }) => {

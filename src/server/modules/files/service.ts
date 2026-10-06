@@ -9,6 +9,7 @@ import {
   v2OriginalManifestSchema,
   v2UploadCompleteRequestSchema,
   v2UploadReservationRequestSchema,
+  v2UploadSessionSchema,
 } from "../../../contracts/v2";
 import * as schema from "../../db/schema";
 import { createV2AccountingRepository } from "../../db/v2-accounting";
@@ -344,6 +345,18 @@ export function createFilesService(core: V2Core, deps: FileServiceDependencies) 
     if (!deps.paidStorage && !unmeteredTest) throw new FileError("PROCESSING_UNAVAILABLE");
   };
   return {
+    async resumeUpload(ownerId: string, workspaceId: string, fileId: string) {
+      await consent(ownerId);
+      const u = await session(ownerId, workspaceId, fileId, undefined, true);
+      return v2UploadSessionSchema.parse({
+        schemaVersion: "2",
+        fileId: u.file_id,
+        uploadSession: u.id,
+        chunkBytes: V2_LIMITS.chunkBytes,
+        reservedBytes: u.reserved_bytes,
+        expiresAt: u.expires_at,
+      });
+    },
     async list(ownerId: string, workspaceId: string, afterId?: string) {
       await workspace(ownerId, workspaceId);
       if (afterId) parse(opaqueIdSchema, afterId);
