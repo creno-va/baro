@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { getAuth } from "../auth";
+import { createFileProcessingAdmission } from "../runtime/file-admission";
 import { accountDeleteApi } from "./account-delete";
 import { answersApi } from "./answers";
 import { caseCreateApi } from "./case-create";
@@ -62,7 +63,12 @@ export const api = new Hono<ApiEnvironment>()
   )
   .route(
     "/v2/cases",
-    createFilesApi({ dependencies: async (env) => ({ bucket: env.CASE_PRIVATE_R2 }) }),
+    createFilesApi({
+      dependencies: async (env, core) => ({
+        bucket: env.CASE_PRIVATE_R2,
+        ...createFileProcessingAdmission(core, env),
+      }),
+    }),
   )
   .route("/me", meApi)
   .route("/me", accountDeleteApi)

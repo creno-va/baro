@@ -3,7 +3,8 @@ import { z } from "zod";
 import { idempotencyKeySchema, opaqueIdSchema, revisionSchema } from "../../../contracts";
 import type { V2ErrorCode } from "../../../contracts/v2";
 import { createCaseDataCipher } from "../../crypto";
-import { createV2Core } from "../../db/v2-core";
+import { createV2Core, type V2Core } from "../../db/v2-core";
+import { ProcessingError } from "../../modules/file-processing/protocol";
 import { FileError } from "../../modules/files/binary";
 import { createFilesService, type FileServiceDependencies } from "../../modules/files/service";
 import { caseAccess } from "../case-access";
@@ -27,7 +28,10 @@ const publicFileError: Record<FileError["code"], V2ErrorCode> = {
 /** Mounted at /v2/cases. Dependencies are server composition, never request fields. */
 export function createFilesApi(
   options: {
-    dependencies?: (env: Env) => Promise<Omit<FileServiceDependencies, "environment">>;
+    dependencies?: (
+      env: Env,
+      core: V2Core,
+    ) => Promise<Omit<FileServiceDependencies, "environment">>;
   } = {},
 ) {
   const app = new Hono<ApiEnvironment>();
@@ -41,6 +45,11 @@ export function createFilesApi(
     return;
   });
   app.onError((error, c) => {
+    if (error instanceof ProcessingError)
+      return c.json(
+        errorBody(c, "FILE_PROCESSING_FAILED", "자료 처리 준비를 확인하고 있어요.", true),
+        503,
+      );
     if (error instanceof z.ZodError || error instanceof SyntaxError)
       return c.json(errorBody(c, "VALIDATION_ERROR", "자료 요청을 확인해 주세요."), 400);
     if (error instanceof FileError) {
@@ -61,11 +70,13 @@ export function createFilesApi(
     }
     return c.json(errorBody(c, "INTERNAL_ERROR", "자료 요청을 처리하지 못했어요.", true), 500);
   });
-  const service = async (env: Env) =>
-    createFilesService(createV2Core(env.DB, await createCaseDataCipher(env)), {
-      ...(await options.dependencies?.(env)),
+  const service = async (env: Env) => {
+    const core = createV2Core(env.DB, await createCaseDataCipher(env));
+    return createFilesService(core, {
+      ...(await options.dependencies?.(env, core)),
       environment: env.APP_ENV === "production" ? "production" : "preview",
     });
+  };
   app.get("/:caseId/files", async (c) => {
     const access = await caseAccess(c);
     if (access.response) return access.response;

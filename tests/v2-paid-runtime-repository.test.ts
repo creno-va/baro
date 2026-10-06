@@ -1,4 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
+import { CURRENT_POLICY_VERSIONS } from "../src/contracts/consent";
 import { createCaseDataCipher } from "../src/server/crypto";
 import {
   type BudgetAllocation,
@@ -22,6 +23,7 @@ import { createV2ReportsRepository } from "../src/server/db/v2-reports";
 import { createV2StorageRepository } from "../src/server/db/v2-storage";
 import { createV2UploadProbeRepository } from "../src/server/db/v2-upload-probe";
 import { createProcessingBudgetService } from "../src/server/modules/budget/processing-ledger";
+import { createFileProcessingAdmission } from "../src/server/runtime/file-admission";
 import { createTestDatabase } from "./helpers/d1";
 import { seedTestSession } from "./helpers/session";
 
@@ -307,6 +309,102 @@ async function uploadProbeFixture() {
   };
   return { ...f, uploadId, fileId, probes, prepare, containerPricing: completePricing };
 }
+
+test("actual upload probe composition reserves SQL cost before native transport and suppresses deleted results", async () => {
+  const f = await uploadProbeFixture();
+  f.db.sqlite
+    .query("UPDATE v2_consents SET version=? WHERE file_id=?")
+    .run(CURRENT_POLICY_VERSIONS.aiNoticeVersion, f.fileId);
+  let calls = 0,
+    stops = 0,
+    ticks = 0,
+    removeDuringDispatch = false;
+  // Explicit synthetic Container transport; production composition uses the DO binding.
+  const env = {
+    APP_ENV: "preview",
+    FILE_PROCESSOR: {
+      newUniqueId: () => ({}),
+      get: () => ({
+        fetch: async (request: Request) => {
+          calls++;
+          expect(
+            f.db.sqlite
+              .query("SELECT count(*) n FROM v2_paid_holds WHERE state='dispatched'")
+              .get(),
+          ).toEqual({ n: calls });
+          await request.body?.cancel();
+          if (removeDuringDispatch)
+            f.db.sqlite
+              .query(
+                "INSERT INTO v2_tombstones(target_kind,target_id,deleted_at) VALUES('file',?,?)",
+              )
+              .run(f.fileId, NOW);
+          return Response.json({
+            version: 1,
+            probe: { category: "document", format: "pdf", pageCount: 1, byteLength: 100 },
+          });
+        },
+        stop: async () => {
+          stops++;
+        },
+      }),
+    },
+  } as unknown as Env;
+  const admission = createFileProcessingAdmission(
+    f.core,
+    env,
+    {
+      bounds: async (_input, inputDigest, now) => ({
+        inputDigest,
+        evidenceHash: HASH,
+        verifiedAt: now,
+        validUntil: new Date(Date.parse(now) + 300000).toISOString(),
+        quantities: [{ sku: "container_cpu_seconds", maximumQuantity: "600" }],
+      }),
+    },
+    () => new Date(Date.parse(NOW) + ++ticks).toISOString(),
+  );
+  const input = {
+    ownerId: f.actor.ownerId,
+    workspaceId: f.workspaceId,
+    fileId: f.fileId,
+    uploadSession: f.uploadId,
+    uploadRevision: 1,
+    byteLength: 100,
+    contentHash: HASH,
+    open: () =>
+      new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new Uint8Array(100));
+          controller.close();
+        },
+      }),
+  };
+  const probe = admission.probe;
+  if (!probe) throw new Error("synthetic probe missing");
+  expect(await probe(input)).toEqual({
+    category: "document",
+    format: "pdf",
+    pageCount: 1,
+    byteLength: 100,
+  });
+  expect(calls).toBe(1);
+  expect(stops).toBe(1);
+  expect(
+    f.db.sqlite.query("SELECT state,current_job_id FROM v2_files WHERE id=?").get(f.fileId),
+  ).toEqual({ state: "reserved", current_job_id: null });
+  expect(f.db.sqlite.query("SELECT count(*) n FROM v2_outbox").get()).toEqual({ n: 0 });
+  expect(f.db.sqlite.query("SELECT count(*) n FROM v2_runtime_usage").get()).toEqual({ n: 0 });
+  removeDuringDispatch = true;
+  await expect(probe(input)).rejects.toThrow("STALE_REVISION");
+  expect(calls).toBe(2);
+  expect(stops).toBe(2);
+  expect(
+    f.db.sqlite.query("SELECT count(*) n FROM v2_cost_attempts WHERE state='reserved'").get(),
+  ).toEqual({ n: 2 });
+  await expect(probe(input)).rejects.toThrow("STALE_REVISION");
+  expect(calls).toBe(2);
+});
 
 test("processing cost bridge uses advancing time, restores actual admission and retains additive unknown exposure", async () => {
   const f = await uploadProbeFixture();
