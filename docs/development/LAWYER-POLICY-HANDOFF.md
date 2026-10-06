@@ -23,6 +23,7 @@
 reference가 필요하다. stream 중 auth 재검사는 응답 header를 다시 쓰지 않는다.
 
 프로필 편집은 focus/visibility/pageshow/peer-tab storage와 저장/공개 전후에 session을 확인한다.
+요청이 실패한 뒤에도 현재 계정을 검사해 이전 계정 초안·오류를 새 계정에서 보존하지 않는다.
 계정/role/동의 변경 시 draft·preview·공개 확인·사진 변환·오류와 이전 응답을 폐기한다.
 공개 요청은 profileId/revision을 명시해 이전 계정 요청이 다른 자기 프로필에 적용되지 않게 한다.
 HTTP publication과 내부 service/mock handler도 profileId를 필수로 검사한다. 이전 client의 ID 없는
@@ -98,7 +99,7 @@ v2 두 역할/전 사건 준비 범위와 milestone 링크·새 브랜드는 아
 - `bun run check`: lint/typecheck 성공, 1205 tests/132600 assertions 성공. schema drift 없음,
   fresh/upgrade migration 추가 6 tests/29 assertions 성공. schema/migration 변경 없음.
 - `bun run build`, `bun run cf:dry-run`: 성공. dry-run은 배포·원격 Container 시작 증거가 아니다.
-- `bunx playwright test --config tests/browser/lawyer-public.config.ts`: 9 성공. URL 초기 복원/빠른 입력,
+- `bunx playwright test --config tests/browser/lawyer-public.config.ts`: 10 성공. URL 초기 복원/빠른 입력,
   back/forward·키보드·실패 재시도·320px·200%·axe, 저장/재접속/충돌/peer-tab 계정 변경/대기 자료 연결.
 - `PUBLIC_API_MODE=mock bunx playwright test --config tests/browser/integration.config.ts tests/browser/lawyer-api-mock.e2e.ts`:
   1 성공. 통합 로그인→동의→사진/PDF→저장·재접속→공개/디렉터리/다운로드→비공개/자료 삭제,

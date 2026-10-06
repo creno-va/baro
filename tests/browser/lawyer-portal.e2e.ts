@@ -348,3 +348,38 @@ test("pending upload survives reconnect and can only attach after ready status",
   await expect(page.getByLabel("활동 제목 1")).toHaveValue("공개 자료");
   await expect(page.getByRole("button", { name: "업로드 자료 삭제" })).toBeDisabled();
 });
+
+test("failed old-owner save cannot retain the draft after an account switch without browser events", async ({
+  page,
+}) => {
+  let account = "synthetic-first";
+  let release!: () => void;
+  const pending = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let started = false;
+  await page.route("**/api/me/session", (route) =>
+    route.fulfill({
+      json: { user: { id: account, name: account, accountType: "lawyer" }, needsConsent: false },
+    }),
+  );
+  await page.route("**/api/v2/me/lawyer/self-profile", async (route) => {
+    if (route.request().method() === "GET")
+      return route.fulfill({ json: emptySelfProfile(account, account) });
+    started = true;
+    await pending;
+    return route.fulfill({
+      status: 409,
+      json: { error: { code: "STALE_REVISION", message: "합성 이전 요청 실패", retryable: false } },
+    });
+  });
+  await page.goto("/lawyer");
+  await page.getByLabel("이름", { exact: true }).fill("이전 계정의 비공개 초안");
+  await page.getByRole("button", { name: "프로필 저장" }).click();
+  await expect.poll(() => started).toBe(true);
+  account = "synthetic-second";
+  release();
+  await expect(page.getByLabel("이름", { exact: true })).toHaveValue("synthetic-second");
+  await expect(page.getByText("합성 이전 요청 실패", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "프로필 저장" })).toBeDisabled();
+});

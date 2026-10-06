@@ -196,6 +196,21 @@ export function Editor() {
     setDraft((p) => (p ? { ...p, [field]: value } : p));
     setNotice("");
   };
+  const failForOwner = async (cause: unknown, startEpoch: number) => {
+    if (epoch.current !== startEpoch) return;
+    try {
+      const checked = await verify();
+      if (!checked || checked.epoch !== startEpoch) {
+        if (checked?.changed) await load();
+        return;
+      }
+      fail(cause);
+    } catch (sessionError) {
+      clear();
+      setBusy(false);
+      fail(sessionError);
+    }
+  };
   const mutate = async (operation: () => Promise<LawyerView>, message: string) => {
     const startEpoch = epoch.current;
     setBusy(true);
@@ -222,7 +237,7 @@ export function Editor() {
       setPhotoPreview(null);
       setNotice(message);
     } catch (cause) {
-      if (epoch.current === startEpoch) fail(cause);
+      await failForOwner(cause, startEpoch);
     } finally {
       if (epoch.current === startEpoch) setBusy(false);
     }
@@ -274,7 +289,7 @@ export function Editor() {
       }
       setAssets(items);
     } catch (cause) {
-      if (epoch.current === startEpoch) fail(cause);
+      await failForOwner(cause, startEpoch);
     }
   };
   const removeAsset = async (asset: LawyerAssetView) => {
@@ -296,7 +311,7 @@ export function Editor() {
         setNotice("자료 삭제를 접수했어요. 원격 정리는 별도 절차로 진행돼요.");
       }
     } catch (cause) {
-      if (epoch.current === startEpoch) fail(cause);
+      await failForOwner(cause, startEpoch);
     } finally {
       if (epoch.current === startEpoch) setBusy(false);
     }
@@ -337,7 +352,7 @@ export function Editor() {
           "자료를 업로드했어요. 정제 완료 후 ‘자료 상태 확인’에서 연결해 주세요. 처리 대기는 공개 완료가 아니에요.",
         );
     } catch (cause) {
-      if (epoch.current === startEpoch) fail(cause);
+      await failForOwner(cause, startEpoch);
     } finally {
       if (epoch.current === startEpoch) setBusy(false);
     }
