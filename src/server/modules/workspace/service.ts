@@ -1,6 +1,7 @@
 import type { z } from "zod";
 import { idempotencyKeySchema, opaqueIdSchema } from "../../../contracts";
 import {
+  V2_INTAKE_POLICY,
   v2ActionUpdateRequestSchema,
   v2AnswersForBatchSchema,
   v2AnswersRequestSchema,
@@ -234,6 +235,15 @@ export function createWorkspaceService(core: V2Core, deps: WorkspaceDependencies
       const g = await dependencyStep("retry_workspace", () =>
         guard(ownerId, id, request.expectedRevision),
       );
+      if (job.kind === "intake_questions") {
+        const intake = await workspace.metadata(g, id);
+        if (
+          !intake ||
+          intake.batches.reduce((count, batch) => count + batch.questions.length, 0) >=
+            V2_INTAKE_POLICY.followupLimit
+        )
+          throw new WorkspaceError("REVIEW_REQUIRED");
+      }
       const operation = await dependencyStep("retry_operation", () =>
         core
           .statement(
@@ -354,7 +364,10 @@ export function createWorkspaceService(core: V2Core, deps: WorkspaceDependencies
         id,
         key,
         body,
-        intake.batches.length < 3 ? "intake_questions" : "intake_summary",
+        intake.batches.reduce((count, batch) => count + batch.questions.length, 0) <
+          V2_INTAKE_POLICY.followupLimit
+          ? "intake_questions"
+          : "intake_summary",
       );
     },
     async editSummary(ownerId: string, id: string, key: string, raw: unknown) {

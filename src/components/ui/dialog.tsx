@@ -75,7 +75,9 @@ export function Dialog({
           first.focus();
         }
       }}
-      onClose={() => {
+      onClose={(event) => {
+        // A queued close event can arrive after a keyboard user has reopened the dialog.
+        if (event.currentTarget.open) return;
         onOpenChange(false);
         restoreFocus(previousFocus.current);
       }}

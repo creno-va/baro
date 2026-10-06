@@ -529,21 +529,10 @@ test("intake metadata returns bounded questions/answers and >4MiB summary identi
   expect((await iterator.next()).done).toBe(true);
 }, 60000);
 
-test("all three question batches and fifteen answers retain original order through four bounded metadata reads", async () => {
+test("legacy three question batches and fifteen answers remain editable through four bounded metadata reads", async () => {
   const f = await fixture();
   const batchIds: string[] = [];
   for (let ordinal = 1; ordinal <= 3; ordinal++) {
-    const jobId = crypto.randomUUID();
-    expect(await f.jobs.admitWorkspace(f.guard(), admission(), jobId, "intake_questions")).toBe(
-      true,
-    );
-    const job = await f.jobs.acquire(
-      f.actor,
-      jobId,
-      crypto.randomUUID(),
-      "2026-10-06T00:04:00.000Z",
-    );
-    if (!job) throw new Error("Synthetic question lease unavailable");
     const batchId = crypto.randomUUID();
     batchIds.push(batchId);
     const questions = Array.from({ length: 5 }, (_, index) => ({
@@ -552,13 +541,26 @@ test("all three question batches and fifteen answers retain original order throu
       answerType: "text" as const,
       options: [],
     }));
-    expect(
-      await f.ws.writeBatch(
-        f.guard(),
-        { id: batchId, ordinal, generatedForIntakeRevision: ordinal, questions, answers: [] },
-        job.lease,
-      ),
-    ).toBe(true);
+    // Restore previously saved ciphertext: new generation is intentionally stricter.
+    const value = {
+      id: batchId,
+      ordinal,
+      generatedForIntakeRevision: ordinal,
+      questions,
+      answers: [],
+    };
+    const envelope = await f.core.encrypt(
+      "v2_question_batches",
+      batchId,
+      f.actor.ownerId,
+      1,
+      value,
+    );
+    f.db.sqlite
+      .query(
+        "INSERT INTO v2_question_batches(id,workspace_id,ordinal,intake_revision,question_count,encrypted_payload,created_at) VALUES(?,?,?,?,?,?,?)",
+      )
+      .run(batchId, f.id, ordinal, ordinal, questions.length, envelope, NOW);
     expect(
       await f.ws.answer(f.guard(), batchId, {
         expectedRevision: ordinal,

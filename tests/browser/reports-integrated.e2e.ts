@@ -42,11 +42,11 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
   await expect(page).toHaveURL(/\/$/);
   async function completeIntake(narrative: string) {
     await page.getByRole("textbox", { name: "지금까지 있었던 일" }).fill(narrative);
-    await page.getByRole("button", { name: "저장하고 질문 시작" }).click();
-    for (let index = 0; index < 4; index++)
+    await page.getByRole("button", { name: "저장하고 계속" }).click();
+    for (let index = 0; index < 2; index++)
       await page.getByRole("button", { name: "모름", exact: true }).click();
     await expect(page).toHaveURL(/\/summary$/);
-    await page.getByRole("checkbox", { name: /저장한 요약을 읽고/ }).check();
+    await page.getByRole("checkbox", { name: /요약이 내가 이야기한 사실과 맞는지/ }).check();
     await page.getByRole("button", { name: "요약 확인하고 계속" }).click();
     await page.getByRole("button", { name: "확인하고 사건 열기" }).click();
     await expect(page.getByRole("heading", { name: "이어서 대화하기" })).toBeVisible();
