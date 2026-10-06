@@ -1,5 +1,21 @@
 # P0.3 환경 readiness 기록
 
+## 2026-10-07 Preview / production 동등성 점검
+
+동일한 익명 GET 9개 경로를 직접 검사했다. preview `868fd09133f1006e2c526a539ea3f253b6f58f3f`는
+전체 통과했고, production `d91f342a3aa64008ab72ff338eca55c4ba14d40e`는 health/schema0009와
+session은 통과했지만 `/api/v2/lawyers/self-service?limit=1`에서
+`503 DEPENDENCY_UNAVAILABLE`을 반환했다. 나머지 보호 경로의 익명 요청은 정상 401이었다.
+production GitHub Environment에는 `PUBLIC_TURNSTILE_SITE_KEY` 변수가 없으며 기존
+production 빌드에도 해당 변수를 전달하지 않았다. OAuth 6개 Environment secret 이름은
+양쪽 배포에서 같은 방식으로 검증·동기화하도록 공통 배포 action으로 통합한다.
+
+디렉터리 오류와 동일한 실패를 `CASE_DATA_KEY_V1` 누락 fixture에서 재현했으나 이것만으로
+실제 Worker 키 누락을 확정하지 않는다. 새 배포 전 Worker secret 이름 확인과 환경별
+Turnstile widget/secret 짝 복구가 필요하다. 기존 암호화 키를 임의로 덮어쓰지 않는다.
+이 기록은 수정 코드의 production 적용이나 실제 사용자 OAuth/AI 성공 증거가 아니다.
+이전 `sync_oauth` 선택 옵션은 공통 배포 절차에서 제거하고 환경별 6개 credential을 항상 적용한다.
+
 > **2026-10-07 사용자 후속 — 이전 비용 정책보다 우선:** 계정별 AI 응답은 KST 하루200회이며 Preview/Production의 별도 전체 월 예산 차단은 해제한다. Cloudflare 기존 결제 경로에서 잔액$10 이하 시$30 자동 충전을 사용자가 직접 승인/설정했다. metering·실제 funding·가격/FX·bounded attempt·unknown 비용 보존은 유지한다. 배포 설정 `MONTHLY_BUDGET_CAP_ENABLED=false`가 예약·사용량·정산에 일관되게 적용된다. 기존 allocation 금액은 이 모드에서 소비 차단 한도가 아니며 schema0009의 기록을 보존한다.
 
 AI missing bounds/pricing/funding/allocation 후속은 [관측 정본](./AI-RUNTIME-OBSERVATION.json)과 production workflow `configure_ai`로 두 환경을 함께 연결한다. 배포 완료·실제 응답은 [journal](https://github.com/creno-va/baro/issues/71#issuecomment-6021564076)의 candidate별 관측으로 판정한다. 최초 provisioning은 두 실제 DB가 zero-state임을 확인하고, 갱신은 unresolved hold가 없어야 actual drain/peer 증거를 교환한다. 갱신 전 만료/불명 hold를 삭제하지 않는다.

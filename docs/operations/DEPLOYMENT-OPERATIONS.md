@@ -207,3 +207,26 @@ manifest/키/revision을 읽지 못하면 해당 기능을 닫고 forward-fix한
 기존 사건을 자동 재분석하지 않는다. 법률 source 실패 시 검증되지 않은 법률 행동은 닫되 사용자가
 확인한 사실 정리·자료/리포트 접근은 유지할 수 있다. [삭제/복구](./DELETION-RESTORE.md)의 차단
 조건이 남으면 traffic을 다시 열지 않는다.
+
+## Preview / production 배포 동등성
+
+두 환경은 `.github/actions/deploy-worker/action.yml`의 동일한 절차로 배포한다.
+같은 immutable SHA에 대해 real API 빌드 → bundle/dry-run 검증 → 생성된 Worker 환경 확인 →
+D1 migration → 환경별 OAuth 6개 secret 동기화 → release/schema/API smoke를 수행한다.
+production의 CI·preview 증거, GitHub Environment 승인과 공개 모드 검증은 이 공통 절차 전에 유지한다.
+`sync_oauth` 선택지는 제거했으며 각 Environment의 credential을 매번 사용한다.
+
+두 GitHub Environment 모두 `PUBLIC_TURNSTILE_SITE_KEY` 변수가 필요하다. 해당 환경의
+hostname에 등록된 실제 widget site key여야 하고 Worker의 `TURNSTILE_SECRET_KEY`와
+같은 widget이어야 한다. 누락·테스트 키는 원격 migration 전에 배포를 중단한다.
+빌드에는 `PUBLIC_API_MODE=real`을 명시하며 mock fixture를 배포하지 않는다.
+DB/KV/R2/Workflow/Container/OAuth/Gateway의 환경별 식별자와 키는 계속 분리한다.
+배포 전 Worker의 secret 이름만 조회하여 `BETTER_AUTH_SECRET`, `CASE_DATA_KEY_V1`,
+`TURNSTILE_SECRET_KEY`, `LAW_API_OC` 존재를 확인한다. 기존 암호화 키를 자동 생성하거나
+덮어쓰지 않는다. 누락된 키는 해당 환경의 기존 보관본/담당 절차로 복구해야 한다.
+
+API smoke는 인증 cookie 없이 session, 공개 변호사 목록, 사건/자료/리포트/사용량의
+읽기 경로를 검사한다. open 모드에서는 정상 공개 응답 또는 `401 UNAUTHENTICATED`를,
+production foundation에서는 `503 BETA_NOT_OPEN`을 요구한다. health 성공만으로
+API가 열렸다고 판정하지 않으며, 이 검사는 실제 OAuth callback·Turnstile·AI 처리의
+성공을 대신하지 않는다. API 노출 모드는 승인된 production release mode로만 결정한다.

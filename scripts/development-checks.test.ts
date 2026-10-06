@@ -69,6 +69,19 @@ test("a missing required AI regression fails closed while unrelated styles stay 
   expect(selected.some((path) => aiRuntimeTests.includes(path))).toBe(false);
 });
 
+test("deployment actions and runtime configuration cannot skip environment parity checks", async () => {
+  for (const file of [
+    ".github/actions/deploy-worker/action.yml",
+    ".github/workflows/deploy-production.yml",
+    "wrangler.jsonc",
+    "astro.config.ts",
+  ]) {
+    const selected = await unitTargets([file], unitTests);
+    expect(selected).toContain("tests/workflows.test.ts");
+    expect(selected).toContain("tests/deployment-config.test.ts");
+  }
+});
+
 test("source-only authentication and file changes run existing consumer tests", async () => {
   const auth = await unitTargets(["src/server/auth/session.ts"], unitTests);
   expect(auth).toContain("tests/auth-lifecycle.test.ts");
