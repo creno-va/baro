@@ -20,6 +20,7 @@ export interface ProcessingCosts {
       identity: string;
       byteLength: number;
       durationSeconds: number | null;
+      action?: "container_probe" | "container_process" | "r2_get" | "r2_put" | "asr" | "vision";
       model?: string;
       wire?: Readonly<Record<string, unknown>>;
     },
@@ -57,6 +58,7 @@ export function createProcessorTransport(options: {
     const permit = await options.costs.before(
       {
         service: "container",
+        action: kind === "probe" ? "container_probe" : "container_process",
         identity: `${kind}:${input.contentHash}:${input.unit ?? 0}:${input.frameOffset ?? 0}`,
         byteLength: input.byteLength,
         durationSeconds: null,

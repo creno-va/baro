@@ -151,7 +151,7 @@ def process(source, root, probe, unit, frame_offset):
             texts = source.read_bytes().decode("utf-8-sig", errors="strict").split("\f")
         else:
             texts = None
-        pages = [dict(page=p, status="missing") for p in range(1, probe["pageCount"] + 1)]
+        pages = [dict(page=unit + 1, status="missing")]
         for page in [unit + 1]:
             position = dict(kind="document", page=page, paragraph=None, table=None)
             text = texts[page - 1] if texts is not None else command([
@@ -168,7 +168,7 @@ def process(source, root, probe, unit, frame_offset):
                 status = "low_quality"
             if text:
                 text_artifacts(text, position)
-            pages[page - 1] = dict(page=page, status=status)
+            pages[0] = dict(page=page, status=status)
         coverage = dict(category="document", status="complete" if all(p["status"] == "processed" for p in pages) else "partial",
                         pageCount=probe["pageCount"], pages=pages)
     elif category == "image":
@@ -190,8 +190,8 @@ def process(source, root, probe, unit, frame_offset):
                 ffmpeg(source, ["-t", str(end - start), "-map", "0:a:0", "-vn",
                                 "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", "-f", "wav", str(path)], seek=start)
                 artifact(path, "audio", dict(kind="audio", startSeconds=start, endSeconds=end))
-        audio = dict(durationSeconds=duration, status="partial", intervals=[dict(startSeconds=0,
-                     endSeconds=duration, status="missing")]) if category == "audio" or probe["hasAudio"] else None
+        audio = dict(durationSeconds=duration, status="partial", intervals=[dict(startSeconds=unit * 30,
+                     endSeconds=min((unit+1)*30,duration), status="missing")]) if category == "audio" or probe["hasAudio"] else None
         if category == "audio":
             coverage = dict(category="audio", audio=audio)
         else:
@@ -246,11 +246,9 @@ def process(source, root, probe, unit, frame_offset):
                     record["position"]["frameIndex"] = frame_offset + max(0, min(len(indexed) - 1, bisect.bisect_left(indexed, record["position"]["timestampSeconds"])))
             for frame in frames:
                 frame["frameIndex"] = artifacts[int(frame["id"].split("-")[1])]["position"]["frameIndex"]
-            sampled = {f["timestampSeconds"]: f for f in frames if f["sampling"] == "one_second"}
-            all_frames = [sampled.get(t, dict(id="missing-%06d" % t, timestampSeconds=t, frameIndex=0, sampling="one_second", status="missing")) for t in range(math.ceil(duration))]
-            all_frames += [f for f in frames if f["sampling"] == "scene_change"]
+            all_frames = frames
             coverage = dict(category="video", durationSeconds=duration, status="partial", hasAudio=probe["hasAudio"],
-                            audio=audio, frames=all_frames, sceneDetection="failed", sceneFrameCount=None)
+                            audio=audio, frames=all_frames, sceneDetection="complete", sceneFrameCount=len(timestamps))
     return dict(version=1, unit=unit, totalUnits=total_units, frameOffset=frame_offset, decodedFrameCount=len(indexed) if category == "video" else 0, probe=probe, coverage=coverage, artifacts=artifacts, outputBytes=output_bytes)
 
 

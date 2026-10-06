@@ -20,6 +20,35 @@ const probe = {
   byteLength: input.byteLength,
   pageCount: 1,
 };
+
+test("native unit fragment preserves 100000-page source identity without sending whole-file missing coverage", () => {
+  const value = {
+    version: 1,
+    unit: 99999,
+    totalUnits: 100000,
+    frameOffset: 0,
+    decodedFrameCount: 0,
+    probe: { category: "document", format: "txt", byteLength: 200000, pageCount: 100000 },
+    coverage: {
+      category: "document",
+      status: "complete",
+      pageCount: 100000,
+      pages: [{ page: 100000, status: "processed" }],
+    },
+    artifacts: [],
+    outputBytes: 0,
+  };
+  expect(processorManifestSchema.safeParse(value).success).toBe(true);
+  expect(JSON.stringify(value).length).toBeLessThan(600);
+  expect(
+    processorManifestSchema.safeParse({
+      ...value,
+      coverage: { ...value.coverage, pages: [{ page: 1, status: "processed" }] },
+    }).success,
+  ).toBe(false);
+  expect(processorManifestSchema.safeParse({ ...value, totalUnits: 1 }).success).toBe(false);
+  expect(processorManifestSchema.safeParse({ ...value, decodedFrameCount: 1 }).success).toBe(false);
+});
 async function fixture(
   options: { reserve?: () => void; allowed?: boolean; records?: unknown[] } = {},
 ) {

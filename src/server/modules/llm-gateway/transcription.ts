@@ -115,6 +115,7 @@ export function createMediaGateway(
     const permit = await options.costs.before(
       {
         service: model === WHISPER_MODEL ? "asr" : "model",
+        action: model === WHISPER_MODEL ? "asr" : "vision",
         identity: await digest(serialized),
         byteLength: serialized.byteLength,
         durationSeconds: duration,
