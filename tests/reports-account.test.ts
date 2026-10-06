@@ -98,6 +98,10 @@ test("review edits and masking persist through storage reload; old versions reta
   expect(f.read().reportHistory?.[saved.id]?.content).toContain("검토한 사실");
   expect(maskReportText(saved.content)).not.toContain("01012345678");
   expect(maskReportText(saved.content)).not.toContain("demo@example.test");
+  expect(maskReportText("연락: 02-123-4567 / +82 10 1234 5678")).toBe(
+    "연락: [전화번호 가림] / [전화번호 가림]",
+  );
+  expect(maskReportText("합성 거래번호 99901012345678999")).toContain("99901012345678999");
 });
 test("revision conflict and mutation-key replay prevent silent overwrites and duplicate report versions", async () => {
   const f = fixture();
@@ -302,6 +306,7 @@ test("canonical shared namespaces enforce ownership and deleting one account pre
     if (!own) throw new Error("fixture missing");
     state.cases["peer-case"] = { ...own, id: "peer-case" };
     state.caseOwners = { "case-demo": "synthetic-owner", "peer-case": "peer-owner" };
+    state.consents = { "synthetic-owner": { accepted: true }, "peer-owner": { accepted: true } };
     state.intake = {
       "case-demo": { narrative: "자기 합성 입력" },
       "peer-case": { narrative: "다른 합성 입력" },
@@ -332,6 +337,7 @@ test("canonical shared namespaces enforce ownership and deleting one account pre
   await f.account.deleteAccount("DELETE");
   expect(Object.keys(f.read().cases)).toEqual(["peer-case"]);
   expect(f.read().caseOwners).toEqual({ "peer-case": "peer-owner" });
+  expect(f.read().consents).toEqual({ "peer-owner": { accepted: true } });
   expect(Object.keys(f.read().intake ?? {})).toEqual(["peer-case"]);
   expect(Object.keys(f.read().caseRequests ?? {})).toEqual(["peer:create:key"]);
   expect(f.read().lawyers).toEqual({
@@ -340,4 +346,20 @@ test("canonical shared namespaces enforce ownership and deleting one account pre
   });
   expect(f.read().session.user).toBeNull();
   expect(f.read().deletedAccountIds).toEqual(["synthetic-owner"]);
+});
+
+test("deleting a case while its original is loading prevents a late ZIP download", async () => {
+  const f = fixture();
+  const report = await f.reports.get("case-demo");
+  const reports = createReportsClient(
+    createReportsMockHandler({
+      read: f.read,
+      update: f.update,
+      original: async () => {
+        await f.account.deleteCase("case-demo", "DELETE");
+        return new Blob(["합성 원본"]);
+      },
+    }),
+  );
+  await expect(reports.zip(report.id, ["file-demo"])).rejects.toMatchObject({ code: "NOT_FOUND" });
 });

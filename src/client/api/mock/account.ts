@@ -132,6 +132,7 @@ export function createAccountMockHandler(runtime: AccountMockRuntime): DomainReq
         for (const id of Object.keys(current.cases))
           if (!current.caseOwners || current.caseOwners[id] === ownerId) eraseCase(current, id);
         if (hasOwners) {
+          delete current.consents?.[ownerId];
           for (const [key, receipt] of Object.entries(current.caseRequests ?? {}))
             if (receipt.ownerId === ownerId) delete current.caseRequests?.[key];
           const lawyers = current.lawyers as
