@@ -9,6 +9,10 @@ export interface GatewayAttemptRequest {
   correction: boolean;
   /** Complete serialized wire input, not an assertion about tokenizer output. */
   inputBytes: number;
+  /** Server-computed identity of the complete binding input. Private plan evidence,
+   * never public telemetry and never evidence of a tokenizer/vision upper bound.
+   */
+  wireInputSha256: string;
   outputTokenUpperBound: number;
 }
 

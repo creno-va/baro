@@ -140,6 +140,8 @@ export function createLlmGateway(
         };
         if (ledger) {
           try {
+            const wireBytes = new TextEncoder().encode(JSON.stringify(wireInput));
+            const digest = await crypto.subtle.digest("SHA-256", wireBytes);
             handle = await ledger.beforeDispatch({
               invocationId: invocationId as string,
               requestId,
@@ -147,7 +149,10 @@ export function createLlmGateway(
               model: MODEL_ID,
               attemptOrdinal: call + 1,
               correction,
-              inputBytes: new TextEncoder().encode(JSON.stringify(wireInput)).byteLength,
+              inputBytes: wireBytes.byteLength,
+              wireInputSha256: Array.from(new Uint8Array(digest), (byte) =>
+                byte.toString(16).padStart(2, "0"),
+              ).join(""),
               outputTokenUpperBound: limits[phase],
             });
           } catch {

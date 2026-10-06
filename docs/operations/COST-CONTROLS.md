@@ -197,10 +197,13 @@ SDK/transport retry는 adapter 호출 수 밖에서 비용을 만들 수 있다.
 재시도를 하지 않고 같은 handle/비용 reservation을 대조한다.
 
 Gateway의 비용 연결은 `llm-gateway/attempts.ts`의 trusted server ledger를 사용한다.
-`beforeDispatch`가 서버 invocation/phase/attempt와 완전한 wire input bytes·출력 token 상한으로
+`beforeDispatch`가 서버 invocation/phase/attempt와 완전한 wire input bytes·SHA256·출력 token 상한으로
 hold를 확보한 뒤 사용자 quota를 확인하고, `confirmDispatch`가 현재 job/revision/lease와
 가격·funding을 호출 직전에 다시 검증한다. wire bytes는 tokenizer 계산 결과가 아니며 실제
-최대 token 수와 framing/schema 여유는 검증된 execution planner가 정한다. client request ID를
+최대 token 수와 framing/schema 여유는 검증된 execution planner가 정한다. 서버의
+`wireInputSha256`는 실제 binding input 전체의 prompt/schema/framing/correction을 묶어 같은
+크기의 다른 입력을 구분한다. trusted planner가 private 계획과 대조하며 hash를 로그/공개 증거로
+보내거나 tokenizer/vision 상한의 근거로 사용하지 않는다. client request ID를
 invocation ID로 사용하지 않는다. 거절·length·잘못된 JSON/schema·error envelope도 출력 판정
 전에 `afterTransport`로 사용량을 저장한다. 기록 저장 실패는 출력 게시와 후속 호출을 막는다.
 

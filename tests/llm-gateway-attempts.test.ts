@@ -197,6 +197,47 @@ test("the final dispatch guard runs after quota; pre-transport cancellation is d
   expect(valid.requests[0]?.inputBytes).toBeGreaterThan(100);
 });
 
+test("private attempt identity binds the actual complete input and distinguishes equal-size prompts and corrections", async () => {
+  async function capture(narrative: string) {
+    const wires: string[] = [];
+    const h = harness(async (_model, wire) => {
+      wires.push(JSON.stringify(wire));
+      return wires.length === 1
+        ? {
+            ...completion(),
+            choices: [{ message: { content: "invalid" }, finish_reason: "stop" }],
+          }
+        : completion();
+    });
+    expect(
+      await h.gateway.call(
+        "screening",
+        { narrative },
+        "safe-request-id",
+        async () => true,
+        async () => true,
+        invocationId,
+      ),
+    ).toEqual(output);
+    expect(h.requests).toHaveLength(2);
+    for (let index = 0; index < wires.length; index++) {
+      const bytes = new TextEncoder().encode(wires[index]);
+      const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
+      const expected = Array.from(digest, (byte) => byte.toString(16).padStart(2, "0")).join("");
+      expect(h.requests[index]?.inputBytes).toBe(bytes.byteLength);
+      expect(h.requests[index]?.wireInputSha256).toBe(expected);
+      expect(h.requests[index]?.wireInputSha256).toMatch(/^[a-f0-9]{64}$/);
+    }
+    expect(h.requests[0]?.wireInputSha256).not.toBe(h.requests[1]?.wireInputSha256);
+    expect(JSON.stringify(h.requests)).not.toContain(narrative);
+    return h.requests;
+  }
+  const first = await capture("private-prompt-sentinel-A");
+  const second = await capture("private-prompt-sentinel-B");
+  expect(first[0]?.inputBytes).toBe(second[0]?.inputBytes);
+  expect(first[0]?.wireInputSha256).not.toBe(second[0]?.wireInputSha256);
+});
+
 test("refusal and raw error envelopes are metered before rejection without exposing model content", async () => {
   for (const raw of [
     {
