@@ -269,31 +269,36 @@ test("unapproved query text is never sent and safe configuration errors contain 
   expect(JSON.stringify(rejected)).not.toContain("private");
 });
 
-test.each(["wrongid", "wrongdate", "missingarticle", "incompletehistory", "malformedUnicode"])(
-  "official %s counterexample is unavailable without invented source",
-  async (mode) => {
-    const f = await fixture();
-    const detail = structuredClone(officialDetail);
-    const list = structuredClone(syntheticCompleteList);
-    if (mode === "wrongid") detail.법령.기본정보.법령ID = "99999";
-    if (mode === "wrongdate") detail.법령.기본정보.시행일자 = "20270101";
-    if (mode === "missingarticle") detail.법령.조문.조문단위 = [];
-    if (mode === "incompletehistory") list.LawSearch.totalCnt = 101;
-    if (mode === "malformedUnicode") {
-      const row = detail.법령.조문.조문단위.find((r) => r.조문번호 === "598");
-      if (!row) throw new Error("Missing captured article");
-      row.조문내용 = "합성 잘못된 Unicode \ud800";
-    }
-    const result = await f
-      .service({
-        transport: async (url) =>
-          response(new URL(url).pathname.endsWith("lawSearch.do") ? list : detail),
-      })
-      .retrieve(input(), f.access);
-    expect(result.chunks).toEqual([]);
-    expect(result.outcomes[0]?.availability).toBe("unavailable");
-  },
-);
+test.each([
+  "wrongid",
+  "wrongdate",
+  "wrongpromulgation",
+  "missingarticle",
+  "incompletehistory",
+  "malformedUnicode",
+])("official %s counterexample is unavailable without invented source", async (mode) => {
+  const f = await fixture();
+  const detail = structuredClone(officialDetail);
+  const list = structuredClone(syntheticCompleteList);
+  if (mode === "wrongid") detail.법령.기본정보.법령ID = "99999";
+  if (mode === "wrongdate") detail.법령.기본정보.시행일자 = "20270101";
+  if (mode === "wrongpromulgation") detail.법령.기본정보.공포번호 = "99999";
+  if (mode === "missingarticle") detail.법령.조문.조문단위 = [];
+  if (mode === "incompletehistory") list.LawSearch.totalCnt = 101;
+  if (mode === "malformedUnicode") {
+    const row = detail.법령.조문.조문단위.find((r) => r.조문번호 === "598");
+    if (!row) throw new Error("Missing captured article");
+    row.조문내용 = "합성 잘못된 Unicode \ud800";
+  }
+  const result = await f
+    .service({
+      transport: async (url) =>
+        response(new URL(url).pathname.endsWith("lawSearch.do") ? list : detail),
+    })
+    .retrieve(input(), f.access);
+  expect(result.chunks).toEqual([]);
+  expect(result.outcomes[0]?.availability).toBe("unavailable");
+});
 
 test("transport retries reserve each invocation attempt and never retry an unclassified HTTP200 upstream rejection", async () => {
   let calls = 0;

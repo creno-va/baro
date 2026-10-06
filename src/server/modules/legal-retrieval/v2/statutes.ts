@@ -10,6 +10,8 @@ const candidateSchema = z.object({
   법령일련번호: digits,
   법령명한글: displayText(100),
   시행일자: apiDate,
+  공포일자: apiDate,
+  공포번호: z.union([displayText(100), z.number().int().nonnegative()]).transform(String),
 });
 const listSchema = z.object({
   LawSearch: z.object({
@@ -56,7 +58,13 @@ const article = z.object({
 });
 const detail = z.object({
   법령: z.object({
-    기본정보: z.object({ 법령ID: digits, 법령명_한글: displayText(100), 시행일자: apiDate }),
+    기본정보: z.object({
+      법령ID: digits,
+      법령명_한글: displayText(100),
+      시행일자: apiDate,
+      공포일자: apiDate,
+      공포번호: z.union([displayText(100), z.number().int().nonnegative()]).transform(String),
+    }),
     조문: z.object({ 조문단위: z.union([article, z.array(article).max(3000)]) }),
   }),
 });
@@ -96,7 +104,9 @@ export async function parseStatute(
   if (
     basic.법령ID !== candidate.법령ID ||
     basic.법령명_한글 !== candidate.법령명한글 ||
-    basic.시행일자 !== candidate.시행일자
+    basic.시행일자 !== candidate.시행일자 ||
+    basic.공포일자 !== candidate.공포일자 ||
+    basic.공포번호 !== candidate.공포번호
   )
     throw new RetrievalFailure("identity_mismatch");
   const rows = Array.isArray(root.조문.조문단위) ? root.조문.조문단위 : [root.조문.조문단위];
