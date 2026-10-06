@@ -68,6 +68,46 @@ function wireSchema(schema: unknown): unknown {
   }
   return schema;
 }
+/** Private provider input shared by dispatch and the trusted paid-execution planner. */
+export function prepareGatewayWireInput(phase: Phase, input: unknown, correction = false) {
+  const envelope = z.strictObject({ output: schemas[phase] });
+  const jsonSchema = wireSchema(z.toJSONSchema(envelope, { io: "input", unrepresentable: "any" }));
+  return {
+    messages: [
+      { role: "system", content: `BARO prompt ${PROMPT_VERSION}. ${prompts[phase]}` },
+      {
+        role: "user",
+        content: JSON.stringify({
+          data: input,
+          correction: correction
+            ? "Previous output did not match schema. Return exactly the schema without new facts."
+            : null,
+        }),
+      },
+    ],
+    reasoning_effort: "medium",
+    max_completion_tokens: limits[phase],
+    store: false,
+    service_tier: "default",
+    response_format: {
+      type: "json_schema",
+      json_schema: { name: `baro_${phase}_v1`, strict: true, schema: jsonSchema },
+    },
+  };
+}
+
+/** Identity only: neither byte length nor this digest proves a token/vision cost bound. */
+export async function gatewayWireIdentity(wireInput: ReturnType<typeof prepareGatewayWireInput>) {
+  const wireBytes = new TextEncoder().encode(JSON.stringify(wireInput));
+  const digest = await crypto.subtle.digest("SHA-256", wireBytes);
+  return {
+    inputBytes: wireBytes.byteLength,
+    wireInputSha256: Array.from(new Uint8Array(digest), (byte) =>
+      byte.toString(16).padStart(2, "0"),
+    ).join(""),
+  };
+}
+
 export function createLlmGateway(
   env: { AI: GatewayBinding; AI_GATEWAY_ID: string; APP_ENV?: string },
   options: {
@@ -101,33 +141,9 @@ export function createLlmGateway(
         throw new ModelError("MODEL_UNAVAILABLE");
       const schema = schemas[phase];
       const envelope = z.strictObject({ output: schema });
-      const jsonSchema = wireSchema(
-        z.toJSONSchema(envelope, { io: "input", unrepresentable: "any" }),
-      );
       let correction = false;
       for (let call = 0; call < 3; call++) {
-        const wireInput = {
-          messages: [
-            { role: "system", content: `BARO prompt ${PROMPT_VERSION}. ${prompts[phase]}` },
-            {
-              role: "user",
-              content: JSON.stringify({
-                data: input,
-                correction: correction
-                  ? "Previous output did not match schema. Return exactly the schema without new facts."
-                  : null,
-              }),
-            },
-          ],
-          reasoning_effort: "medium",
-          max_completion_tokens: limits[phase],
-          store: false,
-          service_tier: "default",
-          response_format: {
-            type: "json_schema",
-            json_schema: { name: `baro_${phase}_v1`, strict: true, schema: jsonSchema },
-          },
-        };
+        const wireInput = prepareGatewayWireInput(phase, input, correction);
         let handle: GatewayAttemptHandle | null = null;
         const record = async (receipt: GatewayTransportReceipt) => {
           if (!ledger || !handle) return;
@@ -140,8 +156,7 @@ export function createLlmGateway(
         };
         if (ledger) {
           try {
-            const wireBytes = new TextEncoder().encode(JSON.stringify(wireInput));
-            const digest = await crypto.subtle.digest("SHA-256", wireBytes);
+            const wireIdentity = await gatewayWireIdentity(wireInput);
             handle = await ledger.beforeDispatch({
               invocationId: invocationId as string,
               requestId,
@@ -149,11 +164,8 @@ export function createLlmGateway(
               model: MODEL_ID,
               attemptOrdinal: call + 1,
               correction,
-              inputBytes: wireBytes.byteLength,
-              wireInputSha256: Array.from(new Uint8Array(digest), (byte) =>
-                byte.toString(16).padStart(2, "0"),
-              ).join(""),
-              outputTokenUpperBound: limits[phase],
+              ...wireIdentity,
+              outputTokenUpperBound: wireInput.max_completion_tokens,
             });
           } catch {
             throw new ModelError("MODEL_UNAVAILABLE");
