@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { opaqueIdSchema } from "../../contracts";
 import {
+  V2_INTAKE_POLICY,
   type V2Action,
   type V2CreateCaseRequest,
   type V2FactReference,
@@ -794,6 +795,10 @@ export function createV2WorkspaceRepository(
           !current ||
           current.revision !== value.generatedForIntakeRevision ||
           current.batches.length + 1 !== value.ordinal ||
+          value.questions.length > V2_INTAKE_POLICY.questionsPerBatch ||
+          current.batches.reduce((count, batch) => count + batch.questions.length, 0) +
+            value.questions.length >
+            V2_INTAKE_POLICY.followupLimit ||
           value.answers.length !== 0 ||
           value.questions.some((q) =>
             current.batches.some((b) => b.questions.some((old) => old.id === q.id)),

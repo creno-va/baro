@@ -193,8 +193,10 @@ for (const viewport of [
       await context.addCookies([info.ownerCookie]);
       await page.evaluate(() => window.dispatchEvent(new Event("focus")));
       await expect(editor).toHaveValue("직접 수정한 합성 브라우저 요약입니다.");
-      await expect(page.getByRole("checkbox", { name: /저장한 요약을 읽고/ })).not.toBeChecked();
-      await page.getByRole("checkbox", { name: /저장한 요약을 읽고/ }).check();
+      await expect(
+        page.getByRole("checkbox", { name: /요약이 내가 이야기한 사실과 맞는지/ }),
+      ).not.toBeChecked();
+      await page.getByRole("checkbox", { name: /요약이 내가 이야기한 사실과 맞는지/ }).check();
       await page.getByRole("button", { name: "요약 확인하고 계속" }).click();
       await page.getByRole("button", { name: "확인하고 사건 열기" }).click();
       await expect(page.getByRole("alert")).toBeVisible();

@@ -178,15 +178,16 @@ export function SummaryReview({ caseId }: { caseId: string }) {
         />
       ) : null}
       {item && ready ? (
-        <section className="intake-card" aria-busy={busy}>
+        <section className="intake-card intake-review" aria-busy={busy}>
           <div className="intake-assistant-heading">
             <BrandMark size={32} />
-            <p className="intake-eyebrow">지금까지 나눈 이야기</p>
+            <p className="intake-eyebrow">마지막으로 확인해 주세요</p>
           </div>
-          <h1>이렇게 정리해 봤어요.</h1>
+          <h1>이야기를 이렇게 정리했어요</h1>
           <p className="intake-muted">
-            틀리거나 빠진 내용, 불리한 사실도 수정해 주세요. 이 요약은 사실 정리이며 법률 판단이
-            아니에요.
+            이름, 날짜, 금액이 맞는지 살펴보세요.
+            <br />
+            틀리거나 빠진 내용, 불리한 사실도 바로 고칠 수 있어요.
           </p>
           {item.schemaVersion === "1" || item.stage === "active" || item.stage === "archived" ? (
             <StatePanel
@@ -211,10 +212,15 @@ export function SummaryReview({ caseId }: { caseId: string }) {
             />
           ) : (
             <>
-              <label htmlFor="case-summary" className="ui-label">
-                <Pencil size={16} aria-hidden="true" />
-                요약 편집
-              </label>
+              <div className="intake-review-heading">
+                <label htmlFor="case-summary" className="ui-label">
+                  <Pencil size={16} aria-hidden="true" />
+                  요약 편집
+                </label>
+                <span className={dirty ? "intake-review-state is-dirty" : "intake-review-state"}>
+                  {dirty ? "수정 중" : "저장됨"}
+                </span>
+              </div>
               <Textarea
                 id="case-summary"
                 value={summary}
@@ -231,14 +237,14 @@ export function SummaryReview({ caseId }: { caseId: string }) {
                 {[...summary].length.toLocaleString()} / 5,000자 ·{" "}
                 {dirty ? "아직 저장하지 않은 수정이 있어요" : "저장한 요약"}
               </p>
-              <div className="intake-actions">
+              <div className="intake-actions intake-review-edit-actions">
                 <Button
                   variant="outline"
                   onClick={() => void save()}
                   disabled={busy || !dirty || !summary.trim()}
                 >
                   <Save size={16} aria-hidden="true" />
-                  수정 내용 저장
+                  {busy && failedOperation.current === "save" ? "저장 중…" : "수정 내용 저장"}
                 </Button>
                 <Button
                   variant="ghost"
@@ -251,56 +257,69 @@ export function SummaryReview({ caseId }: { caseId: string }) {
                 >
                   수정 취소
                 </Button>
-                <ButtonLink
-                  variant="ghost"
-                  href={`/cases/${encodeURIComponent(caseId)}/intake?question=0&edit=1`}
-                >
-                  질문으로 돌아가기
-                </ButtonLink>
               </div>
               <p className="intake-save-notice" role="status">
                 {notice}
               </p>
-              <label className="intake-confirm-check">
-                <input
-                  type="checkbox"
-                  checked={checked}
-                  onChange={(event) => {
-                    setChecked(event.target.checked);
-                    setConfirming(false);
-                  }}
-                  disabled={busy || dirty}
-                />
-                <span>저장한 요약을 읽고, 내가 제공한 사실과 맞는지 확인했어요.</span>
-              </label>
-              {confirming ? (
-                <div
-                  className="intake-exit"
-                  role="dialog"
-                  aria-modal="false"
-                  aria-labelledby="confirm-title"
-                >
-                  <h2 id="confirm-title">이 요약으로 사건 정리를 이어갈까요?</h2>
-                  <p>이제 BARO와 대화하며 자료, 사건의 흐름, 다음 할 일을 함께 정리할 수 있어요.</p>
-                  <div className="intake-actions">
-                    <Button onClick={() => void confirm()} disabled={busy}>
-                      <Check size={18} aria-hidden="true" />
-                      {busy ? "확인 중…" : "확인하고 사건 열기"}
-                    </Button>
-                    <Button variant="outline" onClick={() => setConfirming(false)} disabled={busy}>
-                      취소
-                    </Button>
+              <div className="intake-review-finish">
+                <label className="intake-confirm-check">
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={(event) => {
+                      setChecked(event.target.checked);
+                      setConfirming(false);
+                    }}
+                    disabled={busy || dirty}
+                  />
+                  <span>요약이 내가 이야기한 사실과 맞는지 확인했어요.</span>
+                </label>
+                <p className="intake-review-note">
+                  {dirty
+                    ? "수정 내용을 저장하면 확인할 수 있어요."
+                    : "요약은 사실을 정리한 내용이며, 법률 판단은 아니에요."}
+                </p>
+                {confirming ? (
+                  <div
+                    className="intake-exit"
+                    role="dialog"
+                    aria-modal="false"
+                    aria-labelledby="confirm-title"
+                  >
+                    <h2 id="confirm-title">이제 사건 정리를 시작할까요?</h2>
+                    <p>사건을 열면 자료를 추가하고, 다음 할 일을 함께 정리할 수 있어요.</p>
+                    <div className="intake-actions">
+                      <Button onClick={() => void confirm()} disabled={busy}>
+                        <Check size={18} aria-hidden="true" />
+                        {busy ? "확인 중…" : "확인하고 사건 열기"}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => setConfirming(false)}
+                        disabled={busy}
+                      >
+                        취소
+                      </Button>
+                    </div>
                   </div>
-                </div>
-              ) : (
-                <Button
-                  onClick={() => setConfirming(true)}
-                  disabled={busy || dirty || !checked || !summary.trim()}
-                >
-                  요약 확인하고 계속
-                  <ArrowRight size={18} aria-hidden="true" />
-                </Button>
-              )}
+                ) : (
+                  <Button
+                    className="intake-review-continue"
+                    onClick={() => setConfirming(true)}
+                    disabled={busy || dirty || !checked || !summary.trim()}
+                  >
+                    요약 확인하고 계속
+                    <ArrowRight size={18} aria-hidden="true" />
+                  </Button>
+                )}
+              </div>
+              <ButtonLink
+                className="intake-review-back"
+                variant="ghost"
+                href={`/cases/${encodeURIComponent(caseId)}/intake?question=0&edit=1`}
+              >
+                이전 답변 수정하기
+              </ButtonLink>
             </>
           )}
         </section>

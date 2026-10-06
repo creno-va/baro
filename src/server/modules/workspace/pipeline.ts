@@ -8,7 +8,7 @@ import type {
   V2Summary,
   V2UserMessage,
 } from "../../../contracts/v2";
-import { v2ReferenceIsAuthorized } from "../../../contracts/v2";
+import { V2_INTAKE_POLICY, v2ReferenceIsAuthorized } from "../../../contracts/v2";
 import type { WorkspaceSourceRequest } from "../legal-retrieval/v2/workspace-plans";
 import type { Phase } from "../llm-gateway/prompts";
 import type { createLlmGateway } from "../llm-gateway/service";
@@ -127,6 +127,11 @@ export function createWorkspacePipeline(
   };
   return {
     async questions(context: WorkspaceContext, requestId: string) {
+      if (
+        context.intake.batches.reduce((count, batch) => count + batch.questions.length, 0) >=
+        V2_INTAKE_POLICY.followupLimit
+      )
+        throw new ModelError("POLICY_REJECTED");
       const draft = workspaceQuestionsOutputSchema.parse(
         await call("workspace_questions", context, requestId),
       );

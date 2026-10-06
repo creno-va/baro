@@ -115,8 +115,10 @@ failure가 하나라도 있으면 배포를 막는다. 샘플·프롬프트·예
 [ADR-0006](../adr/0006-continuous-case-workspace-and-navigation.md)의 상태와
 [v2 실행 계약](./V2-CONTRACTS.md)을 사용한다. workspace를 완료 terminal로 닫지 않고
 intake/question job, summary review, confirmed summary, chat/action job, file interpretation,
-report snapshot을 독립 versioned operation으로 나눈다. 기본 intake 3묶음×최대5문항 후
-사용자 요약 확인을 받는다. 이후에도 질문·사실 수정·자료 추가를 계속 처리한다.
+report snapshot을 독립 versioned operation으로 나눈다. 2026-10-07 사용자 요청에 따라
+새 intake는 한 번에 한 문항, 총 최대 두 후속 질문 뒤 사용자 요약 확인을 받는다.
+모름·건너뛰기도 한도에 포함하고 남은 정보 공백은 요약에 보존한다. 기존 사건의 저장된
+질문·답변은 그대로 읽고 수정할 수 있다. 이후에도 질문·사실 수정·자료 추가를 계속 처리한다.
 
 | 단계 | 최소 입력·출력 | 확정/실패 경계 |
 | --- | --- | --- |
