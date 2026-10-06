@@ -14,6 +14,7 @@ import { type Actor, actorSchema, parse, type V2Core } from "../../db/v2-core";
 import { createV2DeletionRepository } from "../../db/v2-deletion";
 import { createV2LawyersRepository } from "../../db/v2-lawyers";
 import type { LawyerAssetDependencies } from "./assets";
+import type { OpenSanitizedAsset } from "./sanitized";
 
 export class LawyerError extends Error {
   constructor(
@@ -28,7 +29,9 @@ export class LawyerError extends Error {
     this.name = "LawyerError";
   }
 }
-export type LawyerDependencies = Partial<LawyerAssetDependencies>;
+export type LawyerDependencies = Partial<LawyerAssetDependencies> & {
+  openSanitized?: OpenSanitizedAsset;
+};
 export function createLawyersService(core: V2Core, deps: LawyerDependencies = {}) {
   const repository = createV2LawyersRepository(core);
   const deletion = createV2DeletionRepository(core);
