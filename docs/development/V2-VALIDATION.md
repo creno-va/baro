@@ -849,3 +849,13 @@ seed는 사용하지 않았다. 사용자가 완료한 동의를 새로 대신 �
 이 결과는 localhost4321 앱·제공된 key의 실제 인증 성공이며 remote preview/production
 키·callback·공개 gate의 성공을 대신하지 않는다. 실제 관측과 새 SHA의 CI/Full/배포는
 [정본 journal](https://github.com/creno-va/baro/issues/71#issuecomment-6021564076)에 이어 기록한다.
+
+### 실제 운영 차단 응답의 cache 후속
+
+main7aebe4a의 CI/Full/preview 및 정상 production 승인·배포가 통과했다. 독립
+SHA/schema0009 smoke는 성공했고 API5경로 모두 BETA_NOT_OPEN503을 반환했다.
+추가 probe에서 공용 beta guard가 directory 모듈 이전에 조기 반환해 공개 차단
+디렉터리2경로의 no-store를 누락한 것을 확인했다. auth/cases/report의 private,no-store는
+정상이다. 공용 차단 응답에도 no-store를 설정하고 실제 두 경로 재현을 회귀 검증한다.
+발견 당시 probe 실패와 이후 immutable 검증/배포는 정본 journal에 보존한다.
+공개 gate·정책·schema0009 및 공급자 설정은 변경하지 않는다.

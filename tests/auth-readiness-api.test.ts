@@ -55,3 +55,16 @@ test("production auth remains private and closed before missing configuration is
     expect(await response.json()).toMatchObject({ error: { code: "BETA_NOT_OPEN" } });
   }
 });
+
+test("the global production gate preserves no-store for public directory routes", async () => {
+  for (const path of ["/api/v2/lawyers", "/api/v2/lawyers/self-service"]) {
+    const response = await workerApi.request(path, undefined, {
+      APP_ENV: "production",
+      PUBLIC_BETA_ENABLED: "false",
+    } as Env);
+    expect(response.status).toBe(503);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(response.headers.get("x-request-id")).toBeTruthy();
+    expect(await response.json()).toMatchObject({ error: { code: "BETA_NOT_OPEN" } });
+  }
+});

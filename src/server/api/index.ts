@@ -74,6 +74,7 @@ export const api = new Hono<ApiEnvironment>()
       !context.req.path.startsWith("/api/health/") &&
       !context.req.path.startsWith("/health/")
     ) {
+      context.header("cache-control", "no-store");
       return context.json(errorBody(context, "BETA_NOT_OPEN", "공개 베타를 준비하고 있어요."), 503);
     }
     await next();
