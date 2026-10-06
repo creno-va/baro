@@ -1,10 +1,68 @@
 {
-  "asset": "clarity-hero.webp",
-  "purpose": "BARO landing page desktop hero",
-  "source": "Higgsfield",
-  "model": "gpt_image_2_5",
-  "generationId": "30ac89d1-f9dc-4161-8420-d3529730b7f0",
-  "generatedOn": "2026-10-07",
-  "description": "Custom bright architectural interior with a cobalt glass arch, representing a clearer path forward. No third-party branding or stock reference assets.",
-  "optimization": "Original 1344x752 PNG converted to WebP at quality 85; mobile picture source uses an empty inline SVG."
+  "assets": [
+    {
+      "asset": "clarity-hero.webp",
+      "purpose": "BARO landing page desktop hero",
+      "source": "Higgsfield",
+      "model": "gpt_image_2_5",
+      "generationId": "30ac89d1-f9dc-4161-8420-d3529730b7f0",
+      "generatedOn": "2026-10-07",
+      "description": "Custom bright architectural interior with a cobalt glass arch, representing a clearer path forward. No third-party branding or stock reference assets.",
+      "optimization": "Original 1344x752 PNG converted to WebP at quality 85; mobile picture source uses an empty inline SVG."
+    },
+    {
+      "asset": "everyday-home.webp",
+      "purpose": "Illustrative everyday BARO use scene; not a testimonial",
+      "source": "Higgsfield",
+      "model": "gpt_image_2_5",
+      "generationId": "8857b811-0d5a-443c-8c46-fe06580f0d9f",
+      "generatedOn": "2026-10-07",
+      "description": "Fictional adult at home with moving boxes, reviewing their phone.",
+      "optimization": "896x1120 WebP at quality 84; no image source on viewports below 768px."
+    },
+    {
+      "asset": "everyday-cafe.webp",
+      "purpose": "Illustrative everyday BARO use scene; not a testimonial",
+      "source": "Higgsfield",
+      "model": "gpt_image_2_5",
+      "generationId": "2f8559e0-140b-4804-ab82-d0e35b2e3a63",
+      "generatedOn": "2026-10-07",
+      "description": "Fictional cafe owner reviewing their phone beside everyday business records.",
+      "optimization": "896x1120 WebP at quality 84; no image source on viewports below 768px."
+    },
+    {
+      "asset": "everyday-work.webp",
+      "purpose": "Illustrative everyday BARO use scene; not a testimonial",
+      "source": "Higgsfield",
+      "model": "gpt_image_2_5",
+      "generationId": "a73b0d5a-c602-460e-91dc-d0f5f160012a",
+      "generatedOn": "2026-10-07",
+      "description": "Fictional adult reviewing their phone beside a laptop and notebook.",
+      "optimization": "896x1120 WebP at quality 84; no image source on viewports below 768px."
+    },
+    {
+      "asset": "hero-everyday.mp4",
+      "poster": "hero-poster.webp",
+      "purpose": "Decorative landing film with independent playback control",
+      "source": "Higgsfield",
+      "model": "seedance_2_5",
+      "generationId": "7db45262-f08c-4f25-8217-518de07f47cf",
+      "generatedOn": "2026-10-07",
+      "durationSeconds": 8,
+      "description": "Fictional adult using a smartphone at a sunlit dining table.",
+      "optimization": "1280x720 H.264 CRF 26, audio removed, fast-start MP4; extracted first-frame WebP poster. Video source attaches only while visible on desktop. Reduced-motion and data-saver preferences prevent autoplay."
+    },
+    {
+      "asset": "everyday-moment.mp4",
+      "poster": "benefit-poster.webp",
+      "purpose": "Decorative landing film with independent playback control",
+      "source": "Higgsfield",
+      "model": "seedance_2_5",
+      "generationId": "abcfd483-1972-4e97-a936-3dd759f23ba5",
+      "generatedOn": "2026-10-07",
+      "durationSeconds": 6,
+      "description": "Slow camera move across a phone, blue folder and notebook on a sunlit desk.",
+      "optimization": "1280x720 H.264 CRF 26, audio removed, fast-start MP4; extracted first-frame WebP poster. Video source attaches only while visible on desktop. Reduced-motion and data-saver preferences prevent autoplay."
+    }
+  ]
 }

@@ -1169,7 +1169,7 @@ html:has(.landing) {
     padding: 0 14px;
     border-radius: 10px;
   }
-  .landing-decoration {
+  .landing .landing-decoration {
     display: none;
   }
   .landing-hero {

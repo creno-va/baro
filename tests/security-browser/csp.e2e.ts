@@ -41,8 +41,29 @@ test("built landing loads its local artwork and scroll behavior under the Worker
         new URL(element.currentSrc).origin === location.origin,
     ),
   ).toBe(true);
+  const heroFilm = page.locator('video[data-film="hero"]');
+  await expect
+    .poll(
+      () =>
+        heroFilm.evaluate((video) => video instanceof HTMLVideoElement && video.readyState >= 2),
+      { timeout: 15_000 },
+    )
+    .toBe(true);
+  expect(
+    await heroFilm.evaluate(
+      (video) =>
+        video instanceof HTMLVideoElement && new URL(video.currentSrc).origin === location.origin,
+    ),
+  ).toBe(true);
   await page.evaluate(() => window.scrollTo(0, 700));
   await expect(page.locator("[data-scroll-scene]").first()).toHaveCSS("--scene-progress", /\d/);
+  await page.locator("#phone-story").evaluate((element) => {
+    window.scrollTo({ top: scrollY + element.getBoundingClientRect().top, behavior: "instant" });
+  });
+  await expect(page.locator("[data-phone-story]")).toHaveClass(/phone-story-ready/);
+  await page.locator('[data-phone-step="2"]').click();
+  await expect(page.locator("[data-phone-story]")).toHaveAttribute("data-chapter", "2");
+  await expect(page.locator('[data-phone-screen="2"]')).toHaveClass(/is-current/);
   expect(
     await page.evaluate(
       () => (window as unknown as { landingCspViolations: string[] }).landingCspViolations,

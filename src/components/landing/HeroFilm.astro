@@ -1,0 +1,20 @@
+---
+// biome-ignore lint/correctness/noUnusedImports: Astro template renders the icons.
+import { ArrowDown, ArrowRight, Check, Pause, Play } from "lucide-react";
+---
+<section class="landing-hero landing-hero--film" data-scroll-scene data-hero-scene aria-labelledby="landing-title">
+  <div class="landing-hero-image landing-decoration" data-parallax="110" data-scale="0.16" aria-hidden="true" data-film-container>
+    <picture><source media="(min-width: 768px)" srcset="/landing/hero-poster.webp" /><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1' height='1'/%3E" width="1280" height="720" alt="" fetchpriority="high" /></picture>
+    <video class="landing-film" data-film="hero" data-video-src="/landing/hero-everyday.mp4" muted loop playsinline preload="none" disablepictureinpicture aria-hidden="true"></video>
+  </div>
+  <div class="landing-hero-shade" aria-hidden="true"></div>
+  <div class="landing-hero-copy">
+    <p class="landing-eyebrow"><span></span> 일상 속 법률 고민, 정리의 시작</p>
+    <h1 id="landing-title">막막했던 법률 문제,<br />이제 정리부터 가볍게.</h1>
+    <p class="landing-hero-description">살다 보면, 누구에게나 어려운 순간이 오니까.<br />대화로 정리하고, 다음 한 걸음을 준비하세요.</p>
+    <div class="landing-hero-actions"><a class="landing-button" href="/app">내 상황 정리하기 <ArrowRight size={19} aria-hidden="true" /></a><a class="landing-hero-explore" href="#phone-story">BARO 기능 둘러보기 <ArrowDown size={17} aria-hidden="true" /></a></div>
+  </div>
+  <div class="landing-hero-signal landing-decoration" data-hero-signal aria-hidden="true"><span class="landing-signal-check"><Check size={19} /></span><div><strong>생각이 정리되면, 일상이 가벼워져요</strong><span>나의 이야기 → 확인할 사실 → 다음 준비</span></div></div>
+  <div class="landing-film-toolbar landing-decoration"><span>AI로 제작한 이용 장면</span><button class="landing-film-toggle" data-film-toggle="hero" type="button" aria-label="첫 화면 영상 재생하기" hidden><Play size={16} className="film-play" aria-hidden="true" /><Pause size={16} className="film-pause" aria-hidden="true" /><span data-film-label>영상 재생</span></button></div>
+  <a class="landing-scroll-cue" href="#how-it-works"><span>스크롤해서 경험해 보세요</span><ArrowDown size={21} aria-hidden="true" /></a>
+</section>

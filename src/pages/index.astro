@@ -1,7 +1,6 @@
 ---
 // biome-ignore lint/correctness/noUnusedImports: Astro template reads icons.
 import {
-  ArrowDown,
   ArrowRight,
   Check,
   CheckCheck,
@@ -13,16 +12,23 @@ import {
   MessageCircle,
   Mic,
   Paperclip,
-  Plus,
   Search,
   ShieldCheck,
-  Sparkles,
 } from "lucide-react";
+// biome-ignore lint/correctness/noUnusedImports: Astro renders the landing components.
+import BenefitFilm from "../components/landing/BenefitFilm.astro";
+// biome-ignore lint/correctness/noUnusedImports: Astro renders the landing components.
+import EverydayStories from "../components/landing/EverydayStories.astro";
+// biome-ignore lint/correctness/noUnusedImports: Astro renders the landing components.
+import HeroFilm from "../components/landing/HeroFilm.astro";
+// biome-ignore lint/correctness/noUnusedImports: Astro renders the landing components.
+import PhoneStory from "../components/landing/PhoneStory.astro";
 // biome-ignore lint/correctness/noUnusedImports: Astro template reads Brand.
 import { Brand } from "../components/ui/brand";
 // biome-ignore lint/correctness/noUnusedImports: Astro template reads layout.
 import BaseLayout from "../layouts/BaseLayout.astro";
 import "../styles/landing.css";
+import "../styles/landing-film.css";
 ---
 
 <BaseLayout title="BARO — 막막한 법률 문제, 정리부터 가볍게" description="어떤 일이 있었는지 편하게 들려주세요. BARO와 대화하며 사실과 자료를 정리하고, 변호사 상담을 차분하게 준비하세요.">
@@ -31,8 +37,8 @@ import "../styles/landing.css";
       <div class="landing-nav-wrap">
         <Brand />
         <nav class="landing-nav" aria-label="메인 메뉴">
-          <a class="landing-nav-section" href="#how-it-works">서비스 소개</a>
-          <a class="landing-nav-section" href="#principles">BARO의 약속</a>
+          <a class="landing-nav-section" href="#phone-story">기능 둘러보기</a>
+          <a class="landing-nav-section" href="#everyday">일상 속 BARO</a>
           <a class="landing-nav-section" href="/lawyers">변호사 찾기</a>
           <a class="landing-login" href="/login">로그인 <ArrowRight size={16} aria-hidden="true" /></a>
         </nav>
@@ -41,60 +47,20 @@ import "../styles/landing.css";
     </header>
 
     <main id="main-content" tabindex="-1" class="landing-main">
-      <section class="landing-hero" data-scroll-scene aria-labelledby="landing-title">
-        <div class="landing-hero-image landing-decoration" data-parallax="45" aria-hidden="true">
-          <picture><source media="(min-width: 768px)" srcset="/landing/clarity-hero.webp" /><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1' height='1'/%3E" width="1344" height="752" alt="" fetchpriority="high" decoding="async" /></picture>
-        </div>
-        <div class="landing-hero-shade" aria-hidden="true"></div>
-        <div class="landing-hero-copy">
-          <p class="landing-eyebrow"><span></span> 복잡한 일도, 하나씩. BARO</p>
-          <h1 id="landing-title">막막했던 법률 문제,<br />이제 정리부터 가볍게.</h1>
-          <p class="landing-hero-description">어떤 일이 있었는지 편하게 들려주세요.<br />흩어진 생각부터 상담 준비까지, BARO와 함께.</p>
-          <a class="landing-button" href="/app">내 상황 정리하기 <ArrowRight size={19} aria-hidden="true" /></a>
-          <p class="landing-hero-caption">나의 이야기가 다음 한 걸음이 되도록</p>
-        </div>
-        <a class="landing-scroll-cue" href="#how-it-works"><span>BARO 알아보기</span><ArrowDown size={20} aria-hidden="true" /></a>
-        <span class="landing-hero-label landing-decoration" aria-hidden="true">A CLEARER WAY FORWARD</span>
-      </section>
+      <HeroFilm />
 
-      <section id="how-it-works" class="landing-intro landing-section" aria-labelledby="intro-title">
+      <section id="how-it-works" class="landing-intro landing-section" data-scroll-scene data-intro-scene aria-labelledby="intro-title">
         <p class="landing-eyebrow" data-reveal>어려운 말보다, 당신의 이야기부터</p>
-        <h2 id="intro-title" data-reveal>무슨 말을 해야 할지.<br />무엇부터 준비해야 할지.<br /><span>그 막막함을 잘 아니까.</span></h2>
+        <h2 id="intro-title"><span data-ink-line>무슨 말을 해야 할지.</span><br /><span data-ink-line>무엇부터 준비해야 할지.</span><br /><span data-ink-line>그 막막함을 잘 아니까.</span></h2>
         <p class="landing-body" data-reveal>법률 용어를 몰라도, 모든 자료가 없어도 괜찮아요.<br class="desktop-break" /> BARO는 지금 알고 있는 이야기에서 시작해<br class="desktop-break" /> 복잡한 상황을 하나씩 풀어 정리해요.</p>
         <div class="landing-journey" aria-label="BARO 이용 순서" data-reveal>
           <span><MessageCircle size={20} aria-hidden="true" /> 편하게 이야기하고</span><ArrowRight size={16} aria-hidden="true" /><span><FolderOpen size={20} aria-hidden="true" /> 차근차근 정리하고</span><ArrowRight size={16} aria-hidden="true" /><span><CheckCheck size={20} aria-hidden="true" /> 다음을 준비해요</span>
         </div>
       </section>
 
-      <section class="landing-feature landing-section" data-scroll-scene aria-labelledby="conversation-title">
-        <div class="landing-feature-inner">
-          <div class="landing-feature-copy" data-reveal>
-            <p class="landing-kicker">01 &nbsp; 나를 위한 대화</p>
-            <h2 id="conversation-title">잘 정리해서<br />말하지 않아도<br /><span>괜찮아요.</span></h2>
-            <p class="landing-body">친구에게 이야기하듯 편하게 시작하세요.<br />BARO가 상황에 맞는 질문을 건네고,<br />함께 확인할 내용을 짚어드려요.</p>
-            <p class="landing-feature-note">모르는 건 건너뛰고, 생각나면 이어서.</p>
-            <a class="landing-text-link" href="/app">첫 이야기 시작하기 <ArrowRight size={19} aria-hidden="true" /></a>
-          </div>
-          <div class="landing-chat-stage landing-decoration" aria-label="대화로 사건을 정리하는 화면 예시">
-            <div class="landing-orbit" aria-hidden="true"></div>
-            <div class="landing-phone" data-parallax="-42">
-              <div class="landing-phone-top"><span>9:41</span><span>••• ▰</span></div>
-              <div class="landing-phone-brand"><img src="/brand/logo.svg" alt="" width="24" height="24" /><strong>BARO</strong><span>나의 이야기</span></div>
-              <div class="landing-phone-content">
-                <div class="landing-mini-mark"><Sparkles size={24} aria-hidden="true" /></div>
-                <h3>어떤 일이 있었나요?</h3><p>편하게 말씀해 주세요.<br />함께 하나씩 정리해 볼게요.</p>
-                <div class="landing-chat-user">빌려준 돈을 아직<br />돌려받지 못했어요.</div>
-                <div class="landing-chat-assistant"><span class="landing-ai-dot"></span><p>마음이 많이 쓰이셨겠어요.<br />언제, 어떤 방식으로<br />돈을 빌려주셨나요?</p></div>
-                <div class="landing-chat-user landing-chat-user-short">지난 3월에 계좌로 보냈어요.</div>
-                <div class="landing-chat-typing"><span></span><span></span><span></span></div>
-              </div>
-              <div class="landing-phone-input"><Plus size={18} aria-hidden="true" /><span>편하게 이야기해 주세요</span><ArrowRight size={17} aria-hidden="true" /></div>
-            </div>
-            <div class="landing-floating-note" data-parallax="75"><span class="landing-note-icon"><Check size={20} aria-hidden="true" /></span><div><strong>중요한 사실을 찾았어요</strong><span>대여 시점 · 지난 3월</span></div></div>
-            <span class="landing-demo-caption">이해를 돕기 위한 가상 화면이에요</span>
-          </div>
-        </div>
-      </section>
+      <PhoneStory />
+
+      <EverydayStories />
 
       <section id="organize" class="landing-feature landing-feature-tint landing-section" data-scroll-scene aria-labelledby="organize-title">
         <div class="landing-feature-inner landing-feature-reverse">
@@ -105,10 +71,10 @@ import "../styles/landing.css";
             <p class="landing-feature-note">내가 말한 사실과 확인이 필요한 내용은 구분해요.</p>
           </div>
           <div class="landing-files-stage landing-decoration" aria-label="자료와 타임라인 정리 화면 예시">
-            <div class="landing-file-chip landing-file-chip-one" data-parallax="-65"><FileText size={26} aria-hidden="true" /><span>거래 내역.pdf</span></div>
-            <div class="landing-file-chip landing-file-chip-two" data-parallax="50"><Image size={26} aria-hidden="true" /><span>주고받은 대화.png</span></div>
-            <div class="landing-file-chip landing-file-chip-three" data-parallax="85"><Mic size={26} aria-hidden="true" /><span>통화 녹음.m4a</span></div>
-            <div class="landing-timeline-card" data-parallax="-25">
+            <div class="landing-file-chip landing-file-chip-one" data-parallax="-145" data-drift="-90" data-rotate="-12"><FileText size={26} aria-hidden="true" /><span>거래 내역.pdf</span></div>
+            <div class="landing-file-chip landing-file-chip-two" data-parallax="120" data-drift="100" data-rotate="14"><Image size={26} aria-hidden="true" /><span>주고받은 대화.png</span></div>
+            <div class="landing-file-chip landing-file-chip-three" data-parallax="170" data-drift="75" data-rotate="-10"><Mic size={26} aria-hidden="true" /><span>통화 녹음.m4a</span></div>
+            <div class="landing-timeline-card" data-parallax="-65" data-scale="0.10">
               <div class="landing-card-heading"><span>나의 사건 타임라인</span><span class="landing-tag">정리 예시</span></div>
               <h3>흐름이 보이기 시작해요</h3>
               <ol class="landing-timeline">
@@ -125,7 +91,7 @@ import "../styles/landing.css";
       <section class="landing-report-section landing-section" data-scroll-scene aria-labelledby="report-title">
         <div class="landing-report-heading" data-reveal><p class="landing-kicker">03 &nbsp; 상담 준비의 시작</p><h2 id="report-title">길었던 이야기는 정돈하고.<br /><span>중요한 이야기는 빠짐없이.</span></h2><p class="landing-body">정리된 사실과 자료를 직접 확인하고 수정하세요.<br />내가 검토한 리포트와 선택한 자료로 상담을 준비할 수 있어요.</p></div>
         <div class="landing-report-stage landing-decoration" aria-label="상담 준비 리포트 예시">
-          <div class="landing-report-paper" data-parallax="-45">
+          <div class="landing-report-paper" data-parallax="-100" data-rotate="8">
             <div class="landing-report-brand"><img src="/brand/logo.svg" alt="" width="24" height="24" /><strong>BARO</strong><span>상담 준비 리포트 · 예시</span></div>
             <h3>내 이야기를<br />한눈에 이해할 수 있도록.</h3><p class="landing-report-subtitle">개인 간 금전 대여 · 내가 검토한 내용</p>
             <div class="landing-report-line"><span>01</span><div><strong>사건의 흐름</strong><p>시작부터 지금까지, 날짜순으로 정리해요.</p></div><Check size={20} aria-hidden="true" /></div>
@@ -133,11 +99,13 @@ import "../styles/landing.css";
             <div class="landing-report-line"><span>03</span><div><strong>상담에서 확인하고 싶은 것</strong><p>잊지 않고 물어볼 수 있도록 함께 모아둬요.</p></div><Check size={20} aria-hidden="true" /></div>
             <div class="landing-report-bottom"><ShieldCheck size={17} aria-hidden="true" /> 검토하고, 공유할 내용을 직접 선택해요</div>
           </div>
-          <div class="landing-report-float landing-report-float-one" data-parallax="90"><span class="landing-square-icon"><FileText size={24} aria-hidden="true" /></span><strong>상담 준비.pdf</strong><span>나의 검토를 마친 이야기</span></div>
-          <div class="landing-report-float landing-report-float-two" data-parallax="-70"><CheckCheck size={22} aria-hidden="true" /><strong>공유는 내가 결정해요</strong><span>필요한 자료만 골라서</span></div>
+          <div class="landing-report-float landing-report-float-one" data-parallax="150" data-drift="-90"><span class="landing-square-icon"><FileText size={24} aria-hidden="true" /></span><strong>상담 준비.pdf</strong><span>나의 검토를 마친 이야기</span></div>
+          <div class="landing-report-float landing-report-float-two" data-parallax="-140" data-drift="85"><CheckCheck size={22} aria-hidden="true" /><strong>공유는 내가 결정해요</strong><span>필요한 자료만 골라서</span></div>
         </div>
         <div class="landing-report-steps" data-reveal><span><b>1</b> 내용 확인하기</span><span><b>2</b> 필요한 부분 수정하기</span><span><b>3</b> 전달할 자료 선택하기</span></div>
       </section>
+
+      <BenefitFilm />
 
       <section class="landing-lawyers landing-section" aria-labelledby="lawyers-title">
         <div class="landing-lawyers-inner">
