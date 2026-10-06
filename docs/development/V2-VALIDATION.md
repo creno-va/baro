@@ -607,3 +607,16 @@ PDF 스킬의 읽기 전용 검사에서 모듈의 대역 다운로드 PDF 첫 �
 인증 부재이며 격리 restore 등록부·DB 밖 최신 journal·키 담당·rollback version·실제 alert
 수신/ack가 없으므로 보호 DB를 drill 대상으로 사용하지 않았다. #19/#27/#70/#71 및
 milestone4/5는 이 관측이나 CI/health만으로 완료하지 않는다.
+
+공유 PR132 final head `5f5e818173ba0b7d0bfed04bc00dc7b7ed691227`의
+[CI37496257599](https://github.com/creno-va/baro/actions/runs/37496257599)3 jobs 성공을 확인하고
+main `f75bc9d24f1992ff69ea3cc4ebf7ae9893770693`로 정상 squash 병합했다. native 실행 단계는
+변경 없음으로 skip됐으며 실제 native 검증으로 대신하지 않는다. PR130 final cf8d3da의
+[CI37497199020](https://github.com/creno-va/baro/actions/runs/37497199020)는 native 실제 실행과
+source/browser·quality gate 모두 성공했다. 공유 병합 뒤 최신 main rebase·새 head 검증을
+요청했으며 그 결과 전에는 cf8의 성공만으로 병합하지 않는다. 이전 c7ca596의
+[CI37496506640](https://github.com/creno-va/baro/actions/runs/37496506640)19 PASS/1 FAIL도 보존한다.
+
+01:44 KST 동일 D1 console은 preview/production2개, 기간 rows read26.78k·written1.17k,
+billable usage $0.00을 표시했다. 계정 전체 기간 관측이며 최종 candidate별 scan/청구 receipt나
+무료 처리 보장이 아니다. 격리 복구 자원이 없다는 판단은 동일하다.
