@@ -32,6 +32,7 @@ test("built public directory and detail hydrate under hash CSP with no case data
   });
   const response = await page.goto("/lawyers");
   expect(response?.headers()["content-security-policy"]).toContain("sha256-");
+  expect(response?.headers()["cache-control"]).toContain("no-transform");
   await expect(page.getByRole("link", { name: "프로필과 연락처 보기" })).toBeVisible();
   await page.getByRole("link", { name: "프로필과 연락처 보기" }).press("Enter");
   await expect(
