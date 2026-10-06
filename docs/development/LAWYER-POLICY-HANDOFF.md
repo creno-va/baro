@@ -25,6 +25,9 @@ reference가 필요하다. stream 중 auth 재검사는 응답 header를 다시 
 프로필 편집은 focus/visibility/pageshow/peer-tab storage와 저장/공개 전후에 session을 확인한다.
 계정/role/동의 변경 시 draft·preview·공개 확인·사진 변환·오류와 이전 응답을 폐기한다.
 공개 요청은 profileId/revision을 명시해 이전 계정 요청이 다른 자기 프로필에 적용되지 않게 한다.
+HTTP publication과 내부 service/mock handler도 profileId를 필수로 검사한다. 이전 client의 ID 없는
+요청은 VALIDATION_ERROR로 차단되며 새 client를 다시 불러와야 한다. 서로 다른 owner의 같은 revision에서
+외부 ID/누락 ID는 타인 공개 상태와 revision을 바꾸지 않고, 본인 정상 요청/replay는 유지한다.
 디렉터리는 URL 복원 전 입력을 잠시 비활성화하고 복원 후 빠른 입력·새 검색을 보존한다.
 뒤로/앞으로는 popstate로 복원하고 오래된 검색 응답은 새 조건을 덮어쓰지 않는다.
 
@@ -92,7 +95,7 @@ v2 두 역할/전 사건 준비 범위와 milestone 링크·새 브랜드는 아
 ## 로컬 검증 결과 — 2026-10-07 KST
 
 - `bun ci`: 380 installs/528 packages, lock 변경 없음.
-- `bun run check`: lint/typecheck 성공, 1205 tests/132591 assertions 성공. schema drift 없음,
+- `bun run check`: lint/typecheck 성공, 1205 tests/132600 assertions 성공. schema drift 없음,
   fresh/upgrade migration 추가 6 tests/29 assertions 성공. schema/migration 변경 없음.
 - `bun run build`, `bun run cf:dry-run`: 성공. dry-run은 배포·원격 Container 시작 증거가 아니다.
 - `bunx playwright test --config tests/browser/lawyer-public.config.ts`: 9 성공. URL 초기 복원/빠른 입력,
@@ -106,7 +109,7 @@ v2 두 역할/전 사건 준비 범위와 milestone 링크·새 브랜드는 아
 - `bun run release:check`: 의도된 실패. 미승인 정책/게시·동의 버전 불일치와 미검토 release evidence를
   그대로 보고한다. 이번 검증 결과를 human receipt/공개 승인으로 입력하지 않는다.
 
-4번 공유 PR 통합 후 고객→변호사로 바꾼 동일 owner의 사건/chat/private 자료 403, usage/delete 접근 유지,
+4번 공유 PR #127 통합 후 고객→변호사로 바꾼 동일 owner의 사건/chat/private 자료 403, usage/delete 접근 유지,
 기능 PR의 관련 CI와 새 full runner를 최신 main에서 재검증한다. 최종 병합은 4번이 맡는다.
 
 ## PR #126의 실제 CI 상태

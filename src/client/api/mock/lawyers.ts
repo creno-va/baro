@@ -215,16 +215,15 @@ export function createMockLawyers(context: LawyerMockContext) {
     },
     async publishMine(
       published: boolean,
-      current?: { profileId: string; expectedRevision: number },
+      current: { profileId: string; expectedRevision: number },
     ) {
       const owner = await own();
       const store = state();
       const profile = store.profiles.find((p) => p.id === owner.profile.id);
       if (!profile) throw new LawyerApiError("NOT_FOUND", "프로필을 찾을 수 없어요.");
-      if (current && profile.id !== current.profileId)
+      if (!current || profile.id !== current.profileId)
         throw new LawyerApiError("NOT_FOUND", "본인 프로필만 변경할 수 있어요.");
       if (
-        current &&
         profile.revision !== current.expectedRevision &&
         !(profile.revision === current.expectedRevision + 1 && profile.published === published)
       )
@@ -290,16 +289,14 @@ export const lawyersMockHandlers = {
       const parsed = z
         .strictObject({
           published: z.boolean(),
-          profileId: z.string().optional(),
-          expectedRevision: z.number().int().positive().optional(),
+          profileId: z.string().min(1),
+          expectedRevision: z.number().int().positive(),
         })
         .parse(input);
-      return mockLawyers.publishMine(
-        parsed.published,
-        parsed.profileId && parsed.expectedRevision
-          ? { profileId: parsed.profileId, expectedRevision: parsed.expectedRevision }
-          : undefined,
-      );
+      return mockLawyers.publishMine(parsed.published, {
+        profileId: parsed.profileId,
+        expectedRevision: parsed.expectedRevision,
+      });
     })(),
 };
 registerMockHandlers(lawyersMockHandlers);

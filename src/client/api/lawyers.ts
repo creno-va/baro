@@ -151,11 +151,14 @@ const mockTransport = {
   get: (id: string) => sharedRequest<LawyerView>("lawyers.get", { id }),
   getMine: () => sharedRequest<LawyerView>("lawyers.getMine"),
   saveMine: (profile: LawyerView) => sharedRequest<LawyerView>("lawyers.saveMine", profile),
-  publishMine: (published: boolean, current?: Pick<LawyerView, "id" | "revision">) =>
-    sharedRequest<LawyerView>("lawyers.publishMine", {
+  async publishMine(published: boolean, current?: Pick<LawyerView, "id" | "revision">) {
+    const mine = current ?? (await sharedRequest<LawyerView>("lawyers.getMine"));
+    return sharedRequest<LawyerView>("lawyers.publishMine", {
       published,
-      ...(current ? { profileId: current.id, expectedRevision: current.revision } : {}),
-    }),
+      profileId: mine.id,
+      expectedRevision: mine.revision,
+    });
+  },
 };
 export const lawyers = {
   async list(filters: LawyerFilters = {}) {

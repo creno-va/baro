@@ -331,13 +331,11 @@ test("pending upload survives reconnect and can only attach after ready status",
     });
   });
   await page.goto("/lawyer");
-  await page
-    .getByLabel("포트폴리오 파일 (이미지·PDF)")
-    .setInputFiles({
-      name: "synthetic.pdf",
-      mimeType: "application/pdf",
-      buffer: Buffer.from("%PDF-1.4\nsynthetic\n%%EOF"),
-    });
+  await page.getByLabel("포트폴리오 파일 (이미지·PDF)").setInputFiles({
+    name: "synthetic.pdf",
+    mimeType: "application/pdf",
+    buffer: Buffer.from("%PDF-1.4\nsynthetic\n%%EOF"),
+  });
   await expect(page.getByText("처리 대기는 공개 완료가 아니에요.", { exact: false })).toBeVisible();
   await expect(page.getByRole("button", { name: "프로필에 연결" })).toBeDisabled();
   await expect(page.getByLabel("활동 제목 1")).toHaveCount(0);

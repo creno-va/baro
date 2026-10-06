@@ -128,10 +128,10 @@ export function createSelfProfileService(core: V2Core, clock = () => new Date().
       ownerId: string,
       published: boolean,
       expectedRevision: number,
-      profileId?: string,
+      profileId: string,
     ) {
       const current = await service.getMine(ownerId);
-      if (profileId && current.id !== profileId) throw new LawyerError("NOT_FOUND");
+      if (current.id !== profileId) throw new LawyerError("NOT_FOUND");
       if (current.revision === expectedRevision + 1 && current.published === published)
         return current;
       if (current.revision !== expectedRevision) throw new LawyerError("STALE_REVISION");

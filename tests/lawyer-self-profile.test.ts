@@ -42,14 +42,19 @@ test("mock owner edit/publish/refresh/directory share one profile; customers can
   let api = createMockLawyers(context);
   const blank = await api.getMine();
   expect(blank.verificationStatus).toBe("self_declared");
-  await expect(api.publishMine(true)).rejects.toThrow();
+  await expect(
+    api.publishMine(true, { profileId: blank.id, expectedRevision: blank.revision }),
+  ).rejects.toThrow();
   const saved = await api.saveMine({ ...blank, ...complete, verificationStatus: "verified" });
   expect(await api.saveMine({ ...blank, ...complete, verificationStatus: "verified" })).toEqual(
     saved,
   );
   expect(saved.verificationStatus).toBe("self_declared");
   const stale = { ...saved, name: "old tab" };
-  const published = await api.publishMine(true);
+  const published = await api.publishMine(true, {
+    profileId: saved.id,
+    expectedRevision: saved.revision,
+  });
   expect(await api.get(published.id)).toEqual(published);
   api = createMockLawyers(context);
   expect(await api.getMine()).toEqual(published);
@@ -57,7 +62,7 @@ test("mock owner edit/publish/refresh/directory share one profile; customers can
     published,
   ]);
   await expect(api.saveMine(stale)).rejects.toThrow();
-  await api.publishMine(false);
+  await api.publishMine(false, { profileId: published.id, expectedRevision: published.revision });
   expect(await api.list({ query: "합성변호사" })).toEqual([]);
   await expect(api.get(published.id)).rejects.toThrow();
   user = { id: "customer", name: "고객", accountType: "customer" };
@@ -138,11 +143,12 @@ test("real API stores encrypted self profiles, records publication consent, hide
     "/v2/me/lawyer/self-profile/publication",
     f.owner,
     "POST",
-    { published: true, expectedRevision: saved.revision, consent: false },
+    { published: true, profileId: saved.id, expectedRevision: saved.revision, consent: false },
   );
   expect(withoutConsent.status).toBe(400);
   const publication = await f.request("/v2/me/lawyer/self-profile/publication", f.owner, "POST", {
     published: true,
+    profileId: saved.id,
     expectedRevision: saved.revision,
     consent: true,
   });
@@ -173,6 +179,7 @@ test("real API stores encrypted self profiles, records publication consent, hide
   ).toBe(409);
   const hidden = await f.request("/v2/me/lawyer/self-profile/publication", f.owner, "POST", {
     published: false,
+    profileId: published.id,
     expectedRevision: published.revision,
     consent: false,
   });
@@ -204,6 +211,7 @@ test("selected lawyer accounts manage self-declared profiles without qualificati
   const saved = selfProfileSchema.parse(await savedResponse.json());
   const publication = await f.request("/v2/me/lawyer/self-profile/publication", f.other, "POST", {
     published: true,
+    profileId: saved.id,
     expectedRevision: saved.revision,
     consent: true,
   });
@@ -268,7 +276,7 @@ test("self directory advances filtered empty pages and returns profiles beyond t
   for (const user of [f.owner, f.noConsent]) {
     const blank = await service.getMine(user.userId);
     const saved = await service.saveMine(user.userId, { ...blank, ...complete, name: user.userId });
-    profiles.push(await service.publishMine(user.userId, true, saved.revision));
+    profiles.push(await service.publishMine(user.userId, true, saved.revision, saved.id));
   }
   profiles.sort((a, b) => a.id.localeCompare(b.id));
   const firstProfile = profiles[0];
@@ -341,16 +349,47 @@ test("publication is bound to the displayed profile and current consent, includi
   const other = selfProfileSchema.parse(
     await (await f.request("/v2/me/lawyer/self-profile", f.other)).json(),
   );
+  const otherSaved = selfProfileSchema.parse(
+    await (
+      await f.request("/v2/me/lawyer/self-profile", f.other, "PUT", {
+        profile: { ...other, ...complete },
+      })
+    ).json(),
+  );
+  expect(otherSaved.revision).toBe(saved.revision);
   expect(
     (
       await f.request("/v2/me/lawyer/self-profile/publication", f.other, "POST", {
         profileId: saved.id,
-        published: false,
-        expectedRevision: other.revision,
-        consent: false,
+        published: true,
+        expectedRevision: saved.revision,
+        consent: true,
       })
     ).status,
   ).toBe(404);
+  const missing = await f.request("/v2/me/lawyer/self-profile/publication", f.other, "POST", {
+    published: true,
+    expectedRevision: saved.revision,
+    consent: true,
+  });
+  expect(missing.status).toBe(400);
+  const missingBody = (await missing.json()) as { error: { code: string } };
+  expect(missingBody.error.code).toBe("VALIDATION_ERROR");
+  expect(await createSelfProfileService(f.core).getMine(f.other.userId)).toEqual(otherSaved);
+  const valid = {
+    published: true,
+    profileId: otherSaved.id,
+    expectedRevision: otherSaved.revision,
+    consent: true,
+  };
+  const normal = await f.request("/v2/me/lawyer/self-profile/publication", f.other, "POST", valid);
+  expect(normal.status).toBe(200);
+  const otherPublished = selfProfileSchema.parse(await normal.json());
+  expect(otherPublished.published).toBe(true);
+  expect(otherPublished.revision).toBe(otherSaved.revision + 1);
+  const replay = await f.request("/v2/me/lawyer/self-profile/publication", f.other, "POST", valid);
+  expect(replay.status).toBe(200);
+  expect(selfProfileSchema.parse(await replay.json())).toEqual(otherPublished);
   expect(
     (
       await f.request("/v2/me/lawyer/self-profile/publication", f.owner, "POST", {
