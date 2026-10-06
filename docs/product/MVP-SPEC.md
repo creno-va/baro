@@ -1,4 +1,5 @@
 # BARO v2 전체 서비스 기능 명세
+> **2026-10-06 사용자 개정 — 아래 이전 범위보다 우선한다.** MVP는 고객/변호사 두 역할이며 통합 로그인에서 선택한다. 변호사 승인 어드민·자격 심사·반려·승인대기 UX는 제외한다. 실제 제품 client UI 동일 구현체를 API mock adapter로 먼저 완성하고 기능 연결을 병렬 진행한다. 별도 /mock UI는 만들지 않는다. [5세션 계획](../development/PARALLEL-UI-SPRINT.md)의 실제 착수부터 2시간 sprint를 적용하며 독립 UI는 DB/AI/OAuth/backend CI/A 이슈 종료를 기다리지 않는다. 완료된 코드/이슈/증거를 보존하고 새 DB/비용 선행 이슈를 추가하지 않는다. AI 품질 확대는 모든 UX 연결 뒤다. P0.3/#70/#71 외부·정책·production·공개 gate는 보존하며 mock 성공을 실제 외부 성공으로 표시하지 않는다. [ADR-0014](../adr/0014-mvp-two-roles-and-api-mock-first.md)가 대체 범위를 기록한다.
 
 - Version: 2.0
 - Status: Implementation-ready target; not implementation or public approval evidence
@@ -17,7 +18,7 @@ workspace/version 계약과 additive schema로 확장하며 기존 사건을 자
 - 대한민국 사건 가족 전체, 개인 또는 기업 단일 작성자 소유, 만 14세 이상.
 - 공개 디렉터리 읽기 외 사건 변경·자료·AI 사용은 로그인·현재 동의·소유권을 요구한다.
 - 재동의 전에도 자신의 과거 데이터 조회·다운로드·삭제와 로그아웃은 가능해야 한다.
-- 소유권·revision·role·public 승인·quota는 서버가 검사한다.
+- 소유권·revision·고객/변호사 role·공개 동의·quota는 서버가 검사한다. role 선택으로 moderator 권한을 부여하지 않는다.
 - 사건 데이터는 암호화하고 모델로 보내는 식별 정보를 최소화한다.
 - API/DB/Workflow/UI는 shared strict 계약을 사용하고 v1 타입을 느슨하게 바꾸지 않는다.
 - JSON body 한도와 자료 upload 한도를 구분하고 파일 확장자/클라이언트 MIME만 신뢰하지 않는다.
@@ -26,7 +27,7 @@ workspace/version 계약과 additive schema로 확장하며 기존 사건을 자
 
 | ID | 기능 | 반드시 검증할 동작 |
 | --- | --- | --- |
-| F-001 | 가입·로그인·동의 | Google/Naver/Kakao 성공·취소·오류·만료, 연령 확인, 최신 동의, 재인증·로그아웃 |
+| F-001 | 통합 가입·로그인·동의 | 고객/변호사 선택, Google/Naver/Kakao 성공·취소·오류·만료, 연령 확인, 최신 동의, 재인증·로그아웃 |
 | F-002 | 사건 생성·저장 | 개인/기업 선택, KR 유형 전체, narrative 20~5,000자, Turnstile·멱등성·일 3 사건, 소유 목록 |
 | F-003 | 적응형 질문 | 답변 기반 최대 3 묶음/묶음 5개, text/choice·모름·건너뛰기, 서버 저장·중단·재개·동시 revision |
 | F-004 | 사건 요약 확인 | 사용자 진술·AI 정리·추론·공백·모순 구분, 수정·명시적 확인, 수정 revision 반영 |
@@ -35,10 +36,10 @@ workspace/version 계약과 additive schema로 확장하며 기존 사건을 자
 | F-007 | 자료 업로드·분석 | 동의 후 자동 처리, 문서/이미지/음성/영상, 실제 형식·bytes·쪽/시간·quota, 처리 대기·오류·retry |
 | F-008 | 자료 검토 | 원본/파생물·내용 수정·자료별 추출 근거/coverage/미처리 구간, 삭제·교차 소유권 차단 |
 | F-009 | 리포트·전달 | 생성 revision·시각, 검토/편집/마스킹/제외, 식별자 기본 유지, PDF 한글·출처, 선택 원본 ZIP |
-| F-010 | 변호사 등록·인증 | 개인 본인·변호사 자격·사무실 수동 확인, evidence private, 신청·반려·재신청·승인 |
-| F-011 | 프로필·포트폴리오 | 사진·이름·소개·주소·연락·분야·text/image/PDF, 편집 미리보기·제출, 모든 공개 편집 승인 |
+| F-010 | 변호사 역할·자기 portal | 통합 로그인 역할 선택, 자기 프로필 접근·저장/재접속·소유권, 자기 역할 선택으로 자격 인증 표시 부여 금지 |
+| F-011 | 프로필·포트폴리오 | 사진·이름·소개·주소·연락·분야·text/image/PDF, 편집·저장·미리보기, 승인대기 없음 |
 | F-012 | 공개 탐색·연락 | 비로그인 목록/프로필, 객관적 필터·회전 기준 표시, 부족 결과, 전화/email/외부상담·Naver/Kakao/Google 길찾기 |
-| F-013 | 운영 심사·신고 | moderator role 서버 검증, 자격/게시물 승인·반려, pending 비공개, 공개 신고·조치·비민감 감사 상태 |
+| F-013 | MVP 제외 (역사 보존) | 자격/게시물 승인 어드민·반려·재신청·신고 운영 UI는 이번 MVP 필수 시연 대상 아님; 기존 서버 코드 보존 |
 | F-014 | 설정·삭제 | 실제최근 OAuth, 사건/자료/계정·원본/파생물/context/export/public 자산 삭제, 늦은 작업 부활 방지 |
 | F-015 | 비용·오류·운영 | 일한도·저장예약·월 100 만원, 비용차단·재개, no double userquota retry, 실제비용 ledger·경보·복구 |
 
@@ -111,18 +112,17 @@ AI 응답을 따로 늘리지 않지만 실제 비용은 모두 계산한다. qu
 추출·이미 생성한 snapshot의 PDF/ZIP 다운로드는 AI 응답을 소비하지 않으며 실제
 비용은 모든 호출/처리마다 월 ledger에 기록한다.
 
-## 프로필·심사 상태
+## 자기 프로필 상태 (ADR-0014)
 
 ```text
-lawyer_application: draft → submitted → approved / rejected → resubmitted
-profile_revision: draft → submitted → approved / rejected
-public_profile: 마지막 승인 revision만 읽음 → 숨김/삭제/자격 철회
+통합 로그인: customer / lawyer → 해당 dashboard / 자기 portal
+자기 프로필: 작성 → 저장 → 미리보기 → 수정 / 삭제
+공개 프로필: 실제 공개 동의·소유권·개인정보 경계 적용, 확인되지 않은 자격 인증 표시 없음
 ```
 
-최초 공개에는 자격 신청과 공개 내용 승인이 모두 필요하다. 인증 표시는 확인한
-범위와 확인일을 알리며 능력·성과를 보증하지 않는다. 사진·주소·연락·포트폴리오
-변경도 예외 없이 심사한다. 승인 전 private portfolio 객체를 public URL로 만들지 않는다.
-운영자는 인증·게시물 자료만 접근하며 사건·채팅·리포트 원문을 조회하지 않는다.
+승인 어드민·자격 신청·반려·재신청·승인대기는 MVP에서 제외한다. 기존 서버 심사 계약은
+역사와 기존 데이터 보존을 위해 유지한다. 공개할 자산을 사용자가 명시적으로 선택하며
+private 사건 자료를 프로필에 자동 공유하지 않는다. 실제 서비스 공개/법률·정책 승인은 #70/#71 별도다.
 
 ## 삭제·복구와 v1 회귀
 
