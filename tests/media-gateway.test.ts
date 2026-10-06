@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
-import { createMediaGateway, WHISPER_MODEL } from "../src/server/modules/llm-gateway/transcription";
-import { MODEL_ID } from "../src/server/modules/llm-gateway/prompts";
 import type { ProcessingCosts } from "../src/server/modules/file-processing/transport";
+import { MODEL_ID } from "../src/server/modules/llm-gateway/prompts";
+import { createMediaGateway, WHISPER_MODEL } from "../src/server/modules/llm-gateway/transcription";
 
 const wav = () => {
   const bytes = new Uint8Array(32044);
