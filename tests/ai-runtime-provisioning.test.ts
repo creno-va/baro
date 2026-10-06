@@ -53,7 +53,7 @@ test("a fresh customer can admit their first text-only AI job without a prior fi
       n: 0,
     });
     const unconfigured = createWorkspaceService(core, {
-      ...createWorkspaceDependencies(core, { ...env, AI_MODEL_TOKEN_BOUNDS_JSON: undefined }),
+      ...createWorkspaceDependencies(core, { ...env, AI_MODEL_TOKEN_BOUNDS_JSON: "" }),
       dispatch: async () => undefined,
     });
     await expect(
