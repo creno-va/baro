@@ -343,7 +343,7 @@ test("real account usage converts seconds to minutes and deletion uses the exist
         timezone: "Asia/Seoul",
         resetAt: "2026-10-06T15:00:00Z",
         newCases: { used: 1, reserved: 0, remaining: 2, limit: 3 },
-        aiResponses: { used: 2, reserved: 0, remaining: 28, limit: 30 },
+        aiResponses: { used: 2, reserved: 0, remaining: 198, limit: 200 },
         mediaSeconds: { used: 120, reserved: 60, remaining: 3420, limit: 3600 },
         storageBytes: { used: 100, reserved: 0, remaining: 9_999_999_900, limit: 10_000_000_000 },
         waitReasons: [],

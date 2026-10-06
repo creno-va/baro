@@ -1,5 +1,7 @@
 # 사건·분석 실행 계약
 
+> **2026-10-07 사용자 후속 — 이전 비용 정책보다 우선:** 계정별 AI 응답은 KST 하루200회이며 Preview/Production의 별도 전체 월 예산 차단은 해제한다. Cloudflare 기존 결제 경로에서 잔액$10 이하 시$30 자동 충전을 사용자가 직접 승인/설정했다. metering·실제 funding·가격/FX·bounded attempt·unknown 비용 보존은 유지한다. 배포 설정 `MONTHLY_BUDGET_CAP_ENABLED=false`가 예약·사용량·정산에 일관되게 적용된다. 기존 allocation 금액은 이 모드에서 소비 차단 한도가 아니며 schema0009의 기록을 보존한다.
+
 - Contract: v1 보존, v2 사용량·비용 실행 정본 추가 (2026-10-06)
 
 이 문서는 v1의 누적5문항/단일 분석 실행 계약을 보존한다. v2의 연속 사건 작업 공간,
@@ -126,7 +128,7 @@ schema 범위이며 실행 retry는 서비스별 더 작은 검증된 상한을 
 | quota | initial reservation | consumed 시점 | released / retry |
 | --- | --- | --- | --- |
 | 신규 사건 KST 하루3개 | 생성 admission의 operation/day에1개 | 사건·operation·idempotency 생성 commit과 원자적으로 소비 | 생성 실패는 전체 rollback. 생성 뒤 삭제/분석 실패로 일 allowance를 반환하지 않음 |
-| 사용자 AI 응답 KST 하루30회 | 사용자에게 보일 응답 operation/day에1개 | 검증된 질문 묶음·요약·채팅·AI 자료 해석 publish commit과 원자적으로 소비 | 미게시 terminal 실패/취소는 reserved를 멱등 release. 같은 operation retry는 원래 day에서 재예약 |
+| 사용자 AI 응답 KST 하루200회 | 사용자에게 보일 응답 operation/day에1개 | 검증된 질문 묶음·요약·채팅·AI 자료 해석 publish commit과 원자적으로 소비 | 미게시 terminal 실패/취소는 reserved를 멱등 release. 같은 operation retry는 원래 day에서 재예약 |
 | 음성/영상 KST 하루3600초 | server probe로 확인한 실제 원본 duration | 최초 실제 media 처리 start의 durable commit에서 소비 | start 전 취소/실패만 release. start 이후 retry/실패는 consumed 재차감·반환 없음 |
 
 한 질문 묶음의 여러 질문, 응답 생성 전 내부 minimization/교정/정책 검증은 추가 응답이 아니다.

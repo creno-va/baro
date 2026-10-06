@@ -436,7 +436,7 @@ export const usage: V2Usage = {
   timezone: "Asia/Seoul",
   resetAt: "2026-10-06T15:00:00Z",
   newCases: { limit: 3, used: 1, reserved: 1, remaining: 1 },
-  aiResponses: { limit: 30, used: 2, reserved: 1, remaining: 27 },
+  aiResponses: { limit: 200, used: 2, reserved: 1, remaining: 197 },
   mediaSeconds: { limit: 3600, used: 2, reserved: 0, remaining: 3598 },
   storageBytes: { limit: 10_000_000_000, used: 100, reserved: 200, remaining: 9_999_999_700 },
   waitReasons: [],

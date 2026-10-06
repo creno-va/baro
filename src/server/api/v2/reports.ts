@@ -91,7 +91,9 @@ export function createReportsApi(
     if (options.testOnlyMissingD1Meta && env.APP_ENV !== "preview")
       throw new ReportError("STORAGE_UNAVAILABLE");
     const core = reportRequestCore(
-      createV2Core(env.DB, await createCaseDataCipher(env)),
+      createV2Core(env.DB, await createCaseDataCipher(env), {
+        monthlyBudgetCapEnabled: env.MONTHLY_BUDGET_CAP_ENABLED !== "false",
+      }),
       !options.testOnlyMissingD1Meta,
     );
     return createReportsService(

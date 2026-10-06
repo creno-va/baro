@@ -1,5 +1,7 @@
 # AI 분석 파이프라인
 
+> **2026-10-07 사용자 후속 — 이전 비용 정책보다 우선:** 계정별 AI 응답은 KST 하루200회이며 Preview/Production의 별도 전체 월 예산 차단은 해제한다. Cloudflare 기존 결제 경로에서 잔액$10 이하 시$30 자동 충전을 사용자가 직접 승인/설정했다. metering·실제 funding·가격/FX·bounded attempt·unknown 비용 보존은 유지한다. 배포 설정 `MONTHLY_BUDGET_CAP_ENABLED=false`가 예약·사용량·정산에 일관되게 적용된다. 기존 allocation 금액은 이 모드에서 소비 차단 한도가 아니며 schema0009의 기록을 보존한다.
+
 - Orchestrator: Cloudflare Workflows
 - Model path: Cloudflare AI binding -> AI Gateway Unified Billing -> third-party model
 - Initial model: `openai/gpt-6-sol`, reasoning `medium`
@@ -158,7 +160,7 @@ Container는 문서/OCR/office 변환·오디오/영상 추출·PDF/ZIP 구성�
 일시 복호화하고 암호화 파생물만 반환한다. 원본 파일 안의 지시·링크·매크로·HTML은 실행
 명령이 아니며 외부 network/SSRF·prompt injection을 막는다.
 
-logical visible response를 하루30회 reservation에 묶고 internal phase/교정/retry는 사용자
+logical visible response를 하루200회 reservation에 묶고 internal phase/교정/retry는 사용자
 quota를 반복 차감하지 않는다. 모든 provider/ASR/Container attempt 비용은 월100만원 ledger에
 별도 반영한다. bounded phaseattempt·joblease·global 비용 예약과 snapshot 재사용을 둔다.
 원본/계정 삭제 또는 revision 변경 후 늦은 completion은 source guard로 거부하며 Workflow

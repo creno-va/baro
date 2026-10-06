@@ -354,6 +354,11 @@ export function AccountSettings() {
             있어요.
           </p>
         )}
+        {usage?.waitReasons?.includes("ai_funding") && (
+          <p role="status" className="settings-error">
+            AI 실행 설정을 확인 중이에요. 저장한 내용을 확인하거나 삭제할 수 있어요.
+          </p>
+        )}
         {usage?.waitReasons?.includes("processing_capacity") && (
           <p role="status" className="settings-error">
             처리 용량 때문에 새 자동 처리가 대기 중이에요. 잠시 후 다시 확인해 주세요.

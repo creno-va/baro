@@ -206,6 +206,7 @@ export function createV2StoragePaidRuntimeRepository(
           row = await core.statement(source.sql, source.values).first<{ anchor: string }>();
         if (!row) return null;
         const budget = budgetAdmissionPredicate({
+          monthlyBudgetCapEnabled: core.monthlyBudgetCapEnabled,
           pricingProofId: r.pricingProofId,
           fundingProofId: r.fundingProofId,
           pricingJson: JSON.stringify(pricing),

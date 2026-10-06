@@ -47,7 +47,11 @@ export const hashSchema = z.string().regex(/^[0-9a-f]{64}$/);
 export const sqlClaim = "EXISTS (SELECT 1 FROM v2_mutation_claims WHERE id = ?)";
 export const aliveWorkspace = `NOT EXISTS (SELECT 1 FROM v2_tombstones t WHERE (t.target_kind = 'workspace' AND t.target_id = w.id) OR (t.target_kind = 'account' AND t.target_id = w.owner_id))`;
 export const workspaceGuardSql = `w.owner_id = ? AND w.id = ? AND w.revision = ? AND ${aliveWorkspace}`;
-export function createV2Core(binding: D1Database, cipher: EnvelopeCipher) {
+export function createV2Core(
+  binding: D1Database,
+  cipher: EnvelopeCipher,
+  options: { monthlyBudgetCapEnabled?: boolean | undefined } = {},
+) {
   const sizes = new WeakMap<D1PreparedStatement, number>();
   const statement = (sql: string, values: unknown[] = []) => {
     if (values.length > 100) throw new V2RepositoryError("SNAPSHOT_STREAM_REQUIRED");
@@ -123,7 +127,18 @@ export function createV2Core(binding: D1Database, cipher: EnvelopeCipher) {
         }),
       ),
     );
-  return { binding, cipher, statement, claim, finish, bump, changed, encrypt, decrypt };
+  return {
+    binding,
+    cipher,
+    statement,
+    claim,
+    finish,
+    bump,
+    changed,
+    encrypt,
+    decrypt,
+    monthlyBudgetCapEnabled: options.monthlyBudgetCapEnabled !== false,
+  };
 }
 export type V2Core = ReturnType<typeof createV2Core>;
 export type SnapshotPurpose = (typeof V2_SNAPSHOT_PURPOSES)[number];

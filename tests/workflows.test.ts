@@ -186,4 +186,12 @@ test("operator launch exception preserves strict public-beta gate and protected 
   expect(job.steps[operator]?.env?.LAUNCH_AUTHORIZATION_COMMENT).toBe(
     "${{ inputs.launch_authorization_comment }}",
   );
+  const ai = job.steps.findIndex((s) => s.name === "Configure verified AI runtime");
+  const deploy = job.steps.findIndex((s) => s.name === "Deploy production");
+  expect(ai).toBeGreaterThan(migration);
+  expect(ai).toBeLessThan(deploy);
+  expect(job.steps[ai]?.if).toBe(
+    "steps.application.outputs.present == 'true' && inputs.configure_ai",
+  );
+  expect(job.steps[ai]?.run).toBe('bun scripts/provision-ai-budget.ts "$TARGET_SHA"');
 });

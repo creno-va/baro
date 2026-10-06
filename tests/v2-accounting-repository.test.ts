@@ -286,9 +286,9 @@ test("concurrent same-key creation returns one operation without partial counter
   });
 });
 
-test("visible responses reserve 30 slots concurrently and settle on original day exactly once", async () => {
+test("visible responses reserve 200 slots concurrently and settle on original day exactly once", async () => {
   const f = await fixture();
-  const targets = await Promise.all(Array.from({ length: 31 }, () => activeWorkspace(f)));
+  const targets = await Promise.all(Array.from({ length: 201 }, () => activeWorkspace(f)));
   const operations = targets.map(() => admission());
   const results = await Promise.all(
     targets.map((id, i) => {
@@ -306,11 +306,11 @@ test("visible responses reserve 30 slots concurrently and settle on original day
       );
     }),
   );
-  expect(results.filter(Boolean)).toHaveLength(30);
+  expect(results.filter(Boolean)).toHaveLength(200);
   expect((await f.accounting.usage(f.actor)).aiResponses).toEqual({
-    limit: 30,
+    limit: 200,
     used: 0,
-    reserved: 30,
+    reserved: 200,
     remaining: 0,
   });
   const winner = operations[results.findIndex(Boolean)];
@@ -321,9 +321,9 @@ test("visible responses reserve 30 slots concurrently and settle on original day
   expect(await f.accounting.settleQuota(next, winner.operationId, "released")).toBe(false);
   expect((await f.accounting.usage(next)).aiResponses.used).toBe(0);
   expect((await f.accounting.usage(f.actor)).aiResponses).toEqual({
-    limit: 30,
+    limit: 200,
     used: 1,
-    reserved: 29,
+    reserved: 199,
     remaining: 0,
   });
 });
@@ -652,16 +652,16 @@ test("actual job failure releases unpublished quota; retry re-reserves the same 
   expect(await f.jobs.retry({ ...next, ownerId: other.userId }, jobId)).toBe(false);
   // Filling the original day is a synthetic history fixture; a fresh day cannot bypass it.
   f.database.sqlite
-    .query("UPDATE v2_daily_usage SET responses_used=30 WHERE owner_id=? AND day='2026-10-05'")
+    .query("UPDATE v2_daily_usage SET responses_used=200 WHERE owner_id=? AND day='2026-10-05'")
     .run(f.actor.ownerId);
   expect(await f.jobs.retry(next, jobId)).toBe(false);
   expect((await f.accounting.usage({ ...f.actor, now: MIDNIGHT })).aiResponses).toMatchObject({
     used: 0,
     reserved: 0,
-    remaining: 30,
+    remaining: 200,
   });
   f.database.sqlite
-    .query("UPDATE v2_daily_usage SET responses_used=29 WHERE owner_id=? AND day='2026-10-05'")
+    .query("UPDATE v2_daily_usage SET responses_used=199 WHERE owner_id=? AND day='2026-10-05'")
     .run(f.actor.ownerId);
   expect(
     (await Promise.all(Array.from({ length: 4 }, () => f.jobs.retry(next, jobId)))).filter(Boolean),
@@ -672,7 +672,7 @@ test("actual job failure releases unpublished quota; retry re-reserves the same 
       .get(input.operationId),
   ).toEqual({ operation_id: input.operationId, day: "2026-10-05", state: "reserved" });
   expect((await f.accounting.usage(f.actor)).aiResponses).toMatchObject({
-    used: 29,
+    used: 199,
     reserved: 1,
     remaining: 0,
   });

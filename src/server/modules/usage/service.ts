@@ -41,6 +41,7 @@ export function createUsageService(
   binding: D1Database,
   options: {
     environment: "preview" | "production";
+    monthlyBudgetCapEnabled?: boolean;
     clock?: () => string;
     paidAvailable?: (now: string) => Promise<boolean>;
     budgetProofs?: (environment: "preview" | "production") => Promise<{
@@ -51,14 +52,18 @@ export function createUsageService(
     processingAvailable?: () => Promise<boolean>;
   },
 ) {
-  const core = createV2Core(binding, {
-    async encrypt() {
-      throw new Error("Counter service cannot encrypt private data");
+  const core = createV2Core(
+    binding,
+    {
+      async encrypt() {
+        throw new Error("Counter service cannot encrypt private data");
+      },
+      async decrypt() {
+        throw new Error("Counter service cannot decrypt private data");
+      },
     },
-    async decrypt() {
-      throw new Error("Counter service cannot decrypt private data");
-    },
-  });
+    { monthlyBudgetCapEnabled: options.monthlyBudgetCapEnabled },
+  );
   const accounting = createV2AccountingRepository(core, options.environment);
   const storage = createV2StorageRepository(core);
   const paidAvailable =
@@ -100,7 +105,7 @@ export function createUsageService(
     if (usage.aiResponses.remaining < 1) waitReasons.push("daily_ai_responses");
     if (usage.mediaSeconds.remaining <= 0) waitReasons.push("daily_media");
     if (usage.storageBytes.remaining < 1) waitReasons.push("account_storage");
-    if (!paid) waitReasons.push("monthly_budget");
+    if (!paid) waitReasons.push(core.monthlyBudgetCapEnabled ? "monthly_budget" : "ai_funding");
     if (!capacity) waitReasons.push("processing_capacity");
     return v2UsageSchema.parse({ ...usage, waitReasons });
   }

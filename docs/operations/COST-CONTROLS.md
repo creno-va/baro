@@ -1,5 +1,7 @@
 # v2 사용량·월 비용 운영
 
+> **2026-10-07 사용자 후속 — 이전 비용 정책보다 우선:** 계정별 AI 응답은 KST 하루200회이며 Preview/Production의 별도 전체 월 예산 차단은 해제한다. Cloudflare 기존 결제 경로에서 잔액$10 이하 시$30 자동 충전을 사용자가 직접 승인/설정했다. metering·실제 funding·가격/FX·bounded attempt·unknown 비용 보존은 유지한다. 배포 설정 `MONTHLY_BUDGET_CAP_ENABLED=false`가 예약·사용량·정산에 일관되게 적용된다. 기존 allocation 금액은 이 모드에서 소비 차단 한도가 아니며 schema0009의 기록을 보존한다.
+
 - Status: Implementation target — ledger·cloud cap이 구현되었다는 증거 아님
 - 기준: 2026-10-06; 구현 #57, 저장/처리 #58/#59, 실제 검증 #71
 - 참조: [파일 처리](./FILE-PROCESSING.md), [배포](./DEPLOYMENT-OPERATIONS.md), [관측성](./OBSERVABILITY.md)
@@ -30,7 +32,7 @@ limit·청구액은 실행 전 다시 확인한다. 실패했다고0원/미실�
 | 대상 | 한도 | 계산 경계 |
 | --- | --- | --- |
 | 계정·KST 일일 | 신규 사건 3개 | 동일 idempotency 재요청/재시도는 신규 사건 아님 |
-| 계정·KST 일일 | AI 응답 30회 | 공개할 질문 묶음·요약·채팅·AI 자료 해석마다 예약; 내부 phase/교정은 추가 응답 아님 |
+| 계정·KST 일일 | AI 응답 200회 | 공개할 질문 묶음·요약·채팅·AI 자료 해석마다 예약; 내부 phase/교정은 추가 응답 아님 |
 | 계정·KST 일일 | audio/video 처리 60분 | video audio와 frame 처리 하나의 media duration; 동일 작업 retry 중복 차감 없음 |
 | 계정 저장 | 10,000,000,000 bytes | 사건/프로필 원본·파생·리포트·ZIP와 pending 예약 |
 | 사건 원본·파일 수 | 원본 합계 5,000,000,000 bytes / 원본 100개 | pending 원본 예약 포함, 복제 원본도 별도 업로드이면 파일 1개. 파생물·리포트는 계정 10GB와 처리 제한에 포함 |

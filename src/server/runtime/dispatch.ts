@@ -13,7 +13,9 @@ import { createWorkspaceDispatcher } from "../modules/workspace/dispatch";
 export async function reconcileV2Dispatch(env: Env) {
   try {
     const now = new Date().toISOString();
-    const core = createV2Core(env.DB, await createCaseDataCipher(env));
+    const core = createV2Core(env.DB, await createCaseDataCipher(env), {
+      monthlyBudgetCapEnabled: env.MONTHLY_BUDGET_CAP_ENABLED !== "false",
+    });
     const environment = env.APP_ENV === "production" ? "production" : "preview";
     const control = await core
       .statement(

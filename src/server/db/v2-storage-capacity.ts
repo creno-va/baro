@@ -58,7 +58,7 @@ export const isPreparedPhysicalCapacity = (value: unknown): value is PreparedPhy
 
 // The current month has already reserved the full approved physical ceiling,
 // rather than prorating a newly uploaded object or imposing a retention expiry.
-function currentProjection(environment: string, now: string) {
+function currentProjection(environment: string, now: string, monthlyBudgetCapEnabled: boolean) {
   return {
     sql: `EXISTS(SELECT 1 FROM v2_storage_projections projection JOIN v2_physical_storage_capacity capacity ON capacity.environment=projection.environment
     JOIN v2_runtime_controls control ON control.month=projection.month AND control.environment=projection.environment
@@ -74,7 +74,7 @@ function currentProjection(environment: string, now: string) {
     AND pricing.payload_json=json_extract(projection.payload_json,'$.pricingJson') AND funding.payload_json=json_extract(projection.payload_json,'$.fundingJson') AND allocation.payload_json=json_extract(projection.payload_json,'$.allocationJson')
     AND pricing.environment=projection.environment AND pricing.kind='pricing' AND funding.environment=projection.environment AND funding.kind='funding' AND allocation.environment=projection.environment AND allocation.kind='allocation'
     AND pricing.verified_at<=? AND funding.verified_at<=? AND allocation.verified_at<=? AND pricing.valid_until>? AND funding.valid_until>? AND allocation.valid_until>?
-    AND budget.settled_krw+budget.reserved_krw+budget.ambiguous_krw+budget.fixed_maintenance_krw+(${carryoverSql})<=budget.limit_krw
+    AND (${monthlyBudgetCapEnabled ? "0" : "1"}=1 OR budget.settled_krw+budget.reserved_krw+budget.ambiguous_krw+budget.fixed_maintenance_krw+(${carryoverSql})<=budget.limit_krw)
     AND budget.settled_krw+budget.reserved_krw+budget.ambiguous_krw+budget.fixed_maintenance_krw+(${carryoverSql})<=json_extract(funding.payload_json,'$.spendAllowanceKrw')
     AND json_extract(funding.payload_json,'$.state') IN ('funded','trial_credit')
     AND NOT EXISTS(SELECT 1 FROM v2_blobs b LEFT JOIN v2_physical_blob_bindings binding ON binding.blob_id=b.id WHERE b.state!='deleted' AND (binding.blob_id IS NULL OR binding.state!='held' OR binding.environment!=projection.environment OR binding.object_key!=b.object_key OR b.cipher_bytes>binding.maximum_cipher_bytes)))`,
@@ -353,7 +353,7 @@ export function createV2StorageCapacityRepository(
       actor = parse(actorSchema, actor);
       const binding = Object.freeze(parse(physicalBindingSchema, input));
       if (binding.ownerId !== actor.ownerId) throw new Error("CAPACITY_SCOPE_INVALID");
-      const current = currentProjection(environment, actor.now);
+      const current = currentProjection(environment, actor.now, core.monthlyBudgetCapEnabled);
       const predicate = {
         sql: `${current.sql} AND EXISTS(SELECT 1 FROM v2_physical_storage_capacity c WHERE c.environment=? AND c.held_bytes+CASE WHEN EXISTS(SELECT 1 FROM v2_physical_blob_bindings b WHERE b.blob_id=? AND b.environment=c.environment AND b.owner_id=? AND b.object_key=? AND b.maximum_cipher_bytes=? AND b.state='held') THEN 0 ELSE ? END<=c.capacity_bytes)`,
         values: [
@@ -399,7 +399,7 @@ export function createV2StorageCapacityRepository(
         parse(opaqueIdSchema, blobId);
         parse(z.number().int().positive().max(100000000000), byteLength);
         now = parse(iso, now);
-        const current = currentProjection(environment, now),
+        const current = currentProjection(environment, now, core.monthlyBudgetCapEnabled),
           token = crypto.randomUUID();
         const row = await core
           .statement(
@@ -459,7 +459,7 @@ export function createV2StorageCapacityRepository(
       return safe(async () => {
         const io = parse(maintenanceIOSchema, input);
         now = parse(iso, now);
-        const current = currentProjection(environment, now);
+        const current = currentProjection(environment, now, core.monthlyBudgetCapEnabled);
         const row = await core
           .statement(
             `SELECT binding.object_key FROM v2_physical_blob_bindings binding JOIN v2_blobs b ON b.id=binding.blob_id WHERE binding.blob_id=? AND binding.environment=? AND binding.state='held' AND b.object_key=binding.object_key AND b.cipher_bytes<=binding.maximum_cipher_bytes AND b.state ${io.action === "delete" ? "='deleting'" : io.action === "get" ? "='stored'" : "IN ('stored','deleting')"}`,
@@ -502,7 +502,7 @@ export function createV2StorageCapacityRepository(
     async consumeMaintenanceIO(permit: MaintenancePermit, now: string) {
       if (!permits.delete(permit) || permit.environment !== environment) return false;
       now = parse(iso, now);
-      const current = currentProjection(environment, now);
+      const current = currentProjection(environment, now, core.monthlyBudgetCapEnabled);
       return Boolean(
         await core
           .statement(

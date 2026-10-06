@@ -74,7 +74,9 @@ export function createFilesApi(
     return c.json(errorBody(c, "INTERNAL_ERROR", "자료 요청을 처리하지 못했어요.", true), 500);
   });
   const service = async (env: Env, ownerId: string) => {
-    const core = createV2Core(env.DB, await createCaseDataCipher(env));
+    const core = createV2Core(env.DB, await createCaseDataCipher(env), {
+      monthlyBudgetCapEnabled: env.MONTHLY_BUDGET_CAP_ENABLED !== "false",
+    });
     return createFilesService(core, {
       ...(await options.dependencies?.(env, core, ownerId)),
       environment: env.APP_ENV === "production" ? "production" : "preview",
@@ -161,7 +163,9 @@ export function createFilesApi(
   app.post("/:caseId/files/:fileId/retry", async (c) => {
     const access = await caseAccess(c, true, true);
     if (access.response) return access.response;
-    const core = createV2Core(c.env.DB, await createCaseDataCipher(c.env));
+    const core = createV2Core(c.env.DB, await createCaseDataCipher(c.env), {
+      monthlyBudgetCapEnabled: c.env.MONTHLY_BUDGET_CAP_ENABLED !== "false",
+    });
     const deps = (await options.dependencies?.(c.env, core, access.ownerId)) ?? {};
     return c.json(
       await createFileRetry(core, c.env, deps)(
@@ -177,7 +181,9 @@ export function createFilesApi(
     const access = await caseAccess(c);
     if (access.response) return access.response;
     z.strictObject({}).parse(c.req.query());
-    const core = createV2Core(c.env.DB, await createCaseDataCipher(c.env));
+    const core = createV2Core(c.env.DB, await createCaseDataCipher(c.env), {
+      monthlyBudgetCapEnabled: c.env.MONTHLY_BUDGET_CAP_ENABLED !== "false",
+    });
     return c.json(
       await readWorkspaceFile(core, access.ownerId, c.req.param("caseId"), c.req.param("fileId")),
     );

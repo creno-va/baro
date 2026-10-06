@@ -194,7 +194,6 @@ test("quote fails closed for missing/stale/wrong environment/zero-price/new-mode
     await expect(quote(value)).rejects.toBeInstanceOf(BudgetError);
   }
   for (const funding of [
-    { ...proofs().funding, autoRecharge: true },
     { ...proofs().funding, existingPaymentPath: false },
     { ...proofs().funding, role: "admin" },
   ])
@@ -208,13 +207,18 @@ test("quote fails closed for missing/stale/wrong environment/zero-price/new-mode
     calculateQuote({ environment: "preview", now: NOW, pricing: null, funding: null, plan: null }),
   ).rejects.toBeInstanceOf(BudgetError);
 });
-test("bounded invocation cost cannot exceed funding or the authorized global technical budget", async () => {
+test("bounded invocation cost cannot exceed funding or the maximum attempt exposure", async () => {
   const value = proofs();
   value.funding.spendAllowanceKrw = 32;
   await expect(quote(value)).rejects.toBeInstanceOf(BudgetError);
   const expensive = proofs();
   firstPrice(expensive).usdPerUnit = "1000";
   await expect(quote(expensive)).rejects.toBeInstanceOf(BudgetError);
+});
+test("verified existing funding permits operator-authorized automatic recharge", async () => {
+  await expect(
+    quote({ funding: { ...proofs().funding, autoRecharge: true } }),
+  ).resolves.toBeDefined();
 });
 test("refusal/malformed output transport still settles actual scalar usage before output validation", async () => {
   const hold = await quote();

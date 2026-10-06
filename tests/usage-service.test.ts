@@ -67,12 +67,12 @@ test("usage uses server KST midnight, legacy maximum, reservations and honest ov
     .run(f.owner.userId, "2026-10-05", NOW);
   f.database.sqlite
     .query(
-      "INSERT INTO v2_daily_usage(owner_id,day,cases_used,responses_used,responses_reserved,media_used,media_reserved) VALUES(?,?,1,31,2,3599.25,0.25)",
+      "INSERT INTO v2_daily_usage(owner_id,day,cases_used,responses_used,responses_reserved,media_used,media_reserved) VALUES(?,?,1,201,2,3599.25,0.25)",
     )
     .run(f.owner.userId, "2026-10-05");
   const before = await f.service.account(f.owner.userId);
   expect(before.newCases.used).toBe(3);
-  expect(before.aiResponses.used).toBe(31);
+  expect(before.aiResponses.used).toBe(201);
   expect(before.aiResponses.remaining).toBe(0);
   expect(before.mediaSeconds.remaining).toBe(0.5);
   expect(before.waitReasons).toEqual(["daily_cases", "daily_ai_responses", "monthly_budget"]);

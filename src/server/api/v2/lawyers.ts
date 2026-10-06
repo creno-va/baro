@@ -63,7 +63,11 @@ export function createLawyersApi(
 ) {
   const app = privateLawyerApi();
   const selfService = async (env: Env) =>
-    createSelfProfileService(createV2Core(env.DB, await createCaseDataCipher(env)));
+    createSelfProfileService(
+      createV2Core(env.DB, await createCaseDataCipher(env), {
+        monthlyBudgetCapEnabled: env.MONTHLY_BUDGET_CAP_ENABLED !== "false",
+      }),
+    );
   const selfAccess = async (c: import("hono").Context<ApiEnvironment>, mutation = false) => {
     const a = await lawyerAccess(c, { mutation, consent: true });
     if (a.response) return a;
@@ -113,7 +117,9 @@ export function createLawyersApi(
   app.get("/lawyer/self-profile/assets/:assetId/content", async (c) => {
     const a = await selfAccess(c);
     if (a.response) return a.response;
-    const core = createV2Core(c.env.DB, await createCaseDataCipher(c.env));
+    const core = createV2Core(c.env.DB, await createCaseDataCipher(c.env), {
+      monthlyBudgetCapEnabled: c.env.MONTHLY_BUDGET_CAP_ENABLED !== "false",
+    });
     const service = createSelfProfileService(core);
     const profile = await service.getMine(a.ownerId);
     const assetId = c.req.param("assetId");
@@ -175,11 +181,15 @@ export function createLawyersApi(
     );
   });
   const service = async (env: Env, ownerId: string) => {
-    const core = createV2Core(env.DB, await createCaseDataCipher(env));
+    const core = createV2Core(env.DB, await createCaseDataCipher(env), {
+      monthlyBudgetCapEnabled: env.MONTHLY_BUDGET_CAP_ENABLED !== "false",
+    });
     return createLawyersService(core, await options.dependencies?.(env, core, ownerId));
   };
   const assets = async (env: Env, ownerId: string) => {
-    const core = createV2Core(env.DB, await createCaseDataCipher(env));
+    const core = createV2Core(env.DB, await createCaseDataCipher(env), {
+      monthlyBudgetCapEnabled: env.MONTHLY_BUDGET_CAP_ENABLED !== "false",
+    });
     return createLawyerAssetsService(core, {
       ...(await options.dependencies?.(env, core, ownerId)),
       environment: env.APP_ENV === "production" ? "production" : "preview",
