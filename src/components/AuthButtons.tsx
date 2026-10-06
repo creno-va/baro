@@ -12,6 +12,8 @@ const providers: Array<{ id: Provider; label: string }> = [
 ];
 
 export function AuthButtons() {
+  const [ready, setReady] = useState(false);
+  useEffect(() => setReady(true), []);
   const [accountType, setAccountType] = useState<AccountType>("customer");
   const [pendingProvider, setPendingProvider] = useState<Provider | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -36,7 +38,7 @@ export function AuthButtons() {
 
   return (
     <div className="auth-options" aria-busy={pendingProvider !== null}>
-      <fieldset className="account-type" disabled={pendingProvider !== null}>
+      <fieldset className="account-type" disabled={!ready || pendingProvider !== null}>
         <legend>어떤 목적으로 이용하시나요?</legend>
         <label>
           <input
@@ -70,7 +72,7 @@ export function AuthButtons() {
         <Button
           variant="outline"
           className={`auth-provider auth-provider--${provider.id}`}
-          disabled={pendingProvider !== null}
+          disabled={!ready || pendingProvider !== null}
           key={provider.id}
           onClick={(event) => {
             lastButton.current = event.currentTarget;
