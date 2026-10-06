@@ -525,3 +525,24 @@ fixture의 exact session API를 합성 customer/lawyer/anonymous로 제어하고
 auth bypass를 추가하지 않았다. 이 실패 run 및 고객9b8ba19의 전용 API browser 실패
 [37492036664](https://github.com/creno-va/baro/actions/runs/37492036664)는 보존하며 최신 head로
 재검증한다. 고객 모듈의 focus/transient-session error 검토는 PR128 담당에 요청했다.
+
+PR126은 최신 head `0faf7e961c59b2867000af6d5b6a383815b9d151`의
+[CI37492533305](https://github.com/creno-va/baro/actions/runs/37492533305)3 jobs 성공과 실제 diff를
+확인한 뒤 main `e619cb8beb47dcb103cd422d7189ba24819d54d2`로 정상 squash 병합했다.
+self APPROVE/protection 우회 없음. 실제 외부/정책 승인과 구분한다.
+
+리포트 모듈 PR130의 900MB/256KiB chunk별 source 재검사가 D1 invocation query 한도와
+고정 d1_rows_read 비용 bound를 넘을 수 있어 모듈 담당에 P1 수정 요청을 남겼다.
+[리뷰](https://github.com/creno-va/baro/pull/130#issuecomment-6020306652)는
+[공식 D1 limits](https://developers.cloudflare.com/d1/platform/limits/)와 실제 코드 경로를
+연결한다. 원본 I/O 전에 정량적 계획을 거부하고 owner/role/consent/삭제/lease/revision
+stream fence를 유지하는 검증이 필요하다. 실제 maximum ZIP 성공으로 기록하지 않는다.
+
+공유 후속 변경은 정확한 report review PATCH만131,072 bytes로 제한해 한글30,000자 저장을
+허용하고, 다른 JSON/유사 경로/POST는 기존65,536 bytes를 유지한다. Content-Length 없는
+초과 stream 거부도 검증한다. 직접 v2 account repository는 동일 recent OAuth predicate의
+atomic batch에서 exact account-type metadata와 user를 삭제한다. SQL trigger/cascade가
+포함되므로 영향 행 집계 대신 DELETE RETURNING의 owner ID로 성공을 확인한다.
+owner session 거부/만료/미래 재인증, 다른 owner metadata 보존, SQL 실패 시 metadata·user·
+journal 복구의 실제 SQLite 회귀를 포함한다. facade와 publishMine 계약 문서는 기존
+모듈의 profileId/expectedRevision/published/consent 요구를 반영한다. schema/migration 변경 없음.

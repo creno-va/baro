@@ -179,7 +179,10 @@ export const api = {
     get(id: string): Promise<LawyerView>;
     getMine(): Promise<LawyerView>;
     saveMine(profile: LawyerView): Promise<LawyerView>;
-    publishMine(published: boolean): Promise<LawyerView>;
+    publishMine(
+      published: boolean,
+      current?: Pick<LawyerView, "id" | "revision">,
+    ): Promise<LawyerView>;
   }>("lawyers"),
 };
 export { ApiError, apiMode, apiRequest, errorMessage, request } from "./core";

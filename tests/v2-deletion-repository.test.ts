@@ -1,4 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
+import { saveAccountType } from "../src/server/auth/account-type";
 import { createCaseDataCipher } from "../src/server/crypto";
 import { type Actor, createV2Core } from "../src/server/db/v2-core";
 import { type CleanupLease, createV2DeletionRepository } from "../src/server/db/v2-deletion";
@@ -142,25 +143,40 @@ test("journal insert failure atomically preserves workspace and removes partial 
 
 test("account deletion requires owner session, nonexpired session and recent nonfuture OAuth", async () => {
   const f = await fixture();
+  await saveAccountType(f.database.binding, f.actor.ownerId, "lawyer");
+  await saveAccountType(f.database.binding, f.peer.userId, "customer");
+  const metadata = () =>
+    f.database.sqlite
+      .query("SELECT value FROM app_metadata WHERE key=?")
+      .get(`account-type:${f.actor.ownerId}`);
   await workspace(f);
   const other = await workspace(f, f.peer.userId);
   expect(await f.deletion.account(f.actor, f.peer.sessionId)).toBe(false);
+  expect(metadata()).toEqual({ value: "lawyer" });
   for (const authTime of [Date.parse(NOW) - 600001, Date.parse(NOW) + 1, null]) {
     f.database.sqlite
       .query("UPDATE session SET oauth_authenticated_at=? WHERE id=?")
       .run(authTime, f.session.sessionId);
     expect(await f.deletion.account(f.actor, f.session.sessionId)).toBe(false);
+    expect(metadata()).toEqual({ value: "lawyer" });
   }
   f.database.sqlite
     .query("UPDATE session SET oauth_authenticated_at=?,expires_at=? WHERE id=?")
     .run(Date.parse(NOW), Date.parse(NOW), f.session.sessionId);
   expect(await f.deletion.account(f.actor, f.session.sessionId)).toBe(false);
+  expect(metadata()).toEqual({ value: "lawyer" });
   expect(count(f, "user")).toBe(2);
   expect(count(f, "v2_tombstones")).toBe(0);
   f.database.sqlite
     .query("UPDATE session SET expires_at=? WHERE id=?")
     .run(Date.parse(NOW) + 1, f.session.sessionId);
   expect(await f.deletion.account(f.actor, f.session.sessionId)).toBe(true);
+  expect(metadata()).toBeNull();
+  expect(
+    f.database.sqlite
+      .query("SELECT value FROM app_metadata WHERE key=?")
+      .get(`account-type:${f.peer.userId}`),
+  ).toEqual({ value: "customer" });
   expect(count(f, "user")).toBe(1);
   expect(
     f.database.sqlite.query("SELECT id FROM session WHERE user_id=?").all(f.session.userId),
@@ -170,6 +186,23 @@ test("account deletion requires owner session, nonexpired session and recent non
   ).not.toBeNull();
   expect(await f.deletion.findByTarget("account", f.actor.ownerId)).not.toBeNull();
   expect(f.database.sqlite.query("PRAGMA foreign_key_check").all()).toEqual([]);
+});
+
+test("direct account deletion rolls metadata and journals back when user SQL fails", async () => {
+  const f = await fixture();
+  await saveAccountType(f.database.binding, f.actor.ownerId, "lawyer");
+  f.database.sqlite.exec(
+    "CREATE TRIGGER test_abort_account_delete BEFORE DELETE ON user BEGIN SELECT RAISE(ABORT,'synthetic delete failure'); END;",
+  );
+  await expect(f.deletion.account(f.actor, f.session.sessionId)).rejects.toThrow();
+  expect(
+    f.database.sqlite
+      .query("SELECT value FROM app_metadata WHERE key=?")
+      .get(`account-type:${f.actor.ownerId}`),
+  ).toEqual({ value: "lawyer" });
+  expect(count(f, "user")).toBe(2);
+  expect(count(f, "v2_tombstones")).toBe(0);
+  expect(count(f, "v2_deletion_journals")).toBe(0);
 });
 
 test("cleanup acquisition is fenced, bounded and restartable; no early finish with pending targets", async () => {
