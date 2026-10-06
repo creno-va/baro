@@ -16,6 +16,12 @@ import {
   requeueAssetUploadCleanup,
 } from "./v2-asset-uploads";
 import {
+  abandonArtifactBlob,
+  commitArtifactBlob,
+  findPendingArtifactBlob,
+  prepareArtifactBlob,
+} from "./v2-artifact-blobs";
+import {
   type Actor,
   actorSchema,
   aliveWorkspace,
@@ -28,6 +34,7 @@ import {
   type WorkspaceGuard,
 } from "./v2-core";
 import { type CleanupLease, cleanupLeaseSchema } from "./v2-deletion";
+import type { JobLease } from "./v2-workspace";
 
 export function storagePredicate(
   ownerId: string,
@@ -217,6 +224,18 @@ export function createV2StorageRepository(core: V2Core) {
           core.finish(claimId),
         ]);
       });
+    },
+    prepareArtifactBlob(actor: Actor, lease: JobLease, blob: BlobRegistration) {
+      return prepareArtifactBlob(core, actor, lease, blob);
+    },
+    commitArtifactBlob(actor: Actor, lease: JobLease, blob: BlobRegistration) {
+      return commitArtifactBlob(core, actor, lease, blob);
+    },
+    abandonArtifactBlob(actor: Actor, blobId: string) {
+      return abandonArtifactBlob(core, actor, blobId);
+    },
+    findPendingArtifactBlob(actor: Actor, lease: JobLease, blobId: string) {
+      return findPendingArtifactBlob(core, actor, lease, blobId);
     },
     registerBlob(actor: Actor, input: BlobRegistration) {
       return safe(async () => {
