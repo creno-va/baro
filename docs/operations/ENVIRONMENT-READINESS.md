@@ -136,7 +136,8 @@ full-product smoke, 전체 live corpus eval, OAuth, 법률 API, 공개 정책 �
 ### 2026-10-06 현재 브라우저 도구 접근 경계
 
 이번 읽기 전용 재점검에서 `cua.getState()`는 apps/browsers 모두 빈 목록을 반환했고 IAB
-선택도 `Browser is not available: iab`이었다. 따라서 기존 콘솔의 로그인·권한·preview client/
+선택도 `Browser is not available: iab`이었다. 이어서 이름을 지정한 Chrome 탭 생성도
+`Browser is not available: chrome`으로 실패하여 탭을 만들지 못했다. 따라서 기존 콘솔의 로그인·권한·preview client/
 tester 상태와 현재 결제/plan을 브라우저로 재확인하지 못했다. 이는 사용자 로그아웃이나
 계정 권한 부족의 증거가 아니며, 위 CLI/이전 provisioning 증거를 취소하지 않는다.
 설정·credential·결제·클라우드 변경과 실제 OAuth·모델 호출은 수행하지 않았다.
