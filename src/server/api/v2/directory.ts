@@ -1,5 +1,6 @@
 import { type Context, Hono } from "hono";
 import { z } from "zod";
+import { v2DirectoryQuerySchema } from "../../../contracts/v2";
 import { createCaseDataCipher } from "../../crypto";
 import { createV2Core, V2RepositoryError } from "../../db/v2-core";
 import { createV2StorageCapacityRepository } from "../../db/v2-storage-capacity";
@@ -9,6 +10,8 @@ import {
   publicProfileQuerySchema,
 } from "../../modules/lawyers/directory";
 import { readPublicAsset } from "../../modules/lawyers/public-read";
+import { createSelfProfileService } from "../../modules/lawyers/self-profile";
+import { LawyerError } from "../../modules/lawyers/service";
 import { type ApiEnvironment, errorBody } from "../errors";
 
 export function createDirectoryApi(options: { clock?: () => string } = {}) {
@@ -21,6 +24,8 @@ export function createDirectoryApi(options: { clock?: () => string } = {}) {
     return;
   });
   app.onError((error, c) => {
+    if (error instanceof LawyerError && error.code === "NOT_FOUND")
+      return c.json(errorBody(c, "NOT_FOUND", "공개된 프로필을 찾을 수 없어요."), 404);
     if (
       error instanceof z.ZodError ||
       (error instanceof V2RepositoryError && error.code === "REPOSITORY_INPUT_INVALID")
@@ -44,6 +49,20 @@ export function createDirectoryApi(options: { clock?: () => string } = {}) {
   const service = async (env: Env) =>
     createDirectoryService(createV2Core(env.DB, await createCaseDataCipher(env)), options.clock);
   app.get("/", async (c) => c.json(await (await service(c.env)).list(c.req.query())));
+  app.get("/self-service", async (c) => {
+    const raw = c.req.query();
+    const query = v2DirectoryQuerySchema.parse({
+      ...raw,
+      ...(raw.limit === undefined ? {} : { limit: Number(raw.limit) }),
+    });
+    const core = createV2Core(c.env.DB, await createCaseDataCipher(c.env));
+    return c.json(await createSelfProfileService(core, options.clock).list(query));
+  });
+  app.get("/self-service/:id", async (c) => {
+    publicProfileQuerySchema.parse(c.req.query());
+    const core = createV2Core(c.env.DB, await createCaseDataCipher(c.env));
+    return c.json(await createSelfProfileService(core, options.clock).get(c.req.param("id")));
+  });
   const publicAsset = async (c: Context<ApiEnvironment>) => {
     publicProfileQuerySchema.parse(c.req.query());
     const core = createV2Core(c.env.DB, await createCaseDataCipher(c.env));

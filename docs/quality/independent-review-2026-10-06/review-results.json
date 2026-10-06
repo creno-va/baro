@@ -1,0 +1,116 @@
+{
+  "browserExecutionCandidate": "dc22c26",
+  "sourceUnchangedForReviewedAreasAt": "539a3cc",
+  "pass": 8,
+  "failedAssertions": 4,
+  "productDefects": 3,
+  "observations": [
+    {
+      "title": "customer complete shared flow, reload, chat and upload retry, report files, downloads, deletion",
+      "status": "passed",
+      "durationMs": 13194,
+      "errors": []
+    },
+    {
+      "title": "lawyer save reload publish search detail hide uses same profile id",
+      "status": "passed",
+      "durationMs": 3207,
+      "errors": []
+    },
+    {
+      "title": "two report editors reject outdated revision and recover without overwriting",
+      "status": "passed",
+      "durationMs": 3097,
+      "errors": []
+    },
+    {
+      "title": "switch account in peer tab hides former owner's report before further actions",
+      "status": "failed",
+      "durationMs": 9297,
+      "errors": [
+        "Error: old owner report must clear when another account becomes active\n\n\u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).not.\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator:  getByLabel('리포트 내용 편집')\nExpected: not visible\nReceived: visible\nTimeout:  6000ms"
+      ]
+    },
+    {
+      "title": "switch account in peer tab hides former owner's intake summary",
+      "status": "failed",
+      "durationMs": 8738,
+      "errors": [
+        "Error: previous owner summary must clear on account switch\n\n\u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).not.\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator:  getByRole('textbox')\nExpected: not visible\nReceived: visible\nTimeout:  6000ms"
+      ]
+    },
+    {
+      "title": "owner API boundaries deny previous account's case workspace files and reports",
+      "status": "failed",
+      "durationMs": 3619,
+      "errors": [
+        "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // deep equality\u001b[22m\n\n\u001b[32m- Expected  - 1\u001b[39m\n\u001b[31m+ Received  + 1\u001b[39m\n\n\u001b[2m  Object {\u001b[22m\n\u001b[2m    \"cases\": \"NOT_FOUND\",\u001b[22m\n\u001b[2m    \"files\": \"NOT_FOUND\",\u001b[22m\n\u001b[2m    \"reports\": \"NOT_FOUND\",\u001b[22m\n\u001b[32m-   \"workspace\": \"NOT_FOUND\",\u001b[39m\n\u001b[31m+   \"workspace\": \"UNAVAILABLE\",\u001b[39m\n\u001b[2m  }\u001b[22m\n\n  210 |     return results;\n  211 |   }, { modulePath, id: path.split(\"/\").pop() });\n> 212 |   expect(results).toEqual({ cases: \"NOT_FOUND\", workspace: \"NOT_FOUND\", files: \"NOT_FOUND\", reports: \"NOT_FOUND\" });\n      |                   ^\n  213 | });\n  214 |\n  215 | test(\"report stale follows shared case revision after workspace mutation\", async ({ page }) => {\n    at /Users/hwang-eunchan/.codex/worktrees/2ae2/baro/tests/independent-review/integration.e2e.ts:212:19"
+      ]
+    },
+    {
+      "title": "report stale follows shared case revision after workspace mutation",
+      "status": "passed",
+      "durationMs": 5455,
+      "errors": []
+    },
+    {
+      "title": "workspace clears old owner content after account switch and focus refresh",
+      "status": "failed",
+      "durationMs": 11342,
+      "errors": [
+        "Error: previous owner workspace must clear on denied focus refresh\n\n\u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).not.\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator:  getByLabel('추가 사실 또는 질문')\nExpected: not visible\nReceived: visible\nTimeout:  6000ms"
+      ]
+    },
+    {
+      "title": "report download refuses deleted file from stale tab; reload removes stale selection",
+      "status": "passed",
+      "durationMs": 5730,
+      "errors": []
+    },
+    {
+      "title": "account deletion clears own data and session while preserving peer lawyer profile",
+      "status": "passed",
+      "durationMs": 7700,
+      "errors": [],
+      "rerun": "focused test after correcting test locator and success-page expectation"
+    },
+    {
+      "title": "report save lost acknowledgement retries same version and preserves edits",
+      "status": "passed",
+      "durationMs": 3614,
+      "errors": []
+    },
+    {
+      "title": "lawyer editors reject stale profile revision and recover by reload",
+      "status": "passed",
+      "durationMs": 1499,
+      "errors": []
+    }
+  ],
+  "realBoundaryObservations": [
+    {
+      "operation": "account deletion role metadata cleanup",
+      "status": "failed",
+      "expected": "owner preference removed; peer kept",
+      "actual": "deleted user preference lawyer remains"
+    },
+    {
+      "operation": "report/PDF/ZIP/timeline create/file retry real routes",
+      "status": "confirmed unavailable",
+      "actualHttpStatus": 404,
+      "testedRoutes": 7
+    },
+    {
+      "operation": "real saveSummary lost ACK retry",
+      "status": "failed",
+      "actualCode": "CONFLICT",
+      "mutationWrites": 1
+    },
+    {
+      "operation": "real confirmSummary lost ACK retry",
+      "status": "failed",
+      "actualCode": "CONFLICT",
+      "mutationWrites": 1
+    }
+  ]
+}

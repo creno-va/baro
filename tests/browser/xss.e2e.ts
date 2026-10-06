@@ -4,6 +4,9 @@ import { guidance } from "../fixtures/contracts";
 test("untrusted HTML and script URLs fail strict detail schema without execution or result display", async ({
   page,
 }) => {
+  await page.route("**/api/v2/cases/*/workspace", (route) =>
+    route.fulfill({ status: 404, json: { error: { code: "NOT_FOUND" } } }),
+  );
   const id = "11111111-1111-4111-8111-111111111111";
   await page.addInitScript(() => {
     (window as unknown as { injected: number }).injected = 0;
@@ -36,7 +39,7 @@ test("untrusted HTML and script URLs fail strict detail schema without execution
       }),
     );
     await page.goto(`/cases/${id}`);
-    await expect(page.getByRole("alert")).toContainText("상태를 확인하지 못했어요");
+    await expect(page.getByRole("alert")).toContainText("사건을 찾을 수 없어요");
     await expect(page.getByRole("heading", { name: "상황 정리" })).toHaveCount(0);
     expect(await page.evaluate(() => (window as unknown as { injected: number }).injected)).toBe(0);
     await page.unroute(`**/api/cases/${id}`);

@@ -1,0 +1,46 @@
+{
+  "baseRefName": "codex/102-api-mock-shell",
+  "body": "변호사는 `/lawyer`에서 사진·소개·분야·사무실·연락처·포트폴리오를 작성·저장·수정·미리보기하고, 공개 동의 후 직접 공개/비공개를 전환합니다. 기존 `/lawyers` 검색·필터·상세·연락·길찾기 UI는 같은 profile id를 읽습니다. 역할 선택이나 등록으로 자격 확인 배지를 부여하지 않습니다.\n\nUI는 `api.lawyers`를 호출합니다. mock은 A의 공통 request/ApiError/session과 `lawyers` namespace를 사용하고 새로고침 뒤에도 저장 상태를 유지합니다. real adapter는 기존 디렉터리 API 및 추가 본인 프로필 저장/공개 API에 연결합니다. 기존 암호화 snapshot/consent, SQL 역할·소유자·동의·origin·production gate를 재사용하며 이전 moderation 기록을 보존합니다. 새 schema/migration은 없습니다. 페이지 조회를 순회하므로 검색 결과가 첫 페이지에 없거나 공급자가 200명을 넘어도 누락하지 않습니다.\n\n검증:\n- 공통 로그인/동의부터 사진·portfolio 저장/새로고침·공개·검색·상세·비공개까지 mock browser 1개 통과: 390px axe 0, 실제 /api 요청 0.\n- 기존 directory + owner editor 제품 browser 4개 통과: 320px axe 0, 사진·preview·연락/지도·충돌·취소·키보드·재시도.\n- mock 및 real Hono/SQLite encrypted API tests 4개/40 assertions, 기존 lawyers/directory API/repository regression 88개/2074 assertions 통과.\n- lint/build/cf:dry-run 통과. 초기 main 기반 bun ci/check 통과 후 전체 corpus 반복 없음.\n\n공통 통합 대기: A `session.signIn`의 TS7030 반환 누락이 현재 PR CI를 막습니다. A index의 `api.lawyers` 등록도 요청했습니다. 실행 포트 4344이며 mock 시연 시작은 `/login`입니다. 실제 OAuth·역할 저장·통합 preview·공개 정책 증거는 A/#62/#71에서 별도로 검증하며 로컬/합성 결과를 외부 성공으로 표현하지 않습니다.\n\nRefs #106, #62, #102, #71.\r\n",
+  "headRefName": "codex/106-lawyer-ui-api-mock",
+  "headRefOid": "e82888b79d61f9bdc867fb85bcdf49b4959ba1ff",
+  "mergeCommit": {
+    "oid": "ca9b9c8eaa9f5e53a0cc57037023b57f8f22c17a"
+  },
+  "mergeStateStatus": "UNKNOWN",
+  "mergedAt": "2026-10-06T12:23:20Z",
+  "number": 113,
+  "state": "MERGED",
+  "statusCheckRollup": [
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-10-06T12:12:17Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/creno-va/baro/actions/runs/37461579127/job/112262194281",
+      "name": "Isolated native media fixtures",
+      "startedAt": "2026-10-06T12:12:12Z",
+      "status": "COMPLETED",
+      "workflowName": "CI"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-10-06T12:12:55Z",
+      "conclusion": "FAILURE",
+      "detailsUrl": "https://github.com/creno-va/baro/actions/runs/37461579127/job/112262193750",
+      "name": "Source and browser checks",
+      "startedAt": "2026-10-06T12:12:13Z",
+      "status": "COMPLETED",
+      "workflowName": "CI"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-10-06T12:12:59Z",
+      "conclusion": "FAILURE",
+      "detailsUrl": "https://github.com/creno-va/baro/actions/runs/37461579127/job/112262493677",
+      "name": "Quality gate",
+      "startedAt": "2026-10-06T12:12:57Z",
+      "status": "COMPLETED",
+      "workflowName": "CI"
+    }
+  ],
+  "url": "https://github.com/creno-va/baro/pull/113"
+}

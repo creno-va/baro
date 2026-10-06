@@ -1,0 +1,192 @@
+.report-review {
+  max-width: 1120px;
+  margin: 0 auto;
+  color: var(--foreground, #17233b);
+  overflow-wrap: anywhere;
+}
+.report-heading,
+.report-card-heading,
+.report-actions {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+.report-heading {
+  margin: 1.5rem 0;
+}
+.report-heading h1 {
+  font-size: 2rem;
+  margin: 0.3rem 0;
+}
+.report-eyebrow {
+  color: #2159c8;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+.report-card {
+  background: var(--card, #fff);
+  border: 1px solid var(--border, #dbe4f0);
+  border-radius: 16px;
+  padding: 1.5rem;
+  margin: 1.25rem 0;
+}
+.report-card h2 {
+  font-size: 1.2rem;
+  margin: 0 0 0.75rem;
+}
+.report-review button,
+.report-modal button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 9px;
+  background: #fff;
+  color: #17233b;
+  min-height: 44px;
+  padding: 0.6rem 0.9rem;
+  font: inherit;
+  cursor: pointer;
+}
+.report-review button.primary {
+  background: #2159c8;
+  border-color: #2159c8;
+  color: white;
+}
+.report-review button:disabled,
+.report-modal button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.report-review textarea {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  border: 1px solid #bac9de;
+  border-radius: 9px;
+  padding: 1rem;
+  font: inherit;
+  line-height: 1.8;
+  margin: 0.5rem 0 1rem;
+}
+.report-review label {
+  font-weight: 600;
+}
+.report-meta {
+  color: #52627a;
+  font-size: 0.875rem;
+}
+.report-callout {
+  display: flex;
+  gap: 0.75rem;
+  background: #edf4ff;
+  border-radius: 10px;
+  padding: 1rem;
+  line-height: 1.65;
+  font-size: 0.9rem;
+}
+.report-callout svg {
+  flex-shrink: 0;
+}
+.report-callout p {
+  margin: 0;
+}
+.report-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+}
+.report-columns .report-card {
+  margin: 0;
+}
+.report-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  min-height: 44px;
+  padding: 0.55rem 0;
+  line-height: 1.5;
+}
+.report-check input {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  margin-top: 0.15rem;
+}
+.report-material {
+  border-bottom: 1px solid #dbe4f0;
+  padding: 1rem 0;
+  overflow-wrap: anywhere;
+}
+.report-preview {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: inherit;
+  line-height: 1.8;
+}
+.report-export {
+  display: flex;
+  gap: 1.5rem;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+.report-error {
+  background: #fff1f2;
+  color: #9f1239;
+  border-radius: 9px;
+  padding: 1rem;
+}
+.report-success {
+  background: #ecfdf5;
+  color: #065f46;
+  border-radius: 9px;
+  padding: 1rem;
+}
+.report-modal {
+  max-width: min(520px, calc(100vw - 2rem));
+  overflow-wrap: anywhere;
+  border: 1px solid #cbd5e1;
+  border-radius: 16px;
+  padding: 1.5rem;
+  color: #17233b;
+  box-shadow: 0 25px 80px #0003;
+}
+.report-modal::backdrop {
+  background: #12244580;
+}
+.report-modal input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.75rem;
+  border: 1px solid #bac9de;
+  border-radius: 8px;
+  margin: 0.5rem 0 1rem;
+}
+.report-review :focus-visible,
+.report-modal :focus-visible {
+  outline: 3px solid #2159c8;
+  outline-offset: 3px;
+}
+.report-review footer {
+  padding: 1.5rem 0;
+  font-size: 0.9rem;
+}
+@media (max-width: 700px) {
+  .report-columns {
+    grid-template-columns: 1fr;
+  }
+  .report-card {
+    padding: 1rem;
+  }
+  .report-heading h1 {
+    font-size: 1.6rem;
+  }
+  .report-export .report-actions {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

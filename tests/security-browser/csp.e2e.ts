@@ -11,6 +11,10 @@ test("built public directory and detail hydrate under hash CSP with no case data
   });
   await page.route("**/api/v2/lawyers**", (route) => {
     const path = new URL(route.request().url()).pathname;
+    if (path === "/api/v2/lawyers/self-service")
+      return route.fulfill({ json: { items: [], nextCursor: null } });
+    if (path.startsWith("/api/v2/lawyers/self-service/"))
+      return route.fulfill({ status: 404, json: {} });
     if (path.includes("/assets/")) return route.fulfill({ status: 404, body: "" });
     return route.fulfill({
       json:
@@ -28,6 +32,7 @@ test("built public directory and detail hydrate under hash CSP with no case data
   });
   const response = await page.goto("/lawyers");
   expect(response?.headers()["content-security-policy"]).toContain("sha256-");
+  expect(response?.headers()["cache-control"]).toContain("no-transform");
   await expect(page.getByRole("link", { name: "프로필과 연락처 보기" })).toBeVisible();
   await page.getByRole("link", { name: "프로필과 연락처 보기" }).press("Enter");
   await expect(
@@ -106,11 +111,13 @@ test("built Worker mobile menu, brand, local font and error state work without C
       }),
     );
   });
-  await page.route("**/api/cases", (route) => route.fulfill({ status: 503, json: {} }));
+  await page.route("**/api/cases**", (route) => route.fulfill({ status: 503, json: {} }));
   await page.setViewportSize({ width: 320, height: 760 });
   await page.goto("/cases");
-  await expect(page.getByRole("alert")).toContainText("목록을 불러오지 못했어요");
-  await page.locator("astro-island[ssr]").waitFor({ state: "detached" });
+  await expect(page.getByRole("alert")).toContainText(
+    "요청을 완료하지 못했어요. 다시 시도해 주세요.",
+  );
+  await expect(page.locator("astro-island[ssr]")).toHaveCount(0);
   await page.evaluate(() => {
     document.documentElement.style.scrollbarGutter = "stable";
     document.body.style.minHeight = "calc(100vh + 1px)";

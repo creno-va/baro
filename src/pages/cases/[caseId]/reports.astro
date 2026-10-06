@@ -1,0 +1,11 @@
+---
+// biome-ignore lint/correctness/noUnusedImports: Astro template reads component.
+import { ReportReview } from "../../../components/reports/ReportReview";
+// biome-ignore lint/correctness/noUnusedImports: Astro template reads layout.
+import CaseLayout from "../../../layouts/CaseLayout.astro";
+import "../../../styles/reports.css";
+
+// biome-ignore lint/correctness/noUnusedVariables: Astro template reads route.
+const caseId = Astro.params.caseId ?? "";
+---
+<CaseLayout title="리포트 검토"><ReportReview caseId={caseId} client:load /></CaseLayout>

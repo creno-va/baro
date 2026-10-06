@@ -1,0 +1,44 @@
+{
+  "baseRefName": "main",
+  "body": "사건 목록의 빈 상태에서 새 사건을 만들고, 답변·모름·건너뛰기를 저장해 요약 편집·확인 후 같은 사건 workspace 경로로 이동합니다. 기존 v1 기록은 원래 상세 경로로 유지하며 모든 화면은 api.cases를 소비합니다. mock은 공통 cases/caseOwners 저장소와 intake 상태를 보존하므로 새로고침·재개·뒤로 수정이 이어집니다. 요약에서 이전 질문을 수정하면 기존 요약을 무효화하고 다시 준비합니다.\n\nPR100을 소비하는 real adapter도 구현했습니다. 질문 저장/비동기 advance와 summary 편집/확인의 intake·workspace·summary revision, idempotency key, 보안 확인, 작업 상태/재시도를 변환합니다. B 소유 파일과 담당 테스트만 직접 수정했고 공통 기반은 A의 92da530/fad82f0/e31a051/cf5f1b2/fac3aa5에서 가져왔습니다. 최신 main f87f546을 병합했습니다.\n\n검증: 변경 기능/공통 영향 Bun 테스트 117개/970 assertions, 4341 제품 경로 Playwright 6개(모바일·키보드·200%·저장/reload/resume·충돌·저장 오류/재시도·동일 입력 새 사건·반복 pending polling), TypeScript/Astro, lint, docs 검사, 제품 build, Worker dry-run 통과. 합성 입력과 API mock/HTTP 대역으로 검증했으며 실제 OAuth/AI/R2 성공을 뜻하지 않습니다. 전체 corpus/대용량 회귀는 반복하지 않았습니다. 기존 cases.e2e.ts의 v1 생성 UI 기대 및 shared signed-session harness의 v2 연결은 A에게 갱신 요청했습니다.\n\n시작: PUBLIC_API_MODE=mock BARO_UI_TEST_FIXTURE=true로 포트 4341, /login → 고객 → 동의 → /cases. 담당 browser: bunx playwright test --config tests/browser/intake103.config.ts.\n\n남은 실제 연결: PR100은 검증 당시 CI SUCCESS/OPEN이므로 검토·main 통합 및 runtime readiness는 A/C 담당입니다. PR100 answers API는 마지막 질문 batch만 수정하므로 이전 batch까지의 실제 back-edit 확대는 C에 요청합니다. 실제 OAuth·Turnstile·모델/예산 readiness와 외부 성공 증거는 #65/#71에 남습니다. workspace 내용 및 report/삭제까지의 합성 통합 시연은 A가 C/D PR과 합쳐 확인합니다.\n\nRefs #103\nRefs #65\nRefs #64\n",
+  "headRefName": "codex/103-intake-ui-api-mock",
+  "headRefOid": "7cc4e28e10b3578ec9565e0ec3284d9e72c059d1",
+  "mergeCommit": null,
+  "mergeStateStatus": "BEHIND",
+  "mergedAt": null,
+  "number": 115,
+  "state": "OPEN",
+  "statusCheckRollup": [
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-10-06T12:33:01Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/creno-va/baro/actions/runs/37463983182/job/112270412253",
+      "name": "Isolated native media fixtures",
+      "startedAt": "2026-10-06T12:32:55Z",
+      "status": "COMPLETED",
+      "workflowName": "CI"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-10-06T12:38:18Z",
+      "conclusion": "FAILURE",
+      "detailsUrl": "https://github.com/creno-va/baro/actions/runs/37463983182/job/112270411798",
+      "name": "Source and browser checks",
+      "startedAt": "2026-10-06T12:32:54Z",
+      "status": "COMPLETED",
+      "workflowName": "CI"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-10-06T12:38:25Z",
+      "conclusion": "FAILURE",
+      "detailsUrl": "https://github.com/creno-va/baro/actions/runs/37463983182/job/112272678485",
+      "name": "Quality gate",
+      "startedAt": "2026-10-06T12:38:21Z",
+      "status": "COMPLETED",
+      "workflowName": "CI"
+    }
+  ],
+  "url": "https://github.com/creno-va/baro/pull/115"
+}
