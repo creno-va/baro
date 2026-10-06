@@ -1,0 +1,1821 @@
+{
+  "schemaVersion": 1,
+  "syntheticOnly": true,
+  "serial": true,
+  "baselineRef": "b6cfdfe3676506bf2b4880af0911138a9b3f107e",
+  "repetitions": 3,
+  "environment": {
+    "platform": "macOS-26.5-arm64-arm-64bit",
+    "python": "3.12.14",
+    "pillow": "12.3.0",
+    "logicalCpuCount": 10,
+    "tools": {
+      "ffmpeg": "ffmpeg version 9.0.1-tessus  https://evermeet.cx/ffmpeg/  Copyright (c) 2000-2026 the FFmpeg developers",
+      "ffprobe": "ffprobe version 9.0.1-tessus  https://evermeet.cx/ffmpeg/  Copyright (c) 2007-2026 the FFmpeg developers",
+      "pdfinfo": "pdfinfo version 26.05.0",
+      "pdftotext": "pdftotext version 26.05.0",
+      "pdftoppm": "pdftoppm version 26.05.0",
+      "tesseractAvailable": false,
+      "dockerAvailable": false
+    }
+  },
+  "bounds": {
+    "maxCaseInputBytes": 4000000,
+    "maxGeneratedPixels": 6000000,
+    "maxMediaSeconds": 31,
+    "maxTextPages": 4,
+    "maxConcurrentJobs": 1,
+    "maxRepetitions": 3
+  },
+  "memoryMethod": "OS ru_maxrss: processor and largest native child separately; their sum is a conservative upper bound, not sampled process-tree peak",
+  "scope": "fresh Python interpreter per unit; inspect+process, output writes/hash/manifest; excludes source staging, Node ingress, R2, model/Whisper/remote Containers",
+  "results": [
+    {
+      "case": "pdf-text",
+      "inputBytes": 25842,
+      "units": 2,
+      "action": "process",
+      "outputBytes": 311,
+      "artifactCount": 2,
+      "coverage": {
+        "pageCount": 2,
+        "pagesPresent": 2,
+        "status": "complete"
+      },
+      "fullManifestAndBytesEqual": true,
+      "before": {
+        "wallSeconds": {
+          "median": 0.138369999000588,
+          "min": 0.13736750099997153,
+          "max": 0.14585337499966045
+        },
+        "processingSeconds": {
+          "median": 0.05068600000004153,
+          "min": 0.04998258399973565,
+          "max": 0.0540730830002758
+        },
+        "processorPeakRssBytes": {
+          "median": 33587200,
+          "min": 33554432,
+          "max": 33603584
+        },
+        "largestChildPeakRssBytes": {
+          "median": 12648448,
+          "min": 12582912,
+          "max": 12648448
+        },
+        "peakRssUpperBoundBytes": {
+          "median": 46202880,
+          "min": 46186496,
+          "max": 46235648
+        },
+        "nativeSubprocesses": {
+          "pdfinfo": 2,
+          "pdftotext": 2
+        },
+        "runs": [
+          {
+            "wallSeconds": 0.14585337499966045,
+            "processingSeconds": 0.0540730830002758,
+            "processorPeakRssBytes": 33603584,
+            "largestChildPeakRssBytes": 12582912,
+            "peakRssUpperBoundBytes": 46186496,
+            "nativeSubprocesses": {
+              "pdfinfo": 2,
+              "pdftotext": 2
+            }
+          },
+          {
+            "wallSeconds": 0.138369999000588,
+            "processingSeconds": 0.05068600000004153,
+            "processorPeakRssBytes": 33587200,
+            "largestChildPeakRssBytes": 12648448,
+            "peakRssUpperBoundBytes": 46235648,
+            "nativeSubprocesses": {
+              "pdfinfo": 2,
+              "pdftotext": 2
+            }
+          },
+          {
+            "wallSeconds": 0.13736750099997153,
+            "processingSeconds": 0.04998258399973565,
+            "processorPeakRssBytes": 33554432,
+            "largestChildPeakRssBytes": 12648448,
+            "peakRssUpperBoundBytes": 46202880,
+            "nativeSubprocesses": {
+              "pdfinfo": 2,
+              "pdftotext": 2
+            }
+          }
+        ]
+      },
+      "after": {
+        "wallSeconds": {
+          "median": 0.1422413340001185,
+          "min": 0.14013604199953988,
+          "max": 0.14248858300015854
+        },
+        "processingSeconds": {
+          "median": 0.0506217080001079,
+          "min": 0.04898879200027295,
+          "max": 0.05144154199979312
+        },
+        "processorPeakRssBytes": {
+          "median": 34373632,
+          "min": 34324480,
+          "max": 34373632
+        },
+        "largestChildPeakRssBytes": {
+          "median": 12582912,
+          "min": 12582912,
+          "max": 12599296
+        },
+        "peakRssUpperBoundBytes": {
+          "median": 46956544,
+          "min": 46923776,
+          "max": 46956544
+        },
+        "nativeSubprocesses": {
+          "pdfinfo": 2,
+          "pdftotext": 2
+        },
+        "runs": [
+          {
+            "wallSeconds": 0.14248858300015854,
+            "processingSeconds": 0.05144154199979312,
+            "processorPeakRssBytes": 34324480,
+            "largestChildPeakRssBytes": 12599296,
+            "peakRssUpperBoundBytes": 46923776,
+            "nativeSubprocesses": {
+              "pdfinfo": 2,
+              "pdftotext": 2
+            }
+          },
+          {
+            "wallSeconds": 0.1422413340001185,
+            "processingSeconds": 0.0506217080001079,
+            "processorPeakRssBytes": 34373632,
+            "largestChildPeakRssBytes": 12582912,
+            "peakRssUpperBoundBytes": 46956544,
+            "nativeSubprocesses": {
+              "pdfinfo": 2,
+              "pdftotext": 2
+            }
+          },
+          {
+            "wallSeconds": 0.14013604199953988,
+            "processingSeconds": 0.04898879200027295,
+            "processorPeakRssBytes": 34373632,
+            "largestChildPeakRssBytes": 12582912,
+            "peakRssUpperBoundBytes": 46956544,
+            "nativeSubprocesses": {
+              "pdfinfo": 2,
+              "pdftotext": 2
+            }
+          }
+        ]
+      }
+    },
+    {
+      "case": "text-small",
+      "inputBytes": 317,
+      "units": 1,
+      "action": "process",
+      "outputBytes": 317,
+      "artifactCount": 1,
+      "coverage": {
+        "pageCount": 1,
+        "pagesPresent": 1,
+        "status": "complete"
+      },
+      "fullManifestAndBytesEqual": true,
+      "before": {
+        "wallSeconds": {
+          "median": 0.05631545799997184,
+          "min": 0.05525137500035271,
+          "max": 0.0705564999998387
+        },
+        "processingSeconds": {
+          "median": 0.011997499999779393,
+          "min": 0.010812999999870954,
+          "max": 0.02401845799977309
+        },
+        "processorPeakRssBytes": {
+          "median": 37109760,
+          "min": 37109760,
+          "max": 37109760
+        },
+        "largestChildPeakRssBytes": {
+          "median": 0,
+          "min": 0,
+          "max": 0
+        },
+        "peakRssUpperBoundBytes": {
+          "median": 37109760,
+          "min": 37109760,
+          "max": 37109760
+        },
+        "nativeSubprocesses": {},
+        "runs": [
+          {
+            "wallSeconds": 0.0705564999998387,
+            "processingSeconds": 0.02401845799977309,
+            "processorPeakRssBytes": 37109760,
+            "largestChildPeakRssBytes": 0,
+            "peakRssUpperBoundBytes": 37109760,
+            "nativeSubprocesses": {}
+          },
+          {
+            "wallSeconds": 0.05525137500035271,
+            "processingSeconds": 0.010812999999870954,
+            "processorPeakRssBytes": 37109760,
+            "largestChildPeakRssBytes": 0,
+            "peakRssUpperBoundBytes": 37109760,
+            "nativeSubprocesses": {}
+          },
+          {
+            "wallSeconds": 0.05631545799997184,
+            "processingSeconds": 0.011997499999779393,
+            "processorPeakRssBytes": 37109760,
+            "largestChildPeakRssBytes": 0,
+            "peakRssUpperBoundBytes": 37109760,
+            "nativeSubprocesses": {}
+          }
+        ]
+      },
+      "after": {
+        "wallSeconds": {
+          "median": 0.05964487500023097,
+          "min": 0.05732075000014447,
+          "max": 0.06112308399997346
+        },
+        "processingSeconds": {
+          "median": 0.011785707999933948,
+          "min": 0.011644707999948878,
+          "max": 0.012228583000251092
+        },
+        "processorPeakRssBytes": {
+          "median": 37289984,
+          "min": 37240832,
+          "max": 37371904
+        },
+        "largestChildPeakRssBytes": {
+          "median": 0,
+          "min": 0,
+          "max": 0
+        },
+        "peakRssUpperBoundBytes": {
+          "median": 37289984,
+          "min": 37240832,
+          "max": 37371904
+        },
+        "nativeSubprocesses": {},
+        "runs": [
+          {
+            "wallSeconds": 0.05964487500023097,
+            "processingSeconds": 0.011785707999933948,
+            "processorPeakRssBytes": 37240832,
+            "largestChildPeakRssBytes": 0,
+            "peakRssUpperBoundBytes": 37240832,
+            "nativeSubprocesses": {}
+          },
+          {
+            "wallSeconds": 0.06112308399997346,
+            "processingSeconds": 0.012228583000251092,
+            "processorPeakRssBytes": 37371904,
+            "largestChildPeakRssBytes": 0,
+            "peakRssUpperBoundBytes": 37371904,
+            "nativeSubprocesses": {}
+          },
+          {
+            "wallSeconds": 0.05732075000014447,
+            "processingSeconds": 0.011644707999948878,
+            "processorPeakRssBytes": 37289984,
+            "largestChildPeakRssBytes": 0,
+            "peakRssUpperBoundBytes": 37289984,
+            "nativeSubprocesses": {}
+          }
+        ]
+      }
+    },
+    {
+      "case": "image-png",
+      "inputBytes": 21700,
+      "units": 1,
+      "action": "process",
+      "outputBytes": 35914,
+      "artifactCount": 1,
+      "coverage": {
+        "status": "partial",
+        "observation": "missing"
+      },
+      "fullManifestAndBytesEqual": true,
+      "before": {
+        "wallSeconds": {
+          "median": 0.04868954199992004,
+          "min": 0.048073458000089886,
+          "max": 0.04923079200034408
+        },
+        "processingSeconds": {
+          "median": 0.005327708000095299,
+          "min": 0.005184042000109912,
+          "max": 0.006306042000232992
+        },
+        "processorPeakRssBytes": {
+          "median": 40501248,
+          "min": 40271872,
+          "max": 40517632
+        },
+        "largestChildPeakRssBytes": {
+          "median": 0,
+          "min": 0,
+          "max": 0
+        },
+        "peakRssUpperBoundBytes": {
+          "median": 40501248,
+          "min": 40271872,
+          "max": 40517632
+        },
+        "nativeSubprocesses": {},
+        "runs": [
+          {
+            "wallSeconds": 0.04923079200034408,
+            "processingSeconds": 0.006306042000232992,
+            "processorPeakRssBytes": 40271872,
+            "largestChildPeakRssBytes": 0,
+            "peakRssUpperBoundBytes": 40271872,
+            "nativeSubprocesses": {}
+          },
+          {
+            "wallSeconds": 0.04868954199992004,
+            "processingSeconds": 0.005327708000095299,
+            "processorPeakRssBytes": 40517632,
+            "largestChildPeakRssBytes": 0,
+            "peakRssUpperBoundBytes": 40517632,
+            "nativeSubprocesses": {}
+          },
+          {
+            "wallSeconds": 0.048073458000089886,
+            "processingSeconds": 0.005184042000109912,
+            "processorPeakRssBytes": 40501248,
+            "largestChildPeakRssBytes": 0,
+            "peakRssUpperBoundBytes": 40501248,
+            "nativeSubprocesses": {}
+          }
+        ]
+      },
+      "after": {
+        "wallSeconds": {
+          "median": 0.05052587499994843,
+          "min": 0.05016954099983195,
+          "max": 0.050835832999837294
+        },
+        "processingSeconds": {
+          "median": 0.005220791999818175,
+          "min": 0.005051749999893218,
+          "max": 0.005222833000061655
+        },
+        "processorPeakRssBytes": {
+          "median": 37896192,
+          "min": 37814272,
+          "max": 37928960
+        },
+        "largestChildPeakRssBytes": {
+          "median": 0,
+          "min": 0,
+          "max": 0
+        },
+        "peakRssUpperBoundBytes": {
+          "median": 37896192,
+          "min": 37814272,
+          "max": 37928960
+        },
+        "nativeSubprocesses": {},
+        "runs": [
+          {
+            "wallSeconds": 0.050835832999837294,
+            "processingSeconds": 0.005222833000061655,
+            "processorPeakRssBytes": 37814272,
+            "largestChildPeakRssBytes": 0,
+            "peakRssUpperBoundBytes": 37814272,
+            "nativeSubprocesses": {}
+          },
+          {
+            "wallSeconds": 0.05016954099983195,
+            "processingSeconds": 0.005051749999893218,
+            "processorPeakRssBytes": 37896192,
+            "largestChildPeakRssBytes": 0,
+            "peakRssUpperBoundBytes": 37896192,
+            "nativeSubprocesses": {}
+          },
+          {
+            "wallSeconds": 0.05052587499994843,
+            "processingSeconds": 0.005220791999818175,
+            "processorPeakRssBytes": 37928960,
+            "largestChildPeakRssBytes": 0,
+            "peakRssUpperBoundBytes": 37928960,
+            "nativeSubprocesses": {}
+          }
+        ]
+      }
+    },
+    {
+      "case": "image-jpeg",
+      "inputBytes": 45680,
+      "units": 1,
+      "action": "process",
+      "outputBytes": 35626,
+      "artifactCount": 1,
+      "coverage": {
+        "status": "partial",
+        "observation": "missing"
+      },
+      "fullManifestAndBytesEqual": true,
+      "before": {
+        "wallSeconds": {
+          "median": 0.0480096669998602,
+          "min": 0.04685870799994518,
+          "max": 0.04919999999992797
+        },
+        "processingSeconds": {
+          "median": 0.004956624999977066,
+          "min": 0.0046637910004392324,
+          "max": 0.005108667000058631
+        },
+        "processorPeakRssBytes": {
+          "median": 40566784,
+          "min": 40386560,
+          "max": 40779776
+        },
+        "largestChildPeakRssBytes": {
+          "median": 0,
+          "min": 0,
+          "max": 0
+        },
+        "peakRssUpperBoundBytes": {
+          "median": 40566784,
+          "min": 40386560,
+          "max": 40779776
+        },
+        "nativeSubprocesses": {},
+        "runs": [
+          {
+            "wallSeconds": 0.0480096669998602,
+            "processingSeconds": 0.005108667000058631,
+            "processorPeakRssBytes": 40779776,
+            "largestChildPeakRssBytes": 0,
+            "peakRssUpperBoundBytes": 40779776,
+            "nativeSubprocesses": {}
+          },
+          {
+            "wallSeconds": 0.04685870799994518,
+            "processingSeconds": 0.0046637910004392324,
+            "processorPeakRssBytes": 40386560,
+            "largestChildPeakRssBytes": 0,
+            "peakRssUpperBoundBytes": 40386560,
+            "nativeSubprocesses": {}
+          },
+          {
+            "wallSeconds": 0.04919999999992797,
+            "processingSeconds": 0.004956624999977066,
+            "processorPeakRssBytes": 40566784,
+            "largestChildPeakRssBytes": 0,
+            "peakRssUpperBoundBytes": 40566784,
+            "nativeSubprocesses": {}
+          }
+        ]
+      },
+      "after": {
+        "wallSeconds": {
+          "median": 0.0492103749998023,
+          "min": 0.048738500000126805,
+          "max": 0.05014958299989303
+        },
+        "processingSeconds": {
+          "median": 0.0045455419999598234,
+          "min": 0.004508125000029395,
+          "max": 0.00472983400004523
+        },
+        "processorPeakRssBytes": {
+          "median": 37978112,
+          "min": 37961728,
+          "max": 37978112
+        },
+        "largestChildPeakRssBytes": {
+          "median": 0,
+          "min": 0,
+          "max": 0
+        },
+        "peakRssUpperBoundBytes": {
+          "median": 37978112,
+          "min": 37961728,
+          "max": 37978112
+        },
+        "nativeSubprocesses": {},
+        "runs": [
+          {
+            "wallSeconds": 0.05014958299989303,
+            "processingSeconds": 0.004508125000029395,
+            "processorPeakRssBytes": 37961728,
+            "largestChildPeakRssBytes": 0,
+            "peakRssUpperBoundBytes": 37961728,
+            "nativeSubprocesses": {}
+          },
+          {
+            "wallSeconds": 0.048738500000126805,
+            "processingSeconds": 0.0045455419999598234,
+            "processorPeakRssBytes": 37978112,
+            "largestChildPeakRssBytes": 0,
+            "peakRssUpperBoundBytes": 37978112,
+            "nativeSubprocesses": {}
+          },
+          {
+            "wallSeconds": 0.0492103749998023,
+            "processingSeconds": 0.00472983400004523,
+            "processorPeakRssBytes": 37978112,
+            "largestChildPeakRssBytes": 0,
+            "peakRssUpperBoundBytes": 37978112,
+            "nativeSubprocesses": {}
+          }
+        ]
+      }
+    },
+    {
+      "case": "audio-wav",
+      "inputBytes": 228846,
+      "units": 1,
+      "action": "process",
+      "outputBytes": 228878,
+      "artifactCount": 1,
+      "coverage": {
+        "durationSeconds": 7.15,
+        "status": "partial",
+        "audioIntervals": 1
+      },
+      "fullManifestAndBytesEqual": true,
+      "before": {
+        "wallSeconds": {
+          "median": 0.11243662500010032,
+          "min": 0.11137016699967717,
+          "max": 0.14201937500001804
+        },
+        "processingSeconds": {
+          "median": 0.06669658300006631,
+          "min": 0.06648749999976644,
+          "max": 0.0978439159998743
+        },
+        "processorPeakRssBytes": {
+          "median": 37044224,
+          "min": 37027840,
+          "max": 37142528
+        },
+        "largestChildPeakRssBytes": {
+          "median": 10375168,
+          "min": 10342400,
+          "max": 10379264
+        },
+        "peakRssUpperBoundBytes": {
+          "median": 47419392,
+          "min": 47407104,
+          "max": 47484928
+        },
+        "nativeSubprocesses": {
+          "ffprobe": 1,
+          "ffmpeg": 1
+        },
+        "runs": [
+          {
+            "wallSeconds": 0.14201937500001804,
+            "processingSeconds": 0.0978439159998743,
+            "processorPeakRssBytes": 37027840,
+            "largestChildPeakRssBytes": 10379264,
+            "peakRssUpperBoundBytes": 47407104,
+            "nativeSubprocesses": {
+              "ffprobe": 1,
+              "ffmpeg": 1
+            }
+          },
+          {
+            "wallSeconds": 0.11137016699967717,
+            "processingSeconds": 0.06648749999976644,
+            "processorPeakRssBytes": 37142528,
+            "largestChildPeakRssBytes": 10342400,
+            "peakRssUpperBoundBytes": 47484928,
+            "nativeSubprocesses": {
+              "ffprobe": 1,
+              "ffmpeg": 1
+            }
+          },
+          {
+            "wallSeconds": 0.11243662500010032,
+            "processingSeconds": 0.06669658300006631,
+            "processorPeakRssBytes": 37044224,
+            "largestChildPeakRssBytes": 10375168,
+            "peakRssUpperBoundBytes": 47419392,
+            "nativeSubprocesses": {
+              "ffprobe": 1,
+              "ffmpeg": 1
+            }
+          }
+        ]
+      },
+      "after": {
+        "wallSeconds": {
+          "median": 0.11498354199966343,
+          "min": 0.11445812500005559,
+          "max": 0.11614858299981279
+        },
+        "processingSeconds": {
+          "median": 0.0677922910003872,
+          "min": 0.06760895799970967,
+          "max": 0.06784916699962196
+        },
+        "processorPeakRssBytes": {
+          "median": 37191680,
+          "min": 37158912,
+          "max": 37289984
+        },
+        "largestChildPeakRssBytes": {
+          "median": 10395648,
+          "min": 10391552,
+          "max": 10498048
+        },
+        "peakRssUpperBoundBytes": {
+          "median": 47685632,
+          "min": 47550464,
+          "max": 47689728
+        },
+        "nativeSubprocesses": {
+          "ffprobe": 1,
+          "ffmpeg": 1
+        },
+        "runs": [
+          {
+            "wallSeconds": 0.11498354199966343,
+            "processingSeconds": 0.06784916699962196,
+            "processorPeakRssBytes": 37289984,
+            "largestChildPeakRssBytes": 10395648,
+            "peakRssUpperBoundBytes": 47685632,
+            "nativeSubprocesses": {
+              "ffprobe": 1,
+              "ffmpeg": 1
+            }
+          },
+          {
+            "wallSeconds": 0.11614858299981279,
+            "processingSeconds": 0.0677922910003872,
+            "processorPeakRssBytes": 37191680,
+            "largestChildPeakRssBytes": 10498048,
+            "peakRssUpperBoundBytes": 47689728,
+            "nativeSubprocesses": {
+              "ffprobe": 1,
+              "ffmpeg": 1
+            }
+          },
+          {
+            "wallSeconds": 0.11445812500005559,
+            "processingSeconds": 0.06760895799970967,
+            "processorPeakRssBytes": 37158912,
+            "largestChildPeakRssBytes": 10391552,
+            "peakRssUpperBoundBytes": 47550464,
+            "nativeSubprocesses": {
+              "ffprobe": 1,
+              "ffmpeg": 1
+            }
+          }
+        ]
+      }
+    },
+    {
+      "case": "video-silent",
+      "inputBytes": 21432,
+      "units": 1,
+      "action": "process",
+      "outputBytes": 124128,
+      "artifactCount": 10,
+      "coverage": {
+        "durationSeconds": 8.0,
+        "status": "partial",
+        "audioIntervals": 0,
+        "oneSecondFrames": 8,
+        "sceneFrames": 2,
+        "decodedFrameCount": 80
+      },
+      "fullManifestAndBytesEqual": true,
+      "before": {
+        "wallSeconds": {
+          "median": 0.5103916249995564,
+          "min": 0.4875712919997568,
+          "max": 0.5935804999999164
+        },
+        "processingSeconds": {
+          "median": 0.4625353329997779,
+          "min": 0.4422404169999936,
+          "max": 0.5263948749998235
+        },
+        "processorPeakRssBytes": {
+          "median": 37322752,
+          "min": 37076992,
+          "max": 37339136
+        },
+        "largestChildPeakRssBytes": {
+          "median": 17334272,
+          "min": 17235968,
+          "max": 17715200
+        },
+        "peakRssUpperBoundBytes": {
+          "median": 54657024,
+          "min": 54575104,
+          "max": 54792192
+        },
+        "nativeSubprocesses": {
+          "ffprobe": 2,
+          "ffmpeg": 11
+        },
+        "runs": [
+          {
+            "wallSeconds": 0.4875712919997568,
+            "processingSeconds": 0.4422404169999936,
+            "processorPeakRssBytes": 37322752,
+            "largestChildPeakRssBytes": 17334272,
+            "peakRssUpperBoundBytes": 54657024,
+            "nativeSubprocesses": {
+              "ffprobe": 2,
+              "ffmpeg": 11
+            }
+          },
+          {
+            "wallSeconds": 0.5935804999999164,
+            "processingSeconds": 0.5263948749998235,
+            "processorPeakRssBytes": 37339136,
+            "largestChildPeakRssBytes": 17235968,
+            "peakRssUpperBoundBytes": 54575104,
+            "nativeSubprocesses": {
+              "ffprobe": 2,
+              "ffmpeg": 11
+            }
+          },
+          {
+            "wallSeconds": 0.5103916249995564,
+            "processingSeconds": 0.4625353329997779,
+            "processorPeakRssBytes": 37076992,
+            "largestChildPeakRssBytes": 17715200,
+            "peakRssUpperBoundBytes": 54792192,
+            "nativeSubprocesses": {
+              "ffprobe": 2,
+              "ffmpeg": 11
+            }
+          }
+        ]
+      },
+      "after": {
+        "wallSeconds": {
+          "median": 0.49563045900004,
+          "min": 0.4884584999999788,
+          "max": 1.0736675829998603
+        },
+        "processingSeconds": {
+          "median": 0.44828483299988875,
+          "min": 0.43707150000000183,
+          "max": 1.018369249999978
+        },
+        "processorPeakRssBytes": {
+          "median": 37257216,
+          "min": 37208064,
+          "max": 37421056
+        },
+        "largestChildPeakRssBytes": {
+          "median": 17358848,
+          "min": 17297408,
+          "max": 17862656
+        },
+        "peakRssUpperBoundBytes": {
+          "median": 54718464,
+          "min": 54566912,
+          "max": 55119872
+        },
+        "nativeSubprocesses": {
+          "ffprobe": 2,
+          "ffmpeg": 11
+        },
+        "runs": [
+          {
+            "wallSeconds": 0.49563045900004,
+            "processingSeconds": 0.44828483299988875,
+            "processorPeakRssBytes": 37421056,
+            "largestChildPeakRssBytes": 17297408,
+            "peakRssUpperBoundBytes": 54718464,
+            "nativeSubprocesses": {
+              "ffprobe": 2,
+              "ffmpeg": 11
+            }
+          },
+          {
+            "wallSeconds": 1.0736675829998603,
+            "processingSeconds": 1.018369249999978,
+            "processorPeakRssBytes": 37257216,
+            "largestChildPeakRssBytes": 17862656,
+            "peakRssUpperBoundBytes": 55119872,
+            "nativeSubprocesses": {
+              "ffprobe": 2,
+              "ffmpeg": 11
+            }
+          },
+          {
+            "wallSeconds": 0.4884584999999788,
+            "processingSeconds": 0.43707150000000183,
+            "processorPeakRssBytes": 37208064,
+            "largestChildPeakRssBytes": 17358848,
+            "peakRssUpperBoundBytes": 54566912,
+            "nativeSubprocesses": {
+              "ffprobe": 2,
+              "ffmpeg": 11
+            }
+          }
+        ]
+      }
+    },
+    {
+      "case": "video-audio",
+      "inputBytes": 66723,
+      "units": 1,
+      "action": "process",
+      "outputBytes": 378158,
+      "artifactCount": 11,
+      "coverage": {
+        "durationSeconds": 8.0,
+        "status": "partial",
+        "audioIntervals": 1,
+        "oneSecondFrames": 8,
+        "sceneFrames": 2,
+        "decodedFrameCount": 80
+      },
+      "fullManifestAndBytesEqual": true,
+      "before": {
+        "wallSeconds": {
+          "median": 0.5095251249999819,
+          "min": 0.5052535840000019,
+          "max": 0.5154094170002281
+        },
+        "processingSeconds": {
+          "median": 0.4641648750002787,
+          "min": 0.46107895800014376,
+          "max": 0.46948887500002456
+        },
+        "processorPeakRssBytes": {
+          "median": 37158912,
+          "min": 37142528,
+          "max": 37306368
+        },
+        "largestChildPeakRssBytes": {
+          "median": 18001920,
+          "min": 17616896,
+          "max": 18513920
+        },
+        "peakRssUpperBoundBytes": {
+          "median": 55144448,
+          "min": 54923264,
+          "max": 55672832
+        },
+        "nativeSubprocesses": {
+          "ffprobe": 2,
+          "ffmpeg": 12
+        },
+        "runs": [
+          {
+            "wallSeconds": 0.5154094170002281,
+            "processingSeconds": 0.46948887500002456,
+            "processorPeakRssBytes": 37142528,
+            "largestChildPeakRssBytes": 18001920,
+            "peakRssUpperBoundBytes": 55144448,
+            "nativeSubprocesses": {
+              "ffprobe": 2,
+              "ffmpeg": 12
+            }
+          },
+          {
+            "wallSeconds": 0.5052535840000019,
+            "processingSeconds": 0.46107895800014376,
+            "processorPeakRssBytes": 37306368,
+            "largestChildPeakRssBytes": 17616896,
+            "peakRssUpperBoundBytes": 54923264,
+            "nativeSubprocesses": {
+              "ffprobe": 2,
+              "ffmpeg": 12
+            }
+          },
+          {
+            "wallSeconds": 0.5095251249999819,
+            "processingSeconds": 0.4641648750002787,
+            "processorPeakRssBytes": 37158912,
+            "largestChildPeakRssBytes": 18513920,
+            "peakRssUpperBoundBytes": 55672832,
+            "nativeSubprocesses": {
+              "ffprobe": 2,
+              "ffmpeg": 12
+            }
+          }
+        ]
+      },
+      "after": {
+        "wallSeconds": {
+          "median": 0.5101939169999241,
+          "min": 0.5071215409998331,
+          "max": 0.5113189169996986
+        },
+        "processingSeconds": {
+          "median": 0.46379337500002293,
+          "min": 0.4611758750002082,
+          "max": 0.4641815830000269
+        },
+        "processorPeakRssBytes": {
+          "median": 37208064,
+          "min": 37109760,
+          "max": 37240832
+        },
+        "largestChildPeakRssBytes": {
+          "median": 18128896,
+          "min": 17784832,
+          "max": 18468864
+        },
+        "peakRssUpperBoundBytes": {
+          "median": 55369728,
+          "min": 54894592,
+          "max": 55676928
+        },
+        "nativeSubprocesses": {
+          "ffprobe": 2,
+          "ffmpeg": 12
+        },
+        "runs": [
+          {
+            "wallSeconds": 0.5101939169999241,
+            "processingSeconds": 0.46379337500002293,
+            "processorPeakRssBytes": 37208064,
+            "largestChildPeakRssBytes": 18468864,
+            "peakRssUpperBoundBytes": 55676928,
+            "nativeSubprocesses": {
+              "ffprobe": 2,
+              "ffmpeg": 12
+            }
+          },
+          {
+            "wallSeconds": 0.5071215409998331,
+            "processingSeconds": 0.4611758750002082,
+            "processorPeakRssBytes": 37240832,
+            "largestChildPeakRssBytes": 18128896,
+            "peakRssUpperBoundBytes": 55369728,
+            "nativeSubprocesses": {
+              "ffprobe": 2,
+              "ffmpeg": 12
+            }
+          },
+          {
+            "wallSeconds": 0.5113189169996986,
+            "processingSeconds": 0.4641815830000269,
+            "processorPeakRssBytes": 37109760,
+            "largestChildPeakRssBytes": 17784832,
+            "peakRssUpperBoundBytes": 54894592,
+            "nativeSubprocesses": {
+              "ffprobe": 2,
+              "ffmpeg": 12
+            }
+          }
+        ]
+      }
+    },
+    {
+      "case": "text-bounded",
+      "inputBytes": 1333318,
+      "units": 4,
+      "action": "process",
+      "outputBytes": 1333312,
+      "artifactCount": 12,
+      "coverage": {
+        "pageCount": 4,
+        "pagesPresent": 4,
+        "status": "complete"
+      },
+      "fullManifestAndBytesEqual": true,
+      "before": {
+        "wallSeconds": {
+          "median": 0.3214905410004576,
+          "min": 0.3212687499999447,
+          "max": 0.32154533399989305
+        },
+        "processingSeconds": {
+          "median": 0.14118266500054233,
+          "min": 0.14101383299930603,
+          "max": 0.14175941599978614
+        },
+        "processorPeakRssBytes": {
+          "median": 49627136,
+          "min": 49512448,
+          "max": 49725440
+        },
+        "largestChildPeakRssBytes": {
+          "median": 0,
+          "min": 0,
+          "max": 0
+        },
+        "peakRssUpperBoundBytes": {
+          "median": 49627136,
+          "min": 49512448,
+          "max": 49725440
+        },
+        "nativeSubprocesses": {},
+        "runs": [
+          {
+            "wallSeconds": 0.3214905410004576,
+            "processingSeconds": 0.14175941599978614,
+            "processorPeakRssBytes": 49512448,
+            "largestChildPeakRssBytes": 0,
+            "peakRssUpperBoundBytes": 49512448,
+            "nativeSubprocesses": {}
+          },
+          {
+            "wallSeconds": 0.3212687499999447,
+            "processingSeconds": 0.14118266500054233,
+            "processorPeakRssBytes": 49725440,
+            "largestChildPeakRssBytes": 0,
+            "peakRssUpperBoundBytes": 49725440,
+            "nativeSubprocesses": {}
+          },
+          {
+            "wallSeconds": 0.32154533399989305,
+            "processingSeconds": 0.14101383299930603,
+            "processorPeakRssBytes": 49627136,
+            "largestChildPeakRssBytes": 0,
+            "peakRssUpperBoundBytes": 49627136,
+            "nativeSubprocesses": {}
+          }
+        ]
+      },
+      "after": {
+        "wallSeconds": {
+          "median": 0.25351150000005873,
+          "min": 0.24879774999953952,
+          "max": 0.2546807919998173
+        },
+        "processingSeconds": {
+          "median": 0.06696699899976011,
+          "min": 0.06526520799980062,
+          "max": 0.06755391700016844
+        },
+        "processorPeakRssBytes": {
+          "median": 38846464,
+          "min": 38797312,
+          "max": 39518208
+        },
+        "largestChildPeakRssBytes": {
+          "median": 0,
+          "min": 0,
+          "max": 0
+        },
+        "peakRssUpperBoundBytes": {
+          "median": 38846464,
+          "min": 38797312,
+          "max": 39518208
+        },
+        "nativeSubprocesses": {},
+        "runs": [
+          {
+            "wallSeconds": 0.25351150000005873,
+            "processingSeconds": 0.06696699899976011,
+            "processorPeakRssBytes": 39518208,
+            "largestChildPeakRssBytes": 0,
+            "peakRssUpperBoundBytes": 39518208,
+            "nativeSubprocesses": {}
+          },
+          {
+            "wallSeconds": 0.2546807919998173,
+            "processingSeconds": 0.06755391700016844,
+            "processorPeakRssBytes": 38846464,
+            "largestChildPeakRssBytes": 0,
+            "peakRssUpperBoundBytes": 38846464,
+            "nativeSubprocesses": {}
+          },
+          {
+            "wallSeconds": 0.24879774999953952,
+            "processingSeconds": 0.06526520799980062,
+            "processorPeakRssBytes": 38797312,
+            "largestChildPeakRssBytes": 0,
+            "peakRssUpperBoundBytes": 38797312,
+            "nativeSubprocesses": {}
+          }
+        ]
+      }
+    },
+    {
+      "case": "image-rgb-bounded",
+      "inputBytes": 22513,
+      "units": 1,
+      "action": "process",
+      "outputBytes": 147496,
+      "artifactCount": 1,
+      "coverage": {
+        "status": "partial",
+        "observation": "missing"
+      },
+      "fullManifestAndBytesEqual": true,
+      "before": {
+        "wallSeconds": {
+          "median": 0.08437850000018443,
+          "min": 0.08386220800002775,
+          "max": 0.08495870799970362
+        },
+        "processingSeconds": {
+          "median": 0.03953454200018314,
+          "min": 0.03945629200006806,
+          "max": 0.039675125000030675
+        },
+        "processorPeakRssBytes": {
+          "median": 102694912,
+          "min": 102612992,
+          "max": 102711296
+        },
+        "largestChildPeakRssBytes": {
+          "median": 0,
+          "min": 0,
+          "max": 0
+        },
+        "peakRssUpperBoundBytes": {
+          "median": 102694912,
+          "min": 102612992,
+          "max": 102711296
+        },
+        "nativeSubprocesses": {},
+        "runs": [
+          {
+            "wallSeconds": 0.08437850000018443,
+            "processingSeconds": 0.039675125000030675,
+            "processorPeakRssBytes": 102694912,
+            "largestChildPeakRssBytes": 0,
+            "peakRssUpperBoundBytes": 102694912,
+            "nativeSubprocesses": {}
+          },
+          {
+            "wallSeconds": 0.08386220800002775,
+            "processingSeconds": 0.03953454200018314,
+            "processorPeakRssBytes": 102711296,
+            "largestChildPeakRssBytes": 0,
+            "peakRssUpperBoundBytes": 102711296,
+            "nativeSubprocesses": {}
+          },
+          {
+            "wallSeconds": 0.08495870799970362,
+            "processingSeconds": 0.03945629200006806,
+            "processorPeakRssBytes": 102612992,
+            "largestChildPeakRssBytes": 0,
+            "peakRssUpperBoundBytes": 102612992,
+            "nativeSubprocesses": {}
+          }
+        ]
+      },
+      "after": {
+        "wallSeconds": {
+          "median": 0.08376575000011144,
+          "min": 0.08241729199971815,
+          "max": 0.08390970900018146
+        },
+        "processingSeconds": {
+          "median": 0.03760141700013264,
+          "min": 0.037524166999901354,
+          "max": 0.037827082999683626
+        },
+        "processorPeakRssBytes": {
+          "median": 78888960,
+          "min": 78823424,
+          "max": 78970880
+        },
+        "largestChildPeakRssBytes": {
+          "median": 0,
+          "min": 0,
+          "max": 0
+        },
+        "peakRssUpperBoundBytes": {
+          "median": 78888960,
+          "min": 78823424,
+          "max": 78970880
+        },
+        "nativeSubprocesses": {},
+        "runs": [
+          {
+            "wallSeconds": 0.08376575000011144,
+            "processingSeconds": 0.037524166999901354,
+            "processorPeakRssBytes": 78970880,
+            "largestChildPeakRssBytes": 0,
+            "peakRssUpperBoundBytes": 78970880,
+            "nativeSubprocesses": {}
+          },
+          {
+            "wallSeconds": 0.08390970900018146,
+            "processingSeconds": 0.03760141700013264,
+            "processorPeakRssBytes": 78888960,
+            "largestChildPeakRssBytes": 0,
+            "peakRssUpperBoundBytes": 78888960,
+            "nativeSubprocesses": {}
+          },
+          {
+            "wallSeconds": 0.08241729199971815,
+            "processingSeconds": 0.037827082999683626,
+            "processorPeakRssBytes": 78823424,
+            "largestChildPeakRssBytes": 0,
+            "peakRssUpperBoundBytes": 78823424,
+            "nativeSubprocesses": {}
+          }
+        ]
+      }
+    },
+    {
+      "case": "video-coincident",
+      "inputBytes": 2675,
+      "units": 1,
+      "action": "process",
+      "outputBytes": 9215,
+      "artifactCount": 5,
+      "coverage": {
+        "durationSeconds": 4.0,
+        "status": "partial",
+        "audioIntervals": 0,
+        "oneSecondFrames": 4,
+        "sceneFrames": 1,
+        "decodedFrameCount": 40
+      },
+      "fullManifestAndBytesEqual": true,
+      "before": {
+        "wallSeconds": {
+          "median": 0.29117983300011474,
+          "min": 0.2893004170000495,
+          "max": 0.2944070409998858
+        },
+        "processingSeconds": {
+          "median": 0.24595895900029063,
+          "min": 0.24516416599999502,
+          "max": 0.24833516699982283
+        },
+        "processorPeakRssBytes": {
+          "median": 36978688,
+          "min": 36962304,
+          "max": 37208064
+        },
+        "largestChildPeakRssBytes": {
+          "median": 14659584,
+          "min": 14655488,
+          "max": 14766080
+        },
+        "peakRssUpperBoundBytes": {
+          "median": 51744768,
+          "min": 51621888,
+          "max": 51863552
+        },
+        "nativeSubprocesses": {
+          "ffprobe": 2,
+          "ffmpeg": 6
+        },
+        "runs": [
+          {
+            "wallSeconds": 0.2944070409998858,
+            "processingSeconds": 0.24833516699982283,
+            "processorPeakRssBytes": 36962304,
+            "largestChildPeakRssBytes": 14659584,
+            "peakRssUpperBoundBytes": 51621888,
+            "nativeSubprocesses": {
+              "ffprobe": 2,
+              "ffmpeg": 6
+            }
+          },
+          {
+            "wallSeconds": 0.2893004170000495,
+            "processingSeconds": 0.24516416599999502,
+            "processorPeakRssBytes": 36978688,
+            "largestChildPeakRssBytes": 14766080,
+            "peakRssUpperBoundBytes": 51744768,
+            "nativeSubprocesses": {
+              "ffprobe": 2,
+              "ffmpeg": 6
+            }
+          },
+          {
+            "wallSeconds": 0.29117983300011474,
+            "processingSeconds": 0.24595895900029063,
+            "processorPeakRssBytes": 37208064,
+            "largestChildPeakRssBytes": 14655488,
+            "peakRssUpperBoundBytes": 51863552,
+            "nativeSubprocesses": {
+              "ffprobe": 2,
+              "ffmpeg": 6
+            }
+          }
+        ]
+      },
+      "after": {
+        "wallSeconds": {
+          "median": 0.2664366250000967,
+          "min": 0.2659016249999695,
+          "max": 0.27068450000024313
+        },
+        "processingSeconds": {
+          "median": 0.21930754099957994,
+          "min": 0.21916341699989061,
+          "max": 0.2194206250001116
+        },
+        "processorPeakRssBytes": {
+          "median": 37355520,
+          "min": 37289984,
+          "max": 37404672
+        },
+        "largestChildPeakRssBytes": {
+          "median": 14745600,
+          "min": 14741504,
+          "max": 15331328
+        },
+        "peakRssUpperBoundBytes": {
+          "median": 52146176,
+          "min": 52101120,
+          "max": 52621312
+        },
+        "nativeSubprocesses": {
+          "ffprobe": 2,
+          "ffmpeg": 5
+        },
+        "runs": [
+          {
+            "wallSeconds": 0.27068450000024313,
+            "processingSeconds": 0.21930754099957994,
+            "processorPeakRssBytes": 37289984,
+            "largestChildPeakRssBytes": 15331328,
+            "peakRssUpperBoundBytes": 52621312,
+            "nativeSubprocesses": {
+              "ffprobe": 2,
+              "ffmpeg": 5
+            }
+          },
+          {
+            "wallSeconds": 0.2659016249999695,
+            "processingSeconds": 0.21916341699989061,
+            "processorPeakRssBytes": 37355520,
+            "largestChildPeakRssBytes": 14745600,
+            "peakRssUpperBoundBytes": 52101120,
+            "nativeSubprocesses": {
+              "ffprobe": 2,
+              "ffmpeg": 5
+            }
+          },
+          {
+            "wallSeconds": 0.2664366250000967,
+            "processingSeconds": 0.2194206250001116,
+            "processorPeakRssBytes": 37404672,
+            "largestChildPeakRssBytes": 14741504,
+            "peakRssUpperBoundBytes": 52146176,
+            "nativeSubprocesses": {
+              "ffprobe": 2,
+              "ffmpeg": 5
+            }
+          }
+        ]
+      }
+    },
+    {
+      "case": "video-unit-boundary",
+      "inputBytes": 3459,
+      "units": 2,
+      "action": "process",
+      "outputBytes": 57133,
+      "artifactCount": 31,
+      "coverage": {
+        "durationSeconds": 31.0,
+        "status": "partial",
+        "audioIntervals": 0,
+        "oneSecondFrames": 31,
+        "sceneFrames": 0,
+        "decodedFrameCount": 62
+      },
+      "fullManifestAndBytesEqual": true,
+      "before": {
+        "wallSeconds": {
+          "median": 1.172282166000059,
+          "min": 1.1708237080001709,
+          "max": 1.1750864999999067
+        },
+        "processingSeconds": {
+          "median": 1.0818238329998167,
+          "min": 1.0780100419997325,
+          "max": 1.0829762090002077
+        },
+        "processorPeakRssBytes": {
+          "median": 37142528,
+          "min": 37093376,
+          "max": 37322752
+        },
+        "largestChildPeakRssBytes": {
+          "median": 15310848,
+          "min": 15196160,
+          "max": 15372288
+        },
+        "peakRssUpperBoundBytes": {
+          "median": 52338688,
+          "min": 52322304,
+          "max": 52465664
+        },
+        "nativeSubprocesses": {
+          "ffprobe": 4,
+          "ffmpeg": 33
+        },
+        "runs": [
+          {
+            "wallSeconds": 1.1750864999999067,
+            "processingSeconds": 1.0818238329998167,
+            "processorPeakRssBytes": 37093376,
+            "largestChildPeakRssBytes": 15310848,
+            "peakRssUpperBoundBytes": 52338688,
+            "nativeSubprocesses": {
+              "ffprobe": 4,
+              "ffmpeg": 33
+            }
+          },
+          {
+            "wallSeconds": 1.172282166000059,
+            "processingSeconds": 1.0829762090002077,
+            "processorPeakRssBytes": 37322752,
+            "largestChildPeakRssBytes": 15196160,
+            "peakRssUpperBoundBytes": 52322304,
+            "nativeSubprocesses": {
+              "ffprobe": 4,
+              "ffmpeg": 33
+            }
+          },
+          {
+            "wallSeconds": 1.1708237080001709,
+            "processingSeconds": 1.0780100419997325,
+            "processorPeakRssBytes": 37142528,
+            "largestChildPeakRssBytes": 15372288,
+            "peakRssUpperBoundBytes": 52465664,
+            "nativeSubprocesses": {
+              "ffprobe": 4,
+              "ffmpeg": 33
+            }
+          }
+        ]
+      },
+      "after": {
+        "wallSeconds": {
+          "median": 1.1766064580001512,
+          "min": 1.1582360409997818,
+          "max": 1.1810810830002083
+        },
+        "processingSeconds": {
+          "median": 1.0814797509997334,
+          "min": 1.0646358750000218,
+          "max": 1.0853258340002867
+        },
+        "processorPeakRssBytes": {
+          "median": 37289984,
+          "min": 37208064,
+          "max": 37306368
+        },
+        "largestChildPeakRssBytes": {
+          "median": 15122432,
+          "min": 15052800,
+          "max": 15142912
+        },
+        "peakRssUpperBoundBytes": {
+          "median": 52350976,
+          "min": 52326400,
+          "max": 52428800
+        },
+        "nativeSubprocesses": {
+          "ffprobe": 4,
+          "ffmpeg": 33
+        },
+        "runs": [
+          {
+            "wallSeconds": 1.1810810830002083,
+            "processingSeconds": 1.0853258340002867,
+            "processorPeakRssBytes": 37306368,
+            "largestChildPeakRssBytes": 15122432,
+            "peakRssUpperBoundBytes": 52428800,
+            "nativeSubprocesses": {
+              "ffprobe": 4,
+              "ffmpeg": 33
+            }
+          },
+          {
+            "wallSeconds": 1.1582360409997818,
+            "processingSeconds": 1.0646358750000218,
+            "processorPeakRssBytes": 37289984,
+            "largestChildPeakRssBytes": 15052800,
+            "peakRssUpperBoundBytes": 52326400,
+            "nativeSubprocesses": {
+              "ffprobe": 4,
+              "ffmpeg": 33
+            }
+          },
+          {
+            "wallSeconds": 1.1766064580001512,
+            "processingSeconds": 1.0814797509997334,
+            "processorPeakRssBytes": 37208064,
+            "largestChildPeakRssBytes": 15142912,
+            "peakRssUpperBoundBytes": 52350976,
+            "nativeSubprocesses": {
+              "ffprobe": 4,
+              "ffmpeg": 33
+            }
+          }
+        ]
+      }
+    },
+    {
+      "case": "audio-unit-boundary",
+      "inputBytes": 992078,
+      "units": 2,
+      "action": "process",
+      "outputBytes": 992156,
+      "artifactCount": 2,
+      "coverage": {
+        "durationSeconds": 31.0,
+        "status": "partial",
+        "audioIntervals": 2
+      },
+      "fullManifestAndBytesEqual": true,
+      "before": {
+        "wallSeconds": {
+          "median": 0.22894033400007174,
+          "min": 0.2285662920003233,
+          "max": 0.23450387499997305
+        },
+        "processingSeconds": {
+          "median": 0.13967400000001362,
+          "min": 0.13931999999977052,
+          "max": 0.14380995800001983
+        },
+        "processorPeakRssBytes": {
+          "median": 38486016,
+          "min": 38387712,
+          "max": 38518784
+        },
+        "largestChildPeakRssBytes": {
+          "median": 10506240,
+          "min": 10502144,
+          "max": 10506240
+        },
+        "peakRssUpperBoundBytes": {
+          "median": 48939008,
+          "min": 48893952,
+          "max": 48992256
+        },
+        "nativeSubprocesses": {
+          "ffprobe": 2,
+          "ffmpeg": 2
+        },
+        "runs": [
+          {
+            "wallSeconds": 0.23450387499997305,
+            "processingSeconds": 0.14380995800001983,
+            "processorPeakRssBytes": 38518784,
+            "largestChildPeakRssBytes": 10502144,
+            "peakRssUpperBoundBytes": 48939008,
+            "nativeSubprocesses": {
+              "ffprobe": 2,
+              "ffmpeg": 2
+            }
+          },
+          {
+            "wallSeconds": 0.22894033400007174,
+            "processingSeconds": 0.13967400000001362,
+            "processorPeakRssBytes": 38387712,
+            "largestChildPeakRssBytes": 10506240,
+            "peakRssUpperBoundBytes": 48893952,
+            "nativeSubprocesses": {
+              "ffprobe": 2,
+              "ffmpeg": 2
+            }
+          },
+          {
+            "wallSeconds": 0.2285662920003233,
+            "processingSeconds": 0.13931999999977052,
+            "processorPeakRssBytes": 38486016,
+            "largestChildPeakRssBytes": 10506240,
+            "peakRssUpperBoundBytes": 48992256,
+            "nativeSubprocesses": {
+              "ffprobe": 2,
+              "ffmpeg": 2
+            }
+          }
+        ]
+      },
+      "after": {
+        "wallSeconds": {
+          "median": 0.2305478749995018,
+          "min": 0.22936387499976263,
+          "max": 0.23449583299998267
+        },
+        "processingSeconds": {
+          "median": 0.13735333300019192,
+          "min": 0.13711933299964585,
+          "max": 0.14084416600007899
+        },
+        "processorPeakRssBytes": {
+          "median": 37339136,
+          "min": 37306368,
+          "max": 37437440
+        },
+        "largestChildPeakRssBytes": {
+          "median": 10461184,
+          "min": 10416128,
+          "max": 10485760
+        },
+        "peakRssUpperBoundBytes": {
+          "median": 47722496,
+          "min": 47693824,
+          "max": 47898624
+        },
+        "nativeSubprocesses": {
+          "ffprobe": 2,
+          "ffmpeg": 2
+        },
+        "runs": [
+          {
+            "wallSeconds": 0.22936387499976263,
+            "processingSeconds": 0.13735333300019192,
+            "processorPeakRssBytes": 37437440,
+            "largestChildPeakRssBytes": 10461184,
+            "peakRssUpperBoundBytes": 47898624,
+            "nativeSubprocesses": {
+              "ffprobe": 2,
+              "ffmpeg": 2
+            }
+          },
+          {
+            "wallSeconds": 0.23449583299998267,
+            "processingSeconds": 0.14084416600007899,
+            "processorPeakRssBytes": 37339136,
+            "largestChildPeakRssBytes": 10485760,
+            "peakRssUpperBoundBytes": 47693824,
+            "nativeSubprocesses": {
+              "ffprobe": 2,
+              "ffmpeg": 2
+            }
+          },
+          {
+            "wallSeconds": 0.2305478749995018,
+            "processingSeconds": 0.13711933299964585,
+            "processorPeakRssBytes": 37306368,
+            "largestChildPeakRssBytes": 10416128,
+            "peakRssUpperBoundBytes": 47722496,
+            "nativeSubprocesses": {
+              "ffprobe": 2,
+              "ffmpeg": 2
+            }
+          }
+        ]
+      }
+    },
+    {
+      "case": "pdf-sanitize",
+      "inputBytes": 25842,
+      "units": 1,
+      "action": "sanitize",
+      "outputBytes": 136621,
+      "artifactCount": 0,
+      "coverage": {
+        "pageCount": 2,
+        "operation": "sanitize"
+      },
+      "fullManifestAndBytesEqual": true,
+      "before": {
+        "wallSeconds": {
+          "median": 0.21705712499988294,
+          "min": 0.21617095900001004,
+          "max": 0.22437524999986636
+        },
+        "processingSeconds": {
+          "median": 0.17303779199983182,
+          "min": 0.1728950410001744,
+          "max": 0.18002529099976528
+        },
+        "processorPeakRssBytes": {
+          "median": 62521344,
+          "min": 62324736,
+          "max": 62619648
+        },
+        "largestChildPeakRssBytes": {
+          "median": 22904832,
+          "min": 22757376,
+          "max": 23117824
+        },
+        "peakRssUpperBoundBytes": {
+          "median": 85524480,
+          "min": 85082112,
+          "max": 85639168
+        },
+        "nativeSubprocesses": {
+          "pdfinfo": 1,
+          "pdftoppm": 2
+        },
+        "runs": [
+          {
+            "wallSeconds": 0.22437524999986636,
+            "processingSeconds": 0.18002529099976528,
+            "processorPeakRssBytes": 62521344,
+            "largestChildPeakRssBytes": 23117824,
+            "peakRssUpperBoundBytes": 85639168,
+            "nativeSubprocesses": {
+              "pdfinfo": 1,
+              "pdftoppm": 2
+            }
+          },
+          {
+            "wallSeconds": 0.21617095900001004,
+            "processingSeconds": 0.1728950410001744,
+            "processorPeakRssBytes": 62324736,
+            "largestChildPeakRssBytes": 22757376,
+            "peakRssUpperBoundBytes": 85082112,
+            "nativeSubprocesses": {
+              "pdfinfo": 1,
+              "pdftoppm": 2
+            }
+          },
+          {
+            "wallSeconds": 0.21705712499988294,
+            "processingSeconds": 0.17303779199983182,
+            "processorPeakRssBytes": 62619648,
+            "largestChildPeakRssBytes": 22904832,
+            "peakRssUpperBoundBytes": 85524480,
+            "nativeSubprocesses": {
+              "pdfinfo": 1,
+              "pdftoppm": 2
+            }
+          }
+        ]
+      },
+      "after": {
+        "wallSeconds": {
+          "median": 0.21907175000023926,
+          "min": 0.21877391599991824,
+          "max": 0.22159829200018066
+        },
+        "processingSeconds": {
+          "median": 0.17280854099999488,
+          "min": 0.172552375000123,
+          "max": 0.17415587499999674
+        },
+        "processorPeakRssBytes": {
+          "median": 62898176,
+          "min": 62734336,
+          "max": 62898176
+        },
+        "largestChildPeakRssBytes": {
+          "median": 22872064,
+          "min": 22855680,
+          "max": 23134208
+        },
+        "peakRssUpperBoundBytes": {
+          "median": 85770240,
+          "min": 85590016,
+          "max": 86032384
+        },
+        "nativeSubprocesses": {
+          "pdfinfo": 1,
+          "pdftoppm": 2
+        },
+        "runs": [
+          {
+            "wallSeconds": 0.21877391599991824,
+            "processingSeconds": 0.172552375000123,
+            "processorPeakRssBytes": 62898176,
+            "largestChildPeakRssBytes": 23134208,
+            "peakRssUpperBoundBytes": 86032384,
+            "nativeSubprocesses": {
+              "pdfinfo": 1,
+              "pdftoppm": 2
+            }
+          },
+          {
+            "wallSeconds": 0.21907175000023926,
+            "processingSeconds": 0.17280854099999488,
+            "processorPeakRssBytes": 62734336,
+            "largestChildPeakRssBytes": 22855680,
+            "peakRssUpperBoundBytes": 85590016,
+            "nativeSubprocesses": {
+              "pdfinfo": 1,
+              "pdftoppm": 2
+            }
+          },
+          {
+            "wallSeconds": 0.22159829200018066,
+            "processingSeconds": 0.17415587499999674,
+            "processorPeakRssBytes": 62898176,
+            "largestChildPeakRssBytes": 22872064,
+            "peakRssUpperBoundBytes": 85770240,
+            "nativeSubprocesses": {
+              "pdfinfo": 1,
+              "pdftoppm": 2
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "skipped": []
+}

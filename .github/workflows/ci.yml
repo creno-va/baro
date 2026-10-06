@@ -55,6 +55,14 @@ jobs:
           -v "$PWD/services/file-processor/fixture-test.py:/app/fixture-test.py:ro"
           baro-file-processor python3 /app/fixture-test.py
 
+      - name: Verify lossless extraction optimizations on bounded inputs
+        if: steps.scope.outputs.native == 'true'
+        timeout-minutes: 2
+        run: >-
+          docker run --rm --network none --memory 512m --cpus 1 --pids-limit 128
+          -v "$PWD/services/file-processor/performance-test.py:/app/performance-test.py:ro"
+          baro-file-processor python3 /app/performance-test.py --require-video
+
   quality:
     name: Source and browser checks
     runs-on: ubuntu-latest
