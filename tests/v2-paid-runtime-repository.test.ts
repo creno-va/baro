@@ -323,7 +323,15 @@ test("actual upload probe composition reserves SQL cost before native transport 
   const env = {
     APP_ENV: "preview",
     FILE_PROCESSOR: {
-      newUniqueId: () => ({}),
+      idFromName: (id: string) => {
+        expect(id).toMatch(/^probe-[a-f0-9-]{36}-1$/);
+        expect(
+          f.db.sqlite
+            .query("SELECT runtime_instance_id FROM v2_jobs WHERE runtime_instance_id=?")
+            .get(id),
+        ).toEqual({ runtime_instance_id: id });
+        return {};
+      },
       get: () => ({
         fetch: async (request: Request) => {
           calls++;

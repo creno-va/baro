@@ -18,10 +18,11 @@ import { seedTestSession } from "./session";
 
 const NOW = "2026-10-06T00:00:00.000Z";
 const dbs: Awaited<ReturnType<typeof createTestDatabase>>[] = [];
-afterEach(() => {
-  for (const db of dbs.splice(0)) db.close();
-});
-function r2() {
+if (Bun.env.BARO_SYNTHETIC_REPORT_SERVER !== "true")
+  afterEach(() => {
+    for (const db of dbs.splice(0)) db.close();
+  });
+export function r2() {
   const objects = new Map<string, Uint8Array<ArrayBuffer>>();
   const calls = { get: 0, put: 0, delete: 0 };
   let putHook: (() => Promise<void>) | undefined;
@@ -140,7 +141,10 @@ export async function fixture(
     },
   };
 }
-type Fixture = Awaited<ReturnType<typeof fixture>>;
+type Fixture = Pick<
+  Awaited<ReturnType<typeof fixture>>,
+  "service" | "actor" | "workspaceId" | "rev"
+>;
 async function reserved(
   f: Fixture,
   bytes: number,

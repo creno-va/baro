@@ -55,6 +55,8 @@ export function requireMockAccount(state: ReportMockState) {
 export function requireMockCase(state: ReportMockState, id: string, consent = true) {
   if (consent) requireMockAccount(state);
   else requireMockSession(state);
+  if (state.session.user?.accountType !== "customer")
+    throw new ReportMockError("ROLE_REQUIRED", "고객 역할로 로그인한 뒤 사건을 확인해 주세요.");
   const item = state.cases[id];
   if (
     !item ||
@@ -108,6 +110,8 @@ export function createReportsMockHandler(runtime: ReportMockRuntime): DomainRequ
   const handler: DomainRequest = async <T>(path: string, init: DomainRequestInit = {}) => {
     const state = runtime.read();
     requireMockAccount(state);
+    if (state.session.user?.accountType !== "customer")
+      throw new ReportMockError("ROLE_REQUIRED", "고객 역할로 로그인한 뒤 리포트를 확인해 주세요.");
     const reportPath = path.match(/^\/api\/v2\/cases\/([^/]+)\/reports$/);
     const exportPath = path.match(/^\/api\/v2\/reports\/([^/]+)\/(pdf|zip)$/);
     const method = init.method ?? "GET";
@@ -260,7 +264,7 @@ export function mockResponseError(error: unknown) {
   const status =
     code === "UNAUTHENTICATED"
       ? 401
-      : code === "CONSENT_REQUIRED"
+      : ["CONSENT_REQUIRED", "ROLE_REQUIRED", "REAUTHENTICATION_REQUIRED"].includes(code)
         ? 403
         : code === "NOT_FOUND"
           ? 404

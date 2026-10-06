@@ -116,7 +116,7 @@ export function prepareReplay(input: unknown) {
       ) => `INSERT INTO deletion_jobs(id,target_type,target_id,deleted_at,workflow_instance_ids,primary_state,cleanup_state,attempts,expires_at)
 VALUES(${literal(job.id)},${literal(job.target_type)},${literal(job.target_id)},${literal(job.deleted_at)},${literal(JSON.stringify(job.workflow_instance_ids))},'deleted','pending',0,${literal(job.expires_at)})
 ON CONFLICT(id) DO UPDATE SET cleanup_state='pending',attempts=0,cleanup_cursor=0,next_attempt_at='1970-01-01T00:00:00.000Z';
-DELETE FROM ${job.target_type === "account" ? "user" : "cases"} WHERE id=${literal(job.target_id)};`,
+${job.target_type === "account" ? `DELETE FROM app_metadata WHERE key=${literal(`account-type:${job.target_id}`)} AND EXISTS(SELECT 1 FROM deletion_jobs WHERE id=${literal(job.id)} AND target_type='account' AND target_id=${literal(job.target_id)});\n` : ""}DELETE FROM ${job.target_type === "account" ? "user" : "cases"} WHERE id=${literal(job.target_id)};`,
     )
     .join("\n");
 }

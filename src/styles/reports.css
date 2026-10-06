@@ -1,7 +1,7 @@
 .report-review {
   max-width: 1120px;
   margin: 0 auto;
-  color: var(--foreground, #17233b);
+  color: var(--foreground, var(--foreground, #202838));
   overflow-wrap: anywhere;
 }
 .report-heading,
@@ -21,13 +21,13 @@
   margin: 0.3rem 0;
 }
 .report-eyebrow {
-  color: #2159c8;
+  color: var(--primary, #226cdb);
   font-size: 0.85rem;
   font-weight: 700;
 }
 .report-card {
   background: var(--card, #fff);
-  border: 1px solid var(--border, #dbe4f0);
+  border: 1px solid var(--border, var(--border, #e6eaf0));
   border-radius: 16px;
   padding: 1.5rem;
   margin: 1.25rem 0;
@@ -42,18 +42,18 @@
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  border: 1px solid #cbd5e1;
-  border-radius: 9px;
+  border: 1px solid var(--border, #e6eaf0);
+  border-radius: 12px;
   background: #fff;
-  color: #17233b;
+  color: var(--foreground, #202838);
   min-height: 44px;
   padding: 0.6rem 0.9rem;
   font: inherit;
   cursor: pointer;
 }
 .report-review button.primary {
-  background: #2159c8;
-  border-color: #2159c8;
+  background: var(--primary, #226cdb);
+  border-color: var(--primary, #226cdb);
   color: white;
 }
 .report-review button:disabled,
@@ -65,8 +65,8 @@
   width: 100%;
   box-sizing: border-box;
   resize: vertical;
-  border: 1px solid #bac9de;
-  border-radius: 9px;
+  border: 1px solid var(--input, #b6c0ce);
+  border-radius: 12px;
   padding: 1rem;
   font: inherit;
   line-height: 1.8;
@@ -76,13 +76,13 @@
   font-weight: 600;
 }
 .report-meta {
-  color: #52627a;
+  color: var(--muted-foreground, #626d80);
   font-size: 0.875rem;
 }
 .report-callout {
   display: flex;
   gap: 0.75rem;
-  background: #edf4ff;
+  background: var(--secondary, #edf4ff);
   border-radius: 10px;
   padding: 1rem;
   line-height: 1.65;
@@ -117,7 +117,7 @@
   margin-top: 0.15rem;
 }
 .report-material {
-  border-bottom: 1px solid #dbe4f0;
+  border-bottom: 1px solid var(--border, #e6eaf0);
   padding: 1rem 0;
   overflow-wrap: anywhere;
 }
@@ -136,22 +136,22 @@
 .report-error {
   background: #fff1f2;
   color: #9f1239;
-  border-radius: 9px;
+  border-radius: 12px;
   padding: 1rem;
 }
 .report-success {
   background: #ecfdf5;
   color: #065f46;
-  border-radius: 9px;
+  border-radius: 12px;
   padding: 1rem;
 }
 .report-modal {
   max-width: min(520px, calc(100vw - 2rem));
   overflow-wrap: anywhere;
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--border, #e6eaf0);
   border-radius: 16px;
   padding: 1.5rem;
-  color: #17233b;
+  color: var(--foreground, #202838);
   box-shadow: 0 25px 80px #0003;
 }
 .report-modal::backdrop {
@@ -161,13 +161,13 @@
   width: 100%;
   box-sizing: border-box;
   padding: 0.75rem;
-  border: 1px solid #bac9de;
+  border: 1px solid var(--input, #b6c0ce);
   border-radius: 8px;
   margin: 0.5rem 0 1rem;
 }
 .report-review :focus-visible,
 .report-modal :focus-visible {
-  outline: 3px solid #2159c8;
+  outline: 3px solid var(--primary, #226cdb);
   outline-offset: 3px;
 }
 .report-review footer {
@@ -188,5 +188,53 @@
     width: 100%;
     flex-direction: column;
     align-items: stretch;
+  }
+}
+
+/* Keep report/settings actions consistent with the conversation shell. */
+.report-heading h1 {
+  font-size: clamp(1.5rem, 3vw, 1.85rem);
+  letter-spacing: -0.04em;
+}
+.report-heading > a {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  color: var(--muted-foreground);
+}
+.report-progress {
+  padding: 0.85rem 1rem;
+  background: var(--muted);
+  border-radius: 12px;
+  line-height: 1.6;
+}
+.report-modal {
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
+}
+.report-modal button + button {
+  margin-left: 0.5rem;
+}
+.report-review button:not(:disabled):hover {
+  border-color: var(--primary);
+}
+.report-check input {
+  accent-color: var(--primary);
+}
+@media (max-width: 380px) {
+  .report-heading,
+  .report-card-heading {
+    align-items: flex-start;
+  }
+  .report-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .report-modal button {
+    margin: 0.5rem 0 0;
+    width: 100%;
+  }
+  .report-modal button + button {
+    margin-left: 0;
   }
 }

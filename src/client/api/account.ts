@@ -3,6 +3,7 @@ import { deletionAccessSchema } from "../../contracts";
 import { v2UsageSchema } from "../../contracts/v2";
 import { authClient } from "../auth";
 import { type ApiRequest, type DomainRequest, domainRequest } from "./reports";
+import { notifySessionChanged } from "./session";
 import type { UsageView } from "./types";
 
 const count = z.object({ used: z.number().nonnegative(), limit: z.number().positive() });
@@ -18,6 +19,7 @@ export type UsageSummary = UsageView & {
   includesReservations?: boolean;
 };
 export function createAccountClient(request: DomainRequest) {
+  let ownerTag: string | null = null;
   return {
     async usage(): Promise<UsageSummary> {
       const result = await request<unknown>("/api/v2/me/usage");
@@ -59,18 +61,22 @@ export function createAccountClient(request: DomainRequest) {
           headers: { "idempotency-key": crypto.randomUUID() },
         },
       );
+      if (typeof window !== "undefined") notifySessionChanged();
     },
     async deleteAccount(confirmation: string) {
       if (confirmation !== "DELETE") throw new Error("삭제 확인란에 DELETE를 입력해 주세요.");
       const result = await request<unknown>("/api/me", {
         method: "DELETE",
         body: { confirmation },
+        ...(ownerTag ? { headers: { "x-baro-deletion-owner": ownerTag } } : {}),
       });
       z.object({ status: z.literal("accepted") }).parse(result);
+      if (typeof window !== "undefined") notifySessionChanged();
     },
     async deletionAccess() {
       const result = await request<unknown>("/api/me/deletion");
       const access = deletionAccessSchema.extend({ mock: z.boolean().optional() }).parse(result);
+      ownerTag = access.ownerTag;
       let marker: { ownerTag?: string; startedAt?: number } | null = null;
       try {
         const raw =

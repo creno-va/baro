@@ -47,7 +47,7 @@ export function createFileProcessingAdmission(
         context.byteLength !== input.byteLength
       )
         throw new ProcessingError("STALE_REVISION");
-      const jobId = crypto.randomUUID(),
+      const jobId = `probe-${crypto.randomUUID()}`,
         invocationId = `${jobId}-1`;
       const budget = createProcessingBudgetService({
         core,
@@ -123,7 +123,7 @@ export function createFileProcessingAdmission(
       const processor = createProcessorTransport({
         costs: budget.costs(lease, admission),
         fetch: (request) => {
-          native = env.FILE_PROCESSOR.get(env.FILE_PROCESSOR.newUniqueId());
+          native = env.FILE_PROCESSOR.get(env.FILE_PROCESSOR.idFromName(invocationId));
           return native.fetch(request);
         },
         stop: async () => {
@@ -184,7 +184,7 @@ export function createFileProcessingAdmission(
         row.encrypted_payload,
         z.strictObject({ contentHash: hashSchema }),
       );
-      const jobId = crypto.randomUUID(),
+      const jobId = `file-processing-${crypto.randomUUID()}`,
         operationId = crypto.randomUUID();
       const requestHash = await runtimeDigest({
         workspaceId: input.workspaceId,

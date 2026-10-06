@@ -38,6 +38,86 @@ test.afterAll(() => {
 });
 
 const evidence = process.env.BARO_REPORT_EVIDENCE_DIR;
+test("peer account switch clears dirty report, selected originals, confirmation and open dialog", async ({
+  page,
+  context,
+}) => {
+  await page.goto("/cases/case-demo/reports");
+  const editor = page.getByRole("textbox", { name: "리포트 내용 편집" });
+  await expect(editor).toBeVisible();
+  await editor.fill("이전 계정의 저장하지 않은 합성 편집");
+  await page.getByRole("checkbox", { name: "ZIP에 원본 포함" }).check();
+  await page.evaluate(() => {
+    const key = "baro.reports.browser-test.v1",
+      state = JSON.parse(localStorage.getItem(key) ?? "{}");
+    state.reports["case-demo"].revision++;
+    localStorage.setItem(key, JSON.stringify(state));
+  });
+  await page.getByRole("button", { name: "검토 내용 저장" }).click();
+  await expect(page.getByRole("alert")).toBeVisible();
+  await page.getByRole("button", { name: "다시 확인" }).click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  const peer = await context.newPage();
+  await peer.goto("/settings");
+  await peer.evaluate(() => {
+    const key = "baro.reports.browser-test.v1",
+      state = JSON.parse(localStorage.getItem(key) ?? "{}");
+    state.session.user = { id: "synthetic-peer", name: "다른 합성 계정", accountType: "customer" };
+    localStorage.setItem(key, JSON.stringify(state));
+  });
+  await page.bringToFront();
+  await expect(editor).toHaveCount(0);
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.getByRole("checkbox", { name: "ZIP에 원본 포함" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "PDF 다운로드" })).toHaveCount(0);
+  await expect(page.getByText("이전 계정의 저장하지 않은 합성 편집")).toHaveCount(0);
+});
+test("same owner role change purges report edits and exports after peer-tab notification", async ({
+  page,
+  context,
+}) => {
+  await page.goto("/cases/case-demo/reports");
+  const editor = page.getByRole("textbox", { name: "리포트 내용 편집" });
+  await expect(editor).toBeVisible();
+  await editor.fill("역할 변경 전에 남겨진 합성 편집");
+  await page.getByRole("checkbox", { name: "ZIP에 원본 포함" }).check();
+  const peer = await context.newPage();
+  await peer.goto("/settings");
+  await peer.evaluate(() => {
+    const key = "baro.reports.browser-test.v1",
+      state = JSON.parse(localStorage.getItem(key) ?? "{}");
+    state.session.user.accountType = "lawyer";
+    localStorage.setItem(key, JSON.stringify(state));
+  });
+  await page.bringToFront();
+  await expect(editor).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "PDF 다운로드" })).toHaveCount(0);
+  await expect(page.getByRole("checkbox", { name: "ZIP에 원본 포함" })).toHaveCount(0);
+  await expect(page.getByText("역할 변경 전에 남겨진 합성 편집")).toHaveCount(0);
+});
+test("peer account switch clears settings usage and an account deletion confirmation", async ({
+  page,
+  context,
+}) => {
+  await page.goto("/settings");
+  await page.getByRole("button", { name: "계정과 모든 사건 삭제", exact: true }).click();
+  await page.getByRole("textbox", { name: "삭제 확인 — DELETE 입력" }).fill("DELETE");
+  const peer = await context.newPage();
+  await peer.goto("/settings");
+  await peer.evaluate(() => {
+    const key = "baro.reports.browser-test.v1",
+      state = JSON.parse(localStorage.getItem(key) ?? "{}");
+    state.session.user = { id: "synthetic-peer", name: "다른 합성 계정", accountType: "customer" };
+    localStorage.setItem(key, JSON.stringify(state));
+  });
+  await page.bringToFront();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "합성 대여금 사건" })).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "계정과 모든 사건 삭제", exact: true }),
+  ).toBeDisabled();
+  await expect(page.getByRole("alert")).toContainText("계정이 변경");
+});
 test("review, masking, exclusions, actual PDF/ZIP downloads and persistent cascading deletion", async ({
   page,
 }) => {

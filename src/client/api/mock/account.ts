@@ -136,13 +136,21 @@ export function createAccountMockHandler(runtime: AccountMockRuntime): DomainReq
           for (const [key, receipt] of Object.entries(current.caseRequests ?? {}))
             if (receipt.ownerId === ownerId) delete current.caseRequests?.[key];
           const lawyers = current.lawyers as
-            | { profiles?: { id: string }[]; owners?: Record<string, string> }
+            | {
+                profiles?: { id: string }[];
+                owners?: Record<string, string>;
+                assets?: Record<string, { ownerId: string; profileId?: string }>;
+              }
             | undefined;
           const profileId = lawyers?.owners?.[ownerId];
-          if (profileId && lawyers?.profiles) {
-            lawyers.profiles = lawyers.profiles.filter((profile) => profile.id !== profileId);
+          if (profileId && lawyers) {
+            if (lawyers.profiles)
+              lawyers.profiles = lawyers.profiles.filter((profile) => profile.id !== profileId);
             delete lawyers.owners?.[ownerId];
           }
+          for (const [id, asset] of Object.entries(lawyers?.assets ?? {}))
+            if (asset.ownerId === ownerId || (profileId && asset.profileId === profileId))
+              delete lawyers?.assets?.[id];
           current.session = { user: null, needsConsent: false };
           current.deletedAccountIds = [...new Set([...(current.deletedAccountIds ?? []), ownerId])];
           return;

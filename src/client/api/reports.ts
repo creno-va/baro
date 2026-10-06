@@ -37,7 +37,6 @@ export function createReportsClient(request: DomainRequest) {
     return report;
   };
   const path = (id: string) => `/api/v2/cases/${encodeURIComponent(id)}/reports`;
-  const mutation = () => ({ "idempotency-key": crypto.randomUUID() });
   async function write(id: string, method: "PATCH" | "POST", body: unknown) {
     const identity = `${method}:${id}`,
       fingerprint = JSON.stringify(body);
@@ -58,9 +57,11 @@ export function createReportsClient(request: DomainRequest) {
     pending.delete(identity);
     return report;
   }
-  async function binary(url: string, type: string, body?: unknown) {
+  async function binary(url: string, type: string, body?: unknown, key?: string) {
     const result = await request<Blob>(url, {
-      ...(body ? { method: "POST", body, headers: mutation() } : {}),
+      ...(body
+        ? { method: "POST", body, headers: { "idempotency-key": key ?? crypto.randomUUID() } }
+        : {}),
       responseType: "blob",
     });
     if (!(result instanceof Blob) || result.type.split(";")[0] !== type || !result.size)
@@ -97,9 +98,22 @@ export function createReportsClient(request: DomainRequest) {
         .max(100)
         .refine((values) => new Set(values).size === values.length)
         .parse(selectedFileIds);
-      return binary(`/api/v2/reports/${encodeURIComponent(id)}/zip`, "application/zip", {
-        selectedFileIds: ids,
-      });
+      const body = { selectedFileIds: ids },
+        identity = `ZIP:${id}`,
+        fingerprint = JSON.stringify(body);
+      let operation = pending.get(identity);
+      if (!operation || operation.fingerprint !== fingerprint) {
+        operation = { fingerprint, key: crypto.randomUUID() };
+        pending.set(identity, operation);
+      }
+      // Repeated downloads and retries after a lost response reuse the same
+      // immutable package. Changed selections create a separate operation.
+      return binary(
+        `/api/v2/reports/${encodeURIComponent(id)}/zip`,
+        "application/zip",
+        body,
+        operation.key,
+      );
     },
   };
 }
