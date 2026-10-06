@@ -26,8 +26,9 @@ afterEach(() => {
 async function fixture(purpose: "portfolio" | "profile_photo" | "identity" = "profile_photo") {
   const database = await createTestDatabase();
   databases.push(database);
-  // Test helper seeds synthetic authentication SQL only; all asset/job writes below
-  // use actual repositories and the generated migration with foreign keys enabled.
+  // Actual repositories, generated migration and AES. Narrow SQL below fills
+  // upload/sanitizer provenance for synthetic stored-receipt fixtures; it does
+  // not claim native sanitization, R2 bytes or provider processing succeeded.
   const owner = await seedTestSession(database, { now: Date.parse(NOW), consent: true });
   const other = await seedTestSession(database, { now: Date.parse(NOW), consent: true });
   const actor = { ownerId: owner.userId, now: NOW };
@@ -104,6 +105,7 @@ async function fixture(purpose: "portfolio" | "profile_photo" | "identity" = "pr
     logicalBytes: 60,
     cipherBytes: 76,
     contentHash: SANITIZED_HASH,
+    keyVersion: "asset_sanitized_v1",
   };
   const value: V2PortfolioAsset = {
     id: assetId,
@@ -116,7 +118,7 @@ async function fixture(purpose: "portfolio" | "profile_photo" | "identity" = "pr
       id: sanitized.id,
       contentHash: SANITIZED_HASH,
       byteLength: 60,
-      format: kind === "pdf" ? "pdf" : "png",
+      format: kind === "pdf" ? "pdf" : "jpeg",
     },
     currentJobId: null,
     failure: null,
@@ -124,6 +126,11 @@ async function fixture(purpose: "portfolio" | "profile_photo" | "identity" = "pr
   async function storeOriginal(blob = original) {
     expect(await storage.registerBlob(actor, blob)).toBe(true);
     expect(await storage.commitReservation(actor, reservationId)).toBe(true);
+    // registerBlob is only a receipt primitive; the real upload commit also
+    // binds this pointer. Explicit fixture SQL supplies that upload provenance.
+    database.sqlite
+      .query("UPDATE v2_assets SET original_blob_id=? WHERE id=?")
+      .run(blob.id, assetId);
   }
   async function storeSanitized(blob = sanitized) {
     expect(
@@ -138,6 +145,23 @@ async function fixture(purpose: "portfolio" | "profile_photo" | "identity" = "pr
     ).toBe(true);
     expect(await storage.registerBlob(actor, blob)).toBe(true);
     expect(await storage.commitReservation(actor, sanitized.reservationId)).toBe(true);
+    // The generic stored-receipt fixture predates prepareSanitizedAssetBlob.
+    // Bind the same source/revision written by its actual sanitizer commit.
+    database.sqlite
+      .query("UPDATE v2_blobs SET source_blob_id=?,source_asset_revision=1 WHERE id=?")
+      .run(original.id, blob.id);
+    expect(
+      database.sqlite
+        .query(
+          "SELECT operation_id,entity_id,target_id,state FROM v2_storage_reservations WHERE id=?",
+        )
+        .get(blob.reservationId),
+    ).toEqual({
+      operation_id: admission.operationId,
+      entity_id: assetId,
+      target_id: blob.id,
+      state: "stored",
+    });
   }
   const jobId = crypto.randomUUID();
   async function admit() {
@@ -227,6 +251,9 @@ async function anotherSource(f: Fixture, differentOwner: boolean) {
   const original = { ...f.original, id: crypto.randomUUID(), reservationId };
   expect(await f.storage.registerBlob(actor, original)).toBe(true);
   expect(await f.storage.commitReservation(actor, reservationId)).toBe(true);
+  f.database.sqlite
+    .query("UPDATE v2_assets SET original_blob_id=? WHERE id=?")
+    .run(original.id, assetId);
   const sanitized = { ...f.sanitized, id: crypto.randomUUID(), reservationId: crypto.randomUUID() };
   expect(
     await f.storage.reserveAssetCopy(actor, {
@@ -240,6 +267,11 @@ async function anotherSource(f: Fixture, differentOwner: boolean) {
   ).toBe(true);
   expect(await f.storage.registerBlob(actor, sanitized)).toBe(true);
   expect(await f.storage.commitReservation(actor, sanitized.reservationId)).toBe(true);
+  // Independent asset fixture, with matching provenance rather than the
+  // target asset's source; cross-owner/entity substitution must still reject.
+  f.database.sqlite
+    .query("UPDATE v2_blobs SET source_blob_id=?,source_asset_revision=1 WHERE id=?")
+    .run(original.id, sanitized.id);
   return { original, sanitized };
 }
 
@@ -603,3 +635,42 @@ test("SQLite publication failure rolls back the asset, completed job and operati
   expect(f.snapshot()).toEqual(before);
   expect(f.database.sqlite.query("PRAGMA foreign_key_check").all()).toEqual([]);
 });
+
+for (const source of ["original", "sanitized"] as const) {
+  for (const field of ["cipher_hash", "object_key", "source_asset_revision"] as const) {
+    test(`final asset publication rejects ${source} ${field} changed while actual AES yields`, async () => {
+      const f = await processing();
+      let changed = false;
+      f.onEncrypt((context) => {
+        if (context.table !== "v2_assets" || changed) return;
+        changed = true;
+        // Actual mutable physical metadata race, after hashes/AAD decrypted
+        // successfully; cipher bytes are not replaced with invalid placeholders.
+        f.database.sqlite
+          .query(`UPDATE v2_blobs SET ${field}=? WHERE id=?`)
+          .run(
+            field === "cipher_hash"
+              ? "e".repeat(64)
+              : field === "object_key"
+                ? "private/synthetic-replaced"
+                : 99,
+            f[source].id,
+          );
+      });
+      expect(await save(f, f.lease)).toBe(false);
+      expect(changed).toBe(true);
+      expect(
+        f.database.sqlite.query("SELECT state,revision FROM v2_assets WHERE id=?").get(f.assetId),
+      ).toEqual({ state: "sanitizing", revision: 1 });
+      expect((await f.jobs.find(f.actor, f.jobId))?.status).toBe("running");
+      expect(
+        f.database.sqlite
+          .query("SELECT state FROM v2_operations WHERE id=?")
+          .get(f.admission.operationId),
+      ).toEqual({ state: "admitted" });
+      expect(
+        f.database.sqlite.query("SELECT id FROM v2_blobs WHERE visibility='public'").all(),
+      ).toEqual([]);
+    });
+  }
+}
