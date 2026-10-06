@@ -5,6 +5,7 @@ import {
   createV2AccountingRepository,
 } from "../src/server/db/v2-accounting";
 import { type Actor, createV2Core } from "../src/server/db/v2-core";
+import { createV2FilesRepository } from "../src/server/db/v2-files";
 import { createV2JobsRepository } from "../src/server/db/v2-jobs";
 import { createV2LawyersRepository } from "../src/server/db/v2-lawyers";
 import {
@@ -19,6 +20,7 @@ import {
 } from "../src/server/db/v2-paid-runtime";
 import { createV2ReportsRepository } from "../src/server/db/v2-reports";
 import { createV2StorageRepository } from "../src/server/db/v2-storage";
+import { createV2UploadProbeRepository } from "../src/server/db/v2-upload-probe";
 import { createTestDatabase } from "./helpers/d1";
 import { seedTestSession } from "./helpers/session";
 
@@ -205,6 +207,162 @@ async function fixture() {
   return { db, core, actor, accounting, jobs, runtime, pp, fp, workspaceId, ap, drain, remote };
 }
 type Fixture = Awaited<ReturnType<typeof fixture>>;
+
+async function uploadProbeFixture() {
+  const f = await fixture();
+  f.db.sqlite
+    .query("INSERT INTO v2_case_original_usage(workspace_id) VALUES(?)")
+    .run(f.workspaceId);
+  const uploadId = crypto.randomUUID(),
+    fileId = crypto.randomUUID();
+  expect(
+    await createV2FilesRepository(f.core).reserve(
+      { ...f.actor, workspaceId: f.workspaceId, expectedRevision: 1 },
+      {
+        name: "합성.pdf",
+        byteLength: 100,
+        mediaType: "application/pdf",
+        autoProcessConsentVersion: "synthetic",
+      },
+      {
+        fileId,
+        uploadId,
+        reservationId: crypto.randomUUID(),
+        consentId: crypto.randomUUID(),
+        expiresAt: EXP,
+        admission: {
+          operationId: crypto.randomUUID(),
+          key: crypto.randomUUID(),
+          requestHash: HASH,
+        },
+      },
+    ),
+  ).toBeTruthy();
+  const probes = createV2UploadProbeRepository(f.core);
+  const p: PricingProof = {
+    ...f.pp,
+    id: crypto.randomUUID(),
+    modelBillingPolicy: null,
+    prices: [
+      {
+        sku: "container_cpu_seconds",
+        provider: "cloudflare",
+        model: null,
+        modelRates: null,
+        region: "global",
+        plan: "synthetic-paid",
+        billingMode: "metered",
+        unit: "vcpu_seconds",
+        unitSize: "1",
+        usdPerUnit: "0.0001",
+        billingQuantum: "0.01",
+        officialUrl: "https://developers.cloudflare.com/containers/pricing/",
+        checkedAt: NOW,
+        validUntil: EXP,
+      },
+    ],
+  };
+  expect(await f.runtime.putPricingProof(p, NOW)).toBe(true);
+  const prepare = async (now = NOW) => {
+    const current = await probes.context({ ...f.actor, now }, uploadId, 1);
+    if (!current) throw new Error("synthetic upload probe context missing");
+    const r: PaidHoldRequest = {
+      ...request(f),
+      pricingProofId: p.id,
+      service: "container",
+      targetKind: "file",
+      targetId: current.fileId,
+      targetRevision: current.fileRevision,
+      plan: {
+        operationId: current.operationId,
+        operationRevision: current.operationRevision,
+        requestHash: current.requestHash,
+        invocationId: crypto.randomUUID(),
+        maximumAttempts: 1,
+        deadlineAt: new Date(Date.parse(now) + 300000).toISOString(),
+        quantities: [{ sku: "container_cpu_seconds", maximumQuantity: "265" }],
+      },
+    };
+    const paid = await f.runtime.prepareHold({ ...f.actor, now }, r);
+    if (!paid) throw new Error("synthetic bounded probe hold missing");
+    return { r, paid };
+  };
+  return { ...f, uploadId, fileId, probes, prepare };
+}
+
+test("inline upload probe reserves real bounded paid hold before dispatch without quota or outbox", async () => {
+  const f = await uploadProbeFixture(),
+    { r, paid } = await f.prepare();
+  const args = { uploadId: f.uploadId, uploadRevision: 1, leaseUntil: "2026-10-06T00:05:00.000Z" };
+  expect(await f.probes.attach(f.actor, args)).toBeNull();
+  expect(f.db.sqlite.query("SELECT count(*) n FROM v2_jobs").get()).toEqual({ n: 0 });
+  const lease = await f.probes.attach(f.actor, args, paid);
+  expect(lease).not.toBeNull();
+  if (!lease) throw new Error("synthetic probe lease missing");
+  expect(await f.runtime.beforeDispatch(f.actor, lease, r.attemptId)).not.toBeNull();
+  expect(f.db.sqlite.query("SELECT count(*) n FROM v2_outbox").get()).toEqual({ n: 0 });
+  expect((await f.accounting.usage(f.actor)).aiResponses.reserved).toBe(0);
+  expect(
+    await f.probes.finish(f.actor, f.uploadId, 1, { ...lease, token: crypto.randomUUID() }, true),
+  ).toBe(false);
+  expect(await f.probes.finish(f.actor, f.uploadId, 1, lease, true)).toBe(true);
+  expect(await f.probes.finish(f.actor, f.uploadId, 1, lease, true)).toBe(false);
+  expect(
+    f.db.sqlite
+      .query("SELECT revision,state,current_job_id FROM v2_files WHERE id=?")
+      .get(f.fileId),
+  ).toEqual({ revision: 1, state: "reserved", current_job_id: null });
+  expect(
+    f.db.sqlite.query("SELECT state FROM v2_upload_sessions WHERE id=?").get(f.uploadId),
+  ).toEqual({ state: "open" });
+  expect(
+    f.db.sqlite.query("SELECT state FROM v2_operations WHERE id=?").get(r.plan.operationId),
+  ).toEqual({ state: "admitted" });
+  expect((await f.runtime.exposure(NOW))?.reserved_krw).toBeGreaterThan(0);
+});
+
+test("inline upload probe owner, revision, consent and timeout reject before creating held jobs", async () => {
+  const f = await uploadProbeFixture(),
+    { paid } = await f.prepare();
+  const args = { uploadId: f.uploadId, uploadRevision: 1, leaseUntil: "2026-10-06T00:05:00.000Z" };
+  expect(await f.probes.attach({ ...f.actor, ownerId: "foreign-owner" }, args, paid)).toBeNull();
+  expect(await f.probes.attach(f.actor, { ...args, uploadRevision: 2 }, paid)).toBeNull();
+  expect(
+    await f.probes.attach(f.actor, { ...args, leaseUntil: "2026-10-06T00:05:01.000Z" }, paid),
+  ).toBeNull();
+  f.db.sqlite.query("DELETE FROM v2_consents WHERE file_id=?").run(f.fileId);
+  expect(await f.probes.attach(f.actor, args, paid)).toBeNull();
+  expect(f.db.sqlite.query("SELECT count(*) n FROM v2_paid_holds").get()).toEqual({ n: 0 });
+  expect(f.db.sqlite.query("SELECT count(*) n FROM v2_jobs").get()).toEqual({ n: 0 });
+});
+
+test("inline upload probe expired lease can be replaced without refunding unknown exposure or reviving old results", async () => {
+  const f = await uploadProbeFixture(),
+    first = await f.prepare();
+  const lease = await f.probes.attach(
+    f.actor,
+    { uploadId: f.uploadId, uploadRevision: 1, leaseUntil: "2026-10-06T00:05:00.000Z" },
+    first.paid,
+  );
+  if (!lease) throw new Error("synthetic first lease missing");
+  const later = "2026-10-06T00:05:01.000Z",
+    second = await f.prepare(later),
+    actor = { ...f.actor, now: later };
+  const next = await f.probes.attach(
+    actor,
+    { uploadId: f.uploadId, uploadRevision: 1, leaseUntil: "2026-10-06T00:10:01.000Z" },
+    second.paid,
+  );
+  expect(next).not.toBeNull();
+  expect(await f.probes.finish(actor, f.uploadId, 1, lease, true)).toBe(false);
+  expect(await f.runtime.beforeDispatch(actor, lease, first.r.attemptId)).toBeNull();
+  expect(
+    f.db.sqlite.query("SELECT status,lease_token FROM v2_jobs WHERE id=?").get(lease.jobId),
+  ).toEqual({ status: "cancelled", lease_token: null });
+  expect(
+    f.db.sqlite.query("SELECT count(*) n FROM v2_cost_attempts WHERE state='reserved'").get(),
+  ).toEqual({ n: 2 });
+});
 test("late incomplete usage observations remain durable under the same ambiguous hold without a fictitious monetary transition", async () => {
   const f = await fixture(),
     d = await dispatch(f);
