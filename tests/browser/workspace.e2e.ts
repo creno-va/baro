@@ -61,7 +61,10 @@ test("file processing failure, retry, extracted text, original bytes, cancellati
   await expect(page.getByRole("heading", { name: "아직 자료가 없어요" })).toBeVisible();
   await page.evaluate((storageKey) => {
     const state = JSON.parse(localStorage.getItem(storageKey) ?? "{}");
-    state.faults = { "files.upload": ["file_failed"], "files.uploadPart": ["UNAVAILABLE"] };
+    state.faults = {
+      "files.upload": ["file_failed"],
+      "files.uploadPart": ["UNAVAILABLE", "UNAVAILABLE"],
+    };
     localStorage.setItem(storageKey, JSON.stringify(state));
   }, key);
   await page.getByLabel("선택 자료의 자동 처리에 동의합니다.").check();
@@ -70,6 +73,16 @@ test("file processing failure, retry, extracted text, original bytes, cancellati
     .getByLabel("업로드할 파일 선택", { exact: true })
     .setInputFiles({ name: "synthetic.txt", mimeType: "text/plain", buffer: Buffer.from(text) });
   await page.getByRole("button", { name: "업로드 다시 시도" }).click();
+  await expect(page.getByRole("alert")).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "synthetic.txt" })).toBeVisible();
+  await page.getByLabel("선택 자료의 자동 처리에 동의합니다.").check();
+  await page.getByLabel("업로드할 파일 선택", { exact: true }).setInputFiles({
+    name: "synthetic.txt",
+    mimeType: "text/plain",
+    buffer: Buffer.from(text),
+  });
+  await expect(page.getByRole("heading", { name: "synthetic.txt" })).toHaveCount(1);
   await expect(page.getByText("처리 실패", { exact: true })).toBeVisible();
   await page.reload();
   await page.getByRole("button", { name: "처리 다시 시도" }).click();
@@ -127,4 +140,23 @@ test("mobile keyboard dialog, empty state, quota, stale input and safe image pre
   await page.getByRole("button", { name: "원본 확인 · 다운로드" }).click();
   await expect(page.getByAltText("synthetic.png 원본 미리보기")).toBeVisible();
   await page.screenshot({ path: "test-results/workspace-mobile-preview.png", fullPage: true });
+});
+
+test("changing the shared mock owner hides the previous workspace and open editor", async ({
+  page,
+}) => {
+  await page.goto(`${base}/timeline`);
+  await page.getByRole("button", { name: "일정 추가" }).click();
+  await page.getByLabel("어떤 일이 있었나요?").fill("공개하지 않을 합성 초안");
+  await page.evaluate((storageKey) => {
+    const state = JSON.parse(localStorage.getItem(storageKey) ?? "{}");
+    state.caseOwners = { "synthetic-case": "synthetic-owner" };
+    state.session.user = { id: "other-owner", name: "다른 합성 사용자", accountType: "customer" };
+    localStorage.setItem(storageKey, JSON.stringify(state));
+    window.dispatchEvent(new Event("focus"));
+  }, key);
+  await expect(page.getByRole("alert")).toContainText("사건 또는 자료를 찾을 수 없어요.");
+  await expect(page.getByRole("dialog")).not.toBeVisible();
+  await expect(page.getByRole("heading", { name: "대여금 반환 관련 자료 정리" })).not.toBeVisible();
+  await expect(page.getByLabel("어떤 일이 있었나요?")).not.toBeVisible();
 });

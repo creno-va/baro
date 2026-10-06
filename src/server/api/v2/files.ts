@@ -108,6 +108,18 @@ export function createFilesApi(
       201,
     );
   });
+  app.get("/:caseId/files/:fileId/upload-session", async (c) => {
+    const access = await caseAccess(c, false, true);
+    if (access.response) return access.response;
+    z.strictObject({}).parse(c.req.query());
+    return c.json(
+      await (await service(c.env, access.ownerId)).resumeUpload(
+        access.ownerId,
+        c.req.param("caseId"),
+        c.req.param("fileId"),
+      ),
+    );
+  });
   app.put("/:caseId/files/:fileId/parts/:partNumber", async (c) => {
     const access = await caseAccess(c, true, true);
     if (access.response) {

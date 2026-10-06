@@ -165,6 +165,21 @@ export function createFilesApi(request: WorkspaceTransport) {
     };
     let session = attempt.session;
     if (!session) {
+      const pending = (await list(id)).find(
+        (item) =>
+          item.status === "uploading" && item.name === file.name && item.sizeBytes === file.size,
+      );
+      if (pending) {
+        session = v2UploadSessionSchema.parse(
+          await workspaceJson(
+            request,
+            `${base(id)}/files/${encodeURIComponent(pending.id)}/upload-session`,
+          ),
+        );
+        attempt.session = session;
+      }
+    }
+    if (!session) {
       try {
         session = v2UploadSessionSchema.parse(
           await workspaceJson(request, `${base(id)}/files`, {

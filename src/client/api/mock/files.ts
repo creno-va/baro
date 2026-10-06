@@ -85,7 +85,7 @@ async function blobHash(blob: Blob) {
 export function createFilesMock(runtime: WorkspaceMockRuntime, originals = mockOriginalStore) {
   return async function handleFilesMock(request: Request): Promise<Response | null> {
     const match =
-      /^\/api\/v2\/cases\/([^/]+)\/files(?:\/([^/]+)(?:\/(content|retry|complete|parts\/(\d+)))?)?$/.exec(
+      /^\/api\/v2\/cases\/([^/]+)\/files(?:\/([^/]+)(?:\/(content|retry|complete|upload-session|parts\/(\d+)))?)?$/.exec(
         new URL(request.url).pathname,
       );
     if (!match) return null;
@@ -180,6 +180,18 @@ export function createFilesMock(runtime: WorkspaceMockRuntime, originals = mockO
       }
       if (!record || !fileId) throw new WorkspaceMockError("NOT_FOUND", "자료를 찾을 수 없어요.");
       const upload = state.fileUploads?.[fileId];
+      if (request.method === "GET" && kind === "upload-session") {
+        requireMockCase(state, id, true);
+        if (
+          !upload ||
+          upload.ownerId !== owner ||
+          upload.caseId !== id ||
+          record.status !== "uploading" ||
+          Date.parse(upload.session.expiresAt) <= Date.now()
+        )
+          throw new WorkspaceMockError("NOT_FOUND", "업로드가 만료되거나 삭제됐어요.");
+        return mockResponse(upload.session);
+      }
       if (request.method === "PUT" && kind?.startsWith("parts/")) {
         const index = Number(match[4]);
         if (

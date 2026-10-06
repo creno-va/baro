@@ -1,4 +1,8 @@
 import { afterEach, expect, test } from "bun:test";
+import { Hono } from "hono";
+import { CURRENT_POLICY_VERSIONS } from "../src/contracts/consent";
+import type { ApiEnvironment } from "../src/server/api/errors";
+import { createFilesApi } from "../src/server/api/v2/files";
 import { createCaseDataCipher } from "../src/server/crypto";
 import { createV2AccountingRepository } from "../src/server/db/v2-accounting";
 import { createV2Core } from "../src/server/db/v2-core";
@@ -46,7 +50,7 @@ test("workspace file observations read requires exact owner and workspace and st
         name: "synthetic.txt",
         byteLength: 10,
         mediaType: "text/plain",
-        autoProcessConsentVersion: "synthetic-v2",
+        autoProcessConsentVersion: CURRENT_POLICY_VERSIONS.aiNoticeVersion,
       },
       {
         fileId,
@@ -65,6 +69,46 @@ test("workspace file observations read requires exact owner and workspace and st
   const own = await readWorkspaceFile(core, owner.userId, workspaceId, fileId);
   expect(own.name).toBe("synthetic.txt");
   expect(own.status).toBe("reserved");
+  const app = new Hono<ApiEnvironment>()
+    .use("*", async (c, next) => {
+      c.set("requestId", "synthetic-resume");
+      await next();
+    })
+    .route("/v2/cases", createFilesApi());
+  const env = { ...owner.env, CASE_DATA_KEY_V1: btoa("f".repeat(32)).replace(/=+$/, "") };
+  const route = `/v2/cases/${workspaceId}/files/${fileId}/upload-session`;
+  expect((await app.request(route, {}, env)).status).toBe(401);
+  expect((await app.request(route, { headers: { cookie: other.cookie } }, env)).status).toBe(404);
+  expect(
+    (
+      await app.request(
+        `/v2/cases/${siblingId}/files/${fileId}/upload-session`,
+        {
+          headers: { cookie: owner.cookie },
+        },
+        env,
+      )
+    ).status,
+  ).toBe(404);
+  const resumed = await app.request(route, { headers: { cookie: owner.cookie } }, env);
+  expect(resumed.status).toBe(200);
+  expect(((await resumed.json()) as { fileId: string }).fileId).toBe(fileId);
+  expect(resumed.headers.get("cache-control")).toBe("private, no-store");
+  const detail = await app.request(
+    `/v2/cases/${workspaceId}/files/${fileId}`,
+    {
+      headers: { cookie: owner.cookie },
+    },
+    env,
+  );
+  expect(detail.status).toBe(200);
+  expect(((await detail.json()) as { name: string }).name).toBe("synthetic.txt");
+  db.sqlite
+    .query("UPDATE v2_upload_sessions SET expires_at=? WHERE file_id=?")
+    .run(new Date(Date.now() - 1000).toISOString(), fileId);
+  expect((await app.request(route, { headers: { cookie: owner.cookie } }, env)).status).toBe(404);
+  db.sqlite.query("DELETE FROM user_consents WHERE user_id=?").run(owner.userId);
+  expect((await app.request(route, { headers: { cookie: owner.cookie } }, env)).status).toBe(403);
   await expect(readWorkspaceFile(core, other.userId, workspaceId, fileId)).rejects.toMatchObject({
     code: "NOT_FOUND",
   });

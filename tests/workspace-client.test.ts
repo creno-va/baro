@@ -198,6 +198,26 @@ test("session, consent, quota and deleted case are enforced without recreating s
   await expect(f.client.get("synthetic-case")).rejects.toMatchObject({ code: "NOT_FOUND" });
   expect(f.runtime.read().workspace).toEqual({});
 });
+
+test("common caseOwners state denies another mock account and deleted-account replay", async () => {
+  const f = fixture();
+  f.runtime.update((state) => {
+    state.caseOwners = { "synthetic-case": "synthetic-owner" };
+  });
+  await f.client.get("synthetic-case");
+  f.runtime.update((state) => {
+    state.session.user = { id: "other-owner", name: "다른 합성 사용자", accountType: "customer" };
+  });
+  await expect(f.client.get("synthetic-case")).rejects.toMatchObject({ code: "NOT_FOUND" });
+  await expect(createFilesApi(f.transport).list("synthetic-case")).rejects.toMatchObject({
+    code: "NOT_FOUND",
+  });
+  f.runtime.update((state) => {
+    state.session.user = { id: "synthetic-owner", name: "합성 사용자", accountType: "customer" };
+    state.deletedAccountIds = ["synthetic-owner"];
+  });
+  await expect(f.client.get("synthetic-case")).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
+});
 test("real file adapter surfaces unavailable processing API instead of generating mock success", async () => {
   const calls: string[] = [];
   const request = async (path: string) => {
@@ -237,7 +257,7 @@ test("chunk upload retries reuse reservation and preserve exact original bytes a
   const pending = await files.list("synthetic-case");
   expect(pending).toHaveLength(1);
   expect(pending[0]?.status).toBe("uploading");
-  const uploaded = await files.upload("synthetic-case", source);
+  const uploaded = await createFilesApi(f.transport).upload("synthetic-case", source);
   expect(uploaded.id).toBe(pending[0]?.id ?? "");
   expect(await files.list("synthetic-case")).toHaveLength(1);
   const resumed = createFilesApi(f.transport);

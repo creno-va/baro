@@ -19,6 +19,8 @@ export type WorkspaceMockData = {
 export type WorkspaceMockState = {
   session: SessionView;
   cases: Record<string, CaseView>;
+  caseOwners?: Record<string, string>;
+  deletedAccountIds?: string[];
   workspace: Record<string, WorkspaceMockData>;
   files: Record<string, FileView[]>;
   deletedCaseIds?: string[];
@@ -84,10 +86,16 @@ export function mockFailure(cause: unknown) {
 }
 export function requireMockCase(state: WorkspaceMockState, id: string, write = false) {
   if (!state.session.user) throw new WorkspaceMockError("UNAUTHENTICATED", "로그인이 필요해요.");
+  if (state.deletedAccountIds?.includes(state.session.user.id))
+    throw new WorkspaceMockError("UNAUTHENTICATED", "로그인이 필요해요.");
   if (state.session.needsConsent)
     throw new WorkspaceMockError("CONSENT_REQUIRED", "동의를 확인해 주세요.");
   const item = state.cases[id];
-  if (!item || state.deletedCaseIds?.includes(id))
+  if (
+    !item ||
+    state.deletedCaseIds?.includes(id) ||
+    (state.caseOwners && state.caseOwners[id] !== state.session.user.id)
+  )
     throw new WorkspaceMockError("NOT_FOUND", "사건을 찾을 수 없어요.");
   if (write && item.stage !== "active")
     throw new WorkspaceMockError("CONFLICT", "최신 요약을 확인하거나 보관 상태를 확인해 주세요.");

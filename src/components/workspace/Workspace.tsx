@@ -84,6 +84,19 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
   const dialog = useRef<HTMLDialogElement>(null);
   const chatEnd = useRef<HTMLDivElement>(null);
   const latest = useRef(0);
+  const showError = useCallback((cause: unknown) => {
+    const next = problem(cause);
+    setError(next);
+    if (["UNAUTHENTICATED", "NOT_FOUND", "CONSENT_REQUIRED"].includes(next.code)) {
+      setView(null);
+      setSelected([]);
+      setPreview(null);
+      setDeleteFile(null);
+      setEntry(null);
+      setOriginal(null);
+    }
+    return next;
+  }, []);
 
   const apply = useCallback((next: WorkspaceView) => {
     setView(next);
@@ -100,12 +113,12 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
   useEffect(() => {
     mounted.current = true;
     void load().catch((cause) => {
-      if (mounted.current) setError(problem(cause));
+      if (mounted.current) showError(cause);
     });
     const refresh = () => {
       if (!document.hidden && !lock.current)
         void load().catch((cause) => {
-          if (mounted.current) setError(problem(cause));
+          if (mounted.current) showError(cause);
         });
     };
     window.addEventListener("focus", refresh);
@@ -116,7 +129,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
       window.removeEventListener("focus", refresh);
       document.removeEventListener("visibilitychange", refresh);
     };
-  }, [load]);
+  }, [load, showError]);
   useEffect(() => {
     if (!view || view.case.schemaVersion === "1") return;
     const pending =
@@ -124,10 +137,10 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
       view.files.some((file) => ["uploading", "processing", "waiting"].includes(file.status));
     if (!pending) return;
     const timer = setTimeout(() => {
-      if (!document.hidden && !lock.current) void load().catch((cause) => setError(problem(cause)));
+      if (!document.hidden && !lock.current) void load().catch(showError);
     }, 1800);
     return () => clearTimeout(timer);
-  }, [view, load]);
+  }, [view, load, showError]);
   useEffect(() => {
     if (tab === "chat" && view?.messages.length)
       chatEnd.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
@@ -148,8 +161,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
     try {
       await action();
     } catch (cause) {
-      const nextError = problem(cause);
-      setError(nextError);
+      const nextError = showError(cause);
       if (nextError.code === "CONFLICT") await load().catch(() => {});
     } finally {
       lock.current = false;
@@ -498,6 +510,12 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                         <p className="workspace-coverage">
                           {file.coverage || "추출 범위는 처리가 끝난 뒤 확인할 수 있어요."}
                         </p>
+                        {file.status === "uploading" && (
+                          <p className="workspace-muted">
+                            업로드가 중단됐다면 같은 원본 파일을 다시 선택해 이어서 저장하세요.
+                            만료된 업로드는 삭제한 뒤 다시 추가할 수 있어요.
+                          </p>
+                        )}
                         <div className="workspace-buttons">
                           <Button
                             variant="outline"
