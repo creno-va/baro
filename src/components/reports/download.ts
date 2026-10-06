@@ -45,6 +45,10 @@ function header(size: number, fields: [number, number, 2 | 4][]) {
 /** ZIP STORE entries, UTF-8 filenames, CRC32, central directory and EOCD. No fake extensions. */
 export async function createZip(entries: { name: string; blob: Blob }[]) {
   if (!entries.length || entries.length > 100) throw new Error("ZIP 자료를 1~100개 선택해 주세요.");
+  if (entries.reduce((size, entry) => size + entry.blob.size, 0) > 100_000_000)
+    throw new Error(
+      "API 예시 ZIP은 선택 자료 전체 100MB까지 지원해요. 자료를 나눠 다운로드해 주세요.",
+    );
   const locals: Uint8Array[] = [];
   const central: Uint8Array[] = [];
   let offset = 0;

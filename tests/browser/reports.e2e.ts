@@ -1,6 +1,40 @@
+import { type ChildProcess, spawn } from "node:child_process";
 import { mkdir, readFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { expect, test } from "@playwright/test";
+
+// Dedicated D port under either the main browser config or the standalone config.
+test.use({ baseURL: "http://127.0.0.1:4343" });
+let server: ChildProcess;
+test.beforeAll(async () => {
+  server = spawn("bun", ["tests/helpers/reports-ui-server.ts"], {
+    cwd: fileURLToPath(new URL("../..", import.meta.url)),
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  await new Promise<void>((done, reject) => {
+    const timeout = setTimeout(() => reject(new Error("D browser harness did not start")), 15000);
+    server.stdout?.on("data", (chunk) => {
+      if (String(chunk).includes("D product component harness:")) {
+        clearTimeout(timeout);
+        done();
+      }
+    });
+    server.once("error", () => {
+      clearTimeout(timeout);
+      reject(new Error("D browser harness startup failed"));
+    });
+    server.once("exit", (code) => {
+      if (code) {
+        clearTimeout(timeout);
+        reject(new Error("D browser harness exited"));
+      }
+    });
+  });
+});
+test.afterAll(() => {
+  server?.kill();
+});
 
 const evidence = process.env.BARO_REPORT_EVIDENCE_DIR;
 test("review, masking, exclusions, actual PDF/ZIP downloads and persistent cascading deletion", async ({
@@ -141,4 +175,81 @@ test("mobile layout, keyboard cancel, failure and retry use the same components"
   await expect(page.getByRole("textbox", { name: "리포트 내용 편집" })).toBeVisible();
   if (evidence)
     await page.screenshot({ path: resolve(evidence, "report-mobile.png"), fullPage: true });
+});
+
+test("account deletion preserves signed session, OAuth callback and SQL revoke guards in the new component", async ({
+  page,
+  context,
+  baseURL,
+}) => {
+  const child = spawn(
+    "bun",
+    ["tests/helpers/browser-session-server.ts", baseURL ?? "", "account"],
+    { cwd: fileURLToPath(new URL("../..", import.meta.url)), stdio: ["pipe", "pipe", "pipe"] },
+  );
+  try {
+    const seed = await new Promise<{
+      origin: string;
+      cookie: {
+        name: string;
+        value: string;
+        url: string;
+        httpOnly: boolean;
+        secure: boolean;
+        sameSite: "Lax";
+      };
+    }>((done, reject) => {
+      const timeout = setTimeout(
+        () => reject(new Error("Synthetic signed-session fixture startup failed")),
+        15000,
+      );
+      let output = "";
+      child.stdout.on("data", (chunk) => {
+        output += String(chunk);
+        if (!output.includes("\n")) return;
+        clearTimeout(timeout);
+        done(JSON.parse(output.slice(0, output.indexOf("\n"))));
+      });
+      child.once("error", () => {
+        clearTimeout(timeout);
+        reject(new Error("Synthetic signed-session fixture startup failed"));
+      });
+    });
+    await context.addCookies([seed.cookie]);
+    await page.route("**/api/**", async (route) => {
+      const request = route.request(),
+        url = new URL(request.url());
+      const response = await route.fetch({
+        url: `${seed.origin}${url.pathname}${url.search}`,
+        headers: await request.allHeaders(),
+        maxRedirects: 0,
+      });
+      await route.fulfill({ response });
+    });
+    // Only the provider exchange is synthetic; nonce, callback, cookie and SQL execute real guards.
+    await page.route("https://accounts.google.com/**", async (route) => {
+      const url = new URL(route.request().url());
+      const callback = `${baseURL}/api/auth/callback/google?state=${encodeURIComponent(url.searchParams.get("state") ?? "")}&code=synthetic-code`;
+      await route.fulfill({
+        contentType: "text/html",
+        body: `<script>location.replace(${JSON.stringify(callback)})</script>`,
+      });
+    });
+    await page.goto("/settings?real-account=true");
+    const open = page.getByRole("button", { name: "계정과 모든 사건 삭제", exact: true });
+    await expect(open).toBeDisabled();
+    await page.getByRole("button", { name: "google로 재인증" }).click();
+    await expect(open).toBeEnabled();
+    await open.click();
+    await page.getByRole("textbox", { name: "삭제 확인 — DELETE 입력" }).fill("DELETE");
+    await page.getByRole("button", { name: "삭제 요청 확인", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "계정 삭제를 접수했어요" })).toBeVisible();
+    const revoked = await context.request.get(`${seed.origin}/api/me/deletion`, {
+      headers: { cookie: `${seed.cookie.name}=${seed.cookie.value}` },
+    });
+    expect(revoked.status()).toBe(401);
+  } finally {
+    child.stdin.end();
+    child.kill();
+  }
 });

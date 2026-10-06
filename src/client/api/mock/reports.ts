@@ -183,8 +183,17 @@ export function createReportsMockHandler(runtime: ReportMockRuntime): DomainRequ
       if (!report) throw new ReportMockError("NOT_FOUND", "리포트를 찾을 수 없어요.");
       requireMockCase(state, report.caseId);
       const content = report.maskIdentifiers ? maskReportText(report.content) : report.content;
-      if (exportPath[2] === "pdf" && method === "GET")
-        return (await createSyntheticPdf(report.title, content, report.revision)) as T;
+      if (exportPath[2] === "pdf" && method === "GET") {
+        const blob = await createSyntheticPdf(report.title, content, report.revision);
+        const latest = runtime.read();
+        requireMockCase(latest, report.caseId);
+        if (latest.session.user?.id !== state.session.user?.id)
+          throw new ReportMockError(
+            "UNAUTHENTICATED",
+            "로그인 상태가 변경됐어요. 다시 확인해 주세요.",
+          );
+        return blob as T;
+      }
       if (exportPath[2] === "zip" && method === "POST") {
         const ids = (init.body as { selectedFileIds?: unknown })?.selectedFileIds;
         if (
@@ -213,7 +222,17 @@ export function createReportsMockHandler(runtime: ReportMockRuntime): DomainRequ
           )
         )
           throw new ReportMockError("NOT_FOUND", "내보내는 동안 자료가 삭제됐어요.");
-        return (await createZip(entries)) as T;
+        const blob = await createZip(entries);
+        const finalState = runtime.read();
+        requireMockCase(finalState, report.caseId);
+        if (
+          finalState.session.user?.id !== state.session.user?.id ||
+          ids.some(
+            (fileId) => !(finalState.files[report.caseId] ?? []).some((file) => file.id === fileId),
+          )
+        )
+          throw new ReportMockError("NOT_FOUND", "내보내는 동안 자료나 로그인 상태가 변경됐어요.");
+        return blob as T;
       }
     }
     throw new ReportMockError("NOT_FOUND", "리포트 요청 경로를 확인해 주세요.");

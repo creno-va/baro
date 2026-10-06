@@ -19,6 +19,7 @@ export function ReportReview({ caseId }: { caseId: string }) {
   const [regenerate, setRegenerate] = useState(false);
   const [reviewed, setReviewed] = useState(false);
   const lock = useRef(false);
+  const loadSequence = useRef(0);
   const accept = useCallback((value: ReportView) => {
     setReport(value);
     setContent(value.content);
@@ -27,6 +28,7 @@ export function ReportReview({ caseId }: { caseId: string }) {
     setReviewed(false);
   }, []);
   const load = useCallback(async () => {
+    const sequence = ++loadSequence.current;
     setBusy("리포트 확인 중…");
     setError("");
     try {
@@ -34,6 +36,7 @@ export function ReportReview({ caseId }: { caseId: string }) {
         api.reports.get(caseId),
         api.files.list(caseId),
       ]);
+      if (sequence !== loadSequence.current) return;
       accept(value);
       setFiles(materials);
       setSelected([]);

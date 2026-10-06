@@ -7,7 +7,9 @@ import { createReportsMock, type ReportMockState } from "../../src/client/api/mo
 import { createReportsApi } from "../../src/client/api/reports";
 
 const key = "baro.reports.browser-test.v1";
-const initial = {
+const realAccountKey = "baro.reports-test.real-account";
+if (location.search.includes("real-account")) sessionStorage.setItem(realAccountKey, "true");
+const initial: ReportMockState & { lawyers: unknown } = {
   session: {
     user: { id: "synthetic-owner", name: "합성 이용자", accountType: "customer" },
     needsConsent: false,
@@ -62,6 +64,7 @@ const runtime = {
 const handleReports = createReportsMock(runtime),
   handleAccount = createAccountMock(runtime);
 async function request(path: string, init?: RequestInit) {
+  if (sessionStorage.getItem(realAccountKey) === "true") return fetch(path, init);
   const input = new Request(new URL(path, location.origin), init);
   const result = (await handleReports(input)) ?? (await handleAccount(input));
   if (!result) throw new Error("Unregistered test request");

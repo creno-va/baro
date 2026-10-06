@@ -2,7 +2,12 @@ import { expect, test } from "bun:test";
 import { createAccountClient } from "../src/client/api/account";
 import { createAccountMockHandler } from "../src/client/api/mock/account";
 import { createReportsMockHandler, type ReportMockState } from "../src/client/api/mock/reports";
-import { createReportsClient, type DomainRequest } from "../src/client/api/reports";
+import {
+  createReportsClient,
+  type DomainRequest,
+  type DomainRequestInit,
+} from "../src/client/api/reports";
+import type { ReportView } from "../src/client/api/types";
 import { createZip, maskReportText } from "../src/components/reports/download";
 
 function fixture() {
@@ -116,8 +121,8 @@ test("revision conflict and mutation-key replay prevent silent overwrites and du
     headers: { "idempotency-key": "synthetic-key" },
     body: { expectedRevision: old.revision + 1 },
   };
-  const one = await f.request("/api/v2/cases/case-demo/reports", init);
-  expect(await f.request("/api/v2/cases/case-demo/reports", init)).toEqual(one);
+  const one = await f.request<ReportView>("/api/v2/cases/case-demo/reports", init);
+  expect(await f.request<ReportView>("/api/v2/cases/case-demo/reports", init)).toEqual(one);
   await expect(
     f.request("/api/v2/cases/case-demo/reports", { ...init, body: { expectedRevision: 99 } }),
   ).rejects.toMatchObject({ code: "CONFLICT" });
@@ -182,7 +187,7 @@ test("anonymous, unconsented and nonexistent cases cannot read reports or downlo
 });
 test("real account usage converts seconds to minutes and deletion uses the existing guarded wire contracts", async () => {
   const calls: { path: string; init: unknown }[] = [];
-  const request: DomainRequest = async <T>(path, init) => {
+  const request: DomainRequest = async <T>(path: string, init?: DomainRequestInit) => {
     calls.push({ path, init });
     if (path.endsWith("usage"))
       return {
@@ -192,15 +197,18 @@ test("real account usage converts seconds to minutes and deletion uses the exist
         resetAt: "2026-10-06T15:00:00Z",
         newCases: { used: 1, reserved: 0, remaining: 2, limit: 3 },
         aiResponses: { used: 2, reserved: 0, remaining: 28, limit: 30 },
-        mediaSeconds: { used: 120, reserved: 0, remaining: 3480, limit: 3600 },
+        mediaSeconds: { used: 120, reserved: 60, remaining: 3420, limit: 3600 },
         storageBytes: { used: 100, reserved: 0, remaining: 9_999_999_900, limit: 10_000_000_000 },
         waitReasons: [],
       } as T;
     return { status: "accepted" } as T;
   };
   const api = createAccountClient(request);
-  expect((await api.usage()).mediaMinutes).toEqual({ used: 2, limit: 60 });
-  await api.deleteCase("synthetic-case", "DELETE");
+  const usage = await api.usage();
+  expect(usage.mediaMinutes).toEqual({ used: 3, limit: 60 });
+  expect(usage.includesReservations).toBe(true);
+  expect(usage.resetAt).toBe("2026-10-06T15:00:00Z");
+  await api.deleteCase("synthetic-case", "DELETE", "1");
   await api.deleteAccount("DELETE");
   expect(calls[1]?.path).toBe("/api/cases/synthetic-case");
   expect(calls[1]?.init).toMatchObject({ method: "DELETE" });

@@ -24,24 +24,41 @@ export function createAccountClient(request: DomainRequest) {
       const wire = v2UsageSchema.safeParse(result);
       if (wire.success) {
         const value = wire.data;
-        return usageViewSchema.parse({
-          newCases: value.newCases,
-          aiResponses: value.aiResponses,
-          storageBytes: value.storageBytes,
-          mediaMinutes: {
-            used: value.mediaSeconds.used / 60,
-            limit: value.mediaSeconds.limit / 60,
-          },
-        });
+        return {
+          ...usageViewSchema.parse({
+            newCases: {
+              used: value.newCases.used + value.newCases.reserved,
+              limit: value.newCases.limit,
+            },
+            aiResponses: {
+              used: value.aiResponses.used + value.aiResponses.reserved,
+              limit: value.aiResponses.limit,
+            },
+            storageBytes: {
+              used: value.storageBytes.used + value.storageBytes.reserved,
+              limit: value.storageBytes.limit,
+            },
+            mediaMinutes: {
+              used: (value.mediaSeconds.used + value.mediaSeconds.reserved) / 60,
+              limit: value.mediaSeconds.limit / 60,
+            },
+          }),
+          resetAt: value.resetAt,
+          waitReasons: value.waitReasons,
+          includesReservations: true,
+        };
       }
       return usageViewSchema.parse(result);
     },
-    async deleteCase(id: string, confirmation: string) {
+    async deleteCase(id: string, confirmation: string, schemaVersion: "1" | "2" = "2") {
       if (confirmation !== "DELETE") throw new Error("삭제 확인란에 DELETE를 입력해 주세요.");
-      await request(`/api/cases/${encodeURIComponent(id)}`, {
-        method: "DELETE",
-        headers: { "idempotency-key": crypto.randomUUID() },
-      });
+      await request(
+        `/api/${schemaVersion === "1" ? "cases" : "v2/cases"}/${encodeURIComponent(id)}`,
+        {
+          method: "DELETE",
+          headers: { "idempotency-key": crypto.randomUUID() },
+        },
+      );
     },
     async deleteAccount(confirmation: string) {
       if (confirmation !== "DELETE") throw new Error("삭제 확인란에 DELETE를 입력해 주세요.");

@@ -74,7 +74,7 @@ export function createAccountMockHandler(runtime: AccountMockRuntime): DomainReq
         mock: true,
       } as T;
     }
-    const casePath = path.match(/^\/api\/cases\/([^/]+)$/);
+    const casePath = path.match(/^\/api\/(?:v2\/)?cases\/([^/]+)$/);
     if (casePath && method === "DELETE") {
       const id = decodeURIComponent(casePath[1] ?? "");
       requireMockCase(state, id, false);
@@ -119,11 +119,11 @@ export function createAccountMock(runtime: AccountMockRuntime) {
     const path = new URL(request.url).pathname;
     if (
       !["/api/v2/me/usage", "/api/me/deletion", "/api/me"].includes(path) &&
-      !/^\/api\/cases\/[^/]+$/.test(path)
+      !/^\/api\/(?:v2\/)?cases\/[^/]+$/.test(path)
     )
       return null;
     if (path === "/api/me" && request.method !== "DELETE") return null;
-    if (/^\/api\/cases\/[^/]+$/.test(path) && request.method !== "DELETE") return null;
+    if (/^\/api\/(?:v2\/)?cases\/[^/]+$/.test(path) && request.method !== "DELETE") return null;
     try {
       const result = await handle(path, {
         method: request.method,

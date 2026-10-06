@@ -19,7 +19,9 @@ export function AccountSettings() {
   const [confirmation, setConfirmation] = useState("");
   const [deleted, setDeleted] = useState(false);
   const lock = useRef(false);
+  const loadSequence = useRef(0);
   const load = useCallback(async () => {
+    const sequence = ++loadSequence.current;
     setBusy("설정 확인 중…");
     setError("");
     try {
@@ -28,6 +30,7 @@ export function AccountSettings() {
         api.cases.list(),
         api.account.deletionAccess(),
       ]);
+      if (sequence !== loadSequence.current) return;
       const problems: string[] = [];
       if (results[0].status === "fulfilled") setUsage(results[0].value);
       else problems.push("사용량을 확인하지 못했어요.");
@@ -37,7 +40,12 @@ export function AccountSettings() {
         const value = results[2].value;
         setAccess(value);
         const raw = sessionStorage.getItem(markerKey);
-        const marker = raw ? JSON.parse(raw) : null;
+        let marker: { ownerTag?: string; startedAt?: number } | null = null;
+        try {
+          marker = raw ? JSON.parse(raw) : null;
+        } catch {
+          sessionStorage.removeItem(markerKey);
+        }
         const confirmed = value.canDelete;
         setReady(Boolean(confirmed));
         if (marker && marker.ownerTag !== value.ownerTag) {
@@ -89,13 +97,18 @@ export function AccountSettings() {
         setDeleted(true);
         setTarget(null);
       } else {
-        await api.account.deleteCase(target.id, confirmation);
+        await api.account.deleteCase(target.id, confirmation, target.schemaVersion ?? "2");
         setCases(cases.filter((item) => item.id !== target.id));
         setTarget(null);
         setNotice(
           "사건 삭제를 접수하고 접근을 차단했어요. 원격 자료 정리는 별도 절차에 따라 진행돼요.",
         );
-        setUsage(await api.account.usage());
+        try {
+          setUsage(await api.account.usage());
+        } catch {
+          setUsage(null);
+          setError("삭제는 접수했지만 사용량을 다시 확인하지 못했어요. ‘다시 확인’을 눌러 주세요.");
+        }
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "삭제를 확인하지 못했어요. 다시 확인해 주세요.");
