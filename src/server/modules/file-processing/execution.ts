@@ -275,7 +275,7 @@ export function createFileProcessingExecution(
       throw new ProcessingError("STORAGE_UNAVAILABLE");
     const permit = await options.costs.before(
       {
-        service: "storage",
+        service: "requests",
         action: "r2_get",
         identity: `get:${blobId}:${blob.cipher_hash}`,
         byteLength: blob.cipher_bytes,
@@ -343,7 +343,7 @@ export function createFileProcessingExecution(
           throw new ProcessingError("FILE_REJECTED");
         const permit = await options.costs.before(
           {
-            service: "storage",
+            service: "requests",
             action: "r2_get",
             identity: `recover:${blobId}:${b.cipherHash}`,
             byteLength: b.cipherBytes,

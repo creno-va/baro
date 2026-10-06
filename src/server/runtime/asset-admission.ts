@@ -79,7 +79,7 @@ export function createAssetProcessingAdmission(
         },
       });
       const prepared = await budget.prepareInitial({
-        service: "storage",
+        service: "requests",
         action: "r2_get",
         identity: `asset-original:${source.original_blob_id}:${source.cipher_hash}`,
         byteLength: source.cipher_bytes,

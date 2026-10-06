@@ -4,7 +4,7 @@ import { idempotencyKeySchema, opaqueIdSchema, revisionSchema } from "../../../c
 import type { V2ErrorCode } from "../../../contracts/v2";
 import { lawyerAccess } from "../../auth/roles";
 import { createCaseDataCipher } from "../../crypto";
-import { createV2Core } from "../../db/v2-core";
+import { createV2Core, type V2Core } from "../../db/v2-core";
 import { AssetBinaryError } from "../../modules/lawyers/asset-binary";
 import { createLawyerAssetsService } from "../../modules/lawyers/assets";
 import {
@@ -51,77 +51,90 @@ export function privateLawyerApi() {
 }
 export const expectedRevisionBody = z.strictObject({ expectedRevision: revisionSchema });
 export function createLawyersApi(
-  options: { dependencies?: (env: Env) => Promise<LawyerDependencies> } = {},
+  options: {
+    dependencies?: (env: Env, core: V2Core, ownerId: string) => Promise<LawyerDependencies>;
+  } = {},
 ) {
   const app = privateLawyerApi();
-  const service = async (env: Env) =>
-    createLawyersService(
-      createV2Core(env.DB, await createCaseDataCipher(env)),
-      await options.dependencies?.(env),
-    );
-  const assets = async (env: Env) =>
-    createLawyerAssetsService(createV2Core(env.DB, await createCaseDataCipher(env)), {
-      ...(await options.dependencies?.(env)),
+  const service = async (env: Env, ownerId: string) => {
+    const core = createV2Core(env.DB, await createCaseDataCipher(env));
+    return createLawyersService(core, await options.dependencies?.(env, core, ownerId));
+  };
+  const assets = async (env: Env, ownerId: string) => {
+    const core = createV2Core(env.DB, await createCaseDataCipher(env));
+    return createLawyerAssetsService(core, {
+      ...(await options.dependencies?.(env, core, ownerId)),
       environment: env.APP_ENV === "production" ? "production" : "preview",
     });
+  };
   app.get("/roles", async (c) => {
     const a = await lawyerAccess(c);
     if (a.response) return a.response;
     z.strictObject({}).parse(c.req.query());
-    return c.json(await (await service(c.env)).roles(a.ownerId, a.sessionId));
+    return c.json(await (await service(c.env, a.ownerId)).roles(a.ownerId, a.sessionId));
   });
   app.get("/lawyer/application", async (c) => {
     const a = await lawyerAccess(c);
     if (a.response) return a.response;
     z.strictObject({}).parse(c.req.query());
-    return c.json(await (await service(c.env)).application(a.ownerId));
+    return c.json(await (await service(c.env, a.ownerId)).application(a.ownerId));
   });
   app.post("/lawyer/application", async (c) => {
     const a = await lawyerAccess(c, { mutation: true, consent: true });
     if (a.response) return a.response;
     z.strictObject({}).parse(await c.req.json());
-    return c.json(await (await service(c.env)).createApplication(a.ownerId), 201);
+    return c.json(await (await service(c.env, a.ownerId)).createApplication(a.ownerId), 201);
   });
   app.put("/lawyer/application", async (c) => {
     const a = await lawyerAccess(c, { mutation: true, consent: true });
     if (a.response) return a.response;
-    return c.json(await (await service(c.env)).saveApplication(a.ownerId, await c.req.json()));
+    return c.json(
+      await (await service(c.env, a.ownerId)).saveApplication(a.ownerId, await c.req.json()),
+    );
   });
   app.post("/lawyer/application/submit", async (c) => {
     const a = await lawyerAccess(c, { mutation: true, consent: true });
     if (a.response) return a.response;
     const body = expectedRevisionBody.parse(await c.req.json());
-    return c.json(await (await service(c.env)).submitApplication(a.ownerId, body.expectedRevision));
+    return c.json(
+      await (await service(c.env, a.ownerId)).submitApplication(a.ownerId, body.expectedRevision),
+    );
   });
   app.post("/lawyer/application/withdraw", async (c) => {
     const a = await lawyerAccess(c, { mutation: true });
     if (a.response) return a.response;
     const body = expectedRevisionBody.parse(await c.req.json());
     return c.json(
-      await (await service(c.env)).withdrawApplication(a.ownerId, body.expectedRevision),
+      await (await service(c.env, a.ownerId)).withdrawApplication(a.ownerId, body.expectedRevision),
     );
   });
   app.get("/lawyer/profile", async (c) => {
     const a = await lawyerAccess(c);
     if (a.response) return a.response;
     z.strictObject({}).parse(c.req.query());
-    return c.json(await (await service(c.env)).profile(a.ownerId));
+    return c.json(await (await service(c.env, a.ownerId)).profile(a.ownerId));
   });
   app.put("/lawyer/profile", async (c) => {
     const a = await lawyerAccess(c, { mutation: true, consent: true });
     if (a.response) return a.response;
-    return c.json(await (await service(c.env)).saveProfile(a.ownerId, await c.req.json()));
+    return c.json(
+      await (await service(c.env, a.ownerId)).saveProfile(a.ownerId, await c.req.json()),
+    );
   });
   app.post("/lawyer/profile/submit", async (c) => {
     const a = await lawyerAccess(c, { mutation: true, consent: true });
     if (a.response) return a.response;
     const body = expectedRevisionBody.parse(await c.req.json());
-    return c.json(await (await service(c.env)).submitProfile(a.ownerId, body.expectedRevision));
+    return c.json(
+      await (await service(c.env, a.ownerId)).submitProfile(a.ownerId, body.expectedRevision),
+    );
   });
   app.post("/lawyer/profile/withdraw", async (c) => {
     const a = await lawyerAccess(c, { mutation: true });
     if (a.response) return a.response;
-    return c.json(await (await service(c.env)).withdrawProfile(a.ownerId, await c.req.json()));
+    return c.json(
+      await (await service(c.env, a.ownerId)).withdrawProfile(a.ownerId, await c.req.json()),
+    );
   });
   for (const group of ["verification-assets", "portfolio-assets"] as const) {
     const scope = group === "verification-assets" ? "verification" : "portfolio";
@@ -134,7 +147,9 @@ export function createLawyersApi(
           limit: z.coerce.number().int().min(1).max(20).default(20),
         })
         .parse(c.req.query());
-      return c.json(await (await assets(c.env)).list(a.ownerId, scope, q.cursor, q.limit));
+      return c.json(
+        await (await assets(c.env, a.ownerId)).list(a.ownerId, scope, q.cursor, q.limit),
+      );
     });
     app.post(`/lawyer/${group}`, async (c) => {
       const a = await lawyerAccess(c, { mutation: true, consent: true });
@@ -143,7 +158,7 @@ export function createLawyersApi(
       if (!match || !/^[1-9]\d*$/.test(match)) throw new LawyerError("STALE_REVISION");
       const key = idempotencyKeySchema.parse(c.req.header("idempotency-key"));
       return c.json(
-        await (await assets(c.env)).reserve(
+        await (await assets(c.env, a.ownerId)).reserve(
           a.ownerId,
           Number(match),
           key,
@@ -157,7 +172,7 @@ export function createLawyersApi(
       const a = await lawyerAccess(c);
       if (a.response) return a.response;
       return c.json(
-        await (await service(c.env)).asset(
+        await (await service(c.env, a.ownerId)).asset(
           a.ownerId,
           opaqueIdSchema.parse(c.req.param("assetId")),
           group === "verification-assets" ? "verification" : "portfolio",
@@ -168,13 +183,13 @@ export function createLawyersApi(
       const a = await lawyerAccess(c, { mutation: true });
       if (a.response) return a.response;
       const body = expectedRevisionBody.parse(await c.req.json());
-      await (await service(c.env)).asset(
+      await (await service(c.env, a.ownerId)).asset(
         a.ownerId,
         c.req.param("assetId"),
         group === "verification-assets" ? "verification" : "portfolio",
       );
       return c.json(
-        await (await service(c.env)).removeAsset(
+        await (await service(c.env, a.ownerId)).removeAsset(
           a.ownerId,
           c.req.param("assetId"),
           body.expectedRevision,
@@ -196,7 +211,7 @@ export function createLawyersApi(
     )
       throw new LawyerError("ASSET_NOT_READY");
     return c.json(
-      await (await assets(c.env)).upload(
+      await (await assets(c.env, a.ownerId)).upload(
         a.ownerId,
         c.req.param("assetId"),
         Number(match),
@@ -209,7 +224,7 @@ export function createLawyersApi(
     const a = await lawyerAccess(c);
     if (a.response) return a.response;
     z.strictObject({}).parse(c.req.query());
-    const result = await (await assets(c.env)).open(a.ownerId, c.req.param("assetId"));
+    const result = await (await assets(c.env, a.ownerId)).open(a.ownerId, c.req.param("assetId"));
     return new Response(result.body, {
       headers: {
         "content-type": "application/octet-stream",

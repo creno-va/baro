@@ -18,7 +18,7 @@ export interface ProcessingCosts {
   /** Actual paid reservation/proof and final dispatch CAS, never a browser budget boolean. */
   before(
     input: {
-      service: "container" | "asr" | "model" | "storage";
+      service: "container" | "asr" | "model" | "storage" | "requests";
       identity: string;
       byteLength: number;
       durationSeconds: number | null;

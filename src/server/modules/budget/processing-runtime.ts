@@ -39,7 +39,7 @@ export const boundedProcessingResources: NonNullable<ProcessingRuntimePolicy["bo
         maximumQuantity: String(2 * Math.ceil(input.byteLength / 8388608)),
       },
     ];
-  } else if (input.service === "storage" && input.action === "r2_get") {
+  } else if (input.service === "requests" && input.action === "r2_get") {
     quantities = [{ sku: "r2_class_b_requests", maximumQuantity: "2" }];
   } else if (
     input.service === "asr" &&

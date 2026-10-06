@@ -40,14 +40,14 @@ export function createAssetProcessingService(
     environment: "preview" | "production";
     instanceId: string;
     bucket: PrivateBucket;
-    processor: ProcessorTransport;
+    processor?: ProcessorTransport;
     costs: ProcessingCosts;
     clock?: () => string;
     fixedLength?: (size: number) => {
       readable: ReadableStream<Uint8Array>;
       writable: WritableStream<Uint8Array>;
     };
-    openOriginal: (
+    openOriginal?: (
       input: OriginalInput,
       authorized: () => Promise<boolean>,
     ) => Promise<{ byteLength: number; contentHash: string; body: ReadableStream<Uint8Array> }>;
@@ -362,9 +362,11 @@ export function createAssetProcessingService(
         ))
       )
         throw new ProcessingError("STALE_REVISION");
+      if (!options.openOriginal || !options.processor)
+        throw new ProcessingError("MODEL_UNAVAILABLE");
       const originalPermit = await options.costs.before(
         {
-          service: "storage",
+          service: "requests",
           action: "r2_get",
           identity: `asset-original:${source.original_blob_id}:${source.cipher_hash}`,
           byteLength: source.cipher_bytes,
@@ -377,7 +379,7 @@ export function createAssetProcessingService(
         await options.costs.after(originalPermit, { transport: "not_sent" });
         throw new ProcessingError("STALE_REVISION");
       }
-      let original: Awaited<ReturnType<typeof options.openOriginal>>;
+      let original: Awaited<ReturnType<NonNullable<typeof options.openOriginal>>>;
       try {
         original = await options.openOriginal(params, access.authorize);
         await options.costs.after(originalPermit, { transport: "response" });
@@ -732,7 +734,7 @@ export function createAssetProcessingService(
       const access = { signal: new AbortController().signal, authorize: valid };
       const permit = await options.costs.before(
         {
-          service: "storage",
+          service: "requests",
           action: "r2_get",
           identity: `asset-get:${input.sourceBlobId}:${row.cipher_hash}`,
           byteLength: row.cipher_bytes,
