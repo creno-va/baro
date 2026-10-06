@@ -1,5 +1,4 @@
 import { Hono } from "hono";
-import { bodyLimit } from "hono/body-limit";
 import { getAuth } from "../auth";
 import { accountDeleteApi } from "./account-delete";
 import { answersApi } from "./answers";
@@ -9,6 +8,7 @@ import { type ApiEnvironment, errorBody } from "./errors";
 import { feedbackApi } from "./feedback";
 import { healthApi } from "./health";
 import { meApi } from "./me";
+import { requestBodyLimit } from "./request-body-limit";
 import { retryApi } from "./retry";
 import { usageApi } from "./v2/usage";
 
@@ -40,14 +40,7 @@ export const api = new Hono<ApiEnvironment>()
     await next();
     return;
   })
-  .use(
-    "*",
-    bodyLimit({
-      maxSize: 65_536,
-      onError: (context) =>
-        context.json(errorBody(context, "BODY_TOO_LARGE", "입력이 너무 커요."), 413),
-    }),
-  )
+  .use("*", requestBodyLimit)
   .all("/auth/*", async (context) => getAuth(context.env).handler(context.req.raw))
   .route("/health", healthApi)
   .route("/v2/me", usageApi)
