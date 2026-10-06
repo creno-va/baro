@@ -1,0 +1,71 @@
+{
+  "syntheticOnly": true,
+  "serial": true,
+  "repetitions": 1,
+  "scope": "local Node ingress + native subprocess + validated NDJSON; startup-only shims; no remote Containers/R2/models",
+  "results": [
+    {
+      "case": "pdf-text",
+      "unit": 0,
+      "wireBytes": 815,
+      "beforeWallSeconds": 0.13344899999999998,
+      "afterWallSeconds": 0.05841616599999998,
+      "exactWireEqual": true,
+      "cleanupBeforeCompletion": true
+    },
+    {
+      "case": "pdf-text",
+      "unit": 1,
+      "wireBytes": 787,
+      "beforeWallSeconds": 0.055134834000000014,
+      "afterWallSeconds": 0.05533145799999988,
+      "exactWireEqual": true,
+      "cleanupBeforeCompletion": true
+    },
+    {
+      "case": "text-small",
+      "unit": 0,
+      "wireBytes": 1013,
+      "beforeWallSeconds": 0.056241167000000016,
+      "afterWallSeconds": 0.04421616699999981,
+      "exactWireEqual": true,
+      "cleanupBeforeCompletion": true
+    },
+    {
+      "case": "image-png",
+      "unit": 0,
+      "wireBytes": 48438,
+      "beforeWallSeconds": 0.03997775000000001,
+      "afterWallSeconds": 0.037823832999999925,
+      "exactWireEqual": true,
+      "cleanupBeforeCompletion": true
+    },
+    {
+      "case": "audio-wav",
+      "unit": 0,
+      "wireBytes": 305803,
+      "beforeWallSeconds": 0.15344820899999997,
+      "afterWallSeconds": 0.09920975000000021,
+      "exactWireEqual": true,
+      "cleanupBeforeCompletion": true
+    },
+    {
+      "case": "video-silent",
+      "unit": 0,
+      "wireBytes": 169530,
+      "beforeWallSeconds": 0.460686375,
+      "afterWallSeconds": 0.450265584,
+      "exactWireEqual": true,
+      "cleanupBeforeCompletion": true
+    },
+    {
+      "case": "pdf-sanitize",
+      "unit": 0,
+      "wireBytes": 364734,
+      "beforeWallSeconds": 0.20611137499999996,
+      "afterWallSeconds": 0.20667637499999977,
+      "exactWireEqual": true,
+      "cleanupBeforeCompletion": true
+    }
+  ]
+}

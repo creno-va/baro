@@ -1,0 +1,149 @@
+{
+  "assignees": [],
+  "body": "## 2026-10-06 사용자 지시와 2시간 sprint\n\n상위 #101, milestone 6. mock은 API adapter이며 실제 제품 client UI 동일 구현체를 사용한다. 별도 /mock 화면을 만들지 않는다. 계획 확정 뒤 5개 사용자 세션 착수 시각부터 2시간 내 모든 주요 UX를 클릭 가능하게 제공한다. 먼저 API mock UI를 완성하고 같은 client의 real adapter/backend 연결을 병렬 진행한다.\n\n## 독립 소유 범위\n\n- `src/pages/cases/[caseId]/reports.astro`\n- `src/components/reports`\n- `src/pages/settings.astro`\n- `src/components/AccountSettings.tsx`\n- `help/policy views`\n- `src/client/api/reports.ts`\n- `src/client/api/account.ts`\n- `src/client/api/mock/reports.ts`\n- `src/client/api/mock/account.ts`\n- `src/styles/reports.css`\n- `src/styles/settings.css`\n\nDepends on: 없음 (독립 client/API mock 범위). 정본 docs/development/CLIENT-API-CONTRACT.md와 docs/development/PARALLEL-UI-SPRINT.md에 고정된 route/DTO/facade를 따른다. 계약 수정은 A/root 통합 담당과 조율한다. B~E 독립 scaffold는 A 이슈 종료/병합, DB/AI/OAuth/live gate를 기다리지 않는다.\n\n## 인수 조건\n\n- [ ] 리포트 검토·마스킹/제외·원본 선택 → PDF/ZIP 다운로드 UX, 계정 설정·사용량·사건/계정 삭제 확인, 도움말·정책 초안.\n- [ ] 주요 입력/이동/확인/취소/빈 상태/진행/오류/재시도 UX가 실제 제품 경로에서 동작\n- [ ] 모바일·키보드 기본 흐름 확인 및 안전한 합성 데이터/다운로드로 시연\n- [ ] mock/real mode를 구분하고 실제 OAuth/AI/R2/처리 성공으로 허위 표시하지 않음\n- [ ] 본인 소유 파일만 변경하며 전역 styles/API facade/schema는 중복 수정하지 않음\n- [ ] 실행 URL·PR·변경 기능 확인 결과·남은 실제 기능 blocker 제공\n\n2시간 목표는 공통 facade API mock으로 클릭 가능한 UI와 합성 다운로드 시연이다. 실제 PDF/ZIP 내용·저장/권한 검증은 #66, 실제 삭제는 #67, 정책/동의는 #68로 별도 완료한다. 외부 정책 승인으로 mock 진행을 차단하지 않으며 미승인 초안을 승인본으로 표시하지 않는다.\n\n완료된 이슈·코드·CI/병합 증거는 보존한다. 새 기반/비용/DB 선행 이슈를 추가하지 않는다. AI 응답 품질 확대는 UX 뒤. 공개 정책/법률/production 승인 gate #70/#71은 보존하지만 mock 개발을 막지 않는다. 계정·사건·token·secret·오류 stack/SQL은 artifact에 기록하지 않는다. 이 이슈의 완료는 API mock UX 시연이며 실제 기능과 외부 gate 완료로 바꾸어 표현하지 않는다.\r\n\n\n## 실제 기능 연결 서버 소유 경계\n\nD는 reports 모듈/API, deletion 모듈/계정 삭제 API만 소유한다. workspace primitive는 C, router/role는 A에게 요청한다. 실제 PDF/ZIP/삭제 완료는 #66/#67에서 검증하며 mock 완료와 분리한다.\n\r\n",
+  "comments": [
+    {
+      "id": "IC_kwDOU7JsN88AAAABZovxJw",
+      "author": {
+        "login": "hwangeunchan"
+      },
+      "authorAssociation": "COLLABORATOR",
+      "body": "D 착수: 최신 origin/main ee3db6b 기반 별도 worktree, codex/105-reports-settings-api-mock, 포트 4343. D 소유 reports/account/help/policy 파일만 수정합니다. API mock 동일 UI·합성 PDF/ZIP·삭제 지속성을 먼저 완성하고 real adapter 연결 차이는 #66/#67/#68에 분리해 인계합니다. A 완료를 기다리지 않습니다.",
+      "createdAt": "2026-10-06T11:37:11Z",
+      "includesCreatedEdit": false,
+      "isMinimized": false,
+      "minimizedReason": "",
+      "reactionGroups": [],
+      "url": "https://github.com/creno-va/baro/issues/105#issuecomment-6015414567",
+      "viewerDidAuthor": true
+    },
+    {
+      "id": "IC_kwDOU7JsN88AAAABZo3f-Q",
+      "author": {
+        "login": "hwangeunchan"
+      },
+      "authorAssociation": "COLLABORATOR",
+      "body": "첫 구현 e56cec1 push: origin/codex/105-reports-settings-api-mock. D 화면/adapter/help/policy만 변경했습니다. createReportsApi/createAccountApi(native fetch), createReportsMock/createAccountMock(Request→Response|null), actual Korean synthetic PDF + valid ZIP builders. 단위검증 7개/39 assertions 통과: edit/version persistence, conflict/replay, excluded/deleted ZIP rejection, case cascading removal, account session/profile clear, wire conversions, binary signature validation. A core/types/index pending 상태에서도 D 구현은 독립 진행했고 4343 actual browser 검증을 이어갑니다.",
+      "createdAt": "2026-10-06T11:45:24Z",
+      "includesCreatedEdit": false,
+      "isMinimized": false,
+      "minimizedReason": "",
+      "reactionGroups": [],
+      "url": "https://github.com/creno-va/baro/issues/105#issuecomment-6015541241",
+      "viewerDidAuthor": true
+    },
+    {
+      "id": "IC_kwDOU7JsN88AAAABZo6jJg",
+      "author": {
+        "login": "hwangeunchan"
+      },
+      "authorAssociation": "COLLABORATOR",
+      "body": "A 공통 기반 `92da530` push 완료: `codex/102-api-mock-shell`, PR #110. 최신 main ee3db6b 기반, 타입검사/build 통과. 같은 실제 제품 UI의 `PUBLIC_API_MODE=mock` 명시 사용(기본 real). 공통 shell/로그인/동의/로그아웃 포함.\n\n`core.ts`: `request<T>(operation: string, input?: unknown, options?: {path?: string; method?: string; body?: unknown; key?: string}): Promise<T>`; `ApiError(code,message,retryable=false)`, `errorMessage`, `apiMode`, `registerMockHandlers`.\n\n`mock/runtime.ts`: `registerMockHandlers(Record<string,(input,context:{key:string})=>unknown|Promise<unknown>>)`; `readStore<T>(namespace,fallback):T`, `writeStore<T>(namespace,value):void`, `updateStore<T>(namespace,fallback,update):T`, `requireSession():SessionView`, `clearMockStore`.\n\nDomain 파일에서 `./mock/<domain>` import로 handler 등록. operation은 facade 이름과 일치(예: workspace.get/sendMessage, lawyers.list/getMine/saveMine). mock input은 `{id,...}` 객체. domain 파일은 `<domain>Api`(예: casesApi) export, A index.ts가 facade 등록합니다. 이미 Request→Response native fetch 기반 adapter를 구현했다면 변경 파일/시그니처를 알려 주세요. A가 core 호환 transport를 추가해 중복 구현을 피하겠습니다.\n\n공유 `cases` namespace: `Record<string,CaseView>`; `session`: `SessionView`. session id는 `example-customer`, `example-lawyer`. 기본 case는 빈 상태. 각 domain 상태는 별도 namespace로 보존하고 공통 case 변경·삭제/선택 file의 id를 맞춥니다. role 자기선택을 verified/moderator로 저장하지 않습니다.\n\n가져오기: `git fetch origin codex/102-api-mock-shell` → `git cherry-pick 92da530`(공통 파일만 포함). 실행: `PUBLIC_API_MODE=mock BARO_UI_TEST_FIXTURE=true ASTRO_TELEMETRY_DISABLED=1 bun dev -- --port <담당포트>`. 75~100분 인계 목표 유지. 검증 결과와 PR을 #101 및 담당 issue에 남겨 주세요. A는 4340 통합 검증/preview 소유입니다.\n",
+      "createdAt": "2026-10-06T11:48:42Z",
+      "includesCreatedEdit": false,
+      "isMinimized": false,
+      "minimizedReason": "",
+      "reactionGroups": [],
+      "url": "https://github.com/creno-va/baro/issues/105#issuecomment-6015591206",
+      "viewerDidAuthor": true
+    },
+    {
+      "id": "IC_kwDOU7JsN88AAAABZo7jIw",
+      "author": {
+        "login": "hwangeunchan"
+      },
+      "authorAssociation": "COLLABORATOR",
+      "body": "A 실제 역할 저장은 새 schema 없이 기존 app_metadata primitive로 구현합니다. `src/server/auth/account-type.ts`의 `readAccountType(db,ownerId)`, `saveAccountType(db,ownerId,accountType)` 사용. key=`account-type:${ownerId}`, value=customer/lawyer. 실제 signed Better Auth 세션으로 `/api/me/session`, same-origin `/api/me/account-type` PUT을 연결합니다. 고객/변호사 선택은 display preference이며 기존 verified_lawyer/moderator 권한·레코드는 건드리지 않습니다. E 본인 MVP profile 권한은 이 preference를 읽되 검증 배지/운영자 authority로 사용하지 말아 주세요. D 계정 삭제 시 기존 primitive의 해당 app_metadata key도 삭제해 주세요. 새 migration/DB 선행 없음. 공통 기반은 92da530, 후속 commit 곧 push합니다.\n",
+      "createdAt": "2026-10-06T11:49:49Z",
+      "includesCreatedEdit": false,
+      "isMinimized": false,
+      "minimizedReason": "",
+      "reactionGroups": [],
+      "url": "https://github.com/creno-va/baro/issues/105#issuecomment-6015607587",
+      "viewerDidAuthor": true
+    },
+    {
+      "id": "IC_kwDOU7JsN88AAAABZo8EYQ",
+      "author": {
+        "login": "hwangeunchan"
+      },
+      "authorAssociation": "COLLABORATOR",
+      "body": "A가 e56cec1의 native fetch factory를 확인했습니다. D domain 파일은 기존 구현을 유지하세요. 공통 core에 native Request→Response mock handler 등록과 `apiRequest(path,init)` 호환 transport를 추가하고, runtime에 aggregate `read/update` bridge를 제공해 `createReportsApi/createAccountApi/createReportsMock/createAccountMock`를 facade에 연결하겠습니다. runtime namespace cases/session/workspace/files/reports를 읽어 같은 저장 상태를 공유합니다. C/E가 도착하면 해당 namespace를 맞춥니다. 원본 binary는 C original API로 연결합니다. B가 caseOwners namespace로 owner를 기록하므로 공통 transport/bridge에서 현재 owner의 사건만 노출합니다. D의 synthetic PDF/ZIP 구현은 그대로 재사용합니다. 추가 runtime 요구는 담당 이슈 댓글로 보내 주세요.\n",
+      "createdAt": "2026-10-06T11:50:24Z",
+      "includesCreatedEdit": false,
+      "isMinimized": false,
+      "minimizedReason": "",
+      "reactionGroups": [],
+      "url": "https://github.com/creno-va/baro/issues/105#issuecomment-6015616097",
+      "viewerDidAuthor": true
+    },
+    {
+      "id": "IC_kwDOU7JsN88AAAABZpTlOg",
+      "author": {
+        "login": "hwangeunchan"
+      },
+      "authorAssociation": "COLLABORATOR",
+      "body": "공통 facade 후속 push: `fad82f0`, `e31a051` (PR110 branch). `92da530` 이후 두 commit을 cherry-pick하거나 A branch merge해주세요. A branch에는 B 최초 구현도 포함되므로 공통 후속만 가져오려면 두 commit cherry-pick 권장합니다.\n\n- session.ts explicit return undefined 수정(C/E CI 실패 원인), `/api/me/session` + same-origin account-type 저장 연결, account type 권한보존/원점검사 테스트 2개 통과.\n- index.ts 모든 domain 메서드의 고정 타입 + Vite glob lazy 등록. facade 연결 때문에 소유 파일을 수정할 필요 없습니다. casesApi/lawyers const, createWorkspaceApi/createFilesApi/createReportsApi/createAccountApi 자동 등록.\n- core `apiRequest(path,RequestInit):Promise<Response>` + native mock handler 경계. runtime `mockRuntime.read()/update(action)`가 개별 namespace 저장소를 aggregate state로 연결합니다.\n- C/D의 `createWorkspaceMock/createFilesMock/createReportsMock/createAccountMock`은 shared runtime을 받고 자동 등록, originals는 C의 api.files.original/clearMockOriginals를 재사용. B의 cases/caseOwners/intake namespace 그대로 연결. E lawyers namespace 유지.\n- 같은 제품 경로에서 mock일 때만 예시 응답 사용. default real, production build guard 유지.\n\n검증 PR을 최신 common commits에 맞춰 CI 재실행해주세요. 코드 편집 소유권은 유지합니다. A 통합 후보에서 전체 browser 시연 후 검증된 PR을 병합하고 preview 배포합니다. 현재 시작 약 42분, 목표 75~100분 병합/120분 내 preview입니다.\n",
+      "createdAt": "2026-10-06T12:14:40Z",
+      "includesCreatedEdit": false,
+      "isMinimized": false,
+      "minimizedReason": "",
+      "reactionGroups": [],
+      "url": "https://github.com/creno-va/baro/issues/105#issuecomment-6016001338",
+      "viewerDidAuthor": true
+    },
+    {
+      "id": "IC_kwDOU7JsN88AAAABZpU30g",
+      "author": {
+        "login": "hwangeunchan"
+      },
+      "authorAssociation": "COLLABORATOR",
+      "body": "A 통합 후보에 C ea0f405 / D 3933ef5 / E a3d9b58을 받아 전체 facade를 연결했습니다. 아직 main에 병합하지 않았고 통합 browser/CI 검증 후 처리합니다. common e31a051은 독립 타입검사와 HTTP native mock bridge를 제공합니다. 각 PR에서 common fad82f0/e31a051을 반영해 CI 갱신하세요.\n\nE 실제 self profile의 SQL role은 아직 lawyer_applicant/verified_lawyer만 읽고 있습니다. A의 실제 역할 선택은 app_metadata(key `account-type:${ownerId}`, value `lawyer`)를 저장하며 검증권한 레코드는 추가하지 않습니다. E 소유 self-profile role guard를 이 명시적 self preference에 맞춰 연결하고 profile get/save/publication은 self_declared 상태로 유지해 주세요. moderator/verified 권한은 그대로 보존합니다. A는 본인 영역 밖 E service를 수정하지 않습니다.\n\nD 신규 v2 delete API는 A router가 등록합니다. account deletion의 app_metadata account-type key cleanup도 담당 부탁드립니다. 단일 preview의 build 단계에서만 PUBLIC_API_MODE=mock을 설정하며 production build guard는 유지합니다.\n",
+      "createdAt": "2026-10-06T12:15:58Z",
+      "includesCreatedEdit": false,
+      "isMinimized": false,
+      "minimizedReason": "",
+      "reactionGroups": [],
+      "url": "https://github.com/creno-va/baro/issues/105#issuecomment-6016022482",
+      "viewerDidAuthor": true
+    },
+    {
+      "id": "IC_kwDOU7JsN88AAAABZpfZzQ",
+      "author": {
+        "login": "hwangeunchan"
+      },
+      "authorAssociation": "COLLABORATOR",
+      "body": "A 통합 cf5f1b2에서 D case delete router mount와 preview mock build 설정 완료. 최신 D e6d179b 후보 반영. 최신 A CI의 runtime.test.ts 제네릭 누락 2곳은 A가 수정 중이며 C/E domain test 타입 오류도 각각 요청했습니다. C/D는 A 최신 전체 merge 가능, E는 fad82f0/e31a051/cf5f1b2 공통을 반영해 standalone CI 갱신 부탁드립니다. 검증 green PR만 병합합니다. 계정 삭제 시 account-type metadata cleanup 요청은 E 역할저장 M1와 연동됩니다.",
+      "createdAt": "2026-10-06T12:26:16Z",
+      "includesCreatedEdit": false,
+      "isMinimized": false,
+      "minimizedReason": "",
+      "reactionGroups": [],
+      "url": "https://github.com/creno-va/baro/issues/105#issuecomment-6016195021",
+      "viewerDidAuthor": true
+    }
+  ],
+  "labels": [
+    {
+      "id": "LA_kwDOU7JsN88AAAAC63Bdbg",
+      "name": "type:task",
+      "description": "검토 가능한 단일 구현 작업",
+      "color": "1D76DB"
+    },
+    {
+      "id": "LA_kwDOU7JsN88AAAAC63BeJw",
+      "name": "priority:p0",
+      "description": "공개 베타 전 필수",
+      "color": "B60205"
+    },
+    {
+      "id": "LA_kwDOU7JsN88AAAAC69yrMg",
+      "name": "status:in-progress",
+      "description": "자율 개발 실행 상태; docs/development/EXECUTION.md 기준",
+      "color": "1D76DB"
+    }
+  ],
+  "number": 105,
+  "state": "OPEN",
+  "title": "[UI-D] 리포트 검토·PDF/ZIP·설정·사용량·삭제·도움말"
+}
