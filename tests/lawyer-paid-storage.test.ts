@@ -276,8 +276,10 @@ test("actual bridge→lawyer private binary→atomic uploaded receipt preserves 
   });
   expect(f.db.sqlite.query("SELECT state FROM v2_blobs").get()).toEqual({ state: "stored" });
   expect(f.db.sqlite.query("SELECT count(*) n FROM v2_jobs").get()).toEqual({ n: 0 });
-  const opened = await f.service.open(f.actor.ownerId, f.reservation.assetId);
-  expect(new Uint8Array(await new Response(opened.body).arrayBuffer())).toEqual(new Uint8Array(5));
+  // PUT admission cannot substitute for the independent monthly maintenance projection.
+  await expect(f.service.open(f.actor.ownerId, f.reservation.assetId)).rejects.toMatchObject({
+    code: "PROCESSING_UNAVAILABLE",
+  });
 });
 test("actual pending failure rolls back cost+intent; concurrent original admission has one paid winner", async () => {
   const f = await paidFixture();
