@@ -11,6 +11,7 @@ export const workGraphSchema = z
           issue: z.number().int().positive(),
           milestone: z.number().int().positive(),
           kind: z.enum(["implementation", "external"]),
+          implementationPr: z.number().int().positive().optional(),
           dependsOn: z.array(z.number().int().positive()),
           owns: z.array(z.string().min(1)).min(1),
           docs: z.array(z.string().min(1)).min(1),
@@ -47,6 +48,8 @@ export function validateWorkGraph(graph: WorkGraph): string[] {
     visited.add(issue);
   }
   for (const item of graph.items) {
+    if (item.kind === "external" && item.implementationPr !== undefined)
+      errors.push(`External gate #${item.issue} cannot use an implementation PR`);
     visit(item.issue);
     for (const path of item.docs) {
       if (!path.startsWith("docs/") || path.includes("..") || !existsSync(resolve(path))) {
@@ -55,6 +58,34 @@ export function validateWorkGraph(graph: WorkGraph): string[] {
     }
   }
   return errors;
+}
+
+/** Reviewed implementation can unblock code; this never closes an issue or a public gate. */
+export function implementationIsMerged(value: unknown): boolean {
+  const parsed = z
+    .object({
+      state: z.literal("MERGED"),
+      baseRefName: z.literal("main"),
+      mergeCommit: z.object({ oid: z.string().regex(/^[a-f0-9]{40}$/) }),
+      headRefOid: z.string().regex(/^[a-f0-9]{40}$/),
+      statusCheckRollup: z.array(
+        z.object({
+          name: z.string().optional(),
+          status: z.string().optional(),
+          conclusion: z.string().optional(),
+        }),
+      ),
+    })
+    .safeParse(value);
+  return (
+    parsed.success &&
+    parsed.data.statusCheckRollup.some(
+      (check) =>
+        check.name === "Quality gate" &&
+        check.status === "COMPLETED" &&
+        check.conclusion === "SUCCESS",
+    )
+  );
 }
 
 if (import.meta.main) {
@@ -117,6 +148,25 @@ if (import.meta.main) {
       ]),
     );
   const issues = new Map(live.map((item) => [item.number, item]));
+  const implemented = new Set<number>();
+  for (const item of graph.items) {
+    if (
+      item.kind !== "implementation" ||
+      !item.implementationPr ||
+      issues.get(item.issue)?.state === "CLOSED"
+    )
+      continue;
+    const proof = await ghJson([
+      "pr",
+      "view",
+      String(item.implementationPr),
+      "--repo",
+      graph.repository,
+      "--json",
+      "state,baseRefName,mergeCommit,headRefOid,statusCheckRollup",
+    ]);
+    if (implementationIsMerged(proof)) implemented.add(item.issue);
+  }
   let drift = false;
   for (const item of graph.items) {
     const issue = issues.get(item.issue);
@@ -130,19 +180,23 @@ if (import.meta.main) {
       console.error(`MILESTONE DRIFT #${item.issue}`);
       drift = true;
     }
-    const blockedBy = item.dependsOn.filter((id) => issues.get(id)?.state !== "CLOSED");
+    const blockedBy = item.dependsOn.filter(
+      (id) => issues.get(id)?.state !== "CLOSED" && !implemented.has(id),
+    );
     const active =
       issue.labels.some((label) => label.name === "status:in-progress") ||
       prs.some((pr) =>
         new RegExp(`(?:Refs|Closes|Fixes) #${item.issue}(?!\\d)`, "i").test(pr.body),
       );
-    const status = active
-      ? "IN_PROGRESS"
-      : item.kind === "external"
-        ? "EXTERNAL"
-        : blockedBy.length
-          ? "BLOCKED"
-          : "READY";
+    const status = implemented.has(item.issue)
+      ? "IMPLEMENTATION_MERGED"
+      : active
+        ? "IN_PROGRESS"
+        : item.kind === "external"
+          ? "EXTERNAL"
+          : blockedBy.length
+            ? "BLOCKED"
+            : "READY";
     console.log(
       `${status} #${item.issue} ${issue.title}${blockedBy.length ? ` <- ${blockedBy.map((id) => `#${id}`).join(", ")}` : ""}`,
     );

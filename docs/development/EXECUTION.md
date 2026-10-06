@@ -32,7 +32,12 @@ P0.3 #18은 50개 제품 runner/상세 UI와 자동 접근성, dependency/secret
 복구/rollback 및 공개 정책은 P0.3 #18/#19/#20/#27이다. `Implementation-ready`는
 목표 계약이며 외부 승인 완료를 뜻하지 않는다. 원격 schema는 배포 health로 확인한다.
 
-실제 진행 상태의 정본은 GitHub 이슈/PR이며 의존성과 소유 경계는 [작업 그래프](./work-items.json)다. PR이 병합되어 선행 이슈가 완료되기 전에는 후속 제품 코드가 ready가 아니다. 마일스톤은 실행자 배정이 아니라 완료 게이트다.
+실제 진행 상태의 정본은 GitHub 이슈/PR이며 의존성과 소유 경계는 [작업 그래프](./work-items.json)다.
+2026-10-06 사용자 승인에 따라 후속 개발은 선행 구현 PR의 CI 성공과 main 병합으로 시작한다.
+실제 외부 검증이 남은 이슈는 OPEN으로 보존하며 구현 병합을 이슈/마일스톤 완료로 표시하지 않는다.
+그래프의 `implementationPr`는 검토된 전체 구현 PR만 지정하며 `work:next`가 실제 main 병합과
+Quality gate 성공을 조회한다. Fixture-only PR은 지정하지 않고 external 항목은 이 예외를 사용할 수 없다.
+마일스톤은 전체 완료 게이트다. 기존 Goal은 삭제됐으며 기능 연결·검증·배포 루프로 진행한다.
 
 ## 작업 선택·인계
 
