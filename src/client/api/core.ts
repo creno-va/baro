@@ -59,3 +59,32 @@ export async function request<T>(
   }
   return (await response.json()) as T;
 }
+
+export type HttpMockHandler = (request: Request) => Promise<Response | null>;
+const httpMocks: HttpMockHandler[] = [];
+export function registerHttpMockHandler(handler: HttpMockHandler) {
+  httpMocks.push(handler);
+}
+export async function apiRequest(path: string, init: RequestInit = {}): Promise<Response> {
+  if (!path.startsWith("/api/"))
+    throw new ApiError("VALIDATION_ERROR", "요청 경로를 확인해 주세요.");
+  if (apiMode === "real") {
+    try {
+      return await fetch(path, { ...init, credentials: "same-origin" });
+    } catch {
+      throw new ApiError("UNAVAILABLE", "연결하지 못했어요. 다시 시도해 주세요.", true);
+    }
+  }
+  const incoming = new Request(
+    new URL(path, typeof location === "undefined" ? "http://localhost" : location.origin),
+    init,
+  );
+  for (const handler of httpMocks) {
+    const result = await handler(incoming.clone() as unknown as Request);
+    if (result) return result;
+  }
+  return Response.json(
+    { error: { code: "UNAVAILABLE", message: "API 연결을 준비하고 있어요.", retryable: true } },
+    { status: 503 },
+  );
+}
