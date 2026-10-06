@@ -10,6 +10,7 @@ import { feedbackApi } from "./feedback";
 import { healthApi } from "./health";
 import { meApi } from "./me";
 import { retryApi } from "./retry";
+import { usageApi } from "./v2/usage";
 
 export const api = new Hono<ApiEnvironment>()
   .onError((_error, context) =>
@@ -18,6 +19,10 @@ export const api = new Hono<ApiEnvironment>()
   .notFound((context) =>
     context.json(errorBody(context, "NOT_FOUND", "요청한 경로를 찾을 수 없어요."), 404),
   )
+  .use("/v2/me/*", async (context, next) => {
+    await next();
+    context.header("cache-control", "private, no-store");
+  })
   .use("*", async (context, next) => {
     const incomingId = context.req.header("x-request-id");
     const requestId =
@@ -45,6 +50,7 @@ export const api = new Hono<ApiEnvironment>()
   )
   .all("/auth/*", async (context) => getAuth(context.env).handler(context.req.raw))
   .route("/health", healthApi)
+  .route("/v2/me", usageApi)
   .route("/me", meApi)
   .route("/me", accountDeleteApi)
   .route("/cases", caseCreateApi)
