@@ -1,10 +1,10 @@
 import { z } from "zod";
 import {
   positionMatchesProbe,
-  v2VideoFrameSchema,
   v2FileProbeSchema,
   v2HashSchema,
   v2SourcePositionSchema,
+  v2VideoFrameSchema,
 } from "../../../contracts/v2";
 
 export const MAX_ARTIFACT_BYTES = 1_048_576;
