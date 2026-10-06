@@ -620,3 +620,22 @@ source/browser·quality gate 모두 성공했다. 공유 병합 뒤 최신 main 
 01:44 KST 동일 D1 console은 preview/production2개, 기간 rows read26.78k·written1.17k,
 billable usage $0.00을 표시했다. 계정 전체 기간 관측이며 최종 candidate별 scan/청구 receipt나
 무료 처리 보장이 아니다. 격리 복구 자원이 없다는 판단은 동일하다.
+
+파일 담당 완료 인계 뒤 통합 담당이 기존 PR130을 f75bc9d로 rebase했다. range-diff에서
+모듈 commit5개는 동일했다. rebase head68ebfa3의
+[CI37498417740](https://github.com/creno-va/baro/actions/runs/37498417740)는 FAILURE:
+report PATCH65537 거부를 기대하던 테스트가 공유128KiB 계약과 충돌했다. 실제 signed SQL
+한글30000자 저장도 `RUNTIME_PROOF_TOO_LARGE`로503임을 추가 재현했다. 작은 기존 요청의
+receipt hash는 보존하고 큰 검토만 exact UTF-8 SHA256을 포함하는 versioned request identity로
+묶었다. 일반 금융 proof64KiB 한도는 확대하지 않았다. 같은 key 재시도는 동일 검토를 반환하고
+동일 길이 한 글자 변경은409, 원본/R2 I/O 없이 저장한다. PATCH131073/POST65537 거부도 확인했다.
+4665518의 [CI37498891870](https://github.com/creno-va/baro/actions/runs/37498891870)는 새 테스트의
+unknown wire typing 오류로 FAILURE이며 결과를 보존한다. DTO typing만 고친 final head
+`371da5db02f4f826c6f93e394cae9748c655d7ff`의 작업 트리에서 frozen ci/check1256 PASS/
+133307 assertions, drift·fresh/upgrade6/29, build/dry-run 및 focused API/service12/94가 통과했다.
+[새 CI37499235080](https://github.com/creno-va/baro/actions/runs/37499235080)가 병합 기준이다.
+
+Safari preview 로그인에서 실제 페이지 확대 메뉴200%를 확인했고 역할 선택과 로그인 버튼은
+세로 스크롤로 접근하며 가로 잘림이 없었다.100%로 복원하고 임시 탭을 정리했다. 이는 c6b9665
+배포의 로그인 검사이며 최종 통합 전체 흐름과 구분한다. 로컬 Chromium viewport/CSS 확대
+검사와 실제 browser zoom을 동일 증거로 부르지 않는다.
