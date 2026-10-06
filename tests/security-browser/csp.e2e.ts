@@ -11,6 +11,10 @@ test("built public directory and detail hydrate under hash CSP with no case data
   });
   await page.route("**/api/v2/lawyers**", (route) => {
     const path = new URL(route.request().url()).pathname;
+    if (path === "/api/v2/lawyers/self-service")
+      return route.fulfill({ json: { items: [], nextCursor: null } });
+    if (path.startsWith("/api/v2/lawyers/self-service/"))
+      return route.fulfill({ status: 404, json: {} });
     if (path.includes("/assets/")) return route.fulfill({ status: 404, body: "" });
     return route.fulfill({
       json:
@@ -95,21 +99,30 @@ test("built Worker mobile menu, brand, local font and error state work without C
 }) => {
   await page.addInitScript(() => {
     const browser = window as unknown as {
-      uiCspViolations: Array<{ directive: string; blockedURI: string; lineNumber: number }>;
+      uiCspViolations: Array<{
+        directive: string;
+        blockedURI: string;
+        sourceFile: string;
+        lineNumber: number;
+      }>;
     };
     browser.uiCspViolations = [];
     document.addEventListener("securitypolicyviolation", (event) =>
       browser.uiCspViolations.push({
         directive: event.violatedDirective,
         blockedURI: event.blockedURI,
+        sourceFile: event.sourceFile,
         lineNumber: event.lineNumber,
       }),
     );
   });
   await page.route("**/api/cases", (route) => route.fulfill({ status: 503, json: {} }));
+  await page.route("**/api/v2/cases**", (route) => route.fulfill({ status: 503, json: {} }));
   await page.setViewportSize({ width: 320, height: 760 });
   await page.goto("/cases");
-  await expect(page.getByRole("alert")).toContainText("목록을 불러오지 못했어요");
+  await expect(page.getByRole("alert")).toContainText(
+    "요청을 완료하지 못했어요. 다시 시도해 주세요.",
+  );
   await page.locator("astro-island[ssr]").waitFor({ state: "detached" });
   await page.evaluate(() => {
     document.documentElement.style.scrollbarGutter = "stable";

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import "./common";
 
 export const CURRENT_POLICY_VERSIONS = {
   termsVersion: "2026-10-04",
