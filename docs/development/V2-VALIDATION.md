@@ -191,7 +191,19 @@ root 통합 소스 `0cf6c5e079ff19a285a3f4d7284acfb84ae87d35`와의 직접 diff�
 통합 checkout의 bun ci·문서/그래프/경계·build·cf:dry-run도 통과했다. 별도 격리 local
 workerd D1에0000~0007을 모두 실제 적용했고 application table91개/v2 table76개/
 foreign key 위반0을 aggregate로 확인했다. 기존 로컬/원격 사건 행은 읽지 않았다.
-이는 아직 PR CI·원격0007 migration·실제 funding/청구·전체 역할 UI 성공 증거가 아니다.
+이 로컬 결과만으로 실제 funding/청구·전체 역할 UI 성공을 주장하지 않는다.
+
+#87은 [PR90](https://github.com/creno-va/baro/pull/90)의
+[exact-head CI](https://github.com/creno-va/baro/actions/runs/37404677949)를 통과해
+main `0638e42b19579bca356261c3eea36060499da9c5`에 병합되고 CLOSED가 됐다.
+같은 SHA의 [main CI](https://github.com/creno-va/baro/actions/runs/37405358551),
+[preview 배포](https://github.com/creno-va/baro/actions/runs/37405869467),
+[production foundation 배포](https://github.com/creno-va/baro/actions/runs/37407825207)가
+성공했다. Production은 기존 Environment의 정상 승인 경로를 사용했으며 deployment
+`6874733903`에 연결된다. 2026-10-06 KST의 독립 smoke가 두 실제 도메인의 SHA와
+`0007_runtime_paid_execution`을 확인했고 production `/api/cases`는
+HTTP503/`BETA_NOT_OPEN`을 유지한다. 이 foundation 결과는 실제 자금/청구나 OAuth·
+파일 처리·전 역할 UI·운영 drill·공개 승인 성공을 대신하지 않는다.
 
 이 증거는 저장 primitive와 migration의 검증이다. 아직 HTTP/UI가 연결되지 않은 v2 기능,
 실제 외부 처리·운영 drill·공개 승인·전체 서비스 배포 완료를 주장하지 않는다.
@@ -205,8 +217,11 @@ Gateway [draft PR88](https://github.com/creno-va/baro/pull/88)의 head
 secret·offline eval·build/bundle 성공이다. 별도 로컬 집중17개/180 assertions와 제품·도구
 TypeScript 검사가 통과했다. 각 실제 시도의 receipt·ambiguous exposure와 미호출 CAS 경계를
 검증하며 private 전체 binding input digest로 같은 크기의 다른 prompt/correction을 구분한다.
-digest는 token/vision 상한 증거가 아니다. #87 공유 DB와 #57 trusted factory·실제 가격/funding/
-청구 대조는 아직 미완료이고 PR은 draft다. 최대 자료 검사의 전체 host harness 시간을 조정한
+digest는 token/vision 상한 증거가 아니다. #87 공유 DB는 PR90으로 병합됐지만
+#57 trusted factory·실제 가격/funding/청구 대조는 미완료이며 PR은 draft다.
+공유 요청 생성/identity 함수는 `52e4ed4`에서 실제 dispatch와 planner가 사용하도록 분리했고
+집중17개/180 assertions·제품/도구 TypeScript·Biome 검사를 통과했다.
+최대 자료 검사의 전체 host harness 시간을 조정한
 #87 통합 후 최신 source의 로컬 mandatory를 순차 재검증한다. 제품의 단계별 제한과 자료
 크기·검증 항목은 줄이지 않는다.
 
