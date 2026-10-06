@@ -12,9 +12,14 @@ const usageViewSchema = z.object({
   mediaMinutes: count,
   storageBytes: count,
 });
+export type UsageSummary = UsageView & {
+  resetAt?: string;
+  waitReasons?: string[];
+  includesReservations?: boolean;
+};
 export function createAccountClient(request: DomainRequest) {
   return {
-    async usage(): Promise<UsageView> {
+    async usage(): Promise<UsageSummary> {
       const result = await request<unknown>("/api/v2/me/usage");
       const wire = v2UsageSchema.safeParse(result);
       if (wire.success) {

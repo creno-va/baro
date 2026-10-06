@@ -1,14 +1,14 @@
 import { AlertTriangle, HelpCircle, RefreshCw, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../client/api";
-import type { CaseView, UsageView } from "../client/api/types";
+import type { CaseView } from "../client/api/types";
 import { accountDeleted } from "../server/modules/analytics/browser";
 import { ConfirmDialog } from "./reports/ConfirmDialog";
 
 const markerKey = "baro.account-reauth.v1";
 type Access = Awaited<ReturnType<typeof api.account.deletionAccess>>;
 export function AccountSettings() {
-  const [usage, setUsage] = useState<UsageView | null>(null);
+  const [usage, setUsage] = useState<Awaited<ReturnType<typeof api.account.usage>> | null>(null);
   const [cases, setCases] = useState<CaseView[]>([]);
   const [access, setAccess] = useState<Access | null>(null);
   const [ready, setReady] = useState(false);
@@ -187,6 +187,26 @@ export function AccountSettings() {
               </div>
             ))}
           </div>
+        )}
+        {usage?.includesReservations && (
+          <p className="settings-muted">진행 중인 처리 예약을 포함한 사용량이에요.</p>
+        )}
+        {usage?.resetAt && (
+          <p className="settings-muted">
+            다음 일일 한도 갱신:{" "}
+            {new Date(usage.resetAt).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })}
+          </p>
+        )}
+        {usage?.waitReasons?.includes("monthly_budget") && (
+          <p role="status" className="settings-error">
+            처리 예산 때문에 새 자동 처리가 대기 중이에요. 저장한 내용을 확인하거나 삭제할 수
+            있어요.
+          </p>
+        )}
+        {usage?.waitReasons?.includes("processing_capacity") && (
+          <p role="status" className="settings-error">
+            처리 용량 때문에 새 자동 처리가 대기 중이에요. 잠시 후 다시 확인해 주세요.
+          </p>
         )}
         <p className="settings-muted">
           사건별 원본은 최대 100개·5GB예요. 문서·이미지 100MB, 음성·영상 1GB, PDF 500쪽, 미디어 60분
