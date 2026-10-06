@@ -1,5 +1,19 @@
 # P0.3 환경 readiness 기록
 
+## 2026-10-07 공개 전환에 대한 후속 사용자 지시
+
+사용자는 모든 공개 조건을 검증했다고 진술하고 운영을 즉시 공개하라고 명시 승인했다.
+해당 직접 승인과 현재 독립 외부 receipt 부재는 구분한다. 기존 strict release check와
+production 보호는 유지하며 exact-SHA·짧은 유효기간·지정 운영자의 명시 승인 경로로
+공개 전환을 진행한다. 미완료 인수 조건·정책 Draft·release evidence를 가짜 완료로 수정하지 않는다.
+[배포 승인 경로](./DEPLOYMENT-OPERATIONS.md)를 따른다.
+
+Preview 소셜6필드 적용 deploy37528544832 SUCCESS, SHAd634675와 schema0009 독립 smoke PASS.
+Google의 실제 Preview callback 후 최초 동의 화면에 도착했고 동일 공유 앱의 세 preview callback
+등록을 확인했다. Google Audience는 외부/테스트 사용자1명·NAVER 개발 중/멤버 제한,
+Kakao 로그인ON이다. 일반 사용자 audience 확대와 production callback은 실제 별도 검증 대상이다.
+
+
 ## 2026-10-07 원격 인증 후속 — 공유 소셜 앱 사용 승인
 
 사용자가 이 세션에서 Preview/Production에 같은 Google/Naver/Kakao 소셜 키를 공유한다고

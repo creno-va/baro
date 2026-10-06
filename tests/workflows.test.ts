@@ -158,3 +158,32 @@ test("preview OAuth sync uses only preview Environment secrets before deployment
   expect(deploy?.with?.command).not.toContain("secret");
   expect(deploy?.with?.environment).toBeUndefined();
 });
+
+test("operator launch exception preserves strict public-beta gate and protected production", async () => {
+  const workflow = Bun.YAML.parse(
+    await Bun.file(".github/workflows/deploy-production.yml").text(),
+  ) as {
+    jobs: {
+      deploy: {
+        environment: string;
+        steps: { name: string; if?: string; run?: string; env?: Record<string, string> }[];
+      };
+    };
+  };
+  const job = workflow.jobs.deploy;
+  expect(job.environment).toBe("production");
+  const strict = job.steps.find((s) => s.name === "Check public beta release evidence");
+  expect(strict?.if).toBe("inputs.release_mode == 'public-beta'");
+  expect(strict?.run).toBe("bun run release:check");
+  const operator = job.steps.findIndex(
+    (s) => s.name === "Check explicit operator launch authorization",
+  );
+  const migration = job.steps.findIndex((s) => s.name === "Apply validated production migrations");
+  expect(operator).toBeGreaterThan(-1);
+  expect(operator).toBeLessThan(migration);
+  expect(job.steps[operator]?.if).toBe("inputs.release_mode == 'operator-authorized'");
+  expect(job.steps[operator]?.run).toContain('"$TARGET_SHA" "$LAUNCH_AUTHORIZATION_COMMENT"');
+  expect(job.steps[operator]?.env?.LAUNCH_AUTHORIZATION_COMMENT).toBe(
+    "${{ inputs.launch_authorization_comment }}",
+  );
+});
