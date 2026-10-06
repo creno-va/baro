@@ -39,6 +39,11 @@ export const api = new Hono<ApiEnvironment>()
     context.header("cache-control", "private, no-store");
     context.header("x-content-type-options", "nosniff");
   })
+  .use("/v2/reports/*", async (context, next) => {
+    await next();
+    context.header("cache-control", "private, no-store");
+    context.header("x-content-type-options", "nosniff");
+  })
   .use("*", async (context, next) => {
     const incomingId = context.req.header("x-request-id");
     const requestId =

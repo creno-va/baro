@@ -461,3 +461,30 @@ runtime/SQL 검증이다. 사용자 quota 조회는 추가 hold/charge를 만들
 포함되지 않아 명시적으로 skip했다. 새 navigation 순서의 keyboard focus-wrap과 모바일
 메뉴·local font·실제 hash CSP·주입 script 차단을 확인했다. production fixture 제외는
 별도 bundle 검사로 유지한다.
+
+공유 PR127은 head `5b3d46637e9c7ac1d576cef02a022efef37dcb19`의
+[CI37487759856](https://github.com/creno-va/baro/actions/runs/37487759856) 필수3 jobs 성공을
+확인한 뒤 main `79434963086e1cea81e2b2785dd30083b2c49995`로 병합했다. self APPROVE와
+admin 우회는 사용하지 않았다. 각 모듈에 최신 main role/peer-tab/CI 재검증을 요청했다.
+같은 PR head의 [Full validation37487782522](https://github.com/creno-va/baro/actions/runs/37487782522)는
+모든3 jobs 성공했다. Linux native media fixtures, drift/fresh/upgrade6/29,
+1,203 tests/132,600 assertions, browser58(50-corpus 포함), CSP4/fixture-only skip1,
+production bundle145 files와 dry-run이 통과했다. 별도 immutable 증거이며 최종 모든 모듈
+통합 SHA의 검증을 대신하지 않는다. 초기 main의 실패 run은 계속 보존한다.
+
+metadata-only [readiness37488784651](https://github.com/creno-va/baro/actions/runs/37488784651)의
+[allowlisted JSON](../quality/integration-2026-10-07/preview-readiness-7943496.json)을 보존했다.
+candidate7943496에서 실행했지만 관측된 deployed SHA는 아직 이전 ca6e15b다. OAuth6개
+client 설정·model bounds 없음, processing bindings5개·preview Turnstile widget1개 존재,
+Gateway metadata API403을 확인했다. API403은 인증된 console 관측을 취소하지 않으며
+Gateway 호출 실패 증거도 아니다. 법률 단계는 실행하지 않았다.
+
+후속 공유 검토는 변호사 private mock operation의 역할 검사를 cache replay 이전에 보완하고,
+예정된 `/v2/reports/*`의 private/no-store/nosniff middleware를 먼저 준비한다. public directory/
+detail/공개 asset은 anonymous 조회를 유지한다. 별도 reports DomainRequest mock 경계는
+담당 #66/#67에 재현·수정 요청을 남겼으며 공용 namespace guard가 적용된 것으로 오기록하지 않는다.
+
+후속 공유 candidate의 frozen ci/check는1,204 tests/132,606 assertions와 drift/fresh/upgrade6/29,
+fresh production build/dry-run/bundle145 files, 공용 login/intake/workspace/report/delete 및
+lawyer mock browser3개, built CSP4개/fixture-only skip1로 통과했다. 새 role replay 테스트의
+임시 handler는 검사 뒤 복원하며 실제 도메인 handler를 다른 테스트에 남기지 않는다.

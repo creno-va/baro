@@ -1,4 +1,4 @@
-import { beforeEach, expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, test } from "bun:test";
 import type { SessionView } from "../types";
 import {
   clearMockStore,
@@ -10,6 +10,10 @@ import {
 } from "./runtime";
 
 beforeEach(clearMockStore);
+const restoreHandlers: (() => void)[] = [];
+afterEach(() => {
+  for (const restore of restoreHandlers.splice(0)) restore();
+});
 test("aggregate updates share namespaces without dropping another domain", () => {
   writeStore("cases", { one: { id: "one" } });
   writeStore("lawyers", { profiles: [{ id: "public" }] });
@@ -59,6 +63,44 @@ test("cached private mutation cannot resurrect a deleted case or deleted account
     "로그인",
   );
   expect(calls).toBe(1);
+});
+
+test("lawyer private replay rechecks role while public reads stay anonymous", async () => {
+  writeStore("session", {
+    user: { id: "owner", name: "합성", accountType: "lawyer" },
+    needsConsent: false,
+  });
+  let calls = 0;
+  restoreHandlers.push(
+    registerMockHandlers({
+      "lawyers.saveMine": () => ({ id: "profile", revision: ++calls }),
+      "lawyers.list": () => [],
+      "lawyers.get": () => ({ id: "public" }),
+      "lawyers.assetBlob": () => new Blob(["synthetic public asset"]),
+    }),
+  );
+  await mockRequest("lawyers.saveMine", { id: "profile" }, "lawyer-replay");
+  writeStore("session", {
+    user: { id: "owner", name: "합성", accountType: "customer" },
+    needsConsent: false,
+  });
+  await expect(
+    mockRequest("lawyers.saveMine", { id: "profile" }, "lawyer-replay"),
+  ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  await expect(
+    mockRequest("lawyers.assetBlob", { privateRead: true }, "private-asset"),
+  ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  expect(calls).toBe(1);
+  writeStore("session", { user: null, needsConsent: false });
+  expect(await mockRequest<unknown[]>("lawyers.list", {}, "public-list")).toEqual([]);
+  expect(
+    await mockRequest<{ id: string }>("lawyers.get", { id: "public" }, "public-detail"),
+  ).toEqual({
+    id: "public",
+  });
+  expect(
+    await mockRequest("lawyers.assetBlob", { privateRead: false }, "public-asset"),
+  ).toBeInstanceOf(Blob);
 });
 
 test("same mock owner changing roles cannot replay private customer results", async () => {
