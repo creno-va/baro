@@ -196,6 +196,27 @@ SDK/transport retry는 adapter 호출 수 밖에서 비용을 만들 수 있다.
 환경/새 설정 증거가 아니다. binding timeout이 원격 abort를 보장하지 않으면 즉시 겹치는
 재시도를 하지 않고 같은 handle/비용 reservation을 대조한다.
 
+Gateway의 비용 연결은 `llm-gateway/attempts.ts`의 trusted server ledger를 사용한다.
+`beforeDispatch`가 서버 invocation/phase/attempt와 완전한 wire input bytes·출력 token 상한으로
+hold를 확보한 뒤 사용자 quota를 확인하고, `confirmDispatch`가 현재 job/revision/lease와
+가격·funding을 호출 직전에 다시 검증한다. wire bytes는 tokenizer 계산 결과가 아니며 실제
+최대 token 수와 framing/schema 여유는 검증된 execution planner가 정한다. client request ID를
+invocation ID로 사용하지 않는다. 거절·length·잘못된 JSON/schema·error envelope도 출력 판정
+전에 `afterTransport`로 사용량을 저장한다. 기록 저장 실패는 출력 게시와 후속 호출을 막는다.
+
+시간 초과는 unknown hold로 남기며 재호출하지 않는다. `waitUntil`에 등록한 늦은 응답은 먼저
+unknown 기록이 완료된 뒤 동일 attempt를 정산하며 결과를 게시하지 않는다. Worker가 종료되거나
+늦은 기록이 실패하면 이미 남은 exposure를 복구·청구 대조로 해결한다. 사용량 누락·provider
+오류를 무과금으로 확정하지 않으며, binding을 호출하지 않은 취소만 definitive not_sent다.
+이는 현재 작업자의 미호출 근거이며 shared attempt 전체의 무과금 확정은 아니다. trusted sink는
+단일 batch/CAS로 prepared/reserved와 dispatch token 부재를 함께 확인해야만 이를 받아들여
+hold를 반환한다. 다른 작업자가 이미 dispatched/unknown으로 만든 attempt에 같은 receipt를
+재생하면 거부하며 기존 비용을 보존한다. final dispatch commit 뒤 callback 오류도 자동 반환하지 않는다.
+preview/production의 Gateway는 ledger가 없으면 fail closed다. 기존 v1 읽기·삭제와 합성
+offline adapter는 보존하지만, ledger를 연결하지 않은 실제 v1 AI 실행은 제공하지 않는다.
+이 adapter와 대역 테스트는 실제 DB 비용 연결·가격/funding 확인·provider 청구 대조의 완료
+증거가 아니다. #87 저장 계약 통합, #57 trusted factory 연결, #71 실제 검증이 필요하다.
+
 R2는 storage와 Class A/B operations를 계산한다. egress 무료여도 연결된 다른 metered service
 비용은 별도이며 Infrequent Access의 최소 보관/회수 요금은 삭제 비용 예측에 포함한다. 초기에는
 명세와 실측을 우선하고 임의 storage class 전환으로 비용을 숨기지 않는다.

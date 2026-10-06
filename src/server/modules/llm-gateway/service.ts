@@ -7,6 +7,15 @@ import {
   structuredCaseSchema,
   validationOutputSchema,
 } from "../../../contracts";
+import {
+  type GatewayAttemptHandle,
+  type GatewayAttemptLedger,
+  type GatewayTransportReceipt,
+  invocationIdSchema,
+  providerStatus,
+  responseReceipt,
+  unavailableReceipt,
+} from "./attempts";
 import { MODEL_ID, type Phase, PROMPT_VERSION, prompts } from "./prompts";
 
 const schemas = {
@@ -60,11 +69,13 @@ function wireSchema(schema: unknown): unknown {
   return schema;
 }
 export function createLlmGateway(
-  env: { AI: GatewayBinding; AI_GATEWAY_ID: string },
+  env: { AI: GatewayBinding; AI_GATEWAY_ID: string; APP_ENV?: string },
   options: {
     sleep?: (ms: number) => Promise<void>;
     observe?: (metric: ModelMetric) => void;
     timeoutMs?: number;
+    attemptLedger?: GatewayAttemptLedger;
+    requireAttemptLedger?: boolean;
   } = {},
 ) {
   const sleep =
@@ -76,8 +87,17 @@ export function createLlmGateway(
       requestId: string,
       reserve: () => Promise<boolean>,
       reserveCorrection: () => Promise<boolean> = async () => true,
+      invocationId?: string,
     ): Promise<unknown> {
       if (!env.AI || !env.AI_GATEWAY_ID || !/^[A-Za-z0-9_-]{1,128}$/.test(requestId))
+        throw new ModelError("MODEL_UNAVAILABLE");
+      const ledger = options.attemptLedger;
+      if (
+        !ledger &&
+        (options.requireAttemptLedger || env.APP_ENV === "preview" || env.APP_ENV === "production")
+      )
+        throw new ModelError("MODEL_UNAVAILABLE");
+      if (ledger && (!invocationId || !invocationIdSchema.test(invocationId)))
         throw new ModelError("MODEL_UNAVAILABLE");
       const schema = schemas[phase];
       const envelope = z.strictObject({ output: schema });
@@ -86,47 +106,126 @@ export function createLlmGateway(
       );
       let correction = false;
       for (let call = 0; call < 3; call++) {
-        if (!(await reserve())) throw new ModelError("MODEL_UNAVAILABLE");
+        const wireInput = {
+          messages: [
+            { role: "system", content: `BARO prompt ${PROMPT_VERSION}. ${prompts[phase]}` },
+            {
+              role: "user",
+              content: JSON.stringify({
+                data: input,
+                correction: correction
+                  ? "Previous output did not match schema. Return exactly the schema without new facts."
+                  : null,
+              }),
+            },
+          ],
+          reasoning_effort: "medium",
+          max_completion_tokens: limits[phase],
+          store: false,
+          response_format: {
+            type: "json_schema",
+            json_schema: { name: `baro_${phase}_v1`, strict: true, schema: jsonSchema },
+          },
+        };
+        let handle: GatewayAttemptHandle | null = null;
+        const record = async (receipt: GatewayTransportReceipt) => {
+          if (!ledger || !handle) return;
+          try {
+            await ledger.afterTransport(handle, receipt);
+          } catch {
+            // Persistence failures must neither publish output nor retry a paid call.
+            throw new ModelError("MODEL_UNAVAILABLE");
+          }
+        };
+        if (ledger) {
+          try {
+            handle = await ledger.beforeDispatch({
+              invocationId: invocationId as string,
+              requestId,
+              phase,
+              model: MODEL_ID,
+              attemptOrdinal: call + 1,
+              correction,
+              inputBytes: new TextEncoder().encode(JSON.stringify(wireInput)).byteLength,
+              outputTokenUpperBound: limits[phase],
+            });
+          } catch {
+            throw new ModelError("MODEL_UNAVAILABLE");
+          }
+          if (
+            !handle ||
+            handle.invocationId !== invocationId ||
+            !invocationIdSchema.test(handle.attemptId)
+          )
+            throw new ModelError("MODEL_UNAVAILABLE");
+        }
+        let admitted = false;
+        try {
+          admitted = await reserve();
+          if (admitted && ledger && handle) admitted = await ledger.confirmDispatch(handle);
+        } catch {
+          admitted = false;
+        }
+        if (!admitted) {
+          await record(unavailableReceipt("not_sent"));
+          throw new ModelError("MODEL_UNAVAILABLE");
+        }
         const start = Date.now();
         let timeout: ReturnType<typeof setTimeout> | undefined;
+        let timedOut = false;
+        let finishTimeoutRecord = () => {};
+        const timeoutRecorded = new Promise<void>((resolve) => {
+          finishTimeoutRecord = resolve;
+        });
         let raw: unknown;
         try {
           // Binding has no abort parameter. A timeout ends this phase; no immediate retry
           // can overlap an ambiguous provider call. Durable reservation survives replay.
-          raw = await Promise.race([
-            env.AI.run(
-              MODEL_ID,
-              {
-                messages: [
-                  { role: "system", content: `BARO prompt ${PROMPT_VERSION}. ${prompts[phase]}` },
-                  {
-                    role: "user",
-                    content: JSON.stringify({
-                      data: input,
-                      correction: correction
-                        ? "Previous output did not match schema. Return exactly the schema without new facts."
-                        : null,
-                    }),
+          const remote = Promise.resolve().then(() =>
+            env.AI.run(MODEL_ID, wireInput, {
+              gateway: { id: env.AI_GATEWAY_ID, collectLog: false, skipCache: true },
+            }),
+          );
+          if (ledger) {
+            ledger.waitUntil(
+              remote
+                .then(
+                  async (response) => {
+                    if (!timedOut) return;
+                    await timeoutRecorded;
+                    await record(responseReceipt(response));
                   },
-                ],
-                reasoning_effort: "medium",
-                max_completion_tokens: limits[phase],
-                store: false,
-                response_format: {
-                  type: "json_schema",
-                  json_schema: { name: `baro_${phase}_v1`, strict: true, schema: jsonSchema },
-                },
-              },
-              { gateway: { id: env.AI_GATEWAY_ID, collectLog: false, skipCache: true } },
-            ),
+                  async (error: unknown) => {
+                    if (!timedOut) return;
+                    await timeoutRecorded;
+                    await record(
+                      unavailableReceipt(
+                        providerStatus(error) === null ? "unknown" : "provider_error",
+                      ),
+                    );
+                  },
+                )
+                .catch(() => {
+                  throw new ModelError("MODEL_UNAVAILABLE");
+                }),
+            );
+          }
+          raw = await Promise.race([
+            remote,
             new Promise<never>((_resolve, reject) => {
-              timeout = setTimeout(
-                () => reject(new ModelError("MODEL_UNAVAILABLE")),
-                options.timeoutMs ?? 60_000,
-              );
+              timeout = setTimeout(() => {
+                timedOut = true;
+                reject(new ModelError("MODEL_UNAVAILABLE"));
+              }, options.timeoutMs ?? 60_000);
             }),
           ]);
         } catch (error) {
+          const status = providerStatus(error);
+          try {
+            await record(unavailableReceipt(status === null ? "unknown" : "provider_error"));
+          } finally {
+            finishTimeoutRecord();
+          }
           options.observe?.({
             requestId,
             phase,
@@ -137,17 +236,15 @@ export function createLlmGateway(
             status: "failed",
           });
           if (error instanceof ModelError) throw error;
-          const status =
-            typeof error === "object" && error !== null && "status" in error
-              ? Number(error.status)
-              : null;
+          if (status === null) throw new ModelError("MODEL_UNAVAILABLE");
           if (status !== null && status !== 429 && status < 500)
             throw new ModelError("MODEL_UNAVAILABLE");
           if (call === 2) throw new ModelError("MODEL_UNAVAILABLE");
-          const retryAfter =
+          const retryAfterValue =
             typeof error === "object" && error !== null && "retryAfter" in error
               ? Number(error.retryAfter)
               : 0;
+          const retryAfter = Number.isFinite(retryAfterValue) ? retryAfterValue : 0;
           await sleep(
             Math.max(
               1000 * 2 ** call + Math.floor(Math.random() * 200),
@@ -157,7 +254,9 @@ export function createLlmGateway(
           continue;
         } finally {
           if (timeout !== undefined) clearTimeout(timeout);
+          finishTimeoutRecord();
         }
+        await record(responseReceipt(raw));
         if (raw && typeof raw === "object" && "error" in raw)
           throw new ModelError("MODEL_UNAVAILABLE");
         const completion = z
