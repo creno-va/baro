@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { createReportsApi } from "../src/client/api/reports";
+import type { ReportView } from "../src/client/api/types";
 import { reportHttpFixture } from "./helpers/report-http-fixture";
 import { seedTestSession } from "./helpers/session";
 
@@ -174,7 +175,7 @@ test("signed SQL report review preserves 30,000 Korean characters above the gene
       f.env,
     );
     expect(response.status).toBe(200);
-    const saved = await response.json();
+    const saved = (await response.json()) as ReportView;
     expect(saved).toMatchObject({ content, revision: report.revision + 1 });
     const replay = await f.app.request(
       `/api/v2/cases/${f.workspaceId}/reports`,
@@ -182,7 +183,7 @@ test("signed SQL report review preserves 30,000 Korean characters above the gene
       f.env,
     );
     expect(replay.status).toBe(200);
-    expect(await replay.json()).toEqual(saved);
+    expect((await replay.json()) as ReportView).toEqual(saved);
     const conflict = await f.app.request(
       `/api/v2/cases/${f.workspaceId}/reports`,
       {
