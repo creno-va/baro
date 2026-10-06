@@ -1,8 +1,6 @@
 ---
 // biome-ignore lint/correctness/noUnusedImports: Astro template reads icons.
 import { BookOpenCheck, Files, ListChecks } from "lucide-react";
-// biome-ignore lint/correctness/noUnusedImports: Astro resolves component imports in the template.
-import { FoundationStatus } from "../components/FoundationStatus";
 // biome-ignore lint/correctness/noUnusedImports: Astro template reads component.
 import { AppNavigation } from "../components/ui/app-navigation";
 // biome-ignore lint/correctness/noUnusedImports: Astro resolves component imports in the template.
@@ -17,19 +15,19 @@ import BaseLayout from "../layouts/BaseLayout.astro";
   <main id="main-content" tabindex="-1">
     <section class="hero" aria-labelledby="hero-title">
       <div>
-      <div class="eyebrow">대한민국 · 개인 간 금전 대여</div>
+      <div class="eyebrow">대한민국 · 사건 정리와 상담 준비</div>
       <h1 id="hero-title">복잡한 상황을<br />차분하게 정리합니다.</h1>
       <p class="lede">
         BARO는 사용자가 알려준 내용을 바탕으로 사건의 흐름, 확인할 쟁점, 준비할 자료와
         공식 법령 출처를 정리하는 서비스입니다.
       </p>
       <div class="actions">
-        <span class="primary-action" aria-disabled="true">공개 베타 준비 중</span>
-        <a class="secondary-action" href="https://github.com/creno-va/baro/blob/main/docs/PRD.md">
-          제품 명세 보기
+        <a class="primary-action" href="/login">내 상황 정리 시작하기</a>
+        <a class="secondary-action" href="/lawyers">
+          변호사 찾아보기
         </a>
       </div>
-      <FoundationStatus client:idle />
+
       </div>
       <aside class="hero-preview" aria-label="상황 정리 안내">
         <p class="eyebrow">확인할 내용을 한곳에</p>

@@ -1,6 +1,9 @@
 ---
 import "../styles/global.css";
 
+// biome-ignore lint/correctness/noUnusedVariables: Astro template reads the value.
+const isMock = import.meta.env.PUBLIC_API_MODE === "mock";
+
 interface Props {
   title: string;
   description: string;
@@ -21,6 +24,7 @@ const { title, description } = Astro.props;
   </head>
   <body>
     <a class="skip-link" href="#main-content">본문으로 건너뛰기</a>
+    {isMock && <div class="api-mode-notice" role="status">API 예시 응답으로 보기</div>}
     <slot />
   </body>
 </html>

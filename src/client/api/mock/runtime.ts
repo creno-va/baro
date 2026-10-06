@@ -1,0 +1,70 @@
+import { ApiError } from "../errors";
+import type { SessionView } from "../types";
+// biome-ignore lint/suspicious/noExplicitAny: Each domain owns input validation at the registered API boundary.
+export type MockHandler = (input: any, context: { key: string }) => unknown | Promise<unknown>;
+const handlers = new Map<string, MockHandler>();
+const memory = new Map<string, string>();
+const prefix = "baro-api-mock-v1:";
+export function registerMockHandlers(entries: Record<string, MockHandler>) {
+  for (const [operation, handler] of Object.entries(entries)) handlers.set(operation, handler);
+}
+export function readStore<T>(namespace: string, fallback: T): T {
+  try {
+    const value =
+      typeof localStorage === "undefined"
+        ? memory.get(namespace)
+        : localStorage.getItem(prefix + namespace);
+    return value ? (JSON.parse(value) as T) : structuredClone(fallback);
+  } catch {
+    return structuredClone(fallback);
+  }
+}
+export function writeStore<T>(namespace: string, value: T): void {
+  const json = JSON.stringify(value);
+  try {
+    if (typeof localStorage !== "undefined") localStorage.setItem(prefix + namespace, json);
+    else memory.set(namespace, json);
+  } catch {
+    throw new ApiError("QUOTA_EXCEEDED", "예시 저장 공간이 부족해요. 저장한 자료를 정리해 주세요.");
+  }
+}
+export function updateStore<T>(namespace: string, fallback: T, update: (value: T) => T): T {
+  const next = update(readStore(namespace, fallback));
+  writeStore(namespace, next);
+  return next;
+}
+export function requireSession(): SessionView {
+  const session = readStore<SessionView>("session", { user: null, needsConsent: false });
+  if (!session.user) throw new ApiError("UNAUTHENTICATED", "로그인이 필요해요.");
+  if (session.needsConsent)
+    throw new ApiError("CONSENT_REQUIRED", "시작 전에 필수 확인을 완료해 주세요.");
+  return session;
+}
+const replay = new Map<string, { input: string; value: unknown }>();
+export async function mockRequest<T>(operation: string, input: unknown, key: string): Promise<T> {
+  const handler = handlers.get(operation);
+  if (!handler)
+    throw new ApiError(
+      "UNAVAILABLE",
+      "이 기능을 연결하고 있어요. 잠시 뒤 다시 시도해 주세요.",
+      true,
+    );
+  const identity = `${readStore<SessionView>("session", { user: null, needsConsent: false }).user?.id ?? "visitor"}:${operation}:${key}`;
+  const previous = replay.get(identity),
+    fingerprint = JSON.stringify(input ?? null);
+  if (previous) {
+    if (previous.input !== fingerprint)
+      throw new ApiError("CONFLICT", "같은 요청에 다른 내용이 포함됐어요.");
+    return structuredClone(previous.value) as T;
+  }
+  const value = await handler(input, { key });
+  replay.set(identity, { input: fingerprint, value });
+  return value as T;
+}
+export function clearMockStore() {
+  memory.clear();
+  replay.clear();
+  if (typeof localStorage !== "undefined")
+    for (const key of Object.keys(localStorage))
+      if (key.startsWith(prefix)) localStorage.removeItem(key);
+}

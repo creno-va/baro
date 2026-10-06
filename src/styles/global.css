@@ -785,3 +785,46 @@ html:has(dialog[open]) {
     animation-iteration-count: 1;
   }
 }
+
+.api-mode-notice {
+  background: #eaf1ff;
+  color: #1e40af;
+  padding: 0.45rem 1rem;
+  text-align: center;
+  font-size: 0.8rem;
+  border-bottom: 1px solid #c7d9fb;
+}
+.account-type {
+  border: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.65rem;
+}
+.account-type legend {
+  margin-bottom: 0.75rem;
+  font-weight: 700;
+}
+.account-type label {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  border: 1px solid var(--border);
+  background: var(--card);
+  padding: 1rem;
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.account-type label:has(input:checked) {
+  border-color: var(--primary);
+  background: var(--secondary);
+}
+.account-type input {
+  width: 1.2rem;
+  height: 1.2rem;
+  accent-color: var(--primary);
+}
+.account-type small {
+  display: block;
+  margin-top: 0.2rem;
+  color: var(--muted-foreground);
+}
