@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { authClient } from "../client/auth";
+import type { AccountType } from "../client/api";
+import { api, errorMessage, roleStart } from "../client/api";
 import { Button } from "./ui/button";
 
 type Provider = "google" | "naver" | "kakao";
@@ -11,6 +12,7 @@ const providers: Array<{ id: Provider; label: string }> = [
 ];
 
 export function AuthButtons() {
+  const [accountType, setAccountType] = useState<AccountType>("customer");
   const [pendingProvider, setPendingProvider] = useState<Provider | null>(null);
   const [error, setError] = useState<string | null>(null);
   const lastButton = useRef<HTMLButtonElement | null>(null);
@@ -23,21 +25,47 @@ export function AuthButtons() {
     setError(null);
 
     try {
-      const result = await authClient.signIn.social({
-        provider,
-        callbackURL: "/consent",
-        errorCallbackURL: "/login?error=oauth",
-      });
-      if (!result.error) return;
-    } catch {
-      // Network failures use the same recoverable UI as provider failures.
+      const result = await api.session.signIn(provider, accountType);
+      if (result) window.location.assign(roleStart(result));
+      return;
+    } catch (cause) {
+      setError(errorMessage(cause));
     }
-    setError("로그인을 시작하지 못했어요. 잠시 뒤 다시 시도해 주세요.");
     setPendingProvider(null);
   }
 
   return (
     <div className="auth-options" aria-busy={pendingProvider !== null}>
+      <fieldset className="account-type" disabled={pendingProvider !== null}>
+        <legend>어떤 목적으로 이용하시나요?</legend>
+        <label>
+          <input
+            type="radio"
+            name="accountType"
+            value="customer"
+            checked={accountType === "customer"}
+            onChange={() => setAccountType("customer")}
+          />
+          <span>
+            <strong>고객</strong>
+            <small>내 사건과 상담 준비 자료 정리</small>
+          </span>
+        </label>
+        <label>
+          <input
+            type="radio"
+            name="accountType"
+            value="lawyer"
+            checked={accountType === "lawyer"}
+            onChange={() => setAccountType("lawyer")}
+          />
+          <span>
+            <strong>변호사</strong>
+            <small>본인 프로필 작성과 공개 설정</small>
+          </span>
+        </label>
+      </fieldset>
+      <p className="case-muted">이용 유형 선택은 변호사 자격 확인을 의미하지 않아요.</p>
       {providers.map((provider) => (
         <Button
           variant="outline"
@@ -53,6 +81,9 @@ export function AuthButtons() {
           {pendingProvider === provider.id ? "연결 중…" : provider.label}
         </Button>
       ))}
+      <a className="secondary-action" href="/">
+        취소하고 홈으로
+      </a>
       {error ? (
         <p className="form-error" role="alert">
           {error}

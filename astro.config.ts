@@ -4,6 +4,10 @@ import react from "@astrojs/react";
 import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "astro/config";
 
+if (process.env.CLOUDFLARE_ENV === "production" && process.env.PUBLIC_API_MODE === "mock") {
+  throw new Error("Production builds cannot use API mock responses.");
+}
+
 export default defineConfig({
   output: "server",
   adapter: cloudflare({

@@ -8,7 +8,9 @@ import {
   ShieldCheck,
   Users,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import type { SessionView } from "../../client/api";
+import { api, apiMode } from "../../client/api";
 import { Brand } from "./brand";
 import { Button } from "./button";
 import { Sheet } from "./dialog";
@@ -65,7 +67,40 @@ export function AppNavigation({
   showLogin?: boolean;
 }) {
   const [open, setOpen] = useState(false);
-  const items = availableNavigation(role, availableRoutes);
+  const [session, setSession] = useState<SessionView | null>(null);
+  const [error, setError] = useState("");
+  const [signingOut, setSigningOut] = useState(false);
+  useEffect(() => {
+    api.session
+      .get()
+      .then(setSession)
+      .catch(() => setSession({ user: null, needsConsent: false }));
+  }, []);
+  const resolvedRole = session?.user
+    ? session.user.accountType === "lawyer"
+      ? "lawyer"
+      : "user"
+    : role;
+  const items = availableNavigation(resolvedRole, [
+    ...availableRoutes,
+    "/",
+    "/cases",
+    "/cases/new",
+    "/lawyer",
+    "/lawyers",
+    "/settings",
+  ]);
+  async function signOut() {
+    setSigningOut(true);
+    setError("");
+    try {
+      await api.session.signOut();
+      window.location.assign("/login");
+    } catch {
+      setError("로그아웃하지 못했어요. 다시 시도해 주세요.");
+      setSigningOut(false);
+    }
+  }
   const renderLinks = () =>
     items.map((item) => {
       const Icon = icons[item.icon];
@@ -86,16 +121,32 @@ export function AppNavigation({
     });
   return (
     <header className="app-header">
+      {apiMode === "mock" && (
+        <div className="api-mode-notice">
+          API 예시 응답으로 보기 · 합성 데이터로 이용 흐름을 확인하세요.
+        </div>
+      )}
+      {error && (
+        <p role="alert" className="form-error">
+          {error}
+        </p>
+      )}
       <div className="app-header__inner">
         <Brand />
         <nav className="app-nav app-nav--desktop" aria-label="주 메뉴">
           {renderLinks()}
         </nav>
         <div className="app-header__actions">
-          {showLogin && (
-            <a className="ui-button ui-button--primary" href="/login">
-              로그인
-            </a>
+          {session?.user ? (
+            <Button variant="outline" onClick={() => void signOut()} disabled={signingOut}>
+              {signingOut ? "로그아웃 중…" : "로그아웃"}
+            </Button>
+          ) : (
+            (showLogin || session !== null) && (
+              <a className="ui-button ui-button--primary" href="/login">
+                로그인
+              </a>
+            )
           )}
           <Button
             className="app-menu-trigger"
