@@ -1,6 +1,11 @@
 import { expect, type Page, test } from "@playwright/test";
 import type { SessionView } from "../../src/client/api/types";
 
+test.skip(
+  process.env.PUBLIC_API_MODE !== "mock" && !process.env.BARO_DESIGN_URL,
+  "Use conversation.config.ts with the mock API adapter.",
+);
+
 async function setSession(page: Page, session: SessionView) {
   await page.addInitScript((value) => {
     localStorage.setItem("baro-api-mock-v1:session", JSON.stringify(value));

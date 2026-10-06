@@ -20,7 +20,7 @@ export function browserTargets(files: string[], available: string[]): string[] {
   const selected = new Set(files.filter((file) => /^tests\/browser\/.*\.e2e\.ts$/.test(file)));
   const rules: [RegExp, RegExp][] = [
     [
-      /src\/(layouts\/|styles\/global|server\/router\.|components\/ui\/|client\/api\/(core|types|index|mock\/runtime))/,
+      /src\/(layouts\/|styles\/(global|shell)|server\/router\.|components\/ui\/|client\/api\/(core|types|index|mock\/runtime))/,
       /\.e2e\.ts$/,
     ],
     [
@@ -29,7 +29,7 @@ export function browserTargets(files: string[], available: string[]): string[] {
     ],
     [
       /src\/(styles\/(intake|workspace)\.css|pages\/cases\/|components\/(intake|analysis|workspace)\/|client\/api\/(?:mock\/)?(cases|workspace|files)|server\/(api\/(cases|case-create|answers|retry|v2\/(files|workspaces))|modules\/(intake|cases|case-structure|workspace|files|file-processing)\/))/,
-      /\/(cases|analysis|workspace|intake|files|xss)\.e2e\.ts$/,
+      /\/(cases|analysis|workspace|intake|intake103|conversation-home|files|xss)\.e2e\.ts$/,
     ],
     [
       /src\/(styles\/lawyers\.css|pages\/lawyer|components\/lawyers\/|client\/api\/(?:mock\/)?lawyers|server\/(api\/v2\/(lawyers|directory|moderation)|modules\/(lawyers|moderation)\/))/,
@@ -41,7 +41,7 @@ export function browserTargets(files: string[], available: string[]): string[] {
     ],
     [
       /src\/(pages\/index|components\/AnalyticsChoice|server\/modules\/analytics\/)/,
-      /\/(analytics|auth)\.e2e\.ts$/,
+      /\/(analytics|auth|conversation-home)\.e2e\.ts$/,
     ],
   ];
   for (const [source, tests] of rules) {
@@ -141,7 +141,7 @@ async function main() {
   const mockTargets =
     mode === "browser"
       ? targets.filter((path) =>
-          /\/(shell-integration|lawyer-api-mock|intake103|workspace-shared|workspace|reports-integrated)\.e2e\.ts$/.test(
+          /\/(shell-integration|lawyer-api-mock|intake103|conversation-home|workspace-shared|workspace|reports-integrated)\.e2e\.ts$/.test(
             path,
           ),
         )
@@ -162,8 +162,14 @@ async function main() {
         "tests/browser/integration.config.ts",
         mockTargets.filter(
           (path) =>
-            !/\/(intake103|workspace-shared|workspace|reports-integrated)\.e2e\.ts$/.test(path),
+            !/\/(intake103|conversation-home|workspace-shared|workspace|reports-integrated)\.e2e\.ts$/.test(
+              path,
+            ),
         ),
+      ],
+      [
+        "tests/browser/conversation.config.ts",
+        mockTargets.filter((path) => path.endsWith("/conversation-home.e2e.ts")),
       ],
       [
         "tests/browser/intake103.config.ts",

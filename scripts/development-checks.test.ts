@@ -41,6 +41,10 @@ test("case pages and input islands select existing browser flows, including the 
 });
 
 test("shared UI excludes corpus flows and a missing feature test fails explicitly", () => {
+  for (const file of ["src/styles/shell.css", "src/pages/index.astro"])
+    expect(browserTargets([file], browserTests)).toContain(
+      "tests/browser/conversation-home.e2e.ts",
+    );
   expect(browserTargets(["src/styles/global.css"], browserTests)).not.toContain(
     "tests/browser/evals.e2e.ts",
   );

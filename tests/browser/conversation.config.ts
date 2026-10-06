@@ -1,5 +1,8 @@
 import { defineConfig } from "@playwright/test";
 
+// The same product UI is exercised against its synthetic API adapter.
+process.env.PUBLIC_API_MODE = "mock";
+
 export default defineConfig({
   testDir: ".",
   testMatch: [
