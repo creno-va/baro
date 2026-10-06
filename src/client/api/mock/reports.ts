@@ -34,13 +34,17 @@ export class ReportMockError extends Error {
     super(message);
   }
 }
-export function requireMockAccount(state: ReportMockState) {
+export function requireMockSession(state: ReportMockState) {
   if (!state.session.user) throw new ReportMockError("UNAUTHENTICATED", "로그인이 필요해요.");
+}
+export function requireMockAccount(state: ReportMockState) {
+  requireMockSession(state);
   if (state.session.needsConsent)
     throw new ReportMockError("CONSENT_REQUIRED", "먼저 필수 동의를 확인해 주세요.");
 }
-export function requireMockCase(state: ReportMockState, id: string) {
-  requireMockAccount(state);
+export function requireMockCase(state: ReportMockState, id: string, consent = true) {
+  if (consent) requireMockAccount(state);
+  else requireMockSession(state);
   const item = state.cases[id];
   if (!item || state.deletedCaseIds?.includes(id))
     throw new ReportMockError(

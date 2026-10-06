@@ -77,7 +77,7 @@ function fixture() {
 test("review edits and masking persist through storage reload; old versions retain their reviewed content", async () => {
   const f = fixture();
   const report = await f.reports.get("case-demo");
-  expect((await f.account.deletionAccess()).mock).toBe(true);
+  expect((await f.account.deletionAccess()).canDelete).toBe(true);
   expect(report.maskIdentifiers).toBe(false);
   const saved = await f.reports.save("case-demo", {
     content: "검토한 사실 01012345678 demo@example.test",
@@ -222,4 +222,17 @@ test("download rejects HTML masquerading as PDF and ZIP stores valid UTF-8 paths
     bytes.slice(30 + length, 30 + length + view.getUint32(18, true)),
   );
   expect(text).toBe("합성 원본");
+});
+
+test("consent refusal blocks new processing but keeps owner deletion available", async () => {
+  const f = fixture();
+  f.update((state) => {
+    state.session.needsConsent = true;
+  });
+  await expect(f.reports.get("case-demo")).rejects.toMatchObject({ code: "CONSENT_REQUIRED" });
+  expect((await f.account.deletionAccess()).canDelete).toBe(true);
+  await f.account.deleteCase("case-demo", "DELETE");
+  expect(f.read().cases).toEqual({});
+  await f.account.deleteAccount("DELETE");
+  expect(f.read().session.user).toBeNull();
 });

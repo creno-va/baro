@@ -53,7 +53,28 @@ export function createAccountClient(request: DomainRequest) {
     },
     async deletionAccess() {
       const result = await request<unknown>("/api/me/deletion");
-      return deletionAccessSchema.extend({ mock: z.boolean().optional() }).parse(result);
+      const access = deletionAccessSchema.extend({ mock: z.boolean().optional() }).parse(result);
+      let marker: { ownerTag?: string; startedAt?: number } | null = null;
+      try {
+        const raw =
+          typeof sessionStorage === "undefined"
+            ? null
+            : sessionStorage.getItem("baro.account-reauth.v1");
+        marker = raw ? JSON.parse(raw) : null;
+      } catch {
+        marker = null;
+      }
+      const canDelete =
+        access.mock === true ||
+        Boolean(
+          marker?.ownerTag === access.ownerTag &&
+            access.recentOAuth &&
+            access.authenticatedAt &&
+            typeof marker?.startedAt === "number" &&
+            Date.parse(access.authenticatedAt) >= marker.startedAt,
+        );
+      const { mock: _mock, ...view } = access;
+      return { ...view, canDelete };
     },
     async reauthenticate(provider: "google" | "naver" | "kakao") {
       const result = await authClient.signIn.social({

@@ -38,13 +38,7 @@ export function AccountSettings() {
         setAccess(value);
         const raw = sessionStorage.getItem(markerKey);
         const marker = raw ? JSON.parse(raw) : null;
-        const confirmed =
-          value.mock ||
-          (marker &&
-            marker.ownerTag === value.ownerTag &&
-            value.recentOAuth &&
-            value.authenticatedAt &&
-            Date.parse(value.authenticatedAt) >= marker.startedAt);
+        const confirmed = value.canDelete;
         setReady(Boolean(confirmed));
         if (marker && marker.ownerTag !== value.ownerTag) {
           sessionStorage.removeItem(markerKey);

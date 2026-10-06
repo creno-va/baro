@@ -7,6 +7,7 @@ import {
   type ReportMockState,
   requireMockAccount,
   requireMockCase,
+  requireMockSession,
 } from "./reports";
 export type AccountMockRuntime = Omit<ReportMockRuntime, "original"> & {
   removeOriginals?: (ownerId: string, caseId?: string) => Promise<void>;
@@ -33,9 +34,10 @@ function eraseCase(state: ReportMockState, id: string) {
 export function createAccountMockHandler(runtime: AccountMockRuntime): DomainRequest {
   const handler: DomainRequest = async <T>(path: string, init: DomainRequestInit = {}) => {
     const state = runtime.read();
-    requireMockAccount(state);
+    requireMockSession(state);
     const method = init.method ?? "GET";
     if (path === "/api/v2/me/usage" && method === "GET") {
+      requireMockAccount(state);
       const usage: UsageView = {
         newCases: { used: Object.keys(state.cases).length, limit: 3 },
         aiResponses: {
@@ -75,9 +77,9 @@ export function createAccountMockHandler(runtime: AccountMockRuntime): DomainReq
     const casePath = path.match(/^\/api\/cases\/([^/]+)$/);
     if (casePath && method === "DELETE") {
       const id = decodeURIComponent(casePath[1] ?? "");
-      requireMockCase(state, id);
+      requireMockCase(state, id, false);
       runtime.update((current) => {
-        requireMockCase(current, id);
+        requireMockCase(current, id, false);
         eraseCase(current, id);
       });
       await runtime.removeOriginals?.(state.session.user?.id ?? "", id);
@@ -87,7 +89,7 @@ export function createAccountMockHandler(runtime: AccountMockRuntime): DomainReq
       if ((init.body as { confirmation?: string })?.confirmation !== "DELETE")
         throw new ReportMockError("VALIDATION_ERROR", "삭제 확인란에 DELETE를 입력해 주세요.");
       runtime.update((current) => {
-        requireMockAccount(current);
+        requireMockSession(current);
         for (const id of Object.keys(current.cases)) eraseCase(current, id);
         // Clear every domain, including profile/session. Keep a tombstone rather than reseeding on reload.
         for (const key of Object.keys(current))
