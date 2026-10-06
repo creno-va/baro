@@ -22,8 +22,10 @@ export async function createTestDatabase(options: { throughMigration?: string } 
       meta: { changes: number };
     }
   >();
+  let queryCount = 0;
   function prepare(sql: string, values: SQLQueryBindings[] = []) {
     const execute = () => {
+      queryCount++;
       const before = (sqlite.query("SELECT total_changes() AS count").get() as { count: number })
         .count;
       const results = sqlite.query(sql).all(...values);
@@ -36,16 +38,19 @@ export async function createTestDatabase(options: { throughMigration?: string } 
         return prepare(sql, parameters);
       },
       async raw() {
+        queryCount++;
         return sqlite.query(sql).values(...values);
       },
       async all() {
         return execute();
       },
       async first(column?: string) {
+        queryCount++;
         const row = sqlite.query(sql).get(...values) as Record<string, unknown> | null;
         return column ? (row?.[column] ?? null) : row;
       },
       async run() {
+        queryCount++;
         const result = sqlite.query(sql).run(...values);
         return { results: [], success: true, meta: { changes: result.changes } };
       },
@@ -65,7 +70,14 @@ export async function createTestDatabase(options: { throughMigration?: string } 
       )();
     },
   } as unknown as D1Database;
-  return { sqlite, binding, close: () => sqlite.close() };
+  return {
+    sqlite,
+    binding,
+    get queryCount() {
+      return queryCount;
+    },
+    close: () => sqlite.close(),
+  };
 }
 
 export function testEnvironment(database: D1Database): Env {

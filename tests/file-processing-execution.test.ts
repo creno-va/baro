@@ -13,12 +13,15 @@ import { fixture, uploaded } from "./helpers/file-processing-fixture";
 const signal = () => new AbortController().signal;
 async function setup(options: { before?: () => void; corrupt?: boolean } = {}) {
   const f = await fixture({
-    probe: async (input) => ({
-      category: "document",
-      format: "txt",
-      byteLength: input.byteLength,
-      pageCount: 2,
-    }),
+    probe: async (input) => {
+      await new Response(input.open()).arrayBuffer();
+      return {
+        category: "document",
+        format: "txt",
+        byteLength: input.byteLength,
+        pageCount: 2,
+      };
+    },
   });
   const original = new TextEncoder().encode("first synthetic page\fsecond synthetic page");
   const u = await uploaded(f, original),

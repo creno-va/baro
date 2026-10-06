@@ -138,6 +138,8 @@ jobs:
         run: |
           bun run db:check
           bunx wrangler d1 migrations apply DB --local --persist-to .wrangler/ci-migration
+          bun scripts/apply-d1-migrations.ts preview --local --persist-to .wrangler/ci-file-import
+          bun scripts/apply-d1-migrations.ts preview --local --persist-to .wrangler/ci-file-import
 
       - name: Lint
         if: steps.application.outputs.present == 'true'
