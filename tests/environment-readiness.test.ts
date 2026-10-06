@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { inspectPreview } from "../scripts/environment-readiness";
+import { inspectEnvironment, inspectPreview } from "../scripts/environment-readiness";
 
 const sha = "a".repeat(40);
 test("readiness excludes credentials, raw errors and unrelated account resources", async () => {
@@ -93,4 +93,91 @@ test("default metadata observation does not repeat a known forbidden Gateway pro
   expect(report.gateway.status).toBe("not_requested");
   expect(report.gateway.exists).toBeNull();
   expect(report.gateway.authentication).toBeNull();
+});
+
+test("production inspection reads selected metadata and exports only its unique public sitekey", async () => {
+  const privateValue = "DO-NOT-EXPORT-PRODUCTION-SECRET";
+  const requests: string[] = [];
+  const report = await inspectEnvironment("private-token", sha, "production", async (url, init) => {
+    requests.push(url);
+    expect(init.method).toBe("GET");
+    expect(init.redirect).toBe("error");
+    expect(init.body).toBeUndefined();
+    return Response.json({
+      success: true,
+      result: url.includes("settings")
+        ? {
+            bindings: [
+              { name: "APP_ENV", type: "plain_text", text: "production" },
+              { name: "BETTER_AUTH_URL", type: "plain_text", text: "https://baro.site" },
+              { name: "AI_GATEWAY_ID", type: "plain_text", text: "baro-production" },
+              { name: "CASE_DATA_KEY_V1", type: "secret_text", text: privateValue },
+            ],
+          }
+        : [
+            { domains: ["baro.site"], sitekey: "public-production-sitekey", secret: privateValue },
+            { domains: ["preview.baro.site"], sitekey: "unrelated-preview-sitekey" },
+          ],
+    });
+  });
+  expect(requests).toHaveLength(2);
+  expect(requests[0]).toEndWith("/workers/scripts/baro-production/settings");
+  expect(requests[1]).toEndWith("/challenges/widgets?per_page=100");
+  expect(report.environment).toBe("production");
+  expect(report.worker.environmentMatches).toBe(true);
+  expect(report.worker.authOriginMatches).toBe(true);
+  expect(report.worker.gatewayIdMatches).toBe(true);
+  expect(report.worker.secrets.find((item) => item.name === "CASE_DATA_KEY_V1")?.present).toBe(
+    true,
+  );
+  expect(report.turnstile.publicSiteKey).toBe("public-production-sitekey");
+  expect(report.turnstile.observedExclusiveWidgetCount).toBe(1);
+  expect(JSON.stringify(report)).not.toContain(privateValue);
+  expect(JSON.stringify(report)).not.toContain("unrelated-preview-sitekey");
+});
+
+test("sitekey selection rejects absent, shared, ambiguous, malformed and truncated widgets", async () => {
+  const target = { domains: ["baro.site"], sitekey: "public-production-sitekey" };
+  const widgetLists = [
+    [],
+    [{ ...target, domains: ["baro.site", "preview.baro.site"] }],
+    [target, { ...target, sitekey: "another-public-sitekey" }],
+    [target, { ...target, domains: ["baro.site", "another.site"] }],
+    [{ ...target, sitekey: { secret: "private-value" } }],
+    [{ ...target, domains: ["subdomain.baro.site"] }],
+    [target, ...Array.from({ length: 99 }, () => ({ domains: ["another.site"] }))],
+  ];
+  for (const widgets of widgetLists) {
+    const report = await inspectEnvironment("private-token", sha, "production", async (url) =>
+      Response.json({
+        success: true,
+        result: url.includes("settings") ? { bindings: [] } : widgets,
+      }),
+    );
+    expect(report.turnstile.publicSiteKey).toBeNull();
+  }
+});
+
+test("production optional Gateway check selects only the production Gateway", async () => {
+  const requests: string[] = [];
+  const report = await inspectEnvironment(
+    "private-token",
+    sha,
+    "production",
+    async (url) => {
+      requests.push(url);
+      return Response.json({
+        success: true,
+        result: url.includes("settings")
+          ? { bindings: [] }
+          : url.includes("ai-gateway")
+            ? [{ id: "baro-production", collect_logs: false, cache_ttl: 0, authentication: true }]
+            : [],
+      });
+    },
+    { checkGateway: true },
+  );
+  expect(requests[1]).toEndWith("/ai-gateway/gateways?search=baro-production&per_page=100");
+  expect(report.gateway.exists).toBe(true);
+  expect(report.gateway.authentication).toBe(true);
 });

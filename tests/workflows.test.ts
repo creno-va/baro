@@ -41,7 +41,12 @@ test("readiness is manual, main-only and cannot create deployment evidence", asy
       inspect: {
         if: string;
         environment: { name: string; deployment: boolean };
-        steps: { env?: Record<string, string> }[];
+        steps: {
+          name?: string;
+          if?: string;
+          env?: Record<string, string>;
+          with?: Record<string, string>;
+        }[];
       };
     };
   };
@@ -50,11 +55,35 @@ test("readiness is manual, main-only and cannot create deployment evidence", asy
   expect(workflow.jobs.inspect.if).toBe("github.ref == 'refs/heads/main'");
   expect(workflow.jobs.inspect.environment).toEqual({ name: "preview", deployment: false });
   expect(workflow.on.workflow_dispatch).toMatchObject({
-    inputs: { check_legal: { type: "boolean", default: false } },
+    inputs: {
+      target_environment: {
+        type: "choice",
+        options: ["preview", "production"],
+        default: "preview",
+      },
+      check_legal: { type: "boolean", default: false },
+    },
   });
   expect(
     workflow.jobs.inspect.steps.some((s) => s.env?.READINESS_CANDIDATE_SHA === "${{ github.sha }}"),
   ).toBe(true);
+  expect(
+    workflow.jobs.inspect.steps.some(
+      (step) => step.env?.READINESS_TARGET_ENVIRONMENT === "${{ inputs.target_environment }}",
+    ),
+  ).toBe(true);
+  expect(
+    workflow.jobs.inspect.steps.find(
+      (step) => step.name === "Verify official legal adapter with synthetic concepts",
+    )?.if,
+  ).toBe("always() && inputs.check_legal && inputs.target_environment == 'preview'");
+  const artifact = workflow.jobs.inspect.steps.find(
+    (step) => step.name === "Save allowlisted readiness observation",
+  );
+  expect(artifact?.with?.name).toBe("${{ inputs.target_environment }}-readiness-${{ github.sha }}");
+  expect(artifact?.with?.path).toContain(
+    ".wrangler/readiness/${{ inputs.target_environment }}.json",
+  );
 });
 
 test("development CI checks the exact candidate and changed features without a case corpus loop", async () => {

@@ -1,10 +1,17 @@
-name: Preview environment readiness
+name: Environment readiness
 
 on:
   workflow_dispatch:
     inputs:
+      target_environment:
+        description: Worker metadata to inspect using read-only requests
+        type: choice
+        options:
+          - preview
+          - production
+        default: preview
       check_legal:
-        description: Recheck official legal API only after credential or approval changes
+        description: Preview only; recheck official legal API after credential or approval changes
         type: boolean
         default: false
       check_gateway:
@@ -16,7 +23,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: cloudflare-preview-readiness
+  group: cloudflare-${{ inputs.target_environment }}-readiness
   cancel-in-progress: false
 
 jobs:
@@ -39,14 +46,15 @@ jobs:
           bun-version-file: .bun-version
       - name: Install frozen dependencies
         run: bun ci
-      - name: Read preview metadata only
+      - name: Read selected environment metadata only
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           READINESS_CANDIDATE_SHA: ${{ github.sha }}
+          READINESS_TARGET_ENVIRONMENT: ${{ inputs.target_environment }}
           READINESS_CHECK_GATEWAY: ${{ inputs.check_gateway }}
         run: bun scripts/environment-readiness.ts
       - name: Verify official legal adapter with synthetic concepts
-        if: always() && inputs.check_legal
+        if: always() && inputs.check_legal && inputs.target_environment == 'preview'
         env:
           LAW_API_OC: ${{ secrets.LAW_API_OC }}
           READINESS_CANDIDATE_SHA: ${{ github.sha }}
@@ -55,9 +63,9 @@ jobs:
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v7.0.1
         with:
-          name: preview-readiness-${{ github.sha }}
+          name: ${{ inputs.target_environment }}-readiness-${{ github.sha }}
           path: |
-            .wrangler/readiness/preview.json
+            .wrangler/readiness/${{ inputs.target_environment }}.json
             .wrangler/readiness/legal.json
           if-no-files-found: error
           retention-days: 7
