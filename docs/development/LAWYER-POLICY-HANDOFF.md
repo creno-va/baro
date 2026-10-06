@@ -1,10 +1,10 @@
 # 변호사·공개 정책 인계 — #62/#68/#20/#70
 
 - Candidate base: `ca6e15b` (PR125 main)
-- Integrated main: `7943496` (PR127; required CI 3 jobs SUCCESS 후 4번 병합)
+- Integrated main: `a5130db` (PR127 + PR129; 각 required CI 3 jobs SUCCESS 후 4번 병합)
 - Branch: `codex/62-lawyer-public-polish`
 - Reviewed: 2026-10-07 KST
-- Status: 구현·공유 역할 가드/의존성 통합 완료 / 최신 후보 통합·CI·외부 검증·게시 승인 대기
+- Status: 구현·공유 역할 가드/의존성 통합 완료 / 최종 CI·외부 검증·게시 승인 대기
 - 변경 소유: lawyer/profile/directory 전용 UI/API/module/CSS/test, 도움말/정책/콘텐츠
 - 공유 인증·role/session/contracts/schema/router/CI·동의 버전은 4번, 저장/처리/계정 삭제는 2번.
 
@@ -81,6 +81,7 @@ contracts/ConsentForm·자료 자동 처리/공개 동의 범위·publishedPolic
   role/session/router/계정 삭제 UI를 편집하지 않는다.
 - 2번: 실제 자산 reservation/upload/정제 admission·처리 재시도/대기·사용량/삭제·restore 재삭제와
   실제 R2/Containers byte/보존 근거를 확인한다. 정제 대기 자료는 업로드 성공과 공개 완료를 구분한다.
+- 4번: PR129는 lawyer private mock의 role/현재 동의를 cache replay 전에 검사하고 public anonymous 읽기를 유지한다. exact-head d86a406 CI 37490993750의3 jobs SUCCESS/main a5130db 통합을 확인했다.
 - 4번: 기능 PR의 검증·관련 CI를 확인하고 병합한다. #70/#71과 production Environment/최초 공개
   gate를 별도로 유지한다. mock/로컬 DB 성공을 실제 외부 성공으로 표시하지 않는다.
 - 사업자/법률/운영 담당: 위 필드별 증거를 준비해 #20/#70에 비민감 reference를 남긴다.
@@ -155,3 +156,17 @@ fence를 보완한다. `bun ci`, audit 취약점0, check 1211 tests/132881 asser
 normal build/cf:dry-run, CI-selector wire16+mock1, production bundle147/CSP4(명시적 fixture-only skip1)가
 성공했다. 이전 head의 CI 성공을 이 추가 후보의 CI 성공으로 대체하지 않는다. 최종 공유 통합 후
 정확한 head 결과는 담당 이슈/PR 댓글에 기록한다.
+
+## PR129 최신 main 통합 후 최종 로컬 검증
+
+공유 PR129 exact-head `d86a406`의 CI 37490993750 필수3 jobs SUCCESS와 4번의 main
+`a5130db` 병합을 확인하고 rebase했다. `bun ci`/audit 취약점0, check1212 tests/132887 assertions,
+migration6/29·drift 없음, build/cf:dry-run, production bundle147/CSP4(명시적 fixture-only skip1)가
+성공했다. customer-role/profile/assets/shared core/mock runtime20 tests/374 assertions는
+동일 owner 역할 변경 후 private cached replay 거부·anonymous public 유지까지 포함한다.
+CI-selector browser는 wire16+integrated mock1 성공이다. 설치/build 동시 실행의 Vite cache 누락과
+검증 중 변경에 따른 axe execution-context navigation 실패는 성공으로 숨기지 않았다. 설치/build/
+check·문서 수정 완료 후 workspace에 쓰기를 하지 않는 순차 browser 재검증에서17개 모두 통과했다.
+
+PR #126 최신 head CI는 이 추가 통합 후보를 별도로 검증한다. 담당 이슈/PR에 정확한 SHA/run을
+남기고 4번에게 병합을 맡긴다. #20/#70 승인 증거와 실제 외부 성공은 여전히 미확인/OPEN이다.
