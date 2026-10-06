@@ -586,3 +586,24 @@ readiness의 Gateway403 원인이 바뀌지 않았으므로 기본 probe를 명�
 조건 변경 증거 전에는 재호출하지 않는다. 7개 processing binding의 존재를 점검하되 secret 값,
 bucket/namespace ID, model bounds 내용은 출력하지 않는다. 정상 production bundle에 API mock/
 test fixture를 넣거나 synthetic pricing/funding을 실제 DB proof로 채우지 않는다.
+
+공유132의 d73a9d3 [CI37494702283](https://github.com/creno-va/baro/actions/runs/37494702283)는
+regular browser38 PASS/3 FAIL이었다. analytics fixture의 고객 session 응답 누락2개와,
+menu trigger가 effect에서 enabled되기 전 Enter를 보낸1개를 수정해 focused4개가 통과했다.
+5f5e818에서 frozen ci/check1225/133026·migration6/29·build/dry-run도 다시 통과했으며 새
+exact-head CI37496257599를 요구한다. 제품 인증·역할·hydration guard 완화 없음.
+PR13019295aeb의 [CI37495417013](https://github.com/creno-va/baro/actions/runs/37495417013)는
+Linux native 실행 SUCCESS, source browser16 PASS/2 FAIL이었다. settings의 재인증 marker/
+이전 화면 비동기 응답 경합을 [모듈 담당에 인계](https://github.com/creno-va/baro/pull/130#issuecomment-6020740933)했다.
+이전 head의 실패를 새 head의 검증으로 지우지 않는다.
+
+PDF 스킬의 읽기 전용 검사에서 모듈의 대역 다운로드 PDF 첫 페이지와 긴 리포트 마지막
+페이지의 한글/마스킹·번호·여백을 확인했고 pypdf로13페이지·400행·마지막 문장 보존 및
+전화번호/이메일 제거를 검사했다. 이는 해당 합성 artifact의 검사이며 최종 릴리스/원격 비용
+증거가 아니다. 최종 candidate의 signed SQL 다운로드는 전용 no-webServer/60초 config에서
+순차 실행한다. source-only report/global router 변경도 이 소비자 검사를 선택한다.
+
+01:33 KST Cloudflare D1 인증된 목록에는 보호 preview/production2개만 있다. 로컬 CLI는
+인증 부재이며 격리 restore 등록부·DB 밖 최신 journal·키 담당·rollback version·실제 alert
+수신/ack가 없으므로 보호 DB를 drill 대상으로 사용하지 않았다. #19/#27/#70/#71 및
+milestone4/5는 이 관측이나 CI/health만으로 완료하지 않는다.

@@ -34,6 +34,12 @@ main 병합만으로 두 환경의 배포 성공을 갱신하지 않는다. 실�
 - preview/production 각각 private/public의 R2 버킷4개가 분리되어 있으며 모두 objects0/size0B.
   두 private 버킷의 **Public Access Disabled**를 직접 확인했다.
   계정 R2 Class A16/Class B42 관측은 계정 집계이고 현재 릴리스/제품 처리별 비용 정산이 아니다.
+- 2026-10-07 01:33 KST 인증된 D1 목록은 `baro-production`, `baro-preview`의2개만 표시했다.
+  합성 전용 `baro-drill-*` D1/Worker/Workflow 등록부가 없어 두 보호 DB를 restore 대상으로
+  사용하지 않았다. 운영 관리자는 허용된 격리 자원·baseline bookmark·DB 밖 journal 보관처·
+  키 복구 관리자·rollback version 및 경보 수신자/ack timeout을 지정해야 한다.
+  로컬 Wrangler D1 목록 조회는 현재 CLI 인증 부재로 실패했으며 Safari 로그인과 구분한다.
+  token scope 확대·새 DB 생성·보호 DB restore는 하지 않았다.
 
 이 관측으로 console 로그인 blocker만 해소했다. runtime의 immutable pricing/FX/funding/
 allocation/bounds·실제 billing receipt 및 제품 OAuth→자료 처리→삭제 경로는 여전히 별도
