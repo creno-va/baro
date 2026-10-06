@@ -6,6 +6,7 @@ import {
   MAX_PLAINTEXT_BYTES,
   V2_SNAPSHOT_PURPOSES,
 } from "../crypto";
+import { rememberDependencyFailure } from "../dependency-diagnostics";
 
 export class V2RepositoryError extends Error {
   constructor(
@@ -30,7 +31,9 @@ export async function safe<T>(operation: () => Promise<T>): Promise<T> {
     return await operation();
   } catch (error) {
     if (error instanceof V2RepositoryError) throw error;
-    throw new V2RepositoryError("DB_OPERATION_FAILED");
+    const failure = new V2RepositoryError("DB_OPERATION_FAILED");
+    rememberDependencyFailure(failure, error);
+    throw failure;
   }
 }
 export const actorSchema = z.strictObject({
