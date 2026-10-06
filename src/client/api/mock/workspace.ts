@@ -188,6 +188,7 @@ export function createWorkspaceMock(runtime: WorkspaceMockRuntime) {
         requireMockCase(state, id, request.method !== "GET");
         const view = ensureMockWorkspace(state, id),
           data = state.workspace[id];
+        if (!data) throw new WorkspaceMockError("NOT_FOUND", "작업 공간을 찾을 수 없어요.");
         if (route === "workspace" && request.method === "GET") {
           return mockResponse(view);
         }

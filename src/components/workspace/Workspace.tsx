@@ -741,20 +741,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                 닫기
               </Button>
             </div>
-            {original &&
-              (original.type.startsWith("image/") ? (
-                <img src={original.url} alt={`${preview.name} 원본 미리보기`} />
-              ) : original.type.startsWith("audio/") ? (
-                <audio src={original.url} controls>
-                  <track kind="captions" />
-                  오디오 원본
-                </audio>
-              ) : (
-                <video src={original.url} controls>
-                  <track kind="captions" />
-                  영상 원본
-                </video>
-              ))}
+            {original && <img src={original.url} alt={`${preview.name} 원본 미리보기`} />}
             {error && (
               <p role="alert" className="workspace-error">
                 {error.message}

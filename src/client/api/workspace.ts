@@ -117,7 +117,8 @@ export const workspaceViewSchema = z.object({
 function parseView(value: unknown): WorkspaceView {
   const parsed = workspaceViewSchema.safeParse(value);
   if (!parsed.success) throw workspaceError("UNAVAILABLE", "사건 응답을 확인하지 못했어요.", true);
-  return parsed.data;
+  const { schemaVersion, ...caseFields } = parsed.data.case;
+  return { ...parsed.data, case: { ...caseFields, ...(schemaVersion ? { schemaVersion } : {}) } };
 }
 export function createWorkspaceApi(request: WorkspaceTransport) {
   const files = createFilesApi(request);
