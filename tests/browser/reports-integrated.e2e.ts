@@ -151,13 +151,11 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
   );
   await page.goto(`${accountCasePath}/files`);
   await page.getByLabel("선택 자료의 자동 처리에 동의합니다.").check();
-  await page
-    .getByLabel("업로드할 파일 선택", { exact: true })
-    .setInputFiles({
-      name: "계정 삭제 원본.txt",
-      mimeType: "text/plain",
-      buffer: Buffer.from(originalText),
-    });
+  await page.getByLabel("업로드할 파일 선택", { exact: true }).setInputFiles({
+    name: "계정 삭제 원본.txt",
+    mimeType: "text/plain",
+    buffer: Buffer.from(originalText),
+  });
   await expect(page.getByText("결과 확인 가능", { exact: true })).toBeVisible();
   expect(await originalCount()).toBeGreaterThan(0);
   await page.goto("/settings");
