@@ -11,6 +11,7 @@ export type ReportMockState = {
   session: SessionView;
   cases: Record<string, CaseView>;
   caseOwners?: Record<string, string>;
+  consents?: Record<string, unknown>;
   intake?: Record<string, unknown>;
   caseRequests?: Record<string, { ownerId: string; fingerprint: string; result: unknown }>;
   lawyers?: unknown;
@@ -43,7 +44,8 @@ export class ReportMockError extends Error {
   }
 }
 export function requireMockSession(state: ReportMockState) {
-  if (!state.session.user) throw new ReportMockError("UNAUTHENTICATED", "로그인이 필요해요.");
+  if (!state.session.user || state.deletedAccountIds?.includes(state.session.user.id))
+    throw new ReportMockError("UNAUTHENTICATED", "로그인이 필요해요.");
 }
 export function requireMockAccount(state: ReportMockState) {
   requireMockSession(state);

@@ -2,7 +2,14 @@
 export function maskReportText(text: string) {
   return text
     .replace(/\b\d{6}\s*-?\s*[1-8]\d{6}\b/g, "[주민등록번호 가림]")
-    .replace(/(?:\+82[-\s]?)?0?1[016789][-\s]?\d{3,4}[-\s]?\d{4}/g, "[전화번호 가림]")
+    .replace(
+      /(?<!\d)(?:\+82[-\s]?0?1[016789]|01[016789])[-\s]?\d{3,4}[-\s]?\d{4}(?!\d)/g,
+      "[전화번호 가림]",
+    )
+    .replace(
+      /(?<!\d)(?:\+82[-\s]?0?(?:2|[3-6]\d|70)|0(?:2|[3-6]\d|70))[-\s]?\d{3,4}[-\s]?\d{4}(?!\d)/g,
+      "[전화번호 가림]",
+    )
     .replace(/[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}/g, "[이메일 가림]");
 }
 export function downloadBlob(blob: Blob, filename: string) {
@@ -68,6 +75,7 @@ export async function createZip(entries: { name: string; blob: Blob }[]) {
       [0, 0x04034b50, 4],
       [4, 20, 2],
       [6, 0x800, 2],
+      [12, 0x21, 2],
       [14, crc, 4],
       [18, bytes.length, 4],
       [22, bytes.length, 4],
@@ -80,6 +88,7 @@ export async function createZip(entries: { name: string; blob: Blob }[]) {
         [4, 20, 2],
         [6, 20, 2],
         [8, 0x800, 2],
+        [14, 0x21, 2],
         [16, crc, 4],
         [20, bytes.length, 4],
         [24, bytes.length, 4],

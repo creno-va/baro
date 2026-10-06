@@ -2,6 +2,7 @@
   max-width: 1120px;
   margin: 0 auto;
   color: var(--foreground, #17233b);
+  overflow-wrap: anywhere;
 }
 .report-heading,
 .report-card-heading,
@@ -146,6 +147,7 @@
 }
 .report-modal {
   max-width: min(520px, calc(100vw - 2rem));
+  overflow-wrap: anywhere;
   border: 1px solid #cbd5e1;
   border-radius: 16px;
   padding: 1.5rem;
