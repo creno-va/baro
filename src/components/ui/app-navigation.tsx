@@ -119,12 +119,19 @@ export function AppNavigation({
       if (document.visibilityState === "visible") void refresh();
     };
     const storage = (event: StorageEvent) => {
-      if (!event.key || event.key === "baro-api-mock-v1:session") void refresh();
+      if (
+        !event.key ||
+        ["baro-api-mock-v1:session", "baro-session-changed", "better-auth.message"].includes(
+          event.key,
+        )
+      )
+        void refresh();
     };
     void refresh();
     window.addEventListener("focus", refresh);
     window.addEventListener("pageshow", refresh);
     window.addEventListener("storage", storage);
+    window.addEventListener("baro-session-changed", refresh);
     document.addEventListener("visibilitychange", visible);
     return () => {
       active = false;
@@ -132,14 +139,18 @@ export function AppNavigation({
       window.removeEventListener("focus", refresh);
       window.removeEventListener("pageshow", refresh);
       window.removeEventListener("storage", storage);
+      window.removeEventListener("baro-session-changed", refresh);
       document.removeEventListener("visibilitychange", visible);
     };
   }, []);
-  const resolvedRole = session?.user
-    ? session.user.accountType === "lawyer"
-      ? "lawyer"
-      : "user"
-    : role;
+  const resolvedRole: NavigationRole =
+    session === null
+      ? role
+      : session.user
+        ? session.user.accountType === "lawyer"
+          ? "lawyer"
+          : "user"
+        : "visitor";
   const items = availableNavigation(resolvedRole, [
     ...availableRoutes,
     "/",
@@ -209,27 +220,38 @@ export function AppNavigation({
         도움말
       </a>
       {session?.user ? (
-        <div className="sidebar-account__row">
-          <a href="/settings" className="sidebar-profile">
-            <span className="sidebar-avatar" aria-hidden="true">
-              {session.user.name.slice(0, 1) || "B"}
-            </span>
-            <span>
-              <strong>{session.user.name || "내 계정"}</strong>
-              <small>{session.user.accountType === "lawyer" ? "변호사 계정" : "나의 BARO"}</small>
-            </span>
+        <>
+          <div className="sidebar-account__row">
+            <a href={session.needsConsent ? "/consent" : "/settings"} className="sidebar-profile">
+              <span className="sidebar-avatar" aria-hidden="true">
+                {session.user.name.slice(0, 1) || "B"}
+              </span>
+              <span>
+                <strong>{session.user.name || "내 계정"}</strong>
+                <small>
+                  {session.needsConsent
+                    ? "필수 확인 필요"
+                    : session.user.accountType === "lawyer"
+                      ? "변호사 계정"
+                      : "나의 BARO"}
+                </small>
+              </span>
+            </a>
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label={signingOut ? "로그아웃 중…" : "로그아웃"}
+              title="로그아웃"
+              onClick={() => void signOut()}
+              disabled={signingOut}
+            >
+              <LogOut size={18} aria-hidden="true" />
+            </Button>
+          </div>
+          <a href="/login" className="sidebar-help">
+            이용 유형 변경
           </a>
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label={signingOut ? "로그아웃 중…" : "로그아웃"}
-            title="로그아웃"
-            onClick={() => void signOut()}
-            disabled={signingOut}
-          >
-            <LogOut size={18} aria-hidden="true" />
-          </Button>
-        </div>
+        </>
       ) : (
         (showLogin || session !== null) && (
           <a className="ui-button ui-button--primary sidebar-login" href="/login">

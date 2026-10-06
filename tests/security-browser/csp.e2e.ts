@@ -141,7 +141,7 @@ test("built Worker mobile menu, brand, local font and error state work without C
   await page.screenshot({ path: ".wrangler/built-ui-menu-320.png" });
   await expect(dialog.getByRole("button", { name: "닫기", exact: true })).toBeFocused();
   await page.keyboard.press("Shift+Tab");
-  await expect(dialog.getByRole("button", { name: "로그아웃", exact: true })).toBeFocused();
+  await expect(dialog.getByRole("link", { name: "이용 유형 변경", exact: true })).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(dialog.getByRole("button", { name: "닫기", exact: true })).toBeFocused();
   await page.keyboard.press("Escape");

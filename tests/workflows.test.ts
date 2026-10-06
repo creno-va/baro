@@ -48,6 +48,9 @@ test("readiness is manual, main-only and cannot create deployment evidence", asy
   expect(workflow.permissions).toEqual({ contents: "read" });
   expect(workflow.jobs.inspect.if).toBe("github.ref == 'refs/heads/main'");
   expect(workflow.jobs.inspect.environment).toEqual({ name: "preview", deployment: false });
+  expect(workflow.on.workflow_dispatch).toMatchObject({
+    inputs: { check_legal: { type: "boolean", default: false } },
+  });
   expect(
     workflow.jobs.inspect.steps.some((s) => s.env?.READINESS_CANDIDATE_SHA === "${{ github.sha }}"),
   ).toBe(true);

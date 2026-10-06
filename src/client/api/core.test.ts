@@ -20,6 +20,16 @@ test("real API errors preserve consent and security-check boundaries without ech
   );
   expect(budget.code).toBe("UNAVAILABLE");
   expect(budget.retryable).toBe(true);
+  const role = await responseError(
+    Response.json(
+      { error: { code: "ROLE_REQUIRED", message: "private role detail" } },
+      { status: 403 },
+    ),
+  );
+  expect(role.code).toBe("NOT_FOUND");
+  expect(role.retryable).toBe(false);
+  expect(role.message).toContain("이용 유형");
+  expect(role.message).not.toContain("private role detail");
   expect((await responseError(new Response("untrusted raw detail", { status: 403 }))).code).toBe(
     "VALIDATION_ERROR",
   );

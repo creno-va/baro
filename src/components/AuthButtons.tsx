@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { AccountType } from "../client/api";
-import { api, errorMessage, roleStart } from "../client/api";
+import { api, apiMode, errorMessage, roleStart } from "../client/api";
 import { Button } from "./ui/button";
 
 type Provider = "google" | "naver" | "kakao";
@@ -38,6 +38,9 @@ export function AuthButtons() {
 
   return (
     <div className="auth-options" aria-busy={pendingProvider !== null}>
+      {apiMode === "mock" && (
+        <p className="case-muted">API 예시 모드 · 합성 계정으로 시연합니다.</p>
+      )}
       <fieldset className="account-type" disabled={!ready || pendingProvider !== null}>
         <legend>어떤 목적으로 이용하시나요?</legend>
         <label>

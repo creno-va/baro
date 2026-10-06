@@ -1,5 +1,54 @@
 # P0.3 환경 readiness 기록
 
+## 2026-10-07 통합 세션의 현재 readiness
+
+아래 이전 관측은 당시의 기록이며 현재 자원 상태를 대신하지 않는다. 최신 통합 기준은
+`ca6e15b1226ebdfaf3eee98b07b993cdb303f873`이며 main CI/preview/production foundation
+배포·동일 SHA smoke를 확인했다. 실제 사용자 기능/외부 성공과 분리한 증거는
+[V2 검증 기록](../development/V2-VALIDATION.md)에 연결한다.
+
+| 항목 | 현재 확인/제한 | 담당 행동과 필요한 증거 |
+| --- | --- | --- |
+| Cloudflare console | 사용자가 Safari 로그인 완료; 2026-10-07 00:05~00:15 KST 인증된 콘솔에서 읽기 전용 관측 | 현재 plan/resources/credit를 아래 기록. 로그인은 OAuth/법률 승인이나 제품 실제 처리 성공을 뜻하지 않음 |
+| OAuth | preview 동일 UI는 명시적 API mock, 실제 공급자 로그인 경로를 검증한 결과가 아님 | 공급자 앱 관리자: 환경별 별도 client, `https://preview.baro.site/api/auth/callback/{google,naver,kakao}`, Google Audience/test users, NAVER tester/admin/검수, Kakao 테스트 멤버·동의항목을 확인한 뒤 실제 성공/취소 callback 기록 |
+| Turnstile | 배포/secret 존재와 실제 widget/action 성공은 별도 | 환경 관리자: preview hostname/site와 secret 짝 확인; 고객 생성의 case_create action, 만료/재사용/hostname·action mismatch smoke |
+| 비용·AI | 기존 isolated synthetic 호출 증거 보존. 현재 release의 가격/FX/funding/allocation/bounds·billing 정산 미검증 | 비용/배포 관리자: 기존 credit/auto-recharge OFF와 지출 한도, 신선한 공식 가격·FX·총100만원 환경 allocation, pinned model bounds 근거 및 실제 receipt/invoice 대조. 증거 부재 시 paid admission은 닫힘 |
+| R2/Containers/Whisper | 기존 리소스·CLI roundtrip/Linux native fixture 증거 보존, 현재 release의 제품 로그인→원본→처리→삭제 미검증 | 파일 세션+통합: 승인된 합성 입력으로 current binding/image digest/원격 처리·full audio coverage·sampled frames·temporary cleanup와 실제 비용을 함께 기록 |
+| 공식 법률 | 기존 승인 credential의 upstream error와 정확한 원인 미확정 보존; 조건 미변경이므로 재호출 없음 | 공식 법률 계정 관리자: 신청 내역의 법령/판례 서비스, 인터넷·JSON 접근, 시스템/도메인/이용목적과 오류자가진단 결과 확인; 조건 변경 뒤만 bounded parser/ID/version/date/hash/URL 검증 |
+| 복구·삭제·경보 | 최신 제품 연결/원격 deletion journal/restore·rollback·실제 alert ack 미완료 | 통합+운영 관리자: 격리 자원 등록부, key recovery 관리자, 외부 journal 보관처, rollback version/image, 내부 테스트 수신처·담당·ack timeout을 확정하고 합성 drill 수행 |
+| 정책/공개 | #20/#70 승인/사업자·국가·보존 사실과 동일 게시/동의 버전 증거 없음 | 정책 책임자: reviewer·문서 hash/버전·사업자 사실·게시 승인 receipt. 승인 전 draft를 CURRENT_POLICY_VERSIONS에 복사하지 않음; public-beta gate 닫힘 유지 |
+
+### 인증된 콘솔의 현재 관측
+
+- Workers **Paid / Current plan**, 기본 `$5/month + usage` 표시.
+- preview/production Containers가 각각 존재하며 최종 상세의 **Ready**, active instances0을 확인했다.
+  preview image digest `e67479b76c51b6f40e4364c5cdb8088a2c966a466685f192a2e596bcf408a390`,
+  1vCPU/6,144MiB/12,000MB. 목록의 처음 Updating은 후속 상세에서 Ready로 전환됐다.
+  같은 구독 기간의 console usage `$0.00`·CPU/memory/disk/egress0 표시는
+  실제 제품 처리/정확한 청구액의 증거가 아니다.
+- Gateway 목록에는 `baro-preview`만 보였다. Collect Logs/Cache/Retry/Spend Limits OFF,
+  Authenticated Gateway/Zero Data Retention ON, Workers AI Unified billing.
+  기존 credit `$10.00`, **Auto recharge OFF**; 추가 결제나 설정 변경 없음.
+  과거 stored logs3은 내용을 열거나 삭제하지 않았다. 반올림된 Cost$0.00은 무료 증거가 아니다.
+- preview/production 각각 private/public의 R2 버킷4개가 분리되어 있으며 모두 objects0/size0B.
+  두 private 버킷의 **Public Access Disabled**를 직접 확인했다.
+  계정 R2 Class A16/Class B42 관측은 계정 집계이고 현재 릴리스/제품 처리별 비용 정산이 아니다.
+
+이 관측으로 console 로그인 blocker만 해소했다. runtime의 immutable pricing/FX/funding/
+allocation/bounds·실제 billing receipt 및 제품 OAuth→자료 처리→삭제 경로는 여전히 별도
+증거가 필요하다. console 숫자를 production DB proof로 복사하거나 합성 fixture로 채우지 않았다.
+공식 법률 신청/OC 조건 변경 답변은 없어 법률 API를 재호출하지 않았다.
+
+Readiness workflow는 `check_legal=false`가 기본인 metadata-only 점검을 제공한다.
+법률 인증/신청 조건이 실제 바뀐 경우에만 `check_legal=true`로 재검증한다. 읽기 전용
+보고서는 binding 이름/존재·환경/SHA/origin·logging/cache만 허용하며 model bounds의
+내용·namespace/bucket ID·credential은 출력하지 않는다. 값이 있다는 관측은 값의 유효성,
+funding/billing/Container image나 OAuth 성공 증거가 아니다.
+
+```sh
+gh workflow run environment-readiness.yml --repo creno-va/baro --ref main -f check_legal=false
+```
+
 ## v2 목표와 현재 증거 경계 (#53)
 
 아래 P0.3 관측은 날짜/환경별 역사적 증거다. #53의 설계 승인으로 실제 OAuth·법률·AI·키 복구
@@ -166,7 +215,7 @@ site key/secret, 원문 응답, 오류 body/stack은 제외한다. 잘못된 응
 관측된 첫 페이지에 한정하고 100개 이상이면 truncation 가능성을 표시한다. live gate 통과가 아니다. artifact의 `unverified`
 항목은 이 workflow의 성공 여부와 무관하게 남는다.
 
-같은 run의 법령 단계는 승인된 preview OC와 합성 `loan`/`interest`/`repayment` 개념으로
+명시적으로 `check_legal=true`를 선택한 run의 법령 단계는 승인된 preview OC와 합성 `loan`/`interest`/`repayment` 개념으로
 실제 `legal-retrieval` parser/date/hash 검증을 최대 4개 request 예약 안에서 수행한다.
 cache는 메모리 대역이며 D1에 쓰지 않는다. 성공/실패와 시행일/hash만 별도 artifact로 남긴다.
 이 단계는 CI runner의 adapter 증거이며 Worker 전체 smoke를 대신하지 않는다. 법령 검증이

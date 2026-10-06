@@ -1,6 +1,6 @@
 # BARO v2 검증 증거 기록
 
-- 기준일: 2026-10-06
+- 최신 통합 기록: 2026-10-07 (아래 4세션 통합 재검증). 초기 표와 이전 SHA의 증거는 역사적 기록으로 보존한다.
 - 상태: #53 명세·#54 strict 계약·#55 additive DB·#56 공통 UI 시스템 완료. 후속 서비스 실행·화면·외부 연동·공개는 진행 중이며 전체 완료 증거 없음.
 - 마일스톤: [전체 서비스 개발](https://github.com/creno-va/baro/milestone/5)
 - 실행 정본: [V2 실행 계획](./V2-EXECUTION.md), 개정 PRD/UX와 실제 GitHub 이슈
@@ -13,9 +13,12 @@ cookie·token·secret·인증 URL·stack/SQL은 증거에 포함하지 않는다
 릴리스별 증거를 새로 기록하고 과거 SHA의 녹색 CI나 health를 현재 기능 승인으로 쓰지 않는다.
 관측 실패·missing·pending·mock-only는 통과가 아니다.
 
-## 전체 요구사항과 증거 소유자
+## 초기 요구사항과 증거 소유자 (역사적 계획)
 
-| 요구사항 | 코드/계약 이슈 | 실제 검증 | 현재 판정 |
+ADR-0014 이후 MVP는 고객/변호사 두 역할이며 자격 심사·승인대기·반려·어드민 UX는 제외한다.
+아래 초기 계획의 심사 행은 현재 개발 요구사항이나 공개 승인 증거로 재사용하지 않는다.
+
+| 초기 요구사항 | 코드/계약 이슈 | 실제 검증 | 당시 판정 |
 | --- | --- | --- | --- |
 | 로그인·동의·계정·만14세·역할 | #60/#68, 기존 #10 | #27/#69/#71 실제 OAuth 성공/취소/만료/권한 | 미검증 |
 | 개인/사업자 단일 소유자·전체 사건군 | #54/#55/#63/#64/#65 | #69/#71 사건군별 UI·평가·공식 source | 미구현 |
@@ -369,3 +372,92 @@ browser interception은 실제 자격·R2·외부 provider 검증이 아니며 #
 승인·명령·artifact·실패 조건이 있으면 완료하지 않는다. 모든 역할의 실제 동작, 다운로드 내용,
 저장/삭제/복구, 외부 제공자, 같은 릴리스 배포, 공개 승인 근거까지 강한 증거로 확인한 뒤에만
 milestone 5를 완료한다. 기존 Goal은 삭제됐으며 이번 기록은 이후 실제 성공을 미리 기록하지 않는다.
+## 2026-10-07 4세션 통합 재검증
+
+통합 세션은 clean main `ca6e15b1226ebdfaf3eee98b07b993cdb303f873` (PR125)에서
+`codex/71-integration-release`와 별도 checkout을 만들었다. #57/#63/#69/#19/#27/#71에
+소유 기록을 남겼으며 고객 #64/#65, 파일/native/report/delete #58/#59/#66/#67,
+변호사/정책 #62/#68의 모듈 내부 편집은 각 세션에 유지한다. 공유 contracts/schema/router/
+auth/session/global shell/CI와 통합 증거는 통합 세션이 소유한다. 신규 migration 요청은 없고
+현재 marker `0009_storage_capacity_maintenance`를 보존한다. 새 agent/Goal/automation은 없다.
+
+| 기준 immutable SHA의 확인 | 실제 증거와 한계 |
+| --- | --- |
+| main CI | [37481561242](https://github.com/creno-va/baro/actions/runs/37481561242) 성공 |
+| preview 배포 | [37482464416](https://github.com/creno-va/baro/actions/runs/37482464416) 성공; 독립 foundation smoke의 full SHA/ready/schema 일치 |
+| production 배포 | [37481730002](https://github.com/creno-va/baro/actions/runs/37481730002) 정상 Environment 승인 경로 뒤 성공; 독립 foundation smoke 일치 |
+| 배포 전 smoke 실패 | production 완료 전 조회는 이전 SHA여서 wrong-release로 거부; 완료 뒤 재검증 성공. 실패를 배포 성공으로 바꾸거나 삭제하지 않음 |
+| Full validation | [37483052100](https://github.com/creno-va/baro/actions/runs/37483052100) 실패: browser9 fail/14 skip/34 pass. native 성공. mock 전용 테스트가 real adapter에 실행됐으며 corpus harness는 /src/client/api/ asset까지 가로챘다. 실패 보존·runner/경로 수정 후 새 candidate에서 재검증 |
+| 로컬 기준 검사 | 1,199 tests/132,525 assertions 실패0; 초기 db:check는 bunx PATH 누락으로 실패. 런타임 PATH 보완 뒤 drift 없음·fresh/upgrade 6 tests/29 assertions 성공 |
+| 실제 preview browser | 동일 제품 login→합성 session→합성 consent→고객 홈의 실제 hydration 확인. API mock 시연이며 OAuth 성공이 아님 |
+
+현재 [preview](https://preview.baro.site)는 `PUBLIC_API_MODE=mock`으로 빌드된 동일 제품 UI다.
+[production](https://baro.site)는 real adapter와 비공개 foundation gate를 사용한다.
+코드/health/CI 성공은 로그인·AI·공식 법률·파일 처리·청구·삭제/복구 drill 또는 공개 승인
+성공을 뜻하지 않는다. #19/#20/#27/#70/#71 및 milestone 4/5는 외부 증거 없이 닫지 않는다.
+
+공유 수정 후보는 사용량 API의 저장된 가격/자금/allocation 증거 조회 누락을 연결하고,
+고객 사건 API의 signed owner accountType 경계를 추가한다. lawyer usage/account deletion은
+유지하며 선택 역할이 moderator/verified 권한을 생성하지 않는다. 공용 client는
+ROLE_REQUIRED를 기존 NOT_FOUND 화면 purge 경계로 안전하게 변환한다. 모듈의 별도
+workspaceResponse 변환은 #65 담당자에게 요청했다. mock private namespace도 동일 역할
+경계를 검사한다. 신규 실제 funding/가격/FX 증거·비용 지출은 생성하지 않는다.
+
+공유 사용량 집중 검증은 실제 SQL/서명 session과 **합성** durable proofs로 진행했다.
+유효 증거 표시, 잘못된 환경, KST 월 경계, frozen control, 만료/immutable 증거, 전액 사용,
+조회가 비용 예약·차감을 만들지 않는 경계를 확인했다. 같은 owner의 customer→lawyer 변경은
+기존 v1 사건/analysis/delete와 v2 workspace/chat/files/delete 접근을 차단하고 customer로
+복귀하면 기존 사건을 유지한다. 최종 소스의 mandatory/PR CI는 별도로 연결한다.
+
+현재 외부 실행 제한과 필요한 사람 조치는
+[환경 readiness](../operations/ENVIRONMENT-READINESS.md#2026-10-07-통합-세션의-현재-readiness)를
+따른다. 공식 법률 신청/OC 조건은 변하지 않아 같은 실패 probe를 반복하지 않았다.
+
+
+공유 Full validation runner는 wire browser와 각 mock config를 같은 checkout에서 순차 실행한다.
+50-corpus는 signed v1 실제 API/SQL 대역 및 제품 legacy compatibility 화면으로 검증하며,
+v2 모델 품질/실제 공식 근거 승인으로 확장해 표시하지 않는다. corpus harness의 경로 검사는
+`/api/` 정본만 전달하고 Vite의 `/src/client/api/` asset은 원래 dev server에 유지한다.
+session 변경은 credential/role을 포함하지 않는 `baro-session-changed` marker로 peer 탭에
+재조회만 요청하며 로그아웃·동의·persisted role 변경 후 발행한다. 공유 shell은 이 marker와
+기존 Better Auth 알림을 받아 최근 사건과 역할 navigation을 재검증한다.
+
+
+공유 candidate의 집중 browser 검사는 wire35, compiled Worker corpus1(50합성 사례),
+integration3, conversation7, intake6, shared-workspace1, workspace4, reports1로 **58개**
+통과했다. workspace 4342는 다른 checkout이 사용해 통합 소유 검사만 중단하고
+`BARO_WORKSPACE_UI_PORT=4442`로 나머지3 config를 순차 검증했다. 다른 checkout 서버는
+변경/종료/재사용하지 않았다. 최종 CI는 별도 fresh runner에서 전체 runner를 실행한다.
+새 '이용 유형 변경' 링크가 메뉴의 마지막 tabbable이 되므로 built CSP의 focus-wrap
+기대도 이 실제 순서에 맞춘다. 최초 기대 불일치 실패는 보존하고 재검증한다.
+
+PR126 head `af070a3e9af6c489d28847796b7a1915dd2f8290`의 CI
+[37486565424](https://github.com/creno-va/baro/actions/runs/37486565424)는 공용 sharp
+advisory audit에서 실패했다. [공식 advisory](https://github.com/advisories/GHSA-wq5f-xc86-pv6w)의
+patched0.35.5를 정확히 고정하고 lockfile을 갱신했다. 전체 dependency upgrade나 audit
+우회는 하지 않았으며 새 로컬 audit는 취약점0이다. 변경된 의존성 candidate의 mandatory
+검사·빌드·browser/CSP·exact-head CI는 별도로 다시 연결한다.
+
+공식 retrieval/citation의 현재 제품 경계는 v2 bounded transport의3회 이내 attempts/
+30calls/응답 byte·deadline 한도, official ID/version/date/URL/hash 재검증 및 request-local
+권한/동의 재검사다. unavailable과 claim rejection은 유지하며 승인 오류를 모델 기억으로
+대체하지 않는다. 보존한 PR120 benchmark 추천 patch는 아직 제품 적용되지 않았다.
+실제 공식 응답 승인/ID 검증 성공과 live 전체 AI 품질은 입증하지 않았다.
+
+sharp0.35.5 반영 후 frozen `bun ci`와 `bun run check`를 다시 실행해 1,203 tests /
+132,600 assertions, migration6/29 및 schema drift 없음으로 통과했다. 같은 checkout의
+fresh production build·`cf:dry-run`·최종 browser58개도 모두 통과했다. 이 수치는 실제
+SQLite/서명 session 및 합성 transport/증거를 구분한 로컬 결과이며 새 immutable PR의
+CI/Full validation와 배포 smoke는 후속 기록으로 연결한다.
+
+quota·예산 회귀는 `usage-service`, `budget-service`, `budget-accounting`,
+`budget-gateway-ledger` 테스트의 KST 일/월 경계, 원자적 동시 예약, retry별 실제 meter
+receipt와 logical user quota1회, 100만원 상한·정확한 FX decimal rounding,
+불명확 비용 보존·삭제 후 늦은 next-month receipt·정산 SQL rollback을 포함한다.
+이는 실제 공급자 청구서를 대조한 비용 reconciliation이 아니라 합성 receipt를 쓰는
+runtime/SQL 검증이다. 사용자 quota 조회는 추가 hold/charge를 만들지 않는다.
+
+최종 built Worker CSP는4개 통과했고 합성 fixture 전용1개는 정상 production build에
+포함되지 않아 명시적으로 skip했다. 새 navigation 순서의 keyboard focus-wrap과 모바일
+메뉴·local font·실제 hash CSP·주입 script 차단을 확인했다. production fixture 제외는
+별도 bundle 검사로 유지한다.

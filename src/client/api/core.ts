@@ -52,6 +52,7 @@ export async function responseError(response: Response): Promise<ApiError> {
   const serverCodes = {
     UNAUTHENTICATED: "UNAUTHENTICATED",
     CONSENT_REQUIRED: "CONSENT_REQUIRED",
+    ROLE_REQUIRED: "NOT_FOUND",
     NOT_FOUND: "NOT_FOUND",
     CONFLICT: "CONFLICT",
     REVISION_CONFLICT: "CONFLICT",
@@ -77,7 +78,10 @@ export async function responseError(response: Response): Promise<ApiError> {
   const messages = {
     UNAUTHENTICATED: "로그인이 필요해요.",
     CONSENT_REQUIRED: "필수 동의를 확인해 주세요.",
-    NOT_FOUND: "요청한 내용을 찾지 못했어요.",
+    NOT_FOUND:
+      raw === "ROLE_REQUIRED"
+        ? "이용 유형이 변경됐어요. 로그인 화면에서 이용 유형을 확인해 주세요."
+        : "요청한 내용을 찾지 못했어요.",
     CONFLICT: "내용이 변경됐어요. 다시 불러온 뒤 저장해 주세요.",
     QUOTA_EXCEEDED: "이용 한도에 도달했어요. 잠시 후 다시 시도해 주세요.",
     VALIDATION_ERROR:
