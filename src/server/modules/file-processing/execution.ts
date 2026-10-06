@@ -193,7 +193,14 @@ export function createFileProcessingExecution(
   };
   const renew = async () => {
     const c = await guard();
-    if (!(await jobs.renew(actor(), c.lease, new Date(Date.parse(now()) + 300000).toISOString())))
+    const renewalActor = actor();
+    if (
+      !(await jobs.renew(
+        renewalActor,
+        c.lease,
+        new Date(Date.parse(renewalActor.now) + 300000).toISOString(),
+      ))
+    )
       throw new ProcessingError("STALE_REVISION");
     return guard();
   };
@@ -540,11 +547,12 @@ export function createFileProcessingExecution(
           )
           .first();
         if (!admitted) throw new ProcessingError("STALE_REVISION");
+        const acquisitionActor = actor();
         const granted = await jobs.acquire(
-          actor(),
+          acquisitionActor,
           params.jobId,
           crypto.randomUUID(),
-          new Date(Date.parse(now()) + 300000).toISOString(),
+          new Date(Date.parse(acquisitionActor.now) + 300000).toISOString(),
           options.initialAttemptId ?? null,
         );
         if (!granted) throw new ProcessingError("BUDGET_UNAVAILABLE");
