@@ -1,5 +1,7 @@
 import { opaqueIdSchema, timestampSchema } from "../../../contracts";
 import { type V2CostQuote, v2CostQuoteSchema } from "../../../contracts/v2";
+import { estimatePlanKrw, receiptKrw } from "../../db/v2-paid-contracts";
+import { runtimeDigest } from "../../db/v2-paid-runtime";
 import {
   type ExecutionPlan,
   executionPlanSchema,
@@ -10,7 +12,6 @@ import {
   type UsageReceipt,
   usageReceiptSchema,
 } from "./contracts";
-import { add, billableQuantity, decimal, divide, krwCeiling, multiply } from "./money";
 
 export class BudgetError extends Error {
   constructor(readonly code: "BUDGET_UNAVAILABLE" | "INVALID_RECEIPT") {
@@ -46,31 +47,6 @@ function assertFresh(
   )
     throw new BudgetError("BUDGET_UNAVAILABLE");
 }
-async function hashProof(value: unknown) {
-  const digest = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(JSON.stringify(value)),
-  );
-  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
-}
-function priceQuantities(pricing: PricingProof, quantities: { sku: string; quantity: string }[]) {
-  let usd = decimal("0");
-  for (const item of quantities) {
-    const price = pricing.prices.find((candidate) => candidate.sku === item.sku);
-    if (!price) throw new BudgetError("BUDGET_UNAVAILABLE");
-    // Shared free tiers/credits are not a transactional execution guarantee. Until
-    // a dedicated bounded free allowance is proven, reserve the metered upper bound.
-    if (price.billingMode !== "metered") throw new BudgetError("BUDGET_UNAVAILABLE");
-    usd = add(
-      usd,
-      multiply(
-        divide(billableQuantity(item.quantity, price.billingQuantum), decimal(price.unitSize)),
-        decimal(price.usdPerUnit),
-      ),
-    );
-  }
-  return usd;
-}
 
 /** Trusted dependency inputs only: no HTTP body is a source of price, FX, funding or clock. */
 export async function calculateQuote(input: {
@@ -86,19 +62,18 @@ export async function calculateQuote(input: {
     const funding = fundingProofSchema.parse(input.funding);
     const plan = executionPlanSchema.parse(input.plan);
     assertFresh(pricing, funding, now, input.environment);
-    if (Date.parse(plan.deadlineAt) <= Date.parse(now)) throw new BudgetError("BUDGET_UNAVAILABLE");
-    const usd = multiply(
-      priceQuantities(
-        pricing,
-        plan.quantities.map((item) => ({ sku: item.sku, quantity: item.maximumQuantity })),
-      ),
-      decimal(String(pricing.hiddenAttemptMultiplier)),
-    );
-    const estimatedKrw = krwCeiling(usd, pricing.fx.krwPerUsd, [
-      pricing.taxRatio,
-      pricing.feeRatio,
-      pricing.safetyMarginRatio,
-    ]);
+    if (
+      Date.parse(plan.deadlineAt) <= Date.parse(now) ||
+      Date.parse(plan.deadlineAt) - Date.parse(now) > 3600000 ||
+      [pricing, pricing.fx, funding, ...pricing.prices].some(
+        (proof) => Date.parse(proof.validUntil) < Date.parse(plan.deadlineAt),
+      ) ||
+      plan.quantities.some(
+        (item) => pricing.prices.find((price) => price.sku === item.sku)?.billingMode !== "metered",
+      )
+    )
+      throw new BudgetError("BUDGET_UNAVAILABLE");
+    const estimatedKrw = estimatePlanKrw(pricing, plan.quantities);
     const maximumInvocationKrw = estimatedKrw * plan.maximumAttempts;
     if (
       !Number.isSafeInteger(maximumInvocationKrw) ||
@@ -115,7 +90,7 @@ export async function calculateQuote(input: {
         ...pricing.prices.map((price) => price.validUntil),
       ].map(Date.parse),
     );
-    const proofHash = await hashProof({ pricing, funding, plan });
+    const proofHash = await runtimeDigest({ pricing, funding, plan });
     const quote = v2CostQuoteSchema.parse({
       id: crypto.randomUUID(),
       version: pricing.version,
@@ -142,7 +117,7 @@ export function assessReceipt(hold: VerifiedQuote, attemptId: string, input: unk
     if (receipt.attemptId !== attemptId || receipt.invocationId !== hold.plan.invocationId)
       throw new BudgetError("INVALID_RECEIPT");
     if (receipt.definitiveNoCharge)
-      return { receipt, outcome: "released" as const, chargedKrw: null };
+      return { receipt, outcome: "release_candidate" as const, chargedKrw: null };
     // Transport errors can still incur charges. Missing usage is never interpreted as zero.
     if (
       receipt.chargedUsd === null &&
@@ -165,15 +140,8 @@ export function assessReceipt(hold: VerifiedQuote, attemptId: string, input: unk
         ))
     )
       return { receipt, outcome: "ambiguous" as const, chargedKrw: null };
-    const usd =
-      receipt.chargedUsd === null
-        ? priceQuantities(hold.pricing, receipt.quantities)
-        : decimal(receipt.chargedUsd);
-    // Actual invoices exclude the reservation safety margin; real overruns remain visible.
-    const chargedKrw = krwCeiling(usd, hold.pricing.fx.krwPerUsd, [
-      hold.pricing.taxRatio,
-      hold.pricing.feeRatio,
-    ]);
+    const chargedKrw = receiptKrw(hold.pricing, receipt);
+    if (chargedKrw === null) return { receipt, outcome: "ambiguous" as const, chargedKrw: null };
     return { receipt, outcome: "settled" as const, chargedKrw };
   } catch (error) {
     if (error instanceof BudgetError) throw error;

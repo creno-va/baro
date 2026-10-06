@@ -20,6 +20,7 @@ const END = "2026-10-06T00:00:00.000Z";
 function proofs(): { pricing: PricingProof; funding: FundingProof; plan: ExecutionPlan } {
   return {
     pricing: {
+      modelBillingPolicy: null,
       id: crypto.randomUUID(),
       version: 1,
       environment: "preview",
@@ -28,8 +29,9 @@ function proofs(): { pricing: PricingProof; funding: FundingProof; plan: Executi
       prices: [
         {
           sku: "asr_seconds",
+          modelRates: null,
           provider: "cloudflare",
-          model: "@cf/openai/whisper",
+          model: "@cf/openai/whisper-large-v3-turbo",
           region: "global",
           plan: "verified-test-plan",
           billingMode: "metered",
@@ -73,7 +75,7 @@ function proofs(): { pricing: PricingProof; funding: FundingProof; plan: Executi
       requestHash: "a".repeat(64),
       invocationId: crypto.randomUUID(),
       maximumAttempts: 3,
-      deadlineAt: END,
+      deadlineAt: new Date(Date.parse(NOW) + 60000).toISOString(),
       quantities: [{ sku: "asr_seconds", maximumQuantity: "60" }],
     },
   };
@@ -107,6 +109,8 @@ function receipt(
     meteringComplete: true,
     quantities: [{ sku: "asr_seconds", quantity: "0.5" }],
     chargedUsd: null,
+    dispatchToken: null,
+    modelTokenDetails: null,
     ...overrides,
   };
 }
@@ -124,7 +128,7 @@ test("quote reserves exact decimal FX/tax/fees/margin/hidden retries and binds i
   const fractional = await quote(value);
   expect(fractional.quote.estimatedKrw).toBe(1);
   expect(firstQuantity(first.plan).maximumQuantity).toBe("60");
-  expect(first.quote.validUntil).toBe(END);
+  expect(first.quote.validUntil).toBe(value.plan.deadlineAt);
 });
 test("money ceilings never under-reserve a representable decimal just above an integer", () => {
   expect(krwCeiling(decimal("1.000000000001"), "1", [])).toBe(2);
@@ -252,7 +256,7 @@ test("unknown/partial usage retains exposure while only definitively unsent requ
       providerRequestId: null,
     }),
   );
-  expect(released.outcome).toBe("released");
+  expect(released.outcome).toBe("release_candidate");
   expect(released.chargedKrw).toBeNull();
   expect(() => assessReceipt(hold, id, receipt(hold, id, { definitiveNoCharge: true }))).toThrow(
     BudgetError,

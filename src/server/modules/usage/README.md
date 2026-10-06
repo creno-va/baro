@@ -16,4 +16,9 @@ Missing trusted paid availability reports `monthly_budget`; reads and deletion
 do not require a paid dispatch. Shared router integration retains authentication,
 consent, `no-store` and the production public gate.
 
+Server-only `budgetProofs` binds the usage adapter to durable verified pricing,
+funding and allocation IDs. It checks the active environment control, freshness,
+fixed cost and old unresolved carryover without exposing provider ledger details.
+Missing configuration remains unavailable; no browser proof activates paid work.
+
 Authoritative contract: [domain lifecycle](../../../../docs/architecture/DOMAIN-LIFECYCLE.md).

@@ -10,6 +10,7 @@ import {
 import { createV2AccountingRepository } from "../../db/v2-accounting";
 import { type Actor, actorSchema, createV2Core } from "../../db/v2-core";
 import { createV2StorageRepository } from "../../db/v2-storage";
+import { createPaidAvailability } from "../budget/availability";
 
 export class UsageError extends Error {
   constructor(
@@ -42,6 +43,11 @@ export function createUsageService(
     environment: "preview" | "production";
     clock?: () => string;
     paidAvailable?: (now: string) => Promise<boolean>;
+    budgetProofs?: (environment: "preview" | "production") => Promise<{
+      pricingProofId: string;
+      fundingProofId: string;
+      allocationProofId: string;
+    } | null>;
     processingAvailable?: () => Promise<boolean>;
   },
 ) {
@@ -55,6 +61,12 @@ export function createUsageService(
   });
   const accounting = createV2AccountingRepository(core, options.environment);
   const storage = createV2StorageRepository(core);
+  const paidAvailable =
+    options.paidAvailable ??
+    createPaidAvailability(core, options.environment, {
+      ...(options.clock ? { clock: options.clock } : {}),
+      proofs: () => options.budgetProofs?.(options.environment) ?? Promise.resolve(null),
+    });
   const actor = (ownerId: string): Actor =>
     actorSchema.parse({ ownerId, now: (options.clock ?? (() => new Date().toISOString()))() });
   async function requireAlive(a: Actor) {
@@ -79,7 +91,7 @@ export function createUsageService(
     await requireAlive(a);
     const [usage, paid, capacity] = await Promise.all([
       accounting.usage(a),
-      options.paidAvailable?.(a.now) ?? Promise.resolve(false),
+      paidAvailable(a.now),
       options.processingAvailable?.() ?? Promise.resolve(true),
     ]);
     await requireAlive(a);

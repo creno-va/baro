@@ -82,7 +82,7 @@ async function fixture() {
           {
             sku: "asr_seconds",
             provider: "cloudflare",
-            model: "@cf/openai/whisper",
+            model: "@cf/openai/whisper-large-v3-turbo",
             region: "global",
             plan: "synthetic-plan",
             billingMode: "metered",
@@ -126,7 +126,7 @@ async function fixture() {
         requestHash: HASH,
         invocationId,
         maximumAttempts: 1,
-        deadlineAt: END,
+        deadlineAt: new Date(Date.parse(NOW) + 60000).toISOString(),
         quantities: [{ sku: "asr_seconds", maximumQuantity: "0.5" }],
       },
     });
@@ -179,7 +179,10 @@ test("unknown cost never TTL-refunds; late next-month receipt settles original m
     meteringComplete: false,
     quantities: [],
     chargedUsd: null,
+    dispatchToken: null,
+    modelTokenDetails: null,
   });
+  if (unknown.outcome !== "ambiguous") throw new Error("Synthetic unknown must retain exposure");
   expect(await f.accounting.settleCost(attempt.id, unknown.outcome, unknown.chargedKrw)).toBe(true);
   expect(await f.accounting.settleCost(attempt.id, "released", null)).toBe(false);
   f.database.sqlite.query("DELETE FROM user WHERE id=?").run(f.actor.ownerId);
@@ -188,6 +191,8 @@ test("unknown cost never TTL-refunds; late next-month receipt settles original m
     attemptId: attempt.id,
     invocationId: attempt.invocationId,
     providerRequestId: "synthetic-provider-meter",
+    dispatchToken: null,
+    modelTokenDetails: null,
     observedAt: END,
     transport: "response",
     definitiveNoCharge: false,
@@ -195,6 +200,7 @@ test("unknown cost never TTL-refunds; late next-month receipt settles original m
     quantities: [],
     chargedUsd: "1",
   });
+  if (late.outcome !== "settled") throw new Error("Synthetic exact bill must settle");
   expect(late.chargedKrw).toBe(1376);
   const settlements = await Promise.all(
     Array.from({ length: 5 }, () =>
