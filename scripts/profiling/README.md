@@ -70,6 +70,18 @@ $env:PROFILE_API_DELAY = "150"
 $env:PROFILE_OUTPUT = "test-results/final-delayed"
 node scripts/profiling/client-profile.mjs
 
+Remove-Item Env:PROFILE_WIRE
+Remove-Item Env:PROFILE_API_DELAY
+$env:PROFILE_DATE_PROBE = "off"
+$env:PROFILE_REPEATS = "5"
+$env:PROFILE_ONLY = "workspace-1000"
+$env:PROFILE_URL = "http://127.0.0.1:4351"
+$env:PROFILE_OUTPUT = "test-results/control-baseline"
+node scripts/profiling/client-profile.mjs
+$env:PROFILE_URL = "http://127.0.0.1:4353"
+$env:PROFILE_OUTPUT = "test-results/control-candidate"
+node scripts/profiling/client-profile.mjs
+
 node scripts/profiling/media-profile.mjs
 node scripts/profiling/verify-candidate.mjs
 node scripts/profiling/refresh-probe.mjs
@@ -83,3 +95,5 @@ Media/verification/refresh scripts use their fixed local ports independently of 
 `prepare-formatter-candidate.mjs` copies built assets, excludes live `.wrangler` state, requires exactly one formatter expression and writes a source diff plus before/after hashes. It never changes `src`. The source diff reuses an Intl formatter and preserves invalid-date behavior, message rows, saving and owner guards. Built substitution is an experiment, not a source build validation.
 
 After A/C coordination, the Workspace owner can review `candidates/shared-chat-formatter.patch` with `git apply --check`, apply it in their own change, build from source and repeat the comparison/save/permission checks. Rebase/remeasure if the source expression changed. This profiling PR does not apply it to product source. See the report for conditions, measurement boundaries, existing baseline check failure and interpretation limits.
+
+The date-probe-off control retains the original baseline/candidate builds and records tool checkout SHA separately. Do not reuse a different source build under the fixed baseline label. Run timing comparisons while host load is steady; do not run the full test suite concurrently.

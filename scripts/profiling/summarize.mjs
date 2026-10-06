@@ -132,6 +132,38 @@ evidence.candidateValidation = JSON.parse(
 evidence.candidateManifest = JSON.parse(
   await readFile(".wrangler/profile-formatter-build/candidate-manifest.json", "utf8"),
 );
+// Optional control: same retained built artifacts, date-call hook disabled.
+// Tool checkout SHA is distinct from the already-fixed build source SHA.
+evidence.dateProbeControl = {};
+for (const dir of ["control-baseline", "control-candidate"]) {
+  let raw;
+  try {
+    raw = await readFile(`test-results/${dir}/raw.json`, "utf8");
+  } catch {
+    continue;
+  }
+  const source = JSON.parse(raw);
+  if (source.dateProbe !== false || source.results.length !== 5)
+    throw new Error("Incomplete date-probe control");
+  const runs = source.results.map(runMetrics);
+  const values = runs.flatMap((r) => r.inputInteractionDurationsMs);
+  evidence.dateProbeControl[dir] = {
+    retainedBuildSourceSha: evidence.sha,
+    toolCheckoutSha: source.sha,
+    measuredAt: source.measuredAt,
+    device: source.device,
+    rawSha256: createHash("sha256").update(raw).digest("hex"),
+    n: runs.length,
+    summary: {
+      inputSamples: values.length,
+      inputMedianMs: quantile(values),
+      inputP95Ms: quantile(values, 0.95),
+      inputTwoRafMedianMs: quantile(runs.flatMap((r) => r.inputFramesMs)),
+      inputLongTasksMedian: quantile(runs.map((r) => r.inputLongTaskCount)),
+    },
+    runs,
+  };
+}
 await mkdir("docs/quality/client-performance-2026-10-06", { recursive: true });
 await writeFile(
   "docs/quality/client-performance-2026-10-06/results.json",

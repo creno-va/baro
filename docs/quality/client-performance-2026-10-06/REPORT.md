@@ -7,7 +7,7 @@
 - 측정 기준: **9ae91932c99f54a1618c3697cf160ad1607007d9**, A가 #102에 인계한 #110의 당시 head. 별도 managed worktree `baro-client-profile`에서 고정했다.
 - #102에 명시적 고정 SHA와 C/A 조율을 요청했으나 측정 종료 시 별도 지정 회신이 없었다. 따라서 이것을 A가 추가 승인한 SHA라고 표현하지 않는다. 이후 #110 head/main 변경을 측정에 섞지 않았다. 앞선 dc22c26 탐색 실행은 아래 증거에서 제외했다.
 - 착수 21:47 KST. 최종 반복 측정과 분석은 같은 60분 창 안에서 수행했다. 추가 chat, Goal, agent, schedule 없음.
-- 실제 `/login`, `/cases`, `/cases/:id/workspace`, `/cases/:id/reports`, `/lawyer`, `/lawyers` 구현체의 optimized build를 Workers 로컬 런타임으로 실행했다. 별도 mock 화면 없음.
+- 실제 `/login`, `/cases`, `/cases/:id`, `/cases/:id/reports`, `/lawyer`, `/lawyers` 구현체의 optimized build를 Workers 로컬 런타임으로 실행했다. 별도 mock 화면 없음.
 - `PUBLIC_API_MODE=mock`의 합성 localStorage와 `PUBLIC_API_MODE=real`의 합성 native HTTP DTO intercept를 구분했다. **OAuth, DB, AI, 실제 API 서버 처리시간, preview/production 성능 또는 외부 성공을 검증한 결과가 아니다.** #70/#71/P0.3 공개·정책 gate는 유지한다.
 - 도구 PR의 main 통합과 측정 source SHA는 별개다. 제품 변경을 main에서 받아도 이 보고서의 기준은 위 SHA이다.
 
@@ -22,7 +22,7 @@
 | CPU/cache | CDP CPU 4× slowdown, 반복마다 새 browser context, client 측정은 CDP cache disable |
 | 기본 network | unthrottled localhost loopback, 외부 API 호출 intercept/차단 |
 | 제한 network | latency 150ms, download 200,000 B/s (1.6Mbps), upload 93,750 B/s (0.75Mbps) |
-| 반복 | mock 9시나리오×5, real HTTP 8×5 + 긴 대화×5, 후보 2×5, 제한 network 6×3, 인위 API delay 2×3, 사진/portfolio 5회 |
+| 반복 | mock 9시나리오×5, real HTTP 8×5 + 긴 대화×5, 후보 2×5, 제한 network 6×3, 인위 API delay 2×3, 사진/portfolio 5회, 날짜 계측 hook 제거 control 2×5 |
 | 입력 크기 | 기본 사건/메시지/변호사 20개, 스트레스 각각 1,000개. 메시지 288문자/688 UTF-8 bytes, 사건 summary 240문자, report 2,500문자. 파일/행동/타임라인은 비움 |
 | 입력 동작 | Workspace composer와 변호사 검색에 ASCII 30문자 `synthetic input response 12345`, key 간 요청 delay 30ms. 사진 편집은 이름 입력 22문자 |
 
@@ -30,7 +30,7 @@ JS bytes는 초기 외부 script 응답의 gzip encodedBodySize와 decoded body 
 
 Hydration은 navigation origin부터 마지막 **Astro `astro:hydrate` 이벤트**까지의 wall time이다. 순수 CPU 소요 또는 데이터 로딩 완료가 아니다. hydrate 호출 span도 JSON에 별도 보존한다. `loadAndUiReady`는 `page.goto`의 load 완료 후 ready locator까지이므로 폰트 등의 load를 포함하는 상한이다. 이를 첫 사용 가능 시점이나 TTI로 부르지 않는다.
 
-긴 task는 PerformanceObserver의 >50ms 항목이다. 초기 구간은 load/ready 직후 snapshot까지, 입력 구간은 30 key 시퀀스까지다. Event Timing은 interactionId별 최대 duration으로 중복 제거하고, 브라우저의 16ms threshold/8ms 양자화가 적용된다. 따라서 미보고된 빠른 입력은 0ms로 간주하지 않으며 p95는 관측된 interaction의 nearest-rank 값이다. 별도 input-event → 2 RAF wall time을 함께 측정했다. 한국어 IME/실기기/field INP 측정은 하지 않았다.
+긴 task는 PerformanceObserver의 >50ms 항목이다. 날짜 호출 계측과 observer 자체 비용이 포함되며, 이 비교를 field INP 또는 순수 제품 실행 비용으로 일반화하지 않는다. 초기 구간은 load/ready 직후 snapshot까지, 입력 구간은 30 key 시퀀스까지다. Event Timing은 interactionId별 최대 duration으로 중복 제거하고, 브라우저의 16ms threshold/8ms 양자화가 적용된다. 따라서 미보고된 빠른 입력은 0ms로 간주하지 않으며 p95는 관측된 interaction의 nearest-rank 값이다. 별도 input-event → 2 RAF wall time을 함께 측정했다. 한국어 IME/실기기/field INP 측정은 하지 않았다.
 
 ## 초기 측정: 실제 UI + 제품 mock adapter
 
@@ -75,6 +75,8 @@ native DTO 응답 delay 0ms, 5회. backend는 실행하지 않으며 client 요�
 composer state 변경이 전체 Workspace 렌더를 반복한다. 기본 20개 메시지는 30회 입력에 날짜 포맷 호출 600회, 1,000개는 30,000회였다. 옵션을 매번 전달하는 `toLocaleTimeString` 대신 동일한 `Intl.DateTimeFormat` 한 개를 재사용했다. 메시지 수/표시/저장/권한 처리를 줄이지 않았다. 20개 메시지에서는 전후 p95 48ms로 개선을 주장할 근거가 없다. 초기 hydration 개선도 작은 표본/순서 변동 때문에 주장하지 않는다.
 
 real HTTP client의 기존 history adapter는 1,000개 fixture 중 **500개까지만 가져왔다**. 실제 렌더 500개, API 16회, 입력 p50/p95 128/152ms, 긴 task 30개였다. 1,000개 표시 실험과 같은 규모라고 혼합하지 않는다. 기존 cap 축소는 제안하지 않는다.
+
+같은 고정 built artifacts에서 날짜 호출 hook을 완전히 복원한 별도 5회씩 control에서도 입력 p50/p95는 **240/312 → 32/56ms (p95 82.1% 감소)**, input→2 RAF 중앙값은 **239.9 → 27.9ms**, 긴 task는 **30 → 0개**였다(각 150 interactions). 다른 observer는 양쪽에 동일하게 남는다. control은 tool checkout SHA를 별도 기록하며 retained build source는 9ae9193이다. 전후 실행 순서와 호스트 부하가 완전히 격리되지 않은 한 기기의 결과이고, field INP로 일반화하지 않는다.
 
 이 patch가 **가장 효과가 확인된 하나의 개선**이다. 145개 날짜(유효 144개 + invalid)에서 기존 ko-KR 시간 표기와 일치했고, 후보 built UI의 메시지 저장→reload와 다른 owner의 reload 후 차단을 확인했다. cross-tab 권한 전환 전체 보장을 의미하지 않는다. 소스 적용 후 담당자는 source build와 같은 검증을 다시 해야 한다.
 
@@ -123,7 +125,7 @@ B/A와 조율할 다음 후보: 목록 DTO에 현재 표시하는 최소 metadat
 - `bun ci`, mock/real optimized `bun run build`, `bun run cf:dry-run`: 성공.
 - 측정 source의 `bun run check`: 기존 A 소유 BaseLayout.astro formatter 1건에서 중단. docs/workgraph/boundaries는 성공. 동시 수정 금지에 따라 수정하지 않고 A에게 전달했다. 별도 typecheck: 0 errors (Astro 13 hints).
 - profiling 도구 Biome, Node syntax, 후보 `git apply --check`: 성공. 후보 표기 동등/메시지 저장/reload/다른 owner reload 차단: 성공.
-- main으로 도구 commit을 통합한 뒤의 전체 check/CI 결과는 PR에 기록한다. 측정은 고정 SHA의 값으로 보존한다.
+- main 통합 후 전체 check: docs/workgraph/boundaries/lint/typecheck 성공, 1,171 tests pass / 2 fail. 실패는 기존 scripts/development-checks.test.ts의 Windows Bun.Glob 역슬래시 경로가 POSIX regex/기대값에 불일치한 2건이다. 원본 단독 실행에서도 재현했고, ignored 진단 preload로 Glob 출력만 slash 정규화하면 4/4 통과했다. 해당 공유 CI 도구는 이번 profiling PR에서 수정하지 않는다. 별도 db:check(schema drift + fresh/upgrade 6 tests)는 통과했다. 원격 Linux CI 결과는 PR에 기록한다.
 
 ## 해석 제한
 

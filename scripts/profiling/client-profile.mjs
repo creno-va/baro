@@ -96,7 +96,7 @@ function syntheticState({
   if (role === "lawyer") state.lawyers.owners[owner] = "lawyer-0";
   return state;
 }
-function observe({ state, loggedOut, candidate }) {
+function observe({ state, loggedOut, candidate, dateProbe }) {
   if (!sessionStorage.getItem("profile-seeded")) {
     for (const [key, value] of Object.entries(state))
       localStorage.setItem(`baro-api-mock-v1:${key}`, JSON.stringify(value));
@@ -135,6 +135,7 @@ function observe({ state, loggedOut, candidate }) {
       p.dateFormat.duration += performance.now() - begin;
     }
   };
+  if (dateProbe === false) Date.prototype.toLocaleTimeString = originalTime;
   document.addEventListener(
     "astro:hydrate",
     (e) =>
@@ -389,6 +390,7 @@ const result = {
   apiAdapter:
     process.env.PROFILE_WIRE === "true" ? "real client + synthetic HTTP" : "product API mock",
   apiDelayMs: Number(process.env.PROFILE_API_DELAY ?? 0),
+  dateProbe: process.env.PROFILE_DATE_PROBE !== "off",
   results: [],
 };
 try {
@@ -399,6 +401,7 @@ try {
         state: syntheticState(scenario.state),
         loggedOut: scenario.loggedOut,
         candidate: process.env.PROFILE_CANDIDATE,
+        dateProbe: process.env.PROFILE_DATE_PROBE !== "off",
       });
       const page = await context.newPage();
       if (process.env.PROFILE_WIRE === "true")
