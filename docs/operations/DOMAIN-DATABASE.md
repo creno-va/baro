@@ -171,6 +171,9 @@ preview의0009가 원격 query 경로에서 `incomplete input`으로 중단되�
 적용 기록은 알려진 migration의 연속 prefix여야 한다. 실패 시 배포를 중단하고 기록을 확인한
 뒤 재실행한다. ledger를 임의로 채우거나 기존 migration을 편집하지 않는다. 로컬 fresh import·
 실패 rollback·재실행 검사는 CI에 포함되며 원격 성공은 같은 SHA의 preview smoke로 확인한다.
+Wrangler 원격 파일 import는 `--json`에서도 진행 문구를 stdout에 출력한다. 파일 import의
+stdout은 JSON으로 파싱하지 않고 exit code와 별도 ledger query로 적용을 확인한다. query
+응답은 성공 JSON을 엄격하게 검증하며 raw CLI/SQL 진단을 로그로 보내지 않는다.
 
 private 원본 파일과 변호사 원본 GET, private/publiccopy cleanup의 DELETE·HEAD는 실제 IO
 직전에 현재 월 storage projection과 capacity binding의 일회 permit을 소비한다. 한도 소진·

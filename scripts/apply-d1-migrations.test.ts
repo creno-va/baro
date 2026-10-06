@@ -1,6 +1,11 @@
 import { Database } from "bun:sqlite";
 import { expect, test } from "bun:test";
-import { migrationImport, migrationTableSql, pendingMigrations } from "./apply-d1-migrations";
+import {
+  executionOutput,
+  migrationImport,
+  migrationTableSql,
+  pendingMigrations,
+} from "./apply-d1-migrations";
 
 test("SQL-file import preserves multi-statement triggers and records the same atomic migration", async () => {
   const db = new Database(":memory:");
@@ -61,4 +66,33 @@ test("applied history is an ordered known prefix and retries skip recorded files
   expect(() => pendingMigrations(files, ["0001_next.sql"])).toThrow("MIGRATION_HISTORY_GAP");
   expect(() => pendingMigrations(files, ["9999_unknown.sql"])).toThrow("MIGRATION_HISTORY_UNKNOWN");
   expect(() => migrationImport("../invalid.sql", "SELECT 1;")).toThrow();
+});
+
+test("remote file-import progress cannot mask success, while query receipts remain strict", () => {
+  const progress =
+    "│ Checking if file needs uploading\n│ Uploading complete.\n[unknown import summary]";
+  expect(executionOutput(["--file", "/tmp/migration.sql"], 0, progress)).toEqual([]);
+  expect(() => executionOutput(["--file", "/tmp/migration.sql"], 1, progress)).toThrow(
+    "D1_MIGRATION_EXECUTION_FAILED",
+  );
+  const rows = executionOutput(
+    ["--command", "SELECT name"],
+    0,
+    JSON.stringify([
+      { success: true, results: [{ name: "0009_storage_capacity_maintenance.sql" }] },
+    ]),
+  );
+  expect(rows.flatMap((r) => r.results)).toEqual([
+    { name: "0009_storage_capacity_maintenance.sql" },
+  ]);
+  expect(() => executionOutput(["--command", "SELECT name"], 0, progress)).toThrow(
+    "D1_QUERY_OUTPUT_INVALID",
+  );
+  expect(() =>
+    executionOutput(
+      ["--command", "SELECT name"],
+      0,
+      JSON.stringify([{ success: false, results: [] }]),
+    ),
+  ).toThrow("D1_QUERY_OUTPUT_INVALID");
 });

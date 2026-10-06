@@ -34,6 +34,18 @@ const resultsSchema = z.array(
   z.object({ success: z.literal(true), results: z.array(z.record(z.string(), z.unknown())) }),
 );
 
+/** Remote file imports emit Wrangler progress text even with --json.
+ * Their authoritative receipt is the separate ledger query, not CLI stdout. */
+export function executionOutput(args: string[], code: number, stdout: string) {
+  if (code !== 0) throw new Error("D1_MIGRATION_EXECUTION_FAILED");
+  if (args.includes("--file")) return [];
+  try {
+    return resultsSchema.parse(JSON.parse(stdout));
+  } catch {
+    throw new Error("D1_QUERY_OUTPUT_INVALID");
+  }
+}
+
 async function main() {
   const environment = z.enum(["preview", "production"]).parse(process.argv[2]);
   const local = process.argv.includes("--local");
@@ -70,8 +82,7 @@ async function main() {
       child.exited,
     ]);
     // CLI/API diagnostics can contain query payloads. Expose only a stable code.
-    if (code !== 0) throw new Error("D1_MIGRATION_EXECUTION_FAILED");
-    return resultsSchema.parse(JSON.parse(stdout));
+    return executionOutput(args, code, stdout);
   };
   await run(["--command", migrationTableSql]);
   const history = await run(["--command", "SELECT name FROM d1_migrations ORDER BY id"]);
