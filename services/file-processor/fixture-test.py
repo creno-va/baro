@@ -85,3 +85,30 @@ for filename in ["truncated-video.mp4"]:
         assert result.returncode != 0 and (root / "error.json").exists()
         count += 1
 print("Linux native synthetic fixtures: %d PASS (not ASR/vision/R2/cloud evidence)" % count)
+
+# Actual image/PDF codecs reconstruct pixels into a new document; no original
+# object/action/attachment/metadata is copied. Not a claim of actual public R2.
+for filename in ["image-markers.png", "image-markers.jpg", "text-two-pages.pdf", "scan-image-only.pdf"]:
+    with tempfile.TemporaryDirectory(prefix="baro-sanitized-") as tmp:
+        root = Path(tmp)
+        shutil.copyfile(FIXTURES / filename, root / "input")
+        result = subprocess.run(["python3", "/app/processor.py", str(root), "sanitize", "0"], capture_output=True, timeout=180)
+        assert result.returncode == 0
+        metadata = json.loads((root / "manifest.json").read_text())
+        content = (root / "sanitized.bin").read_bytes()
+        assert len(content) == metadata["byteLength"] <= 100_000_000
+        assert hashlib.sha256(content).hexdigest() == metadata["contentHash"]
+        assert metadata["chunkCount"] == (len(content) + 1_048_575) // 1_048_576
+        if metadata["format"] == "pdf":
+            assert content.startswith(b"%PDF-1.4")
+            for forbidden in [b"/JavaScript", b"/OpenAction", b"/Launch", b"/EmbeddedFiles", b"/AcroForm", b"/Annots", b"/URI"]:
+                assert forbidden not in content
+            info = subprocess.run(["pdfinfo", str(root / "sanitized.bin")], capture_output=True, check=True).stdout.decode()
+            import re
+            assert int(re.search(r"^Pages:\s+(\d+)", info, re.M)[1]) == metadata["probe"]["pageCount"]
+        else:
+            from PIL import Image
+            with Image.open(root / "sanitized.bin") as image:
+                assert image.format == "JPEG" and not image.getexif()
+                assert "icc_profile" not in image.info and "comment" not in image.info
+print("Linux sanitized image/PDF fixtures: 4 PASS (not public R2/moderation evidence)")

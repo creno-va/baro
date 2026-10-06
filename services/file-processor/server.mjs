@@ -27,12 +27,13 @@ export const server = createServer(async (req, res) => {
   // Internal ingress only. Worker DO supplies a fresh per-request capability; no public route.
   if (
     req.method !== "POST" ||
-    !["/probe", "/process"].includes(req.url) ||
+    !["/probe", "/process", "/sanitize"].includes(req.url) ||
     typeof capability !== "string" ||
     !/^[a-f0-9]{64}$/.test(capability) ||
     !Number.isSafeInteger(size) ||
     size < 1 ||
     size > MAX_BYTES ||
+    (req.url === "/sanitize" && size > 100_000_000) ||
     !Number.isInteger(frameOffset) || frameOffset < 0 || frameOffset > 10_000_000 || !Number.isInteger(unit) ||
     unit < 0 ||
     unit >= 100_000 ||
@@ -86,6 +87,8 @@ export const server = createServer(async (req, res) => {
       )
         ? safe.code
         : "PROCESSING_FAILED";
+      await rm(root, { recursive: true, force: true });
+      root = undefined;
       return response(res, 422, code);
     }
     const manifestFile = join(root, "manifest.json");
@@ -96,6 +99,40 @@ export const server = createServer(async (req, res) => {
       root = undefined;
       res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" });
       return res.end(JSON.stringify(manifest));
+    }
+    if (req.url === "/sanitize") {
+      if (size > 100_000_000 || !Number.isSafeInteger(manifest.byteLength) || manifest.byteLength < 1 || manifest.byteLength > 100_000_000)
+        throw new Error("OUTPUT_LIMIT");
+      const output = await open(join(root, "sanitized.bin"), "r");
+      res.writeHead(200, { "content-type": "application/x-ndjson", "cache-control": "no-store" });
+      const emit = async (value) => {
+        const line = JSON.stringify(value) + "\n";
+        if (Buffer.byteLength(line) > MAX_LINE || abort.signal.aborted) throw new Error("OUTPUT_LIMIT");
+        if (!res.write(line)) await once(res, "drain", { signal: abort.signal });
+      };
+      const hasher = createHash("sha256");
+      let received = 0;
+      try {
+        if ((await output.stat()).size !== manifest.byteLength) throw new Error("INVALID_OUTPUT");
+        await emit({ type: "sanitized_manifest", value: manifest });
+        for (let index = 0; index < manifest.chunkCount; index++) {
+          const bytes = Buffer.alloc(Math.min(1_048_576, manifest.byteLength - received));
+          if (bytes.length < 1) throw new Error("INVALID_OUTPUT");
+          const result = await output.read(bytes, 0, bytes.length, received);
+          if (result.bytesRead !== bytes.length) throw new Error("INVALID_OUTPUT");
+          hasher.update(bytes);
+          received += bytes.length;
+          await emit({ type: "sanitized_chunk", index, data: bytes.toString("base64") });
+          bytes.fill(0);
+        }
+        if (received !== manifest.byteLength || hasher.digest("hex") !== manifest.contentHash) throw new Error("INVALID_OUTPUT");
+      } finally {
+        await output.close();
+      }
+      await rm(root, { recursive: true, force: true });
+      root = undefined;
+      await emit({ type: "complete" });
+      return res.end();
     }
     res.writeHead(200, { "content-type": "application/x-ndjson", "cache-control": "no-store" });
     const write = async (value) => {

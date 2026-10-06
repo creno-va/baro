@@ -12,6 +12,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+import io
 from PIL import Image
 
 Image.MAX_IMAGE_PIXELS = 40_000_000
@@ -252,12 +253,102 @@ def process(source, root, probe, unit, frame_offset):
     return dict(version=1, unit=unit, totalUnits=total_units, frameOffset=frame_offset, decodedFrameCount=len(indexed) if category == "video" else 0, probe=probe, coverage=coverage, artifacts=artifacts, outputBytes=output_bytes)
 
 
+def sanitize(source, root, probe):
+    """A new image-only document: no source PDF objects/attachments/actions copied.
+
+    Page pixels are processed one at a time and the output is capped at 100 MB.
+    The supervising native timeout applies even to valid maximum-sized inputs.
+    """
+    if probe["byteLength"] > 100_000_000:
+        raise Rejected("LIMIT")
+    target = root / "sanitized.bin"
+
+    def jpeg(image):
+        image.thumbnail((1800, 1800))
+        flattened = Image.new("RGB", image.size, "white")
+        if image.mode in ("RGBA", "LA") or "transparency" in image.info:
+            rgba = image.convert("RGBA")
+            flattened.paste(rgba, mask=rgba.getchannel("A"))
+        else:
+            flattened.paste(image.convert("RGB"))
+        payload = io.BytesIO()
+        # Fresh RGB pixels; no EXIF, ICC, comment or source metadata is passed.
+        flattened.save(payload, "JPEG", quality=82, optimize=False)
+        return payload.getvalue(), flattened.width, flattened.height
+
+    if probe["category"] == "image":
+        with Image.open(source) as image:
+            image.seek(0)
+            content, _, _ = jpeg(image)
+        target.write_bytes(content)
+        fmt = "jpeg"
+    elif probe["category"] == "document" and probe["format"] == "pdf":
+        count = probe["pageCount"]
+        offsets = [0] * (3 + count * 3)
+        with target.open("wb") as output:
+            def write(value):
+                if output.tell() + len(value) > 100_000_000:
+                    raise Rejected("OUTPUT_LIMIT")
+                output.write(value)
+
+            def obj(number, value):
+                offsets[number] = output.tell()
+                write(("%d 0 obj\n" % number).encode() + value + b"\nendobj\n")
+
+            write(b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n")
+            obj(1, b"<< /Type /Catalog /Pages 2 0 R >>")
+            children = " ".join("%d 0 R" % (3 + page * 3) for page in range(count))
+            obj(2, ("<< /Type /Pages /Count %d /Kids [%s] >>" % (count, children)).encode())
+            for page in range(count):
+                prefix = root / "sanitized-page"
+                command(["pdftoppm", "-f", str(page + 1), "-l", str(page + 1),
+                         "-scale-to", "1800", "-singlefile", "-png", str(source), str(prefix)])
+                raster = prefix.with_suffix(".png")
+                if raster.stat().st_size > 32_000_000:
+                    raise Rejected("OUTPUT_LIMIT")
+                with Image.open(raster) as image:
+                    content, width, height = jpeg(image)
+                raster.unlink()
+                number = 3 + page * 3
+                # Dimensions originate only from decoded raster, not source strings.
+                obj(number, ("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 %d %d] "
+                             "/Resources << /XObject << /Im0 %d 0 R >> >> /Contents %d 0 R >>"
+                             % (width, height, number + 1, number + 2)).encode())
+                obj(number + 1, ("<< /Type /XObject /Subtype /Image /Width %d /Height %d "
+                                  "/ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length %d >>\nstream\n"
+                                  % (width, height, len(content))).encode() + content + b"\nendstream")
+                drawing = ("q %d 0 0 %d 0 0 cm /Im0 Do Q\n" % (width, height)).encode()
+                obj(number + 2, ("<< /Length %d >>\nstream\n" % len(drawing)).encode() + drawing + b"endstream")
+            xref = output.tell()
+            write(("xref\n0 %d\n0000000000 65535 f \n" % len(offsets)).encode())
+            for offset in offsets[1:]:
+                write(("%010d 00000 n \n" % offset).encode())
+            write(("trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n" % (len(offsets), xref)).encode())
+        fmt = "pdf"
+    else:
+        raise Rejected("UNSUPPORTED_FORMAT")
+    size = target.stat().st_size
+    if not 1 <= size <= 100_000_000:
+        raise Rejected("OUTPUT_LIMIT")
+    hasher = hashlib.sha256()
+    with target.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(MAX_ARTIFACT), b""):
+            hasher.update(chunk)
+    return dict(version=1, probe=probe, format=fmt, byteLength=size,
+                contentHash=hasher.hexdigest(), chunkCount=math.ceil(size / MAX_ARTIFACT))
+
+
 def main():
     root = Path(sys.argv[1]).resolve()
     source = root / "input"
     try:
         probe = inspect(source)
-        result = dict(version=1, probe=probe) if sys.argv[2] == "probe" else process(source, root, probe, int(sys.argv[3]), int(sys.argv[4]) if len(sys.argv) > 4 else 0)
+        if sys.argv[2] == "probe":
+            result = dict(version=1, probe=probe)
+        elif sys.argv[2] == "sanitize":
+            result = sanitize(source, root, probe)
+        else:
+            result = process(source, root, probe, int(sys.argv[3]), int(sys.argv[4]) if len(sys.argv) > 4 else 0)
         (root / "manifest.json").write_text(json.dumps(result, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     except Exception as error:
         # Never expose native errors, filenames, extracted text, paths, or stack traces.
