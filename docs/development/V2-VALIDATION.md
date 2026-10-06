@@ -274,6 +274,30 @@ HTTP503/`BETA_NOT_OPEN`이다. 이는 #57/#63 구현의 foundation 배포이며 
 활성화하지 않았다. 이 검증은 R2 리소스/CLI roundtrip 증거이며 사용자 로그인·파일 API·
 전체 미디어 처리·승인된 public profile 게시 성공을 대신하지 않는다.
 
+## 2026-10-06 파일 저장 구현 배포와 처리 계정 준비
+
+#58은 [PR92](https://github.com/creno-va/baro/pull/92)의 최종 소스
+`3ee9d966e7ab7012ddd388f09f7318a0372afa01`에서
+[CI](https://github.com/creno-va/baro/actions/runs/37412084444)를 통과했다.
+744개 테스트/127,502 assertions와 migration6개/29 assertions, 필수 source·build·browser·
+CSP·Worker 검증이 성공했다. 같은 소스의 로컬 bun ci/check/build/cf:dry-run도
+2026-10-06T04:17:17Z 모두 종료0으로 완료했다. 실제 외부 admission·비용·처리와 전체
+삭제 인벤토리 검증이 남아 있으므로 #58은 OPEN이다.
+
+병합 main `44adf2477a0f1d9831181d502d9b5de31df32b81`의
+[main CI](https://github.com/creno-va/baro/actions/runs/37412692938),
+[preview 배포](https://github.com/creno-va/baro/actions/runs/37413185065),
+[production foundation 배포](https://github.com/creno-va/baro/actions/runs/37413597198)가
+성공했다. production은 정상 Environment 승인을 거친 deployment `6875650196`이다.
+독립 실제 두 도메인 smoke에서 같은 full SHA와 `0007_runtime_paid_execution`을 확인했다.
+production `/api/cases`는 HTTP503/`BETA_NOT_OPEN`을 유지한다.
+
+Containers 조회는 최초 Workers Paid 필요 오류를 반환했다. 사용자가 계정 플랜을
+활성화한 뒤 2026-10-06T04:29Z 실제 BARO 계정의 `wrangler containers list`가
+종료0/`No containers found`를 반환했다. 접근 조건은 충족했지만 아직 Container image·
+resource 배포, 실제 처리/Whisper/vision, 비용·청구·최대 자료 측정 증거는 아니다.
+구독 API는 현재 Wrangler 인증 범위에서 HTTP403이며 개인 결제정보·인증값은 기록하지 않았다.
+
 ## 최종 감사
 
 각 원래 Goal 항목과 PRD 요구사항을 위 ledger 및 UX 시연에 대응시킨다. 누락된 기능이나
