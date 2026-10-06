@@ -3,6 +3,7 @@ import { z } from "zod";
 import { readAccountType } from "../auth/account-type";
 import { createCaseDataCipher } from "../crypto";
 import * as schema from "../db/schema";
+import { createV2AccountingRepository } from "../db/v2-accounting";
 import { createV2Core, type V2Core } from "../db/v2-core";
 import { createV2OfficialSourceRepository } from "../db/v2-official-sources";
 import { paidHoldRequestSchema } from "../modules/budget/contracts";
@@ -139,6 +140,13 @@ export function createWorkspaceDependencies(core: V2Core, env: Env): WorkspaceDe
           "model_input_tokens",
         );
       if (!proofs) return null;
+      // Text-only customers have not gone through file admission, which also
+      // initializes this account-owned ledger identity. Repair existing accounts
+      // here before preparing their first paid workspace hold.
+      if (
+        !(await createV2AccountingRepository(core).ensurePrincipal({ ownerId: input.ownerId, now }))
+      )
+        return null;
       const latest =
         input.retryMessage ??
         (input.chat
