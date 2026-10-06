@@ -93,6 +93,7 @@ jobs:
           bun scripts/verify-release.ts "$TARGET_SHA"
           bun run check
           bun run build:production
+          bun run bundle:check
           bun run cf:dry-run
 
       - name: Check public beta release evidence

@@ -658,3 +658,13 @@ unconditional mock import 제거이며 변호사 mock import5개에도 같은 bu
 mock namespace를 거부하는 강화된 production bundle 검사가 사전 build136 files에서 통과했다.
 공유 session storage invalidation listener 문자열은 adapter 자체와 구분한다. 최종 통합의 필수
 check·모든 browser·production build/bundle 및 CSP는 별도 candidate에서 실행한다.
+
+통합 PR133의 첫 head1d6fd92는 새 test adapter의 D1 overload/optional method 타입 오류로
+[CI37500419811](https://github.com/creno-va/baro/actions/runs/37500419811) FAILURE였으며 제품
+guard를 바꾸지 않고 test typing만 수정했다. e4b678b에서 frozen ci/check1260 PASS/133359
+assertions, drift·fresh/upgrade6/29, build/dry-run, production build/bundle139 files,
+CSP4 PASS/fixture 전용1skip이 통과했다. 같은 checkout에서 signed SQL 실제 PDF/ZIP 다운로드1,
+공유 lawyer API mock1, 고객 login/intake/originals/report/삭제/reload·peer purge 통합1을 순차
+실행해 모두 통과했다. 다운로드 입력·SQL·D1 billing metadata는 합성이며 remote OAuth/R2/
+청구 증거가 아니다. production 배포 job에도 build 뒤·migration 전 `bundle:check`를 추가해
+승인된 job의 실제 산출물에서 동일 guard를 실행한다. 이 workflow 변경은 새 head에서 검증한다.
