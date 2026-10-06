@@ -42,6 +42,7 @@ test("settings uses real signed session, OAuth state/callback, SQL account delet
     await page.route("**/api/**", async (route) => {
       const request = route.request(),
         url = new URL(request.url());
+      if (!url.pathname.startsWith("/api/")) return route.continue();
       const response = await route.fetch({
         url: `${seed.origin}${url.pathname}${url.search}`,
         headers: await request.allHeaders(),
