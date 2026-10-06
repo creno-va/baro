@@ -11,3 +11,6 @@ TURNSTILE_SECRET_KEY=
 CASE_DATA_KEY_V1=
 LAW_API_OC=
 AI_GATEWAY_ID=
+# Deployment-verified capability bounds for the existing pinned model (server only).
+# Configure authenticated bounds/evidence in the deployment coordinator; no browser-supplied values.
+AI_MODEL_TOKEN_BOUNDS_JSON=

@@ -4,6 +4,7 @@ import { createStorageBudgetService } from "../modules/budget/storage-ledger";
 import { createAssetProcessingAdmission } from "../runtime/asset-admission";
 import { createFileProcessingAdmission } from "../runtime/file-admission";
 import { createSanitizedReaders } from "../runtime/sanitized-reader";
+import { createWorkspaceDependencies } from "../runtime/workspace";
 import { accountDeleteApi } from "./account-delete";
 import { answersApi } from "./answers";
 import { caseCreateApi } from "./case-create";
@@ -18,6 +19,7 @@ import { createFilesApi } from "./v2/files";
 import { createLawyersApi } from "./v2/lawyers";
 import { createModerationApi } from "./v2/moderation";
 import { usageApi } from "./v2/usage";
+import { createWorkspacesApi } from "./v2/workspaces";
 
 export const api = new Hono<ApiEnvironment>()
   .onError((_error, context) =>
@@ -56,6 +58,12 @@ export const api = new Hono<ApiEnvironment>()
   .all("/auth/*", async (context) => getAuth(context.env).handler(context.req.raw))
   .route("/health", healthApi)
   .route("/v2/me", usageApi)
+  .route(
+    "/v2/cases",
+    createWorkspacesApi({
+      dependencies: async (env, core) => createWorkspaceDependencies(core, env),
+    }),
+  )
   .route(
     "/v2/me",
     createLawyersApi({

@@ -17,6 +17,12 @@ import {
   unavailableReceipt,
 } from "./attempts";
 import { MODEL_ID, type Phase, PROMPT_VERSION, prompts } from "./prompts";
+import {
+  workspaceAuditOutputSchema,
+  workspaceChatOutputSchema,
+  workspaceQuestionsOutputSchema,
+  workspaceSummaryOutputSchema,
+} from "./v2/schemas";
 
 const schemas = {
   minimize: minimizedInputSchema,
@@ -25,6 +31,10 @@ const schemas = {
   questions: questionOutputSchema,
   generation: guidanceResultSchema,
   validation: validationOutputSchema,
+  workspace_questions: workspaceQuestionsOutputSchema,
+  workspace_summary: workspaceSummaryOutputSchema,
+  workspace_chat: workspaceChatOutputSchema,
+  workspace_audit: workspaceAuditOutputSchema,
 };
 const limits = {
   minimize: 2200,
@@ -33,6 +43,10 @@ const limits = {
   questions: 1800,
   generation: 8000,
   validation: 8000,
+  workspace_questions: 2400,
+  workspace_summary: 10000,
+  workspace_chat: 10000,
+  workspace_audit: 2400,
 };
 export class ModelError extends Error {
   constructor(readonly code: "MODEL_UNAVAILABLE" | "MODEL_SCHEMA_INVALID" | "POLICY_REJECTED") {
@@ -74,7 +88,10 @@ export function prepareGatewayWireInput(phase: Phase, input: unknown, correction
   const jsonSchema = wireSchema(z.toJSONSchema(envelope, { io: "input", unrepresentable: "any" }));
   return {
     messages: [
-      { role: "system", content: `BARO prompt ${PROMPT_VERSION}. ${prompts[phase]}` },
+      {
+        role: "system",
+        content: `BARO prompt ${phase.startsWith("workspace_") ? "2.0.0" : PROMPT_VERSION}. ${prompts[phase]}`,
+      },
       {
         role: "user",
         content: JSON.stringify({
@@ -91,7 +108,11 @@ export function prepareGatewayWireInput(phase: Phase, input: unknown, correction
     service_tier: "default",
     response_format: {
       type: "json_schema",
-      json_schema: { name: `baro_${phase}_v1`, strict: true, schema: jsonSchema },
+      json_schema: {
+        name: `baro_${phase}_${phase.startsWith("workspace_") ? "v2" : "v1"}`,
+        strict: true,
+        schema: jsonSchema,
+      },
     },
   };
 }

@@ -20,4 +20,6 @@ interface Env {
   CASE_IP_LIMIT: RateLimit;
   CASE_ACCOUNT_LIMIT: RateLimit;
   ANALYSIS_ACCOUNT_LIMIT: RateLimit;
+  WORKSPACE_PROCESSING: Workflow<import("./server/modules/workspace/execution").WorkspaceParams>;
+  AI_MODEL_TOKEN_BOUNDS_JSON?: string;
 }
