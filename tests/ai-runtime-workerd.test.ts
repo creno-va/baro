@@ -15,7 +15,7 @@ import { signedSessionCookie, testEnvironment } from "./helpers/d1";
 
 // Wrangler pins this workerd/Miniflare pair in bun.lock. Using its actual D1
 // implementation catches SQLite authorization/SQL limits that bun:sqlite cannot.
-test("workerd D1 executes authenticated questions, retry, summary confirmation and chat publication", async () => {
+test("workerd D1 executes questions, outage/policy recovery, summary confirmation and chat publication", async () => {
   const mf = new Miniflare(
     convertV4MiniflareOptions({
       modules: true,
@@ -79,7 +79,8 @@ test("workerd D1 executes authenticated questions, retry, summary confirmation a
         monthlyBudgetCapEnabled: false,
       });
     let providerCalls = 0,
-      unavailable = false;
+      unavailable = false,
+      auditRejected = false;
     const env = {
       ...testEnvironment(preview),
       APP_ENV: "preview",
@@ -106,7 +107,7 @@ test("workerd D1 executes authenticated questions, retry, summary confirmation a
           let output: unknown;
           if (phase.includes("audit")) {
             output = {
-              pass: true,
+              pass: !auditRejected,
               findings: [],
               unsupportedFactIds: [],
               legalClaimsSupported: true,
@@ -317,14 +318,38 @@ test("workerd D1 executes authenticated questions, retry, summary confirmation a
     expect(latest.status).toBe(200);
     expect(await latest.json()).toMatchObject({ status: "failed", retryable: true });
     unavailable = false;
+    auditRejected = true;
     const retry = await request(
       `/api/v2/cases/${workspace.id}/workspace-jobs/${failedJob.jobId}/retry`,
       "POST",
       { expectedRevision: (await service.find(ownerId, workspace.id)).workspaceRevision },
     );
     expect(retry.status).toBe(202);
+    expect((await execute(failedJob.jobId)).status).toBe("failed");
+    expect(await service.job(ownerId, workspace.id, failedJob.jobId)).toMatchObject({
+      status: "failed",
+      failure: "POLICY_REJECTED",
+      attempts: 2,
+      retryable: true,
+    });
+    expect(
+      await preview
+        .prepare("SELECT retryable FROM v2_jobs WHERE id=?")
+        .bind(failedJob.jobId)
+        .first<number>("retryable"),
+    ).toBe(0);
+    // Exercise the legacy retryable=0 branch on native D1 with real paid predicates.
+    // The first retry's rejected drafts remain unpublished and its answers remain saved.
+    expect((await service.intake(ownerId, workspace.id))?.batches).toHaveLength(1);
+    auditRejected = false;
+    const policyRetry = await request(
+      `/api/v2/cases/${workspace.id}/workspace-jobs/${failedJob.jobId}/retry`,
+      "POST",
+      { expectedRevision: (await service.find(ownerId, workspace.id)).workspaceRevision },
+    );
+    expect(policyRetry.status).toBe(202);
     expect((await execute(failedJob.jobId)).status).toBe("completed");
-    expect(providerCalls).toBe(5);
+    expect(providerCalls).toBe(9);
     // Continue every paid product phase on native D1, including encrypted
     // staging/publishing of facts, parties, timeline and actions.
     for (const batchIndex of [1, 2]) {
@@ -370,7 +395,7 @@ test("workerd D1 executes authenticated questions, retry, summary confirmation a
     expect(chat.status).toBe(202);
     const chatJob = (await chat.json()) as { jobId: string };
     expect((await execute(chatJob.jobId)).status).toBe("completed");
-    expect(providerCalls).toBe(11);
+    expect(providerCalls).toBe(15);
     const messages = await request(`/api/v2/cases/${workspace.id}/messages`);
     expect(messages.status).toBe(200);
     expect(await messages.json()).toMatchObject({
@@ -388,10 +413,10 @@ test("workerd D1 executes authenticated questions, retry, summary confirmation a
       await preview
         .prepare("SELECT count(*) AS n FROM v2_cost_attempts WHERE state='settled'")
         .first<number>("n"),
-    ).toBe(10);
+    ).toBe(14);
     // Replay cannot emit another model request or duplicate published entities.
     expect((await execute(chatJob.jobId)).status).toBe("completed");
-    expect(providerCalls).toBe(11);
+    expect(providerCalls).toBe(15);
   } finally {
     await mf.dispose();
   }

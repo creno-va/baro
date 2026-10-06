@@ -1,3 +1,4 @@
+import type { QuestionsResult } from "./cases";
 import { ApiError, apiRequest, cacheClient, registerHttpMockHandler } from "./core";
 import { sessionApi } from "./session";
 import type {
@@ -5,7 +6,6 @@ import type {
   FileView,
   LawyerView,
   Provider,
-  QuestionView,
   ReportView,
   TimelineView,
   UsageView,
@@ -99,13 +99,6 @@ function domain<T>(name: string): T {
     },
   ) as T;
 }
-type Questions = {
-  questions: QuestionView[];
-  complete: boolean;
-  revision: number;
-  processing?: boolean;
-  failed?: boolean;
-};
 type Answers = {
   expectedRevision: number;
   answers: (
@@ -123,9 +116,9 @@ export const api = {
       turnstileToken?: string;
     }): Promise<CaseView>;
     get(id: string): Promise<CaseView>;
-    getQuestions(id: string): Promise<Questions>;
-    saveAnswers(id: string, input: Answers): Promise<Questions>;
-    advance(id: string, input: { expectedRevision: number }): Promise<Questions>;
+    getQuestions(id: string): Promise<QuestionsResult>;
+    saveAnswers(id: string, input: Answers): Promise<QuestionsResult>;
+    advance(id: string, input: { expectedRevision: number }): Promise<QuestionsResult>;
     saveSummary(
       id: string,
       input: { expectedRevision: number; summary: string },

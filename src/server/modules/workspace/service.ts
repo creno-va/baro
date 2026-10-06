@@ -14,6 +14,7 @@ import {
 } from "../../../contracts/v2";
 import { createV2AccountingRepository } from "../../db/v2-accounting";
 import type { Actor, V2Core } from "../../db/v2-core";
+import { canRetryV2Job } from "../../db/v2-job-retry";
 import { createV2JobsRepository } from "../../db/v2-jobs";
 import type { MutationReceipt } from "../../db/v2-mutation-receipts";
 import { runtimeDigest } from "../../db/v2-paid-runtime";
@@ -194,21 +195,22 @@ export function createWorkspaceService(core: V2Core, deps: WorkspaceDependencies
     find,
     replayCreate,
     async job(ownerId: string, id: string, jobId: string) {
-      await find(ownerId, id);
+      const current = await find(ownerId, id);
       const job = await jobs.find(actor(ownerId), opaqueIdSchema.parse(jobId));
       if (!job || job.target.kind !== "workspace" || job.target.caseId !== id)
         throw new WorkspaceError("NOT_FOUND");
-      return job;
+      return { ...job, retryable: canRetryV2Job(job, current) };
     },
     async latestJob(ownerId: string, id: string) {
-      await find(ownerId, id);
+      const current = await find(ownerId, id);
       const row = await core
         .statement(
           "SELECT j.id FROM v2_jobs j JOIN v2_operations o ON o.id=j.operation_id WHERE o.owner_id=? AND j.workspace_id=? AND j.target_kind='workspace' AND j.kind IN ('intake_questions','intake_summary','chat_response') ORDER BY j.target_revision DESC,j.created_at DESC,j.id DESC LIMIT 1",
           [ownerId, id],
         )
         .first<{ id: string }>();
-      return row ? jobs.find(actor(ownerId), row.id) : null;
+      const job = row ? await jobs.find(actor(ownerId), row.id) : null;
+      return job ? { ...job, retryable: canRetryV2Job(job, current) } : null;
     },
     async retry(ownerId: string, id: string, jobId: string, raw: unknown) {
       const request = v2IntakeAdvanceRequestSchema.parse(raw);
@@ -222,7 +224,7 @@ export function createWorkspaceService(core: V2Core, deps: WorkspaceDependencies
         !["intake_questions", "intake_summary", "chat_response"].includes(job.kind)
       )
         throw new WorkspaceError("NOT_FOUND");
-      await dependencyStep("retry_workspace", () => find(ownerId, id));
+      const current = await dependencyStep("retry_workspace", () => find(ownerId, id));
       if (
         job.status === "queued" ||
         job.status === "running" ||
@@ -230,10 +232,13 @@ export function createWorkspaceService(core: V2Core, deps: WorkspaceDependencies
         job.status === "completed"
       )
         return queued(ownerId, job.operationId);
-      if (job.status !== "failed" || !job.retryable) throw new WorkspaceError("REVIEW_REQUIRED");
+      if (!canRetryV2Job(job)) throw new WorkspaceError("REVIEW_REQUIRED");
       const g = await dependencyStep("retry_workspace", () =>
         guard(ownerId, id, request.expectedRevision),
       );
+      // Editing saved answers supersedes a rejected draft; the next advance makes a new job.
+      if (!canRetryV2Job(job, { ...current, workspaceRevision: g.expectedRevision }))
+        throw new WorkspaceError("STALE_REVISION");
       const operation = await dependencyStep("retry_operation", () =>
         core
           .statement(

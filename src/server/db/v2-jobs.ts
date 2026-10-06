@@ -31,6 +31,7 @@ import {
   type V2Core,
   type WorkspaceGuard,
 } from "./v2-core";
+import { v2JobRetryPredicate } from "./v2-job-retry";
 import {
   isPreparedPaidHold,
   type PreparedPaidHold,
@@ -787,11 +788,11 @@ export function createV2JobsRepository(core: V2Core) {
         parse(opaqueIdSchema, jobId);
         const row = await core
           .statement(
-            "SELECT j.* FROM v2_jobs j JOIN v2_operations o ON o.id=j.operation_id WHERE j.id=? AND o.owner_id=? AND j.workspace_id=? AND j.status='failed' AND j.retryable=1",
+            `SELECT j.* FROM v2_jobs j JOIN v2_operations o ON o.id=j.operation_id WHERE j.id=? AND o.owner_id=? AND j.workspace_id=? AND ${v2JobRetryPredicate}`,
             [jobId, g.ownerId, g.workspaceId],
           )
           .first<JobRow>();
-        if (!row || row.attempts >= 10) return false;
+        if (!row) return false;
         const bound = await core
           .statement("SELECT attempt_id FROM v2_paid_holds WHERE job_id=? LIMIT 1", [jobId])
           .first();
@@ -809,7 +810,9 @@ export function createV2JobsRepository(core: V2Core) {
           return false;
         const target =
           row.target_kind === "workspace"
-            ? "w.current_job_id IS NULL AND w.status IN ('intake','active')"
+            ? row.failure_code === "POLICY_REJECTED"
+              ? "w.current_job_id IS NULL AND w.status='intake' AND w.revision=j.target_revision+1"
+              : "w.current_job_id IS NULL AND w.status IN ('intake','active')"
             : row.target_kind === "file"
               ? "EXISTS(SELECT 1 FROM v2_files f WHERE f.id=j.target_id AND f.workspace_id=w.id AND f.revision=j.target_revision AND f.state='failed' AND f.current_job_id IS NULL)"
               : row.target_kind === "report"
@@ -824,7 +827,7 @@ export function createV2JobsRepository(core: V2Core) {
             // Keep the independent funding predicate beside the correlated job
             // check. Nesting it inside that EXISTS exceeds workerd D1's SQL
             // expression depth even though desktop SQLite accepts the query.
-            `EXISTS(SELECT 1 FROM v2_jobs j WHERE j.id=? AND j.status='failed' AND j.retryable=1 AND ${quotaRetryPredicate} AND ${target} AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind=j.target_kind AND target_id=j.target_id)) AND (${paid?.predicate.sql ?? "NOT EXISTS(SELECT 1 FROM v2_runtime_controls)"})`,
+            `EXISTS(SELECT 1 FROM v2_jobs j WHERE j.id=? AND j.workspace_id=w.id AND ${v2JobRetryPredicate} AND ${quotaRetryPredicate} AND ${target} AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind=j.target_kind AND target_id=j.target_id)) AND (${paid?.predicate.sql ?? "NOT EXISTS(SELECT 1 FROM v2_runtime_controls)"})`,
             [jobId, ...(paid?.predicate.values ?? [])],
           ),
           ...quotaRetryStatements(core, jobId, claimId),

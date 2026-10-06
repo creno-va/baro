@@ -86,6 +86,16 @@ provider 보존/무학습 설정은 Gateway 로그 설정과 별도로 법률/�
 - 네트워크, 429, 명시적 5xx만 제한 횟수의 지수 backoff로 재시도한다.
 - schema 실패는 같은 단계에서 1회 교정 시도 후 실패한다.
 - policy/citation 실패는 같은 초안을 반복 호출하지 않고 안전하게 축소하거나 실패한다.
+- v2 intake는 정규화한 중복 질문을 제거하고 남은 새 질문 전체를 검증한다. 새 질문이
+  없거나 생성 결과의 내부 검증이 실패하면 사유 코드만 전달해 새 초안을 1회 재생성하고
+  사실·개인정보·정책 검사와 독립 audit를 다시 수행한다. 공급자의 refusal은 자동 재생성하지 않는다.
+- 질문 audit는 질문과 선택지를 평가한다. 사용자 입력에 전략·분쟁·민감 정보가 있다는
+  사실이나 질문 묶음이 전체 요약을 포함하지 않는다는 이유만으로 거절하지 않는다.
+  실제 생성된 법률 전략·근거 없는 주장·개인정보 노출은 계속 차단한다.
+- `POLICY_REJECTED` intake 작업은 저장한 답변을 유지하며 사용자가 같은 작업을 총 3회
+  실행 한도 안에서 재시도할 수 있다. 이전에 retryable=false로 저장된 intake 실패에도
+  적용하며 chat/파일/리포트에는 확대하지 않는다. 추가 모델 호출은 각각 실제 비용을
+  예약·정산하고 기존 소유권·revision·quota·삭제·lease 검증을 유지한다.
 - Workflow step은 암호화 checkpoint/reference와 결과 hash를 재사용한다. 외부 호출 성공과
   checkpoint commit 사이의 crash는 중복 과금이 가능하므로 exactly-once를 보장하지 않는다.
   최대 attempt·timeout·quota 규칙은 DOMAIN-LIFECYCLE을 따른다.

@@ -23,6 +23,9 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
   const [exit, setExit] = useState(false);
   const [editing, setEditing] = useState(false);
   const pending = useRef(false);
+  const failedOperation = useRef<
+    { kind: "advance" } | { kind: "save"; move: boolean; state: QuestionView["answerState"] } | null
+  >(null);
   const heading = useRef<HTMLHeadingElement>(null);
   const request = useRef(0);
   const {
@@ -46,6 +49,7 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
     setError(null);
     setBusy(false);
     pending.current = false;
+    failedOperation.current = null;
   }, setError);
   const report = useCallback(
     (cause: unknown) => {
@@ -60,38 +64,43 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
     [deny],
   );
   const question = result?.questions[index];
-  const load = useCallback(async () => {
-    let epoch = ticket();
-    const serial = ++request.current;
-    setLoading(true);
-    setError(null);
-    try {
-      if (!(await verify())) return;
-      epoch = ticket();
-      const [caseView, questions] = await Promise.all([
-        api.cases.get(caseId),
-        api.cases.getQuestions(caseId),
-      ]);
-      if (!(await verify()) || !accessCurrent(epoch) || serial !== request.current) return;
-      setItem(caseView);
-      setEditing(new URLSearchParams(window.location.search).get("edit") === "1");
-      setResult(questions);
-      const requested = Number(new URLSearchParams(window.location.search).get("question"));
-      const unanswered = questions.questions.findIndex((q) => !q.answerState);
-      setIndex(
-        new URLSearchParams(window.location.search).has("question") &&
-          Number.isInteger(requested) &&
-          requested >= 0 &&
-          requested < questions.questions.length
-          ? requested
-          : Math.max(0, unanswered),
-      );
-    } catch (cause) {
-      if (alive(epoch)) report(cause);
-    } finally {
-      if (alive(epoch)) setLoading(false);
-    }
-  }, [caseId, verify, ticket, accessCurrent, alive, report]);
+  const load = useCallback(
+    async (replaceDraft = false) => {
+      if (pending.current || (failedOperation.current && !replaceDraft)) return;
+      let epoch = ticket();
+      const serial = ++request.current;
+      setLoading(true);
+      setError(null);
+      try {
+        if (!(await verify())) return;
+        epoch = ticket();
+        const [caseView, questions] = await Promise.all([
+          api.cases.get(caseId),
+          api.cases.getQuestions(caseId),
+        ]);
+        if (!(await verify()) || !accessCurrent(epoch) || serial !== request.current) return;
+        failedOperation.current = null;
+        setItem(caseView);
+        setEditing(new URLSearchParams(window.location.search).get("edit") === "1");
+        setResult(questions);
+        const requested = Number(new URLSearchParams(window.location.search).get("question"));
+        const unanswered = questions.questions.findIndex((q) => !q.answerState);
+        setIndex(
+          new URLSearchParams(window.location.search).has("question") &&
+            Number.isInteger(requested) &&
+            requested >= 0 &&
+            requested < questions.questions.length
+            ? requested
+            : Math.max(0, unanswered),
+        );
+      } catch (cause) {
+        if (alive(epoch)) report(cause);
+      } finally {
+        if (alive(epoch)) setLoading(false);
+      }
+    },
+    [caseId, verify, ticket, accessCurrent, alive, report],
+  );
   useEffect(() => {
     if (version) void load();
   }, [load, version]);
@@ -125,18 +134,22 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
     setBusy(true);
     setError(null);
     try {
+      failedOperation.current = { kind: "advance" };
       if (!(await verify()) || !accessCurrent(epoch)) return;
       const next = await api.cases.advance(caseId, { expectedRevision: result.revision });
       if (!(await verify()) || !accessCurrent(epoch)) return;
+      failedOperation.current = null;
+      setEditing(false);
       setResult(next);
       if (next.complete) window.location.assign(`/cases/${encodeURIComponent(caseId)}/summary`);
       else {
-        setIndex(
-          Math.max(
-            0,
-            next.questions.findIndex((q) => !q.answerState),
-          ),
-        );
+        if (!next.failed)
+          setIndex(
+            Math.max(
+              0,
+              next.questions.findIndex((q) => !q.answerState),
+            ),
+          );
         setNotice(
           next.processing
             ? "저장한 내용으로 다음 질문을 준비하고 있어요."
@@ -167,6 +180,7 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
     setError(null);
     setNotice("");
     try {
+      failedOperation.current = { kind: "save", move, state };
       if (!(await verify()) || !accessCurrent(epoch)) return;
       const next = await api.cases.saveAnswers(caseId, {
         expectedRevision: result.revision,
@@ -177,17 +191,23 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
         ],
       });
       if (!(await verify()) || !accessCurrent(epoch)) return;
+      failedOperation.current = null;
       setResult(next);
       setAnswerState(state);
       setNotice("답변이 저장됐어요. 내 사건에서 다시 이어갈 수 있어요.");
       if (move && index < next.questions.length - 1) setIndex(index + 1);
       else if (move) {
+        // Saving succeeded. A retry must resume generation with this revision,
+        // without saving the last answer a second time.
+        failedOperation.current = { kind: "advance" };
+        setEditing(false);
         const advanced = await api.cases.advance(caseId, { expectedRevision: next.revision });
         if (!(await verify()) || !accessCurrent(epoch)) return;
+        failedOperation.current = null;
         setResult(advanced);
         if (advanced.complete)
           window.location.assign(`/cases/${encodeURIComponent(caseId)}/summary`);
-        else {
+        else if (!advanced.failed) {
           setIndex(
             Math.max(
               0,
@@ -212,7 +232,19 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
       {loading && !result && !error ? (
         <StatePanel variant="loading" title="저장한 질문을 불러오고 있어요." />
       ) : null}
-      {error ? <ErrorPanel error={error} retry={() => void load()} disabled={busy} /> : null}
+      {error ? (
+        <ErrorPanel
+          error={error}
+          retry={() => {
+            const operation = failedOperation.current;
+            if ((error as { code?: string }).code === "CONFLICT") void load(true);
+            else if (operation?.kind === "advance") void advance();
+            else if (operation?.kind === "save") void save(operation.move, operation.state);
+            else void load();
+          }}
+          disabled={busy}
+        />
+      ) : null}
       {ready && item && result ? (
         <section className="intake-card" aria-busy={busy}>
           <div className="intake-assistant-heading">
@@ -261,15 +293,36 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
                 </Button>
               }
             />
-          ) : result.failed ? (
+          ) : result.failed && !editing ? (
             <StatePanel
               variant="error"
-              title="다음 내용을 준비하지 못했어요."
-              description="저장한 답변은 남아 있어요. 다시 시도해 주세요."
+              title={
+                result.failure === "POLICY_REJECTED" || result.failure === "MODEL_SCHEMA_INVALID"
+                  ? "AI가 다음 질문이나 요약을 준비하지 못했어요."
+                  : "다음 내용을 준비하지 못했어요."
+              }
+              description={
+                "저장한 답변은 그대로 남아 있어요. " +
+                (result.retryable
+                  ? "다시 준비하거나 저장한 답변을 확인할 수 있어요."
+                  : "지금은 같은 내용으로 다시 준비할 수 없어요. 답변을 확인·수정하거나 내 사건에서 나중에 이어갈 수 있어요.")
+              }
               action={
-                <Button onClick={() => void advance()} disabled={busy}>
-                  다시 준비하기
-                </Button>
+                <div className="intake-actions">
+                  {result.retryable ? (
+                    <Button onClick={() => void advance()} disabled={busy}>
+                      다시 준비하기
+                    </Button>
+                  ) : null}
+                  {result.questions.length ? (
+                    <Button variant="outline" onClick={() => setEditing(true)} disabled={busy}>
+                      저장한 답변 확인·수정
+                    </Button>
+                  ) : null}
+                  <ButtonLink variant="ghost" href="/cases">
+                    나중에 이어하기
+                  </ButtonLink>
+                </div>
               }
             />
           ) : !question ? (

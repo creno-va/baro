@@ -1,4 +1,4 @@
-import { afterEach, expect, test } from "bun:test";
+import { afterEach, expect, setSystemTime, test } from "bun:test";
 import observation from "../docs/operations/AI-RUNTIME-OBSERVATION.json";
 import { modelBounds, observationSchema, provisionAiRuntime } from "../scripts/provision-ai-budget";
 import { createCaseDataCipher } from "../src/server/crypto";
@@ -17,6 +17,7 @@ import { seedTestSession } from "./helpers/session";
 
 const databases: Awaited<ReturnType<typeof createTestDatabase>>[] = [];
 afterEach(() => {
+  setSystemTime();
   for (const database of databases.splice(0)) database.close();
 });
 
@@ -45,7 +46,10 @@ async function fixture() {
   );
   const calls: string[] = [];
   let transportError = false,
-    invalidDraft = false;
+    invalidDraft = false,
+    repeatedQuestions = false,
+    rejectedAudit = false,
+    phaseDurationMs = 0;
   const env = {
     ...owner.env,
     APP_ENV: "preview",
@@ -67,28 +71,33 @@ async function fixture() {
         };
         const phase = wire.response_format.json_schema.name;
         calls.push(phase);
+        if (phaseDurationMs) setSystemTime(new Date(Date.now() + phaseDurationMs));
         if (transportError) throw new Error("Synthetic provider unavailable");
         const context = JSON.parse(wire.messages[1]?.content ?? "null").data as WorkspaceContext;
         let output: unknown;
         if (phase.includes("audit")) {
           output = {
-            pass: true,
-            findings: [],
+            pass: !rejectedAudit,
+            findings: rejectedAudit ? [{ severity: "critical", code: "question_repetition" }] : [],
             unsupportedFactIds: [],
             legalClaimsSupported: true,
             strategyDetected: false,
           };
+          rejectedAudit = false;
         } else if (phase.includes("questions")) {
           output = {
             questions: [
               {
                 id: "placeholder",
-                prompt: `자료 확인 단계 ${context.intake.batches.length + 1}에서 확인할 내용은 무엇인가요?`,
+                prompt: repeatedQuestions
+                  ? context.intake.batches[0]?.questions[0]?.prompt
+                  : `자료 확인 단계 ${context.intake.batches.length + 1}에서 확인할 내용은 무엇인가요?`,
                 answerType: "text",
                 options: [],
               },
             ],
           };
+          repeatedQuestions = false;
         } else if (phase.includes("summary")) {
           output = {
             overview: "합성 거래 자료의 확인 준비를 정리했습니다.",
@@ -193,6 +202,15 @@ async function fixture() {
     invalidateNextDraft: () => {
       invalidDraft = true;
     },
+    repeatNextQuestions: () => {
+      repeatedQuestions = true;
+    },
+    rejectNextAudit: () => {
+      rejectedAudit = true;
+    },
+    simulatePhaseDuration: (durationMs: number) => {
+      phaseDurationMs = durationMs;
+    },
   };
 }
 
@@ -245,6 +263,65 @@ test("schema correction is separately paid and its validated result is published
   expect((await f.execute(queued.jobId)).status).toBe("completed");
   expect(f.calls).toHaveLength(3);
   expect(f.calls[2]).toContain("audit");
+});
+
+test("a repeated follow-up is regenerated with paid admission and preserves the saved answer", async () => {
+  const f = await fixture();
+  const first = await f.advance();
+  expect((await f.execute(first.jobId)).status).toBe("completed");
+  const intake = await f.service.intake(f.owner.userId, f.workspace.id);
+  const question = intake?.batches[0]?.questions[0];
+  if (!intake || !question) throw new Error("Question missing");
+  const answers = [
+    { questionId: question.id, status: "answered" as const, value: "계약서는 보관 중입니다." },
+  ];
+  await f.service.answers(f.owner.userId, f.workspace.id, crypto.randomUUID(), {
+    expectedRevision: intake.revision,
+    answers,
+  });
+  f.repeatNextQuestions();
+  const followup = await f.advance();
+  expect((await f.execute(followup.jobId)).status).toBe("completed");
+  const saved = await f.service.intake(f.owner.userId, f.workspace.id);
+  expect(saved?.batches).toHaveLength(2);
+  expect(saved?.batches[0]?.answers).toEqual(answers);
+  expect(saved?.batches[1]?.questions[0]?.prompt).not.toBe(question.prompt);
+  expect(f.calls).toHaveLength(5);
+  expect(
+    f.preview.sqlite
+      .query("SELECT count(*) AS n FROM v2_cost_attempts WHERE state='settled'")
+      .get(),
+  ).toEqual({ n: 5 });
+  expect((await f.execute(followup.jobId)).status).toBe("completed");
+  expect(f.calls).toHaveLength(5);
+});
+
+test("an audit rejection generates and independently audits a new draft under paid execution", async () => {
+  const f = await fixture();
+  f.rejectNextAudit();
+  const queued = await f.advance();
+  expect((await f.execute(queued.jobId)).status).toBe("completed");
+  expect(f.calls).toHaveLength(4);
+  expect(f.calls.filter((phase) => phase.includes("audit"))).toHaveLength(2);
+  expect((await f.service.intake(f.owner.userId, f.workspace.id))?.batches).toHaveLength(1);
+  expect(
+    f.preview.sqlite
+      .query("SELECT count(*) AS n FROM v2_cost_attempts WHERE state='settled'")
+      .get(),
+  ).toEqual({ n: 4 });
+});
+
+test("regeneration renews the fenced lease between paid phases when total processing exceeds five minutes", async () => {
+  const f = await fixture();
+  f.rejectNextAudit();
+  f.simulatePhaseDuration(80_000);
+  const queued = await f.advance();
+  const started = Date.now();
+  expect((await f.execute(queued.jobId)).status).toBe("completed");
+  expect(Date.now() - started).toBeGreaterThanOrEqual(320_000);
+  expect(f.calls).toHaveLength(4);
+  expect((await f.service.find(f.owner.userId, f.workspace.id)).currentJobId).toBeNull();
+  expect((await f.service.intake(f.owner.userId, f.workspace.id))?.batches).toHaveLength(1);
 });
 
 test("a clock tick between lease arguments cannot stop acquisition or renewal", async () => {
