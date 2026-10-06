@@ -1,3 +1,4 @@
+import { drizzle } from "drizzle-orm/d1";
 import { z } from "zod";
 import {
   idempotencyKeySchema,
@@ -6,10 +7,14 @@ import {
   timestampSchema,
 } from "../../../contracts";
 import { v2LawyerAssetUploadRequestSchema } from "../../../contracts/v2";
+import * as schema from "../../db/schema";
 import { createV2AccountingRepository } from "../../db/v2-accounting";
 import { actorSchema, hashSchema, type V2Core } from "../../db/v2-core";
 import { createV2LawyersRepository } from "../../db/v2-lawyers";
 import { type BlobRegistration, createV2StorageRepository } from "../../db/v2-storage";
+import { isPreparedStoragePaidHold } from "../../db/v2-storage-paid-runtime";
+import type { StorageCosts, StoragePermit } from "../budget/storage-ledger";
+import { hasCurrentConsent } from "../consent/service";
 import { digest } from "../files/binary";
 import type { PrivateBucket } from "../files/service";
 import { decryptAssetBinary, prepareAssetBinary } from "./asset-binary";
@@ -19,15 +24,10 @@ export type LawyerAssetDependencies = {
   environment: "preview" | "production";
   bucket?: PrivateBucket;
   clock?: () => string;
-  /** Trusted budget/funding sink. A client cannot provide an approval or price. */
-  storageAdmission?: (input: {
-    ownerId: string;
-    profileId: string;
-    assetId: string;
-    operationId: string;
-    byteLength: number;
-    kind: "reserve" | "upload";
-  }) => Promise<boolean>;
+  /** Server-only producer, bound to the authenticated owner and durable #93 proofs. */
+  paidStorage?: (ownerId: string) => StorageCosts;
+  /** Explicit offline adapter, preview only; never mounted in production. */
+  testOnlyUnmeteredStorage?: true;
   /** #59 processor owns format validation/sanitization + fenced ready publication. */
   enqueueProcessing?: (input: {
     ownerId: string;
@@ -88,20 +88,11 @@ export function createLawyerAssetsService(core: V2Core, deps: LawyerAssetDepende
     if (!row) throw new LawyerError("NOT_FOUND");
     return row;
   };
-  const allow = async (
-    ownerId: string,
-    row: Pick<AssetRow, "id" | "profile_id" | "operation_id" | "byte_length">,
-    kind: "reserve" | "upload",
-  ) => {
+  const unmeteredTest = deps.environment === "preview" && deps.testOnlyUnmeteredStorage === true;
+  const allow = async (ownerId: string) => {
     if (
-      !(await deps.storageAdmission?.({
-        ownerId,
-        profileId: row.profile_id,
-        assetId: row.id,
-        operationId: row.operation_id,
-        byteLength: row.byte_length,
-        kind,
-      }))
+      (!deps.paidStorage && !unmeteredTest) ||
+      !(await hasCurrentConsent(drizzle(core.binding, { schema }), ownerId))
     )
       throw new LawyerError("PROCESSING_UNAVAILABLE");
   };
@@ -222,6 +213,7 @@ export function createLawyerAssetsService(core: V2Core, deps: LawyerAssetDepende
       group: "verification" | "portfolio",
     ) {
       const request = v2LawyerAssetUploadRequestSchema.parse(input);
+      await allow(ownerId);
       revisionSchema.parse(expectedProfileRevision);
       idempotencyKeySchema.parse(key);
       if (
@@ -263,16 +255,6 @@ export function createLawyerAssetsService(core: V2Core, deps: LawyerAssetDepende
       }
       const assetId = crypto.randomUUID();
       const operationId = crypto.randomUUID();
-      await allow(
-        ownerId,
-        {
-          id: assetId,
-          profile_id: p.id,
-          operation_id: operationId,
-          byte_length: request.byteLength,
-        },
-        "reserve",
-      );
       let accepted: boolean;
       try {
         accepted = await repository.reserveAsset(
@@ -323,23 +305,108 @@ export function createLawyerAssetsService(core: V2Core, deps: LawyerAssetDepende
       if (row.revision !== expectedRevision || row.state !== "reserved" || row.original_blob_id)
         throw new LawyerError("STALE_REVISION");
       if (!body || byteLength !== row.byte_length) throw new LawyerError("ASSET_NOT_READY");
-      await allow(ownerId, row, "upload");
+      await allow(ownerId);
       const targetBucket = bucket();
       const blobId = crypto.randomUUID();
       const reserved = await repository.readAsset(actor(ownerId), assetId);
       if (!reserved || !("request" in reserved)) throw new LawyerError("STALE_REVISION");
+      const costs = deps.paidStorage?.(ownerId);
+      if (!costs && !unmeteredTest) throw new LawyerError("PROCESSING_UNAVAILABLE");
+      const operation = await core
+        .statement(
+          "SELECT o.revision,(SELECT request_hash FROM v2_idempotency WHERE operation_id=o.id LIMIT 1) AS request_hash FROM v2_operations o WHERE o.id=? AND o.owner_id=? AND o.state='admitted'",
+          [row.operation_id, ownerId],
+        )
+        .first<{ revision: number; request_hash: string }>();
+      if (!operation) throw new LawyerError("STALE_REVISION");
+      const admission = costs
+        ? await costs.prepare({
+            runId: blobId,
+            attemptOrdinal: 1,
+            maximumAttempts: 1,
+            deadlineAt: new Date(Date.parse(now()) + 300000).toISOString(),
+            action: "r2_put",
+            service: "requests",
+            operationId: row.operation_id,
+            operationRevision: operation.revision,
+            requestHash: operation.request_hash,
+            targetKind: "profile_asset",
+            targetId: assetId,
+            targetRevision: expectedRevision,
+            reservationId: row.reservation_id,
+            blobId,
+            pending: {
+              logicalBytes: byteLength,
+              cipherBytes: 0,
+              cipherHash: null,
+              keyVersion: "asset_binary_v1",
+            },
+            intent: { kind: "lawyer_original" },
+          })
+        : null;
       if (
-        !(await storage.prepareAssetUpload(actor(ownerId), {
-          assetId,
-          assetRevision: expectedRevision,
-          blobId,
-          reservationId: row.reservation_id,
-          keyVersion: "asset_binary_v1",
-        }))
+        costs &&
+        (!admission ||
+          !isPreparedStoragePaidHold(admission.paid) ||
+          admission.actor.ownerId !== ownerId)
+      )
+        throw new LawyerError("PROCESSING_UNAVAILABLE");
+      if (
+        !(await storage.prepareAssetUpload(
+          admission?.actor ?? actor(ownerId),
+          {
+            assetId,
+            assetRevision: expectedRevision,
+            blobId,
+            reservationId: row.reservation_id,
+            keyVersion: "asset_binary_v1",
+          },
+          admission?.paid,
+        ))
       )
         throw new LawyerError("STALE_REVISION");
       const capturedIntent = await storage.captureAssetUploadIntent(actor(ownerId), blobId);
       if (!capturedIntent) throw new LawyerError("STALE_REVISION");
+      const pendingPayload = await core
+        .statement("SELECT encrypted_payload FROM v2_blobs WHERE id=? AND state='pending'", [
+          blobId,
+        ])
+        .first<string>("encrypted_payload");
+      let permit: StoragePermit | null = null,
+        sent = false,
+        recorded = false;
+      const authorize = async () => {
+        try {
+          await allow(ownerId);
+          const current = await assetRow(ownerId, assetId);
+          const pending =
+            pendingPayload &&
+            (await core
+              .statement(
+                "SELECT b.id FROM v2_blobs b JOIN v2_operations o ON o.id=? WHERE b.id=? AND b.state='pending' AND b.reservation_id=? AND b.logical_bytes=? AND b.cipher_bytes=0 AND b.cipher_hash IS NULL AND b.key_version='asset_binary_v1' AND b.encrypted_payload=? AND o.owner_id=? AND o.state='admitted' AND o.revision=?",
+                [
+                  row.operation_id,
+                  blobId,
+                  row.reservation_id,
+                  byteLength,
+                  pendingPayload,
+                  ownerId,
+                  operation.revision,
+                ],
+              )
+              .first());
+          return (
+            !!pending &&
+            current.revision === expectedRevision &&
+            current.state === "reserved" &&
+            !current.original_blob_id &&
+            current.encrypted_payload === row.encrypted_payload &&
+            (!admission || now() < admission.request.plan.deadlineAt)
+          );
+        } catch {
+          return false;
+        }
+      };
       try {
         const binary = await prepareAssetBinary(
           core.cipher,
@@ -356,6 +423,12 @@ export function createLawyerAssetsService(core: V2Core, deps: LawyerAssetDepende
         const pipe =
           deps.fixedLengthStream?.(binary.cipherBytes) ?? new FixedLengthStream(binary.cipherBytes);
         const writer = pipe.writable.getWriter();
+        if (admission && costs) {
+          permit = await costs.beforeDispatch(admission, authorize);
+          if (!permit) throw new LawyerError("PROCESSING_UNAVAILABLE");
+        }
+        if (!(await authorize())) throw new LawyerError("STALE_REVISION");
+        sent = true;
         const upload = targetBucket.put(`private/${blobId}`, pipe.readable, {
           httpMetadata: { contentType: "application/octet-stream" },
         });
@@ -374,8 +447,17 @@ export function createLawyerAssetsService(core: V2Core, deps: LawyerAssetDepende
           await Promise.allSettled([saved, encoded]);
           throw error;
         }
+        if (permit && costs) {
+          recorded = true;
+          await costs.after(permit, {
+            transport: "response",
+            definitiveNoCharge: false,
+            observedAt: now(),
+          });
+        }
         if (!receipt || receipt.key !== `private/${blobId}` || receipt.size !== binary.cipherBytes)
           throw new LawyerError("ASSET_NOT_READY");
+        if (!(await authorize())) throw new LawyerError("STALE_REVISION");
         const registration: BlobRegistration = {
           id: blobId,
           reservationId: row.reservation_id,
@@ -417,14 +499,24 @@ export function createLawyerAssetsService(core: V2Core, deps: LawyerAssetDepende
           processingQueued,
         };
       } catch (error) {
+        let failure = error;
+        if (permit && costs && !recorded) {
+          try {
+            await costs.after(permit, {
+              transport: sent ? "unknown" : "not_sent",
+              definitiveNoCharge: !sent,
+              observedAt: now(),
+            });
+          } catch {
+            failure = new LawyerError("PROCESSING_UNAVAILABLE");
+          }
+        }
         await storage.abandonAssetUpload(actor(ownerId), blobId).catch(() => false);
-        // The original PUT has now settled. If a previous cleanup completed
-        // before that late write, preserve a new journal generation using the
-        // exact server-captured capability; never reconstruct it from input.
-        const lateObject = await targetBucket.head(`private/${blobId}`).catch(() => null);
-        if (lateObject?.key === `private/${blobId}`)
+        // A sent PUT may have produced a late object even when its reply failed.
+        // Requeue the captured generation without another unbudgeted R2 HEAD.
+        if (sent)
           await storage.requeueAssetUploadCleanup(actor(ownerId), capturedIntent).catch(() => null);
-        throw error;
+        throw failure;
       }
     },
     open,

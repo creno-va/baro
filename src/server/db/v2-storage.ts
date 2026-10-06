@@ -48,6 +48,7 @@ import {
   findPendingSanitizedAssetBlob,
   prepareSanitizedAssetBlob,
 } from "./v2-sanitized-asset-blobs";
+import type { PreparedStoragePaidHold } from "./v2-storage-paid-runtime";
 import type { JobLease } from "./v2-workspace";
 
 export function storagePredicate(
@@ -162,8 +163,8 @@ export function createV2StorageRepository(core: V2Core) {
     abandonApprovedPublicCopy(actor: Actor, blobId: string) {
       return abandonApprovedPublicCopy(core, actor, blobId);
     },
-    prepareAssetUpload(actor: Actor, input: AssetUploadIntent) {
-      return prepareAssetUpload(core, actor, input);
+    prepareAssetUpload(actor: Actor, input: AssetUploadIntent, paid?: PreparedStoragePaidHold) {
+      return prepareAssetUpload(core, actor, input, paid);
     },
     commitAssetUpload(
       actor: Actor,

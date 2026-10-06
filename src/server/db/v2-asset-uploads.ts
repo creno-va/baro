@@ -8,6 +8,7 @@ import {
 import { type Actor, actorSchema, parse, safe, sqlClaim, type V2Core } from "./v2-core";
 import { findPendingSanitizedAssetBlob } from "./v2-sanitized-asset-blobs";
 import { type BlobRegistration, blobSchema } from "./v2-storage";
+import { isPreparedStoragePaidHold, type PreparedStoragePaidHold } from "./v2-storage-paid-runtime";
 import { type JobLease, leaseSchema } from "./v2-workspace";
 
 export interface AssetUploadIntent {
@@ -152,8 +153,9 @@ export function captureSanitizedAssetBlobIntent(
   });
 }
 
-// Called only after the original PUT has actually finished and HEAD proves the
-// captured object exists. A fresh journal preserves previous deletion receipts.
+// Called after a sent PUT settles, including an unknown transport outcome.
+// The captured intent restores cleanup exposure, never an existence/deletion receipt.
+// A fresh journal preserves previous deletion receipts without an extra R2 HEAD.
 export function requeueAssetUploadCleanup(
   core: V2Core,
   actor: Actor,
@@ -249,12 +251,33 @@ export function requeueAssetUploadCleanup(
   });
 }
 
-export function prepareAssetUpload(core: V2Core, actor: Actor, input: AssetUploadIntent) {
+export function prepareAssetUpload(
+  core: V2Core,
+  actor: Actor,
+  input: AssetUploadIntent,
+  paid?: PreparedStoragePaidHold,
+) {
   return safe(async () => {
     actor = parse(actorSchema, actor);
     for (const id of [input.assetId, input.blobId, input.reservationId]) parse(opaqueIdSchema, id);
     parse(revisionSchema, input.assetRevision);
     if (input.keyVersion !== "asset_binary_v1") return false;
+    if (
+      paid &&
+      (!isPreparedStoragePaidHold(paid) ||
+        paid.actor.ownerId !== actor.ownerId ||
+        paid.actor.now !== actor.now ||
+        paid.request.intent.kind !== "lawyer_original" ||
+        paid.request.targetKind !== "profile_asset" ||
+        paid.request.targetId !== input.assetId ||
+        paid.request.targetRevision !== input.assetRevision ||
+        paid.request.blobId !== input.blobId ||
+        paid.request.reservationId !== input.reservationId ||
+        paid.request.pending.cipherBytes !== 0 ||
+        paid.request.pending.cipherHash !== null ||
+        paid.request.pending.keyVersion !== input.keyVersion)
+    )
+      return false;
     const values = [input.assetId, input.assetRevision, actor.ownerId, input.reservationId];
     const row = await core
       .statement(
@@ -272,12 +295,47 @@ export function prepareAssetUpload(core: V2Core, actor: Actor, input: AssetUploa
       requestSchema,
     );
     if (request.purpose !== row.purpose || request.byteLength !== row.byte_length) return false;
+    if (paid && paid.request.pending.logicalBytes !== row.byte_length) return false;
     const envelope = await core.encrypt("v2_blobs", input.blobId, actor.ownerId, 1, {
       assetId: input.assetId,
       assetRevision: input.assetRevision,
       profileId: row.profile_id,
       assetPayload: row.encrypted_payload,
     });
+    if (paid) {
+      const claim = crypto.randomUUID();
+      const anchor =
+        "a.encrypted_payload=? AND a.purpose=? AND a.profile_id=? AND r.byte_length=? AND NOT EXISTS(SELECT 1 FROM v2_blobs WHERE id=?) AND NOT EXISTS(SELECT 1 FROM v2_blobs WHERE reservation_id=r.id AND state!='deleted')";
+      const anchorValues = [
+        row.encrypted_payload,
+        row.purpose,
+        row.profile_id,
+        row.byte_length,
+        input.blobId,
+      ];
+      return core.changed([
+        core.statement(
+          `INSERT INTO v2_mutation_claims(id,owner_id,target_id,revision) SELECT ?,a.owner_id,a.id,a.revision ${from} WHERE ${eligible} AND ${anchor} AND (${paid.predicate.sql})`,
+          [claim, ...values, ...anchorValues, ...paid.predicate.values],
+        ),
+        core.statement(
+          `INSERT INTO v2_blobs(id,principal_id,reservation_id,kind,visibility,state,object_key,logical_bytes,cipher_bytes,cipher_hash,key_version,encrypted_payload,created_at) SELECT ?,r.principal_id,r.id,?,'private','pending',?,r.byte_length,0,NULL,?,?,? ${from} WHERE ${eligible} AND ${anchor} AND ${sqlClaim}`,
+          [
+            input.blobId,
+            kind(row.purpose),
+            `private/${input.blobId}`,
+            input.keyVersion,
+            envelope,
+            actor.now,
+            ...values,
+            ...anchorValues,
+            claim,
+          ],
+        ),
+        ...(await paid.statements(core, paid.actor, claim, envelope)),
+        core.finish(claim),
+      ]);
+    }
     return (
       (
         await core

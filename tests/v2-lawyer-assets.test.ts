@@ -101,7 +101,7 @@ async function fixture() {
   const service = createLawyerAssetsService(core, {
     environment: "preview",
     bucket,
-    storageAdmission: async () => true,
+    testOnlyUnmeteredStorage: true,
     fixedLengthStream: fixed,
   });
   return {

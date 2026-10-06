@@ -62,7 +62,7 @@ async function setup(
     environment: "preview",
     bucket,
     clock,
-    storageAdmission: async () => true,
+    testOnlyUnmeteredStorage: true,
     fixedLengthStream: fixed,
   });
   const reserved = await assets.reserve(
