@@ -72,9 +72,10 @@ function domain<T>(name: string): T {
             clients.set(name, client);
           }
           try {
-            const fn = (await client)[method];
+            const resolved = await client;
+            const fn = resolved[method];
             if (!fn) throw new ApiError("UNAVAILABLE", "이 기능을 연결하고 있어요.", true);
-            return await fn(...args);
+            return await fn.apply(resolved, args);
           } catch (error) {
             clients.delete(name);
             throw error;
