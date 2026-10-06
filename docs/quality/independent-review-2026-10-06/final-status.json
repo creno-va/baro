@@ -1,0 +1,611 @@
+{
+  "observedAt": "2026-10-06T12:56:00Z",
+  "entries": [
+    {
+      "kind": "issue",
+      "number": 101,
+      "data": {
+        "comments": [
+          {
+            "author": {
+              "login": "hwangeunchan"
+            },
+            "authorAssociation": "COLLABORATOR",
+            "body": "CSP 실패 후속 PR119: https://github.com/creno-va/baro/pull/119 (commit d007010, base A dc22c26, 2파일).\n\n최종 원인은 두 층이었습니다: (1) CSP fixture에 새 self-service directory 응답 누락/이전 cases 오류문구, (2) consent.ts의 Zod object 생성이 common.ts의 jitless 설정보다 먼저 실행돼 실제 script-src eval CSP 위반을 발생시키는 초기화 순서. consent.ts가 기존 common 설정을 먼저 import하도록 수정했습니다. CSP/unsafe-eval 허용이나 실패 검사 제외는 없습니다.\n\nbuilt production Worker test:csp 4 passed/1 expected skipped(일반 배포에 explicit UI fixture 없음), 디렉터리/상세 hydration, 주입 script 차단/Turnstile 허용, 320px 메뉴·초점·local font·오류 화면에서 CSP 위반0. 동의·인증/core25 tests212assertions, 전체 타입0errors, build:production/bundle:check/production cf:dry-run 및 Biome 통과. PR119의 remote CI를 확인하고 A 후보에 통합하면 됩니다. PR118 E/D 보완이 이미 A에 들어간 것도 확인했습니다.\n\n제가 두 CSP 소비 파일을 맡았으므로 A가 동일 파일을 다시 고칠 필요는 없습니다. main/preview와 공개 gate는 A 소유·기존 조건을 유지합니다.\n",
+            "createdAt": "2026-10-06T12:49:59Z",
+            "id": "IC_kwDOU7JsN88AAAABZp50zw",
+            "includesCreatedEdit": false,
+            "isMinimized": false,
+            "minimizedReason": "",
+            "reactionGroups": [],
+            "url": "https://github.com/creno-va/baro/issues/101#issuecomment-6016627919",
+            "viewerDidAuthor": true
+          },
+          {
+            "author": {
+              "login": "hwangeunchan"
+            },
+            "authorAssociation": "COLLABORATOR",
+            "body": "A 통합 후보는 `539a3cc` / PR #110입니다. B `7cc4e28`, C #112/#116, D #111/#117, E #113/#118을 정확한 이력으로 포함했고 PR100은 재검증 후 main `b6cfdfe`에 병합했습니다. B의 기존 공통 cases fixture 인계도 완료했고, v1 signed SQL 분석 회귀는 현재 workspace compatibility 경로에서 4개 모두 통과했습니다.\n\n4340 최신 실제 UI 고객 흐름: 로그인·동의 → 사건 생성/문답/요약 → 대화 → TXT 원본 업로드 → 타임라인 → 리포트 → PDF/선택 ZIP → 삭제 통과. PDF `%PDF-1.4`, ZIP CRC 정상 및 합성 원본 내용 일치 확인. 변호사 로그인·동의/사진·포트폴리오 저장·reload/공개/검색·상세·연락/숨김·reload와 axe 위반 0개도 통과했습니다. 두 흐름 모두 실제 API 요청 0개이며 화면 복제나 fixture 사건 주입은 없습니다.\n\n실제 signed-session 이용 유형 저장과 본인 변호사 프로필 접근을 연결했습니다. 자격·moderator 권한은 그대로 보존합니다. 최종 필수 check 및 PR CI 후 main 통합 → 단일 `https://preview.baro.site` 배포 → 같은 browser 시나리오로 원격 재확인을 진행합니다. 외부 OAuth/AI/R2와 정책·production gate #70/#71은 별도입니다.\n",
+            "createdAt": "2026-10-06T12:52:41Z",
+            "id": "IC_kwDOU7JsN88AAAABZp8paw",
+            "includesCreatedEdit": false,
+            "isMinimized": false,
+            "minimizedReason": "",
+            "reactionGroups": [],
+            "url": "https://github.com/creno-va/baro/issues/101#issuecomment-6016674155",
+            "viewerDidAuthor": true
+          },
+          {
+            "author": {
+              "login": "hwangeunchan"
+            },
+            "authorAssociation": "COLLABORATOR",
+            "body": "PR119 원격 CI 최종 SUCCESS 확인했습니다: https://github.com/creno-va/baro/actions/runs/37466069757 . Source and browser checks / Quality gate / Isolated native media fixtures 모두 성공입니다. consent CSP 초기화+현재 CSP 소비 테스트를 포함한 head d007010을 이제 A 통합 candidate에 반영할 수 있습니다. 앞선 PR118은 A dc22c26에 반영됐습니다.\n\n이 보완 세션에서 중단된 E 타입/역할 연결, D 검사 skip/formatter, E reload race와 공통 consent CSP 실제 위반까지 수정·검증 완료했습니다. 이후 main 병합 및 preview는 A 단일 담당을 유지합니다. 106/105와 #70/#71의 실제 외부/공개 잔여는 성공으로 허위 종료하지 않습니다.\n",
+            "createdAt": "2026-10-06T12:54:01Z",
+            "id": "IC_kwDOU7JsN88AAAABZp-AXQ",
+            "includesCreatedEdit": false,
+            "isMinimized": false,
+            "minimizedReason": "",
+            "reactionGroups": [],
+            "url": "https://github.com/creno-va/baro/issues/101#issuecomment-6016696413",
+            "viewerDidAuthor": true
+          }
+        ],
+        "number": 101,
+        "state": "OPEN",
+        "updatedAt": "2026-10-06T12:54:01Z"
+      }
+    },
+    {
+      "kind": "issue",
+      "number": 102,
+      "data": {
+        "comments": [
+          {
+            "author": {
+              "login": "hwangeunchan"
+            },
+            "authorAssociation": "COLLABORATOR",
+            "body": "CSP fixture/문구 수정 뒤 검사 마지막까지 실행하니 실제 eval CSP 위반도 드러났습니다. built Worker의 /cases에서 Zod capability probe가 script-src eval 위반을 한 번 발생시킵니다. consent.ts가 common.ts(jitless 설정)을 경유하지 않고 객체 schema를 먼저 만들고, 신규 공통 session/mock session import가 이를 모든 shell에 로드하는 순서 문제입니다.\n\ncodex/102-csp-consumer-repair에서 consent 계약에 기존 common CSP 설정을 먼저 import하고 기존 CSP test fixture만 갱신해 검증 중입니다. CSP/unsafe-eval 허용, 검사 제외, 새 provider/schema는 추가하지 않습니다. A는 src/contracts/consent.ts 및 tests/security-browser/csp.e2e.ts 두 파일을 중복 수정하지 않아도 됩니다. 코드2파일 후속 PR로 인계하겠습니다.\n",
+            "createdAt": "2026-10-06T12:48:42Z",
+            "id": "IC_kwDOU7JsN88AAAABZp4YRA",
+            "includesCreatedEdit": false,
+            "isMinimized": false,
+            "minimizedReason": "",
+            "reactionGroups": [],
+            "url": "https://github.com/creno-va/baro/issues/102#issuecomment-6016604228",
+            "viewerDidAuthor": true
+          },
+          {
+            "author": {
+              "login": "hwangeunchan"
+            },
+            "authorAssociation": "COLLABORATOR",
+            "body": "CSP 실패 후속 PR119: https://github.com/creno-va/baro/pull/119 (commit d007010, base A dc22c26, 2파일).\n\n최종 원인은 두 층이었습니다: (1) CSP fixture에 새 self-service directory 응답 누락/이전 cases 오류문구, (2) consent.ts의 Zod object 생성이 common.ts의 jitless 설정보다 먼저 실행돼 실제 script-src eval CSP 위반을 발생시키는 초기화 순서. consent.ts가 기존 common 설정을 먼저 import하도록 수정했습니다. CSP/unsafe-eval 허용이나 실패 검사 제외는 없습니다.\n\nbuilt production Worker test:csp 4 passed/1 expected skipped(일반 배포에 explicit UI fixture 없음), 디렉터리/상세 hydration, 주입 script 차단/Turnstile 허용, 320px 메뉴·초점·local font·오류 화면에서 CSP 위반0. 동의·인증/core25 tests212assertions, 전체 타입0errors, build:production/bundle:check/production cf:dry-run 및 Biome 통과. PR119의 remote CI를 확인하고 A 후보에 통합하면 됩니다. PR118 E/D 보완이 이미 A에 들어간 것도 확인했습니다.\n\n제가 두 CSP 소비 파일을 맡았으므로 A가 동일 파일을 다시 고칠 필요는 없습니다. main/preview와 공개 gate는 A 소유·기존 조건을 유지합니다.\n",
+            "createdAt": "2026-10-06T12:49:57Z",
+            "id": "IC_kwDOU7JsN88AAAABZp5yLw",
+            "includesCreatedEdit": false,
+            "isMinimized": false,
+            "minimizedReason": "",
+            "reactionGroups": [],
+            "url": "https://github.com/creno-va/baro/issues/102#issuecomment-6016627247",
+            "viewerDidAuthor": true
+          },
+          {
+            "author": {
+              "login": "hwangeunchan"
+            },
+            "authorAssociation": "COLLABORATOR",
+            "body": "PR119 원격 CI 최종 SUCCESS 확인했습니다: https://github.com/creno-va/baro/actions/runs/37466069757 . Source and browser checks / Quality gate / Isolated native media fixtures 모두 성공입니다. consent CSP 초기화+현재 CSP 소비 테스트를 포함한 head d007010을 이제 A 통합 candidate에 반영할 수 있습니다. 앞선 PR118은 A dc22c26에 반영됐습니다.\n\n이 보완 세션에서 중단된 E 타입/역할 연결, D 검사 skip/formatter, E reload race와 공통 consent CSP 실제 위반까지 수정·검증 완료했습니다. 이후 main 병합 및 preview는 A 단일 담당을 유지합니다. 106/105와 #70/#71의 실제 외부/공개 잔여는 성공으로 허위 종료하지 않습니다.\n",
+            "createdAt": "2026-10-06T12:54:00Z",
+            "id": "IC_kwDOU7JsN88AAAABZp9-zQ",
+            "includesCreatedEdit": false,
+            "isMinimized": false,
+            "minimizedReason": "",
+            "reactionGroups": [],
+            "url": "https://github.com/creno-va/baro/issues/102#issuecomment-6016696013",
+            "viewerDidAuthor": true
+          }
+        ],
+        "number": 102,
+        "state": "OPEN",
+        "updatedAt": "2026-10-06T12:54:00Z"
+      }
+    },
+    {
+      "kind": "issue",
+      "number": 103,
+      "data": {
+        "comments": [
+          {
+            "author": {
+              "login": "hwangeunchan"
+            },
+            "authorAssociation": "COLLABORATOR",
+            "body": "사건 목록의 빈 상태에서 새 사건을 만들고, 답변·모름·건너뛰기를 저장해 요약 편집·확인 후 같은 사건 workspace 경로로 이동합니다. 기존 v1 기록은 원래 상세 경로로 유지하며 모든 화면은 api.cases를 소비합니다. mock은 공통 cases/caseOwners 저장소와 intake 상태를 보존하므로 새로고침·재개·뒤로 수정이 이어집니다. 요약에서 이전 질문을 수정하면 기존 요약을 무효화하고 다시 준비합니다.\n\nPR100을 소비하는 real adapter도 구현했습니다. 질문 저장/비동기 advance와 summary 편집/확인의 intake·workspace·summary revision, idempotency key, 보안 확인, 작업 상태/재시도를 변환합니다. B 소유 파일과 담당 테스트만 직접 수정했고 공통 기반은 A의 92da530/fad82f0/e31a051을 가져왔습니다.\n\n검증: 변경 기능 Bun 테스트 7개/30 assertions, 제품 경로 Playwright 5개(모바일·키보드·200%·저장/reload/resume·충돌·저장 오류/재시도·동일 입력 새 사건), TypeScript/Astro, 제품 build, Worker dry-run 통과. 합성 입력과 API mock/HTTP 대역으로 검증했으며 실제 OAuth/AI/R2 성공을 뜻하지 않습니다. 전체 corpus/대용량 회귀는 반복하지 않았습니다.\n\n시작: PUBLIC_API_MODE=mock BARO_UI_TEST_FIXTURE=true로 포트 4341, /login → 고객 → 동의 → /cases. 담당 browser: bunx playwright test --config tests/browser/intake103.config.ts.\n\n남은 실제 연결: PR100은 검증 당시 CI SUCCESS/OPEN이므로 검토·main 통합 및 runtime readiness는 A/C 담당입니다. PR100 answers API는 마지막 질문 batch만 수정하므로 이전 batch까지의 실제 back-edit 확대는 C에 요청합니다. 실제 OAuth·Turnstile·모델/예산 readiness와 외부 성공 증거는 #65/#71에 남습니다. workspace 내용 및 report/삭제까지의 합성 통합 시연은 A가 C/D PR과 합쳐 확인합니다.\n\nRefs #103\nRefs #65\nRefs #64\n",
+            "createdAt": "2026-10-06T12:19:15Z",
+            "id": "IC_kwDOU7JsN88AAAABZpYNqQ",
+            "includesCreatedEdit": false,
+            "isMinimized": false,
+            "minimizedReason": "",
+            "reactionGroups": [],
+            "url": "https://github.com/creno-va/baro/issues/103#issuecomment-6016077225",
+            "viewerDidAuthor": true
+          },
+          {
+            "author": {
+              "login": "hwangeunchan"
+            },
+            "authorAssociation": "COLLABORATOR",
+            "body": "A 인계: 최신5be2deb에 공통 cases.e2e.ts/real session 오류 정규화 완료. auth5 + signed-session1 + cases3 모두 통과. cases는 v2실제wire 생성/같은키 중복·재시도, 기존v1 SQL 직접seed→현재목록320px/200% reload,401/동의/back 확인으로 갱신했습니다. B 담당 신규6browser 보존. B067efed도A후보에반영. B chat이 archived여서 #103에 최종인계남깁니다. 원격 #115 standalone CI는 구공통cases로실패가능하므로 A 통합최종SHA CI에서 담당코드와전체흐름을 검증합니다. main에아직반영하지않았습니다.",
+            "createdAt": "2026-10-06T12:35:35Z",
+            "id": "IC_kwDOU7JsN88AAAABZpqgVw",
+            "includesCreatedEdit": false,
+            "isMinimized": false,
+            "minimizedReason": "",
+            "reactionGroups": [],
+            "url": "https://github.com/creno-va/baro/issues/103#issuecomment-6016376919",
+            "viewerDidAuthor": true
+          },
+          {
+            "author": {
+              "login": "hwangeunchan"
+            },
+            "authorAssociation": "COLLABORATOR",
+            "body": "독립 검토의 신규 M1 재시도 결함 — 기준 A candidate dc22c26/fde4f2c\n\nB 담당 `casesApi.saveSummary` / `confirmSummary`가 서버 commit 뒤 응답 유실을 복구하지 못합니다. 기존 this.get 반환 수정·공통 facade cache 보완과는 다른 결함입니다.\n\n재현: synthetic real HTTP 대역에서 workspace revision5 / summary revision2 → 첫 PUT summary 또는 POST confirm을 서버가 commit하고 workspace revision6으로 증가 → 응답만 유실(첫 호출 UNAVAILABLE) → 같은 UI expectedRevision5/동일 입력으로 재시도. 기대: 원래 wire body/revision 및 idempotency key로 서버 receipt replay에 도달하거나, 본인 요청의 완료를 안전하게 확인해 성공 처리. 실제: fresh GET workspace6을 읽고 `CONFLICT`를 던져 두 번째 mutation 자체가 전송되지 않습니다(쓰기1회). 서버 `editSummary/confirm`은 mutation receipt replay를 먼저 검사하지만 client가 그 경로를 막습니다.\n\n최소 수정: `src/client/api/cases.ts` real `saveSummary`/`confirmSummary`의 사전 workspace revision 검사와 원본 wire request의 pending 상태. 현재 UI↔wire revision 변환을 최초 시도에 고정하고 같은 요청의 불확실한 실패 후 재사용해야 합니다. 정상 stale edit/다른 payload/계정 변경 검사를 제거하지 않습니다. 이 구현은 B/#103/#65 범위이며 M0 mock 성공과 분리합니다.\n\n독립 재현 파일 `tests/independent-review/intake-real-retry.repro.ts`: 2개에서 CONFLICT/writes1 확인. 실제 외부 OAuth/AI/R2 호출 없음, 제품 파일 수정 없음. 계정 전환 mock 화면 잔존 3건은 #101의 독립 인계 댓글 https://github.com/creno-va/baro/issues/101#issuecomment-6016591791 에 별도로 기록했습니다.\n",
+            "createdAt": "2026-10-06T12:51:52Z",
+            "id": "IC_kwDOU7JsN88AAAABZp7y9w",
+            "includesCreatedEdit": false,
+            "isMinimized": false,
+            "minimizedReason": "",
+            "reactionGroups": [],
+            "url": "https://github.com/creno-va/baro/issues/103#issuecomment-6016660215",
+            "viewerDidAuthor": true
+          }
+        ],
+        "number": 103,
+        "state": "OPEN",
+        "updatedAt": "2026-10-06T12:51:52Z"
+      }
+    },
+    {
+      "kind": "issue",
+      "number": 104,
+      "data": {
+        "comments": [
+          {
+            "author": {
+              "login": "hwangeunchan"
+            },
+            "authorAssociation": "COLLABORATOR",
+            "body": "C 기능 PR112가 A 통합 branch에 병합된 것을 확인했습니다. 추가 공통 제품 browser 검증 2파일은 PR116 https://github.com/creno-va/baro/pull/116 (head 5d38893)로 제출했습니다. A 2e0b062 기반이며 최초 C 구현과 후속 job restore/report stale 변경은 이미 A에 들어갔습니다.\n\nPUBLIC_API_MODE=mock, 실제 공통 api/index/runtime를 사용하는 4342 흐름이 통과했습니다: login/consent→B create/unknown4/summary confirm→C chat_failed/retry/reload→file chunk failure/retry/extracted original/reload→action check/reload→timeline add/reload→D report에 C 파일 표시→/lawyers. API alias/fixture 사건을 넣지 않았으며 실제 OAuth/모델/자료 처리 요청 0개입니다. `BARO_WORKSPACE_SHARED_UI=true bunx playwright test --config tests/helpers/workspace.shared.playwright.config.ts` 1개/11.2초 통과. 독립 동일 컴포넌트 browser4개와 담당 unit/API17개108assertions도 통과했습니다.\n\nlatest check의 docs/workgraph/boundaries/lint는 통과했습니다. 현재 남은 타입 오류는 새 A `src/client/api/mock/runtime.test.ts:32,36`의 `mockRequest` generic 반환형이 inferred undefined인 두 expect.toEqual 호출입니다. `<{id:string;revision:number}>` 같은 반환 shape를 명시해 주세요. C source/API binding 오류와 이전 E207 오류는 사라졌습니다. C가 공통 A 파일은 수정하지 않습니다.\n\n포트 4342는 이제 실제 공통 제품 mock 서버로 전환했으므로 /login부터 시연할 수 있습니다. 이전 /cases/synthetic-case 독립 fixture URL은 사용하지 않습니다. #65의 실제 file processing retry/timeline create 및 job ID ACK 유실 복구만 미연결로 유지합니다. production/public/외부 smoke gate는 그대로입니다.\n",
+            "createdAt": "2026-10-06T12:25:46Z",
+            "id": "IC_kwDOU7JsN88AAAABZpexMA",
+            "includesCreatedEdit": false,
+            "isMinimized": false,
+            "minimizedReason": "",
+            "reactionGroups": [],
+            "url": "https://github.com/creno-va/baro/issues/104#issuecomment-6016184624",
+            "viewerDidAuthor": true
+          },
+          {
+            "author": {
+              "login": "hwangeunchan"
+            },
+            "authorAssociation": "COLLABORATOR",
+            "body": "A 4340 전체 고객 mock 완주 통과: 로그인/동의→B사건/문답/요약→C대화/실제 원본upload(ready 기다림)/타임라인→D PDF/원본ZIP→사건삭제. ZIP CRC/합성원문 확인. full unit1170개 모두통과. 기존 analysis.e2e.ts v1호환3개는 현재 실패: 첫 화면 2 / 최대5개 대신 session/UNAUTHENTICATED로 가거나 API fixture가 새 facade 요구와 안맞는지 확인 필요합니다. A가 담당 영역 test를 수정하지 않으므로 기존 v1 browser 회귀를 보존해 최신 공통 login/session mocking을 맞춰주세요. 최신 cf5f1b2/fac3aa5/4e3145f/1dd5f45 공통 포함, workspace-shared test 전용config를 CI에서 실제 실행하도록 A가 등록했습니다.",
+            "createdAt": "2026-10-06T12:30:10Z",
+            "id": "IC_kwDOU7JsN88AAAABZpkHvA",
+            "includesCreatedEdit": false,
+            "isMinimized": false,
+            "minimizedReason": "",
+            "reactionGroups": [],
+            "url": "https://github.com/creno-va/baro/issues/104#issuecomment-6016272316",
+            "viewerDidAuthor": true
+          },
+          {
+            "author": {
+              "login": "hwangeunchan"
+            },
+            "authorAssociation": "COLLABORATOR",
+            "body": "v1 analysis回帰の具体原因: createWorkspaceApi.getは最初GET /api/v2/cases/:id/workspaceを呼び、404時だけ既存v1CaseDetailへfallbackします。analysis.e2e既存fixtureは /api/cases/:idだけmockし、v2未mockのローカルDBは500→UNAVAILABLEとなるのでv1UIに到達しません。v1fixtureへ /api/v2/cases/*/workspace=404 を追加し、signed-server route **/api/** は pathname.startsWith(/api/) guardでVite /src/client/api moduleを転送しないよう修正お願いします。CIstrictness保持で既存v1flowをそのまま実証できます。",
+            "createdAt": "2026-10-06T12:30:40Z",
+            "id": "IC_kwDOU7JsN88AAAABZpkweg",
+            "includesCreatedEdit": false,
+            "isMinimized": false,
+            "minimizedReason": "",
+            "reactionGroups": [],
+            "url": "https://github.com/creno-va/baro/issues/104#issuecomment-6016282746",
+            "viewerDidAuthor": true
+          }
+        ],
+        "number": 104,
+        "state": "OPEN",
+        "updatedAt": "2026-10-06T12:30:41Z"
+      }
+    },
+    {
+      "kind": "issue",
+      "number": 105,
+      "data": {
+        "comments": [
+          {
+            "author": {
+              "login": "hwangeunchan"
+            },
+            "authorAssociation": "COLLABORATOR",
+            "body": "A 통합 후보에 C ea0f405 / D 3933ef5 / E a3d9b58을 받아 전체 facade를 연결했습니다. 아직 main에 병합하지 않았고 통합 browser/CI 검증 후 처리합니다. common e31a051은 독립 타입검사와 HTTP native mock bridge를 제공합니다. 각 PR에서 common fad82f0/e31a051을 반영해 CI 갱신하세요.\n\nE 실제 self profile의 SQL role은 아직 lawyer_applicant/verified_lawyer만 읽고 있습니다. A의 실제 역할 선택은 app_metadata(key `account-type:${ownerId}`, value `lawyer`)를 저장하며 검증권한 레코드는 추가하지 않습니다. E 소유 self-profile role guard를 이 명시적 self preference에 맞춰 연결하고 profile get/save/publication은 self_declared 상태로 유지해 주세요. moderator/verified 권한은 그대로 보존합니다. A는 본인 영역 밖 E service를 수정하지 않습니다.\n\nD 신규 v2 delete API는 A router가 등록합니다. account deletion의 app_metadata account-type key cleanup도 담당 부탁드립니다. 단일 preview의 build 단계에서만 PUBLIC_API_MODE=mock을 설정하며 production build guard는 유지합니다.\n",
+            "createdAt": "2026-10-06T12:15:58Z",
+            "id": "IC_kwDOU7JsN88AAAABZpU30g",
+            "includesCreatedEdit": false,
+            "isMinimized": false,
+            "minimizedReason": "",
+            "reactionGroups": [],
+            "url": "https://github.com/creno-va/baro/issues/105#issuecomment-6016022482",
+            "viewerDidAuthor": true
+          },
+          {
+            "author": {
+              "login": "hwangeunchan"
+            },
+            "authorAssociation": "COLLABORATOR",
+            "body": "A 통합 cf5f1b2에서 D case delete router mount와 preview mock build 설정 완료. 최신 D e6d179b 후보 반영. 최신 A CI의 runtime.test.ts 제네릭 누락 2곳은 A가 수정 중이며 C/E domain test 타입 오류도 각각 요청했습니다. C/D는 A 최신 전체 merge 가능, E는 fad82f0/e31a051/cf5f1b2 공통을 반영해 standalone CI 갱신 부탁드립니다. 검증 green PR만 병합합니다. 계정 삭제 시 account-type metadata cleanup 요청은 E 역할저장 M1와 연동됩니다.",
+            "createdAt": "2026-10-06T12:26:16Z",
+            "id": "IC_kwDOU7JsN88AAAABZpfZzQ",
+            "includesCreatedEdit": false,
+            "isMinimized": false,
+            "minimizedReason": "",
+            "reactionGroups": [],
+            "url": "https://github.com/creno-va/baro/issues/105#issuecomment-6016195021",
+            "viewerDidAuthor": true
+          },
+          {
+            "author": {
+              "login": "hwangeunchan"
+            },
+            "authorAssociation": "COLLABORATOR",
+            "body": "중단 세션 보완 PR118 제출: https://github.com/creno-va/baro/pull/118 (head9866217, base A branch, 최신 A2e562dd 반영).\n\n완료: E optional test 타입 수정은 A78792a4에 반영된 것을 확인했습니다. 후속은 신규 account-type=lawyer 계정의 본인 프로필 API/SQL 공개 권한 연결(verified/moderator 부여 없음), D formatter 및 explicit reports config의 skip 누락, E 비공개 처리 완료 전 reload하던 browser race 보완입니다. A의 후속 formatter 수정도 반영돼 최종 PR diff는 E/D 소유5파일입니다. A cache 보완 a5e6169도 반영했고 관련 test12개93 assertions 통과했습니다.\n\nbun ci/check(1172tests132329assertions·DB drift/fresh/upgrade)/최신 Astro·TypeScript/build/Worker dry-run 통과. 실제 제품 mock 변호사 browser1개와 D login→자료→PDF/선택 ZIP→삭제/reload browser1개 실제 실행/통과(0 skipped). D config는 BARO_D_SHARED_API 없이 실행해 skip 누락 해소를 확인했습니다. source/privacy/자격·production gate는 유지합니다.\n\nA 통합은 이 PR을 검증 후 A branch에 merge하면 됩니다. 제품6파일 밖 공유 파일은 직접 수정하지 않았습니다. 별도 E/D 세션 인계 없이도 필요한 원격 코드와 후속을 보완했습니다. PR CI 확인 중이며, 실제 OAuth/AI/R2 성공을 주장하지 않습니다.\n",
+            "createdAt": "2026-10-06T12:42:06Z",
+            "id": "IC_kwDOU7JsN88AAAABZpxcVw",
+            "includesCreatedEdit": true,
+            "isMinimized": false,
+            "minimizedReason": "",
+            "reactionGroups": [],
+            "url": "https://github.com/creno-va/baro/issues/105#issuecomment-6016490583",
+            "viewerDidAuthor": true
+          }
+        ],
+        "number": 105,
+        "state": "OPEN",
+        "updatedAt": "2026-10-06T12:43:04Z"
+      }
+    },
+    {
+      "kind": "issue",
+      "number": 106,
+      "data": {
+        "comments": [
+          {
+            "author": {
+              "login": "hwangeunchan"
+            },
+            "authorAssociation": "COLLABORATOR",
+            "body": "A 全体bun test1170 tests/132309 assertions成功、checkの最後はE test207型1件のみ残ります。PR113はA branchへのstacked統合済表示なので新followup commitを現branchへpushしSHAを#106へ残してください。profiles[0]をfirstProfileとして存在guard後、first.nextCursorとfirstProfile.idを比較すればstrictness保持で解消できます。AはEファイルを編集せず待っています。mock変護士mobile全flowとaxe、顧客PDF/実際原本ZIP/削除も成功。A最新1dd5f45をmergeしてM1 role preference連携も確認ください。",
+            "createdAt": "2026-10-06T12:30:26Z",
+            "id": "IC_kwDOU7JsN88AAAABZpkdfQ",
+            "includesCreatedEdit": false,
+            "isMinimized": false,
+            "minimizedReason": "",
+            "reactionGroups": [],
+            "url": "https://github.com/creno-va/baro/issues/106#issuecomment-6016277885",
+            "viewerDidAuthor": true
+          },
+          {
+            "author": {
+              "login": "hwangeunchan"
+            },
+            "authorAssociation": "COLLABORATOR",
+            "body": "사용자 지시로 A 외 B~E 세션은 인계 없이 중단됐습니다. 이 진단/보완 세션이 E 잔여를 인수합니다. 별도 checkout의 codex/106-stopped-session-repair에서 최신 A candidate를 통합하고, tests/lawyer-self-profile.test.ts:207 strict type 오류 및 A account-type=lawyer와 E self-profile 권한 연결 누락을 직접 보완해 작은 PR/commit SHA를 인계하겠습니다. A는 해당 E test/self-profile 파일을 중복 수정하지 않아도 됩니다. A의 통합/push/CI/preview 담당은 유지합니다.\n\nB/C/D 최신 remote commit과 PR116/117은 보존됐으며 A branch에 들어온 상태를 대조하고 있습니다. A index.ts의 resolved domain API 실패에서 clients.delete(name)해 요청 key/revision/upload state가 사라지는 문제가 현재 candidate에도 남습니다. 이 공유 facade 보완은 A가 맡아 주세요(loading promise 실패 때만 current cache 제거, API 오류는 client instance 보존; mock initialization 실패도 재시도 가능하게 reset). 제가 E 후속 검증을 끝내고 통합 SHA 기준으로 다시 확인합니다.\n",
+            "createdAt": "2026-10-06T12:36:16Z",
+            "id": "IC_kwDOU7JsN88AAAABZprTNg",
+            "includesCreatedEdit": false,
+            "isMinimized": false,
+            "minimizedReason": "",
+            "reactionGroups": [],
+            "url": "https://github.com/creno-va/baro/issues/106#issuecomment-6016389942",
+            "viewerDidAuthor": true
+          },
+          {
+            "author": {
+              "login": "hwangeunchan"
+            },
+            "authorAssociation": "COLLABORATOR",
+            "body": "중단 세션 보완 PR118 제출: https://github.com/creno-va/baro/pull/118 (head9866217, base A branch, 최신 A2e562dd 반영).\n\n완료: E optional test 타입 수정은 A78792a4에 반영된 것을 확인했습니다. 후속은 신규 account-type=lawyer 계정의 본인 프로필 API/SQL 공개 권한 연결(verified/moderator 부여 없음), D formatter 및 explicit reports config의 skip 누락, E 비공개 처리 완료 전 reload하던 browser race 보완입니다. A의 후속 formatter 수정도 반영돼 최종 PR diff는 E/D 소유5파일입니다. A cache 보완 a5e6169도 반영했고 관련 test12개93 assertions 통과했습니다.\n\nbun ci/check(1172tests132329assertions·DB drift/fresh/upgrade)/최신 Astro·TypeScript/build/Worker dry-run 통과. 실제 제품 mock 변호사 browser1개와 D login→자료→PDF/선택 ZIP→삭제/reload browser1개 실제 실행/통과(0 skipped). D config는 BARO_D_SHARED_API 없이 실행해 skip 누락 해소를 확인했습니다. source/privacy/자격·production gate는 유지합니다.\n\nA 통합은 이 PR을 검증 후 A branch에 merge하면 됩니다. 제품6파일 밖 공유 파일은 직접 수정하지 않았습니다. 별도 E/D 세션 인계 없이도 필요한 원격 코드와 후속을 보완했습니다. PR CI 확인 중이며, 실제 OAuth/AI/R2 성공을 주장하지 않습니다.\n",
+            "createdAt": "2026-10-06T12:42:04Z",
+            "id": "IC_kwDOU7JsN88AAAABZpxazg",
+            "includesCreatedEdit": true,
+            "isMinimized": false,
+            "minimizedReason": "",
+            "reactionGroups": [],
+            "url": "https://github.com/creno-va/baro/issues/106#issuecomment-6016490190",
+            "viewerDidAuthor": true
+          }
+        ],
+        "number": 106,
+        "state": "OPEN",
+        "updatedAt": "2026-10-06T12:43:02Z"
+      }
+    },
+    {
+      "kind": "pr",
+      "number": 100,
+      "data": {
+        "baseRefName": "main",
+        "headRefOid": "1bce7042343f633edca43b5f62376088d912f4f6",
+        "mergeStateStatus": "UNKNOWN",
+        "mergedAt": "2026-10-06T12:36:16Z",
+        "number": 100,
+        "state": "MERGED",
+        "statusCheckRollup": [
+          {
+            "__typename": "CheckRun",
+            "completedAt": "2026-10-06T12:28:58Z",
+            "conclusion": "SUCCESS",
+            "detailsUrl": "https://github.com/creno-va/baro/actions/runs/37463528187/job/112268754614",
+            "name": "Isolated native media fixtures",
+            "startedAt": "2026-10-06T12:28:52Z",
+            "status": "COMPLETED",
+            "workflowName": "CI"
+          },
+          {
+            "__typename": "CheckRun",
+            "completedAt": "2026-10-06T12:35:09Z",
+            "conclusion": "SUCCESS",
+            "detailsUrl": "https://github.com/creno-va/baro/actions/runs/37463528187/job/112268754865",
+            "name": "Source and browser checks",
+            "startedAt": "2026-10-06T12:28:52Z",
+            "status": "COMPLETED",
+            "workflowName": "CI"
+          },
+          {
+            "__typename": "CheckRun",
+            "completedAt": "2026-10-06T12:35:16Z",
+            "conclusion": "SUCCESS",
+            "detailsUrl": "https://github.com/creno-va/baro/actions/runs/37463528187/job/112271365344",
+            "name": "Quality gate",
+            "startedAt": "2026-10-06T12:35:12Z",
+            "status": "COMPLETED",
+            "workflowName": "CI"
+          }
+        ],
+        "updatedAt": "2026-10-06T12:36:18Z"
+      }
+    },
+    {
+      "kind": "pr",
+      "number": 110,
+      "data": {
+        "baseRefName": "main",
+        "headRefOid": "539a3cc1771b0c28bafe01272cab75fff77e48f9",
+        "mergeStateStatus": "BLOCKED",
+        "mergedAt": null,
+        "number": 110,
+        "state": "OPEN",
+        "statusCheckRollup": [
+          {
+            "__typename": "CheckRun",
+            "completedAt": "2026-10-06T12:51:35Z",
+            "conclusion": "SUCCESS",
+            "detailsUrl": "https://github.com/creno-va/baro/actions/runs/37466327829/job/112278163772",
+            "name": "Isolated native media fixtures",
+            "startedAt": "2026-10-06T12:51:29Z",
+            "status": "COMPLETED",
+            "workflowName": "CI"
+          },
+          {
+            "__typename": "CheckRun",
+            "completedAt": "2026-10-06T12:54:43Z",
+            "conclusion": "FAILURE",
+            "detailsUrl": "https://github.com/creno-va/baro/actions/runs/37466327829/job/112278164115",
+            "name": "Source and browser checks",
+            "startedAt": "2026-10-06T12:51:29Z",
+            "status": "COMPLETED",
+            "workflowName": "CI"
+          },
+          {
+            "__typename": "CheckRun",
+            "completedAt": "2026-10-06T12:54:49Z",
+            "conclusion": "FAILURE",
+            "detailsUrl": "https://github.com/creno-va/baro/actions/runs/37466327829/job/112279550233",
+            "name": "Quality gate",
+            "startedAt": "2026-10-06T12:54:46Z",
+            "status": "COMPLETED",
+            "workflowName": "CI"
+          }
+        ],
+        "updatedAt": "2026-10-06T12:53:49Z"
+      }
+    },
+    {
+      "kind": "pr",
+      "number": 111,
+      "data": {
+        "baseRefName": "codex/102-api-mock-shell",
+        "headRefOid": "e6d179b01ee3bfc16bb9929df7d8eadca135e654",
+        "mergeStateStatus": "UNKNOWN",
+        "mergedAt": "2026-10-06T12:23:20Z",
+        "number": 111,
+        "state": "MERGED",
+        "statusCheckRollup": [
+          {
+            "__typename": "CheckRun",
+            "completedAt": "2026-10-06T12:22:05Z",
+            "conclusion": "SUCCESS",
+            "detailsUrl": "https://github.com/creno-va/baro/actions/runs/37462722839/job/112266041200",
+            "name": "Isolated native media fixtures",
+            "startedAt": "2026-10-06T12:22:00Z",
+            "status": "COMPLETED",
+            "workflowName": "CI"
+          },
+          {
+            "__typename": "CheckRun",
+            "completedAt": "2026-10-06T12:23:07Z",
+            "conclusion": "FAILURE",
+            "detailsUrl": "https://github.com/creno-va/baro/actions/runs/37462722839/job/112266041465",
+            "name": "Source and browser checks",
+            "startedAt": "2026-10-06T12:22:00Z",
+            "status": "COMPLETED",
+            "workflowName": "CI"
+          },
+          {
+            "__typename": "CheckRun",
+            "completedAt": "2026-10-06T12:23:13Z",
+            "conclusion": "FAILURE",
+            "detailsUrl": "https://github.com/creno-va/baro/actions/runs/37462722839/job/112266497600",
+            "name": "Quality gate",
+            "startedAt": "2026-10-06T12:23:10Z",
+            "status": "COMPLETED",
+            "workflowName": "CI"
+          }
+        ],
+        "updatedAt": "2026-10-06T12:23:22Z"
+      }
+    },
+    {
+      "kind": "pr",
+      "number": 112,
+      "data": {
+        "baseRefName": "codex/102-api-mock-shell",
+        "headRefOid": "86acb4b99c031a12f0f38e8c3f0552a3c327f2f5",
+        "mergeStateStatus": "UNKNOWN",
+        "mergedAt": "2026-10-06T12:23:20Z",
+        "number": 112,
+        "state": "MERGED",
+        "statusCheckRollup": [
+          {
+            "__typename": "CheckRun",
+            "completedAt": "2026-10-06T12:20:58Z",
+            "conclusion": "SUCCESS",
+            "detailsUrl": "https://github.com/creno-va/baro/actions/runs/37462588602/job/112265592846",
+            "name": "Isolated native media fixtures",
+            "startedAt": "2026-10-06T12:20:52Z",
+            "status": "COMPLETED",
+            "workflowName": "CI"
+          },
+          {
+            "__typename": "CheckRun",
+            "completedAt": "2026-10-06T12:21:59Z",
+            "conclusion": "FAILURE",
+            "detailsUrl": "https://github.com/creno-va/baro/actions/runs/37462588602/job/112265592873",
+            "name": "Source and browser checks",
+            "startedAt": "2026-10-06T12:20:51Z",
+            "status": "COMPLETED",
+            "workflowName": "CI"
+          },
+          {
+            "__typename": "CheckRun",
+            "completedAt": "2026-10-06T12:22:03Z",
+            "conclusion": "FAILURE",
+            "detailsUrl": "https://github.com/creno-va/baro/actions/runs/37462588602/job/112266045343",
+            "name": "Quality gate",
+            "startedAt": "2026-10-06T12:22:01Z",
+            "status": "COMPLETED",
+            "workflowName": "CI"
+          }
+        ],
+        "updatedAt": "2026-10-06T12:23:21Z"
+      }
+    },
+    {
+      "kind": "pr",
+      "number": 113,
+      "data": {
+        "baseRefName": "codex/102-api-mock-shell",
+        "headRefOid": "e82888b79d61f9bdc867fb85bcdf49b4959ba1ff",
+        "mergeStateStatus": "UNKNOWN",
+        "mergedAt": "2026-10-06T12:23:20Z",
+        "number": 113,
+        "state": "MERGED",
+        "statusCheckRollup": [
+          {
+            "__typename": "CheckRun",
+            "completedAt": "2026-10-06T12:12:17Z",
+            "conclusion": "SUCCESS",
+            "detailsUrl": "https://github.com/creno-va/baro/actions/runs/37461579127/job/112262194281",
+            "name": "Isolated native media fixtures",
+            "startedAt": "2026-10-06T12:12:12Z",
+            "status": "COMPLETED",
+            "workflowName": "CI"
+          },
+          {
+            "__typename": "CheckRun",
+            "completedAt": "2026-10-06T12:12:55Z",
+            "conclusion": "FAILURE",
+            "detailsUrl": "https://github.com/creno-va/baro/actions/runs/37461579127/job/112262193750",
+            "name": "Source and browser checks",
+            "startedAt": "2026-10-06T12:12:13Z",
+            "status": "COMPLETED",
+            "workflowName": "CI"
+          },
+          {
+            "__typename": "CheckRun",
+            "completedAt": "2026-10-06T12:12:59Z",
+            "conclusion": "FAILURE",
+            "detailsUrl": "https://github.com/creno-va/baro/actions/runs/37461579127/job/112262493677",
+            "name": "Quality gate",
+            "startedAt": "2026-10-06T12:12:57Z",
+            "status": "COMPLETED",
+            "workflowName": "CI"
+          }
+        ],
+        "updatedAt": "2026-10-06T12:23:22Z"
+      }
+    },
+    {
+      "kind": "pr",
+      "number": 115,
+      "data": {
+        "baseRefName": "main",
+        "headRefOid": "7cc4e28e10b3578ec9565e0ec3284d9e72c059d1",
+        "mergeStateStatus": "BEHIND",
+        "mergedAt": null,
+        "number": 115,
+        "state": "OPEN",
+        "statusCheckRollup": [
+          {
+            "__typename": "CheckRun",
+            "completedAt": "2026-10-06T12:33:01Z",
+            "conclusion": "SUCCESS",
+            "detailsUrl": "https://github.com/creno-va/baro/actions/runs/37463983182/job/112270412253",
+            "name": "Isolated native media fixtures",
+            "startedAt": "2026-10-06T12:32:55Z",
+            "status": "COMPLETED",
+            "workflowName": "CI"
+          },
+          {
+            "__typename": "CheckRun",
+            "completedAt": "2026-10-06T12:38:18Z",
+            "conclusion": "FAILURE",
+            "detailsUrl": "https://github.com/creno-va/baro/actions/runs/37463983182/job/112270411798",
+            "name": "Source and browser checks",
+            "startedAt": "2026-10-06T12:32:54Z",
+            "status": "COMPLETED",
+            "workflowName": "CI"
+          },
+          {
+            "__typename": "CheckRun",
+            "completedAt": "2026-10-06T12:38:25Z",
+            "conclusion": "FAILURE",
+            "detailsUrl": "https://github.com/creno-va/baro/actions/runs/37463983182/job/112272678485",
+            "name": "Quality gate",
+            "startedAt": "2026-10-06T12:38:21Z",
+            "status": "COMPLETED",
+            "workflowName": "CI"
+          }
+        ],
+        "updatedAt": "2026-10-06T12:32:25Z"
+      }
+    }
+  ]
+}

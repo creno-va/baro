@@ -1,0 +1,34 @@
+{
+  "baseRefName": "main",
+  "body": "고객과 변호사가 같은 로그인에서 이용 유형을 선택하고, 동의 후 각 역할의 실제 제품 화면으로 이동합니다. 공통 API facade가 real/mock transport만 교체하며 B 사건 입력, C 작업 공간·자료, D 리포트·설정·삭제, E 프로필·디렉터리를 하나의 상태 저장소와 제품 경로로 연결합니다. 별도 `/mock` 화면은 없습니다.\n\n- 최초 공통 기반 `92da530`을 착수 20분 안에 push하고 5세션에 계약·사용법을 전달했습니다. 이후 공통 DTO, 오류, native Response/Blob transport, 영속 namespace와 요청 키를 통합했습니다. 로딩 실패는 재시도하고 API 실패 때 domain client의 revision·업로드·요청 상태를 유지합니다.\n- mock은 명시한 local/preview 빌드에서만 사용합니다. preview workflow에만 `PUBLIC_API_MODE=mock`을 적용하고 기본 real 및 production mock build 차단을 유지합니다. 삭제한 사건·계정의 캐시 재생을 차단하고 원본 정리를 연결합니다.\n- 기존 Better Auth signed session, 현재 동의, same-origin 검사에 실제 `/api/me/session` 및 고객/변호사 선택 저장을 연결했습니다. 기존 `app_metadata`를 사용하며 moderator/verified 권한을 부여하거나 변경하지 않습니다.\n- B #115, C #112/#116, D #111/#117, E #113과 PR100 연결을 후보에 통합했습니다. C/D/E stacked PR은 이 A 브랜치 기준으로 반영됐으며 최종 main 진입은 이 PR의 전체 CI 성공 후 진행합니다. PR100은 최신 main 재검증 후 별도로 main에 병합했습니다.\n\n검증 증거:\n- 포트 4340, 390px 실제 제품 UI에서 고객 로그인·동의→사건 생성·문답·요약 확인→대화·원본 자료 업로드·타임라인→리포트→PDF/선택 원본 ZIP 다운로드→사건 삭제 흐름 통과. PDF signature, ZIP CRC 및 합성 원본 내용 일치를 확인했습니다. fixture 사건을 주입하지 않았고 실제 API 요청은 0개였습니다.\n- 변호사 로그인·동의→사진/포트폴리오 편집·저장·reload→공개→필터·상세·연락처→숨김·reload 흐름과 axe 위반 0개 확인했습니다.\n- 실제 signed-session 동의·로그아웃·폐기된 cookie 차단, 고객/변호사 선택 저장의 origin/owner/권한보존 검사 통과. 공통 인증 5개·signed-session 1개·v2 wire 생성과 기존 v1 SQL 목록 회귀 3개 browser 검사가 통과했습니다.\n- 전체 단위/API 테스트 1,170개, 제품 build 및 Workers dry-run 통과. 최신 인계·공통 fixture 수정 후 필수 check와 변경 기능 browser/CI를 재검증 중입니다. B/C/D 전용 mock browser도 CI에서 각 설정과 명시 환경으로 실행합니다.\n\n실제 외부 OAuth·AI·R2·원격 cleanup과 승인되지 않은 정책·production 공개는 #65/#66/#67/#68/#70/#71의 기존 gate에 남습니다. 합성 adapter 검증을 실제 외부 성공으로 표시하지 않습니다.\n\nRefs #102, #101.\n",
+  "headRefName": "codex/102-api-mock-shell",
+  "headRefOid": "2e562dd47a5e3b916f8a4d675ff27d362f535db5",
+  "mergeCommit": null,
+  "mergeStateStatus": "BLOCKED",
+  "mergedAt": null,
+  "number": 110,
+  "state": "OPEN",
+  "statusCheckRollup": [
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-10-06T12:39:00Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/creno-va/baro/actions/runs/37464763095/job/112272914959",
+      "name": "Isolated native media fixtures",
+      "startedAt": "2026-10-06T12:38:54Z",
+      "status": "COMPLETED",
+      "workflowName": "CI"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "0001-01-01T00:00:00Z",
+      "conclusion": "",
+      "detailsUrl": "https://github.com/creno-va/baro/actions/runs/37464763095/job/112272915370",
+      "name": "Source and browser checks",
+      "startedAt": "2026-10-06T12:38:55Z",
+      "status": "IN_PROGRESS",
+      "workflowName": "CI"
+    }
+  ],
+  "url": "https://github.com/creno-va/baro/pull/110"
+}
