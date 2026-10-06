@@ -204,6 +204,8 @@ export function createV2LegalRetrieval(
               throw new RetrievalFailure(access.signal?.aborted ? "cancelled" : "not_authorized");
             if (!(await repo.put(chunk.source, chunk.citation)))
               throw new RetrievalFailure("cache_invalid");
+            if (!(await safePermit(access.authorize)) || access.signal?.aborted)
+              throw new RetrievalFailure(access.signal?.aborted ? "cancelled" : "not_authorized");
             if (!(await options.bindCitation(chunk.citation)))
               throw new RetrievalFailure("not_authorized");
           }

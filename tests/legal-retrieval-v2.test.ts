@@ -564,6 +564,78 @@ test("cancel during fetch and retry backoff stops reservations; budget denial ne
   ).rejects.toMatchObject({ reason: "budget_exhausted" });
   expect(calls).toBe(0);
 });
+test.each(["revoked", "guardThrows", "cancelled"])(
+  "%s during cost reservation prevents any query disclosure without inventing an actual charge",
+  async (mode) => {
+    let authorized = true,
+      calls = 0,
+      reservations = 0;
+    const controller = new AbortController();
+    const request = createBoundedTransport(async () => {
+      calls++;
+      return response({});
+    });
+    await expect(
+      request(requestUrl, "moleg_eflaw_list", {
+        authorize: async () => {
+          if (!authorized && mode === "guardThrows")
+            throw new Error("synthetic authorization diagnostic");
+          return authorized;
+        },
+        authorizeQuery: async () => true,
+        signal: controller.signal,
+        reserveRequest: async () => {
+          reservations++;
+          authorized = false;
+          if (mode === "cancelled") controller.abort();
+          return true;
+        },
+      }),
+    ).rejects.toMatchObject({ reason: mode === "cancelled" ? "cancelled" : "not_authorized" });
+    expect(reservations).toBe(1);
+    expect(calls).toBe(0);
+  },
+);
+test("real SQL consent withdrawal during reservation stops transport before disclosure", async () => {
+  const f = await fixture();
+  const result = await f.service().retrieve(input(), {
+    ...f.access,
+    reserveRequest: async () => {
+      f.db.sqlite.query("DELETE FROM user_consents WHERE user_id=?").run(f.actor.ownerId);
+      return true;
+    },
+  });
+  expect(f.calls).toEqual([]);
+  expect(result.outcomes[0]?.reason).toBe("not_authorized");
+  expect(result.chunks).toEqual([]);
+});
+test("consent revoked during actual public cache put does not bind the retrieved citation", async () => {
+  const f = await fixture();
+  const repo = {
+    ...f.repo,
+    put: async (...args: Parameters<typeof f.repo.put>) => {
+      const accepted = await f.repo.put(...args);
+      f.db.sqlite.query("DELETE FROM user_consents WHERE user_id=?").run(f.actor.ownerId);
+      return accepted;
+    },
+  };
+  const service = createV2LegalRetrieval({ LAW_API_OC: "synthetic-private-test" }, repo, {
+    transport: async (url) =>
+      response(
+        new URL(url).pathname.endsWith("lawSearch.do") ? syntheticCompleteList : officialDetail,
+      ),
+    bindCitation: (c) => f.repo.bindCitation(f.guard, c),
+  });
+  const result = await service.retrieve(input(), f.access);
+  expect(result.outcomes[0]?.reason).toBe("not_authorized");
+  expect(result.chunks).toEqual([]);
+  expect(f.db.sqlite.query("SELECT count(*) AS n FROM v2_citation_bindings").get()).toEqual({
+    n: 0,
+  });
+  expect(f.db.sqlite.query("SELECT count(*) AS n FROM v2_official_sources").get()).toEqual({
+    n: 1,
+  });
+});
 test("body invalid UTF-8 and mismatched declared bytes fail without retry; supplementary Unicode may span chunks", async () => {
   let calls = 0;
   const utf8 = createBoundedTransport(async () => {

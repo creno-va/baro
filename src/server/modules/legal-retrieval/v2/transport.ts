@@ -19,6 +19,12 @@ export function createBoundedTransport(
       if (!(await safePermit(access.authorize))) throw new RetrievalFailure("not_authorized");
       if (!(await safePermit(() => access.reserveRequest({ invocationId, attempt, endpointId }))))
         throw new RetrievalFailure("budget_exhausted");
+      // Reservation can yield to revocation/deletion. The final authorization
+      // must follow that await so private query disclosure never precedes it.
+      if (access.signal?.aborted) throw new RetrievalFailure("cancelled");
+      const finalAuthorized = await safePermit(access.authorize);
+      if (access.signal?.aborted) throw new RetrievalFailure("cancelled");
+      if (!finalAuthorized) throw new RetrievalFailure("not_authorized");
       const controller = new AbortController();
       const externalAbort = () => controller.abort();
       access.signal?.addEventListener("abort", externalAbort, { once: true });
