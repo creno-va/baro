@@ -1,13 +1,15 @@
 import { expect, test } from "bun:test";
 import { createAccountClient } from "../src/client/api/account";
 import { createAccountMockHandler } from "../src/client/api/mock/account";
+import { casesMockHandlers } from "../src/client/api/mock/cases";
 import { createReportsMockHandler, type ReportMockState } from "../src/client/api/mock/reports";
+import { clearMockStore, readStore, writeStore } from "../src/client/api/mock/runtime";
 import {
   createReportsClient,
   type DomainRequest,
   type DomainRequestInit,
 } from "../src/client/api/reports";
-import type { ReportView } from "../src/client/api/types";
+import type { CaseView, QuestionView, ReportView, SessionView } from "../src/client/api/types";
 import { createZip, maskReportText } from "../src/components/reports/download";
 
 function fixture() {
@@ -362,4 +364,108 @@ test("deleting a case while its original is loading prevents a late ZIP download
     }),
   );
   await expect(reports.zip(report.id, ["file-demo"])).rejects.toMatchObject({ code: "NOT_FOUND" });
+});
+
+test("retry after a lost report mutation response replays the committed version instead of generating twice", async () => {
+  const f = fixture();
+  let loseResponse = true;
+  const keys: string[] = [];
+  const report = createReportsClient(async <T>(path: string, init?: DomainRequestInit) => {
+    const result = await f.request<T>(path, init);
+    if (init?.method === "POST") {
+      keys.push(init.headers?.["idempotency-key"] ?? "");
+      if (loseResponse) {
+        loseResponse = false;
+        throw Object.assign(new Error("합성 응답 유실"), { code: "UNAVAILABLE" });
+      }
+    }
+    return result;
+  });
+  await report.get("case-demo");
+  await expect(report.generate("case-demo")).rejects.toMatchObject({ code: "UNAVAILABLE" });
+  expect((await report.generate("case-demo")).revision).toBe(2);
+  expect(keys[0]).toBe(keys[1]);
+  expect(Object.values(f.read().reportHistory ?? {})).toHaveLength(2);
+});
+
+test("B intake and D report/delete share actual canonical namespaces across adapter reload", async () => {
+  clearMockStore();
+  try {
+    writeStore("session", {
+      user: { id: "canonical-owner", name: "합성 고객", accountType: "customer" },
+      needsConsent: false,
+    });
+    writeStore("consents", { "canonical-owner": { synthetic: true } });
+    const item = casesMockHandlers["cases.create"](
+      {
+        narrative: "친구에게 돈을 빌려준 뒤 합성 자료로 상담을 준비합니다.",
+        subjectContext: "individual",
+      },
+      { key: crypto.randomUUID() },
+    ) as CaseView;
+    const questions = casesMockHandlers["cases.getQuestions"]({ id: item.id }) as {
+      questions: QuestionView[];
+      revision: number;
+    };
+    const answered = casesMockHandlers["cases.saveAnswers"](
+      {
+        id: item.id,
+        expectedRevision: questions.revision,
+        answers: questions.questions.map((question) => ({
+          questionId: question.id,
+          state: "unknown",
+        })),
+      },
+      { key: crypto.randomUUID() },
+    ) as { revision: number };
+    const advanced = casesMockHandlers["cases.advance"](
+      { id: item.id, expectedRevision: answered.revision },
+      { key: crypto.randomUUID() },
+    ) as { revision: number };
+    casesMockHandlers["cases.confirmSummary"](
+      { id: item.id, expectedRevision: advanced.revision },
+      { key: crypto.randomUUID() },
+    );
+    const read = (): ReportMockState => ({
+      session: readStore<SessionView>("session", { user: null, needsConsent: false }),
+      cases: readStore("cases", {}),
+      caseOwners: readStore("caseOwners", {}),
+      consents: readStore("consents", {}),
+      intake: readStore("intake", {}),
+      caseRequests: readStore("caseRequests", {}),
+      workspace: readStore("workspace", {}),
+      files: readStore("files", {}),
+      reports: readStore("reports", {}),
+      reportHistory: readStore("reportHistory", {}),
+      reportSources: readStore("reportSources", {}),
+      reportRequests: readStore("reportRequests", {}),
+      deletedCaseIds: readStore("deletedCaseIds", []),
+    });
+    const update = (action: (value: ReportMockState) => void) => {
+      const value = read();
+      action(value);
+      for (const [namespace, data] of Object.entries(value)) writeStore(namespace, data);
+    };
+    const runtime = { read, update, original: async () => new Blob(["합성 자료"]) };
+    const handler = createReportsMockHandler(runtime);
+    const reports = createReportsClient(handler);
+    const report = await reports.get(item.id);
+    expect(report.content).toContain("친구에게 돈");
+    const saved = await reports.save(item.id, {
+      content: "직접 검토한 합성 사실",
+      maskIdentifiers: true,
+      excludedFileIds: [],
+    });
+    expect(await createReportsClient(handler).get(item.id)).toEqual(saved);
+    await createAccountClient(createAccountMockHandler(runtime)).deleteCase(item.id, "DELETE");
+    expect(casesMockHandlers["cases.list"]()).toEqual([]);
+    expect(readStore("intake", {})).toEqual({});
+    expect(readStore("caseRequests", {})).toEqual({});
+    await expect(reports.get(item.id)).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await createAccountClient(createAccountMockHandler(runtime)).deleteAccount("DELETE");
+    expect(readStore<SessionView>("session", { user: null, needsConsent: false }).user).toBeNull();
+    expect(readStore("consents", {})).toEqual({});
+  } finally {
+    clearMockStore();
+  }
 });

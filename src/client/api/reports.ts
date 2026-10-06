@@ -30,6 +30,7 @@ export const reportSaveSchema = z.object({
 export type ReportSave = z.infer<typeof reportSaveSchema>;
 export function createReportsClient(request: DomainRequest) {
   const revisions = new Map<string, number>();
+  const pending = new Map<string, { fingerprint: string; key: string }>();
   const accept = (value: unknown): ReportView => {
     const report = reportSchema.parse(value);
     revisions.set(report.caseId, report.revision);
@@ -37,6 +38,26 @@ export function createReportsClient(request: DomainRequest) {
   };
   const path = (id: string) => `/api/v2/cases/${encodeURIComponent(id)}/reports`;
   const mutation = () => ({ "idempotency-key": crypto.randomUUID() });
+  async function write(id: string, method: "PATCH" | "POST", body: unknown) {
+    const identity = `${method}:${id}`,
+      fingerprint = JSON.stringify(body);
+    let previous = pending.get(identity);
+    if (!previous || previous.fingerprint !== fingerprint) {
+      previous = { fingerprint, key: crypto.randomUUID() };
+      pending.set(identity, previous);
+    }
+    // Retain the key after a lost response. A retry must replay the same version,
+    // while changed edits/source revision identify a new operation.
+    const report = accept(
+      await request<unknown>(path(id), {
+        method,
+        body,
+        headers: { "idempotency-key": previous.key },
+      }),
+    );
+    pending.delete(identity);
+    return report;
+  }
   async function binary(url: string, type: string, body?: unknown) {
     const result = await request<Blob>(url, {
       ...(body ? { method: "POST", body, headers: mutation() } : {}),
@@ -58,22 +79,13 @@ export function createReportsClient(request: DomainRequest) {
       return accept(await request<unknown>(path(id)));
     },
     async save(id: string, input: ReportSave) {
-      return accept(
-        await request<unknown>(path(id), {
-          method: "PATCH",
-          body: { ...reportSaveSchema.parse(input), expectedRevision: revisions.get(id) },
-          headers: mutation(),
-        }),
-      );
+      return write(id, "PATCH", {
+        ...reportSaveSchema.parse(input),
+        expectedRevision: revisions.get(id),
+      });
     },
     async generate(id: string) {
-      return accept(
-        await request<unknown>(path(id), {
-          method: "POST",
-          body: { expectedRevision: revisions.get(id) },
-          headers: mutation(),
-        }),
-      );
+      return write(id, "POST", { expectedRevision: revisions.get(id) });
     },
     async pdf(id: string) {
       return binary(`/api/v2/reports/${encodeURIComponent(id)}/pdf`, "application/pdf");

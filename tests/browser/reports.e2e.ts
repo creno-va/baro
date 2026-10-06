@@ -2,6 +2,7 @@ import { type ChildProcess, spawn } from "node:child_process";
 import { mkdir, readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
 // Dedicated D port under either the main browser config or the standalone config.
@@ -147,8 +148,14 @@ test("mobile layout, keyboard cancel, failure and retry use the same components"
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true,
   );
+  expect(
+    (await new AxeBuilder({ page }).include(".account-settings").analyze()).violations,
+  ).toEqual([]);
   await page.getByRole("button", { name: "사건 삭제", exact: true }).click();
   await expect(page.getByRole("dialog")).toBeVisible();
+  expect((await new AxeBuilder({ page }).include(".report-modal").analyze()).violations).toEqual(
+    [],
+  );
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "사건 삭제", exact: true })).toBeFocused();
@@ -156,6 +163,9 @@ test("mobile layout, keyboard cancel, failure and retry use the same components"
   await expect(page.getByRole("textbox", { name: "리포트 내용 편집" })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true,
+  );
+  expect((await new AxeBuilder({ page }).include(".report-review").analyze()).violations).toEqual(
+    [],
   );
   await page.evaluate(() => {
     const key = "baro.reports.browser-test.v1";
