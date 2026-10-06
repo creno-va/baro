@@ -1042,11 +1042,13 @@ export function createV2LawyersRepository(core: V2Core) {
       profileId: string,
       expectedRevision: number,
       kind: "submission" | "publication",
+      expectedProfileRevision?: number,
     ) {
       return safe(async () => {
         actor = parse(actorSchema, { ownerId: actor.ownerId, now: actor.now });
         parse(opaqueIdSchema, profileId);
         parse(revisionSchema, expectedRevision);
+        if (expectedProfileRevision !== undefined) parse(revisionSchema, expectedProfileRevision);
         parse(z.enum(["submission", "publication"]), kind);
         const claimId = crypto.randomUUID();
         const row = await core
@@ -1058,8 +1060,18 @@ export function createV2LawyersRepository(core: V2Core) {
         if (!row) return false;
         return core.changed([
           core.statement(
-            `INSERT INTO v2_mutation_claims(id,owner_id,target_id,revision) SELECT ?,p.owner_id,p.id,p.revision FROM v2_profiles p JOIN v2_profile_revisions r ON r.profile_id=p.id WHERE p.id=? AND p.owner_id=? AND r.id=? AND r.revision=? AND ((?='submission' AND r.status='submitted') OR (?='publication' AND r.status='approved' AND p.approved_revision_id=r.id)) AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE (target_kind='account' AND target_id=p.owner_id) OR (target_kind='profile' AND target_id=p.id))`,
-            [claimId, profileId, actor.ownerId, row.id, expectedRevision, kind, kind],
+            `INSERT INTO v2_mutation_claims(id,owner_id,target_id,revision) SELECT ?,p.owner_id,p.id,p.revision FROM v2_profiles p JOIN v2_profile_revisions r ON r.profile_id=p.id WHERE p.id=? AND p.owner_id=? AND r.id=? AND r.revision=? AND (? IS NULL OR p.revision=?) AND ((?='submission' AND r.status='submitted') OR (?='publication' AND r.status='approved' AND p.approved_revision_id=r.id)) AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE (target_kind='account' AND target_id=p.owner_id) OR (target_kind='profile' AND target_id=p.id))`,
+            [
+              claimId,
+              profileId,
+              actor.ownerId,
+              row.id,
+              expectedRevision,
+              expectedProfileRevision ?? null,
+              expectedProfileRevision ?? null,
+              kind,
+              kind,
+            ],
           ),
           core.statement(
             `UPDATE v2_profile_revisions SET status='withdrawn',withdrawn_at=? WHERE id=? AND ${sqlClaim}`,
@@ -1075,6 +1087,28 @@ export function createV2LawyersRepository(core: V2Core) {
           ),
           core.finish(claimId),
         ]);
+      });
+    },
+    withdrawApprovedProfile(actor: Actor, profileId: string, expectedProfileRevision: number) {
+      return safe(async () => {
+        actor = parse(actorSchema, actor);
+        parse(opaqueIdSchema, profileId);
+        parse(revisionSchema, expectedProfileRevision);
+        const row = await core
+          .statement(
+            "SELECT r.revision FROM v2_profiles p JOIN v2_profile_revisions r ON r.id=p.approved_revision_id AND r.profile_id=p.id WHERE p.id=? AND p.owner_id=? AND p.revision=? AND r.status='approved' AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE (target_kind='account' AND target_id=p.owner_id) OR (target_kind='profile' AND target_id=p.id))",
+            [profileId, actor.ownerId, expectedProfileRevision],
+          )
+          .first<{ revision: number }>();
+        return row
+          ? repository.withdrawProfile(
+              actor,
+              profileId,
+              row.revision,
+              "publication",
+              expectedProfileRevision,
+            )
+          : false;
       });
     },
     publishApproved(

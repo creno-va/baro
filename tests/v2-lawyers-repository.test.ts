@@ -1159,3 +1159,35 @@ test("owner publication withdrawal preserves reviewed history and journals publi
       .get(),
   ).toEqual({ n: 1 });
 });
+
+test("owner withdraws the approved pointer using current profile revision while preserving a newer draft", async () => {
+  await seedPublication();
+  await seedBlob({ id: "public_photo", kind: "public_copy", visibility: "public" });
+  expect(await repository.publishApproved(owner, publicLawyer, { photo_1: "public_photo" })).toBe(
+    true,
+  );
+  expect(
+    await repository.saveProfileDraft(owner, profileId, 2, "new_draft", publicLawyer.content),
+  ).toBe(true);
+  const draft = await repository.readProfileRevision(owner, profileId, 3);
+  expect(await repository.withdrawApprovedProfile(stranger, profileId, 3)).toBe(false);
+  expect(await repository.withdrawApprovedProfile(owner, profileId, 2)).toBe(false);
+  expect(await repository.withdrawApprovedProfile(owner, profileId, 3)).toBe(true);
+  expect(await repository.withdrawApprovedProfile(owner, profileId, 3)).toBe(false);
+  expect(await repository.publicProfile(profileId)).toBeNull();
+  expect(await repository.readProfileRevision(owner, profileId, 3)).toEqual(draft);
+  expect(
+    database.sqlite
+      .query("SELECT revision,approved_revision_id FROM v2_profiles WHERE id=?")
+      .get(profileId),
+  ).toEqual({ revision: 3, approved_revision_id: null });
+  expect(
+    database.sqlite.query("SELECT status FROM v2_profile_revisions WHERE id='new_draft'").get(),
+  ).toEqual({ status: "draft" });
+  expect(
+    database.sqlite.query("SELECT status FROM v2_profile_revisions WHERE id='revision_2'").get(),
+  ).toEqual({ status: "withdrawn" });
+  expect(database.sqlite.query("SELECT state FROM v2_blobs WHERE id='public_photo'").get()).toEqual(
+    { state: "deleting" },
+  );
+});
