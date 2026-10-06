@@ -178,6 +178,21 @@ foundation 배포이며 실제 OAuth·사건 전체 흐름·v2 역할별 UI·공
 추적한다. DB 소유자가 fresh source cache·atomic paid admission/dispatch·durable 가격/funding/
 usage·allocation/carryover를 확장하고 소비자는 새 primitive의 공유 PR을 먼저 통합한다.
 
+#87의 검증된 소스 `27ee8321e7819a04a2c729fabb3b565a9086ee93`는2026-10-06
+02:27:46Z에 단독 필수 검사를 완료했다. bun ci는 변경 없는 lock/dependency로 통과했으며
+최종 bun run check는52개 파일/568개 테스트/126,157 assertions·실패0,
+별도 migration checker6개/29 assertions를 통과했다. build·cf:dry-run·db:generate도
+모두 실제 종료 코드0이며91개 application table의 generation drift가 없다. 최대 자료
+검증은10,000 observations/20,000 derivatives의 편집·게시·pagination과100MiB/1,600parts
+Unicode 저장·스트리밍을 검증했다. 게시·저장의 여러 bounded 단계를 감싸는 host harness
+시간만600초로 조정했고 제품 단계별 제한·자료 크기·검증 항목은 유지했다.
+root 통합 소스 `0cf6c5e079ff19a285a3f4d7284acfb84ae87d35`와의 직접 diff는 제품·DB·
+테스트·도구·설정 차이가 없고 차이는 architecture/operations/검증 문서뿐임을 확인했다.
+통합 checkout의 bun ci·문서/그래프/경계·build·cf:dry-run도 통과했다. 별도 격리 local
+workerd D1에0000~0007을 모두 실제 적용했고 application table91개/v2 table76개/
+foreign key 위반0을 aggregate로 확인했다. 기존 로컬/원격 사건 행은 읽지 않았다.
+이는 아직 PR CI·원격0007 migration·실제 funding/청구·전체 역할 UI 성공 증거가 아니다.
+
 이 증거는 저장 primitive와 migration의 검증이다. 아직 HTTP/UI가 연결되지 않은 v2 기능,
 실제 외부 처리·운영 drill·공개 승인·전체 서비스 배포 완료를 주장하지 않는다.
 
