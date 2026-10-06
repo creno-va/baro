@@ -1,4 +1,4 @@
-// Run after build:production. A bundle is required; absence fails closed.
+// Run after deployed real-API preview/production builds. Missing bundles fail closed.
 let count = 0;
 for await (const file of new Bun.Glob("dist/**/*.{js,mjs,cjs,map}").scan(".")) {
   count++;
