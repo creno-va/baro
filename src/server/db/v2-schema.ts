@@ -1727,3 +1727,51 @@ export const v2MaintenanceEvidence = sqliteTable(
     ),
   ],
 );
+
+// Billing evidence outlives source deletion. Opaque source IDs deliberately have
+// no cascading FK; authorization always joins the current live storage target.
+export const v2StoragePaidExecutions = sqliteTable(
+  "v2_storage_paid_executions",
+  {
+    attemptId: text("attempt_id")
+      .primaryKey()
+      .references(() => v2CostAttempts.id),
+    planId: text("plan_id").notNull(),
+    operationId: text("operation_id").notNull(),
+    operationRevision: integer("operation_revision").notNull(),
+    reservationId: text("reservation_id").notNull(),
+    blobId: text("blob_id").notNull(),
+    targetKind: text("target_kind").notNull(),
+    targetId: text("target_id").notNull(),
+    targetRevision: integer("target_revision").notNull(),
+    scope: text("scope").notNull(),
+    pricingProofId: text("pricing_proof_id")
+      .notNull()
+      .references(() => v2RuntimeProofs.id),
+    fundingProofId: text("funding_proof_id")
+      .notNull()
+      .references(() => v2RuntimeProofs.id),
+    digest: text("digest").notNull(),
+    payloadJson: text("payload_json").notNull(),
+    anchorJson: text("anchor_json").notNull(),
+    evidenceHash: text("evidence_hash").notNull(),
+    verifiedAt: text("verified_at").notNull(),
+    deadlineAt: text("deadline_at").notNull(),
+    createdAt: created(),
+    state: text("state").notNull().default("prepared"),
+    dispatchToken: text("dispatch_token"),
+    dispatchedAt: text("dispatched_at"),
+  },
+  (t) => [
+    uniqueIndex("v2_storage_paid_plan_unique").on(t.planId),
+    index("v2_storage_paid_intent_idx").on(t.blobId, t.state),
+    check(
+      "v2_storage_paid_bounds",
+      sql`${t.targetKind} IN ('file','profile_asset') AND ${t.scope} IN ('case_original','lawyer_original','approved_public_copy') AND typeof(${t.operationRevision})='integer' AND ${t.operationRevision} BETWEEN 1 AND 9007199254740991 AND typeof(${t.targetRevision})='integer' AND ${t.targetRevision} BETWEEN 1 AND 9007199254740991 AND length(${t.digest})=64 AND length(${t.evidenceHash})=64 AND length(CAST(${t.payloadJson} AS BLOB))<=65536 AND length(CAST(${t.anchorJson} AS BLOB))<=1048576 AND ${t.deadlineAt}>${t.createdAt}`,
+    ),
+    check(
+      "v2_storage_paid_state",
+      sql`${t.state} IN ('prepared','dispatched','unknown','final') AND ((${t.state}='prepared' AND ${t.dispatchToken} IS NULL AND ${t.dispatchedAt} IS NULL) OR ${t.state}='final' OR (${t.state} IN ('dispatched','unknown') AND ${t.dispatchToken} IS NOT NULL AND ${t.dispatchedAt} IS NOT NULL))`,
+    ),
+  ],
+);
