@@ -1,7 +1,7 @@
 # 자료·리포트·삭제 구현 검증
 
 담당 이슈: #58, #59, #66, #67. 브랜치: `codex/58-files-reports-deletion`.
-기준 main: `a5130db48d673d27ce1b928c255285e2cb680ca0` (PR #125 UI와 PR #127/#129 공유 경계 포함).
+기준 main: `c6b96656ee6e4d7c968486b47a994b2807bdeadd` (PR #125 UI, #126/#128 및 #127/#129/#131 공유 경계 포함).
 ADR-0014의 고객/변호사 MVP 및 실제 client UI/API adapter 구성을 유지한다.
 schema/migration, 공유 router/auth, Cloudflare 배포 설정은 변경하지 않는다.
 
@@ -97,7 +97,7 @@ late writer의 stop 및 negative HEAD를 확인해야 한다. 누락/불명확�
 같은 checkout의 browser/dev/build 검사는 순차 실행한다. 모든 입력은 합성이다.
 검증 산출물은 ignored `.wrangler`/`test-results`에 두며 민감 원문·secret을 게시하지 않는다.
 
-2026-10-07 로컬: frozen install, 전체 check **1230 tests / 132844 assertions**,
+2026-10-07 로컬: frozen install, 전체 check **1253 tests / 133269 assertions**,
 drift 없음 및 fresh/upgrade **6 tests / 29 assertions** 통과.
 owned reports browser 6, 실제 SQL 다운로드 1, shared mock 통합 1,
 독립 peer-account report 회귀 1이 통과했다.

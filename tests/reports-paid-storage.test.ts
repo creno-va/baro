@@ -64,6 +64,7 @@ test("real report paid SQL and physical capacity reserve before PUT, preserve un
     p.actor.ownerId,
     () => p.actor.now,
   ).costs;
+  if (!secondCosts) throw new Error("Report paid factory unavailable");
   const secondReports = createReportsService(secondCore, { ...actualDeps, costs: secondCosts });
   const next = await secondReports.generate(p.actor.ownerId, p.workspaceId, crypto.randomUUID(), {
     expectedRevision: draft.revision,
