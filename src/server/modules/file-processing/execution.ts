@@ -1093,13 +1093,16 @@ export async function admitFileProcessing(
     expectedRevision: number;
     key: string;
     paid: PreparedPaidHold;
+    /** Exact server actor used to prepare the initial hold; never a browser value. */
+    admissionActor: { ownerId: string; now: string };
   },
 ) {
+  if (input.admissionActor.ownerId !== input.ownerId) throw new ProcessingError("STALE_REVISION");
   const g = {
     ownerId: input.ownerId,
     workspaceId: input.workspaceId,
     expectedRevision: input.expectedRevision,
-    now: new Date().toISOString(),
+    now: new Date(timestampSchema.parse(input.admissionActor.now)).toISOString(),
   };
   const file = await createV2FilesRepository(core).metadata(g, input.fileId);
   if (
