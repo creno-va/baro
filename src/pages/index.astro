@@ -17,16 +17,22 @@ import DemoLab from "../components/landing/DemoLab.astro";
 import EverydayFuture from "../components/landing/EverydayFuture.astro";
 // biome-ignore lint/correctness/noUnusedImports: Astro renders the landing components.
 import EverydayStories from "../components/landing/EverydayStories.astro";
+// biome-ignore lint/correctness/noUnusedImports: Astro renders the final experience.
+import FinalExperience from "../components/landing/FinalExperience.astro";
 // biome-ignore lint/correctness/noUnusedImports: Astro renders the landing components.
 import HeroFilm from "../components/landing/HeroFilm.astro";
 // biome-ignore lint/correctness/noUnusedImports: Astro renders the public navigation.
 import LandingNavigation from "../components/landing/LandingNavigation.astro";
 // biome-ignore lint/correctness/noUnusedImports: Astro renders experiential sections.
 import LogoExperience from "../components/landing/LogoExperience.astro";
+// biome-ignore lint/correctness/noUnusedImports: Astro renders the original-note experience.
+import OriginExperience from "../components/landing/OriginExperience.astro";
 // biome-ignore lint/correctness/noUnusedImports: Astro renders experiential sections.
 import PainToClarity from "../components/landing/PainToClarity.astro";
 // biome-ignore lint/correctness/noUnusedImports: Astro renders the landing components.
 import PhoneStory from "../components/landing/PhoneStory.astro";
+// biome-ignore lint/correctness/noUnusedImports: Astro renders the time experience.
+import TimeExperience from "../components/landing/TimeExperience.astro";
 // biome-ignore lint/correctness/noUnusedImports: Astro template reads Brand.
 import { Brand } from "../components/ui/brand";
 // biome-ignore lint/correctness/noUnusedImports: Astro template reads layout.
@@ -52,6 +58,8 @@ import "../styles/landing-refinement.css";
         </div>
       </section>
 
+      <OriginExperience />
+
       <BlueAppReveal />
 
       <LogoExperience />
@@ -63,6 +71,8 @@ import "../styles/landing-refinement.css";
       <div class="landing-simplicity-link"><a href="/simplicity">BARO Simplicity에서 더 깊이 경험하기 <ArrowRight size={19} aria-hidden="true" /></a><p>걱정이 정리되는 순간부터, 내 손안의 기능까지.</p></div>
 
       <PhoneStory />
+
+      <TimeExperience imageSrc="/landing/time-watch.webp" imageFocusX={42} imageFocusY={48} />
 
       <EverydayStories />
 
@@ -94,9 +104,7 @@ import "../styles/landing-refinement.css";
         </div>
       </section>
 
-      <section class="landing-final" aria-labelledby="final-title">
-        <div class="landing-final-glow" aria-hidden="true"></div><div data-reveal><img src="/brand/logo.svg" alt="" width="54" height="54" /><h2 id="final-title">혼자 고민하던 이야기,<br />이제 BARO에서 시작해요.</h2><a class="landing-button landing-button-white" href="/app">내 상황 정리하기 <ArrowRight size={19} aria-hidden="true" /></a><p>첫 문장은, 완벽하지 않아도 괜찮아요.</p></div>
-      </section>
+      <FinalExperience />
     </main>
 
     <footer class="landing-footer"><div class="landing-footer-inner"><div class="landing-footer-top"><Brand /><nav aria-label="하단 메뉴"><a href="/lawyers">변호사 찾기</a><a href="/policies/terms">이용약관 초안</a><a href="/policies/privacy">개인정보 처리방침 초안</a><a href="/policies/ai">AI 이용 안내 초안</a></nav></div><p>BARO는 사실 정리와 상담 준비를 돕는 AI 서비스입니다.<br />AI가 정리한 내용은 직접 확인해 주세요. 법률 자문이나 사건 결과를 보장하지 않습니다.</p><div class="landing-footer-bottom"><span>© BARO. 복잡한 일도, 하나씩.</span><span>Made for your next step.</span></div></div></footer>

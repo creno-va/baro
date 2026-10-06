@@ -146,6 +146,30 @@
       "durationSeconds": 10,
       "description": "Fictional client and professional having a prepared conversation; not an actual consultation or testimonial.",
       "optimization": "1600x900 H.264 CRF25, audio removed, fast-start MP4, first-frame WebP poster. Lazy desktop playback, user pause control, motion/data-saving preferences respected."
+    },
+    {
+      "asset": "origin-notes-original.webp",
+      "source": "User-supplied IMG_4378.jpeg",
+      "description": "Original handwritten sticky notes. Handwriting is not regenerated: this image is clipped over the background retouch in two protected paper regions.",
+      "optimization": "EXIF orientation applied, 2048px wide WebP quality95; desktop picture source only."
+    },
+    {
+      "asset": "origin-notes-clean.webp",
+      "source": "Higgsfield edit of user-supplied IMG_4378.jpeg",
+      "model": "gpt_image_2_5",
+      "generationId": "a484ea07-d31f-43b5-8833-693cf33dced0",
+      "generatedOn": "2026-10-07",
+      "description": "Monitor display, desk and surroundings tidied. Original photo layers replace the handwritten note regions in the page.",
+      "optimization": "1744x2325 WebP quality90; desktop picture source only."
+    },
+    {
+      "asset": "time-watch.webp",
+      "source": "Higgsfield edit of user-supplied IMG_4379.jpeg",
+      "model": "gpt_image_2_5",
+      "generationId": "1466a42a-457a-409e-9e11-83bf23dca306",
+      "generatedOn": "2026-10-07",
+      "description": "Original wristwatch with dial text and emblem removed, hands and hour markers retained; surrounding ivory surface cleaned.",
+      "optimization": "1744x2336 WebP quality90; no mobile media request."
     }
   ]
 }

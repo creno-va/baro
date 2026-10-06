@@ -1,0 +1,97 @@
+---
+import {
+  // biome-ignore lint/correctness/noUnusedImports: The Astro template renders these icons.
+  ArrowRight,
+  FileCheck2,
+  FolderOpen,
+  MessageCircle,
+} from "lucide-react";
+import "../../styles/landing-time.css";
+
+interface Props {
+  imageSrc?: string;
+  imageAlt?: string;
+  imageFocusX?: number;
+  imageFocusY?: number;
+}
+
+// biome-ignore lint/correctness/noUnusedVariables: The Astro template renders the supplied photo.
+const { imageSrc, imageAlt = "아날로그 시계", imageFocusX = 50, imageFocusY = 50 } = Astro.props;
+// biome-ignore lint/correctness/noUnusedVariables: The Astro template draws the original clock face.
+const ticks = Array.from({ length: 60 }, (_, index) => index);
+// biome-ignore lint/correctness/noUnusedVariables: The Astro template draws the hour numerals.
+const hours = Array.from({ length: 12 }, (_, index) => {
+  const hour = index + 1;
+  const angle = (hour * Math.PI) / 6;
+  return { hour, x: 320 + Math.sin(angle) * 204, y: 320 - Math.cos(angle) * 204 };
+});
+// biome-ignore lint/correctness/noUnusedVariables: The Astro template renders the three benefits.
+const benefits = [
+  { icon: MessageCircle, title: "이야기 쉽게 꺼내기", description: "기억나는 일부터, 내 말로." },
+  { icon: FolderOpen, title: "자료 한곳에", description: "찾아 헤매던 기록을 모아서." },
+  { icon: FileCheck2, title: "상담 준비 빠르게", description: "정리한 내용을 내가 검토하며." },
+];
+---
+
+<section id="time-experience" class="time-experience" data-time-experience aria-labelledby="time-experience-title">
+  <div class="time-experience-pin" data-time-pin>
+    <div class="time-clock-stage" aria-hidden="true">
+      <div class:list={["time-clock", { "time-clock-photo": Boolean(imageSrc) }]} data-time-clock data-time-focus-x={imageFocusX} data-time-focus-y={imageFocusY}>
+        {imageSrc ? (
+          <picture>
+            <source media="(min-width: 768px) and (min-height: 600px)" srcset={imageSrc} />
+            <img class="time-watch-image" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 3 4'%3E%3C/svg%3E" width="900" height="1200" alt={imageAlt} loading="lazy" decoding="async" />
+          </picture>
+        ) : (
+          <svg class="time-clock-drawing" viewBox="0 0 640 640" xmlns="http://www.w3.org/2000/svg" focusable="false" aria-hidden="true">
+            <defs>
+              <linearGradient id="time-clock-metal" x1="100" y1="70" x2="538" y2="602" gradientUnits="userSpaceOnUse"><stop stop-color="#fefefd" /><stop offset=".18" stop-color="#c1c4c4" /><stop offset=".39" stop-color="#f7f7f4" /><stop offset=".65" stop-color="#929a9e" /><stop offset=".84" stop-color="#e3e6e3" /><stop offset="1" stop-color="#fafaf7" /></linearGradient>
+              <linearGradient id="time-clock-inner-rim" x1="150" y1="60" x2="490" y2="610" gradientUnits="userSpaceOnUse"><stop stop-color="#a2a7a7" /><stop offset=".43" stop-color="#fefefd" /><stop offset="1" stop-color="#b7bdbd" /></linearGradient>
+              <radialGradient id="time-clock-ivory" cx=".42" cy=".32" r=".8"><stop stop-color="#fffcf4" /><stop offset=".72" stop-color="#f3f0e7" /><stop offset="1" stop-color="#e8e7df" /></radialGradient>
+              <linearGradient id="time-clock-hands" x1="310" y1="120" x2="329" y2="345" gradientUnits="userSpaceOnUse"><stop stop-color="#687076" /><stop offset=".5" stop-color="#303b43" /><stop offset="1" stop-color="#17232a" /></linearGradient>
+            </defs>
+            <circle cx="320" cy="320" r="299" fill="url(#time-clock-metal)" stroke="#e4e6e4" stroke-width="2" />
+            <circle cx="320" cy="320" r="283" fill="url(#time-clock-inner-rim)" />
+            <circle cx="320" cy="320" r="273" fill="url(#time-clock-ivory)" stroke="#d6d8d2" stroke-width="2" />
+            <circle cx="320" cy="320" r="263" fill="none" stroke="#dddcd3" stroke-width="1" />
+            {ticks.map((tick) => <line x1="320" y1="68" x2="320" y2={tick % 5 === 0 ? "87" : "77"} transform={`rotate(${tick * 6} 320 320)`} stroke={tick % 5 === 0 ? "#485157" : "#959b98"} stroke-width={tick % 5 === 0 ? "3.5" : "1.5"} stroke-linecap="round" />)}
+            {hours.map(({ hour, x, y }) => <text x={x} y={y} text-anchor="middle" dominant-baseline="central" fill="#414b50" font-size="34" font-weight="400" font-family="Arial, sans-serif">{hour}</text>)}
+            <g fill="url(#time-clock-hands)">
+              <path d="M 314 344 L 310 287 L 315 174 Q 320 166 325 174 L 330 287 L 326 344 Z" transform="rotate(305 320 320)" />
+              <path d="M 315 349 L 313 278 L 316 116 Q 320 106 324 116 L 327 278 L 325 349 Z" transform="rotate(60 320 320)" />
+            </g>
+            <line x1="320" y1="357" x2="320" y2="93" stroke="#66808e" stroke-width="2" stroke-linecap="round" />
+            <circle cx="320" cy="320" r="11" fill="#394750" stroke="#a4b0b3" stroke-width="2" />
+            <circle cx="320" cy="320" r="4" fill="#d4dcdb" />
+          </svg>
+        )}
+      </div>
+    </div>
+
+    <div class="time-blue-wipe" aria-hidden="true" data-time-wipe></div>
+
+    <div class="time-message" data-time-message>
+      <div class="time-message-inner">
+        <h2 id="time-experience-title">법률 문제에서,<br />시간은 중요하니까.</h2>
+        <p class="time-promise">당신의 시간을 지켜드립니다.</p>
+        <p class="time-description">자료를 찾고 같은 설명을 반복하는 시간을 줄일 수 있도록.<br class="time-desktop-break" /> 내 이야기를 정리하는 첫 단계를 더 쉽고 빠르게.</p>
+        <ul class="time-benefits" aria-label="BARO로 줄이는 준비 시간">
+          {benefits.map((benefit, index) => (
+            <li class={`time-benefit time-benefit-${index}`} data-time-benefit>
+              <span class="time-benefit-icon" aria-hidden="true"><benefit.icon size={23} strokeWidth={1.7} /></span>
+              <div><h3>{benefit.title}</h3><p>{benefit.description}</p></div>
+            </li>
+          ))}
+        </ul>
+        <div class="time-actions">
+          <a class="time-action-primary" href="#try-baro">직접 체험하기<ArrowRight size={18} aria-hidden="true" /></a>
+          <a class="time-action-secondary" href="/app">내 이야기 시작하기<ArrowRight size={17} aria-hidden="true" /></a>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+  import "../../client/landing-time";
+</script>

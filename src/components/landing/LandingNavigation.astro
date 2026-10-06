@@ -12,6 +12,7 @@ const { variant = "home" } = Astro.props;
 const links =
   variant === "home"
     ? [
+        { href: "#our-beginning", label: "BARO의 시작" },
         { href: "#blue-app-reveal", label: "앱 둘러보기" },
         { href: "#try-baro", label: "직접 체험하기" },
         { href: "#everyday-future", label: "우리가 바꾸는 일상" },
@@ -27,19 +28,25 @@ const links =
 const chapters =
   variant === "home"
     ? [
+        { href: "#our-beginning", label: "BARO의 시작" },
         { href: "#blue-app-reveal", label: "앱 둘러보기" },
         { href: "#logo-experience", label: "로고 속 기능" },
         { href: "#try-baro", label: "직접 체험" },
         { href: "#clarity", label: "걱정에서 준비로" },
         { href: "#phone-story", label: "내 손안의 BARO" },
+        { href: "#time-experience", label: "당신의 시간" },
         { href: "#everyday-future", label: "달라지는 일상" },
+        { href: "#start-with-baro", label: "더 간단한 시작" },
       ]
     : [
         { href: "#clarity", label: "걱정에서 준비로" },
+        { href: "#our-beginning", label: "BARO의 시작" },
         { href: "#blue-app-reveal", label: "앱 둘러보기" },
         { href: "#logo-experience", label: "로고 속 기능" },
         { href: "#try-baro", label: "직접 체험" },
         { href: "#phone-story", label: "내 손안의 BARO" },
+        { href: "#time-experience", label: "당신의 시간" },
+        { href: "#start-with-baro", label: "더 간단한 시작" },
       ];
 ---
 <header class="landing-header">
@@ -49,7 +56,7 @@ const chapters =
       {links.map((link) => <a class="landing-nav-section" href={link.href}>{link.label}</a>)}
       <details class="landing-mobile-menu" data-landing-menu>
         <summary aria-label="페이지 메뉴"><Menu className="landing-menu-open-icon" size={22} aria-hidden="true" /><X className="landing-menu-close-icon" size={22} aria-hidden="true" /></summary>
-        <div class="landing-mobile-menu-panel"><p>BARO 둘러보기</p>{links.map((link) => <a href={link.href}>{link.label}<ArrowRight size={16} aria-hidden="true" /></a>)}<a href="/lawyers">변호사 살펴보기<ArrowRight size={16} aria-hidden="true" /></a></div>
+        <div class="landing-mobile-menu-panel"><p>BARO 둘러보기</p>{links.map((link) => <a href={link.href}>{link.label}<ArrowRight size={16} aria-hidden="true" /></a>)}<a href="#phone-story">내 손안의 BARO<ArrowRight size={16} aria-hidden="true" /></a><a href="#time-experience">당신의 시간<ArrowRight size={16} aria-hidden="true" /></a><a href="#start-with-baro">더 간단한 시작<ArrowRight size={16} aria-hidden="true" /></a><a href="/lawyers">변호사 살펴보기<ArrowRight size={16} aria-hidden="true" /></a></div>
       </details>
       <a class="landing-login" href="/login">로그인 <ArrowRight size={16} aria-hidden="true" /></a>
     </nav>

@@ -7,11 +7,109 @@ if (phoneStory) {
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
   const chapters = [...scene.querySelectorAll<HTMLElement>("[data-phone-chapter]")];
   const screens = [...scene.querySelectorAll<HTMLElement>("[data-phone-screen]")];
-  const floats = [...scene.querySelectorAll<HTMLElement>("[data-phone-float]")];
+  const services = [...scene.querySelectorAll<HTMLElement>("[data-phone-service]")];
+  const facets = [...scene.querySelectorAll<HTMLElement>("[data-phone-facet]")];
   const buttons = [...scene.querySelectorAll<HTMLButtonElement>("[data-phone-step]")];
+  const serviceOrigins: [number, number][] = [
+    [-172, -181],
+    [174, -78],
+    [-172, 77],
+    [174, 186],
+  ];
+  const metalSurfaces: { node: HTMLElement; x: number; y: number; back: boolean }[] = [];
   let enabled = false;
   let frame = 0;
   let chapter = -1;
+
+  const clamp = (value: number) => Math.min(1, Math.max(0, value));
+  const smoothstep = (value: number) => {
+    const bounded = clamp(value);
+    return bounded * bounded * (3 - 2 * bounded);
+  };
+
+  function placeFacet(
+    facet: HTMLElement,
+    angle: number,
+    x: number,
+    y: number,
+    length: number,
+    depth: number,
+    centerZ: number,
+    back: boolean,
+  ) {
+    const nx = Math.cos(angle);
+    const ny = Math.sin(angle);
+    metalSurfaces.push({ node: facet, x: nx, y: ny, back });
+    facet.style.width = `${length + 0.25}px`;
+    facet.style.height = `${depth}px`;
+    facet.style.marginLeft = `${-(length + 0.25) / 2}px`;
+    facet.style.marginTop = `${-depth / 2}px`;
+    // Tangent, depth and outward normal form the three basis vectors of each wall.
+    facet.style.transform = `matrix3d(${-ny},${nx},0,0,0,0,1,0,${nx},${ny},0,0,${x},${y},${centerZ},1)`;
+  }
+
+  function buildRoundedShell(
+    nodes: HTMLElement[],
+    width: number,
+    height: number,
+    radius: number,
+    depth: number,
+    centerZ: number,
+    back: boolean,
+  ) {
+    const halfWidth = width / 2;
+    const halfHeight = height / 2;
+    const cornerSegments = 12;
+    const halfSegment = Math.PI / (4 * cornerSegments);
+
+    for (const [index, facet] of nodes.entries()) {
+      let angle: number;
+      let x: number;
+      let y: number;
+      let length: number;
+      if (index < 4) {
+        angle = (index * Math.PI) / 2;
+        x = Math.cos(angle) * halfWidth;
+        y = Math.sin(angle) * halfHeight;
+        length = (index % 2 === 0 ? halfHeight : halfWidth) * 2 - radius * 2;
+      } else {
+        const corner = Math.floor((index - 4) / cornerSegments);
+        const step = (index - 4) % cornerSegments;
+        angle = (corner * Math.PI) / 2 + (step + 0.5) * halfSegment * 2;
+        const centerX = (corner === 0 || corner === 3 ? 1 : -1) * (halfWidth - radius);
+        const centerY = (corner < 2 ? 1 : -1) * (halfHeight - radius);
+        // Each facet is a chord. Adjacent endpoints meet the caps and the straight walls.
+        const chordRadius = radius * Math.cos(halfSegment);
+        x = centerX + chordRadius * Math.cos(angle);
+        y = centerY + chordRadius * Math.sin(angle);
+        length = 2 * radius * Math.sin(halfSegment);
+      }
+      placeFacet(facet, angle, x, y, length, depth, centerZ, back);
+    }
+  }
+
+  function buildShell() {
+    buildRoundedShell(facets, 280, 586.56, 46, 31.41, 0, false);
+    const cameraWalls = [...scene.querySelectorAll<HTMLElement>("[data-phone-camera-wall]")];
+    buildRoundedShell(cameraWalls, 250, 151, 31, 4.8, 2.4, true);
+    const lensWalls = [...scene.querySelectorAll<HTMLElement>("[data-phone-lens-wall]")];
+    const halfSegment = Math.PI / 24;
+    for (const wall of lensWalls) {
+      const index = Number(wall.dataset.phoneLensWall);
+      const angle = (index + 0.5) * halfSegment * 2;
+      const radius = 27 * Math.cos(halfSegment);
+      placeFacet(
+        wall,
+        angle,
+        radius * Math.cos(angle),
+        radius * Math.sin(angle),
+        54 * Math.sin(halfSegment),
+        6.4,
+        8,
+        true,
+      );
+    }
+  }
 
   function selectChapter(next: number) {
     if (chapter === next) return;
@@ -19,8 +117,6 @@ if (phoneStory) {
     scene.dataset.chapter = String(next);
     for (const [index, node] of chapters.entries()) node.hidden = enabled && index !== next;
     for (const [index, node] of screens.entries())
-      node.classList.toggle("is-current", index === next);
-    for (const [index, node] of floats.entries())
       node.classList.toggle("is-current", index === next);
     for (const [index, button] of buttons.entries()) {
       button.setAttribute("aria-pressed", String(index === next));
@@ -35,20 +131,63 @@ if (phoneStory) {
     const pin = scene.querySelector<HTMLElement>(".phone-story-sticky");
     const stickyTop = pin ? Number.parseFloat(window.getComputedStyle(pin).top) || 0 : 0;
     const distance = Math.max(1, scene.offsetHeight - (pin?.offsetHeight || window.innerHeight));
-    const progress = Math.min(1, Math.max(0, (stickyTop - bounds.top) / distance));
+    const progress = clamp((stickyTop - bounds.top) / distance);
+    const turnProgress = smoothstep(progress / 0.48);
+    const turn = -18 - turnProgress * 360;
     scene.style.setProperty("--phone-progress", progress.toFixed(4));
-    // The full turn is continuous. Front, polished back and metal edges all take their turn.
-    scene.style.setProperty("--phone-turn", `${(-18 - progress * 360).toFixed(2)}deg`);
+    // Finish the complete turn before the services settle into the front-facing BARO app.
+    scene.style.setProperty("--phone-turn", `${turn.toFixed(2)}deg`);
     scene.style.setProperty(
       "--phone-tilt",
-      `${(5 - Math.sin(progress * Math.PI * 2) * 8).toFixed(2)}deg`,
+      `${(5 - Math.sin(turnProgress * Math.PI * 2) * 7).toFixed(2)}deg`,
     );
-    scene.style.setProperty("--phone-rise", `${(-Math.sin(progress * Math.PI) * 36).toFixed(2)}px`);
+    scene.style.setProperty("--phone-rise", `${(-Math.sin(progress * Math.PI) * 19).toFixed(2)}px`);
     scene.style.setProperty(
-      "--phone-card-drift",
-      `${(Math.sin(progress * Math.PI * 2) * 24).toFixed(2)}px`,
+      "--phone-reflection",
+      `${(24 + Math.sin(turnProgress * Math.PI) * 46).toFixed(2)}%`,
     );
-    selectChapter(Math.min(3, Math.floor(progress * 4)));
+    const turnRadians = (turn * Math.PI) / 180;
+    scene.style.setProperty(
+      "--phone-shadow-width",
+      (0.34 + Math.abs(Math.cos(turnRadians)) * 0.66).toFixed(3),
+    );
+    for (const surface of metalSurfaces) {
+      const angle = turnRadians + (surface.back ? Math.PI : 0);
+      const light =
+        surface.x * Math.cos(angle) * -0.3 - surface.y * 0.45 - surface.x * Math.sin(angle) * 0.55;
+      surface.node.style.setProperty("--phone-metal-shade", (0.12 - light * 0.12).toFixed(3));
+    }
+
+    let absorbed = 0;
+    let intakeGlow = 0;
+    for (const [index, service] of services.entries()) {
+      const origin = serviceOrigins[index];
+      if (!origin) continue;
+      const intake = clamp((progress - (0.42 + index * 0.12)) / 0.105);
+      const travel = smoothstep(intake);
+      const drift = Math.sin(progress * Math.PI * 2 + index) * 9 * (1 - travel);
+      service.style.setProperty("--phone-service-x", `${(origin[0] * (1 - travel)).toFixed(2)}px`);
+      service.style.setProperty(
+        "--phone-service-y",
+        `${(origin[1] * (1 - travel) - travel * 28 + drift).toFixed(2)}px`,
+      );
+      service.style.setProperty("--phone-service-scale", (1 - travel * 0.86).toFixed(3));
+      service.style.setProperty(
+        "--phone-service-opacity",
+        (1 - smoothstep((intake - 0.64) / 0.36)).toFixed(3),
+      );
+      service.style.setProperty(
+        "--phone-service-turn",
+        `${((index % 2 === 0 ? -5 : 5) * (1 - travel)).toFixed(2)}deg`,
+      );
+      if (intake === 1) absorbed++;
+      intakeGlow = Math.max(intakeGlow, Math.sin(intake * Math.PI));
+    }
+    scene.dataset.phoneAbsorbed = String(absorbed);
+    scene.style.setProperty("--phone-intake-glow", intakeGlow.toFixed(3));
+    scene.style.setProperty("--phone-app-arrival", smoothstep((progress - 0.9) / 0.085).toFixed(3));
+    // The visible explanation and app screen follow the service currently entering the phone.
+    selectChapter(progress < 0.54 ? 0 : progress < 0.66 ? 1 : progress < 0.78 ? 2 : 3);
   }
 
   function schedule() {
@@ -68,7 +207,8 @@ if (phoneStory) {
       scene.style.removeProperty("--phone-turn");
       scene.style.removeProperty("--phone-tilt");
       scene.style.removeProperty("--phone-rise");
-      scene.style.removeProperty("--phone-card-drift");
+      scene.style.removeProperty("--phone-app-arrival");
+      scene.style.removeProperty("--phone-intake-glow");
     }
   }
 
@@ -78,7 +218,7 @@ if (phoneStory) {
     const stickyTop = pin ? Number.parseFloat(window.getComputedStyle(pin).top) || 0 : 0;
     const distance = Math.max(1, scene.offsetHeight - (pin?.offsetHeight || window.innerHeight));
     // Keep selected chapters clear of boundaries, including floating-point rounding on restore.
-    const progress = index === 0 ? 0 : (index + 0.15) / 4;
+    const progress = index === 0 ? 0 : 0.54 + (index - 1) * 0.12 + 0.045;
     const top =
       window.scrollY + scene.getBoundingClientRect().top - stickyTop + distance * progress;
     window.scrollTo({ top, behavior: "smooth" });
@@ -104,6 +244,7 @@ if (phoneStory) {
   window.addEventListener("pageshow", configure);
   desktop.addEventListener("change", configure);
   reduceMotion.addEventListener("change", configure);
+  buildShell();
   configure();
 }
 

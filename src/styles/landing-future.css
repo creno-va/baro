@@ -580,7 +580,7 @@
     position: static;
   }
   .future-film-overline {
-    color: #738ba9;
+    color: #526984;
     font-size: 8px;
     line-height: 1.8;
   }
@@ -591,7 +591,7 @@
     color: #28456b;
   }
   .future-film-copy > p {
-    color: #667d9b;
+    color: #526984;
     font-size: 14px;
     line-height: 1.9;
   }
@@ -600,7 +600,7 @@
   }
   .future-film-caption {
     margin-top: 22px;
-    color: #8095b0;
+    color: #526984;
     font-size: 11px;
   }
   .future-film-conversation {

@@ -2,6 +2,7 @@
 import {
   // biome-ignore lint/correctness/noUnusedImports: Icons are rendered by the Astro template.
   ArrowRight,
+  BatteryFull,
   Check,
   CheckCheck,
   FileText,
@@ -11,7 +12,9 @@ import {
   Mic,
   Paperclip,
   ShieldCheck,
+  Signal,
   Sparkles,
+  Wifi,
 } from "lucide-react";
 import "../../styles/landing-phone.css";
 
@@ -54,6 +57,22 @@ const chapters = [
     icon: ShieldCheck,
   },
 ];
+
+// A closed rounded shell, at 280px wide, keeps the 78:163.4:8.75 device proportions.
+// Geometry is applied by the client so the page does not need inline style attributes.
+// biome-ignore lint/correctness/noUnusedVariables: Mesh facets are rendered by the Astro template.
+const shellFacets = Array.from({ length: 52 }, (_, index) => index);
+// biome-ignore lint/correctness/noUnusedVariables: Lens layers are rendered by the Astro template.
+const lensLayers = [0, 6];
+// biome-ignore lint/correctness/noUnusedVariables: Cylindrical lens walls are rendered by the Astro template.
+const lensWalls = Array.from({ length: 24 }, (_, index) => index);
+// biome-ignore lint/correctness/noUnusedVariables: Service labels are rendered by the Astro template.
+const services = [
+  { label: "상황 이야기", detail: "편하게 시작하고", icon: MessageCircle },
+  { label: "자료 모으기", detail: "흩어진 기록을 모아", icon: FolderOpen },
+  { label: "시간순 정리", detail: "흐름을 확인하고", icon: CheckCheck },
+  { label: "상담 준비", detail: "다음 한 걸음으로", icon: ShieldCheck },
+];
 ---
 
 <section id="phone-story" class="phone-story" data-phone-story aria-labelledby="phone-story-title">
@@ -85,19 +104,41 @@ const chapters = [
         <div class="phone-story-floor"></div>
         <div class="phone-story-perspective">
           <div class="phone-story-device">
-            <div class="phone-story-edge phone-story-edge-left"></div>
-            <div class="phone-story-edge phone-story-edge-right"></div>
-            <div class="phone-story-edge phone-story-edge-top"></div>
-            <div class="phone-story-edge phone-story-edge-bottom"></div>
+            <div class="phone-story-shell">
+              {shellFacets.map((index) => <span class="phone-story-shell-facet" data-phone-facet={index}></span>)}
+            </div>
+            <div class="phone-story-bevel phone-story-bevel-front"></div>
+            <div class="phone-story-bevel phone-story-bevel-back"></div>
+            <span class="phone-story-hardware phone-story-action-button"></span>
+            <span class="phone-story-hardware phone-story-volume-up"></span>
+            <span class="phone-story-hardware phone-story-volume-down"></span>
+            <span class="phone-story-hardware phone-story-side-button"></span>
+            <span class="phone-story-hardware phone-story-camera-control"></span>
+            <span class="phone-story-antenna phone-story-antenna-left-top"></span>
+            <span class="phone-story-antenna phone-story-antenna-left-bottom"></span>
+            <span class="phone-story-antenna phone-story-antenna-right-top"></span>
+            <span class="phone-story-antenna phone-story-antenna-right-bottom"></span>
+            <div class="phone-story-connectors"><i class="phone-story-speakers"></i><span class="phone-story-usb"></span><i class="phone-story-speakers"></i></div>
             <div class="phone-story-face phone-story-back">
-              <div class="phone-story-camera"><i></i><i></i><i></i><b></b></div>
-              <div class="phone-story-back-brand"><img src="/brand/logo.svg" width="54" height="54" alt="" /><strong>BARO</strong><span>A CLEARER WAY FORWARD</span></div>
-              <div class="phone-story-back-line"></div>
+              <div class="phone-story-back-finish"></div>
+              <div class="phone-story-camera">
+                {shellFacets.map((index) => <i class="phone-story-camera-wall" data-phone-camera-wall={index}></i>)}
+                <div class="phone-story-camera-step phone-story-camera-step-one"></div>
+                <div class="phone-story-camera-step phone-story-camera-step-two"></div>
+                <div class="phone-story-camera-step phone-story-camera-step-three"></div>
+                <div class="phone-story-camera-plate"></div>
+                {[0, 1, 2].map((lens) => <div class={`phone-story-lens phone-story-lens-${lens}`}>
+                  {lensWalls.map((wall) => <i class="phone-story-lens-wall" data-phone-lens-wall={wall}></i>)}
+                  {lensLayers.map((layer) => <i class={`phone-story-lens-ring phone-story-lens-ring-${layer}`}></i>)}
+                  <span class="phone-story-lens-glass"><i></i></span>
+                </div>)}
+                <span class="phone-story-flash"></span><span class="phone-story-lidar"></span><span class="phone-story-camera-mic"></span>
+              </div>
             </div>
             <div class="phone-story-face phone-story-front">
               <div class="phone-story-screen">
-                <div class="phone-story-status"><b>9:41</b><span>••• ▰</span></div>
-                <div class="phone-story-island"></div>
+                <div class="phone-story-status"><b>9:41</b><span><Signal size={12} /><Wifi size={12} /><BatteryFull size={16} /></span></div>
+                <div class="phone-story-island"><span></span></div>
                 <div class="phone-story-appbar"><img src="/brand/logo.svg" width="23" height="23" alt="" /><strong>BARO</strong><span>나의 이야기</span></div>
                 <div class="phone-story-screen-panels">
                   <div class="phone-story-screen-panel is-current" data-phone-screen="0">
@@ -125,20 +166,24 @@ const chapters = [
                     <div class="phone-story-screen-review"><ShieldCheck size={20} /><span>내가 검토한 내용만<br /><strong>내가 선택한 사람에게.</strong></span></div><div class="phone-story-screen-cta">상담 준비 리포트 확인 <ArrowRight size={15} /></div>
                   </div>
                 </div>
+                <div class="phone-story-arrival" data-phone-arrival>
+                  <div class="phone-story-arrival-brand"><img src="/brand/logo.svg" width="45" height="45" alt="" /><strong>BARO</strong></div>
+                  <span class="phone-story-arrival-label">법률 상담을 준비하는 나의 공간</span>
+                  <h4>막막했던 이야기가,<br />다음 한 걸음이 되도록.</h4>
+                  <div class="phone-story-arrival-services">{services.map((service) => <div><service.icon size={20} /><span>{service.label}</span><Check size={12} /></div>)}</div>
+                  <div class="phone-story-arrival-prompt"><span>어떤 일이 있었나요?</span><ArrowRight size={19} /></div>
+                  <p>내 이야기에서 시작해요.</p>
+                </div>
                 <div class="phone-story-home"></div>
               </div>
+              <div class="phone-story-glass"></div>
             </div>
           </div>
         </div>
-        <div class="phone-story-floats">
-          <div class="phone-story-float phone-story-float-main" data-phone-float="0"><span class="phone-story-float-icon"><MessageCircle size={23} /></span><div><small>나를 위한 질문</small><strong>편하게 말해도 괜찮아요</strong></div><Check size={17} /></div>
-          <div class="phone-story-float phone-story-float-main" data-phone-float="1"><span class="phone-story-float-icon"><FolderOpen size={23} /></span><div><small>흩어진 자료를 한곳에</small><strong>이야기와 기록을 함께</strong></div><Check size={17} /></div>
-          <div class="phone-story-float phone-story-float-main" data-phone-float="2"><span class="phone-story-float-icon"><CheckCheck size={23} /></span><div><small>복잡했던 일의 흐름</small><strong>날짜순으로 한눈에</strong></div><Check size={17} /></div>
-          <div class="phone-story-float phone-story-float-main" data-phone-float="3"><span class="phone-story-float-icon"><ShieldCheck size={23} /></span><div><small>내가 검토한 리포트</small><strong>첫 상담을 한결 가볍게</strong></div><Check size={17} /></div>
-          <div class="phone-story-mini-float phone-story-mini-float-one"><FileText size={21} /><span>사실을 정리하고</span></div>
-          <div class="phone-story-mini-float phone-story-mini-float-two"><Sparkles size={21} /><span>다음을 준비해요</span></div>
+        <div class="phone-story-services">
+          {services.map((service, index) => <div class="phone-story-service-chip" data-phone-service={index}><span class="phone-story-service-icon"><service.icon size={21} /></span><div><small>{service.detail}</small><strong>{service.label}</strong></div></div>)}
         </div>
-        <span class="phone-story-visual-caption">이해를 돕기 위한 가상 화면 · 스크롤하며 둘러보세요</span>
+        <span class="phone-story-visual-caption">이해를 돕기 위한 가상 화면 · 기능이 하나의 BARO로</span>
         <div class="phone-story-rotation"><span>360°</span><i></i><small>SCROLL TO EXPLORE</small></div>
       </div>
     </div>

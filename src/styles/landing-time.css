@@ -1,0 +1,422 @@
+.time-experience {
+  position: relative;
+  color: #fff;
+  background: #f4f3ef;
+  scroll-margin-top: 76px;
+  --time-blue: #155bea;
+  --time-clock-scale: 1;
+  --time-clock-opacity: 1;
+  --time-wipe-scale: 0;
+  --time-wipe-cover: 30;
+  --time-message-opacity: 0;
+  --time-message-rise: 38px;
+}
+
+.time-experience-pin {
+  position: relative;
+  isolation: isolate;
+  overflow: clip;
+}
+
+.time-clock-stage {
+  display: grid;
+  place-items: center;
+  height: 355px;
+  padding: 35px 24px;
+  background: radial-gradient(ellipse at 50% 40%, #fffefa, #f4f3ef 72%);
+}
+
+.time-clock {
+  width: 260px;
+  aspect-ratio: 1;
+  flex-shrink: 0;
+  transform-origin: var(--time-focus-x, 50%) var(--time-focus-y, 50%);
+}
+
+.time-clock-drawing {
+  display: block;
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 14px 17px #292e301c);
+}
+
+.time-clock-photo {
+  width: 205px;
+  aspect-ratio: 3 / 4;
+}
+
+.time-clock picture {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.time-watch-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  mask-image:
+    linear-gradient(to right, transparent, #000 12%, #000 88%, transparent),
+    linear-gradient(to bottom, transparent, #000 12%, #000 85%, transparent);
+  mask-composite: intersect;
+}
+
+.time-blue-wipe {
+  display: none;
+  pointer-events: none;
+}
+
+.time-message {
+  position: relative;
+  z-index: 2;
+  padding: 80px 32px 85px;
+  background: var(--time-blue);
+  text-align: center;
+}
+
+.time-message-inner {
+  width: 100%;
+  max-width: 1040px;
+  margin: auto;
+}
+
+.time-message h2 {
+  margin: 0;
+  font-size: clamp(38px, 4.8vw, 68px);
+  font-weight: 750;
+  line-height: 1.2;
+  letter-spacing: -0.055em;
+  word-break: keep-all;
+}
+
+.time-promise {
+  margin: 20px 0 0;
+  color: #fff;
+  font-size: clamp(25px, 3.1vw, 43px);
+  font-weight: 670;
+  line-height: 1.35;
+  letter-spacing: -0.045em;
+  word-break: keep-all;
+}
+
+.time-description {
+  margin: 25px auto 0;
+  color: #e7efff;
+  font-size: 16px;
+  font-weight: 420;
+  line-height: 1.85;
+  letter-spacing: -0.02em;
+  word-break: keep-all;
+}
+
+.time-benefits {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  max-width: 890px;
+  padding: 0;
+  margin: 38px auto 0;
+  list-style: none;
+  text-align: left;
+}
+
+.time-benefit {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 17px 25px;
+  border-left: 1px solid #ffffff40;
+}
+
+.time-benefit:first-child {
+  border-left: 0;
+}
+
+.time-benefit-icon {
+  display: grid;
+  place-items: center;
+  width: 43px;
+  height: 43px;
+  flex-shrink: 0;
+  border: 1px solid #ffffff47;
+  border-radius: 13px;
+  background: #ffffff0d;
+  color: #fff;
+}
+
+.time-benefit h3 {
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.4;
+  font-weight: 650;
+  letter-spacing: -0.03em;
+  word-break: keep-all;
+}
+
+.time-benefit p {
+  margin: 6px 0 0;
+  color: #e2edff;
+  font-size: 12px;
+  line-height: 1.55;
+  letter-spacing: -0.02em;
+  word-break: keep-all;
+}
+
+.time-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin-top: 34px;
+}
+
+:where(.time-actions) a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 50px;
+  gap: 12px;
+  padding: 13px 21px;
+  border: 1px solid transparent;
+  border-radius: 13px;
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.5;
+  letter-spacing: -0.02em;
+  text-decoration: none;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease;
+}
+
+.time-action-primary {
+  background: #fff;
+  color: #1855c5;
+}
+
+.time-action-primary:hover {
+  background: #edf4ff;
+}
+
+.time-action-secondary {
+  background: transparent;
+  color: #fff;
+}
+
+:where(.time-actions) .time-action-secondary {
+  border-color: #ffffff65;
+}
+
+.time-action-secondary:hover {
+  background: #ffffff16;
+}
+
+.time-actions a:focus-visible {
+  outline: 3px solid #fff;
+  outline-offset: 5px;
+}
+
+/* Only JavaScript-enabled, roomy screens receive the long pinned sequence. */
+@media (min-width: 900px) and (min-height: 720px) and (prefers-reduced-motion: no-preference) {
+  .time-experience-motion {
+    height: 280svh;
+  }
+
+  :where(.time-experience-motion) .time-experience-pin {
+    position: sticky;
+    top: 76px;
+    height: calc(100svh - 76px);
+  }
+
+  :where(.time-experience-motion) .time-clock-stage {
+    position: absolute;
+    inset: 0;
+    grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+    height: auto;
+    padding: 0;
+    opacity: var(--time-clock-opacity);
+  }
+
+  :where(.time-experience-motion) .time-clock {
+    width: clamp(300px, min(47vw, 62svh), 620px);
+    transform: translate3d(
+        calc(50% - var(--time-focus-x, 50%)),
+        calc(50% - var(--time-focus-y, 50%)),
+        0
+      )
+      scale(var(--time-clock-scale));
+  }
+
+  :where(.time-experience-motion) .time-clock-photo {
+    width: min(78vw, calc((100svh - 76px) * 1.12));
+  }
+
+  :where(.time-experience-motion) .time-blue-wipe {
+    display: block;
+    position: absolute;
+    z-index: 1;
+    left: calc(50% - 40px);
+    top: calc(50% - 40px);
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background: var(--time-blue);
+    transform: scale(var(--time-wipe-scale));
+  }
+
+  :where(.time-experience-motion) .time-message {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    padding: 25px 35px;
+    background: transparent;
+    opacity: var(--time-message-opacity);
+    transform: translate3d(0, var(--time-message-rise), 0);
+    pointer-events: none;
+  }
+
+  :where(.time-experience-ready) .time-message {
+    pointer-events: auto;
+  }
+
+  :where(.time-experience-motion) .time-message h2 {
+    font-size: clamp(38px, min(4.8vw, 6.4svh), 68px);
+  }
+
+  :where(.time-experience-motion) .time-promise {
+    margin-top: 18px;
+    font-size: clamp(26px, min(3.1vw, 4.7svh), 43px);
+  }
+
+  :where(.time-experience-motion) .time-description {
+    margin-top: 21px;
+    font-size: 15px;
+    line-height: 1.8;
+  }
+
+  :where(.time-experience-motion) .time-benefits {
+    margin-top: 29px;
+  }
+
+  :where(.time-experience-motion) .time-benefit {
+    opacity: var(--time-benefit-opacity, 0);
+    transform: translate3d(0, var(--time-benefit-rise, 22px), 0);
+  }
+
+  :where(.time-experience-motion) .time-actions {
+    margin-top: 28px;
+  }
+
+  /* A keyboard visitor can reach the calls to action before the scroll reveal. */
+  :where(.time-experience-motion:has(:focus-visible)) .time-clock-stage {
+    opacity: 0;
+  }
+
+  :where(.time-experience-motion:has(:focus-visible)) .time-blue-wipe {
+    transform: scale(var(--time-wipe-cover));
+  }
+
+  :where(.time-experience-motion:has(:focus-visible)) .time-message,
+  :where(.time-experience-motion:has(:focus-visible)) .time-benefit {
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
+  }
+}
+
+@media (max-width: 1050px) {
+  .time-benefit {
+    gap: 10px;
+    padding: 14px;
+  }
+
+  .time-benefit h3 {
+    font-size: 16px;
+  }
+
+  .time-benefit p {
+    font-size: 11px;
+  }
+}
+
+@media (max-width: 767px), (max-height: 599px) {
+  .time-clock-stage {
+    display: none;
+  }
+
+  .time-message {
+    padding: 74px 24px;
+    text-align: left;
+  }
+
+  .time-message h2 {
+    font-size: clamp(33px, 8.4vw, 52px);
+    line-height: 1.27;
+  }
+
+  .time-promise {
+    margin-top: 22px;
+    max-width: 390px;
+    font-size: clamp(25px, 6.3vw, 35px);
+    line-height: 1.45;
+  }
+
+  .time-description {
+    max-width: 470px;
+    margin: 23px 0 0;
+    font-size: 14px;
+    line-height: 1.85;
+  }
+
+  .time-desktop-break {
+    display: none;
+  }
+
+  .time-benefits {
+    grid-template-columns: 1fr;
+    gap: 0;
+    max-width: none;
+    margin-top: 32px;
+  }
+
+  .time-benefit {
+    gap: 16px;
+    padding: 19px 0;
+    border-left: 0;
+    border-top: 1px solid #ffffff40;
+  }
+
+  .time-benefit h3 {
+    font-size: 17px;
+  }
+
+  .time-benefit p {
+    font-size: 13px;
+  }
+
+  .time-actions {
+    align-items: stretch;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 29px;
+  }
+
+  .time-actions a {
+    min-height: 50px;
+    padding: 13px 17px;
+  }
+}
+
+@media (max-width: 390px) {
+  .time-actions {
+    flex-direction: column;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .time-actions a {
+    transition: none;
+  }
+}
