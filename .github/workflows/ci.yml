@@ -15,8 +15,31 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  native:
+    name: Isolated native media fixtures
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Build isolated file processor (linux/amd64)
+        timeout-minutes: 8
+        run: docker build --platform linux/amd64 -f services/file-processor/Dockerfile -t baro-file-processor .
+
+      - name: Execute native media fixtures with no network
+        timeout-minutes: 5
+        run: >-
+          docker run --rm --network none --memory 6g --cpus 1 --pids-limit 128
+          -v "$PWD/tests/fixtures/media:/fixtures:ro"
+          -v "$PWD/services/file-processor/fixture-test.py:/app/fixture-test.py:ro"
+          baro-file-processor python3 /app/fixture-test.py
+
   quality:
-    name: Quality gate
+    name: Source and browser checks
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -138,8 +161,20 @@ jobs:
         shell: bash
         run: |
           if [[ -f wrangler.jsonc || -f wrangler.json || -f wrangler.toml ]]; then
-            bunx wrangler deploy --dry-run --outdir .wrangler/dry-run
+            bun run cf:dry-run
           else
             echo "::error::Application exists but a Wrangler configuration file is missing."
             exit 1
           fi
+
+  quality-gate:
+    name: Quality gate
+    runs-on: ubuntu-latest
+    if: always()
+    needs: [quality, native]
+    steps:
+      - name: Require every verification job to succeed
+        env:
+          SOURCE_RESULT: ${{ needs.quality.result }}
+          NATIVE_RESULT: ${{ needs.native.result }}
+        run: test "$SOURCE_RESULT" = success && test "$NATIVE_RESULT" = success

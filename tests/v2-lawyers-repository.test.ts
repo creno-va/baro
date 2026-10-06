@@ -13,6 +13,7 @@ import {
   type EnvelopeCipher,
 } from "../src/server/crypto";
 import { createV2Core } from "../src/server/db/v2-core";
+import { createV2DeletionRepository } from "../src/server/db/v2-deletion";
 import { createV2LawyersRepository } from "../src/server/db/v2-lawyers";
 import { createV2StorageRepository } from "../src/server/db/v2-storage";
 import { application, publicLawyer } from "./fixtures/contracts/v2";
@@ -1158,4 +1159,332 @@ test("owner publication withdrawal preserves reviewed history and journals publi
       )
       .get(),
   ).toEqual({ n: 1 });
+});
+
+test("owner withdraws the approved pointer using current profile revision while preserving a newer draft", async () => {
+  await seedPublication();
+  await seedBlob({ id: "public_photo", kind: "public_copy", visibility: "public" });
+  expect(await repository.publishApproved(owner, publicLawyer, { photo_1: "public_photo" })).toBe(
+    true,
+  );
+  expect(
+    await repository.saveProfileDraft(owner, profileId, 2, "new_draft", publicLawyer.content),
+  ).toBe(true);
+  const draft = await repository.readProfileRevision(owner, profileId, 3);
+  expect(await repository.withdrawApprovedProfile(stranger, profileId, 3)).toBe(false);
+  expect(await repository.withdrawApprovedProfile(owner, profileId, 2)).toBe(false);
+  expect(await repository.withdrawApprovedProfile(owner, profileId, 3)).toBe(true);
+  expect(await repository.withdrawApprovedProfile(owner, profileId, 3)).toBe(false);
+  expect(await repository.publicProfile(profileId)).toBeNull();
+  expect(await repository.readProfileRevision(owner, profileId, 3)).toEqual(draft);
+  expect(
+    database.sqlite
+      .query("SELECT revision,approved_revision_id FROM v2_profiles WHERE id=?")
+      .get(profileId),
+  ).toEqual({ revision: 3, approved_revision_id: null });
+  expect(
+    database.sqlite.query("SELECT status FROM v2_profile_revisions WHERE id='new_draft'").get(),
+  ).toEqual({ status: "draft" });
+  expect(
+    database.sqlite.query("SELECT status FROM v2_profile_revisions WHERE id='revision_2'").get(),
+  ).toEqual({ status: "withdrawn" });
+  expect(database.sqlite.query("SELECT state FROM v2_blobs WHERE id='public_photo'").get()).toEqual(
+    { state: "deleting" },
+  );
+});
+
+const copyIntent = {
+  assetId: "photo_1",
+  assetRevision: 2,
+  approvedRevisionId: "revision_2",
+  sourceBlobId: "sanitized_photo_1",
+  blobId: "pending_public_photo",
+  reservationId: "pending_public_reservation",
+};
+const copyReceipt = {
+  id: copyIntent.blobId,
+  reservationId: copyIntent.reservationId,
+  kind: "public_copy" as const,
+  visibility: "public" as const,
+  logicalBytes: 100,
+  cipherBytes: 100,
+  cipherHash: hash,
+  contentHash: hash,
+  keyVersion: null,
+};
+test("approved public copy atomically reserves exact source bytes and only actual receipt promotes pending + storage", async () => {
+  await seedPublication();
+  const baseline = database.sqlite
+    .query("SELECT reserved_bytes,stored_bytes FROM v2_storage_usage WHERE principal_id=?")
+    .get(`principal_${owner.ownerId}`) as { reserved_bytes: number; stored_bytes: number };
+  expect(await storage.prepareApprovedPublicCopy(owner, copyIntent)).toBe(true);
+  expect(await storage.prepareApprovedPublicCopy(owner, copyIntent)).toBe(false);
+  expect(await storage.findBlob(owner, copyIntent.blobId)).toBeNull();
+  expect(
+    database.sqlite
+      .query("SELECT state,cipher_hash,cipher_bytes FROM v2_blobs WHERE id=?")
+      .get(copyIntent.blobId),
+  ).toEqual({ state: "pending", cipher_hash: null, cipher_bytes: 0 });
+  expect(
+    database.sqlite
+      .query("SELECT reserved_bytes,stored_bytes FROM v2_storage_usage WHERE principal_id=?")
+      .get(`principal_${owner.ownerId}`),
+  ).toEqual({ reserved_bytes: baseline.reserved_bytes + 100, stored_bytes: baseline.stored_bytes });
+  expect(await storage.registerApprovedPublicCopy(owner, copyReceipt, copyIntent)).toBe(true);
+  expect(await storage.registerApprovedPublicCopy(owner, copyReceipt, copyIntent)).toBe(false);
+  expect(
+    database.sqlite
+      .query("SELECT reserved_bytes,stored_bytes FROM v2_storage_usage WHERE principal_id=?")
+      .get(`principal_${owner.ownerId}`),
+  ).toEqual({ reserved_bytes: baseline.reserved_bytes, stored_bytes: baseline.stored_bytes + 100 });
+  expect(
+    database.sqlite
+      .query("SELECT state FROM v2_storage_reservations WHERE id=?")
+      .get(copyIntent.reservationId),
+  ).toEqual({ state: "stored" });
+  expect(
+    await repository.publishApproved(owner, publicLawyer, { photo_1: copyIntent.blobId }),
+  ).toBe(true);
+  expect(await storage.abandonApprovedPublicCopy(owner, copyIntent.blobId)).toBe(false);
+  expect(await storage.captureApprovedPublicCopyIntent(owner, copyIntent.blobId)).toBeNull();
+});
+for (const boundary of [
+  "foreign",
+  "withdrawn",
+  "role",
+  "source",
+  "size",
+  "hash",
+  "expiry",
+] as const)
+  test(`prepared public copy rejects ${boundary} and retains pending exposure without partial publication`, async () => {
+    await seedPublication();
+    expect(await storage.prepareApprovedPublicCopy(owner, copyIntent)).toBe(true);
+    if (boundary === "withdrawn")
+      database.sqlite
+        .query(
+          "UPDATE v2_profile_revisions SET status='withdrawn',withdrawn_at=? WHERE id='revision_2'",
+        )
+        .run(now);
+    if (boundary === "role")
+      database.sqlite.query("DELETE FROM v2_role_bindings WHERE owner_id=?").run(owner.ownerId);
+    if (boundary === "source")
+      database.sqlite
+        .query("UPDATE v2_blobs SET state='deleting' WHERE id='sanitized_photo_1'")
+        .run();
+    const changedReceipt =
+      boundary === "size"
+        ? { ...copyReceipt, cipherBytes: 101 }
+        : boundary === "hash"
+          ? { ...copyReceipt, cipherHash: otherHash, contentHash: otherHash }
+          : copyReceipt;
+    const caller =
+      boundary === "foreign"
+        ? stranger
+        : boundary === "expiry"
+          ? { ...owner, now: "2026-10-06T00:05:00.000Z" }
+          : owner;
+    const beforeCount = database.sqlite
+      .query("SELECT reserved_bytes,stored_bytes FROM v2_storage_usage WHERE principal_id=?")
+      .get(`principal_${owner.ownerId}`);
+    expect(await storage.registerApprovedPublicCopy(caller, changedReceipt, copyIntent)).toBe(
+      false,
+    );
+    expect(
+      database.sqlite.query("SELECT state FROM v2_blobs WHERE id=?").get(copyIntent.blobId),
+    ).toEqual({ state: "pending" });
+    expect(
+      database.sqlite
+        .query("SELECT reserved_bytes,stored_bytes FROM v2_storage_usage WHERE principal_id=?")
+        .get(`principal_${owner.ownerId}`),
+    ).toEqual(beforeCount);
+  });
+test("public prepare rejects foreign ownership before decrypt and rolls back reservation plus intent on SQL failure", async () => {
+  await seedPublication();
+  let calls = 0;
+  beforeDecrypt = () => {
+    calls++;
+  };
+  expect(await storage.prepareApprovedPublicCopy(stranger, copyIntent)).toBe(false);
+  expect(calls).toBe(0);
+  database.sqlite.exec(
+    "CREATE TRIGGER reject_public_intent BEFORE INSERT ON v2_blobs WHEN NEW.kind='public_copy' BEGIN SELECT RAISE(ABORT,'synthetic'); END",
+  );
+  const counters = database.sqlite.query("SELECT * FROM v2_storage_usage").all();
+  await expect(storage.prepareApprovedPublicCopy(owner, copyIntent)).rejects.toThrow(
+    "DB_OPERATION_FAILED",
+  );
+  expect(database.sqlite.query("SELECT * FROM v2_storage_usage").all()).toEqual(counters);
+  expect(
+    database.sqlite
+      .query("SELECT count(*) AS n FROM v2_storage_reservations WHERE id=?")
+      .get(copyIntent.reservationId),
+  ).toEqual({ n: 0 });
+  expect(database.sqlite.query("SELECT count(*) AS n FROM v2_mutation_claims").get()).toEqual({
+    n: 0,
+  });
+});
+test("public actual receipt rechecks source and approved revision after encryption yields", async () => {
+  await seedPublication();
+  expect(await storage.prepareApprovedPublicCopy(owner, copyIntent)).toBe(true);
+  beforeEncrypt = (context) => {
+    if (context.table === "v2_blobs")
+      database.sqlite.query("DELETE FROM v2_role_bindings WHERE owner_id=?").run(owner.ownerId);
+  };
+  expect(await storage.registerApprovedPublicCopy(owner, copyReceipt, copyIntent)).toBe(false);
+  expect(
+    database.sqlite.query("SELECT state FROM v2_blobs WHERE id=?").get(copyIntent.blobId),
+  ).toEqual({ state: "pending" });
+});
+test("late public PUT preserves completed history and requeues actual blob cleanup after publication withdrawal", async () => {
+  await seedPublication();
+  expect(await storage.prepareApprovedPublicCopy(owner, copyIntent)).toBe(true);
+  const captured = await storage.captureApprovedPublicCopyIntent(owner, copyIntent.blobId);
+  if (!captured) throw new Error("Synthetic public capture missing");
+  expect(await storage.captureApprovedPublicCopyIntent(stranger, copyIntent.blobId)).toBeNull();
+  expect(await storage.abandonApprovedPublicCopy(owner, copyIntent.blobId)).toBe(true);
+  const deletion = createV2DeletionRepository(core),
+    journal = await deletion.findByTarget("blob", copyIntent.blobId);
+  if (!journal) throw new Error("Synthetic public journal missing");
+  const lease = await deletion.acquire(
+    journal.id,
+    "public_cleanup",
+    now,
+    "2026-10-06T00:01:00.000Z",
+  );
+  if (!lease) throw new Error("Synthetic public lease missing");
+  expect(
+    await storage.confirmBlobDeleted(copyIntent.blobId, now, {
+      lease,
+      receiptId: "public_absence",
+      objectKey: `public/${copyIntent.blobId}`,
+      cipherHash: null,
+    }),
+  ).toBe(true);
+  expect(await deletion.finish(lease, now)).toBe(true);
+  const history = database.sqlite
+    .query("SELECT * FROM v2_deletion_journals WHERE id=?")
+    .get(journal.id);
+  const receipts = database.sqlite.query("SELECT * FROM v2_cleanup_receipts").all();
+  database.sqlite
+    .query(
+      "UPDATE v2_profile_revisions SET status='withdrawn',withdrawn_at=? WHERE id='revision_2'",
+    )
+    .run(now);
+  const next = await storage.requeueApprovedPublicCopyCleanup(owner, captured);
+  if (!next) throw new Error("Synthetic public generation missing");
+  expect(next).not.toBe(journal.id);
+  expect(await storage.requeueApprovedPublicCopyCleanup(owner, { ...captured })).toBeNull();
+  expect(await storage.requeueApprovedPublicCopyCleanup(owner, captured)).toBe(next);
+  expect(
+    database.sqlite.query("SELECT * FROM v2_deletion_journals WHERE id=?").get(journal.id),
+  ).toEqual(history);
+  expect(database.sqlite.query("SELECT * FROM v2_cleanup_receipts").all()).toEqual(receipts);
+  expect(
+    database.sqlite
+      .query("SELECT state FROM v2_storage_reservations WHERE id=?")
+      .get(copyIntent.reservationId),
+  ).toEqual({ state: "stored" });
+  expect(
+    await storage.confirmBlobDeleted(copyIntent.blobId, now, {
+      lease,
+      receiptId: "public_absence",
+      objectKey: `public/${copyIntent.blobId}`,
+      cipherHash: null,
+    }),
+  ).toBe(false);
+  const fresh = await deletion.acquire(next, "public_fresh", now, "2026-10-06T00:01:00.000Z");
+  if (!fresh) throw new Error("Synthetic public fresh lease missing");
+  expect(
+    await storage.confirmBlobDeleted(copyIntent.blobId, now, {
+      lease: fresh,
+      receiptId: "public_actual_late_absence",
+      objectKey: `public/${copyIntent.blobId}`,
+      cipherHash: null,
+    }),
+  ).toBe(true);
+  expect(await deletion.finish(fresh, now)).toBe(true);
+  expect(
+    database.sqlite
+      .query("SELECT state FROM v2_storage_reservations WHERE id=?")
+      .get(copyIntent.reservationId),
+  ).toEqual({ state: "released" });
+});
+
+test("concurrent public intent and receipt have one winner and one storage transfer", async () => {
+  await seedPublication();
+  expect(
+    (
+      await Promise.all([
+        storage.prepareApprovedPublicCopy(owner, copyIntent),
+        storage.prepareApprovedPublicCopy(owner, copyIntent),
+      ])
+    ).filter(Boolean),
+  ).toHaveLength(1);
+  expect(
+    (
+      await Promise.all([
+        storage.registerApprovedPublicCopy(owner, copyReceipt, copyIntent),
+        storage.registerApprovedPublicCopy(owner, copyReceipt, copyIntent),
+      ])
+    ).filter(Boolean),
+  ).toHaveLength(1);
+  expect(
+    database.sqlite
+      .query("SELECT state FROM v2_storage_reservations WHERE id=?")
+      .get(copyIntent.reservationId),
+  ).toEqual({ state: "stored" });
+  expect(
+    database.sqlite
+      .query("SELECT reserved_bytes,stored_bytes FROM v2_storage_usage WHERE principal_id=?")
+      .get(`principal_${owner.ownerId}`),
+  ).toEqual({ reserved_bytes: 0, stored_bytes: 200 });
+});
+test("public reservation admission respects capacity and binds sanitized hash to the ready asset DTO", async () => {
+  await seedPublication();
+  database.sqlite
+    .query("UPDATE v2_storage_usage SET stored_bytes=9999999901 WHERE principal_id=?")
+    .run(`principal_${owner.ownerId}`);
+  expect(await storage.prepareApprovedPublicCopy(owner, copyIntent)).toBe(false);
+  expect(
+    database.sqlite
+      .query("SELECT count(*) AS n FROM v2_storage_reservations WHERE id=?")
+      .get(copyIntent.reservationId),
+  ).toEqual({ n: 0 });
+  database.sqlite
+    .query("UPDATE v2_storage_usage SET stored_bytes=100 WHERE principal_id=?")
+    .run(`principal_${owner.ownerId}`);
+  const changed = await core.encrypt("v2_blobs", copyIntent.sourceBlobId, owner.ownerId, 1, {
+    contentHash: otherHash,
+  });
+  database.sqlite
+    .query("UPDATE v2_blobs SET encrypted_payload=? WHERE id=?")
+    .run(changed, copyIntent.sourceBlobId);
+  expect(await storage.prepareApprovedPublicCopy(owner, copyIntent)).toBe(false);
+  expect(
+    database.sqlite.query("SELECT count(*) AS n FROM v2_blobs WHERE id=?").get(copyIntent.blobId),
+  ).toEqual({ n: 0 });
+});
+test("actual public receipt SQL failure rolls back blob, reservation, counters and ephemeral claim", async () => {
+  await seedPublication();
+  expect(await storage.prepareApprovedPublicCopy(owner, copyIntent)).toBe(true);
+  const before = database.sqlite.query("SELECT * FROM v2_storage_usage").all();
+  database.sqlite.exec(
+    "CREATE TRIGGER reject_public_commit BEFORE UPDATE OF state ON v2_blobs WHEN NEW.kind='public_copy' AND NEW.state='stored' BEGIN SELECT RAISE(ABORT,'synthetic'); END",
+  );
+  await expect(storage.registerApprovedPublicCopy(owner, copyReceipt, copyIntent)).rejects.toThrow(
+    "DB_OPERATION_FAILED",
+  );
+  expect(database.sqlite.query("SELECT * FROM v2_storage_usage").all()).toEqual(before);
+  expect(
+    database.sqlite
+      .query("SELECT state FROM v2_storage_reservations WHERE id=?")
+      .get(copyIntent.reservationId),
+  ).toEqual({ state: "reserved" });
+  expect(
+    database.sqlite.query("SELECT state FROM v2_blobs WHERE id=?").get(copyIntent.blobId),
+  ).toEqual({ state: "pending" });
+  expect(database.sqlite.query("SELECT count(*) AS n FROM v2_mutation_claims").get()).toEqual({
+    n: 0,
+  });
 });

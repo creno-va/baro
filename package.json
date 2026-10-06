@@ -17,7 +17,7 @@
     "test:ui": "playwright test",
     "test:csp": "playwright test --config playwright.csp.config.ts",
     "cf:types": "wrangler types --strict-vars false",
-    "cf:dry-run": "wrangler deploy --dry-run --outdir .wrangler/dry-run",
+    "cf:dry-run": "wrangler deploy --dry-run --containers-rollout=none --outdir .wrangler/dry-run",
     "db:generate": "drizzle-kit generate",
     "db:check": "bun scripts/check-migrations.ts",
     "docs:check": "bun .github/scripts/check-docs.ts",
@@ -35,6 +35,7 @@
   "dependencies": {
     "@astrojs/cloudflare": "14.3.3",
     "@astrojs/react": "7.0.0",
+    "@cloudflare/containers": "0.3.7",
     "@noble/hashes": "2.4.0",
     "@tailwindcss/vite": "4.3.3",
     "astro": "7.3.5",

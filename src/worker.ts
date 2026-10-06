@@ -8,8 +8,13 @@ import { reconcileAnalysisTimeouts } from "./server/modules/case-structure/execu
 import { reconcileDeletion } from "./server/modules/deletion/service";
 import { reconcileDispatch } from "./server/modules/dispatch/service";
 import { reconcileFileUploads } from "./server/modules/files/reconcile";
+import { reconcileV2Dispatch } from "./server/runtime/dispatch";
 
 export { AnalysisWorkflow } from "./workflows/analysis";
+export { AssetProcessingWorkflow } from "./workflows/asset-processing";
+export { FileProcessingWorkflow } from "./workflows/file-processing";
+export { FileProcessorContainer } from "./workflows/file-processor-container";
+export { ProfilePublicationWorkflow } from "./workflows/profile-publication";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -40,5 +45,6 @@ export default {
     await reconcileDispatch(env);
     await reconcileAnalysisTimeouts(env);
     await reconcileFileUploads(env);
+    await reconcileV2Dispatch(env);
   },
 };
