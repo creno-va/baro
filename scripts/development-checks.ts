@@ -1,5 +1,6 @@
 /** Development checks cover the changed feature; corpus evaluations are separate release work. */
 export {};
+
 const mode = process.argv[2];
 if (!["unit", "browser", "scope"].includes(mode ?? "")) throw new Error("Unknown check mode");
 const candidate = process.env.CHECK_CANDIDATE_SHA ?? "HEAD";
