@@ -1,20 +1,54 @@
 ---
-// biome-ignore lint/correctness/noUnusedImports: Astro template renders the icons.
-import { ArrowDown, ArrowRight, Check, Pause, Play } from "lucide-react";
+// biome-ignore lint/correctness/noUnusedImports: Astro renders the icons.
+import {
+  ArrowDown,
+  ArrowRight,
+  Check,
+  FileText,
+  MessageCircle,
+  Pause,
+  Play,
+  Sparkles,
+} from "lucide-react";
+import "../../styles/landing-journey.css";
 ---
-<section class="landing-hero landing-hero--film" data-scroll-scene data-hero-scene aria-labelledby="landing-title">
-  <div class="landing-hero-image landing-decoration" data-parallax="110" data-scale="0.16" aria-hidden="true" data-film-container>
-    <picture><source media="(min-width: 768px)" srcset="/landing/hero-poster.webp" /><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1' height='1'/%3E" width="1280" height="720" alt="" fetchpriority="high" /></picture>
-    <video class="landing-film" data-film="hero" data-video-src="/landing/hero-everyday.mp4" muted loop playsinline preload="none" disablepictureinpicture aria-hidden="true"></video>
+<section class="journey-hero" data-journey-hero aria-labelledby="landing-title">
+  <div class="journey-pin">
+    <div class="journey-film-stage" aria-hidden="true">
+      <picture><source media="(min-width: 768px)" srcset="/landing/journey-poster.webp" /><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1' height='1'/%3E" width="1280" height="720" alt="" fetchpriority="high" /></picture>
+      <video class="journey-film" data-film="hero" data-scroll-film data-video-src="/landing/phone-journey.mp4" muted playsinline preload="none" disablepictureinpicture aria-hidden="true"></video>
+      <div class="journey-film-shade"></div>
+    </div>
+    <div class="journey-opening">
+      <p class="journey-eyebrow"><span></span> 복잡했던 일상이, 가벼워지는 시작</p>
+      <h1 id="landing-title">막막했던 법률 문제,<br />이제 정리부터 가볍게.</h1>
+      <p>당신의 일상에서, 당신의 손안으로.<br />스크롤하며 BARO가 돕는 순간을 경험하세요.</p>
+      <div class="journey-actions"><a class="journey-primary" href="/app">내 상황 정리하기 <ArrowRight size={19} aria-hidden="true" /></a><a class="journey-explore" href="#try-baro">직접 체험하기 <ArrowRight size={17} aria-hidden="true" /></a></div>
+    </div>
+    <div class="journey-portal" aria-hidden="true"></div>
+    <div class="journey-app" data-journey-app>
+      <div class="journey-app-copy"><p class="journey-eyebrow">화면 속 이야기가, 내 이야기가 되는 순간</p><h2>막막함은 꺼내놓고.<br /><span>다음은 함께 찾아요.</span></h2><p>어려운 양식을 채우는 대신,<br />나의 말로 시작하는 상담 준비.</p><a href="#try-baro" class="journey-primary">이 화면 직접 체험하기 <ArrowRight size={18} aria-hidden="true" /></a></div>
+      <div class="journey-device" aria-label="BARO 작동 화면 예시">
+        <div class="journey-device-camera" aria-hidden="true"></div>
+        <div class="journey-device-status" aria-hidden="true"><b>9:41</b><span>••• ▰</span></div>
+        <div class="journey-app-header"><img src="/brand/logo.svg" width="24" height="24" alt="" /><strong>BARO</strong><span>예시로 만나보기</span></div>
+        <div class="journey-app-body">
+          <div class="journey-message journey-message-ai" data-journey-message="0"><span class="journey-spark"><Sparkles size={19} aria-hidden="true" /></span><p>어떤 일이 있었나요?<br /><strong>편하게 이야기해 주세요.</strong></p></div>
+          <div class="journey-message journey-message-me" data-journey-message="1">빌려준 돈을<br />돌려받지 못했어요.</div>
+          <div class="journey-message journey-message-ai" data-journey-message="2"><img src="/brand/logo.svg" width="19" height="19" alt="" /><p>언제, 어떤 방식으로<br />돈을 빌려주셨나요?</p></div>
+          <div class="journey-message journey-message-me" data-journey-message="3">3월 12일에 계좌로 보냈어요.</div>
+          <div class="journey-fact" data-journey-message="4"><span><Check size={17} aria-hidden="true" /> 이야기에서 찾은 사실</span><strong>3월 12일 · 계좌 이체</strong><small>내용을 확인하고, 자료를 연결해요.</small></div>
+          <div class="journey-result" data-journey-message="5"><FileText size={21} aria-hidden="true" /><div><strong>상담 준비의 시작</strong><span>내 이야기 + 날짜 + 확인할 자료</span></div></div>
+        </div>
+        <a class="journey-input" href="#try-baro"><MessageCircle size={17} aria-hidden="true" /><span>나도 예시로 체험해 보기</span><ArrowRight size={17} aria-hidden="true" /></a>
+      </div>
+      <div class="journey-app-note"><Check size={17} aria-hidden="true" /><span>내가 확인한 이야기로<br /><strong>다음 한 걸음을 준비해요.</strong></span></div>
+    </div>
+    <div class="journey-bottom"><a href="#hero-experience" data-journey-enter><span data-journey-cue>휴대폰 안으로 들어가 볼까요?</span><ArrowDown size={20} aria-hidden="true" /></a><div class="journey-video-control"><span>AI로 제작한 일상 장면</span><button type="button" data-journey-toggle aria-label="첫 화면 영상 일시정지" hidden><Pause size={15} className="journey-pause" aria-hidden="true" /><Play size={15} className="journey-play" aria-hidden="true" /><span data-journey-toggle-label>영상 일시정지</span></button></div></div>
+    <div class="journey-chapters" aria-hidden="true"><span class="is-active">01 일상에서</span><i></i><span>02 손안으로</span><i></i><span>03 BARO로</span></div>
   </div>
-  <div class="landing-hero-shade" aria-hidden="true"></div>
-  <div class="landing-hero-copy">
-    <p class="landing-eyebrow"><span></span> 일상 속 법률 고민, 정리의 시작</p>
-    <h1 id="landing-title">막막했던 법률 문제,<br />이제 정리부터 가볍게.</h1>
-    <p class="landing-hero-description">살다 보면, 누구에게나 어려운 순간이 오니까.<br />대화로 정리하고, 다음 한 걸음을 준비하세요.</p>
-    <div class="landing-hero-actions"><a class="landing-button" href="/app">내 상황 정리하기 <ArrowRight size={19} aria-hidden="true" /></a><a class="landing-hero-explore" href="#phone-story">BARO 기능 둘러보기 <ArrowDown size={17} aria-hidden="true" /></a></div>
-  </div>
-  <div class="landing-hero-signal landing-decoration" data-hero-signal aria-hidden="true"><span class="landing-signal-check"><Check size={19} /></span><div><strong>생각이 정리되면, 일상이 가벼워져요</strong><span>나의 이야기 → 확인할 사실 → 다음 준비</span></div></div>
-  <div class="landing-film-toolbar landing-decoration"><span>AI로 제작한 이용 장면</span><button class="landing-film-toggle" data-film-toggle="hero" type="button" aria-label="첫 화면 영상 재생하기" hidden><Play size={16} className="film-play" aria-hidden="true" /><Pause size={16} className="film-pause" aria-hidden="true" /><span data-film-label>영상 재생</span></button></div>
-  <a class="landing-scroll-cue" href="#how-it-works"><span>스크롤해서 경험해 보세요</span><ArrowDown size={21} aria-hidden="true" /></a>
+  <span id="hero-experience" class="journey-anchor" aria-hidden="true"></span>
 </section>
+<script>
+  import "../../client/landing-journey";
+</script>

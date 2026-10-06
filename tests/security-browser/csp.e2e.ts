@@ -1,9 +1,10 @@
 import { expect, test } from "@playwright/test";
 import { publicLawyer } from "../fixtures/contracts/v2";
 
-test("built landing loads its local artwork and scroll behavior under the Worker hash CSP", async ({
+test("built landing loads local footage and its interactive scenes under the Worker hash CSP", async ({
   page,
 }) => {
+  test.setTimeout(45_000);
   await page.addInitScript(() => {
     const browser = window as unknown as { landingCspViolations: string[] };
     browser.landingCspViolations = [];
@@ -24,6 +25,7 @@ test("built landing loads its local artwork and scroll behavior under the Worker
     }),
   ).toBeVisible();
   await expect(page.locator(".landing-motion-ready")).toHaveCount(1);
+  await expect(page.locator("[data-journey-hero]")).toHaveClass(/journey-ready/);
   const artwork = page.locator(".landing-main img").first();
   await artwork.scrollIntoViewIfNeeded();
   await expect
@@ -41,7 +43,7 @@ test("built landing loads its local artwork and scroll behavior under the Worker
         new URL(element.currentSrc).origin === location.origin,
     ),
   ).toBe(true);
-  const heroFilm = page.locator('video[data-film="hero"]');
+  const heroFilm = page.locator("video[data-scroll-film]");
   await expect
     .poll(
       () =>
@@ -55,8 +57,63 @@ test("built landing loads its local artwork and scroll behavior under the Worker
         video instanceof HTMLVideoElement && new URL(video.currentSrc).origin === location.origin,
     ),
   ).toBe(true);
-  await page.evaluate(() => window.scrollTo(0, 700));
-  await expect(page.locator("[data-scroll-scene]").first()).toHaveCSS("--scene-progress", /\d/);
+  await page.locator("[data-journey-toggle]").click();
+  await expect(page.locator("[data-journey-toggle]")).toHaveAttribute("data-paused", "true");
+  await page.locator("[data-journey-toggle]").click();
+  await page.locator("[data-journey-hero]").evaluate((element) => {
+    const pin = element.querySelector<HTMLElement>(".journey-pin");
+    if (!(element instanceof HTMLElement) || !pin) throw new Error("Missing journey scene");
+    const top = Number.parseFloat(getComputedStyle(pin).top) || 76;
+    window.scrollTo({
+      top:
+        scrollY +
+        element.getBoundingClientRect().top -
+        top +
+        (element.offsetHeight - pin.offsetHeight) * 0.96,
+      behavior: "instant",
+    });
+  });
+  await expect(page.locator("[data-journey-hero]")).toHaveAttribute("data-stage", "app");
+  await expect(page.locator("[data-journey-app]")).toHaveAttribute("aria-hidden", "false");
+  await expect(page.locator("[data-journey-message].is-shown")).toHaveCount(6);
+  await page.locator("[data-logo-experience]").evaluate((element) => {
+    const pin = element.querySelector<HTMLElement>(".logo-experience-sticky");
+    if (!(element instanceof HTMLElement) || !pin) throw new Error("Missing logo scene");
+    const top = Number.parseFloat(getComputedStyle(pin).top) || 76;
+    window.scrollTo({
+      top:
+        scrollY +
+        element.getBoundingClientRect().top -
+        top +
+        (element.offsetHeight - pin.offsetHeight) * 0.56,
+      behavior: "instant",
+    });
+  });
+  await expect(page.locator("[data-logo-experience]")).toHaveAttribute("data-logo-selected", "1");
+  await page.locator('[data-logo-feature="3"]').click();
+  await expect(page.locator('[data-logo-panel="3"]')).toBeVisible();
+  await page.locator('[data-logo-panel="3"] a').click();
+  await expect(page.locator('[data-demo-tab="report"]')).toHaveAttribute("aria-selected", "true");
+  await page.locator('[data-demo-confirm="facts"]').check();
+  await page.locator('[data-demo-confirm="files"]').check();
+  await page.locator("[data-demo-finish]").click();
+  await expect(page.locator("[data-demo-complete]")).toBeVisible();
+  await page.locator("[data-clarity]").evaluate((element) => {
+    const pin = element.querySelector<HTMLElement>("[data-clarity-pin]");
+    if (!(element instanceof HTMLElement) || !pin) throw new Error("Missing clarity scene");
+    const top = Number.parseFloat(getComputedStyle(pin).top) || 76;
+    window.scrollTo({
+      top:
+        scrollY +
+        element.getBoundingClientRect().top -
+        top +
+        (element.offsetHeight - pin.offsetHeight) * 0.97,
+      behavior: "instant",
+    });
+  });
+  await page.locator('[data-clarity-topic="work"]').click();
+  await expect(page.locator('[data-clarity-result="0"]')).toContainText("일이 있었던 날짜");
+  await expect(page.locator('[data-clarity-output="2"]')).toHaveCSS("opacity", "1");
   await page.locator("#phone-story").evaluate((element) => {
     window.scrollTo({ top: scrollY + element.getBoundingClientRect().top, behavior: "instant" });
   });
@@ -67,6 +124,36 @@ test("built landing loads its local artwork and scroll behavior under the Worker
   expect(
     await page.evaluate(
       () => (window as unknown as { landingCspViolations: string[] }).landingCspViolations,
+    ),
+  ).toEqual([]);
+});
+
+test("the built simplicity page hydrates its compact explanation under hash CSP", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const browser = window as unknown as { simplicityCspViolations: string[] };
+    browser.simplicityCspViolations = [];
+    document.addEventListener("securitypolicyviolation", (event) =>
+      browser.simplicityCspViolations.push(event.violatedDirective),
+    );
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const response = await page.goto("/simplicity");
+  expect(response?.status()).toBe(200);
+  const policy = response?.headers()["content-security-policy"];
+  expect(policy).toContain("sha256-");
+  expect(policy).not.toMatch(/unsafe-inline|unsafe-eval/);
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+  await expect(page.locator("[data-clarity]")).toHaveClass(/clarity-static-ready/);
+  await page.locator('[data-clarity-topic="money"]').click();
+  await page.locator("[data-clarity-play]").click();
+  await expect(page.locator('[data-clarity-result="0"]')).toContainText("돈을 보낸 날");
+  await expect(page.locator(".clarity-help")).toBeHidden();
+  expect(
+    await page.evaluate(
+      () => (window as unknown as { simplicityCspViolations: string[] }).simplicityCspViolations,
     ),
   ).toEqual([]);
 });

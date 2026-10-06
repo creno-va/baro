@@ -15,30 +15,33 @@
       "purpose": "Illustrative everyday BARO use scene; not a testimonial",
       "source": "Higgsfield",
       "model": "gpt_image_2_5",
-      "generationId": "8857b811-0d5a-443c-8c46-fe06580f0d9f",
+      "generationId": "94418c9e-1fdc-48d3-ab79-53263d6ba177",
       "generatedOn": "2026-10-07",
-      "description": "Fictional adult at home with moving boxes, reviewing their phone.",
-      "optimization": "896x1120 WebP at quality 84; no image source on viewports below 768px."
+      "description": "Candid documentary-style fictional adult using a phone in an ordinary lived-in setting; natural skin and lighting, not a real customer testimonial.",
+      "optimization": "896x1120 WebP at quality 84; no image source on viewports below 768px.",
+      "previousGenerationId": "8857b811-0d5a-443c-8c46-fe06580f0d9f"
     },
     {
       "asset": "everyday-cafe.webp",
       "purpose": "Illustrative everyday BARO use scene; not a testimonial",
       "source": "Higgsfield",
       "model": "gpt_image_2_5",
-      "generationId": "2f8559e0-140b-4804-ab82-d0e35b2e3a63",
+      "generationId": "784b4649-4c20-4297-bf7b-652705e262c7",
       "generatedOn": "2026-10-07",
-      "description": "Fictional cafe owner reviewing their phone beside everyday business records.",
-      "optimization": "896x1120 WebP at quality 84; no image source on viewports below 768px."
+      "description": "Candid documentary-style fictional adult using a phone in an ordinary lived-in setting; natural skin and lighting, not a real customer testimonial.",
+      "optimization": "896x1120 WebP at quality 84; no image source on viewports below 768px.",
+      "previousGenerationId": "2f8559e0-140b-4804-ab82-d0e35b2e3a63"
     },
     {
       "asset": "everyday-work.webp",
       "purpose": "Illustrative everyday BARO use scene; not a testimonial",
       "source": "Higgsfield",
       "model": "gpt_image_2_5",
-      "generationId": "a73b0d5a-c602-460e-91dc-d0f5f160012a",
+      "generationId": "418a71ad-f81f-483a-8cb1-7dac1cb62a09",
       "generatedOn": "2026-10-07",
-      "description": "Fictional adult reviewing their phone beside a laptop and notebook.",
-      "optimization": "896x1120 WebP at quality 84; no image source on viewports below 768px."
+      "description": "Candid documentary-style fictional adult using a phone in an ordinary lived-in setting; natural skin and lighting, not a real customer testimonial.",
+      "optimization": "896x1120 WebP at quality 84; no image source on viewports below 768px.",
+      "previousGenerationId": "a73b0d5a-c602-460e-91dc-d0f5f160012a"
     },
     {
       "asset": "hero-everyday.mp4",
@@ -63,6 +66,26 @@
       "durationSeconds": 6,
       "description": "Slow camera move across a phone, blue folder and notebook on a sunlit desk.",
       "optimization": "1280x720 H.264 CRF 26, audio removed, fast-start MP4; extracted first-frame WebP poster. Video source attaches only while visible on desktop. Reduced-motion and data-saver preferences prevent autoplay."
+    },
+    {
+      "asset": "help-clarity.webp",
+      "source": "Higgsfield",
+      "model": "gpt_image_2_5",
+      "generationId": "64c98e17-0871-4121-9e09-225e43e4f31e",
+      "generatedOn": "2026-10-07",
+      "description": "Fictional adults reviewing a smartphone and household documents together. Illustrative scene, not a testimonial.",
+      "optimization": "1024x688 WebP quality84; desktop picture source only."
+    },
+    {
+      "asset": "phone-journey.mp4",
+      "poster": "journey-poster.webp",
+      "source": "Higgsfield",
+      "model": "seedance_2_5",
+      "generationId": "6954821a-d469-42b6-9bec-bbb8894f2cab",
+      "generatedOn": "2026-10-07",
+      "durationSeconds": 8,
+      "description": "Fictional adult at home using a phone; camera physically approaches the phone. Landing transitions into local HTML app demonstration.",
+      "optimization": "1280x720 H.264 CRF24 with 12-frame keyframes for responsive scroll seeking, audio removed, fast-start MP4, first-frame WebP poster. No mobile or reduced-motion autoplay/download."
     }
   ]
 }

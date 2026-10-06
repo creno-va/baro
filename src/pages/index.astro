@@ -17,10 +17,16 @@ import {
 } from "lucide-react";
 // biome-ignore lint/correctness/noUnusedImports: Astro renders the landing components.
 import BenefitFilm from "../components/landing/BenefitFilm.astro";
+// biome-ignore lint/correctness/noUnusedImports: Astro renders experiential sections.
+import DemoLab from "../components/landing/DemoLab.astro";
 // biome-ignore lint/correctness/noUnusedImports: Astro renders the landing components.
 import EverydayStories from "../components/landing/EverydayStories.astro";
 // biome-ignore lint/correctness/noUnusedImports: Astro renders the landing components.
 import HeroFilm from "../components/landing/HeroFilm.astro";
+// biome-ignore lint/correctness/noUnusedImports: Astro renders experiential sections.
+import LogoExperience from "../components/landing/LogoExperience.astro";
+// biome-ignore lint/correctness/noUnusedImports: Astro renders experiential sections.
+import PainToClarity from "../components/landing/PainToClarity.astro";
 // biome-ignore lint/correctness/noUnusedImports: Astro renders the landing components.
 import PhoneStory from "../components/landing/PhoneStory.astro";
 // biome-ignore lint/correctness/noUnusedImports: Astro template reads Brand.
@@ -37,9 +43,9 @@ import "../styles/landing-film.css";
       <div class="landing-nav-wrap">
         <Brand />
         <nav class="landing-nav" aria-label="메인 메뉴">
-          <a class="landing-nav-section" href="#phone-story">기능 둘러보기</a>
-          <a class="landing-nav-section" href="#everyday">일상 속 BARO</a>
-          <a class="landing-nav-section" href="/lawyers">변호사 찾기</a>
+          <a class="landing-nav-section" href="#logo-experience">로고 속 BARO</a>
+          <a class="landing-nav-section" href="#try-baro">직접 체험하기</a>
+          <a class="landing-nav-section" href="/simplicity">Simplicity</a>
           <a class="landing-login" href="/login">로그인 <ArrowRight size={16} aria-hidden="true" /></a>
         </nav>
       </div>
@@ -57,6 +63,14 @@ import "../styles/landing-film.css";
           <span><MessageCircle size={20} aria-hidden="true" /> 편하게 이야기하고</span><ArrowRight size={16} aria-hidden="true" /><span><FolderOpen size={20} aria-hidden="true" /> 차근차근 정리하고</span><ArrowRight size={16} aria-hidden="true" /><span><CheckCheck size={20} aria-hidden="true" /> 다음을 준비해요</span>
         </div>
       </section>
+
+      <LogoExperience />
+
+      <DemoLab />
+
+      <PainToClarity />
+
+      <div class="landing-simplicity-link"><a href="/simplicity">BARO Simplicity에서 더 깊이 경험하기 <ArrowRight size={19} aria-hidden="true" /></a><p>걱정이 정리되는 순간부터, 내 손안의 기능까지.</p></div>
 
       <PhoneStory />
 

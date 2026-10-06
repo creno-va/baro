@@ -1,0 +1,40 @@
+---
+// biome-ignore lint/correctness/noUnusedImports: Astro renders icons.
+import { ArrowDown, ArrowRight } from "lucide-react";
+// biome-ignore lint/correctness/noUnusedImports: Astro renders the experience.
+import DemoLab from "../components/landing/DemoLab.astro";
+// biome-ignore lint/correctness/noUnusedImports: Astro renders the experience.
+import LogoExperience from "../components/landing/LogoExperience.astro";
+// biome-ignore lint/correctness/noUnusedImports: Astro renders the experience.
+import PainToClarity from "../components/landing/PainToClarity.astro";
+// biome-ignore lint/correctness/noUnusedImports: Astro renders the experience.
+import PhoneStory from "../components/landing/PhoneStory.astro";
+// biome-ignore lint/correctness/noUnusedImports: Astro renders the brand.
+import { Brand } from "../components/ui/brand";
+// biome-ignore lint/correctness/noUnusedImports: Astro renders the page components.
+import BaseLayout from "../layouts/BaseLayout.astro";
+import "../styles/landing.css";
+import "../styles/landing-simplicity.css";
+---
+<BaseLayout title="BARO Simplicity — 복잡한 일상에서, 분명한 다음으로" description="흩어진 고민이 모이고, 사실과 자료가 정리되는 순간을 직접 경험하세요. BARO의 대화, 자료, 타임라인과 상담 준비를 예시로 체험할 수 있습니다.">
+  <div class="landing simplicity-page">
+    <header class="landing-header simplicity-header"><div class="landing-nav-wrap"><Brand /><nav class="landing-nav" aria-label="메인 메뉴"><a class="landing-nav-section" href="/">홈</a><a class="landing-nav-section" href="#clarity">변화의 시작</a><a class="landing-nav-section" href="#try-baro">직접 체험하기</a><a class="landing-login" href="/login">로그인 <ArrowRight size={16} aria-hidden="true" /></a></nav></div><div class="landing-scroll-progress" aria-hidden="true"></div></header>
+    <main id="main-content" class="landing-main" tabindex="-1">
+      <section class="simplicity-intro" aria-labelledby="simplicity-title">
+        <div class="simplicity-intro-orbit" aria-hidden="true"><span></span><span></span><span></span><img src="/brand/logo.svg" width="100" height="100" alt="" /></div>
+        <p class="simplicity-overline">BARO · SIMPLICITY</p>
+        <h1 id="simplicity-title">일상은 복잡해도,<br /><span>시작은 간단하게.</span></h1>
+        <p class="simplicity-intro-body">흩어진 고민을 모으면, 다음이 보이기 시작해요.<br />직접 펼치고, 선택하고, 정리해 보세요.</p>
+        <div class="simplicity-intro-actions"><a href="#clarity">고민을 모아보기 <ArrowDown size={18} aria-hidden="true" /></a><a href="#try-baro">바로 체험하기 <ArrowRight size={18} aria-hidden="true" /></a></div>
+        <div class="simplicity-index" aria-label="체험 순서"><span>01 걱정을 모으고</span><i></i><span>02 기능을 펼치고</span><i></i><span>03 직접 경험해요</span></div>
+      </section>
+      <PainToClarity />
+      <LogoExperience />
+      <DemoLab />
+      <PhoneStory />
+      <section class="simplicity-outro"><p>다음은, 당신의 이야기.</p><h2>작은 시작이<br /><span>분명한 다음이 되도록.</span></h2><a href="/app">내 이야기로 시작하기 <ArrowRight size={19} aria-hidden="true" /></a><a class="simplicity-home-link" href="/">BARO 홈으로 돌아가기</a></section>
+    </main>
+    <footer class="landing-footer"><div class="landing-footer-inner"><div class="landing-footer-top"><Brand /><nav aria-label="하단 메뉴"><a href="/policies/privacy">개인정보 처리방침 초안</a><a href="/policies/ai">AI 이용 안내 초안</a></nav></div><p>체험에는 이해를 돕기 위한 예시가 사용됩니다. BARO는 사실 정리와 상담 준비를 도우며, 법률 판단은 전문가와 함께하세요.</p></div></footer>
+  </div>
+</BaseLayout>
+<script>import "../client/landing";</script>

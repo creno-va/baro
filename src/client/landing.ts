@@ -27,7 +27,9 @@ if (landing) {
   let revealObserver: IntersectionObserver | undefined;
   let enabled = false;
 
-  const films = [...landing.querySelectorAll<HTMLVideoElement>("[data-film]")].map((video) => ({
+  const films = [
+    ...landing.querySelectorAll<HTMLVideoElement>("[data-film]:not([data-scroll-film])"),
+  ].map((video) => ({
     video,
     container: video.closest<HTMLElement>("[data-film-container]"),
     button: landing.querySelector<HTMLButtonElement>(`[data-film-toggle="${video.dataset.film}"]`),

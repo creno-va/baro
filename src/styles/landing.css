@@ -1459,3 +1459,29 @@ html:has(.landing) {
     transform: none;
   }
 }
+
+.landing-simplicity-link {
+  padding: 40px 24px;
+  text-align: center;
+  background: #101a2e;
+  color: white;
+}
+.landing .landing-simplicity-link > a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 48px;
+  font-size: 16px;
+  font-weight: 650;
+}
+.landing-simplicity-link > p {
+  color: #a9bad4;
+  font-size: 12px;
+  line-height: 1.7;
+}
+@media (max-width: 767px) {
+  .landing .landing-simplicity-link > a {
+    font-size: 13px;
+  }
+}
