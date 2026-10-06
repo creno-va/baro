@@ -40,6 +40,12 @@ function moderatorValues(actor: Actor, sessionId: string) {
 }
 const ownerAlive = `NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='account' AND target_id=?)`;
 const verifiedProfile = `EXISTS(SELECT 1 FROM v2_role_bindings vb WHERE vb.owner_id=p.owner_id AND vb.role='verified_lawyer') AND EXISTS(SELECT 1 FROM v2_applications app WHERE app.id=r.application_id AND app.owner_id=p.owner_id AND app.status='approved') AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='profile' AND target_id=p.id)`;
+const moderationPageSchema = z.strictObject({
+  limit: z.number().int().min(1).max(20).default(10),
+  cursor: opaqueIdSchema.optional(),
+});
+const submittedApplicationSql = `a.status='submitted' AND a.owner_id!=? AND a.revision=(SELECT max(revision) FROM v2_applications WHERE owner_id=a.owner_id) AND NOT EXISTS(SELECT 1 FROM v2_tombstones t WHERE (t.target_kind='account' AND t.target_id=a.owner_id) OR (t.target_kind='profile' AND t.target_id IN (SELECT id FROM v2_profiles WHERE owner_id=a.owner_id))) AND ${moderatorSql}`;
+const submittedProfileSql = `r.status='submitted' AND r.revision=p.revision AND p.owner_id!=? AND ${verifiedProfile} AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='account' AND target_id=p.owner_id) AND ${moderatorSql}`;
 type AssetRow = {
   id: string;
   purpose: string;
@@ -156,6 +162,110 @@ export function createV2LawyersRepository(core: V2Core) {
     });
   };
   return {
+    submittedApplications(
+      reviewer: Actor,
+      sessionId: string,
+      page: { limit?: number; cursor?: string } = {},
+    ) {
+      return safe(async () => {
+        reviewer = parse(actorSchema, reviewer);
+        const query = parse(moderationPageSchema, page);
+        const rows = await core
+          .statement(
+            `SELECT a.id,a.owner_id,a.revision,a.submitted_at FROM v2_applications a WHERE ${submittedApplicationSql} AND a.id>? ORDER BY a.id LIMIT ?`,
+            [
+              reviewer.ownerId,
+              ...moderatorValues(reviewer, sessionId),
+              query.cursor ?? "",
+              query.limit + 1,
+            ],
+          )
+          .all<{ id: string; owner_id: string; revision: number; submitted_at: string }>();
+        const items = rows.results.slice(0, query.limit).map((row) => ({
+          id: row.id,
+          applicantId: row.owner_id,
+          revision: row.revision,
+          submittedAt: row.submitted_at,
+        }));
+        return {
+          items,
+          nextCursor: rows.results.length > query.limit ? (items.at(-1)?.id ?? null) : null,
+        };
+      });
+    },
+    submittedProfiles(
+      reviewer: Actor,
+      sessionId: string,
+      page: { limit?: number; cursor?: string } = {},
+    ) {
+      return safe(async () => {
+        reviewer = parse(actorSchema, reviewer);
+        const query = parse(moderationPageSchema, page);
+        const rows = await core
+          .statement(
+            `SELECT r.id,r.profile_id,r.revision,r.submitted_at FROM v2_profile_revisions r JOIN v2_profiles p ON p.id=r.profile_id WHERE ${submittedProfileSql} AND r.id>? ORDER BY r.id LIMIT ?`,
+            [
+              reviewer.ownerId,
+              ...moderatorValues(reviewer, sessionId),
+              query.cursor ?? "",
+              query.limit + 1,
+            ],
+          )
+          .all<{ id: string; profile_id: string; revision: number; submitted_at: string }>();
+        const items = rows.results.slice(0, query.limit).map((row) => ({
+          id: row.id,
+          profileId: row.profile_id,
+          revision: row.revision,
+          submittedAt: row.submitted_at,
+        }));
+        return {
+          items,
+          nextCursor: rows.results.length > query.limit ? (items.at(-1)?.id ?? null) : null,
+        };
+      });
+    },
+    readSubmittedApplication(reviewer: Actor, sessionId: string, id: string) {
+      return safe(async () => {
+        reviewer = parse(actorSchema, reviewer);
+        parse(opaqueIdSchema, id);
+        const sql = `SELECT a.* FROM v2_applications a WHERE a.id=? AND ${submittedApplicationSql}`;
+        const values = [id, reviewer.ownerId, ...moderatorValues(reviewer, sessionId)];
+        const row = await core.statement(sql, values).first<ApplicationRow>();
+        if (!row) return null;
+        const value = await decodeApplication(row);
+        const final = await core.statement(sql, values).first<ApplicationRow>();
+        return final?.owner_id === row.owner_id &&
+          final.revision === row.revision &&
+          final.encrypted_payload === row.encrypted_payload &&
+          final.submitted_at === row.submitted_at
+          ? value
+          : null;
+      });
+    },
+    readSubmittedProfile(reviewer: Actor, sessionId: string, profileId: string, revision: number) {
+      return safe(async () => {
+        reviewer = parse(actorSchema, reviewer);
+        parse(opaqueIdSchema, profileId);
+        parse(revisionSchema, revision);
+        const sql = `SELECT r.*,p.owner_id FROM v2_profile_revisions r JOIN v2_profiles p ON p.id=r.profile_id WHERE p.id=? AND r.revision=? AND ${submittedProfileSql}`;
+        const values = [
+          profileId,
+          revision,
+          reviewer.ownerId,
+          ...moderatorValues(reviewer, sessionId),
+        ];
+        const row = await core.statement(sql, values).first<ProfileRevisionRow>();
+        if (!row) return null;
+        const value = await decodeRevision(row);
+        const final = await core.statement(sql, values).first<ProfileRevisionRow>();
+        return final?.id === row.id &&
+          final.owner_id === row.owner_id &&
+          final.encrypted_payload === row.encrypted_payload &&
+          final.submitted_at === row.submitted_at
+          ? value
+          : null;
+      });
+    },
     roles(actor: Actor) {
       return safe(async () => {
         actor = parse(actorSchema, { ownerId: actor.ownerId, now: actor.now });
