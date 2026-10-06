@@ -17,6 +17,7 @@ if (originSection) {
   };
   let active = false;
   let frame = 0;
+  let lastProgress = 0;
 
   function render() {
     frame = 0;
@@ -25,6 +26,8 @@ if (originSection) {
     if (bounds.top > innerHeight || bounds.bottom < 0) return;
     const top = Number.parseFloat(getComputedStyle(pin).top) || 0;
     const progress = clamp((top - bounds.top) / Math.max(1, root.offsetHeight - pin.offsetHeight));
+    const reversing = progress < lastProgress;
+    lastProgress = progress;
     const approach = smooth((progress - 0.12) / 0.48);
     const dissolve = smooth((progress - 0.4) / 0.28);
     const appear = smooth((progress - 0.62) / 0.2);
@@ -43,6 +46,10 @@ if (originSection) {
     root.style.setProperty("--origin-arrival-opacity", appear.toFixed(3));
     root.style.setProperty("--origin-arrival-y", `${((1 - appear) * 22).toFixed(2)}px`);
     root.classList.toggle("origin-arrived", appear > 0.95);
+    // Return focus with the visible scene so the accessibility reveal cannot cover the memo on rewind.
+    if (reversing && appear <= 0.95 && arrival?.contains(document.activeElement)) {
+      skip?.focus({ preventScroll: true });
+    }
   }
 
   function schedule() {

@@ -152,10 +152,14 @@ if (blueReveal) {
     link.addEventListener("focus", () => {
       if (link.matches(":focus-visible")) choose(selected < 0 ? 0 : selected);
     });
-    link.addEventListener("click", () => {
-      window.dispatchEvent(
-        new CustomEvent("baro:demo-feature", { detail: { feature: link.dataset.blueDemo } }),
-      );
+    link.addEventListener("click", (event) => {
+      if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
+        return;
+      const request = new CustomEvent("baro:demo-feature", {
+        detail: { feature: link.dataset.blueDemo },
+        cancelable: true,
+      });
+      if (!window.dispatchEvent(request)) event.preventDefault();
     });
   }
   window.addEventListener("scroll", schedule, { passive: true });

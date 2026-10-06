@@ -13,7 +13,7 @@
 }
 .future-eyebrow {
   margin: 0 0 24px;
-  color: #4780d7;
+  color: #356bc1;
   font-size: 11px;
   font-weight: 650;
   letter-spacing: 0.14em;
@@ -30,7 +30,7 @@
 }
 .future-introduction-body {
   margin: 0;
-  color: #778596;
+  color: #586d88;
   font-size: 18px;
   line-height: 1.85;
   letter-spacing: -0.025em;
@@ -102,7 +102,7 @@
   padding: 26px 3px 0;
 }
 .future-photo :where(figcaption) > span {
-  color: #8795a6;
+  color: #61738c;
   font-size: 11px;
   font-weight: 550;
 }
@@ -264,7 +264,7 @@
 }
 .future-conversation-copy > p:not(.future-eyebrow) {
   margin: 0;
-  color: #6e8096;
+  color: #586d88;
   font-size: 17px;
   line-height: 1.85;
   letter-spacing: -0.03em;
@@ -284,7 +284,7 @@
   font-size: 13px;
 }
 .future-conversation-steps b {
-  color: #a1b6cf;
+  color: #61738c;
   font-size: 10px;
   font-weight: 500;
 }

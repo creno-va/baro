@@ -139,10 +139,14 @@ if (logoExperience) {
   }
 
   for (const link of scene.querySelectorAll<HTMLAnchorElement>("[data-logo-demo]")) {
-    link.addEventListener("click", () => {
-      window.dispatchEvent(
-        new CustomEvent("baro:demo-feature", { detail: { feature: link.dataset.logoDemo } }),
-      );
+    link.addEventListener("click", (event) => {
+      if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
+        return;
+      const request = new CustomEvent("baro:demo-feature", {
+        detail: { feature: link.dataset.logoDemo },
+        cancelable: true,
+      });
+      if (!window.dispatchEvent(request)) event.preventDefault();
     });
   }
 

@@ -45,6 +45,7 @@ if (navigationDialog && navigationTrigger && navigationFallback && navigationPan
   // Move the existing links, so the same navigation also works without JavaScript.
   if (typeof dialog.showModal === "function") {
     dialog.appendChild(panel);
+    fallback.open = false;
     fallback.hidden = true;
     trigger.hidden = false;
     trigger.addEventListener("click", open);

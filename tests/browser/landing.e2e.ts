@@ -1,5 +1,5 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, type Locator, test } from "@playwright/test";
+import { expect, type Locator, type Page, test } from "@playwright/test";
 
 const heroTitle = /막막했던 법률 문제,\s*이제 정리부터 가볍게\./;
 const landingSections = [
@@ -48,6 +48,29 @@ async function expectLocalImage(image: Locator, pathname: string) {
           new URL(element.currentSrc).pathname === path,
         pathname,
       ),
+    )
+    .toBe(true);
+}
+
+async function expectDemoDestination(page: Page, feature: "files" | "report") {
+  const panel = page.locator(`[data-demo-panel="${feature}"]`);
+  const heading = panel.locator("[data-demo-focus]");
+  await expect(page).toHaveURL(/#try-baro$/);
+  await expect(page.locator(`[data-demo-tab="${feature}"]`)).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await expect(panel).toBeVisible();
+  await expect(heading).toBeFocused();
+  await expect(heading).toBeInViewport({ ratio: 1 });
+  await expect
+    .poll(() =>
+      heading.evaluate((element) => {
+        const bounds = element.getBoundingClientRect();
+        const headerBottom =
+          document.querySelector(".landing-header")?.getBoundingClientRect().bottom ?? 0;
+        return bounds.top >= headerBottom - 1 && bounds.bottom <= innerHeight + 1;
+      }),
     )
     .toBe(true);
 }
@@ -205,6 +228,39 @@ test("shared landing navigation supports desktop chapters and a keyboard-operate
     await expect(menu).toBeHidden();
     await expect(page.locator(`#${id}`)).toBeInViewport();
   }
+});
+
+test("enhancing an already open fallback menu releases its page lock", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  let releaseScripts = () => {};
+  const scriptsReady = new Promise<void>((resolve) => {
+    releaseScripts = resolve;
+  });
+  await page.route("**/*", async (route) => {
+    if (route.request().resourceType() === "script") await scriptsReady;
+    await route.continue();
+  });
+  const fallback = page.locator("details[data-landing-menu]");
+  try {
+    // Keep the native menu usable while external enhancement modules are still loading.
+    await page.goto("/", { waitUntil: "commit" });
+    await fallback.locator("summary").click();
+    await expect(fallback).toHaveAttribute("open", "");
+  } finally {
+    releaseScripts();
+  }
+  await page.waitForLoadState("load");
+  await expect(fallback).toBeHidden();
+  await expect(fallback).not.toHaveAttribute("open", "");
+  await expect(page.locator("[data-landing-menu-trigger]")).toBeVisible();
+  await expect(page.locator(".landing-header .brand")).toBeVisible();
+  await expect(page.locator(".landing-header .landing-login")).toBeVisible();
+  await expect(page.locator("[data-landing-menu-dialog]")).not.toHaveAttribute("open", "");
+  const initialScroll = await page.evaluate(() => scrollY);
+  // Do not click outside first: an unrelated pointer handler could conceal the stale lock.
+  await page.mouse.move(200, 500);
+  await page.mouse.wheel(0, 400);
+  await expect.poll(() => page.evaluate(() => scrollY)).toBeGreaterThan(initialScroll + 100);
 });
 
 for (const viewport of [
@@ -559,8 +615,7 @@ test("the blue opening expands into selectable app features and hands the select
   await page.evaluate(() => window.dispatchEvent(new Event("resize")));
   await expect(scene).toHaveAttribute("data-blue-selected", "3");
   await scene.locator('[data-blue-demo="report"]').click();
-  await expect(page.locator('[data-demo-tab="report"]')).toHaveAttribute("aria-selected", "true");
-  await expect(page.locator('[data-demo-panel="report"]')).toBeVisible();
+  await expectDemoDestination(page, "report");
 });
 
 for (const viewport of [
@@ -604,6 +659,26 @@ for (const viewport of [
     await origin.getByRole("button", { name: "BARO로 들어가기" }).click();
     await expect(origin.locator(".origin-arrival")).toHaveCSS("opacity", "1");
     const entry = origin.getByRole("link", { name: "BARO 안으로" });
+    await expect(origin).toHaveClass(/origin-arrived/);
+    await expect(entry).toBeFocused();
+    await expect(entry).toBeInViewport({ ratio: 1 });
+    await scrollScene(origin, ".origin-pin", 0.18);
+    await expect(origin.getByRole("button", { name: "BARO로 들어가기" })).toBeFocused();
+    await expect(origin.locator(".origin-arrival")).toHaveCSS("opacity", "0");
+    await expect(origin.locator(".origin-photo-window")).toHaveCSS("opacity", "1");
+    await expect(origin.locator(".origin-photo-window")).toHaveCSS("filter", "blur(0px)");
+    for (const layer of await originals.all()) await expect(layer).toBeInViewport();
+    await expect
+      .poll(() =>
+        origin.evaluate((element) =>
+          Number.parseFloat(getComputedStyle(element).getPropertyValue("--origin-progress")),
+        ),
+      )
+      .toBeCloseTo(0.18, 2);
+    // Keyboard focus may still reveal the destination without forcing the scroll forward.
+    await page.keyboard.press("Shift+Tab");
+    await expect(entry).toBeFocused();
+    await expect(origin.locator(".origin-arrival")).toHaveCSS("opacity", "1");
     await expect(entry).toBeInViewport({ ratio: 1 });
     await entry.click();
     await expect(page).toHaveURL(/#blue-app-reveal$/);
@@ -827,6 +902,7 @@ test("mobile and reduced-motion blue previews keep keyboard tabs and working dem
 }) => {
   for (const viewport of [
     { width: 320, height: 844, reducedMotion: "no-preference" as const },
+    { width: 390, height: 844, reducedMotion: "no-preference" as const },
     { width: 1440, height: 900, reducedMotion: "reduce" as const },
   ]) {
     await page.goto("about:blank");
@@ -853,7 +929,7 @@ test("mobile and reduced-motion blue previews keep keyboard tabs and working dem
       ),
     ).toBe(true);
     await scene.locator('[data-blue-demo="files"]').click();
-    await expect(page.locator('[data-demo-tab="files"]')).toHaveAttribute("aria-selected", "true");
+    await expectDemoDestination(page, "files");
   }
 });
 
@@ -1140,8 +1216,7 @@ test("the brand turns, separates, and reveals selectable features that open the 
   await expect(scene).toHaveAttribute("data-logo-selected", "2");
   await buttons.nth(1).click();
   await scene.locator('[data-logo-panel="1"] a').click();
-  await expect(page.locator('[data-demo-tab="files"]')).toHaveAttribute("aria-selected", "true");
-  await expect(page.locator('[data-demo-panel="files"]')).toBeVisible();
+  await expectDemoDestination(page, "files");
 });
 
 test("mobile logo motion keeps keyboard feature selection and reduces to a static preview", async ({
@@ -1158,12 +1233,16 @@ test("mobile logo motion keeps keyboard feature selection and reduces to a stati
   await page.keyboard.press("ArrowRight");
   await expect(scene.locator('[data-logo-feature="1"]')).toBeFocused();
   await expect(scene.locator('[data-logo-panel="1"]')).toBeVisible();
+  await scene.locator('[data-logo-panel="1"] a').click();
+  await expectDemoDestination(page, "files");
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.setViewportSize({ width: 1440, height: 900 });
   await expect(scene).not.toHaveClass(/logo-experience-motion/);
   await scene.locator('[data-logo-feature="3"]').click();
   await expect(scene.locator('[data-logo-panel="3"]')).toBeVisible();
   await expect(scene.locator('[data-logo-panel="3"]')).toContainText("나의 상담 준비 리포트");
+  await scene.locator('[data-logo-panel="3"] a').click();
+  await expectDemoDestination(page, "report");
 });
 
 test("the demo connects the chosen scenario, materials and timeline and requires a fresh report review", async ({

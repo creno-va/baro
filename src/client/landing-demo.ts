@@ -204,7 +204,7 @@ if (demoRoot) {
       );
     }
   }
-  function openFeature(next: DemoFeature, focus = false) {
+  function openFeature(next: DemoFeature, focus = false, block: ScrollLogicalPosition = "nearest") {
     for (const panel of all("[data-demo-panel]")) panel.hidden = panel.dataset.demoPanel !== next;
     for (const tab of all<HTMLButtonElement>("[data-demo-tab]")) {
       const active = tab.dataset.demoTab === next;
@@ -221,7 +221,7 @@ if (demoRoot) {
       heading?.focus({ preventScroll: true });
       heading?.scrollIntoView({
         behavior: motion.matches ? "instant" : "smooth",
-        block: "nearest",
+        block,
       });
     }
   }
@@ -339,12 +339,14 @@ if (demoRoot) {
     if (!detail || typeof detail !== "object" || !("feature" in detail)) return;
     const next = detail.feature;
     if (typeof next !== "string" || !features.includes(next as DemoFeature)) return;
+    // A handled request owns both focus and scrolling; its source link can cancel the native jump.
+    event.preventDefault();
     if (next !== "conversation") {
       answered = true;
       refreshConversation();
     }
-    openFeature(next as DemoFeature, true);
-    root.scrollIntoView({ behavior: motion.matches ? "instant" : "smooth", block: "start" });
+    if (location.hash !== "#try-baro") history.pushState(null, "", "#try-baro");
+    openFeature(next as DemoFeature, true, "start");
   });
 
   reset("loan");
