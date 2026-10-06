@@ -19,6 +19,7 @@ import { createModerationService } from "../src/server/modules/moderation/servic
 import { application } from "./fixtures/contracts/v2";
 import { createTestDatabase } from "./helpers/d1";
 import { seedTestSession } from "./helpers/session";
+import { NOW, ready } from "./helpers/storage-capacity";
 
 const databases: Awaited<ReturnType<typeof createTestDatabase>>[] = [];
 afterEach(() => {
@@ -54,9 +55,9 @@ const stream = (bytes: Uint8Array, width = 65536) => {
     { highWaterMark: 0 },
   );
 };
-async function fixture() {
-  const db = await createTestDatabase();
-  databases.push(db);
+async function fixture(meteredReads = false) {
+  const db = meteredReads ? (await ready()).db : await createTestDatabase();
+  if (!meteredReads) databases.push(db);
   const owner = await seedTestSession(db, { consent: true });
   const other = await seedTestSession(db, { consent: true });
   const cipher = await createCaseDataCipher({
@@ -66,6 +67,7 @@ async function fixture() {
   const core = createV2Core(db.binding, cipher);
   const repository = createV2LawyersRepository(core);
   const objects = new Map<string, Uint8Array>();
+  let getCalls = 0;
   let badReceipt = false;
   let rejectedPut = false;
   let onPut: (() => void) | null = null;
@@ -80,6 +82,7 @@ async function fixture() {
       return { key, size: badReceipt ? data.length + 1 : data.length };
     },
     async get(key: string) {
+      getCalls++;
       const data = objects.get(key);
       return data ? { key, size: data.length, body: stream(data) } : null;
     },
@@ -115,6 +118,7 @@ async function fixture() {
     bucket,
     service,
     profileId,
+    getCalls: () => getCalls,
     setBad: () => {
       badReceipt = true;
     },
@@ -717,4 +721,44 @@ test("submitted verification download is confined to fresh moderator/application
   expect(
     await f.repository.roles({ ownerId: f.owner.userId, now: new Date().toISOString() }),
   ).toContain("verified_lawyer");
+});
+
+test("lawyer private original reads require current maintenance budget and consent before R2 GET", async () => {
+  const f = await fixture(true),
+    bytes = new TextEncoder().encode("synthetic private asset");
+  f.beforeStore(async () => {
+    const b = f.db.sqlite
+      .query("SELECT id,object_key,cipher_bytes FROM v2_blobs WHERE state='pending'")
+      .get() as { id: string; object_key: string; cipher_bytes: number };
+    f.db.sqlite
+      .query(`INSERT INTO v2_physical_blob_bindings(blob_id,environment,owner_id,object_key,maximum_cipher_bytes,state,writer_state,created_at)
+      VALUES(?,'preview',?,?,?,'held','stopped',?)`)
+      .run(b.id, f.owner.userId, b.object_key, bytes.length + 65536, NOW);
+  });
+  const r = await f.service.reserve(
+    f.owner.userId,
+    1,
+    "synthetic_maintenance_asset",
+    {
+      name: "synthetic.png",
+      byteLength: bytes.length,
+      mediaType: "image/png",
+      purpose: "identity",
+    },
+    "verification",
+  );
+  await f.service.upload(f.owner.userId, r.assetId, 1, bytes.length, stream(bytes));
+  const metered = createLawyerAssetsService(f.core, {
+    environment: "preview",
+    bucket: f.bucket,
+    clock: () => NOW,
+  });
+  const first = await metered.open(f.owner.userId, r.assetId);
+  expect(new Uint8Array(await new Response(first.body).arrayBuffer())).toEqual(bytes);
+  f.db.sqlite.query("DELETE FROM user_consents WHERE user_id=?").run(f.owner.userId);
+  await expect(metered.open(f.owner.userId, r.assetId)).rejects.toMatchObject({
+    code: "PROCESSING_UNAVAILABLE",
+  });
+  expect(f.getCalls()).toBe(1);
+  expect(f.db.sqlite.query("SELECT gets FROM v2_storage_projections").get()).toEqual({ gets: 1 });
 });
