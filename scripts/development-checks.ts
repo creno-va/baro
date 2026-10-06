@@ -169,6 +169,7 @@ async function main() {
       const child = Bun.spawn(["bunx", "playwright", "test", "--config", config, ...selected], {
         stdout: "inherit",
         stderr: "inherit",
+        env: { ...process.env, PUBLIC_API_MODE: "mock" },
       });
       if (await child.exited) process.exit(1);
     }

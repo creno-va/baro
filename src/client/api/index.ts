@@ -23,7 +23,7 @@ let httpMocksReady: Promise<void> | undefined;
 async function initializeHttpMocks() {
   for (const name of ["workspace", "files", "reports", "account"]) {
     const mockLoader = mockModules[`./mock/${name}.ts`];
-    if (!mockLoader) throw new ApiError("UNAVAILABLE", "예시 API 연결을 준비하고 있어요.", true);
+    if (!mockLoader) continue;
     const mock = await mockLoader();
     const suffix = name[0]?.toUpperCase() + name.slice(1);
     const runtime = {
@@ -72,9 +72,10 @@ function domain<T>(name: string): T {
             clients.set(name, client);
           }
           try {
-            const fn = (await client)[method];
+            const resolved = await client;
+            const fn = resolved[method];
             if (!fn) throw new ApiError("UNAVAILABLE", "이 기능을 연결하고 있어요.", true);
-            return await fn(...args);
+            return await fn.apply(resolved, args);
           } catch (error) {
             clients.delete(name);
             throw error;

@@ -29,11 +29,23 @@ test("cached private mutation cannot resurrect a deleted case or deleted account
   writeStore("caseOwners", { one: "owner" });
   let calls = 0;
   registerMockHandlers({ "cases.saveSummary": () => ({ id: "one", revision: ++calls }) });
-  expect(await mockRequest("cases.saveSummary", { id: "one" }, "request-one")).toEqual({
+  expect(
+    await mockRequest<{ id: string; revision: number }>(
+      "cases.saveSummary",
+      { id: "one" },
+      "request-one",
+    ),
+  ).toEqual({
     id: "one",
     revision: 1,
   });
-  expect(await mockRequest("cases.saveSummary", { id: "one" }, "request-one")).toEqual({
+  expect(
+    await mockRequest<{ id: string; revision: number }>(
+      "cases.saveSummary",
+      { id: "one" },
+      "request-one",
+    ),
+  ).toEqual({
     id: "one",
     revision: 1,
   });
