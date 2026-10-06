@@ -28,8 +28,10 @@ function withSyntheticBillingMetadata(binding: D1Database): D1Database {
       bind: (...values: unknown[]) => wrap(statement.bind(...values)),
       all: async <T>() => receipt(await statement.all<T>()),
       run: async <T>() => receipt(await statement.run<T>()),
-      first: <T>(column?: string) => statement.first<T>(column),
-      raw: <T>(options?: { columnNames?: boolean }) => statement.raw<T>(options),
+      first: <T>(column?: string) =>
+        column === undefined ? statement.first<T>() : statement.first<T>(column),
+      raw: <T>(options?: { columnNames?: boolean }) =>
+        options?.columnNames ? statement.raw<T>({ columnNames: true }) : statement.raw<T>(),
     } as D1PreparedStatement;
     originals.set(value, statement);
     return value;
@@ -99,8 +101,8 @@ test("global production gate keeps every report route private and blocks before 
     ["/api/v2/cases/synthetic-case/reports", "POST"],
     ["/api/v2/reports/synthetic-report/pdf", "GET"],
     ["/api/v2/reports/synthetic-report/zip", "POST"],
-  ]) {
-    const response = await workerApi.request(path as string, { method }, {
+  ] as const) {
+    const response = await workerApi.request(path, { method }, {
       APP_ENV: "production",
       PUBLIC_BETA_ENABLED: "false",
     } as Env);
