@@ -63,7 +63,9 @@ test("account type requires signed owner session and configured origin; rejects 
     needsConsent: false,
   });
   expect(db.sqlite.query("SELECT count(*) n FROM v2_role_bindings").get()).toEqual({ n: 0 });
-  expect(await (await app.request("/api/me/session", undefined, owner.env)).json()).toEqual({
+  expect(
+    (await (await app.request("/api/me/session", undefined, owner.env)).json()) as unknown,
+  ).toEqual({
     user: null,
     needsConsent: false,
   });

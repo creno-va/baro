@@ -68,3 +68,43 @@ export function clearMockStore() {
     for (const key of Object.keys(localStorage))
       if (key.startsWith(prefix)) localStorage.removeItem(key);
 }
+
+export type AggregateMockState = Record<string, unknown> & {
+  session: SessionView;
+  cases: Record<string, import("../types").CaseView>;
+  workspace: Record<string, unknown>;
+  files: Record<string, import("../types").FileView[]>;
+  reports: Record<string, import("../types").ReportView>;
+};
+function storeNamespaces(): string[] {
+  const names = new Set(memory.keys());
+  if (typeof localStorage !== "undefined")
+    for (const key of Object.keys(localStorage))
+      if (key.startsWith(prefix)) names.add(key.slice(prefix.length));
+  return [...names];
+}
+export const mockRuntime = {
+  read(): AggregateMockState {
+    const state: AggregateMockState = {
+      session: { user: null, needsConsent: false },
+      cases: {},
+      workspace: {},
+      files: {},
+      reports: {},
+    };
+    for (const namespace of storeNamespaces()) state[namespace] = readStore(namespace, null);
+    return state;
+  },
+  update<T>(mutate: (state: AggregateMockState) => T): T {
+    const state = mockRuntime.read();
+    const previous = storeNamespaces();
+    const result = mutate(state);
+    for (const namespace of previous)
+      if (!(namespace in state)) {
+        memory.delete(namespace);
+        if (typeof localStorage !== "undefined") localStorage.removeItem(prefix + namespace);
+      }
+    for (const [namespace, value] of Object.entries(state)) writeStore(namespace, value);
+    return result;
+  },
+};
