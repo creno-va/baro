@@ -1,0 +1,98 @@
+{
+  "assignees": [],
+  "body": "## 2026-10-06 사용자 정정: 실제 client UI + API mock\n\nmock은 API 응답/adapter다. 실제 제품 client UI 동일 구현체를 개발하며 별도 /mock UI를 만들지 않는다. 지금은 계획·마일스톤·소유 범위 확정이 먼저이며 사용자가 아래 다섯 세션을 직접 시작한다. 완료 목표는 다섯 세션 실제 착수 시각부터 2시간이다. 기존 19:51~21:51 고정 시각은 초기 해석 기록이며 현재 deadline이 아니다.\n\n## 5개 독립 stream\n\n- [ ] A #102: 공통 API facade/types/mock fixtures/real adapter + 고객/변호사 통합 로그인 + 공통 shell; 첫 20분 최소 계약·adapter·shell PR, 통합/preview 담당\n- [ ] B #103: 사건 목록/생성/질문/요약 확인\n- [ ] C #104: workspace/대화/자료/타임라인/다음 행동\n- [ ] D #105: 리포트 검토/다운로드/설정/사용량/삭제/도움말·정책 views\n- [ ] E #106: 변호사 자기 프로필 portal/기존 디렉터리/직접 연락\n\n정본: docs/development/CLIENT-API-CONTRACT.md, docs/development/PARALLEL-UI-SPRINT.md. A~E 전용 feature styles를 사용하고 global.css와 facade 변경은 A만 소유. B~E는 동결 계약으로 독립 scaffold하며 A CLOSED/병합과 backend CI를 기다리지 않는다. 고객/변호사 두 역할만 시연하며 승인 어드민/반려/승인대기 UX는 MVP 제외.\n\n## 완료 기준과 후속\n\n- [ ] 실제 제품 경로에서 모든 주요 고객/변호사 흐름 클릭 가능\n- [ ] 모바일·키보드 기본 흐름, 빈/진행/오류/다시 시도 상태\n- [ ] 실행 URL·PR·기능별 시연 기록, mock/real mode 명확히 구분\n- [ ] client UI를 복제하지 않고 같은 facade로 real backend 연결 가능\n\nAPI mock 완료 뒤 각 stream은 같은 UI의 기능 연결을 병렬 진행한다. #65 고객 사건 기능, #62 변호사 자기 프로필 기능, #66 실제 PDF/ZIP, #67 실제 삭제, #68 동의/정책, #69 고객/변호사 E2E를 별도 추적한다. #64 PR100과 기존 병합 구현을 재사용한다. DB/AI/OAuth/live/공개 gate는 mock 선행이 아니며 실제 외부 성공으로 허위 표시하지 않는다. 완료된 코드/이슈/증거 보존, 새 DB/비용 선행 작업 금지. AI 답변 품질 확대는 모든 UX 연결 뒤. P0.3 및 #70/#71 외부·정책·production·최초 공개 gate 보존.\r\n",
+  "comments": [
+    {
+      "id": "IC_kwDOU7JsN88AAAABZo6gMg",
+      "author": {
+        "login": "hwangeunchan"
+      },
+      "authorAssociation": "COLLABORATOR",
+      "body": "A 공통 기반 `92da530` push 완료: `codex/102-api-mock-shell`, PR #110. 최신 main ee3db6b 기반, 타입검사/build 통과. 같은 실제 제품 UI의 `PUBLIC_API_MODE=mock` 명시 사용(기본 real). 공통 shell/로그인/동의/로그아웃 포함.\n\n`core.ts`: `request<T>(operation: string, input?: unknown, options?: {path?: string; method?: string; body?: unknown; key?: string}): Promise<T>`; `ApiError(code,message,retryable=false)`, `errorMessage`, `apiMode`, `registerMockHandlers`.\n\n`mock/runtime.ts`: `registerMockHandlers(Record<string,(input,context:{key:string})=>unknown|Promise<unknown>>)`; `readStore<T>(namespace,fallback):T`, `writeStore<T>(namespace,value):void`, `updateStore<T>(namespace,fallback,update):T`, `requireSession():SessionView`, `clearMockStore`.\n\nDomain 파일에서 `./mock/<domain>` import로 handler 등록. operation은 facade 이름과 일치(예: workspace.get/sendMessage, lawyers.list/getMine/saveMine). mock input은 `{id,...}` 객체. domain 파일은 `<domain>Api`(예: casesApi) export, A index.ts가 facade 등록합니다. 이미 Request→Response native fetch 기반 adapter를 구현했다면 변경 파일/시그니처를 알려 주세요. A가 core 호환 transport를 추가해 중복 구현을 피하겠습니다.\n\n공유 `cases` namespace: `Record<string,CaseView>`; `session`: `SessionView`. session id는 `example-customer`, `example-lawyer`. 기본 case는 빈 상태. 각 domain 상태는 별도 namespace로 보존하고 공통 case 변경·삭제/선택 file의 id를 맞춥니다. role 자기선택을 verified/moderator로 저장하지 않습니다.\n\n가져오기: `git fetch origin codex/102-api-mock-shell` → `git cherry-pick 92da530`(공통 파일만 포함). 실행: `PUBLIC_API_MODE=mock BARO_UI_TEST_FIXTURE=true ASTRO_TELEMETRY_DISABLED=1 bun dev -- --port <담당포트>`. 75~100분 인계 목표 유지. 검증 결과와 PR을 #101 및 담당 issue에 남겨 주세요. A는 4340 통합 검증/preview 소유입니다.\n",
+      "createdAt": "2026-10-06T11:48:39Z",
+      "includesCreatedEdit": false,
+      "isMinimized": false,
+      "minimizedReason": "",
+      "reactionGroups": [],
+      "url": "https://github.com/creno-va/baro/issues/101#issuecomment-6015590450",
+      "viewerDidAuthor": true
+    },
+    {
+      "id": "IC_kwDOU7JsN88AAAABZpckLA",
+      "author": {
+        "login": "hwangeunchan"
+      },
+      "authorAssociation": "COLLABORATOR",
+      "body": "A 통합 후보 2e0b062 push. 공통만 cherry-pick 시 cf5f1b2: 누락 domain loader skip, native mutation lifecycle/삭제 후 캐시 재생 방지, 삭제 계정 재로그인 ID 순환, real 세션 만료 동의 redirect, D v2 case-delete router mount, preview 빌드만 PUBLIC_API_MODE=mock, CI mock browser 별도 config 실행입니다. C/D/E 각각 최신 branch를 후보에 반영했습니다. C/E 담당 test type 오류 수정 요청은 각 issue에 남겼습니다. 포트4340 공통 고객 셸 + E 실제 제품 흐름 browser2 통과. API/mock39 tests264 assertions 통과. 고객 생성→자료→리포트→삭제를 계속 검증합니다.",
+      "createdAt": "2026-10-06T12:23:38Z",
+      "includesCreatedEdit": false,
+      "isMinimized": false,
+      "minimizedReason": "",
+      "reactionGroups": [],
+      "url": "https://github.com/creno-va/baro/issues/101#issuecomment-6016148524",
+      "viewerDidAuthor": true
+    },
+    {
+      "id": "IC_kwDOU7JsN88AAAABZpffFg",
+      "author": {
+        "login": "hwangeunchan"
+      },
+      "authorAssociation": "COLLABORATOR",
+      "body": "CI 진단·멀티 세션 중재 기록 — 2026-10-06 21:26 KST\n\n결론: 최근 UI PR 실패는 GitHub runner/설치 장애가 아니라 공유 기반 및 통합 테스트의 타입 오류입니다. 같은 코드가 stacked PR에 포함돼 여러 PR이 함께 빨간 상태가 됩니다. Quality gate 실패는 Source and browser checks 실패의 후속 결과입니다. 오류가 있는 동일 SHA의 재실행만으로는 해결되지 않습니다.\n\n확인한 증거:\n- main f87f546: CI 성공 https://github.com/creno-va/baro/actions/runs/37460944147 및 preview 성공 https://github.com/creno-va/baro/actions/runs/37461195572 . 최근 PR들은 설치/의존성 audit/secret scan/lint까지 통과하고 Typecheck에서 중단됩니다.\n- 이전 공통 session.signIn의 TS7030 반환 누락이 C/E 등으로 전파됐고 A 후속 수정에 포함됐습니다. E 과거 실패 run: https://github.com/creno-va/baro/actions/runs/37461579127 .\n- A 5dd52b3 / D e6d179b의 tsc 오류: C helper tests/helpers/workspace-client-fixture.ts:47의 Workers Request generic 불일치와 E tests/lawyer-self-profile.test.ts:207의 string|null 대 string|undefined 비교. C helper 수정은 A 2e0b062에 들어 있습니다. E 비교는 해당 candidate에 남아 있습니다. 근거 https://github.com/creno-va/baro/actions/runs/37462501175 및 https://github.com/creno-va/baro/actions/runs/37462722839 .\n- 최신 A candidate 2e0b062는 그보다 앞선 Astro check에서 src/client/api/mock/runtime.test.ts:32,36 TS2769 두 건으로 실패했습니다. generic mockRequest의 반환 타입을 명시하지 않은 테스트 비교가 undefined로 추론됩니다. 따라서 이후 tsc까지 아직 도달하지 않았습니다. https://github.com/creno-va/baro/actions/runs/37462894058 .\n\n통합 상태를 구분합니다: #111/#112/#113은 main이 아니라 codex/102-api-mock-shell로 병합됐습니다. main 반영/전체 CI 성공으로 기록하지 않습니다. #110이 main 진입 통합 후보이며 #115는 main 대상 별도 B PR입니다. PR 완료 뒤 표시되는 Deploy preview skipped는 main push+CI success 조건에 해당하지 않아 정상입니다.\n\n담당 조정:\n1. A/#102: runtime.test.ts 두 호출에 실제 합성 응답 DTO generic을 명시하고 타입/해당 테스트 검증. E 수정 및 B 최신 delta를 받아 하나의 통합 SHA로 타입·build·변경 기능 browser·Worker 검증을 완료합니다. 테스트를 제외하거나 타입 strictness/Quality gate를 완화할 필요는 없습니다.\n2. E/#106: self-profile.test.ts의 첫 profile 존재를 명시적으로 확인한 뒤 cursor와 비교하거나 의도에 맞는 null 처리를 적용합니다. 이미 A에 병합된 PR의 과거 실패를 재실행하기보다 담당 worktree 수정 commit SHA를 남겨 A가 통합합니다.\n3. C/#104: helper 수정은 통합본에서 확인됐습니다. 같은 오류의 중복 수정은 불필요합니다. 본인 변경 기능 검증을 이어가며 추가 서버 누락은 기존 #65 범위를 유지합니다.\n4. B/#103: #115 최신 0fa221c와 A 2e0b062 사이 B 소유 delta가 남습니다. cases.ts의 real saveSummary/confirmSummary에서 this.get을 casesApi.get으로 바꾸는 수정, unbound 호출 검증 및 pending polling browser 검증을 A에 인계합니다. A에 polling fix는 이미 있으므로 같은 수정을 중복 적용하지 않습니다. PR base/병합 순서는 A와 조율합니다.\n5. D/#105: 최근 D 실패에 보고된 두 타입 오류는 C/E에서 들어온 코드입니다. D 소유 로직의 실패로 단정하거나 D에서 다른 담당 파일을 고치지 않습니다. 공통 candidate 통합 후 다운로드/삭제 연결 검증을 유지합니다.\n\n각 담당은 수정 SHA·변경 파일·담당 검증 결과를 자신의 issue에 남기고 A가 통합 SHA/CI 링크를 #101에 갱신해 주세요. 독립 UI 개발을 막지 않으며 #70/#71과 production 승인 gate는 유지합니다. 이 진단 세션은 제품 파일/기존 작업 branch를 수정하지 않았습니다. 로컬 PATH에는 Bun이 없어 work:next 실행은 불가했고 GitHub 이슈/PR/check와 원격 코드로 상태를 직접 대조했습니다.\n",
+      "createdAt": "2026-10-06T12:26:20Z",
+      "includesCreatedEdit": false,
+      "isMinimized": false,
+      "minimizedReason": "",
+      "reactionGroups": [],
+      "url": "https://github.com/creno-va/baro/issues/101#issuecomment-6016196374",
+      "viewerDidAuthor": true
+    },
+    {
+      "id": "IC_kwDOU7JsN88AAAABZpsrig",
+      "author": {
+        "login": "hwangeunchan"
+      },
+      "authorAssociation": "COLLABORATOR",
+      "body": "A 통합 최신작업: PR100 최신main재CI 전체green 후 squash main병합(b6cfdfe). 고객mock 4340전체완주/PDF/ZIP원본·CRC/삭제 통과. 전체unit1170, build/cf dry-run 통과. 공통 auth5 + signedSession1 + v2intake/legacySQL 목록회귀3통과. facade cache를 loading/factory 실패 때만 초기화하며 API 실패시 client instance와request/revision상태유지, HTTPmock등록도atomic/retry reset으로수정하고6tests통과했습니다. E 담당보완0def313 test narrowing을받아통합중. 남은 공통browserfixture(analytics/design-system/settings/XSS)와 Clegacyanalysis 회귀 수정 후 최종CI/main/preview로진행합니다. main에는아직UI후보미반영이며 actual OAuth/AI/R2성공을 주장하지않습니다.",
+      "createdAt": "2026-10-06T12:37:29Z",
+      "includesCreatedEdit": false,
+      "isMinimized": false,
+      "minimizedReason": "",
+      "reactionGroups": [],
+      "url": "https://github.com/creno-va/baro/issues/101#issuecomment-6016412554",
+      "viewerDidAuthor": true
+    },
+    {
+      "id": "IC_kwDOU7JsN88AAAABZptsgA",
+      "author": {
+        "login": "hwangeunchan"
+      },
+      "authorAssociation": "COLLABORATOR",
+      "body": "보완 세션 인계 답변: E0def313 A후보cherry-pick78792a4 완료. 공유 facade는 a5e6169에서 cacheClient(load)로분리해module/factory load실패만reset,메서드실패client상태보존, native mock등록 atomic+실패시readyPromise reset. 의미있는 회귀test추가6개통과. C기존analysis.e2e는v2workspace404fixture와v1실제POSTseed+API/Vite URLguard가필요한상태이며 #104/PR116에인계했습니다. B/C/D중단상태를확인해공통settings/analytics/design-system/XSS browserfixture도A가갱신중입니다(제품도메인파일아직편집없음). 보완담당이Clegacyanalysis test만이어받을수있으면 최종단일CI수렴이빨라집니다. A는공통회귀+mainpreview담당유지합니다.",
+      "createdAt": "2026-10-06T12:38:27Z",
+      "includesCreatedEdit": false,
+      "isMinimized": false,
+      "minimizedReason": "",
+      "reactionGroups": [],
+      "url": "https://github.com/creno-va/baro/issues/101#issuecomment-6016429184",
+      "viewerDidAuthor": true
+    }
+  ],
+  "labels": [
+    {
+      "id": "LA_kwDOU7JsN88AAAAC63BcsQ",
+      "name": "type:epic",
+      "description": "여러 구현 작업을 묶는 추적 이슈",
+      "color": "3E4B9E"
+    },
+    {
+      "id": "LA_kwDOU7JsN88AAAAC63BeJw",
+      "name": "priority:p0",
+      "description": "공개 베타 전 필수",
+      "color": "B60205"
+    }
+  ],
+  "number": 101,
+  "state": "OPEN",
+  "title": "[Epic] 5세션·2시간 실제 client UI + API mock 전체 UX"
+}

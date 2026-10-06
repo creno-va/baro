@@ -1,0 +1,46 @@
+{
+  "baseRefName": "main",
+  "body": "질문·답변 저장에서 요약 수정/확인과 지속 대화까지 v2 사건 백엔드를 연결합니다. 응답과 사실·당사자·행동·타임라인 갱신은 함께 저장되며 요청 키 재실행, revision 충돌, 실패 작업 재시도와 durable dispatch를 처리합니다. 모델은 기존 pinned Gateway를 사용하고 공식 출처 조회는 서버가 허용한 공개 법률명·개념으로 제한합니다.\n\n검증: 변경 기능 테스트 6개/49 assertions, TypeScript, 제품 build, Worker dry-run 통과. 전체 사례·회귀 검사는 반복하지 않았습니다. schema/migration 변경 없음.\n\n실제 모델 V18과 전 역할 UI는 #71에 남습니다. 배포 소유 모델 bounds와 pricing/funding/allocation 증거가 없으면 유료 실행을 거절하고 저장된 사건은 보존합니다. 로컬 합성 adapter 성공을 실제 모델 성공으로 표현하지 않습니다.\n\nRefs #64\nRefs #71\r\n",
+  "headRefName": "codex/64-workspace-pipeline",
+  "headRefOid": "1bce7042343f633edca43b5f62376088d912f4f6",
+  "mergeCommit": {
+    "oid": "b6cfdfe3676506bf2b4880af0911138a9b3f107e"
+  },
+  "mergeStateStatus": "UNKNOWN",
+  "mergedAt": "2026-10-06T12:36:16Z",
+  "number": 100,
+  "state": "MERGED",
+  "statusCheckRollup": [
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-10-06T12:28:58Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/creno-va/baro/actions/runs/37463528187/job/112268754614",
+      "name": "Isolated native media fixtures",
+      "startedAt": "2026-10-06T12:28:52Z",
+      "status": "COMPLETED",
+      "workflowName": "CI"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-10-06T12:35:09Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/creno-va/baro/actions/runs/37463528187/job/112268754865",
+      "name": "Source and browser checks",
+      "startedAt": "2026-10-06T12:28:52Z",
+      "status": "COMPLETED",
+      "workflowName": "CI"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-10-06T12:35:16Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/creno-va/baro/actions/runs/37463528187/job/112271365344",
+      "name": "Quality gate",
+      "startedAt": "2026-10-06T12:35:12Z",
+      "status": "COMPLETED",
+      "workflowName": "CI"
+    }
+  ],
+  "url": "https://github.com/creno-va/baro/pull/100"
+}

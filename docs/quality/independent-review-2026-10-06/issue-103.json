@@ -1,0 +1,74 @@
+{
+  "assignees": [],
+  "body": "## 2026-10-06 사용자 지시와 2시간 sprint\n\n상위 #101, milestone 6. mock은 API adapter이며 실제 제품 client UI 동일 구현체를 사용한다. 별도 /mock 화면을 만들지 않는다. 계획 확정 뒤 5개 사용자 세션 착수 시각부터 2시간 내 모든 주요 UX를 클릭 가능하게 제공한다. 먼저 API mock UI를 완성하고 같은 client의 real adapter/backend 연결을 병렬 진행한다.\n\n## 독립 소유 범위\n\n- `src/pages/cases/index.astro`\n- `src/pages/cases/new.astro`\n- `src/pages/cases/[caseId]/intake.astro`\n- `src/pages/cases/[caseId]/summary.astro`\n- `src/components/intake`\n- `src/client/api/cases.ts`\n- `src/client/api/mock/cases.ts`\n- `src/styles/intake.css`\n\nDepends on: 없음 (독립 client/API mock 범위). 정본 docs/development/CLIENT-API-CONTRACT.md와 docs/development/PARALLEL-UI-SPRINT.md에 고정된 route/DTO/facade를 따른다. 계약 수정은 A/root 통합 담당과 조율한다. B~E 독립 scaffold는 A 이슈 종료/병합, DB/AI/OAuth/live gate를 기다리지 않는다.\n\n## 인수 조건\n\n- [ ] 사건 목록/빈 상태 → 새 사건 생성 → 질문(모름/건너뛰기/뒤로/저장) → 요약 수정·확인 → C workspace 경로.\n- [ ] 주요 입력/이동/확인/취소/빈 상태/진행/오류/재시도 UX가 실제 제품 경로에서 동작\n- [ ] 모바일·키보드 기본 흐름 확인 및 안전한 합성 데이터/다운로드로 시연\n- [ ] mock/real mode를 구분하고 실제 OAuth/AI/R2/처리 성공으로 허위 표시하지 않음\n- [ ] 본인 소유 파일만 변경하며 전역 styles/API facade/schema는 중복 수정하지 않음\n- [ ] 실행 URL·PR·변경 기능 확인 결과·남은 실제 기능 blocker 제공\n\n기존 v1 목록·읽기 호환 보존. workspace 상세 root는 C 소유. #64 PR100을 재사용하며 mock 개발에는 backend CI/main 병합을 요구하지 않는다. 실제 저장/재접속/확인 기능 연결은 #65에서 완료 검증.\n\n완료된 이슈·코드·CI/병합 증거는 보존한다. 새 기반/비용/DB 선행 이슈를 추가하지 않는다. AI 응답 품질 확대는 UX 뒤. 공개 정책/법률/production 승인 gate #70/#71은 보존하지만 mock 개발을 막지 않는다. 계정·사건·token·secret·오류 stack/SQL은 artifact에 기록하지 않는다. 이 이슈의 완료는 API mock UX 시연이며 실제 기능과 외부 gate 완료로 바꾸어 표현하지 않는다.\r\n\n\n## 실제 기능 연결 서버 소유 경계\n\nB는 실제 cases/intake/summary client adapter와 기존 서버 API 소비만 소유한다. workspace 서버 service/API 누락은 C에 요청하며 같은 서버 파일을 수정하지 않는다.\n\r\n",
+  "comments": [
+    {
+      "id": "IC_kwDOU7JsN88AAAABZo2RmQ",
+      "author": {
+        "login": "hwangeunchan"
+      },
+      "authorAssociation": "COLLABORATOR",
+      "body": "B 구현 시작: 최신 main ee3db6b 기반 별도 worktree / codex/103-intake-ui-api-mock, 로컬 포트 4341. 고정 client 계약으로 동일 제품 UI의 목록·생성·질문·요약을 먼저 구현하고 실제 intake/summary adapter 연결을 진행합니다. 합성 데이터만 검증에 사용하며 공통 파일과 서버는 소유자에게 요청합니다.",
+      "createdAt": "2026-10-06T11:44:06Z",
+      "includesCreatedEdit": false,
+      "isMinimized": false,
+      "minimizedReason": "",
+      "reactionGroups": [],
+      "url": "https://github.com/creno-va/baro/issues/103#issuecomment-6015521177",
+      "viewerDidAuthor": true
+    },
+    {
+      "id": "IC_kwDOU7JsN88AAAABZpYNqQ",
+      "author": {
+        "login": "hwangeunchan"
+      },
+      "authorAssociation": "COLLABORATOR",
+      "body": "사건 목록의 빈 상태에서 새 사건을 만들고, 답변·모름·건너뛰기를 저장해 요약 편집·확인 후 같은 사건 workspace 경로로 이동합니다. 기존 v1 기록은 원래 상세 경로로 유지하며 모든 화면은 api.cases를 소비합니다. mock은 공통 cases/caseOwners 저장소와 intake 상태를 보존하므로 새로고침·재개·뒤로 수정이 이어집니다. 요약에서 이전 질문을 수정하면 기존 요약을 무효화하고 다시 준비합니다.\n\nPR100을 소비하는 real adapter도 구현했습니다. 질문 저장/비동기 advance와 summary 편집/확인의 intake·workspace·summary revision, idempotency key, 보안 확인, 작업 상태/재시도를 변환합니다. B 소유 파일과 담당 테스트만 직접 수정했고 공통 기반은 A의 92da530/fad82f0/e31a051을 가져왔습니다.\n\n검증: 변경 기능 Bun 테스트 7개/30 assertions, 제품 경로 Playwright 5개(모바일·키보드·200%·저장/reload/resume·충돌·저장 오류/재시도·동일 입력 새 사건), TypeScript/Astro, 제품 build, Worker dry-run 통과. 합성 입력과 API mock/HTTP 대역으로 검증했으며 실제 OAuth/AI/R2 성공을 뜻하지 않습니다. 전체 corpus/대용량 회귀는 반복하지 않았습니다.\n\n시작: PUBLIC_API_MODE=mock BARO_UI_TEST_FIXTURE=true로 포트 4341, /login → 고객 → 동의 → /cases. 담당 browser: bunx playwright test --config tests/browser/intake103.config.ts.\n\n남은 실제 연결: PR100은 검증 당시 CI SUCCESS/OPEN이므로 검토·main 통합 및 runtime readiness는 A/C 담당입니다. PR100 answers API는 마지막 질문 batch만 수정하므로 이전 batch까지의 실제 back-edit 확대는 C에 요청합니다. 실제 OAuth·Turnstile·모델/예산 readiness와 외부 성공 증거는 #65/#71에 남습니다. workspace 내용 및 report/삭제까지의 합성 통합 시연은 A가 C/D PR과 합쳐 확인합니다.\n\nRefs #103\nRefs #65\nRefs #64\n",
+      "createdAt": "2026-10-06T12:19:15Z",
+      "includesCreatedEdit": false,
+      "isMinimized": false,
+      "minimizedReason": "",
+      "reactionGroups": [],
+      "url": "https://github.com/creno-va/baro/issues/103#issuecomment-6016077225",
+      "viewerDidAuthor": true
+    },
+    {
+      "id": "IC_kwDOU7JsN88AAAABZpqgVw",
+      "author": {
+        "login": "hwangeunchan"
+      },
+      "authorAssociation": "COLLABORATOR",
+      "body": "A 인계: 최신5be2deb에 공통 cases.e2e.ts/real session 오류 정규화 완료. auth5 + signed-session1 + cases3 모두 통과. cases는 v2실제wire 생성/같은키 중복·재시도, 기존v1 SQL 직접seed→현재목록320px/200% reload,401/동의/back 확인으로 갱신했습니다. B 담당 신규6browser 보존. B067efed도A후보에반영. B chat이 archived여서 #103에 최종인계남깁니다. 원격 #115 standalone CI는 구공통cases로실패가능하므로 A 통합최종SHA CI에서 담당코드와전체흐름을 검증합니다. main에아직반영하지않았습니다.",
+      "createdAt": "2026-10-06T12:35:35Z",
+      "includesCreatedEdit": false,
+      "isMinimized": false,
+      "minimizedReason": "",
+      "reactionGroups": [],
+      "url": "https://github.com/creno-va/baro/issues/103#issuecomment-6016376919",
+      "viewerDidAuthor": true
+    }
+  ],
+  "labels": [
+    {
+      "id": "LA_kwDOU7JsN88AAAAC63Bdbg",
+      "name": "type:task",
+      "description": "검토 가능한 단일 구현 작업",
+      "color": "1D76DB"
+    },
+    {
+      "id": "LA_kwDOU7JsN88AAAAC63BeJw",
+      "name": "priority:p0",
+      "description": "공개 베타 전 필수",
+      "color": "B60205"
+    },
+    {
+      "id": "LA_kwDOU7JsN88AAAAC69yrMg",
+      "name": "status:in-progress",
+      "description": "자율 개발 실행 상태; docs/development/EXECUTION.md 기준",
+      "color": "1D76DB"
+    }
+  ],
+  "number": 103,
+  "state": "OPEN",
+  "title": "[UI-B] 고객 사건 목록·생성·적응형 질문·요약 확인"
+}
