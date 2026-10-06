@@ -4,6 +4,11 @@ import { guidance } from "../fixtures/contracts";
 const caseId = "11111111-1111-4111-8111-111111111111",
   analysisId = "22222222-2222-4222-8222-222222222222",
   storage = "baro.optional-analytics.v1";
+test.beforeEach(async ({ page }) => {
+  await page.route("**/api/v2/cases/*/workspace", (route) =>
+    route.fulfill({ status: 404, json: { error: { code: "NOT_FOUND" } } }),
+  );
+});
 test("decline leaves case flow usable with no optional storage/network; feedback independent", async ({
   page,
 }) => {

@@ -42,6 +42,7 @@ test("settings uses real signed session, OAuth state/callback, SQL account delet
     await page.route("**/api/**", async (route) => {
       const request = route.request(),
         url = new URL(request.url());
+      if (!url.pathname.startsWith("/api/")) return route.continue();
       const response = await route.fetch({
         url: `${seed.origin}${url.pathname}${url.search}`,
         headers: await request.allHeaders(),
@@ -81,6 +82,7 @@ test("settings uses real signed session, OAuth state/callback, SQL account delet
 });
 test("settings reauth needs a newer callback for same owner and a fresh explicit keyboard confirmation", async ({
   page,
+  baseURL,
 }) => {
   let stamp: string | null = null,
     deletes = 0;
@@ -100,7 +102,7 @@ test("settings reauth needs a newer callback for same owner and a fresh explicit
       callbackURL: "/settings",
     });
     stamp = new Date(Date.now() + 20).toISOString();
-    await route.fulfill({ json: { url: "http://127.0.0.1:4337/settings", redirect: true } });
+    await route.fulfill({ json: { url: `${baseURL}/settings`, redirect: true } });
   });
   await page.route("**/api/me", async (route) => {
     deletes++;

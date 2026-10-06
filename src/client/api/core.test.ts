@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { responseError } from "./core";
+import { cacheClient, responseError } from "./core";
 
 test("real API errors preserve consent and security-check boundaries without echoing server details", async () => {
   const consent = await responseError(
@@ -23,4 +23,24 @@ test("real API errors preserve consent and security-check boundaries without ech
   expect((await responseError(new Response("untrusted raw detail", { status: 403 }))).code).toBe(
     "VALIDATION_ERROR",
   );
+});
+
+test("a failed load retries but an API failure retains its domain instance and pending request state", async () => {
+  let loads = 0;
+  const client = {
+    key: "same-request",
+    save: () => {
+      throw new Error("temporary API failure");
+    },
+  };
+  const get = cacheClient(async () => {
+    if (++loads === 1) throw new Error("module load failed");
+    return client;
+  });
+  await expect(get()).rejects.toThrow("module load failed");
+  const loaded = await get();
+  expect(() => loaded.save()).toThrow("temporary API failure");
+  expect(await get()).toBe(loaded);
+  expect((await get()).key).toBe("same-request");
+  expect(loads).toBe(2);
 });
