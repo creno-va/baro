@@ -546,3 +546,43 @@ atomic batch에서 exact account-type metadata와 user를 삭제한다. SQL trig
 owner session 거부/만료/미래 재인증, 다른 owner metadata 보존, SQL 실패 시 metadata·user·
 journal 복구의 실제 SQLite 회귀를 포함한다. facade와 publishMine 계약 문서는 기존
 모듈의 profileId/expectedRevision/published/consent 요구를 반영한다. schema/migration 변경 없음.
+
+### 4세션 후속 통합과 외부 증거의 현재 경계
+
+공유 PR131 final head `f8ed6e38e53d5767d9845b2884f21d0a1b4bfb06`의
+[CI37493048253](https://github.com/creno-va/baro/actions/runs/37493048253)3 jobs 성공을 확인하고
+main `5e094b709a0656bed21948d60d34039662e589bf`로 정상 병합했다.
+동일 SHA의 [main CI37493558489](https://github.com/creno-va/baro/actions/runs/37493558489),
+[preview37493898259](https://github.com/creno-va/baro/actions/runs/37493898259), 별도 full-SHA/
+schema0009 smoke는 성공했다. 이전 PR129 후 main fixture 실패를 성공으로 바꾸지 않았다.
+
+고객 PR128 final head `e49edd9e22b0065a95d3bae45a7c855d46757e6c`의
+[CI37493874301](https://github.com/creno-va/baro/actions/runs/37493874301)3 jobs 성공과 실제 diff를
+검토하고 main `c6b96656ee6e4d7c968486b47a994b2807bdeadd`로 정상 병합했다.
+[main CI37494685736](https://github.com/creno-va/baro/actions/runs/37494685736)와
+[preview37495363389](https://github.com/creno-va/baro/actions/runs/37495363389)는 성공했으며
+독립 smoke도 동일 full SHA/schema0009를 확인했다. protected CI나 self APPROVE 우회 없음.
+공유 PR132는 고객 통합 main에 rebase한 `d73a9d3f97810cfcbd1ca3fab6d31114f4f86465`에서
+frozen ci/check1225 tests/133026 assertions, drift·fresh/upgrade6/29, build/dry-run을 통과했다.
+정확한 PR head CI와 최종 모든 모듈 SHA의 Full validation는 별도 기록한다.
+
+5e094b7 preview의 실제 IAB에서 API 예시 모드를 명시한 합성 변호사로 역할 선택·합성 동의,
+프로필·합성 PNG 사진·합성 PDF 포트폴리오 저장, reload 후 복원, 공개 설정·디렉터리·공개
+상세를 확인했다. 공개 상세에는 합성 정보임을 명시했다. screenshot은 ignored
+`.wrangler/integration/preview-5e094b7-lawyer.jpg`에 보존했다. IAB의 portfolio download event는
+10초 내 관측되지 않아 이 browser에서 파일 다운로드 성공으로 기록하지 않는다.
+별도 Chromium/SQL 다운로드 증거와 구분하며 실제 OAuth/R2 공개 copy 증거가 아니다.
+
+PR130 published19295aeb의 ZIP P1 후속은 입력 기반 예상800/전체900 query·source250행 한도,
+request-local dispatch 계수와 actual D1 row metadata 검증, single-query stream source fence를
+제공한다. [후속 리뷰](https://github.com/creno-va/baro/pull/130#issuecomment-6020690222)에
+원본 I/O 전 초과 거부·작은 선택 재시도·권한/동의/동일 revision 변경 회귀를 연결했다.
+900MB/100개는 입력 절대 상한이며 한 번의 synchronous ZIP 성공 범위가 아니다.
+Paid HTTP 기본 CPU30초와 코드 cost maximum300000ms는 별개다. 실제 CPU/deadline,
+remote row scans·billing·제품 처리/삭제는 미검증이며 global CPU 설정을 임의 확대하지 않는다.
+
+readiness의 Gateway403 원인이 바뀌지 않았으므로 기본 probe를 명시적 opt-in으로 변경한다.
+`check_gateway=false`의 not_requested/null은 존재·인증·호출 성공이 아니다. 법률도 신청/OC
+조건 변경 증거 전에는 재호출하지 않는다. 7개 processing binding의 존재를 점검하되 secret 값,
+bucket/namespace ID, model bounds 내용은 출력하지 않는다. 정상 production bundle에 API mock/
+test fixture를 넣거나 synthetic pricing/funding을 실제 DB proof로 채우지 않는다.

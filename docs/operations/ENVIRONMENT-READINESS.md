@@ -3,8 +3,9 @@
 ## 2026-10-07 통합 세션의 현재 readiness
 
 아래 이전 관측은 당시의 기록이며 현재 자원 상태를 대신하지 않는다. 최신 통합 기준은
-`ca6e15b1226ebdfaf3eee98b07b993cdb303f873`이며 main CI/preview/production foundation
-배포·동일 SHA smoke를 확인했다. 실제 사용자 기능/외부 성공과 분리한 증거는
+preview의 마지막 독립 smoke는 `c6b96656ee6e4d7c968486b47a994b2807bdeadd`이며
+production foundation의 확인 SHA는 `ca6e15b1226ebdfaf3eee98b07b993cdb303f873`다.
+main 병합만으로 두 환경의 배포 성공을 갱신하지 않는다. 실제 사용자 기능/외부 성공과 분리한 증거는
 [V2 검증 기록](../development/V2-VALIDATION.md)에 연결한다.
 
 | 항목 | 현재 확인/제한 | 담당 행동과 필요한 증거 |
@@ -51,14 +52,17 @@ binding은 모두 존재하고 exclusive preview Turnstile widget1개를 관측�
 실제 action 검증이 아니다. GitHub의 현재 Cloudflare token은 Gateway metadata GET에서403이어서
 API 관측은 미확인으로 유지하며 인증된 콘솔 결과와 구분한다. token scope를 자동 확대하지 않았다.
 
-Readiness workflow는 `check_legal=false`가 기본인 metadata-only 점검을 제공한다.
+Readiness workflow는 `check_legal=false`, `check_gateway=false`가 기본인 metadata-only 점검을 제공한다.
 법률 인증/신청 조건이 실제 바뀐 경우에만 `check_legal=true`로 재검증한다. 읽기 전용
+Gateway GET은 기존 token의 읽기 권한이 변경됐다는 근거가 있을 때만 `check_gateway=true`로
+선택한다. 기본 결과의 `not_requested`는 존재·인증·호출 성공을 뜻하지 않는다.
+processing binding 점검은 기존5개에 ASSET_PROCESSING/PROFILE_PUBLICATION을 포함한7개다.
 보고서는 binding 이름/존재·환경/SHA/origin·logging/cache만 허용하며 model bounds의
 내용·namespace/bucket ID·credential은 출력하지 않는다. 값이 있다는 관측은 값의 유효성,
 funding/billing/Container image나 OAuth 성공 증거가 아니다.
 
 ```sh
-gh workflow run environment-readiness.yml --repo creno-va/baro --ref main -f check_legal=false
+gh workflow run environment-readiness.yml --repo creno-va/baro --ref main -f check_legal=false -f check_gateway=false
 ```
 
 ## v2 목표와 현재 증거 경계 (#53)
