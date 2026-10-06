@@ -1,5 +1,4 @@
-import { ApiError, apiMode, apiRequest, cacheClient, registerHttpMockHandler } from "./core";
-import { mockRuntime } from "./mock/runtime";
+import { ApiError, apiRequest, cacheClient, registerHttpMockHandler } from "./core";
 import { sessionApi } from "./session";
 import type {
   CaseView,
@@ -19,16 +18,21 @@ const modules = import.meta.glob<Record<string, unknown>>([
   "!./*.test.ts",
   "!./{core,session,index,types,errors}.ts",
 ]);
-const mockModules = import.meta.glob<Record<string, unknown>>([
-  "./mock/*.ts",
-  "!./mock/*.test.ts",
-  "!./mock/{runtime,session}.ts",
-]);
+const mockModules: Record<string, () => Promise<Record<string, unknown>>> =
+  import.meta.env.PUBLIC_API_MODE === "mock"
+    ? import.meta.glob<Record<string, unknown>>([
+        "./mock/*.ts",
+        "!./mock/*.test.ts",
+        "!./mock/{runtime,session}.ts",
+      ])
+    : {};
 // biome-ignore lint/suspicious/noExplicitAny: Lazy factories are validated by the owning domain modules; the public facade is typed below.
 type Client = Record<string, (...args: any[]) => Promise<any>>;
 const clients = new Map<string, () => Promise<Client>>();
 let httpMocksReady: Promise<void> | undefined;
 async function initializeHttpMocks() {
+  if (import.meta.env.PUBLIC_API_MODE !== "mock") return;
+  const { mockRuntime } = await import("./mock/runtime");
   const ready: import("./core").HttpMockHandler[] = [];
   for (const name of ["workspace", "files", "reports", "account"]) {
     const mockLoader = mockModules[`./mock/${name}.ts`];
@@ -58,7 +62,10 @@ async function loadClient(name: string): Promise<Client> {
   const loader = modules[`./${name}.ts`];
   if (!loader) throw new ApiError("UNAVAILABLE", "이 화면의 API 연결을 준비하고 있어요.", true);
   const domain = await loader();
-  if (apiMode === "mock" && ["workspace", "files", "reports", "account"].includes(name)) {
+  if (
+    import.meta.env.PUBLIC_API_MODE === "mock" &&
+    ["workspace", "files", "reports", "account"].includes(name)
+  ) {
     httpMocksReady ??= initializeHttpMocks().catch((error) => {
       httpMocksReady = undefined;
       throw error;
