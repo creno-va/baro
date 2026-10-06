@@ -26,11 +26,13 @@ import {
 import { type CleanupLease, createV2DeletionRepository } from "../../db/v2-deletion";
 import { createV2FilesRepository } from "../../db/v2-files";
 import { type BlobRegistration, createV2StorageRepository } from "../../db/v2-storage";
-import type { StoragePaidHoldRequest } from "../../db/v2-storage-paid-contracts";
-import {
-  isPreparedStoragePaidHold,
-  type PreparedStoragePaidHold,
-} from "../../db/v2-storage-paid-runtime";
+import { isPreparedStoragePaidHold } from "../../db/v2-storage-paid-runtime";
+import type {
+  StorageAdmission,
+  StorageCostInput,
+  StorageCosts,
+  StoragePermit,
+} from "../budget/storage-ledger";
 import { hasCurrentConsent } from "../consent/service";
 import {
   decryptPart,
@@ -44,49 +46,10 @@ import {
 } from "./binary";
 
 export type PrivateBucket = Pick<R2Bucket, "get" | "put" | "head" | "delete">;
-export type FileStorageInput = {
-  runId: string;
-  attemptOrdinal: number;
-  maximumAttempts: number;
-  deadlineAt: string;
-  action: "r2_put";
-  service: "requests";
-  operationId: string;
-  operationRevision: number;
-  requestHash: string;
-  targetKind: "file";
-  targetId: string;
-  targetRevision: number;
-  reservationId: string;
-  blobId: string;
-  pending: StoragePaidHoldRequest["pending"];
-  intent: Extract<StoragePaidHoldRequest["intent"], { kind: "case_original" }>;
-};
-export type FileStorageAdmission = {
-  readonly actor: Actor;
-  readonly paid: PreparedStoragePaidHold;
-  readonly request: StoragePaidHoldRequest;
-  readonly inputDigest: string;
-};
-export type FileStoragePermit = {
-  readonly attemptId: string;
-  readonly dispatchToken: string | null;
-};
-export type FileStorageCosts = {
-  prepare(input: FileStorageInput): Promise<FileStorageAdmission | null>;
-  beforeDispatch(
-    admission: FileStorageAdmission,
-    access: () => Promise<boolean>,
-  ): Promise<FileStoragePermit | null>;
-  after(
-    permit: FileStoragePermit,
-    transport: {
-      transport: "response" | "unknown" | "not_sent";
-      definitiveNoCharge: boolean;
-      observedAt: string;
-    },
-  ): Promise<void>;
-};
+export type FileStorageInput = StorageCostInput;
+export type FileStorageAdmission = StorageAdmission;
+export type FileStoragePermit = StoragePermit;
+export type FileStorageCosts = StorageCosts;
 export type FileServiceDependencies = {
   environment: "preview" | "production";
   bucket?: PrivateBucket;

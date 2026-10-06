@@ -13,6 +13,7 @@ import {
 } from "../../../contracts/v2";
 import * as schema from "../../db/schema";
 import { fragmentText, utf8Bytes, type V2Core, type WorkspaceGuard } from "../../db/v2-core";
+import { stopExpiredUndispatchedJob } from "../../db/v2-expired-undispatched-job";
 import { createV2FileStagingRepository } from "../../db/v2-file-staging";
 import { createV2FilesRepository } from "../../db/v2-files";
 import { createV2JobsRepository, jobAlive } from "../../db/v2-jobs";
@@ -555,7 +556,15 @@ export function createFileProcessingExecution(
           new Date(Date.parse(acquisitionActor.now) + 300000).toISOString(),
           options.initialAttemptId ?? null,
         );
-        if (!granted) throw new ProcessingError("BUDGET_UNAVAILABLE");
+        if (!granted) {
+          await stopExpiredUndispatchedJob(core, options.environment, {
+            ownerId: params.ownerId,
+            jobId: params.jobId,
+            instanceId: options.instanceId,
+            now: now(),
+          });
+          throw new ProcessingError("BUDGET_UNAVAILABLE");
+        }
       }
       const metadata = await files.metadata(actor(), params.fileId);
       if (!metadata?.probe || metadata.revision !== params.fileRevision)

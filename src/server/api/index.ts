@@ -1,5 +1,7 @@
 import { Hono } from "hono";
 import { getAuth } from "../auth";
+import { createStorageBudgetService } from "../modules/budget/storage-ledger";
+import { createAssetProcessingAdmission } from "../runtime/asset-admission";
 import { createFileProcessingAdmission } from "../runtime/file-admission";
 import { accountDeleteApi } from "./account-delete";
 import { answersApi } from "./answers";
@@ -55,7 +57,20 @@ export const api = new Hono<ApiEnvironment>()
   .route("/v2/me", usageApi)
   .route(
     "/v2/me",
-    createLawyersApi({ dependencies: async (env) => ({ bucket: env.CASE_PRIVATE_R2 }) }),
+    createLawyersApi({
+      dependencies: async (env, core, ownerId) => ({
+        bucket: env.CASE_PRIVATE_R2,
+        paidStorage: (requestedOwnerId) => {
+          if (requestedOwnerId !== ownerId) throw new Error("Owner scope mismatch");
+          return createStorageBudgetService({
+            core,
+            ownerId,
+            environment: env.APP_ENV === "production" ? "production" : "preview",
+          });
+        },
+        ...createAssetProcessingAdmission(core, env),
+      }),
+    }),
   )
   .route(
     "/v2/moderation",
@@ -64,8 +79,13 @@ export const api = new Hono<ApiEnvironment>()
   .route(
     "/v2/cases",
     createFilesApi({
-      dependencies: async (env, core) => ({
+      dependencies: async (env, core, ownerId) => ({
         bucket: env.CASE_PRIVATE_R2,
+        paidStorage: createStorageBudgetService({
+          core,
+          ownerId,
+          environment: env.APP_ENV === "production" ? "production" : "preview",
+        }),
         ...createFileProcessingAdmission(core, env),
       }),
     }),

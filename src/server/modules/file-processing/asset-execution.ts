@@ -1,5 +1,6 @@
 import { timestampSchema } from "../../../contracts";
 import type { V2Core } from "../../db/v2-core";
+import { stopExpiredUndispatchedJob } from "../../db/v2-expired-undispatched-job";
 import { createV2JobsRepository, jobAlive } from "../../db/v2-jobs";
 import type { JobLease } from "../../db/v2-workspace";
 import type { AssetProcessingParams } from "./assets";
@@ -11,6 +12,7 @@ export function createAssetProcessingExecution(
   core: V2Core,
   params: AssetProcessingParams,
   options: {
+    environment?: "preview" | "production";
     instanceId: string;
     initialAttemptId: string | null;
     clock?: () => string;
@@ -58,7 +60,16 @@ export function createAssetProcessingExecution(
         lease = { jobId: params.jobId, token: current.lease_token, fencing: current.fencing };
       } else {
         // A newly acquired paid job must have its actual durable admission.
-        if (!options.initialAttemptId) throw new ProcessingError("BUDGET_UNAVAILABLE");
+        if (!options.initialAttemptId) {
+          if (options.environment)
+            await stopExpiredUndispatchedJob(core, options.environment, {
+              ownerId: params.ownerId,
+              jobId: params.jobId,
+              instanceId: options.instanceId,
+              now: actor().now,
+            });
+          throw new ProcessingError("BUDGET_UNAVAILABLE");
+        }
         const acquisition = actor();
         const granted = await jobs.acquire(
           acquisition,
@@ -67,7 +78,16 @@ export function createAssetProcessingExecution(
           new Date(Date.parse(acquisition.now) + 300000).toISOString(),
           options.initialAttemptId,
         );
-        if (!granted) throw new ProcessingError("BUDGET_UNAVAILABLE");
+        if (!granted) {
+          if (options.environment)
+            await stopExpiredUndispatchedJob(core, options.environment, {
+              ownerId: params.ownerId,
+              jobId: params.jobId,
+              instanceId: options.instanceId,
+              now: actor().now,
+            });
+          throw new ProcessingError("BUDGET_UNAVAILABLE");
+        }
         lease = granted.lease;
       }
       return options.sanitize(params, lease, signal);

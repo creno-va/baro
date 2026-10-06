@@ -313,6 +313,25 @@ fixture가 성공했다. 장면 전환과 31초 영상의 두 처리 구간에�
 최종 소스 검증, Cloudflare Container resource 배포와 live 처리/ASR/vision, 실제 청구와
 전 역할 UI는 별도 검증이 필요하다. #59/#60을 완료하거나 외부 gate를 해제하지 않았다.
 
+## 2026-10-06 작업 없는 저장 비용 계약의 실제 배포
+
+#93은 [PR94](https://github.com/creno-va/baro/pull/94)의 소스
+`c883a5e0c3a66fe03fd746b5d5d83dbf9081101f`에서 로컬 필수4개 명령과
+[동일 소스 CI](https://github.com/creno-va/baro/actions/runs/37421508201)를 통과했다.
+병합 main `731e7756a30b1ffd75f64b3166da127dccf5ca08`의
+[main CI](https://github.com/creno-va/baro/actions/runs/37422147323),
+[preview 배포](https://github.com/creno-va/baro/actions/runs/37422506968),
+[production 배포](https://github.com/creno-va/baro/actions/runs/37422772171)가 성공했다.
+Production은 기존 Environment reviewer의 정상 승인을 거친 deployment `6877091498`이다.
+독립 실제 두 도메인 smoke에서 같은 full SHA와 `0008_storage_paid_execution`을 확인했다.
+Production `/api/cases`는 HTTP503/`BETA_NOT_OPEN`을 유지했다.
+
+실제 Cloudflare 콘솔에서 Workers Paid가 현재 플랜임을 확인했다. AI Gateway에는 기존
+$10 credit이 표시되며 auto recharge는 OFF였다. 표시 잔액이나 반올림된 사용량을 실제
+처리 청구 검증으로 간주하지 않았다. 아직 배포된 Container resource·실제 미디어 처리·
+전 역할 UI의 성공 증거는 없으며 #93/#59/#60/#71은 필요한 외부 검증을 OPEN으로 보존한다.
+반복 보관과 물리 R2 용량의 선결 계약은 #95에서 별도로 검증한다.
+
 ## 최종 감사
 
 각 원래 Goal 항목과 PRD 요구사항을 위 ledger 및 UX 시연에 대응시킨다. 누락된 기능이나

@@ -125,6 +125,7 @@ export async function createAssetProcessingRuntime(
     openOriginal: source.openOriginal,
   });
   return createAssetProcessingExecution(core, params, {
+    environment,
     instanceId,
     initialAttemptId: initial,
     completed: assets.completed,
