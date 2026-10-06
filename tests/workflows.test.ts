@@ -18,6 +18,7 @@ test("all workflow actions use immutable commits and valid YAML", async () => {
     "deploy-preview.yml",
     "deploy-production.yml",
     "environment-readiness.yml",
+    "recover-production-runtime.yml",
   ]) {
     const workflow = workflowSchema.parse(
       Bun.YAML.parse(await Bun.file(`.github/workflows/${file}`).text()),
@@ -255,4 +256,72 @@ test("production verifies immutable preview and launch evidence before shared de
     "inputs.target-environment == 'production' && inputs.configure-ai == 'true'",
   );
   expect(steps[ai]?.run).toBe('bun scripts/provision-ai-budget.ts "$RELEASE_SHA"');
+});
+
+test("production runtime recovery preserves reviewer protection and cannot become release evidence", async () => {
+  const workflow = Bun.YAML.parse(
+    await Bun.file(".github/workflows/recover-production-runtime.yml").text(),
+  ) as {
+    on: Record<string, unknown>;
+    permissions: Record<string, string>;
+    concurrency: { group: string; "cancel-in-progress": boolean };
+    jobs: {
+      recover: {
+        if: string;
+        env?: Record<string, string>;
+        environment: { name: string; deployment: boolean };
+        steps: (Omit<DeploymentStep, "with"> & {
+          with?: Record<string, unknown>;
+          "continue-on-error"?: boolean;
+        })[];
+      };
+    };
+  };
+  expect(Object.keys(workflow.on)).toEqual(["workflow_dispatch"]);
+  expect(workflow.on.workflow_dispatch).toMatchObject({
+    inputs: {
+      confirmation: { required: true, type: "string" },
+      expected_live_sha: { required: true, type: "string" },
+    },
+  });
+  expect(workflow.permissions).toEqual({ contents: "read", actions: "read" });
+  expect(workflow.concurrency).toEqual({
+    group: "cloudflare-production",
+    "cancel-in-progress": false,
+  });
+  const job = workflow.jobs.recover;
+  expect(job.if).toBe("inputs.confirmation == 'production' && github.ref == 'refs/heads/main'");
+  expect(job.environment).toEqual({ name: "production", deployment: false });
+  expect(job.env).toBeUndefined();
+  const validation = job.steps.findIndex((step) => step.name === "Validate recovery target");
+  const recovery = job.steps.findIndex(
+    (step) => step.run === "bun scripts/recover-production-runtime.ts",
+  );
+  expect(validation).toBeGreaterThanOrEqual(0);
+  expect(recovery).toBeGreaterThan(validation);
+  expect(job.steps[validation]?.run).toBe('[[ "$RECOVERY_EXPECTED_LIVE_SHA" =~ ^[a-f0-9]{40}$ ]]');
+  expect(job.steps[validation]?.env).toEqual({
+    RECOVERY_EXPECTED_LIVE_SHA: "${{ inputs.expected_live_sha }}",
+  });
+  expect(job.steps[recovery]?.env).toEqual({
+    RECOVERY_EXPECTED_LIVE_SHA: "${{ inputs.expected_live_sha }}",
+    CLOUDFLARE_API_TOKEN: "${{ secrets.CLOUDFLARE_API_TOKEN }}",
+    CASE_DATA_KEY_V1: "${{ secrets.CASE_DATA_KEY_V1 }}",
+    LAW_API_OC: "${{ secrets.LAW_API_OC }}",
+  });
+  const checkout = job.steps.find((step) => step.uses?.startsWith("actions/checkout@"));
+  expect(checkout?.with).toMatchObject({ ref: "${{ github.sha }}", "persist-credentials": false });
+  const artifact = job.steps.find((step) => step.uses?.startsWith("actions/upload-artifact@"));
+  expect(artifact?.if).toBe("always()");
+  expect(artifact?.with?.path).toBe(".wrangler/readiness/production-recovery.json");
+  expect(artifact?.with?.["retention-days"]).toBe(7);
+  for (const [index, step] of job.steps.entries()) {
+    expect(step["continue-on-error"]).not.toBe(true);
+    expect(step.uses).not.toBe("./.github/actions/deploy-worker");
+    expect(step.run ?? "").not.toMatch(
+      /wrangler.*deploy|migrate|provision-ai-budget|PUBLIC_BETA_ENABLED|\/deployments/,
+    );
+    if (index !== recovery)
+      expect(Object.values(step.env ?? {}).some((value) => value.includes("secrets."))).toBe(false);
+  }
 });
