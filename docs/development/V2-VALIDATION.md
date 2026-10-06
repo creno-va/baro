@@ -461,3 +461,46 @@ runtime/SQL 검증이다. 사용자 quota 조회는 추가 hold/charge를 만들
 포함되지 않아 명시적으로 skip했다. 새 navigation 순서의 keyboard focus-wrap과 모바일
 메뉴·local font·실제 hash CSP·주입 script 차단을 확인했다. production fixture 제외는
 별도 bundle 검사로 유지한다.
+
+공유 PR127은 head `5b3d46637e9c7ac1d576cef02a022efef37dcb19`의
+[CI37487759856](https://github.com/creno-va/baro/actions/runs/37487759856) 필수3 jobs 성공을
+확인한 뒤 main `79434963086e1cea81e2b2785dd30083b2c49995`로 병합했다. self APPROVE와
+admin 우회는 사용하지 않았다. 각 모듈에 최신 main role/peer-tab/CI 재검증을 요청했다.
+같은 PR head의 [Full validation37487782522](https://github.com/creno-va/baro/actions/runs/37487782522)는
+모든3 jobs 성공했다. Linux native media fixtures, drift/fresh/upgrade6/29,
+1,203 tests/132,600 assertions, browser58(50-corpus 포함), CSP4/fixture-only skip1,
+production bundle145 files와 dry-run이 통과했다. 별도 immutable 증거이며 최종 모든 모듈
+통합 SHA의 검증을 대신하지 않는다. 초기 main의 실패 run은 계속 보존한다.
+
+metadata-only [readiness37488784651](https://github.com/creno-va/baro/actions/runs/37488784651)의
+[allowlisted JSON](../quality/integration-2026-10-07/preview-readiness-7943496.json)을 보존했다.
+candidate7943496에서 실행했지만 관측된 deployed SHA는 아직 이전 ca6e15b다. OAuth6개
+client 설정·model bounds 없음, processing bindings5개·preview Turnstile widget1개 존재,
+Gateway metadata API403을 확인했다. API403은 인증된 console 관측을 취소하지 않으며
+Gateway 호출 실패 증거도 아니다. 법률 단계는 실행하지 않았다.
+
+후속 공유 검토는 변호사 private mock operation의 역할 검사를 cache replay 이전에 보완하고,
+예정된 `/v2/reports/*`의 private/no-store/nosniff middleware를 먼저 준비한다. public directory/
+detail/공개 asset은 anonymous 조회를 유지한다. 별도 reports DomainRequest mock 경계는
+담당 #66/#67에 재현·수정 요청을 남겼으며 공용 namespace guard가 적용된 것으로 오기록하지 않는다.
+
+후속 공유 candidate의 frozen ci/check는1,204 tests/132,606 assertions와 drift/fresh/upgrade6/29,
+fresh production build/dry-run/bundle145 files, 공용 login/intake/workspace/report/delete 및
+lawyer mock browser3개, built CSP4개/fixture-only skip1로 통과했다. 새 role replay 테스트의
+임시 handler는 검사 뒤 복원하며 실제 도메인 handler를 다른 테스트에 남기지 않는다.
+
+고객 PR128의 구체적인 DTO 요청을 받은 뒤 WorkspaceView에 기존 V2Summary facts/parties를
+재사용한 optional facts/people와 unknowns/notices를 공용 types/facade 계약에 반영한다.
+고객의 local CustomerWorkspaceView는 호환되며 공유 서버 schema/migration은 바꾸지 않는다.
+
+PR128이 제공한 customer-real.e2e/config의 별도60초 real transport 환경을 공용 runner에
+순차 연결한다. 모듈 파일이 도착해 해당 target이 선택될 때만 config를 실행하므로 선행
+공유 candidate에 모듈 코드나 fixture를 복사하지 않는다. 최종 소비자 branch의 최신 head CI로
+실제 결합을 검증한다. runner 추가 뒤 전체 check/build/dry-run도 다시 통과했다.
+
+main7943496의 [CI37488768849](https://github.com/creno-va/baro/actions/runs/37488768849)와
+[preview37489693444](https://github.com/creno-va/baro/actions/runs/37489693444)가 성공했고,
+별도 full SHA/schema0009 foundation smoke도 통과했다. 실제 IAB에서 저장된 합성 사건의
+재접속·메뉴 Enter/ShiftTab wrap·Escape opener 복귀와 새 이용 유형 변경 링크를 확인했다.
+IAB viewport override는 실제CSS760px로 남아 원격320px 성공으로 기록하지 않는다.
+Chromium320px/200% 회귀는 별도 compiled/fixture browser 증거다.

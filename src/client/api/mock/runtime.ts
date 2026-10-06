@@ -6,7 +6,18 @@ const handlers = new Map<string, MockHandler>();
 const memory = new Map<string, string>();
 const prefix = "baro-api-mock-v1:";
 export function registerMockHandlers(entries: Record<string, MockHandler>) {
+  const previous = new Map(
+    Object.keys(entries).map((operation) => [operation, handlers.get(operation)]),
+  );
   for (const [operation, handler] of Object.entries(entries)) handlers.set(operation, handler);
+  return () => {
+    for (const [operation, handler] of Object.entries(entries)) {
+      if (handlers.get(operation) !== handler) continue;
+      const prior = previous.get(operation);
+      if (prior) handlers.set(operation, prior);
+      else handlers.delete(operation);
+    }
+  };
 }
 export function readStore<T>(namespace: string, fallback: T): T {
   try {
@@ -54,6 +65,15 @@ export async function mockRequest<T>(operation: string, input: unknown, key: str
     const session = requireSession();
     if (session.user?.accountType !== "customer")
       throw new ApiError("NOT_FOUND", "고객 이용 유형으로 로그인해 주세요.");
+  }
+  if (
+    /^lawyers\.(getMine|saveMine|publishMine|assets|uploadAsset|removeAsset)$/.test(operation) ||
+    (operation === "lawyers.assetBlob" &&
+      (input as { privateRead?: boolean } | undefined)?.privateRead === true)
+  ) {
+    const session = requireSession();
+    if (session.user?.accountType !== "lawyer")
+      throw new ApiError("NOT_FOUND", "변호사 이용 유형으로 로그인해 주세요.");
   }
   const identity = `${readStore<SessionView>("session", { user: null, needsConsent: false }).user?.id ?? "visitor"}:${operation}:${key}`;
   const cacheable =

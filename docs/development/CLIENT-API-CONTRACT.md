@@ -1,7 +1,7 @@
 # 동일 클라이언트와 API mock 계약
 
 - Status: Accepted implementation plan
-- Updated: 2026-10-06
+- Updated: 2026-10-07
 - 사용자 결정: 실제 클라이언트 UI 하나를 만들고 API 응답만 mock으로 대체한다.
 - 실행: [5세션 계획](./PARALLEL-UI-SPRINT.md). 기존 공유 서버 계약은 `src/contracts/v2/`를 보존한다.
 
@@ -62,6 +62,8 @@ type FileView = {
 type WorkspaceView = {
   case: CaseView; messages: MessageView[]; actions: ActionView[];
   timeline: TimelineView[]; files: FileView[];
+  facts?: V2Summary["facts"]; people?: V2Summary["parties"];
+  unknowns?: string[]; notices?: string[];
 };
 type ReportView = {
   id: string; caseId: string; revision: number; title: string;
@@ -89,6 +91,19 @@ type ApiErrorView = {
 ```
 
 ## 도메인별 호출과 소유권
+
+2026-10-07 #65 요청에 따라 WorkspaceView를 위 optional 필드로 확장한다. V2Summary는
+기존 `src/contracts/v2/intake.ts`의 검증된 Summary 정본이다. facts는 사실·주장·출처 참조,
+people은 parties의 기존 전체 shape를 그대로 재사용한다. unknowns/notices는 해당 Summary의
+미확인·안내 문자열이다. 기존 DTO 소비자는 필드 부재를 허용하며 실제 근거·자격·모델의
+새 provenance를 발명하지 않는다. facade의 모든 WorkspaceView 반환에도 같은 타입을 적용한다.
+
+고객 모듈의 POST `/api/v2/cases/:id/timeline`은 기존 v2TimelineEditRequestSchema를 쓰고
+생성은 workspace revision, 편집은 entity revision을 비교한다. GET
+`/api/v2/cases/:id/workspace-jobs/latest`는 owner-scoped 기존 V2Job 또는 null이다. 목록의
+`previews?: { id: string; title: string; hasSummary: boolean }[]`는 부가 표시이며
+items/nextCursor와 private owner 경계를 바꾸지 않는다. HTTP receipt·동일 key/body·충돌 처리는
+기존 계약을 유지한다. 새 schema/migration 없이 모듈 PR128의 실제 구현·CI에서 검증한다.
 
 아래 호출을 `api` facade로 공개한다. `expectedRevision`과 mutation request key는
 domain client가 기존 wire 형식으로 변환하고 mock에도 같은 중복 방지를 적용한다.

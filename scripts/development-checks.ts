@@ -114,8 +114,12 @@ export async function runBrowserTargets(targets: string[]) {
     ),
   );
   const corpusTargets = targets.filter((path) => path.endsWith("/evals.e2e.ts"));
+  const customerRealTargets = targets.filter((path) => path.endsWith("/customer-real.e2e.ts"));
   const regularTargets = targets.filter(
-    (path) => !mockTargets.includes(path) && !corpusTargets.includes(path),
+    (path) =>
+      !mockTargets.includes(path) &&
+      !corpusTargets.includes(path) &&
+      !customerRealTargets.includes(path),
   );
   if (regularTargets.length) {
     const child = Bun.spawn(["bunx", "playwright", "test", ...regularTargets], {
@@ -127,6 +131,20 @@ export async function runBrowserTargets(targets: string[]) {
   if (corpusTargets.length) {
     const child = Bun.spawn(
       ["bunx", "playwright", "test", "--config", "tests/browser/evals.config.ts", ...corpusTargets],
+      { stdout: "inherit", stderr: "inherit" },
+    );
+    if (await child.exited) process.exit(1);
+  }
+  if (customerRealTargets.length) {
+    const child = Bun.spawn(
+      [
+        "bunx",
+        "playwright",
+        "test",
+        "--config",
+        "tests/browser/customer-real.config.ts",
+        ...customerRealTargets,
+      ],
       { stdout: "inherit", stderr: "inherit" },
     );
     if (await child.exited) process.exit(1);

@@ -39,6 +39,18 @@ allocation/bounds·실제 billing receipt 및 제품 OAuth→자료 처리→삭
 증거가 필요하다. console 숫자를 production DB proof로 복사하거나 합성 fixture로 채우지 않았다.
 공식 법률 신청/OC 조건 변경 답변은 없어 법률 API를 재호출하지 않았다.
 
+main7943496의 metadata-only [run37488784651](https://github.com/creno-va/baro/actions/runs/37488784651)
+관측(2026-10-07 00:35 KST, deployed는 아직 이전ca6e15b)은
+[비민감 JSON](../quality/integration-2026-10-07/preview-readiness-7943496.json)에 보존한다.
+preview GOOGLE/NAVER/KAKAO CLIENT_ID/CLIENT_SECRET6개가 모두 없고
+`AI_MODEL_TOKEN_BOUNDS_JSON`도 없다. 환경 관리자가 위 callback과 공급자 앱/tester 승인을
+확인한 환경별 credential을 preview Worker에 등록하고, pinned model의 검증된 bounds를
+배포 설정에 연결해야 한다. production credential 복제나 추정 bounds 입력으로 대신하지 않는다.
+CASE_PRIVATE_R2/PROFILE_PUBLIC_R2/FILE_PROCESSOR/FILE_PROCESSING/WORKSPACE_PROCESSING
+binding은 모두 존재하고 exclusive preview Turnstile widget1개를 관측했다. secret 존재/개수는
+실제 action 검증이 아니다. GitHub의 현재 Cloudflare token은 Gateway metadata GET에서403이어서
+API 관측은 미확인으로 유지하며 인증된 콘솔 결과와 구분한다. token scope를 자동 확대하지 않았다.
+
 Readiness workflow는 `check_legal=false`가 기본인 metadata-only 점검을 제공한다.
 법률 인증/신청 조건이 실제 바뀐 경우에만 `check_legal=true`로 재검증한다. 읽기 전용
 보고서는 binding 이름/존재·환경/SHA/origin·logging/cache만 허용하며 model bounds의
