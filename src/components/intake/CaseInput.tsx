@@ -36,41 +36,98 @@ export function CaseInput({ siteKey: _siteKey }: { siteKey?: string }) {
   const [error, setError] = useState<unknown>(null);
   const [created, setCreated] = useState<string | null>(null);
   const pending = useRef(false);
+  const identity = useRef<string | undefined>(undefined);
+  const sessionRequest = useRef(0);
+  const operation = useRef(0);
+  const mounted = useRef(false);
   const count = [...narrative.trim()].length;
   const valid = count >= 20 && count <= 5000;
   const canCreate = session?.user?.accountType === "customer" && !session.needsConsent;
   const loadSession = useCallback(async () => {
+    const ticket = ++sessionRequest.current;
+    const current = () => mounted.current && ticket === sessionRequest.current;
     setLoading(true);
     setSessionError(null);
+    const accept = (next: SessionView) => {
+      if (!current()) return null;
+      const nextIdentity = JSON.stringify([
+        next.user?.id ?? null,
+        next.user?.accountType ?? null,
+        next.needsConsent,
+      ]);
+      if (identity.current !== undefined && identity.current !== nextIdentity) {
+        ++operation.current;
+        pending.current = false;
+        setBusy(false);
+        setNarrative("");
+        setContext("individual");
+        setCreated(null);
+        setError(null);
+      }
+      identity.current = nextIdentity;
+      setSession(next);
+      return next;
+    };
     try {
-      setSession(await api.session.get());
+      return accept(await api.session.get());
     } catch (cause) {
       if (cause instanceof ApiError && cause.code === "UNAUTHENTICATED")
-        setSession({ user: null, needsConsent: false });
-      else setSessionError(cause);
+        return accept({ user: null, needsConsent: false });
+      if (current()) setSessionError(cause);
+      return null;
     } finally {
-      setLoading(false);
+      if (current()) setLoading(false);
     }
   }, []);
   useEffect(() => {
+    mounted.current = true;
+    const refresh = () => void loadSession();
+    const visible = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    const storage = (event: StorageEvent) => {
+      if (!event.key || event.key === "baro-api-mock-v1:session") refresh();
+    };
     void loadSession();
+    window.addEventListener("focus", refresh);
+    window.addEventListener("pageshow", refresh);
+    window.addEventListener("storage", storage);
+    document.addEventListener("visibilitychange", visible);
+    return () => {
+      mounted.current = false;
+      ++sessionRequest.current;
+      ++operation.current;
+      window.removeEventListener("focus", refresh);
+      window.removeEventListener("pageshow", refresh);
+      window.removeEventListener("storage", storage);
+      document.removeEventListener("visibilitychange", visible);
+    };
   }, [loadSession]);
 
   async function create(event?: SyntheticEvent<HTMLFormElement>) {
     event?.preventDefault();
-    if (!canCreate || !valid || pending.current || created) return;
+    if (!canCreate || loading || sessionError || !valid || pending.current || created) return;
+    const ticket = ++operation.current;
+    const current = () => mounted.current && ticket === operation.current;
     pending.current = true;
     setBusy(true);
     setError(null);
     try {
+      const fresh = await loadSession();
+      if (!current() || fresh?.user?.accountType !== "customer" || fresh.needsConsent) return;
       const item = await api.cases.create({ narrative: narrative.trim(), subjectContext });
+      // A completed request must not restore a prior owner's UI after an account switch.
+      await loadSession();
+      if (!current()) return;
       setCreated(item.id);
       window.location.assign(`/cases/${encodeURIComponent(item.id)}/intake`);
     } catch (cause) {
-      setError(cause);
+      if (current()) setError(cause);
     } finally {
-      setBusy(false);
-      pending.current = false;
+      if (current()) {
+        setBusy(false);
+        pending.current = false;
+      }
     }
   }
 
@@ -103,9 +160,9 @@ export function CaseInput({ siteKey: _siteKey }: { siteKey?: string }) {
               </label>
               <Textarea
                 id="narrative"
-                value={narrative}
+                value={loading || sessionError ? "" : narrative}
                 onChange={(event) => setNarrative(event.target.value)}
-                disabled={busy || loading || !canCreate}
+                disabled={busy || loading || !!sessionError || !canCreate}
                 aria-describedby="narrative-help narrative-count"
                 aria-invalid={count > 0 && !valid}
                 placeholder="어떤 일이 있었나요? 처음부터 완벽하게 정리하지 않아도 괜찮아요."
@@ -169,7 +226,9 @@ export function CaseInput({ siteKey: _siteKey }: { siteKey?: string }) {
             <div className="conversation-input-meta">
               <p id="narrative-help">주민등록번호·계좌번호 전체는 적지 마세요.</p>
               <p id="narrative-count" aria-live="polite">
-                {count > 0 ? `${count.toLocaleString()} / 5,000자` : "20자 이상 적어주세요"}
+                {count > 0
+                  ? `${count.toLocaleString()} / 5,000자 · 최소 20자`
+                  : "20자 이상 적어주세요"}
               </p>
             </div>
             {error ? (

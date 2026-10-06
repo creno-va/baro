@@ -37,14 +37,16 @@
 
 ## 검증 기록
 
-- `bun ci --offline`, `bun run check` 통과. 기존 1,173개 테스트와 migration 검사 포함.
+- `bun ci`, `bun run check` 통과. 최신 main의 1,199개 테스트와 migration 검사 포함.
 - 최종 변경 후 typecheck·변경 파일 Biome 통과. 기존 서버/테스트의 lint 경고는 유지.
 - 일반/합성 빌드, `bun run cf:dry-run` 통과.
-- 고객 홈·개인/기업 질문·저장 실패 재시도·요약 충돌/수정·로그인/동의/로그아웃·채팅/자료/리포트·최근 사건 계정 변경: 브라우저 14개 시나리오 통과.
+- 고객 홈·개인/기업 질문·저장 실패 재시도·요약 충돌/수정·로그인/동의/로그아웃·채팅/자료/리포트·최근 사건 계정 변경: 브라우저 16개 시나리오 통과. 실제 peer-tab storage event로 홈 로그인 반영과 계정 전환 시 초안 초기화도 확인했다.
 - 공통 디자인 시스템 6개, 일반 Worker CSP 4개 통과. fixture 전용 CSP 1개는 일반 빌드이므로 제외.
 - 홈/대화 자동 접근성 검사, 320px 모바일, 200% 텍스트, reduced motion 확인.
 - 시각 검토에서 발견한 모바일 composer의 답변 겹침을 수정했다. 모바일에서는 문서 흐름으로, 데스크톱에서는 하단 sticky로 표시한다.
 - 다른 탭의 로그아웃/계정 변경 후 최근 사건 제목이 남지 않도록 세션 재확인과 요청 순서 가드를 추가했다.
+- 독립 PR 검토에서 홈 입력창의 mount-only 세션이 계정 전환을 반영하지 않는 결함을 재현했다. 홈도 focus/visibility/pageshow/storage에서 세션을 확인하고, owner·role·consent가 바뀌면 초안/개인·기업 선택/완료·오류 상태를 비운다. 저장 전 재확인과 이전 owner 비동기 응답 폐기로 다른 계정의 초안을 제출하지 않도록 보완했다.
+- 이용 설정을 접은 새 UI는 사용자가 열어서 선택 지표를 동의/거부/철회한다. 기존 consent·hash/allowlist·중복 이벤트·비동의 저장/외부 요청 없음 및 signed-session/SQL 사건 흐름을 제거하지 않고 현재 입력 권한 fixture와 locator를 반영했다. 관련 기존 브라우저 9개가 통과했다.
 
 재현: `BARO_WORKSPACE_SHARED_UI=true bun x playwright test --config tests/browser/conversation.config.ts`.
 검토용 합성 화면 캡처는 로컬 `.wrangler/ui-review/`에 생성된다. 실제 외부 OAuth/AI 성공과 공개 배포를 이 검증으로 주장하지 않는다.
