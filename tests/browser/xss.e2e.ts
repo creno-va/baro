@@ -4,6 +4,14 @@ import { guidance } from "../fixtures/contracts";
 test("untrusted HTML and script URLs fail strict detail schema without execution or result display", async ({
   page,
 }) => {
+  await page.route("**/api/me/session", (route) =>
+    route.fulfill({
+      json: {
+        user: { id: "synthetic-owner", name: "합성 고객", accountType: "customer" },
+        needsConsent: false,
+      },
+    }),
+  );
   await page.route("**/api/v2/cases/*/workspace", (route) =>
     route.fulfill({ status: 404, json: { error: { code: "NOT_FOUND" } } }),
   );

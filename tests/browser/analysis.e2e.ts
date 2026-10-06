@@ -1,9 +1,19 @@
 import { spawn } from "node:child_process";
-import { expect, test } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 import { guidance, outOfScope, questions, urgentRedirect } from "../fixtures/contracts";
 
 const caseId = "11111111-1111-4111-8111-111111111111",
   analysisId = "22222222-2222-4222-8222-222222222222";
+async function syntheticCustomer(page: Page) {
+  await page.route("**/api/me/session", (route) =>
+    route.fulfill({
+      json: {
+        user: { id: "synthetic-owner", name: "합성 고객", accountType: "customer" },
+        needsConsent: false,
+      },
+    }),
+  );
+}
 function state(status: string, result: unknown = null, revision = 1) {
   return {
     caseId,
@@ -26,7 +36,7 @@ function state(status: string, result: unknown = null, revision = 1) {
   };
 }
 test.beforeEach(async ({ page }) => {
-  // These tests retain the signed v1 analysis flow through the workspace compatibility route.
+  // Preserve v1 compatibility; the final test uses actual signed session/API calls.
   await page.route("**/api/v2/cases/*/workspace", (route) =>
     route.fulfill({ status: 404, json: { error: { code: "NOT_FOUND" } } }),
   );
@@ -34,6 +44,7 @@ test.beforeEach(async ({ page }) => {
 test("questions duplicate/error/replay and stale revision restore server state, keyboard and expiry", async ({
   page,
 }) => {
+  await syntheticCustomer(page);
   let current = state("needs_clarification"),
     posts = 0;
   const keys: string[] = [];
@@ -131,6 +142,7 @@ test("questions duplicate/error/replay and stale revision restore server state, 
 test("polling delays stop while hidden or terminal; policy results and bounded retry/deletion", async ({
   page,
 }) => {
+  await syntheticCustomer(page);
   // Keep wall time during route/expect awaits out of the exact polling boundaries.
   await page.clock.install({ time: new Date("2026-01-01T00:00:00Z") });
   await page.clock.pauseAt(new Date("2026-01-01T00:00:01Z"));
@@ -247,6 +259,7 @@ test("polling delays stop while hidden or terminal; policy results and bounded r
 test("failed read retries, stale/late answers recover the latest revision and expiry", async ({
   page,
 }) => {
+  await syntheticCustomer(page);
   let current = state("needs_clarification"),
     failedRead = true,
     initialMetadataRead = true,

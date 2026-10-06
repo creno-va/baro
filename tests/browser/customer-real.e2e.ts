@@ -134,6 +134,14 @@ for (const viewport of [
       expect(saveWrites[0]).toEqual(saveWrites[1]);
       await page.reload();
       await expect(editor).toHaveValue("직접 수정한 합성 브라우저 요약입니다.");
+      await editor.fill("네트워크 장애 후에도 보존할 요약 초안");
+      sessionUnavailable = true;
+      await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+      await expect(editor).not.toBeVisible();
+      await expect(page.getByRole("alert")).toContainText("연결하지 못했어요");
+      sessionUnavailable = false;
+      await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+      await expect(editor).toHaveValue("네트워크 장애 후에도 보존할 요약 초안");
       await editor.fill("다른 계정으로 저장되면 안 되는 요약 초안");
       await context.addCookies([info.foreignCookie]);
       await page.evaluate(() => window.dispatchEvent(new Event("focus")));
@@ -183,7 +191,32 @@ for (const viewport of [
       await context.addCookies([info.foreignCookie]);
       await page.evaluate(() => window.dispatchEvent(new Event("focus")));
       await expect(page.getByLabel("추가 사실 또는 질문")).not.toBeVisible();
-      await expect(page.getByRole("alert")).toBeVisible();
+      await expect(page.getByRole("alert")).toContainText(
+        "계정 또는 사건 접근이 바뀌어 이전 내용을 비웠어요.",
+      );
+      await context.addCookies([info.ownerCookie]);
+      await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+      await expect(page.getByLabel("추가 사실 또는 질문")).toHaveValue("");
+      await page.getByLabel("추가 사실 또는 질문").fill("로그아웃 후 비워야 할 초안");
+      await context.clearCookies();
+      sessionUnavailable = true;
+      await page.evaluate(() =>
+        window.dispatchEvent(
+          new StorageEvent("storage", {
+            key: "better-auth.message",
+            newValue: JSON.stringify({ event: "session", data: { trigger: "signout" } }),
+          }),
+        ),
+      );
+      await expect(page.getByLabel("추가 사실 또는 질문")).not.toBeVisible();
+      await expect(
+        page.getByRole("alert").getByRole("link", { name: "로그인", exact: true }),
+      ).toBeVisible();
+      sessionUnavailable = false;
+      await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+      await expect(
+        page.getByRole("alert").getByRole("link", { name: "로그인", exact: true }),
+      ).toBeVisible();
       await context.addCookies([info.ownerCookie]);
       await page.evaluate(() => window.dispatchEvent(new Event("focus")));
       await expect(page.getByLabel("추가 사실 또는 질문")).toHaveValue("");
@@ -201,7 +234,9 @@ for (const viewport of [
       expect(await role("lawyer")).toBe(200);
       await page.evaluate(() => window.dispatchEvent(new Event("focus")));
       await expect(page.getByLabel("추가 사실 또는 질문")).not.toBeVisible();
-      await expect(page.getByRole("alert")).toBeVisible();
+      await expect(page.getByRole("alert")).toContainText(
+        "계정 또는 사건 접근이 바뀌어 이전 내용을 비웠어요.",
+      );
       expect(await role("customer")).toBe(200);
       await page.evaluate(() => window.dispatchEvent(new Event("focus")));
       await expect(page.getByLabel("추가 사실 또는 질문")).toHaveValue("");

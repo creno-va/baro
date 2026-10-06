@@ -12,7 +12,7 @@
 | 요약 PUT 또는 확인 POST가 실제 저장 후 응답만 유실 | 원래 intake/summary revision, 본문, idempotency key로 재전송한다. 성공 응답과 authoritative 조회가 끝나기 전에는 요청을 해제하지 않는다. 요약 화면의 background refresh도 실패한 요청 revision을 교체하지 않는다. |
 | 같은 key의 변경된 본문 / 새 key의 오래된 revision / 다른 owner | 실제 Hono API가 각각 409 / 409 / 404를 반환한다. 저장 revision이 다시 증가하지 않는다. |
 | 다른 탭의 로그아웃·계정 변경·역할 변경 | 고객 screen boundary가 identity epoch를 폐기하고 요약·확인 checkbox·메시지·자료·파일 input·초안·대화상자를 지운다. mutation 전후 세션을 확인하고 이전 epoch의 늦은 결과를 적용하지 않는다. |
-| session 조회의 일시적 네트워크 장애 | 정상 owner의 초안을 보존하고 쓰기를 보내지 않는다. 실제 401/동의 거부/404와 구분한다. |
+| session 조회의 일시적 네트워크 장애 | 정상 owner의 초안을 보존하고 쓰기를 보내지 않는다. 외부 변경 재검증이 불가능하면 UI를 가린 채 초안을 보관하며 같은 owner를 확인한 뒤 복구한다. 실제 401/동의 거부/404와 구분한다. 명시적인 Better Auth signout 알림은 네트워크 상태와 관계없이 즉시 지운다. |
 | 작업 도중 customer→lawyer 변경 | runtime은 admission, execution, 각 gateway reserve와 게시 전 권한을 재검사한다. 실제 account-type API로 합성 모델 실행 도중 역할을 바꾼 회귀에서 결과가 게시되지 않고 이후 작업은 stopped가 된다. 비용 receipt는 지우지 않는다. 공유 403/ROLE_REQUIRED도 고객 adapter에서 접근 거부로 매핑한다. |
 | 타임라인 생성 저장 후 응답 유실 | POST receipt와 결정적인 entity ID를 재사용한다. 생성은 workspace revision, 편집은 entity revision을 검사한다. 새로고침 후 1개 항목만 남는다. |
 | 이전 batch 질문 수정 | 질문 ID로 원래 batch를 찾고 해당 batch 계약으로 검증한다. 요약을 무효화하고 다른 batch 답변은 보존한다. |

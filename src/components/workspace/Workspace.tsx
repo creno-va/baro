@@ -365,7 +365,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                 ? "저장된 사건은 보존돼요. 사용량에서 한도를 확인할 수 있어요."
                 : ["UNAUTHENTICATED", "CONSENT_REQUIRED", "NOT_FOUND"].includes(error.code)
                   ? "계정 또는 사건 접근이 바뀌어 이전 내용을 비웠어요."
-                  : "입력한 내용은 이 화면에 남아 있어요."}
+                  : "입력한 내용은 보존돼요. 확인한 뒤 다시 시도해 주세요."}
           </p>
           <div className="workspace-buttons">
             {!!retryUploads.length && (

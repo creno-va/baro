@@ -39,8 +39,10 @@ export function useCustomerAccess(purge: () => void, report: (error: unknown) =>
         if ((cause as { code?: string })?.code === "UNAUTHENTICATED")
           session = { user: null, needsConsent: false };
         else {
-          allowed.current = wasAllowed;
-          setReady(wasAllowed);
+          // Keep the draft privately while an external session change is unknown.
+          // A normal mutation preflight outage may keep the verified owner's UI.
+          allowed.current = !hide && wasAllowed;
+          setReady(allowed.current);
           throw cause;
         }
       }
@@ -99,6 +101,18 @@ export function useCustomerAccess(purge: () => void, report: (error: unknown) =>
     window.addEventListener("focus", refresh);
     window.addEventListener("pageshow", refresh);
     const storage = (event: StorageEvent) => {
+      if (event.key === "better-auth.message") {
+        try {
+          const message = JSON.parse(event.newValue ?? "null");
+          if (message?.event === "session" && message?.data?.trigger === "signout") {
+            deny();
+            callbacks.current.report(new ApiError("UNAUTHENTICATED", "로그인이 필요해요."));
+            return;
+          }
+        } catch {
+          /* Untrusted messages cannot grant access; verify the server session. */
+        }
+      }
       if (
         !event.key ||
         event.key === "baro-api-mock-v1:session" ||
@@ -121,6 +135,6 @@ export function useCustomerAccess(purge: () => void, report: (error: unknown) =>
       window.removeEventListener("baro-session-changed", refresh);
       document.removeEventListener("visibilitychange", visible);
     };
-  }, [verify]);
+  }, [deny, verify]);
   return { ready, version, verify, ticket, alive, current, deny };
 }
