@@ -7,6 +7,12 @@ import {
 } from "../../contracts/v2";
 import { createV2AccountingRepository } from "./v2-accounting";
 import {
+  type AssetUploadIntent,
+  abandonAssetUpload,
+  commitAssetUpload,
+  prepareAssetUpload,
+} from "./v2-asset-uploads";
+import {
   type Actor,
   actorSchema,
   aliveWorkspace,
@@ -105,6 +111,18 @@ const reservationAlive = `((r.kind='case_original' AND EXISTS(SELECT 1 FROM v2_f
 export function createV2StorageRepository(core: V2Core) {
   const accounting = createV2AccountingRepository(core);
   return {
+    prepareAssetUpload(actor: Actor, input: AssetUploadIntent) {
+      return prepareAssetUpload(core, actor, input);
+    },
+    commitAssetUpload(
+      actor: Actor,
+      input: { assetId: string; assetRevision: number; blob: BlobRegistration },
+    ) {
+      return commitAssetUpload(core, actor, input);
+    },
+    abandonAssetUpload(actor: Actor, blobId: string) {
+      return abandonAssetUpload(core, actor, blobId);
+    },
     reserveArtifact(
       g: WorkspaceGuard,
       input: {
@@ -495,7 +513,7 @@ export function createV2StorageRepository(core: V2Core) {
         lease: CleanupLease;
         receiptId: string;
         objectKey: string;
-        cipherHash: string;
+        cipherHash: string | null;
       },
     ) {
       return safe(async () => {
@@ -505,10 +523,10 @@ export function createV2StorageRepository(core: V2Core) {
         const { lease } = confirmation;
         parse(cleanupLeaseSchema, lease);
         parse(opaqueIdSchema, confirmation.receiptId);
-        parse(hashSchema, confirmation.cipherHash);
+        parse(hashSchema.nullable(), confirmation.cipherHash);
         const row = await core
           .statement(
-            "SELECT reservation_id FROM v2_blobs WHERE id=? AND state='deleting' AND object_key=? AND cipher_hash=?",
+            "SELECT reservation_id FROM v2_blobs WHERE id=? AND state='deleting' AND object_key=? AND cipher_hash IS ? AND (cipher_hash IS NOT NULL OR (cipher_bytes=0 AND visibility='private' AND kind IN ('verification','profile_photo_original','portfolio_original')))",
             [blobId, confirmation.objectKey, confirmation.cipherHash],
           )
           .first<{ reservation_id: string }>();
@@ -525,10 +543,10 @@ export function createV2StorageRepository(core: V2Core) {
         ];
         // Removing a failed pending chunk does not cancel its live file upload.
         // Preserve the original reservation until that file is actually deleted.
-        const releasable = `NOT EXISTS(SELECT 1 FROM v2_storage_reservations original JOIN v2_files f ON f.id=original.entity_id JOIN v2_workspaces w ON w.id=f.workspace_id WHERE original.id=? AND original.kind='case_original' AND f.state!='deleting' AND ${aliveWorkspace} AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='file' AND target_id=f.id))`;
+        const releasable = `NOT EXISTS(SELECT 1 FROM v2_storage_reservations original LEFT JOIN v2_files f ON f.id=original.entity_id LEFT JOIN v2_workspaces w ON w.id=f.workspace_id LEFT JOIN v2_assets a ON a.id=original.entity_id LEFT JOIN v2_profiles profile ON profile.id=a.profile_id WHERE original.id=? AND ((original.kind='case_original' AND f.state!='deleting' AND ${aliveWorkspace} AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='file' AND target_id=f.id)) OR (original.kind='lawyer_asset' AND original.target_id=a.id AND a.state!='deleting' AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE (target_kind='account' AND target_id=a.owner_id) OR (target_kind='asset' AND target_id=a.id) OR (target_kind='profile' AND target_id=profile.id)))))`;
         const results = await core.binding.batch([
           core.statement(
-            "INSERT INTO v2_cleanup_receipts(id,journal_id,kind,target_id,confirmed_at) SELECT ?,j.id,'blob',b.id,? FROM v2_deletion_journals j JOIN v2_deletion_targets t ON t.journal_id=j.id JOIN v2_blobs b ON b.id=t.target_id WHERE j.id=? AND j.lease_token=? AND j.fencing=? AND j.lease_until>? AND j.state='running' AND t.kind='blob' AND t.state='pending' AND b.id=? AND b.state='deleting' AND b.object_key=? AND b.cipher_hash=? AND NOT EXISTS(SELECT 1 FROM v2_deletion_targets WHERE journal_id=j.id AND kind IN ('job','legacy_workflow') AND state='pending') ON CONFLICT(journal_id,kind,target_id) DO NOTHING",
+            "INSERT INTO v2_cleanup_receipts(id,journal_id,kind,target_id,confirmed_at) SELECT ?,j.id,'blob',b.id,? FROM v2_deletion_journals j JOIN v2_deletion_targets t ON t.journal_id=j.id JOIN v2_blobs b ON b.id=t.target_id WHERE j.id=? AND j.lease_token=? AND j.fencing=? AND j.lease_until>? AND j.state='running' AND t.kind='blob' AND t.state='pending' AND b.id=? AND b.state='deleting' AND b.object_key=? AND b.cipher_hash IS ? AND (b.cipher_hash IS NOT NULL OR (b.cipher_bytes=0 AND b.visibility='private' AND b.kind IN ('verification','profile_photo_original','portfolio_original'))) AND NOT EXISTS(SELECT 1 FROM v2_deletion_targets WHERE journal_id=j.id AND kind IN ('job','legacy_workflow') AND state='pending') ON CONFLICT(journal_id,kind,target_id) DO NOTHING",
             [
               confirmation.receiptId,
               actor.now,
