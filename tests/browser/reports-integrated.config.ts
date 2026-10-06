@@ -1,4 +1,7 @@
 import { defineConfig } from "@playwright/test";
+
+// Selecting this configuration opts into the actual shared-product mock flow.
+process.env.BARO_D_SHARED_API = "true";
 export default defineConfig({
   testDir: ".",
   testMatch: "reports-integrated.e2e.ts",

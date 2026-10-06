@@ -14,7 +14,9 @@ import { LawyerError } from "./service";
 const publicVersion = "mvp-self-profile-public-v1";
 const privateVersion = "mvp-self-profile-private-v1";
 const alive = `NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE (target_kind='account' AND target_id=p.owner_id) OR (target_kind='profile' AND target_id=p.id))`;
-const role = `EXISTS(SELECT 1 FROM v2_role_bindings WHERE owner_id=p.owner_id AND role IN ('lawyer_applicant','verified_lawyer'))`;
+// Match account-type selection without granting a qualification or moderation role.
+// Existing lawyer roles remain a fallback only when no valid preference is saved.
+const role = `(EXISTS(SELECT 1 FROM app_metadata WHERE key='account-type:'||p.owner_id AND value='lawyer') OR (NOT EXISTS(SELECT 1 FROM app_metadata WHERE key='account-type:'||p.owner_id AND value IN ('customer','lawyer')) AND EXISTS(SELECT 1 FROM v2_role_bindings WHERE owner_id=p.owner_id AND role IN ('lawyer_applicant','verified_lawyer'))))`;
 type Row = { id: string; owner_id: string; snapshot_id: string; revision: number };
 const latest = `SELECT p.id,p.owner_id,s.id AS snapshot_id,s.revision FROM v2_profiles p JOIN v2_private_snapshots s ON s.target_id=p.id AND s.owner_id=p.owner_id AND s.purpose='profile_revision' JOIN v2_consents c ON c.id=s.id AND c.owner_id=p.owner_id AND c.kind='profile_publication' WHERE c.version IN ('${publicVersion}','${privateVersion}') AND s.state='published' AND s.revision=(SELECT max(revision) FROM v2_private_snapshots WHERE target_id=p.id AND purpose='profile_revision') AND ${alive}`;
 export function createSelfProfileService(core: V2Core, clock = () => new Date().toISOString()) {
