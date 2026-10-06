@@ -110,22 +110,25 @@ export const server = createServer(async (req, res) => {
         if (Buffer.byteLength(line) > MAX_LINE || abort.signal.aborted) throw new Error("OUTPUT_LIMIT");
         if (!res.write(line)) await once(res, "drain", { signal: abort.signal });
       };
-      const hasher = createHash("sha256");
-      let received = 0;
       try {
         if ((await output.stat()).size !== manifest.byteLength) throw new Error("INVALID_OUTPUT");
         await emit({ type: "sanitized_manifest", value: manifest });
-        for (let index = 0; index < manifest.chunkCount; index++) {
-          const bytes = Buffer.alloc(Math.min(1_048_576, manifest.byteLength - received));
-          if (bytes.length < 1) throw new Error("INVALID_OUTPUT");
-          const result = await output.read(bytes, 0, bytes.length, received);
-          if (result.bytesRead !== bytes.length) throw new Error("INVALID_OUTPUT");
-          hasher.update(bytes);
-          received += bytes.length;
-          await emit({ type: "sanitized_chunk", index, data: bytes.toString("base64") });
-          bytes.fill(0);
+        if (manifest.passes !== 2) throw new Error("INVALID_OUTPUT");
+        for (let pass = 0; pass < 2; pass++) {
+          const hasher = createHash("sha256");
+          let received = 0;
+          for (let index = 0; index < manifest.chunkCount; index++) {
+            const bytes = Buffer.alloc(Math.min(1_048_576, manifest.byteLength - received));
+            if (bytes.length < 1) throw new Error("INVALID_OUTPUT");
+            const result = await output.read(bytes, 0, bytes.length, received);
+            if (result.bytesRead !== bytes.length) throw new Error("INVALID_OUTPUT");
+            hasher.update(bytes);
+            received += bytes.length;
+            await emit({ type: "sanitized_chunk", pass, index, data: bytes.toString("base64") });
+            bytes.fill(0);
+          }
+          if (received !== manifest.byteLength || hasher.digest("hex") !== manifest.contentHash) throw new Error("INVALID_OUTPUT");
         }
-        if (received !== manifest.byteLength || hasher.digest("hex") !== manifest.contentHash) throw new Error("INVALID_OUTPUT");
       } finally {
         await output.close();
       }

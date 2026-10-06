@@ -95,6 +95,7 @@ for filename in ["image-markers.png", "image-markers.jpg", "text-two-pages.pdf",
         result = subprocess.run(["python3", "/app/processor.py", str(root), "sanitize", "0"], capture_output=True, timeout=180)
         assert result.returncode == 0
         metadata = json.loads((root / "manifest.json").read_text())
+        assert metadata["passes"] == 2
         content = (root / "sanitized.bin").read_bytes()
         assert len(content) == metadata["byteLength"] <= 100_000_000
         assert hashlib.sha256(content).hexdigest() == metadata["contentHash"]
@@ -112,3 +113,57 @@ for filename in ["image-markers.png", "image-markers.jpg", "text-two-pages.pdf",
                 assert image.format == "JPEG" and not image.getexif()
                 assert "icc_profile" not in image.info and "comment" not in image.info
 print("Linux sanitized image/PDF fixtures: 4 PASS (not public R2/moderation evidence)")
+
+# Execute the actual Node ingress/stream encoder in the built Linux image too.
+# Loopback remains local even with Docker --network none; all bytes are synthetic.
+import base64
+import time
+import urllib.request
+native_server = subprocess.Popen(["node", "/app/server.mjs"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+try:
+    for attempt in range(50):
+        try:
+            with urllib.request.urlopen("http://127.0.0.1:8080/ready", timeout=1) as ready:
+                assert ready.status == 200
+            break
+        except (OSError, TimeoutError):
+            assert native_server.poll() is None
+            time.sleep(.1)
+    else:
+        raise AssertionError("Native fixture server did not become ready")
+    for filename in ["image-markers.png", "text-two-pages.pdf"]:
+        source = (FIXTURES / filename).read_bytes()
+        request = urllib.request.Request("http://127.0.0.1:8080/sanitize", data=source, method="POST", headers={
+            "x-baro-capability": "0" * 64, "x-baro-bytes": str(len(source)),
+            "x-baro-hash": hashlib.sha256(source).hexdigest(),
+        })
+        with urllib.request.urlopen(request, timeout=240) as response:
+            metadata = json.loads(response.readline(1_500_001))
+            assert metadata["type"] == "sanitized_manifest" and metadata["value"]["passes"] == 2
+            metadata = metadata["value"]
+            first_hashes = []
+            for stage in range(2):
+                total = 0
+                hasher = hashlib.sha256()
+                for index in range(metadata["chunkCount"]):
+                    record = json.loads(response.readline(1_500_001))
+                    assert record["type"] == "sanitized_chunk" and record["pass"] == stage and record["index"] == index
+                    chunk = base64.b64decode(record["data"], validate=True)
+                    assert len(chunk) == min(1_048_576, metadata["byteLength"] - total)
+                    total += len(chunk)
+                    hasher.update(chunk)
+                    if stage == 0:
+                        first_hashes.append(hashlib.sha256(chunk).digest())
+                    else:
+                        assert first_hashes[index] == hashlib.sha256(chunk).digest()
+                assert total == metadata["byteLength"] and hasher.hexdigest() == metadata["contentHash"]
+            assert json.loads(response.readline(1_500_001)) == {"type": "complete"}
+            assert not response.read(1)
+finally:
+    native_server.terminate()
+    try:
+        native_server.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        native_server.kill()
+        native_server.wait(timeout=5)
+print("Linux native HTTP two-pass sanitizer: 2 PASS (synthetic loopback only)")

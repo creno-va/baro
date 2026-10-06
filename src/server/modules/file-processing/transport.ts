@@ -1,3 +1,4 @@
+import { sha256 } from "@noble/hashes/sha2.js";
 import { z } from "zod";
 import { v2FileProbeSchema } from "../../../contracts/v2";
 import { digest, hex } from "../files/binary";
@@ -9,6 +10,7 @@ import {
   processorLines,
   processorRecordSchema,
 } from "./protocol";
+import { type SanitizedManifest, sanitizedRecordSchema } from "./sanitized-protocol";
 
 export type ProcessingAccess = { authorize: () => Promise<boolean>; signal: AbortSignal };
 export type ProcessingCostPermit = { attemptId: string; dispatchToken: string | null };
@@ -44,7 +46,7 @@ export function createProcessorTransport(options: {
   costs: ProcessingCosts;
 }) {
   const start = async (
-    kind: "probe" | "process_unit",
+    kind: "probe" | "process_unit" | "sanitize",
     input: {
       byteLength: number;
       contentHash: string;
@@ -72,7 +74,7 @@ export function createProcessorTransport(options: {
     }
     let sent = false;
     try {
-      const path = kind === "probe" ? "/probe" : "/process";
+      const path = kind === "probe" ? "/probe" : kind === "sanitize" ? "/sanitize" : "/process";
       const request = new Request(`http://processor.internal${path}`, {
         method: "POST",
         headers: {
@@ -109,13 +111,86 @@ export function createProcessorTransport(options: {
     }
   };
   return {
+    async *sanitize(
+      input: { byteLength: number; contentHash: string; open: () => ReadableStream<Uint8Array> },
+      access: ProcessingAccess,
+    ): AsyncGenerator<
+      | { type: "manifest"; manifest: SanitizedManifest }
+      | { type: "chunk"; pass: 0 | 1; index: number; bytes: Uint8Array<ArrayBuffer> }
+    > {
+      let manifest: SanitizedManifest | null = null;
+      let index = 0,
+        pass = 0,
+        complete = false;
+      let hasher = sha256.create();
+      const firstHashes: string[] = [];
+      try {
+        if (
+          !Number.isSafeInteger(input.byteLength) ||
+          input.byteLength < 1 ||
+          input.byteLength > 100_000_000 ||
+          !/^[a-f0-9]{64}$/.test(input.contentHash)
+        )
+          throw new ProcessingError("FILE_REJECTED");
+        const response = await start("sanitize", input, access);
+        if (!response.body) throw new ProcessingError("FILE_REJECTED");
+        for await (const raw of processorLines(response.body, access.signal)) {
+          if (!(await authorize(access))) throw new ProcessingError("STALE_REVISION");
+          if (complete) throw new ProcessingError("FILE_REJECTED");
+          const record = sanitizedRecordSchema.parse(raw);
+          if (record.type === "sanitized_manifest") {
+            if (manifest || pass || index || record.value.probe.byteLength !== input.byteLength)
+              throw new ProcessingError("FILE_REJECTED");
+            manifest = record.value;
+            yield { type: "manifest", manifest };
+          } else if (record.type === "sanitized_chunk") {
+            if (!manifest || pass > 1 || record.pass !== pass || record.index !== index)
+              throw new ProcessingError("FILE_REJECTED");
+            const size = Math.min(1_048_576, manifest.byteLength - index * 1_048_576);
+            const bytes = decodeArtifact(record.data, size);
+            try {
+              const hash = await digest(bytes);
+              if (pass === 0) firstHashes.push(hash);
+              // Reject changed plaintext BEFORE handing it to saved-IV encryption.
+              else if (firstHashes[index] !== hash) throw new ProcessingError("FILE_REJECTED");
+              hasher.update(bytes);
+              if (
+                index === manifest.chunkCount - 1 &&
+                hex(hasher.digest()) !== manifest.contentHash
+              )
+                throw new ProcessingError("FILE_REJECTED");
+              yield { type: "chunk", pass: pass as 0 | 1, index, bytes };
+            } finally {
+              bytes.fill(0);
+            }
+            index++;
+            if (index === manifest.chunkCount) {
+              index = 0;
+              pass++;
+              hasher = sha256.create();
+            }
+          } else {
+            if (!manifest || pass !== 2 || index !== 0) throw new ProcessingError("FILE_REJECTED");
+            complete = true;
+          }
+        }
+        if (!complete || !(await authorize(access))) throw new ProcessingError("FILE_REJECTED");
+      } catch (error) {
+        if (error instanceof ProcessingError) throw error;
+        throw new ProcessingError("FILE_REJECTED");
+      } finally {
+        hasher.destroy();
+        await options.stop();
+      }
+    },
     async probe(
       input: { byteLength: number; contentHash: string; open: () => ReadableStream<Uint8Array> },
       access: ProcessingAccess,
     ) {
       try {
         const response = await start("probe", input, access);
-        const reader = response.body!.getReader();
+        if (!response.body) throw new ProcessingError("FILE_REJECTED");
+        const reader = response.body.getReader();
         const chunks: Uint8Array[] = [];
         let count = 0;
         try {
@@ -166,7 +241,8 @@ export function createProcessorTransport(options: {
         complete = false;
       try {
         const response = await start("process_unit", input, access);
-        for await (const raw of processorLines(response.body!, access.signal)) {
+        if (!response.body) throw new ProcessingError("FILE_REJECTED");
+        for await (const raw of processorLines(response.body, access.signal)) {
           if (!(await authorize(access)) || complete) throw new ProcessingError("STALE_REVISION");
           const record = processorRecordSchema.parse(raw);
           if (record.type === "manifest") {

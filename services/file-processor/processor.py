@@ -334,7 +334,7 @@ def sanitize(source, root, probe):
     with target.open("rb") as handle:
         for chunk in iter(lambda: handle.read(MAX_ARTIFACT), b""):
             hasher.update(chunk)
-    return dict(version=1, probe=probe, format=fmt, byteLength=size,
+    return dict(version=1, passes=2, probe=probe, format=fmt, byteLength=size,
                 contentHash=hasher.hexdigest(), chunkCount=math.ceil(size / MAX_ARTIFACT))
 
 
