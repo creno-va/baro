@@ -14,8 +14,16 @@ import type {
 } from "./types";
 
 // Optional domain modules arrive independently during the parallel sprint.
-const modules = import.meta.glob<Record<string, unknown>>("./*.ts");
-const mockModules = import.meta.glob<Record<string, unknown>>("./mock/*.ts");
+const modules = import.meta.glob<Record<string, unknown>>([
+  "./*.ts",
+  "!./*.test.ts",
+  "!./{core,session,index,types,errors}.ts",
+]);
+const mockModules = import.meta.glob<Record<string, unknown>>([
+  "./mock/*.ts",
+  "!./mock/*.test.ts",
+  "!./mock/{runtime,session}.ts",
+]);
 // biome-ignore lint/suspicious/noExplicitAny: Lazy factories are validated by the owning domain modules; the public facade is typed below.
 type Client = Record<string, (...args: any[]) => Promise<any>>;
 const clients = new Map<string, Promise<Client>>();
