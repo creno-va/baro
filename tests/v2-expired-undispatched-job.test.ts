@@ -21,6 +21,14 @@ import {
 } from "../src/server/db/v2-paid-runtime";
 import type { StoragePaidHoldRequest } from "../src/server/db/v2-storage-paid-contracts";
 import { createV2StoragePaidRuntimeRepository } from "../src/server/db/v2-storage-paid-runtime";
+import { createAssetProcessingExecution } from "../src/server/modules/file-processing/asset-execution";
+import { createFileProcessingExecution } from "../src/server/modules/file-processing/execution";
+import {
+  createProcessorTransport,
+  type ProcessingCosts,
+} from "../src/server/modules/file-processing/transport";
+import { createFilesService, type PrivateBucket } from "../src/server/modules/files/service";
+import { createMediaGateway } from "../src/server/modules/llm-gateway/transcription";
 import { createTestDatabase } from "./helpers/d1";
 import { seedTestSession } from "./helpers/session";
 
@@ -563,4 +571,136 @@ test("runtime/fencing replacement after refund cannot stop a new generation", as
   expect(f.db.sqlite.query("SELECT state FROM v2_files WHERE id=?").get(f.r.targetId)).toEqual({
     state: "queued",
   });
+});
+
+test("actual asset Workflow run stops expired initial admission before sanitizer transport", async () => {
+  const f = await queued("profile_asset");
+  const asset = f.db.sqlite
+    .query("SELECT profile_id FROM v2_assets WHERE id=?")
+    .get(f.r.targetId) as { profile_id: string };
+  let sanitizerCalls = 0;
+  const execution = createAssetProcessingExecution(
+    f.core,
+    {
+      ownerId: f.actor.ownerId,
+      profileId: asset.profile_id,
+      assetId: f.r.targetId,
+      assetRevision: 1,
+      jobId: f.jobId,
+    },
+    {
+      environment: "preview",
+      instanceId: f.stop.instanceId,
+      initialAttemptId: f.request.attemptId,
+      clock: () => LATER,
+      completed: async () => null,
+      sanitize: async () => {
+        sanitizerCalls++;
+        throw new Error("Synthetic transport must not dispatch");
+      },
+    },
+  );
+  await expect(execution.run(new AbortController().signal)).rejects.toMatchObject({
+    code: "BUDGET_UNAVAILABLE",
+  });
+  expect(sanitizerCalls).toBe(0);
+  expect(
+    f.db.sqlite.query("SELECT state,current_job_id FROM v2_assets WHERE id=?").get(f.r.targetId),
+  ).toEqual({ state: "failed", current_job_id: null });
+  expect(f.db.sqlite.query("SELECT status,retryable FROM v2_jobs WHERE id=?").get(f.jobId)).toEqual(
+    { status: "failed", retryable: 1 },
+  );
+  expect(money(f)).toEqual({ reserved_krw: 0, ambiguous_krw: 0, settled_krw: 0 });
+});
+
+test("actual file Workflow initialize stops expired initial admission without R2/native/model calls", async () => {
+  const f = await queued();
+  let externalCalls = 0;
+  const costs: ProcessingCosts = {
+    before: async () => {
+      externalCalls++;
+      return null;
+    },
+    after: async () => {
+      externalCalls++;
+    },
+  };
+  const bucket: PrivateBucket = {
+    get: async () => {
+      externalCalls++;
+      return null;
+    },
+    head: async () => {
+      externalCalls++;
+      return null;
+    },
+    put: async () => {
+      externalCalls++;
+      throw new Error("Synthetic PUT must not dispatch");
+    },
+    delete: async () => {
+      externalCalls++;
+    },
+  };
+  const processor = createProcessorTransport({
+    costs,
+    stop: async () => {
+      externalCalls++;
+    },
+    fetch: async () => {
+      externalCalls++;
+      throw new Error("Synthetic native must not dispatch");
+    },
+  });
+  const media = createMediaGateway(
+    {
+      AI_GATEWAY_ID: "synthetic",
+      AI: {
+        run: async () => {
+          externalCalls++;
+          throw new Error("Synthetic model must not dispatch");
+        },
+      },
+    },
+    {
+      costs,
+      waitUntil: () => {
+        externalCalls++;
+      },
+    },
+  );
+  const execution = createFileProcessingExecution(
+    f.core,
+    {
+      ownerId: f.actor.ownerId,
+      workspaceId: f.workspaceId,
+      fileId: f.r.targetId,
+      fileRevision: 1,
+      jobId: f.jobId,
+    },
+    {
+      environment: "preview",
+      instanceId: f.stop.instanceId,
+      initialAttemptId: f.request.attemptId,
+      clock: () => LATER,
+      files: createFilesService(f.core, { environment: "preview", bucket }),
+      bucket,
+      processor,
+      media,
+      costs,
+    },
+  );
+  await expect(execution.initialize()).rejects.toMatchObject({ code: "BUDGET_UNAVAILABLE" });
+  expect(externalCalls).toBe(0);
+  expect(
+    f.db.sqlite.query("SELECT state,current_job_id FROM v2_files WHERE id=?").get(f.r.targetId),
+  ).toEqual({ state: "failed", current_job_id: null });
+  expect(f.db.sqlite.query("SELECT status,retryable FROM v2_jobs WHERE id=?").get(f.jobId)).toEqual(
+    { status: "failed", retryable: 1 },
+  );
+  expect(f.db.sqlite.query("SELECT media_used,media_reserved FROM v2_daily_usage").get()).toEqual({
+    media_used: 0,
+    media_reserved: 0,
+  });
+  expect(money(f)).toEqual({ reserved_krw: 0, ambiguous_krw: 0, settled_krw: 0 });
 });
