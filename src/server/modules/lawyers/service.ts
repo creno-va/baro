@@ -4,6 +4,7 @@ import {
   type V2VerificationAsset,
   v2LawyerApplicationDraftRequestSchema,
   v2LawyerApplicationSchema,
+  v2ProfileContentSchema,
   v2ProfileEditRequestSchema,
   v2ProfileWithdrawRequestSchema,
   v2SessionRolesSchema,
@@ -223,6 +224,9 @@ export function createLawyersService(core: V2Core, deps: LawyerDependencies = {}
       const application = await ownApplication(ownerId);
       if (!row || row.revision !== expectedRevision) throw new LawyerError("STALE_REVISION");
       if (application?.status !== "approved") throw new LawyerError("REVIEW_REQUIRED");
+      const current = await repository.readProfileRevision(actor(ownerId), row.id, row.revision);
+      if (current?.status !== "draft" || !v2ProfileContentSchema.safeParse(current.content).success)
+        throw new LawyerError("ASSET_NOT_READY");
       if (!(await repository.submitProfile(actor(ownerId), row.id, row.revision, application.id)))
         throw new LawyerError("ASSET_NOT_READY");
       return repository.readProfileRevision(actor(ownerId), row.id, row.revision);

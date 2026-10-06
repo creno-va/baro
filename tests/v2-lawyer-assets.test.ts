@@ -65,9 +65,11 @@ async function fixture() {
   const repository = createV2LawyersRepository(core);
   const objects = new Map<string, Uint8Array>();
   let badReceipt = false;
+  let rejectedPut = false;
   let onPut: (() => void) | null = null;
   const bucket = {
     async put(key: string, value: ReadableStream<Uint8Array>) {
+      if (rejectedPut) throw new Error("Synthetic R2 transport failure");
       const data = new Uint8Array(await new Response(value).arrayBuffer());
       objects.set(key, data);
       onPut?.();
@@ -111,6 +113,9 @@ async function fixture() {
     profileId,
     setBad: () => {
       badReceipt = true;
+    },
+    setRejectedPut: () => {
+      rejectedPut = true;
     },
     putHook: (fn: () => void) => {
       onPut = fn;
@@ -221,6 +226,46 @@ test("missing trusted funding, owner/revision and exact length reject before bod
   });
   expect(pulls).toBe(0);
 });
+test("concurrent same idempotency key reserves one asset and replays the committed winner", async () => {
+  const f = await fixture();
+  const request = {
+    name: "synthetic.png",
+    byteLength: 100,
+    mediaType: "image/png",
+    purpose: "identity",
+  };
+  const results = await Promise.all(
+    [1, 2].map(() =>
+      f.service.reserve(f.owner.userId, 1, "synthetic_same_key_race", request, "verification"),
+    ),
+  );
+  expect(results[0]?.assetId).toBe(results[1]?.assetId);
+  expect(f.db.sqlite.query("SELECT count(*) AS n FROM v2_assets").get()).toEqual({ n: 1 });
+  expect(f.db.sqlite.query("SELECT reserved_bytes FROM v2_storage_usage").get()).toEqual({
+    reserved_bytes: 100,
+  });
+});
+test("R2 rejection before consuming ciphertext aborts producer and leaves durable pending cleanup", async () => {
+  const f = await fixture();
+  const r = await f.service.reserve(
+    f.owner.userId,
+    1,
+    "synthetic_transport_failure",
+    { name: "😀".repeat(255), byteLength: 100, mediaType: "image/png", purpose: "identity" },
+    "verification",
+  );
+  f.setRejectedPut();
+  await expect(
+    f.service.upload(f.owner.userId, r.assetId, 1, 100, stream(new Uint8Array(100))),
+  ).rejects.toThrow();
+  expect(
+    f.db.sqlite.query("SELECT state,original_blob_id FROM v2_assets WHERE id=?").get(r.assetId),
+  ).toEqual({ state: "reserved", original_blob_id: null });
+  expect(f.db.sqlite.query("SELECT state,cipher_hash FROM v2_blobs").get()).toEqual({
+    state: "deleting",
+    cipher_hash: null,
+  });
+}, 5000);
 test("failed R2 receipt or mid-put deletion never promotes pointer and pending object remains journalled", async () => {
   const f = await fixture();
   const input = {

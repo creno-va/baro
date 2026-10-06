@@ -433,3 +433,31 @@ test("profile draft and rejected resubmission preserve the previous approved pub
   expect(rejected.current?.status).toBe("rejected");
   expect(rejected.published?.approvedRevision).toBe(2);
 });
+test("incomplete owned profile remains editable and submit yields a domain error rather than internal failure", async () => {
+  const f = await fixture();
+  const id = await submitted(f);
+  expect(
+    (await f.request(`/v2/moderation/applications/${id}/decision`, f.moderator, "POST", approval))
+      .status,
+  ).toBe(200);
+  const draft = await f.request("/v2/me/lawyer/profile", f.owner, "PUT", {
+    expectedRevision: 1,
+    content: { name: "Synthetic partial profile" },
+  });
+  expect(draft.status).toBe(200);
+  const submit = await f.request("/v2/me/lawyer/profile/submit", f.owner, "POST", {
+    expectedRevision: 2,
+  });
+  expect(submit.status).toBe(409);
+  expect(
+    z.object({ error: z.object({ code: z.string() }) }).parse(await submit.json()).error.code,
+  ).toBe("FILE_REJECTED");
+  expect(
+    (
+      await f.request("/v2/me/lawyer/profile", f.owner, "PUT", {
+        expectedRevision: 2,
+        content: { introduction: "Continued draft" },
+      })
+    ).status,
+  ).toBe(200);
+});

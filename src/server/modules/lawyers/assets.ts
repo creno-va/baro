@@ -250,8 +250,9 @@ export function createLawyerAssetsService(core: V2Core, deps: LawyerAssetDepende
         },
         "reserve",
       );
-      if (
-        !(await repository.reserveAsset(
+      let accepted: boolean;
+      try {
+        accepted = await repository.reserveAsset(
           actor(ownerId),
           p.id,
           p.revision,
@@ -259,9 +260,32 @@ export function createLawyerAssetsService(core: V2Core, deps: LawyerAssetDepende
           request,
           crypto.randomUUID(),
           { operationId, key, requestHash },
-        ))
-      )
-        throw new LawyerError("STALE_REVISION");
+        );
+      } catch (error) {
+        // A racing identical request can commit between lookup and the guarded
+        // reservation batch. Resolve only its exact committed operation.
+        const winner = await accounting.findOperation(
+          actor(ownerId),
+          `/api/v2/lawyers/${p.id}/assets`,
+          key,
+          requestHash,
+        );
+        if (winner?.kind !== "replay") throw error;
+        const found = await core
+          .statement(
+            "SELECT entity_id FROM v2_storage_reservations WHERE operation_id=? AND kind='lawyer_asset' AND state!='released'",
+            [winner.operation.id],
+          )
+          .first<string>("entity_id");
+        if (!found) throw new LawyerError("STALE_REVISION");
+        const row = await assetRow(ownerId, found);
+        return {
+          assetId: found,
+          revision: row.revision,
+          value: await repository.readAsset(actor(ownerId), found),
+        };
+      }
+      if (!accepted) throw new LawyerError("STALE_REVISION");
       return { assetId, revision: 1, value: { request } };
     },
     async upload(
