@@ -1,0 +1,66 @@
+name: Recover production runtime
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: Type production to restore missing settings on the existing production release
+        required: true
+        type: string
+      expected_live_sha:
+        description: Full 40-character SHA currently serving the already-open production API
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: cloudflare-production
+  cancel-in-progress: false
+
+jobs:
+  recover:
+    if: inputs.confirmation == 'production' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: production
+      deployment: false
+    steps:
+      - name: Validate recovery target
+        env:
+          RECOVERY_EXPECTED_LIVE_SHA: ${{ inputs.expected_live_sha }}
+        run: '[[ "$RECOVERY_EXPECTED_LIVE_SHA" =~ ^[a-f0-9]{40}$ ]]'
+
+      - name: Checkout approved main recovery implementation
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: .bun-version
+
+      - name: Install frozen dependencies
+        run: bun ci
+
+      - name: Restore and verify missing production runtime settings
+        env:
+          RECOVERY_EXPECTED_LIVE_SHA: ${{ inputs.expected_live_sha }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CASE_DATA_KEY_V1: ${{ secrets.CASE_DATA_KEY_V1 }}
+          LAW_API_OC: ${{ secrets.LAW_API_OC }}
+        run: bun scripts/recover-production-runtime.ts
+
+      - name: Save allowlisted production recovery observation
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v7.0.1
+        with:
+          name: production-recovery-${{ github.run_id }}
+          path: .wrangler/readiness/production-recovery.json
+          if-no-files-found: warn
+          retention-days: 7

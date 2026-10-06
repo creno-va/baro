@@ -145,8 +145,12 @@ export async function unitTargets(files: string[], tests: string[]): Promise<str
     selected.push(
       ...tests.filter((path) => /(^src\/server\/auth\/|^tests\/auth-lifecycle\.test)/.test(path)),
     );
-  if (files.some((file) => file.startsWith(".github/workflows/")))
-    selected.push("tests/workflows.test.ts");
+  if (
+    files.some((file) =>
+      /^(?:\.github\/(?:workflows|actions)\/|wrangler\.jsonc$|astro\.config\.ts$)/.test(file),
+    )
+  )
+    selected.push("tests/workflows.test.ts", "tests/deployment-config.test.ts");
   return [...new Set(selected)].sort();
 }
 
