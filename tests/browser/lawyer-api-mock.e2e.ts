@@ -30,6 +30,22 @@ test("integrated lawyer login/consent/editor uses persistent API mock with no re
   await page.getByRole("combobox", { name: "지역", exact: true }).selectOption("seoul");
   await page.getByLabel("사무실 주소").fill("서울 서초구 합성로 1");
   await page.getByLabel("이메일", { exact: true }).fill("demo@example.invalid");
+  const png = await page.evaluate(() => {
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = 32;
+    const context = canvas.getContext("2d");
+    if (context) {
+      context.fillStyle = "#2563eb";
+      context.fillRect(0, 0, 32, 32);
+    }
+    return canvas.toDataURL("image/png").split(",")[1];
+  });
+  await page.getByLabel("프로필 사진").setInputFiles({
+    name: "synthetic.png",
+    mimeType: "image/png",
+    buffer: Buffer.from(png ?? "", "base64"),
+  });
+  await expect(page.getByRole("img", { name: "내 프로필 사진" })).toBeVisible();
   await page.getByRole("button", { name: "포트폴리오 추가" }).click();
   await page.getByLabel("활동 제목 1").fill("합성 포트폴리오");
   await page.getByLabel("자료 URL 1").fill("https://example.com/portfolio");
@@ -37,6 +53,7 @@ test("integrated lawyer login/consent/editor uses persistent API mock with no re
   await expect(page.getByText("프로필을 저장했어요.", { exact: true })).toBeVisible();
   await page.reload();
   await expect(page.getByLabel("이름", { exact: true })).toHaveValue("E 통합 시연 변호사");
+  await expect(page.getByRole("img", { name: "내 프로필 사진" })).toBeVisible();
   await page.getByRole("button", { name: "프로필 공개", exact: true }).click();
   await page.getByRole("checkbox", { name: /내 사진과 연락처를 포함한/ }).check();
   await page.getByRole("button", { name: "동의하고 공개" }).click();
@@ -58,6 +75,7 @@ test("integrated lawyer login/consent/editor uses persistent API mock with no re
   );
   await expect(page.getByText("본인·자격·사무실 수동 확인", { exact: false })).toHaveCount(0);
   await expect(page.getByText("본인 작성 정보입니다.", { exact: false })).toBeVisible();
+  await expect(page.getByRole("img", { name: "E 통합 시연 변호사 프로필 사진" })).toBeVisible();
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await page.getByRole("heading", { name: "E 통합 시연 변호사", exact: true }).click();
   await page.screenshot({ path: ".wrangler/lawyer-api-mock-390.png", fullPage: true });
@@ -66,6 +84,9 @@ test("integrated lawyer login/consent/editor uses persistent API mock with no re
   );
   expect(snapshot.owners["example-lawyer"]).toBeTruthy();
   const id = snapshot.owners["example-lawyer"];
+  expect(snapshot.profiles.find((profile: { id: string }) => profile.id === id).photoUrl).toMatch(
+    /^data:image\/jpeg;base64,/,
+  );
   await page.goto("/lawyer");
   await expect(page.locator("astro-island[ssr]")).toHaveCount(0);
   await page.getByRole("button", { name: "비공개로 전환" }).click();
