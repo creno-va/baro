@@ -17,6 +17,9 @@ from PIL import Image
 Image.MAX_IMAGE_PIXELS = 40_000_000
 MAX_ARTIFACT = 1_048_576
 MAX_OUTPUT = 536_870_912
+# Technical scene candidates, not a claim that every semantic scene is detectable.
+# 0.05 catches the corpus's measured 0.097842/0.089128 changes after 160x90 scaling.
+SCENE_SCORE_THRESHOLD = 0.05
 
 
 class Rejected(Exception):
@@ -25,17 +28,18 @@ class Rejected(Exception):
 
 def command(args, timeout=60):
     result = subprocess.run(args, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-                            stderr=subprocess.DEVNULL, timeout=timeout, check=False)
+                            stderr=subprocess.DEVNULL, timeout=timeout, check=False,
+                            env={**os.environ, "OMP_THREAD_LIMIT": "1"})
     if result.returncode != 0 or len(result.stdout) > MAX_ARTIFACT:
         raise Rejected("INVALID_MEDIA")
     return result.stdout
 
 
 def ffmpeg(source, args, seek=None):
-    prefix = ["ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error", "-protocol_whitelist", "file,pipe"]
+    prefix = ["ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error", "-protocol_whitelist", "file,pipe", "-threads", "1", "-filter_threads", "1", "-filter_complex_threads", "1"]
     if seek is not None:
         prefix += ["-ss", str(seek)]
-    return command(prefix + ["-i", str(source)] + args)
+    return command(prefix + ["-i", str(source), "-threads", "1"] + args)
 
 
 def inspect(source):
@@ -78,7 +82,7 @@ def inspect(source):
         except UnicodeDecodeError:
             pass
     try:
-        info = json.loads(command(["ffprobe", "-v", "error", "-protocol_whitelist", "file,pipe",
+        info = json.loads(command(["ffprobe", "-v", "error", "-threads", "1", "-protocol_whitelist", "file,pipe",
                                    "-show_entries", "format=format_name,duration,start_time:stream=codec_type,width,height,r_frame_rate,start_time",
                                    "-of", "json", str(source)]))
     except (ValueError, Rejected):
@@ -194,7 +198,7 @@ def process(source, root, probe, unit, frame_offset):
             # Tiny scene detector output: select reduced grayscale frames and log only timestamp metadata.
             scene_meta = root / "scenes.txt"
             scene_start = max(0, unit * 30 - 1)
-            ffmpeg(source, ["-t", str(min((unit + 1) * 30, duration) - scene_start), "-an", "-vf", "scale=160:90,select='gt(scene,0.30)',metadata=print:file=" + str(scene_meta),
+            ffmpeg(source, ["-t", str(min((unit + 1) * 30, duration) - scene_start), "-an", "-vf", "scale=160:90,select='gt(scene,%s)',metadata=print:file=" % SCENE_SCORE_THRESHOLD + str(scene_meta),
                             "-f", "null", "-"], seek=scene_start)
             timestamps = [float(t) + scene_start for t in re.findall(r"pts_time:([0-9.]+)", (scene_meta.read_text() if scene_meta.exists() else ""))]
             timestamps = [t for t in timestamps if unit * 30 <= t < min((unit + 1) * 30, duration)]
@@ -215,7 +219,7 @@ def process(source, root, probe, unit, frame_offset):
             # A spool avoids capturing pixels or an unbounded subprocess stdout.
             frame_index = root / "frame-index.txt"
             with frame_index.open("wb") as spool:
-                result = subprocess.run(["ffprobe", "-v", "error", "-protocol_whitelist", "file,pipe", "-select_streams", "v:0",
+                result = subprocess.run(["ffprobe", "-v", "error", "-threads", "1", "-protocol_whitelist", "file,pipe", "-select_streams", "v:0",
                                          "-read_intervals", "%s%%%s" % (unit * 30, min((unit + 1) * 30, duration)),
                                          "-show_entries", "frame=best_effort_timestamp_time", "-of", "csv=p=0", str(source)],
                                         stdout=spool, stderr=subprocess.DEVNULL, timeout=90)

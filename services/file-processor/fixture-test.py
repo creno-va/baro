@@ -57,7 +57,7 @@ with tempfile.TemporaryDirectory(prefix="baro-boundary-") as tmp:
     root = Path(tmp)
     made = subprocess.run(["ffmpeg", "-nostdin", "-v", "error", "-f", "lavfi", "-i",
                            "color=c=blue:s=96x64:r=2:d=31", "-c:v", "libx264", "-g", "10",
-                           "-pix_fmt", "yuv420p", "-f", "mp4", str(root / "input")],
+                           "-threads", "1", "-pix_fmt", "yuv420p", "-f", "mp4", str(root / "input")],
                           capture_output=True, timeout=60)
     assert made.returncode == 0
     offset = 0

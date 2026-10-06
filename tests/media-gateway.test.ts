@@ -78,7 +78,7 @@ function setup(
     {
       costs,
       waitUntil: (p) => pending.push(p),
-      timeoutMs: options.timeoutMs,
+      ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }),
       visionCapability: async () =>
         capable
           ? { model: MODEL_ID, wire: "chat_image_url", validUntil: "2099-01-01T00:00:00Z" }
