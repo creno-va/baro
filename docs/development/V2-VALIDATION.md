@@ -679,3 +679,54 @@ AccountSettings 제품 UI/owner·최근 OAuth·callback·삭제 보호는 변경
 signed SQL native report 다운로드 PDF는 pypdf/Poppler에서 한글·마스킹·버전·페이지·여백을
 확인했다. 합성 입력 PDF1페이지/3126732 bytes와 ZIP의 선택 원본 정확한 byte가 보존됐다.
 한글 폰트·마스킹·footer는 깨짐/겹침 없이 렌더됐으며 원격 제품 비용 증거가 아니다.
+
+## 4세션 통합 릴리스와 현재 외부 gate (2026-10-07)
+
+[현재 immutable 릴리스 journal](https://github.com/creno-va/baro/issues/71#issuecomment-6021564076)은
+이 문서 변경 자신을 포함한 최종 main SHA의 CI·preview·독립 smoke·Full validation(manual)·
+실제 browser·protected production 상태를 기록하는 정본이다. pending/실패/승인대기를
+완료로 표시하지 않고 이전 SHA의 증거를 보존한다. 아래 모듈/로컬 증거와 실제 외부 성공을 구분한다.
+
+| 대상 | 통합 구현과 검증 가능한 범위 | 아직 입증되지 않은 범위 |
+| --- | --- | --- |
+| 고객 | 동일 UI의 명시적 API 예시 adapter로 역할·합성 동의→사건·질문·요약 확인→chat·자료→검토·PDF/선택 원본 ZIP→reload→사건/계정 삭제. signed SQL/native PDF/ZIP는 별도 합성 다운로드 검사 | 실제 OAuth·Turnstile action·승인 모델·공식 법률·R2/Container/Whisper의 로그인부터 삭제까지 제품 처리 |
+| 변호사 | 동일 UI API 예시에서 본인 프로필·사진·PDF portfolio 저장/reload·직접 공개 설정·디렉터리/공개 상세. 별도 backend 소유/역할/동의/revision/삭제 fence 검사 | 실제 OAuth·R2 public copy/download·현재 정책 승인·자격/소속 사실 검증. 자격 심사/승인대기/어드민 UX는 ADR-0014에 따라 제외 |
+| 비용/quota | 실제 SQL factory의 KST 일/월 경계·동시 admission·retry별 meter와 logical quota1회·100만원 상한·정확한 FX·불명 비용 보존·삭제/다음 달 late receipt 검증 | 합성 receipt는 공급자 invoice가 아님. immutable 가격/FX/funding/allocation/model bounds 부재 시 paid admission 닫힘 |
+| 공식 근거 | legal-retrieval 전용 captured/synthetic parser/cache의 ID/version/date/URL/hash·한도·취소·bounded retry·unavailable 검사 | 현재 OC/서비스/인터넷 JSON 승인과 실제 공식 응답의 근거 tuple 확인. 모델 기억은 공식 근거로 쓰지 않음 |
+| 운영 | native report global router와 scheduled v2 deletion 연결, owner/CSRF/role/tombstone 보호, production mock artifact 거부 | 격리 restore·DB 밖 최신 v2 deletion journal/replay·key recovery·rollback·실제 alert 수신 ack 및 현재 비용 receipt |
+
+공유/모듈 PR #126/#128/#130/#132는 최신 base와 정확한 head CI로 정상 병합했다.
+#133은 global native report/scheduled deletion 연결과 production mock artifact 제거를 통합한다.
+모듈 UI 파일을 중복 구현하거나 자체 APPROVE/admin/gate를 우회하지 않았다. migration은
+`0009_storage_capacity_maintenance`를 유지하며 새 번호를 만들지 않았다.
+
+최종 product source의 로컬 frozen ci/check1260 PASS/133360 assertions, migration drift 및
+fresh/upgrade6 PASS/29 assertions, build/dry-run PASS. production bundle139 files와 CSP4 PASS/
+fixture 전용1skip, signed SQL/native report 다운로드·공유 lawyer mock·고객 integrated API mock
+각1 PASS, settings fixture5개×3회15 PASS. 실제 PDF1page/3126732 bytes의 한글·마스킹·footer와
+ZIP 선택 원본 byte/이름을 pypdf/Poppler로 확인했다. 이 local/SQL/fixture 성공은 실제 OAuth·
+공식 법률·모델·R2·청구 성공을 대신하지 않는다. 최종 main의 Full validation은 위 journal에서
+actual native 실행 여부·browser 수·CI run·동일 SHA를 확인해야 한다.
+
+production build에서 기존 검사에 잡히지 않던 mock chunk를 발견했다. shared core/facade와
+consumer의 compile-time 모드 분기로 제외하고 namespace 검사를 강화했다. production job은
+build 뒤/migration 전에 `bundle:check`를 실행한다. 실제 fixture/합성 proof를 production DB에
+주입하지 않는다. preview 예시 adapter는 명시적 모드이고 별도 /mock UI가 아니다.
+
+외부 담당은 [현재 readiness](../operations/ENVIRONMENT-READINESS.md)의 구체적 필드/행동을
+수행해야 한다. Cloudflare 콘솔 로그인은 완료됐으나 GitHub/CLI 자원 권한 확대·새 결제·자동
+충전·예산 확대를 하지 않았다. 법률 신청/OC와 Gateway GET403 원인이 그대로여서 기본
+metadata 점검은 `check_legal=false/check_gateway=false`; not_requested는 성공이 아니다.
+`CURRENT_POLICY_VERSIONS`2026-10-04와 draft2026-10-06-v2-draft를 구분한다.
+#19/#20/#27/#70/#71와 milestones4/5는 실제 외부/운영/정책 승인 증거 전 OPEN을 유지한다.
+production foundation 승인과 공개 gate는 서로 별개이며 최종 상태는 위 journal에 연결한다.
+
+PR133 final head `d4bd155908cbb6e3f56b19737f290fc59b152241`의
+[CI37501545916](https://github.com/creno-va/baro/actions/runs/37501545916) source/browser·native job·
+quality gate3개 SUCCESS와 CLEAN을 확인해 main
+`b89318c47f15923f5eb8c95745fb5596fbe38deb`로 정상 squash 병합했다. native 실행 단계는 변경 없음
+skip이므로 최종 Full validation(manual)에서 실제 실행을 요구한다. main
+[CI37502658428](https://github.com/creno-va/baro/actions/runs/37502658428)와 후속 preview는 이 문서
+작성 시 아직 진행 중이다. 마지막 독립 preview smoke c6b9665와 production foundation ca6e15b의
+실제 성공 기록을 새 main 병합만으로 갱신하지 않는다. 문서까지 포함한 최종 candidate와 검증은
+현재 #71 journal에서 참조한다.
