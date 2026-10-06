@@ -492,3 +492,15 @@ lawyer mock browser3개, built CSP4개/fixture-only skip1로 통과했다. 새 r
 고객 PR128의 구체적인 DTO 요청을 받은 뒤 WorkspaceView에 기존 V2Summary facts/parties를
 재사용한 optional facts/people와 unknowns/notices를 공용 types/facade 계약에 반영한다.
 고객의 local CustomerWorkspaceView는 호환되며 공유 서버 schema/migration은 바꾸지 않는다.
+
+PR128이 제공한 customer-real.e2e/config의 별도60초 real transport 환경을 공용 runner에
+순차 연결한다. 모듈 파일이 도착해 해당 target이 선택될 때만 config를 실행하므로 선행
+공유 candidate에 모듈 코드나 fixture를 복사하지 않는다. 최종 소비자 branch의 최신 head CI로
+실제 결합을 검증한다. runner 추가 뒤 전체 check/build/dry-run도 다시 통과했다.
+
+main7943496의 [CI37488768849](https://github.com/creno-va/baro/actions/runs/37488768849)와
+[preview37489693444](https://github.com/creno-va/baro/actions/runs/37489693444)가 성공했고,
+별도 full SHA/schema0009 foundation smoke도 통과했다. 실제 IAB에서 저장된 합성 사건의
+재접속·메뉴 Enter/ShiftTab wrap·Escape opener 복귀와 새 이용 유형 변경 링크를 확인했다.
+IAB viewport override는 실제CSS760px로 남아 원격320px 성공으로 기록하지 않는다.
+Chromium320px/200% 회귀는 별도 compiled/fixture browser 증거다.
