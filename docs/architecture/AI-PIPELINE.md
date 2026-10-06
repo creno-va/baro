@@ -96,6 +96,9 @@ provider 보존/무학습 설정은 Gateway 로그 설정과 별도로 법률/�
   실행 한도 안에서 재시도할 수 있다. 이전에 retryable=false로 저장된 intake 실패에도
   적용하며 chat/파일/리포트에는 확대하지 않는다. 추가 모델 호출은 각각 실제 비용을
   예약·정산하고 기존 소유권·revision·quota·삭제·lease 검증을 유지한다.
+- v2 workspace는 유료 단계마다 유효한 5분 lease를 갱신한다. 최대 4개 생성/audit
+  단계를 허용하는 Workflow의 외부 timeout은 20분이며 단계별 호출 횟수·60초 timeout은
+  늘리지 않는다. 검증 중인 초안은 Workflow step 상태나 사용자에게 노출하지 않는다.
 - Workflow step은 암호화 checkpoint/reference와 결과 hash를 재사용한다. 외부 호출 성공과
   checkpoint commit 사이의 crash는 중복 과금이 가능하므로 exactly-once를 보장하지 않는다.
   최대 attempt·timeout·quota 규칙은 DOMAIN-LIFECYCLE을 따른다.

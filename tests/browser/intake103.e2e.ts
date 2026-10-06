@@ -292,13 +292,20 @@ for (const retryable of [true, false]) {
       let advances = 0;
       registerMockHandlers({
         "cases.advance": (input: { id: string }, context: { key: string }) => {
-          if (++advances === 1)
+          if (++advances === 1) {
+            // Admission and terminal failure each advance the real workspace.
+            // A user retry therefore starts from the failed job's new revision.
+            const key = "baro-api-mock-v1:cases";
+            const items = JSON.parse(localStorage.getItem(key) ?? "{}");
+            items[input.id].revision += 2;
+            localStorage.setItem(key, JSON.stringify(items));
             return {
               ...handlers["cases.getQuestions"](input),
               failed: true,
               retryable,
               failure: "POLICY_REJECTED",
             };
+          }
           return handlers["cases.advance"](input, context);
         },
       });
