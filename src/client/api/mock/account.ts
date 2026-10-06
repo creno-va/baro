@@ -1,4 +1,4 @@
-import type { DomainRequest } from "../reports";
+import type { DomainRequest, DomainRequestInit } from "../reports";
 import type { UsageView } from "../types";
 import {
   mockResponseError,
@@ -12,6 +12,10 @@ export type AccountMockRuntime = Omit<ReportMockRuntime, "original"> & {
   removeOriginals?: (ownerId: string, caseId?: string) => Promise<void>;
 };
 function eraseCase(state: ReportMockState, id: string) {
+  for (const file of state.files[id] ?? []) delete state.fileProcessing?.[file.id];
+  for (const key of Object.keys(state.workspaceReceipts ?? {}))
+    if (key.includes(`:/api/v2/cases/${encodeURIComponent(id)}/`))
+      delete state.workspaceReceipts?.[key];
   delete state.cases[id];
   delete state.workspace[id];
   delete state.files[id];
@@ -27,7 +31,7 @@ function eraseCase(state: ReportMockState, id: string) {
   state.deletedCaseIds.push(id);
 }
 export function createAccountMockHandler(runtime: AccountMockRuntime): DomainRequest {
-  const handler: DomainRequest = async <T>(path, init = {}) => {
+  const handler: DomainRequest = async <T>(path: string, init: DomainRequestInit = {}) => {
     const state = runtime.read();
     requireMockAccount(state);
     const method = init.method ?? "GET";
@@ -53,14 +57,21 @@ export function createAccountMockHandler(runtime: AccountMockRuntime): DomainReq
       };
       return usage as T;
     }
-    if (path === "/api/me/deletion" && method === "GET")
+    if (path === "/api/me/deletion" && method === "GET") {
+      const digest = await crypto.subtle.digest(
+        "SHA-256",
+        new TextEncoder().encode(`mock-owner:${state.session.user?.id}`),
+      );
       return {
-        ownerTag: state.session.user?.id,
+        ownerTag: [...new Uint8Array(digest)]
+          .map((byte) => byte.toString(16).padStart(2, "0"))
+          .join(""),
         recentOAuth: true,
         authenticatedAt: new Date().toISOString(),
         providers: ["google", "naver", "kakao"],
         mock: true,
       } as T;
+    }
     const casePath = path.match(/^\/api\/cases\/([^/]+)$/);
     if (casePath && method === "DELETE") {
       const id = decodeURIComponent(casePath[1] ?? "");

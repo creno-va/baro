@@ -10,7 +10,7 @@ export function downloadBlob(blob: Blob, filename: string) {
   const anchor = document.createElement("a");
   anchor.href = url;
   anchor.download = filename.replace(/[^\p{L}\p{N}._-]/gu, "_");
-  document.body.append(anchor);
+  document.body.appendChild(anchor);
   anchor.click();
   anchor.remove();
   setTimeout(() => URL.revokeObjectURL(url), 60000);
@@ -99,13 +99,14 @@ export async function createZip(entries: { name: string; blob: Blob }[]) {
 /** Mock PDF embeds browser-rendered Korean text. Production rendering remains #66. */
 export async function createSyntheticPdf(title: string, content: string, revision: number) {
   if (typeof document === "undefined") throw new Error("PDF는 브라우저에서 다운로드해 주세요.");
+  await document.fonts.load('26px "Pretendard Variable"');
   await document.fonts.ready;
   const canvas = document.createElement("canvas");
   canvas.width = 1240;
   canvas.height = 1754;
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("PDF 화면을 만들지 못했어요.");
-  ctx.font = "26px Pretendard, sans-serif";
+  ctx.font = '26px "Pretendard Variable", sans-serif';
   const lines: string[] = [];
   for (const paragraph of content.split("\n")) {
     let line = "";
@@ -123,20 +124,20 @@ export async function createSyntheticPdf(title: string, content: string, revisio
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, 1240, 1754);
     ctx.fillStyle = "#2159c8";
-    ctx.font = "bold 28px Pretendard, sans-serif";
+    ctx.font = 'bold 28px "Pretendard Variable", sans-serif';
     ctx.fillText("BARO · 합성 API 예시 리포트", 90, 95);
     ctx.fillStyle = "#17233b";
-    ctx.font = "bold 34px Pretendard, sans-serif";
+    ctx.font = 'bold 34px "Pretendard Variable", sans-serif';
     ctx.fillText(title.slice(0, 32), 90, 158);
     ctx.fillStyle = "#64748b";
-    ctx.font = "22px Pretendard, sans-serif";
+    ctx.font = '22px "Pretendard Variable", sans-serif';
     ctx.fillText(`검토 버전 ${revision} · 법률 판단이나 원본 진정성을 보장하지 않습니다.`, 90, 205);
     ctx.fillStyle = "#17233b";
-    ctx.font = "26px Pretendard, sans-serif";
+    ctx.font = '26px "Pretendard Variable", sans-serif';
     for (const [index, line] of lines.slice(start, start + perPage).entries())
       ctx.fillText(line, 90, 278 + index * 38);
     ctx.fillStyle = "#64748b";
-    ctx.font = "22px Pretendard, sans-serif";
+    ctx.font = '22px "Pretendard Variable", sans-serif';
     ctx.fillText(
       "사용자가 내용을 확인하고 자료를 직접 전달합니다. 실제 외부 처리 결과가 아닙니다.",
       90,

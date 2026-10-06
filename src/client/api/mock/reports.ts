@@ -3,7 +3,7 @@ import {
   createZip,
   maskReportText,
 } from "../../../components/reports/download";
-import type { DomainRequest } from "../reports";
+import type { DomainRequest, DomainRequestInit } from "../reports";
 import { reportSaveSchema } from "../reports";
 import type { CaseView, FileView, ReportView, SessionView, WorkspaceView } from "../types";
 
@@ -17,6 +17,8 @@ export type ReportMockState = {
   reportSources?: Record<string, number>;
   deletedCaseIds?: string[];
   reportRequests?: Record<string, { fingerprint: string; value: ReportView }>;
+  workspaceReceipts?: Record<string, unknown>;
+  fileProcessing?: Record<string, unknown>;
 };
 export type ReportMockRuntime = {
   read: () => ReportMockState;
@@ -85,7 +87,7 @@ function draft(state: ReportMockState, item: CaseView, revision: number): Report
   };
 }
 export function createReportsMockHandler(runtime: ReportMockRuntime): DomainRequest {
-  const handler: DomainRequest = async <T>(path, init = {}) => {
+  const handler: DomainRequest = async <T>(path: string, init: DomainRequestInit = {}) => {
     const state = runtime.read();
     requireMockAccount(state);
     const reportPath = path.match(/^\/api\/v2\/cases\/([^/]+)\/reports$/);

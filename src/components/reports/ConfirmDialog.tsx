@@ -14,8 +14,14 @@ export function ConfirmDialog({
   const id = useId();
   useEffect(() => {
     const dialog = ref.current;
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     dialog?.showModal();
-    return () => dialog?.close();
+    return () => {
+      dialog?.close();
+      queueMicrotask(() => {
+        if (previous?.isConnected) previous.focus();
+      });
+    };
   }, []);
   return (
     <dialog

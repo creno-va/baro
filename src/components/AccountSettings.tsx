@@ -212,7 +212,14 @@ export function AccountSettings() {
               </p>
               <a href={`/cases/${encodeURIComponent(item.id)}/reports`}>리포트 확인</a>
             </div>
-            <button type="button" disabled={Boolean(busy)} onClick={() => open(item)}>
+            <button
+              type="button"
+              disabled={Boolean(busy)}
+              onClick={(event) => {
+                event.currentTarget.focus();
+                open(item);
+              }}
+            >
               <Trash2 size={16} aria-hidden="true" /> 사건 삭제
             </button>
           </div>
@@ -249,7 +256,10 @@ export function AccountSettings() {
           type="button"
           className="danger-button"
           disabled={Boolean(busy) || !ready}
-          onClick={() => open("account")}
+          onClick={(event) => {
+            event.currentTarget.focus();
+            open("account");
+          }}
         >
           계정과 모든 사건 삭제
         </button>

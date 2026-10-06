@@ -43,6 +43,8 @@ function fixture() {
     },
     reports: {},
     lawyers: { mine: { published: true } },
+    workspaceReceipts: { "POST:/api/v2/cases/case-demo/chat:key:body": {} },
+    fileProcessing: { "file-demo": { at: 1, failed: false } },
   });
   const read = () => JSON.parse(raw) as ReportMockState;
   const update = (action: (state: ReportMockState) => void) => {
@@ -75,6 +77,7 @@ function fixture() {
 test("review edits and masking persist through storage reload; old versions retain their reviewed content", async () => {
   const f = fixture();
   const report = await f.reports.get("case-demo");
+  expect((await f.account.deletionAccess()).mock).toBe(true);
   expect(report.maskIdentifiers).toBe(false);
   const saved = await f.reports.save("case-demo", {
     content: "검토한 사실 01012345678 demo@example.test",
@@ -152,6 +155,8 @@ test("case deletion removes listing, workspace, files and every report version a
   expect(f.read().files).toEqual({});
   expect(f.read().reports).toEqual({});
   expect(f.read().reportHistory).toEqual({});
+  expect(f.read().workspaceReceipts).toEqual({});
+  expect(f.read().fileProcessing).toEqual({});
   expect(f.removed).toEqual(["case-demo"]);
   await expect(f.reports.get("case-demo")).rejects.toMatchObject({ code: "NOT_FOUND" });
   await expect(f.reports.pdf(report.id)).rejects.toMatchObject({ code: "NOT_FOUND" });

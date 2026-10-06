@@ -125,7 +125,14 @@ export function ReportReview({ caseId }: { caseId: string }) {
                   버전 {report.revision} · {new Date(report.updatedAt).toLocaleString("ko-KR")}
                 </p>
               </div>
-              <button type="button" disabled={Boolean(busy)} onClick={() => setRegenerate(true)}>
+              <button
+                type="button"
+                disabled={Boolean(busy)}
+                onClick={(event) => {
+                  event.currentTarget.focus();
+                  setRegenerate(true);
+                }}
+              >
                 <RefreshCw size={16} aria-hidden="true" /> 새 버전 만들기
               </button>
             </div>

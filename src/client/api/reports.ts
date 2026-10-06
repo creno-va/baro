@@ -1,22 +1,20 @@
 import { z } from "zod";
 import type { ReportView } from "./types";
 
-export type DomainRequest = <T>(
-  path: string,
-  init?: {
-    method?: string;
-    body?: unknown;
-    headers?: Record<string, string>;
-    responseType?: "blob";
-  },
-) => Promise<T>;
+export type DomainRequestInit = {
+  method?: string;
+  body?: unknown;
+  headers?: Record<string, string>;
+  responseType?: "blob";
+};
+export type DomainRequest = <T>(path: string, init?: DomainRequestInit) => Promise<T>;
 const reportSchema = z.object({
   id: z.string().min(1),
   caseId: z.string().min(1),
   revision: z.number().int().positive(),
   title: z.string(),
   content: z.string().max(30000),
-  updatedAt: z.string().datetime(),
+  updatedAt: z.iso.datetime(),
   stale: z.boolean(),
   excludedFileIds: z.array(z.string()),
   maskIdentifiers: z.boolean(),
@@ -97,7 +95,7 @@ export function createReportsClient(request: DomainRequest) {
 /** Native fetch boundary shared with the workspace/files domain factories. */
 export type ApiRequest = (path: string, init?: RequestInit) => Promise<Response>;
 export function domainRequest(request: ApiRequest): DomainRequest {
-  return async <T>(path: string, init = {}) => {
+  return async <T>(path: string, init: DomainRequestInit = {}) => {
     const headers = new Headers(init.headers);
     if (init.body !== undefined) headers.set("content-type", "application/json");
     const response = await request(path, {
