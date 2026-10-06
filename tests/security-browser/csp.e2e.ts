@@ -1,6 +1,55 @@
 import { expect, test } from "@playwright/test";
 import { publicLawyer } from "../fixtures/contracts/v2";
 
+test("built landing loads its local artwork and scroll behavior under the Worker hash CSP", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const browser = window as unknown as { landingCspViolations: string[] };
+    browser.landingCspViolations = [];
+    document.addEventListener("securitypolicyviolation", (event) =>
+      browser.landingCspViolations.push(event.violatedDirective),
+    );
+  });
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const response = await page.goto("/");
+  const policy = response?.headers()["content-security-policy"];
+  expect(policy).toContain("sha256-");
+  expect(policy).not.toMatch(/unsafe-inline|unsafe-eval/);
+  await expect(
+    page.getByRole("heading", {
+      level: 1,
+      name: /막막했던 법률 문제,\s*이제 정리부터 가볍게\./,
+    }),
+  ).toBeVisible();
+  await expect(page.locator(".landing-motion-ready")).toHaveCount(1);
+  const artwork = page.locator(".landing-main img").first();
+  await artwork.scrollIntoViewIfNeeded();
+  await expect
+    .poll(() =>
+      artwork.evaluate(
+        (element) =>
+          element instanceof HTMLImageElement && element.complete && element.naturalWidth > 0,
+      ),
+    )
+    .toBe(true);
+  expect(
+    await artwork.evaluate(
+      (element) =>
+        element instanceof HTMLImageElement &&
+        new URL(element.currentSrc).origin === location.origin,
+    ),
+  ).toBe(true);
+  await page.evaluate(() => window.scrollTo(0, 700));
+  await expect(page.locator("[data-scroll-scene]").first()).toHaveCSS("--scene-progress", /\d/);
+  expect(
+    await page.evaluate(
+      () => (window as unknown as { landingCspViolations: string[] }).landingCspViolations,
+    ),
+  ).toEqual([]);
+});
+
 test("built public directory and detail hydrate under hash CSP with no case data in map links", async ({
   page,
 }) => {

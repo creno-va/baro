@@ -120,6 +120,54 @@ test("consent loading failure retries; keyboard checks gate save, failure recove
   await expect(save).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(page.getByRole("link", { name: "내 화면으로 계속하기" })).toBeFocused();
+  await expect(page.getByRole("link", { name: "내 화면으로 계속하기" })).toHaveAttribute(
+    "href",
+    "/app",
+  );
+});
+
+test("app hides the composer while session checks are pending or fail and supports retry", async ({
+  page,
+}) => {
+  let release: (() => void) | undefined;
+  const pending = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let failing = true;
+  await page.route("**/api/me/session", async (route) => {
+    await pending;
+    if (failing) return route.abort("failed");
+    return route.fulfill({
+      json: {
+        user: { id: "synthetic-owner", name: "합성 고객", accountType: "customer" },
+        needsConsent: false,
+      },
+    });
+  });
+  await page.goto("/app");
+  await expect(page.getByRole("status")).toContainText("로그인 상태를 확인");
+  await expect(page.getByRole("textbox", { name: "지금까지 있었던 일" })).toHaveCount(0);
+  release?.();
+  await expect(page.locator("main").getByRole("alert")).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "지금까지 있었던 일" })).toHaveCount(0);
+  failing = false;
+  await page.locator("main").getByRole("button", { name: "다시 시도", exact: true }).click();
+  await expect(page.getByRole("textbox", { name: "지금까지 있었던 일" })).toBeEnabled();
+});
+
+test("app clears an active draft and returns to login when the session expires", async ({
+  page,
+}) => {
+  await page.goto("/app");
+  const narrative = page.getByRole("textbox", { name: "지금까지 있었던 일" });
+  await narrative.fill("세션 만료 전 합성 초안입니다. 이전 입력이 로그인 화면에 남으면 안 됩니다.");
+  await page.route("**/api/me/session", (route) =>
+    route.fulfill({ json: { user: null, needsConsent: false } }),
+  );
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect(page).toHaveURL(/\/login$/);
+  await expect(page.getByRole("textbox", { name: "지금까지 있었던 일" })).toHaveCount(0);
+  await expect(page.locator("body")).not.toContainText("세션 만료 전 합성 초안");
 });
 
 test("an expired session during consent saving returns to login", async ({ page }) => {

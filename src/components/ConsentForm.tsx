@@ -6,7 +6,7 @@ import { CURRENT_POLICY_VERSIONS } from "../contracts/consent";
 type ConsentState = "loading" | "required" | "complete";
 
 export function ConsentForm() {
-  const [startPath, setStartPath] = useState("/");
+  const [startPath, setStartPath] = useState("/app");
   const [state, setState] = useState<ConsentState>("loading");
   const [accepted, setAccepted] = useState(false);
   const [over14, setOver14] = useState(false);
@@ -27,8 +27,8 @@ export function ConsentForm() {
           window.location.assign("/login?error=session_expired");
           return;
         }
-        setStartPath(session.user.accountType === "lawyer" ? "/lawyer" : "/");
         const consent = await api.session.getConsent();
+        setStartPath(roleStart({ ...session, needsConsent: consent.needsConsent }));
         setState(consent.needsConsent ? "required" : "complete");
       })
       .catch(() => setError("동의 상태를 불러오지 못했어요. 다시 불러와 주세요."));

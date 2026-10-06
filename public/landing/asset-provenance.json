@@ -1,0 +1,10 @@
+{
+  "asset": "clarity-hero.webp",
+  "purpose": "BARO landing page desktop hero",
+  "source": "Higgsfield",
+  "model": "gpt_image_2_5",
+  "generationId": "30ac89d1-f9dc-4161-8420-d3529730b7f0",
+  "generatedOn": "2026-10-07",
+  "description": "Custom bright architectural interior with a cobalt glass arch, representing a clearer path forward. No third-party branding or stock reference assets.",
+  "optimization": "Original 1344x752 PNG converted to WebP at quality 85; mobile picture source uses an empty inline SVG."
+}

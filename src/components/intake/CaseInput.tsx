@@ -1,6 +1,6 @@
 import { ArrowRight, ArrowUp, Building2, FileText, UserRound, WalletCards } from "lucide-react";
 import { type SyntheticEvent, useCallback, useEffect, useRef, useState } from "react";
-import { api } from "../../client/api";
+import { api, roleStart } from "../../client/api";
 import { ApiError } from "../../client/api/core";
 import type { SessionView } from "../../client/api/types";
 import { BrandMark } from "../ui/brand";
@@ -26,7 +26,13 @@ const examples = [
   },
 ];
 
-export function CaseInput({ siteKey: _siteKey }: { siteKey?: string }) {
+export function CaseInput({
+  siteKey: _siteKey,
+  requireSession = false,
+}: {
+  siteKey?: string;
+  requireSession?: boolean;
+}) {
   const [session, setSession] = useState<SessionView | null>(null);
   const [loading, setLoading] = useState(true);
   const [sessionError, setSessionError] = useState<unknown>(null);
@@ -69,6 +75,9 @@ export function CaseInput({ siteKey: _siteKey }: { siteKey?: string }) {
       }
       identity.current = nextIdentity;
       setSession(next);
+      if (requireSession && (next.user?.accountType !== "customer" || next.needsConsent)) {
+        window.location.replace(roleStart(next));
+      }
       return next;
     };
     try {
@@ -81,7 +90,7 @@ export function CaseInput({ siteKey: _siteKey }: { siteKey?: string }) {
     } finally {
       if (current()) setLoading(false);
     }
-  }, [clearDraft]);
+  }, [clearDraft, requireSession]);
   useEffect(() => {
     mounted.current = true;
     const refresh = () => void loadSession();
@@ -99,6 +108,7 @@ export function CaseInput({ siteKey: _siteKey }: { siteKey?: string }) {
             setSession({ user: null, needsConsent: false });
             setLoading(false);
             setSessionError(null);
+            if (requireSession) window.location.replace("/login");
             return;
           }
         } catch {
@@ -129,7 +139,7 @@ export function CaseInput({ siteKey: _siteKey }: { siteKey?: string }) {
       window.removeEventListener("baro-session-changed", refresh);
       document.removeEventListener("visibilitychange", visible);
     };
-  }, [clearDraft, loadSession]);
+  }, [clearDraft, loadSession, requireSession]);
 
   async function create(event?: SyntheticEvent<HTMLFormElement>) {
     event?.preventDefault();
@@ -156,6 +166,18 @@ export function CaseInput({ siteKey: _siteKey }: { siteKey?: string }) {
         pending.current = false;
       }
     }
+  }
+
+  // Private case data remains API-authorized. Keep the application composer out
+  // of SSR and pending/error states until the session, role and consent resolve.
+  if (requireSession && (loading || !canCreate || sessionError)) {
+    return sessionError ? (
+      <ErrorPanel error={sessionError} retry={() => void loadSession()} />
+    ) : (
+      <p className="conversation-reassurance" role="status">
+        로그인 상태를 확인하고 있어요.
+      </p>
+    );
   }
 
   return (

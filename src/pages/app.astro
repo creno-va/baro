@@ -1,0 +1,20 @@
+---
+// biome-ignore lint/correctness/noUnusedImports: Astro template reads component.
+import { CaseInput } from "../components/intake/CaseInput";
+// biome-ignore lint/correctness/noUnusedImports: Astro template reads layout.
+import AppLayout from "../layouts/AppLayout.astro";
+import "../styles/intake.css";
+
+Astro.response.headers.set("Cache-Control", "no-store");
+---
+
+<AppLayout
+  title="BARO — 복잡한 일도, 하나씩"
+  description="어떤 일이 있었는지 편하게 들려주세요. BARO가 상황에 맞는 질문과 대화로 사건 정리를 도와드려요."
+  role="user"
+  availableRoutes={["/app", "/cases", "/cases/new", "/lawyers", "/settings"]}
+  contentClass="conversation-main"
+>
+  <CaseInput requireSession client:load />
+  <noscript><p>사건 정리를 시작하려면 브라우저에서 JavaScript를 켜고 <a href="/login">로그인</a>해 주세요.</p></noscript>
+</AppLayout>

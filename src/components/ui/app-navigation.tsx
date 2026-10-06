@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { CaseView, SessionView } from "../../client/api";
-import { api, apiMode } from "../../client/api";
+import { api, apiMode, roleStart } from "../../client/api";
 import { Brand } from "./brand";
 import { Button } from "./button";
 import { Sheet } from "./dialog";
@@ -35,11 +35,12 @@ const icons = {
 };
 export const ROLE_NAVIGATION: Record<NavigationRole, readonly NavigationItem[]> = {
   visitor: [
-    { href: "/", label: "새로운 이야기", icon: "new" },
+    { href: "/", label: "서비스 소개", icon: "home" },
+    { href: "/login", label: "이야기 시작하기", icon: "new" },
     { href: "/lawyers", label: "변호사 찾기", icon: "lawyers" },
   ],
   user: [
-    { href: "/", label: "새 사건 입력", icon: "new" },
+    { href: "/app", label: "새 사건 입력", icon: "new" },
     { href: "/cases", label: "내 사건", icon: "cases" },
     { href: "/lawyers", label: "변호사 찾기", icon: "lawyers" },
     { href: "/settings", label: "계정 설정", icon: "settings" },
@@ -154,6 +155,8 @@ export function AppNavigation({
   const items = availableNavigation(resolvedRole, [
     ...availableRoutes,
     "/",
+    "/app",
+    "/login",
     "/cases",
     "/cases/new",
     "/lawyer",
@@ -181,7 +184,7 @@ export function AppNavigation({
       const Icon = icons[item.icon];
       const active =
         pathname === item.href ||
-        (item.href === "/" && pathname === "/cases/new") ||
+        (item.href === "/app" && pathname === "/cases/new") ||
         (item.href === "/cases" && pathname.startsWith("/cases/") && pathname !== "/cases/new");
       return (
         <a
@@ -276,7 +279,7 @@ export function AppNavigation({
     <>
       <header className="app-header">
         <div className="app-header__inner">
-          <Brand />
+          <Brand href={session?.user ? roleStart(session) : "/"} />
           <span className="mobile-caption">생각이 정리되는 곳</span>
           {apiMode === "mock" && <span className="mobile-mode">API 예시</span>}
           <Button
@@ -314,7 +317,7 @@ export function AppNavigation({
         title="메뉴"
         description="이야기를 시작하거나 이어가세요."
       >
-        <Brand />
+        <Brand href={session?.user ? roleStart(session) : "/"} />
         <nav className="app-nav app-nav--mobile" aria-label="모바일 주 메뉴">
           {renderLinks()}
         </nav>

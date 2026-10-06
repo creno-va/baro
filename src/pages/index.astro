@@ -1,17 +1,178 @@
 ---
-// biome-ignore lint/correctness/noUnusedImports: Astro template reads component.
-import { CaseInput } from "../components/intake/CaseInput";
+// biome-ignore lint/correctness/noUnusedImports: Astro template reads icons.
+import {
+  ArrowDown,
+  ArrowRight,
+  Check,
+  CheckCheck,
+  ChevronDown,
+  FileText,
+  FolderOpen,
+  Image,
+  LockKeyhole,
+  MessageCircle,
+  Mic,
+  Paperclip,
+  Plus,
+  Search,
+  ShieldCheck,
+  Sparkles,
+} from "lucide-react";
+// biome-ignore lint/correctness/noUnusedImports: Astro template reads Brand.
+import { Brand } from "../components/ui/brand";
 // biome-ignore lint/correctness/noUnusedImports: Astro template reads layout.
-import AppLayout from "../layouts/AppLayout.astro";
-import "../styles/intake.css";
+import BaseLayout from "../layouts/BaseLayout.astro";
+import "../styles/landing.css";
 ---
 
-<AppLayout
-  title="BARO — 복잡한 일도, 하나씩"
-  description="어떤 일이 있었는지 편하게 들려주세요. BARO가 상황에 맞는 질문과 대화로 사건 정리를 도와드려요."
-  role="visitor"
-  availableRoutes={["/", "/cases", "/cases/new", "/lawyers", "/settings"]}
-  contentClass="conversation-main"
->
-  <CaseInput client:load />
-</AppLayout>
+<BaseLayout title="BARO — 막막한 법률 문제, 정리부터 가볍게" description="어떤 일이 있었는지 편하게 들려주세요. BARO와 대화하며 사실과 자료를 정리하고, 변호사 상담을 차분하게 준비하세요.">
+  <div class="landing">
+    <header class="landing-header">
+      <div class="landing-nav-wrap">
+        <Brand />
+        <nav class="landing-nav" aria-label="메인 메뉴">
+          <a class="landing-nav-section" href="#how-it-works">서비스 소개</a>
+          <a class="landing-nav-section" href="#principles">BARO의 약속</a>
+          <a class="landing-nav-section" href="/lawyers">변호사 찾기</a>
+          <a class="landing-login" href="/login">로그인 <ArrowRight size={16} aria-hidden="true" /></a>
+        </nav>
+      </div>
+      <div class="landing-scroll-progress" aria-hidden="true"></div>
+    </header>
+
+    <main id="main-content" tabindex="-1" class="landing-main">
+      <section class="landing-hero" data-scroll-scene aria-labelledby="landing-title">
+        <div class="landing-hero-image landing-decoration" data-parallax="45" aria-hidden="true">
+          <picture><source media="(min-width: 768px)" srcset="/landing/clarity-hero.webp" /><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1' height='1'/%3E" width="1344" height="752" alt="" fetchpriority="high" decoding="async" /></picture>
+        </div>
+        <div class="landing-hero-shade" aria-hidden="true"></div>
+        <div class="landing-hero-copy">
+          <p class="landing-eyebrow"><span></span> 복잡한 일도, 하나씩. BARO</p>
+          <h1 id="landing-title">막막했던 법률 문제,<br />이제 정리부터 가볍게.</h1>
+          <p class="landing-hero-description">어떤 일이 있었는지 편하게 들려주세요.<br />흩어진 생각부터 상담 준비까지, BARO와 함께.</p>
+          <a class="landing-button" href="/app">내 상황 정리하기 <ArrowRight size={19} aria-hidden="true" /></a>
+          <p class="landing-hero-caption">나의 이야기가 다음 한 걸음이 되도록</p>
+        </div>
+        <a class="landing-scroll-cue" href="#how-it-works"><span>BARO 알아보기</span><ArrowDown size={20} aria-hidden="true" /></a>
+        <span class="landing-hero-label landing-decoration" aria-hidden="true">A CLEARER WAY FORWARD</span>
+      </section>
+
+      <section id="how-it-works" class="landing-intro landing-section" aria-labelledby="intro-title">
+        <p class="landing-eyebrow" data-reveal>어려운 말보다, 당신의 이야기부터</p>
+        <h2 id="intro-title" data-reveal>무슨 말을 해야 할지.<br />무엇부터 준비해야 할지.<br /><span>그 막막함을 잘 아니까.</span></h2>
+        <p class="landing-body" data-reveal>법률 용어를 몰라도, 모든 자료가 없어도 괜찮아요.<br class="desktop-break" /> BARO는 지금 알고 있는 이야기에서 시작해<br class="desktop-break" /> 복잡한 상황을 하나씩 풀어 정리해요.</p>
+        <div class="landing-journey" aria-label="BARO 이용 순서" data-reveal>
+          <span><MessageCircle size={20} aria-hidden="true" /> 편하게 이야기하고</span><ArrowRight size={16} aria-hidden="true" /><span><FolderOpen size={20} aria-hidden="true" /> 차근차근 정리하고</span><ArrowRight size={16} aria-hidden="true" /><span><CheckCheck size={20} aria-hidden="true" /> 다음을 준비해요</span>
+        </div>
+      </section>
+
+      <section class="landing-feature landing-section" data-scroll-scene aria-labelledby="conversation-title">
+        <div class="landing-feature-inner">
+          <div class="landing-feature-copy" data-reveal>
+            <p class="landing-kicker">01 &nbsp; 나를 위한 대화</p>
+            <h2 id="conversation-title">잘 정리해서<br />말하지 않아도<br /><span>괜찮아요.</span></h2>
+            <p class="landing-body">친구에게 이야기하듯 편하게 시작하세요.<br />BARO가 상황에 맞는 질문을 건네고,<br />함께 확인할 내용을 짚어드려요.</p>
+            <p class="landing-feature-note">모르는 건 건너뛰고, 생각나면 이어서.</p>
+            <a class="landing-text-link" href="/app">첫 이야기 시작하기 <ArrowRight size={19} aria-hidden="true" /></a>
+          </div>
+          <div class="landing-chat-stage landing-decoration" aria-label="대화로 사건을 정리하는 화면 예시">
+            <div class="landing-orbit" aria-hidden="true"></div>
+            <div class="landing-phone" data-parallax="-42">
+              <div class="landing-phone-top"><span>9:41</span><span>••• ▰</span></div>
+              <div class="landing-phone-brand"><img src="/brand/logo.svg" alt="" width="24" height="24" /><strong>BARO</strong><span>나의 이야기</span></div>
+              <div class="landing-phone-content">
+                <div class="landing-mini-mark"><Sparkles size={24} aria-hidden="true" /></div>
+                <h3>어떤 일이 있었나요?</h3><p>편하게 말씀해 주세요.<br />함께 하나씩 정리해 볼게요.</p>
+                <div class="landing-chat-user">빌려준 돈을 아직<br />돌려받지 못했어요.</div>
+                <div class="landing-chat-assistant"><span class="landing-ai-dot"></span><p>마음이 많이 쓰이셨겠어요.<br />언제, 어떤 방식으로<br />돈을 빌려주셨나요?</p></div>
+                <div class="landing-chat-user landing-chat-user-short">지난 3월에 계좌로 보냈어요.</div>
+                <div class="landing-chat-typing"><span></span><span></span><span></span></div>
+              </div>
+              <div class="landing-phone-input"><Plus size={18} aria-hidden="true" /><span>편하게 이야기해 주세요</span><ArrowRight size={17} aria-hidden="true" /></div>
+            </div>
+            <div class="landing-floating-note" data-parallax="75"><span class="landing-note-icon"><Check size={20} aria-hidden="true" /></span><div><strong>중요한 사실을 찾았어요</strong><span>대여 시점 · 지난 3월</span></div></div>
+            <span class="landing-demo-caption">이해를 돕기 위한 가상 화면이에요</span>
+          </div>
+        </div>
+      </section>
+
+      <section id="organize" class="landing-feature landing-feature-tint landing-section" data-scroll-scene aria-labelledby="organize-title">
+        <div class="landing-feature-inner landing-feature-reverse">
+          <div class="landing-feature-copy" data-reveal>
+            <p class="landing-kicker">02 &nbsp; 흩어진 자료를 한곳에</p>
+            <h2 id="organize-title">메시지 한 장도,<br />기억 속 날짜도.<br /><span>하나의 흐름으로.</span></h2>
+            <p class="landing-body">문서, 사진, 녹음에 흩어진 이야기를<br />사건별로 모아두세요. 사실과 자료,<br />시간의 흐름을 함께 확인할 수 있어요.</p>
+            <p class="landing-feature-note">내가 말한 사실과 확인이 필요한 내용은 구분해요.</p>
+          </div>
+          <div class="landing-files-stage landing-decoration" aria-label="자료와 타임라인 정리 화면 예시">
+            <div class="landing-file-chip landing-file-chip-one" data-parallax="-65"><FileText size={26} aria-hidden="true" /><span>거래 내역.pdf</span></div>
+            <div class="landing-file-chip landing-file-chip-two" data-parallax="50"><Image size={26} aria-hidden="true" /><span>주고받은 대화.png</span></div>
+            <div class="landing-file-chip landing-file-chip-three" data-parallax="85"><Mic size={26} aria-hidden="true" /><span>통화 녹음.m4a</span></div>
+            <div class="landing-timeline-card" data-parallax="-25">
+              <div class="landing-card-heading"><span>나의 사건 타임라인</span><span class="landing-tag">정리 예시</span></div>
+              <h3>흐름이 보이기 시작해요</h3>
+              <ol class="landing-timeline">
+                <li><span class="landing-time-dot"></span><small>3월 12일</small><strong>돈을 빌려줬어요</strong><p>계좌 이체 내역을 함께 보관했어요.</p><span class="landing-source"><Paperclip size={12} aria-hidden="true" /> 거래 내역.pdf</span></li>
+                <li><span class="landing-time-dot"></span><small>4월 12일</small><strong>약속한 날짜가 지났어요</strong><p>대화에서 확인한 반환 예정일이에요.</p></li>
+                <li><span class="landing-time-dot landing-time-dot-open"></span><small>다음 확인</small><strong>그 이후의 대화가 있나요?</strong><p>추가 자료가 있으면 이어서 정리해요.</p></li>
+              </ol>
+            </div>
+            <span class="landing-demo-caption">실제 사건이 아닌 이해를 돕기 위한 예시예요</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="landing-report-section landing-section" data-scroll-scene aria-labelledby="report-title">
+        <div class="landing-report-heading" data-reveal><p class="landing-kicker">03 &nbsp; 상담 준비의 시작</p><h2 id="report-title">길었던 이야기는 정돈하고.<br /><span>중요한 이야기는 빠짐없이.</span></h2><p class="landing-body">정리된 사실과 자료를 직접 확인하고 수정하세요.<br />내가 검토한 리포트와 선택한 자료로 상담을 준비할 수 있어요.</p></div>
+        <div class="landing-report-stage landing-decoration" aria-label="상담 준비 리포트 예시">
+          <div class="landing-report-paper" data-parallax="-45">
+            <div class="landing-report-brand"><img src="/brand/logo.svg" alt="" width="24" height="24" /><strong>BARO</strong><span>상담 준비 리포트 · 예시</span></div>
+            <h3>내 이야기를<br />한눈에 이해할 수 있도록.</h3><p class="landing-report-subtitle">개인 간 금전 대여 · 내가 검토한 내용</p>
+            <div class="landing-report-line"><span>01</span><div><strong>사건의 흐름</strong><p>시작부터 지금까지, 날짜순으로 정리해요.</p></div><Check size={20} aria-hidden="true" /></div>
+            <div class="landing-report-line"><span>02</span><div><strong>알고 있는 사실과 준비 자료</strong><p>확인한 내용과 아직 모르는 내용을 구분해요.</p></div><Check size={20} aria-hidden="true" /></div>
+            <div class="landing-report-line"><span>03</span><div><strong>상담에서 확인하고 싶은 것</strong><p>잊지 않고 물어볼 수 있도록 함께 모아둬요.</p></div><Check size={20} aria-hidden="true" /></div>
+            <div class="landing-report-bottom"><ShieldCheck size={17} aria-hidden="true" /> 검토하고, 공유할 내용을 직접 선택해요</div>
+          </div>
+          <div class="landing-report-float landing-report-float-one" data-parallax="90"><span class="landing-square-icon"><FileText size={24} aria-hidden="true" /></span><strong>상담 준비.pdf</strong><span>나의 검토를 마친 이야기</span></div>
+          <div class="landing-report-float landing-report-float-two" data-parallax="-70"><CheckCheck size={22} aria-hidden="true" /><strong>공유는 내가 결정해요</strong><span>필요한 자료만 골라서</span></div>
+        </div>
+        <div class="landing-report-steps" data-reveal><span><b>1</b> 내용 확인하기</span><span><b>2</b> 필요한 부분 수정하기</span><span><b>3</b> 전달할 자료 선택하기</span></div>
+      </section>
+
+      <section class="landing-lawyers landing-section" aria-labelledby="lawyers-title">
+        <div class="landing-lawyers-inner">
+          <div data-reveal><p class="landing-kicker">04 &nbsp; 선택은 내 기준으로</p><h2 id="lawyers-title">이제, 전문가와<br />이야기할 준비.</h2><p class="landing-body">지역과 분야로 공개된 프로필을 살펴보고,<br />필요한 변호사에게 직접 연락하세요.<br />누구와 이야기할지는 언제나 나의 선택이에요.</p><a class="landing-text-link" href="/lawyers">변호사 살펴보기 <ArrowRight size={19} aria-hidden="true" /></a></div>
+          <div class="landing-directory-preview" data-reveal><div class="landing-search-illustration"><Search size={22} aria-hidden="true" /><span>어떤 분야의 도움이 필요하세요?</span></div><div class="landing-category-list"><span>대여금</span><span>임대차</span><span>근로</span><span>손해배상</span><span>가사</span><span>그 밖의 문제</span></div><div class="landing-directory-foot"><span>분야 확인</span><ArrowRight size={17} aria-hidden="true" /><span>프로필 탐색</span><ArrowRight size={17} aria-hidden="true" /><strong>직접 연락</strong></div></div>
+        </div>
+      </section>
+
+      <section id="principles" class="landing-principles landing-section" aria-labelledby="principles-title">
+        <div data-reveal><p class="landing-kicker">당신의 이야기를 대하는 기준</p><h2 id="principles-title">도움은 가까이.<br /><span>결정은 당신에게.</span></h2></div>
+        <div class="landing-principle-grid">
+          <article data-reveal><span class="landing-principle-icon"><MessageCircle size={27} aria-hidden="true" /></span><h3>사실과 추정을 구분해요</h3><p>알려주신 이야기와 AI가 정리한 내용,<br class="desktop-break" /> 아직 확인이 필요한 내용을 구분해요.</p></article>
+          <article data-reveal><span class="landing-principle-icon"><Search size={27} aria-hidden="true" /></span><h3>확인할 근거를 함께 봐요</h3><p>법률 정보는 공식 출처로 확인하고,<br class="desktop-break" /> 중요한 내용은 원문을 다시 살펴봐요.</p></article>
+          <article data-reveal><span class="landing-principle-icon"><LockKeyhole size={27} aria-hidden="true" /></span><h3>판단을 대신하지 않아요</h3><p>BARO는 사실 정리와 상담 준비를 도와요.<br class="desktop-break" /> 법률 판단과 중요한 결정은 전문가와 함께해요.</p></article>
+        </div>
+      </section>
+
+      <section id="faq" class="landing-faq landing-section" aria-labelledby="faq-title">
+        <h2 id="faq-title" data-reveal>시작하기 전에<br />궁금할 수 있는 것들.</h2>
+        <div class="landing-faq-list">
+          <details><summary>어떤 이야기부터 시작하면 되나요?<ChevronDown size={20} aria-hidden="true" /></summary><p>지금 가장 신경 쓰이는 일을 편하게 적어주세요. 날짜나 금액이 정확하지 않아도 괜찮아요. BARO가 상황에 맞춰 질문하고, 모르는 내용은 건너뛰거나 나중에 이어서 정리할 수 있어요.</p></details>
+          <details><summary>BARO가 법률 상담을 해주나요?<ChevronDown size={20} aria-hidden="true" /></summary><p>BARO는 AI와의 대화로 사실관계와 자료를 정리하고 상담 준비를 돕는 서비스예요. 법률 자문이나 사건 결과를 보장하지 않아요. 법률 판단, 대응 방향과 중요한 기한은 자격 있는 전문가에게 확인해 주세요.</p></details>
+          <details><summary>자료가 아직 없어도 이용할 수 있나요?<ChevronDown size={20} aria-hidden="true" /></summary><p>알고 있는 이야기만으로 시작할 수 있어요. 가진 자료와 추가로 확인할 내용을 나누어 정리하고, 문서나 사진 같은 자료는 준비되는 대로 사건에 더할 수 있어요.</p></details>
+          <details><summary>정리한 내용이 변호사에게 자동으로 전달되나요?<ChevronDown size={20} aria-hidden="true" /></summary><p>자동으로 전달되지 않아요. 리포트 내용을 직접 검토한 뒤 공유할 자료를 선택하고, 원하는 변호사에게 직접 연락해 전달하는 방식이에요.</p></details>
+        </div>
+      </section>
+
+      <section class="landing-final" aria-labelledby="final-title">
+        <div class="landing-final-glow" aria-hidden="true"></div><div data-reveal><img src="/brand/logo.svg" alt="" width="54" height="54" /><h2 id="final-title">혼자 고민하던 이야기,<br />이제 BARO에서 시작해요.</h2><a class="landing-button landing-button-white" href="/app">내 상황 정리하기 <ArrowRight size={19} aria-hidden="true" /></a><p>첫 문장은, 완벽하지 않아도 괜찮아요.</p></div>
+      </section>
+    </main>
+
+    <footer class="landing-footer"><div class="landing-footer-inner"><div class="landing-footer-top"><Brand /><nav aria-label="하단 메뉴"><a href="/lawyers">변호사 찾기</a><a href="/policies/terms">이용약관 초안</a><a href="/policies/privacy">개인정보 처리방침 초안</a><a href="/policies/ai">AI 이용 안내 초안</a></nav></div><p>BARO는 사실 정리와 상담 준비를 돕는 AI 서비스입니다.<br />AI가 정리한 내용은 직접 확인해 주세요. 법률 자문이나 사건 결과를 보장하지 않습니다.</p><div class="landing-footer-bottom"><span>© BARO. 복잡한 일도, 하나씩.</span><span>Made for your next step.</span></div></div></footer>
+  </div>
+</BaseLayout>
+<script>
+  import "../client/landing";
+</script>
