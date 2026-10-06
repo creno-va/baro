@@ -145,6 +145,7 @@
     },
     {
       "issue": 59,
+      "implementationPr": 89,
       "milestone": 5,
       "kind": "implementation",
       "dependsOn": [
@@ -166,6 +167,7 @@
     },
     {
       "issue": 60,
+      "implementationPr": 89,
       "milestone": 5,
       "kind": "implementation",
       "dependsOn": [
@@ -446,6 +448,15 @@
         "docs/development/V2-EXECUTION.md"
       ],
       "validation": "authenticated monthly capacity projection, atomic physical admission including pending/deleting objects, bounded maintenance I/O, verified deletion receipt release, fresh/upgrade/drift; consumers await shared main merge"
+    },
+    {
+      "issue": 97,
+      "milestone": 5,
+      "kind": "implementation",
+      "dependsOn": [],
+      "owns": [".gitleaksignore", ".github/workflows/ci.yml", "docs/development", "scripts/work-items.ts"],
+      "docs": ["docs/development/EXECUTION.md", "docs/development/V2-EXECUTION.md"],
+      "validation": "reachable full-history secret scan, exact synthetic exclusions, reviewed main implementation dependencies and synchronized issue wording"
     },
     {
       "issue": 71,
