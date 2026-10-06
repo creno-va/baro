@@ -640,6 +640,37 @@ export function createV2JobsRepository(core: V2Core) {
           : null;
       });
     },
+    renew(actor: Actor, lease: JobLease, leaseUntil: string) {
+      return safe(async () => {
+        actor = parse(actorSchema, actor);
+        parse(leaseSchema, lease);
+        leaseUntil = new Date(parse(timestampSchema, leaseUntil)).toISOString();
+        if (
+          Date.parse(leaseUntil) <= Date.parse(actor.now) ||
+          Date.parse(leaseUntil) - Date.parse(actor.now) > 300000
+        )
+          return false;
+        return (
+          (
+            await core
+              .statement(
+                `UPDATE v2_jobs SET lease_until=?,updated_at=? WHERE id IN (SELECT j.id FROM v2_jobs j JOIN v2_operations o ON o.id=j.operation_id WHERE j.id=? AND o.owner_id=? AND o.state IN ('admitted','ambiguous') AND j.lease_token=? AND j.fencing=? AND j.lease_until>? AND j.lease_until<=? AND j.status IN ('running','validating') AND ${jobAlive} AND (j.target_kind!='file' OR EXISTS(SELECT 1 FROM v2_consents c WHERE c.file_id=j.target_id AND c.owner_id=o.owner_id AND c.kind='auto_processing')))`,
+                [
+                  leaseUntil,
+                  actor.now,
+                  lease.jobId,
+                  actor.ownerId,
+                  lease.token,
+                  lease.fencing,
+                  actor.now,
+                  leaseUntil,
+                ],
+              )
+              .run()
+          ).meta.changes === 1
+        );
+      });
+    },
     checkpoint(
       actor: Actor,
       lease: JobLease,

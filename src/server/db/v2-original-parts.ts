@@ -11,6 +11,7 @@ import {
   type V2Core,
 } from "./v2-core";
 import { type BlobRegistration, blobSchema } from "./v2-storage";
+import { isPreparedStoragePaidHold, type PreparedStoragePaidHold } from "./v2-storage-paid-runtime";
 
 export interface OriginalPartRegistration {
   uploadId: string;
@@ -57,10 +58,35 @@ function originalInput(actor: Actor, input: OriginalPartRegistration) {
   };
 }
 // A pending row is a cleanup intent, never proof that R2 contains the object.
-export function prepareOriginalPart(core: V2Core, actor: Actor, input: OriginalPartRegistration) {
+export function prepareOriginalPart(
+  core: V2Core,
+  actor: Actor,
+  input: OriginalPartRegistration,
+  paid?: PreparedStoragePaidHold,
+) {
   return safe(async () => {
     const { a, b, valid } = originalInput(actor, input);
     if (!valid) return false;
+    if (paid) {
+      const r = paid.request;
+      if (
+        !isPreparedStoragePaidHold(paid) ||
+        paid.actor.ownerId !== a.ownerId ||
+        paid.actor.now !== a.now ||
+        r.intent.kind !== "case_original" ||
+        r.intent.uploadId !== input.uploadId ||
+        r.intent.uploadRevision !== input.uploadRevision ||
+        r.intent.ordinal !== input.ordinal ||
+        r.blobId !== b.id ||
+        r.reservationId !== b.reservationId ||
+        r.targetKind !== "file" ||
+        r.pending.logicalBytes !== b.logicalBytes ||
+        r.pending.cipherBytes !== b.cipherBytes ||
+        r.pending.cipherHash !== b.cipherHash ||
+        r.pending.keyVersion !== b.keyVersion
+      )
+        return false;
+    }
     const { eligibility, values, from } = originalPartGuard(a, input, b);
     if (!(await core.statement(`SELECT u.id ${from} WHERE ${eligibility}`, values).first()))
       return false;
@@ -70,6 +96,32 @@ export function prepareOriginalPart(core: V2Core, actor: Actor, input: OriginalP
       uploadRevision: input.uploadRevision,
       ordinal: input.ordinal,
     });
+    if (paid) {
+      const claim = crypto.randomUUID();
+      return core.changed([
+        core.statement(
+          `INSERT INTO v2_mutation_claims(id,owner_id,target_id,revision) SELECT ?,w.owner_id,u.id,u.revision ${from} WHERE ${eligibility} AND NOT EXISTS(SELECT 1 FROM v2_blobs WHERE id=?) AND (${paid.predicate.sql})`,
+          [claim, ...values, b.id, ...paid.predicate.values],
+        ),
+        core.statement(
+          `INSERT INTO v2_blobs(id,principal_id,reservation_id,kind,visibility,state,object_key,logical_bytes,cipher_bytes,cipher_hash,key_version,encrypted_payload,created_at) SELECT ?,r.principal_id,r.id,'original','private','pending',?,?,?,?,?,?,? ${from} WHERE ${eligibility} AND ${sqlClaim}`,
+          [
+            b.id,
+            `private/${b.id}`,
+            b.logicalBytes,
+            b.cipherBytes,
+            b.cipherHash,
+            b.keyVersion,
+            metadata,
+            a.now,
+            ...values,
+            claim,
+          ],
+        ),
+        ...(await paid.statements(core, paid.actor, claim, metadata)),
+        core.finish(claim),
+      ]);
+    }
     const result = await core
       .statement(
         `INSERT INTO v2_blobs(id,principal_id,reservation_id,kind,visibility,state,object_key,logical_bytes,cipher_bytes,cipher_hash,key_version,encrypted_payload,created_at) SELECT ?,r.principal_id,r.id,'original','private','pending',?,?,?,?,?,?,? ${from} WHERE ${eligibility} AND NOT EXISTS(SELECT 1 FROM v2_blobs WHERE id=?)`,

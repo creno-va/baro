@@ -75,6 +75,8 @@ export function preparePaidStatements(input: {
   freeze(input.request);
   const { request: r, reservedKrw: amount, environment, now } = input;
   const month = usageDateKst(now).slice(0, 7);
+  // Distinct authenticated phases reserve additive holds. Reusing an unresolved
+  // invocation is denied even if only the attempt identifier changes.
   const budget = budgetAdmissionPredicate({
     pricingProofId: r.pricingProofId,
     fundingProofId: r.fundingProofId,
@@ -85,8 +87,16 @@ export function preparePaidStatements(input: {
     now,
   });
   const predicate = {
-    sql: `${budget.sql} AND NOT EXISTS(SELECT 1 FROM v2_cost_attempts WHERE id=? OR (invocation_id=? AND attempt=?)) AND NOT EXISTS(SELECT 1 FROM v2_runtime_plans WHERE id=?) AND NOT EXISTS(SELECT 1 FROM v2_paid_holds h JOIN v2_cost_attempts a ON a.id=h.attempt_id WHERE h.job_id=? AND a.state IN ('reserved','ambiguous'))`,
-    values: [...budget.values, r.attemptId, r.plan.invocationId, r.attempt, r.planId, r.jobId],
+    sql: `${budget.sql} AND NOT EXISTS(SELECT 1 FROM v2_cost_attempts WHERE id=? OR (invocation_id=? AND attempt=?)) AND NOT EXISTS(SELECT 1 FROM v2_runtime_plans WHERE id=?) AND NOT EXISTS(SELECT 1 FROM v2_paid_holds h JOIN v2_cost_attempts a ON a.id=h.attempt_id WHERE h.job_id=? AND a.invocation_id=? AND a.state IN ('reserved','ambiguous'))`,
+    values: [
+      ...budget.values,
+      r.attemptId,
+      r.plan.invocationId,
+      r.attempt,
+      r.planId,
+      r.jobId,
+      r.plan.invocationId,
+    ],
   };
   const prepared: PreparedPaidHold = {
     request: r,

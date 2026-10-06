@@ -1,0 +1,319 @@
+{
+  "schemaVersion": 1,
+  "issue": 59,
+  "privateLocalArtifact": false,
+  "sourceCheckout": "606987e040070932f263fbd0b6c6b2b4cf45266a",
+  "fixtures": [
+    {
+      "fixtureId": "text-two-pages-pdf",
+      "path": "tests/fixtures/media/text-two-pages.pdf",
+      "category": "document",
+      "synthetic": true,
+      "provenance": "Locally authored fictional processing markers; no actual people, cases or recordings.",
+      "byteLength": 25842,
+      "verification": "Local structural/decoder checks only; no product, OCR, ASR, vision, Container or remote processing result.",
+      "format": "pdf",
+      "pageCount": 2,
+      "expectedVisibleTextByPage": [
+        [
+          "BARO SYNTHETIC FIXTURE - PAGE 1",
+          "합성 문서 첫 번째 페이지",
+          "처리 표식: BLUE BOX 17",
+          "이 파일은 실제 사건이나 사람을 포함하지 않습니다."
+        ],
+        [
+          "BARO SYNTHETIC FIXTURE - PAGE 2",
+          "합성 문서 두 번째 페이지",
+          "처리 표식: ORANGE CIRCLE 42",
+          "문서 끝 표식: END OF SYNTHETIC DOCUMENT"
+        ]
+      ],
+      "localTextExtraction": "pypdf recovered all listed strings in the correct page order"
+    },
+    {
+      "fixtureId": "image-markers-png",
+      "path": "tests/fixtures/media/image-markers.png",
+      "category": "image",
+      "synthetic": true,
+      "provenance": "Locally authored fictional processing markers; no actual people, cases or recordings.",
+      "byteLength": 21700,
+      "verification": "Local structural/decoder checks only; no product, OCR, ASR, vision, Container or remote processing result.",
+      "format": "png",
+      "width": 1000,
+      "height": 700,
+      "expectedVisibleText": [
+        "SYNTHETIC SCAN - IMAGE ONLY",
+        "이미지 기반 합성 문서",
+        "처리 표식: GREEN TRIANGLE 09",
+        "실제 인물 및 사건 없음"
+      ],
+      "expectedShapes": ["green triangle"],
+      "embeddedPersonalMetadata": false
+    },
+    {
+      "fixtureId": "image-markers-jpg",
+      "path": "tests/fixtures/media/image-markers.jpg",
+      "category": "image",
+      "synthetic": true,
+      "provenance": "Locally authored fictional processing markers; no actual people, cases or recordings.",
+      "byteLength": 45680,
+      "verification": "Local structural/decoder checks only; no product, OCR, ASR, vision, Container or remote processing result.",
+      "format": "jpeg",
+      "width": 1000,
+      "height": 700,
+      "expectedVisibleText": [
+        "SYNTHETIC SCAN - IMAGE ONLY",
+        "이미지 기반 합성 문서",
+        "처리 표식: GREEN TRIANGLE 09",
+        "실제 인물 및 사건 없음"
+      ],
+      "expectedShapes": ["green triangle"],
+      "embeddedPersonalMetadata": false
+    },
+    {
+      "fixtureId": "scan-image-only-pdf",
+      "path": "tests/fixtures/media/scan-image-only.pdf",
+      "category": "document",
+      "synthetic": true,
+      "provenance": "Locally authored fictional processing markers; no actual people, cases or recordings.",
+      "byteLength": 25067,
+      "verification": "Local structural/decoder checks only; no product, OCR, ASR, vision, Container or remote processing result.",
+      "format": "pdf",
+      "pageCount": 1,
+      "expectedVisibleTextByPage": [
+        [
+          "SYNTHETIC SCAN - IMAGE ONLY",
+          "이미지 기반 합성 문서",
+          "처리 표식: GREEN TRIANGLE 09",
+          "실제 인물 및 사건 없음"
+        ]
+      ],
+      "localTextExtraction": "Empty, intentionally; raster OCR required"
+    },
+    {
+      "fixtureId": "utf8-markers-txt",
+      "path": "tests/fixtures/media/utf8-markers.txt",
+      "category": "document",
+      "synthetic": true,
+      "provenance": "Locally authored fictional processing markers; no actual people, cases or recordings.",
+      "byteLength": 317,
+      "verification": "Local structural/decoder checks only; no product, OCR, ASR, vision, Container or remote processing result.",
+      "format": "txt",
+      "encoding": "UTF-8",
+      "expectedVisibleText": [
+        "BARO SYNTHETIC FIXTURE - PAGE 1",
+        "합성 문서 첫 번째 페이지",
+        "처리 표식: BLUE BOX 17",
+        "이 파일은 실제 사건이나 사람을 포함하지 않습니다.",
+        "BARO SYNTHETIC FIXTURE - PAGE 2",
+        "합성 문서 두 번째 페이지",
+        "처리 표식: ORANGE CIRCLE 42",
+        "문서 끝 표식: END OF SYNTHETIC DOCUMENT"
+      ],
+      "pageCount": null
+    },
+    {
+      "fixtureId": "speech-ko-wav",
+      "path": "tests/fixtures/media/speech-ko.wav",
+      "category": "audio",
+      "synthetic": true,
+      "provenance": "Locally authored synthetic markers / installed Windows TTS; no actual people, cases or human recordings.",
+      "byteLength": 228846,
+      "format": "wav",
+      "codec": "PCM signed 16-bit little-endian",
+      "durationSeconds": 7.15,
+      "sampleRate": 16000,
+      "channels": 1,
+      "sampleCount": 114400,
+      "expectedSpokenText": "이것은 합성 음성입니다. 파란 상자 열일곱. 초록 삼각형 아홉.",
+      "voice": "Microsoft Heami Desktop",
+      "localPCMVerification": {
+        "peakAbsoluteSample": 17807,
+        "rms": 2289.522
+      },
+      "transcriptionVerified": false,
+      "limitation": "Text is the local TTS input; no ASR transcript or intelligibility evaluation has run."
+    },
+    {
+      "fixtureId": "speech-en-wav",
+      "path": "tests/fixtures/media/speech-en.wav",
+      "category": "audio",
+      "synthetic": true,
+      "provenance": "Locally authored synthetic markers / installed Windows TTS; no actual people, cases or human recordings.",
+      "byteLength": 208526,
+      "format": "wav",
+      "codec": "PCM signed 16-bit little-endian",
+      "durationSeconds": 6.515,
+      "sampleRate": 16000,
+      "channels": 1,
+      "sampleCount": 104240,
+      "expectedSpokenText": "This is synthetic speech. Blue box seventeen. Green triangle nine.",
+      "voice": "Microsoft Zira Desktop",
+      "localPCMVerification": {
+        "peakAbsoluteSample": 23158,
+        "rms": 3073.593
+      },
+      "transcriptionVerified": false,
+      "limitation": "Text is the local TTS input; no ASR transcript or intelligibility evaluation has run."
+    },
+    {
+      "fixtureId": "scenes-silent-mp4",
+      "path": "tests/fixtures/media/scenes-silent.mp4",
+      "category": "video",
+      "synthetic": true,
+      "provenance": "Locally authored synthetic markers / installed Windows TTS; no actual people, cases or human recordings.",
+      "byteLength": 21432,
+      "format": "mp4",
+      "videoCodec": "H.264 (OpenH264)",
+      "audioCodec": null,
+      "width": 640,
+      "height": 360,
+      "frameRate": 10,
+      "durationSeconds": 8,
+      "frameCount": 80,
+      "expectedSceneBoundariesSeconds": [0, 1.4, 3.2],
+      "expectedVisibleScenes": [
+        {
+          "startSeconds": 0,
+          "endSeconds": 1.4,
+          "visibleText": "SCENE A - BLUE BOX 17"
+        },
+        {
+          "startSeconds": 1.4,
+          "endSeconds": 3.2,
+          "visibleText": "SCENE B - ORANGE CIRCLE 42"
+        },
+        {
+          "startSeconds": 3.2,
+          "endSeconds": 8,
+          "visibleText": "SCENE C - GREEN TRIANGLE 09"
+        }
+      ],
+      "expectedOneSecondFrameTimes": [0, 1, 2, 3, 4, 5, 6, 7],
+      "expectedAdditionalSceneChangeFrameTimes": [1.4, 3.2],
+      "expectedSpokenText": null,
+      "speechIntervalSeconds": null,
+      "silentControl": true,
+      "verifiedTracks": [
+        {
+          "handler": "vide",
+          "timescale": 10240,
+          "durationSeconds": 8.0,
+          "sampleCount": 80
+        }
+      ],
+      "localDecodeVerification": "FFmpeg decoded every video/audio stream without error; independent MP4 boxes match 80 frames and 8 seconds.",
+      "limitation": "No Container/vision/scene detector/ASR has run; the silent video is only a no-audio control."
+    },
+    {
+      "fixtureId": "scenes-speech-mp4",
+      "path": "tests/fixtures/media/scenes-speech.mp4",
+      "category": "video",
+      "synthetic": true,
+      "provenance": "Locally authored synthetic markers / installed Windows TTS; no actual people, cases or human recordings.",
+      "byteLength": 66723,
+      "format": "mp4",
+      "videoCodec": "H.264 (OpenH264)",
+      "audioCodec": "AAC",
+      "width": 640,
+      "height": 360,
+      "frameRate": 10,
+      "durationSeconds": 8,
+      "frameCount": 80,
+      "expectedSceneBoundariesSeconds": [0, 1.4, 3.2],
+      "expectedVisibleScenes": [
+        {
+          "startSeconds": 0,
+          "endSeconds": 1.4,
+          "visibleText": "SCENE A - BLUE BOX 17"
+        },
+        {
+          "startSeconds": 1.4,
+          "endSeconds": 3.2,
+          "visibleText": "SCENE B - ORANGE CIRCLE 42"
+        },
+        {
+          "startSeconds": 3.2,
+          "endSeconds": 8,
+          "visibleText": "SCENE C - GREEN TRIANGLE 09"
+        }
+      ],
+      "expectedOneSecondFrameTimes": [0, 1, 2, 3, 4, 5, 6, 7],
+      "expectedAdditionalSceneChangeFrameTimes": [1.4, 3.2],
+      "expectedSpokenText": "이것은 합성 음성입니다. 파란 상자 열일곱. 초록 삼각형 아홉.",
+      "speechIntervalSeconds": [0, 7.15],
+      "silentControl": false,
+      "verifiedTracks": [
+        {
+          "handler": "vide",
+          "timescale": 10240,
+          "durationSeconds": 8.0,
+          "sampleCount": 80
+        },
+        {
+          "handler": "soun",
+          "timescale": 16000,
+          "durationSeconds": 8.064,
+          "sampleCount": 126
+        }
+      ],
+      "localDecodeVerification": "FFmpeg decoded every video/audio stream without error; independent MP4 boxes match 80 frames and 8 seconds.",
+      "limitation": "No Container/vision/scene detector/ASR has run; the silent video is only a no-audio control."
+    },
+    {
+      "fixtureId": "not-a-pdf-pdf",
+      "path": "tests/fixtures/media/not-a-pdf.pdf",
+      "category": "document",
+      "synthetic": true,
+      "provenance": "Locally authored synthetic markers / installed Windows TTS; no actual people, cases or human recordings.",
+      "byteLength": 57,
+      "declaredFormat": "pdf",
+      "actualFormat": "txt",
+      "expectedRejection": "format mismatch; extension must not grant PDF admission",
+      "verification": "Known text bytes with no PDF signature; product rejection expectation is unexecuted."
+    },
+    {
+      "fixtureId": "truncated-video-mp4",
+      "path": "tests/fixtures/media/truncated-video.mp4",
+      "category": "video",
+      "synthetic": true,
+      "provenance": "Locally authored synthetic markers / installed Windows TTS; no actual people, cases or human recordings.",
+      "byteLength": 128,
+      "declaredFormat": "mp4",
+      "actualFormat": "truncated mp4",
+      "expectedRejection": "truncated container / incomplete metadata; no complete coverage result",
+      "verification": "Intentional first-128-byte truncation. Local FFmpeg rejection checked separately; product rejection unexecuted."
+    }
+  ],
+  "localVideoPixelVerification": "Decoded frames 0,14,32,79 match expected scene color at center (lossy tolerance 10/channel).",
+  "localVideoAudioVerification": {
+    "decodedDurationSeconds": 8.0,
+    "peakAbsoluteSample": 17754,
+    "rms": 2161.685
+  },
+  "localPDFVisualVerification": "All three final rendered pages inspected: legible Korean/English, no clipping or overlapping text.",
+  "localVideoVisualVerification": "Decoded frames 0,14,32 inspected: expected labels and distinct shapes are legible and unclipped.",
+  "preparedOn": "2026-10-06",
+  "fixtureOnly": true,
+  "dependenciesAtPreparation": {
+    "57": "OPEN",
+    "58": "OPEN"
+  },
+  "font": "Installed Microsoft Malgun Gothic; embedded subset in PDF. No font file distributed separately.",
+  "tools": {
+    "python": "bundled Python, reportlab/pypdf/Pillow",
+    "pdfRenderer": "installed bundled Poppler",
+    "audio": "already installed Windows System.Speech TTS (Heami Desktop/Zira Desktop)",
+    "video": "already installed FFmpeg 7.0.2, network disabled build; no downloads"
+  },
+  "privacy": "Tracked files are deliberately synthetic source fixtures. No real people, cases, original recordings, credentials or personal metadata. Hash receipt is kept only in the git-ignored local preparation directory and is not included here.",
+  "limitations": [
+    "Small smoke fixtures, not maximum size/page/duration/zip-bomb/resource-limit proof.",
+    "Only PDF/TXT/PNG/JPEG/WAV/MP4 covered; HWP/HWPX/Office/HEIC/other media variants remain gaps.",
+    "No actual preview upload, R2, Container, Whisper, multimodal provider or product UI validation.",
+    "Spoken text is expected TTS source, not a verified transcript. Video scene list is ground truth, not detector success.",
+    "Negative product rejection labels are expectations, not an executed processor result."
+  ],
+  "fixtureAssetCount": 11,
+  "totalInputBytes": 644318
+}

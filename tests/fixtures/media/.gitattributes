@@ -1,0 +1,7 @@
+# Preserve exact source bytes across Windows/Linux checkouts and PDF xref offsets.
+*.pdf binary
+*.png binary
+*.jpg binary
+*.wav binary
+*.mp4 binary
+*.txt binary

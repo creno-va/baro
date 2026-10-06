@@ -1,0 +1,6 @@
+**
+!services/
+!services/file-processor/
+!services/file-processor/Dockerfile
+!services/file-processor/server.mjs
+!services/file-processor/processor.py

@@ -1,10 +1,12 @@
 import { afterEach, expect, test } from "bun:test";
+import { CURRENT_POLICY_VERSIONS } from "../src/contracts/consent";
 import { createCaseDataCipher } from "../src/server/crypto";
 import {
   type BudgetAllocation,
   createV2AccountingRepository,
 } from "../src/server/db/v2-accounting";
 import { type Actor, createV2Core } from "../src/server/db/v2-core";
+import { createV2FilesRepository } from "../src/server/db/v2-files";
 import { createV2JobsRepository } from "../src/server/db/v2-jobs";
 import { createV2LawyersRepository } from "../src/server/db/v2-lawyers";
 import {
@@ -19,6 +21,9 @@ import {
 } from "../src/server/db/v2-paid-runtime";
 import { createV2ReportsRepository } from "../src/server/db/v2-reports";
 import { createV2StorageRepository } from "../src/server/db/v2-storage";
+import { createV2UploadProbeRepository } from "../src/server/db/v2-upload-probe";
+import { createProcessingBudgetService } from "../src/server/modules/budget/processing-ledger";
+import { createFileProcessingAdmission } from "../src/server/runtime/file-admission";
 import { createTestDatabase } from "./helpers/d1";
 import { seedTestSession } from "./helpers/session";
 
@@ -205,6 +210,408 @@ async function fixture() {
   return { db, core, actor, accounting, jobs, runtime, pp, fp, workspaceId, ap, drain, remote };
 }
 type Fixture = Awaited<ReturnType<typeof fixture>>;
+
+async function uploadProbeFixture() {
+  const f = await fixture();
+  f.db.sqlite
+    .query("INSERT INTO v2_case_original_usage(workspace_id) VALUES(?)")
+    .run(f.workspaceId);
+  const uploadId = crypto.randomUUID(),
+    fileId = crypto.randomUUID();
+  expect(
+    await createV2FilesRepository(f.core).reserve(
+      { ...f.actor, workspaceId: f.workspaceId, expectedRevision: 1 },
+      {
+        name: "합성.pdf",
+        byteLength: 100,
+        mediaType: "application/pdf",
+        autoProcessConsentVersion: "synthetic",
+      },
+      {
+        fileId,
+        uploadId,
+        reservationId: crypto.randomUUID(),
+        consentId: crypto.randomUUID(),
+        expiresAt: EXP,
+        admission: {
+          operationId: crypto.randomUUID(),
+          key: crypto.randomUUID(),
+          requestHash: HASH,
+        },
+      },
+    ),
+  ).toBeTruthy();
+  const probes = createV2UploadProbeRepository(f.core);
+  const p: PricingProof = {
+    ...f.pp,
+    id: crypto.randomUUID(),
+    modelBillingPolicy: null,
+    prices: [
+      {
+        sku: "container_cpu_seconds",
+        provider: "cloudflare",
+        model: null,
+        modelRates: null,
+        region: "global",
+        plan: "synthetic-paid",
+        billingMode: "metered",
+        unit: "vcpu_seconds",
+        unitSize: "1",
+        usdPerUnit: "0.0001",
+        billingQuantum: "0.01",
+        officialUrl: "https://developers.cloudflare.com/containers/pricing/",
+        checkedAt: NOW,
+        validUntil: EXP,
+      },
+    ],
+  };
+  expect(await f.runtime.putPricingProof(p, NOW)).toBe(true);
+  const completePricing: PricingProof = {
+    ...p,
+    id: crypto.randomUUID(),
+    prices: [
+      ...p.prices,
+      ...(["container_memory_gib_seconds", "container_disk_gb_seconds"] as const).map((sku) => ({
+        ...p.prices[0]!,
+        sku,
+        unit:
+          sku === "container_memory_gib_seconds"
+            ? ("gib_seconds" as const)
+            : ("gb_seconds" as const),
+        usdPerUnit: "0.000001",
+      })),
+    ],
+  };
+  expect(await f.runtime.putPricingProof(completePricing, NOW)).toBe(true);
+  const prepare = async (now = NOW) => {
+    const current = await probes.context({ ...f.actor, now }, uploadId, 1);
+    if (!current) throw new Error("synthetic upload probe context missing");
+    const r: PaidHoldRequest = {
+      ...request(f),
+      pricingProofId: p.id,
+      service: "container",
+      targetKind: "file",
+      targetId: current.fileId,
+      targetRevision: current.fileRevision,
+      plan: {
+        operationId: current.operationId,
+        operationRevision: current.operationRevision,
+        requestHash: current.requestHash,
+        invocationId: crypto.randomUUID(),
+        maximumAttempts: 1,
+        deadlineAt: new Date(Date.parse(now) + 300000).toISOString(),
+        quantities: [{ sku: "container_cpu_seconds", maximumQuantity: "265" }],
+      },
+    };
+    const paid = await f.runtime.prepareHold({ ...f.actor, now }, r);
+    if (!paid) throw new Error("synthetic bounded probe hold missing");
+    return { r, paid };
+  };
+  return { ...f, uploadId, fileId, probes, prepare, containerPricing: completePricing };
+}
+
+test("actual upload probe composition reserves SQL cost before native transport and suppresses deleted results", async () => {
+  const f = await uploadProbeFixture();
+  f.db.sqlite
+    .query("UPDATE v2_consents SET version=? WHERE file_id=?")
+    .run(CURRENT_POLICY_VERSIONS.aiNoticeVersion, f.fileId);
+  let calls = 0,
+    stops = 0,
+    ticks = 0,
+    removeDuringDispatch = false;
+  // Explicit synthetic Container transport; production composition uses the DO binding.
+  const env = {
+    APP_ENV: "preview",
+    FILE_PROCESSOR: {
+      newUniqueId: () => ({}),
+      get: () => ({
+        fetch: async (request: Request) => {
+          calls++;
+          expect(
+            f.db.sqlite
+              .query("SELECT count(*) n FROM v2_paid_holds WHERE state='dispatched'")
+              .get(),
+          ).toEqual({ n: calls });
+          await request.body?.cancel();
+          if (removeDuringDispatch)
+            f.db.sqlite
+              .query(
+                "INSERT INTO v2_tombstones(target_kind,target_id,deleted_at) VALUES('file',?,?)",
+              )
+              .run(f.fileId, NOW);
+          return Response.json({
+            version: 1,
+            probe: { category: "document", format: "pdf", pageCount: 1, byteLength: 100 },
+          });
+        },
+        stop: async () => {
+          stops++;
+        },
+      }),
+    },
+  } as unknown as Env;
+  const admission = createFileProcessingAdmission(
+    f.core,
+    env,
+    {
+      bounds: async (_input, inputDigest, now) => ({
+        inputDigest,
+        evidenceHash: HASH,
+        verifiedAt: now,
+        validUntil: new Date(Date.parse(now) + 300000).toISOString(),
+        quantities: [{ sku: "container_cpu_seconds", maximumQuantity: "600" }],
+      }),
+    },
+    () => new Date(Date.parse(NOW) + ++ticks).toISOString(),
+  );
+  const input = {
+    ownerId: f.actor.ownerId,
+    workspaceId: f.workspaceId,
+    fileId: f.fileId,
+    uploadSession: f.uploadId,
+    uploadRevision: 1,
+    byteLength: 100,
+    contentHash: HASH,
+    open: () =>
+      new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new Uint8Array(100));
+          controller.close();
+        },
+      }),
+  };
+  const probe = admission.probe;
+  if (!probe) throw new Error("synthetic probe missing");
+  expect(await probe(input)).toEqual({
+    category: "document",
+    format: "pdf",
+    pageCount: 1,
+    byteLength: 100,
+  });
+  expect(calls).toBe(1);
+  expect(stops).toBe(1);
+  expect(
+    f.db.sqlite.query("SELECT state,current_job_id FROM v2_files WHERE id=?").get(f.fileId),
+  ).toEqual({ state: "reserved", current_job_id: null });
+  expect(f.db.sqlite.query("SELECT count(*) n FROM v2_outbox").get()).toEqual({ n: 0 });
+  expect(f.db.sqlite.query("SELECT count(*) n FROM v2_runtime_usage").get()).toEqual({ n: 0 });
+  removeDuringDispatch = true;
+  await expect(probe(input)).rejects.toThrow("STALE_REVISION");
+  expect(calls).toBe(2);
+  expect(stops).toBe(2);
+  expect(
+    f.db.sqlite.query("SELECT count(*) n FROM v2_cost_attempts WHERE state='reserved'").get(),
+  ).toEqual({ n: 2 });
+  await expect(probe(input)).rejects.toThrow("STALE_REVISION");
+  expect(calls).toBe(2);
+});
+
+test("processing cost bridge uses advancing time, restores actual admission and retains additive unknown exposure", async () => {
+  const f = await uploadProbeFixture();
+  const context = await f.probes.context(f.actor, f.uploadId, 1);
+  if (!context) throw new Error("synthetic context missing");
+  const jobId = crypto.randomUUID();
+  const runId = crypto.randomUUID();
+  let ticks = 0;
+  const options: Parameters<typeof createProcessingBudgetService>[0] = {
+    core: f.core,
+    environment: "preview",
+    ownerId: f.actor.ownerId,
+    clock: () => new Date(Date.parse(NOW) + ++ticks).toISOString(),
+    binding: async () => ({
+      ...context,
+      jobId,
+      targetKind: "file",
+      targetId: f.fileId,
+      targetRevision: context.fileRevision,
+      invocationId: runId,
+      maximumAttempts: 1,
+      deadlineAt: "2026-10-06T00:05:00.000Z",
+      pricingProofId: f.containerPricing.id,
+      fundingProofId: f.fp.id,
+      allocationProofId: f.ap.id,
+    }),
+    bounds: async (_input, inputDigest) => ({
+      inputDigest,
+      evidenceHash: HASH,
+      verifiedAt: NOW,
+      validUntil: EXP,
+      quantities: [
+        { sku: "container_cpu_seconds", maximumQuantity: "600" },
+        { sku: "container_memory_gib_seconds", maximumQuantity: "3600" },
+        { sku: "container_disk_gb_seconds", maximumQuantity: "7200" },
+      ],
+    }),
+  };
+  const service = createProcessingBudgetService(options);
+  const input = {
+    service: "container" as const,
+    action: "container_probe" as const,
+    identity: `probe:${HASH}:0:0`,
+    byteLength: 100,
+    durationSeconds: null,
+  };
+  const admission = await service.prepareInitial(input);
+  expect(admission).not.toBeNull();
+  if (!admission) throw new Error("synthetic admission missing");
+  expect(f.db.sqlite.query("SELECT count(*) n FROM v2_paid_holds").get()).toEqual({ n: 0 });
+  const lease = await f.probes.attach(
+    admission.actor,
+    { uploadId: f.uploadId, uploadRevision: 1, leaseUntil: "2026-10-06T00:05:00.000Z" },
+    admission.paid,
+  );
+  if (!lease) throw new Error("synthetic lease missing");
+  const costs = createProcessingBudgetService({
+    ...options,
+    initialAttemptId: admission.request.attemptId,
+  }).costs(lease);
+  const access = { authorize: async () => true, signal: new AbortController().signal };
+  expect(await costs.before({ ...input, identity: "substituted" }, access)).toBeNull();
+  const permit = await costs.before(input, access);
+  expect(permit).not.toBeNull();
+  if (!permit) throw new Error("synthetic permit missing");
+  expect(await service.costs(lease, admission).before(input, access)).toBeNull();
+  await costs.after({ ...permit }, { transport: "response", rawUsage: { chargedUsd: "0" } });
+  await costs.after(permit, { transport: "response" });
+  expect(await costs.before(input, access)).toBeNull();
+  const next = await costs.before(
+    { ...input, identity: `process:${HASH}:1:0`, action: "container_process" },
+    access,
+  );
+  expect(next).not.toBeNull();
+  expect(
+    f.db.sqlite.query("SELECT count(*) n FROM v2_cost_attempts WHERE state='reserved'").get(),
+  ).toEqual({ n: 2 });
+  expect(
+    f.db.sqlite.query("SELECT state FROM v2_cost_attempts WHERE id=?").get(permit.attemptId),
+  ).toEqual({ state: "reserved" });
+  expect(f.db.sqlite.query("SELECT count(*) n FROM v2_runtime_usage").get()).toEqual({ n: 0 });
+  expect((await f.runtime.exposure(NOW))?.reserved_krw).toBeGreaterThan(0);
+});
+
+test("processing cost bridge denies absent bounds, changed input proof and cancelled access before native dispatch", async () => {
+  const f = await uploadProbeFixture();
+  const context = await f.probes.context(f.actor, f.uploadId, 1);
+  if (!context) throw new Error("synthetic context missing");
+  const options = {
+    core: f.core,
+    environment: "preview" as const,
+    ownerId: f.actor.ownerId,
+    clock: () => NOW,
+    binding: async () => ({
+      ...context,
+      jobId: crypto.randomUUID(),
+      targetKind: "file" as const,
+      targetId: f.fileId,
+      targetRevision: context.fileRevision,
+      invocationId: crypto.randomUUID(),
+      maximumAttempts: 1,
+      deadlineAt: "2026-10-06T00:05:00.000Z",
+      pricingProofId: f.containerPricing.id,
+      fundingProofId: f.fp.id,
+      allocationProofId: f.ap.id,
+    }),
+  };
+  const input = {
+    service: "container" as const,
+    action: "container_probe" as const,
+    identity: HASH,
+    byteLength: 100,
+    durationSeconds: null,
+  };
+  expect(await createProcessingBudgetService(options).prepareInitial(input)).toBeNull();
+  const service = createProcessingBudgetService({
+    ...options,
+    bounds: async () => ({
+      inputDigest: "b".repeat(64),
+      evidenceHash: HASH,
+      verifiedAt: NOW,
+      validUntil: EXP,
+      quantities: [{ sku: "container_cpu_seconds", maximumQuantity: "600" }],
+    }),
+  });
+  expect(await service.prepareInitial(input)).toBeNull();
+  expect(
+    await service
+      .costs({ jobId: crypto.randomUUID(), token: crypto.randomUUID(), fencing: 1 })
+      .before(input, { authorize: async () => false, signal: new AbortController().signal }),
+  ).toBeNull();
+  expect(f.db.sqlite.query("SELECT count(*) n FROM v2_paid_holds").get()).toEqual({ n: 0 });
+});
+
+test("inline upload probe reserves real bounded paid hold before dispatch without quota or outbox", async () => {
+  const f = await uploadProbeFixture(),
+    { r, paid } = await f.prepare();
+  const args = { uploadId: f.uploadId, uploadRevision: 1, leaseUntil: "2026-10-06T00:05:00.000Z" };
+  expect(await f.probes.attach(f.actor, args)).toBeNull();
+  expect(f.db.sqlite.query("SELECT count(*) n FROM v2_jobs").get()).toEqual({ n: 0 });
+  const lease = await f.probes.attach(f.actor, args, paid);
+  expect(lease).not.toBeNull();
+  if (!lease) throw new Error("synthetic probe lease missing");
+  expect(await f.runtime.beforeDispatch(f.actor, lease, r.attemptId)).not.toBeNull();
+  expect(f.db.sqlite.query("SELECT count(*) n FROM v2_outbox").get()).toEqual({ n: 0 });
+  expect((await f.accounting.usage(f.actor)).aiResponses.reserved).toBe(0);
+  expect(
+    await f.probes.finish(f.actor, f.uploadId, 1, { ...lease, token: crypto.randomUUID() }, true),
+  ).toBe(false);
+  expect(await f.probes.finish(f.actor, f.uploadId, 1, lease, true)).toBe(true);
+  expect(await f.probes.finish(f.actor, f.uploadId, 1, lease, true)).toBe(false);
+  expect(
+    f.db.sqlite
+      .query("SELECT revision,state,current_job_id FROM v2_files WHERE id=?")
+      .get(f.fileId),
+  ).toEqual({ revision: 1, state: "reserved", current_job_id: null });
+  expect(
+    f.db.sqlite.query("SELECT state FROM v2_upload_sessions WHERE id=?").get(f.uploadId),
+  ).toEqual({ state: "open" });
+  expect(
+    f.db.sqlite.query("SELECT state FROM v2_operations WHERE id=?").get(r.plan.operationId),
+  ).toEqual({ state: "admitted" });
+  expect((await f.runtime.exposure(NOW))?.reserved_krw).toBeGreaterThan(0);
+});
+
+test("inline upload probe owner, revision, consent and timeout reject before creating held jobs", async () => {
+  const f = await uploadProbeFixture(),
+    { paid } = await f.prepare();
+  const args = { uploadId: f.uploadId, uploadRevision: 1, leaseUntil: "2026-10-06T00:05:00.000Z" };
+  expect(await f.probes.attach({ ...f.actor, ownerId: "foreign-owner" }, args, paid)).toBeNull();
+  expect(await f.probes.attach(f.actor, { ...args, uploadRevision: 2 }, paid)).toBeNull();
+  expect(
+    await f.probes.attach(f.actor, { ...args, leaseUntil: "2026-10-06T00:05:01.000Z" }, paid),
+  ).toBeNull();
+  f.db.sqlite.query("DELETE FROM v2_consents WHERE file_id=?").run(f.fileId);
+  expect(await f.probes.attach(f.actor, args, paid)).toBeNull();
+  expect(f.db.sqlite.query("SELECT count(*) n FROM v2_paid_holds").get()).toEqual({ n: 0 });
+  expect(f.db.sqlite.query("SELECT count(*) n FROM v2_jobs").get()).toEqual({ n: 0 });
+});
+
+test("inline upload probe expired lease can be replaced without refunding unknown exposure or reviving old results", async () => {
+  const f = await uploadProbeFixture(),
+    first = await f.prepare();
+  const lease = await f.probes.attach(
+    f.actor,
+    { uploadId: f.uploadId, uploadRevision: 1, leaseUntil: "2026-10-06T00:05:00.000Z" },
+    first.paid,
+  );
+  if (!lease) throw new Error("synthetic first lease missing");
+  const later = "2026-10-06T00:05:01.000Z",
+    second = await f.prepare(later),
+    actor = { ...f.actor, now: later };
+  const next = await f.probes.attach(
+    actor,
+    { uploadId: f.uploadId, uploadRevision: 1, leaseUntil: "2026-10-06T00:10:01.000Z" },
+    second.paid,
+  );
+  expect(next).not.toBeNull();
+  expect(await f.probes.finish(actor, f.uploadId, 1, lease, true)).toBe(false);
+  expect(await f.runtime.beforeDispatch(actor, lease, first.r.attemptId)).toBeNull();
+  expect(
+    f.db.sqlite.query("SELECT status,lease_token FROM v2_jobs WHERE id=?").get(lease.jobId),
+  ).toEqual({ status: "cancelled", lease_token: null });
+  expect(
+    f.db.sqlite.query("SELECT count(*) n FROM v2_cost_attempts WHERE state='reserved'").get(),
+  ).toEqual({ n: 2 });
+});
 test("late incomplete usage observations remain durable under the same ambiguous hold without a fictitious monetary transition", async () => {
   const f = await fixture(),
     d = await dispatch(f);

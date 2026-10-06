@@ -71,7 +71,7 @@ async function fixture() {
     service = createFilesService(core, {
       environment: "preview",
       bucket,
-      storageAdmission: async () => true,
+      testOnlyUnmeteredStorage: true,
     });
   async function pending() {
     const revision = (

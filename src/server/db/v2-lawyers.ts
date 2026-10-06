@@ -40,6 +40,12 @@ function moderatorValues(actor: Actor, sessionId: string) {
 }
 const ownerAlive = `NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='account' AND target_id=?)`;
 const verifiedProfile = `EXISTS(SELECT 1 FROM v2_role_bindings vb WHERE vb.owner_id=p.owner_id AND vb.role='verified_lawyer') AND EXISTS(SELECT 1 FROM v2_applications app WHERE app.id=r.application_id AND app.owner_id=p.owner_id AND app.status='approved') AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='profile' AND target_id=p.id)`;
+const moderationPageSchema = z.strictObject({
+  limit: z.number().int().min(1).max(20).default(10),
+  cursor: opaqueIdSchema.optional(),
+});
+const submittedApplicationSql = `a.status='submitted' AND a.owner_id!=? AND a.revision=(SELECT max(revision) FROM v2_applications WHERE owner_id=a.owner_id) AND NOT EXISTS(SELECT 1 FROM v2_tombstones t WHERE (t.target_kind='account' AND t.target_id=a.owner_id) OR (t.target_kind='profile' AND t.target_id IN (SELECT id FROM v2_profiles WHERE owner_id=a.owner_id))) AND ${moderatorSql}`;
+const submittedProfileSql = `r.status='submitted' AND r.revision=p.revision AND p.owner_id!=? AND ${verifiedProfile} AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='account' AND target_id=p.owner_id) AND ${moderatorSql}`;
 type AssetRow = {
   id: string;
   purpose: string;
@@ -155,7 +161,167 @@ export function createV2LawyersRepository(core: V2Core) {
       ...(row.status === "withdrawn" ? { withdrawnAt: row.withdrawn_at } : {}),
     });
   };
-  return {
+  const repository = {
+    readSubmittedProfileById(
+      reviewer: Actor,
+      sessionId: string,
+      revisionId: string,
+    ): Promise<V2ProfileRevision | null> {
+      return safe(async () => {
+        reviewer = parse(actorSchema, reviewer);
+        parse(opaqueIdSchema, revisionId);
+        const row = await core
+          .statement(
+            `SELECT r.profile_id,r.revision FROM v2_profile_revisions r JOIN v2_profiles p ON p.id=r.profile_id WHERE r.id=? AND ${submittedProfileSql}`,
+            [revisionId, reviewer.ownerId, ...moderatorValues(reviewer, sessionId)],
+          )
+          .first<{ profile_id: string; revision: number }>();
+        if (!row) return null;
+        const value = await repository.readSubmittedProfile(
+          reviewer,
+          sessionId,
+          row.profile_id,
+          row.revision,
+        );
+        return value?.id === revisionId ? value : null;
+      });
+    },
+    revokeVerificationByApplication(
+      reviewer: Actor,
+      sessionId: string,
+      applicationId: string,
+      expectedRevision: number,
+    ): Promise<boolean> {
+      return safe(async () => {
+        reviewer = parse(actorSchema, reviewer);
+        parse(opaqueIdSchema, applicationId);
+        parse(revisionSchema, expectedRevision);
+        const row = await core
+          .statement(
+            `SELECT owner_id FROM v2_applications WHERE id=? AND revision=? AND status='approved' AND owner_id!=? AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='account' AND target_id=v2_applications.owner_id) AND ${moderatorSql}`,
+            [
+              applicationId,
+              expectedRevision,
+              reviewer.ownerId,
+              ...moderatorValues(reviewer, sessionId),
+            ],
+          )
+          .first<{ owner_id: string }>();
+        return row
+          ? repository.revokeVerification(
+              reviewer,
+              sessionId,
+              row.owner_id,
+              applicationId,
+              expectedRevision,
+            )
+          : false;
+      });
+    },
+    submittedApplications(
+      reviewer: Actor,
+      sessionId: string,
+      page: { limit?: number; cursor?: string } = {},
+    ) {
+      return safe(async () => {
+        reviewer = parse(actorSchema, reviewer);
+        const query = parse(moderationPageSchema, page);
+        const rows = await core
+          .statement(
+            `SELECT a.id,a.owner_id,a.revision,a.submitted_at FROM v2_applications a WHERE ${submittedApplicationSql} AND a.id>? ORDER BY a.id LIMIT ?`,
+            [
+              reviewer.ownerId,
+              ...moderatorValues(reviewer, sessionId),
+              query.cursor ?? "",
+              query.limit + 1,
+            ],
+          )
+          .all<{ id: string; owner_id: string; revision: number; submitted_at: string }>();
+        const items = rows.results.slice(0, query.limit).map((row) => ({
+          id: row.id,
+          applicantId: row.owner_id,
+          revision: row.revision,
+          submittedAt: row.submitted_at,
+        }));
+        return {
+          items,
+          nextCursor: rows.results.length > query.limit ? (items.at(-1)?.id ?? null) : null,
+        };
+      });
+    },
+    submittedProfiles(
+      reviewer: Actor,
+      sessionId: string,
+      page: { limit?: number; cursor?: string } = {},
+    ) {
+      return safe(async () => {
+        reviewer = parse(actorSchema, reviewer);
+        const query = parse(moderationPageSchema, page);
+        const rows = await core
+          .statement(
+            `SELECT r.id,r.profile_id,r.revision,r.submitted_at FROM v2_profile_revisions r JOIN v2_profiles p ON p.id=r.profile_id WHERE ${submittedProfileSql} AND r.id>? ORDER BY r.id LIMIT ?`,
+            [
+              reviewer.ownerId,
+              ...moderatorValues(reviewer, sessionId),
+              query.cursor ?? "",
+              query.limit + 1,
+            ],
+          )
+          .all<{ id: string; profile_id: string; revision: number; submitted_at: string }>();
+        const items = rows.results.slice(0, query.limit).map((row) => ({
+          id: row.id,
+          profileId: row.profile_id,
+          revision: row.revision,
+          submittedAt: row.submitted_at,
+        }));
+        return {
+          items,
+          nextCursor: rows.results.length > query.limit ? (items.at(-1)?.id ?? null) : null,
+        };
+      });
+    },
+    readSubmittedApplication(reviewer: Actor, sessionId: string, id: string) {
+      return safe(async () => {
+        reviewer = parse(actorSchema, reviewer);
+        parse(opaqueIdSchema, id);
+        const sql = `SELECT a.* FROM v2_applications a WHERE a.id=? AND ${submittedApplicationSql}`;
+        const values = [id, reviewer.ownerId, ...moderatorValues(reviewer, sessionId)];
+        const row = await core.statement(sql, values).first<ApplicationRow>();
+        if (!row) return null;
+        const value = await decodeApplication(row);
+        const final = await core.statement(sql, values).first<ApplicationRow>();
+        return final?.owner_id === row.owner_id &&
+          final.revision === row.revision &&
+          final.encrypted_payload === row.encrypted_payload &&
+          final.submitted_at === row.submitted_at
+          ? value
+          : null;
+      });
+    },
+    readSubmittedProfile(reviewer: Actor, sessionId: string, profileId: string, revision: number) {
+      return safe(async () => {
+        reviewer = parse(actorSchema, reviewer);
+        parse(opaqueIdSchema, profileId);
+        parse(revisionSchema, revision);
+        const sql = `SELECT r.*,p.owner_id FROM v2_profile_revisions r JOIN v2_profiles p ON p.id=r.profile_id WHERE p.id=? AND r.revision=? AND ${submittedProfileSql}`;
+        const values = [
+          profileId,
+          revision,
+          reviewer.ownerId,
+          ...moderatorValues(reviewer, sessionId),
+        ];
+        const row = await core.statement(sql, values).first<ProfileRevisionRow>();
+        if (!row) return null;
+        const value = await decodeRevision(row);
+        const final = await core.statement(sql, values).first<ProfileRevisionRow>();
+        return final?.id === row.id &&
+          final.owner_id === row.owner_id &&
+          final.encrypted_payload === row.encrypted_payload &&
+          final.submitted_at === row.submitted_at
+          ? value
+          : null;
+      });
+    },
     roles(actor: Actor) {
       return safe(async () => {
         actor = parse(actorSchema, { ownerId: actor.ownerId, now: actor.now });
@@ -301,7 +467,7 @@ export function createV2LawyersRepository(core: V2Core) {
         const claimId = crypto.randomUUID();
         return core.changed([
           core.statement(
-            `INSERT INTO v2_mutation_claims(id,owner_id,target_id,revision) SELECT ?,owner_id,id,revision FROM v2_applications WHERE id=? AND owner_id=? AND revision=? AND status='approved' AND ${moderatorSql}`,
+            `INSERT INTO v2_mutation_claims(id,owner_id,target_id,revision) SELECT ?,owner_id,id,revision FROM v2_applications WHERE id=? AND owner_id=? AND revision=? AND status='approved' AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='account' AND target_id=v2_applications.owner_id) AND ${moderatorSql}`,
             [
               claimId,
               applicationId,
@@ -876,11 +1042,13 @@ export function createV2LawyersRepository(core: V2Core) {
       profileId: string,
       expectedRevision: number,
       kind: "submission" | "publication",
+      expectedProfileRevision?: number,
     ) {
       return safe(async () => {
         actor = parse(actorSchema, { ownerId: actor.ownerId, now: actor.now });
         parse(opaqueIdSchema, profileId);
         parse(revisionSchema, expectedRevision);
+        if (expectedProfileRevision !== undefined) parse(revisionSchema, expectedProfileRevision);
         parse(z.enum(["submission", "publication"]), kind);
         const claimId = crypto.randomUUID();
         const row = await core
@@ -892,8 +1060,18 @@ export function createV2LawyersRepository(core: V2Core) {
         if (!row) return false;
         return core.changed([
           core.statement(
-            `INSERT INTO v2_mutation_claims(id,owner_id,target_id,revision) SELECT ?,p.owner_id,p.id,p.revision FROM v2_profiles p JOIN v2_profile_revisions r ON r.profile_id=p.id WHERE p.id=? AND p.owner_id=? AND r.id=? AND r.revision=? AND ((?='submission' AND r.status='submitted') OR (?='publication' AND r.status='approved' AND p.approved_revision_id=r.id)) AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE (target_kind='account' AND target_id=p.owner_id) OR (target_kind='profile' AND target_id=p.id))`,
-            [claimId, profileId, actor.ownerId, row.id, expectedRevision, kind, kind],
+            `INSERT INTO v2_mutation_claims(id,owner_id,target_id,revision) SELECT ?,p.owner_id,p.id,p.revision FROM v2_profiles p JOIN v2_profile_revisions r ON r.profile_id=p.id WHERE p.id=? AND p.owner_id=? AND r.id=? AND r.revision=? AND (? IS NULL OR p.revision=?) AND ((?='submission' AND r.status='submitted') OR (?='publication' AND r.status='approved' AND p.approved_revision_id=r.id)) AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE (target_kind='account' AND target_id=p.owner_id) OR (target_kind='profile' AND target_id=p.id))`,
+            [
+              claimId,
+              profileId,
+              actor.ownerId,
+              row.id,
+              expectedRevision,
+              expectedProfileRevision ?? null,
+              expectedProfileRevision ?? null,
+              kind,
+              kind,
+            ],
           ),
           core.statement(
             `UPDATE v2_profile_revisions SET status='withdrawn',withdrawn_at=? WHERE id=? AND ${sqlClaim}`,
@@ -909,6 +1087,28 @@ export function createV2LawyersRepository(core: V2Core) {
           ),
           core.finish(claimId),
         ]);
+      });
+    },
+    withdrawApprovedProfile(actor: Actor, profileId: string, expectedProfileRevision: number) {
+      return safe(async () => {
+        actor = parse(actorSchema, actor);
+        parse(opaqueIdSchema, profileId);
+        parse(revisionSchema, expectedProfileRevision);
+        const row = await core
+          .statement(
+            "SELECT r.revision FROM v2_profiles p JOIN v2_profile_revisions r ON r.id=p.approved_revision_id AND r.profile_id=p.id WHERE p.id=? AND p.owner_id=? AND p.revision=? AND r.status='approved' AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE (target_kind='account' AND target_id=p.owner_id) OR (target_kind='profile' AND target_id=p.id))",
+            [profileId, actor.ownerId, expectedProfileRevision],
+          )
+          .first<{ revision: number }>();
+        return row
+          ? repository.withdrawProfile(
+              actor,
+              profileId,
+              row.revision,
+              "publication",
+              expectedProfileRevision,
+            )
+          : false;
       });
     },
     publishApproved(
@@ -1150,12 +1350,23 @@ export function createV2LawyersRepository(core: V2Core) {
             : row.purpose === "profile_photo"
               ? "profile_photo_original"
               : "verification";
+        // Capture the physical/source/reservation tuple as well as ciphertext.
+        // The final claim repeats this exact tuple after every encryption await.
+        const blobTuple = (blob: string, reservation: string) =>
+          `json_array(${blob}.reservation_id,${blob}.principal_id,${blob}.object_key,${blob}.cipher_bytes,${blob}.cipher_hash,${blob}.key_version,${blob}.logical_bytes,${blob}.source_blob_id,${blob}.source_asset_revision,${reservation}.operation_id,${reservation}.principal_id,${reservation}.state,${reservation}.byte_length,${reservation}.target_id,${reservation}.kind,${reservation}.entity_id)`;
+        type AssetBlob = {
+          encrypted_payload: string;
+          logical_bytes: number;
+          physical_tuple: string;
+          source_blob_id: string | null;
+          source_asset_revision: number | null;
+        };
         const original = await core
           .statement(
-            "SELECT b.encrypted_payload,b.logical_bytes FROM v2_blobs b JOIN v2_storage_reservations r ON r.id=b.reservation_id JOIN v2_billing_principals p ON p.id=b.principal_id WHERE b.id=? AND p.owner_id=? AND r.kind='lawyer_asset' AND r.entity_id=? AND b.kind=? AND b.visibility='private' AND b.state='stored'",
+            `SELECT b.encrypted_payload,b.logical_bytes,b.source_blob_id,b.source_asset_revision,${blobTuple("b", "r")} AS physical_tuple FROM v2_blobs b JOIN v2_storage_reservations r ON r.id=b.reservation_id JOIN v2_billing_principals p ON p.id=b.principal_id WHERE b.id=? AND p.owner_id=? AND r.kind='lawyer_asset' AND r.entity_id=? AND b.kind=? AND b.visibility='private' AND b.state='stored'`,
             [originalBlobId, actor.ownerId, id, originalKind],
           )
-          .first<{ encrypted_payload: string; logical_bytes: number }>();
+          .first<AssetBlob>();
         if (!original || original.logical_bytes !== asset.byteLength) return false;
         const originalHash = await core.decrypt(
           "v2_blobs",
@@ -1170,12 +1381,12 @@ export function createV2LawyersRepository(core: V2Core) {
           ("contentHash" in asset ? asset.contentHash : asset.originalHash)
         )
           return false;
-        let sanitized: { encrypted_payload: string; logical_bytes: number } | null = null;
+        let sanitized: AssetBlob | null = null;
         if ("sanitizedDerivative" in asset && asset.sanitizedDerivative) {
           if (!sanitizedBlobId) return false;
           sanitized = await core
             .statement(
-              "SELECT b.encrypted_payload,b.logical_bytes FROM v2_blobs b JOIN v2_storage_reservations r ON r.id=b.reservation_id JOIN v2_billing_principals p ON p.id=b.principal_id WHERE b.id=? AND p.owner_id=? AND r.kind='lawyer_asset' AND r.entity_id=? AND b.kind=? AND b.visibility='staging' AND b.state='stored'",
+              `SELECT b.encrypted_payload,b.logical_bytes,b.source_blob_id,b.source_asset_revision,${blobTuple("b", "r")} AS physical_tuple FROM v2_blobs b JOIN v2_storage_reservations r ON r.id=b.reservation_id JOIN v2_billing_principals p ON p.id=b.principal_id WHERE b.id=? AND p.owner_id=? AND r.kind='lawyer_asset' AND r.entity_id=? AND b.kind=? AND b.visibility='staging' AND b.state='stored'`,
               [
                 sanitizedBlobId,
                 actor.ownerId,
@@ -1183,8 +1394,14 @@ export function createV2LawyersRepository(core: V2Core) {
                 row.purpose === "profile_photo" ? "profile_photo_sanitized" : "portfolio_sanitized",
               ],
             )
-            .first();
+            .first<AssetBlob>();
           if (!sanitized || sanitized.logical_bytes !== asset.sanitizedDerivative.byteLength)
+            return false;
+          if (
+            lease &&
+            (sanitized.source_blob_id !== originalBlobId ||
+              sanitized.source_asset_revision !== expectedRevision)
+          )
             return false;
           const hash = await core.decrypt(
             "v2_blobs",
@@ -1217,7 +1434,7 @@ export function createV2LawyersRepository(core: V2Core) {
               };
         return core.changed([
           core.statement(
-            `INSERT INTO v2_mutation_claims(id,owner_id,target_id,revision) SELECT ?,a.owner_id,a.id,a.revision FROM v2_assets a JOIN v2_profiles p ON p.id=a.profile_id JOIN v2_blobs b ON b.id=? JOIN v2_storage_reservations br ON br.id=b.reservation_id JOIN v2_billing_principals principal ON principal.id=b.principal_id WHERE a.id=? AND a.owner_id=? AND a.revision=? AND a.state IN ('reserved','uploaded','sanitizing','failed') AND a.encrypted_payload=? AND ${execution.sql} AND principal.owner_id=a.owner_id AND br.kind='lawyer_asset' AND br.entity_id=a.id AND b.kind=? AND b.state='stored' AND b.visibility='private' AND b.encrypted_payload=? AND ${ownerAlive} AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE (target_kind='asset' AND target_id=a.id) OR (target_kind='profile' AND target_id=p.id)) AND (? IS NULL OR EXISTS(SELECT 1 FROM v2_blobs s JOIN v2_billing_principals sp ON sp.id=s.principal_id JOIN v2_storage_reservations sr ON sr.id=s.reservation_id WHERE s.id=? AND s.state='stored' AND s.visibility='staging' AND sp.owner_id=a.owner_id AND sr.kind='lawyer_asset' AND sr.entity_id=a.id AND s.kind=? AND s.encrypted_payload=?))`,
+            `INSERT INTO v2_mutation_claims(id,owner_id,target_id,revision) SELECT ?,a.owner_id,a.id,a.revision FROM v2_assets a JOIN v2_profiles p ON p.id=a.profile_id JOIN v2_blobs b ON b.id=? JOIN v2_storage_reservations br ON br.id=b.reservation_id JOIN v2_billing_principals principal ON principal.id=b.principal_id WHERE a.id=? AND a.owner_id=? AND a.revision=? AND a.state IN ('reserved','uploaded','sanitizing','failed') AND a.encrypted_payload=? AND ${execution.sql} AND principal.owner_id=a.owner_id AND br.kind='lawyer_asset' AND br.entity_id=a.id AND b.kind=? AND b.state='stored' AND b.visibility='private' AND b.encrypted_payload=? AND ${blobTuple("b", "br")}=? AND ${ownerAlive} AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE (target_kind='asset' AND target_id=a.id) OR (target_kind='profile' AND target_id=p.id)) AND (? IS NULL OR EXISTS(SELECT 1 FROM v2_blobs s JOIN v2_billing_principals sp ON sp.id=s.principal_id JOIN v2_storage_reservations sr ON sr.id=s.reservation_id WHERE s.id=? AND s.state='stored' AND s.visibility='staging' AND sp.owner_id=a.owner_id AND sr.kind='lawyer_asset' AND sr.entity_id=a.id AND s.kind=? AND s.encrypted_payload=? AND ${blobTuple("s", "sr")}=?))`,
             [
               claimId,
               originalBlobId,
@@ -1228,11 +1445,13 @@ export function createV2LawyersRepository(core: V2Core) {
               ...execution.values,
               originalKind,
               original.encrypted_payload,
+              original.physical_tuple,
               actor.ownerId,
               sanitizedBlobId,
               sanitizedBlobId,
               row.purpose === "profile_photo" ? "profile_photo_sanitized" : "portfolio_sanitized",
               sanitized?.encrypted_payload ?? null,
+              sanitized?.physical_tuple ?? null,
             ],
           ),
           core.statement(
@@ -1366,4 +1585,5 @@ export function createV2LawyersRepository(core: V2Core) {
       });
     },
   };
+  return repository;
 }

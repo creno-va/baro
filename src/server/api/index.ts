@@ -1,5 +1,9 @@
 import { Hono } from "hono";
 import { getAuth } from "../auth";
+import { createStorageBudgetService } from "../modules/budget/storage-ledger";
+import { createAssetProcessingAdmission } from "../runtime/asset-admission";
+import { createFileProcessingAdmission } from "../runtime/file-admission";
+import { createSanitizedReaders } from "../runtime/sanitized-reader";
 import { accountDeleteApi } from "./account-delete";
 import { answersApi } from "./answers";
 import { caseCreateApi } from "./case-create";
@@ -11,6 +15,8 @@ import { meApi } from "./me";
 import { requestBodyLimit } from "./request-body-limit";
 import { retryApi } from "./retry";
 import { createFilesApi } from "./v2/files";
+import { createLawyersApi } from "./v2/lawyers";
+import { createModerationApi } from "./v2/moderation";
 import { usageApi } from "./v2/usage";
 
 export const api = new Hono<ApiEnvironment>()
@@ -51,8 +57,51 @@ export const api = new Hono<ApiEnvironment>()
   .route("/health", healthApi)
   .route("/v2/me", usageApi)
   .route(
+    "/v2/me",
+    createLawyersApi({
+      dependencies: async (env, core, ownerId) => ({
+        bucket: env.CASE_PRIVATE_R2,
+        paidStorage: (requestedOwnerId) => {
+          if (requestedOwnerId !== ownerId) throw new Error("Owner scope mismatch");
+          return createStorageBudgetService({
+            core,
+            ownerId,
+            environment: env.APP_ENV === "production" ? "production" : "preview",
+          });
+        },
+        ...createAssetProcessingAdmission(core, env),
+      }),
+    }),
+  )
+  .route(
+    "/v2/moderation",
+    createModerationApi({
+      dependencies: async (env, core) => ({
+        bucket: env.CASE_PRIVATE_R2,
+        ...(env.CASE_PRIVATE_R2
+          ? {
+              openSanitized: createSanitizedReaders(core, {
+                environment: env.APP_ENV === "production" ? "production" : "preview",
+                bucket: env.CASE_PRIVATE_R2,
+              }).moderation,
+            }
+          : {}),
+      }),
+    }),
+  )
+  .route(
     "/v2/cases",
-    createFilesApi({ dependencies: async (env) => ({ bucket: env.CASE_PRIVATE_R2 }) }),
+    createFilesApi({
+      dependencies: async (env, core, ownerId) => ({
+        bucket: env.CASE_PRIVATE_R2,
+        paidStorage: createStorageBudgetService({
+          core,
+          ownerId,
+          environment: env.APP_ENV === "production" ? "production" : "preview",
+        }),
+        ...createFileProcessingAdmission(core, env),
+      }),
+    }),
   )
   .route("/me", meApi)
   .route("/me", accountDeleteApi)

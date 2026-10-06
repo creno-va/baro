@@ -145,6 +145,7 @@
     },
     {
       "issue": 59,
+      "implementationPr": 89,
       "milestone": 5,
       "kind": "implementation",
       "dependsOn": [
@@ -166,6 +167,7 @@
     },
     {
       "issue": 60,
+      "implementationPr": 89,
       "milestone": 5,
       "kind": "implementation",
       "dependsOn": [
@@ -418,12 +420,43 @@
     },
     {
       "issue": 93,
+      "implementationPr": 94,
       "milestone": 5,
       "kind": "implementation",
       "dependsOn": [55, 57, 87],
       "owns": ["src/server/db/v2-storage-paid-runtime", "additive storage-paid schema", "storage-paid SQL tests"],
       "docs": ["docs/architecture/DATA-MODEL.md", "docs/operations/COST-CONTROLS.md", "docs/development/V2-EXECUTION.md"],
       "validation": "real jobless storage intent and approval guards, authenticated durable pricing/funding/plan, atomic additive budget and one-time dispatch, fresh/upgrade/drift; consumers await shared main merge"
+    },
+    {
+      "issue": 95,
+      "milestone": 5,
+      "kind": "implementation",
+      "dependsOn": [
+        57,
+        87,
+        93
+      ],
+      "owns": [
+        "additive storage capacity schema",
+        "physical R2 capacity and recurring maintenance reservation",
+        "capacity SQL tests"
+      ],
+      "docs": [
+        "docs/operations/COST-CONTROLS.md",
+        "docs/architecture/DATA-MODEL.md",
+        "docs/development/V2-EXECUTION.md"
+      ],
+      "validation": "authenticated monthly capacity projection, atomic physical admission including pending/deleting objects, bounded maintenance I/O, verified deletion receipt release, fresh/upgrade/drift; consumers await shared main merge"
+    },
+    {
+      "issue": 97,
+      "milestone": 5,
+      "kind": "implementation",
+      "dependsOn": [],
+      "owns": [".gitleaksignore", ".github/workflows/ci.yml", "docs/development", "scripts/work-items.ts"],
+      "docs": ["docs/development/EXECUTION.md", "docs/development/V2-EXECUTION.md"],
+      "validation": "reachable full-history secret scan, exact synthetic exclusions, reviewed main implementation dependencies and synchronized issue wording"
     },
     {
       "issue": 71,

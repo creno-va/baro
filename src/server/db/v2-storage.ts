@@ -7,6 +7,23 @@ import {
 } from "../../contracts/v2";
 import { createV2AccountingRepository } from "./v2-accounting";
 import {
+  abandonArtifactBlob,
+  commitArtifactBlob,
+  findPendingArtifactBlob,
+  prepareArtifactBlob,
+} from "./v2-artifact-blobs";
+import {
+  type AssetUploadCleanupIntent,
+  type AssetUploadIntent,
+  abandonAssetUpload,
+  captureApprovedPublicCopyIntent,
+  captureAssetUploadIntent,
+  captureSanitizedAssetBlobIntent,
+  commitAssetUpload,
+  prepareAssetUpload,
+  requeueAssetUploadCleanup,
+} from "./v2-asset-uploads";
+import {
   type Actor,
   actorSchema,
   aliveWorkspace,
@@ -19,6 +36,20 @@ import {
   type WorkspaceGuard,
 } from "./v2-core";
 import { type CleanupLease, cleanupLeaseSchema } from "./v2-deletion";
+import {
+  abandonApprovedPublicCopy,
+  commitPreparedPublicCopy,
+  type PublicCopyIntent,
+  prepareApprovedPublicCopy,
+} from "./v2-public-copies";
+import {
+  abandonSanitizedAssetBlob,
+  commitSanitizedAssetBlob,
+  findPendingSanitizedAssetBlob,
+  prepareSanitizedAssetBlob,
+} from "./v2-sanitized-asset-blobs";
+import type { PreparedStoragePaidHold } from "./v2-storage-paid-runtime";
+import type { JobLease } from "./v2-workspace";
 
 export function storagePredicate(
   ownerId: string,
@@ -105,6 +136,63 @@ const reservationAlive = `((r.kind='case_original' AND EXISTS(SELECT 1 FROM v2_f
 export function createV2StorageRepository(core: V2Core) {
   const accounting = createV2AccountingRepository(core);
   return {
+    captureSanitizedAssetBlobIntent(actor: Actor, lease: JobLease, blobId: string) {
+      return captureSanitizedAssetBlobIntent(core, actor, lease, blobId);
+    },
+    requeueSanitizedAssetBlobCleanup(actor: Actor, captured: AssetUploadCleanupIntent) {
+      return captured.visibility === "staging" &&
+        ["profile_photo_sanitized", "portfolio_sanitized"].includes(captured.kind)
+        ? requeueAssetUploadCleanup(core, actor, captured)
+        : Promise.resolve(null);
+    },
+    prepareSanitizedAssetBlob(actor: Actor, lease: JobLease, blob: BlobRegistration) {
+      return prepareSanitizedAssetBlob(core, actor, lease, blob);
+    },
+    commitSanitizedAssetBlob(actor: Actor, lease: JobLease, blob: BlobRegistration) {
+      return commitSanitizedAssetBlob(core, actor, lease, blob);
+    },
+    abandonSanitizedAssetBlob(actor: Actor, blobId: string) {
+      return abandonSanitizedAssetBlob(core, actor, blobId);
+    },
+    findPendingSanitizedAssetBlob(actor: Actor, lease: JobLease, blobId: string) {
+      return findPendingSanitizedAssetBlob(core, actor, lease, blobId);
+    },
+    prepareApprovedPublicCopy(
+      actor: Actor,
+      input: PublicCopyIntent,
+      paid?: PreparedStoragePaidHold,
+    ) {
+      return prepareApprovedPublicCopy(core, actor, input, paid);
+    },
+    abandonApprovedPublicCopy(actor: Actor, blobId: string) {
+      return abandonApprovedPublicCopy(core, actor, blobId);
+    },
+    prepareAssetUpload(actor: Actor, input: AssetUploadIntent, paid?: PreparedStoragePaidHold) {
+      return prepareAssetUpload(core, actor, input, paid);
+    },
+    commitAssetUpload(
+      actor: Actor,
+      input: { assetId: string; assetRevision: number; blob: BlobRegistration },
+    ) {
+      return commitAssetUpload(core, actor, input);
+    },
+    abandonAssetUpload(actor: Actor, blobId: string) {
+      return abandonAssetUpload(core, actor, blobId);
+    },
+    captureAssetUploadIntent(actor: Actor, blobId: string) {
+      return captureAssetUploadIntent(core, actor, blobId);
+    },
+    captureApprovedPublicCopyIntent(actor: Actor, blobId: string) {
+      return captureApprovedPublicCopyIntent(core, actor, blobId);
+    },
+    requeueApprovedPublicCopyCleanup(actor: Actor, captured: AssetUploadCleanupIntent) {
+      return captured.kind === "public_copy" && captured.visibility === "public"
+        ? requeueAssetUploadCleanup(core, actor, captured)
+        : Promise.resolve(null);
+    },
+    requeueAssetUploadCleanup(actor: Actor, captured: AssetUploadCleanupIntent) {
+      return requeueAssetUploadCleanup(core, actor, captured);
+    },
     reserveArtifact(
       g: WorkspaceGuard,
       input: {
@@ -190,6 +278,18 @@ export function createV2StorageRepository(core: V2Core) {
           core.finish(claimId),
         ]);
       });
+    },
+    prepareArtifactBlob(actor: Actor, lease: JobLease, blob: BlobRegistration) {
+      return prepareArtifactBlob(core, actor, lease, blob);
+    },
+    commitArtifactBlob(actor: Actor, lease: JobLease, blob: BlobRegistration) {
+      return commitArtifactBlob(core, actor, lease, blob);
+    },
+    abandonArtifactBlob(actor: Actor, blobId: string) {
+      return abandonArtifactBlob(core, actor, blobId);
+    },
+    findPendingArtifactBlob(actor: Actor, lease: JobLease, blobId: string) {
+      return findPendingArtifactBlob(core, actor, lease, blobId);
     },
     registerBlob(actor: Actor, input: BlobRegistration) {
       return safe(async () => {
@@ -300,6 +400,13 @@ export function createV2StorageRepository(core: V2Core) {
           parse(opaqueIdSchema, id);
         parse(z.number().int().positive(), provenance.assetRevision);
         if (b.kind !== "public_copy" || b.visibility !== "public") return false;
+        const existing = await core
+          .statement("SELECT state FROM v2_blobs WHERE id=?", [b.id])
+          .first<{ state: string }>();
+        if (existing)
+          return existing.state === "pending"
+            ? commitPreparedPublicCopy(core, actor, b, provenance)
+            : false;
         const source = await core
           .statement(
             "SELECT b.encrypted_payload,b.logical_bytes FROM v2_blobs b JOIN v2_storage_reservations r ON r.id=b.reservation_id JOIN v2_billing_principals p ON p.id=b.principal_id JOIN v2_assets a ON a.id=r.entity_id WHERE b.id=? AND p.owner_id=? AND a.id=? AND a.revision=? AND a.sanitized_blob_id=b.id AND b.visibility='staging' AND b.state='stored'",
@@ -495,7 +602,7 @@ export function createV2StorageRepository(core: V2Core) {
         lease: CleanupLease;
         receiptId: string;
         objectKey: string;
-        cipherHash: string;
+        cipherHash: string | null;
       },
     ) {
       return safe(async () => {
@@ -503,12 +610,13 @@ export function createV2StorageRepository(core: V2Core) {
         const actor = parse(actorSchema, { ownerId: "cleanup", now });
         if (!confirmation) return false;
         const { lease } = confirmation;
+        const receiptClaim = crypto.randomUUID();
         parse(cleanupLeaseSchema, lease);
         parse(opaqueIdSchema, confirmation.receiptId);
-        parse(hashSchema, confirmation.cipherHash);
+        parse(hashSchema.nullable(), confirmation.cipherHash);
         const row = await core
           .statement(
-            "SELECT reservation_id FROM v2_blobs WHERE id=? AND state='deleting' AND object_key=? AND cipher_hash=?",
+            "SELECT reservation_id FROM v2_blobs WHERE id=? AND state='deleting' AND object_key=? AND cipher_hash IS ? AND (cipher_hash IS NOT NULL OR (cipher_bytes=0 AND ((visibility='private' AND kind IN ('verification','profile_photo_original','portfolio_original')) OR (visibility='public' AND kind='public_copy' AND key_version IS NULL AND source_blob_id IS NOT NULL AND approved_revision_id IS NOT NULL))))",
             [blobId, confirmation.objectKey, confirmation.cipherHash],
           )
           .first<{ reservation_id: string }>();
@@ -519,21 +627,39 @@ export function createV2StorageRepository(core: V2Core) {
           confirmation.receiptId,
           lease.journalId,
           blobId,
-          lease.token,
+          receiptClaim,
           lease.fencing,
           actor.now,
         ];
         // Removing a failed pending chunk does not cancel its live file upload.
         // Preserve the original reservation until that file is actually deleted.
-        const releasable = `NOT EXISTS(SELECT 1 FROM v2_storage_reservations original JOIN v2_files f ON f.id=original.entity_id JOIN v2_workspaces w ON w.id=f.workspace_id WHERE original.id=? AND original.kind='case_original' AND f.state!='deleting' AND ${aliveWorkspace} AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='file' AND target_id=f.id))`;
+        const releasable = `NOT EXISTS(SELECT 1 FROM v2_storage_reservations original LEFT JOIN v2_files f ON f.id=original.entity_id LEFT JOIN v2_workspaces w ON w.id=f.workspace_id LEFT JOIN v2_assets a ON a.id=original.entity_id LEFT JOIN v2_profiles profile ON profile.id=a.profile_id WHERE original.id=? AND ((original.kind='case_original' AND f.state!='deleting' AND ${aliveWorkspace} AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='file' AND target_id=f.id)) OR (original.kind='lawyer_asset' AND original.target_id=a.id AND a.state!='deleting' AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE (target_kind='account' AND target_id=a.owner_id) OR (target_kind='asset' AND target_id=a.id) OR (target_kind='profile' AND target_id=profile.id)))))`;
         const results = await core.binding.batch([
+          // Temporary lease-token CAS is confined to this atomic batch. It gates
+          // every write on a newly admitted receipt, including deleted accounts
+          // that cannot own an ephemeral user-FK mutation claim anymore.
           core.statement(
-            "INSERT INTO v2_cleanup_receipts(id,journal_id,kind,target_id,confirmed_at) SELECT ?,j.id,'blob',b.id,? FROM v2_deletion_journals j JOIN v2_deletion_targets t ON t.journal_id=j.id JOIN v2_blobs b ON b.id=t.target_id WHERE j.id=? AND j.lease_token=? AND j.fencing=? AND j.lease_until>? AND j.state='running' AND t.kind='blob' AND t.state='pending' AND b.id=? AND b.state='deleting' AND b.object_key=? AND b.cipher_hash=? AND NOT EXISTS(SELECT 1 FROM v2_deletion_targets WHERE journal_id=j.id AND kind IN ('job','legacy_workflow') AND state='pending') ON CONFLICT(journal_id,kind,target_id) DO NOTHING",
+            "UPDATE v2_deletion_journals SET lease_token=? WHERE id=? AND lease_token=? AND fencing=? AND lease_until>? AND state='running' AND EXISTS(SELECT 1 FROM v2_deletion_targets t JOIN v2_blobs b ON b.id=t.target_id WHERE t.journal_id=v2_deletion_journals.id AND t.kind='blob' AND t.state='pending' AND b.id=? AND b.state='deleting' AND b.object_key=? AND b.cipher_hash IS ? AND (b.cipher_hash IS NOT NULL OR (b.cipher_bytes=0 AND ((b.visibility='private' AND b.kind IN ('verification','profile_photo_original','portfolio_original')) OR (b.visibility='public' AND b.kind='public_copy' AND b.key_version IS NULL AND b.source_blob_id IS NOT NULL AND b.approved_revision_id IS NOT NULL))))) AND NOT EXISTS(SELECT 1 FROM v2_deletion_targets WHERE journal_id=v2_deletion_journals.id AND kind IN ('job','legacy_workflow') AND state='pending') AND NOT EXISTS(SELECT 1 FROM v2_cleanup_receipts WHERE id=? OR (journal_id=v2_deletion_journals.id AND kind='blob' AND target_id=?))",
+            [
+              receiptClaim,
+              lease.journalId,
+              lease.token,
+              lease.fencing,
+              actor.now,
+              blobId,
+              confirmation.objectKey,
+              confirmation.cipherHash,
+              confirmation.receiptId,
+              blobId,
+            ],
+          ),
+          core.statement(
+            "INSERT INTO v2_cleanup_receipts(id,journal_id,kind,target_id,confirmed_at) SELECT ?,j.id,'blob',b.id,? FROM v2_deletion_journals j JOIN v2_deletion_targets t ON t.journal_id=j.id JOIN v2_blobs b ON b.id=t.target_id WHERE j.id=? AND j.lease_token=? AND j.fencing=? AND j.lease_until>? AND j.state='running' AND t.kind='blob' AND t.state='pending' AND b.id=? AND b.state='deleting' AND b.object_key=? AND b.cipher_hash IS ? AND (b.cipher_hash IS NOT NULL OR (b.cipher_bytes=0 AND ((b.visibility='private' AND b.kind IN ('verification','profile_photo_original','portfolio_original')) OR (b.visibility='public' AND b.kind='public_copy' AND b.key_version IS NULL AND b.source_blob_id IS NOT NULL AND b.approved_revision_id IS NOT NULL)))) AND NOT EXISTS(SELECT 1 FROM v2_deletion_targets WHERE journal_id=j.id AND kind IN ('job','legacy_workflow') AND state='pending') ON CONFLICT(journal_id,kind,target_id) DO NOTHING",
             [
               confirmation.receiptId,
               actor.now,
               lease.journalId,
-              lease.token,
+              receiptClaim,
               lease.fencing,
               actor.now,
               blobId,
@@ -567,6 +693,10 @@ export function createV2StorageRepository(core: V2Core) {
           core.statement(
             `UPDATE v2_deletion_targets SET state='completed' WHERE journal_id=? AND kind='blob' AND target_id=? AND ${receiptGuard}`,
             [lease.journalId, blobId, ...args],
+          ),
+          core.statement(
+            "UPDATE v2_deletion_journals SET lease_token=? WHERE id=? AND lease_token=? AND fencing=?",
+            [lease.token, lease.journalId, receiptClaim, lease.fencing],
           ),
         ]);
         return results[0]?.meta.changes === 1;
