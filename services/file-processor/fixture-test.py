@@ -64,7 +64,10 @@ with tempfile.TemporaryDirectory(prefix="baro-boundary-") as tmp:
     for unit in range(2):
         result = subprocess.run(["python3", "/app/processor.py", str(root), "process", str(unit), str(offset)],
                                 capture_output=True, timeout=180)
-        assert result.returncode == 0
+        native_code = None
+        if result.returncode and (root / "error.json").exists():
+            native_code = json.loads((root / "error.json").read_text()).get("code")
+        assert result.returncode == 0, {"unit": unit, "nativeCode": native_code}
         output = json.loads((root / "manifest.json").read_text())
         assert output["frameOffset"] == offset
         assert output["decodedFrameCount"] == (60 if unit == 0 else 2)

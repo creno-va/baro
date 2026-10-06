@@ -36,7 +36,7 @@ def command(args, timeout=60):
 
 
 def ffmpeg(source, args, seek=None):
-    prefix = ["ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error", "-protocol_whitelist", "file,pipe", "-threads", "1", "-filter_threads", "1", "-filter_complex_threads", "1"]
+    prefix = ["ffmpeg", "-nostdin", "-y", "-hide_banner", "-loglevel", "error", "-protocol_whitelist", "file,pipe", "-threads", "1", "-filter_threads", "1", "-filter_complex_threads", "1"]
     if seek is not None:
         prefix += ["-ss", str(seek)]
     return command(prefix + ["-i", str(source), "-threads", "1"] + args)
