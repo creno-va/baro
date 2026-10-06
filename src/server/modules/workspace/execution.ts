@@ -59,11 +59,14 @@ export async function executeWorkspace(
       [params.jobId, params.workspaceRevision, clock()],
     )
     .first<{ attempt_id: string }>();
+  // The repository caps a lease at exactly five minutes. Sampling the clock
+  // twice can produce a 300001 ms lease and incorrectly stop a valid job.
+  const acquisitionActor = actor();
   const acquired = await jobs.acquire(
-    actor(),
+    acquisitionActor,
     params.jobId,
     crypto.randomUUID(),
-    new Date(Date.parse(clock()) + 300000).toISOString(),
+    new Date(Date.parse(acquisitionActor.now) + 300000).toISOString(),
     paid?.attempt_id ?? null,
   );
   if (!acquired) return { jobId: params.jobId, status: "stopped" as const };
@@ -87,9 +90,14 @@ export async function executeWorkspace(
     );
     const pipeline = await options.pipeline(acquired.job, lease, context);
     const fresh = async () => {
+      if (!(await options.authorize(params.ownerId))) throw new ModelError("MODEL_UNAVAILABLE");
+      const renewalActor = actor();
       if (
-        !(await options.authorize(params.ownerId)) ||
-        !(await jobs.renew(actor(), lease, new Date(Date.parse(clock()) + 300000).toISOString()))
+        !(await jobs.renew(
+          renewalActor,
+          lease,
+          new Date(Date.parse(renewalActor.now) + 300000).toISOString(),
+        ))
       )
         throw new ModelError("MODEL_UNAVAILABLE");
     };

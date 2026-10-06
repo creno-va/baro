@@ -54,6 +54,18 @@ predicate를 correlated job `EXISTS` 안에 중첩한 조합이 workerd D1의 �
 preview에 배포됐는지 검증하는 것이다. 기존 실패 job을 지우거나 예산 predicate를 제거하여
 오류를 감추지 않는다.
 
+### 0.1. 작업 잠금의 시작·만료 시각 경합
+
+[workspace 실행](../../src/server/modules/workspace/execution.ts)은 잠금 획득과 갱신에서
+시작 시각과 만료 시각 계산용 clock을 따로 읽었다. 두 호출 사이에 1ms가 지나면 잠금 길이가
+300001ms가 되어 repository의 최대 300000ms 검증에 거부된다. 이 경우 획득은 `stopped`,
+갱신은 `MODEL_UNAVAILABLE`로 끝날 수 있다.
+
+각 잠금 작업에서 한 번 읽은 시각을 시작과 만료 계산에 함께 사용하도록 수정했다.
+[실행 회귀](../../tests/ai-runtime-execution.test.ts)는 clock을 읽을 때마다 1ms 증가시켜
+수정 전 실패를 결정적으로 재현하고, 수정 후 획득과 갱신을 모두 통과함을 확인한다.
+시간 허용 범위를 넓히거나 테스트를 재시도하여 실패를 감추지 않는다.
+
 ### 1. 기존 사건 분석 Workflow의 비용 ledger 누락
 
 관련 소스:
@@ -188,7 +200,7 @@ preview 배포 후 `all` 검사를 실행하고 수동 실행도 지원한다. �
 응답에는 SHA·환경·준비 상태·공개 모델 용량에서 유도한 단계별 토큰 예약량만 포함한다.
 비밀키·설정 원문·evidence hash·자금 정보·고객 데이터는 반환하지 않으며 DB나 모델을
 호출하지 않는다. 사전검사는 이 응답의 SHA/환경을 대조하고 D1 가격으로 실제 필요한
-최소 단일 호출 예약금을 계산한다. 단순히 남은 자금이 0보다 큰지만으로 통과하지 않는다.
+각 단계 중 가장 큰 단일 호출 예약금을 계산한다. 단순히 남은 자금이 0보다 큰지만으로 통과하지 않는다.
 
 CI는 dependency/lockfile/Workers 설정 및 AI 경로 변경에서도 실제 product admission,
 실행·정산, native workerd 재시도 회귀를 반드시 실행한다. Miniflare는 기존 Wrangler가

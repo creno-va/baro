@@ -3,9 +3,15 @@ import observation from "../docs/operations/AI-RUNTIME-OBSERVATION.json";
 import { modelBounds, observationSchema, provisionAiRuntime } from "../scripts/provision-ai-budget";
 import { createCaseDataCipher } from "../src/server/crypto";
 import { createV2Core } from "../src/server/db/v2-core";
+import { ModelError } from "../src/server/modules/llm-gateway/service";
+import { executeWorkspace } from "../src/server/modules/workspace/execution";
 import type { WorkspaceContext } from "../src/server/modules/workspace/pipeline";
 import { createWorkspaceService } from "../src/server/modules/workspace/service";
-import { createWorkspaceDependencies, runWorkspaceRuntime } from "../src/server/runtime/workspace";
+import {
+  createWorkspaceDependencies,
+  hasCustomerWorkspaceAccess,
+  runWorkspaceRuntime,
+} from "../src/server/runtime/workspace";
 import { createTestDatabase } from "./helpers/d1";
 import { seedTestSession } from "./helpers/session";
 
@@ -239,6 +245,42 @@ test("schema correction is separately paid and its validated result is published
   expect((await f.execute(queued.jobId)).status).toBe("completed");
   expect(f.calls).toHaveLength(3);
   expect(f.calls[2]).toContain("audit");
+});
+
+test("a clock tick between lease arguments cannot stop acquisition or renewal", async () => {
+  const f = await fixture();
+  const queued = await f.advance();
+  const job = await f.service.job(f.owner.userId, f.workspace.id, queued.jobId);
+  if (job.target.kind !== "workspace") throw new Error("Wrong synthetic job target");
+  let ticks = 0,
+    reachedPipeline = 0;
+  const base = Date.now();
+  const rejectDraft = async () => {
+    reachedPipeline++;
+    throw new ModelError("POLICY_REJECTED");
+  };
+  const result = await executeWorkspace(
+    f.core,
+    {
+      ownerId: f.owner.userId,
+      workspaceId: f.workspace.id,
+      workspaceRevision: job.target.workspaceRevision,
+      jobId: queued.jobId,
+    },
+    `${queued.jobId}-1`,
+    {
+      clock: () => new Date(base + ticks++).toISOString(),
+      authorize: (ownerId) => hasCustomerWorkspaceAccess(f.core, ownerId),
+      pipeline: async () => ({ questions: rejectDraft, summary: rejectDraft, chat: rejectDraft }),
+    },
+  );
+  // A deliberate draft rejection proves both acquire and the preceding renewal
+  // accepted their exact five-minute leases; no timing retry masks a stopped job.
+  expect(result.status).toBe("failed");
+  expect(reachedPipeline).toBe(1);
+  expect((await f.service.job(f.owner.userId, f.workspace.id, queued.jobId)).failure).toBe(
+    "POLICY_REJECTED",
+  );
 });
 
 test("missing gateway configuration fails admission before consuming quota or creating a job", async () => {
