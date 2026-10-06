@@ -186,7 +186,13 @@ async function main() {
       const child = Bun.spawn(["bunx", "playwright", "test", "--config", config, ...selected], {
         stdout: "inherit",
         stderr: "inherit",
-        env: { ...process.env, PUBLIC_API_MODE: "mock", BARO_WORKSPACE_SHARED_UI: "true" },
+        env: {
+          ...process.env,
+          PUBLIC_API_MODE: "mock",
+          BARO_WORKSPACE_SHARED_UI: "true",
+          BARO_C_TEST_API: "true",
+          BARO_D_SHARED_API: "true",
+        },
       });
       if (await child.exited) process.exit(1);
     }
