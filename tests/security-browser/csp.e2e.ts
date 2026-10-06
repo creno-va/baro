@@ -24,7 +24,7 @@ for (const viewport of [
   { width: 390, height: 844 },
   { width: 1440, height: 900 },
 ]) {
-  test(`built photos, transitions and CEO comparison work under hash CSP at ${viewport.width}px`, async ({
+  test(`built photos, transitions and complete CEO letters work under hash CSP at ${viewport.width}px`, async ({
     page,
   }) => {
     await page.addInitScript(() => {
@@ -99,8 +99,21 @@ for (const viewport of [
     await expect(phone.locator("[data-phone-arrival]")).toContainText("어떤 일이 있었나요?");
     const ceo = page.locator("[data-ceo-greeting]");
     await expect(ceo).toHaveClass(/ceo-motion-ready/);
-    await scrollScene(ceo.locator("[data-ceo-scroll]"), "[data-ceo-visual]", 0);
-    for (const portrait of await ceo.locator("[data-ceo-photo] img").all()) {
+    await expect(ceo.locator("button")).toHaveCount(0);
+    await expect(ceo.locator("[data-ceo-chapter]")).toHaveCount(2);
+    for (const [face, progress] of [
+      ["suit", 0],
+      ["crenova", 1],
+    ] as const) {
+      await scrollScene(ceo.locator("[data-ceo-scroll]"), "[data-ceo-viewport]", progress);
+      await expect(ceo).toHaveAttribute("data-ceo-current", face);
+      for (const accessibleChapter of await ceo.locator("[data-ceo-chapter]").all()) {
+        await expect(accessibleChapter).not.toHaveAttribute("inert");
+        await expect(accessibleChapter).not.toHaveAttribute("aria-hidden");
+        await expect(accessibleChapter.getByRole("heading", { level: 3 })).toHaveCount(1);
+      }
+      const chapter = ceo.locator(`[data-ceo-chapter="${face}"]`);
+      const portrait = chapter.locator("[data-ceo-photo] img");
       await expect
         .poll(() =>
           portrait.evaluate(
@@ -112,15 +125,14 @@ for (const viewport of [
           ),
         )
         .toBe(true);
+      await expect(chapter.locator("[data-ceo-message]")).toBeVisible();
+      await expect(chapter.locator(".ceo-signature")).toContainText("황은찬");
+      if (face === "suit") await expect(chapter.locator("h3")).toBeInViewport({ ratio: 1 });
+      else await expect(chapter.locator(".ceo-signature")).toBeInViewport({ ratio: 1 });
     }
-    await ceo.locator('[data-ceo-show="crenova"]').first().click();
-    await expect(ceo.locator('[data-ceo-message="crenova"]')).toHaveAttribute(
-      "aria-hidden",
-      "false",
-    );
-    await expect(ceo.locator('[data-ceo-message="suit"]')).toHaveAttribute("inert", "");
-    await ceo.locator('[data-ceo-show="suit"]').first().click();
-    await expect(ceo.locator('[data-ceo-photo="suit"]')).toHaveAttribute("aria-hidden", "false");
+    await scrollScene(ceo.locator("[data-ceo-scroll]"), "[data-ceo-viewport]", 0);
+    await expect(ceo).toHaveAttribute("data-ceo-current", "suit");
+    await expect(ceo.locator('[data-ceo-message="suit"] h3')).toBeInViewport({ ratio: 1 });
     const finale = page.locator("[data-finale]");
     await expect(finale).toHaveClass(/finale-motion-ready/);
     await scrollScene(finale, "[data-finale-pin]", 0.74);

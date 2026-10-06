@@ -9,58 +9,47 @@ import "../../styles/landing-ceo.css";
     <p class="ceo-eyebrow">CEO 인사말</p>
     <h2 id="ceo-greeting-title">어려운 순간에도,<br /><span>일상은 계속되니까.</span></h2>
     <p>더 편안한 시작을 만들고 싶은 마음.<br />BARO가 일상 가까이 다가가는 이유입니다.</p>
+    <p class="ceo-scroll-instruction" aria-hidden="true">스크롤로 이어지는 두 이야기 <span>↓</span></p>
   </header>
 
-  <div class="ceo-layout">
-    <div class="ceo-scroll-stage" data-ceo-scroll>
-      <div class="ceo-visual" data-ceo-visual>
-        <div class="ceo-photo-summary" aria-hidden="true">
-          <p data-ceo-summary="suit">기준은 명확하게.<br /><span>과정은 책임 있게.</span></p>
-          <p data-ceo-summary="crenova">조금 더 편안하게.<br /><span>당신의 일상 가까이.</span></p>
+  <div class="ceo-scroll-stage" data-ceo-scroll>
+    <div class="ceo-viewport" data-ceo-viewport>
+      <div class="ceo-reading-plane">
+        <div class="ceo-visual" data-ceo-visual>
+          <article class="ceo-scene" data-ceo-chapter="suit" aria-labelledby="ceo-suit-title">
+            <figure class="ceo-portrait" data-ceo-photo="suit">
+              <img src="/landing/ceo-suit.webp" width="814" height="964" loading="lazy" decoding="async" alt="정장을 입은 CRENOVA CEO 황은찬의 원본 사진" />
+              <figcaption>CRENOVA CEO<br /><strong>황은찬</strong></figcaption>
+            </figure>
+            <div class="ceo-letter" id="ceo-letter-suit" data-ceo-message="suit">
+              <h3 id="ceo-suit-title">기준은 명확하게.<br /><span>과정은 책임 있게.</span></h3>
+              <p>법률 문제의 시작에는 정확한 사실과 차분한 준비가 필요합니다. BARO는 흩어진 이야기와 자료를 정리하고, 확인할 내용을 분명히 살펴볼 수 있도록 돕습니다.</p>
+              <p>AI가 정리한 내용은 사용자가 직접 확인하고, 필요한 판단은 전문가와 함께 검토할 수 있도록. 기술의 역할과 한계를 명확히 안내하는 서비스를 만들겠습니다.</p>
+              <p class="ceo-closing">한 번의 편리함을 넘어,<br />신뢰할 수 있는 시작을 만들어 가겠습니다.</p>
+              <div class="ceo-signature"><span>CRENOVA CEO</span><strong>황은찬 <span>Hwang Eun Chan</span></strong></div>
+            </div>
+          </article>
+          <article class="ceo-scene" data-ceo-chapter="crenova" aria-labelledby="ceo-crenova-title">
+            <figure class="ceo-portrait" data-ceo-photo="crenova">
+              <img src="/landing/ceo-crenova.webp" width="1220" height="1423" loading="lazy" decoding="async" alt="CRENOVA 로고가 있는 검은 티셔츠를 입은 CEO 황은찬의 브랜드 이미지" />
+              <figcaption>CRENOVA CEO<br /><strong>황은찬</strong></figcaption>
+            </figure>
+            <div class="ceo-letter" id="ceo-letter-crenova" data-ceo-message="crenova">
+              <h3 id="ceo-crenova-title">조금 더 편안하게.<br /><span>당신의 일상 가까이.</span></h3>
+              <p>어려운 일을 마주해도 우리의 일상은 계속됩니다. 무엇부터 해야 할지 막막한 순간, 알고 계신 이야기부터 편하게 꺼내실 수 있도록 BARO를 만들고 있습니다.</p>
+              <p>다시 설명하는 수고는 줄이고, 다음에 확인할 일은 더 쉽게 살펴보실 수 있도록. 정리한 내용을 직접 확인하며, 자신의 속도로 다음 걸음을 준비하시길 바랍니다.</p>
+              <p class="ceo-closing">법률 문제의 첫걸음이,<br />일상 속 조금 더 편안한 경험이 되기를 바랍니다.</p>
+              <div class="ceo-signature"><span>CRENOVA CEO</span><strong>황은찬 <span>Hwang Eun Chan</span></strong></div>
+            </div>
+          </article>
         </div>
-        <div class="ceo-portraits" id="ceo-portraits">
-          <figure class="ceo-portrait ceo-portrait-suit" data-ceo-photo="suit"><img src="/landing/ceo-suit.webp" width="814" height="964" loading="lazy" decoding="async" alt="정장을 입은 CRENOVA CEO 황은찬의 원본 사진" /><figcaption>정장 사진 · 원본</figcaption></figure>
-          <figure class="ceo-portrait ceo-portrait-crenova" data-ceo-photo="crenova"><img src="/landing/ceo-crenova.webp" width="1220" height="1423" loading="lazy" decoding="async" alt="CRENOVA 로고가 있는 검은 티셔츠를 입은 CEO 황은찬의 브랜드 이미지" /><figcaption>CRENOVA 티셔츠 · 브랜드 이미지</figcaption></figure>
-        </div>
-        <div class="ceo-comparison-controls" data-ceo-controls hidden>
-          <div class="ceo-comparison-buttons" role="group" aria-label="CEO 사진과 인사말 선택">
-            <button type="button" data-ceo-show="suit" aria-controls="ceo-portraits ceo-letter-suit" aria-pressed="true">정장 · 원칙과 책임</button>
-            <button type="button" data-ceo-show="crenova" aria-controls="ceo-portraits ceo-letter-crenova" aria-pressed="false">티셔츠 · 일상 가까이</button>
-          </div>
-          <p class="ceo-scroll-instruction"><span class="ceo-native-instruction">스크롤하거나 </span>버튼으로 두 인사말을 살펴보세요.</p>
-        </div>
-        <p class="ceo-image-note">티셔츠 사진은 원본 인물 사진을 바탕으로<br />AI로 제작한 브랜드 이미지입니다.</p>
-        <p class="ceo-live" role="status" aria-live="polite" aria-atomic="true" data-ceo-live></p>
       </div>
-    </div>
-
-    <div class="ceo-letter" data-ceo-letter>
-      <div class="ceo-comparison-controls ceo-letter-controls" data-ceo-controls hidden>
-        <div class="ceo-comparison-buttons" role="group" aria-label="읽을 CEO 인사말 선택">
-          <button type="button" data-ceo-show="suit" aria-controls="ceo-portraits ceo-letter-suit" aria-pressed="true">원칙과 책임</button>
-          <button type="button" data-ceo-show="crenova" aria-controls="ceo-portraits ceo-letter-crenova" aria-pressed="false">일상 가까이</button>
-        </div>
-      </div>
-      <div class="ceo-letter-panels">
-        <article class="ceo-letter-panel" id="ceo-letter-suit" data-ceo-message="suit" aria-labelledby="ceo-suit-title">
-          <p class="ceo-letter-kicker">원칙과 책임</p>
-          <h3 id="ceo-suit-title">기준은 명확하게.<br /><span>과정은 책임 있게.</span></h3>
-          <p>법률 문제의 시작에는 정확한 사실과 차분한 준비가 필요합니다. BARO는 흩어진 이야기와 자료를 정리하고, 확인할 내용을 분명히 살펴볼 수 있도록 돕습니다.</p>
-          <p>AI가 정리한 내용은 사용자가 직접 확인하고, 필요한 판단은 전문가와 함께 검토할 수 있도록. 기술의 역할과 한계를 명확히 안내하는 서비스를 만들겠습니다.</p>
-          <p class="ceo-closing">한 번의 편리함을 넘어,<br />신뢰할 수 있는 시작을 만들어 가겠습니다.</p>
-        </article>
-        <article class="ceo-letter-panel" id="ceo-letter-crenova" data-ceo-message="crenova" aria-labelledby="ceo-crenova-title">
-          <p class="ceo-letter-kicker">일상 가까이, BARO</p>
-          <h3 id="ceo-crenova-title">조금 더 편안하게.<br /><span>당신의 일상 가까이.</span></h3>
-          <p>어려운 일을 마주해도 우리의 일상은 계속됩니다. 무엇부터 해야 할지 막막한 순간, 알고 계신 이야기부터 편하게 꺼내실 수 있도록 BARO를 만들고 있습니다.</p>
-          <p>다시 설명하는 수고는 줄이고, 다음에 확인할 일은 더 쉽게 살펴보실 수 있도록. 정리한 내용을 직접 확인하며, 자신의 속도로 다음 걸음을 준비하시길 바랍니다.</p>
-          <p class="ceo-closing">법률 문제의 첫걸음이,<br />일상 속 조금 더 편안한 경험이 되기를 바랍니다.</p>
-        </article>
-      </div>
-      <div class="ceo-signature"><span>CRENOVA CEO</span><strong>황은찬 <span>· Hwang Eun Chan</span></strong></div>
-      <a class="ceo-start" href="/app">BARO에서 시작하기 <ArrowRight size={17} aria-hidden="true" /></a>
     </div>
   </div>
+  <footer class="ceo-footer">
+    <a class="ceo-start" href="/app">BARO에서 시작하기 <ArrowRight size={17} aria-hidden="true" /></a>
+    <p class="ceo-image-note">티셔츠 사진은 원본 인물 사진을 바탕으로 AI로 제작한 브랜드 이미지입니다.</p>
+  </footer>
 </section>
 
 <script>

@@ -1338,10 +1338,11 @@ test("reduced-motion mobile clarity keeps its photo and working before/after con
 });
 
 for (const viewport of [
+  { width: 320, height: 568 },
   { width: 390, height: 844 },
   { width: 1440, height: 900 },
 ]) {
-  test(`CEO portraits and greetings follow scrolling and accessible selection at ${viewport.width}px`, async ({
+  test(`CEO photographs and complete letters turn together after reading at ${viewport.width}px`, async ({
     page,
   }) => {
     await page.setViewportSize(viewport);
@@ -1349,39 +1350,177 @@ for (const viewport of [
     await page.goto("/");
     await page.evaluate(() => document.fonts.ready);
     const ceo = page.locator("[data-ceo-greeting]");
-    await expect(ceo).toHaveClass(/ceo-motion-ready/);
     const stage = ceo.locator("[data-ceo-scroll]");
-    await scrollScene(stage, "[data-ceo-visual]", 0.05);
+    await expect(ceo).toHaveClass(/ceo-motion-ready/);
+    await expect(ceo.locator("[data-ceo-chapter]")).toHaveCount(2);
+    await expect(ceo.locator("button")).toHaveCount(0);
+    await expect(ceo.locator(".ceo-signature")).toHaveCount(2);
+    const expectBothLettersAccessible = async () => {
+      for (const chapter of await ceo.locator("[data-ceo-chapter]").all()) {
+        await expect(chapter).not.toHaveAttribute("inert");
+        await expect(chapter).not.toHaveAttribute("aria-hidden");
+        await expect(chapter.getByRole("heading", { level: 3 })).toHaveCount(1);
+      }
+    };
+    await expectBothLettersAccessible();
+    await scrollScene(stage, "[data-ceo-viewport]", 0);
     await expectLocalImage(ceo.locator('[data-ceo-photo="suit"] img'), "/landing/ceo-suit.webp");
+    await expect(ceo).toHaveAttribute("data-ceo-current", "suit");
+
+    // Advance through the real document, recording whether every paragraph and signature
+    // can actually fit inside the clipped reading window while its face is front-facing.
+    const reading = await ceo.evaluate(async (element) => {
+      const stage = element.querySelector<HTMLElement>("[data-ceo-scroll]");
+      const viewport = element.querySelector<HTMLElement>("[data-ceo-viewport]");
+      if (!stage || !viewport) throw new Error("Missing CEO reading scene");
+      const top = Number.parseFloat(getComputedStyle(viewport).top) || 0;
+      const start = scrollY + stage.getBoundingClientRect().top - top;
+      const distance = Math.max(1, stage.offsetHeight - viewport.offsetHeight);
+      const faces = ["suit", "crenova"] as const;
+      const blocks = faces.map((face) => [
+        ...element.querySelectorAll<HTMLElement>(
+          '[data-ceo-message="' +
+            face +
+            '"] > h3, [data-ceo-message="' +
+            face +
+            '"] > p, [data-ceo-message="' +
+            face +
+            '"] > .ceo-signature',
+        ),
+      ]);
+      const seen = blocks.map((items) => items.map(() => false));
+      let frontCompleteBeforeTurn = false;
+      let firstTurn = true;
+      let synchronizedTurn = false;
+      let backStartsAtHeading = false;
+      let firstBack = true;
+      let bothLettersAlwaysAccessible = true;
+      const samples: number[] = [];
+      for (let travelled = 0; travelled <= distance + 48; travelled += 48) {
+        scrollTo({ top: start + Math.min(distance, travelled), behavior: "instant" });
+        await new Promise<void>((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+        );
+        const turn =
+          Number.parseFloat(getComputedStyle(element).getPropertyValue("--ceo-turn")) || 0;
+        samples.push(turn);
+        for (const chapter of element.querySelectorAll<HTMLElement>("[data-ceo-chapter]")) {
+          if (chapter.inert || chapter.hasAttribute("aria-hidden"))
+            bothLettersAlwaysAccessible = false;
+        }
+        const clip = viewport.getBoundingClientRect();
+        const style = getComputedStyle(viewport);
+        const lower = clip.bottom - Number.parseFloat(style.paddingBottom);
+        const upper = clip.top + Number.parseFloat(style.paddingTop);
+        const inReadingWindow = (block: HTMLElement) => {
+          const bounds = block.getBoundingClientRect();
+          return (
+            bounds.height > 0 &&
+            bounds.width > 0 &&
+            bounds.top >= upper - 1 &&
+            bounds.bottom <= lower + 1 &&
+            bounds.left >= clip.left - 1 &&
+            bounds.right <= clip.right + 1
+          );
+        };
+        for (const [index, items] of blocks.entries()) {
+          if (
+            (index === 0 && Math.abs(turn) > 0.01) ||
+            (index === 1 && Math.abs(turn + 180) > 0.01)
+          )
+            continue;
+          for (const [blockIndex, block] of items.entries()) {
+            const faceSeen = seen[index];
+            if (faceSeen && inReadingWindow(block)) faceSeen[blockIndex] = true;
+          }
+        }
+        if (turn < -0.1 && firstTurn) {
+          frontCompleteBeforeTurn = (seen[0] ?? []).every(Boolean);
+          firstTurn = false;
+        }
+        if (turn < -20 && turn > -160) {
+          const photo = element.querySelector<HTMLElement>('[data-ceo-photo="suit"]');
+          const message = element.querySelector<HTMLElement>('[data-ceo-message="suit"]');
+          if (!photo || !message) throw new Error("Missing paired CEO surfaces");
+          const photoMatrix = new DOMMatrixReadOnly(getComputedStyle(photo).transform);
+          const messageMatrix = new DOMMatrixReadOnly(getComputedStyle(message).transform);
+          synchronizedTurn ||=
+            Math.abs(photoMatrix.m11 - messageMatrix.m11) < 0.001 &&
+            Math.abs(photoMatrix.m13 - messageMatrix.m13) < 0.001 &&
+            Math.abs(photoMatrix.m13) > 0.1;
+        }
+        if (Math.abs(turn + 180) < 0.01 && firstBack) {
+          const heading = blocks[1]?.[0];
+          backStartsAtHeading = Boolean(heading && inReadingWindow(heading));
+          firstBack = false;
+        }
+      }
+      return {
+        missing: blocks.flatMap((items, face) =>
+          items
+            .filter((_, index) => !seen[face]?.[index])
+            .map((block) => block.textContent?.trim()),
+        ),
+        blockCounts: blocks.map((items) => items.length),
+        frontCompleteBeforeTurn,
+        synchronizedTurn,
+        backStartsAtHeading,
+        bothLettersAlwaysAccessible,
+        firstTurn: samples[0],
+        lastTurn: samples.at(-1),
+      };
+    });
+    expect(reading.blockCounts).toEqual([5, 5]);
+    expect(reading.missing).toEqual([]);
+    expect(reading.frontCompleteBeforeTurn).toBe(true);
+    expect(reading.synchronizedTurn).toBe(true);
+    expect(reading.backStartsAtHeading).toBe(true);
+    expect(reading.bothLettersAlwaysAccessible).toBe(true);
+    expect(reading.firstTurn).toBe(0);
+    expect(reading.lastTurn).toBe(-180);
     await expectLocalImage(
       ceo.locator('[data-ceo-photo="crenova"] img'),
       "/landing/ceo-crenova.webp",
     );
-    await expect(ceo.locator('[data-ceo-message="suit"]')).toHaveAttribute("aria-hidden", "false");
-    const chooseCrenova = ceo.locator('[data-ceo-show="crenova"]').first();
-    await chooseCrenova.focus();
-    await page.keyboard.press("Enter");
-    for (const button of await ceo.locator('[data-ceo-show="crenova"]').all())
-      await expect(button).toHaveAttribute("aria-pressed", "true");
-    await expect(ceo.locator('[data-ceo-photo="crenova"]')).toHaveAttribute("aria-hidden", "false");
-    await expect(ceo.locator('[data-ceo-message="crenova"]')).toHaveAttribute(
-      "aria-hidden",
-      "false",
-    );
-    await expect(ceo.locator('[data-ceo-message="suit"]')).toHaveAttribute("inert", "");
-    await ceo.locator('[data-ceo-show="suit"]').first().click();
-    await expect(ceo.locator('[data-ceo-message="suit"]')).not.toHaveAttribute("inert");
-    await scrollScene(stage, "[data-ceo-visual]", 0.9);
-    await expect(ceo.locator('[data-ceo-message="crenova"]')).toHaveAttribute(
-      "aria-hidden",
-      "false",
-    );
-    await scrollScene(stage, "[data-ceo-visual]", 0.05);
-    await expect(ceo.locator('[data-ceo-message="suit"]')).toHaveAttribute("aria-hidden", "false");
+    await expect(ceo).toHaveAttribute("data-ceo-current", "crenova");
+    await expectBothLettersAccessible();
+    await expect(ceo.locator('[data-ceo-message="crenova"] .ceo-signature')).toBeInViewport({
+      ratio: 1,
+    });
+
+    await scrollScene(stage, "[data-ceo-viewport]", 0);
+    await expect(ceo).toHaveAttribute("data-ceo-current", "suit");
+    await expect(ceo.locator('[data-ceo-message="suit"] h3')).toBeInViewport({ ratio: 1 });
+    await expectBothLettersAccessible();
+    await expect
+      .poll(() =>
+        ceo.evaluate((element) =>
+          Math.abs(Number.parseFloat(getComputedStyle(element).getPropertyValue("--ceo-read-y"))),
+        ),
+      )
+      .toBe(0);
     await page.emulateMedia({ reducedMotion: "reduce" });
     await expect(ceo).not.toHaveClass(/ceo-motion-ready/);
-    await ceo.locator('[data-ceo-show="crenova"]').last().click();
-    await expect(ceo.locator('[data-ceo-message="crenova"]')).not.toHaveAttribute("inert");
+    await expectBothLettersAccessible();
+    const chapters = ceo.locator("[data-ceo-chapter]");
+    for (const chapter of await chapters.all()) {
+      await expect(chapter).toBeVisible();
+      await expect(chapter).not.toHaveAttribute("inert");
+      await expect(chapter).not.toHaveAttribute("aria-hidden");
+      for (const block of await chapter
+        .locator("[data-ceo-message] > h3, [data-ceo-message] > p, .ceo-signature")
+        .all()) {
+        await block.scrollIntoViewIfNeeded();
+        await expect(block).toBeInViewport({ ratio: 1 });
+      }
+    }
+    const boxes = await chapters.evaluateAll((elements) =>
+      elements.map((element) => {
+        const bounds = element.getBoundingClientRect();
+        return { top: bounds.top, bottom: bounds.bottom };
+      }),
+    );
+    expect(boxes[1]?.top ?? 0).toBeGreaterThanOrEqual(boxes[0]?.bottom ?? 1);
     await expect(ceo.getByRole("link", { name: "BARO에서 시작하기" })).toHaveAttribute(
       "href",
       "/app",
@@ -1436,12 +1575,19 @@ test("core landing content, login and FAQs work when JavaScript is unavailable",
       await expect(chapter).toBeVisible();
     await expect(page.locator(".phone-story-controls")).toBeHidden();
     await expect(page.locator("[data-journey-toggle]")).toBeHidden();
+    await expect(page.locator("[data-ceo-chapter]")).toHaveCount(2);
+    await expect(page.locator("[data-ceo-message]")).toHaveCount(2);
+    await expect(page.locator("[data-ceo-photo]")).toHaveCount(2);
+    await expect(page.locator("[data-ceo-greeting] button")).toHaveCount(0);
     for (const letter of await page.locator("[data-ceo-message]").all())
       await expect(letter).toBeVisible();
     for (const portrait of await page.locator("[data-ceo-photo]").all())
       await expect(portrait).toBeVisible();
-    for (const controls of await page.locator("[data-ceo-controls]").all())
-      await expect(controls).toBeHidden();
+    for (const signature of await page.locator("[data-ceo-message] .ceo-signature").all()) {
+      await signature.scrollIntoViewIfNeeded();
+      await expect(signature).toBeInViewport({ ratio: 1 });
+      await expect(signature).toContainText("황은찬");
+    }
     await expect(page.locator("[data-demo-fallback]")).toBeVisible();
     await expect(page.locator("[data-demo-interactive]")).toBeHidden();
     await expect(page.locator("[data-blue-tabs]")).toBeHidden();
@@ -1473,6 +1619,15 @@ test("core landing content, login and FAQs work when JavaScript is unavailable",
     await disclosure.locator("summary").click();
     await expect(disclosure).toHaveAttribute("open", "");
     await page.setViewportSize({ width: 390, height: 844 });
+    for (const chapter of await page.locator("[data-ceo-chapter]").all()) {
+      await expect(chapter).not.toHaveAttribute("inert");
+      await expect(chapter).not.toHaveAttribute("aria-hidden");
+      await expect(chapter.getByRole("heading", { level: 3 })).toHaveCount(1);
+      for (const ending of await chapter.locator(".ceo-closing, .ceo-signature").all()) {
+        await ending.scrollIntoViewIfNeeded();
+        await expect(ending).toBeInViewport({ ratio: 1 });
+      }
+    }
     const menu = page.locator("[data-landing-menu]");
     await menu.locator("summary").click();
     await expect(menu).toHaveAttribute("open", "");
