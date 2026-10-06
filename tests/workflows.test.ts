@@ -111,3 +111,50 @@ test("CD builds before migration and production verifies immutable preview evide
     }
   }
 });
+
+test("preview OAuth sync uses only preview Environment secrets before deployment", async () => {
+  const workflow = Bun.YAML.parse(
+    await Bun.file(".github/workflows/deploy-preview.yml").text(),
+  ) as {
+    jobs: {
+      deploy: {
+        environment: string;
+        steps: {
+          name: string;
+          env?: Record<string, string>;
+          with?: Record<string, string>;
+          run?: string;
+        }[];
+      };
+    };
+  };
+  const job = workflow.jobs.deploy;
+  expect(job.environment).toBe("preview");
+  const validation = job.steps.findIndex(
+    (step) => step.name === "Validate preview OAuth credentials",
+  );
+  const migration = job.steps.findIndex(
+    (step) => step.name === "Apply validated preview migrations",
+  );
+  const deploy = job.steps.find((step) => step.name === "Deploy preview");
+  expect(validation).toBeGreaterThan(-1);
+  expect(validation).toBeLessThan(migration);
+  const fields = [
+    "GOOGLE_CLIENT_ID",
+    "GOOGLE_CLIENT_SECRET",
+    "NAVER_CLIENT_ID",
+    "NAVER_CLIENT_SECRET",
+    "KAKAO_CLIENT_ID",
+    "KAKAO_CLIENT_SECRET",
+  ];
+  expect(deploy?.with?.secrets?.trim().split(/\s+/)).toEqual(fields);
+  expect(Object.keys(deploy?.env ?? {}).sort()).toEqual([...fields].sort());
+  for (const field of fields) {
+    const expected = "${{ secrets." + field + " }}";
+    expect(deploy?.env?.[field]).toBe(expected);
+    expect(job.steps[validation]?.env?.[field]).toBe(expected);
+  }
+  expect(deploy?.with?.command).not.toContain("PUBLIC_BETA_ENABLED");
+  expect(deploy?.with?.command).not.toContain("secret");
+  expect(deploy?.with?.environment).toBeUndefined();
+});

@@ -1,5 +1,25 @@
 # BARO v2 검증 증거 기록
 
+## 2026-10-07 원격 auth·503 후속 착수
+
+최신 main b1a6b6b/PR140 MERGED·필수3 CI SUCCESS 및 preview37525972574 SUCCESS를 확인했다.
+production applicationSHA76c31fcc571e82b96d55dab6dcd3f02dc331e323 /
+Worker a13dd2c3-f368-4d9c-9e29-210322fbbf40의 기존 승인 배포37525699611 SUCCESS를 보존한다.
+이는 실제 callback/세션·사건/프로필 사용 성공 증거가 아니다.
+
+별도 worktree71-remote-auth-release / codex/71-remote-auth-release는 공용 auth/router,
+환경 설정·배포 후속을 소유한다. 모듈 내부/schema/migration은 변경하지 않는다.
+사용자가 Preview와 Production 같은 소셜 키 공유를 명시했고, 소셜6필드를 preview 보호
+Environment에만 추가 등록했다. preview 서명 key와 production 설정·공개 flag는 유지한다.
+Worker 반영·실제 원격 callback/세션/역할/동의와 고객 생성/본인 프로필은 배포 후 확인한다.
+
+공개 release check의 실제 실패: 정책3종 미승인/동의 version 불일치,10개 evidence false/null,
+reviewedAt null. PUBLIC_BETA_ENABLED=false의 운영503은 유지하며 정책/사업자·법률·국외 처리/
+보존·drill/경보·same-SHA 실제 외부 증거 없이는 공개 전환 배포하지 않는다.
+[readiness](../operations/ENVIRONMENT-READINESS.md)와
+[정책 담당 필드](./LAWYER-POLICY-HANDOFF.md)를 따른다. #19/#20/#27/#70/#71과 milestone gate는 OPEN이다.
+
+
 - 최신 통합 기록: 2026-10-07 (아래 4세션 통합 재검증). 초기 표와 이전 SHA의 증거는 역사적 기록으로 보존한다.
 - 상태: #53 명세·#54 strict 계약·#55 additive DB·#56 공통 UI 시스템 완료. 후속 서비스 실행·화면·외부 연동·공개는 진행 중이며 전체 완료 증거 없음.
 - 마일스톤: [전체 서비스 개발](https://github.com/creno-va/baro/milestone/5)

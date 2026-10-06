@@ -1,5 +1,32 @@
 # P0.3 환경 readiness 기록
 
+## 2026-10-07 원격 인증 후속 — 공유 소셜 앱 사용 승인
+
+사용자가 이 세션에서 Preview/Production에 같은 Google/Naver/Kakao 소셜 키를 공유한다고
+명시했다. 환경별 별도 client 요구의 이번 승인 예외이며 DB/KV/서명 secret·사건 암호화 키·
+공개 gate는 환경별로 유지한다. 보호 파일 원본/local DB/기존 local SSO 증거를 보존하고
+소셜6필드만 GitHub `preview` Environment에 등록했다. 기존 production6필드는 유지한다.
+`Deploy preview`가 preview Environment의6필드를 검증·Worker에 적용하도록 연결한다.
+GitHub secret 등록은 Worker 적용·공급자 callback 성공 증거가 아니다.
+
+공유 앱 관리자 확인 대상은 아래3개 redirect와 tester/audience 권한이다. 기존 local 및
+production redirect를 보존하고 client ID/secret·token·cookie·인증 URL은 기록하지 않는다.
+
+- Google: `https://preview.baro.site/api/auth/callback/google`, Web client redirect,
+  Audience 게시 상태·테스트 사용자 및 실제 로그인 계정 권한.
+- NAVER: `https://preview.baro.site/api/auth/callback/naver`, 서비스 URL·callback,
+  검수 상태와 tester/admin 권한.
+- Kakao: `https://preview.baro.site/api/auth/callback/kakao`, Web 플랫폼·redirect,
+  앱/테스트 앱 멤버와 요청 동의항목.
+
+현재 main `b1a6b6b3cb0590b21a341b189ecfdbbc857c0e96`에서 `release:check`는 정책3종
+미승인·게시/동의 버전 불일치,10종 release evidence 부재 및 reviewedAt null로 실패한다.
+운영 `BETA_NOT_OPEN`은 이 공개 조건에 따른 guard이며 설정 오류로 제거하지 않는다.
+정책 책임자의 실제 사업자/개인정보 담당·국외 처리/보존 계약·법률 검토·Approved for publication
+문서/버전/시행일이 필요하다. 통합/운영 담당은 같은 SHA의 remote OAuth·Turnstile·AI/법률·
+삭제/복구/rollback·alert ack receipt를 수집해야 한다. legacy boolean을 임의로 true로 만들지 않는다.
+정확한 사람 필드/행동은 [정책 인계](../development/LAWYER-POLICY-HANDOFF.md)를 따른다.
+
 ## 2026-10-07 통합 세션의 현재 readiness
 
 최종 문서까지 포함한 immutable SHA별 CI·preview·독립 smoke·Full validation·browser·production은
