@@ -126,3 +126,37 @@ integer 보존은 SQLite 테스트로 확인한다. migration 뒤 rollback은 ad
 D1 내부 관리 테이블은 애플리케이션82개 집계에서 제외한다. 새 릴리스 smoke는 candidate의
 최신 journal tag를 정확히 확인한다. 이전 Worker rollback은 DB를 이전 tag로 되돌리지 않고,
 남아 있는0006 marker와 이전 Worker의 read/write·삭제 호환성을 별도 drill로 확인한다.
+
+## 후속 유료 실행·공식 cache 확장 (#87)
+
+`0007_runtime_paid_execution`은0000~0006을 변경하지 않는 append-only 확장이다. runtime proof,
+plan, hold, usage, control, drain, maintenance와 claim 저장소9개를 추가해 애플리케이션 선언
+테이블은91개가 된다. 위82개/0006은 이전 foundation baseline이다. 새 candidate의 정확한
+schema marker는0007이며 실제 원격 적용·같은 SHA 배포 결과는 별도 증거가 필요하다.
+
+가격·funding·allocation은 trusted server verifier가 정본 digest와 evidence를 확인한 뒤 immutable
+proof로 저장한다. proof가 없거나 만료되면 paid hold를 만들지 않는다. `prepareHold`의 준비 객체는
+동일 guarded admission transaction 안에서 operation/quota/job/outbox와 비용을 함께 기록한다.
+현재 lease/revision·동의·tombstone과 proof 유효성을 acquire 및 최종 `beforeDispatch`에서 확인한다.
+runtime control을 초기화한 뒤에는 hold를 생략한 기존 v2 admission/acquire를 허용하지 않는다.
+HTTP/Workflow 소비자는 #87 공유 PR main 병합 뒤 연결하며 실제 factory가 없는 paid 실행은 닫는다.
+
+Gateway receipt의 input/output·cache-read/write·실제 tier를 정본 가격 matrix와 대조한다. cache
+누락·불일치·timeout은 ambiguous hold로 남는다. 늦은 불완전 usage도 동일 attempt의 immutable
+evidence로 보존하되 금액을 반환하지 않는다. 계정 삭제나 원래 proof의 만료 후에도 확정된 늦은
+청구는 원래 가격 근거로 정산한다. not_sent 후보는 prepared/reserved와 dispatch token 부재를
+같은 CAS에서 확인해야만 비용을 반환하며, 다른 Worker의 dispatched attempt를 취소하지 못한다.
+
+환경 간 allocation은 freeze→감소/drain→신뢰 가능한 양쪽 acknowledgement→증가/resume 순서다.
+전역100만원은 환경 cap과 shared 의무의 합계이며 두 D1의 batch를 전역 atomic으로 표현하지 않는다.
+이전 월 미정산 hold와 maintenance exposure를 새 월 여유로 지우지 않는다. 필수 유지 비용,
+청구 대조·읽기·삭제는 새 paid admission과 구분한다. 실제 funding·환율·청구·전환 증거는 #57/#71이다.
+
+최초 발견 공식 cache는 공개 identity/type/version/section/extractor만으로 최신 유효 tuple을 찾는다.
+private 검색질의는 저장하지 않는다. 최대2회 indexed query와1MiB body hash 검증으로 bounded하게
+조회하며, 검증 중 새 tuple이 추가되면 이전 결과를 반환하지 않는다. fetched/verified/expiry는
+canonical UTC milliseconds로 저장·비교한다. exact tuple와 immutable 본문·allowlist 검증은 유지한다.
+
+fresh와 populated0006→0007의 모든 기존82개 테이블 행·FK·암호문/AAD·snapshot·읽기/삭제를
+검증한다. DB rollback으로 새 테이블·비용 proof·hold를 DROP하지 않으며 restore 뒤에도 최신
+삭제 journal과 allocation·비용 상태를 재적용한다. 로컬 SQL/AES 성공은 실제 restore drill이 아니다.
