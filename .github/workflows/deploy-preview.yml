@@ -82,6 +82,24 @@ jobs:
           bun run bundle:check
           bun run cf:dry-run
 
+      - name: Validate preview OAuth credentials
+        if: steps.application.outputs.present == 'true'
+        env:
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          NAVER_CLIENT_ID: ${{ secrets.NAVER_CLIENT_ID }}
+          NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
+          KAKAO_CLIENT_ID: ${{ secrets.KAKAO_CLIENT_ID }}
+          KAKAO_CLIENT_SECRET: ${{ secrets.KAKAO_CLIENT_SECRET }}
+        shell: bash
+        run: |
+          for name in GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET NAVER_CLIENT_ID NAVER_CLIENT_SECRET KAKAO_CLIENT_ID KAKAO_CLIENT_SECRET; do
+            if [[ -z "${!name}" ]]; then
+              echo "::error::Missing preview Environment OAuth credential: $name"
+              exit 1
+            fi
+          done
+
       - name: Apply validated preview migrations
         if: steps.application.outputs.present == 'true'
         env:
@@ -99,6 +117,20 @@ jobs:
           accountId: ${{ env.CLOUDFLARE_ACCOUNT_ID }}
           wranglerVersion: "4.147.0"
           command: deploy --var RELEASE_SHA:${{ github.event.workflow_run.head_sha }}
+          secrets: |
+            GOOGLE_CLIENT_ID
+            GOOGLE_CLIENT_SECRET
+            NAVER_CLIENT_ID
+            NAVER_CLIENT_SECRET
+            KAKAO_CLIENT_ID
+            KAKAO_CLIENT_SECRET
+        env:
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          NAVER_CLIENT_ID: ${{ secrets.NAVER_CLIENT_ID }}
+          NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
+          KAKAO_CLIENT_ID: ${{ secrets.KAKAO_CLIENT_ID }}
+          KAKAO_CLIENT_SECRET: ${{ secrets.KAKAO_CLIENT_SECRET }}
 
       - name: Verify deployed preview release
         if: steps.application.outputs.present == 'true'

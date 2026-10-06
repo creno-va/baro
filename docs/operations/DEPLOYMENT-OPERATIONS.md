@@ -12,8 +12,10 @@
 | preview | 통합·실제 OAuth smoke | 전용 D1/Workflow/Gateway/OAuth, 실제 법률 API |
 | production | 현재 foundation; 승인 후 공개 서비스 | 전용 리소스와 secret, 실제 연동은 별도 검증 |
 
-환경 간 DB, OAuth client, 암호화 키, API key를 공유하지 않는다. preview는 고정 hostname을
-사용한다. PR별 build는 가능하지만 OAuth callback을 동적으로 추가하지 않는다.
+환경 간 DB·KV·암호화/세션 서명 key는 분리한다. OAuth client는 2026-10-07 사용자 명시
+승인으로 Preview/Production에서 같은 Google/Naver/Kakao 앱을 공유한다. 두 환경의 callback과
+tester/audience 권한은 각각 확인하며 소셜6필드만 각 GitHub Environment에서 Worker에 적용한다.
+`BETTER_AUTH_SECRET`은 이 sync에 포함하지 않는다. preview는 고정 hostname을 사용한다. PR별 build는 가능하지만 OAuth callback을 동적으로 추가하지 않는다.
 
 고정 preview URL은 `https://preview.baro.site`다. Worker,
 D1, Workflow, SESSION KV는 `preview`와 `production` 이름으로 각각 분리한다.
