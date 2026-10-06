@@ -2,6 +2,7 @@ import type { z } from "zod";
 import { idempotencyKeySchema, opaqueIdSchema } from "../../../contracts";
 import {
   v2ActionUpdateRequestSchema,
+  v2AnswersForBatchSchema,
   v2AnswersRequestSchema,
   v2CreateCaseRequestSchema,
   v2IntakeAdvanceRequestSchema,
@@ -198,6 +199,16 @@ export function createWorkspaceService(core: V2Core, deps: WorkspaceDependencies
         throw new WorkspaceError("NOT_FOUND");
       return job;
     },
+    async latestJob(ownerId: string, id: string) {
+      await find(ownerId, id);
+      const row = await core
+        .statement(
+          "SELECT j.id FROM v2_jobs j JOIN v2_operations o ON o.id=j.operation_id WHERE o.owner_id=? AND j.workspace_id=? AND j.target_kind='workspace' AND j.kind IN ('intake_questions','intake_summary','chat_response') ORDER BY j.target_revision DESC,j.created_at DESC,j.id DESC LIMIT 1",
+          [ownerId, id],
+        )
+        .first<{ id: string }>();
+      return row ? jobs.find(actor(ownerId), row.id) : null;
+    },
     async retry(ownerId: string, id: string, jobId: string, raw: unknown) {
       const request = v2IntakeAdvanceRequestSchema.parse(raw);
       const job = await jobs.find(actor(ownerId), opaqueIdSchema.parse(jobId));
@@ -254,6 +265,19 @@ export function createWorkspaceService(core: V2Core, deps: WorkspaceDependencies
     async list(ownerId: string, limit = 20, before?: { createdAt: string; id: string }) {
       return workspace.list(actor(ownerId), limit, before);
     },
+    async previews(ownerId: string, items: Awaited<ReturnType<typeof workspace.list>>) {
+      const result: { id: string; title: string; hasSummary: boolean }[] = [];
+      for (const item of items) {
+        const metadata = await workspace.metadata(actor(ownerId), item.id);
+        if (metadata)
+          result.push({
+            id: item.id,
+            title: [...metadata.narrative].slice(0, 45).join(""),
+            hasSummary: !!metadata.summary,
+          });
+      }
+      return result;
+    },
     async create(ownerId: string, key: string, raw: unknown) {
       const request = v2CreateCaseRequestSchema.parse(raw);
       const { turnstileToken: _, ...business } = request;
@@ -279,7 +303,12 @@ export function createWorkspaceService(core: V2Core, deps: WorkspaceDependencies
       if (m.replay) return workspace.metadata(actor(ownerId), id);
       const g = await guard(ownerId, id);
       const intake = await workspace.metadata(g, id),
-        batch = intake?.batches.at(-1);
+        batch = intake?.batches.find((candidate) =>
+          request.answers.every((answer) =>
+            candidate.questions.some((question) => question.id === answer.questionId),
+          ),
+        );
+      if (batch) v2AnswersForBatchSchema(batch).parse(request);
       if (!batch || !(await workspace.answer(g, batch.id, request, m.receipt)))
         throw new WorkspaceError("STALE_REVISION");
       return workspace.metadata(actor(ownerId), id);
@@ -427,6 +456,45 @@ export function createWorkspaceService(core: V2Core, deps: WorkspaceDependencies
       )
         throw new WorkspaceError("STALE_REVISION");
       return { ...value, revision: row.revision + 1, status: body.status };
+    },
+    async createTimeline(ownerId: string, id: string, key: string, raw: unknown) {
+      const body = v2TimelineEditRequestSchema.parse(raw);
+      const m = await mutation(ownerId, id, key, "timeline", body, "chat");
+      const digest = await runtimeDigest({ ownerId, id, key, route: "timeline" });
+      const entryId = `${digest.slice(0, 8)}-${digest.slice(8, 12)}-4${digest.slice(13, 16)}-8${digest.slice(17, 20)}-${digest.slice(20, 32)}`;
+      const { v2TimelineEntrySchema } = await import("../../../contracts/v2");
+      if (m.replay) {
+        const row = await core
+          .statement(
+            "SELECT id,revision,encrypted_payload FROM v2_timeline WHERE workspace_id=? AND entity_id=?",
+            [id, entryId],
+          )
+          .first<{ id: string; revision: number; encrypted_payload: string }>();
+        if (!row) throw new WorkspaceError("NOT_FOUND");
+        return core.decrypt(
+          "v2_timeline",
+          row.id,
+          ownerId,
+          row.revision,
+          row.encrypted_payload,
+          v2TimelineEntrySchema,
+        );
+      }
+      const g = await guard(ownerId, id, body.expectedRevision);
+      const entry = v2TimelineEntrySchema.parse({
+        id: entryId,
+        revision: 1,
+        date: body.date,
+        datePrecision: body.datePrecision,
+        event: body.event,
+        certainty: "reported",
+        references: [],
+        factIds: [],
+        userEdited: true,
+      });
+      if (!(await workspace.writeTimeline(g, entry, null, m.receipt)))
+        throw new WorkspaceError("STALE_REVISION");
+      return entry;
     },
     async editTimeline(ownerId: string, id: string, entryId: string, key: string, raw: unknown) {
       const body = v2TimelineEditRequestSchema.parse(raw);

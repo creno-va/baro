@@ -7,6 +7,7 @@ import { Button, ButtonLink } from "../ui/button";
 import { Textarea } from "../ui/form";
 import { StatePanel } from "../ui/state-panel";
 import { BackToCases, ErrorPanel, IntakeProgress } from "./common";
+import { useCustomerAccess } from "./useCustomerAccess";
 
 export function SummaryReview({ caseId }: { caseId: string }) {
   const [item, setItem] = useState<CaseView | null>(null);
@@ -18,25 +19,66 @@ export function SummaryReview({ caseId }: { caseId: string }) {
   const [checked, setChecked] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const pending = useRef(false);
-  const dirty = !!item && summary !== item.summary;
-  const load = useCallback(async () => {
-    setLoading(true);
+  const savedItem = useRef(item);
+  savedItem.current = item;
+  const failedOperation = useRef<"save" | "confirm" | null>(null);
+  const access = useCustomerAccess(() => {
+    setItem(null);
+    setSummary("");
+    setChecked(false);
+    setConfirming(false);
+    setBusy(false);
+    setNotice("");
     setError(null);
-    try {
-      const next = await api.cases.get(caseId);
-      setItem(next);
-      setSummary(next.summary);
-      setChecked(false);
-      setConfirming(false);
-    } catch (cause) {
-      setError(cause);
-    } finally {
-      setLoading(false);
-    }
-  }, [caseId]);
+    pending.current = false;
+    failedOperation.current = null;
+  }, setError);
+  const { ticket, current, alive, verify, ready, version, deny } = access;
+  const dirty = !!item && summary !== item.summary;
+  const load = useCallback(
+    async (replaceDraft = false) => {
+      // A background refresh must not advance the revision of a lost-response
+      // retry. Explicit conflict recovery may replace that original request.
+      if (pending.current || (failedOperation.current && !replaceDraft)) return;
+      let epoch = ticket();
+      setLoading(true);
+      setError(null);
+      try {
+        if (!(await verify())) return;
+        epoch = ticket();
+        const next = await api.cases.get(caseId);
+        if (!(await verify()) || !current(epoch)) return;
+        failedOperation.current = null;
+        const changed = savedItem.current?.revision !== next.revision;
+        setItem(next);
+        setSummary((draft) =>
+          !replaceDraft && savedItem.current && draft !== savedItem.current.summary
+            ? draft
+            : next.summary,
+        );
+        if (changed) {
+          setChecked(false);
+          setConfirming(false);
+        }
+      } catch (cause) {
+        if (alive(epoch)) {
+          if (
+            ["UNAUTHENTICATED", "CONSENT_REQUIRED", "NOT_FOUND"].includes(
+              (cause as { code?: string }).code ?? "",
+            )
+          )
+            deny();
+          setError(cause);
+        }
+      } finally {
+        if (alive(epoch)) setLoading(false);
+      }
+    },
+    [caseId, ticket, current, alive, verify, deny],
+  );
   useEffect(() => {
-    void load();
-  }, [load]);
+    if (version) void load();
+  }, [load, version]);
   useEffect(() => {
     const warn = (event: BeforeUnloadEvent) => {
       if (dirty) event.preventDefault();
@@ -46,52 +88,96 @@ export function SummaryReview({ caseId }: { caseId: string }) {
   }, [dirty]);
   async function save() {
     if (!item || pending.current || !summary.trim()) return;
+    const epoch = ticket();
     pending.current = true;
     setBusy(true);
     setError(null);
     setNotice("");
     try {
+      if (!(await verify()) || !current(epoch)) return;
+      failedOperation.current = "save";
       const next = await api.cases.saveSummary(caseId, {
         expectedRevision: item.revision,
         summary: summary.trim(),
       });
+      if (!(await verify()) || !current(epoch)) return;
+      failedOperation.current = null;
       setItem(next);
       setSummary(next.summary);
       setChecked(false);
       setNotice("수정한 요약이 저장됐어요.");
     } catch (cause) {
-      setError(cause);
+      if (alive(epoch)) {
+        if (
+          ["UNAUTHENTICATED", "CONSENT_REQUIRED", "NOT_FOUND"].includes(
+            (cause as { code?: string }).code ?? "",
+          )
+        )
+          deny();
+        setError(cause);
+      }
     } finally {
-      setBusy(false);
-      pending.current = false;
+      if (alive(epoch)) {
+        setBusy(false);
+        pending.current = false;
+      }
     }
   }
   async function confirm() {
     if (!item || !checked || dirty || pending.current) return;
+    const epoch = ticket();
     pending.current = true;
     setBusy(true);
     setError(null);
     try {
+      if (!(await verify()) || !current(epoch)) return;
+      failedOperation.current = "confirm";
       const next = await api.cases.confirmSummary(caseId, { expectedRevision: item.revision });
+      if (!(await verify()) || !current(epoch)) return;
+      failedOperation.current = null;
       setItem(next);
       window.location.assign(`/cases/${encodeURIComponent(caseId)}`);
     } catch (cause) {
-      setError(cause);
-      setConfirming(false);
+      if (alive(epoch)) {
+        if (
+          ["UNAUTHENTICATED", "CONSENT_REQUIRED", "NOT_FOUND"].includes(
+            (cause as { code?: string }).code ?? "",
+          )
+        )
+          deny();
+        setError(cause);
+      }
+      if (alive(epoch)) setConfirming(false);
     } finally {
-      setBusy(false);
-      pending.current = false;
+      if (alive(epoch)) {
+        setBusy(false);
+        pending.current = false;
+      }
     }
   }
   return (
     <div className="intake-flow">
       <BackToCases />
       <IntakeProgress step={2} />
-      {loading && !item ? (
+      {loading && !item && !error ? (
         <StatePanel variant="loading" title="저장한 요약을 불러오고 있어요." />
       ) : null}
-      {error ? <ErrorPanel error={error} retry={() => void load()} disabled={busy} /> : null}
-      {item ? (
+      {error ? (
+        <ErrorPanel
+          error={error}
+          retry={() =>
+            void ((error as { code?: string }).code === "CONFLICT"
+              ? load(true)
+              : failedOperation.current === "save"
+                ? save()
+                : failedOperation.current === "confirm"
+                  ? confirm()
+                  : load())
+          }
+          disabled={busy}
+        />
+      ) : null}
+      {item && ready ? (
         <section className="intake-card" aria-busy={busy}>
           <div className="intake-assistant-heading">
             <BrandMark size={32} />

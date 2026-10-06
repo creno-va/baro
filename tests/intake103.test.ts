@@ -226,6 +226,12 @@ describe("PR100 real wire mapping", () => {
     writes.length = 0;
     globalThis.fetch = (async (input, init) => {
       const url = String(input);
+      if (String(input).endsWith("/workspace-jobs/latest")) return Response.json(null);
+      if (String(input) === "/api/me/session")
+        return Response.json({
+          user: { id: "synthetic-summary-owner", accountType: "customer" },
+          needsConsent: false,
+        });
       if (init?.method && init.method !== "GET")
         writes.push({
           url,

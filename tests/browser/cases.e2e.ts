@@ -106,6 +106,9 @@ test("intake validates code points, blocks duplicates, preserves replay key and 
           },
     }),
   );
+  await page.route("**/api/v2/cases/*/workspace-jobs/latest", (route) =>
+    route.fulfill({ json: null }),
+  );
   await page.goto("/cases/new");
   const input = page.getByRole("textbox");
   const submit = page.getByRole("button", { name: "저장하고 질문 시작" });
@@ -132,6 +135,14 @@ test("list empty/error/loading, auth and consent gates, refresh/back use server 
   let fail = true;
   let present = false;
   let gate: "CONSENT_REQUIRED" | "UNAUTHENTICATED" | null = null;
+  await page.route("**/api/me/session", (route) =>
+    route.fulfill({
+      json: {
+        user: { id: "synthetic-owner", name: "합성 고객", accountType: "customer" },
+        needsConsent: false,
+      },
+    }),
+  );
   await page.route("**/api/cases?*", async (route) => {
     if (gate) {
       await route.fulfill({
@@ -172,7 +183,7 @@ test("list empty/error/loading, auth and consent gates, refresh/back use server 
   await expect(page.getByRole("heading", { name: "아직 정리한 사건이 없어요" })).toBeVisible();
   present = true;
   await page.reload();
-  await expect(page.getByRole("link", { name: /금전 대여 사건/ })).toBeVisible();
+  await expect(page.getByRole("main").getByRole("link", { name: /금전 대여 사건/ })).toBeVisible();
   gate = "UNAUTHENTICATED";
   await page.reload();
   await expect(page.getByRole("link", { name: "로그인하기", exact: true })).toBeVisible();
@@ -182,7 +193,7 @@ test("list empty/error/loading, auth and consent gates, refresh/back use server 
   gate = null;
   await page.goto("/login");
   await page.goBack();
-  await expect(page.getByRole("link", { name: /금전 대여 사건/ })).toBeVisible();
+  await expect(page.getByRole("main").getByRole("link", { name: /금전 대여 사건/ })).toBeVisible();
 });
 test("real signed session submits admission into SQL and reloads owner-scoped list at 320px/200%", async ({
   page,

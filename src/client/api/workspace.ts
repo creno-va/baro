@@ -28,7 +28,7 @@ export async function workspaceResponse(response: Response) {
         ? "UNAUTHENTICATED"
         : wireCode === "CONSENT_REQUIRED"
           ? "CONSENT_REQUIRED"
-          : response.status === 404
+          : response.status === 404 || wireCode === "ROLE_REQUIRED"
             ? "NOT_FOUND"
             : response.status === 409
               ? "CONFLICT"
@@ -61,9 +61,10 @@ export async function workspaceJson(
 ): Promise<unknown> {
   const response = await workspaceResponse(await request(path, init));
   const key = new Headers(init?.headers).get("idempotency-key");
+  const value = await response.json();
   if (key)
     for (const [signature, value] of signatures) if (value === key) signatures.delete(signature);
-  return response.json();
+  return value;
 }
 const signatures = new Map<string, string>();
 export function workspaceMutation(path: string, body: unknown, method = "POST"): RequestInit {
@@ -120,6 +121,7 @@ function parseView(value: unknown): WorkspaceView {
   const { schemaVersion, ...caseFields } = parsed.data.case;
   return { ...parsed.data, case: { ...caseFields, ...(schemaVersion ? { schemaVersion } : {}) } };
 }
+export type CustomerWorkspaceView = WorkspaceView;
 export function createWorkspaceApi(
   request: WorkspaceTransport,
   jobStorage?: Pick<Storage, "getItem" | "setItem" | "removeItem"> | null,
@@ -137,6 +139,21 @@ export function createWorkspaceApi(
   const actionRevisions = new Map<string, number>();
   const timelineRevisions = new Map<string, number>();
   const messageJobs = new Map<string, { jobId: string; revision: number }>();
+  const schemaVersions = new Map<string, "1" | "2">();
+  const workspaceRevisions = new Map<string, number>();
+  const snapshots = new Map<
+    string,
+    {
+      revision: number;
+      intake: unknown;
+      messagesRaw: Awaited<ReturnType<typeof allMessages>>;
+      actionsRaw: unknown[];
+      timelineRaw: unknown[];
+      summary: z.infer<typeof v2SummarySchema> | null;
+    }
+  >();
+  const pendingMessages = new Map<string, RequestInit>();
+  const pendingTimelines = new Map<string, RequestInit>();
   const knownJobs = new Map<string, string>();
   function rememberJob(id: string, jobId: string | null) {
     if (jobId) knownJobs.set(id, jobId);
@@ -173,13 +190,18 @@ export function createWorkspaceApi(
       text: v2UserMessageSchema.shape.text,
     }),
   ]);
-  async function get(id: string): Promise<WorkspaceView> {
+  async function get(id: string): Promise<CustomerWorkspaceView> {
     const response = await request(`${base(id)}/workspace`);
     if (response.status === 404) {
+      if (schemaVersions.get(id) === "2") await workspaceResponse(response);
+      const legacyResponse = await request(`/api/cases/${encodeURIComponent(id)}`);
+      if (legacyResponse.status >= 500 && schemaVersions.get(id) !== "1")
+        throw workspaceError("NOT_FOUND", "사건을 찾을 수 없어요.");
       const legacy = caseDetailResponseSchema.safeParse(
-        await workspaceJson(request, `/api/cases/${encodeURIComponent(id)}`),
+        await (await workspaceResponse(legacyResponse)).json(),
       );
       if (!legacy.success) throw workspaceError("NOT_FOUND", "사건을 찾을 수 없어요.");
+      schemaVersions.set(id, "1");
       return {
         case: {
           id,
@@ -200,6 +222,8 @@ export function createWorkspaceApi(
     const value: unknown = await (await workspaceResponse(response)).json();
     if (workspaceViewSchema.safeParse(value).success) {
       const view = parseView(value);
+      schemaVersions.set(id, view.case.schemaVersion ?? "2");
+      workspaceRevisions.set(id, view.case.revision);
       for (const action of view.actions)
         actionRevisions.set(`${id}:${action.id}`, view.case.revision);
       for (const entry of view.timeline)
@@ -207,19 +231,42 @@ export function createWorkspaceApi(
       return view;
     }
     const w = v2WorkspaceSchema.parse(value);
+    schemaVersions.set(id, "2");
+    workspaceRevisions.set(id, w.workspaceRevision);
+    const cached = snapshots.get(id);
     const [intake, messagesRaw, actionsRaw, timelineRaw, fileViews] = await Promise.all([
-      workspaceJson(request, `${base(id)}/intake`),
-      allMessages(id),
-      allEntities(id, "actions"),
-      allEntities(id, "timeline"),
+      cached?.revision === w.workspaceRevision
+        ? Promise.resolve(cached.intake)
+        : workspaceJson(request, `${base(id)}/intake`),
+      cached?.revision === w.workspaceRevision
+        ? Promise.resolve(cached.messagesRaw)
+        : allMessages(id),
+      cached?.revision === w.workspaceRevision
+        ? Promise.resolve(cached.actionsRaw)
+        : allEntities(id, "actions"),
+      cached?.revision === w.workspaceRevision
+        ? Promise.resolve(cached.timelineRaw)
+        : allEntities(id, "timeline"),
       files.list(id),
     ]);
     const metadata = z
       .object({ narrative: z.string(), summary: z.object({ revision: z.number() }).nullable() })
       .parse(intake);
-    let summary = "";
-    if (metadata.summary)
-      summary = v2SummarySchema.parse(await workspaceJson(request, `${base(id)}/summary`)).overview;
+    const summary =
+      cached?.revision === w.workspaceRevision
+        ? cached.summary
+        : metadata.summary
+          ? v2SummarySchema.parse(await workspaceJson(request, `${base(id)}/summary`))
+          : null;
+    snapshots.set(id, {
+      revision: w.workspaceRevision,
+      intake,
+      messagesRaw,
+      actionsRaw,
+      timelineRaw,
+      summary,
+    });
+    if (snapshots.size > 20) snapshots.delete(snapshots.keys().next().value ?? "");
     const messages: MessageView[] = messagesRaw.map((m) => ({
       id: m.id,
       role: m.role,
@@ -227,7 +274,17 @@ export function createWorkspaceApi(
       status: "complete",
       createdAt: m.createdAt,
     }));
-    const jobId = w.currentJobId ?? rememberedJob(id);
+    let jobId = w.currentJobId ?? rememberedJob(id);
+    if (!jobId) {
+      const latest = await request(`${base(id)}/workspace-jobs/latest`);
+      if (latest.status !== 404) {
+        const recovered = v2JobSchema
+          .nullable()
+          .parse(await (await workspaceResponse(latest)).json());
+        if (recovered && ["queued", "running", "validating", "failed"].includes(recovered.status))
+          jobId = recovered.id;
+      }
+    }
     if (jobId) {
       const response = await request(`${base(id)}/workspace-jobs/${encodeURIComponent(jobId)}`);
       const job =
@@ -286,10 +343,20 @@ export function createWorkspaceApi(
       stage: w.status,
       revision: w.workspaceRevision,
       updatedAt: w.updatedAt,
-      summary,
+      summary: summary?.overview ?? "",
       schemaVersion: "2",
     };
-    return { case: caseView, messages, actions, timeline, files: fileViews };
+    return {
+      case: caseView,
+      messages,
+      actions,
+      timeline,
+      files: fileViews,
+      facts: summary?.facts ?? [],
+      people: summary?.parties ?? [],
+      unknowns: summary?.unknowns ?? [],
+      notices: summary?.notices ?? [],
+    };
   }
   async function allMessages(id: string) {
     const items: z.infer<typeof messageTextSchema>[] = [];
@@ -342,10 +409,15 @@ export function createWorkspaceApi(
       input: { expectedRevision: number; text: string; selectedFileIds: string[] },
     ) {
       const path = `${base(id)}/messages`;
-      const value = await workspaceJson(request, path, workspaceMutation(path, input));
+      const signature = JSON.stringify({ id, input });
+      const init = pendingMessages.get(signature) ?? workspaceMutation(path, input);
+      pendingMessages.set(signature, init);
+      const value = await workspaceJson(request, path, init);
       const accepted = v2AcceptedOperationSchema.safeParse(value);
       if (accepted.success) rememberJob(id, accepted.data.jobId);
-      return get(id);
+      const next = await get(id);
+      pendingMessages.delete(signature);
+      return next;
     },
     async retryMessage(id: string, messageId: string) {
       // mock has the same request route; real recovers current failed job after reload.
@@ -380,20 +452,25 @@ export function createWorkspaceApi(
     },
     async saveTimeline(id: string, entry: Omit<TimelineView, "id"> & { id?: string }) {
       if (entry.id && !timelineRevisions.has(`${id}:${entry.id}`)) await get(id);
-      // Existing PR100 edits are reused. New-entry route is explicit and never falls back to mock.
-      return mutation(
-        id,
-        `timeline${entry.id ? `/${encodeURIComponent(entry.id)}` : ""}`,
-        {
+      const route = `${base(id)}/timeline${entry.id ? `/${encodeURIComponent(entry.id)}` : ""}`;
+      const signature = JSON.stringify({ id, entry });
+      let init = pendingTimelines.get(signature);
+      if (!init) {
+        const body = {
           expectedRevision: entry.id
             ? (timelineRevisions.get(`${id}:${entry.id}`) ?? 1)
-            : (await get(id)).case.revision,
+            : (workspaceRevisions.get(id) ?? (await get(id)).case.revision),
           date: entry.date || null,
           datePrecision: entry.date ? "day" : "unknown",
           event: entry.detail ? `${entry.title}\n${entry.detail}` : entry.title,
-        },
-        entry.id ? "PUT" : "POST",
-      );
+        };
+        init = workspaceMutation(route, body, entry.id ? "PUT" : "POST");
+        pendingTimelines.set(signature, init);
+      }
+      await workspaceJson(request, route, init);
+      const next = await get(id);
+      pendingTimelines.delete(signature);
+      return next;
     },
   };
 }

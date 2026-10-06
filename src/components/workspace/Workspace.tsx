@@ -17,7 +17,9 @@ import {
 import { type SyntheticEvent, useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../../client/api";
 import type { FileView, TimelineView, WorkspaceView } from "../../client/api/types";
+import type { CustomerWorkspaceView } from "../../client/api/workspace";
 import { CaseDetail } from "../analysis/CaseDetail";
+import { useCustomerAccess } from "../intake/useCustomerAccess";
 import { BrandMark } from "../ui/brand";
 import { Button, ButtonLink } from "../ui/button";
 
@@ -69,7 +71,7 @@ function download(blob: Blob, name: string) {
 }
 
 export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: WorkspaceTab }) {
-  const [view, setView] = useState<WorkspaceView | null>(null);
+  const [view, setView] = useState<CustomerWorkspaceView | null>(null);
   const [error, setError] = useState<ReturnType<typeof problem> | null>(null);
   const [busy, setBusy] = useState("");
   const [draft, setDraft] = useState("");
@@ -81,26 +83,49 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
   const [original, setOriginal] = useState<{ url: string; type: string } | null>(null);
   const [uploadConsent, setUploadConsent] = useState(false);
   const [retryUploads, setRetryUploads] = useState<File[]>([]);
+  const sendAttempt = useRef<{
+    expectedRevision: number;
+    text: string;
+    selectedFileIds: string[];
+  } | null>(null);
   const lock = useRef(false);
   const mounted = useRef(true);
   const uploadInput = useRef<HTMLInputElement>(null);
   const dialog = useRef<HTMLDialogElement>(null);
+  const followingChat = useRef(true);
   const chatEnd = useRef<HTMLDivElement>(null);
   const draftInput = useRef<HTMLTextAreaElement>(null);
   const latest = useRef(0);
-  const showError = useCallback((cause: unknown) => {
-    const next = problem(cause);
-    setError(next);
-    if (["UNAUTHENTICATED", "NOT_FOUND", "CONSENT_REQUIRED"].includes(next.code)) {
-      setView(null);
-      setSelected([]);
-      setPreview(null);
-      setDeleteFile(null);
-      setEntry(null);
-      setOriginal(null);
-    }
-    return next;
+  const purge = useCallback(() => {
+    ++latest.current;
+    sendAttempt.current = null;
+    setView(null);
+    setDraft("");
+    setSelected([]);
+    setPreview(null);
+    setDeleteFile(null);
+    setEntry(null);
+    setOriginal(null);
+    setUploadConsent(false);
+    setRetryUploads([]);
+    setNotice("");
+    setBusy("");
+    setError(null);
+    lock.current = false;
+    if (uploadInput.current) uploadInput.current.value = "";
+    dialog.current?.close();
   }, []);
+  const access = useCustomerAccess(purge, (cause) => setError(problem(cause)));
+  const { ready, version, verify, ticket, current, alive, deny } = access;
+  const showError = useCallback(
+    (cause: unknown) => {
+      const next = problem(cause);
+      if (["UNAUTHENTICATED", "NOT_FOUND", "CONSENT_REQUIRED"].includes(next.code)) deny();
+      setError(next);
+      return next;
+    },
+    [deny],
+  );
 
   const apply = useCallback((next: WorkspaceView) => {
     setView(next);
@@ -110,30 +135,29 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
     setPreview((file) => (file ? (next.files.find((item) => item.id === file.id) ?? null) : null));
   }, []);
   const load = useCallback(async () => {
-    const ticket = ++latest.current;
-    const next = await api.workspace.get(caseId);
-    if (mounted.current && ticket === latest.current) apply(next);
-  }, [caseId, apply]);
+    const serial = ++latest.current;
+    let epoch = ticket();
+    try {
+      if (!(await verify())) return;
+      epoch = ticket();
+      const next = await api.workspace.get(caseId);
+      if (!(await verify())) return;
+      if (current(epoch) && serial === latest.current) {
+        apply(next);
+        setError(null);
+      }
+    } catch (cause) {
+      if (alive(epoch) && serial === latest.current) showError(cause);
+    }
+  }, [caseId, apply, verify, ticket, current, alive, showError]);
   useEffect(() => {
     mounted.current = true;
-    void load().catch((cause) => {
-      if (mounted.current) showError(cause);
-    });
-    const refresh = () => {
-      if (!document.hidden && !lock.current)
-        void load().catch((cause) => {
-          if (mounted.current) showError(cause);
-        });
-    };
-    window.addEventListener("focus", refresh);
-    document.addEventListener("visibilitychange", refresh);
+    if (version && !lock.current) void load();
     return () => {
       mounted.current = false;
-      latest.current++;
-      window.removeEventListener("focus", refresh);
-      document.removeEventListener("visibilitychange", refresh);
+      ++latest.current;
     };
-  }, [load, showError]);
+  }, [load, version]);
   useEffect(() => {
     if (!view || view.case.schemaVersion === "1") return;
     const pending =
@@ -151,6 +175,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
     : "";
   useEffect(() => {
     if (tab !== "chat" || !latestMessageContent) return;
+    if (!followingChat.current) return;
     chatEnd.current?.scrollIntoView({
       block: "end",
       behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
@@ -158,6 +183,14 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
         : "smooth",
     });
   }, [latestMessageContent, tab]);
+  useEffect(() => {
+    const observe = () => {
+      const end = chatEnd.current;
+      if (end) followingChat.current = end.getBoundingClientRect().top <= window.innerHeight + 200;
+    };
+    window.addEventListener("scroll", observe, { passive: true });
+    return () => window.removeEventListener("scroll", observe);
+  }, []);
   useEffect(() => {
     const input = draftInput.current;
     if (!input) return;
@@ -170,35 +203,75 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
     if (!open && dialog.current?.open) dialog.current?.close();
   }, [preview, deleteFile, entry]);
 
-  async function run(key: string, action: () => Promise<void>) {
+  useEffect(() => {
+    const modal = dialog.current;
+    if (!modal || !(preview || deleteFile || entry)) return;
+    const fit = () => {
+      const viewport = window.visualViewport;
+      const zoom = Number.parseFloat(getComputedStyle(document.documentElement).zoom) || 1;
+      modal.style.setProperty(
+        "--workspace-viewport-height",
+        `${(viewport?.height ?? window.innerHeight) / zoom}px`,
+      );
+      modal.style.setProperty(
+        "--workspace-viewport-width",
+        `${(viewport?.width ?? window.innerWidth) / zoom}px`,
+      );
+    };
+    fit();
+    window.addEventListener("resize", fit);
+    window.visualViewport?.addEventListener("resize", fit);
+    return () => {
+      window.removeEventListener("resize", fit);
+      window.visualViewport?.removeEventListener("resize", fit);
+    };
+  }, [preview, deleteFile, entry]);
+
+  async function run(key: string, action: (epoch: number) => Promise<void>) {
     if (lock.current) return;
+    const epoch = ticket();
     lock.current = true;
     latest.current++;
     setBusy(key);
     setError(null);
     setNotice("");
     try {
-      await action();
+      if (!(await verify()) || !current(epoch)) return;
+      await action(epoch);
     } catch (cause) {
+      if (!alive(epoch)) return;
       const nextError = showError(cause);
-      if (nextError.code === "CONFLICT") await load().catch(() => {});
+      if (nextError.code === "CONFLICT") {
+        sendAttempt.current = null;
+        await load();
+      }
     } finally {
-      lock.current = false;
-      setBusy("");
+      if (alive(epoch)) {
+        lock.current = false;
+        setBusy("");
+      }
     }
   }
   async function send(event: SyntheticEvent) {
     event.preventDefault();
     if (!view || !draft.trim()) return;
     const text = draft.trim();
-    await run("send", async () => {
-      apply(
-        await api.workspace.sendMessage(caseId, {
+    followingChat.current = true;
+    await run("send", async (epoch) => {
+      if (
+        !sendAttempt.current ||
+        sendAttempt.current.text !== text ||
+        JSON.stringify(sendAttempt.current.selectedFileIds) !== JSON.stringify(selected)
+      )
+        sendAttempt.current = {
           expectedRevision: view.case.revision,
           text,
           selectedFileIds: selected,
-        }),
-      );
+        };
+      const next = await api.workspace.sendMessage(caseId, sendAttempt.current);
+      if (!(await verify()) || !current(epoch)) return;
+      apply(next);
+      sendAttempt.current = null;
       setDraft("");
       setSelected([]);
       setNotice("메시지를 저장했어요.");
@@ -207,17 +280,21 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
   async function upload(files: FileList | File[] | null) {
     if (!files?.length) return;
     const chosen = Array.from(files);
-    await run("upload", async () => {
+    await run("upload", async (epoch) => {
       let completed = 0;
       try {
         for (const file of chosen) {
+          if (!current(epoch)) return;
           await api.files.upload(caseId, file);
+          if (!current(epoch)) return;
           completed++;
           await load();
         }
+        if (!current(epoch)) return;
         setRetryUploads([]);
         setNotice("자료를 저장했어요. 처리 상태와 확인 가능한 범위를 확인해 주세요.");
       } catch (cause) {
+        if (!current(epoch)) return;
         setRetryUploads(chosen.slice(completed));
         throw cause;
       }
@@ -234,25 +311,43 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
   async function saveEntry(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
     const values = new FormData(event.currentTarget);
-    await run("timeline", async () => {
-      apply(
-        await api.workspace.saveTimeline(caseId, {
-          ...(entry?.id ? { id: entry.id } : {}),
-          date: String(values.get("date") ?? ""),
-          title: String(values.get("title") ?? "").trim(),
-          detail: String(values.get("detail") ?? "").trim(),
-        }),
-      );
+    await run("timeline", async (epoch) => {
+      const next = await api.workspace.saveTimeline(caseId, {
+        ...(entry?.id ? { id: entry.id } : {}),
+        date: String(values.get("date") ?? ""),
+        title: String(values.get("title") ?? "").trim(),
+        detail: String(values.get("detail") ?? "").trim(),
+      });
+      if (!(await verify()) || !current(epoch)) return;
+      apply(next);
       setEntry(null);
       setNotice("타임라인을 저장했어요.");
     });
   }
 
-  if (view?.case.schemaVersion === "1") return <CaseDetail caseId={caseId} />;
+  if (view?.case.schemaVersion === "1")
+    return (
+      <>
+        {!ready && (
+          <section className="workspace-error" role={error ? "alert" : "status"}>
+            <p>{error?.message ?? "계정을 확인하고 있어요."}</p>
+            {error && (
+              <Button variant="outline" onClick={() => void load()}>
+                다시 확인
+              </Button>
+            )}
+          </section>
+        )}
+        {/* Keep legacy drafts mounted during verification; deny() removes view. */}
+        <div hidden={!ready} inert={!ready}>
+          <CaseDetail caseId={caseId} />
+        </div>
+      </>
+    );
   const base = `/cases/${encodeURIComponent(caseId)}`;
   const readyFiles = view?.files.filter((file) => file.status === "ready") ?? [];
   const pendingResponse = view?.messages.some((message) => message.status === "pending");
-  const readonly = view?.case.stage !== "active";
+  const readonly = !ready || view?.case.stage !== "active";
   return (
     <div className={`workspace workspace--${tab}`}>
       <a className="workspace-back" href="/cases">
@@ -260,7 +355,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
       </a>
       <header className="workspace-header">
         <div>
-          <h1>{view?.case.title ?? "사건을 불러오는 중"}</h1>
+          <h1>{(ready ? view?.case.title : null) ?? "사건을 불러오는 중"}</h1>
         </div>
         <ButtonLink href={`${base}/reports`} variant="ghost">
           <FileText size={17} /> 리포트 보기
@@ -271,7 +366,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
           <a key={id} href={`${base}${path}`} aria-current={tab === id ? "page" : undefined}>
             <Icon size={17} />
             {label}
-            {id === "files" && view ? <span>{view.files.length}</span> : null}
+            {id === "files" && view && ready ? <span>{view.files.length}</span> : null}
           </a>
         ))}
       </nav>
@@ -286,7 +381,9 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
               ? "최신 내용을 불러왔어요. 입력은 유지됩니다. 확인한 뒤 다시 저장해 주세요."
               : error.code === "QUOTA_EXCEEDED"
                 ? "저장된 사건은 보존돼요. 사용량에서 한도를 확인할 수 있어요."
-                : "입력한 내용은 이 화면에 남아 있어요."}
+                : ["UNAUTHENTICATED", "CONSENT_REQUIRED", "NOT_FOUND"].includes(error.code)
+                  ? "계정 또는 사건 접근이 바뀌어 이전 내용을 비웠어요."
+                  : "입력한 내용은 보존돼요. 확인한 뒤 다시 시도해 주세요."}
           </p>
           <div className="workspace-buttons">
             {!!retryUploads.length && (
@@ -305,8 +402,9 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                 variant="outline"
                 disabled={!!busy}
                 onClick={() =>
-                  void run("refresh", async () => {
+                  void run("refresh", async (epoch) => {
                     await load();
+                    if (!(await verify()) || !current(epoch)) return;
                     setNotice("최신 내용을 불러왔어요.");
                   })
                 }
@@ -322,7 +420,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
           <LoaderCircle className="workspace-spin" /> 사건과 저장된 자료를 불러오고 있어요.
         </div>
       )}
-      {view && (
+      {view && ready && (
         <>
           {readonly && (
             <section className="workspace-error">
@@ -418,8 +516,10 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                               size="sm"
                               disabled={!!busy || readonly}
                               onClick={() =>
-                                void run(message.id, async () => {
-                                  apply(await api.workspace.retryMessage(caseId, message.id));
+                                void run(message.id, async (epoch) => {
+                                  const next = await api.workspace.retryMessage(caseId, message.id);
+                                  if (!(await verify()) || !current(epoch)) return;
+                                  apply(next);
                                   setNotice("응답을 다시 요청했어요.");
                                 })
                               }
@@ -723,14 +823,20 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                                   item.id === action.id ? { ...item, done } : item,
                                 ),
                               });
-                              void run(action.id, async () => {
+                              void run(action.id, async (epoch) => {
                                 try {
-                                  apply(await api.workspace.setAction(caseId, action.id, done));
+                                  const next = await api.workspace.setAction(
+                                    caseId,
+                                    action.id,
+                                    done,
+                                  );
+                                  if (!(await verify()) || !current(epoch)) return;
+                                  apply(next);
                                   setNotice(
                                     done ? "완료 표시를 저장했어요." : "완료 표시를 해제했어요.",
                                   );
                                 } catch (cause) {
-                                  apply(previous);
+                                  if (current(epoch)) apply(previous);
                                   throw cause;
                                 }
                               });
@@ -776,6 +882,80 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                       요약 검토하기 <ArrowRight size={14} />
                     </a>
                   </section>
+                  {!!view.facts?.length && (
+                    <section>
+                      <h2>확인할 사실</h2>
+                      <ul className="workspace-facts">
+                        {view.facts.map((fact) => (
+                          <li key={fact.id}>
+                            <p>{fact.text}</p>
+                            <small>
+                              {fact.attribution === "user_statement"
+                                ? "사용자 진술"
+                                : fact.attribution === "official_source"
+                                  ? "공식 자료"
+                                  : "자료에서 추출"}{" "}
+                              ·{" "}
+                              {fact.certainty === "uncertain"
+                                ? "불확실"
+                                : fact.certainty === "observed"
+                                  ? "자료에서 관찰"
+                                  : "보고된 사실"}
+                              {fact.significance === "unfavorable" ? " · 불리한 사실" : ""}
+                              {fact.conflictingFactIds.length ? " · 서로 다른 진술 확인 필요" : ""}
+                            </small>
+                            {fact.references.map((ref) => (
+                              <span key={JSON.stringify(ref)} className="workspace-fact-source">
+                                {ref.kind === "user_material" ? (
+                                  <a href={`${base}/files`}>
+                                    자료:{" "}
+                                    {view.files.find((file) => file.id === ref.fileId)?.name ??
+                                      "원본 범위 확인"}
+                                  </a>
+                                ) : ref.kind === "user_message" ? (
+                                  "대화에서 제공"
+                                ) : ref.kind === "intake_answer" ? (
+                                  "질문 답변에서 제공"
+                                ) : ref.kind === "intake_narrative" ? (
+                                  "처음 제공한 이야기"
+                                ) : (
+                                  "공식 출처"
+                                )}
+                              </span>
+                            ))}
+                          </li>
+                        ))}
+                      </ul>
+                    </section>
+                  )}
+                  {!!view.people?.length && (
+                    <section>
+                      <h2>관련 인물</h2>
+                      <ul className="workspace-facts">
+                        {view.people.map((person) => (
+                          <li key={person.id}>
+                            <strong>{person.label}</strong>
+                            <p>{person.role}</p>
+                          </li>
+                        ))}
+                      </ul>
+                    </section>
+                  )}
+                  {!!view.unknowns?.length && (
+                    <section>
+                      <h2>아직 확인할 내용</h2>
+                      <ul className="workspace-facts">
+                        {view.unknowns.map((unknown) => (
+                          <li key={unknown}>{unknown}</li>
+                        ))}
+                      </ul>
+                    </section>
+                  )}
+                  {view.notices?.map((notice) => (
+                    <p key={notice} className="workspace-muted">
+                      {notice}
+                    </p>
+                  ))}
                   <section>
                     <h2>준비 현황</h2>
                     <a href={`${base}/files`}>
@@ -845,7 +1025,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
             <X size={20} />
           </Button>
         </div>
-        {preview && (
+        {preview && ready && (
           <div className="workspace-preview">
             <h3>{preview.name}</h3>
             <p>
@@ -862,8 +1042,9 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                 variant="outline"
                 disabled={!!busy}
                 onClick={() =>
-                  void run("original", async () => {
+                  void run("original", async (epoch) => {
                     const blob = await api.files.original(caseId, preview.id);
+                    if (!(await verify()) || !current(epoch)) return;
                     const type =
                       blob.type === "application/octet-stream" ? preview.mimeType : blob.type;
                     const safe = /^(image\/(png|jpeg|webp|gif|bmp))$/.test(type);
@@ -875,6 +1056,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                           reject(new Error("원본 미리보기를 불러오지 못했어요."));
                         reader.readAsDataURL(new Blob([blob], { type }));
                       });
+                      if (!(await verify()) || !current(epoch)) return;
                       setOriginal({ url, type });
                     } else download(blob, preview.name);
                     setNotice(
@@ -899,7 +1081,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
             )}
           </div>
         )}
-        {deleteFile && (
+        {deleteFile && ready && (
           <>
             <p>
               <strong>{deleteFile.name}</strong> 원본과 처리 결과를 삭제할까요?
@@ -916,9 +1098,11 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                 variant="destructive"
                 disabled={!!busy}
                 onClick={() =>
-                  void run("delete", async () => {
+                  void run("delete", async (epoch) => {
                     await api.files.remove(caseId, deleteFile.id);
+                    if (!(await verify()) || !current(epoch)) return;
                     await load();
+                    if (!(await verify()) || !current(epoch)) return;
                     setDeleteFile(null);
                     setNotice("자료를 삭제했어요.");
                   })
@@ -934,17 +1118,24 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
             )}
           </>
         )}
-        {entry && (
+        {entry && ready && (
           <form onSubmit={(event) => void saveEntry(event)}>
             <label htmlFor="timeline-date">날짜 (모르면 비워 두세요)</label>
-            <input id="timeline-date" name="date" type="date" defaultValue={entry.date} />
+            <input
+              id="timeline-date"
+              name="date"
+              type="date"
+              value={entry.date ?? ""}
+              onChange={(event) => setEntry({ ...entry, date: event.target.value })}
+            />
             <label htmlFor="timeline-title">어떤 일이 있었나요?</label>
             <input
               id="timeline-title"
               name="title"
               required
               maxLength={300}
-              defaultValue={entry.title}
+              value={entry.title ?? ""}
+              onChange={(event) => setEntry({ ...entry, title: event.target.value })}
             />
             <label htmlFor="timeline-detail">상세 내용</label>
             <textarea
@@ -952,7 +1143,8 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
               name="detail"
               maxLength={1600}
               rows={4}
-              defaultValue={entry.detail}
+              value={entry.detail ?? ""}
+              onChange={(event) => setEntry({ ...entry, detail: event.target.value })}
             />
             <div className="workspace-buttons">
               <Button variant="outline" disabled={!!busy} onClick={closeDialog}>

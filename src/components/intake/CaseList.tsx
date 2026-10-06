@@ -1,11 +1,12 @@
 import { ArrowRight, FolderOpen, Plus } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../../client/api";
 import type { CaseView } from "../../client/api/types";
 import type { CaseStatus } from "../../contracts";
 import { Button, ButtonLink } from "../ui/button";
 import { StatePanel } from "../ui/state-panel";
 import { caseHref, ErrorPanel } from "./common";
+import { useCustomerAccess } from "./useCustomerAccess";
 
 // Used by the preserved v1 detail UI.
 export const statusLabels: Record<CaseStatus, string> = {
@@ -28,27 +29,44 @@ export function CaseList() {
   const [items, setItems] = useState<CaseView[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<unknown>(null);
+  const request = useRef(0);
+  const { ready, version, verify, ticket, current, alive, deny } = useCustomerAccess(() => {
+    setItems([]);
+    setError(null);
+    ++request.current;
+  }, setError);
   const load = useCallback(async () => {
+    const serial = ++request.current;
+    let epoch = ticket();
     setLoading(true);
     setError(null);
     try {
-      setItems(await api.cases.list());
+      if (!(await verify())) return;
+      epoch = ticket();
+      const items = await api.cases.list();
+      if (!(await verify())) return;
+      if (current(epoch) && serial === request.current) setItems(items);
     } catch (cause) {
-      setError(cause);
+      if (alive(epoch) && serial === request.current) {
+        if (
+          ["UNAUTHENTICATED", "CONSENT_REQUIRED", "NOT_FOUND"].includes(
+            (cause as { code?: string }).code ?? "",
+          )
+        )
+          deny();
+        setError(cause);
+      }
     } finally {
-      setLoading(false);
+      if (alive(epoch) && serial === request.current) setLoading(false);
     }
-  }, []);
+  }, [verify, ticket, current, alive, deny]);
   useEffect(() => {
-    void load();
-    const refresh = () => void load();
-    window.addEventListener("pageshow", refresh);
-    return () => window.removeEventListener("pageshow", refresh);
-  }, [load]);
+    if (version) void load();
+  }, [load, version]);
   return (
     <section className="intake-list" aria-busy={loading}>
       <div className="intake-toolbar">
-        <span>{items.length ? `${items.length}개의 사건` : "내가 정리하는 사건"}</span>
+        <span>{ready && items.length ? `${items.length}개의 사건` : "내가 정리하는 사건"}</span>
         <div className="intake-actions">
           <Button variant="outline" disabled={loading} onClick={() => void load()}>
             새로 불러오기
@@ -58,10 +76,10 @@ export function CaseList() {
           </ButtonLink>
         </div>
       </div>
-      {loading && <StatePanel variant="loading" title="사건 목록을 불러오고 있어요." />}
+      {loading && !error && <StatePanel variant="loading" title="사건 목록을 불러오고 있어요." />}
       {error ? (
         <ErrorPanel error={error} retry={() => void load()} />
-      ) : !loading && items.length === 0 ? (
+      ) : ready && !loading && items.length === 0 ? (
         <div className="intake-empty">
           <FolderOpen size={48} aria-hidden="true" />
           <h2>아직 정리한 사건이 없어요</h2>
@@ -76,7 +94,7 @@ export function CaseList() {
           </ButtonLink>
         </div>
       ) : null}
-      {!error && (
+      {ready && !error && (
         <ul className="intake-case-grid">
           {items.map((item) => (
             <li key={item.id}>

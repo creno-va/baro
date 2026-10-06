@@ -8,6 +8,7 @@ import { Button, ButtonLink } from "../ui/button";
 import { Textarea } from "../ui/form";
 import { StatePanel } from "../ui/state-panel";
 import { BackToCases, ErrorPanel, IntakeProgress } from "./common";
+import { useCustomerAccess } from "./useCustomerAccess";
 
 export function IntakeQuestions({ caseId }: { caseId: string }) {
   const [item, setItem] = useState<CaseView | null>(null);
@@ -23,16 +24,56 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
   const [editing, setEditing] = useState(false);
   const pending = useRef(false);
   const heading = useRef<HTMLHeadingElement>(null);
+  const request = useRef(0);
+  const {
+    ready,
+    version,
+    verify,
+    ticket,
+    current: accessCurrent,
+    alive,
+    deny,
+  } = useCustomerAccess(() => {
+    ++request.current;
+    setItem(null);
+    setResult(null);
+    setValue("");
+    setAnswerState(undefined);
+    setIndex(0);
+    setExit(false);
+    setEditing(false);
+    setNotice("");
+    setError(null);
+    setBusy(false);
+    pending.current = false;
+  }, setError);
+  const report = useCallback(
+    (cause: unknown) => {
+      if (
+        ["UNAUTHENTICATED", "CONSENT_REQUIRED", "NOT_FOUND"].includes(
+          (cause as { code?: string }).code ?? "",
+        )
+      )
+        deny();
+      setError(cause);
+    },
+    [deny],
+  );
   const question = result?.questions[index];
   const load = useCallback(async () => {
+    let epoch = ticket();
+    const serial = ++request.current;
     setLoading(true);
     setError(null);
     try {
-      const [current, questions] = await Promise.all([
+      if (!(await verify())) return;
+      epoch = ticket();
+      const [caseView, questions] = await Promise.all([
         api.cases.get(caseId),
         api.cases.getQuestions(caseId),
       ]);
-      setItem(current);
+      if (!(await verify()) || !accessCurrent(epoch) || serial !== request.current) return;
+      setItem(caseView);
       setEditing(new URLSearchParams(window.location.search).get("edit") === "1");
       setResult(questions);
       const requested = Number(new URLSearchParams(window.location.search).get("question"));
@@ -46,24 +87,24 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
           : Math.max(0, unanswered),
       );
     } catch (cause) {
-      setError(cause);
+      if (alive(epoch)) report(cause);
     } finally {
-      setLoading(false);
+      if (alive(epoch)) setLoading(false);
     }
-  }, [caseId]);
+  }, [caseId, verify, ticket, accessCurrent, alive, report]);
   useEffect(() => {
-    void load();
-  }, [load]);
+    if (version) void load();
+  }, [load, version]);
   useEffect(() => {
     setValue(question?.answer ?? "");
     setAnswerState(question?.answerState);
-    if (question) {
+    if (question?.id) {
       const url = new URL(window.location.href);
       url.searchParams.set("question", String(index));
       window.history.replaceState(null, "", url);
       heading.current?.focus();
     }
-  }, [question, index]);
+  }, [question?.id, question?.answer, question?.answerState, index]);
   useEffect(() => {
     if (!result?.processing || busy) return;
     const timer = window.setTimeout(() => void load(), 2500);
@@ -79,11 +120,14 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
   }, [value, answerState, question]);
   async function advance() {
     if (!result || pending.current) return;
+    const epoch = ticket();
     pending.current = true;
     setBusy(true);
     setError(null);
     try {
+      if (!(await verify()) || !accessCurrent(epoch)) return;
       const next = await api.cases.advance(caseId, { expectedRevision: result.revision });
+      if (!(await verify()) || !accessCurrent(epoch)) return;
       setResult(next);
       if (next.complete) window.location.assign(`/cases/${encodeURIComponent(caseId)}/summary`);
       else {
@@ -100,10 +144,12 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
         );
       }
     } catch (cause) {
-      setError(cause);
+      if (alive(epoch)) report(cause);
     } finally {
-      setBusy(false);
-      pending.current = false;
+      if (alive(epoch)) {
+        setBusy(false);
+        pending.current = false;
+      }
     }
   }
   async function save(move: boolean, state = answerState) {
@@ -115,11 +161,13 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
       pending.current
     )
       return;
+    const epoch = ticket();
     pending.current = true;
     setBusy(true);
     setError(null);
     setNotice("");
     try {
+      if (!(await verify()) || !accessCurrent(epoch)) return;
       const next = await api.cases.saveAnswers(caseId, {
         expectedRevision: result.revision,
         answers: [
@@ -128,12 +176,14 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
             : { questionId: question.id, state },
         ],
       });
+      if (!(await verify()) || !accessCurrent(epoch)) return;
       setResult(next);
       setAnswerState(state);
       setNotice("답변이 저장됐어요. 내 사건에서 다시 이어갈 수 있어요.");
       if (move && index < next.questions.length - 1) setIndex(index + 1);
       else if (move) {
         const advanced = await api.cases.advance(caseId, { expectedRevision: next.revision });
+        if (!(await verify()) || !accessCurrent(epoch)) return;
         setResult(advanced);
         if (advanced.complete)
           window.location.assign(`/cases/${encodeURIComponent(caseId)}/summary`);
@@ -147,21 +197,23 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
         }
       }
     } catch (cause) {
-      setError(cause);
+      if (alive(epoch)) report(cause);
     } finally {
-      setBusy(false);
-      pending.current = false;
+      if (alive(epoch)) {
+        setBusy(false);
+        pending.current = false;
+      }
     }
   }
   return (
     <div className="intake-flow">
       <BackToCases />
       <IntakeProgress step={1} />
-      {loading && !result ? (
+      {loading && !result && !error ? (
         <StatePanel variant="loading" title="저장한 질문을 불러오고 있어요." />
       ) : null}
       {error ? <ErrorPanel error={error} retry={() => void load()} disabled={busy} /> : null}
-      {item && result ? (
+      {ready && item && result ? (
         <section className="intake-card" aria-busy={busy}>
           <div className="intake-assistant-heading">
             <BrandMark size={32} />

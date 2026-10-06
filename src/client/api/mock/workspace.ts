@@ -187,6 +187,8 @@ function receiptKey(request: Request, body: unknown) {
 }
 export function createWorkspaceMock(runtime: WorkspaceMockRuntime) {
   return async function handleWorkspaceMock(request: Request): Promise<Response | null> {
+    if (/^\/api\/cases\/[^/]+$/.test(new URL(request.url).pathname))
+      return mockFailure(new WorkspaceMockError("NOT_FOUND", "기존 사건을 찾을 수 없어요."));
     const match =
       /^\/api\/v2\/cases\/([^/]+)\/(workspace|messages(?:\/([^/]+)\/retry)?|actions\/([^/]+)|timeline(?:\/([^/]+))?)$/.exec(
         new URL(request.url).pathname,

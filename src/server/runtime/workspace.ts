@@ -1,5 +1,6 @@
 import { drizzle } from "drizzle-orm/d1";
 import { z } from "zod";
+import { readAccountType } from "../auth/account-type";
 import { createCaseDataCipher } from "../crypto";
 import * as schema from "../db/schema";
 import { createV2Core, type V2Core } from "../db/v2-core";
@@ -34,6 +35,14 @@ import { executeWorkspace, type WorkspaceParams } from "../modules/workspace/exe
 import { createWorkspacePipeline } from "../modules/workspace/pipeline";
 import type { WorkspaceDependencies } from "../modules/workspace/service";
 import { readProcessingProofs } from "./processing-proofs";
+
+/** Role changes revoke future dispatch/publication without erasing paid receipts. */
+export async function hasCustomerWorkspaceAccess(core: V2Core, ownerId: string) {
+  return (
+    (await readAccountType(core.binding, ownerId)) === "customer" &&
+    (await hasCurrentConsent(drizzle(core.binding, { schema }), ownerId))
+  );
+}
 
 const boundsConfigSchema = z.strictObject({
   bounds: executionDescriptorSchema.omit({
@@ -102,6 +111,7 @@ export function createWorkspaceDependencies(core: V2Core, env: Env): WorkspaceDe
     dispatch: () =>
       createWorkspaceDispatcher(core, { binding: env.WORKSPACE_PROCESSING }).dispatch(4),
     async prepareJob(input) {
+      if (!(await hasCustomerWorkspaceAccess(core, input.ownerId))) return null;
       if (!env.WORKSPACE_PROCESSING || !env.AI || !configuredBounds(env)) return null;
       const now = new Date().toISOString(),
         proofs = await readProcessingProofs(
@@ -162,7 +172,7 @@ export async function runWorkspaceRuntime(
   const core = createV2Core(env.DB, await createCaseDataCipher(env));
   return executeWorkspace(core, params, instanceId, {
     guideHosts: GUIDE_HOSTS,
-    authorize: (ownerId) => hasCurrentConsent(drizzle(core.binding, { schema }), ownerId),
+    authorize: (ownerId) => hasCustomerWorkspaceAccess(core, ownerId),
     pipeline: async (job, lease) => {
       const row = await core
         .statement(
@@ -189,8 +199,8 @@ export async function runWorkspaceRuntime(
       };
       const gateway: ReturnType<typeof createLlmGateway> = {
         async call(phase, input, requestId, reserve, reserveCorrection, invocationId) {
-          if (!(await hasCurrentConsent(drizzle(core.binding, { schema }), params.ownerId)))
-            throw new Error("Consent unavailable");
+          if (!(await hasCustomerWorkspaceAccess(core, params.ownerId)))
+            throw new Error("Customer access unavailable");
           const currentId = invocationId ?? invocation(phase),
             now = new Date().toISOString();
           const service = budget(core, env, params.ownerId, input);
@@ -247,13 +257,12 @@ export async function runWorkspaceRuntime(
         },
       };
       return createWorkspacePipeline(gateway, {
-        reserve: async () => hasCurrentConsent(drizzle(core.binding, { schema }), params.ownerId),
+        reserve: async () => hasCustomerWorkspaceAccess(core, params.ownerId),
         invocation,
         retrieve: async (context, requests) => {
           const sourceRepository = createV2OfficialSourceRepository(core, GUIDE_HOSTS);
           const authorize = async () => {
-            if (!(await hasCurrentConsent(drizzle(core.binding, { schema }), params.ownerId)))
-              return false;
+            if (!(await hasCustomerWorkspaceAccess(core, params.ownerId))) return false;
             return !!(await core
               .statement(
                 "SELECT id FROM v2_jobs WHERE id=? AND lease_token=? AND fencing=? AND lease_until>? AND status IN ('running','validating') AND EXISTS(SELECT 1 FROM v2_workspaces WHERE id=? AND owner_id=? AND current_job_id=v2_jobs.id AND revision=?)",
