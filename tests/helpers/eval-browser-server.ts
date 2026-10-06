@@ -26,8 +26,20 @@ const server = Bun.serve({
   hostname: "127.0.0.1",
   port: 0,
   fetch(request) {
-    const id = new URL(request.url).pathname.split("/")[3];
-    const entry = entries.find((e) => e.result.caseId === id);
+    const pathname = new URL(request.url).pathname;
+    const id = pathname.split("/")[3];
+    const cookies =
+      request.headers
+        .get("cookie")
+        ?.split(";")
+        .map((cookie) => cookie.trim()) ?? [];
+    // The customer shell verifies /me/session before reading a legacy case.
+    // Choose its isolated SQL database by the signed cookie, then let the native
+    // auth/session route validate it. No session response or role is fabricated.
+    const entry =
+      pathname === "/api/me/session"
+        ? (entries.find((e) => cookies.includes(e.result.session.cookie)) ?? entries[0])
+        : entries.find((e) => e.result.caseId === id);
     return entry ? app.fetch(request, entry.result.env) : new Response(null, { status: 404 });
   },
 });

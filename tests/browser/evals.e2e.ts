@@ -48,6 +48,9 @@ test("all 50 pipeline fixtures render actual owner-scoped details with zero auto
       });
     });
     expect(metadata.cases).toHaveLength(50);
+    const anonymous = await context.request.get(`${metadata.origin}/api/me/session`);
+    expect(anonymous.status()).toBe(200);
+    expect(await anonymous.json()).toEqual({ user: null, needsConsent: false });
     await page.route("**/api/**", async (route) => {
       // Vite imports under /src/client/api/ are assets, not server requests.
       if (!new URL(route.request().url()).pathname.startsWith("/api/")) return route.continue();
@@ -75,6 +78,12 @@ test("all 50 pipeline fixtures render actual owner-scoped details with zero auto
       await page.goto("about:blank");
       await context.clearCookies();
       await context.addCookies([entry.cookie]);
+      const session = await context.request.get(`${metadata.origin}/api/me/session`);
+      expect(session.status()).toBe(200);
+      expect(await session.json()).toMatchObject({
+        user: { accountType: "customer" },
+        needsConsent: false,
+      });
       await page.setViewportSize({ width: 320, height: 800 });
       await page.goto(`/cases/${entry.caseId}`);
       await expect(
