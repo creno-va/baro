@@ -4,6 +4,7 @@ import { V2_LIMITS } from "../src/contracts/v2";
 import { createCaseDataCipher } from "../src/server/crypto";
 import { createV2Core } from "../src/server/db/v2-core";
 import { createV2DeletionRepository } from "../src/server/db/v2-deletion";
+import { createV2JobsRepository } from "../src/server/db/v2-jobs";
 import { createV2LawyersRepository } from "../src/server/db/v2-lawyers";
 import { createV2StorageRepository } from "../src/server/db/v2-storage";
 import { hex } from "../src/server/modules/files/binary";
@@ -294,6 +295,62 @@ test("R2 rejection before consuming ciphertext aborts producer and leaves durabl
     cipher_hash: null,
   });
 }, 5000);
+test("actual admitted and acquired sanitizer reads the scoped original while its lease remains current", async () => {
+  const f = await fixture();
+  const bytes = new Uint8Array([255, 216, 255, 217]);
+  const reserved = await f.service.reserve(
+    f.owner.userId,
+    1,
+    "synthetic_sanitizer_original",
+    {
+      name: "synthetic.jpeg",
+      byteLength: bytes.length,
+      mediaType: "image/jpeg",
+      purpose: "profile_photo",
+    },
+    "portfolio",
+  );
+  await f.service.upload(f.owner.userId, reserved.assetId, 1, bytes.length, stream(bytes));
+  const jobs = createV2JobsRepository(f.core),
+    now = new Date().toISOString(),
+    jobId = crypto.randomUUID();
+  const actor = { ownerId: f.owner.userId, now };
+  expect(await jobs.admitAsset(actor, { assetId: reserved.assetId, assetRevision: 2, jobId })).toBe(
+    true,
+  );
+  const acquired = await jobs.acquire(
+    actor,
+    jobId,
+    crypto.randomUUID(),
+    new Date(Date.parse(now) + 60000).toISOString(),
+  );
+  if (!acquired) throw new Error("Actual synthetic sanitizer lease required");
+  expect(f.db.sqlite.query("SELECT state FROM v2_assets WHERE id=?").get(reserved.assetId)).toEqual(
+    { state: "sanitizing" },
+  );
+  const authorized = async () =>
+    !!(await f.core
+      .statement(
+        "SELECT id FROM v2_jobs WHERE id=? AND lease_token=? AND fencing=? AND status IN ('running','validating') AND lease_until>?",
+        [jobId, acquired.lease.token, acquired.lease.fencing, new Date().toISOString()],
+      )
+      .first());
+  const input = {
+    ownerId: f.owner.userId,
+    profileId: f.profileId,
+    assetId: reserved.assetId,
+    assetRevision: 2,
+  };
+  const original = await f.service.openOriginal(input, authorized);
+  expect(original.contentHash).toBe(hex(sha256(bytes)));
+  expect(new Uint8Array(await new Response(original.body).arrayBuffer())).toEqual(bytes);
+  const stale = await f.service.openOriginal(input, authorized);
+  f.db.sqlite.query("UPDATE v2_jobs SET fencing=fencing+1 WHERE id=?").run(jobId);
+  await expect(new Response(stale.body).arrayBuffer()).rejects.toThrow("INVALID_ASSET_BINARY");
+  await expect(f.service.openOriginal(input, authorized)).rejects.toMatchObject({
+    code: "NOT_FOUND",
+  });
+});
 test("late PUT after completed cleanup uses captured intent to create a new durable cleanup generation", async () => {
   const f = await fixture();
   const storage = createV2StorageRepository(f.core);

@@ -188,7 +188,7 @@ export function createLawyerAssetsService(core: V2Core, deps: LawyerAssetDepende
           return (
             current.profile_id === input.profileId &&
             current.revision === input.assetRevision &&
-            ["uploaded", "queued", "processing"].includes(current.state)
+            ["uploaded", "sanitizing"].includes(current.state)
           );
         } catch {
           return false;
