@@ -92,7 +92,25 @@ function budget(core: V2Core, env: Env, ownerId: string, input: unknown) {
   const config = configuredBounds(env);
   const planner = createGatewayExecutionPlanner({
     input: async () => input,
-    bounds: async () => (config?.bounds as TokenBounds | null) ?? null,
+    bounds: async (wire) => {
+      if (!config) return null;
+      if (config.bounds.basis !== "verified_model_context_limit")
+        return config.bounds as TokenBounds;
+      // A complete context reservation includes this exact output cap. No text/token heuristic.
+      const inputLimit = config.bounds.modelContextTokenLimit - wire.max_completion_tokens;
+      if (
+        inputLimit <= 0 ||
+        inputLimit > config.bounds.modelInputTokenLimit ||
+        config.bounds.vision
+      )
+        return null;
+      return {
+        ...config.bounds,
+        textTokensUpperBound: inputLimit,
+        framingTokensUpperBound: 0,
+        modelInputTokenLimit: inputLimit,
+      } as TokenBounds;
+    },
     verifyBounds: async (_descriptor, digest, now) =>
       config && Date.parse(config.verifiedAt) <= Date.parse(now)
         ? { digest, evidenceHash: config.evidenceHash, verifiedAt: config.verifiedAt }
@@ -169,7 +187,9 @@ export async function runWorkspaceRuntime(
   instanceId: string,
   waitUntil: (work: Promise<void>) => void,
 ) {
-  const core = createV2Core(env.DB, await createCaseDataCipher(env));
+  const core = createV2Core(env.DB, await createCaseDataCipher(env), {
+    monthlyBudgetCapEnabled: env.MONTHLY_BUDGET_CAP_ENABLED !== "false",
+  });
   return executeWorkspace(core, params, instanceId, {
     guideHosts: GUIDE_HOSTS,
     authorize: (ownerId) => hasCustomerWorkspaceAccess(core, ownerId),

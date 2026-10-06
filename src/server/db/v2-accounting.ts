@@ -174,7 +174,7 @@ export function quotaTransitionStatements(
     ),
   ];
 }
-export const quotaRetryPredicate = `NOT EXISTS(SELECT 1 FROM v2_quota_reservations q JOIN v2_daily_usage u ON u.owner_id=q.owner_id AND u.day=q.day WHERE q.operation_id=j.operation_id AND q.state='released' AND ((q.kind='visible_response' AND u.responses_used+u.responses_reserved+q.units>30) OR (q.kind='media' AND u.media_used+u.media_reserved+q.units>3600) OR (q.kind='new_case' AND u.cases_used+u.cases_reserved+q.units>3)))`;
+export const quotaRetryPredicate = `NOT EXISTS(SELECT 1 FROM v2_quota_reservations q JOIN v2_daily_usage u ON u.owner_id=q.owner_id AND u.day=q.day WHERE q.operation_id=j.operation_id AND q.state='released' AND ((q.kind='visible_response' AND u.responses_used+u.responses_reserved+q.units>${V2_LIMITS.dailyAiResponses}) OR (q.kind='media' AND u.media_used+u.media_reserved+q.units>3600) OR (q.kind='new_case' AND u.cases_used+u.cases_reserved+q.units>3)))`;
 export function quotaRetryStatements(
   core: V2Core,
   jobId: string,
@@ -296,7 +296,11 @@ export function createV2AccountingRepository(core: V2Core, environment?: "previe
             Math.max(row?.cases_used ?? 0, legacy ?? 0),
             row?.cases_reserved ?? 0,
           ),
-          aiResponses: counter(30, row?.responses_used ?? 0, row?.responses_reserved ?? 0),
+          aiResponses: counter(
+            V2_LIMITS.dailyAiResponses,
+            row?.responses_used ?? 0,
+            row?.responses_reserved ?? 0,
+          ),
           mediaSeconds: counter(3600, row?.media_used ?? 0, row?.media_reserved ?? 0),
           storageBytes: counter(
             10000000000,
@@ -390,7 +394,7 @@ export function createV2AccountingRepository(core: V2Core, environment?: "previe
         const claimId = crypto.randomUUID();
         const statements = [
           core.statement(
-            `INSERT INTO v2_mutation_claims(id,owner_id,target_id,revision) SELECT ?,o.owner_id,o.id,o.revision FROM v2_operations o JOIN v2_billing_principals p ON p.owner_id=o.owner_id JOIN v2_cost_quotes q ON q.id=? JOIN v2_monthly_budget b ON b.month=? JOIN v2_budget_allocations a ON a.month=b.month AND a.version=b.allocation_version WHERE o.id=? AND o.owner_id=? AND o.state IN ('admitted','ambiguous') AND q.reviewed_at<=? AND q.valid_until>? AND q.estimated_krw=? AND b.settled_krw+b.reserved_krw+b.ambiguous_krw+b.fixed_maintenance_krw+?<=b.limit_krw AND b.environment=? AND NOT EXISTS(SELECT 1 FROM v2_runtime_controls c WHERE c.month=b.month) AND a.reviewed_at<=? AND a.valid_until>? AND a.funding_valid_until>? AND a.funding_state IN ('funded','trial_credit') AND NOT EXISTS(SELECT 1 FROM v2_cost_attempts WHERE invocation_id=? AND attempt=?) AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='account' AND target_id=o.owner_id) AND (o.workspace_id IS NULL OR EXISTS(SELECT 1 FROM v2_workspaces w WHERE w.id=o.workspace_id AND w.owner_id=o.owner_id AND ${aliveWorkspace}))`,
+            `INSERT INTO v2_mutation_claims(id,owner_id,target_id,revision) SELECT ?,o.owner_id,o.id,o.revision FROM v2_operations o JOIN v2_billing_principals p ON p.owner_id=o.owner_id JOIN v2_cost_quotes q ON q.id=? JOIN v2_monthly_budget b ON b.month=? JOIN v2_budget_allocations a ON a.month=b.month AND a.version=b.allocation_version WHERE o.id=? AND o.owner_id=? AND o.state IN ('admitted','ambiguous') AND q.reviewed_at<=? AND q.valid_until>? AND q.estimated_krw=? AND (${core.monthlyBudgetCapEnabled ? "0" : "1"}=1 OR b.settled_krw+b.reserved_krw+b.ambiguous_krw+b.fixed_maintenance_krw+?<=b.limit_krw) AND b.environment=? AND NOT EXISTS(SELECT 1 FROM v2_runtime_controls c WHERE c.month=b.month) AND a.reviewed_at<=? AND a.valid_until>? AND a.funding_valid_until>? AND a.funding_state IN ('funded','trial_credit') AND NOT EXISTS(SELECT 1 FROM v2_cost_attempts WHERE invocation_id=? AND attempt=?) AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='account' AND target_id=o.owner_id) AND (o.workspace_id IS NULL OR EXISTS(SELECT 1 FROM v2_workspaces w WHERE w.id=o.workspace_id AND w.owner_id=o.owner_id AND ${aliveWorkspace}))`,
             [
               claimId,
               a.quoteId,
@@ -507,19 +511,22 @@ export function createV2AccountingRepository(core: V2Core, environment?: "previe
           month,
           environment: ledger?.environment ?? environment ?? null,
           allocationVersion: ledger?.allocation_version ?? null,
-          allocatedLimitKrw: ledger?.limit_krw ?? 0,
+          allocatedLimitKrw: core.monthlyBudgetCapEnabled ? (ledger?.limit_krw ?? 0) : null,
+          monthlyBudgetCapEnabled: core.monthlyBudgetCapEnabled,
           settledKrw: row?.settled_krw ?? 0,
           reservedKrw: row?.reserved_krw ?? 0,
           ambiguousKrw: row?.ambiguous_krw ?? 0,
           fixedAndMaintenanceKrw: row?.fixed_maintenance_krw ?? 0,
-          availableKrw: Math.max(
-            0,
-            (ledger?.limit_krw ?? 0) -
-              (row?.settled_krw ?? 0) -
-              (row?.reserved_krw ?? 0) -
-              (row?.ambiguous_krw ?? 0) -
-              (row?.fixed_maintenance_krw ?? 0),
-          ),
+          availableKrw: core.monthlyBudgetCapEnabled
+            ? Math.max(
+                0,
+                (ledger?.limit_krw ?? 0) -
+                  (row?.settled_krw ?? 0) -
+                  (row?.reserved_krw ?? 0) -
+                  (row?.ambiguous_krw ?? 0) -
+                  (row?.fixed_maintenance_krw ?? 0),
+              )
+            : null,
         };
       });
     },

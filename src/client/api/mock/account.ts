@@ -83,7 +83,7 @@ export function createAccountMockHandler(runtime: AccountMockRuntime): DomainReq
                 (workspace.messages ?? []).filter((message) => message.role === "assistant").length,
               0,
             ),
-          limit: 30,
+          limit: 200,
         },
         mediaMinutes: { used: 0, limit: 60 },
         storageBytes: {

@@ -269,6 +269,7 @@ export function createV2PaidRuntimeRepository(
           .first();
         if (!owner) return null;
         return preparePaidStatements({
+          monthlyBudgetCapEnabled: core.monthlyBudgetCapEnabled,
           request: r,
           reservedKrw: amount,
           planHash,
@@ -466,7 +467,10 @@ export function createV2PaidRuntimeRepository(
         if (budget?.reserved_krw !== 0 || budget.ambiguous_krw !== 0) return null;
         const allocation = a.value.allocation;
         const amount = environment === "preview" ? allocation.previewKrw : allocation.productionKrw;
-        if (budget.settled_krw + budget.fixed_maintenance_krw + budget.carryover > amount)
+        if (
+          core.monthlyBudgetCapEnabled &&
+          budget.settled_krw + budget.fixed_maintenance_krw + budget.carryover > amount
+        )
           return null;
         const id = crypto.randomUUID();
         const value: DrainProof = {
@@ -570,7 +574,8 @@ export function createV2PaidRuntimeRepository(
               p.manifestHash !== allocation.manifestHash ||
               p.limitKrw !==
                 (p.environment === "preview" ? allocation.previewKrw : allocation.productionKrw) ||
-              p.settledKrw + p.fixedKrw + p.carryoverKrw > p.limitKrw,
+              (core.monthlyBudgetCapEnabled &&
+                p.settledKrw + p.fixedKrw + p.carryoverKrw > p.limitKrw),
           )
         )
           return false;

@@ -24,6 +24,10 @@ on:
         description: Issue 71 comment receipt for explicit operator launch authorization of this exact SHA
         type: string
         default: ''
+      configure_ai:
+        description: Apply verified AI bounds, pricing, funding and real two-environment budget coordination
+        type: boolean
+        default: false
       sync_oauth:
         description: Apply the six production Environment OAuth credentials to the production Worker
         type: boolean
@@ -136,6 +140,10 @@ jobs:
       - name: Apply validated production migrations
         if: steps.application.outputs.present == 'true'
         run: bun run db:migrate:production
+
+      - name: Configure verified AI runtime
+        if: steps.application.outputs.present == 'true' && inputs.configure_ai
+        run: bun scripts/provision-ai-budget.ts "$TARGET_SHA"
 
       - name: Deploy production
         if: steps.application.outputs.present == 'true'

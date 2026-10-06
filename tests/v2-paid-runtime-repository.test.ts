@@ -153,14 +153,14 @@ function funding(): FundingProof {
     validUntil: EXP,
   };
 }
-async function fixture() {
+async function fixture(monthlyBudgetCapEnabled = true) {
   const db = await createTestDatabase();
   dbs.push(db);
   const session = await seedTestSession(db, { now: Date.parse(NOW), consent: true });
   const cipher = await createCaseDataCipher({
     CASE_DATA_KEY_V1: btoa("d".repeat(32)).replace(/=+$/u, ""),
   });
-  const core = createV2Core(db.binding, cipher),
+  const core = createV2Core(db.binding, cipher, { monthlyBudgetCapEnabled }),
     actor: Actor = { ownerId: session.userId, now: NOW };
   const accounting = createV2AccountingRepository(core, "preview"),
     jobs = createV2JobsRepository(core),
@@ -964,10 +964,10 @@ test("paid chat op/quota/job/outbox and exact-price hold commit atomically, immu
   ])
     expect(f.db.sqlite.query(`SELECT count(*) AS n FROM ${table}`).get()).toEqual({ n: 1 });
   expect((await f.accounting.usage(f.actor)).aiResponses).toEqual({
-    limit: 30,
+    limit: 200,
     used: 0,
     reserved: 1,
-    remaining: 29,
+    remaining: 199,
   });
   const saved = f.db.sqlite
     .query("SELECT payload_json,evidence_hash FROM v2_runtime_plans")
@@ -1745,4 +1745,20 @@ test("verified over-bound or overflow charge is never discarded: durable usage f
   expect(
     second.db.sqlite.query("SELECT outcome,payload_json FROM v2_runtime_usage").get(),
   ).toMatchObject({ outcome: "ambiguous" });
+});
+
+test("disabled monthly cap permits paid admission beyond legacy allocation, preserving authenticated funding ceiling", async () => {
+  const f = await fixture(false);
+  f.db.sqlite.exec("UPDATE v2_monthly_budget SET limit_krw=0");
+  const r = request(f);
+  const paid = await f.runtime.prepareHold(f.actor, r);
+  expect(paid).not.toBeNull();
+  if (!paid) throw new Error("synthetic paid hold missing");
+  const check = async () =>
+    f.core
+      .statement(`SELECT (${paid.predicate.sql}) AS allowed`, paid.predicate.values)
+      .first<number>("allowed");
+  expect(await check()).toBe(1);
+  f.db.sqlite.exec("UPDATE v2_monthly_budget SET settled_krw=50000");
+  expect(await check()).toBe(0);
 });

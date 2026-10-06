@@ -114,7 +114,9 @@ export async function createFileProcessingRuntime(
   if (!env.CASE_PRIVATE_R2 || !env.FILE_PROCESSOR || !env.AI || !env.AI_GATEWAY_ID)
     throw new ProcessingError("MODEL_UNAVAILABLE");
   const environment = env.APP_ENV === "production" ? "production" : "preview";
-  const core = createV2Core(env.DB, await createCaseDataCipher(env));
+  const core = createV2Core(env.DB, await createCaseDataCipher(env), {
+    monthlyBudgetCapEnabled: env.MONTHLY_BUDGET_CAP_ENABLED !== "false",
+  });
   const initialAttemptId = await core
     .statement(
       `SELECT h.attempt_id FROM v2_paid_holds h JOIN v2_jobs j ON j.id=h.job_id JOIN v2_operations o ON o.id=j.operation_id

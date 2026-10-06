@@ -123,5 +123,7 @@ export function reportRequestCore(core: V2Core, requireRowMeta = true) {
       queryLimit = REPORT_QUERY_LIMIT;
     },
   });
-  return createV2Core(binding, core.cipher);
+  return createV2Core(binding, core.cipher, {
+    monthlyBudgetCapEnabled: core.monthlyBudgetCapEnabled,
+  });
 }

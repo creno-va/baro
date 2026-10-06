@@ -1,5 +1,11 @@
 # BARO v2 검증 증거 기록
 
+## 2026-10-07 AI 실행 예산 후속
+
+사용자는 BUDGET_UNAVAILABLE을 두 원격 환경 모두에서 해결하도록 지시한 뒤 하루 AI200회, 전체 월 예산 차단 해제, 기존 Cloudflare $10/$30 자동충전을 직접 승인했다. authenticated console에서 credit$40/autoRechargeON/threshold10/refill30을 확인했다. 운영 Gateway가 없음을 확인하고 baro-production을 별도로 생성하며 CollectLogs/Cache/Retry/SpendLimitOFF·Authentication/ZDRON·UnifiedBilling으로 연결했다. 실제 등록 완료와 실행 성공은 각각 관측 후 journal에 기록한다.
+
+공식 모델 context1,050,000/output128,000과 short/long/cache 가격, IBK2026-10-06 송금환율1351.70KRW/USD를 확인했다. 새 배포 coordinator는 두 실제 D1의 zero-state/노출·drain을 읽고 기존 typed budget primitive로 가격/funding/allocation을 등록한다. 고객 데이터/토큰/secret을 읽거나 출력하지 않는다. schema0009 보존·새 migration 없음. 로컬 `bun ci`, `bun run check`(1274 pass/0 fail), build, production build/bundle, cf dry-run 통과. 실제 두 SQLite DB의 초기 활성화와 legacy allocation 초과 후 갱신·unknown hold 차단을 함께 확인했다(43 pass/0 fail). Preview/production model bounds를 기존 Worker secret으로 배포하며 정상 protected production 승인과 exact-head CI는 유지한다. 기존 Full/local SSO는 반복하지 않는다.
+
 ## 2026-10-07 운영 공개 승인과 Preview 실제 인증
 
 사용자는 Preview/Production 공유 소셜 앱을 명시 승인한 뒤 공개 조건을 모두 검증했다고
@@ -16,7 +22,6 @@ preview37528544832 SUCCESS. applicationSHA d63467501850ea474c876ceaed6d1867207d5
 완료하고 최초 동의 화면에 도착했다. session seed/mock/local SSO를 사용하지 않았다.
 동의 제출·역할/사건/프로필·NAVER/Kakao remote 성공은 이후 실제 관측만 추가한다.
 Python urllib 관측은403으로 실패했고 실제 브라우저 성공과 구분한다.
-
 
 ## 2026-10-07 원격 auth·503 후속 착수
 
@@ -36,7 +41,6 @@ reviewedAt null. PUBLIC_BETA_ENABLED=false의 운영503은 유지하며 정책/�
 보존·drill/경보·same-SHA 실제 외부 증거 없이는 공개 전환 배포하지 않는다.
 [readiness](../operations/ENVIRONMENT-READINESS.md)와
 [정책 담당 필드](./LAWYER-POLICY-HANDOFF.md)를 따른다. #19/#20/#27/#70/#71과 milestone gate는 OPEN이다.
-
 
 - 최신 통합 기록: 2026-10-07 (아래 4세션 통합 재검증). 초기 표와 이전 SHA의 증거는 역사적 기록으로 보존한다.
 - 상태: #53 명세·#54 strict 계약·#55 additive DB·#56 공통 UI 시스템 완료. 후속 서비스 실행·화면·외부 연동·공개는 진행 중이며 전체 완료 증거 없음.
@@ -451,7 +455,6 @@ workspaceResponse 변환은 #65 담당자에게 요청했다. mock private names
 [환경 readiness](../operations/ENVIRONMENT-READINESS.md#2026-10-07-통합-세션의-현재-readiness)를
 따른다. 공식 법률 신청/OC 조건은 변하지 않아 같은 실패 probe를 반복하지 않았다.
 
-
 공유 Full validation runner는 wire browser와 각 mock config를 같은 checkout에서 순차 실행한다.
 50-corpus는 signed v1 실제 API/SQL 대역 및 제품 legacy compatibility 화면으로 검증하며,
 v2 모델 품질/실제 공식 근거 승인으로 확장해 표시하지 않는다. corpus harness의 경로 검사는
@@ -459,7 +462,6 @@ v2 모델 품질/실제 공식 근거 승인으로 확장해 표시하지 않는
 session 변경은 credential/role을 포함하지 않는 `baro-session-changed` marker로 peer 탭에
 재조회만 요청하며 로그아웃·동의·persisted role 변경 후 발행한다. 공유 shell은 이 marker와
 기존 Better Auth 알림을 받아 최근 사건과 역할 navigation을 재검증한다.
-
 
 공유 candidate의 집중 browser 검사는 wire35, compiled Worker corpus1(50합성 사례),
 integration3, conversation7, intake6, shared-workspace1, workspace4, reports1로 **58개**

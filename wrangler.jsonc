@@ -56,6 +56,7 @@
   "vars": {
     "APP_ENV": "local",
     "PUBLIC_BETA_ENABLED": "false",
+    "MONTHLY_BUDGET_CAP_ENABLED": "false",
     "RELEASE_SHA": "local",
     "BETTER_AUTH_URL": "https://preview.baro.site"
   },
@@ -146,6 +147,7 @@
         "APP_ENV": "preview",
         "AI_GATEWAY_ID": "baro-preview",
         "PUBLIC_BETA_ENABLED": "false",
+        "MONTHLY_BUDGET_CAP_ENABLED": "false",
         "RELEASE_SHA": "unknown",
         "BETTER_AUTH_URL": "https://preview.baro.site"
       },
@@ -274,7 +276,9 @@
       ],
       "vars": {
         "APP_ENV": "production",
+        "AI_GATEWAY_ID": "baro-production",
         "PUBLIC_BETA_ENABLED": "false",
+        "MONTHLY_BUDGET_CAP_ENABLED": "false",
         "RELEASE_SHA": "unknown",
         "BETTER_AUTH_URL": "https://baro.site"
       },

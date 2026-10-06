@@ -188,7 +188,9 @@ export function createV2DeletionReconciler(core: V2Core, deps: DeletionCleanupDe
 }
 /** Session 4 mounts this in scheduled(), after auth/file intent reconciliation. */
 export async function reconcileV2Deletion(env: Env) {
-  const core = createV2Core(env.DB, await createCaseDataCipher(env));
+  const core = createV2Core(env.DB, await createCaseDataCipher(env), {
+    monthlyBudgetCapEnabled: env.MONTHLY_BUDGET_CAP_ENABLED !== "false",
+  });
   return createV2DeletionReconciler(core, {
     environment: env.APP_ENV === "production" ? "production" : "preview",
     privateBucket: env.CASE_PRIVATE_R2,

@@ -1,5 +1,11 @@
 # P0.3 환경 readiness 기록
 
+> **2026-10-07 사용자 후속 — 이전 비용 정책보다 우선:** 계정별 AI 응답은 KST 하루200회이며 Preview/Production의 별도 전체 월 예산 차단은 해제한다. Cloudflare 기존 결제 경로에서 잔액$10 이하 시$30 자동 충전을 사용자가 직접 승인/설정했다. metering·실제 funding·가격/FX·bounded attempt·unknown 비용 보존은 유지한다. 배포 설정 `MONTHLY_BUDGET_CAP_ENABLED=false`가 예약·사용량·정산에 일관되게 적용된다. 기존 allocation 금액은 이 모드에서 소비 차단 한도가 아니며 schema0009의 기록을 보존한다.
+
+AI missing bounds/pricing/funding/allocation 후속은 [관측 정본](./AI-RUNTIME-OBSERVATION.json)과 production workflow `configure_ai`로 두 환경을 함께 연결한다. 배포 완료·실제 응답은 [journal](https://github.com/creno-va/baro/issues/71#issuecomment-6021564076)의 candidate별 관측으로 판정한다. 최초 provisioning은 두 실제 DB가 zero-state임을 확인하고, 갱신은 unresolved hold가 없어야 actual drain/peer 증거를 교환한다. 갱신 전 만료/불명 hold를 삭제하지 않는다.
+
+현재 가격/funding/model 관측은 KST 2026-11-01 00:00에 만료된다. coordinator 실행에는 24시간 이내 관측이 필요하므로 승인 대기가 길면 해당 콘솔과 공식 가격/환율 관측을 갱신한다. 다음 달에는 새 월 ledger와 증명을 정상 승인 배포로 갱신해야 한다. 자동 충전 활성화만으로 이 증명이 자동 갱신되지는 않는다. 전역 예산 무제한은 계정별 하루 한도나 단일 attempt의 bounded 비용 계산을 없애지 않는다.
+
 ## 2026-10-07 공개 전환에 대한 후속 사용자 지시
 
 사용자는 모든 공개 조건을 검증했다고 진술하고 운영을 즉시 공개하라고 명시 승인했다.
@@ -12,7 +18,6 @@ Preview 소셜6필드 적용 deploy37528544832 SUCCESS, SHAd634675와 schema0009
 Google의 실제 Preview callback 후 최초 동의 화면에 도착했고 동일 공유 앱의 세 preview callback
 등록을 확인했다. Google Audience는 외부/테스트 사용자1명·NAVER 개발 중/멤버 제한,
 Kakao 로그인ON이다. 일반 사용자 audience 확대와 production callback은 실제 별도 검증 대상이다.
-
 
 ## 2026-10-07 원격 인증 후속 — 공유 소셜 앱 사용 승인
 

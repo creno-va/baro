@@ -9,7 +9,7 @@ import {
 import { V2_LIMITS, v2CountSchema, v2VersionSchema, v2WaitReasonSchema } from "./common";
 
 const observedKrw = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
-const reservedKrw = observedKrw.max(V2_LIMITS.monthlyBudgetKrw);
+const reservedKrw = observedKrw.max(V2_LIMITS.maximumAttemptKrw);
 
 function counter(limit: number, integral = true) {
   const quantity = integral ? v2CountSchema : z.number().min(0).max(Number.MAX_SAFE_INTEGER);
@@ -44,7 +44,7 @@ export const v2UsageSchema = z
     storageBytes: counter(V2_LIMITS.accountStorageBytes),
     waitReasons: z
       .array(v2WaitReasonSchema)
-      .max(7)
+      .max(8)
       .refine((reasons) => new Set(reasons).size === reasons.length, "Duplicate wait reasons"),
   })
   .refine(
@@ -176,19 +176,21 @@ export const v2BudgetLedgerSchema = z
     schemaVersion: v2VersionSchema,
     month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/),
     timezone: z.literal("Asia/Seoul"),
-    limitKrw: z.literal(V2_LIMITS.monthlyBudgetKrw),
+    limitKrw: observedKrw.nullable(),
     settledKrw: observedKrw,
     reservedKrw: observedKrw,
     ambiguousKrw: observedKrw,
     fixedAndMaintenanceKrw: observedKrw,
-    availableKrw: reservedKrw,
+    availableKrw: observedKrw.nullable(),
   })
   .refine((ledger) => {
     const committed =
       ledger.settledKrw + ledger.reservedKrw + ledger.ambiguousKrw + ledger.fixedAndMaintenanceKrw;
     return (
       Number.isSafeInteger(committed) &&
-      ledger.availableKrw === Math.max(0, ledger.limitKrw - committed)
+      (ledger.limitKrw === null
+        ? ledger.availableKrw === null
+        : ledger.availableKrw === Math.max(0, ledger.limitKrw - committed))
     );
   }, "Budget availability must include attempts, ambiguity and maintenance");
 /** Snapshot decision only; runtime must reserve atomically and recheck before execution. */
@@ -199,7 +201,7 @@ export function v2BudgetAdmissionSchema(ledger: unknown, now: string) {
     (quote) =>
       Date.parse(quote.reviewedAt) <= Date.parse(now) &&
       Date.parse(quote.validUntil) > Date.parse(now) &&
-      quote.estimatedKrw <= snapshot.availableKrw,
+      (snapshot.availableKrw === null || quote.estimatedKrw <= snapshot.availableKrw),
     "Expired quote or insufficient global budget",
   );
 }

@@ -111,8 +111,11 @@ export async function inspectPreview(
       environmentMatches: bindings?.success ? text("APP_ENV") === "preview" : null,
       publicBetaClosed: bindings?.success ? text("PUBLIC_BETA_ENABLED") === "false" : null,
       modelBoundsConfigured: bindings?.success
-        ? typeof text("AI_MODEL_TOKEN_BOUNDS_JSON") === "string" &&
-          String(text("AI_MODEL_TOKEN_BOUNDS_JSON")).trim().length > 0
+        ? (typeof text("AI_MODEL_TOKEN_BOUNDS_JSON") === "string" &&
+            String(text("AI_MODEL_TOKEN_BOUNDS_JSON")).trim().length > 0) ||
+          configured.some(
+            (b) => b.name === "AI_MODEL_TOKEN_BOUNDS_JSON" && b.type === "secret_text",
+          )
         : null,
       processingBindings: [
         { name: "CASE_PRIVATE_R2", type: "r2_bucket" },

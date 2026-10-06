@@ -5,6 +5,7 @@ import type { PaidHoldRequest } from "./v2-paid-contracts";
 export const carryoverSql =
   "coalesce((SELECT sum(reserved_krw+ambiguous_krw) FROM v2_monthly_budget WHERE month<?),0)+coalesce((SELECT sum(amount_krw) FROM v2_maintenance_exposure WHERE month<? AND state IN ('reserved','ambiguous')),0)";
 export function budgetAdmissionPredicate(input: {
+  monthlyBudgetCapEnabled?: boolean | undefined;
   pricingProofId: string;
   fundingProofId: string;
   pricingJson: string;
@@ -16,7 +17,7 @@ export function budgetAdmissionPredicate(input: {
   const { amount, environment, now } = input;
   const month = usageDateKst(now).slice(0, 7);
   return {
-    sql: `EXISTS(SELECT 1 FROM v2_monthly_budget b JOIN v2_runtime_controls c ON c.month=b.month JOIN v2_budget_allocations a ON a.month=b.month AND a.version=b.allocation_version JOIN v2_runtime_proofs ap ON ap.id=c.allocation_proof_id JOIN v2_runtime_proofs pp ON pp.id=? JOIN v2_runtime_proofs fp ON fp.id=? WHERE b.month=? AND b.environment=? AND c.environment=b.environment AND c.phase='active' AND ap.kind='allocation' AND ap.environment=b.environment AND json_extract(ap.payload_json,'$.allocation.version')=b.allocation_version AND json_extract(ap.payload_json,'$.allocation.manifestHash')=a.manifest_hash AND ap.valid_until>? AND ap.verified_at<=? AND pp.kind='pricing' AND fp.kind='funding' AND pp.environment=b.environment AND fp.environment=b.environment AND pp.payload_json=? AND fp.payload_json=? AND pp.verified_at<=? AND fp.verified_at<=? AND pp.valid_until>? AND fp.valid_until>? AND a.reviewed_at<=? AND a.valid_until>? AND a.funding_valid_until>? AND a.funding_state IN ('funded','trial_credit') AND b.settled_krw+b.reserved_krw+b.ambiguous_krw+b.fixed_maintenance_krw+(${carryoverSql})+?<=b.limit_krw AND b.settled_krw+b.reserved_krw+b.ambiguous_krw+b.fixed_maintenance_krw+(${carryoverSql})+?<=json_extract(fp.payload_json,'$.spendAllowanceKrw') AND json_extract(fp.payload_json,'$.state') IN ('funded','trial_credit'))`,
+    sql: `EXISTS(SELECT 1 FROM v2_monthly_budget b JOIN v2_runtime_controls c ON c.month=b.month JOIN v2_budget_allocations a ON a.month=b.month AND a.version=b.allocation_version JOIN v2_runtime_proofs ap ON ap.id=c.allocation_proof_id JOIN v2_runtime_proofs pp ON pp.id=? JOIN v2_runtime_proofs fp ON fp.id=? WHERE b.month=? AND b.environment=? AND c.environment=b.environment AND c.phase='active' AND ap.kind='allocation' AND ap.environment=b.environment AND json_extract(ap.payload_json,'$.allocation.version')=b.allocation_version AND json_extract(ap.payload_json,'$.allocation.manifestHash')=a.manifest_hash AND ap.valid_until>? AND ap.verified_at<=? AND pp.kind='pricing' AND fp.kind='funding' AND pp.environment=b.environment AND fp.environment=b.environment AND pp.payload_json=? AND fp.payload_json=? AND pp.verified_at<=? AND fp.verified_at<=? AND pp.valid_until>? AND fp.valid_until>? AND a.reviewed_at<=? AND a.valid_until>? AND a.funding_valid_until>? AND a.funding_state IN ('funded','trial_credit') AND (${input.monthlyBudgetCapEnabled === false ? "1" : "0"}=1 OR b.settled_krw+b.reserved_krw+b.ambiguous_krw+b.fixed_maintenance_krw+(${carryoverSql})+?<=b.limit_krw) AND b.settled_krw+b.reserved_krw+b.ambiguous_krw+b.fixed_maintenance_krw+(${carryoverSql})+?<=json_extract(fp.payload_json,'$.spendAllowanceKrw') AND json_extract(fp.payload_json,'$.state') IN ('funded','trial_credit'))`,
     values: [
       input.pricingProofId,
       input.fundingProofId,
@@ -54,6 +55,7 @@ export function isPreparedPaidHold(value: unknown): value is PreparedPaidHold {
 }
 export function preparePaidStatements(input: {
   request: PaidHoldRequest;
+  monthlyBudgetCapEnabled?: boolean | undefined;
   reservedKrw: number;
   planHash: string;
   pricingJson: string;
@@ -78,6 +80,7 @@ export function preparePaidStatements(input: {
   // Distinct authenticated phases reserve additive holds. Reusing an unresolved
   // invocation is denied even if only the attempt identifier changes.
   const budget = budgetAdmissionPredicate({
+    monthlyBudgetCapEnabled: input.monthlyBudgetCapEnabled,
     pricingProofId: r.pricingProofId,
     fundingProofId: r.fundingProofId,
     pricingJson: input.pricingJson,
