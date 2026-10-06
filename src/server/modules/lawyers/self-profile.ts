@@ -1,7 +1,9 @@
 import { z } from "zod";
 import { opaqueIdSchema } from "../../../contracts";
+import { CURRENT_POLICY_VERSIONS } from "../../../contracts/consent";
 import { readSnapshot, snapshotStatements, sqlClaim, type V2Core } from "../../db/v2-core";
 import { createV2LawyersRepository } from "../../db/v2-lawyers";
+import { requireSelfAssets, selfAssetClaim } from "./self-assets";
 import {
   emptySelfProfile,
   isDuplicateProfileSave,
@@ -17,6 +19,7 @@ const alive = `NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE (target_kind='accoun
 // Match account-type selection without granting a qualification or moderation role.
 // Existing lawyer roles remain a fallback only when no valid preference is saved.
 const role = `(EXISTS(SELECT 1 FROM app_metadata WHERE key='account-type:'||p.owner_id AND value='lawyer') OR (NOT EXISTS(SELECT 1 FROM app_metadata WHERE key='account-type:'||p.owner_id AND value IN ('customer','lawyer')) AND EXISTS(SELECT 1 FROM v2_role_bindings WHERE owner_id=p.owner_id AND role IN ('lawyer_applicant','verified_lawyer'))))`;
+const currentConsentSql = `EXISTS(SELECT 1 FROM user_consents WHERE user_id=p.owner_id AND terms_version='${CURRENT_POLICY_VERSIONS.termsVersion}' AND privacy_version='${CURRENT_POLICY_VERSIONS.privacyVersion}' AND ai_notice_version='${CURRENT_POLICY_VERSIONS.aiNoticeVersion}' AND over_14_confirmed=1)`;
 type Row = { id: string; owner_id: string; snapshot_id: string; revision: number };
 const latest = `SELECT p.id,p.owner_id,s.id AS snapshot_id,s.revision FROM v2_profiles p JOIN v2_private_snapshots s ON s.target_id=p.id AND s.owner_id=p.owner_id AND s.purpose='profile_revision' JOIN v2_consents c ON c.id=s.id AND c.owner_id=p.owner_id AND c.kind='profile_publication' WHERE c.version IN ('${publicVersion}','${privateVersion}') AND s.state='published' AND s.revision=(SELECT max(revision) FROM v2_private_snapshots WHERE target_id=p.id AND purpose='profile_revision') AND ${alive}`;
 export function createSelfProfileService(core: V2Core, clock = () => new Date().toISOString()) {
@@ -64,7 +67,8 @@ export function createSelfProfileService(core: V2Core, clock = () => new Date().
         throw new z.ZodError([
           { code: "custom", path: [], message: "Complete public profile required" },
         ]);
-      if (next.photoUrl) validateSelfPhoto(next.photoUrl);
+      if (next.photoUrl?.startsWith("data:")) validateSelfPhoto(next.photoUrl);
+      await requireSelfAssets(core, ownerId, next);
       const snapshotId = crypto.randomUUID();
       const claimId = crypto.randomUUID();
       const now = clock();
@@ -74,9 +78,10 @@ export function createSelfProfileService(core: V2Core, clock = () => new Date().
         scope: "photo/introduction/practice/office/contact/portfolio",
         acceptedAt: now,
       });
+      const assets = selfAssetClaim(next);
       const claim = core.statement(
-        `INSERT INTO v2_mutation_claims(id,owner_id,target_id,revision) SELECT ?,p.owner_id,p.id,? FROM v2_profiles p WHERE p.id=? AND p.owner_id=? AND ${alive} AND ${role} AND coalesce((SELECT max(revision) FROM v2_private_snapshots WHERE target_id=p.id AND purpose='profile_revision'),1)=?`,
-        [claimId, next.revision, next.id, ownerId, current.revision],
+        `INSERT INTO v2_mutation_claims(id,owner_id,target_id,revision) SELECT ?,p.owner_id,p.id,? FROM v2_profiles p WHERE p.id=? AND p.owner_id=? AND ${alive} AND ${role} AND ${currentConsentSql} AND coalesce((SELECT max(revision) FROM v2_private_snapshots WHERE target_id=p.id AND purpose='profile_revision'),1)=?${assets.sql}`,
+        [claimId, next.revision, next.id, ownerId, current.revision, ...assets.args],
       );
       const changed = await core.changed([
         claim,
@@ -119,27 +124,64 @@ export function createSelfProfileService(core: V2Core, clock = () => new Date().
       if (!changed) throw new LawyerError("STALE_REVISION");
       return next;
     },
-    async publishMine(ownerId: string, published: boolean, expectedRevision: number) {
+    async publishMine(
+      ownerId: string,
+      published: boolean,
+      expectedRevision: number,
+      profileId: string,
+    ) {
       const current = await service.getMine(ownerId);
+      if (current.id !== profileId) throw new LawyerError("NOT_FOUND");
       if (current.revision === expectedRevision + 1 && current.published === published)
         return current;
       if (current.revision !== expectedRevision) throw new LawyerError("STALE_REVISION");
       return service.saveMine(ownerId, current, published);
     },
+    /** Stream fences use SQL metadata so each chunk does not decrypt every portfolio entry again. */
+    async isCurrent(
+      ownerId: string,
+      profile: SelfProfile,
+      publicOnly: boolean,
+      sessionId?: string,
+    ) {
+      if (!publicOnly) {
+        if (!sessionId) return false;
+        return !!(await core
+          .statement(
+            `SELECT p.id FROM v2_profiles p WHERE p.id=? AND p.owner_id=? AND ${alive} AND ${role} AND ${currentConsentSql} AND coalesce((SELECT max(revision) FROM v2_private_snapshots WHERE target_id=p.id AND purpose='profile_revision'),1)=? AND EXISTS(SELECT 1 FROM session WHERE id=? AND user_id=p.owner_id AND expires_at>?)`,
+            [profile.id, ownerId, profile.revision, sessionId, Date.parse(clock())],
+          )
+          .first());
+      }
+      const assets = selfAssetClaim(profile);
+      return !!(await core
+        .statement(
+          `${latest} AND c.version=? AND ${role} AND ${currentConsentSql} AND p.id=? AND p.owner_id=? AND s.revision=?${assets.sql}`,
+          [publicVersion, profile.id, ownerId, profile.revision, ...assets.args],
+        )
+        .first());
+    },
     async get(id: string) {
       opaqueIdSchema.parse(id);
       const row = await core
-        .statement(`${latest} AND c.version=? AND ${role} AND p.id=?`, [publicVersion, id])
+        .statement(`${latest} AND c.version=? AND ${role} AND ${currentConsentSql} AND p.id=?`, [
+          publicVersion,
+          id,
+        ])
         .first<Row>();
       if (!row) throw new LawyerError("NOT_FOUND");
       const profile = await decode(row);
       if (!profile?.published) throw new LawyerError("NOT_FOUND");
+      try {
+        await requireSelfAssets(core, row.owner_id, profile);
+      } catch {
+        throw new LawyerError("NOT_FOUND");
+      }
       const current = await core
-        .statement(`${latest} AND c.version=? AND ${role} AND p.id=? AND s.id=?`, [
-          publicVersion,
-          id,
-          row.snapshot_id,
-        ])
+        .statement(
+          `${latest} AND c.version=? AND ${role} AND ${currentConsentSql} AND p.id=? AND s.id=?`,
+          [publicVersion, id, row.snapshot_id],
+        )
         .first<Row>();
       if (!current) throw new LawyerError("NOT_FOUND");
       return profile;
@@ -153,11 +195,10 @@ export function createSelfProfileService(core: V2Core, clock = () => new Date().
     }) {
       const limit = filters.limit ?? 20;
       const rows = await core
-        .statement(`${latest} AND c.version=? AND ${role} AND p.id>? ORDER BY p.id LIMIT ?`, [
-          publicVersion,
-          filters.cursor ?? "",
-          limit + 1,
-        ])
+        .statement(
+          `${latest} AND c.version=? AND ${role} AND ${currentConsentSql} AND p.id>? ORDER BY p.id LIMIT ?`,
+          [publicVersion, filters.cursor ?? "", limit + 1],
+        )
         .all<Row>();
       const items: SelfProfile[] = [];
       const page = rows.results.slice(0, limit);

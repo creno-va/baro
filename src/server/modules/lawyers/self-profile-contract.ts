@@ -5,6 +5,11 @@ import {
   v2RegionSchema,
 } from "../../../contracts/v2/lawyers";
 
+export const selfAssetUrl = (profileId: string, assetId: string) =>
+  `/api/v2/lawyers/self-service/${encodeURIComponent(profileId)}/assets/${encodeURIComponent(assetId)}`;
+const assetPath = z
+  .string()
+  .regex(/^\/api\/v2\/lawyers\/self-service\/[A-Za-z0-9_-]+\/assets\/[A-Za-z0-9_-]+$/);
 const publicLink = z.literal("").or(z.url().pipe(v2ExternalConsultationUrlSchema));
 export const selfProfileSchema = z
   .strictObject({
@@ -23,23 +28,36 @@ export const selfProfileSchema = z
       .refine((v) => v === "" || /^\+?[0-9][0-9 ()-]{6,29}$/.test(v)),
     email: z.email().max(254).or(z.literal("")),
     website: publicLink,
+    photoAssetId: z.string().min(1).max(128).nullable().optional(),
     photoUrl: z
       .string()
       .max(44000)
       .regex(/^data:image\/jpeg;base64,[A-Za-z0-9+/]+=*$/)
+      .or(assetPath)
       .nullable(),
     portfolio: z
       .array(
         z.strictObject({
           id: z.string().min(1).max(128),
           title: z.string().trim().min(1).max(300),
-          url: publicLink.nullable(),
+          url: publicLink.or(assetPath).nullable(),
+          assetId: z.string().min(1).max(128).optional(),
         }),
       )
       .max(30),
     published: z.boolean(),
     verificationStatus: z.enum(["self_declared", "verified"]),
   })
+  .refine(
+    (p) =>
+      (p.photoAssetId
+        ? p.photoUrl === selfAssetUrl(p.id, p.photoAssetId)
+        : !p.photoUrl?.startsWith("/")) &&
+      p.portfolio.every((item) =>
+        item.assetId ? item.url === selfAssetUrl(p.id, item.assetId) : !item.url?.startsWith("/"),
+      ),
+    "Asset links must match this profile",
+  )
   .refine(
     (p) =>
       new Set(p.practiceAreas).size === p.practiceAreas.length &&

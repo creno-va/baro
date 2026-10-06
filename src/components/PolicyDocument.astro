@@ -1,0 +1,19 @@
+---
+import * as drafts from "../content/policy-drafts";
+
+interface Props {
+  kind: keyof typeof drafts.policyDrafts;
+}
+const { kind } = Astro.props;
+// biome-ignore lint/correctness/noUnusedVariables: Astro template reads policy.
+const policy = drafts.policyDrafts[kind];
+// biome-ignore lint/correctness/noUnusedVariables: Astro template reads the versions.
+const { currentConsentVersions, POLICY_DRAFT_VERSION } = drafts;
+---
+<article class="policy-document">
+  <header class="policy-heading"><span class="policy-eyebrow">이용 안내 · 검토 중</span><h1>{policy.title}</h1><p>{policy.description}</p></header>
+  <aside class="policy-draft" role="note" aria-label="미승인 초안 안내"><strong>공개 게시 승인을 받지 않은 초안입니다.</strong><p>문서 초안 버전 {POLICY_DRAFT_VERSION} · 시행일 미확인</p><p>현재 개발용 동의 버전: 약관 {currentConsentVersions.termsVersion} · 개인정보 {currentConsentVersions.privacyVersion} · AI 고지 {currentConsentVersions.aiNoticeVersion}. 초안을 읽는 것이 동의 버전 변경이나 공개 승인 완료를 뜻하지 않습니다.</p></aside>
+  <nav class="policy-toc" aria-label="문서 목차">{policy.sections.map((section) => <a href={`#${section.id}`}>{section.title}</a>)}</nav>
+  {policy.sections.map((section) => <section class="policy-card" id={section.id}><h2>{section.title}</h2>{section.paragraphs.map((paragraph) => <p>{paragraph}</p>)}</section>)}
+  <nav class="policy-links" aria-label="다른 이용 안내"><a href="/help">도움말</a><a href="/policies/terms">이용약관 초안</a><a href="/policies/privacy">개인정보 처리방침 초안</a><a href="/policies/ai">AI 이용 고지 초안</a><a href="/lawyer">내 프로필</a></nav>
+</article>

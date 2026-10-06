@@ -1,0 +1,84 @@
+.policy-document,
+.help-document {
+  width: min(100%, 52rem);
+  margin-inline: auto;
+  padding-block: clamp(0.5rem, 3vw, 2rem);
+  overflow-wrap: anywhere;
+  line-height: 1.8;
+}
+.policy-heading {
+  margin-bottom: 1.5rem;
+}
+.policy-heading h1 {
+  margin: 0.5rem 0;
+  font-size: clamp(1.7rem, 4vw, 2.3rem);
+  line-height: 1.4;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+}
+.policy-heading p,
+.policy-eyebrow {
+  color: var(--color-muted-foreground);
+}
+.policy-eyebrow {
+  font-size: 0.85rem;
+}
+.policy-card,
+.policy-draft {
+  margin-block: 1rem;
+  padding: clamp(1rem, 3vw, 1.75rem);
+  border: 1px solid #dce5f1;
+  border-radius: 1.25rem;
+  background: var(--color-card);
+}
+.policy-draft {
+  background: #edf5ff;
+  color: #254873;
+}
+.policy-draft p {
+  margin: 0.5rem 0 0;
+  font-size: 0.9rem;
+}
+.policy-card h2 {
+  font-size: 1.15rem;
+  font-weight: 650;
+  margin-bottom: 0.8rem;
+}
+.policy-card p + p {
+  margin-top: 0.9rem;
+}
+.policy-toc,
+.policy-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem 1.2rem;
+  padding-block: 0.75rem;
+}
+.policy-document a,
+.help-document a {
+  color: #1858b1;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+.policy-document a:focus-visible,
+.help-document a:focus-visible,
+.help-document summary:focus-visible {
+  outline: 3px solid var(--color-ring);
+  outline-offset: 3px;
+  border-radius: 0.25rem;
+}
+.policy-card:target {
+  scroll-margin-top: 2rem;
+  border-color: #78a6e4;
+}
+.help-document details {
+  border-top: 1px solid var(--color-border);
+  padding-block: 0.8rem;
+}
+.help-document summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.help-document details p {
+  margin-top: 0.75rem;
+}

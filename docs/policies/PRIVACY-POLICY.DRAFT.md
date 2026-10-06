@@ -27,9 +27,9 @@
 | 사건 준비 | 서술·질문/답변·모름/건너뛰기·요약 revision·chat·사람/사실/타임라인·행동·출처 | 입력/AI 생성/이용자 수정; owner에게만 |
 | 자료 처리 | 원본·filename/format/bytes/duration/pages·text/OCR·음성 전사·sampled frame·timestamps/coverage/gaps | 업로드·Container·ASR/AI; 비공개 |
 | 리포트 | 사실/주장/미확인·상반/불리 자료·출처·편집/가림/제외·PDF/선택 원본 ZIP | 이용자 확인 후 생성/download; 비공개 |
-| 변호사 등록·확인 | 본인·자격·소속/사무실 확인용 정보와 제출 자료·심사 결정 | private scope; 자격 확인 담당자만 |
-| 공개 프로필 | 이름·사진·소개·주소·분야·전화/email/상담 링크·text/image/PDF 포트폴리오 | 본인 게시 신청·심사 승인 revision만 공개 |
-| 신고·심사 | 프로필/게시물 신고 대상·정해진 사유·처리 상태·담당 결정 | 필요한 담당자에게만; 사건 원문 열람 아님 |
+| 역할·자기 프로필 관리 | 본인이 선택한 고객/변호사 역할·프로필 초안/revision·공개 항목/시각 | 로그인 계정의 자기 프로필만; 선택은 자격 확인 아님 |
+| 공개 프로필 | 이름·사진·소개·주소·분야·전화/email/외부 링크·활동 제목/이미지/PDF 포트폴리오 | 본인 공개 동의와 최신 공개 revision만 비로그인 제공 |
+| 기존 확인 자료·심사 기록 | 기존 backend에 존재하는 자료와 결정 | 과거 기록 보존; MVP에 신규 심사/어드민 이용 흐름을 제공하지 않음 |
 | 제한·비용·삭제 | opaque operation/job/file ID·사용량/예약/actual 비용·상태·삭제 tombstone/inventory | 서버 생성; owner 상태/운영 aggregate |
 | 보안·장애 | request/workflow/job ID·route template·status·latency·고정 error 코드 | application allowlist; 플랫폼 수집은 별도 확인 |
 | 선택 지표 | 가명 분석 ID·허용 UI 이벤트·사건 ID HMAC hash | 명시적 opt-in, 해당 탭 sessionStorage |
@@ -59,10 +59,18 @@ Container는 job에 필요한 한 파일의 평문 stream을 임시 처리하고
 식별정보를 검색어로 그대로 보내지 않도록 설계한다. 텍스트·private 파일은 애플리케이션
 암호화로 보관하지만 처리·전사·AI 생성에 필요한 구간은 해당 처리자에게 평문으로 전달될 수 있다.
 
-변호사는 공개할 내용만 별도로 제출하고 승인된 revision의 정제 자산만 public 저장소로
-복사한다. 신분·자격 증빙과 사건 원본을 공개하지 않는다. 공개 프로필은 검색/제3자 다운로드가
-가능할 수 있으므로 사진·포트폴리오의 권리/제3자 식별정보를 확인해야 한다. 보류/반려 revision은
-기존 승인 프로필을 덮어쓰지 않으며 운영 심사자에게 사건 원문 접근 권한을 부여하지 않는다.
+변호사는 공개할 자기 프로필을 저장하고 공개 범위를 확인·동의한 뒤 직접 게시한다. 기존 작은
+JPEG 사진은 encrypted D1 snapshot에 보관하며 새 사진·포트폴리오 파일은 기존 #58/#59 API의
+R2 private 원본→정제 derivative를 사용한다. 정제 완료한 자기 사진/portfolio만 프로필에 연결하며
+public serving에서 최신 공개 revision·role·현재 동의·삭제 상태와 자산 owner/profile/purpose/ready를
+검사한다. self-service 자산은 private R2의 정제된 derivative를 권한 검사한 API로 제공한다.
+원본·private 사건 파일·신분/자격 증빙·처리 중 자료를 공개 endpoint로 제공하지 않는다.
+기존 심사 승인 공개 R2 copy와 그 증거는 별도로 보존하며 이번 MVP에 심사 UI를 추가하지 않는다.
+
+사진·포트폴리오의 권리/제3자 식별정보와 공개 자료의 저장·전달 가능성을 확인한다. 공개된
+프로필의 수정은 새 저장 revision에 반영된다. 비공개 전환·role 변경·현재 동의 불일치·계정/자산
+삭제 후 신규 공개 제공과 진행 중 자료 stream을 차단한다. 제3자가 저장한 사본까지 파기할 수는
+없다. 역할 선택과 프로필 저장은 변호사 자격 확인이나 법률 승인 증거가 아니다.
 
 ## 4. 제3자 제공·처리위탁·국외 이전
 
@@ -75,7 +83,7 @@ Container는 job에 필요한 한 파일의 평문 stream을 임시 처리하고
 | 처리자/외부 경로 | 목적·전달 범위 | 확정되지 않은 사항 |
 | --- | --- | --- |
 | Google/Naver/Kakao | 로그인 요청·공급자 인증/식별 | 실제 계약 법인·처리 국가·token 처리/보존·거부 영향 |
-| Cloudflare Workers/D1/Workflows/KV/R2 | hosting·계정/사건/private 원본/파생/report·public approved assets·삭제/보안 | 법인·region/전송/보관·backup/로그 기간·접근/삭제 조건 |
+| Cloudflare Workers/D1/Workflows/KV/R2 | hosting·계정/사건/private 원본/파생/report·self-service 공개 derivative 및 과거 승인 public assets·삭제/보안 | 법인·region/전송/보관·backup/로그 기간·접근/삭제 조건 |
 | Cloudflare Containers/DO | job-scoped 임시 document/image/audio/video 처리·상태 | 실행/egress 국가·temporary disk/로그·종료/삭제 보장 |
 | Cloudflare Workers AI/Whisper 경로 | audio 전사·영상 audio/선택 frame 처리에 필요한 자료 | 실제 모델/수탁 법인·처리 국가·전달 범위·보존/학습/삭제 조건 |
 | AI Gateway와 모델 공급자(현재 합의 OpenAI 경로) | 최소화된 사건·파일 추출 정보와 생성 지시 | Unified Billing 계약·법인·국가·provider 보존/학습·ZDR 실제 적용 |
@@ -98,9 +106,9 @@ BARO는 사건 자료를 변호사에게 자동 제공하지 않는다. 이용�
 
 | 항목 | 목표/확정 경계 |
 | --- | --- |
-| 계정·동의·private 프로필·자격 자료 | 계정/자료 삭제까지; 별도 심사 증빙 보존은 근거/최소 기간 검토 후 확정 |
+| 계정·동의·private 프로필·기존 자격 자료 | 계정/자료 삭제까지 목표; 기존 증빙/법정 보존 근거·최소 기간은 미확인 |
 | 사건·chat·요약·행동·원본/파생/PDF/ZIP | 이용자가 사건/자료 또는 계정을 삭제할 때까지 |
-| 공개 프로필/자산 | 승인된 게시 기간, 철회/삭제 시 public pointer·cache·원격 copy 정리 |
+| 공개 프로필/자산 | 본인이 선택한 공개 기간; 비공개·role 변경·동의 불일치·삭제 시 제공 차단, 원격 정리는 별도 절차 |
 | 세션 | 만료·logout·계정 삭제까지 |
 | 임시 Container 평문·부분 upload/export | job 종료·실패·취소/만료 시 정리; sleep만으로 삭제 완료를 보장하지 않음 |
 | 기술/보안 logs | 30일 이내 목표, 실제 platform/provider·계약/접근 설정 확인 후 확정 |
@@ -130,13 +138,16 @@ cache는 durable cleanup으로 비동기 삭제한다. 202는 접수/primary 접
 ## 7. 권리·안전 조치
 
 이용자는 자신의 자료 열람·수정·처리 동의 철회·삭제·계정 종료를 요청할 수 있다. 공개 프로필
-수정은 심사 상태와 이전 승인 revision을 구분해 안내한다. 개인정보 열람/정정/삭제/처리정지·
+수정은 저장한 revision과 공개 여부를 구분해 안내한다. 개인정보 열람/정정/삭제/처리정지·
 법률상 권리 행사와 대리인 확인은 실제 문의처에서 본인/권한을 확인한 뒤 관련 법령에 따라 처리한다.
 
 환경별 key/secret·소유권/역할·전송 암호화·private text/chunk 저장 암호화·job-scoped capability·
 CSP·최소 권한·bounded 비용/삭제·취약점 검증을 적용하는 목표다. 앱 logs/artifact에는 원문·
 filename/file hash·OCR/transcript/frame·신분 자료·token/cookie·signed URL·SQL/stack을 넣지 않는다.
-운영자는 profile/자격 심사 scope만 갖고 일반 사건 원문을 열람하는 UI를 제공하지 않는다.
+변호사 역할로 고객 사건 원문에 접근하는 권한을 제공하지 않는다. 동일 owner의 고객→변호사
+전환 후 사건/chat/private 자료 차단은 공유 역할 가드와 합성 SQL/API 검증으로 확인했다.
+실제 OAuth 전환·운영 자료 접근 차단 smoke는 공개 전에 별도로 확인한다.
+MVP에 어드민/심사 UI를 추가하지 않는다.
 
 ## 8. 쿠키와 선택 지표
 
@@ -153,3 +164,15 @@ helpful boolean은 별도 선택 요청으로 D1에 저장되고 지표 철회�
 추가 고지/동의 필요성을 확인한다. 기존 사건의 동의 기록을 덮어쓰지 않는다. 문의와 권리구제
 기관 정보는 실제 담당/최신 공식 연락처 검증 뒤 공개본에 넣는다. #70의 qualified human review와
 사업자/공급자/보존 근거, #71의 실제 기능/처리/삭제 증거 없이는 Approved 상태로 바꾸지 않는다.
+
+## 10. 현재 코드의 동의 경계와 공개 전 확인
+
+개발용 필수 동의는 `2026-10-04`, 이 v2 초안/화면은 `2026-10-06-v2-draft`이며 게시 승인 전이다.
+파일 예약은 현재 `aiNoticeVersion`을 `autoProcessConsentVersion`으로 전달하고 서비스가 현재
+필수 동의와 대조한다. 이 기술적 검사만으로 국외 처리/민감정보에 필요한 법률상 동의 구조가
+충족되었다고 판단하지 않는다. 자료별 자동 처리 거부·철회 및 진행 중 job 차단의 실제 UI/원격
+효과는 #58/#59/#67/#71에서 확인해야 한다. 구현 목표를 완료 사실로 표시하지 않는다.
+
+프로필 공개 기술 기록은 `mvp-self-profile-public-v1`과 항목·시각·revision이며 약관/국외 처리
+동의 승인 버전을 대신하지 않는다. #20/#70의 실제 법률 검토·사업자·국가·계약·보존·게시 증거가
+없으므로 blocker와 Draft를 유지한다. [필드별 인계](../development/LAWYER-POLICY-HANDOFF.md).

@@ -32,7 +32,14 @@ export const lawyersFixture: LawyerView[] = [
     published: true,
   },
 ];
-export type LawyerMockStore = { profiles: LawyerView[]; owners: Record<string, string> };
+export type LawyerMockStore = {
+  profiles: LawyerView[];
+  owners: Record<string, string>;
+  assets?: Record<
+    string,
+    { ownerId: string; profileId: string; type: string; data: string; purpose: string }
+  >;
+};
 export type LawyerMockContext = {
   read(): LawyerMockStore | null;
   write(state: LawyerMockStore): void;
@@ -65,6 +72,82 @@ export function createMockLawyers(context: LawyerMockContext) {
     return { store, profile };
   };
   return {
+    async assets() {
+      const owner = await own();
+      return Object.entries(state().assets ?? {})
+        .filter(([, a]) => a.profileId === owner.profile.id)
+        .map(([id, a]) => ({
+          id,
+          revision: 1,
+          status: "ready",
+          purpose: a.purpose,
+          kind: a.type === "application/pdf" ? "pdf" : "image",
+        }));
+    },
+    async uploadAsset(input: {
+      profileId: string;
+      file: File;
+      purpose: "profile_photo" | "portfolio";
+    }) {
+      const owner = await own();
+      if (owner.profile.id !== input.profileId)
+        throw new LawyerApiError("NOT_FOUND", "본인 프로필만 변경할 수 있어요.");
+      if (input.file.size > 1_000_000)
+        throw new LawyerApiError("QUOTA_EXCEEDED", "예시 저장소는 파일당 1MB까지 보관해요.");
+      const bytes = new Uint8Array(await input.file.arrayBuffer());
+      const data = Array.from(bytes, (b) => String.fromCharCode(b)).join("");
+      const checked = await own();
+      if (checked.profile.id !== input.profileId)
+        throw new LawyerApiError("NOT_FOUND", "계정이 변경됐어요.");
+      const store = state(),
+        id = crypto.randomUUID();
+      store.assets ??= {};
+      store.assets[id] = {
+        ownerId: (await context.session()).user?.id ?? "",
+        profileId: input.profileId,
+        type: input.file.type,
+        data: btoa(data),
+        purpose: input.purpose,
+      };
+      context.write(store);
+      return {
+        id,
+        revision: 1,
+        status: "ready",
+        purpose: input.purpose,
+        kind: input.file.type === "application/pdf" ? "pdf" : "image",
+      };
+    },
+    async removeAsset(input: { assetId: string }) {
+      const owner = await own();
+      const store = state();
+      if (store.assets?.[input.assetId]?.profileId !== owner.profile.id)
+        throw new LawyerApiError("NOT_FOUND", "본인 자료만 삭제할 수 있어요.");
+      delete store.assets[input.assetId];
+      context.write(store);
+    },
+    async assetBlob(input: { profileId: string; assetId: string; privateRead: boolean }) {
+      const store = state(),
+        asset = store.assets?.[input.assetId];
+      const profile = store.profiles.find((p) => p.id === input.profileId);
+      if (
+        !profile ||
+        !asset ||
+        asset.profileId !== profile.id ||
+        (!input.privateRead &&
+          !(
+            profile.photoAssetId === input.assetId ||
+            profile.portfolio.some((p) => p.assetId === input.assetId)
+          ))
+      )
+        throw new LawyerApiError("NOT_FOUND", "공개 자료를 찾지 못했어요.");
+      if (input.privateRead) {
+        if ((await own()).profile.id !== profile.id)
+          throw new LawyerApiError("NOT_FOUND", "본인 자료만 볼 수 있어요.");
+      } else if (!profile.published)
+        throw new LawyerApiError("NOT_FOUND", "공개 자료를 찾지 못했어요.");
+      return { data: asset.data, type: asset.type };
+    },
     async list(filters: LawyerFilters = {}) {
       return clone(
         rotateLawyers(
@@ -104,6 +187,17 @@ export function createMockLawyers(context: LawyerMockContext) {
           "CONFLICT",
           "다른 화면에서 변경됐어요. 최신 프로필을 불러온 후 다시 저장해 주세요.",
         );
+      const references = [
+        ...(input.photoAssetId ? [{ id: input.photoAssetId, purpose: "profile_photo" }] : []),
+        ...input.portfolio.flatMap((p) =>
+          p.assetId ? [{ id: p.assetId, purpose: "portfolio" }] : [],
+        ),
+      ];
+      for (const ref of references) {
+        const asset = store.assets?.[ref.id];
+        if (!asset || asset.profileId !== profile.id || asset.purpose !== ref.purpose)
+          throw new LawyerApiError("NOT_FOUND", "본인 자료만 연결할 수 있어요.");
+      }
       const result = selfProfileSchema.safeParse({
         ...input,
         revision: profile.revision + 1,
@@ -119,11 +213,21 @@ export function createMockLawyers(context: LawyerMockContext) {
       context.write(store);
       return clone(result.data);
     },
-    async publishMine(published: boolean) {
+    async publishMine(
+      published: boolean,
+      current: { profileId: string; expectedRevision: number },
+    ) {
       const owner = await own();
       const store = state();
       const profile = store.profiles.find((p) => p.id === owner.profile.id);
       if (!profile) throw new LawyerApiError("NOT_FOUND", "프로필을 찾을 수 없어요.");
+      if (!current || profile.id !== current.profileId)
+        throw new LawyerApiError("NOT_FOUND", "본인 프로필만 변경할 수 있어요.");
+      if (
+        profile.revision !== current.expectedRevision &&
+        !(profile.revision === current.expectedRevision + 1 && profile.published === published)
+      )
+        throw new LawyerApiError("CONFLICT", "다른 화면에서 변경됐어요.");
       if (profile.published === published) return clone(profile);
       if (published && !profileReady(selfProfileSchema.parse(profile)))
         throw new LawyerApiError(
@@ -157,6 +261,15 @@ export const mockLawyers = createMockLawyers({
   },
 });
 export const lawyersMockHandlers = {
+  "lawyers.removeAsset": (input: { assetId: string }) => mockLawyers.removeAsset(input),
+  "lawyers.assets": () => mockLawyers.assets(),
+  "lawyers.uploadAsset": (input: {
+    profileId: string;
+    file: File;
+    purpose: "profile_photo" | "portfolio";
+  }) => mockLawyers.uploadAsset(input),
+  "lawyers.assetBlob": (input: { profileId: string; assetId: string; privateRead: boolean }) =>
+    mockLawyers.assetBlob(input),
   "lawyers.list": (input: unknown) =>
     mockLawyers.list(
       z
@@ -172,6 +285,18 @@ export const lawyersMockHandlers = {
   "lawyers.getMine": () => mockLawyers.getMine(),
   "lawyers.saveMine": (input: unknown) => mockLawyers.saveMine(selfProfileSchema.parse(input)),
   "lawyers.publishMine": (input: unknown) =>
-    mockLawyers.publishMine(z.strictObject({ published: z.boolean() }).parse(input).published),
+    (() => {
+      const parsed = z
+        .strictObject({
+          published: z.boolean(),
+          profileId: z.string().min(1),
+          expectedRevision: z.number().int().positive(),
+        })
+        .parse(input);
+      return mockLawyers.publishMine(parsed.published, {
+        profileId: parsed.profileId,
+        expectedRevision: parsed.expectedRevision,
+      });
+    })(),
 };
 registerMockHandlers(lawyersMockHandlers);

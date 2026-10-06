@@ -49,6 +49,12 @@ test("integrated lawyer login/consent/editor uses persistent API mock with no re
   await page.getByRole("button", { name: "포트폴리오 추가" }).click();
   await page.getByLabel("활동 제목 1").fill("합성 포트폴리오");
   await page.getByLabel("자료 URL 1").fill("https://example.com/portfolio");
+  await page.getByLabel("포트폴리오 파일 (이미지·PDF)").setInputFiles({
+    name: "synthetic.pdf",
+    mimeType: "application/pdf",
+    buffer: Buffer.from("%PDF-1.4\nsynthetic offline adapter input\n%%EOF"),
+  });
+  await page.getByLabel("활동 제목 2").fill("합성 PDF 포트폴리오");
   await page.getByRole("button", { name: "프로필 저장" }).click();
   await expect(page.getByText("프로필을 저장했어요.", { exact: true })).toBeVisible();
   await page.reload();
@@ -76,6 +82,9 @@ test("integrated lawyer login/consent/editor uses persistent API mock with no re
   await expect(page.getByText("본인·자격·사무실 수동 확인", { exact: false })).toHaveCount(0);
   await expect(page.getByText("본인 작성 정보입니다.", { exact: false })).toBeVisible();
   await expect(page.getByRole("img", { name: "E 통합 시연 변호사 프로필 사진" })).toBeVisible();
+  const downloaded = page.waitForEvent("download");
+  await page.getByRole("link", { name: "합성 PDF 포트폴리오 자료 다운로드" }).click();
+  expect((await downloaded).suggestedFilename()).toContain("합성 PDF 포트폴리오");
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await page.getByRole("heading", { name: "E 통합 시연 변호사", exact: true }).click();
   await page.screenshot({ path: ".wrangler/lawyer-api-mock-390.png", fullPage: true });
@@ -85,7 +94,7 @@ test("integrated lawyer login/consent/editor uses persistent API mock with no re
   expect(snapshot.owners["example-lawyer"]).toBeTruthy();
   const id = snapshot.owners["example-lawyer"];
   expect(snapshot.profiles.find((profile: { id: string }) => profile.id === id).photoUrl).toMatch(
-    /^data:image\/jpeg;base64,/,
+    /self-service.*assets/,
   );
   await page.goto("/lawyer");
   await expect(page.locator("astro-island[ssr]")).toHaveCount(0);
@@ -93,6 +102,15 @@ test("integrated lawyer login/consent/editor uses persistent API mock with no re
   await expect(page.getByText("프로필을 비공개로 전환했어요.", { exact: true })).toBeVisible();
   await page.reload();
   await expect(page.getByText("비공개", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "자료 상태 확인" }).click();
+  await expect(page.getByRole("button", { name: "업로드 자료 삭제" })).toHaveCount(2);
+  await expect(page.getByRole("button", { name: "업로드 자료 삭제" }).nth(1)).toBeDisabled();
+  await page.getByRole("button", { name: "포트폴리오 2 삭제" }).click();
+  await page.getByRole("button", { name: "프로필 저장" }).click();
+  await expect(page.getByText("프로필을 저장했어요.", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "업로드 자료 삭제" }).nth(1).click();
+  await expect(page.getByText("자료 삭제를 접수했어요.", { exact: false })).toBeVisible();
+  await expect(page.getByRole("button", { name: "업로드 자료 삭제" })).toHaveCount(1);
   await page.goto(`/lawyers/${id}`);
   await expect(page.getByRole("alert")).toBeVisible();
   expect(requests).toEqual([]);
