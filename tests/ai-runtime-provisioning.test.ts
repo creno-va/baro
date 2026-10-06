@@ -35,6 +35,7 @@ test("a fresh customer can admit their first text-only AI job without a prior fi
       APP_ENV: "preview",
       DB: preview.binding,
       AI: {},
+      AI_GATEWAY_ID: "synthetic-gateway",
       WORKSPACE_PROCESSING: {},
       AI_MODEL_TOKEN_BOUNDS_JSON: JSON.stringify(modelBounds(o, result.evidenceHash)),
     } as unknown as Env;

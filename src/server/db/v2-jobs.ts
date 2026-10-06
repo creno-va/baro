@@ -821,7 +821,10 @@ export function createV2JobsRepository(core: V2Core) {
           core.claim(
             g,
             claimId,
-            `EXISTS(SELECT 1 FROM v2_jobs j WHERE j.id=? AND j.status='failed' AND j.retryable=1 AND ${quotaRetryPredicate} AND (${paid?.predicate.sql ?? "NOT EXISTS(SELECT 1 FROM v2_runtime_controls)"}) AND ${target} AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind=j.target_kind AND target_id=j.target_id))`,
+            // Keep the independent funding predicate beside the correlated job
+            // check. Nesting it inside that EXISTS exceeds workerd D1's SQL
+            // expression depth even though desktop SQLite accepts the query.
+            `EXISTS(SELECT 1 FROM v2_jobs j WHERE j.id=? AND j.status='failed' AND j.retryable=1 AND ${quotaRetryPredicate} AND ${target} AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind=j.target_kind AND target_id=j.target_id)) AND (${paid?.predicate.sql ?? "NOT EXISTS(SELECT 1 FROM v2_runtime_controls)"})`,
             [jobId, ...(paid?.predicate.values ?? [])],
           ),
           ...quotaRetryStatements(core, jobId, claimId),

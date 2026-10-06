@@ -2,6 +2,37 @@ import { existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import ts from "typescript";
 
+// Dependency and deployment configuration changes do not appear in the TypeScript
+// import graph. Keep the actual admission/execution paths covered even when no
+// application source or test file changes with them.
+const aiRuntimeTests = [
+  "src/server/api/health.test.ts",
+  "tests/ai-preflight.test.ts",
+  "tests/ai-runtime-provisioning.test.ts",
+  "tests/ai-runtime-execution.test.ts",
+  "tests/ai-runtime-workerd.test.ts",
+  "tests/llm-gateway-attempts.test.ts",
+  "tests/llm-gateway.test.ts",
+  "tests/budget-gateway-ledger.test.ts",
+  "tests/media-gateway.test.ts",
+  "tests/file-processing-execution.test.ts",
+  "tests/asset-processing-runtime.test.ts",
+] as const;
+
+function affectsAiRuntime(file: string): boolean {
+  return (
+    /^(?:package\.json|bun\.lock|\.bun-version|wrangler(?:\.[^/]+)?\.(?:jsonc?|toml)|astro\.config\.ts|tsconfig(?:\.[^/]+)?\.json)$/.test(
+      file,
+    ) ||
+    /^src\/(?:worker\.ts$|env\.d\.ts$|contracts\/|workflows\/|server\/(?:runtime\/|db\/|crypto\/|api\/(?:index\.ts$|v2\/(?:workspaces|files|reports)\.ts$)|modules\/(?:budget|llm-gateway|legal-retrieval|workspace|file-processing|asset-processing)\/))/.test(
+      file,
+    ) ||
+    /^(?:\.github\/(?:workflows|actions)\/|drizzle\/|services\/file-processor\/|scripts\/(?:development-checks|provision-ai-budget|remote-budget-d1|apply-d1-migrations|ai-preflight|smoke|check-deployment|check-runtime-secrets)\.ts$)/.test(
+      file,
+    )
+  );
+}
+
 export function validationScope(files: string[]) {
   return {
     native: files.some((file) =>
@@ -68,6 +99,9 @@ export function browserTargets(files: string[], available: string[]): string[] {
 /** Follow relative imports/re-exports to select existing consumer tests even
  * when a service/auth patch does not edit a test. */
 export async function unitTargets(files: string[], tests: string[]): Promise<string[]> {
+  const requiredAiTests = files.some(affectsAiRuntime) ? aiRuntimeTests : [];
+  if (requiredAiTests.some((test) => !tests.includes(test)))
+    throw new Error("AI_RUNTIME_TEST_MISSING");
   const changed = new Set(files.map((file) => resolve(file)));
   const cache = new Map<string, string[]>();
   const imports = async (path: string) => {
@@ -94,7 +128,7 @@ export async function unitTargets(files: string[], tests: string[]): Promise<str
     cache.set(path, paths);
     return paths;
   };
-  const selected: string[] = [];
+  const selected: string[] = [...requiredAiTests];
   for (const test of tests) {
     if (test.startsWith("tests/evals/") || test.startsWith("tests/fixtures/")) continue;
     const visited = new Set<string>();
