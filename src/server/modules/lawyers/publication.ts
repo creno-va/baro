@@ -176,6 +176,11 @@ export function createLawyerPublicationService(core: V2Core, deps: PublicationDe
       )
       .first<{ id: string; object_key: string; cipher_bytes: number; encrypted_payload: string }>();
   return {
+    /** Only identifiers leave the trusted service; profile content stays in D1. */
+    async approvedAssetIds(ownerId: string, profileId: string, approvedRevision: number) {
+      const current = await snapshot(ownerId, profileId, approvedRevision);
+      return current.sources.map((source) => source.assetId);
+    },
     async recoverInterruptedPublicCopies(limit = 8) {
       z.number().int().min(1).max(20).parse(limit);
       const cutoff = new Date(Date.parse(now()) - 300000).toISOString();
