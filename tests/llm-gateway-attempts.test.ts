@@ -5,6 +5,7 @@ import type {
   GatewayAttemptRequest,
   GatewayTransportReceipt,
 } from "../src/server/modules/llm-gateway/attempts";
+import { responseReceipt } from "../src/server/modules/llm-gateway/attempts";
 import { createLlmGateway, type GatewayBinding } from "../src/server/modules/llm-gateway/service";
 
 const invocationId = "00000000-0000-4000-8000-000000000001";
@@ -12,7 +13,12 @@ const output = { schemaVersion: "1", inScope: true, urgency: "none", reasonCode:
 const completion = () => ({
   id: "chatcmpl-synthetic-1",
   choices: [{ message: { content: JSON.stringify({ output }) }, finish_reason: "stop" }],
-  usage: { prompt_tokens: 10, completion_tokens: 20 },
+  service_tier: "default",
+  usage: {
+    prompt_tokens: 10,
+    completion_tokens: 20,
+    prompt_tokens_details: { cached_tokens: 2, cache_write_tokens: 3 },
+  },
 });
 
 test("preview and production composition cannot fall back to an unaccounted paid call", async () => {
@@ -211,6 +217,10 @@ test("refusal and raw error envelopes are metered before rejection without expos
       providerRequestId: "chatcmpl-synthetic-1",
       inputTokens: 10,
       outputTokens: 20,
+      cachedInputTokens: 2,
+      cacheWriteInputTokens: 3,
+      serviceTier: "default",
+      meteringStatus: "complete",
       definitiveNoCharge: false,
     });
     const metadata = JSON.stringify({ requests: h.requests, receipts: h.receipts });
@@ -322,7 +332,14 @@ test("timeout retains liability and later records usage on the same attempt with
   expect(await result).toMatchObject({ code: "MODEL_UNAVAILABLE" });
   await Promise.all(h.background);
   expect(stored.map((r) => r.transport)).toEqual(["unknown", "response"]);
-  expect(stored[1]).toMatchObject({ inputTokens: 10, outputTokens: 20 });
+  expect(stored[1]).toMatchObject({
+    inputTokens: 10,
+    outputTokens: 20,
+    cachedInputTokens: 2,
+    cacheWriteInputTokens: 3,
+    serviceTier: "default",
+    meteringStatus: "complete",
+  });
   expect(h.runs()).toBe(1);
   expect(h.requests).toHaveLength(1);
 });
@@ -353,4 +370,125 @@ test("mismatched durable handles and failed hold storage cannot dispatch", async
     expect(h.runs()).toBe(0);
     expect(h.events).not.toContain("quota");
   }
+});
+
+test("settlement registration failure cannot dispatch, consume quota, or lose late metering", async () => {
+  let quota = 0;
+  let confirms = 0;
+  let settlement: Promise<void> | undefined;
+  const h = harness(async () => completion(), {
+    waitUntil: (promise) => {
+      settlement = promise;
+      throw new Error("private context sentinel");
+    },
+    confirmDispatch: async () => {
+      confirms++;
+      return true;
+    },
+  });
+  await expect(
+    h.call(async () => {
+      quota++;
+      return true;
+    }),
+  ).rejects.toThrow("MODEL_UNAVAILABLE");
+  await settlement;
+  expect(h.runs()).toBe(0);
+  expect(quota).toBe(0);
+  expect(confirms).toBe(0);
+  expect(h.receipts).toHaveLength(1);
+  expect(h.receipts[0]?.receipt).toMatchObject({
+    transport: "not_sent",
+    definitiveNoCharge: true,
+    meteringStatus: "incomplete",
+  });
+  expect(JSON.stringify(h.receipts)).not.toContain("sentinel");
+});
+
+test("metering preserves exclusive cache counts and full-context input independently of output", () => {
+  for (const input of [272000, 272001, Number.MAX_SAFE_INTEGER]) {
+    const receipt = responseReceipt({
+      ...completion(),
+      choices: [],
+      usage: {
+        prompt_tokens: input,
+        completion_tokens: 40,
+        prompt_tokens_details: { cached_tokens: 2, cache_write_tokens: input - 2 },
+      },
+    });
+    expect(receipt).toMatchObject({
+      inputTokens: input,
+      outputTokens: 40,
+      cachedInputTokens: 2,
+      cacheWriteInputTokens: input - 2,
+      meteringStatus: "complete",
+    });
+  }
+  const ordinary = responseReceipt({
+    ...completion(),
+    usage: {
+      prompt_tokens: 10,
+      completion_tokens: 20,
+      prompt_tokens_details: { cached_tokens: 0, cache_write_tokens: 0 },
+    },
+  });
+  expect(ordinary.cacheWriteInputTokens).toBe(0);
+  expect(ordinary).not.toEqual(responseReceipt(completion()));
+});
+
+test("partial or invalid metering never invents cache zeros, a price tier, or complete billing evidence", () => {
+  const totalOnly = responseReceipt({
+    usage: { prompt_tokens: 10, completion_tokens: 20 },
+    service_tier: "default",
+  });
+  expect(totalOnly).toMatchObject({
+    inputTokens: 10,
+    outputTokens: 20,
+    cachedInputTokens: null,
+    cacheWriteInputTokens: null,
+    meteringStatus: "incomplete",
+  });
+  const partial = responseReceipt({
+    ...completion(),
+    usage: {
+      prompt_tokens: 10,
+      completion_tokens: 20,
+      prompt_tokens_details: { cached_tokens: 2 },
+    },
+  });
+  expect(partial).toMatchObject({
+    cachedInputTokens: 2,
+    cacheWriteInputTokens: null,
+    meteringStatus: "incomplete",
+  });
+  for (const detail of [
+    { cached_tokens: -1, cache_write_tokens: 0 },
+    { cached_tokens: 0.5, cache_write_tokens: 0 },
+    { cached_tokens: "2", cache_write_tokens: 0 },
+    { cached_tokens: 8, cache_write_tokens: 3 },
+    { cached_tokens: 11 },
+    { cache_write_tokens: 11 },
+    { cached_tokens: Number.MAX_SAFE_INTEGER + 1, cache_write_tokens: 0 },
+    [],
+  ]) {
+    expect(
+      responseReceipt({
+        ...completion(),
+        usage: { prompt_tokens: 10, completion_tokens: 20, prompt_tokens_details: detail },
+      }).meteringStatus,
+    ).toBe("invalid");
+  }
+  for (const serviceTier of [undefined, null, "private-tier-sentinel", "auto", {}]) {
+    const receipt = responseReceipt({ ...completion(), service_tier: serviceTier });
+    expect(receipt.serviceTier).toBeNull();
+    expect(receipt.meteringStatus).toBe(serviceTier == null ? "incomplete" : "invalid");
+    expect(JSON.stringify(receipt)).not.toContain("sentinel");
+  }
+  for (const tier of ["default", "flex", "scale", "priority"] as const) {
+    expect(responseReceipt({ ...completion(), service_tier: tier })).toMatchObject({
+      serviceTier: tier,
+      meteringStatus: "complete",
+    });
+  }
+  expect(responseReceipt({ ...completion(), usage: [] }).meteringStatus).toBe("invalid");
 });

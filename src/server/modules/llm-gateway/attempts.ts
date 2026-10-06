@@ -22,6 +22,11 @@ export interface GatewayTransportReceipt {
   providerRequestId: string | null;
   inputTokens: number | null;
   outputTokens: number | null;
+  cachedInputTokens: number | null;
+  cacheWriteInputTokens: number | null;
+  serviceTier: "default" | "flex" | "scale" | "priority" | null;
+  /** Structural completeness only; the trusted sink still verifies the pricing basis. */
+  meteringStatus: "complete" | "incomplete" | "invalid";
   observedAt: string;
   /** A local unsent candidate. The trusted sink must CAS-check prepared/reserved
    * with no dispatch token before confirming it or releasing shared exposure.
@@ -48,19 +53,49 @@ function tokenCount(value: unknown): number | null {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : null;
 }
 
+function object(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
 /** Extract metering independently of choices/refusal/content/schema validity. */
 export function responseReceipt(raw: unknown): GatewayTransportReceipt {
-  const value = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : null;
-  const usage =
-    value?.usage && typeof value.usage === "object"
-      ? (value.usage as Record<string, unknown>)
-      : null;
+  const value = object(raw);
+  const usage = object(value?.usage);
+  const details = object(usage?.prompt_tokens_details);
+  const counts = [
+    usage?.prompt_tokens,
+    usage?.completion_tokens,
+    details?.cached_tokens,
+    details?.cache_write_tokens,
+  ];
+  const [inputTokens, outputTokens, cachedInputTokens, cacheWriteInputTokens] =
+    counts.map(tokenCount);
+  const tier = value?.service_tier;
+  const serviceTier =
+    tier === "default" || tier === "flex" || tier === "scale" || tier === "priority" ? tier : null;
+  const malformed =
+    (value?.usage != null && usage === null) ||
+    (usage?.prompt_tokens_details != null && details === null) ||
+    counts.some((count) => count != null && tokenCount(count) === null) ||
+    (tier != null && serviceTier === null) ||
+    (inputTokens != null &&
+      BigInt(cachedInputTokens ?? 0) + BigInt(cacheWriteInputTokens ?? 0) > BigInt(inputTokens));
   return {
     transport: "response",
     providerRequestId:
       typeof value?.id === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(value.id) ? value.id : null,
-    inputTokens: tokenCount(usage?.prompt_tokens),
-    outputTokens: tokenCount(usage?.completion_tokens),
+    inputTokens: inputTokens ?? null,
+    outputTokens: outputTokens ?? null,
+    cachedInputTokens: cachedInputTokens ?? null,
+    cacheWriteInputTokens: cacheWriteInputTokens ?? null,
+    serviceTier,
+    meteringStatus: malformed
+      ? "invalid"
+      : counts.every((count) => tokenCount(count) !== null) && serviceTier !== null
+        ? "complete"
+        : "incomplete",
     observedAt: new Date().toISOString(),
     definitiveNoCharge: false,
   };
@@ -74,6 +109,10 @@ export function unavailableReceipt(
     providerRequestId: null,
     inputTokens: null,
     outputTokens: null,
+    cachedInputTokens: null,
+    cacheWriteInputTokens: null,
+    serviceTier: null,
+    meteringStatus: "incomplete",
     observedAt: new Date().toISOString(),
     definitiveNoCharge: transport === "not_sent",
   };

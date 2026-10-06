@@ -99,7 +99,7 @@ Paid/Containers/R2/Whisper가 활성화됐거나 청구액이 확정됐다는 �
 | [R2 Standard](https://developers.cloudflare.com/r2/pricing/) | $0.015/GB-month·A$4.50/M·B$0.36/M, 무료10GB-month·A1M·B10M/month | 일별 peak 평균과 다음 billing unit 올림, parts·복사본·cipher bytes 포함. Delete/AbortMultipartUpload 무료여도 Worker/D1은 별도 |
 | [Containers](https://developers.cloudflare.com/containers/platform/pricing/) | Paid포함량25GiB-hours memory·375vCPU-minutes·200GB-hours disk/month; 초과$0.0000025/GiB-second·$0.000020/vCPU-second·$0.00000007/GB-second. Korea egress$0.05/GB | 10ms billing, provisioned memory/disk·activeCPU·idle/egress·Worker/DO/로그. 실제 배치 지역과 남은 포함량 확인 |
 | [Whisper 모델](https://developers.cloudflare.com/workers-ai/models/whisper-large-v3-turbo/), [플랫폼 표](https://developers.cloudflare.com/workers-ai/platform/pricing/) | 모델페이지$0.000513/audio-minute, 플랫폼 표$0.0005와46.63neurons/minute | 표시 정밀도 차이를0비용으로 해석하지 않음. 더 높은 확인값·단위 올림·chunk overlap·retry를 예약하고 실제 neuron/billing 대조 |
-| [gpt-6-sol](https://developers.cloudflare.com/ai/models/openai/gpt-6-sol/) | short input/output$2/$10 per1Mtokens, long$4/$15 | short/long 경계·이미지/reasoning/token 계산과 실제 Gateway usage 확인. 현재 부족한 입력 근거는 추정/보류로 구분 |
+| [gpt-6-sol](https://developers.cloudflare.com/ai/models/openai/gpt-6-sol/) | per1Mtokens short 일반/cache-read/cache-write 입력$2/$0.20/$2.50·출력$10, long$4/$0.40/$5·출력$15 | 전체 입력272,000tokens 초과 시 long. cache-write는 일반 입력에 중복 합산하지 않음; 실제 context/cache/tier/지역과 Gateway usage 확인 |
 | [AI Gateway](https://developers.cloudflare.com/ai-gateway/reference/pricing/), [Unified Billing](https://developers.cloudflare.com/ai-gateway/features/unified-billing/) | core 기능 무료, credit 구매 수수료5%, inference provider 가격 전달 | 기존 credit 원가/새 구매 수수료의 회계 범위를 분리해 중복 합산하지 않음. 실제 funding/로그 과금은 별도 확인 |
 
 ## 환경별 할당과 안전한 전환
@@ -204,6 +204,18 @@ hold를 확보한 뒤 사용자 quota를 확인하고, `confirmDispatch`가 현�
 invocation ID로 사용하지 않는다. 거절·length·잘못된 JSON/schema·error envelope도 출력 판정
 전에 `afterTransport`로 사용량을 저장한다. 기록 저장 실패는 출력 게시와 후속 호출을 막는다.
 
+Gateway는 전체 input/output와 `prompt_tokens_details.cached_tokens/cache_write_tokens`, 실제
+`service_tier`를 별도 allowlisted scalar로 보존한다. 일반 입력은 전체 입력에서 cache-read와
+cache-write를 뺀 값이며, long context는 이 차감 값이 아닌 전체 입력으로 판단한다. 누락된
+cache 수를0으로 만들지 않는다. 음수·소수·안전 정수 초과·전체 입력보다 큰 cache 합은 invalid,
+누락은 incomplete로 남긴다. complete는 metadata의 구조 완전성일 뿐 확정 청구 증거가 아니다.
+trusted sink가 가격 근거의 context/cache/tier/지역과 대조해 계산하며 불일치·불완전 사용량은
+hold를 유지한다. 요청은 `service_tier: default`를 명시하지만 실제 응답 등급 일치를 보장하지
+않으며 `skipCache`도 공급자의 prompt cache-write 부재를 증명하지 않는다. 예약 단가는 허용한
+모든 context/cache와 지역 배수의 상한 이상이어야 한다. [공식 모델 가격](https://developers.openai.com/api/docs/models/gpt-6-sol),
+[prompt caching](https://developers.openai.com/api/docs/guides/prompt-caching),
+[응답 사용량 계약](https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create)
+
 시간 초과는 unknown hold로 남기며 재호출하지 않는다. `waitUntil`에 등록한 늦은 응답은 먼저
 unknown 기록이 완료된 뒤 동일 attempt를 정산하며 결과를 게시하지 않는다. Worker가 종료되거나
 늦은 기록이 실패하면 이미 남은 exposure를 복구·청구 대조로 해결한다. 사용량 누락·provider
@@ -212,6 +224,8 @@ unknown 기록이 완료된 뒤 동일 attempt를 정산하며 결과를 게시�
 단일 batch/CAS로 prepared/reserved와 dispatch token 부재를 함께 확인해야만 이를 받아들여
 hold를 반환한다. 다른 작업자가 이미 dispatched/unknown으로 만든 attempt에 같은 receipt를
 재생하면 거부하며 기존 비용을 보존한다. final dispatch commit 뒤 callback 오류도 자동 반환하지 않는다.
+`waitUntil` 등록은 quota·final dispatch commit·binding 호출보다 먼저 수행한다. 등록 자체가
+실패하면 binding을 시작하지 않고 위 CAS 검증을 요구하는 not_sent 후보만 기록한다.
 preview/production의 Gateway는 ledger가 없으면 fail closed다. 기존 v1 읽기·삭제와 합성
 offline adapter는 보존하지만, ledger를 연결하지 않은 실제 v1 AI 실행은 제공하지 않는다.
 이 adapter와 대역 테스트는 실제 DB 비용 연결·가격/funding 확인·provider 청구 대조의 완료

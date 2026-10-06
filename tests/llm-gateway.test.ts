@@ -24,6 +24,7 @@ test("Worker binding sends pinned structured model/privacy options and allowlist
           expect(model).toBe(MODEL_ID);
           expect(input.reasoning_effort).toBe("medium");
           expect(input.store).toBe(false);
+          expect(input.service_tier).toBe("default");
           expect(input).not.toHaveProperty("temperature");
           expect(options).toEqual({
             gateway: { id: "synthetic-gateway", collectLog: false, skipCache: true },

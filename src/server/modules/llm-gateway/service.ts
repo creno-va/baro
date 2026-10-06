@@ -122,6 +122,7 @@ export function createLlmGateway(
           reasoning_effort: "medium",
           max_completion_tokens: limits[phase],
           store: false,
+          service_tier: "default",
           response_format: {
             type: "json_schema",
             json_schema: { name: `baro_${phase}_v1`, strict: true, schema: jsonSchema },
@@ -159,44 +160,38 @@ export function createLlmGateway(
           )
             throw new ModelError("MODEL_UNAVAILABLE");
         }
-        let admitted = false;
-        try {
-          admitted = await reserve();
-          if (admitted && ledger && handle) admitted = await ledger.confirmDispatch(handle);
-        } catch {
-          admitted = false;
-        }
-        if (!admitted) {
-          await record(unavailableReceipt("not_sent"));
-          throw new ModelError("MODEL_UNAVAILABLE");
-        }
         const start = Date.now();
         let timeout: ReturnType<typeof setTimeout> | undefined;
         let timedOut = false;
+        let didDispatch = false;
         let finishTimeoutRecord = () => {};
         const timeoutRecorded = new Promise<void>((resolve) => {
           finishTimeoutRecord = resolve;
         });
-        let raw: unknown;
-        try {
-          // Binding has no abort parameter. A timeout ends this phase; no immediate retry
-          // can overlap an ambiguous provider call. Durable reservation survives replay.
-          const remote = Promise.resolve().then(() =>
-            env.AI.run(MODEL_ID, wireInput, {
-              gateway: { id: env.AI_GATEWAY_ID, collectLog: false, skipCache: true },
-            }),
-          );
-          if (ledger) {
+        let startRemote: (allowed: boolean) => void = () => {};
+        // Register the settlement lifetime before the final dispatch commit. A local
+        // context failure must not start paid work or lose its eventual usage receipt.
+        const remote = new Promise<boolean>((resolve) => {
+          startRemote = resolve;
+        }).then((allowed) =>
+          allowed
+            ? env.AI.run(MODEL_ID, wireInput, {
+                gateway: { id: env.AI_GATEWAY_ID, collectLog: false, skipCache: true },
+              })
+            : undefined,
+        );
+        if (ledger) {
+          try {
             ledger.waitUntil(
               remote
                 .then(
                   async (response) => {
-                    if (!timedOut) return;
+                    if (!didDispatch || !timedOut) return;
                     await timeoutRecorded;
                     await record(responseReceipt(response));
                   },
                   async (error: unknown) => {
-                    if (!timedOut) return;
+                    if (!didDispatch || !timedOut) return;
                     await timeoutRecorded;
                     await record(
                       unavailableReceipt(
@@ -209,7 +204,30 @@ export function createLlmGateway(
                   throw new ModelError("MODEL_UNAVAILABLE");
                 }),
             );
+          } catch {
+            startRemote(false);
+            await record(unavailableReceipt("not_sent"));
+            throw new ModelError("MODEL_UNAVAILABLE");
           }
+        }
+        let admitted = false;
+        try {
+          admitted = await reserve();
+          if (admitted && ledger && handle) admitted = await ledger.confirmDispatch(handle);
+        } catch {
+          admitted = false;
+        }
+        if (!admitted) {
+          startRemote(false);
+          await record(unavailableReceipt("not_sent"));
+          throw new ModelError("MODEL_UNAVAILABLE");
+        }
+        didDispatch = true;
+        startRemote(true);
+        let raw: unknown;
+        try {
+          // Binding has no abort parameter. A timeout ends this phase; no immediate retry
+          // can overlap an ambiguous provider call. Durable reservation survives replay.
           raw = await Promise.race([
             remote,
             new Promise<never>((_resolve, reject) => {
