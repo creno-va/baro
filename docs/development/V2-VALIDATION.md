@@ -504,3 +504,24 @@ main7943496의 [CI37488768849](https://github.com/creno-va/baro/actions/runs/374
 재접속·메뉴 Enter/ShiftTab wrap·Escape opener 복귀와 새 이용 유형 변경 링크를 확인했다.
 IAB viewport override는 실제CSS760px로 남아 원격320px 성공으로 기록하지 않는다.
 Chromium320px/200% 회귀는 별도 compiled/fixture browser 증거다.
+
+공유 PR129는 latest head `d86a406a92d22606195802a1162a4eb8d9cb5e59`의
+[CI37490993750](https://github.com/creno-va/baro/actions/runs/37490993750) 필수3 jobs가
+성공한 뒤 main `a5130db48d673d27ce1b928c255285e2cb680ca0`로 정상 병합했다.
+해당 changed-scope CI의 native job은 변경 없음으로 native 실행 단계가 skip됐으며,
+실제 native 실행 증거는 앞선 Full validation와 최종 통합 candidate의 별도 run으로 구분한다.
+정식 self APPROVE·admin protection 우회는 하지 않았다. #126/#128 및 #66 담당에 최신 main
+rebase와 정확한 최종 head 재검증을 요청했다. reports factory는 모듈 최종 PR 통합 뒤 연결한다.
+
+`bun run work:next` 재조회에서도 #57/#58/#59/#63은 IMPLEMENTATION_MERGED,
+#19/#20/#27/#62/#64/#65/#66/#67/#68/#69/#71은 IN_PROGRESS, #70은 EXTERNAL이다.
+공유 코드·합성 browser 성공으로 외부·공개 gate나 milestone을 완료 처리하지 않았다.
+
+main a5130db의 [CI37491846210](https://github.com/creno-va/baro/actions/runs/37491846210)은
+공유 design-system fixture의 role prop과 실제 session hydration 경쟁 때문에 browser
+34PASS/1FAIL이었다. 로그인 부재가 확인되면 visitor로 전환하는 제품 경계는 유지한다.
+fixture의 exact session API를 합성 customer/lawyer/anonymous로 제어하고 focus 재검사 뒤
+메뉴를 검사하도록 수정해 local design-system6개가 통과했다. 제품에 fixture role override나
+auth bypass를 추가하지 않았다. 이 실패 run 및 고객9b8ba19의 전용 API browser 실패
+[37492036664](https://github.com/creno-va/baro/actions/runs/37492036664)는 보존하며 최신 head로
+재검증한다. 고객 모듈의 focus/transient-session error 검토는 PR128 담당에 요청했다.

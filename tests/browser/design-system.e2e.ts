@@ -1,7 +1,27 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, type Page, test } from "@playwright/test";
 
-async function openInteractiveFixture(page: Page) {
+async function openInteractiveFixture(
+  page: Page,
+  accountType: () => "customer" | "lawyer" | null = () => "customer",
+) {
+  // Navigation now resolves the API session after hydration. Keep this fixture
+  // deterministic without granting authority through the presentation role prop.
+  await page.route("**/api/me/session", (route) => {
+    const type = accountType();
+    return route.fulfill({
+      json: {
+        user: type ? { id: "synthetic-owner", name: "합성 계정", accountType: type } : null,
+        needsConsent: false,
+      },
+    });
+  });
+  await page.route("**/api/cases?*", (route) =>
+    route.fulfill({ json: { items: [], nextCursor: null } }),
+  );
+  await page.route("**/api/v2/cases?*", (route) =>
+    route.fulfill({ json: { items: [], nextCursor: null } }),
+  );
   await page.goto("/__design-system");
   await expect(page.getByRole("heading", { name: "공유 UI 구성 요소" })).toBeVisible();
   // SSR buttons are visible before their React handlers are attached.
@@ -63,14 +83,21 @@ test("current landing, login and case screens share local brand and remain usabl
 test("synthetic role menus omit dormant routes; form and keyboard tabs remain accessible", async ({
   page,
 }) => {
-  await openInteractiveFixture(page);
+  let accountType: "customer" | "lawyer" | null = "customer";
+  await openInteractiveFixture(page, () => accountType);
   const navigation = page.getByRole("navigation", { name: "주 메뉴", exact: true });
   await expect(navigation.getByRole("link", { name: "내 사건", exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "변호사 찾기" })).toHaveAttribute("href", "/lawyers");
+  accountType = "lawyer";
   await page.getByLabel("메뉴 예시 역할").selectOption("lawyer");
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
   await expect(navigation.getByRole("link", { name: "내 사건", exact: true })).toHaveCount(0);
+  await expect(navigation.getByRole("link", { name: "변호사 프로필" })).toBeVisible();
   await expect(navigation.getByRole("link", { name: "계정 설정" })).toBeVisible();
+  accountType = null;
   await page.getByLabel("메뉴 예시 역할").selectOption("moderator");
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect(navigation.getByRole("link", { name: "계정 설정" })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "검토 대기" })).toHaveCount(0);
   await expect(page.getByLabel("사건 이름")).toHaveAttribute("aria-describedby", "fixture-help");
   const overview = page.getByRole("tab", { name: "개요", exact: true });
