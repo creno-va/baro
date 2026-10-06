@@ -2,7 +2,85 @@ import { expect, test } from "bun:test";
 import observation from "../docs/operations/AI-RUNTIME-OBSERVATION.json";
 import { modelBounds, observationSchema, provisionAiRuntime } from "../scripts/provision-ai-budget";
 import { remoteBudgetD1 } from "../scripts/remote-budget-d1";
+import { createCaseDataCipher } from "../src/server/crypto";
+import { createV2Core } from "../src/server/db/v2-core";
+import { createWorkspaceService } from "../src/server/modules/workspace/service";
+import { createWorkspaceDependencies } from "../src/server/runtime/workspace";
 import { createTestDatabase } from "./helpers/d1";
+import { seedTestSession } from "./helpers/session";
+
+test("a fresh customer can admit their first text-only AI job without a prior file upload", async () => {
+  const preview = await createTestDatabase(),
+    production = await createTestDatabase();
+  try {
+    const now = new Date().toISOString();
+    const o = observationSchema.parse({
+      ...observation,
+      checkedAt: now,
+      validUntil: new Date(Date.now() + 86400000).toISOString(),
+    });
+    const result = await provisionAiRuntime(
+      { preview: preview.binding, production: production.binding },
+      o,
+    );
+    const owner = await seedTestSession(preview, { consent: true });
+    const core = createV2Core(
+      preview.binding,
+      await createCaseDataCipher({
+        CASE_DATA_KEY_V1: btoa("w".repeat(32)).replace(/=+$/, ""),
+      }),
+      { monthlyBudgetCapEnabled: false },
+    );
+    const env = {
+      APP_ENV: "preview",
+      DB: preview.binding,
+      AI: {},
+      WORKSPACE_PROCESSING: {},
+      AI_MODEL_TOKEN_BOUNDS_JSON: JSON.stringify(modelBounds(o, result.evidenceHash)),
+    } as unknown as Env;
+    const dependencies = createWorkspaceDependencies(core, env);
+    const service = createWorkspaceService(core, {
+      ...dependencies,
+      dispatch: async () => undefined,
+    });
+    const workspace = await service.create(owner.userId, crypto.randomUUID(), {
+      narrative: "합성 계약 자료의 거래 날짜를 확인하고 상담을 준비하려고 합니다.",
+      jurisdiction: "KR",
+      subjectContext: "individual",
+      turnstileToken: "synthetic",
+    });
+    expect(preview.sqlite.query("SELECT count(*) AS n FROM v2_billing_principals").get()).toEqual({
+      n: 0,
+    });
+    const unconfigured = createWorkspaceService(core, {
+      ...createWorkspaceDependencies(core, { ...env, AI_MODEL_TOKEN_BOUNDS_JSON: undefined }),
+      dispatch: async () => undefined,
+    });
+    await expect(
+      unconfigured.advance(owner.userId, workspace.id, crypto.randomUUID(), {
+        expectedRevision: workspace.workspaceRevision,
+      }),
+    ).rejects.toThrow("BUDGET_UNAVAILABLE");
+    expect(preview.sqlite.query("SELECT count(*) AS n FROM v2_billing_principals").get()).toEqual({
+      n: 0,
+    });
+    const admitted = await service.advance(owner.userId, workspace.id, crypto.randomUUID(), {
+      expectedRevision: workspace.workspaceRevision,
+    });
+    expect(admitted.status).toBe("queued");
+    expect(preview.sqlite.query("SELECT count(*) AS n FROM v2_billing_principals").get()).toEqual({
+      n: 1,
+    });
+    expect(
+      preview.sqlite
+        .query("SELECT count(*) AS n FROM v2_cost_attempts WHERE state='reserved'")
+        .get(),
+    ).toEqual({ n: 1 });
+  } finally {
+    preview.close();
+    production.close();
+  }
+});
 
 test("two real migrated databases activate from authenticated zero observations and exchange actual drains", async () => {
   const preview = await createTestDatabase(),

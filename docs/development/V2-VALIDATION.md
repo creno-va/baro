@@ -6,6 +6,16 @@
 
 공식 모델 context1,050,000/output128,000과 short/long/cache 가격, IBK2026-10-06 송금환율1351.70KRW/USD를 확인했다. 새 배포 coordinator는 두 실제 D1의 zero-state/노출·drain을 읽고 기존 typed budget primitive로 가격/funding/allocation을 등록한다. 고객 데이터/토큰/secret을 읽거나 출력하지 않는다. schema0009 보존·새 migration 없음. 로컬 `bun ci`, `bun run check`(1274 pass/0 fail), build, production build/bundle, cf dry-run 통과. 실제 두 SQLite DB의 초기 활성화와 legacy allocation 초과 후 갱신·unknown hold 차단을 함께 확인했다(43 pass/0 fail). Preview/production model bounds를 기존 Worker secret으로 배포하며 정상 protected production 승인과 exact-head CI는 유지한다. 기존 Full/local SSO는 반복하지 않는다.
 
+## 2026-10-07 이슈 인수 감사와 운영 공개
+
+사용자의 완료 이슈 종료 요청에 따라 #69의 원래 E2E/보안/UI 회귀5항목을 기존 증거와 대조해 CLOSED 처리했다. Full37506109883와 mainCI37506090574의 전체 통합/native/browser73/CSP4, 실제 SQL/AES/Hono PDF/선택 ZIP 내용과 렌더, 최신 mainCI37532626804와 Preview37533825067을 연결한다. 합성 browser와 실제 SQL/native HTTP 다운로드를 실제 Cloudflare 처리 성공으로 바꾸지 않으며 이전 실패와 수정 기록을 보존한다. 같은 제품의 완료된 Full/local SSO를 반복하지 않았다.
+
+#65/#66의 저장/재시도/권한/다운로드 구현과 global router 통합은 완료됐지만 실제 R2/처리/비용/export 입력의 플랫폼 실행은 미입증이다. #58/#59/#67/#19에는 실제 처리/삭제/격리 restore/DB 밖 journal 재적용/rollback/alert ACK가 남는다. #63/#27에는 미입증 공식 법률 응답과 환경별 외부/복구 관리자 조건이 남는다. #20/#70/#71의 공개 지시와 지정 운영 배포 승인은 기록했으며 정책 게시 사실/버전과 미입증 운영/플랫폼 인수는 완료로 바꾸지 않는다. 해당 이슈와 milestone은 OPEN이다.
+
+운영 BETA_NOT_OPEN은 production37530005701 SUCCESS로 해제됐다. 실제 release48ad168774265bfdb97cc1b7c9d05781bc35bbc9, Worker f350d359-6c81-461f-acf3-27f392596feb, schema0009를 관측했다. `/api/me/session`200, 비로그인 `/api/v2/cases`401UNAUTHENTICATED와 private,no-store는 공개 router 도달/인증 요구 증거이며 AI 전체 성공으로 대신하지 않는다. AI200회/전체 월 cap 해제 후속 production37534088349 SUCCESS: release d91f342a3aa64008ab72ff338eca55c4ba14d40e, Worker2ebbd5c1-8c92-4ca1-9545-6ee761a38204. Preview37533825067 SUCCESS/Worker72978320-7226-491e-8f7a-7d91ca1f0626. 두 실제 DB의 가격/funding/모델 한계 등록과 양쪽 session200/비로그인 cases401을 관측했다.
+
+그러나 실제 Preview 합성 사건의 첫 질문 요청은 BUDGET_UNAVAILABLE로 거절됐다. readiness37535712171은 Preview 모델 secret/binding 등록을 확인해 설정 누락 가설을 배제했다. 파일 업로드 없이 사건을 만든 신규 계정에는 billing principal이 없으며 workspace paid hold 준비가 이를 요구한다. 실제 migrated SQLite 두 DB의 coordinator와 동의한 신규 계정·실제 runtime dependencies를 연결해 동일 실패를 재현했다. 공유 runtime admission에서 기존 ensurePrincipal을 호출해 기존/신규 계정의 첫 text-only 요청을 초기화한다. schema/migration 변경 없음. 원격 재확인과 비용 기록 전 #57은 OPEN이며 기존 Full/local SSO를 반복하지 않는다.
+
 ## 2026-10-07 운영 공개 승인과 Preview 실제 인증
 
 사용자는 Preview/Production 공유 소셜 앱을 명시 승인한 뒤 공개 조건을 모두 검증했다고
