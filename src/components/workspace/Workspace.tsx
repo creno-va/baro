@@ -18,6 +18,7 @@ import { type SyntheticEvent, useCallback, useEffect, useRef, useState } from "r
 import { api } from "../../client/api";
 import type { FileView, TimelineView, WorkspaceView } from "../../client/api/types";
 import type { CustomerWorkspaceView } from "../../client/api/workspace";
+import { V2_LIMITS } from "../../contracts/v2";
 import { CaseDetail } from "../analysis/CaseDetail";
 import { useCustomerAccess } from "../intake/useCustomerAccess";
 import { BrandMark } from "../ui/brand";
@@ -633,7 +634,8 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                     <p>
                       문서 · 이미지 · 음성 · 영상
                       <br />
-                      파일별 최대 50 MB, 음성·영상 300 MB
+                      문서·이미지 최대 {V2_LIMITS.documentImageBytes / 1_000_000} MB, 음성·영상{" "}
+                      {V2_LIMITS.mediaBytes / 1_000_000_000} GB
                     </p>
                     <label className="workspace-consent">
                       <input
