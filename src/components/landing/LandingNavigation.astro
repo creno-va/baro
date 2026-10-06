@@ -1,0 +1,61 @@
+---
+// biome-ignore lint/correctness/noUnusedImports: Astro renders the icons.
+import { ArrowRight, Menu, X } from "lucide-react";
+// biome-ignore lint/correctness/noUnusedImports: Astro renders the brand.
+import { Brand } from "../ui/brand";
+
+interface Props {
+  variant?: "home" | "simplicity";
+}
+const { variant = "home" } = Astro.props;
+// biome-ignore lint/correctness/noUnusedVariables: Astro renders both navigation sizes.
+const links =
+  variant === "home"
+    ? [
+        { href: "#blue-app-reveal", label: "앱 둘러보기" },
+        { href: "#try-baro", label: "직접 체험하기" },
+        { href: "#everyday-future", label: "우리가 바꾸는 일상" },
+        { href: "/simplicity", label: "Simplicity" },
+      ]
+    : [
+        { href: "/", label: "홈" },
+        { href: "#clarity", label: "변화의 시작" },
+        { href: "#blue-app-reveal", label: "앱 둘러보기" },
+        { href: "#try-baro", label: "직접 체험하기" },
+      ];
+// biome-ignore lint/correctness/noUnusedVariables: Astro renders the chapter rail.
+const chapters =
+  variant === "home"
+    ? [
+        { href: "#blue-app-reveal", label: "앱 둘러보기" },
+        { href: "#logo-experience", label: "로고 속 기능" },
+        { href: "#try-baro", label: "직접 체험" },
+        { href: "#clarity", label: "걱정에서 준비로" },
+        { href: "#phone-story", label: "내 손안의 BARO" },
+        { href: "#everyday-future", label: "달라지는 일상" },
+      ]
+    : [
+        { href: "#clarity", label: "걱정에서 준비로" },
+        { href: "#blue-app-reveal", label: "앱 둘러보기" },
+        { href: "#logo-experience", label: "로고 속 기능" },
+        { href: "#try-baro", label: "직접 체험" },
+        { href: "#phone-story", label: "내 손안의 BARO" },
+      ];
+---
+<header class="landing-header">
+  <div class="landing-nav-wrap">
+    <Brand />
+    <nav class="landing-nav" aria-label="메인 메뉴">
+      {links.map((link) => <a class="landing-nav-section" href={link.href}>{link.label}</a>)}
+      <details class="landing-mobile-menu" data-landing-menu>
+        <summary aria-label="페이지 메뉴"><Menu className="landing-menu-open-icon" size={22} aria-hidden="true" /><X className="landing-menu-close-icon" size={22} aria-hidden="true" /></summary>
+        <div class="landing-mobile-menu-panel"><p>BARO 둘러보기</p>{links.map((link) => <a href={link.href}>{link.label}<ArrowRight size={16} aria-hidden="true" /></a>)}<a href="/lawyers">변호사 살펴보기<ArrowRight size={16} aria-hidden="true" /></a></div>
+      </details>
+      <a class="landing-login" href="/login">로그인 <ArrowRight size={16} aria-hidden="true" /></a>
+    </nav>
+  </div>
+  <div class="landing-scroll-progress" aria-hidden="true"></div>
+</header>
+<nav class="landing-chapter-nav" aria-label="페이지 구간" data-chapter-nav>
+  {chapters.map((chapter) => <a href={chapter.href} aria-label={`${chapter.label} 구간으로 이동`}><i aria-hidden="true"></i><span>{chapter.label}</span></a>)}
+</nav>

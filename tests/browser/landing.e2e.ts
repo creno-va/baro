@@ -2,6 +2,18 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, type Locator, test } from "@playwright/test";
 
 const heroTitle = /막막했던 법률 문제,\s*이제 정리부터 가볍게\./;
+const landingSections = [
+  "how-it-works",
+  "blue-app-reveal",
+  "logo-experience",
+  "try-baro",
+  "clarity",
+  "phone-story",
+  "everyday",
+  "principles",
+  "everyday-future",
+  "faq",
+];
 
 async function scrollScene(scene: Locator, pinSelector: string, progress: number) {
   await scene.evaluate(
@@ -33,18 +45,7 @@ test("public landing explains BARO and exposes the login and protected app entry
     page.getByRole("link", { name: "내 상황 정리하기", exact: true }).first(),
   ).toHaveAttribute("href", "/app");
   await expect(page.getByRole("textbox", { name: "지금까지 있었던 일" })).toHaveCount(0);
-  for (const section of [
-    "how-it-works",
-    "logo-experience",
-    "try-baro",
-    "clarity",
-    "phone-story",
-    "everyday",
-    "organize",
-    "principles",
-    "faq",
-  ])
-    await expect(page.locator(`#${section}`)).toBeVisible();
+  for (const section of landingSections) await expect(page.locator(`#${section}`)).toBeVisible();
   await login.focus();
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/login$/);
@@ -71,7 +72,9 @@ test("landing fits narrow screens and omits decorative scenes without removing t
       ),
       `Landing must fit a ${width}px viewport`,
     ).toBe(true);
-    const decorations = page.locator(".landing-decoration");
+    const decorations = page.locator(
+      ".journey-film-stage, .everyday-photo-stage, .future-photo-window",
+    );
     expect(await decorations.count()).toBeGreaterThan(0);
     if (width <= 767)
       for (const decoration of await decorations.all()) await expect(decoration).toBeHidden();
@@ -85,6 +88,48 @@ test("landing fits narrow screens and omits decorative scenes without removing t
     ),
   ).toBe(true);
   await expect(page.getByRole("heading", { level: 1, name: heroTitle })).toBeVisible();
+});
+
+test("shared landing navigation supports desktop chapters and a keyboard-operated mobile menu", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/");
+  const navigation = page.getByRole("navigation", { name: "메인 메뉴", exact: true });
+  await expect(navigation.getByRole("link", { name: "앱 둘러보기", exact: true })).toHaveAttribute(
+    "href",
+    "#blue-app-reveal",
+  );
+  await expect(
+    navigation.getByRole("link", { name: "우리가 바꾸는 일상", exact: true }),
+  ).toHaveAttribute("href", "#everyday-future");
+  const chapter = page
+    .getByRole("navigation", { name: "페이지 구간", exact: true })
+    .getByRole("link", {
+      name: "로고 속 기능 구간으로 이동",
+      exact: true,
+    });
+  await chapter.click();
+  await expect(page).toHaveURL(/#logo-experience$/);
+  await expect(chapter).toHaveAttribute("aria-current", "location");
+  await page.setViewportSize({ width: 390, height: 844 });
+  const menu = page.locator("[data-landing-menu]");
+  const summary = menu.locator("summary");
+  await summary.focus();
+  await page.keyboard.press("Enter");
+  await expect(menu).toHaveAttribute("open", "");
+  await page.keyboard.press("Escape");
+  await expect(menu).not.toHaveAttribute("open", "");
+  await expect(summary).toBeFocused();
+  await page.keyboard.press("Enter");
+  expect((await new AxeBuilder({ page }).include(".landing-header").analyze()).violations).toEqual(
+    [],
+  );
+  await menu.getByRole("link", { name: "직접 체험하기", exact: true }).click();
+  await expect(page).toHaveURL(/#try-baro$/);
+  await expect(menu).not.toHaveAttribute("open", "");
+  await expect(navigation.getByRole("link", { name: "로그인", exact: true })).toBeVisible();
 });
 
 test("desktop visual progress follows scrolling and honors a changed motion preference", async ({
@@ -154,9 +199,10 @@ test("landing supports keyboard disclosures and remains accessible with reduced 
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
 });
 
-test("hero footage scrubs into an accessible app scene and preserves the visitor's pause", async ({
+test("hero footage plays continuously while idle, scroll changes only the framing, and pause persists", async ({
   page,
 }) => {
+  test.setTimeout(45_000);
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.emulateMedia({ reducedMotion: "no-preference" });
   await page.goto("/");
@@ -165,31 +211,70 @@ test("hero footage scrubs into an accessible app scene and preserves the visitor
   const toggle = page.locator("[data-journey-toggle]");
   await expect(scene).toHaveClass(/journey-ready/);
   await expect
-    .poll(() => heroFilm.evaluate((video) => video instanceof HTMLVideoElement && !video.paused), {
-      timeout: 15_000,
-    })
+    .poll(
+      () =>
+        heroFilm.evaluate(
+          (video) =>
+            video instanceof HTMLVideoElement &&
+            video.readyState >= 3 &&
+            !video.paused &&
+            video.currentTime > 0,
+        ),
+      { timeout: 15_000 },
+    )
     .toBe(true);
   await expect(toggle).toHaveAccessibleName("첫 화면 영상 일시정지");
   expect(
     await heroFilm.evaluate(
-      (video) => video instanceof HTMLVideoElement && video.muted && video.playsInline,
+      (video) =>
+        video instanceof HTMLVideoElement &&
+        video.autoplay &&
+        video.muted &&
+        video.playsInline &&
+        video.loop,
     ),
   ).toBe(true);
-  await expect(page.locator('video[data-film="benefit"]')).not.toHaveAttribute("src");
+  await expect(heroFilm).toHaveAttribute("src", "/landing/hero-continuous.mp4");
+  const playback = await heroFilm.evaluate(async (element) => {
+    if (!(element instanceof HTMLVideoElement)) throw new Error("Missing hero film");
+    const first = { time: element.currentTime, wall: performance.now() };
+    const samples = [first];
+    // Observe longer than two old 1.6-second reset periods without seeking the video ourselves.
+    while (performance.now() - first.wall < 3_400) {
+      await new Promise((resolve) => window.setTimeout(resolve, 60));
+      samples.push({ time: element.currentTime, wall: performance.now() });
+    }
+    const discontinuities: number[] = [];
+    let advanced = 0;
+    let before = first;
+    for (const after of samples.slice(1)) {
+      let elapsed = after.time - before.time;
+      // A native end-of-file loop is expected; a reset in the middle of the clip is not.
+      if (before.time > element.duration - 0.6 && after.time < 0.6) elapsed += element.duration;
+      if (elapsed < -0.15 || elapsed > (after.wall - before.wall) / 1_000 + 0.5)
+        discontinuities.push(elapsed);
+      advanced += Math.max(0, elapsed);
+      before = after;
+    }
+    return { discontinuities, advanced, paused: element.paused };
+  });
+  expect(playback.discontinuities).toEqual([]);
+  expect(playback.advanced).toBeGreaterThan(2.5);
+  expect(playback.paused).toBe(false);
+  for (const film of await page.locator("video[data-film]:not([data-scroll-film])").all())
+    await expect(film).not.toHaveAttribute("src");
   await scrollScene(scene, ".journey-pin", 0.32);
   await expect(scene).toHaveAttribute("data-stage", "film");
   await expect
-    .poll(() => heroFilm.evaluate((video) => video instanceof HTMLVideoElement && video.paused))
+    .poll(() => heroFilm.evaluate((video) => video instanceof HTMLVideoElement && !video.paused))
     .toBe(true);
-  await expect
-    .poll(() =>
-      heroFilm.evaluate((video) =>
-        video instanceof HTMLVideoElement ? video.currentTime / video.duration : 0,
-      ),
-    )
-    .toBeGreaterThan(0.45);
   await expect(page.locator(".journey-opening")).toHaveAttribute("aria-hidden", "true");
   await expect(page.locator("[data-journey-app]")).toHaveAttribute("aria-hidden", "true");
+  await scrollScene(scene, ".journey-pin", 0.7);
+  await expect
+    .poll(() => heroFilm.evaluate((video) => video instanceof HTMLVideoElement && video.paused))
+    .toBe(true);
+  await expect(page.locator(".journey-film-stage")).toHaveCSS("opacity", "0");
   await scrollScene(scene, ".journey-pin", 0.96);
   await expect(scene).toHaveAttribute("data-stage", "app");
   await expect(page.locator("[data-journey-app]")).toHaveAttribute("aria-hidden", "false");
@@ -206,9 +291,18 @@ test("hero footage scrubs into an accessible app scene and preserves the visitor
     .toBe(true);
   await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
   await expect(toggle).toHaveAccessibleName("첫 화면 영상 일시정지");
+  await expect
+    .poll(() => heroFilm.evaluate((video) => video instanceof HTMLVideoElement && !video.paused))
+    .toBe(true);
+  const beforePauseScroll = await page.evaluate(() => scrollY);
   await toggle.click();
   await expect(toggle).toHaveAccessibleName("첫 화면 영상 재생하기");
   await expect(toggle).toHaveAttribute("data-paused", "true");
+  expect(Math.abs((await page.evaluate(() => scrollY)) - beforePauseScroll)).toBeLessThanOrEqual(1);
+  await scrollScene(scene, ".journey-pin", 0.32);
+  await expect
+    .poll(() => heroFilm.evaluate((video) => video instanceof HTMLVideoElement && video.paused))
+    .toBe(true);
   await page.locator("#phone-story").evaluate((element) => {
     window.scrollTo({ top: scrollY + element.getBoundingClientRect().top, behavior: "instant" });
   });
@@ -219,11 +313,235 @@ test("hero footage scrubs into an accessible app scene and preserves the visitor
   ).toBe(true);
   await toggle.click();
   await expect(toggle).toHaveAccessibleName("첫 화면 영상 일시정지");
+  await expect
+    .poll(() => heroFilm.evaluate((video) => video instanceof HTMLVideoElement && !video.paused))
+    .toBe(true);
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(toggle).toBeHidden();
   await expect
     .poll(() => heroFilm.evaluate((video) => video instanceof HTMLVideoElement && video.paused))
     .toBe(true);
+});
+
+test("data-saving entry leaves the hero unloaded until the visitor explicitly starts it", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "connection", {
+      configurable: true,
+      value: { saveData: true },
+    });
+  });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await page.goto("/");
+  const hero = page.locator("video[data-scroll-film]");
+  const toggle = page.locator("[data-journey-toggle]");
+  await expect(toggle).toHaveAccessibleName("첫 화면 영상 재생하기");
+  await expect(hero).not.toHaveAttribute("src");
+  await toggle.click();
+  await expect
+    .poll(
+      () =>
+        hero.evaluate(
+          (video) => video instanceof HTMLVideoElement && video.readyState >= 2 && !video.paused,
+        ),
+      { timeout: 15_000 },
+    )
+    .toBe(true);
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await expect(toggle).toBeHidden();
+  await expect
+    .poll(() => hero.evaluate((video) => video instanceof HTMLVideoElement && video.paused))
+    .toBe(true);
+});
+
+test("the blue opening expands into selectable app features and hands the selected flow to the demo", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await page.goto("/");
+  const scene = page.locator("[data-blue-reveal]");
+  await expect(scene).toHaveClass(/blue-reveal-motion/);
+  await scrollScene(scene, ".blue-reveal-pin", 0);
+  const circle = scene.locator(".blue-reveal-circle");
+  await expect(circle).toBeVisible();
+  const initialCircle = await circle.boundingBox();
+  expect(initialCircle).not.toBeNull();
+  await scrollScene(scene, ".blue-reveal-pin", 0.4);
+  await expect(scene).toHaveClass(/blue-reveal-open/);
+  await expect(scene.locator(".blue-reveal-pin")).toHaveCSS("position", "sticky");
+  await expect
+    .poll(async () => (await circle.boundingBox())?.width ?? 0)
+    .toBeGreaterThan((initialCircle?.width ?? 80) * 10);
+  for (const [index, progress] of [0.4, 0.57, 0.75, 0.94].entries()) {
+    await scrollScene(scene, ".blue-reveal-pin", progress);
+    await expect(scene).toHaveAttribute("data-blue-selected", String(index));
+    await expect(scene.locator(`[data-blue-tab="${index}"]`)).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    await expect(scene.locator(`[data-blue-panel="${index}"]`)).toBeVisible();
+    await expect(scene.locator("[data-blue-panel]:not([hidden])")).toHaveCount(1);
+  }
+  await scrollScene(scene, ".blue-reveal-pin", 0.57);
+  await expect(scene).toHaveAttribute("data-blue-selected", "1");
+  await scene.locator('[data-blue-tab="1"]').focus();
+  await page.keyboard.press("End");
+  await expect(scene.locator('[data-blue-tab="3"]')).toBeFocused();
+  await expect(scene.locator('[data-blue-panel="3"]')).toBeVisible();
+  await expect(scene.locator(".blue-reveal-pin")).toHaveJSProperty("scrollTop", 0);
+  await page.evaluate(() => window.dispatchEvent(new Event("resize")));
+  await expect(scene).toHaveAttribute("data-blue-selected", "3");
+  await scene.locator('[data-blue-demo="report"]').click();
+  await expect(page.locator('[data-demo-tab="report"]')).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator('[data-demo-panel="report"]')).toBeVisible();
+});
+
+test("mobile and reduced-motion blue previews keep keyboard tabs and working demo links", async ({
+  page,
+}) => {
+  for (const viewport of [
+    { width: 320, height: 844, reducedMotion: "no-preference" as const },
+    { width: 1440, height: 900, reducedMotion: "reduce" as const },
+  ]) {
+    await page.goto("about:blank");
+    await page.setViewportSize(viewport);
+    await page.emulateMedia({ reducedMotion: viewport.reducedMotion });
+    await page.goto("/");
+    const scene = page.locator("[data-blue-reveal]");
+    await expect(scene).toHaveClass(/blue-reveal-enhanced/);
+    await expect(scene).not.toHaveClass(/blue-reveal-motion/);
+    await expect(scene.locator(".blue-reveal-circle")).toBeHidden();
+    await scene.getByRole("tab", { name: /편한 대화/ }).focus();
+    await page.keyboard.press("ArrowRight");
+    await expect(scene.locator('[data-blue-tab="1"]')).toBeFocused();
+    await expect(scene.locator('[data-blue-panel="1"]')).toContainText("계좌 이체 내역.pdf");
+    await expect(scene.locator('[data-blue-panel="0"]')).toBeHidden();
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+      ),
+    ).toBe(true);
+    await scene.locator('[data-blue-demo="files"]').click();
+    await expect(page.locator('[data-demo-tab="files"]')).toHaveAttribute("aria-selected", "true");
+  }
+});
+
+test("the everyday story moves with scroll and its films play only while visible without overriding pause", async ({
+  page,
+}) => {
+  test.setTimeout(60_000);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await page.goto("/");
+  const future = page.locator("[data-everyday-future]");
+  await expect(future).toHaveClass(/future-motion-ready/);
+  const collage = future.locator(".future-collage");
+  await collage.evaluate((element) => {
+    window.scrollTo({
+      top: scrollY + element.getBoundingClientRect().top - 450,
+      behavior: "instant",
+    });
+  });
+  const photo = collage.locator("[data-future-layer]").first();
+  await expect
+    .poll(() => photo.evaluate((element) => getComputedStyle(element).transform))
+    .not.toBe("none");
+  const initialTransform = await photo.evaluate((element) => getComputedStyle(element).transform);
+  await page.evaluate(() => window.scrollBy({ top: 220, behavior: "instant" }));
+  await expect
+    .poll(() => photo.evaluate((element) => getComputedStyle(element).transform))
+    .not.toBe(initialTransform);
+  for (const name of ["future-everyday", "future-conversation"]) {
+    const film = future.locator(`video[data-film="${name}"]`);
+    const toggle = future.locator(`[data-film-toggle="${name}"]`);
+    const showFilm = () =>
+      film.evaluate((element) => {
+        const container = element.closest("[data-film-container]");
+        if (!container) throw new Error("Missing film container");
+        window.scrollTo({
+          top: scrollY + container.getBoundingClientRect().top - 100,
+          behavior: "instant",
+        });
+      });
+    await showFilm();
+    await expect
+      .poll(
+        () => film.evaluate((element) => element instanceof HTMLVideoElement && !element.paused),
+        { timeout: 15_000 },
+      )
+      .toBe(true);
+    await expect(toggle).toHaveAttribute("data-playing", "true");
+    expect(
+      await film.evaluate(
+        (element) =>
+          element instanceof HTMLVideoElement &&
+          element.muted &&
+          element.loop &&
+          element.playsInline,
+      ),
+    ).toBe(true);
+    await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
+    await expect
+      .poll(() => film.evaluate((element) => element instanceof HTMLVideoElement && element.paused))
+      .toBe(true);
+    await showFilm();
+    await expect
+      .poll(() =>
+        film.evaluate((element) => element instanceof HTMLVideoElement && !element.paused),
+      )
+      .toBe(true);
+    await toggle.click();
+    await expect(toggle).toHaveAttribute("data-playing", "false");
+    await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
+    await showFilm();
+    await expect
+      .poll(() => film.evaluate((element) => element instanceof HTMLVideoElement && element.paused))
+      .toBe(true);
+  }
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await expect(future).not.toHaveClass(/future-motion-ready/);
+  for (const layer of await future.locator("[data-future-layer]").all())
+    await expect(layer).toHaveCSS("transform", "none");
+  for (const copy of await future.locator("[data-future-reveal]").all())
+    await expect(copy).toHaveCSS("opacity", "1");
+});
+
+test("the mobile everyday story keeps the message and next steps without requesting decorative media", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const mediaRequests: string[] = [];
+  page.on("request", (request) => {
+    if (/\/landing\/future-[^/]+\.(?:mp4|webp)(?:\?|$)/.test(request.url()))
+      mediaRequests.push(request.url());
+  });
+  await page.goto("/");
+  const future = page.locator("[data-everyday-future]");
+  await expect(future).not.toHaveClass(/future-motion-ready/);
+  for (const window of await future
+    .locator(".future-photo-window, .future-film-media, .future-video-toggle")
+    .all())
+    await expect(window).toBeHidden();
+  for (const caption of await future.locator(".future-photo figcaption").all())
+    await expect(caption).toBeVisible();
+  await expect(future.locator("#future-everyday-title")).toBeVisible();
+  await expect(future.locator("#future-conversation-title")).toBeVisible();
+  await expect(future.locator("#future-vision-title")).toBeVisible();
+  await expect(future.getByRole("link", { name: "내 이야기로 시작하기" })).toHaveAttribute(
+    "href",
+    "/app",
+  );
+  await expect(future.getByRole("link", { name: "변호사 살펴보기" })).toHaveAttribute(
+    "href",
+    "/lawyers",
+  );
+  await future.locator(".future-vision-actions").scrollIntoViewIfNeeded();
+  for (const film of await future.locator("video").all())
+    await expect(film).not.toHaveAttribute("src");
+  expect(mediaRequests).toEqual([]);
 });
 
 test("mobile and reduced-motion entry keep all phone chapters readable without downloading films", async ({
@@ -600,24 +918,18 @@ test("core landing content, login and FAQs work when JavaScript is unavailable",
   try {
     await page.goto("/");
     await expect(page.getByRole("heading", { level: 1, name: heroTitle })).toBeVisible();
-    for (const section of [
-      "how-it-works",
-      "logo-experience",
-      "try-baro",
-      "clarity",
-      "phone-story",
-      "everyday",
-      "organize",
-      "principles",
-      "faq",
-    ])
-      await expect(page.locator(`#${section}`)).toBeVisible();
+    for (const section of landingSections) await expect(page.locator(`#${section}`)).toBeVisible();
     for (const chapter of await page.locator("[data-phone-chapter]").all())
       await expect(chapter).toBeVisible();
     await expect(page.locator(".phone-story-controls")).toBeHidden();
     await expect(page.locator("[data-journey-toggle]")).toBeHidden();
     await expect(page.locator("[data-demo-fallback]")).toBeVisible();
     await expect(page.locator("[data-demo-interactive]")).toBeHidden();
+    await expect(page.locator("[data-blue-tabs]")).toBeHidden();
+    await expect(page.locator("[data-blue-panel]")).toHaveCount(4);
+    for (const panel of await page.locator("[data-blue-panel]").all())
+      await expect(panel).toBeVisible();
+    await expect(page.locator("#future-vision-title")).toBeVisible();
     await expect(page.locator("[data-logo-panel]")).toHaveCount(6);
     for (const panel of await page.locator("[data-logo-panel]").all())
       await expect(panel).toBeVisible();
@@ -630,6 +942,14 @@ test("core landing content, login and FAQs work when JavaScript is unavailable",
     const disclosure = page.locator("#faq details").first();
     await disclosure.locator("summary").click();
     await expect(disclosure).toHaveAttribute("open", "");
+    await page.setViewportSize({ width: 390, height: 844 });
+    const menu = page.locator("[data-landing-menu]");
+    await menu.locator("summary").click();
+    await expect(menu).toHaveAttribute("open", "");
+    await menu.getByRole("link", { name: "앱 둘러보기", exact: true }).click();
+    await expect(page).toHaveURL(/#blue-app-reveal$/);
+    await menu.locator("summary").click();
+    await expect(menu).not.toHaveAttribute("open", "");
     await page
       .getByRole("navigation", { name: "메인 메뉴", exact: true })
       .getByRole("link", { name: "로그인", exact: true })

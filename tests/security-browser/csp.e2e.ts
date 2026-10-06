@@ -4,7 +4,7 @@ import { publicLawyer } from "../fixtures/contracts/v2";
 test("built landing loads local footage and its interactive scenes under the Worker hash CSP", async ({
   page,
 }) => {
-  test.setTimeout(45_000);
+  test.setTimeout(60_000);
   await page.addInitScript(() => {
     const browser = window as unknown as { landingCspViolations: string[] };
     browser.landingCspViolations = [];
@@ -47,19 +47,46 @@ test("built landing loads local footage and its interactive scenes under the Wor
   await expect
     .poll(
       () =>
-        heroFilm.evaluate((video) => video instanceof HTMLVideoElement && video.readyState >= 2),
+        heroFilm.evaluate(
+          (video) => video instanceof HTMLVideoElement && video.readyState >= 2 && !video.paused,
+        ),
       { timeout: 15_000 },
     )
     .toBe(true);
   expect(
     await heroFilm.evaluate(
       (video) =>
-        video instanceof HTMLVideoElement && new URL(video.currentSrc).origin === location.origin,
+        video instanceof HTMLVideoElement &&
+        new URL(video.currentSrc).origin === location.origin &&
+        new URL(video.currentSrc).pathname === "/landing/hero-continuous.mp4" &&
+        video.autoplay &&
+        video.loop,
     ),
   ).toBe(true);
+  const scrollBeforePause = await page.evaluate(() => scrollY);
   await page.locator("[data-journey-toggle]").click();
   await expect(page.locator("[data-journey-toggle]")).toHaveAttribute("data-paused", "true");
+  expect(Math.abs((await page.evaluate(() => scrollY)) - scrollBeforePause)).toBeLessThanOrEqual(1);
+  expect(
+    await heroFilm.evaluate((video) => video instanceof HTMLVideoElement && video.paused),
+  ).toBe(true);
   await page.locator("[data-journey-toggle]").click();
+  await page.locator("[data-journey-hero]").evaluate((element) => {
+    const pin = element.querySelector<HTMLElement>(".journey-pin");
+    if (!(element instanceof HTMLElement) || !pin) throw new Error("Missing journey scene");
+    const top = Number.parseFloat(getComputedStyle(pin).top) || 76;
+    window.scrollTo({
+      top:
+        scrollY +
+        element.getBoundingClientRect().top -
+        top +
+        (element.offsetHeight - pin.offsetHeight) * 0.32,
+      behavior: "instant",
+    });
+  });
+  await expect
+    .poll(() => heroFilm.evaluate((video) => video instanceof HTMLVideoElement && !video.paused))
+    .toBe(true);
   await page.locator("[data-journey-hero]").evaluate((element) => {
     const pin = element.querySelector<HTMLElement>(".journey-pin");
     if (!(element instanceof HTMLElement) || !pin) throw new Error("Missing journey scene");
@@ -74,8 +101,30 @@ test("built landing loads local footage and its interactive scenes under the Wor
     });
   });
   await expect(page.locator("[data-journey-hero]")).toHaveAttribute("data-stage", "app");
+  await expect
+    .poll(() => heroFilm.evaluate((video) => video instanceof HTMLVideoElement && video.paused))
+    .toBe(true);
   await expect(page.locator("[data-journey-app]")).toHaveAttribute("aria-hidden", "false");
   await expect(page.locator("[data-journey-message].is-shown")).toHaveCount(6);
+  const blue = page.locator("[data-blue-reveal]");
+  await expect(blue).toHaveClass(/blue-reveal-motion/);
+  await blue.evaluate((element) => {
+    const pin = element.querySelector<HTMLElement>(".blue-reveal-pin");
+    if (!(element instanceof HTMLElement) || !pin) throw new Error("Missing blue reveal");
+    const top = Number.parseFloat(getComputedStyle(pin).top) || 76;
+    window.scrollTo({
+      top:
+        scrollY +
+        element.getBoundingClientRect().top -
+        top +
+        (element.offsetHeight - pin.offsetHeight) * 0.75,
+      behavior: "instant",
+    });
+  });
+  await expect(blue).toHaveAttribute("data-blue-selected", "2");
+  await expect(blue.locator('[data-blue-panel="2"]')).toBeVisible();
+  await blue.locator('[data-blue-demo="timeline"]').click();
+  await expect(page.locator('[data-demo-tab="timeline"]')).toHaveAttribute("aria-selected", "true");
   await page.locator("[data-logo-experience]").evaluate((element) => {
     const pin = element.querySelector<HTMLElement>(".logo-experience-sticky");
     if (!(element instanceof HTMLElement) || !pin) throw new Error("Missing logo scene");
@@ -121,6 +170,35 @@ test("built landing loads local footage and its interactive scenes under the Wor
   await page.locator('[data-phone-step="2"]').click();
   await expect(page.locator("[data-phone-story]")).toHaveAttribute("data-chapter", "2");
   await expect(page.locator('[data-phone-screen="2"]')).toHaveClass(/is-current/);
+  const future = page.locator("[data-everyday-future]");
+  await expect(future).toHaveClass(/future-motion-ready/);
+  const futureFilm = future.locator('video[data-film="future-everyday"]');
+  await futureFilm.evaluate((element) => {
+    const container = element.closest("[data-film-container]");
+    if (!container) throw new Error("Missing everyday film container");
+    window.scrollTo({
+      top: scrollY + container.getBoundingClientRect().top - 100,
+      behavior: "instant",
+    });
+  });
+  await expect
+    .poll(
+      () =>
+        futureFilm.evaluate(
+          (video) =>
+            video instanceof HTMLVideoElement &&
+            video.readyState >= 2 &&
+            !video.paused &&
+            new URL(video.currentSrc).origin === location.origin,
+        ),
+      { timeout: 15_000 },
+    )
+    .toBe(true);
+  await future.locator('[data-film-toggle="future-everyday"]').click();
+  await expect(future.locator('[data-film-toggle="future-everyday"]')).toHaveAttribute(
+    "data-playing",
+    "false",
+  );
   expect(
     await page.evaluate(
       () => (window as unknown as { landingCspViolations: string[] }).landingCspViolations,
@@ -151,6 +229,20 @@ test("the built simplicity page hydrates its compact explanation under hash CSP"
   await page.locator("[data-clarity-play]").click();
   await expect(page.locator('[data-clarity-result="0"]')).toContainText("돈을 보낸 날");
   await expect(page.locator(".clarity-help")).toBeHidden();
+  const blue = page.locator("[data-blue-reveal]");
+  await expect(blue).toHaveClass(/blue-reveal-enhanced/);
+  await expect(blue).not.toHaveClass(/blue-reveal-motion/);
+  await blue.locator('[data-blue-tab="0"]').focus();
+  await page.keyboard.press("End");
+  await expect(blue.locator('[data-blue-panel="3"]')).toBeVisible();
+  await blue.locator('[data-blue-demo="report"]').click();
+  await expect(page.locator('[data-demo-tab="report"]')).toHaveAttribute("aria-selected", "true");
+  const menu = page.locator("[data-landing-menu]");
+  await menu.locator("summary").focus();
+  await page.keyboard.press("Enter");
+  await expect(menu).toHaveAttribute("open", "");
+  await page.keyboard.press("Escape");
+  await expect(menu).not.toHaveAttribute("open", "");
   expect(
     await page.evaluate(
       () => (window as unknown as { simplicityCspViolations: string[] }).simplicityCspViolations,

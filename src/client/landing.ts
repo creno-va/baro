@@ -23,6 +23,25 @@ if (landing) {
   const inkLines = [...landing.querySelectorAll<HTMLElement>("[data-ink-line]")];
   const hero = landing.querySelector<HTMLElement>("[data-hero-scene]");
   const progress = landing.querySelector<HTMLElement>(".landing-scroll-progress");
+  const chapterLinks = [...landing.querySelectorAll<HTMLAnchorElement>("[data-chapter-nav] a")].map(
+    (link) => ({ link, section: document.querySelector<HTMLElement>(link.hash) }),
+  );
+  const menus = [...landing.querySelectorAll<HTMLDetailsElement>("[data-landing-menu]")];
+  for (const menu of menus) {
+    menu.addEventListener("click", (event) => {
+      if (event.target instanceof Element && event.target.closest("a")) menu.open = false;
+    });
+    menu.addEventListener("keydown", (event) => {
+      if (event.key !== "Escape" || !menu.open) return;
+      menu.open = false;
+      menu.querySelector("summary")?.focus({ preventScroll: true });
+    });
+  }
+  document.addEventListener("pointerdown", (event) => {
+    for (const menu of menus) {
+      if (event.target instanceof Node && !menu.contains(event.target)) menu.open = false;
+    }
+  });
   let frame = 0;
   let revealObserver: IntersectionObserver | undefined;
   let enabled = false;
@@ -48,7 +67,7 @@ if (landing) {
     film.button?.setAttribute("data-playing", String(playing));
     film.button?.setAttribute(
       "aria-label",
-      `${film.video.dataset.film === "hero" ? "첫 화면" : "일상"} 영상 ${playing ? "일시정지" : "재생하기"}`,
+      `${film.video.dataset.filmName ?? (film.video.dataset.film === "hero" ? "첫 화면" : "일상")} 영상 ${playing ? "일시정지" : "재생하기"}`,
     );
     if (label) label.textContent = playing ? "영상 일시정지" : "영상 재생";
   }
@@ -128,10 +147,19 @@ if (landing) {
 
   function render() {
     frame = 0;
-    if (!enabled) return;
     const viewport = window.innerHeight;
     const scrollRange = Math.max(1, document.documentElement.scrollHeight - viewport);
     progress?.style.setProperty("--page-progress", String(clamp(window.scrollY / scrollRange)));
+    let currentChapter: HTMLAnchorElement | undefined;
+    for (const chapter of chapterLinks) {
+      if (chapter.section && chapter.section.getBoundingClientRect().top <= viewport * 0.45)
+        currentChapter = chapter.link;
+    }
+    for (const { link } of chapterLinks) {
+      if (link === currentChapter) link.setAttribute("aria-current", "location");
+      else link.removeAttribute("aria-current");
+    }
+    if (!enabled) return;
     for (const scene of scenes) {
       const bounds = scene.node.getBoundingClientRect();
       if (bounds.bottom < -200 || bounds.top > viewport + 200) continue;
@@ -168,7 +196,7 @@ if (landing) {
   }
 
   function schedule() {
-    if (enabled && !frame) frame = window.requestAnimationFrame(render);
+    if (!frame) frame = window.requestAnimationFrame(render);
   }
 
   function configure() {
@@ -196,6 +224,7 @@ if (landing) {
         hero?.style.removeProperty(property);
       for (const line of inkLines) line.style.removeProperty("--ink-progress");
       progress?.style.removeProperty("--page-progress");
+      schedule();
       return;
     }
     if ("IntersectionObserver" in window) {

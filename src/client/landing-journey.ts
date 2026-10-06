@@ -1,4 +1,4 @@
-/** The camera approaches a real filmed phone, then the DOM application takes over. */
+/** The footage plays continuously; only its framing and the DOM scene follow scroll. */
 const journey = document.querySelector<HTMLElement>("[data-journey-hero]");
 if (journey) {
   const scene = journey;
@@ -17,13 +17,25 @@ if (journey) {
     ?.saveData;
   const clamp = (n: number) => Math.max(0, Math.min(1, n));
   let enabled = false;
-  let visible = true;
+  let visible = false;
   let progress = 0;
   let frame = 0;
   let userPaused = false;
   let explicitlyStarted = false;
   let failed = false;
   let playingRequest = false;
+
+  function shouldPlay() {
+    return (
+      enabled &&
+      visible &&
+      progress < 0.62 &&
+      !document.hidden &&
+      !userPaused &&
+      !failed &&
+      (!saveData || explicitlyStarted)
+    );
+  }
 
   function syncButton() {
     if (!button) return;
@@ -36,15 +48,8 @@ if (journey) {
 
   function reconcileVideo() {
     if (!video) return;
-    if (
-      !enabled ||
-      !visible ||
-      document.hidden ||
-      userPaused ||
-      failed ||
-      (saveData && !explicitlyStarted)
-    ) {
-      video.pause();
+    if (!shouldPlay()) {
+      if (!video.paused) video.pause();
       syncButton();
       return;
     }
@@ -52,25 +57,19 @@ if (journey) {
       video.src = video.dataset.videoSrc;
       video.muted = true;
     }
-    if (progress < 0.015) {
-      if (video.paused && !playingRequest) {
-        playingRequest = true;
-        void video
-          .play()
-          .catch((error: unknown) => {
-            if (!(error instanceof DOMException && error.name === "AbortError")) userPaused = true;
-          })
-          .finally(() => {
-            playingRequest = false;
-            syncButton();
-          });
-      }
-    } else {
-      video.pause();
-      if (Number.isFinite(video.duration) && !video.seeking) {
-        const target = clamp(progress / 0.58) * Math.max(0, video.duration - 0.08);
-        if (Math.abs(video.currentTime - target) > 0.09) video.currentTime = target;
-      }
+    if (video.paused && !playingRequest) {
+      playingRequest = true;
+      void video
+        .play()
+        .catch((error: unknown) => {
+          if (!(error instanceof DOMException && error.name === "AbortError")) userPaused = true;
+        })
+        .finally(() => {
+          playingRequest = false;
+          // A pending autoplay request must not restart a hidden or visitor-paused film.
+          if (!shouldPlay()) video.pause();
+          syncButton();
+        });
     }
     syncButton();
   }
@@ -118,7 +117,7 @@ if (journey) {
     });
     if (cue)
       cue.textContent =
-        current === 2 ? "이제 직접 눌러서 체험해 보세요" : "휴대폰 안으로 들어가 볼까요?";
+        current === 2 ? "이제 직접 눌러서 체험해 보세요" : "스크롤해 BARO를 만나보세요";
     if (enter) enter.href = current === 2 ? "#try-baro" : "#hero-experience";
     reconcileVideo();
   }
@@ -149,15 +148,20 @@ if (journey) {
     video.classList.add("is-ready");
     schedule();
   });
-  video?.addEventListener("seeked", schedule);
-  video?.addEventListener("timeupdate", () => {
-    if (enabled && progress < 0.015 && video.currentTime > 1.6 && !video.seeking)
-      video.currentTime = 0;
+  video?.addEventListener("play", () => {
+    // Native autoplay can fire after viewport or motion preferences have changed.
+    if (!shouldPlay()) video.pause();
   });
   video?.addEventListener("error", () => {
     failed = true;
     video.classList.remove("is-ready");
     syncButton();
+  });
+  button?.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0) return;
+    // Keep focus inside the clipped sticky panel without scrolling its flow position.
+    event.preventDefault();
+    button.focus({ preventScroll: true });
   });
   button?.addEventListener("click", () => {
     if (userPaused || failed || (saveData && !explicitlyStarted)) {
@@ -183,17 +187,19 @@ if (journey) {
       behavior: "smooth",
     });
   });
-  if ("IntersectionObserver" in window)
+  if (pin && "IntersectionObserver" in window)
     new IntersectionObserver(
       (entries) => {
         visible = entries[0]?.isIntersecting ?? false;
-        reconcileVideo();
+        schedule();
       },
       { threshold: 0.01 },
-    ).observe(scene);
+    ).observe(pin);
+  else visible = true;
   window.addEventListener("scroll", schedule, { passive: true });
   window.addEventListener("resize", schedule, { passive: true });
   window.addEventListener("pageshow", configure);
+  window.addEventListener("pagehide", () => video?.pause());
   document.addEventListener("visibilitychange", reconcileVideo);
   desktop.addEventListener("change", configure);
   reduced.addEventListener("change", configure);

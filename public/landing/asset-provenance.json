@@ -86,6 +86,66 @@
       "durationSeconds": 8,
       "description": "Fictional adult at home using a phone; camera physically approaches the phone. Landing transitions into local HTML app demonstration.",
       "optimization": "1280x720 H.264 CRF24 with 12-frame keyframes for responsive scroll seeking, audio removed, fast-start MP4, first-frame WebP poster. No mobile or reduced-motion autoplay/download."
+    },
+    {
+      "asset": "future-home.webp",
+      "source": "Higgsfield",
+      "model": "gpt_image_2_5",
+      "generationId": "7346bb62-208c-4eb6-9a83-474cc03ac64d",
+      "generatedOn": "2026-10-07",
+      "description": "Fictional adult reviewing household documents in an ordinary Korean apartment.",
+      "optimization": "896x1120 WebP quality85; no image request below 768px."
+    },
+    {
+      "asset": "future-work.webp",
+      "source": "Higgsfield",
+      "model": "gpt_image_2_5",
+      "generationId": "4efe1821-ea95-4838-8b2e-155c1615c895",
+      "generatedOn": "2026-10-07",
+      "description": "Fictional Korean adult checking notes on a phone at a bus stop after work.",
+      "optimization": "896x1120 WebP quality85; no image request below 768px."
+    },
+    {
+      "asset": "future-cafe.webp",
+      "source": "Higgsfield",
+      "model": "gpt_image_2_5",
+      "generationId": "a0a04780-9d8c-42c3-9b6c-1b52b5fa9889",
+      "generatedOn": "2026-10-07",
+      "description": "Fictional neighborhood cafe owner reviewing receipts and a smartphone.",
+      "optimization": "896x1120 WebP quality85; no image request below 768px."
+    },
+    {
+      "asset": "hero-continuous.mp4",
+      "poster": "hero-continuous-poster.webp",
+      "source": "Higgsfield",
+      "model": "seedance_2_5",
+      "generationId": "5c836ee6-f4e5-4804-a8d6-bd92e57941e0",
+      "generatedOn": "2026-10-07",
+      "durationSeconds": 12,
+      "description": "Continuous locked-off documentary-style shot of a fictional adult using a phone at home; natural subtle movement, no scroll seeking.",
+      "optimization": "1600x900 H.264 CRF25, audio removed, fast-start MP4, first-frame WebP poster. Lazy desktop playback, user pause control, motion/data-saving preferences respected."
+    },
+    {
+      "asset": "future-everyday.mp4",
+      "poster": "future-everyday-poster.webp",
+      "source": "Higgsfield",
+      "model": "seedance_2_5",
+      "generationId": "31674685-2335-4605-bd95-c4e01f8acb85",
+      "generatedOn": "2026-10-07",
+      "durationSeconds": 10,
+      "description": "Fictional adults organizing household paperwork together; illustrative preparation, not a legal outcome or testimonial.",
+      "optimization": "1600x900 H.264 CRF25, audio removed, fast-start MP4, first-frame WebP poster. Lazy desktop playback, user pause control, motion/data-saving preferences respected."
+    },
+    {
+      "asset": "future-conversation.mp4",
+      "poster": "future-conversation-poster.webp",
+      "source": "Higgsfield",
+      "model": "seedance_2_5",
+      "generationId": "d25531bb-6743-4146-a3f9-f64a4769a1a8",
+      "generatedOn": "2026-10-07",
+      "durationSeconds": 10,
+      "description": "Fictional client and professional having a prepared conversation; not an actual consultation or testimonial.",
+      "optimization": "1600x900 H.264 CRF25, audio removed, fast-start MP4, first-frame WebP poster. Lazy desktop playback, user pause control, motion/data-saving preferences respected."
     }
   ]
 }

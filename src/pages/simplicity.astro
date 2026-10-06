@@ -1,8 +1,12 @@
 ---
 // biome-ignore lint/correctness/noUnusedImports: Astro renders icons.
 import { ArrowDown, ArrowRight } from "lucide-react";
+// biome-ignore lint/correctness/noUnusedImports: Astro renders the blue app experience.
+import BlueAppReveal from "../components/landing/BlueAppReveal.astro";
 // biome-ignore lint/correctness/noUnusedImports: Astro renders the experience.
 import DemoLab from "../components/landing/DemoLab.astro";
+// biome-ignore lint/correctness/noUnusedImports: Astro renders the public navigation.
+import LandingNavigation from "../components/landing/LandingNavigation.astro";
 // biome-ignore lint/correctness/noUnusedImports: Astro renders the experience.
 import LogoExperience from "../components/landing/LogoExperience.astro";
 // biome-ignore lint/correctness/noUnusedImports: Astro renders the experience.
@@ -15,10 +19,11 @@ import { Brand } from "../components/ui/brand";
 import BaseLayout from "../layouts/BaseLayout.astro";
 import "../styles/landing.css";
 import "../styles/landing-simplicity.css";
+import "../styles/landing-refinement.css";
 ---
 <BaseLayout title="BARO Simplicity — 복잡한 일상에서, 분명한 다음으로" description="흩어진 고민이 모이고, 사실과 자료가 정리되는 순간을 직접 경험하세요. BARO의 대화, 자료, 타임라인과 상담 준비를 예시로 체험할 수 있습니다.">
   <div class="landing simplicity-page">
-    <header class="landing-header simplicity-header"><div class="landing-nav-wrap"><Brand /><nav class="landing-nav" aria-label="메인 메뉴"><a class="landing-nav-section" href="/">홈</a><a class="landing-nav-section" href="#clarity">변화의 시작</a><a class="landing-nav-section" href="#try-baro">직접 체험하기</a><a class="landing-login" href="/login">로그인 <ArrowRight size={16} aria-hidden="true" /></a></nav></div><div class="landing-scroll-progress" aria-hidden="true"></div></header>
+    <LandingNavigation variant="simplicity" />
     <main id="main-content" class="landing-main" tabindex="-1">
       <section class="simplicity-intro" aria-labelledby="simplicity-title">
         <div class="simplicity-intro-orbit" aria-hidden="true"><span></span><span></span><span></span><img src="/brand/logo.svg" width="100" height="100" alt="" /></div>
@@ -29,6 +34,7 @@ import "../styles/landing-simplicity.css";
         <div class="simplicity-index" aria-label="체험 순서"><span>01 걱정을 모으고</span><i></i><span>02 기능을 펼치고</span><i></i><span>03 직접 경험해요</span></div>
       </section>
       <PainToClarity />
+      <BlueAppReveal />
       <LogoExperience />
       <DemoLab />
       <PhoneStory />
