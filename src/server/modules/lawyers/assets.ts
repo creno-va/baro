@@ -315,6 +315,8 @@ export function createLawyerAssetsService(core: V2Core, deps: LawyerAssetDepende
         }))
       )
         throw new LawyerError("STALE_REVISION");
+      const capturedIntent = await storage.captureAssetUploadIntent(actor(ownerId), blobId);
+      if (!capturedIntent) throw new LawyerError("STALE_REVISION");
       try {
         const binary = await prepareAssetBinary(
           core.cipher,
@@ -393,6 +395,12 @@ export function createLawyerAssetsService(core: V2Core, deps: LawyerAssetDepende
         };
       } catch (error) {
         await storage.abandonAssetUpload(actor(ownerId), blobId).catch(() => false);
+        // The original PUT has now settled. If a previous cleanup completed
+        // before that late write, preserve a new journal generation using the
+        // exact server-captured capability; never reconstruct it from input.
+        const lateObject = await targetBucket.head(`private/${blobId}`).catch(() => null);
+        if (lateObject?.key === `private/${blobId}`)
+          await storage.requeueAssetUploadCleanup(actor(ownerId), capturedIntent).catch(() => null);
         throw error;
       }
     },

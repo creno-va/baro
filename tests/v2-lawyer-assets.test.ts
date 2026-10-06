@@ -5,6 +5,7 @@ import { createCaseDataCipher } from "../src/server/crypto";
 import { createV2Core } from "../src/server/db/v2-core";
 import { createV2DeletionRepository } from "../src/server/db/v2-deletion";
 import { createV2LawyersRepository } from "../src/server/db/v2-lawyers";
+import { createV2StorageRepository } from "../src/server/db/v2-storage";
 import { hex } from "../src/server/modules/files/binary";
 import {
   type AssetIdentity,
@@ -67,10 +68,12 @@ async function fixture() {
   let badReceipt = false;
   let rejectedPut = false;
   let onPut: (() => void) | null = null;
+  let beforeStore: (() => Promise<void>) | null = null;
   const bucket = {
     async put(key: string, value: ReadableStream<Uint8Array>) {
       if (rejectedPut) throw new Error("Synthetic R2 transport failure");
       const data = new Uint8Array(await new Response(value).arrayBuffer());
+      await beforeStore?.();
       objects.set(key, data);
       onPut?.();
       return { key, size: badReceipt ? data.length + 1 : data.length };
@@ -119,6 +122,9 @@ async function fixture() {
     },
     putHook: (fn: () => void) => {
       onPut = fn;
+    },
+    beforeStore: (fn: () => Promise<void>) => {
+      beforeStore = fn;
     },
   };
 }
@@ -266,6 +272,96 @@ test("R2 rejection before consuming ciphertext aborts producer and leaves durabl
     cipher_hash: null,
   });
 }, 5000);
+test("late PUT after completed cleanup uses captured intent to create a new durable cleanup generation", async () => {
+  const f = await fixture();
+  const storage = createV2StorageRepository(f.core);
+  const deletion = createV2DeletionRepository(f.core);
+  const r = await f.service.reserve(
+    f.owner.userId,
+    1,
+    "synthetic_late_put_generation",
+    { name: "synthetic.png", byteLength: 20, mediaType: "image/png", purpose: "identity" },
+    "verification",
+  );
+  let oldJournal = "";
+  let blobId = "";
+  f.beforeStore(async () => {
+    const row = f.db.sqlite.query("SELECT id FROM v2_blobs WHERE state='pending'").get() as {
+      id: string;
+    };
+    blobId = row.id;
+    const time = new Date().toISOString();
+    expect(await storage.abandonAssetUpload({ ownerId: f.owner.userId, now: time }, blobId)).toBe(
+      true,
+    );
+    const journal = await deletion.findByTarget("blob", blobId);
+    if (!journal) throw new Error("Synthetic cleanup journal required");
+    oldJournal = journal.id;
+    const lease = await deletion.acquire(
+      journal.id,
+      crypto.randomUUID(),
+      time,
+      new Date(Date.parse(time) + 60000).toISOString(),
+    );
+    if (!lease) throw new Error("Synthetic current lease required");
+    await f.bucket.delete(`private/${blobId}`);
+    expect(await f.bucket.head(`private/${blobId}`)).toBeNull();
+    expect(
+      await storage.confirmBlobDeleted(blobId, time, {
+        lease,
+        receiptId: crypto.randomUUID(),
+        objectKey: `private/${blobId}`,
+        cipherHash: null,
+      }),
+    ).toBe(true);
+    expect(await deletion.finish(lease, time)).toBe(true);
+  });
+  await expect(
+    f.service.upload(f.owner.userId, r.assetId, 1, 20, stream(new Uint8Array(20))),
+  ).rejects.toMatchObject({ code: "STALE_REVISION" });
+  expect(f.objects.has(`private/${blobId}`)).toBe(true);
+  expect(f.db.sqlite.query("SELECT state FROM v2_blobs WHERE id=?").get(blobId)).toEqual({
+    state: "deleting",
+  });
+  const time = new Date().toISOString();
+  const pending = await deletion.pending(time, 20);
+  expect(pending).toHaveLength(1);
+  const newJournal = pending[0];
+  if (!newJournal) throw new Error("Fresh generation required");
+  expect(newJournal.id).not.toBe(oldJournal);
+  expect(
+    f.db.sqlite
+      .query("SELECT count(*) AS n FROM v2_cleanup_receipts WHERE journal_id=?")
+      .get(oldJournal),
+  ).toEqual({ n: 1 });
+  const lease = await deletion.acquire(
+    newJournal.id,
+    crypto.randomUUID(),
+    time,
+    new Date(Date.parse(time) + 60000).toISOString(),
+  );
+  if (!lease) throw new Error("Fresh generation lease required");
+  await f.bucket.delete(`private/${blobId}`);
+  expect(await f.bucket.head(`private/${blobId}`)).toBeNull();
+  expect(
+    await storage.confirmBlobDeleted(blobId, time, {
+      lease,
+      receiptId: crypto.randomUUID(),
+      objectKey: `private/${blobId}`,
+      cipherHash: null,
+    }),
+  ).toBe(true);
+  expect(await deletion.finish(lease, time)).toBe(true);
+  expect(f.db.sqlite.query("SELECT count(*) AS n FROM v2_cleanup_receipts").get()).toEqual({
+    n: 2,
+  });
+  expect(
+    f.db.sqlite.query("SELECT state,original_blob_id FROM v2_assets WHERE id=?").get(r.assetId),
+  ).toEqual({ state: "reserved", original_blob_id: null });
+  expect(
+    f.db.sqlite.query("SELECT stored_bytes,reserved_bytes FROM v2_storage_usage").get(),
+  ).toEqual({ stored_bytes: 0, reserved_bytes: 20 });
+});
 test("failed R2 receipt or mid-put deletion never promotes pointer and pending object remains journalled", async () => {
   const f = await fixture();
   const input = {
