@@ -114,14 +114,22 @@ export function createV2DeletionRepository(core: V2Core) {
         actor = parse(actorSchema, { ownerId: actor.ownerId, now: actor.now });
         parse(opaqueIdSchema, sessionId);
         const time = Date.parse(actor.now);
-        return Boolean(
-          await core
-            .statement(
-              "DELETE FROM user WHERE id=? AND EXISTS(SELECT 1 FROM session WHERE id=? AND user_id=? AND expires_at>? AND oauth_authenticated_at BETWEEN ? AND ?) RETURNING id",
-              [actor.ownerId, sessionId, actor.ownerId, time, time - 600000, time],
-            )
-            .first(),
-        );
+        const sessionGuard =
+          "EXISTS(SELECT 1 FROM session WHERE id=? AND user_id=? AND expires_at>? AND oauth_authenticated_at BETWEEN ? AND ?)";
+        const args = [sessionId, actor.ownerId, time, time - 600000, time];
+        // Metadata is not covered by user cascades. The same authenticated
+        // predicate and atomic batch preserve it on rejection or SQL failure.
+        const rows = await core.binding.batch<{ id: string }>([
+          core.statement(
+            `DELETE FROM app_metadata WHERE key=? AND EXISTS(SELECT 1 FROM user WHERE id=?) AND ${sessionGuard}`,
+            [`account-type:${actor.ownerId}`, actor.ownerId, ...args],
+          ),
+          core.statement(`DELETE FROM user WHERE id=? AND ${sessionGuard} RETURNING id`, [
+            actor.ownerId,
+            ...args,
+          ]),
+        ]);
+        return rows[1]?.results[0]?.id === actor.ownerId;
       });
     },
     findByTarget(kind: string, id: string) {

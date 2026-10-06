@@ -13,9 +13,19 @@ const jsonLimit = bodyLimit({
   onError: (context) =>
     context.json(errorBody(context, "BODY_TOO_LARGE", "입력이 너무 커요."), 413),
 });
+// A 30,000-character Korean review can exceed 64 KiB. Only this exact
+// mutation gets the larger bound; exports and other JSON remain unchanged.
+const reportReviewPath = /^(?:\/api)?\/v2\/cases\/[A-Za-z0-9_-]{1,128}\/reports$/;
+const reportReviewLimit = bodyLimit({
+  maxSize: 131_072,
+  onError: (context) =>
+    context.json(errorBody(context, "BODY_TOO_LARGE", "입력이 너무 커요."), 413),
+});
 
 export const requestBodyLimit: MiddlewareHandler<ApiEnvironment> = (context, next) =>
   context.req.method === "PUT" &&
   (binaryPartPath.test(context.req.path) || binaryProfileAssetPath.test(context.req.path))
     ? next()
-    : jsonLimit(context, next);
+    : context.req.method === "PATCH" && reportReviewPath.test(context.req.path)
+      ? reportReviewLimit(context, next)
+      : jsonLimit(context, next);

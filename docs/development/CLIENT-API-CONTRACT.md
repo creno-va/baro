@@ -146,7 +146,7 @@ reports의 id는 caseId이며 PDF/ZIP 다운로드에는 조회한 reportId를 �
 | E | `api.lawyers.get(id)` | `LawyerView` |
 | E | `api.lawyers.getMine()` | `LawyerView` |
 | E | `api.lawyers.saveMine(profile)` | `LawyerView` |
-| E | `api.lawyers.publishMine(published)` | `LawyerView`; 운영 승인 단계 없음 |
+| E | `api.lawyers.publishMine(published, current?)` | `LawyerView`; 화면에서 확인한 `{ id, revision }`을 전달. HTTP body는 `profileId`, `expectedRevision`, `published`, `consent` 필수; 운영 승인 단계 없음 |
 
 ## 병렬 편집 경계
 

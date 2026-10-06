@@ -5,6 +5,14 @@ const caseId = "11111111-1111-4111-8111-111111111111",
   analysisId = "22222222-2222-4222-8222-222222222222",
   storage = "baro.optional-analytics.v1";
 test.beforeEach(async ({ page }) => {
+  await page.route("**/api/me/session", (route) =>
+    route.fulfill({
+      json: {
+        user: { id: "synthetic-owner", name: "합성 고객", accountType: "customer" },
+        needsConsent: false,
+      },
+    }),
+  );
   await page.route("**/api/v2/cases/*/workspace", (route) =>
     route.fulfill({ status: 404, json: { error: { code: "NOT_FOUND" } } }),
   );
