@@ -106,8 +106,8 @@ export function createReportDependencies(
               { sku: "r2_class_a_requests", maximumQuantity: "1" },
               { sku: "worker_requests", maximumQuantity: "1" },
               { sku: "worker_cpu_ms", maximumQuantity: "300000" },
-              { sku: "d1_rows_read", maximumQuantity: "100000" },
-              { sku: "d1_rows_written", maximumQuantity: "1000" },
+              { sku: "d1_rows_read", maximumQuantity: String(input.workPlan.rowsRead) },
+              { sku: "d1_rows_written", maximumQuantity: String(input.workPlan.rowsWritten) },
             ],
           };
         },

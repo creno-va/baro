@@ -327,8 +327,8 @@ export function ReportReview({ caseId }: { caseId: string }) {
             <section className="report-card">
               <h2>자료 제외와 원본 선택</h2>
               <p>
-                리포트에서 제외할 자료와 ZIP에 넣을 원본은 별도로 선택해요. ZIP 원본은 한 번에
-                900MB까지 선택해 주세요.
+                리포트에서 제외할 자료와 ZIP에 넣을 원본은 별도로 선택해요. 원본이 많거나 크면
+                선택을 줄여 나눠 다운로드해 주세요.
               </p>
               {!files.length && <p>등록한 자료가 없어요. PDF만 다운로드할 수 있어요.</p>}
               {files.map((file) => (

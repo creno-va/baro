@@ -29,7 +29,8 @@ export class ReportError extends Error {
       | "BUDGET_UNAVAILABLE"
       | "USER_QUOTA_EXCEEDED"
       | "IDEMPOTENCY_CONFLICT"
-      | "LEGAL_SOURCE_UNAVAILABLE",
+      | "LEGAL_SOURCE_UNAVAILABLE"
+      | "EXPORT_LIMIT_EXCEEDED",
   ) {
     super(code);
   }
@@ -96,23 +97,26 @@ export async function ownedWorkspace(core: V2Core, actor: Actor, id: string) {
 }
 /** Internal report/storage revisions do not make the source stale. Track the
  * actual summary, messages, material coverage, actions and timeline identities. */
-export async function sourceDigest(core: V2Core, actor: Actor, id: string) {
-  const workspace = await ownedWorkspace(core, actor, id);
-  const rows = await core
-    .statement(
-      `SELECT 'summary' AS kind,s.id,s.revision AS revision,s.snapshot_id AS snapshot FROM v2_summaries s JOIN v2_intakes i ON i.summary_id=s.id WHERE i.id=?
+export const REPORT_SOURCE_SQL = `SELECT 'summary' AS kind,s.id,s.revision AS revision,s.snapshot_id AS snapshot FROM v2_summaries s JOIN v2_intakes i ON i.summary_id=s.id WHERE i.id=?
     UNION ALL SELECT 'file',f.id,f.revision,f.state || ':' || coalesce(f.manifest_snapshot_id,'') || ':' || coalesce(f.coverage_snapshot_id,'') || ':' || f.encrypted_payload FROM v2_files f WHERE f.workspace_id=? AND f.state!='deleting'
     UNION ALL SELECT 'message',id,revision,created_at FROM v2_messages WHERE workspace_id=?
     UNION ALL SELECT 'action',id,revision,'' FROM v2_actions WHERE workspace_id=?
     UNION ALL SELECT 'timeline',id,revision,'' FROM v2_timeline WHERE workspace_id=?
-    UNION ALL SELECT 'citation',c.id,c.snapshot_revision,c.citation_json || ':' || coalesce(s.content_hash,'') || ':' || coalesce(s.canonical_url,'') || ':' || coalesce(s.verified_at,'') || ':' || coalesce(s.expires_at,'') || ':' || CASE WHEN s.fetched_at<=? AND s.verified_at<=? AND s.expires_at>? THEN 'fresh' ELSE 'unavailable' END FROM v2_citation_bindings c LEFT JOIN v2_official_sources s ON s.source_id=c.source_id WHERE c.workspace_id=? ORDER BY kind,id`,
-      [id, id, id, id, id, actor.now, actor.now, actor.now, id],
-    )
-    .all();
+    UNION ALL SELECT 'citation',c.id,c.snapshot_revision,c.citation_json || ':' || coalesce(s.content_hash,'') || ':' || coalesce(s.canonical_url,'') || ':' || coalesce(s.verified_at,'') || ':' || coalesce(s.expires_at,'') || ':' || CASE WHEN s.fetched_at<=? AND s.verified_at<=? AND s.expires_at>? THEN 'fresh' ELSE 'unavailable' END FROM v2_citation_bindings c LEFT JOIN v2_official_sources s ON s.source_id=c.source_id WHERE c.workspace_id=? ORDER BY kind,id`;
+export async function reportSourceRows(core: V2Core, actor: Actor, id: string) {
+  return (
+    await core
+      .statement(REPORT_SOURCE_SQL, [id, id, id, id, id, actor.now, actor.now, actor.now, id])
+      .all<{ kind: string; id: string; revision: number; snapshot: string }>()
+  ).results;
+}
+export async function sourceDigest(core: V2Core, actor: Actor, id: string) {
+  const workspace = await ownedWorkspace(core, actor, id);
+  const rows = await reportSourceRows(core, actor, id);
   return runtimeDigest({
     summary: workspace.confirmed_summary_revision,
     status: workspace.status,
-    rows: rows.results,
+    rows,
   });
 }
 /** Only reuse citations already bound by legal-retrieval. No discovery, model

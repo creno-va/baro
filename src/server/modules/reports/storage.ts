@@ -11,6 +11,13 @@ import { createStorageMaintenance } from "../budget/storage-maintenance";
 import type { ProcessingCosts } from "../file-processing/transport";
 import type { FilesService, PrivateBucket } from "../files/service";
 import { decryptExport, type ExportIdentity, planExport } from "./binary";
+import { exportFence } from "./fence";
+import {
+  allowReportCleanup,
+  applyReportWorkPlan,
+  type ReportWorkPlan,
+  reportWorkPlan,
+} from "./limits";
 import { renderReportPdf } from "./pdf";
 import {
   ownedWorkspace,
@@ -35,6 +42,7 @@ export type ReportDependencies = {
     operationId: string;
     sourceRevision: number;
     lease: JobLease;
+    workPlan: ReportWorkPlan;
   }) => Promise<ProcessingCosts>;
   /** Preview-only explicit test composition. Never selected from a request. */
   testOnlyUnmeteredStorage?: true;
@@ -54,6 +62,8 @@ type ExportRow = {
   state: string;
   pdf_blob_id: string | null;
   zip_blob_id: string | null;
+  snapshot_id: string;
+  encrypted_payload: string;
 };
 type Ports = {
   row: (actor: Actor, id: string) => Promise<ExportRow>;
@@ -156,16 +166,6 @@ export function createReportExports(core: V2Core, deps: ReportDependencies, port
       .run();
     return { jobId: r.current_job_id, token, fencing: acquired };
   }
-  const guard = async (ownerId: string, r: ExportRow, l: JobLease) => {
-    await valid(a(ownerId), r.id);
-    const current = await core
-      .statement(
-        `SELECT j.id FROM v2_jobs j JOIN v2_operations o ON o.id=j.operation_id WHERE j.id=? AND o.owner_id=? AND j.lease_token=? AND j.fencing=? AND j.lease_until>? AND j.status IN ('running','validating') AND ${jobAlive}`,
-        [l.jobId, ownerId, l.token, l.fencing, now()],
-      )
-      .first();
-    if (!current) throw new ReportError("NOT_FOUND");
-  };
   async function persist(
     ownerId: string,
     r: ExportRow,
@@ -173,9 +173,10 @@ export function createReportExports(core: V2Core, deps: ReportDependencies, port
     kind: ExportIdentity["kind"],
     size: number,
     open: () => AsyncGenerator<Uint8Array>,
+    authorize: () => Promise<void>,
+    workPlan: ReportWorkPlan,
   ) {
     bucket();
-    const authorize = () => guard(ownerId, r, l);
     const blobId = crypto.randomUUID(),
       reservationId = crypto.randomUUID();
     const plan = await planExport(
@@ -247,6 +248,7 @@ export function createReportExports(core: V2Core, deps: ReportDependencies, port
     try {
       if (!(await core.changed(pending))) throw new ReportError("BUDGET_UNAVAILABLE");
     } catch (error) {
+      allowReportCleanup(core);
       await abandonReservation(reservationId);
       throw error;
     }
@@ -267,6 +269,7 @@ export function createReportExports(core: V2Core, deps: ReportDependencies, port
           operationId: r.operation_id,
           sourceRevision: r.workspace_revision,
           lease: l,
+          workPlan,
         });
         permit =
           (await costs?.before(
@@ -350,6 +353,7 @@ export function createReportExports(core: V2Core, deps: ReportDependencies, port
         contentHash: plan.contentHash,
       };
     } catch (error) {
+      allowReportCleanup(core);
       await abortProducer?.();
       if (writer && !sent)
         await capacity.confirmWriterStopped(writer, { transport: "not_sent" }, now());
@@ -365,14 +369,22 @@ export function createReportExports(core: V2Core, deps: ReportDependencies, port
     blobId: string,
     kind: ExportIdentity["kind"],
   ) {
-    const authorize = async () => {
-      await valid(a(ownerId), r.id);
-      if (!(await storage.findBlob(a(ownerId), blobId))) throw new ReportError("NOT_FOUND");
-    };
+    const data = await valid(a(ownerId), r.id);
+    const fence = await exportFence(core, a(ownerId), r, data.review.sourceDigest, now);
+    const authorize = () => fence.check(undefined, blobId);
     await authorize();
     const blob = await storage.findBlob(a(ownerId), blobId);
     if (!blob || blob.kind !== kind || blob.key_version !== "report_stream_v1")
       throw new ReportError("NOT_FOUND");
+    applyReportWorkPlan(
+      core,
+      reportWorkPlan({
+        pdfBytes: kind === "report_pdf" ? blob.logical_bytes : 0,
+        zipBytes: kind === "original_zip" ? blob.logical_bytes : 0,
+        sourceRows: fence.rows,
+        reportFiles: data.body.selectedFiles.length,
+      }),
+    );
     if (
       !test &&
       !(await maintenance.admit(blobId, blob.object_key, "get", async () => {
@@ -423,11 +435,14 @@ export function createReportExports(core: V2Core, deps: ReportDependencies, port
     const data = await valid(actor, id),
       r = data.row;
     if (r.state === "ready" && r.pdf_blob_id && (!selected || r.zip_blob_id)) return r;
+    const fence = await exportFence(core, actor, r, data.review.sourceDigest, now);
+    if (fence.rows > 250) throw new ReportError("EXPORT_LIMIT_EXCEEDED");
     const l = await lease(actor.ownerId, r);
     const written: string[] = [];
     try {
       const font = await deps.font();
-      await guard(actor.ownerId, r, l);
+      const authorize = () => fence.check(l);
+      await authorize();
       const pdf = renderReportPdf(font, {
         title: data.review.title,
         content: data.review.maskIdentifiers
@@ -436,6 +451,41 @@ export function createReportExports(core: V2Core, deps: ReportDependencies, port
         revision: r.revision,
         updatedAt: data.body.generatedAt,
       });
+      const choices = selected
+        ? validateOriginalSelection(data.body, data.review.excludedFileIds, selected)
+        : [];
+      const plannedSources: ZipSource[] = choices.map((file) => ({
+        ...file,
+        open: async () => {
+          await authorize();
+          const content = await deps.files.content(actor.ownerId, r.workspace_id, file.id);
+          if (content.name !== file.name || content.byteLength !== file.byteLength)
+            throw new ReportError("STALE_REVISION");
+          return content.body;
+        },
+      }));
+      const zipSize = selected ? zipByteLength(plannedSources) : undefined;
+      if (zipSize && zipSize > MAX_SELECTED_ZIP_BYTES)
+        throw new ReportError("EXPORT_LIMIT_EXCEEDED");
+      const originalParts = choices.length
+        ? await core
+            .statement(
+              "SELECT count(*) n FROM v2_upload_parts p JOIN v2_upload_sessions u ON u.id=p.upload_id WHERE u.file_id IN (SELECT value FROM json_each(?))",
+              [JSON.stringify(choices.map((f) => f.id))],
+            )
+            .first<number>("n")
+        : 0;
+      if (choices.length && (originalParts ?? 0) < choices.length)
+        throw new ReportError("STORAGE_UNAVAILABLE");
+      const workPlan = reportWorkPlan({
+        pdfBytes: pdf.byteLength,
+        zipBytes: zipSize ?? 0,
+        selectedFiles: choices.length,
+        originalParts: originalParts ?? 0,
+        sourceRows: fence.rows,
+        reportFiles: data.body.selectedFiles.length,
+      });
+      applyReportWorkPlan(core, workPlan);
       const pdfArtifact = await persist(
         actor.ownerId,
         r,
@@ -445,26 +495,22 @@ export function createReportExports(core: V2Core, deps: ReportDependencies, port
         async function* () {
           yield pdf;
         },
+        authorize,
+        workPlan,
       );
       written.push(pdfArtifact.id);
       pdf.fill(0);
       let zipArtifact = null;
       if (selected) {
-        const choices = validateOriginalSelection(data.body, data.review.excludedFileIds, selected);
-        const sources: ZipSource[] = choices.map((file) => ({
-          ...file,
-          open: async () => {
-            await guard(actor.ownerId, r, l);
-            const content = await deps.files.content(actor.ownerId, r.workspace_id, file.id);
-            if (content.name !== file.name || content.byteLength !== file.byteLength)
-              throw new ReportError("STALE_REVISION");
-            return content.body;
-          },
-        }));
-        const size = zipByteLength(sources);
-        if (size > MAX_SELECTED_ZIP_BYTES) throw new ReportError("VALIDATION_ERROR");
-        zipArtifact = await persist(actor.ownerId, r, l, "original_zip", size, () =>
-          zipChunks(sources, () => guard(actor.ownerId, r, l)),
+        zipArtifact = await persist(
+          actor.ownerId,
+          r,
+          l,
+          "original_zip",
+          zipSize as number,
+          () => zipChunks(plannedSources, authorize),
+          authorize,
+          workPlan,
         );
         written.push(zipArtifact.id);
       }
@@ -481,6 +527,7 @@ export function createReportExports(core: V2Core, deps: ReportDependencies, port
         throw new ReportError("NOT_FOUND");
       return ports.row(a(actor.ownerId), id);
     } catch (error) {
+      allowReportCleanup(core);
       for (const blobId of written) await abandon(blobId);
       // A retry reacquires the same local job with a new fencing token. Failed
       // output IDs remain in the durable deletion journal, never reused.

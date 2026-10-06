@@ -3,6 +3,7 @@ import { z } from "zod";
 import { idempotencyKeySchema, opaqueIdSchema } from "../../../contracts";
 import { createCaseDataCipher } from "../../crypto";
 import { createV2Core, type V2Core, V2RepositoryError } from "../../db/v2-core";
+import { reportRequestCore } from "../../modules/reports/limits";
 import { createReportDependencies } from "../../modules/reports/runtime";
 import { createReportsService } from "../../modules/reports/service";
 import { ReportError } from "../../modules/reports/source";
@@ -15,6 +16,8 @@ import { attachmentFilename } from "./files";
 export function createReportsApi(
   options: {
     dependencies?: (env: Env, core: V2Core, ownerId: string) => Promise<ReportDependencies>;
+    /** Explicit offline SQLite adapter only; native D1 must supply billing metadata. */
+    testOnlyMissingD1Meta?: true;
   } = {},
 ) {
   const app = new Hono<ApiEnvironment>();
@@ -43,7 +46,7 @@ export function createReportsApi(
         STALE_REVISION: "사건이나 검토 버전이 변경됐어요. 다시 불러오거나 새 버전을 만들어 주세요.",
         REVIEW_REQUIRED: "현재 사건 요약을 확인한 뒤 리포트를 만들어 주세요.",
         VALIDATION_ERROR:
-          "내용·제외 자료·원본 선택을 확인해 주세요. ZIP은 한 번에 900MB까지 지원해요.",
+          "내용·제외 자료·원본 선택을 확인해 주세요. 원본이 많거나 크면 나눠 다운로드해 주세요.",
         STORAGE_UNAVAILABLE:
           "다운로드를 완료하지 못했어요. 저장한 검토 내용은 보존돼요. 다시 시도해 주세요.",
         BUDGET_UNAVAILABLE:
@@ -53,19 +56,25 @@ export function createReportsApi(
         IDEMPOTENCY_CONFLICT: "다른 입력에 사용된 요청이에요. 최신 내용을 다시 확인해 주세요.",
         LEGAL_SOURCE_UNAVAILABLE:
           "리포트에 쓰인 공식 출처를 현재 검증할 수 없어요. 출처를 다시 확인한 뒤 새 버전을 만들어 주세요.",
+        EXPORT_LIMIT_EXCEEDED:
+          "한 번에 처리할 다운로드 한도를 넘었어요. 원본 수나 크기를 줄여 나눠 다운로드해 주세요.",
       };
       const status =
         error.code === "NOT_FOUND"
           ? 404
-          : error.code === "VALIDATION_ERROR"
-            ? 400
-            : error.code === "USER_QUOTA_EXCEEDED"
-              ? 429
-              : ["BUDGET_UNAVAILABLE", "STORAGE_UNAVAILABLE", "LEGAL_SOURCE_UNAVAILABLE"].includes(
-                    error.code,
-                  )
-                ? 503
-                : 409;
+          : error.code === "EXPORT_LIMIT_EXCEEDED"
+            ? 413
+            : error.code === "VALIDATION_ERROR"
+              ? 400
+              : error.code === "USER_QUOTA_EXCEEDED"
+                ? 429
+                : [
+                      "BUDGET_UNAVAILABLE",
+                      "STORAGE_UNAVAILABLE",
+                      "LEGAL_SOURCE_UNAVAILABLE",
+                    ].includes(error.code)
+                  ? 503
+                  : 409;
       return c.json(errorBody(c, error.code, messages[error.code], status === 503), status);
     }
     return c.json(
@@ -79,7 +88,12 @@ export function createReportsApi(
     );
   });
   const service = async (env: Env, ownerId: string) => {
-    const core = createV2Core(env.DB, await createCaseDataCipher(env));
+    if (options.testOnlyMissingD1Meta && env.APP_ENV !== "preview")
+      throw new ReportError("STORAGE_UNAVAILABLE");
+    const core = reportRequestCore(
+      createV2Core(env.DB, await createCaseDataCipher(env)),
+      !options.testOnlyMissingD1Meta,
+    );
     return createReportsService(
       core,
       (await options.dependencies?.(env, core, ownerId)) ??

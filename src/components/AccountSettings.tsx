@@ -106,7 +106,7 @@ export function AccountSettings() {
     } catch (error) {
       clearOwnerState();
       setError(
-        error instanceof Error ? error.message : "설정을 확인하지 못했어요. 다시 시도해 주세요.",
+        `계정 상태를 확인하지 못했어요. ${error instanceof Error ? error.message : "다시 로그인하거나 재시도해 주세요."}`,
       );
     } finally {
       if (sequence === loadSequence.current) {

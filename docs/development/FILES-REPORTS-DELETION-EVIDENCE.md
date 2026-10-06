@@ -36,9 +36,30 @@ schema/migration, 공유 router/auth, Cloudflare 배포 설정은 변경하지 �
   일반 한글 음절을 포함하며 원본 font에 없는 glyph는 대체 표시한다.
 
 원본 ZIP은 식별정보를 마스킹하지 않는다. 사용자의 명시적 선택만 포함하며
-변호사 자동 전송을 추가하지 않는다. 최대 선택 원본은 900MB, 100개다.
+변호사 자동 전송을 추가하지 않는다. 900MB·100개는 절대 입력 상한이며,
+실제 동기식 ZIP은 아래 SQL 작업량 한도를 충족한 선택만 허용한다.
 256KiB AEAD chunk와 세 번의 stream pass로 ZIP 전체를 메모리에 올리지 않는다.
 late deletion/owner/revision/hash 변화는 stream을 중단하고 완료로 표시하지 않는다.
+
+## SQL 작업량과 청크 검사
+
+리포트 복호화·정본 재구성을 매 청크 반복하지 않는다. immutable report envelope,
+source identity(동일 revision의 ciphertext/coverage 변경 포함), 소유권·고객 역할·
+현재 동의·삭제·lease·revision은 청크마다 한 SQL fence로 재검사한다.
+
+`reportWorkPlan`은 PDF/ZIP 출력 청크, 선택 원본 수, 실제 SQL upload part 수와
+source 행 수를 반영한다. 정상 처리 예상 query가 800을 넘거나 source가 250행을
+넘으면 원본 R2 GET과 export PUT 전에 413으로 거부한다. 정상 작업에는 계산한
+query 한도, 실패 정리에는 최대 900 query를 적용해 session/middleware 여유를 남긴다.
+D1 batch의 각 statement도 dispatch 전에 계수한다. 원격 D1 rows_read/rows_written
+metadata가 없으면 native 구성은 거부하며, 실제 누적 row receipt가 예약한 envelope를
+넘으면 후속 SQL을 중단한다. 불명확한 PUT/정산은 journal과 inventory를 유지한다.
+
+[Cloudflare D1 공식 한도](https://developers.cloudflare.com/d1/platform/limits/)의
+Paid invocation당 1,000 query 한도를 기준으로 한다. SQLite 계수는 원격 D1 scan
+비용이나 플랫폼 성공 증거가 아니다. 합성 SQL 두 원본 ZIP은 800 query 미만이며,
+큰 계획 거부 뒤 작은 선택 재시도·query/batch 선행 차단·row receipt 중단·청크 사이
+역할/동의/원본/리포트/삭제 변경을 `tests/reports-limits.test.ts`로 검증한다.
 
 ## 공유 연결: 4번 소유
 
@@ -49,7 +70,8 @@ late deletion/owner/revision/hash 변화는 stream을 중단하고 완료로 표
 3. report PATCH에만 131,072-byte streaming JSON bound 적용
    (30,000자 한글은 기존 global 65,536 bytes를 초과할 수 있음).
 4. 실제 CPU/deadline·R2/D1 비용 및 최대 크기 ZIP 처리 검증.
-   로컬 작은 합성 입력이 900MB 원격 처리 성공을 입증하지 않는다.
+   로컬 작은 합성 입력이 원격 대용량 처리 성공을 입증하지 않는다.
+   동기식 SQL 작업량 한도를 넘는 요청은 거부하며 선택을 줄여 재시도한다.
    실행 plan은 CPU 300,000ms를 예약하므로 배포 설정/실측 한도가 맞아야 한다.
    실패·proof 부재는 명시적으로 거부하며 실제 성공으로 바꾸지 않는다.
 5. 공유 `createV2DeletionRepository.account`의 직접 user DELETE 경로도 exact

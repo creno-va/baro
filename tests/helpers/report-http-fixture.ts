@@ -4,6 +4,7 @@ import { meApi } from "../../src/server/api/me";
 import { requestBodyLimit } from "../../src/server/api/request-body-limit";
 import { createFilesApi } from "../../src/server/api/v2/files";
 import { createReportsApi } from "../../src/server/api/v2/reports";
+import { createFilesService } from "../../src/server/modules/files/service";
 import { signedSessionCookie, testEnvironment } from "./d1";
 import { readyFile, reportFixture } from "./report-fixture";
 
@@ -46,6 +47,20 @@ export async function reportHttpFixture() {
         }),
       }),
     )
-    .route("/api/v2", createReportsApi({ dependencies: async () => f.deps }));
+    .route(
+      "/api/v2",
+      createReportsApi({
+        testOnlyMissingD1Meta: true,
+        dependencies: async (_, core) => ({
+          ...f.deps,
+          files: createFilesService(core, {
+            environment: "preview",
+            bucket: f.bucketPort,
+            clock: () => f.actor.now,
+            testOnlyUnmeteredStorage: true,
+          }),
+        }),
+      }),
+    );
   return { ...f, env, cookie, app, selectedFileId: selected.session.fileId, original };
 }
