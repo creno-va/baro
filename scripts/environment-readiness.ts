@@ -17,7 +17,7 @@ const object = z.record(z.string(), z.unknown());
 type Observation =
   | { status: "available"; result: unknown }
   | {
-      status: "forbidden" | "unavailable";
+      status: "forbidden" | "unavailable" | "not_requested";
       httpStatus: number | null;
     };
 
@@ -26,6 +26,7 @@ export async function inspectPreview(
   token: string,
   candidateSha: string,
   fetcher: typeof fetch = fetch,
+  options: { checkGateway?: boolean } = {},
 ) {
   if (!token || !/^[a-f0-9]{40}$/.test(candidateSha)) throw new Error("Readiness inputs invalid");
   async function read(path: string): Promise<Observation> {
@@ -55,7 +56,9 @@ export async function inspectPreview(
   }
   const [settings, gateways, widgets] = await Promise.all([
     read("workers/scripts/baro-preview/settings"),
-    read("ai-gateway/gateways?search=baro-preview&per_page=100"),
+    options.checkGateway === true
+      ? read("ai-gateway/gateways?search=baro-preview&per_page=100")
+      : Promise.resolve<Observation>({ status: "not_requested", httpStatus: null }),
     read("challenges/widgets?per_page=100"),
   ]);
   const settingsResult = settings.status === "available" ? object.safeParse(settings.result) : null;
@@ -117,6 +120,8 @@ export async function inspectPreview(
         { name: "FILE_PROCESSOR", type: "durable_object_namespace" },
         { name: "FILE_PROCESSING", type: "workflow" },
         { name: "WORKSPACE_PROCESSING", type: "workflow" },
+        { name: "ASSET_PROCESSING", type: "workflow" },
+        { name: "PROFILE_PUBLICATION", type: "workflow" },
       ].map(({ name, type }) => ({
         name,
         present: bindings?.success
@@ -162,6 +167,8 @@ if (import.meta.main) {
     const report = await inspectPreview(
       process.env.CLOUDFLARE_API_TOKEN ?? "",
       process.env.READINESS_CANDIDATE_SHA ?? "",
+      fetch,
+      { checkGateway: process.env.READINESS_CHECK_GATEWAY === "true" },
     );
     await Bun.write(".wrangler/readiness/preview.json", `${JSON.stringify(report, null, 2)}\n`);
     console.log(

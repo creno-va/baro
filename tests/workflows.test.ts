@@ -100,6 +100,10 @@ test("CD builds before migration and production verifies immutable preview evide
     expect(build).toBeGreaterThanOrEqual(0);
     expect(migration).toBeGreaterThan(build);
     if (file === "deploy-production.yml") {
+      const buildRun = steps[build]?.run ?? "";
+      expect(buildRun.indexOf("bun run bundle:check")).toBeGreaterThan(
+        buildRun.indexOf("bun run build:production"),
+      );
       expect(content).toContain('bun scripts/verify-release.ts "$TARGET_SHA"');
       expect(content).toContain("inputs.release_mode == 'public-beta'");
       expect(content).toContain("bun run release:check");

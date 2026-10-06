@@ -7,6 +7,10 @@ on:
         description: Recheck official legal API only after credential or approval changes
         type: boolean
         default: false
+      check_gateway:
+        description: Recheck Gateway metadata only after token read permission changes
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -39,6 +43,7 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           READINESS_CANDIDATE_SHA: ${{ github.sha }}
+          READINESS_CHECK_GATEWAY: ${{ inputs.check_gateway }}
         run: bun scripts/environment-readiness.ts
       - name: Verify official legal adapter with synthetic concepts
         if: always() && inputs.check_legal

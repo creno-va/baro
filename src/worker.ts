@@ -6,6 +6,7 @@ import { api } from "./server/api";
 import { cleanupAuthData } from "./server/auth/cleanup";
 import { reconcileAnalysisTimeouts } from "./server/modules/case-structure/execution";
 import { reconcileDeletion } from "./server/modules/deletion/service";
+import { reconcileV2Deletion } from "./server/modules/deletion/v2-reconcile";
 import { reconcileDispatch } from "./server/modules/dispatch/service";
 import { reconcileFileUploads } from "./server/modules/files/reconcile";
 import { reconcileV2Dispatch } from "./server/runtime/dispatch";
@@ -47,5 +48,6 @@ export default {
     await reconcileAnalysisTimeouts(env);
     await reconcileFileUploads(env);
     await reconcileV2Dispatch(env);
+    await reconcileV2Deletion(env);
   },
 };

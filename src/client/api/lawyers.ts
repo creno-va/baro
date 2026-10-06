@@ -141,7 +141,7 @@ const real = {
 };
 async function adapter() {
   if (apiMode === "mock") {
-    await import("./mock/lawyers");
+    if (import.meta.env.PUBLIC_API_MODE === "mock") await import("./mock/lawyers");
     return mockTransport;
   }
   return real;
@@ -214,7 +214,7 @@ async function checkedAssetRequest(path: string, init: RequestInit = {}) {
 export const lawyerAssets = {
   async list(): Promise<LawyerAssetView[]> {
     if (apiMode === "mock") {
-      await import("./mock/lawyers");
+      if (import.meta.env.PUBLIC_API_MODE === "mock") await import("./mock/lawyers");
       return sharedRequest("lawyers.assets");
     }
     const response = await checkedAssetRequest("/api/v2/me/lawyer/self-profile/assets");
@@ -248,7 +248,7 @@ export const lawyerAssets = {
         "사진은 JPEG·PNG·WebP, 자료는 이미지·PDF 100MB 이하로 선택해 주세요.",
       );
     if (apiMode === "mock") {
-      await import("./mock/lawyers");
+      if (import.meta.env.PUBLIC_API_MODE === "mock") await import("./mock/lawyers");
       return sharedRequest("lawyers.uploadAsset", { profileId, file, purpose });
     }
     const mine = z
@@ -295,7 +295,7 @@ export const lawyerAssets = {
   },
   async remove(assetId: string, revision: number): Promise<void> {
     if (apiMode === "mock") {
-      await import("./mock/lawyers");
+      if (import.meta.env.PUBLIC_API_MODE === "mock") await import("./mock/lawyers");
       await sharedRequest("lawyers.removeAsset", { assetId, revision });
       return;
     }
@@ -307,7 +307,7 @@ export const lawyerAssets = {
   },
   async blob(profileId: string, assetId: string, privateRead = false): Promise<Blob> {
     if (apiMode === "mock") {
-      await import("./mock/lawyers");
+      if (import.meta.env.PUBLIC_API_MODE === "mock") await import("./mock/lawyers");
       const data = await sharedRequest<{ data: string; type: string }>("lawyers.assetBlob", {
         profileId,
         assetId,

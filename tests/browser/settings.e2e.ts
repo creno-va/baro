@@ -195,6 +195,9 @@ test("loading/error/cancel, expired callback and switched account never arm dele
   await expect(
     page.getByRole("button", { name: "계정과 모든 사건 삭제", exact: true }),
   ).toBeDisabled();
+  // A visible button can still belong to the first, unfinished settings load.
+  // Complete that callback check before injecting the next navigation marker.
+  await expect(page.getByRole("button", { name: "google로 재인증" })).toBeEnabled();
   await page.evaluate(
     (key) =>
       sessionStorage.setItem(

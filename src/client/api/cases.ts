@@ -13,7 +13,6 @@ import {
 } from "../../contracts/v2";
 import { ApiError, apiMode, request } from "./core";
 import type { CaseView, QuestionView } from "./types";
-import "./mock/cases";
 
 export const createInputSchema = z.object({
   narrative: boundedText(20, 5000),

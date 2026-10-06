@@ -546,3 +546,136 @@ atomic batch에서 exact account-type metadata와 user를 삭제한다. SQL trig
 owner session 거부/만료/미래 재인증, 다른 owner metadata 보존, SQL 실패 시 metadata·user·
 journal 복구의 실제 SQLite 회귀를 포함한다. facade와 publishMine 계약 문서는 기존
 모듈의 profileId/expectedRevision/published/consent 요구를 반영한다. schema/migration 변경 없음.
+
+### 4세션 후속 통합과 외부 증거의 현재 경계
+
+공유 PR131 final head `f8ed6e38e53d5767d9845b2884f21d0a1b4bfb06`의
+[CI37493048253](https://github.com/creno-va/baro/actions/runs/37493048253)3 jobs 성공을 확인하고
+main `5e094b709a0656bed21948d60d34039662e589bf`로 정상 병합했다.
+동일 SHA의 [main CI37493558489](https://github.com/creno-va/baro/actions/runs/37493558489),
+[preview37493898259](https://github.com/creno-va/baro/actions/runs/37493898259), 별도 full-SHA/
+schema0009 smoke는 성공했다. 이전 PR129 후 main fixture 실패를 성공으로 바꾸지 않았다.
+
+고객 PR128 final head `e49edd9e22b0065a95d3bae45a7c855d46757e6c`의
+[CI37493874301](https://github.com/creno-va/baro/actions/runs/37493874301)3 jobs 성공과 실제 diff를
+검토하고 main `c6b96656ee6e4d7c968486b47a994b2807bdeadd`로 정상 병합했다.
+[main CI37494685736](https://github.com/creno-va/baro/actions/runs/37494685736)와
+[preview37495363389](https://github.com/creno-va/baro/actions/runs/37495363389)는 성공했으며
+독립 smoke도 동일 full SHA/schema0009를 확인했다. protected CI나 self APPROVE 우회 없음.
+공유 PR132는 고객 통합 main에 rebase한 `d73a9d3f97810cfcbd1ca3fab6d31114f4f86465`에서
+frozen ci/check1225 tests/133026 assertions, drift·fresh/upgrade6/29, build/dry-run을 통과했다.
+정확한 PR head CI와 최종 모든 모듈 SHA의 Full validation는 별도 기록한다.
+
+5e094b7 preview의 실제 IAB에서 API 예시 모드를 명시한 합성 변호사로 역할 선택·합성 동의,
+프로필·합성 PNG 사진·합성 PDF 포트폴리오 저장, reload 후 복원, 공개 설정·디렉터리·공개
+상세를 확인했다. 공개 상세에는 합성 정보임을 명시했다. screenshot은 ignored
+`.wrangler/integration/preview-5e094b7-lawyer.jpg`에 보존했다. IAB의 portfolio download event는
+10초 내 관측되지 않아 이 browser에서 파일 다운로드 성공으로 기록하지 않는다.
+별도 Chromium/SQL 다운로드 증거와 구분하며 실제 OAuth/R2 공개 copy 증거가 아니다.
+
+PR130 published19295aeb의 ZIP P1 후속은 입력 기반 예상800/전체900 query·source250행 한도,
+request-local dispatch 계수와 actual D1 row metadata 검증, single-query stream source fence를
+제공한다. [후속 리뷰](https://github.com/creno-va/baro/pull/130#issuecomment-6020690222)에
+원본 I/O 전 초과 거부·작은 선택 재시도·권한/동의/동일 revision 변경 회귀를 연결했다.
+900MB/100개는 입력 절대 상한이며 한 번의 synchronous ZIP 성공 범위가 아니다.
+Paid HTTP 기본 CPU30초와 코드 cost maximum300000ms는 별개다. 실제 CPU/deadline,
+remote row scans·billing·제품 처리/삭제는 미검증이며 global CPU 설정을 임의 확대하지 않는다.
+
+readiness의 Gateway403 원인이 바뀌지 않았으므로 기본 probe를 명시적 opt-in으로 변경한다.
+`check_gateway=false`의 not_requested/null은 존재·인증·호출 성공이 아니다. 법률도 신청/OC
+조건 변경 증거 전에는 재호출하지 않는다. 7개 processing binding의 존재를 점검하되 secret 값,
+bucket/namespace ID, model bounds 내용은 출력하지 않는다. 정상 production bundle에 API mock/
+test fixture를 넣거나 synthetic pricing/funding을 실제 DB proof로 채우지 않는다.
+
+공유132의 d73a9d3 [CI37494702283](https://github.com/creno-va/baro/actions/runs/37494702283)는
+regular browser38 PASS/3 FAIL이었다. analytics fixture의 고객 session 응답 누락2개와,
+menu trigger가 effect에서 enabled되기 전 Enter를 보낸1개를 수정해 focused4개가 통과했다.
+5f5e818에서 frozen ci/check1225/133026·migration6/29·build/dry-run도 다시 통과했으며 새
+exact-head CI37496257599를 요구한다. 제품 인증·역할·hydration guard 완화 없음.
+PR13019295aeb의 [CI37495417013](https://github.com/creno-va/baro/actions/runs/37495417013)는
+Linux native 실행 SUCCESS, source browser16 PASS/2 FAIL이었다. settings의 재인증 marker/
+이전 화면 비동기 응답 경합을 [모듈 담당에 인계](https://github.com/creno-va/baro/pull/130#issuecomment-6020740933)했다.
+이전 head의 실패를 새 head의 검증으로 지우지 않는다.
+
+PDF 스킬의 읽기 전용 검사에서 모듈의 대역 다운로드 PDF 첫 페이지와 긴 리포트 마지막
+페이지의 한글/마스킹·번호·여백을 확인했고 pypdf로13페이지·400행·마지막 문장 보존 및
+전화번호/이메일 제거를 검사했다. 이는 해당 합성 artifact의 검사이며 최종 릴리스/원격 비용
+증거가 아니다. 최종 candidate의 signed SQL 다운로드는 전용 no-webServer/60초 config에서
+순차 실행한다. source-only report/global router 변경도 이 소비자 검사를 선택한다.
+
+01:33 KST Cloudflare D1 인증된 목록에는 보호 preview/production2개만 있다. 로컬 CLI는
+인증 부재이며 격리 restore 등록부·DB 밖 최신 journal·키 담당·rollback version·실제 alert
+수신/ack가 없으므로 보호 DB를 drill 대상으로 사용하지 않았다. #19/#27/#70/#71 및
+milestone4/5는 이 관측이나 CI/health만으로 완료하지 않는다.
+
+공유 PR132 final head `5f5e818173ba0b7d0bfed04bc00dc7b7ed691227`의
+[CI37496257599](https://github.com/creno-va/baro/actions/runs/37496257599)3 jobs 성공을 확인하고
+main `f75bc9d24f1992ff69ea3cc4ebf7ae9893770693`로 정상 squash 병합했다. native 실행 단계는
+변경 없음으로 skip됐으며 실제 native 검증으로 대신하지 않는다. PR130 final cf8d3da의
+[CI37497199020](https://github.com/creno-va/baro/actions/runs/37497199020)는 native 실제 실행과
+source/browser·quality gate 모두 성공했다. 공유 병합 뒤 최신 main rebase·새 head 검증을
+요청했으며 그 결과 전에는 cf8의 성공만으로 병합하지 않는다. 이전 c7ca596의
+[CI37496506640](https://github.com/creno-va/baro/actions/runs/37496506640)19 PASS/1 FAIL도 보존한다.
+
+01:44 KST 동일 D1 console은 preview/production2개, 기간 rows read26.78k·written1.17k,
+billable usage $0.00을 표시했다. 계정 전체 기간 관측이며 최종 candidate별 scan/청구 receipt나
+무료 처리 보장이 아니다. 격리 복구 자원이 없다는 판단은 동일하다.
+
+파일 담당 완료 인계 뒤 통합 담당이 기존 PR130을 f75bc9d로 rebase했다. range-diff에서
+모듈 commit5개는 동일했다. rebase head68ebfa3의
+[CI37498417740](https://github.com/creno-va/baro/actions/runs/37498417740)는 FAILURE:
+report PATCH65537 거부를 기대하던 테스트가 공유128KiB 계약과 충돌했다. 실제 signed SQL
+한글30000자 저장도 `RUNTIME_PROOF_TOO_LARGE`로503임을 추가 재현했다. 작은 기존 요청의
+receipt hash는 보존하고 큰 검토만 exact UTF-8 SHA256을 포함하는 versioned request identity로
+묶었다. 일반 금융 proof64KiB 한도는 확대하지 않았다. 같은 key 재시도는 동일 검토를 반환하고
+동일 길이 한 글자 변경은409, 원본/R2 I/O 없이 저장한다. PATCH131073/POST65537 거부도 확인했다.
+4665518의 [CI37498891870](https://github.com/creno-va/baro/actions/runs/37498891870)는 새 테스트의
+unknown wire typing 오류로 FAILURE이며 결과를 보존한다. DTO typing만 고친 final head
+`371da5db02f4f826c6f93e394cae9748c655d7ff`의 작업 트리에서 frozen ci/check1256 PASS/
+133307 assertions, drift·fresh/upgrade6/29, build/dry-run 및 focused API/service12/94가 통과했다.
+[새 CI37499235080](https://github.com/creno-va/baro/actions/runs/37499235080)가 병합 기준이다.
+
+Safari preview 로그인에서 실제 페이지 확대 메뉴200%를 확인했고 역할 선택과 로그인 버튼은
+세로 스크롤로 접근하며 가로 잘림이 없었다.100%로 복원하고 임시 탭을 정리했다. 이는 c6b9665
+배포의 로그인 검사이며 최종 통합 전체 흐름과 구분한다. 로컬 Chromium viewport/CSS 확대
+검사와 실제 browser zoom을 동일 증거로 부르지 않는다.
+
+PR130 final head `371da5db02f4f826c6f93e394cae9748c655d7ff`의
+[CI37499235080](https://github.com/creno-va/baro/actions/runs/37499235080)3 jobs(native 실제 실행
+포함) SUCCESS와 최신 base f75bc9d/CLEAN을 확인해 main
+`5a28053d483e47a71e7c61b7c7787d533ee5be55`로 정상 squash 병합했다. 자체 APPROVE/admin 우회
+없음. 공유 통합은 native `createReportsApi()`를 `/v2`에 연결하고 scheduled 마지막에
+`reconcileV2Deletion`을 연결한다. 실제 SQL/crypto/signed owner와 native factory의 global router
+검사2개/39 assertions가 통과했다. 명시적 synthetic D1 billing metadata만 공급하는 test adapter는
+원격 scan/청구 증거가 아니며 production composition에는 주입하지 않는다. 다른 owner404,
+CSRF/role403, 미승인 production gate503/비공개 headers, 익명 directory200 및 R2 I/O 없음도 검사한다.
+
+production 사전 build는 기존 bundle sentinel 검사를 통과했으나 API mock 저장 namespace와
+합성 session/cases 및 변호사 chunk를 포함했다. 기존 검사는 test/auth-bypass sentinel에 한정됐고
+API mock artifact 부재를 입증하지 못했다. 공유 core의 mock handler는 예시 모드에서만 lazy-await,
+facade glob과 mock imports는 compile-time 모드 분기로 제한했다. cases consumer의 변경은
+unconditional mock import 제거이며 변호사 mock import5개에도 같은 build-time guard를 적용했다.
+mock namespace를 거부하는 강화된 production bundle 검사가 사전 build136 files에서 통과했다.
+공유 session storage invalidation listener 문자열은 adapter 자체와 구분한다. 최종 통합의 필수
+check·모든 browser·production build/bundle 및 CSP는 별도 candidate에서 실행한다.
+
+통합 PR133의 첫 head1d6fd92는 새 test adapter의 D1 overload/optional method 타입 오류로
+[CI37500419811](https://github.com/creno-va/baro/actions/runs/37500419811) FAILURE였으며 제품
+guard를 바꾸지 않고 test typing만 수정했다. e4b678b에서 frozen ci/check1260 PASS/133359
+assertions, drift·fresh/upgrade6/29, build/dry-run, production build/bundle139 files,
+CSP4 PASS/fixture 전용1skip이 통과했다. 같은 checkout에서 signed SQL 실제 PDF/ZIP 다운로드1,
+공유 lawyer API mock1, 고객 login/intake/originals/report/삭제/reload·peer purge 통합1을 순차
+실행해 모두 통과했다. 다운로드 입력·SQL·D1 billing metadata는 합성이며 remote OAuth/R2/
+청구 증거가 아니다. production 배포 job에도 build 뒤·migration 전 `bundle:check`를 추가해
+승인된 job의 실제 산출물에서 동일 guard를 실행한다. 이 workflow 변경은 새 head에서 검증한다.
+
+main5a28053의 [CI37500203783](https://github.com/creno-va/baro/actions/runs/37500203783)는
+settings switched-account fixture1 FAIL이었다. 첫 deletionAccess 뒤 버튼 visible/삭제 disabled는
+전체 초기 load 완료를 뜻하지 않아 다음 callback marker를 이전 load가 소비할 수 있었다.
+expired callback의 재인증 버튼 enabled를 기다린 뒤 다음 marker를 주입하도록 fixture만 고쳤다.
+AccountSettings 제품 UI/owner·최근 OAuth·callback·삭제 보호는 변경하지 않았다. settings5개를
+3회 반복해15 PASS이며 이전 pagehide/늦은 access 오류/늦은 OAuth 오류가 새 marker를 지우지
+못하는 기존 지연 회귀도 유지했다. 실패 main CI는 보존하고 최종 head/main에서 재검증한다.
+signed SQL native report 다운로드 PDF는 pypdf/Poppler에서 한글·마스킹·버전·페이지·여백을
+확인했다. 합성 입력 PDF1페이지/3126732 bytes와 ZIP의 선택 원본 정확한 byte가 보존됐다.
+한글 폰트·마스킹·footer는 깨짐/겹침 없이 렌더됐으며 원격 제품 비용 증거가 아니다.

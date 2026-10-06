@@ -4,7 +4,7 @@ for await (const file of new Bun.Glob("dist/**/*.{js,mjs,cjs,map}").scan(".")) {
   count++;
   const content = await Bun.file(file).text();
   if (
-    /(?:tests\/(?:adapters|helpers|fixtures|evals)|MOCK_AUTH|TEST_USER_ID|synthetic-session-|PIPELINE_EVAL_FAILED|INVALID_SYNTHETIC_ORIGIN)/.test(
+    /(?:tests\/(?:adapters|helpers|fixtures|evals)|MOCK_AUTH|TEST_USER_ID|synthetic-session-|PIPELINE_EVAL_FAILED|INVALID_SYNTHETIC_ORIGIN|baro-api-mock-v1:["'`]|baro-workspace-originals-v1)/.test(
       content,
     )
   )
