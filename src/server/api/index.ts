@@ -20,6 +20,7 @@ import { createDirectoryApi } from "./v2/directory";
 import { createFilesApi } from "./v2/files";
 import { createLawyersApi } from "./v2/lawyers";
 import { createModerationApi } from "./v2/moderation";
+import { createReportsApi } from "./v2/reports";
 import { usageApi } from "./v2/usage";
 import { createWorkspacesApi } from "./v2/workspaces";
 
@@ -120,6 +121,7 @@ export const api = new Hono<ApiEnvironment>()
     }),
   )
   .route("/v2/cases", workspaceDeleteApi)
+  .route("/v2", createReportsApi())
   .route("/me", meApi)
   .route("/me", accountDeleteApi)
   .route("/cases", caseCreateApi)

@@ -639,3 +639,22 @@ Safari preview 로그인에서 실제 페이지 확대 메뉴200%를 확인했�
 세로 스크롤로 접근하며 가로 잘림이 없었다.100%로 복원하고 임시 탭을 정리했다. 이는 c6b9665
 배포의 로그인 검사이며 최종 통합 전체 흐름과 구분한다. 로컬 Chromium viewport/CSS 확대
 검사와 실제 browser zoom을 동일 증거로 부르지 않는다.
+
+PR130 final head `371da5db02f4f826c6f93e394cae9748c655d7ff`의
+[CI37499235080](https://github.com/creno-va/baro/actions/runs/37499235080)3 jobs(native 실제 실행
+포함) SUCCESS와 최신 base f75bc9d/CLEAN을 확인해 main
+`5a28053d483e47a71e7c61b7c7787d533ee5be55`로 정상 squash 병합했다. 자체 APPROVE/admin 우회
+없음. 공유 통합은 native `createReportsApi()`를 `/v2`에 연결하고 scheduled 마지막에
+`reconcileV2Deletion`을 연결한다. 실제 SQL/crypto/signed owner와 native factory의 global router
+검사2개/39 assertions가 통과했다. 명시적 synthetic D1 billing metadata만 공급하는 test adapter는
+원격 scan/청구 증거가 아니며 production composition에는 주입하지 않는다. 다른 owner404,
+CSRF/role403, 미승인 production gate503/비공개 headers, 익명 directory200 및 R2 I/O 없음도 검사한다.
+
+production 사전 build는 기존 bundle sentinel 검사를 통과했으나 API mock 저장 namespace와
+합성 session/cases 및 변호사 chunk를 포함했다. 기존 검사는 test/auth-bypass sentinel에 한정됐고
+API mock artifact 부재를 입증하지 못했다. 공유 core의 mock handler는 예시 모드에서만 lazy-await,
+facade glob과 mock imports는 compile-time 모드 분기로 제한했다. cases consumer의 변경은
+unconditional mock import 제거이며 변호사 mock import5개에도 같은 build-time guard를 적용했다.
+mock namespace를 거부하는 강화된 production bundle 검사가 사전 build136 files에서 통과했다.
+공유 session storage invalidation listener 문자열은 adapter 자체와 구분한다. 최종 통합의 필수
+check·모든 browser·production build/bundle 및 CSP는 별도 candidate에서 실행한다.
