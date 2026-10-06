@@ -53,7 +53,7 @@ test("fresh migrations enforce auth FK, cascade and consent age constraints", as
     sqlite.exec("DELETE FROM user WHERE id='u'");
     expect(sqlite.query("SELECT * FROM user_consents").all()).toEqual([]);
     expect(sqlite.query("SELECT value FROM app_metadata WHERE key='schema_version'").get()).toEqual(
-      { value: "0008_storage_paid_execution" },
+      { value: "0009_storage_capacity_maintenance" },
     );
   } finally {
     database.close();
