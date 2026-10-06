@@ -107,6 +107,7 @@ export function createSubmittedAssetReview(
       if (
         asset.status !== "ready" ||
         !asset.sanitizedDerivative ||
+        asset.sanitizedDerivative.id !== row.sanitized_blob_id ||
         asset.sanitizedDerivative.byteLength !== row.logical_bytes ||
         asset.sanitizedDerivative.contentHash !== receipt.contentHash ||
         !(await authorized())

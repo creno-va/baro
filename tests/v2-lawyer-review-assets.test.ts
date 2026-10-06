@@ -81,7 +81,7 @@ async function fixture() {
     byteLength: bytes.length,
     originalHash: hash,
     sanitizedDerivative: {
-      id: "synthetic_derivative",
+      id: sourceBlobId,
       contentHash: hash,
       byteLength: bytes.length,
       format: "jpeg",
