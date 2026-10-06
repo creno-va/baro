@@ -3,7 +3,7 @@
 - Candidate base: `ca6e15b` (PR125 main)
 - Branch: `codex/62-lawyer-public-polish`
 - Reviewed: 2026-10-07 KST
-- Status: 구현·로컬 검증 완료 / 공유 역할 가드 통합·외부 검증·법률·사업자·게시 승인 대기
+- Status: 구현·로컬 검증 완료 / 공유 의존성 CI 차단·역할 가드 통합·외부 검증·게시 승인 대기
 - 변경 소유: lawyer/profile/directory 전용 UI/API/module/CSS/test, 도움말/정책/콘텐츠
 - 공유 인증·role/session/contracts/schema/router/CI·동의 버전은 4번, 저장/처리/계정 삭제는 2번.
 
@@ -108,3 +108,17 @@ v2 두 역할/전 사건 준비 범위와 milestone 링크·새 브랜드는 아
 
 4번 공유 PR 통합 후 고객→변호사로 바꾼 동일 owner의 사건/chat/private 자료 403, usage/delete 접근 유지,
 기능 PR의 관련 CI와 새 full runner를 최신 main에서 재검증한다. 최종 병합은 4번이 맡는다.
+
+## PR #126의 실제 CI 상태
+
+Candidate `af070a3`의 [CI](https://github.com/creno-va/baro/actions/runs/37486565424)는 native scope
+검사를 통과했지만 dependency audit에서 중단되어 후속 source/browser 단계는 실행되지 않았다.
+기존 main lock의 top-level sharp는 0.35.5, 중첩 `miniflare/sharp`는 0.35.4이며
+[GHSA-wq5f-xc86-pv6w](https://github.com/advisories/GHSA-wq5f-xc86-pv6w)의 `<0.35.5` high 보고 대상이다.
+공식 patched 버전은 sharp 0.35.5이다. package/lock/CI 소유자인 4번에 정확한 중첩 경로와
+수정·검증·통합 요청을 #62 댓글로 남겼다. 감사 skip/예외나 공유 package 변경은 하지 않았다.
+
+추가 독립 검증은 `CHECK_BASE_SHA=ca6e15b CHECK_CANDIDATE_SHA=af070a3 bun scripts/development-checks.ts browser`
+선택 wire 15 + integrated mock 1 성공, `build:production`/`bundle:check` 성공(147 files),
+`test:csp` 4 성공/1 test-fixture-only skip이다. 원격 CI 통과로 표시하지 않는다.
+공유 수정이 승인·인계되면 통합 후 audit와 전체 필수/관련 검사를 다시 수행한다.
