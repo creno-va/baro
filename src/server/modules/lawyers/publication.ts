@@ -1,4 +1,5 @@
 import { sha256 } from "@noble/hashes/sha2.js";
+import { drizzle } from "drizzle-orm/d1";
 import { z } from "zod";
 import { opaqueIdSchema, revisionSchema, timestampSchema } from "../../../contracts";
 import {
@@ -7,10 +8,14 @@ import {
   v2PortfolioAssetSchema,
   v2PublicLawyerSchema,
 } from "../../../contracts/v2";
+import * as schema from "../../db/schema";
 import { actorSchema, hashSchema, type V2Core } from "../../db/v2-core";
 import { type CleanupLease, createV2DeletionRepository } from "../../db/v2-deletion";
 import { createV2LawyersRepository } from "../../db/v2-lawyers";
 import { createV2StorageRepository } from "../../db/v2-storage";
+import { isPreparedStoragePaidHold } from "../../db/v2-storage-paid-runtime";
+import type { StorageCosts, StoragePermit } from "../budget/storage-ledger";
+import { hasCurrentConsent } from "../consent/service";
 import { hex } from "../files/binary";
 import type { PrivateBucket } from "../files/service";
 import { boundedReader } from "./asset-binary";
@@ -18,22 +23,48 @@ import type { OpenSanitizedAsset } from "./sanitized";
 import { LawyerError } from "./service";
 
 export type PublicationDependencies = {
+  environment?: "preview" | "production";
   publicBucket?: PrivateBucket;
   clock?: () => string;
-  storageAdmission?: (input: {
-    ownerId: string;
-    profileId: string;
-    assetId: string;
-    approvedRevision: number;
-    byteLength: number;
-  }) => Promise<boolean>;
+  paidStorage?: (ownerId: string) => StorageCosts;
+  /** Explicit synthetic preview adapter; never a production funding proof. */
+  testOnlyUnmeteredStorage?: true;
   /** Trusted #59 decoder; this callback never comes from a browser request. */
-  openSanitized?: OpenSanitizedAsset;
+  openSanitized?: OpenPublicationSanitizedAsset;
   fixedLengthStream?: (length: number) => {
     readable: ReadableStream<Uint8Array>;
     writable: WritableStream<Uint8Array>;
   };
 };
+export type PublicationReadPermit = StoragePermit;
+export type PublicationSanitizedInput = Parameters<OpenSanitizedAsset>[0] & {
+  approvedReadPermit?: PublicationReadPermit;
+};
+export type OpenPublicationSanitizedAsset = (
+  input: PublicationSanitizedInput,
+) => ReturnType<OpenSanitizedAsset>;
+const reads = new WeakMap<object, { tuple: string; authorize: () => Promise<boolean> }>();
+const readTuple = (input: Parameters<OpenSanitizedAsset>[0]) =>
+  JSON.stringify([
+    input.ownerId,
+    input.profileId,
+    input.assetId,
+    input.assetRevision,
+    input.sourceBlobId,
+  ]);
+/** Root scoped decoder checks this before actual GET and every decrypted frame.
+ * Client JSON/cloned permits never inherit the already-admitted aggregate budget. */
+export async function authorizePublicationRead(input: PublicationSanitizedInput): Promise<boolean> {
+  const cap = input.approvedReadPermit;
+  if (!cap || typeof cap !== "object") return false;
+  const issued = reads.get(cap);
+  if (!issued || issued.tuple !== readTuple(input)) return false;
+  try {
+    return await issued.authorize();
+  } catch {
+    return false;
+  }
+}
 type Source = {
   assetId: string;
   assetRevision: number;
@@ -61,7 +92,10 @@ export function createLawyerPublicationService(core: V2Core, deps: PublicationDe
     if (!deps.publicBucket) throw new LawyerError("PROCESSING_UNAVAILABLE");
     return deps.publicBucket;
   };
+  const currentPolicy = (ownerId: string) =>
+    hasCurrentConsent(drizzle(core.binding, { schema }), ownerId);
   const snapshot = async (ownerId: string, profileId: string, revision: number) => {
+    if (!(await currentPolicy(ownerId))) throw new LawyerError("PROCESSING_UNAVAILABLE");
     opaqueIdSchema.parse(profileId);
     revisionSchema.parse(revision);
     const target = await core
@@ -144,9 +178,10 @@ export function createLawyerPublicationService(core: V2Core, deps: PublicationDe
     revisionId: string,
     source: Source,
   ) =>
+    (await currentPolicy(ownerId)) &&
     !!(await core
       .statement(
-        "SELECT a.id FROM v2_profile_revision_assets link JOIN v2_assets a ON a.id=link.asset_id JOIN v2_profiles p ON p.id=a.profile_id JOIN v2_profile_revisions r ON r.id=link.revision_id JOIN v2_blobs b ON b.id=a.sanitized_blob_id WHERE p.id=? AND p.owner_id=? AND r.id=? AND r.status='approved' AND a.id=? AND a.revision=? AND link.asset_revision=a.revision AND a.state='ready' AND a.encrypted_payload=? AND b.id=? AND b.state='stored' AND b.visibility='staging' AND b.encrypted_payload=? AND EXISTS(SELECT 1 FROM v2_role_bindings WHERE owner_id=p.owner_id AND role='verified_lawyer') AND EXISTS(SELECT 1 FROM v2_applications WHERE id=r.application_id AND owner_id=p.owner_id AND status='approved') AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE (target_kind='account' AND target_id=p.owner_id) OR (target_kind='profile' AND target_id=p.id) OR (target_kind='asset' AND target_id=a.id))",
+        "SELECT a.id FROM v2_profile_revision_assets link JOIN v2_assets a ON a.id=link.asset_id JOIN v2_profiles p ON p.id=a.profile_id JOIN v2_profile_revisions r ON r.id=link.revision_id JOIN v2_blobs b ON b.id=a.sanitized_blob_id WHERE p.id=? AND p.owner_id=? AND r.id=? AND r.status='approved' AND NOT EXISTS(SELECT 1 FROM v2_profile_revisions newer WHERE newer.profile_id=p.id AND newer.status='approved' AND newer.revision>r.revision) AND a.id=? AND a.revision=? AND link.asset_revision=a.revision AND a.state='ready' AND a.encrypted_payload=? AND b.id=? AND b.state='stored' AND b.visibility='staging' AND b.encrypted_payload=? AND EXISTS(SELECT 1 FROM v2_role_bindings WHERE owner_id=p.owner_id AND role='verified_lawyer') AND EXISTS(SELECT 1 FROM v2_applications WHERE id=r.application_id AND owner_id=p.owner_id AND status='approved') AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE (target_kind='account' AND target_id=p.owner_id) OR (target_kind='profile' AND target_id=p.id) OR (target_kind='asset' AND target_id=a.id))",
         [
           profileId,
           ownerId,
@@ -243,38 +278,94 @@ export function createLawyerPublicationService(core: V2Core, deps: PublicationDe
       if (!source) throw new LawyerError("NOT_FOUND");
       const prior = await storedCopy(ownerId, current.target.id, source);
       if (prior) {
-        const object = await bucket().head(prior.object_key);
+        const receipt = await core.decrypt(
+          "v2_blobs",
+          prior.id,
+          ownerId,
+          1,
+          prior.encrypted_payload,
+          z.strictObject({ contentHash: hashSchema }),
+        );
         if (
-          !object ||
-          object.key !== prior.object_key ||
-          object.size !== source.byteLength ||
+          prior.object_key !== `public/${prior.id}` ||
+          prior.cipher_bytes !== source.byteLength ||
+          receipt.contentHash !== source.contentHash ||
           !(await authorized(ownerId, profileId, current.target.id, source))
         )
           throw new LawyerError("ASSET_NOT_READY");
         return { assetId, blobId: prior.id };
       }
+      const unmeteredTest =
+        deps.environment === "preview" && deps.testOnlyUnmeteredStorage === true;
+      const costs = deps.paidStorage?.(ownerId);
       if (
+        !deps.publicBucket ||
         !deps.openSanitized ||
-        !(await deps.storageAdmission?.({
-          ownerId,
-          profileId,
-          assetId,
-          approvedRevision,
-          byteLength: source.byteLength,
-        }))
+        (!costs && !unmeteredTest) ||
+        !(await currentPolicy(ownerId))
       )
         throw new LawyerError("PROCESSING_UNAVAILABLE");
       const blobId = crypto.randomUUID();
       const reservationId = crypto.randomUUID();
+      const operation = costs
+        ? await core
+            .statement(
+              "SELECT o.id,o.revision,(SELECT request_hash FROM v2_idempotency WHERE operation_id=o.id LIMIT 1) AS request_hash FROM v2_outbox outbox JOIN v2_operations o ON o.id=outbox.operation_id WHERE outbox.kind='profile_publish' AND outbox.target_id=? AND outbox.revision=? AND outbox.state IN ('pending','dispatched') AND o.owner_id=? AND o.kind='profile_revision' AND o.state='admitted' ORDER BY outbox.id LIMIT 1",
+              [profileId, approvedRevision, ownerId],
+            )
+            .first<{ id: string; revision: number; request_hash: string }>()
+        : null;
+      if (costs && !operation) throw new LawyerError("PROCESSING_UNAVAILABLE");
+      const admission =
+        costs && operation
+          ? await costs.prepare({
+              runId: blobId,
+              attemptOrdinal: 1,
+              maximumAttempts: 1,
+              deadlineAt: new Date(Date.parse(now()) + 300000).toISOString(),
+              action: "public_copy",
+              service: "requests",
+              operationId: operation.id,
+              operationRevision: operation.revision,
+              requestHash: operation.request_hash,
+              targetKind: "profile_asset",
+              targetId: assetId,
+              targetRevision: source.assetRevision,
+              reservationId,
+              blobId,
+              pending: {
+                logicalBytes: source.byteLength,
+                cipherBytes: 0,
+                cipherHash: null,
+                keyVersion: null,
+              },
+              intent: {
+                kind: "approved_public_copy",
+                approvedRevisionId: current.target.id,
+                sourceBlobId: source.blobId,
+              },
+            })
+          : null;
       if (
-        !(await storage.prepareApprovedPublicCopy(actor(ownerId), {
-          assetId,
-          assetRevision: source.assetRevision,
-          approvedRevisionId: current.target.id,
-          sourceBlobId: source.blobId,
-          blobId,
-          reservationId,
-        }))
+        costs &&
+        (!admission ||
+          !isPreparedStoragePaidHold(admission.paid) ||
+          admission.actor.ownerId !== ownerId)
+      )
+        throw new LawyerError("PROCESSING_UNAVAILABLE");
+      if (
+        !(await storage.prepareApprovedPublicCopy(
+          admission?.actor ?? actor(ownerId),
+          {
+            assetId,
+            assetRevision: source.assetRevision,
+            approvedRevisionId: current.target.id,
+            sourceBlobId: source.blobId,
+            blobId,
+            reservationId,
+          },
+          admission?.paid,
+        ))
       )
         throw new LawyerError("STALE_REVISION");
       const captured = await storage.captureApprovedPublicCopyIntent(actor(ownerId), blobId);
@@ -282,15 +373,56 @@ export function createLawyerPublicationService(core: V2Core, deps: PublicationDe
         await storage.abandonApprovedPublicCopy(actor(ownerId), blobId).catch(() => false);
         throw new LawyerError("STALE_REVISION");
       }
-      let putStarted = false;
+      const pendingPayload = await core
+        .statement("SELECT encrypted_payload FROM v2_blobs WHERE id=? AND state='pending'", [
+          blobId,
+        ])
+        .first<string>("encrypted_payload");
+      const access = async () => {
+        if (
+          !(await authorized(ownerId, profileId, current.target.id, source)) ||
+          (admission && now() >= admission.request.plan.deadlineAt)
+        )
+          return false;
+        return (
+          !!pendingPayload &&
+          !!(await core
+            .statement(
+              "SELECT id FROM v2_blobs WHERE id=? AND reservation_id=? AND state='pending' AND encrypted_payload=? AND cipher_bytes=0 AND cipher_hash IS NULL AND key_version IS NULL AND logical_bytes=? AND source_blob_id=? AND source_asset_revision=? AND approved_revision_id=?",
+              [
+                blobId,
+                reservationId,
+                pendingPayload,
+                source.byteLength,
+                source.blobId,
+                source.assetRevision,
+                current.target.id,
+              ],
+            )
+            .first())
+        );
+      };
+      let permit: StoragePermit | null = null,
+        putStarted = false,
+        getStarted = false,
+        recorded = false;
+      const decoderInput: PublicationSanitizedInput = {
+        ownerId,
+        profileId,
+        assetId,
+        assetRevision: source.assetRevision,
+        sourceBlobId: source.blobId,
+      };
       try {
-        const decoded = await deps.openSanitized({
-          ownerId,
-          profileId,
-          assetId,
-          assetRevision: source.assetRevision,
-          sourceBlobId: source.blobId,
-        });
+        if (admission && costs) {
+          permit = await costs.beforeDispatch(admission, access);
+          if (!permit) throw new LawyerError("PROCESSING_UNAVAILABLE");
+          reads.set(permit, { tuple: readTuple(decoderInput), authorize: access });
+          decoderInput.approvedReadPermit = permit;
+        }
+        if (!(await access())) throw new LawyerError("STALE_REVISION");
+        getStarted = true;
+        const decoded = await deps.openSanitized(decoderInput);
         if (
           decoded.byteLength !== source.byteLength ||
           decoded.contentHash !== source.contentHash
@@ -303,22 +435,23 @@ export function createLawyerPublicationService(core: V2Core, deps: PublicationDe
         const writer = pipe.writable.getWriter();
         const reader = boundedReader(decoded.body);
         const hash = sha256.create();
+        if (!(await access())) {
+          await reader.cancel();
+          hash.destroy();
+          throw new LawyerError("STALE_REVISION");
+        }
         const copied = (async () => {
           try {
             let remaining = source.byteLength;
             while (remaining) {
-              if (!(await authorized(ownerId, profileId, current.target.id, source)))
-                throw new LawyerError("STALE_REVISION");
+              if (!(await access())) throw new LawyerError("STALE_REVISION");
               const chunk = await reader.exact(Math.min(V2_LIMITS.chunkBytes, remaining));
               hash.update(chunk);
               await writer.write(chunk);
               remaining -= chunk.length;
             }
             await reader.end();
-            if (
-              hex(hash.digest()) !== source.contentHash ||
-              !(await authorized(ownerId, profileId, current.target.id, source))
-            )
+            if (hex(hash.digest()) !== source.contentHash || !(await access()))
               throw new LawyerError("ASSET_NOT_READY");
             await writer.close();
           } catch (error) {
@@ -349,8 +482,17 @@ export function createLawyerPublicationService(core: V2Core, deps: PublicationDe
           await Promise.allSettled([saved, copied]);
           throw error;
         }
+        if (permit && costs) {
+          recorded = true;
+          await costs.after(permit, {
+            transport: "response",
+            definitiveNoCharge: false,
+            observedAt: now(),
+          });
+        }
         if (!receipt || receipt.key !== `public/${blobId}` || receipt.size !== source.byteLength)
           throw new LawyerError("ASSET_NOT_READY");
+        if (!(await access())) throw new LawyerError("STALE_REVISION");
         if (
           !(await storage.registerApprovedPublicCopy(
             actor(ownerId),
@@ -376,17 +518,27 @@ export function createLawyerPublicationService(core: V2Core, deps: PublicationDe
           throw new LawyerError("STALE_REVISION");
         return { assetId, blobId };
       } catch (error) {
+        let failure = error;
+        if (permit && costs && !recorded) {
+          try {
+            await costs.after(permit, {
+              transport: getStarted || putStarted ? "unknown" : "not_sent",
+              definitiveNoCharge: !getStarted && !putStarted,
+              observedAt: now(),
+            });
+          } catch {
+            failure = new LawyerError("PROCESSING_UNAVAILABLE");
+          }
+        }
         await storage.abandonApprovedPublicCopy(actor(ownerId), blobId).catch(() => false);
         if (putStarted) {
-          const actual = await bucket()
-            .head(`public/${blobId}`)
+          await storage
+            .requeueApprovedPublicCopyCleanup(actor(ownerId), captured)
             .catch(() => null);
-          if (actual?.key === `public/${blobId}`)
-            await storage
-              .requeueApprovedPublicCopyCleanup(actor(ownerId), captured)
-              .catch(() => null);
         }
-        throw error;
+        throw failure;
+      } finally {
+        if (permit) reads.delete(permit);
       }
     },
     async finalize(ownerId: string, profileId: string, approvedRevision: number) {

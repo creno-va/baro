@@ -8,6 +8,7 @@ import {
   storagePredicate,
   storageReservationStatements,
 } from "./v2-storage";
+import { isPreparedStoragePaidHold, type PreparedStoragePaidHold } from "./v2-storage-paid-runtime";
 
 export interface PublicCopyIntent {
   assetId: string;
@@ -60,12 +61,36 @@ function validate(actor: Actor, input: PublicCopyIntent) {
     ],
   };
 }
-export function prepareApprovedPublicCopy(core: V2Core, actor: Actor, input: PublicCopyIntent) {
+export function prepareApprovedPublicCopy(
+  core: V2Core,
+  actor: Actor,
+  input: PublicCopyIntent,
+  paid?: PreparedStoragePaidHold,
+) {
   return safe(async () => {
     const validated = validate(actor, input);
     actor = validated.actor;
+    if (
+      paid &&
+      (!isPreparedStoragePaidHold(paid) ||
+        paid.actor.ownerId !== actor.ownerId ||
+        paid.actor.now !== actor.now ||
+        paid.request.intent.kind !== "approved_public_copy" ||
+        paid.request.intent.approvedRevisionId !== input.approvedRevisionId ||
+        paid.request.intent.sourceBlobId !== input.sourceBlobId ||
+        paid.request.targetKind !== "profile_asset" ||
+        paid.request.targetId !== input.assetId ||
+        paid.request.targetRevision !== input.assetRevision ||
+        paid.request.blobId !== input.blobId ||
+        paid.request.reservationId !== input.reservationId ||
+        paid.request.pending.cipherBytes !== 0 ||
+        paid.request.pending.cipherHash !== null ||
+        paid.request.pending.keyVersion !== null)
+    )
+      return false;
     const source = await core.statement(sourceSelect, validated.values).first<Source>();
     if (!source) return false;
+    if (paid && paid.request.pending.logicalBytes !== source.logical_bytes) return false;
     const { contentHash } = await core.decrypt(
       "v2_blobs",
       input.sourceBlobId,
@@ -105,7 +130,7 @@ export function prepareApprovedPublicCopy(core: V2Core, actor: Actor, input: Pub
       capacity = storagePredicate(actor.ownerId, source.logical_bytes);
     return core.changed([
       core.statement(
-        `INSERT INTO v2_mutation_claims(id,owner_id,target_id,revision) SELECT ?,a.owner_id,a.id,a.revision ${sourceFrom} WHERE ${sourceGuard} AND a.encrypted_payload=? AND revision.encrypted_payload=? AND source.encrypted_payload=? AND source.logical_bytes=? AND ${capacity.sql} AND NOT EXISTS(SELECT 1 FROM v2_storage_reservations WHERE id=? OR target_id=?) AND NOT EXISTS(SELECT 1 FROM v2_blobs WHERE id=?)`,
+        `INSERT INTO v2_mutation_claims(id,owner_id,target_id,revision) SELECT ?,a.owner_id,a.id,a.revision ${sourceFrom} WHERE ${sourceGuard} AND a.encrypted_payload=? AND revision.encrypted_payload=? AND source.encrypted_payload=? AND source.logical_bytes=? AND ${capacity.sql} AND NOT EXISTS(SELECT 1 FROM v2_storage_reservations WHERE id=? OR target_id=?) AND NOT EXISTS(SELECT 1 FROM v2_blobs WHERE id=?) ${paid ? `AND (${paid.predicate.sql})` : ""}`,
         [
           claimId,
           ...validated.values,
@@ -117,6 +142,7 @@ export function prepareApprovedPublicCopy(core: V2Core, actor: Actor, input: Pub
           input.reservationId,
           input.blobId,
           input.blobId,
+          ...(paid ? paid.predicate.values : []),
         ],
       ),
       ...storageReservationStatements(
@@ -130,7 +156,7 @@ export function prepareApprovedPublicCopy(core: V2Core, actor: Actor, input: Pub
           byteLength: source.logical_bytes,
           state: "reserved",
         },
-        source.operation_id,
+        paid?.request.plan.operationId ?? source.operation_id,
         claimId,
         input.blobId,
       ),
@@ -148,6 +174,7 @@ export function prepareApprovedPublicCopy(core: V2Core, actor: Actor, input: Pub
           claimId,
         ],
       ),
+      ...(paid ? await paid.statements(core, paid.actor, claimId, anchor) : []),
       core.finish(claimId),
     ]);
   });

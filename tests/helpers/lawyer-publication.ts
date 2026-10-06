@@ -212,7 +212,8 @@ export async function publicationFixture() {
   const deps = {
     publicBucket: bucket,
     fixedLengthStream: fixed,
-    storageAdmission: async () => true,
+    environment: "preview" as const,
+    testOnlyUnmeteredStorage: true as const,
     openSanitized: async (input: {
       ownerId: string;
       profileId: string;

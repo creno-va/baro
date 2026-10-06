@@ -157,8 +157,12 @@ export function createV2StorageRepository(core: V2Core) {
     findPendingSanitizedAssetBlob(actor: Actor, lease: JobLease, blobId: string) {
       return findPendingSanitizedAssetBlob(core, actor, lease, blobId);
     },
-    prepareApprovedPublicCopy(actor: Actor, input: PublicCopyIntent) {
-      return prepareApprovedPublicCopy(core, actor, input);
+    prepareApprovedPublicCopy(
+      actor: Actor,
+      input: PublicCopyIntent,
+      paid?: PreparedStoragePaidHold,
+    ) {
+      return prepareApprovedPublicCopy(core, actor, input, paid);
     },
     abandonApprovedPublicCopy(actor: Actor, blobId: string) {
       return abandonApprovedPublicCopy(core, actor, blobId);
