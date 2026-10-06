@@ -8,8 +8,9 @@ import { createV2FilesRepository } from "../src/server/db/v2-files";
 import { digest, encryptPart } from "../src/server/modules/files/binary";
 import { reconcileFileUploads } from "../src/server/modules/files/reconcile";
 import { createFilesService, type PrivateBucket } from "../src/server/modules/files/service";
-import { createTestDatabase } from "./helpers/d1";
+import type { createTestDatabase } from "./helpers/d1";
 import { seedTestSession } from "./helpers/session";
+import { ready } from "./helpers/storage-capacity";
 
 const databases: Awaited<ReturnType<typeof createTestDatabase>>[] = [];
 afterEach(() => {
@@ -18,9 +19,8 @@ afterEach(() => {
     db.close();
   }
 });
-async function fixture() {
-  const db = await createTestDatabase();
-  databases.push(db);
+async function fixture(limits: { headLimit?: number; deleteLimit?: number } = {}) {
+  const { db } = await ready({ getLimit: 100, headLimit: 100, deleteLimit: 100, ...limits });
   const old = new Date(Date.now() - 360000).toISOString();
   const user = await seedTestSession(db, { now: Date.parse(old), consent: true });
   const key = btoa("r".repeat(32)).replace(/=+$/u, "");
@@ -41,7 +41,9 @@ async function fixture() {
   db.sqlite.query("INSERT INTO v2_case_original_usage(workspace_id) VALUES(?)").run(workspaceId);
   const objects = new Map<string, Uint8Array<ArrayBuffer>>();
   let deleteFails = false,
-    deleteCalls = 0;
+    deleteCalls = 0,
+    headCalls = 0;
+  let deleteHook: (() => void) | undefined;
   const bucket = {
     async put(k: string, v: Uint8Array<ArrayBuffer>) {
       objects.set(k, v.slice());
@@ -52,6 +54,7 @@ async function fixture() {
       return v ? { key: k, size: v.byteLength, body: new Response(v.slice()).body } : null;
     },
     async head(k: string) {
+      headCalls++;
       const v = objects.get(k);
       return v ? { key: k, size: v.byteLength } : null;
     },
@@ -59,6 +62,7 @@ async function fixture() {
       deleteCalls++;
       if (deleteFails) throw new Error("synthetic R2 deletion");
       objects.delete(k);
+      deleteHook?.();
     },
   } as unknown as PrivateBucket;
   const env = {
@@ -73,7 +77,7 @@ async function fixture() {
       bucket,
       testOnlyUnmeteredStorage: true,
     });
-  async function pending() {
+  async function pending(runningWriter = false) {
     const revision = (
       db.sqlite.query("SELECT revision FROM v2_workspaces WHERE id=?").get(workspaceId) as {
         revision: number;
@@ -136,6 +140,23 @@ async function fixture() {
       },
     };
     expect(await files.prepareOriginalPart(actor, input)).toBe(true);
+    db.sqlite
+      .query(`INSERT INTO v2_physical_blob_bindings(blob_id,environment,owner_id,object_key,maximum_cipher_bytes,state,writer_state,created_at)
+      VALUES(?,'preview',?,?,?,'held',?,?)`)
+      .run(
+        input.blob.id,
+        actor.ownerId,
+        `private/${input.blob.id}`,
+        frame.byteLength,
+        runningWriter ? "prepared" : "stopped",
+        old,
+      );
+    if (runningWriter)
+      db.sqlite
+        .query(
+          "UPDATE v2_physical_blob_bindings SET writer_state='running',writer_token=?,expected_cipher_bytes=maximum_cipher_bytes WHERE blob_id=?",
+        )
+        .run(crypto.randomUUID(), input.blob.id);
     objects.set(`private/${input.blob.id}`, frame);
     return { input, fileId, uploadId, bytes };
   }
@@ -154,6 +175,10 @@ async function fixture() {
       deleteFails = v;
     },
     deleteCalls: () => deleteCalls,
+    headCalls: () => headCalls,
+    setDeleteHook: (fn: () => void) => {
+      deleteHook = fn;
+    },
   };
 }
 test("cron recovers an actual encrypted stale intent, deletes its R2 object, keeps the live reservation and allows resume", async () => {
@@ -193,6 +218,11 @@ test("cron recovers an actual encrypted stale intent, deletes its R2 object, kee
   });
   expect((await reconcileFileUploads(f.env)).acquired).toBe(0);
   expect(f.deleteCalls()).toBe(1);
+  expect(f.headCalls()).toBe(1);
+  expect(f.db.sqlite.query("SELECT deletes,heads FROM v2_storage_projections").get()).toEqual({
+    deletes: 1,
+    heads: 1,
+  });
 });
 test("R2 deletion failure writes no receipt, keeps exposure and leaves a retryable journal for the next cron", async () => {
   const f = await fixture();
@@ -325,4 +355,37 @@ test("cron finishes a journal interrupted after all actual blob receipts without
   expect(await reconcileFileUploads(f.env)).toMatchObject({ recovered: 0, completed: 1, retry: 0 });
   expect(f.deleteCalls()).toBe(1);
   expect(f.db.sqlite.query("SELECT * FROM v2_cleanup_receipts").all()).toEqual(receipts);
+});
+
+test("cleanup budgets stop actual DELETE/HEAD and never fabricate absence receipts", async () => {
+  for (const limits of [{ deleteLimit: 0 }, { headLimit: 0 }]) {
+    const f = await fixture(limits);
+    await f.pending();
+    expect(await reconcileFileUploads(f.env)).toMatchObject({ completed: 0, retry: 1 });
+    expect(f.deleteCalls()).toBe(limits.deleteLimit === 0 ? 0 : 1);
+    expect(f.headCalls()).toBe(0);
+    expect(f.db.sqlite.query("SELECT count(*) AS count FROM v2_cleanup_receipts").get()).toEqual({
+      count: 0,
+    });
+    expect(f.db.sqlite.query("SELECT state FROM v2_physical_blob_bindings").get()).toEqual({
+      state: "held",
+    });
+  }
+});
+test("a revoked cleanup lease after DELETE prevents HEAD and receipt; a running writer prevents DELETE", async () => {
+  const f = await fixture();
+  await f.pending();
+  f.setDeleteHook(() => {
+    f.db.sqlite.query("UPDATE v2_deletion_journals SET lease_until=?").run(f.actor.now);
+  });
+  expect(await reconcileFileUploads(f.env)).toMatchObject({ completed: 0, retry: 1 });
+  expect(f.deleteCalls()).toBe(1);
+  expect(f.headCalls()).toBe(0);
+  expect(f.db.sqlite.query("SELECT count(*) AS count FROM v2_cleanup_receipts").get()).toEqual({
+    count: 0,
+  });
+  const g = await fixture();
+  await g.pending(true);
+  expect(await reconcileFileUploads(g.env)).toMatchObject({ completed: 0, retry: 1 });
+  expect(g.deleteCalls()).toBe(0);
 });

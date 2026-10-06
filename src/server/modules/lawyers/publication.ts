@@ -15,6 +15,7 @@ import { createV2LawyersRepository } from "../../db/v2-lawyers";
 import { createV2StorageRepository } from "../../db/v2-storage";
 import { isPreparedStoragePaidHold } from "../../db/v2-storage-paid-runtime";
 import type { StorageCosts, StoragePermit } from "../budget/storage-ledger";
+import { authorizeBlobCleanup, createStorageMaintenance } from "../budget/storage-maintenance";
 import { hasCurrentConsent } from "../consent/service";
 import { hex } from "../files/binary";
 import type { PrivateBucket } from "../files/service";
@@ -87,6 +88,8 @@ export function createLawyerPublicationService(core: V2Core, deps: PublicationDe
     new Date(
       timestampSchema.parse((deps.clock ?? (() => new Date().toISOString()))()),
     ).toISOString();
+  const maintenance = createStorageMaintenance(core, deps.environment ?? "preview", now);
+  const unmeteredTest = deps.environment !== "production" && deps.testOnlyUnmeteredStorage === true;
   const actor = (ownerId: string) => actorSchema.parse({ ownerId, now: now() });
   const bucket = () => {
     if (!deps.publicBucket) throw new LawyerError("PROCESSING_UNAVAILABLE");
@@ -251,7 +254,23 @@ export function createLawyerPublicationService(core: V2Core, deps: PublicationDe
           !/^public\/[A-Za-z0-9_-]{1,128}$/.test(blob.object_key)
         )
           return false;
+        const access = () =>
+          authorizeBlobCleanup(core, lease, target.target_id, blob.object_key, now());
+        if (
+          !(await access()) ||
+          !(unmeteredTest
+            ? true
+            : await maintenance.admit(target.target_id, blob.object_key, "delete", access))
+        )
+          return false;
         await bucket().delete(blob.object_key);
+        if (
+          !(await access()) ||
+          !(unmeteredTest
+            ? true
+            : await maintenance.admit(target.target_id, blob.object_key, "head", access))
+        )
+          return false;
         if (await bucket().head(blob.object_key)) return false;
         if (
           !(await storage.confirmBlobDeleted(target.target_id, now(), {

@@ -20,6 +20,7 @@ import {
   V2RepositoryError,
   type WorkspaceGuard,
 } from "./v2-core";
+import { type MutationReceipt, mutationTools } from "./v2-mutation-receipts";
 import { referenceCommitPredicate } from "./v2-workspace";
 
 const zero = "0".repeat(64);
@@ -792,7 +793,7 @@ export function createV2SummaryEditsRepository(core: V2Core) {
         return changed ? { done: c.phase === "done" && c.output === "" } : null;
       });
     },
-    publish(g: WorkspaceGuard, id: string, summaryId: string) {
+    publish(g: WorkspaceGuard, id: string, summaryId: string, receipt?: MutationReceipt) {
       return safe(async () => {
         g = parse(guardSchema, g);
         parse(opaqueIdSchema, summaryId);
@@ -927,6 +928,7 @@ export function createV2SummaryEditsRepository(core: V2Core) {
             id,
             claimId,
           ]),
+          ...mutationTools(core, g, receipt).complete(claimId),
           core.finish(claimId),
         ]);
         return changed;

@@ -1,11 +1,13 @@
 import { ArrowRight, Building2, UserRound } from "lucide-react";
-import { type SyntheticEvent, useRef, useState } from "react";
+import { type SyntheticEvent, useEffect, useRef, useState } from "react";
 import { api } from "../../client/api";
 import { Button, ButtonLink } from "../ui/button";
 import { Textarea } from "../ui/form";
 import { BackToCases, ErrorPanel, IntakeProgress } from "./common";
 
 export function CaseInput({ siteKey: _siteKey }: { siteKey?: string }) {
+  const [ready, setReady] = useState(false);
+  useEffect(() => setReady(true), []);
   const [narrative, setNarrative] = useState("");
   const [subjectContext, setContext] = useState<"individual" | "company">("individual");
   const [busy, setBusy] = useState(false);
@@ -50,7 +52,7 @@ export function CaseInput({ siteKey: _siteKey }: { siteKey?: string }) {
           </div>
         ) : (
           <form onSubmit={(event) => void create(event)}>
-            <fieldset className="intake-context" disabled={busy}>
+            <fieldset className="intake-context" disabled={busy || !ready}>
               <legend>누구의 사건인가요?</legend>
               {(["individual", "company"] as const).map((value) => (
                 <label key={value} className={subjectContext === value ? "selected" : ""}>
@@ -81,7 +83,7 @@ export function CaseInput({ siteKey: _siteKey }: { siteKey?: string }) {
               id="narrative"
               value={narrative}
               onChange={(event) => setNarrative(event.target.value)}
-              disabled={busy}
+              disabled={busy || !ready}
               aria-describedby="narrative-help narrative-count"
               aria-invalid={count > 0 && !valid}
               placeholder="예: 지난달 지인에게 돈을 빌려줬는데, 약속한 날짜가 지나도 돌려받지 못했어요."
@@ -90,7 +92,7 @@ export function CaseInput({ siteKey: _siteKey }: { siteKey?: string }) {
               {count.toLocaleString()} / 5,000자 · 최소 20자
             </p>
             <div className="intake-actions">
-              <Button type="submit" disabled={busy || !valid}>
+              <Button type="submit" disabled={busy || !ready || !valid}>
                 {busy ? "사건을 저장하고 있어요…" : "저장하고 질문 시작"}
                 <ArrowRight size={18} aria-hidden="true" />
               </Button>
@@ -104,7 +106,7 @@ export function CaseInput({ siteKey: _siteKey }: { siteKey?: string }) {
                 : "입력한 상황은 사건으로 저장돼요. 이후 언제든 이어서 정리할 수 있어요."}
             </p>
             {error ? (
-              <ErrorPanel error={error} retry={() => void create()} disabled={busy} />
+              <ErrorPanel error={error} retry={() => void create()} disabled={busy || !ready} />
             ) : null}
           </form>
         )}

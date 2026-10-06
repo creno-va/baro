@@ -6,6 +6,7 @@ import {
   createFileProcessingDispatcher,
 } from "../modules/file-processing/dispatch";
 import { createProfilePublicationDispatcher } from "../modules/lawyers/publication-dispatch";
+import { createWorkspaceDispatcher } from "../modules/workspace/dispatch";
 
 /** Scheduled recovery only dispatches admitted immutable IDs. The coordinator
  * must have activated real funding, including fixed platform maintenance. */
@@ -38,7 +39,10 @@ export async function reconcileV2Dispatch(env: Env) {
     const profiles = await createProfilePublicationDispatcher(core, {
       binding: env.PROFILE_PUBLICATION,
     }).dispatch(4);
-    return { available: true, files, assets, profiles };
+    const workspaces = await createWorkspaceDispatcher(core, {
+      binding: env.WORKSPACE_PROCESSING,
+    }).dispatch(4);
+    return { available: true, files, assets, profiles, workspaces };
   } catch {
     // Payloads, SQL and provider failures must not enter scheduled logs.
     return { available: false };

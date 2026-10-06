@@ -9,6 +9,7 @@ import {
   v2OriginalManifestSchema,
   v2UploadCompleteRequestSchema,
   v2UploadReservationRequestSchema,
+  v2UploadSessionSchema,
 } from "../../../contracts/v2";
 import * as schema from "../../db/schema";
 import { createV2AccountingRepository } from "../../db/v2-accounting";
@@ -33,6 +34,7 @@ import type {
   StorageCosts,
   StoragePermit,
 } from "../budget/storage-ledger";
+import { authorizeBlobCleanup, createStorageMaintenance } from "../budget/storage-maintenance";
 import { hasCurrentConsent } from "../consent/service";
 import {
   decryptPart,
@@ -115,6 +117,7 @@ export function createFilesService(core: V2Core, deps: FileServiceDependencies) 
     new Date(
       timestampSchema.parse((deps.clock ?? (() => new Date().toISOString()))()),
     ).toISOString();
+  const maintenance = createStorageMaintenance(core, deps.environment, now);
   const actor = (ownerId: string): Actor => parse(actorSchema, { ownerId, now: now() });
   const consent = async (ownerId: string) => {
     if (!(await hasCurrentConsent(drizzle(core.binding, { schema }), ownerId)))
@@ -181,12 +184,12 @@ export function createFilesService(core: V2Core, deps: FileServiceDependencies) 
     index,
     byteLength,
   });
-  // One bounded ownership/provenance read before IO and one after IO. With 120
-  // chunks and two complete passes this stays below D1's 1000-query paid limit.
+  // Combine consent and provenance in one read. Completion validates bytes in
+  // the processor's single pass, keeping 120 metered chunks within D1 limits.
   const authorizedBlob = (ownerId: string, workspaceId: string, u: Session, p: Part) =>
     core
       .statement(
-        `SELECT b.id,b.object_key,b.kind,b.visibility,b.logical_bytes,b.cipher_bytes,b.cipher_hash,b.key_version FROM v2_upload_sessions u JOIN v2_files f ON f.id=u.file_id JOIN v2_workspaces w ON w.id=f.workspace_id JOIN v2_upload_parts part ON part.upload_id=u.id JOIN v2_blobs b ON b.id=part.blob_id JOIN v2_storage_reservations r ON r.id=b.reservation_id JOIN v2_billing_principals principal ON principal.id=b.principal_id WHERE u.id=? AND u.revision=? AND f.id=? AND w.id=? AND w.owner_id=? AND principal.owner_id=w.owner_id AND r.principal_id=b.principal_id AND r.entity_id=f.id AND r.kind='case_original' AND r.state!='released' AND part.ordinal=? AND part.blob_id=? AND part.cipher_hash=? AND part.encrypted_payload=? AND b.state='stored' AND b.kind='original' AND b.visibility='private' AND ${aliveWorkspace} AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='file' AND target_id=f.id)`,
+        `SELECT b.id,b.object_key,b.kind,b.visibility,b.logical_bytes,b.cipher_bytes,b.cipher_hash,b.key_version FROM v2_upload_sessions u JOIN v2_files f ON f.id=u.file_id JOIN v2_workspaces w ON w.id=f.workspace_id JOIN v2_upload_parts part ON part.upload_id=u.id JOIN v2_blobs b ON b.id=part.blob_id JOIN v2_storage_reservations r ON r.id=b.reservation_id JOIN v2_billing_principals principal ON principal.id=b.principal_id WHERE u.id=? AND u.revision=? AND f.id=? AND w.id=? AND w.owner_id=? AND principal.owner_id=w.owner_id AND r.principal_id=b.principal_id AND r.entity_id=f.id AND r.kind='case_original' AND r.state!='released' AND part.ordinal=? AND part.blob_id=? AND part.cipher_hash=? AND part.encrypted_payload=? AND b.state='stored' AND b.kind='original' AND b.visibility='private' AND EXISTS(SELECT 1 FROM user_consents c WHERE c.user_id=w.owner_id AND c.terms_version=? AND c.privacy_version=? AND c.ai_notice_version=? AND c.over_14_confirmed=1) AND ${aliveWorkspace} AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='file' AND target_id=f.id)`,
         [
           u.id,
           u.revision,
@@ -197,6 +200,9 @@ export function createFilesService(core: V2Core, deps: FileServiceDependencies) 
           p.blob_id,
           p.cipher_hash,
           p.encrypted_payload,
+          CURRENT_POLICY_VERSIONS.termsVersion,
+          CURRENT_POLICY_VERSIONS.privacyVersion,
+          CURRENT_POLICY_VERSIONS.aiNoticeVersion,
         ],
       )
       .first<{
@@ -224,6 +230,24 @@ export function createFilesService(core: V2Core, deps: FileServiceDependencies) 
       blob.logical_bytes !== p.byte_length
     )
       throw new FileError("NOT_FOUND");
+    const currentAccess = async () => {
+      try {
+        const current = await authorizedBlob(ownerId, workspaceId, u, p);
+        return (
+          current?.id === blob.id &&
+          current.object_key === blob.object_key &&
+          current.cipher_hash === blob.cipher_hash
+        );
+      } catch {
+        return false;
+      }
+    };
+    if (
+      !(unmeteredTest
+        ? await currentAccess()
+        : await maintenance.admit(blob.id, blob.object_key, "get", currentAccess))
+    )
+      throw new FileError("PROCESSING_UNAVAILABLE");
     const object = await bucket().get(blob.object_key);
     if (!object || !("body" in object) || object.size !== blob.cipher_bytes)
       throw new FileError("INVALID_FILE");
@@ -274,6 +298,7 @@ export function createFilesService(core: V2Core, deps: FileServiceDependencies) 
     workspaceId: string,
     u: Session,
     manifest: z.infer<typeof v2OriginalManifestSchema>,
+    validated?: () => void,
   ) => {
     let index = 0;
     let wrappedKey: string | undefined;
@@ -285,6 +310,7 @@ export function createFilesService(core: V2Core, deps: FileServiceDependencies) 
             if (index === manifest.parts.length) {
               await session(ownerId, workspaceId, u.file_id, u.id);
               if (hex(hash.digest()) !== manifest.contentHash) throw new FileError("INVALID_FILE");
+              validated?.();
               controller.close();
               return;
             }
@@ -319,6 +345,18 @@ export function createFilesService(core: V2Core, deps: FileServiceDependencies) 
     if (!deps.paidStorage && !unmeteredTest) throw new FileError("PROCESSING_UNAVAILABLE");
   };
   return {
+    async resumeUpload(ownerId: string, workspaceId: string, fileId: string) {
+      await consent(ownerId);
+      const u = await session(ownerId, workspaceId, fileId, undefined, true);
+      return v2UploadSessionSchema.parse({
+        schemaVersion: "2",
+        fileId: u.file_id,
+        uploadSession: u.id,
+        chunkBytes: V2_LIMITS.chunkBytes,
+        reservedBytes: u.reserved_bytes,
+        expiresAt: u.expires_at,
+      });
+    },
     async list(ownerId: string, workspaceId: string, afterId?: string) {
       await workspace(ownerId, workspaceId);
       if (afterId) parse(opaqueIdSchema, afterId);
@@ -577,10 +615,9 @@ export function createFilesService(core: V2Core, deps: FileServiceDependencies) 
         // The pending intent already survives termination. Only terminal IO can be
         // abandoned here; no logical storage refund happens before actual cleanup.
         const retained = await files.abandonOriginalPart(actor(ownerId), blob.id);
-        if (!retained) {
-          await bucket().delete(objectKey);
-          if (await bucket().head(objectKey)) throw new FileError("STORAGE_UNAVAILABLE");
-        }
+        // A concurrent deletion owns any surviving object and its durable journal.
+        // Do not bypass the fenced cleanup/budget path with an untracked DELETE.
+        if (!retained) failure = new FileError("STORAGE_UNAVAILABLE");
         if (written) {
           const winner = await part(u, index);
           if (winner) {
@@ -628,15 +665,8 @@ export function createFilesService(core: V2Core, deps: FileServiceDependencies) 
       if (!deps.probe) throw new FileError("PROCESSING_UNAVAILABLE");
       const manifest = v2OriginalManifestSchema.parse(request.manifest);
       if (manifest.byteLength !== u.reserved_bytes) throw new FileError("INVALID_FILE");
-      const reader = stream(ownerId, workspaceId, u, manifest).getReader();
-      try {
-        while (!(await reader.read()).done) {
-          /* bounded validation; no retained plaintext */
-        }
-      } finally {
-        await reader.cancel().catch(() => {});
-        reader.releaseLock();
-      }
+      let opened = false,
+        validated = false;
       const probe = v2FileProbeSchema.parse(
         await deps.probe({
           ownerId,
@@ -646,10 +676,16 @@ export function createFilesService(core: V2Core, deps: FileServiceDependencies) 
           uploadRevision: u.revision,
           byteLength: u.reserved_bytes,
           contentHash: manifest.contentHash,
-          open: () => stream(ownerId, workspaceId, u, manifest),
+          open: () => {
+            if (opened) throw new FileError("INVALID_FILE");
+            opened = true;
+            return stream(ownerId, workspaceId, u, manifest, () => {
+              validated = true;
+            });
+          },
         }),
       );
-      if (probe.byteLength !== u.reserved_bytes) throw new FileError("INVALID_FILE");
+      if (!validated || probe.byteLength !== u.reserved_bytes) throw new FileError("INVALID_FILE");
       await consent(ownerId);
       await session(ownerId, workspaceId, fileId, u.id, true);
       const metadata = await files.metadata(actor(ownerId), fileId);
@@ -778,7 +814,23 @@ export function createFilesService(core: V2Core, deps: FileServiceDependencies) 
           !/^private\/[A-Za-z0-9_-]{1,128}$/.test(row.object_key)
         )
           return false;
+        const access = () =>
+          authorizeBlobCleanup(core, lease, target.target_id, row.object_key, now());
+        if (
+          !(await access()) ||
+          !(unmeteredTest
+            ? true
+            : await maintenance.admit(target.target_id, row.object_key, "delete", access))
+        )
+          return false;
         await bucket().delete(row.object_key);
+        if (
+          !(await access()) ||
+          !(unmeteredTest
+            ? true
+            : await maintenance.admit(target.target_id, row.object_key, "head", access))
+        )
+          return false;
         if (await bucket().head(row.object_key)) return false;
         if (
           !(await storage.confirmBlobDeleted(target.target_id, now(), {

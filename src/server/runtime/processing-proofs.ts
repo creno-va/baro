@@ -7,6 +7,7 @@ export async function readProcessingProofs(
   core: V2Core,
   environment: "preview" | "production",
   now: string,
+  sku = "container_cpu_seconds",
 ) {
   return core
     .statement(
@@ -18,9 +19,9 @@ export async function readProcessingProofs(
     WHERE c.environment=? AND c.phase='active' AND c.month=substr(?,1,7)
     AND allocation.verified_at<=? AND allocation.valid_until>? AND pricing.verified_at<=? AND pricing.valid_until>?
     AND funding.verified_at<=? AND funding.valid_until>?
-    AND EXISTS(SELECT 1 FROM json_each(pricing.payload_json,'$.prices') WHERE json_extract(value,'$.sku')='container_cpu_seconds')
+    AND EXISTS(SELECT 1 FROM json_each(pricing.payload_json,'$.prices') WHERE json_extract(value,'$.sku')=?)
     ORDER BY pricing.verified_at DESC,funding.verified_at DESC,pricing.id,funding.id LIMIT 1`,
-      [environment, usageDateKst(now), now, now, now, now, now, now],
+      [environment, usageDateKst(now), now, now, now, now, now, now, sku],
     )
     .first<{
       pricingProofId: string;

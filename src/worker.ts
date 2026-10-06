@@ -15,6 +15,7 @@ export { AssetProcessingWorkflow } from "./workflows/asset-processing";
 export { FileProcessingWorkflow } from "./workflows/file-processing";
 export { FileProcessorContainer } from "./workflows/file-processor-container";
 export { ProfilePublicationWorkflow } from "./workflows/profile-publication";
+export { WorkspaceWorkflow } from "./workflows/workspace";
 
 const app = new Hono<{ Bindings: Env }>();
 

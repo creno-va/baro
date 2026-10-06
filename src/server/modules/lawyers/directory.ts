@@ -29,10 +29,28 @@ export function createDirectoryService(core: V2Core, clock = () => new Date().to
             expiresAt: new Date(Date.parse(now) + DIRECTORY_SNAPSHOT_TTL_MS).toISOString(),
           });
       if (!result) throw new DirectoryError("CURSOR_EXPIRED");
-      return result;
+      // A self-managed profile replaces the older reviewed projection without rewriting its history.
+      const items = [];
+      for (const item of result.items) {
+        const replaced = await core
+          .statement(
+            "SELECT s.id FROM v2_private_snapshots s JOIN v2_consents c ON c.id=s.id AND c.owner_id=s.owner_id WHERE s.target_id=? AND s.purpose='profile_revision' AND c.kind='profile_publication' AND c.version IN ('mvp-self-profile-public-v1','mvp-self-profile-private-v1') LIMIT 1",
+            [item.id],
+          )
+          .first();
+        if (!replaced) items.push(item);
+      }
+      return { ...result, items };
     },
     async profile(id: string): Promise<V2PublicLawyer> {
       opaqueIdSchema.parse(id);
+      const replaced = await core
+        .statement(
+          "SELECT s.id FROM v2_private_snapshots s JOIN v2_consents c ON c.id=s.id AND c.owner_id=s.owner_id WHERE s.target_id=? AND s.purpose='profile_revision' AND c.kind='profile_publication' AND c.version IN ('mvp-self-profile-public-v1','mvp-self-profile-private-v1') LIMIT 1",
+          [id],
+        )
+        .first();
+      if (replaced) throw new DirectoryError("NOT_FOUND");
       const profile = await lawyers.publicProfile(id);
       if (!profile) throw new DirectoryError("NOT_FOUND");
       // A retired or missing copy must disappear from detail as well as list pages.

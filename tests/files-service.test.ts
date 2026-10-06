@@ -15,6 +15,7 @@ import {
 } from "../src/server/modules/files/service";
 import { createTestDatabase } from "./helpers/d1";
 import { seedTestSession } from "./helpers/session";
+import { ready } from "./helpers/storage-capacity";
 
 const NOW = "2026-10-06T00:00:00.000Z";
 const dbs: Awaited<ReturnType<typeof createTestDatabase>>[] = [];
@@ -74,12 +75,24 @@ function r2() {
     },
   };
 }
+async function drain(body: ReadableStream<Uint8Array>) {
+  const reader = body.getReader();
+  try {
+    while (!(await reader.read()).done) {
+      /* streamed validation */
+    }
+  } finally {
+    await reader.cancel().catch(() => {});
+    reader.releaseLock();
+  }
+}
 async function fixture(
   overrides: Partial<FileServiceDependencies> = {},
   disabled: { admission?: true; probe?: true } = {},
+  meteredReads = false,
 ) {
-  const db = await createTestDatabase();
-  dbs.push(db);
+  const db = meteredReads ? (await ready({ getLimit: 2 })).db : await createTestDatabase();
+  if (!meteredReads) dbs.push(db);
   const owner = await seedTestSession(db, { now: Date.parse(NOW), consent: true });
   const cipher = await createCaseDataCipher({
     CASE_DATA_KEY_V1: btoa("k".repeat(32)).replace(/=+$/, ""),
@@ -105,12 +118,15 @@ async function fixture(
     bucket: bucket.port,
     clock: () => currentNow,
     testOnlyUnmeteredStorage: true,
-    probe: async (input) => ({
-      category: "document",
-      format: "txt",
-      byteLength: input.byteLength,
-      pageCount: 1,
-    }),
+    probe: async (input) => {
+      await drain(input.open());
+      return {
+        category: "document",
+        format: "txt",
+        byteLength: input.byteLength,
+        pageCount: 1,
+      };
+    },
     ...overrides,
   };
   if (disabled.admission) delete deps.testOnlyUnmeteredStorage;
@@ -372,6 +388,7 @@ test("complete replay does not invoke probe twice; stale revision/wrong hash fai
   const f = await fixture({
     probe: async (input) => {
       probes++;
+      await drain(input.open());
       return { category: "document", format: "txt", byteLength: input.byteLength, pageCount: 1 };
     },
   });
@@ -585,3 +602,90 @@ test("maximum supplementary Unicode names and exact storage/case admission count
   f.db.sqlite.query("UPDATE v2_storage_usage SET stored_bytes=9999999995").run();
   await expect(reserved(f, 1)).rejects.toThrow("CONFLICT");
 });
+
+test("completion requires a fully validated single processor read", async () => {
+  for (const partial of [false, true]) {
+    const f = await fixture({
+      probe: async (input) => {
+        if (partial) {
+          const reader = input.open().getReader();
+          await reader.read();
+          await reader.cancel();
+        }
+        return { category: "document", format: "txt", byteLength: input.byteLength, pageCount: 1 };
+      },
+    });
+    const s = await reserved(f, 5);
+    const data = new Uint8Array(5);
+    const p = await f.service.putPart(
+      f.actor.ownerId,
+      f.workspaceId,
+      s.fileId,
+      s.uploadSession,
+      0,
+      new Response(data).body,
+    );
+    await expect(
+      f.service.complete(f.actor.ownerId, f.workspaceId, s.fileId, {
+        expectedRevision: f.rev(),
+        uploadSession: s.uploadSession,
+        manifest: { byteLength: 5, contentHash: hex(sha256(data)), parts: [p] },
+      }),
+    ).rejects.toThrow("INVALID_FILE");
+    expect(f.db.sqlite.query("SELECT state FROM v2_upload_sessions").get()).toEqual({
+      state: "open",
+    });
+  }
+});
+test("private GETs consume maintenance counters once per chunk and deny exhausted reads; completion stays within the 120-chunk D1 bound", async () => {
+  const f = await fixture({}, {}, true);
+  const data = new Uint8Array(V2_LIMITS.chunkBytes + 7);
+  const s = await reserved(f, data.length);
+  f.bucket.setPutHook(async () => {
+    for (const b of f.db.sqlite
+      .query("SELECT id,object_key,cipher_bytes FROM v2_blobs WHERE state='pending'")
+      .all() as { id: string; object_key: string; cipher_bytes: number }[]) {
+      f.db.sqlite
+        .query(`INSERT INTO v2_physical_blob_bindings(blob_id,environment,owner_id,object_key,maximum_cipher_bytes,state,writer_state,created_at)
+        VALUES(?,'preview',?,?,?,'held','stopped',?)`)
+        .run(b.id, f.actor.ownerId, b.object_key, b.cipher_bytes, NOW);
+    }
+  });
+  const parts = [];
+  for (let i = 0; i < 2; i++) {
+    const chunk = data.slice(i * V2_LIMITS.chunkBytes, (i + 1) * V2_LIMITS.chunkBytes);
+    parts.push(
+      await f.service.putPart(
+        f.actor.ownerId,
+        f.workspaceId,
+        s.fileId,
+        s.uploadSession,
+        i,
+        new Response(chunk).body,
+      ),
+    );
+  }
+  const metered = createFilesService(f.core, {
+    environment: "preview",
+    bucket: f.bucket.port,
+    clock: () => NOW,
+    probe: async (input) => {
+      await drain(input.open());
+      return { category: "document", format: "txt", byteLength: input.byteLength, pageCount: 1 };
+    },
+  });
+  const before = f.db.queryCount,
+    gets = f.bucket.calls.get;
+  await metered.complete(f.actor.ownerId, f.workspaceId, s.fileId, {
+    expectedRevision: f.rev(),
+    uploadSession: s.uploadSession,
+    manifest: { byteLength: data.length, contentHash: hex(sha256(data)), parts },
+  });
+  // Seven D1 statements per additional chunk; measured fixed completion overhead.
+  expect(f.db.queryCount - before + (120 - 2) * 7).toBeLessThanOrEqual(1000);
+  expect(f.bucket.calls.get - gets).toBe(2);
+  expect(f.db.sqlite.query("SELECT gets FROM v2_storage_projections").get()).toEqual({ gets: 2 });
+  const content = await metered.content(f.actor.ownerId, f.workspaceId, s.fileId);
+  await expect(content.body.getReader().read()).rejects.toThrow("INVALID_FILE");
+  expect(f.bucket.calls.get - gets).toBe(2);
+}, 30000);

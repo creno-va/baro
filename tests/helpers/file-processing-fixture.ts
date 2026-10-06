@@ -105,12 +105,15 @@ export async function fixture(
     bucket: bucket.port,
     clock: () => currentNow,
     testOnlyUnmeteredStorage: true,
-    probe: async (input) => ({
-      category: "document",
-      format: "txt",
-      byteLength: input.byteLength,
-      pageCount: 1,
-    }),
+    probe: async (input) => {
+      await new Response(input.open()).arrayBuffer();
+      return {
+        category: "document",
+        format: "txt",
+        byteLength: input.byteLength,
+        pageCount: 1,
+      };
+    },
     ...overrides,
   };
   if (disabled.admission) delete deps.testOnlyUnmeteredStorage;

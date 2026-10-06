@@ -464,6 +464,22 @@
       "owns": ["src/pages/lawyer","src/pages/lawyers","src/components/lawyers","src/client/api/lawyers.ts","src/client/api/mock/lawyers.ts","src/styles/lawyers.css","lawyers/profile/directory modules/API"],
       "docs": ["docs/development/CLIENT-API-CONTRACT.md","docs/development/PARALLEL-UI-SPRINT.md","docs/adr/0014-mvp-two-roles-and-api-mock-first.md"],
       "validation": "mock lawyer own profile edit/save/preview directory/contact; existing #61 preserved; no approval/admin UX; real persistence #62"
+    },
+    {
+      "issue": 108,
+      "milestone": 5,
+      "kind": "implementation",
+      "dependsOn": [],
+      "owns": [
+        "scripts/apply-d1-migrations.ts",
+        "scripts/development-checks.ts",
+        "private storage maintenance integration"
+      ],
+      "docs": [
+        "docs/operations/DOMAIN-DATABASE.md",
+        "docs/development/PARALLEL-UI-SPRINT.md"
+      ],
+      "validation": "atomic SQL file migration import, private maintenance budget/lease/consent guards, changed-feature CI selection; preview same-SHA migration evidence"
     }
   ]
 }
