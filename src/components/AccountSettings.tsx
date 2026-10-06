@@ -147,6 +147,8 @@ export function AccountSettings() {
     const returned = (event: PageTransitionEvent) => {
       if (!event.persisted) return;
       lock.current = false;
+      setTarget(null);
+      setConfirmation("");
       void load();
     };
     window.addEventListener("pageshow", returned);

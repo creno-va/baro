@@ -112,6 +112,11 @@ owned reports browser 6, 실제 SQL 다운로드 1, shared mock 통합 1,
 
 설정 재인증 race 회귀: 지연 접근 실패 및 지연 OAuth 실패를 화면 전환 뒤 전달하는
 새 browser2개는 이전 코드에서 모두 실패하고, 수정 후 기존 보호 조건과 함께
-3회 반복 **15 PASS**다. bfcache 복귀는 상태를 다시 검증하며 오래된 callback으로
+3회 반복 **15 PASS**다. bfcache 복귀는 이전 확인 modal/DELETE 입력을 지우고 상태를 다시 검증하며 오래된 callback으로
 삭제를 승인하지 않는다. 로컬 실제 HTTP/합성 OAuth adapter 증거이며 외부 OAuth
 성공으로 표현하지 않는다.
+
+CI의 cold load keyboard 회귀는 초기 disabled delete만 보고 재인증 버튼의
+로딩 완료를 기다리지 않던 검사를 수정했다. 실제 auth 버튼 enabled와 OAuth
+요청 도착을 확인한 뒤 keyboard Enter를 수행하며 newer callback/owner/DELETE
+보호를 유지한다. timeout 확대나 오래된 callback 허용으로 통과시키지 않는다.

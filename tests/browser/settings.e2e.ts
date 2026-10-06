@@ -117,8 +117,12 @@ test("settings reauth needs a newer callback for same owner and a fresh explicit
   await expect(confirm).toHaveCount(0);
   await expect(remove).toBeDisabled();
   const auth = page.getByRole("button", { name: "google로 재인증" });
+  // The disabled delete action is also the initial loading state. Wait until
+  // access/optional reads finish before issuing a real keyboard action.
+  await expect(auth).toBeEnabled();
   await auth.focus();
   await page.keyboard.press("Enter");
+  await expect.poll(() => stamp).not.toBeNull();
   await expect(remove).toBeEnabled();
   await remove.click();
   await expect(confirm).toBeEnabled();
@@ -142,6 +146,15 @@ test("settings reauth needs a newer callback for same owner and a fresh explicit
   await expect(confirm).toHaveValue("");
   const finish = page.getByRole("button", { name: "삭제 요청 확인", exact: true });
   await expect(finish).toBeDisabled();
+  await confirm.fill("DELETE");
+  await page.evaluate(() => {
+    window.dispatchEvent(new PageTransitionEvent("pagehide"));
+    window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true }));
+  });
+  await expect(confirm).toHaveCount(0);
+  await expect(remove).toBeEnabled();
+  await remove.click();
+  await expect(confirm).toHaveValue("");
   await confirm.fill("DELETE");
   await finish.focus();
   await page.keyboard.press("Enter");
