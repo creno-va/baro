@@ -3,6 +3,7 @@ import { getAuth } from "../auth";
 import { createStorageBudgetService } from "../modules/budget/storage-ledger";
 import { createAssetProcessingAdmission } from "../runtime/asset-admission";
 import { createFileProcessingAdmission } from "../runtime/file-admission";
+import { createSanitizedReaders } from "../runtime/sanitized-reader";
 import { accountDeleteApi } from "./account-delete";
 import { answersApi } from "./answers";
 import { caseCreateApi } from "./case-create";
@@ -74,7 +75,19 @@ export const api = new Hono<ApiEnvironment>()
   )
   .route(
     "/v2/moderation",
-    createModerationApi({ dependencies: async (env) => ({ bucket: env.CASE_PRIVATE_R2 }) }),
+    createModerationApi({
+      dependencies: async (env, core) => ({
+        bucket: env.CASE_PRIVATE_R2,
+        ...(env.CASE_PRIVATE_R2
+          ? {
+              openSanitized: createSanitizedReaders(core, {
+                environment: env.APP_ENV === "production" ? "production" : "preview",
+                bucket: env.CASE_PRIVATE_R2,
+              }).moderation,
+            }
+          : {}),
+      }),
+    }),
   )
   .route(
     "/v2/cases",

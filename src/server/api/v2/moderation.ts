@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { lawyerAccess } from "../../auth/roles";
 import { createCaseDataCipher } from "../../crypto";
-import { createV2Core } from "../../db/v2-core";
+import { createV2Core, type V2Core } from "../../db/v2-core";
 import { createLawyerAssetsService } from "../../modules/lawyers/assets";
 import { createSubmittedAssetReview } from "../../modules/lawyers/sanitized";
 import type { LawyerDependencies } from "../../modules/lawyers/service";
@@ -9,7 +9,10 @@ import { createModerationService } from "../../modules/moderation/service";
 import { expectedRevisionBody, privateLawyerApi } from "./lawyers";
 
 export function createModerationApi(
-  options: { clock?: () => string; dependencies?: (env: Env) => Promise<LawyerDependencies> } = {},
+  options: {
+    clock?: () => string;
+    dependencies?: (env: Env, core: V2Core, reviewerId: string) => Promise<LawyerDependencies>;
+  } = {},
 ) {
   const app = privateLawyerApi();
   const service = async (env: Env) =>
@@ -21,13 +24,11 @@ export function createModerationApi(
     const a = await lawyerAccess(c, { moderator: true });
     if (a.response) return a.response;
     z.strictObject({}).parse(c.req.query());
-    const review = createSubmittedAssetReview(
-      createV2Core(c.env.DB, await createCaseDataCipher(c.env)),
-      {
-        ...(await options.dependencies?.(c.env)),
-        ...(options.clock ? { clock: options.clock } : {}),
-      },
-    );
+    const core = createV2Core(c.env.DB, await createCaseDataCipher(c.env));
+    const review = createSubmittedAssetReview(core, {
+      ...(await options.dependencies?.(c.env, core, a.ownerId)),
+      ...(options.clock ? { clock: options.clock } : {}),
+    });
     const result = await review.open(
       a.ownerId,
       a.sessionId,
@@ -48,13 +49,11 @@ export function createModerationApi(
     const a = await lawyerAccess(c, { moderator: true });
     if (a.response) return a.response;
     z.strictObject({}).parse(c.req.query());
-    const assets = createLawyerAssetsService(
-      createV2Core(c.env.DB, await createCaseDataCipher(c.env)),
-      {
-        ...(await options.dependencies?.(c.env)),
-        environment: c.env.APP_ENV === "production" ? "production" : "preview",
-      },
-    );
+    const core = createV2Core(c.env.DB, await createCaseDataCipher(c.env));
+    const assets = createLawyerAssetsService(core, {
+      ...(await options.dependencies?.(c.env, core, a.ownerId)),
+      environment: c.env.APP_ENV === "production" ? "production" : "preview",
+    });
     const result = await assets.moderatorOpen(
       a.ownerId,
       a.sessionId,
