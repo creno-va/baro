@@ -93,6 +93,12 @@
       "name": "baro-profile-publication-preview",
       "binding": "PROFILE_PUBLICATION",
       "class_name": "ProfilePublicationWorkflow"
+    },
+
+    {
+      "name": "baro-workspace-preview",
+      "binding": "WORKSPACE_PROCESSING",
+      "class_name": "WorkspaceWorkflow"
     }
   ],
   "env": {
@@ -177,6 +183,12 @@
           "name": "baro-profile-publication-preview",
           "binding": "PROFILE_PUBLICATION",
           "class_name": "ProfilePublicationWorkflow"
+        },
+
+        {
+          "name": "baro-workspace-preview",
+          "binding": "WORKSPACE_PROCESSING",
+          "class_name": "WorkspaceWorkflow"
         }
       ],
       "r2_buckets": [
@@ -300,6 +312,12 @@
           "name": "baro-profile-publication-production",
           "binding": "PROFILE_PUBLICATION",
           "class_name": "ProfilePublicationWorkflow"
+        },
+
+        {
+          "name": "baro-workspace-production",
+          "binding": "WORKSPACE_PROCESSING",
+          "class_name": "WorkspaceWorkflow"
         }
       ],
       "r2_buckets": [
