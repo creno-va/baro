@@ -66,7 +66,10 @@ test("customer completes intake workspace original ZIP report and cascading dele
     .fill("합성 추가 사실입니다. 반환 약속 메시지를 자료로 보관했습니다.");
   await page.getByRole("button", { name: "보내기", exact: true }).click();
   await expect(page.getByText("이 응답은 합성 API 예시", { exact: false })).toBeVisible();
-  await page.getByRole("link", { name: "자료", exact: true }).click();
+  await page
+    .getByRole("navigation", { name: "사건 메뉴" })
+    .getByRole("link", { name: /^자료/ })
+    .click();
   await page.getByLabel("선택 자료의 자동 처리에 동의합니다.").check();
   await page.getByLabel("업로드할 파일 선택", { exact: true }).setInputFiles({
     name: "합성증거.txt",
