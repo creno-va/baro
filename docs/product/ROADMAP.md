@@ -2,42 +2,41 @@
 
 - Updated: 2026-10-06
 - Current target: [PRD v2](../PRD.md)
-- Full delivery: [마일스톤 5](https://github.com/creno-va/baro/milestone/5)
+- UI sprint: [마일스톤 6](https://github.com/creno-va/baro/milestone/6), 실제 기능: [마일스톤 5](https://github.com/creno-va/baro/milestone/5), 외부/공개: [#71](https://github.com/creno-va/baro/issues/71)
 
-## 기존 P0.3 먼저 확인
+## 기존 구현과 외부 gate 보존
 
 P0.1 보안 기반과 P0.2 분석 경험은 기존 v1의 완료 기록이다.
 P0.3 #17~#20/#27은 실제 외부 연동·삭제/복구·운영·공개 정책 게이트다.
 다른 세션의 브랜치·PR·CI·배포·기록을 먼저 확인하고 미완료 기술 작업을 이어받는다.
 #19의 #27 선행 조건과 기존 승인 근거를 보존한다.
 
-실행 가능한 기술 작업을 먼저 끝낸 뒤 사람의 정책/법률·계정 승인만 남으면 구체적인
-blocker를 기록한다. P0.3을 허위 종료하지 않고 독립적인 v2 명세·adapter/fixture·
-개발·preview 검증을 계속한다. 실제 선행 구현에 의존하는 코드 작업은 병합 후 시작한다.
+P0.3을 허위 종료하지 않고 외부 blocker를 구체적인 담당자·필드·행동으로 남긴다.
+이 대기는 동일 client UI+API mock 및 독립 기능 연결을 차단하지 않는다. 완료된 코드·이슈·증거를 재사용한다.
 
-## 하나의 v2 전체 개발 마일스톤
+## M6 API mock UX → M5 기능 연결 → #71 외부/공개
 
-v2 마일스톤을 UI scaffold 만으로 닫지 않는다. 전체 기능·실제 UI 시연·외부 연동·배포·
-공개 조건이 exit 다. 세부 의존성과 실제 번호는 [작업 그래프](../development/work-items.json)
-및 GitHub를 따른다.
+2026-10-06 사용자 지시로 MVP는 고객/변호사 두 역할이다. 통합 로그인에서 역할을 선택하고
+변호사는 자기 프로필을 관리한다. 승인 어드민·자격 신청/심사·반려·승인대기는 제외한다.
+[5세션 계획](../development/PARALLEL-UI-SPRINT.md)과 [client 계약](../development/CLIENT-API-CONTRACT.md)이 정본이다.
 
-1. 문서·ADR·시연 행렬을 고정하고 shared v2 계약과 additive DB를 통합한다.
-2. 공통 DS·브랜드, 역할/심사, private/public 저장 및 budget admission을 구축한다.
-3. 공개 디렉터리/변호사 portal/운영 심사, 적응형 질문/확인/chat/workspace를 구현한다.
-4. Containers extraction·Whisper·공식 자료 확장, 자료 UI·PDF/원본 ZIP을 실제로 연결한다.
-5. 모든 원본/파생물/context/report 삭제와 복구·quota·권한·실패 시나리오를 검증한다.
-6. 실제 UI/외부 연동/같은 SHA 배포 evidence를 채우고 정책 승인 후 공개를 검토한다.
+1. M6/#101~#106: 실제 client UI 동일 구현체의 API mock을 5세션 실제 착수부터 2시간 내 완성한다. 별도 `/mock` UI는 만들지 않는다.
+2. A 공통 facade/로그인/shell, B 사건/질문/요약, C workspace/자료/행동, D report/설정/삭제, E 변호사 portal/directory를 병렬 만든다.
+3. M5: 각 영역 mock UX가 사용 가능해지면 같은 client의 real adapter를 기존 구현/PR에 연결한다. 저장·재접속·자료·다운로드·삭제·권한을 확인한다.
+4. 모든 UX 연결 뒤 AI 답변 정교화·광범위 법률군 품질 개선을 진행한다. 새 DB/비용 기반 작업을 UI 선행으로 추가하지 않는다.
+5. #70/#71: 실제 외부 연동·복구/운영·같은 SHA 배포·법률/정책/production/최초 공개 승인 증거를 별도로 채운다.
 
 완성된 기능 단위로 PR·CI·preview·production 배포를 반복한다.
 UI 와 backend가 실제로 연결된 시연 가능한 단위를 만들며 fixture 만으로 live 성공을 주장하지 않는다.
-합성 데이터/역할은 preview 에만 두고 production 공개 프로필은 실제 자격 확인을 거친다.
+합성 API 응답은 local/격리 preview에만 두며 production 인증을 우회하지 않는다.
+자기 선택 변호사 역할/프로필을 자격 확인·법률 승인 증거로 표시하지 않는다.
 
 ## 완료 증거와 비목표
 
 [UI 시연 행렬](./UI-DEMONSTRATION.md)의 각 행을 자동/수동/외부 증거와 연결한다.
 기존 personal-loan 평가셋은 회귀용이고 전 KR 유형·media·role 범위 증거를 별도로 확보한다.
-공개 정책 승인이 남으면 전체 마일스톤과 Goal은 미완료다. 독립 진행이 불가능해졌을 때
-필요한 담당자·필드·행동과 남은 인수 조건을 보고한다.
+mock 완료는 실제 기능/외부 공개 완료가 아니다. 공개 정책 승인이 남으면 #70/#71을 OPEN으로 보존한다.
+기존 Goal은 재생성하지 않는다. 독립 진행이 불가능해졌을 때 구체적인 blocker를 보고한다.
 
 이번 범위에 팀 공동 workspace, 플랫폼 내부 상담/메시징, 사용자를 대신한 연락/제출/
 결제, 유료 노출·소개 수수료·승소 예측·법률 전략·완성 제출 문서 생성은 포함하지 않는다.

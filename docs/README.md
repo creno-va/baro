@@ -11,10 +11,14 @@
 
 ## 읽는 순서
 
+2026-10-06 최신 MVP 실행은 [동일 client/API mock 계약](./development/CLIENT-API-CONTRACT.md),
+[5세션 실행·시작 프롬프트](./development/PARALLEL-UI-SPRINT.md), [ADR-0014](./adr/0014-mvp-two-roles-and-api-mock-first.md)를 먼저 읽는다.
+고객/변호사 두 역할이며 승인 어드민은 제외한다. 기존 backend/증거와 외부 공개 gate는 보존한다.
+
 1. [PRD](./PRD.md): 핵심가치·대상·제품경계·한도·완료기준
 2. [MVP](./product/MVP-SPEC.md), [UX](./product/UX-SPEC.md), [로드맵](./product/ROADMAP.md)
 3. [실제 UI 시연 행렬](./product/UI-DEMONSTRATION.md): 기능/실패/역할별필수증거
-4. [ADR](./adr/README.md): 0001~0005 유지경계와 0006~0013 v2 부분대체
+4. [ADR](./adr/README.md): 0001~0005 유지경계, 0006~0013 v2 목표, 0014 MVP 부분 대체
 5. [시스템](./architecture/SYSTEM.md), [데이터](./architecture/DATA-MODEL.md), [API](./architecture/HTTP-API.md)
 6. [실행계약](./architecture/DOMAIN-LIFECYCLE.md), [AI](./architecture/AI-PIPELINE.md), [공식자료](./architecture/LEGAL-RETRIEVAL.md)
 7. [보안](./security/SECURITY-PRIVACY.md), [인증수명](./security/AUTH-LIFECYCLE.md), [테스트](./quality/TEST-STRATEGY.md)

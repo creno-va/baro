@@ -1,7 +1,8 @@
 # BARO v2 전체 개발 실행 계획
+> **2026-10-06 사용자 개정 — 아래 이전 범위보다 우선한다.** MVP는 고객/변호사 두 역할이며 통합 로그인에서 선택한다. 변호사 승인 어드민·자격 심사·반려·승인대기 UX는 제외한다. 실제 제품 client UI 동일 구현체를 API mock adapter로 먼저 완성하고 기능 연결을 병렬 진행한다. 별도 /mock UI는 만들지 않는다. [5세션 계획](./PARALLEL-UI-SPRINT.md)의 실제 착수부터 2시간 sprint를 적용하며 독립 UI는 DB/AI/OAuth/backend CI/A 이슈 종료를 기다리지 않는다. 완료된 코드/이슈/증거를 보존하고 새 DB/비용 선행 이슈를 추가하지 않는다. AI 품질 확대는 모든 UX 연결 뒤다. P0.3/#70/#71 외부·정책·production·공개 gate는 보존하며 mock 성공을 실제 외부 성공으로 표시하지 않는다. [ADR-0014](../adr/0014-mvp-two-roles-and-api-mock-first.md)가 대체 범위를 기록한다.
 
 - Reviewed: 2026-10-06
-- GitHub milestone: [BARO v2 — Full service delivery](https://github.com/creno-va/baro/milestone/5)
+- GitHub milestone: [BARO MVP — Customer/lawyer functional UX](https://github.com/creno-va/baro/milestone/5)
 - 정본: 개정 PRD, Accepted ADR, [작업 그래프](./work-items.json), 실제 GitHub 이슈/PR
 
 ## 선행 작업과 현재 상태
@@ -33,7 +34,9 @@ v2에 맞추지 않는다. additive 계약과 migration을 단일 DB 소유자�
 
 ## 실행 순서와 소유권
 
-2026-10-06 후속 지시: MVP 전체 범위를 유지하며 #64~#69 제품 연결을 계속한다.
+2026-10-06 최신 지시: 고객/변호사 UX를 우선하고 승인 어드민을 MVP에서 제외한다.
+#101~#106은 [동결 client 계약](./CLIENT-API-CONTRACT.md)과 [5세션 계획](./PARALLEL-UI-SPRINT.md)의
+독립 API mock UI 범위이며 실제 5세션 착수부터 2시간 목표다. 기능 연결은 동일 client에서 병렬 진행한다.
 #59/#60 구현은 PR89 (head `51e912fa93e9db2bcbc6b80ec2bca386fa47f1ed`)의
 성공한 CI 후 main `e6bc711c9f55ee53f1b5d5efa489117ee4e8f60a`에 병합됐다.
 해당 이슈의 실제 Container·모델·R2·비용 검증은 #71과 함께 OPEN으로 남기되
@@ -61,18 +64,24 @@ v2에 맞추지 않는다. additive 계약과 migration을 단일 DB 소유자�
 | #57 | quota·월 예산·비용 ledger | #55 | 동시 예약/KST/중복/실패/실제 비용 정산 |
 | #58 | private/public R2·자료 admission | #55/#57 | 크기/수량/소유권/동의/streaming/cleanup |
 | #59 | Containers·Whisper·멀티모달 처리 | #58/#57 | 실제 처리 상태·coverage·취소/재시도/삭제, live는 #71 |
-| #60 | 역할·변호사 자격·프로필 API | #55/#58 | 수동 자격 확인·모든 공개 revision 승인·권한 |
+| #60 | 기존 역할·변호사 자격·프로필 API 보존 | #55/#58 | PR89 병합 구현 보존, MVP self-service 연결 #102/#62 |
 | #61 | 디렉터리·객관적 필터·직접 연락 | #56/#60/#59 | 승인본만 탐색·실제 부족 상태·외부 연락/길찾기 |
-| #62 | 변호사·운영자 portal | #56/#60/#59 | 반려/재신청/승인/공개·사건 원문 접근 금지 |
+| #62 | 변호사 자기 프로필 실제 기능 | #56/#60/#102/#106 | 자기 저장/미리보기/재접속·소유권; admin 제외 |
 | #63 | 공식 법령·판례·기관 안내 | #54/#55 | source별 schema/date/hash/claim 검증, live는 #71 |
 | #64 | 적응형 intake·확인·chat·행동 | #55/#59/#63/#57 | revision/재접속/근거·사실 경계·비용·지속 관리 |
-| #65 | dashboard·workspace·자료 UI | #56/#58/#59/#64 | 초기 입력부터 지속 사용까지 실제 브라우저 시연 |
-| #66 | PDF·선택 원본 ZIP | #59/#64/#65 | 다운로드한 한글 PDF 렌더/내용과 ZIP 원본 확인 |
+| #65 | 고객 사건 실제 기능 연결 | #56/#58/#59/#64/#103/#104 | UI는 B/C, 같은 client 저장/재개/자료·실제 흐름 |
+| #66 | 실제 PDF·선택 원본 ZIP API 연결 | #59/#64/#65/#105 | UI는 D, 다운로드한 한글 PDF 렌더/내용과 ZIP 원본 확인 |
 | #67 | 확장 삭제·복구 후 재삭제 | #60/#58/#64/#66 | 늦은 처리 부활 방지·opaque journal·실제 drill #71 |
 | #68 | 공개 콘텐츠·정책 초안·동의 | #53/#60/#59/#63/#66 | 실제 처리 경로와 Draft/게시/동의 버전 정합 |
-| #69 | 전 기능 E2E·보안·UI 증거 | #61/#62/#65/#66/#67/#68 | 전 역할·실패·모바일·키보드·200%·CSP 시연 |
+| #69 | 고객/변호사 기능 E2E·보안·UI 증거 | #61/#62/#65/#66/#67/#68 | 두 역할·저장/권한/실패·모바일·키보드·CSP; AI 품질 확대 후순위 |
 | #70 | 법률·사업자·정책 게시 승인 | #68 | 책임 있는 사람의 검토/사실/승인 증거 |
-| #71 | live·drill·배포·공개 완료 | #59/#63/#67/#69/#70/#19/#20/#27 | 같은 SHA의 실제 연동·전 역할 UI·preview/production·공개 승인 |
+| #71 | live·drill·배포·공개 gate | #59/#63/#67/#69/#70/#19/#20/#27 | 같은 SHA의 실제 연동·두 역할 UI·preview/production·공개 승인 |
+| #101 | 전체 API mock UX 추적 | #102~#106 | 실제 client 동일 UI, 5세션 착수부터 2시간 |
+| #102 | A facade·mock/real adapter·역할 로그인·shell | 독립 | 첫 20분 최소 계약/adapter/shell PR, 통합·preview |
+| #103 | B dashboard·intake·요약 | 독립 | 동결 계약으로 scaffold, mock 뒤 #65 기능 연결 |
+| #104 | C workspace·chat·자료·timeline·actions | 독립 | D report route 링크, mock 뒤 #65 기능 연결 |
+| #105 | D report·설정·사용량·삭제·help/policy | 독립 | mock UX 뒤 #66/#67/#68 실제 기능 |
+| #106 | E 자기 lawyer portal·기존 directory | 독립 | 승인대기/admin 없음, mock 뒤 #62 기능 |
 
 #55가 공유 schema와 migration 번호를 소유한다. 다른 이슈는 schema 변경 요청을 먼저 통합한다.
 여러 작업자는 별도 checkout/worktree를 사용하고 같은 파일의 동시 수정을 피한다.
@@ -106,7 +115,8 @@ production OAuth를 preview/local로 복제하지 않는다.
 [V2 검증 기록](./V2-VALIDATION.md)은 요구사항별 evidence ledger다. 성공에는 candidate SHA,
 수행 환경, 실제 결과, 신뢰 가능한 run/receipt 또는 안전한 화면 증거가 필요하다. 기존 P0.3의
 foundation·50개 개인 대여 합성 평가를 v2 전체 범위 완료 증거로 재사용하지 않는다.
-milestone 5와 Goal은 기능·실제 시연·외부 연동·운영·배포·공개 조건이 모두 충족될 때만 완료한다.
+milestone 6의 API mock UX와 milestone 5의 기능 연결, #70/#71 외부·공개 gate를 구분한다.
+기존 Goal은 재생성하지 않는다. mock 증거는 실제 저장/외부/공개 증거를 대신하지 않는다.
 
 막힌 조건은 이슈와 readiness 문서에 담당자·필드·필요 행동·마지막 결과로 기록한다.
 독립 ready 작업을 계속하며 외부 blocker를 해소한 것으로 간주해 DAG를 우회하지 않는다.

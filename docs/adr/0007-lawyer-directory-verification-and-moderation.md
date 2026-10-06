@@ -6,6 +6,8 @@
 - Decision scope: User-approved v2 target; implementation, live capability and public approval remain unverified
 - Partial supersession: ADR-0001의 AI 사실/법률 경계와 ADR-0003의 소유권을 유지하고 새 공개 프로필·moderator 역할만 추가한다.
 
+> MVP amendment 2026-10-06: [ADR-0014](./0014-mvp-two-roles-and-api-mock-first.md)가 수동 자격 확인·공개 편집 심사·moderator UI 요구를 이번 MVP에서 제외한다. 아래 결정과 기존 구현은 역사로 보존하며 실제 공개/법률 승인을 의미하지 않는다.
+
 ## 맥락
 
 핵심 가치는 사용자가 변호사를 직접 탐색하고 연락하는 것이다. AI가 사건 기반 적합도 순위를 만들거나 미승인 자료를 게시하면 선택·광고·개인정보 경계가 바뀐다.
