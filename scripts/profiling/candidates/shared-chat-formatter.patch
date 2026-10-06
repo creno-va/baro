@@ -1,0 +1,31 @@
+diff --git a/src/components/workspace/Workspace.tsx b/src/components/workspace/Workspace.tsx
+index eac139a..ab2282b 100644
+--- a/src/components/workspace/Workspace.tsx
++++ b/src/components/workspace/Workspace.tsx
+@@ -18,6 +18,14 @@ import type { FileView, TimelineView, WorkspaceView } from "../../client/api/typ
+ import { CaseDetail } from "../analysis/CaseDetail";
+ import { Button, ButtonLink } from "../ui/button";
+ 
++const chatClock = new Intl.DateTimeFormat("ko-KR", { hour: "2-digit", minute: "2-digit" });
++function messageTime(createdAt: string) {
++  const date = new Date(createdAt);
++  return Number.isNaN(date.getTime())
++    ? date.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })
++    : chatClock.format(date);
++}
++
+ export type WorkspaceTab = "chat" | "files" | "timeline" | "actions";
+ const tabs = [
+   { id: "chat", label: "대화", icon: MessageSquare, path: "" },
+@@ -354,10 +362,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
+                         <div className="workspace-message-label">
+                           {message.role === "user" ? "나" : "BARO · AI 정리"}
+                           <time dateTime={message.createdAt}>
+-                            {new Date(message.createdAt).toLocaleTimeString("ko-KR", {
+-                              hour: "2-digit",
+-                              minute: "2-digit",
+-                            })}
++                            {messageTime(message.createdAt)}
+                           </time>
+                         </div>
+                         <p>{message.text}</p>
