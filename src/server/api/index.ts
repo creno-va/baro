@@ -14,6 +14,7 @@ import { healthApi } from "./health";
 import { meApi } from "./me";
 import { requestBodyLimit } from "./request-body-limit";
 import { retryApi } from "./retry";
+import { createDirectoryApi } from "./v2/directory";
 import { createFilesApi } from "./v2/files";
 import { createLawyersApi } from "./v2/lawyers";
 import { createModerationApi } from "./v2/moderation";
@@ -55,6 +56,7 @@ export const api = new Hono<ApiEnvironment>()
   .use("*", requestBodyLimit)
   .all("/auth/*", async (context) => getAuth(context.env).handler(context.req.raw))
   .route("/health", healthApi)
+  .route("/v2/lawyers", createDirectoryApi())
   .route("/v2/me", usageApi)
   .route(
     "/v2/me",

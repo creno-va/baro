@@ -6,7 +6,13 @@ import { defineConfig } from "astro/config";
 
 export default defineConfig({
   output: "server",
-  adapter: cloudflare({ imageService: "passthrough", remoteBindings: false }),
+  adapter: cloudflare({
+    imageService: "passthrough",
+    remoteBindings: false,
+    // Browser tests use intercepted synthetic APIs and never execute native/AI work.
+    // Actual native codecs remain mandatory in the independent Linux CI job.
+    ...(process.env.BARO_UI_TEST_FIXTURE === "true" ? { configPath: "./wrangler.ui.jsonc" } : {}),
+  }),
   integrations: [
     react(),
     ...(process.env.BARO_UI_TEST_FIXTURE === "true"

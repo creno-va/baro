@@ -1,4 +1,43 @@
 import { expect, test } from "@playwright/test";
+import { publicLawyer } from "../fixtures/contracts/v2";
+
+test("built public directory and detail hydrate under hash CSP with no case data in map links", async ({
+  page,
+}) => {
+  const violations: string[] = [];
+  page.on("console", (entry) => {
+    if (entry.type() === "error" && entry.text().includes("Content Security Policy"))
+      violations.push(entry.text());
+  });
+  await page.route("**/api/v2/lawyers**", (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (path.includes("/assets/")) return route.fulfill({ status: 404, body: "" });
+    return route.fulfill({
+      json:
+        path === "/api/v2/lawyers"
+          ? {
+              schemaVersion: "2",
+              snapshotId: "synthetic-csp-directory",
+              rotation: "disclosed_rotation",
+              expiresAt: "2026-10-06T00:05:00Z",
+              items: [publicLawyer],
+              nextCursor: null,
+            }
+          : publicLawyer,
+    });
+  });
+  const response = await page.goto("/lawyers");
+  expect(response?.headers()["content-security-policy"]).toContain("sha256-");
+  await expect(page.getByRole("link", { name: "프로필과 연락처 보기" })).toBeVisible();
+  await page.getByRole("link", { name: "프로필과 연락처 보기" }).press("Enter");
+  await expect(
+    page.getByRole("heading", { name: publicLawyer.content.name, exact: true }),
+  ).toBeVisible();
+  expect(await page.getByRole("link", { name: "Google 길찾기" }).getAttribute("href")).not.toMatch(
+    /caseId|token|narrative/,
+  );
+  expect(violations).toEqual([]);
+});
 
 test.use({ launchOptions: { ignoreDefaultArgs: ["--hide-scrollbars"] } });
 

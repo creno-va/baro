@@ -107,6 +107,13 @@ reviewedAt은 null, 모든 external check는 false다. P0.3 milestone과 Epic #6
 
 ## 표준 검증
 
+2026-10-06 사용자 지시로 개발 중 검증은 변경 기능의 동작·권한·저장 테스트와 타입·빌드로
+제한한다. 공유 CI 변경도 명시적으로 승인받았다. 매 PR마다 기존 사례 corpus, 법률 적합성
+재평가, 전체 회귀 및 대용량 fixture를 반복하지 않는다. CI는 변경한 테스트와 기능별 테스트만
+선택하며 native 처리기와 schema 검증은 해당 파일 변경 때만 실행한다. 전체 검증은
+`Full validation (manual)` workflow에 보존한다. 아래 전체 명령을 개발 선행 조건으로
+반복하지 않는다. 외부 공개 승인 상태는 보존한다.
+
 ```bash
 bun ci
 bun run check

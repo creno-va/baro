@@ -15,7 +15,7 @@ const { title } = Astro.props;
 const environment =
   env.APP_ENV === "production" ? "production" : env.APP_ENV === "preview" ? "preview" : "local";
 ---
-<AppLayout title={`${title} · BARO`} description="대한민국 개인 간 금전 대여 상황 정리" role="user" availableRoutes={["/cases", "/settings"]} contentClass="case-shell">
+<AppLayout title={`${title} · BARO`} description="대한민국 개인 간 금전 대여 상황 정리" role="user" availableRoutes={["/cases", "/lawyers", "/settings"]} contentClass="case-shell">
     <slot />
     <div class="case-utilities"><AnalyticsChoice environment={environment} release={env.RELEASE_SHA} client:load /></div>
     <aside class="case-notice">BARO는 법률 자문을 제공하지 않습니다. AI 결과와 중요한 결정·기한은 공식 원문 또는 자격 있는 전문가를 통해 확인해 주세요.</aside>

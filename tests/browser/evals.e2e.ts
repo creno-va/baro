@@ -63,6 +63,9 @@ test("all 50 pipeline fixtures render actual owner-scoped details with zero auto
     };
     const reports = [];
     for (const entry of metadata.cases) {
+      // End the previous owner's polling before replacing its session cookie.
+      // Otherwise its 401 redirect can abort the next owner's navigation.
+      await page.goto("about:blank");
       await context.clearCookies();
       await context.addCookies([entry.cookie]);
       await page.setViewportSize({ width: 320, height: 800 });

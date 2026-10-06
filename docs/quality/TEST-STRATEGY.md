@@ -178,6 +178,12 @@ gutter와 세로 스크롤을 예약해 320px viewport 안의 실제 305px 너�
 full-page screenshot이 viewport 높이를 임시 변경하기 전에 수행한다. 메뉴 Enter/Escape·
 focus 복원·200% layout과 정상 built Worker의 CSP 위반 없음도 함께 검증한다.
 
+`BARO_UI_TEST_FIXTURE=true`의 Astro dev는 `wrangler.ui.jsonc`의 로컬 D1만 사용한다.
+Windows에서 지원하지 않는 로컬 Containers와 외부 AI binding을 UI 대역 검사에서 실행하지
+않는다. 브라우저 fixture는 요청을 명시적으로 가로채며 실제 provider나 production fallback이
+아니다. 정상 build는 기존 `wrangler.jsonc`와 Container binding을 유지하고 Linux CI의 native
+미디어 및 built Worker CSP 검사를 그대로 통과해야 한다.
+
 공유 UI fixture의 버튼은 React hydration 전에 SSR로 보일 수 있다. 브라우저 검사는 fixture
 화면을 확인하고 `astro-island[ssr]`가 사라진 뒤 첫 상호작용을 수행한다. 임의 sleep이나
 실패 재시도로 첫 클릭 경합을 숨기지 않으며 모달·중첩 unmount·포커스·탭 assertion은 유지한다.

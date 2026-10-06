@@ -14,6 +14,7 @@ const workflowSchema = z.object({
 test("all workflow actions use immutable commits and valid YAML", async () => {
   for (const file of [
     "ci.yml",
+    "full-validation.yml",
     "deploy-preview.yml",
     "deploy-production.yml",
     "environment-readiness.yml",
@@ -52,7 +53,7 @@ test("readiness is manual, main-only and cannot create deployment evidence", asy
   ).toBe(true);
 });
 
-test("quality CI checks out exact candidate and uses dedicated artifact SHA rather than reserved GITHUB_SHA", async () => {
+test("development CI checks the exact candidate and changed features without a case corpus loop", async () => {
   const ci = Bun.YAML.parse(await Bun.file(".github/workflows/ci.yml").text()) as {
     jobs: {
       quality: {
@@ -69,16 +70,20 @@ test("quality CI checks out exact candidate and uses dedicated artifact SHA rath
   expect(steps.find((s) => s.name === "Checkout")?.with?.ref).toBe(
     "${{ github.event.pull_request.head.sha || github.sha }}",
   );
-  for (const name of [
-    "AI change detection and deterministic product eval",
-    "Synthetic browser keyboard and error flows",
-  ]) {
+  for (const name of ["Changed feature tests", "Changed feature browser flows"]) {
     const step = steps.find((s) => s.name === name);
-    expect(step?.env?.EVAL_CANDIDATE_SHA).toBe(
+    expect(step?.env?.CHECK_CANDIDATE_SHA).toBe(
       "${{ github.event.pull_request.head.sha || github.sha }}",
     );
     expect(step?.env?.GITHUB_SHA).toBeUndefined();
   }
+  expect(steps.some((s) => s.run?.includes("eval:offline"))).toBe(false);
+  expect(steps.some((s) => s.run?.includes("bun run test:ui"))).toBe(false);
+  expect(steps.some((s) => s.run === "bun run test")).toBe(false);
+  const manual = Bun.YAML.parse(await Bun.file(".github/workflows/full-validation.yml").text()) as {
+    on: Record<string, unknown>;
+  };
+  expect(Object.keys(manual.on)).toEqual(["workflow_dispatch"]);
 });
 
 test("CD builds before migration and production verifies immutable preview evidence", async () => {
