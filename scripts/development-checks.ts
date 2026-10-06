@@ -18,6 +18,8 @@ export function validationScope(files: string[]) {
 /** HTTP browser flows require an explicit route map. Shared UI affects all non-corpus flows. */
 export function browserTargets(files: string[], available: string[]): string[] {
   const selected = new Set(files.filter((file) => /^tests\/browser\/.*\.e2e\.ts$/.test(file)));
+  if (files.some((file) => /^scripts\/(development-checks|full-browser)\.ts$/.test(file)))
+    for (const path of available) selected.add(path);
   const rules: [RegExp, RegExp][] = [
     [
       /src\/(layouts\/|styles\/(global|shell)|server\/router\.|components\/ui\/|client\/api\/(core|types|index|mock\/runtime))/,
@@ -104,54 +106,27 @@ export async function unitTargets(files: string[], tests: string[]): Promise<str
   return [...new Set(selected)].sort();
 }
 
-async function main() {
-  const mode = process.argv[2];
-  if (!["unit", "browser", "scope"].includes(mode ?? "")) throw new Error("Unknown check mode");
-  const candidate = process.env.CHECK_CANDIDATE_SHA ?? "HEAD";
-  const suppliedBase = process.env.CHECK_BASE_SHA;
-  const base = suppliedBase && !/^0+$/.test(suppliedBase) ? suppliedBase : `${candidate}^`;
-  const diff = Bun.spawnSync([
-    "git",
-    "diff",
-    "--name-only",
-    "--diff-filter=ACMRD",
-    base,
-    candidate,
-  ]);
-  if (diff.exitCode !== 0) throw new Error("Cannot determine development check scope");
-  const files = diff.stdout.toString().trim().split("\n").filter(Boolean);
-  if (mode === "scope") {
-    const output = process.env.GITHUB_OUTPUT;
-    if (!output) throw new Error("GITHUB_OUTPUT is missing");
-    const scope = validationScope(files);
-    await Bun.write(
-      output,
-      `${await Bun.file(output).text()}native=${scope.native}\ndatabase=${scope.database}\n`,
-    );
-    return;
-  }
-  const tests = [
-    ...new Bun.Glob(
-      mode === "unit" ? "{tests,scripts,src}/**/*.test.ts" : "tests/browser/*.e2e.ts",
-    ).scanSync("."),
-  ];
-  const targets = mode === "unit" ? await unitTargets(files, tests) : browserTargets(files, tests);
-  if (targets.some((path) => !existsSync(path))) throw new Error("SELECTED_TEST_MISSING");
-  console.log(`${mode}: ${targets.length ? targets.join(", ") : "no affected feature tests"}`);
-  const mockTargets =
-    mode === "browser"
-      ? targets.filter((path) =>
-          /\/(shell-integration|lawyer-api-mock|intake103|conversation-home|workspace-shared|workspace|reports-integrated)\.e2e\.ts$/.test(
-            path,
-          ),
-        )
-      : [];
-  const regularTargets = targets.filter((path) => !mockTargets.includes(path));
+/** Run wire tests and each mock adapter configuration sequentially in one checkout. */
+export async function runBrowserTargets(targets: string[]) {
+  const mockTargets = targets.filter((path) =>
+    /\/(shell-integration|lawyer-api-mock|intake103|conversation-home|workspace-shared|workspace|reports-integrated)\.e2e\.ts$/.test(
+      path,
+    ),
+  );
+  const corpusTargets = targets.filter((path) => path.endsWith("/evals.e2e.ts"));
+  const regularTargets = targets.filter(
+    (path) => !mockTargets.includes(path) && !corpusTargets.includes(path),
+  );
   if (regularTargets.length) {
+    const child = Bun.spawn(["bunx", "playwright", "test", ...regularTargets], {
+      stdout: "inherit",
+      stderr: "inherit",
+    });
+    if (await child.exited) process.exit(1);
+  }
+  if (corpusTargets.length) {
     const child = Bun.spawn(
-      mode === "unit"
-        ? ["bun", "test", ...regularTargets]
-        : ["bunx", "playwright", "test", ...regularTargets],
+      ["bunx", "playwright", "test", "--config", "tests/browser/evals.config.ts", ...corpusTargets],
       { stdout: "inherit", stderr: "inherit" },
     );
     if (await child.exited) process.exit(1);
@@ -202,6 +177,50 @@ async function main() {
       });
       if (await child.exited) process.exit(1);
     }
+  }
+}
+
+async function main() {
+  const mode = process.argv[2];
+  if (!["unit", "browser", "scope"].includes(mode ?? "")) throw new Error("Unknown check mode");
+  const candidate = process.env.CHECK_CANDIDATE_SHA ?? "HEAD";
+  const suppliedBase = process.env.CHECK_BASE_SHA;
+  const base = suppliedBase && !/^0+$/.test(suppliedBase) ? suppliedBase : `${candidate}^`;
+  const diff = Bun.spawnSync([
+    "git",
+    "diff",
+    "--name-only",
+    "--diff-filter=ACMRD",
+    base,
+    candidate,
+  ]);
+  if (diff.exitCode !== 0) throw new Error("Cannot determine development check scope");
+  const files = diff.stdout.toString().trim().split("\n").filter(Boolean);
+  if (mode === "scope") {
+    const output = process.env.GITHUB_OUTPUT;
+    if (!output) throw new Error("GITHUB_OUTPUT is missing");
+    const scope = validationScope(files);
+    await Bun.write(
+      output,
+      `${await Bun.file(output).text()}native=${scope.native}\ndatabase=${scope.database}\n`,
+    );
+    return;
+  }
+  const tests = [
+    ...new Bun.Glob(
+      mode === "unit" ? "{tests,scripts,src}/**/*.test.ts" : "tests/browser/*.e2e.ts",
+    ).scanSync("."),
+  ];
+  const targets = mode === "unit" ? await unitTargets(files, tests) : browserTargets(files, tests);
+  if (targets.some((path) => !existsSync(path))) throw new Error("SELECTED_TEST_MISSING");
+  console.log(`${mode}: ${targets.length ? targets.join(", ") : "no affected feature tests"}`);
+  if (mode === "browser") await runBrowserTargets(targets);
+  else if (targets.length) {
+    const child = Bun.spawn(["bun", "test", ...targets], {
+      stdout: "inherit",
+      stderr: "inherit",
+    });
+    if (await child.exited) process.exit(1);
   }
 }
 

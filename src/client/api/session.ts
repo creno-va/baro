@@ -5,6 +5,15 @@ import type { AccountType, Provider, SessionView } from "./types";
 import "./mock/session";
 export const roleStart = (session: SessionView) =>
   session.needsConsent ? "/consent" : session.user?.accountType === "lawyer" ? "/lawyer" : "/";
+/** Non-sensitive invalidation only; never share a session, role or token across tabs. */
+export function notifySessionChanged() {
+  try {
+    localStorage.setItem("baro-session-changed", crypto.randomUUID());
+  } catch {
+    // Session operations remain usable when optional cross-tab storage is disabled.
+  }
+  window.dispatchEvent(new Event("baro-session-changed"));
+}
 export const sessionApi = {
   async get(): Promise<SessionView> {
     const session = await request<SessionView>("session.get", undefined, {
@@ -20,12 +29,17 @@ export const sessionApi = {
         );
         sessionStorage.removeItem("baro-account-type");
         session.user.accountType = selected;
+        notifySessionChanged();
       }
     }
     return session;
   },
   async signIn(provider: Provider, accountType: AccountType): Promise<SessionView | undefined> {
-    if (apiMode === "mock") return request("session.signIn", { provider, accountType });
+    if (apiMode === "mock") {
+      const session = await request<SessionView>("session.signIn", { provider, accountType });
+      notifySessionChanged();
+      return session;
+    }
     sessionStorage.setItem("baro-account-type", accountType);
     const result = await authClient.signIn
       .social({
@@ -47,13 +61,19 @@ export const sessionApi = {
       { path: "/api/me/consent" },
     ),
   async saveConsent(input: ConsentInput): Promise<SessionView> {
-    if (apiMode === "mock") return request("session.saveConsent", input);
+    if (apiMode === "mock") {
+      const session = await request<SessionView>("session.saveConsent", input);
+      notifySessionChanged();
+      return session;
+    }
     await request("session.saveConsent", input, {
       path: "/api/me/consent",
       method: "PUT",
       body: input,
     });
-    return sessionApi.get();
+    const session = await sessionApi.get();
+    notifySessionChanged();
+    return session;
   },
   async signOut() {
     if (apiMode === "mock") await request("session.signOut");
@@ -62,5 +82,6 @@ export const sessionApi = {
       if (result.error)
         throw new ApiError("UNAVAILABLE", "로그아웃하지 못했어요. 다시 시도해 주세요.", true);
     }
+    notifySessionChanged();
   },
 };

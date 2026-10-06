@@ -19,7 +19,7 @@ export default defineConfig({
           },
           command: "bun run dev -- --ignore-lock --host 127.0.0.1 --port 4340",
           url: "http://127.0.0.1:4340/login",
-          reuseExistingServer: !process.env.CI,
+          reuseExistingServer: false,
           timeout: 120000,
         },
       }),

@@ -105,6 +105,24 @@ export async function inspectPreview(
       aiBindingPresent: bindings?.success
         ? configured.some((b) => b.name === "AI" && b.type === "ai")
         : null,
+      environmentMatches: bindings?.success ? text("APP_ENV") === "preview" : null,
+      publicBetaClosed: bindings?.success ? text("PUBLIC_BETA_ENABLED") === "false" : null,
+      modelBoundsConfigured: bindings?.success
+        ? typeof text("AI_MODEL_TOKEN_BOUNDS_JSON") === "string" &&
+          String(text("AI_MODEL_TOKEN_BOUNDS_JSON")).trim().length > 0
+        : null,
+      processingBindings: [
+        { name: "CASE_PRIVATE_R2", type: "r2_bucket" },
+        { name: "PROFILE_PUBLIC_R2", type: "r2_bucket" },
+        { name: "FILE_PROCESSOR", type: "durable_object_namespace" },
+        { name: "FILE_PROCESSING", type: "workflow" },
+        { name: "WORKSPACE_PROCESSING", type: "workflow" },
+      ].map(({ name, type }) => ({
+        name,
+        present: bindings?.success
+          ? configured.some((b) => b.name === name && b.type === type)
+          : null,
+      })),
       secrets,
     },
     gateway: {
@@ -129,6 +147,8 @@ export async function inspectPreview(
       "oauth-callbacks",
       "turnstile-action-smoke",
       "gateway-budget-credit-provider-retention",
+      "durable-pricing-funding-allocation-billing",
+      "r2-container-whisper-product-smoke",
       "live-model-eval",
       "crypto-recovery-custody",
       "backup-restore",

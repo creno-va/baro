@@ -49,12 +49,19 @@ test("all 50 pipeline fixtures render actual owner-scoped details with zero auto
     });
     expect(metadata.cases).toHaveLength(50);
     await page.route("**/api/**", async (route) => {
+      // Vite imports under /src/client/api/ are assets, not server requests.
+      if (!new URL(route.request().url()).pathname.startsWith("/api/")) return route.continue();
       const response = await route.fetch({
         url: metadata.origin + new URL(route.request().url()).pathname,
         headers: await route.request().allHeaders(),
       });
       await route.fulfill({ response });
     });
+    // Preserve the signed v1 corpus through the product's legacy compatibility route.
+    // The v2 customer corpus is verified separately after its module integration.
+    await page.route("**/api/v2/cases/*/workspace", (route) =>
+      route.fulfill({ status: 404, json: { error: { code: "NOT_FOUND" } } }),
+    );
     const headings: Record<string, string> = {
       guidance: "상황 정리",
       needs_clarification: "확인이 필요한 내용",

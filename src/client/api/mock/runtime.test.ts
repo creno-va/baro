@@ -60,3 +60,22 @@ test("cached private mutation cannot resurrect a deleted case or deleted account
   );
   expect(calls).toBe(1);
 });
+
+test("same mock owner changing roles cannot replay private customer results", async () => {
+  writeStore("session", {
+    user: { id: "owner", name: "합성", accountType: "customer" },
+    needsConsent: false,
+  });
+  writeStore("caseOwners", { one: "owner" });
+  let calls = 0;
+  registerMockHandlers({ "reports.save": () => ({ id: "one", revision: ++calls }) });
+  await mockRequest("reports.save", { id: "one" }, "role-request");
+  writeStore("session", {
+    user: { id: "owner", name: "합성", accountType: "lawyer" },
+    needsConsent: false,
+  });
+  await expect(mockRequest("reports.save", { id: "one" }, "role-request")).rejects.toMatchObject({
+    code: "NOT_FOUND",
+  });
+  expect(calls).toBe(1);
+});

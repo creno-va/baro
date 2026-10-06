@@ -1,5 +1,5 @@
 import { type SyntheticEvent, useEffect, useRef, useState } from "react";
-import { api, roleStart } from "../client/api";
+import { api, apiMode, roleStart } from "../client/api";
 import { ApiError } from "../client/api/errors";
 import { CURRENT_POLICY_VERSIONS } from "../contracts/consent";
 
@@ -79,6 +79,7 @@ export function ConsentForm() {
   if (state === "complete") {
     return (
       <div className="consent-complete">
+        {apiMode === "mock" && <p className="case-muted">API 예시 모드 · 합성 동의 기록입니다.</p>}
         <p>필수 확인이 완료됐어요.</p>
         <a className="primary-action" href={startPath} ref={completedLink}>
           내 화면으로 계속하기
@@ -89,6 +90,7 @@ export function ConsentForm() {
 
   return (
     <form className="consent-form" onSubmit={submit} aria-busy={submitting}>
+      {apiMode === "mock" && <p className="case-muted">API 예시 모드 · 합성 동의 기록입니다.</p>}
       <label>
         <input
           checked={accepted}

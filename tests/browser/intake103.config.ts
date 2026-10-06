@@ -13,7 +13,7 @@ export default defineConfig({
     },
     command: "bun run dev -- --host 127.0.0.1 --port 4341 --ignore-lock",
     url: "http://127.0.0.1:4341/cases",
-    reuseExistingServer: true,
+    reuseExistingServer: false,
     timeout: 120000,
   },
 });

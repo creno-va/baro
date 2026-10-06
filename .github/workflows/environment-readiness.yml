@@ -2,6 +2,11 @@ name: Preview environment readiness
 
 on:
   workflow_dispatch:
+    inputs:
+      check_legal:
+        description: Recheck official legal API only after credential or approval changes
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -36,7 +41,7 @@ jobs:
           READINESS_CANDIDATE_SHA: ${{ github.sha }}
         run: bun scripts/environment-readiness.ts
       - name: Verify official legal adapter with synthetic concepts
-        if: always()
+        if: always() && inputs.check_legal
         env:
           LAW_API_OC: ${{ secrets.LAW_API_OC }}
           READINESS_CANDIDATE_SHA: ${{ github.sha }}

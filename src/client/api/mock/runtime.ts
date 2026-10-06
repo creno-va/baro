@@ -50,6 +50,11 @@ export async function mockRequest<T>(operation: string, input: unknown, key: str
       "이 기능을 연결하고 있어요. 잠시 뒤 다시 시도해 주세요.",
       true,
     );
+  if (/^(cases|workspace|files|reports)\./.test(operation)) {
+    const session = requireSession();
+    if (session.user?.accountType !== "customer")
+      throw new ApiError("NOT_FOUND", "고객 이용 유형으로 로그인해 주세요.");
+  }
   const identity = `${readStore<SessionView>("session", { user: null, needsConsent: false }).user?.id ?? "visitor"}:${operation}:${key}`;
   const cacheable =
     /\.(create|saveAnswers|saveSummary|confirmSummary|advance|sendMessage|retryMessage|setAction|saveTimeline|upload|retry|remove|save|generate|deleteCase|deleteAccount|saveMine|publishMine)$/.test(
