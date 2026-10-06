@@ -78,7 +78,7 @@ export function createSelfProfileService(core: V2Core, clock = () => new Date().
         scope: "photo/introduction/practice/office/contact/portfolio",
         acceptedAt: now,
       });
-      const assets = selfAssetClaim(ownerId, next);
+      const assets = selfAssetClaim(next);
       const claim = core.statement(
         `INSERT INTO v2_mutation_claims(id,owner_id,target_id,revision) SELECT ?,p.owner_id,p.id,? FROM v2_profiles p WHERE p.id=? AND p.owner_id=? AND ${alive} AND ${role} AND ${currentConsentSql} AND coalesce((SELECT max(revision) FROM v2_private_snapshots WHERE target_id=p.id AND purpose='profile_revision'),1)=?${assets.sql}`,
         [claimId, next.revision, next.id, ownerId, current.revision, ...assets.args],
@@ -136,6 +136,30 @@ export function createSelfProfileService(core: V2Core, clock = () => new Date().
         return current;
       if (current.revision !== expectedRevision) throw new LawyerError("STALE_REVISION");
       return service.saveMine(ownerId, current, published);
+    },
+    /** Stream fences use SQL metadata so each chunk does not decrypt every portfolio entry again. */
+    async isCurrent(
+      ownerId: string,
+      profile: SelfProfile,
+      publicOnly: boolean,
+      sessionId?: string,
+    ) {
+      if (!publicOnly) {
+        if (!sessionId) return false;
+        return !!(await core
+          .statement(
+            `SELECT p.id FROM v2_profiles p WHERE p.id=? AND p.owner_id=? AND ${alive} AND ${role} AND ${currentConsentSql} AND coalesce((SELECT max(revision) FROM v2_private_snapshots WHERE target_id=p.id AND purpose='profile_revision'),1)=? AND EXISTS(SELECT 1 FROM session WHERE id=? AND user_id=p.owner_id AND expires_at>?)`,
+            [profile.id, ownerId, profile.revision, sessionId, Date.parse(clock())],
+          )
+          .first());
+      }
+      const assets = selfAssetClaim(profile);
+      return !!(await core
+        .statement(
+          `${latest} AND c.version=? AND ${role} AND ${currentConsentSql} AND p.id=? AND p.owner_id=? AND s.revision=?${assets.sql}`,
+          [publicVersion, profile.id, ownerId, profile.revision, ...assets.args],
+        )
+        .first());
     },
     async get(id: string) {
       opaqueIdSchema.parse(id);

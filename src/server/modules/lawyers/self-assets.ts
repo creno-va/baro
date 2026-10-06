@@ -16,9 +16,11 @@ export function selfAssetReferences(profile: SelfProfile) {
     ),
   ];
 }
-const readyAsset = `SELECT a.revision,a.encrypted_payload,a.sanitized_blob_id,b.logical_bytes FROM v2_assets a
+const readyAsset = (
+  correlated = false,
+) => `SELECT a.revision,a.encrypted_payload,a.sanitized_blob_id,b.logical_bytes FROM v2_assets a
 JOIN v2_blobs b ON b.id=a.sanitized_blob_id JOIN v2_billing_principals principal ON principal.id=b.principal_id
-WHERE a.id=? AND a.owner_id=? AND a.profile_id=? AND a.purpose=? AND a.state='ready'
+WHERE a.id=? AND ${correlated ? "a.owner_id=p.owner_id AND a.profile_id=p.id" : "a.owner_id=? AND a.profile_id=?"} AND a.purpose=? AND a.state='ready'
 AND b.state='stored' AND b.visibility='staging' AND principal.owner_id=a.owner_id
 AND ((a.purpose='profile_photo' AND b.kind='profile_photo_sanitized') OR (a.purpose='portfolio' AND b.kind='portfolio_sanitized'))
 AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE (target_kind='asset' AND target_id=a.id) OR (target_kind='account' AND target_id=a.owner_id) OR (target_kind='profile' AND target_id=a.profile_id))`;
@@ -33,7 +35,7 @@ async function source(
     (a) => a.id === assetId && (!purpose || a.purpose === purpose),
   );
   if (!ref) throw new LawyerError("NOT_FOUND");
-  const row = await core.statement(readyAsset, [ref.id, ownerId, profile.id, ref.purpose]).first<{
+  const row = await core.statement(readyAsset(), [ref.id, ownerId, profile.id, ref.purpose]).first<{
     revision: number;
     encrypted_payload: string;
     sanitized_blob_id: string;
@@ -62,11 +64,11 @@ export async function requireSelfAssets(core: V2Core, ownerId: string, profile: 
     await source(core, ownerId, profile, ref.id, ref.purpose);
 }
 /** Final mutation CAS also checks ready pointers, closing deletion/processing races after decryption. */
-export function selfAssetClaim(ownerId: string, profile: SelfProfile) {
+export function selfAssetClaim(profile: SelfProfile) {
   const refs = selfAssetReferences(profile);
   return {
-    sql: refs.map(() => ` AND EXISTS(${readyAsset})`).join(""),
-    args: refs.flatMap((ref) => [ref.id, ownerId, profile.id, ref.purpose]),
+    sql: refs.map(() => ` AND EXISTS(${readyAsset(true)})`).join(""),
+    args: refs.flatMap((ref) => [ref.id, ref.purpose]),
   };
 }
 export function createSelfAssetReader(

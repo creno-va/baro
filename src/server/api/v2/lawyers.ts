@@ -1,15 +1,11 @@
-import { drizzle } from "drizzle-orm/d1";
 import { Hono } from "hono";
 import { z } from "zod";
 import { idempotencyKeySchema, opaqueIdSchema, revisionSchema } from "../../../contracts";
 import type { V2ErrorCode } from "../../../contracts/v2";
-import { getAuth } from "../../auth";
 import { readAccountType } from "../../auth/account-type";
 import { lawyerAccess } from "../../auth/roles";
 import { createCaseDataCipher } from "../../crypto";
-import * as schema from "../../db/schema";
 import { createV2Core, type V2Core } from "../../db/v2-core";
-import { hasCurrentConsent } from "../../modules/consent/service";
 import { AssetBinaryError } from "../../modules/lawyers/asset-binary";
 import { createLawyerAssetsService } from "../../modules/lawyers/assets";
 import type { OpenSanitizedAsset } from "../../modules/lawyers/sanitized";
@@ -145,15 +141,9 @@ export function createLawyersApi(
     });
     return selfAssetResponse(
       await read(a.ownerId, preview, assetId, async () => {
-        // Stream checks read auth without rewriting response headers after the body starts.
-        const access = await getAuth(c.env).api.getSession({ headers: c.req.raw.headers });
-        return (
-          access?.user.id === a.ownerId &&
-          access.session.id === a.sessionId &&
-          (await readAccountType(c.env.DB, a.ownerId)) === "lawyer" &&
-          (await hasCurrentConsent(drizzle(c.env.DB, { schema }), a.ownerId)) &&
-          (await service.getMine(a.ownerId)).revision === profile.revision
-        );
+        // Initial signed-cookie verification binds the session ID. Each chunk rechecks its
+        // expiry/revocation, role, consent and profile revision without sliding auth writes.
+        return service.isCurrent(a.ownerId, profile, false, a.sessionId);
       }),
     );
   });

@@ -167,27 +167,30 @@ export async function selfAssetFixture(
       );
     },
   });
-  const processing = createAssetProcessingService(
-    {
-      ...f.core,
-      encrypt: async (...args: Parameters<typeof f.core.encrypt>) => {
-        if (args[0] === "v2_assets" && args[3] === 3) options.beforeReady?.();
-        return f.core.encrypt(...args);
+  const processingFor = (currentJobId: string) =>
+    createAssetProcessingService(
+      {
+        ...f.core,
+        encrypt: async (...args: Parameters<typeof f.core.encrypt>) => {
+          if (args[0] === "v2_assets" && args[3] === 3) options.beforeReady?.();
+          return f.core.encrypt(...args);
+        },
       },
-    },
-    {
-      environment: "preview",
-      instanceId: `${jobId}-1`,
-      bucket,
-      processor,
-      costs,
-      clock,
-      fixedLength: fixed,
-      openOriginal: (input, authorized) => assets.openOriginal(input, authorized),
-    },
-  );
+      {
+        environment: "preview",
+        instanceId: `${currentJobId}-1`,
+        bucket,
+        processor,
+        costs,
+        clock,
+        fixedLength: fixed,
+        openOriginal: (input, authorized) => assets.openOriginal(input, authorized),
+      },
+    );
+  const processing = processingFor(jobId);
   return {
     ...f,
+    processingFor,
     bucketPort: bucket,
     lawyers,
     jobs,
@@ -196,6 +199,8 @@ export async function selfAssetFixture(
     processing,
     nativeCalls: () => nativeCalls,
     receipts,
+    original,
+    assets,
     output,
   };
 }

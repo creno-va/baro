@@ -157,3 +157,137 @@ test("ready asset owner/purpose and deletion/current consent gates protect self 
     .run(f.actor.ownerId);
   expect((await f.request()).status).toBe(404);
 });
+
+test("stream revision fences avoid snapshot decryption and support own uploads before the first save", async () => {
+  const f = await publishedFixture();
+  let decryptions = 0;
+  const sessionId = (
+    f.db.sqlite.query("SELECT id FROM session WHERE user_id=?").get(f.actor.ownerId) as {
+      id: string;
+    }
+  ).id;
+  const service = createSelfProfileService(
+    {
+      ...f.core,
+      decrypt: async (...args: Parameters<typeof f.core.decrypt>) => {
+        decryptions++;
+        return f.core.decrypt(...args);
+      },
+    },
+    () => f.actor.now,
+  );
+  expect(await service.isCurrent(f.actor.ownerId, f.profile, true)).toBe(true);
+  expect(await service.isCurrent(f.actor.ownerId, f.profile, false)).toBe(false);
+  expect(await service.isCurrent(f.actor.ownerId, f.profile, false, sessionId)).toBe(true);
+  f.db.sqlite
+    .query("UPDATE session SET expires_at=? WHERE id=?")
+    .run(Date.parse(f.actor.now), sessionId);
+  expect(await service.isCurrent(f.actor.ownerId, f.profile, false, sessionId)).toBe(false);
+  f.db.sqlite
+    .query("UPDATE session SET expires_at=? WHERE id=?")
+    .run(Date.parse(f.actor.now) + 3600000, sessionId);
+  await saveAccountType(f.db.binding, f.actor.ownerId, "customer");
+  expect(await service.isCurrent(f.actor.ownerId, f.profile, false, sessionId)).toBe(false);
+  await saveAccountType(f.db.binding, f.actor.ownerId, "lawyer");
+  expect(decryptions).toBe(0);
+  await f.service.publishMine(f.actor.ownerId, false, f.profile.revision, f.profile.id);
+  expect(await service.isCurrent(f.actor.ownerId, f.profile, true)).toBe(false);
+  expect(await service.isCurrent(f.actor.ownerId, f.profile, false, sessionId)).toBe(false);
+  const fresh = await selfAssetFixture();
+  await saveAccountType(fresh.db.binding, fresh.actor.ownerId, "lawyer");
+  const freshSession = (
+    fresh.db.sqlite.query("SELECT id FROM session WHERE user_id=?").get(fresh.actor.ownerId) as {
+      id: string;
+    }
+  ).id;
+  const freshService = createSelfProfileService(fresh.core, () => fresh.actor.now);
+  const blank = await freshService.getMine(fresh.actor.ownerId);
+  expect(await freshService.isCurrent(fresh.actor.ownerId, blank, false, freshSession)).toBe(true);
+  expect(await freshService.isCurrent(fresh.actor.ownerId, blank, true)).toBe(false);
+});
+
+test("photo plus all 30 portfolio assets save/publish within D1's 100 bound parameters", async () => {
+  const f = await selfAssetFixture();
+  await saveAccountType(f.db.binding, f.actor.ownerId, "lawyer");
+  expect(
+    await f.processing.sanitize(f.params, f.lease, new AbortController().signal),
+  ).toMatchObject({ status: "ready" });
+  const refs: { id: string; title: string; assetId: string; url: string }[] = [];
+  for (let index = 0; index < 30; index++) {
+    const reserved = await f.assets.reserve(
+      f.actor.ownerId,
+      1,
+      crypto.randomUUID(),
+      {
+        purpose: "portfolio",
+        name: "synthetic.png",
+        byteLength: f.original.length,
+        mediaType: "image/png",
+      },
+      "portfolio",
+    );
+    await f.assets.upload(
+      f.actor.ownerId,
+      reserved.assetId,
+      1,
+      f.original.length,
+      new Response(f.original).body,
+    );
+    const jobId = crypto.randomUUID();
+    expect(
+      await f.jobs.admitAsset(f.actor, { assetId: reserved.assetId, assetRevision: 2, jobId }),
+    ).toBe(true);
+    const granted = await f.jobs.acquire(
+      f.actor,
+      jobId,
+      crypto.randomUUID(),
+      new Date(Date.parse(f.actor.now) + 300000).toISOString(),
+    );
+    if (!granted) throw new Error("synthetic lease missing");
+    expect(
+      await f
+        .processingFor(jobId)
+        .sanitize(
+          { ...f.params, assetId: reserved.assetId, jobId },
+          granted.lease,
+          new AbortController().signal,
+        ),
+    ).toMatchObject({ status: "ready" });
+    refs.push({
+      id: `activity-${index}`,
+      title: `합성 자료 ${index}`,
+      assetId: reserved.assetId,
+      url: selfAssetUrl(f.params.profileId, reserved.assetId),
+    });
+  }
+  let maximum = 0;
+  const service = createSelfProfileService(
+    {
+      ...f.core,
+      statement(sql, args = []) {
+        maximum = Math.max(maximum, args.length);
+        expect(args.length).toBeLessThanOrEqual(100);
+        return f.core.statement(sql, args);
+      },
+    },
+    () => f.actor.now,
+  );
+  const blank = await service.getMine(f.actor.ownerId);
+  const saved = await service.saveMine(f.actor.ownerId, {
+    ...blank,
+    name: "합성",
+    introduction: "합성 소개",
+    officeName: "합성 사무실",
+    address: "서울 합성로 1",
+    region: "seoul",
+    practiceAreas: ["civil"],
+    email: "synthetic@example.invalid",
+    photoAssetId: f.params.assetId,
+    photoUrl: selfAssetUrl(blank.id, f.params.assetId),
+    portfolio: refs,
+  });
+  const profile = await service.publishMine(f.actor.ownerId, true, saved.revision, saved.id);
+  expect((await service.getMine(f.actor.ownerId)).portfolio).toHaveLength(30);
+  expect(await service.isCurrent(f.actor.ownerId, profile, true)).toBe(true);
+  expect(maximum).toBe(67);
+});

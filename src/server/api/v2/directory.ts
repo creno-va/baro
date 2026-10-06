@@ -79,7 +79,7 @@ export function createDirectoryApi(
     return selfAssetResponse(
       await read(ownerId, profile, c.req.param("assetId"), async () => {
         try {
-          return (await service.get(profile.id)).revision === profile.revision;
+          return service.isCurrent(ownerId, profile, true);
         } catch {
           return false;
         }
