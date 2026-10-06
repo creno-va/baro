@@ -1,0 +1,341 @@
+import { z } from "zod";
+import { caseDetailResponseSchema, opaqueIdSchema } from "../../contracts";
+import {
+  v2AcceptedOperationSchema,
+  v2ActionSchema,
+  v2JobSchema,
+  v2MessageSchema,
+  v2SummarySchema,
+  v2TimelineEntrySchema,
+  v2WorkspaceSchema,
+} from "../../contracts/v2";
+import { createFilesApi } from "./files";
+import type { ActionView, CaseView, MessageView, TimelineView, WorkspaceView } from "./types";
+
+/** Shared transport returns a Response for both mock and same-origin real requests. */
+export type WorkspaceTransport = (path: string, init?: RequestInit) => Promise<Response>;
+export function workspaceError(code: string, message: string, retryable = false) {
+  return Object.assign(new Error(message), { code, retryable });
+}
+export async function workspaceResponse(response: Response) {
+  if (!response.ok) {
+    const value = (await response.json().catch(() => null)) as {
+      error?: { code?: string; retryable?: boolean };
+    } | null;
+    const wireCode = value?.error?.code;
+    const code =
+      response.status === 401
+        ? "UNAUTHENTICATED"
+        : wireCode === "CONSENT_REQUIRED"
+          ? "CONSENT_REQUIRED"
+          : response.status === 404
+            ? "NOT_FOUND"
+            : response.status === 409
+              ? "CONFLICT"
+              : response.status === 429
+                ? "QUOTA_EXCEEDED"
+                : response.status === 400 || response.status === 413
+                  ? "VALIDATION_ERROR"
+                  : "UNAVAILABLE";
+    const messages: Record<string, string> = {
+      UNAUTHENTICATED: "로그인한 뒤 사건을 이어서 확인해 주세요.",
+      CONSENT_REQUIRED: "최신 동의 내용을 확인해 주세요.",
+      NOT_FOUND: "사건 또는 자료를 찾을 수 없어요.",
+      CONFLICT: "다른 화면에서 내용이 바뀌었어요. 최신 내용을 확인해 주세요.",
+      QUOTA_EXCEEDED: "사용 한도에 도달했어요. 저장된 내용은 보존됩니다.",
+      VALIDATION_ERROR: "입력 또는 파일 형식·크기를 확인해 주세요.",
+      UNAVAILABLE: "지금 요청을 처리할 수 없어요. 잠시 후 다시 시도해 주세요.",
+    };
+    throw workspaceError(
+      code,
+      messages[code] ?? "지금 요청을 처리할 수 없어요. 잠시 후 다시 시도해 주세요.",
+      value?.error?.retryable === true || response.status >= 500,
+    );
+  }
+  return response;
+}
+export async function workspaceJson(
+  request: WorkspaceTransport,
+  path: string,
+  init?: RequestInit,
+): Promise<unknown> {
+  const response = await workspaceResponse(await request(path, init));
+  const key = new Headers(init?.headers).get("idempotency-key");
+  if (key)
+    for (const [signature, value] of signatures) if (value === key) signatures.delete(signature);
+  return response.json();
+}
+const signatures = new Map<string, string>();
+export function workspaceMutation(path: string, body: unknown, method = "POST"): RequestInit {
+  const signature = JSON.stringify({ path, body, method });
+  const key = signatures.get(signature) ?? crypto.randomUUID();
+  signatures.set(signature, key);
+  if (signatures.size > 100) signatures.delete(signatures.keys().next().value ?? "");
+  return {
+    method,
+    headers: { "content-type": "application/json", "idempotency-key": key },
+    body: JSON.stringify(body),
+  };
+}
+const fileViewSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  mimeType: z.string(),
+  sizeBytes: z.number(),
+  status: z.enum(["uploading", "processing", "ready", "failed", "waiting"]),
+  coverage: z.string(),
+  extractedText: z.string(),
+});
+export const workspaceViewSchema = z.object({
+  case: z.object({
+    id: z.string(),
+    title: z.string(),
+    subjectContext: z.enum(["individual", "company"]),
+    stage: z.enum(["intake", "summary", "active", "archived"]),
+    revision: z.number().int().positive(),
+    updatedAt: z.string(),
+    summary: z.string(),
+    schemaVersion: z.enum(["1", "2"]).optional(),
+  }),
+  messages: z.array(
+    z.object({
+      id: z.string(),
+      role: z.enum(["user", "assistant"]),
+      text: z.string(),
+      status: z.enum(["pending", "complete", "failed"]),
+      createdAt: z.string(),
+    }),
+  ),
+  actions: z.array(
+    z.object({ id: z.string(), title: z.string(), detail: z.string(), done: z.boolean() }),
+  ),
+  timeline: z.array(
+    z.object({ id: z.string(), date: z.string(), title: z.string(), detail: z.string() }),
+  ),
+  files: z.array(fileViewSchema),
+});
+function parseView(value: unknown): WorkspaceView {
+  const parsed = workspaceViewSchema.safeParse(value);
+  if (!parsed.success) throw workspaceError("UNAVAILABLE", "사건 응답을 확인하지 못했어요.", true);
+  return parsed.data;
+}
+export function createWorkspaceApi(request: WorkspaceTransport) {
+  const files = createFilesApi(request);
+  const base = (id: string) => `/api/v2/cases/${encodeURIComponent(opaqueIdSchema.parse(id))}`;
+  const actionRevisions = new Map<string, number>();
+  const timelineRevisions = new Map<string, number>();
+  const messageJobs = new Map<string, { jobId: string; revision: number }>();
+  async function get(id: string): Promise<WorkspaceView> {
+    const response = await request(`${base(id)}/workspace`);
+    if (response.status === 404) {
+      const legacy = caseDetailResponseSchema.safeParse(
+        await workspaceJson(request, `/api/cases/${encodeURIComponent(id)}`),
+      );
+      if (!legacy.success) throw workspaceError("NOT_FOUND", "사건을 찾을 수 없어요.");
+      return {
+        case: {
+          id,
+          title: legacy.data.title,
+          subjectContext: "individual",
+          stage: "active",
+          revision: legacy.data.inputRevision,
+          updatedAt: new Date().toISOString(),
+          summary: "",
+          schemaVersion: "1",
+        },
+        messages: [],
+        actions: [],
+        timeline: [],
+        files: [],
+      };
+    }
+    const value: unknown = await (await workspaceResponse(response)).json();
+    if (workspaceViewSchema.safeParse(value).success) {
+      const view = parseView(value);
+      for (const action of view.actions)
+        actionRevisions.set(`${id}:${action.id}`, view.case.revision);
+      for (const entry of view.timeline)
+        timelineRevisions.set(`${id}:${entry.id}`, view.case.revision);
+      return view;
+    }
+    const w = v2WorkspaceSchema.parse(value);
+    const [intake, messagesRaw, actionsRaw, timelineRaw, fileViews] = await Promise.all([
+      workspaceJson(request, `${base(id)}/intake`),
+      allMessages(id),
+      allEntities(id, "actions"),
+      allEntities(id, "timeline"),
+      files.list(id),
+    ]);
+    const metadata = z
+      .object({ narrative: z.string(), summary: z.object({ revision: z.number() }).nullable() })
+      .parse(intake);
+    let summary = "";
+    if (metadata.summary)
+      summary = v2SummarySchema.parse(await workspaceJson(request, `${base(id)}/summary`)).overview;
+    const messages: MessageView[] = messagesRaw.map((m) => ({
+      id: m.id,
+      role: m.role,
+      text: m.text,
+      status: "complete",
+      createdAt: m.createdAt,
+    }));
+    if (w.currentJobId) {
+      const job = v2JobSchema.parse(
+        await workspaceJson(
+          request,
+          `${base(id)}/workspace-jobs/${encodeURIComponent(w.currentJobId)}`,
+        ),
+      );
+      if (
+        job.kind === "chat_response" &&
+        job.target.kind === "workspace" &&
+        job.status !== "completed"
+      ) {
+        const messageId = `job:${job.id}`;
+        messageJobs.set(messageId, { jobId: job.id, revision: w.workspaceRevision });
+        messages.push({
+          id: messageId,
+          role: "assistant",
+          text:
+            job.status === "failed"
+              ? "응답을 완료하지 못했어요."
+              : "추가된 내용을 정리하고 있어요.",
+          status: job.status === "failed" ? "failed" : "pending",
+          createdAt: job.updatedAt,
+        });
+      }
+    }
+    const actions = actionsRaw.map((a) => {
+      const item = v2ActionSchema.parse(a);
+      actionRevisions.set(`${id}:${item.id}`, item.revision);
+      return {
+        id: item.id,
+        title: item.title,
+        detail: `${item.instructions}\n${item.caution}`,
+        done: item.status === "done",
+      } satisfies ActionView;
+    });
+    const timeline = timelineRaw.map((t) => {
+      const item = v2TimelineEntrySchema.parse(t);
+      timelineRevisions.set(`${id}:${item.id}`, item.revision);
+      const [title, ...detail] = item.event.split("\n");
+      return {
+        id: item.id,
+        date: item.date ?? "",
+        title: title ?? item.event,
+        detail: detail.join("\n"),
+      } satisfies TimelineView;
+    });
+    const caseView: CaseView = {
+      id: w.id,
+      title: metadata.narrative.slice(0, 60) || w.title,
+      subjectContext: w.subjectContext,
+      stage: w.status,
+      revision: w.workspaceRevision,
+      updatedAt: w.updatedAt,
+      summary,
+      schemaVersion: "2",
+    };
+    return { case: caseView, messages, actions, timeline, files: fileViews };
+  }
+  async function allMessages(id: string) {
+    const items: z.infer<ReturnType<typeof v2MessageSchema>>[] = [];
+    let cursor: string | null = null;
+    do {
+      const page = z
+        .object({ items: z.array(v2MessageSchema()), nextCursor: z.string().nullable() })
+        .parse(
+          await workspaceJson(
+            request,
+            `${base(id)}/messages?limit=50${cursor ? `&before=${encodeURIComponent(cursor)}` : ""}`,
+          ),
+        );
+      items.unshift(...page.items);
+      cursor = page.nextCursor;
+      if (items.length >= 500) break;
+    } while (cursor);
+    return items.sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
+  }
+  async function allEntities(id: string, name: "actions" | "timeline") {
+    const items: unknown[] = [];
+    let cursor: string | null = null;
+    do {
+      const page = z
+        .object({ items: z.array(z.unknown()), nextCursor: z.string().nullable() })
+        .parse(
+          await workspaceJson(
+            request,
+            `${base(id)}/${name}${cursor ? `?after=${encodeURIComponent(cursor)}` : ""}`,
+          ),
+        );
+      items.push(...page.items);
+      cursor = page.nextCursor;
+      if (items.length >= 1000) break;
+    } while (cursor);
+    return items;
+  }
+  async function mutation(id: string, path: string, body: unknown, method = "POST") {
+    await workspaceJson(
+      request,
+      `${base(id)}/${path}`,
+      workspaceMutation(`${base(id)}/${path}`, body, method),
+    );
+    return get(id);
+  }
+  return {
+    get,
+    sendMessage(
+      id: string,
+      input: { expectedRevision: number; text: string; selectedFileIds: string[] },
+    ) {
+      return mutation(id, "messages", input);
+    },
+    async retryMessage(id: string, messageId: string) {
+      // mock has the same request route; real recovers current failed job after reload.
+      if (!messageJobs.has(messageId)) await get(id);
+      const job = messageJobs.get(messageId);
+      const path = job
+        ? `workspace-jobs/${encodeURIComponent(job.jobId)}/retry`
+        : `messages/${encodeURIComponent(messageId)}/retry`;
+      if (job)
+        v2AcceptedOperationSchema.parse(
+          await workspaceJson(
+            request,
+            `${base(id)}/${path}`,
+            workspaceMutation(`${base(id)}/${path}`, { expectedRevision: job.revision }),
+          ),
+        );
+      else return mutation(id, path, {});
+      return get(id);
+    },
+    async setAction(id: string, actionId: string, done: boolean) {
+      if (!actionRevisions.has(`${id}:${actionId}`)) await get(id);
+      return mutation(
+        id,
+        `actions/${encodeURIComponent(actionId)}`,
+        {
+          expectedRevision: actionRevisions.get(`${id}:${actionId}`) ?? 1,
+          status: done ? "done" : "todo",
+        },
+        "PUT",
+      );
+    },
+    async saveTimeline(id: string, entry: Omit<TimelineView, "id"> & { id?: string }) {
+      if (entry.id && !timelineRevisions.has(`${id}:${entry.id}`)) await get(id);
+      // Existing PR100 edits are reused. New-entry route is explicit and never falls back to mock.
+      return mutation(
+        id,
+        `timeline${entry.id ? `/${encodeURIComponent(entry.id)}` : ""}`,
+        {
+          expectedRevision: entry.id
+            ? (timelineRevisions.get(`${id}:${entry.id}`) ?? 1)
+            : (await get(id)).case.revision,
+          date: entry.date || null,
+          datePrecision: entry.date ? "day" : "unknown",
+          event: entry.detail ? `${entry.title}\n${entry.detail}` : entry.title,
+        },
+        entry.id ? "PUT" : "POST",
+      );
+    },
+  };
+}
