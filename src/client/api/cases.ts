@@ -429,7 +429,7 @@ export const casesApi = {
             { path: path(id, "summary"), method: "PUT", body, key },
           ),
         );
-      if (!result.edit) return this.get(id);
+      if (!result.edit) return casesApi.get(id);
       await new Promise((resolve) =>
         setTimeout(resolve, Math.min(result.edit?.retryAfter ?? 1, 3) * 1000),
       );
@@ -457,6 +457,6 @@ export const casesApi = {
         key,
       },
     );
-    return this.get(id);
+    return casesApi.get(id);
   },
 };

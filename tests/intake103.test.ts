@@ -245,9 +245,11 @@ describe("PR100 real wire mapping", () => {
     globalThis.fetch = original;
   });
   test("overview edits use summary revision and confirmations use intake/summary revisions", async () => {
-    await casesApi.saveSummary(id, { expectedRevision: 5, summary: "수정된 합성 요약" });
+    const saveSummary = casesApi.saveSummary,
+      confirmSummary = casesApi.confirmSummary;
+    await saveSummary(id, { expectedRevision: 5, summary: "수정된 합성 요약" });
     expect(writes[0]?.body).toEqual({ expectedRevision: 2, overview: "수정된 합성 요약" });
-    await casesApi.confirmSummary(id, { expectedRevision: 5 });
+    await confirmSummary(id, { expectedRevision: 5 });
     expect(writes[1]?.body).toEqual({ expectedRevision: 3, summaryRevision: 2 });
     expect(writes.every((write) => !!write.key)).toBe(true);
     await expect(casesApi.confirmSummary(id, { expectedRevision: 4 })).rejects.toMatchObject({
