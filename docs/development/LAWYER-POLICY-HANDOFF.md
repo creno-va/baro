@@ -4,7 +4,7 @@
 - Integrated main: `7943496` (PR127; required CI 3 jobs SUCCESS 후 4번 병합)
 - Branch: `codex/62-lawyer-public-polish`
 - Reviewed: 2026-10-07 KST
-- Status: 구현·공유 역할 가드/의존성 통합 완료 / 최신 후보 CI·외부 검증·게시 승인 대기
+- Status: 구현·공유 역할 가드/의존성 통합 완료 / 최신 후보 통합·CI·외부 검증·게시 승인 대기
 - 변경 소유: lawyer/profile/directory 전용 UI/API/module/CSS/test, 도움말/정책/콘텐츠
 - 공유 인증·role/session/contracts/schema/router/CI·동의 버전은 4번, 저장/처리/계정 삭제는 2번.
 
@@ -21,7 +21,10 @@
 다른 owner/신분 증빙/사건 원본/pending 자료/비공개 pointer는 공개 경로에서 열지 않는다.
 저장·비공개·삭제·권한 변경 중 stream은 재검사하며 이전 revision 응답은 차단한다.
 자기 ready 업로드는 저장 전에도 owner 전용 경로에서 미리볼 수 있으며 공개 경로에는 저장된
-reference가 필요하다. stream 중 auth 재검사는 응답 header를 다시 쓰지 않는다.
+reference가 필요하다. stream 중 최초 signed-cookie 검증의 session ID에 expiry/revocation/role/현재 동의/revision SQL fence를 적용하며 응답 header를 다시 쓰지 않는다. 전체 snapshot을 chunk마다 재복호화하지 않는다.
+사진 1개+포트폴리오 최대30개 CAS는 owner/profile을 outer profile에 correlate해 최대67 bound
+parameters를 사용한다(D1 제한100). 기존 예약/upload/정제로31개를 생성한 SQLite/AES 회귀에서
+저장·공개·재조회·현재 공개 revision fence를 검증했다. 실서비스 R2/Containers 처리 성공을 의미하지 않는다.
 
 프로필 편집은 focus/visibility/pageshow/peer-tab storage와 저장/공개 전후에 session을 확인한다.
 요청이 실패한 뒤에도 현재 계정을 검사해 이전 계정 초안·오류를 새 계정에서 보존하지 않는다.
@@ -143,3 +146,12 @@ snapshot은 이전 strict schema reader와 호환되지 않으므로 기능 comm
 UI를 rollback하더라도 확장된 self-profile schema/자산 reader·권한 가드를 유지한다. 이전 reader로
 돌려야 한다면 owner가 참조를 제외해 저장하고 optional asset 필드의 정리·재저장 검증을 먼저 수행한다.
 자료 삭제·restore journal 재적용은 2번/4번의 기존 운영 절차를 따른다.
+
+
+## 파일 최대 경계 보완 검증 — 2026-10-07 KST
+
+`13438b4` / test typing `54b6505`는 31개 자산의 CAS bind 제한과 private/public stream metadata
+fence를 보완한다. `bun ci`, audit 취약점0, check 1211 tests/132881 assertions·migration6/29,
+normal build/cf:dry-run, CI-selector wire16+mock1, production bundle147/CSP4(명시적 fixture-only skip1)가
+성공했다. 이전 head의 CI 성공을 이 추가 후보의 CI 성공으로 대체하지 않는다. 최종 공유 통합 후
+정확한 head 결과는 담당 이슈/PR 댓글에 기록한다.
