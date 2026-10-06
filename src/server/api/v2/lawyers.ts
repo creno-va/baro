@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { idempotencyKeySchema, opaqueIdSchema, revisionSchema } from "../../../contracts";
 import type { V2ErrorCode } from "../../../contracts/v2";
+import { readAccountType } from "../../auth/account-type";
 import { lawyerAccess } from "../../auth/roles";
 import { createCaseDataCipher } from "../../crypto";
 import { createV2Core, type V2Core } from "../../db/v2-core";
@@ -64,11 +65,11 @@ export function createLawyersApi(
     const a = await lawyerAccess(c, { mutation, consent: true });
     if (a.response) return a;
     const row = await c.env.DB.prepare(
-      "SELECT owner_id FROM v2_role_bindings WHERE owner_id=? AND role IN ('lawyer_applicant','verified_lawyer') AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='account' AND target_id=owner_id)",
+      "SELECT id FROM user WHERE id=? AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='account' AND target_id=user.id)",
     )
       .bind(a.ownerId)
       .first();
-    if (!row)
+    if (!row || (await readAccountType(c.env.DB, a.ownerId)) !== "lawyer")
       return {
         response: c.json(errorBody(c, "ROLE_REQUIRED", "변호사 역할로 로그인해 주세요."), 403),
       };

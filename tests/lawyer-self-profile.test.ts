@@ -4,6 +4,7 @@ import { createMockLawyers, type LawyerMockStore } from "../src/client/api/mock/
 import type { ApiEnvironment } from "../src/server/api/errors";
 import { createDirectoryApi } from "../src/server/api/v2/directory";
 import { createLawyersApi } from "../src/server/api/v2/lawyers";
+import { saveAccountType } from "../src/server/auth/account-type";
 import { createCaseDataCipher } from "../src/server/crypto";
 import { createV2Core } from "../src/server/db/v2-core";
 import { createSelfProfileService } from "../src/server/modules/lawyers/self-profile";
@@ -186,6 +187,72 @@ test("real API stores encrypted self profiles, records publication consent, hide
       .query("SELECT count(*) AS n FROM v2_private_snapshots WHERE target_id=?")
       .get(published.id),
   ).toEqual({ n: 0 });
+});
+
+test("selected lawyer accounts manage self-declared profiles without qualification roles", async () => {
+  const f = await fixture();
+  await saveAccountType(f.db.binding, f.other.userId, "lawyer");
+  await saveAccountType(f.db.binding, f.noConsent.userId, "lawyer");
+  expect((await f.request("/v2/me/lawyer/self-profile", f.noConsent)).status).toBe(403);
+  const blankResponse = await f.request("/v2/me/lawyer/self-profile", f.other);
+  expect(blankResponse.status).toBe(200);
+  const blank = selfProfileSchema.parse(await blankResponse.json());
+  const savedResponse = await f.request("/v2/me/lawyer/self-profile", f.other, "PUT", {
+    profile: { ...blank, ...complete, verificationStatus: "verified" },
+  });
+  expect(savedResponse.status).toBe(200);
+  const saved = selfProfileSchema.parse(await savedResponse.json());
+  const publication = await f.request("/v2/me/lawyer/self-profile/publication", f.other, "POST", {
+    published: true,
+    expectedRevision: saved.revision,
+    consent: true,
+  });
+  expect(publication.status).toBe(200);
+  const published = selfProfileSchema.parse(await publication.json());
+  expect(published.verificationStatus).toBe("self_declared");
+  expect(
+    f.db.sqlite.query("SELECT role FROM v2_role_bindings WHERE owner_id=?").all(f.other.userId),
+  ).toEqual([]);
+  expect(
+    selfProfileSchema.parse(await (await f.request("/v2/me/lawyer/self-profile", f.other)).json()),
+  ).toEqual(published);
+  expect(
+    selfDirectoryPageSchema.parse(await (await f.request("/v2/lawyers/self-service")).json()).items,
+  ).toEqual([published]);
+  expect((await f.request(`/v2/lawyers/self-service/${published.id}`)).status).toBe(200);
+
+  await saveAccountType(f.db.binding, f.other.userId, "customer");
+  expect((await f.request("/v2/me/lawyer/self-profile", f.other)).status).toBe(403);
+  expect((await f.request(`/v2/lawyers/self-service/${published.id}`)).status).toBe(404);
+  expect(
+    selfDirectoryPageSchema.parse(await (await f.request("/v2/lawyers/self-service")).json()).items,
+  ).toEqual([]);
+  await expect(
+    createSelfProfileService(f.core).saveMine(f.other.userId, {
+      ...published,
+      name: "권한 변경 뒤 합성 수정",
+    }),
+  ).rejects.toThrow("STALE_REVISION");
+
+  await saveAccountType(f.db.binding, f.other.userId, "lawyer");
+  expect((await f.request(`/v2/lawyers/self-service/${published.id}`)).status).toBe(200);
+  f.db.sqlite
+    .query("INSERT INTO v2_tombstones(target_kind,target_id,deleted_at) VALUES('account',?,?)")
+    .run(f.other.userId, new Date().toISOString());
+  expect((await f.request("/v2/me/lawyer/self-profile", f.other)).status).toBe(403);
+  expect((await f.request(`/v2/lawyers/self-service/${published.id}`)).status).toBe(404);
+});
+
+test("customer preference overrides legacy lawyer access while preserving existing roles", async () => {
+  const f = await fixture();
+  expect((await f.request("/v2/me/lawyer/self-profile")).status).toBe(200);
+  await saveAccountType(f.db.binding, f.owner.userId, "customer");
+  expect((await f.request("/v2/me/lawyer/self-profile")).status).toBe(403);
+  expect(
+    f.db.sqlite.query("SELECT role FROM v2_role_bindings WHERE owner_id=?").all(f.owner.userId),
+  ).toEqual([{ role: "lawyer_applicant" }]);
+  await saveAccountType(f.db.binding, f.owner.userId, "lawyer");
+  expect((await f.request("/v2/me/lawyer/self-profile")).status).toBe(200);
 });
 
 test("self directory advances filtered empty pages and returns profiles beyond the first page", async () => {

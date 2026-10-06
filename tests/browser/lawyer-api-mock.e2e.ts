@@ -90,6 +90,7 @@ test("integrated lawyer login/consent/editor uses persistent API mock with no re
   await page.goto("/lawyer");
   await expect(page.locator("astro-island[ssr]")).toHaveCount(0);
   await page.getByRole("button", { name: "비공개로 전환" }).click();
+  await expect(page.getByText("프로필을 비공개로 전환했어요.", { exact: true })).toBeVisible();
   await page.reload();
   await expect(page.getByText("비공개", { exact: true })).toBeVisible();
   await page.goto(`/lawyers/${id}`);
