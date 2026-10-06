@@ -19,6 +19,10 @@ on:
         options:
           - foundation
           - public-beta
+      sync_oauth:
+        description: Apply the six production Environment OAuth credentials to the production Worker
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -100,6 +104,24 @@ jobs:
         if: inputs.release_mode == 'public-beta'
         run: bun run release:check
 
+      - name: Validate requested production OAuth credentials
+        if: steps.application.outputs.present == 'true' && inputs.sync_oauth
+        env:
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          NAVER_CLIENT_ID: ${{ secrets.NAVER_CLIENT_ID }}
+          NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
+          KAKAO_CLIENT_ID: ${{ secrets.KAKAO_CLIENT_ID }}
+          KAKAO_CLIENT_SECRET: ${{ secrets.KAKAO_CLIENT_SECRET }}
+        shell: bash
+        run: |
+          for name in GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET NAVER_CLIENT_ID NAVER_CLIENT_SECRET KAKAO_CLIENT_ID KAKAO_CLIENT_SECRET; do
+            if [[ -z "${!name}" ]]; then
+              echo "::error::Missing production Environment OAuth credential: $name"
+              exit 1
+            fi
+          done
+
       - name: Apply validated production migrations
         if: steps.application.outputs.present == 'true'
         run: bun run db:migrate:production
@@ -110,8 +132,23 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ env.CLOUDFLARE_ACCOUNT_ID }}
+          environment: production
           wranglerVersion: "4.147.0"
           command: deploy --var RELEASE_SHA:${{ inputs.target_sha }} --var PUBLIC_BETA_ENABLED:${{ inputs.release_mode == 'public-beta' && 'true' || 'false' }}
+          secrets: |
+            ${{ inputs.sync_oauth && 'GOOGLE_CLIENT_ID' || '' }}
+            ${{ inputs.sync_oauth && 'GOOGLE_CLIENT_SECRET' || '' }}
+            ${{ inputs.sync_oauth && 'NAVER_CLIENT_ID' || '' }}
+            ${{ inputs.sync_oauth && 'NAVER_CLIENT_SECRET' || '' }}
+            ${{ inputs.sync_oauth && 'KAKAO_CLIENT_ID' || '' }}
+            ${{ inputs.sync_oauth && 'KAKAO_CLIENT_SECRET' || '' }}
+        env:
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          NAVER_CLIENT_ID: ${{ secrets.NAVER_CLIENT_ID }}
+          NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
+          KAKAO_CLIENT_ID: ${{ secrets.KAKAO_CLIENT_ID }}
+          KAKAO_CLIENT_SECRET: ${{ secrets.KAKAO_CLIENT_SECRET }}
 
       - name: Verify deployed production release
         if: steps.application.outputs.present == 'true'

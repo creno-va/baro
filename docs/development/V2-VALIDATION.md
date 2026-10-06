@@ -852,6 +852,12 @@ seed는 사용하지 않았다. 사용자가 완료한 동의를 새로 대신 �
 
 ### 실제 운영 차단 응답의 cache 후속
 
+사용자의 운영 API 우선 배포 지시로 production 보호 Environment의 OAuth6필드를
+운영 Worker에 적용하는 명시적 배포 옵션을 추가한다. 원격 preview로 복제하거나 운영
+서명 키를 회전하지 않는다. CI/preview immutable 검증과 지정 Environment 승인을 유지한다.
+실제 배포·필드 적용과 공개 차단 상태는 정본 journal의 새 immutable 결과로 확인한다.
+이는 공급자 운영 callback·정책·모델·법률·공개 승인을 대신하지 않는다.
+
 main7aebe4a의 CI/Full/preview 및 정상 production 승인·배포가 통과했다. 독립
 SHA/schema0009 smoke는 성공했고 API5경로 모두 BETA_NOT_OPEN503을 반환했다.
 추가 probe에서 공용 beta guard가 directory 모듈 이전에 조기 반환해 공개 차단
