@@ -1,0 +1,65 @@
+--- a/src/server/modules/legal-retrieval/v2/service.ts
++++ b/src/server/modules/legal-retrieval/v2/service.ts
+@@ -129,6 +129,37 @@
+         ...access,
+         reserveRequest: async (attempt) => ++calls <= 30 && access.reserveRequest(attempt),
+       };
++      // Verified statute candidates are scoped to this invocation's fixed dates.
++      // Failures are never memoized; fresh cache discovery/hash checks still run.
++      const candidates = new Map<string, ReturnType<typeof selectStatute>>();
++      async function selectedStatute(
++        plan: Extract<(typeof body.plans)[number], { kind: "statute" }>,
++      ) {
++        const url = lawUrl("lawSearch.do", "eflaw", {
++          query: plan.lawTitle,
++          ...(plan.lawId ? { LID: plan.lawId } : {}),
++          nw: "1,3",
++          sort: "efdes",
++          display: "100",
++          page: "1",
++          efYd: "00010101~" + body.asOfDate.replaceAll("-", ""),
++        });
++        const key = url.href;
++        const cached = candidates.get(key);
++        if (cached) {
++          if (access.signal?.aborted) throw new RetrievalFailure("cancelled");
++          if (!(await safePermit(access.authorize))) throw new RetrievalFailure("not_authorized");
++          if (access.signal?.aborted) throw new RetrievalFailure("cancelled");
++          return cached;
++        }
++        const candidate = selectStatute(
++          await json(url, "moleg_eflaw_list", boundedAccess),
++          plan,
++          body.asOfDate,
++        );
++        candidates.set(key, candidate);
++        return candidate;
++      }
+       for (const plan of body.plans) {
+         const chunks: SourceChunk[] = [];
+         let reason: SourceOutcome["reason"] = null;
+@@ -143,23 +174,7 @@
+             throw new RetrievalFailure("not_authorized");
+           if (access.signal?.aborted) throw new RetrievalFailure("cancelled");
+           if (plan.kind === "statute") {
+-            const candidate = selectStatute(
+-              await json(
+-                lawUrl("lawSearch.do", "eflaw", {
+-                  query: plan.lawTitle,
+-                  ...(plan.lawId ? { LID: plan.lawId } : {}),
+-                  nw: "1,3",
+-                  sort: "efdes",
+-                  display: "100",
+-                  page: "1",
+-                  efYd: `00010101~${body.asOfDate.replaceAll("-", "")}`,
+-                }),
+-                "moleg_eflaw_list",
+-                boundedAccess,
+-              ),
+-              plan,
+-              body.asOfDate,
+-            );
++            const candidate = await selectedStatute(plan);
+             for (const article of plan.articles) {
+               const section = `제${BigInt(article.number)}조${BigInt(article.branch) !== 0n ? `의${BigInt(article.branch)}` : ""}`;
+               const cached = await cachedChunk(
