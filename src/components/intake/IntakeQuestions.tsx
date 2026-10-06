@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowRight, Check, LoaderCircle, Save } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, Save } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../../client/api";
 import type { QuestionsResult } from "../../client/api/cases";
@@ -7,8 +7,9 @@ import { BrandMark } from "../ui/brand";
 import { Button, ButtonLink } from "../ui/button";
 import { Textarea } from "../ui/form";
 import { StatePanel } from "../ui/state-panel";
-import { BackToCases, ErrorPanel, IntakeProgress } from "./common";
+import { BackToCases, ErrorPanel } from "./common";
 import { useCustomerAccess } from "./useCustomerAccess";
+import { useSceneTransition } from "./useSceneTransition";
 
 export function IntakeQuestions({ caseId }: { caseId: string }) {
   const [item, setItem] = useState<CaseView | null>(null);
@@ -23,6 +24,7 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
   const [exit, setExit] = useState(false);
   const [editing, setEditing] = useState(false);
   const [preparing, setPreparing] = useState(false);
+  const { leaving, transition } = useSceneTransition();
   const pending = useRef(false);
   const loaded = useRef(false);
   const heading = useRef<HTMLHeadingElement>(null);
@@ -68,7 +70,9 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
   const limit = Math.max(result?.followupLimit ?? 2, result?.questions.length ?? 0);
   const savedCount = result?.questions.filter((q) => q.answerState).length ?? 0;
   const waiting = preparing || Boolean(result?.processing);
-  const locked = busy || waiting;
+  const locked = busy || waiting || leaving;
+  const displayed = useRef({ index, id: question?.id });
+  displayed.current = { index, id: question?.id };
   const summarizing = result?.processingStage === "summary" || savedCount >= limit;
   const statusTitle = summarizing ? "사건 요약을 정리하고 있어요" : "다음 질문을 준비하고 있어요";
   const load = useCallback(
@@ -89,12 +93,12 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
         const params = new URLSearchParams(window.location.search);
         const isEditing = params.get("edit") === "1";
         setEditing(isEditing);
-        setResult(questions);
         const requested = Number(params.get("question"));
         const unanswered = questions.questions.findIndex((q) => !q.answerState);
         const initial = !loaded.current;
         loaded.current = true;
-        setIndex((previous) =>
+        const previous = displayed.current.index;
+        const nextIndex =
           initial &&
           params.has("question") &&
           Number.isInteger(requested) &&
@@ -110,8 +114,7 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
                 ? unanswered
                 : initial
                   ? 0
-                  : previous,
-        );
+                  : previous;
         if (
           questions.complete &&
           !questions.processing &&
@@ -121,13 +124,26 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
           (caseView.stage === "summary" || caseView.stage === "intake")
         )
           window.location.replace(`/cases/${encodeURIComponent(caseId)}/summary`);
+        else {
+          const show = () => {
+            setResult(questions);
+            setIndex(nextIndex);
+          };
+          if (
+            !initial &&
+            !questions.processing &&
+            displayed.current.id !== questions.questions[nextIndex]?.id
+          )
+            await transition(show, () => accessCurrent(epoch) && serial === request.current);
+          else show();
+        }
       } catch (cause) {
         if (alive(epoch)) report(cause);
       } finally {
         if (alive(epoch)) setLoading(false);
       }
     },
-    [caseId, verify, ticket, accessCurrent, alive, report],
+    [caseId, verify, ticket, accessCurrent, alive, report, transition],
   );
   useEffect(() => {
     if (version) void load();
@@ -142,7 +158,7 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
     }
   }, [question?.id, question?.answer, question?.answerState, index]);
   useEffect(() => {
-    if (question?.id && !waiting) heading.current?.focus();
+    if (question?.id && !waiting) heading.current?.focus({ preventScroll: true });
   }, [question?.id, waiting]);
   useEffect(() => {
     if (!result?.processing || busy) return;
@@ -165,6 +181,22 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
     url.searchParams.delete("edit");
     window.history.replaceState(null, "", url);
   }
+  async function showNext(next: QuestionsResult, epoch: number) {
+    if (next.complete && !next.processing) {
+      window.location.assign(`/cases/${encodeURIComponent(caseId)}/summary`);
+      return;
+    }
+    const unanswered = next.questions.findIndex((q) => !q.answerState);
+    if (!next.processing && unanswered >= 0 && next.questions[unanswered]?.id !== question?.id) {
+      await transition(
+        () => {
+          setResult(next);
+          setIndex(unanswered);
+        },
+        () => accessCurrent(epoch),
+      );
+    } else setResult(next);
+  }
   async function advance() {
     if (!result || pending.current || result.processing) return;
     const epoch = ticket();
@@ -176,13 +208,8 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
       if (!(await verify()) || !accessCurrent(epoch)) return;
       const next = await api.cases.advance(caseId, { expectedRevision: result.revision });
       if (!(await verify()) || !accessCurrent(epoch)) return;
-      setResult(next);
-      if (next.complete) window.location.assign(`/cases/${encodeURIComponent(caseId)}/summary`);
-      else {
-        const unanswered = next.questions.findIndex((q) => !q.answerState);
-        if (!next.processing && unanswered >= 0) setIndex(unanswered);
-        setNotice("");
-      }
+      await showNext(next, epoch);
+      setNotice("");
     } catch (cause) {
       if (alive(epoch)) report(cause);
     } finally {
@@ -222,18 +249,19 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
       setResult(next);
       setAnswerState(state);
       setNotice("답변이 저장됐어요. 내 사건에서 다시 이어갈 수 있어요.");
-      if (move && index < next.questions.length - 1) setIndex(index + 1);
-      else if (move) {
+      if (move && index < next.questions.length - 1) {
+        await transition(
+          () => {
+            setIndex(index + 1);
+            setNotice("");
+          },
+          () => accessCurrent(epoch),
+        );
+      } else if (move) {
         prepareNext();
         const advanced = await api.cases.advance(caseId, { expectedRevision: next.revision });
         if (!(await verify()) || !accessCurrent(epoch)) return;
-        setResult(advanced);
-        if (advanced.complete)
-          window.location.assign(`/cases/${encodeURIComponent(caseId)}/summary`);
-        else {
-          const unanswered = advanced.questions.findIndex((q) => !q.answerState);
-          if (!advanced.processing && unanswered >= 0) setIndex(unanswered);
-        }
+        await showNext(advanced, epoch);
       }
     } catch (cause) {
       if (alive(epoch)) report(cause);
@@ -247,21 +275,18 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
   }
   return (
     <div className="intake-flow intake-detail-flow">
-      <BackToCases />
-      <IntakeProgress step={1} />
+      <nav className="intake-scene-nav" aria-label="사건 정리 탐색">
+        <BackToCases />
+        <span>{question ? `질문 ${index + 1} / 최대 ${limit}` : "질문 최대 2개"}</span>
+      </nav>
       {loading && !result && !error ? (
         <StatePanel variant="loading" title="저장한 질문을 불러오고 있어요." />
       ) : null}
-      {error ? <ErrorPanel error={error} retry={() => void load()} disabled={busy} /> : null}
+      {error ? (
+        <ErrorPanel error={error} retry={() => void load()} disabled={busy || leaving} />
+      ) : null}
       {ready && item && result ? (
-        <section className="intake-card intake-question-card">
-          <div className="intake-assistant-heading">
-            <BrandMark size={32} />
-            <div>
-              <p className="intake-eyebrow">사건을 더 정확하게 정리해요</p>
-              <p className="intake-case-caption">{item.title}</p>
-            </div>
-          </div>
+        <section className="intake-scene" data-transition={leaving ? "leaving" : "idle"}>
           {item.schemaVersion === "1" ? (
             <StatePanel
               variant="pending"
@@ -290,227 +315,236 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
                 </ButtonLink>
               }
             />
-          ) : !question ? (
-            <>
-              <div className="intake-question-intro">
-                <span className="intake-tag">추가 질문은 최대 2개</span>
-                <h1>{waiting ? "필요한 내용만 확인할게요" : "몇 가지만 더 알려주세요"}</h1>
-                <p className="intake-muted">
-                  말씀해 주신 상황에 꼭 필요한 질문을 골라요. 답변을 마치면 사건 요약을 볼 수
-                  있어요.
-                </p>
-                <blockquote className="intake-narrative-preview">{item.title}</blockquote>
-              </div>
-              {waiting ? (
-                <PreparationStatus title={statusTitle} />
-              ) : result.failed ? (
-                <StatePanel
-                  variant="error"
-                  title="질문을 준비하지 못했어요"
-                  description="입력한 상황은 저장되어 있어요. 이어서 준비할게요."
-                  action={
-                    <Button onClick={() => void advance()} disabled={locked}>
-                      다시 준비하기
-                    </Button>
-                  }
-                />
-              ) : (
-                <Button
-                  className="intake-primary-action"
-                  onClick={() => void advance()}
-                  disabled={locked}
-                >
-                  질문 시작하기 <ArrowRight size={16} aria-hidden="true" />
-                </Button>
-              )}
-            </>
           ) : (
-            <>
-              <div className="intake-question-top">
-                <p>
-                  질문 {index + 1} / 최대 {limit}
-                </p>
-                <span className="intake-question-remaining">
-                  {index + 1 >= limit
-                    ? "마지막 질문이에요"
-                    : limit > 2
-                      ? "저장된 질문을 확인해 주세요"
-                      : "최대 두 번만 여쭤볼게요"}
+            <div
+              className="intake-scene-content"
+              key={question?.id ?? "initial"}
+              data-waiting={waiting}
+            >
+              <header className="intake-scene-heading">
+                <span className="intake-scene-emblem" aria-hidden="true">
+                  <BrandMark size={48} />
                 </span>
-              </div>
-              <progress max={limit} value={savedCount} aria-label="저장한 질문 수" />
-              <h1 ref={heading} tabIndex={-1} id="question-heading">
-                {question.text}
-              </h1>
-              <p className="intake-muted">
-                기억나는 만큼만 알려주세요. 확실하지 않으면 모름을 선택해도 괜찮아요.
-              </p>
-              <form
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  void save(true);
-                }}
-              >
-                {question.kind === "choice" ? (
-                  <fieldset
-                    className="intake-options"
-                    disabled={locked}
-                    aria-labelledby="question-heading"
-                  >
-                    <legend className="sr-only">답변 선택</legend>
-                    {question.options?.map((option) => (
-                      <label
-                        key={option}
-                        className={answerState === "answered" && value === option ? "selected" : ""}
-                      >
-                        <input
-                          type="radio"
-                          name={question.id}
-                          value={option}
-                          checked={answerState === "answered" && value === option}
-                          onChange={() => {
-                            setValue(option);
-                            setAnswerState("answered");
-                          }}
-                        />
-                        <span>{option}</span>
-                      </label>
-                    ))}
-                  </fieldset>
-                ) : (
-                  <>
-                    <label className="ui-label" htmlFor="question-answer">
-                      답변
-                    </label>
-                    <Textarea
-                      id="question-answer"
-                      value={answerState === "answered" ? value : ""}
-                      maxLength={1000}
-                      disabled={locked}
-                      onChange={(event) => {
-                        setValue(event.target.value);
-                        setAnswerState("answered");
-                      }}
-                      placeholder="기억나는 만큼 적어주세요."
-                    />
-                  </>
-                )}
-                <div className="intake-secondary-actions">
-                  <Button
-                    variant={answerState === "unknown" ? "secondary" : "outline"}
-                    disabled={locked}
-                    onClick={() => {
-                      setAnswerState("unknown");
-                      void save(true, "unknown");
-                    }}
-                  >
-                    모름
-                  </Button>
-                  <Button
-                    variant={answerState === "skipped" ? "secondary" : "ghost"}
-                    disabled={locked}
-                    onClick={() => {
-                      setAnswerState("skipped");
-                      void save(true, "skipped");
-                    }}
-                  >
-                    건너뛰기
-                  </Button>
-                </div>
-                {answerState === "unknown" || answerState === "skipped" ? (
-                  <p className="intake-muted">
-                    저장한 답변: {answerState === "unknown" ? "모름" : "건너뛰기"}
-                  </p>
-                ) : null}
-                {waiting ? <PreparationStatus title={statusTitle} saved /> : null}
-                {result.failed && !waiting ? (
+                <h1 ref={heading} tabIndex={-1} id="question-heading">
+                  {question?.text ?? "필요한 내용만 확인할게요"}
+                </h1>
+                <p>
+                  {question
+                    ? index + 1 >= limit
+                      ? "마지막 질문이에요. 기억나는 만큼만 알려주세요."
+                      : "기억나는 만큼만 편하게 알려주세요."
+                    : "말씀해 주신 상황에서 질문을 고르고 있어요."}
+                </p>
+              </header>
+              {!question ? (
+                waiting ? (
+                  <PreparationStatus title={statusTitle} />
+                ) : result.failed ? (
                   <StatePanel
                     variant="error"
-                    title="이어서 준비하지 못했어요"
-                    description="방금 답변은 저장되어 있어요. 다시 시도해 주세요."
+                    title="질문을 준비하지 못했어요"
+                    description="입력한 상황은 저장되어 있어요."
                     action={
-                      <Button
-                        onClick={() => (dirty ? void save(true) : void advance())}
-                        disabled={
-                          busy ||
-                          (dirty && (!answerState || (answerState === "answered" && !value.trim())))
-                        }
-                      >
-                        {dirty ? "답변 저장하고 다시 준비하기" : "다시 준비하기"}
+                      <Button onClick={() => void advance()} disabled={locked}>
+                        다시 준비하기
                       </Button>
                     }
                   />
-                ) : null}
-                <div className="intake-actions intake-question-navigation">
+                ) : (
                   <Button
-                    variant="outline"
-                    disabled={locked || index === 0}
-                    onClick={() => {
-                      setIndex(index - 1);
-                      setNotice("");
+                    className="intake-scene-primary"
+                    onClick={() => void advance()}
+                    disabled={locked}
+                  >
+                    질문 시작하기 <ArrowRight size={18} aria-hidden="true" />
+                  </Button>
+                )
+              ) : (
+                <>
+                  <form
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      void save(true);
                     }}
                   >
-                    <ArrowLeft size={16} aria-hidden="true" />
-                    이전 질문
-                  </Button>
-                  <Button
-                    variant="outline"
-                    disabled={
-                      locked || !answerState || (answerState === "answered" && !value.trim())
-                    }
-                    onClick={() => void save(false)}
-                  >
-                    <Save size={16} aria-hidden="true" />
-                    답변 저장
-                  </Button>
-                </div>
-                <div className="intake-question-footer">
-                  <Button
-                    className="intake-primary-action"
-                    type="submit"
-                    disabled={
-                      locked || !answerState || (answerState === "answered" && !value.trim())
-                    }
-                  >
-                    {waiting
-                      ? summarizing
-                        ? "요약을 정리하고 있어요"
-                        : "다음 질문을 준비하고 있어요"
-                      : busy
-                        ? "답변을 저장하고 있어요"
-                        : index + 1 >= limit || (editing && index === result.questions.length - 1)
-                          ? "저장하고 요약 보기"
-                          : "저장하고 다음 질문"}
-                    <ArrowRight size={16} aria-hidden="true" />
-                  </Button>
-                </div>
-              </form>
-              <p className="intake-save-notice" role="status">
-                {waiting ? "" : notice}
-              </p>
-              <Button variant="ghost" onClick={() => setExit(true)} disabled={busy}>
-                나중에 이어하기
-              </Button>
-              {exit ? (
-                <div
-                  className="intake-exit"
-                  role="dialog"
-                  aria-modal="false"
-                  aria-labelledby="exit-title"
-                >
-                  <h2 id="exit-title">내 사건에서 다시 이어갈 수 있어요</h2>
-                  <p>
-                    저장 버튼을 누른 답변은 유지돼요. 현재 수정한 내용은 답변 저장 후 이동해 주세요.
-                  </p>
-                  <div className="intake-actions">
-                    <ButtonLink href="/cases">목록으로 이동</ButtonLink>
-                    <Button variant="outline" onClick={() => setExit(false)}>
-                      계속 답하기
-                    </Button>
-                  </div>
-                </div>
-              ) : null}
-            </>
+                    <div className="intake-scene-composer">
+                      {question.kind === "choice" ? (
+                        <fieldset
+                          className="intake-options"
+                          disabled={locked}
+                          aria-labelledby="question-heading"
+                        >
+                          <legend className="sr-only">답변 선택</legend>
+                          {question.options?.map((option) => (
+                            <label
+                              key={option}
+                              className={
+                                answerState === "answered" && value === option ? "selected" : ""
+                              }
+                            >
+                              <input
+                                type="radio"
+                                name={question.id}
+                                value={option}
+                                checked={answerState === "answered" && value === option}
+                                onChange={() => {
+                                  setValue(option);
+                                  setAnswerState("answered");
+                                }}
+                              />
+                              <span>{option}</span>
+                            </label>
+                          ))}
+                        </fieldset>
+                      ) : (
+                        <>
+                          <label className="sr-only" htmlFor="question-answer">
+                            답변
+                          </label>
+                          <Textarea
+                            id="question-answer"
+                            value={answerState === "answered" ? value : ""}
+                            maxLength={1000}
+                            disabled={locked}
+                            onChange={(event) => {
+                              setValue(event.target.value);
+                              setAnswerState("answered");
+                            }}
+                            placeholder="여기에 편하게 적어주세요."
+                          />
+                        </>
+                      )}
+                      {answerState === "unknown" || answerState === "skipped" ? (
+                        <p className="intake-scene-answer-state">
+                          {answerState === "unknown" ? "모름" : "건너뛰기"}으로 저장했어요.
+                        </p>
+                      ) : null}
+                      <div className="intake-scene-options">
+                        <Button
+                          variant="ghost"
+                          disabled={locked}
+                          onClick={() => {
+                            setAnswerState("unknown");
+                            void save(true, "unknown");
+                          }}
+                        >
+                          모름
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          disabled={locked}
+                          onClick={() => {
+                            setAnswerState("skipped");
+                            void save(true, "skipped");
+                          }}
+                        >
+                          건너뛰기
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="intake-scene-action">
+                      {waiting ? (
+                        <PreparationStatus title={statusTitle} saved />
+                      ) : (
+                        <Button
+                          className="intake-scene-primary"
+                          type="submit"
+                          disabled={
+                            locked || !answerState || (answerState === "answered" && !value.trim())
+                          }
+                        >
+                          {busy
+                            ? "답변을 저장하고 있어요"
+                            : index + 1 >= limit ||
+                                (editing && index === result.questions.length - 1)
+                              ? "저장하고 요약 보기"
+                              : "저장하고 다음 질문"}
+                          <ArrowRight size={18} aria-hidden="true" />
+                        </Button>
+                      )}
+                    </div>
+                    {result.failed && !waiting ? (
+                      <StatePanel
+                        variant="error"
+                        title="이어서 준비하지 못했어요"
+                        description="방금 답변은 저장되어 있어요."
+                        action={
+                          <Button
+                            onClick={() => (dirty ? void save(true) : void advance())}
+                            disabled={
+                              locked ||
+                              (dirty &&
+                                (!answerState || (answerState === "answered" && !value.trim())))
+                            }
+                          >
+                            {dirty ? "답변 저장하고 다시 준비하기" : "다시 준비하기"}
+                          </Button>
+                        }
+                      />
+                    ) : null}
+                    <p className="intake-scene-notice" role="status">
+                      {waiting ? "" : notice}
+                    </p>
+                    <details className="intake-scene-management">
+                      <summary>답변 관리</summary>
+                      <div className="intake-scene-tools">
+                        <Button
+                          variant="ghost"
+                          disabled={locked || index === 0}
+                          onClick={() => {
+                            const epoch = ticket();
+                            void transition(
+                              () => {
+                                setIndex(index - 1);
+                                setNotice("");
+                              },
+                              () => accessCurrent(epoch),
+                            );
+                          }}
+                        >
+                          <ArrowLeft size={15} aria-hidden="true" />
+                          이전 질문
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          disabled={
+                            locked || !answerState || (answerState === "answered" && !value.trim())
+                          }
+                          onClick={() => void save(false)}
+                        >
+                          <Save size={15} aria-hidden="true" />
+                          답변 저장
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          onClick={() => setExit(true)}
+                          disabled={busy || leaving}
+                        >
+                          나중에 이어하기
+                        </Button>
+                      </div>
+                    </details>
+                  </form>
+                  {exit ? (
+                    <div
+                      className="intake-exit"
+                      role="dialog"
+                      aria-modal="false"
+                      aria-labelledby="exit-title"
+                    >
+                      <h2 id="exit-title">내 사건에서 다시 이어갈 수 있어요</h2>
+                      <p>수정 중인 답변은 저장한 뒤 이동해 주세요.</p>
+                      <div className="intake-scene-tools">
+                        <ButtonLink href="/cases">목록으로 이동</ButtonLink>
+                        <Button variant="ghost" onClick={() => setExit(false)}>
+                          계속 답하기
+                        </Button>
+                      </div>
+                    </div>
+                  ) : null}
+                </>
+              )}
+            </div>
           )}
         </section>
       ) : null}
@@ -520,19 +554,22 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
 
 function PreparationStatus({ title, saved = false }: { title: string; saved?: boolean }) {
   return (
-    <div className="intake-preparation" role="status" aria-live="polite" aria-atomic="true">
-      <span className="intake-preparation-icon">
-        <LoaderCircle size={20} aria-hidden="true" />
-      </span>
+    <div className="intake-scene-status" role="status" aria-live="polite" aria-atomic="true">
       <div>
         {saved ? (
-          <span className="intake-preparation-saved">
+          <span className="intake-scene-saved">
             <Check size={13} aria-hidden="true" />
             답변 저장 완료
           </span>
         ) : null}
-        <p>{title}</p>
-        <span>준비되면 자동으로 이어져요. 잠시만 기다려 주세요.</span>
+        <p>
+          {title}
+          <span className="intake-scene-dots" aria-hidden="true">
+            <i />
+            <i />
+            <i />
+          </span>
+        </p>
       </div>
     </div>
   );

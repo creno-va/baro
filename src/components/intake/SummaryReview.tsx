@@ -1,4 +1,4 @@
-import { ArrowRight, Check, Pencil, Save } from "lucide-react";
+import { ArrowRight, Check, Save } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../../client/api";
 import type { CaseView } from "../../client/api/types";
@@ -6,7 +6,7 @@ import { BrandMark } from "../ui/brand";
 import { Button, ButtonLink } from "../ui/button";
 import { Textarea } from "../ui/form";
 import { StatePanel } from "../ui/state-panel";
-import { BackToCases, ErrorPanel, IntakeProgress } from "./common";
+import { BackToCases, ErrorPanel } from "./common";
 import { useCustomerAccess } from "./useCustomerAccess";
 
 export function SummaryReview({ caseId }: { caseId: string }) {
@@ -157,8 +157,10 @@ export function SummaryReview({ caseId }: { caseId: string }) {
   }
   return (
     <div className="intake-flow">
-      <BackToCases />
-      <IntakeProgress step={2} />
+      <nav className="intake-scene-nav" aria-label="사건 정리 탐색">
+        <BackToCases />
+        <span>요약 확인</span>
+      </nav>
       {loading && !item && !error ? (
         <StatePanel variant="loading" title="저장한 요약을 불러오고 있어요." />
       ) : null}
@@ -178,17 +180,18 @@ export function SummaryReview({ caseId }: { caseId: string }) {
         />
       ) : null}
       {item && ready ? (
-        <section className="intake-card intake-review" aria-busy={busy}>
-          <div className="intake-assistant-heading">
-            <BrandMark size={32} />
-            <p className="intake-eyebrow">마지막으로 확인해 주세요</p>
-          </div>
-          <h1>이야기를 이렇게 정리했어요</h1>
-          <p className="intake-muted">
-            이름, 날짜, 금액이 맞는지 살펴보세요.
-            <br />
-            틀리거나 빠진 내용, 불리한 사실도 바로 고칠 수 있어요.
-          </p>
+        <section
+          className="intake-scene intake-summary-scene intake-scene-arrival"
+          aria-busy={busy}
+          aria-labelledby="summary-heading"
+        >
+          <header className="intake-scene-heading">
+            <span className="intake-scene-emblem" aria-hidden="true">
+              <BrandMark size={48} />
+            </span>
+            <h1 id="summary-heading">이야기를 이렇게 정리했어요</h1>
+            <p>내용이 맞는지 확인하고, 필요한 부분만 고쳐주세요.</p>
+          </header>
           {item.schemaVersion === "1" || item.stage === "active" || item.stage === "archived" ? (
             <StatePanel
               variant="pending"
@@ -212,114 +215,107 @@ export function SummaryReview({ caseId }: { caseId: string }) {
             />
           ) : (
             <>
-              <div className="intake-review-heading">
-                <label htmlFor="case-summary" className="ui-label">
-                  <Pencil size={16} aria-hidden="true" />
+              <div className="intake-scene-composer">
+                <label htmlFor="case-summary" className="sr-only">
                   요약 편집
                 </label>
-                <span className={dirty ? "intake-review-state is-dirty" : "intake-review-state"}>
-                  {dirty ? "수정 중" : "저장됨"}
-                </span>
-              </div>
-              <Textarea
-                id="case-summary"
-                value={summary}
-                onChange={(event) => {
-                  setSummary(event.target.value);
-                  setChecked(false);
-                  setConfirming(false);
-                }}
-                maxLength={5000}
-                disabled={busy}
-                aria-describedby="summary-help"
-              />
-              <p id="summary-help" className="intake-count">
-                {[...summary].length.toLocaleString()} / 5,000자 ·{" "}
-                {dirty ? "아직 저장하지 않은 수정이 있어요" : "저장한 요약"}
-              </p>
-              <div className="intake-actions intake-review-edit-actions">
-                <Button
-                  variant="outline"
-                  onClick={() => void save()}
-                  disabled={busy || !dirty || !summary.trim()}
-                >
-                  <Save size={16} aria-hidden="true" />
-                  {busy && failedOperation.current === "save" ? "저장 중…" : "수정 내용 저장"}
-                </Button>
-                <Button
-                  variant="ghost"
-                  onClick={() => {
-                    setSummary(item.summary);
+                <Textarea
+                  id="case-summary"
+                  value={summary}
+                  onChange={(event) => {
+                    setSummary(event.target.value);
                     setChecked(false);
                     setConfirming(false);
+                    setNotice("");
                   }}
-                  disabled={busy || !dirty}
-                >
-                  수정 취소
-                </Button>
-              </div>
-              <p className="intake-save-notice" role="status">
-                {notice}
-              </p>
-              <div className="intake-review-finish">
-                <label className="intake-confirm-check">
-                  <input
-                    type="checkbox"
-                    checked={checked}
-                    onChange={(event) => {
-                      setChecked(event.target.checked);
-                      setConfirming(false);
-                    }}
-                    disabled={busy || dirty}
-                  />
-                  <span>요약이 내가 이야기한 사실과 맞는지 확인했어요.</span>
-                </label>
-                <p className="intake-review-note">
-                  {dirty
-                    ? "수정 내용을 저장하면 확인할 수 있어요."
-                    : "요약은 사실을 정리한 내용이며, 법률 판단은 아니에요."}
+                  maxLength={5000}
+                  disabled={busy}
+                  aria-describedby="summary-help"
+                />
+                <p id="summary-help" className="intake-count">
+                  {[...summary].length.toLocaleString()} / 5,000자
                 </p>
-                {confirming ? (
-                  <div
-                    className="intake-exit"
-                    role="dialog"
-                    aria-modal="false"
-                    aria-labelledby="confirm-title"
-                  >
-                    <h2 id="confirm-title">이제 사건 정리를 시작할까요?</h2>
-                    <p>사건을 열면 자료를 추가하고, 다음 할 일을 함께 정리할 수 있어요.</p>
-                    <div className="intake-actions">
-                      <Button onClick={() => void confirm()} disabled={busy}>
-                        <Check size={18} aria-hidden="true" />
-                        {busy ? "확인 중…" : "확인하고 사건 열기"}
-                      </Button>
-                      <Button
-                        variant="outline"
-                        onClick={() => setConfirming(false)}
-                        disabled={busy}
-                      >
-                        취소
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <Button
-                    className="intake-review-continue"
-                    onClick={() => setConfirming(true)}
-                    disabled={busy || dirty || !checked || !summary.trim()}
-                  >
-                    요약 확인하고 계속
-                    <ArrowRight size={18} aria-hidden="true" />
-                  </Button>
-                )}
               </div>
-              <ButtonLink
-                className="intake-review-back"
-                variant="ghost"
-                href={`/cases/${encodeURIComponent(caseId)}/intake?question=0&edit=1`}
-              >
-                이전 답변 수정하기
-              </ButtonLink>
+              {dirty ? (
+                <div className="intake-scene-tools">
+                  <Button
+                    variant="outline"
+                    onClick={() => void save()}
+                    disabled={busy || !summary.trim()}
+                  >
+                    <Save size={16} aria-hidden="true" />
+                    {busy && failedOperation.current === "save" ? "저장 중…" : "수정 내용 저장"}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={() => {
+                      setSummary(item.summary);
+                      setChecked(false);
+                      setConfirming(false);
+                      setNotice("");
+                    }}
+                    disabled={busy}
+                  >
+                    수정 취소
+                  </Button>
+                </div>
+              ) : null}
+              <p className="intake-scene-notice" role="status">
+                {dirty ? "수정 내용을 저장하면 계속할 수 있어요." : notice}
+              </p>
+              <label className="intake-confirm-check">
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={(event) => {
+                    setChecked(event.target.checked);
+                    setConfirming(false);
+                  }}
+                  disabled={busy || dirty}
+                />
+                <span>요약이 내가 이야기한 사실과 맞는지 확인했어요.</span>
+              </label>
+              {confirming ? (
+                <div
+                  className="intake-exit"
+                  role="dialog"
+                  aria-modal="false"
+                  aria-labelledby="confirm-title"
+                >
+                  <h2 id="confirm-title">이제 사건 정리를 시작할까요?</h2>
+                  <Button
+                    className="intake-scene-primary"
+                    onClick={() => void confirm()}
+                    disabled={busy}
+                  >
+                    <Check size={18} aria-hidden="true" />
+                    {busy ? "확인 중…" : "확인하고 사건 열기"}
+                  </Button>
+                  <div className="intake-scene-tools">
+                    <Button variant="ghost" onClick={() => setConfirming(false)} disabled={busy}>
+                      취소
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <Button
+                  className="intake-scene-primary"
+                  onClick={() => setConfirming(true)}
+                  disabled={busy || dirty || !checked || !summary.trim()}
+                >
+                  요약 확인하고 계속
+                  <ArrowRight size={18} aria-hidden="true" />
+                </Button>
+              )}
+              <div className="intake-scene-tools">
+                <ButtonLink
+                  variant="ghost"
+                  href={`/cases/${encodeURIComponent(caseId)}/intake?question=0&edit=1`}
+                >
+                  이전 답변 수정하기
+                </ButtonLink>
+              </div>
+              <p className="intake-scene-notice">AI가 정리한 내용이며, 법률 판단은 아니에요.</p>
             </>
           )}
         </section>

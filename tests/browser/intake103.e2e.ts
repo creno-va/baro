@@ -3,12 +3,26 @@ import type { QuestionView } from "../../src/client/api/types";
 
 async function capture(page: Page, name: string) {
   const { default: AxeBuilder } = await import("@axe-core/playwright");
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await page.evaluate(() => {
     if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
     window.scrollTo(0, 0);
   });
-  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
-  await page.screenshot({ path: `/tmp/baro-intake-${name}.png`, fullPage: true });
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+  await page.screenshot({
+    path: `/tmp/baro-simple-intake-${name}.png`,
+    fullPage: true,
+    animations: "disabled",
+  });
+}
+
+async function openAnswerTools(page: Page) {
+  const tools = page
+    .locator("details")
+    .filter({ has: page.locator("summary", { hasText: "답변 관리" }) });
+  await expect(tools).toBeVisible();
+  if (!(await tools.evaluate((element) => element.hasAttribute("open"))))
+    await tools.locator("summary").click();
 }
 
 async function holdGeneration(page: Page, stage: "questions" | "summary", failed = false) {
@@ -109,16 +123,24 @@ test("two-question mobile flow saves/reloads/resumes/back edits/skips and reache
   await expect(page).toHaveURL(/\/intake/);
   await expect(page.getByRole("heading", { name: "이 일은 언제 시작됐나요?" })).toBeVisible();
   await capture(page, "question-mobile");
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await capture(page, "question-desktop");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.getByRole("button", { name: "답변 저장", exact: true })).toBeHidden();
+  await expect(page.getByRole("button", { name: "나중에 이어하기" })).toBeHidden();
   await page.getByRole("textbox", { name: "답변", exact: true }).fill("2026년 9월");
+  await openAnswerTools(page);
   await page.getByRole("button", { name: "답변 저장", exact: true }).click();
   await expect(page.getByRole("status").filter({ hasText: "답변이 저장됐어요" })).toBeVisible();
   await page.reload();
   await expect(page.getByRole("textbox", { name: "답변", exact: true })).toHaveValue("2026년 9월");
   await page.getByRole("button", { name: "저장하고 다음 질문" }).click();
   await expect(page.getByRole("heading", { name: "얼마의 금액이 관련되어 있나요?" })).toBeVisible();
+  await openAnswerTools(page);
   await page.getByRole("button", { name: "이전 질문" }).click();
   await page.getByRole("textbox", { name: "답변", exact: true }).fill("2026년 8월");
   await page.getByRole("button", { name: "저장하고 다음 질문" }).click();
+  await openAnswerTools(page);
   await page.getByRole("button", { name: "나중에 이어하기" }).click();
   await page.getByRole("link", { name: "목록으로 이동" }).click();
   await page.getByRole("link").filter({ hasText: "이어 답하기" }).click();
@@ -127,6 +149,7 @@ test("two-question mobile flow saves/reloads/resumes/back edits/skips and reache
       name: "얼마의 금액이 관련되어 있나요?",
     }),
   ).toBeVisible();
+  await openAnswerTools(page);
   await page.getByRole("button", { name: "이전 질문" }).click();
   await expect(page.getByRole("textbox", { name: "답변", exact: true })).toHaveValue("2026년 8월");
   await page.getByRole("button", { name: "저장하고 다음 질문" }).click();
@@ -135,7 +158,12 @@ test("two-question mobile flow saves/reloads/resumes/back edits/skips and reache
   const summary = page.getByRole("textbox", { name: "요약 편집" });
   await expect(summary).toHaveValue(/2026년 8월/);
   await expect(summary).toHaveValue(/건너뛰기/);
+  await expect(page.getByRole("button", { name: "수정 내용 저장" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "수정 취소", exact: true })).toHaveCount(0);
   await capture(page, "summary-mobile");
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await capture(page, "summary-desktop");
+  await page.setViewportSize({ width: 390, height: 844 });
   expect(
     await page.evaluate(() => {
       const records = JSON.parse(localStorage.getItem("baro-api-mock-v1:intake") ?? "{}");
@@ -148,6 +176,7 @@ test("two-question mobile flow saves/reloads/resumes/back edits/skips and reache
   await summary.fill(`${old}\n수정 취소 확인`);
   await page.getByRole("button", { name: "수정 취소", exact: true }).click();
   await expect(summary).toHaveValue(old);
+  await expect(page.getByRole("button", { name: "수정 내용 저장" })).toHaveCount(0);
   await summary.fill(`${old}\n합성 추가 사실입니다.`);
   await page.getByRole("button", { name: "수정 내용 저장" }).click();
   await expect(
@@ -295,6 +324,7 @@ test("new follow-up generation retains the submitted answer and polls past the s
   await expect(answer).toHaveValue("2026년 8월에 시작했어요.");
   await expect(answer).toBeDisabled();
   await capture(page, "pending-mobile");
+  await openAnswerTools(page);
   await expect(page.getByRole("button", { name: "이전 질문" })).toBeDisabled();
   await expect(page).toHaveURL(/question=0/);
   await expect
@@ -375,6 +405,7 @@ test("returning to the tab preserves a draft on a previous question", async ({ p
   const answer = page.getByRole("textbox", { name: "답변", exact: true });
   await answer.fill("2026년 8월");
   await page.getByRole("button", { name: "저장하고 다음 질문" }).click();
+  await openAnswerTools(page);
   await page.getByRole("button", { name: "이전 질문" }).click();
   await answer.fill("아직 저장하지 않은 2026년 9월 답변");
   await page.evaluate(async () => {
@@ -413,6 +444,7 @@ test("retrying a failed summary saves the edited answer before generation", asyn
   await page.getByRole("button", { name: "모름", exact: true }).click();
   const answer = page.getByRole("textbox", { name: "답변", exact: true });
   await answer.fill("처음에는 100만 원이라고 적었어요.");
+  await openAnswerTools(page);
   await page.getByRole("button", { name: "답변 저장", exact: true }).click();
   await expect(page.getByRole("status").filter({ hasText: "답변이 저장됐어요" })).toBeVisible();
   await holdGeneration(page, "summary", true);
@@ -429,3 +461,72 @@ test("retrying a failed summary saves the edited answer before generation", asyn
   await expect(page.getByRole("textbox", { name: "요약 편집" })).toHaveValue(/200만 원/);
   await expect(page.getByRole("textbox", { name: "요약 편집" })).not.toHaveValue(/100만 원/);
 });
+
+for (const reducedMotion of ["no-preference", "reduce"] as const) {
+  test(`question transition waits for the saved response with ${reducedMotion} motion`, async ({
+    page,
+  }) => {
+    await page.emulateMedia({ reducedMotion });
+    await page.goto("/cases/new");
+    await page
+      .getByRole("textbox", { name: "지금까지 있었던 일" })
+      .fill("합성 전환 테스트입니다. 지인에게 빌려준 돈과 약속 날짜를 차분히 정리하고 싶어요.");
+    await page.getByRole("button", { name: "저장하고 계속" }).click();
+    const first = page.getByRole("heading", { name: "이 일은 언제 시작됐나요?" });
+    const second = page.getByRole("heading", { name: "얼마의 금액이 관련되어 있나요?" });
+    const answer = page.getByRole("textbox", { name: "답변", exact: true });
+    await expect(first).toBeVisible();
+    const scene = page.locator(".intake-scene");
+    const content = page.locator(".intake-scene-content");
+    if (reducedMotion === "reduce") {
+      await expect(content).toHaveCSS("animation-name", "none");
+    } else {
+      expect(
+        await content.evaluate((element) =>
+          Number.parseFloat(getComputedStyle(element).animationDuration),
+        ),
+      ).toBeGreaterThan(0);
+    }
+    await page.evaluate(async () => {
+      const corePath = "/src/client/api/core.ts";
+      const fixturePath = "/src/client/api/mock/cases.ts";
+      const { registerMockHandlers } = await import(corePath);
+      const { casesMockHandlers } = await import(fixturePath);
+      const state = { started: false, release: () => {} };
+      (window as unknown as { intakeSave: typeof state }).intakeSave = state;
+      registerMockHandlers({
+        "cases.saveAnswers": async (raw: unknown, context: { key: string }) => {
+          state.started = true;
+          await new Promise<void>((resolve) => {
+            state.release = resolve;
+          });
+          return casesMockHandlers["cases.saveAnswers"](raw, context);
+        },
+      });
+    });
+    await answer.fill("2026년 9월부터예요.");
+    await page.getByRole("button", { name: "저장하고 다음 질문" }).click();
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () => (window as unknown as { intakeSave: { started: boolean } }).intakeSave.started,
+        ),
+      )
+      .toBe(true);
+    await expect(first).toBeVisible();
+    await expect(second).toHaveCount(0);
+    await expect(answer).toHaveValue("2026년 9월부터예요.");
+    await expect(answer).toBeDisabled();
+    await expect(page).toHaveURL(/question=0/);
+    await expect(scene).not.toHaveAttribute("data-transition", "leaving");
+    await page.evaluate(() => {
+      (window as unknown as { intakeSave: { release: () => void } }).intakeSave.release();
+    });
+    await expect(second).toBeVisible();
+    await expect(second).toBeFocused();
+    await expect(page).toHaveURL(/question=1/);
+    await expect(answer).toBeEnabled();
+    await expect(answer).toHaveValue("");
+    if (reducedMotion === "reduce") await expect(content).toHaveCSS("animation-name", "none");
+  });
+}
