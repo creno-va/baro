@@ -214,9 +214,9 @@ async function fixture() {
   };
 }
 
-test("funded runtime completes three question batches, summary and chat through the real paid gateway", async () => {
+test("funded runtime completes two follow-up questions, summary and chat through the real paid gateway", async () => {
   const f = await fixture();
-  for (let index = 0; index < 3; index++) {
+  for (let index = 0; index < 2; index++) {
     const queued = await f.advance();
     expect((await f.execute(queued.jobId)).status).toBe("completed");
     const intake = await f.service.intake(f.owner.userId, f.workspace.id);
@@ -242,8 +242,8 @@ test("funded runtime completes three question batches, summary and chat through 
     selectedFileIds: [],
   });
   expect((await f.execute(chat.jobId)).status).toBe("completed");
-  expect(f.calls).toHaveLength(10);
-  expect(f.calls.filter((phase) => phase.includes("audit"))).toHaveLength(5);
+  expect(f.calls).toHaveLength(8);
+  expect(f.calls.filter((phase) => phase.includes("audit"))).toHaveLength(4);
   expect((await f.service.messages(f.owner.userId, f.workspace.id)).map((m) => m.role)).toContain(
     "assistant",
   );
@@ -251,9 +251,9 @@ test("funded runtime completes three question batches, summary and chat through 
     f.preview.sqlite
       .query("SELECT count(*) AS n FROM v2_cost_attempts WHERE state='settled'")
       .get(),
-  ).toEqual({ n: 10 });
+  ).toEqual({ n: 8 });
   expect((await f.execute(chat.jobId)).status).toBe("completed");
-  expect(f.calls).toHaveLength(10);
+  expect(f.calls).toHaveLength(8);
 });
 
 test("schema correction is separately paid and its validated result is published", async () => {

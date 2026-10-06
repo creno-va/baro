@@ -86,8 +86,8 @@ provider 보존/무학습 설정은 Gateway 로그 설정과 별도로 법률/�
 - 네트워크, 429, 명시적 5xx만 제한 횟수의 지수 backoff로 재시도한다.
 - schema 실패는 같은 단계에서 1회 교정 시도 후 실패한다.
 - policy/citation 실패는 같은 초안을 반복 호출하지 않고 안전하게 축소하거나 실패한다.
-- v2 intake는 정규화한 중복 질문을 제거하고 남은 새 질문 전체를 검증한다. 새 질문이
-  없거나 생성 결과의 내부 검증이 실패하면 사유 코드만 전달해 새 초안을 1회 재생성하고
+- v2 intake는 새로 생성한 한 문항이 기존 질문과 정규화 후 중복되는지 검사한다. 중복이거나
+  생성 결과의 내부 검증이 실패하면 사유 코드만 전달해 새 초안을 1회 재생성하고
   사실·개인정보·정책 검사와 독립 audit를 다시 수행한다. 공급자의 refusal은 자동 재생성하지 않는다.
 - 질문 audit는 질문과 선택지를 평가한다. 사용자 입력에 전략·분쟁·민감 정보가 있다는
   사실이나 질문 묶음이 전체 요약을 포함하지 않는다는 이유만으로 거절하지 않는다.
@@ -128,8 +128,10 @@ failure가 하나라도 있으면 배포를 막는다. 샘플·프롬프트·예
 [ADR-0006](../adr/0006-continuous-case-workspace-and-navigation.md)의 상태와
 [v2 실행 계약](./V2-CONTRACTS.md)을 사용한다. workspace를 완료 terminal로 닫지 않고
 intake/question job, summary review, confirmed summary, chat/action job, file interpretation,
-report snapshot을 독립 versioned operation으로 나눈다. 기본 intake 3묶음×최대5문항 후
-사용자 요약 확인을 받는다. 이후에도 질문·사실 수정·자료 추가를 계속 처리한다.
+report snapshot을 독립 versioned operation으로 나눈다. 2026-10-07 사용자 요청에 따라
+새 intake는 한 번에 한 문항, 총 최대 두 후속 질문 뒤 사용자 요약 확인을 받는다.
+모름·건너뛰기도 한도에 포함하고 남은 정보 공백은 요약에 보존한다. 기존 사건의 저장된
+질문·답변은 그대로 읽고 수정할 수 있다. 이후에도 질문·사실 수정·자료 추가를 계속 처리한다.
 
 | 단계 | 최소 입력·출력 | 확정/실패 경계 |
 | --- | --- | --- |

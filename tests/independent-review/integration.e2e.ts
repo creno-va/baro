@@ -17,15 +17,14 @@ async function createActiveCase(page: Page, confirm = true) {
   await page
     .getByLabel("지금까지 있었던 일")
     .fill("독립 검토용 합성 사건입니다. 빌려준 돈과 약속 날짜를 확인합니다.");
-  await page.getByRole("button", { name: "저장하고 질문 시작" }).click();
+  await page.getByRole("button", { name: "저장하고 계속" }).click();
   await page.getByRole("button", { name: "모름", exact: true }).click();
   await page.reload();
-  await expect(page.getByText("질문 2 / 4", { exact: true })).toBeVisible();
+  await expect(page.getByText("질문 2 / 최대 2", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "건너뛰기", exact: true }).click();
-  for (let i = 0; i < 2; i++) await page.getByRole("button", { name: "모름", exact: true }).click();
   await expect(page).toHaveURL(/\/summary$/);
   if (!confirm) return new URL(page.url()).pathname.replace(/\/summary$/, "");
-  await page.getByRole("checkbox", { name: /저장한 요약을 읽고/ }).check();
+  await page.getByRole("checkbox", { name: /요약이 내가 이야기한 사실과 맞는지/ }).check();
   await page.getByRole("button", { name: "요약 확인하고 계속" }).click();
   await page.getByRole("button", { name: "확인하고 사건 열기" }).click();
   await expect(page.getByRole("heading", { name: "이어서 대화하기" })).toBeVisible();

@@ -35,16 +35,8 @@ function context(): WorkspaceContext {
           id: "batch_1",
           ordinal: 1,
           generatedForIntakeRevision: 1,
-          questions: [
-            question("q1", "어떤 자료를 보유하고 있나요?"),
-            question("q2", "사건은 언제 발생했나요?"),
-            question("q3", "당사자들은 어떤 관계인가요?"),
-          ],
-          answers: [
-            { questionId: "q1", status: "answered", value: "요구 내용을 담은 문자가 있습니다." },
-            { questionId: "q2", status: "unknown" },
-            { questionId: "q3", status: "skipped" },
-          ],
+          questions: [question("q2", "사건은 언제 발생했나요?")],
+          answers: [{ questionId: "q2", status: "unknown" }],
         },
       ],
       summary: null,
@@ -57,7 +49,7 @@ function context(): WorkspaceContext {
     facts: [],
     references: {
       intakeRevision: 3,
-      answeredQuestionIds: ["q1"],
+      answeredQuestionIds: [],
       messages: [],
       files: [],
       verifiedCitationIds: [],
@@ -83,40 +75,64 @@ function pipeline(reply: (phase: Phase, input: unknown) => unknown | Promise<unk
   };
 }
 
-test("later batches drop exact repeated answered/unknown/skipped questions and audit the remaining batch", async () => {
+test.each(["answered", "unknown", "skipped"] as const)(
+  "the second follow-up replaces a repeated %s question without changing saved answers",
+  async (status) => {
+    const saved = context();
+    const batch = saved.intake.batches[0];
+    if (!batch) throw new Error("Missing first batch");
+    batch.answers = [
+      status === "answered"
+        ? { questionId: "q2", status, value: "지난달입니다." }
+        : { questionId: "q2", status },
+    ];
+    saved.references.answeredQuestionIds = status === "answered" ? ["q2"] : [];
+    const before = structuredClone(saved);
+    let generated = 0;
+    const { calls, value } = pipeline((phase, input) => {
+      if (phase === "workspace_audit") {
+        expect(input).toMatchObject({
+          phase: "workspace_questions",
+          draft: { questions: [question("new_1", "요구에 답한 기록이 있나요?")] },
+        });
+        return approved;
+      }
+      generated += 1;
+      return {
+        questions: [
+          generated === 1
+            ? question("repeat_1", "사건은  언제 발생했나요?")
+            : question("new_1", "요구에 답한 기록이 있나요?"),
+        ],
+      };
+    });
+    const result = await value.questions(saved, "request-1");
+    expect(result).toHaveLength(1);
+    expect(result[0]?.prompt).toBe("요구에 답한 기록이 있나요?");
+    expect(result[0]?.id).not.toBe("new_1");
+    expect(calls.map((call) => call.phase)).toEqual([
+      "workspace_questions",
+      "workspace_questions",
+      "workspace_audit",
+    ]);
+    expect(saved).toEqual(before);
+  },
+);
+
+test("the two-question intake cap stops generation before any paid phase or regeneration", async () => {
   const saved = context();
   saved.intake.batches.push({
     id: "batch_2",
     ordinal: 2,
     generatedForIntakeRevision: 2,
-    questions: [question("q4", "요구를 언제 전달받았나요?")],
-    answers: [{ questionId: "q4", status: "unknown" }],
+    questions: [question("q3", "요구에 답한 기록이 있나요?")],
+    answers: [{ questionId: "q3", status: "skipped" }],
   });
-  const before = structuredClone(saved);
-  const { calls, value } = pipeline((phase, input) => {
-    if (phase === "workspace_audit") {
-      expect(input).toMatchObject({
-        phase: "workspace_questions",
-        draft: { questions: [question("new_1", "요구에 답한 기록이 있나요?")] },
-      });
-      return approved;
-    }
-    return {
-      questions: [
-        question("repeat_1", "어떤 자료를 보유하고 있나요?"),
-        question("repeat_2", "사건은 언제 발생했나요?"),
-        question("repeat_3", "당사자들은 어떤 관계인가요?"),
-        question("new_1", "요구에 답한 기록이 있나요?"),
-        question("new_2", "요구에  답한 기록이 있나요?"),
-      ],
-    };
+  const { calls, value } = pipeline(() => {
+    throw new Error("No generation after the cap");
   });
-  const result = await value.questions(saved, "request-1");
-  expect(result).toHaveLength(1);
-  expect(result[0]?.prompt).toBe("요구에 답한 기록이 있나요?");
-  expect(result[0]?.id).not.toBe("new_1");
-  expect(calls.map((call) => call.phase)).toEqual(["workspace_questions", "workspace_audit"]);
-  expect(saved).toEqual(before);
+  await expect(value.questions(saved, "request-limit")).rejects.toThrow("POLICY_REJECTED");
+  expect(calls).toHaveLength(0);
 });
 
 test("all repeated follow-up questions regenerate once with saved answers and a sanitized reason", async () => {

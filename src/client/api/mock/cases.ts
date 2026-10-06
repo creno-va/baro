@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { V2_LIMITS } from "../../../contracts/v2";
+import { V2_INTAKE_POLICY, V2_LIMITS } from "../../../contracts/v2";
 import {
   answersInputSchema,
   createInputSchema,
@@ -39,6 +39,7 @@ function result(item: CaseView, value: Intake) {
     questions: value.questions,
     revision: item.revision,
     complete: item.stage === "summary" || item.stage === "active",
+    followupLimit: V2_INTAKE_POLICY.followupLimit,
   };
 }
 function store(item: CaseView, value?: Intake) {
@@ -96,17 +97,6 @@ function makeQuestions(narrative: string, subject: "individual" | "company"): Qu
         : subject === "company"
           ? "기업과 상대방은 어떤 관계인가요?"
           : "상대방과 어떤 관계인가요?",
-    },
-    {
-      id: crypto.randomUUID(),
-      kind: "choice",
-      text: "확인할 수 있는 자료가 있나요?",
-      options: ["계약서나 문서가 있어요", "문자·메신저·녹음이 있어요", "현재 자료가 없어요"],
-    },
-    {
-      id: crypto.randomUUID(),
-      kind: "text",
-      text: "내 입장에 불리하거나, 서로 다르게 기억하는 내용이 있나요?",
     },
   ];
 }

@@ -25,7 +25,7 @@ test("a customer starts directly on home and reaches adaptive questions without 
   await page.goto("/");
   const narrative = page.getByRole("textbox", { name: "지금까지 있었던 일" });
   await expect(narrative).toBeEnabled();
-  const submit = page.getByRole("button", { name: "저장하고 질문 시작" });
+  const submit = page.getByRole("button", { name: "저장하고 계속" });
   await expect(submit).toBeDisabled();
   await narrative.fill("짧은 내용");
   await expect(submit).toBeDisabled();
@@ -73,7 +73,7 @@ test("home keeps guest, consent and lawyer entry points separate from customer c
       page.locator("main .conversation-home").getByRole("link", { name: item.label, exact: true }),
     ).toHaveAttribute("href", item.href);
     await expect(page.getByRole("textbox", { name: "지금까지 있었던 일" })).toBeDisabled();
-    await expect(page.getByRole("button", { name: "저장하고 질문 시작" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "저장하고 계속" })).toHaveCount(0);
   }
   expect(await page.evaluate(() => localStorage.getItem("baro-api-mock-v1:cases"))).toBeNull();
 });
@@ -127,12 +127,12 @@ test("conversation screens remain accessible and responsive from home through ch
   await page
     .getByRole("textbox", { name: "지금까지 있었던 일" })
     .fill("화면 검증용 합성 사건입니다. 지인에게 빌려준 돈을 약속한 날짜에 돌려받지 못했어요.");
-  await page.getByRole("button", { name: "저장하고 질문 시작" }).click();
+  await page.getByRole("button", { name: "저장하고 계속" }).click();
   await expect(page.getByRole("heading", { name: "이 일은 언제 시작됐나요?" })).toBeVisible();
   await page.screenshot({ path: ".wrangler/ui-review/intake-mobile.png", fullPage: true });
-  for (let index = 0; index < 4; index++)
+  for (let index = 0; index < 2; index++)
     await page.getByRole("button", { name: "모름", exact: true }).click();
-  await page.getByRole("checkbox", { name: "저장한 요약을 읽고" }).check();
+  await page.getByRole("checkbox", { name: "요약이 내가 이야기한 사실과 맞는지" }).check();
   await page.getByRole("button", { name: "요약 확인하고 계속" }).click();
   await page.getByRole("button", { name: "확인하고 사건 열기" }).click();
   await expect(page.getByRole("heading", { name: "이어서 대화하기" })).toBeVisible();
@@ -158,7 +158,7 @@ test("recent case titles clear when another tab changes the active account", asy
   await page
     .getByRole("textbox", { name: "지금까지 있었던 일" })
     .fill("이전 사용자에게만 보여야 하는 합성 사건 제목입니다. 지인에게 돈을 빌려줬어요.");
-  await page.getByRole("button", { name: "저장하고 질문 시작" }).click();
+  await page.getByRole("button", { name: "저장하고 계속" }).click();
   const recent = page.getByRole("navigation", { name: "최근 사건" });
   await expect(recent.getByRole("link")).toHaveCount(1);
   await page.evaluate(() => {
@@ -191,7 +191,7 @@ test("a guest home follows a real peer-tab login and becomes editable without re
   await expect(page.locator("main").getByRole("link", { name: "로그인하고 시작하기" })).toHaveCount(
     0,
   );
-  await expect(page.getByRole("button", { name: "저장하고 질문 시작" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "저장하고 계속" })).toBeDisabled();
 });
 
 test("a peer-tab owner switch clears the home draft before any case can be created", async ({
@@ -221,6 +221,6 @@ test("a peer-tab owner switch clears the home draft before any case can be creat
   await expect(page.getByRole("link", { name: "다른 합성 고객 나의 BARO" })).toBeVisible();
   await expect(narrative).toHaveValue("");
   await expect(page.getByRole("radio", { name: "개인", exact: true })).toBeChecked();
-  await expect(page.getByRole("button", { name: "저장하고 질문 시작" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "저장하고 계속" })).toBeDisabled();
   expect(await page.evaluate(() => localStorage.getItem("baro-api-mock-v1:cases"))).toBeNull();
 });

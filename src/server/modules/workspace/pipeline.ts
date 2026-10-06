@@ -8,7 +8,7 @@ import type {
   V2Summary,
   V2UserMessage,
 } from "../../../contracts/v2";
-import { v2ReferenceIsAuthorized } from "../../../contracts/v2";
+import { V2_INTAKE_POLICY, v2ReferenceIsAuthorized } from "../../../contracts/v2";
 import type { WorkspaceSourceRequest } from "../legal-retrieval/v2/workspace-plans";
 import type { Phase } from "../llm-gateway/prompts";
 import type { createLlmGateway } from "../llm-gateway/service";
@@ -166,6 +166,11 @@ export function createWorkspacePipeline(
   };
   return {
     async questions(context: WorkspaceContext, requestId: string) {
+      if (
+        context.intake.batches.reduce((count, batch) => count + batch.questions.length, 0) >=
+        V2_INTAKE_POLICY.followupLimit
+      )
+        throw new ModelError("POLICY_REJECTED");
       return regenerateDraft(context, async (input) => {
         const draft = workspaceQuestionsOutputSchema.parse(
           await call("workspace_questions", input, requestId),
@@ -182,8 +187,8 @@ export function createWorkspacePipeline(
             batch.questions.map((question) => normalized(question.prompt)),
           ),
         );
-        // An otherwise useful batch need not fail because one question was repeated.
-        // Remove only exact normalized repetitions, including previously skipped questions.
+        // Never publish exact normalized repetitions, including previously skipped questions.
+        // A repeated single-question draft is regenerated within the same follow-up slot.
         draft.questions = draft.questions.filter((question) => {
           const prompt = normalized(question.prompt);
           if (prior.has(prompt)) return false;

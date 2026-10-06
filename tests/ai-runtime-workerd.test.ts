@@ -352,7 +352,7 @@ test("workerd D1 executes questions, outage/policy recovery, summary confirmatio
     expect(providerCalls).toBe(9);
     // Continue every paid product phase on native D1, including encrypted
     // staging/publishing of facts, parties, timeline and actions.
-    for (const batchIndex of [1, 2]) {
+    for (const batchIndex of [1]) {
       const currentIntake = await service.intake(ownerId, workspace.id);
       expect(
         (
@@ -373,7 +373,7 @@ test("workerd D1 executes questions, outage/policy recovery, summary confirmatio
       expect((await execute(accepted.jobId)).status).toBe("completed");
     }
     const summary = await service.intake(ownerId, workspace.id);
-    expect(summary?.batches).toHaveLength(3);
+    expect(summary?.batches).toHaveLength(2);
     expect(summary?.summary).toBeDefined();
     const summaryResponse = await request(`/api/v2/cases/${workspace.id}/summary`);
     expect(summaryResponse.status).toBe(200);
@@ -395,7 +395,7 @@ test("workerd D1 executes questions, outage/policy recovery, summary confirmatio
     expect(chat.status).toBe(202);
     const chatJob = (await chat.json()) as { jobId: string };
     expect((await execute(chatJob.jobId)).status).toBe("completed");
-    expect(providerCalls).toBe(15);
+    expect(providerCalls).toBe(13);
     const messages = await request(`/api/v2/cases/${workspace.id}/messages`);
     expect(messages.status).toBe(200);
     expect(await messages.json()).toMatchObject({
@@ -413,10 +413,10 @@ test("workerd D1 executes questions, outage/policy recovery, summary confirmatio
       await preview
         .prepare("SELECT count(*) AS n FROM v2_cost_attempts WHERE state='settled'")
         .first<number>("n"),
-    ).toBe(14);
+    ).toBe(12);
     // Replay cannot emit another model request or duplicate published entities.
     expect((await execute(chatJob.jobId)).status).toBe("completed");
-    expect(providerCalls).toBe(15);
+    expect(providerCalls).toBe(13);
   } finally {
     await mf.dispose();
   }
