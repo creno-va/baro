@@ -30,6 +30,18 @@ body {
   width: 31px;
   height: 36px;
 }
+/* Product screens inherit the visual palette of the public index. */
+.app-frame,
+.ui-sheet {
+  --primary: #2364e8;
+  --foreground: #191f28;
+  --muted-foreground: #6b7684;
+  --muted: #f5f6f8;
+  --border: #e9edf2;
+}
+.app-surface:has(.lawyer-directory, .account-settings, .stories-heading)::before {
+  display: none;
+}
 .app-frame {
   min-height: 100dvh;
   padding-left: 240px;
@@ -87,49 +99,123 @@ body {
 .app-frame .app-nav__link:hover {
   background: #edf1f7;
 }
+/* Recent stories share the index page's quiet type, soft surfaces and blue accent. */
 .sidebar-recent {
   min-width: 0;
-  margin: 35px 4px 20px;
+  margin: 28px 0 24px;
+  padding-top: 22px;
+  border-top: 1px solid #e9edf2;
+}
+.sidebar-recent__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 10px;
+  margin-bottom: 9px;
 }
 .sidebar-caption {
-  color: #626d80;
+  color: #6b7684;
   font-size: 0.75rem;
   font-weight: 600;
-  margin: 0 10px 12px;
+  margin: 0;
+}
+.sidebar-recent__all {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-height: 32px;
+  color: #6b7684;
+  font-size: 0.68rem;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.sidebar-recent__all:hover {
+  color: #2364e8;
 }
 .sidebar-recent nav {
   display: grid;
-  gap: 3px;
+  gap: 5px;
 }
-.sidebar-recent a {
+.sidebar-story {
   min-width: 0;
   display: flex;
   align-items: center;
   gap: 10px;
-  min-height: 42px;
-  padding: 10px;
+  min-height: 68px;
+  padding: 12px 10px;
   text-decoration: none;
-  border-radius: 9px;
-  color: #586478;
-  font-size: 0.8rem;
+  border-radius: 14px;
+  color: #4e5968;
+  transition:
+    background 0.18s,
+    color 0.18s;
 }
-.sidebar-recent a svg {
+.sidebar-story__icon {
+  display: grid;
+  place-items: center;
   flex-shrink: 0;
+  width: 32px;
+  height: 36px;
+  color: #6b7684;
+  background: #eef1f5;
+  border-radius: 10px;
 }
-.sidebar-recent a span {
+.sidebar-story__copy {
+  display: grid;
+  flex: 1;
   min-width: 0;
+  gap: 6px;
+}
+.sidebar-story__copy strong {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+  font-size: 0.8rem;
+  font-weight: 550;
+  line-height: 1.4;
 }
-.sidebar-recent a:hover {
-  background: #eaf0f7;
+.sidebar-story__meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  color: #6b7684;
+  font-size: 0.65rem;
+  line-height: 1.4;
+}
+.sidebar-story__meta time {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.sidebar-story:hover {
+  background: #edf1f7;
+}
+.sidebar-story[aria-current="page"] {
+  background: #eaf1ff;
+  color: #2364e8;
+}
+.sidebar-story[aria-current="page"] .sidebar-story__icon {
+  background: #dce8ff;
+  color: #2364e8;
 }
 .sidebar-empty {
-  margin: 0 10px;
-  font-size: 0.75rem;
-  color: #626d80;
-  line-height: 1.7;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0;
+  padding: 16px 10px;
+  font-size: 0.73rem;
+  color: #6b7684;
+}
+.sidebar-empty > svg {
+  flex-shrink: 0;
+  margin-top: 3px;
+  color: #8b95a1;
+}
+.sidebar-empty p {
+  margin: 0;
+  line-height: 1.8;
 }
 .sidebar-note {
   margin: auto 14px 35px;
