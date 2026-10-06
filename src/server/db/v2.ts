@@ -10,6 +10,7 @@ import { createV2JobsRepository } from "./v2-jobs";
 import { createV2LawyersRepository } from "./v2-lawyers";
 import { createV2LegacyUpgradeRepository } from "./v2-legacy-upgrade";
 import { createV2OfficialSourceRepository } from "./v2-official-sources";
+import { createV2PaidRuntimeRepository, type RuntimeProofVerifier } from "./v2-paid-runtime";
 import { createV2ReportsRepository } from "./v2-reports";
 import { createV2StagingRepository } from "./v2-staging";
 import { createV2SummaryEditsRepository } from "./v2-summary-edits";
@@ -20,11 +21,20 @@ import { createV2WorkspaceRepository } from "./v2-workspace";
 export function createV2Repository(
   binding: D1Database,
   cipher: EnvelopeCipher,
-  options: { environment: "preview" | "production"; guideHosts?: readonly string[] },
+  options: {
+    environment: "preview" | "production";
+    guideHosts?: readonly string[];
+    verifyRuntimeProof?: RuntimeProofVerifier;
+  },
 ) {
   const core = createV2Core(binding, cipher);
   return {
     accounting: createV2AccountingRepository(core, options.environment),
+    paidRuntime: createV2PaidRuntimeRepository(
+      core,
+      options.environment,
+      options.verifyRuntimeProof,
+    ),
     workspace: createV2WorkspaceRepository(binding, cipher, options.guideHosts),
     files: createV2FilesRepository(core),
     fileStaging: createV2FileStagingRepository(core),

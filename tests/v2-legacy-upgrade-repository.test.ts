@@ -684,6 +684,9 @@ test("first new AI job requires a separate explicit admission after preserved le
   const f = await fixture();
   await f.appendAll();
   expect(await f.upgrades.complete(f.actor, f.snapshotId)).toBe(true);
+  // Historical fixture asserts the real 0005→0006 preservation above. Current
+  // runtime job APIs require the additive 0007 tables before starting new work.
+  f.database.sqlite.exec(await Bun.file("drizzle/0007_runtime_paid_execution.sql").text());
   expect(f.database.sqlite.query("SELECT * FROM v2_jobs").all()).toEqual([]);
   const admission = {
     operationId: crypto.randomUUID(),
