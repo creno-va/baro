@@ -16,7 +16,7 @@ schema/migration, 공유 router/auth, Cloudflare 배포 설정은 변경하지 �
 | #66 UI 접근 경계 | peer-tab 계정/역할 전환·접근 거부·늦은 응답에서 이전 편집/선택/확인/다운로드/modal을 제거. stale revision 복구, 원본 경고, 진행/실패 표시, 모바일·키보드 modal | `tests/browser/reports.e2e.ts`, 독립 integration 회귀 |
 | #67 삭제 | 실제 `/me` 삭제 batch에 exact owner account-type metadata 정리. journal replay는 user 부재에도 metadata 정리. publication runtime inventory와 late-job fencing 유지 | `tests/account-metadata-cleanup.test.ts`, `scripts/deletion-journal.test.ts` |
 | #67 물리 정리 | v2 durable journal/lease/receipt, job stop → private/staging/public delete → negative HEAD → reservation release. running/unknown writer, 부분 실패, stale lease, 예산/권한 실패는 pending 유지 | `tests/v2-deletion-reconcile.test.ts` |
-| #67 설정 | owner-tag 삭제 확인 header, 사용량/사건/계정 삭제 상태 및 확인 modal 정리. 다른 계정이나 reauthentication 실패 후 이전 usage/confirmation 제거. accepted 뒤에만 기존 비민감 session marker를 발행 | signed-session SQL 및 browser 회귀 |
+| #67 설정 | load/focus/pagehide/pageshow 요청 수명과 재인증 generation으로 이전 화면의 늦은 접근/OAuth 실패가 새 marker를 지우지 못하도록 함. owner-tag 삭제 확인 header, 사용량/사건/계정 삭제 상태 및 확인 modal 정리. 다른 계정이나 reauthentication 실패 후 이전 usage/confirmation 제거. accepted 뒤에만 기존 비민감 session marker를 발행 | signed-session SQL 및 browser 회귀 |
 
 ## 다운로드 검증
 
@@ -109,3 +109,9 @@ owned reports browser 6, 실제 SQL 다운로드 1, shared mock 통합 1,
 - native PCM fixture 및 CI의 Linux isolated media fixture
 - `bun test ./tests/independent-review/account-metadata.repro.ts -t 'real account deletion'`
   (같은 파일의 옛 unmounted-route 기록 검사는 route 구현 인수 조건으로 사용하지 않음)
+
+설정 재인증 race 회귀: 지연 접근 실패 및 지연 OAuth 실패를 화면 전환 뒤 전달하는
+새 browser2개는 이전 코드에서 모두 실패하고, 수정 후 기존 보호 조건과 함께
+3회 반복 **15 PASS**다. bfcache 복귀는 상태를 다시 검증하며 오래된 callback으로
+삭제를 승인하지 않는다. 로컬 실제 HTTP/합성 OAuth adapter 증거이며 외부 OAuth
+성공으로 표현하지 않는다.

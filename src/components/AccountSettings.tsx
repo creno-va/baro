@@ -6,6 +6,10 @@ import { accountDeleted } from "../server/modules/analytics/browser";
 import { ConfirmDialog } from "./reports/ConfirmDialog";
 
 const markerKey = "baro.account-reauth.v1";
+const superseded = () =>
+  Object.assign(new Error("설정 확인 요청이 변경됐어요."), { code: "SETTINGS_READ_SUPERSEDED" });
+const isSuperseded = (error: unknown) =>
+  (error as { code?: string })?.code === "SETTINGS_READ_SUPERSEDED";
 type Access = Awaited<ReturnType<typeof api.account.deletionAccess>>;
 export function AccountSettings() {
   const [usage, setUsage] = useState<Awaited<ReturnType<typeof api.account.usage>> | null>(null);
@@ -24,6 +28,7 @@ export function AccountSettings() {
   const [checking, setChecking] = useState(true);
   const clearOwnerState = useCallback(() => {
     ++loadSequence.current;
+    lock.current = false;
     owner.current = null;
     setUsage(null);
     setCases([]);
@@ -37,10 +42,11 @@ export function AccountSettings() {
     sessionStorage.removeItem(markerKey);
   }, []);
   const verifyOwner = useCallback(async () => {
+    const sequence = loadSequence.current;
     try {
       const value = await api.account.deletionAccess();
+      if (sequence !== loadSequence.current) throw superseded();
       if (owner.current && owner.current !== value.ownerTag) {
-        clearOwnerState();
         throw new Error("계정이 변경됐어요. 설정을 다시 불러와 삭제할 계정을 확인해 주세요.");
       }
       owner.current = value.ownerTag;
@@ -48,6 +54,7 @@ export function AccountSettings() {
       setReady(value.canDelete);
       return value;
     } catch (error) {
+      if (isSuperseded(error) || sequence !== loadSequence.current) throw superseded();
       clearOwnerState();
       throw error;
     }
@@ -64,6 +71,7 @@ export function AccountSettings() {
         api.cases.list(),
         api.account.deletionAccess(),
       ]);
+      if (sequence !== loadSequence.current) return;
       await verifyOwner();
       if (sequence !== loadSequence.current) return;
       const problems: string[] = [];
@@ -104,6 +112,7 @@ export function AccountSettings() {
       }
       setError(problems.join(" "));
     } catch (error) {
+      if (isSuperseded(error)) return;
       clearOwnerState();
       setError(
         `계정 상태를 확인하지 못했어요. ${error instanceof Error ? error.message : "다시 로그인하거나 재시도해 주세요."}`,
@@ -118,22 +127,37 @@ export function AccountSettings() {
   useEffect(() => {
     void load();
     const check = () => {
-      if (document.visibilityState === "hidden") return;
+      if (document.visibilityState === "hidden" || lock.current) return;
       const sequence = loadSequence.current;
       setChecking(true);
       void verifyOwner()
         .catch((error: unknown) => {
-          setError(error instanceof Error ? error.message : "계정 접근 상태를 다시 확인해 주세요.");
+          if (!isSuperseded(error))
+            setError(
+              error instanceof Error ? error.message : "계정 접근 상태를 다시 확인해 주세요.",
+            );
         })
         .finally(() => {
           if (sequence === loadSequence.current) setChecking(false);
         });
     };
+    const leaving = () => {
+      ++loadSequence.current;
+    };
+    const returned = (event: PageTransitionEvent) => {
+      if (!event.persisted) return;
+      lock.current = false;
+      void load();
+    };
+    window.addEventListener("pageshow", returned);
+    window.addEventListener("pagehide", leaving);
     window.addEventListener("focus", check);
     window.addEventListener("storage", check);
     document.addEventListener("visibilitychange", check);
     return () => {
       ++loadSequence.current;
+      window.removeEventListener("pageshow", returned);
+      window.removeEventListener("pagehide", leaving);
       window.removeEventListener("focus", check);
       window.removeEventListener("storage", check);
       document.removeEventListener("visibilitychange", check);
@@ -142,22 +166,28 @@ export function AccountSettings() {
   async function reauthenticate(provider: Access["providers"][number]) {
     if (lock.current || checking || !access) return;
     lock.current = true;
+    let sequence = loadSequence.current;
     setBusy("재인증 시작 중…");
     setError("");
     setReady(false);
     try {
       await verifyOwner();
+      // Earlier load/focus reads cannot consume the new reauthentication marker.
+      sequence = ++loadSequence.current;
       sessionStorage.setItem(
         markerKey,
         JSON.stringify({ ownerTag: access.ownerTag, startedAt: Date.now() }),
       );
       await api.account.reauthenticate(provider);
     } catch (e) {
+      if (sequence !== loadSequence.current || isSuperseded(e)) return;
       sessionStorage.removeItem(markerKey);
       setError(e instanceof Error ? e.message : "재인증을 시작하지 못했어요.");
     } finally {
-      lock.current = false;
-      setBusy("");
+      if (sequence === loadSequence.current) {
+        lock.current = false;
+        setBusy("");
+      }
     }
   }
   async function remove() {
