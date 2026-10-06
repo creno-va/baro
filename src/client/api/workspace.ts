@@ -121,12 +121,7 @@ function parseView(value: unknown): WorkspaceView {
   const { schemaVersion, ...caseFields } = parsed.data.case;
   return { ...parsed.data, case: { ...caseFields, ...(schemaVersion ? { schemaVersion } : {}) } };
 }
-export type CustomerWorkspaceView = WorkspaceView & {
-  facts?: z.infer<typeof v2SummarySchema>["facts"];
-  people?: z.infer<typeof v2SummarySchema>["parties"];
-  unknowns?: string[];
-  notices?: string[];
-};
+export type CustomerWorkspaceView = WorkspaceView;
 export function createWorkspaceApi(
   request: WorkspaceTransport,
   jobStorage?: Pick<Storage, "getItem" | "setItem" | "removeItem"> | null,

@@ -2,6 +2,7 @@
 
 - 기준: main `ca6e15b` (UI PR125 병합), `codex/65-customer-workspace`.
 - 통합 기준: main `7943496` (공유 PR127의 역할 경계·session marker·dependency audit 수정 병합). 공유 수정은 해당 선행 PR에서 가져왔다.
+- 최종 통합 기준: main `a5130db` (공유 PR129의 정식 WorkspaceView 및 고객 real browser 순차 runner 병합). 고객 DTO는 공유 WorkspaceView를 직접 재사용한다.
 - 경로: 기존 `/cases`, `/cases/:id/intake`, `/cases/:id/summary`, `/cases/:id`와 자료·타임라인·할 일 탭.
 - 공유 contracts/schema/migration/router/auth/session/CI는 수정하지 않았다.
 - 기존 workspace execution engine과 llm-gateway를 재사용한다. 새 공급자·모델·품질 corpus는 추가하지 않는다.
@@ -55,7 +56,7 @@ PR127 통합 후 실제 API의 동일 owner 역할 거부는 403/ROLE_REQUIRED�
 
 - 고객 namespace에 POST `/api/v2/cases/:id/timeline`을 추가했다. 기존 `v2TimelineEditRequestSchema`를 사용하며 create의 expectedRevision은 workspace revision이다. 201에는 기존 timeline entry 계약을 반환한다. PUT 편집 계약은 유지한다.
 - GET `/api/v2/cases/:id/workspace-jobs/latest`은 기존 Job 또는 null을 반환한다. owner/workspace로 제한하며 intake/chat만 선택한다. client는 구버전 route의 404를 허용한다.
-- 사건 목록 응답의 optional `previews: { id, title, hasSummary }[]`는 기존 items/cursor를 유지한다. 고객 workspace view의 optional facts/people/unknowns/notices는 기존 Summary 계약에서 읽는다. 정식 공유 facade/type 문서 정리는 4번에 요청했다.
+- 사건 목록 응답의 optional `previews: { id, title, hasSummary }[]`는 기존 items/cursor를 유지한다. 고객 workspace view의 optional facts/people/unknowns/notices는 기존 Summary 계약에서 읽는다. 4번의 PR129에 병합된 정식 공유 WorkspaceView와 계약 문서를 재사용한다.
 - shared session의 `baro-session-changed` peer-tab/same-tab marker는 4번의 PR127에서 병합됐다. 고객 boundary는 이 marker와 Better Auth의 `better-auth.message`, focus/pageshow/visibility 및 15초 session 검사를 사용한다. 동일 owner의 lawyer 전환은 공유 403/ROLE_REQUIRED 경계와 고객 API namespace 가드에서 거부한다.
 - 자료 처리 POST `/api/v2/cases/:id/files/:fileId/retry` 연결은 2번 소유이며 [요청 코멘트](https://github.com/creno-va/baro/issues/59#issuecomment-6018985215)에 기록했다. 자료 API/처리/report/삭제는 이 PR에서 변경하지 않는다. 처리 요청의 실제 외부 성공을 합성 upload 증거로 대신하지 않는다.
 - #64/#65 및 #70/#71 외부·정책·공개 조건은 OPEN으로 보존한다. PR은 Refs만 사용한다. 병합·배포는 4번 통합 세션에 맡긴다.
