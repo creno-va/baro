@@ -18,6 +18,7 @@ import {
 } from "../../contracts";
 
 export * from "./v2-schema";
+export * from "./v2-storage-capacity-schema";
 
 export const appMetadata = sqliteTable("app_metadata", {
   key: text("key").primaryKey(),

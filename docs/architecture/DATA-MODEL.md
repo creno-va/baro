@@ -279,3 +279,39 @@ dispatch는 현재 정책·file 자동 처리 동의·소유권·revision·만�
 재확인하는 일회 CAS다. 미확정 비용을 유지하고 실제 검증된 usage만 기존 정산 계약으로 반영한다.
 계정 삭제·월 전환 뒤 receipt도 원래 attempt/month에 정산한다. 합성 SQL/AES 검증은 실제 R2 청구,
 보관 비용 조달, 공개 UI·운영 검증의 완료 증거가 아니다.
+## 물리 저장 용량과 월별 유지 비용
+
+`0009_storage_capacity_maintenance`는 기존 테이블을 보존하고 환경별
+`v2_physical_storage_capacity`, 월별 `v2_storage_projections`, 객체별
+`v2_physical_blob_bindings`를 추가한다. 초기 물리 상한은 암호문 100,000,000,000 bytes이며
+인증한 manifest로 낮출 수 있다. 사용자별 원문/논리 용량과 별도로 원본, 파생 파일,
+sanitized 자산과 공개 copy가 같은 물리 용량을 점유한다. binding에는 owner/blob FK
+cascade가 없으며 월 변경이나 계정 삭제로 용량 의무가 사라지지 않는다.
+
+`createV2StorageCapacityRepository`의 `reserveProjection`은 공식 가격·환율,
+실제 funding·allocation을 인증하는 기존 server verifier를 사용한다. KST 현재 월의
+전체 승인 물리 상한을 Standard R2 GB-month로 올림하고, 승인한 GET/HEAD/DELETE 횟수와
+Worker/D1 상한을 기존 decimal 계산기로 합산한다. 결과는 `v2_maintenance_exposure`의
+reserved 추정값과 `fixed_maintenance_krw`로 기록하며 실제 청구 receipt가 아니다.
+무료 tier, 추정 보관 만료, 자동 원문 삭제로 비용을 줄였다고 주장하지 않는다.
+projection을 기록한 뒤 새 drain/양쪽 환경 증거를 통해 활성화한다. 초기화된 용량이
+있으면 새 월도 projection 없이 활성화할 수 없다. 만료되거나 누락된 증거는 I/O를 거절한다.
+
+`prepareCapacity(actor, binding)`의 branded predicate를 실제 pending 객체의 기존
+mutation claim에 합치고, pending INSERT 뒤 `statements(core, actor, claimId)`를 같은
+D1 batch 안에 넣는다. missing/mismatched pending은 batch 전체를 취소한다. actor는
+준비 시각을 포함한 같은 snapshot이어야 한다. `beginWrite(blobId, byteLength, now)`는
+실제 알려진 암호문 wire 길이, pending key, 승인 용량과 현재 projection을 확인하여
+prepared→running 한 번만 전이하고 scoped permit을 반환한다. 실제 R2 반환 key/길이가
+일치하거나 transport가 전혀 호출되지 않았을 때만 `confirmWriterStopped`를 호출한다.
+완료를 모르는 writer는 running과 용량을 유지한다. 진행 중 DELETE receipt는 용량을
+반환하지 않으며, writer 완료 후 다시 실제 DELETE를 확인해야 한다. never-started
+prepared 객체는 실제 `confirmBlobDeleted`와 원자적으로 stopped/released 된다.
+
+`beforeMaintenanceIO`는 실제 held 객체와 현재 projection의 bounded counter를 원자적으로
+차감해 일회용 permit을 만든다. `consumeMaintenanceIO`는 같은 repository에서 정확한
+객체 key·상태·월을 재확인한다. caller는 각 await 후 현재 소유권·동의·moderation과
+삭제 상태를 별도로 확인한다. 알 수 없는 I/O는 counter를 환급하지 않는다. 과거 객체의
+bounded inventory 등록도 인증한 coordinator만 가능하며, writer 종료를 확인하지 못한
+기존 객체는 unknown/running으로 남는다. 합성 SQLite 검사는 실제 cloud 처리나 청구,
+production funding을 입증하지 않는다. 실제 구성·smoke는 #71에 남는다.
