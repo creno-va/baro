@@ -351,6 +351,20 @@ OAuth/파일 처리/전 역할 UI는 #71에서 확인하며 #64의 외부 검증
 
 ## 최종 감사
 
+2026-10-06 #61은 공개 directory/detail API와 검색·프로필 화면을 연결했다. 이미 승인된
+공개 projection만 읽으며 이름·지역·분야 필터, 한국 시간 일일 회전과 5분 snapshot cursor,
+공급 부족/오류/재시도, URL 검색 조건 복원을 제공한다. 승인 사진/포트폴리오는 현재 공개
+revision과 hash/size/type를 확인하고 #95의 단일 maintenance GET 허용 후 스트리밍한다.
+자격 철회·공개 pointer 변경·삭제 후 새 요청과 진행 중 stream은 거부된다.
+320px 실제 browser의 검색→empty→새로고침→상세→연락/지도 링크 및 axe 검사를 통과했고
+합성 화면을 직접 확인했다. 외부 지도에는 공개 사무실 주소만 전달한다. 합성 승인과
+browser interception은 실제 자격·R2·외부 provider 검증이 아니며 #71에 남긴다.
+`bun ci`, 전체 `bun run check`(1,104 pass/0 fail, 131,676 assertions 및 migration 6 pass),
+최종 typecheck/build/dry-run을 통과했다. Browser 29개와 directory 2개 시나리오 및
+수정한 독립 50-corpus 평가를 통과했다. 정상 built Worker의 CSP 4개 검사도 통과했다.
+50-corpus는 account 교체 전에 이전 document를 종료해 기존 인증 요청과 다음 navigation의
+경합을 제거했으며 임의 sleep/retry로 숨기지 않았다. 최종 PR의 동일 head CI는 별도로 확인한다.
+
 각 원래 Goal 항목과 PRD 요구사항을 위 ledger 및 UX 시연에 대응시킨다. 누락된 기능이나
 승인·명령·artifact·실패 조건이 있으면 완료하지 않는다. 모든 역할의 실제 동작, 다운로드 내용,
 저장/삭제/복구, 외부 제공자, 같은 릴리스 배포, 공개 승인 근거까지 강한 증거로 확인한 뒤에만
