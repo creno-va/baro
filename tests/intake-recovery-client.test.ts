@@ -1,5 +1,6 @@
 import { afterEach, expect, test } from "bun:test";
 import { casesApi } from "../src/client/api/cases";
+import type { V2QuestionBatch } from "../src/contracts/v2";
 
 const originalFetch = globalThis.fetch;
 afterEach(() => {
@@ -31,7 +32,7 @@ function fixture(retryable: boolean, revision = 6) {
     revision: 3,
     status: "collecting",
     narrative: "합성 입력입니다. 질문 저장 이후 생성 실패 복구를 확인합니다.",
-    batches: [],
+    batches: [] as V2QuestionBatch[],
     confirmedSummaryRevision: null,
     currentJobId: null,
     summary: null,
@@ -61,8 +62,34 @@ function fixture(retryable: boolean, revision = 6) {
       path.endsWith("/workspace") ? workspace : path.endsWith("/intake") ? metadata : job,
     );
   }) as typeof fetch;
-  return { id, jobId, writes };
+  return { id, jobId, writes, metadata };
 }
+
+test("three saved questions in the first round still retry the second round instead of skipping to summary", async () => {
+  const f = fixture(true);
+  const questions = Array.from({ length: 3 }, (_, index) => ({
+    id: `first-${index}`,
+    prompt: `첫 차례 질문 ${index}`,
+    answerType: "text" as const,
+    options: [],
+  }));
+  f.metadata.batches.push({
+    id: "first-round",
+    ordinal: 1,
+    generatedForIntakeRevision: 1,
+    questions,
+    answers: questions.map((q) => ({ questionId: q.id, status: "unknown" })),
+  });
+  const result = await casesApi.getQuestions(f.id);
+  expect(result).toMatchObject({
+    roundLimit: 2,
+    processingStage: "questions",
+    canPrepareSummary: false,
+  });
+  expect(result.rounds).toEqual([{ ordinal: 1, questionIds: questions.map((q) => q.id) }]);
+  await casesApi.advance(f.id, { expectedRevision: 6 });
+  expect(f.writes[0]?.path).toBe(`/api/v2/cases/${f.id}/workspace-jobs/${f.jobId}/retry`);
+});
 
 test("failed intake projects output-validation failure and retries generation only", async () => {
   const f = fixture(true);

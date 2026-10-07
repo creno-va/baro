@@ -30,20 +30,24 @@ test("B-created and confirmed case uses the same canonical namespaces in C after
     { id: created.id },
     crypto.randomUUID(),
   );
-  questions = await mockRequest(
-    "cases.saveAnswers",
-    {
-      id: created.id,
-      expectedRevision: questions.revision,
-      answers: questions.questions.map((q) => ({ questionId: q.id, state: "unknown" })),
-    },
-    crypto.randomUUID(),
-  );
-  await mockRequest(
-    "cases.advance",
-    { id: created.id, expectedRevision: questions.revision },
-    crypto.randomUUID(),
-  );
+  for (let round = 0; round < 2; round++) {
+    questions = await mockRequest(
+      "cases.saveAnswers",
+      {
+        id: created.id,
+        expectedRevision: questions.revision,
+        answers: questions.questions
+          .filter((q) => !q.answerState)
+          .map((q) => ({ questionId: q.id, state: "unknown" })),
+      },
+      crypto.randomUUID(),
+    );
+    questions = await mockRequest(
+      "cases.advance",
+      { id: created.id, expectedRevision: questions.revision },
+      crypto.randomUUID(),
+    );
+  }
   const reviewed = await mockRequest<CaseView>(
     "cases.get",
     { id: created.id },

@@ -72,13 +72,26 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
   );
   const question = result?.questions[index];
   const dirty = value !== (question?.answer ?? "") || answerState !== question?.answerState;
-  const limit = Math.max(result?.followupLimit ?? 2, result?.questions.length ?? 0);
-  const savedCount = result?.questions.filter((q) => q.answerState).length ?? 0;
+  const rounds = result?.rounds ?? [];
+  const round = rounds.find(
+    (candidate) => question && candidate.questionIds.includes(question.id),
+  ) ?? {
+    ordinal: 1,
+    questionIds: result?.questions.map((q) => q.id) ?? [],
+  };
+  const roundLimit = Math.max(result?.roundLimit ?? 2, ...rounds.map((r) => r.ordinal));
+  const roundIndex = question ? round.questionIds.indexOf(question.id) : 0;
+  const lastInRound = roundIndex === round.questionIds.length - 1;
+  const finalQuestion =
+    index === (result?.questions.length ?? 0) - 1 &&
+    (rounds.length >= roundLimit || result?.processingStage === "summary" || editing);
   const waiting = preparing || Boolean(result?.processing);
   const locked = busy || waiting || leaving;
   const displayed = useRef({ index, id: question?.id });
   displayed.current = { index, id: question?.id };
-  const summarizing = result?.processingStage === "summary" || savedCount >= limit;
+  const summarizing =
+    result?.processingStage === "summary" ||
+    (rounds.length >= roundLimit && result?.questions.every((q) => q.answerState));
   const statusTitle = summarizing ? "사건 요약을 정리하고 있어요" : "다음 질문을 준비하고 있어요";
   const failureTitle =
     result?.failure === "POLICY_REJECTED" || result?.failure === "MODEL_SCHEMA_INVALID"
@@ -337,7 +350,11 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
     <div className="intake-flow intake-detail-flow">
       <nav className="intake-scene-nav" aria-label="사건 정리 탐색">
         <BackToCases />
-        <span>{question ? `질문 ${index + 1} / 최대 ${limit}` : "질문 최대 2개"}</span>
+        <span>
+          {question
+            ? `${round.ordinal}차 질문 · ${roundIndex + 1} / ${round.questionIds.length}`
+            : "질문은 최대 두 차례"}
+        </span>
       </nav>
       {loading && !result && !error ? (
         <StatePanel variant="loading" title="저장한 질문을 불러오고 있어요." />
@@ -400,7 +417,7 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
                 </h1>
                 <p>
                   {question
-                    ? index + 1 >= limit
+                    ? finalQuestion
                       ? "마지막 질문이에요. 기억나는 만큼만 알려주세요."
                       : "기억나는 만큼만 편하게 알려주세요."
                     : "말씀해 주신 상황에서 질문을 고르고 있어요."}
@@ -529,10 +546,11 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
                         >
                           {busy
                             ? "답변을 저장하고 있어요"
-                            : index + 1 >= limit ||
-                                (editing && index === result.questions.length - 1)
+                            : finalQuestion
                               ? "저장하고 요약 보기"
-                              : "저장하고 다음 질문"}
+                              : lastInRound && round.ordinal < roundLimit
+                                ? `저장하고 ${round.ordinal + 1}차 질문 보기`
+                                : "저장하고 다음 질문"}
                           <ArrowRight size={18} aria-hidden="true" />
                         </Button>
                       )}

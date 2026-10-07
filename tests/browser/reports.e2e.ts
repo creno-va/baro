@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
+import { openReportOptions } from "../helpers/report-controls";
 
 // Dedicated D port under either the main browser config or the standalone config.
 test.use({ baseURL: "http://127.0.0.1:4343" });
@@ -46,6 +47,7 @@ test("peer account switch clears dirty report, selected originals, confirmation 
   const editor = page.getByRole("textbox", { name: "리포트 내용 편집" });
   await expect(editor).toBeVisible();
   await editor.fill("이전 계정의 저장하지 않은 합성 편집");
+  await openReportOptions(page);
   await page.getByRole("checkbox", { name: "ZIP에 원본 포함" }).check();
   await page.evaluate(() => {
     const key = "baro.reports.browser-test.v1",
@@ -80,6 +82,7 @@ test("same owner role change purges report edits and exports after peer-tab noti
   const editor = page.getByRole("textbox", { name: "리포트 내용 편집" });
   await expect(editor).toBeVisible();
   await editor.fill("역할 변경 전에 남겨진 합성 편집");
+  await openReportOptions(page);
   await page.getByRole("checkbox", { name: "ZIP에 원본 포함" }).check();
   const peer = await context.newPage();
   await peer.goto("/settings");
@@ -133,6 +136,7 @@ test("review, masking, exclusions, actual PDF/ZIP downloads and persistent casca
     .fill(
       "사건의 사실과 주장\n합성 검토 내용: 010-1234-5678 / demo@example.test\n미확인 사항: 반환 날짜를 원본과 확인하세요.",
     );
+  await openReportOptions(page);
   await page.getByRole("checkbox", { name: "전화번호·이메일·주민등록번호 가리기" }).check();
   await page.getByRole("button", { name: "검토 내용 저장" }).click();
   await expect(page.getByRole("status")).toContainText("검토 내용을 저장");
@@ -140,21 +144,27 @@ test("review, masking, exclusions, actual PDF/ZIP downloads and persistent casca
   await expect(page.getByRole("textbox", { name: "리포트 내용 편집" })).toHaveValue(
     /합성 검토 내용/,
   );
+  await openReportOptions(page);
   await expect(
     page.getByRole("checkbox", { name: "전화번호·이메일·주민등록번호 가리기" }),
   ).toBeChecked();
   await page.getByRole("button", { name: "전달 내용 미리보기" }).click();
   await expect(page.locator(".report-preview")).not.toContainText("010-1234-5678");
   await expect(page.locator(".report-preview")).toContainText("[전화번호 가림]");
+  await openReportOptions(page);
   await page.getByRole("checkbox", { name: "리포트에서 제외" }).check();
+  await openReportOptions(page);
   await expect(page.getByRole("checkbox", { name: "ZIP에 원본 포함" })).toBeDisabled();
   await page.getByRole("button", { name: "검토 내용 저장" }).click();
   await expect(page.getByRole("status")).toContainText("저장했어요");
   await page.reload();
+  await openReportOptions(page);
   await expect(page.getByRole("checkbox", { name: "리포트에서 제외" })).toBeChecked();
+  await openReportOptions(page);
   await page.getByRole("checkbox", { name: "리포트에서 제외" }).uncheck();
   await page.getByRole("button", { name: "검토 내용 저장" }).click();
   await expect(page.getByRole("status")).toContainText("저장했어요");
+  await openReportOptions(page);
   await page.getByRole("checkbox", { name: "ZIP에 원본 포함" }).check();
   await page.getByRole("checkbox", { name: "내용·식별정보·선택한 원본을 확인했어요" }).check();
   const pdfPromise = page.waitForEvent("download");

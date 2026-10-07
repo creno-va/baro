@@ -119,7 +119,7 @@ test.each(["answered", "unknown", "skipped"] as const)(
   },
 );
 
-test("the two-question intake cap stops generation before any paid phase or regeneration", async () => {
+test("the two-round intake cap stops generation before any paid phase or regeneration", async () => {
   const saved = context();
   saved.intake.batches.push({
     id: "batch_2",

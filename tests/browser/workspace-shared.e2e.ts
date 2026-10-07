@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { openReportOptions } from "../helpers/report-controls";
 
 test.skip(
   process.env.BARO_WORKSPACE_SHARED_UI !== "true",
@@ -26,15 +27,19 @@ test("common login and B intake flow through C workspace and D report with origi
       "공통 API 검증을 위한 합성 사건입니다. 지인에게 빌려준 돈과 반환 약속을 확인하고 싶습니다.",
     );
   await page.getByRole("button", { name: "저장하고 계속" }).click();
-  for (let index = 1; index <= 2; index++) {
-    await expect(page.getByText(`질문 ${index} / 최대 2`, { exact: true })).toBeVisible();
+  for (let index = 1; index <= 6; index++) {
+    await expect(
+      page.getByText(`${Math.ceil(index / 3)}차 질문 · ${((index - 1) % 3) + 1} / 3`, {
+        exact: true,
+      }),
+    ).toBeVisible();
     await page.getByRole("button", { name: "모름", exact: true }).click();
   }
   await expect(page).toHaveURL(/\/summary$/);
   await page.getByLabel("요약이 내가 이야기한 사실과 맞는지 확인했어요.").check();
   await page.getByRole("button", { name: "요약 확인하고 계속" }).click();
   await page.getByRole("button", { name: "확인하고 사건 열기" }).click();
-  await expect(page.getByRole("heading", { name: "이어서 대화하기" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "이제, 하나씩 풀어가요." })).toBeVisible();
   const base = new URL(page.url()).pathname;
   await page.evaluate(() =>
     localStorage.setItem(
@@ -84,7 +89,8 @@ test("common login and B intake flow through C workspace and D report with origi
   await page.screenshot({ path: "test-results/workspace-shared-desktop.png", fullPage: true });
   await page.getByRole("link", { name: "리포트 보기" }).first().click();
   await expect(page).toHaveURL(`${base}/reports`);
-  await expect(page.getByRole("heading", { name: "리포트 검토" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "전달할 리포트를 준비해요" })).toBeVisible();
+  await openReportOptions(page);
   await expect(page.getByText("shared-synthetic.txt", { exact: true })).toBeVisible();
   await page.getByRole("link", { name: "사건으로 돌아가기" }).click();
   await page

@@ -796,9 +796,7 @@ export function createV2WorkspaceRepository(
           current.revision !== value.generatedForIntakeRevision ||
           current.batches.length + 1 !== value.ordinal ||
           value.questions.length > V2_INTAKE_POLICY.questionsPerBatch ||
-          current.batches.reduce((count, batch) => count + batch.questions.length, 0) +
-            value.questions.length >
-            V2_INTAKE_POLICY.followupLimit ||
+          current.batches.length >= V2_INTAKE_POLICY.followupRounds ||
           value.answers.length !== 0 ||
           value.questions.some((q) =>
             current.batches.some((b) => b.questions.some((old) => old.id === q.id)),

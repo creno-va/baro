@@ -166,10 +166,7 @@ export function createWorkspacePipeline(
   };
   return {
     async questions(context: WorkspaceContext, requestId: string) {
-      if (
-        context.intake.batches.reduce((count, batch) => count + batch.questions.length, 0) >=
-        V2_INTAKE_POLICY.followupLimit
-      )
+      if (context.intake.batches.length >= V2_INTAKE_POLICY.followupRounds)
         throw new ModelError("POLICY_REJECTED");
       return regenerateDraft(context, async (input) => {
         const draft = workspaceQuestionsOutputSchema.parse(
@@ -188,7 +185,7 @@ export function createWorkspacePipeline(
           ),
         );
         // Never publish exact normalized repetitions, including previously skipped questions.
-        // A repeated single-question draft is regenerated within the same follow-up slot.
+        // A fully repeated draft is regenerated within the same follow-up round.
         draft.questions = draft.questions.filter((question) => {
           const prompt = normalized(question.prompt);
           if (prior.has(prompt)) return false;

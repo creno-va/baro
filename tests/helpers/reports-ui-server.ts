@@ -26,6 +26,7 @@ const globalCss = (await Bun.file(`${root}/src/styles/global.css`).text())
   .replace(/@theme inline\s*\{[^}]*\}/s, "");
 const css =
   globalCss +
+  (await Bun.file(`${root}/src/styles/workspace.css`).text()) +
   (await Bun.file(`${root}/src/styles/reports.css`).text()) +
   (await Bun.file(`${root}/src/styles/settings.css`).text());
 const server = Bun.serve({

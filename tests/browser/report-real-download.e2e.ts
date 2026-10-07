@@ -2,6 +2,7 @@ import { type ChildProcess, execFileSync, spawn } from "node:child_process";
 import { mkdir, readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { expect, test } from "@playwright/test";
+import { openReportOptions } from "../helpers/report-controls";
 
 test("ReportReview uses signed real SQL routes and downloads a Korean font PDF and exact selected original ZIP", async ({
   page,
@@ -54,6 +55,7 @@ test("ReportReview uses signed real SQL routes and downloads a Korean font PDF a
     await editor.fill(
       "사건 요약\n실제 다운로드 한글 검토 · 010-1234-5678 · synthetic@example.test\n자료와 사실은 합성 입력입니다.",
     );
+    await openReportOptions(page);
     await page.getByRole("checkbox", { name: "전화번호·이메일·주민등록번호 가리기" }).check();
     await page.getByRole("button", { name: "검토 내용 저장" }).click();
     await expect(page.getByRole("status")).toContainText("저장했어요");

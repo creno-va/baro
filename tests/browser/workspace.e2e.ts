@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { captureCaseViewports } from "../helpers/case-ui-capture";
 
 // This isolated C contract suite also runs before A's shared facade is available.
 // Enable with: BARO_C_TEST_API=true bunx playwright test --config tests/helpers/workspace.playwright.config.ts
@@ -13,7 +14,7 @@ test("chat failure/retry, reload, action checks and timeline editing on actual c
   page,
 }) => {
   await page.goto(base);
-  await expect(page.getByRole("heading", { name: "이어서 대화하기" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "이제, 하나씩 풀어가요." })).toBeVisible();
   await page.evaluate((storageKey) => {
     const state = JSON.parse(localStorage.getItem(storageKey) ?? "{}");
     state.faults = { "workspace.sendMessage": ["chat_failed"] };
@@ -107,7 +108,7 @@ test("mobile keyboard dialog, empty state, quota, stale input and safe image pre
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(base);
-  await expect(page.getByRole("heading", { name: "이어서 대화하기" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "이제, 하나씩 풀어가요." })).toBeVisible();
   await page.evaluate((storageKey) => {
     const state = JSON.parse(localStorage.getItem(storageKey) ?? "{}");
     state.faults = { "workspace.sendMessage": ["QUOTA_EXCEEDED"] };
@@ -159,4 +160,48 @@ test("changing the shared mock owner hides the previous workspace and open edito
   await expect(page.getByRole("dialog")).not.toBeVisible();
   await expect(page.getByRole("heading", { name: "대여금 반환 관련 자료 정리" })).not.toBeVisible();
   await expect(page.getByLabel("어떤 일이 있었나요?")).not.toBeVisible();
+});
+
+test("workspace panels keep their navigation, readable layouts and accessible controls on desktop and mobile", async ({
+  page,
+}) => {
+  await page.goto(base);
+  await expect(page.getByRole("heading", { name: "이제, 하나씩 풀어가요." })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "사건 메뉴" }).getByRole("link")).toHaveCount(
+    5,
+  );
+  await captureCaseViewports(page, "chat-welcome");
+  await page
+    .getByLabel("추가 사실 또는 질문")
+    .fill("합성 자료의 날짜와 반환 약속을 차근차근 확인하고 싶어요.");
+  await page.getByRole("button", { name: "보내기", exact: true }).click();
+  await expect(page.getByText("이 응답은 합성 API 예시", { exact: false })).toBeVisible();
+  await captureCaseViewports(page, "chat");
+  await page.getByRole("link", { name: "자료 0", exact: true }).click();
+  await page.getByLabel("선택 자료의 자동 처리에 동의합니다.").check();
+  const chooser = page.waitForEvent("filechooser");
+  await page.getByRole("button", { name: "파일 선택", exact: true }).click();
+  await (await chooser).setFiles({
+    name: "반환 약속 메시지.txt",
+    mimeType: "text/plain",
+    buffer: Buffer.from("반환 약속 날짜를 확인하는 합성 자료입니다."),
+  });
+  await expect(page.getByText("결과 확인 가능", { exact: true })).toBeVisible();
+  await captureCaseViewports(page, "files");
+  await page.getByRole("link", { name: "타임라인", exact: true }).click();
+  await page.getByRole("button", { name: "일정 추가" }).click();
+  await page.getByLabel("어떤 일이 있었나요?").fill("반환 약속 메시지를 받음");
+  await page.getByLabel("날짜 (모르면 비워 두세요)").fill("2026-10-01");
+  await page.getByLabel("상세 내용").fill("메시지 원본의 날짜와 내용을 확인할 예정입니다.");
+  await page.getByRole("button", { name: "타임라인 저장" }).click();
+  await expect(page.getByRole("dialog")).toBeHidden();
+  await expect(page.getByRole("heading", { name: "사건의 흐름" })).toBeVisible();
+  await captureCaseViewports(page, "timeline");
+  await page.getByRole("link", { name: "다음 행동", exact: true }).click();
+  await page.getByRole("checkbox").first().check();
+  await expect(page.getByRole("progressbar", { name: "다음 행동 완료 현황" })).toHaveAttribute(
+    "value",
+    "1",
+  );
+  await captureCaseViewports(page, "actions");
 });

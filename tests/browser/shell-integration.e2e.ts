@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { openReportOptions } from "../helpers/report-controls";
 
 test("customer login consent logout share the product shell without external API requests", async ({
   page,
@@ -57,7 +58,7 @@ test("customer completes intake workspace original ZIP report and cascading dele
     .getByLabel("지금까지 있었던 일")
     .fill("합성 시연 사건입니다. 지인에게 빌려준 돈을 약속한 날짜가 지나도 돌려받지 못했습니다.");
   await page.getByRole("button", { name: "저장하고 계속" }).click();
-  for (let index = 0; index < 2; index++)
+  for (let index = 0; index < 6; index++)
     await page.getByRole("button", { name: "모름", exact: true }).click();
   await expect(page).toHaveURL(/\/summary/);
   await page.getByRole("checkbox", { name: "요약이 내가 이야기한 사실과 맞는지" }).check();
@@ -92,6 +93,7 @@ test("customer completes intake workspace original ZIP report and cascading dele
   await expect(page.getByText("2026-10-01", { exact: true })).toBeVisible();
   await page.goto(`${casePath}/reports`);
   await expect(page.getByLabel("리포트 내용 편집")).toBeVisible();
+  await openReportOptions(page);
   await page.getByRole("checkbox", { name: "ZIP에 원본 포함" }).check();
   await page.getByRole("checkbox", { name: "내용·식별정보·선택한 원본을 확인했어요" }).check();
   const pdfPromise = page.waitForEvent("download");

@@ -194,7 +194,7 @@ export function CaseInput({
         </p>
         <div className="conversation-effort">
           <Check size={15} aria-hidden="true" />
-          추가 질문은 최대 2개예요
+          질문은 두 차례, 한 번에 최대 3개예요
         </div>
       </header>
       {created && canCreate && !loading && !sessionError ? (
@@ -321,8 +321,8 @@ export function CaseInput({
       )}
       <footer className="conversation-home-footer">
         <p>
-          상황 입력 <span aria-hidden="true">→</span> 질문 최대 2개{" "}
-          <span aria-hidden="true">→</span> 요약 확인
+          상황 입력 <span aria-hidden="true">→</span> 질문 두 차례 <span aria-hidden="true">→</span>{" "}
+          요약 확인
         </p>
         <p>BARO의 AI 답변은 법률 자문이 아니에요. 중요한 판단은 전문가와 확인해 주세요.</p>
       </footer>

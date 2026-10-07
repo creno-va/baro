@@ -3,6 +3,7 @@ import { V2_INTAKE_POLICY, V2_LIMITS } from "../../../contracts/v2";
 import {
   answersInputSchema,
   createInputSchema,
+  type QuestionRound,
   revisionInputSchema,
   summaryInputSchema,
 } from "../cases";
@@ -10,7 +11,7 @@ import { ApiError } from "../errors";
 import type { CaseView, QuestionView } from "../types";
 import { readStore, registerMockHandlers, requireSession, writeStore } from "./runtime";
 
-type Intake = { narrative: string; questions: QuestionView[] };
+type Intake = { narrative: string; questions: QuestionView[]; rounds?: QuestionRound[] };
 type Receipt = { ownerId: string; fingerprint: string; result: unknown };
 const idInput = z.object({ id: z.string().min(1).max(200) });
 export const casesFixtures: Record<string, CaseView> = {};
@@ -35,11 +36,15 @@ function intake(id: string): Intake {
   return value;
 }
 function result(item: CaseView, value: Intake) {
+  const rounds = value.rounds ?? [{ ordinal: 1, questionIds: value.questions.map((q) => q.id) }];
+  const roundLimit = value.rounds ? V2_INTAKE_POLICY.followupRounds : rounds.length;
   return {
     questions: value.questions,
     revision: item.revision,
     complete: item.stage === "summary" || item.stage === "active",
-    followupLimit: V2_INTAKE_POLICY.followupLimit,
+    roundLimit,
+    rounds,
+    processingStage: rounds.length >= roundLimit ? ("summary" as const) : ("questions" as const),
   };
 }
 function store(item: CaseView, value?: Intake) {
@@ -98,6 +103,29 @@ function makeQuestions(narrative: string, subject: "individual" | "company"): Qu
           ? "기업과 상대방은 어떤 관계인가요?"
           : "상대방과 어떤 관계인가요?",
     },
+    { id: crypto.randomUUID(), kind: "text", text: "이번 일을 어떻게 정리하고 싶나요?" },
+  ];
+}
+function makeDeeperQuestions(value: Intake): QuestionView[] {
+  const context = [value.narrative, ...value.questions.map((q) => q.answer ?? "")].join(" ");
+  const money = /돈|송금|대금|빌려|보증금|급여|월급/.test(context);
+  return [
+    {
+      id: crypto.randomUUID(),
+      kind: "text",
+      text: money ? "상대방과 어떤 약속을 했나요?" : "상대방은 이 일에 대해 뭐라고 했나요?",
+    },
+    {
+      id: crypto.randomUUID(),
+      kind: "choice",
+      text: "확인할 수 있는 자료가 있나요?",
+      options: ["계약서나 문서가 있어요", "문자·메신저·녹음이 있어요", "현재 자료가 없어요"],
+    },
+    {
+      id: crypto.randomUUID(),
+      kind: "text",
+      text: "내 입장에 불리하거나, 서로 다르게 기억하는 내용이 있나요?",
+    },
   ];
 }
 export const casesMockHandlers = {
@@ -141,9 +169,11 @@ export const casesMockHandlers = {
       };
       owners[item.id] = user;
       writeStore("caseOwners", owners);
+      const questions = makeQuestions(input.narrative, input.subjectContext);
       store(item, {
         narrative: input.narrative,
-        questions: makeQuestions(input.narrative, input.subjectContext),
+        questions,
+        rounds: [{ ordinal: 1, questionIds: questions.map((q) => q.id) }],
       });
       return item;
     }),
@@ -201,6 +231,17 @@ export const casesMockHandlers = {
           "VALIDATION_ERROR",
           "모든 질문에 답변·모름·건너뛰기 중 하나를 저장해 주세요.",
         );
+      if (value.rounds && value.rounds.length < V2_INTAKE_POLICY.followupRounds) {
+        const questions = makeDeeperQuestions(value);
+        value.questions.push(...questions);
+        value.rounds.push({
+          ordinal: value.rounds.length + 1,
+          questionIds: questions.map((q) => q.id),
+        });
+        const next = changed(item, { stage: "intake", summary: "" });
+        store(next, value);
+        return result(next, value);
+      }
       const summary = [
         "입력한 상황",
         value.narrative,

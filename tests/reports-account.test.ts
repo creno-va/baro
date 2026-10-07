@@ -537,27 +537,31 @@ test("B intake and D report/delete share actual canonical namespaces across adap
       },
       { key: crypto.randomUUID() },
     ) as CaseView;
-    const questions = casesMockHandlers["cases.getQuestions"]({ id: item.id }) as {
+    let questions = casesMockHandlers["cases.getQuestions"]({ id: item.id }) as {
       questions: QuestionView[];
       revision: number;
     };
-    const answered = casesMockHandlers["cases.saveAnswers"](
-      {
-        id: item.id,
-        expectedRevision: questions.revision,
-        answers: questions.questions.map((question) => ({
-          questionId: question.id,
-          state: "unknown",
-        })),
-      },
-      { key: crypto.randomUUID() },
-    ) as { revision: number };
-    const advanced = casesMockHandlers["cases.advance"](
-      { id: item.id, expectedRevision: answered.revision },
-      { key: crypto.randomUUID() },
-    ) as { revision: number };
+    for (let round = 0; round < 2; round++) {
+      const answered = casesMockHandlers["cases.saveAnswers"](
+        {
+          id: item.id,
+          expectedRevision: questions.revision,
+          answers: questions.questions
+            .filter((question) => !question.answerState)
+            .map((question) => ({
+              questionId: question.id,
+              state: "unknown",
+            })),
+        },
+        { key: crypto.randomUUID() },
+      );
+      questions = casesMockHandlers["cases.advance"](
+        { id: item.id, expectedRevision: answered.revision },
+        { key: crypto.randomUUID() },
+      );
+    }
     casesMockHandlers["cases.confirmSummary"](
-      { id: item.id, expectedRevision: advanced.revision },
+      { id: item.id, expectedRevision: questions.revision },
       { key: crypto.randomUUID() },
     );
     const read = (): ReportMockState => ({

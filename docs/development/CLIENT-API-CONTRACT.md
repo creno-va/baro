@@ -54,6 +54,14 @@ type QuestionView = {
   id: string; text: string; kind: "text" | "choice";
   options?: string[]; answer?: string; answerState?: "answered" | "unknown" | "skipped";
 };
+type QuestionRound = { ordinal: number; questionIds: string[] };
+// Question IDs map the flat editable list to its published generation rounds.
+type QuestionsResult = {
+  questions: QuestionView[]; complete: boolean; revision: number;
+  roundLimit?: number; rounds?: QuestionRound[];
+  processingStage?: "questions" | "summary";
+  processing?: boolean; failed?: boolean; retryable?: boolean;
+};
 type MessageView = {
   id: string; role: "user" | "assistant"; text: string;
   status: "pending" | "complete" | "failed"; createdAt: string;
@@ -126,8 +134,9 @@ reports의 id는 caseId이며 PDF/ZIP 다운로드에는 조회한 reportId를 �
 | B | `api.cases.list()` | `CaseView[]` |
 | B | `api.cases.create({ narrative, subjectContext })` | `CaseView` |
 | B | `api.cases.get(id)` | `CaseView` |
-| B | `api.cases.getQuestions(id)` | `{ questions: QuestionView[]; complete: boolean; revision: number }` |
+| B | `api.cases.getQuestions(id)` | `QuestionsResult`; 저장된 각 묶음의 문항 ID와 차례를 함께 반환 |
 | B | `api.cases.saveAnswers(id, { expectedRevision, answers })` | answers는`{ questionId, state, value? }[]`; 질문 view와 최신 revision |
+| B | `api.cases.advance(id, { expectedRevision })` | `QuestionsResult`; 현재 묶음 답변 완료 후 다음 묶음 생성, 두 묶음 완료 후 요약 준비 |
 | B | `api.cases.saveSummary(id, { expectedRevision, summary })` | `CaseView` |
 | B | `api.cases.confirmSummary(id, { expectedRevision })` | `CaseView`, stage=active |
 | C | `api.workspace.get(id)` | `WorkspaceView` |
