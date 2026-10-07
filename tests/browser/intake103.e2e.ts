@@ -1,4 +1,5 @@
 import { expect, type Page, test } from "@playwright/test";
+import type { QuestionsResult } from "../../src/client/api/cases";
 
 async function capture(page: Page, name: string) {
   const { default: AxeBuilder } = await import("@axe-core/playwright");
@@ -75,6 +76,107 @@ async function finishGeneration(page: Page) {
   });
 }
 
+type InitialGenerationState = {
+  ready: boolean;
+  polls: number;
+  advances: number;
+  postflightPending: boolean;
+  sessionReads: number;
+  releasePostflight?: () => void;
+};
+
+async function initialGeneration(
+  page: Page,
+  options: { failFirstPoll?: boolean; pausePostflight?: boolean } = {},
+) {
+  await page.goto("/cases/new");
+  await page
+    .getByRole("textbox", { name: "지금까지 있었던 일" })
+    .fill("합성 첫 질문 테스트입니다. 지인에게 빌려준 돈을 돌려받지 못했어요.");
+  await page.getByRole("button", { name: "저장하고 계속" }).click();
+  await expect(page.getByRole("heading", { name: "이 일은 언제 시작됐나요?" })).toBeVisible();
+  const published: QuestionsResult = await page.evaluate(async () => {
+    const modulePath = "/src/client/api/mock/cases.ts";
+    const { casesMockHandlers } = await import(modulePath);
+    const id = location.pathname.split("/")[2];
+    if (!id) throw new Error("Synthetic intake case id is missing");
+    const questions = casesMockHandlers["cases.getQuestions"]({ id });
+    const key = "baro-api-mock-v1:intake";
+    const records = JSON.parse(localStorage.getItem(key) ?? "{}");
+    records[id].questions = [];
+    records[id].rounds = [];
+    localStorage.setItem(key, JSON.stringify(records));
+    return questions;
+  });
+  await page.reload();
+  await expect(page.getByRole("button", { name: "질문 시작하기" })).toBeVisible();
+  await page.evaluate(
+    async ({ published, options }) => {
+      const corePath = "/src/client/api/core.ts";
+      const mockPath = "/src/client/api/mock/cases.ts";
+      const { registerMockHandlers, ApiError } = await import(corePath);
+      const { casesMockHandlers } = await import(mockPath);
+      const state: InitialGenerationState = {
+        ready: false,
+        polls: 0,
+        advances: 0,
+        postflightPending: false,
+        sessionReads: 0,
+      };
+      (window as unknown as { initialGeneration: InitialGenerationState }).initialGeneration =
+        state;
+      let started = false;
+      registerMockHandlers({
+        "cases.advance": (input: unknown) => {
+          state.advances++;
+          started = true;
+          return { ...casesMockHandlers["cases.getQuestions"](input), processing: true };
+        },
+        "cases.getQuestions": (input: unknown) => {
+          const current = casesMockHandlers["cases.getQuestions"](input);
+          if (!started) return current;
+          state.polls++;
+          if (options.failFirstPoll && state.polls === 1)
+            throw new ApiError("UNAVAILABLE", "합성 질문 조회 연결 실패", true);
+          return state.ready ? published : { ...current, processing: true };
+        },
+        "session.get": () => {
+          const session = JSON.parse(localStorage.getItem("baro-api-mock-v1:session") ?? "{}");
+          if (started) state.sessionReads++;
+          if (started && options.pausePostflight && !state.postflightPending) {
+            state.postflightPending = true;
+            return new Promise((resolve) => {
+              state.releasePostflight = () => resolve(session);
+            });
+          }
+          return session;
+        },
+      });
+    },
+    { published, options },
+  );
+}
+
+async function initialGenerationState(page: Page) {
+  return page.evaluate(() => {
+    const state = (window as unknown as { initialGeneration: InitialGenerationState })
+      .initialGeneration;
+    return { polls: state.polls, advances: state.advances, sessionReads: state.sessionReads };
+  });
+}
+
+async function publishInitialQuestions(page: Page) {
+  await page.evaluate(() => {
+    (window as unknown as { initialGeneration: InitialGenerationState }).initialGeneration.ready =
+      true;
+  });
+  await expect(page.getByRole("heading", { name: "이 일은 언제 시작됐나요?" })).toBeVisible({
+    timeout: 8000,
+  });
+  await expect(page.getByRole("textbox", { name: "답변", exact: true })).toBeEnabled();
+  expect((await initialGenerationState(page)).advances).toBe(1);
+}
+
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     if (!localStorage.getItem("baro-api-mock-v1:session"))
@@ -87,6 +189,108 @@ test.beforeEach(async ({ page }) => {
       );
   });
 });
+
+test("initial question generation stays pending and appears without refreshing", async ({
+  page,
+}) => {
+  await initialGeneration(page);
+  await page.getByRole("button", { name: "질문 시작하기" }).click();
+  await expect(
+    page.getByRole("status").filter({ hasText: "다음 질문을 준비하고 있어요" }),
+  ).toBeVisible();
+  await expect.poll(async () => (await initialGenerationState(page)).polls).toBeGreaterThan(0);
+  await expect(page.getByRole("button", { name: "질문 시작하기" })).toHaveCount(0);
+  await publishInitialQuestions(page);
+});
+
+test("initial question generation resumes after a transient polling failure without refreshing", async ({
+  page,
+}) => {
+  await initialGeneration(page, { failFirstPoll: true });
+  await page.getByRole("button", { name: "질문 시작하기" }).click();
+  await expect(page.getByRole("alert")).toContainText("합성 질문 조회 연결 실패");
+  await publishInitialQuestions(page);
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  expect((await initialGenerationState(page)).polls).toBeGreaterThan(1);
+});
+
+test("initial question generation recovers when focus supersedes its session check", async ({
+  page,
+}) => {
+  await initialGeneration(page, { pausePostflight: true });
+  await page.getByRole("button", { name: "질문 시작하기" }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as unknown as { initialGeneration: InitialGenerationState }).initialGeneration
+            .postflightPending,
+      ),
+    )
+    .toBe(true);
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect
+    .poll(async () => (await initialGenerationState(page)).sessionReads)
+    .toBeGreaterThan(1);
+  await page.evaluate(() => {
+    (
+      window as unknown as { initialGeneration: InitialGenerationState }
+    ).initialGeneration.releasePostflight?.();
+  });
+  await publishInitialQuestions(page);
+});
+
+test("initial question recovery never reveals the previous account after a session switch", async ({
+  page,
+}) => {
+  await initialGeneration(page, { pausePostflight: true });
+  await page.getByRole("button", { name: "질문 시작하기" }).click();
+  await expect.poll(async () => (await initialGenerationState(page)).sessionReads).toBe(1);
+  await page.evaluate(() => {
+    localStorage.setItem(
+      "baro-api-mock-v1:session",
+      JSON.stringify({
+        user: { id: "other-synthetic-customer", name: "다른 합성 고객", accountType: "customer" },
+        needsConsent: false,
+      }),
+    );
+    window.dispatchEvent(new Event("focus"));
+  });
+  await expect(page.getByRole("alert")).toBeVisible();
+  await page.evaluate(() => {
+    const state = (window as unknown as { initialGeneration: InitialGenerationState })
+      .initialGeneration;
+    state.ready = true;
+    state.releasePostflight?.();
+  });
+  await expect(page.getByRole("heading", { name: "이 일은 언제 시작됐나요?" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "질문 시작하기" })).toHaveCount(0);
+  await expect(page.getByRole("textbox", { name: "답변", exact: true })).toHaveCount(0);
+  expect((await initialGenerationState(page)).advances).toBe(1);
+});
+
+test("initial question completion respects a case archived in another tab", async ({ page }) => {
+  await initialGeneration(page);
+  await page.getByRole("button", { name: "질문 시작하기" }).click();
+  await expect.poll(async () => (await initialGenerationState(page)).polls).toBeGreaterThan(0);
+  await page.evaluate(() => {
+    const id = location.pathname.split("/")[2];
+    if (!id) throw new Error("Synthetic intake case id is missing");
+    const key = "baro-api-mock-v1:cases";
+    const records = JSON.parse(localStorage.getItem(key) ?? "{}");
+    records[id].stage = "archived";
+    localStorage.setItem(key, JSON.stringify(records));
+    (window as unknown as { initialGeneration: InitialGenerationState }).initialGeneration.ready =
+      true;
+  });
+  await expect(page.getByRole("link", { name: "사건 열기", exact: true })).toBeVisible({
+    timeout: 8000,
+  });
+  await expect(page.getByRole("heading", { name: "이 일은 언제 시작됐나요?" })).toHaveCount(0);
+  await expect(page.getByRole("textbox", { name: "답변", exact: true })).toHaveCount(0);
+  expect((await initialGenerationState(page)).advances).toBe(1);
+});
+
 test("two-round mobile flow saves/reloads/resumes/back edits/skips and reaches workspace", async ({
   page,
 }) => {

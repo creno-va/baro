@@ -25,12 +25,14 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
   const [exit, setExit] = useState(false);
   const [editing, setEditing] = useState(false);
   const [preparing, setPreparing] = useState(false);
+  const [recovering, setRecovering] = useState(false);
   const { leaving, transition } = useSceneTransition();
   const pending = useRef(false);
   const failedOperation = useRef<
     { kind: "advance" } | { kind: "save"; move: boolean; state: QuestionView["answerState"] } | null
   >(null);
   const loaded = useRef(false);
+  const caseSnapshot = useRef<CaseView | null>(null);
   const heading = useRef<HTMLHeadingElement>(null);
   const request = useRef(0);
   const {
@@ -51,7 +53,9 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
     setExit(false);
     setEditing(false);
     setPreparing(false);
+    setRecovering(false);
     loaded.current = false;
+    caseSnapshot.current = null;
     setNotice("");
     setError(null);
     setBusy(false);
@@ -85,7 +89,7 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
   const finalQuestion =
     index === (result?.questions.length ?? 0) - 1 &&
     (rounds.length >= roundLimit || result?.processingStage === "summary" || editing);
-  const waiting = preparing || Boolean(result?.processing);
+  const waiting = preparing || recovering || Boolean(result?.processing);
   const locked = busy || waiting || leaving;
   const displayed = useRef({ index, id: question?.id });
   displayed.current = { index, id: question?.id };
@@ -144,12 +148,17 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
       try {
         if (!(await verify())) return;
         epoch = ticket();
-        const [caseView, questions] = await Promise.all([
-          api.cases.get(caseId),
+        let [caseView, questions] = await Promise.all([
+          poll && caseSnapshot.current ? caseSnapshot.current : api.cases.get(caseId),
           api.cases.getQuestions(caseId),
         ]);
+        // The pending view can be reused, but completion must reflect stage
+        // changes made in another tab before exposing editable questions.
+        if (poll && caseSnapshot.current && !questions.processing)
+          caseView = await api.cases.get(caseId);
         if (!(await verify()) || !accessCurrent(epoch) || serial !== request.current) return;
         failedOperation.current = null;
+        caseSnapshot.current = caseView;
         setItem(caseView);
         const params = new URLSearchParams(window.location.search);
         const isEditing = params.get("edit") === "1";
@@ -189,6 +198,7 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
           const show = () => {
             setResult(questions);
             setIndex(nextIndex);
+            setRecovering(false);
           };
           if (
             !initial &&
@@ -222,10 +232,24 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
     if (question?.id && !waiting) heading.current?.focus({ preventScroll: true });
   }, [question?.id, waiting]);
   useEffect(() => {
-    if (!result?.processing || busy) return;
-    const timer = window.setTimeout(() => void load(true), 2500);
-    return () => window.clearTimeout(timer);
-  }, [result, busy, load]);
+    if ((!result?.processing && !recovering) || busy) return;
+    let cancelled = false;
+    let timer: number;
+    const poll = async () => {
+      try {
+        await load(true);
+      } finally {
+        // Failed or superseded reads do not change result. Keep checking until
+        // a fresh snapshot finishes the job, or the owner/screen changes.
+        if (!cancelled) timer = window.setTimeout(() => void poll(), 2500);
+      }
+    };
+    timer = window.setTimeout(() => void poll(), 2500);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [result?.processing, recovering, busy, load]);
   useEffect(() => {
     const warn = (event: BeforeUnloadEvent) => {
       if (value !== (question?.answer ?? "") || answerState !== question?.answerState)
@@ -241,6 +265,24 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
     const url = new URL(window.location.href);
     url.searchParams.delete("edit");
     window.history.replaceState(null, "", url);
+  }
+  async function verifyCompletion(epoch: number) {
+    try {
+      if ((await verify()) && accessCurrent(epoch)) return true;
+    } catch (cause) {
+      if (alive(epoch)) {
+        failedOperation.current = null;
+        setRecovering(true);
+      }
+      throw cause;
+    }
+    if (alive(epoch)) {
+      // The write succeeded, but a focus/session check superseded its response.
+      // Recover with reads instead of replaying an already accepted mutation.
+      failedOperation.current = null;
+      setRecovering(true);
+    }
+    return false;
   }
   async function showNext(next: QuestionsResult, epoch: number) {
     if (next.complete && !next.processing && !next.failed) {
@@ -274,7 +316,7 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
       failedOperation.current = { kind: "advance" };
       if (!(await verify()) || !accessCurrent(epoch)) return;
       const next = await api.cases.advance(caseId, { expectedRevision: result.revision });
-      if (!(await verify()) || !accessCurrent(epoch)) return;
+      if (!(await verifyCompletion(epoch))) return;
       failedOperation.current = null;
       await showNext(next, epoch);
       setNotice("");
@@ -314,7 +356,7 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
             : { questionId: question.id, state },
         ],
       });
-      if (!(await verify()) || !accessCurrent(epoch)) return;
+      if (!(await verifyCompletion(epoch))) return;
       failedOperation.current = null;
       setResult(next);
       setAnswerState(state);
@@ -332,7 +374,7 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
         failedOperation.current = { kind: "advance" };
         prepareNext();
         const advanced = await api.cases.advance(caseId, { expectedRevision: next.revision });
-        if (!(await verify()) || !accessCurrent(epoch)) return;
+        if (!(await verifyCompletion(epoch))) return;
         failedOperation.current = null;
         await showNext(advanced, epoch);
       }
