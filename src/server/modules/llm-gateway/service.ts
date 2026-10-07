@@ -93,7 +93,7 @@ export function prepareGatewayWireInput(phase: Phase, input: unknown, correction
     messages: [
       {
         role: "system",
-        content: `BARO prompt ${phase.startsWith("workspace_") ? "2.0.0" : PROMPT_VERSION}. ${prompts[phase]}`,
+        content: `BARO prompt ${phase.startsWith("workspace_") ? "2.1.0" : PROMPT_VERSION}. ${prompts[phase]}`,
       },
       {
         role: "user",

@@ -27,6 +27,9 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
   const [preparing, setPreparing] = useState(false);
   const { leaving, transition } = useSceneTransition();
   const pending = useRef(false);
+  const failedOperation = useRef<
+    { kind: "advance" } | { kind: "save"; move: boolean; state: QuestionView["answerState"] } | null
+  >(null);
   const loaded = useRef(false);
   const heading = useRef<HTMLHeadingElement>(null);
   const request = useRef(0);
@@ -53,6 +56,7 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
     setError(null);
     setBusy(false);
     pending.current = false;
+    failedOperation.current = null;
   }, setError);
   const report = useCallback(
     (cause: unknown) => {
@@ -76,8 +80,50 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
   displayed.current = { index, id: question?.id };
   const summarizing = result?.processingStage === "summary" || savedCount >= limit;
   const statusTitle = summarizing ? "사건 요약을 정리하고 있어요" : "다음 질문을 준비하고 있어요";
+  const failureTitle =
+    result?.failure === "POLICY_REJECTED" || result?.failure === "MODEL_SCHEMA_INVALID"
+      ? "AI가 다음 질문이나 요약을 준비하지 못했어요."
+      : "다음 내용을 준비하지 못했어요.";
+  const failureDescription =
+    "저장한 답변은 그대로 남아 있어요. " +
+    (result?.canPrepareSummary
+      ? "추가 질문 없이 저장한 답변으로 요약을 준비할 수 있어요."
+      : result?.retryable
+        ? "다시 준비하거나 저장한 답변을 확인할 수 있어요."
+        : "지금은 같은 내용으로 다시 준비할 수 없어요. 답변을 확인·수정하거나 내 사건에서 나중에 이어갈 수 있어요.");
+  const recoveryActions = (
+    <div className="intake-actions">
+      {result?.retryable || result?.canPrepareSummary || dirty ? (
+        <Button
+          onClick={() => (dirty ? void save(true) : void advance())}
+          disabled={
+            locked || (dirty && (!answerState || (answerState === "answered" && !value.trim())))
+          }
+        >
+          {dirty
+            ? "답변 저장하고 다시 준비하기"
+            : result?.canPrepareSummary
+              ? "저장한 답변으로 요약 보기"
+              : "다시 준비하기"}
+        </Button>
+      ) : null}
+      {question ? (
+        <Button
+          variant="outline"
+          disabled={locked}
+          onClick={() => (document.getElementById("question-answer") ?? heading.current)?.focus()}
+        >
+          저장한 답변 확인·수정
+        </Button>
+      ) : null}
+      <ButtonLink variant="ghost" href="/cases">
+        나중에 이어하기
+      </ButtonLink>
+    </div>
+  );
   const load = useCallback(
-    async (poll = false) => {
+    async (poll = false, replaceDraft = false) => {
+      if (pending.current || (failedOperation.current && !replaceDraft)) return;
       let epoch = ticket();
       const serial = ++request.current;
       setLoading(true);
@@ -90,6 +136,7 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
           api.cases.getQuestions(caseId),
         ]);
         if (!(await verify()) || !accessCurrent(epoch) || serial !== request.current) return;
+        failedOperation.current = null;
         setItem(caseView);
         const params = new URLSearchParams(window.location.search);
         const isEditing = params.get("edit") === "1";
@@ -183,12 +230,17 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
     window.history.replaceState(null, "", url);
   }
   async function showNext(next: QuestionsResult, epoch: number) {
-    if (next.complete && !next.processing) {
+    if (next.complete && !next.processing && !next.failed) {
       window.location.assign(`/cases/${encodeURIComponent(caseId)}/summary`);
       return;
     }
     const unanswered = next.questions.findIndex((q) => !q.answerState);
-    if (!next.processing && unanswered >= 0 && next.questions[unanswered]?.id !== question?.id) {
+    if (
+      !next.processing &&
+      !next.failed &&
+      unanswered >= 0 &&
+      next.questions[unanswered]?.id !== question?.id
+    ) {
       await transition(
         () => {
           setResult(next);
@@ -206,9 +258,11 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
     prepareNext();
     setError(null);
     try {
+      failedOperation.current = { kind: "advance" };
       if (!(await verify()) || !accessCurrent(epoch)) return;
       const next = await api.cases.advance(caseId, { expectedRevision: result.revision });
       if (!(await verify()) || !accessCurrent(epoch)) return;
+      failedOperation.current = null;
       await showNext(next, epoch);
       setNotice("");
     } catch (cause) {
@@ -237,6 +291,7 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
     setError(null);
     setNotice("");
     try {
+      failedOperation.current = { kind: "save", move, state };
       if (!(await verify()) || !accessCurrent(epoch)) return;
       const next = await api.cases.saveAnswers(caseId, {
         expectedRevision: result.revision,
@@ -247,6 +302,7 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
         ],
       });
       if (!(await verify()) || !accessCurrent(epoch)) return;
+      failedOperation.current = null;
       setResult(next);
       setAnswerState(state);
       setNotice("답변이 저장됐어요. 내 사건에서 다시 이어갈 수 있어요.");
@@ -259,9 +315,12 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
           () => accessCurrent(epoch),
         );
       } else if (move) {
+        // The answer is saved. Retry only generation with its new revision.
+        failedOperation.current = { kind: "advance" };
         prepareNext();
         const advanced = await api.cases.advance(caseId, { expectedRevision: next.revision });
         if (!(await verify()) || !accessCurrent(epoch)) return;
+        failedOperation.current = null;
         await showNext(advanced, epoch);
       }
     } catch (cause) {
@@ -284,7 +343,17 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
         <StatePanel variant="loading" title="저장한 질문을 불러오고 있어요." />
       ) : null}
       {error ? (
-        <ErrorPanel error={error} retry={() => void load()} disabled={busy || leaving} />
+        <ErrorPanel
+          error={error}
+          retry={() => {
+            const operation = failedOperation.current;
+            if ((error as { code?: string }).code === "CONFLICT") void load(false, true);
+            else if (operation?.kind === "advance") void advance();
+            else if (operation?.kind === "save") void save(operation.move, operation.state);
+            else void load();
+          }}
+          disabled={locked}
+        />
       ) : null}
       {ready && item && result ? (
         <section className="intake-scene" data-transition={leaving ? "leaving" : "idle"}>
@@ -343,13 +412,9 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
                 ) : result.failed ? (
                   <StatePanel
                     variant="error"
-                    title="질문을 준비하지 못했어요"
-                    description="입력한 상황은 저장되어 있어요."
-                    action={
-                      <Button onClick={() => void advance()} disabled={locked}>
-                        다시 준비하기
-                      </Button>
-                    }
+                    title={failureTitle}
+                    description={failureDescription}
+                    action={recoveryActions}
                   />
                 ) : (
                   <Button
@@ -365,7 +430,9 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
                   <form
                     onSubmit={(event) => {
                       event.preventDefault();
-                      void save(true);
+                      if (result.failed && !dirty) {
+                        if (result.retryable || result.canPrepareSummary) void advance();
+                      } else void save(true);
                     }}
                   >
                     <div className="intake-scene-composer">
@@ -451,7 +518,13 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
                           className="intake-scene-primary"
                           type="submit"
                           disabled={
-                            locked || !answerState || (answerState === "answered" && !value.trim())
+                            locked ||
+                            (result.failed &&
+                              !result.retryable &&
+                              !result.canPrepareSummary &&
+                              !dirty) ||
+                            !answerState ||
+                            (answerState === "answered" && !value.trim())
                           }
                         >
                           {busy
@@ -467,20 +540,9 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
                     {result.failed && !waiting ? (
                       <StatePanel
                         variant="error"
-                        title="이어서 준비하지 못했어요"
-                        description="방금 답변은 저장되어 있어요."
-                        action={
-                          <Button
-                            onClick={() => (dirty ? void save(true) : void advance())}
-                            disabled={
-                              locked ||
-                              (dirty &&
-                                (!answerState || (answerState === "answered" && !value.trim())))
-                            }
-                          >
-                            {dirty ? "답변 저장하고 다시 준비하기" : "다시 준비하기"}
-                          </Button>
-                        }
+                        title={failureTitle}
+                        description={failureDescription}
+                        action={recoveryActions}
                       />
                     ) : null}
                     <p className="intake-scene-notice" role="status">

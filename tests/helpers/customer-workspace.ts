@@ -11,14 +11,14 @@ import { createTestDatabase } from "./d1";
 import { seedTestSession } from "./session";
 
 const NOW = "2026-10-06T00:00:00.000Z";
-export async function customerWorkspaceFixture() {
+export async function customerWorkspaceFixture(now = NOW) {
   const db = await createTestDatabase();
   const owner = await seedTestSession(db, { consent: true });
   const core = createV2Core(
     db.binding,
     await createCaseDataCipher({ CASE_DATA_KEY_V1: btoa("w".repeat(32)).replace(/=+$/, "") }),
   );
-  const service = createWorkspaceService(core, { clock: () => NOW });
+  const service = createWorkspaceService(core, { clock: () => now });
   const workspace = await service.create(owner.userId, crypto.randomUUID(), {
     narrative: "계약 이후 받은 자료에서 거래 날짜를 확인하고 상담할 내용을 준비합니다.",
     subjectContext: "individual",
@@ -26,6 +26,7 @@ export async function customerWorkspaceFixture() {
     turnstileToken: "synthetic",
   });
   return {
+    now,
     db,
     owner,
     core,
@@ -60,7 +61,7 @@ export async function runCustomerJob(
     await f.jobs.admitWorkspace(
       {
         ownerId: f.owner.userId,
-        now: NOW,
+        now: f.now,
         workspaceId: workspace.id,
         expectedRevision: workspace.workspaceRevision,
       },
@@ -86,7 +87,7 @@ export async function executeCustomerJob(
 ) {
   const id = params.jobId;
   const result = await executeWorkspace(f.core, params, `${id}-1`, {
-    clock: () => NOW,
+    clock: () => f.now,
     authorize: (ownerId) => hasCustomerWorkspaceAccess(f.core, ownerId),
     pipeline: async () =>
       createWorkspacePipeline(

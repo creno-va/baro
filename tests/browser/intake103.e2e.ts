@@ -61,7 +61,13 @@ async function holdGeneration(page: Page, stage: "questions" | "summary", failed
         },
         "cases.getQuestions": (raw: unknown) => {
           const current = casesMockHandlers["cases.getQuestions"](raw);
-          if (!pending) return { ...current, failed: failed && !delivered, processingStage };
+          if (!pending)
+            return {
+              ...current,
+              failed: failed && !delivered,
+              retryable: failed && !delivered,
+              processingStage,
+            };
           state.polls++;
           if (!state.ready) return { ...current, processing: true, processingStage };
           pending = false;
@@ -557,5 +563,128 @@ for (const reducedMotion of ["no-preference", "reduce"] as const) {
     await expect(answer).toBeEnabled();
     await expect(answer).toHaveValue("");
     if (reducedMotion === "reduce") await expect(content).toHaveCSS("animation-name", "none");
+  });
+}
+async function lastQuestion(page: Page) {
+  await page.goto("/cases/new");
+  await page
+    .getByRole("textbox", { name: "지금까지 있었던 일" })
+    .fill("합성 복구 테스트입니다. 답변 저장 후 다음 질문을 준비하다 멈춘 상황입니다.");
+  await page.getByRole("button", { name: "저장하고 계속" }).click();
+  await page.getByRole("button", { name: "모름", exact: true }).click();
+  await page.getByRole("textbox", { name: "답변", exact: true }).fill("보존할 합성 답변");
+}
+
+test("generation transport retry keeps the saved answer and never saves it twice", async ({
+  page,
+}) => {
+  await lastQuestion(page);
+  await page.evaluate(async () => {
+    const corePath = "/src/client/api/core.ts";
+    const mockPath = "/src/client/api/mock/cases.ts";
+    const { registerMockHandlers, ApiError } = await import(corePath);
+    const { casesMockHandlers: handlers } = await import(mockPath);
+    const counts = { saves: 0, advances: 0, reads: 0, revisions: [] as number[] };
+    registerMockHandlers({
+      "cases.saveAnswers": (input: unknown, context: { key: string }) => {
+        counts.saves++;
+        localStorage.setItem("synthetic-recovery-counts", JSON.stringify(counts));
+        return handlers["cases.saveAnswers"](input, context);
+      },
+      "cases.advance": (input: { expectedRevision: number }, context: { key: string }) => {
+        counts.advances++;
+        counts.revisions.push(input.expectedRevision);
+        localStorage.setItem("synthetic-recovery-counts", JSON.stringify(counts));
+        if (counts.advances === 1) throw new ApiError("UNAVAILABLE", "합성 연결 실패", true);
+        return handlers["cases.advance"](input, context);
+      },
+      "cases.getQuestions": (input: unknown) => {
+        counts.reads++;
+        localStorage.setItem("synthetic-recovery-counts", JSON.stringify(counts));
+        return handlers["cases.getQuestions"](input);
+      },
+    });
+  });
+  await page.getByRole("button", { name: "저장하고 요약 보기" }).click();
+  await expect(page.getByRole("alert")).toContainText("합성 연결 실패");
+  await expect(page.getByRole("textbox", { name: "답변", exact: true })).toHaveValue(
+    "보존할 합성 답변",
+  );
+  await page.getByRole("button", { name: "다시 시도", exact: true }).click();
+  await expect(page).toHaveURL(/\/summary/);
+  await expect(page.getByRole("textbox", { name: "요약 편집" })).toHaveValue(/보존할 합성 답변/);
+  expect(
+    await page.evaluate(() =>
+      JSON.parse(localStorage.getItem("synthetic-recovery-counts") ?? "{}"),
+    ),
+  ).toEqual({ saves: 1, advances: 2, reads: 0, revisions: [3, 3] });
+});
+
+for (const recovery of [
+  { retryable: true, canPrepareSummary: false },
+  { retryable: false, canPrepareSummary: false },
+  { retryable: false, canPrepareSummary: true },
+]) {
+  const { retryable, canPrepareSummary } = recovery;
+  test(`output rejection preserves answers and offers only available recovery (retryable=${retryable}, summary=${canPrepareSummary})`, async ({
+    page,
+  }) => {
+    await lastQuestion(page);
+    await page.evaluate(async ({ retryable, canPrepareSummary }) => {
+      const corePath = "/src/client/api/core.ts";
+      const mockPath = "/src/client/api/mock/cases.ts";
+      const { registerMockHandlers } = await import(corePath);
+      const { casesMockHandlers: handlers } = await import(mockPath);
+      let advances = 0;
+      registerMockHandlers({
+        "cases.advance": (input: { id: string }, context: { key: string }) => {
+          if (++advances === 1) {
+            // Admission and terminal failure each advance the real workspace.
+            // A user retry therefore starts from the failed job's new revision.
+            const key = "baro-api-mock-v1:cases";
+            const items = JSON.parse(localStorage.getItem(key) ?? "{}");
+            items[input.id].revision += 2;
+            localStorage.setItem(key, JSON.stringify(items));
+            return {
+              ...handlers["cases.getQuestions"](input),
+              failed: true,
+              retryable,
+              canPrepareSummary,
+              failure: "POLICY_REJECTED",
+            };
+          }
+          return handlers["cases.advance"](input, context);
+        },
+      });
+    }, recovery);
+    await page.getByRole("button", { name: "저장하고 요약 보기" }).click();
+    await expect(page.getByRole("alert")).toContainText(
+      "AI가 다음 질문이나 요약을 준비하지 못했어요",
+    );
+    await expect(page.getByRole("alert")).toContainText("저장한 답변은 그대로 남아 있어요");
+    await expect(page.getByRole("alert")).not.toContainText("POLICY_REJECTED");
+    await expect(page.getByRole("link", { name: "나중에 이어하기" })).toBeVisible();
+    await expect(page.getByRole("textbox", { name: "답변", exact: true })).toHaveValue(
+      "보존할 합성 답변",
+    );
+    if (canPrepareSummary) {
+      await expect(page.getByRole("button", { name: "다시 준비하기", exact: true })).toHaveCount(0);
+      await page.getByRole("button", { name: "저장한 답변으로 요약 보기" }).click();
+    } else if (retryable) {
+      await page.getByRole("button", { name: "다시 준비하기" }).click();
+    } else {
+      await expect(page.getByRole("button", { name: "다시 준비하기" })).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "저장하고 요약 보기" })).toBeDisabled();
+      await page.getByRole("button", { name: "저장한 답변 확인·수정" }).click();
+      await expect(page.getByRole("textbox", { name: "답변", exact: true })).toHaveValue(
+        "보존할 합성 답변",
+      );
+      await page.getByRole("textbox", { name: "답변", exact: true }).fill("수정한 합성 답변");
+      await page.getByRole("button", { name: "답변 저장하고 다시 준비하기" }).click();
+    }
+    await expect(page).toHaveURL(/\/summary/);
+    await expect(page.getByRole("textbox", { name: "요약 편집" })).toHaveValue(
+      retryable || canPrepareSummary ? /보존할 합성 답변/ : /수정한 합성 답변/,
+    );
   });
 }

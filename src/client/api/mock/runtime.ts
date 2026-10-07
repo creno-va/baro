@@ -36,7 +36,11 @@ export function writeStore<T>(namespace: string, value: T): void {
     if (typeof localStorage !== "undefined") localStorage.setItem(prefix + namespace, json);
     else memory.set(namespace, json);
   } catch {
-    throw new ApiError("QUOTA_EXCEEDED", "예시 저장 공간이 부족해요. 저장한 자료를 정리해 주세요.");
+    throw new ApiError(
+      "QUOTA_EXCEEDED",
+      "예시 저장 공간이 부족해요. 저장한 자료를 정리해 주세요.",
+      true,
+    );
   }
 }
 export function updateStore<T>(namespace: string, fallback: T, update: (value: T) => T): T {
