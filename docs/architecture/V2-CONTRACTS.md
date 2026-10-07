@@ -1,5 +1,7 @@
 # v2 사건 작업 공간·자료·중개 실행 계약
 
+> **2026-10-07 사용자 후속 — 이전 비용 정책보다 우선:** 계정별 AI 응답은 KST 하루200회이며 Preview/Production의 별도 전체 월 예산 차단은 해제한다. Cloudflare 기존 결제 경로에서 잔액$10 이하 시$30 자동 충전을 사용자가 직접 승인/설정했다. metering·실제 funding·가격/FX·bounded attempt·unknown 비용 보존은 유지한다. 배포 설정 `MONTHLY_BUDGET_CAP_ENABLED=false`가 예약·사용량·정산에 일관되게 적용된다. 기존 allocation 금액은 이 모드에서 소비 차단 한도가 아니며 schema0009의 기록을 보존한다.
+
 - Status: Accepted target specification; implementation and live evidence pending
 - Reviewed: 2026-10-06
 - Tracking: [#53](https://github.com/creno-va/baro/issues/53)
@@ -60,9 +62,10 @@ revision·job kind만 저장한다. params/events/step 반환에 평문 사건·
 
 ## 적응형 질문과 지속적인 채팅
 
-초기 질문은 큰 틀에서 시작하고 답변에 따라 다음 묶음을 만든다. 기본은 3묶음, 묶음당 최대
-5문항이며 5~10분 입력을 목표로 한다. 이는 v1의 누적 5문항 제한과 별도 계약이다. 반복되는
-질문을 억제하고, 모름·건너뛰기·임시 저장·다른 기기 재접속을 지원한다. 한 묶음은 서버 생성
+2026-10-07 사용자 요청으로 초기 서술 뒤 후속 질문은 총 두 개, 새 묶음당 한 문항이다.
+`V2_INTAKE_POLICY`를 모델 출력·작업 admission/retry·저장 경계에서 적용한다. 기존 저장
+계약의 3묶음×5문항은 이전 사건 읽기·수정을 위해 유지하며 신규 생성 한도로 사용하지 않는다.
+기존 질문 수가 두 개 이상이면 추가 생성 없이 요약으로 진행한다. 반복되는 질문을 억제하고, 모름·건너뛰기·임시 저장·다른 기기 재접속을 지원한다. 한 묶음은 서버 생성
 question ID와 답변 형식·선택지를 고정하며 답변은 `answered|unknown|skipped`로 저장한다.
 중단은 draft를 실패/만료시키지 않는다. job lease 만료와 사용자 draft 보존을 구분한다.
 
@@ -98,7 +101,7 @@ quote/funding·환경별 할당과 안전한 전환은 [비용 운영 계약](..
 | 계정 | 저장 10GB | 모든 사건 원본·파생물·보고서·미완료 예약 합계 |
 | 문서·이미지 | 원본당 100MB, PDF 500페이지 | MIME/magic 실제 형식·페이지 검증. 압축/디코딩 폭증 별도 제한 |
 | 음성·영상 | 원본당 1GB, 재생 60분 | 서버 probe로 실제 시간 검증. 없는 duration을 0으로 간주하지 않음 |
-| KST 하루 | 신규 사건 3개, AI 응답 30회, media 60분 | 사용자별 원자적 reservation, KST 자정 초기화, 병렬 경계 검사 |
+| KST 하루 | 신규 사건 3개, AI 응답 200회, media 60분 | 사용자별 원자적 reservation, KST 자정 초기화, 병렬 경계 검사 |
 | KST 월 기술 예산 | 총 1,000,000원 | 모델·ASR·Containers·저장·요청·기존 고정비, 예약과 불명확 과금 포함 |
 
 사건의 원본 5GB와 계정의 전체 저장 10GB는 별도 counter다. 파생물·PDF·ZIP은 계정

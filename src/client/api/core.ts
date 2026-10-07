@@ -5,6 +5,7 @@ export { ApiError, errorMessage } from "./errors";
 export { registerMockHandlers } from "./mock/runtime";
 export const apiMode: "mock" | "real" =
   import.meta.env.PUBLIC_API_MODE === "mock" ? "mock" : "real";
+let mockHandlersReady: Promise<void> | undefined;
 export interface RequestOptions {
   path?: string;
   method?: string;
@@ -17,7 +18,16 @@ export async function request<T>(
   options: RequestOptions = {},
 ): Promise<T> {
   const key = options.key ?? crypto.randomUUID();
-  if (apiMode === "mock") return mockRequest<T>(operation, input, key);
+  if (import.meta.env.PUBLIC_API_MODE === "mock") {
+    mockHandlersReady ??= Promise.all([import("./mock/session"), import("./mock/cases")])
+      .then(() => undefined)
+      .catch((error) => {
+        mockHandlersReady = undefined;
+        throw error;
+      });
+    await mockHandlersReady;
+    return mockRequest<T>(operation, input, key);
+  }
   if (!options.path) throw new ApiError("UNAVAILABLE", "실제 API 연결을 준비하고 있어요.", true);
   const method = options.method ?? "GET";
   let response: Response;

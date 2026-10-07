@@ -3,8 +3,10 @@ import { z } from "zod";
 import { readAccountType } from "../auth/account-type";
 import { createCaseDataCipher } from "../crypto";
 import * as schema from "../db/schema";
+import { createV2AccountingRepository } from "../db/v2-accounting";
 import { createV2Core, type V2Core } from "../db/v2-core";
 import { createV2OfficialSourceRepository } from "../db/v2-official-sources";
+import { reportProviderFailure } from "../dependency-diagnostics";
 import { paidHoldRequestSchema } from "../modules/budget/contracts";
 import {
   createGatewayExecutionPlanner,
@@ -57,12 +59,31 @@ const boundsConfigSchema = z.strictObject({
   verifiedAt: z.string().datetime(),
 });
 /** Only a deployment-owned setting can supply authenticated model capability bounds. */
-function configuredBounds(env: Env) {
+export function configuredBounds(env: Env) {
   try {
     return boundsConfigSchema.parse(JSON.parse(env.AI_MODEL_TOKEN_BOUNDS_JSON ?? "null"));
   } catch {
     return null;
   }
+}
+
+/** The same complete-wire reservation is used by admission and configuration inspection. */
+export function workspaceTokenBounds(
+  config: ReturnType<typeof configuredBounds>,
+  outputCap: number,
+): TokenBounds | null {
+  if (!config) return null;
+  if (config.bounds.basis !== "verified_model_context_limit") return config.bounds as TokenBounds;
+  // A complete context reservation includes this exact output cap. No text/token heuristic.
+  const inputLimit = config.bounds.modelContextTokenLimit - outputCap;
+  if (inputLimit <= 0 || inputLimit > config.bounds.modelInputTokenLimit || config.bounds.vision)
+    return null;
+  return {
+    ...config.bounds,
+    textTokensUpperBound: inputLimit,
+    framingTokensUpperBound: 0,
+    modelInputTokenLimit: inputLimit,
+  } as TokenBounds;
 }
 const phaseFor = (kind: string): Phase =>
   kind === "intake_questions"
@@ -92,7 +113,7 @@ function budget(core: V2Core, env: Env, ownerId: string, input: unknown) {
   const config = configuredBounds(env);
   const planner = createGatewayExecutionPlanner({
     input: async () => input,
-    bounds: async () => (config?.bounds as TokenBounds | null) ?? null,
+    bounds: async (wire) => workspaceTokenBounds(config, wire.max_completion_tokens),
     verifyBounds: async (_descriptor, digest, now) =>
       config && Date.parse(config.verifiedAt) <= Date.parse(now)
         ? { digest, evidenceHash: config.evidenceHash, verifiedAt: config.verifiedAt }
@@ -112,7 +133,13 @@ export function createWorkspaceDependencies(core: V2Core, env: Env): WorkspaceDe
       createWorkspaceDispatcher(core, { binding: env.WORKSPACE_PROCESSING }).dispatch(4),
     async prepareJob(input) {
       if (!(await hasCustomerWorkspaceAccess(core, input.ownerId))) return null;
-      if (!env.WORKSPACE_PROCESSING || !env.AI || !configuredBounds(env)) return null;
+      if (
+        !env.WORKSPACE_PROCESSING ||
+        !env.AI ||
+        !env.AI_GATEWAY_ID?.trim() ||
+        !configuredBounds(env)
+      )
+        return null;
       const now = new Date().toISOString(),
         proofs = await readProcessingProofs(
           core,
@@ -121,6 +148,13 @@ export function createWorkspaceDependencies(core: V2Core, env: Env): WorkspaceDe
           "model_input_tokens",
         );
       if (!proofs) return null;
+      // Text-only customers have not gone through file admission, which also
+      // initializes this account-owned ledger identity. Repair existing accounts
+      // here before preparing their first paid workspace hold.
+      if (
+        !(await createV2AccountingRepository(core).ensurePrincipal({ ownerId: input.ownerId, now }))
+      )
+        return null;
       const latest =
         input.retryMessage ??
         (input.chat
@@ -169,7 +203,9 @@ export async function runWorkspaceRuntime(
   instanceId: string,
   waitUntil: (work: Promise<void>) => void,
 ) {
-  const core = createV2Core(env.DB, await createCaseDataCipher(env));
+  const core = createV2Core(env.DB, await createCaseDataCipher(env), {
+    monthlyBudgetCapEnabled: env.MONTHLY_BUDGET_CAP_ENABLED !== "false",
+  });
   return executeWorkspace(core, params, instanceId, {
     guideHosts: GUIDE_HOSTS,
     authorize: (ownerId) => hasCustomerWorkspaceAccess(core, ownerId),
@@ -246,14 +282,10 @@ export async function runWorkspaceRuntime(
               return { lease, expiresAt: r.lease_until };
             },
           });
-          return createLlmGateway(env, { attemptLedger: ledger }).call(
-            phase,
-            input,
-            requestId,
-            reserve,
-            reserveCorrection,
-            currentId,
-          );
+          return createLlmGateway(env, {
+            attemptLedger: ledger,
+            observeFailure: reportProviderFailure,
+          }).call(phase, input, requestId, reserve, reserveCorrection, currentId);
         },
       };
       return createWorkspacePipeline(gateway, {

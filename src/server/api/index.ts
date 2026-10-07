@@ -1,5 +1,6 @@
-import { Hono } from "hono";
+import { type Context, Hono, type Next } from "hono";
 import { getAuth } from "../auth";
+import { AuthConfigurationError } from "../auth/env";
 import { createStorageBudgetService } from "../modules/budget/storage-ledger";
 import { createAssetProcessingAdmission } from "../runtime/asset-admission";
 import { createFileProcessingAdmission } from "../runtime/file-admission";
@@ -20,16 +21,33 @@ import { createDirectoryApi } from "./v2/directory";
 import { createFilesApi } from "./v2/files";
 import { createLawyersApi } from "./v2/lawyers";
 import { createModerationApi } from "./v2/moderation";
+import { createReportsApi } from "./v2/reports";
 import { usageApi } from "./v2/usage";
 import { createWorkspacesApi } from "./v2/workspaces";
 
+async function privateAuthResponse(context: Context<ApiEnvironment>, next: Next) {
+  await next();
+  context.header("cache-control", "private, no-store");
+  context.header("x-content-type-options", "nosniff");
+}
+
 export const api = new Hono<ApiEnvironment>()
-  .onError((_error, context) =>
-    context.json(errorBody(context, "INTERNAL_ERROR", "요청을 처리하지 못했어요.", true), 500),
-  )
+  .onError((error, context) => {
+    if (error instanceof AuthConfigurationError)
+      return context.json(
+        errorBody(context, "DEPENDENCY_UNAVAILABLE", "로그인 서비스를 준비하고 있어요.", true),
+        503,
+      );
+    return context.json(
+      errorBody(context, "INTERNAL_ERROR", "요청을 처리하지 못했어요.", true),
+      500,
+    );
+  })
   .notFound((context) =>
     context.json(errorBody(context, "NOT_FOUND", "요청한 경로를 찾을 수 없어요."), 404),
   )
+  .use("/me/*", privateAuthResponse)
+  .use("/auth/*", privateAuthResponse)
   .use("/v2/me/*", async (context, next) => {
     await next();
     context.header("cache-control", "private, no-store");
@@ -56,6 +74,7 @@ export const api = new Hono<ApiEnvironment>()
       !context.req.path.startsWith("/api/health/") &&
       !context.req.path.startsWith("/health/")
     ) {
+      context.header("cache-control", "no-store");
       return context.json(errorBody(context, "BETA_NOT_OPEN", "공개 베타를 준비하고 있어요."), 503);
     }
     await next();
@@ -120,6 +139,7 @@ export const api = new Hono<ApiEnvironment>()
     }),
   )
   .route("/v2/cases", workspaceDeleteApi)
+  .route("/v2", createReportsApi())
   .route("/me", meApi)
   .route("/me", accountDeleteApi)
   .route("/cases", caseCreateApi)

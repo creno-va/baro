@@ -1,0 +1,22 @@
+{
+  "checkedAt": "2026-10-06T21:01:08.000Z",
+  "validUntil": "2026-10-31T15:00:00.000Z",
+  "creditUsd": "40.00",
+  "existingPaymentPath": true,
+  "autoRecharge": true,
+  "thresholdUsd": "10.00",
+  "refillUsd": "30.00",
+  "authorizedByDirectUserInstruction": true,
+  "monthlyBudgetCapEnabled": false,
+  "fx": {
+    "krwPerUsd": "1351.70",
+    "asOf": "2026-10-06T08:55:16.000Z",
+    "authority": "Industrial Bank of Korea: sending remittance rate, 2026-10-06",
+    "referenceUrl": "https://global.ibk.co.kr/en/services/ExchangeRate/USD"
+  },
+  "model": "openai/gpt-6-sol",
+  "contextTokens": 1050000,
+  "maximumOutputTokens": 128000,
+  "modelReference": "https://developers.cloudflare.com/ai/models/openai/gpt-6-sol/",
+  "outputReference": "https://developers.openai.com/api/docs/models/gpt-6-sol"
+}

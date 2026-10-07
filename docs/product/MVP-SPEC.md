@@ -55,9 +55,9 @@ draft → intake_saved → questioning → summary_pending → confirmed → act
 어느 단계에서도 safety_redirect / dependency_failed / usage_waiting / deletion 가능
 ```
 
-질문마다 answered/unknown/skipped를 구분해 저장한다. 세 묶음을 다 써야 하는 것은
-아니며 이미 충분하면 요약으로 이동한다. 기본 초기 cap 15개 이후 공백은 표시하고
-chat 에서 질문한다. 반복 질문으로 초기 폼을 무한히 늘리지 않는다.
+질문마다 answered/unknown/skipped를 구분해 저장한다. 2026-10-07 사용자 요청에 따라
+새 초기 입력은 후속 질문을 한 번에 하나씩, 총 최대 두 개까지 받는다. 모름·건너뛰기도
+한도에 포함하며 이후 정보 공백은 요약에 남기고 chat 에서 보완한다. 반복 질문으로 초기 폼을 무한히 늘리지 않는다.
 v1의 24 시간 만료 때문에 v2의 저장된 질문·답변을 지우거나 새 사건 생성을 요구하지 않는다.
 
 요약 확인은 법률적 사실 인정이나 제출 서명이 아니다. 사용자가 내용을 확인했다는

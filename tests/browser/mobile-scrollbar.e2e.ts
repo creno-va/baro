@@ -61,6 +61,8 @@ test("mobile menu keyboard flow and 200% fixture fit the available scrollbar wid
   await reserveScrollbarGutter(page);
   await expectAvailableWidth(page);
   const opener = page.getByRole("button", { name: "메뉴 열기" });
+  // Hydration removes ssr before the effect enables the keyboard trigger.
+  await expect(opener).toBeEnabled();
   await opener.focus();
   await page.keyboard.press("Enter");
   const menu = page.getByRole("dialog", { name: "메뉴", exact: true });

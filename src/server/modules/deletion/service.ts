@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { timestampSchema, uuidSchema } from "../../../contracts";
 import { RECENT_OAUTH_MS } from "../../auth/policy";
+import { profilePublicationInstanceId } from "../lawyers/publication-execution";
 
 const DAY = 86_400_000;
 export const CLEANUP_ATTEMPTS = 8;
@@ -20,18 +21,34 @@ export async function deleteAccount(
     at = new Date(now).toISOString();
   const live = `EXISTS(SELECT 1 FROM session WHERE id=? AND user_id=? AND expires_at>?
     AND oauth_authenticated_at>=? AND oauth_authenticated_at<=?)`;
+  const publications = (
+    await db
+      .prepare(
+        "SELECT x.id AS outboxId,x.operation_id AS operationId,x.target_id AS profileId,x.revision AS approvedRevision FROM v2_outbox x JOIN v2_profiles p ON p.id=x.target_id WHERE x.kind='profile_publish' AND p.owner_id=?",
+      )
+      .bind(ownerId)
+      .all<{ outboxId: string; operationId: string; profileId: string; approvedRevision: number }>()
+  ).results;
+  const inventory = JSON.stringify(
+    publications.map((row) => ({ ...row, runtimeId: profilePublicationInstanceId(row) })),
+  );
+  // Freeze the complete publication inventory in the same deletion transaction.
+  // A new outbox admitted between read and batch makes this request retry safely.
+  const publicationGuard =
+    "NOT EXISTS(SELECT 1 FROM v2_outbox x JOIN v2_profiles p ON p.id=x.target_id WHERE x.kind='profile_publish' AND p.owner_id=u.id AND NOT EXISTS(SELECT 1 FROM json_each(?) WHERE json_extract(value,'$.outboxId')=x.id AND json_extract(value,'$.approvedRevision')=x.revision))";
   const result = await db.batch([
     db
       .prepare(`INSERT INTO deletion_jobs(id,target_type,target_id,deleted_at,workflow_instance_ids,primary_state,cleanup_state,attempts,expires_at)
       SELECT ?,'account',u.id,?,(SELECT json_group_array(instance_id) FROM (
         ${workflowIdsSql} WHERE c.user_id=u.id
         UNION SELECT o.instance_id FROM dispatch_outbox o JOIN analyses a ON a.id=o.analysis_id JOIN cases c ON c.id=a.case_id WHERE c.user_id=u.id
-      )),'deleted','pending',0,? FROM user u WHERE u.id=? AND ${live}`)
+      )),'deleted','pending',0,? FROM user u WHERE u.id=? AND ${publicationGuard} AND ${live}`)
       .bind(
         jobId,
         at,
         new Date(now + 35 * DAY).toISOString(),
         ownerId,
+        inventory,
         sessionId,
         ownerId,
         now,
@@ -40,9 +57,19 @@ export async function deleteAccount(
       ),
     db
       .prepare(
+        "DELETE FROM app_metadata WHERE key=? AND EXISTS(SELECT 1 FROM deletion_jobs WHERE id=? AND target_type='account' AND target_id=?)",
+      )
+      .bind(`account-type:${ownerId}`, jobId, ownerId),
+    db
+      .prepare(
         `DELETE FROM user WHERE id=? AND EXISTS(SELECT 1 FROM deletion_jobs WHERE id=? AND target_type='account' AND target_id=?)`,
       )
       .bind(ownerId, jobId, ownerId),
+    db
+      .prepare(
+        "INSERT INTO v2_deletion_targets(journal_id,kind,target_id,ordinal) SELECT j.id,'job',json_extract(value,'$.runtimeId'),coalesce((SELECT max(ordinal)+1 FROM v2_deletion_targets WHERE journal_id=j.id),0)+CAST(json_each.key AS INTEGER) FROM json_each(?) JOIN v2_deletion_journals j ON j.target_kind='account' AND j.target_id=? WHERE EXISTS(SELECT 1 FROM deletion_jobs WHERE id=? AND target_type='account' AND target_id=?) ON CONFLICT(journal_id,kind,target_id) DO NOTHING",
+      )
+      .bind(inventory, ownerId, jobId, ownerId),
   ]);
   return result[0]?.meta.changes === 1;
 }
@@ -177,6 +204,9 @@ export async function replayDeletionJournal(db: D1Database, input: unknown) {
           JSON.stringify(job.workflow_instance_ids),
           job.expires_at,
         ),
+      ...(job.target_type === "account"
+        ? [db.prepare("DELETE FROM app_metadata WHERE key=?").bind(`account-type:${job.target_id}`)]
+        : []),
       db
         .prepare(
           job.target_type === "account"
@@ -187,4 +217,22 @@ export async function replayDeletionJournal(db: D1Database, input: unknown) {
     ]);
   }
   return { replayed: jobs.length };
+}
+
+/** Opaque owner binding for an explicit deletion confirmation; no user ID is exposed. */
+export async function deletionOwnerTag(secret: string, ownerId: string) {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  return [
+    ...new Uint8Array(
+      await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(`deletion-owner:${ownerId}`)),
+    ),
+  ]
+    .map((x) => x.toString(16).padStart(2, "0"))
+    .join("");
 }

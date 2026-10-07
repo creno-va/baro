@@ -14,20 +14,28 @@ const secretNames = [
   "LAW_API_OC",
 ] as const;
 const object = z.record(z.string(), z.unknown());
+const environmentSchema = z.enum(["preview", "production"]);
+type ReadinessEnvironment = z.infer<typeof environmentSchema>;
+type ReadinessFetch = (input: string, init: RequestInit) => Promise<Response>;
 type Observation =
   | { status: "available"; result: unknown }
   | {
-      status: "forbidden" | "unavailable";
+      status: "forbidden" | "unavailable" | "not_requested";
       httpStatus: number | null;
     };
 
 // Only GET requests and explicit projections: settings and widget responses can contain credentials.
-export async function inspectPreview(
+export async function inspectEnvironment(
   token: string,
   candidateSha: string,
-  fetcher: typeof fetch = fetch,
+  environment: ReadinessEnvironment = "preview",
+  fetcher: ReadinessFetch = fetch,
+  options: { checkGateway?: boolean } = {},
 ) {
   if (!token || !/^[a-f0-9]{40}$/.test(candidateSha)) throw new Error("Readiness inputs invalid");
+  environmentSchema.parse(environment);
+  const workerName = `baro-${environment}`;
+  const hostname = environment === "preview" ? "preview.baro.site" : "baro.site";
   async function read(path: string): Promise<Observation> {
     try {
       const response = await fetcher(
@@ -35,6 +43,8 @@ export async function inspectPreview(
         {
           method: "GET",
           headers: { Authorization: `Bearer ${token}` },
+          redirect: "error",
+          cache: "no-store",
           signal: AbortSignal.timeout(10_000),
         },
       );
@@ -54,8 +64,10 @@ export async function inspectPreview(
     }
   }
   const [settings, gateways, widgets] = await Promise.all([
-    read("workers/scripts/baro-preview/settings"),
-    read("ai-gateway/gateways?search=baro-preview&per_page=100"),
+    read(`workers/scripts/${workerName}/settings`),
+    options.checkGateway === true
+      ? read(`ai-gateway/gateways?search=${workerName}&per_page=100`)
+      : Promise.resolve<Observation>({ status: "not_requested", httpStatus: null }),
     read("challenges/widgets?per_page=100"),
   ]);
   const settingsResult = settings.status === "available" ? object.safeParse(settings.result) : null;
@@ -74,15 +86,28 @@ export async function inspectPreview(
   const gatewayList =
     gateways.status === "available" ? z.array(object).safeParse(gateways.result) : null;
   const gateway = gatewayList?.success
-    ? gatewayList.data.find((g) => g.id === "baro-preview")
+    ? gatewayList.data.find((g) => g.id === workerName)
     : undefined;
   const widgetList =
     widgets.status === "available" ? z.array(object).safeParse(widgets.result) : null;
-  const previewWidgets = widgetList?.success
-    ? widgetList.data.filter(
-        (w) => Array.isArray(w.domains) && w.domains.includes("preview.baro.site"),
-      )
+  const targetWidgets = widgetList?.success
+    ? widgetList.data.filter((w) => Array.isArray(w.domains) && w.domains.includes(hostname))
     : [];
+  const exclusiveWidgets = targetWidgets.filter(
+    (w) => Array.isArray(w.domains) && w.domains.length === 1,
+  );
+  const possiblyTruncated = widgetList?.success ? widgetList.data.length >= 100 : null;
+  // A sitekey is public client configuration. Never expose the widget secret,
+  // unrelated keys, or select among ambiguous/shared/truncated hostname matches.
+  const publicSiteKey =
+    possiblyTruncated === false && targetWidgets.length === 1 && exclusiveWidgets.length === 1
+      ? z
+          .string()
+          .min(1)
+          .max(100)
+          .regex(/^[A-Za-z0-9_-]+$/)
+          .safeParse(exclusiveWidgets[0]?.sitekey)
+      : null;
   const status = (observation: Observation) =>
     observation.status === "available" ? { status: observation.status } : observation;
   const boolean = (value: unknown) => (typeof value === "boolean" ? value : null);
@@ -92,24 +117,27 @@ export async function inspectPreview(
   return {
     version: 1,
     checkedAt: new Date().toISOString(),
-    environment: "preview",
+    environment,
     candidateSha,
     worker: {
       ...status(settings),
       parsed: bindings?.success === true,
       deployedSha: typeof release === "string" && /^[a-f0-9]{40}$/.test(release) ? release : null,
       authOriginMatches: bindings?.success
-        ? text("BETTER_AUTH_URL") === "https://preview.baro.site"
+        ? text("BETTER_AUTH_URL") === `https://${hostname}`
         : null,
-      gatewayIdMatches: bindings?.success ? text("AI_GATEWAY_ID") === "baro-preview" : null,
+      gatewayIdMatches: bindings?.success ? text("AI_GATEWAY_ID") === workerName : null,
       aiBindingPresent: bindings?.success
         ? configured.some((b) => b.name === "AI" && b.type === "ai")
         : null,
-      environmentMatches: bindings?.success ? text("APP_ENV") === "preview" : null,
+      environmentMatches: bindings?.success ? text("APP_ENV") === environment : null,
       publicBetaClosed: bindings?.success ? text("PUBLIC_BETA_ENABLED") === "false" : null,
       modelBoundsConfigured: bindings?.success
-        ? typeof text("AI_MODEL_TOKEN_BOUNDS_JSON") === "string" &&
-          String(text("AI_MODEL_TOKEN_BOUNDS_JSON")).trim().length > 0
+        ? (typeof text("AI_MODEL_TOKEN_BOUNDS_JSON") === "string" &&
+            String(text("AI_MODEL_TOKEN_BOUNDS_JSON")).trim().length > 0) ||
+          configured.some(
+            (b) => b.name === "AI_MODEL_TOKEN_BOUNDS_JSON" && b.type === "secret_text",
+          )
         : null,
       processingBindings: [
         { name: "CASE_PRIVATE_R2", type: "r2_bucket" },
@@ -117,6 +145,8 @@ export async function inspectPreview(
         { name: "FILE_PROCESSOR", type: "durable_object_namespace" },
         { name: "FILE_PROCESSING", type: "workflow" },
         { name: "WORKSPACE_PROCESSING", type: "workflow" },
+        { name: "ASSET_PROCESSING", type: "workflow" },
+        { name: "PROFILE_PUBLICATION", type: "workflow" },
       ].map(({ name, type }) => ({
         name,
         present: bindings?.success
@@ -136,11 +166,10 @@ export async function inspectPreview(
     turnstile: {
       ...status(widgets),
       parsed: widgetList?.success === true,
-      observedPreviewWidgetCount: widgetList?.success ? previewWidgets.length : null,
-      possiblyTruncated: widgetList?.success ? widgetList.data.length >= 100 : null,
-      observedExclusivePreviewWidgetCount: widgetList?.success
-        ? previewWidgets.filter((w) => Array.isArray(w.domains) && w.domains.length === 1).length
-        : null,
+      observedWidgetCount: widgetList?.success ? targetWidgets.length : null,
+      possiblyTruncated,
+      observedExclusiveWidgetCount: widgetList?.success ? exclusiveWidgets.length : null,
+      publicSiteKey: publicSiteKey?.success ? publicSiteKey.data : null,
     },
     // Configuration presence is never live OAuth/model/restore or human approval evidence.
     unverified: [
@@ -157,15 +186,50 @@ export async function inspectPreview(
   };
 }
 
+/** Preserve the existing preview report shape for historical callers. */
+export async function inspectPreview(
+  token: string,
+  candidateSha: string,
+  fetcher: ReadinessFetch = fetch,
+  options: { checkGateway?: boolean } = {},
+) {
+  const report = await inspectEnvironment(token, candidateSha, "preview", fetcher, options);
+  const {
+    observedWidgetCount,
+    observedExclusiveWidgetCount,
+    publicSiteKey: _sitekey,
+    ...turnstile
+  } = report.turnstile;
+  return {
+    ...report,
+    environment: "preview" as const,
+    turnstile: {
+      ...turnstile,
+      observedPreviewWidgetCount: observedWidgetCount,
+      observedExclusivePreviewWidgetCount: observedExclusiveWidgetCount,
+    },
+  };
+}
+
 if (import.meta.main) {
   try {
-    const report = await inspectPreview(
+    const environment = environmentSchema.parse(
+      process.env.READINESS_TARGET_ENVIRONMENT ?? "preview",
+    );
+    const report = await inspectEnvironment(
       process.env.CLOUDFLARE_API_TOKEN ?? "",
       process.env.READINESS_CANDIDATE_SHA ?? "",
+      environment,
+      fetch,
+      { checkGateway: process.env.READINESS_CHECK_GATEWAY === "true" },
     );
-    await Bun.write(".wrangler/readiness/preview.json", `${JSON.stringify(report, null, 2)}\n`);
+    await Bun.write(
+      `.wrangler/readiness/${environment}.json`,
+      `${JSON.stringify(report, null, 2)}\n`,
+    );
     console.log(
       JSON.stringify({
+        environment,
         worker: report.worker.status,
         gateway: report.gateway.status,
         turnstile: report.turnstile.status,
@@ -175,7 +239,7 @@ if (import.meta.main) {
       }),
     );
   } catch {
-    console.error("PREVIEW_READINESS_FAILED");
+    console.error("ENVIRONMENT_READINESS_FAILED");
     process.exitCode = 1;
   }
 }

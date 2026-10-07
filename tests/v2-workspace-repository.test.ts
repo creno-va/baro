@@ -123,12 +123,6 @@ async function batch(f: F, ordinal: number) {
     generatedForIntakeRevision: intake.revision,
     questions: [
       { id: crypto.randomUUID(), prompt: "증거를 보관했나요?", answerType: "text", options: [] },
-      {
-        id: crypto.randomUUID(),
-        prompt: "추가 사실을 알고 있나요?",
-        answerType: "choice",
-        options: ["예", "아니오"],
-      },
     ],
     answers: [],
   };
@@ -178,10 +172,7 @@ for (const count of [1, 2])
       expect(
         await f.ws.answer(g(f), b.id, {
           expectedRevision: intake?.revision,
-          answers: [
-            { questionId: b.questions[0]?.id, status: "unknown" },
-            { questionId: b.questions[1]?.id, status: "skipped" },
-          ],
+          answers: [{ questionId: b.questions[0]?.id, status: i === 1 ? "unknown" : "skipped" }],
         }),
       ).toBe(true);
     }
@@ -254,10 +245,7 @@ test("answers CAS race has one winner, duplicate cross-batch question and unknow
   const current = g(f);
   const request = {
     expectedRevision: 1,
-    answers: [
-      { questionId: b.questions[0]?.id, status: "unknown" },
-      { questionId: b.questions[1]?.id, status: "skipped" },
-    ],
+    answers: [{ questionId: b.questions[0]?.id, status: "unknown" }],
   };
   const outcomes = await Promise.all([
     f.ws.answer(current, b.id, request),

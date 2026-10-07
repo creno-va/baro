@@ -8,6 +8,7 @@ test.skip(process.env.BARO_D_SHARED_API !== "true", "Run the explicit shared moc
 test("shared login/intake/C originals/D review downloads and deletion persist across reload", async ({
   page,
   baseURL,
+  context,
 }) => {
   const apiRequests: string[] = [],
     externalRequests: string[] = [];
@@ -41,11 +42,11 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
   await expect(page).toHaveURL(/\/app$/);
   async function completeIntake(narrative: string) {
     await page.getByRole("textbox", { name: "지금까지 있었던 일" }).fill(narrative);
-    await page.getByRole("button", { name: "저장하고 질문 시작" }).click();
-    for (let index = 0; index < 4; index++)
+    await page.getByRole("button", { name: "저장하고 계속" }).click();
+    for (let index = 0; index < 2; index++)
       await page.getByRole("button", { name: "모름", exact: true }).click();
     await expect(page).toHaveURL(/\/summary$/);
-    await page.getByRole("checkbox", { name: /저장한 요약을 읽고/ }).check();
+    await page.getByRole("checkbox", { name: /요약이 내가 이야기한 사실과 맞는지/ }).check();
     await page.getByRole("button", { name: "요약 확인하고 계속" }).click();
     await page.getByRole("button", { name: "확인하고 사건 열기" }).click();
     await expect(page.getByRole("heading", { name: "이어서 대화하기" })).toBeVisible();
@@ -158,11 +159,22 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
   });
   await expect(page.getByText("결과 확인 가능", { exact: true })).toBeVisible();
   expect(await originalCount()).toBeGreaterThan(0);
+  const peer = await context.newPage();
+  await peer.goto(`${accountCasePath}/reports`);
+  await expect(peer.getByRole("textbox", { name: "리포트 내용 편집" })).toBeVisible();
+  const previousMarker = await page.evaluate(() => localStorage.getItem("baro-session-changed"));
   await page.goto("/settings");
   await page.getByRole("button", { name: "계정과 모든 사건 삭제", exact: true }).click();
   await page.getByRole("textbox", { name: "삭제 확인 — DELETE 입력" }).fill("DELETE");
   await page.getByRole("button", { name: "삭제 요청 확인", exact: true }).click();
   await expect(page.getByRole("heading", { name: "계정 삭제를 접수했어요" })).toBeVisible();
+  const deletedMarker = await page.evaluate(() => localStorage.getItem("baro-session-changed"));
+  expect(deletedMarker).toMatch(/^[0-9a-f-]{36}$/);
+  expect(deletedMarker).not.toBe(previousMarker);
+  await peer.bringToFront();
+  await expect(peer.getByRole("textbox", { name: "리포트 내용 편집" })).toHaveCount(0);
+  await expect(peer.getByRole("button", { name: "PDF 다운로드" })).toHaveCount(0);
+  await expect(peer.getByRole("link", { name: "로그인", exact: true })).toBeVisible();
   await page.reload();
   expect(
     await page.evaluate(

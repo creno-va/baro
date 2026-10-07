@@ -117,8 +117,12 @@ test("settings reauth needs a newer callback for same owner and a fresh explicit
   await expect(confirm).toHaveCount(0);
   await expect(remove).toBeDisabled();
   const auth = page.getByRole("button", { name: "google로 재인증" });
+  // The disabled delete action is also the initial loading state. Wait until
+  // access/optional reads finish before issuing a real keyboard action.
+  await expect(auth).toBeEnabled();
   await auth.focus();
   await page.keyboard.press("Enter");
+  await expect.poll(() => stamp).not.toBeNull();
   await expect(remove).toBeEnabled();
   await remove.click();
   await expect(confirm).toBeEnabled();
@@ -142,6 +146,15 @@ test("settings reauth needs a newer callback for same owner and a fresh explicit
   await expect(confirm).toHaveValue("");
   const finish = page.getByRole("button", { name: "삭제 요청 확인", exact: true });
   await expect(finish).toBeDisabled();
+  await confirm.fill("DELETE");
+  await page.evaluate(() => {
+    window.dispatchEvent(new PageTransitionEvent("pagehide"));
+    window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true }));
+  });
+  await expect(confirm).toHaveCount(0);
+  await expect(remove).toBeEnabled();
+  await remove.click();
+  await expect(confirm).toHaveValue("");
   await confirm.fill("DELETE");
   await finish.focus();
   await page.keyboard.press("Enter");
@@ -182,6 +195,9 @@ test("loading/error/cancel, expired callback and switched account never arm dele
   await expect(
     page.getByRole("button", { name: "계정과 모든 사건 삭제", exact: true }),
   ).toBeDisabled();
+  // A visible button can still belong to the first, unfinished settings load.
+  // Complete that callback check before injecting the next navigation marker.
+  await expect(page.getByRole("button", { name: "google로 재인증" })).toBeEnabled();
   await page.evaluate(
     (key) =>
       sessionStorage.setItem(
@@ -198,4 +214,100 @@ test("loading/error/cancel, expired callback and switched account never arm dele
     page.getByRole("button", { name: "계정과 모든 사건 삭제", exact: true }),
   ).toBeDisabled();
   expect(await page.evaluate((key) => sessionStorage.getItem(key), marker)).toBeNull();
+});
+
+test("a previous page's late access failure cannot erase the next OAuth reauthentication marker", async ({
+  page,
+}) => {
+  let pause = false;
+  let held: import("@playwright/test").Route | undefined;
+  let signal: (() => void) | undefined;
+  const pending = new Promise<void>((resolve) => {
+    signal = resolve;
+  });
+  await page.route("**/api/me/deletion", async (route) => {
+    if (pause) {
+      held = route;
+      signal?.();
+      return;
+    }
+    await route.fulfill({
+      json: {
+        ownerTag: tag,
+        recentOAuth: true,
+        authenticatedAt: new Date(Date.now() + 60).toISOString(),
+        providers: ["google"],
+      },
+    });
+  });
+  await page.goto("/settings");
+  await expect(page.getByRole("button", { name: "다시 확인" })).toBeEnabled();
+  pause = true;
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await pending;
+  const nextMarker = JSON.stringify({ ownerTag: tag, startedAt: Date.now() });
+  await page.evaluate(
+    ({ key, value }) => {
+      window.dispatchEvent(new PageTransitionEvent("pagehide"));
+      sessionStorage.setItem(key, value);
+    },
+    { key: marker, value: nextMarker },
+  );
+  if (!held) throw new Error("Synthetic pending access read missing");
+  await held.fulfill({ status: 503 });
+  await expect
+    .poll(() => page.evaluate((key) => sessionStorage.getItem(key), marker))
+    .toBe(nextMarker);
+  pause = false;
+  await page.reload();
+  await expect(
+    page.getByRole("button", { name: "계정과 모든 사건 삭제", exact: true }),
+  ).toBeEnabled();
+  expect(await page.evaluate((key) => sessionStorage.getItem(key), marker)).toBe(nextMarker);
+});
+
+test("late OAuth request failure after leaving preserves the next ticket; back navigation still requires a fresh callback", async ({
+  page,
+}) => {
+  let held: import("@playwright/test").Route | undefined;
+  let signal: (() => void) | undefined;
+  const pending = new Promise<void>((resolve) => {
+    signal = resolve;
+  });
+  await page.route("**/api/me/deletion", (route) =>
+    route.fulfill({
+      json: {
+        ownerTag: tag,
+        recentOAuth: true,
+        authenticatedAt: new Date(Date.now() - 60_000).toISOString(),
+        providers: ["google"],
+      },
+    }),
+  );
+  await page.route("**/api/auth/sign-in/social", (route) => {
+    held = route;
+    signal?.();
+  });
+  await page.goto("/settings");
+  await expect(page.getByRole("button", { name: "다시 확인" })).toBeEnabled();
+  await page.getByRole("button", { name: "google로 재인증" }).click();
+  await pending;
+  const nextMarker = JSON.stringify({ ownerTag: tag, startedAt: Date.now() });
+  await page.evaluate(
+    ({ key, value }) => {
+      window.dispatchEvent(new PageTransitionEvent("pagehide"));
+      sessionStorage.setItem(key, value);
+    },
+    { key: marker, value: nextMarker },
+  );
+  if (!held) throw new Error("Synthetic pending OAuth request missing");
+  await held.fulfill({ status: 503, json: { error: { message: "synthetic unavailable" } } });
+  await page.evaluate(() =>
+    window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true })),
+  );
+  await expect(page.getByRole("button", { name: "다시 확인" })).toBeEnabled();
+  expect(await page.evaluate((key) => sessionStorage.getItem(key), marker)).toBe(nextMarker);
+  await expect(
+    page.getByRole("button", { name: "계정과 모든 사건 삭제", exact: true }),
+  ).toBeDisabled();
 });

@@ -12,6 +12,30 @@ import {
 import type { CaseView, QuestionView, ReportView, SessionView } from "../src/client/api/types";
 import { createZip, maskReportText } from "../src/components/reports/download";
 
+test("lost ZIP response and repeated downloads reuse the immutable selection key; changed selection gets a new key", async () => {
+  const keys: string[] = [],
+    bodies: unknown[] = [];
+  let lost = true;
+  const client = createReportsClient(async <T>(_path: string, init?: DomainRequestInit) => {
+    keys.push(init?.headers?.["idempotency-key"] ?? "");
+    bodies.push(init?.body);
+    if (lost) {
+      lost = false;
+      throw new Error("synthetic lost response");
+    }
+    return new Blob([new Uint8Array([0x50, 0x4b, 3, 4, 0])], { type: "application/zip" }) as T;
+  });
+  await expect(client.zip("report-synthetic", ["one"])).rejects.toThrow("lost response");
+  await client.zip("report-synthetic", ["one"]);
+  await client.zip("report-synthetic", ["one"]);
+  await client.zip("report-synthetic", ["two"]);
+  expect(keys[0]).toBeTruthy();
+  expect(keys[1]).toBe(keys[0]);
+  expect(keys[2]).toBe(keys[0]);
+  expect(keys[3]).not.toBe(keys[0]);
+  expect(bodies[0]).toEqual({ selectedFileIds: ["one"] });
+});
+
 function fixture() {
   let raw = JSON.stringify({
     session: {
@@ -81,6 +105,47 @@ function fixture() {
     account: createAccountClient(request),
   };
 }
+test("accepted deletion sends opaque shared invalidation; failed or ambiguous responses do not", async () => {
+  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, "window"),
+    previousStorage = Object.getOwnPropertyDescriptor(globalThis, "localStorage"),
+    events: string[] = [],
+    markers: [string, string][] = [];
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: { dispatchEvent: (event: Event) => events.push(event.type) },
+  });
+  Object.defineProperty(globalThis, "localStorage", {
+    configurable: true,
+    value: { setItem: (key: string, value: string) => markers.push([key, value]) },
+  });
+  try {
+    const failure = createAccountClient(async () => {
+      throw new Error("synthetic transport failure");
+    });
+    await expect(failure.deleteCase("synthetic-case", "DELETE")).rejects.toThrow("failure");
+    await expect(failure.deleteAccount("DELETE")).rejects.toThrow("failure");
+    const ambiguous = createAccountClient(async <T>() => ({ status: "unknown" }) as T);
+    await expect(ambiguous.deleteAccount("DELETE")).rejects.toThrow();
+    expect(events).toEqual([]);
+    expect(markers).toEqual([]);
+    const accepted = createAccountClient(async <T>() => ({ status: "accepted" }) as T);
+    await accepted.deleteCase("synthetic-case", "DELETE");
+    await accepted.deleteAccount("DELETE");
+    expect(events).toEqual(["baro-session-changed", "baro-session-changed"]);
+    expect(markers).toHaveLength(2);
+    for (const [key, value] of markers) {
+      expect(key).toBe("baro-session-changed");
+      expect(value).toMatch(/^[0-9a-f-]{36}$/);
+      expect(value).not.toContain("synthetic");
+    }
+    expect(markers[0]?.[1]).not.toBe(markers[1]?.[1]);
+  } finally {
+    if (previousWindow) Object.defineProperty(globalThis, "window", previousWindow);
+    else Reflect.deleteProperty(globalThis, "window");
+    if (previousStorage) Object.defineProperty(globalThis, "localStorage", previousStorage);
+    else Reflect.deleteProperty(globalThis, "localStorage");
+  }
+});
 test("review edits and masking persist through storage reload; old versions retain their reviewed content", async () => {
   const f = fixture();
   const report = await f.reports.get("case-demo");
@@ -132,6 +197,65 @@ test("revision conflict and mutation-key replay prevent silent overwrites and du
   await expect(
     f.request("/api/v2/cases/case-demo/reports", { ...init, body: { expectedRevision: 99 } }),
   ).rejects.toMatchObject({ code: "CONFLICT" });
+});
+test("same owner customer to lawyer blocks direct report read, replay, exports and case deletion while preserving neutral account operations", async () => {
+  const f = fixture(),
+    first = await f.reports.get("case-demo"),
+    key = crypto.randomUUID(),
+    path = "/api/v2/cases/case-demo/reports",
+    init = {
+      method: "PATCH",
+      headers: { "idempotency-key": key },
+      body: {
+        expectedRevision: first.revision,
+        content: "역할 경계 합성 검토",
+        maskIdentifiers: true,
+        excludedFileIds: [],
+      },
+    };
+  const saved = await f.request<ReportView>(path, init);
+  f.update((state) => {
+    if (state.session.user) state.session.user.accountType = "lawyer";
+  });
+  for (const action of [
+    () => f.reports.get("case-demo"),
+    () => f.request(path, init),
+    () => f.reports.pdf(saved.id),
+    () => f.reports.zip(saved.id, ["file-demo"]),
+    () => f.account.deleteCase("case-demo", "DELETE"),
+  ])
+    await expect(action()).rejects.toMatchObject({ code: "ROLE_REQUIRED" });
+  expect((await f.account.usage()).newCases.used).toBe(1);
+  expect((await f.account.deletionAccess()).canDelete).toBe(true);
+  f.update((state) => {
+    if (state.session.user) state.session.user.accountType = "customer";
+  });
+  expect((await f.reports.get("case-demo")).content).toBe(saved.content);
+  f.update((state) => {
+    if (state.session.user) state.session.user.accountType = "lawyer";
+  });
+  await f.account.deleteAccount("DELETE");
+  expect(f.read().session.user).toBeNull();
+});
+test("a role switch while original bytes load refuses a late ZIP response", async () => {
+  const f = fixture(),
+    report = await f.reports.get("case-demo"),
+    handler = createReportsMockHandler({
+      read: f.read,
+      update: f.update,
+      original: async () => {
+        f.update((state) => {
+          if (state.session.user) state.session.user.accountType = "lawyer";
+        });
+        return new Blob(["합성 원본"]);
+      },
+    });
+  await expect(
+    handler(`/api/v2/reports/${report.id}/zip`, {
+      method: "POST",
+      body: { selectedFileIds: ["file-demo"] },
+    }),
+  ).rejects.toMatchObject({ code: "ROLE_REQUIRED" });
 });
 test("stale source revisions are shown, excluded or removed originals cannot enter ZIP", async () => {
   const f = fixture();
@@ -219,7 +343,7 @@ test("real account usage converts seconds to minutes and deletion uses the exist
         timezone: "Asia/Seoul",
         resetAt: "2026-10-06T15:00:00Z",
         newCases: { used: 1, reserved: 0, remaining: 2, limit: 3 },
-        aiResponses: { used: 2, reserved: 0, remaining: 28, limit: 30 },
+        aiResponses: { used: 2, reserved: 0, remaining: 198, limit: 200 },
         mediaSeconds: { used: 120, reserved: 60, remaining: 3420, limit: 3600 },
         storageBytes: { used: 100, reserved: 0, remaining: 9_999_999_900, limit: 10_000_000_000 },
         waitReasons: [],
@@ -329,6 +453,15 @@ test("canonical shared namespaces enforce ownership and deleting one account pre
     state.lawyers = {
       profiles: [{ id: "own-profile" }, { id: "peer-profile" }],
       owners: { "synthetic-owner": "own-profile", "peer-owner": "peer-profile" },
+      assets: {
+        owned: { ownerId: "synthetic-owner", profileId: "own-profile", data: "합성 자기 자료" },
+        orphaned: {
+          ownerId: "synthetic-owner",
+          profileId: "retired-profile",
+          data: "합성 자기 자료",
+        },
+        peer: { ownerId: "peer-owner", profileId: "peer-profile", data: "합성 타인 자료" },
+      },
     };
   });
   await expect(f.reports.get("peer-case")).rejects.toMatchObject({ code: "NOT_FOUND" });
@@ -345,6 +478,7 @@ test("canonical shared namespaces enforce ownership and deleting one account pre
   expect(f.read().lawyers).toEqual({
     profiles: [{ id: "peer-profile" }],
     owners: { "peer-owner": "peer-profile" },
+    assets: { peer: { ownerId: "peer-owner", profileId: "peer-profile", data: "합성 타인 자료" } },
   });
   expect(f.read().session.user).toBeNull();
   expect(f.read().deletedAccountIds).toEqual(["synthetic-owner"]);

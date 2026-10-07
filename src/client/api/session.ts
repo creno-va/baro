@@ -2,7 +2,6 @@ import type { ConsentInput } from "../../contracts/consent";
 import { authClient } from "../auth";
 import { ApiError, apiMode, request } from "./core";
 import type { AccountType, Provider, SessionView } from "./types";
-import "./mock/session";
 export const roleStart = (session: SessionView) =>
   !session.user
     ? "/login"

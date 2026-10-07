@@ -6,6 +6,7 @@ import {
   displayText,
 } from "../../contracts";
 import {
+  V2_INTAKE_POLICY,
   v2JobSchema,
   v2QuestionBatchSchema,
   v2SummarySchema,
@@ -13,7 +14,6 @@ import {
 } from "../../contracts/v2";
 import { ApiError, apiMode, request } from "./core";
 import type { CaseView, QuestionView } from "./types";
-import "./mock/cases";
 
 export const createInputSchema = z.object({
   narrative: boundedText(20, 5000),
@@ -50,6 +50,8 @@ export type QuestionsResult = {
   revision: number;
   processing?: boolean;
   failed?: boolean;
+  followupLimit?: number;
+  processingStage?: "questions" | "summary";
 };
 const metadataSchema = z.object({
   schemaVersion: z.literal("2"),
@@ -210,6 +212,12 @@ function questions(m: Metadata, revision: number): QuestionsResult {
     complete: m.summary !== null,
     revision,
     processing: m.currentJobId !== null,
+    followupLimit: V2_INTAKE_POLICY.followupLimit,
+    processingStage:
+      m.batches.reduce((count, batch) => count + batch.questions.length, 0) >=
+      V2_INTAKE_POLICY.followupLimit
+        ? "summary"
+        : "questions",
   };
 }
 async function getQuestions(id: string): Promise<QuestionsResult> {
@@ -486,7 +494,7 @@ export const casesApi = {
     const jobId = m.currentJobId ?? (recovered?.status === "failed" ? recovered.id : null);
     if (jobId) {
       const job = z
-        .object({ status: z.string(), retryable: z.boolean() })
+        .object({ status: z.string(), retryable: z.boolean(), kind: z.string().optional() })
         .parse(
           await request(
             "cases.job",
@@ -495,12 +503,16 @@ export const casesApi = {
           ),
         );
       if (job.status !== "failed") return getQuestions(id);
-      if (!job.retryable)
+      const summaryInstead =
+        (job.kind ?? recovered?.kind) === "intake_questions" &&
+        m.batches.reduce((count, batch) => count + batch.questions.length, 0) >=
+          V2_INTAKE_POLICY.followupLimit;
+      if (!job.retryable && !summaryInstead)
         throw new ApiError(
           "UNAVAILABLE",
           "이 작업을 다시 준비할 수 없어요. 저장한 답변은 보존돼요.",
         );
-      suffix = `workspace-jobs/${encodeURIComponent(jobId)}/retry`;
+      if (!summaryInstead) suffix = `workspace-jobs/${encodeURIComponent(jobId)}/retry`;
     }
     await request(
       "cases.advance",

@@ -17,7 +17,9 @@ export async function createProfilePublicationRuntime(
   _waitUntil: (task: Promise<void>) => void,
   capabilities: Omit<PublicationDependencies, "publicBucket" | "fixedLengthStream"> = {},
 ) {
-  const core = createV2Core(env.DB, await createCaseDataCipher(env));
+  const core = createV2Core(env.DB, await createCaseDataCipher(env), {
+    monthlyBudgetCapEnabled: env.MONTHLY_BUDGET_CAP_ENABLED !== "false",
+  });
   const environment = env.APP_ENV === "production" ? "production" : "preview";
   return createProfilePublicationExecution(
     core,

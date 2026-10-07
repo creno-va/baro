@@ -1,0 +1,103 @@
+name: Deploy BARO Worker
+description: Shared real API build, validation, migration, credential sync and endpoint smoke.
+inputs:
+  target-environment:
+    description: Isolated Cloudflare and GitHub Environment (preview or production).
+    required: true
+  release-sha:
+    description: Verified immutable commit to deploy.
+    required: true
+  public-beta-enabled:
+    description: Production API gate, authorized by the calling workflow.
+    required: true
+  configure-ai:
+    description: Apply separately verified AI runtime evidence after production migrations.
+    default: 'false'
+runs:
+  using: composite
+  steps:
+    - name: Validate deployment inputs
+      shell: bash
+      env:
+        DEPLOY_ENVIRONMENT: ${{ inputs.target-environment }}
+        RELEASE_SHA: ${{ inputs.release-sha }}
+        PUBLIC_BETA_ENABLED: ${{ inputs.public-beta-enabled }}
+        CONFIGURE_AI: ${{ inputs.configure-ai }}
+      run: |
+        [[ "$DEPLOY_ENVIRONMENT" == preview || "$DEPLOY_ENVIRONMENT" == production ]]
+        [[ "$RELEASE_SHA" =~ ^[a-f0-9]{40}$ ]]
+        test "$(git rev-parse HEAD)" = "$RELEASE_SHA"
+        [[ "$PUBLIC_BETA_ENABLED" == true || "$PUBLIC_BETA_ENABLED" == false ]]
+        [[ "$CONFIGURE_AI" == true || "$CONFIGURE_AI" == false ]]
+        if [[ "$DEPLOY_ENVIRONMENT" == preview ]]; then
+          test "$PUBLIC_BETA_ENABLED" = false
+          test "$CONFIGURE_AI" = false
+        fi
+        test -n "$CLOUDFLARE_API_TOKEN"
+        test -n "$CLOUDFLARE_ACCOUNT_ID"
+        bun scripts/check-deployment.ts "$DEPLOY_ENVIRONMENT"
+        bun scripts/check-runtime-secrets.ts "$DEPLOY_ENVIRONMENT"
+
+    - name: Build and validate selected environment
+      shell: bash
+      env:
+        CLOUDFLARE_ENV: ${{ inputs.target-environment }}
+        PUBLIC_API_MODE: real
+      run: |
+        bun run build
+        bun run bundle:check
+        bun run cf:dry-run
+        bun scripts/check-deployment.ts "$CLOUDFLARE_ENV" --built
+
+    - name: Reject superseded preview release before migration
+      if: inputs.target-environment == 'preview'
+      shell: bash
+      env:
+        RELEASE_SHA: ${{ inputs.release-sha }}
+      run: test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)" = "$RELEASE_SHA"
+
+    - name: Apply validated migrations
+      shell: bash
+      env:
+        DEPLOY_ENVIRONMENT: ${{ inputs.target-environment }}
+      run: bun scripts/apply-d1-migrations.ts "$DEPLOY_ENVIRONMENT"
+
+    - name: Configure verified AI runtime
+      if: inputs.target-environment == 'production' && inputs.configure-ai == 'true'
+      shell: bash
+      env:
+        RELEASE_SHA: ${{ inputs.release-sha }}
+      run: bun scripts/provision-ai-budget.ts "$RELEASE_SHA"
+
+    - name: Deploy Worker and synchronize environment credentials
+      uses: cloudflare/wrangler-action@953926a2e2182532811c01a25e53647d93bf07c0 # v4.1.3
+      with:
+        apiToken: ${{ env.CLOUDFLARE_API_TOKEN }}
+        accountId: ${{ env.CLOUDFLARE_ACCOUNT_ID }}
+        environment: ${{ inputs.target-environment }}
+        wranglerVersion: '4.147.0'
+        command: deploy --var RELEASE_SHA:${{ inputs.release-sha }} --var PUBLIC_BETA_ENABLED:${{ inputs.public-beta-enabled }}
+        secrets: |
+          GOOGLE_CLIENT_ID
+          GOOGLE_CLIENT_SECRET
+          NAVER_CLIENT_ID
+          NAVER_CLIENT_SECRET
+          KAKAO_CLIENT_ID
+          KAKAO_CLIENT_SECRET
+
+    - name: Verify release, schema and endpoint behavior
+      shell: bash
+      env:
+        DEPLOY_ENVIRONMENT: ${{ inputs.target-environment }}
+        RELEASE_SHA: ${{ inputs.release-sha }}
+        PUBLIC_BETA_ENABLED: ${{ inputs.public-beta-enabled }}
+      run: |
+        if [[ "$DEPLOY_ENVIRONMENT" == preview ]]; then
+          origin=https://preview.baro.site
+          mode=open
+        else
+          origin=https://baro.site
+          mode=foundation
+          if [[ "$PUBLIC_BETA_ENABLED" == true ]]; then mode=open; fi
+        fi
+        bun scripts/smoke.ts "$origin" "$RELEASE_SHA" "$mode"

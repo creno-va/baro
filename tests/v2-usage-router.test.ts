@@ -23,7 +23,7 @@ test("Worker router exposes own usage with signed SQL session and preserves v1 c
   expect(response.headers.get("x-request-id")).toBe("synthetic-router-usage");
   const usage = v2UsageSchema.parse(await response.json());
   expect(usage.newCases.limit).toBe(3);
-  expect(usage.aiResponses.limit).toBe(30);
+  expect(usage.aiResponses.limit).toBe(200);
   expect(usage.mediaSeconds.limit).toBe(3600);
   expect(usage.waitReasons).toContain("monthly_budget");
   expect((await workerApi.request("/api/me/consent", { headers }, owner.env)).status).toBe(200);

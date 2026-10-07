@@ -1,6 +1,7 @@
 import type { z } from "zod";
 import { idempotencyKeySchema, opaqueIdSchema } from "../../../contracts";
 import {
+  V2_INTAKE_POLICY,
   v2ActionUpdateRequestSchema,
   v2AnswersForBatchSchema,
   v2AnswersRequestSchema,
@@ -20,6 +21,7 @@ import { runtimeDigest } from "../../db/v2-paid-runtime";
 import type { PreparedPaidHold } from "../../db/v2-paid-statements";
 import { createV2SummaryEditsRepository } from "../../db/v2-summary-edits";
 import { type Admission, createV2WorkspaceRepository } from "../../db/v2-workspace";
+import { dependencyStep } from "../../dependency-diagnostics";
 
 export class WorkspaceError extends Error {
   constructor(
@@ -211,7 +213,9 @@ export function createWorkspaceService(core: V2Core, deps: WorkspaceDependencies
     },
     async retry(ownerId: string, id: string, jobId: string, raw: unknown) {
       const request = v2IntakeAdvanceRequestSchema.parse(raw);
-      const job = await jobs.find(actor(ownerId), opaqueIdSchema.parse(jobId));
+      const job = await dependencyStep("retry_job", () =>
+        jobs.find(actor(ownerId), opaqueIdSchema.parse(jobId)),
+      );
       if (
         !job ||
         job.target.kind !== "workspace" ||
@@ -219,7 +223,7 @@ export function createWorkspaceService(core: V2Core, deps: WorkspaceDependencies
         !["intake_questions", "intake_summary", "chat_response"].includes(job.kind)
       )
         throw new WorkspaceError("NOT_FOUND");
-      await find(ownerId, id);
+      await dependencyStep("retry_workspace", () => find(ownerId, id));
       if (
         job.status === "queued" ||
         job.status === "running" ||
@@ -228,39 +232,60 @@ export function createWorkspaceService(core: V2Core, deps: WorkspaceDependencies
       )
         return queued(ownerId, job.operationId);
       if (job.status !== "failed" || !job.retryable) throw new WorkspaceError("REVIEW_REQUIRED");
-      const g = await guard(ownerId, id, request.expectedRevision);
-      const operation = await core
-        .statement(
-          "SELECT revision,request_hash,key FROM v2_operations o JOIN v2_idempotency i ON i.operation_id=o.id WHERE o.id=? AND o.owner_id=?",
-          [job.operationId, ownerId],
+      const g = await dependencyStep("retry_workspace", () =>
+        guard(ownerId, id, request.expectedRevision),
+      );
+      if (job.kind === "intake_questions") {
+        const intake = await workspace.metadata(g, id);
+        if (
+          !intake ||
+          intake.batches.reduce((count, batch) => count + batch.questions.length, 0) >=
+            V2_INTAKE_POLICY.followupLimit
         )
-        .first<{ revision: number; request_hash: string; key: string }>();
+          throw new WorkspaceError("REVIEW_REQUIRED");
+      }
+      const operation = await dependencyStep("retry_operation", () =>
+        core
+          .statement(
+            "SELECT revision,request_hash,key FROM v2_operations o JOIN v2_idempotency i ON i.operation_id=o.id WHERE o.id=? AND o.owner_id=?",
+            [job.operationId, ownerId],
+          )
+          .first<{ revision: number; request_hash: string; key: string }>(),
+      );
       if (!operation) throw new WorkspaceError("NOT_FOUND");
       const prior =
         job.kind === "chat_response"
-          ? await workspace.userMessage(actor(ownerId), id, job.operationId)
+          ? await dependencyStep("retry_context", () =>
+              workspace.userMessage(actor(ownerId), id, job.operationId),
+            )
           : undefined;
       if (job.kind === "chat_response" && !prior) throw new WorkspaceError("NOT_FOUND");
-      const prepared = await deps.prepareJob?.({
-        ownerId,
-        caseId: id,
-        revision: g.expectedRevision + 1,
-        operationRevision: operation.revision,
-        jobId,
-        kind: job.kind as WorkspaceJobInput["kind"],
-        admission: {
-          operationId: job.operationId,
-          key: operation.key,
-          requestHash: operation.request_hash,
-        },
-        ...(prior?.role === "user" ? { retryMessage: prior } : {}),
-      });
+      const prepared = await dependencyStep("retry_admission", async () =>
+        deps.prepareJob?.({
+          ownerId,
+          caseId: id,
+          revision: g.expectedRevision + 1,
+          operationRevision: operation.revision,
+          jobId,
+          kind: job.kind as WorkspaceJobInput["kind"],
+          admission: {
+            operationId: job.operationId,
+            key: operation.key,
+            requestHash: operation.request_hash,
+          },
+          ...(prior?.role === "user" ? { retryMessage: prior } : {}),
+        }),
+      );
       if (!prepared || prepared.actor.ownerId !== ownerId)
         throw new WorkspaceError("BUDGET_UNAVAILABLE");
-      if (!(await jobs.retry({ ...g, now: prepared.actor.now }, jobId, prepared.paid)))
+      if (
+        !(await dependencyStep("retry_commit", () =>
+          jobs.retry({ ...g, now: prepared.actor.now }, jobId, prepared.paid),
+        ))
+      )
         throw new WorkspaceError("STALE_REVISION");
       await deps.dispatch?.().catch(() => undefined);
-      return queued(ownerId, job.operationId);
+      return dependencyStep("retry_receipt", () => queued(ownerId, job.operationId));
     },
     async list(ownerId: string, limit = 20, before?: { createdAt: string; id: string }) {
       return workspace.list(actor(ownerId), limit, before);
@@ -339,7 +364,10 @@ export function createWorkspaceService(core: V2Core, deps: WorkspaceDependencies
         id,
         key,
         body,
-        intake.batches.length < 3 ? "intake_questions" : "intake_summary",
+        intake.batches.reduce((count, batch) => count + batch.questions.length, 0) <
+          V2_INTAKE_POLICY.followupLimit
+          ? "intake_questions"
+          : "intake_summary",
       );
     },
     async editSummary(ownerId: string, id: string, key: string, raw: unknown) {

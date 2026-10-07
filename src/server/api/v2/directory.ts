@@ -51,7 +51,12 @@ export function createDirectoryApi(
     return c.json(errorBody(c, "DEPENDENCY_UNAVAILABLE", "프로필을 불러오지 못했어요.", true), 503);
   });
   const service = async (env: Env) =>
-    createDirectoryService(createV2Core(env.DB, await createCaseDataCipher(env)), options.clock);
+    createDirectoryService(
+      createV2Core(env.DB, await createCaseDataCipher(env), {
+        monthlyBudgetCapEnabled: env.MONTHLY_BUDGET_CAP_ENABLED !== "false",
+      }),
+      options.clock,
+    );
   app.get("/", async (c) => c.json(await (await service(c.env)).list(c.req.query())));
   app.get("/self-service", async (c) => {
     const raw = c.req.query();
@@ -59,12 +64,16 @@ export function createDirectoryApi(
       ...raw,
       ...(raw.limit === undefined ? {} : { limit: Number(raw.limit) }),
     });
-    const core = createV2Core(c.env.DB, await createCaseDataCipher(c.env));
+    const core = createV2Core(c.env.DB, await createCaseDataCipher(c.env), {
+      monthlyBudgetCapEnabled: c.env.MONTHLY_BUDGET_CAP_ENABLED !== "false",
+    });
     return c.json(await createSelfProfileService(core, options.clock).list(query));
   });
   app.get("/self-service/:id/assets/:assetId", async (c) => {
     publicProfileQuerySchema.parse(c.req.query());
-    const core = createV2Core(c.env.DB, await createCaseDataCipher(c.env));
+    const core = createV2Core(c.env.DB, await createCaseDataCipher(c.env), {
+      monthlyBudgetCapEnabled: c.env.MONTHLY_BUDGET_CAP_ENABLED !== "false",
+    });
     const service = createSelfProfileService(core, options.clock);
     const profile = await service.get(c.req.param("id"));
     const ownerId = await core
@@ -88,12 +97,16 @@ export function createDirectoryApi(
   });
   app.get("/self-service/:id", async (c) => {
     publicProfileQuerySchema.parse(c.req.query());
-    const core = createV2Core(c.env.DB, await createCaseDataCipher(c.env));
+    const core = createV2Core(c.env.DB, await createCaseDataCipher(c.env), {
+      monthlyBudgetCapEnabled: c.env.MONTHLY_BUDGET_CAP_ENABLED !== "false",
+    });
     return c.json(await createSelfProfileService(core, options.clock).get(c.req.param("id")));
   });
   const publicAsset = async (c: Context<ApiEnvironment>) => {
     publicProfileQuerySchema.parse(c.req.query());
-    const core = createV2Core(c.env.DB, await createCaseDataCipher(c.env));
+    const core = createV2Core(c.env.DB, await createCaseDataCipher(c.env), {
+      monthlyBudgetCapEnabled: c.env.MONTHLY_BUDGET_CAP_ENABLED !== "false",
+    });
     const directory = createDirectoryService(core, options.clock);
     const capacity = createV2StorageCapacityRepository(
       core,

@@ -758,12 +758,16 @@ test("logical visible responses are distinct from actual attempt cost and ambigu
   accepts(v2BudgetAdmissionSchema(budget, time), quote);
   rejects(v2BudgetAdmissionSchema(budget, time), {
     ...quote,
-    estimatedKrw: budget.availableKrw + 1,
+    estimatedKrw: (budget.availableKrw ?? 0) + 1,
   });
   rejects(v2BudgetAdmissionSchema(budget, "2026-10-07T00:00:00Z"), quote);
   const exhausted = { ...budget, settledKrw: 1_000_000, availableKrw: 0 };
   accepts(v2BudgetLedgerSchema, exhausted);
   rejects(v2BudgetAdmissionSchema(exhausted, time), quote);
+  const unlimited = { ...exhausted, limitKrw: null, availableKrw: null };
+  accepts(v2BudgetLedgerSchema, unlimited);
+  accepts(v2BudgetAdmissionSchema(unlimited, time), quote);
+  rejects(v2BudgetLedgerSchema, { ...unlimited, availableKrw: 0 });
 });
 
 test("timestamp checks compare instants across ISO fractional precision and preserve KST midnight", () => {
@@ -929,7 +933,7 @@ test("legacy cutover and reconciliation preserve observed quota overages without
   const overage = {
     ...usage,
     newCases: { limit: 3, used: 10, reserved: 0, remaining: 0 },
-    aiResponses: { limit: 30, used: 31, reserved: 1, remaining: 0 },
+    aiResponses: { limit: 200, used: 201, reserved: 1, remaining: 0 },
     mediaSeconds: { limit: 3600, used: 3601.5, reserved: 0, remaining: 0 },
   };
   accepts(v2UsageSchema, overage);

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { displayText, opaqueIdSchema } from "../../../../contracts";
 import {
+  V2_INTAKE_POLICY,
   v2ActionSchema,
   v2FactReferenceSchema,
   v2FactsSchema,
@@ -10,7 +11,9 @@ import {
 } from "../../../../contracts/v2";
 import { workspaceSourceRequestSchema } from "../../legal-retrieval/v2/workspace-plans";
 
-export const workspaceQuestionsOutputSchema = z.strictObject({ questions: v2QuestionsSchema });
+export const workspaceQuestionsOutputSchema = z.strictObject({
+  questions: v2QuestionsSchema.max(V2_INTAKE_POLICY.questionsPerBatch),
+});
 export const workspaceSummaryOutputSchema = v2SummarySchema.omit({
   schemaVersion: true,
   revision: true,

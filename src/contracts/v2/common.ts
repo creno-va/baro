@@ -2,6 +2,8 @@ import { z } from "zod";
 import { displayText, opaqueIdSchema, timestampSchema } from "../common";
 
 export const V2_CONTRACT_VERSION = "2" as const;
+/** New intake generation policy; stored legacy batches keep their original limits below. */
+export const V2_INTAKE_POLICY = { followupLimit: 2, questionsPerBatch: 1 } as const;
 export const V2_LIMITS = {
   jsonBytes: 64 * 1024,
   chunkBytes: 8 * 1024 * 1024,
@@ -13,9 +15,9 @@ export const V2_LIMITS = {
   pdfPages: 500,
   mediaSeconds: 3600,
   dailyCases: 3,
-  dailyAiResponses: 30,
+  dailyAiResponses: 200,
   dailyMediaSeconds: 3600,
-  monthlyBudgetKrw: 1_000_000,
+  maximumAttemptKrw: 1_000_000,
   initialBatches: 3,
   questionsPerBatch: 5,
 } as const;
@@ -68,6 +70,7 @@ export const v2WaitReasonSchema = z.enum([
   "case_original_storage",
   "account_storage",
   "monthly_budget",
+  "ai_funding",
   "processing_capacity",
 ]);
 export const v2ErrorSchema = z.strictObject({

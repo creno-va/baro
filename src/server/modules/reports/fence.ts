@@ -1,0 +1,83 @@
+import { CURRENT_POLICY_VERSIONS } from "../../../contracts/consent";
+import { type Actor, aliveWorkspace, type V2Core } from "../../db/v2-core";
+import { jobAlive } from "../../db/v2-jobs";
+import { runtimeDigest } from "../../db/v2-paid-runtime";
+import type { JobLease } from "../../db/v2-workspace";
+import { ownedWorkspace, REPORT_SOURCE_SQL, ReportError, reportSourceRows } from "./source";
+
+/** Read/decrypt immutable snapshots once. Each stream boundary uses a single
+ * indexed SQL fence over the exact source identity, including ciphertext,
+ * coverage pointers and official-source expiry. No report AES replay per chunk. */
+export async function exportFence(
+  core: V2Core,
+  actor: Actor,
+  report: {
+    id: string;
+    revision: number;
+    workspace_id: string;
+    snapshot_id: string;
+    encrypted_payload: string;
+  },
+  digest: string,
+  clock: () => string,
+) {
+  const workspace = await ownedWorkspace(core, actor, report.workspace_id);
+  const rows = await reportSourceRows(core, actor, report.workspace_id);
+  if (
+    (await runtimeDigest({
+      summary: workspace.confirmed_summary_revision,
+      status: workspace.status,
+      rows,
+    })) !== digest
+  )
+    throw new ReportError("STALE_REVISION");
+  const json = JSON.stringify(
+    rows.map((r) => ({ kind: r.kind, id: r.id, revision: r.revision, snapshot: r.snapshot })),
+  );
+  return {
+    rows: rows.length,
+    async check(lease?: JobLease, blobId?: string) {
+      const now = clock(),
+        id = report.workspace_id;
+      const ok = await core
+        .statement(
+          `WITH source AS (${REPORT_SOURCE_SQL})
+        SELECT 1 AS ok FROM v2_reports r JOIN v2_workspaces w ON w.id=r.workspace_id JOIN user u ON u.id=w.owner_id
+        WHERE r.id=? AND r.revision=? AND r.snapshot_id=? AND r.encrypted_payload=? AND w.owner_id=? AND w.status='active'
+        AND ${aliveWorkspace} AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='report' AND target_id=r.id)
+        AND coalesce((SELECT value FROM app_metadata WHERE key='account-type:'||w.owner_id),'customer')='customer'
+        AND EXISTS(SELECT 1 FROM user_consents c WHERE c.user_id=w.owner_id AND c.terms_version=? AND c.privacy_version=? AND c.ai_notice_version=? AND c.over_14_confirmed=1)
+        AND w.confirmed_summary_revision=?
+        AND coalesce((SELECT json_group_array(json_object('kind',kind,'id',id,'revision',revision,'snapshot',snapshot)) FROM source),'[]')=?
+        AND NOT EXISTS(SELECT 1 FROM v2_tombstones t JOIN source s ON s.kind='file' AND s.id=t.target_id WHERE t.target_kind='file')
+        ${lease ? `AND EXISTS(SELECT 1 FROM v2_jobs j JOIN v2_operations o ON o.id=j.operation_id WHERE j.id=? AND o.owner_id=w.owner_id AND j.lease_token=? AND j.fencing=? AND j.lease_until>? AND j.status IN ('running','validating') AND ${jobAlive})` : ""}
+        ${blobId ? "AND EXISTS(SELECT 1 FROM v2_blobs b JOIN v2_storage_reservations x ON x.id=b.reservation_id JOIN v2_billing_principals p ON p.id=b.principal_id WHERE b.id=? AND p.owner_id=w.owner_id AND b.state='stored' AND b.visibility='private' AND x.entity_id=r.id AND x.state!='released')" : ""}`,
+          [
+            id,
+            id,
+            id,
+            id,
+            id,
+            now,
+            now,
+            now,
+            id,
+            report.id,
+            report.revision,
+            report.snapshot_id,
+            report.encrypted_payload,
+            actor.ownerId,
+            CURRENT_POLICY_VERSIONS.termsVersion,
+            CURRENT_POLICY_VERSIONS.privacyVersion,
+            CURRENT_POLICY_VERSIONS.aiNoticeVersion,
+            workspace.confirmed_summary_revision,
+            json,
+            ...(lease ? [lease.jobId, lease.token, lease.fencing, now] : []),
+            ...(blobId ? [blobId] : []),
+          ],
+        )
+        .first();
+      if (!ok) throw new ReportError("STALE_REVISION");
+    },
+  };
+}

@@ -19,7 +19,9 @@ export async function createAssetProcessingRuntime(
   policy: ProcessingRuntimePolicy = {},
 ) {
   if (!env.CASE_PRIVATE_R2 || !env.FILE_PROCESSOR) throw new ProcessingError("STORAGE_UNAVAILABLE");
-  const core = createV2Core(env.DB, await createCaseDataCipher(env));
+  const core = createV2Core(env.DB, await createCaseDataCipher(env), {
+    monthlyBudgetCapEnabled: env.MONTHLY_BUDGET_CAP_ENABLED !== "false",
+  });
   const environment = env.APP_ENV === "production" ? "production" : "preview";
   const initial = await core
     .statement(

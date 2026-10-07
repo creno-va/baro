@@ -2,6 +2,37 @@ import { existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import ts from "typescript";
 
+// Dependency and deployment configuration changes do not appear in the TypeScript
+// import graph. Keep the actual admission/execution paths covered even when no
+// application source or test file changes with them.
+const aiRuntimeTests = [
+  "src/server/api/health.test.ts",
+  "tests/ai-preflight.test.ts",
+  "tests/ai-runtime-provisioning.test.ts",
+  "tests/ai-runtime-execution.test.ts",
+  "tests/ai-runtime-workerd.test.ts",
+  "tests/llm-gateway-attempts.test.ts",
+  "tests/llm-gateway.test.ts",
+  "tests/budget-gateway-ledger.test.ts",
+  "tests/media-gateway.test.ts",
+  "tests/file-processing-execution.test.ts",
+  "tests/asset-processing-runtime.test.ts",
+] as const;
+
+function affectsAiRuntime(file: string): boolean {
+  return (
+    /^(?:package\.json|bun\.lock|\.bun-version|wrangler(?:\.[^/]+)?\.(?:jsonc?|toml)|astro\.config\.ts|tsconfig(?:\.[^/]+)?\.json)$/.test(
+      file,
+    ) ||
+    /^src\/(?:worker\.ts$|env\.d\.ts$|contracts\/|workflows\/|server\/(?:runtime\/|db\/|crypto\/|api\/(?:index\.ts$|v2\/(?:workspaces|files|reports)\.ts$)|modules\/(?:budget|llm-gateway|legal-retrieval|workspace|file-processing|asset-processing)\/))/.test(
+      file,
+    ) ||
+    /^(?:\.github\/(?:workflows|actions)\/|drizzle\/|services\/file-processor\/|scripts\/(?:development-checks|provision-ai-budget|remote-budget-d1|apply-d1-migrations|ai-preflight|smoke|check-deployment|check-runtime-secrets)\.ts$)/.test(
+      file,
+    )
+  );
+}
+
 export function validationScope(files: string[]) {
   return {
     native: files.some((file) =>
@@ -18,11 +49,21 @@ export function validationScope(files: string[]) {
 /** HTTP browser flows require an explicit route map. Shared UI affects all non-corpus flows. */
 export function browserTargets(files: string[], available: string[]): string[] {
   const selected = new Set(files.filter((file) => /^tests\/browser\/.*\.e2e\.ts$/.test(file)));
+  const corpusChanged = files.some((file) =>
+    /^tests\/(?:browser\/evals\.(?:e2e|config)\.ts|helpers\/eval-browser-server\.ts|evals\/pipeline\.ts)$/.test(
+      file,
+    ),
+  );
+  if (corpusChanged) {
+    const corpus = available.find((path) => path.endsWith("/evals.e2e.ts"));
+    if (!corpus) throw new Error("BROWSER_FEATURE_TEST_MISSING");
+    selected.add(corpus);
+  }
   if (files.some((file) => /^scripts\/(development-checks|full-browser)\.ts$/.test(file)))
     for (const path of available) selected.add(path);
   const rules: [RegExp, RegExp][] = [
     [
-      /src\/(layouts\/|styles\/(global|shell)|server\/router\.|components\/ui\/|client\/api\/(core|types|index|mock\/runtime))/,
+      /src\/(worker\.|layouts\/|styles\/(global|shell)|server\/(router\.|api\/index)|components\/ui\/|client\/api\/(core|types|index|mock\/runtime))/,
       /\.e2e\.ts$/,
     ],
     [
@@ -39,7 +80,7 @@ export function browserTargets(files: string[], available: string[]): string[] {
     ],
     [
       /src\/(styles\/(reports|settings)\.css|pages\/(settings|help|polic)|components\/reports\/|components\/AccountSettings|client\/api\/(?:mock\/)?(account|reports)|server\/(api\/(account-delete|v2\/reports)|modules\/(deletion|reports|usage)\/))/,
-      /\/(settings|reports|account)\.e2e\.ts$/,
+      /\/(settings|reports(?:-integrated)?|report-real-download|account)\.e2e\.ts$/,
     ],
     [
       /src\/(pages\/index|components\/AnalyticsChoice|server\/modules\/analytics\/)/,
@@ -52,12 +93,15 @@ export function browserTargets(files: string[], available: string[]): string[] {
     if (!matched.length) throw new Error("BROWSER_FEATURE_TEST_MISSING");
     for (const path of matched) selected.add(path);
   }
-  return [...selected].filter((path) => !path.endsWith("/evals.e2e.ts")).sort();
+  return [...selected].filter((path) => corpusChanged || !path.endsWith("/evals.e2e.ts")).sort();
 }
 
 /** Follow relative imports/re-exports to select existing consumer tests even
  * when a service/auth patch does not edit a test. */
 export async function unitTargets(files: string[], tests: string[]): Promise<string[]> {
+  const requiredAiTests = files.some(affectsAiRuntime) ? aiRuntimeTests : [];
+  if (requiredAiTests.some((test) => !tests.includes(test)))
+    throw new Error("AI_RUNTIME_TEST_MISSING");
   const changed = new Set(files.map((file) => resolve(file)));
   const cache = new Map<string, string[]>();
   const imports = async (path: string) => {
@@ -84,7 +128,7 @@ export async function unitTargets(files: string[], tests: string[]): Promise<str
     cache.set(path, paths);
     return paths;
   };
-  const selected: string[] = [];
+  const selected: string[] = [...requiredAiTests];
   for (const test of tests) {
     if (test.startsWith("tests/evals/") || test.startsWith("tests/fixtures/")) continue;
     const visited = new Set<string>();
@@ -101,8 +145,12 @@ export async function unitTargets(files: string[], tests: string[]): Promise<str
     selected.push(
       ...tests.filter((path) => /(^src\/server\/auth\/|^tests\/auth-lifecycle\.test)/.test(path)),
     );
-  if (files.some((file) => file.startsWith(".github/workflows/")))
-    selected.push("tests/workflows.test.ts");
+  if (
+    files.some((file) =>
+      /^(?:\.github\/(?:workflows|actions)\/|wrangler\.jsonc$|astro\.config\.ts$)/.test(file),
+    )
+  )
+    selected.push("tests/workflows.test.ts", "tests/deployment-config.test.ts");
   return [...new Set(selected)].sort();
 }
 
@@ -115,11 +163,13 @@ export async function runBrowserTargets(targets: string[]) {
   );
   const corpusTargets = targets.filter((path) => path.endsWith("/evals.e2e.ts"));
   const customerRealTargets = targets.filter((path) => path.endsWith("/customer-real.e2e.ts"));
+  const reportRealTargets = targets.filter((path) => path.endsWith("/report-real-download.e2e.ts"));
   const regularTargets = targets.filter(
     (path) =>
       !mockTargets.includes(path) &&
       !corpusTargets.includes(path) &&
-      !customerRealTargets.includes(path),
+      !customerRealTargets.includes(path) &&
+      !reportRealTargets.includes(path),
   );
   if (regularTargets.length) {
     const child = Bun.spawn(["bunx", "playwright", "test", ...regularTargets], {
@@ -144,6 +194,20 @@ export async function runBrowserTargets(targets: string[]) {
         "--config",
         "tests/browser/customer-real.config.ts",
         ...customerRealTargets,
+      ],
+      { stdout: "inherit", stderr: "inherit" },
+    );
+    if (await child.exited) process.exit(1);
+  }
+  if (reportRealTargets.length) {
+    const child = Bun.spawn(
+      [
+        "bunx",
+        "playwright",
+        "test",
+        "--config",
+        "tests/browser/report-real-download.config.ts",
+        ...reportRealTargets,
       ],
       { stdout: "inherit", stderr: "inherit" },
     );

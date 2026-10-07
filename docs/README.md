@@ -21,7 +21,7 @@
 4. [ADR](./adr/README.md): 0001~0005 유지경계, 0006~0013 v2 목표, 0014 MVP 부분 대체
 5. [시스템](./architecture/SYSTEM.md), [데이터](./architecture/DATA-MODEL.md), [API](./architecture/HTTP-API.md)
 6. [실행계약](./architecture/DOMAIN-LIFECYCLE.md), [AI](./architecture/AI-PIPELINE.md), [공식자료](./architecture/LEGAL-RETRIEVAL.md)
-7. [보안](./security/SECURITY-PRIVACY.md), [인증수명](./security/AUTH-LIFECYCLE.md), [테스트](./quality/TEST-STRATEGY.md)
+7. [보안](./security/SECURITY-PRIVACY.md), [인증수명](./security/AUTH-LIFECYCLE.md), [테스트](./quality/TEST-STRATEGY.md), [AI 사전 검사 감사](./quality/AI-PREFLIGHT-AUDIT.md)
 8. [배포](./operations/DEPLOYMENT-OPERATIONS.md), [환경](./operations/ENVIRONMENT-READINESS.md), [관측](./operations/OBSERVABILITY.md)
 9. [삭제/복구](./operations/DELETION-RESTORE.md), [데이터키](./operations/CASE-DATA-KEYS.md), [운영 drill](./operations/BETA-DRILLS.md)
 10. [이벤트](./analytics/EVENTS.md), [정책초안](./policies/), [공개문구감사](./product/PUBLIC-CONTENT-AUDIT.md)

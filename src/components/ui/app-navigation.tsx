@@ -1,5 +1,6 @@
 import {
   BriefcaseBusiness,
+  ChevronRight,
   CircleHelp,
   FileText,
   House,
@@ -201,18 +202,65 @@ export function AppNavigation({
   const renderRecent = () =>
     resolvedRole === "user" && (
       <div className="sidebar-recent">
-        <p className="sidebar-caption">최근 이야기</p>
+        <div className="sidebar-recent__heading">
+          <p className="sidebar-caption">최근 이야기</p>
+          <a href="/cases" className="sidebar-recent__all" aria-label="최근 이야기 전체 보기">
+            전체 보기 <ChevronRight size={13} aria-hidden="true" />
+          </a>
+        </div>
         {recent.length ? (
           <nav aria-label="최근 사건">
             {recent.map((item) => (
-              <a key={item.id} href={caseLink(item)} title={item.title}>
-                <MessageCircle size={16} aria-hidden="true" />
-                <span>{item.title}</span>
+              <a
+                key={item.id}
+                href={caseLink(item)}
+                title={item.title}
+                className="sidebar-story"
+                aria-current={
+                  pathname === `/cases/${encodeURIComponent(item.id)}` ||
+                  pathname.startsWith(`/cases/${encodeURIComponent(item.id)}/`)
+                    ? "page"
+                    : undefined
+                }
+              >
+                <span className="sidebar-story__icon">
+                  <MessageCircle size={16} aria-hidden="true" />
+                </span>
+                <span className="sidebar-story__copy">
+                  <strong>{item.title}</strong>
+                  <span className="sidebar-story__meta">
+                    <span>
+                      {item.schemaVersion === "1"
+                        ? "기존 기록"
+                        : item.stage === "intake"
+                          ? "질문 답변 중"
+                          : item.stage === "summary"
+                            ? "요약 확인"
+                            : item.stage === "archived"
+                              ? "보관한 이야기"
+                              : "정리 중"}
+                    </span>
+                    <time dateTime={item.updatedAt}>
+                      {new Date(item.updatedAt).toLocaleDateString("ko-KR", {
+                        month: "numeric",
+                        day: "numeric",
+                        timeZone: "Asia/Seoul",
+                      })}
+                    </time>
+                  </span>
+                </span>
               </a>
             ))}
           </nav>
         ) : (
-          <p className="sidebar-empty">여기서 이야기를 이어갈 수 있어요.</p>
+          <div className="sidebar-empty">
+            <MessageCircle size={20} aria-hidden="true" />
+            <p>
+              나누던 이야기는 여기에.
+              <br />
+              언제든 이어서 정리할 수 있어요.
+            </p>
+          </div>
         )}
       </div>
     );

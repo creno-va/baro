@@ -143,7 +143,7 @@ test("consent routes forward sliding and expired cookies while preserving the ac
         fixture.env,
       );
       expect(response.status).toBe(200);
-      expect(response.headers.get("cache-control")).toBe("no-store");
+      expect(response.headers.get("cache-control")).toBe("private, no-store");
       const sessionCookie = response.headers
         .getSetCookie()
         .find((value) => value.startsWith("better-auth.session_token="));

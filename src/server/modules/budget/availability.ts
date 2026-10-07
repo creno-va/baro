@@ -91,7 +91,7 @@ export function createPaidAvailability(
         Date.parse(pricing.fx.asOf) <= freshNow &&
         Date.parse(funding.observedAt) <= freshNow &&
         freshNow < cutoff &&
-        exposure < e.limit_krw &&
+        (!core.monthlyBudgetCapEnabled || exposure < e.limit_krw) &&
         exposure < funding.spendAllowanceKrw
       );
     } catch {

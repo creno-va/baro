@@ -1,5 +1,7 @@
 # AI 분석 파이프라인
 
+> **2026-10-07 사용자 후속 — 이전 비용 정책보다 우선:** 계정별 AI 응답은 KST 하루200회이며 Preview/Production의 별도 전체 월 예산 차단은 해제한다. Cloudflare 기존 결제 경로에서 잔액$10 이하 시$30 자동 충전을 사용자가 직접 승인/설정했다. metering·실제 funding·가격/FX·bounded attempt·unknown 비용 보존은 유지한다. 배포 설정 `MONTHLY_BUDGET_CAP_ENABLED=false`가 예약·사용량·정산에 일관되게 적용된다. 기존 allocation 금액은 이 모드에서 소비 차단 한도가 아니며 schema0009의 기록을 보존한다.
+
 - Orchestrator: Cloudflare Workflows
 - Model path: Cloudflare AI binding -> AI Gateway Unified Billing -> third-party model
 - Initial model: `openai/gpt-6-sol`, reasoning `medium`
@@ -113,8 +115,10 @@ failure가 하나라도 있으면 배포를 막는다. 샘플·프롬프트·예
 [ADR-0006](../adr/0006-continuous-case-workspace-and-navigation.md)의 상태와
 [v2 실행 계약](./V2-CONTRACTS.md)을 사용한다. workspace를 완료 terminal로 닫지 않고
 intake/question job, summary review, confirmed summary, chat/action job, file interpretation,
-report snapshot을 독립 versioned operation으로 나눈다. 기본 intake 3묶음×최대5문항 후
-사용자 요약 확인을 받는다. 이후에도 질문·사실 수정·자료 추가를 계속 처리한다.
+report snapshot을 독립 versioned operation으로 나눈다. 2026-10-07 사용자 요청에 따라
+새 intake는 한 번에 한 문항, 총 최대 두 후속 질문 뒤 사용자 요약 확인을 받는다.
+모름·건너뛰기도 한도에 포함하고 남은 정보 공백은 요약에 보존한다. 기존 사건의 저장된
+질문·답변은 그대로 읽고 수정할 수 있다. 이후에도 질문·사실 수정·자료 추가를 계속 처리한다.
 
 | 단계 | 최소 입력·출력 | 확정/실패 경계 |
 | --- | --- | --- |
@@ -158,7 +162,7 @@ Container는 문서/OCR/office 변환·오디오/영상 추출·PDF/ZIP 구성�
 일시 복호화하고 암호화 파생물만 반환한다. 원본 파일 안의 지시·링크·매크로·HTML은 실행
 명령이 아니며 외부 network/SSRF·prompt injection을 막는다.
 
-logical visible response를 하루30회 reservation에 묶고 internal phase/교정/retry는 사용자
+logical visible response를 하루200회 reservation에 묶고 internal phase/교정/retry는 사용자
 quota를 반복 차감하지 않는다. 모든 provider/ASR/Container attempt 비용은 월100만원 ledger에
 별도 반영한다. bounded phaseattempt·joblease·global 비용 예약과 snapshot 재사용을 둔다.
 원본/계정 삭제 또는 revision 변경 후 늦은 completion은 source guard로 거부하며 Workflow

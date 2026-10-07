@@ -1,3 +1,4 @@
+import { sha256 } from "@noble/hashes/sha2.js";
 import { z } from "zod";
 import { CURRENT_POLICY_VERSIONS } from "../../contracts/consent";
 import {
@@ -57,12 +58,31 @@ function coverageLabel(coverage: V2Coverage | null) {
   return `영상 ${Math.ceil(coverage.durationSeconds)}초 · ${coverage.frames.length}개 확인 구간 중 ${processed}개 처리${coverage.status === "partial" ? " · 누락·품질 저하 구간 있음" : ""}${coverage.audio?.status === "partial" ? " · 음성 일부 누락" : ""} · 전체 장면에 대한 관찰을 보장하지 않아요.`;
 }
 async function hash(blob: Blob) {
-  return Array.from(
-    new Uint8Array(await crypto.subtle.digest("SHA-256", await blob.arrayBuffer())),
-    (b) => b.toString(16).padStart(2, "0"),
-  ).join("");
+  const hash = sha256.create(),
+    reader = blob.stream().getReader();
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      hash.update(value);
+    }
+    return Array.from(hash.digest(), (b) => b.toString(16).padStart(2, "0")).join("");
+  } finally {
+    reader.releaseLock();
+  }
 }
 export function validateUpload(file: Pick<File, "name" | "size" | "type">) {
+  if (
+    !file.name.trim() ||
+    file.name.length > 255 ||
+    file.name.includes("/") ||
+    file.name.includes("\\") ||
+    [...file.name].some((c) => c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127)
+  )
+    throw workspaceError(
+      "VALIDATION_ERROR",
+      "파일 이름에 경로나 제어 문자가 포함돼 있어요. 이름을 바꾼 뒤 다시 선택해 주세요.",
+    );
   const media =
     file.type.startsWith("audio/") ||
     file.type.startsWith("video/") ||
@@ -71,7 +91,7 @@ export function validateUpload(file: Pick<File, "name" | "size" | "type">) {
   if (!file.size || file.size > limit)
     throw workspaceError(
       "VALIDATION_ERROR",
-      `파일은 비어 있지 않아야 하며 ${media ? 300 : 50} MB 이하여야 해요.`,
+      `파일은 비어 있지 않아야 하며 ${limit / 1_000_000} MB 이하여야 해요.`,
     );
   if (
     !/\.(txt|pdf|doc|docx|hwp|hwpx|xls|xlsx|ppt|pptx|jpg|jpeg|png|webp|gif|bmp|tiff|heic|mp3|wav|m4a|ogg|flac|aac|mp4|mov|webm|avi|mkv)$/i.test(

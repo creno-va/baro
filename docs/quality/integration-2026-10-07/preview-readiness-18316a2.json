@@ -1,0 +1,116 @@
+{
+  "version": 1,
+  "checkedAt": "2026-10-06T17:29:47.470Z",
+  "environment": "preview",
+  "candidateSha": "18316a2cb8536b8e3e62f662bbcb5753ba93a8d1",
+  "worker": {
+    "status": "available",
+    "parsed": true,
+    "deployedSha": "18316a2cb8536b8e3e62f662bbcb5753ba93a8d1",
+    "authOriginMatches": true,
+    "gatewayIdMatches": true,
+    "aiBindingPresent": true,
+    "environmentMatches": true,
+    "publicBetaClosed": true,
+    "modelBoundsConfigured": false,
+    "processingBindings": [
+      {
+        "name": "CASE_PRIVATE_R2",
+        "present": true
+      },
+      {
+        "name": "PROFILE_PUBLIC_R2",
+        "present": true
+      },
+      {
+        "name": "FILE_PROCESSOR",
+        "present": true
+      },
+      {
+        "name": "FILE_PROCESSING",
+        "present": true
+      },
+      {
+        "name": "WORKSPACE_PROCESSING",
+        "present": true
+      },
+      {
+        "name": "ASSET_PROCESSING",
+        "present": true
+      },
+      {
+        "name": "PROFILE_PUBLICATION",
+        "present": true
+      }
+    ],
+    "secrets": [
+      {
+        "name": "BETTER_AUTH_SECRET",
+        "present": true
+      },
+      {
+        "name": "GOOGLE_CLIENT_ID",
+        "present": false
+      },
+      {
+        "name": "GOOGLE_CLIENT_SECRET",
+        "present": false
+      },
+      {
+        "name": "NAVER_CLIENT_ID",
+        "present": false
+      },
+      {
+        "name": "NAVER_CLIENT_SECRET",
+        "present": false
+      },
+      {
+        "name": "KAKAO_CLIENT_ID",
+        "present": false
+      },
+      {
+        "name": "KAKAO_CLIENT_SECRET",
+        "present": false
+      },
+      {
+        "name": "TURNSTILE_SECRET_KEY",
+        "present": true
+      },
+      {
+        "name": "CASE_DATA_KEY_V1",
+        "present": true
+      },
+      {
+        "name": "LAW_API_OC",
+        "present": true
+      }
+    ]
+  },
+  "gateway": {
+    "status": "not_requested",
+    "httpStatus": null,
+    "parsed": false,
+    "exists": null,
+    "collectLogs": null,
+    "cacheTtl": null,
+    "authentication": null
+  },
+  "turnstile": {
+    "status": "available",
+    "parsed": true,
+    "observedPreviewWidgetCount": 1,
+    "possiblyTruncated": false,
+    "observedExclusivePreviewWidgetCount": 1
+  },
+  "unverified": [
+    "oauth-callbacks",
+    "turnstile-action-smoke",
+    "gateway-budget-credit-provider-retention",
+    "durable-pricing-funding-allocation-billing",
+    "r2-container-whisper-product-smoke",
+    "live-model-eval",
+    "crypto-recovery-custody",
+    "backup-restore",
+    "public-policy-approval"
+  ]
+}

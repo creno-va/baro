@@ -24,7 +24,7 @@ jobs:
       github.event.workflow_run.event == 'push' &&
       github.event.workflow_run.head_repository.full_name == github.repository
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     environment: preview
     env:
       CLOUDFLARE_ACCOUNT_ID: 9e844969d0c44b2449f3951d1f301654
@@ -37,74 +37,32 @@ jobs:
           ref: ${{ github.event.workflow_run.head_sha }}
           persist-credentials: false
 
-      - name: Detect deployable application
-        id: application
-        shell: bash
-        run: |
-          if [[ -f package.json ]]; then
-            echo "present=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "present=false" >> "$GITHUB_OUTPUT"
-            echo "Application has not been scaffolded; preview deployment skipped."
-          fi
-
-      - name: Validate deployment configuration
-        if: steps.application.outputs.present == 'true'
-        shell: bash
-        run: |
-          test -f bun.lock || {
-            echo "::error::bun.lock is required."
-            exit 1
-          }
-          if [[ ! -f wrangler.jsonc && ! -f wrangler.json && ! -f wrangler.toml ]]; then
-            echo "::error::Wrangler configuration is required."
-            exit 1
-          fi
-          if [[ -z "$CLOUDFLARE_API_TOKEN" ]]; then
-            echo "::error::Set CLOUDFLARE_API_TOKEN in the preview GitHub Environment."
-            exit 1
-          fi
-
       - name: Setup Bun
-        if: steps.application.outputs.present == 'true'
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: .bun-version
 
-      - name: Install and build
-        if: steps.application.outputs.present == 'true'
+      - name: Install dependencies
+        run: bun ci
+
+      - name: Build and deploy verified release
+        uses: ./.github/actions/deploy-worker
+        with:
+          target-environment: preview
+          release-sha: ${{ github.event.workflow_run.head_sha }}
+          public-beta-enabled: 'false'
         env:
           PUBLIC_TURNSTILE_SITE_KEY: ${{ vars.PUBLIC_TURNSTILE_SITE_KEY }}
-          PUBLIC_API_MODE: mock
-        run: |
-          bun ci
-          bun run build:preview
-          bun run cf:dry-run
-
-      - name: Apply validated preview migrations
-        if: steps.application.outputs.present == 'true'
-        env:
+          PUBLIC_API_MODE: real
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          NAVER_CLIENT_ID: ${{ secrets.NAVER_CLIENT_ID }}
+          NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
+          KAKAO_CLIENT_ID: ${{ secrets.KAKAO_CLIENT_ID }}
+          KAKAO_CLIENT_SECRET: ${{ secrets.KAKAO_CLIENT_SECRET }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
-        run: |
-          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)" = "$RELEASE_SHA"
-          bun run db:migrate:preview
-
-      - name: Deploy preview
-        if: steps.application.outputs.present == 'true'
-        uses: cloudflare/wrangler-action@953926a2e2182532811c01a25e53647d93bf07c0 # v4.1.3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ env.CLOUDFLARE_ACCOUNT_ID }}
-          wranglerVersion: "4.147.0"
-          command: deploy --var RELEASE_SHA:${{ github.event.workflow_run.head_sha }}
-
-      - name: Verify deployed preview release
-        if: steps.application.outputs.present == 'true'
-        run: bun scripts/smoke.ts https://preview.baro.site ${{ github.event.workflow_run.head_sha }}
 
       - name: Record verified preview deployment
-        if: steps.application.outputs.present == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
@@ -114,4 +72,4 @@ jobs:
             -F production_environment=false -F transient_environment=false -f 'required_contexts[]' --jq .id)
           gh api --method POST "repos/$GITHUB_REPOSITORY/deployments/$deployment_id/statuses" \
             -f state=success -f environment_url=https://preview.baro.site \
-            -f description='Foundation health/ready and release SHA smoke passed' -F auto_inactive=false
+            -f description='Release, schema and endpoint smoke passed' -F auto_inactive=false

@@ -1,3 +1,4 @@
+import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
 test.beforeEach(async ({ page }) => {
@@ -15,6 +16,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test("callback cancellation and expired sessions show safe messages", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 568 });
   for (const [error, message] of [
     ["access_denied", "로그인을 취소했어요."],
     ["session_expired", "안전한 이용을 위해 다시 로그인해 주세요."],
@@ -23,6 +25,51 @@ test("callback cancellation and expired sessions show safe messages", async ({ p
     await page.goto(`/login?error=${error}&error_description=untrusted-raw-detail`);
     await expect(page.getByRole("alert")).toContainText(message);
     await expect(page.locator("body")).not.toContainText("untrusted-raw-detail");
+    const captionBounds = await page.locator(".login-intro__caption").boundingBox();
+    const errorBounds = await page.getByRole("alert").boundingBox();
+    const roleBounds = await page
+      .getByRole("group", { name: "어떤 목적으로 이용하시나요?" })
+      .boundingBox();
+    if (!captionBounds || !errorBounds || !roleBounds) {
+      throw new Error("Login caption, error and account choices must remain visible.");
+    }
+    expect(errorBounds.y).toBeGreaterThanOrEqual(captionBounds.y + captionBounds.height);
+    expect(roleBounds.y).toBeGreaterThanOrEqual(errorBounds.y + errorBounds.height);
+  }
+});
+
+test("branded social login stays accessible on narrow phones and desktop", async ({ page }) => {
+  for (const viewport of [
+    { width: 320, height: 760 },
+    { width: 390, height: 844 },
+    { width: 1440, height: 1000 },
+  ]) {
+    await page.setViewportSize(viewport);
+    await page.goto("/login");
+    const logo = page.getByRole("link", { name: "BARO 홈" }).locator("img");
+    await expect(logo).toBeVisible();
+    await expect(logo).toHaveAttribute("src", "/brand/logo.svg");
+    await expect
+      .poll(() =>
+        logo.evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0),
+      )
+      .toBe(true);
+    await expect(page.getByRole("radio", { name: /고객/ })).toBeChecked();
+    await expect(page.getByRole("radio", { name: /변호사/ })).toBeEnabled();
+    for (const name of ["Kakao로 계속하기", "Naver로 계속하기", "Google로 계속하기"]) {
+      const button = page.getByRole("button", { name, exact: true });
+      await expect(button).toBeVisible();
+      await expect(button).toBeEnabled();
+      const bounds = await button.boundingBox();
+      expect(bounds?.width).toBeGreaterThanOrEqual(44);
+      expect(bounds?.height).toBeGreaterThanOrEqual(44);
+    }
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+      ),
+    ).toBe(true);
+    expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   }
 });
 
@@ -44,11 +91,52 @@ test("keyboard OAuth initiation blocks duplicates and restores focus on a networ
   await page.keyboard.press("Enter");
   await expect(page.getByRole("button", { name: "연결 중…" })).toBeDisabled();
   await expect(page.getByRole("button", { name: "Naver로 계속하기" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Kakao로 계속하기" })).toBeDisabled();
+  await expect(page.getByRole("radio", { name: /고객/ })).toBeDisabled();
+  await expect(page.getByRole("radio", { name: /변호사/ })).toBeDisabled();
   release?.();
   await expect(page.getByRole("alert")).toContainText("로그인을 시작하지 못했어요.");
   await expect(page.getByRole("button", { name: "Google로 계속하기" })).toBeFocused();
-  await page.keyboard.press("Tab");
+  await page.keyboard.press("Shift+Tab");
   await expect(page.getByRole("button", { name: "Naver로 계속하기" })).toBeFocused();
+});
+
+test("keyboard role selection reaches the lawyer destination after a synthetic OAuth callback", async ({
+  page,
+}) => {
+  await page.route("**/api/auth/sign-in/social", (route) =>
+    route.fulfill({
+      json: { redirect: true, url: new URL("/consent", route.request().url()).href },
+    }),
+  );
+  await page.route("**/api/me/account-type", (route) =>
+    route.fulfill({ json: { accountType: "lawyer" } }),
+  );
+  await page.route("**/api/me/consent", (route) =>
+    route.fulfill({ json: { needsConsent: false } }),
+  );
+  await page.goto("/login");
+  const customer = page.getByRole("radio", { name: /고객/ });
+  const lawyer = page.getByRole("radio", { name: /변호사/ });
+  await expect(customer).toBeEnabled();
+  await customer.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(lawyer).toBeFocused();
+  await expect(lawyer).toBeChecked();
+  const signIn = page.waitForRequest("**/api/auth/sign-in/social");
+  const saveRole = page.waitForRequest("**/api/me/account-type");
+  await page.getByRole("button", { name: "Kakao로 계속하기" }).click();
+  expect((await signIn).postDataJSON()).toMatchObject({
+    provider: "kakao",
+    callbackURL: "/consent",
+    errorCallbackURL: "/login?error=oauth",
+  });
+  expect((await saveRole).postDataJSON()).toEqual({ accountType: "lawyer" });
+  await expect(page).toHaveURL(/\/consent$/);
+  await expect(page.getByRole("link", { name: "내 화면으로 계속하기" })).toHaveAttribute(
+    "href",
+    "/lawyer",
+  );
 });
 
 test("provider errors are recoverable and a synthetic redirect reaches consent", async ({

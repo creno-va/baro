@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { opaqueIdSchema, timestampSchema } from "../../contracts";
 import {
+  V2_INTAKE_POLICY,
   type V2Job,
   type V2MessageRequest,
   type V2OperationQuota,
@@ -504,7 +505,7 @@ export function createV2JobsRepository(core: V2Core) {
           kind === "chat_response"
             ? "w.status='active'"
             : kind === "intake_questions"
-              ? `w.status='intake' AND (SELECT count(*) FROM v2_question_batches WHERE workspace_id=w.id)<3 AND ${answered}`
+              ? `w.status='intake' AND (SELECT coalesce(sum(question_count),0) FROM v2_question_batches WHERE workspace_id=w.id)<${V2_INTAKE_POLICY.followupLimit} AND ${answered}`
               : `w.status='intake' AND EXISTS(SELECT 1 FROM v2_question_batches WHERE workspace_id=w.id) AND ${answered}`;
         const statements = [
           core.claim(
@@ -809,7 +810,7 @@ export function createV2JobsRepository(core: V2Core) {
           return false;
         const target =
           row.target_kind === "workspace"
-            ? "w.current_job_id IS NULL AND w.status IN ('intake','active')"
+            ? `w.current_job_id IS NULL AND w.status IN ('intake','active') AND (j.kind!='intake_questions' OR (SELECT coalesce(sum(question_count),0) FROM v2_question_batches WHERE workspace_id=w.id)<${V2_INTAKE_POLICY.followupLimit})`
             : row.target_kind === "file"
               ? "EXISTS(SELECT 1 FROM v2_files f WHERE f.id=j.target_id AND f.workspace_id=w.id AND f.revision=j.target_revision AND f.state='failed' AND f.current_job_id IS NULL)"
               : row.target_kind === "report"
@@ -821,7 +822,10 @@ export function createV2JobsRepository(core: V2Core) {
           core.claim(
             g,
             claimId,
-            `EXISTS(SELECT 1 FROM v2_jobs j WHERE j.id=? AND j.status='failed' AND j.retryable=1 AND ${quotaRetryPredicate} AND (${paid?.predicate.sql ?? "NOT EXISTS(SELECT 1 FROM v2_runtime_controls)"}) AND ${target} AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind=j.target_kind AND target_id=j.target_id))`,
+            // Keep the independent funding predicate beside the correlated job
+            // check. Nesting it inside that EXISTS exceeds workerd D1's SQL
+            // expression depth even though desktop SQLite accepts the query.
+            `EXISTS(SELECT 1 FROM v2_jobs j WHERE j.id=? AND j.status='failed' AND j.retryable=1 AND ${quotaRetryPredicate} AND ${target} AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind=j.target_kind AND target_id=j.target_id)) AND (${paid?.predicate.sql ?? "NOT EXISTS(SELECT 1 FROM v2_runtime_controls)"})`,
             [jobId, ...(paid?.predicate.values ?? [])],
           ),
           ...quotaRetryStatements(core, jobId, claimId),

@@ -5,6 +5,7 @@ const root = resolve(import.meta.dir, "../..");
 const bundle = await Bun.build({
   entrypoints: [resolve(import.meta.dir, "reports-ui-entry.tsx")],
   target: "browser",
+  define: { "import.meta.env.PUBLIC_API_MODE": '"real"' },
   minify: false,
   plugins: [
     {

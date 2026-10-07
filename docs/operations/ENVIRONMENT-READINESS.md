@@ -1,11 +1,115 @@
 # P0.3 환경 readiness 기록
 
+## 2026-10-07 Preview / production 동등성 점검
+
+동일한 익명 GET 9개 경로를 직접 검사했다. preview `868fd09133f1006e2c526a539ea3f253b6f58f3f`는
+전체 통과했고, production `d91f342a3aa64008ab72ff338eca55c4ba14d40e`는 health/schema0009와
+session은 통과했지만 `/api/v2/lawyers/self-service?limit=1`에서
+`503 DEPENDENCY_UNAVAILABLE`을 반환했다. 나머지 보호 경로의 익명 요청은 정상 401이었다.
+production GitHub Environment에는 `PUBLIC_TURNSTILE_SITE_KEY` 변수가 없으며 기존
+production 빌드에도 해당 변수를 전달하지 않았다. OAuth 6개 Environment secret 이름은
+양쪽 배포에서 같은 방식으로 검증·동기화하도록 공통 배포 action으로 통합한다.
+
+디렉터리 오류와 동일한 실패를 `CASE_DATA_KEY_V1` 누락 fixture에서 재현했으나 이것만으로
+실제 Worker 키 누락을 확정하지 않는다. 새 배포 전 Worker secret 이름 확인과 환경별
+Turnstile widget/secret 짝 복구가 필요하다. 기존 암호화 키를 임의로 덮어쓰지 않는다.
+이 기록은 수정 코드의 production 적용이나 실제 사용자 OAuth/AI 성공 증거가 아니다.
+이전 `sync_oauth` 선택 옵션은 공통 배포 절차에서 제거하고 환경별 6개 credential을 항상 적용한다.
+
+> **2026-10-07 사용자 후속 — 이전 비용 정책보다 우선:** 계정별 AI 응답은 KST 하루200회이며 Preview/Production의 별도 전체 월 예산 차단은 해제한다. Cloudflare 기존 결제 경로에서 잔액$10 이하 시$30 자동 충전을 사용자가 직접 승인/설정했다. metering·실제 funding·가격/FX·bounded attempt·unknown 비용 보존은 유지한다. 배포 설정 `MONTHLY_BUDGET_CAP_ENABLED=false`가 예약·사용량·정산에 일관되게 적용된다. 기존 allocation 금액은 이 모드에서 소비 차단 한도가 아니며 schema0009의 기록을 보존한다.
+
+AI missing bounds/pricing/funding/allocation 후속은 [관측 정본](./AI-RUNTIME-OBSERVATION.json)과 production workflow `configure_ai`로 두 환경을 함께 연결한다. 배포 완료·실제 응답은 [journal](https://github.com/creno-va/baro/issues/71#issuecomment-6021564076)의 candidate별 관측으로 판정한다. 최초 provisioning은 두 실제 DB가 zero-state임을 확인하고, 갱신은 unresolved hold가 없어야 actual drain/peer 증거를 교환한다. 갱신 전 만료/불명 hold를 삭제하지 않는다.
+
+현재 가격/funding/model 관측은 KST 2026-11-01 00:00에 만료된다. coordinator 실행에는 24시간 이내 관측이 필요하므로 승인 대기가 길면 해당 콘솔과 공식 가격/환율 관측을 갱신한다. 다음 달에는 새 월 ledger와 증명을 정상 승인 배포로 갱신해야 한다. 자동 충전 활성화만으로 이 증명이 자동 갱신되지는 않는다. 전역 예산 무제한은 계정별 하루 한도나 단일 attempt의 bounded 비용 계산을 없애지 않는다.
+
+## 2026-10-07 공개 전환에 대한 후속 사용자 지시
+
+사용자는 모든 공개 조건을 검증했다고 진술하고 운영을 즉시 공개하라고 명시 승인했다.
+해당 직접 승인과 현재 독립 외부 receipt 부재는 구분한다. 기존 strict release check와
+production 보호는 유지하며 exact-SHA·짧은 유효기간·지정 운영자의 명시 승인 경로로
+공개 전환을 진행한다. 미완료 인수 조건·정책 Draft·release evidence를 가짜 완료로 수정하지 않는다.
+[배포 승인 경로](./DEPLOYMENT-OPERATIONS.md)를 따른다.
+
+Preview 소셜6필드 적용 deploy37528544832 SUCCESS, SHAd634675와 schema0009 독립 smoke PASS.
+Google의 실제 Preview callback 후 최초 동의 화면에 도착했고 동일 공유 앱의 세 preview callback
+등록을 확인했다. Google Audience는 외부/테스트 사용자1명·NAVER 개발 중/멤버 제한,
+Kakao 로그인ON이다. 일반 사용자 audience 확대와 production callback은 실제 별도 검증 대상이다.
+
+## 2026-10-07 원격 인증 후속 — 공유 소셜 앱 사용 승인
+
+사용자가 이 세션에서 Preview/Production에 같은 Google/Naver/Kakao 소셜 키를 공유한다고
+명시했다. 환경별 별도 client 요구의 이번 승인 예외이며 DB/KV/서명 secret·사건 암호화 키·
+공개 gate는 환경별로 유지한다. 보호 파일 원본/local DB/기존 local SSO 증거를 보존하고
+소셜6필드만 GitHub `preview` Environment에 등록했다. 기존 production6필드는 유지한다.
+`Deploy preview`가 preview Environment의6필드를 검증·Worker에 적용하도록 연결한다.
+GitHub secret 등록은 Worker 적용·공급자 callback 성공 증거가 아니다.
+
+공유 앱 관리자 확인 대상은 아래3개 redirect와 tester/audience 권한이다. 기존 local 및
+production redirect를 보존하고 client ID/secret·token·cookie·인증 URL은 기록하지 않는다.
+
+- Google: `https://preview.baro.site/api/auth/callback/google`, Web client redirect,
+  Audience 게시 상태·테스트 사용자 및 실제 로그인 계정 권한.
+- NAVER: `https://preview.baro.site/api/auth/callback/naver`, 서비스 URL·callback,
+  검수 상태와 tester/admin 권한.
+- Kakao: `https://preview.baro.site/api/auth/callback/kakao`, Web 플랫폼·redirect,
+  앱/테스트 앱 멤버와 요청 동의항목.
+
+현재 main `b1a6b6b3cb0590b21a341b189ecfdbbc857c0e96`에서 `release:check`는 정책3종
+미승인·게시/동의 버전 불일치,10종 release evidence 부재 및 reviewedAt null로 실패한다.
+운영 `BETA_NOT_OPEN`은 이 공개 조건에 따른 guard이며 설정 오류로 제거하지 않는다.
+정책 책임자의 실제 사업자/개인정보 담당·국외 처리/보존 계약·법률 검토·Approved for publication
+문서/버전/시행일이 필요하다. 통합/운영 담당은 같은 SHA의 remote OAuth·Turnstile·AI/법률·
+삭제/복구/rollback·alert ack receipt를 수집해야 한다. legacy boolean을 임의로 true로 만들지 않는다.
+정확한 사람 필드/행동은 [정책 인계](../development/LAWYER-POLICY-HANDOFF.md)를 따른다.
+
 ## 2026-10-07 통합 세션의 현재 readiness
 
-아래 이전 관측은 당시의 기록이며 현재 자원 상태를 대신하지 않는다. 최신 통합 기준은
-`ca6e15b1226ebdfaf3eee98b07b993cdb303f873`이며 main CI/preview/production foundation
-배포·동일 SHA smoke를 확인했다. 실제 사용자 기능/외부 성공과 분리한 증거는
+최종 문서까지 포함한 immutable SHA별 CI·preview·독립 smoke·Full validation·browser·production은
+[현재 릴리스 journal](https://github.com/creno-va/baro/issues/71#issuecomment-6021564076)을 정본으로 확인한다.
+PR135까지 main e8b18c72a88a31ec9d4ae0c6f6855c6a59dfd48f의 main CI·Full validation·preview와
+production foundation37507920363이 정상 Environment 승인 뒤 성공했다. 두 도메인의 독립
+fullSHA/schema0009 smoke와 운영 공개 gate/CSP/no-mock9검사를 확인했다. 실제 OAuth·AI·법률·
+처리/청구·복구/공개 성공은 미완료다. PR134 main18316a2의 corpus 실패는 보존한다.
+아래 이전 관측은 당시의 기록이며 현재 자원 상태를 대신하지 않는다.
+문서 작성 시 두 환경의 독립 smoke 확인 SHA는 `e8b18c72a88a31ec9d4ae0c6f6855c6a59dfd48f`다.
+사용자 후속 요청으로 preview의 강제 mock 배포를 실제 API로 전환한다. 새 PR/head/main의 검사와
+실제 설정 오류는 release journal에서 갱신하며 e8b18c7 성공을 새 SHA의 증거로 재사용하지 않는다.
+main 병합만으로 두 환경의 배포 성공을 갱신하지 않는다. 실제 사용자 기능/외부 성공과 분리한 증거는
 [V2 검증 기록](../development/V2-VALIDATION.md)에 연결한다.
+
+### 실제 API 전환 관측 (2026-10-07)
+
+사용자의 운영 API 배포 후속 지시에 따라 제공된 소셜6필드를 GitHub `production`
+Environment secret으로만 저장하고, `Deploy production`의 `sync_oauth=true`로 기존
+`baro-production` Worker에 적용한다. Environment reviewer 승인·immutable CI/preview
+검증은 기존대로 필수다. 옵션 기본값은 false이며 요청 시6필드가 모두 있는지 먼저 검사한다.
+`BETTER_AUTH_SECRET`, preview client와 공개 gate는 변경하지 않는다. 실제 값은 command
+인자·로그·PR·artifact에 보내지 않는다. 기존 키 등록과 새 값 적용은 실제 callback 성공과
+구분하고, 운영 callback URL은 `https://baro.site/api/auth/callback/{google,naver,kakao}`다.
+공급자 앱 관리자에게 해당 URL 등록과 tester/audience 권한 확인을 요구한다.
+실제 배포 결과·Worker 버전·적용된 필드 이름은 정본 journal에 보존한다.
+
+PR136 main73cc78324bcaa9302339c3f8e6da51aa1a8915a3의 CI37510886700과
+preview37511081159는 SUCCESS이며 독립 fullSHA/schema0009 smoke를 통과했다.
+실제 브라우저는 기존 local 예시 계정/사건을 표시하지 않고 실제 API 오류를 반환했다.
+디렉터리와 self-service 목록은 실제200/0건/no-store, 잘못된 origin의 account-type 요청은403,
+Google 로그인 시작은 설정 부족으로 실패했다. 예시 로그인으로 대체하지 않았다.
+이 관측은 실제 OAuth 성공이나 정책·공개 승인을 뜻하지 않는다.
+
+세션 설정 실패가500/INTERNAL_ERROR로 반환되고 오류에 no-store가 없던 공유 결함을
+후속에서 typed AuthConfigurationError→503/DEPENDENCY_UNAVAILABLE로 보완한다.
+me/auth 응답은 정상·오류·공개 차단 모두 private,no-store/nosniff를 사용하며 설정의
+필드/값·stack/SQL을 응답하지 않는다. 실제 공급자 key 등록과 최근 OAuth 조건을 우회하지 않는다.
+signed-session/auth/global report 회귀20tests/207assertions 및 설정 검증을 통과했고,
+최종 SHA의 필수 검증·preview 실제 HTTP 결과는 정본 journal에서 별도로 갱신한다.
+
+사용자가 제공한 .dev.vars.txt의 local callback4321용 소셜6필드와 서명 key를 Git-ignored
+.dev.vars(0600)에 적용했다. 실제 값은 로그/PR/산출물에 보존하지 않는다. 이는 preview나
+production secret 등록·공급자 callback 승인 완료를 뜻하지 않는다. 로컬 인증 검증은
+remoteBindings=false 및 local migration0009를 사용하며 실제 공급자 응답과 최종 callback을
+각각 구분한다. Cloudflare adapter의 local preview용 dist/server/.dev.vars 생성은 빌드 완료
+hook에서 제거하고 bundle guard는 dotenv 파일이 남으면 배포 전 실패한다. source .dev.vars는
+개발 서버에 보존한다. 로그인 성공·취소·만료·동의/역할/세션은 실제 확인된 범위만 journal에 기록한다.
 
 | 항목 | 현재 확인/제한 | 담당 행동과 필요한 증거 |
 | --- | --- | --- |
@@ -33,6 +137,12 @@
 - preview/production 각각 private/public의 R2 버킷4개가 분리되어 있으며 모두 objects0/size0B.
   두 private 버킷의 **Public Access Disabled**를 직접 확인했다.
   계정 R2 Class A16/Class B42 관측은 계정 집계이고 현재 릴리스/제품 처리별 비용 정산이 아니다.
+- 2026-10-07 01:33 KST 인증된 D1 목록은 `baro-production`, `baro-preview`의2개만 표시했다.
+  합성 전용 `baro-drill-*` D1/Worker/Workflow 등록부가 없어 두 보호 DB를 restore 대상으로
+  사용하지 않았다. 운영 관리자는 허용된 격리 자원·baseline bookmark·DB 밖 journal 보관처·
+  키 복구 관리자·rollback version 및 경보 수신자/ack timeout을 지정해야 한다.
+  로컬 Wrangler D1 목록 조회는 현재 CLI 인증 부재로 실패했으며 Safari 로그인과 구분한다.
+  token scope 확대·새 DB 생성·보호 DB restore는 하지 않았다.
 
 이 관측으로 console 로그인 blocker만 해소했다. runtime의 immutable pricing/FX/funding/
 allocation/bounds·실제 billing receipt 및 제품 OAuth→자료 처리→삭제 경로는 여전히 별도
@@ -51,14 +161,17 @@ binding은 모두 존재하고 exclusive preview Turnstile widget1개를 관측�
 실제 action 검증이 아니다. GitHub의 현재 Cloudflare token은 Gateway metadata GET에서403이어서
 API 관측은 미확인으로 유지하며 인증된 콘솔 결과와 구분한다. token scope를 자동 확대하지 않았다.
 
-Readiness workflow는 `check_legal=false`가 기본인 metadata-only 점검을 제공한다.
+Readiness workflow는 `check_legal=false`, `check_gateway=false`가 기본인 metadata-only 점검을 제공한다.
 법률 인증/신청 조건이 실제 바뀐 경우에만 `check_legal=true`로 재검증한다. 읽기 전용
+Gateway GET은 기존 token의 읽기 권한이 변경됐다는 근거가 있을 때만 `check_gateway=true`로
+선택한다. 기본 결과의 `not_requested`는 존재·인증·호출 성공을 뜻하지 않는다.
+processing binding 점검은 기존5개에 ASSET_PROCESSING/PROFILE_PUBLICATION을 포함한7개다.
 보고서는 binding 이름/존재·환경/SHA/origin·logging/cache만 허용하며 model bounds의
 내용·namespace/bucket ID·credential은 출력하지 않는다. 값이 있다는 관측은 값의 유효성,
 funding/billing/Container image나 OAuth 성공 증거가 아니다.
 
 ```sh
-gh workflow run environment-readiness.yml --repo creno-va/baro --ref main -f check_legal=false
+gh workflow run environment-readiness.yml --repo creno-va/baro --ref main -f check_legal=false -f check_gateway=false
 ```
 
 ## v2 목표와 현재 증거 경계 (#53)
