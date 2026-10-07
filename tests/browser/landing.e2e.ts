@@ -20,20 +20,39 @@ const landingSections = [
 ];
 
 async function scrollScene(scene: Locator, pinSelector: string, progress: number) {
-  await scene.evaluate(
-    (element, options) => {
-      const pin = element.querySelector<HTMLElement>(options.pinSelector);
-      if (!(element instanceof HTMLElement) || !pin) throw new Error("Scroll scene is missing");
-      const stickyTop = Number.parseFloat(getComputedStyle(pin).top) || 0;
-      const distance = Math.max(1, element.offsetHeight - pin.offsetHeight);
-      window.scrollTo({
-        top:
-          scrollY + element.getBoundingClientRect().top - stickyTop + distance * options.progress,
-        behavior: "instant",
-      });
-    },
-    { pinSelector, progress },
-  );
+  // Font/ResizeObserver updates and a preceding smooth navigation can still be
+  // settling. Measure the actual scene geometry before asserting its choreography.
+  await expect
+    .poll(() =>
+      scene.evaluate(
+        async (element, options) => {
+          const pin = element.querySelector<HTMLElement>(options.pinSelector);
+          if (!(element instanceof HTMLElement) || !pin) throw new Error("Scroll scene is missing");
+          const frame = () =>
+            new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+          await frame();
+          const stickyTop = Number.parseFloat(getComputedStyle(pin).top) || 0;
+          const distance = Math.max(1, element.offsetHeight - pin.offsetHeight);
+          window.scrollTo({
+            top:
+              scrollY +
+              element.getBoundingClientRect().top -
+              stickyTop +
+              distance * options.progress,
+            behavior: "instant",
+          });
+          await frame();
+          await frame();
+          return Math.abs(
+            stickyTop -
+              element.getBoundingClientRect().top -
+              (element.offsetHeight - pin.offsetHeight) * options.progress,
+          );
+        },
+        { pinSelector, progress },
+      ),
+    )
+    .toBeLessThanOrEqual(1);
 }
 
 async function expectLocalImage(image: Locator, pathname: string) {
@@ -280,7 +299,14 @@ for (const viewport of [
     const trigger = page.locator("[data-landing-menu-trigger]");
     await expect(trigger).toHaveAccessibleName("페이지 메뉴");
     const menu = page.getByRole("dialog", { name: "BARO 전체 메뉴", exact: true });
-    await trigger.click();
+    // Click its visible fixed-header position. Locator.click auto-scrolls the
+    // button below root scroll-padding before clicking, unlike an actual pointer.
+    const triggerBounds = await trigger.boundingBox();
+    if (!triggerBounds) throw new Error("Visible mobile menu trigger is missing");
+    await page.mouse.click(
+      triggerBounds.x + triggerBounds.width / 2,
+      triggerBounds.y + triggerBounds.height / 2,
+    );
     await expect(menu).toBeVisible();
     await expect(trigger).toHaveAttribute("aria-expanded", "true");
     await expect.poll(() => menu.evaluate((element) => element.matches(":modal"))).toBe(true);
@@ -1142,6 +1168,13 @@ test("phone chapters follow keyboard selection and reverse scrolling while the s
   await expect(controls.nth(0)).toBeFocused();
   await expect(story).toHaveAttribute("data-chapter", "0");
   await expect(controls.nth(0)).toHaveAttribute("aria-pressed", "true");
+  await expect
+    .poll(() =>
+      story.evaluate((element) =>
+        Number.parseFloat(getComputedStyle(element).getPropertyValue("--phone-progress")),
+      ),
+    )
+    .toBe(0);
   const services = story.locator("[data-phone-service]");
   await expect(services).toHaveCount(4);
   await scrollScene(story, ".phone-story-sticky", 0.54);
@@ -1210,7 +1243,8 @@ test("the brand turns, separates, and reveals selectable features that open the 
   await page.keyboard.press("End");
   await expect(buttons.nth(5)).toBeFocused();
   await expect(scene.locator('[data-logo-panel="5"]')).toBeVisible();
-  await scrollScene(scene, ".logo-experience-sticky", 0.72);
+  // Stay inside chapter 2 after the wheel delta rather than on its 0.725 boundary.
+  await scrollScene(scene, ".logo-experience-sticky", 0.68);
   await expect(scene).toHaveAttribute("data-logo-selected", "5");
   await page.mouse.wheel(0, 24);
   await expect(scene).toHaveAttribute("data-logo-selected", "2");
@@ -1589,7 +1623,11 @@ for (const viewport of [
       for (const block of await chapter
         .locator("[data-ceo-message] > h3, [data-ceo-message] > p, .ceo-signature")
         .all()) {
-        await block.scrollIntoViewIfNeeded();
+        // scrollIntoViewIfNeeded may keep a 99%-visible paragraph at the edge.
+        // Center it explicitly before requiring the whole letter block to fit.
+        await block.evaluate((element) =>
+          element.scrollIntoView({ block: "center", behavior: "instant" }),
+        );
         await expect(block).toBeInViewport({ ratio: 1 });
       }
     }

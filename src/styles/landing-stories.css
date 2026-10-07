@@ -262,7 +262,7 @@
 }
 .everyday-mini-timeline small {
   margin-bottom: 3px;
-  color: #8793a3;
+  color: #596e8a;
   font-size: 10px;
 }
 .everyday-mini-timeline strong {
@@ -307,7 +307,7 @@
 }
 .everyday-document-row small {
   margin-top: 4px;
-  color: #8793a3;
+  color: #596e8a;
   font-size: 10px;
 }
 .everyday-document-row > svg {
@@ -333,7 +333,7 @@
   font-weight: 550;
 }
 .everyday-report-item > span {
-  color: #94a5be;
+  color: #596e8a;
   font-size: 9px;
 }
 .everyday-report-item > svg {
@@ -345,7 +345,7 @@
   padding: 10px 0;
   border-radius: 8px;
   background: #f1f6fd;
-  color: #7792ba;
+  color: #526c8e;
   text-align: center;
   font-size: 10px;
 }

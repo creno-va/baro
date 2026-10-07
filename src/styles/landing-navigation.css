@@ -144,9 +144,12 @@
 .landing-menu-dialog[open] .landing-menu-content {
   animation: landing-menu-content-in 340ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
-html.landing-menu-is-open,
-html.landing-menu-is-open body {
+/* Lock the root without creating a new body scroll container for sticky scenes. */
+html.landing-menu-is-open {
   overflow: hidden;
+  overscroll-behavior: none;
+}
+html.landing-menu-is-open body {
   overscroll-behavior: none;
 }
 @keyframes landing-menu-appear {
@@ -234,8 +237,7 @@ html.landing-menu-is-open body {
     -webkit-backdrop-filter: blur(28px);
     backdrop-filter: blur(28px);
   }
-  html:has(.landing-mobile-menu[open]),
-  body:has(.landing-mobile-menu[open]) {
+  html:has(.landing-mobile-menu[open]) {
     overflow: hidden;
   }
 }

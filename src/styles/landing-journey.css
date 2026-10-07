@@ -305,7 +305,7 @@
 .journey-message-me {
   align-self: flex-end;
   padding: 11px 14px;
-  background: #3778ef;
+  background: #2865ce;
   color: white;
   border-radius: 15px 15px 4px 15px;
 }
@@ -319,7 +319,7 @@
   display: flex;
   align-items: center;
   gap: 5px;
-  color: #4276cd;
+  color: #2865ce;
   font-size: 9px;
 }
 .journey-fact > strong {
@@ -330,7 +330,7 @@
 }
 .journey-fact small {
   display: block;
-  color: #64758e;
+  color: #596e8a;
   font-size: 9px;
   margin-top: 6px;
 }
@@ -338,7 +338,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  color: #3778ef;
+  color: #2865ce;
   padding: 10px;
   border-top: 1px solid #edf1f7;
 }
@@ -350,7 +350,7 @@
 .journey-result span {
   margin-top: 5px;
   font-size: 9px;
-  color: #64758e;
+  color: #596e8a;
 }
 .journey-input {
   position: absolute;
@@ -383,7 +383,7 @@
   line-height: 1.7;
 }
 .journey-app-note svg {
-  color: #3778ef;
+  color: #2865ce;
 }
 .journey-app-note strong {
   font-size: 13px;

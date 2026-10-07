@@ -153,7 +153,7 @@
   color: #276ee7;
 }
 :where(.blue-reveal-tab[aria-selected="true"]) .blue-reveal-tab-number {
-  color: #517cba;
+  color: #4b6b96;
 }
 :where(.blue-reveal-tab:hover) .blue-reveal-tab-face {
   box-shadow: 0 0 0 2px #c9e1ff80;
@@ -262,7 +262,7 @@
   align-items: center;
   gap: 7px;
   padding: 15px 9px;
-  color: #607a9c;
+  color: #526c8e;
   font-size: 9px;
 }
 .blue-reveal-sidebar-bottom {
@@ -305,7 +305,7 @@
   align-items: center;
   gap: 5px;
   margin-bottom: 6px;
-  color: #627b9b;
+  color: #526c8e;
   font-size: 8px;
 }
 .blue-reveal-app-top strong {
@@ -354,7 +354,7 @@
   font-weight: 650;
 }
 .blue-reveal-panel-title > span {
-  color: #647a97;
+  color: #526c8e;
   font-size: 9px;
 }
 .blue-app-chat {
@@ -387,7 +387,7 @@
   font-weight: 650;
 }
 .blue-app-greeting p {
-  color: #627a9a;
+  color: #526c8e;
   font-size: 9px;
   margin: 5px 0 0;
 }
@@ -396,7 +396,7 @@
   margin: 0 0 15px auto;
   padding: 10px 13px;
   color: #fff;
-  background: #3477ec;
+  background: #2865ce;
   border-radius: 13px 13px 3px 13px;
   font-size: 10px;
   line-height: 1.65;
@@ -423,7 +423,7 @@
   padding: 8px 10px;
   border: 1px solid #dfe8f4;
   border-radius: 10px;
-  color: #617b9d;
+  color: #526c8e;
   font-size: 9px;
 }
 .blue-app-input-send {
@@ -445,7 +445,7 @@
 }
 .blue-app-small-heading {
   display: block;
-  color: #5275a3;
+  color: #4b6b96;
   font-size: 9px;
   font-weight: 600;
 }
@@ -459,7 +459,7 @@
 .blue-app-facts :where(div) > span {
   display: block;
   font-size: 9px;
-  color: #5a7598;
+  color: #526c8e;
 }
 .blue-app-facts strong {
   display: block;
@@ -469,7 +469,7 @@
   font-weight: 550;
 }
 .blue-app-facts > p {
-  color: #607a9b;
+  color: #526c8e;
   font-size: 8px;
   line-height: 1.8;
   margin: 20px 0 0;
@@ -489,12 +489,12 @@
   font-weight: 650;
 }
 .blue-app-files-intro p {
-  color: #627c9d;
+  color: #526c8e;
   font-size: 9px;
   margin: 5px 0 0;
 }
 .blue-app-files-intro > span {
-  color: #5e7fa8;
+  color: #526c8e;
   background: #f0f6ff;
   border-radius: 6px;
   padding: 5px 7px;
@@ -536,11 +536,11 @@
 .blue-app-file-row :where(div) > span {
   display: block;
   margin-top: 4px;
-  color: #6a809d;
+  color: #526c8e;
   font-size: 8px;
 }
 .blue-app-file-tag {
-  color: #5d7da7;
+  color: #526c8e;
   background: #f2f6fc;
   border-radius: 5px;
   padding: 4px 7px;
@@ -554,7 +554,7 @@
   display: flex;
   gap: 5px;
   align-items: center;
-  color: #667f9e;
+  color: #526c8e;
   font-size: 8px;
   margin: 12px 0 0;
 }
@@ -574,7 +574,7 @@
   font-weight: 650;
 }
 .blue-app-timeline-intro > span {
-  color: #627c9d;
+  color: #526c8e;
   font-size: 8px;
 }
 .blue-app-timeline ol {
@@ -602,7 +602,7 @@
   display: block;
   width: 56px;
   flex-shrink: 0;
-  color: #4c77b4;
+  color: #4b6b96;
   font-size: 8px;
   background: #eef5ff;
   border-radius: 6px;
@@ -619,7 +619,7 @@
   font-weight: 600;
 }
 .blue-app-timeline p {
-  color: #6681a1;
+  color: #526c8e;
   font-size: 9px;
   margin: 5px 0;
 }
@@ -627,11 +627,11 @@
   display: inline-flex;
   gap: 4px;
   align-items: center;
-  color: #5a7fab;
+  color: #526c8e;
   font-size: 8px;
 }
 .blue-app-timeline i {
-  color: #4e7ead;
+  color: #526c8e;
   padding: 4px 6px;
   background: #edf6ff;
   border-radius: 5px;
@@ -670,7 +670,7 @@
   border-top: 1px solid #edf1f8;
 }
 .blue-app-report-paper :where(div) > span {
-  color: #637fa4;
+  color: #526c8e;
   font-size: 8px;
 }
 .blue-app-report-paper strong {
@@ -702,7 +702,7 @@
   font-weight: 650;
 }
 .blue-app-review > p {
-  color: #6781a1;
+  color: #526c8e;
   font-size: 9px;
   line-height: 1.8;
   margin: 9px 0 13px;
@@ -711,13 +711,13 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  color: #5f7fa6;
+  color: #526c8e;
   font-size: 9px;
   margin-top: 8px;
 }
 .blue-app-review > small {
   display: block;
-  color: #607c9e;
+  color: #526c8e;
   font-size: 8px;
   margin-top: 15px;
 }
@@ -735,7 +735,7 @@
   gap: 5px;
   align-items: center;
   font-size: 8px;
-  color: #657f9f;
+  color: #526c8e;
 }
 .blue-reveal-panel-footer > a {
   display: inline-flex;

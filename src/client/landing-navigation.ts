@@ -13,15 +13,21 @@ if (navigationDialog && navigationTrigger && navigationFallback && navigationPan
   const mobile = window.matchMedia("(max-width: 1023px)");
   const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
   let closeTimer = 0;
+  let openingScroll: { left: number; top: number } | undefined;
 
   function finishClose(restoreFocus = false) {
+    const position = openingScroll;
+    openingScroll = undefined;
     window.clearTimeout(closeTimer);
     closeTimer = 0;
     dialog.classList.remove("is-closing");
     dialog.close();
     trigger.setAttribute("aria-expanded", "false");
     document.documentElement.classList.remove("landing-menu-is-open");
-    if (restoreFocus && mobile.matches) trigger.focus({ preventScroll: true });
+    if (restoreFocus && mobile.matches) {
+      trigger.focus({ preventScroll: true });
+      if (position) window.scrollTo({ ...position, behavior: "instant" });
+    }
   }
 
   function close() {
@@ -35,11 +41,14 @@ if (navigationDialog && navigationTrigger && navigationFallback && navigationPan
 
   function open() {
     if (!mobile.matches || dialog.open) return;
+    openingScroll = { left: window.scrollX, top: window.scrollY };
     dialog.showModal();
     panel.scrollTop = 0;
     trigger.setAttribute("aria-expanded", "true");
     document.documentElement.classList.add("landing-menu-is-open");
     dismiss?.focus({ preventScroll: true });
+    // Native dialog autofocus must not recenter the page beneath the fixed modal.
+    window.scrollTo({ ...openingScroll, behavior: "instant" });
   }
 
   // Move the existing links, so the same navigation also works without JavaScript.
@@ -48,6 +57,12 @@ if (navigationDialog && navigationTrigger && navigationFallback && navigationPan
     fallback.open = false;
     fallback.hidden = true;
     trigger.hidden = false;
+    trigger.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0) return;
+      // The sticky button sits above root scroll-padding; default focus would center it.
+      event.preventDefault();
+      trigger.focus({ preventScroll: true });
+    });
     trigger.addEventListener("click", open);
     dismiss?.addEventListener("click", close);
     dialog.addEventListener("cancel", (event) => {

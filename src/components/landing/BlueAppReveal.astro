@@ -88,7 +88,7 @@ const features = [
             <div class="blue-reveal-app-top"><div><span class="blue-reveal-breadcrumb">나의 사건 <ChevronRight size={11} aria-hidden="true" /> 돌려받지 못한 돈</span><strong>내 이야기를 정리하는 공간</strong></div><span class="blue-reveal-app-state"><span></span> 내가 확인하는 이야기</span></div>
             <div class="blue-reveal-panels">
               {features.map((feature, index) => (
-                <article class="blue-reveal-panel" id={`blue-panel-${feature.id}`} data-blue-panel={index} aria-labelledby={`blue-panel-title-${feature.id}`}>
+                <div class="blue-reveal-panel" id={`blue-panel-${feature.id}`} data-blue-panel={index} role="group" aria-labelledby={`blue-panel-title-${feature.id}`}>
                   <div class="blue-reveal-panel-title"><h3 id={`blue-panel-title-${feature.id}`}><feature.icon size={17} aria-hidden="true" />{feature.label}</h3><span>{feature.benefit}</span></div>
 
                   {feature.id === "conversation" && <div class="blue-app-chat"><div class="blue-app-chat-main"><div class="blue-app-greeting"><span><Sparkles size={21} aria-hidden="true" /></span><div><strong>어떤 일이 있었나요?</strong><p>정리되지 않은 이야기여도 괜찮아요.</p></div></div><div class="blue-app-chat-bubble">빌려준 돈을 아직 돌려받지 못했어요.</div><div class="blue-app-chat-reply"><img src="/brand/logo.svg" width="21" height="21" alt="" /><p>마음이 많이 쓰이셨겠어요.<br />언제, 어떤 방법으로 돈을 빌려주셨나요?</p></div><div class="blue-app-chat-bubble blue-app-chat-bubble-small">3월 12일에 계좌로 보냈어요.</div><div class="blue-app-input" aria-hidden="true"><Paperclip size={15} /><span>편하게 이야기해 주세요</span><span class="blue-app-input-send"><ArrowRight size={14} /></span></div></div><aside class="blue-app-facts"><span class="blue-app-small-heading">대화에서 정리한 사실</span><div><Check size={15} aria-hidden="true" /><span>대여 시점<strong>3월 12일</strong></span></div><div><Check size={15} aria-hidden="true" /><span>돈을 보낸 방법<strong>계좌 이체</strong></span></div><p>알고 있는 사실부터 정리해요.<br />모르는 건 나중에 이어서.</p></aside></div>}
@@ -100,7 +100,7 @@ const features = [
                   {feature.id === "report" && <div class="blue-app-report"><div class="blue-app-report-paper"><span class="blue-app-small-heading">내가 검토하는 상담 준비 리포트</span><h4>길었던 이야기,<br />중요한 내용부터 선명하게.</h4><div><span>01</span><strong>사건의 흐름</strong><CheckCheck size={16} aria-hidden="true" /></div><div><span>02</span><strong>확인한 사실과 준비 자료</strong><CheckCheck size={16} aria-hidden="true" /></div><div><span>03</span><strong>상담에서 확인할 질문</strong><CheckCheck size={16} aria-hidden="true" /></div></div><aside class="blue-app-review"><span><ShieldCheck size={24} aria-hidden="true" /></span><strong>마지막 확인은,<br />내가 직접.</strong><p>사실과 날짜를 확인하고<br />필요한 부분은 수정해요.</p><div><Check size={13} aria-hidden="true" />내용 검토</div><div><Check size={13} aria-hidden="true" />전달할 자료 선택</div><small>공유는 내가 결정해요.</small></aside></div>}
 
                   <div class="blue-reveal-panel-footer"><span><ShieldCheck size={13} aria-hidden="true" />이해를 돕기 위한 가상 화면이에요.</span><a href="#try-baro" data-blue-demo={feature.id}>{feature.action}<ArrowRight size={15} aria-hidden="true" /></a></div>
-                </article>
+                </div>
               ))}
             </div>
           </div>

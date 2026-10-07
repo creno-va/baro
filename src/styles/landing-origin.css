@@ -33,7 +33,7 @@
   font-size: 12px;
   font-weight: 650;
   letter-spacing: 0.07em;
-  color: #637086;
+  color: #59677f;
 }
 .origin-opening h2 {
   margin: 0;
@@ -172,7 +172,7 @@
 .origin-next-steps :where(li) > span {
   display: block;
   margin-bottom: 7px;
-  color: #657c9d;
+  color: #526c8e;
   font-size: 10px;
   letter-spacing: 0.08em;
 }
@@ -322,7 +322,7 @@
     align-items: center;
     gap: 14px;
     font-size: 11px;
-    color: #647086;
+    color: #59677f;
     opacity: var(--origin-copy-opacity);
     pointer-events: none;
   }
