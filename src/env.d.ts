@@ -2,6 +2,10 @@
 /// <reference path="../worker-configuration.d.ts" />
 /// <reference types="astro/client" />
 
+interface ImportMetaEnv {
+  readonly BARO_UI_TEST_FIXTURE: boolean;
+}
+
 interface Env {
   PUBLIC_BETA_ENABLED: string;
   RELEASE_SHA: string;

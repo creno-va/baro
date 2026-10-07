@@ -32,6 +32,14 @@ test("320px pages fit clientWidth including a classic vertical scrollbar gutter"
   page,
 }) => {
   await page.setViewportSize({ width: 320, height: 760 });
+  await page.route("**/api/me/session", (route) =>
+    route.fulfill({
+      json: {
+        user: { id: "synthetic-scrollbar-owner", name: "합성 고객", accountType: "customer" },
+        needsConsent: false,
+      },
+    }),
+  );
   await page.route("**/api/cases", (route) =>
     route.fulfill({ json: { items: [], nextCursor: null } }),
   );
@@ -39,8 +47,12 @@ test("320px pages fit clientWidth including a classic vertical scrollbar gutter"
     route.fulfill({ json: { needsConsent: false } }),
   );
   await page.route("**/api/me", (route) => route.fulfill({ status: 401, json: {} }));
-  for (const path of ["/", "/login", "/cases", "/cases/new", "/settings"]) {
+  for (const path of ["/", "/app", "/login", "/cases", "/cases/new", "/settings"]) {
     await page.goto(path);
+    if (path === "/app") {
+      await expect(page).toHaveURL(/\/app$/);
+      await expect(page.getByRole("textbox", { name: "지금까지 있었던 일" })).toBeEnabled();
+    }
     await reserveScrollbarGutter(page);
     await expect(page.locator(".brand img").first()).toBeVisible();
     await expectAvailableWidth(page);

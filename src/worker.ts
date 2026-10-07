@@ -4,6 +4,7 @@ import { Hono } from "hono";
 import { secureHeaders } from "hono/secure-headers";
 import { api } from "./server/api";
 import { cleanupAuthData } from "./server/auth/cleanup";
+import { createPageAccess } from "./server/auth/page-access";
 import { reconcileAnalysisTimeouts } from "./server/modules/case-structure/execution";
 import { reconcileDeletion } from "./server/modules/deletion/service";
 import { reconcileV2Deletion } from "./server/modules/deletion/v2-reconcile";
@@ -34,6 +35,7 @@ app.use(async (context, next) => {
   context.header("content-security-policy", `${policy ? `${policy}; ` : ""}frame-ancestors 'none'`);
 });
 app.route("/api", api);
+app.use(createPageAccess({ syntheticFixture: import.meta.env.BARO_UI_TEST_FIXTURE === true }));
 app.use(actions());
 app.use(middleware());
 app.use(pages());

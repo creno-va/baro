@@ -258,6 +258,23 @@ test("app clears an active draft and returns to login when the session expires",
   await expect(page.locator("body")).not.toContainText("세션 만료 전 합성 초안");
 });
 
+for (const endpoint of ["session", "consent"] as const) {
+  test(`an expired ${endpoint} read replaces consent with the login recovery page`, async ({
+    page,
+  }) => {
+    await page.route(`**/api/me/${endpoint}`, (route) =>
+      route.fulfill({ status: 401, json: { error: { code: "UNAUTHENTICATED" } } }),
+    );
+    await page.goto("/login?before=expired-consent");
+    await page.goto("/consent");
+    await expect(page).toHaveURL(/\/login\?error=session_expired$/);
+    await expect(page.getByRole("alert")).toContainText("안전한 이용을 위해 다시 로그인해 주세요.");
+    await expect(page.getByRole("button", { name: "다시 불러오기" })).toHaveCount(0);
+    await page.goBack();
+    await expect(page).toHaveURL(/\/login\?before=expired-consent$/);
+  });
+}
+
 test("an expired session during consent saving returns to login", async ({ page }) => {
   await page.route("**/api/me/consent", (route) =>
     route.fulfill(

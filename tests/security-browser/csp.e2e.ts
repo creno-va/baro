@@ -493,6 +493,14 @@ test("built Worker mobile menu, brand, local font and error state work without C
   await opener.press("Enter");
   const dialog = page.getByRole("dialog", { name: "메뉴", exact: true });
   await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole("link", { name: "새 사건 입력", exact: true })).toHaveAttribute(
+    "href",
+    "/app",
+  );
+  await expect(dialog.getByRole("link", { name: "BARO 홈", exact: true })).toHaveAttribute(
+    "href",
+    "/app",
+  );
   await page.screenshot({ path: ".wrangler/built-ui-menu-320.png" });
   await expect(dialog.getByRole("button", { name: "닫기", exact: true })).toBeFocused();
   await page.keyboard.press("Shift+Tab");

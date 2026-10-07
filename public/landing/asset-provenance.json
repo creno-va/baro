@@ -18,7 +18,7 @@
       "generationId": "94418c9e-1fdc-48d3-ab79-53263d6ba177",
       "generatedOn": "2026-10-07",
       "description": "Candid documentary-style fictional adult using a phone in an ordinary lived-in setting; natural skin and lighting, not a real customer testimonial.",
-      "optimization": "896x1120 WebP at quality 84; no image source on viewports below 768px.",
+      "optimization": "896x1120 WebP at quality 84; responsive image source on mobile and desktop.",
       "previousGenerationId": "8857b811-0d5a-443c-8c46-fe06580f0d9f"
     },
     {
@@ -29,7 +29,7 @@
       "generationId": "784b4649-4c20-4297-bf7b-652705e262c7",
       "generatedOn": "2026-10-07",
       "description": "Candid documentary-style fictional adult using a phone in an ordinary lived-in setting; natural skin and lighting, not a real customer testimonial.",
-      "optimization": "896x1120 WebP at quality 84; no image source on viewports below 768px.",
+      "optimization": "896x1120 WebP at quality 84; responsive image source on mobile and desktop.",
       "previousGenerationId": "2f8559e0-140b-4804-ab82-d0e35b2e3a63"
     },
     {
@@ -40,7 +40,7 @@
       "generationId": "418a71ad-f81f-483a-8cb1-7dac1cb62a09",
       "generatedOn": "2026-10-07",
       "description": "Candid documentary-style fictional adult using a phone in an ordinary lived-in setting; natural skin and lighting, not a real customer testimonial.",
-      "optimization": "896x1120 WebP at quality 84; no image source on viewports below 768px.",
+      "optimization": "896x1120 WebP at quality 84; responsive image source on mobile and desktop.",
       "previousGenerationId": "a73b0d5a-c602-460e-91dc-d0f5f160012a"
     },
     {
@@ -94,7 +94,7 @@
       "generationId": "7346bb62-208c-4eb6-9a83-474cc03ac64d",
       "generatedOn": "2026-10-07",
       "description": "Fictional adult reviewing household documents in an ordinary Korean apartment.",
-      "optimization": "896x1120 WebP quality85; no image request below 768px."
+      "optimization": "896x1120 WebP quality85; responsive image source on mobile and desktop."
     },
     {
       "asset": "future-work.webp",
@@ -103,7 +103,7 @@
       "generationId": "4efe1821-ea95-4838-8b2e-155c1615c895",
       "generatedOn": "2026-10-07",
       "description": "Fictional Korean adult checking notes on a phone at a bus stop after work.",
-      "optimization": "896x1120 WebP quality85; no image request below 768px."
+      "optimization": "896x1120 WebP quality85; responsive image source on mobile and desktop."
     },
     {
       "asset": "future-cafe.webp",
@@ -112,7 +112,7 @@
       "generationId": "a0a04780-9d8c-42c3-9b6c-1b52b5fa9889",
       "generatedOn": "2026-10-07",
       "description": "Fictional neighborhood cafe owner reviewing receipts and a smartphone.",
-      "optimization": "896x1120 WebP quality85; no image request below 768px."
+      "optimization": "896x1120 WebP quality85; responsive image source on mobile and desktop."
     },
     {
       "asset": "hero-continuous.mp4",

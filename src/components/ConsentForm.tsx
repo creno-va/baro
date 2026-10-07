@@ -24,14 +24,20 @@ export function ConsentForm() {
       .get()
       .then(async (session) => {
         if (!session.user) {
-          window.location.assign("/login?error=session_expired");
+          window.location.replace("/login?error=session_expired");
           return;
         }
         const consent = await api.session.getConsent();
         setStartPath(roleStart({ ...session, needsConsent: consent.needsConsent }));
         setState(consent.needsConsent ? "required" : "complete");
       })
-      .catch(() => setError("동의 상태를 불러오지 못했어요. 다시 불러와 주세요."));
+      .catch((failure) => {
+        if (failure instanceof ApiError && failure.code === "UNAUTHENTICATED") {
+          window.location.replace("/login?error=session_expired");
+          return;
+        }
+        setError("동의 상태를 불러오지 못했어요. 다시 불러와 주세요.");
+      });
   }, []);
 
   async function submit(event: SyntheticEvent<HTMLFormElement>) {
@@ -49,7 +55,7 @@ export function ConsentForm() {
       setStartPath(roleStart(session));
     } catch (failure) {
       if (failure instanceof ApiError && failure.code === "UNAUTHENTICATED") {
-        window.location.assign("/login?error=session_expired");
+        window.location.replace("/login?error=session_expired");
         return;
       }
       setError("동의를 저장하지 못했어요. 다시 시도해 주세요.");
