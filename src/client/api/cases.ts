@@ -173,7 +173,23 @@ function validate<T>(schema: z.ZodType<T>, raw: unknown): T {
   return parsed.data;
 }
 async function metadata(id: string) {
-  return metadataSchema.parse(await request("cases.intake", { id }, { path: path(id, "intake") }));
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const value = await readMetadata(id);
+    if (value) return value;
+  }
+  throw snapshotUnavailable();
+}
+async function readMetadata(id: string) {
+  return metadataSchema
+    .nullable()
+    .parse(await request("cases.intake", { id }, { path: path(id, "intake") }));
+}
+function snapshotUnavailable() {
+  return new ApiError(
+    "UNAVAILABLE",
+    "준비된 내용을 다시 확인하고 있어요. 잠시 후 다시 시도해 주세요.",
+    true,
+  );
 }
 // Schema knowledge contains no case content or permissions. A confirmed v2
 // denial must not become an unrelated legacy request or its network failure.
@@ -228,50 +244,87 @@ function questions(m: Metadata, revision: number): QuestionsResult {
   };
 }
 async function latestFailedIntakeJob(id: string, revision: number) {
+  const job = await latestIntakeJob(id);
+  return isCurrentFailure(job, revision) ? job : null;
+}
+async function latestIntakeJob(id: string) {
   const job = v2JobSchema
     .nullable()
     .parse(await request("cases.latestJob", { id }, { path: path(id, "workspace-jobs/latest") }));
-  // Failing a job advances the workspace once. Subsequent answer edits create
-  // new input and must not be blocked by an exhausted job for the older input.
-  return job?.status === "failed" &&
+  return job &&
     (job.kind === "intake_questions" || job.kind === "intake_summary") &&
-    job.target.kind === "workspace" &&
-    revision <= job.target.workspaceRevision + 1
+    job.target.kind === "workspace"
     ? job
     : null;
 }
+function isCurrentFailure(job: Awaited<ReturnType<typeof latestIntakeJob>>, revision: number) {
+  // Failing a job advances the workspace once. Subsequent answer edits create
+  // new input and must not be blocked by an exhausted job for the older input.
+  return (
+    job?.status === "failed" &&
+    job.target.kind === "workspace" &&
+    revision <= job.target.workspaceRevision + 1
+  );
+}
 async function getQuestions(id: string): Promise<QuestionsResult> {
   if (apiMode === "mock") return request("cases.getQuestions", { id });
-  const [w, m] = await Promise.all([workspace(id), metadata(id)]);
-  const result = questions(m, w.workspaceRevision);
-  const recovered = m.currentJobId ? null : await latestFailedIntakeJob(id, w.workspaceRevision);
-  const jobId = m.currentJobId ?? recovered?.id;
-  if (jobId) {
-    const job = z
-      .object({
-        status: z.string(),
-        retryable: z.boolean(),
-        failure: v2FailureCodeSchema.nullable(),
-        kind: z.string().optional(),
-      })
-      .parse(
-        await request(
-          "cases.job",
-          { id },
-          { path: path(id, `workspace-jobs/${encodeURIComponent(jobId)}`) },
-        ),
-      );
-    result.processing = ["queued", "running", "validating"].includes(job.status);
+  // A completion clears the intake pointer and publishes its result atomically,
+  // but these HTTP reads are separate snapshots. Never stop polling on an older
+  // intake just because a later job read observes its completion.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const [w, m] = await Promise.all([workspace(id), readMetadata(id)]);
+    if (
+      !m ||
+      (w.status === "intake" && w.currentJobId !== m.currentJobId) ||
+      w.intakeRevision !== m.revision
+    )
+      continue;
+    const result = questions(m, w.workspaceRevision);
+    const latest = m.currentJobId ? null : await latestIntakeJob(id);
+    if (latest?.target.kind === "workspace") {
+      const changedAfterSnapshot = w.workspaceRevision <= latest.target.workspaceRevision;
+      const missingPublishedResult =
+        latest.status === "completed" &&
+        (latest.kind === "intake_questions"
+          ? m.batches.length === 0 ||
+            (w.workspaceRevision === latest.target.workspaceRevision + 1 &&
+              m.batches.at(-1)?.generatedForIntakeRevision !== m.revision)
+          : w.workspaceRevision === latest.target.workspaceRevision + 1 && !m.summary);
+      if (changedAfterSnapshot || missingPublishedResult) continue;
+    }
+    const recovered = isCurrentFailure(latest, w.workspaceRevision) ? latest : null;
+    const jobId = m.currentJobId ?? recovered?.id;
+    if (!jobId) return result;
+    const job =
+      recovered ??
+      z
+        .object({
+          status: z.string(),
+          retryable: z.boolean(),
+          failure: v2FailureCodeSchema.nullable(),
+          kind: z.string().optional(),
+        })
+        .parse(
+          await request(
+            "cases.job",
+            { id },
+            { path: path(id, `workspace-jobs/${encodeURIComponent(jobId)}`) },
+          ),
+        );
+    const processing = ["queued", "running", "validating"].includes(job.status);
+    if (m.currentJobId && !processing) continue;
+    result.processing = processing;
     result.failed = job.status === "failed";
     result.retryable = result.failed && job.retryable;
     result.failure = result.failed ? job.failure : null;
     result.canPrepareSummary =
       result.failed &&
-      (job.kind ?? recovered?.kind) === "intake_questions" &&
+      job.kind === "intake_questions" &&
       m.batches.length >= V2_INTAKE_POLICY.followupRounds &&
       result.questions.every((question) => question.answerState);
+    return result;
   }
-  return result;
+  throw snapshotUnavailable();
 }
 
 interface TurnstileWidget {

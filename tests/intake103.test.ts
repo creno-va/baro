@@ -432,7 +432,7 @@ describe("PR100 real wire mapping", () => {
             ...m,
             status: "collecting",
             summary: null,
-            currentJobId: "failed-questions",
+            currentJobId: null,
             batches: [1, 2].map((ordinal) => ({
               id: `saved-batch-${ordinal}`,
               ordinal,
@@ -444,9 +444,20 @@ describe("PR100 real wire mapping", () => {
               })),
             })),
           });
-        if (url.endsWith("/workspace-jobs/failed-questions"))
+        if (
+          url.endsWith("/workspace-jobs/failed-questions") ||
+          url.endsWith("/workspace-jobs/latest")
+        )
           return Response.json({
+            schemaVersion: "2",
+            id: "failed-questions",
+            operationId: "failed-operation",
+            target: { kind: "workspace", caseId: id, workspaceRevision: 4 },
             status: "failed",
+            phase: "generating",
+            progressPercent: 50,
+            attempts: 3,
+            updatedAt: now,
             retryable: false,
             kind: "intake_questions",
             failure: "POLICY_REJECTED",
