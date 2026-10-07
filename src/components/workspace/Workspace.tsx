@@ -16,6 +16,7 @@ import { type SyntheticEvent, useCallback, useEffect, useRef, useState } from "r
 import { api } from "../../client/api";
 import type { FileView, TimelineView, WorkspaceView } from "../../client/api/types";
 import type { CustomerWorkspaceView } from "../../client/api/workspace";
+import { PUBLIC_PREVIEW } from "../../client/public-preview";
 import { V2_LIMITS } from "../../contracts/v2";
 import { CaseDetail } from "../analysis/CaseDetail";
 import { useCustomerAccess } from "../intake/useCustomerAccess";
@@ -112,6 +113,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
   }, []);
   const access = useCustomerAccess(purge, (cause) => setError(problem(cause)));
   const { ready, version, verify, ticket, current, alive, deny } = access;
+  const readonly = PUBLIC_PREVIEW || !ready || view?.case.stage !== "active";
   const showError = useCallback(
     (cause: unknown) => {
       const next = problem(cause);
@@ -223,7 +225,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
   }, [preview, deleteFile, entry]);
 
   async function run(key: string, action: (epoch: number) => Promise<void>) {
-    if (lock.current) return;
+    if (lock.current || (readonly && key !== "refresh")) return;
     const epoch = ticket();
     lock.current = true;
     latest.current++;
@@ -249,7 +251,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
   }
   async function send(event: SyntheticEvent) {
     event.preventDefault();
-    if (!view || !draft.trim()) return;
+    if (readonly || !view || !draft.trim()) return;
     const text = draft.trim();
     followingChat.current = true;
     await run("send", async (epoch) => {
@@ -273,7 +275,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
     });
   }
   async function upload(files: FileList | File[] | null) {
-    if (!files?.length) return;
+    if (readonly || !files?.length) return;
     const chosen = Array.from(files);
     await run("upload", async (epoch) => {
       let completed = 0;
@@ -305,6 +307,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
   }
   async function saveEntry(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (readonly) return;
     const values = new FormData(event.currentTarget);
     await run("timeline", async (epoch) => {
       const next = await api.workspace.saveTimeline(caseId, {
@@ -342,7 +345,6 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
   const base = `/cases/${encodeURIComponent(caseId)}`;
   const readyFiles = view?.files.filter((file) => file.status === "ready") ?? [];
   const pendingResponse = view?.messages.some((message) => message.status === "pending");
-  const readonly = !ready || view?.case.stage !== "active";
   return (
     <div className={`workspace workspace--${tab}`}>
       <CaseNavigation
@@ -354,6 +356,14 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
       <div className="workspace-feedback" aria-live="polite" aria-atomic="true">
         {notice}
       </div>
+      {PUBLIC_PREVIEW && (
+        <section className="workspace-preview-notice" role="status">
+          <p>
+            추가 대화·자료 관리·타임라인 편집·행동 완료 기능은 준비 중이에요. 저장된 내용과 각
+            화면은 둘러볼 수 있어요.
+          </p>
+        </section>
+      )}
       {error && (
         <section className="workspace-error" role="alert">
           <strong>{error.message}</strong>
@@ -368,7 +378,11 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
           </p>
           <div className="workspace-buttons">
             {!!retryUploads.length && (
-              <Button variant="outline" disabled={!!busy} onClick={() => void upload(retryUploads)}>
+              <Button
+                variant="outline"
+                disabled={!!busy || readonly}
+                onClick={() => void upload(retryUploads)}
+              >
                 업로드 다시 시도
               </Button>
             )}
@@ -403,7 +417,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
       )}
       {view && ready && (
         <>
-          {readonly && (
+          {view.case.stage !== "active" && (
             <section className="workspace-error">
               <p>
                 {view.case.stage === "archived"
@@ -810,7 +824,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                             disabled={!!busy || readonly}
                             onChange={(event) => {
                               const done = event.target.checked;
-                              if (lock.current) return;
+                              if (readonly || lock.current) return;
                               const previous = view;
                               apply({
                                 ...view,
@@ -1035,7 +1049,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
             <div className="workspace-buttons">
               <Button
                 variant="outline"
-                disabled={!!busy}
+                disabled={!!busy || readonly}
                 onClick={() =>
                   void run("original", async (epoch) => {
                     const blob = await api.files.original(caseId, preview.id);
@@ -1091,7 +1105,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
               </Button>
               <Button
                 variant="destructive"
-                disabled={!!busy}
+                disabled={!!busy || readonly}
                 onClick={() =>
                   void run("delete", async (epoch) => {
                     await api.files.remove(caseId, deleteFile.id);
@@ -1120,6 +1134,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
               id="timeline-date"
               name="date"
               type="date"
+              disabled={readonly || !!busy}
               value={entry.date ?? ""}
               onChange={(event) => setEntry({ ...entry, date: event.target.value })}
             />
@@ -1129,6 +1144,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
               name="title"
               required
               maxLength={300}
+              disabled={readonly || !!busy}
               value={entry.title ?? ""}
               onChange={(event) => setEntry({ ...entry, title: event.target.value })}
             />
@@ -1138,6 +1154,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
               name="detail"
               maxLength={1600}
               rows={4}
+              disabled={readonly || !!busy}
               value={entry.detail ?? ""}
               onChange={(event) => setEntry({ ...entry, detail: event.target.value })}
             />
@@ -1145,7 +1162,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
               <Button variant="outline" disabled={!!busy} onClick={closeDialog}>
                 취소
               </Button>
-              <Button type="submit" disabled={!!busy}>
+              <Button type="submit" disabled={!!busy || readonly}>
                 {busy === "timeline" ? "저장 중" : "타임라인 저장"}
               </Button>
             </div>
