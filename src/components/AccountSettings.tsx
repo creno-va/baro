@@ -1,4 +1,20 @@
-import { AlertTriangle, HelpCircle, RefreshCw, Trash2 } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowRight,
+  ChartNoAxesColumnIncreasing,
+  Check,
+  ChevronRight,
+  Clock3,
+  FileText,
+  FolderOpen,
+  HardDrive,
+  HelpCircle,
+  MessageCircle,
+  Mic,
+  RefreshCw,
+  ShieldCheck,
+  Trash2,
+} from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../client/api";
 import type { CaseView } from "../client/api/types";
@@ -264,13 +280,22 @@ export function AccountSettings() {
   };
   if (deleted)
     return (
-      <section className="settings-card" role="status">
+      <section className="settings-card settings-deleted" role="status">
+        <span className="settings-section-icon">
+          <Check size={25} aria-hidden="true" />
+        </span>
         <h1>계정 삭제를 접수했어요</h1>
         <p>
           로그인 세션을 종료하고 접근을 차단했어요. 원격 파일·백업 정리는 삭제 절차에 따라 진행돼요.
         </p>
-        <a href="/login">로그인 화면으로</a>
-        <a href="/help#deletion">삭제 도움말</a>
+        <div className="settings-actions">
+          <a className="settings-primary-link" href="/login">
+            로그인 화면으로 <ArrowRight size={17} aria-hidden="true" />
+          </a>
+          <a className="settings-text-link" href="/help#deletion">
+            삭제 도움말 <ChevronRight size={16} aria-hidden="true" />
+          </a>
+        </div>
       </section>
     );
   return (
@@ -279,15 +304,20 @@ export function AccountSettings() {
         <div>
           <span className="settings-eyebrow">내 계정</span>
           <h1>설정과 사용량</h1>
-          <p>이용 한도를 확인하고 보관한 사건을 관리하세요.</p>
+          <p>나의 이용 현황과 보관한 이야기를 한곳에서 관리해요.</p>
         </div>
-        <button type="button" disabled={Boolean(busy) || checking} onClick={() => void load()}>
+        <button
+          className="settings-refresh"
+          type="button"
+          disabled={Boolean(busy) || checking}
+          onClick={() => void load()}
+        >
           <RefreshCw aria-hidden="true" size={16} /> 다시 확인
         </button>
       </header>
       {(busy || checking) && (
-        <p role="status" className="settings-progress">
-          {busy || "계정 접근 상태 확인 중…"}
+        <p className="settings-loading settings-progress" role="status">
+          <RefreshCw size={15} aria-hidden="true" /> {busy || "계정 접근 상태 확인 중…"}
         </p>
       )}
       {error && !target && (
@@ -300,30 +330,45 @@ export function AccountSettings() {
           {notice}
         </p>
       )}
-      <section className="settings-card">
-        <h2>사용량과 한도</h2>
-        <p>
-          하루 한도는 한국 시간 자정에 다시 이용할 수 있어요. 저장 공간은 자료를 삭제해 확보할 수
-          있어요.
-        </p>
+      <section className="settings-card settings-usage" aria-labelledby="settings-usage-title">
+        <div className="settings-section-heading">
+          <span className="settings-section-icon">
+            <ChartNoAxesColumnIncreasing size={23} aria-hidden="true" />
+          </span>
+          <div>
+            <h2 id="settings-usage-title">사용량과 한도</h2>
+            <p>오늘 얼마나 이용했는지 살펴보세요.</p>
+          </div>
+          <span className="settings-reset-badge">
+            <Clock3 size={14} aria-hidden="true" /> 매일 자정 갱신
+          </span>
+        </div>
         {usage && !checking && (
           <div className="usage-grid">
             {(
               [
-                ["오늘 새 사건", usage.newCases, "건"],
-                ["오늘 AI 응답", usage.aiResponses, "회"],
-                ["오늘 음성·영상", usage.mediaMinutes, "분"],
+                ["오늘 새 사건", usage.newCases, "건", FolderOpen],
+                ["오늘 AI 응답", usage.aiResponses, "회", MessageCircle],
+                ["오늘 음성·영상", usage.mediaMinutes, "분", Mic],
                 [
                   "계정 저장 공간",
                   { used: usage.storageBytes.used / 1e9, limit: usage.storageBytes.limit / 1e9 },
                   "GB",
+                  HardDrive,
                 ],
               ] as const
-            ).map(([label, count, unit]) => (
+            ).map(([label, count, unit, Icon]) => (
               <div className="usage-item" key={label}>
-                <strong>{label}</strong>
-                <p>
-                  <b>{Number(count.used.toFixed(2))}</b> / {count.limit} {unit}
+                <div className="usage-item-label">
+                  <Icon size={18} aria-hidden="true" />
+                  <strong>{label}</strong>
+                </div>
+                <p className="usage-item-value">
+                  <b>{Number(count.used.toFixed(2))}</b>
+                  <span>{unit}</span>
+                  <span className="usage-item-limit">
+                    / {count.limit} {unit}
+                  </span>
                 </p>
                 <progress
                   aria-label={label}
@@ -339,122 +384,205 @@ export function AccountSettings() {
             ))}
           </div>
         )}
-        {usage?.includesReservations && (
-          <p className="settings-muted">진행 중인 처리 예약을 포함한 사용량이에요.</p>
-        )}
-        {usage?.resetAt && (
-          <p className="settings-muted">
-            다음 일일 한도 갱신:{" "}
-            {new Date(usage.resetAt).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })}
-          </p>
-        )}
-        {usage?.waitReasons?.includes("monthly_budget") && (
-          <p role="status" className="settings-error">
-            처리 예산 때문에 새 자동 처리가 대기 중이에요. 저장한 내용을 확인하거나 삭제할 수
+        <div className="settings-usage-notes">
+          <p>
+            하루 한도는 한국 시간 자정에 다시 이용할 수 있어요. 저장 공간은 자료를 삭제해 확보할 수
             있어요.
           </p>
-        )}
-        {usage?.waitReasons?.includes("ai_funding") && (
-          <p role="status" className="settings-error">
-            AI 실행 설정을 확인 중이에요. 저장한 내용을 확인하거나 삭제할 수 있어요.
+          {usage?.includesReservations && <p>진행 중인 처리 예약을 포함한 사용량이에요.</p>}
+          {usage?.resetAt && (
+            <p>
+              다음 일일 한도 갱신:{" "}
+              {new Date(usage.resetAt).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })}
+            </p>
+          )}
+          {usage?.waitReasons?.includes("monthly_budget") && (
+            <p role="status" className="settings-error">
+              처리 예산 때문에 새 자동 처리가 대기 중이에요. 저장한 내용을 확인하거나 삭제할 수
+              있어요.
+            </p>
+          )}
+          {usage?.waitReasons?.includes("ai_funding") && (
+            <p role="status" className="settings-error">
+              AI 실행 설정을 확인 중이에요. 저장한 내용을 확인하거나 삭제할 수 있어요.
+            </p>
+          )}
+          {usage?.waitReasons?.includes("processing_capacity") && (
+            <p role="status" className="settings-error">
+              처리 용량 때문에 새 자동 처리가 대기 중이에요. 잠시 후 다시 확인해 주세요.
+            </p>
+          )}
+        </div>
+        <div className="settings-usage-guide">
+          <p className="settings-muted">
+            사건별 원본은 최대 100개·5GB예요. 문서·이미지 100MB, 음성·영상 1GB, PDF 500쪽, 미디어
+            60분 한도를 적용해요. 처리 예산이나 용량에 따라 자동 처리가 대기할 수 있어요.
           </p>
-        )}
-        {usage?.waitReasons?.includes("processing_capacity") && (
-          <p role="status" className="settings-error">
-            처리 용량 때문에 새 자동 처리가 대기 중이에요. 잠시 후 다시 확인해 주세요.
-          </p>
-        )}
-        <p className="settings-muted">
-          사건별 원본은 최대 100개·5GB예요. 문서·이미지 100MB, 음성·영상 1GB, PDF 500쪽, 미디어 60분
-          한도를 적용해요. 처리 예산이나 용량에 따라 자동 처리가 대기할 수 있어요.
-        </p>
-        <a href="/help#limits">한도와 대기 도움말</a>
+          <a className="settings-text-link" href="/help#limits">
+            한도와 대기 도움말 <ChevronRight size={16} aria-hidden="true" />
+          </a>
+        </div>
       </section>
-      <section className="settings-card">
-        <h2>보관한 사건</h2>
-        <p>삭제하기 전에 필요한 PDF와 자료를 다운로드하세요. 삭제 후 되돌릴 수 없어요.</p>
-        {!busy && !checking && cases.length === 0 && (
-          <p>
-            보관한 사건이 없어요. <a href="/cases/new">새 사건 만들기</a>
-          </p>
-        )}
-        {!checking &&
-          cases.map((item) => (
-            <div className="settings-case" key={item.id}>
-              <div>
-                <a href={`/cases/${encodeURIComponent(item.id)}`}>{item.title}</a>
-                <p className="settings-muted">
-                  {new Date(item.updatedAt).toLocaleDateString("ko-KR")} ·{" "}
-                  {item.schemaVersion === "1" ? "기존 사건" : "사건 정리"}
-                </p>
-                <a href={`/cases/${encodeURIComponent(item.id)}/reports`}>리포트 확인</a>
+      <div className="settings-details-grid">
+        <section className="settings-card settings-cases" aria-labelledby="settings-cases-title">
+          <div className="settings-section-heading">
+            <span className="settings-section-icon">
+              <FolderOpen size={23} aria-hidden="true" />
+            </span>
+            <div>
+              <h2 id="settings-cases-title">보관한 사건</h2>
+              <p>나의 이야기를 확인하고 관리해요.</p>
+            </div>
+            {!checking && <span className="settings-count">{cases.length}</span>}
+          </div>
+          <div className="settings-case-list">
+            {!busy && !checking && cases.length === 0 && (
+              <div className="settings-empty">
+                <FolderOpen size={30} aria-hidden="true" />
+                <p>보관한 사건이 없어요.</p>
+                <a className="settings-text-link" href="/cases/new">
+                  새 사건 만들기 <ArrowRight size={16} aria-hidden="true" />
+                </a>
               </div>
-              <button
-                type="button"
-                disabled={Boolean(busy) || checking}
-                onClick={(event) => {
-                  event.currentTarget.focus();
-                  open(item);
-                }}
-              >
-                <Trash2 size={16} aria-hidden="true" /> 사건 삭제
-              </button>
-            </div>
-          ))}
-      </section>
-      <section className="settings-card settings-danger">
-        <h2>
-          <AlertTriangle size={20} aria-hidden="true" /> 계정 삭제
-        </h2>
-        <p>
-          모든 사건·자료·리포트·프로필과 로그인 정보의 삭제를 요청해요. 이미 다운로드하거나 외부에
-          전달한 파일은 BARO에서 삭제할 수 없어요.
-        </p>
-        {!ready && (
-          <>
-            <p>계정 삭제 전에 같은 계정으로 다시 인증해 주세요.</p>
-            <div className="settings-actions">
-              {access?.providers.map((provider) => (
-                <button
-                  key={provider}
-                  type="button"
-                  disabled={Boolean(busy) || checking}
-                  onClick={() => void reauthenticate(provider)}
-                >
-                  {provider}로 재인증
-                </button>
+            )}
+            {!checking &&
+              cases.map((item) => (
+                <div className="settings-case" key={item.id}>
+                  <span className="settings-case-icon">
+                    <FileText size={20} aria-hidden="true" />
+                  </span>
+                  <div className="settings-case-info">
+                    <a
+                      className="settings-case-title"
+                      href={`/cases/${encodeURIComponent(item.id)}`}
+                    >
+                      {item.title}
+                    </a>
+                    <p className="settings-muted">
+                      {new Date(item.updatedAt).toLocaleDateString("ko-KR")} ·{" "}
+                      {item.schemaVersion === "1" ? "기존 사건" : "사건 정리"}
+                    </p>
+                    <a
+                      className="settings-report-link"
+                      href={`/cases/${encodeURIComponent(item.id)}/reports`}
+                    >
+                      리포트 확인 <ChevronRight size={14} aria-hidden="true" />
+                    </a>
+                  </div>
+                  <button
+                    className="settings-case-delete"
+                    type="button"
+                    disabled={Boolean(busy) || checking}
+                    onClick={(event) => {
+                      event.currentTarget.focus();
+                      open(item);
+                    }}
+                  >
+                    <Trash2 size={15} aria-hidden="true" /> 사건 삭제
+                  </button>
+                </div>
               ))}
+          </div>
+          <p className="settings-case-note">
+            삭제하기 전에 필요한 PDF와 자료를 다운로드하세요. 삭제 후 되돌릴 수 없어요.
+          </p>
+        </section>
+        <section className="settings-card settings-help" aria-labelledby="settings-help-title">
+          <div className="settings-section-heading">
+            <span className="settings-section-icon settings-section-icon-neutral">
+              <HelpCircle size={23} aria-hidden="true" />
+            </span>
+            <div>
+              <h2 id="settings-help-title">도움말과 정책</h2>
+              <p>궁금한 내용을 확인해 보세요.</p>
             </div>
-            {access && !access.providers.length && <a href="/login">다시 로그인</a>}
-            {!access && !busy && <a href="/login">로그인 상태 확인</a>}
-          </>
-        )}
-        {ready && <p>계정 확인을 마쳤어요. 삭제할 내용을 한 번 더 확인해 주세요.</p>}
-        <button
-          type="button"
-          className="danger-button"
-          disabled={Boolean(busy) || checking || !ready}
-          onClick={(event) => {
-            event.currentTarget.focus();
-            open("account");
-          }}
-        >
-          계정과 모든 사건 삭제
-        </button>
-      </section>
-      <section className="settings-card">
-        <h2>
-          <HelpCircle size={20} aria-hidden="true" /> 도움말과 정책
-        </h2>
-        <nav className="settings-links">
-          <a href="/help">사용 도움말</a>
-          <a href="/policies/terms">이용약관 초안</a>
-          <a href="/policies/privacy">개인정보 처리방침 초안</a>
-          <a href="/policies/ai">AI 이용 고지 초안</a>
-        </nav>
-        <p className="settings-muted">
-          정책은 검토 중인 초안이며 법률·사업자·게시 승인이 완료된 공개본이 아니에요.
-        </p>
+          </div>
+          <nav className="settings-links" aria-label="도움말과 정책">
+            <a href="/help">
+              <span>사용 도움말</span>
+              <ChevronRight size={18} aria-hidden="true" />
+            </a>
+            <a href="/policies/terms">
+              <span>이용약관 초안</span>
+              <ChevronRight size={18} aria-hidden="true" />
+            </a>
+            <a href="/policies/privacy">
+              <span>개인정보 처리방침 초안</span>
+              <ChevronRight size={18} aria-hidden="true" />
+            </a>
+            <a href="/policies/ai">
+              <span>AI 이용 고지 초안</span>
+              <ChevronRight size={18} aria-hidden="true" />
+            </a>
+          </nav>
+          <p className="settings-policy-note">
+            정책은 검토 중인 초안이며 법률·사업자·게시 승인이 완료된 공개본이 아니에요.
+          </p>
+        </section>
+      </div>
+      <section className="settings-card settings-danger" aria-labelledby="settings-danger-title">
+        <div className="settings-section-heading">
+          <span className="settings-section-icon settings-section-icon-danger">
+            <ShieldCheck size={22} aria-hidden="true" />
+          </span>
+          <div>
+            <h2 id="settings-danger-title">계정 삭제</h2>
+            <p>중요한 정보는 미리 보관해 주세요.</p>
+          </div>
+        </div>
+        <div className="settings-danger-content">
+          <p>
+            모든 사건·자료·리포트·프로필과 로그인 정보의 삭제를 요청해요. 이미 다운로드하거나 외부에
+            전달한 파일은 BARO에서 삭제할 수 없어요.
+          </p>
+          {!ready && (
+            <div className="settings-reauth">
+              <p>
+                <AlertTriangle size={16} aria-hidden="true" /> 계정 삭제 전에 같은 계정으로 다시
+                인증해 주세요.
+              </p>
+              <div className="settings-actions">
+                {access?.providers.map((provider) => (
+                  <button
+                    key={provider}
+                    type="button"
+                    disabled={Boolean(busy) || checking}
+                    onClick={() => void reauthenticate(provider)}
+                  >
+                    {provider}로 재인증
+                  </button>
+                ))}
+              </div>
+              {access && !access.providers.length && (
+                <a className="settings-text-link" href="/login">
+                  다시 로그인 <ChevronRight size={16} aria-hidden="true" />
+                </a>
+              )}
+              {!access && !busy && (
+                <a className="settings-text-link" href="/login">
+                  로그인 상태 확인 <ChevronRight size={16} aria-hidden="true" />
+                </a>
+              )}
+            </div>
+          )}
+          {ready && (
+            <p className="settings-reauth-complete">
+              <Check size={16} aria-hidden="true" /> 계정 확인을 마쳤어요. 삭제할 내용을 한 번 더
+              확인해 주세요.
+            </p>
+          )}
+          <button
+            type="button"
+            className="danger-button"
+            disabled={Boolean(busy) || checking || !ready}
+            onClick={(event) => {
+              event.currentTarget.focus();
+              open("account");
+            }}
+          >
+            계정과 모든 사건 삭제
+          </button>
+        </div>
       </section>
       {target && (
         <ConfirmDialog

@@ -1,4 +1,4 @@
-import { ArrowRight, FolderOpen, Plus } from "lucide-react";
+import { ArrowRight, FolderOpen, MessageCircle, Plus, RotateCw } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../../client/api";
 import type { CaseView } from "../../client/api/types";
@@ -66,9 +66,12 @@ export function CaseList() {
   return (
     <section className="intake-list" aria-busy={loading}>
       <div className="intake-toolbar">
-        <span>{ready && items.length ? `${items.length}개의 사건` : "내가 정리하는 사건"}</span>
+        <span className="stories-count">
+          내가 정리하는 사건{ready && items.length > 0 && <strong>{items.length}</strong>}
+        </span>
         <div className="intake-actions">
           <Button variant="outline" disabled={loading} onClick={() => void load()}>
+            <RotateCw size={16} aria-hidden="true" />
             새로 불러오기
           </Button>
           <ButtonLink href="/cases/new">
@@ -81,7 +84,9 @@ export function CaseList() {
         <ErrorPanel error={error} retry={() => void load()} />
       ) : ready && !loading && items.length === 0 ? (
         <div className="intake-empty">
-          <FolderOpen size={48} aria-hidden="true" />
+          <span className="stories-empty-icon">
+            <FolderOpen size={32} aria-hidden="true" />
+          </span>
           <h2>아직 정리한 사건이 없어요</h2>
           <p>
             어떤 일이 있었는지 적어주세요.
@@ -99,14 +104,17 @@ export function CaseList() {
           {items.map((item) => (
             <li key={item.id}>
               <a href={caseHref(item)} className="intake-case-card">
-                <div>
-                  <span className="intake-tag">
+                <div className="stories-card-top">
+                  <span className="stories-card-icon">
+                    <MessageCircle size={23} strokeWidth={1.7} aria-hidden="true" />
+                  </span>
+                  <span className={`intake-tag stories-stage--${item.stage}`}>
                     {item.schemaVersion === "1" ? "기존 기록" : stageLabels[item.stage]}
                   </span>
-                  <span className="intake-muted">
-                    {item.subjectContext === "company" ? "기업 사건" : "개인 사건"}
-                  </span>
                 </div>
+                <span className="stories-card-context">
+                  {item.subjectContext === "company" ? "기업 사건" : "개인 사건"}
+                </span>
                 <h2>{item.title}</h2>
                 <p>{item.summary || "저장한 질문에서 이어서 정리할 수 있어요."}</p>
                 <footer>
