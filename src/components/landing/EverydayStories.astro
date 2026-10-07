@@ -1,0 +1,97 @@
+---
+// biome-ignore lint/correctness/noUnusedImports: Astro templates read these icons.
+import { ArrowRight, CalendarDays, Check, FileText, MessageCircle, Paperclip } from "lucide-react";
+import "../../styles/landing-stories.css";
+---
+
+<section id="everyday" class="everyday-stories" aria-labelledby="everyday-title">
+  <header class="everyday-heading">
+    <p class="everyday-eyebrow" data-reveal>일상의 걱정 곁에, BARO</p>
+    <h2 id="everyday-title" data-reveal>막막한 순간을,<br /><span>준비할 수 있는 순간으로.</span></h2>
+    <p class="everyday-introduction" data-reveal>집에서도, 일터에서도, 잠깐의 여유 속에서도.<br />복잡한 문제의 시작을 조금 더 쉽게 바꿔요.</p>
+  </header>
+
+  <article class="everyday-story everyday-story-home" data-scroll-scene aria-labelledby="everyday-home-title">
+    <div class="everyday-photo-stage">
+      <div class="everyday-photo-clip">
+        <div class="everyday-photo-drift" data-parallax="-90">
+          <picture class="everyday-photo" data-scale="0.14">
+            <source media="(min-width: 768px)" srcset="/landing/everyday-home.webp" />
+            <img src="/landing/everyday-home.webp" width="896" height="1120" loading="lazy" decoding="async" alt="집에서 휴대폰을 보며 자신의 상황을 정리하는 사람의 AI 제작 장면" />
+          </picture>
+        </div>
+        <span class="everyday-photo-corner" aria-hidden="true">AT HOME</span>
+      </div>
+      <div class="everyday-floating-card everyday-home-card" data-parallax="100" aria-hidden="true">
+        <div class="everyday-card-top"><span class="everyday-card-icon"><CalendarDays size={20} /></span><span>기억을, 날짜순으로</span><span class="everyday-card-example">예시</span></div>
+        <div class="everyday-mini-timeline"><span></span><div><small>계약한 날</small><strong>계약서와 함께 보관</strong></div></div>
+        <div class="everyday-mini-timeline"><span></span><div><small>이야기를 나눈 날</small><strong>대화 내용을 함께 정리</strong></div></div>
+        <div class="everyday-mini-timeline everyday-mini-timeline-next"><span></span><div><small>다음으로</small><strong>확인할 내용을 하나씩</strong></div></div>
+      </div>
+    </div>
+    <div class="everyday-story-copy">
+      <p class="everyday-story-label" data-reveal><span>01</span> 나의 집에서</p>
+      <h3 id="everyday-home-title" data-reveal>보증금 걱정에<br />마음까지<br /><em>묶이지 않도록.</em></h3>
+      <p class="everyday-story-description" data-reveal>계약은 언제 끝나는지, 어떤 이야기를 나눴는지.<br />기억과 계약서를 한곳에 모으면<br />상담에서 무엇을 확인할지 보이기 시작해요.</p>
+      <div class="everyday-takeaway" data-reveal><span class="everyday-takeaway-line"></span><p>막연한 걱정에서<br /><strong>확인할 날짜와 자료로.</strong></p></div>
+      <a class="everyday-link" href="/app" data-reveal>내 이야기 정리하기 <ArrowRight size={18} aria-hidden="true" /></a>
+    </div>
+  </article>
+
+  <article class="everyday-story everyday-story-cafe" data-scroll-scene aria-labelledby="everyday-cafe-title">
+    <div class="everyday-photo-stage">
+      <div class="everyday-photo-clip">
+        <div class="everyday-photo-drift" data-parallax="75">
+          <picture class="everyday-photo" data-scale="0.12">
+            <source media="(min-width: 768px)" srcset="/landing/everyday-cafe.webp" />
+            <img src="/landing/everyday-cafe.webp" width="896" height="1120" loading="lazy" decoding="async" alt="카페에서 휴대폰으로 메시지와 거래 자료를 살펴보는 가게 주인의 AI 제작 장면" />
+          </picture>
+        </div>
+        <span class="everyday-photo-corner" aria-hidden="true">AT MY SHOP</span>
+      </div>
+      <div class="everyday-floating-card everyday-cafe-card" data-parallax="-95" aria-hidden="true">
+        <div class="everyday-card-top"><span class="everyday-card-icon"><Paperclip size={20} /></span><span>흩어진 기록을 한곳에</span><span class="everyday-card-example">예시</span></div>
+        <div class="everyday-document-row"><span><MessageCircle size={19} /></span><div><strong>주고받은 메시지</strong><small>약속한 내용을 다시 확인해요</small></div><Check size={17} /></div>
+        <div class="everyday-document-row"><span><FileText size={19} /></span><div><strong>거래 내역과 영수증</strong><small>관련 자료를 함께 모아둬요</small></div><Check size={17} /></div>
+      </div>
+    </div>
+    <div class="everyday-story-copy">
+      <p class="everyday-story-label" data-reveal><span>02</span> 나의 가게에서</p>
+      <h3 id="everyday-cafe-title" data-reveal>신경 쓸 일은 많은데,<br />어디서부터<br /><em>시작해야 할까요.</em></h3>
+      <p class="everyday-story-description" data-reveal>정산 내역, 거래처와 나눈 대화, 남겨둔 영수증.<br />찾느라 헤매던 자료를 사건별로 모으고,<br />알고 있는 이야기부터 편하게 시작하세요.</p>
+      <div class="everyday-takeaway" data-reveal><span class="everyday-takeaway-line"></span><p>여러 곳에 흩어진 기록에서<br /><strong>한 번에 살펴볼 수 있는 이야기로.</strong></p></div>
+      <a class="everyday-link" href="/app" data-reveal>흩어진 자료 모아보기 <ArrowRight size={18} aria-hidden="true" /></a>
+    </div>
+  </article>
+
+  <article class="everyday-story everyday-story-work" data-scroll-scene aria-labelledby="everyday-work-title">
+    <div class="everyday-photo-stage">
+      <div class="everyday-photo-clip">
+        <div class="everyday-photo-drift" data-parallax="-80">
+          <picture class="everyday-photo" data-scale="0.14">
+            <source media="(min-width: 768px)" srcset="/landing/everyday-work.webp" />
+            <img src="/landing/everyday-work.webp" width="896" height="1120" loading="lazy" decoding="async" alt="카페 창가에서 휴대폰으로 직장에서 있었던 일과 상담 질문을 정리하는 직장인의 AI 제작 장면" />
+          </picture>
+        </div>
+        <span class="everyday-photo-corner" aria-hidden="true">A MOMENT FOR ME</span>
+      </div>
+      <div class="everyday-floating-card everyday-work-card" data-parallax="105" aria-hidden="true">
+        <div class="everyday-card-top"><span class="everyday-card-icon"><FileText size={20} /></span><span>다음 이야기를 위한 준비</span><span class="everyday-card-example">예시</span></div>
+        <p class="everyday-report-title">다시 처음부터<br />설명하지 않도록.</p>
+        <div class="everyday-report-item"><span>01</span> 있었던 일과 날짜 <Check size={16} /></div>
+        <div class="everyday-report-item"><span>02</span> 내가 확인한 사실 <Check size={16} /></div>
+        <div class="everyday-report-item"><span>03</span> 상담에서 물어볼 질문 <Check size={16} /></div>
+        <p class="everyday-report-note">검토한 내용으로 상담을 준비해요</p>
+      </div>
+    </div>
+    <div class="everyday-story-copy">
+      <p class="everyday-story-label" data-reveal><span>03</span> 나의 일상 속에서</p>
+      <h3 id="everyday-work-title" data-reveal>꺼내기 어려운 말도,<br />처음부터 또<br /><em>설명하지 않도록.</em></h3>
+      <p class="everyday-story-description" data-reveal>일터에서 있었던 일과 그때의 대화.<br />차분히 기록하고, 사실과 날짜를 확인하세요.<br />정리한 내용을 검토하면 상담 준비도 한결 가벼워져요.</p>
+      <div class="everyday-takeaway" data-reveal><span class="everyday-takeaway-line"></span><p>머릿속에서 맴돌던 이야기에서<br /><strong>내가 검토한 상담 준비로.</strong></p></div>
+      <a class="everyday-link" href="/app" data-reveal>나의 다음 한 걸음 준비하기 <ArrowRight size={18} aria-hidden="true" /></a>
+    </div>
+  </article>
+
+  <p class="everyday-disclosure">AI로 제작한 이용 장면 · 실제 이용 후기 아님</p>
+</section>

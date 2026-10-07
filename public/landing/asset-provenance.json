@@ -1,0 +1,190 @@
+{
+  "assets": [
+    {
+      "asset": "clarity-hero.webp",
+      "purpose": "BARO landing page desktop hero",
+      "source": "Higgsfield",
+      "model": "gpt_image_2_5",
+      "generationId": "30ac89d1-f9dc-4161-8420-d3529730b7f0",
+      "generatedOn": "2026-10-07",
+      "description": "Custom bright architectural interior with a cobalt glass arch, representing a clearer path forward. No third-party branding or stock reference assets.",
+      "optimization": "Original 1344x752 PNG converted to WebP at quality 85; mobile picture source uses an empty inline SVG."
+    },
+    {
+      "asset": "everyday-home.webp",
+      "purpose": "Illustrative everyday BARO use scene; not a testimonial",
+      "source": "Higgsfield",
+      "model": "gpt_image_2_5",
+      "generationId": "94418c9e-1fdc-48d3-ab79-53263d6ba177",
+      "generatedOn": "2026-10-07",
+      "description": "Candid documentary-style fictional adult using a phone in an ordinary lived-in setting; natural skin and lighting, not a real customer testimonial.",
+      "optimization": "896x1120 WebP at quality 84; responsive image source on mobile and desktop.",
+      "previousGenerationId": "8857b811-0d5a-443c-8c46-fe06580f0d9f"
+    },
+    {
+      "asset": "everyday-cafe.webp",
+      "purpose": "Illustrative everyday BARO use scene; not a testimonial",
+      "source": "Higgsfield",
+      "model": "gpt_image_2_5",
+      "generationId": "784b4649-4c20-4297-bf7b-652705e262c7",
+      "generatedOn": "2026-10-07",
+      "description": "Candid documentary-style fictional adult using a phone in an ordinary lived-in setting; natural skin and lighting, not a real customer testimonial.",
+      "optimization": "896x1120 WebP at quality 84; responsive image source on mobile and desktop.",
+      "previousGenerationId": "2f8559e0-140b-4804-ab82-d0e35b2e3a63"
+    },
+    {
+      "asset": "everyday-work.webp",
+      "purpose": "Illustrative everyday BARO use scene; not a testimonial",
+      "source": "Higgsfield",
+      "model": "gpt_image_2_5",
+      "generationId": "418a71ad-f81f-483a-8cb1-7dac1cb62a09",
+      "generatedOn": "2026-10-07",
+      "description": "Candid documentary-style fictional adult using a phone in an ordinary lived-in setting; natural skin and lighting, not a real customer testimonial.",
+      "optimization": "896x1120 WebP at quality 84; responsive image source on mobile and desktop.",
+      "previousGenerationId": "a73b0d5a-c602-460e-91dc-d0f5f160012a"
+    },
+    {
+      "asset": "hero-everyday.mp4",
+      "poster": "hero-poster.webp",
+      "purpose": "Decorative landing film with independent playback control",
+      "source": "Higgsfield",
+      "model": "seedance_2_5",
+      "generationId": "7db45262-f08c-4f25-8217-518de07f47cf",
+      "generatedOn": "2026-10-07",
+      "durationSeconds": 8,
+      "description": "Fictional adult using a smartphone at a sunlit dining table.",
+      "optimization": "1280x720 H.264 CRF 26, audio removed, fast-start MP4; extracted first-frame WebP poster. Video source attaches only while visible on desktop. Reduced-motion and data-saver preferences prevent autoplay."
+    },
+    {
+      "asset": "everyday-moment.mp4",
+      "poster": "benefit-poster.webp",
+      "purpose": "Decorative landing film with independent playback control",
+      "source": "Higgsfield",
+      "model": "seedance_2_5",
+      "generationId": "abcfd483-1972-4e97-a936-3dd759f23ba5",
+      "generatedOn": "2026-10-07",
+      "durationSeconds": 6,
+      "description": "Slow camera move across a phone, blue folder and notebook on a sunlit desk.",
+      "optimization": "1280x720 H.264 CRF 26, audio removed, fast-start MP4; extracted first-frame WebP poster. Video source attaches only while visible on desktop. Reduced-motion and data-saver preferences prevent autoplay."
+    },
+    {
+      "asset": "help-clarity.webp",
+      "source": "Higgsfield",
+      "model": "gpt_image_2_5",
+      "generationId": "64c98e17-0871-4121-9e09-225e43e4f31e",
+      "generatedOn": "2026-10-07",
+      "description": "Fictional adults reviewing a smartphone and household documents together. Illustrative scene, not a testimonial.",
+      "optimization": "1024x688 WebP quality84; responsive picture source on mobile and desktop."
+    },
+    {
+      "asset": "phone-journey.mp4",
+      "poster": "journey-poster.webp",
+      "source": "Higgsfield",
+      "model": "seedance_2_5",
+      "generationId": "6954821a-d469-42b6-9bec-bbb8894f2cab",
+      "generatedOn": "2026-10-07",
+      "durationSeconds": 8,
+      "description": "Fictional adult at home using a phone; camera physically approaches the phone. Landing transitions into local HTML app demonstration.",
+      "optimization": "1280x720 H.264 CRF24 with 12-frame keyframes for responsive scroll seeking, audio removed, fast-start MP4, first-frame WebP poster. No mobile or reduced-motion autoplay/download."
+    },
+    {
+      "asset": "future-home.webp",
+      "source": "Higgsfield",
+      "model": "gpt_image_2_5",
+      "generationId": "7346bb62-208c-4eb6-9a83-474cc03ac64d",
+      "generatedOn": "2026-10-07",
+      "description": "Fictional adult reviewing household documents in an ordinary Korean apartment.",
+      "optimization": "896x1120 WebP quality85; responsive image source on mobile and desktop."
+    },
+    {
+      "asset": "future-work.webp",
+      "source": "Higgsfield",
+      "model": "gpt_image_2_5",
+      "generationId": "4efe1821-ea95-4838-8b2e-155c1615c895",
+      "generatedOn": "2026-10-07",
+      "description": "Fictional Korean adult checking notes on a phone at a bus stop after work.",
+      "optimization": "896x1120 WebP quality85; responsive image source on mobile and desktop."
+    },
+    {
+      "asset": "future-cafe.webp",
+      "source": "Higgsfield",
+      "model": "gpt_image_2_5",
+      "generationId": "a0a04780-9d8c-42c3-9b6c-1b52b5fa9889",
+      "generatedOn": "2026-10-07",
+      "description": "Fictional neighborhood cafe owner reviewing receipts and a smartphone.",
+      "optimization": "896x1120 WebP quality85; responsive image source on mobile and desktop."
+    },
+    {
+      "asset": "hero-continuous.mp4",
+      "poster": "hero-continuous-poster.webp",
+      "source": "Higgsfield",
+      "model": "seedance_2_5",
+      "generationId": "5c836ee6-f4e5-4804-a8d6-bd92e57941e0",
+      "generatedOn": "2026-10-07",
+      "durationSeconds": 12,
+      "description": "Continuous locked-off documentary-style shot of a fictional adult using a phone at home; natural subtle movement, no scroll seeking.",
+      "optimization": "1600x900 H.264 CRF25, audio removed, fast-start MP4, first-frame WebP poster. Lazy responsive playback, user pause control, motion/data-saving preferences respected."
+    },
+    {
+      "asset": "future-everyday.mp4",
+      "poster": "future-everyday-poster.webp",
+      "source": "Higgsfield",
+      "model": "seedance_2_5",
+      "generationId": "31674685-2335-4605-bd95-c4e01f8acb85",
+      "generatedOn": "2026-10-07",
+      "durationSeconds": 10,
+      "description": "Fictional adults organizing household paperwork together; illustrative preparation, not a legal outcome or testimonial.",
+      "optimization": "1600x900 H.264 CRF25, audio removed, fast-start MP4, first-frame WebP poster. Lazy responsive playback, user pause control, motion/data-saving preferences respected."
+    },
+    {
+      "asset": "future-conversation.mp4",
+      "poster": "future-conversation-poster.webp",
+      "source": "Higgsfield",
+      "model": "seedance_2_5",
+      "generationId": "d25531bb-6743-4146-a3f9-f64a4769a1a8",
+      "generatedOn": "2026-10-07",
+      "durationSeconds": 10,
+      "description": "Fictional client and professional having a prepared conversation; not an actual consultation or testimonial.",
+      "optimization": "1600x900 H.264 CRF25, audio removed, fast-start MP4, first-frame WebP poster. Lazy responsive playback, user pause control, motion/data-saving preferences respected."
+    },
+    {
+      "asset": "origin-notes-original.webp",
+      "source": "User-supplied IMG_4378.jpeg",
+      "description": "Original handwritten sticky notes. Handwriting is not regenerated: this image is clipped over the background retouch in two protected paper regions.",
+      "optimization": "EXIF orientation applied, 2048px wide WebP quality95; responsive picture source on mobile and desktop."
+    },
+    {
+      "asset": "origin-notes-clean.webp",
+      "source": "Higgsfield edit of user-supplied IMG_4378.jpeg",
+      "model": "gpt_image_2_5",
+      "generationId": "a484ea07-d31f-43b5-8833-693cf33dced0",
+      "generatedOn": "2026-10-07",
+      "description": "Monitor display, desk and surroundings tidied. Original photo layers replace the handwritten note regions in the page.",
+      "optimization": "1744x2325 WebP quality90; responsive picture source on mobile and desktop."
+    },
+    {
+      "asset": "time-watch.webp",
+      "source": "Higgsfield edit of user-supplied IMG_4379.jpeg",
+      "model": "gpt_image_2_5",
+      "generationId": "1466a42a-457a-409e-9e11-83bf23dca306",
+      "generatedOn": "2026-10-07",
+      "description": "Original wristwatch with dial text and emblem removed, hands and hour markers retained; surrounding ivory surface cleaned.",
+      "optimization": "1744x2336 WebP quality90; responsive photo on mobile and desktop."
+    },
+    {
+      "asset": "ceo-suit.webp",
+      "source": "User-supplied founder portrait",
+      "description": "Original founder portrait in a suit, retained for the opening state of the greeting.",
+      "optimization": "814x964 WebP quality94; metadata removed."
+    },
+    {
+      "asset": "ceo-crenova.webp",
+      "source": "Higgsfield wardrobe edit of the user-supplied founder portrait and CRENOVA logo",
+      "model": "gpt_image_2_5",
+      "generationId": "d852b7fd-3bc0-4250-b288-1f28cbc57ee8",
+      "generatedOn": "2026-10-07",
+      "description": "Matching studio portrait wearing a black cotton T-shirt with a small CRENOVA symbol and wordmark on the wearer’s left chest. Reference identity, expression and pose preserved in the edit.",
+      "optimization": "1220px wide WebP quality93; metadata removed; lazy responsive image."
+    }
+  ]
+}

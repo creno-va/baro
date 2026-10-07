@@ -1,17 +1,118 @@
 ---
-// biome-ignore lint/correctness/noUnusedImports: Astro template reads component.
-import { CaseInput } from "../components/intake/CaseInput";
+// biome-ignore lint/correctness/noUnusedImports: Astro template reads icons.
+import {
+  ArrowRight,
+  CheckCheck,
+  ChevronDown,
+  FolderOpen,
+  LockKeyhole,
+  MessageCircle,
+  Search,
+} from "lucide-react";
+// biome-ignore lint/correctness/noUnusedImports: Astro renders the landing components.
+import BlueAppReveal from "../components/landing/BlueAppReveal.astro";
+// biome-ignore lint/correctness/noUnusedImports: Astro renders the founder's greeting.
+import CeoGreeting from "../components/landing/CeoGreeting.astro";
+// biome-ignore lint/correctness/noUnusedImports: Astro renders experiential sections.
+import DemoLab from "../components/landing/DemoLab.astro";
+// biome-ignore lint/correctness/noUnusedImports: Astro renders the closing films.
+import EverydayFuture from "../components/landing/EverydayFuture.astro";
+// biome-ignore lint/correctness/noUnusedImports: Astro renders the landing components.
+import EverydayStories from "../components/landing/EverydayStories.astro";
+// biome-ignore lint/correctness/noUnusedImports: Astro renders the final experience.
+import FinalExperience from "../components/landing/FinalExperience.astro";
+// biome-ignore lint/correctness/noUnusedImports: Astro renders the landing components.
+import HeroFilm from "../components/landing/HeroFilm.astro";
+// biome-ignore lint/correctness/noUnusedImports: Astro renders the public navigation.
+import LandingNavigation from "../components/landing/LandingNavigation.astro";
+// biome-ignore lint/correctness/noUnusedImports: Astro renders experiential sections.
+import LogoExperience from "../components/landing/LogoExperience.astro";
+// biome-ignore lint/correctness/noUnusedImports: Astro renders the original-note experience.
+import OriginExperience from "../components/landing/OriginExperience.astro";
+// biome-ignore lint/correctness/noUnusedImports: Astro renders experiential sections.
+import PainToClarity from "../components/landing/PainToClarity.astro";
+// biome-ignore lint/correctness/noUnusedImports: Astro renders the landing components.
+import PhoneStory from "../components/landing/PhoneStory.astro";
+// biome-ignore lint/correctness/noUnusedImports: Astro renders the time experience.
+import TimeExperience from "../components/landing/TimeExperience.astro";
+// biome-ignore lint/correctness/noUnusedImports: Astro template reads Brand.
+import { Brand } from "../components/ui/brand";
 // biome-ignore lint/correctness/noUnusedImports: Astro template reads layout.
-import AppLayout from "../layouts/AppLayout.astro";
-import "../styles/intake.css";
+import BaseLayout from "../layouts/BaseLayout.astro";
+import "../styles/landing.css";
+import "../styles/landing-film.css";
+import "../styles/landing-refinement.css";
 ---
 
-<AppLayout
-  title="BARO — 복잡한 일도, 하나씩"
-  description="어떤 일이 있었는지 편하게 들려주세요. BARO가 상황에 맞는 질문과 대화로 사건 정리를 도와드려요."
-  role="visitor"
-  availableRoutes={["/", "/cases", "/cases/new", "/lawyers", "/settings"]}
-  contentClass="conversation-main"
->
-  <CaseInput client:load />
-</AppLayout>
+<BaseLayout startAtTop title="BARO — 막막한 법률 문제, 정리부터 가볍게" description="어떤 일이 있었는지 편하게 들려주세요. BARO와 대화하며 사실과 자료를 정리하고, 변호사 상담을 차분하게 준비하세요.">
+  <div class="landing">
+    <LandingNavigation />
+
+    <main id="main-content" tabindex="-1" class="landing-main">
+      <HeroFilm />
+
+      <section id="how-it-works" class="landing-intro landing-section" data-scroll-scene data-intro-scene aria-labelledby="intro-title">
+        <p class="landing-eyebrow" data-reveal>어려운 말보다, 당신의 이야기부터</p>
+        <h2 id="intro-title"><span data-ink-line>무슨 말을 해야 할지.</span><br /><span data-ink-line>무엇부터 준비해야 할지.</span><br /><span data-ink-line>그 막막함을 잘 아니까.</span></h2>
+        <p class="landing-body" data-reveal>법률 용어를 몰라도, 모든 자료가 없어도 괜찮아요.<br class="desktop-break" /> BARO는 지금 알고 있는 이야기에서 시작해<br class="desktop-break" /> 복잡한 상황을 하나씩 풀어 정리해요.</p>
+        <div class="landing-journey" aria-label="BARO 이용 순서" data-reveal>
+          <span><MessageCircle size={20} aria-hidden="true" /> 편하게 이야기하고</span><ArrowRight size={16} aria-hidden="true" /><span><FolderOpen size={20} aria-hidden="true" /> 차근차근 정리하고</span><ArrowRight size={16} aria-hidden="true" /><span><CheckCheck size={20} aria-hidden="true" /> 다음을 준비해요</span>
+        </div>
+      </section>
+
+      <OriginExperience />
+
+      <BlueAppReveal />
+
+      <LogoExperience />
+
+      <DemoLab />
+
+      <PainToClarity />
+
+
+      <PhoneStory />
+
+      <TimeExperience imageSrc="/landing/time-watch.webp" imageFocusX={42} imageFocusY={48} />
+
+      <EverydayStories />
+
+      <section class="landing-lawyers landing-section" aria-labelledby="lawyers-title">
+        <div class="landing-lawyers-inner">
+          <div data-reveal><p class="landing-kicker">04 &nbsp; 선택은 내 기준으로</p><h2 id="lawyers-title">이제, 전문가와<br />이야기할 준비.</h2><p class="landing-body">지역과 분야로 공개된 프로필을 살펴보고,<br />필요한 변호사에게 직접 연락하세요.<br />누구와 이야기할지는 언제나 나의 선택이에요.</p><a class="landing-text-link" href="/lawyers">변호사 살펴보기 <ArrowRight size={19} aria-hidden="true" /></a></div>
+          <div class="landing-directory-preview" data-reveal><div class="landing-search-illustration"><Search size={22} aria-hidden="true" /><span>어떤 분야의 도움이 필요하세요?</span></div><div class="landing-category-list"><span>대여금</span><span>임대차</span><span>근로</span><span>손해배상</span><span>가사</span><span>그 밖의 문제</span></div><div class="landing-directory-foot"><span>분야 확인</span><ArrowRight size={17} aria-hidden="true" /><span>프로필 탐색</span><ArrowRight size={17} aria-hidden="true" /><strong>직접 연락</strong></div></div>
+        </div>
+      </section>
+
+      <section id="principles" class="landing-principles landing-section" aria-labelledby="principles-title">
+        <div data-reveal><p class="landing-kicker">당신의 이야기를 대하는 기준</p><h2 id="principles-title">도움은 가까이.<br /><span>결정은 당신에게.</span></h2></div>
+        <div class="landing-principle-grid">
+          <article data-reveal><span class="landing-principle-icon"><MessageCircle size={27} aria-hidden="true" /></span><h3>사실과 추정을 구분해요</h3><p>알려주신 이야기와 AI가 정리한 내용,<br class="desktop-break" /> 아직 확인이 필요한 내용을 구분해요.</p></article>
+          <article data-reveal><span class="landing-principle-icon"><Search size={27} aria-hidden="true" /></span><h3>확인할 근거를 함께 봐요</h3><p>법률 정보는 공식 출처로 확인하고,<br class="desktop-break" /> 중요한 내용은 원문을 다시 살펴봐요.</p></article>
+          <article data-reveal><span class="landing-principle-icon"><LockKeyhole size={27} aria-hidden="true" /></span><h3>판단을 대신하지 않아요</h3><p>BARO는 사실 정리와 상담 준비를 도와요.<br class="desktop-break" /> 법률 판단과 중요한 결정은 전문가와 함께해요.</p></article>
+        </div>
+      </section>
+
+      <CeoGreeting />
+
+      <EverydayFuture />
+
+      <section id="faq" class="landing-faq landing-section" aria-labelledby="faq-title">
+        <h2 id="faq-title" data-reveal>시작하기 전에<br />궁금할 수 있는 것들.</h2>
+        <div class="landing-faq-list">
+          <details><summary>어떤 이야기부터 시작하면 되나요?<ChevronDown size={20} aria-hidden="true" /></summary><p>지금 가장 신경 쓰이는 일을 편하게 적어주세요. 날짜나 금액이 정확하지 않아도 괜찮아요. BARO가 상황에 맞춰 질문하고, 모르는 내용은 건너뛰거나 나중에 이어서 정리할 수 있어요.</p></details>
+          <details><summary>BARO가 법률 상담을 해주나요?<ChevronDown size={20} aria-hidden="true" /></summary><p>BARO는 AI와의 대화로 사실관계와 자료를 정리하고 상담 준비를 돕는 서비스예요. 법률 자문이나 사건 결과를 보장하지 않아요. 법률 판단, 대응 방향과 중요한 기한은 자격 있는 전문가에게 확인해 주세요.</p></details>
+          <details><summary>자료가 아직 없어도 이용할 수 있나요?<ChevronDown size={20} aria-hidden="true" /></summary><p>알고 있는 이야기만으로 시작할 수 있어요. 가진 자료와 추가로 확인할 내용을 나누어 정리하고, 문서나 사진 같은 자료는 준비되는 대로 사건에 더할 수 있어요.</p></details>
+          <details><summary>정리한 내용이 변호사에게 자동으로 전달되나요?<ChevronDown size={20} aria-hidden="true" /></summary><p>자동으로 전달되지 않아요. 리포트 내용을 직접 검토한 뒤 공유할 자료를 선택하고, 원하는 변호사에게 직접 연락해 전달하는 방식이에요.</p></details>
+        </div>
+      </section>
+
+      <FinalExperience />
+    </main>
+
+    <footer class="landing-footer"><div class="landing-footer-inner"><div class="landing-footer-top"><Brand /><nav aria-label="하단 메뉴"><a href="/lawyers">변호사 찾기</a><a href="/policies/terms">이용약관 초안</a><a href="/policies/privacy">개인정보 처리방침 초안</a><a href="/policies/ai">AI 이용 안내 초안</a></nav></div><div class="landing-footer-bottom"><span>© BARO. 복잡한 일도, 하나씩.</span><span>Made for your next step.</span></div></div></footer>
+  </div>
+</BaseLayout>
+<script>
+  import "../client/landing";
+</script>

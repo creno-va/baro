@@ -28,7 +28,7 @@ async function openInteractiveFixture(
   await page.locator("astro-island[ssr]").waitFor({ state: "detached" });
 }
 
-test("current landing, login and case screens share local brand and remain usable at 320px", async ({
+test("application, login and case screens share local brand and remain usable at 320px", async ({
   page,
 }) => {
   await page.route("**/api/me/session", (route) =>
@@ -48,7 +48,7 @@ test("current landing, login and case screens share local brand and remain usabl
   await page.route("**/api/me/consent", (route) =>
     route.fulfill({ json: { needsConsent: false } }),
   );
-  await page.goto("/");
+  await page.goto("/app");
   await expect(page.getByRole("heading", { name: "어떤 일이 있었나요?" })).toBeVisible();
   await expect(page.locator("astro-island[ssr]")).toHaveCount(0);
   await page.screenshot({ path: ".wrangler/home-desktop.png", fullPage: true });
@@ -56,7 +56,7 @@ test("current landing, login and case screens share local brand and remain usabl
   await expect(page.getByRole("button", { name: "Google로 계속하기" })).toBeVisible();
   await page.screenshot({ path: ".wrangler/login-desktop.png", fullPage: true });
   await page.setViewportSize({ width: 320, height: 760 });
-  for (const path of ["/login", "/cases", "/cases/new"]) {
+  for (const path of ["/app", "/login", "/cases", "/cases/new"]) {
     await page.goto(path);
     await expect(page.locator("astro-island[ssr]")).toHaveCount(0);
     await expect(page.locator(".brand img").first()).toHaveAttribute("src", "/brand/logo.svg");

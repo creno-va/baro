@@ -5,15 +5,20 @@ import "../styles/shell.css";
 interface Props {
   title: string;
   description: string;
+  startAtTop?: boolean;
 }
 
 // biome-ignore lint/correctness/noUnusedVariables: Astro resolves frontmatter variables in the template.
-const { title, description } = Astro.props;
+const { title, description, startAtTop = false } = Astro.props;
 Astro.response.headers.set("Cache-Control", "private, no-store, no-transform");
 const validationBootstrap = "Object.assign(globalThis, { __zod_globalConfig: { jitless: true } });";
+// Clear a saved chapter before fragment restoration; later in-page links stay native.
+const landingEntryBootstrap = `history.scrollRestoration="manual";if(location.hash)history.replaceState(history.state,"",location.pathname+location.search);window.addEventListener("pageshow",()=>window.scrollTo({top:0,left:0,behavior:"instant"}));`;
+// Register one exact bootstrap before the streamed response commits its CSP header.
+const pageBootstrap = validationBootstrap + (startAtTop ? landingEntryBootstrap : "");
 const bootstrapDigest = await crypto.subtle.digest(
   "SHA-256",
-  new TextEncoder().encode(validationBootstrap),
+  new TextEncoder().encode(pageBootstrap),
 );
 Astro.csp?.insertScriptHash(
   `sha256-${btoa(String.fromCharCode(...new Uint8Array(bootstrapDigest)))}`,
@@ -25,7 +30,7 @@ Astro.csp?.insertScriptHash(
   <head>
     <meta charset="UTF-8" />
     <!-- Configure validation before island modules construct schemas under the hash CSP. -->
-    <script is:inline set:html={validationBootstrap} />
+    <script is:inline set:html={pageBootstrap} />
     <meta name="viewport" content="width=device-width" />
     <meta name="description" content={description} />
     <link rel="icon" type="image/svg+xml" href="/brand/logo.svg" />

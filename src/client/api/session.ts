@@ -3,7 +3,13 @@ import { authClient } from "../auth";
 import { ApiError, apiMode, request } from "./core";
 import type { AccountType, Provider, SessionView } from "./types";
 export const roleStart = (session: SessionView) =>
-  session.needsConsent ? "/consent" : session.user?.accountType === "lawyer" ? "/lawyer" : "/";
+  !session.user
+    ? "/login"
+    : session.needsConsent
+      ? "/consent"
+      : session.user.accountType === "lawyer"
+        ? "/lawyer"
+        : "/app";
 /** Non-sensitive invalidation only; never share a session, role or token across tabs. */
 export function notifySessionChanged() {
   try {

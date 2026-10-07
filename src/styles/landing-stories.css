@@ -1,0 +1,567 @@
+.everyday-stories {
+  padding: 150px 0 72px;
+  background: #fff;
+  color: #191f28;
+}
+.everyday-heading {
+  max-width: 1200px;
+  margin: 0 auto 120px;
+  padding: 0 40px;
+  text-align: center;
+}
+.everyday-eyebrow {
+  margin: 0 0 25px;
+  color: #2364e8;
+  font-size: 17px;
+  font-weight: 650;
+  letter-spacing: -0.025em;
+}
+.landing .everyday-heading h2 {
+  margin-bottom: 28px;
+  font-size: clamp(40px, 4.8vw, 68px);
+  line-height: 1.28;
+  letter-spacing: -0.065em;
+}
+.everyday-introduction {
+  margin: 0;
+  color: #657081;
+  font-size: 20px;
+  line-height: 1.8;
+  letter-spacing: -0.025em;
+}
+.everyday-story {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  align-items: center;
+  gap: clamp(48px, 6.4vw, 106px);
+  max-width: 1440px;
+  padding: 0 70px 0 0;
+  margin: 0 auto 185px;
+}
+.everyday-story-cafe {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  padding: 0 0 0 100px;
+}
+:where(.everyday-story-cafe) .everyday-photo-stage {
+  grid-column: 2;
+  grid-row: 1;
+}
+:where(.everyday-story-cafe) .everyday-story-copy {
+  grid-column: 1;
+  grid-row: 1;
+}
+.everyday-story-work {
+  margin-bottom: 95px;
+}
+.everyday-photo-stage {
+  position: relative;
+  min-width: 0;
+  height: 720px;
+}
+.everyday-photo-clip {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: 0 28px 28px 0;
+  background: #e5eceb;
+  isolation: isolate;
+}
+.everyday-photo-clip::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgb(18 30 37 / 22%), transparent 25%);
+  pointer-events: none;
+}
+.everyday-story-cafe .everyday-photo-clip {
+  border-radius: 28px 0 0 28px;
+  background: #e9e4dd;
+}
+.everyday-story-work .everyday-photo-clip {
+  background: #dce7e5;
+}
+.everyday-photo-drift {
+  position: absolute;
+  inset: -105px -25px;
+}
+.everyday-photo,
+.everyday-photo img {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.everyday-photo img {
+  object-fit: cover;
+  object-position: center;
+}
+.everyday-photo-corner {
+  position: absolute;
+  z-index: 1;
+  top: 30px;
+  left: 34px;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.18em;
+}
+.everyday-story-copy {
+  position: relative;
+  padding: 40px 0;
+}
+.everyday-story-label {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  margin: 0 0 24px;
+  color: #4b586c;
+  font-size: 15px;
+  font-weight: 650;
+}
+.everyday-story-label > span {
+  color: #657081;
+  font-size: 13px;
+  letter-spacing: 0.05em;
+}
+.landing .everyday-story-copy h3 {
+  margin: 0 0 28px;
+  color: #191f28;
+  font-size: clamp(36px, 3.5vw, 50px);
+  line-height: 1.35;
+  letter-spacing: -0.055em;
+  font-weight: 750;
+}
+.everyday-story-copy h3 em {
+  color: #2364e8;
+  font-style: normal;
+}
+.everyday-story-description {
+  margin: 0 0 28px;
+  color: #657081;
+  font-size: 17px;
+  line-height: 1.85;
+  letter-spacing: -0.025em;
+}
+.everyday-takeaway {
+  display: flex;
+  align-items: stretch;
+  gap: 16px;
+  margin: 32px 0;
+}
+.everyday-takeaway-line {
+  flex: 0 0 3px;
+  border-radius: 3px;
+  background: #4d82e8;
+}
+.everyday-takeaway p {
+  margin: 0;
+  color: #657081;
+  font-size: 15px;
+  line-height: 1.8;
+  letter-spacing: -0.025em;
+}
+.everyday-takeaway strong {
+  color: #35465f;
+  font-weight: 650;
+}
+.everyday-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  color: #2364e8;
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: -0.025em;
+}
+.everyday-link svg {
+  transition: transform 200ms ease;
+}
+.everyday-link:where(:hover) svg {
+  transform: translateX(5px);
+}
+.everyday-link:focus-visible {
+  outline: 3px solid #9ab9fa;
+  outline-offset: 6px;
+  border-radius: 3px;
+}
+.everyday-floating-card {
+  position: absolute;
+  z-index: 2;
+  width: 296px;
+  padding: 23px;
+  border: 1px solid rgb(255 255 255 / 85%);
+  border-radius: 20px;
+  background: rgb(255 255 255 / 96%);
+  box-shadow:
+    0 18px 55px rgb(16 31 52 / 13%),
+    0 2px 8px rgb(16 31 52 / 3%);
+}
+.everyday-home-card {
+  right: -37px;
+  bottom: 34px;
+}
+.everyday-cafe-card {
+  left: -42px;
+  bottom: -35px;
+  width: 314px;
+}
+.everyday-work-card {
+  right: -40px;
+  bottom: -8px;
+}
+.everyday-card-top {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 21px;
+  color: #35445b;
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: -0.035em;
+}
+.everyday-card-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 33px;
+  height: 33px;
+  border-radius: 10px;
+  background: #ecf3ff;
+  color: #2364e8;
+}
+.everyday-card-top .everyday-card-example {
+  margin-left: auto;
+  color: #657081;
+  font-size: 10px;
+  font-weight: 500;
+}
+.everyday-mini-timeline {
+  position: relative;
+  display: flex;
+  gap: 12px;
+  padding-bottom: 20px;
+}
+.everyday-mini-timeline::before {
+  content: "";
+  position: absolute;
+  top: 12px;
+  bottom: 0;
+  left: 4px;
+  width: 1px;
+  background: #d7e4fa;
+}
+.everyday-mini-timeline > span {
+  flex: 0 0 9px;
+  height: 9px;
+  margin-top: 4px;
+  border-radius: 50%;
+  background: #78a4ed;
+}
+.everyday-mini-timeline small,
+.everyday-mini-timeline strong {
+  display: block;
+}
+.everyday-mini-timeline small {
+  margin-bottom: 3px;
+  color: #596e8a;
+  font-size: 10px;
+}
+.everyday-mini-timeline strong {
+  color: #3e4b5f;
+  font-size: 12px;
+  font-weight: 600;
+}
+.everyday-mini-timeline-next {
+  padding-bottom: 0;
+}
+.everyday-mini-timeline-next::before {
+  display: none;
+}
+.everyday-mini-timeline-next > span {
+  border: 2px solid #86acec;
+  background: #fff;
+}
+.everyday-document-row {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 15px 0;
+  border-top: 1px solid #eaf0f6;
+}
+.everyday-document-row > span {
+  display: grid;
+  place-items: center;
+  flex: 0 0 35px;
+  height: 39px;
+  border-radius: 8px;
+  background: #f4f7fa;
+  color: #8d9cad;
+}
+.everyday-document-row strong,
+.everyday-document-row small {
+  display: block;
+}
+.everyday-document-row strong {
+  color: #3e4b5f;
+  font-size: 12px;
+  font-weight: 650;
+}
+.everyday-document-row small {
+  margin-top: 4px;
+  color: #596e8a;
+  font-size: 10px;
+}
+.everyday-document-row > svg {
+  margin-left: auto;
+  color: #4589dd;
+}
+.everyday-report-title {
+  margin: 0 0 20px;
+  color: #35445b;
+  font-size: 24px;
+  line-height: 1.45;
+  font-weight: 700;
+  letter-spacing: -0.055em;
+}
+.everyday-report-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 0;
+  border-top: 1px solid #eaf0f6;
+  color: #536178;
+  font-size: 11px;
+  font-weight: 550;
+}
+.everyday-report-item > span {
+  color: #596e8a;
+  font-size: 9px;
+}
+.everyday-report-item > svg {
+  margin-left: auto;
+  color: #558ce5;
+}
+.everyday-report-note {
+  margin: 12px 0 0;
+  padding: 10px 0;
+  border-radius: 8px;
+  background: #f1f6fd;
+  color: #526c8e;
+  text-align: center;
+  font-size: 10px;
+}
+.everyday-disclosure {
+  margin: 0;
+  padding: 0 24px;
+  color: #657081;
+  text-align: center;
+  font-size: 12px;
+  line-height: 1.7;
+}
+@media (min-width: 1441px) {
+  .everyday-story {
+    padding-left: 40px;
+  }
+  .everyday-story-cafe {
+    padding-right: 40px;
+    padding-left: 100px;
+  }
+  .everyday-photo-clip,
+  .everyday-story-cafe .everyday-photo-clip {
+    border-radius: 28px;
+  }
+}
+@media (max-width: 1100px) and (min-width: 768px) {
+  .everyday-story {
+    gap: 54px;
+    padding-right: 32px;
+    margin-bottom: 130px;
+  }
+  .everyday-story-cafe {
+    padding-right: 0;
+    padding-left: 32px;
+  }
+  .everyday-photo-stage {
+    height: 640px;
+  }
+  .landing .everyday-story-copy h3 {
+    font-size: 36px;
+  }
+  .everyday-story-description {
+    font-size: 15px;
+  }
+  .everyday-story-description br {
+    display: none;
+  }
+  .everyday-floating-card {
+    width: 250px;
+    padding: 19px;
+  }
+  .everyday-cafe-card {
+    width: 270px;
+  }
+  .everyday-card-top {
+    font-size: 11px;
+  }
+  .everyday-takeaway p,
+  .everyday-link {
+    font-size: 14px;
+  }
+}
+@media (max-width: 767px) {
+  .everyday-stories {
+    padding: 100px 24px 70px;
+    background: #f6f8fb;
+  }
+  .everyday-heading {
+    margin-bottom: 65px;
+    padding: 0;
+    text-align: left;
+  }
+  .everyday-eyebrow {
+    margin-bottom: 20px;
+    font-size: 14px;
+  }
+  .landing .everyday-heading h2 {
+    margin-bottom: 22px;
+    font-size: clamp(32px, 6.8vw, 44px);
+    line-height: 1.4;
+    letter-spacing: -0.06em;
+  }
+  .everyday-introduction {
+    font-size: 16px;
+    line-height: 1.8;
+  }
+  .everyday-story,
+  .everyday-story-cafe,
+  .everyday-story-work {
+    display: block;
+    max-width: 560px;
+    margin: 0 auto 48px;
+    padding: 0;
+  }
+  .everyday-photo-stage {
+    display: none;
+  }
+  .everyday-story-copy {
+    padding: 36px 0 0;
+    border-top: 1px solid #dfe5ee;
+  }
+  .everyday-story-label {
+    margin-bottom: 19px;
+    font-size: 14px;
+  }
+  .everyday-story-label > span {
+    color: #426998;
+  }
+  .landing .everyday-story-copy h3 {
+    margin-bottom: 22px;
+    font-size: clamp(30px, 6.3vw, 39px);
+    line-height: 1.4;
+    letter-spacing: -0.05em;
+  }
+  .everyday-story-description {
+    max-width: 420px;
+    margin-bottom: 22px;
+    font-size: 16px;
+    line-height: 1.85;
+  }
+  .everyday-story-description br {
+    display: none;
+  }
+  .everyday-takeaway {
+    margin: 26px 0 19px;
+  }
+  .everyday-takeaway p,
+  .everyday-link {
+    font-size: 14px;
+  }
+  .everyday-disclosure {
+    display: none;
+  }
+}
+
+@media (max-width: 767px) {
+  .everyday-stories {
+    overflow: clip;
+  }
+  .everyday-story {
+    margin-bottom: 72px;
+  }
+  .everyday-photo-stage {
+    display: block;
+    height: clamp(350px, 110vw, 540px);
+    margin-bottom: 25px;
+  }
+  .everyday-photo-clip,
+  .everyday-story-cafe .everyday-photo-clip {
+    border-radius: 22px;
+  }
+  .everyday-photo-drift {
+    inset: -55px -12px;
+  }
+  .everyday-photo-corner {
+    top: 20px;
+    left: 20px;
+    font-size: 8px;
+  }
+  .everyday-floating-card {
+    right: 9px;
+    left: auto;
+    width: min(245px, 86%);
+    padding: 15px;
+    bottom: 17px;
+    top: auto;
+    border-radius: 18px;
+  }
+  .everyday-cafe-card,
+  .everyday-work-card {
+    right: 9px;
+    left: auto;
+    top: auto;
+    bottom: 17px;
+  }
+  .everyday-card-top {
+    font-size: 10px;
+    gap: 7px;
+    margin-bottom: 12px;
+  }
+  .everyday-card-icon {
+    width: 28px;
+    height: 28px;
+  }
+  .everyday-mini-timeline {
+    padding-bottom: 12px;
+  }
+  .everyday-report-title {
+    font-size: 20px;
+  }
+  .everyday-report-item {
+    padding: 8px 0;
+    font-size: 10px;
+  }
+  .everyday-document-row {
+    gap: 8px;
+    padding: 10px 0;
+  }
+  .everyday-document-row strong {
+    font-size: 10px;
+  }
+  .everyday-story-copy {
+    padding-top: 12px;
+    border-top: 0;
+  }
+  .everyday-disclosure {
+    display: block;
+    font-size: 9px;
+    line-height: 1.6;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .everyday-link svg {
+    transition: none;
+  }
+  .everyday-link:where(:hover) svg {
+    transform: none;
+  }
+}

@@ -9,6 +9,13 @@ if (process.env.CLOUDFLARE_ENV === "production" && process.env.PUBLIC_API_MODE =
   throw new Error("Production builds cannot use API mock responses.");
 }
 
+if (
+  ["preview", "production"].includes(process.env.CLOUDFLARE_ENV ?? "") &&
+  process.env.BARO_UI_TEST_FIXTURE === "true"
+) {
+  throw new Error("Deployment builds cannot enable synthetic UI fixtures.");
+}
+
 let buildArtifactDirectory: URL | undefined;
 
 export default defineConfig({
@@ -78,6 +85,11 @@ export default defineConfig({
     },
   },
   vite: {
+    define: {
+      // Synthetic browser tests intercept the API after SSR; real deployments
+      // always enforce the server session before rendering the application.
+      "import.meta.env.BARO_UI_TEST_FIXTURE": process.env.BARO_UI_TEST_FIXTURE === "true",
+    },
     plugins: [tailwindcss()],
   },
 });

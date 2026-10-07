@@ -1,0 +1,82 @@
+---
+// biome-ignore lint/correctness/noUnusedImports: Astro templates read the icons.
+import { ArrowRight, Pause, Play } from "lucide-react";
+import "../../styles/landing-future.css";
+---
+
+<section id="everyday-future" class="everyday-future" data-everyday-future aria-labelledby="future-title">
+  <div class="future-introduction">
+    <p class="future-eyebrow" data-future-reveal>FOR THE LIFE THAT GOES ON</p>
+    <h2 id="future-title" data-future-reveal>걱정이 생긴 순간에도,<br /><span class="future-intro-emphasis">우리의 일상은 계속되니까.</span></h2>
+    <p class="future-introduction-body" data-future-reveal>돌려받을 보증금부터 일터에서 있었던 일까지.<br />법률 문제는 멀리 있는 이야기가 아니에요.<br />BARO는 그 이야기를 꺼내는 순간부터 함께해요.</p>
+  </div>
+
+  <div class="future-collage" data-future-scene>
+    <figure class="future-photo future-photo-home" data-future-layer data-future-y="-85" data-future-x="-12" data-future-scale="0.07">
+      <div class="future-photo-window" data-future-reveal><picture><source media="(min-width: 768px)" srcset="/landing/future-home.webp" /><img src="/landing/future-home.webp" width="896" height="1120" loading="lazy" decoding="async" alt="집에서 휴대폰과 서류를 보며 상황을 정리하는 한국 성인의 AI 제작 장면" /></picture><span class="future-photo-index" aria-hidden="true">01 / HOME</span></div>
+      <figcaption><span>나의 집에서</span><p>혼자 생각하던 걱정을<br /><strong>말로 꺼내는 시작.</strong></p></figcaption>
+    </figure>
+    <figure class="future-photo future-photo-work" data-future-layer data-future-y="35" data-future-scale="0.09">
+      <div class="future-photo-window" data-future-reveal><picture><source media="(min-width: 768px)" srcset="/landing/future-work.webp" /><img src="/landing/future-work.webp" width="896" height="1120" loading="lazy" decoding="async" alt="퇴근길 버스 정류장에서 휴대폰으로 필요한 기록을 확인하는 한국 성인의 AI 제작 장면" /></picture><span class="future-photo-index" aria-hidden="true">02 / WORK</span></div>
+      <figcaption><span>일터에서 돌아오는 길</span><p>기억과 기록을 모아<br /><strong>확인할 수 있는 이야기로.</strong></p></figcaption>
+    </figure>
+    <figure class="future-photo future-photo-cafe" data-future-layer data-future-y="-130" data-future-x="14" data-future-scale="0.06">
+      <div class="future-photo-window" data-future-reveal><picture><source media="(min-width: 768px)" srcset="/landing/future-cafe.webp" /><img src="/landing/future-cafe.webp" width="896" height="1120" loading="lazy" decoding="async" alt="카페에서 영수증과 휴대폰을 함께 확인하는 한국 성인의 AI 제작 장면" /></picture><span class="future-photo-index" aria-hidden="true">03 / A MOMENT</span></div>
+      <figcaption><span>나의 가게에서</span><p>떠오른 질문을 남겨<br /><strong>다음 대화를 준비해요.</strong></p></figcaption>
+    </figure>
+  </div>
+
+  <div class="future-films">
+    <article class="future-film-story future-film-everyday" aria-labelledby="future-everyday-title" data-future-scene>
+      <div class="future-film-shell" data-film-container>
+        <div class="future-film-media" data-future-layer data-future-y="-32" data-future-scale="0.1" aria-hidden="true">
+          <picture><source media="(min-width: 768px)" srcset="/landing/future-everyday-poster.webp" /><img src="/landing/future-everyday-poster.webp" width="1280" height="720" loading="lazy" decoding="async" alt="" /></picture>
+          <video class="future-video" data-film="future-everyday" data-film-name="일상 정리" data-video-src="/landing/future-everyday.mp4" muted loop playsinline preload="none" disablepictureinpicture aria-hidden="true"></video>
+        </div>
+        <div class="future-film-shade" aria-hidden="true"></div>
+        <div class="future-film-copy" data-future-reveal>
+          <span class="future-film-overline">ONE LESS THING TO HOLD IN YOUR HEAD</span>
+          <h3 id="future-everyday-title">머릿속에만 있던 이야기는<br />BARO에 남겨두고.</h3>
+          <p>사실과 날짜, 다음에 확인할 내용을 정리해요.<br />다시 시작할 때도, 처음부터 설명하지 않도록.</p>
+          <span class="future-film-caption">정리한 이야기는, 필요할 때 다시 이어서.</span>
+        </div>
+        <button type="button" class="future-video-toggle" data-film-toggle="future-everyday" aria-label="일상으로 이어지는 영상 재생" hidden><Pause size={15} className="future-icon-pause" aria-hidden="true" /><Play size={15} className="future-icon-play" aria-hidden="true" /><span data-film-label>영상 재생</span></button>
+        <span class="future-film-ai">AI로 제작한 일상 장면</span>
+      </div>
+    </article>
+
+    <article class="future-film-story future-film-conversation" aria-labelledby="future-conversation-title" data-future-scene>
+      <div class="future-conversation-copy" data-future-reveal>
+        <p class="future-eyebrow">A BETTER PREPARED CONVERSATION</p>
+        <h3 id="future-conversation-title">중요한 대화 앞에서,<br /><span>내 이야기를<br />더 분명하게.</span></h3>
+        <p>알고 있는 사실은 확인하고,<br />모르는 내용은 질문으로 남겨요.<br />내가 검토한 정리와 선택한 자료로<br />전문가와의 대화를 준비할 수 있어요.</p>
+        <div class="future-conversation-steps" aria-label="상담 준비의 세 가지 기준"><span><b>01</b> 사실은 직접 확인하고</span><span><b>02</b> 물어볼 질문을 준비하고</span><span><b>03</b> 공유할 자료는 내가 선택해요</span></div>
+      </div>
+      <div class="future-conversation-film" data-film-container>
+        <div class="future-film-media" data-future-layer data-future-y="12" data-future-scale="0.025" aria-hidden="true">
+          <picture><source media="(min-width: 768px)" srcset="/landing/future-conversation-poster.webp" /><img src="/landing/future-conversation-poster.webp" width="1280" height="720" loading="lazy" decoding="async" alt="" /></picture>
+          <video class="future-video" data-film="future-conversation" data-film-name="준비된 대화" data-video-src="/landing/future-conversation.mp4" muted loop playsinline preload="none" disablepictureinpicture aria-hidden="true"></video>
+        </div>
+        <div class="future-conversation-shade" aria-hidden="true"></div>
+        <span class="future-conversation-film-label">이야기가 준비된, 다음의 순간.</span>
+        <button type="button" class="future-video-toggle" data-film-toggle="future-conversation" aria-label="준비된 대화 영상 재생" hidden><Pause size={15} className="future-icon-pause" aria-hidden="true" /><Play size={15} className="future-icon-play" aria-hidden="true" /><span data-film-label>영상 재생</span></button>
+        <span class="future-film-ai">AI 제작 장면 · 실제 상담 사례 아님</span>
+      </div>
+    </article>
+  </div>
+
+  <div class="future-vision" data-future-vision aria-labelledby="future-vision-title">
+    <div class="future-vision-inner">
+      <img class="future-vision-mark" src="/brand/logo.svg" alt="" width="52" height="52" />
+      <p class="future-eyebrow" data-future-reveal>우리가 만들어가고 싶은 변화</p>
+      <h2 id="future-vision-title"><span data-future-ink>대한민국의</span><span data-future-ink>법률 경험이,</span><span data-future-ink>일상 가까이.</span></h2>
+      <p class="future-vision-body" data-future-reveal>법률 용어를 아는 사람만 시작할 수 있는 일이 아니도록.<br />누구나 자신의 상황을 이해하고,<br />필요한 도움을 준비할 수 있는 일상을 만들고 싶어요.</p>
+      <div class="future-vision-actions" data-future-reveal><a class="future-cta" href="/app">내 이야기로 시작하기 <ArrowRight size={19} aria-hidden="true" /></a><a class="future-cta-secondary" href="/lawyers">변호사 살펴보기 <ArrowRight size={17} aria-hidden="true" /></a></div>
+      <p class="future-vision-note">사실 정리와 상담 준비는 BARO와.<br class="future-mobile-break" /> 법률 판단과 중요한 결정은 전문가와 함께.</p>
+    </div>
+  </div>
+</section>
+
+<script>
+  import "../../client/landing-future";
+</script>

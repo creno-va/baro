@@ -22,7 +22,7 @@ test("a customer starts directly on home and reaches adaptive questions without 
 }) => {
   await setSession(page, customer);
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/");
+  await page.goto("/app");
   const narrative = page.getByRole("textbox", { name: "지금까지 있었던 일" });
   await expect(narrative).toBeEnabled();
   const submit = page.getByRole("button", { name: "저장하고 계속" });
@@ -48,31 +48,28 @@ test("a customer starts directly on home and reaches adaptive questions without 
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
-test("home keeps guest, consent and lawyer entry points separate from customer creation", async ({
+test("app redirects guests, pending consent and lawyers before showing the customer composer", async ({
   page,
 }) => {
-  const cases: { session: SessionView; label: string; href: string }[] = [
-    { session: { user: null, needsConsent: false }, label: "로그인하고 시작하기", href: "/login" },
-    { session: { ...customer, needsConsent: true }, label: "동의하고 시작하기", href: "/consent" },
+  const cases: { session: SessionView; path: string }[] = [
+    { session: { user: null, needsConsent: false }, path: "/login" },
+    { session: { ...customer, needsConsent: true }, path: "/consent" },
     {
       session: {
         user: { id: "conversation-lawyer", name: "합성 변호사", accountType: "lawyer" },
         needsConsent: false,
       },
-      label: "변호사 홈으로",
-      href: "/lawyer",
+      path: "/lawyer",
     },
   ];
   for (const item of cases) {
-    await page.goto("/");
+    await page.goto("/login");
     await page.evaluate((session) => {
       localStorage.setItem("baro-api-mock-v1:session", JSON.stringify(session));
     }, item.session);
-    await page.reload();
-    await expect(
-      page.locator("main .conversation-home").getByRole("link", { name: item.label, exact: true }),
-    ).toHaveAttribute("href", item.href);
-    await expect(page.getByRole("textbox", { name: "지금까지 있었던 일" })).toBeDisabled();
+    await page.goto("/app");
+    await expect(page).toHaveURL(new RegExp(`${item.path}$`));
+    await expect(page.getByRole("textbox", { name: "지금까지 있었던 일" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "저장하고 계속" })).toHaveCount(0);
   }
   expect(await page.evaluate(() => localStorage.getItem("baro-api-mock-v1:cases"))).toBeNull();
@@ -82,7 +79,7 @@ test("an example only fills the composer and home remains usable at enlarged tex
   page,
 }) => {
   await setSession(page, customer);
-  await page.goto("/");
+  await page.goto("/app");
   await page.setViewportSize({ width: 390, height: 844 });
   const example = page.getByRole("button", { name: "빌려준 돈을 못 받았어요" });
   await expect(example).toBeEnabled();
@@ -94,7 +91,7 @@ test("an example only fills the composer and home remains usable at enlarged tex
   const narrative = page.getByRole("textbox", { name: "지금까지 있었던 일" });
   await expect(narrative).toHaveValue(/약속한 날짜/);
   await expect(narrative).toBeFocused();
-  await expect(page).toHaveURL(/\/$/);
+  await expect(page).toHaveURL(/\/app$/);
   expect(await page.evaluate(() => localStorage.getItem("baro-api-mock-v1:cases"))).toBeNull();
   await page.setViewportSize({ width: 390, height: 844 });
   await page.evaluate(() => {
@@ -110,7 +107,7 @@ test("conversation screens remain accessible and responsive from home through ch
   await page.emulateMedia({ reducedMotion: "reduce" });
   await setSession(page, customer);
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto("/");
+  await page.goto("/app");
   await expect(page.getByRole("textbox", { name: "지금까지 있었던 일" })).toBeEnabled();
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await page.screenshot({ path: ".wrangler/ui-review/home-desktop.png", fullPage: true });
@@ -154,7 +151,7 @@ test("conversation screens remain accessible and responsive from home through ch
 
 test("recent case titles clear when another tab changes the active account", async ({ page }) => {
   await setSession(page, customer);
-  await page.goto("/");
+  await page.goto("/app");
   await page
     .getByRole("textbox", { name: "지금까지 있었던 일" })
     .fill("이전 사용자에게만 보여야 하는 합성 사건 제목입니다. 지인에게 돈을 빌려줬어요.");
@@ -175,11 +172,11 @@ test("recent case titles clear when another tab changes the active account", asy
   await expect(recent).toHaveCount(0);
 });
 
-test("a guest home follows a real peer-tab login and becomes editable without reload", async ({
+test("the legacy new-case page follows a real peer-tab login without reload", async ({
   page,
   context,
 }) => {
-  await page.goto("/");
+  await page.goto("/cases/new");
   const narrative = page.getByRole("textbox", { name: "지금까지 있었던 일" });
   await expect(narrative).toBeDisabled();
   const peer = await context.newPage();
@@ -199,7 +196,7 @@ test("a peer-tab owner switch clears the home draft before any case can be creat
   context,
 }) => {
   await setSession(page, customer);
-  await page.goto("/");
+  await page.goto("/app");
   const narrative = page.getByRole("textbox", { name: "지금까지 있었던 일" });
   await expect(narrative).toBeEnabled();
   await narrative.fill(
