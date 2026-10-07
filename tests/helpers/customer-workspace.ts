@@ -42,6 +42,7 @@ export async function runCustomerJob(
   kind: "intake_questions" | "intake_summary" | "chat_response",
   auditPass = true,
   onPhase?: () => Promise<void>,
+  questionsPerRound = 1,
 ) {
   const workspace = await f.service.find(f.owner.userId, f.workspace.id),
     id = crypto.randomUUID(),
@@ -77,13 +78,14 @@ export async function runCustomerJob(
     workspaceRevision: workspace.workspaceRevision + 1,
     jobId: id,
   };
-  return executeCustomerJob(f, params, auditPass, onPhase);
+  return executeCustomerJob(f, params, auditPass, onPhase, questionsPerRound);
 }
 export async function executeCustomerJob(
   f: Fixture,
   params: { ownerId: string; workspaceId: string; workspaceRevision: number; jobId: string },
   auditPass = true,
   onPhase?: () => Promise<void>,
+  questionsPerRound = 1,
 ) {
   const id = params.jobId;
   const result = await executeWorkspace(f.core, params, `${id}-1`, {
@@ -106,14 +108,12 @@ export async function executeCustomerJob(
               };
             if (phase === "workspace_questions")
               return {
-                questions: [
-                  {
-                    id: "placeholder",
-                    prompt: `자료 준비 단계 ${context.intake.batches.length + 1}에서 확인할 내용은 무엇인가요?`,
-                    answerType: "text",
-                    options: [],
-                  },
-                ],
+                questions: Array.from({ length: questionsPerRound }, (_, index) => ({
+                  id: `placeholder-${index}`,
+                  prompt: `자료 준비 단계 ${context.intake.batches.length + 1}의 확인 사항 ${index + 1}은 무엇인가요?`,
+                  answerType: "text",
+                  options: [],
+                })),
               };
             if (phase === "workspace_summary")
               return {

@@ -1,5 +1,4 @@
 import { expect, type Page, test } from "@playwright/test";
-import type { QuestionView } from "../../src/client/api/types";
 
 async function capture(page: Page, name: string) {
   const { default: AxeBuilder } = await import("@axe-core/playwright");
@@ -32,19 +31,6 @@ async function holdGeneration(page: Page, stage: "questions" | "summary", failed
       const fixturePath = "/src/client/api/mock/cases.ts";
       const { registerMockHandlers } = await import(modulePath);
       const { casesMockHandlers } = await import(fixturePath);
-      const key = "baro-api-mock-v1:intake";
-      const records = JSON.parse(localStorage.getItem(key) ?? "{}") as Record<
-        string,
-        { narrative: string; questions: QuestionView[] }
-      >;
-      const entry = Object.entries(records)[0];
-      if (!entry) throw new Error("Synthetic intake fixture is missing");
-      const [id, intake] = entry;
-      const second = intake.questions[1];
-      if (processingStage === "questions") {
-        intake.questions = intake.questions.slice(0, 1);
-        localStorage.setItem(key, JSON.stringify(records));
-      }
       const state = { ready: false, polls: 0 };
       (window as unknown as { intakeGeneration: typeof state }).intakeGeneration = state;
       let pending = false;
@@ -72,14 +58,8 @@ async function holdGeneration(page: Page, stage: "questions" | "summary", failed
           if (!state.ready) return { ...current, processing: true, processingStage };
           pending = false;
           delivered = true;
-          if (processingStage === "questions") {
-            const latest = JSON.parse(localStorage.getItem(key) ?? "{}");
-            latest[id].questions.push(second);
-            localStorage.setItem(key, JSON.stringify(latest));
-            return casesMockHandlers["cases.getQuestions"](raw);
-          }
           return casesMockHandlers["cases.advance"](
-            { id, expectedRevision: current.revision },
+            { id: (raw as { id: string }).id, expectedRevision: current.revision },
             { key: "synthetic-summary-completion" },
           );
         },
@@ -107,7 +87,7 @@ test.beforeEach(async ({ page }) => {
       );
   });
 });
-test("two-question mobile flow saves/reloads/resumes/back edits/skips and reaches workspace", async ({
+test("two-round mobile flow saves/reloads/resumes/back edits/skips and reaches workspace", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
@@ -177,6 +157,25 @@ test("two-question mobile flow saves/reloads/resumes/back edits/skips and reache
   await expect(page.getByRole("textbox", { name: "답변", exact: true })).toHaveValue("2026년 8월");
   await page.getByRole("button", { name: "저장하고 다음 질문" }).click();
   await page.getByRole("button", { name: "건너뛰기", exact: true }).click();
+  await expect(page.getByText("1차 질문 · 3 / 3", { exact: true })).toBeVisible();
+  expect(
+    await page.evaluate(() => {
+      const records = JSON.parse(localStorage.getItem("baro-api-mock-v1:intake") ?? "{}");
+      return (Object.values(records) as { questions: unknown[] }[]).map(
+        (item) => item.questions.length,
+      );
+    }),
+  ).toEqual([3]);
+  await page
+    .getByRole("textbox", { name: "답변", exact: true })
+    .fill("약속한 돈을 돌려받고 싶어요.");
+  await page.getByRole("button", { name: "저장하고 2차 질문 보기" }).click();
+  await expect(page.getByText("2차 질문 · 1 / 3", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "모름", exact: true }).click();
+  await page.getByRole("radio", { name: "문자·메신저·녹음이 있어요" }).check();
+  await page.getByRole("button", { name: "저장하고 다음 질문" }).click();
+  await expect(page.getByText("2차 질문 · 3 / 3", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "건너뛰기", exact: true }).click();
   await expect(page).toHaveURL(/\/summary/);
   const summary = page.getByRole("textbox", { name: "요약 편집" });
   await expect(summary).toHaveValue(/2026년 8월/);
@@ -194,7 +193,7 @@ test("two-question mobile flow saves/reloads/resumes/back edits/skips and reache
         (item) => item.questions.length,
       );
     }),
-  ).toEqual([2]);
+  ).toEqual([6]);
   const old = await summary.inputValue();
   await summary.fill(`${old}\n수정 취소 확인`);
   await page.getByRole("button", { name: "수정 취소", exact: true }).click();
@@ -270,7 +269,7 @@ test("stale summary cannot overwrite newer content; keyboard and 200 percent lay
     .getByRole("textbox", { name: "지금까지 있었던 일" })
     .fill("합성 충돌 테스트입니다. 서로 다른 화면에서 요약을 수정하는 상황입니다.");
   await page.getByRole("button", { name: "저장하고 계속" }).click();
-  for (let i = 0; i < 2; i++) await page.getByRole("button", { name: "모름", exact: true }).click();
+  for (let i = 0; i < 6; i++) await page.getByRole("button", { name: "모름", exact: true }).click();
   await expect(page).toHaveURL(/\/summary/);
   const summary = page.getByRole("textbox", { name: "요약 편집" });
   await summary.fill("현재 화면에서 수정한 합성 요약");
@@ -309,11 +308,12 @@ test("summary returns to editable questions and regenerates after a prior answer
     .getByRole("textbox", { name: "지금까지 있었던 일" })
     .fill("합성 수정 테스트입니다. 질문에 답한 뒤 요약에서 이전 답변을 고쳐 봅니다.");
   await page.getByRole("button", { name: "저장하고 계속" }).click();
-  for (let i = 0; i < 2; i++) await page.getByRole("button", { name: "모름", exact: true }).click();
+  for (let i = 0; i < 6; i++) await page.getByRole("button", { name: "모름", exact: true }).click();
   await expect(page).toHaveURL(/\/summary/);
   await page.getByRole("link", { name: "이전 답변 수정하기" }).click();
   await page.getByRole("textbox", { name: "답변", exact: true }).fill("2026년 7월로 수정");
-  await page.getByRole("button", { name: "저장하고 다음 질문" }).click();
+  for (let index = 0; index < 5; index++)
+    await page.getByRole("button", { name: /^저장하고 (다음 질문|2차 질문 보기)$/ }).click();
   await page.getByRole("button", { name: "저장하고 요약 보기" }).click();
   await expect(page).toHaveURL(/\/summary/);
   await expect(page.getByRole("textbox", { name: "요약 편집" })).toHaveValue(/2026년 7월로 수정/);
@@ -346,12 +346,14 @@ test("new follow-up generation retains the submitted answer and polls past the s
     .getByRole("textbox", { name: "지금까지 있었던 일" })
     .fill("합성 비동기 테스트입니다. 지인에게 빌려준 돈을 아직 돌려받지 못했어요.");
   await page.getByRole("button", { name: "저장하고 계속" }).click();
-  const first = page.getByRole("heading", { name: "이 일은 언제 시작됐나요?" });
+  for (let index = 0; index < 2; index++)
+    await page.getByRole("button", { name: "모름", exact: true }).click();
+  const first = page.getByRole("heading", { name: "이번 일을 어떻게 정리하고 싶나요?" });
   const answer = page.getByRole("textbox", { name: "답변", exact: true });
   await expect(first).toBeVisible();
   await holdGeneration(page, "questions");
   await answer.fill("2026년 8월에 시작했어요.");
-  await page.getByRole("button", { name: "저장하고 다음 질문" }).click();
+  await page.getByRole("button", { name: "저장하고 2차 질문 보기" }).click();
   await expect(
     page.getByRole("status").filter({ hasText: "다음 질문을 준비하고 있어요" }),
   ).toBeVisible();
@@ -361,7 +363,7 @@ test("new follow-up generation retains the submitted answer and polls past the s
   await capture(page, "pending-mobile");
   await openAnswerTools(page);
   await expect(page.getByRole("button", { name: "이전 질문" })).toBeDisabled();
-  await expect(page).toHaveURL(/question=0/);
+  await expect(page).toHaveURL(/question=2/);
   await expect
     .poll(() =>
       page.evaluate(
@@ -372,19 +374,20 @@ test("new follow-up generation retains the submitted answer and polls past the s
   await expect(first).toBeVisible();
   await expect(answer).toHaveValue("2026년 8월에 시작했어요.");
   await finishGeneration(page);
-  await expect(page.getByRole("heading", { name: "얼마의 금액이 관련되어 있나요?" })).toBeVisible({
+  await expect(page.getByRole("heading", { name: "상대방과 어떤 약속을 했나요?" })).toBeVisible({
     timeout: 10000,
   });
-  await expect(page).toHaveURL(/question=1/);
+  await expect(page).toHaveURL(/question=3/);
   await expect(answer).toBeEnabled();
   await expect(answer).toHaveValue("");
-  await page.getByRole("button", { name: "모름", exact: true }).click();
+  for (let index = 0; index < 3; index++)
+    await page.getByRole("button", { name: "모름", exact: true }).click();
   await expect(page).toHaveURL(/\/summary/);
   await expect(page.getByRole("textbox", { name: "요약 편집" })).toHaveValue(/2026년 8월/);
 });
 
 for (const editing of [false, true]) {
-  test(`${editing ? "edited" : "new"} summary generation stays on the second answer and opens the summary when ready`, async ({
+  test(`${editing ? "edited" : "new"} summary generation stays on the final answer and opens the summary when ready`, async ({
     page,
   }) => {
     await page.goto("/cases/new");
@@ -392,15 +395,19 @@ for (const editing of [false, true]) {
       .getByRole("textbox", { name: "지금까지 있었던 일" })
       .fill("합성 요약 대기 테스트입니다. 지인에게 빌려준 돈과 약속 날짜를 정리해요.");
     await page.getByRole("button", { name: "저장하고 계속" }).click();
-    await page.getByRole("button", { name: "모름", exact: true }).click();
+    for (let index = 0; index < 5; index++)
+      await page.getByRole("button", { name: "모름", exact: true }).click();
     if (editing) {
       await page.getByRole("button", { name: "모름", exact: true }).click();
       await expect(page).toHaveURL(/\/summary/);
       await page.getByRole("link", { name: "이전 답변 수정하기" }).click();
       await expect(page).toHaveURL(/edit=1/);
-      await page.getByRole("button", { name: "저장하고 다음 질문" }).click();
+      for (let index = 0; index < 5; index++)
+        await page.getByRole("button", { name: /^저장하고 (다음 질문|2차 질문 보기)$/ }).click();
     }
-    const second = page.getByRole("heading", { name: "얼마의 금액이 관련되어 있나요?" });
+    const second = page.getByRole("heading", {
+      name: "내 입장에 불리하거나, 서로 다르게 기억하는 내용이 있나요?",
+    });
     const answer = page.getByRole("textbox", { name: "답변", exact: true });
     await expect(second).toBeVisible();
     await holdGeneration(page, "summary");
@@ -423,7 +430,7 @@ for (const editing of [false, true]) {
       )
       .toBeGreaterThan(0);
     await expect(second).toBeVisible();
-    await expect(page).toHaveURL(/question=1/);
+    await expect(page).toHaveURL(/question=5/);
     await expect(page).not.toHaveURL(/edit=1/);
     await finishGeneration(page);
     await expect(page).toHaveURL(/\/summary/, { timeout: 10000 });
@@ -476,7 +483,8 @@ test("retrying a failed summary saves the edited answer before generation", asyn
     .getByRole("textbox", { name: "지금까지 있었던 일" })
     .fill("합성 재시도 테스트입니다. 지인에게 빌려준 돈을 정리하다가 요약 준비에 실패했어요.");
   await page.getByRole("button", { name: "저장하고 계속" }).click();
-  await page.getByRole("button", { name: "모름", exact: true }).click();
+  for (let index = 0; index < 5; index++)
+    await page.getByRole("button", { name: "모름", exact: true }).click();
   const answer = page.getByRole("textbox", { name: "답변", exact: true });
   await answer.fill("처음에는 100만 원이라고 적었어요.");
   await openAnswerTools(page);
@@ -571,7 +579,8 @@ async function lastQuestion(page: Page) {
     .getByRole("textbox", { name: "지금까지 있었던 일" })
     .fill("합성 복구 테스트입니다. 답변 저장 후 다음 질문을 준비하다 멈춘 상황입니다.");
   await page.getByRole("button", { name: "저장하고 계속" }).click();
-  await page.getByRole("button", { name: "모름", exact: true }).click();
+  for (let index = 0; index < 5; index++)
+    await page.getByRole("button", { name: "모름", exact: true }).click();
   await page.getByRole("textbox", { name: "답변", exact: true }).fill("보존할 합성 답변");
 }
 
@@ -617,7 +626,7 @@ test("generation transport retry keeps the saved answer and never saves it twice
     await page.evaluate(() =>
       JSON.parse(localStorage.getItem("synthetic-recovery-counts") ?? "{}"),
     ),
-  ).toEqual({ saves: 1, advances: 2, reads: 0, revisions: [3, 3] });
+  ).toEqual({ saves: 1, advances: 2, reads: 0, revisions: [8, 8] });
 });
 
 for (const recovery of [

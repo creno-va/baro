@@ -2,6 +2,8 @@ import { mkdir, readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
+import { captureCaseViewports } from "../helpers/case-ui-capture";
+import { openReportOptions } from "../helpers/report-controls";
 
 // Uses the actual product pages and shared facade, with no component/API alias or injected seed.
 test.skip(process.env.BARO_D_SHARED_API !== "true", "Run the explicit shared mock configuration.");
@@ -43,13 +45,13 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
   async function completeIntake(narrative: string) {
     await page.getByRole("textbox", { name: "지금까지 있었던 일" }).fill(narrative);
     await page.getByRole("button", { name: "저장하고 계속" }).click();
-    for (let index = 0; index < 2; index++)
+    for (let index = 0; index < 6; index++)
       await page.getByRole("button", { name: "모름", exact: true }).click();
     await expect(page).toHaveURL(/\/summary$/);
     await page.getByRole("checkbox", { name: /요약이 내가 이야기한 사실과 맞는지/ }).check();
     await page.getByRole("button", { name: "요약 확인하고 계속" }).click();
     await page.getByRole("button", { name: "확인하고 사건 열기" }).click();
-    await expect(page.getByRole("heading", { name: "이어서 대화하기" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "이제, 하나씩 풀어가요." })).toBeVisible();
     return new URL(page.url()).pathname;
   }
   const casePath = await completeIntake(
@@ -68,11 +70,17 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
   await page.goto(`${casePath}/reports`);
   const editor = page.getByRole("textbox", { name: "리포트 내용 편집" });
   await expect(editor).toBeVisible();
+  await expect(
+    page.getByRole("checkbox", { name: "전화번호·이메일·주민등록번호 가리기" }),
+  ).toBeHidden();
+  await captureCaseViewports(page, "reports", ".report-review");
   await editor.fill(
     "사용자가 검토한 합성 사실입니다. 연락처 010-1234-5678, synthetic@example.test는 전달 전에 가립니다.",
   );
+  await openReportOptions(page);
   await page.getByRole("checkbox", { name: "전화번호·이메일·주민등록번호 가리기" }).check();
   const excluded = page.locator(".report-material").filter({ hasText: "제외 원본.txt" });
+  await openReportOptions(page);
   await excluded.getByRole("checkbox", { name: "리포트에서 제외" }).check();
   await page.getByRole("button", { name: "검토 내용 저장" }).click();
   await expect(
@@ -80,10 +88,13 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
   ).toBeVisible();
   await page.reload();
   await expect(editor).toHaveValue(/사용자가 검토한 합성 사실/);
+  await openReportOptions(page);
   await expect(
     page.getByRole("checkbox", { name: "전화번호·이메일·주민등록번호 가리기" }),
   ).toBeChecked();
+  await openReportOptions(page);
   await expect(excluded.getByRole("checkbox", { name: "리포트에서 제외" })).toBeChecked();
+  await openReportOptions(page);
   await expect(excluded.getByRole("checkbox", { name: "ZIP에 원본 포함" })).toBeDisabled();
   await page
     .locator(".report-material")

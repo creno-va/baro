@@ -238,3 +238,299 @@
     margin-left: 0;
   }
 }
+
+/* The report shares the case canvas; only the editable document has a surface. */
+.report-workspace {
+  max-width: 1040px;
+}
+.report-canvas {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 0 8px;
+}
+.report-workspace .report-heading {
+  display: block;
+  text-align: center;
+  margin: 48px 0 38px;
+}
+.report-heading-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  margin-bottom: 14px;
+  color: var(--primary);
+  background: #edf5ff;
+  border-radius: 22px;
+}
+.report-workspace h2 {
+  font-size: 1rem;
+  font-weight: 650;
+  letter-spacing: -0.025em;
+  margin: 0;
+}
+.report-workspace .report-heading h2 {
+  margin: 0 0 12px;
+  font-size: clamp(1.65rem, 3.5vw, 2.15rem);
+  font-weight: 650;
+  line-height: 1.35;
+  letter-spacing: -0.045em;
+}
+.report-workspace .report-heading p {
+  color: var(--muted-foreground);
+  margin: 0;
+  line-height: 1.7;
+}
+.report-editor-heading,
+.report-editor-tools {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.report-editor-heading {
+  margin-bottom: 16px;
+}
+.report-editor-heading .report-meta {
+  font-size: 0.75rem;
+  margin: 5px 0 0;
+}
+.report-workspace .report-editor-heading button,
+.report-workspace .report-editor-tools button {
+  border-color: transparent;
+  background: transparent;
+  color: #526178;
+  font-size: 0.8rem;
+  padding: 8px 10px;
+}
+.report-paper {
+  border: 1px solid #e3eaf3;
+  border-radius: 24px;
+  background: white;
+  padding: 6px;
+  transition:
+    border-color 180ms ease,
+    box-shadow 180ms ease;
+}
+.report-paper .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.report-paper:focus-within {
+  border-color: #8cbbff;
+  box-shadow: 0 0 0 3px rgb(49 130 246 / 7%);
+}
+.report-workspace textarea {
+  display: block;
+  min-height: 330px;
+  border: 0;
+  background: transparent;
+  margin: 0;
+  padding: 20px 22px 12px;
+  color: var(--foreground);
+  font-size: 0.95rem;
+  line-height: 1.85;
+  outline: none;
+}
+.report-workspace textarea:focus-visible {
+  outline: none;
+}
+.report-editor-count {
+  margin: 0;
+  padding: 8px 20px 12px;
+  color: var(--muted-foreground);
+  font-size: 0.72rem;
+  text-align: right;
+  line-height: 1.6;
+}
+.report-editor-tools {
+  margin-top: 8px;
+}
+.report-workspace .report-save.is-dirty {
+  color: #2569c6;
+  background: #eaf3ff;
+}
+.report-options {
+  margin: 32px 0;
+  border-top: 1px solid #e8edf4;
+  border-bottom: 1px solid #e8edf4;
+}
+.report-options > summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  list-style: none;
+  cursor: pointer;
+  padding: 22px 4px;
+  color: #516079;
+}
+.report-options > summary::-webkit-details-marker {
+  display: none;
+}
+.report-options > summary > span {
+  flex: 1;
+  min-width: 0;
+}
+.report-options > summary strong {
+  color: var(--foreground);
+  font-size: 0.925rem;
+  font-weight: 600;
+}
+.report-options-status {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+  line-height: 1.6;
+}
+.report-options-chevron {
+  flex-shrink: 0;
+  transition: transform 180ms ease;
+}
+.report-options[open] .report-options-chevron {
+  transform: rotate(180deg);
+}
+.report-options-body {
+  padding: 0 4px 22px;
+}
+.report-options-body > section + section {
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid #edf0f5;
+}
+.report-workspace .report-options-body p {
+  color: var(--muted-foreground);
+  font-size: 0.8rem;
+  line-height: 1.75;
+  margin: 10px 0;
+}
+.report-workspace .report-check {
+  font-weight: 450;
+  font-size: 0.875rem;
+  line-height: 1.65;
+  align-items: center;
+  gap: 10px;
+}
+.report-workspace .report-check input {
+  width: 20px;
+  height: 20px;
+  margin: 0;
+}
+.report-workspace .report-material {
+  padding: 18px 0;
+}
+.report-workspace .report-material > strong {
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+.report-material-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 28px;
+}
+.report-option-note {
+  color: var(--muted-foreground);
+  font-size: 0.8rem;
+  line-height: 1.75;
+}
+.report-preview-section {
+  padding-bottom: 28px;
+  margin-bottom: 28px;
+  border-bottom: 1px solid #e8edf4;
+}
+.report-workspace .report-preview-section > p {
+  color: var(--muted-foreground);
+  font-size: 0.8rem;
+}
+.report-workspace .report-preview {
+  padding: 24px;
+  border-radius: 20px;
+  background: #f5f7fa;
+  font-size: 0.9rem;
+}
+.report-workspace .report-export {
+  display: block;
+  margin-top: 30px;
+}
+.report-workspace .report-export > p {
+  color: var(--muted-foreground);
+  font-size: 0.82rem;
+  line-height: 1.75;
+}
+.report-export > .report-check {
+  margin: 18px 0 12px;
+}
+.report-workspace .report-export .report-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+  gap: 12px;
+}
+.report-export .report-actions button {
+  min-height: 52px;
+  border-radius: 16px;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+.report-workspace .report-export-notice {
+  margin-top: 20px;
+  color: #6e7888;
+  font-size: 0.72rem;
+}
+.report-workspace footer {
+  text-align: center;
+  color: var(--muted-foreground);
+  font-size: 0.72rem;
+  padding: 32px 0 20px;
+  line-height: 1.8;
+}
+.report-workspace footer a {
+  color: inherit;
+}
+.report-workspace .report-stale {
+  color: #785425;
+  background: #fff8e9;
+}
+@media (max-width: 640px) {
+  .report-canvas {
+    padding: 0;
+  }
+  .report-workspace .report-heading {
+    margin: 32px 0;
+  }
+  .report-workspace .report-heading p {
+    font-size: 0.875rem;
+  }
+  .report-workspace textarea {
+    padding: 16px 14px 8px;
+    min-height: 300px;
+    font-size: 0.9rem;
+  }
+  .report-editor-heading,
+  .report-editor-tools {
+    gap: 4px;
+  }
+  .report-workspace .report-editor-heading button,
+  .report-workspace .report-editor-tools button {
+    padding: 8px;
+    gap: 5px;
+    font-size: 0.75rem;
+  }
+  .report-workspace .report-export .report-actions {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  .report-workspace .report-preview {
+    padding: 18px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .report-paper,
+  .report-options-chevron {
+    transition: none;
+  }
+}

@@ -242,11 +242,7 @@ export function createWorkspaceService(core: V2Core, deps: WorkspaceDependencies
         throw new WorkspaceError("STALE_REVISION");
       if (job.kind === "intake_questions") {
         const intake = await workspace.metadata(g, id);
-        if (
-          !intake ||
-          intake.batches.reduce((count, batch) => count + batch.questions.length, 0) >=
-            V2_INTAKE_POLICY.followupLimit
-        )
+        if (!intake || intake.batches.length >= V2_INTAKE_POLICY.followupRounds)
           throw new WorkspaceError("REVIEW_REQUIRED");
       }
       const operation = await dependencyStep("retry_operation", () =>
@@ -369,8 +365,7 @@ export function createWorkspaceService(core: V2Core, deps: WorkspaceDependencies
         id,
         key,
         body,
-        intake.batches.reduce((count, batch) => count + batch.questions.length, 0) <
-          V2_INTAKE_POLICY.followupLimit
+        intake.batches.length < V2_INTAKE_POLICY.followupRounds
           ? "intake_questions"
           : "intake_summary",
       );

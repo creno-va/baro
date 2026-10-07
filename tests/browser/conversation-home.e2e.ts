@@ -127,12 +127,12 @@ test("conversation screens remain accessible and responsive from home through ch
   await page.getByRole("button", { name: "저장하고 계속" }).click();
   await expect(page.getByRole("heading", { name: "이 일은 언제 시작됐나요?" })).toBeVisible();
   await page.screenshot({ path: ".wrangler/ui-review/intake-mobile.png", fullPage: true });
-  for (let index = 0; index < 2; index++)
+  for (let index = 0; index < 6; index++)
     await page.getByRole("button", { name: "모름", exact: true }).click();
   await page.getByRole("checkbox", { name: "요약이 내가 이야기한 사실과 맞는지" }).check();
   await page.getByRole("button", { name: "요약 확인하고 계속" }).click();
   await page.getByRole("button", { name: "확인하고 사건 열기" }).click();
-  await expect(page.getByRole("heading", { name: "이어서 대화하기" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "이제, 하나씩 풀어가요." })).toBeVisible();
   await page
     .getByRole("textbox", { name: "추가 사실 또는 질문" })
     .fill("약속한 날짜가 지난 뒤 주고받은 메시지도 보관하고 있어요.");

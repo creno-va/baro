@@ -214,7 +214,7 @@ async function fixture() {
   };
 }
 
-test("funded runtime completes two follow-up questions, summary and chat through the real paid gateway", async () => {
+test("funded runtime completes two follow-up rounds, summary and chat through the real paid gateway", async () => {
   const f = await fixture();
   for (let index = 0; index < 2; index++) {
     const queued = await f.advance();

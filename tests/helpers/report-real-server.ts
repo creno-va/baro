@@ -30,6 +30,7 @@ const globalCss = (await Bun.file(`${root}/src/styles/global.css`).text())
 const css =
   globalCss +
   (await Bun.file(`${root}/src/styles/shell.css`).text()) +
+  (await Bun.file(`${root}/src/styles/workspace.css`).text()) +
   (await Bun.file(`${root}/src/styles/reports.css`).text());
 const server = Bun.serve({
   hostname: "127.0.0.1",

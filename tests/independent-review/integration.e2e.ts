@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { expect, type Page, test } from "@playwright/test";
+import { openReportOptions } from "../helpers/report-controls";
 
 const modulePath = "/src/client/api/index.ts";
 async function login(page: Page, role: "고객" | "변호사" = "고객") {
@@ -20,14 +21,16 @@ async function createActiveCase(page: Page, confirm = true) {
   await page.getByRole("button", { name: "저장하고 계속" }).click();
   await page.getByRole("button", { name: "모름", exact: true }).click();
   await page.reload();
-  await expect(page.getByText("질문 2 / 최대 2", { exact: true })).toBeVisible();
+  await expect(page.getByText("1차 질문 · 2 / 3", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "건너뛰기", exact: true }).click();
+  for (let index = 0; index < 4; index++)
+    await page.getByRole("button", { name: "모름", exact: true }).click();
   await expect(page).toHaveURL(/\/summary$/);
   if (!confirm) return new URL(page.url()).pathname.replace(/\/summary$/, "");
   await page.getByRole("checkbox", { name: /요약이 내가 이야기한 사실과 맞는지/ }).check();
   await page.getByRole("button", { name: "요약 확인하고 계속" }).click();
   await page.getByRole("button", { name: "확인하고 사건 열기" }).click();
-  await expect(page.getByRole("heading", { name: "이어서 대화하기" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "이제, 하나씩 풀어가요." })).toBeVisible();
   return new URL(page.url()).pathname;
 }
 async function changeToLawyer(page: Page) {
@@ -84,14 +87,18 @@ test("customer complete shared flow, reload, chat and upload retry, report files
   await expect(page.getByText("결과 확인 가능", { exact: true })).toBeVisible();
   await page.reload();
   await page.goto(`${path}/reports`);
+  await openReportOptions(page);
   await expect(page.getByText("independent-synthetic.txt", { exact: true })).toBeVisible();
   await page.getByLabel("리포트 내용 편집").fill("독립 검토 보고서 · 합성 연락처 010-1234-5678");
+  await openReportOptions(page);
   await page.getByLabel("전화번호·이메일·주민등록번호 가리기").check();
   await page.getByRole("button", { name: "검토 내용 저장" }).click();
   await expect(page.getByText("검토 내용을 저장했어요.")).toBeVisible();
   await page.reload();
   await expect(page.getByLabel("리포트 내용 편집")).toHaveValue(/독립 검토 보고서/);
+  await openReportOptions(page);
   await expect(page.getByLabel("전화번호·이메일·주민등록번호 가리기")).toBeChecked();
+  await openReportOptions(page);
   await page.getByLabel("ZIP에 원본 포함").check();
   await page.getByLabel("내용·식별정보·선택한 원본을 확인했어요").check();
   const pdfEvent = page.waitForEvent("download");
@@ -329,6 +336,7 @@ test("report download refuses deleted file from stale tab; reload removes stale 
   });
   await expect(page.getByText("결과 확인 가능", { exact: true })).toBeVisible();
   await page.goto(`${path}/reports`);
+  await openReportOptions(page);
   await page.getByLabel("ZIP에 원본 포함").check();
   await page.getByLabel("내용·식별정보·선택한 원본을 확인했어요").check();
   const peer = await context.newPage();

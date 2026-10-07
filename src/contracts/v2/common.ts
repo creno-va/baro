@@ -3,7 +3,7 @@ import { displayText, opaqueIdSchema, timestampSchema } from "../common";
 
 export const V2_CONTRACT_VERSION = "2" as const;
 /** New intake generation policy; stored legacy batches keep their original limits below. */
-export const V2_INTAKE_POLICY = { followupLimit: 2, questionsPerBatch: 1 } as const;
+export const V2_INTAKE_POLICY = { followupRounds: 2, questionsPerBatch: 3 } as const;
 export const V2_LIMITS = {
   jsonBytes: 64 * 1024,
   chunkBytes: 8 * 1024 * 1024,

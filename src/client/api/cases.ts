@@ -46,6 +46,7 @@ export const summaryInputSchema = z.object({
 });
 export const revisionInputSchema = z.object({ expectedRevision: z.number().int().min(1) });
 export type AnswersInput = z.infer<typeof answersInputSchema>;
+export type QuestionRound = { ordinal: number; questionIds: string[] };
 export type QuestionsResult = {
   questions: QuestionView[];
   complete: boolean;
@@ -55,7 +56,8 @@ export type QuestionsResult = {
   retryable?: boolean;
   failure?: V2FailureCode | null;
   canPrepareSummary?: boolean;
-  followupLimit?: number;
+  roundLimit?: number;
+  rounds?: QuestionRound[];
   processingStage?: "questions" | "summary";
 };
 const metadataSchema = z.object({
@@ -217,12 +219,12 @@ function questions(m: Metadata, revision: number): QuestionsResult {
     complete: m.summary !== null,
     revision,
     processing: m.currentJobId !== null,
-    followupLimit: V2_INTAKE_POLICY.followupLimit,
-    processingStage:
-      m.batches.reduce((count, batch) => count + batch.questions.length, 0) >=
-      V2_INTAKE_POLICY.followupLimit
-        ? "summary"
-        : "questions",
+    roundLimit: V2_INTAKE_POLICY.followupRounds,
+    rounds: m.batches.map((batch) => ({
+      ordinal: batch.ordinal,
+      questionIds: batch.questions.map((q) => q.id),
+    })),
+    processingStage: m.batches.length >= V2_INTAKE_POLICY.followupRounds ? "summary" : "questions",
   };
 }
 async function latestFailedIntakeJob(id: string, revision: number) {
@@ -266,7 +268,7 @@ async function getQuestions(id: string): Promise<QuestionsResult> {
     result.canPrepareSummary =
       result.failed &&
       (job.kind ?? recovered?.kind) === "intake_questions" &&
-      result.questions.length >= V2_INTAKE_POLICY.followupLimit &&
+      m.batches.length >= V2_INTAKE_POLICY.followupRounds &&
       result.questions.every((question) => question.answerState);
   }
   return result;
@@ -523,8 +525,7 @@ export const casesApi = {
       if (job.status !== "failed") return getQuestions(id);
       const summaryInstead =
         (job.kind ?? recovered?.kind) === "intake_questions" &&
-        m.batches.reduce((count, batch) => count + batch.questions.length, 0) >=
-          V2_INTAKE_POLICY.followupLimit;
+        m.batches.length >= V2_INTAKE_POLICY.followupRounds;
       if (!job.retryable && !summaryInstead)
         throw new ApiError(
           "UNAVAILABLE",

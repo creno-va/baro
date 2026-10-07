@@ -1,5 +1,4 @@
 import {
-  ArrowLeft,
   ArrowRight,
   CheckCheck,
   ChevronDown,
@@ -7,7 +6,6 @@ import {
   FileText,
   FolderOpen,
   LoaderCircle,
-  MessageSquare,
   Paperclip,
   Plus,
   Send,
@@ -23,14 +21,10 @@ import { CaseDetail } from "../analysis/CaseDetail";
 import { useCustomerAccess } from "../intake/useCustomerAccess";
 import { BrandMark } from "../ui/brand";
 import { Button, ButtonLink } from "../ui/button";
+import { CaseNavigation } from "./CaseNavigation";
 
 export type WorkspaceTab = "chat" | "files" | "timeline" | "actions";
-const tabs = [
-  { id: "chat", label: "대화", icon: MessageSquare, path: "" },
-  { id: "files", label: "자료", icon: FolderOpen, path: "/files" },
-  { id: "timeline", label: "타임라인", icon: Clock3, path: "/timeline" },
-  { id: "actions", label: "다음 행동", icon: CheckCheck, path: "/actions" },
-] as const;
+const tabLabels = { chat: "대화", files: "자료", timeline: "타임라인", actions: "다음 행동" };
 const fileStatus: Record<FileView["status"], string> = {
   uploading: "업로드 중",
   processing: "처리 중",
@@ -351,26 +345,12 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
   const readonly = !ready || view?.case.stage !== "active";
   return (
     <div className={`workspace workspace--${tab}`}>
-      <a className="workspace-back" href="/cases">
-        <ArrowLeft size={16} /> 내 사건
-      </a>
-      <header className="workspace-header">
-        <div>
-          <h1>{(ready ? view?.case.title : null) ?? "사건을 불러오는 중"}</h1>
-        </div>
-        <ButtonLink href={`${base}/reports`} variant="ghost">
-          <FileText size={17} /> 리포트 보기
-        </ButtonLink>
-      </header>
-      <nav className="workspace-tabs" aria-label="사건 메뉴">
-        {tabs.map(({ id, label, icon: Icon, path }) => (
-          <a key={id} href={`${base}${path}`} aria-current={tab === id ? "page" : undefined}>
-            <Icon size={17} />
-            {label}
-            {id === "files" && view && ready ? <span>{view.files.length}</span> : null}
-          </a>
-        ))}
-      </nav>
+      <CaseNavigation
+        caseId={caseId}
+        title={(ready ? view?.case.title : null) ?? "사건을 불러오는 중"}
+        active={tab}
+        fileCount={ready ? view?.files.length : undefined}
+      />
       <div className="workspace-feedback" aria-live="polite" aria-atomic="true">
         {notice}
       </div>
@@ -436,16 +416,14 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
             </section>
           )}
           <div className="workspace-grid">
-            <section
-              className="workspace-main"
-              aria-label={tabs.find((item) => item.id === tab)?.label}
-            >
+            <section className="workspace-main" aria-label={tabLabels[tab]}>
               {tab === "chat" && (
                 <>
-                  <div className="workspace-chat-heading">
-                    <h2>이어서 대화하기</h2>
-                    <span>BARO와 함께 정리해요</span>
-                  </div>
+                  {!!view.messages.length && (
+                    <div className="workspace-chat-heading">
+                      <h2>이어서 대화하기</h2>
+                    </div>
+                  )}
                   <div
                     className="workspace-messages"
                     role="log"
@@ -457,31 +435,25 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                         <div className="workspace-welcome-mark">
                           <BrandMark size={52} />
                         </div>
-                        <h3>이제, 하나씩 풀어가요.</h3>
-                        <p>
-                          기억나는 사실부터 궁금한 점까지.
-                          <br />
-                          BARO와 대화하며 다음을 준비해요.
-                        </p>
+                        <h2>이제, 하나씩 풀어가요.</h2>
+                        <p>더 기억나는 일이나 궁금한 점이 있나요?</p>
                         <div className="workspace-suggestions">
-                          {[
-                            "지금까지 내용을 정리해 주세요",
-                            "어떤 자료를 준비하면 좋을까요?",
-                            "추가로 기억난 일이 있어요",
-                          ].map((prompt) => (
-                            <Button
-                              key={prompt}
-                              variant="outline"
-                              disabled={!!busy || readonly}
-                              onClick={() => {
-                                setDraft(prompt);
-                                draftInput.current?.focus();
-                              }}
-                            >
-                              {prompt}
-                              <ArrowRight size={15} />
-                            </Button>
-                          ))}
+                          {["어떤 자료를 준비하면 좋을까요?", "추가로 기억난 일이 있어요"].map(
+                            (prompt) => (
+                              <Button
+                                key={prompt}
+                                variant="outline"
+                                disabled={!!busy || readonly}
+                                onClick={() => {
+                                  setDraft(prompt);
+                                  draftInput.current?.focus();
+                                }}
+                              >
+                                {prompt}
+                                <ArrowRight size={15} />
+                              </Button>
+                            ),
+                          )}
                         </div>
                       </div>
                     )}
@@ -624,41 +596,54 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                   <div className="workspace-section-heading">
                     <div>
                       <h2>사건 자료</h2>
-                      <p>원본과 추출 내용을 함께 확인하고 필요한 자료를 대화에 사용하세요.</p>
+                      <p>흩어진 자료를 한곳에 모아두세요.</p>
                     </div>
-                    <FolderOpen size={22} />
                   </div>
                   <div className="workspace-upload">
-                    <Upload size={28} />
-                    <h3>자료를 추가하세요</h3>
-                    <p>
-                      문서 · 이미지 · 음성 · 영상
-                      <br />
-                      문서·이미지 최대 {V2_LIMITS.documentImageBytes / 1_000_000} MB, 음성·영상{" "}
-                      {V2_LIMITS.mediaBytes / 1_000_000_000} GB
-                    </p>
-                    <label className="workspace-consent">
+                    <div className="workspace-upload-intro">
+                      <span className="workspace-upload-icon">
+                        <Upload size={22} />
+                      </span>
+                      <div>
+                        <h3>자료를 추가하세요</h3>
+                        <p>문서 · 이미지 · 음성 · 영상</p>
+                      </div>
+                    </div>
+                    <div className="workspace-upload-controls">
+                      <label className="workspace-consent">
+                        <input
+                          type="checkbox"
+                          checked={uploadConsent}
+                          disabled={!!busy || readonly}
+                          onChange={(event) => setUploadConsent(event.target.checked)}
+                        />
+                        선택 자료의 자동 처리에 동의합니다.
+                      </label>
+                      <label className="workspace-upload-label" htmlFor="workspace-upload">
+                        업로드할 파일 선택
+                      </label>
+                      <Button
+                        disabled={!!busy || readonly || !uploadConsent}
+                        onClick={() => uploadInput.current?.click()}
+                      >
+                        <Plus size={17} aria-hidden="true" /> 파일 선택
+                      </Button>
                       <input
-                        type="checkbox"
-                        checked={uploadConsent}
-                        disabled={!!busy || readonly}
-                        onChange={(event) => setUploadConsent(event.target.checked)}
+                        ref={uploadInput}
+                        id="workspace-upload"
+                        aria-label="업로드할 파일 선택"
+                        type="file"
+                        hidden
+                        multiple
+                        disabled={!!busy || readonly || !uploadConsent}
+                        accept=".txt,.pdf,.doc,.docx,.hwp,.hwpx,.xls,.xlsx,.ppt,.pptx,image/*,audio/*,video/*"
+                        onChange={(event) => void upload(event.target.files)}
                       />
-                      선택 자료의 자동 처리에 동의합니다.
-                    </label>
-                    <label className="workspace-upload-label" htmlFor="workspace-upload">
-                      업로드할 파일 선택
-                    </label>
-                    <input
-                      ref={uploadInput}
-                      id="workspace-upload"
-                      aria-label="업로드할 파일 선택"
-                      type="file"
-                      multiple
-                      disabled={!!busy || readonly || !uploadConsent}
-                      accept=".txt,.pdf,.doc,.docx,.hwp,.hwpx,.xls,.xlsx,.ppt,.pptx,image/*,audio/*,video/*"
-                      onChange={(event) => void upload(event.target.files)}
-                    />
+                      <p className="workspace-upload-limit">
+                        문서·이미지 {V2_LIMITS.documentImageBytes / 1_000_000} MB · 음성·영상{" "}
+                        {V2_LIMITS.mediaBytes / 1_000_000_000} GB까지
+                      </p>
+                    </div>
                     {busy === "upload" && (
                       <p role="status">
                         <LoaderCircle size={17} className="workspace-spin" /> 자료 저장 중
@@ -740,11 +725,11 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                 <>
                   <div className="workspace-section-heading">
                     <div>
-                      <h2>타임라인</h2>
-                      <p>언제 어떤 일이 있었는지 시간 순서로 정리하세요.</p>
+                      <h2>사건의 흐름</h2>
+                      <p>언제 어떤 일이 있었는지 차근차근 정리해요.</p>
                     </div>
                     <Button
-                      variant="outline"
+                      variant="default"
                       disabled={!!busy || readonly}
                       onClick={() => setEntry({ date: "", title: "", detail: "" })}
                     >
@@ -790,13 +775,21 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                   <div className="workspace-section-heading">
                     <div>
                       <h2>다음 행동</h2>
-                      <p>완료한 일을 표시하고, 확인이 필요한 내용을 준비하세요.</p>
+                      <p>하나씩 확인하면서 상담을 준비해요.</p>
                     </div>
                     <span className="workspace-count">
                       {view.actions.filter((action) => action.done).length} / {view.actions.length}{" "}
                       완료
                     </span>
                   </div>
+                  {!!view.actions.length && (
+                    <progress
+                      className="workspace-action-progress"
+                      aria-label="다음 행동 완료 현황"
+                      max={view.actions.length}
+                      value={view.actions.filter((action) => action.done).length}
+                    />
+                  )}
                   {!view.actions.length && (
                     <div className="workspace-empty">
                       <CheckCheck size={32} />
@@ -853,8 +846,8 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                     ))}
                   </ul>
                   <div className="workspace-next">
-                    <h3>전문가와 직접 확인할 준비가 되셨나요?</h3>
-                    <p>리포트와 필요한 자료를 검토하고, 변호사를 직접 선택해 연락하세요.</p>
+                    <h3>정리한 내용을 상담으로 이어가세요</h3>
+                    <p>리포트를 검토한 뒤, 직접 선택한 변호사에게 연락할 수 있어요.</p>
                     <div className="workspace-buttons">
                       <ButtonLink href={`${base}/reports`} variant="outline">
                         리포트 검토

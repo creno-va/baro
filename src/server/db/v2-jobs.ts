@@ -506,7 +506,7 @@ export function createV2JobsRepository(core: V2Core) {
           kind === "chat_response"
             ? "w.status='active'"
             : kind === "intake_questions"
-              ? `w.status='intake' AND (SELECT coalesce(sum(question_count),0) FROM v2_question_batches WHERE workspace_id=w.id)<${V2_INTAKE_POLICY.followupLimit} AND ${answered}`
+              ? `w.status='intake' AND (SELECT count(*) FROM v2_question_batches WHERE workspace_id=w.id)<${V2_INTAKE_POLICY.followupRounds} AND ${answered}`
               : `w.status='intake' AND EXISTS(SELECT 1 FROM v2_question_batches WHERE workspace_id=w.id) AND ${answered}`;
         const statements = [
           core.claim(
@@ -811,7 +811,7 @@ export function createV2JobsRepository(core: V2Core) {
           return false;
         const target =
           row.target_kind === "workspace"
-            ? `w.current_job_id IS NULL AND ${row.failure_code === "POLICY_REJECTED" ? "w.status='intake' AND w.revision=j.target_revision+1" : "w.status IN ('intake','active')"} AND (j.kind!='intake_questions' OR (SELECT coalesce(sum(question_count),0) FROM v2_question_batches WHERE workspace_id=w.id)<${V2_INTAKE_POLICY.followupLimit})`
+            ? `w.current_job_id IS NULL AND ${row.failure_code === "POLICY_REJECTED" ? "w.status='intake' AND w.revision=j.target_revision+1" : "w.status IN ('intake','active')"} AND (j.kind!='intake_questions' OR (SELECT count(*) FROM v2_question_batches WHERE workspace_id=w.id)<${V2_INTAKE_POLICY.followupRounds})`
             : row.target_kind === "file"
               ? "EXISTS(SELECT 1 FROM v2_files f WHERE f.id=j.target_id AND f.workspace_id=w.id AND f.revision=j.target_revision AND f.state='failed' AND f.current_job_id IS NULL)"
               : row.target_kind === "report"
