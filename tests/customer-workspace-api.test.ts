@@ -20,7 +20,8 @@ afterEach(() => {
   for (const db of databases.splice(0)) db.close();
 });
 async function fixture() {
-  const f = await customerWorkspaceFixture();
+  // Hono uses the live clock; keep synthetic receipts within its 24-hour replay window.
+  const f = await customerWorkspaceFixture(new Date().toISOString());
   databases.push(f.db);
   await runCustomerJob(f, "intake_questions");
   const intake = await f.service.intake(f.owner.userId, f.workspace.id);
@@ -274,7 +275,7 @@ test("real chat receipt replay and latest-job lookup recover a lost ACK after fa
         ownerId: f.owner.userId,
         workspaceId: w.id,
         expectedRevision: w.workspaceRevision,
-        now: "2026-10-06T00:00:00.000Z",
+        now: f.now,
       },
       { operationId, key, requestHash: await runtimeDigest(body) },
       jobId,

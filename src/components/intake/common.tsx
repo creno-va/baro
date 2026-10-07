@@ -70,7 +70,7 @@ export function ErrorPanel({
           <ButtonLink href="/login">로그인하기</ButtonLink>
         ) : code === "CONSENT_REQUIRED" ? (
           <ButtonLink href="/consent">동의 확인</ButtonLink>
-        ) : retry ? (
+        ) : retry && (!value || value.retryable || code === "CONFLICT") ? (
           <Button variant="outline" disabled={disabled} onClick={retry}>
             {code === "CONFLICT" ? "최신 내용 불러오기" : "다시 시도"}
           </Button>

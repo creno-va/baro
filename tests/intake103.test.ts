@@ -358,13 +358,20 @@ describe("PR100 real wire mapping", () => {
             ],
           });
         if (url.endsWith("/workspace-jobs/failed-questions"))
-          return Response.json({ status: "failed", retryable: false, kind: "intake_questions" });
+          return Response.json({
+            status: "failed",
+            retryable: false,
+            kind: "intake_questions",
+            failure: "POLICY_REJECTED",
+          });
         return transport(input, init);
       }) as typeof fetch;
       const result = await casesApi.advance(id, { expectedRevision: 5 });
       expect(writes[0]?.url).toBe(`/api/v2/cases/${id}/intake/advance`);
       expect(result.followupLimit).toBe(2);
       expect(result.processingStage).toBe("summary");
+      expect(result.canPrepareSummary).toBe(true);
+      expect(result.retryable).toBe(false);
       expect(result.questions).toHaveLength(count);
       expect(result.questions.every((q) => q.answerState === "skipped")).toBe(true);
     });

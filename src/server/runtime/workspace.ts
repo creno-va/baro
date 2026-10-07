@@ -5,6 +5,7 @@ import { createCaseDataCipher } from "../crypto";
 import * as schema from "../db/schema";
 import { createV2AccountingRepository } from "../db/v2-accounting";
 import { createV2Core, type V2Core } from "../db/v2-core";
+import { createV2JobsRepository } from "../db/v2-jobs";
 import { createV2OfficialSourceRepository } from "../db/v2-official-sources";
 import { reportProviderFailure } from "../dependency-diagnostics";
 import { paidHoldRequestSchema } from "../modules/budget/contracts";
@@ -29,6 +30,7 @@ import { MODEL_ID, type Phase } from "../modules/llm-gateway/prompts";
 import {
   createLlmGateway,
   gatewayWireIdentity,
+  ModelError,
   prepareGatewayWireInput,
 } from "../modules/llm-gateway/service";
 import { readWorkspaceContext } from "../modules/workspace/context";
@@ -239,6 +241,16 @@ export async function runWorkspaceRuntime(
             throw new Error("Customer access unavailable");
           const currentId = invocationId ?? invocation(phase),
             now = new Date().toISOString();
+          // Generation, correction and independent audit can span several minutes.
+          // Renew only this live fenced lease before each separately paid phase.
+          if (
+            !(await createV2JobsRepository(core).renew(
+              { ownerId: params.ownerId, now },
+              lease,
+              new Date(Date.parse(now) + 300000).toISOString(),
+            ))
+          )
+            throw new ModelError("MODEL_UNAVAILABLE");
           const service = budget(core, env, params.ownerId, input);
           const useInitial = phase === primary && !initialUsed;
           const binding: GatewayExecutionBinding = {

@@ -45,8 +45,25 @@ export type WorkspaceContext = {
     coverage: unknown;
   }[];
 };
+export type WorkspaceOutputPolicyReason =
+  | "unauthorized_reference"
+  | "unsupported_fact"
+  | "prohibited_content"
+  | "question_repetition"
+  | "audit_rejected";
+
+/** A rejected generated draft can be regenerated; a provider refusal cannot. */
+export class WorkspaceOutputPolicyError extends ModelError {
+  constructor(readonly reason: WorkspaceOutputPolicyReason) {
+    super("POLICY_REJECTED");
+  }
+}
+
+const privateIdentifiers = (text: string) =>
+  /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}|01[016789][- ]?\d{3,4}[- ]?\d{4}/i.test(text);
 const prohibited = (text: string) =>
-  /승소\s*(확률|가능성\s*\d|보장)|반드시\s*승소|변호사로서|무조건\s*(승소|이깁)|합의금\s*\d+|(?:고소|소송|협상)\s*전략|[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}|01[016789][- ]?\d{3,4}[- ]?\d{4}/i.test(
+  privateIdentifiers(text) ||
+  /승소\s*(확률|가능성\s*\d|보장)|반드시\s*승소|변호사로서|무조건\s*(승소|이깁)|(?:고소|소송|협상)\s*전략/i.test(
     text,
   );
 
@@ -77,7 +94,7 @@ export function assertWorkspaceReferences(
   references: readonly V2FactReference[],
 ) {
   if (references.some((ref) => !v2ReferenceIsAuthorized(ref, context.references)))
-    throw new ModelError("POLICY_REJECTED");
+    throw new WorkspaceOutputPolicyError("unauthorized_reference");
 }
 export function assertWorkspaceFacts(context: WorkspaceContext, facts: readonly V2Fact[]) {
   for (const fact of facts) {
@@ -85,9 +102,13 @@ export function assertWorkspaceFacts(context: WorkspaceContext, facts: readonly 
     // Reported statements and extracted observations cannot gain invented numbers or facts.
     if (fact.attribution === "user_statement" || fact.attribution === "user_material") {
       if (!fact.references.some((ref) => sourceText(context, ref)?.includes(fact.text)))
-        throw new ModelError("POLICY_REJECTED");
+        throw new WorkspaceOutputPolicyError("unsupported_fact");
+      // A verbatim attributed report of a demand or legal topic is not AI advice.
+      // It still must not expose identifiers, and the independent audit checks attribution.
+      if (privateIdentifiers(fact.text)) throw new WorkspaceOutputPolicyError("prohibited_content");
+    } else if (prohibited(fact.text)) {
+      throw new WorkspaceOutputPolicyError("prohibited_content");
     }
-    if (prohibited(fact.text)) throw new ModelError("POLICY_REJECTED");
   }
 }
 
@@ -112,9 +133,27 @@ export function createWorkspacePipeline(
       () => deps.reserve(phase),
       deps.invocation(phase),
     );
-  const audit = async (context: WorkspaceContext, draft: unknown, requestId: string) => {
+  const regenerateDraft = async <T>(
+    context: WorkspaceContext,
+    generateAndValidate: (input: unknown) => Promise<T>,
+  ): Promise<T> => {
+    try {
+      return await generateAndValidate(context);
+    } catch (error) {
+      if (!(error instanceof WorkspaceOutputPolicyError)) throw error;
+      // One newly admitted generation, with a sanitized reason and full revalidation.
+      // Provider refusals and infrastructure failures do not enter this recovery path.
+      return generateAndValidate({ ...context, draftCorrection: { reason: error.reason } });
+    }
+  };
+  const audit = async (
+    phase: "workspace_questions" | "workspace_summary" | "workspace_chat",
+    context: WorkspaceContext,
+    draft: unknown,
+    requestId: string,
+  ) => {
     const checked = workspaceAuditOutputSchema.parse(
-      await call("workspace_audit", { context, draft }, requestId),
+      await call("workspace_audit", { phase, context, draft }, requestId),
     );
     if (
       !checked.pass ||
@@ -123,7 +162,7 @@ export function createWorkspacePipeline(
       checked.unsupportedFactIds.length ||
       checked.findings.some((f) => f.severity === "critical")
     )
-      throw new ModelError("POLICY_REJECTED");
+      throw new WorkspaceOutputPolicyError("audit_rejected");
   };
   return {
     async questions(context: WorkspaceContext, requestId: string) {
@@ -132,35 +171,49 @@ export function createWorkspacePipeline(
         V2_INTAKE_POLICY.followupLimit
       )
         throw new ModelError("POLICY_REJECTED");
-      const draft = workspaceQuestionsOutputSchema.parse(
-        await call("workspace_questions", context, requestId),
-      );
-      const prior = new Set(
-        context.intake.batches.flatMap((batch) =>
-          batch.questions.map((q) => q.prompt.normalize("NFKC").replace(/\s+/g, "")),
-        ),
-      );
-      const prompts = draft.questions.map((q) => q.prompt.normalize("NFKC").replace(/\s+/g, ""));
-      if (
-        new Set(prompts).size !== prompts.length ||
-        draft.questions.some((q, i) => prior.has(prompts[i] ?? "") || prohibited(q.prompt))
-      )
-        throw new ModelError("POLICY_REJECTED");
-      await audit(context, draft, requestId);
-      return draft.questions.map((question) => ({ ...question, id: crypto.randomUUID() }));
+      return regenerateDraft(context, async (input) => {
+        const draft = workspaceQuestionsOutputSchema.parse(
+          await call("workspace_questions", input, requestId),
+        );
+        if (
+          draft.questions.some(
+            (question) => prohibited(question.prompt) || question.options.some(prohibited),
+          )
+        )
+          throw new WorkspaceOutputPolicyError("prohibited_content");
+        const normalized = (prompt: string) => prompt.normalize("NFKC").replace(/\s+/g, "");
+        const prior = new Set(
+          context.intake.batches.flatMap((batch) =>
+            batch.questions.map((question) => normalized(question.prompt)),
+          ),
+        );
+        // Never publish exact normalized repetitions, including previously skipped questions.
+        // A repeated single-question draft is regenerated within the same follow-up slot.
+        draft.questions = draft.questions.filter((question) => {
+          const prompt = normalized(question.prompt);
+          if (prior.has(prompt)) return false;
+          prior.add(prompt);
+          return true;
+        });
+        if (!draft.questions.length) throw new WorkspaceOutputPolicyError("question_repetition");
+        await audit("workspace_questions", context, draft, requestId);
+        return draft.questions.map((question) => ({ ...question, id: crypto.randomUUID() }));
+      });
     },
     async summary(context: WorkspaceContext, requestId: string) {
-      const draft = workspaceSummaryOutputSchema.parse(
-        await call("workspace_summary", context, requestId),
-      );
-      assertWorkspaceFacts(context, draft.facts);
-      if (
-        prohibited(draft.overview) ||
-        draft.parties.some((party) => prohibited(JSON.stringify(party)))
-      )
-        throw new ModelError("POLICY_REJECTED");
-      await audit(context, draft, requestId);
-      return draft;
+      return regenerateDraft(context, async (input) => {
+        const draft = workspaceSummaryOutputSchema.parse(
+          await call("workspace_summary", input, requestId),
+        );
+        assertWorkspaceFacts(context, draft.facts);
+        if (
+          prohibited(draft.overview) ||
+          draft.parties.some((party) => prohibited(JSON.stringify(party)))
+        )
+          throw new WorkspaceOutputPolicyError("prohibited_content");
+        await audit("workspace_summary", context, draft, requestId);
+        return draft;
+      });
     },
     async chat(context: WorkspaceContext, requestId: string) {
       if (
@@ -208,8 +261,8 @@ export function createWorkspacePipeline(
         prohibited(draft.text) ||
         draft.parties.some((party) => prohibited(JSON.stringify(party)))
       )
-        throw new ModelError("POLICY_REJECTED");
-      await audit(context, draft, requestId);
+        throw new WorkspaceOutputPolicyError("prohibited_content");
+      await audit("workspace_chat", context, draft, requestId);
       const cited = new Set(
         [
           ...draft.references,

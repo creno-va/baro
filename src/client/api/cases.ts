@@ -7,6 +7,8 @@ import {
 } from "../../contracts";
 import {
   V2_INTAKE_POLICY,
+  type V2FailureCode,
+  v2FailureCodeSchema,
   v2JobSchema,
   v2QuestionBatchSchema,
   v2SummarySchema,
@@ -50,6 +52,9 @@ export type QuestionsResult = {
   revision: number;
   processing?: boolean;
   failed?: boolean;
+  retryable?: boolean;
+  failure?: V2FailureCode | null;
+  canPrepareSummary?: boolean;
   followupLimit?: number;
   processingStage?: "questions" | "summary";
 };
@@ -220,21 +225,33 @@ function questions(m: Metadata, revision: number): QuestionsResult {
         : "questions",
   };
 }
+async function latestFailedIntakeJob(id: string, revision: number) {
+  const job = v2JobSchema
+    .nullable()
+    .parse(await request("cases.latestJob", { id }, { path: path(id, "workspace-jobs/latest") }));
+  // Failing a job advances the workspace once. Subsequent answer edits create
+  // new input and must not be blocked by an exhausted job for the older input.
+  return job?.status === "failed" &&
+    (job.kind === "intake_questions" || job.kind === "intake_summary") &&
+    job.target.kind === "workspace" &&
+    revision <= job.target.workspaceRevision + 1
+    ? job
+    : null;
+}
 async function getQuestions(id: string): Promise<QuestionsResult> {
   if (apiMode === "mock") return request("cases.getQuestions", { id });
   const [w, m] = await Promise.all([workspace(id), metadata(id)]);
   const result = questions(m, w.workspaceRevision);
-  const recovered = m.currentJobId
-    ? null
-    : v2JobSchema
-        .nullable()
-        .parse(
-          await request("cases.latestJob", { id }, { path: path(id, "workspace-jobs/latest") }),
-        );
-  const jobId = m.currentJobId ?? (recovered?.status === "failed" ? recovered.id : null);
+  const recovered = m.currentJobId ? null : await latestFailedIntakeJob(id, w.workspaceRevision);
+  const jobId = m.currentJobId ?? recovered?.id;
   if (jobId) {
     const job = z
-      .object({ status: z.string(), retryable: z.boolean() })
+      .object({
+        status: z.string(),
+        retryable: z.boolean(),
+        failure: v2FailureCodeSchema.nullable(),
+        kind: z.string().optional(),
+      })
       .parse(
         await request(
           "cases.job",
@@ -242,8 +259,15 @@ async function getQuestions(id: string): Promise<QuestionsResult> {
           { path: path(id, `workspace-jobs/${encodeURIComponent(jobId)}`) },
         ),
       );
-    result.processing = !["failed", "cancelled", "superseded"].includes(job.status);
+    result.processing = ["queued", "running", "validating"].includes(job.status);
     result.failed = job.status === "failed";
+    result.retryable = result.failed && job.retryable;
+    result.failure = result.failed ? job.failure : null;
+    result.canPrepareSummary =
+      result.failed &&
+      (job.kind ?? recovered?.kind) === "intake_questions" &&
+      result.questions.length >= V2_INTAKE_POLICY.followupLimit &&
+      result.questions.every((question) => question.answerState);
   }
   return result;
 }
@@ -482,16 +506,10 @@ export const casesApi = {
         { id, ...input },
         { key: await mutationKey(`cases.advance:${id}`, input) },
       );
-    const m = await metadata(id);
+    const [w, m] = await Promise.all([workspace(id), metadata(id)]);
     let suffix = "intake/advance";
-    const recovered = m.currentJobId
-      ? null
-      : v2JobSchema
-          .nullable()
-          .parse(
-            await request("cases.latestJob", { id }, { path: path(id, "workspace-jobs/latest") }),
-          );
-    const jobId = m.currentJobId ?? (recovered?.status === "failed" ? recovered.id : null);
+    const recovered = m.currentJobId ? null : await latestFailedIntakeJob(id, w.workspaceRevision);
+    const jobId = m.currentJobId ?? recovered?.id;
     if (jobId) {
       const job = z
         .object({ status: z.string(), retryable: z.boolean(), kind: z.string().optional() })
