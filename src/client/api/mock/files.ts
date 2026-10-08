@@ -317,8 +317,12 @@ export function createFilesMock(runtime: WorkspaceMockRuntime, originals = mockO
         return runtime.update((value) => {
           requireMockCase(value, id, true);
           const file = ensureMockWorkspace(value, id).files.find((item) => item.id === fileId);
-          if (file?.status !== "failed")
-            throw new WorkspaceMockError("CONFLICT", "실패한 자료만 다시 처리할 수 있어요.");
+          if (
+            !file ||
+            (file.status !== "failed" && !(file.status === "waiting" && file.canStartProcessing))
+          )
+            throw new WorkspaceMockError("CONFLICT", "다시 처리가 가능한 자료인지 확인해 주세요.");
+          file.canStartProcessing = false;
           file.status = "processing";
           file.coverage = "API 예시 재처리 중";
           value.fileProcessing ??= {};

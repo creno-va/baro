@@ -50,6 +50,7 @@ function problem(cause: unknown) {
       ? (error.message ?? "요청을 완료하지 못했어요.")
       : "요청을 완료하지 못했어요. 잠시 후 다시 시도해 주세요.",
     retryable: error?.retryable !== false,
+    resource: false,
   };
 }
 function size(bytes: number) {
@@ -92,8 +93,14 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
   const chatEnd = useRef<HTMLDivElement>(null);
   const draftInput = useRef<HTMLTextAreaElement>(null);
   const latest = useRef(0);
+  const operationError = useRef(false);
+  const acknowledgedTimeline = useRef(false);
+  const [timelineRecovery, setTimelineRecovery] = useState(false);
   const purge = useCallback(() => {
     ++latest.current;
+    operationError.current = false;
+    acknowledgedTimeline.current = false;
+    setTimelineRecovery(false);
     sendAttempt.current = null;
     setView(null);
     setDraft("");
@@ -115,9 +122,13 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
   const { ready, version, verify, ticket, current, alive, deny } = access;
   const readonly = PUBLIC_PREVIEW || !ready || view?.case.stage !== "active";
   const showError = useCallback(
-    (cause: unknown) => {
-      const next = problem(cause);
-      if (["UNAUTHENTICATED", "NOT_FOUND", "CONSENT_REQUIRED"].includes(next.code)) deny();
+    (cause: unknown, resource = false) => {
+      const next = { ...problem(cause), resource };
+      if (
+        ["UNAUTHENTICATED", "CONSENT_REQUIRED"].includes(next.code) ||
+        (next.code === "NOT_FOUND" && !resource)
+      )
+        deny();
       setError(next);
       return next;
     },
@@ -135,17 +146,24 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
     const serial = ++latest.current;
     let epoch = ticket();
     try {
-      if (!(await verify()) || serial !== latest.current) return;
+      if (!(await verify()) || serial !== latest.current) return false;
       epoch = ticket();
       const next = await api.workspace.get(caseId);
-      if (serial !== latest.current || !(await verify())) return;
+      if (serial !== latest.current || !(await verify())) return false;
       if (current(epoch) && serial === latest.current) {
         apply(next);
-        setError(null);
+        if (!operationError.current) setError(null);
+        if (acknowledgedTimeline.current) {
+          acknowledgedTimeline.current = false;
+          setTimelineRecovery(false);
+          setEntry(null);
+        }
+        return true;
       }
     } catch (cause) {
       if (alive(epoch) && serial === latest.current) showError(cause);
     }
+    return false;
   }, [caseId, apply, verify, ticket, current, alive, showError]);
   useEffect(() => {
     mounted.current = true;
@@ -240,17 +258,34 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
     lock.current = true;
     latest.current++;
     setBusy(key);
-    setError(null);
+    if (key !== "refresh") {
+      operationError.current = false;
+      setError(null);
+    }
     setNotice("");
     try {
       if (!(await verify()) || !current(epoch)) return;
       await action(epoch);
     } catch (cause) {
       if (!alive(epoch)) return;
-      const nextError = showError(cause);
+      operationError.current = key === "upload";
+      let resource = false;
+      if (problem(cause).code === "NOT_FOUND") {
+        try {
+          const next = await api.workspace.get(caseId);
+          if (!(await verify()) || !current(epoch)) return;
+          apply(next);
+          resource = true;
+        } catch (accessError) {
+          showError(accessError);
+          return;
+        }
+      }
+      const nextError = showError(cause, resource);
       if (nextError.code === "CONFLICT") {
         sendAttempt.current = null;
         await load();
+        if (alive(epoch)) setError(nextError);
       }
     } finally {
       if (alive(epoch)) {
@@ -310,6 +345,8 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
   }
   function closeDialog() {
     if (busy) return;
+    acknowledgedTimeline.current = false;
+    setTimelineRecovery(false);
     setPreview(null);
     setDeleteFile(null);
     setEntry(null);
@@ -320,13 +357,21 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
     if (readonly) return;
     const values = new FormData(event.currentTarget);
     await run("timeline", async (epoch) => {
+      if (acknowledgedTimeline.current) {
+        await load();
+        return;
+      }
       const next = await api.workspace.saveTimeline(caseId, {
         ...(entry?.id ? { id: entry.id } : {}),
         date: String(values.get("date") ?? ""),
         title: String(values.get("title") ?? "").trim(),
         detail: String(values.get("detail") ?? "").trim(),
       });
+      acknowledgedTimeline.current = true;
+      setTimelineRecovery(true);
       if (!(await verify()) || !current(epoch)) return;
+      acknowledgedTimeline.current = false;
+      setTimelineRecovery(false);
       apply(next);
       setEntry(null);
       setNotice("타임라인을 저장했어요.");
@@ -382,7 +427,8 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
               ? "최신 내용을 불러왔어요. 입력은 유지됩니다. 확인한 뒤 다시 저장해 주세요."
               : error.code === "QUOTA_EXCEEDED"
                 ? "저장된 사건은 보존돼요. 사용량에서 한도를 확인할 수 있어요."
-                : ["UNAUTHENTICATED", "CONSENT_REQUIRED", "NOT_FOUND"].includes(error.code)
+                : ["UNAUTHENTICATED", "CONSENT_REQUIRED", "NOT_FOUND"].includes(error.code) &&
+                    !error.resource
                   ? "계정 또는 사건 접근이 바뀌어 이전 내용을 비웠어요."
                   : "입력한 내용은 보존돼요. 확인한 뒤 다시 시도해 주세요."}
           </p>
@@ -408,7 +454,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                 disabled={!!busy}
                 onClick={() =>
                   void run("refresh", async (epoch) => {
-                    await load();
+                    if (!(await load())) return;
                     if (!(await verify()) || !current(epoch)) return;
                     setNotice("최신 내용을 불러왔어요.");
                   })
@@ -507,22 +553,31 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                         )}
                         {message.status === "failed" && (
                           <div className="workspace-message-failed">
-                            <p>응답을 완료하지 못했어요. 같은 대화에서 다시 시도할 수 있어요.</p>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              disabled={!!busy || readonly}
-                              onClick={() =>
-                                void run(message.id, async (epoch) => {
-                                  const next = await api.workspace.retryMessage(caseId, message.id);
-                                  if (!(await verify()) || !current(epoch)) return;
-                                  apply(next);
-                                  setNotice("응답을 다시 요청했어요.");
-                                })
-                              }
-                            >
-                              응답 다시 시도
-                            </Button>
+                            <p>
+                              {message.retryable === false
+                                ? "응답을 완료하지 못했어요. 내용을 확인한 뒤 새 메시지를 보내 주세요."
+                                : "응답을 완료하지 못했어요. 같은 대화에서 다시 시도할 수 있어요."}
+                            </p>
+                            {message.retryable !== false && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={!!busy || readonly}
+                                onClick={() =>
+                                  void run(message.id, async (epoch) => {
+                                    const next = await api.workspace.retryMessage(
+                                      caseId,
+                                      message.id,
+                                    );
+                                    if (!(await verify()) || !current(epoch)) return;
+                                    apply(next);
+                                    setNotice("응답을 다시 요청했어요.");
+                                  })
+                                }
+                              >
+                                응답 다시 시도
+                              </Button>
+                            )}
                           </div>
                         )}
                       </article>
@@ -716,7 +771,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                           >
                             자료 확인
                           </Button>
-                          {file.status === "failed" && (
+                          {(file.status === "failed" || file.canStartProcessing) && (
                             <Button
                               variant="outline"
                               size="sm"
@@ -728,7 +783,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                                 })
                               }
                             >
-                              처리 다시 시도
+                              {file.canStartProcessing ? "자료 처리 시작" : "처리 다시 시도"}
                             </Button>
                           )}
                           <Button
@@ -836,13 +891,13 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                               const done = event.target.checked;
                               if (readonly || lock.current) return;
                               const previous = view;
-                              apply({
-                                ...view,
-                                actions: view.actions.map((item) =>
-                                  item.id === action.id ? { ...item, done } : item,
-                                ),
-                              });
                               void run(action.id, async (epoch) => {
+                                apply({
+                                  ...view,
+                                  actions: view.actions.map((item) =>
+                                    item.id === action.id ? { ...item, done } : item,
+                                  ),
+                                });
                                 try {
                                   const next = await api.workspace.setAction(
                                     caseId,
@@ -1059,7 +1114,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
             <div className="workspace-buttons">
               <Button
                 variant="outline"
-                disabled={!!busy || readonly}
+                disabled={!!busy || readonly || preview.status === "uploading"}
                 onClick={() =>
                   void run("original", async (epoch) => {
                     const blob = await api.files.original(caseId, preview.id);
@@ -1144,7 +1199,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
               id="timeline-date"
               name="date"
               type="date"
-              disabled={readonly || !!busy}
+              disabled={readonly || !!busy || timelineRecovery}
               value={entry.date ?? ""}
               onChange={(event) => setEntry({ ...entry, date: event.target.value })}
             />
@@ -1154,7 +1209,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
               name="title"
               required
               maxLength={300}
-              disabled={readonly || !!busy}
+              disabled={readonly || !!busy || timelineRecovery}
               value={entry.title ?? ""}
               onChange={(event) => setEntry({ ...entry, title: event.target.value })}
             />
@@ -1164,7 +1219,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
               name="detail"
               maxLength={1600}
               rows={4}
-              disabled={readonly || !!busy}
+              disabled={readonly || !!busy || timelineRecovery}
               value={entry.detail ?? ""}
               onChange={(event) => setEntry({ ...entry, detail: event.target.value })}
             />

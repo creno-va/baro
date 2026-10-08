@@ -1,6 +1,7 @@
 import { ArrowRight, Check, Save } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../../client/api";
+import { ApiError } from "../../client/api/core";
 import type { CaseView } from "../../client/api/types";
 import { BrandMark } from "../ui/brand";
 import { Button, ButtonLink } from "../ui/button";
@@ -19,13 +20,20 @@ export function SummaryReview({ caseId }: { caseId: string }) {
   const [notice, setNotice] = useState("");
   const [checked, setChecked] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [recovering, setRecovering] = useState(false);
+  const acknowledged = useRef(false);
+  const draftDirty = useRef(false);
   const pending = useRef(false);
+  const request = useRef(0);
   const confirmation = useRef<HTMLInputElement>(null);
   const focusAfterSave = useRef(false);
   const savedItem = useRef(item);
   savedItem.current = item;
   const failedOperation = useRef<"save" | "confirm" | null>(null);
   const access = useCustomerAccess(() => {
+    ++request.current;
+    acknowledged.current = false;
+    setRecovering(false);
     setItem(null);
     setSummary("");
     setChecked(false);
@@ -39,6 +47,7 @@ export function SummaryReview({ caseId }: { caseId: string }) {
   }, setError);
   const { ticket, current, alive, verify, ready, version, deny } = access;
   const dirty = !!item && summary !== item.summary;
+  draftDirty.current = dirty;
   useEffect(() => {
     if (focusAfterSave.current && ready && !busy && !dirty) {
       focusAfterSave.current = false;
@@ -50,19 +59,35 @@ export function SummaryReview({ caseId }: { caseId: string }) {
       // A background refresh must not advance the revision of a lost-response
       // retry. Explicit conflict recovery may replace that original request.
       if (pending.current || (failedOperation.current && !replaceDraft)) return;
+      const serial = ++request.current;
       let epoch = ticket();
       setLoading(true);
       setError(null);
       try {
-        if (!(await verify())) return;
+        if (!(await verify()) || serial !== request.current) return;
         epoch = ticket();
         const next = await api.cases.get(caseId);
-        if (!(await verify()) || !current(epoch)) return;
+        // An earlier focus read must not replace a newer read or completed write.
+        if (serial !== request.current) return;
+        if (!(await verify()) || !current(epoch) || serial !== request.current) return;
+        if (
+          !replaceDraft &&
+          !acknowledged.current &&
+          draftDirty.current &&
+          savedItem.current?.revision !== next.revision
+        )
+          throw new ApiError(
+            "CONFLICT",
+            "다른 화면에서 요약이 바뀌었어요. 최신 내용을 확인해 주세요.",
+          );
         failedOperation.current = null;
+        const replace = replaceDraft || acknowledged.current;
+        acknowledged.current = false;
+        setRecovering(false);
         const changed = savedItem.current?.revision !== next.revision;
         setItem(next);
         setSummary((draft) =>
-          !replaceDraft && savedItem.current && draft !== savedItem.current.summary
+          !replace && savedItem.current && draft !== savedItem.current.summary
             ? draft
             : next.summary,
         );
@@ -71,7 +96,7 @@ export function SummaryReview({ caseId }: { caseId: string }) {
           setConfirming(false);
         }
       } catch (cause) {
-        if (alive(epoch)) {
+        if (alive(epoch) && serial === request.current) {
           if (
             ["UNAUTHENTICATED", "CONSENT_REQUIRED", "NOT_FOUND"].includes(
               (cause as { code?: string }).code ?? "",
@@ -81,7 +106,7 @@ export function SummaryReview({ caseId }: { caseId: string }) {
           setError(cause);
         }
       } finally {
-        if (alive(epoch)) setLoading(false);
+        if (alive(epoch) && serial === request.current) setLoading(false);
       }
     },
     [caseId, ticket, current, alive, verify, deny],
@@ -98,6 +123,8 @@ export function SummaryReview({ caseId }: { caseId: string }) {
   }, [dirty]);
   async function save() {
     if (!item || pending.current || !summary.trim()) return;
+    ++request.current;
+    setLoading(false);
     const epoch = ticket();
     pending.current = true;
     setBusy(true);
@@ -110,7 +137,14 @@ export function SummaryReview({ caseId }: { caseId: string }) {
         expectedRevision: item.revision,
         summary: summary.trim(),
       });
+      // The API acknowledged the write. A failed session check must recover by
+      // reading, rather than submitting this revision again.
+      acknowledged.current = true;
+      failedOperation.current = null;
+      setRecovering(true);
       if (!(await verify()) || !current(epoch)) return;
+      acknowledged.current = false;
+      setRecovering(false);
       failedOperation.current = null;
       focusAfterSave.current = true;
       setItem(next);
@@ -136,6 +170,8 @@ export function SummaryReview({ caseId }: { caseId: string }) {
   }
   async function confirm() {
     if (!item || !checked || dirty || pending.current) return;
+    ++request.current;
+    setLoading(false);
     const epoch = ticket();
     pending.current = true;
     setBusy(true);
@@ -144,7 +180,12 @@ export function SummaryReview({ caseId }: { caseId: string }) {
       if (!(await verify()) || !current(epoch)) return;
       failedOperation.current = "confirm";
       const next = await api.cases.confirmSummary(caseId, { expectedRevision: item.revision });
+      acknowledged.current = true;
+      failedOperation.current = null;
+      setRecovering(true);
       if (!(await verify()) || !current(epoch)) return;
+      acknowledged.current = false;
+      setRecovering(false);
       failedOperation.current = null;
       setItem(next);
       window.location.assign(`/cases/${encodeURIComponent(caseId)}`);
@@ -240,7 +281,7 @@ export function SummaryReview({ caseId }: { caseId: string }) {
                     setNotice("");
                   }}
                   maxLength={5000}
-                  disabled={busy}
+                  disabled={busy || recovering || (error as { code?: string })?.code === "CONFLICT"}
                   aria-describedby="summary-help"
                 />
                 <p id="summary-help" className="intake-count">
@@ -252,7 +293,12 @@ export function SummaryReview({ caseId }: { caseId: string }) {
                   <Button
                     variant="outline"
                     onClick={() => void save()}
-                    disabled={busy || !summary.trim()}
+                    disabled={
+                      busy ||
+                      recovering ||
+                      !summary.trim() ||
+                      (error as { code?: string })?.code === "CONFLICT"
+                    }
                   >
                     <Save size={16} aria-hidden="true" />
                     {busy && failedOperation.current === "save" ? "저장 중…" : "수정 내용 저장"}
@@ -290,7 +336,14 @@ export function SummaryReview({ caseId }: { caseId: string }) {
               <Button
                 className="intake-scene-primary"
                 onClick={() => setConfirming(true)}
-                disabled={busy || dirty || !checked || !summary.trim()}
+                disabled={
+                  busy ||
+                  recovering ||
+                  dirty ||
+                  !checked ||
+                  !summary.trim() ||
+                  (error as { code?: string })?.code === "CONFLICT"
+                }
               >
                 요약 확인하고 계속
                 <ArrowRight size={18} aria-hidden="true" />

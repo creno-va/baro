@@ -36,6 +36,7 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
   const caseSnapshot = useRef<CaseView | null>(null);
   const heading = useRef<HTMLHeadingElement>(null);
   const request = useRef(0);
+  const drafts = useRef(new Map<string, { value: string; state: QuestionView["answerState"] }>());
   const draftSnapshot = useRef<{ dirty: boolean; revision: number } | null>(null);
   const {
     ready,
@@ -48,6 +49,7 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
   } = useCustomerAccess(() => {
     ++request.current;
     draftSnapshot.current = null;
+    drafts.current.clear();
     setItem(null);
     setResult(null);
     setValue("");
@@ -79,7 +81,9 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
   );
   const question = result?.questions[index];
   const dirty = value !== (question?.answer ?? "") || answerState !== question?.answerState;
-  draftSnapshot.current = result ? { dirty, revision: result.revision } : null;
+  draftSnapshot.current = result
+    ? { dirty: dirty || drafts.current.size > 0, revision: result.revision }
+    : null;
   const rounds = result?.rounds ?? [];
   const round = rounds.find(
     (candidate) => question && candidate.questionIds.includes(question.id),
@@ -150,17 +154,24 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
       setLoading(true);
       setError(null);
       try {
-        if (!(await verify())) return;
+        if (!(await verify()) || serial !== request.current) return;
         epoch = ticket();
         let [caseView, questions] = await Promise.all([
           poll && caseSnapshot.current ? caseSnapshot.current : api.cases.get(caseId),
           api.cases.getQuestions(caseId),
         ]);
+        if (serial !== request.current) return;
         // The pending view can be reused, but completion must reflect stage
         // changes made in another tab before exposing editable questions.
         if (poll && caseSnapshot.current && !questions.processing)
           caseView = await api.cases.get(caseId);
-        if (!(await verify()) || !accessCurrent(epoch) || serial !== request.current) return;
+        if (
+          serial !== request.current ||
+          !(await verify()) ||
+          !accessCurrent(epoch) ||
+          serial !== request.current
+        )
+          return;
         if (
           !replaceDraft &&
           draftSnapshot.current?.dirty &&
@@ -213,6 +224,7 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
             setIndex(nextIndex);
             setRecovering(false);
             if (replaceDraft) {
+              drafts.current.clear();
               setValue(questions.questions[nextIndex]?.answer ?? "");
               setAnswerState(questions.questions[nextIndex]?.answerState);
             }
@@ -226,9 +238,9 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
           else show();
         }
       } catch (cause) {
-        if (alive(epoch)) report(cause);
+        if (alive(epoch) && serial === request.current) report(cause);
       } finally {
-        if (alive(epoch)) setLoading(false);
+        if (alive(epoch) && serial === request.current) setLoading(false);
       }
     },
     [caseId, verify, ticket, accessCurrent, alive, report, transition],
@@ -237,8 +249,9 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
     if (version) void load();
   }, [load, version]);
   useEffect(() => {
-    setValue(question?.answer ?? "");
-    setAnswerState(question?.answerState);
+    const draft = question?.id ? drafts.current.get(question.id) : undefined;
+    setValue(draft?.value ?? question?.answer ?? "");
+    setAnswerState(draft ? draft.state : question?.answerState);
     if (question?.id) {
       const url = new URL(window.location.href);
       url.searchParams.set("question", String(index));
@@ -269,7 +282,11 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
   }, [result?.processing, recovering, busy, load]);
   useEffect(() => {
     const warn = (event: BeforeUnloadEvent) => {
-      if (value !== (question?.answer ?? "") || answerState !== question?.answerState)
+      if (
+        value !== (question?.answer ?? "") ||
+        answerState !== question?.answerState ||
+        drafts.current.size > 0
+      )
         event.preventDefault();
     };
     window.addEventListener("beforeunload", warn);
@@ -324,6 +341,8 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
   }
   async function advance() {
     if (!result || pending.current || result.processing) return;
+    ++request.current;
+    setLoading(false);
     const epoch = ticket();
     pending.current = true;
     setBusy(true);
@@ -357,6 +376,8 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
       result.processing
     )
       return;
+    ++request.current;
+    setLoading(false);
     const epoch = ticket();
     pending.current = true;
     setBusy(true);
@@ -373,6 +394,7 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
             : { questionId: question.id, state },
         ],
       });
+      drafts.current.delete(question.id);
       if (!(await verifyCompletion(epoch))) return;
       failedOperation.current = null;
       setResult(next);
@@ -425,7 +447,7 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
             const operation = failedOperation.current;
             if ((error as { code?: string }).code === "CONFLICT") void load(false, true);
             else if (operation?.kind === "advance") void advance();
-            else if (operation?.kind === "save") void save(operation.move, operation.state);
+            else if (operation?.kind === "save") void save(operation.move);
             else void load();
           }}
           disabled={busy || waiting || leaving}
@@ -632,6 +654,8 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
                           variant="ghost"
                           disabled={locked || index === 0}
                           onClick={() => {
+                            if (question && dirty)
+                              drafts.current.set(question.id, { value, state: answerState });
                             const epoch = ticket();
                             void transition(
                               () => {
