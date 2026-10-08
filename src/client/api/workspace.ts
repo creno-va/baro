@@ -154,6 +154,7 @@ export function createWorkspaceApi(
   >();
   const pendingMessages = new Map<string, RequestInit>();
   const pendingTimelines = new Map<string, RequestInit>();
+  const pendingActions = new Map<string, { done: boolean; init: RequestInit }>();
   const knownJobs = new Map<string, string>();
   function rememberJob(id: string, jobId: string | null) {
     if (jobId) knownJobs.set(id, jobId);
@@ -440,15 +441,25 @@ export function createWorkspaceApi(
     },
     async setAction(id: string, actionId: string, done: boolean) {
       if (!actionRevisions.has(`${id}:${actionId}`)) await get(id);
-      return mutation(
-        id,
-        `actions/${encodeURIComponent(actionId)}`,
-        {
-          expectedRevision: actionRevisions.get(`${id}:${actionId}`) ?? 1,
-          status: done ? "done" : "todo",
-        },
-        "PUT",
-      );
+      const route = `${base(id)}/actions/${encodeURIComponent(actionId)}`;
+      const signature = JSON.stringify({ id, actionId });
+      const pending = pendingActions.get(signature);
+      const init =
+        pending?.done === done
+          ? pending.init
+          : workspaceMutation(
+              route,
+              {
+                expectedRevision: actionRevisions.get(`${id}:${actionId}`) ?? 1,
+                status: done ? "done" : "todo",
+              },
+              "PUT",
+            );
+      pendingActions.set(signature, { done, init });
+      await workspaceJson(request, route, init);
+      const next = await get(id);
+      if (pendingActions.get(signature)?.init === init) pendingActions.delete(signature);
+      return next;
     },
     async saveTimeline(id: string, entry: Omit<TimelineView, "id"> & { id?: string }) {
       if (entry.id && !timelineRevisions.has(`${id}:${entry.id}`)) await get(id);

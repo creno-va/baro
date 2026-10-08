@@ -1,5 +1,216 @@
 import { expect, type Page, test } from "@playwright/test";
 import type { QuestionsResult } from "../../src/client/api/cases";
+import type { CaseView, WorkspaceView } from "../../src/client/api/types";
+
+test("peer answer changes preserve the unsaved draft until explicit conflict recovery", async ({
+  page,
+}) => {
+  await page.goto("/cases/new");
+  await page
+    .getByLabel("지금까지 있었던 일")
+    .fill("합성 초안 충돌 검증입니다. 다른 탭에서 저장한 답변을 확인합니다.");
+  await page.getByRole("button", { name: "저장하고 계속" }).click();
+  const editor = page.getByRole("textbox", { name: "답변", exact: true });
+  await editor.fill("현재 탭에서 아직 저장하지 않은 답변");
+  await page.evaluate(async () => {
+    const modulePath = "/src/client/api/index.ts";
+    const { api } = await import(modulePath);
+    const id = location.pathname.split("/")[2];
+    const questions = await api.cases.getQuestions(id);
+    await api.cases.saveAnswers(id, {
+      expectedRevision: questions.revision,
+      answers: [
+        {
+          questionId: questions.questions[0].id,
+          state: "answered",
+          value: "다른 탭에서 저장한 답변",
+        },
+      ],
+    });
+    window.dispatchEvent(new Event("focus"));
+  });
+  await expect(page.getByRole("alert")).toContainText("작성 중인 답변은 남겨뒀어요");
+  await expect(editor).toHaveValue("현재 탭에서 아직 저장하지 않은 답변");
+  await expect(page.getByRole("button", { name: "저장하고 다음 질문" })).toBeDisabled();
+  await page.getByRole("button", { name: "최신 내용 불러오기" }).click();
+  await expect(editor).toHaveValue("다른 탭에서 저장한 답변");
+  await expect(page.getByRole("button", { name: "저장하고 다음 질문" })).toBeEnabled();
+});
+
+async function recoveryWorkspace(page: Page) {
+  await page.goto("/cases/new");
+  await page
+    .getByLabel("지금까지 있었던 일")
+    .fill("합성 사건 복구 검증입니다. 계약 날짜와 준비할 자료를 정리합니다.");
+  await page.getByRole("button", { name: "저장하고 계속" }).click();
+  for (let i = 0; i < 6; i++) await page.getByRole("button", { name: "모름", exact: true }).click();
+  await page.getByLabel("요약이 내가 이야기한 사실과 맞는지 확인했어요.").check();
+  await page.getByRole("button", { name: "요약 확인하고 계속" }).click();
+  await page.getByRole("button", { name: "확인하고 사건 열기" }).click();
+  await expect(page.getByRole("textbox", { name: "추가 사실 또는 질문" })).toBeVisible();
+}
+
+type CustomerReadRace = {
+  reads: number;
+  holdingSession: boolean;
+  sessionHeld: boolean;
+  oldDelivered: boolean;
+  releaseOld: () => void;
+  releaseNew: () => void;
+};
+for (const kind of ["list", "workspace"] as const) {
+  test(`${kind} keeps the latest snapshot when an older read arrives during session verification`, async ({
+    page,
+  }) => {
+    await recoveryWorkspace(page);
+    if (kind === "list") {
+      await page.goto("/cases");
+      await expect(page.locator(".intake-case-card")).toHaveCount(1);
+    }
+    await page.evaluate(async (kind) => {
+      const modulePath = "/src/client/api/index.ts";
+      const { api } = await import(modulePath);
+      const state: CustomerReadRace = {
+        reads: 0,
+        holdingSession: false,
+        sessionHeld: false,
+        oldDelivered: false,
+        releaseOld: () => {},
+        releaseNew: () => {},
+      };
+      (window as unknown as { customerReadRace: CustomerReadRace }).customerReadRace = state;
+      // AppNavigation also reads cases/session; schedule only the screen under test.
+      const owner = kind === "list" ? "CaseList.tsx" : "Workspace.tsx";
+      const session = api.session.get.bind(api.session);
+      api.session.get = async () => {
+        const owned = new Error().stack?.includes(owner);
+        const value = await session();
+        if (owned && state.holdingSession) {
+          state.holdingSession = false;
+          state.sessionHeld = true;
+          await new Promise<void>((resolve) => {
+            state.releaseNew = resolve;
+          });
+        }
+        return value;
+      };
+      const wrap = async <T>(read: () => Promise<T>, update: (value: T) => T) => {
+        const owned = new Error().stack?.includes(owner);
+        const value = await read();
+        if (!owned) return value;
+        const ordinal = ++state.reads;
+        if (ordinal === 1) {
+          await new Promise<void>((resolve) => {
+            state.releaseOld = resolve;
+          });
+          state.oldDelivered = true;
+          return value;
+        }
+        if (ordinal === 2) {
+          state.holdingSession = true;
+          return update(value);
+        }
+        return value;
+      };
+      if (kind === "list") {
+        const original = api.cases.list.bind(api.cases);
+        api.cases = {
+          ...api.cases,
+          list: () =>
+            wrap<CaseView[]>(original, (items) =>
+              items.map((item) => ({ ...item, title: "최신 조회 복구 결과" })),
+            ),
+        };
+      } else {
+        const original = api.workspace.get.bind(api.workspace);
+        api.workspace = {
+          ...api.workspace,
+          get: (id: string) =>
+            wrap<WorkspaceView>(
+              () => original(id),
+              (view) => ({ ...view, case: { ...view.case, title: "최신 조회 복구 결과" } }),
+            ),
+        };
+      }
+      window.dispatchEvent(new Event("focus"));
+    }, kind);
+    const state = () =>
+      page.evaluate(() => {
+        const s = (window as unknown as { customerReadRace: CustomerReadRace }).customerReadRace;
+        return { reads: s.reads, sessionHeld: s.sessionHeld, oldDelivered: s.oldDelivered };
+      });
+    await expect.poll(async () => (await state()).reads).toBe(1);
+    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await expect.poll(async () => (await state()).sessionHeld).toBe(true);
+    await page.evaluate(() =>
+      (window as unknown as { customerReadRace: CustomerReadRace }).customerReadRace.releaseOld(),
+    );
+    await expect.poll(async () => (await state()).oldDelivered).toBe(true);
+    await page.evaluate(() =>
+      (window as unknown as { customerReadRace: CustomerReadRace }).customerReadRace.releaseNew(),
+    );
+    await expect(
+      page.getByRole("main").getByText("최신 조회 복구 결과", { exact: true }),
+    ).toBeVisible();
+  });
+}
+
+test("pending workspace files keep polling after a transient failure and stop on completion", async ({
+  page,
+}) => {
+  await recoveryWorkspace(page);
+  await page.getByRole("link", { name: "자료 0", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "사건 자료", exact: true })).toBeVisible();
+  await page.evaluate(async () => {
+    const modulePath = "/src/client/api/index.ts";
+    const { api } = await import(modulePath);
+    const original = api.workspace.get.bind(api.workspace);
+    const state = { reads: 0 };
+    (window as unknown as { customerPoll: typeof state }).customerPoll = state;
+    api.workspace = {
+      ...api.workspace,
+      get: async (id: string) => {
+        const owned = new Error().stack?.includes("Workspace.tsx");
+        if (!owned) return original(id);
+        const ordinal = ++state.reads;
+        if (ordinal === 2)
+          throw Object.assign(new Error("합성 일시 조회 실패"), {
+            code: "UNAVAILABLE",
+            retryable: true,
+          });
+        const value = await original(id);
+        return {
+          ...value,
+          files: [
+            {
+              id: "synthetic-processing-file",
+              name: "합성 처리 자료.txt",
+              mimeType: "text/plain",
+              sizeBytes: 12,
+              status: ordinal === 1 ? "processing" : "ready",
+              coverage: "합성 처리 범위",
+              extractedText: "합성 추출 내용",
+            },
+          ],
+        };
+      },
+    };
+    window.dispatchEvent(new Event("focus"));
+  });
+  const reads = () =>
+    page.evaluate(
+      () => (window as unknown as { customerPoll: { reads: number } }).customerPoll.reads,
+    );
+  await expect.poll(reads).toBe(2);
+  await expect(page.getByRole("alert")).toBeVisible();
+  await expect.poll(reads, { timeout: 6000 }).toBe(3);
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect(page.getByText("합성 처리 자료.txt", { exact: true })).toBeVisible();
+  await expect(page.getByText("결과 확인 가능", { exact: true })).toBeVisible();
+  // Two polling periods pass without any further workspace read after completion.
+  await page.waitForTimeout(3800);
+  expect(await reads()).toBe(3);
+});
 
 async function capture(page: Page, name: string) {
   const { default: AxeBuilder } = await import("@axe-core/playwright");
