@@ -87,6 +87,12 @@ for (const operation of ["save", "confirm"] as const)
           await page.getByRole("button", { name: "확인하고 사건 열기" }).click();
           if (!loseSession) {
             await expect(page).toHaveURL(new RegExp(`/cases/${info.id}$`));
+            const summary = page.getByRole("complementary", { name: "사건 요약 및 준비 현황" });
+            await expect(summary).toBeVisible();
+            await summary.getByText("사건 요약과 준비 현황", { exact: true }).click();
+            await expect(
+              summary.getByText("사용자의 거래 자료 확인 준비를 정리했습니다.", { exact: true }),
+            ).toBeVisible();
             return;
           }
           await expect(page.getByRole("alert")).toContainText("연결하지 못했어요");
@@ -102,8 +108,14 @@ for (const operation of ["save", "confirm"] as const)
           await expect(page.getByRole("link", { name: "사건 열기", exact: true })).toBeVisible();
         }
       } finally {
-        server.stdin.end();
-        server.kill();
+        try {
+          // Stop new page requests, then drain active routes before shutting down the API.
+          await page.close();
+          await context.unrouteAll({ behavior: "wait" });
+        } finally {
+          server.stdin.end();
+          server.kill();
+        }
       }
     });
   }
