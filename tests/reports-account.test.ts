@@ -154,7 +154,7 @@ test("review edits and masking persist through storage reload; old versions reta
   const saved = await f.reports.save("case-demo", {
     content: "검토한 사실 01012345678 demo@example.test",
     maskIdentifiers: true,
-    excludedFileIds: ["file-demo"],
+    excludedFileIds: [],
   });
   expect(saved.revision).toBe(2);
   expect(saved.id).not.toBe(report.id);
@@ -169,6 +169,78 @@ test("review edits and masking persist through storage reload; old versions reta
     "연락: [전화번호 가림] / [전화번호 가림]",
   );
   expect(maskReportText("합성 거래번호 99901012345678999")).toContain("99901012345678999");
+});
+test("mock reports use current facts, people, actions and corrected observations; excluding material rebuilds its text", async () => {
+  const f = fixture();
+  const initial = await f.reports.get("case-demo");
+  f.update((state) => {
+    const workspace = state.workspace["case-demo"];
+    if (!workspace) throw new Error("Synthetic workspace missing");
+    workspace.facts = [
+      {
+        id: "new-fact",
+        text: "현재 교정한 사실",
+        attribution: "user_statement",
+        certainty: "reported",
+        significance: "neutral",
+        references: [],
+        conflictingFactIds: [],
+        userEdited: true,
+      },
+    ];
+    workspace.people = [{ id: "new-person", label: "현재 관계자", role: "자료 확인자" }];
+    workspace.actions = [
+      { id: "new-action", title: "최신 행동", detail: "자료 확인 완료", done: true },
+    ];
+    state.fileReviews = {
+      "file-demo": {
+        observations: [
+          {
+            value: {
+              id: "observation-one",
+              text: "교정한 자료 관찰",
+              position: { kind: "audio", startSeconds: 1.25, endSeconds: 2.75 },
+              certainty: "uncertain",
+              userEdited: true,
+              included: true,
+            },
+          },
+          {
+            value: {
+              id: "observation-two",
+              text: "제외한 자료 관찰",
+              position: { kind: "image", region: null },
+              certainty: "observed",
+              userEdited: false,
+              included: false,
+            },
+          },
+        ],
+      },
+    };
+    const item = state.cases["case-demo"];
+    if (item) item.revision++;
+  });
+  const current = await f.reports.generate("case-demo");
+  for (const text of [
+    "현재 교정한 사실",
+    "현재 관계자",
+    "최신 행동 (완료)",
+    "교정한 자료 관찰",
+    "1.25–2.75초",
+  ])
+    expect(current.content).toContain(text);
+  expect(current.content).not.toContain("제외한 자료 관찰");
+  expect(f.read().reportHistory?.[initial.id]?.content).toBe(initial.content);
+  const excluded = await f.reports.save("case-demo", {
+    content: current.content,
+    maskIdentifiers: true,
+    excludedFileIds: ["file-demo"],
+  });
+  expect(excluded.content).not.toContain("교정한 자료 관찰");
+  expect(excluded.content).not.toContain("합성 자료.txt");
+  expect(excluded.content).toContain("현재 교정한 사실");
+  expect(f.read().reportHistory?.[current.id]?.content).toBe(current.content);
 });
 test("revision conflict and mutation-key replay prevent silent overwrites and duplicate report versions", async () => {
   const f = fixture();
@@ -614,8 +686,8 @@ test("existing mock report reads survive re-consent while case deletion clears m
   f.update((state) => {
     state.session.needsConsent = true;
     state.fileReviews = {
-      "file-demo": { text: "보존하면 안 되는 교정" },
-      peer: { text: "다른 사건 교정" },
+      "file-demo": { observations: [] },
+      peer: { observations: [] },
     };
     state.fileReviewReceipts = {
       own: { signature: "own", value: { fileId: "file-demo" } },
@@ -625,7 +697,7 @@ test("existing mock report reads survive re-consent while case deletion clears m
   expect((await f.reports.get("case-demo")).id).toBe(report.id);
   await expect(f.reports.generate("case-demo")).rejects.toMatchObject({ code: "CONSENT_REQUIRED" });
   await f.account.deleteCase("case-demo", "DELETE");
-  expect(f.read().fileReviews).toEqual({ peer: { text: "다른 사건 교정" } });
+  expect(f.read().fileReviews).toEqual({ peer: { observations: [] } });
   expect(f.read().fileReviewReceipts).toEqual({
     peer: { signature: "peer", value: { fileId: "peer" } },
   });

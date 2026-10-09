@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { createReportHtml } from "../../../components/reports/document";
 import { maskReportText } from "../../../components/reports/download";
 import { idempotencyKeySchema, opaqueIdSchema } from "../../../contracts";
 import { CURRENT_POLICY_VERSIONS } from "../../../contracts/consent";
@@ -511,6 +512,15 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
     },
     async pdf(ownerId: string, id: string) {
       return exports.pdf(actor(ownerId), id);
+    },
+    async html(ownerId: string, id: string) {
+      const a = actor(ownerId);
+      const report = await view(a, id);
+      const document = createReportHtml(report);
+      // Saved-report presentation only; no new AI processing, report revision or blob.
+      // Recheck ownership and deletion after all asynchronous source reads.
+      await row(a, id);
+      return document;
     },
     async zip(ownerId: string, id: string, key: string, selectedFileIds: readonly string[]) {
       const a = actor(ownerId),

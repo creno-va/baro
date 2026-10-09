@@ -66,6 +66,23 @@ revision을 올리므로 전체 숫자만으로 stale을 판단하지 않는다.
 기존 생성 기준의 동일 byte를 읽으며 owner/role/report/blob/deletion을 매 stream 경계에서 확인한다.
 아직 생성되지 않은 PDF와 새 ZIP은 최신 source digest와 동의 검사 후 생성한다.
 
+## HTML 리포트와 바로 로고
+
+`GET /api/v2/reports/:reportId/html`과 `api.reports.html(id): Promise<Blob>`은 저장된
+리포트를 HTML로 내려준다. 인증/소유권/삭제 검사를 거치며 현재 동의가 만료되거나
+source가 변경되어도 기존 생성 기준을 표시한 저장본을 읽을 수 있다. 새 AI 처리,
+리포트 revision, R2 파생물을 만들지 않는다. 새 리포트 생성/수정 권한과 구분한다.
+
+제품의 전달 내용 미리보기와 HTML 다운로드는 같은 renderer를 사용한다. 기존 UI의
+흰색·파란색·회색, 카드와 여백에 맞췄고 실제 `public/brand/logo.svg`를 넣었다.
+다운로드 파일은 로고를 내장하여 오프라인에서도 표시한다. 식별정보 가림은 제목과
+본문에 적용하며 저장된 제외 설정과 생성 기준을 표시한다. 저장 전 제외 설정은
+저장 후 본문에 반영됨을 안내하고 저장 전 다운로드는 차단한다.
+
+사용자 문자열은 HTML escape하며 외부 script/font/image 요청이 없다. 제품 미리보기는
+정적 CSS와 escape된 fragment를 사용해 기존 CSP를 유지한다. 다운로드는 attachment,
+no-store, nosniff와 sandbox CSP를 반환한다. 악성 문자는 실행 없이 글자로 표시한다.
+
 ## 검증 경계
 
 `tests/files-review.test.ts`: 실제 SQLite/AES 기반 4개씩 페이지/저장, 9개 관찰 재접속,
@@ -76,6 +93,31 @@ revision을 올리므로 전체 숫자만으로 stale을 판단하지 않는다.
 `tests/reports-service.test.ts` / `tests/reports-api.test.ts`: 선택 원본 UTF-8 이름/byte,
 PDF masking/자료 제외, immutable report, stale 저장 PDF 동일 byte, 새 동의 요구,
 삭제 후 stream 차단을 검사한다. 기존 paid storage/resource/fence/deletion tests도 재사용한다.
+
+`tests/browser/material-report.config.ts`의 실제 signed-session/SQLite/AES 경로 2개는
+한글 PDF·선택 ZIP 다운로드, source 변경/동의 철회 후 같은 PDF byte, 새 작업 차단,
+원본 삭제 후 리포트 접근 제거를 확인한다. `reports.config.ts`의 독립 화면 회귀 6개와
+`reports-integrated.config.ts`의 공유 제품 로그인→문답→자료→리포트→PDF/ZIP→삭제 1개도 통과했다.
+mock도 현재 사실/인물/행동/교정 관찰을 반영하고 자료 제외 변경 시 본문을 재구성한다.
+
+같은 설정의 HTML 시각 검증 1개는 데스크톱/390px 모바일/인쇄 레이아웃, 실제 로고
+로딩, axe 접근성 및 스크립트 비실행을 검사한다. 실제 API 경로에서 HTML 다운로드의
+마스킹과 제품 미리보기 로고도 검증한다. `tests/reports-html.test.ts`는 escape,
+생성 기준/위치/누락 보존, 재동의 전 다운로드, 교차 소유권과 자료 삭제 후 404를 검사한다.
+HTML 데스크톱·모바일 스크린샷을 직접 열어 글자·간격·배치·가로 넘침을 확인했다.
+
+A/B 통합 커밋 `5bcb97d`에서 추가 대화→사실/인물/연결 타임라인/행동→새 리포트,
+사실 재교정→재확인→새 리포트 및 이전 PDF byte 보존을 실제 repository로 검증했다
+(1 test / 28 assertions). B의 `tests/integration/report-current-summary.integration.ts`는
+A 통합 PR에서 `.test.ts`로 옮겨 기본 CI에 포함한다. A의
+`tests/customer-material-review-api.test.ts`는 실제 고객 adapter→B Hono/SQLite API의
+9개 관찰 paging, If-Match, PATCH/continue 응답 유실·동일 키, 재접속, 원문 보존,
+재동의 읽기/쓰기 분리와 교차 소유권을 추가 검증했다. 두 결합 테스트 모두 통과했다.
+
+합성 산출물의 실제 한글 PDF 2쪽을 PNG로 렌더링해 본문·줄바꿈·여백·페이지 번호를
+직접 확인했다. PDF 텍스트에서 교정 문장과 위치를 확인하고 원래 문장/제외 관찰/전화번호가
+빠졌는지 대조했다. ZIP은 선택한 `합성💙 자료.txt` 1개와 23-byte 원본을 정확히 대조했다.
+전사 교정은 2.25–8.75초 위치, 12.5–19.25초 누락과 19.25–30초 저품질 구간을 보존한다.
 
 최종 검사/브라우저/PDF 시각 검증 결과는 PR의 exact-head 검증 기록을 정본으로 삼는다.
 모든 입력은 합성이다. 이 테스트의 R2 byte adapter와 SQL journal replay는 원격 Cloudflare

@@ -4,11 +4,12 @@ import { api } from "../../client/api";
 import type { ReportView as BaseReportView, FileView } from "../../client/api/types";
 import { CaseNavigation } from "../workspace/CaseNavigation";
 import { ConfirmDialog } from "./ConfirmDialog";
-import { downloadBlob, maskReportText } from "./download";
+import { createReportMarkup } from "./document";
+import { downloadBlob } from "./download";
 
 type ReportView = BaseReportView & {
-  basis?: { workspaceRevision: number; summaryRevision: number; generatedAt: string };
-  pdfAvailable?: boolean;
+  basis?: { workspaceRevision: number; summaryRevision: number; generatedAt: string } | undefined;
+  pdfAvailable?: boolean | undefined;
 };
 
 export function ReportReview({ caseId }: { caseId: string }) {
@@ -431,7 +432,27 @@ export function ReportReview({ caseId }: { caseId: string }) {
             {preview && (
               <section className="report-preview-section" id="report-preview-section">
                 <h2>전달 내용 미리보기</h2>
-                <pre className="report-preview">{mask ? maskReportText(content) : content}</pre>
+                <p className="report-option-note">
+                  {dirty
+                    ? "저장 전 미리보기예요. 자료 제외 설정은 저장 후 본문에 반영돼요."
+                    : "저장된 생성 기준과 검토 내용을 담은 HTML 리포트예요."}
+                </p>
+                {/* Trusted template escapes every title/body string; no user HTML is interpreted. */}
+                <section
+                  className="report-html-preview"
+                  aria-label="디자인된 HTML 리포트 미리보기"
+                  // biome-ignore lint/a11y/noNoninteractiveTabindex: The bounded report region must support keyboard scrolling.
+                  tabIndex={0}
+                  // biome-ignore lint/security/noDangerouslySetInnerHtml: createReportMarkup escapes every user-derived string.
+                  dangerouslySetInnerHTML={{
+                    __html: createReportMarkup({
+                      ...report,
+                      content,
+                      maskIdentifiers: mask,
+                      excludedFileIds: excluded,
+                    }),
+                  }}
+                />
                 <p>
                   리포트 제외 자료: {excluded.length}개 · ZIP 원본: {selected.length}개
                 </p>
@@ -457,6 +478,21 @@ export function ReportReview({ caseId }: { caseId: string }) {
                 <button
                   type="button"
                   className="primary"
+                  disabled={Boolean(busy) || dirty || !reviewed}
+                  onClick={() =>
+                    void run("HTML 준비 중…", async () => {
+                      downloadBlob(
+                        await ownedResult(api.reports.html(report.id)),
+                        `BARO-${report.id}.html`,
+                      );
+                      setNotice("HTML 리포트 다운로드를 시작했어요.");
+                    })
+                  }
+                >
+                  <Download size={16} aria-hidden="true" /> HTML 다운로드
+                </button>
+                <button
+                  type="button"
                   disabled={
                     Boolean(busy) ||
                     ((report.stale || needsConsent) && !report.pdfAvailable) ||
