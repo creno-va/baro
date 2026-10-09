@@ -40,6 +40,9 @@ P0.3 #18은 50개 제품 runner/상세 UI와 자동 접근성, dependency/secret
 실제 외부 검증이 남은 이슈는 OPEN으로 보존하며 구현 병합을 이슈/마일스톤 완료로 표시하지 않는다.
 그래프의 `implementationPr`는 검토된 전체 구현 PR만 지정하며 `work:next`가 실제 main 병합과
 Quality gate 성공을 조회한다. Fixture-only PR은 지정하지 않고 external 항목은 이 예외를 사용할 수 없다.
+외부/최종 인수 항목은 선행 이슈가 실제 CLOSED여야 충족되며, 선행 구현 PR의 병합만으로
+OPEN 외부 조건을 목록에서 제외하지 않는다. 진행 중인 보완은 `IN_PROGRESS`로 표시하고
+기존 구현 PR 병합 증거를 함께 표시한다. `IMPLEMENTATION_MERGED`도 이슈 완료는 아니다.
 마일스톤은 전체 완료 게이트다. 기존 Goal은 삭제됐으며 기능 연결·검증·배포 루프로 진행한다.
 
 ## 작업 선택·인계

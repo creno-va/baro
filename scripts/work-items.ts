@@ -24,6 +24,28 @@ export const workGraphSchema = z
 
 export type WorkGraph = z.infer<typeof workGraphSchema>;
 
+/** Implementation evidence unblocks development, never final external acceptance. */
+export function workItemProgress(
+  item: Pick<WorkGraph["items"][number], "issue" | "kind" | "dependsOn">,
+  closed: ReadonlySet<number>,
+  implemented: ReadonlySet<number>,
+  active: boolean,
+) {
+  const blockedBy = item.dependsOn.filter(
+    (id) => !closed.has(id) && (item.kind === "external" || !implemented.has(id)),
+  );
+  const status = active
+    ? "IN_PROGRESS"
+    : implemented.has(item.issue)
+      ? "IMPLEMENTATION_MERGED"
+      : item.kind === "external"
+        ? "EXTERNAL"
+        : blockedBy.length
+          ? "BLOCKED"
+          : "READY";
+  return { blockedBy, status };
+}
+
 export function validateWorkGraph(graph: WorkGraph): string[] {
   const errors: string[] = [];
   const items = new Map(graph.items.map((item) => [item.issue, item]));
@@ -148,6 +170,7 @@ if (import.meta.main) {
       ]),
     );
   const issues = new Map(live.map((item) => [item.number, item]));
+  const closed = new Set(live.filter((item) => item.state === "CLOSED").map((item) => item.number));
   const implemented = new Set<number>();
   for (const item of graph.items) {
     if (
@@ -180,25 +203,17 @@ if (import.meta.main) {
       console.error(`MILESTONE DRIFT #${item.issue}`);
       drift = true;
     }
-    const blockedBy = item.dependsOn.filter(
-      (id) => issues.get(id)?.state !== "CLOSED" && !implemented.has(id),
-    );
     const active =
       issue.labels.some((label) => label.name === "status:in-progress") ||
       prs.some((pr) =>
         new RegExp(`(?:Refs|Closes|Fixes) #${item.issue}(?!\\d)`, "i").test(pr.body),
       );
-    const status = implemented.has(item.issue)
-      ? "IMPLEMENTATION_MERGED"
-      : active
-        ? "IN_PROGRESS"
-        : item.kind === "external"
-          ? "EXTERNAL"
-          : blockedBy.length
-            ? "BLOCKED"
-            : "READY";
+    const { blockedBy, status } = workItemProgress(item, closed, implemented, active);
+    const proof = implemented.has(item.issue)
+      ? ` [implementation PR #${item.implementationPr} merged]`
+      : "";
     console.log(
-      `${status} #${item.issue} ${issue.title}${blockedBy.length ? ` <- ${blockedBy.map((id) => `#${id}`).join(", ")}` : ""}`,
+      `${status} #${item.issue} ${issue.title}${proof}${blockedBy.length ? ` <- ${blockedBy.map((id) => `#${id}`).join(", ")}` : ""}`,
     );
   }
   const untracked = live.filter(
