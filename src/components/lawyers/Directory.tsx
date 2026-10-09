@@ -1,7 +1,6 @@
 import { ArrowRight, ChevronDown, Info, MapPin, Search, UserRound } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, type LawyerView, lawyerErrorMessage } from "../../client/api/lawyers";
-import { PUBLIC_PREVIEW } from "../../client/public-preview";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { PageHeader } from "../ui/page-header";
@@ -20,10 +19,6 @@ export function Directory({ preview = false }: { preview?: boolean }) {
   const current = useRef<AbortController | null>(null);
   const query = useRef("");
   const load = useCallback(async (params: URLSearchParams) => {
-    if (PUBLIC_PREVIEW) {
-      setBusy(false);
-      return;
-    }
     current.current?.abort();
     const controller = new AbortController();
     current.current = controller;
@@ -96,7 +91,7 @@ export function Directory({ preview = false }: { preview?: boolean }) {
             className="directory-search__form"
             onSubmit={(event) => {
               event.preventDefault();
-              if (PUBLIC_PREVIEW || !ready) return;
+              if (!ready) return;
               const params = new URLSearchParams(
                 Object.entries(filters)
                   .filter(([, value]) => value.trim() !== "")
@@ -116,7 +111,7 @@ export function Directory({ preview = false }: { preview?: boolean }) {
                 <input
                   placeholder="이름 또는 사무실명 입력"
                   maxLength={100}
-                  disabled={PUBLIC_PREVIEW || !ready}
+                  disabled={!ready}
                   value={filters.name}
                   onChange={(event) => setFilters({ ...filters, name: event.target.value })}
                 />
@@ -126,7 +121,7 @@ export function Directory({ preview = false }: { preview?: boolean }) {
               <span>지역</span>
               <span className="directory-search__select">
                 <select
-                  disabled={PUBLIC_PREVIEW || !ready}
+                  disabled={!ready}
                   value={filters.region}
                   onChange={(event) => setFilters({ ...filters, region: event.target.value })}
                 >
@@ -144,7 +139,7 @@ export function Directory({ preview = false }: { preview?: boolean }) {
               <span>분야</span>
               <span className="directory-search__select">
                 <select
-                  disabled={PUBLIC_PREVIEW || !ready}
+                  disabled={!ready}
                   value={filters.legalField}
                   onChange={(event) => setFilters({ ...filters, legalField: event.target.value })}
                 >
@@ -159,13 +154,9 @@ export function Directory({ preview = false }: { preview?: boolean }) {
               </span>
             </label>
             <div className="directory-search__submit">
-              <Button
-                type="submit"
-                disabled={PUBLIC_PREVIEW || !ready}
-                className="directory-search__button"
-              >
+              <Button type="submit" disabled={!ready} className="directory-search__button">
                 <Search size={18} aria-hidden="true" />
-                {PUBLIC_PREVIEW ? "검색 · 준비 중" : "검색"}
+                검색
               </Button>
             </div>
           </form>
@@ -186,14 +177,7 @@ export function Directory({ preview = false }: { preview?: boolean }) {
           }
         />
       )}
-      {PUBLIC_PREVIEW && (
-        <StatePanel
-          variant="pending"
-          title="변호사 찾기를 준비하고 있어요."
-          description="2026년 11월 1일 웹 전체 출시 예정이에요. 지금은 사건 입력과 질문 답변을 체험해 주세요."
-        />
-      )}
-      {!PUBLIC_PREVIEW && !busy && !error && items.length === 0 && (
+      {!busy && !error && items.length === 0 && (
         <StatePanel
           variant="empty"
           title="조건에 맞는 공개 프로필이 없어요."
