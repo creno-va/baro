@@ -1,4 +1,4 @@
-// A/B integration: run explicitly after combining A's current-summary implementation and B.
+// A/B integration: current summary and material/report contracts run together in CI.
 // Uses real repositories/SQL/AES and deterministic validated AI output; no remote model calls.
 import { expect, test } from "bun:test";
 import type { V2Action, V2Fact, V2TimelineEntry } from "../../src/contracts/v2";

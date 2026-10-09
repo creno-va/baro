@@ -297,6 +297,12 @@ export function SummaryReview({ caseId }: { caseId: string }) {
             />
           ) : (
             <>
+              {item.stage === "active" && (
+                <ButtonLink href={`/cases/${encodeURIComponent(caseId)}`}>
+                  사건 열기
+                  <ArrowRight size={16} aria-hidden="true" />
+                </ButtonLink>
+              )}
               {!canMutate && (
                 <p>
                   저장한 요약을 읽을 수 있어요. 수정·확인하려면{" "}

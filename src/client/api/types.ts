@@ -67,8 +67,8 @@ export type WorkspaceView = {
   notices?: string[];
 };
 export type ReportView = {
-  basis?: { workspaceRevision: number; summaryRevision: number; generatedAt: string };
-  pdfAvailable?: boolean;
+  basis?: { workspaceRevision: number; summaryRevision: number; generatedAt: string } | undefined;
+  pdfAvailable?: boolean | undefined;
   id: string;
   caseId: string;
   revision: number;

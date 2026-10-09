@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../../client/api";
+import { ApiError } from "../../client/api/core";
 import type { FileReviewProgress, FileReviewView } from "../../client/api/types";
 import { accessHref } from "../../client/return-path";
 import type { V2Coverage } from "../../contracts/v2";
+import { ErrorPanel } from "../intake/common";
 import { useCustomerAccess } from "../intake/useCustomerAccess";
 import { Button } from "../ui/button";
 import { positionLabel } from "./source-label";
@@ -36,36 +38,52 @@ function coverageRows(value: V2Coverage): string[] {
 export function FileReview({
   caseId,
   fileId,
+  canEdit,
   onChanged,
   onError,
 }: {
   caseId: string;
   fileId: string;
-  onChanged: () => Promise<void>;
+  canEdit: boolean;
+  onChanged: () => Promise<unknown>;
   onError: (cause: unknown) => unknown;
 }) {
   const [review, setReview] = useState<FileReviewView | null>(null);
   const [drafts, setDrafts] = useState<Record<string, { text: string; included: boolean }>>({});
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
+  const [error, setError] = useState<unknown>(null);
+  const saved = useRef(review);
+  saved.current = review;
+  const draftDirty = useRef(false);
+  draftDirty.current = Object.keys(drafts).length > 0;
+  const report = useCallback(
+    (cause: unknown) => {
+      setError(cause);
+      return onError(cause);
+    },
+    [onError],
+  );
   const [limit, setLimit] = useState(100);
   const serial = useRef(0),
     locked = useRef(false);
   const purge = useCallback(() => {
     ++serial.current;
     setReview(null);
+    setError(null);
     setDrafts({});
     locked.current = false;
     setBusy(false);
   }, []);
   const { ready, canMutate, version, verify, ticket, current, alive } = useCustomerAccess(
     purge,
-    onError,
+    report,
     true,
   );
   const dirty = Object.keys(drafts).length > 0;
+  const canWrite = canMutate && canEdit && (error as { code?: string })?.code !== "CONFLICT";
   const load = useCallback(
-    async (after = -1) => {
+    async (after = -1, replace = false) => {
       const request = ++serial.current;
       let epoch = ticket();
       try {
@@ -73,16 +91,27 @@ export function FileReview({
         epoch = ticket();
         const next = await api.files.review(caseId, fileId, after);
         if (!(await verify()) || !current(epoch) || request !== serial.current) return;
+        if (
+          !replace &&
+          (after >= 0 || draftDirty.current) &&
+          saved.current &&
+          (saved.current.file.revision !== next.file.revision ||
+            saved.current.workspaceRevision !== next.workspaceRevision)
+        ) {
+          throw new ApiError("CONFLICT", "자료가 변경됐어요. 최신 내용을 확인해 주세요.");
+        }
+        setError(null);
+        if (replace) setDrafts({});
         setReview((old) =>
           after < 0
             ? next
             : { ...next, observations: [...(old?.observations ?? []), ...next.observations] },
         );
       } catch (cause) {
-        if (alive(epoch) && request === serial.current) onError(cause);
+        if (alive(epoch) && request === serial.current) report(cause);
       }
     },
-    [caseId, fileId, verify, ticket, current, alive, onError],
+    [caseId, fileId, verify, ticket, current, alive, report],
   );
   useEffect(() => {
     if (version && !locked.current) void load();
@@ -94,7 +123,7 @@ export function FileReview({
     [],
   );
   async function run(action: (epoch: number) => Promise<void>, write = true) {
-    if (locked.current || (write && !canMutate)) return;
+    if (locked.current || (write && !canWrite)) return;
     locked.current = true;
     setBusy(true);
     setNotice("");
@@ -103,7 +132,7 @@ export function FileReview({
     try {
       if ((await verify(false, write)) && current(epoch)) await action(epoch);
     } catch (cause) {
-      if (alive(epoch)) onError(cause);
+      if (alive(epoch)) report(cause);
     } finally {
       if (alive(epoch)) {
         locked.current = false;
@@ -125,7 +154,7 @@ export function FileReview({
     if (result.status === "ready") {
       setDrafts({});
       setNotice("교정 내용을 저장했어요. 새로 접속해도 유지됩니다.");
-      await load();
+      await load(-1, true);
       if (current(epoch)) await onChanged();
     }
   }
@@ -133,6 +162,13 @@ export function FileReview({
   return (
     <section aria-label="자료 내용 검토" aria-busy={busy}>
       <h3>자료 내용 검토</h3>
+      {error ? (
+        <ErrorPanel
+          error={error}
+          retry={() => void load(-1, (error as { code?: string })?.code === "CONFLICT")}
+          disabled={busy}
+        />
+      ) : null}
       {!ready || !review ? (
         <p role="status">처리 위치와 저장한 교정 내용을 불러오고 있어요.</p>
       ) : (
@@ -143,6 +179,7 @@ export function FileReview({
               <a href={accessHref("consent")}>최신 동의 확인</a>이 필요해요.
             </p>
           )}
+          {canMutate && !canEdit && <p>자료 교정은 사건 요약을 확인한 뒤 진행할 수 있어요.</p>}
           {review.recovery && <p role="status">{review.recovery.message}</p>}
           <details>
             <summary>페이지·시간별 처리 범위 ({rows.length}개)</summary>
@@ -172,7 +209,7 @@ export function FileReview({
                 return copy;
               });
             return (
-              <fieldset key={value.id} disabled={busy || !canMutate || !!review.pendingReview}>
+              <fieldset key={value.id} disabled={busy || !canWrite || !!review.pendingReview}>
                 <legend>{positionLabel(value.position)}</legend>
                 <details>
                   <summary>원본 추출 내용</summary>
@@ -216,7 +253,7 @@ export function FileReview({
               </p>
               {review.pendingReview.status === "saving" && (
                 <Button
-                  disabled={busy || !canMutate}
+                  disabled={busy || !canWrite}
                   onClick={() =>
                     void run(async (epoch) =>
                       progress(
@@ -256,7 +293,7 @@ export function FileReview({
           ) : (
             dirty && (
               <Button
-                disabled={busy || !canMutate || Object.values(drafts).some((d) => !d.text.trim())}
+                disabled={busy || !canWrite || Object.values(drafts).some((d) => !d.text.trim())}
                 onClick={() =>
                   void run(async (epoch) => {
                     const result = await api.files.saveReview(

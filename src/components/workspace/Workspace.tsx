@@ -140,6 +140,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
     );
     setPreview((file) => (file ? (next.files.find((item) => item.id === file.id) ?? null) : null));
   }, []);
+  const fileReviewError = useCallback((cause: unknown) => showError(cause, true), [showError]);
   const load = useCallback(async () => {
     const serial = ++latest.current;
     let epoch = ticket();
@@ -1149,8 +1150,8 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
             <X size={20} />
           </Button>
         </div>
-        {preview && ready && (
-          <div className="workspace-preview">
+        {preview && (
+          <div className="workspace-preview" hidden={!ready} inert={!ready}>
             <h3>{preview.name}</h3>
             <p>
               {fileStatus[preview.status]} · {size(preview.sizeBytes)}
@@ -1161,8 +1162,9 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
               key={preview.id}
               caseId={caseId}
               fileId={preview.id}
+              canEdit={!readonly}
               onChanged={load}
-              onError={showError}
+              onError={fileReviewError}
             />
             <div className="workspace-buttons">
               <Button

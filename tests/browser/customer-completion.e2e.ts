@@ -233,3 +233,62 @@ test("login preserves a permitted path and rejects an external return destinatio
   await page.getByRole("button", { name: "Google로 계속하기" }).click();
   await expect(page).toHaveURL(/\/app$/);
 });
+
+test("structured drafts and file corrections retain their base revision across a peer edit", async ({
+  page,
+}) => {
+  await seed(page);
+  await page.goto(`${base}/summary`);
+  await page.getByLabel("사실 내용", { exact: true }).first().fill("아직 저장하지 않은 사실 초안");
+  await page.evaluate(async () => {
+    const path = "/src/client/api/index.ts";
+    const { api } = await import(path);
+    const item = await api.cases.get("completion-case");
+    await api.cases.saveSummary(item.id, {
+      expectedRevision: item.revision,
+      summary: "다른 탭에서 저장한 요약",
+    });
+    window.dispatchEvent(new Event("focus"));
+  });
+  await expect(page.getByRole("alert")).toBeVisible();
+  await expect(page.getByLabel("사실 내용", { exact: true }).first()).toHaveValue(
+    "아직 저장하지 않은 사실 초안",
+  );
+  await expect(page.getByRole("button", { name: "수정 내용 저장", exact: true })).toBeDisabled();
+  await page.getByRole("button", { name: "최신 내용 불러오기", exact: true }).click();
+  await expect(page.getByLabel("요약 편집")).toHaveValue("다른 탭에서 저장한 요약");
+  await page.evaluate(async () => {
+    const path = "/src/client/api/index.ts";
+    const { api } = await import(path);
+    const item = await api.cases.get("completion-case");
+    await api.cases.confirmSummary(item.id, { expectedRevision: item.revision });
+  });
+  await page.goto(`${base}/files?file=file-one`);
+  await page.getByLabel("확인·교정한 내용").fill("저장하지 않은 자료 교정 초안");
+  await page.evaluate(async () => {
+    const path = "/src/client/api/index.ts";
+    const { api } = await import(path);
+    const review = await api.files.review("completion-case", "file-one");
+    await api.files.saveReview(
+      "completion-case",
+      "file-one",
+      {
+        expectedRevision: review.file.revision,
+        edits: [
+          {
+            observationId: review.observations[0].value.id,
+            text: "다른 탭의 자료 교정",
+            included: true,
+          },
+        ],
+      },
+      review.workspaceRevision,
+    );
+    window.dispatchEvent(new Event("focus"));
+  });
+  const panel = page.getByRole("region", { name: "자료 내용 검토" });
+  await expect(panel.getByRole("alert")).toBeVisible();
+  await expect(page.getByLabel("확인·교정한 내용")).toHaveValue("저장하지 않은 자료 교정 초안");
+  await panel.getByRole("button", { name: "최신 내용 불러오기", exact: true }).click();
+  await expect(page.getByLabel("확인·교정한 내용")).toHaveValue("다른 탭의 자료 교정");
+});
