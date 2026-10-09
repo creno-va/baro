@@ -40,7 +40,7 @@ ADR-0014의 심사/어드민 UI만 제외하고 기존 backend/증거는 보존�
 | E-R | `76c31fcc571e82b96d55dab6dcd3f02dc331e323`, [journal](https://github.com/creno-va/baro/issues/71#issuecomment-6024218432) | CI/Full/preview/production·SHA/schema0009/HTTP smoke와 local 세 OAuth callback 기록. 모든 환경 전체 시나리오·복구·정책 완료 아님 |
 | E-U | PR143/main `d91f342a3aa64008ab72ff338eca55c4ba14d40e`, CI37532626804/production37534088349 SUCCESS ([#57](https://github.com/creno-va/baro/issues/57)) | AI200·월cap 설정 배포. 실제 원격 비용/unknown hold 정산 완료 아님 |
 | E-I | [독립 리뷰](../quality/independent-review-2026-10-06/REPORT.md), PR123 및 #65/#66/#69 후속 이관 기록 | 당시 실패와 수정의 역사. 현재 미충족은 아래 담당 이슈로 유지 |
-| E-C | 이번 C PR의 최종 SHA·명령·결과는 아래 검증 기록에 추가 | 서버/변호사 client/문서 보완. A 통합·원격·사람 승인과 분리 |
+| E-C | C source `0d3fbe0`, 아래 로컬 검증 기록 PASS; 최종 PR CI/통합 SHA는 후속 연결 | 서버/변호사 client/문서 보완. A #163/#165 임시 통합 검증이며 main·원격·사람 승인과 분리 |
 
 ## 요구사항 완료표
 
@@ -66,19 +66,19 @@ ADR-0014의 심사/어드민 UI만 제외하고 기존 backend/증거는 보존�
 | F009 / 16 | B #66/#67 | 선택 ZIP 다운로드 → 선택 원본만, 중복 filename/삭제 안전 | ZIP bytes·HTTP/owner·원격 | E-F native 완료; 최신 보완·원격 이관 |
 | F012 / 17 | C #62/#61 | 비로그인 목록 필터/URL/빈 결과/회전 → 객관적 정렬·복원 | browser/API·mobile | E-L 완료; #162 활성화 통합 회귀 #69 |
 | F012 / 18 | C #62/#61 | 공개 프로필→연락/세 map 링크 → 올바른 URL·보장 없음 | browser/URL·공개 가드 | E-L 완료; text 표시 보완 및 live #71 |
-| F010 / 19 | C #62, A auth | 자기 portal·타인/고객 사건 시도 → 소유권/역할 차단·무검증 고지 | signed SQL/IDOR·browser | E-L 완료; 재동의 보완 E-C 대기 |
-| F011 / 20 | C #62 | 제목+별도 본문 작성/저장/재접속/미리보기/공개/수정/삭제 → 본문 보존 | 암호화 SQL·API/mock/browser | E-L image/PDF 완료; text E-C 대기 |
+| F010 / 19 | C #62, A auth | 자기 portal·타인/고객 사건 시도 → 소유권/역할 차단·무검증 고지 | signed SQL/IDOR·browser | E-L 완료; 재동의 보완 E-C 합성 PASS; main 통합 대기 |
+| F011 / 20 | C #62 | 제목+별도 본문 작성/저장/재접속/미리보기/공개/수정/삭제 → 본문 보존 | 암호화 SQL·API/mock/browser | E-L image/PDF 완료; text E-C 합성 PASS; main 통합 대기 |
 | F013 / 21–23 | ADR-0014 (#60 역사) | 승인·반려·심사 admin → MVP에 노출하지 않음 | route/navigation 확인 | 범위 제외, 기존 backend/증거 보존; #70 법률 승인과 별개 |
 | F014 / 24 | B #67, A auth | 최근 OAuth→자료/사건/계정 삭제 → 원본/파생/context/export/public 정리 | 실제 SQL·R2/instance delete | E-F 합성 완료; 원격 #67/#19/#71 |
 | F014 / 25 | B #67 | 삭제 중 upload/chat/export 완료 → 부활 금지·재시도/경보 | 경합 SQL·actual restore/journal | E-F 합성 완료; 실제 복구/운영 대기 |
 | legacy / 26 | A #65, B #67, #55 | v1 읽기/삭제 → schema1·기존 인용 보존·무단 재분석 없음 | migration/SQL/browser | E-F 완료; 변경 영향만 통합 회귀 |
-| all / 27 | A/B/C #69, #56 | 320px/desktop/200%·keyboard → focus/dialog/오류 접근성 | browser/axe+시각 점검 | E-F 기존 완료; 새 화면 E-C 및 A/B 통합 대기 |
+| all / 27 | A/B/C #69, #56 | 320px/desktop/200%·keyboard → focus/dialog/오류 접근성 | browser/axe+시각 점검 | E-F 기존 완료; 새 화면 E-C 합성 PASS; A/B/C main 통합 대기 |
 | all / 28 | A #69/#71, #56 | built Worker CSP→폰트/아이콘/dialog/upload → hydration·fallback | production bundle/CSP/browser | E-F 기존 완료; #162/새 client 통합 대기 |
 | F005/009 / 29 | A #64/#65, B #66 | 직접 연락 링크 후 사실/자료 추가→리포트 갱신 → 강제 연락/자동 공유 없음 | browser+snapshot | E-F 기존; 최신 facts 연결 보완 미검증 |
 | privacy / 30 | #68/#69 | analytics 거부/철회→기능 동일·PII allowlist | 동의/철회 테스트 | E-F 완료; 정책 사람 승인 #20/#70 |
 | renewal-customer / 31 | A #65, B #58 | 재동의 전 사건/자료 조회·다운로드 → 읽기 허용/수정·AI 차단 | API/browser·계정 전환 | 보완 통합 대기, 미검증 |
 | renewal-report / 32 | B #66 | 재동의 전 옛 PDF/ZIP 다운로드 → 기존 artifact 유지/생성 차단 | API/browser·byte/권한 | 보완 통합 대기, 미검증 |
-| renewal-lawyer / 33 | C #62, A runtime | 재동의 전 자기 profile/assets 조회·download → 기존 읽기만 허용 | API/stream revoke·mock/browser | E-C 대기, public 현재동의 유지 |
+| renewal-lawyer / 33 | C #62, A runtime | 재동의 전 자기 profile/assets 조회·download → 기존 읽기만 허용 | API/stream revoke·mock/browser | E-C 합성 PASS, public 현재동의 유지; main 통합 대기 |
 | activation / 34 | A #162/#163 | 출시 모달/비활성 제거→기존 기능 진입 → 권한/상태/외부 gate 유지 | integrated browser/CSP | #163 CI/통합 대기; 기능 자체 완료와 별개 |
 | F015 비용/한도 | #57, A/B #71 | retry/월경계/미확정 청구 → actual ledger·bounded attempt·복구 | SQL·실제 청구/가격/funding | E-U 구현/배포, 실제 정산 미완료 |
 | 출처/법률 | #63/#70 | 공식 출처 못 얻음 → 확인불가, 법률 검토 전 승인 주장 없음 | live tuple·사람 검토 | E-F captured/합성; live/사람 대기 |
@@ -121,3 +121,23 @@ B와 A가 연결하고 #71에서 함께 검사한다. 운영 환경 변경·배�
 - `docs:check`: 69 Markdown/14 ADR 성공. `work:check`/`work:next`: 54 tasks, no cycles, milestone drift 없음.
 - A의 공통 mock 읽기 옵션과 #163 main 통합 뒤 C Editor/Profile·mock consumer 및 browser 시나리오를 검증한다.
   시나리오 준비는 PASS가 아니다. 원격 R2/Containers·실제 OAuth·사람 승인 검증은 수행하지 않았다.
+
+### C 기능 완성 후보 — source `0d3fbe0`
+
+A가 #163을 로컬 통합한 뒤 임시 합성 검증을 허용해 #163 `aae4f77`과 #165 `da568b9`를 C worktree에
+반영했다. 공유 파일 소유/실제 main 통합은 A다. 최종 C PR은 선행 main 병합 뒤 C 변경만 포함하도록 정리한다.
+
+- 최종 `bun run check`: **1431 pass/0 fail,137552 assertions**, typecheck0 errors/0 warnings,
+  docs69/ADR14·graph54/no cycle·boundary/lint 성공. fresh/upgrade6/29, generation drift 없음.
+- `bun run build`, `bun run cf:dry-run`: 성공. 배포/원격 Container 시작은 하지 않았다.
+- 변호사 unit+shared runtime:21 tests/388 assertions PASS. 텍스트와 기존 snapshot 호환, read/mutation
+  동의 분리, signed SQL/session/owner/role/public/삭제·stream 중 만료, cached mutation 거절 검증.
+- wire UI12 PASS:320px/200%·keyboard·axe·실패/충돌·계정 전환·본문 저장/재접속/미리보기/공개/수정/삭제·
+  재동의 전 기존 조회/다운로드. `.wrangler/lawyer-portal-320.png`, `lawyer-renewal-320.png` 합성 화면 육안 점검.
+- 같은 UI의 integrated mock1 PASS:로그인/동의→photo/PDF/text 저장→재접속/공개→재동의 전 download→
+  다시 동의 후 비공개/자료삭제. 실제 `/api` network0; 실제 OAuth/R2 성공이 아니다.
+- 추가 다운로드 경합:응답 완료 직전 계정 변경(브라우저 focus event 없음)→이전 owner UI 제거·파일 전달0.
+  최초 기대 문구가 공통 오류 매핑과 달라1 fail/7 pass였고 기대를 공통 문구로 고친 뒤 해당1 PASS.
+  오류/실패 이력은 보존하며 이 추가 검증을 원격 privacy 승인으로 확대하지 않는다.
+
+고객/자료/리포트 A/B 미통합 보완 조건, 실제 외부·사람 승인 및 #71은 위 합성 PASS와 별도로 계속 대기한다.
