@@ -1,6 +1,7 @@
 import { ArrowRight, Check, Save } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../../client/api";
+import { ApiError } from "../../client/api/core";
 import type { CaseView } from "../../client/api/types";
 import { accessHref } from "../../client/return-path";
 import type { V2Fact } from "../../contracts/v2";
@@ -25,6 +26,9 @@ export function SummaryReview({ caseId }: { caseId: string }) {
   const [notice, setNotice] = useState("");
   const [checked, setChecked] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [recovering, setRecovering] = useState(false);
+  const acknowledged = useRef(false);
+  const draftDirty = useRef(false);
   const pending = useRef(false);
   const request = useRef(0);
   const confirmation = useRef<HTMLInputElement>(null);
@@ -35,6 +39,8 @@ export function SummaryReview({ caseId }: { caseId: string }) {
   const access = useCustomerAccess(
     () => {
       ++request.current;
+      acknowledged.current = false;
+      setRecovering(false);
       setItem(null);
       setSummary("");
       setFactEdits({});
@@ -58,6 +64,9 @@ export function SummaryReview({ caseId }: { caseId: string }) {
       Object.keys(factEdits).length > 0 ||
       (unknownsDraft !== null &&
         unknownsDraft !== (item.summaryDetails?.unknowns ?? []).join("\n")));
+  draftDirty.current = dirty;
+  const locked =
+    busy || recovering || !canMutate || (error as { code?: string })?.code === "CONFLICT";
   useEffect(() => {
     if (focusAfterSave.current && ready && !busy && !dirty) {
       focusAfterSave.current = false;
@@ -80,15 +89,28 @@ export function SummaryReview({ caseId }: { caseId: string }) {
         // An earlier focus read must not replace a newer read or completed write.
         if (serial !== request.current) return;
         if (!(await verify()) || !current(epoch) || serial !== request.current) return;
+        if (
+          !replaceDraft &&
+          !acknowledged.current &&
+          draftDirty.current &&
+          savedItem.current?.revision !== next.revision
+        )
+          throw new ApiError(
+            "CONFLICT",
+            "다른 화면에서 요약이 바뀌었어요. 최신 내용을 확인해 주세요.",
+          );
         failedOperation.current = null;
+        const replace = replaceDraft || acknowledged.current;
+        acknowledged.current = false;
+        setRecovering(false);
         const changed = savedItem.current?.revision !== next.revision;
         setItem(next);
-        if (replaceDraft) {
+        if (replace) {
           setFactEdits({});
           setUnknownsDraft(null);
         }
         setSummary((draft) =>
-          !replaceDraft && savedItem.current && draft !== savedItem.current.summary
+          !replace && savedItem.current && draft !== savedItem.current.summary
             ? draft
             : next.summary,
         );
@@ -111,6 +133,11 @@ export function SummaryReview({ caseId }: { caseId: string }) {
   useEffect(() => {
     if (version) void load();
   }, [load, version]);
+  useEffect(() => {
+    // A focus refresh can finish while the acknowledged write still blocks reads.
+    // Retry its read after the write settles; explicit failures keep manual retry.
+    if (recovering && !busy && ready && !error) void load();
+  }, [recovering, busy, ready, error, load]);
   useEffect(() => {
     const warn = (event: BeforeUnloadEvent) => {
       if (dirty) event.preventDefault();
@@ -146,7 +173,14 @@ export function SummaryReview({ caseId }: { caseId: string }) {
             }
           : {}),
       });
+      // The API acknowledged the write. A failed session check must recover by
+      // reading, rather than submitting this revision again.
+      acknowledged.current = true;
+      failedOperation.current = null;
+      setRecovering(true);
       if (!(await verify()) || !current(epoch)) return;
+      acknowledged.current = false;
+      setRecovering(false);
       failedOperation.current = null;
       focusAfterSave.current = true;
       setItem(next);
@@ -180,7 +214,12 @@ export function SummaryReview({ caseId }: { caseId: string }) {
       if (!(await verify(false, true)) || !current(epoch)) return;
       failedOperation.current = "confirm";
       const next = await api.cases.confirmSummary(caseId, { expectedRevision: item.revision });
+      acknowledged.current = true;
+      failedOperation.current = null;
+      setRecovering(true);
       if (!(await verify()) || !current(epoch)) return;
+      acknowledged.current = false;
+      setRecovering(false);
       failedOperation.current = null;
       setItem(next);
       window.location.assign(`/cases/${encodeURIComponent(caseId)}`);
@@ -219,7 +258,7 @@ export function SummaryReview({ caseId }: { caseId: string }) {
                   ? confirm()
                   : load())
           }
-          disabled={busy || !canMutate}
+          disabled={busy}
         />
       ) : null}
       {item && ready ? (
@@ -278,7 +317,12 @@ export function SummaryReview({ caseId }: { caseId: string }) {
                     setNotice("");
                   }}
                   maxLength={5000}
-                  disabled={busy || !canMutate}
+                  disabled={
+                    !canMutate ||
+                    busy ||
+                    recovering ||
+                    (error as { code?: string })?.code === "CONFLICT"
+                  }
                   aria-describedby="summary-help"
                 />
                 <p id="summary-help" className="intake-count">
@@ -309,7 +353,7 @@ export function SummaryReview({ caseId }: { caseId: string }) {
                     return (
                       <fieldset
                         key={fact.id}
-                        disabled={busy || !canMutate || fact.attribution === "official_source"}
+                        disabled={locked || fact.attribution === "official_source"}
                       >
                         <legend>
                           {fact.significance === "unfavorable" ? "불리한 사실 · " : ""}
@@ -381,7 +425,7 @@ export function SummaryReview({ caseId }: { caseId: string }) {
                   <Textarea
                     id="summary-unknowns"
                     value={unknownsDraft ?? item.summaryDetails.unknowns.join("\n")}
-                    disabled={busy || !canMutate}
+                    disabled={locked}
                     onChange={(e) => {
                       setUnknownsDraft(e.target.value);
                       setChecked(false);
@@ -395,7 +439,13 @@ export function SummaryReview({ caseId }: { caseId: string }) {
                   <Button
                     variant="outline"
                     onClick={() => void save()}
-                    disabled={busy || !canMutate || !summary.trim()}
+                    disabled={
+                      !canMutate ||
+                      busy ||
+                      recovering ||
+                      !summary.trim() ||
+                      (error as { code?: string })?.code === "CONFLICT"
+                    }
                   >
                     <Save size={16} aria-hidden="true" />
                     {busy && failedOperation.current === "save" ? "저장 중…" : "수정 내용 저장"}
@@ -410,7 +460,7 @@ export function SummaryReview({ caseId }: { caseId: string }) {
                       setConfirming(false);
                       setNotice("");
                     }}
-                    disabled={busy || !canMutate}
+                    disabled={locked}
                   >
                     수정 취소
                   </Button>
@@ -428,14 +478,22 @@ export function SummaryReview({ caseId }: { caseId: string }) {
                     setChecked(event.target.checked);
                     setConfirming(false);
                   }}
-                  disabled={busy || !canMutate || dirty}
+                  disabled={locked || dirty}
                 />
                 <span>요약이 내가 이야기한 사실과 맞는지 확인했어요.</span>
               </label>
               <Button
                 className="intake-scene-primary"
                 onClick={() => setConfirming(true)}
-                disabled={busy || !canMutate || dirty || !checked || !summary.trim()}
+                disabled={
+                  !canMutate ||
+                  busy ||
+                  recovering ||
+                  dirty ||
+                  !checked ||
+                  !summary.trim() ||
+                  (error as { code?: string })?.code === "CONFLICT"
+                }
               >
                 요약 확인하고 계속
                 <ArrowRight size={18} aria-hidden="true" />
@@ -446,15 +504,11 @@ export function SummaryReview({ caseId }: { caseId: string }) {
                 title="이제 사건 정리를 시작할까요?"
               >
                 <div className="intake-actions">
-                  <Button onClick={() => void confirm()} disabled={busy || !canMutate}>
+                  <Button onClick={() => void confirm()} disabled={locked}>
                     <Check size={18} aria-hidden="true" />
                     {busy ? "확인 중…" : "확인하고 사건 열기"}
                   </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => setConfirming(false)}
-                    disabled={busy || !canMutate}
-                  >
+                  <Button variant="outline" onClick={() => setConfirming(false)} disabled={locked}>
                     취소
                   </Button>
                 </div>

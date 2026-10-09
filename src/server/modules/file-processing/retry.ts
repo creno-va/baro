@@ -64,12 +64,7 @@ export function createFileRetry(
       .first<number>("revision");
     if (workspace !== value.expectedRevision) throw new FileError("CONFLICT");
     if (file.status === "uploaded") {
-      const op = await core
-        .statement(
-          "SELECT operation_id FROM v2_upload_sessions WHERE file_id=? AND state='finalized'",
-          [fileId],
-        )
-        .first<string>("operation_id");
+      const op = file.operationId;
       if (
         !op ||
         !(await deps.enqueueProcessing?.({
