@@ -146,17 +146,25 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
       setLoading(true);
       setError(null);
       try {
-        if (!(await verify())) return;
+        if (!(await verify()) || serial !== request.current) return;
         epoch = ticket();
         let [caseView, questions] = await Promise.all([
           poll && caseSnapshot.current ? caseSnapshot.current : api.cases.get(caseId),
           api.cases.getQuestions(caseId),
         ]);
+        // A read started before a save/advance cannot restore its old answers.
+        if (serial !== request.current) return;
         // The pending view can be reused, but completion must reflect stage
         // changes made in another tab before exposing editable questions.
         if (poll && caseSnapshot.current && !questions.processing)
           caseView = await api.cases.get(caseId);
-        if (!(await verify()) || !accessCurrent(epoch) || serial !== request.current) return;
+        if (
+          serial !== request.current ||
+          !(await verify()) ||
+          !accessCurrent(epoch) ||
+          serial !== request.current
+        )
+          return;
         failedOperation.current = null;
         caseSnapshot.current = caseView;
         setItem(caseView);
@@ -209,9 +217,9 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
           else show();
         }
       } catch (cause) {
-        if (alive(epoch)) report(cause);
+        if (alive(epoch) && serial === request.current) report(cause);
       } finally {
-        if (alive(epoch)) setLoading(false);
+        if (alive(epoch) && serial === request.current) setLoading(false);
       }
     },
     [caseId, verify, ticket, accessCurrent, alive, report, transition],
@@ -307,6 +315,8 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
   }
   async function advance() {
     if (!result || pending.current || result.processing) return;
+    ++request.current;
+    setLoading(false);
     const epoch = ticket();
     pending.current = true;
     setBusy(true);
@@ -340,6 +350,8 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
       result.processing
     )
       return;
+    ++request.current;
+    setLoading(false);
     const epoch = ticket();
     pending.current = true;
     setBusy(true);
