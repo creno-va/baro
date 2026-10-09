@@ -38,6 +38,7 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
   const request = useRef(0);
   const drafts = useRef(new Map<string, { value: string; state: QuestionView["answerState"] }>());
   const draftSnapshot = useRef<{ dirty: boolean; revision: number } | null>(null);
+  const acknowledgedRevision = useRef<number | null>(null);
   const {
     ready,
     version,
@@ -50,6 +51,7 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
     ++request.current;
     draftSnapshot.current = null;
     drafts.current.clear();
+    acknowledgedRevision.current = null;
     setItem(null);
     setResult(null);
     setValue("");
@@ -69,6 +71,7 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
   }, setError);
   const report = useCallback(
     (cause: unknown) => {
+      if ((cause as { code?: string }).code === "CONFLICT") setRecovering(false);
       if (
         ["UNAUTHENTICATED", "CONSENT_REQUIRED", "NOT_FOUND"].includes(
           (cause as { code?: string }).code ?? "",
@@ -160,6 +163,7 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
           poll && caseSnapshot.current ? caseSnapshot.current : api.cases.get(caseId),
           api.cases.getQuestions(caseId),
         ]);
+        // A read started before a save/advance cannot restore its old answers.
         if (serial !== request.current) return;
         // The pending view can be reused, but completion must reflect stage
         // changes made in another tab before exposing editable questions.
@@ -175,7 +179,8 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
         if (
           !replaceDraft &&
           draftSnapshot.current?.dirty &&
-          draftSnapshot.current.revision !== questions.revision
+          draftSnapshot.current.revision !== questions.revision &&
+          acknowledgedRevision.current !== questions.revision
         )
           throw new ApiError(
             "CONFLICT",
@@ -220,6 +225,7 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
           window.location.replace(`/cases/${encodeURIComponent(caseId)}/summary`);
         else {
           const show = () => {
+            acknowledgedRevision.current = null;
             setResult(questions);
             setIndex(nextIndex);
             setRecovering(false);
@@ -394,8 +400,19 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
             : { questionId: question.id, state },
         ],
       });
+      if (!alive(epoch)) return;
       drafts.current.delete(question.id);
+      // The adapter reads again after saving, so its response can already include
+      // a peer edit. Only the next revision with our answer proves this snapshot.
+      const savedQuestion = next.questions.find((candidate) => candidate.id === question.id);
+      acknowledgedRevision.current =
+        next.revision === result.revision + 1 &&
+        savedQuestion?.answerState === state &&
+        (state !== "answered" || savedQuestion.answer === value.trim())
+          ? next.revision
+          : null;
       if (!(await verifyCompletion(epoch))) return;
+      acknowledgedRevision.current = null;
       failedOperation.current = null;
       setResult(next);
       setAnswerState(state);
@@ -450,7 +467,9 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
             else if (operation?.kind === "save") void save(operation.move);
             else void load();
           }}
-          disabled={busy || waiting || leaving}
+          disabled={
+            busy || leaving || (waiting && (error as { code?: string }).code !== "CONFLICT")
+          }
         />
       ) : null}
       {ready && item && result ? (
