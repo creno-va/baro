@@ -3,6 +3,42 @@ import { expect, test } from "@playwright/test";
 
 // No OAuth/AI success claim: real production APIs receive signed synthetic sessions.
 const modulePath = "/src/client/api/index.ts";
+async function startCustomerServer(browserOrigin: string) {
+  const server = spawn("bun", ["tests/helpers/customer-browser-server.ts", browserOrigin], {
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+  type Cookie = {
+    name: string;
+    value: string;
+    url: string;
+    httpOnly: boolean;
+    secure: boolean;
+    sameSite: "Lax";
+  };
+  const info = await new Promise<{
+    origin: string;
+    id: string;
+    ownerCookie: Cookie;
+    foreignCookie: Cookie;
+  }>((resolve, reject) => {
+    let output = "";
+    server.stdout.on("data", (chunk) => {
+      output += String(chunk);
+      if (output.includes("\n")) {
+        try {
+          resolve(JSON.parse(output.split("\n")[0] ?? ""));
+        } catch (error) {
+          reject(error);
+        }
+      }
+    });
+    server.on("error", reject);
+    server.on("exit", (code) => {
+      if (code) reject(new Error("Synthetic customer API harness failed"));
+    });
+  });
+  return { server, info };
+}
 for (const viewport of [
   { width: 390, height: 844 },
   { width: 640, height: 450 },
@@ -14,39 +50,7 @@ for (const viewport of [
   }, testInfo) => {
     const browserOrigin = new URL(String(testInfo.project.use.baseURL ?? "http://127.0.0.1:4355"))
       .origin;
-    const server = spawn("bun", ["tests/helpers/customer-browser-server.ts", browserOrigin], {
-      stdio: ["pipe", "pipe", "pipe"],
-    });
-    type Cookie = {
-      name: string;
-      value: string;
-      url: string;
-      httpOnly: boolean;
-      secure: boolean;
-      sameSite: "Lax";
-    };
-    const info = await new Promise<{
-      origin: string;
-      id: string;
-      ownerCookie: Cookie;
-      foreignCookie: Cookie;
-    }>((resolve, reject) => {
-      let output = "";
-      server.stdout.on("data", (chunk) => {
-        output += String(chunk);
-        if (output.includes("\n")) {
-          try {
-            resolve(JSON.parse(output.split("\n")[0] ?? ""));
-          } catch (error) {
-            reject(error);
-          }
-        }
-      });
-      server.on("error", reject);
-      server.on("exit", (code) => {
-        if (code) reject(new Error("Synthetic customer API harness failed"));
-      });
-    });
+    const { server, info } = await startCustomerServer(browserOrigin);
     try {
       // 640x450 is the CSS viewport of a 1280x900 window at 200% browser zoom.
       // Also stress CSS zoom separately; unlike browser zoom it retains media queries.
@@ -301,6 +305,94 @@ for (const viewport of [
       );
       expect(saved.timeline).toHaveLength(1);
     } finally {
+      server.stdin.end();
+    }
+  });
+}
+
+for (const [action, outcome] of [
+  ["save", "success"],
+  ["save", "failure"],
+  ["refresh", "failure"],
+] as const) {
+  test(`real intake ${action} ignores an older ${outcome} after completion`, async ({
+    page,
+    context,
+  }, testInfo) => {
+    const browserOrigin = new URL(String(testInfo.project.use.baseURL)).origin;
+    const { server, info } = await startCustomerServer(browserOrigin);
+    let holdNextRead = false;
+    let releaseRead: (() => void) | undefined;
+    let readFinished = false;
+    let writes = 0;
+    try {
+      await page.setViewportSize({ width: 390, height: 844 });
+      await context.addCookies([info.ownerCookie]);
+      await context.route("**/api/**", async (route) => {
+        const request = route.request();
+        const path = new URL(request.url()).pathname;
+        if (!path.startsWith("/api/")) {
+          await route.continue();
+          return;
+        }
+        const response = await context.request.fetch(new URL(path, info.origin).href, {
+          method: request.method(),
+          headers: { ...request.headers(), origin: browserOrigin },
+          ...(request.postData() ? { data: request.postData() ?? "" } : {}),
+        });
+        if (request.method() === "PUT" && path.endsWith("/intake/answers")) {
+          expect(response.ok()).toBe(true);
+          ++writes;
+        }
+        // Both workspace/intake snapshots have arrived before the adapter's
+        // final job lookup. Delay only delivery of this genuine server response.
+        if (holdNextRead && path.endsWith("/workspace-jobs/latest")) {
+          holdNextRead = false;
+          await new Promise<void>((resolve) => {
+            releaseRead = resolve;
+          });
+          if (outcome === "failure") await route.abort("failed");
+          else await route.fulfill({ response });
+          readFinished = true;
+          return;
+        }
+        await route.fulfill({ response });
+      });
+      await page.goto(`/cases/${info.id}/intake?question=0&edit=1`);
+      const answer = page.getByRole("textbox", { name: "답변", exact: true });
+      await expect(answer).toBeVisible();
+      holdNextRead = true;
+      await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+      await expect.poll(() => !!releaseRead).toBe(true);
+      await expect(answer).toBeVisible();
+      const text = "늦은 조회 응답 이후에도 남아야 하는 합성 답변";
+      await answer.fill(text);
+      if (action === "save") {
+        await page.locator("details > summary", { hasText: "답변 관리" }).click();
+        await page.getByRole("button", { name: "답변 저장", exact: true }).click();
+        await expect(page.getByRole("status")).toContainText("답변이 저장됐어요.");
+        expect(writes).toBe(1);
+      } else {
+        await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+        await expect(answer).toBeVisible();
+      }
+      releaseRead?.();
+      await expect.poll(() => readFinished).toBe(true);
+      // Wait for the old load's postflight session check, if it incorrectly runs.
+      await page.evaluate(async () => {
+        await new Promise<void>((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+        );
+      });
+      await expect(page.getByRole("alert")).not.toBeVisible();
+      await expect(answer).toHaveValue(text);
+      if (action === "save") {
+        await page.reload();
+        await expect(answer).toHaveValue(text);
+        expect(writes).toBe(1);
+      }
+    } finally {
+      releaseRead?.();
       server.stdin.end();
     }
   });
