@@ -264,14 +264,17 @@ test("mobile layout, keyboard cancel, failure and retry use the same components"
     localStorage.setItem(key, JSON.stringify(state));
   });
   await page.reload();
-  await expect(page.getByRole("alert")).toContainText("동의");
+  await expect(
+    page.getByRole("status").filter({ hasText: "새 리포트 생성과 수정은 필수 동의 후" }),
+  ).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "리포트 내용 편집" })).toBeDisabled();
   await page.evaluate(() => {
     const key = "baro.reports.browser-test.v1";
     const state = JSON.parse(localStorage.getItem(key) ?? "{}");
     state.session.needsConsent = false;
     localStorage.setItem(key, JSON.stringify(state));
   });
-  await page.getByRole("button", { name: "다시 확인" }).click();
+  await page.reload();
   await expect(page.getByRole("textbox", { name: "리포트 내용 편집" })).toBeVisible();
   const editor = page.getByRole("textbox", { name: "리포트 내용 편집" });
   await editor.fill("저장되지 않은 검토 내용");

@@ -77,6 +77,25 @@ revision을 올리므로 전체 숫자만으로 stale을 판단하지 않는다.
 PDF masking/자료 제외, immutable report, stale 저장 PDF 동일 byte, 새 동의 요구,
 삭제 후 stream 차단을 검사한다. 기존 paid storage/resource/fence/deletion tests도 재사용한다.
 
+`tests/browser/material-report.config.ts`의 실제 signed-session/SQLite/AES 경로 2개는
+한글 PDF·선택 ZIP 다운로드, source 변경/동의 철회 후 같은 PDF byte, 새 작업 차단,
+원본 삭제 후 리포트 접근 제거를 확인한다. `reports.config.ts`의 독립 화면 회귀 6개와
+`reports-integrated.config.ts`의 공유 제품 로그인→문답→자료→리포트→PDF/ZIP→삭제 1개도 통과했다.
+mock도 현재 사실/인물/행동/교정 관찰을 반영하고 자료 제외 변경 시 본문을 재구성한다.
+
+A/B 통합 커밋 `5bcb97d`에서 추가 대화→사실/인물/연결 타임라인/행동→새 리포트,
+사실 재교정→재확인→새 리포트 및 이전 PDF byte 보존을 실제 repository로 검증했다
+(1 test / 28 assertions). B의 `tests/integration/report-current-summary.integration.ts`는
+A 통합 PR에서 `.test.ts`로 옮겨 기본 CI에 포함한다. A의
+`tests/customer-material-review-api.test.ts`는 실제 고객 adapter→B Hono/SQLite API의
+9개 관찰 paging, If-Match, PATCH/continue 응답 유실·동일 키, 재접속, 원문 보존,
+재동의 읽기/쓰기 분리와 교차 소유권을 추가 검증했다. 두 결합 테스트 모두 통과했다.
+
+합성 산출물의 실제 한글 PDF 2쪽을 PNG로 렌더링해 본문·줄바꿈·여백·페이지 번호를
+직접 확인했다. PDF 텍스트에서 교정 문장과 위치를 확인하고 원래 문장/제외 관찰/전화번호가
+빠졌는지 대조했다. ZIP은 선택한 `합성💙 자료.txt` 1개와 23-byte 원본을 정확히 대조했다.
+전사 교정은 2.25–8.75초 위치, 12.5–19.25초 누락과 19.25–30초 저품질 구간을 보존한다.
+
 최종 검사/브라우저/PDF 시각 검증 결과는 PR의 exact-head 검증 기록을 정본으로 삼는다.
 모든 입력은 합성이다. 이 테스트의 R2 byte adapter와 SQL journal replay는 원격 Cloudflare
 R2/Containers/Whisper/OAuth 성공이나 실제 backup 복구 drill 증거가 아니다.

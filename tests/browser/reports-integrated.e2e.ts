@@ -87,7 +87,9 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
     page.getByRole("status").filter({ hasText: "검토 내용을 저장했어요." }),
   ).toBeVisible();
   await page.reload();
-  await expect(editor).toHaveValue(/사용자가 검토한 합성 사실/);
+  await expect(editor).toHaveValue(/합성 API 예시/);
+  await expect(editor).not.toHaveValue(/제외 원본.txt/);
+  await expect(editor).not.toHaveValue(/사용자가 검토한 합성 사실/);
   await openReportOptions(page);
   await expect(
     page.getByRole("checkbox", { name: "전화번호·이메일·주민등록번호 가리기" }),
