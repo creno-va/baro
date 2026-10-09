@@ -383,3 +383,149 @@ test("failed old-owner save cannot retain the draft after an account switch with
   await expect(page.getByText("합성 이전 요청 실패", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "프로필 저장" })).toBeDisabled();
 });
+
+test("text body persists separately from its title, previews, publishes, edits and deletes", async ({
+  page,
+}) => {
+  let profile = {
+    ...emptySelfProfile("text-portfolio"),
+    name: "본문 시연",
+    introduction: "소개",
+    officeName: "사무실",
+    address: "서울",
+    region: "seoul" as const,
+    practiceAreas: ["civil" as const],
+    email: "text@example.invalid",
+  };
+  await page.route("**/api/v2/me/lawyer/self-profile**", (route) => {
+    const req = route.request();
+    if (req.method() !== "GET") {
+      const body = req.postDataJSON();
+      profile = req.url().endsWith("/publication")
+        ? { ...profile, published: body.published, revision: profile.revision + 1 }
+        : { ...body.profile, revision: profile.revision + 1 };
+    }
+    return route.fulfill({ json: profile });
+  });
+  await page.route("**/api/v2/lawyers/self-service/text-portfolio", (route) =>
+    route.fulfill({ json: profile }),
+  );
+  await page.goto("/lawyer");
+  await page.getByRole("button", { name: "포트폴리오 추가" }).click();
+  await page.getByLabel("활동 제목 1").fill("제목은 짧게");
+  const body = "첫 번째 문단입니다.\n<script>window.untrusted = true</script>\n마지막 문단";
+  await page.getByLabel("활동 본문 1").fill(body);
+  await page.getByRole("button", { name: "프로필 저장", exact: true }).click();
+  await expect(page.getByText("프로필을 저장했어요.", { exact: true })).toBeVisible();
+  await page.reload();
+  await expect(page.getByLabel("활동 본문 1")).toHaveValue(body);
+  await page.getByRole("button", { name: "미리보기", exact: true }).click();
+  await expect(page.getByText(body, { exact: true })).toBeVisible();
+  expect(await page.evaluate(() => "untrusted" in window)).toBe(false);
+  await page.getByRole("button", { name: "프로필 공개", exact: true }).click();
+  await page.getByRole("checkbox", { name: /내 사진과 연락처를 포함한/ }).check();
+  await page.getByRole("button", { name: "동의하고 공개" }).click();
+  await expect(page.getByText("공개 중", { exact: true })).toBeVisible();
+  await page.goto("/lawyers/text-portfolio");
+  await expect(page.getByText(body, { exact: true })).toBeVisible();
+  await page.goto("/lawyer");
+  await page.getByLabel("활동 본문 1").fill("수정한 포트폴리오 본문");
+  await page.getByRole("button", { name: "프로필 저장", exact: true }).click();
+  await expect(page.getByText("프로필을 저장했어요.", { exact: true })).toBeVisible();
+  await page.goto("/lawyers/text-portfolio");
+  await expect(page.getByText("수정한 포트폴리오 본문", { exact: true })).toBeVisible();
+  await page.goto("/lawyer");
+  await page.getByRole("button", { name: "포트폴리오 1 삭제", exact: true }).click();
+  await page.getByRole("button", { name: "프로필 저장", exact: true }).click();
+  await expect(page.getByText("프로필을 저장했어요.", { exact: true })).toBeVisible();
+  await page.reload();
+  await expect(page.getByText("등록된 포트폴리오가 없어요.", { exact: true })).toBeVisible();
+});
+
+test("renewal keeps existing profile and uploaded download available while edits/publication stay disabled", async ({
+  page,
+}) => {
+  let needsConsent = false;
+  let owner = "synthetic-lawyer";
+  let writes = 0;
+  const profile = {
+    ...emptySelfProfile("renewal-profile"),
+    name: "기존 프로필",
+    portfolio: [{ id: "text", title: "기존 제목", text: "기존 본문", url: null }],
+  };
+  await page.route("**/api/me/session", (route) =>
+    route.fulfill({
+      json: { user: { id: owner, name: "합성", accountType: "lawyer" }, needsConsent },
+    }),
+  );
+  await page.route("**/api/v2/me/lawyer/self-profile**", (route) => {
+    if (route.request().method() !== "GET") writes++;
+    const path = new URL(route.request().url()).pathname;
+    if (path.endsWith("/content"))
+      return route.fulfill({
+        contentType: "application/pdf",
+        body: "%PDF-1.4 synthetic saved artifact",
+      });
+    if (path.endsWith("/assets"))
+      return route.fulfill({
+        json: {
+          items: [{ id: "saved-upload", revision: 3, status: "ready", purpose: "portfolio" }],
+        },
+      });
+    return owner === "synthetic-lawyer"
+      ? route.fulfill({ json: profile })
+      : route.fulfill({
+          status: 403,
+          json: { error: { code: "CONSENT_REQUIRED", message: "동의 필요" } },
+        });
+  });
+  await page.goto("/lawyer");
+  await page.getByLabel("활동 본문 1").fill("저장하지 않은 초안");
+  needsConsent = true;
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect(
+    page.getByText("재동의 전에도 기존 프로필과 자료를 확인할 수 있어요.", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText("기존 본문", { exact: true })).toBeVisible();
+  await expect(page.getByText("저장하지 않은 초안", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "프로필 공개", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "프로필 저장", exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "자료 상태 확인", exact: true }).click();
+  const download = page.waitForEvent("download");
+  await page.getByRole("button", { name: "업로드 자료 1 다운로드", exact: true }).click();
+  expect((await download).suggestedFilename()).toContain("pdf");
+  await page.setViewportSize({ width: 320, height: 760 });
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  await page.screenshot({ path: ".wrangler/lawyer-renewal-320.png", fullPage: true });
+  expect(writes).toBe(0);
+  let releaseDownload!: () => void;
+  let downloadStarted!: () => void;
+  const started = new Promise<void>((resolve) => {
+    downloadStarted = resolve;
+  });
+  const release = new Promise<void>((resolve) => {
+    releaseDownload = resolve;
+  });
+  let lateDownloads = 0;
+  page.on("download", () => {
+    lateDownloads++;
+  });
+  await page.route("**/assets/saved-upload/content", async (route) => {
+    downloadStarted();
+    await release;
+    await route.fulfill({
+      contentType: "application/pdf",
+      body: "%PDF-1.4 synthetic saved artifact",
+    });
+  });
+  await page.getByRole("button", { name: "업로드 자료 1 다운로드", exact: true }).click();
+  await started;
+  owner = "different-lawyer";
+  releaseDownload();
+  await expect(page.getByText("필수 동의를 확인해 주세요.", { exact: true })).toBeVisible();
+  expect(lateDownloads).toBe(0);
+  await expect(page.getByText("기존 본문", { exact: true })).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "업로드 자료 1 다운로드", exact: true }),
+  ).toHaveCount(0);
+});

@@ -4,10 +4,13 @@ import { CURRENT_POLICY_VERSIONS } from "../../contracts/consent";
 import {
   V2_LIMITS,
   type V2Coverage,
+  v2CoverageSchema,
+  v2FileObservationSchema,
   v2FileSchema,
+  v2ObservationEditRequestSchema,
   v2UploadSessionSchema,
 } from "../../contracts/v2";
-import type { FileView } from "./types";
+import type { FileReviewProgress, FileReviewView, FileView } from "./types";
 import {
   type WorkspaceTransport,
   workspaceError,
@@ -42,6 +45,32 @@ const metadataSchema = z.object({
     "failed",
     "deleting",
   ]),
+});
+const reviewProgressSchema = z.object({
+  reviewId: z.string(),
+  fileId: z.string(),
+  revision: z.number(),
+  workspaceRevision: z.number(),
+  status: z.enum(["saving", "ready", "conflict"]),
+  completed: z.number(),
+  total: z.number(),
+});
+const reviewSchema = z.object({
+  file: z.object({ id: z.string(), revision: z.number(), name: z.string(), status: z.string() }),
+  workspaceRevision: z.number(),
+  coverage: v2CoverageSchema.nullable(),
+  observations: z.array(
+    z.object({
+      ordinal: z.number(),
+      value: v2FileObservationSchema,
+      original: v2FileObservationSchema,
+    }),
+  ),
+  nextAfterOrdinal: z.number().nullable(),
+  pendingReview: reviewProgressSchema.nullable(),
+  recovery: z
+    .object({ code: z.string(), message: z.string(), actions: z.array(z.string()) })
+    .nullable(),
 });
 function coverageLabel(coverage: V2Coverage | null) {
   if (!coverage) return "처리 범위를 아직 확인할 수 없어요.";
@@ -106,6 +135,7 @@ export function validateUpload(file: Pick<File, "name" | "size" | "type">) {
 }
 export function createFilesApi(request: WorkspaceTransport) {
   const revisions = new Map<string, number>();
+  const reviews = new Map<string, RequestInit>();
   const pendingRemovals = new Set<string>();
   const uploads = new Map<
     string,
@@ -262,6 +292,61 @@ export function createFilesApi(request: WorkspaceTransport) {
   return {
     list,
     upload,
+    async review(id: string, fileId: string, afterOrdinal = -1): Promise<FileReviewView> {
+      return reviewSchema.parse(
+        await workspaceJson(
+          request,
+          `${base(id)}/files/${encodeURIComponent(fileId)}/review?afterOrdinal=${afterOrdinal}`,
+        ),
+      );
+    },
+    async saveReview(
+      id: string,
+      fileId: string,
+      input: z.infer<typeof v2ObservationEditRequestSchema>,
+      workspaceRevision: number,
+    ): Promise<FileReviewProgress> {
+      const body = v2ObservationEditRequestSchema.parse(input);
+      const path = `${base(id)}/files/${encodeURIComponent(fileId)}/observations`;
+      const signature = JSON.stringify({ id, fileId, body, workspaceRevision });
+      let init = reviews.get(signature);
+      if (!init) {
+        init = workspaceMutation(path, body, "PATCH");
+        init.headers = {
+          ...Object.fromEntries(new Headers(init.headers)),
+          "if-match": String(workspaceRevision),
+        };
+        reviews.set(signature, init);
+      }
+      try {
+        const result = reviewProgressSchema.parse(await workspaceJson(request, path, init));
+        reviews.delete(signature);
+        return result;
+      } catch (cause) {
+        if ((cause as { code?: string }).code === "CONFLICT") reviews.delete(signature);
+        throw cause;
+      }
+    },
+    async continueReview(
+      id: string,
+      fileId: string,
+      reviewId: string,
+    ): Promise<FileReviewProgress> {
+      return reviewProgressSchema.parse(
+        await workspaceJson(
+          request,
+          `${base(id)}/files/${encodeURIComponent(fileId)}/observations/${encodeURIComponent(reviewId)}/continue`,
+          { method: "POST" },
+        ),
+      );
+    },
+    async discardReview(id: string, fileId: string, reviewId: string): Promise<void> {
+      await workspaceJson(
+        request,
+        `${base(id)}/files/${encodeURIComponent(fileId)}/observations/${encodeURIComponent(reviewId)}`,
+        { method: "DELETE" },
+      );
+    },
     async retry(id: string, fileId: string) {
       await list(id);
       const value = await workspaceJson(

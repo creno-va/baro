@@ -3,6 +3,8 @@ import { ApiError, apiRequest, cacheClient, registerHttpMockHandler } from "./co
 import { sessionApi } from "./session";
 import type {
   CaseView,
+  FileReviewProgress,
+  FileReviewView,
   FileView,
   LawyerView,
   Provider,
@@ -121,7 +123,7 @@ export const api = {
     advance(id: string, input: { expectedRevision: number }): Promise<QuestionsResult>;
     saveSummary(
       id: string,
-      input: { expectedRevision: number; summary: string },
+      input: import("zod").infer<typeof import("./cases").summaryInputSchema>,
     ): Promise<CaseView>;
     confirmSummary(id: string, input: { expectedRevision: number }): Promise<CaseView>;
   }>("cases"),
@@ -140,6 +142,17 @@ export const api = {
   }>("workspace"),
   files: domain<{
     list(id: string): Promise<FileView[]>;
+    review(id: string, fileId: string, afterOrdinal?: number): Promise<FileReviewView>;
+    saveReview(
+      id: string,
+      fileId: string,
+      input: import("zod").infer<
+        typeof import("../../contracts/v2").v2ObservationEditRequestSchema
+      >,
+      workspaceRevision: number,
+    ): Promise<FileReviewProgress>;
+    continueReview(id: string, fileId: string, reviewId: string): Promise<FileReviewProgress>;
+    discardReview(id: string, fileId: string, reviewId: string): Promise<void>;
     upload(id: string, file: File): Promise<FileView>;
     retry(id: string, fileId: string): Promise<FileView>;
     remove(id: string, fileId: string): Promise<FileView[]>;
@@ -152,6 +165,7 @@ export const api = {
       input: { content: string; maskIdentifiers: boolean; excludedFileIds: string[] },
     ): Promise<ReportView>;
     generate(id: string): Promise<ReportView>;
+    html(id: string): Promise<Blob>;
     pdf(id: string): Promise<Blob>;
     zip(id: string, selectedFileIds: string[]): Promise<Blob>;
   }>("reports"),

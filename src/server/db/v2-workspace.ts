@@ -53,6 +53,7 @@ import {
   V2RepositoryError,
   type WorkspaceGuard,
 } from "./v2-core";
+import { appendSummaryEntities, summaryAdditions } from "./v2-current-summary";
 import { type MutationReceipt, mutationTools } from "./v2-mutation-receipts";
 import { createV2StagingRepository } from "./v2-staging";
 
@@ -262,7 +263,8 @@ export function createV2WorkspaceRepository(
       : null;
   };
   const readIntake = async (actor: Actor, id: string): Promise<V2Intake | null> => {
-    if (!(await findWorkspace(actor, id))) return null;
+    const currentWorkspace = await findWorkspace(actor, id);
+    if (!currentWorkspace) return null;
     const row = await core.statement("SELECT * FROM v2_intakes WHERE id=?", [id]).first<{
       revision: number;
       status: string;
@@ -326,6 +328,17 @@ export function createV2WorkspaceRepository(
         v2SummarySchema,
       );
     }
+    if (summary) {
+      // Compatibility snapshots written before staging have no normalized snapshot_id.
+      const factIds = new Set(summary.facts.map((fact) => fact.id));
+      const partyIds = new Set(summary.parties.map((party) => party.id));
+      for await (const value of summaryAdditions(core, actor, id, summary.revision, "facts"))
+        if (!factIds.has(value.id))
+          summary.facts.push(parse(v2SummarySchema.shape.facts.element, value));
+      for await (const value of summaryAdditions(core, actor, id, summary.revision, "parties"))
+        if (!partyIds.has(value.id))
+          summary.parties.push(parse(v2SummarySchema.shape.parties.element, value));
+    }
     const value = parse(v2IntakeSchema, {
       schemaVersion: "2",
       revision: row.revision,
@@ -338,8 +351,15 @@ export function createV2WorkspaceRepository(
     });
     return (await core
       .statement(
-        `SELECT i.id FROM v2_intakes i JOIN v2_workspaces w ON w.id=i.id WHERE i.id=? AND w.owner_id=? AND i.revision=? AND i.status=? AND i.summary_id IS ? AND ${aliveWorkspace}`,
-        [id, actor.ownerId, row.revision, row.status, row.summary_id],
+        `SELECT i.id FROM v2_intakes i JOIN v2_workspaces w ON w.id=i.id WHERE i.id=? AND w.owner_id=? AND i.revision=? AND i.status=? AND i.summary_id IS ? AND w.revision=? AND ${aliveWorkspace}`,
+        [
+          id,
+          actor.ownerId,
+          row.revision,
+          row.status,
+          row.summary_id,
+          currentWorkspace.workspaceRevision,
+        ],
       )
       .first())
       ? value
@@ -422,8 +442,17 @@ export function createV2WorkspaceRepository(
       const envelope = await core.encrypt("v2_facts", rowId, g.ownerId, value.revision, fact);
       statements.push(
         core.statement(
-          `INSERT INTO v2_facts(id,entity_id,workspace_id,revision,summary_revision,encrypted_payload) SELECT ?,?,?,?,?,? WHERE ${sqlClaim}`,
-          [rowId, fact.id, g.workspaceId, value.revision, value.revision, envelope, claimId],
+          `INSERT INTO v2_facts(id,entity_id,workspace_id,revision,summary_revision,snapshot_id,encrypted_payload) SELECT ?,?,?,?,?,?,? WHERE ${sqlClaim}`,
+          [
+            rowId,
+            fact.id,
+            g.workspaceId,
+            value.revision,
+            value.revision,
+            snapshotId,
+            envelope,
+            claimId,
+          ],
         ),
       );
       for (const [ordinal, ref] of fact.references.entries()) {
@@ -458,8 +487,17 @@ export function createV2WorkspaceRepository(
       const envelope = await core.encrypt("v2_parties", rowId, g.ownerId, value.revision, party);
       statements.push(
         core.statement(
-          `INSERT INTO v2_parties(id,entity_id,workspace_id,revision,summary_revision,encrypted_payload) SELECT ?,?,?,?,?,? WHERE ${sqlClaim}`,
-          [rowId, party.id, g.workspaceId, value.revision, value.revision, envelope, claimId],
+          `INSERT INTO v2_parties(id,entity_id,workspace_id,revision,summary_revision,snapshot_id,encrypted_payload) SELECT ?,?,?,?,?,?,? WHERE ${sqlClaim}`,
+          [
+            rowId,
+            party.id,
+            g.workspaceId,
+            value.revision,
+            value.revision,
+            snapshotId,
+            envelope,
+            claimId,
+          ],
         ),
       );
     }
@@ -669,17 +707,25 @@ export function createV2WorkspaceRepository(
       actor = parse(actorSchema, { ownerId: actor.ownerId, now: actor.now });
       const row = await core
         .statement(
-          `SELECT i.summary_id,s.snapshot_id FROM v2_intakes i JOIN v2_summaries s ON s.id=i.summary_id JOIN v2_workspaces w ON w.id=i.id WHERE i.id=? AND w.owner_id=? AND ${aliveWorkspace}`,
+          `SELECT i.summary_id,s.snapshot_id,s.revision,w.revision AS workspace_revision FROM v2_intakes i JOIN v2_summaries s ON s.id=i.summary_id JOIN v2_workspaces w ON w.id=i.id WHERE i.id=? AND w.owner_id=? AND ${aliveWorkspace}`,
           [id, actor.ownerId],
         )
-        .first<{ summary_id: string; snapshot_id: string }>();
+        .first<{
+          summary_id: string;
+          snapshot_id: string;
+          revision: number;
+          workspace_revision: number;
+        }>();
       if (!row) return;
-      for await (const part of createV2StagingRepository(core).fragments(actor, row.snapshot_id)) {
+      for await (const part of appendSummaryEntities(
+        createV2StagingRepository(core).fragments(actor, row.snapshot_id),
+        (kind) => summaryAdditions(core, actor, id, row.revision, kind),
+      )) {
         if (
           !(await core
             .statement(
-              `SELECT i.id FROM v2_intakes i JOIN v2_workspaces w ON w.id=i.id WHERE i.id=? AND w.owner_id=? AND i.summary_id=? AND ${aliveWorkspace}`,
-              [id, actor.ownerId, row.summary_id],
+              `SELECT i.id FROM v2_intakes i JOIN v2_workspaces w ON w.id=i.id WHERE i.id=? AND w.owner_id=? AND i.summary_id=? AND w.revision=? AND ${aliveWorkspace}`,
+              [id, actor.ownerId, row.summary_id, row.workspace_revision],
             )
             .first())
         )
@@ -911,7 +957,10 @@ export function createV2WorkspaceRepository(
             ...fact,
             text: change.text,
             userEdited: true,
-            certainty: fact.certainty === "observed" ? ("uncertain" as const) : fact.certainty,
+            certainty:
+              change.certainty ??
+              (fact.certainty === "observed" ? ("uncertain" as const) : fact.certainty),
+            conflictingFactIds: change.conflictingFactIds ?? fact.conflictingFactIds,
           };
         });
         return writeSummary(
@@ -939,8 +988,13 @@ export function createV2WorkspaceRepository(
         return core.changed([
           mutation.claim(
             claimId,
-            "w.status='intake' AND w.current_job_id IS NULL AND w.intake_revision=? AND EXISTS(SELECT 1 FROM v2_intakes i JOIN v2_summaries s ON s.id=i.summary_id WHERE i.id=w.id AND i.status='reviewing_summary' AND s.revision=? AND s.intake_revision=i.revision)",
-            [value.expectedRevision, value.summaryRevision],
+            "w.status IN ('intake','active') AND w.current_job_id IS NULL AND w.intake_revision=? AND EXISTS(SELECT 1 FROM v2_intakes i JOIN v2_summaries s ON s.id=i.summary_id WHERE i.id=w.id AND i.status IN ('reviewing_summary','confirmed') AND s.revision=? AND s.intake_revision=i.revision) AND (? IS NULL OR w.revision=?)",
+            [
+              value.expectedRevision,
+              value.summaryRevision,
+              value.workspaceRevision ?? null,
+              value.workspaceRevision ?? null,
+            ],
           ),
           core.statement(
             `UPDATE v2_intakes SET status='confirmed',confirmed_summary_revision=? WHERE id=? AND ${sqlClaim}`,

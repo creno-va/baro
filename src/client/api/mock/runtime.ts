@@ -48,11 +48,11 @@ export function updateStore<T>(namespace: string, fallback: T, update: (value: T
   writeStore(namespace, next);
   return next;
 }
-export function requireSession(): SessionView {
+export function requireSession(options: { consent?: boolean } = {}): SessionView {
   const session = readStore<SessionView>("session", { user: null, needsConsent: false });
   if (!session.user || readStore<string[]>("deletedAccountIds", []).includes(session.user.id))
     throw new ApiError("UNAUTHENTICATED", "로그인이 필요해요.");
-  if (session.needsConsent)
+  if (session.needsConsent && options.consent !== false)
     throw new ApiError("CONSENT_REQUIRED", "시작 전에 필수 확인을 완료해 주세요.");
   return session;
 }
@@ -66,7 +66,11 @@ export async function mockRequest<T>(operation: string, input: unknown, key: str
       true,
     );
   if (/^(cases|workspace|files|reports)\./.test(operation)) {
-    const session = requireSession();
+    const session = requireSession({
+      consent: !/\.(list|get|getQuestions|review|download|downloadPdf|downloadOriginals)$/.test(
+        operation,
+      ),
+    });
     if (session.user?.accountType !== "customer")
       throw new ApiError("NOT_FOUND", "고객 이용 유형으로 로그인해 주세요.");
   }
@@ -75,7 +79,9 @@ export async function mockRequest<T>(operation: string, input: unknown, key: str
     (operation === "lawyers.assetBlob" &&
       (input as { privateRead?: boolean } | undefined)?.privateRead === true)
   ) {
-    const session = requireSession();
+    const session = requireSession({
+      consent: !/^lawyers\.(getMine|assets|assetBlob)$/.test(operation),
+    });
     if (session.user?.accountType !== "lawyer")
       throw new ApiError("NOT_FOUND", "변호사 이용 유형으로 로그인해 주세요.");
   }

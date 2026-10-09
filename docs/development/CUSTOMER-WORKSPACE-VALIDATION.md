@@ -85,3 +85,43 @@ PR127 통합 후 실제 API의 동일 owner 역할 거부는 403/ROLE_REQUIRED�
 통과했다. 최초 390px 실행은 저장 재시도 버튼 클릭 중 60초 timeout으로 실패했고,
 동일 코드의 모바일 단독 재실행은 통과했다. 외부 OAuth·AI·R2 검증과 구분한다.
 로컬 시연은 API mock과 PUBLIC_PREVIEW_TEST를 사용해 배포의 기능 제한을 유지했다.
+
+## 2026-10-09 A 고객 완성·3세션 통합
+
+작업 branch는 `codex/64-customer-mvp-completion`, 통합 PR은 #167이다. #158~#161의
+기존 복구 코드와 검사를 보존하고 #163 활성화, B #164 자료/리포트, 공유 #165 읽기 동의,
+#166 삭제 복구, C #168 변호사/완료표를 통합한다. 앞 절의 과거 기능 제한·공유 파일 미수정
+설명은 해당 날짜의 검증 범위다. 이번 A는 공통 client/auth와 최종 통합을 소유한다.
+
+- 추가 chat의 facts/parties는 기존 정규화 행과 summary snapshot을 합쳐 조회한다.
+  summary revision과 workspace revision을 함께 검사하며, 요약 교정은 새 revision을
+  만들고 재확인 전 상태로 되돌린다. DB/schema/migration을 추가하지 않는다.
+- 구조화된 사실·모순·정보 공백을 편집하고 확인된 사건에서도 요약을 다시 열 수 있다.
+  공식 출처 사실은 직접 바꾸지 않으며 인용·자료 위치·검증 실패 경고를 함께 표시한다.
+- 날짜 year/month/day/unknown을 입력·저장·제목만 편집·새 접속에서도 보존한다.
+- 재동의 전 본인 사건/자료 읽기와 원본 다운로드는 허용하고 신규 생성/AI/수정은 차단한다.
+  로그인·동의 복귀는 허용된 내부 경로만 보존하고 외부 URL·이중 인코딩·역슬래시를 거부한다.
+- B의 자료 review/observations API로 원본/교정 구분, 분석 제외, page/time coverage,
+  다음 페이지, 이어 저장/취소를 연결한다. 같은 owner의 focus 재검증은 초안을 유지하며,
+  다른 탭의 revision 변경은 명시적 최신 내용 확인 전 저장을 막는다.
+
+기능 source `b7fb758`, 응답 유실 browser `45aa3db`, 공통 오류 `eff09f5` 및 통합 원본 PR의
+범위별 로컬 증거다. 최종 main SHA의 CI/배포는 PR167과 #71의 후속 receipt로 기록한다.
+
+| 검증 | 결과·증거 종류 |
+| --- | --- |
+| 전체 단위 검사(삭제 #166 추가 전 A/B/C 통합 `210eb33`) | 1,465 pass, 0 fail, 137,945 assertions. 해당 이후 변경 전체 검사는 최종 CI로 다시 확인한다. |
+| `customer-material-review-api.test.ts` + `integration/report-current-summary.test.ts` | 2 tests/47 assertions. 실제 A adapter→B Hono/암호화 SQLite, 9개 관찰 paging, If-Match 충돌, start/continue 응답 유실, 재접속, 원본·교정·제외, 재동의와 타인 차단, 최신 facts/people 리포트 정본. |
+| `customer-completion.e2e.ts` | 7 pass. 같은 제품 UI+API mock으로 구조화 교정/재확인, 출처/coverage, 모든 날짜 정밀도, 동의/로그인 복귀, peer 수정 초안 보존, 저장 후 응답 유실의 단일 revision 확인. |
+| `customer-recovery-intake.e2e.ts` / `customer-recovery-workspace.e2e.ts` | 11 pass / 12 pass. 기존 #161의 ACK/focus·질문 초안·업로드·타임라인·원본 오류 복구를 보존한다. |
+| `customer-recovery-real.e2e.ts` | 4 pass. 실제 Hono/SQL의 요약 저장/확인 및 마지막 세션 조회 실패. OAuth/provider 모델은 합성 대역이다. |
+| `workspace-shared.e2e.ts` | 1 pass. 통합 mock 로그인→질문→확인→대화→자료/리포트 흐름. |
+| client 오류/교정 계약 | 17 tests/104 assertions. `workspace-client.test.ts`, `customer-material-review-api.test.ts`. |
+| schema drift·fresh/upgrade migration | 변경 없음, 6 tests/29 assertions pass. |
+
+회귀 중 찾은 요약 확인 후 사건 링크 누락과 focus 시 자료 editor unmount에 의한 초안 유실을
+수정했다. 병렬 Playwright 실행의 공용 artifact 경로 충돌(ENOENT)은 출력 경로를 분리해
+실제 Hono 검사 4개를 다시 통과했다. 최초 실패를 성공 기록으로 덮어쓰지 않는다.
+
+실제 외부 OAuth·Turnstile·유료 모델·R2/Containers/Whisper·운영 복구/경보·법률/정책 승인은
+이 합성/SQL 증거의 범위 밖이며 #64/#65와 #70/#71 전체 완료로 표시하지 않는다.

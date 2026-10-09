@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { V2_INTAKE_POLICY, V2_LIMITS } from "../../../contracts/v2";
+import { V2_INTAKE_POLICY, V2_LIMITS, v2SummarySchema } from "../../../contracts/v2";
 import {
   answersInputSchema,
   createInputSchema,
@@ -16,7 +16,7 @@ type Receipt = { ownerId: string; fingerprint: string; result: unknown };
 const idInput = z.object({ id: z.string().min(1).max(200) });
 export const casesFixtures: Record<string, CaseView> = {};
 function owner() {
-  const session = requireSession();
+  const session = requireSession({ consent: false });
   if (!session.user) throw new ApiError("UNAUTHENTICATED", "로그인이 필요해요.");
   if (readStore<string[]>("deletedAccountIds", []).includes(session.user.id))
     throw new ApiError("UNAUTHENTICATED", "로그인이 필요해요.");
@@ -70,6 +70,7 @@ function parse<T>(schema: z.ZodType<T>, raw: unknown): T {
   return value.data;
 }
 function replay<T>(operation: string, raw: unknown, key: string, run: () => T): T {
+  requireSession();
   const user = owner(),
     identity = `${user}:${operation}:${key}`,
     fingerprint = JSON.stringify(raw),
@@ -259,6 +260,28 @@ export const casesMockHandlers = {
       const next = changed(item, {
         stage: "summary",
         summary: [...summary].slice(0, 5000).join(""),
+        summaryDetails: {
+          schemaVersion: "2",
+          revision: 1,
+          intakeRevision: item.revision,
+          createdAt: new Date().toISOString(),
+          overview: [...summary].slice(0, 5000).join(""),
+          facts: [
+            {
+              id: crypto.randomUUID(),
+              text: value.narrative.slice(0, 2000),
+              attribution: "user_statement",
+              certainty: "reported",
+              significance: "neutral",
+              references: [{ kind: "intake_narrative", intakeRevision: item.revision }],
+              conflictingFactIds: [],
+              userEdited: false,
+            },
+          ],
+          parties: [],
+          unknowns: value.questions.filter((q) => q.answerState !== "answered").map((q) => q.text),
+          notices: ["합성 API 예시입니다. 실제 법률 검토 결과가 아닙니다."],
+        },
       });
       store(next);
       return result(next, value);
@@ -269,9 +292,36 @@ export const casesMockHandlers = {
         input = parse(summaryInputSchema, raw),
         item = owned(id);
       guard(item, input.expectedRevision);
-      if (item.stage !== "summary")
+      if (item.stage !== "summary" && item.stage !== "active")
         throw new ApiError("CONFLICT", "현재 요약을 먼저 준비해 주세요.");
-      const next = changed(item, { summary: input.summary });
+      const details = item.summaryDetails;
+      const next = changed(item, {
+        summary: input.summary,
+        stage: "summary",
+        ...(details
+          ? {
+              summaryDetails: {
+                ...details,
+                overview: input.summary,
+                revision: details.revision + 1,
+                unknowns: input.unknowns ?? details.unknowns,
+                facts: details.facts.map((fact) => {
+                  const edit = input.factEdits?.find((e) => e.factId === fact.id);
+                  return edit
+                    ? {
+                        ...fact,
+                        text: edit.text,
+                        certainty: edit.certainty ?? fact.certainty,
+                        conflictingFactIds: edit.conflictingFactIds ?? fact.conflictingFactIds,
+                        userEdited: true,
+                      }
+                    : fact;
+                }),
+              },
+            }
+          : {}),
+      });
+      if (next.summaryDetails) parse(v2SummarySchema, next.summaryDetails);
       store(next);
       return next;
     }),
@@ -281,7 +331,7 @@ export const casesMockHandlers = {
         input = parse(revisionInputSchema, raw),
         item = owned(id);
       guard(item, input.expectedRevision);
-      if (item.stage !== "summary" || !item.summary.trim())
+      if (!["summary", "active"].includes(item.stage) || !item.summary.trim())
         throw new ApiError("VALIDATION_ERROR", "저장한 요약을 확인해 주세요.");
       const next = changed(item, { stage: "active" });
       store(next);

@@ -170,3 +170,22 @@ check·문서 수정 완료 후 workspace에 쓰기를 하지 않는 순차 brow
 
 PR #126 최신 head CI는 이 추가 통합 후보를 별도로 검증한다. 담당 이슈/PR에 정확한 SHA/run을
 남기고 4번에게 병합을 맡긴다. #20/#70 승인 증거와 실제 외부 성공은 여전히 미확인/OPEN이다.
+
+## 2026-10-09 C 보완 — 텍스트 본문·재동의 전 읽기
+
+#62/#69는 과거 PR126의 구현·합성 검증 완료를 보존하고 누락 조건만 재개했다.
+현재 3세션은 A=공통/auth/runtime/통합·배포, B=자료/리포트/삭제, C=변호사 서버/client·계획/증거다.
+본문 `portfolio[].text?`는 제목과 별개이며 최대5,000자, 기존 profile 총60,000byte 제한을 유지한다.
+기존 title/link/image/PDF snapshot을 그대로 읽고 같은 암호화·revision/소유·공개 동의 경로로 저장한다.
+새 schema/migration을 만들지 않는다. HTML 실행 없이 plain text와 줄바꿈으로 렌더링한다.
+
+재동의 전 기존 자기 profile/assets GET과 ready 정제 자료 다운로드는 허용한다. 새 profile 생성,
+저장·공개·upload는 현재 동의를 요구한다. private stream은 signed session 만료/철회·role/owner·
+삭제·profile/asset revision을 계속 검사하며 public stream은 current consent도 계속 요구한다.
+mock의 공통 읽기 진입부는 A PR165, domain handler/client는 C가 연결한다. #163 main 통합 뒤
+화면을 수정하고 [요구사항 완료표](./MVP-REQUIREMENTS-EVIDENCE.md)에 정확한 SHA·종류·결과를 기록한다.
+
+호환성: 새 reader는 과거 text 없는 snapshot과 호환된다. 본문을 저장한 뒤 이전 strict reader로
+그대로 rollback하면 새 `text` 필드를 거부하므로 UI rollback 시 확장 reader를 유지한다.
+이전 reader 복귀가 필요하면 명시적인 데이터 보존·변환 검토 없이 본문을 지우지 않는다.
+#20/#70의 실제 사업자·법률·계약·게시 승인과 #71의 외부/운영 최종 인수는 별도 OPEN이다.

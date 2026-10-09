@@ -830,7 +830,7 @@ test("the ending gathers four features into the app, shows the final message and
   await expect(finale.locator("[data-finale-message]")).toHaveCSS("opacity", "0");
   await action.focus();
   await page.keyboard.press("Enter");
-  await expect(page).toHaveURL(/\/login$/);
+  await expect(page).toHaveURL(/\/login\?returnTo=%2Fapp$/);
   await expect(page.getByRole("button", { name: "Google로 계속하기" })).toBeVisible();
 });
 

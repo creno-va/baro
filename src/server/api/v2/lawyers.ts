@@ -69,7 +69,7 @@ export function createLawyersApi(
       }),
     );
   const selfAccess = async (c: import("hono").Context<ApiEnvironment>, mutation = false) => {
-    const a = await lawyerAccess(c, { mutation, consent: true });
+    const a = await lawyerAccess(c, { mutation, consent: mutation });
     if (a.response) return a;
     const row = await c.env.DB.prepare(
       "SELECT id FROM user WHERE id=? AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='account' AND target_id=user.id)",
@@ -86,7 +86,17 @@ export function createLawyersApi(
     const a = await selfAccess(c);
     if (a.response) return a.response;
     z.strictObject({}).parse(c.req.query());
-    const profile = await (await selfService(c.env)).getMine(a.ownerId);
+    const service = await selfService(c.env);
+    let profile: Awaited<ReturnType<typeof service.getMine>>;
+    try {
+      profile = await service.getMine(a.ownerId, false);
+    } catch (error) {
+      if (!(error instanceof LawyerError) || error.code !== "NOT_FOUND") throw error;
+      // Reading existing data needs no renewed consent; creating a first profile does.
+      const consent = await lawyerAccess(c, { consent: true });
+      if (consent.response) return consent.response;
+      profile = await service.getMine(a.ownerId);
+    }
     const after = await selfAccess(c);
     if (after.response) return after.response;
     if (after.ownerId !== a.ownerId)
@@ -121,7 +131,7 @@ export function createLawyersApi(
       monthlyBudgetCapEnabled: c.env.MONTHLY_BUDGET_CAP_ENABLED !== "false",
     });
     const service = createSelfProfileService(core);
-    const profile = await service.getMine(a.ownerId);
+    const profile = await service.getMine(a.ownerId, false);
     const assetId = c.req.param("assetId");
     const purpose = await core
       .statement(
@@ -148,7 +158,8 @@ export function createLawyersApi(
     return selfAssetResponse(
       await read(a.ownerId, preview, assetId, async () => {
         // Initial signed-cookie verification binds the session ID. Each chunk rechecks its
-        // expiry/revocation, role, consent and profile revision without sliding auth writes.
+        // expiry/revocation, role and profile revision without sliding auth writes.
+        // Renewed consent gates mutations/public reads, never the owner's existing download.
         return service.isCurrent(a.ownerId, profile, false, a.sessionId);
       }),
     );

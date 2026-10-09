@@ -87,7 +87,9 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
     page.getByRole("status").filter({ hasText: "검토 내용을 저장했어요." }),
   ).toBeVisible();
   await page.reload();
-  await expect(editor).toHaveValue(/사용자가 검토한 합성 사실/);
+  await expect(editor).toHaveValue(/합성 API 예시/);
+  await expect(editor).not.toHaveValue(/제외 원본.txt/);
+  await expect(editor).not.toHaveValue(/사용자가 검토한 합성 사실/);
   await openReportOptions(page);
   await expect(
     page.getByRole("checkbox", { name: "전화번호·이메일·주민등록번호 가리기" }),
@@ -102,8 +104,8 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
     .getByRole("checkbox", { name: "ZIP에 원본 포함" })
     .check();
   await page.getByRole("button", { name: "전달 내용 미리보기" }).click();
-  await expect(page.locator(".report-preview")).toContainText("[전화번호 가림]");
-  await expect(page.locator(".report-preview")).not.toContainText("010-1234-5678");
+  await expect(page.locator(".report-html-preview")).toContainText("[전화번호 가림]");
+  await expect(page.locator(".report-html-preview")).not.toContainText("010-1234-5678");
   await page.getByRole("checkbox", { name: "내용·식별정보·선택한 원본을 확인했어요" }).check();
   const pdfEvent = page.waitForEvent("download");
   await page.getByRole("button", { name: "PDF 다운로드", exact: true }).click();

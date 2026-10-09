@@ -11,6 +11,7 @@ import {
   v2FailureCodeSchema,
   v2JobSchema,
   v2QuestionBatchSchema,
+  v2SummaryEditRequestSchema,
   v2SummarySchema,
   v2WorkspaceSchema,
 } from "../../contracts/v2";
@@ -43,6 +44,8 @@ export const answersInputSchema = z
 export const summaryInputSchema = z.object({
   expectedRevision: z.number().int().min(1),
   summary: displayText(5000),
+  factEdits: v2SummaryEditRequestSchema.shape.factEdits,
+  unknowns: v2SummaryEditRequestSchema.shape.unknowns,
 });
 export const revisionInputSchema = z.object({ expectedRevision: z.number().int().min(1) });
 export type AnswersInput = z.infer<typeof answersInputSchema>;
@@ -540,7 +543,7 @@ export const casesApi = {
     const s = m.summary
       ? v2SummarySchema.parse(await request("cases.summary", { id }, { path: path(id, "summary") }))
       : null;
-    return view(w, m, s?.overview ?? "");
+    return { ...view(w, m, s?.overview ?? ""), ...(s ? { summaryDetails: s } : {}) };
   },
   getQuestions,
   async saveAnswers(id: string, raw: AnswersInput): Promise<QuestionsResult> {
@@ -628,7 +631,12 @@ export const casesApi = {
         { key: await mutationKey(`cases.saveSummary:${id}`, input) },
       );
     const { key, saved } = await intakeRequest("cases.saveSummary", id, input);
-    const body = { expectedRevision: saved.summaryRevision, overview: input.summary };
+    const body = {
+      expectedRevision: saved.summaryRevision,
+      overview: input.summary,
+      ...(input.factEdits ? { factEdits: input.factEdits } : {}),
+      ...(input.unknowns ? { unknowns: input.unknowns } : {}),
+    };
     for (let attempt = 0; attempt < 30; attempt++) {
       const result = z
         .looseObject({ edit: z.object({ status: z.string(), retryAfter: z.number() }).optional() })
@@ -669,7 +677,11 @@ export const casesApi = {
       {
         path: path(id, "summary/confirm"),
         method: "POST",
-        body: { expectedRevision: saved.revision, summaryRevision: saved.summaryRevision },
+        body: {
+          expectedRevision: saved.revision,
+          summaryRevision: saved.summaryRevision,
+          workspaceRevision: input.expectedRevision,
+        },
         key,
       },
     );

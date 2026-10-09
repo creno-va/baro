@@ -9,6 +9,42 @@ import { createReportsService } from "../src/server/modules/reports/service";
 import { streamChunks, zipByteLength, zipChunks } from "../src/server/modules/reports/zip";
 import { readyFile, reportFixture } from "./helpers/report-fixture";
 
+test("consent revoked during report encryption cannot publish a new report or operation", async () => {
+  const f = await reportFixture();
+  const first = await f.reports.get(f.actor.ownerId, f.workspaceId);
+  const revision = f.rev();
+  let revoked = false;
+  const raced = createReportsService(
+    {
+      ...f.core,
+      encrypt: async (...args: Parameters<typeof f.core.encrypt>) => {
+        const encrypted = await f.core.encrypt(...args);
+        if (!revoked && args[0] === "v2_reports") {
+          revoked = true;
+          f.db.sqlite.query("DELETE FROM user_consents WHERE user_id=?").run(f.actor.ownerId);
+        }
+        return encrypted;
+      },
+    },
+    f.deps,
+  );
+  await expect(
+    raced.save(f.actor.ownerId, f.workspaceId, crypto.randomUUID(), {
+      expectedRevision: first.revision,
+      content: "저장 중 동의를 철회한 합성 내용",
+      maskIdentifiers: true,
+      excludedFileIds: [],
+    }),
+  ).rejects.toThrow("CONSENT_REQUIRED");
+  expect(revoked).toBe(true);
+  expect(f.rev()).toBe(revision);
+  expect(f.db.sqlite.query("SELECT count(*) AS n FROM v2_reports").get()).toEqual({ n: 1 });
+  expect(
+    f.db.sqlite.query("SELECT count(*) AS n FROM v2_operations WHERE kind='report'").get(),
+  ).toEqual({ n: 1 });
+  expect((await f.reports.get(f.actor.ownerId, f.workspaceId)).content).toBe(first.content);
+});
+
 test("actual SQL encrypted immutable reports preserve review, masking, revision and idempotent lost responses", async () => {
   const f = await reportFixture(),
     owner = f.actor.ownerId;
@@ -423,4 +459,66 @@ test("streaming ZIP rejects changed originals and unsafe names before claiming a
   expect(() => zipByteLength([{ ...source, name: "../wrong.txt" }])).toThrow(
     "EXPORT_INVALID_FILENAME",
   );
+});
+
+test("stored historical PDF keeps its exact bytes after newer source and consent changes, but owner/delete fences remain", async () => {
+  const f = await reportFixture(),
+    a = f.actor.ownerId;
+  const old = await f.reports.get(a, f.workspaceId);
+  const original = await f.reports.pdf(a, old.id),
+    bytes = await new Response(original.body).arrayBuffer();
+  await readyFile(f, "새로 추가한 합성 자료");
+  expect((await f.reports.get(a, f.workspaceId)).stale).toBe(true);
+  f.db.sqlite.query("DELETE FROM user_consents WHERE user_id=?").run(a);
+  const stored = await f.reports.pdf(a, old.id);
+  expect(await new Response(stored.body).arrayBuffer()).toEqual(bytes);
+  expect((await f.reports.get(a, f.workspaceId)).content).toBe(old.content);
+  await expect(f.reports.generate(a, f.workspaceId, crypto.randomUUID(), {})).rejects.toMatchObject(
+    { code: "CONSENT_REQUIRED" },
+  );
+  await expect(f.reports.pdf(crypto.randomUUID(), old.id)).rejects.toMatchObject({
+    code: "NOT_FOUND",
+  });
+  const late = await f.reports.pdf(a, old.id);
+  f.db.sqlite.query("DELETE FROM v2_workspaces WHERE id=?").run(f.workspaceId);
+  await expect(new Response(late.body).arrayBuffer()).rejects.toThrow();
+});
+
+test("excluding a material rebuilds the rendered review, removing its observed text from actual PDF input", async () => {
+  const f = await reportFixture(),
+    a = f.actor.ownerId,
+    u = await readyFile(f, "제외 대상 원본"),
+    fileId = u.session.fileId;
+  const id = crypto.randomUUID(),
+    entity = crypto.randomUUID();
+  const payload = await f.core.encrypt("v2_file_observations", id, a, 2, {
+    id: entity,
+    text: "제외 대상 비공개 문장",
+    position: { kind: "document", page: 1, paragraph: null, table: null },
+    certainty: "observed",
+    userEdited: false,
+    included: true,
+  });
+  f.db.sqlite
+    .query(
+      "INSERT INTO v2_file_observations(id,entity_id,file_id,revision,file_revision,ordinal,encrypted_payload) VALUES(?,?,?,2,2,0,?)",
+    )
+    .run(id, entity, fileId, payload);
+  const prior = await f.reports.get(a, f.workspaceId);
+  expect(prior.content).toContain("제외 대상 비공개 문장");
+  const saved = await f.reports.save(a, f.workspaceId, crypto.randomUUID(), {
+    expectedRevision: prior.revision,
+    content: prior.content,
+    maskIdentifiers: true,
+    excludedFileIds: [fileId],
+  });
+  expect(saved.content).not.toContain("제외 대상 비공개 문장");
+  expect(
+    (await createV2ReportsRepository(f.core).read(f.actor, saved.id))?.body.selectedFiles,
+  ).toEqual([]);
+  expect(
+    (await createV2ReportsRepository(f.core).read(f.actor, prior.id))?.body.selectedFiles,
+  ).toHaveLength(1);
+  const pdf = await f.reports.pdf(a, saved.id);
+  expect((await new Response(pdf.body).arrayBuffer()).byteLength).toBe(pdf.byteLength);
 });

@@ -93,7 +93,17 @@ test("real signed SQL routes and client adapter save immutable review then retur
     ).status,
   ).toBe(403);
   f.db.sqlite.query("DELETE FROM user_consents WHERE user_id=?").run(f.actor.ownerId);
-  expect((await request(`/api/v2/reports/${saved.id}/pdf`)).status).toBe(403);
+  expect((await request(`/api/v2/reports/${saved.id}/pdf`)).status).toBe(200);
+  expect((await request(base)).status).toBe(200);
+  expect(
+    (
+      await request(base, {
+        method: "POST",
+        headers: { "idempotency-key": crypto.randomUUID() },
+        body: "{}",
+      })
+    ).status,
+  ).toBe(403);
 });
 test("closed public gate, duplicate selection and JSON stream size fail with safe responses", async () => {
   const f = await reportHttpFixture(),

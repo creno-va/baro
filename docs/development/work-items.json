@@ -12,10 +12,58 @@
     { "issue": 16, "milestone": 3, "kind": "implementation", "dependsOn": [10, 11, 12, 28], "owns": ["src/pages/cases/index.astro", "src/pages/cases/new.astro", "src/components/intake", "src/layouts"], "docs": ["docs/product/UX-SPEC.md", "docs/architecture/HTTP-API.md"], "validation": "list/input empty/error/loading, Turnstile, keyboard, 320px, duplicate submit" },
     { "issue": 17, "milestone": 4, "kind": "implementation", "dependsOn": [10, 12, 13], "owns": ["src/server/api/account-delete.ts", "src/server/modules/deletion", "src/pages/settings.astro"], "docs": ["docs/security/SECURITY-PRIVACY.md", "docs/architecture/DOMAIN-LIFECYCLE.md"], "validation": "recent OAuth vs sliding session, immediate revoke, Workflow deletion race, restore replay, no shadow copy" },
     { "issue": 18, "milestone": 4, "kind": "implementation", "dependsOn": [13, 17, 29, 30, 31], "owns": ["tests/e2e", "tests/evals", ".github/workflows"], "docs": ["docs/quality/TEST-STRATEGY.md"], "validation": "50 evals zero-critical, IDOR/deletion/CSRF, E2E/accessibility, secret/fixture/logging gates" },
-    { "issue": 19, "milestone": 4, "kind": "implementation", "dependsOn": [18, 27, 74], "owns": ["scripts/smoke.ts", "docs/operations", ".github/workflows"], "docs": ["docs/operations/DEPLOYMENT-OPERATIONS.md", "docs/operations/OBSERVABILITY.md"], "validation": "immutable release SHA, live synthetic smoke, backup/restore/rollback and alerts evidence" },
-    { "issue": 20, "milestone": 4, "kind": "external", "dependsOn": [], "owns": ["docs/policies", "docs/product/PUBLIC-CONTENT-AUDIT.md"], "docs": ["docs/policies/TERMS.DRAFT.md", "docs/policies/PRIVACY-POLICY.DRAFT.md"], "validation": "human legal/business approval, external landing copy, published policy versions" },
+    {
+      "issue": 19,
+      "milestone": 4,
+      "kind": "implementation",
+      "dependsOn": [
+        18,
+        27,
+        74
+      ],
+      "owns": [
+        "scripts/smoke.ts",
+        "docs/operations",
+        ".github/workflows"
+      ],
+      "docs": [
+        "docs/operations/DEPLOYMENT-OPERATIONS.md",
+        "docs/operations/OBSERVABILITY.md",
+        "docs/development/MVP-REQUIREMENTS-EVIDENCE.md"
+      ],
+      "validation": "immutable release SHA, live synthetic smoke, backup/restore/rollback and alerts evidence"
+    },
+    {
+      "issue": 20,
+      "milestone": 4,
+      "kind": "external",
+      "dependsOn": [],
+      "owns": [
+        "docs/policies",
+        "docs/product/PUBLIC-CONTENT-AUDIT.md"
+      ],
+      "docs": [
+        "docs/policies/TERMS.DRAFT.md",
+        "docs/policies/PRIVACY-POLICY.DRAFT.md",
+        "docs/development/MVP-REQUIREMENTS-EVIDENCE.md"
+      ],
+      "validation": "human legal/business approval, external landing copy, published policy versions"
+    },
     { "issue": 26, "milestone": 2, "kind": "implementation", "dependsOn": [], "owns": ["AGENTS.md", "scripts", "docs/development"], "docs": ["docs/quality/PROJECT-REVIEW.md"], "validation": "work DAG, docs, migrations, API regression, CI/CD and review PR" },
-    { "issue": 27, "milestone": 4, "kind": "external", "dependsOn": [], "owns": ["docs/operations"], "docs": ["docs/development/EXECUTION.md"], "validation": "preview clients, OAuth callback approval, Turnstile, Gateway credit/log/cache/budget, runtime keys" },
+    {
+      "issue": 27,
+      "milestone": 4,
+      "kind": "external",
+      "dependsOn": [],
+      "owns": [
+        "docs/operations"
+      ],
+      "docs": [
+        "docs/development/EXECUTION.md",
+        "docs/development/MVP-REQUIREMENTS-EVIDENCE.md"
+      ],
+      "validation": "preview clients, OAuth callback approval, Turnstile, Gateway credit/log/cache/budget, runtime keys"
+    },
     { "issue": 28, "milestone": 2, "kind": "implementation", "dependsOn": [4], "owns": ["src/contracts", "tests/fixtures/contracts"], "docs": ["docs/architecture/DOMAIN-LIFECYCLE.md", "docs/architecture/HTTP-API.md"], "validation": "strict unions, limits, invalid/unknown fields, fact/citation shape, synthetic fixtures" },
     { "issue": 29, "milestone": 3, "kind": "implementation", "dependsOn": [12, 13, 14, 15, 28], "owns": ["src/pages/cases/[caseId].astro", "src/components/analysis"], "docs": ["docs/product/UX-SPEC.md", "docs/architecture/DOMAIN-LIFECYCLE.md"], "validation": "questions/result/retry polling, refresh/back, 24h expiry, keyboard and live status" },
     { "issue": 30, "milestone": 3, "kind": "implementation", "dependsOn": [12, 28], "owns": ["src/server/modules/analytics", "src/server/api/feedback.ts"], "docs": ["docs/analytics/EVENTS.md"], "validation": "opt-in, event dedup, allowlist, ownership, no sensitive/free-text collection" },
@@ -117,7 +165,8 @@
         "docs/PRD.md",
         "docs/product/UX-SPEC.md",
         "docs/architecture/SYSTEM.md",
-        "docs/quality/TEST-STRATEGY.md"
+        "docs/quality/TEST-STRATEGY.md",
+        "docs/development/MVP-REQUIREMENTS-EVIDENCE.md"
       ],
       "validation": "boundary/concurrency/KST/idempotency/failure/reconciliation tests; actual costs verified in V18"
     },
@@ -139,7 +188,8 @@
         "docs/PRD.md",
         "docs/product/UX-SPEC.md",
         "docs/architecture/SYSTEM.md",
-        "docs/quality/TEST-STRATEGY.md"
+        "docs/quality/TEST-STRATEGY.md",
+        "docs/development/MVP-REQUIREMENTS-EVIDENCE.md"
       ],
       "validation": "upload/download/ownership/quota/failure tests; actual R2 smoke linked to V18"
     },
@@ -161,7 +211,8 @@
         "docs/PRD.md",
         "docs/product/UX-SPEC.md",
         "docs/architecture/SYSTEM.md",
-        "docs/quality/TEST-STRATEGY.md"
+        "docs/quality/TEST-STRATEGY.md",
+        "docs/development/MVP-REQUIREMENTS-EVIDENCE.md"
       ],
       "validation": "container build and processor fixture/timeout/retry/deletion tests; live media smoke V18"
     },
@@ -214,10 +265,28 @@
       "issue": 62,
       "milestone": 5,
       "kind": "implementation",
-      "dependsOn": [56,60,102,106],
-      "owns": ["src/pages/lawyer","src/components/lawyer","lawyer self-service functional integration"],
-      "docs": ["docs/PRD.md","docs/product/UX-SPEC.md","docs/architecture/SYSTEM.md","docs/quality/TEST-STRATEGY.md"],
-      "validation": "customer/lawyer own profile persistence/reload/ownership, no moderator escalation and no approval/admin UX; mock #106 distinct"
+      "dependsOn": [
+        56,
+        60,
+        102,
+        106
+      ],
+      "owns": [
+        "src/pages/lawyer",
+        "src/components/lawyers",
+        "src/client/api/lawyers.ts",
+        "src/client/api/mock/lawyers.ts",
+        "src/server/modules/lawyers/self-profile*",
+        "src/server/api/v2/lawyers.ts"
+      ],
+      "docs": [
+        "docs/PRD.md",
+        "docs/product/UX-SPEC.md",
+        "docs/architecture/SYSTEM.md",
+        "docs/quality/TEST-STRATEGY.md",
+        "docs/development/MVP-REQUIREMENTS-EVIDENCE.md"
+      ],
+      "validation": "text portfolio body save/reconnect/preview/publish/edit/remove, legacy snapshots; pre-renewal own profile/assets read/download with mutation/public consent and owner/role/session fences; no admin or unverified qualification"
     },
     {
       "issue": 63,
@@ -237,7 +306,8 @@
         "docs/PRD.md",
         "docs/product/UX-SPEC.md",
         "docs/architecture/SYSTEM.md",
-        "docs/quality/TEST-STRATEGY.md"
+        "docs/quality/TEST-STRATEGY.md",
+        "docs/development/MVP-REQUIREMENTS-EVIDENCE.md"
       ],
       "validation": "captured official fixtures/schema/date/hash/URL/claim rejection tests; credentials/live sources separately V18"
     },
@@ -261,7 +331,8 @@
         "docs/PRD.md",
         "docs/product/UX-SPEC.md",
         "docs/architecture/SYSTEM.md",
-        "docs/quality/TEST-STRATEGY.md"
+        "docs/quality/TEST-STRATEGY.md",
+        "docs/development/MVP-REQUIREMENTS-EVIDENCE.md"
       ],
       "validation": "pipeline/concurrency/quota/revision/false-fact/strategy boundary eval; live model V18"
     },
@@ -269,19 +340,51 @@
       "issue": 65,
       "milestone": 5,
       "kind": "implementation",
-      "dependsOn": [56,58,59,64,103,104],
-      "owns": ["src/pages/workspaces","src/components/workspace","src/pages/cases"],
-      "docs": ["docs/PRD.md","docs/product/UX-SPEC.md","docs/architecture/SYSTEM.md","docs/quality/TEST-STRATEGY.md"],
+      "dependsOn": [
+        56,
+        58,
+        59,
+        64,
+        103,
+        104
+      ],
+      "owns": [
+        "src/pages/workspaces",
+        "src/components/workspace",
+        "src/pages/cases"
+      ],
+      "docs": [
+        "docs/PRD.md",
+        "docs/product/UX-SPEC.md",
+        "docs/architecture/SYSTEM.md",
+        "docs/quality/TEST-STRATEGY.md",
+        "docs/development/MVP-REQUIREMENTS-EVIDENCE.md"
+      ],
       "validation": "same-client B/C mock UI integrated with real backend: customer persistence/relogin/resume/files/permissions; #64 PR100 reused"
     },
     {
       "issue": 66,
       "milestone": 5,
       "kind": "implementation",
-      "dependsOn": [59,64,65,105],
-      "owns": ["src/server/modules/reports","src/server/api/v2/reports","real report functional integration"],
-      "docs": ["docs/PRD.md","docs/product/UX-SPEC.md","docs/architecture/SYSTEM.md","docs/quality/TEST-STRATEGY.md"],
-      "validation": "actual Korean PDF rendered content and selected-original ZIP download/ownership; UI mock #105 distinct"
+      "dependsOn": [
+        59,
+        64,
+        65,
+        105
+      ],
+      "owns": [
+        "src/server/modules/reports",
+        "src/server/api/v2/reports",
+        "real report functional integration"
+      ],
+      "docs": [
+        "docs/PRD.md",
+        "docs/product/UX-SPEC.md",
+        "docs/architecture/SYSTEM.md",
+        "docs/quality/TEST-STRATEGY.md",
+        "docs/development/MVP-REQUIREMENTS-EVIDENCE.md"
+      ],
+      "validation": "latest confirmed facts/material corrections in new reports; immutable prior basis/stale and renewal read/download; product HTML preview/download with escaping/CSP/mobile/print plus actual Korean PDF and selected-original ZIP content/ownership/deletion; UI-35 and #69/#71 evidence, mock #105 distinct"
     },
     {
       "issue": 67,
@@ -336,10 +439,30 @@
       "issue": 69,
       "milestone": 5,
       "kind": "implementation",
-      "dependsOn": [61,62,65,66,67,68],
-      "owns": ["tests/e2e","tests/evals","docs/development/V2-VALIDATION.md","quality CI"],
-      "docs": ["docs/PRD.md","docs/product/UX-SPEC.md","docs/architecture/SYSTEM.md","docs/quality/TEST-STRATEGY.md"],
-      "validation": "customer/lawyer full functional UX persistence/roles/download/delete/mobile/CSP; mock and real evidence distinct; broad AI quality improvements after UX"
+      "dependsOn": [
+        61,
+        62,
+        65,
+        66,
+        67,
+        68,
+        162
+      ],
+      "owns": [
+        "tests/e2e",
+        "tests/evals",
+        "docs/development/V2-VALIDATION.md",
+        "docs/development/MVP-REQUIREMENTS-EVIDENCE.md",
+        "requirement/evidence audit (CI owned by A)"
+      ],
+      "docs": [
+        "docs/PRD.md",
+        "docs/product/UX-SPEC.md",
+        "docs/architecture/SYSTEM.md",
+        "docs/quality/TEST-STRATEGY.md",
+        "docs/development/MVP-REQUIREMENTS-EVIDENCE.md"
+      ],
+      "validation": "all F/UI requirements and transfers mapped to current owner, scenario, expected result, evidence kind, exact SHA/result; #162 and new #62/#64/#65/#58/#59/#66 including product HTML UI-35 verified after integration; preserve prior failures/passes"
     },
     {
       "issue": 70,
@@ -357,7 +480,8 @@
         "docs/PRD.md",
         "docs/product/UX-SPEC.md",
         "docs/architecture/SYSTEM.md",
-        "docs/quality/TEST-STRATEGY.md"
+        "docs/quality/TEST-STRATEGY.md",
+        "docs/development/MVP-REQUIREMENTS-EVIDENCE.md"
       ],
       "validation": "human-approved documents, versions and verifiable receipts; do not substitute automated tests"
     },
@@ -405,11 +529,38 @@
     {
       "issue": 71,
       "milestone": 5,
-      "kind": "implementation",
-      "dependsOn": [59,63,67,69,70,19,20,27],
-      "owns": ["scripts/live-smoke",".github/workflows","docs/operations","release evidence"],
-      "docs": ["docs/PRD.md","docs/product/UX-SPEC.md","docs/architecture/SYSTEM.md","docs/quality/TEST-STRATEGY.md"],
-      "validation": "trusted same-SHA customer/lawyer live/CI/preview/production receipts, real external/policy/public gates; mock UI is not live evidence"
+      "kind": "external",
+      "dependsOn": [
+        59,
+        63,
+        67,
+        69,
+        70,
+        19,
+        20,
+        27,
+        57,
+        58,
+        62,
+        64,
+        65,
+        66,
+        162
+      ],
+      "owns": [
+        "scripts/live-smoke",
+        ".github/workflows",
+        "docs/operations",
+        "release evidence"
+      ],
+      "docs": [
+        "docs/PRD.md",
+        "docs/product/UX-SPEC.md",
+        "docs/architecture/SYSTEM.md",
+        "docs/quality/TEST-STRATEGY.md",
+        "docs/development/MVP-REQUIREMENTS-EVIDENCE.md"
+      ],
+      "validation": "close last only after all mandatory requirements including product HTML UI-35/transfers/known defects/external conditions complete; same immutable candidate release/live receipts and human policy evidence; no inferred approval or synthetic/live substitution"
     },
     {
       "issue": 101,
@@ -480,6 +631,20 @@
         "docs/development/PARALLEL-UI-SPRINT.md"
       ],
       "validation": "atomic SQL file migration import, private maintenance budget/lease/consent guards, changed-feature CI selection; preview same-SHA migration evidence"
+    },
+    {
+      "issue": 162,
+      "milestone": 5,
+      "kind": "implementation",
+      "dependsOn": [],
+      "owns": [
+        "launch notice removal and existing feature activation (#163; integrated by A)"
+      ],
+      "docs": [
+        "docs/product/UI-DEMONSTRATION.md",
+        "docs/development/MVP-REQUIREMENTS-EVIDENCE.md"
+      ],
+      "validation": "remove launch notice/deactivation, restore lawyer/customer/report navigation, preserve auth/state/public gates; integrated SHA browser/CSP evidence"
     }
   ]
 }

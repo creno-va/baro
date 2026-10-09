@@ -3,19 +3,21 @@ import { caseDetailResponseSchema, opaqueIdSchema } from "../../contracts";
 import {
   v2AcceptedOperationSchema,
   v2ActionSchema,
+  v2FactReferenceSchema,
   v2JobSchema,
   v2SummarySchema,
   v2TimelineEntrySchema,
   v2UserMessageSchema,
   v2WorkspaceSchema,
 } from "../../contracts/v2";
+import { ApiError } from "./errors";
 import { createFilesApi } from "./files";
 import type { ActionView, CaseView, MessageView, TimelineView, WorkspaceView } from "./types";
 
 /** Shared transport returns a Response for both mock and same-origin real requests. */
 export type WorkspaceTransport = (path: string, init?: RequestInit) => Promise<Response>;
-export function workspaceError(code: string, message: string, retryable = false) {
-  return Object.assign(new Error(message), { code, retryable });
+export function workspaceError(code: ApiError["code"], message: string, retryable = false) {
+  return new ApiError(code, message, retryable);
 }
 export async function workspaceResponse(response: Response) {
   if (!response.ok) {
@@ -78,6 +80,22 @@ export function workspaceMutation(path: string, body: unknown, method = "POST"):
     body: JSON.stringify(body),
   };
 }
+const messageSources = {
+  references: z.array(v2FactReferenceSchema).default([]),
+  citations: z
+    .array(
+      z.object({
+        id: z.string(),
+        title: z.string(),
+        url: z.url().refine((value) => {
+          const url = new URL(value);
+          return url.protocol === "https:" && !url.username && !url.password;
+        }),
+      }),
+    )
+    .default([]),
+  warnings: z.array(z.string()).default([]),
+};
 const fileViewSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -107,13 +125,20 @@ export const workspaceViewSchema = z.object({
       status: z.enum(["pending", "complete", "failed"]),
       retryable: z.boolean().optional(),
       createdAt: z.string(),
+      ...messageSources,
     }),
   ),
   actions: z.array(
     z.object({ id: z.string(), title: z.string(), detail: z.string(), done: z.boolean() }),
   ),
   timeline: z.array(
-    z.object({ id: z.string(), date: z.string(), title: z.string(), detail: z.string() }),
+    z.object({
+      id: z.string(),
+      date: z.string(),
+      datePrecision: z.enum(["day", "month", "year", "unknown"]).default("day"),
+      title: z.string(),
+      detail: z.string(),
+    }),
   ),
   files: z.array(fileViewSchema),
 });
@@ -178,8 +203,7 @@ export function createWorkspaceApi(
       return null;
     }
   }
-  // This screen renders plain message text. Source validation and URL allowlists stay
-  // on the server; hidden citations must not be revalidated against an empty registry.
+  // The server validates official hosts; the UI preserves its evidence and rejects unsafe URLs.
   const messageTextSchema = z.discriminatedUnion("role", [
     v2UserMessageSchema,
     z.object({
@@ -191,6 +215,7 @@ export function createWorkspaceApi(
       role: z.literal("assistant"),
       safety: z.literal("validated"),
       text: v2UserMessageSchema.shape.text,
+      ...messageSources,
     }),
   ]);
   async function get(id: string, recovery = 0): Promise<CustomerWorkspaceView> {
@@ -261,6 +286,15 @@ export function createWorkspaceApi(
         : metadata.summary
           ? v2SummarySchema.parse(await workspaceJson(request, `${base(id)}/summary`))
           : null;
+    const settled =
+      cached?.revision === w.workspaceRevision
+        ? w
+        : v2WorkspaceSchema.parse(await workspaceJson(request, `${base(id)}/workspace`));
+    if (settled.workspaceRevision !== w.workspaceRevision) {
+      snapshots.delete(id);
+      if (recovery < 2) return get(id, recovery + 1);
+      throw workspaceError("UNAVAILABLE", "사건이 갱신되어 최신 내용을 다시 불러와 주세요.", true);
+    }
     snapshots.set(id, {
       revision: w.workspaceRevision,
       intake,
@@ -276,6 +310,9 @@ export function createWorkspaceApi(
       text: m.text,
       status: "complete",
       createdAt: m.createdAt,
+      ...(m.role === "assistant"
+        ? { references: m.references, citations: m.citations, warnings: m.warnings }
+        : {}),
     }));
     let jobId = w.currentJobId ?? rememberedJob(id);
     let latestJob: z.infer<typeof v2JobSchema> | null = null;
@@ -332,6 +369,13 @@ export function createWorkspaceApi(
             job.failure !== "POLICY_REJECTED" &&
             job.attempts < 10,
           createdAt: job.updatedAt,
+          warnings:
+            job.status === "failed" &&
+            ["CITATION_INVALID", "POLICY_REJECTED", "MODEL_SCHEMA_INVALID"].includes(
+              job.failure ?? "",
+            )
+              ? ["답변 검증을 통과하지 못해 내용을 표시하지 않았어요. 원본과 출처를 확인해 주세요."]
+              : [],
         });
       }
     }
@@ -352,6 +396,7 @@ export function createWorkspaceApi(
       return {
         id: item.id,
         date: item.date ?? "",
+        datePrecision: item.datePrecision,
         title: title ?? item.event,
         detail: detail.join("\n"),
       } satisfies TimelineView;
@@ -500,7 +545,7 @@ export function createWorkspaceApi(
             ? (timelineRevisions.get(`${id}:${entry.id}`) ?? 1)
             : (workspaceRevisions.get(id) ?? (await get(id)).case.revision),
           date: entry.date || null,
-          datePrecision: entry.date ? "day" : "unknown",
+          datePrecision: entry.date ? (entry.datePrecision ?? "day") : "unknown",
           event: entry.detail ? `${entry.title}\n${entry.detail}` : entry.title,
         };
         init = workspaceMutation(route, body, entry.id ? "PUT" : "POST");

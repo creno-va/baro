@@ -4,6 +4,7 @@ import { api } from "../../client/api";
 import type { QuestionsResult } from "../../client/api/cases";
 import { ApiError } from "../../client/api/core";
 import type { CaseView, QuestionView } from "../../client/api/types";
+import { accessHref } from "../../client/return-path";
 import { BrandMark } from "../ui/brand";
 import { Button, ButtonLink } from "../ui/button";
 import { Dialog } from "../ui/dialog";
@@ -41,42 +42,43 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
   const acknowledgedRevision = useRef<number | null>(null);
   const {
     ready,
+    canMutate,
     version,
     verify,
     ticket,
     current: accessCurrent,
     alive,
     deny,
-  } = useCustomerAccess(() => {
-    ++request.current;
-    draftSnapshot.current = null;
-    drafts.current.clear();
-    acknowledgedRevision.current = null;
-    setItem(null);
-    setResult(null);
-    setValue("");
-    setAnswerState(undefined);
-    setIndex(0);
-    setExit(false);
-    setEditing(false);
-    setPreparing(false);
-    setRecovering(false);
-    loaded.current = false;
-    caseSnapshot.current = null;
-    setNotice("");
-    setError(null);
-    setBusy(false);
-    pending.current = false;
-    failedOperation.current = null;
-  }, setError);
+  } = useCustomerAccess(
+    () => {
+      ++request.current;
+      draftSnapshot.current = null;
+      drafts.current.clear();
+      acknowledgedRevision.current = null;
+      setItem(null);
+      setResult(null);
+      setValue("");
+      setAnswerState(undefined);
+      setIndex(0);
+      setExit(false);
+      setEditing(false);
+      setPreparing(false);
+      setRecovering(false);
+      loaded.current = false;
+      caseSnapshot.current = null;
+      setNotice("");
+      setError(null);
+      setBusy(false);
+      pending.current = false;
+      failedOperation.current = null;
+    },
+    setError,
+    true,
+  );
   const report = useCallback(
     (cause: unknown) => {
       if ((cause as { code?: string }).code === "CONFLICT") setRecovering(false);
-      if (
-        ["UNAUTHENTICATED", "CONSENT_REQUIRED", "NOT_FOUND"].includes(
-          (cause as { code?: string }).code ?? "",
-        )
-      )
+      if (["UNAUTHENTICATED", "NOT_FOUND"].includes((cause as { code?: string }).code ?? ""))
         deny();
       setError(cause);
     },
@@ -101,7 +103,8 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
     index === (result?.questions.length ?? 0) - 1 &&
     (rounds.length >= roundLimit || result?.processingStage === "summary" || editing);
   const waiting = preparing || recovering || Boolean(result?.processing);
-  const locked = busy || waiting || leaving || (error as { code?: string })?.code === "CONFLICT";
+  const locked =
+    !canMutate || busy || waiting || leaving || (error as { code?: string })?.code === "CONFLICT";
   const displayed = useRef({ index, id: question?.id });
   displayed.current = { index, id: question?.id };
   const summarizing =
@@ -346,7 +349,7 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
     } else setResult(next);
   }
   async function advance() {
-    if (!result || pending.current || result.processing) return;
+    if (!canMutate || !result || pending.current || result.processing) return;
     ++request.current;
     setLoading(false);
     const epoch = ticket();
@@ -356,7 +359,7 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
     setError(null);
     try {
       failedOperation.current = { kind: "advance" };
-      if (!(await verify()) || !accessCurrent(epoch)) return;
+      if (!(await verify(false, true)) || !accessCurrent(epoch)) return;
       const next = await api.cases.advance(caseId, { expectedRevision: result.revision });
       if (!(await verifyCompletion(epoch))) return;
       failedOperation.current = null;
@@ -374,6 +377,7 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
   }
   async function save(move: boolean, state = answerState) {
     if (
+      !canMutate ||
       !result ||
       !question ||
       !state ||
@@ -391,7 +395,7 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
     setNotice("");
     try {
       failedOperation.current = { kind: "save", move, state };
-      if (!(await verify()) || !accessCurrent(epoch)) return;
+      if (!(await verify(false, true)) || !accessCurrent(epoch)) return;
       const next = await api.cases.saveAnswers(caseId, {
         expectedRevision: result.revision,
         answers: [
@@ -474,6 +478,12 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
       ) : null}
       {ready && item && result ? (
         <section className="intake-scene" data-transition={leaving ? "leaving" : "idle"}>
+          {!canMutate && (
+            <p>
+              저장한 질문과 답변을 읽을 수 있어요. 변경·AI 처리에는{" "}
+              <a href={accessHref("consent")}>최신 동의 확인</a>이 필요해요.
+            </p>
+          )}
           {item.schemaVersion === "1" ? (
             <StatePanel
               variant="pending"
@@ -671,7 +681,7 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
                       <div className="intake-scene-tools">
                         <Button
                           variant="ghost"
-                          disabled={locked || index === 0}
+                          disabled={busy || waiting || leaving || index === 0}
                           onClick={() => {
                             if (question) {
                               if (dirty)

@@ -1,6 +1,7 @@
 import { type SyntheticEvent, useEffect, useRef, useState } from "react";
-import { api, apiMode, roleStart } from "../client/api";
+import { api, apiMode } from "../client/api";
 import { ApiError } from "../client/api/errors";
+import { accessHref, returnPathFromLocation, sessionDestination } from "../client/return-path";
 import { CURRENT_POLICY_VERSIONS } from "../contracts/consent";
 
 type ConsentState = "loading" | "required" | "complete";
@@ -24,16 +25,20 @@ export function ConsentForm() {
       .get()
       .then(async (session) => {
         if (!session.user) {
-          window.location.replace("/login?error=session_expired");
+          window.location.replace(
+            accessHref("login", returnPathFromLocation() ?? undefined, "session_expired"),
+          );
           return;
         }
         const consent = await api.session.getConsent();
-        setStartPath(roleStart({ ...session, needsConsent: consent.needsConsent }));
+        setStartPath(sessionDestination({ ...session, needsConsent: consent.needsConsent }));
         setState(consent.needsConsent ? "required" : "complete");
       })
       .catch((failure) => {
         if (failure instanceof ApiError && failure.code === "UNAUTHENTICATED") {
-          window.location.replace("/login?error=session_expired");
+          window.location.replace(
+            accessHref("login", returnPathFromLocation() ?? undefined, "session_expired"),
+          );
           return;
         }
         setError("동의 상태를 불러오지 못했어요. 다시 불러와 주세요.");
@@ -52,10 +57,12 @@ export function ConsentForm() {
         ...CURRENT_POLICY_VERSIONS,
         over14Confirmed: true,
       });
-      setStartPath(roleStart(session));
+      setStartPath(sessionDestination(session));
     } catch (failure) {
       if (failure instanceof ApiError && failure.code === "UNAUTHENTICATED") {
-        window.location.replace("/login?error=session_expired");
+        window.location.replace(
+          accessHref("login", returnPathFromLocation() ?? undefined, "session_expired"),
+        );
         return;
       }
       setError("동의를 저장하지 못했어요. 다시 시도해 주세요.");
