@@ -197,6 +197,115 @@ test("acknowledged answer recovery preserves a hidden question draft without ano
   expect(result.questions[1].answer).toBeUndefined();
 });
 
+for (const operation of ["save", "confirm"] as const) {
+  test(`acknowledged summary ${operation} recovers after focus supersedes its session check`, async ({
+    page,
+  }) => {
+    await page.addInitScript(() =>
+      localStorage.setItem(
+        "baro-api-mock-v1:session",
+        JSON.stringify({
+          user: { id: "summary-focus-customer", name: "합성 검증 고객", accountType: "customer" },
+          needsConsent: false,
+        }),
+      ),
+    );
+    await page.goto("/cases/new");
+    await page
+      .getByLabel("지금까지 있었던 일")
+      .fill("요약 저장 이후 화면 복귀와 세션 확인의 경합을 검증하는 합성 사건입니다.");
+    await page.getByRole("button", { name: "저장하고 계속" }).click();
+    for (let i = 0; i < 6; i++)
+      await page.getByRole("button", { name: "모름", exact: true }).click();
+    await expect(page).toHaveURL(/\/summary$/);
+    const editor = page.getByLabel("요약 편집");
+    await expect(editor).toBeVisible();
+    await page.evaluate(async (operation) => {
+      const apiPath = "/src/client/api/index.ts";
+      const casesPath = "/src/client/api/cases.ts";
+      const { api } = await import(apiPath);
+      const { casesApi } = await import(casesPath);
+      const state = {
+        writes: 0,
+        acknowledged: false,
+        held: false,
+        released: false,
+        release: () => {},
+      };
+      (window as unknown as { summaryFocusRecovery: typeof state }).summaryFocusRecovery = state;
+      const method = operation === "save" ? "saveSummary" : "confirmSummary";
+      const write = casesApi[method].bind(casesApi);
+      casesApi[method] = async (id: string, input: unknown) => {
+        ++state.writes;
+        const next = await write(id, input);
+        state.acknowledged = true;
+        return next;
+      };
+      const session = api.session.get.bind(api.session);
+      api.session.get = async () => {
+        const owned = new Error().stack?.includes("SummaryReview.tsx");
+        const next = await session();
+        if (owned && state.acknowledged && !state.held) {
+          state.held = true;
+          await new Promise<void>((resolve) => {
+            state.release = () => {
+              state.released = true;
+              resolve();
+            };
+          });
+        }
+        return next;
+      };
+    }, operation);
+    const savedSummary = "화면 복귀 이후에도 복구돼야 하는 최신 합성 요약입니다.";
+    if (operation === "save") {
+      await editor.fill(savedSummary);
+      await page.getByRole("button", { name: "수정 내용 저장" }).click();
+    } else {
+      await page.getByLabel("요약이 내가 이야기한 사실과 맞는지 확인했어요.").check();
+      await page.getByRole("button", { name: "요약 확인하고 계속" }).click();
+      await page.getByRole("button", { name: "확인하고 사건 열기" }).click();
+    }
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () =>
+            (window as unknown as { summaryFocusRecovery: { held: boolean } }).summaryFocusRecovery
+              .held,
+        ),
+      )
+      .toBe(true);
+    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await expect(editor).toBeVisible();
+    await page.evaluate(async () => {
+      // Finish the focus refresh and its skipped load before releasing the write's check.
+      await new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      );
+      (
+        window as unknown as { summaryFocusRecovery: { release: () => void } }
+      ).summaryFocusRecovery.release();
+    });
+    if (operation === "save") {
+      await expect(editor).toBeEnabled();
+      await expect(editor).toHaveValue(savedSummary);
+      await expect(page.getByRole("button", { name: "수정 내용 저장" })).toHaveCount(0);
+    } else {
+      await expect(page.getByRole("link", { name: "사건 열기", exact: true })).toBeVisible();
+      await expect(page.getByRole("dialog")).toHaveCount(0);
+    }
+    await expect(page.getByRole("alert")).toHaveCount(0);
+    expect(
+      await page.evaluate(() => {
+        const state = (
+          window as unknown as { summaryFocusRecovery: { writes: number; released: boolean } }
+        ).summaryFocusRecovery;
+        return { writes: state.writes, released: state.released };
+      }),
+    ).toEqual({ writes: 1, released: true });
+  });
+}
+
 for (const focus of [false, true]) {
   test(`peer summary edit with local draft; background refresh=${focus}`, async ({ page }) => {
     await page.addInitScript(() =>

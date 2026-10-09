@@ -115,6 +115,11 @@ export function SummaryReview({ caseId }: { caseId: string }) {
     if (version) void load();
   }, [load, version]);
   useEffect(() => {
+    // A focus refresh can finish while the acknowledged write still blocks reads.
+    // Retry its read after the write settles; explicit failures keep manual retry.
+    if (recovering && !busy && ready && !error) void load();
+  }, [recovering, busy, ready, error, load]);
+  useEffect(() => {
     const warn = (event: BeforeUnloadEvent) => {
       if (dirty) event.preventDefault();
     };
