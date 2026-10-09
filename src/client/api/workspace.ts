@@ -86,6 +86,7 @@ const fileViewSchema = z.object({
   status: z.enum(["uploading", "processing", "ready", "failed", "waiting"]),
   coverage: z.string(),
   extractedText: z.string(),
+  canStartProcessing: z.boolean().optional(),
 });
 export const workspaceViewSchema = z.object({
   case: z.object({
@@ -104,6 +105,7 @@ export const workspaceViewSchema = z.object({
       role: z.enum(["user", "assistant"]),
       text: z.string(),
       status: z.enum(["pending", "complete", "failed"]),
+      retryable: z.boolean().optional(),
       createdAt: z.string(),
     }),
   ),
@@ -154,6 +156,7 @@ export function createWorkspaceApi(
   >();
   const pendingMessages = new Map<string, RequestInit>();
   const pendingTimelines = new Map<string, RequestInit>();
+  const pendingActions = new Map<string, { done: boolean; init: RequestInit }>();
   const knownJobs = new Map<string, string>();
   function rememberJob(id: string, jobId: string | null) {
     if (jobId) knownJobs.set(id, jobId);
@@ -190,7 +193,7 @@ export function createWorkspaceApi(
       text: v2UserMessageSchema.shape.text,
     }),
   ]);
-  async function get(id: string): Promise<CustomerWorkspaceView> {
+  async function get(id: string, recovery = 0): Promise<CustomerWorkspaceView> {
     const response = await request(`${base(id)}/workspace`);
     if (response.status === 404) {
       if (schemaVersions.get(id) === "2") await workspaceResponse(response);
@@ -275,22 +278,34 @@ export function createWorkspaceApi(
       createdAt: m.createdAt,
     }));
     let jobId = w.currentJobId ?? rememberedJob(id);
-    if (!jobId) {
+    let latestJob: z.infer<typeof v2JobSchema> | null = null;
+    if (!w.currentJobId) {
       const latest = await request(`${base(id)}/workspace-jobs/latest`);
       if (latest.status !== 404) {
-        const recovered = v2JobSchema
-          .nullable()
-          .parse(await (await workspaceResponse(latest)).json());
-        if (recovered && ["queued", "running", "validating", "failed"].includes(recovered.status))
-          jobId = recovered.id;
+        latestJob = v2JobSchema.nullable().parse(await (await workspaceResponse(latest)).json());
+        jobId = latestJob?.id ?? null;
+        if (!jobId) rememberJob(id, null);
       }
     }
     if (jobId) {
-      const response = await request(`${base(id)}/workspace-jobs/${encodeURIComponent(jobId)}`);
-      const job =
-        response.status === 404 && !w.currentJobId
-          ? null
-          : v2JobSchema.parse(await (await workspaceResponse(response)).json());
+      let job = latestJob;
+      if (!job) {
+        const response = await request(`${base(id)}/workspace-jobs/${encodeURIComponent(jobId)}`);
+        job =
+          response.status === 404 && !w.currentJobId
+            ? null
+            : v2JobSchema.parse(await (await workspaceResponse(response)).json());
+      }
+      if (
+        job?.kind === "chat_response" &&
+        job.status === "completed" &&
+        (!messagesRaw.some((m) => m.role === "assistant" && m.operationId === job.operationId) ||
+          messagesRaw.some((m) => m.workspaceRevision > w.workspaceRevision))
+      ) {
+        snapshots.delete(id);
+        if (recovery < 2) return get(id, recovery + 1);
+        throw workspaceError("UNAVAILABLE", "완료된 응답을 다시 확인해 주세요.", true);
+      }
       if (!job || ["completed", "cancelled", "superseded"].includes(job.status))
         rememberJob(id, null);
       if (
@@ -311,6 +326,11 @@ export function createWorkspaceApi(
               ? "응답을 완료하지 못했어요."
               : "추가된 내용을 정리하고 있어요.",
           status: job.status === "failed" ? "failed" : "pending",
+          retryable:
+            job.status === "failed" &&
+            job.retryable &&
+            job.failure !== "POLICY_REJECTED" &&
+            job.attempts < 10,
           createdAt: job.updatedAt,
         });
       }
@@ -440,15 +460,34 @@ export function createWorkspaceApi(
     },
     async setAction(id: string, actionId: string, done: boolean) {
       if (!actionRevisions.has(`${id}:${actionId}`)) await get(id);
-      return mutation(
-        id,
-        `actions/${encodeURIComponent(actionId)}`,
-        {
-          expectedRevision: actionRevisions.get(`${id}:${actionId}`) ?? 1,
-          status: done ? "done" : "todo",
-        },
-        "PUT",
-      );
+      const route = `${base(id)}/actions/${encodeURIComponent(actionId)}`;
+      const signature = JSON.stringify({ id, actionId });
+      const pending = pendingActions.get(signature);
+      const init =
+        pending?.done === done
+          ? pending.init
+          : workspaceMutation(
+              route,
+              {
+                expectedRevision: actionRevisions.get(`${id}:${actionId}`) ?? 1,
+                status: done ? "done" : "todo",
+              },
+              "PUT",
+            );
+      pendingActions.set(signature, { done, init });
+      try {
+        await workspaceJson(request, route, init);
+      } catch (cause) {
+        if (
+          (cause as { code?: string }).code === "CONFLICT" &&
+          pendingActions.get(signature)?.init === init
+        )
+          pendingActions.delete(signature);
+        throw cause;
+      }
+      const next = await get(id);
+      if (pendingActions.get(signature)?.init === init) pendingActions.delete(signature);
+      return next;
     },
     async saveTimeline(id: string, entry: Omit<TimelineView, "id"> & { id?: string }) {
       if (entry.id && !timelineRevisions.has(`${id}:${entry.id}`)) await get(id);
@@ -467,7 +506,16 @@ export function createWorkspaceApi(
         init = workspaceMutation(route, body, entry.id ? "PUT" : "POST");
         pendingTimelines.set(signature, init);
       }
-      await workspaceJson(request, route, init);
+      try {
+        await workspaceJson(request, route, init);
+      } catch (cause) {
+        if (
+          (cause as { code?: string }).code === "CONFLICT" &&
+          pendingTimelines.get(signature) === init
+        )
+          pendingTimelines.delete(signature);
+        throw cause;
+      }
       const next = await get(id);
       pendingTimelines.delete(signature);
       return next;

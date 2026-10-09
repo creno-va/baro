@@ -29,6 +29,7 @@ export type MessageView = {
   role: "user" | "assistant";
   text: string;
   status: "pending" | "complete" | "failed";
+  retryable?: boolean | undefined;
   createdAt: string;
 };
 export type ActionView = { id: string; title: string; detail: string; done: boolean };
@@ -41,6 +42,7 @@ export type FileView = {
   status: "uploading" | "processing" | "ready" | "failed" | "waiting";
   coverage: string;
   extractedText: string;
+  canStartProcessing?: boolean | undefined;
 };
 export type WorkspaceView = {
   case: CaseView;

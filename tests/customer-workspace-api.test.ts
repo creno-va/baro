@@ -1,12 +1,15 @@
 import { afterEach, expect, test } from "bun:test";
 import { Hono } from "hono";
 import { casesApi } from "../src/client/api/cases";
+import { createFilesApi as createClientFilesApi } from "../src/client/api/files";
 import { createWorkspaceApi, workspaceMutation } from "../src/client/api/workspace";
+import { CURRENT_POLICY_VERSIONS } from "../src/contracts/consent";
 import type { ApiEnvironment } from "../src/server/api/errors";
 import { meApi } from "../src/server/api/me";
 import { createFilesApi } from "../src/server/api/v2/files";
 import { createWorkspacesApi } from "../src/server/api/v2/workspaces";
 import { runtimeDigest } from "../src/server/db/v2-paid-runtime";
+import { createFilesService } from "../src/server/modules/files/service";
 import { hasCustomerWorkspaceAccess } from "../src/server/runtime/workspace";
 import {
   customerWorkspaceFixture,
@@ -388,4 +391,260 @@ test("role change during an admitted workspace job prevents publishing its synth
   expect(f.db.sqlite.query("SELECT count(*) n FROM v2_summaries").get()).toEqual({ n: 1 });
   expect((await f.service.find(f.owner.userId, f.workspace.id)).currentJobId).toBeNull();
   expect((await runCustomerJob(f, "intake_questions")).result.status).toBe("stopped");
+});
+
+for (const failure of ["response", "read"] as const) {
+  test(`real answer save recovers a lost ${failure} with the original revision/body/key and keeps owner/conflict guards`, async () => {
+    const f = await fixture();
+    const id = f.workspace.id;
+    const before = await f.service.find(f.owner.userId, id);
+    const intake = await f.service.intake(f.owner.userId, id);
+    const questionId = intake?.batches[0]?.questions[0]?.id;
+    if (!questionId) throw new Error("Missing synthetic question");
+    const input = {
+      expectedRevision: before.workspaceRevision,
+      answers: [{ questionId, state: "answered" as const, value: "재시도할 합성 답변" }],
+    };
+    const writes: RequestInit[] = [];
+    let lost = false;
+    let cookie = f.owner.cookie;
+    const original = globalThis.fetch;
+    globalThis.fetch = (async (path, init) => {
+      if (failure === "read" && writes.length && !lost && String(path).endsWith("/workspace")) {
+        lost = true;
+        return Response.json(
+          { error: { code: "DEPENDENCY_UNAVAILABLE", retryable: true } },
+          { status: 503 },
+        );
+      }
+      const response = await f.transport(String(path), init, cookie);
+      if (init?.method === "PUT" && String(path).endsWith("/intake/answers")) {
+        writes.push(init);
+        if (failure === "response" && !lost) {
+          lost = true;
+          expect(response.ok).toBe(true);
+          throw new TypeError("Synthetic response loss after commit");
+        }
+      }
+      return response;
+    }) as typeof fetch;
+    try {
+      await expect(casesApi.saveAnswers(id, input)).rejects.toMatchObject({ code: "UNAVAILABLE" });
+      const recovered = await casesApi.saveAnswers(id, input);
+      expect(recovered.questions.find((q) => q.id === questionId)?.answer).toBe(
+        input.answers[0]?.value,
+      );
+      expect(recovered.revision).toBe(before.workspaceRevision + 1);
+      expect(writes).toHaveLength(2);
+      expect(writes[0]?.body).toBe(writes[1]?.body);
+      expect(new Headers(writes[0]?.headers).get("idempotency-key")).toBe(
+        new Headers(writes[1]?.headers).get("idempotency-key"),
+      );
+      const first = writes[0];
+      if (!first) throw new Error("Missing answer request");
+      const route = `/api/v2/cases/${id}/intake/answers`;
+      const changed = JSON.parse(String(first.body));
+      changed.answers[0].value = "다른 합성 답변";
+      expect((await f.transport(route, { ...first, body: JSON.stringify(changed) })).status).toBe(
+        409,
+      );
+      expect(
+        (
+          await f.transport(route, {
+            ...first,
+            headers: { "content-type": "application/json", "idempotency-key": crypto.randomUUID() },
+          })
+        ).status,
+      ).toBe(409);
+      const foreign = await seedTestSession(f.db, { consent: true });
+      expect((await f.transport(route, first, foreign.cookie)).status).toBe(404);
+      cookie = foreign.cookie;
+      await expect(casesApi.saveAnswers(id, input)).rejects.toMatchObject({ code: "NOT_FOUND" });
+      expect((await f.service.find(f.owner.userId, id)).workspaceRevision).toBe(
+        before.workspaceRevision + 1,
+      );
+    } finally {
+      globalThis.fetch = original;
+    }
+  });
+
+  test(`real action save recovers a lost ${failure} without a second edit`, async () => {
+    const f = await fixture();
+    const id = f.workspace.id;
+    const intake = await f.service.intake(f.owner.userId, id);
+    await f.service.confirm(f.owner.userId, id, crypto.randomUUID(), {
+      expectedRevision: intake?.revision,
+      summaryRevision: intake?.summary?.revision,
+    });
+    await runCustomerJob(f, "chat_response");
+    let committed = false;
+    let lost = false;
+    let cookie = f.owner.cookie;
+    const writes: RequestInit[] = [];
+    const client = createWorkspaceApi(async (path, init) => {
+      if (failure === "read" && committed && !lost && path.endsWith("/workspace")) {
+        lost = true;
+        return Response.json(
+          { error: { code: "DEPENDENCY_UNAVAILABLE", retryable: true } },
+          { status: 503 },
+        );
+      }
+      const response = await f.transport(path, init, cookie);
+      if (init?.method === "PUT" && path.includes("/actions/")) {
+        writes.push(init);
+        if (response.ok) committed = true;
+        if (failure === "response" && !lost) {
+          lost = true;
+          expect(response.ok).toBe(true);
+          throw new TypeError("Synthetic action response loss");
+        }
+      }
+      return response;
+    }, null);
+    const before = await client.get(id);
+    const action = before.actions[0];
+    if (!action) throw new Error("Missing synthetic action");
+    await expect(client.setAction(id, action.id, true)).rejects.toThrow();
+    const recovered = await client.setAction(id, action.id, true);
+    expect(recovered.actions.find((item) => item.id === action.id)?.done).toBe(true);
+    expect(recovered.case.revision).toBe(before.case.revision + 1);
+    expect(writes).toHaveLength(2);
+    expect(writes[0]?.body).toBe(writes[1]?.body);
+    expect(new Headers(writes[0]?.headers).get("idempotency-key")).toBe(
+      new Headers(writes[1]?.headers).get("idempotency-key"),
+    );
+    const first = writes[0];
+    if (!first) throw new Error("Missing action request");
+    const route = `/api/v2/cases/${id}/actions/${action.id}`;
+    expect(
+      (
+        await f.transport(route, {
+          ...first,
+          headers: { "content-type": "application/json", "idempotency-key": crypto.randomUUID() },
+        })
+      ).status,
+    ).toBe(409);
+    const foreign = await seedTestSession(f.db, { consent: true });
+    expect((await f.transport(route, first, foreign.cookie)).status).toBe(404);
+    cookie = foreign.cookie;
+    await expect(client.setAction(id, action.id, true)).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
+  });
+}
+
+test("an action conflict can retry the same intent with the refreshed revision", async () => {
+  const f = await fixture();
+  const id = f.workspace.id;
+  const intake = await f.service.intake(f.owner.userId, id);
+  await f.service.confirm(f.owner.userId, id, crypto.randomUUID(), {
+    expectedRevision: intake?.revision,
+    summaryRevision: intake?.summary?.revision,
+  });
+  await runCustomerJob(f, "chat_response");
+  const current = createWorkspaceApi(f.transport, null);
+  const peer = createWorkspaceApi(f.transport, null);
+  const action = (await current.get(id)).actions[0];
+  if (!action) throw new Error("Missing synthetic action");
+  await peer.get(id);
+  await peer.setAction(id, action.id, true);
+  await peer.setAction(id, action.id, false);
+  await expect(current.setAction(id, action.id, true)).rejects.toMatchObject({ code: "CONFLICT" });
+  await current.get(id);
+  const retried = await current.setAction(id, action.id, true);
+  expect(retried.actions.find((item) => item.id === action.id)?.done).toBe(true);
+  expect((await peer.get(id)).actions.find((item) => item.id === action.id)?.done).toBe(true);
+});
+
+test("a changed action intent replaces its interrupted retry instead of replaying an older toggle", async () => {
+  const f = await fixture();
+  const id = f.workspace.id;
+  const intake = await f.service.intake(f.owner.userId, id);
+  await f.service.confirm(f.owner.userId, id, crypto.randomUUID(), {
+    expectedRevision: intake?.revision,
+    summaryRevision: intake?.summary?.revision,
+  });
+  await runCustomerJob(f, "chat_response");
+  let committed = false;
+  let lost = false;
+  const keys: string[] = [];
+  const client = createWorkspaceApi(async (path, init) => {
+    if (committed && !lost && path.endsWith("/workspace")) {
+      lost = true;
+      return Response.json(
+        { error: { code: "DEPENDENCY_UNAVAILABLE", retryable: true } },
+        { status: 503 },
+      );
+    }
+    const response = await f.transport(path, init);
+    if (init?.method === "PUT" && path.includes("/actions/")) {
+      committed = response.ok;
+      keys.push(new Headers(init.headers).get("idempotency-key") ?? "");
+    }
+    return response;
+  }, null);
+  const before = await client.get(id);
+  const action = before.actions[0];
+  if (!action) throw new Error("Missing synthetic action");
+  await expect(client.setAction(id, action.id, true)).rejects.toMatchObject({
+    code: "UNAVAILABLE",
+  });
+  await client.get(id);
+  expect((await client.setAction(id, action.id, false)).actions[0]?.done).toBe(false);
+  const next = await client.setAction(id, action.id, true);
+  expect(next.actions[0]?.done).toBe(true);
+  expect(next.case.revision).toBe(before.case.revision + 3);
+  expect(new Set(keys).size).toBe(3);
+});
+
+test("real file deletion recovers a committed lost response only after authorizing the workspace", async () => {
+  const f = await fixture();
+  const id = f.workspace.id;
+  const w = await f.service.find(f.owner.userId, id);
+  const unusedBinary = async () => {
+    throw new Error("Deletion recovery does not access binary storage");
+  };
+  const files = createFilesService(f.core, {
+    environment: "preview",
+    bucket: { get: unusedBinary, put: unusedBinary, head: unusedBinary, delete: unusedBinary },
+    testOnlyUnmeteredStorage: true,
+    clock: () => f.now,
+  });
+  const reserved = await files.reserve(
+    f.owner.userId,
+    id,
+    w.workspaceRevision,
+    crypto.randomUUID(),
+    {
+      name: "합성 삭제 자료.txt",
+      byteLength: 12,
+      mediaType: "text/plain",
+      autoProcessConsentVersion: CURRENT_POLICY_VERSIONS.aiNoticeVersion,
+    },
+  );
+  let lost = false;
+  let deletes = 0;
+  let cookie = f.owner.cookie;
+  const client = createClientFilesApi(async (path, init) => {
+    const response = await f.transport(path, init, cookie);
+    if (init?.method === "DELETE") {
+      deletes++;
+      if (response.ok && !lost) {
+        lost = true;
+        throw new TypeError("Synthetic deletion response loss");
+      }
+    }
+    return response;
+  });
+  await expect(client.remove(id, reserved.fileId)).rejects.toThrow();
+  const foreign = await seedTestSession(f.db, { consent: true });
+  cookie = foreign.cookie;
+  await expect(client.remove(id, reserved.fileId)).rejects.toMatchObject({ code: "NOT_FOUND" });
+  cookie = f.owner.cookie;
+  expect(await client.remove(id, reserved.fileId)).toEqual([]);
+  expect(deletes).toBe(1);
+  expect((await f.service.find(f.owner.userId, id)).workspaceRevision).toBe(
+    w.workspaceRevision + 2,
+  );
+  await expect(client.remove(id, crypto.randomUUID())).rejects.toMatchObject({ code: "NOT_FOUND" });
 });

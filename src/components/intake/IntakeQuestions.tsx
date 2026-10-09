@@ -2,6 +2,7 @@ import { ArrowLeft, ArrowRight, Check, Save } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../../client/api";
 import type { QuestionsResult } from "../../client/api/cases";
+import { ApiError } from "../../client/api/core";
 import type { CaseView, QuestionView } from "../../client/api/types";
 import { BrandMark } from "../ui/brand";
 import { Button, ButtonLink } from "../ui/button";
@@ -35,6 +36,9 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
   const caseSnapshot = useRef<CaseView | null>(null);
   const heading = useRef<HTMLHeadingElement>(null);
   const request = useRef(0);
+  const drafts = useRef(new Map<string, { value: string; state: QuestionView["answerState"] }>());
+  const draftSnapshot = useRef<{ dirty: boolean; revision: number } | null>(null);
+  const acknowledgedRevision = useRef<number | null>(null);
   const {
     ready,
     version,
@@ -45,6 +49,9 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
     deny,
   } = useCustomerAccess(() => {
     ++request.current;
+    draftSnapshot.current = null;
+    drafts.current.clear();
+    acknowledgedRevision.current = null;
     setItem(null);
     setResult(null);
     setValue("");
@@ -64,6 +71,7 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
   }, setError);
   const report = useCallback(
     (cause: unknown) => {
+      if ((cause as { code?: string }).code === "CONFLICT") setRecovering(false);
       if (
         ["UNAUTHENTICATED", "CONSENT_REQUIRED", "NOT_FOUND"].includes(
           (cause as { code?: string }).code ?? "",
@@ -76,6 +84,9 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
   );
   const question = result?.questions[index];
   const dirty = value !== (question?.answer ?? "") || answerState !== question?.answerState;
+  draftSnapshot.current = result
+    ? { dirty: dirty || drafts.current.size > 0, revision: result.revision }
+    : null;
   const rounds = result?.rounds ?? [];
   const round = rounds.find(
     (candidate) => question && candidate.questionIds.includes(question.id),
@@ -90,7 +101,7 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
     index === (result?.questions.length ?? 0) - 1 &&
     (rounds.length >= roundLimit || result?.processingStage === "summary" || editing);
   const waiting = preparing || recovering || Boolean(result?.processing);
-  const locked = busy || waiting || leaving;
+  const locked = busy || waiting || leaving || (error as { code?: string })?.code === "CONFLICT";
   const displayed = useRef({ index, id: question?.id });
   displayed.current = { index, id: question?.id };
   const summarizing =
@@ -146,17 +157,35 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
       setLoading(true);
       setError(null);
       try {
-        if (!(await verify())) return;
+        if (!(await verify()) || serial !== request.current) return;
         epoch = ticket();
         let [caseView, questions] = await Promise.all([
           poll && caseSnapshot.current ? caseSnapshot.current : api.cases.get(caseId),
           api.cases.getQuestions(caseId),
         ]);
+        // A read started before a save/advance cannot restore its old answers.
+        if (serial !== request.current) return;
         // The pending view can be reused, but completion must reflect stage
         // changes made in another tab before exposing editable questions.
         if (poll && caseSnapshot.current && !questions.processing)
           caseView = await api.cases.get(caseId);
-        if (!(await verify()) || !accessCurrent(epoch) || serial !== request.current) return;
+        if (
+          serial !== request.current ||
+          !(await verify()) ||
+          !accessCurrent(epoch) ||
+          serial !== request.current
+        )
+          return;
+        if (
+          !replaceDraft &&
+          draftSnapshot.current?.dirty &&
+          draftSnapshot.current.revision !== questions.revision &&
+          acknowledgedRevision.current !== questions.revision
+        )
+          throw new ApiError(
+            "CONFLICT",
+            "다른 화면에서 답변이 바뀌었어요. 작성 중인 답변은 남겨뒀어요. 최신 내용을 불러오면 저장된 답변으로 바뀝니다.",
+          );
         failedOperation.current = null;
         caseSnapshot.current = caseView;
         setItem(caseView);
@@ -196,9 +225,15 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
           window.location.replace(`/cases/${encodeURIComponent(caseId)}/summary`);
         else {
           const show = () => {
+            acknowledgedRevision.current = null;
             setResult(questions);
             setIndex(nextIndex);
             setRecovering(false);
+            if (replaceDraft) {
+              drafts.current.clear();
+              setValue(questions.questions[nextIndex]?.answer ?? "");
+              setAnswerState(questions.questions[nextIndex]?.answerState);
+            }
           };
           if (
             !initial &&
@@ -209,9 +244,9 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
           else show();
         }
       } catch (cause) {
-        if (alive(epoch)) report(cause);
+        if (alive(epoch) && serial === request.current) report(cause);
       } finally {
-        if (alive(epoch)) setLoading(false);
+        if (alive(epoch) && serial === request.current) setLoading(false);
       }
     },
     [caseId, verify, ticket, accessCurrent, alive, report, transition],
@@ -220,8 +255,9 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
     if (version) void load();
   }, [load, version]);
   useEffect(() => {
-    setValue(question?.answer ?? "");
-    setAnswerState(question?.answerState);
+    const draft = question?.id ? drafts.current.get(question.id) : undefined;
+    setValue(draft?.value ?? question?.answer ?? "");
+    setAnswerState(draft ? draft.state : question?.answerState);
     if (question?.id) {
       const url = new URL(window.location.href);
       url.searchParams.set("question", String(index));
@@ -252,7 +288,11 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
   }, [result?.processing, recovering, busy, load]);
   useEffect(() => {
     const warn = (event: BeforeUnloadEvent) => {
-      if (value !== (question?.answer ?? "") || answerState !== question?.answerState)
+      if (
+        value !== (question?.answer ?? "") ||
+        answerState !== question?.answerState ||
+        drafts.current.size > 0
+      )
         event.preventDefault();
     };
     window.addEventListener("beforeunload", warn);
@@ -307,6 +347,8 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
   }
   async function advance() {
     if (!result || pending.current || result.processing) return;
+    ++request.current;
+    setLoading(false);
     const epoch = ticket();
     pending.current = true;
     setBusy(true);
@@ -340,6 +382,8 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
       result.processing
     )
       return;
+    ++request.current;
+    setLoading(false);
     const epoch = ticket();
     pending.current = true;
     setBusy(true);
@@ -356,7 +400,19 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
             : { questionId: question.id, state },
         ],
       });
+      if (!alive(epoch)) return;
+      drafts.current.delete(question.id);
+      // The adapter reads again after saving, so its response can already include
+      // a peer edit. Only the next revision with our answer proves this snapshot.
+      const savedQuestion = next.questions.find((candidate) => candidate.id === question.id);
+      acknowledgedRevision.current =
+        next.revision === result.revision + 1 &&
+        savedQuestion?.answerState === state &&
+        (state !== "answered" || savedQuestion.answer === value.trim())
+          ? next.revision
+          : null;
       if (!(await verifyCompletion(epoch))) return;
+      acknowledgedRevision.current = null;
       failedOperation.current = null;
       setResult(next);
       setAnswerState(state);
@@ -408,10 +464,12 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
             const operation = failedOperation.current;
             if ((error as { code?: string }).code === "CONFLICT") void load(false, true);
             else if (operation?.kind === "advance") void advance();
-            else if (operation?.kind === "save") void save(operation.move, operation.state);
+            else if (operation?.kind === "save") void save(operation.move);
             else void load();
           }}
-          disabled={locked}
+          disabled={
+            busy || leaving || (waiting && (error as { code?: string }).code !== "CONFLICT")
+          }
         />
       ) : null}
       {ready && item && result ? (
@@ -615,6 +673,11 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
                           variant="ghost"
                           disabled={locked || index === 0}
                           onClick={() => {
+                            if (question) {
+                              if (dirty)
+                                drafts.current.set(question.id, { value, state: answerState });
+                              else drafts.current.delete(question.id);
+                            }
                             const epoch = ticket();
                             void transition(
                               () => {

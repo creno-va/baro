@@ -1,5 +1,388 @@
 import { expect, type Page, test } from "@playwright/test";
 import type { QuestionsResult } from "../../src/client/api/cases";
+import type { CaseView, WorkspaceView } from "../../src/client/api/types";
+
+type IntakePostflightRegression = {
+  writes: number;
+  failedSessionReads: number;
+  postflightHeld: boolean;
+  peerSaved: boolean;
+  nextQuestion: string;
+  releasePostflight?: () => void;
+};
+
+async function prepareIntakePostflightRegression(
+  page: Page,
+  mode: "outage" | "superseded" | "peer" | "peer-read",
+) {
+  await page.goto("/cases/new");
+  await page
+    .getByLabel("지금까지 있었던 일")
+    .fill("합성 저장 복구 테스트입니다. 답변을 저장한 뒤 세션 확인만 잠깐 실패합니다.");
+  await page.getByRole("button", { name: "저장하고 계속" }).click();
+  await page.getByRole("textbox", { name: "답변", exact: true }).fill("현재 화면의 합성 답변");
+  await page.evaluate(async (mode) => {
+    const casesPath = "/src/client/api/cases.ts";
+    const apiPath = "/src/client/api/index.ts";
+    const corePath = "/src/client/api/core.ts";
+    const { casesApi } = await import(casesPath);
+    const { api } = await import(apiPath);
+    const { ApiError } = await import(corePath);
+    const saveAnswers = casesApi.saveAnswers.bind(casesApi);
+    const session = api.session.get.bind(api.session);
+    const state: IntakePostflightRegression = {
+      writes: 0,
+      failedSessionReads: 0,
+      postflightHeld: false,
+      peerSaved: false,
+      nextQuestion: "",
+    };
+    (
+      window as unknown as { intakePostflightRegression: IntakePostflightRegression }
+    ).intakePostflightRegression = state;
+    let committed: { id: string; revision: number; questionId: string } | null = null;
+    casesApi.saveAnswers = async (
+      id: string,
+      input: { expectedRevision: number; answers: { questionId: string }[] },
+    ) => {
+      state.writes++;
+      const next: QuestionsResult = await saveAnswers(id, input);
+      if (state.writes === 1) {
+        const questionId = input.answers[0]?.questionId;
+        if (!questionId) throw new Error("Missing synthetic submitted question");
+        committed = { id, revision: next.revision, questionId };
+        state.nextQuestion = next.questions.find((question) => !question.answerState)?.text ?? "";
+        if (mode === "peer-read") {
+          // The real adapter reads questions after PUT; that read may already
+          // include a peer's later write instead of the submitted snapshot.
+          const peer = await saveAnswers(id, {
+            expectedRevision: next.revision,
+            answers: [{ questionId, state: "answered", value: "다른 화면에서 저장한 합성 답변" }],
+          });
+          state.peerSaved = true;
+          return peer;
+        }
+      }
+      return next;
+    };
+    api.session.get = async () => {
+      const accepted = committed;
+      if (!accepted) return session();
+      // Only the first session read after the completed save is interrupted.
+      committed = null;
+      if (mode === "superseded") {
+        const value = await session();
+        state.postflightHeld = true;
+        await new Promise<void>((resolve) => {
+          state.releasePostflight = resolve;
+        });
+        return value;
+      }
+      if (mode === "peer") {
+        // Use the unwrapped save to model a distinct writer after our accepted
+        // snapshot, without counting it as a retry from the screen under test.
+        await saveAnswers(accepted.id, {
+          expectedRevision: accepted.revision,
+          answers: [
+            {
+              questionId: accepted.questionId,
+              state: "answered",
+              value: "다른 화면에서 저장한 합성 답변",
+            },
+          ],
+        });
+        state.peerSaved = true;
+      }
+      state.failedSessionReads++;
+      throw new ApiError("UNAVAILABLE", "합성 저장 후 세션 조회 실패", true);
+    };
+  }, mode);
+}
+
+async function intakePostflightRegressionState(page: Page) {
+  return page.evaluate(() => {
+    const state = (window as unknown as { intakePostflightRegression: IntakePostflightRegression })
+      .intakePostflightRegression;
+    return {
+      writes: state.writes,
+      failedSessionReads: state.failedSessionReads,
+      postflightHeld: state.postflightHeld,
+      peerSaved: state.peerSaved,
+      nextQuestion: state.nextQuestion,
+    };
+  });
+}
+
+for (const mode of ["outage", "superseded"] as const) {
+  test(`a committed answer recovers after postflight session ${mode} without saving twice`, async ({
+    page,
+  }) => {
+    await prepareIntakePostflightRegression(page, mode);
+    await page.getByRole("button", { name: "저장하고 다음 질문" }).click();
+    if (mode === "superseded") {
+      await expect
+        .poll(async () => (await intakePostflightRegressionState(page)).postflightHeld)
+        .toBe(true);
+      // A focus refresh verifies the same owner while the original postflight
+      // is held. The older verification then resolves as superseded.
+      await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+      await expect(page.getByRole("textbox", { name: "답변", exact: true })).toBeVisible();
+      await page.evaluate(() =>
+        (
+          window as unknown as { intakePostflightRegression: IntakePostflightRegression }
+        ).intakePostflightRegression.releasePostflight?.(),
+      );
+    } else {
+      await expect
+        .poll(async () => (await intakePostflightRegressionState(page)).failedSessionReads)
+        .toBe(1);
+    }
+    await expect
+      .poll(async () => (await intakePostflightRegressionState(page)).nextQuestion)
+      .not.toBe("");
+    const { nextQuestion } = await intakePostflightRegressionState(page);
+    await expect(page.getByRole("heading", { name: nextQuestion, exact: true })).toBeVisible({
+      timeout: 10000,
+    });
+    await expect(page.getByRole("textbox", { name: "답변", exact: true })).toBeEnabled();
+    await expect(page.getByRole("alert")).toHaveCount(0);
+    expect((await intakePostflightRegressionState(page)).writes).toBe(1);
+  });
+}
+
+for (const mode of ["peer", "peer-read"] as const)
+  test(`a ${mode} edit after an accepted answer keeps the draft and permits explicit conflict recovery`, async ({
+    page,
+  }) => {
+    await prepareIntakePostflightRegression(page, mode);
+    await page.getByRole("button", { name: "저장하고 다음 질문" }).click();
+    await expect
+      .poll(async () => (await intakePostflightRegressionState(page)).peerSaved)
+      .toBe(true);
+    await expect(page.getByRole("alert")).toContainText("작성 중인 답변은 남겨뒀어요", {
+      timeout: 10000,
+    });
+    const editor = page.getByRole("textbox", { name: "답변", exact: true });
+    await expect(editor).toHaveValue("현재 화면의 합성 답변");
+    await expect(editor).toBeDisabled();
+    const reload = page.getByRole("button", { name: "최신 내용 불러오기" });
+    await expect(reload).toBeEnabled();
+    await reload.click();
+    await expect(editor).toHaveValue("다른 화면에서 저장한 합성 답변");
+    await expect(editor).toBeEnabled();
+    await expect(page.getByRole("alert")).toHaveCount(0);
+    expect((await intakePostflightRegressionState(page)).writes).toBe(1);
+  });
+
+test("peer answer changes preserve the unsaved draft until explicit conflict recovery", async ({
+  page,
+}) => {
+  await page.goto("/cases/new");
+  await page
+    .getByLabel("지금까지 있었던 일")
+    .fill("합성 초안 충돌 검증입니다. 다른 탭에서 저장한 답변을 확인합니다.");
+  await page.getByRole("button", { name: "저장하고 계속" }).click();
+  const editor = page.getByRole("textbox", { name: "답변", exact: true });
+  await editor.fill("현재 탭에서 아직 저장하지 않은 답변");
+  await page.evaluate(async () => {
+    const modulePath = "/src/client/api/index.ts";
+    const { api } = await import(modulePath);
+    const id = location.pathname.split("/")[2];
+    const questions = await api.cases.getQuestions(id);
+    await api.cases.saveAnswers(id, {
+      expectedRevision: questions.revision,
+      answers: [
+        {
+          questionId: questions.questions[0].id,
+          state: "answered",
+          value: "다른 탭에서 저장한 답변",
+        },
+      ],
+    });
+    window.dispatchEvent(new Event("focus"));
+  });
+  await expect(page.getByRole("alert")).toContainText("작성 중인 답변은 남겨뒀어요");
+  await expect(editor).toHaveValue("현재 탭에서 아직 저장하지 않은 답변");
+  await expect(page.getByRole("button", { name: "저장하고 다음 질문" })).toBeDisabled();
+  await page.getByRole("button", { name: "최신 내용 불러오기" }).click();
+  await expect(editor).toHaveValue("다른 탭에서 저장한 답변");
+  await expect(page.getByRole("button", { name: "저장하고 다음 질문" })).toBeEnabled();
+});
+
+async function recoveryWorkspace(page: Page) {
+  await page.goto("/cases/new");
+  await page
+    .getByLabel("지금까지 있었던 일")
+    .fill("합성 사건 복구 검증입니다. 계약 날짜와 준비할 자료를 정리합니다.");
+  await page.getByRole("button", { name: "저장하고 계속" }).click();
+  for (let i = 0; i < 6; i++) await page.getByRole("button", { name: "모름", exact: true }).click();
+  await page.getByLabel("요약이 내가 이야기한 사실과 맞는지 확인했어요.").check();
+  await page.getByRole("button", { name: "요약 확인하고 계속" }).click();
+  await page.getByRole("button", { name: "확인하고 사건 열기" }).click();
+  await expect(page.getByRole("textbox", { name: "추가 사실 또는 질문" })).toBeVisible();
+}
+
+type CustomerReadRace = {
+  reads: number;
+  holdingSession: boolean;
+  sessionHeld: boolean;
+  oldDelivered: boolean;
+  releaseOld: () => void;
+  releaseNew: () => void;
+};
+for (const kind of ["list", "workspace"] as const) {
+  test(`${kind} keeps the latest snapshot when an older read arrives during session verification`, async ({
+    page,
+  }) => {
+    await recoveryWorkspace(page);
+    if (kind === "list") {
+      await page.goto("/cases");
+      await expect(page.locator(".intake-case-card")).toHaveCount(1);
+    }
+    await page.evaluate(async (kind) => {
+      const modulePath = "/src/client/api/index.ts";
+      const { api } = await import(modulePath);
+      const state: CustomerReadRace = {
+        reads: 0,
+        holdingSession: false,
+        sessionHeld: false,
+        oldDelivered: false,
+        releaseOld: () => {},
+        releaseNew: () => {},
+      };
+      (window as unknown as { customerReadRace: CustomerReadRace }).customerReadRace = state;
+      // AppNavigation also reads cases/session; schedule only the screen under test.
+      const owner = kind === "list" ? "CaseList.tsx" : "Workspace.tsx";
+      const session = api.session.get.bind(api.session);
+      api.session.get = async () => {
+        const owned = new Error().stack?.includes(owner);
+        const value = await session();
+        if (owned && state.holdingSession) {
+          state.holdingSession = false;
+          state.sessionHeld = true;
+          await new Promise<void>((resolve) => {
+            state.releaseNew = resolve;
+          });
+        }
+        return value;
+      };
+      const wrap = async <T>(read: () => Promise<T>, update: (value: T) => T) => {
+        const owned = new Error().stack?.includes(owner);
+        const value = await read();
+        if (!owned) return value;
+        const ordinal = ++state.reads;
+        if (ordinal === 1) {
+          await new Promise<void>((resolve) => {
+            state.releaseOld = resolve;
+          });
+          state.oldDelivered = true;
+          return value;
+        }
+        if (ordinal === 2) {
+          state.holdingSession = true;
+          return update(value);
+        }
+        return value;
+      };
+      if (kind === "list") {
+        const original = api.cases.list.bind(api.cases);
+        api.cases = {
+          ...api.cases,
+          list: () =>
+            wrap<CaseView[]>(original, (items) =>
+              items.map((item) => ({ ...item, title: "최신 조회 복구 결과" })),
+            ),
+        };
+      } else {
+        const original = api.workspace.get.bind(api.workspace);
+        api.workspace = {
+          ...api.workspace,
+          get: (id: string) =>
+            wrap<WorkspaceView>(
+              () => original(id),
+              (view) => ({ ...view, case: { ...view.case, title: "최신 조회 복구 결과" } }),
+            ),
+        };
+      }
+      window.dispatchEvent(new Event("focus"));
+    }, kind);
+    const state = () =>
+      page.evaluate(() => {
+        const s = (window as unknown as { customerReadRace: CustomerReadRace }).customerReadRace;
+        return { reads: s.reads, sessionHeld: s.sessionHeld, oldDelivered: s.oldDelivered };
+      });
+    await expect.poll(async () => (await state()).reads).toBe(1);
+    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await expect.poll(async () => (await state()).sessionHeld).toBe(true);
+    await page.evaluate(() =>
+      (window as unknown as { customerReadRace: CustomerReadRace }).customerReadRace.releaseOld(),
+    );
+    await expect.poll(async () => (await state()).oldDelivered).toBe(true);
+    await page.evaluate(() =>
+      (window as unknown as { customerReadRace: CustomerReadRace }).customerReadRace.releaseNew(),
+    );
+    await expect(
+      page.getByRole("main").getByText("최신 조회 복구 결과", { exact: true }),
+    ).toBeVisible();
+  });
+}
+
+test("pending workspace files keep polling after a transient failure and stop on completion", async ({
+  page,
+}) => {
+  await recoveryWorkspace(page);
+  await page.getByRole("link", { name: "자료 0", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "사건 자료", exact: true })).toBeVisible();
+  await page.evaluate(async () => {
+    const modulePath = "/src/client/api/index.ts";
+    const { api } = await import(modulePath);
+    const original = api.workspace.get.bind(api.workspace);
+    const state = { reads: 0 };
+    (window as unknown as { customerPoll: typeof state }).customerPoll = state;
+    api.workspace = {
+      ...api.workspace,
+      get: async (id: string) => {
+        const owned = new Error().stack?.includes("Workspace.tsx");
+        if (!owned) return original(id);
+        const ordinal = ++state.reads;
+        if (ordinal === 2)
+          throw Object.assign(new Error("합성 일시 조회 실패"), {
+            code: "UNAVAILABLE",
+            retryable: true,
+          });
+        const value = await original(id);
+        return {
+          ...value,
+          files: [
+            {
+              id: "synthetic-processing-file",
+              name: "합성 처리 자료.txt",
+              mimeType: "text/plain",
+              sizeBytes: 12,
+              status: ordinal === 1 ? "processing" : "ready",
+              coverage: "합성 처리 범위",
+              extractedText: "합성 추출 내용",
+            },
+          ],
+        };
+      },
+    };
+    window.dispatchEvent(new Event("focus"));
+  });
+  const reads = () =>
+    page.evaluate(
+      () => (window as unknown as { customerPoll: { reads: number } }).customerPoll.reads,
+    );
+  await expect.poll(reads).toBe(2);
+  await expect(page.getByRole("alert")).toBeVisible();
+  await expect.poll(reads, { timeout: 6000 }).toBe(3);
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect(page.getByText("합성 처리 자료.txt", { exact: true })).toBeVisible();
+  await expect(page.getByText("결과 확인 가능", { exact: true })).toBeVisible();
+  // Two polling periods pass without any further workspace read after completion.
+  await page.waitForTimeout(3800);
+  expect(await reads()).toBe(3);
+});
 
 async function capture(page: Page, name: string) {
   const { default: AxeBuilder } = await import("@axe-core/playwright");
