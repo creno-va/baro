@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { maskReportText } from "../../../components/reports/download";
 import { idempotencyKeySchema, opaqueIdSchema } from "../../../contracts";
+import { CURRENT_POLICY_VERSIONS } from "../../../contracts/consent";
 import {
   type V2ReportBody,
   v2ReportBodySchema,
@@ -265,8 +266,11 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
       core.claim(
         g,
         claimId,
-        "w.status='active' AND w.current_job_id IS NULL AND w.confirmed_summary_revision=? AND EXISTS(SELECT 1 FROM v2_private_snapshots WHERE id=? AND owner_id=w.owner_id AND workspace_revision=w.revision AND state='sealed') AND NOT EXISTS(SELECT 1 FROM v2_idempotency WHERE owner_id=w.owner_id AND route=? AND key=? AND expires_at>?) AND coalesce((SELECT max(revision) FROM v2_reports WHERE workspace_id=w.id AND id NOT LIKE 'export-%'),0)=?",
+        "w.status='active' AND w.current_job_id IS NULL AND coalesce((SELECT value FROM app_metadata WHERE key='account-type:'||w.owner_id),'customer')='customer' AND EXISTS(SELECT 1 FROM user_consents WHERE user_id=w.owner_id AND terms_version=? AND privacy_version=? AND ai_notice_version=? AND over_14_confirmed=1) AND w.confirmed_summary_revision=? AND EXISTS(SELECT 1 FROM v2_private_snapshots WHERE id=? AND owner_id=w.owner_id AND workspace_revision=w.revision AND state='sealed') AND NOT EXISTS(SELECT 1 FROM v2_idempotency WHERE owner_id=w.owner_id AND route=? AND key=? AND expires_at>?) AND coalesce((SELECT max(revision) FROM v2_reports WHERE workspace_id=w.id AND id NOT LIKE 'export-%'),0)=?",
         [
+          CURRENT_POLICY_VERSIONS.termsVersion,
+          CURRENT_POLICY_VERSIONS.privacyVersion,
+          CURRENT_POLICY_VERSIONS.aiNoticeVersion,
           current.confirmed_summary_revision,
           snapshotId,
           route,
@@ -354,7 +358,10 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
       core.finish(claimId),
     ];
     try {
-      if (!(await core.changed(statements))) throw new ReportError("STALE_REVISION");
+      if (!(await core.changed(statements))) {
+        await requireReportConsent(core, a);
+        throw new ReportError("STALE_REVISION");
+      }
     } catch (error) {
       const receipt = await accounting.findOperation(a, route, key, requestHash);
       if (receipt?.kind === "replay") {

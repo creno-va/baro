@@ -9,6 +9,42 @@ import { createReportsService } from "../src/server/modules/reports/service";
 import { streamChunks, zipByteLength, zipChunks } from "../src/server/modules/reports/zip";
 import { readyFile, reportFixture } from "./helpers/report-fixture";
 
+test("consent revoked during report encryption cannot publish a new report or operation", async () => {
+  const f = await reportFixture();
+  const first = await f.reports.get(f.actor.ownerId, f.workspaceId);
+  const revision = f.rev();
+  let revoked = false;
+  const raced = createReportsService(
+    {
+      ...f.core,
+      encrypt: async (...args: Parameters<typeof f.core.encrypt>) => {
+        const encrypted = await f.core.encrypt(...args);
+        if (!revoked && args[0] === "v2_reports") {
+          revoked = true;
+          f.db.sqlite.query("DELETE FROM user_consents WHERE user_id=?").run(f.actor.ownerId);
+        }
+        return encrypted;
+      },
+    },
+    f.deps,
+  );
+  await expect(
+    raced.save(f.actor.ownerId, f.workspaceId, crypto.randomUUID(), {
+      expectedRevision: first.revision,
+      content: "저장 중 동의를 철회한 합성 내용",
+      maskIdentifiers: true,
+      excludedFileIds: [],
+    }),
+  ).rejects.toThrow("CONSENT_REQUIRED");
+  expect(revoked).toBe(true);
+  expect(f.rev()).toBe(revision);
+  expect(f.db.sqlite.query("SELECT count(*) AS n FROM v2_reports").get()).toEqual({ n: 1 });
+  expect(
+    f.db.sqlite.query("SELECT count(*) AS n FROM v2_operations WHERE kind='report'").get(),
+  ).toEqual({ n: 1 });
+  expect((await f.reports.get(f.actor.ownerId, f.workspaceId)).content).toBe(first.content);
+});
+
 test("actual SQL encrypted immutable reports preserve review, masking, revision and idempotent lost responses", async () => {
   const f = await reportFixture(),
     owner = f.actor.ownerId;
