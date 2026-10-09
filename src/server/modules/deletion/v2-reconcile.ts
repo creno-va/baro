@@ -1,3 +1,4 @@
+import { uuidSchema } from "../../../contracts";
 import { createCaseDataCipher } from "../../crypto";
 import { createV2Core, type V2Core } from "../../db/v2-core";
 import { createV2DeletionRepository } from "../../db/v2-deletion";
@@ -5,6 +6,42 @@ import { createV2StorageRepository } from "../../db/v2-storage";
 import { authorizeBlobCleanup, createStorageMaintenance } from "../budget/storage-maintenance";
 import type { PrivateBucket } from "../files/service";
 
+const cleanupReasons = [
+  "CLEANUP_BINDING_UNAVAILABLE",
+  "CLEANUP_LEGACY_RUNTIME_PROOF_REQUIRED",
+  "CLEANUP_INVENTORY_INVALID",
+  "CLEANUP_BUCKET_UNAVAILABLE",
+  "CLEANUP_WRITER_OR_BUDGET_PENDING",
+  "CLEANUP_FENCED",
+  "CLEANUP_OBJECT_REMAINS",
+  "CLEANUP_INVENTORY_PENDING",
+] as const;
+export type CleanupFailureEvent = {
+  event: "v2_deletion_cleanup_failed";
+  environment: "preview" | "production";
+  reason: (typeof cleanupReasons)[number] | "CLEANUP_DEPENDENCY_UNAVAILABLE";
+  attempts: number;
+  ageSeconds: number;
+};
+function reportCleanupFailure(event: CleanupFailureEvent) {
+  console.error(
+    JSON.stringify({
+      event: "v2_deletion_cleanup_failed",
+      environment: event.environment,
+      reason: event.reason,
+      attempts: event.attempts,
+      ageSeconds: event.ageSeconds,
+    }),
+  );
+}
+/** Older probes used the opaque runtime ID as their Container name. A successful
+ * stop is required; missing Workflows alone never prove that writer is absent. */
+export async function stopLegacyContainer(binding: Env["FILE_PROCESSOR"] | undefined, id: string) {
+  if (!binding || !id.endsWith("-1") || !uuidSchema.safeParse(id.slice(0, -2)).success)
+    return false;
+  await binding.get(binding.idFromName(id)).stop("SIGKILL");
+  return true;
+}
 export type CleanupWorkflow = { get(id: string): Promise<{ delete(): Promise<void> }> };
 export type DeletionCleanupDependencies = {
   environment: "preview" | "production";
@@ -17,6 +54,7 @@ export type DeletionCleanupDependencies = {
   /** Coordinator receipt for legacy/unknown runtime IDs. Absence from Workflow
    * namespaces alone cannot prove that an older Container probe has stopped. */
   confirmAbsentJob?: (runtimeId: string) => Promise<boolean>;
+  onFailure?: (event: CleanupFailureEvent) => void;
   clock?: () => string;
   testOnlyUnmeteredStorage?: true;
 };
@@ -52,6 +90,7 @@ export function createV2DeletionReconciler(core: V2Core, deps: DeletionCleanupDe
         );
         if (!lease) continue;
         result.acquired++;
+        let failure: CleanupFailureEvent["reason"] | undefined;
         try {
           // Work per invocation is bounded. Receipts and remaining targets survive
           // lease expiry, partial transport failures and another scheduler's replay.
@@ -175,12 +214,37 @@ export function createV2DeletionReconciler(core: V2Core, deps: DeletionCleanupDe
             result.completed++;
             continue;
           }
-        } catch {
-          /* Preserve inventory and physical exposure; never manufacture a receipt. */
+        } catch (error) {
+          // Never log provider errors, IDs, keys, SQL or payloads.
+          failure =
+            error instanceof Error && cleanupReasons.some((reason) => reason === error.message)
+              ? (error.message as CleanupFailureEvent["reason"])
+              : "CLEANUP_DEPENDENCY_UNAVAILABLE";
         }
         result.retry++;
         const failedAt = now();
-        await deletion.fail(lease, failedAt, new Date(Date.parse(failedAt) + 60000).toISOString());
+        const retained = await deletion.fail(
+          lease,
+          failedAt,
+          new Date(Date.parse(failedAt) + 60000).toISOString(),
+        );
+        if (retained && failure) {
+          const event: CleanupFailureEvent = {
+            event: "v2_deletion_cleanup_failed",
+            environment: deps.environment,
+            reason: failure,
+            attempts: journal.attempts + 1,
+            ageSeconds: Math.max(
+              0,
+              Math.floor((Date.parse(failedAt) - Date.parse(journal.created_at)) / 1000),
+            ),
+          };
+          try {
+            (deps.onFailure ?? reportCleanupFailure)(event);
+          } catch {
+            /* Observability failure cannot discard the durable retry. */
+          }
+        }
       }
       return result;
     },
@@ -202,6 +266,7 @@ export async function reconcileV2Deletion(env: Env) {
       env.PROFILE_PUBLICATION,
     ],
     legacyWorkflow: env.ANALYSIS_WORKFLOW,
+    confirmAbsentJob: (id) => stopLegacyContainer(env.FILE_PROCESSOR, id),
     stopProbe: async (id) => {
       if (!env.FILE_PROCESSOR) throw new Error("CLEANUP_BINDING_UNAVAILABLE");
       await env.FILE_PROCESSOR.get(env.FILE_PROCESSOR.idFromName(id)).stop("SIGKILL");
