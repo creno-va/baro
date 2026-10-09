@@ -20,6 +20,8 @@ import {
   workspaceSummaryOutputSchema,
 } from "../llm-gateway/v2/schemas";
 
+import { normalizeTimelineDates } from "./timeline-dates";
+
 export type WorkspaceContext = {
   intake: V2Intake;
   confirmedSummary: V2Summary | null;
@@ -58,6 +60,9 @@ export class WorkspaceOutputPolicyError extends ModelError {
     super("POLICY_REJECTED");
   }
 }
+
+const unavailableSourceWarning =
+  "공식 자료를 확인하지 못해 법률 설명을 제공하지 않았어요. 사실 정리는 계속할 수 있어요.";
 
 const privateIdentifiers = (text: string) =>
   /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}|01[016789][- ]?\d{3,4}[- ]?\d{4}/i.test(text);
@@ -228,10 +233,7 @@ export function createWorkspacePipeline(
         draft = workspaceChatOutputSchema.parse(await call("workspace_chat", context, requestId));
       }
       if (context.sourceStatus === "unavailable")
-        draft.warnings = [
-          ...draft.warnings.slice(0, 19),
-          "공식 자료를 확인하지 못해 법률 설명을 제공하지 않았어요. 사실 정리는 계속할 수 있어요.",
-        ];
+        draft.warnings = [...draft.warnings.slice(0, 19), unavailableSourceWarning];
       assertWorkspaceFacts(context, draft.facts);
       assertWorkspaceReferences(context, [
         ...draft.references,
@@ -259,6 +261,32 @@ export function createWorkspacePipeline(
         draft.parties.some((party) => prohibited(JSON.stringify(party)))
       )
         throw new WorkspaceOutputPolicyError("prohibited_content");
+      const dates = normalizeTimelineDates(
+        {
+          ...context,
+          facts: [
+            ...context.facts,
+            ...draft.facts.filter(
+              (fact) =>
+                fact.attribution === "user_statement" || fact.attribution === "user_material",
+            ),
+          ],
+        },
+        draft.timeline,
+        (ref) => sourceText(context, ref),
+      );
+      draft.timeline = dates.timeline;
+      if (dates.changed) {
+        const sourceUnavailable = context.sourceStatus === "unavailable";
+        const warnings = sourceUnavailable
+          ? draft.warnings.filter((warning) => warning !== unavailableSourceWarning)
+          : draft.warnings;
+        draft.warnings = [
+          ...warnings.slice(0, sourceUnavailable ? 18 : 19),
+          ...(sourceUnavailable ? [unavailableSourceWarning] : []),
+          "타임라인 날짜는 원문에서 확인한 정밀도로만 표시했어요. 근거가 없으면 날짜 미확인으로 남겼어요.",
+        ];
+      }
       await audit("workspace_chat", context, draft, requestId);
       const cited = new Set(
         [
