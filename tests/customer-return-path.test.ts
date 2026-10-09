@@ -4,6 +4,12 @@ import { accessHref, safeReturnPath, sessionDestination } from "../src/client/re
 test("login and consent retain only allowed local case paths and the selected role", () => {
   const path = "/cases/synthetic-case/files";
   expect(accessHref("login", path)).toBe("/login?returnTo=%2Fcases%2Fsynthetic-case%2Ffiles");
+  expect(accessHref("login", path, "session_expired")).toBe(
+    "/login?returnTo=%2Fcases%2Fsynthetic-case%2Ffiles&error=session_expired",
+  );
+  expect(accessHref("login", "https://evil.test", "session_expired")).toBe(
+    "/login?error=session_expired",
+  );
   const user = { id: "synthetic", name: "합성", accountType: "customer" as const };
   expect(sessionDestination({ user, needsConsent: true }, path)).toBe(
     "/consent?returnTo=%2Fcases%2Fsynthetic-case%2Ffiles",

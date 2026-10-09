@@ -253,7 +253,7 @@ test("app clears an active draft and returns to login when the session expires",
     route.fulfill({ json: { user: null, needsConsent: false } }),
   );
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
-  await expect(page).toHaveURL(/\/login$/);
+  await expect(page).toHaveURL(/\/login\?returnTo=%2Fapp$/);
   await expect(page.getByRole("textbox", { name: "지금까지 있었던 일" })).toHaveCount(0);
   await expect(page.locator("body")).not.toContainText("세션 만료 전 합성 초안");
 });
@@ -288,5 +288,18 @@ test("an expired session during consent saving returns to login", async ({ page 
   await page.getByRole("checkbox").nth(1).check();
   await page.getByRole("button", { name: "동의하고 계속하기" }).click();
   await expect(page).toHaveURL(/\/login\?error=session_expired$/);
+  await expect(page.getByRole("alert")).toContainText("안전한 이용을 위해 다시 로그인해 주세요.");
+});
+
+test("expired consent preserves the permitted case destination and the recovery notice", async ({
+  page,
+}) => {
+  await page.route("**/api/me/session", (route) =>
+    route.fulfill({ status: 401, json: { error: { code: "UNAUTHENTICATED" } } }),
+  );
+  await page.goto("/consent?returnTo=%2Fcases%2Fsynthetic-case%2Ffiles");
+  await expect(page).toHaveURL(
+    /\/login\?returnTo=%2Fcases%2Fsynthetic-case%2Ffiles&error=session_expired$/,
+  );
   await expect(page.getByRole("alert")).toContainText("안전한 이용을 위해 다시 로그인해 주세요.");
 });

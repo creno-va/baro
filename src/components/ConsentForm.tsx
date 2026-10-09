@@ -25,7 +25,9 @@ export function ConsentForm() {
       .get()
       .then(async (session) => {
         if (!session.user) {
-          window.location.replace(accessHref("login", returnPathFromLocation() ?? undefined));
+          window.location.replace(
+            accessHref("login", returnPathFromLocation() ?? undefined, "session_expired"),
+          );
           return;
         }
         const consent = await api.session.getConsent();
@@ -34,7 +36,9 @@ export function ConsentForm() {
       })
       .catch((failure) => {
         if (failure instanceof ApiError && failure.code === "UNAUTHENTICATED") {
-          window.location.replace(accessHref("login", returnPathFromLocation() ?? undefined));
+          window.location.replace(
+            accessHref("login", returnPathFromLocation() ?? undefined, "session_expired"),
+          );
           return;
         }
         setError("동의 상태를 불러오지 못했어요. 다시 불러와 주세요.");
@@ -56,7 +60,9 @@ export function ConsentForm() {
       setStartPath(sessionDestination(session));
     } catch (failure) {
       if (failure instanceof ApiError && failure.code === "UNAUTHENTICATED") {
-        window.location.replace(accessHref("login", returnPathFromLocation() ?? undefined));
+        window.location.replace(
+          accessHref("login", returnPathFromLocation() ?? undefined, "session_expired"),
+        );
         return;
       }
       setError("동의를 저장하지 못했어요. 다시 시도해 주세요.");

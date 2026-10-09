@@ -51,7 +51,7 @@ export const sessionApi = {
       .social({
         provider,
         callbackURL: accessHref("consent", returnPathFromLocation() ?? undefined),
-        errorCallbackURL: `${accessHref("login", returnPathFromLocation() ?? undefined)}${returnPathFromLocation() ? "&" : "?"}error=oauth`,
+        errorCallbackURL: accessHref("login", returnPathFromLocation() ?? undefined, "oauth"),
       })
       .catch(() => {
         throw new ApiError("UNAVAILABLE", "로그인을 시작하지 못했어요. 다시 시도해 주세요.", true);

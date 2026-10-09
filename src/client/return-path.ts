@@ -20,11 +20,18 @@ export function returnPathFromLocation(): string | null {
   if (typeof window === "undefined") return null;
   return safeReturnPath(new URLSearchParams(window.location.search).get("returnTo"));
 }
-export function accessHref(page: "login" | "consent", path?: string): string {
+export function accessHref(
+  page: "login" | "consent",
+  path?: string,
+  error?: "session_expired" | "oauth",
+): string {
   const target = safeReturnPath(
     path ?? (typeof window !== "undefined" ? window.location.pathname : ""),
   );
-  return `/${page}${target ? `?returnTo=${encodeURIComponent(target)}` : ""}`;
+  const params = new URLSearchParams();
+  if (target) params.set("returnTo", target);
+  if (error) params.set("error", error);
+  return `/${page}${params.size ? `?${params}` : ""}`;
 }
 export function sessionDestination(
   session: SessionView,
