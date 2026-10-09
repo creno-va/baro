@@ -88,7 +88,7 @@ type LawyerView = {
   id: string; revision: number; name: string; introduction: string;
   officeName: string; address: string; region: string; practiceAreas: string[];
   phone: string; email: string; website: string; photoUrl: string | null;
-  portfolio: { id: string; title: string; url: string | null }[];
+  portfolio: { id: string; title: string; text?: string; url: string | null; assetId?: string }[];
   published: boolean; verificationStatus: "self_declared" | "verified";
 };
 type UsageView = {
@@ -201,3 +201,18 @@ B~E는 완료를 기다리지 않고 소유 화면을 만든다. A가 표의 dom
 #64 PR100 workspace backend, #58 files API, #60 lawyers API, #61 directory를 재사용한다.
 실제 API 성공·외부 gate는 mock 완료와 별도로 기록한다. DB를 선행 재설계하지 않고 미연결 operation은
 담당 기존 기능 이슈에 기록한 뒤 같은 UI의 real domain adapter를 연결한다.
+
+## 2026-10-09 C 변호사 보완 계약
+
+현재 3세션 소유는 A=공통 types/auth/router/runtime·고객, B=자료/리포트/삭제,
+C=변호사 서버/API/client·계획/증거다. 위 옛 A~E 소유 표는 mock sprint 이력이다.
+`LawyerView`는 변호사 전용 selfProfileSchema에서 파생하며 공통 types 변경은 없다.
+portfolio `text`는 제목과 별개인 선택 본문(최대 5,000자); 없는 기존 snapshot/link/image/PDF와 호환된다.
+본문은 HTML로 실행하지 않고 줄바꿈을 보존하는 텍스트로 미리보기·공개한다. 저장/삭제는 기존
+프로필 revision·암호화·소유권·공개 동의 경로를 사용하며 migration은 추가하지 않는다.
+
+기존 자기 profile/ready upload 조회·다운로드는 재동의 전 허용한다. 새 profile 생성·저장·공개·
+업로드는 현재 동의가 필요하고 타인/고객 역할/session 만료·삭제는 계속 차단한다. 공개 디렉터리와
+자산은 기존 current consent 가드를 유지한다. A의 `requireSession({consent:false})` 읽기 옵션과
+lawyer 읽기 whitelist를 C mock consumer에서 사용하고 mutation/cache replay의 동의 검사는 유지한다.
+최종 SHA/통합 결과는 [완료표](./MVP-REQUIREMENTS-EVIDENCE.md)와 #62/#69에서 추적한다.

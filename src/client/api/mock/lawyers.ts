@@ -53,15 +53,20 @@ export function createMockLawyers(context: LawyerMockContext) {
     return context.read() ?? { profiles: structuredClone(lawyersFixture), owners: {} };
   }
   const clone = <T>(value: T): T => structuredClone(value);
-  const own = async () => {
+  const own = async (mutation = true) => {
     const session = await context.session();
     if (session.user?.accountType !== "lawyer")
       throw new LawyerApiError("UNAUTHENTICATED", "변호사 역할로 로그인해 주세요.");
-    if (session.needsConsent)
+    if (mutation && session.needsConsent)
       throw new LawyerApiError("CONSENT_REQUIRED", "필수 동의를 확인해 주세요.");
     const store = state();
     let id = store.owners[session.user.id];
     if (!id) {
+      if (session.needsConsent)
+        throw new LawyerApiError(
+          "CONSENT_REQUIRED",
+          "새 프로필 작성 전 필수 동의를 확인해 주세요.",
+        );
       id = crypto.randomUUID();
       store.owners[session.user.id] = id;
       store.profiles.push(emptySelfProfile(id, session.user.name));
@@ -73,7 +78,7 @@ export function createMockLawyers(context: LawyerMockContext) {
   };
   return {
     async assets() {
-      const owner = await own();
+      const owner = await own(false);
       return Object.entries(state().assets ?? {})
         .filter(([, a]) => a.profileId === owner.profile.id)
         .map(([id, a]) => ({
@@ -142,7 +147,7 @@ export function createMockLawyers(context: LawyerMockContext) {
       )
         throw new LawyerApiError("NOT_FOUND", "공개 자료를 찾지 못했어요.");
       if (input.privateRead) {
-        if ((await own()).profile.id !== profile.id)
+        if ((await own(false)).profile.id !== profile.id)
           throw new LawyerApiError("NOT_FOUND", "본인 자료만 볼 수 있어요.");
       } else if (!profile.published)
         throw new LawyerApiError("NOT_FOUND", "공개 자료를 찾지 못했어요.");
@@ -168,7 +173,7 @@ export function createMockLawyers(context: LawyerMockContext) {
       return clone(p);
     },
     async getMine() {
-      return clone((await own()).profile);
+      return clone((await own(false)).profile);
     },
     async saveMine(input: LawyerView) {
       const owner = await own();

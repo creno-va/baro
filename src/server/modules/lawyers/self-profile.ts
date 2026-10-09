@@ -37,17 +37,22 @@ export function createSelfProfileService(core: V2Core, clock = () => new Date().
   const ownRow = (ownerId: string) =>
     core.statement(`${latest} AND p.owner_id=?`, [ownerId]).first<Row>();
   const service = {
-    async getMine(ownerId: string): Promise<SelfProfile> {
+    async getMine(ownerId: string, createIfMissing = true): Promise<SelfProfile> {
       const row = await ownRow(ownerId);
       if (row) {
         const profile = await decode(row);
         if (!profile) throw new LawyerError("NOT_FOUND");
         return profile;
       }
-      await createV2LawyersRepository(core).createProfile(actor(ownerId), crypto.randomUUID());
-      const p = await core
+      let p = await core
         .statement(`SELECT p.id FROM v2_profiles p WHERE p.owner_id=? AND ${alive}`, [ownerId])
         .first<{ id: string }>();
+      if (!p && createIfMissing) {
+        await createV2LawyersRepository(core).createProfile(actor(ownerId), crypto.randomUUID());
+        p = await core
+          .statement(`SELECT p.id FROM v2_profiles p WHERE p.owner_id=? AND ${alive}`, [ownerId])
+          .first<{ id: string }>();
+      }
       if (!p) throw new LawyerError("NOT_FOUND");
       return emptySelfProfile(p.id);
     },
@@ -148,7 +153,7 @@ export function createSelfProfileService(core: V2Core, clock = () => new Date().
         if (!sessionId) return false;
         return !!(await core
           .statement(
-            `SELECT p.id FROM v2_profiles p WHERE p.id=? AND p.owner_id=? AND ${alive} AND ${role} AND ${currentConsentSql} AND coalesce((SELECT max(revision) FROM v2_private_snapshots WHERE target_id=p.id AND purpose='profile_revision'),1)=? AND EXISTS(SELECT 1 FROM session WHERE id=? AND user_id=p.owner_id AND expires_at>?)`,
+            `SELECT p.id FROM v2_profiles p WHERE p.id=? AND p.owner_id=? AND ${alive} AND ${role} AND coalesce((SELECT max(revision) FROM v2_private_snapshots WHERE target_id=p.id AND purpose='profile_revision'),1)=? AND EXISTS(SELECT 1 FROM session WHERE id=? AND user_id=p.owner_id AND expires_at>?)`,
             [profile.id, ownerId, profile.revision, sessionId, Date.parse(clock())],
           )
           .first());
