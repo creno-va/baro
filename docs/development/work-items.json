@@ -384,7 +384,7 @@
         "docs/quality/TEST-STRATEGY.md",
         "docs/development/MVP-REQUIREMENTS-EVIDENCE.md"
       ],
-      "validation": "actual Korean PDF rendered content and selected-original ZIP download/ownership; UI mock #105 distinct"
+      "validation": "latest confirmed facts/material corrections in new reports; immutable prior basis/stale and renewal read/download; product HTML preview/download with escaping/CSP/mobile/print plus actual Korean PDF and selected-original ZIP content/ownership/deletion; UI-35 and #69/#71 evidence, mock #105 distinct"
     },
     {
       "issue": 67,
@@ -462,7 +462,7 @@
         "docs/quality/TEST-STRATEGY.md",
         "docs/development/MVP-REQUIREMENTS-EVIDENCE.md"
       ],
-      "validation": "all F/UI requirements and transfers mapped to current owner, scenario, expected result, evidence kind, exact SHA/result; #162 and new #62/#64/#65/#58/#59/#66 gaps verified after integration; preserve prior failures/passes"
+      "validation": "all F/UI requirements and transfers mapped to current owner, scenario, expected result, evidence kind, exact SHA/result; #162 and new #62/#64/#65/#58/#59/#66 including product HTML UI-35 verified after integration; preserve prior failures/passes"
     },
     {
       "issue": 70,
@@ -560,7 +560,7 @@
         "docs/quality/TEST-STRATEGY.md",
         "docs/development/MVP-REQUIREMENTS-EVIDENCE.md"
       ],
-      "validation": "close last only after all mandatory requirements/transfers/known defects/external conditions complete; same immutable candidate release/live receipts and human policy evidence; no inferred approval or synthetic/live substitution"
+      "validation": "close last only after all mandatory requirements including product HTML UI-35/transfers/known defects/external conditions complete; same immutable candidate release/live receipts and human policy evidence; no inferred approval or synthetic/live substitution"
     },
     {
       "issue": 101,

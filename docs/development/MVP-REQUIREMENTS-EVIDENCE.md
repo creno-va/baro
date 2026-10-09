@@ -27,6 +27,7 @@ ADR-0014의 심사/어드민 UI만 제외하고 기존 backend/증거는 보존�
 | 사용량 | #57/PR143/main `d91f342`: KST AI200회/일, 사건3/일, media60분/일·저장10GB 등 다른 한도 유지 | AI30회/일 대체. 문항 수와 논리 응답 operation·내부 재시도 비용은 별개 |
 | 비용 | #57의 직접 지시 기록·PR143·DOMAIN-LIFECYCLE: 월 cap 해제(`MONTHLY_BUDGET_CAP_ENABLED=false`), 기존 사용자 설정 잔액$10/충전$30 | 과거 기술100만원 hard stop/자동충전 OFF 대체. actual funding/가격/FX·bounded attempts·unknown holds·ledger는 유지 |
 | 운영 승인 | #71의 후속 배포 기록과 실제 현재 Environment 규칙을 A가 확인 | 오래된 reviewer 지정 문서를 현재 설정으로 단정하지 않음. 배포 허용은 법률/사업자/외부 인수 승인 아님 |
+| HTML 리포트 | 2026-10-09 B 채팅의 사용자 답변 “BARO 제품에 적용”: 디자인된 HTML 미리보기·다운로드, B #66 | 샘플 파일만 만드는 범위가 아님. 기존 PDF/선택 원본 ZIP 및 외부 gate 유지 |
 
 위 비용 행은 확인한 기존 기록과 배포 코드의 정합성 정리다. C가 새 정책·결제·충전·예산 또는
 새 공개 승인을 부여하거나 운영 설정을 변경하지 않는다. 기록 범위 밖 결정은 추론하지 않는다.
@@ -77,9 +78,10 @@ ADR-0014의 심사/어드민 UI만 제외하고 기존 backend/증거는 보존�
 | F005/009 / 29 | A #64/#65, B #66 | 직접 연락 링크 후 사실/자료 추가→리포트 갱신 → 강제 연락/자동 공유 없음 | browser+snapshot | E-F 기존; 최신 facts 연결 보완 미검증 |
 | privacy / 30 | #68/#69 | analytics 거부/철회→기능 동일·PII allowlist | 동의/철회 테스트 | E-F 완료; 정책 사람 승인 #20/#70 |
 | renewal-customer / 31 | A #65, B #58 | 재동의 전 사건/자료 조회·다운로드 → 읽기 허용/수정·AI 차단 | API/browser·계정 전환 | 보완 통합 대기, 미검증 |
-| renewal-report / 32 | B #66 | 재동의 전 옛 PDF/ZIP 다운로드 → 기존 artifact 유지/생성 차단 | API/browser·byte/권한 | 보완 통합 대기, 미검증 |
+| renewal-report / 32 | B #66 | 재동의 전 기존 HTML/PDF/ZIP 조회·다운로드 → 저장 snapshot 유지/새 생성·수정 차단 | API/browser·byte/권한 | 보완 통합 대기, 미검증 |
 | renewal-lawyer / 33 | C #62, A runtime | 재동의 전 자기 profile/assets 조회·download → 기존 읽기만 허용 | API/stream revoke·mock/browser | E-C 합성 PASS, public 현재동의 유지; main 통합 대기 |
 | activation / 34 | A #162/#163 | 출시 모달/비활성 제거→기존 기능 진입 → 권한/상태/외부 gate 유지 | integrated browser/CSP | #163 CI/통합 대기; 기능 자체 완료와 별개 |
+| F009 / 35 | B #66, C #69/#71 | 저장 리포트→디자인된 HTML 미리보기·다운로드→모바일/인쇄 → 고정 revision·basis/stale·마스킹·자료 제외·출처/누락 유지 | 실제 HTML/HTTP·browser/시각·escape/CSP·owner/삭제 경합 | 사용자 범위 확정, B 구현/통합 대기; 검증 SHA 없음, 미검증 |
 | F015 비용/한도 | #57, A/B #71 | retry/월경계/미확정 청구 → actual ledger·bounded attempt·복구 | SQL·실제 청구/가격/funding | E-U 구현/배포, 실제 정산 미완료 |
 | 출처/법률 | #63/#70 | 공식 출처 못 얻음 → 확인불가, 법률 검토 전 승인 주장 없음 | live tuple·사람 검토 | E-F captured/합성; live/사람 대기 |
 | 운영/최종 | A #19/#27/#71, C #69 | 최종 candidate 전체 시연·restore/rollback → 요구 누락/결함0 | 동일 SHA release/live·human receipt | E-R 과거 배포만 완료; #71 마지막 종료 |
@@ -102,14 +104,14 @@ B와 A가 연결하고 #71에서 함께 검사한다. 운영 환경 변경·배�
 ## #71 마지막 종료 조건
 
 1. 위 모든 필수 행과 기존 UI 정상/실패 조건에 정확한 증거가 있고 이관된 필수 조건의 현재 이슈도 실제 완료한다.
-2. #162 활성화 및 #159~#161/후속 알려진 결함을 통합하고 #69에서 새 요구를 감사한다. 준비만 된 테스트는 pending이다.
+2. #162 활성화 및 #159~#161/후속 알려진 결함, #66 제품 HTML 리포트(UI-35)를 통합하고 #69에서 새 요구를 감사한다. 준비만 된 테스트는 pending이다.
 3. #19/#20/#27/#57/#58/#59/#63/#67/#70의 실제/사람 증거가 모두 충족된다. 기존 배포 승인은 외부·법률·사업자 승인 대체가 아니다.
 4. 최종 immutable SHA의 CI/preview/production·실제 양 역할·파일 다운로드·권한·삭제/운영 receipt와 정책/동의 버전을 대조한다. 과거 증거 재사용은 영향 범위가 같음을 명시한다.
 5. 남은 필수 blocker/결함0, 최종 URL/결과표/증거 링크를 제공한 뒤 M5 및 #71을 마지막으로 닫는다. C PR은 `Refs`만 사용한다.
 
 ## C 보완 검증 기록
 
-서버·추적 중간 source `b223cb8`을 보존했다. 최종 UI source/PR CI는 아직 미완료이며 아래 기록으로 대신하지 않는다.
+서버·추적 중간 source `b223cb8`의 당시 기록을 보존했다. 이후 UI 검증은 아래 `0d3fbe0` 절에 따로 기록하며 PR CI/최종 통합 증거와 구분한다.
 
 - `bun ci`: Bun1.3.14 frozen install 성공, lock 변경 없음.
 - 변호사 self-profile/self-assets: 16 tests/343 assertions 성공. 텍스트 저장/재접속/공개/수정/삭제,
