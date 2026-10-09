@@ -1,6 +1,6 @@
 import type { z } from "zod";
 import { type V2Fact, type V2Summary, v2FactSchema, v2SummarySchema } from "../../contracts/v2";
-import type { Actor, V2Core } from "./v2-core";
+import { type Actor, fragmentText, type V2Core } from "./v2-core";
 
 /** Chat additions share the current summary revision; workspace revision fences reads. */
 export async function* summaryAdditions(
@@ -49,20 +49,30 @@ export async function* appendSummaryEntities(
     key = "",
     field = "";
   let mode: "key" | "colon" | "value" = "key";
+  let index = 0;
+  const seen = new Set<string>();
+  let entity = "";
   let target: "facts" | "parties" | null = null,
     populated = false;
   for await (const part of source) {
     let output = "";
     for (const ch of part.text) {
       if (!quoted && ch === "]" && depth === 2 && target) {
-        if (output) yield { text: output, complete: false };
-        output = "";
         for await (const value of additions(target)) {
-          yield { text: `${populated ? "," : ""}${JSON.stringify(value)}`, complete: false };
+          if (value && typeof value === "object" && "id" in value && seen.has(String(value.id)))
+            continue;
+          if (output) {
+            yield { index: index++, text: output, complete: false };
+            output = "";
+          }
+          for (const text of fragmentText(`${populated ? "," : ""}${JSON.stringify(value)}`))
+            yield { index: index++, text, complete: false };
           populated = true;
         }
         target = null;
       }
+      if (target && depth === 2 && ch === "{" && !quoted) entity = "";
+      if (target && (depth > 2 || (depth === 2 && ch === "{" && !quoted))) entity += ch;
       if (target && depth >= 2 && !/\s/.test(ch)) populated = true;
       output += ch;
       if (quoted) {
@@ -83,12 +93,18 @@ export async function* appendSummaryEntities(
         if (ch === "[" && depth === 1 && (field === "facts" || field === "parties")) {
           target = field;
           populated = false;
+          seen.clear();
         }
         depth++;
-      } else if (ch === "}" || ch === "]") depth--;
-      else if (depth === 1 && ch === ":") mode = "value";
+      } else if (ch === "}" || ch === "]") {
+        depth--;
+        if (target && depth === 2 && entity) {
+          seen.add(String(JSON.parse(entity).id));
+          entity = "";
+        }
+      } else if (depth === 1 && ch === ":") mode = "value";
       else if (depth === 1 && ch === ",") mode = "key";
     }
-    yield { text: output, complete: part.complete };
+    yield { index: index++, text: output, complete: part.complete };
   }
 }

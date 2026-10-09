@@ -142,7 +142,7 @@ describe("B persistent API mock", () => {
       user: { id: "synthetic-customer", name: "예시", accountType: "customer" },
       needsConsent: true,
     });
-    expect(() => handlers["cases.list"]()).toThrow(ApiError);
+    expect(handlers["cases.list"]()).toEqual([]);
   });
   test("mutation replay persists across handler calls and changed payload cannot reuse a key", () => {
     const key = context(),
@@ -397,7 +397,11 @@ describe("PR100 real wire mapping", () => {
     await saveSummary(id, { expectedRevision: 5, summary: "수정된 합성 요약" });
     expect(writes[0]?.body).toEqual({ expectedRevision: 2, overview: "수정된 합성 요약" });
     await confirmSummary(id, { expectedRevision: 5 });
-    expect(writes[1]?.body).toEqual({ expectedRevision: 3, summaryRevision: 2 });
+    expect(writes[1]?.body).toEqual({
+      expectedRevision: 3,
+      summaryRevision: 2,
+      workspaceRevision: 5,
+    });
     expect(writes.every((write) => !!write.key)).toBe(true);
     await expect(casesApi.confirmSummary(id, { expectedRevision: 4 })).rejects.toMatchObject({
       code: "CONFLICT",

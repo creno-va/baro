@@ -64,6 +64,8 @@ const cursorSchema = z.strictObject({
   ]),
   field: z.string(),
   seen: z.array(z.string()).max(9),
+  copiedFactIds: z.array(opaqueIdSchema).max(300).default([]),
+  copiedPartyIds: z.array(opaqueIdSchema).max(30).default([]),
   extraFacts: z.number().int().nonnegative().default(0),
   extraParties: z.number().int().nonnegative().default(0),
   factCount: z.number().int().min(0).max(300),
@@ -495,6 +497,7 @@ export function createV2SummaryEditsRepository(core: V2Core) {
           const targetId = crypto.randomUUID();
           const target = await core.encrypt(table, targetId, g.ownerId, e.target_revision, edited);
           const ordinal = kind === "fact" ? c.factCount++ : c.partyCount++;
+          (kind === "fact" ? c.copiedFactIds : c.copiedPartyIds).push(original.id);
           sourceGuards.push({
             sql: `EXISTS(SELECT 1 FROM ${table} WHERE id=? AND (snapshot_id=? OR snapshot_id IS NULL) AND encrypted_payload=?)`,
             values: [row.id, e.source_snapshot_id, row.encrypted_payload],
@@ -670,6 +673,16 @@ export function createV2SummaryEditsRepository(core: V2Core) {
                     ? v2FactSchema
                     : v2SummarySchema.shape.parties.element) as z.ZodType<unknown>,
                 );
+                if (
+                  (facts ? c.copiedFactIds : c.copiedPartyIds).includes(
+                    parse(z.object({ id: opaqueIdSchema }), value).id,
+                  )
+                ) {
+                  if (facts) c.extraFacts++;
+                  else c.extraParties++;
+                  items++;
+                  continue;
+                }
                 const result = await normalized(facts ? "fact" : "party", value);
                 emit(`${c.arrayFirst ? "" : ","}${JSON.stringify(result)}`);
                 c.arrayFirst = false;

@@ -39,6 +39,7 @@ test("chat failure/retry, reload, action checks and timeline editing on actual c
   await page.getByLabel("상세 내용").fill("원본 메시지를 검토할 예정입니다.");
   await page.getByRole("button", { name: "타임라인 저장" }).click();
   await page.getByRole("button", { name: "편집", exact: true }).click();
+  await page.getByLabel("날짜 정밀도").selectOption("day");
   await page.getByLabel("날짜 (모르면 비워 두세요)").fill("2026-10-01");
   await page.getByRole("button", { name: "타임라인 저장" }).click();
   await expect(page.getByText("타임라인을 저장했어요.", { exact: true })).toBeVisible();
@@ -89,6 +90,7 @@ test("file processing failure, retry, extracted text, original bytes, cancellati
   await page.getByRole("button", { name: "처리 다시 시도" }).click();
   await expect(page.getByText("결과 확인 가능", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "자료 확인" }).click();
+  await page.getByText("원본 추출 내용", { exact: true }).click();
   await expect(page.getByRole("dialog").getByText(text, { exact: true })).toBeVisible();
   const download = page.waitForEvent("download");
   await page.getByRole("button", { name: "원본 확인 · 다운로드" }).click();
@@ -191,6 +193,7 @@ test("workspace panels keep their navigation, readable layouts and accessible co
   await page.getByRole("link", { name: "타임라인", exact: true }).click();
   await page.getByRole("button", { name: "일정 추가" }).click();
   await page.getByLabel("어떤 일이 있었나요?").fill("반환 약속 메시지를 받음");
+  await page.getByLabel("날짜 정밀도").selectOption("day");
   await page.getByLabel("날짜 (모르면 비워 두세요)").fill("2026-10-01");
   await page.getByLabel("상세 내용").fill("메시지 원본의 날짜와 내용을 확인할 예정입니다.");
   await page.getByRole("button", { name: "타임라인 저장" }).click();

@@ -132,7 +132,7 @@ export const workspaceViewSchema = z.object({
     z.object({
       id: z.string(),
       date: z.string(),
-      datePrecision: z.enum(["day", "month", "year", "unknown"]).optional(),
+      datePrecision: z.enum(["day", "month", "year", "unknown"]).default("day"),
       title: z.string(),
       detail: z.string(),
     }),
@@ -495,7 +495,7 @@ export function createWorkspaceApi(
             ? (timelineRevisions.get(`${id}:${entry.id}`) ?? 1)
             : (workspaceRevisions.get(id) ?? (await get(id)).case.revision),
           date: entry.date || null,
-          datePrecision: entry.datePrecision ?? (entry.date ? "day" : "unknown"),
+          datePrecision: entry.date ? (entry.datePrecision ?? "day") : "unknown",
           event: entry.detail ? `${entry.title}\n${entry.detail}` : entry.title,
         };
         init = workspaceMutation(route, body, entry.id ? "PUT" : "POST");

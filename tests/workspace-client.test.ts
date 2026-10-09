@@ -332,6 +332,8 @@ test("real workspace DTOs preserve server-validated text and use entity revision
   const view = await api.get(workspace.id);
   expect(view.case.summary).toBe(summary.overview);
   expect(view.messages[1]?.text).toBe(assistantMessage.text);
+  expect(view.messages[1]?.citations?.[0]?.url).toBe(guide.url);
+  expect(view.messages[1]?.references).toEqual([{ kind: "official_source", citationId: guide.id }]);
   await api.get(workspace.id);
   expect(reads.filter((path) => path.includes("/messages?"))).toHaveLength(1);
   expect(reads.filter((path) => path.endsWith("/timeline"))).toHaveLength(1);
@@ -492,4 +494,84 @@ test("known v1 records still read and preserve UNAVAILABLE during temporary lega
   expect((await client.get(id)).case.schemaVersion).toBe("1");
   unavailable = true;
   await expect(client.get(id)).rejects.toMatchObject({ code: "UNAVAILABLE" });
+});
+
+test("date precision survives create, edit and a new client for every precision", async () => {
+  const f = fixture();
+  for (const [date, datePrecision] of [
+    ["2024-01-01", "year"],
+    ["2024-06-01", "month"],
+    ["2024-06-03", "day"],
+    ["", "unknown"],
+  ] as const) {
+    const before = await f.client.get("synthetic-case");
+    const next = await f.client.saveTimeline("synthetic-case", {
+      date,
+      datePrecision,
+      title: `정밀도 ${datePrecision}`,
+      detail: "",
+    });
+    const entry = next.timeline.find((v) => v.title === `정밀도 ${datePrecision}`);
+    expect(entry?.datePrecision).toBe(datePrecision);
+    const reloaded = await createWorkspaceApi(f.transport).get("synthetic-case");
+    expect(reloaded.timeline.find((v) => v.id === entry?.id)).toEqual(entry);
+    expect(next.case.revision).toBeGreaterThan(before.case.revision);
+  }
+});
+
+test("material edits retain originals, survive a lost acknowledgement and reconsent allows only reads", async () => {
+  const f = fixture();
+  const file = {
+    id: "review-file",
+    name: "합성.txt",
+    mimeType: "text/plain",
+    sizeBytes: 20,
+    status: "ready" as const,
+    coverage: "한 쪽",
+    extractedText: "원래 추출 내용",
+  };
+  f.runtime.update((state) => {
+    state.files["synthetic-case"] = [file];
+  });
+  const files = createFilesApi(f.transport);
+  const initial = await files.review("synthetic-case", file.id);
+  let lose = true;
+  const client = createFilesApi(async (path, init) => {
+    const response = await f.transport(path, init);
+    if (init?.method === "PATCH" && lose) {
+      lose = false;
+      throw new Error("synthetic lost acknowledgement");
+    }
+    return response;
+  });
+  const edit = {
+    expectedRevision: initial.file.revision,
+    edits: [
+      {
+        observationId: initial.observations[0]?.value.id ?? "",
+        text: "사용자 교정 내용",
+        included: false,
+      },
+    ],
+  };
+  await expect(
+    client.saveReview("synthetic-case", file.id, edit, initial.workspaceRevision),
+  ).rejects.toThrow("lost acknowledgement");
+  expect(
+    (await client.saveReview("synthetic-case", file.id, edit, initial.workspaceRevision)).status,
+  ).toBe("ready");
+  const current = await createFilesApi(f.transport).review("synthetic-case", file.id);
+  expect(current.observations[0]?.original.text).toBe("원래 추출 내용");
+  expect(current.observations[0]?.value).toMatchObject({
+    text: "사용자 교정 내용",
+    included: false,
+    userEdited: true,
+  });
+  f.runtime.update((state) => {
+    state.session.needsConsent = true;
+  });
+  expect((await files.review("synthetic-case", file.id)).file.revision).toBe(2);
+  await expect(
+    files.saveReview("synthetic-case", file.id, edit, initial.workspaceRevision),
+  ).rejects.toMatchObject({ code: "CONSENT_REQUIRED" });
 });

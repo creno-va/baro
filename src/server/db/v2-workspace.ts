@@ -957,7 +957,10 @@ export function createV2WorkspaceRepository(
             ...fact,
             text: change.text,
             userEdited: true,
-            certainty: fact.certainty === "observed" ? ("uncertain" as const) : fact.certainty,
+            certainty:
+              change.certainty ??
+              (fact.certainty === "observed" ? ("uncertain" as const) : fact.certainty),
+            conflictingFactIds: change.conflictingFactIds ?? fact.conflictingFactIds,
           };
         });
         return writeSummary(
@@ -985,8 +988,13 @@ export function createV2WorkspaceRepository(
         return core.changed([
           mutation.claim(
             claimId,
-            "w.status IN ('intake','active') AND w.current_job_id IS NULL AND w.intake_revision=? AND EXISTS(SELECT 1 FROM v2_intakes i JOIN v2_summaries s ON s.id=i.summary_id WHERE i.id=w.id AND i.status='reviewing_summary' AND s.revision=? AND s.intake_revision=i.revision)",
-            [value.expectedRevision, value.summaryRevision],
+            "w.status IN ('intake','active') AND w.current_job_id IS NULL AND w.intake_revision=? AND EXISTS(SELECT 1 FROM v2_intakes i JOIN v2_summaries s ON s.id=i.summary_id WHERE i.id=w.id AND i.status IN ('reviewing_summary','confirmed') AND s.revision=? AND s.intake_revision=i.revision) AND (? IS NULL OR w.revision=?)",
+            [
+              value.expectedRevision,
+              value.summaryRevision,
+              value.workspaceRevision ?? null,
+              value.workspaceRevision ?? null,
+            ],
           ),
           core.statement(
             `UPDATE v2_intakes SET status='confirmed',confirmed_summary_revision=? WHERE id=? AND ${sqlClaim}`,

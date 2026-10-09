@@ -17,12 +17,15 @@ import { api } from "../../client/api";
 import type { FileView, TimelineView, WorkspaceView } from "../../client/api/types";
 import type { CustomerWorkspaceView } from "../../client/api/workspace";
 import { PUBLIC_PREVIEW } from "../../client/public-preview";
+import { accessHref } from "../../client/return-path";
 import { V2_LIMITS } from "../../contracts/v2";
 import { CaseDetail } from "../analysis/CaseDetail";
 import { useCustomerAccess } from "../intake/useCustomerAccess";
 import { BrandMark } from "../ui/brand";
 import { Button, ButtonLink } from "../ui/button";
 import { CaseNavigation } from "./CaseNavigation";
+import { FileReview } from "./FileReview";
+import { referenceLabel, timelineDateLabel } from "./source-label";
 
 export type WorkspaceTab = "chat" | "files" | "timeline" | "actions";
 const tabLabels = { chat: "대화", files: "자료", timeline: "타임라인", actions: "다음 행동" };
@@ -111,13 +114,13 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
     if (uploadInput.current) uploadInput.current.value = "";
     dialog.current?.close();
   }, []);
-  const access = useCustomerAccess(purge, (cause) => setError(problem(cause)));
-  const { ready, version, verify, ticket, current, alive, deny } = access;
-  const readonly = PUBLIC_PREVIEW || !ready || view?.case.stage !== "active";
+  const access = useCustomerAccess(purge, (cause) => setError(problem(cause)), true);
+  const { ready, canMutate, version, verify, ticket, current, alive, deny } = access;
+  const readonly = PUBLIC_PREVIEW || !ready || !canMutate || view?.case.stage !== "active";
   const showError = useCallback(
     (cause: unknown) => {
       const next = problem(cause);
-      if (["UNAUTHENTICATED", "NOT_FOUND", "CONSENT_REQUIRED"].includes(next.code)) deny();
+      if (["UNAUTHENTICATED", "NOT_FOUND"].includes(next.code)) deny();
       setError(next);
       return next;
     },
@@ -166,6 +169,11 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
     }, 1800);
     return () => clearTimeout(timer);
   }, [view, load, showError]);
+  useEffect(() => {
+    if (tab !== "files" || !ready || !view) return;
+    const id = new URLSearchParams(window.location.search).get("file");
+    if (id) setPreview(view.files.find((file) => file.id === id) ?? null);
+  }, [tab, ready, view]);
   const latestMessage = view?.messages.at(-1);
   const latestMessageContent = latestMessage
     ? `${latestMessage.id}:${latestMessage.status}:${latestMessage.text}`
@@ -225,7 +233,8 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
   }, [preview, deleteFile, entry]);
 
   async function run(key: string, action: (epoch: number) => Promise<void>) {
-    if (lock.current || (readonly && key !== "refresh")) return;
+    const readOrDelete = ["refresh", "original", "delete"].includes(key);
+    if (lock.current || !ready || (readonly && !readOrDelete)) return;
     const epoch = ticket();
     lock.current = true;
     latest.current++;
@@ -233,7 +242,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
     setError(null);
     setNotice("");
     try {
-      if (!(await verify()) || !current(epoch)) return;
+      if (!(await verify(false, !readOrDelete)) || !current(epoch)) return;
       await action(epoch);
     } catch (cause) {
       if (!alive(epoch)) return;
@@ -312,7 +321,15 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
     await run("timeline", async (epoch) => {
       const next = await api.workspace.saveTimeline(caseId, {
         ...(entry?.id ? { id: entry.id } : {}),
-        date: String(values.get("date") ?? ""),
+        date:
+          !entry?.date || entry.datePrecision === "unknown"
+            ? ""
+            : entry.datePrecision === "year"
+              ? `${entry.date.slice(0, 4)}-01-01`
+              : entry.datePrecision === "month"
+                ? `${entry.date.slice(0, 7)}-01`
+                : entry.date,
+        datePrecision: !entry?.date ? "unknown" : (entry.datePrecision ?? "day"),
         title: String(values.get("title") ?? "").trim(),
         detail: String(values.get("detail") ?? "").trim(),
       });
@@ -387,9 +404,9 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
               </Button>
             )}
             {error.code === "UNAUTHENTICATED" ? (
-              <ButtonLink href={`/login?returnTo=${encodeURIComponent(base)}`}>로그인</ButtonLink>
+              <ButtonLink href={accessHref("login")}>로그인</ButtonLink>
             ) : error.code === "CONSENT_REQUIRED" ? (
-              <ButtonLink href="/consent">동의 확인</ButtonLink>
+              <ButtonLink href={accessHref("consent")}>동의 확인</ButtonLink>
             ) : error.code === "QUOTA_EXCEEDED" ? (
               <ButtonLink href="/settings">사용량 확인</ButtonLink>
             ) : (
@@ -417,6 +434,15 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
       )}
       {view && ready && (
         <>
+          {!canMutate && (
+            <section className="workspace-error">
+              <p>
+                저장한 사건·자료는 읽을 수 있어요. 새 대화·수정·처리는 최신 동의 확인 후 사용할 수
+                있어요.
+              </p>
+              <ButtonLink href={accessHref("consent")}>동의 확인하고 계속하기</ButtonLink>
+            </section>
+          )}
           {view.case.stage !== "active" && (
             <section className="workspace-error">
               <p>
@@ -489,6 +515,41 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                           </time>
                         </div>
                         <p>{message.text}</p>
+                        {!!message.warnings?.length && (
+                          <ul aria-label="응답 검증 경고" className="workspace-error">
+                            {message.warnings.map((warning) => (
+                              <li key={warning}>{warning}</li>
+                            ))}
+                          </ul>
+                        )}
+                        {!!message.citations?.length && (
+                          <ul aria-label="공식 출처">
+                            {message.citations.map((citation) => (
+                              <li key={citation.id}>
+                                <a href={citation.url} target="_blank" rel="noopener noreferrer">
+                                  {citation.title}
+                                </a>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                        {!!message.references?.length && (
+                          <ul aria-label="답변에 사용한 자료">
+                            {message.references.map((ref) => (
+                              <li key={JSON.stringify(ref)}>
+                                {ref.kind === "user_material" ? (
+                                  <a href={`${base}/files?file=${encodeURIComponent(ref.fileId)}`}>
+                                    {view.files.find((f) => f.id === ref.fileId)?.name ??
+                                      "참조 자료"}{" "}
+                                    · {referenceLabel(ref)}
+                                  </a>
+                                ) : (
+                                  referenceLabel(ref)
+                                )}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
                         {message.status === "pending" && (
                           <span className="workspace-status">
                             <LoaderCircle size={15} className="workspace-spin" /> 응답 준비 중 ·
@@ -724,7 +785,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                           <Button
                             variant="ghost"
                             size="sm"
-                            disabled={!!busy || readonly}
+                            disabled={!!busy || !ready}
                             onClick={() => setDeleteFile(file)}
                           >
                             삭제
@@ -745,7 +806,9 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                     <Button
                       variant="default"
                       disabled={!!busy || readonly}
-                      onClick={() => setEntry({ date: "", title: "", detail: "" })}
+                      onClick={() =>
+                        setEntry({ date: "", datePrecision: "day", title: "", detail: "" })
+                      }
                     >
                       <Plus size={17} />
                       일정 추가
@@ -765,7 +828,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                       .sort((a, b) => (a.date || "9999").localeCompare(b.date || "9999"))
                       .map((item) => (
                         <li key={item.id}>
-                          <time>{item.date || "날짜 확인 필요"}</time>
+                          <time>{timelineDateLabel(item)}</time>
                           <div>
                             <h3>{item.title}</h3>
                             <p>{item.detail}</p>
@@ -1042,14 +1105,17 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
             </p>
             <h4>처리 범위</h4>
             <p>{preview.coverage || "추출 범위를 아직 확인할 수 없어요."}</p>
-            <h4>추출 결과</h4>
-            <pre>
-              {preview.extractedText || "아직 추출된 내용이 없어요. 처리 완료 후 다시 확인하세요."}
-            </pre>
+            <FileReview
+              key={preview.id}
+              caseId={caseId}
+              fileId={preview.id}
+              onChanged={load}
+              onError={showError}
+            />
             <div className="workspace-buttons">
               <Button
                 variant="outline"
-                disabled={!!busy || readonly}
+                disabled={!!busy || !ready}
                 onClick={() =>
                   void run("original", async (epoch) => {
                     const blob = await api.files.original(caseId, preview.id);
@@ -1105,7 +1171,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
               </Button>
               <Button
                 variant="destructive"
-                disabled={!!busy || readonly}
+                disabled={!!busy || view.case.stage === "archived"}
                 onClick={() =>
                   void run("delete", async (epoch) => {
                     await api.files.remove(caseId, deleteFile.id);
@@ -1129,13 +1195,46 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
         )}
         {entry && ready && (
           <form onSubmit={(event) => void saveEntry(event)}>
+            <label htmlFor="timeline-precision">날짜 정밀도</label>
+            <select
+              id="timeline-precision"
+              value={entry.datePrecision ?? (entry.date ? "day" : "unknown")}
+              disabled={readonly || !!busy}
+              onChange={(e) => {
+                const precision = e.target.value as NonNullable<TimelineView["datePrecision"]>;
+                setEntry({
+                  ...entry,
+                  datePrecision: precision,
+                  date: precision === "unknown" ? "" : (entry.date ?? ""),
+                });
+              }}
+            >
+              <option value="day">연·월·일</option>
+              <option value="month">연·월 (일 미상)</option>
+              <option value="year">연도 (월·일 미상)</option>
+              <option value="unknown">날짜 미상</option>
+            </select>
             <label htmlFor="timeline-date">날짜 (모르면 비워 두세요)</label>
             <input
               id="timeline-date"
               name="date"
-              type="date"
-              disabled={readonly || !!busy}
-              value={entry.date ?? ""}
+              type={
+                entry.datePrecision === "year"
+                  ? "text"
+                  : entry.datePrecision === "month"
+                    ? "month"
+                    : "date"
+              }
+              inputMode={entry.datePrecision === "year" ? "numeric" : undefined}
+              pattern={entry.datePrecision === "year" ? "[0-9]{4}" : undefined}
+              disabled={readonly || !!busy || entry.datePrecision === "unknown"}
+              value={
+                entry.datePrecision === "year"
+                  ? (entry.date ?? "").slice(0, 4)
+                  : entry.datePrecision === "month"
+                    ? (entry.date ?? "").slice(0, 7)
+                    : (entry.date ?? "")
+              }
               onChange={(event) => setEntry({ ...entry, date: event.target.value })}
             />
             <label htmlFor="timeline-title">어떤 일이 있었나요?</label>

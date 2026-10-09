@@ -1,5 +1,9 @@
 import { ZodError } from "zod";
-import type { V2UploadPart, V2UploadSession } from "../../../contracts/v2";
+import {
+  type V2UploadPart,
+  type V2UploadSession,
+  v2TimelineEditRequestSchema,
+} from "../../../contracts/v2";
 import type {
   ActionView,
   CaseView,
@@ -292,10 +296,12 @@ export function createWorkspaceMock(runtime: WorkspaceMockRuntime) {
               (typeof body.date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(body.date)))
           )
             throw new WorkspaceMockError("VALIDATION_ERROR", "타임라인 입력을 확인해 주세요.");
+          const timeline = v2TimelineEditRequestSchema.parse(body);
           const [title, ...detail] = body.event.split("\n");
           const entry = {
             id: match[5] ? decodeURIComponent(match[5]) : crypto.randomUUID(),
             date: typeof body.date === "string" ? body.date : "",
+            datePrecision: timeline.datePrecision,
             title: title ?? "",
             detail: detail.join("\n"),
           };

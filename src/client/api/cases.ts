@@ -656,7 +656,11 @@ export const casesApi = {
       {
         path: path(id, "summary/confirm"),
         method: "POST",
-        body: { expectedRevision: saved.revision, summaryRevision: saved.summaryRevision },
+        body: {
+          expectedRevision: saved.revision,
+          summaryRevision: saved.summaryRevision,
+          workspaceRevision: input.expectedRevision,
+        },
         key,
       },
     );

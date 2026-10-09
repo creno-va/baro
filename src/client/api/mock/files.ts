@@ -5,6 +5,7 @@ import {
 } from "../../../contracts/v2";
 import { validateUpload } from "../files";
 import type { FileView } from "../types";
+import { handleFileReviewMock } from "./file-review";
 import {
   consumeMockFault,
   ensureMockWorkspace,
@@ -84,6 +85,8 @@ async function blobHash(blob: Blob) {
 }
 export function createFilesMock(runtime: WorkspaceMockRuntime, originals = mockOriginalStore) {
   return async function handleFilesMock(request: Request): Promise<Response | null> {
+    const review = await handleFileReviewMock(runtime, request);
+    if (review) return review;
     const match =
       /^\/api\/v2\/cases\/([^/]+)\/files(?:\/([^/]+)(?:\/(content|retry|complete|upload-session|parts\/(\d+)))?)?$/.exec(
         new URL(request.url).pathname,
@@ -94,7 +97,7 @@ export function createFilesMock(runtime: WorkspaceMockRuntime, originals = mockO
       kind = match[3];
     try {
       const state = runtime.read();
-      requireMockCase(state, id, request.method !== "GET");
+      requireMockCase(state, id, !["GET", "DELETE"].includes(request.method));
       const owner = state.session.user?.id;
       if (!owner) throw new WorkspaceMockError("UNAUTHENTICATED", "로그인이 필요해요.");
       if (request.method === "GET" && !fileId) {
@@ -333,11 +336,13 @@ export function createFilesMock(runtime: WorkspaceMockRuntime, originals = mockO
         for (const part of Object.values(upload?.parts ?? {}))
           await originals(`${owner}/${id}/${fileId}/part-${part.index}`, null);
         return runtime.update((value) => {
-          requireMockCase(value, id, true);
+          requireMockCase(value, id);
           value.files[id] = value.files[id]?.filter((file) => file.id !== fileId) ?? [];
           delete value.fileProcessing?.[fileId];
           delete value.fileUploads?.[fileId];
           delete value.fileExtractions?.[fileId];
+          delete (value.fileReviews as Record<string, unknown> | undefined)?.[fileId ?? ""];
+          value.fileReviewReceipts = {};
           for (const [key, replay] of Object.entries(value.fileUploadReceipts ?? {}))
             if (replay.fileId === fileId) delete value.fileUploadReceipts?.[key];
           if (value.reports?.[id])

@@ -119,6 +119,7 @@ export function v2SummaryEditForFactsSchema(factIds: readonly string[], expected
 export const v2SummaryConfirmationRequestSchema = z.strictObject({
   expectedRevision: revisionSchema,
   summaryRevision: revisionSchema,
+  workspaceRevision: revisionSchema.optional(),
 });
 export function v2CurrentSummaryConfirmationSchema(
   intakeRevision: number,

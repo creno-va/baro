@@ -61,7 +61,7 @@ export function useCustomerAccess(
       const next = JSON.stringify([
         session.user?.id,
         session.user?.accountType,
-        session.needsConsent,
+        readAccess ? null : session.needsConsent,
       ]);
       if (identity.current !== undefined && identity.current !== next) {
         deny();
@@ -73,7 +73,11 @@ export function useCustomerAccess(
         (session.needsConsent && write) ||
         session.user.accountType !== "customer"
       ) {
-        deny();
+        if (readAccess && session.user?.accountType === "customer" && session.needsConsent) {
+          allowed.current = true;
+          setReady(true);
+          setCanMutate(false);
+        } else deny();
         const error = new ApiError(
           !session.user
             ? "UNAUTHENTICATED"

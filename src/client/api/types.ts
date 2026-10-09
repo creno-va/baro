@@ -1,4 +1,4 @@
-import type { V2FactReference } from "../../contracts/v2";
+import type { V2Coverage, V2FactReference, V2FileObservation } from "../../contracts/v2";
 import type { V2Summary } from "../../contracts/v2/intake";
 
 export type AccountType = "customer" | "lawyer";
@@ -111,4 +111,23 @@ export type ApiErrorView = {
     | "UNAVAILABLE";
   message: string;
   retryable: boolean;
+};
+
+export type FileReviewProgress = {
+  reviewId: string;
+  fileId: string;
+  revision: number;
+  workspaceRevision: number;
+  status: "saving" | "ready" | "conflict";
+  completed: number;
+  total: number;
+};
+export type FileReviewView = {
+  file: { id: string; revision: number; name: string; status: string };
+  workspaceRevision: number;
+  coverage: V2Coverage | null;
+  observations: { ordinal: number; value: V2FileObservation; original: V2FileObservation }[];
+  nextAfterOrdinal: number | null;
+  pendingReview: FileReviewProgress | null;
+  recovery: { code: string; message: string; actions: string[] } | null;
 };

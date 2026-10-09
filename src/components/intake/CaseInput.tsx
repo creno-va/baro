@@ -1,8 +1,9 @@
 import { ArrowRight, Building2, Check, FileText, UserRound, WalletCards } from "lucide-react";
 import { type SyntheticEvent, useCallback, useEffect, useRef, useState } from "react";
-import { api, roleStart } from "../../client/api";
+import { api } from "../../client/api";
 import { ApiError } from "../../client/api/core";
 import type { SessionView } from "../../client/api/types";
+import { sessionDestination } from "../../client/return-path";
 import { BrandMark } from "../ui/brand";
 import { Button, ButtonLink } from "../ui/button";
 import { Textarea } from "../ui/form";
@@ -76,7 +77,7 @@ export function CaseInput({
       identity.current = nextIdentity;
       setSession(next);
       if (requireSession && (next.user?.accountType !== "customer" || next.needsConsent)) {
-        window.location.replace(roleStart(next));
+        window.location.replace(sessionDestination(next, window.location.pathname));
       }
       return next;
     };
