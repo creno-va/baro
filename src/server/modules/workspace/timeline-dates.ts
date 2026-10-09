@@ -42,8 +42,8 @@ export function normalizeTimelineDates(
     );
     const corrections = facts.filter((fact) => fact.userEdited);
     // An explicitly corrected fact cannot regain the date from its older source statement.
-    const texts = corrections.length
-      ? corrections.map((fact) => fact.text)
+    const texts = entry.factIds.length
+      ? (corrections.length ? corrections : facts).map((fact) => fact.text)
       : entry.references.flatMap((ref) => {
           const text = readSource(ref);
           if (text !== null) return [text];
@@ -55,9 +55,13 @@ export function normalizeTimelineDates(
             );
           return [];
         });
-    if (!corrections.length) texts.push(...facts.map((fact) => fact.text));
+    const dates = texts.flatMap(explicitDates);
+    // Without a linked event fact, multiple dates cannot identify this event's date.
+    const ambiguous =
+      !entry.factIds.length &&
+      new Set(dates.map((source) => `${source.date}/${source.precision}`)).size > 1;
     let supported = 0;
-    for (const source of texts.flatMap(explicitDates)) {
+    for (const source of ambiguous ? [] : dates) {
       if (source.date.slice(0, 4) !== entry.date.slice(0, 4)) continue;
       let precision = 1;
       if (rank[source.precision] >= 2 && source.date.slice(0, 7) === entry.date.slice(0, 7)) {

@@ -117,6 +117,37 @@ export function assertWorkspaceFacts(context: WorkspaceContext, facts: readonly 
   }
 }
 
+function normalizeNewFacts(context: WorkspaceContext, facts: V2Fact[]) {
+  let changed = false;
+  for (const fact of facts) {
+    if (fact.userEdited) {
+      fact.userEdited = false;
+      changed = true;
+    }
+    if (
+      fact.attribution !== "user_material" ||
+      fact.certainty === "uncertain" ||
+      fact.certainty === "conflicting"
+    )
+      continue;
+    const sources = context.materials.filter(
+      (material) =>
+        fact.references.some((ref) => JSON.stringify(ref) === JSON.stringify(material.reference)) &&
+        material.text.includes(fact.text),
+    );
+    if (
+      sources.some((source) => {
+        const coverage = source.coverage as { observationCertainty?: string; userEdited?: boolean };
+        return coverage?.observationCertainty === "uncertain" || coverage?.userEdited === true;
+      })
+    ) {
+      fact.certainty = "uncertain";
+      changed = true;
+    }
+  }
+  return changed;
+}
+
 /** The draft and independent audit remain private. No unvalidated tokens are streamed. */
 export function createWorkspacePipeline(
   gateway: ReturnType<typeof createLlmGateway>,
@@ -207,6 +238,7 @@ export function createWorkspacePipeline(
         const draft = workspaceSummaryOutputSchema.parse(
           await call("workspace_summary", input, requestId),
         );
+        normalizeNewFacts(context, draft.facts);
         assertWorkspaceFacts(context, draft.facts);
         if (
           prohibited(draft.overview) ||
@@ -232,8 +264,7 @@ export function createWorkspacePipeline(
         };
         draft = workspaceChatOutputSchema.parse(await call("workspace_chat", context, requestId));
       }
-      if (context.sourceStatus === "unavailable")
-        draft.warnings = [...draft.warnings.slice(0, 19), unavailableSourceWarning];
+      const factsChanged = normalizeNewFacts(context, draft.facts);
       assertWorkspaceFacts(context, draft.facts);
       assertWorkspaceReferences(context, [
         ...draft.references,
@@ -242,7 +273,11 @@ export function createWorkspacePipeline(
       ]);
       const ids = new Set([...context.facts, ...draft.facts].map((fact) => fact.id));
       if (
-        draft.facts.some((fact) => context.facts.some((existing) => existing.id === fact.id)) ||
+        draft.facts.some(
+          (fact) =>
+            context.facts.some((existing) => existing.id === fact.id) ||
+            fact.conflictingFactIds.some((id) => !ids.has(id)),
+        ) ||
         draft.actions.some(
           (action) =>
             action.revision !== 1 ||
@@ -276,17 +311,23 @@ export function createWorkspacePipeline(
         (ref) => sourceText(context, ref),
       );
       draft.timeline = dates.timeline;
-      if (dates.changed) {
-        const sourceUnavailable = context.sourceStatus === "unavailable";
-        const warnings = sourceUnavailable
-          ? draft.warnings.filter((warning) => warning !== unavailableSourceWarning)
-          : draft.warnings;
-        draft.warnings = [
-          ...warnings.slice(0, sourceUnavailable ? 18 : 19),
-          ...(sourceUnavailable ? [unavailableSourceWarning] : []),
-          "타임라인 날짜는 원문에서 확인한 정밀도로만 표시했어요. 근거가 없으면 날짜 미확인으로 남겼어요.",
-        ];
-      }
+      const serverWarnings = [
+        ...(context.sourceStatus === "unavailable" ? [unavailableSourceWarning] : []),
+        ...(factsChanged
+          ? ["새 사실의 교정·미확인 표시는 원자료와 실제 사용자 수정 기록을 기준으로 유지했어요."]
+          : []),
+        ...(dates.changed
+          ? [
+              "타임라인 날짜는 원문에서 확인한 정밀도로만 표시했어요. 근거가 없으면 날짜 미확인으로 남겼어요.",
+            ]
+          : []),
+      ];
+      draft.warnings = [
+        ...draft.warnings
+          .filter((warning) => !serverWarnings.includes(warning))
+          .slice(0, 20 - serverWarnings.length),
+        ...serverWarnings,
+      ];
       await audit("workspace_chat", context, draft, requestId);
       const cited = new Set(
         [

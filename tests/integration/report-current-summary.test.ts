@@ -102,6 +102,21 @@ test("current chat facts/people and reconfirmed corrections propagate to reports
   expect(retained.stale).toBe(true);
   expect(retained.basis).toEqual(initial.basis);
   expect(retained.content).toBe(initial.content);
+  const proposed = await ws.readIntake(f.actor, f.workspaceId);
+  if (!proposed?.summary) throw new Error("Missing chat summary");
+  expect(proposed.status).toBe("reviewing_summary");
+  expect(proposed.confirmedSummaryRevision).toBeNull();
+  await expect(
+    f.reports.generate(a, f.workspaceId, crypto.randomUUID(), {
+      expectedRevision: initial.revision,
+    }),
+  ).rejects.toMatchObject({ code: "REVIEW_REQUIRED" });
+  expect(
+    await ws.confirmSummary(guard(), {
+      expectedRevision: proposed.revision,
+      summaryRevision: proposed.summary.revision,
+    }),
+  ).toBe(true);
   const afterChat = await f.reports.generate(a, f.workspaceId, crypto.randomUUID(), {
     expectedRevision: initial.revision,
   });
@@ -121,7 +136,7 @@ test("current chat facts/people and reconfirmed corrections propagate to reports
       summaryId,
       targetSnapshotId: crypto.randomUUID(),
       request: {
-        expectedRevision: 1,
+        expectedRevision: proposed.summary.revision,
         overview: "사용자가 다시 확인한 최신 합성 요약",
         factEdits: [{ factId: fact.id, text: "사용자가 교정한 합성 자료 보관 사실" }],
         unknowns: [],
@@ -140,7 +155,12 @@ test("current chat facts/people and reconfirmed corrections propagate to reports
   }
   expect(done).toBe(true);
   expect(await edits.publish(guard(), stageId, crypto.randomUUID())).toBe(true);
-  expect(await ws.confirmSummary(guard(), { expectedRevision: 1, summaryRevision: 2 })).toBe(true);
+  expect(
+    await ws.confirmSummary(guard(), {
+      expectedRevision: proposed.revision,
+      summaryRevision: proposed.summary.revision + 1,
+    }),
+  ).toBe(true);
   expect(
     await ws.writeTimeline(
       guard(),
@@ -157,7 +177,7 @@ test("current chat facts/people and reconfirmed corrections propagate to reports
   const current = await f.reports.generate(a, f.workspaceId, crypto.randomUUID(), {
     expectedRevision: afterChat.revision,
   });
-  expect(current.basis.summaryRevision).toBe(2);
+  expect(current.basis.summaryRevision).toBe(proposed.summary.revision + 1);
   for (const text of [
     "사용자가 다시 확인한 최신 합성 요약",
     "사용자가 교정한 합성 자료 보관 사실",

@@ -193,3 +193,16 @@ export async function executeCustomerJob(
   });
   return { result, params };
 }
+
+export async function confirmCustomerSummary(
+  f: Awaited<ReturnType<typeof customerWorkspaceFixture>>,
+) {
+  const intake = await f.service.intake(f.owner.userId, f.workspace.id);
+  if (!intake?.summary) throw new Error("Missing pending summary");
+  expect(intake.status).toBe("reviewing_summary");
+  expect(intake.confirmedSummaryRevision).toBeNull();
+  return f.service.confirm(f.owner.userId, f.workspace.id, crypto.randomUUID(), {
+    expectedRevision: intake.revision,
+    summaryRevision: intake.summary.revision,
+  });
+}

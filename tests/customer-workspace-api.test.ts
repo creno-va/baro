@@ -12,6 +12,7 @@ import { runtimeDigest } from "../src/server/db/v2-paid-runtime";
 import { createFilesService } from "../src/server/modules/files/service";
 import { hasCustomerWorkspaceAccess } from "../src/server/runtime/workspace";
 import {
+  confirmCustomerSummary,
   customerWorkspaceFixture,
   executeCustomerJob,
   runCustomerJob,
@@ -477,6 +478,7 @@ for (const failure of ["response", "read"] as const) {
       summaryRevision: intake?.summary?.revision,
     });
     await runCustomerJob(f, "chat_response");
+    await confirmCustomerSummary(f);
     let committed = false;
     let lost = false;
     let cookie = f.owner.cookie;
@@ -542,6 +544,7 @@ test("an action conflict can retry the same intent with the refreshed revision",
     summaryRevision: intake?.summary?.revision,
   });
   await runCustomerJob(f, "chat_response");
+  await confirmCustomerSummary(f);
   const current = createWorkspaceApi(f.transport, null);
   const peer = createWorkspaceApi(f.transport, null);
   const action = (await current.get(id)).actions[0];
@@ -565,6 +568,7 @@ test("a changed action intent replaces its interrupted retry instead of replayin
     summaryRevision: intake?.summary?.revision,
   });
   await runCustomerJob(f, "chat_response");
+  await confirmCustomerSummary(f);
   let committed = false;
   let lost = false;
   const keys: string[] = [];
