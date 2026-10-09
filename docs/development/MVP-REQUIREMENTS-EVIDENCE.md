@@ -109,4 +109,15 @@ B와 A가 연결하고 #71에서 함께 검사한다. 운영 환경 변경·배�
 
 ## C 보완 검증 기록
 
-진행 중. 최종 소스 SHA와 로컬/CI 결과는 PR 제출 전 이 절 및 #62/#69에 추가한다.
+서버·추적 중간 source `b223cb8`을 보존했다. 최종 UI source/PR CI는 아직 미완료이며 아래 기록으로 대신하지 않는다.
+
+- `bun ci`: Bun1.3.14 frozen install 성공, lock 변경 없음.
+- 변호사 self-profile/self-assets: 16 tests/343 assertions 성공. 텍스트 저장/재접속/공개/수정/삭제,
+  재동의 전 기존 조회·ready bytes 다운로드, 수정/공개 차단, 타인/role/session 만료 stream 차단 포함.
+- `bun run check`: 문서/그래프/boundaries/lint/typecheck 성공. 전체1430 중1429 통과,
+  workerd1은 sandbox의 local listen 제한으로 실패. 같은 test를 local listen 허용 환경에서
+  단독 재실행해1 test/39 assertions 통과. 실패 로그를 숨기거나 최초 전체 명령 SUCCESS로 바꾸지 않는다.
+- 중단 이후 `bun run db:check`: drift 없음, fresh/upgrade6 tests/29 assertions 성공. schema/migration 변경 없음.
+- `docs:check`: 69 Markdown/14 ADR 성공. `work:check`/`work:next`: 54 tasks, no cycles, milestone drift 없음.
+- A의 공통 mock 읽기 옵션과 #163 main 통합 뒤 C Editor/Profile·mock consumer 및 browser 시나리오를 검증한다.
+  시나리오 준비는 PASS가 아니다. 원격 R2/Containers·실제 OAuth·사람 승인 검증은 수행하지 않았다.
