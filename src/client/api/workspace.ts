@@ -10,13 +10,14 @@ import {
   v2UserMessageSchema,
   v2WorkspaceSchema,
 } from "../../contracts/v2";
+import { ApiError } from "./errors";
 import { createFilesApi } from "./files";
 import type { ActionView, CaseView, MessageView, TimelineView, WorkspaceView } from "./types";
 
 /** Shared transport returns a Response for both mock and same-origin real requests. */
 export type WorkspaceTransport = (path: string, init?: RequestInit) => Promise<Response>;
-export function workspaceError(code: string, message: string, retryable = false) {
-  return Object.assign(new Error(message), { code, retryable });
+export function workspaceError(code: ApiError["code"], message: string, retryable = false) {
+  return new ApiError(code, message, retryable);
 }
 export async function workspaceResponse(response: Response) {
   if (!response.ok) {
