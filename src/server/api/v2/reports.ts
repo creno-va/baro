@@ -172,6 +172,22 @@ export function createReportsApi(
       },
     });
   });
+  app.get("/reports/:reportId/zip", async (c) => {
+    const access = await caseAccess(c);
+    if (access.response) return access.response;
+    z.strictObject({}).parse(c.req.query());
+    const id = opaqueIdSchema.parse(c.req.param("reportId")),
+      result = await (await service(c.env, access.ownerId)).savedZip(access.ownerId, id);
+    return new Response(result.body, {
+      headers: {
+        "content-type": "application/zip",
+        "content-disposition": attachmentFilename(`BARO-${id}.zip`),
+        "content-length": String(result.byteLength),
+        "cache-control": "private, no-store",
+        "x-content-type-options": "nosniff",
+      },
+    });
+  });
   app.post("/reports/:reportId/zip", async (c) => {
     const access = await caseAccess(c, true, true);
     if (access.response) return access.response;

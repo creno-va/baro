@@ -26,6 +26,13 @@ const reportSchema = z.object({
     })
     .optional(),
   pdfAvailable: z.boolean().optional(),
+  savedZip: z
+    .object({
+      id: z.string().min(1),
+      fileCount: z.number().int().min(1).max(100),
+      createdAt: z.iso.datetime(),
+    })
+    .optional(),
 });
 export const reportSaveSchema = z.object({
   content: z.string().trim().min(1, "내용을 입력해 주세요.").max(30000),
@@ -98,6 +105,9 @@ export function createReportsClient(request: DomainRequest) {
     },
     async pdf(id: string) {
       return binary(`/api/v2/reports/${encodeURIComponent(id)}/pdf`, "application/pdf");
+    },
+    async savedZip(id: string) {
+      return binary(`/api/v2/reports/${encodeURIComponent(id)}/zip`, "application/zip");
     },
     async html(id: string) {
       const result = await request<Blob>(`/api/v2/reports/${encodeURIComponent(id)}/html`, {

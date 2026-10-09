@@ -67,6 +67,7 @@ export type WorkspaceView = {
   notices?: string[];
 };
 export type ReportView = {
+  savedZip?: { id: string; fileCount: number; createdAt: string } | undefined;
   basis?: { workspaceRevision: number; summaryRevision: number; generatedAt: string } | undefined;
   pdfAvailable?: boolean | undefined;
   id: string;

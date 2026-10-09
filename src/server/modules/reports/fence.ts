@@ -88,18 +88,21 @@ export async function exportFence(
   };
 }
 
-/** Reading an already stored PDF does not process current sources. Preserve its historical
+/** Reading an already stored PDF or ZIP does not process current sources. Preserve its historical
  * basis while checking owner/role/deletion/blob identity at every decrypted stream boundary. */
-export function storedPdfFence(
+export function storedReportFence(
   core: V2Core,
   actor: Actor,
   report: { id: string; revision: number; snapshot_id: string; encrypted_payload: string },
   blobId: string,
+  kind: "report_pdf" | "original_zip",
+  parentReportId?: string,
 ) {
+  const column = kind === "report_pdf" ? "pdf_blob_id" : "zip_blob_id";
   return async () => {
     const ok = await core
       .statement(
-        `SELECT 1 FROM v2_reports r JOIN v2_workspaces w ON w.id=r.workspace_id JOIN user u ON u.id=w.owner_id JOIN v2_blobs b ON b.id=r.pdf_blob_id JOIN v2_storage_reservations x ON x.id=b.reservation_id JOIN v2_billing_principals p ON p.id=b.principal_id WHERE r.id=? AND r.revision=? AND r.snapshot_id=? AND r.encrypted_payload=? AND r.pdf_blob_id=? AND r.state='ready' AND w.owner_id=? AND ${aliveWorkspace} AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='report' AND target_id=r.id) AND coalesce((SELECT value FROM app_metadata WHERE key='account-type:'||w.owner_id),'customer')='customer' AND b.state='stored' AND b.visibility='private' AND b.kind='report_pdf' AND p.owner_id=w.owner_id AND x.entity_id=r.id AND x.state!='released' AND NOT EXISTS(SELECT 1 FROM v2_report_selections s LEFT JOIN v2_files f ON f.id=s.file_id WHERE s.report_id=r.id AND (f.id IS NULL OR f.workspace_id!=w.id OR EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='file' AND target_id=f.id)))`,
+        `SELECT 1 FROM v2_reports r JOIN v2_workspaces w ON w.id=r.workspace_id JOIN user u ON u.id=w.owner_id JOIN v2_blobs b ON b.id=r.${column} JOIN v2_storage_reservations x ON x.id=b.reservation_id JOIN v2_billing_principals p ON p.id=b.principal_id WHERE r.id=? AND r.revision=? AND r.snapshot_id=? AND r.encrypted_payload=? AND r.${column}=? AND r.state='ready' AND w.owner_id=? AND ${aliveWorkspace} AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='report' AND target_id=r.id) AND coalesce((SELECT value FROM app_metadata WHERE key='account-type:'||w.owner_id),'customer')='customer' AND b.state='stored' AND b.visibility='private' AND b.kind='${kind}' AND p.owner_id=w.owner_id AND x.entity_id=r.id ${parentReportId ? "AND EXISTS(SELECT 1 FROM v2_reports parent WHERE parent.id=? AND parent.workspace_id=w.id AND parent.revision=r.revision AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='report' AND target_id=parent.id))" : ""} AND x.state!='released' AND NOT EXISTS(SELECT 1 FROM v2_report_selections s LEFT JOIN v2_files f ON f.id=s.file_id WHERE s.report_id=r.id AND (f.id IS NULL OR f.workspace_id!=w.id OR EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='file' AND target_id=f.id)))`,
         [
           report.id,
           report.revision,
@@ -107,6 +110,7 @@ export function storedPdfFence(
           report.encrypted_payload,
           blobId,
           actor.ownerId,
+          ...(parentReportId ? [parentReportId] : []),
         ],
       )
       .first();
