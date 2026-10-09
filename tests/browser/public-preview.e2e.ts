@@ -19,7 +19,6 @@ test.beforeAll(async () => {
         CLOUDFLARE_ENV: "",
         BARO_UI_TEST_FIXTURE: "true",
         PUBLIC_API_MODE: "mock",
-        PUBLIC_PREVIEW_TEST: "true",
         ASTRO_TELEMETRY_DISABLED: "1",
         WRANGLER_LOG_PATH: "/tmp/baro-public-preview-wrangler.log",
       },
@@ -63,55 +62,44 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
-test("launch notice shows both dates, supports Escape and CTA, and fits desktop and 320px", async ({
-  page,
-}) => {
+test("app opens directly without launch notice on desktop and 320px", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto("/app");
   const modal = page.getByRole("dialog", { name: "BARO를 먼저 만나보세요" });
-  await expect(modal).toBeVisible();
-  await expect(modal.locator('time[datetime="2026-11-01"]')).toHaveText("2026.11.01");
-  await expect(modal.locator('time[datetime="2026-11-10"]')).toHaveText("2026.11.10");
-  await expect(modal.getByText("사건 작성 · 후속 질문", { exact: true })).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "지금까지 있었던 일" })).toBeEnabled();
+  await expect(modal).toHaveCount(0);
+  await expect(page.getByText(/2026\.11\.(01|10)/)).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "변호사 찾기", exact: true })).toBeVisible();
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await page.screenshot({
     path: "/tmp/baro-public-preview-desktop.png",
     fullPage: true,
     animations: "disabled",
   });
-  await page.keyboard.press("Escape");
-  await expect(modal).toBeHidden();
-  await expect(page.getByRole("textbox", { name: "지금까지 있었던 일" })).toBeEnabled();
 
   await page.setViewportSize({ width: 320, height: 800 });
   await page.reload();
-  await expect(modal).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "지금까지 있었던 일" })).toBeEnabled();
+  await expect(modal).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  const bounds = await modal.boundingBox();
-  if (!bounds) throw new Error("Launch notice has no visible bounds");
-  expect(bounds.x).toBeGreaterThanOrEqual(0);
-  expect(bounds.x + bounds.width).toBeLessThanOrEqual(320);
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await page.screenshot({
     path: "/tmp/baro-public-preview-mobile.png",
     fullPage: true,
     animations: "disabled",
   });
-  await modal.getByRole("button", { name: "체험 시작하기" }).click();
-  await expect(modal).toBeHidden();
-  await expect(page.getByRole("textbox", { name: "지금까지 있었던 일" })).toBeEnabled();
 });
 
-test("two intake rounds remain usable while detail actions and lawyer navigation stay disabled", async ({
+test("intake opens an active workspace with lawyer navigation and report controls", async ({
   page,
 }) => {
   test.setTimeout(60_000);
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto("/app");
-  await page.getByRole("button", { name: "체험 시작하기" }).click();
-  await expect(
-    page.getByRole("button", { name: "변호사 찾기 · 준비 중", exact: true }),
-  ).toBeDisabled();
+  await expect(page.getByRole("link", { name: "변호사 찾기", exact: true })).toHaveAttribute(
+    "href",
+    "/lawyers",
+  );
   await page
     .getByRole("textbox", { name: "지금까지 있었던 일" })
     .fill(
@@ -131,24 +119,31 @@ test("two intake rounds remain usable while detail actions and lawyer navigation
   await page.getByRole("button", { name: "요약 확인하고 계속" }).click();
   await page.getByRole("button", { name: "확인하고 사건 열기" }).click();
   await expect(page).toHaveURL(/\/cases\/[^/]+$/);
-  await expect(page.getByRole("textbox", { name: "추가 사실 또는 질문" })).toBeDisabled();
+  await expect(page.getByRole("textbox", { name: "추가 사실 또는 질문" })).toBeEnabled();
+  // Empty input still prevents submission; only the launch restriction is removed.
   await expect(page.getByRole("button", { name: "보내기", exact: true })).toBeDisabled();
+  await page.getByRole("textbox", { name: "추가 사실 또는 질문" }).fill("합성 추가 사실입니다.");
+  await expect(page.getByRole("button", { name: "보내기", exact: true })).toBeEnabled();
   const tabs = page.getByRole("navigation", { name: "사건 메뉴" });
   await tabs.getByRole("link", { name: /^자료/ }).click();
   await expect(page.getByRole("button", { name: "파일 선택", exact: true })).toBeDisabled();
-  await expect(page.getByLabel("업로드할 파일 선택", { exact: true })).toBeDisabled();
+  await page.getByLabel("선택 자료의 자동 처리에 동의합니다.").check();
+  await expect(page.getByRole("button", { name: "파일 선택", exact: true })).toBeEnabled();
+  await expect(page.getByLabel("업로드할 파일 선택", { exact: true })).toBeEnabled();
   await tabs.getByRole("link", { name: "타임라인", exact: true }).click();
-  await expect(page.getByRole("button", { name: "일정 추가" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "일정 추가" })).toBeEnabled();
   await tabs.getByRole("link", { name: "다음 행동", exact: true }).click();
   await expect(page.getByRole("heading", { name: "다음 행동", exact: true })).toBeVisible();
-  for (const checkbox of await page.locator(".workspace-action-list input").all())
-    await expect(checkbox).toBeDisabled();
+  await expect(page.locator(".workspace-action-list input").first()).toBeEnabled();
   await tabs.getByRole("link", { name: "리포트 보기" }).click();
-  await expect(page.getByRole("button", { name: "새 버전 만들기" })).toBeDisabled();
-  await expect(page.getByRole("textbox", { name: "리포트 내용 편집" })).toBeDisabled();
-  await expect(page.getByRole("button", { name: "검토 내용 저장" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "새 버전 만들기" })).toBeEnabled();
+  await expect(page.getByRole("textbox", { name: "리포트 내용 편집" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "검토 내용 저장" })).toBeEnabled();
   await expect(page.getByRole("button", { name: "PDF 다운로드" })).toBeDisabled();
+  await page.getByLabel("내용·식별정보·선택한 원본을 확인했어요").check();
+  await expect(page.getByRole("button", { name: "PDF 다운로드" })).toBeEnabled();
+  // ZIP still needs a selected original file.
   await expect(page.getByRole("button", { name: /선택 원본 ZIP/ })).toBeDisabled();
   await tabs.getByRole("link", { name: "대화", exact: true }).click();
-  await expect(page.getByRole("button", { name: "보내기", exact: true })).toBeDisabled();
+  await expect(page.getByRole("textbox", { name: "추가 사실 또는 질문" })).toBeEnabled();
 });

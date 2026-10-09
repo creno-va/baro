@@ -2,65 +2,11 @@ import { ChevronDown, Download, Eye, FileText, RefreshCw, Save, Settings2 } from
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../../client/api";
 import type { FileView, ReportView } from "../../client/api/types";
-import { PUBLIC_PREVIEW } from "../../client/public-preview";
 import { CaseNavigation } from "../workspace/CaseNavigation";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { downloadBlob, maskReportText } from "./download";
 
 export function ReportReview({ caseId }: { caseId: string }) {
-  if (!PUBLIC_PREVIEW) return <FullReportReview caseId={caseId} />;
-  return (
-    <div className="report-review report-workspace">
-      <CaseNavigation caseId={caseId} title="사건 정리" active="reports" />
-      <div className="report-canvas">
-        <header className="report-heading">
-          <span className="report-heading-icon" aria-hidden="true">
-            <FileText size={24} />
-          </span>
-          <h2>전달할 리포트를 준비해요</h2>
-          <p>리포트 편집과 다운로드는 2026년 11월 1일에 만나보실 수 있어요.</p>
-        </header>
-        <section className="report-editor" aria-labelledby="preview-report-heading">
-          <div className="report-editor-heading">
-            <h2 id="preview-report-heading">리포트 내용</h2>
-            <button type="button" disabled>
-              <RefreshCw size={16} aria-hidden="true" /> 새 버전 만들기
-            </button>
-          </div>
-          <div className="report-paper">
-            <textarea
-              aria-label="리포트 내용 편집"
-              rows={12}
-              disabled
-              placeholder="사건 요약과 자료를 한눈에 정리한 리포트가 이곳에 표시돼요."
-            />
-          </div>
-          <div className="report-editor-tools">
-            <button type="button" disabled>
-              <Save size={16} aria-hidden="true" /> 검토 내용 저장
-            </button>
-          </div>
-        </section>
-        <section className="report-export">
-          <h2>리포트 다운로드</h2>
-          <p className="report-option-note">
-            내용 확인과 개인정보 가리기, 선택한 원본 내보내기를 준비하고 있어요.
-          </p>
-          <div className="report-actions">
-            <button type="button" className="primary" disabled>
-              <Download size={16} aria-hidden="true" /> PDF 다운로드
-            </button>
-            <button type="button" disabled>
-              <Download size={16} aria-hidden="true" /> 선택 원본 ZIP
-            </button>
-          </div>
-        </section>
-      </div>
-    </div>
-  );
-}
-
-function FullReportReview({ caseId }: { caseId: string }) {
   const [report, setReport] = useState<ReportView | null>(null);
   const [files, setFiles] = useState<FileView[]>([]);
   const [content, setContent] = useState("");
