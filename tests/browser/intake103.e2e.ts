@@ -999,6 +999,88 @@ async function lastQuestion(page: Page) {
   await page.getByRole("textbox", { name: "답변", exact: true }).fill("보존할 합성 답변");
 }
 
+for (const action of ["refresh", "save"] as const) {
+  for (const outcome of ["success", "failure"] as const) {
+    test(`summary ${action} ignores an older ${outcome} after a newer snapshot`, async ({
+      page,
+    }) => {
+      await lastQuestion(page);
+      await page.getByRole("button", { name: "저장하고 요약 보기" }).click();
+      const editor = page.getByRole("textbox", { name: "요약 편집" });
+      await expect(editor).toHaveValue(/보존할 합성 답변/);
+      await page.evaluate(async (outcome) => {
+        const corePath = "/src/client/api/core.ts";
+        const mockPath = "/src/client/api/mock/cases.ts";
+        const { registerMockHandlers, ApiError } = await import(corePath);
+        const { casesMockHandlers: handlers } = await import(mockPath);
+        const state = { reads: 0, release: undefined as (() => void) | undefined };
+        (window as unknown as { summaryReadRace: typeof state }).summaryReadRace = state;
+        registerMockHandlers({
+          "cases.get": (input: unknown) => {
+            const snapshot = handlers["cases.get"](input);
+            if (++state.reads !== 1) return snapshot;
+            return new Promise((resolve, reject) => {
+              state.release = () =>
+                outcome === "success"
+                  ? resolve(snapshot)
+                  : reject(new ApiError("UNAVAILABLE", "합성 이전 조회 실패", true));
+            });
+          },
+        });
+      }, outcome);
+      await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+      await expect
+        .poll(() =>
+          page.evaluate(
+            () =>
+              !!(window as unknown as { summaryReadRace: { release?: () => void } }).summaryReadRace
+                .release,
+          ),
+        )
+        .toBe(true);
+      if (action === "save") {
+        await editor.fill("다른 탭에서 저장한 최신 합성 요약입니다.");
+        await page.getByRole("button", { name: "수정 내용 저장" }).click();
+        await expect(page.getByText("수정한 요약이 저장됐어요.")).toBeVisible();
+      } else {
+        // A peer tab saves a newer revision while the first read is still pending.
+        await page.evaluate(async () => {
+          const mockPath = "/src/client/api/mock/cases.ts";
+          const { casesMockHandlers: handlers } = await import(mockPath);
+          const id = location.pathname.split("/")[2];
+          const item = handlers["cases.get"]({ id });
+          handlers["cases.saveSummary"](
+            {
+              id,
+              expectedRevision: item.revision,
+              summary: "다른 탭에서 저장한 최신 합성 요약입니다.",
+            },
+            { key: "synthetic-peer-summary-save" },
+          );
+          window.dispatchEvent(new Event("focus"));
+        });
+      }
+      await expect(editor).toHaveValue("다른 탭에서 저장한 최신 합성 요약입니다.");
+      const confirmation = page.getByRole("checkbox", {
+        name: "요약이 내가 이야기한 사실과 맞는지",
+      });
+      await confirmation.check();
+      await page.evaluate(async () => {
+        (
+          window as unknown as { summaryReadRace: { release?: () => void } }
+        ).summaryReadRace.release?.();
+        // Let the old response and its React updates settle before asserting absence.
+        await new Promise<void>((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+        );
+      });
+      await expect(editor).toHaveValue("다른 탭에서 저장한 최신 합성 요약입니다.");
+      await expect(confirmation).toBeChecked();
+      await expect(page.getByRole("alert")).toHaveCount(0);
+    });
+  }
+}
+
 test("generation transport retry keeps the saved answer and never saves it twice", async ({
   page,
 }) => {
