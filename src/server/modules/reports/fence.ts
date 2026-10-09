@@ -1,4 +1,6 @@
 import { CURRENT_POLICY_VERSIONS } from "../../../contracts/consent";
+import { AUTH_RETENTION_MS } from "../../auth/policy";
+
 import { type Actor, aliveWorkspace, type V2Core } from "../../db/v2-core";
 import { jobAlive } from "../../db/v2-jobs";
 import type { JobLease } from "../../db/v2-workspace";
@@ -9,6 +11,17 @@ import {
   reportSourceDigest,
   reportSourceRows,
 } from "./source";
+
+/** Bind HTTP report work to the exact authenticated session, not any session for its owner. */
+export function reportSessionFence(sessionId?: string) {
+  const now = Date.now();
+  return sessionId
+    ? {
+        sql: "AND EXISTS(SELECT 1 FROM session request_session WHERE request_session.id=? AND request_session.user_id=w.owner_id AND request_session.expires_at>? AND request_session.created_at>?)",
+        values: [sessionId, now, now - AUTH_RETENTION_MS],
+      }
+    : { sql: "", values: [] };
+}
 
 /** Read/decrypt immutable snapshots once. Each stream boundary uses a single
  * indexed SQL fence over the exact source identity, including ciphertext,
@@ -25,6 +38,7 @@ export async function exportFence(
   },
   digest: string,
   clock: () => string,
+  sessionId?: string,
 ) {
   const workspace = await ownedWorkspace(core, actor, report.workspace_id);
   const rows = await reportSourceRows(core, actor, report.workspace_id);
@@ -42,7 +56,8 @@ export async function exportFence(
     rows: rows.length,
     async check(lease?: JobLease, blobId?: string) {
       const now = clock(),
-        id = report.workspace_id;
+        id = report.workspace_id,
+        session = reportSessionFence(sessionId);
       const ok = await core
         .statement(
           `WITH source AS (${REPORT_SOURCE_SQL})
@@ -55,7 +70,8 @@ export async function exportFence(
         AND coalesce((SELECT json_group_array(json_object('kind',kind,'id',id,'revision',revision,'snapshot',snapshot)) FROM source),'[]')=?
         AND NOT EXISTS(SELECT 1 FROM v2_tombstones t JOIN source s ON s.kind='file' AND s.id=t.target_id WHERE t.target_kind='file')
         ${lease ? `AND EXISTS(SELECT 1 FROM v2_jobs j JOIN v2_operations o ON o.id=j.operation_id WHERE j.id=? AND o.owner_id=w.owner_id AND j.lease_token=? AND j.fencing=? AND j.lease_until>? AND j.status IN ('running','validating') AND ${jobAlive})` : ""}
-        ${blobId ? "AND EXISTS(SELECT 1 FROM v2_blobs b JOIN v2_storage_reservations x ON x.id=b.reservation_id JOIN v2_billing_principals p ON p.id=b.principal_id WHERE b.id=? AND p.owner_id=w.owner_id AND b.state='stored' AND b.visibility='private' AND x.entity_id=r.id AND x.state!='released')" : ""}`,
+        ${blobId ? "AND EXISTS(SELECT 1 FROM v2_blobs b JOIN v2_storage_reservations x ON x.id=b.reservation_id JOIN v2_billing_principals p ON p.id=b.principal_id WHERE b.id=? AND p.owner_id=w.owner_id AND b.state='stored' AND b.visibility='private' AND x.entity_id=r.id AND x.state!='released')" : ""}
+        ${session.sql}`,
           [
             id,
             id,
@@ -80,6 +96,7 @@ export async function exportFence(
             json,
             ...(lease ? [lease.jobId, lease.token, lease.fencing, now] : []),
             ...(blobId ? [blobId] : []),
+            ...session.values,
           ],
         )
         .first();
@@ -97,12 +114,14 @@ export function storedReportFence(
   blobId: string,
   kind: "report_pdf" | "original_zip",
   parentReportId?: string,
+  sessionId?: string,
 ) {
   const column = kind === "report_pdf" ? "pdf_blob_id" : "zip_blob_id";
   return async () => {
+    const session = reportSessionFence(sessionId);
     const ok = await core
       .statement(
-        `SELECT 1 FROM v2_reports r JOIN v2_workspaces w ON w.id=r.workspace_id JOIN user u ON u.id=w.owner_id JOIN v2_blobs b ON b.id=r.${column} JOIN v2_storage_reservations x ON x.id=b.reservation_id JOIN v2_billing_principals p ON p.id=b.principal_id WHERE r.id=? AND r.revision=? AND r.snapshot_id=? AND r.encrypted_payload=? AND r.${column}=? AND r.state='ready' AND w.owner_id=? AND ${aliveWorkspace} AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='report' AND target_id=r.id) AND coalesce((SELECT value FROM app_metadata WHERE key='account-type:'||w.owner_id),'customer')='customer' AND b.state='stored' AND b.visibility='private' AND b.kind='${kind}' AND p.owner_id=w.owner_id AND x.entity_id=r.id ${parentReportId ? "AND EXISTS(SELECT 1 FROM v2_reports parent WHERE parent.id=? AND parent.workspace_id=w.id AND parent.revision=r.revision AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='report' AND target_id=parent.id))" : ""} AND x.state!='released' AND NOT EXISTS(SELECT 1 FROM v2_report_selections s LEFT JOIN v2_files f ON f.id=s.file_id WHERE s.report_id=r.id AND (f.id IS NULL OR f.workspace_id!=w.id OR EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='file' AND target_id=f.id)))`,
+        `SELECT 1 FROM v2_reports r JOIN v2_workspaces w ON w.id=r.workspace_id JOIN user u ON u.id=w.owner_id JOIN v2_blobs b ON b.id=r.${column} JOIN v2_storage_reservations x ON x.id=b.reservation_id JOIN v2_billing_principals p ON p.id=b.principal_id WHERE r.id=? AND r.revision=? AND r.snapshot_id=? AND r.encrypted_payload=? AND r.${column}=? AND r.state='ready' AND w.owner_id=? AND ${aliveWorkspace} AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='report' AND target_id=r.id) AND coalesce((SELECT value FROM app_metadata WHERE key='account-type:'||w.owner_id),'customer')='customer' AND b.state='stored' AND b.visibility='private' AND b.kind='${kind}' AND p.owner_id=w.owner_id AND x.entity_id=r.id ${parentReportId ? "AND EXISTS(SELECT 1 FROM v2_reports parent WHERE parent.id=? AND parent.workspace_id=w.id AND parent.revision=r.revision AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='report' AND target_id=parent.id))" : ""} AND x.state!='released' AND NOT EXISTS(SELECT 1 FROM v2_report_selections s LEFT JOIN v2_files f ON f.id=s.file_id WHERE s.report_id=r.id AND (f.id IS NULL OR f.workspace_id!=w.id OR EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='file' AND target_id=f.id))) ${session.sql}`,
         [
           report.id,
           report.revision,
@@ -111,6 +130,7 @@ export function storedReportFence(
           blobId,
           actor.ownerId,
           ...(parentReportId ? [parentReportId] : []),
+          ...session.values,
         ],
       )
       .first();

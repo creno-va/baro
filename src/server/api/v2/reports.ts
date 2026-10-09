@@ -91,7 +91,7 @@ export function createReportsApi(
       503,
     );
   });
-  const service = async (env: Env, ownerId: string) => {
+  const service = async (env: Env, ownerId: string, sessionId: string) => {
     if (options.testOnlyMissingD1Meta && env.APP_ENV !== "preview")
       throw new ReportError("STORAGE_UNAVAILABLE");
     const core = reportRequestCore(
@@ -100,25 +100,28 @@ export function createReportsApi(
       }),
       !options.testOnlyMissingD1Meta,
     );
-    return createReportsService(
-      core,
-      (await options.dependencies?.(env, core, ownerId)) ??
-        createReportDependencies(env, core, ownerId),
-    );
+    return createReportsService(core, {
+      ...((await options.dependencies?.(env, core, ownerId)) ??
+        createReportDependencies(env, core, ownerId)),
+      sessionId,
+    });
   };
   app.get("/cases/:caseId/reports", async (c) => {
     const access = await caseAccess(c);
     if (access.response) return access.response;
     z.strictObject({}).parse(c.req.query());
     return c.json(
-      await (await service(c.env, access.ownerId)).get(access.ownerId, c.req.param("caseId")),
+      await (await service(c.env, access.ownerId, access.sessionId)).get(
+        access.ownerId,
+        c.req.param("caseId"),
+      ),
     );
   });
   app.patch("/cases/:caseId/reports", async (c) => {
     const access = await caseAccess(c, true, true);
     if (access.response) return access.response;
     return c.json(
-      await (await service(c.env, access.ownerId)).save(
+      await (await service(c.env, access.ownerId, access.sessionId)).save(
         access.ownerId,
         c.req.param("caseId"),
         idempotencyKeySchema.parse(c.req.header("idempotency-key")),
@@ -130,7 +133,7 @@ export function createReportsApi(
     const access = await caseAccess(c, true, true);
     if (access.response) return access.response;
     return c.json(
-      await (await service(c.env, access.ownerId)).generate(
+      await (await service(c.env, access.ownerId, access.sessionId)).generate(
         access.ownerId,
         c.req.param("caseId"),
         idempotencyKeySchema.parse(c.req.header("idempotency-key")),
@@ -144,7 +147,10 @@ export function createReportsApi(
     if (access.response) return access.response;
     z.strictObject({}).parse(c.req.query());
     const id = opaqueIdSchema.parse(c.req.param("reportId"));
-    const document = await (await service(c.env, access.ownerId)).html(access.ownerId, id);
+    const document = await (await service(c.env, access.ownerId, access.sessionId)).html(
+      access.ownerId,
+      id,
+    );
     return new Response(document, {
       headers: {
         "content-type": "text/html; charset=utf-8",
@@ -161,7 +167,10 @@ export function createReportsApi(
     if (access.response) return access.response;
     z.strictObject({}).parse(c.req.query());
     const id = opaqueIdSchema.parse(c.req.param("reportId")),
-      result = await (await service(c.env, access.ownerId)).pdf(access.ownerId, id);
+      result = await (await service(c.env, access.ownerId, access.sessionId)).pdf(
+        access.ownerId,
+        id,
+      );
     return new Response(result.body, {
       headers: {
         "content-type": "application/pdf",
@@ -177,7 +186,10 @@ export function createReportsApi(
     if (access.response) return access.response;
     z.strictObject({}).parse(c.req.query());
     const id = opaqueIdSchema.parse(c.req.param("reportId")),
-      result = await (await service(c.env, access.ownerId)).savedZip(access.ownerId, id);
+      result = await (await service(c.env, access.ownerId, access.sessionId)).savedZip(
+        access.ownerId,
+        id,
+      );
     return new Response(result.body, {
       headers: {
         "content-type": "application/zip",
@@ -201,7 +213,7 @@ export function createReportsApi(
       })
       .parse(await c.req.json());
     const id = opaqueIdSchema.parse(c.req.param("reportId")),
-      result = await (await service(c.env, access.ownerId)).zip(
+      result = await (await service(c.env, access.ownerId, access.sessionId)).zip(
         access.ownerId,
         id,
         idempotencyKeySchema.parse(c.req.header("idempotency-key")),
