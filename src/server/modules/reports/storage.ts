@@ -34,6 +34,8 @@ export type ReportDependencies = {
   files: FilesService;
   font: () => Promise<Uint8Array>;
   clock?: () => string;
+  /** Set only by the signed HTTP boundary; internal job/test actors have no browser session. */
+  sessionId?: string;
   guideHosts?: readonly string[];
   costs?: (input: {
     ownerId: string;
@@ -371,7 +373,15 @@ export function createReportExports(core: V2Core, deps: ReportDependencies, port
     parentReportId?: string,
   ) {
     const data = await ports.read(a(ownerId), r.id);
-    const authorize = storedReportFence(core, a(ownerId), r, blobId, kind, parentReportId);
+    const authorize = storedReportFence(
+      core,
+      a(ownerId),
+      r,
+      blobId,
+      kind,
+      parentReportId,
+      deps.sessionId,
+    );
     await authorize();
     const blob = await storage.findBlob(a(ownerId), blobId);
     if (!blob || blob.kind !== kind || blob.key_version !== "report_stream_v1")
@@ -438,7 +448,7 @@ export function createReportExports(core: V2Core, deps: ReportDependencies, port
     const data = await valid(actor, id),
       r = data.row;
     if (r.state === "ready" && r.pdf_blob_id && (!selected || r.zip_blob_id)) return r;
-    const fence = await exportFence(core, actor, r, data.review.sourceDigest, now);
+    const fence = await exportFence(core, actor, r, data.review.sourceDigest, now, deps.sessionId);
     if (fence.rows > 250) throw new ReportError("EXPORT_LIMIT_EXCEEDED");
     const l = await lease(actor.ownerId, r);
     const written: string[] = [];
