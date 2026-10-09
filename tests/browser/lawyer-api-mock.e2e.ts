@@ -48,6 +48,7 @@ test("integrated lawyer login/consent/editor uses persistent API mock with no re
   await expect(page.getByRole("img", { name: "내 프로필 사진" })).toBeVisible();
   await page.getByRole("button", { name: "포트폴리오 추가" }).click();
   await page.getByLabel("활동 제목 1").fill("합성 포트폴리오");
+  await page.getByLabel("활동 본문 1").fill("제목과 별도로 저장되는 합성 활동 본문입니다.");
   await page.getByLabel("자료 URL 1").fill("https://example.com/portfolio");
   await page.getByLabel("포트폴리오 파일 (이미지·PDF)").setInputFiles({
     name: "synthetic.pdf",
@@ -60,6 +61,9 @@ test("integrated lawyer login/consent/editor uses persistent API mock with no re
   await page.reload();
   await expect(page.getByLabel("이름", { exact: true })).toHaveValue("E 통합 시연 변호사");
   await expect(page.getByRole("img", { name: "내 프로필 사진" })).toBeVisible();
+  await expect(page.getByLabel("활동 본문 1")).toHaveValue(
+    "제목과 별도로 저장되는 합성 활동 본문입니다.",
+  );
   await page.getByRole("button", { name: "프로필 공개", exact: true }).click();
   await page.getByRole("checkbox", { name: /내 사진과 연락처를 포함한/ }).check();
   await page.getByRole("button", { name: "동의하고 공개" }).click();
@@ -98,6 +102,36 @@ test("integrated lawyer login/consent/editor uses persistent API mock with no re
   );
   await page.goto("/lawyer");
   await expect(page.locator("astro-island[ssr]")).toHaveCount(0);
+  await page.evaluate(() => {
+    const session = JSON.parse(localStorage.getItem("baro-api-mock-v1:session") ?? "{}");
+    localStorage.setItem(
+      "baro-api-mock-v1:session",
+      JSON.stringify({ ...session, needsConsent: true }),
+    );
+    window.dispatchEvent(new Event("focus"));
+  });
+  await expect(
+    page.getByText("재동의 전에도 기존 프로필과 자료를 확인할 수 있어요.", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("제목과 별도로 저장되는 합성 활동 본문입니다.", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "비공개로 전환" })).toBeDisabled();
+  await page.getByRole("button", { name: "자료 상태 확인", exact: true }).click();
+  const renewalDownload = page.waitForEvent("download");
+  await page.getByRole("button", { name: "업로드 자료 2 다운로드", exact: true }).click();
+  expect((await renewalDownload).suggestedFilename()).toContain("pdf");
+  await page.evaluate(() => {
+    const session = JSON.parse(localStorage.getItem("baro-api-mock-v1:session") ?? "{}");
+    localStorage.setItem(
+      "baro-api-mock-v1:session",
+      JSON.stringify({ ...session, needsConsent: false }),
+    );
+    window.dispatchEvent(new Event("focus"));
+  });
+  await expect(page.getByLabel("활동 본문 1")).toHaveValue(
+    "제목과 별도로 저장되는 합성 활동 본문입니다.",
+  );
   await page.getByRole("button", { name: "비공개로 전환" }).click();
   await expect(page.getByText("프로필을 비공개로 전환했어요.", { exact: true })).toBeVisible();
   await page.reload();

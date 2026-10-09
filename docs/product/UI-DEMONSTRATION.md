@@ -12,7 +12,7 @@
 각 시나리오는 배포 candidate SHA·environment·시각·수행 역할·합성 fixture ID·
 수행 단계·기대/실제 결과·자동 test/run·안전한 수동 화면/파일 검토 evidence를 기록한다.
 항목별 상태는 미착수/구현됨/합성검증됨/실제검증됨/차단으로 구분한다.
-이 문서는 시연 요구사항이며 현재 모든 v2 evidence는 미확보다.
+이 문서는 시연 요구사항이다. 기존 증거와 새 보완 조건의 SHA·결과는 [요구사항 완료표](../development/MVP-REQUIREMENTS-EVIDENCE.md)에 연결한다.
 
 E2E mock 이나 signed test session 성공은 실제 OAuth/AI/법률 API/Container/R2의 증거가 아니다.
 직접 browser 에서 렌더링과 작업 흐름을 확인하고 새로고침/재로그인/다른 기기 폭에서
@@ -33,24 +33,24 @@ UI-21~23은 ADR-0014에 따라 MVP 제외이며 원래 요구는 아래 역사 �
 | --- | --- | --- | --- |
 | UI-01 / F001 | 통합 고객/변호사 선택→세 OAuth 로그인·동의·역할별 복귀·로그아웃 | 취소·state/만료·재동의·14 세미만 차단·moderator 승격 금지·실제 callback | #102,기존#27,#69,#71 |
 | UI-02 / F002 | 개인/기업 KR 사건 생성→dashboard | 20/5,000자·Turnstile 실패/재사용·더블클릭·일 3/4 동시·기업단일 owner | #57,#64,#65,#69 |
-| UI-03 / F003 | 답변에 따라 달라지는 2개 이상 질문묶음 | max 3×5·unknown/skip·중복·다른탭 revision·폼 오류 | #54,#64,#65,#69 |
+| UI-03 / F003 | 답변에 따라 달라지는 2개 이상 질문묶음 | max 2×3·unknown/skip·중복·다른탭 revision·폼 오류 | #54,#64,#65,#69 |
 | UI-04 / F003 | 질문 중 저장→이탈→재로그인→재개 | 24 시간지난 v2 답변 보존·실패재시도·quota 대기·저장상태 | #64,#65,#69 |
-| UI-05 / F004 | 사용자진술·AI 정리·공백/모순→편집→요약확인 | 확인전 chat 차단·중복확인·revision 변화·새자료재확인 | #64,#65,#69 |
-| UI-06 / F005 | 지속 chat→검증응답→출처/자료 위치→재접속 | quota30/31·timeout/schema/safety·삭제중응답·미검증 stream 비노출 | #57,#64,#65,#69 |
-| UI-07 / F006 | 사실수정·timeline·미상날짜·행동완료/보류 | 불리한사실/모순유지·자동허구날짜금지·reload 상태·cross-owner404 | #64,#65,#69 |
+| UI-05 / F004 | 사용자진술·AI 정리·공백/모순→편집→요약확인 | 추가 사실/교정 후 재확인·확인전 chat 차단·중복확인·revision 변화·새자료재확인 | #64,#65,#69 |
+| UI-06 / F005 | 지속 chat→검증응답→출처/자료 위치→재접속 | quota200/201·timeout/schema/safety·삭제중응답·미검증 stream 비노출 | #57,#64,#65,#69 |
+| UI-07 / F006 | 사실교정·timeline·year/month/day/unknown 날짜·행동완료/보류 | 불리한사실/모순유지·자동허구날짜금지·reload 상태·cross-owner404 | #64,#65,#69 |
 | UI-08 / F006 | 전략질문→변호사확인·허용준비행동 | 확정판단/승패/유불리/기한계산/완성서류/대리연락 거부·긴급안내 | #63,#64,#68,#69 |
 | UI-09 / F007 | 문서/PDF100MB 이하·이미지 실제 upload/처리 |100MB 경계·PDF 500/501쪽·손상/암호보호·MIME 위조·삭제/취소 | #58,#59,#65,#69 |
 | UI-10 / F007 | 실제음성 upload→전체전사→시간위치 | 1GB/60 분경계·무음/언어/손상·day 60분·retry 이중 quota 방지 | #57,#58,#59,#65,#69,#71 |
 | UI-11 / F007 | 실제영상→전체음성·1초/장면 frame→내용확인 | failed/timegap·coverage 표시·매 frame 확인주장금지·실제 codec | #59,#65,#69,#71 |
 | UI-12 / F007 |동의→upload→처리,대기→재개/삭제 |동의없음·월예산·병렬예약·원본 100/101개·case5GB·account10GB | #57,#58,#59,#65,#69 |
-| UI-13 / F008 |원본 preview/download·자동추출확인/수정 |page/time 근거·privateURL 만료·cross-owner·cache·deleted 자산 404 | #58,#59,#65,#69 |
-| UI-14 / F009 |summary/files→reportversion→PDFpreview |stale 표시·포함/제외·이름등기본유지·마스킹편집·공백/모순 | #66,#69 |
+| UI-13 / F008 |원본 preview/download·자동추출확인/교정/분석제외 |정확한 처리/누락 page/time 근거·교정/제외 저장·privateURL 만료·cross-owner·cache·deleted 자산 404 | #58,#59,#65,#69 |
+| UI-14 / F009 |최신 확인 facts/summary/files→새 reportversion→PDFpreview |옛 리포트 다운로드·revision/stale 표시·포함/제외·이름등기본유지·마스킹편집·공백/모순 | #66,#69 |
 | UI-15 / F009 |한글 PDF 다운로드후실제로열기 |폰트/줄바꿈/긴 text·pagebreak·timestamp/인용·생성실패/중복 | #66,#69,#71 |
 | UI-16 / F009 |선택원본 ZIP 다운로드→실제파일목록/내용 |미선택파일없음·원본미마스킹안내·cross-owner·중복 filename·삭제중 export | #66,#67,#69 |
 | UI-17 / F012 |비로그인변호사필터/목록→프로필 |지역/분야부족·empty/error·회전기준·pagination; 과거 pending 심사는 MVP 제외 | #61,#106,#69 |
 | UI-18 / F012 |사진/이름/소개/주소/포트폴리오→연락/길찾기 |phone/email/외부상담·세 map 목적/URL·없는/숨김프로필·수임보장금지 | #61,#69 |
 | UI-19 / F010 |통합 고객/변호사 선택→변호사 자기 portal |moderator 승격 금지·타계정 접근 차단·실제확인 없는 인증표시 금지 | #102,#106,#62,#69 |
-| UI-20 / F011 |프로필·text/image/PDF portfolio 편집→저장→미리보기→재접속 |공개 동의·업로드 실패·민감표현·타인 portfolio 접근 차단 | #106,#62,#69 |
+| UI-20 / F011 |프로필·제목과 별도 text 본문/image/PDF portfolio 작성→저장→미리보기→재접속→공개→수정→삭제 |공개 동의·업로드 실패·민감표현·타인 portfolio 접근 차단 | #106,#62,#69 |
 | UI-21 / F013 |MVP 제외: 과거 자격심사·반려·재신청·승인 |기존 backend/증거 보존, 이번 필수 시연 아님 | ADR-0014 |
 | UI-22 / F011/13 |MVP 제외: 과거 공개 revision 운영 승인 |기존 backend/증거 보존, 이번 필수 시연 아님 | ADR-0014 |
 | UI-23 / F013 |MVP 제외: 과거 프로필 신고·운영 조치 |기존 backend/증거 보존, 이번 필수 시연 아님 | ADR-0014 |
@@ -61,6 +61,10 @@ UI-21~23은 ADR-0014에 따라 MVP 제외이며 원래 요구는 아래 역사 �
 | UI-28 / all |builtWorkerCSP의 font/icons/dialog/upload/chat/Turnstile |blockedscript·hydration/fallback·동일 SVG 교체모든사용처·font 라이선스 | #56,#69,#71 |
 | UI-29 / F005/09 |변호사연락링크선택→case 로돌아와자료추가/report 갱신 |contact 완료강요없음·자료자동전송없음·전략대신사실준비계속 | #61,#64,#65,#66,#69 |
 | UI-30 / privacy |선택 analytics 동의/거부→실제기능사용 |optout 기능동일·동의철회정리·원문/검색어/파일명/PII 없는 allowlist | #68,#69 |
+| UI-31 / renewal |재동의 전 기존 본인 고객 사건·사실·자료 조회/다운로드 |새 AI/수정/upload 차단·타인/역할/session/삭제 가드 유지 | #65,#58,#69 |
+| UI-32 / renewal |재동의 전 기존 본인 리포트/PDF/ZIP 조회·다운로드 |새 생성/수정 차단·옛 revision 표시·최신 사실 새 리포트 비교 | #66,#69 |
+| UI-33 / renewal |재동의 전 기존 본인 프로필·업로드 자료 조회/다운로드 |새 작성/수정/공개/upload 차단·소유/session/삭제·public 현재동의 유지 | #62,#69 |
+| UI-34 / activation |출시 모달/체험 비활성 제거 뒤 기존 고객·자료·리포트·변호사 진입 |인증/권한/상태/public gate 유지, 통합 전 통과 표시 금지 | #162,#69,#71 |
 
 contact 시연은 실제 링크 이동까지만 한다. 실제 상담 메시지 발송·전화 발신은 이
 목표의 검증에 필수하지 않으며 별도 사용자 지시 없이는 실행하지 않는다.
@@ -72,7 +76,7 @@ contact 시연은 실제 링크 이동까지만 한다. 실제 상담 메시지 
 | 계약/version·DB 보존 | strict rejection·fresh/upgrade·schema drift·실제 SQL concurrency/IDOR·v1 fixture 유지 | #54,#55,#69 |
 | 모델/법률출처 | 기본 사실/비자문·출처 경계 및 실제 pinned model/Whisper/source smoke 유지; 광범위 가족별 품질 개선은 UX 연결 뒤 | #59,#63,#64,#69,#71 |
 | 원본/처리 coverage | 실제 R2/Container의 4 범주처리·timestamps/pages/hash·누락/제한·private cipher/object 권한 | #58,#59,#69,#71 |
-| quota/비용 | concurrency/KST/월경계·operation replay·예약회수·actualretryledger·기술 100 만원 hardstop | #57,#69,#71 |
+| quota/비용 | concurrency/KST/월경계·operation replay·예약회수·actualretryledger·승인된 월cap 해제·bounded attempt·actual ledger | #57,#69,#71 |
 | 삭제/복구 | 실제 object/instance 삭제·격리 restore+최신 journal·rollback·경보수신 receipt | #67,#71, 기존#19/#27 |
 | public 기능/정책 | approved 문서 URL/version·검토자/시각/범위·사업자사실·행동승인·자기 프로필 표현 정합 | #68,#70, 기존#20 |
 | 지속배포 | PRCI→previewSHA→smoke→productionSHA, migration/image/font/asset release 일치 | #71 |

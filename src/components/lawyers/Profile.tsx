@@ -61,9 +61,11 @@ export function Profile({ id, preview = false }: { id: string; preview?: boolean
 export function ProfileContent({
   lawyer,
   privateRead = false,
+  canDeliverDownload,
 }: {
   lawyer: LawyerView;
   privateRead?: boolean;
+  canDeliverDownload?: () => Promise<boolean>;
 }) {
   const [assetError, setAssetError] = useState("");
   return (
@@ -167,11 +169,10 @@ export function ProfileContent({
             lawyer.portfolio.map((item) => (
               <div className="mb-5" key={item.id}>
                 <h3>{item.title}</h3>
-                {item.url === null ? (
-                  <p className="whitespace-pre-wrap break-words">
-                    {"text" in item && typeof item.text === "string" ? item.text : "등록된 활동"}
-                  </p>
-                ) : (
+                {(item.text || !item.url) && (
+                  <p className="whitespace-pre-wrap break-words">{item.text || "등록된 활동"}</p>
+                )}
+                {item.url && (
                   <a
                     className="ui-button ui-button--outline"
                     href={item.url}
@@ -185,6 +186,7 @@ export function ProfileContent({
                               item.assetId as string,
                               privateRead,
                               item.title,
+                              canDeliverDownload,
                             ).catch((cause) => setAssetError(lawyerErrorMessage(cause)));
                           }
                         : undefined

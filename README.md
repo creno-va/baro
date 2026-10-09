@@ -1,4 +1,5 @@
 # BARO
+> **2026-10-09 정합성:** 질문 최대 2차례×3문항(PR154), AI200회/일·월 cap 해제·기존 사용자 설정 $10/$30 자동충전(#57/PR143)이 확인된 최신 기준이다. 아래 과거 30회/100만원·충전 금지 기록은 당시 증거로 보존한다. 새 정책/지출 승인이나 운영 설정 변경이 아니다. [요구사항·증거 완료표](./docs/development/MVP-REQUIREMENTS-EVIDENCE.md)가 현재 담당·미완료 조건 정본이다.
 > **2026-10-06 사용자 개정 — 아래 이전 범위보다 우선한다.** MVP는 고객/변호사 두 역할이며 통합 로그인에서 선택한다. 변호사 승인 어드민·자격 심사·반려·승인대기 UX는 제외한다. 실제 제품 client UI 동일 구현체를 API mock adapter로 먼저 완성하고 기능 연결을 병렬 진행한다. 별도 /mock UI는 만들지 않는다. [5세션 계획](./docs/development/PARALLEL-UI-SPRINT.md)의 실제 착수부터 2시간 sprint를 적용하며 독립 UI는 DB/AI/OAuth/backend CI/A 이슈 종료를 기다리지 않는다. 완료된 코드/이슈/증거를 보존하고 새 DB/비용 선행 이슈를 추가하지 않는다. AI 품질 확대는 모든 UX 연결 뒤다. P0.3/#70/#71 외부·정책·production·공개 gate는 보존하며 mock 성공을 실제 외부 성공으로 표시하지 않는다. [ADR-0014](./docs/adr/0014-mvp-two-roles-and-api-mock-first.md)가 대체 범위를 기록한다.
 
 [![CI](https://github.com/creno-va/baro/actions/workflows/ci.yml/badge.svg)](https://github.com/creno-va/baro/actions/workflows/ci.yml)
@@ -41,7 +42,7 @@ PDF 리포트와 선택한 원본을 직접 전달해 변호사의 초기 사건
 기존 심사 backend는 보존하며 이번 MVP UI에 노출하지 않습니다. role 선택을 자격 확인으로 표시하지 않습니다.
 
 문서·이미지·음성·영상의 실제 처리와 coverage, private 원본/파생물/리포트의 삭제,
-사용량·기술 월 100 만원 예산을 검증합니다. 세부 한도와 완료 기준은 [PRD](./docs/PRD.md),
+사용량·실제 비용 원장과 승인된 환경별 비용 설정을 검증합니다. 세부 한도와 완료 기준은 [PRD](./docs/PRD.md),
 [MVP](./docs/product/MVP-SPEC.md), [실제 UI 시연 행렬](./docs/product/UI-DEMONSTRATION.md)이 정본입니다.
 
 기존 v1 사건·schemaVersion 1·분석 결과·읽기·삭제는 보존하고 사용자 승인 없이 재분석하지 않습니다.
