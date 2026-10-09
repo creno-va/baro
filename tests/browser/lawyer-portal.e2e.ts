@@ -498,8 +498,32 @@ test("renewal keeps existing profile and uploaded download available while edits
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await page.screenshot({ path: ".wrangler/lawyer-renewal-320.png", fullPage: true });
   expect(writes).toBe(0);
+  let releaseDownload!: () => void;
+  let downloadStarted!: () => void;
+  const started = new Promise<void>((resolve) => {
+    downloadStarted = resolve;
+  });
+  const release = new Promise<void>((resolve) => {
+    releaseDownload = resolve;
+  });
+  let lateDownloads = 0;
+  page.on("download", () => {
+    lateDownloads++;
+  });
+  await page.route("**/assets/saved-upload/content", async (route) => {
+    downloadStarted();
+    await release;
+    await route.fulfill({
+      contentType: "application/pdf",
+      body: "%PDF-1.4 synthetic saved artifact",
+    });
+  });
+  await page.getByRole("button", { name: "업로드 자료 1 다운로드", exact: true }).click();
+  await started;
   owner = "different-lawyer";
-  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  releaseDownload();
+  await expect(page.getByText("필수 동의를 확인해 주세요.", { exact: true })).toBeVisible();
+  expect(lateDownloads).toBe(0);
   await expect(page.getByText("기존 본문", { exact: true })).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "업로드 자료 1 다운로드", exact: true }),

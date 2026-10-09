@@ -262,7 +262,7 @@ export const mockLawyers = createMockLawyers({
     writeStore("lawyers", state);
   },
   async session() {
-    return requireSession();
+    return requireSession({ consent: false });
   },
 });
 export const lawyersMockHandlers = {
