@@ -41,7 +41,7 @@ ADR-0014의 심사/어드민 UI만 제외하고 기존 backend/증거는 보존�
 | E-R | `76c31fcc571e82b96d55dab6dcd3f02dc331e323`, [journal](https://github.com/creno-va/baro/issues/71#issuecomment-6024218432) | CI/Full/preview/production·SHA/schema0009/HTTP smoke와 local 세 OAuth callback 기록. 모든 환경 전체 시나리오·복구·정책 완료 아님 |
 | E-U | PR143/main `d91f342a3aa64008ab72ff338eca55c4ba14d40e`, CI37532626804/production37534088349 SUCCESS ([#57](https://github.com/creno-va/baro/issues/57)) | AI200·월cap 설정 배포. 실제 원격 비용/unknown hold 정산 완료 아님 |
 | E-I | [독립 리뷰](../quality/independent-review-2026-10-06/REPORT.md), PR123 및 #65/#66/#69 후속 이관 기록 | 당시 실패와 수정의 역사. 현재 미충족은 아래 담당 이슈로 유지 |
-| E-C | C source `0d3fbe0`, 아래 로컬 검증 기록 PASS; 최종 PR CI/통합 SHA는 후속 연결 | 서버/변호사 client/문서 보완. A #163/#165 임시 통합 검증이며 main·원격·사람 승인과 분리 |
+| E-C | C source `0d3fbe0`, 아래 로컬 검증 기록 PASS; [PR168](https://github.com/creno-va/baro/pull/168), 최종 [통합 PR167](https://github.com/creno-va/baro/pull/167)의 CI/통합 SHA는 #62/#69/#71 후속 receipt에 연결 | 서버/변호사 client/문서 보완. A #163/#165 임시 통합 검증이며 main·원격·사람 승인과 분리 |
 
 ## 요구사항 완료표
 
@@ -143,3 +143,14 @@ A가 #163을 로컬 통합한 뒤 임시 합성 검증을 허용해 #163 `aae4f7
   오류/실패 이력은 보존하며 이 추가 검증을 원격 privacy 승인으로 확대하지 않는다.
 
 고객/자료/리포트 A/B 미통합 보완 조건, 실제 외부·사람 승인 및 #71은 위 합성 PASS와 별도로 계속 대기한다.
+
+### 추적 도구·최종 인계
+
+`work:next`에서 OPEN 외부 조건을 구현 PR 병합만으로 #71의 선행 목록에서 빼던 판정을 수정했다.
+개발 선행은 기존 병합 예외를 유지하고 외부/최종 인수는 모든 선행 이슈의 CLOSED를 요구한다.
+재개된 보완은 IN_PROGRESS와 기존 implementation PR 병합 증거를 함께 표시한다.
+graph 회귀5 tests/16 assertions·tools typecheck·lint·docs69/ADR14·live graph54/no drift가 통과했다.
+
+C는 PR168 원본 커밋과 증거를 유지하고 A가 PR167에서 최신 main 및 A/B 변경을 함께 검증한다.
+PR168 `fac2fe5`의 CI37895700011은 후속 요구/추적 commit push로 취소돼 전체 PASS가 아니다.
+새 candidate CI와 최종 통합 receipt를 #62/#69/#71에 연결하며 기존 실패/취소 이력은 보존한다.
