@@ -1,10 +1,15 @@
 import { ChevronDown, Download, Eye, FileText, RefreshCw, Save, Settings2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../../client/api";
-import type { FileView, ReportView } from "../../client/api/types";
+import type { ReportView as BaseReportView, FileView } from "../../client/api/types";
 import { CaseNavigation } from "../workspace/CaseNavigation";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { downloadBlob, maskReportText } from "./download";
+
+type ReportView = BaseReportView & {
+  basis?: { workspaceRevision: number; summaryRevision: number; generatedAt: string };
+  pdfAvailable?: boolean;
+};
 
 export function ReportReview({ caseId }: { caseId: string }) {
   const [report, setReport] = useState<ReportView | null>(null);
@@ -21,6 +26,7 @@ export function ReportReview({ caseId }: { caseId: string }) {
   const [reloadConfirm, setReloadConfirm] = useState(false);
   const [reviewed, setReviewed] = useState(false);
   const [accessChecking, setAccessChecking] = useState(true);
+  const [needsConsent, setNeedsConsent] = useState(false);
   const owner = useRef<string | null>(null);
   const lock = useRef(false);
   const loadSequence = useRef(0);
@@ -35,6 +41,7 @@ export function ReportReview({ caseId }: { caseId: string }) {
     ++loadSequence.current;
     owner.current = null;
     setReport(null);
+    setNeedsConsent(false);
     setFiles([]);
     setContent("");
     setMask(false);
@@ -53,30 +60,26 @@ export function ReportReview({ caseId }: { caseId: string }) {
     const id = session.user?.id;
     if (
       !id ||
-      session.needsConsent ||
       session.user?.accountType !== "customer" ||
       (owner.current && owner.current !== id)
     ) {
       clearOwnerState();
       throw Object.assign(
         new Error(
-          session.needsConsent
-            ? "필수 동의를 다시 확인한 뒤 리포트를 불러와 주세요."
-            : session.user?.accountType !== "customer"
-              ? "고객 역할로 로그인한 뒤 리포트를 다시 확인해 주세요."
-              : "계정 또는 접근 상태가 변경됐어요. 로그인 후 리포트를 다시 확인해 주세요.",
+          session.user?.accountType !== "customer"
+            ? "고객 역할로 로그인한 뒤 리포트를 다시 확인해 주세요."
+            : "계정 또는 접근 상태가 변경됐어요. 로그인 후 리포트를 다시 확인해 주세요.",
         ),
         {
           code: !id
             ? "UNAUTHENTICATED"
-            : session.needsConsent
-              ? "CONSENT_REQUIRED"
-              : session.user?.accountType !== "customer"
-                ? "ROLE_REQUIRED"
-                : "NOT_FOUND",
+            : session.user?.accountType !== "customer"
+              ? "ROLE_REQUIRED"
+              : "NOT_FOUND",
         },
       );
     }
+    setNeedsConsent(session.needsConsent);
     owner.current = id;
     return id;
   }, [clearOwnerState]);
@@ -97,10 +100,10 @@ export function ReportReview({ caseId }: { caseId: string }) {
       setFiles(materials);
       setSelected([]);
     } catch (e) {
+      if ((e as { code?: string })?.code === "CONSENT_REQUIRED") setNeedsConsent(true);
       if (
         [
           "UNAUTHENTICATED",
-          "CONSENT_REQUIRED",
           "NOT_FOUND",
           "FORBIDDEN",
           "ROLE_REQUIRED",
@@ -167,10 +170,10 @@ export function ReportReview({ caseId }: { caseId: string }) {
       await verifyOwner();
       await action();
     } catch (e) {
+      if ((e as { code?: string })?.code === "CONSENT_REQUIRED") setNeedsConsent(true);
       if (
         [
           "UNAUTHENTICATED",
-          "CONSENT_REQUIRED",
           "NOT_FOUND",
           "FORBIDDEN",
           "ROLE_REQUIRED",
@@ -247,6 +250,12 @@ export function ReportReview({ caseId }: { caseId: string }) {
         )}
         {report && !accessChecking && (
           <>
+            {needsConsent && (
+              <p className="report-callout" role="status">
+                새 리포트 생성과 수정은 필수 동의 후 이용할 수 있어요. 기존 리포트와 저장된 PDF는
+                계속 확인할 수 있어요. <a href="/consent">동의 확인</a>
+              </p>
+            )}
             <section className="report-editor" aria-labelledby="report-editor-heading">
               <div className="report-editor-heading">
                 <div>
@@ -257,10 +266,17 @@ export function ReportReview({ caseId }: { caseId: string }) {
                       {new Date(report.updatedAt).toLocaleDateString("ko-KR")}
                     </time>
                   </p>
+                  {report.basis && (
+                    <p className="report-meta">
+                      생성 기준: 요약 {report.basis.summaryRevision} · 사건{" "}
+                      {report.basis.workspaceRevision} ·{" "}
+                      {new Date(report.basis.generatedAt).toLocaleString("ko-KR")}
+                    </p>
+                  )}
                 </div>
                 <button
                   type="button"
-                  disabled={Boolean(busy)}
+                  disabled={Boolean(busy) || needsConsent}
                   onClick={(event) => {
                     event.currentTarget.focus();
                     setRegenerate(true);
@@ -271,8 +287,8 @@ export function ReportReview({ caseId }: { caseId: string }) {
               </div>
               {report.stale && (
                 <p className="report-callout report-stale" role="status">
-                  사건이나 자료가 변경됐어요. 새 버전을 만든 뒤 다시 검토해 주세요. 이전 편집 내용은
-                  현재 버전에 보관돼요.
+                  사건이나 자료가 변경됐어요. 이 리포트는 위 생성 기준의 내용이에요. 최신 내용은 새
+                  버전을 만들어 검토해 주세요. 저장된 PDF는 기존 내용으로 다운로드할 수 있어요.
                 </p>
               )}
               <div className="report-paper">
@@ -284,7 +300,7 @@ export function ReportReview({ caseId }: { caseId: string }) {
                   rows={12}
                   maxLength={30000}
                   value={content}
-                  disabled={Boolean(busy)}
+                  disabled={Boolean(busy) || needsConsent}
                   onChange={(e) => {
                     setContent(e.target.value);
                     setReviewed(false);
@@ -308,7 +324,7 @@ export function ReportReview({ caseId }: { caseId: string }) {
                 </button>
                 <button
                   type="button"
-                  disabled={Boolean(busy) || report.stale || !content.trim()}
+                  disabled={Boolean(busy) || needsConsent || report.stale || !content.trim()}
                   onClick={() => void run("저장 중…", save)}
                   className={dirty ? "report-save is-dirty" : "report-save"}
                 >
@@ -336,7 +352,7 @@ export function ReportReview({ caseId }: { caseId: string }) {
                     <input
                       type="checkbox"
                       checked={mask}
-                      disabled={Boolean(busy)}
+                      disabled={Boolean(busy) || needsConsent}
                       onChange={(e) => {
                         setMask(e.target.checked);
                         setReviewed(false);
@@ -376,7 +392,7 @@ export function ReportReview({ caseId }: { caseId: string }) {
                           <input
                             type="checkbox"
                             checked={excluded.includes(file.id)}
-                            disabled={Boolean(busy)}
+                            disabled={Boolean(busy) || needsConsent}
                             onChange={() => {
                               setExcluded(toggle(excluded, file.id));
                               setSelected(selected.filter((id) => id !== file.id));
@@ -390,7 +406,10 @@ export function ReportReview({ caseId }: { caseId: string }) {
                             type="checkbox"
                             checked={selected.includes(file.id)}
                             disabled={
-                              Boolean(busy) || excluded.includes(file.id) || file.status !== "ready"
+                              Boolean(busy) ||
+                              needsConsent ||
+                              excluded.includes(file.id) ||
+                              file.status !== "ready"
                             }
                             onChange={() => {
                               setSelected(toggle(selected, file.id));
@@ -403,8 +422,8 @@ export function ReportReview({ caseId }: { caseId: string }) {
                     </div>
                   ))}
                   <p className="report-option-note">
-                    제외 설정은 기존 리포트 문장을 자동으로 지우지 않으므로 관련 내용을 직접 수정해
-                    주세요.
+                    제외 목록을 바꾸면 자료를 기준으로 본문을 다시 구성해요. 기존 수동 편집은 이전
+                    버전에 보관돼요. 저장 후 내용을 다시 확인해 주세요.
                   </p>
                 </section>
               </div>
@@ -438,12 +457,20 @@ export function ReportReview({ caseId }: { caseId: string }) {
                 <button
                   type="button"
                   className="primary"
-                  disabled={Boolean(busy) || report.stale || dirty || !reviewed}
+                  disabled={
+                    Boolean(busy) ||
+                    ((report.stale || needsConsent) && !report.pdfAvailable) ||
+                    dirty ||
+                    !reviewed
+                  }
                   onClick={() =>
                     void run("PDF 준비 중…", async () => {
                       downloadBlob(
                         await ownedResult(api.reports.pdf(report.id)),
                         `BARO-${report.id}.pdf`,
+                      );
+                      setReport((current) =>
+                        current?.id === report.id ? { ...current, pdfAvailable: true } : current,
                       );
                       setNotice("PDF 다운로드를 시작했어요.");
                     })
@@ -453,7 +480,14 @@ export function ReportReview({ caseId }: { caseId: string }) {
                 </button>
                 <button
                   type="button"
-                  disabled={Boolean(busy) || report.stale || dirty || !reviewed || !selected.length}
+                  disabled={
+                    Boolean(busy) ||
+                    needsConsent ||
+                    report.stale ||
+                    dirty ||
+                    !reviewed ||
+                    !selected.length
+                  }
                   onClick={() =>
                     void run("ZIP 준비 중…", async () => {
                       downloadBlob(
@@ -500,7 +534,7 @@ export function ReportReview({ caseId }: { caseId: string }) {
             </button>
             <button
               type="button"
-              disabled={Boolean(busy) || (dirty && !report?.stale)}
+              disabled={Boolean(busy) || needsConsent || (dirty && !report?.stale)}
               onClick={() =>
                 void run("새 버전 생성 중…", async () => {
                   accept(await ownedResult(api.reports.generate(caseId)));

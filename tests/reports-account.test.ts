@@ -607,3 +607,26 @@ test("B intake and D report/delete share actual canonical namespaces across adap
     clearMockStore();
   }
 });
+
+test("existing mock report reads survive re-consent while case deletion clears material review and replay namespaces", async () => {
+  const f = fixture(),
+    report = await f.reports.get("case-demo");
+  f.update((state) => {
+    state.session.needsConsent = true;
+    state.fileReviews = {
+      "file-demo": { text: "보존하면 안 되는 교정" },
+      peer: { text: "다른 사건 교정" },
+    };
+    state.fileReviewReceipts = {
+      own: { signature: "own", value: { fileId: "file-demo" } },
+      peer: { signature: "peer", value: { fileId: "peer" } },
+    };
+  });
+  expect((await f.reports.get("case-demo")).id).toBe(report.id);
+  await expect(f.reports.generate("case-demo")).rejects.toMatchObject({ code: "CONSENT_REQUIRED" });
+  await f.account.deleteCase("case-demo", "DELETE");
+  expect(f.read().fileReviews).toEqual({ peer: { text: "다른 사건 교정" } });
+  expect(f.read().fileReviewReceipts).toEqual({
+    peer: { signature: "peer", value: { fileId: "peer" } },
+  });
+});

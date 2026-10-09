@@ -1,7 +1,7 @@
 import { z } from "zod";
-import type { ReportView } from "../../../client/api/types";
 import { maskReportText } from "../../../components/reports/download";
 import { idempotencyKeySchema, opaqueIdSchema } from "../../../contracts";
+import { CURRENT_POLICY_VERSIONS } from "../../../contracts/consent";
 import {
   type V2ReportBody,
   v2ReportBodySchema,
@@ -17,16 +17,17 @@ import {
   utf8Bytes,
   type V2Core,
 } from "../../db/v2-core";
-import { createV2FilesRepository } from "../../db/v2-files";
 import { jobInsertStatements } from "../../db/v2-jobs";
 import { runtimeDigest } from "../../db/v2-paid-runtime";
 import { createV2ReportsRepository } from "../../db/v2-reports";
 import { createV2StagingRepository } from "../../db/v2-staging";
+import { requireReportConsent } from "./fence";
 import {
   buildReportSource,
   ownedWorkspace,
   ReportError,
   type ReportReviewData,
+  reportFile,
   reportReviewSchema,
   reportText,
   sourceDigest,
@@ -68,8 +69,7 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
     now: clock(),
   });
   const canonical = createV2ReportsRepository(core, deps.guideHosts);
-  const accounting = createV2AccountingRepository(core),
-    files = createV2FilesRepository(core);
+  const accounting = createV2AccountingRepository(core);
   const row = async (a: Actor, id: string) => {
     opaqueIdSchema.parse(id);
     const result = await core
@@ -136,7 +136,7 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
       throw new ReportError("STALE_REVISION");
     return { row: r, body, review };
   };
-  const view = async (a: Actor, id: string): Promise<ReportView> => {
+  const view = async (a: Actor, id: string) => {
     const data = await read(a, id);
     const stale = data.review.sourceDigest !== (await sourceDigest(core, a, data.row.workspace_id));
     await row(a, id);
@@ -148,6 +148,12 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
       content: data.review.content,
       updatedAt: data.row.created_at,
       stale,
+      basis: {
+        workspaceRevision: data.row.workspace_revision,
+        summaryRevision: data.row.summary_revision,
+        generatedAt: data.body.generatedAt,
+      },
+      pdfAvailable: data.row.state === "ready" && !!data.row.pdf_blob_id,
       excludedFileIds: data.review.excludedFileIds,
       maskIdentifiers: data.review.maskIdentifiers,
     };
@@ -201,6 +207,7 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
     selectedOriginals: readonly string[] = [],
   ) {
     idempotencyKeySchema.parse(key);
+    await requireReportConsent(core, a);
     const replay = await accounting.findOperation(a, route, key, requestHash);
     if (replay?.kind === "conflict") throw new ReportError("IDEMPOTENCY_CONFLICT");
     if (replay?.kind === "replay") {
@@ -213,6 +220,8 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
     const current = await ownedWorkspace(core, a, caseId);
     if (current.status !== "active" || !current.confirmed_summary_revision)
       throw new ReportError("REVIEW_REQUIRED");
+    if (review.sourceDigest !== (await sourceDigest(core, a, caseId)))
+      throw new ReportError("STALE_REVISION");
     const id = review.parentReportId ? `export-${crypto.randomUUID()}` : crypto.randomUUID();
     const snapshotId = await stage(a, caseId, current.revision, id, body);
     const request = v2ReportCreateRequestSchema.parse({
@@ -233,7 +242,7 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
     const g = { ...a, workspaceId: caseId, expectedRevision: current.revision };
     const selections = [];
     for (const file of body.selectedFiles) {
-      const actual = await files.read(a, file.id);
+      const actual = await reportFile(core, a, file.id);
       if (
         actual?.status !== "ready" ||
         actual.revision !== file.revision ||
@@ -257,8 +266,11 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
       core.claim(
         g,
         claimId,
-        "w.status='active' AND w.current_job_id IS NULL AND w.confirmed_summary_revision=? AND EXISTS(SELECT 1 FROM v2_private_snapshots WHERE id=? AND owner_id=w.owner_id AND workspace_revision=w.revision AND state='sealed') AND NOT EXISTS(SELECT 1 FROM v2_idempotency WHERE owner_id=w.owner_id AND route=? AND key=? AND expires_at>?) AND coalesce((SELECT max(revision) FROM v2_reports WHERE workspace_id=w.id AND id NOT LIKE 'export-%'),0)=?",
+        "w.status='active' AND w.current_job_id IS NULL AND coalesce((SELECT value FROM app_metadata WHERE key='account-type:'||w.owner_id),'customer')='customer' AND EXISTS(SELECT 1 FROM user_consents WHERE user_id=w.owner_id AND terms_version=? AND privacy_version=? AND ai_notice_version=? AND over_14_confirmed=1) AND w.confirmed_summary_revision=? AND EXISTS(SELECT 1 FROM v2_private_snapshots WHERE id=? AND owner_id=w.owner_id AND workspace_revision=w.revision AND state='sealed') AND NOT EXISTS(SELECT 1 FROM v2_idempotency WHERE owner_id=w.owner_id AND route=? AND key=? AND expires_at>?) AND coalesce((SELECT max(revision) FROM v2_reports WHERE workspace_id=w.id AND id NOT LIKE 'export-%'),0)=?",
         [
+          CURRENT_POLICY_VERSIONS.termsVersion,
+          CURRENT_POLICY_VERSIONS.privacyVersion,
+          CURRENT_POLICY_VERSIONS.aiNoticeVersion,
           current.confirmed_summary_revision,
           snapshotId,
           route,
@@ -346,7 +358,10 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
       core.finish(claimId),
     ];
     try {
-      if (!(await core.changed(statements))) throw new ReportError("STALE_REVISION");
+      if (!(await core.changed(statements))) {
+        await requireReportConsent(core, a);
+        throw new ReportError("STALE_REVISION");
+      }
     } catch (error) {
       const receipt = await accounting.findOperation(a, route, key, requestHash);
       if (receipt?.kind === "replay") {
@@ -430,9 +445,15 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
         value.excludedFileIds,
         deps.guideHosts,
       );
+      // Exclusions rebuild source-derived text so material cannot survive in a stale free-text
+      // copy. The previous immutable report retains any earlier manual editing.
+      const exclusionsChanged =
+        JSON.stringify([...value.excludedFileIds].sort()) !==
+        JSON.stringify([...old.review.excludedFileIds].sort());
       const review = {
         ...old.review,
         ...value,
+        content: exclusionsChanged ? reportText(source.body, source.coverage) : value.content,
         format: "client_review_v1" as const,
         sourceDigest: source.digest,
       };

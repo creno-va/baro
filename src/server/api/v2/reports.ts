@@ -42,6 +42,8 @@ export function createReportsApi(
       );
     if (error instanceof ReportError) {
       const messages = {
+        CONSENT_REQUIRED:
+          "현재 필수 동의 후 새 리포트를 만들 수 있어요. 저장된 리포트와 PDF는 계속 확인할 수 있어요.",
         NOT_FOUND: "리포트를 찾을 수 없거나 접근할 수 없어요.",
         STALE_REVISION: "사건이나 검토 버전이 변경됐어요. 다시 불러오거나 새 버전을 만들어 주세요.",
         REVIEW_REQUIRED: "현재 사건 요약을 확인한 뒤 리포트를 만들어 주세요.",
@@ -60,21 +62,23 @@ export function createReportsApi(
           "한 번에 처리할 다운로드 한도를 넘었어요. 원본 수나 크기를 줄여 나눠 다운로드해 주세요.",
       };
       const status =
-        error.code === "NOT_FOUND"
-          ? 404
-          : error.code === "EXPORT_LIMIT_EXCEEDED"
-            ? 413
-            : error.code === "VALIDATION_ERROR"
-              ? 400
-              : error.code === "USER_QUOTA_EXCEEDED"
-                ? 429
-                : [
-                      "BUDGET_UNAVAILABLE",
-                      "STORAGE_UNAVAILABLE",
-                      "LEGAL_SOURCE_UNAVAILABLE",
-                    ].includes(error.code)
-                  ? 503
-                  : 409;
+        error.code === "CONSENT_REQUIRED"
+          ? 403
+          : error.code === "NOT_FOUND"
+            ? 404
+            : error.code === "EXPORT_LIMIT_EXCEEDED"
+              ? 413
+              : error.code === "VALIDATION_ERROR"
+                ? 400
+                : error.code === "USER_QUOTA_EXCEEDED"
+                  ? 429
+                  : [
+                        "BUDGET_UNAVAILABLE",
+                        "STORAGE_UNAVAILABLE",
+                        "LEGAL_SOURCE_UNAVAILABLE",
+                      ].includes(error.code)
+                    ? 503
+                    : 409;
       return c.json(errorBody(c, error.code, messages[error.code], status === 503), status);
     }
     return c.json(
@@ -103,7 +107,7 @@ export function createReportsApi(
     );
   };
   app.get("/cases/:caseId/reports", async (c) => {
-    const access = await caseAccess(c, false, true);
+    const access = await caseAccess(c);
     if (access.response) return access.response;
     z.strictObject({}).parse(c.req.query());
     return c.json(
@@ -136,7 +140,7 @@ export function createReportsApi(
     );
   });
   app.get("/reports/:reportId/pdf", async (c) => {
-    const access = await caseAccess(c, false, true);
+    const access = await caseAccess(c);
     if (access.response) return access.response;
     z.strictObject({}).parse(c.req.query());
     const id = opaqueIdSchema.parse(c.req.param("reportId")),
