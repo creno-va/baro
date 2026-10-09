@@ -1,7 +1,9 @@
 import { expect, test } from "bun:test";
-import type { V2FileObservation } from "../src/contracts/v2";
+import type { V2Coverage, V2FileObservation } from "../src/contracts/v2";
+import { snapshotStatements } from "../src/server/db/v2-core";
 import { createV2DeletionRepository } from "../src/server/db/v2-deletion";
 import { createFileReviewService } from "../src/server/modules/files/review";
+import { fixture, uploaded } from "./helpers/file-processing-fixture";
 import { readyFile, reportFixture } from "./helpers/report-fixture";
 import { reportHttpFixture } from "./helpers/report-http-fixture";
 import { seedTestSession } from "./helpers/session";
@@ -115,6 +117,105 @@ test("bounded material correction preserves original, pages, coverage and surviv
     await Bun.write(`${Bun.env.BARO_MATERIAL_EVIDENCE_DIR}/corrected-korean-report.pdf`, bytes);
     await Bun.write(`${Bun.env.BARO_MATERIAL_EVIDENCE_DIR}/selected-original.zip`, zipBytes);
   }
+});
+test("transcript correction keeps exact source time and partial coverage; recoverable gaps differ from rejected files", async () => {
+  const f = await reportFixture(
+    await fixture({
+      probe: async ({ byteLength, open }) => {
+        await new Response(open()).arrayBuffer();
+        return { category: "audio", format: "wav", byteLength, durationSeconds: 30 };
+      },
+    }),
+  );
+  const u = await uploaded(f),
+    fileId = u.session.fileId;
+  const coverage: V2Coverage = {
+    category: "audio",
+    audio: {
+      durationSeconds: 30,
+      status: "partial",
+      intervals: [
+        { startSeconds: 0, endSeconds: 12.5, status: "processed" },
+        { startSeconds: 12.5, endSeconds: 19.25, status: "missing" },
+        { startSeconds: 19.25, endSeconds: 30, status: "low_quality" },
+      ],
+    },
+  };
+  const coverageId = crypto.randomUUID(),
+    claim = crypto.randomUUID(),
+    rowId = crypto.randomUUID();
+  const original: V2FileObservation = {
+    id: crypto.randomUUID(),
+    text: "원본 전사 문장",
+    position: { kind: "audio", startSeconds: 2.25, endSeconds: 8.75 },
+    certainty: "observed",
+    userEdited: false,
+    included: true,
+  };
+  await f.core.binding.batch([
+    f.core.claim({ ...f.actor, workspaceId: f.workspaceId, expectedRevision: f.rev() }, claim),
+    ...(await snapshotStatements(
+      f.core,
+      {
+        id: coverageId,
+        ownerId: f.actor.ownerId,
+        workspaceId: f.workspaceId,
+        targetId: fileId,
+        revision: 2,
+        purpose: "file_coverage",
+        now: f.actor.now,
+      },
+      coverage,
+      claim,
+    )),
+    f.core.finish(claim),
+  ]);
+  f.db.sqlite
+    .query(
+      "UPDATE v2_files SET state='ready',coverage_snapshot_id=?,operation_id=(SELECT operation_id FROM v2_upload_sessions WHERE file_id=?) WHERE id=?",
+    )
+    .run(coverageId, fileId, fileId);
+  f.db.sqlite
+    .query(
+      "INSERT INTO v2_file_observations(id,entity_id,file_id,revision,file_revision,ordinal,encrypted_payload,snapshot_id) VALUES(?,?,?,2,2,0,?,?)",
+    )
+    .run(
+      rowId,
+      original.id,
+      fileId,
+      await f.core.encrypt("v2_file_observations", rowId, f.actor.ownerId, 2, original),
+      coverageId,
+    );
+  const service = createFileReviewService(f.core, () => f.actor.now),
+    a = f.actor.ownerId;
+  const before = await service.read(a, f.workspaceId, fileId);
+  expect(before.coverage).toEqual(coverage);
+  const saved = await service.start(a, f.workspaceId, fileId, f.rev(), crypto.randomUUID(), {
+    expectedRevision: 2,
+    edits: [{ observationId: original.id, text: "사용자 교정한 전사 문장", included: true }],
+  });
+  expect(saved.status).toBe("ready");
+  const reopened = await service.read(a, f.workspaceId, fileId);
+  expect(reopened.coverage).toEqual(coverage);
+  expect(reopened.observations[0]?.original).toEqual(original);
+  expect(reopened.observations[0]?.value.position).toEqual(original.position);
+  const report = await f.reports.get(a, f.workspaceId);
+  expect(report.content).toContain("2.25–8.75초");
+  expect(report.content).toContain("12.5–19.25초 누락");
+  expect(report.content).toContain("19.25–30초 품질 낮음");
+  expect(report.content).toContain("사용자 교정한 전사 문장");
+  f.db.sqlite
+    .query("UPDATE v2_files SET state='failed',failure_code='COVERAGE_INCOMPLETE' WHERE id=?")
+    .run(fileId);
+  const gaps = await service.read(a, f.workspaceId, fileId);
+  expect(gaps.recovery?.actions).toContain("review_original");
+  expect(gaps.recovery?.actions).toContain("retry");
+  f.db.sqlite
+    .query("UPDATE v2_files SET state='failed',failure_code='FILE_REJECTED' WHERE id=?")
+    .run(fileId);
+  const rejected = await service.read(a, f.workspaceId, fileId);
+  expect(rejected.recovery?.actions).toContain("replace_file");
+  expect(rejected.recovery?.actions).not.toContain("retry");
 });
 test("review HTTP isolates owners/workspaces and preserves read/download/delete before re-consent", async () => {
   const f = await reportHttpFixture(),
