@@ -88,7 +88,7 @@ export function requireMockCase(state: WorkspaceMockState, id: string, write = f
   if (!state.session.user) throw new WorkspaceMockError("UNAUTHENTICATED", "로그인이 필요해요.");
   if (state.deletedAccountIds?.includes(state.session.user.id))
     throw new WorkspaceMockError("UNAUTHENTICATED", "로그인이 필요해요.");
-  if (state.session.needsConsent)
+  if (write && state.session.needsConsent)
     throw new WorkspaceMockError("CONSENT_REQUIRED", "동의를 확인해 주세요.");
   const item = state.cases[id];
   if (

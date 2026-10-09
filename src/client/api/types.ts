@@ -1,3 +1,4 @@
+import type { V2FactReference } from "../../contracts/v2";
 import type { V2Summary } from "../../contracts/v2/intake";
 
 export type AccountType = "customer" | "lawyer";
@@ -15,6 +16,7 @@ export type CaseView = {
   updatedAt: string;
   summary: string;
   schemaVersion?: "1" | "2";
+  summaryDetails?: V2Summary;
 };
 export type QuestionView = {
   id: string;
@@ -30,9 +32,18 @@ export type MessageView = {
   text: string;
   status: "pending" | "complete" | "failed";
   createdAt: string;
+  references?: V2FactReference[];
+  citations?: { id: string; title: string; url: string }[];
+  warnings?: string[];
 };
 export type ActionView = { id: string; title: string; detail: string; done: boolean };
-export type TimelineView = { id: string; date: string; title: string; detail: string };
+export type TimelineView = {
+  id: string;
+  date: string;
+  datePrecision?: "day" | "month" | "year" | "unknown";
+  title: string;
+  detail: string;
+};
 export type FileView = {
   id: string;
   name: string;
@@ -54,6 +65,8 @@ export type WorkspaceView = {
   notices?: string[];
 };
 export type ReportView = {
+  basis?: { workspaceRevision: number; summaryRevision: number; generatedAt: string };
+  pdfAvailable?: boolean;
   id: string;
   caseId: string;
   revision: number;

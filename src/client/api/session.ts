@@ -1,5 +1,6 @@
 import type { ConsentInput } from "../../contracts/consent";
 import { authClient } from "../auth";
+import { accessHref, returnPathFromLocation } from "../return-path";
 import { ApiError, apiMode, request } from "./core";
 import type { AccountType, Provider, SessionView } from "./types";
 export const roleStart = (session: SessionView) =>
@@ -49,8 +50,8 @@ export const sessionApi = {
     const result = await authClient.signIn
       .social({
         provider,
-        callbackURL: "/consent",
-        errorCallbackURL: "/login?error=oauth",
+        callbackURL: accessHref("consent", returnPathFromLocation() ?? undefined),
+        errorCallbackURL: `${accessHref("login", returnPathFromLocation() ?? undefined)}${returnPathFromLocation() ? "&" : "?"}error=oauth`,
       })
       .catch(() => {
         throw new ApiError("UNAVAILABLE", "로그인을 시작하지 못했어요. 다시 시도해 주세요.", true);

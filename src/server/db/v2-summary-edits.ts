@@ -64,6 +64,8 @@ const cursorSchema = z.strictObject({
   ]),
   field: z.string(),
   seen: z.array(z.string()).max(9),
+  extraFacts: z.number().int().nonnegative().default(0),
+  extraParties: z.number().int().nonnegative().default(0),
   factCount: z.number().int().min(0).max(300),
   partyCount: z.number().int().min(0).max(30),
   unknownCount: z.number().int().min(0).max(100),
@@ -154,7 +156,7 @@ export function createV2SummaryEditsRepository(core: V2Core) {
   const find = (g: WorkspaceGuard, id: string) =>
     core
       .statement(
-        `SELECT e.*,c.revision AS cursor_revision,c.encrypted_payload AS cursor_payload FROM v2_summary_edit_stages e JOIN v2_summary_edit_cursors c ON c.id=e.id JOIN v2_workspaces w ON w.id=e.workspace_id JOIN v2_intakes i ON i.id=w.id JOIN v2_summaries s ON s.id=e.source_summary_id JOIN v2_private_snapshots p ON p.id=s.snapshot_id JOIN v2_private_snapshots q ON q.id=e.target_snapshot_id WHERE e.id=? AND e.owner_id=? AND w.id=? AND w.owner_id=e.owner_id AND w.revision=? AND w.revision=e.workspace_revision AND w.status='intake' AND w.current_job_id IS NULL AND i.status='reviewing_summary' AND i.summary_id=s.id AND i.revision=e.intake_revision AND s.revision=e.source_revision AND s.snapshot_id=e.source_snapshot_id AND p.state='published' AND p.owner_id=w.owner_id AND p.workspace_id=w.id AND p.target_id=w.id AND p.purpose='summary' AND p.revision=e.source_revision AND s.workspace_id=w.id AND q.state='staging' AND q.owner_id=w.owner_id AND q.workspace_id=w.id AND q.target_id=w.id AND q.purpose='summary' AND q.revision=e.target_revision AND q.workspace_revision=w.revision AND ${aliveWorkspace} AND e.expires_at>?`,
+        `SELECT e.*,c.revision AS cursor_revision,c.encrypted_payload AS cursor_payload FROM v2_summary_edit_stages e JOIN v2_summary_edit_cursors c ON c.id=e.id JOIN v2_workspaces w ON w.id=e.workspace_id JOIN v2_intakes i ON i.id=w.id JOIN v2_summaries s ON s.id=e.source_summary_id JOIN v2_private_snapshots p ON p.id=s.snapshot_id JOIN v2_private_snapshots q ON q.id=e.target_snapshot_id WHERE e.id=? AND e.owner_id=? AND w.id=? AND w.owner_id=e.owner_id AND w.revision=? AND w.revision=e.workspace_revision AND w.status IN ('intake','active') AND w.current_job_id IS NULL AND i.status IN ('reviewing_summary','confirmed') AND i.summary_id=s.id AND i.revision=e.intake_revision AND s.revision=e.source_revision AND s.snapshot_id=e.source_snapshot_id AND p.state='published' AND p.owner_id=w.owner_id AND p.workspace_id=w.id AND p.target_id=w.id AND p.purpose='summary' AND p.revision=e.source_revision AND s.workspace_id=w.id AND q.state='staging' AND q.owner_id=w.owner_id AND q.workspace_id=w.id AND q.target_id=w.id AND q.purpose='summary' AND q.revision=e.target_revision AND q.workspace_revision=w.revision AND ${aliveWorkspace} AND e.expires_at>?`,
         [id, g.ownerId, g.workspaceId, g.expectedRevision, g.now],
       )
       .first<Stage>();
@@ -167,7 +169,7 @@ export function createV2SummaryEditsRepository(core: V2Core) {
     core.claim(
       g,
       id,
-      `w.status='intake' AND w.current_job_id IS NULL AND EXISTS(SELECT 1 FROM v2_summary_edit_stages e JOIN v2_summary_edit_cursors c ON c.id=e.id JOIN v2_intakes i ON i.id=e.workspace_id JOIN v2_summaries s ON s.id=e.source_summary_id JOIN v2_private_snapshots p ON p.id=e.source_snapshot_id WHERE e.id=? AND e.owner_id=w.owner_id AND e.workspace_id=w.id AND e.workspace_revision=w.revision AND e.encrypted_payload=? AND e.expires_at>? AND c.revision=? AND c.encrypted_payload=? AND i.summary_id=s.id AND i.status='reviewing_summary' AND i.revision=e.intake_revision AND i.encrypted_payload=? AND s.snapshot_id=p.id AND s.revision=e.source_revision AND p.encrypted_payload=? AND p.state='published' AND p.owner_id=w.owner_id AND p.workspace_id=w.id AND p.target_id=w.id AND p.purpose='summary' AND p.revision=e.source_revision AND EXISTS(SELECT 1 FROM v2_private_snapshots q WHERE q.id=e.target_snapshot_id AND q.state='staging' AND q.owner_id=w.owner_id AND q.workspace_id=w.id AND q.target_id=w.id AND q.purpose='summary' AND q.revision=e.target_revision AND q.workspace_revision=w.revision))`,
+      `w.status IN ('intake','active') AND w.current_job_id IS NULL AND EXISTS(SELECT 1 FROM v2_summary_edit_stages e JOIN v2_summary_edit_cursors c ON c.id=e.id JOIN v2_intakes i ON i.id=e.workspace_id JOIN v2_summaries s ON s.id=e.source_summary_id JOIN v2_private_snapshots p ON p.id=e.source_snapshot_id WHERE e.id=? AND e.owner_id=w.owner_id AND e.workspace_id=w.id AND e.workspace_revision=w.revision AND e.encrypted_payload=? AND e.expires_at>? AND c.revision=? AND c.encrypted_payload=? AND i.summary_id=s.id AND i.status IN ('reviewing_summary','confirmed') AND i.revision=e.intake_revision AND i.encrypted_payload=? AND s.snapshot_id=p.id AND s.revision=e.source_revision AND p.encrypted_payload=? AND p.state='published' AND p.owner_id=w.owner_id AND p.workspace_id=w.id AND p.target_id=w.id AND p.purpose='summary' AND p.revision=e.source_revision AND EXISTS(SELECT 1 FROM v2_private_snapshots q WHERE q.id=e.target_snapshot_id AND q.state='staging' AND q.owner_id=w.owner_id AND q.workspace_id=w.id AND q.target_id=w.id AND q.purpose='summary' AND q.revision=e.target_revision AND q.workspace_revision=w.revision))`,
       [
         e.id,
         e.encrypted_payload,
@@ -232,7 +234,7 @@ export function createV2SummaryEditsRepository(core: V2Core) {
         }
         const source = await core
           .statement(
-            `SELECT s.*,p.encrypted_payload AS source_header,p.part_count,p.byte_length,i.encrypted_payload AS intake_payload FROM v2_summaries s JOIN v2_intakes i ON i.summary_id=s.id JOIN v2_workspaces w ON w.id=s.workspace_id JOIN v2_private_snapshots p ON p.id=s.snapshot_id WHERE s.id=? AND w.id=? AND w.owner_id=? AND w.revision=? AND w.status='intake' AND w.current_job_id IS NULL AND i.status='reviewing_summary' AND p.state='published' AND p.owner_id=w.owner_id AND p.workspace_id=w.id AND p.purpose='summary' AND p.target_id=w.id AND p.revision=s.revision AND ${aliveWorkspace}`,
+            `SELECT s.*,p.encrypted_payload AS source_header,p.part_count,p.byte_length,i.encrypted_payload AS intake_payload FROM v2_summaries s JOIN v2_intakes i ON i.summary_id=s.id JOIN v2_workspaces w ON w.id=s.workspace_id JOIN v2_private_snapshots p ON p.id=s.snapshot_id WHERE s.id=? AND w.id=? AND w.owner_id=? AND w.revision=? AND w.status IN ('intake','active') AND w.current_job_id IS NULL AND i.status IN ('reviewing_summary','confirmed') AND p.state='published' AND p.owner_id=w.owner_id AND p.workspace_id=w.id AND p.purpose='summary' AND p.target_id=w.id AND p.revision=s.revision AND ${aliveWorkspace}`,
             [input.summaryId, g.workspaceId, g.ownerId, g.expectedRevision],
           )
           .first<{
@@ -248,7 +250,7 @@ export function createV2SummaryEditsRepository(core: V2Core) {
         if (
           await core
             .statement(
-              "SELECT 1 AS invalid FROM json_each(?) e WHERE NOT EXISTS(SELECT 1 FROM v2_facts WHERE workspace_id=? AND summary_revision=? AND entity_id=json_extract(e.value,'$.factId') AND snapshot_id=?) LIMIT 1",
+              "SELECT 1 AS invalid FROM json_each(?) e WHERE NOT EXISTS(SELECT 1 FROM v2_facts WHERE workspace_id=? AND summary_revision=? AND entity_id=json_extract(e.value,'$.factId') AND (snapshot_id=? OR snapshot_id IS NULL)) LIMIT 1",
               [
                 JSON.stringify(request.factEdits ?? []),
                 g.workspaceId,
@@ -302,7 +304,7 @@ export function createV2SummaryEditsRepository(core: V2Core) {
           core.claim(
             g,
             claimId,
-            `w.status='intake' AND w.current_job_id IS NULL AND EXISTS(SELECT 1 FROM v2_intakes i JOIN v2_summaries s ON s.id=i.summary_id JOIN v2_private_snapshots p ON p.id=s.snapshot_id WHERE i.id=w.id AND i.status='reviewing_summary' AND s.id=? AND s.revision=? AND i.encrypted_payload=? AND p.state='published' AND p.encrypted_payload=?)`,
+            `w.status IN ('intake','active') AND w.current_job_id IS NULL AND EXISTS(SELECT 1 FROM v2_intakes i JOIN v2_summaries s ON s.id=i.summary_id JOIN v2_private_snapshots p ON p.id=s.snapshot_id WHERE i.id=w.id AND i.status IN ('reviewing_summary','confirmed') AND s.id=? AND s.revision=? AND i.encrypted_payload=? AND p.state='published' AND p.encrypted_payload=?)`,
             [input.summaryId, source.revision, source.intake_payload, source.source_header],
           ),
           core.statement(
@@ -434,8 +436,9 @@ export function createV2SummaryEditsRepository(core: V2Core) {
               : parse(v2SummarySchema.shape.parties.element, value);
           const row = await core
             .statement(
-              `SELECT id,encrypted_payload FROM ${kind === "fact" ? "v2_facts" : "v2_parties"} WHERE snapshot_id=? AND entity_id=? AND summary_revision=?`,
+              `SELECT id,encrypted_payload FROM ${kind === "fact" ? "v2_facts" : "v2_parties"} WHERE workspace_id=? AND (snapshot_id=? OR snapshot_id IS NULL) AND entity_id=? AND summary_revision=?`,
               [
+                g.workspaceId,
                 e.source_snapshot_id,
                 parse(z.object({ id: opaqueIdSchema }), original).id,
                 e.source_revision,
@@ -467,8 +470,22 @@ export function createV2SummaryEditsRepository(core: V2Core) {
                 ...fact,
                 text: change.text,
                 userEdited: true,
-                certainty: fact.certainty === "observed" ? "uncertain" : fact.certainty,
+                certainty:
+                  change.certainty ??
+                  (fact.certainty === "observed" ? "uncertain" : fact.certainty),
+                conflictingFactIds: change.conflictingFactIds ?? fact.conflictingFactIds,
               });
+              const ids = parse(v2FactSchema, edited).conflictingFactIds;
+              for (const id of ids)
+                if (
+                  !(await core
+                    .statement(
+                      "SELECT id FROM v2_facts WHERE workspace_id=? AND summary_revision=? AND entity_id=?",
+                      [g.workspaceId, e.source_revision, id],
+                    )
+                    .first())
+                )
+                  throw new V2RepositoryError("REPOSITORY_INPUT_INVALID");
               c.edited.push(fact.id);
             }
             const refs = referenceCommitPredicate(fact.references);
@@ -479,7 +496,7 @@ export function createV2SummaryEditsRepository(core: V2Core) {
           const target = await core.encrypt(table, targetId, g.ownerId, e.target_revision, edited);
           const ordinal = kind === "fact" ? c.factCount++ : c.partyCount++;
           sourceGuards.push({
-            sql: `EXISTS(SELECT 1 FROM ${table} WHERE id=? AND snapshot_id=? AND encrypted_payload=?)`,
+            sql: `EXISTS(SELECT 1 FROM ${table} WHERE id=? AND (snapshot_id=? OR snapshot_id IS NULL) AND encrypted_payload=?)`,
             values: [row.id, e.source_snapshot_id, row.encrypted_payload],
           });
           writes.push(
@@ -633,6 +650,35 @@ export function createV2SummaryEditsRepository(core: V2Core) {
             continue;
           }
           if (c.phase === "array" && c.buffer[0] === "]") {
+            if (c.field === "facts" || c.field === "parties") {
+              const facts = c.field === "facts";
+              const table = facts ? "v2_facts" : "v2_parties";
+              const row = await core
+                .statement(
+                  `SELECT id,encrypted_payload FROM ${table} WHERE workspace_id=? AND summary_revision=? AND snapshot_id IS NULL ORDER BY id LIMIT 1 OFFSET ?`,
+                  [g.workspaceId, e.source_revision, facts ? c.extraFacts : c.extraParties],
+                )
+                .first<{ id: string; encrypted_payload: string }>();
+              if (row) {
+                const value = await core.decrypt(
+                  table,
+                  row.id,
+                  g.ownerId,
+                  e.source_revision,
+                  row.encrypted_payload,
+                  (facts
+                    ? v2FactSchema
+                    : v2SummarySchema.shape.parties.element) as z.ZodType<unknown>,
+                );
+                const result = await normalized(facts ? "fact" : "party", value);
+                emit(`${c.arrayFirst ? "" : ","}${JSON.stringify(result)}`);
+                c.arrayFirst = false;
+                if (facts) c.extraFacts++;
+                else c.extraParties++;
+                items++;
+                continue;
+              }
+            }
             if (c.field === "unknowns" && c.arrayFirst && data.request.unknowns !== undefined)
               emit(data.request.unknowns.map((item) => JSON.stringify(item)).join(","));
             if (c.field === "notices" && c.noticeCount < 1)
@@ -753,7 +799,7 @@ export function createV2SummaryEditsRepository(core: V2Core) {
         const extra = sourceGuards.map((guard) => guard.sql).join(" AND ");
         const guarded = extra
           ? core.statement(
-              `INSERT INTO v2_mutation_claims(id,owner_id,target_id,revision) SELECT ?,w.owner_id,w.id,w.revision FROM v2_workspaces w WHERE w.id=? AND w.owner_id=? AND w.revision=? AND w.status='intake' AND w.current_job_id IS NULL AND ${aliveWorkspace} AND ${extra} AND EXISTS(SELECT 1 FROM v2_summary_edit_stages e JOIN v2_summary_edit_cursors c ON c.id=e.id JOIN v2_intakes i ON i.id=e.workspace_id JOIN v2_private_snapshots p ON p.id=e.source_snapshot_id WHERE e.id=? AND e.owner_id=w.owner_id AND e.workspace_revision=w.revision AND e.expires_at>? AND c.revision=? AND c.encrypted_payload=? AND i.summary_id=e.source_summary_id AND i.status='reviewing_summary' AND i.revision=e.intake_revision AND i.encrypted_payload=? AND p.encrypted_payload=? AND p.state='published' AND p.owner_id=w.owner_id AND p.workspace_id=w.id AND p.target_id=w.id AND p.purpose='summary' AND p.revision=e.source_revision AND EXISTS(SELECT 1 FROM v2_private_snapshots q WHERE q.id=e.target_snapshot_id AND q.state='staging' AND q.owner_id=w.owner_id AND q.workspace_id=w.id AND q.target_id=w.id AND q.purpose='summary' AND q.revision=e.target_revision AND q.workspace_revision=w.revision))`,
+              `INSERT INTO v2_mutation_claims(id,owner_id,target_id,revision) SELECT ?,w.owner_id,w.id,w.revision FROM v2_workspaces w WHERE w.id=? AND w.owner_id=? AND w.revision=? AND w.status IN ('intake','active') AND w.current_job_id IS NULL AND ${aliveWorkspace} AND ${extra} AND EXISTS(SELECT 1 FROM v2_summary_edit_stages e JOIN v2_summary_edit_cursors c ON c.id=e.id JOIN v2_intakes i ON i.id=e.workspace_id JOIN v2_private_snapshots p ON p.id=e.source_snapshot_id WHERE e.id=? AND e.owner_id=w.owner_id AND e.workspace_revision=w.revision AND e.expires_at>? AND c.revision=? AND c.encrypted_payload=? AND i.summary_id=e.source_summary_id AND i.status IN ('reviewing_summary','confirmed') AND i.revision=e.intake_revision AND i.encrypted_payload=? AND p.encrypted_payload=? AND p.state='published' AND p.owner_id=w.owner_id AND p.workspace_id=w.id AND p.target_id=w.id AND p.purpose='summary' AND p.revision=e.source_revision AND EXISTS(SELECT 1 FROM v2_private_snapshots q WHERE q.id=e.target_snapshot_id AND q.state='staging' AND q.owner_id=w.owner_id AND q.workspace_id=w.id AND q.target_id=w.id AND q.purpose='summary' AND q.revision=e.target_revision AND q.workspace_revision=w.revision))`,
               [
                 claimId,
                 g.workspaceId,
@@ -865,9 +911,9 @@ export function createV2SummaryEditsRepository(core: V2Core) {
  NOT EXISTS(SELECT 1 FROM v2_fact_references r JOIN v2_facts f ON f.id=r.fact_id JOIN v2_workspaces w ON w.id=f.workspace_id WHERE f.snapshot_id=? AND NOT ((r.kind='intake_narrative' AND r.source_revision=w.intake_revision) OR (r.kind='intake_answer' AND r.source_revision=w.intake_revision AND EXISTS(SELECT 1 FROM v2_answers a JOIN v2_question_batches b ON b.id=a.batch_id WHERE b.workspace_id=w.id AND a.question_id=r.source_id AND a.status='answered')) OR (r.kind='user_message' AND EXISTS(SELECT 1 FROM v2_messages m WHERE m.id=r.source_id AND m.workspace_id=w.id AND m.role='user' AND m.workspace_revision=r.source_revision)) OR (r.kind='user_material' AND EXISTS(SELECT 1 FROM v2_files f WHERE f.id=r.source_id AND f.workspace_id=w.id AND f.revision=r.source_revision AND f.state='ready' AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='file' AND target_id=f.id))) OR (r.kind='official_source' AND EXISTS(SELECT 1 FROM v2_citation_bindings c WHERE c.id=r.source_id AND c.workspace_id=w.id)))) AND
  (SELECT count(*) FROM v2_private_parts WHERE snapshot_id=?)=? AND (SELECT count(*) FROM v2_summary_edit_receipts WHERE stage_id=? AND kind='source_part')=? AND
  (SELECT count(*) FROM v2_private_parts WHERE snapshot_id=?)=? AND (SELECT count(*) FROM v2_summary_edit_receipts WHERE stage_id=? AND kind='target_part')=? AND
+ (SELECT count(*) FROM v2_facts WHERE workspace_id=? AND summary_revision=?)=? AND (SELECT count(*) FROM v2_parties WHERE workspace_id=? AND summary_revision=?)=? AND
  (SELECT count(*) FROM v2_facts WHERE snapshot_id=?)=? AND (SELECT count(*) FROM v2_parties WHERE snapshot_id=?)=? AND
- (SELECT count(*) FROM v2_facts WHERE snapshot_id=?)=? AND (SELECT count(*) FROM v2_parties WHERE snapshot_id=?)=? AND
- NOT EXISTS(SELECT 1 FROM v2_summary_edit_receipts r WHERE r.stage_id=? AND CASE r.kind WHEN 'source_part' THEN NOT EXISTS(SELECT 1 FROM v2_private_parts p WHERE p.id=r.source_id AND p.snapshot_id=? AND p.part_index=r.ordinal AND p.encrypted_payload=json_extract(r.source_payload,'$.payload') AND p.byte_length=json_extract(r.source_payload,'$.bytes')) WHEN 'target_part' THEN NOT EXISTS(SELECT 1 FROM v2_private_parts p WHERE p.id=r.target_id AND p.snapshot_id=? AND p.part_index=r.ordinal AND p.encrypted_payload=json_extract(r.target_payload,'$.payload') AND p.byte_length=json_extract(r.target_payload,'$.bytes')) WHEN 'fact' THEN NOT EXISTS(SELECT 1 FROM v2_facts s JOIN v2_facts t ON t.id=r.target_id WHERE s.id=r.source_id AND s.snapshot_id=? AND s.encrypted_payload=json_extract(r.source_payload,'$.payload') AND s.entity_id=json_extract(r.source_payload,'$.entityId') AND s.revision=json_extract(r.source_payload,'$.revision') AND s.summary_revision=s.revision AND s.workspace_id=json_extract(r.source_payload,'$.workspaceId') AND t.snapshot_id=? AND t.encrypted_payload=json_extract(r.target_payload,'$.payload') AND t.entity_id=json_extract(r.target_payload,'$.entityId') AND t.revision=json_extract(r.target_payload,'$.revision') AND t.summary_revision=t.revision AND t.workspace_id=json_extract(r.target_payload,'$.workspaceId')) WHEN 'party' THEN NOT EXISTS(SELECT 1 FROM v2_parties s JOIN v2_parties t ON t.id=r.target_id WHERE s.id=r.source_id AND s.snapshot_id=? AND s.encrypted_payload=json_extract(r.source_payload,'$.payload') AND s.entity_id=json_extract(r.source_payload,'$.entityId') AND s.revision=json_extract(r.source_payload,'$.revision') AND s.summary_revision=s.revision AND s.workspace_id=json_extract(r.source_payload,'$.workspaceId') AND t.snapshot_id=? AND t.encrypted_payload=json_extract(r.target_payload,'$.payload') AND t.entity_id=json_extract(r.target_payload,'$.entityId') AND t.revision=json_extract(r.target_payload,'$.revision') AND t.summary_revision=t.revision AND t.workspace_id=json_extract(r.target_payload,'$.workspaceId')) END)
+ NOT EXISTS(SELECT 1 FROM v2_summary_edit_receipts r WHERE r.stage_id=? AND CASE r.kind WHEN 'source_part' THEN NOT EXISTS(SELECT 1 FROM v2_private_parts p WHERE p.id=r.source_id AND p.snapshot_id=? AND p.part_index=r.ordinal AND p.encrypted_payload=json_extract(r.source_payload,'$.payload') AND p.byte_length=json_extract(r.source_payload,'$.bytes')) WHEN 'target_part' THEN NOT EXISTS(SELECT 1 FROM v2_private_parts p WHERE p.id=r.target_id AND p.snapshot_id=? AND p.part_index=r.ordinal AND p.encrypted_payload=json_extract(r.target_payload,'$.payload') AND p.byte_length=json_extract(r.target_payload,'$.bytes')) WHEN 'fact' THEN NOT EXISTS(SELECT 1 FROM v2_facts s JOIN v2_facts t ON t.id=r.target_id WHERE s.id=r.source_id AND (s.snapshot_id=? OR s.snapshot_id IS NULL) AND s.encrypted_payload=json_extract(r.source_payload,'$.payload') AND s.entity_id=json_extract(r.source_payload,'$.entityId') AND s.revision=json_extract(r.source_payload,'$.revision') AND s.summary_revision=s.revision AND s.workspace_id=json_extract(r.source_payload,'$.workspaceId') AND t.snapshot_id=? AND t.encrypted_payload=json_extract(r.target_payload,'$.payload') AND t.entity_id=json_extract(r.target_payload,'$.entityId') AND t.revision=json_extract(r.target_payload,'$.revision') AND t.summary_revision=t.revision AND t.workspace_id=json_extract(r.target_payload,'$.workspaceId')) WHEN 'party' THEN NOT EXISTS(SELECT 1 FROM v2_parties s JOIN v2_parties t ON t.id=r.target_id WHERE s.id=r.source_id AND (s.snapshot_id=? OR s.snapshot_id IS NULL) AND s.encrypted_payload=json_extract(r.source_payload,'$.payload') AND s.entity_id=json_extract(r.source_payload,'$.entityId') AND s.revision=json_extract(r.source_payload,'$.revision') AND s.summary_revision=s.revision AND s.workspace_id=json_extract(r.source_payload,'$.workspaceId') AND t.snapshot_id=? AND t.encrypted_payload=json_extract(r.target_payload,'$.payload') AND t.entity_id=json_extract(r.target_payload,'$.entityId') AND t.revision=json_extract(r.target_payload,'$.revision') AND t.summary_revision=t.revision AND t.workspace_id=json_extract(r.target_payload,'$.workspaceId')) END)
  THEN 1 ELSE 0 END WHERE id=?`,
           [
             e.target_snapshot_id,
@@ -881,9 +927,11 @@ export function createV2SummaryEditsRepository(core: V2Core) {
             cursor.targetIndex,
             id,
             cursor.targetIndex,
-            e.source_snapshot_id,
+            g.workspaceId,
+            e.source_revision,
             cursor.factCount,
-            e.source_snapshot_id,
+            g.workspaceId,
+            e.source_revision,
             cursor.partyCount,
             e.target_snapshot_id,
             cursor.factCount,
@@ -918,11 +966,14 @@ export function createV2SummaryEditsRepository(core: V2Core) {
             `UPDATE v2_private_snapshots SET state='published' WHERE id=? AND state='staging' AND ${sqlClaim}`,
             [e.target_snapshot_id, claimId],
           ),
-          core.statement(`UPDATE v2_intakes SET summary_id=? WHERE id=? AND ${sqlClaim}`, [
-            summaryId,
-            g.workspaceId,
-            claimId,
-          ]),
+          core.statement(
+            `UPDATE v2_intakes SET summary_id=?,status='reviewing_summary',confirmed_summary_revision=NULL WHERE id=? AND ${sqlClaim}`,
+            [summaryId, g.workspaceId, claimId],
+          ),
+          core.statement(
+            `UPDATE v2_workspaces SET status='intake',confirmed_summary_revision=NULL WHERE id=? AND ${sqlClaim}`,
+            [g.workspaceId, claimId],
+          ),
           core.bump(g, claimId),
           core.statement(`DELETE FROM v2_summary_edit_stages WHERE id=? AND ${sqlClaim}`, [
             id,

@@ -16,7 +16,7 @@ type Receipt = { ownerId: string; fingerprint: string; result: unknown };
 const idInput = z.object({ id: z.string().min(1).max(200) });
 export const casesFixtures: Record<string, CaseView> = {};
 function owner() {
-  const session = requireSession();
+  const session = requireSession({ consent: false });
   if (!session.user) throw new ApiError("UNAUTHENTICATED", "로그인이 필요해요.");
   if (readStore<string[]>("deletedAccountIds", []).includes(session.user.id))
     throw new ApiError("UNAUTHENTICATED", "로그인이 필요해요.");

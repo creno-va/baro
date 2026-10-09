@@ -195,7 +195,14 @@ test("session, consent, quota and deleted case are enforced without recreating s
   f.runtime.update((state) => {
     state.session.needsConsent = true;
   });
-  await expect(f.client.get("synthetic-case")).rejects.toMatchObject({ code: "CONSENT_REQUIRED" });
+  expect((await f.client.get("synthetic-case")).case.id).toBe("synthetic-case");
+  await expect(
+    f.client.sendMessage("synthetic-case", {
+      expectedRevision: 1,
+      text: "재동의 전 새 처리 금지",
+      selectedFileIds: [],
+    }),
+  ).rejects.toMatchObject({ code: "CONSENT_REQUIRED" });
   f.runtime.update((state) => {
     state.session.needsConsent = false;
     state.session.user = null;
@@ -328,7 +335,7 @@ test("real workspace DTOs preserve server-validated text and use entity revision
   await api.get(workspace.id);
   expect(reads.filter((path) => path.includes("/messages?"))).toHaveLength(1);
   expect(reads.filter((path) => path.endsWith("/timeline"))).toHaveLength(1);
-  expect(reads.filter((path) => path.endsWith("/workspace"))).toHaveLength(2);
+  expect(reads.filter((path) => path.endsWith("/workspace"))).toHaveLength(3);
   expect(reads.filter((path) => path.endsWith("/files"))).toHaveLength(2);
   await api.setAction(workspace.id, action.id, true);
   await api.saveTimeline(workspace.id, {

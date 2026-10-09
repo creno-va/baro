@@ -1,9 +1,7 @@
 import { getSessionCookie } from "better-auth/cookies";
-import { drizzle } from "drizzle-orm/d1";
 import type { Context, MiddlewareHandler } from "hono";
+import { accessHref } from "../../client/return-path";
 import type { ApiEnvironment } from "../api/errors";
-import * as schema from "../db/schema";
-import { hasCurrentConsent } from "../modules/consent/service";
 import { readAccountType } from "./account-type";
 import { getSession } from "./session";
 
@@ -32,17 +30,16 @@ async function appEntry(context: Context<ApiEnvironment>, syntheticFixture: bool
   if (!(syntheticFixture && context.env.APP_ENV === "local")) {
     try {
       // Cookie presence is not authentication. Anonymous visitors need no configured provider.
-      if (!getSessionCookie(context.req.raw)) return context.redirect("/login", 302);
+      if (!getSessionCookie(context.req.raw))
+        return context.redirect(accessHref("login", "/app"), 302);
       const session = await getSession(context);
-      if (!session) return context.redirect("/login", 302);
+      if (!session) return context.redirect(accessHref("login", "/app"), 302);
       const deleted = await context.env.DB.prepare(
         "SELECT target_id FROM v2_tombstones WHERE target_kind='account' AND target_id=?",
       )
         .bind(session.user.id)
         .first();
-      if (deleted) return context.redirect("/login", 302);
-      if (!(await hasCurrentConsent(drizzle(context.env.DB, { schema }), session.user.id)))
-        return context.redirect("/consent", 302);
+      if (deleted) return context.redirect(accessHref("login", "/app"), 302);
       if ((await readAccountType(context.env.DB, session.user.id)) !== "customer")
         return context.redirect("/lawyer", 302);
     } catch {

@@ -737,3 +737,92 @@ async function readManifest(f: Awaited<ReturnType<typeof fixture>>, snapshotId: 
   expect(complete).toBe(true);
   return JSON.parse(text) as V2Summary;
 }
+
+test("chat facts and people survive current reads, later editing and reconfirmation", async () => {
+  const f = await fixture();
+  expect(await f.ws.confirmSummary(f.guard(), { expectedRevision: 2, summaryRevision: 1 })).toBe(
+    true,
+  );
+  const operation = admission(),
+    jobId = crypto.randomUUID(),
+    messageId = crypto.randomUUID();
+  expect(
+    await f.jobs.admitWorkspace(f.guard(), operation, jobId, "chat_response", {
+      id: messageId,
+      request: {
+        expectedRevision: f.guard().expectedRevision,
+        text: "추가 인물과 사실을 알려드립니다.",
+        selectedFileIds: [],
+      },
+    }),
+  ).toBe(true);
+  const acquired = await f.jobs.acquire(
+    f.actor,
+    jobId,
+    crypto.randomUUID(),
+    "2026-10-06T00:04:00.000Z",
+  );
+  if (!acquired) throw new Error("fixture chat lease");
+  const { createV2WorkspaceResponseRepository } = await import(
+    "../src/server/db/v2-workspace-response"
+  );
+  const added: V2Fact = {
+    ...f.summary.facts[0]!,
+    id: crypto.randomUUID(),
+    text: "대화에서 추가한 사실",
+    references: [
+      { kind: "user_message", messageId, workspaceRevision: f.guard().expectedRevision },
+    ],
+  };
+  const party = { id: crypto.randomUUID(), label: "추가 인물", role: "자료 확인자" };
+  expect(
+    await createV2WorkspaceResponseRepository(f.core).commit(f.guard(), acquired.lease, {
+      message: {
+        schemaVersion: "2",
+        id: crypto.randomUUID(),
+        operationId: operation.operationId,
+        workspaceRevision: f.guard().expectedRevision,
+        createdAt: NOW,
+        role: "assistant",
+        safety: "validated",
+        text: "추가 사실을 정리했어요.",
+        references: [],
+        citations: [],
+        warnings: [],
+      },
+      facts: [added],
+      parties: [party],
+      actions: [],
+      timeline: [],
+    }),
+  ).toBe(true);
+  const current = await f.ws.readIntake(f.actor, f.id);
+  expect(current?.summary?.facts).toContainEqual(added);
+  expect(current?.summary?.parties).toContainEqual(party);
+  let json = "";
+  for await (const part of f.ws.summaryFragments(f.actor, f.id)) json += part.text;
+  expect(JSON.parse(json)).toEqual(current?.summary);
+  expect(await f.ws.readIntake(f.stranger, f.id)).toBeNull();
+  const input = editInput(f, {
+    expectedRevision: 1,
+    overview: f.summary.overview,
+    factEdits: [{ factId: added.id, text: "다시 확인해 교정한 사실" }],
+    unknowns: ["추가 확인할 정보"],
+  });
+  expect(await f.edits.begin(f.guard(), input)).toBe(true);
+  await drain(f, input.id);
+  expect(await f.edits.publish(f.guard(), input.id, crypto.randomUUID())).toBe(true);
+  const edited = await f.ws.readIntake(f.actor, f.id);
+  expect(edited?.summary?.revision).toBe(2);
+  expect(edited?.summary?.facts.find((v) => v.id === added.id)?.text).toBe(
+    "다시 확인해 교정한 사실",
+  );
+  expect(edited?.summary?.parties).toContainEqual(party);
+  expect(edited?.status).toBe("reviewing_summary");
+  expect(await f.ws.confirmSummary(f.guard(), { expectedRevision: 2, summaryRevision: 1 })).toBe(
+    false,
+  );
+  expect(await f.ws.confirmSummary(f.guard(), { expectedRevision: 2, summaryRevision: 2 })).toBe(
+    true,
+  );
+});

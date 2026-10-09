@@ -3,6 +3,7 @@ import { caseDetailResponseSchema, opaqueIdSchema } from "../../contracts";
 import {
   v2AcceptedOperationSchema,
   v2ActionSchema,
+  v2FactReferenceSchema,
   v2JobSchema,
   v2SummarySchema,
   v2TimelineEntrySchema,
@@ -78,6 +79,22 @@ export function workspaceMutation(path: string, body: unknown, method = "POST"):
     body: JSON.stringify(body),
   };
 }
+const messageSources = {
+  references: z.array(v2FactReferenceSchema).default([]),
+  citations: z
+    .array(
+      z.object({
+        id: z.string(),
+        title: z.string(),
+        url: z.url().refine((value) => {
+          const url = new URL(value);
+          return url.protocol === "https:" && !url.username && !url.password;
+        }),
+      }),
+    )
+    .default([]),
+  warnings: z.array(z.string()).default([]),
+};
 const fileViewSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -105,13 +122,20 @@ export const workspaceViewSchema = z.object({
       text: z.string(),
       status: z.enum(["pending", "complete", "failed"]),
       createdAt: z.string(),
+      ...messageSources,
     }),
   ),
   actions: z.array(
     z.object({ id: z.string(), title: z.string(), detail: z.string(), done: z.boolean() }),
   ),
   timeline: z.array(
-    z.object({ id: z.string(), date: z.string(), title: z.string(), detail: z.string() }),
+    z.object({
+      id: z.string(),
+      date: z.string(),
+      datePrecision: z.enum(["day", "month", "year", "unknown"]).optional(),
+      title: z.string(),
+      detail: z.string(),
+    }),
   ),
   files: z.array(fileViewSchema),
 });
@@ -175,8 +199,7 @@ export function createWorkspaceApi(
       return null;
     }
   }
-  // This screen renders plain message text. Source validation and URL allowlists stay
-  // on the server; hidden citations must not be revalidated against an empty registry.
+  // The server validates official hosts; the UI preserves its evidence and rejects unsafe URLs.
   const messageTextSchema = z.discriminatedUnion("role", [
     v2UserMessageSchema,
     z.object({
@@ -188,6 +211,7 @@ export function createWorkspaceApi(
       role: z.literal("assistant"),
       safety: z.literal("validated"),
       text: v2UserMessageSchema.shape.text,
+      ...messageSources,
     }),
   ]);
   async function get(id: string): Promise<CustomerWorkspaceView> {
@@ -258,6 +282,12 @@ export function createWorkspaceApi(
         : metadata.summary
           ? v2SummarySchema.parse(await workspaceJson(request, `${base(id)}/summary`))
           : null;
+    const settled =
+      cached?.revision === w.workspaceRevision
+        ? w
+        : v2WorkspaceSchema.parse(await workspaceJson(request, `${base(id)}/workspace`));
+    if (settled.workspaceRevision !== w.workspaceRevision)
+      throw workspaceError("UNAVAILABLE", "사건이 갱신되어 최신 내용을 다시 불러와 주세요.", true);
     snapshots.set(id, {
       revision: w.workspaceRevision,
       intake,
@@ -273,6 +303,9 @@ export function createWorkspaceApi(
       text: m.text,
       status: "complete",
       createdAt: m.createdAt,
+      ...(m.role === "assistant"
+        ? { references: m.references, citations: m.citations, warnings: m.warnings }
+        : {}),
     }));
     let jobId = w.currentJobId ?? rememberedJob(id);
     if (!jobId) {
@@ -332,6 +365,7 @@ export function createWorkspaceApi(
       return {
         id: item.id,
         date: item.date ?? "",
+        datePrecision: item.datePrecision,
         title: title ?? item.event,
         detail: detail.join("\n"),
       } satisfies TimelineView;
@@ -461,7 +495,7 @@ export function createWorkspaceApi(
             ? (timelineRevisions.get(`${id}:${entry.id}`) ?? 1)
             : (workspaceRevisions.get(id) ?? (await get(id)).case.revision),
           date: entry.date || null,
-          datePrecision: entry.date ? "day" : "unknown",
+          datePrecision: entry.datePrecision ?? (entry.date ? "day" : "unknown"),
           event: entry.detail ? `${entry.title}\n${entry.detail}` : entry.title,
         };
         init = workspaceMutation(route, body, entry.id ? "PUT" : "POST");
