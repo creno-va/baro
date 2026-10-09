@@ -356,35 +356,46 @@ test("built landing loads local footage and its interactive scenes under the Wor
   ).toEqual([]);
 });
 
-test("built public preview directory and detail hydrate under hash CSP with actions disabled", async ({
+test("built public directory and detail hydrate under hash CSP with no case data in map links", async ({
   page,
 }) => {
   const violations: string[] = [];
-  const lawyerRequests: string[] = [];
   page.on("console", (entry) => {
     if (entry.type() === "error" && entry.text().includes("Content Security Policy"))
       violations.push(entry.text());
   });
   await page.route("**/api/v2/lawyers**", (route) => {
-    lawyerRequests.push(new URL(route.request().url()).pathname);
-    return route.fulfill({ status: 503, json: {} });
+    const path = new URL(route.request().url()).pathname;
+    if (path === "/api/v2/lawyers/self-service")
+      return route.fulfill({ json: { items: [], nextCursor: null } });
+    if (path.startsWith("/api/v2/lawyers/self-service/"))
+      return route.fulfill({ status: 404, json: {} });
+    if (path.includes("/assets/")) return route.fulfill({ status: 404, body: "" });
+    return route.fulfill({
+      json:
+        path === "/api/v2/lawyers"
+          ? {
+              schemaVersion: "2",
+              snapshotId: "synthetic-csp-directory",
+              rotation: "disclosed_rotation",
+              expiresAt: "2026-10-06T00:05:00Z",
+              items: [publicLawyer],
+              nextCursor: null,
+            }
+          : publicLawyer,
+    });
   });
   const response = await page.goto("/lawyers");
   expect(response?.headers()["content-security-policy"]).toContain("sha256-");
   expect(response?.headers()["cache-control"]).toContain("no-transform");
-  await expect(page.locator("astro-island[ssr]")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "검색 · 준비 중" })).toBeDisabled();
-  await expect(page.getByPlaceholder("이름 또는 사무실명 입력")).toBeDisabled();
-  await expect(page.getByRole("combobox", { name: /^지역/ })).toBeDisabled();
-  await expect(page.getByRole("combobox", { name: /^분야/ })).toBeDisabled();
-  await expect(page.getByText("변호사 찾기를 준비하고 있어요.", { exact: true })).toBeVisible();
-  await expect(page.getByRole("link", { name: "프로필과 연락처 보기" })).toHaveCount(0);
-  const detailResponse = await page.goto(`/lawyers/${publicLawyer.id}`);
-  expect(detailResponse?.headers()["content-security-policy"]).toContain("sha256-");
-  await expect(page.locator("astro-island[ssr]")).toHaveCount(0);
-  await expect(page.getByText("변호사 프로필을 준비하고 있어요.", { exact: true })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Google 길찾기" })).toHaveCount(0);
-  expect(lawyerRequests).toEqual([]);
+  await expect(page.getByRole("link", { name: "프로필과 연락처 보기" })).toBeVisible();
+  await page.getByRole("link", { name: "프로필과 연락처 보기" }).press("Enter");
+  await expect(
+    page.getByRole("heading", { name: publicLawyer.content.name, exact: true }),
+  ).toBeVisible();
+  expect(await page.getByRole("link", { name: "Google 길찾기" }).getAttribute("href")).not.toMatch(
+    /caseId|token|narrative/,
+  );
   expect(violations).toEqual([]);
 });
 

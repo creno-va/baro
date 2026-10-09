@@ -1,12 +1,9 @@
 ---
 // biome-ignore lint/correctness/noUnusedImports: Astro template reads component.
 import { CaseInput } from "../components/intake/CaseInput";
-// biome-ignore lint/correctness/noUnusedImports: Astro template reads component.
-import { LaunchNotice } from "../components/preview/LaunchNotice";
 // biome-ignore lint/correctness/noUnusedImports: Astro template reads layout.
 import AppLayout from "../layouts/AppLayout.astro";
 import "../styles/intake.css";
-import "../styles/launch-notice.css";
 
 Astro.response.headers.set("Cache-Control", "no-store");
 ---
@@ -18,7 +15,6 @@ Astro.response.headers.set("Cache-Control", "no-store");
   availableRoutes={["/app", "/cases", "/cases/new", "/lawyers", "/settings"]}
   contentClass="conversation-main"
 >
-  <LaunchNotice client:load />
   <CaseInput requireSession client:load />
   <noscript><p>사건 정리를 시작하려면 브라우저에서 JavaScript를 켜고 <a href="/login">로그인</a>해 주세요.</p></noscript>
 </AppLayout>

@@ -57,8 +57,11 @@ export async function downloadLawyerAsset(
   assetId: string,
   privateRead = false,
   title = "portfolio",
+  canDeliver?: () => Promise<boolean>,
 ) {
   const blob = await lawyerAssets.blob(profileId, assetId, privateRead);
+  // A private download may finish after the portal observed a different account.
+  if (canDeliver && !(await canDeliver())) return;
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;

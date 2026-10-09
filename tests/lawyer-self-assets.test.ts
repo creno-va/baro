@@ -128,6 +128,19 @@ test("ready own upload preview works before profile attachment while public and 
   const own = await request(cookie);
   expect(own.status).toBe(200);
   expect(new Uint8Array(await own.arrayBuffer())).toEqual(f.output);
+  f.db.sqlite
+    .query("UPDATE user_consents SET privacy_version='stale' WHERE user_id=?")
+    .run(f.actor.ownerId);
+  const beforeRenewal = await request(cookie);
+  expect(beforeRenewal.status).toBe(200);
+  expect(new Uint8Array(await beforeRenewal.arrayBuffer())).toEqual(f.output);
+  const revoked = await request(cookie);
+  expect(revoked.status).toBe(200);
+  f.db.sqlite.query("UPDATE session SET expires_at=? WHERE user_id=?").run(0, f.actor.ownerId);
+  await expect(revoked.arrayBuffer()).rejects.toThrow();
+  f.db.sqlite
+    .query("UPDATE session SET expires_at=? WHERE user_id=?")
+    .run(Date.now() + 3600000, f.actor.ownerId);
   expect((await request(other.cookie)).status).toBe(404);
   await saveAccountType(f.db.binding, f.actor.ownerId, "customer");
   expect((await request(cookie)).status).toBe(403);

@@ -15,7 +15,6 @@ import {
 import { useEffect, useRef, useState } from "react";
 import type { CaseView, SessionView } from "../../client/api";
 import { api, apiMode, roleStart } from "../../client/api";
-import { PUBLIC_PREVIEW } from "../../client/public-preview";
 import { Brand } from "./brand";
 import { Button } from "./button";
 import { Sheet } from "./dialog";
@@ -184,19 +183,6 @@ export function AppNavigation({
   const renderLinks = () =>
     items.map((item) => {
       const Icon = icons[item.icon];
-      if (PUBLIC_PREVIEW && (item.icon === "lawyers" || item.icon === "profile"))
-        return (
-          <button
-            type="button"
-            className="app-nav__link"
-            key={item.href}
-            disabled
-            title="2026년 11월 1일 웹 전체 출시 예정"
-          >
-            <Icon aria-hidden="true" size={19} strokeWidth={1.65} />
-            <span>{item.label} · 준비 중</span>
-          </button>
-        );
       const active =
         pathname === item.href ||
         (item.href === "/app" && pathname === "/cases/new") ||

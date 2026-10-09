@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { api, LawyerApiError, type LawyerView, lawyerErrorMessage } from "../../client/api/lawyers";
-import { PUBLIC_PREVIEW } from "../../client/public-preview";
 import type { V2Office } from "../../contracts/v2";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
@@ -17,7 +16,6 @@ export function Profile({ id, preview = false }: { id: string; preview?: boolean
   const [reload, setReload] = useState(0);
   // biome-ignore lint/correctness/useExhaustiveDependencies: An explicit retry must refetch the current profile.
   useEffect(() => {
-    if (PUBLIC_PREVIEW) return;
     const controller = new AbortController();
     setError("");
     setMissing(false);
@@ -41,13 +39,7 @@ export function Profile({ id, preview = false }: { id: string; preview?: boolean
         변호사 목록으로
       </a>
       <ApiModeNotice preview={preview} />
-      {PUBLIC_PREVIEW ? (
-        <StatePanel
-          variant="pending"
-          title="변호사 프로필을 준비하고 있어요."
-          description="2026년 11월 1일 웹 전체 출시 예정이에요."
-        />
-      ) : error ? (
+      {error ? (
         <StatePanel
           variant="error"
           title={missing ? "현재 공개된 프로필이 아니에요." : error}
@@ -69,9 +61,11 @@ export function Profile({ id, preview = false }: { id: string; preview?: boolean
 export function ProfileContent({
   lawyer,
   privateRead = false,
+  canDeliverDownload,
 }: {
   lawyer: LawyerView;
   privateRead?: boolean;
+  canDeliverDownload?: () => Promise<boolean>;
 }) {
   const [assetError, setAssetError] = useState("");
   return (
@@ -175,11 +169,10 @@ export function ProfileContent({
             lawyer.portfolio.map((item) => (
               <div className="mb-5" key={item.id}>
                 <h3>{item.title}</h3>
-                {item.url === null ? (
-                  <p className="whitespace-pre-wrap break-words">
-                    {"text" in item && typeof item.text === "string" ? item.text : "등록된 활동"}
-                  </p>
-                ) : (
+                {(item.text || !item.url) && (
+                  <p className="whitespace-pre-wrap break-words">{item.text || "등록된 활동"}</p>
+                )}
+                {item.url && (
                   <a
                     className="ui-button ui-button--outline"
                     href={item.url}
@@ -193,6 +186,7 @@ export function ProfileContent({
                               item.assetId as string,
                               privateRead,
                               item.title,
+                              canDeliverDownload,
                             ).catch((cause) => setAssetError(lawyerErrorMessage(cause)));
                           }
                         : undefined
