@@ -24,6 +24,7 @@ export const fileViewSchema = z.object({
   status: z.enum(["uploading", "processing", "ready", "failed", "waiting"]),
   coverage: z.string(),
   extractedText: z.string(),
+  canStartProcessing: z.boolean().optional(),
 });
 const metadataSchema = z.object({
   id: z.string(),
@@ -105,6 +106,7 @@ export function validateUpload(file: Pick<File, "name" | "size" | "type">) {
 }
 export function createFilesApi(request: WorkspaceTransport) {
   const revisions = new Map<string, number>();
+  const pendingRemovals = new Set<string>();
   const uploads = new Map<
     string,
     { expectedRevision: number; key: string; session?: z.infer<typeof v2UploadSessionSchema> }
@@ -150,6 +152,7 @@ export function createFilesApi(request: WorkspaceTransport) {
                     : "waiting",
           coverage: "처리 결과는 아직 확인할 수 없어요.",
           extractedText: "",
+          canStartProcessing: row.status === "uploaded",
         };
         if (row.status === "ready") {
           const detail = await request(`${base(id)}/files/${encodeURIComponent(row.id)}`);
@@ -276,7 +279,20 @@ export function createFilesApi(request: WorkspaceTransport) {
       return found;
     },
     async remove(id: string, fileId: string) {
-      await list(id);
+      const forgetUpload = () => {
+        for (const [key, attempt] of uploads)
+          if (attempt.session?.fileId === fileId) uploads.delete(key);
+      };
+      const identity = `${id}:${fileId}`;
+      // Listing authorizes the workspace even when a prior DELETE already committed.
+      const current = await list(id);
+      if (!current.some((file) => file.id === fileId)) {
+        if (!pendingRemovals.delete(identity))
+          throw workspaceError("NOT_FOUND", "자료를 찾을 수 없어요.");
+        forgetUpload();
+        return current;
+      }
+      pendingRemovals.add(identity);
       await workspaceJson(
         request,
         `${base(id)}/files/${encodeURIComponent(fileId)}`,
@@ -289,7 +305,10 @@ export function createFilesApi(request: WorkspaceTransport) {
           "DELETE",
         ),
       );
-      return list(id);
+      forgetUpload();
+      const next = await list(id);
+      pendingRemovals.delete(identity);
+      return next;
     },
     async original(id: string, fileId: string) {
       return (
