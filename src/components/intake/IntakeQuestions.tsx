@@ -2,6 +2,7 @@ import { ArrowLeft, ArrowRight, Check, Save } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../../client/api";
 import type { QuestionsResult } from "../../client/api/cases";
+import { ApiError } from "../../client/api/core";
 import type { CaseView, QuestionView } from "../../client/api/types";
 import { BrandMark } from "../ui/brand";
 import { Button, ButtonLink } from "../ui/button";
@@ -35,6 +36,8 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
   const caseSnapshot = useRef<CaseView | null>(null);
   const heading = useRef<HTMLHeadingElement>(null);
   const request = useRef(0);
+  const draftSnapshot = useRef<{ dirty: boolean; revision: number } | null>(null);
+  const acknowledgedRevision = useRef<number | null>(null);
   const {
     ready,
     version,
@@ -45,6 +48,8 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
     deny,
   } = useCustomerAccess(() => {
     ++request.current;
+    draftSnapshot.current = null;
+    acknowledgedRevision.current = null;
     setItem(null);
     setResult(null);
     setValue("");
@@ -64,6 +69,7 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
   }, setError);
   const report = useCallback(
     (cause: unknown) => {
+      if ((cause as { code?: string }).code === "CONFLICT") setRecovering(false);
       if (
         ["UNAUTHENTICATED", "CONSENT_REQUIRED", "NOT_FOUND"].includes(
           (cause as { code?: string }).code ?? "",
@@ -76,6 +82,7 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
   );
   const question = result?.questions[index];
   const dirty = value !== (question?.answer ?? "") || answerState !== question?.answerState;
+  draftSnapshot.current = result ? { dirty, revision: result.revision } : null;
   const rounds = result?.rounds ?? [];
   const round = rounds.find(
     (candidate) => question && candidate.questionIds.includes(question.id),
@@ -90,7 +97,7 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
     index === (result?.questions.length ?? 0) - 1 &&
     (rounds.length >= roundLimit || result?.processingStage === "summary" || editing);
   const waiting = preparing || recovering || Boolean(result?.processing);
-  const locked = busy || waiting || leaving;
+  const locked = busy || waiting || leaving || (error as { code?: string })?.code === "CONFLICT";
   const displayed = useRef({ index, id: question?.id });
   displayed.current = { index, id: question?.id };
   const summarizing =
@@ -165,6 +172,16 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
           serial !== request.current
         )
           return;
+        if (
+          !replaceDraft &&
+          draftSnapshot.current?.dirty &&
+          draftSnapshot.current.revision !== questions.revision &&
+          acknowledgedRevision.current !== questions.revision
+        )
+          throw new ApiError(
+            "CONFLICT",
+            "다른 화면에서 답변이 바뀌었어요. 작성 중인 답변은 남겨뒀어요. 최신 내용을 불러오면 저장된 답변으로 바뀝니다.",
+          );
         failedOperation.current = null;
         caseSnapshot.current = caseView;
         setItem(caseView);
@@ -204,9 +221,14 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
           window.location.replace(`/cases/${encodeURIComponent(caseId)}/summary`);
         else {
           const show = () => {
+            acknowledgedRevision.current = null;
             setResult(questions);
             setIndex(nextIndex);
             setRecovering(false);
+            if (replaceDraft) {
+              setValue(questions.questions[nextIndex]?.answer ?? "");
+              setAnswerState(questions.questions[nextIndex]?.answerState);
+            }
           };
           if (
             !initial &&
@@ -368,7 +390,18 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
             : { questionId: question.id, state },
         ],
       });
+      if (!alive(epoch)) return;
+      // The adapter reads again after saving, so its response can already include
+      // a peer edit. Only the next revision with our answer proves this snapshot.
+      const savedQuestion = next.questions.find((candidate) => candidate.id === question.id);
+      acknowledgedRevision.current =
+        next.revision === result.revision + 1 &&
+        savedQuestion?.answerState === state &&
+        (state !== "answered" || savedQuestion.answer === value.trim())
+          ? next.revision
+          : null;
       if (!(await verifyCompletion(epoch))) return;
+      acknowledgedRevision.current = null;
       failedOperation.current = null;
       setResult(next);
       setAnswerState(state);
@@ -423,7 +456,9 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
             else if (operation?.kind === "save") void save(operation.move, operation.state);
             else void load();
           }}
-          disabled={locked}
+          disabled={
+            busy || leaving || (waiting && (error as { code?: string }).code !== "CONFLICT")
+          }
         />
       ) : null}
       {ready && item && result ? (

@@ -113,9 +113,14 @@ function forgetMutation(key: string) {
 // Only revisions and opaque owner IDs persist; request text remains in the editor.
 const wireRevisions = new Map<
   string,
-  { owner: string; revision: number; summaryRevision: number }
+  { owner: string; revision: number; summaryRevision?: number | undefined }
 >();
-async function summaryRequest(operation: string, id: string, input: { expectedRevision: number }) {
+async function intakeRequest(
+  operation: string,
+  id: string,
+  input: { expectedRevision: number },
+  needsSummary = true,
+) {
   const session = z
     .object({
       user: z.object({ id: z.string(), accountType: z.string() }).nullable(),
@@ -137,7 +142,7 @@ async function summaryRequest(operation: string, id: string, input: { expectedRe
           .object({
             owner: z.string(),
             revision: z.number().int().positive(),
-            summaryRevision: z.number().int().positive(),
+            summaryRevision: z.number().int().positive().optional(),
           })
           .parse(JSON.parse(stored));
     }
@@ -145,11 +150,11 @@ async function summaryRequest(operation: string, id: string, input: { expectedRe
     /* Browser storage is optional. */
   }
   // Replays still reach owner checks on the real API; never preflight a committed revision again.
-  if (saved?.owner === owner) return { key, saved };
+  if (saved?.owner === owner && (!needsSummary || saved.summaryRevision)) return { key, saved };
   const [w, m] = await Promise.all([workspace(id), metadata(id)]);
-  if (w.workspaceRevision !== input.expectedRevision || !m.summary)
-    throw new ApiError("CONFLICT", "요약이 변경됐어요. 최신 내용을 확인해 주세요.");
-  saved = { owner, revision: m.revision, summaryRevision: m.summary.revision };
+  if (w.workspaceRevision !== input.expectedRevision || (needsSummary && !m.summary))
+    throw new ApiError("CONFLICT", "내용이 변경됐어요. 최신 내용을 확인해 주세요.");
+  saved = { owner, revision: m.revision, summaryRevision: m.summary?.revision };
   wireRevisions.set(key, saved);
   try {
     sessionStorage.setItem(`baro-cases-wire:${key}`, JSON.stringify(saved));
@@ -158,7 +163,7 @@ async function summaryRequest(operation: string, id: string, input: { expectedRe
   }
   return { key, saved };
 }
-function finishSummary(key: string) {
+function finishIntake(key: string) {
   wireRevisions.delete(key);
   try {
     sessionStorage.removeItem(`baro-cases-wire:${key}`);
@@ -528,12 +533,16 @@ export const casesApi = {
   },
   getQuestions,
   async saveAnswers(id: string, raw: AnswersInput): Promise<QuestionsResult> {
-    const input = validate(answersInputSchema, raw),
-      key = await mutationKey(`cases.saveAnswers:${id}`, input);
-    if (apiMode === "mock") return request("cases.saveAnswers", { id, ...input }, { key });
-    const [w, m] = await Promise.all([workspace(id), metadata(id)]);
-    if (w.workspaceRevision !== input.expectedRevision)
-      throw new ApiError("CONFLICT", "답변이 변경됐어요. 최신 내용을 확인해 주세요.");
+    const input = validate(answersInputSchema, raw);
+    if (apiMode === "mock")
+      return request(
+        "cases.saveAnswers",
+        { id, ...input },
+        {
+          key: await mutationKey(`cases.saveAnswers:${id}`, input),
+        },
+      );
+    const { key, saved } = await intakeRequest("cases.saveAnswers", id, input, false);
     await request(
       "cases.saveAnswers",
       { id, ...input },
@@ -541,7 +550,7 @@ export const casesApi = {
         path: path(id, "intake/answers"),
         method: "PUT",
         body: {
-          expectedRevision: m.revision,
+          expectedRevision: saved.revision,
           answers: input.answers.map((a) => ({
             questionId: a.questionId,
             status: a.state,
@@ -551,6 +560,7 @@ export const casesApi = {
         key,
       },
     );
+    // The expected revision identifies this answer submission, including completed duplicates.
     return getQuestions(id);
   },
   async advance(id: string, raw: { expectedRevision: number }): Promise<QuestionsResult> {
@@ -606,7 +616,7 @@ export const casesApi = {
         { id, ...input },
         { key: await mutationKey(`cases.saveSummary:${id}`, input) },
       );
-    const { key, saved } = await summaryRequest("cases.saveSummary", id, input);
+    const { key, saved } = await intakeRequest("cases.saveSummary", id, input);
     const body = { expectedRevision: saved.summaryRevision, overview: input.summary };
     for (let attempt = 0; attempt < 30; attempt++) {
       const result = z
@@ -620,7 +630,7 @@ export const casesApi = {
         );
       if (!result.edit) {
         const next = await casesApi.get(id);
-        finishSummary(key);
+        finishIntake(key);
         return next;
       }
       await new Promise((resolve) =>
@@ -641,7 +651,7 @@ export const casesApi = {
         { id, ...input },
         { key: await mutationKey(`cases.confirmSummary:${id}`, input) },
       );
-    const { key, saved } = await summaryRequest("cases.confirmSummary", id, input);
+    const { key, saved } = await intakeRequest("cases.confirmSummary", id, input);
     await request(
       "cases.confirmSummary",
       { id, ...input },
@@ -653,7 +663,7 @@ export const casesApi = {
       },
     );
     const next = await casesApi.get(id);
-    finishSummary(key);
+    finishIntake(key);
     return next;
   },
 };
