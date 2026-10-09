@@ -4,7 +4,11 @@ import { createWorkspaceApi } from "../src/client/api/workspace";
 import { meApi } from "../src/server/api/me";
 import { createFilesApi } from "../src/server/api/v2/files";
 import { createWorkspacesApi } from "../src/server/api/v2/workspaces";
-import { customerWorkspaceFixture, runCustomerJob } from "./helpers/customer-workspace";
+import {
+  confirmCustomerSummary,
+  customerWorkspaceFixture,
+  runCustomerJob,
+} from "./helpers/customer-workspace";
 
 async function fixture() {
   const f = await customerWorkspaceFixture(new Date().toISOString());
@@ -21,6 +25,7 @@ async function fixture() {
     summaryRevision: summary!.summary!.revision,
   });
   await runCustomerJob(f, "chat_response");
+  await confirmCustomerSummary(f);
   const env = { ...f.owner.env, CASE_DATA_KEY_V1: btoa("w".repeat(32)).replace(/=+$/, "") };
   const app = new Hono()
     .route("/api/me", meApi)

@@ -3,7 +3,11 @@ import type { ApiEnvironment } from "../../src/server/api/errors";
 import { meApi } from "../../src/server/api/me";
 import { createFilesApi } from "../../src/server/api/v2/files";
 import { createWorkspacesApi } from "../../src/server/api/v2/workspaces";
-import { customerWorkspaceFixture, runCustomerJob } from "./customer-workspace";
+import {
+  confirmCustomerSummary,
+  customerWorkspaceFixture,
+  runCustomerJob,
+} from "./customer-workspace";
 import { seedTestSession } from "./session";
 
 // Loopback-only harness. Real Hono/session/encryption/mutations, synthetic model seed.
@@ -21,6 +25,10 @@ await f.service.answers(f.owner.userId, f.workspace.id, crypto.randomUUID(), {
   })),
 });
 await runCustomerJob(f, "intake_summary");
+if (Bun.argv[3] === "pending-chat-summary") {
+  await confirmCustomerSummary(f);
+  await runCustomerJob(f, "chat_response");
+}
 const env: Env = {
   ...f.owner.env,
   BETTER_AUTH_URL: browserOrigin,
