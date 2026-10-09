@@ -49,6 +49,26 @@ async function prepareSavedZip(page: import("@playwright/test").Page) {
 }
 
 const evidence = process.env.BARO_REPORT_EVIDENCE_DIR;
+test("same-tab signout immediately clears report preview and saved ZIP", async ({ page }) => {
+  await page.goto("/cases/case-demo/reports");
+  const editor = page.getByRole("textbox", { name: "리포트 내용 편집" });
+  await expect(editor).toBeVisible();
+  await prepareSavedZip(page);
+  await page.getByRole("button", { name: "전달 내용 미리보기", exact: true }).click();
+  await expect(page.locator(".report-html-preview")).toBeVisible();
+  await page.evaluate(() => {
+    window.dispatchEvent(
+      new CustomEvent("baro-session-changed", { detail: { reason: "signout" } }),
+    );
+  });
+  await expect(editor).toHaveCount(0);
+  await expect(page.locator(".report-html-preview")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /저장된 선택 원본 ZIP/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "PDF 다운로드", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("checkbox", { name: "ZIP에 원본 포함" })).toHaveCount(0);
+  await expect(page.getByRole("alert")).toContainText("로그인 후 리포트를 다시 확인");
+});
+
 test("peer account switch clears dirty report, selected originals, confirmation and open dialog", async ({
   page,
   context,

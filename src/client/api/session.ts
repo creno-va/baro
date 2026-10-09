@@ -1,8 +1,13 @@
 import type { ConsentInput } from "../../contracts/consent";
 import { authClient } from "../auth";
 import { accessHref, returnPathFromLocation } from "../return-path";
+import { notifySessionChanged } from "../session-events";
+
 import { ApiError, apiMode, request } from "./core";
 import type { AccountType, Provider, SessionView } from "./types";
+
+export { notifySessionChanged } from "../session-events";
+
 export const roleStart = (session: SessionView) =>
   !session.user
     ? "/login"
@@ -11,15 +16,6 @@ export const roleStart = (session: SessionView) =>
       : session.user.accountType === "lawyer"
         ? "/lawyer"
         : "/app";
-/** Non-sensitive invalidation only; never share a session, role or token across tabs. */
-export function notifySessionChanged() {
-  try {
-    localStorage.setItem("baro-session-changed", crypto.randomUUID());
-  } catch {
-    // Session operations remain usable when optional cross-tab storage is disabled.
-  }
-  window.dispatchEvent(new Event("baro-session-changed"));
-}
 export const sessionApi = {
   async get(): Promise<SessionView> {
     const session = await request<SessionView>("session.get", undefined, {
@@ -88,6 +84,6 @@ export const sessionApi = {
       if (result.error)
         throw new ApiError("UNAVAILABLE", "로그아웃하지 못했어요. 다시 시도해 주세요.", true);
     }
-    notifySessionChanged();
+    notifySessionChanged("signout");
   },
 };

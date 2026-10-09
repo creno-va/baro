@@ -2,6 +2,7 @@ import { ChevronDown, Download, Eye, FileText, RefreshCw, Save, Settings2 } from
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../../client/api";
 import type { ReportView as BaseReportView, FileView } from "../../client/api/types";
+import { isExplicitSignOut } from "../../client/session-events";
 import { CaseNavigation } from "../workspace/CaseNavigation";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { createReportMarkup } from "./document";
@@ -124,7 +125,12 @@ export function ReportReview({ caseId }: { caseId: string }) {
   useEffect(() => {
     clearOwnerState();
     void load();
-    const check = () => {
+    const check = (event: Event) => {
+      if (isExplicitSignOut(event)) {
+        clearOwnerState();
+        setError("로그인 후 리포트를 다시 확인해 주세요.");
+        return;
+      }
       if (document.visibilityState === "hidden") return;
       const sequence = loadSequence.current;
       setAccessChecking(true);
@@ -139,11 +145,13 @@ export function ReportReview({ caseId }: { caseId: string }) {
     };
     window.addEventListener("focus", check);
     window.addEventListener("storage", check);
+    window.addEventListener("baro-session-changed", check);
     document.addEventListener("visibilitychange", check);
     return () => {
       ++loadSequence.current;
       window.removeEventListener("focus", check);
       window.removeEventListener("storage", check);
+      window.removeEventListener("baro-session-changed", check);
       document.removeEventListener("visibilitychange", check);
     };
   }, [load, clearOwnerState, verifyOwner]);

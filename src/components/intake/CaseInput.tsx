@@ -4,6 +4,7 @@ import { api } from "../../client/api";
 import { ApiError } from "../../client/api/core";
 import type { SessionView } from "../../client/api/types";
 import { sessionDestination } from "../../client/return-path";
+import { isExplicitSignOut } from "../../client/session-events";
 import { BrandMark } from "../ui/brand";
 import { Button, ButtonLink } from "../ui/button";
 import { Textarea } from "../ui/form";
@@ -47,6 +48,7 @@ export function CaseInput({
   const sessionRequest = useRef(0);
   const operation = useRef(0);
   const mounted = useRef(false);
+  const signedOut = useRef(false);
   const count = [...narrative.trim()].length;
   const valid = count >= 20 && count <= 5000;
   const canCreate = session?.user?.accountType === "customer" && !session.needsConsent;
@@ -60,8 +62,10 @@ export function CaseInput({
     setError(null);
   }, []);
   const loadSession = useCallback(async () => {
+    if (signedOut.current) return null;
     const ticket = ++sessionRequest.current;
-    const current = () => mounted.current && ticket === sessionRequest.current;
+    const current = () =>
+      mounted.current && !signedOut.current && ticket === sessionRequest.current;
     setLoading(true);
     setSessionError(null);
     const accept = (next: SessionView) => {
@@ -94,28 +98,25 @@ export function CaseInput({
   }, [clearDraft, requireSession]);
   useEffect(() => {
     mounted.current = true;
+    signedOut.current = false;
     const refresh = () => void loadSession();
+    const changed = (event: Event) => {
+      if (!isExplicitSignOut(event)) return refresh();
+      signedOut.current = requireSession;
+      ++sessionRequest.current;
+      clearDraft();
+      identity.current = JSON.stringify([null, null, false]);
+      setSession({ user: null, needsConsent: false });
+      setLoading(false);
+      setSessionError(null);
+      // The menu owns same-tab navigation. Peer tabs need their own redirect.
+      if (requireSession && event.type === "storage") window.location.replace("/login");
+    };
     const visible = () => {
       if (document.visibilityState === "visible") refresh();
     };
     const storage = (event: StorageEvent) => {
-      if (event.key === "better-auth.message") {
-        try {
-          const message = JSON.parse(event.newValue ?? "null");
-          if (message?.event === "session" && message?.data?.trigger === "signout") {
-            ++sessionRequest.current;
-            clearDraft();
-            identity.current = JSON.stringify([null, null, false]);
-            setSession({ user: null, needsConsent: false });
-            setLoading(false);
-            setSessionError(null);
-            if (requireSession) window.location.replace("/login");
-            return;
-          }
-        } catch {
-          /* Unknown messages only trigger server verification. */
-        }
-      }
+      if (isExplicitSignOut(event)) return changed(event);
       if (
         !event.key ||
         ["baro-api-mock-v1:session", "better-auth.message", "baro-session-changed"].includes(
@@ -128,7 +129,7 @@ export function CaseInput({
     window.addEventListener("focus", refresh);
     window.addEventListener("pageshow", refresh);
     window.addEventListener("storage", storage);
-    window.addEventListener("baro-session-changed", refresh);
+    window.addEventListener("baro-session-changed", changed);
     document.addEventListener("visibilitychange", visible);
     return () => {
       mounted.current = false;
@@ -137,7 +138,7 @@ export function CaseInput({
       window.removeEventListener("focus", refresh);
       window.removeEventListener("pageshow", refresh);
       window.removeEventListener("storage", storage);
-      window.removeEventListener("baro-session-changed", refresh);
+      window.removeEventListener("baro-session-changed", changed);
       document.removeEventListener("visibilitychange", visible);
     };
   }, [clearDraft, loadSession, requireSession]);
