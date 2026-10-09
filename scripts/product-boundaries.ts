@@ -12,6 +12,8 @@ export function productBoundaryFindings(file: string, content: string): string[]
   );
   const approvedLog =
     'console.error(JSON.stringify({event:"deletion_cleanup_failed",jobId:row.id,attempts:Math.min(attempt,CLEANUP_ATTEMPTS),}),)';
+  const v2DeletionLog =
+    'console.error(JSON.stringify({event:"v2_deletion_cleanup_failed",environment:event.environment,reason:event.reason,attempts:event.attempts,ageSeconds:event.ageSeconds,}),)';
   // Only the reviewed enum-only diagnostics module may emit these exact fields.
   const dependencyLogs = new Set([
     'console.error(JSON.stringify({event:"workspace_dependency_failure",stage:failure?.stage??"unclassified",category:dependencyCategory(error),}),)',
@@ -56,6 +58,8 @@ export function productBoundaryFindings(file: string, content: string): string[]
           ts.isCallExpression(call) &&
           ((file.replaceAll("\\", "/") === "src/server/modules/deletion/service.ts" &&
             call.getText(source).replace(/\s+/g, "") === approvedLog) ||
+            (file.replaceAll("\\", "/") === "src/server/modules/deletion/v2-reconcile.ts" &&
+              call.getText(source).replace(/\s+/g, "") === v2DeletionLog) ||
             (file.replaceAll("\\", "/") === "src/server/dependency-diagnostics.ts" &&
               dependencyLogs.has(call.getText(source).replace(/\s+/g, ""))))
         )
