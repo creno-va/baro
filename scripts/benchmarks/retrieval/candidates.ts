@@ -1,5 +1,6 @@
 import { mkdir } from "node:fs/promises";
 import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import type { createV2LegalRetrieval } from "../../../src/server/modules/legal-retrieval/v2/service";
 
 export const variants = ["baseline", "list-dedup", "json-reuse", "concurrency-2"] as const;
@@ -152,12 +153,12 @@ export async function loadFactory(variant: Variant): Promise<Factory> {
   const moduleDir = resolve("src/server/modules/legal-retrieval/v2");
   source = source.replace(
     /from "(\.[^"]+)"/g,
-    (_, path: string) => `from "${resolve(moduleDir, path)}"`,
+    (_, path: string) => `from ${JSON.stringify(pathToFileURL(resolve(moduleDir, path)).href)}`,
   );
   const dir = resolve(".wrangler/retrieval-benchmark");
   await mkdir(dir, { recursive: true });
   const path = `${dir}/${variant}.ts`;
   await Bun.write(path, source);
-  const module = await import(path);
+  const module = await import(pathToFileURL(path).href);
   return module.createV2LegalRetrieval as Factory;
 }

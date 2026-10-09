@@ -19,6 +19,10 @@ const aiRuntimeTests = [
   "tests/asset-processing-runtime.test.ts",
 ] as const;
 
+/** Git paths and selectors use forward slashes; Bun.Glob uses native separators. */
+function normalizedPaths(paths: string[]): string[] {
+  return paths.map((path) => path.replaceAll("\\", "/"));
+}
 function affectsAiRuntime(file: string): boolean {
   return (
     /^(?:package\.json|bun\.lock|\.bun-version|wrangler(?:\.[^/]+)?\.(?:jsonc?|toml)|astro\.config\.ts|tsconfig(?:\.[^/]+)?\.json)$/.test(
@@ -34,6 +38,7 @@ function affectsAiRuntime(file: string): boolean {
 }
 
 export function validationScope(files: string[]) {
+  files = normalizedPaths(files);
   return {
     native: files.some((file) =>
       /^(services\/file-processor\/|tests\/fixtures\/media\/)/.test(file),
@@ -48,6 +53,8 @@ export function validationScope(files: string[]) {
 
 /** HTTP browser flows require an explicit route map. Shared UI affects all non-corpus flows. */
 export function browserTargets(files: string[], available: string[]): string[] {
+  files = normalizedPaths(files);
+  available = normalizedPaths(available);
   const selected = new Set(files.filter((file) => /^tests\/browser\/.*\.e2e\.ts$/.test(file)));
   const corpusChanged = files.some((file) =>
     /^tests\/(?:browser\/evals\.(?:e2e|config)\.ts|helpers\/eval-browser-server\.ts|evals\/pipeline\.ts)$/.test(
@@ -99,6 +106,8 @@ export function browserTargets(files: string[], available: string[]): string[] {
 /** Follow relative imports/re-exports to select existing consumer tests even
  * when a service/auth patch does not edit a test. */
 export async function unitTargets(files: string[], tests: string[]): Promise<string[]> {
+  files = normalizedPaths(files);
+  tests = normalizedPaths(tests);
   const requiredAiTests = files.some(affectsAiRuntime) ? aiRuntimeTests : [];
   if (requiredAiTests.some((test) => !tests.includes(test)))
     throw new Error("AI_RUNTIME_TEST_MISSING");

@@ -1,8 +1,12 @@
 import { expect, test } from "bun:test";
 import { browserTargets, unitTargets, validationScope } from "./development-checks";
 
-const browserTests = [...new Bun.Glob("tests/browser/*.e2e.ts").scanSync(".")];
-const unitTests = [...new Bun.Glob("{tests,scripts,src}/**/*.test.ts").scanSync(".")];
+const browserTests = [...new Bun.Glob("tests/browser/*.e2e.ts").scanSync(".")].map((path) =>
+  path.replaceAll("\\", "/"),
+);
+const unitTests = [...new Bun.Glob("{tests,scripts,src}/**/*.test.ts").scanSync(".")].map((path) =>
+  path.replaceAll("\\", "/"),
+);
 const aiRuntimeTests = [
   "src/server/api/health.test.ts",
   "tests/ai-preflight.test.ts",
@@ -38,7 +42,7 @@ test("dependency and deployment-only changes cannot skip AI admission and execut
     for (const required of aiRuntimeTests) expect(selected).toContain(required);
     expect(selected.some((path) => path.startsWith("tests/evals/"))).toBe(false);
   }
-});
+}, 15_000);
 
 test("AI runtime, schema, capability and dispatch changes retain the complete focused suite", async () => {
   for (const file of [
@@ -55,7 +59,7 @@ test("AI runtime, schema, capability and dispatch changes retain the complete fo
     const selected = await unitTargets([file], unitTests);
     for (const required of aiRuntimeTests) expect(selected).toContain(required);
   }
-});
+}, 15_000);
 
 test("a missing required AI regression fails closed while unrelated styles stay scoped", async () => {
   for (const missing of aiRuntimeTests)
@@ -156,4 +160,24 @@ test("source-only report and global router changes include the real download con
     expect(browserTargets([file], available)).toContain(download);
     expect(browserTargets([file], available)).not.toContain("tests/browser/evals.e2e.ts");
   }
+});
+
+test("Windows changed paths and native inventories select the same required checks as Git paths", async () => {
+  const posix = (paths: string[]) => paths.map((path) => path.replaceAll("\\", "/"));
+  const windows = (paths: string[]) => paths.map((path) => path.replaceAll("/", "\\"));
+  const availableBrowser = posix(browserTests);
+  const availableUnit = posix(unitTests);
+  const changed = ["src/server/auth/session.ts", "src/components/reports/ReportReview.tsx"];
+  expect(browserTargets(windows(changed), windows(availableBrowser))).toEqual(
+    browserTargets(changed, availableBrowser),
+  );
+  expect(await unitTargets(windows(changed), windows(availableUnit))).toEqual(
+    await unitTargets(changed, availableUnit),
+  );
+  const config = ["src/server/db/v2-core.ts", "services/file-processor/Dockerfile"];
+  expect(validationScope(windows(config))).toEqual(validationScope(config));
+  expect(validationScope(windows(config))).toEqual({ native: true, database: true });
+  await expect(
+    unitTargets(["bun.lock"], windows(availableUnit.filter((path) => path !== aiRuntimeTests[0]))),
+  ).rejects.toThrow("AI_RUNTIME_TEST_MISSING");
 });
