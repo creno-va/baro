@@ -399,7 +399,11 @@ test("real accepted chat job restores failed response after reload and retries c
       return Response.json(accepted, { status: 202 });
     }
     if (path.endsWith("/workspace"))
-      return Response.json({ ...workspace, currentJobId, workspaceRevision: 4 });
+      return Response.json({
+        ...workspace,
+        currentJobId: status === "completed" ? null : currentJobId,
+        workspaceRevision: status === "completed" ? 5 : 4,
+      });
     if (path.endsWith(`/workspace-jobs/${job.id}`))
       return Response.json({
         ...job,
@@ -413,7 +417,16 @@ test("real accepted chat job restores failed response after reload and retries c
     if (path.endsWith("/intake")) return Response.json(intake);
     if (path.endsWith("/summary")) return Response.json(summary);
     if (path.includes("/messages?"))
-      return Response.json({ items: [userMessage], nextCursor: null });
+      return Response.json({
+        items:
+          status === "completed"
+            ? [
+                userMessage,
+                { ...assistantMessage, operationId: job.operationId, workspaceRevision: 5 },
+              ]
+            : [userMessage],
+        nextCursor: null,
+      });
     if (path.endsWith("/actions") || path.endsWith("/timeline"))
       return Response.json({ items: [], nextCursor: null });
     if (path.endsWith("/files")) return Response.json([]);
@@ -434,7 +447,7 @@ test("real accepted chat job restores failed response after reload and retries c
   );
   expect(expectedRetry).toEqual({ expectedRevision: 4 });
   status = "completed";
-  await resumed.get(workspace.id);
+  expect((await resumed.get(workspace.id)).messages.at(-1)?.id).toBe(assistantMessage.id);
   expect(stored.size).toBe(0);
 });
 
