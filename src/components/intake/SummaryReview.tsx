@@ -128,7 +128,7 @@ export function SummaryReview({ caseId }: { caseId: string }) {
     setError(null);
     setNotice("");
     try {
-      if (!(await verify()) || !current(epoch)) return;
+      if (!(await verify(false, true)) || !current(epoch)) return;
       if (!canMutate) return;
       failedOperation.current = "save";
       const next = await api.cases.saveSummary(caseId, {
@@ -177,7 +177,7 @@ export function SummaryReview({ caseId }: { caseId: string }) {
     setBusy(true);
     setError(null);
     try {
-      if (!(await verify()) || !current(epoch)) return;
+      if (!(await verify(false, true)) || !current(epoch)) return;
       failedOperation.current = "confirm";
       const next = await api.cases.confirmSummary(caseId, { expectedRevision: item.revision });
       if (!(await verify()) || !current(epoch)) return;
@@ -295,7 +295,10 @@ export function SummaryReview({ caseId }: { caseId: string }) {
                         ...old,
                         [fact.id]: {
                           text: edit.text,
-                          certainty: edit.certainty,
+                          certainty:
+                            change.text !== undefined && edit.certainty === "observed"
+                              ? "uncertain"
+                              : edit.certainty,
                           conflictingFactIds: edit.conflictingFactIds,
                           ...change,
                         },
@@ -324,6 +327,7 @@ export function SummaryReview({ caseId }: { caseId: string }) {
                         <label>
                           확인 상태
                           <select
+                            aria-label="확인 상태"
                             value={edit.certainty}
                             onChange={(e) => {
                               const certainty = e.target.value as V2Fact["certainty"];
@@ -348,6 +352,7 @@ export function SummaryReview({ caseId }: { caseId: string }) {
                           <label>
                             모순되는 사실 선택
                             <select
+                              aria-label="모순되는 사실 선택"
                               multiple
                               value={edit.conflictingFactIds}
                               onChange={(e) =>

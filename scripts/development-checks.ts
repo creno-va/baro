@@ -157,7 +157,7 @@ export async function unitTargets(files: string[], tests: string[]): Promise<str
 /** Run wire tests and each mock adapter configuration sequentially in one checkout. */
 export async function runBrowserTargets(targets: string[]) {
   const mockTargets = targets.filter((path) =>
-    /\/(shell-integration|lawyer-api-mock|intake103|conversation-home|workspace-shared|workspace|reports-integrated)\.e2e\.ts$/.test(
+    /\/(shell-integration|lawyer-api-mock|intake103|conversation-home|workspace-shared|customer-completion|workspace|reports-integrated)\.e2e\.ts$/.test(
       path,
     ),
   );
@@ -219,7 +219,7 @@ export async function runBrowserTargets(targets: string[]) {
         "tests/browser/integration.config.ts",
         mockTargets.filter(
           (path) =>
-            !/\/(intake103|conversation-home|workspace-shared|workspace|reports-integrated)\.e2e\.ts$/.test(
+            !/\/(intake103|conversation-home|workspace-shared|customer-completion|workspace|reports-integrated)\.e2e\.ts$/.test(
               path,
             ),
         ),
@@ -235,6 +235,10 @@ export async function runBrowserTargets(targets: string[]) {
       [
         "tests/helpers/workspace.shared.playwright.config.ts",
         mockTargets.filter((path) => path.endsWith("/workspace-shared.e2e.ts")),
+      ],
+      [
+        "tests/helpers/customer-completion.playwright.config.ts",
+        mockTargets.filter((path) => path.endsWith("/customer-completion.e2e.ts")),
       ],
       [
         "tests/helpers/workspace.playwright.config.ts",

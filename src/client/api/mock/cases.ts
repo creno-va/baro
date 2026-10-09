@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { V2_INTAKE_POLICY, V2_LIMITS } from "../../../contracts/v2";
+import { V2_INTAKE_POLICY, V2_LIMITS, v2SummarySchema } from "../../../contracts/v2";
 import {
   answersInputSchema,
   createInputSchema,
@@ -321,6 +321,7 @@ export const casesMockHandlers = {
             }
           : {}),
       });
+      if (next.summaryDetails) parse(v2SummarySchema, next.summaryDetails);
       store(next);
       return next;
     }),

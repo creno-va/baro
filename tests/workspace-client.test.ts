@@ -416,7 +416,7 @@ test("real accepted chat job restores failed response after reload and retries c
         phase: status === "completed" ? "finished" : "admission",
         progressPercent: status === "completed" ? 100 : 0,
         attempts: 1,
-        failure: status === "failed" ? "MODEL_UNAVAILABLE" : null,
+        failure: status === "failed" ? "CITATION_INVALID" : null,
         retryable: status === "failed",
       });
     if (path.endsWith("/intake")) return Response.json(intake);
@@ -438,6 +438,9 @@ test("real accepted chat job restores failed response after reload and retries c
   const resumed = createWorkspaceApi(request, storage);
   const restored = await resumed.get(workspace.id);
   expect(restored.messages.at(-1)?.status).toBe("failed");
+  expect(restored.messages.at(-1)?.warnings).toEqual([
+    "답변 검증을 통과하지 못해 내용을 표시하지 않았어요. 원본과 출처를 확인해 주세요.",
+  ]);
   expect((await resumed.retryMessage(workspace.id, `job:${job.id}`)).messages.at(-1)?.status).toBe(
     "pending",
   );

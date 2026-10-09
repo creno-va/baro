@@ -67,7 +67,9 @@ export async function mockRequest<T>(operation: string, input: unknown, key: str
     );
   if (/^(cases|workspace|files|reports)\./.test(operation)) {
     const session = requireSession({
-      consent: !/\.(list|get|review|download|downloadPdf|downloadOriginals)$/.test(operation),
+      consent: !/\.(list|get|getQuestions|review|download|downloadPdf|downloadOriginals)$/.test(
+        operation,
+      ),
     });
     if (session.user?.accountType !== "customer")
       throw new ApiError("NOT_FOUND", "고객 이용 유형으로 로그인해 주세요.");

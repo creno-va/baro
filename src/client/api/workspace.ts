@@ -346,6 +346,13 @@ export function createWorkspaceApi(
               : "추가된 내용을 정리하고 있어요.",
           status: job.status === "failed" ? "failed" : "pending",
           createdAt: job.updatedAt,
+          warnings:
+            job.status === "failed" &&
+            ["CITATION_INVALID", "POLICY_REJECTED", "MODEL_SCHEMA_INVALID"].includes(
+              job.failure ?? "",
+            )
+              ? ["답변 검증을 통과하지 못해 내용을 표시하지 않았어요. 원본과 출처를 확인해 주세요."]
+              : [],
         });
       }
     }

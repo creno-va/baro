@@ -70,8 +70,12 @@ test("common login and B intake flow through C workspace and D report with origi
   await expect(page.getByText("결과 확인 가능", { exact: true })).toBeVisible();
   await page.reload();
   await page.getByRole("button", { name: "자료 확인" }).click();
+  await page.getByText("원본 추출 내용", { exact: true }).click();
   await expect(
-    page.getByRole("dialog").getByText("공통 저장소의 합성 원본 자료입니다.", { exact: true }),
+    page
+      .getByRole("dialog")
+      .locator("details p")
+      .filter({ hasText: "공통 저장소의 합성 원본 자료입니다." }),
   ).toBeVisible();
   await page.getByRole("dialog").getByRole("button", { name: "닫기", exact: true }).last().click();
   await page.getByRole("link", { name: "다음 행동", exact: true }).click();

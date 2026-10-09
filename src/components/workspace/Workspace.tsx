@@ -1172,7 +1172,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
               </Button>
               <Button
                 variant="destructive"
-                disabled={!!busy || view.case.stage === "archived"}
+                disabled={!!busy || !ready || view?.case.stage === "archived"}
                 onClick={() =>
                   void run("delete", async (epoch) => {
                     await api.files.remove(caseId, deleteFile.id);

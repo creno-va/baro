@@ -159,6 +159,32 @@ export function ensureMockWorkspace(state: WorkspaceMockState, id: string) {
     if (message) {
       changed = true;
       message.status = pending.failed ? "failed" : "complete";
+      const position = data.messages.indexOf(message);
+      const statement = data.messages.slice(0, position).findLast((value) => value.role === "user");
+      if (
+        !pending.failed &&
+        statement &&
+        item.summaryDetails &&
+        item.summaryDetails.facts.length < 300 &&
+        !item.summaryDetails.facts.some((fact) =>
+          fact.references.some(
+            (ref) => ref.kind === "user_message" && ref.messageId === statement.id,
+          ),
+        )
+      ) {
+        item.summaryDetails.facts.push({
+          id: crypto.randomUUID(),
+          text: statement.text.slice(0, 2000),
+          attribution: "user_statement",
+          certainty: "reported",
+          significance: "neutral",
+          references: [
+            { kind: "user_message", messageId: statement.id, workspaceRevision: item.revision },
+          ],
+          conflictingFactIds: [],
+          userEdited: false,
+        });
+      }
       message.text = pending.failed
         ? "예시 응답 생성에 실패했어요."
         : "추가한 내용을 저장했어요. 날짜·당사자·자료 원본을 확인하고, 불확실하거나 불리할 수 있는 사실도 함께 정리해 주세요. 이 응답은 합성 API 예시이며 실제 AI 분석이나 법률 판단이 아닙니다.";

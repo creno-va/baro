@@ -91,7 +91,9 @@ test("file processing failure, retry, extracted text, original bytes, cancellati
   await expect(page.getByText("결과 확인 가능", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "자료 확인" }).click();
   await page.getByText("원본 추출 내용", { exact: true }).click();
-  await expect(page.getByRole("dialog").getByText(text, { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("dialog").locator("details p").filter({ hasText: text }),
+  ).toBeVisible();
   const download = page.waitForEvent("download");
   await page.getByRole("button", { name: "원본 확인 · 다운로드" }).click();
   expect((await download).suggestedFilename()).toBe("synthetic.txt");
