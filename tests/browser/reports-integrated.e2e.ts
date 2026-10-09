@@ -104,8 +104,8 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
     .getByRole("checkbox", { name: "ZIP에 원본 포함" })
     .check();
   await page.getByRole("button", { name: "전달 내용 미리보기" }).click();
-  await expect(page.locator(".report-preview")).toContainText("[전화번호 가림]");
-  await expect(page.locator(".report-preview")).not.toContainText("010-1234-5678");
+  await expect(page.locator(".report-html-preview")).toContainText("[전화번호 가림]");
+  await expect(page.locator(".report-html-preview")).not.toContainText("010-1234-5678");
   await page.getByRole("checkbox", { name: "내용·식별정보·선택한 원본을 확인했어요" }).check();
   const pdfEvent = page.waitForEvent("download");
   await page.getByRole("button", { name: "PDF 다운로드", exact: true }).click();

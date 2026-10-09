@@ -1,3 +1,4 @@
+import { createReportHtml } from "../../../components/reports/document";
 import {
   createSyntheticPdf,
   createZip,
@@ -15,10 +16,10 @@ import type {
 } from "../types";
 
 type ReportView = BaseReportView & {
-  pdfAvailable?: boolean;
-  basis?: { workspaceRevision: number; summaryRevision: number; generatedAt: string };
+  pdfAvailable?: boolean | undefined;
+  basis?: { workspaceRevision: number; summaryRevision: number; generatedAt: string } | undefined;
 };
-type ReportCase = CaseView & { summaryDetails?: V2Summary };
+type ReportCase = CaseView & { summaryDetails?: V2Summary | undefined };
 export type ReportMockState = {
   session: SessionView;
   cases: Record<string, ReportCase>;
@@ -177,7 +178,7 @@ export function createReportsMockHandler(runtime: ReportMockRuntime): DomainRequ
     if (state.session.user?.accountType !== "customer")
       throw new ReportMockError("ROLE_REQUIRED", "고객 역할로 로그인한 뒤 리포트를 확인해 주세요.");
     const reportPath = path.match(/^\/api\/v2\/cases\/([^/]+)\/reports$/);
-    const exportPath = path.match(/^\/api\/v2\/reports\/([^/]+)\/(pdf|zip)$/);
+    const exportPath = path.match(/^\/api\/v2\/reports\/([^/]+)\/(html|pdf|zip)$/);
     const method = init.method ?? "GET";
     const key = init.headers?.["idempotency-key"];
     const fingerprint = JSON.stringify([path, method, init.body]);
@@ -273,6 +274,14 @@ export function createReportsMockHandler(runtime: ReportMockRuntime): DomainRequ
         state.reportHistory?.[id] ?? Object.values(state.reports).find((item) => item.id === id);
       if (!report) throw new ReportMockError("NOT_FOUND", "리포트를 찾을 수 없어요.");
       requireMockCase(state, report.caseId, false);
+      if (exportPath[2] === "html" && method === "GET") {
+        const stale =
+          (state.reportSources?.[id] ?? state.cases[report.caseId]?.revision) !==
+          state.cases[report.caseId]?.revision;
+        return new Blob([createReportHtml({ ...report, stale })], {
+          type: "text/html;charset=utf-8",
+        }) as T;
+      }
       const content = report.maskIdentifiers ? maskReportText(report.content) : report.content;
       if (exportPath[2] === "pdf" && method === "GET") {
         if (!report.pdfAvailable) requireMockAccount(state);

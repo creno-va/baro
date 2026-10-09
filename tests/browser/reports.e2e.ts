@@ -149,8 +149,8 @@ test("review, masking, exclusions, actual PDF/ZIP downloads and persistent casca
     page.getByRole("checkbox", { name: "전화번호·이메일·주민등록번호 가리기" }),
   ).toBeChecked();
   await page.getByRole("button", { name: "전달 내용 미리보기" }).click();
-  await expect(page.locator(".report-preview")).not.toContainText("010-1234-5678");
-  await expect(page.locator(".report-preview")).toContainText("[전화번호 가림]");
+  await expect(page.locator(".report-html-preview")).not.toContainText("010-1234-5678");
+  await expect(page.locator(".report-html-preview")).toContainText("[전화번호 가림]");
   await openReportOptions(page);
   await page.getByRole("checkbox", { name: "리포트에서 제외" }).check();
   await openReportOptions(page);

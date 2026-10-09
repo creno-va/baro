@@ -99,6 +99,22 @@ export function createReportsClient(request: DomainRequest) {
     async pdf(id: string) {
       return binary(`/api/v2/reports/${encodeURIComponent(id)}/pdf`, "application/pdf");
     },
+    async html(id: string) {
+      const result = await request<Blob>(`/api/v2/reports/${encodeURIComponent(id)}/html`, {
+        responseType: "blob",
+      });
+      if (
+        !(result instanceof Blob) ||
+        result.type.split(";")[0] !== "text/html" ||
+        !result.size ||
+        result.size > 500000
+      )
+        throw new Error("HTML 리포트를 확인하지 못했어요. 다시 시도해 주세요.");
+      const text = await result.text();
+      if (!text.startsWith("<!doctype html>") || !text.includes('data-baro-report="1"'))
+        throw new Error("HTML 리포트 형식이 올바르지 않아요.");
+      return result;
+    },
     async zip(id: string, selectedFileIds: string[]) {
       const ids = z
         .array(z.string().min(1))

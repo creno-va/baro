@@ -139,6 +139,23 @@ export function createReportsApi(
       201,
     );
   });
+  app.get("/reports/:reportId/html", async (c) => {
+    const access = await caseAccess(c);
+    if (access.response) return access.response;
+    z.strictObject({}).parse(c.req.query());
+    const id = opaqueIdSchema.parse(c.req.param("reportId"));
+    const document = await (await service(c.env, access.ownerId)).html(access.ownerId, id);
+    return new Response(document, {
+      headers: {
+        "content-type": "text/html; charset=utf-8",
+        "content-disposition": attachmentFilename(`BARO-${id}.html`),
+        "cache-control": "private, no-store",
+        "x-content-type-options": "nosniff",
+        "content-security-policy":
+          "sandbox; default-src 'none'; img-src data:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'",
+      },
+    });
+  });
   app.get("/reports/:reportId/pdf", async (c) => {
     const access = await caseAccess(c);
     if (access.response) return access.response;
