@@ -654,8 +654,11 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
                           variant="ghost"
                           disabled={locked || index === 0}
                           onClick={() => {
-                            if (question && dirty)
-                              drafts.current.set(question.id, { value, state: answerState });
+                            if (question) {
+                              if (dirty)
+                                drafts.current.set(question.id, { value, state: answerState });
+                              else drafts.current.delete(question.id);
+                            }
                             const epoch = ticket();
                             void transition(
                               () => {

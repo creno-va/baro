@@ -78,6 +78,48 @@ test("previous question navigation preserves the unsaved current answer", async 
   await expect(editor).toHaveValue("아직 저장하지 않은 두 번째 질문의 합성 초안입니다.");
 });
 
+test("previous question navigation forgets a draft restored to its saved answer", async ({
+  page,
+}) => {
+  await page.addInitScript(() =>
+    localStorage.setItem(
+      "baro-api-mock-v1:session",
+      JSON.stringify({
+        user: { id: "restored-draft-customer", name: "합성 검증 고객", accountType: "customer" },
+        needsConsent: false,
+      }),
+    ),
+  );
+  await page.goto("/cases/new");
+  await page
+    .getByLabel("지금까지 있었던 일")
+    .fill("저장한 답변으로 되돌린 초안을 검증하는 합성 사건입니다. 거래 날짜를 확인합니다.");
+  await page.getByRole("button", { name: "저장하고 계속" }).click();
+  await page.getByRole("button", { name: "모름", exact: true }).click();
+  await expect(page.getByText("1차 질문 · 2 / 3", { exact: true })).toBeVisible();
+  const editor = page.getByRole("textbox", { name: "답변", exact: true });
+  const saved = "이미 저장한 두 번째 합성 답변입니다.";
+  const discarded = "나중에 버릴 두 번째 답변의 합성 초안입니다.";
+  await editor.fill(saved);
+  await page.getByText("답변 관리", { exact: true }).click();
+  await page.getByRole("button", { name: "답변 저장", exact: true }).click();
+  await expect(page.getByRole("status")).toContainText("답변이 저장됐어요.");
+
+  await editor.fill(discarded);
+  await page.getByRole("button", { name: "이전 질문", exact: true }).click();
+  await expect(page.getByText("1차 질문 · 1 / 3", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "모름", exact: true }).click();
+  await expect(editor).toHaveValue(discarded);
+
+  await editor.fill(saved);
+  await page.getByText("답변 관리", { exact: true }).click();
+  await page.getByRole("button", { name: "이전 질문", exact: true }).click();
+  await expect(page.getByText("1차 질문 · 1 / 3", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "모름", exact: true }).click();
+  await expect(page.getByText("1차 질문 · 2 / 3", { exact: true })).toBeVisible();
+  await expect(editor).toHaveValue(saved);
+});
+
 for (const focus of [false, true]) {
   test(`peer summary edit with local draft; background refresh=${focus}`, async ({ page }) => {
     await page.addInitScript(() =>
