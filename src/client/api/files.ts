@@ -24,6 +24,7 @@ export const fileViewSchema = z.object({
   status: z.enum(["uploading", "processing", "ready", "failed", "waiting"]),
   coverage: z.string(),
   extractedText: z.string(),
+  canStartProcessing: z.boolean().optional(),
 });
 const metadataSchema = z.object({
   id: z.string(),
@@ -151,6 +152,7 @@ export function createFilesApi(request: WorkspaceTransport) {
                     : "waiting",
           coverage: "처리 결과는 아직 확인할 수 없어요.",
           extractedText: "",
+          canStartProcessing: row.status === "uploaded",
         };
         if (row.status === "ready") {
           const detail = await request(`${base(id)}/files/${encodeURIComponent(row.id)}`);
@@ -277,12 +279,17 @@ export function createFilesApi(request: WorkspaceTransport) {
       return found;
     },
     async remove(id: string, fileId: string) {
+      const forgetUpload = () => {
+        for (const [key, attempt] of uploads)
+          if (attempt.session?.fileId === fileId) uploads.delete(key);
+      };
       const identity = `${id}:${fileId}`;
       // Listing authorizes the workspace even when a prior DELETE already committed.
       const current = await list(id);
       if (!current.some((file) => file.id === fileId)) {
         if (!pendingRemovals.delete(identity))
           throw workspaceError("NOT_FOUND", "자료를 찾을 수 없어요.");
+        forgetUpload();
         return current;
       }
       pendingRemovals.add(identity);
@@ -298,6 +305,7 @@ export function createFilesApi(request: WorkspaceTransport) {
           "DELETE",
         ),
       );
+      forgetUpload();
       const next = await list(id);
       pendingRemovals.delete(identity);
       return next;

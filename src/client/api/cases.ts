@@ -483,13 +483,24 @@ export const casesApi = {
     );
   },
   async create(raw: z.infer<typeof createInputSchema>): Promise<CaseView> {
-    const input = validate(createInputSchema, raw),
-      key = await mutationKey("cases.create", input);
+    const input = validate(createInputSchema, raw);
     if (apiMode === "mock") {
+      const key = await mutationKey("cases.create", input);
       const item = await request<CaseView>("cases.create", input, { key });
       forgetMutation(key);
       return item;
     }
+    const session = z
+      .object({
+        user: z.object({ id: z.string(), accountType: z.string() }).nullable(),
+        needsConsent: z.boolean(),
+      })
+      .parse(await request("cases.owner", undefined, { path: "/api/me/session" }));
+    if (!session.user) throw new ApiError("UNAUTHENTICATED", "로그인이 필요해요.");
+    if (session.needsConsent) throw new ApiError("CONSENT_REQUIRED", "필수 동의를 확인해 주세요.");
+    if (session.user.accountType !== "customer")
+      throw new ApiError("NOT_FOUND", "사건을 찾을 수 없어요.");
+    const key = await mutationKey(`cases.create:${session.user.id}`, input);
     const turnstileToken = await securityToken();
     const w = v2WorkspaceSchema.parse(
       await request("cases.create", input, {

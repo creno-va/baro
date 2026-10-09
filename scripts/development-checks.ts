@@ -72,7 +72,7 @@ export function browserTargets(files: string[], available: string[]): string[] {
     ],
     [
       /src\/(styles\/(intake|workspace)\.css|pages\/cases\/|components\/(intake|analysis|workspace)\/|client\/api\/(?:mock\/)?(cases|workspace|files)|server\/(api\/(cases|case-create|answers|retry|v2\/(files|workspaces))|modules\/(intake|cases|case-structure|workspace|files|file-processing)\/))/,
-      /\/(cases|analysis|workspace|intake|intake103|conversation-home|files|xss)\.e2e\.ts$/,
+      /\/(cases|analysis|workspace|intake|intake103|conversation-home|files|xss|customer-recovery-(?:intake|real|workspace))\.e2e\.ts$/,
     ],
     [
       /src\/(styles\/lawyers\.css|pages\/lawyer|components\/lawyers\/|client\/api\/(?:mock\/)?lawyers|server\/(api\/v2\/(lawyers|directory|moderation)|modules\/(lawyers|moderation)\/))/,
@@ -164,12 +164,16 @@ export async function runBrowserTargets(targets: string[]) {
   const corpusTargets = targets.filter((path) => path.endsWith("/evals.e2e.ts"));
   const customerRealTargets = targets.filter((path) => path.endsWith("/customer-real.e2e.ts"));
   const reportRealTargets = targets.filter((path) => path.endsWith("/report-real-download.e2e.ts"));
+  const recoveryTargets = targets.filter((path) =>
+    /\/customer-recovery-(intake|real|workspace)\.e2e\.ts$/.test(path),
+  );
   const regularTargets = targets.filter(
     (path) =>
       !mockTargets.includes(path) &&
       !corpusTargets.includes(path) &&
       !customerRealTargets.includes(path) &&
-      !reportRealTargets.includes(path),
+      !reportRealTargets.includes(path) &&
+      !recoveryTargets.includes(path),
   );
   if (regularTargets.length) {
     const child = Bun.spawn(["bunx", "playwright", "test", ...regularTargets], {
@@ -211,6 +215,14 @@ export async function runBrowserTargets(targets: string[]) {
       ],
       { stdout: "inherit", stderr: "inherit" },
     );
+    if (await child.exited) process.exit(1);
+  }
+  for (const target of recoveryTargets) {
+    const config = target.replace(".e2e.ts", ".config.ts");
+    const child = Bun.spawn(["bunx", "playwright", "test", "--config", config, target], {
+      stdout: "inherit",
+      stderr: "inherit",
+    });
     if (await child.exited) process.exit(1);
   }
   if (mockTargets.length) {
