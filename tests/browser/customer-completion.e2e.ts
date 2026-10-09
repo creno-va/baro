@@ -292,3 +292,44 @@ test("structured drafts and file corrections retain their base revision across a
   await panel.getByRole("button", { name: "최신 내용 불러오기", exact: true }).click();
   await expect(page.getByLabel("확인·교정한 내용")).toHaveValue("다른 탭의 자료 교정");
 });
+
+test("material correction retries a lost committed response without duplicating the revision", async ({
+  page,
+}) => {
+  await seed(page);
+  await page.goto(`${base}/files?file=file-one`);
+  const input = page.getByLabel("확인·교정한 내용");
+  await input.fill("응답 유실 뒤에도 한 번만 저장한 교정");
+  await page.evaluate(async () => {
+    const apiPath = "/src/client/api/index.ts";
+    const errorPath = "/src/client/api/core.ts";
+    const filesPath = "/src/client/api/files.ts";
+    const { api } = await import(apiPath);
+    const { ApiError, apiRequest } = await import(errorPath);
+    const { createFilesApi } = await import(filesPath);
+    let first = true;
+    api.files = createFilesApi(async (path: string, init?: RequestInit) => {
+      const response = await apiRequest(path, init);
+      if (init?.method === "PATCH" && response.ok && first) {
+        first = false;
+        throw new ApiError("UNAVAILABLE", "합성 응답 유실", true);
+      }
+      return response;
+    });
+  });
+  await page.getByRole("button", { name: "교정 내용 저장", exact: true }).click();
+  await expect(
+    page.getByRole("region", { name: "자료 내용 검토" }).getByRole("alert"),
+  ).toBeVisible();
+  await expect(input).toHaveValue("응답 유실 뒤에도 한 번만 저장한 교정");
+  await page.getByRole("button", { name: "교정 내용 저장", exact: true }).click();
+  await expect(page.getByText("교정 내용을 저장했어요. 새로 접속해도 유지됩니다.")).toBeVisible();
+  await page.reload();
+  await expect(input).toHaveValue("응답 유실 뒤에도 한 번만 저장한 교정");
+  const revision = await page.evaluate(async () => {
+    const path = "/src/client/api/index.ts";
+    const { api } = await import(path);
+    return (await api.files.review("completion-case", "file-one")).file.revision;
+  });
+  expect(revision).toBe(2);
+});
