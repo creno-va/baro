@@ -5,8 +5,15 @@ import {
 } from "../../../components/reports/download";
 import type { DomainRequest, DomainRequestInit } from "../reports";
 import { reportSaveSchema } from "../reports";
-import type { CaseView, FileView, ReportView, SessionView, WorkspaceView } from "../types";
+import type {
+  ReportView as BaseReportView,
+  CaseView,
+  FileView,
+  SessionView,
+  WorkspaceView,
+} from "../types";
 
+type ReportView = BaseReportView & { pdfAvailable?: boolean };
 export type ReportMockState = {
   session: SessionView;
   cases: Record<string, CaseView>;
@@ -25,6 +32,8 @@ export type ReportMockState = {
   reportRequests?: Record<string, { fingerprint: string; value: ReportView }>;
   workspaceReceipts?: Record<string, unknown>;
   fileProcessing?: Record<string, unknown>;
+  fileReviews?: Record<string, unknown>;
+  fileReviewReceipts?: Record<string, { signature: string; value: { fileId: string } }>;
   fileExtractions?: Record<string, string>;
   fileUploads?: Record<string, { caseId: string; ownerId: string }>;
   fileUploadReceipts?: Record<string, { fileId: string; fingerprint: string }>;
@@ -109,7 +118,7 @@ function draft(state: ReportMockState, item: CaseView, revision: number): Report
 export function createReportsMockHandler(runtime: ReportMockRuntime): DomainRequest {
   const handler: DomainRequest = async <T>(path: string, init: DomainRequestInit = {}) => {
     const state = runtime.read();
-    requireMockAccount(state);
+    requireMockSession(state);
     if (state.session.user?.accountType !== "customer")
       throw new ReportMockError("ROLE_REQUIRED", "고객 역할로 로그인한 뒤 리포트를 확인해 주세요.");
     const reportPath = path.match(/^\/api\/v2\/cases\/([^/]+)\/reports$/);
@@ -117,7 +126,8 @@ export function createReportsMockHandler(runtime: ReportMockRuntime): DomainRequ
     const method = init.method ?? "GET";
     const key = init.headers?.["idempotency-key"];
     const fingerprint = JSON.stringify([path, method, init.body]);
-    if (reportPath) requireMockCase(state, decodeURIComponent(reportPath[1] ?? ""));
+    if (method !== "GET") requireMockAccount(state);
+    if (reportPath) requireMockCase(state, decodeURIComponent(reportPath[1] ?? ""), false);
     if (key && state.reportRequests?.[key]) {
       const prior = state.reportRequests[key];
       if (prior.fingerprint !== fingerprint)
@@ -126,7 +136,7 @@ export function createReportsMockHandler(runtime: ReportMockRuntime): DomainRequ
     }
     if (reportPath) {
       const id = decodeURIComponent(reportPath[1] ?? "");
-      requireMockCase(state, id);
+      requireMockCase(state, id, false);
       let value: ReportView;
       if (method === "GET") {
         if (!state.reports[id])
@@ -174,6 +184,7 @@ export function createReportsMockHandler(runtime: ReportMockRuntime): DomainRequ
               revision: prior.revision + 1,
               updatedAt: new Date().toISOString(),
               stale: false,
+              pdfAvailable: false,
             };
             current.reports[id] = next;
             current.reportHistory ??= {};
@@ -199,17 +210,24 @@ export function createReportsMockHandler(runtime: ReportMockRuntime): DomainRequ
       const report =
         state.reportHistory?.[id] ?? Object.values(state.reports).find((item) => item.id === id);
       if (!report) throw new ReportMockError("NOT_FOUND", "리포트를 찾을 수 없어요.");
-      requireMockCase(state, report.caseId);
+      requireMockCase(state, report.caseId, false);
       const content = report.maskIdentifiers ? maskReportText(report.content) : report.content;
       if (exportPath[2] === "pdf" && method === "GET") {
+        if (!report.pdfAvailable) requireMockAccount(state);
         const blob = await createSyntheticPdf(report.title, content, report.revision);
         const latest = runtime.read();
-        requireMockCase(latest, report.caseId);
+        requireMockCase(latest, report.caseId, false);
         if (latest.session.user?.id !== state.session.user?.id)
           throw new ReportMockError(
             "UNAUTHENTICATED",
             "로그인 상태가 변경됐어요. 다시 확인해 주세요.",
           );
+        runtime.update((current) => {
+          const stored = current.reportHistory?.[id];
+          if (stored) stored.pdfAvailable = true;
+          const latest = current.reports[report.caseId];
+          if (latest?.id === id) latest.pdfAvailable = true;
+        });
         return blob as T;
       }
       if (exportPath[2] === "zip" && method === "POST") {

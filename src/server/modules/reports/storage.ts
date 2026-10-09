@@ -11,7 +11,7 @@ import { createStorageMaintenance } from "../budget/storage-maintenance";
 import type { ProcessingCosts } from "../file-processing/transport";
 import type { FilesService, PrivateBucket } from "../files/service";
 import { decryptExport, type ExportIdentity, planExport } from "./binary";
-import { exportFence } from "./fence";
+import { exportFence, requireReportConsent, storedPdfFence } from "./fence";
 import {
   allowReportCleanup,
   applyReportWorkPlan,
@@ -369,9 +369,15 @@ export function createReportExports(core: V2Core, deps: ReportDependencies, port
     blobId: string,
     kind: ExportIdentity["kind"],
   ) {
-    const data = await valid(a(ownerId), r.id);
-    const fence = await exportFence(core, a(ownerId), r, data.review.sourceDigest, now);
-    const authorize = () => fence.check(undefined, blobId);
+    const data =
+      kind === "report_pdf" ? await ports.read(a(ownerId), r.id) : await valid(a(ownerId), r.id);
+    const fence =
+      kind === "report_pdf"
+        ? null
+        : await exportFence(core, a(ownerId), r, data.review.sourceDigest, now);
+    const authorize = fence
+      ? () => fence.check(undefined, blobId)
+      : storedPdfFence(core, a(ownerId), r, blobId);
     await authorize();
     const blob = await storage.findBlob(a(ownerId), blobId);
     if (!blob || blob.kind !== kind || blob.key_version !== "report_stream_v1")
@@ -381,7 +387,7 @@ export function createReportExports(core: V2Core, deps: ReportDependencies, port
       reportWorkPlan({
         pdfBytes: kind === "report_pdf" ? blob.logical_bytes : 0,
         zipBytes: kind === "original_zip" ? blob.logical_bytes : 0,
-        sourceRows: fence.rows,
+        sourceRows: fence?.rows ?? 0,
         reportFiles: data.body.selectedFiles.length,
       }),
     );
@@ -432,6 +438,9 @@ export function createReportExports(core: V2Core, deps: ReportDependencies, port
     };
   }
   async function build(actor: Actor, id: string, selected?: readonly string[]) {
+    const existing = await ports.row(actor, id);
+    if (!selected && existing.state === "ready" && existing.pdf_blob_id) return existing;
+    await requireReportConsent(core, actor);
     const data = await valid(actor, id),
       r = data.row;
     if (r.state === "ready" && r.pdf_blob_id && (!selected || r.zip_blob_id)) return r;

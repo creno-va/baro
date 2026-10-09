@@ -18,6 +18,14 @@ const reportSchema = z.object({
   stale: z.boolean(),
   excludedFileIds: z.array(z.string()),
   maskIdentifiers: z.boolean(),
+  basis: z
+    .object({
+      workspaceRevision: z.number().int().positive(),
+      summaryRevision: z.number().int().positive(),
+      generatedAt: z.iso.datetime(),
+    })
+    .optional(),
+  pdfAvailable: z.boolean().optional(),
 });
 export const reportSaveSchema = z.object({
   content: z.string().trim().min(1, "내용을 입력해 주세요.").max(30000),

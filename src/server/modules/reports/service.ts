@@ -1,5 +1,4 @@
 import { z } from "zod";
-import type { ReportView } from "../../../client/api/types";
 import { maskReportText } from "../../../components/reports/download";
 import { idempotencyKeySchema, opaqueIdSchema } from "../../../contracts";
 import {
@@ -17,16 +16,17 @@ import {
   utf8Bytes,
   type V2Core,
 } from "../../db/v2-core";
-import { createV2FilesRepository } from "../../db/v2-files";
 import { jobInsertStatements } from "../../db/v2-jobs";
 import { runtimeDigest } from "../../db/v2-paid-runtime";
 import { createV2ReportsRepository } from "../../db/v2-reports";
 import { createV2StagingRepository } from "../../db/v2-staging";
+import { requireReportConsent } from "./fence";
 import {
   buildReportSource,
   ownedWorkspace,
   ReportError,
   type ReportReviewData,
+  reportFile,
   reportReviewSchema,
   reportText,
   sourceDigest,
@@ -68,8 +68,7 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
     now: clock(),
   });
   const canonical = createV2ReportsRepository(core, deps.guideHosts);
-  const accounting = createV2AccountingRepository(core),
-    files = createV2FilesRepository(core);
+  const accounting = createV2AccountingRepository(core);
   const row = async (a: Actor, id: string) => {
     opaqueIdSchema.parse(id);
     const result = await core
@@ -136,7 +135,7 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
       throw new ReportError("STALE_REVISION");
     return { row: r, body, review };
   };
-  const view = async (a: Actor, id: string): Promise<ReportView> => {
+  const view = async (a: Actor, id: string) => {
     const data = await read(a, id);
     const stale = data.review.sourceDigest !== (await sourceDigest(core, a, data.row.workspace_id));
     await row(a, id);
@@ -148,6 +147,12 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
       content: data.review.content,
       updatedAt: data.row.created_at,
       stale,
+      basis: {
+        workspaceRevision: data.row.workspace_revision,
+        summaryRevision: data.row.summary_revision,
+        generatedAt: data.body.generatedAt,
+      },
+      pdfAvailable: data.row.state === "ready" && !!data.row.pdf_blob_id,
       excludedFileIds: data.review.excludedFileIds,
       maskIdentifiers: data.review.maskIdentifiers,
     };
@@ -201,6 +206,7 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
     selectedOriginals: readonly string[] = [],
   ) {
     idempotencyKeySchema.parse(key);
+    await requireReportConsent(core, a);
     const replay = await accounting.findOperation(a, route, key, requestHash);
     if (replay?.kind === "conflict") throw new ReportError("IDEMPOTENCY_CONFLICT");
     if (replay?.kind === "replay") {
@@ -213,6 +219,8 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
     const current = await ownedWorkspace(core, a, caseId);
     if (current.status !== "active" || !current.confirmed_summary_revision)
       throw new ReportError("REVIEW_REQUIRED");
+    if (review.sourceDigest !== (await sourceDigest(core, a, caseId)))
+      throw new ReportError("STALE_REVISION");
     const id = review.parentReportId ? `export-${crypto.randomUUID()}` : crypto.randomUUID();
     const snapshotId = await stage(a, caseId, current.revision, id, body);
     const request = v2ReportCreateRequestSchema.parse({
@@ -233,7 +241,7 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
     const g = { ...a, workspaceId: caseId, expectedRevision: current.revision };
     const selections = [];
     for (const file of body.selectedFiles) {
-      const actual = await files.read(a, file.id);
+      const actual = await reportFile(core, a, file.id);
       if (
         actual?.status !== "ready" ||
         actual.revision !== file.revision ||
@@ -430,9 +438,15 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
         value.excludedFileIds,
         deps.guideHosts,
       );
+      // Exclusions rebuild source-derived text so material cannot survive in a stale free-text
+      // copy. The previous immutable report retains any earlier manual editing.
+      const exclusionsChanged =
+        JSON.stringify([...value.excludedFileIds].sort()) !==
+        JSON.stringify([...old.review.excludedFileIds].sort());
       const review = {
         ...old.review,
         ...value,
+        content: exclusionsChanged ? reportText(source.body, source.coverage) : value.content,
         format: "client_review_v1" as const,
         sourceDigest: source.digest,
       };
