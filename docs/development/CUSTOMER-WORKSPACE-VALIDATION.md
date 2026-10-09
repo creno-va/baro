@@ -63,3 +63,25 @@ PR127 통합 후 실제 API의 동일 owner 역할 거부는 403/ROLE_REQUIRED�
 - shared session의 `baro-session-changed` peer-tab/same-tab marker는 4번의 PR127에서 병합됐다. 고객 boundary는 이 marker와 Better Auth의 `better-auth.message`, focus/pageshow/visibility 및 15초 session 검사를 사용한다. 동일 owner의 lawyer 전환은 공유 403/ROLE_REQUIRED 경계와 고객 API namespace 가드에서 거부한다.
 - 자료 처리 POST `/api/v2/cases/:id/files/:fileId/retry` 연결은 2번 소유이며 [요청 코멘트](https://github.com/creno-va/baro/issues/59#issuecomment-6018985215)에 기록했다. 자료 API/처리/report/삭제는 이 PR에서 변경하지 않는다. 처리 요청의 실제 외부 성공을 합성 upload 증거로 대신하지 않는다.
 - #64/#65 및 #70/#71 외부·정책·공개 조건은 OPEN으로 보존한다. PR은 Refs만 사용한다. 병합·배포는 4번 통합 세션에 맡긴다.
+
+## 2026-10-08 요약 조회 응답 경합 수정
+
+요약 화면에서 focus 조회가 겹치면 먼저 시작한 요청의 늦은 응답이 최신 요약과 확인 상태를
+되돌리거나, 최신 조회 성공 뒤에 오래된 오류를 표시했다. 기존 코드에서 두 조건을 각각
+브라우저로 재현했다. 조회 순번을 검사하고 저장·확인·계정 상태 초기화 때 이전 조회를
+무효화해 현재 요청의 결과·오류·로딩 종료만 반영한다.
+
+`tests/browser/intake103.e2e.ts`의 조회/저장 이후 지연 성공/실패 조합 4개를 포함한
+25개 브라우저 검사가 통과했다. 합성 API adapter를 사용하는 회귀이며 실제 외부 로그인·AI
+성공 증거는 아니다. PUBLIC_PREVIEW와 기능 제한·화면 구조·공유 계약·DB는 변경하지 않았다.
+
+로컬 필수 검사: frozen `bun ci`, 문서·작업 그래프·경계·lint·타입 검사, `bun run build`,
+`bun run cf:dry-run`, schema drift/fresh/upgrade migration 6개가 통과했다.
+`bun run check`는 단위 검사 1,394개 통과/33개 실패로 종료했다. 실패는 변경하지 않은
+법률 벤치마크의 Windows 경로 문자열 import(26개)와 테스트 선택기의 역슬래시 경로
+처리(7개)에서 발생했다. 전체 검사 성공으로 표시하지 않는다.
+
+실제 Hono/SQL·서명된 합성 세션을 사용하는 `customer-real.e2e.ts`는 640px/1280px가
+통과했다. 최초 390px 실행은 저장 재시도 버튼 클릭 중 60초 timeout으로 실패했고,
+동일 코드의 모바일 단독 재실행은 통과했다. 외부 OAuth·AI·R2 검증과 구분한다.
+로컬 시연은 API mock과 PUBLIC_PREVIEW_TEST를 사용해 배포의 기능 제한을 유지했다.
