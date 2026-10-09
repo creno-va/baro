@@ -216,3 +216,16 @@ portfolio `text`는 제목과 별개인 선택 본문(최대 5,000자); 없는 �
 자산은 기존 current consent 가드를 유지한다. A의 `requireSession({consent:false})` 읽기 옵션과
 lawyer 읽기 whitelist를 C mock consumer에서 사용하고 mutation/cache replay의 동의 검사는 유지한다.
 최종 SHA/통합 결과는 [완료표](./MVP-REQUIREMENTS-EVIDENCE.md)와 #62/#69에서 추적한다.
+
+## 2026-10-09 B 제품 HTML 리포트 계약
+
+사용자가 HTML을 “BARO 제품에 적용”하도록 확정했다. B/#66은
+`GET /api/v2/reports/:reportId/html`과 reports client의 `html(id)`를 구현하고
+ReportReview에 디자인된 HTML 미리보기·다운로드를 연결한다. 공통 types/auth/router의 변경은
+필요하면 A와 조율한다. 이 절은 계약/인수 추적이며 구현·통합 PASS를 의미하지 않는다.
+
+저장된 보고서 내용을 렌더하므로 새 AI 생성·revision 변경과 구분한다. 고정 생성 기준·stale·
+마스킹·자료 제외·출처/누락을 유지하며 재동의 전에도 기존 자기 리포트 읽기를 허용한다.
+owner/session/삭제 fence를 유지하고 HTML 입력을 escape하며 script/원격 리소스/폼 실행을
+허용하지 않는다. 응답의 HTML MIME·private/no-store·nosniff·제한된 CSP, 실제 다운로드 내용과
+모바일/인쇄 레이아웃의 증거는 UI-35/#69/#71에서 통합 SHA에 연결한다.
