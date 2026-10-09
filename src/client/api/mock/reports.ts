@@ -1,15 +1,28 @@
+import { createReportHtml } from "../../../components/reports/document";
 import {
   createSyntheticPdf,
   createZip,
   maskReportText,
 } from "../../../components/reports/download";
+import type { V2FileObservation, V2Summary } from "../../../contracts/v2";
 import type { DomainRequest, DomainRequestInit } from "../reports";
 import { reportSaveSchema } from "../reports";
-import type { CaseView, FileView, ReportView, SessionView, WorkspaceView } from "../types";
+import type {
+  ReportView as BaseReportView,
+  CaseView,
+  FileView,
+  SessionView,
+  WorkspaceView,
+} from "../types";
 
+type ReportView = BaseReportView & {
+  pdfAvailable?: boolean | undefined;
+  basis?: { workspaceRevision: number; summaryRevision: number; generatedAt: string } | undefined;
+};
+type ReportCase = CaseView & { summaryDetails?: V2Summary | undefined };
 export type ReportMockState = {
   session: SessionView;
-  cases: Record<string, CaseView>;
+  cases: Record<string, ReportCase>;
   caseOwners?: Record<string, string>;
   consents?: Record<string, unknown>;
   intake?: Record<string, unknown>;
@@ -25,6 +38,8 @@ export type ReportMockState = {
   reportRequests?: Record<string, { fingerprint: string; value: ReportView }>;
   workspaceReceipts?: Record<string, unknown>;
   fileProcessing?: Record<string, unknown>;
+  fileReviews?: Record<string, { observations?: { value: V2FileObservation }[] }>;
+  fileReviewReceipts?: Record<string, { signature: string; value: { fileId: string } }>;
   fileExtractions?: Record<string, string>;
   fileUploads?: Record<string, { caseId: string; ownerId: string }>;
   fileUploadReceipts?: Record<string, { fileId: string; fingerprint: string }>;
@@ -69,16 +84,50 @@ export function requireMockCase(state: ReportMockState, id: string, consent = tr
     );
   return item;
 }
-function draft(state: ReportMockState, item: CaseView, revision: number): ReportView {
-  const files = state.files[item.id] ?? [];
+function draft(
+  state: ReportMockState,
+  item: ReportCase,
+  revision: number,
+  excluded: string[] = [],
+): ReportView {
+  const files = (state.files[item.id] ?? []).filter((file) => !excluded.includes(file.id));
   const workspace = state.workspace[item.id];
+  const generatedAt = new Date().toISOString();
+  const facts = (item.summaryDetails?.facts ?? workspace?.facts ?? []).filter((fact) =>
+    fact.references.every(
+      (ref) => ref.kind !== "user_material" || files.some((file) => file.id === ref.fileId),
+    ),
+  );
+  const observationText = (value: V2FileObservation) => {
+    const p = value.position;
+    const position =
+      p.kind === "audio"
+        ? `${p.startSeconds}–${p.endSeconds}초`
+        : p.kind === "video"
+          ? `${p.timestampSeconds}초 · 프레임 ${p.frameIndex}`
+          : p.kind === "document"
+            ? `${p.page}쪽${p.paragraph ? ` · ${p.paragraph}번째 문단` : ""}`
+            : "이미지 관찰";
+    return `${position} · ${value.userEdited ? "사용자 교정 · 미확인" : "자료 관찰"}\n${value.text}`;
+  };
   const content = [
     "[합성 API 예시 · 실제 AI/외부 처리 결과가 아닙니다]",
     "",
     "사건의 사실과 주장",
     item.summary || "아직 확인된 사건 요약이 없습니다. 내용을 직접 입력해 주세요.",
     "",
+    "당사자",
+    ...(item.summaryDetails?.parties ?? workspace?.people ?? []).map(
+      (p) => `${p.label} · ${p.role}`,
+    ),
+    "",
+    ...facts.map(
+      (fact) =>
+        `${fact.text} · ${fact.userEdited ? "사용자 교정" : "사용자 진술"} · ${fact.certainty}`,
+    ),
+    "",
     "미확인·상반되는 내용",
+    ...(item.summaryDetails?.unknowns ?? workspace?.unknowns ?? []),
     "상대방의 입장과 원본의 진정성은 확인되지 않았습니다. 날짜·금액·출처와 빠진 내용을 직접 확인하세요.",
     "",
     "타임라인",
@@ -86,8 +135,19 @@ function draft(state: ReportMockState, item: CaseView, revision: number): Report
       (entry) => `${entry.date} · ${entry.title}: ${entry.detail}`,
     ),
     "",
+    "준비할 행동",
+    ...(workspace?.actions ?? []).map(
+      (action) => `${action.title} (${action.done ? "완료" : "진행 전"}) · ${action.detail}`,
+    ),
+    "",
     "준비할 자료와 처리 범위",
-    ...files.map((file) => `${file.name} · ${file.coverage || "처리 범위를 직접 확인하세요."}`),
+    ...files.flatMap((file) => [
+      `${file.name} · ${file.coverage || "처리 범위를 직접 확인하세요."}`,
+      ...(state.fileReviews?.[file.id]?.observations
+        ?.filter(({ value }) => value.included)
+        .map(({ value }) => observationText(value)) ??
+        (file.extractedText ? [file.extractedText] : [])),
+    ]),
     "",
     "연락과 전달",
     "사용자가 검토한 자료를 선택한 변호사에게 직접 전달합니다. 법률 판단·소송 전략이나 결과를 보장하지 않습니다.",
@@ -100,24 +160,30 @@ function draft(state: ReportMockState, item: CaseView, revision: number): Report
     revision,
     title: item.title,
     content,
-    updatedAt: new Date().toISOString(),
+    updatedAt: generatedAt,
+    basis: {
+      workspaceRevision: item.revision,
+      summaryRevision: item.summaryDetails?.revision ?? item.revision,
+      generatedAt,
+    },
     stale: false,
-    excludedFileIds: [],
+    excludedFileIds: excluded,
     maskIdentifiers: false,
   };
 }
 export function createReportsMockHandler(runtime: ReportMockRuntime): DomainRequest {
   const handler: DomainRequest = async <T>(path: string, init: DomainRequestInit = {}) => {
     const state = runtime.read();
-    requireMockAccount(state);
+    requireMockSession(state);
     if (state.session.user?.accountType !== "customer")
       throw new ReportMockError("ROLE_REQUIRED", "고객 역할로 로그인한 뒤 리포트를 확인해 주세요.");
     const reportPath = path.match(/^\/api\/v2\/cases\/([^/]+)\/reports$/);
-    const exportPath = path.match(/^\/api\/v2\/reports\/([^/]+)\/(pdf|zip)$/);
+    const exportPath = path.match(/^\/api\/v2\/reports\/([^/]+)\/(html|pdf|zip)$/);
     const method = init.method ?? "GET";
     const key = init.headers?.["idempotency-key"];
     const fingerprint = JSON.stringify([path, method, init.body]);
-    if (reportPath) requireMockCase(state, decodeURIComponent(reportPath[1] ?? ""));
+    if (method !== "GET") requireMockAccount(state);
+    if (reportPath) requireMockCase(state, decodeURIComponent(reportPath[1] ?? ""), false);
     if (key && state.reportRequests?.[key]) {
       const prior = state.reportRequests[key];
       if (prior.fingerprint !== fingerprint)
@@ -126,7 +192,7 @@ export function createReportsMockHandler(runtime: ReportMockRuntime): DomainRequ
     }
     if (reportPath) {
       const id = decodeURIComponent(reportPath[1] ?? "");
-      requireMockCase(state, id);
+      requireMockCase(state, id, false);
       let value: ReportView;
       if (method === "GET") {
         if (!state.reports[id])
@@ -167,13 +233,21 @@ export function createReportsMockHandler(runtime: ReportMockRuntime): DomainRequ
             const allowed = new Set((current.files[id] ?? []).map((file) => file.id));
             if (input.excludedFileIds.some((fileId) => !allowed.has(fileId)))
               throw new ReportMockError("VALIDATION_ERROR", "제외할 자료를 다시 확인해 주세요.");
+            const exclusionsChanged =
+              JSON.stringify([...input.excludedFileIds].sort()) !==
+              JSON.stringify([...prior.excludedFileIds].sort());
+            const rebuilt = exclusionsChanged
+              ? draft(current, item, prior.revision + 1, input.excludedFileIds)
+              : null;
             const next = {
               ...prior,
               ...input,
+              ...(rebuilt ? { content: rebuilt.content, basis: rebuilt.basis } : {}),
               id: `report-${crypto.randomUUID()}`,
               revision: prior.revision + 1,
               updatedAt: new Date().toISOString(),
               stale: false,
+              pdfAvailable: false,
             };
             current.reports[id] = next;
             current.reportHistory ??= {};
@@ -199,17 +273,32 @@ export function createReportsMockHandler(runtime: ReportMockRuntime): DomainRequ
       const report =
         state.reportHistory?.[id] ?? Object.values(state.reports).find((item) => item.id === id);
       if (!report) throw new ReportMockError("NOT_FOUND", "리포트를 찾을 수 없어요.");
-      requireMockCase(state, report.caseId);
+      requireMockCase(state, report.caseId, false);
+      if (exportPath[2] === "html" && method === "GET") {
+        const stale =
+          (state.reportSources?.[id] ?? state.cases[report.caseId]?.revision) !==
+          state.cases[report.caseId]?.revision;
+        return new Blob([createReportHtml({ ...report, stale })], {
+          type: "text/html;charset=utf-8",
+        }) as T;
+      }
       const content = report.maskIdentifiers ? maskReportText(report.content) : report.content;
       if (exportPath[2] === "pdf" && method === "GET") {
+        if (!report.pdfAvailable) requireMockAccount(state);
         const blob = await createSyntheticPdf(report.title, content, report.revision);
         const latest = runtime.read();
-        requireMockCase(latest, report.caseId);
+        requireMockCase(latest, report.caseId, false);
         if (latest.session.user?.id !== state.session.user?.id)
           throw new ReportMockError(
             "UNAUTHENTICATED",
             "로그인 상태가 변경됐어요. 다시 확인해 주세요.",
           );
+        runtime.update((current) => {
+          const stored = current.reportHistory?.[id];
+          if (stored) stored.pdfAvailable = true;
+          const latest = current.reports[report.caseId];
+          if (latest?.id === id) latest.pdfAvailable = true;
+        });
         return blob as T;
       }
       if (exportPath[2] === "zip" && method === "POST") {

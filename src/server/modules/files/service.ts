@@ -186,10 +186,16 @@ export function createFilesService(core: V2Core, deps: FileServiceDependencies) 
   });
   // Combine consent and provenance in one read. Completion validates bytes in
   // the processor's single pass, keeping 120 metered chunks within D1 limits.
-  const authorizedBlob = (ownerId: string, workspaceId: string, u: Session, p: Part) =>
+  const authorizedBlob = (
+    ownerId: string,
+    workspaceId: string,
+    u: Session,
+    p: Part,
+    requireConsent = true,
+  ) =>
     core
       .statement(
-        `SELECT b.id,b.object_key,b.kind,b.visibility,b.logical_bytes,b.cipher_bytes,b.cipher_hash,b.key_version FROM v2_upload_sessions u JOIN v2_files f ON f.id=u.file_id JOIN v2_workspaces w ON w.id=f.workspace_id JOIN v2_upload_parts part ON part.upload_id=u.id JOIN v2_blobs b ON b.id=part.blob_id JOIN v2_storage_reservations r ON r.id=b.reservation_id JOIN v2_billing_principals principal ON principal.id=b.principal_id WHERE u.id=? AND u.revision=? AND f.id=? AND w.id=? AND w.owner_id=? AND principal.owner_id=w.owner_id AND r.principal_id=b.principal_id AND r.entity_id=f.id AND r.kind='case_original' AND r.state!='released' AND part.ordinal=? AND part.blob_id=? AND part.cipher_hash=? AND part.encrypted_payload=? AND b.state='stored' AND b.kind='original' AND b.visibility='private' AND EXISTS(SELECT 1 FROM user_consents c WHERE c.user_id=w.owner_id AND c.terms_version=? AND c.privacy_version=? AND c.ai_notice_version=? AND c.over_14_confirmed=1) AND ${aliveWorkspace} AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='file' AND target_id=f.id)`,
+        `SELECT b.id,b.object_key,b.kind,b.visibility,b.logical_bytes,b.cipher_bytes,b.cipher_hash,b.key_version FROM v2_upload_sessions u JOIN v2_files f ON f.id=u.file_id JOIN v2_workspaces w ON w.id=f.workspace_id JOIN v2_upload_parts part ON part.upload_id=u.id JOIN v2_blobs b ON b.id=part.blob_id JOIN v2_storage_reservations r ON r.id=b.reservation_id JOIN v2_billing_principals principal ON principal.id=b.principal_id WHERE u.id=? AND u.revision=? AND f.id=? AND w.id=? AND w.owner_id=? AND principal.owner_id=w.owner_id AND r.principal_id=b.principal_id AND r.entity_id=f.id AND r.kind='case_original' AND r.state!='released' AND part.ordinal=? AND part.blob_id=? AND part.cipher_hash=? AND part.encrypted_payload=? AND b.state='stored' AND b.kind='original' AND b.visibility='private' AND (?=0 OR EXISTS(SELECT 1 FROM user_consents c WHERE c.user_id=w.owner_id AND c.terms_version=? AND c.privacy_version=? AND c.ai_notice_version=? AND c.over_14_confirmed=1)) AND coalesce((SELECT value FROM app_metadata WHERE key='account-type:'||w.owner_id),'customer')='customer' AND ${aliveWorkspace} AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='file' AND target_id=f.id)`,
         [
           u.id,
           u.revision,
@@ -200,6 +206,7 @@ export function createFilesService(core: V2Core, deps: FileServiceDependencies) 
           p.blob_id,
           p.cipher_hash,
           p.encrypted_payload,
+          requireConsent ? 1 : 0,
           CURRENT_POLICY_VERSIONS.termsVersion,
           CURRENT_POLICY_VERSIONS.privacyVersion,
           CURRENT_POLICY_VERSIONS.aiNoticeVersion,
@@ -221,8 +228,9 @@ export function createFilesService(core: V2Core, deps: FileServiceDependencies) 
     u: Session,
     p: Part,
     wrappedKey?: string,
+    requireConsent = true,
   ) => {
-    const blob = await authorizedBlob(ownerId, workspaceId, u, p);
+    const blob = await authorizedBlob(ownerId, workspaceId, u, p, requireConsent);
     if (
       blob?.visibility !== "private" ||
       blob.kind !== "original" ||
@@ -232,7 +240,7 @@ export function createFilesService(core: V2Core, deps: FileServiceDependencies) 
       throw new FileError("NOT_FOUND");
     const currentAccess = async () => {
       try {
-        const current = await authorizedBlob(ownerId, workspaceId, u, p);
+        const current = await authorizedBlob(ownerId, workspaceId, u, p, requireConsent);
         return (
           current?.id === blob.id &&
           current.object_key === blob.object_key &&
@@ -275,7 +283,7 @@ export function createFilesService(core: V2Core, deps: FileServiceDependencies) 
       wrappedKey,
     );
     if ((await digest(value)) !== receipt.contentHash) throw new FileError("INVALID_FILE");
-    const current = await authorizedBlob(ownerId, workspaceId, u, p);
+    const current = await authorizedBlob(ownerId, workspaceId, u, p, requireConsent);
     if (
       !current ||
       current.cipher_hash !== blob.cipher_hash ||
@@ -299,6 +307,7 @@ export function createFilesService(core: V2Core, deps: FileServiceDependencies) 
     u: Session,
     manifest: z.infer<typeof v2OriginalManifestSchema>,
     validated?: () => void,
+    requireConsent = true,
   ) => {
     let index = 0;
     let wrappedKey: string | undefined;
@@ -316,7 +325,7 @@ export function createFilesService(core: V2Core, deps: FileServiceDependencies) 
             }
             const p = await part(u, index);
             if (!p) throw new FileError("INVALID_FILE");
-            const result = await loadPart(ownerId, workspaceId, u, p, wrappedKey);
+            const result = await loadPart(ownerId, workspaceId, u, p, wrappedKey, requireConsent);
             const expected = manifest.parts[index];
             if (
               !expected ||
@@ -778,7 +787,7 @@ export function createFilesService(core: V2Core, deps: FileServiceDependencies) 
       return {
         name: metadata.name,
         byteLength: manifest.byteLength,
-        body: stream(ownerId, workspaceId, u, manifest),
+        body: stream(ownerId, workspaceId, u, manifest, undefined, false),
       };
     },
     async remove(

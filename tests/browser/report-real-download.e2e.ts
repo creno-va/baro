@@ -59,12 +59,27 @@ test("ReportReview uses signed real SQL routes and downloads a Korean font PDF a
     await page.getByRole("checkbox", { name: "전화번호·이메일·주민등록번호 가리기" }).check();
     await page.getByRole("button", { name: "검토 내용 저장" }).click();
     await expect(page.getByRole("status")).toContainText("저장했어요");
+    await page.getByRole("button", { name: "전달 내용 미리보기" }).click();
+    const previewDocument = page.locator(".report-html-preview");
+    await expect(previewDocument.getByAltText("바로 로고")).toBeVisible();
+    await expect(
+      previewDocument.getByRole("heading", { name: "사건 요약", exact: true }),
+    ).toBeVisible();
+    await expect(previewDocument).toContainText("[전화번호 가림]");
+    await expect(previewDocument).not.toContainText("010-1234-5678");
     await page
       .locator(".report-material")
       .filter({ hasText: `${Buffer.byteLength(seed.original)}바이트` })
       .getByRole("checkbox", { name: "ZIP에 원본 포함" })
       .check();
     await page.getByRole("checkbox", { name: "내용·식별정보·선택한 원본을 확인했어요" }).check();
+    const htmlEvent = page.waitForEvent("download");
+    await page.getByRole("button", { name: "HTML 다운로드", exact: true }).click();
+    const html = await htmlEvent;
+    const htmlText = await readFile((await html.path()) as string, "utf8");
+    expect(htmlText).toContain('data-baro-report="1"');
+    expect(htmlText).toContain("[전화번호 가림]");
+    expect(htmlText).not.toContain("010-1234-5678");
     const pdfEvent = page.waitForEvent("download");
     await page.getByRole("button", { name: "PDF 다운로드" }).click();
     const pdf = await pdfEvent;
@@ -100,6 +115,7 @@ test("ReportReview uses signed real SQL routes and downloads a Korean font PDF a
     const out = process.env.BARO_REPORT_EVIDENCE_DIR ?? testInfo.outputPath("synthetic-downloads");
     await mkdir(out, { recursive: true });
     await pdf.saveAs(resolve(out, "real-korean-report.pdf"));
+    await html.saveAs(resolve(out, "real-korean-report.html"));
     await zip.saveAs(resolve(out, "real-selected-originals.zip"));
     await page.screenshot({ path: resolve(out, "real-report-mobile.png"), fullPage: true });
   } finally {
