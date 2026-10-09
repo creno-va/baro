@@ -138,10 +138,10 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
     const serial = ++latest.current;
     let epoch = ticket();
     try {
-      if (!(await verify())) return;
+      if (!(await verify()) || serial !== latest.current) return;
       epoch = ticket();
       const next = await api.workspace.get(caseId);
-      if (!(await verify())) return;
+      if (serial !== latest.current || !(await verify())) return;
       if (current(epoch) && serial === latest.current) {
         apply(next);
         setError(null);
@@ -164,11 +164,21 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
       view.messages.some((message) => message.status === "pending") ||
       view.files.some((file) => ["uploading", "processing", "waiting"].includes(file.status));
     if (!pending) return;
-    const timer = setTimeout(() => {
-      if (!document.hidden && !lock.current) void load().catch(showError);
-    }, 1800);
-    return () => clearTimeout(timer);
-  }, [view, load, showError]);
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const poll = async () => {
+      try {
+        if (!document.hidden && !lock.current) await load();
+      } finally {
+        if (!cancelled) timer = setTimeout(() => void poll(), 1800);
+      }
+    };
+    timer = setTimeout(() => void poll(), 1800);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [view, load]);
   useEffect(() => {
     if (tab !== "files" || !ready || !view) return;
     const id = new URLSearchParams(window.location.search).get("file");

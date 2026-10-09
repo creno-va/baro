@@ -135,6 +135,7 @@ export function validateUpload(file: Pick<File, "name" | "size" | "type">) {
 export function createFilesApi(request: WorkspaceTransport) {
   const revisions = new Map<string, number>();
   const reviews = new Map<string, RequestInit>();
+  const pendingRemovals = new Set<string>();
   const uploads = new Map<
     string,
     { expectedRevision: number; key: string; session?: z.infer<typeof v2UploadSessionSchema> }
@@ -361,7 +362,15 @@ export function createFilesApi(request: WorkspaceTransport) {
       return found;
     },
     async remove(id: string, fileId: string) {
-      await list(id);
+      const identity = `${id}:${fileId}`;
+      // Listing authorizes the workspace even when a prior DELETE already committed.
+      const current = await list(id);
+      if (!current.some((file) => file.id === fileId)) {
+        if (!pendingRemovals.delete(identity))
+          throw workspaceError("NOT_FOUND", "자료를 찾을 수 없어요.");
+        return current;
+      }
+      pendingRemovals.add(identity);
       await workspaceJson(
         request,
         `${base(id)}/files/${encodeURIComponent(fileId)}`,
@@ -374,7 +383,9 @@ export function createFilesApi(request: WorkspaceTransport) {
           "DELETE",
         ),
       );
-      return list(id);
+      const next = await list(id);
+      pendingRemovals.delete(identity);
+      return next;
     },
     async original(id: string, fileId: string) {
       return (

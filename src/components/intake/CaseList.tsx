@@ -45,10 +45,10 @@ export function CaseList() {
     setLoading(true);
     setError(null);
     try {
-      if (!(await verify())) return;
+      if (!(await verify()) || serial !== request.current) return;
       epoch = ticket();
       const items = await api.cases.list();
-      if (!(await verify())) return;
+      if (serial !== request.current || !(await verify())) return;
       if (current(epoch) && serial === request.current) setItems(items);
     } catch (cause) {
       if (alive(epoch) && serial === request.current) {
