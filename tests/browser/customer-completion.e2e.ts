@@ -175,6 +175,18 @@ test("year, month, day and unknown precision survive actual editor reconnect", a
     await expect(page.getByRole("dialog")).toBeHidden();
     await page.reload();
     await expect(page.getByText(label ?? "", { exact: true })).toBeVisible();
+    const row = page
+      .getByRole("listitem")
+      .filter({ has: page.getByRole("heading", { name: `정밀도 ${precision}`, exact: true }) });
+    await row.getByRole("button", { name: "편집", exact: true }).click();
+    await page.getByLabel("어떤 일이 있었나요?").fill(`제목만 수정 ${precision}`);
+    await page.getByRole("button", { name: "타임라인 저장" }).click();
+    await expect(page.getByRole("dialog")).toBeHidden();
+    await page.reload();
+    await expect(page.getByText(label ?? "", { exact: true })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: `제목만 수정 ${precision}`, exact: true }),
+    ).toBeVisible();
   }
 });
 

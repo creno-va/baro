@@ -289,8 +289,11 @@ export function createWorkspaceApi(
       cached?.revision === w.workspaceRevision
         ? w
         : v2WorkspaceSchema.parse(await workspaceJson(request, `${base(id)}/workspace`));
-    if (settled.workspaceRevision !== w.workspaceRevision)
+    if (settled.workspaceRevision !== w.workspaceRevision) {
+      snapshots.delete(id);
+      if (recovery < 2) return get(id, recovery + 1);
       throw workspaceError("UNAVAILABLE", "사건이 갱신되어 최신 내용을 다시 불러와 주세요.", true);
+    }
     snapshots.set(id, {
       revision: w.workspaceRevision,
       intake,
