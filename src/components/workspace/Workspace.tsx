@@ -16,7 +16,6 @@ import { type SyntheticEvent, useCallback, useEffect, useRef, useState } from "r
 import { api } from "../../client/api";
 import type { FileView, TimelineView, WorkspaceView } from "../../client/api/types";
 import type { CustomerWorkspaceView } from "../../client/api/workspace";
-import { PUBLIC_PREVIEW } from "../../client/public-preview";
 import { V2_LIMITS } from "../../contracts/v2";
 import { CaseDetail } from "../analysis/CaseDetail";
 import { useCustomerAccess } from "../intake/useCustomerAccess";
@@ -113,7 +112,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
   }, []);
   const access = useCustomerAccess(purge, (cause) => setError(problem(cause)));
   const { ready, version, verify, ticket, current, alive, deny } = access;
-  const readonly = PUBLIC_PREVIEW || !ready || view?.case.stage !== "active";
+  const readonly = !ready || view?.case.stage !== "active";
   const showError = useCallback(
     (cause: unknown) => {
       const next = problem(cause);
@@ -366,14 +365,6 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
       <div className="workspace-feedback" aria-live="polite" aria-atomic="true">
         {notice}
       </div>
-      {PUBLIC_PREVIEW && (
-        <section className="workspace-preview-notice" role="status">
-          <p>
-            추가 대화·자료 관리·타임라인 편집·행동 완료 기능은 준비 중이에요. 저장된 내용과 각
-            화면은 둘러볼 수 있어요.
-          </p>
-        </section>
-      )}
       {error && (
         <section className="workspace-error" role="alert">
           <strong>{error.message}</strong>

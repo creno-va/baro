@@ -9,7 +9,6 @@ import {
   lawyerErrorMessage,
 } from "../../client/api/lawyers";
 import { sessionApi } from "../../client/api/session";
-import { PUBLIC_PREVIEW } from "../../client/public-preview";
 import {
   selfAssetUrl,
   stripSelfPhotoMetadata,
@@ -157,7 +156,6 @@ export function Editor() {
     }
   }, [verify, clear]);
   useEffect(() => {
-    if (PUBLIC_PREVIEW) return;
     let alive = true;
     void load();
     const refresh = async () => {
@@ -366,24 +364,6 @@ export function Editor() {
         title="내 변호사 프로필"
         description="소개와 연락처를 작성하고, 공개할 정보를 직접 관리하세요."
       />
-      {PUBLIC_PREVIEW && (
-        <StatePanel
-          variant="pending"
-          title="변호사 프로필 관리를 준비하고 있어요."
-          description="프로필 저장·공개·자료 업로드는 2026년 11월 1일 웹 전체 출시 예정이에요."
-          action={
-            <div className="flex flex-wrap gap-2">
-              <Button disabled>프로필 저장 · 준비 중</Button>
-              <Button disabled variant="outline">
-                프로필 공개 · 준비 중
-              </Button>
-              <Button disabled variant="outline">
-                자료 업로드 · 준비 중
-              </Button>
-            </div>
-          }
-        />
-      )}
       <div className="flex flex-wrap gap-3">
         <a className="ui-button ui-button--outline" href="/lawyers">
           변호사 디렉터리
@@ -440,9 +420,7 @@ export function Editor() {
           {notice}
         </p>
       )}
-      {!PUBLIC_PREVIEW && busy && !draft && (
-        <StatePanel variant="loading" title="내 프로필을 불러오고 있어요." />
-      )}
+      {busy && !draft && <StatePanel variant="loading" title="내 프로필을 불러오고 있어요." />}
       {draft && (
         <>
           <div className="lawyer-toolbar">

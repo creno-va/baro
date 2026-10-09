@@ -10,11 +10,7 @@ const root = resolve(import.meta.dir, "../..");
 const bundle = await Bun.build({
   entrypoints: [resolve(import.meta.dir, "report-real-entry.tsx")],
   target: "browser",
-  define: {
-    "import.meta.env.PUBLIC_API_MODE": '"real"',
-    "import.meta.env.BARO_UI_TEST_FIXTURE": "true",
-    "import.meta.env.PUBLIC_PREVIEW_TEST": '"false"',
-  },
+  define: { "import.meta.env.PUBLIC_API_MODE": '"real"' },
   plugins: [
     {
       name: "real-report-adapters",
