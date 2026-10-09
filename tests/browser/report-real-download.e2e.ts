@@ -95,10 +95,10 @@ test("ReportReview uses signed real SQL routes and downloads a Korean font PDF a
     const zipPath = await zip.path();
     const parsed = JSON.parse(
       execFileSync(
-        "python3",
+        process.platform === "win32" ? "python" : "python3",
         [
           "-c",
-          "import json,sys,zipfile; z=zipfile.ZipFile(sys.argv[1]); print(json.dumps([(i.filename,z.read(i).decode('utf-8')) for i in z.infolist()],ensure_ascii=False))",
+          "import json,sys,zipfile; z=zipfile.ZipFile(sys.argv[1]); print(json.dumps([(i.filename,z.read(i).decode('utf-8')) for i in z.infolist()]))",
           zipPath as string,
         ],
         { encoding: "utf8" },

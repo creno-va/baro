@@ -43,7 +43,15 @@ export type WorkspaceMockState = {
     }
   >;
   fileUploadReceipts?: Record<string, { fileId: string; fingerprint: string }>;
-  reports?: Record<string, { stale: boolean; excludedFileIds: string[] }>;
+  reports?: Record<
+    string,
+    { stale: boolean; excludedFileIds: string[]; savedZip?: { id: string } | undefined }
+  >;
+  reportZips?: Record<
+    string,
+    { reportId: string; caseId: string; ownerId: string; fileIds: string[] }
+  >;
+  reportHistory?: Record<string, { savedZip?: { id: string } | undefined }>;
   [namespace: string]: unknown;
 };
 export type WorkspaceMockRuntime = {

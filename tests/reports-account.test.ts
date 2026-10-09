@@ -702,3 +702,34 @@ test("existing mock report reads survive re-consent while case deletion clears m
     peer: { signature: "peer", value: { fileId: "peer" } },
   });
 });
+
+test("mock saved ZIP survives consent change and controller reload, then case deletion removes its metadata", async () => {
+  const f = fixture(),
+    report = await f.reports.get("case-demo");
+  const first = await f.reports.zip(report.id, ["file-demo"]);
+  const saved = (await f.reports.get("case-demo")).savedZip;
+  if (!saved) throw new Error("saved mock ZIP missing");
+  f.update((state) => {
+    state.session.needsConsent = true;
+    const currentCase = state.cases["case-demo"];
+    if (!currentCase) throw new Error("synthetic case missing");
+    currentCase.revision++;
+  });
+  const reloaded = createReportsClient(f.request);
+  expect(await (await reloaded.savedZip(saved.id)).arrayBuffer()).toEqual(
+    await first.arrayBuffer(),
+  );
+  await expect(reloaded.zip(report.id, ["file-demo"])).rejects.toMatchObject({
+    code: "CONSENT_REQUIRED",
+  });
+  f.update((state) => {
+    if (state.session.user) state.session.user.accountType = "lawyer";
+  });
+  await expect(reloaded.savedZip(saved.id)).rejects.toMatchObject({ code: "ROLE_REQUIRED" });
+  f.update((state) => {
+    if (state.session.user) state.session.user.accountType = "customer";
+  });
+  await f.account.deleteCase("case-demo", "DELETE");
+  expect(Object.keys(f.read().reportZips ?? {})).toEqual([]);
+  await expect(reloaded.savedZip(saved.id)).rejects.toMatchObject({ code: "NOT_FOUND" });
+});

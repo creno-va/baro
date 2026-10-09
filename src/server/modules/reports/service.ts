@@ -140,8 +140,18 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
   const view = async (a: Actor, id: string) => {
     const data = await read(a, id);
     const stale = data.review.sourceDigest !== (await sourceDigest(core, a, data.row.workspace_id));
+    const saved = await core
+      .statement(
+        "SELECT r.id,r.created_at,(SELECT count(*) FROM v2_report_selections WHERE report_id=r.id AND original_selected=1) AS file_count FROM v2_reports r JOIN v2_blobs b ON b.id=r.zip_blob_id WHERE r.workspace_id=? AND r.revision=? AND r.id LIKE 'export-%' AND r.state='ready' AND b.state='stored' AND b.kind='original_zip' ORDER BY r.created_at DESC,r.rowid DESC LIMIT 1",
+        [data.row.workspace_id, data.row.revision],
+      )
+      .first<{ id: string; created_at: string; file_count: number }>();
+    const archive = saved ? await read(a, saved.id) : null;
     await row(a, id);
     return {
+      ...(saved && archive?.review.parentReportId === id && saved.file_count > 0
+        ? { savedZip: { id: saved.id, fileCount: saved.file_count, createdAt: saved.created_at } }
+        : {}),
       id,
       caseId: data.row.workspace_id,
       revision: data.row.revision,
@@ -521,6 +531,16 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
       // Recheck ownership and deletion after all asynchronous source reads.
       await row(a, id);
       return document;
+    },
+    async savedZip(ownerId: string, id: string) {
+      const a = actor(ownerId),
+        data = await read(a, id);
+      const parentId = data.review.parentReportId;
+      if (!parentId) throw new ReportError("NOT_FOUND");
+      const parent = await row(a, parentId);
+      if (parent.workspace_id !== data.row.workspace_id || parent.revision !== data.row.revision)
+        throw new ReportError("NOT_FOUND");
+      return exports.storedZip(a, id, parentId);
     },
     async zip(ownerId: string, id: string, key: string, selectedFileIds: readonly string[]) {
       const a = actor(ownerId),

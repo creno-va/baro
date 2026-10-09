@@ -7,7 +7,7 @@ import { expect, test } from "@playwright/test";
 import { openReportOptions } from "../helpers/report-controls";
 
 // Dedicated D port under either the main browser config or the standalone config.
-test.use({ baseURL: "http://127.0.0.1:4343" });
+test.use({ baseURL: `http://127.0.0.1:${process.env.BARO_REPORT_TEST_PORT ?? 4343}` });
 let server: ChildProcess;
 test.beforeAll(async () => {
   server = spawn("bun", ["tests/helpers/reports-ui-server.ts"], {
@@ -38,6 +38,16 @@ test.afterAll(() => {
   server?.kill();
 });
 
+async function prepareSavedZip(page: import("@playwright/test").Page) {
+  await openReportOptions(page);
+  await page.getByRole("checkbox", { name: "ZIP에 원본 포함" }).check();
+  await page.getByRole("checkbox", { name: "내용·식별정보·선택한 원본을 확인했어요" }).check();
+  const downloaded = page.waitForEvent("download");
+  await page.getByRole("button", { name: /^선택 원본 ZIP/ }).click();
+  await downloaded;
+  await expect(page.getByRole("button", { name: /저장된 선택 원본 ZIP/ })).toBeVisible();
+}
+
 const evidence = process.env.BARO_REPORT_EVIDENCE_DIR;
 test("peer account switch clears dirty report, selected originals, confirmation and open dialog", async ({
   page,
@@ -46,6 +56,7 @@ test("peer account switch clears dirty report, selected originals, confirmation 
   await page.goto("/cases/case-demo/reports");
   const editor = page.getByRole("textbox", { name: "리포트 내용 편집" });
   await expect(editor).toBeVisible();
+  await prepareSavedZip(page);
   await editor.fill("이전 계정의 저장하지 않은 합성 편집");
   await openReportOptions(page);
   await page.getByRole("checkbox", { name: "ZIP에 원본 포함" }).check();
@@ -72,6 +83,7 @@ test("peer account switch clears dirty report, selected originals, confirmation 
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page.getByRole("checkbox", { name: "ZIP에 원본 포함" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "PDF 다운로드" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /저장된 선택 원본 ZIP/ })).toHaveCount(0);
   await expect(page.getByText("이전 계정의 저장하지 않은 합성 편집")).toHaveCount(0);
 });
 test("same owner role change purges report edits and exports after peer-tab notification", async ({
@@ -81,6 +93,7 @@ test("same owner role change purges report edits and exports after peer-tab noti
   await page.goto("/cases/case-demo/reports");
   const editor = page.getByRole("textbox", { name: "리포트 내용 편집" });
   await expect(editor).toBeVisible();
+  await prepareSavedZip(page);
   await editor.fill("역할 변경 전에 남겨진 합성 편집");
   await openReportOptions(page);
   await page.getByRole("checkbox", { name: "ZIP에 원본 포함" }).check();
@@ -95,6 +108,7 @@ test("same owner role change purges report edits and exports after peer-tab noti
   await page.bringToFront();
   await expect(editor).toHaveCount(0);
   await expect(page.getByRole("button", { name: "PDF 다운로드" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /저장된 선택 원본 ZIP/ })).toHaveCount(0);
   await expect(page.getByRole("checkbox", { name: "ZIP에 원본 포함" })).toHaveCount(0);
   await expect(page.getByText("역할 변경 전에 남겨진 합성 편집")).toHaveCount(0);
 });

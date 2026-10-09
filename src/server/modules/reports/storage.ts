@@ -11,7 +11,7 @@ import { createStorageMaintenance } from "../budget/storage-maintenance";
 import type { ProcessingCosts } from "../file-processing/transport";
 import type { FilesService, PrivateBucket } from "../files/service";
 import { decryptExport, type ExportIdentity, planExport } from "./binary";
-import { exportFence, requireReportConsent, storedPdfFence } from "./fence";
+import { exportFence, requireReportConsent, storedReportFence } from "./fence";
 import {
   allowReportCleanup,
   applyReportWorkPlan,
@@ -368,16 +368,10 @@ export function createReportExports(core: V2Core, deps: ReportDependencies, port
     r: ExportRow,
     blobId: string,
     kind: ExportIdentity["kind"],
+    parentReportId?: string,
   ) {
-    const data =
-      kind === "report_pdf" ? await ports.read(a(ownerId), r.id) : await valid(a(ownerId), r.id);
-    const fence =
-      kind === "report_pdf"
-        ? null
-        : await exportFence(core, a(ownerId), r, data.review.sourceDigest, now);
-    const authorize = fence
-      ? () => fence.check(undefined, blobId)
-      : storedPdfFence(core, a(ownerId), r, blobId);
+    const data = await ports.read(a(ownerId), r.id);
+    const authorize = storedReportFence(core, a(ownerId), r, blobId, kind, parentReportId);
     await authorize();
     const blob = await storage.findBlob(a(ownerId), blobId);
     if (!blob || blob.kind !== kind || blob.key_version !== "report_stream_v1")
@@ -387,7 +381,7 @@ export function createReportExports(core: V2Core, deps: ReportDependencies, port
       reportWorkPlan({
         pdfBytes: kind === "report_pdf" ? blob.logical_bytes : 0,
         zipBytes: kind === "original_zip" ? blob.logical_bytes : 0,
-        sourceRows: fence?.rows ?? 0,
+        sourceRows: 0,
         reportFiles: data.body.selectedFiles.length,
       }),
     );
@@ -563,6 +557,11 @@ export function createReportExports(core: V2Core, deps: ReportDependencies, port
       const r = await build(actor, id);
       if (!r.pdf_blob_id) throw new ReportError("STORAGE_UNAVAILABLE");
       return download(actor.ownerId, r, r.pdf_blob_id, "report_pdf");
+    },
+    async storedZip(actor: Actor, id: string, parentReportId: string) {
+      const r = await ports.row(actor, id);
+      if (r.state !== "ready" || !r.zip_blob_id) throw new ReportError("NOT_FOUND");
+      return download(actor.ownerId, r, r.zip_blob_id, "original_zip", parentReportId);
     },
     async zip(actor: Actor, id: string, selected: readonly string[]) {
       const r = await build(actor, id, selected);

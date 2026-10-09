@@ -1,11 +1,12 @@
 import { type ChildProcess, spawn } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { expect, test } from "@playwright/test";
+import { openReportOptions } from "../helpers/report-controls";
 
 test("stored real PDF and report remain readable after source change/re-consent, while mutations and deleted material are fenced", async ({
   page,
   context,
-}) => {
+}, testInfo) => {
   const server: ChildProcess = spawn("bun", ["tests/helpers/report-real-server.ts"], {
     env: {
       ...process.env,
@@ -19,6 +20,7 @@ test("stored real PDF and report remain readable after source change/re-consent,
       origin: string;
       caseId: string;
       selectedFileId: string;
+      original: string;
       cookie: {
         name: string;
         value: string;
@@ -57,6 +59,18 @@ test("stored real PDF and report remain readable after source change/re-consent,
     const originalText = await editor.inputValue();
     const reviewed = page.getByRole("checkbox", { name: "내용·식별정보·선택한 원본을 확인했어요" });
     await reviewed.check();
+    await openReportOptions(page);
+    await page
+      .locator(".report-material")
+      .filter({ hasText: `${Buffer.byteLength(seed.original)}바이트` })
+      .getByRole("checkbox", { name: "ZIP에 원본 포함" })
+      .check();
+    await reviewed.check();
+    const zipEvent = page.waitForEvent("download");
+    await page.getByRole("button", { name: /^선택 원본 ZIP/ }).click();
+    const firstZip = await zipEvent,
+      firstZipBytes = await readFile((await firstZip.path()) as string);
+    await expect(page.getByRole("button", { name: /저장된 선택 원본 ZIP/ })).toBeVisible();
     const firstEvent = page.waitForEvent("download");
     await page.getByRole("button", { name: "PDF 다운로드", exact: true }).click();
     const first = await firstEvent,
@@ -79,7 +93,18 @@ test("stored real PDF and report remain readable after source change/re-consent,
     const second = await secondEvent,
       secondPath = await second.path();
     expect(await readFile(secondPath as string)).toEqual(firstBytes);
-    await expect(page.getByRole("button", { name: /선택 원본 ZIP/ })).toBeDisabled();
+    await expect(page.getByRole("button", { name: /^선택 원본 ZIP/ })).toBeDisabled();
+    const storedZip = page.getByRole("button", { name: /저장된 선택 원본 ZIP/ });
+    await expect(storedZip).toBeEnabled();
+    const retainedZipEvent = page.waitForEvent("download");
+    await storedZip.click();
+    const retainedZip = await retainedZipEvent;
+    expect(await readFile((await retainedZip.path()) as string)).toEqual(firstZipBytes);
+    await page.setViewportSize({ width: 375, height: 812 });
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    ).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath("retained-zip-mobile.png"), fullPage: true });
     const base = `${seed.origin}/api/v2/cases/${seed.caseId}/files/${seed.selectedFileId}`;
     const metadata = (await (await page.request.get(`${base}/review`)).json()) as {
       workspaceRevision: number;
@@ -93,6 +118,7 @@ test("stored real PDF and report remain readable after source change/re-consent,
     expect((await page.request.get(`${base}/review`)).status()).toBe(404);
     await page.reload();
     await expect(editor).not.toBeVisible();
+    await expect(page.getByRole("button", { name: /저장된 선택 원본 ZIP/ })).not.toBeVisible();
     await expect(page.getByRole("button", { name: "PDF 다운로드", exact: true })).not.toBeVisible();
   } finally {
     server.stdin?.end();
