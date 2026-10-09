@@ -37,6 +37,7 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
   const heading = useRef<HTMLHeadingElement>(null);
   const request = useRef(0);
   const draftSnapshot = useRef<{ dirty: boolean; revision: number } | null>(null);
+  const acknowledgedRevision = useRef<number | null>(null);
   const {
     ready,
     version,
@@ -48,6 +49,7 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
   } = useCustomerAccess(() => {
     ++request.current;
     draftSnapshot.current = null;
+    acknowledgedRevision.current = null;
     setItem(null);
     setResult(null);
     setValue("");
@@ -67,6 +69,7 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
   }, setError);
   const report = useCallback(
     (cause: unknown) => {
+      if ((cause as { code?: string }).code === "CONFLICT") setRecovering(false);
       if (
         ["UNAUTHENTICATED", "CONSENT_REQUIRED", "NOT_FOUND"].includes(
           (cause as { code?: string }).code ?? "",
@@ -164,7 +167,8 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
         if (
           !replaceDraft &&
           draftSnapshot.current?.dirty &&
-          draftSnapshot.current.revision !== questions.revision
+          draftSnapshot.current.revision !== questions.revision &&
+          acknowledgedRevision.current !== questions.revision
         )
           throw new ApiError(
             "CONFLICT",
@@ -209,6 +213,7 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
           window.location.replace(`/cases/${encodeURIComponent(caseId)}/summary`);
         else {
           const show = () => {
+            acknowledgedRevision.current = null;
             setResult(questions);
             setIndex(nextIndex);
             setRecovering(false);
@@ -373,7 +378,18 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
             : { questionId: question.id, state },
         ],
       });
+      if (!alive(epoch)) return;
+      // The adapter reads again after saving, so its response can already include
+      // a peer edit. Only the next revision with our answer proves this snapshot.
+      const savedQuestion = next.questions.find((candidate) => candidate.id === question.id);
+      acknowledgedRevision.current =
+        next.revision === result.revision + 1 &&
+        savedQuestion?.answerState === state &&
+        (state !== "answered" || savedQuestion.answer === value.trim())
+          ? next.revision
+          : null;
       if (!(await verifyCompletion(epoch))) return;
+      acknowledgedRevision.current = null;
       failedOperation.current = null;
       setResult(next);
       setAnswerState(state);
@@ -428,7 +444,9 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
             else if (operation?.kind === "save") void save(operation.move, operation.state);
             else void load();
           }}
-          disabled={busy || waiting || leaving}
+          disabled={
+            busy || leaving || (waiting && (error as { code?: string }).code !== "CONFLICT")
+          }
         />
       ) : null}
       {ready && item && result ? (

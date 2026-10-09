@@ -456,7 +456,16 @@ export function createWorkspaceApi(
               "PUT",
             );
       pendingActions.set(signature, { done, init });
-      await workspaceJson(request, route, init);
+      try {
+        await workspaceJson(request, route, init);
+      } catch (cause) {
+        if (
+          (cause as { code?: string }).code === "CONFLICT" &&
+          pendingActions.get(signature)?.init === init
+        )
+          pendingActions.delete(signature);
+        throw cause;
+      }
       const next = await get(id);
       if (pendingActions.get(signature)?.init === init) pendingActions.delete(signature);
       return next;

@@ -533,6 +533,29 @@ for (const failure of ["response", "read"] as const) {
   });
 }
 
+test("an action conflict can retry the same intent with the refreshed revision", async () => {
+  const f = await fixture();
+  const id = f.workspace.id;
+  const intake = await f.service.intake(f.owner.userId, id);
+  await f.service.confirm(f.owner.userId, id, crypto.randomUUID(), {
+    expectedRevision: intake?.revision,
+    summaryRevision: intake?.summary?.revision,
+  });
+  await runCustomerJob(f, "chat_response");
+  const current = createWorkspaceApi(f.transport, null);
+  const peer = createWorkspaceApi(f.transport, null);
+  const action = (await current.get(id)).actions[0];
+  if (!action) throw new Error("Missing synthetic action");
+  await peer.get(id);
+  await peer.setAction(id, action.id, true);
+  await peer.setAction(id, action.id, false);
+  await expect(current.setAction(id, action.id, true)).rejects.toMatchObject({ code: "CONFLICT" });
+  await current.get(id);
+  const retried = await current.setAction(id, action.id, true);
+  expect(retried.actions.find((item) => item.id === action.id)?.done).toBe(true);
+  expect((await peer.get(id)).actions.find((item) => item.id === action.id)?.done).toBe(true);
+});
+
 test("a changed action intent replaces its interrupted retry instead of replaying an older toggle", async () => {
   const f = await fixture();
   const id = f.workspace.id;

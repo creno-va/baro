@@ -2,6 +2,178 @@ import { expect, type Page, test } from "@playwright/test";
 import type { QuestionsResult } from "../../src/client/api/cases";
 import type { CaseView, WorkspaceView } from "../../src/client/api/types";
 
+type IntakePostflightRegression = {
+  writes: number;
+  failedSessionReads: number;
+  postflightHeld: boolean;
+  peerSaved: boolean;
+  nextQuestion: string;
+  releasePostflight?: () => void;
+};
+
+async function prepareIntakePostflightRegression(
+  page: Page,
+  mode: "outage" | "superseded" | "peer" | "peer-read",
+) {
+  await page.goto("/cases/new");
+  await page
+    .getByLabel("지금까지 있었던 일")
+    .fill("합성 저장 복구 테스트입니다. 답변을 저장한 뒤 세션 확인만 잠깐 실패합니다.");
+  await page.getByRole("button", { name: "저장하고 계속" }).click();
+  await page.getByRole("textbox", { name: "답변", exact: true }).fill("현재 화면의 합성 답변");
+  await page.evaluate(async (mode) => {
+    const casesPath = "/src/client/api/cases.ts";
+    const apiPath = "/src/client/api/index.ts";
+    const corePath = "/src/client/api/core.ts";
+    const { casesApi } = await import(casesPath);
+    const { api } = await import(apiPath);
+    const { ApiError } = await import(corePath);
+    const saveAnswers = casesApi.saveAnswers.bind(casesApi);
+    const session = api.session.get.bind(api.session);
+    const state: IntakePostflightRegression = {
+      writes: 0,
+      failedSessionReads: 0,
+      postflightHeld: false,
+      peerSaved: false,
+      nextQuestion: "",
+    };
+    (
+      window as unknown as { intakePostflightRegression: IntakePostflightRegression }
+    ).intakePostflightRegression = state;
+    let committed: { id: string; revision: number; questionId: string } | null = null;
+    casesApi.saveAnswers = async (
+      id: string,
+      input: { expectedRevision: number; answers: { questionId: string }[] },
+    ) => {
+      state.writes++;
+      const next: QuestionsResult = await saveAnswers(id, input);
+      if (state.writes === 1) {
+        const questionId = input.answers[0]?.questionId;
+        if (!questionId) throw new Error("Missing synthetic submitted question");
+        committed = { id, revision: next.revision, questionId };
+        state.nextQuestion = next.questions.find((question) => !question.answerState)?.text ?? "";
+        if (mode === "peer-read") {
+          // The real adapter reads questions after PUT; that read may already
+          // include a peer's later write instead of the submitted snapshot.
+          const peer = await saveAnswers(id, {
+            expectedRevision: next.revision,
+            answers: [{ questionId, state: "answered", value: "다른 화면에서 저장한 합성 답변" }],
+          });
+          state.peerSaved = true;
+          return peer;
+        }
+      }
+      return next;
+    };
+    api.session.get = async () => {
+      const accepted = committed;
+      if (!accepted) return session();
+      // Only the first session read after the completed save is interrupted.
+      committed = null;
+      if (mode === "superseded") {
+        const value = await session();
+        state.postflightHeld = true;
+        await new Promise<void>((resolve) => {
+          state.releasePostflight = resolve;
+        });
+        return value;
+      }
+      if (mode === "peer") {
+        // Use the unwrapped save to model a distinct writer after our accepted
+        // snapshot, without counting it as a retry from the screen under test.
+        await saveAnswers(accepted.id, {
+          expectedRevision: accepted.revision,
+          answers: [
+            {
+              questionId: accepted.questionId,
+              state: "answered",
+              value: "다른 화면에서 저장한 합성 답변",
+            },
+          ],
+        });
+        state.peerSaved = true;
+      }
+      state.failedSessionReads++;
+      throw new ApiError("UNAVAILABLE", "합성 저장 후 세션 조회 실패", true);
+    };
+  }, mode);
+}
+
+async function intakePostflightRegressionState(page: Page) {
+  return page.evaluate(() => {
+    const state = (window as unknown as { intakePostflightRegression: IntakePostflightRegression })
+      .intakePostflightRegression;
+    return {
+      writes: state.writes,
+      failedSessionReads: state.failedSessionReads,
+      postflightHeld: state.postflightHeld,
+      peerSaved: state.peerSaved,
+      nextQuestion: state.nextQuestion,
+    };
+  });
+}
+
+for (const mode of ["outage", "superseded"] as const) {
+  test(`a committed answer recovers after postflight session ${mode} without saving twice`, async ({
+    page,
+  }) => {
+    await prepareIntakePostflightRegression(page, mode);
+    await page.getByRole("button", { name: "저장하고 다음 질문" }).click();
+    if (mode === "superseded") {
+      await expect
+        .poll(async () => (await intakePostflightRegressionState(page)).postflightHeld)
+        .toBe(true);
+      // A focus refresh verifies the same owner while the original postflight
+      // is held. The older verification then resolves as superseded.
+      await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+      await expect(page.getByRole("textbox", { name: "답변", exact: true })).toBeVisible();
+      await page.evaluate(() =>
+        (
+          window as unknown as { intakePostflightRegression: IntakePostflightRegression }
+        ).intakePostflightRegression.releasePostflight?.(),
+      );
+    } else {
+      await expect
+        .poll(async () => (await intakePostflightRegressionState(page)).failedSessionReads)
+        .toBe(1);
+    }
+    await expect
+      .poll(async () => (await intakePostflightRegressionState(page)).nextQuestion)
+      .not.toBe("");
+    const { nextQuestion } = await intakePostflightRegressionState(page);
+    await expect(page.getByRole("heading", { name: nextQuestion, exact: true })).toBeVisible({
+      timeout: 10000,
+    });
+    await expect(page.getByRole("textbox", { name: "답변", exact: true })).toBeEnabled();
+    await expect(page.getByRole("alert")).toHaveCount(0);
+    expect((await intakePostflightRegressionState(page)).writes).toBe(1);
+  });
+}
+
+for (const mode of ["peer", "peer-read"] as const)
+  test(`a ${mode} edit after an accepted answer keeps the draft and permits explicit conflict recovery`, async ({
+    page,
+  }) => {
+    await prepareIntakePostflightRegression(page, mode);
+    await page.getByRole("button", { name: "저장하고 다음 질문" }).click();
+    await expect
+      .poll(async () => (await intakePostflightRegressionState(page)).peerSaved)
+      .toBe(true);
+    await expect(page.getByRole("alert")).toContainText("작성 중인 답변은 남겨뒀어요", {
+      timeout: 10000,
+    });
+    const editor = page.getByRole("textbox", { name: "답변", exact: true });
+    await expect(editor).toHaveValue("현재 화면의 합성 답변");
+    await expect(editor).toBeDisabled();
+    const reload = page.getByRole("button", { name: "최신 내용 불러오기" });
+    await expect(reload).toBeEnabled();
+    await reload.click();
+    await expect(editor).toHaveValue("다른 화면에서 저장한 합성 답변");
+    await expect(editor).toBeEnabled();
+    await expect(page.getByRole("alert")).toHaveCount(0);
+    expect((await intakePostflightRegressionState(page)).writes).toBe(1);
+  });
+
 test("peer answer changes preserve the unsaved draft until explicit conflict recovery", async ({
   page,
 }) => {
