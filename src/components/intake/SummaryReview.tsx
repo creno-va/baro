@@ -20,12 +20,14 @@ export function SummaryReview({ caseId }: { caseId: string }) {
   const [checked, setChecked] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const pending = useRef(false);
+  const request = useRef(0);
   const confirmation = useRef<HTMLInputElement>(null);
   const focusAfterSave = useRef(false);
   const savedItem = useRef(item);
   savedItem.current = item;
   const failedOperation = useRef<"save" | "confirm" | null>(null);
   const access = useCustomerAccess(() => {
+    ++request.current;
     setItem(null);
     setSummary("");
     setChecked(false);
@@ -50,14 +52,17 @@ export function SummaryReview({ caseId }: { caseId: string }) {
       // A background refresh must not advance the revision of a lost-response
       // retry. Explicit conflict recovery may replace that original request.
       if (pending.current || (failedOperation.current && !replaceDraft)) return;
+      const serial = ++request.current;
       let epoch = ticket();
       setLoading(true);
       setError(null);
       try {
-        if (!(await verify())) return;
+        if (!(await verify()) || serial !== request.current) return;
         epoch = ticket();
         const next = await api.cases.get(caseId);
-        if (!(await verify()) || !current(epoch)) return;
+        // An earlier focus read must not replace a newer read or completed write.
+        if (serial !== request.current) return;
+        if (!(await verify()) || !current(epoch) || serial !== request.current) return;
         failedOperation.current = null;
         const changed = savedItem.current?.revision !== next.revision;
         setItem(next);
@@ -71,7 +76,7 @@ export function SummaryReview({ caseId }: { caseId: string }) {
           setConfirming(false);
         }
       } catch (cause) {
-        if (alive(epoch)) {
+        if (alive(epoch) && serial === request.current) {
           if (
             ["UNAUTHENTICATED", "CONSENT_REQUIRED", "NOT_FOUND"].includes(
               (cause as { code?: string }).code ?? "",
@@ -81,7 +86,7 @@ export function SummaryReview({ caseId }: { caseId: string }) {
           setError(cause);
         }
       } finally {
-        if (alive(epoch)) setLoading(false);
+        if (alive(epoch) && serial === request.current) setLoading(false);
       }
     },
     [caseId, ticket, current, alive, verify, deny],
@@ -98,6 +103,8 @@ export function SummaryReview({ caseId }: { caseId: string }) {
   }, [dirty]);
   async function save() {
     if (!item || pending.current || !summary.trim()) return;
+    ++request.current;
+    setLoading(false);
     const epoch = ticket();
     pending.current = true;
     setBusy(true);
@@ -136,6 +143,8 @@ export function SummaryReview({ caseId }: { caseId: string }) {
   }
   async function confirm() {
     if (!item || !checked || dirty || pending.current) return;
+    ++request.current;
+    setLoading(false);
     const epoch = ticket();
     pending.current = true;
     setBusy(true);
