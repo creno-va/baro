@@ -134,6 +134,7 @@ export const workspaceViewSchema = z.object({
   timeline: z.array(
     z.object({
       id: z.string(),
+      revision: z.number().int().positive().optional(),
       date: z.string(),
       datePrecision: z.enum(["day", "month", "year", "unknown"]).default("day"),
       title: z.string(),
@@ -395,6 +396,7 @@ export function createWorkspaceApi(
       const [title, ...detail] = item.event.split("\n");
       return {
         id: item.id,
+        revision: item.revision,
         date: item.date ?? "",
         datePrecision: item.datePrecision,
         title: title ?? item.event,
@@ -534,16 +536,22 @@ export function createWorkspaceApi(
       if (pendingActions.get(signature)?.init === init) pendingActions.delete(signature);
       return next;
     },
-    async saveTimeline(id: string, entry: Omit<TimelineView, "id"> & { id?: string }) {
+    async saveTimeline(
+      id: string,
+      entry: Omit<TimelineView, "id"> & { id?: string; expectedRevision?: number },
+    ) {
       if (entry.id && !timelineRevisions.has(`${id}:${entry.id}`)) await get(id);
       const route = `${base(id)}/timeline${entry.id ? `/${encodeURIComponent(entry.id)}` : ""}`;
       const signature = JSON.stringify({ id, entry });
       let init = pendingTimelines.get(signature);
       if (!init) {
         const body = {
-          expectedRevision: entry.id
-            ? (timelineRevisions.get(`${id}:${entry.id}`) ?? 1)
-            : (workspaceRevisions.get(id) ?? (await get(id)).case.revision),
+          expectedRevision:
+            entry.expectedRevision ??
+            entry.revision ??
+            (entry.id
+              ? (timelineRevisions.get(`${id}:${entry.id}`) ?? 1)
+              : (workspaceRevisions.get(id) ?? (await get(id)).case.revision)),
           date: entry.date || null,
           datePrecision: entry.date ? (entry.datePrecision ?? "day") : "unknown",
           event: entry.detail ? `${entry.title}\n${entry.detail}` : entry.title,

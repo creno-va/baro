@@ -40,6 +40,7 @@ export type MessageView = {
 export type ActionView = { id: string; title: string; detail: string; done: boolean };
 export type TimelineView = {
   id: string;
+  revision?: number | undefined;
   date: string;
   datePrecision?: "day" | "month" | "year" | "unknown";
   title: string;

@@ -47,7 +47,7 @@ async function fixture() {
   return { ...f, transport };
 }
 
-test("timeline: genuine conflict recovers with the same client after refresh", async () => {
+test("timeline: a conflict requires reconciling a draft with the refreshed entry", async () => {
   const f = await fixture();
   try {
     const a = createWorkspaceApi(f.transport, null),
@@ -59,14 +59,23 @@ test("timeline: genuine conflict recovers with the same client after refresh", a
     await b.saveTimeline(id, { ...entry, title: "다른 탭에서 저장한 일정" });
     const desired = { ...entry, title: "현재 탭에서 저장할 일정" };
     await expect(a.saveTimeline(id, desired)).rejects.toMatchObject({ code: "CONFLICT" });
-    await a.get(id);
-    expect((await a.saveTimeline(id, desired)).timeline.find((t) => t.id === entry.id)?.title).toBe(
-      desired.title,
-    );
-    const fresh = createWorkspaceApi(f.transport, null);
-    await fresh.get(id);
+    const refreshed = await a.get(id);
+    await expect(a.saveTimeline(id, desired)).rejects.toMatchObject({ code: "CONFLICT" });
+    const current = refreshed.timeline.find((t) => t.id === entry.id);
+    if (!current) throw new Error("MISSING_SYNTHETIC_TIMELINE");
+    expect(current.title).toBe("다른 탭에서 저장한 일정");
     expect(
-      (await fresh.saveTimeline(id, desired)).timeline.find((t) => t.id === entry.id)?.title,
+      (await a.saveTimeline(id, { ...current, title: desired.title })).timeline.find(
+        (t) => t.id === entry.id,
+      )?.title,
+    ).toBe(desired.title);
+    const fresh = createWorkspaceApi(f.transport, null);
+    const latest = (await fresh.get(id)).timeline.find((t) => t.id === entry.id);
+    if (!latest) throw new Error("MISSING_SYNTHETIC_TIMELINE");
+    expect(
+      (await fresh.saveTimeline(id, { ...latest, title: desired.title })).timeline.find(
+        (t) => t.id === entry.id,
+      )?.title,
     ).toBe(desired.title);
   } finally {
     f.db.close();
