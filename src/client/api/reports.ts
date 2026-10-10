@@ -94,10 +94,10 @@ export function createReportsClient(request: DomainRequest) {
     async get(id: string) {
       return accept(await request<unknown>(path(id)));
     },
-    async save(id: string, input: ReportSave) {
+    async save(id: string, input: ReportSave, expectedRevision = revisions.get(id)) {
       return write(id, "PATCH", {
         ...reportSaveSchema.parse(input),
-        expectedRevision: revisions.get(id),
+        expectedRevision,
       });
     },
     async generate(id: string) {
