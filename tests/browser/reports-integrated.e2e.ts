@@ -220,3 +220,69 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
   expect(apiRequests).toEqual([]);
   expect(externalRequests).toEqual([]);
 });
+
+test("oversized mock source shows first-report recovery and preserves the full original text", async ({
+  page,
+}) => {
+  await page.goto("/login");
+  await page.evaluate(() => {
+    const put = (name: string, value: unknown) =>
+      localStorage.setItem(`baro-api-mock-v1:${name}`, JSON.stringify(value));
+    put("session", {
+      user: { id: "synthetic-overflow-owner", name: "Synthetic", accountType: "customer" },
+      needsConsent: false,
+    });
+    put("caseOwners", { "synthetic-overflow-case": "synthetic-overflow-owner" });
+    put("cases", {
+      "synthetic-overflow-case": {
+        id: "synthetic-overflow-case",
+        title: "Synthetic overflow",
+        subjectContext: "individual",
+        stage: "active",
+        revision: 1,
+        updatedAt: "2026-10-01T00:00:00Z",
+        summary: "Synthetic reviewed facts",
+      },
+    });
+    put("files", {
+      "synthetic-overflow-case": [
+        {
+          id: "synthetic-long-file",
+          name: "긴 합성 자료.txt",
+          mimeType: "text/plain",
+          sizeBytes: 40000,
+          status: "ready",
+          coverage: "Synthetic extraction",
+          extractedText: `${"a".repeat(29999)}😀TAIL`,
+        },
+      ],
+    });
+    put("reports", {});
+  });
+  await page.goto("/cases/synthetic-overflow-case/reports");
+  await expect(
+    page.getByRole("heading", { name: "자료를 줄여 첫 리포트를 만들어요" }),
+  ).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "리포트 내용 편집" })).toBeHidden();
+  expect(
+    await page.evaluate(() => JSON.parse(localStorage.getItem("baro-api-mock-v1:reports") ?? "{}")),
+  ).toEqual({});
+  await page.getByRole("checkbox", { name: "긴 합성 자료.txt · 리포트에서 제외" }).check();
+  await page.getByRole("button", { name: "선택 자료를 제외하고 생성" }).click();
+  const editor = page.getByRole("textbox", { name: "리포트 내용 편집" });
+  await expect(editor).toBeVisible();
+  await expect(editor).toContainText("연락과 전달");
+  await page.reload();
+  await expect(editor).toBeVisible();
+  const saved = await page.evaluate(() => {
+    const files = JSON.parse(localStorage.getItem("baro-api-mock-v1:files") ?? "{}");
+    const reports = JSON.parse(localStorage.getItem("baro-api-mock-v1:reports") ?? "{}");
+    return {
+      text: files["synthetic-overflow-case"][0].extractedText as string,
+      report: reports["synthetic-overflow-case"],
+    };
+  });
+  expect(saved.text).toBe(`${"a".repeat(29999)}😀TAIL`);
+  expect(saved.report.excludedFileIds).toEqual(["synthetic-long-file"]);
+  expect(saved.report.content.isWellFormed()).toBe(true);
+});

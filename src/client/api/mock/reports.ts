@@ -160,9 +160,12 @@ function draft(
     "",
     "연락과 전달",
     "사용자가 검토한 자료를 선택한 변호사에게 직접 전달합니다. 법률 판단·소송 전략이나 결과를 보장하지 않습니다.",
-  ]
-    .join("\n")
-    .slice(0, 30000);
+  ].join("\n");
+  if (content.length > 30000)
+    throw new ReportMockError(
+      "EXPORT_LIMIT_EXCEEDED",
+      "리포트 본문이 너무 길어요. 자료를 제외한 뒤 다시 생성해 주세요.",
+    );
   return {
     id: `report-${crypto.randomUUID()}`,
     caseId: item.id,
