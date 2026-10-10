@@ -175,6 +175,8 @@ jobs:
           CHECK_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
           CHECK_CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
+          python3 -m pip install --target .wrangler/pdf-check pypdf==6.12.2
+          export PYTHONPATH="$PWD/.wrangler/pdf-check${PYTHONPATH:+:$PYTHONPATH}"
           bunx playwright install --with-deps chromium
           bun scripts/development-checks.ts browser
           bun run test:csp
