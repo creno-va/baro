@@ -100,8 +100,11 @@ export function createReportsClient(request: DomainRequest) {
         expectedRevision,
       });
     },
-    async generate(id: string) {
-      return write(id, "POST", { expectedRevision: revisions.get(id) });
+    async generate(id: string, excludedFileIds?: string[]) {
+      return write(id, "POST", {
+        expectedRevision: revisions.get(id),
+        ...(excludedFileIds ? { excludedFileIds } : {}),
+      });
     },
     async pdf(id: string) {
       return binary(`/api/v2/reports/${encodeURIComponent(id)}/pdf`, "application/pdf");

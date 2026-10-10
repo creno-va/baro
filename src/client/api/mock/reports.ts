@@ -113,16 +113,18 @@ function draft(
           : p.kind === "document"
             ? `${p.page}쪽${p.paragraph ? ` · ${p.paragraph}번째 문단` : ""}`
             : "이미지 관찰";
-    return `${position} · ${value.userEdited ? "사용자 교정 · 미확인" : "자료 관찰"}\n${value.text}`;
+    return `${position} · ${value.userEdited ? "사용자 교정 · 미확인" : value.certainty === "uncertain" ? "자료 관찰 · 미확인" : "자료 관찰"}\n${value.text}`;
   };
   const content = [
     "[합성 API 예시 · 실제 AI/외부 처리 결과가 아닙니다]",
     "",
     "사건의 사실과 주장",
-    item.summary || "아직 확인된 사건 요약이 없습니다. 내용을 직접 입력해 주세요.",
+    excluded.length
+      ? "자료를 제외한 리포트입니다. 남은 사실과 출처를 아래에서 확인하고 사건 개요를 직접 보완해 주세요."
+      : item.summary || "아직 확인된 사건 요약이 없습니다. 내용을 직접 입력해 주세요.",
     "",
     "당사자",
-    ...(item.summaryDetails?.parties ?? workspace?.people ?? []).map(
+    ...(excluded.length ? [] : (item.summaryDetails?.parties ?? workspace?.people ?? [])).map(
       (p) => `${p.label} · ${p.role}`,
     ),
     "",
@@ -132,7 +134,9 @@ function draft(
     ),
     "",
     "미확인·상반되는 내용",
-    ...(item.summaryDetails?.unknowns ?? workspace?.unknowns ?? []),
+    ...(excluded.length
+      ? ["종합 요약·당사자·미확인 사항은 제외 자료와의 연결을 구분할 수 없어 옮기지 않았습니다."]
+      : (item.summaryDetails?.unknowns ?? workspace?.unknowns ?? [])),
     "상대방의 입장과 원본의 진정성은 확인되지 않았습니다. 날짜·금액·출처와 빠진 내용을 직접 확인하세요.",
     "",
     "타임라인",
@@ -222,7 +226,7 @@ export function createReportsMockHandler(runtime: ReportMockRuntime): DomainRequ
           (current.reportSources?.[value.id] ?? current.cases[id]?.revision) !==
           current.cases[id]?.revision;
       } else if (method === "PATCH" || method === "POST") {
-        const body = init.body as { expectedRevision?: number };
+        const body = init.body as { expectedRevision?: number; excludedFileIds?: string[] };
         runtime.update((current) => {
           const item = requireMockCase(current, id);
           const prior = current.reports[id];
@@ -232,7 +236,16 @@ export function createReportsMockHandler(runtime: ReportMockRuntime): DomainRequ
               "다른 화면에서 리포트가 변경됐어요. 다시 확인한 뒤 저장해 주세요.",
             );
           if (method === "POST") {
-            const next = draft(current, item, (prior?.revision ?? 0) + 1);
+            const exclusions = body.excludedFileIds ?? [];
+            if (
+              exclusions.length > 100 ||
+              new Set(exclusions).size !== exclusions.length ||
+              exclusions.some(
+                (id) => !(current.files[item.id] ?? []).some((file) => file.id === id),
+              )
+            )
+              throw new ReportMockError("VALIDATION_ERROR", "제외할 자료를 다시 확인해 주세요.");
+            const next = draft(current, item, (prior?.revision ?? 0) + 1, exclusions);
             current.reports[id] = next;
             current.reportHistory ??= {};
             current.reportHistory[next.id] = structuredClone(next);
@@ -247,6 +260,11 @@ export function createReportsMockHandler(runtime: ReportMockRuntime): DomainRequ
             const exclusionsChanged =
               JSON.stringify([...input.excludedFileIds].sort()) !==
               JSON.stringify([...prior.excludedFileIds].sort());
+            if (exclusionsChanged && input.content !== prior.content)
+              throw new ReportMockError(
+                "EDITS_REQUIRE_SAVE",
+                "본문 편집을 먼저 저장한 뒤 자료 제외를 적용해 주세요.",
+              );
             const rebuilt = exclusionsChanged
               ? draft(current, item, prior.revision + 1, input.excludedFileIds)
               : null;

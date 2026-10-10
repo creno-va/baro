@@ -165,7 +165,7 @@ export const api = {
       input: { content: string; maskIdentifiers: boolean; excludedFileIds: string[] },
       expectedRevision?: number,
     ): Promise<ReportView>;
-    generate(id: string): Promise<ReportView>;
+    generate(id: string, excludedFileIds?: string[]): Promise<ReportView>;
     html(id: string): Promise<Blob>;
     pdf(id: string): Promise<Blob>;
     savedZip(id: string): Promise<Blob>;

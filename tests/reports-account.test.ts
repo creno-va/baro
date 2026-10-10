@@ -338,7 +338,7 @@ test("stale source revisions are shown, excluded or removed originals cannot ent
   });
   expect((await f.reports.get("case-demo")).stale).toBe(true);
   const saved = await f.reports.save("case-demo", {
-    content: "수정 내용",
+    content: report.content,
     maskIdentifiers: false,
     excludedFileIds: ["file-demo"],
   });

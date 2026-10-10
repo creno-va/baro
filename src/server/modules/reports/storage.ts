@@ -59,6 +59,8 @@ type ExportRow = {
   revision: number;
   workspace_id: string;
   workspace_revision: number;
+  summary_revision: number;
+  created_at: string;
   operation_id: string;
   current_job_id: string | null;
   state: string;
@@ -148,7 +150,7 @@ export function createReportExports(core: V2Core, deps: ReportDependencies, port
     // capacity dispatch permit immediately before R2.
     const acquired = await core
       .statement(
-        `UPDATE v2_jobs SET status='running',phase='assembling',failure_code=NULL,retryable=0,lease_token=?,lease_until=?,fencing=fencing+1,attempts=attempts+1,updated_at=? WHERE id=? AND attempts<3 AND (status IN ('queued','failed') OR (status IN ('running','validating') AND lease_until<=?)) AND EXISTS(SELECT 1 FROM v2_operations o WHERE o.id=v2_jobs.operation_id AND o.owner_id=? AND o.state='admitted') AND EXISTS(SELECT 1 FROM v2_jobs j JOIN v2_operations o ON o.id=j.operation_id WHERE j.id=v2_jobs.id AND ${jobAlive}) RETURNING fencing`,
+        `UPDATE v2_jobs SET status='running',phase='assembling',failure_code=NULL,retryable=0,lease_token=?,lease_until=?,fencing=fencing+1,attempts=attempts+1,updated_at=? WHERE id=? AND attempts<3 AND (status IN ('queued','failed') OR (status IN ('running','validating') AND lease_until<=?)) AND EXISTS(SELECT 1 FROM v2_operations o WHERE o.id=v2_jobs.operation_id AND o.owner_id=? AND o.state='admitted') AND EXISTS(SELECT 1 FROM v2_jobs j JOIN v2_operations o ON o.id=j.operation_id WHERE j.id=v2_jobs.id AND ${jobAlive}) RETURNING fencing,attempts`,
         [
           token,
           new Date(Date.parse(time) + 300000).toISOString(),
@@ -158,15 +160,28 @@ export function createReportExports(core: V2Core, deps: ReportDependencies, port
           ownerId,
         ],
       )
-      .first<number>("fencing");
-    if (!acquired) throw new ReportError("STORAGE_UNAVAILABLE");
+      .first<{ fencing: number; attempts: number }>();
+    if (!acquired) {
+      const job = await core
+        .statement("SELECT attempts,status FROM v2_jobs WHERE id=?", [r.current_job_id])
+        .first<{ attempts: number; status: string }>();
+      throw new ReportError(
+        job?.status === "failed" && job.attempts >= 3
+          ? "EXPORT_RETRY_EXHAUSTED"
+          : "STORAGE_UNAVAILABLE",
+      );
+    }
     await core
       .statement("UPDATE v2_reports SET state='building' WHERE id=? AND current_job_id=?", [
         r.id,
         r.current_job_id,
       ])
       .run();
-    return { jobId: r.current_job_id, token, fencing: acquired };
+    return {
+      jobId: r.current_job_id,
+      token,
+      fencing: acquired.fencing,
+    };
   }
   async function persist(
     ownerId: string,
@@ -462,7 +477,14 @@ export function createReportExports(core: V2Core, deps: ReportDependencies, port
           ? maskReportText(data.review.content)
           : data.review.content,
         revision: r.revision,
-        updatedAt: data.body.generatedAt,
+        updatedAt: r.created_at,
+        basis: {
+          workspaceRevision: r.workspace_revision,
+          summaryRevision: r.summary_revision,
+          generatedAt: data.body.generatedAt,
+        },
+        excludedFileCount: data.review.excludedFileIds.length,
+        maskIdentifiers: data.review.maskIdentifiers,
       });
       const choices = selected
         ? validateOriginalSelection(data.body, data.review.excludedFileIds, selected)
@@ -546,7 +568,7 @@ export function createReportExports(core: V2Core, deps: ReportDependencies, port
       // output IDs remain in the durable deletion journal, never reused.
       await core
         .statement(
-          `UPDATE v2_jobs SET status='failed',failure_code=?,retryable=1,lease_token=NULL,lease_until=NULL,updated_at=? WHERE id=? AND lease_token=? AND fencing=? AND EXISTS(SELECT 1 FROM v2_jobs j JOIN v2_operations o ON o.id=j.operation_id WHERE j.id=v2_jobs.id AND o.owner_id=? AND ${jobAlive})`,
+          `UPDATE v2_jobs SET status='failed',failure_code=?,retryable=CASE WHEN attempts<3 THEN 1 ELSE 0 END,lease_token=NULL,lease_until=NULL,updated_at=? WHERE id=? AND lease_token=? AND fencing=? AND EXISTS(SELECT 1 FROM v2_jobs j JOIN v2_operations o ON o.id=j.operation_id WHERE j.id=v2_jobs.id AND o.owner_id=? AND ${jobAlive})`,
           [
             error instanceof ReportError && error.code === "BUDGET_UNAVAILABLE"
               ? "BUDGET_UNAVAILABLE"
@@ -559,6 +581,17 @@ export function createReportExports(core: V2Core, deps: ReportDependencies, port
           ],
         )
         .run();
+      const failedJob = await core
+        .statement("SELECT retryable FROM v2_jobs WHERE id=?", [l.jobId])
+        .first<{ retryable: number }>();
+      if (
+        failedJob?.retryable === 0 &&
+        !(
+          error instanceof ReportError &&
+          ["NOT_FOUND", "STALE_REVISION", "CONSENT_REQUIRED"].includes(error.code)
+        )
+      )
+        throw new ReportError("EXPORT_RETRY_EXHAUSTED");
       throw error;
     }
   }

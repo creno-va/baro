@@ -42,11 +42,13 @@ function sections(content: string) {
   let current = { title: "검토한 내용", lines: [] as string[] };
   for (const line of content.split(/\r?\n/)) {
     if (headings.has(line.trim())) {
-      if (current.lines.some((value) => value.trim())) result.push(current);
+      if (headings.has(current.title) || current.lines.some((value) => value.trim()))
+        result.push(current);
       current = { title: line.trim(), lines: [] };
     } else current.lines.push(line);
   }
-  if (current.lines.some((value) => value.trim())) result.push(current);
+  if (headings.has(current.title) || current.lines.some((value) => value.trim()))
+    result.push(current);
   return result;
 }
 const documentCss = `
