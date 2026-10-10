@@ -136,7 +136,17 @@ export function ReportReview({ caseId }: { caseId: string }) {
       setAccessChecking(true);
       void verifyOwner()
         .catch((e: unknown) => {
-          clearOwnerState();
+          if (sequence !== loadSequence.current) return;
+          if (
+            [
+              "UNAUTHENTICATED",
+              "NOT_FOUND",
+              "FORBIDDEN",
+              "ROLE_REQUIRED",
+              "ORIGIN_NOT_ALLOWED",
+            ].includes((e as { code?: string })?.code ?? "")
+          )
+            clearOwnerState();
           setError(e instanceof Error ? e.message : "로그인 상태를 다시 확인해 주세요.");
         })
         .finally(() => {
