@@ -409,7 +409,7 @@ test("material exclusions remove their canonical facts; foreign and stale source
   const draft = await f.reports.get(f.actor.ownerId, f.workspaceId);
   const saved = await f.reports.save(f.actor.ownerId, f.workspaceId, crypto.randomUUID(), {
     expectedRevision: draft.revision,
-    content: "직접 검토한 합성 내용",
+    content: draft.content,
     maskIdentifiers: true,
     excludedFileIds: [u.session.fileId],
   });

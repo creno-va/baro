@@ -46,6 +46,10 @@ export function createReportsApi(
           "현재 필수 동의 후 새 리포트를 만들 수 있어요. 저장된 리포트와 PDF는 계속 확인할 수 있어요.",
         NOT_FOUND: "리포트를 찾을 수 없거나 접근할 수 없어요.",
         STALE_REVISION: "사건이나 검토 버전이 변경됐어요. 다시 불러오거나 새 버전을 만들어 주세요.",
+        EDITS_REQUIRE_SAVE:
+          "본문 편집을 먼저 저장한 뒤 자료 제외를 적용해 주세요. 입력한 내용은 아직 저장되지 않았어요.",
+        EXPORT_RETRY_EXHAUSTED:
+          "이 다운로드의 재시도 횟수를 모두 사용했어요. 검토 내용을 새 버전으로 저장한 뒤 다시 다운로드해 주세요. 기존 내용은 보존돼요.",
         REVIEW_REQUIRED: "현재 사건 요약을 확인한 뒤 리포트를 만들어 주세요.",
         VALIDATION_ERROR:
           "내용·제외 자료·원본 선택을 확인해 주세요. 원본이 많거나 크면 나눠 다운로드해 주세요.",
@@ -59,7 +63,7 @@ export function createReportsApi(
         LEGAL_SOURCE_UNAVAILABLE:
           "리포트에 쓰인 공식 출처를 현재 검증할 수 없어요. 출처를 다시 확인한 뒤 새 버전을 만들어 주세요.",
         EXPORT_LIMIT_EXCEEDED:
-          "한 번에 처리할 다운로드 한도를 넘었어요. 원본 수나 크기를 줄여 나눠 다운로드해 주세요.",
+          "리포트 또는 다운로드 처리 한도를 넘었어요. 리포트에서 자료를 제외하거나 ZIP 원본 선택을 줄여 주세요.",
       };
       const status =
         error.code === "CONSENT_REQUIRED"
