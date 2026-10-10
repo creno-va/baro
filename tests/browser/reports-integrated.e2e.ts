@@ -286,3 +286,59 @@ test("oversized mock source shows first-report recovery and preserves the full o
   expect(saved.report.excludedFileIds).toEqual(["synthetic-long-file"]);
   expect(saved.report.content.isWellFormed()).toBe(true);
 });
+
+test("regeneration after focus refresh cannot replace an unseen peer report", async ({ page }) => {
+  await page.goto("/login");
+  await page.evaluate(() => {
+    const put = (name: string, value: unknown) =>
+      localStorage.setItem(`baro-api-mock-v1:${name}`, JSON.stringify(value));
+    put("session", {
+      user: { id: "synthetic-generation-owner", name: "Synthetic", accountType: "customer" },
+      needsConsent: false,
+    });
+    put("caseOwners", { "synthetic-generation-case": "synthetic-generation-owner" });
+    put("cases", {
+      "synthetic-generation-case": {
+        id: "synthetic-generation-case",
+        title: "Synthetic generation",
+        subjectContext: "individual",
+        stage: "active",
+        revision: 1,
+        updatedAt: "2026-10-01T00:00:00Z",
+        summary: "Synthetic reviewed facts",
+      },
+    });
+    put("files", {});
+    put("reports", {});
+  });
+  await page.goto("/cases/synthetic-generation-case/reports");
+  const editor = page.getByRole("textbox", { name: "리포트 내용 편집" });
+  await expect(editor).toBeVisible();
+  const displayed = await editor.inputValue();
+  const peer = await page.evaluate(() => {
+    const key = "baro-api-mock-v1:reports",
+      reports = JSON.parse(localStorage.getItem(key) ?? "{}");
+    const report = reports["synthetic-generation-case"];
+    report.id = "synthetic-peer-generation";
+    report.revision++;
+    report.content = "Synthetic unseen peer review";
+    localStorage.setItem(key, JSON.stringify(reports));
+    window.dispatchEvent(new Event("focus"));
+    return { id: report.id, revision: report.revision, content: report.content };
+  });
+  await expect(
+    page.getByRole("status").filter({ hasText: "다른 곳에서 새 버전을 만든 경우" }),
+  ).toBeVisible();
+  await expect(editor).toHaveValue(displayed);
+  await page.getByRole("button", { name: "새 버전 만들기" }).click();
+  await page.getByRole("button", { name: "새 버전 생성", exact: true }).click();
+  await expect(page.getByRole("alert")).toBeVisible();
+  await expect(editor).toHaveValue(displayed);
+  const current = await page.evaluate(
+    () =>
+      JSON.parse(localStorage.getItem("baro-api-mock-v1:reports") ?? "{}")[
+        "synthetic-generation-case"
+      ],
+  );
+  expect(current).toMatchObject(peer);
+});

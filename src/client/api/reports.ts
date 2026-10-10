@@ -45,6 +45,7 @@ export const reportSaveSchema = z.object({
 export type ReportSave = z.infer<typeof reportSaveSchema>;
 export function createReportsClient(request: DomainRequest) {
   const revisions = new Map<string, number>();
+  const generations = new Map<string, { selection: string; revision: number | undefined }>();
   const pending = new Map<string, { fingerprint: string; key: string }>();
   const accept = (value: unknown): ReportView => {
     const report = reportSchema.parse(value);
@@ -100,11 +101,29 @@ export function createReportsClient(request: DomainRequest) {
         expectedRevision,
       });
     },
-    async generate(id: string, excludedFileIds?: string[]) {
-      return write(id, "POST", {
-        expectedRevision: revisions.get(id),
-        ...(excludedFileIds ? { excludedFileIds } : {}),
-      });
+    async generate(id: string, excludedFileIds?: string[], expectedRevision?: number) {
+      const selection = JSON.stringify({ excludedFileIds }),
+        previous = generations.get(id),
+        revision =
+          expectedRevision !== undefined
+            ? expectedRevision
+            : previous?.selection === selection
+              ? previous.revision
+              : revisions.get(id);
+      generations.set(id, { selection, revision });
+      try {
+        const report = await write(id, "POST", {
+          expectedRevision: revision,
+          ...(excludedFileIds ? { excludedFileIds } : {}),
+        });
+        generations.delete(id);
+        return report;
+      } catch (cause) {
+        // A definite conflict can be retried with a newly loaded version. Keep the
+        // original basis for ambiguous failures so a metadata GET cannot fork it.
+        if ((cause as { code?: string })?.code === "STALE_REVISION") generations.delete(id);
+        throw cause;
+      }
     },
     async pdf(id: string) {
       return binary(`/api/v2/reports/${encodeURIComponent(id)}/pdf`, "application/pdf");

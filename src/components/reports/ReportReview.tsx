@@ -736,7 +736,7 @@ export function ReportReview({ caseId }: { caseId: string }) {
             </section>
           </>
         )}
-        {regenerate && (
+        {regenerate && report && (
           <ConfirmDialog
             title="새 버전을 만들까요?"
             busy={Boolean(busy)}
@@ -760,7 +760,9 @@ export function ReportReview({ caseId }: { caseId: string }) {
               disabled={Boolean(busy) || needsConsent || (dirty && !report?.stale)}
               onClick={() =>
                 void run("새 버전 생성 중…", async () => {
-                  const value = await ownedResult(api.reports.generate(caseId));
+                  const value = await ownedResult(
+                    api.reports.generate(caseId, undefined, report.revision),
+                  );
                   const materials = await ownedResult(api.files.list(caseId));
                   accept(value);
                   setFiles(materials);
