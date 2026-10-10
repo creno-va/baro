@@ -66,6 +66,7 @@ export function Editor() {
   const [draft, setDraft] = useState<LawyerView | null>(null);
   const [busy, setBusy] = useState(true);
   const [canMutate, setCanMutate] = useState(false);
+  const [accessUnknown, setAccessUnknown] = useState(false);
   const [error, setError] = useState("");
   const [errorCode, setErrorCode] = useState("");
   const [notice, setNotice] = useState("");
@@ -88,6 +89,7 @@ export function Editor() {
     epoch.current += 1;
     profileRequest.current += 1;
     setCanMutate(false);
+    setAccessUnknown(false);
     setAssets([]);
     setPhotoPreview(null);
     setSaved(null);
@@ -107,6 +109,22 @@ export function Editor() {
       session = await sessionApi.get();
     } catch (cause) {
       if (request !== sessionRequest.current) return null;
+      const code = (cause as { code?: string })?.code;
+      if (["UNAUTHENTICATED", "FORBIDDEN", "ROLE_REQUIRED"].includes(code ?? "")) {
+        owner.current = null;
+        clear();
+        setBusy(false);
+        setError(lawyerErrorMessage(cause));
+        setErrorCode(code ?? "UNAUTHENTICATED");
+        return null;
+      } else {
+        setAccessUnknown(true);
+        setCanMutate(false);
+        setPreview(false);
+        setConfirmDiscard(false);
+        setConfirmPublish(false);
+        setPublicationConsent(false);
+      }
       throw cause;
     }
     if (request !== sessionRequest.current) return null;
@@ -125,6 +143,7 @@ export function Editor() {
       setError("변호사 역할로 로그인해 주세요.");
       return null;
     }
+    setAccessUnknown(false);
     setCanMutate(!session.needsConsent);
     return { identity, epoch: epoch.current, changed, canMutate: !session.needsConsent };
   }, [clear]);
@@ -148,7 +167,12 @@ export function Editor() {
       setErrorCode("");
     } catch (cause) {
       if (run !== profileRequest.current) return;
-      clear();
+      if (
+        ["UNAUTHENTICATED", "FORBIDDEN", "NOT_FOUND", "ROLE_REQUIRED"].includes(
+          (cause as { code?: string })?.code ?? "",
+        )
+      )
+        clear();
       run = profileRequest.current;
       setError(lawyerErrorMessage(cause));
       setErrorCode(cause instanceof LawyerApiError ? cause.code : "");
@@ -166,7 +190,6 @@ export function Editor() {
         if (alive && checked?.changed) await load();
       } catch (cause) {
         if (!alive) return;
-        clear();
         setBusy(false);
         setError(lawyerErrorMessage(cause));
       }
@@ -184,7 +207,7 @@ export function Editor() {
       window.removeEventListener("storage", refresh);
       document.removeEventListener("visibilitychange", refresh);
     };
-  }, [load, verify, clear]);
+  }, [load, verify]);
   useEffect(() => {
     if (!dirty) return;
     const leave = (e: BeforeUnloadEvent) => {
@@ -193,6 +216,22 @@ export function Editor() {
     window.addEventListener("beforeunload", leave);
     return () => window.removeEventListener("beforeunload", leave);
   }, [dirty]);
+  async function restoreAccess() {
+    setBusy(true);
+    try {
+      const checked = await verify();
+      if (!checked) return;
+      if (checked.changed || !draft) await load();
+      else {
+        setError("");
+        setErrorCode("");
+      }
+    } catch (cause) {
+      fail(cause);
+    } finally {
+      setBusy(false);
+    }
+  }
   const patch = (field: keyof LawyerView, value: unknown) => {
     if (!canMutate) return;
     setDraft((p) => (p ? { ...p, [field]: value } : p));
@@ -208,7 +247,7 @@ export function Editor() {
       }
       fail(cause);
     } catch (sessionError) {
-      clear();
+      if (epoch.current !== startEpoch) return;
       setBusy(false);
       fail(sessionError);
     }
@@ -436,11 +475,12 @@ export function Editor() {
               <Button
                 disabled={busy}
                 onClick={() => {
-                  if (dirty) setConfirmDiscard(true);
+                  if (accessUnknown) void restoreAccess();
+                  else if (dirty) setConfirmDiscard(true);
                   else void load();
                 }}
               >
-                최신 프로필 다시 불러오기
+                {accessUnknown ? "로그인 상태 다시 확인" : "최신 프로필 다시 불러오기"}
               </Button>
             )
           }
@@ -452,7 +492,7 @@ export function Editor() {
         </p>
       )}
       {busy && !draft && <StatePanel variant="loading" title="내 프로필을 불러오고 있어요." />}
-      {draft && (
+      {draft && !accessUnknown && (
         <>
           {!canMutate && (
             <StatePanel
