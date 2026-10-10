@@ -197,3 +197,52 @@ for (const action of ["read", "retry", "feedback"] as const) {
     expect(url.searchParams.get("error")).toBe("session_expired");
   });
 }
+
+test("legacy answers preserve Unicode and reject over-limit drafts without sending", async ({
+  page,
+}) => {
+  const received: string[] = [];
+  await wire(page, async (route, path) => {
+    if (path === "/api" + casePath + "/answers") {
+      received.push(route.request().postDataJSON().answers[0].value);
+      await route.fulfill({
+        status: 202,
+        json: { analysisId, inputRevision: 1, status: "queued" },
+      });
+      return true;
+    }
+    if (path !== "/api" + casePath) return false;
+    await route.fulfill({
+      json: {
+        caseId,
+        analysisId,
+        inputRevision: 1,
+        title: "합성 문자 입력",
+        status: "needs_clarification",
+        questions: [
+          { id: "q-unicode", prompt: "설명을 입력해 주세요.", answerType: "text", options: [] },
+        ],
+        result: null,
+        error: null,
+      },
+    });
+    return true;
+  });
+  await page.goto(casePath);
+  await page.getByLabel("1번 답변 방식").selectOption("answered");
+  const input = page.getByLabel("1번 답변", { exact: true }),
+    send = page.getByRole("button", { name: "답변 보내기", exact: true });
+  await input.focus();
+  await page.keyboard.insertText("😀".repeat(600));
+  await expect(input).toHaveValue("😀".repeat(600));
+  await input.fill("😀".repeat(1001));
+  await send.click();
+  await expect(page.getByRole("alert")).toContainText("1,000자 이하");
+  await expect(input).toHaveValue("😀".repeat(1001));
+  expect(received).toHaveLength(0);
+  const text = "😀".repeat(1000);
+  await input.fill("  " + text + "  ");
+  await send.click();
+  await expect.poll(() => received.length).toBe(1);
+  expect(received[0]).toBe(text);
+});
