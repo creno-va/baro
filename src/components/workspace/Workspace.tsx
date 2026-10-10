@@ -91,6 +91,14 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
   const mounted = useRef(true);
   const uploadInput = useRef<HTMLInputElement>(null);
   const dialog = useRef<HTMLDialogElement>(null);
+  const reviewDirty = useRef(false);
+  const reviewBusy = useRef(false);
+  const fileReviewBusyChanged = useCallback((busy: boolean) => {
+    reviewBusy.current = busy;
+  }, []);
+  const fileReviewDirtyChanged = useCallback((dirty: boolean) => {
+    reviewDirty.current = dirty;
+  }, []);
   const followingChat = useRef(true);
   const chatEnd = useRef<HTMLDivElement>(null);
   const draftInput = useRef<HTMLTextAreaElement>(null);
@@ -349,7 +357,13 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
     if (uploadInput.current) uploadInput.current.value = "";
   }
   function closeDialog() {
-    if (busy) return;
+    if (busy || reviewBusy.current) return;
+    if (
+      reviewDirty.current &&
+      !window.confirm("저장하지 않은 교정 내용이 있어요. 내용을 버리고 닫을까요?")
+    )
+      return;
+    reviewDirty.current = false;
     acknowledgedTimeline.current = false;
     setTimelineRecovery(false);
     setPreview(null);
@@ -1165,6 +1179,9 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
               canEdit={!readonly}
               onChanged={load}
               onError={fileReviewError}
+              onDirtyChange={fileReviewDirtyChanged}
+              onBusyChange={fileReviewBusyChanged}
+              refreshVersion={`${view?.case.revision ?? 0}:${preview.status}`}
             />
             <div className="workspace-buttons">
               <Button

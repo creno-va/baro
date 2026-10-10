@@ -366,25 +366,24 @@ export function positionMatchesProbe(
     );
   return probe.category === "video" && position.timestampSeconds < probe.durationSeconds;
 }
-export const v2ObservationEditRequestSchema = v2JsonRequestSchema(
-  z.strictObject({
-    expectedRevision: revisionSchema,
-    edits: z
-      .array(
-        z.strictObject({
-          observationId: opaqueIdSchema,
-          text: displayText(5000),
-          included: z.boolean(),
-        }),
-      )
-      .min(1)
-      .max(100)
-      .refine(
-        (edits) => new Set(edits.map((edit) => edit.observationId)).size === edits.length,
-        "Duplicate observation edits",
-      ),
-  }),
-);
+export const v2ObservationEditInputSchema = z.strictObject({
+  expectedRevision: revisionSchema,
+  edits: z
+    .array(
+      z.strictObject({
+        observationId: opaqueIdSchema,
+        text: displayText(5000),
+        included: z.boolean(),
+      }),
+    )
+    .min(1)
+    .max(100)
+    .refine(
+      (edits) => new Set(edits.map((edit) => edit.observationId)).size === edits.length,
+      "Duplicate observation edits",
+    ),
+});
+export const v2ObservationEditRequestSchema = v2JsonRequestSchema(v2ObservationEditInputSchema);
 export type V2FileProbe = z.infer<typeof v2FileProbeSchema>;
 export type V2OriginalManifest = z.infer<typeof v2OriginalManifestSchema>;
 export type V2UploadReservationRequest = z.infer<typeof v2UploadReservationRequestSchema>;
