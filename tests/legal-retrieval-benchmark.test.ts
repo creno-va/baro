@@ -12,8 +12,8 @@ import {
 import { createV2LegalRetrieval } from "../src/server/modules/legal-retrieval/v2/service";
 
 for (const variant of variants) {
-  test(`${variant}: actual SQLite/hash/date output equals unmodified retrieval`, async () => {
-    const baseline = createV2LegalRetrieval,
+  test(`${variant}: actual SQLite/hash/date output equals pinned retrieval`, async () => {
+    const baseline = await loadFactory("baseline"),
       factory = await loadFactory(variant);
     for (const scenario of [
       "cold-multi",
@@ -31,6 +31,16 @@ for (const variant of variants) {
       expect(after.signature).toBe(before.signature);
       expect(after.upstreamResponseBytes).toBeLessThanOrEqual(before.upstreamResponseBytes);
       expect(after.peakInFlight).toBeLessThanOrEqual(variant === "concurrency-2" ? 2 : 1);
+      if (variant === "product" && scenario === "cold-overlap") {
+        expect(before.calls).toBe(5);
+        expect(after.calls).toBe(4);
+        expect(after.listCalls).toBe(1);
+      }
+      if (variant === "product" && scenario === "warm-overlap") {
+        expect(before.calls).toBe(2);
+        expect(after.calls).toBe(1);
+        expect(after.listCalls).toBe(1);
+      }
     }
   });
   test.each(["identity", "future-date", "schema"])(
@@ -70,9 +80,9 @@ for (const variant of variants) {
   );
 }
 test.each(["body", "canonical_url", "source_date"])(
-  "recommended patch rejects cached %s corruption",
+  "product rejects cached %s corruption",
   async (column) => {
-    const f = await fixture(await loadFactory("list-dedup"));
+    const f = await fixture(createV2LegalRetrieval);
     try {
       const first = await f.service.retrieve(f.input([plan(["598"])]), f.access);
       const source = first.chunks[0]?.source;
@@ -99,7 +109,7 @@ test.each(["body", "canonical_url", "source_date"])(
   },
 );
 test("memo is request-local; different query ID has its own list; fresh citation IDs still bind", async () => {
-  const f = await fixture(await loadFactory("list-dedup"));
+  const f = await fixture(createV2LegalRetrieval);
   try {
     f.start();
     const plans = [plan(["598", "600"]), plan(["600", "603"])];
@@ -126,7 +136,7 @@ test("memo is request-local; different query ID has its own list; fresh citation
 });
 test("failed history validation is not memoized for a later overlapping plan", async () => {
   let lists = 0;
-  const f = await fixture(await loadFactory("list-dedup"), {
+  const f = await fixture(createV2LegalRetrieval, {
     mutate: (value, list) =>
       list && ++lists === 1 ? { LawSearch: { ...syntheticList.LawSearch, totalCnt: 101 } } : value,
   });
@@ -146,7 +156,7 @@ test("failed history validation is not memoized for a later overlapping plan", a
 test.each(["revoke", "cancel"])(
   "memo hit repeats guard after query authorization: %s",
   async (mode) => {
-    const f = await fixture(await loadFactory("list-dedup"));
+    const f = await fixture(createV2LegalRetrieval);
     try {
       let queries = 0;
       const controller = new AbortController();
@@ -180,7 +190,7 @@ test.each(["revoke", "cancel"])(
   },
 );
 test("original three-attempt retry reservation sequence is retained", async () => {
-  const factory = await loadFactory("list-dedup");
+  const factory = createV2LegalRetrieval;
   const f = await fixture(factory, { scenario: "retry-429" });
   try {
     const seen: Parameters<typeof f.access.reserveRequest>[0][] = [];
@@ -206,7 +216,7 @@ test("original three-attempt retry reservation sequence is retained", async () =
 
 test("expired source plus terminal upstream failure cannot return stale original", async () => {
   const config: { scenario?: "timeout-terminal" } = {};
-  const f = await fixture(await loadFactory("list-dedup"), config);
+  const f = await fixture(createV2LegalRetrieval, config);
   try {
     const prime = await f.service.retrieve(f.input(), f.access);
     expect(prime.chunks.length).toBe(3);
@@ -225,7 +235,7 @@ test("expired source plus terminal upstream failure cannot return stale original
   }
 });
 test("request reservation denial preserves budget failure without another transport call", async () => {
-  const f = await fixture(await loadFactory("list-dedup"));
+  const f = await fixture(createV2LegalRetrieval);
   try {
     let attempts = 0;
     f.access.reserveRequest = async () => ++attempts <= 2;

@@ -561,6 +561,100 @@ test("transport retries reserve each invocation attempt and never retry an uncla
   expect(f.attempts).toHaveLength(1);
 });
 
+test("statute requests retain documented date/version/article parameters over HTTPS", async () => {
+  const f = await fixture();
+  const requests: { path: string; parameters: Record<string, string> }[] = [];
+  const output = await f
+    .service({
+      transport: async (raw) => {
+        const url = new URL(raw);
+        expect(url.origin).toBe("https://www.law.go.kr");
+        expect(url.searchParams.get("OC")).toBe("synthetic-private-test");
+        url.searchParams.delete("OC");
+        requests.push({ path: url.pathname, parameters: Object.fromEntries(url.searchParams) });
+        return response(
+          url.pathname.endsWith("lawSearch.do") ? syntheticCompleteList : officialDetail,
+        );
+      },
+    })
+    .retrieve(input([{ ...statutePlan, lawId: "1706" }]), f.access);
+  expect(output.legalSourceStatus).toBe("verified");
+  expect(requests).toEqual([
+    {
+      path: "/DRF/lawSearch.do",
+      parameters: {
+        target: "eflaw",
+        type: "JSON",
+        query: "민법",
+        LID: "1706",
+        nw: "1,3",
+        sort: "efdes",
+        display: "100",
+        page: "1",
+        efYd: "00010101~20261006",
+      },
+    },
+    {
+      path: "/DRF/lawService.do",
+      parameters: {
+        target: "eflaw",
+        type: "JSON",
+        MST: "284415",
+        efYd: "20260317",
+        JO: "059800",
+      },
+    },
+  ]);
+});
+
+test("precedent requests use bounded dated lists and the validated ID for detail", async () => {
+  const f = await fixture();
+  const list = precedents.find((v) => v.id === "precedent_list_candidate");
+  const detail = precedents.find((v) => v.id === "precedent_verified");
+  if (!list || !detail) throw new Error("Missing synthetic precedent");
+  const requests: { path: string; parameters: Record<string, string> }[] = [];
+  const output = await f
+    .service({
+      transport: async (raw) => {
+        const url = new URL(raw);
+        expect(url.origin).toBe("https://www.law.go.kr");
+        expect(url.searchParams.get("OC")).toBe("synthetic-private-test");
+        url.searchParams.delete("OC");
+        requests.push({ path: url.pathname, parameters: Object.fromEntries(url.searchParams) });
+        return response(
+          url.pathname.endsWith("lawSearch.do")
+            ? JSON.parse(list.response.body)
+            : syntheticPrecedentDetail(detail.response.body),
+        );
+      },
+    })
+    .retrieve(input([{ kind: "precedent", query: "합성 개념", limit: 3 }]), f.access);
+  expect(output.legalSourceStatus).toBe("verified");
+  expect(requests).toEqual([
+    {
+      path: "/DRF/lawSearch.do",
+      parameters: {
+        target: "prec",
+        type: "JSON",
+        query: "합성 개념",
+        search: "2",
+        display: "3",
+        page: "1",
+        sort: "ddes",
+        prncYd: "00010101~20261006",
+      },
+    },
+    {
+      path: "/DRF/lawService.do",
+      parameters: {
+        target: "prec",
+        type: "JSON",
+        ID: "90000000201",
+      },
+    },
+  ]);
+});
+
 test("stream limits count bytes despite deceptive Content-Length and cancel oversized bodies", async () => {
   let cancelled = false;
   const body = new ReadableStream<Uint8Array>({

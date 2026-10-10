@@ -1,5 +1,33 @@
 # P0.3 환경 readiness 기록
 
+## 2026-10-10 #63 공식 API 요청 진단
+
+현재 `legal-retrieval/v2/service.ts`의 요청을 법제처 공식 가이드와 대조했다.
+필수 요청변수 누락이나 ID/MST/JO의 용도 혼동은 발견하지 못했다. 이것은 문서 대조 결과이며
+실제 credential의 승인 범위나 공급자의 정상 응답을 입증하지 않는다.
+
+| 요청 | 현재 구현과 공식 계약 대조 | 공식 가이드 |
+| --- | --- | --- |
+| 시행일 법령 목록 | `OC/target=eflaw/type=JSON`, 제목 query·선택 LID, `nw=1,3`, `sort=efdes`, display100/page1, 기준일까지 `efYd` 범위 | [목록](https://open.law.go.kr/LSO/openApi/guideResult.do?htmlName=lsEfYdListGuide) |
+| 시행일 법령 본문 | 검증된 목록의 `MST`와 해당 시행일 `efYd`, 6자리 조문 `JO`. 현재 법령 ID만으로 역사 버전을 대신하지 않음 | [본문](https://open.law.go.kr/LSO/openApi/guideResult.do?htmlName=lsEfYdInfoGuide) |
+| 판례 목록 | `target=prec/type=JSON`, 본문 검색 `search=2`, display≤100/page1, `sort=ddes`, 기준일까지 `prncYd` 범위 | [목록](https://open.law.go.kr/LSO/openApi/guideResult.do?htmlName=precListGuide) |
+| 판례 본문 | 검증된 목록의 판례 일련번호 `ID`, `target=prec/type=JSON`. HTML만 제공하는 국세청 판례는 기존 unsupported 경계 유지 | [본문](https://open.law.go.kr/LSO/openApi/guideResult.do?htmlName=precInfoGuide) |
+
+제품은 모든 요청에서 HTTPS를 유지하며 HTTP 예제 URL로 낮추지 않는다. 합성 transport를 통해
+법령·판례 목록/본문의 실제 생성 요청과 캐시·권한 경로를 검증한다. 실제 OC나 전체 요청 URL은
+로그·문서·PR에 넣지 않는다.
+
+Chrome에서 마이페이지 접근이 로그인 화면으로 이동했다. 현재 계정의 신청 승인 내역은 확인하지
+못했다. [공식 이용 안내](https://open.law.go.kr/LSO/information/guide.do)는 데이터 선택 후 신청과
+담당자 승인을 요구한다. 계정 관리자는 로그인 후 신청 내역의 법령/판례 서비스·인터넷/JSON 접근·
+등록 시스템/도메인/이용목적 및 오류자가진단 결과를 확인해야 한다. 인증값 변경이나 신청 재제출은
+이번 코드 작업에 포함하지 않았다.
+
+이전 HTTP200 `result/msg` 오류의 정확한 원인은 여전히 미확정이다. 신청/요청 조건이 달라졌다는
+증거가 없어 live API를 재호출하지 않았다. 조건 확인 뒤 승인된 credential로 bounded 조회를
+실행하고, 실제 공식 ID/version/date/contentHash/HTTPS URL tuple 및 Worker 경로를 확인해야 한다.
+#63은 `Refs`로 연결하고 OPEN을 유지한다. #70/#71과 외부·정책·production·공개 gate를 보존한다.
+
 ## 2026-10-07 Preview / production 동등성 점검
 
 동일한 익명 GET 9개 경로를 직접 검사했다. preview `868fd09133f1006e2c526a539ea3f253b6f58f3f`는
