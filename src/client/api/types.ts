@@ -56,7 +56,9 @@ export type FileView = {
   extractedText: string;
   canStartProcessing?: boolean | undefined;
 };
+export type WorkspaceCollection = "messages" | "actions" | "timeline";
 export type WorkspaceView = {
+  pagination?: Record<WorkspaceCollection, boolean> | undefined;
   case: CaseView;
   messages: MessageView[];
   actions: ActionView[];

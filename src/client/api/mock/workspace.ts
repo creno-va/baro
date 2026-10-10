@@ -2,6 +2,7 @@ import { ZodError } from "zod";
 import {
   type V2UploadPart,
   type V2UploadSession,
+  v2MessageRequestSchema,
   v2TimelineEditRequestSchema,
 } from "../../../contracts/v2";
 import type {
@@ -182,7 +183,7 @@ export function ensureMockWorkspace(state: WorkspaceMockState, id: string) {
       ) {
         item.summaryDetails.facts.push({
           id: crypto.randomUUID(),
-          text: statement.text.slice(0, 2000),
+          text: [...statement.text].slice(0, 2000).join(""),
           attribution: "user_statement",
           certainty: "reported",
           significance: "neutral",
@@ -266,7 +267,7 @@ export function createWorkspaceMock(runtime: WorkspaceMockRuntime) {
           if (
             typeof body.text !== "string" ||
             !body.text.trim() ||
-            body.text.length > 10000 ||
+            !v2MessageRequestSchema.safeParse(body).success ||
             !Array.isArray(body.selectedFileIds) ||
             body.selectedFileIds.some(
               (fileId) => !view.files.some((file) => file.id === fileId && file.status === "ready"),
@@ -325,7 +326,7 @@ export function createWorkspaceMock(runtime: WorkspaceMockRuntime) {
           if (
             typeof body.event !== "string" ||
             !body.event.trim() ||
-            body.event.length > 2000 ||
+            !v2TimelineEditRequestSchema.safeParse(body).success ||
             (body.date !== null &&
               (typeof body.date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(body.date)))
           )

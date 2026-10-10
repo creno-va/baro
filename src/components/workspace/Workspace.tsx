@@ -277,7 +277,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
   }, [preview, deleteFile, entry]);
 
   async function run(key: string, action: (epoch: number) => Promise<void>) {
-    const readOrDelete = ["refresh", "original", "delete"].includes(key);
+    const readOrDelete = ["refresh", "history", "original", "delete"].includes(key);
     if (lock.current || !ready || (readonly && !readOrDelete)) return;
     const epoch = ticket();
     lock.current = true;
@@ -318,6 +318,30 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
         setBusy("");
       }
     }
+  }
+  function historyButton(collection: "messages" | "actions" | "timeline", label: string) {
+    if (!view?.pagination?.[collection]) return null;
+    return (
+      <div className="workspace-buttons">
+        <p className="workspace-muted">
+          불러온 기록 {view[collection].length}개 · 나머지 기록을 이어서 확인할 수 있어요.
+        </p>
+        <Button
+          type="button"
+          variant="outline"
+          disabled={!!busy}
+          onClick={() =>
+            void run("history", async (epoch) => {
+              const next = await api.workspace.loadMore(caseId, collection);
+              if (!(await verify()) || !current(epoch)) return;
+              apply(next);
+            })
+          }
+        >
+          {label}
+        </Button>
+      </div>
+    );
   }
   async function send(event: SyntheticEvent) {
     event.preventDefault();
@@ -582,6 +606,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                         </div>
                       </div>
                     )}
+                    {historyButton("messages", "이전 대화 더 불러오기")}
                     {view.messages.map((message) => (
                       <article
                         className={`workspace-message workspace-message--${message.role}`}
@@ -923,6 +948,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                       </p>
                     </div>
                   )}
+                  {historyButton("timeline", "타임라인 더 불러오기")}
                   <ol className="workspace-timeline">
                     {[...view.timeline]
                       .sort((a, b) => (a.date || "9999").localeCompare(b.date || "9999"))
@@ -982,6 +1008,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                       </ButtonLink>
                     </div>
                   )}
+                  {historyButton("actions", "행동 더 불러오기")}
                   <ul className="workspace-action-list">
                     {view.actions.map((action) => (
                       <li key={action.id} className={action.done ? "is-done" : ""}>
