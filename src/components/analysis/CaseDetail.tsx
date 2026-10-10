@@ -55,6 +55,10 @@ function Questions({
   }
   async function submit(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (questions.some((q) => [...value(q.id).trim()].length > 1000)) {
+      setError("답변은 각각 1,000자 이하로 줄여 주세요. 입력한 내용은 그대로 남아 있어요.");
+      return;
+    }
     const body = answersForQuestionsSchema(questions).safeParse({
       inputRevision: revision,
       answers: questions.map((q) => answers[q.id]),
@@ -116,10 +120,14 @@ function Questions({
                   답변
                   <textarea
                     aria-label={`${index + 1}번 답변`}
-                    maxLength={1000}
+                    aria-describedby={`answer-length-${question.id}`}
+                    aria-invalid={[...value(question.id).trim()].length > 1000}
                     value={value(question.id)}
                     onChange={(event) => choose(question.id, "answered", event.target.value)}
                   />
+                  <span id={`answer-length-${question.id}`}>
+                    {[...value(question.id).trim()].length.toLocaleString()} / 1,000자
+                  </span>
                 </label>
               ))}
           </fieldset>
