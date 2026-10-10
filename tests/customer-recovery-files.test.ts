@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { Hono } from "hono";
-import { createFilesApi as createClient } from "../src/client/api/files";
+import { createFilesApi as createClient, validateUpload } from "../src/client/api/files";
+import { CURRENT_POLICY_VERSIONS } from "../src/contracts/consent";
 import { createFilesApi } from "../src/server/api/v2/files";
 import { createWorkspacesApi } from "../src/server/api/v2/workspaces";
 import { customerWorkspaceFixture } from "./helpers/customer-workspace";
@@ -46,7 +47,7 @@ async function fixture() {
       }),
     }),
   );
-  const raw = (path: string, init?: RequestInit) =>
+  const raw = async (path: string, init?: RequestInit) =>
     app.request(
       path,
       {
@@ -103,3 +104,103 @@ for (const useFreshClient of [false, true])
       f.db.close();
     }
   });
+
+for (const sameBytes of [true, false])
+  test(`fresh client resumes only the same original bytes; same=${sameBytes}`, async () => {
+    const f = await fixture();
+    try {
+      let interrupted = false;
+      const client = createClient(async (path, init) => {
+        const response = await f.raw(path, init);
+        if (!interrupted && init?.method === "PUT" && path.endsWith("/parts/0")) {
+          interrupted = true;
+          throw new TypeError("Synthetic lost part response");
+        }
+        return response;
+      });
+      const original = new File(["original"], "same.txt", { type: "text/plain" });
+      await expect(client.upload(f.workspace.id, original)).rejects.toThrow("lost part response");
+      const pending = (await client.list(f.workspace.id))[0];
+      if (!pending) throw new Error("Synthetic pending upload missing");
+      const next = new File([sameBytes ? "original" : "modified"], "same.txt", {
+        type: "text/plain",
+      });
+      const uploaded = await createClient(f.raw).upload(f.workspace.id, next);
+      expect(uploaded.status).toBe("waiting");
+      expect(uploaded.id === pending.id).toBe(sameBytes);
+      expect(await (await createClient(f.raw).original(f.workspace.id, uploaded.id)).text()).toBe(
+        sameBytes ? "original" : "modified",
+      );
+    } finally {
+      f.db.close();
+    }
+  });
+
+test("a peer client deleting an interrupted upload clears the cached session on explicit re-add", async () => {
+  const f = await fixture();
+  try {
+    let fail = true;
+    const client = createClient(async (path, init) => {
+      if (fail && init?.method === "PUT") {
+        fail = false;
+        throw new TypeError("Synthetic interruption");
+      }
+      return f.raw(path, init);
+    });
+    const source = new File(["original"], "peer.txt", { type: "text/plain" });
+    await expect(client.upload(f.workspace.id, source)).rejects.toThrow("interruption");
+    const old = (await client.list(f.workspace.id))[0];
+    if (!old) throw new Error("Synthetic pending upload missing");
+    await createClient(f.raw).remove(f.workspace.id, old.id);
+    const next = await client.upload(f.workspace.id, source);
+    expect(next.id).not.toBe(old.id);
+    expect(next.status).toBe("waiting");
+  } finally {
+    f.db.close();
+  }
+});
+
+test("legacy reservations remain readable and cannot be resumed using name and size alone", async () => {
+  const f = await fixture();
+  try {
+    const route = `/api/v2/cases/${f.workspace.id}`;
+    const revision = (
+      (await (await f.raw(`${route}/workspace`)).json()) as { workspaceRevision: number }
+    ).workspaceRevision;
+    const response = await f.raw(`${route}/files`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "idempotency-key": crypto.randomUUID(),
+        "if-match": String(revision),
+      },
+      body: JSON.stringify({
+        name: "legacy.txt",
+        byteLength: 8,
+        mediaType: "text/plain",
+        autoProcessConsentVersion: CURRENT_POLICY_VERSIONS.aiNoticeVersion,
+      }),
+    });
+    if (!response.ok) throw new Error(`Synthetic legacy reservation failed: ${response.status}`);
+    const old = (await response.json()) as { fileId: string };
+    const client = createClient(f.raw);
+    expect(await client.list(f.workspace.id)).toHaveLength(1);
+    const next = await client.upload(
+      f.workspace.id,
+      new File(["original"], "legacy.txt", { type: "text/plain" }),
+    );
+    expect(next.id).not.toBe(old.fileId);
+    expect(next.status).toBe("waiting");
+  } finally {
+    f.db.close();
+  }
+});
+
+test("both standard TIFF filename extensions pass upload validation", () => {
+  for (const extension of ["tif", "tiff", "TIF", "TIFF"])
+    expect(() =>
+      validateUpload(
+        new File([new Uint8Array([73, 73, 42, 0])], `scan.${extension}`, { type: "image/tiff" }),
+      ),
+    ).not.toThrow();
+});

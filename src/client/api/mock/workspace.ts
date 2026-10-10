@@ -204,6 +204,7 @@ export function ensureMockWorkspace(state: WorkspaceMockState, id: string) {
     if (pending && pending.at <= Date.now()) {
       changed = true;
       file.status = pending.failed ? "failed" : "ready";
+      file.canRetry = pending.failed;
       file.extractedText = pending.failed ? "" : (state.fileExtractions?.[file.id] ?? "");
       file.coverage = pending.failed
         ? "예시 처리 실패 · 추출 결과 없음"

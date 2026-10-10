@@ -67,6 +67,7 @@ export const v2UploadReservationRequestSchema = z.strictObject({
     "Invalid MIME declaration",
   ),
   autoProcessConsentVersion: boundedText(1, 100),
+  contentHash: v2HashSchema.optional(),
 });
 export const v2UploadSessionSchema = z.strictObject({
   schemaVersion: v2VersionSchema,

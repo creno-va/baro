@@ -165,6 +165,7 @@ export function createFilesMock(runtime: WorkspaceMockRuntime, originals = mockO
             status: "uploading",
             coverage: "원본 업로드 중 · API 예시 응답",
             extractedText: "",
+            uploadContentHash: input.contentHash,
           };
           value.files[id]?.push(file);
           value.fileUploads ??= {};
@@ -291,6 +292,7 @@ export function createFilesMock(runtime: WorkspaceMockRuntime, originals = mockO
             if (file.status !== "uploading" || latest.revision !== input.expectedRevision)
               throw new WorkspaceMockError("CONFLICT", "최신 자료 상태를 확인해 주세요.");
             file.status = "processing";
+            file.canRetry = false;
             file.coverage = "API 예시 처리 중 · 실제 OCR·ASR·영상 처리는 수행되지 않아요.";
             value.fileExtractions ??= {};
             value.fileExtractions[fileId] = extracted;
@@ -327,6 +329,7 @@ export function createFilesMock(runtime: WorkspaceMockRuntime, originals = mockO
             throw new WorkspaceMockError("CONFLICT", "다시 처리가 가능한 자료인지 확인해 주세요.");
           file.canStartProcessing = false;
           file.status = "processing";
+          file.canRetry = false;
           file.coverage = "API 예시 재처리 중";
           value.fileProcessing ??= {};
           value.fileProcessing[fileId] = { at: Date.now() + 1000, failed: false };
