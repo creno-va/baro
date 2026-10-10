@@ -137,3 +137,13 @@ test("delete and a failed retry cannot revive a job, its originals or reservatio
     f.db.sqlite.query("SELECT count(*) n FROM v2_deletion_targets WHERE kind='blob'").get(),
   ).toEqual({ n: 1 });
 });
+
+test("failed file metadata hides retry for terminal failures and exhausted attempts", async () => {
+  const f = await failedFile();
+  const listed = () => f.service.list(f.actor.ownerId, f.workspaceId);
+  expect((await listed())[0]).toMatchObject({ canRetry: true });
+  f.db.sqlite.query("UPDATE v2_jobs SET retryable=0 WHERE id=?").run(f.jobId);
+  expect((await listed())[0]).toMatchObject({ canRetry: false });
+  f.db.sqlite.query("UPDATE v2_jobs SET retryable=1,attempts=10 WHERE id=?").run(f.jobId);
+  expect((await listed())[0]).toMatchObject({ canRetry: false });
+});

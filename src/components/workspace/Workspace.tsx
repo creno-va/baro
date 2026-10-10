@@ -820,7 +820,8 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                           >
                             자료 확인
                           </Button>
-                          {(file.status === "failed" || file.canStartProcessing) && (
+                          {((file.status === "failed" && file.canRetry) ||
+                            file.canStartProcessing) && (
                             <Button
                               variant="outline"
                               size="sm"

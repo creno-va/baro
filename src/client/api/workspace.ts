@@ -105,6 +105,7 @@ const fileViewSchema = z.object({
   coverage: z.string(),
   extractedText: z.string(),
   canStartProcessing: z.boolean().optional(),
+  canRetry: z.boolean().optional(),
 });
 export const workspaceViewSchema = z.object({
   case: z.object({

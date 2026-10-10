@@ -28,6 +28,8 @@ export const fileViewSchema = z.object({
   coverage: z.string(),
   extractedText: z.string(),
   canStartProcessing: z.boolean().optional(),
+  canRetry: z.boolean().optional(),
+  uploadContentHash: z.string().optional(),
 });
 const metadataSchema = z.object({
   id: z.string(),
@@ -35,6 +37,8 @@ const metadataSchema = z.object({
   name: z.string(),
   declaredMediaType: z.string(),
   byteLength: z.number(),
+  contentHash: z.string().optional(),
+  canRetry: z.boolean().optional(),
   status: z.enum([
     "reserved",
     "uploading",
@@ -124,7 +128,7 @@ export function validateUpload(file: Pick<File, "name" | "size" | "type">) {
       `파일은 비어 있지 않아야 하며 ${limit / 1_000_000} MB 이하여야 해요.`,
     );
   if (
-    !/\.(txt|pdf|doc|docx|hwp|hwpx|xls|xlsx|ppt|pptx|jpg|jpeg|png|webp|gif|bmp|tiff|heic|mp3|wav|m4a|ogg|flac|aac|mp4|mov|webm|avi|mkv)$/i.test(
+    !/\.(txt|pdf|doc|docx|hwp|hwpx|xls|xlsx|ppt|pptx|jpg|jpeg|png|webp|gif|bmp|tif|tiff|heic|mp3|wav|m4a|ogg|flac|aac|mp4|mov|webm|avi|mkv)$/i.test(
       file.name,
     )
   )
@@ -135,6 +139,7 @@ export function validateUpload(file: Pick<File, "name" | "size" | "type">) {
 }
 export function createFilesApi(request: WorkspaceTransport) {
   const revisions = new Map<string, number>();
+  const uploadHashes = new Map<string, string | undefined>();
   const reviews = new Map<string, RequestInit>();
   const pendingRemovals = new Set<string>();
   const uploads = new Map<
@@ -160,10 +165,14 @@ export function createFilesApi(request: WorkspaceTransport) {
         `${base(id)}/files${cursor ? `?afterId=${encodeURIComponent(cursor)}` : ""}`,
       );
       const views = z.array(fileViewSchema).safeParse(raw);
-      if (views.success) return views.data;
+      if (views.success) {
+        for (const file of views.data) uploadHashes.set(`${id}:${file.id}`, file.uploadContentHash);
+        return views.data;
+      }
       const rows = z.array(metadataSchema).parse(raw);
       for (const row of rows) {
         revisions.set(`${id}:${row.id}`, row.revision);
+        uploadHashes.set(`${id}:${row.id}`, row.contentHash);
         if (row.status === "deleting") continue;
         const file: FileView = {
           id: row.id,
@@ -183,6 +192,7 @@ export function createFilesApi(request: WorkspaceTransport) {
           coverage: "처리 결과는 아직 확인할 수 없어요.",
           extractedText: "",
           canStartProcessing: row.status === "uploaded",
+          canRetry: row.canRetry ?? false,
         };
         if (row.status === "ready") {
           const detail = await request(`${base(id)}/files/${encodeURIComponent(row.id)}`);
@@ -215,12 +225,21 @@ export function createFilesApi(request: WorkspaceTransport) {
       byteLength: file.size,
       mediaType: file.type.split(";")[0]?.trim().toLowerCase() || "application/octet-stream",
       autoProcessConsentVersion: CURRENT_POLICY_VERSIONS.aiNoticeVersion,
+      contentHash,
     };
+    const current = await list(id);
+    if (attempt.session && !current.some((item) => item.id === attempt.session?.fileId)) {
+      uploads.delete(identity);
+      return upload(id, file);
+    }
     let session = attempt.session;
     if (!session) {
-      const pending = (await list(id)).find(
+      const pending = current.find(
         (item) =>
-          item.status === "uploading" && item.name === file.name && item.sizeBytes === file.size,
+          item.status === "uploading" &&
+          item.name === file.name &&
+          item.sizeBytes === file.size &&
+          uploadHashes.get(`${id}:${item.id}`) === contentHash,
       );
       if (pending) {
         session = v2UploadSessionSchema.parse(

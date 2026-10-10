@@ -54,6 +54,8 @@ export type FileView = {
   coverage: string;
   extractedText: string;
   canStartProcessing?: boolean | undefined;
+  canRetry?: boolean | undefined;
+  uploadContentHash?: string | undefined;
 };
 export type WorkspaceView = {
   case: CaseView;

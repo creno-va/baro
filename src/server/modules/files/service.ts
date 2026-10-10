@@ -370,6 +370,16 @@ export function createFilesService(core: V2Core, deps: FileServiceDependencies) 
       await workspace(ownerId, workspaceId);
       if (afterId) parse(opaqueIdSchema, afterId);
       const result = await files.listMetadata(actor(ownerId), workspaceId, 20, afterId);
+      for (const file of result) {
+        if (file.status !== "failed") continue;
+        const eligible = await core
+          .statement(
+            "SELECT 1 FROM v2_jobs j JOIN v2_operations o ON o.id=j.operation_id WHERE j.target_kind='file' AND j.target_id=? AND j.target_revision=? AND j.kind='file_processing' AND j.status='failed' AND j.retryable=1 AND j.attempts<10 AND o.owner_id=? LIMIT 1",
+            [file.id, file.revision, ownerId],
+          )
+          .first();
+        Object.assign(file, { canRetry: !!eligible && !!file.manifestSnapshotId });
+      }
       await workspace(ownerId, workspaceId);
       return result;
     },
@@ -673,7 +683,12 @@ export function createFilesService(core: V2Core, deps: FileServiceDependencies) 
       if (u.workspace_revision !== request.expectedRevision) throw new FileError("CONFLICT");
       if (!deps.probe) throw new FileError("PROCESSING_UNAVAILABLE");
       const manifest = v2OriginalManifestSchema.parse(request.manifest);
-      if (manifest.byteLength !== u.reserved_bytes) throw new FileError("INVALID_FILE");
+      const reserved = await files.metadata(actor(ownerId), fileId);
+      if (
+        manifest.byteLength !== u.reserved_bytes ||
+        (reserved?.contentHash && reserved.contentHash !== manifest.contentHash)
+      )
+        throw new FileError("INVALID_FILE");
       let opened = false,
         validated = false;
       const probe = v2FileProbeSchema.parse(
