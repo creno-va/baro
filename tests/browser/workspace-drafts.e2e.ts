@@ -1,5 +1,12 @@
 import { expect, test } from "@playwright/test";
-import { assistantMessage, summary, workspace } from "../fixtures/contracts/v2";
+import {
+  action,
+  assistantMessage,
+  summary,
+  timeline,
+  userMessage,
+  workspace,
+} from "../fixtures/contracts/v2";
 
 const id = "synthetic-draft-case";
 const base = `/cases/${id}`;
@@ -295,4 +302,163 @@ test("chat retains Unicode input, blocks over-limit text and submits the complet
   await expect.poll(() => sent.length).toBe(1);
   expect(sent[0]).toBe(text);
   await expect(input).toHaveValue("");
+});
+
+for (const [collection, suffix, label, count] of [
+  ["messages", "", "이전 대화 더 불러오기", 501],
+  ["timeline", "/timeline", "타임라인 더 불러오기", 1001],
+  ["actions", "/actions", "행동 더 불러오기", 1001],
+] as const) {
+  test(`remaining ${collection} records can be read without enabling writes or losing a draft`, async ({
+    page,
+  }) => {
+    const consent = collection === "timeline";
+    const records = Array.from({ length: count }, (_, i) =>
+      collection === "messages"
+        ? {
+            ...userMessage,
+            id: `message_${i}`,
+            operationId: `operation_${i}`,
+            selectedFileIds: [],
+            text: `Saved message ${i}`,
+            createdAt: new Date(Date.UTC(2026, 0, 1, 0, 0, i)).toISOString(),
+          }
+        : collection === "timeline"
+          ? {
+              ...timeline,
+              id: `timeline_${String(i).padStart(4, "0")}`,
+              event: `Saved timeline ${i}`,
+            }
+          : { ...action, id: `action_${String(i).padStart(4, "0")}`, title: `Saved action ${i}` },
+    );
+    if (collection === "messages") records.reverse();
+    const pageSize = collection === "messages" ? 50 : 8;
+    await page.route("**/api/**", async (route) => {
+      const url = new URL(route.request().url());
+      const path = url.pathname;
+      if (!path.startsWith("/api/")) return route.continue();
+      if (path === "/api/me/session")
+        return route.fulfill({
+          json: {
+            user: { id: "synthetic-owner", name: "Synthetic", accountType: "customer" },
+            needsConsent: consent,
+          },
+        });
+      if (path.endsWith("/workspace"))
+        return route.fulfill({ json: { ...workspace, id, legacySnapshotId: null } });
+      if (path.endsWith("/intake"))
+        return route.fulfill({
+          json: { narrative: "Synthetic paginated case", summary: { revision: summary.revision } },
+        });
+      if (path.endsWith("/summary")) return route.fulfill({ json: summary });
+      if (path.endsWith(`/${collection}`)) {
+        const cursor = url.searchParams.get(collection === "messages" ? "before" : "after");
+        const offset = cursor ? Number(cursor) : 0;
+        const items = records.slice(offset, offset + pageSize);
+        return route.fulfill({
+          json: {
+            items,
+            nextCursor:
+              offset + items.length < records.length ? String(offset + items.length) : null,
+          },
+        });
+      }
+      if (["messages", "timeline", "actions"].some((name) => path.endsWith(`/${name}`)))
+        return route.fulfill({ json: { items: [], nextCursor: null } });
+      if (path.endsWith("/files")) return route.fulfill({ json: [] });
+      if (path.endsWith("/workspace-jobs/latest")) return route.fulfill({ json: null });
+      return route.fulfill({ status: 404, json: { error: { code: "NOT_FOUND" } } });
+    });
+    await page.goto(`${base}${suffix}`);
+    const more = page.getByRole("button", { name: label, exact: true });
+    await expect(more).toBeEnabled();
+    if (collection === "messages")
+      await page.locator("#workspace-message").fill("Keep this unsent draft 😀");
+    if (consent)
+      await expect(page.getByRole("button", { name: "일정 추가", exact: true })).toBeDisabled();
+    await more.click();
+    await expect(more).toHaveCount(0);
+    if (collection === "messages") {
+      await expect(page.locator(".workspace-message")).toHaveCount(count);
+      await expect(page.getByText("Saved message 0", { exact: true })).toBeVisible();
+      await expect(page.locator("#workspace-message")).toHaveValue("Keep this unsent draft 😀");
+    } else if (collection === "timeline") {
+      await expect(page.locator(".workspace-timeline > li")).toHaveCount(count);
+      await expect(page.getByRole("button", { name: "일정 추가", exact: true })).toBeDisabled();
+    } else await expect(page.locator(".workspace-action-list > li")).toHaveCount(count);
+    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await expect(more).toHaveCount(0);
+  });
+}
+
+test("a failed older-message read preserves the current conversation and can be retried", async ({
+  page,
+}) => {
+  let fail = true;
+  const records = Array.from({ length: 501 }, (_, i) => ({
+    ...userMessage,
+    id: `message_${i}`,
+    operationId: `operation_${i}`,
+    selectedFileIds: [],
+    text: `Saved message ${i}`,
+    createdAt: new Date(Date.UTC(2026, 0, 1, 0, 0, i)).toISOString(),
+  })).reverse();
+  await page.route("**/api/**", async (route) => {
+    const url = new URL(route.request().url()),
+      path = url.pathname;
+    if (!path.startsWith("/api/")) return route.continue();
+    if (path === "/api/me/session")
+      return route.fulfill({
+        json: {
+          user: { id: "synthetic-owner", name: "Synthetic", accountType: "customer" },
+          needsConsent: false,
+        },
+      });
+    if (path.endsWith("/workspace"))
+      return route.fulfill({ json: { ...workspace, id, legacySnapshotId: null } });
+    if (path.endsWith("/intake"))
+      return route.fulfill({
+        json: { narrative: "Synthetic pagination retry", summary: { revision: summary.revision } },
+      });
+    if (path.endsWith("/summary")) return route.fulfill({ json: summary });
+    if (path.endsWith("/messages")) {
+      const offset = Number(url.searchParams.get("before") ?? "0");
+      if (offset === 500 && fail)
+        return route.fulfill({
+          status: 503,
+          json: { error: { code: "UNAVAILABLE", retryable: true } },
+        });
+      const items = records.slice(offset, offset + 50);
+      return route.fulfill({
+        json: {
+          items,
+          nextCursor: offset + items.length < records.length ? String(offset + items.length) : null,
+        },
+      });
+    }
+    if (path.endsWith("/actions") || path.endsWith("/timeline"))
+      return route.fulfill({ json: { items: [], nextCursor: null } });
+    if (path.endsWith("/files")) return route.fulfill({ json: [] });
+    if (path.endsWith("/workspace-jobs/latest")) return route.fulfill({ json: null });
+    return route.fulfill({ status: 404, json: { error: { code: "NOT_FOUND" } } });
+  });
+  await page.goto(base);
+  const more = page.getByRole("button", { name: "이전 대화 더 불러오기", exact: true });
+  await expect(more).toBeEnabled();
+  await page.locator("#workspace-message").fill("Preserve this draft through failure");
+  await more.click();
+  await expect(
+    page.getByText("지금 요청을 처리할 수 없어요. 잠시 후 다시 시도해 주세요.", { exact: true }),
+  ).toBeVisible();
+  await expect(page.locator(".workspace-message")).toHaveCount(500);
+  await expect(page.locator("#workspace-message")).toHaveValue(
+    "Preserve this draft through failure",
+  );
+  fail = false;
+  await more.click();
+  await expect(page.locator(".workspace-message")).toHaveCount(501);
+  await expect(more).toHaveCount(0);
+  await expect(page.locator("#workspace-message")).toHaveValue(
+    "Preserve this draft through failure",
+  );
 });
