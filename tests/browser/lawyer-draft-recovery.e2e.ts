@@ -175,3 +175,149 @@ test("selecting another ready photo replaces an uploaded photo preview before sa
   await expect(page.getByText("프로필을 저장했어요.", { exact: true })).toBeVisible();
   expect(savedPhoto).toBe("synthetic-photo-b");
 });
+
+for (const outageMode of ["save", "focus", "postflight"] as const) {
+  test(`temporary session outage preserves the profile draft: ${outageMode}`, async ({ page }) => {
+    let outage = false,
+      writes = 0;
+    let profile = {
+      id: "synthetic-outage-profile",
+      revision: 2,
+      name: "Synthetic lawyer",
+      introduction: "Saved introduction",
+      officeName: "Synthetic office",
+      address: "Synthetic address",
+      region: "",
+      practiceAreas: [],
+      phone: "010-1234-5678",
+      email: "",
+      website: "",
+      photoAssetId: null,
+      photoUrl: null,
+      portfolio: [],
+      published: false,
+      verificationStatus: "self_declared",
+    } as import("../../src/server/modules/lawyers/self-profile-contract").SelfProfile;
+    const { isDuplicateProfileSave } = await import(
+      "../../src/server/modules/lawyers/self-profile-contract"
+    );
+    await page.route("**/api/**", async (route) => {
+      const req = route.request(),
+        path = new URL(req.url()).pathname;
+      if (!path.startsWith("/api/")) return route.continue();
+      if (path === "/api/me/session")
+        return outage
+          ? route.fulfill({
+              status: 503,
+              json: { error: { code: "INTERNAL_ERROR", retryable: true } },
+            })
+          : route.fulfill({
+              json: {
+                user: { id: "synthetic-owner", name: "Synthetic", accountType: "lawyer" },
+                needsConsent: false,
+              },
+            });
+      if (path === "/api/v2/me/lawyer/self-profile") {
+        if (req.method() === "PUT") {
+          const next = req.postDataJSON().profile;
+          if (isDuplicateProfileSave(profile, next)) return route.fulfill({ json: profile });
+          expect(next.revision).toBe(profile.revision);
+          profile = { ...next, revision: profile.revision + 1 };
+          writes++;
+          if (outageMode === "postflight" && writes === 1) outage = true;
+        }
+        return route.fulfill({ json: profile });
+      }
+      if (path.endsWith("/assets")) return route.fulfill({ json: { items: [], nextCursor: null } });
+      return route.fulfill({ status: 404, json: {} });
+    });
+    await page.goto("/lawyer");
+    const intro = page.locator("textarea").first();
+    await expect(intro).toHaveValue(profile.introduction);
+    await intro.fill("Synthetic unsaved introduction");
+    if (outageMode !== "postflight") outage = true;
+    if (outageMode === "focus") await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    else await page.getByRole("button", { name: "프로필 저장", exact: true }).click();
+    await expect(intro).toHaveCount(0);
+    const recover = page.getByRole("button", { name: "로그인 상태 다시 확인", exact: true });
+    await expect(recover).toBeEnabled();
+    expect(writes).toBe(outageMode === "postflight" ? 1 : 0);
+    outage = false;
+    await recover.click();
+    await expect(intro).toHaveValue("Synthetic unsaved introduction");
+    await page.getByRole("button", { name: "프로필 저장", exact: true }).click();
+    await expect(page.getByText("프로필을 저장했어요.", { exact: true })).toBeVisible();
+    expect(writes).toBe(1);
+    expect(profile.introduction).toBe("Synthetic unsaved introduction");
+  });
+}
+
+for (const nextSession of ["other-owner", "signed-out", "expired"] as const) {
+  test(`outage draft is discarded after a confirmed session change: ${nextSession}`, async ({
+    page,
+  }) => {
+    let outage = false,
+      owner = "synthetic-owner";
+    await page.route("**/api/**", async (route) => {
+      const path = new URL(route.request().url()).pathname;
+      if (!path.startsWith("/api/")) return route.continue();
+      if (path === "/api/me/session" && !outage && !owner && nextSession === "expired")
+        return route.fulfill({
+          status: 401,
+          json: { error: { code: "UNAUTHENTICATED", retryable: false } },
+        });
+      if (path === "/api/me/session")
+        return outage
+          ? route.fulfill({
+              status: 503,
+              json: { error: { code: "INTERNAL_ERROR", retryable: true } },
+            })
+          : route.fulfill({
+              json: {
+                user: owner ? { id: owner, name: "Synthetic", accountType: "lawyer" } : null,
+                needsConsent: false,
+              },
+            });
+      if (path === "/api/v2/me/lawyer/self-profile")
+        return route.fulfill({
+          json: {
+            id: "synthetic-profile",
+            revision: 2,
+            name: "Synthetic lawyer",
+            introduction:
+              owner === "synthetic-owner" ? "Saved introduction" : "New owner introduction",
+            officeName: "Synthetic office",
+            address: "Synthetic address",
+            region: "",
+            practiceAreas: [],
+            phone: "010-1234-5678",
+            email: "",
+            website: "",
+            photoAssetId: null,
+            photoUrl: null,
+            portfolio: [],
+            published: false,
+            verificationStatus: "self_declared",
+          },
+        });
+      if (path.endsWith("/assets")) return route.fulfill({ json: { items: [], nextCursor: null } });
+      return route.fulfill({ status: 404, json: {} });
+    });
+    await page.goto("/lawyer");
+    const intro = page.locator("textarea").first();
+    await expect(intro).toHaveValue("Saved introduction");
+    await intro.fill("Old owner unsaved draft");
+    outage = true;
+    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await expect(intro).toHaveCount(0);
+    outage = false;
+    owner = nextSession === "other-owner" ? "synthetic-next-owner" : "";
+    await page.getByRole("button", { name: "로그인 상태 다시 확인", exact: true }).click();
+    if (owner) await expect(intro).toHaveValue("New owner introduction");
+    else {
+      await expect(intro).toHaveCount(0);
+      await expect(page.getByRole("link", { name: "로그인", exact: true })).toBeVisible();
+    }
+    await expect(page.getByText("Old owner unsaved draft", { exact: true })).toHaveCount(0);
+  });
+}
