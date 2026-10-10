@@ -93,6 +93,16 @@ test("a settled mock message preserves an emoji at the generated fact boundary",
 });
 
 function historyFixture() {
+  let release!: () => void;
+  let entered!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const blocked = new Promise<void>((resolve) => {
+    entered = resolve;
+  });
+  let fileReads = 0;
+  let jobReads = 0;
   const control = {
     revision: workspace.workspaceRevision,
     fail: false,
@@ -100,6 +110,8 @@ function historyFixture() {
     badCursor: false,
     denied: false,
     preserveRecords: false,
+    delayRefresh: false,
+    delayJob: false,
   };
   const reads: string[] = [];
   const messages = Array.from({ length: 501 }, (_, i) => ({
@@ -164,10 +176,20 @@ function historyFixture() {
         nextCursor: offset + items.length < all.length ? items.at(-1)?.id : null,
       });
     }
-    if (url.pathname.endsWith("/files")) return Response.json([]);
+    if (url.pathname.endsWith("/files")) {
+      if (++fileReads === 2 && control.delayRefresh) {
+        entered();
+        await gate;
+      }
+      return Response.json([]);
+    }
+    if (url.pathname.endsWith("/workspace-jobs/latest") && ++jobReads === 2 && control.delayJob) {
+      entered();
+      await gate;
+    }
     return Response.json({ error: { code: "NOT_FOUND" } }, { status: 404 });
   }
-  return { control, reads, client: createWorkspaceApi(request, null) };
+  return { control, reads, blocked, release, client: createWorkspaceApi(request, null) };
 }
 
 test("bounded workspace reads expose and recover every omitted record without rereading earlier pages", async () => {
@@ -256,4 +278,64 @@ test("a workspace update preserves the ranges the user already opened", async ()
     501, 1001, 1001,
   ]);
   expect(updated.pagination).toEqual({ messages: false, timeline: false, actions: false });
+});
+
+for (const collection of ["messages", "timeline", "actions"] as const)
+  test(`late refresh preserves expanded ${collection} and its exhausted cursor`, async () => {
+    const f = historyFixture();
+    await f.client.get(workspace.id);
+    f.control.delayRefresh = true;
+    const pending = f.client.get(workspace.id);
+    await f.blocked;
+    try {
+      const expanded = await f.client.loadMore(workspace.id, collection);
+      expect(expanded[collection]).toHaveLength(collection === "messages" ? 501 : 1001);
+    } finally {
+      f.release();
+    }
+    const late = await pending;
+    const next = await f.client.get(workspace.id);
+    for (const view of [late, next]) {
+      expect(view[collection]).toHaveLength(collection === "messages" ? 501 : 1001);
+      expect(view.pagination?.[collection]).toBe(false);
+      expect(new Set(view[collection].map((v) => v.id)).size).toBe(view[collection].length);
+    }
+  });
+
+test("late cached refresh cannot restore records from an older workspace revision", async () => {
+  const f = historyFixture();
+  await f.client.get(workspace.id);
+  f.control.delayRefresh = true;
+  const pending = f.client.get(workspace.id);
+  await f.blocked;
+  try {
+    f.control.revision++;
+    const fresh = await f.client.get(workspace.id);
+    expect(fresh.messages.map((v) => v.id)).toEqual(["new_message"]);
+  } finally {
+    f.release();
+  }
+  for (const view of [await pending, await f.client.get(workspace.id)]) {
+    expect(view.case.revision).toBe(workspace.workspaceRevision + 1);
+    expect(view.messages.map((v) => v.id)).toEqual(["new_message"]);
+    expect(view.actions).toHaveLength(0);
+    expect(view.timeline).toHaveLength(0);
+  }
+});
+
+test("a refresh delayed at job lookup returns the history expanded during that lookup", async () => {
+  const f = historyFixture();
+  await f.client.get(workspace.id);
+  f.control.delayJob = true;
+  const pending = f.client.get(workspace.id);
+  await f.blocked;
+  try {
+    await f.client.loadMore(workspace.id, "messages");
+  } finally {
+    f.release();
+  }
+  const late = await pending;
+  expect(late.messages).toHaveLength(501);
+  expect(late.pagination?.messages).toBe(false);
+  expect((await f.client.get(workspace.id)).messages).toHaveLength(501);
 });

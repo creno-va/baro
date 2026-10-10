@@ -273,7 +273,7 @@ export function createWorkspaceApi(
     workspaceRevisions.set(id, w.workspaceRevision);
     const cached = snapshots.get(id);
     const limits = historyLimits.get(id) ?? { messages: 500, actions: 1000, timeline: 1000 };
-    const [intake, messagesRaw, actionsRaw, timelineRaw, fileViews] = await Promise.all([
+    let [intake, messagesRaw, actionsRaw, timelineRaw, fileViews] = await Promise.all([
       cached?.revision === w.workspaceRevision
         ? Promise.resolve(cached.intake)
         : workspaceJson(request, `${base(id)}/intake`),
@@ -303,15 +303,25 @@ export function createWorkspaceApi(
         : metadata.summary
           ? v2SummarySchema.parse(await workspaceJson(request, `${base(id)}/summary`))
           : null;
-    const settled =
-      cached?.revision === w.workspaceRevision && !more
-        ? w
-        : v2WorkspaceSchema.parse(await workspaceJson(request, `${base(id)}/workspace`));
-    if (settled.workspaceRevision !== w.workspaceRevision) {
-      snapshots.delete(id);
+    const settled = v2WorkspaceSchema.parse(await workspaceJson(request, `${base(id)}/workspace`));
+    const newest = snapshots.get(id);
+    if (
+      settled.workspaceRevision !== w.workspaceRevision ||
+      (newest && newest.revision > w.workspaceRevision)
+    ) {
+      if (newest?.revision === w.workspaceRevision) snapshots.delete(id);
       if (recovery < 2) return get(id, recovery + 1);
       throw workspaceError("UNAVAILABLE", "사건이 갱신되어 최신 내용을 다시 불러와 주세요.", true);
     }
+    // A delayed refresh must preserve pages opened while its file requests were pending.
+    if (newest?.revision === w.workspaceRevision) {
+      if (newest.messagesRaw.items.length > messagesRaw.items.length)
+        messagesRaw = newest.messagesRaw;
+      if (newest.actionsRaw.items.length > actionsRaw.items.length) actionsRaw = newest.actionsRaw;
+      if (newest.timelineRaw.items.length > timelineRaw.items.length)
+        timelineRaw = newest.timelineRaw;
+    }
+    workspaceRevisions.set(id, w.workspaceRevision);
     snapshots.set(id, {
       revision: w.workspaceRevision,
       intake,
@@ -409,6 +419,17 @@ export function createWorkspaceApi(
               : [],
         });
       }
+    }
+    const latest = snapshots.get(id);
+    if (
+      latest &&
+      (latest.revision !== w.workspaceRevision ||
+        latest.messagesRaw.items.length > messagesRaw.items.length ||
+        latest.actionsRaw.items.length > actionsRaw.items.length ||
+        latest.timelineRaw.items.length > timelineRaw.items.length)
+    ) {
+      if (recovery < 2) return get(id, recovery + 1);
+      throw workspaceError("UNAVAILABLE", "사건이 갱신되어 최신 내용을 다시 불러와 주세요.", true);
     }
     const actions = actionsRaw.items.map((a) => {
       const item = v2ActionSchema.parse(a);
