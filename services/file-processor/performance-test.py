@@ -24,6 +24,57 @@ SPEC.loader.exec_module(processor)
 
 
 class LosslessExtraction(unittest.TestCase):
+    def test_exif_orientation_and_transparent_marks(self):
+        with tempfile.TemporaryDirectory(prefix="baro-pixel-test-") as tmp:
+            root = Path(tmp)
+            source = root / "input"
+            for orientation in (2, 3, 4, 5, 6, 7, 8):
+                image = Image.new("RGB", (80, 40), "white")
+                ImageDraw.Draw(image).rectangle((0, 0, 20, 20), fill="black")
+                exif = Image.Exif()
+                exif[274] = orientation
+                image.save(source, "JPEG", exif=exif, comment=b"synthetic private comment")
+                from PIL import ImageOps
+                with Image.open(source) as original:
+                    expected = ImageOps.exif_transpose(original)
+                    expected.save(root / "expected.jpg", "JPEG", quality=80)
+                result = processor.process(source, root, processor.inspect(source), 0, 0)
+                output = root / result["artifacts"][0]["path"]
+                self.assertEqual(output.read_bytes(), (root / "expected.jpg").read_bytes())
+                processor.sanitize(source, root, processor.inspect(source))
+                with Image.open(root / "sanitized.bin") as sanitized:
+                    self.assertEqual(sanitized.size, expected.size)
+                    self.assertFalse(sanitized.getexif())
+                    self.assertNotIn("comment", sanitized.info)
+            for mode, transparent, opaque in [("RGBA", (0, 0, 0, 0), (0, 0, 0, 255)),
+                                               ("LA", (0, 0), (0, 255))]:
+                image = Image.new(mode, (100, 60), transparent)
+                ImageDraw.Draw(image).rectangle((30, 20, 60, 40), fill=opaque)
+                image.save(source, "PNG")
+                result = processor.process(source, root, processor.inspect(source), 0, 0)
+                with Image.open(root / result["artifacts"][0]["path"]) as output:
+                    self.assertGreater(output.getpixel((5, 5))[0], 245)
+                    self.assertLess(output.getpixel((40, 30))[0], 10)
+
+    def test_mixed_page_reads_raster_body_and_keeps_native_header(self):
+        with tempfile.TemporaryDirectory(prefix="baro-mixed-test-") as tmp:
+            root = Path(tmp)
+            source = root / "input"
+            source.write_bytes(b"synthetic PDF transport fixture")
+            calls = []
+            def extract(args, *a, **kw):
+                calls.append(args[0])
+                return {"pdftotext": b"HEADER", "pdfimages": b"page num type\n1 0 image 600 180",
+                        "pdftoppm": b"", "tesseract": b"RASTER BODY"}[args[0]]
+            with patch.object(processor, "command", extract):
+                result = processor.process(source, root, {"category": "document", "format": "pdf", "pageCount": 1}, 0, 0)
+            text = "".join((root / a["path"]).read_text() for a in result["artifacts"])
+            self.assertIn("HEADER", text)
+            self.assertIn("RASTER BODY", text)
+            self.assertIn("pdftoppm", calls)
+            self.assertEqual(result["coverage"]["pages"][0]["status"], "low_quality")
+            self.assertEqual(result["coverage"]["status"], "partial")
+
     def test_text_bom_newlines_empty_pages_and_scalar_boundaries(self):
         # Both reader and wire-artifact boundaries, including astral scalars.
         cases = ["\ufeffA\r\nB\rC\n\t\f\f끝😀\f", "\f", " \t\r\n",
@@ -90,7 +141,11 @@ class LosslessExtraction(unittest.TestCase):
                     image.save(source, fmt)
                 self.assertLessEqual(source.stat().st_size, 4_000_000)
                 with Image.open(source) as image:
-                    old = image.convert("RGB")
+                    if mode == "RGBA":
+                        old = Image.new("RGB", image.size, "white")
+                        old.paste(image, mask=image.getchannel("A"))
+                    else:
+                        old = image.convert("RGB")
                     old.thumbnail((1600, 1600))
                     old.save(root / "expected.jpg", "JPEG", quality=80)
                 probe = processor.inspect(source)
@@ -134,6 +189,39 @@ class LosslessExtraction(unittest.TestCase):
                 manifest = processor.process(root / "input", root, processor.inspect(root / "input"), 0, 0)
                 self.assertTrue(manifest["artifacts"][0]["multiFrame"])
                 self.assertEqual(manifest["coverage"], {"category": "image", "status": "partial", "observation": "missing"})
+
+    def test_tiff_orientation_is_applied_once_before_metadata_is_removed(self):
+        methods = {2: Image.Transpose.FLIP_LEFT_RIGHT, 3: Image.Transpose.ROTATE_180,
+                   4: Image.Transpose.FLIP_TOP_BOTTOM, 5: Image.Transpose.TRANSPOSE,
+                   6: Image.Transpose.ROTATE_270, 7: Image.Transpose.TRANSVERSE,
+                   8: Image.Transpose.ROTATE_90}
+        with tempfile.TemporaryDirectory(prefix="baro-tiff-orientation-test-") as tmp:
+            root = Path(tmp)
+            for compression in ("raw", "tiff_deflate"):
+                for frames in (1, 2):
+                    for orientation, method in methods.items():
+                        with self.subTest(compression=compression, frames=frames, orientation=orientation):
+                            source = root / "input"
+                            with Image.new("RGB", (80, 40), "white") as first, Image.new("RGB", (80, 40), "blue") as second:
+                                ImageDraw.Draw(first).rectangle((0, 0, 20, 10), fill="black")
+                                ImageDraw.Draw(first).rectangle((50, 20, 79, 39), fill="red")
+                                first.save(source, "TIFF", compression=compression, tiffinfo={274: orientation},
+                                           save_all=frames == 2, append_images=[second] if frames == 2 else [])
+                                expected = first.transpose(method)
+                            expected.save(root / "expected.jpg", "JPEG", quality=80)
+                            expected.save(root / "expected-sanitized.jpg", "JPEG", quality=82, optimize=False)
+                            probe = processor.inspect(source)
+                            result = processor.process(source, root, probe, 0, 0)
+                            output = root / result["artifacts"][0]["path"]
+                            self.assertEqual(output.read_bytes(), (root / "expected.jpg").read_bytes())
+                            self.assertEqual(result["artifacts"][0]["multiFrame"], frames == 2)
+                            self.assertEqual(result["coverage"]["status"], "partial")
+                            processor.sanitize(source, root, probe)
+                            self.assertEqual((root / "sanitized.bin").read_bytes(), (root / "expected-sanitized.jpg").read_bytes())
+                            for path in (output, root / "sanitized.bin"):
+                                with Image.open(path) as image:
+                                    self.assertEqual(image.size, expected.size)
+                                    self.assertFalse(image.getexif())
 
     @unittest.skipUnless(shutil.which("ffmpeg") and shutil.which("ffprobe"), "native audio tools unavailable")
     def test_wav_units_preserve_every_sample_across_thirty_seconds(self):
