@@ -449,3 +449,100 @@ for (const lateResponse of ["failure", "signed-out"] as const) {
     }
   });
 }
+
+for (const failure of ["http", "network", "invalid-json"] as const) {
+  test(
+    "obsolete settings session failure preserves the recovered view: " + failure,
+    async ({ page }) => {
+      let deletionReads = 0,
+        held = false,
+        settled = false,
+        release!: () => void;
+      const gate = new Promise<void>((r) => (release = r));
+      await page.route("**/api/**", async (route) => {
+        const path = new URL(route.request().url()).pathname;
+        if (!path.startsWith("/api/")) return route.continue();
+        if (path === "/api/me/deletion") {
+          deletionReads++;
+          return route.fulfill({
+            json: {
+              ownerTag: "a".repeat(64),
+              recentOAuth: false,
+              authenticatedAt: null,
+              providers: ["google"],
+            },
+          });
+        }
+        if (path === "/api/me/session") {
+          if (deletionReads > 0 && !held) {
+            held = true;
+            await gate;
+            if (failure === "network") await route.abort("failed");
+            else if (failure === "invalid-json")
+              await route.fulfill({ body: "broken", contentType: "application/json" });
+            else
+              await route.fulfill({
+                status: 503,
+                json: { error: { code: "INTERNAL_ERROR", retryable: true } },
+              });
+            settled = true;
+            return;
+          }
+          return route.fulfill({
+            json: {
+              user: { id: "synthetic-owner", name: "Synthetic", accountType: "customer" },
+              needsConsent: false,
+            },
+          });
+        }
+        if (path.endsWith("/usage"))
+          return route.fulfill({
+            json: {
+              newCases: { used: 0, limit: 3 },
+              aiResponses: { used: 0, limit: 200 },
+              mediaMinutes: { used: 0, limit: 60 },
+              storageBytes: { used: 0, limit: 10000000000 },
+            },
+          });
+        if (path === "/api/cases")
+          return route.fulfill({
+            json: {
+              items: [
+                {
+                  id: "11111111-1111-4111-8111-111111111111",
+                  title: "Synthetic legacy case",
+                  status: "completed",
+                  createdAt: "2026-10-10T00:00:00Z",
+                  updatedAt: "2026-10-10T00:00:00Z",
+                },
+              ],
+              nextCursor: null,
+            },
+          });
+        if (path === "/api/v2/cases")
+          return route.fulfill({ json: { items: [], nextCursor: null, previews: [] } });
+        return route.fulfill({ status: 404, json: {} });
+      });
+      await page.goto("/settings");
+      await expect.poll(() => held).toBe(true);
+      await page.evaluate(() => {
+        window.dispatchEvent(new PageTransitionEvent("pagehide", { persisted: true }));
+        window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true }));
+      });
+      const link = page.getByRole("link", { name: "Synthetic legacy case", exact: true });
+      await expect(link).toBeVisible();
+      await expect(page.getByRole("button", { name: "google로 재인증" })).toBeEnabled();
+      release();
+      await expect.poll(() => settled).toBe(true);
+      await page.evaluate(
+        () =>
+          new Promise<void>((resolve) =>
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+          ),
+      );
+      await expect(link).toBeVisible();
+      await expect(page.getByRole("alert")).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "google로 재인증" })).toBeEnabled();
+    },
+  );
+}

@@ -85,8 +85,8 @@ export function AccountSettings() {
     try {
       await verifyOwner();
       const session = await api.session.get();
-      if (!session.user) throw new Error("로그인 후 설정을 다시 확인해 주세요.");
       if (sequence !== loadSequence.current) return;
+      if (!session.user) throw new Error("로그인 후 설정을 다시 확인해 주세요.");
       setAccountType(session.user.accountType);
       const results = await Promise.allSettled([
         api.account.usage(),
@@ -134,7 +134,7 @@ export function AccountSettings() {
       }
       setError(problems.join(" "));
     } catch (error) {
-      if (isSuperseded(error)) return;
+      if (isSuperseded(error) || sequence !== loadSequence.current) return;
       clearOwnerState();
       setError(
         `계정 상태를 확인하지 못했어요. ${error instanceof Error ? error.message : "다시 로그인하거나 재시도해 주세요."}`,
