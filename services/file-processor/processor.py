@@ -15,7 +15,7 @@ import subprocess
 import sys
 import io
 import wave
-from PIL import Image
+from PIL import Image, ImageOps
 
 Image.MAX_IMAGE_PIXELS = 40_000_000
 MAX_ARTIFACT = 1_048_576
@@ -150,6 +150,18 @@ def inspect(source):
     return dict(category="audio", format=formats[0], byteLength=size, durationSeconds=duration)
 
 
+def normalized_rgb(image):
+    image.load()
+    if image.getexif().get(274, 1) in (2, 3, 4, 5, 6, 7, 8):
+        image = ImageOps.exif_transpose(image)
+    if image.mode in ("RGBA", "LA") or "transparency" in image.info:
+        rgba = image.convert("RGBA")
+        flattened = Image.new("RGB", image.size, "white")
+        flattened.paste(rgba, mask=rgba.getchannel("A"))
+        return flattened
+    return image if image.mode == "RGB" else image.convert("RGB")
+
+
 def process(source, root, probe, unit, frame_offset):
     artifacts = []
     output_bytes = 0
@@ -193,11 +205,17 @@ def process(source, root, probe, unit, frame_offset):
                 "pdftotext", "-f", str(page), "-l", str(page), "-enc", "UTF-8", str(source), "-"
             ]).decode("utf-8", errors="strict").rstrip("\f")
             status = "processed"
-            if not text.strip() and not is_text:
+            # Text headers do not prove that an embedded scanned body was read.
+            images = "" if is_text else command([
+                "pdfimages", "-f", str(page), "-l", str(page), "-list", str(source)
+            ]).decode("utf-8", errors="strict")
+            has_images = any(re.match(r"^\s*\d+\s+\d+\s+", line) for line in images.splitlines())
+            if not is_text and (not text.strip() or has_images):
                 image_base = root / "ocr-page"
                 command(["pdftoppm", "-f", str(page), "-l", str(page), "-singlefile", "-scale-to", "1800",
                          "-png", str(source), str(image_base)])
-                text = command(["tesseract", str(image_base) + ".png", "stdout", "-l", "kor+eng"]).decode("utf-8")
+                ocr = command(["tesseract", str(image_base) + ".png", "stdout", "-l", "kor+eng"]).decode("utf-8")
+                text = text + "\n" + ocr if text.strip() else ocr
                 (root / "ocr-page.png").unlink(missing_ok=True)
                 # OCR is uncertain; native text absence is never perfect page coverage.
                 status = "low_quality"
@@ -215,9 +233,7 @@ def process(source, root, probe, unit, frame_offset):
             multi = getattr(image, "n_frames", 1) > 1
             # Decode before thumbnail so JPEG draft/downsampling cannot change pixels.
             # An already RGB raster needs no full-size copy from convert("RGB").
-            image.load()
-            if image.mode != "RGB":
-                image = image.convert("RGB")
+            image = normalized_rgb(image)
             image.thumbnail((1600, 1600))
             image.save(path, "JPEG", quality=80)
         artifact(path, "image", dict(kind="image", region=None), multiFrame=multi)
@@ -322,13 +338,9 @@ def sanitize(source, root, probe):
     target = root / "sanitized.bin"
 
     def jpeg(image):
-        image.thumbnail((1800, 1800))
-        flattened = Image.new("RGB", image.size, "white")
-        if image.mode in ("RGBA", "LA") or "transparency" in image.info:
-            rgba = image.convert("RGBA")
-            flattened.paste(rgba, mask=rgba.getchannel("A"))
-        else:
-            flattened.paste(image.convert("RGB"))
+        flattened = normalized_rgb(image)
+        flattened.thumbnail((1800, 1800))
+        flattened.info.clear()
         payload = io.BytesIO()
         # Fresh RGB pixels; no EXIF, ICC, comment or source metadata is passed.
         flattened.save(payload, "JPEG", quality=82, optimize=False)

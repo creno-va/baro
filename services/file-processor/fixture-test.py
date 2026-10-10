@@ -216,3 +216,42 @@ with tempfile.TemporaryDirectory(prefix="baro-audio-gap-") as tmp:
     assert json.loads((root / "error.json").read_text())["code"] == "AUDIO_COVERAGE_MISMATCH"
     assert not (root / "manifest.json").exists()
 print("Native missing PCM coverage: 1 PASS (gap rejected, synthetic local codecs only)")
+
+# A native text header must not mask a raster-only contract body.
+with tempfile.TemporaryDirectory(prefix="baro-mixed-page-") as tmp:
+    from PIL import Image, ImageDraw
+    import io
+    root = Path(tmp)
+    image = Image.new("RGB", (360, 50), "white")
+    ImageDraw.Draw(image).text((10, 15), "SYNTHETIC CONTRACT BODY", fill="black")
+    image = image.resize((1440, 200))
+    stream = io.BytesIO()
+    image.save(stream, "JPEG")
+    payload = stream.getvalue()
+    content = b"BT /F1 18 Tf 40 760 Td (SYNTHETIC HEADER) Tj ET\nq 500 0 0 80 40 500 cm /Im1 Do Q"
+    objects = [b"<< /Type /Catalog /Pages 2 0 R >>",
+               b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+               b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> /XObject << /Im1 5 0 R >> >> /Contents 6 0 R >>",
+               b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+               b"<< /Type /XObject /Subtype /Image /Width 1440 /Height 200 /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length " + str(len(payload)).encode() + b" >>\nstream\n" + payload + b"\nendstream",
+               b"<< /Length " + str(len(content)).encode() + b" >>\nstream\n" + content + b"\nendstream"]
+    pdf = bytearray(b"%PDF-1.4\n")
+    offsets = [0]
+    for index, obj in enumerate(objects, 1):
+        offsets.append(len(pdf))
+        pdf.extend(str(index).encode() + b" 0 obj\n" + obj + b"\nendobj\n")
+    start = len(pdf)
+    pdf.extend(b"xref\n0 7\n0000000000 65535 f \n")
+    for offset in offsets[1:]:
+        pdf.extend(f"{offset:010d} 00000 n \n".encode())
+    pdf.extend(b"trailer\n<< /Size 7 /Root 1 0 R >>\nstartxref\n" + str(start).encode() + b"\n%%EOF\n")
+    (root / "input").write_bytes(pdf)
+    result = subprocess.run(["python3", "/app/processor.py", str(root), "process", "0"], capture_output=True, timeout=120)
+    assert result.returncode == 0
+    output = json.loads((root / "manifest.json").read_text())
+    text = "".join((root / artifact["path"]).read_text() for artifact in output["artifacts"])
+    assert "SYNTHETIC HEADER" in text
+    assert "CONTRACT BODY" in text.upper()
+    assert output["coverage"]["pages"][0]["status"] == "low_quality"
+    assert output["coverage"]["status"] == "partial"
+print("Linux native mixed PDF raster body: PASS (synthetic, no model access)")

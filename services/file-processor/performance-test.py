@@ -24,6 +24,57 @@ SPEC.loader.exec_module(processor)
 
 
 class LosslessExtraction(unittest.TestCase):
+    def test_exif_orientation_and_transparent_marks(self):
+        with tempfile.TemporaryDirectory(prefix="baro-pixel-test-") as tmp:
+            root = Path(tmp)
+            source = root / "input"
+            for orientation in (2, 3, 4, 5, 6, 7, 8):
+                image = Image.new("RGB", (80, 40), "white")
+                ImageDraw.Draw(image).rectangle((0, 0, 20, 20), fill="black")
+                exif = Image.Exif()
+                exif[274] = orientation
+                image.save(source, "JPEG", exif=exif, comment=b"synthetic private comment")
+                from PIL import ImageOps
+                with Image.open(source) as original:
+                    expected = ImageOps.exif_transpose(original)
+                    expected.save(root / "expected.jpg", "JPEG", quality=80)
+                result = processor.process(source, root, processor.inspect(source), 0, 0)
+                output = root / result["artifacts"][0]["path"]
+                self.assertEqual(output.read_bytes(), (root / "expected.jpg").read_bytes())
+                processor.sanitize(source, root, processor.inspect(source))
+                with Image.open(root / "sanitized.bin") as sanitized:
+                    self.assertEqual(sanitized.size, expected.size)
+                    self.assertFalse(sanitized.getexif())
+                    self.assertNotIn("comment", sanitized.info)
+            for mode, transparent, opaque in [("RGBA", (0, 0, 0, 0), (0, 0, 0, 255)),
+                                               ("LA", (0, 0), (0, 255))]:
+                image = Image.new(mode, (100, 60), transparent)
+                ImageDraw.Draw(image).rectangle((30, 20, 60, 40), fill=opaque)
+                image.save(source, "PNG")
+                result = processor.process(source, root, processor.inspect(source), 0, 0)
+                with Image.open(root / result["artifacts"][0]["path"]) as output:
+                    self.assertGreater(output.getpixel((5, 5))[0], 245)
+                    self.assertLess(output.getpixel((40, 30))[0], 10)
+
+    def test_mixed_page_reads_raster_body_and_keeps_native_header(self):
+        with tempfile.TemporaryDirectory(prefix="baro-mixed-test-") as tmp:
+            root = Path(tmp)
+            source = root / "input"
+            source.write_bytes(b"synthetic PDF transport fixture")
+            calls = []
+            def extract(args, *a, **kw):
+                calls.append(args[0])
+                return {"pdftotext": b"HEADER", "pdfimages": b"page num type\n1 0 image 600 180",
+                        "pdftoppm": b"", "tesseract": b"RASTER BODY"}[args[0]]
+            with patch.object(processor, "command", extract):
+                result = processor.process(source, root, {"category": "document", "format": "pdf", "pageCount": 1}, 0, 0)
+            text = "".join((root / a["path"]).read_text() for a in result["artifacts"])
+            self.assertIn("HEADER", text)
+            self.assertIn("RASTER BODY", text)
+            self.assertIn("pdftoppm", calls)
+            self.assertEqual(result["coverage"]["pages"][0]["status"], "low_quality")
+            self.assertEqual(result["coverage"]["status"], "partial")
+
     def test_text_bom_newlines_empty_pages_and_scalar_boundaries(self):
         # Both reader and wire-artifact boundaries, including astral scalars.
         cases = ["\ufeffA\r\nB\rC\n\t\f\f끝😀\f", "\f", " \t\r\n",
@@ -90,7 +141,11 @@ class LosslessExtraction(unittest.TestCase):
                     image.save(source, fmt)
                 self.assertLessEqual(source.stat().st_size, 4_000_000)
                 with Image.open(source) as image:
-                    old = image.convert("RGB")
+                    if mode == "RGBA":
+                        old = Image.new("RGB", image.size, "white")
+                        old.paste(image, mask=image.getchannel("A"))
+                    else:
+                        old = image.convert("RGB")
                     old.thumbnail((1600, 1600))
                     old.save(root / "expected.jpg", "JPEG", quality=80)
                 probe = processor.inspect(source)
