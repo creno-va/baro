@@ -317,3 +317,43 @@ test("normal OAuth state/callback and SQL session apply the chosen lawyer role o
     child.kill();
   }
 });
+
+test("a confirmed account change clears the report draft and explains why", async ({ page }) => {
+  let ownerId = "synthetic-owner";
+  await page.route("**/api/**", async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (!path.startsWith("/api/")) return route.continue();
+    if (path === "/api/me/session")
+      return route.fulfill({
+        json: {
+          user: { id: ownerId, name: "Synthetic", accountType: "customer" },
+          needsConsent: false,
+        },
+      });
+    if (path.endsWith("/files")) return route.fulfill({ json: [] });
+    if (path.endsWith("/reports"))
+      return route.fulfill({
+        json: {
+          id: "synthetic-report",
+          caseId: "synthetic-report-switch",
+          revision: 1,
+          title: "Synthetic report",
+          content: "Saved report",
+          updatedAt: "2026-10-10T00:00:00Z",
+          stale: false,
+          excludedFileIds: [],
+          maskIdentifiers: false,
+          pdfAvailable: false,
+        },
+      });
+    return route.fulfill({ status: 404, json: {} });
+  });
+  await page.goto("/cases/synthetic-report-switch/reports");
+  const editor = page.getByRole("textbox", { name: "리포트 내용 편집" });
+  await expect(editor).toHaveValue("Saved report");
+  await editor.fill("Unsaved report correction");
+  ownerId = "synthetic-next-owner";
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect(editor).toHaveCount(0);
+  await expect(page.getByRole("alert")).toContainText("계정 또는 접근 상태가 변경됐어요.");
+});

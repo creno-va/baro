@@ -136,7 +136,6 @@ export function ReportReview({ caseId }: { caseId: string }) {
       setAccessChecking(true);
       void verifyOwner()
         .catch((e: unknown) => {
-          if (sequence !== loadSequence.current) return;
           if (
             [
               "UNAUTHENTICATED",
