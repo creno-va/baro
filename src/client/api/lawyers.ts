@@ -225,6 +225,154 @@ async function checkedAssetRequest(path: string, init: RequestInit = {}) {
   if (!response.ok) throw await responseError(response);
   return response;
 }
+const uploadAttemptSchema = z.object({
+  key: z.string().uuid(),
+  expectedRevision: z.number().int().positive(),
+  assetId: z.string().optional(),
+  assetRevision: z.number().int().positive().optional(),
+});
+type UploadAttempt = z.infer<typeof uploadAttemptSchema>;
+const uploadPrefix = "baro-lawyer-upload-v1:";
+
+/** Each client retains only uncertain uploads; session storage survives a page reload. */
+export function createLawyerUploadClient(send = checkedAssetRequest) {
+  const attempts = new Map<string, UploadAttempt>();
+  const active = new Map<string, Promise<LawyerAssetView>>();
+  function remember(identity: string, attempt: UploadAttempt | null) {
+    if (attempt) attempts.set(identity, attempt);
+    else attempts.delete(identity);
+    try {
+      if (attempt) sessionStorage.setItem(uploadPrefix + identity, JSON.stringify(attempt));
+      else sessionStorage.removeItem(uploadPrefix + identity);
+    } catch {
+      /* Storage can be disabled; same-page recovery still works. */
+    }
+  }
+  function recalled(identity: string) {
+    const cached = attempts.get(identity);
+    if (cached) return cached;
+    try {
+      const stored = sessionStorage.getItem(uploadPrefix + identity);
+      return stored ? uploadAttemptSchema.parse(JSON.parse(stored)) : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+  return {
+    async upload(
+      profileId: string,
+      file: File,
+      purpose: "profile_photo" | "portfolio",
+    ): Promise<LawyerAssetView> {
+      if (
+        !["image/jpeg", "image/png", "image/webp", "application/pdf"].includes(file.type) ||
+        !file.size ||
+        file.size > 100_000_000 ||
+        (purpose === "profile_photo" && file.type === "application/pdf")
+      )
+        throw new LawyerApiError(
+          "VALIDATION_ERROR",
+          "사진은 JPEG·PNG·WebP, 자료는 이미지·PDF 100MB 이하로 선택해 주세요.",
+        );
+      if (apiMode === "mock") {
+        if (import.meta.env.PUBLIC_API_MODE === "mock") await import("./mock/lawyers");
+        return sharedRequest("lawyers.uploadAsset", { profileId, file, purpose });
+      }
+      const name = file.name.trim();
+      const hash = Array.from(
+        new Uint8Array(await crypto.subtle.digest("SHA-256", await file.arrayBuffer())),
+      )
+        .map((byte) => byte.toString(16).padStart(2, "0"))
+        .join("");
+      const identity = JSON.stringify([profileId, purpose, name, file.type, file.size, hash]);
+      const pending = active.get(identity);
+      if (pending) return pending;
+      const run = async () => {
+        const mine = z
+          .object({ profileId: z.string(), revision: z.number() })
+          .parse(await (await send("/api/v2/me/lawyer/profile")).json());
+        if (mine.profileId !== profileId)
+          throw new LawyerApiError("NOT_FOUND", "본인 프로필만 변경할 수 있어요.");
+        const attempt = recalled(identity) ?? {
+          key: crypto.randomUUID(),
+          expectedRevision: mine.revision,
+        };
+        remember(identity, attempt);
+        let recovered: LawyerAssetView | undefined;
+        if (attempt.assetId) {
+          try {
+            const value = assetEnvelope.shape.value.parse(
+              await (
+                await send(
+                  `/api/v2/me/lawyer/portfolio-assets/${encodeURIComponent(attempt.assetId)}`,
+                )
+              ).json(),
+            );
+            recovered = assetView({
+              assetId: attempt.assetId,
+              revision: "revision" in value ? value.revision : attempt.assetRevision,
+              value,
+            });
+          } catch (error) {
+            if (error instanceof LawyerApiError && error.code === "NOT_FOUND")
+              remember(identity, null);
+            throw error;
+          }
+        }
+        const reserved =
+          recovered ??
+          assetView(
+            await (
+              await send("/api/v2/me/lawyer/portfolio-assets", {
+                method: "POST",
+                headers: {
+                  "content-type": "application/json",
+                  "if-match": String(attempt.expectedRevision),
+                  "idempotency-key": attempt.key,
+                },
+                body: JSON.stringify({
+                  purpose,
+                  name,
+                  byteLength: file.size,
+                  mediaType: file.type,
+                }),
+              })
+            ).json(),
+          );
+        if (reserved.status === "deleting")
+          throw new LawyerApiError("NOT_FOUND", "자료가 삭제 중이에요. 자료 상태를 확인해 주세요.");
+        attempt.assetId = reserved.id;
+        attempt.assetRevision = reserved.revision;
+        remember(identity, attempt);
+        if (reserved.status !== "reserved") {
+          remember(identity, null);
+          return { ...reserved, purpose };
+        }
+        const result = {
+          ...assetView(
+            await (
+              await send(`/api/v2/me/lawyer/assets/${encodeURIComponent(reserved.id)}/content`, {
+                method: "PUT",
+                headers: {
+                  "content-type": "application/octet-stream",
+                  "if-match": String(reserved.revision),
+                },
+                body: file,
+              })
+            ).json(),
+          ),
+          purpose,
+        };
+        remember(identity, null);
+        return result;
+      };
+      const task = run().finally(() => active.delete(identity));
+      active.set(identity, task);
+      return task;
+    },
+  };
+}
+
 export const lawyerAssets = {
   async list(): Promise<LawyerAssetView[]> {
     if (apiMode === "mock") {
@@ -257,67 +405,7 @@ export const lawyerAssets = {
     } while (cursor);
     return items;
   },
-  async upload(
-    profileId: string,
-    file: File,
-    purpose: "profile_photo" | "portfolio",
-  ): Promise<LawyerAssetView> {
-    if (
-      !["image/jpeg", "image/png", "image/webp", "application/pdf"].includes(file.type) ||
-      !file.size ||
-      file.size > 100_000_000 ||
-      (purpose === "profile_photo" && file.type === "application/pdf")
-    )
-      throw new LawyerApiError(
-        "VALIDATION_ERROR",
-        "사진은 JPEG·PNG·WebP, 자료는 이미지·PDF 100MB 이하로 선택해 주세요.",
-      );
-    if (apiMode === "mock") {
-      if (import.meta.env.PUBLIC_API_MODE === "mock") await import("./mock/lawyers");
-      return sharedRequest("lawyers.uploadAsset", { profileId, file, purpose });
-    }
-    const mine = z
-      .object({ profileId: z.string(), revision: z.number() })
-      .parse(await request("/api/v2/me/lawyer/profile"));
-    if (mine.profileId !== profileId)
-      throw new LawyerApiError("NOT_FOUND", "본인 프로필만 변경할 수 있어요.");
-    const reserved = assetView(
-      await (
-        await checkedAssetRequest("/api/v2/me/lawyer/portfolio-assets", {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            "if-match": String(mine.revision),
-            "idempotency-key": crypto.randomUUID(),
-          },
-          body: JSON.stringify({
-            purpose,
-            name: file.name,
-            byteLength: file.size,
-            mediaType: file.type,
-          }),
-        })
-      ).json(),
-    );
-    return {
-      ...assetView(
-        await (
-          await checkedAssetRequest(
-            `/api/v2/me/lawyer/assets/${encodeURIComponent(reserved.id)}/content`,
-            {
-              method: "PUT",
-              headers: {
-                "content-type": "application/octet-stream",
-                "if-match": String(reserved.revision),
-              },
-              body: file,
-            },
-          )
-        ).json(),
-      ),
-      purpose,
-    };
-  },
+  upload: createLawyerUploadClient().upload,
   async remove(assetId: string, revision: number): Promise<void> {
     if (apiMode === "mock") {
       if (import.meta.env.PUBLIC_API_MODE === "mock") await import("./mock/lawyers");
