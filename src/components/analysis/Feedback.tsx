@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { accessHref } from "../../client/return-path";
 import { errorResponseSchema } from "../../contracts";
 import { trackCase } from "../../server/modules/analytics/browser";
 export function Feedback({ caseId, analysisId }: { caseId: string; analysisId: string }) {
@@ -17,7 +18,7 @@ export function Feedback({ caseId, analysisId }: { caseId: string; analysisId: s
         body: JSON.stringify({ helpful }),
       });
       if (response.status === 401) {
-        window.location.assign("/login?error=session_expired");
+        window.location.assign(accessHref("login", `/cases/${caseId}`, "session_expired"));
         return;
       }
       if (!response.ok) {
