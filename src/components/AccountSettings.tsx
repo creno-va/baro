@@ -59,31 +59,40 @@ export function AccountSettings() {
     setChecking(false);
     sessionStorage.removeItem(markerKey);
   }, []);
-  const verifyOwner = useCallback(async () => {
-    const sequence = loadSequence.current;
-    try {
-      const value = await api.account.deletionAccess();
-      if (sequence !== loadSequence.current) throw superseded();
-      if (owner.current && owner.current !== value.ownerTag) {
-        throw new Error("계정이 변경됐어요. 설정을 다시 불러와 삭제할 계정을 확인해 주세요.");
+  const verifyOwner = useCallback(
+    async (onInvalidated?: (sequence: number) => void) => {
+      const sequence = loadSequence.current;
+      try {
+        const value = await api.account.deletionAccess();
+        if (sequence !== loadSequence.current) throw superseded();
+        if (owner.current && owner.current !== value.ownerTag) {
+          throw new Error("계정이 변경됐어요. 설정을 다시 불러와 삭제할 계정을 확인해 주세요.");
+        }
+        owner.current = value.ownerTag;
+        setAccess(value);
+        setReady(value.canDelete);
+        return value;
+      } catch (error) {
+        if (isSuperseded(error) || sequence !== loadSequence.current) throw superseded();
+        clearOwnerState();
+        onInvalidated?.(loadSequence.current);
+        throw error;
       }
-      owner.current = value.ownerTag;
-      setAccess(value);
-      setReady(value.canDelete);
-      return value;
-    } catch (error) {
-      if (isSuperseded(error) || sequence !== loadSequence.current) throw superseded();
-      clearOwnerState();
-      throw error;
-    }
-  }, [clearOwnerState]);
+    },
+    [clearOwnerState],
+  );
   const load = useCallback(async () => {
-    const sequence = ++loadSequence.current;
+    let sequence = ++loadSequence.current;
+    const checkOwner = () =>
+      verifyOwner((next) => {
+        // Clearing inaccessible state invalidates other reads, not this failure.
+        sequence = next;
+      });
     setChecking(true);
     setBusy("설정 확인 중…");
     setError("");
     try {
-      await verifyOwner();
+      await checkOwner();
       const session = await api.session.get();
       if (sequence !== loadSequence.current) return;
       if (!session.user) throw new Error("로그인 후 설정을 다시 확인해 주세요.");
@@ -94,7 +103,7 @@ export function AccountSettings() {
         api.account.deletionAccess(),
       ]);
       if (sequence !== loadSequence.current) return;
-      await verifyOwner();
+      await checkOwner();
       if (sequence !== loadSequence.current) return;
       const problems: string[] = [];
       if (results[0].status === "fulfilled") setUsage(results[0].value);
@@ -110,7 +119,6 @@ export function AccountSettings() {
       if (results[2].status === "fulfilled") {
         const value = results[2].value;
         if (value.ownerTag !== owner.current) {
-          clearOwnerState();
           throw new Error("계정이 변경됐어요. 설정을 다시 불러와 주세요.");
         }
         setAccess(value);
