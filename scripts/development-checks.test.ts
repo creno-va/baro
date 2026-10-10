@@ -266,3 +266,21 @@ test("browser config and fixture-only edits select their actual consumers", () =
   );
   expect(browserTargets(["tests/fixtures/unused.txt"], browserTests)).toEqual([]);
 });
+
+test("shared contract and contract-fixture changes retain browser consumers without corpus", () => {
+  const expected = browserTests.filter((path) => !path.endsWith("/evals.e2e.ts")).sort();
+  for (const file of [
+    "src/contracts/v2/reports.ts",
+    "src/contracts/v2/files.ts",
+    "src/contracts/questions.ts",
+    "src/contracts/common.ts",
+    "src/contracts/v2/index.ts",
+    "tests/fixtures/contracts/v2/index.ts",
+    "tests/fixtures/contracts/index.ts",
+  ]) {
+    expect(browserTargets([file], browserTests)).toEqual(expected);
+    expect(browserTargets([file.replaceAll("/", "\\")], browserTests)).toEqual(expected);
+    expect(() => browserTargets([file], [])).toThrow("BROWSER_FEATURE_TEST_MISSING");
+  }
+  expect(browserTargets(["tests/fixtures/unused.txt"], browserTests)).toEqual([]);
+});

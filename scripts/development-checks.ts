@@ -73,6 +73,7 @@ export function browserTargets(files: string[], available: string[]): string[] {
   const lawyerFlows = /\/(directory(?:-[^/]+)?|lawyers?(?:-[^/]+)?)\.e2e\.ts$/;
   const reportFlows = /\/(reports?(?:-[^/]+)?|settings(?:-[^/]+)?|account(?:-[^/]+)?)\.e2e\.ts$/;
   const rules: [RegExp, RegExp][] = [
+    [/^(?:src\/contracts\/|tests\/fixtures\/contracts\/)/, /\.e2e\.ts$/],
     // Shared session notifications and return paths affect every signed-in area.
     [/^src\/client\/(?:session-events|return-path)\.ts$/, /\.e2e\.ts$/],
     [/^playwright\.config\.ts$/, /\.e2e\.ts$/],
