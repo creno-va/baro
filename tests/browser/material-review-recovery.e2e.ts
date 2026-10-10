@@ -97,12 +97,61 @@ test("material focus refresh preserves a dirty later page and still detects a pe
   await page.getByRole("button", { name: "다음 처리 내용 보기", exact: true }).click();
   await expect(fields).toHaveCount(5);
   await fields.nth(4).fill("저장 전 다섯 번째 교정");
+  await page.evaluate(async () => {
+    const path = "/src/client/api/index.ts";
+    const { api } = (await import(path)) as typeof import("../../src/client/api");
+    const tracker = window as unknown as Window & { materialReadsInFlight: number };
+    tracker.materialReadsInFlight = 0;
+    const session = api.session.get;
+    api.session.get = async (...args: Parameters<typeof session>) => {
+      tracker.materialReadsInFlight++;
+      try {
+        return await session(...args);
+      } finally {
+        tracker.materialReadsInFlight--;
+      }
+    };
+    const review = api.files.review;
+    api.files.review = async (...args: Parameters<typeof review>) => {
+      tracker.materialReadsInFlight++;
+      try {
+        return await review(...args);
+      } finally {
+        tracker.materialReadsInFlight--;
+      }
+    };
+    const workspace = api.workspace.get;
+    api.workspace.get = async (...args: Parameters<typeof workspace>) => {
+      tracker.materialReadsInFlight++;
+      try {
+        return await workspace(...args);
+      } finally {
+        tracker.materialReadsInFlight--;
+      }
+    };
+  });
+  const readsBeforeFocus = state.reads;
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
-  await expect.poll(() => state.reads).toBeGreaterThan(2);
+  await expect.poll(() => state.reads).toBeGreaterThan(readsBeforeFocus);
+  const pendingReads = () =>
+    page.evaluate(
+      () => (window as unknown as Window & { materialReadsInFlight: number }).materialReadsInFlight,
+    );
+  await expect.poll(pendingReads).toBe(0);
+  // Complete the postflight reads and the queued React render before the next peer event.
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      ),
+  );
+  await expect.poll(pendingReads).toBe(0);
   await expect(fields).toHaveCount(5);
   await expect(fields.nth(4)).toHaveValue("저장 전 다섯 번째 교정");
   state.revision++;
+  const readsBeforePeerFocus = state.reads;
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect.poll(() => state.reads).toBeGreaterThan(readsBeforePeerFocus);
   await expect(
     page.getByRole("region", { name: "자료 내용 검토" }).getByRole("alert"),
   ).toBeVisible();
