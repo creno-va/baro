@@ -82,6 +82,12 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
   const excluded = page.locator(".report-material").filter({ hasText: "제외 원본.txt" });
   await openReportOptions(page);
   await excluded.getByRole("checkbox", { name: "리포트에서 제외" }).check();
+  await page.getByRole("button", { name: "본문 편집 먼저 저장" }).click();
+  await expect(
+    page.getByRole("status").filter({ hasText: "본문 편집을 먼저 저장했어요." }),
+  ).toBeVisible();
+  await expect(editor).toHaveValue(/사용자가 검토한 합성 사실/);
+  await expect(excluded.getByRole("checkbox", { name: "리포트에서 제외" })).toBeChecked();
   await page.getByRole("button", { name: "검토 내용 저장" }).click();
   await expect(
     page.getByRole("status").filter({ hasText: "검토 내용을 저장했어요." }),
