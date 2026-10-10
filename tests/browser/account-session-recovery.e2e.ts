@@ -357,3 +357,95 @@ test("a confirmed account change clears the report draft and explains why", asyn
   await expect(editor).toHaveCount(0);
   await expect(page.getByRole("alert")).toContainText("계정 또는 접근 상태가 변경됐어요.");
 });
+
+for (const lateResponse of ["failure", "signed-out"] as const) {
+  test(`a superseded ${lateResponse} focus response preserves the current report draft`, async ({
+    page,
+  }) => {
+    let phase: "ready" | "late" | "current" = "ready";
+    let held = 0;
+    let settled = 0;
+    let fresh = 0;
+    let release = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await page.route("**/api/**", async (route) => {
+      const path = new URL(route.request().url()).pathname;
+      if (!path.startsWith("/api/")) return route.continue();
+      if (path === "/api/me/session") {
+        if (phase === "late") {
+          held++;
+          await gate;
+          if (lateResponse === "failure") {
+            await route.fulfill({
+              status: 503,
+              json: {
+                error: {
+                  code: "DEPENDENCY_UNAVAILABLE",
+                  message: "Synthetic old outage",
+                  retryable: true,
+                },
+              },
+            });
+          } else {
+            await route.fulfill({ json: { user: null, needsConsent: false } });
+          }
+          settled++;
+          return;
+        }
+        if (phase === "current") fresh++;
+        return route.fulfill({
+          json: {
+            user: { id: "synthetic-owner", name: "Synthetic", accountType: "customer" },
+            needsConsent: false,
+          },
+        });
+      }
+      if (path.endsWith("/files")) return route.fulfill({ json: [] });
+      if (path.endsWith("/reports"))
+        return route.fulfill({
+          json: {
+            id: "synthetic-report",
+            caseId: "synthetic-report-late",
+            revision: 1,
+            title: "Synthetic report",
+            content: "Saved report",
+            updatedAt: "2026-10-10T00:00:00Z",
+            stale: false,
+            excludedFileIds: [],
+            maskIdentifiers: false,
+            pdfAvailable: false,
+          },
+        });
+      return route.fulfill({ status: 404, json: {} });
+    });
+    try {
+      await page.goto("/cases/synthetic-report-late/reports");
+      const editor = page.getByRole("textbox", { name: "리포트 내용 편집" });
+      await expect(editor).toHaveValue("Saved report");
+      await editor.fill("Unsaved current report correction");
+      phase = "late";
+      await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+      // Both the navigation and report owner check are pending in the first wave.
+      await expect.poll(() => held).toBeGreaterThanOrEqual(2);
+      phase = "current";
+      await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+      await expect.poll(() => fresh).toBeGreaterThanOrEqual(2);
+      await expect(page.getByRole("button", { name: "검토 내용 저장", exact: true })).toBeEnabled();
+      release();
+      await expect.poll(() => settled).toBe(held);
+      await page.evaluate(
+        () =>
+          new Promise<void>((resolve) =>
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+          ),
+      );
+      await expect(editor).toHaveValue("Unsaved current report correction");
+      await expect(page.getByRole("alert")).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "검토 내용 저장", exact: true })).toBeEnabled();
+    } finally {
+      release();
+    }
+  });
+}
