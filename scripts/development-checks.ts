@@ -68,7 +68,32 @@ export function browserTargets(files: string[], available: string[]): string[] {
   }
   if (files.some((file) => /^scripts\/(development-checks|full-browser)\.ts$/.test(file)))
     for (const path of available) selected.add(path);
+  const caseFlows =
+    /\/(cases|analysis|legacy-case-recovery|workspace(?:-[^/]+)?|intake(?:103|-[^/]+)?|conversation-home|files|xss|customer-[^/]+|upload-[^/]+|material-[^/]+)\.e2e\.ts$/;
+  const lawyerFlows = /\/(directory(?:-[^/]+)?|lawyers?(?:-[^/]+)?)\.e2e\.ts$/;
+  const reportFlows = /\/(reports?(?:-[^/]+)?|settings(?:-[^/]+)?|account(?:-[^/]+)?)\.e2e\.ts$/;
   const rules: [RegExp, RegExp][] = [
+    // Shared session notifications and return paths affect every signed-in area.
+    [/^src\/client\/(?:session-events|return-path)\.ts$/, /\.e2e\.ts$/],
+    [/^playwright\.config\.ts$/, /\.e2e\.ts$/],
+    [
+      /^tests\/(?:browser\/(?:reports(?:-account-real|-integrated)?|report-real-download|material-report|account-session-recovery)\.config\.ts|helpers\/reports?[^/]*\.ts)$/,
+      reportFlows,
+    ],
+    [
+      /^tests\/(?:browser\/(?:customer|workspace|intake)[^/]*\.config\.ts|helpers\/(?:customer|workspace)[^/]*\.ts)$/,
+      caseFlows,
+    ],
+    [/^tests\/browser\/(?:conversation|intake103)\.config\.ts$/, caseFlows],
+    [/^tests\/browser\/lawyer-public\.config\.ts$/, lawyerFlows],
+    [
+      /^tests\/browser\/integration\.config\.ts$/,
+      /\/(?:shell-integration|lawyer-api-mock)\.e2e\.ts$/,
+    ],
+    [
+      /^tests\/helpers\/browser-session-server\.ts$/,
+      /\/(?:auth|session|cases|analysis|settings|reports|legacy-case-recovery)\.e2e\.ts$/,
+    ],
     [
       /src\/(worker\.|layouts\/|styles\/(global|shell)|server\/(router\.|api\/index)|components\/ui\/|client\/api\/(core|types|index|mock\/runtime))/,
       /\.e2e\.ts$/,
@@ -79,15 +104,15 @@ export function browserTargets(files: string[], available: string[]): string[] {
     ],
     [
       /src\/(styles\/(intake|workspace)\.css|pages\/cases\/|components\/(intake|analysis|workspace)\/|client\/api\/(?:mock\/)?(cases|workspace|files)|server\/(api\/(cases|case-create|answers|retry|v2\/(files|workspaces))|modules\/(intake|cases|case-structure|workspace|files|file-processing)\/))/,
-      /\/(cases|analysis|workspace|intake|intake103|conversation-home|files|xss|customer-recovery-(?:intake|real|workspace))\.e2e\.ts$/,
+      caseFlows,
     ],
     [
       /src\/(styles\/lawyers\.css|pages\/lawyer|components\/lawyers\/|client\/api\/(?:mock\/)?lawyers|server\/(api\/v2\/(lawyers|directory|moderation)|modules\/(lawyers|moderation)\/))/,
-      /\/(directory|lawyer|lawyers)\.e2e\.ts$/,
+      lawyerFlows,
     ],
     [
       /src\/(styles\/(reports|settings)\.css|pages\/(settings|help|polic)|components\/reports\/|components\/AccountSettings|client\/api\/(?:mock\/)?(account|reports)|server\/(api\/(account-delete|v2\/reports)|modules\/(deletion|reports|usage)\/))/,
-      /\/(settings|reports(?:-integrated)?|report-real-download|account)\.e2e\.ts$/,
+      reportFlows,
     ],
     [
       /src\/(pages\/index|components\/AnalyticsChoice|server\/modules\/analytics\/)/,
@@ -165,6 +190,7 @@ export async function unitTargets(files: string[], tests: string[]): Promise<str
 
 /** Run wire tests and each mock adapter configuration sequentially in one checkout. */
 export async function runBrowserTargets(targets: string[]) {
+  targets = normalizedPaths(targets);
   const mockTargets = targets.filter((path) =>
     /\/(shell-integration|lawyer-api-mock|intake103|conversation-home|workspace-shared|customer-completion|workspace|reports-integrated)\.e2e\.ts$/.test(
       path,
@@ -176,13 +202,23 @@ export async function runBrowserTargets(targets: string[]) {
   const recoveryTargets = targets.filter((path) =>
     /\/customer-recovery-(intake|real|workspace)\.e2e\.ts$/.test(path),
   );
+  const standaloneTargets = targets.filter(
+    (path) =>
+      !mockTargets.includes(path) &&
+      !corpusTargets.includes(path) &&
+      !customerRealTargets.includes(path) &&
+      !reportRealTargets.includes(path) &&
+      !recoveryTargets.includes(path) &&
+      existsSync(path.replace(".e2e.ts", ".config.ts")),
+  );
   const regularTargets = targets.filter(
     (path) =>
       !mockTargets.includes(path) &&
       !corpusTargets.includes(path) &&
       !customerRealTargets.includes(path) &&
       !reportRealTargets.includes(path) &&
-      !recoveryTargets.includes(path),
+      !recoveryTargets.includes(path) &&
+      !standaloneTargets.includes(path),
   );
   if (regularTargets.length) {
     const child = Bun.spawn(["bunx", "playwright", "test", ...regularTargets], {
@@ -227,6 +263,16 @@ export async function runBrowserTargets(targets: string[]) {
     if (await child.exited) process.exit(1);
   }
   for (const target of recoveryTargets) {
+    const config = target.replace(".e2e.ts", ".config.ts");
+    const child = Bun.spawn(["bunx", "playwright", "test", "--config", config, target], {
+      stdout: "inherit",
+      stderr: "inherit",
+    });
+    if (await child.exited) process.exit(1);
+  }
+  // A new flow can declare its own server/fixture configuration without being
+  // silently executed under the generic product server.
+  for (const target of standaloneTargets) {
     const config = target.replace(".e2e.ts", ".config.ts");
     const child = Bun.spawn(["bunx", "playwright", "test", "--config", config, target], {
       stdout: "inherit",
