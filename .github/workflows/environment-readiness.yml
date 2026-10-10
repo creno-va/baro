@@ -53,7 +53,7 @@ jobs:
           READINESS_TARGET_ENVIRONMENT: ${{ inputs.target_environment }}
           READINESS_CHECK_GATEWAY: ${{ inputs.check_gateway }}
         run: bun scripts/environment-readiness.ts
-      - name: Verify official legal adapter with synthetic concepts
+      - name: Verify v2 official law precedent and guide integrity
         if: always() && inputs.check_legal && inputs.target_environment == 'preview'
         env:
           LAW_API_OC: ${{ secrets.LAW_API_OC }}

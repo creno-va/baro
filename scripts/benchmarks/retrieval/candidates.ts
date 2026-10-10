@@ -1,8 +1,16 @@
+import { execFileSync } from "node:child_process";
 import { mkdir } from "node:fs/promises";
 import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import type { createV2LegalRetrieval } from "../../../src/server/modules/legal-retrieval/v2/service";
 
-export const variants = ["baseline", "list-dedup", "json-reuse", "concurrency-2"] as const;
+export const variants = [
+  "baseline",
+  "list-dedup",
+  "json-reuse",
+  "concurrency-2",
+  "product",
+] as const;
 export type Variant = (typeof variants)[number];
 export type ParseCounters = { jsonParses: number; jsonReuseHits: number; articleParses: number };
 export type Factory = (
@@ -11,12 +19,16 @@ export type Factory = (
   options: Parameters<typeof createV2LegalRetrieval>[2] & { benchmarkCounters: ParseCounters },
 ) => ReturnType<typeof createV2LegalRetrieval>;
 const sourcePath = "src/server/modules/legal-retrieval/v2/service.ts";
+export const baselineSha = "b6cfdfe3676506bf2b4880af0911138a9b3f107e";
+export function readBaselineSource() {
+  return execFileSync("git", ["show", `${baselineSha}:${sourcePath}`], { encoding: "utf8" });
+}
 function replace(source: string, before: string, after: string) {
   if (source.split(before).length !== 2) throw new Error("Benchmark source anchor changed");
   return source.replace(before, after);
 }
 export function candidateSource(source: string, variant: Variant): string {
-  if (variant === "baseline") return source;
+  if (variant === "baseline" || variant === "product") return source;
   if (variant === "list-dedup") {
     const start = source.indexOf("            const candidate = selectStatute(");
     const end = source.indexOf("            for (const article of plan.articles) {", start);
@@ -119,7 +131,11 @@ export function candidateSource(source: string, variant: Variant): string {
   );
 }
 export async function loadFactory(variant: Variant): Promise<Factory> {
-  let source = candidateSource(await Bun.file(sourcePath).text(), variant);
+  // Historical experiments keep their original baseline; product runs current code.
+  let source = candidateSource(
+    variant === "product" ? await Bun.file(sourcePath).text() : readBaselineSource(),
+    variant,
+  );
   source = replace(
     source,
     "    bindCitation: (citation: V2OfficialCitation) => Promise<boolean>;",
@@ -152,12 +168,12 @@ export async function loadFactory(variant: Variant): Promise<Factory> {
   const moduleDir = resolve("src/server/modules/legal-retrieval/v2");
   source = source.replace(
     /from "(\.[^"]+)"/g,
-    (_, path: string) => `from "${resolve(moduleDir, path)}"`,
+    (_, path: string) => `from "${pathToFileURL(resolve(moduleDir, path)).href}"`,
   );
   const dir = resolve(".wrangler/retrieval-benchmark");
   await mkdir(dir, { recursive: true });
   const path = `${dir}/${variant}.ts`;
   await Bun.write(path, source);
-  const module = await import(path);
+  const module = await import(pathToFileURL(path).href);
   return module.createV2LegalRetrieval as Factory;
 }

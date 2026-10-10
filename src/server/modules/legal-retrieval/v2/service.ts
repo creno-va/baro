@@ -129,6 +129,38 @@ export function createV2LegalRetrieval(
         ...access,
         reserveRequest: async (attempt) => ++calls <= 30 && access.reserveRequest(attempt),
       };
+      // Verified statute candidates are scoped to this invocation's fixed dates.
+      // Failures are never memoized; fresh cache discovery/hash checks still run.
+      const candidates = new Map<string, ReturnType<typeof selectStatute>>();
+      async function selectedStatute(
+        plan: Extract<(typeof body.plans)[number], { kind: "statute" }>,
+      ) {
+        const url = lawUrl("lawSearch.do", "eflaw", {
+          query: plan.lawTitle,
+          ...(plan.lawId ? { LID: plan.lawId } : {}),
+          nw: "1,3",
+          sort: "efdes",
+          display: "100",
+          page: "1",
+          efYd: "00010101~" + body.asOfDate.replaceAll("-", ""),
+        });
+        const key = url.href;
+        const cached = candidates.get(key);
+        if (cached) {
+          if (access.signal?.aborted) throw new RetrievalFailure("cancelled");
+          if (!(await safePermit(access.authorize))) throw new RetrievalFailure("not_authorized");
+          if (access.signal?.aborted) throw new RetrievalFailure("cancelled");
+          return cached;
+        }
+        const candidate = selectStatute(
+          await json(url, "moleg_eflaw_list", boundedAccess),
+          plan,
+          body.asOfDate,
+          new Date(Date.parse(body.now) + 9 * 3600000).toISOString().slice(0, 10),
+        );
+        candidates.set(key, candidate);
+        return candidate;
+      }
       for (const plan of body.plans) {
         const chunks: SourceChunk[] = [];
         let reason: SourceOutcome["reason"] = null;
@@ -143,23 +175,7 @@ export function createV2LegalRetrieval(
             throw new RetrievalFailure("not_authorized");
           if (access.signal?.aborted) throw new RetrievalFailure("cancelled");
           if (plan.kind === "statute") {
-            const candidate = selectStatute(
-              await json(
-                lawUrl("lawSearch.do", "eflaw", {
-                  query: plan.lawTitle,
-                  ...(plan.lawId ? { LID: plan.lawId } : {}),
-                  nw: "1,3",
-                  sort: "efdes",
-                  display: "100",
-                  page: "1",
-                  efYd: `00010101~${body.asOfDate.replaceAll("-", "")}`,
-                }),
-                "moleg_eflaw_list",
-                boundedAccess,
-              ),
-              plan,
-              body.asOfDate,
-            );
+            const candidate = await selectedStatute(plan);
             for (const article of plan.articles) {
               const section = `제${BigInt(article.number)}조${BigInt(article.branch) !== 0n ? `의${BigInt(article.branch)}` : ""}`;
               const cached = await cachedChunk(
@@ -273,11 +289,17 @@ export function createV2LegalRetrieval(
             if (totalBytes > MAX_RESPONSE_BYTES) throw new RetrievalFailure("too_large");
             if (!(await safePermit(access.authorize)) || access.signal?.aborted)
               throw new RetrievalFailure(access.signal?.aborted ? "cancelled" : "not_authorized");
-            if (!(await repo.put(chunk.source, chunk.citation)))
+            if (
+              !(await repo.put(
+                chunk.source,
+                chunk.citation,
+                reason === null ? "verified" : "limited",
+              ))
+            )
               throw new RetrievalFailure("cache_invalid");
             if (!(await safePermit(access.authorize)) || access.signal?.aborted)
               throw new RetrievalFailure(access.signal?.aborted ? "cancelled" : "not_authorized");
-            if (!(await options.bindCitation(chunk.citation)))
+            if (reason === null && !(await options.bindCitation(chunk.citation)))
               throw new RetrievalFailure("not_authorized");
           }
           outcomes.push({
@@ -301,26 +323,31 @@ export function createV2LegalRetrieval(
           });
         }
       }
-      // Deletion/consent/revision changes must never release preflight source data.
-      if (!(await safePermit(access.authorize)) || access.signal?.aborted)
-        for (const outcome of outcomes) {
-          outcome.availability = "unavailable";
-          outcome.reason = access.signal?.aborted ? "cancelled" : "not_authorized";
-          outcome.chunks = [];
-        }
-      const chunks = [
+      let chunks = [
         ...new Map(
           outcomes
             .flatMap((outcome) => outcome.chunks)
             .map((chunk) => [chunk.citation.sourceId, chunk]),
         ).values(),
       ];
+      let retrievalHash = await textHash(JSON.stringify(chunks.map((c) => c.citation.sourceId)));
+      const emptyHash = await textHash("[]");
+      // No await may follow this guard: hashing also yields to revocation/cancellation.
+      if (!(await safePermit(access.authorize)) || access.signal?.aborted) {
+        for (const outcome of outcomes) {
+          outcome.availability = "unavailable";
+          outcome.reason = access.signal?.aborted ? "cancelled" : "not_authorized";
+          outcome.chunks = [];
+        }
+        chunks = [];
+        retrievalHash = emptyHash;
+      }
       return {
         schemaVersion: "2",
         asOfDate: body.asOfDate,
         outcomes,
         chunks,
-        retrievalHash: await textHash(JSON.stringify(chunks.map((c) => c.citation.sourceId))),
+        retrievalHash,
         legalSourceStatus: outcomes.some((o) => o.availability === "verified")
           ? "verified"
           : body.plans.length

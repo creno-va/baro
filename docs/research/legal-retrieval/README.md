@@ -1,6 +1,6 @@
 # BARO 공식 출처 retrieval 성능 연구
 
-요청 안에서 **identity와 기준일 검증에 성공한 같은 법령 목록 candidate를 재사용하는 개선 하나**를 적용 후보로 선택한다. 겹치는 조문 plan에서 cold upstream 호출은 5→4회, warm 호출은 2→1회로 감소했다. source identity, SHA-256, 기준일, 24시간 TTL과 매 조문의 fresh DB cache 검증은 유지한다. 제품 파일에는 적용하지 않았으며 [후보 patch](./list-dedup.patch)를 소유자가 후속 검토할 수 있다.
+요청 안에서 **identity와 기준일 검증에 성공한 같은 법령 목록 candidate를 재사용하는 개선 하나**를 선택했다. 2026-10-10 #63 후속 작업에서 제품에 적용했다. 겹치는 조문 plan에서 cold upstream 호출은 5→4회, warm 호출은 2→1회로 감소한다. source identity, SHA-256, 기준일, 24시간 TTL과 매 조문의 fresh DB cache 검증은 유지한다. [당시 후보 patch](./list-dedup.patch)와 아래 2026-10-06 측정 결과는 역사적 연구 자료로 보존한다. 이미 적용한 제품에 patch를 다시 적용하지 않는다.
 
 ## 기준과 재현
 
@@ -12,16 +12,12 @@ bun test tests/legal-retrieval-benchmark.test.ts
 BARO_BENCH_REPEATS=5 bun scripts/benchmarks/retrieval/run.ts
 ```
 
-기본 결과와 patch는 `.wrangler/retrieval-benchmark/`에 생성된다. 보존할 결과 위치는 `BARO_BENCH_OUTPUT`으로 지정한다. runner는 기준 SHA의 제품 source와 현재 source가 같은지 확인하며, 변경된 구현에서 조용히 오래된 기준을 사용하지 않는다. 후보는 source anchor를 확인한 뒤 임시 모듈을 만들어 실행한다. `candidateGeneratorSha256`은 실제 비교한 변환 코드의 hash다. 원래 source는 수정하지 않는다.
+기본 결과와 patch는 `.wrangler/retrieval-benchmark/`에 생성된다. 보존할 결과 위치는 `BARO_BENCH_OUTPUT`으로 지정한다. baseline과 세 연구 후보는 기준 SHA의 source를 `git show`로 읽고, `product`는 현재 제품 source를 읽어 별도 비교한다. 따라서 기준 commit이 포함된 Git checkout이 필요하다(CI는 `fetch-depth: 0`). 후보는 source anchor를 확인한 뒤 임시 모듈을 만들어 실행한다. `candidateGeneratorSha256`과 `productSourceSha256`은 각각 현재 변환 코드와 제품 source의 hash다. 임시 모듈 import는 Windows에서도 유효한 file URL을 사용한다. 원래 source와 보존된 결과 JSON은 수정하지 않는다.
 
 ```bash
-# 소유자의 후속 적용 검토용 명령
-git apply --check docs/research/legal-retrieval/list-dedup.patch
-git apply docs/research/legal-retrieval/list-dedup.patch
-bun test tests/legal-retrieval-v2.test.ts
+# 현재 제품의 요청 계약·캐시·권한·최적화 회귀 확인
+bun test tests/legal-retrieval-v2.test.ts tests/legal-retrieval-benchmark.test.ts
 bun run typecheck
-# 연구 branch처럼 미적용 상태로 돌리기
-git apply -R docs/research/legal-retrieval/list-dedup.patch
 ```
 
 ## 작은 합성 입력과 측정 정의
@@ -78,6 +74,12 @@ cold는 cache가 없는 상태, warm은 동일 입력으로 priming한 fresh cac
 시간 sample은 variant별 순서로 실행했고 짧은 로컬 측정에는 JIT·GC·scheduler 차이가 남는다. 0ms profile의 작은 차이를 운영 CPU 성능 향상으로 일반화하지 않는다. 호출·SELECT·write·bytes·parse count는 5회 모두 같음을 검사한다.
 
 ## 검증과 소유자 인계
+
+2026-10-10 후속 작업: 최적화를 실제 제품에 적용하고, cache 변조·요청별 memo 분리·다른 LID·실패 재조회·동의 철회·취소·예약 제한 검사는 임시 후보 대신 실제 제품 factory를 실행하도록 전환했다. 현재 제품과 고정 기준의 출력 동일성 및 cold/warm 겹침 호출 수를 별도로 검사한다. 공식 요청 형식과 외부 승인 확인 한계는 [환경 readiness의 #63 진단](../../operations/ENVIRONMENT-READINESS.md#2026-10-10-63-공식-api-요청-진단)에 기록한다.
+
+후속 검증은 Windows/Bun 1.3.14에서 집중 검사 97개·597 assertions, 도구 TypeScript, build, Worker dry-run, DB drift·migration 검사와 1회씩의 합성 benchmark 200개 조합을 통과했다. 전체 `bun run check`는 1,444개 통과·7개 실패이며, 실패는 main과 동일한 `scripts/development-checks.ts`/`.test.ts`의 Windows 경로 선택 검사다. 해당 수정은 열린 [PR #172](https://github.com/creno-va/baro/pull/172)의 범위이므로 중복 구현하지 않았다. 전체 check 성공으로 표시하지 않는다.
+
+아래는 2026-10-06 연구 당시의 검증·인계 기록이다.
 
 26개 신규 집중 검사는 원문 SHA-256과 source ID의 type/official ID/version/section/extractor hash, canonical URL, 시행일≤asOfDate, 24시간 expiry, exact span과 baseline 결과 동일성을 확인한다. 잘못된 법령 ID, 미래 시행일, schema 변경, cached body/URL/date 변조, query 승인 직후의 동의 철회·취소, 다른 LID, 요청별 memo 분리, 독립 citation 발급, 실패한 history의 재조회, timeout/retry 예약 sequence와 budget denial을 검증한다. expired 원문이 존재하더라도 upstream이 세 번 timeout이면 unavailable·빈 chunks이며 stale 원문을 내보내지 않는다.
 

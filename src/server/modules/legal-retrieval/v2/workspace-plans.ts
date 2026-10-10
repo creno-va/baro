@@ -1,6 +1,19 @@
 import { z } from "zod";
 import { planSchema, type RetrievalPlan } from "./contracts";
 
+// Observed existing registry page only. Models select keys, never document IDs/URLs.
+export const workspaceGuidePlans = {
+  legal_consultation: {
+    kind: "official_guide",
+    institutionId: "moleg_easylaw",
+    endpointId: "easylaw_text_section",
+    csmSeq: "734",
+    ccfNo: "3",
+    cciNo: "1",
+    cnpClsNo: "4",
+  },
+} as const satisfies Record<string, RetrievalPlan>;
+
 // Public legal concepts only. A model cannot send a person's narrative to a law search endpoint.
 export const publicLawTitles = [
   "민법",
@@ -83,9 +96,13 @@ export const workspaceSourceRequestSchema = z.discriminatedUnion("kind", [
   z.strictObject({
     kind: z.literal("statute"),
     lawTitle: z.enum(publicLawTitles),
-    articles: planSchema.options[0].shape.articles,
+    articles: planSchema.options[0].shape.articles.refine(
+      (rows) => rows.length <= 2,
+      "At most two articles per workspace request",
+    ),
   }),
   z.strictObject({ kind: z.literal("precedent"), concept: z.enum(publicLegalConcepts) }),
+  z.strictObject({ kind: z.literal("official_guide"), guideKey: z.enum(["legal_consultation"]) }),
 ]);
 export type WorkspaceSourceRequest = z.infer<typeof workspaceSourceRequestSchema>;
 export function workspaceRetrievalPlans(raw: unknown): RetrievalPlan[] {
@@ -94,9 +111,11 @@ export function workspaceRetrievalPlans(raw: unknown): RetrievalPlan[] {
     .max(2)
     .parse(raw)
     .map((plan) =>
-      plan.kind === "precedent"
-        ? { kind: "precedent", query: plan.concept, limit: 1 }
-        : { ...plan, articles: plan.articles.slice(0, 2) },
+      plan.kind === "official_guide"
+        ? { ...workspaceGuidePlans[plan.guideKey] }
+        : plan.kind === "precedent"
+          ? { kind: "precedent", query: plan.concept, limit: 1 }
+          : plan,
     );
 }
 export const isWorkspacePublicQuery = (value: string) =>

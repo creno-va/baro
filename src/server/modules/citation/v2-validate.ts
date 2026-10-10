@@ -6,7 +6,7 @@ import { EXTRACTOR_VERSION, type RetrievalOutput } from "../legal-retrieval/v2/c
 import { GUIDE_HOSTS } from "../legal-retrieval/v2/registry";
 import { makeChunk } from "../legal-retrieval/v2/source";
 
-const claimSchema = z
+export const sourceClaimSchema = z
   .strictObject({
     id: opaqueIdSchema,
     text: displayText(10000),
@@ -16,7 +16,7 @@ const claimSchema = z
     endUtf16: z.number().int().positive(),
   })
   .refine((c) => c.endUtf16 > c.startUtf16);
-export type SourceClaim = z.infer<typeof claimSchema>;
+export type SourceClaim = z.infer<typeof sourceClaimSchema>;
 export function claimReviewHash(claim: SourceClaim, asOfDate: string) {
   return textHash(
     JSON.stringify([
@@ -45,7 +45,7 @@ export async function validateV2Claims(
   retrieval: RetrievalOutput,
   reviews: readonly ClaimReview[] = [],
 ) {
-  const parsed = z.array(claimSchema).max(100).refine(hasUniqueIds).safeParse(claims);
+  const parsed = z.array(sourceClaimSchema).max(100).refine(hasUniqueIds).safeParse(claims);
   // This boundary may receive corrupt persisted metadata too. Never let a
   // malformed server citation escape as a raw Zod exception.
   let citationsParsed: ReturnType<

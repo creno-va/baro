@@ -9,7 +9,10 @@ import type {
   V2UserMessage,
 } from "../../../contracts/v2";
 import { V2_INTAKE_POLICY, v2ReferenceIsAuthorized } from "../../../contracts/v2";
+import { claimReviewHash, type SourceClaim, validateV2Claims } from "../citation/v2-validate";
+import type { RetrievalOutput } from "../legal-retrieval/v2/contracts";
 import type { WorkspaceSourceRequest } from "../legal-retrieval/v2/workspace-plans";
+import type { projectWorkspaceSources } from "../legal-retrieval/v2/workspace-sources";
 import type { Phase } from "../llm-gateway/prompts";
 import type { createLlmGateway } from "../llm-gateway/service";
 import { ModelError } from "../llm-gateway/service";
@@ -30,6 +33,10 @@ export type WorkspaceContext = {
   citations: V2OfficialCitation[];
   sourceTexts?: { citationId: string; text: string }[];
   sourceStatus?: "verified" | "unavailable" | "not_requested";
+  /** Full originals are proof inputs and must never be sent to the model. */
+  sourceRetrieval?: RetrievalOutput;
+  sourceCoverage?: Awaited<ReturnType<typeof projectWorkspaceSources>>["sourceCoverage"];
+  sourceLookupPerformed?: boolean;
   history?: V2Message[];
   contextCoverage?: {
     factsPartial: boolean;
@@ -37,6 +44,7 @@ export type WorkspaceContext = {
     summaryPartial: boolean;
     messagesPartial: boolean;
     materialsPartial: boolean;
+    sourcesPartial?: boolean;
   };
   /** Exact bounded source text and coverage, populated by trusted file readers. */
   materials: {
@@ -96,7 +104,11 @@ export function assertWorkspaceReferences(
   if (references.some((ref) => !v2ReferenceIsAuthorized(ref, context.references)))
     throw new WorkspaceOutputPolicyError("unauthorized_reference");
 }
-export function assertWorkspaceFacts(context: WorkspaceContext, facts: readonly V2Fact[]) {
+export function assertWorkspaceFacts(
+  context: WorkspaceContext,
+  facts: readonly V2Fact[],
+  claims: readonly SourceClaim[] = [],
+) {
   for (const fact of facts) {
     assertWorkspaceReferences(context, fact.references);
     // Reported statements and extracted observations cannot gain invented numbers or facts.
@@ -106,10 +118,28 @@ export function assertWorkspaceFacts(context: WorkspaceContext, facts: readonly 
       // A verbatim attributed report of a demand or legal topic is not AI advice.
       // It still must not expose identifiers, and the independent audit checks attribution.
       if (privateIdentifiers(fact.text)) throw new WorkspaceOutputPolicyError("prohibited_content");
+    } else if (
+      fact.attribution === "official_source" &&
+      !claims.some(
+        (claim) =>
+          claim.text === fact.text &&
+          fact.references.some(
+            (ref) => ref.kind === "official_source" && ref.citationId === claim.citationId,
+          ),
+      )
+    ) {
+      throw new WorkspaceOutputPolicyError("unsupported_fact");
     } else if (prohibited(fact.text)) {
       throw new WorkspaceOutputPolicyError("prohibited_content");
     }
   }
+}
+
+/** Apply the same projection to paid admission and execution wire identities. */
+export function workspaceModelInput(input: unknown): unknown {
+  if (!input || typeof input !== "object") return input;
+  const { sourceRetrieval: _proof, ...rest } = input as Record<string, unknown>;
+  return "context" in rest ? { ...rest, context: workspaceModelInput(rest.context) } : rest;
 }
 
 /** The draft and independent audit remain private. No unvalidated tokens are streamed. */
@@ -127,7 +157,7 @@ export function createWorkspacePipeline(
   const call = (phase: Phase, input: unknown, requestId: string) =>
     gateway.call(
       phase,
-      input,
+      workspaceModelInput(input),
       requestId,
       () => deps.reserve(phase),
       () => deps.reserve(phase),
@@ -163,6 +193,7 @@ export function createWorkspacePipeline(
       checked.findings.some((f) => f.severity === "critical")
     )
       throw new WorkspaceOutputPolicyError("audit_rejected");
+    return checked;
   };
   return {
     async questions(context: WorkspaceContext, requestId: string) {
@@ -219,20 +250,30 @@ export function createWorkspacePipeline(
         !context.latestMessage
       )
         throw new ModelError("POLICY_REJECTED");
+      context = { ...context, sourceLookupPerformed: false };
       let draft = workspaceChatOutputSchema.parse(await call("workspace_chat", context, requestId));
       if (draft.requestedSources.length) {
         context = (await deps.retrieve?.(context, draft.requestedSources)) ?? {
           ...context,
           sourceStatus: "unavailable",
         };
+        context.sourceLookupPerformed = true;
         draft = workspaceChatOutputSchema.parse(await call("workspace_chat", context, requestId));
+        if (draft.requestedSources.length)
+          throw new WorkspaceOutputPolicyError("unauthorized_reference");
       }
-      if (context.sourceStatus === "unavailable")
-        draft.warnings = [
-          ...draft.warnings.slice(0, 19),
-          "공식 자료를 확인하지 못해 법률 설명을 제공하지 않았어요. 사실 정리는 계속할 수 있어요.",
-        ];
-      assertWorkspaceFacts(context, draft.facts);
+      const sourceWarnings = [
+        ...(context.sourceStatus === "unavailable"
+          ? [
+              "공식 자료를 확인하지 못해 법률 설명을 제공하지 않았어요. 사실 정리는 계속할 수 있어요.",
+            ]
+          : []),
+        ...(context.sourceCoverage?.sourcesPartial
+          ? ["공식 자료 일부만 확인했어요. 출처별 제한과 원문에서 빠진 범위를 확인해 주세요."]
+          : []),
+      ];
+      draft.warnings = [...draft.warnings.slice(0, 20 - sourceWarnings.length), ...sourceWarnings];
+      assertWorkspaceFacts(context, draft.facts, draft.sourceClaims);
       assertWorkspaceReferences(context, [
         ...draft.references,
         ...draft.actions.flatMap((a) => a.references),
@@ -259,7 +300,54 @@ export function createWorkspacePipeline(
         draft.parties.some((party) => prohibited(JSON.stringify(party)))
       )
         throw new WorkspaceOutputPolicyError("prohibited_content");
-      await audit("workspace_chat", context, draft, requestId);
+      const claimIds = new Set(draft.sourceClaims.map((claim) => claim.citationId));
+      const officialRefs = [
+        ...draft.references,
+        ...draft.facts.flatMap((f) => f.references),
+        ...draft.actions.flatMap((a) => a.references),
+        ...draft.timeline.flatMap((t) => t.references),
+      ].filter((ref) => ref.kind === "official_source");
+      if (
+        officialRefs.some((ref) => !claimIds.has(ref.citationId)) ||
+        draft.sourceClaims.some(
+          (claim) =>
+            !draft.text.includes(claim.text) &&
+            !draft.facts.some((fact) => fact.text === claim.text),
+        )
+      )
+        throw new WorkspaceOutputPolicyError("unsupported_fact");
+      const checked = await audit("workspace_chat", context, draft, requestId);
+      if (draft.sourceClaims.length) {
+        const retrieval = context.sourceRetrieval;
+        if (
+          !retrieval ||
+          draft.sourceClaims.some((claim) => {
+            const source = context.sourceTexts?.find(
+              (text) => text.citationId === claim.citationId,
+            );
+            return !source || claim.endUtf16 > source.text.length;
+          })
+        )
+          throw new WorkspaceOutputPolicyError("unsupported_fact");
+        const reviews = await Promise.all(
+          draft.sourceClaims.map(async (claim) => ({
+            claimId: claim.id,
+            claimHash: await claimReviewHash(claim, retrieval.asOfDate),
+            sourceHash:
+              retrieval.chunks.find((chunk) => chunk.citation.id === claim.citationId)?.citation
+                .contentHash ?? "",
+            accepted: checked.legalClaimsSupported,
+            policyAccepted: checked.pass && !checked.strategyDetected,
+          })),
+        );
+        const result = await validateV2Claims(
+          draft.sourceClaims,
+          context.citations.filter((citation) => claimIds.has(citation.id)),
+          retrieval,
+          reviews,
+        );
+        if (!result.valid) throw new WorkspaceOutputPolicyError("unsupported_fact");
+      }
       const cited = new Set(
         [
           ...draft.references,
