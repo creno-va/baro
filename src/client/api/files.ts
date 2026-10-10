@@ -8,6 +8,7 @@ import {
   v2FileObservationSchema,
   v2FileSchema,
   v2ObservationEditRequestSchema,
+  v2UploadReservationRequestSchema,
   v2UploadSessionSchema,
 } from "../../contracts/v2";
 import type { FileReviewProgress, FileReviewView, FileView } from "./types";
@@ -102,13 +103,7 @@ async function hash(blob: Blob) {
   }
 }
 export function validateUpload(file: Pick<File, "name" | "size" | "type">) {
-  if (
-    !file.name.trim() ||
-    file.name.length > 255 ||
-    file.name.includes("/") ||
-    file.name.includes("\\") ||
-    [...file.name].some((c) => c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127)
-  )
+  if (!v2UploadReservationRequestSchema.shape.name.safeParse(file.name).success)
     throw workspaceError(
       "VALIDATION_ERROR",
       "파일 이름에 경로나 제어 문자가 포함돼 있어요. 이름을 바꾼 뒤 다시 선택해 주세요.",

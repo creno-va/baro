@@ -435,7 +435,7 @@ export function createWorkspaceApi(
     });
     const caseView: CaseView = {
       id: w.id,
-      title: metadata.narrative.slice(0, 60) || w.title,
+      title: [...metadata.narrative].slice(0, 60).join("") || w.title,
       subjectContext: w.subjectContext,
       stage: w.status,
       revision: w.workspaceRevision,
