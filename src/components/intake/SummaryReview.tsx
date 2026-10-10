@@ -64,6 +64,8 @@ export function SummaryReview({ caseId }: { caseId: string }) {
       Object.keys(factEdits).length > 0 ||
       (unknownsDraft !== null &&
         unknownsDraft !== (item.summaryDetails?.unknowns ?? []).join("\n")));
+  const summaryTooLong = [...summary.trim()].length > 5000;
+  const factTooLong = Object.values(factEdits).some((edit) => [...edit.text].length > 2000);
   draftDirty.current = dirty;
   const locked =
     busy || recovering || !canMutate || (error as { code?: string })?.code === "CONFLICT";
@@ -146,7 +148,7 @@ export function SummaryReview({ caseId }: { caseId: string }) {
     return () => window.removeEventListener("beforeunload", warn);
   }, [dirty]);
   async function save() {
-    if (!item || pending.current || !summary.trim()) return;
+    if (!item || pending.current || !summary.trim() || summaryTooLong || factTooLong) return;
     ++request.current;
     setLoading(false);
     const epoch = ticket();
@@ -322,7 +324,6 @@ export function SummaryReview({ caseId }: { caseId: string }) {
                     setConfirming(false);
                     setNotice("");
                   }}
-                  maxLength={5000}
                   disabled={
                     !canMutate ||
                     busy ||
@@ -334,6 +335,7 @@ export function SummaryReview({ caseId }: { caseId: string }) {
                 <p id="summary-help" className="intake-count">
                   {[...summary].length.toLocaleString()} / 5,000자
                 </p>
+                {summaryTooLong && <p role="alert">요약은 5,000자까지 입력할 수 있어요.</p>}
               </div>
               {item.summaryDetails && (
                 <section aria-label="구조화된 사실 편집">
@@ -371,9 +373,11 @@ export function SummaryReview({ caseId }: { caseId: string }) {
                         <Textarea
                           id={`fact-${fact.id}`}
                           value={edit.text}
-                          maxLength={2000}
                           onChange={(e) => update({ text: e.target.value })}
                         />
+                        {[...edit.text].length > 2000 && (
+                          <p role="alert">사실 내용은 2,000자까지 입력할 수 있어요.</p>
+                        )}
                         <label>
                           확인 상태
                           <select
@@ -450,6 +454,8 @@ export function SummaryReview({ caseId }: { caseId: string }) {
                       busy ||
                       recovering ||
                       !summary.trim() ||
+                      summaryTooLong ||
+                      factTooLong ||
                       (error as { code?: string })?.code === "CONFLICT"
                     }
                   >
