@@ -251,3 +251,48 @@ test("fact sources identify the referenced material and page", async ({ page }) 
   await expect(link).toHaveAttribute("href", `${base}/files?file=${files[1].id}`);
   await expect(link).toContainText("7쪽");
 });
+
+test("chat retains Unicode input, blocks over-limit text and submits the complete valid text", async ({
+  page,
+}) => {
+  const view = { ...initial(), timeline: [], files: [] };
+  const sent: string[] = [];
+  await page.route("**/api/**", async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (!path.startsWith("/api/")) return route.continue();
+    if (path === "/api/me/session")
+      return route.fulfill({
+        json: {
+          user: { id: "synthetic-owner", name: "Synthetic", accountType: "customer" },
+          needsConsent: false,
+        },
+      });
+    if (path.endsWith("/workspace")) return route.fulfill({ json: view });
+    if (path.endsWith("/messages") && route.request().method() === "POST") {
+      sent.push(route.request().postDataJSON().text);
+      return route.fulfill({ json: {} });
+    }
+    return route.fulfill({ status: 404, json: { error: { code: "NOT_FOUND" } } });
+  });
+  await page.goto(base);
+  const input = page.locator("#workspace-message"),
+    send = page.getByRole("button", { name: "보내기", exact: true });
+  await expect(input).toBeEnabled();
+  await input.focus();
+  await page.keyboard.insertText("😀".repeat(6000));
+  await expect(input).toHaveValue("😀".repeat(6000));
+  await expect(send).toBeEnabled();
+  await input.fill("😀".repeat(10001));
+  await expect(send).toBeDisabled();
+  await input.press("Control+Enter");
+  expect(sent).toHaveLength(0);
+  await expect(input).toHaveValue("😀".repeat(10001));
+  await expect(page.getByText(/10,000자 이하로 줄여 주세요/)).toBeVisible();
+  const text = "😀".repeat(10000);
+  await input.fill("  " + text + "  ");
+  await expect(send).toBeEnabled();
+  await send.click();
+  await expect.poll(() => sent.length).toBe(1);
+  expect(sent[0]).toBe(text);
+  await expect(input).toHaveValue("");
+});
