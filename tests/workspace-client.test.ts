@@ -591,3 +591,27 @@ test("material edits retain originals, survive a lost acknowledgement and recons
     files.saveReview("synthetic-case", file.id, edit, initial.workspaceRevision),
   ).rejects.toMatchObject({ code: "CONSENT_REQUIRED" });
 });
+
+for (const canRetry of [true, false])
+  test(`direct workspace DTO preserves the processing retry permission: ${canRetry}`, async () => {
+    const f = fixture();
+    f.runtime.update((state) => {
+      state.files["synthetic-case"] = [
+        {
+          id: "synthetic-failed-file",
+          name: "合成.txt",
+          mimeType: "text/plain",
+          sizeBytes: 8,
+          status: "failed",
+          coverage: "合成 processing failure",
+          extractedText: "",
+          canRetry,
+        },
+      ];
+    });
+    const view = await f.client.get("synthetic-case");
+    expect(view.files[0]).toMatchObject({ status: "failed", canRetry });
+    expect((await createWorkspaceApi(f.transport).get("synthetic-case")).files[0]?.canRetry).toBe(
+      canRetry,
+    );
+  });
