@@ -289,6 +289,7 @@ test("structured drafts and file corrections retain their base revision across a
   const panel = page.getByRole("region", { name: "자료 내용 검토" });
   await expect(panel.getByRole("alert")).toBeVisible();
   await expect(page.getByLabel("확인·교정한 내용")).toHaveValue("저장하지 않은 자료 교정 초안");
+  page.once("dialog", (confirmation) => confirmation.accept());
   await panel.getByRole("button", { name: "최신 내용 불러오기", exact: true }).click();
   await expect(page.getByLabel("확인·교정한 내용")).toHaveValue("다른 탭의 자료 교정");
 });

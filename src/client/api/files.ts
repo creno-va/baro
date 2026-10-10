@@ -7,6 +7,7 @@ import {
   v2CoverageSchema,
   v2FileObservationSchema,
   v2FileSchema,
+  v2ObservationEditInputSchema,
   v2ObservationEditRequestSchema,
   v2UploadSessionSchema,
 } from "../../contracts/v2";
@@ -133,9 +134,41 @@ export function validateUpload(file: Pick<File, "name" | "size" | "type">) {
       "지원하는 문서·이미지·음성·영상 파일을 선택해 주세요.",
     );
 }
+export function splitObservationEdits(input: z.infer<typeof v2ObservationEditInputSchema>) {
+  const body = v2ObservationEditInputSchema.parse(input);
+  const batches: (typeof body.edits)[] = [];
+  let batch: typeof body.edits = [];
+  for (const edit of body.edits) {
+    const candidate = [...batch, edit];
+    // Reserve the maximum revision width so later batches stay within the same byte limit.
+    if (
+      !v2ObservationEditRequestSchema.safeParse({
+        expectedRevision: Number.MAX_SAFE_INTEGER,
+        edits: candidate,
+      }).success &&
+      batch.length
+    ) {
+      batches.push(batch);
+      batch = [];
+    }
+    batch.push(edit);
+  }
+  batches.push(batch);
+  return batches;
+}
+
 export function createFilesApi(request: WorkspaceTransport) {
   const revisions = new Map<string, number>();
   const reviews = new Map<string, RequestInit>();
+  const batchReviews = new Map<
+    string,
+    {
+      index: number;
+      revision: number;
+      workspaceRevision: number;
+      progress: FileReviewProgress | undefined;
+    }
+  >();
   const pendingRemovals = new Set<string>();
   const uploads = new Map<
     string,
@@ -289,6 +322,33 @@ export function createFilesApi(request: WorkspaceTransport) {
     uploads.delete(identity);
     return result;
   }
+  async function saveSingleReview(
+    id: string,
+    fileId: string,
+    input: z.infer<typeof v2ObservationEditRequestSchema>,
+    workspaceRevision: number,
+  ): Promise<FileReviewProgress> {
+    const body = v2ObservationEditRequestSchema.parse(input);
+    const path = `${base(id)}/files/${encodeURIComponent(fileId)}/observations`;
+    const signature = JSON.stringify({ id, fileId, body, workspaceRevision });
+    let init = reviews.get(signature);
+    if (!init) {
+      init = workspaceMutation(path, body, "PATCH");
+      init.headers = {
+        ...Object.fromEntries(new Headers(init.headers)),
+        "if-match": String(workspaceRevision),
+      };
+      reviews.set(signature, init);
+    }
+    try {
+      const result = reviewProgressSchema.parse(await workspaceJson(request, path, init));
+      reviews.delete(signature);
+      return result;
+    } catch (cause) {
+      if ((cause as { code?: string }).code === "CONFLICT") reviews.delete(signature);
+      throw cause;
+    }
+  }
   return {
     list,
     upload,
@@ -303,27 +363,59 @@ export function createFilesApi(request: WorkspaceTransport) {
     async saveReview(
       id: string,
       fileId: string,
-      input: z.infer<typeof v2ObservationEditRequestSchema>,
+      input: z.infer<typeof v2ObservationEditInputSchema>,
       workspaceRevision: number,
     ): Promise<FileReviewProgress> {
-      const body = v2ObservationEditRequestSchema.parse(input);
-      const path = `${base(id)}/files/${encodeURIComponent(fileId)}/observations`;
+      const body = v2ObservationEditInputSchema.parse(input);
+      if (v2ObservationEditRequestSchema.safeParse(body).success)
+        return saveSingleReview(id, fileId, body, workspaceRevision);
       const signature = JSON.stringify({ id, fileId, body, workspaceRevision });
-      let init = reviews.get(signature);
-      if (!init) {
-        init = workspaceMutation(path, body, "PATCH");
-        init.headers = {
-          ...Object.fromEntries(new Headers(init.headers)),
-          "if-match": String(workspaceRevision),
-        };
-        reviews.set(signature, init);
-      }
+      const batches = splitObservationEdits(body);
+      const state = batchReviews.get(signature) ?? {
+        index: 0,
+        progress: undefined,
+        revision: body.expectedRevision,
+        workspaceRevision,
+      };
+      batchReviews.set(signature, state);
       try {
-        const result = reviewProgressSchema.parse(await workspaceJson(request, path, init));
-        reviews.delete(signature);
+        while (state.index < batches.length) {
+          state.progress ??= await saveSingleReview(
+            id,
+            fileId,
+            { expectedRevision: state.revision, edits: batches[state.index] ?? [] },
+            state.workspaceRevision,
+          );
+          while (state.progress.status === "saving") {
+            state.progress = reviewProgressSchema.parse(
+              await workspaceJson(
+                request,
+                `${base(id)}/files/${encodeURIComponent(fileId)}/observations/${encodeURIComponent(state.progress.reviewId)}/continue`,
+                { method: "POST" },
+              ),
+            );
+          }
+          if (state.progress.status !== "ready")
+            throw workspaceError("CONFLICT", "자료가 변경됐어요. 최신 내용을 확인해 주세요.");
+          state.revision = state.progress.revision;
+          state.workspaceRevision = state.progress.workspaceRevision;
+          state.index++;
+          if (state.index < batches.length) state.progress = undefined;
+        }
+        const result = state.progress;
+        if (!result)
+          throw workspaceError("UNAVAILABLE", "교정 저장 상태를 다시 확인해 주세요.", true);
+        batchReviews.delete(signature);
         return result;
       } catch (cause) {
-        if ((cause as { code?: string }).code === "CONFLICT") reviews.delete(signature);
+        if (cause && typeof cause === "object")
+          Object.assign(cause, {
+            batchedReviewPending: true,
+            completedReviewEdits: batches
+              .slice(0, state.index)
+              .reduce((n, batch) => n + batch.length, 0),
+          });
+        if ((cause as { code?: string }).code === "CONFLICT") batchReviews.delete(signature);
         throw cause;
       }
     },
