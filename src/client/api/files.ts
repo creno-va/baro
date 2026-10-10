@@ -213,15 +213,16 @@ export function createFilesApi(request: WorkspaceTransport) {
   }
   async function upload(id: string, file: File): Promise<FileView> {
     validateUpload(file);
+    const name = file.name.trim();
     const contentHash = await hash(file);
-    const identity = `${id}:${file.name}:${file.size}:${contentHash}`;
+    const identity = `${id}:${name}:${file.size}:${contentHash}`;
     const attempt = uploads.get(identity) ?? {
       expectedRevision: await workspaceRevision(id),
       key: crypto.randomUUID(),
     };
     uploads.set(identity, attempt);
     const input = {
-      name: file.name,
+      name,
       byteLength: file.size,
       mediaType: file.type.split(";")[0]?.trim().toLowerCase() || "application/octet-stream",
       autoProcessConsentVersion: CURRENT_POLICY_VERSIONS.aiNoticeVersion,
@@ -237,7 +238,7 @@ export function createFilesApi(request: WorkspaceTransport) {
       const pending = current.find(
         (item) =>
           item.status === "uploading" &&
-          item.name === file.name &&
+          item.name === name &&
           item.sizeBytes === file.size &&
           uploadHashes.get(`${id}:${item.id}`) === contentHash,
       );

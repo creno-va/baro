@@ -64,6 +64,42 @@ async function fixture() {
 }
 
 for (const useFreshClient of [false, true])
+  test(`resume interrupted whitespace-named upload without a duplicate; fresh client=${useFreshClient}`, async () => {
+    const f = await fixture();
+    try {
+      let interrupted = false;
+      let reservations = 0;
+      const transport = async (path: string, init?: RequestInit) => {
+        if (init?.method === "POST" && path.endsWith("/files")) reservations++;
+        const response = await f.raw(path, init);
+        if (!interrupted && init?.method === "PUT" && path.endsWith("/parts/0")) {
+          interrupted = true;
+          throw new TypeError("Synthetic lost part response");
+        }
+        return response;
+      };
+      const original = "Synthetic whitespace-name original";
+      const source = new File([original], "  resume.txt", { type: "text/plain" });
+      const client = createClient(transport);
+      await expect(client.upload(f.workspace.id, source)).rejects.toThrow(
+        "Synthetic lost part response",
+      );
+      const pending = (await client.list(f.workspace.id))[0];
+      if (!pending) throw new Error("Missing interrupted upload");
+      expect(pending.name).toBe("resume.txt");
+      const retry = useFreshClient ? createClient(transport) : client;
+      const uploaded = await retry.upload(f.workspace.id, source);
+      expect(uploaded.id).toBe(pending.id);
+      expect(uploaded.status).toBe("waiting");
+      expect(reservations).toBe(1);
+      expect(await retry.list(f.workspace.id)).toHaveLength(1);
+      expect(await (await retry.original(f.workspace.id, uploaded.id)).text()).toBe(original);
+    } finally {
+      f.db.close();
+    }
+  });
+
+for (const useFreshClient of [false, true])
   test(`delete interrupted upload then re-add; fresh client=${useFreshClient}`, async () => {
     const f = await fixture();
     try {
