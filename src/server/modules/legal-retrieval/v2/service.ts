@@ -156,6 +156,7 @@ export function createV2LegalRetrieval(
           await json(url, "moleg_eflaw_list", boundedAccess),
           plan,
           body.asOfDate,
+          new Date(Date.parse(body.now) + 9 * 3600000).toISOString().slice(0, 10),
         );
         candidates.set(key, candidate);
         return candidate;
@@ -288,11 +289,17 @@ export function createV2LegalRetrieval(
             if (totalBytes > MAX_RESPONSE_BYTES) throw new RetrievalFailure("too_large");
             if (!(await safePermit(access.authorize)) || access.signal?.aborted)
               throw new RetrievalFailure(access.signal?.aborted ? "cancelled" : "not_authorized");
-            if (!(await repo.put(chunk.source, chunk.citation)))
+            if (
+              !(await repo.put(
+                chunk.source,
+                chunk.citation,
+                reason === null ? "verified" : "limited",
+              ))
+            )
               throw new RetrievalFailure("cache_invalid");
             if (!(await safePermit(access.authorize)) || access.signal?.aborted)
               throw new RetrievalFailure(access.signal?.aborted ? "cancelled" : "not_authorized");
-            if (!(await options.bindCitation(chunk.citation)))
+            if (reason === null && !(await options.bindCitation(chunk.citation)))
               throw new RetrievalFailure("not_authorized");
           }
           outcomes.push({
@@ -316,26 +323,31 @@ export function createV2LegalRetrieval(
           });
         }
       }
-      // Deletion/consent/revision changes must never release preflight source data.
-      if (!(await safePermit(access.authorize)) || access.signal?.aborted)
-        for (const outcome of outcomes) {
-          outcome.availability = "unavailable";
-          outcome.reason = access.signal?.aborted ? "cancelled" : "not_authorized";
-          outcome.chunks = [];
-        }
-      const chunks = [
+      let chunks = [
         ...new Map(
           outcomes
             .flatMap((outcome) => outcome.chunks)
             .map((chunk) => [chunk.citation.sourceId, chunk]),
         ).values(),
       ];
+      let retrievalHash = await textHash(JSON.stringify(chunks.map((c) => c.citation.sourceId)));
+      const emptyHash = await textHash("[]");
+      // No await may follow this guard: hashing also yields to revocation/cancellation.
+      if (!(await safePermit(access.authorize)) || access.signal?.aborted) {
+        for (const outcome of outcomes) {
+          outcome.availability = "unavailable";
+          outcome.reason = access.signal?.aborted ? "cancelled" : "not_authorized";
+          outcome.chunks = [];
+        }
+        chunks = [];
+        retrievalHash = emptyHash;
+      }
       return {
         schemaVersion: "2",
         asOfDate: body.asOfDate,
         outcomes,
         chunks,
-        retrievalHash: await textHash(JSON.stringify(chunks.map((c) => c.citation.sourceId))),
+        retrievalHash,
         legalSourceStatus: outcomes.some((o) => o.availability === "verified")
           ? "verified"
           : body.plans.length

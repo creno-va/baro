@@ -4,18 +4,15 @@ import {
   type V2Coverage,
   type V2ReportBody,
   type V2SourcePosition,
-  v2OfficialCitationSchema,
   v2ReportBodySchema,
   v2SummarySchema,
 } from "../../../contracts/v2";
 import { type Actor, aliveWorkspace, readSnapshot, type V2Core } from "../../db/v2-core";
 import { createV2FilesRepository } from "../../db/v2-files";
-import {
-  createV2OfficialSourceRepository,
-  type OfficialSourceWrite,
-} from "../../db/v2-official-sources";
 import { runtimeDigest } from "../../db/v2-paid-runtime";
 import { createV2WorkspaceRepository, referencesAuthorized } from "../../db/v2-workspace";
+import { readBoundSource } from "../legal-retrieval/v2/bound-sources";
+import { GUIDE_HOSTS } from "../legal-retrieval/v2/registry";
 import type { ZipSource } from "./zip";
 
 export class ReportError extends Error {
@@ -102,13 +99,20 @@ export const REPORT_SOURCE_SQL = `SELECT 'summary' AS kind,s.id,s.revision AS re
     UNION ALL SELECT 'message',id,revision,created_at FROM v2_messages WHERE workspace_id=?
     UNION ALL SELECT 'action',id,revision,'' FROM v2_actions WHERE workspace_id=?
     UNION ALL SELECT 'timeline',id,revision,'' FROM v2_timeline WHERE workspace_id=?
-    UNION ALL SELECT 'citation',c.id,c.snapshot_revision,c.citation_json || ':' || coalesce(s.content_hash,'') || ':' || coalesce(s.canonical_url,'') || ':' || coalesce(s.verified_at,'') || ':' || coalesce(s.expires_at,'') || ':' || CASE WHEN s.fetched_at<=? AND s.verified_at<=? AND s.expires_at>? THEN 'fresh' ELSE 'unavailable' END FROM v2_citation_bindings c LEFT JOIN v2_official_sources s ON s.source_id=c.source_id WHERE c.workspace_id=? ORDER BY kind,id`;
+    UNION ALL SELECT 'citation',c.id,c.snapshot_revision,c.citation_json || ':' || json_object('id',s.source_id,'type',s.source_type,'officialId',s.official_id,'version',s.version,'section',s.section,'hash',s.content_hash,'extractor',s.extractor_version,'url',s.canonical_url,'title',s.title,'date',s.source_date,'court',s.court,'case',s.case_number,'institution',s.institution_id,'endpoint',s.endpoint_id,'rights',s.rights_provenance,'fetched',s.fetched_at,'verified',s.verified_at,'expires',s.expires_at) || ':' || CASE WHEN s.fetched_at<=? AND s.verified_at<=? AND s.expires_at>? THEN 'fresh' ELSE 'unavailable' END FROM v2_citation_bindings c LEFT JOIN v2_official_sources s ON s.source_id=c.source_id WHERE c.workspace_id=? ORDER BY kind,id`;
 export async function reportSourceRows(core: V2Core, actor: Actor, id: string) {
-  return (
+  const rows = (
     await core
       .statement(REPORT_SOURCE_SQL, [id, id, id, id, id, actor.now, actor.now, actor.now, id])
       .all<{ kind: string; id: string; revision: number; snapshot: string }>()
   ).results;
+  // Originals stay in individual bounded reads, never a large aggregate SQL row.
+  for (const row of rows)
+    if (row.kind === "citation")
+      row.snapshot += (await readBoundSource(core, id, row.id, actor.now, GUIDE_HOSTS))
+        ? ":verified"
+        : ":invalid";
+  return rows;
 }
 export async function sourceDigest(core: V2Core, actor: Actor, id: string) {
   const workspace = await ownedWorkspace(core, actor, id);
@@ -132,70 +136,11 @@ async function verifiedCitations(
     ...new Set(refs.flatMap((ref) => (ref.kind === "official_source" ? [ref.citationId] : []))),
   ];
   if (ids.length > 50) throw new ReportError("VALIDATION_ERROR");
-  const repository = createV2OfficialSourceRepository(core, guideHosts),
-    citations: V2ReportBody["citations"] = [];
+  const citations: V2ReportBody["citations"] = [];
   for (const citationId of ids) {
-    const row = await core
-      .statement(
-        "SELECT c.citation_json,s.source_id,s.source_type,s.official_id,s.version,s.section,s.content_hash,s.extractor_version FROM v2_citation_bindings c JOIN v2_official_sources s ON s.source_id=c.source_id WHERE c.id=? AND c.workspace_id=?",
-        [citationId, id],
-      )
-      .first<{
-        citation_json: string;
-        source_id: string;
-        source_type: OfficialSourceWrite["sourceType"];
-        official_id: string;
-        version: string;
-        section: string;
-        content_hash: string;
-        extractor_version: string;
-      }>();
-    if (!row) throw new ReportError("LEGAL_SOURCE_UNAVAILABLE");
-    const parsed = v2OfficialCitationSchema(guideHosts).safeParse(JSON.parse(row.citation_json));
-    if (!parsed.success || parsed.data.id !== citationId)
-      throw new ReportError("LEGAL_SOURCE_UNAVAILABLE");
-    const c = parsed.data,
-      source = await repository.find(
-        {
-          sourceId: row.source_id,
-          sourceType: row.source_type,
-          officialId: row.official_id,
-          version: row.version,
-          section: row.section,
-          contentHash: row.content_hash,
-          extractorVersion: row.extractor_version,
-        },
-        actor.now,
-      );
-    if (
-      !source ||
-      source.sourceId !== c.sourceId ||
-      source.sourceType !== c.kind ||
-      source.contentHash !== c.contentHash ||
-      source.canonicalUrl !== c.url ||
-      source.title !== c.title ||
-      Date.parse(source.verifiedAt) !== Date.parse(c.verifiedAt) ||
-      (c.kind === "statute"
-        ? source.officialId !== c.officialId ||
-          source.section !== c.article ||
-          source.sourceDate !== c.effectiveDate
-        : c.kind === "precedent"
-          ? source.officialId !== c.officialId ||
-            source.court !== c.court ||
-            source.caseNumber !== c.caseNumber ||
-            source.sourceDate !== c.decisionDate
-          : source.institutionId !== c.institutionId ||
-            source.endpointId !== c.endpointId ||
-            source.section !== c.section ||
-            source.sourceDate !== c.publishedDate)
-    )
-      throw new ReportError("LEGAL_SOURCE_UNAVAILABLE");
-    const hash = Array.from(
-      new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(source.body))),
-      (b) => b.toString(16).padStart(2, "0"),
-    ).join("");
-    if (hash !== source.contentHash) throw new ReportError("LEGAL_SOURCE_UNAVAILABLE");
-    citations.push(c);
+    const chunk = await readBoundSource(core, id, citationId, actor.now, guideHosts);
+    if (!chunk) throw new ReportError("LEGAL_SOURCE_UNAVAILABLE");
+    citations.push(chunk.citation);
   }
   return citations;
 }

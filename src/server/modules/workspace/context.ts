@@ -4,7 +4,6 @@ import {
   type V2UserMessage,
   v2FileObservationSchema,
   v2MessageSchema,
-  v2OfficialCitationSchema,
   v2SummarySchema,
   v2UserMessageSchema,
 } from "../../../contracts/v2";
@@ -12,6 +11,10 @@ import type { Actor, V2Core } from "../../db/v2-core";
 import { createV2FilesRepository } from "../../db/v2-files";
 import { createV2SummaryStagingRepository } from "../../db/v2-summary-staging";
 import { createV2WorkspaceRepository } from "../../db/v2-workspace";
+import { textHash } from "../legal-retrieval/service";
+import { readBoundSource } from "../legal-retrieval/v2/bound-sources";
+import { EXTRACTOR_VERSION, type SourceChunk } from "../legal-retrieval/v2/contracts";
+import { projectWorkspaceSources } from "../legal-retrieval/v2/workspace-sources";
 import type { WorkspaceContext } from "./pipeline";
 
 /** Bounded context retains every saved row; the model is told which rows are included. */
@@ -109,14 +112,40 @@ export async function readWorkspaceContext(
   const sourceRows = (
     await core
       .statement(
-        "SELECT b.citation_json,substr(s.body,1,20000) body FROM v2_citation_bindings b JOIN v2_official_sources s ON s.source_id=b.source_id AND s.content_hash=json_extract(b.citation_json,'$.contentHash') AND s.canonical_url=json_extract(b.citation_json,'$.url') WHERE b.workspace_id=? AND s.verified_at<=? AND s.expires_at>? ORDER BY b.snapshot_revision DESC,b.id LIMIT 10",
-        [id, actor.now, actor.now],
+        "SELECT b.id FROM v2_citation_bindings b LEFT JOIN v2_official_sources s ON s.source_id=b.source_id WHERE b.workspace_id=? ORDER BY CASE WHEN s.extractor_version=? THEN 0 ELSE 1 END,json_extract(b.citation_json,'$.verifiedAt') DESC,b.snapshot_revision DESC,b.id LIMIT 11",
+        [id, EXTRACTOR_VERSION],
       )
-      .all<{ citation_json: string; body: string }>()
+      .all<{ id: string }>()
   ).results;
-  const citations = sourceRows.map((row) =>
-    v2OfficialCitationSchema(guideHosts).parse(JSON.parse(row.citation_json)),
+  const chunks: SourceChunk[] = [];
+  let rejectedSources = 0;
+  for (const row of sourceRows.slice(0, 10)) {
+    const chunk = await readBoundSource(core, id, row.id, actor.now, guideHosts);
+    if (chunk) chunks.push(chunk);
+    else rejectedSources++;
+  }
+  const sources = await projectWorkspaceSources(
+    {
+      schemaVersion: "2",
+      asOfDate: new Date(Date.parse(actor.now) + 9 * 3600000).toISOString().slice(0, 10),
+      chunks,
+      outcomes: chunks.map((chunk) => ({
+        kind: chunk.citation.kind,
+        availability: "verified",
+        reason: null,
+        chunks: [chunk],
+      })),
+      retrievalHash: await textHash(JSON.stringify(chunks.map((chunk) => chunk.citation.sourceId))),
+      legalSourceStatus: chunks.length
+        ? "verified"
+        : sourceRows.length
+          ? "unavailable"
+          : "not_requested",
+      factualPreparationAvailable: true,
+    },
+    rejectedSources,
   );
+  sources.sourceCoverage.sourcesPartial ||= sourceRows.length > 10;
   const intake: V2Intake = {
     ...metadata,
     status: z
@@ -191,17 +220,15 @@ export async function readWorkspaceContext(
     messages: messages.map(normalized),
     latestMessage: latest ? normalized(latest) : null,
     history: history.map((message) => ({ ...message, createdAt: "1970-01-01T00:00:00.000Z" })),
-    sourceTexts: sourceRows.map((row, index) => ({
-      citationId: citations[index]?.id ?? "",
-      text: row.body,
-    })),
-    sourceStatus: citations.length ? "verified" : "not_requested",
+    ...sources,
+    sourceLookupPerformed: false,
     contextCoverage: {
       factsPartial: factPage.nextId !== null,
       partiesPartial: partyPage.nextId !== null,
       summaryPartial: (metadata.summary?.byteLength ?? 0) > 1048576,
       messagesPartial: history.length === 20,
       materialsPartial: materials.length > 0,
+      sourcesPartial: sources.sourceCoverage.sourcesPartial,
     },
     references: {
       intakeRevision: metadata.revision,
@@ -215,9 +242,8 @@ export async function readWorkspaceContext(
         workspaceRevision: m.workspaceRevision,
       })),
       files: fileReferences,
-      verifiedCitationIds: citations.map((citation) => citation.id),
+      verifiedCitationIds: sources.citations.map((citation) => citation.id),
     },
-    citations,
     materials,
   };
 }

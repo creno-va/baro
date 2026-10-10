@@ -25,6 +25,7 @@ import {
   isWorkspacePublicQuery,
   workspaceRetrievalPlans,
 } from "../modules/legal-retrieval/v2/workspace-plans";
+import { projectWorkspaceSources } from "../modules/legal-retrieval/v2/workspace-sources";
 import type { GatewayAttemptRequest } from "../modules/llm-gateway/attempts";
 import { MODEL_ID, type Phase } from "../modules/llm-gateway/prompts";
 import {
@@ -36,7 +37,7 @@ import {
 import { readWorkspaceContext } from "../modules/workspace/context";
 import { createWorkspaceDispatcher } from "../modules/workspace/dispatch";
 import { executeWorkspace, type WorkspaceParams } from "../modules/workspace/execution";
-import { createWorkspacePipeline } from "../modules/workspace/pipeline";
+import { createWorkspacePipeline, workspaceModelInput } from "../modules/workspace/pipeline";
 import type { WorkspaceDependencies } from "../modules/workspace/service";
 import { readProcessingProofs } from "./processing-proofs";
 
@@ -99,7 +100,7 @@ async function request(
   invocationId: string,
   requestId: string,
 ): Promise<GatewayAttemptRequest> {
-  const wire = prepareGatewayWireInput(phase, input);
+  const wire = prepareGatewayWireInput(phase, workspaceModelInput(input));
   return {
     invocationId,
     requestId,
@@ -114,7 +115,7 @@ async function request(
 function budget(core: V2Core, env: Env, ownerId: string, input: unknown) {
   const config = configuredBounds(env);
   const planner = createGatewayExecutionPlanner({
-    input: async () => input,
+    input: async () => workspaceModelInput(input),
     bounds: async (wire) => workspaceTokenBounds(config, wire.max_completion_tokens),
     verifyBounds: async (_descriptor, digest, now) =>
       config && Date.parse(config.verifiedAt) <= Date.parse(now)
@@ -349,17 +350,13 @@ export async function runWorkspaceRuntime(
               signal: AbortSignal.timeout(120000),
             },
           );
+          const sources = await projectWorkspaceSources(output);
           return {
             ...context,
-            citations: output.chunks.map((chunk) => chunk.citation),
-            sourceTexts: output.chunks.map((chunk) => ({
-              citationId: chunk.citation.id,
-              text: chunk.span.text,
-            })),
-            sourceStatus: output.legalSourceStatus,
+            ...sources,
             references: {
               ...context.references,
-              verifiedCitationIds: output.chunks.map((chunk) => chunk.citation.id),
+              verifiedCitationIds: sources.citations.map((citation) => citation.id),
             },
           };
         },

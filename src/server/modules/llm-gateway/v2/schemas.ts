@@ -9,6 +9,7 @@ import {
   v2SummarySchema,
   v2TimelineEntrySchema,
 } from "../../../../contracts/v2";
+import { sourceClaimSchema } from "../../citation/v2-validate";
 import { workspaceSourceRequestSchema } from "../../legal-retrieval/v2/workspace-plans";
 
 export const workspaceQuestionsOutputSchema = z.strictObject({
@@ -31,6 +32,7 @@ export const workspaceChatOutputSchema = z.strictObject({
   actions: z.array(v2ActionSchema).max(5),
   parties: v2SummarySchema.shape.parties.max(5),
   requestedSources: z.array(workspaceSourceRequestSchema).max(2),
+  sourceClaims: z.array(sourceClaimSchema).max(50).default([]),
   timeline: z.array(v2TimelineEntrySchema).max(5),
 });
 export const workspaceAuditOutputSchema = z.strictObject({

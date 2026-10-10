@@ -149,7 +149,8 @@ export type Access = {
 };
 export const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
 export const MAX_SOURCE_BYTES = 1024 * 1024;
-export const EXTRACTOR_VERSION = "official-text-v2-1";
+// v2-2 binds verified outcomes only; older bindings cannot attest availability.
+export const EXTRACTOR_VERSION = "official-text-v2-2";
 export async function safePermit(action: () => Promise<boolean>) {
   try {
     return await action();

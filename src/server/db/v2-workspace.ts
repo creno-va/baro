@@ -148,7 +148,7 @@ export async function referencesAuthorized(
     .all<{ id: string; revision: number; encrypted_payload: string }>();
   const citations = await core
     .statement(
-      "SELECT id FROM v2_citation_bindings WHERE workspace_id=? AND id IN (SELECT value FROM json_each(?))",
+      "SELECT id FROM v2_citation_bindings WHERE workspace_id=? AND json_extract(citation_json,'$._availability')='verified' AND id IN (SELECT value FROM json_each(?))",
       [g.workspaceId, JSON.stringify(citationIds)],
     )
     .all<{ id: string }>();
@@ -192,7 +192,7 @@ export function referenceCommitPredicate(references: readonly V2FactReference[])
   values: unknown[];
 } {
   return {
-    sql: `NOT EXISTS(SELECT 1 FROM json_each(?) ref WHERE NOT ((json_extract(ref.value,'$.kind')='intake_narrative' AND json_extract(ref.value,'$.intakeRevision')=w.intake_revision) OR (json_extract(ref.value,'$.kind')='intake_answer' AND json_extract(ref.value,'$.intakeRevision')=w.intake_revision AND EXISTS(SELECT 1 FROM v2_answers a JOIN v2_question_batches b ON b.id=a.batch_id WHERE b.workspace_id=w.id AND a.question_id=json_extract(ref.value,'$.questionId') AND a.status='answered')) OR (json_extract(ref.value,'$.kind')='user_message' AND EXISTS(SELECT 1 FROM v2_messages m WHERE m.id=json_extract(ref.value,'$.messageId') AND m.workspace_id=w.id AND m.role='user' AND m.workspace_revision=json_extract(ref.value,'$.workspaceRevision'))) OR (json_extract(ref.value,'$.kind')='user_material' AND EXISTS(SELECT 1 FROM v2_files f WHERE f.id=json_extract(ref.value,'$.fileId') AND f.workspace_id=w.id AND f.revision=json_extract(ref.value,'$.fileRevision') AND f.state='ready' AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='file' AND target_id=f.id))) OR (json_extract(ref.value,'$.kind')='official_source' AND EXISTS(SELECT 1 FROM v2_citation_bindings c WHERE c.id=json_extract(ref.value,'$.citationId') AND c.workspace_id=w.id))))`,
+    sql: `NOT EXISTS(SELECT 1 FROM json_each(?) ref WHERE NOT ((json_extract(ref.value,'$.kind')='intake_narrative' AND json_extract(ref.value,'$.intakeRevision')=w.intake_revision) OR (json_extract(ref.value,'$.kind')='intake_answer' AND json_extract(ref.value,'$.intakeRevision')=w.intake_revision AND EXISTS(SELECT 1 FROM v2_answers a JOIN v2_question_batches b ON b.id=a.batch_id WHERE b.workspace_id=w.id AND a.question_id=json_extract(ref.value,'$.questionId') AND a.status='answered')) OR (json_extract(ref.value,'$.kind')='user_message' AND EXISTS(SELECT 1 FROM v2_messages m WHERE m.id=json_extract(ref.value,'$.messageId') AND m.workspace_id=w.id AND m.role='user' AND m.workspace_revision=json_extract(ref.value,'$.workspaceRevision'))) OR (json_extract(ref.value,'$.kind')='user_material' AND EXISTS(SELECT 1 FROM v2_files f WHERE f.id=json_extract(ref.value,'$.fileId') AND f.workspace_id=w.id AND f.revision=json_extract(ref.value,'$.fileRevision') AND f.state='ready' AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='file' AND target_id=f.id))) OR (json_extract(ref.value,'$.kind')='official_source' AND EXISTS(SELECT 1 FROM v2_citation_bindings c WHERE c.id=json_extract(ref.value,'$.citationId') AND c.workspace_id=w.id AND json_extract(c.citation_json,'$._availability')='verified'))))`,
     values: [JSON.stringify(references)],
   };
 }

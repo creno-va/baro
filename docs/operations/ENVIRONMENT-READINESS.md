@@ -368,11 +368,14 @@ site key/secret, 원문 응답, 오류 body/stack은 제외한다. 잘못된 응
 관측된 첫 페이지에 한정하고 100개 이상이면 truncation 가능성을 표시한다. live gate 통과가 아니다. artifact의 `unverified`
 항목은 이 workflow의 성공 여부와 무관하게 남는다.
 
-명시적으로 `check_legal=true`를 선택한 run의 법령 단계는 승인된 preview OC와 합성 `loan`/`interest`/`repayment` 개념으로
-실제 `legal-retrieval` parser/date/hash 검증을 최대 4개 request 예약 안에서 수행한다.
-cache는 메모리 대역이며 D1에 쓰지 않는다. 성공/실패와 시행일/hash만 별도 artifact로 남긴다.
-이 단계는 CI runner의 adapter 증거이며 Worker 전체 smoke를 대신하지 않는다. 법령 검증이
-실패하면 workflow도 실패하고 관측 artifact는 보존한다.
+신청·인증 조건이 바뀐 뒤 명시적으로 `check_legal=true`를 선택한 run은 승인된 preview OC로
+v2 민법 598조, 공개 개념 `대여금` 판례, 서버에 등록된 법률상담 안내를 검증한다.
+최대 9개 request 예약 안에서 실제 adapter의 ID/version/date/hash/URL과 인용 span을 확인한다.
+cache는 메모리 대역이며 D1에 쓰지 않는다. 원문·OC·오류 body 없이 출처 tuple, 유형별 제한,
+성공/실패와 candidate SHA를 artifact로 남긴다. 제한 상태는 성공으로 승격하지 않는다.
+이 단계는 CI runner의 adapter 증거이며 `runtimeWorker: false`를 기록한다. 검증 실패 시 workflow도
+실패하고 관측 artifact는 보존한다. 별도 로컬 workerd 합성 검사는 세 유형의 Worker 실행을 확인하지만,
+실제 외부 처리와 같은 SHA의 #71 Worker 전체 smoke를 대신하지 않는다.
 
 조회 범위는 [Gateway 목록 API](https://developers.cloudflare.com/api/resources/ai_gateway/methods/list/),
 [Turnstile 목록 API](https://developers.cloudflare.com/api/resources/turnstile/subresources/widgets/methods/list/),

@@ -188,7 +188,11 @@ export function createV2OfficialSourceRepository(core: V2Core, guideHosts: reado
           : null;
       });
     },
-    put(input: OfficialSourceWrite, citation: V2OfficialCitation) {
+    put(
+      input: OfficialSourceWrite,
+      citation: V2OfficialCitation,
+      availability: "verified" | "limited" = "verified",
+    ) {
       return safe(async () => {
         const source = parse(sourceSchema, input);
         const c = parse(v2OfficialCitationSchema(guideHosts), citation);
@@ -206,36 +210,54 @@ export function createV2OfficialSourceRepository(core: V2Core, guideHosts: reado
           (b) => b.toString(16).padStart(2, "0"),
         ).join("");
         if (digest !== source.contentHash) return false;
-        return (
-          (
-            await core
-              .statement(
-                "INSERT INTO v2_official_sources VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(source_id) DO UPDATE SET fetched_at=excluded.fetched_at,verified_at=excluded.verified_at,expires_at=excluded.expires_at WHERE v2_official_sources.fetched_at<=excluded.fetched_at AND v2_official_sources.verified_at<=excluded.verified_at AND v2_official_sources.source_type=excluded.source_type AND v2_official_sources.official_id=excluded.official_id AND v2_official_sources.version=excluded.version AND v2_official_sources.section=excluded.section AND v2_official_sources.content_hash=excluded.content_hash AND v2_official_sources.extractor_version=excluded.extractor_version AND v2_official_sources.canonical_url=excluded.canonical_url AND v2_official_sources.source_date IS excluded.source_date AND v2_official_sources.court IS excluded.court AND v2_official_sources.case_number IS excluded.case_number AND v2_official_sources.institution_id IS excluded.institution_id AND v2_official_sources.endpoint_id IS excluded.endpoint_id AND v2_official_sources.title=excluded.title AND v2_official_sources.body=excluded.body AND v2_official_sources.rights_provenance=excluded.rights_provenance",
-                [
-                  source.sourceId,
-                  source.sourceType,
-                  source.officialId,
-                  source.version,
-                  source.section,
-                  source.contentHash,
-                  source.extractorVersion,
-                  source.canonicalUrl,
-                  source.title,
-                  source.body,
-                  source.sourceDate,
-                  new Date(source.fetchedAt).toISOString(),
-                  new Date(source.verifiedAt).toISOString(),
-                  new Date(source.expiresAt).toISOString(),
-                  source.rightsProvenance,
-                  source.institutionId,
-                  source.endpointId,
-                  source.court,
-                  source.caseNumber,
-                ],
-              )
-              .run()
-          ).meta.changes === 1
+        const write = core.statement(
+          "INSERT INTO v2_official_sources VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(source_id) DO UPDATE SET fetched_at=excluded.fetched_at,verified_at=excluded.verified_at,expires_at=excluded.expires_at WHERE v2_official_sources.fetched_at<=excluded.fetched_at AND v2_official_sources.verified_at<=excluded.verified_at AND v2_official_sources.source_type=excluded.source_type AND v2_official_sources.official_id=excluded.official_id AND v2_official_sources.version=excluded.version AND v2_official_sources.section=excluded.section AND v2_official_sources.content_hash=excluded.content_hash AND v2_official_sources.extractor_version=excluded.extractor_version AND v2_official_sources.canonical_url=excluded.canonical_url AND v2_official_sources.source_date IS excluded.source_date AND v2_official_sources.court IS excluded.court AND v2_official_sources.case_number IS excluded.case_number AND v2_official_sources.institution_id IS excluded.institution_id AND v2_official_sources.endpoint_id IS excluded.endpoint_id AND v2_official_sources.title=excluded.title AND v2_official_sources.body=excluded.body AND v2_official_sources.rights_provenance=excluded.rights_provenance",
+          [
+            source.sourceId,
+            source.sourceType,
+            source.officialId,
+            source.version,
+            source.section,
+            source.contentHash,
+            source.extractorVersion,
+            source.canonicalUrl,
+            source.title,
+            source.body,
+            source.sourceDate,
+            new Date(source.fetchedAt).toISOString(),
+            new Date(source.verifiedAt).toISOString(),
+            new Date(source.expiresAt).toISOString(),
+            source.rightsProvenance,
+            source.institutionId,
+            source.endpointId,
+            source.court,
+            source.caseNumber,
+          ],
         );
+        if (availability === "limited") {
+          // Preserve bindings and facts, but revoke authority for an identity now observed
+          // as limited. This also handles unchanged text/date and identical timestamps.
+          const results = await core.binding.batch([
+            write,
+            core.statement(
+              "UPDATE v2_citation_bindings SET citation_json=json_set(citation_json,'$._availability','limited','$._limitedAt',max(COALESCE(json_extract(citation_json,'$._limitedAt'),''),?)) WHERE source_id IN (SELECT source_id FROM v2_official_sources WHERE source_type=? AND official_id=? AND version=? AND section=? AND extractor_version=? AND verified_at<=?) AND EXISTS (SELECT 1 FROM v2_official_sources WHERE source_id=? AND fetched_at=? AND verified_at=?)",
+              [
+                new Date(source.verifiedAt).toISOString(),
+                source.sourceType,
+                source.officialId,
+                source.version,
+                source.section,
+                source.extractorVersion,
+                new Date(source.verifiedAt).toISOString(),
+                source.sourceId,
+                new Date(source.fetchedAt).toISOString(),
+                new Date(source.verifiedAt).toISOString(),
+              ],
+            ),
+          ]);
+          return results[0]?.meta.changes === 1;
+        }
+        return (await write.run()).meta.changes === 1;
       });
     },
     find(
@@ -287,7 +309,7 @@ export function createV2OfficialSourceRepository(core: V2Core, guideHosts: reado
           core.claim(
             g,
             claimId,
-            "EXISTS(SELECT 1 FROM v2_official_sources WHERE source_id=? AND source_type=? AND content_hash=? AND canonical_url=? AND official_id=? AND section=? AND source_date IS ? AND institution_id IS ? AND endpoint_id IS ? AND court IS ? AND case_number IS ? AND title=? AND verified_at=? AND verified_at<=? AND expires_at>?)",
+            "EXISTS(SELECT 1 FROM v2_official_sources s WHERE source_id=? AND source_type=? AND content_hash=? AND canonical_url=? AND official_id=? AND section=? AND source_date IS ? AND institution_id IS ? AND endpoint_id IS ? AND court IS ? AND case_number IS ? AND title=? AND verified_at=? AND verified_at<=? AND expires_at>? AND NOT EXISTS(SELECT 1 FROM v2_citation_bindings b JOIN v2_official_sources old ON old.source_id=b.source_id WHERE old.source_type=s.source_type AND old.official_id=s.official_id AND old.version=s.version AND old.section=s.section AND old.extractor_version=s.extractor_version AND json_extract(b.citation_json,'$._availability')='limited' AND json_extract(b.citation_json,'$._limitedAt')>=s.verified_at))",
             [
               c.sourceId,
               c.kind,
@@ -308,7 +330,14 @@ export function createV2OfficialSourceRepository(core: V2Core, guideHosts: reado
           ),
           core.statement(
             `INSERT INTO v2_citation_bindings(id,workspace_id,source_id,snapshot_revision,citation_json) SELECT ?,?,?,?,? WHERE ${sqlClaim}`,
-            [c.id, g.workspaceId, c.sourceId, g.expectedRevision, JSON.stringify(c), claimId],
+            [
+              c.id,
+              g.workspaceId,
+              c.sourceId,
+              g.expectedRevision,
+              JSON.stringify({ ...c, _availability: "verified" }),
+              claimId,
+            ],
           ),
           core.finish(claimId),
         ]);

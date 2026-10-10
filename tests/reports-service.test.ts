@@ -4,6 +4,8 @@ import { snapshotStatements } from "../src/server/db/v2-core";
 import { createV2OfficialSourceRepository } from "../src/server/db/v2-official-sources";
 import { createV2ReportsRepository } from "../src/server/db/v2-reports";
 import { digest } from "../src/server/modules/files/binary";
+import { OFFICIAL_CATALOG } from "../src/server/modules/legal-retrieval/v2/registry";
+import { makeChunk } from "../src/server/modules/legal-retrieval/v2/source";
 import { decryptExport, planExport } from "../src/server/modules/reports/binary";
 import { createReportsService } from "../src/server/modules/reports/service";
 import { streamChunks, zipByteLength, zipChunks } from "../src/server/modules/reports/zip";
@@ -247,50 +249,30 @@ async function replaceSummary(
 }
 test("reuse bound verified official citations without retrieval; expiry invalidates an existing report and refuses new export", async () => {
   const f = await reportFixture(),
-    repository = createV2OfficialSourceRepository(f.core),
-    sourceId = crypto.randomUUID(),
-    citationId = crypto.randomUUID(),
-    officialId = crypto.randomUUID(),
-    body = "공식 출처 합성 본문",
-    contentHash = await digest(new TextEncoder().encode(body));
-  const citation = {
-    id: citationId,
-    sourceId,
-    kind: "statute" as const,
-    officialId,
-    title: "합성 검증 법령",
-    article: "제1조",
-    effectiveDate: "2026-10-01",
-    url: "https://www.law.go.kr/법령/합성",
-    verifiedAt: f.actor.now,
-    contentHash,
-  };
-  expect(
-    await repository.put(
-      {
-        sourceId,
-        sourceType: "statute",
-        officialId,
-        version: "v1",
-        section: "제1조",
-        contentHash,
-        extractorVersion: "synthetic",
-        canonicalUrl: citation.url,
-        title: citation.title,
-        body,
-        sourceDate: citation.effectiveDate,
-        fetchedAt: f.actor.now,
-        verifiedAt: f.actor.now,
-        expiresAt: "2026-10-07T00:00:00.000Z",
-        rightsProvenance: "synthetic only",
-        institutionId: null,
-        endpointId: null,
-        court: null,
-        caseNumber: null,
-      },
-      citation,
-    ),
-  ).toBe(true);
+    repository = createV2OfficialSourceRepository(f.core);
+  const chunk = await makeChunk(
+    {
+      sourceType: "statute",
+      officialId: "1706",
+      version: "284415",
+      section: "제1조",
+      canonicalUrl: "https://law.go.kr/LSW/lsInfoP.do?lsiSeq=284415",
+      title: "합성 검증 법령",
+      body: "공식 출처 합성 본문",
+      sourceDate: "2026-10-01",
+      fetchedAt: f.actor.now,
+      verifiedAt: f.actor.now,
+      rightsProvenance: OFFICIAL_CATALOG[0].rights,
+      institutionId: null,
+      endpointId: null,
+      court: null,
+      caseNumber: null,
+    },
+    f.actor.now.slice(0, 10),
+  );
+  const citation = chunk.citation,
+    citationId = citation.id;
+  expect(await repository.put(chunk.source, citation)).toBe(true);
   expect(
     await repository.bindCitation(
       { ...f.actor, workspaceId: f.workspaceId, expectedRevision: f.rev() },

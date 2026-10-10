@@ -841,7 +841,7 @@ test("synthetic precedent full text and actual-selector guide flow through the r
     f.db.sqlite.query("SELECT source_type FROM v2_official_sources ORDER BY source_type").all(),
   ).toEqual([{ source_type: "official_guide" }, { source_type: "precedent" }]);
   expect(f.db.sqlite.query("SELECT count(*) AS n FROM v2_citation_bindings").get()).toEqual({
-    n: 2,
+    n: 1,
   });
 });
 
