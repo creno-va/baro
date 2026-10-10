@@ -190,6 +190,39 @@ class LosslessExtraction(unittest.TestCase):
                 self.assertTrue(manifest["artifacts"][0]["multiFrame"])
                 self.assertEqual(manifest["coverage"], {"category": "image", "status": "partial", "observation": "missing"})
 
+    def test_tiff_orientation_is_applied_once_before_metadata_is_removed(self):
+        methods = {2: Image.Transpose.FLIP_LEFT_RIGHT, 3: Image.Transpose.ROTATE_180,
+                   4: Image.Transpose.FLIP_TOP_BOTTOM, 5: Image.Transpose.TRANSPOSE,
+                   6: Image.Transpose.ROTATE_270, 7: Image.Transpose.TRANSVERSE,
+                   8: Image.Transpose.ROTATE_90}
+        with tempfile.TemporaryDirectory(prefix="baro-tiff-orientation-test-") as tmp:
+            root = Path(tmp)
+            for compression in ("raw", "tiff_deflate"):
+                for frames in (1, 2):
+                    for orientation, method in methods.items():
+                        with self.subTest(compression=compression, frames=frames, orientation=orientation):
+                            source = root / "input"
+                            with Image.new("RGB", (80, 40), "white") as first, Image.new("RGB", (80, 40), "blue") as second:
+                                ImageDraw.Draw(first).rectangle((0, 0, 20, 10), fill="black")
+                                ImageDraw.Draw(first).rectangle((50, 20, 79, 39), fill="red")
+                                first.save(source, "TIFF", compression=compression, tiffinfo={274: orientation},
+                                           save_all=frames == 2, append_images=[second] if frames == 2 else [])
+                                expected = first.transpose(method)
+                            expected.save(root / "expected.jpg", "JPEG", quality=80)
+                            expected.save(root / "expected-sanitized.jpg", "JPEG", quality=82, optimize=False)
+                            probe = processor.inspect(source)
+                            result = processor.process(source, root, probe, 0, 0)
+                            output = root / result["artifacts"][0]["path"]
+                            self.assertEqual(output.read_bytes(), (root / "expected.jpg").read_bytes())
+                            self.assertEqual(result["artifacts"][0]["multiFrame"], frames == 2)
+                            self.assertEqual(result["coverage"]["status"], "partial")
+                            processor.sanitize(source, root, probe)
+                            self.assertEqual((root / "sanitized.bin").read_bytes(), (root / "expected-sanitized.jpg").read_bytes())
+                            for path in (output, root / "sanitized.bin"):
+                                with Image.open(path) as image:
+                                    self.assertEqual(image.size, expected.size)
+                                    self.assertFalse(image.getexif())
+
     @unittest.skipUnless(shutil.which("ffmpeg") and shutil.which("ffprobe"), "native audio tools unavailable")
     def test_wav_units_preserve_every_sample_across_thirty_seconds(self):
         with tempfile.TemporaryDirectory(prefix="baro-audio-test-") as tmp:

@@ -152,7 +152,9 @@ def inspect(source):
 
 def normalized_rgb(image):
     image.load()
-    if image.getexif().get(274, 1) in (2, 3, 4, 5, 6, 7, 8):
+    # TIFF's decoder already applies orientation. On Pillow 9.4 a multi-frame
+    # load also detaches fp, so a later lazy getexif() cannot read its IFD.
+    if image.format != "TIFF" and image.getexif().get(274, 1) in (2, 3, 4, 5, 6, 7, 8):
         image = ImageOps.exif_transpose(image)
     if image.mode in ("RGBA", "LA") or "transparency" in image.info:
         rgba = image.convert("RGBA")
