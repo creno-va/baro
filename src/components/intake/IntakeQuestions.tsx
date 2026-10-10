@@ -85,6 +85,7 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
     [deny],
   );
   const question = result?.questions[index];
+  const answerTooLong = answerState === "answered" && [...value.trim()].length > 1000;
   const dirty = value !== (question?.answer ?? "") || answerState !== question?.answerState;
   draftSnapshot.current = result
     ? { dirty: dirty || drafts.current.size > 0, revision: result.revision }
@@ -128,7 +129,9 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
         <Button
           onClick={() => (dirty ? void save(true) : void advance())}
           disabled={
-            locked || (dirty && (!answerState || (answerState === "answered" && !value.trim())))
+            locked ||
+            (dirty &&
+              (!answerState || (answerState === "answered" && (!value.trim() || answerTooLong))))
           }
         >
           {dirty
@@ -381,7 +384,7 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
       !result ||
       !question ||
       !state ||
-      (state === "answered" && !value.trim()) ||
+      (state === "answered" && (!value.trim() || [...value.trim()].length > 1000)) ||
       pending.current ||
       result.processing
     )
@@ -599,7 +602,6 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
                           <Textarea
                             id="question-answer"
                             value={answerState === "answered" ? value : ""}
-                            maxLength={1000}
                             disabled={locked}
                             onChange={(event) => {
                               setValue(event.target.value);
@@ -607,11 +609,20 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
                             }}
                             placeholder="여기에 편하게 적어주세요."
                           />
+                          {answerTooLong && (
+                            <p role="alert">
+                              답변은 1,000자까지 입력할 수 있어요. 내용을 줄인 뒤 저장해 주세요.
+                            </p>
+                          )}
                         </>
                       )}
                       {answerState === "unknown" || answerState === "skipped" ? (
                         <p className="intake-scene-answer-state">
-                          {answerState === "unknown" ? "모름" : "건너뛰기"}으로 저장했어요.
+                          {question.answerState === answerState
+                            ? answerState === "unknown"
+                              ? "모름으로 저장했어요."
+                              : "건너뛰기로 저장했어요."
+                            : "아직 저장되지 않았어요. 다시 시도해 주세요."}
                         </p>
                       ) : null}
                       <div className="intake-scene-options">
@@ -651,7 +662,7 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
                               !result.canPrepareSummary &&
                               !dirty) ||
                             !answerState ||
-                            (answerState === "answered" && !value.trim())
+                            (answerState === "answered" && (!value.trim() || answerTooLong))
                           }
                         >
                           {busy
@@ -704,7 +715,9 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
                         <Button
                           variant="ghost"
                           disabled={
-                            locked || !answerState || (answerState === "answered" && !value.trim())
+                            locked ||
+                            !answerState ||
+                            (answerState === "answered" && (!value.trim() || answerTooLong))
                           }
                           onClick={() => void save(false)}
                         >
