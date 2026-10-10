@@ -38,16 +38,31 @@ export function zipNames(sources: readonly ZipSource[]) {
       /^\.+$/.test(source.name)
     )
       throw new Error("EXPORT_INVALID_FILENAME");
-    let name = source.name;
+    // Extraction must remain lossless on case-insensitive, 255-byte filesystems.
+    const safe =
+      source.name
+        .normalize("NFC")
+        .replace(/[<>:"|?*]/g, "_")
+        .replace(/[ .]+$/, "") || "original";
+    const dot = safe.lastIndexOf(".");
+    const extension = dot > 0 ? safe.slice(dot) : "";
+    const rawBase = dot > 0 ? safe.slice(0, dot) : safe;
+    const base = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i.test(rawBase) ? `_${rawBase}` : rawBase;
+    const fit = (value: string, bytes: number) => {
+      let output = "";
+      for (const char of value) {
+        if (encoder.encode(output + char).length > bytes) break;
+        output += char;
+      }
+      return output;
+    };
+    const ext = fit(extension, 64);
+    const candidate = (suffix: string) =>
+      `${fit(base, 255 - encoder.encode(suffix + ext).length)}${suffix}${ext}`;
+    let name = candidate("");
     let counter = 2;
-    while (used.has(name)) {
-      const dot = source.name.lastIndexOf(".");
-      name =
-        dot > 0
-          ? `${source.name.slice(0, dot)} (${counter++})${source.name.slice(dot)}`
-          : `${source.name} (${counter++})`;
-    }
-    used.add(name);
+    while (used.has(name.toLowerCase())) name = candidate(` (${counter++})`);
+    used.add(name.toLowerCase());
     return encoder.encode(name);
   });
 }

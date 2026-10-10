@@ -207,7 +207,11 @@ export function ReportReview({ caseId }: { caseId: string }) {
   async function save() {
     accept(
       await ownedResult(
-        api.reports.save(caseId, { content, maskIdentifiers: mask, excludedFileIds: excluded }),
+        api.reports.save(
+          caseId,
+          { content, maskIdentifiers: mask, excludedFileIds: excluded },
+          report?.revision,
+        ),
       ),
     );
     setNotice("검토 내용을 저장했어요.");
