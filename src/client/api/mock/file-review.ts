@@ -8,6 +8,30 @@ import {
   type WorkspaceMockRuntime,
 } from "./workspace";
 
+function mockObservations(fileId: string, extractedText?: string): FileReviewView["observations"] {
+  const points = [...(extractedText || "합성 추출 내용")],
+    chunks: string[] = [];
+  for (let offset = 0; offset < points.length; offset += 5000) {
+    const text = points
+      .slice(offset, offset + 5000)
+      .join("")
+      .trim();
+    if (text) chunks.push(text);
+  }
+  if (!chunks.length) chunks.push("합성 추출 내용");
+  return chunks.map((text, ordinal) => {
+    const value: FileReviewView["observations"][number]["value"] = {
+      id: ordinal === 0 ? `observation-${fileId}` : `observation-${fileId}-${ordinal}`,
+      text,
+      position: { kind: "document", page: 1, paragraph: null, table: null },
+      certainty: "observed",
+      userEdited: false,
+      included: true,
+    };
+    return { ordinal, value, original: { ...value } };
+  });
+}
+
 export async function handleFileReviewMock(
   runtime: WorkspaceMockRuntime,
   request: Request,
@@ -44,30 +68,7 @@ export async function handleFileReviewMock(
                   pages: [{ page: 1, status: "processed" }],
                 }
               : null,
-          observations:
-            file.status === "ready"
-              ? [
-                  {
-                    ordinal: 0,
-                    value: {
-                      id: `observation-${fileId}`,
-                      text: file.extractedText || "합성 추출 내용",
-                      position: { kind: "document", page: 1, paragraph: null, table: null },
-                      certainty: "observed",
-                      userEdited: false,
-                      included: true,
-                    },
-                    original: {
-                      id: `observation-${fileId}`,
-                      text: file.extractedText || "합성 추출 내용",
-                      position: { kind: "document", page: 1, paragraph: null, table: null },
-                      certainty: "observed",
-                      userEdited: false,
-                      included: true,
-                    },
-                  },
-                ]
-              : [],
+          observations: file.status === "ready" ? mockObservations(fileId, file.extractedText) : [],
           nextAfterOrdinal: null,
           pendingReview: null,
           recovery: null,
