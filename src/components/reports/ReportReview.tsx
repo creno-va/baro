@@ -32,6 +32,7 @@ export function ReportReview({ caseId }: { caseId: string }) {
   const owner = useRef<string | null>(null);
   const lock = useRef(false);
   const loadSequence = useRef(0);
+  const focusRequest = useRef(0);
   const accept = useCallback((value: ReportView) => {
     setReport(value);
     setContent(value.content);
@@ -57,51 +58,74 @@ export function ReportReview({ caseId }: { caseId: string }) {
     setAccessChecking(false);
     setBusy("");
   }, []);
-  const verifyOwner = useCallback(async () => {
-    const session = await api.session.get();
-    const id = session.user?.id;
-    if (
-      !id ||
-      session.user?.accountType !== "customer" ||
-      (owner.current && owner.current !== id)
-    ) {
-      clearOwnerState();
-      throw Object.assign(
-        new Error(
-          session.user?.accountType !== "customer"
-            ? "고객 역할로 로그인한 뒤 리포트를 다시 확인해 주세요."
-            : "계정 또는 접근 상태가 변경됐어요. 로그인 후 리포트를 다시 확인해 주세요.",
-        ),
-        {
-          code: !id
-            ? "UNAUTHENTICATED"
-            : session.user?.accountType !== "customer"
-              ? "ROLE_REQUIRED"
-              : "NOT_FOUND",
-        },
-      );
-    }
-    setNeedsConsent(session.needsConsent);
-    owner.current = id;
-    return id;
-  }, [clearOwnerState]);
+  const verifyOwner = useCallback(
+    async (isCurrent?: () => boolean) => {
+      const sequence = loadSequence.current;
+      const current = isCurrent ?? (() => sequence === loadSequence.current);
+      const superseded = () =>
+        Object.assign(new Error("접근 확인 요청이 갱신됐어요."), {
+          code: "OWNER_CHECK_SUPERSEDED",
+        });
+      let session: Awaited<ReturnType<typeof api.session.get>>;
+      try {
+        session = await api.session.get();
+      } catch (e) {
+        if (!current()) throw superseded();
+        throw e;
+      }
+      if (!current()) throw superseded();
+      const id = session.user?.id;
+      if (
+        !id ||
+        session.user?.accountType !== "customer" ||
+        (owner.current && owner.current !== id)
+      ) {
+        clearOwnerState();
+        throw Object.assign(
+          new Error(
+            session.user?.accountType !== "customer"
+              ? "고객 역할로 로그인한 뒤 리포트를 다시 확인해 주세요."
+              : "계정 또는 접근 상태가 변경됐어요. 로그인 후 리포트를 다시 확인해 주세요.",
+          ),
+          {
+            ownerRevoked: true,
+            code: !id
+              ? "UNAUTHENTICATED"
+              : session.user?.accountType !== "customer"
+                ? "ROLE_REQUIRED"
+                : "NOT_FOUND",
+          },
+        );
+      }
+      setNeedsConsent(session.needsConsent);
+      owner.current = id;
+      return id;
+    },
+    [clearOwnerState],
+  );
   const load = useCallback(async () => {
     const sequence = ++loadSequence.current;
     setAccessChecking(true);
     setBusy("리포트 확인 중…");
     setError("");
     try {
-      await verifyOwner();
+      await verifyOwner(() => sequence === loadSequence.current);
       const [value, materials] = await Promise.all([
         api.reports.get(caseId),
         api.files.list(caseId),
       ]);
-      await verifyOwner();
+      await verifyOwner(() => sequence === loadSequence.current);
       if (sequence !== loadSequence.current) return;
       accept(value);
       setFiles(materials);
       setSelected([]);
     } catch (e) {
+      const failure = e as { code?: string; ownerRevoked?: boolean };
+      if (
+        failure?.code === "OWNER_CHECK_SUPERSEDED" ||
+        (sequence !== loadSequence.current && !failure?.ownerRevoked)
+      )
+        return;
       if ((e as { code?: string })?.code === "CONSENT_REQUIRED") setNeedsConsent(true);
       if (
         [
@@ -111,9 +135,9 @@ export function ReportReview({ caseId }: { caseId: string }) {
           "ROLE_REQUIRED",
           "ORIGIN_NOT_ALLOWED",
         ].includes((e as { code?: string })?.code ?? "")
-      )
-        clearOwnerState();
-      else if (sequence !== loadSequence.current) return;
+      ) {
+        if (!failure?.ownerRevoked) clearOwnerState();
+      }
       setError(e instanceof Error ? e.message : "리포트를 확인하지 못했어요.");
     } finally {
       if (sequence === loadSequence.current) {
@@ -133,14 +157,33 @@ export function ReportReview({ caseId }: { caseId: string }) {
       }
       if (document.visibilityState === "hidden") return;
       const sequence = loadSequence.current;
+      const request = ++focusRequest.current;
+      const current = () => sequence === loadSequence.current && request === focusRequest.current;
       setAccessChecking(true);
-      void verifyOwner()
+      void verifyOwner(current)
         .catch((e: unknown) => {
-          clearOwnerState();
+          const failure = e as { code?: string; ownerRevoked?: boolean };
+          if (
+            request !== focusRequest.current ||
+            failure?.code === "OWNER_CHECK_SUPERSEDED" ||
+            (sequence !== loadSequence.current && !failure?.ownerRevoked)
+          )
+            return;
+          if (
+            [
+              "UNAUTHENTICATED",
+              "NOT_FOUND",
+              "FORBIDDEN",
+              "ROLE_REQUIRED",
+              "ORIGIN_NOT_ALLOWED",
+            ].includes((e as { code?: string })?.code ?? "")
+          ) {
+            if (!failure?.ownerRevoked) clearOwnerState();
+          }
           setError(e instanceof Error ? e.message : "로그인 상태를 다시 확인해 주세요.");
         })
         .finally(() => {
-          if (sequence === loadSequence.current) setAccessChecking(false);
+          if (current()) setAccessChecking(false);
         });
     };
     window.addEventListener("focus", check);
@@ -171,6 +214,7 @@ export function ReportReview({ caseId }: { caseId: string }) {
   }, [dirty]);
   async function run(label: string, action: () => Promise<void>) {
     if (lock.current || accessChecking) return;
+    const sequence = loadSequence.current;
     lock.current = true;
     setBusy(label);
     setError("");
@@ -179,6 +223,12 @@ export function ReportReview({ caseId }: { caseId: string }) {
       await verifyOwner();
       await action();
     } catch (e) {
+      const failure = e as { code?: string; ownerRevoked?: boolean };
+      if (
+        failure?.code === "OWNER_CHECK_SUPERSEDED" ||
+        (sequence !== loadSequence.current && !failure?.ownerRevoked)
+      )
+        return;
       if ((e as { code?: string })?.code === "CONSENT_REQUIRED") setNeedsConsent(true);
       if (
         [
@@ -188,20 +238,19 @@ export function ReportReview({ caseId }: { caseId: string }) {
           "ROLE_REQUIRED",
           "ORIGIN_NOT_ALLOWED",
         ].includes((e as { code?: string })?.code ?? "")
-      )
-        clearOwnerState();
+      ) {
+        if (!failure?.ownerRevoked) clearOwnerState();
+      }
       setError(e instanceof Error ? e.message : "처리하지 못했어요. 다시 시도해 주세요.");
     } finally {
       lock.current = false;
-      setBusy("");
+      if (sequence === loadSequence.current) setBusy("");
     }
   }
   async function ownedResult<T>(work: Promise<T>) {
     const sequence = loadSequence.current;
     const value = await work;
-    await verifyOwner();
-    if (sequence !== loadSequence.current)
-      throw Object.assign(new Error("접근 상태를 다시 확인해 주세요."), { code: "NOT_FOUND" });
+    await verifyOwner(() => sequence === loadSequence.current);
     return value;
   }
   async function save() {

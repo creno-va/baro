@@ -42,11 +42,13 @@ export function AccountSettings() {
   const loadSequence = useRef(0);
   const owner = useRef<string | null>(null);
   const [checking, setChecking] = useState(true);
+  const [accountType, setAccountType] = useState<"customer" | "lawyer" | null>(null);
   const clearOwnerState = useCallback(() => {
     ++loadSequence.current;
     lock.current = false;
     owner.current = null;
     setUsage(null);
+    setAccountType(null);
     setCases([]);
     setAccess(null);
     setReady(false);
@@ -82,9 +84,13 @@ export function AccountSettings() {
     setError("");
     try {
       await verifyOwner();
+      const session = await api.session.get();
+      if (!session.user) throw new Error("로그인 후 설정을 다시 확인해 주세요.");
+      if (sequence !== loadSequence.current) return;
+      setAccountType(session.user.accountType);
       const results = await Promise.allSettled([
         api.account.usage(),
-        api.cases.list(),
+        session.user.accountType === "customer" ? api.cases.list() : Promise.resolve([]),
         api.account.deletionAccess(),
       ]);
       if (sequence !== loadSequence.current) return;
@@ -424,69 +430,73 @@ export function AccountSettings() {
         </div>
       </section>
       <div className="settings-details-grid">
-        <section className="settings-card settings-cases" aria-labelledby="settings-cases-title">
-          <div className="settings-section-heading">
-            <span className="settings-section-icon">
-              <FolderOpen size={23} aria-hidden="true" />
-            </span>
-            <div>
-              <h2 id="settings-cases-title">보관한 사건</h2>
-              <p>나의 이야기를 확인하고 관리해요.</p>
-            </div>
-            {!checking && <span className="settings-count">{cases.length}</span>}
-          </div>
-          <div className="settings-case-list">
-            {!busy && !checking && cases.length === 0 && (
-              <div className="settings-empty">
-                <FolderOpen size={30} aria-hidden="true" />
-                <p>보관한 사건이 없어요.</p>
-                <a className="settings-text-link" href="/cases/new">
-                  새 사건 만들기 <ArrowRight size={16} aria-hidden="true" />
-                </a>
+        {accountType === "customer" && (
+          <section className="settings-card settings-cases" aria-labelledby="settings-cases-title">
+            <div className="settings-section-heading">
+              <span className="settings-section-icon">
+                <FolderOpen size={23} aria-hidden="true" />
+              </span>
+              <div>
+                <h2 id="settings-cases-title">보관한 사건</h2>
+                <p>나의 이야기를 확인하고 관리해요.</p>
               </div>
-            )}
-            {!checking &&
-              cases.map((item) => (
-                <div className="settings-case" key={item.id}>
-                  <span className="settings-case-icon">
-                    <FileText size={20} aria-hidden="true" />
-                  </span>
-                  <div className="settings-case-info">
-                    <a
-                      className="settings-case-title"
-                      href={`/cases/${encodeURIComponent(item.id)}`}
-                    >
-                      {item.title}
-                    </a>
-                    <p className="settings-muted">
-                      {new Date(item.updatedAt).toLocaleDateString("ko-KR")} ·{" "}
-                      {item.schemaVersion === "1" ? "기존 사건" : "사건 정리"}
-                    </p>
-                    <a
-                      className="settings-report-link"
-                      href={`/cases/${encodeURIComponent(item.id)}/reports`}
-                    >
-                      리포트 확인 <ChevronRight size={14} aria-hidden="true" />
-                    </a>
-                  </div>
-                  <button
-                    className="settings-case-delete"
-                    type="button"
-                    disabled={Boolean(busy) || checking}
-                    onClick={(event) => {
-                      event.currentTarget.focus();
-                      open(item);
-                    }}
-                  >
-                    <Trash2 size={15} aria-hidden="true" /> 사건 삭제
-                  </button>
+              {!checking && <span className="settings-count">{cases.length}</span>}
+            </div>
+            <div className="settings-case-list">
+              {!busy && !checking && cases.length === 0 && (
+                <div className="settings-empty">
+                  <FolderOpen size={30} aria-hidden="true" />
+                  <p>보관한 사건이 없어요.</p>
+                  <a className="settings-text-link" href="/cases/new">
+                    새 사건 만들기 <ArrowRight size={16} aria-hidden="true" />
+                  </a>
                 </div>
-              ))}
-          </div>
-          <p className="settings-case-note">
-            삭제하기 전에 필요한 PDF와 자료를 다운로드하세요. 삭제 후 되돌릴 수 없어요.
-          </p>
-        </section>
+              )}
+              {!checking &&
+                cases.map((item) => (
+                  <div className="settings-case" key={item.id}>
+                    <span className="settings-case-icon">
+                      <FileText size={20} aria-hidden="true" />
+                    </span>
+                    <div className="settings-case-info">
+                      <a
+                        className="settings-case-title"
+                        href={`/cases/${encodeURIComponent(item.id)}`}
+                      >
+                        {item.title}
+                      </a>
+                      <p className="settings-muted">
+                        {new Date(item.updatedAt).toLocaleDateString("ko-KR")} ·{" "}
+                        {item.schemaVersion === "1" ? "기존 사건" : "사건 정리"}
+                      </p>
+                      {item.schemaVersion !== "1" && (
+                        <a
+                          className="settings-report-link"
+                          href={`/cases/${encodeURIComponent(item.id)}/reports`}
+                        >
+                          리포트 확인 <ChevronRight size={14} aria-hidden="true" />
+                        </a>
+                      )}
+                    </div>
+                    <button
+                      className="settings-case-delete"
+                      type="button"
+                      disabled={Boolean(busy) || checking}
+                      onClick={(event) => {
+                        event.currentTarget.focus();
+                        open(item);
+                      }}
+                    >
+                      <Trash2 size={15} aria-hidden="true" /> 사건 삭제
+                    </button>
+                  </div>
+                ))}
+            </div>
+            <p className="settings-case-note">
+              삭제하기 전에 필요한 PDF와 자료를 다운로드하세요. 삭제 후 되돌릴 수 없어요.
+            </p>
+          </section>
+        )}
         <section className="settings-card settings-help" aria-labelledby="settings-help-title">
           <div className="settings-section-heading">
             <span className="settings-section-icon settings-section-icon-neutral">
