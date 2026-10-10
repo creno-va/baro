@@ -75,6 +75,8 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
   const [error, setError] = useState<ReturnType<typeof problem> | null>(null);
   const [busy, setBusy] = useState("");
   const [draft, setDraft] = useState("");
+  const messageLength = [...draft.trim()].length;
+  const messageTooLong = messageLength > 10000;
   const [selected, setSelected] = useState<string[]>([]);
   const [notice, setNotice] = useState("");
   const [preview, setPreview] = useState<FileView | null>(null);
@@ -319,7 +321,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
   }
   async function send(event: SyntheticEvent) {
     event.preventDefault();
-    if (readonly || !view || !draft.trim()) return;
+    if (readonly || !view || !draft.trim() || messageTooLong) return;
     const text = draft.trim();
     followingChat.current = true;
     await run("send", async (epoch) => {
@@ -710,13 +712,13 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                       <textarea
                         ref={draftInput}
                         id="workspace-message"
-                        maxLength={10000}
                         rows={2}
                         value={draft}
                         disabled={readonly || busy === "send"}
                         onChange={(event) => setDraft(event.target.value)}
                         placeholder="추가로 기억나는 사실이나 궁금한 점을 이야기해 주세요."
-                        aria-describedby="workspace-chat-notice"
+                        aria-describedby="workspace-message-length workspace-chat-notice"
+                        aria-invalid={messageTooLong}
                         onKeyDown={(event) => {
                           if (
                             event.key === "Enter" &&
@@ -725,7 +727,8 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                             !busy &&
                             !pendingResponse &&
                             !readonly &&
-                            draft.trim()
+                            draft.trim() &&
+                            !messageTooLong
                           ) {
                             event.preventDefault();
                             event.currentTarget.form?.requestSubmit();
@@ -739,7 +742,9 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                         <Button
                           className="workspace-send"
                           type="submit"
-                          disabled={!!busy || !draft.trim() || readonly || pendingResponse}
+                          disabled={
+                            !!busy || !draft.trim() || messageTooLong || readonly || pendingResponse
+                          }
                         >
                           {busy === "send" ? (
                             <LoaderCircle className="workspace-spin" size={17} />
@@ -750,6 +755,11 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                         </Button>
                       </div>
                     </div>
+                    <p id="workspace-message-length" role={messageTooLong ? "alert" : undefined}>
+                      {messageLength.toLocaleString()} / 10,000자
+                      {messageTooLong &&
+                        " · 10,000자 이하로 줄여 주세요. 입력한 내용은 그대로 남아 있어요."}
+                    </p>
                     <p className="workspace-chat-notice" id="workspace-chat-notice">
                       BARO는 AI로 사실을 정리하며 법률 판단을 대신하지 않아요.
                       <br className="workspace-mobile-break" /> 중요한 내용은 원본과 전문가에게
