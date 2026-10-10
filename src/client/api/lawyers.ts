@@ -39,10 +39,16 @@ export function rotateLawyers(items: LawyerView[]) {
   const offset = day % sorted.length;
   return [...sorted.slice(offset), ...sorted.slice(0, offset)];
 }
-async function request(path: string, method = "GET", body?: unknown): Promise<unknown> {
+async function request(
+  path: string,
+  method = "GET",
+  body?: unknown,
+  signal?: AbortSignal,
+): Promise<unknown> {
   return sharedRequest("lawyers.http", undefined, {
     path,
     method,
+    ...(signal ? { signal } : {}),
     ...(body === undefined ? {} : { body }),
   });
 }
@@ -74,17 +80,21 @@ export function fromVerified(p: V2PublicLawyer): LawyerView {
   };
 }
 const real = {
-  async list(filters: LawyerFilters = {}): Promise<LawyerView[]> {
+  async list(filters: LawyerFilters = {}, signal?: AbortSignal): Promise<LawyerView[]> {
     const params = new URLSearchParams();
     if (filters.query?.trim()) params.set("name", filters.query.trim());
     if (filters.region) params.set("region", filters.region);
     if (filters.practiceArea) params.set("legalField", filters.practiceArea);
-    const first = v2DirectorySnapshotSchema.parse(await request(`/api/v2/lawyers?${params}`));
+    const first = v2DirectorySnapshotSchema.parse(
+      await request(`/api/v2/lawyers?${params}`, "GET", undefined, signal),
+    );
     const items = first.items.map(fromVerified);
     let cursor = first.nextCursor;
     while (cursor) {
       params.set("cursor", cursor);
-      const page = v2DirectorySnapshotSchema.parse(await request(`/api/v2/lawyers?${params}`));
+      const page = v2DirectorySnapshotSchema.parse(
+        await request(`/api/v2/lawyers?${params}`, "GET", undefined, signal),
+      );
       items.push(...page.items.map(fromVerified));
       cursor = page.nextCursor;
     }
@@ -92,7 +102,7 @@ const real = {
     const own: SelfProfile[] = [];
     do {
       const page = selfDirectoryPageSchema.parse(
-        await request(`/api/v2/lawyers/self-service?${params}`),
+        await request(`/api/v2/lawyers/self-service?${params}`, "GET", undefined, signal),
       );
       own.push(...page.items);
       cursor = page.nextCursor;
@@ -147,7 +157,8 @@ async function adapter() {
   return real;
 }
 const mockTransport = {
-  list: (filters: LawyerFilters = {}) => sharedRequest<LawyerView[]>("lawyers.list", filters),
+  list: (filters: LawyerFilters = {}, signal?: AbortSignal) =>
+    sharedRequest<LawyerView[]>("lawyers.list", filters, { ...(signal ? { signal } : {}) }),
   get: (id: string) => sharedRequest<LawyerView>("lawyers.get", { id }),
   getMine: () => sharedRequest<LawyerView>("lawyers.getMine"),
   saveMine: (profile: LawyerView) => sharedRequest<LawyerView>("lawyers.saveMine", profile),
@@ -161,8 +172,11 @@ const mockTransport = {
   },
 };
 export const lawyers = {
-  async list(filters: LawyerFilters = {}) {
-    return (await adapter()).list(filters);
+  async list(filters: LawyerFilters = {}, signal?: AbortSignal) {
+    signal?.throwIfAborted();
+    const result = await (await adapter()).list(filters, signal);
+    signal?.throwIfAborted();
+    return result;
   },
   async get(id: string) {
     return (await adapter()).get(id);
@@ -217,20 +231,31 @@ export const lawyerAssets = {
       if (import.meta.env.PUBLIC_API_MODE === "mock") await import("./mock/lawyers");
       return sharedRequest("lawyers.assets");
     }
-    const response = await checkedAssetRequest("/api/v2/me/lawyer/self-profile/assets");
-    const page = z
-      .object({
-        items: z.array(
-          z.object({
-            id: z.string(),
-            revision: z.number(),
-            status: z.string(),
-            purpose: z.string(),
-          }),
-        ),
-      })
-      .parse(await response.json());
-    return page.items.map((item) => ({ ...item, kind: "image" as const }));
+    const items: LawyerAssetView[] = [];
+    let cursor: string | null = null;
+    do {
+      const params = new URLSearchParams();
+      if (cursor) params.set("cursor", cursor);
+      const response = await checkedAssetRequest(
+        `/api/v2/me/lawyer/self-profile/assets${params.size ? `?${params}` : ""}`,
+      );
+      const page = z
+        .object({
+          items: z.array(
+            z.object({
+              id: z.string(),
+              revision: z.number(),
+              status: z.string(),
+              purpose: z.string(),
+            }),
+          ),
+          nextCursor: z.string().nullable(),
+        })
+        .parse(await response.json());
+      items.push(...page.items.map((item) => ({ ...item, kind: "image" as const })));
+      cursor = page.nextCursor;
+    } while (cursor);
+    return items;
   },
   async upload(
     profileId: string,

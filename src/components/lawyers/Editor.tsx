@@ -251,7 +251,7 @@ export function Editor() {
     await mutate(() => api.lawyers.saveMine(draft), "프로필을 저장했어요.");
   };
   const publish = async (published: boolean) => {
-    if (!saved || busy || !canMutate) return;
+    if (!saved || busy || !canMutate || (published && dirty)) return;
     await mutate(
       () => api.lawyers.publishMine(published, saved),
       published
@@ -262,6 +262,7 @@ export function Editor() {
   const attach = (asset: LawyerAssetView) => {
     if (!draft || !canMutate || asset.status !== "ready") return;
     if (asset.purpose === "profile_photo") {
+      setPhotoPreview(null);
       setDraft({ ...draft, photoAssetId: asset.id, photoUrl: selfAssetUrl(draft.id, asset.id) });
     } else {
       setDraft({
@@ -951,7 +952,7 @@ export function Editor() {
                   </label>
                   <div className="mt-3 flex flex-wrap gap-2">
                     <Button
-                      disabled={busy || !canMutate || !publicationConsent}
+                      disabled={busy || !canMutate || !publicationConsent || dirty}
                       onClick={() => void publish(true)}
                     >
                       동의하고 공개

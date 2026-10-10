@@ -12,6 +12,7 @@ import {
   createV2DirectoryRepository,
   DIRECTORY_ROTATION_ALGORITHM,
 } from "../src/server/db/v2-directory";
+import { cleanupExpiredDirectorySnapshots } from "../src/server/db/v2-directory-cleanup";
 import { createV2LawyersRepository } from "../src/server/db/v2-lawyers";
 import { application, publicLawyer } from "./fixtures/contracts/v2";
 import { createTestDatabase } from "./helpers/d1";
@@ -327,13 +328,13 @@ test("daily KST rotation is stable within a snapshot and deterministic for the s
   }
   expect(ids).toEqual(rawOrder(f, a.id).map((i) => i.profile_id));
   expect(new Set(ids).size).toBe(5);
+  const order = rawOrder(f, a.id).map((i) => i.profile_id);
   const tomorrow = await start(
     f,
     { limit: 50 },
     "2026-10-06T15:00:00.000Z",
     "2026-10-06T15:05:00.000Z",
   );
-  const order = rawOrder(f, a.id).map((i) => i.profile_id);
   const firstId = order[0];
   if (!firstId) throw new Error("Synthetic rotation requires an approved profile");
   expect(tomorrow.page.items.map((i) => i.id)).toEqual([...order.slice(1), firstId]);
@@ -601,4 +602,55 @@ test("every continuous page uses a constant bounded query count with no per-prof
   expect(next?.nextCursor).toBeNull();
   expect(queries).toBe(3);
   expect(limits).toEqual([50]);
+});
+
+test("new searches prune expired snapshots and their items while preserving a live cursor", async () => {
+  const f = await fixture();
+  await published(f, 0);
+  await published(f, 1);
+  const expired = await start(f, { limit: 1 });
+  const active = await start(f, { limit: 1 });
+  f.database.sqlite
+    .query("UPDATE v2_directory_snapshots SET expires_at=? WHERE id=?")
+    .run("2026-10-06T00:00:01.000Z", expired.id);
+  await f.directory.create(
+    "2026-10-06T00:00:02.000Z",
+    { limit: 1 },
+    {
+      id: crypto.randomUUID(),
+      expiresAt: "2026-10-06T00:05:02.000Z",
+    },
+  );
+  expect(
+    f.database.sqlite.query("SELECT id FROM v2_directory_snapshots WHERE id=?").get(expired.id),
+  ).toBeNull();
+  expect(
+    f.database.sqlite
+      .query("SELECT snapshot_id FROM v2_directory_items WHERE snapshot_id=?")
+      .all(expired.id),
+  ).toEqual([]);
+  expect(
+    await f.directory.page("2026-10-06T00:00:02.000Z", {
+      limit: 1,
+      cursor: active.page.nextCursor ?? "",
+    }),
+  ).not.toBeNull();
+});
+
+test("scheduled cleanup deletes at most 1000 item rows and 100 empty headers per batch", async () => {
+  const f = await fixture();
+  await published(f, 0);
+  await published(f, 1);
+  for (let i = 0; i < 501; i++) await start(f, { limit: 1 });
+  f.database.sqlite
+    .query("UPDATE v2_directory_snapshots SET expires_at=?")
+    .run("2026-10-06T00:00:01.000Z");
+  await cleanupExpiredDirectorySnapshots(f.database.binding, "2026-10-06T00:00:02.000Z");
+  const count = (table: string) =>
+    (f.database.sqlite.query(`SELECT count(*) AS n FROM ${table}`).get() as { n: number }).n;
+  expect(count("v2_directory_items")).toBe(2);
+  expect(count("v2_directory_snapshots")).toBe(401);
+  await cleanupExpiredDirectorySnapshots(f.database.binding, "2026-10-06T00:00:02.000Z");
+  expect(count("v2_directory_items")).toBe(0);
+  expect(count("v2_directory_snapshots")).toBe(301);
 });
