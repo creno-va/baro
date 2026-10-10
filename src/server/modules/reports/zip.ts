@@ -47,7 +47,9 @@ export function zipNames(sources: readonly ZipSource[]) {
     const dot = safe.lastIndexOf(".");
     const extension = dot > 0 ? safe.slice(dot) : "";
     const rawBase = dot > 0 ? safe.slice(0, dot) : safe;
-    const base = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i.test(rawBase) ? `_${rawBase}` : rawBase;
+    const base = /^(con|prn|aux|nul|com[1-9¹²³]|lpt[1-9¹²³])(?:\.|$)/i.test(safe)
+      ? `_${rawBase}`
+      : rawBase;
     const fit = (value: string, bytes: number) => {
       let output = "";
       for (const char of value) {
