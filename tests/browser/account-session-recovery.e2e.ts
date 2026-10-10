@@ -546,3 +546,66 @@ for (const failure of ["http", "network", "invalid-json"] as const) {
     },
   );
 }
+
+for (const failedRead of ["initial", "recheck", "parallel-owner"] as const) {
+  test(`current settings access failure stays visible and permits retry: ${failedRead}`, async ({
+    page,
+  }) => {
+    let failing = true,
+      reads = 0;
+    await page.route("**/api/**", async (route) => {
+      const path = new URL(route.request().url()).pathname;
+      if (!path.startsWith("/api/")) return route.continue();
+      if (path === "/api/me/session")
+        return route.fulfill({
+          json: {
+            user: { id: "synthetic-owner", name: "Synthetic", accountType: "customer" },
+            needsConsent: false,
+          },
+        });
+      if (path === "/api/me/deletion") {
+        reads++;
+        if (failing && reads === (failedRead === "initial" ? 1 : failedRead === "recheck" ? 3 : -1))
+          return route.fulfill({
+            status: 503,
+            json: { error: { code: "INTERNAL_ERROR", retryable: true } },
+          });
+        return route.fulfill({
+          json: {
+            ownerTag: (failing && failedRead === "parallel-owner" && reads === 2
+              ? "b"
+              : "a"
+            ).repeat(64),
+            recentOAuth: false,
+            authenticatedAt: null,
+            providers: ["google"],
+          },
+        });
+      }
+      if (path.endsWith("/usage"))
+        return route.fulfill({
+          json: {
+            newCases: { used: 0, limit: 3 },
+            aiResponses: { used: 0, limit: 200 },
+            mediaMinutes: { used: 0, limit: 60 },
+            storageBytes: { used: 0, limit: 10000000000 },
+          },
+        });
+      if (path === "/api/cases") return route.fulfill({ json: { items: [], nextCursor: null } });
+      if (path === "/api/v2/cases")
+        return route.fulfill({ json: { items: [], nextCursor: null, previews: [] } });
+      return route.fulfill({ status: 404, json: {} });
+    });
+    await page.goto("/settings");
+    await expect(page.getByRole("alert")).toContainText("계정 상태를 확인하지 못했어요.");
+    await expect(
+      page.getByRole("button", { name: "계정과 모든 사건 삭제", exact: true }),
+    ).toBeDisabled();
+    const retry = page.getByRole("button", { name: "다시 확인", exact: true });
+    await expect(retry).toBeEnabled();
+    failing = false;
+    await retry.click();
+    await expect(page.getByRole("button", { name: "google로 재인증" })).toBeEnabled();
+    await expect(page.getByRole("alert")).toHaveCount(0);
+  });
+}
