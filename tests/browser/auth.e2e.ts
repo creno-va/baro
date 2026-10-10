@@ -106,7 +106,10 @@ test("keyboard role selection reaches the lawyer destination after a synthetic O
 }) => {
   await page.route("**/api/auth/sign-in/social", (route) =>
     route.fulfill({
-      json: { redirect: true, url: new URL("/consent", route.request().url()).href },
+      json: {
+        redirect: true,
+        url: new URL(route.request().postDataJSON().callbackURL, route.request().url()).href,
+      },
     }),
   );
   await page.route("**/api/me/account-type", (route) =>
@@ -126,13 +129,13 @@ test("keyboard role selection reaches the lawyer destination after a synthetic O
   const signIn = page.waitForRequest("**/api/auth/sign-in/social");
   const saveRole = page.waitForRequest("**/api/me/account-type");
   await page.getByRole("button", { name: "Kakao로 계속하기" }).click();
-  expect((await signIn).postDataJSON()).toMatchObject({
-    provider: "kakao",
-    callbackURL: "/consent",
-    errorCallbackURL: "/login?error=oauth",
-  });
+  const initiation = (await signIn).postDataJSON();
+  expect(initiation).toMatchObject({ provider: "kakao", errorCallbackURL: "/login?error=oauth" });
+  const callback = new URL(initiation.callbackURL, page.url());
+  expect(callback.pathname).toBe("/consent");
+  expect(callback.searchParams.get("loginAttempt")).toBeTruthy();
   expect((await saveRole).postDataJSON()).toEqual({ accountType: "lawyer" });
-  await expect(page).toHaveURL(/\/consent$/);
+  await expect(page).toHaveURL(callback.href);
   await expect(page.getByRole("link", { name: "내 화면으로 계속하기" })).toHaveAttribute(
     "href",
     "/lawyer",
@@ -148,7 +151,13 @@ test("provider errors are recoverable and a synthetic redirect reaches consent",
     await route.fulfill(
       attempts === 1
         ? { status: 400, json: { code: "SYNTHETIC_PROVIDER_ERROR", message: "synthetic" } }
-        : { status: 200, json: { redirect: true, url: "http://127.0.0.1:4337/consent" } },
+        : {
+            status: 200,
+            json: {
+              redirect: true,
+              url: new URL(route.request().postDataJSON().callbackURL, route.request().url()).href,
+            },
+          },
     );
   });
   await page.route("**/api/me/consent", (route) => route.fulfill({ json: { needsConsent: true } }));
@@ -157,7 +166,7 @@ test("provider errors are recoverable and a synthetic redirect reaches consent",
   await page.getByRole("button", { name: "Kakao로 계속하기" }).click();
   await expect(page.getByRole("alert")).toContainText("로그인을 시작하지 못했어요.");
   await page.keyboard.press("Enter");
-  await expect(page).toHaveURL(/\/consent$/);
+  await expect(page).toHaveURL(/\/consent\?loginAttempt=/);
 });
 
 test("consent loading failure retries; keyboard checks gate save, failure recovers and completion focuses the link", async ({
