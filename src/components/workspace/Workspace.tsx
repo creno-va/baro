@@ -161,7 +161,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
           setTimelineRecovery(false);
           setEntry(null);
         }
-        return true;
+        return next;
       }
     } catch (cause) {
       if (alive(epoch) && serial === latest.current) showError(cause);
@@ -366,9 +366,29 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
     });
     if (uploadInput.current) uploadInput.current.value = "";
   }
+  async function startEntry() {
+    if (!view || readonly) return;
+    const begin = (revision: number) =>
+      setEntry({
+        date: "",
+        datePrecision: "day",
+        title: "",
+        detail: "",
+        expectedRevision: revision,
+      });
+    if (!acknowledgedTimeline.current) {
+      begin(view.case.revision);
+      return;
+    }
+    // Closing an acknowledged write's recovery dialog does not erase its need
+    // for a verified read. A new draft must start from that refreshed snapshot.
+    await run("refresh", async (epoch) => {
+      const next = await load();
+      if (next && current(epoch)) begin(next.case.revision);
+    });
+  }
   function closeDialog() {
     if (busy) return;
-    acknowledgedTimeline.current = false;
     setTimelineRecovery(false);
     setPreview(null);
     setDeleteFile(null);
@@ -878,15 +898,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                     <Button
                       variant="default"
                       disabled={!!busy || readonly}
-                      onClick={() =>
-                        setEntry({
-                          date: "",
-                          datePrecision: "day",
-                          title: "",
-                          detail: "",
-                          expectedRevision: view.case.revision,
-                        })
-                      }
+                      onClick={() => void startEntry()}
                     >
                       <Plus size={17} />
                       일정 추가
