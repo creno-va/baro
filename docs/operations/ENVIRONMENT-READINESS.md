@@ -1,5 +1,38 @@
 # P0.3 환경 readiness 기록
 
+## 2026-10-11 인계 후 운영·정책 관측
+
+현재 제품 배포는 `283af452b7093d8cac0d9aa2c41b28a22b58d5e9`의
+[동일 SHA CI/preview/production·HTTP receipt](https://github.com/creno-va/baro/issues/71#issuecomment-6107111207)를
+재사용한다. 기존 공개 상태를 유지한 배포이며 전체 MVP·정책/법률 인수 완료가 아니다.
+총괄이 21:28 KST에 production Environment API를 확인했을 때 protected-branch policy가
+있고 required-reviewer 규칙은 없었다. 보호 규칙은 변경하지 않았다.
+
+총괄의 21:29 KST 읽기 전용 `wrangler d1 list --json`은 로컬 CLI 인증 부재로 실패했다.
+인증·AI 담당은 같은 날 21:33 KST 이후 인증된 Safari 콘솔의 D1 목록에서 **총2개,
+baro-preview/baro-production만 있음**을 직접 확인했다. DB 내용/SQL은 열지 않았으며
+지정된 합성 전용 격리 DB는 없었다. CLI 실패를 자원 부재로 해석하지 않고 콘솔 관측과 분리한다.
+따라서 #19 restore는 실행하지 않았다. [기존 drill 절차](./BETA-DRILLS.md)의 자원 지정,
+DB 밖 최신 journal 보관, 키 복구 관리자, 테스트 알림 수신·발송/ACK 조건이 여전히 필요하다.
+
+인증·AI 담당의 실제 Gateway/Turnstile 읽기 관측은 다음 범위에 한정한다. preview/production
+Gateway 모두 존재하며 authenticated gateway/ZDR 표시 ON, logging/cache/retry/spend-limit
+OFF, Unified Billing이었다. 기존 자동충전은 ON/$10 threshold/$30이며 변경하지 않았다.
+콘솔의 전체 기간 집계 사용량·금액은 개별 attempt의 청구·정산 증거로 대입하지 않는다.
+Turnstile은 각각 preview.baro.site/baro.site 하나의 hostname, Managed, pre-clearance OFF다.
+이 설정 확인은 provider 계약상 보존/국가, 실제 OAuth·siteverify·모델·비용 검증을 대신하지 않는다.
+
+법률 API 마이페이지는 기존 관리자 로그인 화면으로 이동해 신청 승인 내역을 읽지 못했다.
+조건 변화 근거가 없어 같은 외부 API 실패를 다시 호출하지 않았다. 실제 로그인은
+[법제처 로그인](https://open.law.go.kr/LSO/login.do)에서 사용자 계정 관리자가 수행해야 한다.
+비밀번호/토큰을 채팅으로 받지 않는다.
+
+정책 문서3개의 `2026-10-06-v2-draft`와 개발 동의3종의 `2026-10-04`, 공개 차단 필드를
+소스에서 대조했다. 승인서·게시 시행일·사업자등록/주소·책임자 지정 근거는 현재 저장소/이슈에
+없으며 [기존 필드별 인계](../development/LAWYER-POLICY-HANDOFF.md)를 재사용해 사용자에게
+로그인/사업자/법률·게시 승인/복구 운영 지정을 한 번에 요청했다. Gateway의 ZDR 표시나 기존
+배포 승인을 법률 검토 승인으로 해석하지 않았고 버전·승인 상태를 임의로 맞추지 않았다.
+
 ## 2026-10-10 #63 공식 API 요청 진단
 
 현재 `legal-retrieval/v2/service.ts`의 요청을 법제처 공식 가이드와 대조했다.

@@ -1,5 +1,31 @@
 # MVP 요구사항·증거 완료표 — 3세션 보완
 
+## 2026-10-11 최종 통합·배포 인계 후 현재 판정
+
+이 절과 GitHub의 최신 receipt가 아래 중간 감사의 미병합/실패 판정보다 우선한다. 과거 실패를
+성공으로 바꾸거나 삭제하지 않는다. 현재 역할은 [완료 인수 책임 인계](./EXECUTION.md#2026-10-11-완료-인수-책임-인계)를 따른다.
+
+| 범위 | 검증된 현재 증거 | 인정하는 결과 |
+| --- | --- | --- |
+| 제품 통합 | [PR167](https://github.com/creno-va/baro/pull/167) 후보 `639c1c091aadd4deae5ea8c411fe9d46e6893ee8` → main `283af452b7093d8cac0d9aa2c41b28a22b58d5e9`, tree `600df584e909c31c0c9a66f67da747bf63d44076` 동일 | 고객/자료/리포트/변호사 후속 stack 통합 완료. 원본 PR 각각이 별도 main 병합됐다는 뜻은 아님 |
+| CI·로컬 기능 | [통합 검토 receipt](https://github.com/creno-va/baro/issues/71#issuecomment-6107059260), main CI [38124196522](https://github.com/creno-va/baro/actions/runs/38124196522) | quick CI SUCCESS. 별도 로컬 1,707 tests/139,589 assertions, migration6/29·drift0, 기능 browser263/37파일·CSP7/fixture1skip·build/bundle/dry-run PASS. 미변경 그룹과 변경 회귀의 결합이며 실제 외부 연동/확대 AI corpus 성공 아님 |
+| 실제 배포 | 같은 main SHA의 [preview38124298959](https://github.com/creno-va/baro/actions/runs/38124298959), [production38124536876](https://github.com/creno-va/baro/actions/runs/38124536876), [독립 HTTP·운영 인계](https://github.com/creno-va/baro/issues/71#issuecomment-6107111207) | 두 환경 배포 SUCCESS, SHA/schema0009·익명9경로 PASS. text preflight configuration_ready는 실제 OAuth/모델/media 성공 아님 |
+| 기능 종료 | #62/#65/#69 CLOSED, 기존 #162 CLOSED 유지 | 구현·합성/로컬 기능 인수 완료. 실제 외부/사람 조건은 담당 이슈에 남음 |
+| 후속 검증 도구 | [PR207](https://github.com/creno-va/baro/pull/207) → main `5186f35ed7eacf7221f0ccdcd32822a26fa3d37b` | Windows 경로 assertion 한 파일 수정. 제품 트리 변경 없음; 이 main SHA를 이미 배포했다고 표시하지 않음 |
+
+총괄은 기존 담당의 배포 완료·운영 lock 해제 후 PR207을 검토·병합했다. 다음 제품 수정은 검토와
+필요 검증 후 순차 병합하고 최종 후보 하나에 CI/preview/production·외부 증거를 연결한다.
+코드가 바뀌면 영향받는 검증만 다시 수행하며, 제품이 같은 PR207 때문에 전체 기능 검사를 반복하지 않는다.
+
+남은 필수 이슈는 #19/#20/#27/#57/#58/#59/#63/#64/#66/#67/#70/#71이다. #19의 지정된 격리
+restore+journal/rollback/실제 알림 ACK, #20/#70의 실제 사업자·처리/보존 사실과 법률·게시 승인,
+각 작업자의 실제 OAuth/모델/법률 API/자료/비용/삭제 인수는 미완료다. 자료 담당이 PR208에서
+재현한 Container 시작 취소와 원본 스트림 세션 폐기 경합은 후속 수정 중이며, 임의 native
+Container ID를 추적하지 못하는 삭제 완료 gap도 같은 인수 범위에서 보완한다. 이 준비·진전은
+원격 삭제/복구 성공 증거가 아니다. 총괄 Goal과 #71은 모든 필수 조건이 충족될 때만 완료한다.
+
+## 보존된 중간 감사
+
 - 기준일: 2026-10-11 KST. GitHub 이슈/PR이 진행 상태 정본이며 이 표는 요구 누락을 막는 인수 정본이다.
 - A: 고객 #64/#65/#162, 공통 client/auth/router/types·CI·통합/운영. B: #58/#59/#66/#67 자료·리포트·삭제. C: #62 변호사 서버/client와 계획·작업 그래프·#69/#71 감사.
 - 기존 worktree/커밋/실패/완료 증거 보존. 새 Goal·세션·에이전트·DB/비용 선행 이슈 없음.
