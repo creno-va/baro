@@ -23,6 +23,14 @@
   6개 파일의 **42 tests / 308 assertions**가 통과했다. `bun ci`, `validate:quick`,
   `validate:build`(production build·163-file bundle·Worker dry-run)도 통과했다.
   UI/schema/native processor 자체는 변경하지 않아 browser/db/native/full을 반복하지 않았다.
+- 후속 #58 점검에서 원본 다운로드 도중 requesting session이 폐기/만료되거나 보존
+  기한을 넘겨도 plaintext가 계속 나오는 결함을 합성 SQL·서명 세션·R2 byte adapter로
+  재현했다(수정 전 3개 FAIL). HTTP 원본 service에 exact session ID를 전달하고 기존
+  per-part SQL 접근 검사에 세션 소유자·유효기간·보존 기한을 결합했다. 다른 활성
+  세션이 같은 owner에게 있어도 요청 세션을 대신하지 않는다. 다운로드 도중 폐기 시
+  다음 part를 R2에서 읽기 전에 중단하고, R2 응답 중 폐기 시 해당 평문도 전달하지 않는다.
+  자료/리포트 관련 5개 파일의 **39 tests / 311 assertions**가 통과했다. 유효한 세션의
+  기존 원본은 필수 재동의 전에도 다운로드된다는 반대 조건을 함께 확인했다.
 
 다음 실제 증거는 아직 없다. 전용 폐기 가능한 OAuth 계정 2개(소유자·비소유자)가 필요하며
 총괄에 요청했다. 해당 계정에서 업로드→R2/Container/Whisper→교정/재접속→최신

@@ -88,13 +88,14 @@ export function createFilesApi(
     }
     return c.json(errorBody(c, "INTERNAL_ERROR", "자료 요청을 처리하지 못했어요.", true), 500);
   });
-  const service = async (env: Env, ownerId: string) => {
+  const service = async (env: Env, ownerId: string, sessionId?: string) => {
     const core = createV2Core(env.DB, await createCaseDataCipher(env), {
       monthlyBudgetCapEnabled: env.MONTHLY_BUDGET_CAP_ENABLED !== "false",
     });
     return createFilesService(core, {
       ...(await options.dependencies?.(env, core, ownerId)),
       environment: env.APP_ENV === "production" ? "production" : "preview",
+      ...(sessionId ? { sessionId } : {}),
     });
   };
   app.get("/:caseId/files", async (c) => {
@@ -261,7 +262,7 @@ export function createFilesApi(
     const access = await caseAccess(c);
     if (access.response) return access.response;
     z.strictObject({}).parse(c.req.query());
-    const result = await (await service(c.env, access.ownerId)).content(
+    const result = await (await service(c.env, access.ownerId, access.sessionId)).content(
       access.ownerId,
       c.req.param("caseId"),
       c.req.param("fileId"),

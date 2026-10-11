@@ -11,6 +11,7 @@ import {
   v2UploadReservationRequestSchema,
   v2UploadSessionSchema,
 } from "../../../contracts/v2";
+import { AUTH_RETENTION_MS } from "../../auth/policy";
 import * as schema from "../../db/schema";
 import { createV2AccountingRepository } from "../../db/v2-accounting";
 import {
@@ -56,6 +57,8 @@ export type FileServiceDependencies = {
   environment: "preview" | "production";
   bucket?: PrivateBucket;
   clock?: () => string;
+  /** Exact signed HTTP session for original downloads; internal jobs use their own leases. */
+  sessionId?: string;
   /** Trusted #93 producer; no pricing, role, time or receipt comes from a client. */
   paidStorage?: FileStorageCosts;
   /** Explicit offline adapter, preview only. Never mounted by production composition. */
@@ -119,6 +122,15 @@ export function createFilesService(core: V2Core, deps: FileServiceDependencies) 
     ).toISOString();
   const maintenance = createStorageMaintenance(core, deps.environment, now);
   const actor = (ownerId: string): Actor => parse(actorSchema, { ownerId, now: now() });
+  const requestSessionFence = () => {
+    const at = Date.now();
+    return deps.sessionId
+      ? {
+          sql: "AND EXISTS(SELECT 1 FROM session request_session WHERE request_session.id=? AND request_session.user_id=w.owner_id AND request_session.expires_at>? AND request_session.created_at>?)",
+          values: [deps.sessionId, at, at - AUTH_RETENTION_MS],
+        }
+      : { sql: "", values: [] };
+  };
   const consent = async (ownerId: string) => {
     if (!(await hasCurrentConsent(drizzle(core.binding, { schema }), ownerId)))
       throw new FileError("PROCESSING_UNAVAILABLE");
@@ -147,9 +159,10 @@ export function createFilesService(core: V2Core, deps: FileServiceDependencies) 
   ) => {
     for (const id of [ownerId, workspaceId, fileId, ...(uploadId ? [uploadId] : [])])
       parse(opaqueIdSchema, id);
+    const requestSession = requestSessionFence();
     const row = await core
       .statement(
-        `SELECT u.*,r.id AS reservation_id,f.operation_id,f.revision AS file_revision,o.revision AS operation_revision,(SELECT request_hash FROM v2_idempotency WHERE operation_id=o.id LIMIT 1) AS request_hash,w.revision AS workspace_revision FROM v2_upload_sessions u JOIN v2_files f ON f.id=u.file_id JOIN v2_operations o ON o.id=f.operation_id JOIN v2_workspaces w ON w.id=f.workspace_id JOIN v2_storage_reservations r ON r.entity_id=f.id AND r.kind='case_original' WHERE w.owner_id=? AND w.id=? AND f.id=? AND (? IS NULL OR u.id=?) AND ${aliveWorkspace} AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='file' AND target_id=f.id) ${writing ? "AND u.state='open' AND u.expires_at>? AND w.status!='archived' AND r.state!='released' AND EXISTS(SELECT 1 FROM v2_consents WHERE file_id=f.id AND owner_id=w.owner_id AND kind='auto_processing' AND version=?)" : ""}`,
+        `SELECT u.*,r.id AS reservation_id,f.operation_id,f.revision AS file_revision,o.revision AS operation_revision,(SELECT request_hash FROM v2_idempotency WHERE operation_id=o.id LIMIT 1) AS request_hash,w.revision AS workspace_revision FROM v2_upload_sessions u JOIN v2_files f ON f.id=u.file_id JOIN v2_operations o ON o.id=f.operation_id JOIN v2_workspaces w ON w.id=f.workspace_id JOIN v2_storage_reservations r ON r.entity_id=f.id AND r.kind='case_original' WHERE w.owner_id=? AND w.id=? AND f.id=? AND (? IS NULL OR u.id=?) AND ${aliveWorkspace} AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='file' AND target_id=f.id) ${writing ? "AND u.state='open' AND u.expires_at>? AND w.status!='archived' AND r.state!='released' AND EXISTS(SELECT 1 FROM v2_consents WHERE file_id=f.id AND owner_id=w.owner_id AND kind='auto_processing' AND version=?)" : ""} ${requestSession.sql}`,
         [
           ownerId,
           workspaceId,
@@ -157,6 +170,7 @@ export function createFilesService(core: V2Core, deps: FileServiceDependencies) 
           uploadId ?? null,
           uploadId ?? null,
           ...(writing ? [now(), CURRENT_POLICY_VERSIONS.aiNoticeVersion] : []),
+          ...requestSession.values,
         ],
       )
       .first<Session>();
@@ -192,10 +206,11 @@ export function createFilesService(core: V2Core, deps: FileServiceDependencies) 
     u: Session,
     p: Part,
     requireConsent = true,
-  ) =>
-    core
+  ) => {
+    const requestSession = requestSessionFence();
+    return core
       .statement(
-        `SELECT b.id,b.object_key,b.kind,b.visibility,b.logical_bytes,b.cipher_bytes,b.cipher_hash,b.key_version FROM v2_upload_sessions u JOIN v2_files f ON f.id=u.file_id JOIN v2_workspaces w ON w.id=f.workspace_id JOIN v2_upload_parts part ON part.upload_id=u.id JOIN v2_blobs b ON b.id=part.blob_id JOIN v2_storage_reservations r ON r.id=b.reservation_id JOIN v2_billing_principals principal ON principal.id=b.principal_id WHERE u.id=? AND u.revision=? AND f.id=? AND w.id=? AND w.owner_id=? AND principal.owner_id=w.owner_id AND r.principal_id=b.principal_id AND r.entity_id=f.id AND r.kind='case_original' AND r.state!='released' AND part.ordinal=? AND part.blob_id=? AND part.cipher_hash=? AND part.encrypted_payload=? AND b.state='stored' AND b.kind='original' AND b.visibility='private' AND (?=0 OR EXISTS(SELECT 1 FROM user_consents c WHERE c.user_id=w.owner_id AND c.terms_version=? AND c.privacy_version=? AND c.ai_notice_version=? AND c.over_14_confirmed=1)) AND coalesce((SELECT value FROM app_metadata WHERE key='account-type:'||w.owner_id),'customer')='customer' AND ${aliveWorkspace} AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='file' AND target_id=f.id)`,
+        `SELECT b.id,b.object_key,b.kind,b.visibility,b.logical_bytes,b.cipher_bytes,b.cipher_hash,b.key_version FROM v2_upload_sessions u JOIN v2_files f ON f.id=u.file_id JOIN v2_workspaces w ON w.id=f.workspace_id JOIN v2_upload_parts part ON part.upload_id=u.id JOIN v2_blobs b ON b.id=part.blob_id JOIN v2_storage_reservations r ON r.id=b.reservation_id JOIN v2_billing_principals principal ON principal.id=b.principal_id WHERE u.id=? AND u.revision=? AND f.id=? AND w.id=? AND w.owner_id=? AND principal.owner_id=w.owner_id AND r.principal_id=b.principal_id AND r.entity_id=f.id AND r.kind='case_original' AND r.state!='released' AND part.ordinal=? AND part.blob_id=? AND part.cipher_hash=? AND part.encrypted_payload=? AND b.state='stored' AND b.kind='original' AND b.visibility='private' AND (?=0 OR EXISTS(SELECT 1 FROM user_consents c WHERE c.user_id=w.owner_id AND c.terms_version=? AND c.privacy_version=? AND c.ai_notice_version=? AND c.over_14_confirmed=1)) AND coalesce((SELECT value FROM app_metadata WHERE key='account-type:'||w.owner_id),'customer')='customer' AND ${aliveWorkspace} AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='file' AND target_id=f.id) ${requestSession.sql}`,
         [
           u.id,
           u.revision,
@@ -210,6 +225,7 @@ export function createFilesService(core: V2Core, deps: FileServiceDependencies) 
           CURRENT_POLICY_VERSIONS.termsVersion,
           CURRENT_POLICY_VERSIONS.privacyVersion,
           CURRENT_POLICY_VERSIONS.aiNoticeVersion,
+          ...requestSession.values,
         ],
       )
       .first<{
@@ -222,6 +238,7 @@ export function createFilesService(core: V2Core, deps: FileServiceDependencies) 
         cipher_hash: string;
         key_version: string | null;
       }>();
+  };
   const loadPart = async (
     ownerId: string,
     workspaceId: string,
