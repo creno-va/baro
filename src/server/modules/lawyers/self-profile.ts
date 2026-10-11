@@ -231,7 +231,8 @@ export function createSelfProfileService(core: V2Core, clock = () => new Date().
         }
         if (
           p?.published &&
-          (!filters.name || `${p.name} ${p.officeName}`.includes(filters.name)) &&
+          (!filters.name ||
+            `${p.name} ${p.officeName}`.toLowerCase().includes(filters.name.toLowerCase())) &&
           (!filters.region || p.region === filters.region) &&
           (!filters.legalField ||
             p.practiceAreas.includes(filters.legalField as SelfProfile["practiceAreas"][number]))

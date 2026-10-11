@@ -27,11 +27,14 @@ export function Directory({ preview = false }: { preview?: boolean }) {
     setItems([]);
     setVisibleCount(20);
     try {
-      const page = await api.lawyers.list({
-        query: params.get("name") ?? "",
-        region: params.get("region") ?? "",
-        practiceArea: params.get("legalField") ?? "",
-      });
+      const page = await api.lawyers.list(
+        {
+          query: params.get("name") ?? "",
+          region: params.get("region") ?? "",
+          practiceArea: params.get("legalField") ?? "",
+        },
+        controller.signal,
+      );
       if (controller.signal.aborted) return;
       setItems(page);
     } catch (cause) {

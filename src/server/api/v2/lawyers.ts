@@ -106,17 +106,39 @@ export function createLawyersApi(
   app.get("/lawyer/self-profile/assets", async (c) => {
     const a = await selfAccess(c);
     if (a.response) return a.response;
+    const query = z
+      .strictObject({
+        limit: z.coerce.number().int().min(1).max(50).default(50),
+        cursor: z.string().max(512).optional(),
+      })
+      .parse(c.req.query());
+    let cursor: [string, string] | undefined;
+    if (query.cursor) {
+      let decoded: unknown;
+      try {
+        decoded = JSON.parse(atob(query.cursor));
+      } catch {
+        throw new SyntaxError("Invalid asset cursor");
+      }
+      cursor = z.tuple([z.iso.datetime(), opaqueIdSchema]).parse(decoded);
+    }
     const rows = await c.env.DB.prepare(
-      "SELECT a.id,a.revision,a.state AS status,a.purpose FROM v2_assets a JOIN v2_profiles p ON p.id=a.profile_id WHERE a.owner_id=? AND p.owner_id=a.owner_id AND a.purpose IN ('profile_photo','portfolio') AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE (target_kind='asset' AND target_id=a.id) OR (target_kind='profile' AND target_id=a.profile_id) OR (target_kind='account' AND target_id=a.owner_id)) ORDER BY a.created_at DESC LIMIT 50",
+      `SELECT a.id,a.revision,a.state AS status,a.purpose,a.created_at FROM v2_assets a JOIN v2_profiles p ON p.id=a.profile_id WHERE a.owner_id=? AND p.owner_id=a.owner_id AND a.purpose IN ('profile_photo','portfolio') AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE (target_kind='asset' AND target_id=a.id) OR (target_kind='profile' AND target_id=a.profile_id) OR (target_kind='account' AND target_id=a.owner_id)) ${cursor ? "AND (a.created_at<? OR (a.created_at=? AND a.id<?))" : ""} ORDER BY a.created_at DESC,a.id DESC LIMIT ?`,
     )
-      .bind(a.ownerId)
-      .all<{ id: string; revision: number; status: string; purpose: string }>();
+      .bind(a.ownerId, ...(cursor ? [cursor[0], cursor[0], cursor[1]] : []), query.limit + 1)
+      .all<{ id: string; revision: number; status: string; purpose: string; created_at: string }>();
+    const page = rows.results.slice(0, query.limit);
+    const last = page.at(-1);
     const after = await selfAccess(c);
     if (after.response) return after.response;
     if (after.ownerId !== a.ownerId)
       return c.json(errorBody(c, "NOT_FOUND", "자료를 찾을 수 없어요."), 404);
     return c.json({
-      items: rows.results.map((row) => ({
+      nextCursor:
+        rows.results.length > query.limit && last
+          ? btoa(JSON.stringify([last.created_at, last.id]))
+          : null,
+      items: page.map((row) => ({
         id: row.id,
         revision: row.revision,
         status: row.status,

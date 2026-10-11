@@ -162,7 +162,9 @@ export function createMockLawyers(context: LawyerMockContext) {
               (!filters.region || p.region === filters.region) &&
               (!filters.practiceArea || p.practiceAreas.includes(filters.practiceArea)) &&
               (!filters.query?.trim() ||
-                `${p.name} ${p.officeName}`.includes(filters.query.trim())),
+                `${p.name} ${p.officeName}`
+                  .toLowerCase()
+                  .includes(filters.query.trim().toLowerCase())),
           ),
         ),
       );

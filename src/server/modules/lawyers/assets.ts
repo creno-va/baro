@@ -241,7 +241,7 @@ export function createLawyerAssetsService(core: V2Core, deps: LawyerAssetDepende
           [ownerId],
         )
         .first<{ id: string; revision: number }>();
-      if (!p || p.revision !== expectedProfileRevision) throw new LawyerError("STALE_REVISION");
+      if (!p) throw new LawyerError("STALE_REVISION");
       const requestHash = await digest(
         new TextEncoder().encode(JSON.stringify({ expectedProfileRevision, request })),
       );
@@ -267,6 +267,7 @@ export function createLawyerAssetsService(core: V2Core, deps: LawyerAssetDepende
           value: await repository.readAsset(actor(ownerId), found),
         };
       }
+      if (p.revision !== expectedProfileRevision) throw new LawyerError("STALE_REVISION");
       const assetId = crypto.randomUUID();
       const operationId = crypto.randomUUID();
       let accepted: boolean;

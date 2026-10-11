@@ -318,6 +318,7 @@ test("pending upload survives reconnect and can only attach after ready status",
     return route.fulfill({
       json: route.request().url().endsWith("/assets")
         ? {
+            nextCursor: null,
             items: [
               {
                 id: "synthetic-pending",
@@ -469,6 +470,7 @@ test("renewal keeps existing profile and uploaded download available while edits
     if (path.endsWith("/assets"))
       return route.fulfill({
         json: {
+          nextCursor: null,
           items: [{ id: "saved-upload", revision: 3, status: "ready", purpose: "portfolio" }],
         },
       });

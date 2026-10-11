@@ -8,6 +8,7 @@ import {
   v2PublicLawyerSchema,
 } from "../../contracts/v2";
 import { parse, safe, type V2Core, V2RepositoryError } from "./v2-core";
+import { directoryCleanupStatements } from "./v2-directory-cleanup";
 
 export const DIRECTORY_SNAPSHOT_TTL_MS = 5 * 60 * 1000;
 export const DIRECTORY_ROTATION_ALGORITHM = "profile_id_daily_v1" as const;
@@ -187,8 +188,10 @@ export function createV2DirectoryRepository(core: V2Core) {
         const where = [eligible];
         const values: unknown[] = [];
         if (query.name !== undefined) {
-          where.push("instr(lower(json_extract(pub.content_json,'$.content.name')),lower(?))>0");
-          values.push(query.name);
+          where.push(
+            "(instr(lower(json_extract(pub.content_json,'$.content.name')),lower(?))>0 OR instr(lower(json_extract(pub.content_json,'$.content.office.name')),lower(?))>0)",
+          );
+          values.push(query.name, query.name);
         }
         if (query.region !== undefined) {
           where.push("json_extract(pub.content_json,'$.content.office.region')=?");
@@ -203,6 +206,7 @@ export function createV2DirectoryRepository(core: V2Core) {
         // Public profile ID order shifts one place each KST day. The snapshot records
         // the algorithm/day; pagination never reranks and no fit/payment score exists.
         await core.binding.batch([
+          ...directoryCleanupStatements(core.binding, now),
           core.statement(
             "INSERT INTO v2_directory_snapshots(id,created_at,expires_at,query_json,rotation_day,rotation_algorithm,item_count) VALUES(?,?,?,?,?,?,0)",
             [input.id, now, expiresAt, queryJson, rotationDay, DIRECTORY_ROTATION_ALGORITHM],

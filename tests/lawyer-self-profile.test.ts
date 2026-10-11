@@ -222,6 +222,66 @@ async function fixture() {
     );
   return { db, owner, other, noConsent, env, core, app, request };
 }
+test("self directory and mock match Latin name/office case and literal punctuation consistently", async () => {
+  const f = await fixture();
+  const service = createSelfProfileService(f.core);
+  const blank = await service.getMine(f.owner.userId);
+  const saved = await service.saveMine(f.owner.userId, {
+    ...blank,
+    ...complete,
+    name: "합성 Alpha Lawyer",
+    officeName: "합성 Delta_100% Office",
+  });
+  const profile = await service.publishMine(f.owner.userId, true, saved.revision, saved.id);
+  let store: LawyerMockStore = {
+    profiles: [profile, { ...profile, id: "synthetic-hidden", published: false }],
+    owners: { [f.owner.userId]: profile.id },
+  };
+  const mock = createMockLawyers({
+    read: () => store,
+    write: (value) => {
+      store = value;
+    },
+    session: async () => ({ user: null, needsConsent: false }),
+  });
+  for (const query of [
+    "alpha",
+    "ALPHA",
+    "delta_100%",
+    "DELTA_100%",
+    "합성 Delta_100%",
+    "없는 사무실",
+    "DeltaX100",
+    "",
+  ]) {
+    const params = new URLSearchParams(query ? { name: query } : {});
+    const response = await f.request(`/v2/lawyers/self-service?${params}`);
+    expect(response.status).toBe(200);
+    const real = selfDirectoryPageSchema.parse(await response.json());
+    const expected = ["없는 사무실", "DeltaX100"].includes(query) ? [] : [profile.id];
+    expect(real.items.map((p) => p.id)).toEqual(expected);
+    expect(real.nextCursor).toBeNull();
+    expect((await mock.list({ query })).map((p) => p.id)).toEqual(expected);
+  }
+  for (const [region, legalField] of [
+    ["busan", "civil"],
+    ["seoul", "criminal"],
+  ] as const) {
+    const params = new URLSearchParams({ name: "delta", region, legalField });
+    const real = selfDirectoryPageSchema.parse(
+      await (await f.request(`/v2/lawyers/self-service?${params}`)).json(),
+    );
+    expect(real.items).toEqual([]);
+  }
+  expect(await mock.list({ query: "delta", region: "busan" })).toEqual([]);
+  expect(await mock.list({ query: "delta", practiceArea: "criminal" })).toEqual([]);
+  expect(
+    (await mock.list({ query: "  delta  ", region: "seoul", practiceArea: "civil" })).map(
+      (p) => p.id,
+    ),
+  ).toEqual([profile.id]);
+});
+
 test("real API stores encrypted self profiles, records publication consent, hides and cleans up", async () => {
   const f = await fixture();
   const blank = selfProfileSchema.parse(

@@ -1,5 +1,59 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
+import { emptySelfProfile } from "../../src/server/modules/lawyers/self-profile-contract";
+
+test("directory searches names and offices case-insensitively while retaining region and field filters", async ({
+  page,
+}) => {
+  test.skip(process.env.PUBLIC_API_MODE !== "mock", "Explicit mock transport scenario");
+  const profile = {
+    ...emptySelfProfile("synthetic-search", "합성 Alpha Lawyer"),
+    officeName: "합성 Delta_100% Office",
+    published: true,
+    region: "seoul",
+    practiceAreas: ["civil"],
+  };
+  await page.addInitScript(
+    (profiles) =>
+      localStorage.setItem("baro-api-mock-v1:lawyers", JSON.stringify({ profiles, owners: {} })),
+    [
+      profile,
+      { ...profile, id: "synthetic-busan", name: "합성 Busan Lawyer", region: "busan" },
+      { ...profile, id: "synthetic-hidden", name: "합성 Hidden Lawyer", published: false },
+    ],
+  );
+  await page.route("**/api/**", (route) =>
+    new URL(route.request().url()).pathname.startsWith("/api/") ? route.abort() : route.continue(),
+  );
+  await page.goto("/lawyers");
+  await expect(page.locator("astro-island[ssr]")).toHaveCount(0);
+  const search = page.getByRole("button", { name: "검색", exact: true });
+  const query = page.getByLabel("이름 또는 사무실", { exact: true });
+  await query.fill("alpha");
+  await search.click();
+  await expect(page.getByRole("link", { name: "합성 Alpha Lawyer", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "합성 Hidden Lawyer", exact: true })).toHaveCount(0);
+  await query.fill("delta_100%");
+  await search.click();
+  await expect(page.getByRole("link", { name: "합성 Busan Lawyer", exact: true })).toBeVisible();
+  await page.getByRole("combobox", { name: "지역", exact: true }).selectOption("seoul");
+  await search.click();
+  await expect(page.getByRole("link", { name: "합성 Busan Lawyer", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "합성 Alpha Lawyer", exact: true })).toBeVisible();
+  await page.getByRole("combobox", { name: "분야", exact: true }).selectOption("criminal");
+  await search.click();
+  await expect(page.getByText("조건에 맞는 공개 프로필이 없어요.", { exact: true })).toBeVisible();
+  await page.getByRole("combobox", { name: "분야", exact: true }).selectOption("civil");
+  await query.fill("deltaX100");
+  await search.click();
+  await expect(page.getByText("조건에 맞는 공개 프로필이 없어요.", { exact: true })).toBeVisible();
+  await query.fill("DELTA_100%");
+  await search.click();
+  await expect(page.getByRole("link", { name: "합성 Alpha Lawyer", exact: true })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("link", { name: "합성 Alpha Lawyer", exact: true })).toBeVisible();
+  await expect(query).toHaveValue("DELTA_100%");
+});
 
 test("integrated lawyer login/consent/editor uses persistent API mock with no real requests", async ({
   page,
