@@ -200,7 +200,8 @@ if (journey) {
   if (pin && "IntersectionObserver" in window)
     new IntersectionObserver(
       (entries) => {
-        visible = entries[0]?.isIntersecting ?? false;
+        // A fast exit and return can be delivered together; use the newest pin state.
+        visible = entries.at(-1)?.isIntersecting ?? false;
         schedule();
       },
       { threshold: 0.01 },

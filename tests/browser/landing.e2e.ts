@@ -569,6 +569,50 @@ test("hero footage plays continuously while idle, scroll changes only the framin
     .toBe(true);
 });
 
+test("hero playback follows the newest visibility entry after a batched scroll return", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const NativeObserver = window.IntersectionObserver;
+    window.IntersectionObserver = class extends NativeObserver {
+      constructor(callback: IntersectionObserverCallback, options?: IntersectionObserverInit) {
+        const pending: IntersectionObserverEntry[] = [];
+        super((entries, observer) => {
+          if (!entries.every((entry) => entry.target.matches(".journey-pin"))) {
+            callback(entries, observer);
+            return;
+          }
+          const latest = entries.at(-1);
+          if (!latest?.isIntersecting) {
+            pending.push(...entries);
+            document.documentElement.dataset.heroHiddenEntryQueued = "true";
+            return;
+          }
+          // A busy main thread can receive several chronological visibility entries at once.
+          callback([...pending.splice(0), ...entries], observer);
+        }, options);
+      }
+    };
+  });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await page.goto("/");
+  const film = page.locator("video[data-scroll-film]");
+  const toggle = page.locator("[data-journey-toggle]");
+  await expect.poll(() => film.evaluate((v) => !(v as HTMLVideoElement).paused)).toBe(true);
+  await page.locator("#phone-story").evaluate((element) => {
+    window.scrollTo({ top: scrollY + element.getBoundingClientRect().top, behavior: "instant" });
+  });
+  await expect(page.locator("html")).toHaveAttribute("data-hero-hidden-entry-queued", "true");
+  await expect.poll(() => film.evaluate((v) => (v as HTMLVideoElement).paused)).toBe(true);
+  await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
+  await expect(toggle).toHaveAccessibleName("첫 화면 영상 일시정지");
+  await expect.poll(() => film.evaluate((v) => !(v as HTMLVideoElement).paused)).toBe(true);
+  await toggle.click();
+  await expect(toggle).toHaveAccessibleName("첫 화면 영상 재생하기");
+  await expect.poll(() => film.evaluate((v) => (v as HTMLVideoElement).paused)).toBe(true);
+});
+
 test("an interrupted hero play request resumes without another scroll or click", async ({
   page,
 }) => {
