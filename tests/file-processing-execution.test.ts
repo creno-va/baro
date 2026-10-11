@@ -1,7 +1,9 @@
 import { expect, test } from "bun:test";
 import { createV2FilesRepository } from "../src/server/db/v2-files";
 import { createV2JobsRepository } from "../src/server/db/v2-jobs";
+import { createProcessorLifecycle } from "../src/server/modules/file-processing/container-lifecycle";
 import { createFileProcessingExecution } from "../src/server/modules/file-processing/execution";
+import { nativeJobId } from "../src/server/modules/file-processing/native-identity";
 import {
   createProcessorTransport,
   type ProcessingCosts,
@@ -25,7 +27,7 @@ async function setup(options: { before?: () => void; corrupt?: boolean } = {}) {
   });
   const original = new TextEncoder().encode("first synthetic page\fsecond synthetic page");
   const u = await uploaded(f, original),
-    jobId = crypto.randomUUID(),
+    jobId = nativeJobId("file"),
     operationId = crypto.randomUUID();
   const jobs = createV2JobsRepository(f.core);
   expect(
@@ -53,10 +55,21 @@ async function setup(options: { before?: () => void; corrupt?: boolean } = {}) {
       receipts.push(r.transport);
     },
   };
-  const processor = createProcessorTransport({
-    costs,
-    stop: async () => {},
+  let running = false,
+    starts = 0;
+  const native = createProcessorLifecycle({
+    isRevoked: async () => false,
+    persistRevoked: async () => {},
+    start: async () => {
+      expect(running).toBe(false);
+      running = true;
+      starts++;
+    },
+    destroy: async () => {
+      running = false;
+    },
     fetch: async (request) => {
+      expect(running).toBe(true);
       nativeCalls++;
       const raw = new Uint8Array(await request.arrayBuffer());
       expect(raw).toEqual(original); // actual original AES download supplied the bytes.
@@ -95,9 +108,11 @@ async function setup(options: { before?: () => void; corrupt?: boolean } = {}) {
         ]
           .map((r) => JSON.stringify(r))
           .join("\n")}\n`,
+        { headers: { "content-type": "application/x-ndjson" } },
       );
     },
   });
+  const processor = createProcessorTransport({ costs, fetch: native.fetch, stop: native.stop });
   const media = createMediaGateway(
     {
       AI_GATEWAY_ID: "synthetic",
@@ -129,7 +144,17 @@ async function setup(options: { before?: () => void; corrupt?: boolean } = {}) {
       instanceId: `${jobId}-1`,
     },
   );
-  return { ...f, u, jobId, operationId, jobs, execution, receipts, nativeCalls: () => nativeCalls };
+  return {
+    ...f,
+    u,
+    jobId,
+    operationId,
+    jobs,
+    execution,
+    receipts,
+    nativeCalls: () => nativeCalls,
+    nativeState: () => ({ running, starts }),
+  };
 }
 
 test("actual SQLite/AES two-unit extraction stages bounded rows and atomically publishes complete coverage", async () => {
@@ -144,6 +169,7 @@ test("actual SQLite/AES two-unit extraction stages bounded rows and atomically p
     await f.execution.prepareUnit(unit, signal());
   }
   expect(f.nativeCalls()).toBe(2);
+  expect(f.nativeState()).toEqual({ running: false, starts: 2 });
   const prepared = await f.execution.preparePublication(2, signal());
   for (let part = 0; part < prepared.partCount; part++)
     await f.execution.stageCoveragePart(part, signal());

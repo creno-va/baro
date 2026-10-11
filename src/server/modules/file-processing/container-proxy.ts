@@ -56,6 +56,7 @@ export async function proxyProcessorRequest(
   request: Request,
   port: ProcessorContainerPort,
   deadlineMs = 265_000,
+  lifecycleSignal?: AbortSignal,
 ): Promise<Response> {
   const url = new URL(request.url);
   const ready = request.method === "GET" && url.pathname === "/ready";
@@ -82,12 +83,15 @@ export async function proxyProcessorRequest(
     return failure("INVALID_REQUEST", 400);
   }
   const controller = new AbortController();
+  const signal = lifecycleSignal
+    ? AbortSignal.any([request.signal, lifecycleSignal])
+    : request.signal;
   let finished = false;
   const finish = async () => {
     if (finished) return;
     finished = true;
     clearTimeout(timer);
-    request.signal.removeEventListener("abort", abort);
+    signal.removeEventListener("abort", abort);
     controller.abort();
     await port.stop();
   };
@@ -96,10 +100,16 @@ export async function proxyProcessorRequest(
     void finish().catch(() => {});
   };
   const timer = setTimeout(abort, deadlineMs);
-  request.signal.addEventListener("abort", abort, { once: true });
+  signal.addEventListener("abort", abort, { once: true });
   try {
-    if (request.signal.aborted) throw new Error("ABORTED");
+    if (signal.aborted) throw new Error("ABORTED");
     await port.start(controller.signal);
+    if (controller.signal.aborted) {
+      // Cancellation may have stopped the instance before a delayed startup
+      // completed. Stop that late instance too, before dispatching any material.
+      await port.stop();
+      throw new Error("ABORTED");
+    }
     const headers = new Headers();
     if (!ready) {
       headers.set("content-type", "application/octet-stream");

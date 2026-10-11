@@ -5,6 +5,7 @@ import {
   type FileProcessingBinding,
 } from "../src/server/modules/file-processing/dispatch";
 import type { FileProcessingParams } from "../src/server/modules/file-processing/execution";
+import { nativeJobId } from "../src/server/modules/file-processing/native-identity";
 import { digest } from "../src/server/modules/files/binary";
 import { fixture, uploaded } from "./helpers/file-processing-fixture";
 
@@ -13,7 +14,7 @@ async function setup() {
     bytes = new TextEncoder().encode("Synthetic dispatched file");
   const u = await uploaded(f, bytes),
     jobs = createV2JobsRepository(f.core),
-    jobId = crypto.randomUUID(),
+    jobId = nativeJobId("file"),
     operationId = crypto.randomUUID();
   expect(
     await jobs.admitFile(

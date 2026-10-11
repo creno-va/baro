@@ -1,5 +1,92 @@
 # 자료·리포트·삭제 구현 검증
 
+## 2026-10-11 실제 인수 재개
+
+인수 담당은 `BARO 자료·리포트·삭제 인수`, checkout `de87`, 브랜치
+`codex/58-material-acceptance`다. 기존 PR130/164 및 통합 PR167의 구현·아래 증거를
+승계한다. 총괄이 지정한 preview는 `https://preview.baro.site`, SHA
+`283af452b7093d8cac0d9aa2c41b28a22b58d5e9`이며
+[수동 배포 run38124298959](https://github.com/creno-va/baro/actions/runs/38124298959)가 성공했다.
+테스트 namespace는 `materials-de87-20261011`이다. 다른 세션 계정·사건은 사용하지 않는다.
+
+- 17:25–17:26 KST 원격 읽기: `/api/health/live`의 release가 위 SHA와 일치했다.
+  익명 요청으로 이 namespace의 자료 목록 및 HTML/PDF/ZIP 경로를 조회한 4건은
+  모두 `401 UNAUTHENTICATED`, `private, no-store`, request ID 포함이었다.
+  존재하는 계정·사건을 조회하지 않았으며 업로드·처리·삭제 성공 증거는 아니다.
+- 기존 합성 fixture 11개, 644,318 bytes의 무결성 검사를 통과했다. document/image/
+  audio/video와 손상 파일 대조군을 그대로 재사용한다. 이 검사는 OCR/Whisper 실행이 아니다.
+- Container proxy에서 시작 도중 취소가 먼저 stop을 끝낸 뒤 startup이 늦게 완료하면
+  원본 처리 POST를 보내고 인스턴스를 남기는 경합을 재현했다. 새 회귀가 수정 전 실패했다.
+  startup 직후 abort를 재검사하고 늦게 시작한 인스턴스를 다시 stop하여 원본 dispatch를
+  차단한다. 실패 응답은 기존 `PROCESSOR_UNAVAILABLE`로 제한한다.
+- 수정 후 container proxy/transport/execution/retry 및 deletion reconcile/restore
+  6개 파일의 **42 tests / 308 assertions**가 통과했다. `bun ci`, `validate:quick`,
+  `validate:build`(production build·163-file bundle·Worker dry-run)도 통과했다.
+  UI/schema/native processor 자체는 변경하지 않아 browser/db/native/full을 반복하지 않았다.
+- 후속 #58 점검에서 원본 다운로드 도중 requesting session이 폐기/만료되거나 보존
+  기한을 넘겨도 plaintext가 계속 나오는 결함을 합성 SQL·서명 세션·R2 byte adapter로
+  재현했다(수정 전 3개 FAIL). HTTP 원본 service에 exact session ID를 전달하고 기존
+  per-part SQL 접근 검사에 세션 소유자·유효기간·보존 기한을 결합했다. 다른 활성
+  세션이 같은 owner에게 있어도 요청 세션을 대신하지 않는다. 다운로드 도중 폐기 시
+  다음 part를 R2에서 읽기 전에 중단하고, R2 응답 중 폐기 시 해당 평문도 전달하지 않는다.
+  마지막 비동기 헤더 복호화 뒤에 최종 접근 검사를 수행하여 첫 `reader.read()`부터
+  평문 전달이 차단됨을 확인했다(EOF 실패만 확인하면 이미 보낸 평문을 놓친다).
+  자료/리포트 관련 5개 파일의 **40 tests / 316 assertions**가 통과했다. 유효한 세션의
+  기존 원본은 필수 재동의 전에도 다운로드된다는 반대 조건을 함께 확인했다.
+
+다음 실제 증거는 아직 없다. 전용 폐기 가능한 OAuth 계정 2개(소유자·비소유자)가 필요하며
+총괄에 요청했다. 해당 계정에서 업로드→R2/Container/Whisper→교정/재접속→최신
+HTML/PDF/선택 ZIP→자료·사건·계정 삭제와 원격 negative HEAD/임시물 정리를 검증한다.
+복구 후 재삭제는 #19 총괄이 격리 환경·최신 외부 journal·복구 관리자 조건을 확인한
+**한 번의 drill**에만 합류한다.
+
+### Native 임시물 수명 보완 (#59/#67)
+
+총괄과 인증·AI 담당이 processing/asset runtime의 identity·binding·lifecycle 수정을
+이 담당에게 인계했다. Workflow가 없을 때 과거 `file-processing-*` native 작업의
+실제 stop 확인 없이 journal이 완료되는 로컬 SQL 재현을 확보했다.
+[PR #208](https://github.com/creno-va/baro/pull/208)에 다음 보완을 모았다.
+
+- 새 file/asset/probe job은 `native-v1-*` 이름을 사용한다. 기존 job/outbox가 보존하는
+  attempt runtime ID가 Container 이름과 같아 삭제 후에도 도달할 수 있다. schema나
+  migration을 추가하지 않는다. 실제 SQL 재시도 후 삭제에서 `-1`과 `-2` 모두
+  inventory에 남고 두 attempt를 revoke한 다음 원본이 삭제됨을 검증했다.
+  10번째 attempt ID도 54~55자로 기존 100자 opaque ID 계약을 통과한다.
+- 같은 attempt의 문서 페이지·영상 unit은 순차 실행하고 unit마다 깨끗한 native
+  process를 시작한다. 이전 DO가 재생성됐을 때 남은 process도 시작 전에 destroy한다.
+  실제 SQL/AES 2페이지 처리→파생물→coverage publication에 동일 lifecycle/proxy를
+  연결한 합성 회귀와 새 ID를 사용한 file/asset Workflow dispatch 회귀가 통과했다.
+  스트리밍 Request를 복제하지 않고 proxy에 수명 신호를 별도로 결합하여 원본 스트림을
+  유지하며 취소·삭제 신호를 함께 적용한다.
+- 삭제 RPC는 비민감 boolean tombstone을 DO storage에 저장하고, 진행 중 요청을
+  취소하며 늦게 완료하는 start까지 기다린 뒤 `destroy()`가 성공해야 반환한다.
+  재생성된 DO도 tombstone을 읽어 start를 거부한다. journal은 revoke와 Workflow
+  delete가 모두 성공한 뒤 receipt를 기록한다. persistence/destroy/Workflow 오류는
+  pending으로 남고 같은 대상 재시도가 가능하다.
+- 과거 임의 Container ID는 이름을 재구성할 수 없다. Workflow 부재뿐 아니라
+  file/asset Workflow 삭제 성공만으로도 완료 처리하지 않는다. 이 대상과 그에 묶인
+  R2 정리는 플랫폼 종료 증거가 마련될 때까지 pending이다. 기존 완료 journal을
+  이번 변경으로 소급 검증하거나 과거 random native 물리 삭제의 성공으로 간주하지 않는다.
+- SDK `@cloudflare/containers` 0.3.7의 destroy는 native destroy를 await하고 DO storage를
+  지우지 않는다. [공식 destroy 계약](https://developers.cloudflare.com/containers/api/container-class/)
+  역시 runtime이 파괴된 뒤 완료됨을 명시한다. 이는 로컬 구현·계약 확인이며 실제
+  배포 인스턴스의 종료 성공 증거는 아니다.
+- 기존 요청 deadline 265초, startup 15초/port 20초, container CPU 600초 및 memory/disk
+  비용 상한은 유지한다. unit당 새 process라는 자원 구조도 유지한다. 추가된 DO storage
+  읽기·삭제 tombstone 쓰기와 RPC의 실제 지연·청구는 원격 인수에서 확인해야 한다.
+
+로컬 lifecycle/proxy, 삭제·복구, paid admission, asset runtime 및
+transport/execution/retry/dispatch **10개 파일의 중복 없는 102개 검사**가 통과했다. 늦은 start·늦은 응답·저장 실패·
+종료 실패·재실행·순차 unit을 포함한다. `validate:quick`은 초기 테스트 타입 오류 수정 및 후속 proxy 변경 뒤 최종 통과했다.
+도구 계약 18 tests / 252 assertions도 통과했다. `validate:build`의
+production build·bundle·Worker dry-run은 통과했다. native Python/image는 변경하지
+않았고 실제 Container 실행은 원격 인수 대기다. 최신 exact-head 결과는 PR에 연결한다.
+
+#58/#59/#66/#67과 Goal은 미완료다. 전용 계정의 실제 업로드/처리/리포트/삭제와
+총괄의 한 번의 격리 복구 drill, 새 candidate의 Container 물리 종료 증거가 필요하다.
+
+## 기존 구현·검증 기록
+
 담당 이슈: #58, #59, #66, #67. 브랜치: `codex/58-files-reports-deletion`.
 기준 main: `c6b96656ee6e4d7c968486b47a994b2807bdeadd` (PR #125 UI, #126/#128 및 #127/#129/#131 공유 경계 포함).
 ADR-0014의 고객/변호사 MVP 및 실제 client UI/API adapter 구성을 유지한다.

@@ -8,6 +8,7 @@ import {
   type AssetProcessingBinding,
   createAssetProcessingDispatcher,
 } from "../src/server/modules/file-processing/dispatch";
+import { nativeJobId } from "../src/server/modules/file-processing/native-identity";
 import { createAssetProcessingAdmission } from "../src/server/runtime/asset-admission";
 import { fixture } from "./helpers/file-processing-fixture";
 import { seedTestSession } from "./helpers/session";
@@ -18,7 +19,7 @@ async function setup(admit = true) {
     storage = createV2StorageRepository(f.core);
   const profileId = crypto.randomUUID(),
     assetId = crypto.randomUUID(),
-    jobId = crypto.randomUUID();
+    jobId = nativeJobId("asset");
   const reservationId = crypto.randomUUID(),
     blobId = crypto.randomUUID(),
     operationId = crypto.randomUUID();

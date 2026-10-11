@@ -14,7 +14,7 @@ import {
 import {
   type CleanupFailureEvent,
   createV2DeletionReconciler,
-  stopLegacyContainer,
+  revokeNamedProcessor,
 } from "../src/server/modules/deletion/v2-reconcile";
 import { createTestDatabase } from "./helpers/d1";
 import { fixture, uploaded } from "./helpers/file-processing-fixture";
@@ -102,7 +102,7 @@ test("v2 restore replays post-backup objects, removes restored account/session, 
     environment: "preview",
     privateBucket: r.f.bucket.port,
     workflows: [missing, missing, missing, missing],
-    stopProbe: async () => {},
+    stopNative: async () => {},
     clock: () => at,
     testOnlyUnmeteredStorage: true,
     onFailure: (event) => events.push(event),
@@ -223,8 +223,8 @@ test("v2 restore refuses traffic-open, incomplete inventory, plaintext and stale
   ).rejects.toThrow();
 });
 
-test("legacy Container stop uses the exact runtime name and never acknowledges a failed stop", async () => {
-  const id = `${crypto.randomUUID()}-1`;
+test("named Container revocation uses the retained attempt name and never acknowledges a failure", async () => {
+  const id = `native-v1-asset-${crypto.randomUUID()}-1`;
   const names: string[] = [];
   let fail = true;
   const binding = {
@@ -233,18 +233,19 @@ test("legacy Container stop uses the exact runtime name and never acknowledges a
       return name;
     },
     get: () => ({
-      stop: async (signal: string) => {
-        expect(signal).toBe("SIGKILL");
+      revoke: async () => {
         if (fail) throw new Error("synthetic private provider error");
       },
     }),
   } as unknown as Env["FILE_PROCESSOR"];
-  await expect(stopLegacyContainer(binding, id)).rejects.toThrow();
+  await expect(revokeNamedProcessor(binding, id)).rejects.toThrow();
   fail = false;
-  expect(await stopLegacyContainer(binding, id)).toBe(true);
+  await revokeNamedProcessor(binding, id);
   expect(names).toEqual([id, id]);
-  expect(await stopLegacyContainer(binding, "untracked-runtime")).toBe(false);
-  expect(await stopLegacyContainer(undefined, id)).toBe(false);
+  await expect(revokeNamedProcessor(binding, `${crypto.randomUUID()}-1`)).rejects.toThrow(
+    "CLEANUP_LEGACY_RUNTIME_PROOF_REQUIRED",
+  );
+  await expect(revokeNamedProcessor(undefined, id)).rejects.toThrow("CLEANUP_BINDING_UNAVAILABLE");
 });
 
 test("restored physical inventory remains held while an actual writer is unresolved", async () => {
@@ -310,13 +311,13 @@ test("restored physical inventory remains held while an actual writer is unresol
   ).toEqual({ writer_state: "running" });
 });
 
-test("legacy stop failure stays retryable; safe failure events cannot disclose provider errors or disrupt cleanup", async () => {
+test("native revoke failure stays retryable; safe failure events cannot disclose provider errors or disrupt cleanup", async () => {
   const r = await recovery();
   await replayV2RestoreJournal(r.core, r.journal, r.options);
   const journal = r.db.sqlite
     .query("SELECT id FROM v2_deletion_journals WHERE target_kind='account'")
     .get() as { id: string };
-  const id = `${crypto.randomUUID()}-1`;
+  const id = `native-v1-asset-${crypto.randomUUID()}-1`;
   r.db.sqlite
     .query(
       "INSERT INTO v2_deletion_targets(journal_id,ordinal,kind,target_id) VALUES(?,999,'job',?)",
@@ -328,7 +329,7 @@ test("legacy stop failure stays retryable; safe failure events cannot disclose p
   const binding = {
     idFromName: (name: string) => name,
     get: () => ({
-      stop: async () => {
+      revoke: async () => {
         if (fail) throw new Error("secret-provider-message-and-sql");
       },
     }),
@@ -339,7 +340,7 @@ test("legacy stop failure stays retryable; safe failure events cannot disclose p
     workflows: [missing, missing, missing, missing],
     clock: () => at,
     testOnlyUnmeteredStorage: true,
-    confirmAbsentJob: (runtime) => stopLegacyContainer(binding, runtime),
+    stopNative: (runtime) => revokeNamedProcessor(binding, runtime),
     onFailure: (e) => {
       events.push(e);
       throw new Error("synthetic logger failure");

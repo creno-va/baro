@@ -14,6 +14,7 @@ import {
 } from "../modules/budget/processing-runtime";
 import { hasCurrentConsent } from "../modules/consent/service";
 import { admitFileProcessing } from "../modules/file-processing/execution";
+import { namedProcessorPort, nativeJobId } from "../modules/file-processing/native-identity";
 import { ProcessingError } from "../modules/file-processing/protocol";
 import { createProcessorTransport } from "../modules/file-processing/transport";
 import type { FileServiceDependencies } from "../modules/files/service";
@@ -47,7 +48,7 @@ export function createFileProcessingAdmission(
         context.byteLength !== input.byteLength
       )
         throw new ProcessingError("STALE_REVISION");
-      const jobId = `probe-${crypto.randomUUID()}`,
+      const jobId = nativeJobId("probe"),
         invocationId = `${jobId}-1`;
       const budget = createProcessingBudgetService({
         core,
@@ -119,18 +120,9 @@ export function createFileProcessingAdmission(
             .first());
         },
       };
-      let native: ReturnType<typeof env.FILE_PROCESSOR.get> | null = null;
       const processor = createProcessorTransport({
         costs: budget.costs(lease, admission),
-        fetch: (request) => {
-          native = env.FILE_PROCESSOR.get(env.FILE_PROCESSOR.idFromName(invocationId));
-          return native.fetch(request);
-        },
-        stop: async () => {
-          const current = native;
-          native = null;
-          await current?.stop("SIGKILL");
-        },
+        ...namedProcessorPort(env.FILE_PROCESSOR, invocationId),
       });
       let succeeded = false;
       try {
@@ -184,7 +176,7 @@ export function createFileProcessingAdmission(
         row.encrypted_payload,
         z.strictObject({ contentHash: hashSchema }),
       );
-      const jobId = `file-processing-${crypto.randomUUID()}`,
+      const jobId = nativeJobId("file"),
         operationId = crypto.randomUUID();
       const requestHash = await runtimeDigest({
         workspaceId: input.workspaceId,

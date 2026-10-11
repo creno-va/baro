@@ -9,7 +9,7 @@
 있고 required-reviewer 규칙은 없었다. 보호 규칙은 변경하지 않았다.
 
 총괄의 21:29 KST 읽기 전용 `wrangler d1 list --json`은 로컬 CLI 인증 부재로 실패했다.
-인증·AI 담당은 같은 날 21:33 KST 이후 인증된 Safari 콘솔의 D1 목록에서 **총2개,
+인증·AI 담당은 같은 날 21:27:35–21:32:25 KST에 인증된 Safari 콘솔의 D1 목록에서 **총2개,
 baro-preview/baro-production만 있음**을 직접 확인했다. DB 내용/SQL은 열지 않았으며
 지정된 합성 전용 격리 DB는 없었다. CLI 실패를 자원 부재로 해석하지 않고 콘솔 관측과 분리한다.
 따라서 #19 restore는 실행하지 않았다. [기존 drill 절차](./BETA-DRILLS.md)의 자원 지정,

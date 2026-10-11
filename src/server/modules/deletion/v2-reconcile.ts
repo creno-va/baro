@@ -1,9 +1,9 @@
-import { uuidSchema } from "../../../contracts";
 import { createCaseDataCipher } from "../../crypto";
 import { createV2Core, type V2Core } from "../../db/v2-core";
 import { createV2DeletionRepository } from "../../db/v2-deletion";
 import { createV2StorageRepository } from "../../db/v2-storage";
 import { authorizeBlobCleanup, createStorageMaintenance } from "../budget/storage-maintenance";
+import { isNamedNativeRuntime } from "../file-processing/native-identity";
 import type { PrivateBucket } from "../files/service";
 
 const cleanupReasons = [
@@ -34,13 +34,12 @@ function reportCleanupFailure(event: CleanupFailureEvent) {
     }),
   );
 }
-/** Older probes used the opaque runtime ID as their Container name. A successful
- * stop is required; missing Workflows alone never prove that writer is absent. */
-export async function stopLegacyContainer(binding: Env["FILE_PROCESSOR"] | undefined, id: string) {
-  if (!binding || !id.endsWith("-1") || !uuidSchema.safeParse(id.slice(0, -2)).success)
-    return false;
-  await binding.get(binding.idFromName(id)).stop("SIGKILL");
-  return true;
+/** Only versioned attempts and explicitly named probes have recoverable identity.
+ * Stopping an empty named instance cannot prove an older random one is gone. */
+export async function revokeNamedProcessor(binding: Env["FILE_PROCESSOR"] | undefined, id: string) {
+  if (!isNamedNativeRuntime(id)) throw new Error("CLEANUP_LEGACY_RUNTIME_PROOF_REQUIRED");
+  if (!binding) throw new Error("CLEANUP_BINDING_UNAVAILABLE");
+  await binding.get(binding.idFromName(id)).revoke();
 }
 export type CleanupWorkflow = { get(id: string): Promise<{ delete(): Promise<void> }> };
 export type DeletionCleanupDependencies = {
@@ -50,10 +49,10 @@ export type DeletionCleanupDependencies = {
   /** All namespaces are required because the durable inventory retains runtime IDs after cascade deletion. */
   workflows: readonly (CleanupWorkflow | undefined)[];
   legacyWorkflow?: CleanupWorkflow;
-  stopProbe?: (runtimeId: string) => Promise<void>;
+  stopNative?: (runtimeId: string) => Promise<void>;
   /** Coordinator receipt for legacy/unknown runtime IDs. Absence from Workflow
    * namespaces alone cannot prove that an older Container probe has stopped. */
-  confirmAbsentJob?: (runtimeId: string) => Promise<boolean>;
+  confirmLegacyJob?: (runtimeId: string) => Promise<boolean>;
   onFailure?: (event: CleanupFailureEvent) => void;
   clock?: () => string;
   testOnlyUnmeteredStorage?: true;
@@ -98,20 +97,31 @@ export function createV2DeletionReconciler(core: V2Core, deps: DeletionCleanupDe
             if (target.kind === "job" || target.kind === "legacy_workflow") {
               if (target.kind === "legacy_workflow")
                 await stop(deps.legacyWorkflow, target.target_id);
-              else if (/^probe-[a-f0-9-]{36}-1$/.test(target.target_id)) {
-                if (!deps.stopProbe) throw new Error("CLEANUP_BINDING_UNAVAILABLE");
-                await deps.stopProbe(target.target_id);
-              } else if (!/^report-local-[a-f0-9-]{36}-1$/.test(target.target_id)) {
-                if (deps.workflows.length !== 4) throw new Error("CLEANUP_BINDING_UNAVAILABLE");
-                let observed = false;
-                for (const binding of deps.workflows)
-                  observed = (await stop(binding, target.target_id)) || observed;
-                if (
-                  !observed &&
-                  !/^file-processing-[a-f0-9-]{36}-[1-9][0-9]*$/.test(target.target_id) &&
-                  !(await deps.confirmAbsentJob?.(target.target_id))
-                )
-                  throw new Error("CLEANUP_LEGACY_RUNTIME_PROOF_REQUIRED");
+              else if (!/^report-local-[a-f0-9-]{36}-1$/.test(target.target_id)) {
+                const named = isNamedNativeRuntime(target.target_id);
+                if (named) {
+                  if (!deps.stopNative) throw new Error("CLEANUP_BINDING_UNAVAILABLE");
+                  // Revoke first: a Workflow may already have dispatched a late
+                  // native request, or may outlive a failed Workflow deletion.
+                  await deps.stopNative(target.target_id);
+                }
+                const probe = named && /^(?:native-v1-)?probe-/.test(target.target_id);
+                if (!probe) {
+                  if (deps.workflows.length !== 4) throw new Error("CLEANUP_BINDING_UNAVAILABLE");
+                  let observed = false;
+                  let nativeObserved = false;
+                  for (const [index, binding] of deps.workflows.entries()) {
+                    const found = await stop(binding, target.target_id);
+                    observed = found || observed;
+                    nativeObserved = (index < 2 && found) || nativeObserved;
+                  }
+                  if (
+                    !named &&
+                    (!observed || nativeObserved || /^file-processing-/.test(target.target_id)) &&
+                    !(await deps.confirmLegacyJob?.(target.target_id))
+                  )
+                    throw new Error("CLEANUP_LEGACY_RUNTIME_PROOF_REQUIRED");
+                }
               }
               // Local report jobs never invoke a Workflow. Their running R2 writer
               // is independently fenced below; a cancelled lease cannot send new I/O.
@@ -266,10 +276,6 @@ export async function reconcileV2Deletion(env: Env) {
       env.PROFILE_PUBLICATION,
     ],
     legacyWorkflow: env.ANALYSIS_WORKFLOW,
-    confirmAbsentJob: (id) => stopLegacyContainer(env.FILE_PROCESSOR, id),
-    stopProbe: async (id) => {
-      if (!env.FILE_PROCESSOR) throw new Error("CLEANUP_BINDING_UNAVAILABLE");
-      await env.FILE_PROCESSOR.get(env.FILE_PROCESSOR.idFromName(id)).stop("SIGKILL");
-    },
+    stopNative: (id) => revokeNamedProcessor(env.FILE_PROCESSOR, id),
   }).run();
 }

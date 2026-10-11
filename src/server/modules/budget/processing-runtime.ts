@@ -5,6 +5,7 @@ import {
   createFileProcessingExecution,
   type FileProcessingParams,
 } from "../file-processing/execution";
+import { namedProcessorPort } from "../file-processing/native-identity";
 import { ProcessingError } from "../file-processing/protocol";
 import { createProcessorTransport, type ProcessingCosts } from "../file-processing/transport";
 import { createFilesService } from "../files/service";
@@ -154,18 +155,9 @@ export async function createFileProcessingRuntime(
       await costOwner.get(permit)?.after(permit, receipt);
     },
   };
-  let native: ReturnType<typeof env.FILE_PROCESSOR.get> | null = null;
   const processor = createProcessorTransport({
     costs,
-    fetch: (request) => {
-      native = env.FILE_PROCESSOR.get(env.FILE_PROCESSOR.newUniqueId());
-      return native.fetch(request);
-    },
-    stop: async () => {
-      const current = native;
-      native = null;
-      await current?.stop("SIGKILL");
-    },
+    ...namedProcessorPort(env.FILE_PROCESSOR, instanceId),
   });
   execution = createFileProcessingExecution(core, params, {
     environment,
