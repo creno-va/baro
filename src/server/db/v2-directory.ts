@@ -188,8 +188,10 @@ export function createV2DirectoryRepository(core: V2Core) {
         const where = [eligible];
         const values: unknown[] = [];
         if (query.name !== undefined) {
-          where.push("instr(lower(json_extract(pub.content_json,'$.content.name')),lower(?))>0");
-          values.push(query.name);
+          where.push(
+            "(instr(lower(json_extract(pub.content_json,'$.content.name')),lower(?))>0 OR instr(lower(json_extract(pub.content_json,'$.content.office.name')),lower(?))>0)",
+          );
+          values.push(query.name, query.name);
         }
         if (query.region !== undefined) {
           where.push("json_extract(pub.content_json,'$.content.office.region')=?");

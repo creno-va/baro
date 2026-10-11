@@ -57,6 +57,7 @@ async function fixture() {
 type Fixture = Awaited<ReturnType<typeof fixture>>;
 type Options = {
   name?: string;
+  officeName?: string;
   region?: V2PublicLawyer["content"]["office"]["region"];
   fields?: V2PublicLawyer["content"]["legalFields"];
 };
@@ -119,6 +120,7 @@ async function published(f: Fixture, index: number, options: Options = {}) {
   dto.id = profileId;
   dto.publishedAt = NOW;
   dto.content.name = options.name ?? `합성 변호사 ${index}`;
+  dto.content.office.name = options.officeName ?? dto.content.office.name;
   dto.content.office.region = options.region ?? "seoul";
   dto.content.legalFields = options.fields ?? ["civil"];
   dto.content.photoAssetId = photoId;
@@ -270,6 +272,62 @@ function hookScan(f: Fixture, run: () => void) {
   };
   return () => fired;
 }
+
+test("directory searches office names literally with case-insensitive Latin and objective paginated filters", async () => {
+  const f = await fixture();
+  const a = await published(f, 0, {
+    name: "합성 Alpha",
+    officeName: "합성 Delta_100% Office",
+    fields: ["civil", "family"],
+  });
+  const b = await published(f, 1, {
+    name: "합성 Beta",
+    officeName: "합성 Delta_100% Office",
+    fields: ["civil", "family"],
+  });
+  await published(f, 2, {
+    officeName: "합성 Delta_100% Office",
+    region: "busan",
+    fields: ["family"],
+  });
+  await published(f, 3, { officeName: "합성 Delta_100% Office", fields: ["criminal"] });
+  await published(f, 4, { officeName: "합성 DeltaX100 Office", fields: ["family"] });
+  let decryptions = 0;
+  const decrypt = f.core.cipher.decrypt.bind(f.core.cipher);
+  f.core.cipher.decrypt = async (e, c) => {
+    decryptions++;
+    return decrypt(e, c);
+  };
+  const query = {
+    name: "delta_100%",
+    region: "seoul" as const,
+    legalField: "family" as const,
+    limit: 1,
+  };
+  const first = await start(f, query);
+  const ids = first.page.items.map((p) => p.id);
+  expect(ids).toHaveLength(1);
+  expect(first.page.nextCursor).not.toBeNull();
+  let cursor = first.page.nextCursor;
+  while (cursor) {
+    const page = await f.directory.page(NOW, { ...query, cursor });
+    if (!page) throw new Error("Synthetic search snapshot missing");
+    ids.push(...page.items.map((p) => p.id));
+    cursor = page.nextCursor;
+  }
+  expect(ids.toSorted()).toEqual([a.profileId, b.profileId].toSorted());
+  expect(new Set(ids).size).toBe(2);
+  expect(
+    (await start(f, { ...query, name: "DELTA_100%", limit: 50 })).page.items.map((p) => p.id),
+  ).toEqual(ids);
+  expect((await start(f, { name: "alpha", limit: 50 })).page.items.map((p) => p.id)).toEqual([
+    a.profileId,
+  ]);
+  expect((await start(f, { name: "합성 Delta_100%", limit: 50 })).page.items).toHaveLength(4);
+  expect((await start(f, { name: "없는 사무실", limit: 50 })).page.items).toEqual([]);
+  expect((await start(f, { limit: 50 })).page.items).toHaveLength(5);
+  expect(decryptions).toBe(0);
+});
 
 test("approved public filters remain literal, objective and never invent coverage or use private decryption", async () => {
   const f = await fixture();
