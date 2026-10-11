@@ -1,5 +1,23 @@
 # BARO v2 검증 증거 기록
 
+## 2026-10-11 현재 통합·배포 재감사
+
+[요구사항 완료표](./MVP-REQUIREMENTS-EVIDENCE.md#2026-10-11-병합ci배포-재감사)를 현재 판정으로 사용한다.
+PR167은 `14f458fbdb6585c5ecf55059600a85792e32385a`에서 OPEN이며 CI37898379926은
+landing 영상 수동 재생 복귀1 실패/97 통과로 FAILURE다. 이전 로컬1478/138054 통과와
+CI37897305466의 실패를 모두 보존하고 전체 성공으로 승격하지 않는다.
+
+main `82a1b87a40acf343e31d5c82362d4a22d4019099`의 CI37897089469/preview37898231484는
+SUCCESS, #163 병합/#162 CLOSED는 활성화 범위 완료다. 마지막 성공 production 실행
+37562126130의 SHA는 `c76d5b0250af96cc0dd2079be421cfa772108243`로 다른 버전이다.
+이번 감사는 GitHub 기록 조회이며 현재 Worker 실시간 재관측·원격 SQL·배포를 수행하지 않는다.
+
+C source5f8bdbf/CI37896718397 및 변호사 후속 #182/#189/#199/#203의 독립 CI는 SUCCESS다.
+자료/HTML/인증·법률 source 보충은 해당 PR/이슈에 보존하되 모두 최종 main 통합 전이다.
+A가 #169~#204의 알려진 결함을 결합하고 같은 SHA의 CI→main→preview→production 증거를
+확보한다. C는 #62/#69 각각의 남은 인수 조건에 따라 종료 여부를 재판정한다. #71은 모든 실제 외부/사람 조건 뒤 마지막에 닫는다.
+새로 종료한 이슈는 없고 현재 #62/#69/#71은 OPEN이다.
+
 ## 2026-10-07 원격 질문 재시도 503 추적
 
 PR144 최종 head0e934ff4441e2f2b926ec05ed9554da3442f1a27의 필수 CI37536532795와 main868fd09133f1006e2c526a539ea3f253b6f58f3f CI37536763090은 SUCCESS다. Preview37537064408 SUCCESS, Worker e62cc468-aaf3-4f28-b59c-1f0cc2547c6d의 health에서 동일 SHA/schema0009를 확인했다. 첫 신규 계정 원장 초기화 수정 뒤 실제 질문 작업은 MODEL_UNAVAILABLE로 실패했고 `/workspace-jobs/:jobId/retry`는 DEPENDENCY_UNAVAILABLE503을 반환했다. production37537388660은 지정 Environment 승인 대기이며 배포 성공으로 표시하지 않는다.
