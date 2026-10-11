@@ -569,6 +569,40 @@ test("hero footage plays continuously while idle, scroll changes only the framin
     .toBe(true);
 });
 
+test("an interrupted hero play request resumes without another scroll or click", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await page.goto("/");
+  const film = page.locator("video[data-scroll-film]");
+  const toggle = page.locator("[data-journey-toggle]");
+  await expect.poll(() => film.evaluate((v) => !(v as HTMLVideoElement).paused)).toBe(true);
+  await toggle.click();
+  await expect(toggle).toHaveAccessibleName("첫 화면 영상 재생하기");
+  await film.evaluate((element) => {
+    const video = element as HTMLVideoElement;
+    const play = video.play.bind(video);
+    let interrupted = false;
+    video.play = () => {
+      if (interrupted) return play();
+      interrupted = true;
+      return new Promise<void>((_, reject) => {
+        window.setTimeout(
+          () => reject(new DOMException("Synthetic interrupted play", "AbortError")),
+          50,
+        );
+      });
+    };
+  });
+  await toggle.click();
+  await expect(toggle).toHaveAccessibleName("첫 화면 영상 일시정지");
+  await expect.poll(() => film.evaluate((v) => !(v as HTMLVideoElement).paused)).toBe(true);
+  await toggle.click();
+  await expect(toggle).toHaveAccessibleName("첫 화면 영상 재생하기");
+  await expect.poll(() => film.evaluate((v) => (v as HTMLVideoElement).paused)).toBe(true);
+});
+
 test("data-saving entry leaves the hero unloaded until the visitor explicitly starts it", async ({
   page,
 }) => {

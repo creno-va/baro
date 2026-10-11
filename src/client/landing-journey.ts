@@ -70,6 +70,9 @@ if (journey) {
           playingRequest = false;
           // A pending autoplay request must not restart a hidden or visitor-paused film.
           if (!shouldPlay()) video.pause();
+          // Scrolling or pausing can abort play before a newer request can start.
+          // Reconcile the latest visible/user state once the old promise settles.
+          else if (video.paused) schedule();
           syncButton();
         });
     }
