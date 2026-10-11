@@ -546,12 +546,13 @@ test.each(["2025-05-17", "2026-03-12"])(
   },
 );
 
-test("date normalization preserves the official-source failure warning at the warning limit", async () => {
+test("date normalization preserves source failure and partial coverage at the warning limit", async () => {
   const f = await reportFixture();
   try {
     const latest = message(f, "거래 날짜를 모릅니다.");
     const context = await readWorkspaceContext(f.core, f.actor, f.workspaceId, latest);
     context.sourceStatus = "unavailable";
+    context.sourceCoverage = { sourcesPartial: true, rejectedSources: 1, outcomes: [] };
     const ref = {
       kind: "user_message" as const,
       messageId: latest.id,
@@ -589,6 +590,7 @@ test("date normalization preserves the official-source failure warning at the wa
     expect(result.timeline[0]).toMatchObject({ date: null, datePrecision: "unknown" });
     expect(result.warnings).toHaveLength(20);
     expect(result.warnings.some((w) => w.includes("공식 자료를 확인하지 못해"))).toBe(true);
+    expect(result.warnings.some((w) => w.includes("공식 자료 일부만 확인"))).toBe(true);
     expect(result.warnings.some((w) => w.includes("날짜 미확인"))).toBe(true);
   } finally {
     f.db.close();

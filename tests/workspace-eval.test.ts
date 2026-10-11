@@ -12,6 +12,8 @@ import {
   gatewayWireIdentity,
   prepareGatewayWireInput,
 } from "../src/server/modules/llm-gateway/service";
+import { workspaceChatOutputSchema } from "../src/server/modules/llm-gateway/v2/schemas";
+import { workspaceModelInput } from "../src/server/modules/workspace/pipeline";
 
 const sha = "a".repeat(40);
 const baseline = await evaluateWorkspace(sha);
@@ -46,8 +48,10 @@ async function replaceDraft(replay: Replay, id: string, output: unknown) {
     await gatewayWireIdentity(
       prepareGatewayWireInput("workspace_audit", {
         phase: s.phase,
-        context: s.context,
-        draft: output,
+        context: workspaceModelInput(
+          s.phase === "workspace_chat" ? { ...s.context, sourceLookupPerformed: false } : s.context,
+        ),
+        draft: s.phase === "workspace_chat" ? workspaceChatOutputSchema.parse(output) : output,
       }),
     )
   ).wireInputSha256;

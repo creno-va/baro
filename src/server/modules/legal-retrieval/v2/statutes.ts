@@ -27,11 +27,13 @@ export function selectStatute(
   value: unknown,
   plan: Extract<RetrievalPlan, { kind: "statute" }>,
   asOfDate: string,
+  observedDate = asOfDate,
 ) {
   const list = listSchema.parse(value).LawSearch;
   const rows = list.law ? (Array.isArray(list.law) ? list.law : [list.law]) : [];
   if (list.totalCnt > 100 || list.totalCnt !== rows.length)
     throw new RetrievalFailure("history_incomplete");
+  if (rows.some((row) => row.공포일자 > observedDate)) throw new RetrievalFailure("date_invalid");
   const candidates = rows
     .filter(
       (row) =>

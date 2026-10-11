@@ -1,18 +1,16 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
-import { candidateSource, loadFactory, variants } from "./candidates";
+import {
+  baselineSha,
+  candidateSource,
+  loadFactory,
+  readBaselineSource,
+  variants,
+} from "./candidates";
 import { runSample, type Shape, scenarios } from "./harness";
 
-const baselineSha = "b6cfdfe3676506bf2b4880af0911138a9b3f107e";
-const source = await Bun.file("src/server/modules/legal-retrieval/v2/service.ts").text();
-assert.equal(
-  source,
-  execFileSync("git", ["show", `${baselineSha}:src/server/modules/legal-retrieval/v2/service.ts`], {
-    encoding: "utf8",
-  }),
-  "Pinned retrieval implementation changed; rebase/review benchmark anchors first",
-);
+const source = readBaselineSource();
 const repetitions = Number(process.env.BARO_BENCH_REPEATS ?? 5);
 assert.ok(Number.isInteger(repetitions) && repetitions >= 1 && repetitions <= 20);
 const rows = [];
@@ -69,6 +67,11 @@ for (const variant of variants) {
 const result = {
   baselineSha,
   researchHead: execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim(),
+  productSourceSha256: await Bun.CryptoHasher.hash(
+    "sha256",
+    await Bun.file("src/server/modules/legal-retrieval/v2/service.ts").arrayBuffer(),
+    "hex",
+  ),
   candidateGeneratorSha256: await Bun.CryptoHasher.hash(
     "sha256",
     await Bun.file("scripts/benchmarks/retrieval/candidates.ts").arrayBuffer(),
@@ -108,14 +111,23 @@ const formatted = Bun.spawnSync(
 assert.equal(formatted.exitCode, 0);
 await Bun.write(".wrangler/retrieval-benchmark/service-after.ts", formatted.stdout);
 const diff = Bun.spawnSync([
+  "git",
   "diff",
-  "-u",
-  "--label",
-  "a/src/server/modules/legal-retrieval/v2/service.ts",
-  "--label",
-  "b/src/server/modules/legal-retrieval/v2/service.ts",
+  "--no-index",
+  "--no-ext-diff",
+  "--",
   ".wrangler/retrieval-benchmark/service-before.ts",
   ".wrangler/retrieval-benchmark/service-after.ts",
 ]);
 assert.equal(diff.exitCode, 1);
-await Bun.write(".wrangler/retrieval-benchmark/list-dedup.patch", diff.stdout);
+const patch = new TextDecoder()
+  .decode(diff.stdout)
+  .replaceAll(
+    "a/.wrangler/retrieval-benchmark/service-before.ts",
+    "a/src/server/modules/legal-retrieval/v2/service.ts",
+  )
+  .replaceAll(
+    "b/.wrangler/retrieval-benchmark/service-after.ts",
+    "b/src/server/modules/legal-retrieval/v2/service.ts",
+  );
+await Bun.write(".wrangler/retrieval-benchmark/list-dedup.patch", patch);
