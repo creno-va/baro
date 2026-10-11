@@ -1,4 +1,6 @@
 # BARO agent working agreement
+
+> **2026-10-11 사용자 개정 — 검증·배포 실행 방식:** 자동 GitHub CI는 `bun run validate:quick`의 문서/경계/lint/typecheck/도구 계약만 실행한다. 기능 검증은 변경에 맞춰 `validate:changed`, `validate:browser`, `validate:db`, `validate:native`, `validate:security`, `validate:build`를 로컬에서 선택 실행하고, `validate:full`은 명시적인 전체 점검 때만 실행한다. 통과한 검사를 변경 없이 반복하지 않는다. 자동 배포와 배포 후 자동 AI 점검은 없다. 배포가 필요할 때 `bun run deploy:preview`, `bun run deploy:production --sha <full40sha>`로 GitHub 수동 workflow를 실행한다. production Environment 승인·secret 보관·동일 SHA CI/preview smoke·공개/외부 인수 조건은 유지한다.
 > **2026-10-06 사용자 개정 — 아래 이전 범위보다 우선한다.** MVP는 고객/변호사 두 역할이며 통합 로그인에서 선택한다. 변호사 승인 어드민·자격 심사·반려·승인대기 UX는 제외한다. 실제 제품 client UI 동일 구현체를 API mock adapter로 먼저 완성하고 기능 연결을 병렬 진행한다. 별도 /mock UI는 만들지 않는다. [5세션 계획](./docs/development/PARALLEL-UI-SPRINT.md)의 실제 착수부터 2시간 sprint를 적용하며 독립 UI는 DB/AI/OAuth/backend CI/A 이슈 종료를 기다리지 않는다. 완료된 코드/이슈/증거를 보존하고 새 DB/비용 선행 이슈를 추가하지 않는다. AI 품질 확대는 모든 UX 연결 뒤다. P0.3/#70/#71 외부·정책·production·공개 gate는 보존하며 mock 성공을 실제 외부 성공으로 표시하지 않는다. [ADR-0014](./docs/adr/0014-mvp-two-roles-and-api-mock-first.md)가 대체 범위를 기록한다.
 
 ## 작업 시작
@@ -23,7 +25,7 @@
 
 ## 검증과 완료
 
-`bun ci`, `bun run check`, `bun run build`, `bun run cf:dry-run`을 실행하고 이슈별 실패 시나리오를 검증한다. DB 변경은 schema 생성 drift와 fresh/upgrade migration 검증이 필수다. 외부 키가 없어도 offline 검증과 PR은 완료한다.
+`bun ci` 후 `bun run validate:quick`과 변경한 기능의 필요한 로컬 검증·실패 시나리오를 실행한다. 빌드 영향은 `validate:build`, DB 변경은 `validate:db`의 schema drift·fresh/upgrade 검증을 수행한다. 브라우저/native/전체 검증을 모든 PR마다 반복하지 않는다. 외부 키가 없어도 offline 검증과 PR은 완료한다.
 
 기능 코드는 PR로 제출한다. 모든 인수 조건과 CI가 통과한 경우에만 `Closes #N`을 쓴다. 실제 외부 smoke가 남으면 `Refs #N`과 해당 외부 검증 이슈를 연결하고, 로컬 대역 테스트를 실제 로그인 성공으로 표현하지 않는다. CI 실패는 수정하며 변경 없음 상태를 반복 보고하지 않는다.
 

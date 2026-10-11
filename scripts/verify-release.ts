@@ -13,18 +13,12 @@ export function hasVerifiedCI(
   );
 }
 
-if (import.meta.main) {
-  const sha = process.argv[2];
-  if (!sha || !/^[a-f0-9]{40}$/.test(sha)) throw new Error("A full immutable SHA is required");
-  const token = process.env.GITHUB_TOKEN;
-  if (!token) throw new Error("GITHUB_TOKEN is required");
-  async function get(path: string): Promise<unknown> {
-    const response = await fetch(`https://api.github.com/repos/creno-va/baro/${path}`, {
-      headers: { authorization: `Bearer ${token}`, accept: "application/vnd.github+json" },
-    });
-    if (!response.ok) throw new Error(`GitHub verification failed: ${response.status}`);
-    return response.json();
-  }
+export async function verifyRelease(
+  sha: string,
+  get: (path: string) => Promise<unknown>,
+  ciOnly = false,
+) {
+  if (!/^[a-f0-9]{40}$/.test(sha)) throw new Error("A full immutable SHA is required");
   const runs = z
     .object({
       workflow_runs: z.array(
@@ -39,6 +33,7 @@ if (import.meta.main) {
     .parse(await get(`actions/workflows/ci.yml/runs?head_sha=${sha}&status=success&per_page=100`));
   if (!hasVerifiedCI(runs.workflow_runs, sha))
     throw new Error("No successful main push CI for this SHA");
+  if (ciOnly) return;
   const deployments = z
     .array(z.object({ id: z.number(), sha: z.string() }))
     .parse(await get(`deployments?sha=${sha}&environment=preview&per_page=100`));
@@ -54,5 +49,26 @@ if (import.meta.main) {
     }
   }
   if (!verifiedPreview) throw new Error("No successful preview deployment/smoke for this SHA");
-  console.log(`Verified CI + preview for ${sha}`);
+}
+
+if (import.meta.main) {
+  const sha = process.argv[2];
+  if (!sha || !/^[a-f0-9]{40}$/.test(sha)) throw new Error("A full immutable SHA is required");
+  const mode = process.argv[3];
+  if (process.argv.length > 4 || (mode && mode !== "--ci-only"))
+    throw new Error("Unknown release verification option");
+  const token = process.env.GITHUB_TOKEN;
+  if (!token) throw new Error("GITHUB_TOKEN is required");
+  await verifyRelease(
+    sha,
+    async (path) => {
+      const response = await fetch(`https://api.github.com/repos/creno-va/baro/${path}`, {
+        headers: { authorization: `Bearer ${token}`, accept: "application/vnd.github+json" },
+      });
+      if (!response.ok) throw new Error(`GitHub verification failed: ${response.status}`);
+      return response.json();
+    },
+    mode === "--ci-only",
+  );
+  console.log(`Verified ${mode === "--ci-only" ? "main CI" : "CI + preview"} for ${sha}`);
 }
