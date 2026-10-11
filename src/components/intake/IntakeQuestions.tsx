@@ -351,6 +351,30 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
       );
     } else setResult(next);
   }
+  function navigateQuestion(nextIndex: number) {
+    if (
+      !ready ||
+      !result ||
+      busy ||
+      waiting ||
+      leaving ||
+      nextIndex < 0 ||
+      nextIndex >= result.questions.length
+    )
+      return;
+    if (question) {
+      if (dirty) drafts.current.set(question.id, { value, state: answerState });
+      else drafts.current.delete(question.id);
+    }
+    const epoch = ticket();
+    void transition(
+      () => {
+        setIndex(nextIndex);
+        setNotice("");
+      },
+      () => accessCurrent(epoch),
+    );
+  }
   async function advance() {
     if (!canMutate || !result || pending.current || result.processing) return;
     ++request.current;
@@ -651,6 +675,16 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
                     <div className="intake-scene-action">
                       {waiting ? (
                         <PreparationStatus title={statusTitle} saved />
+                      ) : !canMutate ? (
+                        <Button
+                          className="intake-scene-primary"
+                          type="button"
+                          disabled={busy || leaving || index >= result.questions.length - 1}
+                          onClick={() => navigateQuestion(index + 1)}
+                        >
+                          다음 질문
+                          <ArrowRight size={18} aria-hidden="true" />
+                        </Button>
                       ) : (
                         <Button
                           className="intake-scene-primary"
@@ -693,21 +727,7 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
                         <Button
                           variant="ghost"
                           disabled={busy || waiting || leaving || index === 0}
-                          onClick={() => {
-                            if (question) {
-                              if (dirty)
-                                drafts.current.set(question.id, { value, state: answerState });
-                              else drafts.current.delete(question.id);
-                            }
-                            const epoch = ticket();
-                            void transition(
-                              () => {
-                                setIndex(index - 1);
-                                setNotice("");
-                              },
-                              () => accessCurrent(epoch),
-                            );
-                          }}
+                          onClick={() => navigateQuestion(index - 1)}
                         >
                           <ArrowLeft size={15} aria-hidden="true" />
                           이전 질문
