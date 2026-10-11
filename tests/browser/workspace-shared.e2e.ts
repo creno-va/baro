@@ -70,8 +70,12 @@ test("common login and B intake flow through C workspace and D report with origi
   await expect(page.getByText("결과 확인 가능", { exact: true })).toBeVisible();
   await page.reload();
   await page.getByRole("button", { name: "자료 확인" }).click();
+  await page.getByText("원본 추출 내용", { exact: true }).click();
   await expect(
-    page.getByRole("dialog").getByText("공통 저장소의 합성 원본 자료입니다.", { exact: true }),
+    page
+      .getByRole("dialog")
+      .locator("details p")
+      .filter({ hasText: "공통 저장소의 합성 원본 자료입니다." }),
   ).toBeVisible();
   await page.getByRole("dialog").getByRole("button", { name: "닫기", exact: true }).last().click();
   await page.getByRole("link", { name: "다음 행동", exact: true }).click();
@@ -99,4 +103,64 @@ test("common login and B intake flow through C workspace and D report with origi
     .click();
   await expect(page).toHaveURL(/\/lawyers$/);
   expect(actualProcessing).toEqual([]);
+});
+
+test("uploaded long mock material can be reviewed, edited and excluded after reload", async ({
+  page,
+}) => {
+  await page.goto("/login");
+  await page.evaluate(() => {
+    const put = (name: string, value: unknown) =>
+      localStorage.setItem(`baro-api-mock-v1:${name}`, JSON.stringify(value));
+    put("session", {
+      user: { id: "synthetic-material-owner", name: "Synthetic", accountType: "customer" },
+      needsConsent: false,
+    });
+    put("caseOwners", { "synthetic-material-case": "synthetic-material-owner" });
+    put("cases", {
+      "synthetic-material-case": {
+        id: "synthetic-material-case",
+        title: "Synthetic material",
+        subjectContext: "individual",
+        stage: "active",
+        revision: 1,
+        updatedAt: "2026-10-01T00:00:00Z",
+        summary: "Synthetic reviewed facts",
+        schemaVersion: "2",
+      },
+    });
+    put("files", {});
+  });
+  await page.goto("/cases/synthetic-material-case/files");
+  const text = `${"a".repeat(5000)}Synthetic second chunk`;
+  await page.getByLabel("선택 자료의 자동 처리에 동의합니다.").check();
+  await page
+    .getByLabel("업로드할 파일 선택", { exact: true })
+    .setInputFiles({ name: "긴 합성 자료.txt", mimeType: "text/plain", buffer: Buffer.from(text) });
+  await expect(page.getByText("결과 확인 가능", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "자료 확인" }).click();
+  const review = page.getByRole("region", { name: "자료 내용 검토" });
+  const editors = review.getByRole("textbox", { name: "확인·교정한 내용" });
+  await expect(editors).toHaveCount(2);
+  await expect(editors.nth(0)).toHaveValue("a".repeat(5000));
+  await expect(editors.nth(1)).toHaveValue("Synthetic second chunk");
+  await editors.nth(0).fill("Synthetic corrected first chunk");
+  await review.getByRole("checkbox", { name: "사건 정리와 새 리포트에 포함" }).nth(1).uncheck();
+  await review.getByRole("button", { name: "교정 내용 저장" }).click();
+  await expect(
+    review.getByRole("status").filter({ hasText: "교정 내용을 저장했어요." }),
+  ).toBeVisible();
+  await page.reload();
+  await page.getByRole("button", { name: "자료 확인" }).click();
+  await expect(editors).toHaveCount(2);
+  await expect(editors.nth(0)).toHaveValue("Synthetic corrected first chunk");
+  await expect(
+    review.getByRole("checkbox", { name: "사건 정리와 새 리포트에 포함" }).nth(1),
+  ).not.toBeChecked();
+  await review.getByText("원본 추출 내용", { exact: true }).nth(0).click();
+  await expect(review.locator("fieldset").nth(0).locator("details p")).toHaveText("a".repeat(5000));
+  await page.goto("/cases/synthetic-material-case/reports");
+  const report = page.getByRole("textbox", { name: "리포트 내용 편집" });
+  await expect(report).toHaveValue(/Synthetic corrected first chunk/);
+  await expect(report).not.toHaveValue(/Synthetic second chunk/);
 });

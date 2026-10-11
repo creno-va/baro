@@ -121,3 +121,54 @@ test("same mock owner changing roles cannot replay private customer results", as
   });
   expect(calls).toBe(1);
 });
+
+test("reconsent permits private read dispatch but denies writes and cached mutations for both roles", async () => {
+  for (const role of ["customer", "lawyer"] as const) {
+    const reads =
+      role === "customer"
+        ? ["cases.list", "cases.get", "files.review", "reports.get"]
+        : ["lawyers.getMine", "lawyers.assets", "lawyers.assetBlob"];
+    const writes =
+      role === "customer"
+        ? ["cases.create", "cases.saveSummary", "workspace.sendMessage", "reports.generate"]
+        : ["lawyers.saveMine", "lawyers.publishMine", "lawyers.uploadAsset"];
+    let mutated = 0;
+    restoreHandlers.push(
+      registerMockHandlers(
+        Object.fromEntries([
+          ...reads.map((name) => [name, () => "private"]),
+          ...writes.map((name) => [name, () => ++mutated]),
+        ]),
+      ),
+    );
+    writeStore("session", {
+      user: { id: "owner", name: "합성", accountType: role },
+      needsConsent: false,
+    });
+    await mockRequest(writes[0] ?? "", {}, "committed");
+    writeStore("session", {
+      user: { id: "owner", name: "합성", accountType: role },
+      needsConsent: true,
+    });
+    for (const read of reads)
+      expect(await mockRequest<string>(read, { privateRead: true }, "read")).toBe("private");
+    for (const write of writes)
+      await expect(mockRequest(write, {}, "committed")).rejects.toMatchObject({
+        code: "CONSENT_REQUIRED",
+      });
+    expect(mutated).toBe(1);
+    writeStore("session", {
+      user: { id: "owner", name: "합성", accountType: role === "customer" ? "lawyer" : "customer" },
+      needsConsent: true,
+    });
+    for (const read of reads)
+      await expect(mockRequest(read, { privateRead: true }, "read")).rejects.toMatchObject({
+        code: "NOT_FOUND",
+      });
+    writeStore("session", { user: null, needsConsent: false });
+    for (const read of reads)
+      await expect(mockRequest(read, { privateRead: true }, "read")).rejects.toMatchObject({
+        code: "UNAUTHENTICATED",
+      });
+  }
+});

@@ -11,6 +11,7 @@ import {
   v2SummarySchema,
   v2TimelineEntrySchema,
 } from "../../contracts/v2";
+import { prepareChatSummary } from "./v2-chat-summary";
 import { guardSchema, parse, safe, sqlClaim, type V2Core, type WorkspaceGuard } from "./v2-core";
 import {
   completeLeaseStatements,
@@ -72,7 +73,7 @@ export function createV2WorkspaceResponseRepository(
         const ids = new Set(existing.map((f) => f.entity_id));
         if (
           new Set(facts.map((f) => f.id)).size !== facts.length ||
-          facts.some((f) => ids.has(f.id))
+          facts.some((f) => ids.has(f.id) || f.userEdited)
         )
           return false;
         for (const fact of facts) ids.add(fact.id);
@@ -88,6 +89,13 @@ export function createV2WorkspaceResponseRepository(
           return false;
         for (const values of [parties, actions, timeline])
           if (new Set(values.map((v) => v.id)).size !== values.length) return false;
+        const summary =
+          facts.length || parties.length
+            ? await prepareChatSummary(core, g, lease, revision, { facts, parties }, guideHosts)
+            : null;
+        const summaryGuard = summary
+          ? "EXISTS(SELECT 1 FROM v2_private_snapshots s WHERE s.id=? AND s.owner_id=w.owner_id AND s.workspace_id=w.id AND s.target_id=w.id AND s.purpose='summary' AND s.state='sealed' AND s.workspace_revision=w.revision AND s.revision=? AND s.lease_job_id=? AND s.lease_fencing=? AND (SELECT count(*) FROM v2_facts WHERE snapshot_id=s.id)=? AND (SELECT count(*) FROM v2_parties WHERE snapshot_id=s.id)=?)"
+          : "1";
         const claimId = crypto.randomUUID(),
           execution = leasePredicate(lease, g.workspaceId, g.expectedRevision, g.now),
           refs = referenceCommitPredicate(references);
@@ -95,7 +103,7 @@ export function createV2WorkspaceResponseRepository(
           core.claim(
             g,
             claimId,
-            `${execution.sql} AND w.status='active' AND w.current_job_id=? AND w.confirmed_summary_revision=? AND EXISTS(SELECT 1 FROM v2_jobs WHERE id=? AND operation_id=? AND kind='chat_response') AND ${refs.sql}
+            `${execution.sql} AND w.status='active' AND w.current_job_id=? AND w.confirmed_summary_revision=? AND EXISTS(SELECT 1 FROM v2_jobs WHERE id=? AND operation_id=? AND kind='chat_response') AND ${refs.sql} AND ${summaryGuard}
           AND (SELECT count(*) FROM v2_facts WHERE workspace_id=w.id AND summary_revision=?) + ? <= 300
           AND (SELECT count(*) FROM v2_parties WHERE workspace_id=w.id AND summary_revision=?) + ? <= 30
           AND NOT EXISTS(SELECT 1 FROM v2_facts WHERE workspace_id=w.id AND summary_revision=? AND entity_id IN (SELECT value FROM json_each(?)))
@@ -109,6 +117,16 @@ export function createV2WorkspaceResponseRepository(
               lease.jobId,
               message.operationId,
               ...refs.values,
+              ...(summary
+                ? [
+                    summary.snapshotId,
+                    summary.revision,
+                    lease.jobId,
+                    lease.fencing,
+                    summary.factCount,
+                    summary.partyCount,
+                  ]
+                : []),
               revision,
               facts.length,
               revision,
@@ -122,52 +140,6 @@ export function createV2WorkspaceResponseRepository(
             ],
           ),
         ];
-        for (const fact of facts) {
-          const id = crypto.randomUUID(),
-            payload = await core.encrypt("v2_facts", id, g.ownerId, revision, fact);
-          const rows = fact.references.map((ref, ordinal) => ({
-            ordinal,
-            kind: ref.kind,
-            sourceId:
-              ref.kind === "intake_narrative"
-                ? g.workspaceId
-                : ref.kind === "intake_answer"
-                  ? ref.questionId
-                  : ref.kind === "user_message"
-                    ? ref.messageId
-                    : ref.kind === "user_material"
-                      ? ref.fileId
-                      : ref.citationId,
-            revision:
-              ref.kind === "intake_narrative" || ref.kind === "intake_answer"
-                ? ref.intakeRevision
-                : ref.kind === "user_message"
-                  ? ref.workspaceRevision
-                  : ref.kind === "user_material"
-                    ? ref.fileRevision
-                    : null,
-          }));
-          statements.push(
-            core.statement(
-              `INSERT INTO v2_facts(id,entity_id,workspace_id,revision,summary_revision,encrypted_payload) SELECT ?,?,?,?,?,? WHERE ${sqlClaim}`,
-              [id, fact.id, g.workspaceId, revision, revision, payload, claimId],
-            ),
-            core.statement(
-              `INSERT INTO v2_fact_references(fact_id,ordinal,kind,source_id,source_revision) SELECT ?,json_extract(value,'$.ordinal'),json_extract(value,'$.kind'),json_extract(value,'$.sourceId'),json_extract(value,'$.revision') FROM json_each(?) WHERE ${sqlClaim}`,
-              [id, JSON.stringify(rows), claimId],
-            ),
-          );
-        }
-        for (const party of parties) {
-          const id = crypto.randomUUID(),
-            payload = await core.encrypt("v2_parties", id, g.ownerId, revision, party);
-          statements.push(
-            core.statement(
-              `INSERT INTO v2_parties(id,entity_id,workspace_id,revision,summary_revision,encrypted_payload) SELECT ?,?,?,?,?,? WHERE ${sqlClaim}`,
-              [id, party.id, g.workspaceId, revision, revision, payload, claimId],
-            ),
-          );
-        }
         for (const action of actions) {
           const id = crypto.randomUUID(),
             payload = await core.encrypt("v2_actions", id, g.ownerId, 1, action);
@@ -188,6 +160,33 @@ export function createV2WorkspaceResponseRepository(
             ),
           );
         }
+        if (summary)
+          statements.push(
+            core.statement(
+              `INSERT INTO v2_summaries(id,workspace_id,revision,intake_revision,snapshot_id,created_at) SELECT ?,?,?,?,?,? WHERE ${sqlClaim}`,
+              [
+                summary.summaryId,
+                g.workspaceId,
+                summary.revision,
+                summary.intakeRevision,
+                summary.snapshotId,
+                g.now,
+                claimId,
+              ],
+            ),
+            core.statement(
+              `UPDATE v2_private_snapshots SET state='published' WHERE id=? AND ${sqlClaim}`,
+              [summary.snapshotId, claimId],
+            ),
+            core.statement(
+              `UPDATE v2_intakes SET status='reviewing_summary',summary_id=?,confirmed_summary_revision=NULL,current_job_id=NULL WHERE id=? AND ${sqlClaim}`,
+              [summary.summaryId, g.workspaceId, claimId],
+            ),
+            core.statement(
+              `UPDATE v2_workspaces SET status='intake',confirmed_summary_revision=NULL WHERE id=? AND ${sqlClaim}`,
+              [g.workspaceId, claimId],
+            ),
+          );
         const payload = await core.encrypt("v2_messages", message.id, g.ownerId, 1, message);
         statements.push(
           core.statement(

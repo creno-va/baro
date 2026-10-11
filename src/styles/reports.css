@@ -534,3 +534,369 @@
     transition: none;
   }
 }
+
+/* HTML report presentation: static counterpart of document.ts, scoped for the product CSP. */
+
+.baro-report {
+  color-scheme: light;
+  --doc-ink: #202838;
+  --doc-muted: #626d80;
+  --doc-line: #e6eaf0;
+  --doc-paper: #fff;
+  --doc-accent: #226cdb;
+  font-family:
+    "Pretendard Variable", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Segoe UI",
+    sans-serif;
+  font-size: 15px;
+  line-height: 1.8;
+  color: var(--doc-ink);
+  background: #f4f6f9;
+  padding: 32px 24px;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+.baro-report * {
+  box-sizing: border-box;
+}
+.baro-report .sheet {
+  max-width: 980px;
+  margin: 0 auto;
+  background: #fff;
+  border: 1px solid var(--doc-line);
+  border-radius: 20px;
+  overflow: hidden;
+}
+.baro-report .masthead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 24px 40px;
+  border-bottom: 1px solid var(--doc-line);
+  gap: 20px;
+}
+.baro-report .brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 22px;
+  font-weight: 750;
+  letter-spacing: 0.085em;
+  line-height: 1;
+  min-height: 36px;
+}
+.baro-report .brand img {
+  display: block;
+  width: 31px;
+  height: 36px;
+}
+.baro-report .masthead-note {
+  font-size: 12px;
+  color: var(--doc-muted);
+}
+.baro-report .hero {
+  padding: 36px 40px 28px;
+}
+.baro-report .eyebrow {
+  font-size: 12px;
+  color: var(--doc-accent);
+  font-weight: 650;
+  margin: 0 0 12px;
+}
+.baro-report .hero h1 {
+  font-size: clamp(28px, 3vw, 36px);
+  font-weight: 750;
+  letter-spacing: -0.035em;
+  line-height: 1.35;
+  margin: 0;
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+}
+.baro-report .hero-subtitle {
+  color: var(--doc-muted);
+  margin: 12px 0 22px;
+  font-size: 14px;
+}
+.baro-report .tags {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.baro-report .tag {
+  font-size: 11px;
+  padding: 5px 10px;
+  border-radius: 8px;
+  background: #f4f6f9;
+  color: var(--doc-muted);
+}
+.baro-report .tag.dark {
+  background: #edf4ff;
+  color: #2463b9;
+  font-weight: 650;
+}
+.baro-report .tag.warm {
+  background: #fff6e7;
+  color: #854d0e;
+}
+.baro-report .layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 190px;
+  padding: 0 40px 36px;
+  gap: 32px;
+}
+.baro-report .content {
+  min-width: 0;
+}
+.baro-report .section {
+  padding: 26px 0;
+  border-top: 1px solid var(--doc-line);
+  break-inside: avoid;
+}
+.baro-report .section-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 15px;
+}
+.baro-report .number {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  min-width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 650;
+  background: #edf4ff;
+  color: #2463b9;
+}
+.baro-report h2 {
+  font-size: 18px;
+  line-height: 1.5;
+  letter-spacing: -0.025em;
+  margin: 0;
+  font-weight: 700;
+}
+.baro-report .lines p {
+  margin: 0 0 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.85;
+}
+.baro-report .lines p:last-child {
+  margin-bottom: 0;
+}
+.baro-report .lines .detail {
+  font-size: 12px;
+  color: var(--doc-muted);
+  line-height: 1.7;
+}
+.baro-report .section:first-child .lines {
+  background: #f5f8fe;
+  padding: 18px 20px;
+  border-radius: 12px;
+}
+.baro-report .section.caution .lines {
+  background: #f4f6f9;
+  padding: 17px 19px;
+  border-radius: 12px;
+}
+.baro-report .section.timeline .lines {
+  border-left: 2px solid #dce8fc;
+  margin-left: 5px;
+  padding-left: 18px;
+}
+.baro-report .section.timeline .lines p {
+  position: relative;
+}
+.baro-report .section.timeline .lines p:before {
+  content: "";
+  position: absolute;
+  left: -23px;
+  top: 0.7em;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--doc-accent);
+  border: 2px solid #fff;
+}
+.baro-report .sidebar {
+  padding-top: 26px;
+  border-top: 1px solid var(--doc-line);
+}
+.baro-report .sidebar h2 {
+  font-size: 13px;
+  margin-bottom: 18px;
+}
+.baro-report .meta {
+  margin: 0 0 24px;
+}
+.baro-report .meta div {
+  margin-bottom: 16px;
+}
+.baro-report .meta dt {
+  font-size: 11px;
+  color: var(--doc-muted);
+  margin-bottom: 3px;
+}
+.baro-report .meta dd {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.baro-report .aside-note {
+  font-size: 12px;
+  padding-top: 18px;
+  border-top: 1px solid var(--doc-line);
+  color: var(--doc-muted);
+  line-height: 1.8;
+}
+.baro-report .aside-note strong {
+  display: block;
+  color: var(--doc-ink);
+  margin-bottom: 6px;
+  font-size: 12px;
+}
+.baro-report .stale {
+  margin: 0 40px 24px;
+  background: #fff6e7;
+  border-radius: 10px;
+  padding: 14px 17px;
+  font-size: 13px;
+  color: #854d0e;
+}
+.baro-report .footer {
+  border-top: 1px solid var(--doc-line);
+  padding: 22px 40px;
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  color: var(--doc-muted);
+  font-size: 11px;
+}
+.baro-report .footer p {
+  margin: 0;
+  max-width: 600px;
+  line-height: 1.8;
+}
+.baro-report .footer strong {
+  font-weight: 650;
+  color: var(--doc-ink);
+}
+@media (max-width: 760px) {
+  .baro-report {
+    padding: 0;
+    background: #fff;
+    font-size: 14px;
+  }
+  .baro-report .sheet {
+    border: 0;
+    border-radius: 0;
+  }
+  .baro-report .masthead {
+    padding: 22px 24px;
+  }
+  .baro-report .masthead-note {
+    font-size: 11px;
+  }
+  .baro-report .hero {
+    padding: 28px 24px 26px;
+  }
+  .baro-report .hero h1 {
+    font-size: 28px;
+  }
+  .baro-report .layout {
+    display: flex;
+    flex-direction: column;
+    padding: 0 24px 28px;
+    gap: 0;
+  }
+  .baro-report .sidebar {
+    margin-top: 8px;
+  }
+  .baro-report .meta {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0 20px;
+    margin-bottom: 8px;
+  }
+  .baro-report .section {
+    padding: 23px 0;
+  }
+  .baro-report .stale {
+    margin: 0 24px 24px;
+  }
+  .baro-report .footer {
+    padding: 22px 24px;
+    display: block;
+  }
+  .baro-report .footer p + p {
+    margin-top: 12px;
+  }
+}
+@media print {
+  .baro-report {
+    background: white;
+    padding: 0;
+    font-size: 10pt;
+  }
+  .baro-report .sheet {
+    max-width: none;
+    border: 0;
+    border-radius: 0;
+  }
+  .baro-report .masthead {
+    padding: 0 0 15px;
+  }
+  .baro-report .hero {
+    padding: 24px 0;
+  }
+  .baro-report .hero h1 {
+    font-size: 25pt;
+  }
+  .baro-report .hero-subtitle {
+    font-size: 10pt;
+  }
+  .baro-report .layout {
+    display: block;
+    padding: 0;
+  }
+  .baro-report .section {
+    padding: 20px 0;
+    break-inside: auto;
+  }
+  .baro-report .section-head {
+    break-after: avoid;
+  }
+  .baro-report h2 {
+    font-size: 14pt;
+  }
+  .baro-report .lines {
+    orphans: 3;
+    widows: 3;
+  }
+  .baro-report .sidebar {
+    display: none;
+  }
+  .baro-report .stale {
+    margin: 0 0 20px;
+  }
+  .baro-report .footer {
+    padding: 16px 0;
+    font-size: 8pt;
+  }
+  .baro-report .tag {
+    font-size: 8pt;
+  }
+}
+
+.report-html-preview {
+  overflow: auto;
+  max-height: 900px;
+  border: 1px solid #e6eaf0;
+  border-radius: 16px;
+}
+.report-html-preview:focus-visible {
+  outline: 2px solid #226cdb;
+  outline-offset: 3px;
+}

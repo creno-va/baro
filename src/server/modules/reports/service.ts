@@ -1,7 +1,8 @@
 import { z } from "zod";
-import type { ReportView } from "../../../client/api/types";
+import { createReportHtml } from "../../../components/reports/document";
 import { maskReportText } from "../../../components/reports/download";
 import { idempotencyKeySchema, opaqueIdSchema } from "../../../contracts";
+import { CURRENT_POLICY_VERSIONS } from "../../../contracts/consent";
 import {
   type V2ReportBody,
   v2ReportBodySchema,
@@ -17,16 +18,17 @@ import {
   utf8Bytes,
   type V2Core,
 } from "../../db/v2-core";
-import { createV2FilesRepository } from "../../db/v2-files";
 import { jobInsertStatements } from "../../db/v2-jobs";
 import { runtimeDigest } from "../../db/v2-paid-runtime";
 import { createV2ReportsRepository } from "../../db/v2-reports";
 import { createV2StagingRepository } from "../../db/v2-staging";
+import { reportSessionFence, requireReportConsent } from "./fence";
 import {
   buildReportSource,
   ownedWorkspace,
   ReportError,
   type ReportReviewData,
+  reportFile,
   reportReviewSchema,
   reportText,
   sourceDigest,
@@ -45,6 +47,11 @@ export const saveReportSchema = z.strictObject({
 });
 export const generateReportSchema = z.strictObject({
   expectedRevision: z.number().int().positive().optional(),
+  excludedFileIds: z
+    .array(opaqueIdSchema)
+    .max(100)
+    .refine((ids) => new Set(ids).size === ids.length)
+    .optional(),
 });
 type Row = {
   id: string;
@@ -68,14 +75,14 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
     now: clock(),
   });
   const canonical = createV2ReportsRepository(core, deps.guideHosts);
-  const accounting = createV2AccountingRepository(core),
-    files = createV2FilesRepository(core);
+  const accounting = createV2AccountingRepository(core);
   const row = async (a: Actor, id: string) => {
     opaqueIdSchema.parse(id);
+    const session = reportSessionFence(deps.sessionId);
     const result = await core
       .statement(
-        `SELECT r.* FROM v2_reports r JOIN v2_workspaces w ON w.id=r.workspace_id WHERE r.id=? AND w.owner_id=? AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE (target_kind='account' AND target_id=w.owner_id) OR (target_kind='workspace' AND target_id=w.id) OR (target_kind='report' AND target_id=r.id))`,
-        [id, a.ownerId],
+        `SELECT r.* FROM v2_reports r JOIN v2_workspaces w ON w.id=r.workspace_id WHERE r.id=? AND w.owner_id=? AND EXISTS(SELECT 1 FROM user WHERE id=w.owner_id) AND coalesce((SELECT value FROM app_metadata WHERE key='account-type:'||w.owner_id),'customer')='customer' AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE (target_kind='account' AND target_id=w.owner_id) OR (target_kind='workspace' AND target_id=w.id) OR (target_kind='report' AND target_id=r.id)) ${session.sql}`,
+        [id, a.ownerId, ...session.values],
       )
       .first<Row>();
     if (!result) throw new ReportError("NOT_FOUND");
@@ -136,11 +143,21 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
       throw new ReportError("STALE_REVISION");
     return { row: r, body, review };
   };
-  const view = async (a: Actor, id: string): Promise<ReportView> => {
+  const view = async (a: Actor, id: string) => {
     const data = await read(a, id);
     const stale = data.review.sourceDigest !== (await sourceDigest(core, a, data.row.workspace_id));
+    const saved = await core
+      .statement(
+        "SELECT r.id,r.created_at,(SELECT count(*) FROM v2_report_selections WHERE report_id=r.id AND original_selected=1) AS file_count FROM v2_reports r JOIN v2_blobs b ON b.id=r.zip_blob_id WHERE r.workspace_id=? AND r.revision=? AND r.id LIKE 'export-%' AND r.state='ready' AND b.state='stored' AND b.kind='original_zip' ORDER BY r.created_at DESC,r.rowid DESC LIMIT 1",
+        [data.row.workspace_id, data.row.revision],
+      )
+      .first<{ id: string; created_at: string; file_count: number }>();
+    const archive = saved ? await read(a, saved.id) : null;
     await row(a, id);
     return {
+      ...(saved && archive?.review.parentReportId === id && saved.file_count > 0
+        ? { savedZip: { id: saved.id, fileCount: saved.file_count, createdAt: saved.created_at } }
+        : {}),
       id,
       caseId: data.row.workspace_id,
       revision: data.row.revision,
@@ -148,6 +165,12 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
       content: data.review.content,
       updatedAt: data.row.created_at,
       stale,
+      basis: {
+        workspaceRevision: data.row.workspace_revision,
+        summaryRevision: data.row.summary_revision,
+        generatedAt: data.body.generatedAt,
+      },
+      pdfAvailable: data.row.state === "ready" && !!data.row.pdf_blob_id,
       excludedFileIds: data.review.excludedFileIds,
       maskIdentifiers: data.review.maskIdentifiers,
     };
@@ -201,6 +224,7 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
     selectedOriginals: readonly string[] = [],
   ) {
     idempotencyKeySchema.parse(key);
+    await requireReportConsent(core, a);
     const replay = await accounting.findOperation(a, route, key, requestHash);
     if (replay?.kind === "conflict") throw new ReportError("IDEMPOTENCY_CONFLICT");
     if (replay?.kind === "replay") {
@@ -213,6 +237,8 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
     const current = await ownedWorkspace(core, a, caseId);
     if (current.status !== "active" || !current.confirmed_summary_revision)
       throw new ReportError("REVIEW_REQUIRED");
+    if (review.sourceDigest !== (await sourceDigest(core, a, caseId)))
+      throw new ReportError("STALE_REVISION");
     const id = review.parentReportId ? `export-${crypto.randomUUID()}` : crypto.randomUUID();
     const snapshotId = await stage(a, caseId, current.revision, id, body);
     const request = v2ReportCreateRequestSchema.parse({
@@ -233,7 +259,7 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
     const g = { ...a, workspaceId: caseId, expectedRevision: current.revision };
     const selections = [];
     for (const file of body.selectedFiles) {
-      const actual = await files.read(a, file.id);
+      const actual = await reportFile(core, a, file.id);
       if (
         actual?.status !== "ready" ||
         actual.revision !== file.revision ||
@@ -253,18 +279,23 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
       });
     }
     const reviewId = crypto.randomUUID();
+    const session = reportSessionFence(deps.sessionId);
     const statements = [
       core.claim(
         g,
         claimId,
-        "w.status='active' AND w.current_job_id IS NULL AND w.confirmed_summary_revision=? AND EXISTS(SELECT 1 FROM v2_private_snapshots WHERE id=? AND owner_id=w.owner_id AND workspace_revision=w.revision AND state='sealed') AND NOT EXISTS(SELECT 1 FROM v2_idempotency WHERE owner_id=w.owner_id AND route=? AND key=? AND expires_at>?) AND coalesce((SELECT max(revision) FROM v2_reports WHERE workspace_id=w.id AND id NOT LIKE 'export-%'),0)=?",
+        `w.status='active' AND w.current_job_id IS NULL AND coalesce((SELECT value FROM app_metadata WHERE key='account-type:'||w.owner_id),'customer')='customer' AND EXISTS(SELECT 1 FROM user_consents WHERE user_id=w.owner_id AND terms_version=? AND privacy_version=? AND ai_notice_version=? AND over_14_confirmed=1) AND w.confirmed_summary_revision=? AND EXISTS(SELECT 1 FROM v2_private_snapshots WHERE id=? AND owner_id=w.owner_id AND workspace_revision=w.revision AND state='sealed') AND NOT EXISTS(SELECT 1 FROM v2_idempotency WHERE owner_id=w.owner_id AND route=? AND key=? AND expires_at>?) AND coalesce((SELECT max(revision) FROM v2_reports WHERE workspace_id=w.id AND id NOT LIKE 'export-%'),0)=? ${session.sql}`,
         [
+          CURRENT_POLICY_VERSIONS.termsVersion,
+          CURRENT_POLICY_VERSIONS.privacyVersion,
+          CURRENT_POLICY_VERSIONS.aiNoticeVersion,
           current.confirmed_summary_revision,
           snapshotId,
           route,
           key,
           a.now,
           review.parentReportId ? ((await latest(a, caseId))?.revision ?? 0) : version - 1,
+          ...session.values,
         ],
       ),
       ...operationStatements(
@@ -346,7 +377,10 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
       core.finish(claimId),
     ];
     try {
-      if (!(await core.changed(statements))) throw new ReportError("STALE_REVISION");
+      if (!(await core.changed(statements))) {
+        await requireReportConsent(core, a);
+        throw new ReportError("STALE_REVISION");
+      }
     } catch (error) {
       const receipt = await accounting.findOperation(a, route, key, requestHash);
       if (receipt?.kind === "replay") {
@@ -430,9 +464,17 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
         value.excludedFileIds,
         deps.guideHosts,
       );
+      // Exclusions rebuild source-derived text so material cannot survive in a stale free-text
+      // copy. The previous immutable report retains any earlier manual editing.
+      const exclusionsChanged =
+        JSON.stringify([...value.excludedFileIds].sort()) !==
+        JSON.stringify([...old.review.excludedFileIds].sort());
+      if (exclusionsChanged && value.content !== old.review.content)
+        throw new ReportError("EDITS_REQUIRE_SAVE");
       const review = {
         ...old.review,
         ...value,
+        content: exclusionsChanged ? reportText(source.body, source.coverage) : value.content,
         format: "client_review_v1" as const,
         sourceDigest: source.digest,
       };
@@ -466,12 +508,18 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
       const prior = await latest(a, caseId);
       if (value.expectedRevision !== undefined && value.expectedRevision !== prior?.revision)
         throw new ReportError("STALE_REVISION");
-      const source = await buildReportSource(core, a, caseId, [], deps.guideHosts);
+      const source = await buildReportSource(
+        core,
+        a,
+        caseId,
+        value.excludedFileIds ?? [],
+        deps.guideHosts,
+      );
       const review: ReportReviewData = {
         format: "client_review_v1",
         title: "사건 상담 준비 리포트",
         content: reportText(source.body, source.coverage),
-        excludedFileIds: [],
+        excludedFileIds: value.excludedFileIds ?? [],
         maskIdentifiers: false,
         sourceDigest: source.digest,
         parentReportId: null,
@@ -490,6 +538,25 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
     },
     async pdf(ownerId: string, id: string) {
       return exports.pdf(actor(ownerId), id);
+    },
+    async html(ownerId: string, id: string) {
+      const a = actor(ownerId);
+      const report = await view(a, id);
+      const document = createReportHtml(report);
+      // Saved-report presentation only; no new AI processing, report revision or blob.
+      // Recheck ownership and deletion after all asynchronous source reads.
+      await row(a, id);
+      return document;
+    },
+    async savedZip(ownerId: string, id: string) {
+      const a = actor(ownerId),
+        data = await read(a, id);
+      const parentId = data.review.parentReportId;
+      if (!parentId) throw new ReportError("NOT_FOUND");
+      const parent = await row(a, parentId);
+      if (parent.workspace_id !== data.row.workspace_id || parent.revision !== data.row.revision)
+        throw new ReportError("NOT_FOUND");
+      return exports.storedZip(a, id, parentId);
     },
     async zip(ownerId: string, id: string, key: string, selectedFileIds: readonly string[]) {
       const a = actor(ownerId),

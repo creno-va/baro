@@ -18,7 +18,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { PageHeader } from "../ui/page-header";
 import { StatePanel } from "../ui/state-panel";
 import { ApiModeNotice } from "./ApiModeNotice";
-import { AssetPhoto } from "./AssetPhoto";
+import { AssetPhoto, downloadLawyerAsset } from "./AssetPhoto";
 import { FIELD_LABELS, REGION_LABELS } from "./labels";
 import { ProfileContent } from "./Profile";
 
@@ -65,6 +65,8 @@ export function Editor() {
   const [saved, setSaved] = useState<LawyerView | null>(null);
   const [draft, setDraft] = useState<LawyerView | null>(null);
   const [busy, setBusy] = useState(true);
+  const [canMutate, setCanMutate] = useState(false);
+  const [accessUnknown, setAccessUnknown] = useState(false);
   const [error, setError] = useState("");
   const [errorCode, setErrorCode] = useState("");
   const [notice, setNotice] = useState("");
@@ -86,6 +88,8 @@ export function Editor() {
   const clear = useCallback(() => {
     epoch.current += 1;
     profileRequest.current += 1;
+    setCanMutate(false);
+    setAccessUnknown(false);
     setAssets([]);
     setPhotoPreview(null);
     setSaved(null);
@@ -105,6 +109,22 @@ export function Editor() {
       session = await sessionApi.get();
     } catch (cause) {
       if (request !== sessionRequest.current) return null;
+      const code = (cause as { code?: string })?.code;
+      if (["UNAUTHENTICATED", "FORBIDDEN", "ROLE_REQUIRED"].includes(code ?? "")) {
+        owner.current = null;
+        clear();
+        setBusy(false);
+        setError(lawyerErrorMessage(cause));
+        setErrorCode(code ?? "UNAUTHENTICATED");
+        return null;
+      } else {
+        setAccessUnknown(true);
+        setCanMutate(false);
+        setPreview(false);
+        setConfirmDiscard(false);
+        setConfirmPublish(false);
+        setPublicationConsent(false);
+      }
       throw cause;
     }
     if (request !== sessionRequest.current) return null;
@@ -116,16 +136,16 @@ export function Editor() {
       owner.current = identity;
       clear();
     }
-    if (session.user?.accountType !== "lawyer" || session.needsConsent) {
+    if (session.user?.accountType !== "lawyer") {
       clear();
       setBusy(false);
-      setErrorCode(session.needsConsent ? "CONSENT_REQUIRED" : "UNAUTHENTICATED");
-      setError(
-        session.needsConsent ? "필수 동의를 확인해 주세요." : "변호사 역할로 로그인해 주세요.",
-      );
+      setErrorCode("UNAUTHENTICATED");
+      setError("변호사 역할로 로그인해 주세요.");
       return null;
     }
-    return { identity, epoch: epoch.current, changed };
+    setAccessUnknown(false);
+    setCanMutate(!session.needsConsent);
+    return { identity, epoch: epoch.current, changed, canMutate: !session.needsConsent };
   }, [clear]);
   const load = useCallback(async () => {
     setBusy(true);
@@ -147,7 +167,12 @@ export function Editor() {
       setErrorCode("");
     } catch (cause) {
       if (run !== profileRequest.current) return;
-      clear();
+      if (
+        ["UNAUTHENTICATED", "FORBIDDEN", "NOT_FOUND", "ROLE_REQUIRED"].includes(
+          (cause as { code?: string })?.code ?? "",
+        )
+      )
+        clear();
       run = profileRequest.current;
       setError(lawyerErrorMessage(cause));
       setErrorCode(cause instanceof LawyerApiError ? cause.code : "");
@@ -165,7 +190,6 @@ export function Editor() {
         if (alive && checked?.changed) await load();
       } catch (cause) {
         if (!alive) return;
-        clear();
         setBusy(false);
         setError(lawyerErrorMessage(cause));
       }
@@ -183,7 +207,7 @@ export function Editor() {
       window.removeEventListener("storage", refresh);
       document.removeEventListener("visibilitychange", refresh);
     };
-  }, [load, verify, clear]);
+  }, [load, verify]);
   useEffect(() => {
     if (!dirty) return;
     const leave = (e: BeforeUnloadEvent) => {
@@ -192,7 +216,24 @@ export function Editor() {
     window.addEventListener("beforeunload", leave);
     return () => window.removeEventListener("beforeunload", leave);
   }, [dirty]);
+  async function restoreAccess() {
+    setBusy(true);
+    try {
+      const checked = await verify();
+      if (!checked) return;
+      if (checked.changed || !draft) await load();
+      else {
+        setError("");
+        setErrorCode("");
+      }
+    } catch (cause) {
+      fail(cause);
+    } finally {
+      setBusy(false);
+    }
+  }
   const patch = (field: keyof LawyerView, value: unknown) => {
+    if (!canMutate) return;
     setDraft((p) => (p ? { ...p, [field]: value } : p));
     setNotice("");
   };
@@ -206,7 +247,7 @@ export function Editor() {
       }
       fail(cause);
     } catch (sessionError) {
-      clear();
+      if (epoch.current !== startEpoch) return;
       setBusy(false);
       fail(sessionError);
     }
@@ -222,6 +263,8 @@ export function Editor() {
         if (checked?.changed) await load();
         return;
       }
+      if (!checked.canMutate)
+        throw new LawyerApiError("CONSENT_REQUIRED", "수정·공개 전 필수 동의를 확인해 주세요.");
       const p = await operation();
       if (epoch.current !== startEpoch) return;
       const after = await verify();
@@ -243,11 +286,11 @@ export function Editor() {
     }
   };
   const save = async () => {
-    if (!draft || busy) return;
+    if (!draft || busy || !canMutate) return;
     await mutate(() => api.lawyers.saveMine(draft), "프로필을 저장했어요.");
   };
   const publish = async (published: boolean) => {
-    if (!saved || busy) return;
+    if (!saved || busy || !canMutate || (published && dirty)) return;
     await mutate(
       () => api.lawyers.publishMine(published, saved),
       published
@@ -256,8 +299,9 @@ export function Editor() {
     );
   };
   const attach = (asset: LawyerAssetView) => {
-    if (!draft || asset.status !== "ready") return;
+    if (!draft || !canMutate || asset.status !== "ready") return;
     if (asset.purpose === "profile_photo") {
+      setPhotoPreview(null);
       setDraft({ ...draft, photoAssetId: asset.id, photoUrl: selfAssetUrl(draft.id, asset.id) });
     } else {
       setDraft({
@@ -299,6 +343,8 @@ export function Editor() {
     try {
       const checked = await verify();
       if (!checked || checked.epoch !== startEpoch) return;
+      if (!checked.canMutate)
+        throw new LawyerApiError("CONSENT_REQUIRED", "필수 동의를 확인해 주세요.");
       await lawyerAssets.remove(asset.id, asset.revision);
       if (epoch.current !== startEpoch) return;
       const after = await verify();
@@ -317,7 +363,7 @@ export function Editor() {
     }
   };
   const upload = async (file: File, purpose: "profile_photo" | "portfolio") => {
-    if (!draft || busy) return;
+    if (!draft || busy || !canMutate) return;
     const startEpoch = epoch.current;
     setBusy(true);
     setError("");
@@ -325,6 +371,8 @@ export function Editor() {
     try {
       const checked = await verify();
       if (!checked || checked.epoch !== startEpoch) return;
+      if (!checked.canMutate)
+        throw new LawyerApiError("CONSENT_REQUIRED", "필수 동의를 확인해 주세요.");
       let selected = file,
         previewData: string | null = null;
       if (purpose === "profile_photo") {
@@ -357,6 +405,28 @@ export function Editor() {
       if (epoch.current === startEpoch) setBusy(false);
     }
   };
+  // Capture the displayed owner; do not deliver a completed download to a new account.
+  const displayedOwner = owner.current;
+  const displayedEpoch = epoch.current;
+  const canDeliverDownload = async () => {
+    const checked = await verify();
+    if (checked?.changed) await load();
+    return !!checked && checked.identity === displayedOwner && checked.epoch === displayedEpoch;
+  };
+  const downloadExisting = async (asset: LawyerAssetView, index: number) => {
+    if (!draft) return;
+    try {
+      await downloadLawyerAsset(
+        draft.id,
+        asset.id,
+        true,
+        `업로드 자료 ${index + 1}`,
+        canDeliverDownload,
+      );
+    } catch (cause) {
+      await failForOwner(cause, displayedEpoch);
+    }
+  };
   return (
     <div className="lawyer-editor space-y-6">
       <ApiModeNotice />
@@ -368,7 +438,7 @@ export function Editor() {
         <a className="ui-button ui-button--outline" href="/lawyers">
           변호사 디렉터리
         </a>
-        {saved?.published && (
+        {saved?.published && canMutate && (
           <a
             className="ui-button ui-button--outline"
             href={`/lawyers/${encodeURIComponent(saved.id)}`}
@@ -405,11 +475,12 @@ export function Editor() {
               <Button
                 disabled={busy}
                 onClick={() => {
-                  if (dirty) setConfirmDiscard(true);
+                  if (accessUnknown) void restoreAccess();
+                  else if (dirty) setConfirmDiscard(true);
                   else void load();
                 }}
               >
-                최신 프로필 다시 불러오기
+                {accessUnknown ? "로그인 상태 다시 확인" : "최신 프로필 다시 불러오기"}
               </Button>
             )
           }
@@ -421,21 +492,43 @@ export function Editor() {
         </p>
       )}
       {busy && !draft && <StatePanel variant="loading" title="내 프로필을 불러오고 있어요." />}
-      {draft && (
+      {draft && !accessUnknown && (
         <>
+          {!canMutate && (
+            <StatePanel
+              variant="permission"
+              title="재동의 전에도 기존 프로필과 자료를 확인할 수 있어요."
+              description="수정·공개·새 업로드는 필수 동의를 확인한 뒤 사용할 수 있어요."
+              action={
+                <a className="ui-button ui-button--primary" href="/consent?returnTo=%2Flawyer">
+                  동의 확인
+                </a>
+              }
+            />
+          )}
           <div className="lawyer-toolbar">
             <p>
-              <strong>{saved?.published ? "공개 중" : "비공개"}</strong> ·{" "}
-              {dirty ? "저장하지 않은 변경이 있어요" : "저장된 프로필"}
+              <strong>
+                {saved?.published
+                  ? canMutate
+                    ? "공개 중"
+                    : "공개 일시 중지 · 재동의 필요"
+                  : "비공개"}
+              </strong>{" "}
+              · {dirty ? "저장하지 않은 변경이 있어요" : "저장된 프로필"}
             </p>
             <div className="flex flex-wrap gap-2">
-              <Button variant="outline" disabled={busy} onClick={() => setPreview(!preview)}>
+              <Button
+                variant="outline"
+                disabled={busy || !canMutate}
+                onClick={() => setPreview(!preview)}
+              >
                 {preview ? <Pencil size={16} /> : <Eye size={16} />}{" "}
                 {preview ? "편집으로 돌아가기" : "미리보기"}
               </Button>
               <Button
                 variant="outline"
-                disabled={busy || !dirty}
+                disabled={busy || !canMutate || !dirty}
                 onClick={() => setConfirmDiscard(true)}
               >
                 변경 취소
@@ -463,17 +556,54 @@ export function Editor() {
               </CardContent>
             </Card>
           )}
-          {preview ? (
+          {preview || !canMutate ? (
             <>
               <p className="lawyer-notice">
-                현재 작성 내용을 미리 보고 있어요. 미리보기는 저장하거나 공개하지 않아요.
+                {canMutate
+                  ? "현재 작성 내용을 미리 보고 있어요. 미리보기는 저장하거나 공개하지 않아요."
+                  : "저장된 프로필을 보고 있어요."}
               </p>
               <ProfileContent
                 lawyer={
                   photoPreview ? { ...draft, photoUrl: photoPreview, photoAssetId: null } : draft
                 }
                 privateRead
+                canDeliverDownload={canDeliverDownload}
               />
+              {!canMutate && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle>기존 업로드 자료</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <Button variant="outline" disabled={busy} onClick={() => void refreshAssets()}>
+                      자료 상태 확인
+                    </Button>
+                    <ul className="lawyer-assets mt-3" aria-label="기존 업로드 자료">
+                      {assets.map((asset, index) => (
+                        <li key={asset.id}>
+                          <span>
+                            {asset.purpose === "profile_photo" ? "프로필 사진" : "포트폴리오 자료"}{" "}
+                            ·{" "}
+                            {asset.status === "ready"
+                              ? "다운로드 가능"
+                              : asset.status === "failed"
+                                ? "처리 실패"
+                                : "처리 대기 또는 진행 중"}
+                          </span>
+                          <Button
+                            variant="outline"
+                            disabled={busy || asset.status !== "ready"}
+                            onClick={() => void downloadExisting(asset, index)}
+                          >
+                            업로드 자료 {index + 1} 다운로드
+                          </Button>
+                        </li>
+                      ))}
+                    </ul>
+                  </CardContent>
+                </Card>
+              )}
             </>
           ) : (
             <form
@@ -482,7 +612,7 @@ export function Editor() {
                 void save();
               }}
             >
-              <fieldset disabled={busy} className="space-y-6">
+              <fieldset disabled={busy || !canMutate} className="space-y-6">
                 <Card>
                   <CardHeader>
                     <CardTitle>사진과 기본 정보</CardTitle>
@@ -778,6 +908,23 @@ export function Editor() {
                         >
                           <X size={18} />
                         </Button>
+                        <label className="lawyer-field col-span-full">
+                          활동 본문 {index + 1}
+                          <textarea
+                            value={item.text ?? ""}
+                            maxLength={5000}
+                            rows={5}
+                            placeholder="활동과 경험을 글로 소개해 주세요. (최대 5,000자)"
+                            onChange={(e) =>
+                              patch(
+                                "portfolio",
+                                draft.portfolio.map((i) =>
+                                  i.id === item.id ? { ...i, text: e.target.value } : i,
+                                ),
+                              )
+                            }
+                          />
+                        </label>
                       </div>
                     ))}
                     <Button
@@ -786,7 +933,7 @@ export function Editor() {
                       onClick={() =>
                         patch("portfolio", [
                           ...draft.portfolio,
-                          { id: crypto.randomUUID(), title: "", url: null },
+                          { id: crypto.randomUUID(), title: "", text: "", url: null },
                         ])
                       }
                     >
@@ -799,7 +946,7 @@ export function Editor() {
                   <p className="text-sm text-muted-foreground">
                     등록은 자격 확인을 의미하지 않아요.
                   </p>
-                  <Button type="submit" disabled={busy || !dirty}>
+                  <Button type="submit" disabled={busy || !canMutate || !dirty}>
                     <Save size={16} />
                     {busy ? "저장 중…" : "프로필 저장"}
                   </Button>
@@ -822,7 +969,7 @@ export function Editor() {
               <div className="mt-4">
                 <Button
                   variant={saved?.published ? "outline" : "default"}
-                  disabled={busy || dirty}
+                  disabled={busy || !canMutate || dirty}
                   onClick={() => (saved?.published ? void publish(false) : setConfirmPublish(true))}
                 >
                   {saved?.published ? "비공개로 전환" : "프로필 공개"}
@@ -845,7 +992,7 @@ export function Editor() {
                   </label>
                   <div className="mt-3 flex flex-wrap gap-2">
                     <Button
-                      disabled={busy || !publicationConsent}
+                      disabled={busy || !canMutate || !publicationConsent || dirty}
                       onClick={() => void publish(true)}
                     >
                       동의하고 공개

@@ -20,7 +20,10 @@ function eraseCase(state: ReportMockState, id: string) {
     delete state.fileProcessing?.[fileId];
     delete state.fileExtractions?.[fileId];
     delete state.fileUploads?.[fileId];
+    delete state.fileReviews?.[fileId];
   }
+  for (const [key, receipt] of Object.entries(state.fileReviewReceipts ?? {}))
+    if (fileIds.has(receipt.value.fileId)) delete state.fileReviewReceipts?.[key];
   for (const [key, receipt] of Object.entries(state.fileUploadReceipts ?? {}))
     if (fileIds.has(receipt.fileId) || key.startsWith(`${state.session.user?.id}/${id}/`))
       delete state.fileUploadReceipts?.[key];
@@ -48,6 +51,8 @@ function eraseCase(state: ReportMockState, id: string) {
       delete state.reportHistory?.[reportId];
       delete state.reportSources?.[reportId];
     }
+  for (const [archiveId, archive] of Object.entries(state.reportZips ?? {}))
+    if (archive.caseId === id) delete state.reportZips?.[archiveId];
   for (const [key, replay] of Object.entries(state.reportRequests ?? {}))
     if (replay.value.caseId === id) delete state.reportRequests?.[key];
   state.deletedCaseIds ??= [];

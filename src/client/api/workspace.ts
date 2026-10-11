@@ -3,19 +3,21 @@ import { caseDetailResponseSchema, opaqueIdSchema } from "../../contracts";
 import {
   v2AcceptedOperationSchema,
   v2ActionSchema,
+  v2FactReferenceSchema,
   v2JobSchema,
   v2SummarySchema,
   v2TimelineEntrySchema,
   v2UserMessageSchema,
   v2WorkspaceSchema,
 } from "../../contracts/v2";
+import { ApiError } from "./errors";
 import { createFilesApi } from "./files";
 import type { ActionView, CaseView, MessageView, TimelineView, WorkspaceView } from "./types";
 
 /** Shared transport returns a Response for both mock and same-origin real requests. */
 export type WorkspaceTransport = (path: string, init?: RequestInit) => Promise<Response>;
-export function workspaceError(code: string, message: string, retryable = false) {
-  return Object.assign(new Error(message), { code, retryable });
+export function workspaceError(code: ApiError["code"], message: string, retryable = false) {
+  return new ApiError(code, message, retryable);
 }
 export async function workspaceResponse(response: Response) {
   if (!response.ok) {
@@ -78,6 +80,22 @@ export function workspaceMutation(path: string, body: unknown, method = "POST"):
     body: JSON.stringify(body),
   };
 }
+const messageSources = {
+  references: z.array(v2FactReferenceSchema).default([]),
+  citations: z
+    .array(
+      z.object({
+        id: z.string(),
+        title: z.string(),
+        url: z.url().refine((value) => {
+          const url = new URL(value);
+          return url.protocol === "https:" && !url.username && !url.password;
+        }),
+      }),
+    )
+    .default([]),
+  warnings: z.array(z.string()).default([]),
+};
 const fileViewSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -87,6 +105,7 @@ const fileViewSchema = z.object({
   coverage: z.string(),
   extractedText: z.string(),
   canStartProcessing: z.boolean().optional(),
+  canRetry: z.boolean().optional(),
 });
 export const workspaceViewSchema = z.object({
   case: z.object({
@@ -107,15 +126,26 @@ export const workspaceViewSchema = z.object({
       status: z.enum(["pending", "complete", "failed"]),
       retryable: z.boolean().optional(),
       createdAt: z.string(),
+      ...messageSources,
     }),
   ),
   actions: z.array(
     z.object({ id: z.string(), title: z.string(), detail: z.string(), done: z.boolean() }),
   ),
   timeline: z.array(
-    z.object({ id: z.string(), date: z.string(), title: z.string(), detail: z.string() }),
+    z.object({
+      id: z.string(),
+      revision: z.number().int().positive().optional(),
+      date: z.string(),
+      datePrecision: z.enum(["day", "month", "year", "unknown"]).default("day"),
+      title: z.string(),
+      detail: z.string(),
+    }),
   ),
   files: z.array(fileViewSchema),
+  pagination: z
+    .object({ messages: z.boolean(), actions: z.boolean(), timeline: z.boolean() })
+    .optional(),
 });
 function parseView(value: unknown): WorkspaceView {
   const parsed = workspaceViewSchema.safeParse(value);
@@ -149,11 +179,13 @@ export function createWorkspaceApi(
       revision: number;
       intake: unknown;
       messagesRaw: Awaited<ReturnType<typeof allMessages>>;
-      actionsRaw: unknown[];
-      timelineRaw: unknown[];
+      actionsRaw: Awaited<ReturnType<typeof allEntities>>;
+      timelineRaw: Awaited<ReturnType<typeof allEntities>>;
       summary: z.infer<typeof v2SummarySchema> | null;
     }
   >();
+  const historyLimits = new Map<string, { messages: number; actions: number; timeline: number }>();
+  const pageRequests = new Map<string, Promise<CustomerWorkspaceView>>();
   const pendingMessages = new Map<string, RequestInit>();
   const pendingTimelines = new Map<string, RequestInit>();
   const pendingActions = new Map<string, { done: boolean; init: RequestInit }>();
@@ -178,8 +210,7 @@ export function createWorkspaceApi(
       return null;
     }
   }
-  // This screen renders plain message text. Source validation and URL allowlists stay
-  // on the server; hidden citations must not be revalidated against an empty registry.
+  // The server validates official hosts; the UI preserves its evidence and rejects unsafe URLs.
   const messageTextSchema = z.discriminatedUnion("role", [
     v2UserMessageSchema,
     z.object({
@@ -191,9 +222,14 @@ export function createWorkspaceApi(
       role: z.literal("assistant"),
       safety: z.literal("validated"),
       text: v2UserMessageSchema.shape.text,
+      ...messageSources,
     }),
   ]);
-  async function get(id: string, recovery = 0): Promise<CustomerWorkspaceView> {
+  async function get(
+    id: string,
+    recovery = 0,
+    more?: "messages" | "actions" | "timeline",
+  ): Promise<CustomerWorkspaceView> {
     const response = await request(`${base(id)}/workspace`);
     if (response.status === 404) {
       if (schemaVersions.get(id) === "2") await workspaceResponse(response);
@@ -237,19 +273,26 @@ export function createWorkspaceApi(
     schemaVersions.set(id, "2");
     workspaceRevisions.set(id, w.workspaceRevision);
     const cached = snapshots.get(id);
-    const [intake, messagesRaw, actionsRaw, timelineRaw, fileViews] = await Promise.all([
+    const limits = historyLimits.get(id) ?? { messages: 500, actions: 1000, timeline: 1000 };
+    let [intake, messagesRaw, actionsRaw, timelineRaw, fileViews] = await Promise.all([
       cached?.revision === w.workspaceRevision
         ? Promise.resolve(cached.intake)
         : workspaceJson(request, `${base(id)}/intake`),
       cached?.revision === w.workspaceRevision
-        ? Promise.resolve(cached.messagesRaw)
-        : allMessages(id),
+        ? more === "messages"
+          ? extendPage(cached.messagesRaw, (cursor) => allMessages(id, cursor))
+          : Promise.resolve(cached.messagesRaw)
+        : allMessages(id, null, limits.messages),
       cached?.revision === w.workspaceRevision
-        ? Promise.resolve(cached.actionsRaw)
-        : allEntities(id, "actions"),
+        ? more === "actions"
+          ? extendPage(cached.actionsRaw, (cursor) => allEntities(id, "actions", cursor))
+          : Promise.resolve(cached.actionsRaw)
+        : allEntities(id, "actions", null, limits.actions),
       cached?.revision === w.workspaceRevision
-        ? Promise.resolve(cached.timelineRaw)
-        : allEntities(id, "timeline"),
+        ? more === "timeline"
+          ? extendPage(cached.timelineRaw, (cursor) => allEntities(id, "timeline", cursor))
+          : Promise.resolve(cached.timelineRaw)
+        : allEntities(id, "timeline", null, limits.timeline),
       files.list(id),
     ]);
     const metadata = z
@@ -261,6 +304,25 @@ export function createWorkspaceApi(
         : metadata.summary
           ? v2SummarySchema.parse(await workspaceJson(request, `${base(id)}/summary`))
           : null;
+    const settled = v2WorkspaceSchema.parse(await workspaceJson(request, `${base(id)}/workspace`));
+    const newest = snapshots.get(id);
+    if (
+      settled.workspaceRevision !== w.workspaceRevision ||
+      (newest && newest.revision > w.workspaceRevision)
+    ) {
+      if (newest?.revision === w.workspaceRevision) snapshots.delete(id);
+      if (recovery < 2) return get(id, recovery + 1);
+      throw workspaceError("UNAVAILABLE", "사건이 갱신되어 최신 내용을 다시 불러와 주세요.", true);
+    }
+    // A delayed refresh must preserve pages opened while its file requests were pending.
+    if (newest?.revision === w.workspaceRevision) {
+      if (newest.messagesRaw.items.length > messagesRaw.items.length)
+        messagesRaw = newest.messagesRaw;
+      if (newest.actionsRaw.items.length > actionsRaw.items.length) actionsRaw = newest.actionsRaw;
+      if (newest.timelineRaw.items.length > timelineRaw.items.length)
+        timelineRaw = newest.timelineRaw;
+    }
+    workspaceRevisions.set(id, w.workspaceRevision);
     snapshots.set(id, {
       revision: w.workspaceRevision,
       intake,
@@ -269,14 +331,29 @@ export function createWorkspaceApi(
       timelineRaw,
       summary,
     });
-    if (snapshots.size > 20) snapshots.delete(snapshots.keys().next().value ?? "");
-    const messages: MessageView[] = messagesRaw.map((m) => ({
-      id: m.id,
-      role: m.role,
-      text: m.text,
-      status: "complete",
-      createdAt: m.createdAt,
-    }));
+    // Refresh the range the user already opened after a write or peer update.
+    historyLimits.set(id, {
+      messages: Math.max(limits.messages, messagesRaw.items.length),
+      actions: Math.max(limits.actions, actionsRaw.items.length),
+      timeline: Math.max(limits.timeline, timelineRaw.items.length),
+    });
+    if (snapshots.size > 20) {
+      const oldest = snapshots.keys().next().value ?? "";
+      snapshots.delete(oldest);
+      historyLimits.delete(oldest);
+    }
+    const messages: MessageView[] = [...messagesRaw.items]
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))
+      .map((m) => ({
+        id: m.id,
+        role: m.role,
+        text: m.text,
+        status: "complete",
+        createdAt: m.createdAt,
+        ...(m.role === "assistant"
+          ? { references: m.references, citations: m.citations, warnings: m.warnings }
+          : {}),
+      }));
     let jobId = w.currentJobId ?? rememberedJob(id);
     let latestJob: z.infer<typeof v2JobSchema> | null = null;
     if (!w.currentJobId) {
@@ -299,8 +376,10 @@ export function createWorkspaceApi(
       if (
         job?.kind === "chat_response" &&
         job.status === "completed" &&
-        (!messagesRaw.some((m) => m.role === "assistant" && m.operationId === job.operationId) ||
-          messagesRaw.some((m) => m.workspaceRevision > w.workspaceRevision))
+        (!messagesRaw.items.some(
+          (m) => m.role === "assistant" && m.operationId === job.operationId,
+        ) ||
+          messagesRaw.items.some((m) => m.workspaceRevision > w.workspaceRevision))
       ) {
         snapshots.delete(id);
         if (recovery < 2) return get(id, recovery + 1);
@@ -332,10 +411,28 @@ export function createWorkspaceApi(
             job.failure !== "POLICY_REJECTED" &&
             job.attempts < 10,
           createdAt: job.updatedAt,
+          warnings:
+            job.status === "failed" &&
+            ["CITATION_INVALID", "POLICY_REJECTED", "MODEL_SCHEMA_INVALID"].includes(
+              job.failure ?? "",
+            )
+              ? ["답변 검증을 통과하지 못해 내용을 표시하지 않았어요. 원본과 출처를 확인해 주세요."]
+              : [],
         });
       }
     }
-    const actions = actionsRaw.map((a) => {
+    const latest = snapshots.get(id);
+    if (
+      latest &&
+      (latest.revision !== w.workspaceRevision ||
+        latest.messagesRaw.items.length > messagesRaw.items.length ||
+        latest.actionsRaw.items.length > actionsRaw.items.length ||
+        latest.timelineRaw.items.length > timelineRaw.items.length)
+    ) {
+      if (recovery < 2) return get(id, recovery + 1);
+      throw workspaceError("UNAVAILABLE", "사건이 갱신되어 최신 내용을 다시 불러와 주세요.", true);
+    }
+    const actions = actionsRaw.items.map((a) => {
       const item = v2ActionSchema.parse(a);
       actionRevisions.set(`${id}:${item.id}`, item.revision);
       return {
@@ -345,20 +442,22 @@ export function createWorkspaceApi(
         done: item.status === "done",
       } satisfies ActionView;
     });
-    const timeline = timelineRaw.map((t) => {
+    const timeline = timelineRaw.items.map((t) => {
       const item = v2TimelineEntrySchema.parse(t);
       timelineRevisions.set(`${id}:${item.id}`, item.revision);
       const [title, ...detail] = item.event.split("\n");
       return {
         id: item.id,
+        revision: item.revision,
         date: item.date ?? "",
+        datePrecision: item.datePrecision,
         title: title ?? item.event,
         detail: detail.join("\n"),
       } satisfies TimelineView;
     });
     const caseView: CaseView = {
       id: w.id,
-      title: metadata.narrative.slice(0, 60) || w.title,
+      title: [...metadata.narrative].slice(0, 60).join("") || w.title,
       subjectContext: w.subjectContext,
       stage: w.status,
       revision: w.workspaceRevision,
@@ -368,6 +467,11 @@ export function createWorkspaceApi(
     };
     return {
       case: caseView,
+      pagination: {
+        messages: Boolean(messagesRaw.nextCursor),
+        actions: Boolean(actionsRaw.nextCursor),
+        timeline: Boolean(timelineRaw.nextCursor),
+      },
       messages,
       actions,
       timeline,
@@ -378,9 +482,10 @@ export function createWorkspaceApi(
       notices: summary?.notices ?? [],
     };
   }
-  async function allMessages(id: string) {
+  async function allMessages(id: string, after: string | null = null, limit = 500) {
     const items: z.infer<typeof messageTextSchema>[] = [];
-    let cursor: string | null = null;
+    let cursor = after;
+    const seen = new Set<string>(after ? [after] : []);
     do {
       const page = z
         .object({ items: z.array(messageTextSchema), nextCursor: z.string().nullable() })
@@ -392,13 +497,20 @@ export function createWorkspaceApi(
         );
       items.unshift(...page.items);
       cursor = page.nextCursor;
-      if (items.length >= 500) break;
+      checkCursor(cursor, page.items.length, seen);
+      if (items.length >= limit) break;
     } while (cursor);
-    return items.sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
+    return { items, nextCursor: cursor };
   }
-  async function allEntities(id: string, name: "actions" | "timeline") {
+  async function allEntities(
+    id: string,
+    name: "actions" | "timeline",
+    after: string | null = null,
+    limit = 1000,
+  ) {
     const items: unknown[] = [];
-    let cursor: string | null = null;
+    let cursor = after;
+    const seen = new Set<string>(after ? [after] : []);
     do {
       const page = z
         .object({ items: z.array(z.unknown()), nextCursor: z.string().nullable() })
@@ -410,9 +522,28 @@ export function createWorkspaceApi(
         );
       items.push(...page.items);
       cursor = page.nextCursor;
-      if (items.length >= 1000) break;
+      checkCursor(cursor, page.items.length, seen);
+      if (items.length >= limit) break;
     } while (cursor);
-    return items;
+    return { items, nextCursor: cursor };
+  }
+  function checkCursor(cursor: string | null, count: number, seen: Set<string>) {
+    if (!cursor) return;
+    if (!count || seen.has(cursor))
+      throw workspaceError(
+        "UNAVAILABLE",
+        "다음 기록을 불러오지 못했어요. 다시 확인해 주세요.",
+        true,
+      );
+    seen.add(cursor);
+  }
+  async function extendPage<T>(
+    page: { items: T[]; nextCursor: string | null },
+    read: (cursor: string) => Promise<{ items: T[]; nextCursor: string | null }>,
+  ) {
+    if (!page.nextCursor) return page;
+    const next = await read(page.nextCursor);
+    return { items: [...page.items, ...next.items], nextCursor: next.nextCursor };
   }
   async function mutation(id: string, path: string, body: unknown, method = "POST") {
     await workspaceJson(
@@ -424,6 +555,17 @@ export function createWorkspaceApi(
   }
   return {
     get,
+    async loadMore(id: string, collection: "messages" | "actions" | "timeline") {
+      // Serialize continuation reads so repeated clicks cannot append the same page.
+      const previous = pageRequests.get(id) ?? Promise.resolve();
+      const next = previous.catch(() => {}).then(() => get(id, 0, collection));
+      pageRequests.set(id, next);
+      try {
+        return await next;
+      } finally {
+        if (pageRequests.get(id) === next) pageRequests.delete(id);
+      }
+    },
     async sendMessage(
       id: string,
       input: { expectedRevision: number; text: string; selectedFileIds: string[] },
@@ -489,18 +631,24 @@ export function createWorkspaceApi(
       if (pendingActions.get(signature)?.init === init) pendingActions.delete(signature);
       return next;
     },
-    async saveTimeline(id: string, entry: Omit<TimelineView, "id"> & { id?: string }) {
+    async saveTimeline(
+      id: string,
+      entry: Omit<TimelineView, "id"> & { id?: string; expectedRevision?: number },
+    ) {
       if (entry.id && !timelineRevisions.has(`${id}:${entry.id}`)) await get(id);
       const route = `${base(id)}/timeline${entry.id ? `/${encodeURIComponent(entry.id)}` : ""}`;
       const signature = JSON.stringify({ id, entry });
       let init = pendingTimelines.get(signature);
       if (!init) {
         const body = {
-          expectedRevision: entry.id
-            ? (timelineRevisions.get(`${id}:${entry.id}`) ?? 1)
-            : (workspaceRevisions.get(id) ?? (await get(id)).case.revision),
+          expectedRevision:
+            entry.expectedRevision ??
+            entry.revision ??
+            (entry.id
+              ? (timelineRevisions.get(`${id}:${entry.id}`) ?? 1)
+              : (workspaceRevisions.get(id) ?? (await get(id)).case.revision)),
           date: entry.date || null,
-          datePrecision: entry.date ? "day" : "unknown",
+          datePrecision: entry.date ? (entry.datePrecision ?? "day") : "unknown",
           event: entry.detail ? `${entry.title}\n${entry.detail}` : entry.title,
         };
         init = workspaceMutation(route, body, entry.id ? "PUT" : "POST");

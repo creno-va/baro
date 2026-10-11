@@ -1,6 +1,7 @@
 // Standalone test server: actual SQLite, AES, signed cookies, Hono routes and
 // R2 byte adapter. No source material, credentials or synthetic sessions in artifacts.
 import { resolve } from "node:path";
+import { readyFile } from "./report-fixture";
 import { reportHttpFixture } from "./report-http-fixture";
 
 if (Bun.env.BARO_SYNTHETIC_REPORT_SERVER !== "true")
@@ -35,12 +36,25 @@ const css =
 const server = Bun.serve({
   hostname: "127.0.0.1",
   port: 0,
-  fetch(request) {
+  async fetch(request) {
     const path = new URL(request.url).pathname;
+    if (
+      Bun.env.BARO_REPORT_RECONSENT_TEST === "true" &&
+      path === "/synthetic/change-and-revoke" &&
+      request.method === "POST"
+    ) {
+      await readyFile(f, "새 합성 자료로 기존 리포트와 현재 사건 상태가 달라집니다.");
+      f.db.sqlite.query("DELETE FROM user_consents WHERE user_id=?").run(f.actor.ownerId);
+      return Response.json({ ok: true });
+    }
     if (path.startsWith("/api/")) return f.app.fetch(request, f.env);
     if (path === "/app.js")
       return new Response(script, { headers: { "content-type": "text/javascript" } });
     if (path === "/app.css") return new Response(css, { headers: { "content-type": "text/css" } });
+    if (path === "/brand/logo.svg")
+      return new Response(Bun.file(`${root}/public/brand/logo.svg`), {
+        headers: { "content-type": "image/svg+xml" },
+      });
     if (path === "/fonts/PretendardVariable.woff2")
       return new Response(Bun.file(`${root}/public/fonts/PretendardVariable.woff2`));
     return new Response(

@@ -19,6 +19,10 @@ const aiRuntimeTests = [
   "tests/asset-processing-runtime.test.ts",
 ] as const;
 
+/** Git paths and selectors use forward slashes; Bun.Glob uses native separators. */
+function normalizedPaths(paths: string[]): string[] {
+  return paths.map((path) => path.replaceAll("\\", "/"));
+}
 function affectsAiRuntime(file: string): boolean {
   return (
     /^(?:package\.json|bun\.lock|\.bun-version|wrangler(?:\.[^/]+)?\.(?:jsonc?|toml)|astro\.config\.ts|tsconfig(?:\.[^/]+)?\.json)$/.test(
@@ -34,6 +38,7 @@ function affectsAiRuntime(file: string): boolean {
 }
 
 export function validationScope(files: string[]) {
+  files = normalizedPaths(files);
   return {
     native: files.some((file) =>
       /^(services\/file-processor\/|tests\/fixtures\/media\/)/.test(file),
@@ -48,6 +53,8 @@ export function validationScope(files: string[]) {
 
 /** HTTP browser flows require an explicit route map. Shared UI affects all non-corpus flows. */
 export function browserTargets(files: string[], available: string[]): string[] {
+  files = normalizedPaths(files);
+  available = normalizedPaths(available);
   const selected = new Set(files.filter((file) => /^tests\/browser\/.*\.e2e\.ts$/.test(file)));
   const corpusChanged = files.some((file) =>
     /^tests\/(?:browser\/evals\.(?:e2e|config)\.ts|helpers\/eval-browser-server\.ts|evals\/pipeline\.ts)$/.test(
@@ -61,7 +68,36 @@ export function browserTargets(files: string[], available: string[]): string[] {
   }
   if (files.some((file) => /^scripts\/(development-checks|full-browser)\.ts$/.test(file)))
     for (const path of available) selected.add(path);
+  const caseFlows =
+    /\/(cases|analysis|legacy-case-recovery|workspace(?:-[^/]+)?|intake(?:103|-[^/]+)?|conversation-home|files|xss|customer-[^/]+|upload-[^/]+|material-[^/]+)\.e2e\.ts$/;
+  const lawyerFlows = /\/(directory(?:-[^/]+)?|lawyers?(?:-[^/]+)?)\.e2e\.ts$/;
+  const reportFlows = /\/(reports?(?:-[^/]+)?|settings(?:-[^/]+)?|account(?:-[^/]+)?)\.e2e\.ts$/;
   const rules: [RegExp, RegExp][] = [
+    [/^(?:src\/contracts\/|tests\/fixtures\/contracts\/)/, /\.e2e\.ts$/],
+    // Shared session notifications and return paths affect every signed-in area.
+    [/^src\/client\/(?:session-events|return-path|api\/mock\/session)\.ts$/, /\.e2e\.ts$/],
+    // Mock file review supplies both workspace corrections and report inputs.
+    [/^src\/client\/api\/mock\/file-review\.ts$/, caseFlows],
+    [/^src\/client\/api\/mock\/file-review\.ts$/, reportFlows],
+    [/^playwright\.config\.ts$/, /\.e2e\.ts$/],
+    [
+      /^tests\/(?:browser\/(?:reports(?:-account-real|-integrated)?|report-real-download|material-report|account-session-recovery)\.config\.ts|helpers\/reports?[^/]*\.ts)$/,
+      reportFlows,
+    ],
+    [
+      /^tests\/(?:browser\/(?:customer|workspace|intake)[^/]*\.config\.ts|helpers\/(?:customer|workspace)[^/]*\.ts)$/,
+      caseFlows,
+    ],
+    [/^tests\/browser\/(?:conversation|intake103)\.config\.ts$/, caseFlows],
+    [/^tests\/browser\/lawyer-public\.config\.ts$/, lawyerFlows],
+    [
+      /^tests\/browser\/integration\.config\.ts$/,
+      /\/(?:shell-integration|lawyer-api-mock)\.e2e\.ts$/,
+    ],
+    [
+      /^tests\/helpers\/browser-session-server\.ts$/,
+      /\/(?:auth|session|cases|analysis|settings|reports|legacy-case-recovery)\.e2e\.ts$/,
+    ],
     [
       /src\/(worker\.|layouts\/|styles\/(global|shell)|server\/(router\.|api\/index)|components\/ui\/|client\/api\/(core|types|index|mock\/runtime))/,
       /\.e2e\.ts$/,
@@ -72,15 +108,15 @@ export function browserTargets(files: string[], available: string[]): string[] {
     ],
     [
       /src\/(styles\/(intake|workspace)\.css|pages\/cases\/|components\/(intake|analysis|workspace)\/|client\/api\/(?:mock\/)?(cases|workspace|files)|server\/(api\/(cases|case-create|answers|retry|v2\/(files|workspaces))|modules\/(intake|cases|case-structure|workspace|files|file-processing)\/))/,
-      /\/(cases|analysis|workspace|intake|intake103|conversation-home|files|xss|customer-recovery-(?:intake|real|workspace))\.e2e\.ts$/,
+      caseFlows,
     ],
     [
       /src\/(styles\/lawyers\.css|pages\/lawyer|components\/lawyers\/|client\/api\/(?:mock\/)?lawyers|server\/(api\/v2\/(lawyers|directory|moderation)|modules\/(lawyers|moderation)\/))/,
-      /\/(directory|lawyer|lawyers)\.e2e\.ts$/,
+      lawyerFlows,
     ],
     [
       /src\/(styles\/(reports|settings)\.css|pages\/(settings|help|polic)|components\/reports\/|components\/AccountSettings|client\/api\/(?:mock\/)?(account|reports)|server\/(api\/(account-delete|v2\/reports)|modules\/(deletion|reports|usage)\/))/,
-      /\/(settings|reports(?:-integrated)?|report-real-download|account)\.e2e\.ts$/,
+      reportFlows,
     ],
     [
       /src\/(pages\/index|components\/AnalyticsChoice|server\/modules\/analytics\/)/,
@@ -99,6 +135,8 @@ export function browserTargets(files: string[], available: string[]): string[] {
 /** Follow relative imports/re-exports to select existing consumer tests even
  * when a service/auth patch does not edit a test. */
 export async function unitTargets(files: string[], tests: string[]): Promise<string[]> {
+  files = normalizedPaths(files);
+  tests = normalizedPaths(tests);
   const requiredAiTests = files.some(affectsAiRuntime) ? aiRuntimeTests : [];
   if (requiredAiTests.some((test) => !tests.includes(test)))
     throw new Error("AI_RUNTIME_TEST_MISSING");
@@ -156,8 +194,9 @@ export async function unitTargets(files: string[], tests: string[]): Promise<str
 
 /** Run wire tests and each mock adapter configuration sequentially in one checkout. */
 export async function runBrowserTargets(targets: string[]) {
+  targets = normalizedPaths(targets);
   const mockTargets = targets.filter((path) =>
-    /\/(shell-integration|lawyer-api-mock|intake103|conversation-home|workspace-shared|workspace|reports-integrated)\.e2e\.ts$/.test(
+    /\/(shell-integration|lawyer-api-mock|intake103|conversation-home|workspace-shared|customer-completion|workspace|reports-integrated)\.e2e\.ts$/.test(
       path,
     ),
   );
@@ -167,13 +206,23 @@ export async function runBrowserTargets(targets: string[]) {
   const recoveryTargets = targets.filter((path) =>
     /\/customer-recovery-(intake|real|workspace)\.e2e\.ts$/.test(path),
   );
+  const standaloneTargets = targets.filter(
+    (path) =>
+      !mockTargets.includes(path) &&
+      !corpusTargets.includes(path) &&
+      !customerRealTargets.includes(path) &&
+      !reportRealTargets.includes(path) &&
+      !recoveryTargets.includes(path) &&
+      existsSync(path.replace(".e2e.ts", ".config.ts")),
+  );
   const regularTargets = targets.filter(
     (path) =>
       !mockTargets.includes(path) &&
       !corpusTargets.includes(path) &&
       !customerRealTargets.includes(path) &&
       !reportRealTargets.includes(path) &&
-      !recoveryTargets.includes(path),
+      !recoveryTargets.includes(path) &&
+      !standaloneTargets.includes(path),
   );
   if (regularTargets.length) {
     const child = Bun.spawn(["bunx", "playwright", "test", ...regularTargets], {
@@ -225,13 +274,23 @@ export async function runBrowserTargets(targets: string[]) {
     });
     if (await child.exited) process.exit(1);
   }
+  // A new flow can declare its own server/fixture configuration without being
+  // silently executed under the generic product server.
+  for (const target of standaloneTargets) {
+    const config = target.replace(".e2e.ts", ".config.ts");
+    const child = Bun.spawn(["bunx", "playwright", "test", "--config", config, target], {
+      stdout: "inherit",
+      stderr: "inherit",
+    });
+    if (await child.exited) process.exit(1);
+  }
   if (mockTargets.length) {
     for (const [config, selected] of [
       [
         "tests/browser/integration.config.ts",
         mockTargets.filter(
           (path) =>
-            !/\/(intake103|conversation-home|workspace-shared|workspace|reports-integrated)\.e2e\.ts$/.test(
+            !/\/(intake103|conversation-home|workspace-shared|customer-completion|workspace|reports-integrated)\.e2e\.ts$/.test(
               path,
             ),
         ),
@@ -247,6 +306,10 @@ export async function runBrowserTargets(targets: string[]) {
       [
         "tests/helpers/workspace.shared.playwright.config.ts",
         mockTargets.filter((path) => path.endsWith("/workspace-shared.e2e.ts")),
+      ],
+      [
+        "tests/helpers/customer-completion.playwright.config.ts",
+        mockTargets.filter((path) => path.endsWith("/customer-completion.e2e.ts")),
       ],
       [
         "tests/helpers/workspace.playwright.config.ts",

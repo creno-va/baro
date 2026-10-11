@@ -5,6 +5,7 @@ import { secureHeaders } from "hono/secure-headers";
 import { api } from "./server/api";
 import { cleanupAuthData } from "./server/auth/cleanup";
 import { createPageAccess } from "./server/auth/page-access";
+import { cleanupExpiredDirectorySnapshots } from "./server/db/v2-directory-cleanup";
 import { reconcileAnalysisTimeouts } from "./server/modules/case-structure/execution";
 import { reconcileDeletion } from "./server/modules/deletion/service";
 import { reconcileV2Deletion } from "./server/modules/deletion/v2-reconcile";
@@ -46,6 +47,7 @@ export default {
   async scheduled(_controller: ScheduledController, env: Env): Promise<void> {
     await reconcileDeletion(env);
     await cleanupAuthData(env.DB);
+    await cleanupExpiredDirectorySnapshots(env.DB);
     await reconcileDispatch(env);
     await reconcileAnalysisTimeouts(env);
     await reconcileFileUploads(env);

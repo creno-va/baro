@@ -5,6 +5,7 @@ import {
 } from "../../../contracts/v2";
 import { validateUpload } from "../files";
 import type { FileView } from "../types";
+import { handleFileReviewMock } from "./file-review";
 import {
   consumeMockFault,
   ensureMockWorkspace,
@@ -84,6 +85,8 @@ async function blobHash(blob: Blob) {
 }
 export function createFilesMock(runtime: WorkspaceMockRuntime, originals = mockOriginalStore) {
   return async function handleFilesMock(request: Request): Promise<Response | null> {
+    const review = await handleFileReviewMock(runtime, request);
+    if (review) return review;
     const match =
       /^\/api\/v2\/cases\/([^/]+)\/files(?:\/([^/]+)(?:\/(content|retry|complete|upload-session|parts\/(\d+)))?)?$/.exec(
         new URL(request.url).pathname,
@@ -94,7 +97,7 @@ export function createFilesMock(runtime: WorkspaceMockRuntime, originals = mockO
       kind = match[3];
     try {
       const state = runtime.read();
-      requireMockCase(state, id, request.method !== "GET");
+      requireMockCase(state, id, !["GET", "DELETE"].includes(request.method));
       const owner = state.session.user?.id;
       if (!owner) throw new WorkspaceMockError("UNAUTHENTICATED", "로그인이 필요해요.");
       if (request.method === "GET" && !fileId) {
@@ -162,6 +165,7 @@ export function createFilesMock(runtime: WorkspaceMockRuntime, originals = mockO
             status: "uploading",
             coverage: "원본 업로드 중 · API 예시 응답",
             extractedText: "",
+            uploadContentHash: input.contentHash,
           };
           value.files[id]?.push(file);
           value.fileUploads ??= {};
@@ -288,6 +292,7 @@ export function createFilesMock(runtime: WorkspaceMockRuntime, originals = mockO
             if (file.status !== "uploading" || latest.revision !== input.expectedRevision)
               throw new WorkspaceMockError("CONFLICT", "최신 자료 상태를 확인해 주세요.");
             file.status = "processing";
+            file.canRetry = false;
             file.coverage = "API 예시 처리 중 · 실제 OCR·ASR·영상 처리는 수행되지 않아요.";
             value.fileExtractions ??= {};
             value.fileExtractions[fileId] = extracted;
@@ -324,6 +329,7 @@ export function createFilesMock(runtime: WorkspaceMockRuntime, originals = mockO
             throw new WorkspaceMockError("CONFLICT", "다시 처리가 가능한 자료인지 확인해 주세요.");
           file.canStartProcessing = false;
           file.status = "processing";
+          file.canRetry = false;
           file.coverage = "API 예시 재처리 중";
           value.fileProcessing ??= {};
           value.fileProcessing[fileId] = { at: Date.now() + 1000, failed: false };
@@ -333,15 +339,30 @@ export function createFilesMock(runtime: WorkspaceMockRuntime, originals = mockO
       }
       if (request.method === "DELETE" && !kind) {
         consumeMockFault(runtime, "files.remove");
+        const archives = Object.entries(runtime.read().reportZips ?? {}).filter(
+          ([, archive]) =>
+            archive.ownerId === owner && archive.caseId === id && archive.fileIds.includes(fileId),
+        );
+        for (const [archiveId] of archives)
+          await originals(`${owner}/${id}/report-zip/${archiveId}`, null);
         await originals(`${owner}/${id}/${fileId}`, null);
         for (const part of Object.values(upload?.parts ?? {}))
           await originals(`${owner}/${id}/${fileId}/part-${part.index}`, null);
         return runtime.update((value) => {
-          requireMockCase(value, id, true);
+          requireMockCase(value, id);
           value.files[id] = value.files[id]?.filter((file) => file.id !== fileId) ?? [];
+          for (const [archiveId, archive] of archives) {
+            delete value.reportZips?.[archiveId];
+            const historical = value.reportHistory?.[archive.reportId];
+            if (historical?.savedZip?.id === archiveId) delete historical.savedZip;
+            const report = value.reports?.[id];
+            if (report?.savedZip?.id === archiveId) delete report.savedZip;
+          }
           delete value.fileProcessing?.[fileId];
           delete value.fileUploads?.[fileId];
           delete value.fileExtractions?.[fileId];
+          delete (value.fileReviews as Record<string, unknown> | undefined)?.[fileId ?? ""];
+          value.fileReviewReceipts = {};
           for (const [key, replay] of Object.entries(value.fileUploadReceipts ?? {}))
             if (replay.fileId === fileId) delete value.fileUploadReceipts?.[key];
           if (value.reports?.[id])

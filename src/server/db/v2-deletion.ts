@@ -171,7 +171,7 @@ export function createV2DeletionRepository(core: V2Core) {
         return (
           await core
             .statement(
-              "SELECT id,target_kind,target_id,state,revision FROM v2_deletion_journals WHERE state IN ('pending','failed','running') AND next_attempt_at<=? AND (lease_until IS NULL OR lease_until<=?) ORDER BY created_at,id LIMIT ?",
+              "SELECT id,target_kind,target_id,state,revision,attempts,created_at FROM v2_deletion_journals WHERE state IN ('pending','failed','running') AND next_attempt_at<=? AND (lease_until IS NULL OR lease_until<=?) ORDER BY created_at,id LIMIT ?",
               [new Date(now).toISOString(), new Date(now).toISOString(), limit],
             )
             .all<{
@@ -180,6 +180,8 @@ export function createV2DeletionRepository(core: V2Core) {
               target_id: string;
               state: string;
               revision: number;
+              attempts: number;
+              created_at: string;
             }>()
         ).results;
       });

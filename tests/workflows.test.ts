@@ -75,7 +75,7 @@ test("readiness is manual, main-only and cannot create deployment evidence", asy
   ).toBe(true);
   expect(
     workflow.jobs.inspect.steps.find(
-      (step) => step.name === "Verify official legal adapter with synthetic concepts",
+      (step) => step.name === "Verify v2 official law precedent and guide integrity",
     )?.if,
   ).toBe("always() && inputs.check_legal && inputs.target_environment == 'preview'");
   const artifact = workflow.jobs.inspect.steps.find(

@@ -40,6 +40,8 @@ export const selfProfileSchema = z
         z.strictObject({
           id: z.string().min(1).max(128),
           title: z.string().trim().min(1).max(300),
+          // Optional for existing title/link-only encrypted snapshots.
+          text: z.string().trim().max(5000).optional(),
           url: publicLink.or(assetPath).nullable(),
           assetId: z.string().min(1).max(128).optional(),
         }),

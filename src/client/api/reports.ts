@@ -18,6 +18,21 @@ const reportSchema = z.object({
   stale: z.boolean(),
   excludedFileIds: z.array(z.string()),
   maskIdentifiers: z.boolean(),
+  basis: z
+    .object({
+      workspaceRevision: z.number().int().positive(),
+      summaryRevision: z.number().int().positive(),
+      generatedAt: z.iso.datetime(),
+    })
+    .optional(),
+  pdfAvailable: z.boolean().optional(),
+  savedZip: z
+    .object({
+      id: z.string().min(1),
+      fileCount: z.number().int().min(1).max(100),
+      createdAt: z.iso.datetime(),
+    })
+    .optional(),
 });
 export const reportSaveSchema = z.object({
   content: z.string().trim().min(1, "내용을 입력해 주세요.").max(30000),
@@ -30,6 +45,7 @@ export const reportSaveSchema = z.object({
 export type ReportSave = z.infer<typeof reportSaveSchema>;
 export function createReportsClient(request: DomainRequest) {
   const revisions = new Map<string, number>();
+  const generations = new Map<string, { selection: string; revision: number | undefined }>();
   const pending = new Map<string, { fingerprint: string; key: string }>();
   const accept = (value: unknown): ReportView => {
     const report = reportSchema.parse(value);
@@ -79,17 +95,57 @@ export function createReportsClient(request: DomainRequest) {
     async get(id: string) {
       return accept(await request<unknown>(path(id)));
     },
-    async save(id: string, input: ReportSave) {
+    async save(id: string, input: ReportSave, expectedRevision = revisions.get(id)) {
       return write(id, "PATCH", {
         ...reportSaveSchema.parse(input),
-        expectedRevision: revisions.get(id),
+        expectedRevision,
       });
     },
-    async generate(id: string) {
-      return write(id, "POST", { expectedRevision: revisions.get(id) });
+    async generate(id: string, excludedFileIds?: string[], expectedRevision?: number) {
+      const selection = JSON.stringify({ excludedFileIds }),
+        previous = generations.get(id),
+        revision =
+          expectedRevision !== undefined
+            ? expectedRevision
+            : previous?.selection === selection
+              ? previous.revision
+              : revisions.get(id);
+      generations.set(id, { selection, revision });
+      try {
+        const report = await write(id, "POST", {
+          expectedRevision: revision,
+          ...(excludedFileIds ? { excludedFileIds } : {}),
+        });
+        generations.delete(id);
+        return report;
+      } catch (cause) {
+        // A definite conflict can be retried with a newly loaded version. Keep the
+        // original basis for ambiguous failures so a metadata GET cannot fork it.
+        if ((cause as { code?: string })?.code === "STALE_REVISION") generations.delete(id);
+        throw cause;
+      }
     },
     async pdf(id: string) {
       return binary(`/api/v2/reports/${encodeURIComponent(id)}/pdf`, "application/pdf");
+    },
+    async savedZip(id: string) {
+      return binary(`/api/v2/reports/${encodeURIComponent(id)}/zip`, "application/zip");
+    },
+    async html(id: string) {
+      const result = await request<Blob>(`/api/v2/reports/${encodeURIComponent(id)}/html`, {
+        responseType: "blob",
+      });
+      if (
+        !(result instanceof Blob) ||
+        result.type.split(";")[0] !== "text/html" ||
+        !result.size ||
+        result.size > 500000
+      )
+        throw new Error("HTML 리포트를 확인하지 못했어요. 다시 시도해 주세요.");
+      const text = await result.text();
+      if (!text.startsWith("<!doctype html>") || !text.includes('data-baro-report="1"'))
+        throw new Error("HTML 리포트 형식이 올바르지 않아요.");
+      return result;
     },
     async zip(id: string, selectedFileIds: string[]) {
       const ids = z

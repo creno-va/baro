@@ -2,6 +2,7 @@ import { runPipelineFixture } from "../tests/evals/pipeline";
 import checksums from "../tests/fixtures/evals/checksums.json";
 import corpus from "../tests/fixtures/evals/corpus.json";
 import { corpusSchema, fixtureChecksum } from "../tests/helpers/evals";
+import { writeFixtureWorkspaceEvaluation } from "./eval-workspace";
 
 const parsed = corpusSchema.parse(corpus);
 if (fixtureChecksum(corpus) !== checksums.corpus) throw new Error("FIXTURE_CHECKSUM_MISMATCH");
@@ -37,3 +38,5 @@ console.log(
   `Deterministic product pipeline: ${reports.length} fixtures, ${critical} critical findings. Live model quality remains unverified.`,
 );
 if (critical) process.exitCode = 1;
+
+await writeFixtureWorkspaceEvaluation(sha);

@@ -1,5 +1,91 @@
 import { expect, test } from "@playwright/test";
 
+test("reconsent navigates every saved answer without saving or generating questions", async ({
+  page,
+}) => {
+  const id = "readonly-intake-case";
+  await page.addInitScript((caseId) => {
+    const prefix = "baro-api-mock-v1:";
+    const questions = [
+      {
+        id: "saved-answer",
+        text: "저장한 첫 번째 질문",
+        kind: "text",
+        answerState: "answered",
+        answer: "이미 저장한 합성 답변입니다.",
+      },
+      { id: "saved-unknown", text: "저장한 두 번째 질문", kind: "text", answerState: "unknown" },
+      { id: "saved-skip", text: "저장한 세 번째 질문", kind: "text", answerState: "skipped" },
+    ];
+    const values = {
+      session: {
+        user: { id: "readonly-owner", name: "합성 검증 고객", accountType: "customer" },
+        needsConsent: true,
+      },
+      cases: {
+        [caseId]: {
+          id: caseId,
+          title: "저장한 질문 읽기 검증",
+          subjectContext: "individual",
+          stage: "intake",
+          revision: 7,
+          updatedAt: "2026-10-11T00:00:00.000Z",
+          summary: "",
+          schemaVersion: "2",
+        },
+      },
+      caseOwners: { [caseId]: "readonly-owner" },
+      intake: {
+        [caseId]: {
+          narrative: "저장한 질문과 답변의 읽기 권한을 검증하는 합성 사건입니다.",
+          questions,
+          rounds: [{ ordinal: 1, questionIds: questions.map((question) => question.id) }],
+        },
+      },
+    };
+    for (const [key, value] of Object.entries(values))
+      localStorage.setItem(prefix + key, JSON.stringify(value));
+  }, id);
+  await page.goto(`/cases/${id}/intake?edit=1&question=1`);
+  await expect(page.getByRole("heading", { name: "저장한 두 번째 질문" })).toBeVisible();
+  const before = await page.evaluate(async () => {
+    const path = "/src/client/api/cases.ts";
+    const { casesApi } = await import(path);
+    const mutation = async () => {
+      localStorage.setItem("readonly-mutation-attempt", "true");
+      throw new Error("Readonly navigation must not mutate");
+    };
+    casesApi.saveAnswers = mutation;
+    casesApi.advance = mutation;
+    return ["cases", "intake", "caseRequests"].map((key) =>
+      localStorage.getItem(`baro-api-mock-v1:${key}`),
+    );
+  });
+  await page.getByText("답변 관리", { exact: true }).click();
+  await page.getByRole("button", { name: "이전 질문", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "저장한 첫 번째 질문" })).toBeVisible();
+  const answer = page.getByRole("textbox", { name: "답변", exact: true });
+  await expect(answer).toHaveValue("이미 저장한 합성 답변입니다.");
+  await expect(answer).toBeDisabled();
+  await page.getByRole("button", { name: "다음 질문", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "저장한 두 번째 질문" })).toBeVisible();
+  await expect(page.getByText("모름으로 저장했어요.", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "다음 질문", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "저장한 세 번째 질문" })).toBeVisible();
+  await expect(page.getByText(/^건너뛰기.*저장했어요\.$/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "다음 질문", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "모름", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "건너뛰기", exact: true })).toBeDisabled();
+  const after = await page.evaluate(() => ({
+    attemptedMutation: localStorage.getItem("readonly-mutation-attempt"),
+    saved: ["cases", "intake", "caseRequests"].map((key) =>
+      localStorage.getItem(`baro-api-mock-v1:${key}`),
+    ),
+  }));
+  expect(after.attemptedMutation).toBeNull();
+  expect(after.saved).toEqual(before);
+});
+
 for (const state of ["unknown", "skipped"] as const)
   for (const errorRetry of [false, true])
     test(`edit answer after failed ${state}; error retry=${errorRetry}`, async ({ page }) => {

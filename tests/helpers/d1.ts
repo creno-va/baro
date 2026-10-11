@@ -2,10 +2,14 @@ import { Database, type SQLQueryBindings } from "bun:sqlite";
 import { readdir } from "node:fs/promises";
 
 // Test-only D1 surface backed by real SQLite. Worker/runtime behavior is checked separately.
-export async function createTestDatabase(options: { throughMigration?: string } = {}) {
-  const sqlite = new Database(":memory:");
+export async function createTestDatabase(
+  options: { throughMigration?: string; snapshot?: Uint8Array } = {},
+) {
+  const sqlite = options.snapshot
+    ? Database.deserialize(options.snapshot)
+    : new Database(":memory:");
   sqlite.exec("PRAGMA foreign_keys = ON");
-  for (const file of (await readdir("drizzle"))
+  for (const file of (options.snapshot ? [] : await readdir("drizzle"))
     .filter(
       (name) =>
         /^\d{4}_.+\.sql$/.test(name) &&

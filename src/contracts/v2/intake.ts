@@ -9,7 +9,7 @@ import {
 } from "../common";
 import { answerSchema, questionSchema } from "../questions";
 import { V2_LIMITS, v2JsonRequestSchema, v2VersionSchema } from "./common";
-import { v2FactsSchema } from "./sources";
+import { v2FactSchema, v2FactsSchema } from "./sources";
 
 export const v2QuestionsSchema = z
   .array(questionSchema)
@@ -83,7 +83,14 @@ export const v2SummaryEditRequestSchema = v2JsonRequestSchema(
       expectedRevision: revisionSchema,
       overview: displayText(5000).optional(),
       factEdits: z
-        .array(z.strictObject({ factId: opaqueIdSchema, text: displayText(2000) }))
+        .array(
+          z.strictObject({
+            factId: opaqueIdSchema,
+            text: displayText(2000),
+            certainty: v2FactSchema.shape.certainty.optional(),
+            conflictingFactIds: v2FactSchema.shape.conflictingFactIds.optional(),
+          }),
+        )
         .min(1)
         .max(100)
         .refine(
@@ -112,6 +119,7 @@ export function v2SummaryEditForFactsSchema(factIds: readonly string[], expected
 export const v2SummaryConfirmationRequestSchema = z.strictObject({
   expectedRevision: revisionSchema,
   summaryRevision: revisionSchema,
+  workspaceRevision: revisionSchema.optional(),
 });
 export function v2CurrentSummaryConfirmationSchema(
   intakeRevision: number,

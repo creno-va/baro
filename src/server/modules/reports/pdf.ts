@@ -82,7 +82,15 @@ function trueType(bytes: Uint8Array) {
 }
 export function renderReportPdf(
   fontBytes: Uint8Array,
-  input: { title: string; content: string; revision: number; updatedAt: string },
+  input: {
+    title: string;
+    content: string;
+    revision: number;
+    updatedAt: string;
+    basis?: { workspaceRevision: number; summaryRevision: number; generatedAt: string };
+    excludedFileCount?: number;
+    maskIdentifiers?: boolean;
+  },
 ) {
   if (fontBytes.byteLength > 4_000_000 || input.content.length > 30000 || input.title.length > 500)
     throw new Error("EXPORT_TOO_LARGE");
@@ -152,6 +160,16 @@ export function renderReportPdf(
   const all = [
     ...title.map((value) => ({ value, size: 18, gap: 26 })),
     { value: `검토 버전 ${input.revision} · ${input.updatedAt}`, size: 9, gap: 27 },
+    ...(input.basis
+      ? wrap(
+          `생성 기준: 요약 ${input.basis.summaryRevision} · 사건 ${input.basis.workspaceRevision} · ${input.basis.generatedAt}`,
+          9,
+        ).map((value) => ({ value, size: 9, gap: 19 }))
+      : []),
+    ...wrap(
+      `제외 자료: ${input.excludedFileCount ?? 0}개 · 식별정보 자동 가림: ${input.maskIdentifiers ? "켜짐" : "꺼짐"} · 생성 기준 이후 변경은 반영되지 않습니다.`,
+      9,
+    ).map((value) => ({ value, size: 9, gap: 19 })),
     ...lines.map((value) => ({ value, size: 11, gap: 19 })),
   ];
   let cursor = 0;

@@ -2,9 +2,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../../client/api";
 import { ApiError } from "../../client/api/core";
 import type { SessionView } from "../../client/api/types";
+import { isExplicitSignOut } from "../../client/session-events";
 
 /** Customer screen boundary: revoke old responses without discarding drafts on outages. */
-export function useCustomerAccess(purge: () => void, report: (error: unknown) => void) {
+export function useCustomerAccess(
+  purge: () => void,
+  report: (error: unknown) => void,
+  readAccess = false,
+) {
   const callbacks = useRef({ purge, report });
   callbacks.current = { purge, report };
   const identity = useRef<string | undefined>(undefined);
@@ -13,6 +18,7 @@ export function useCustomerAccess(purge: () => void, report: (error: unknown) =>
   const request = useRef(0);
   const sessionLookup = useRef<Promise<SessionView> | null>(null);
   const allowed = useRef(false);
+  const [canMutate, setCanMutate] = useState(false);
   const [ready, setReady] = useState(false);
   const [version, setVersion] = useState(0);
   const ticket = useCallback(() => epoch.current, []);
@@ -22,10 +28,11 @@ export function useCustomerAccess(purge: () => void, report: (error: unknown) =>
     ++epoch.current;
     allowed.current = false;
     setReady(false);
+    setCanMutate(false);
     callbacks.current.purge();
   }, []);
   const verify = useCallback(
-    async (hide = false) => {
+    async (hide = false, write = !readAccess) => {
       const serial = ++request.current;
       const wasAllowed = allowed.current;
       if (hide) {
@@ -55,15 +62,23 @@ export function useCustomerAccess(purge: () => void, report: (error: unknown) =>
       const next = JSON.stringify([
         session.user?.id,
         session.user?.accountType,
-        session.needsConsent,
+        readAccess ? null : session.needsConsent,
       ]);
       if (identity.current !== undefined && identity.current !== next) {
         deny();
         if (!hide) setVersion((value) => value + 1);
       }
       identity.current = next;
-      if (!session.user || session.needsConsent || session.user.accountType !== "customer") {
-        deny();
+      if (
+        !session.user ||
+        (session.needsConsent && write) ||
+        session.user.accountType !== "customer"
+      ) {
+        if (readAccess && session.user?.accountType === "customer" && session.needsConsent) {
+          allowed.current = true;
+          setReady(true);
+          setCanMutate(false);
+        } else deny();
         const error = new ApiError(
           !session.user
             ? "UNAUTHENTICATED"
@@ -75,11 +90,12 @@ export function useCustomerAccess(purge: () => void, report: (error: unknown) =>
         callbacks.current.report(error);
         throw error;
       }
+      setCanMutate(!session.needsConsent);
       allowed.current = true;
       setReady(true);
       return true;
     },
-    [deny],
+    [deny, readAccess],
   );
   useEffect(() => {
     mounted.current = true;
@@ -107,19 +123,13 @@ export function useCustomerAccess(purge: () => void, report: (error: unknown) =>
     refresh();
     window.addEventListener("focus", refresh);
     window.addEventListener("pageshow", refresh);
+    const changed = (event: Event) => {
+      if (!isExplicitSignOut(event)) return refresh();
+      deny();
+      callbacks.current.report(new ApiError("UNAUTHENTICATED", "로그인이 필요해요."));
+    };
     const storage = (event: StorageEvent) => {
-      if (event.key === "better-auth.message") {
-        try {
-          const message = JSON.parse(event.newValue ?? "null");
-          if (message?.event === "session" && message?.data?.trigger === "signout") {
-            deny();
-            callbacks.current.report(new ApiError("UNAUTHENTICATED", "로그인이 필요해요."));
-            return;
-          }
-        } catch {
-          /* Untrusted messages cannot grant access; verify the server session. */
-        }
-      }
+      if (isExplicitSignOut(event)) return changed(event);
       if (
         !event.key ||
         event.key === "baro-api-mock-v1:session" ||
@@ -129,7 +139,7 @@ export function useCustomerAccess(purge: () => void, report: (error: unknown) =>
         refresh();
     };
     window.addEventListener("storage", storage);
-    window.addEventListener("baro-session-changed", refresh);
+    window.addEventListener("baro-session-changed", changed);
     document.addEventListener("visibilitychange", visible);
     return () => {
       mounted.current = false;
@@ -139,9 +149,9 @@ export function useCustomerAccess(purge: () => void, report: (error: unknown) =>
       window.removeEventListener("focus", refresh);
       window.removeEventListener("pageshow", refresh);
       window.removeEventListener("storage", storage);
-      window.removeEventListener("baro-session-changed", refresh);
+      window.removeEventListener("baro-session-changed", changed);
       document.removeEventListener("visibilitychange", visible);
     };
   }, [deny, verify]);
-  return { ready, version, verify, ticket, alive, current, deny };
+  return { ready, canMutate, version, verify, ticket, alive, current, deny };
 }

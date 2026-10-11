@@ -11,7 +11,7 @@ import { createStorageMaintenance } from "../budget/storage-maintenance";
 import type { ProcessingCosts } from "../file-processing/transport";
 import type { FilesService, PrivateBucket } from "../files/service";
 import { decryptExport, type ExportIdentity, planExport } from "./binary";
-import { exportFence } from "./fence";
+import { exportFence, requireReportConsent, storedReportFence } from "./fence";
 import {
   allowReportCleanup,
   applyReportWorkPlan,
@@ -34,6 +34,8 @@ export type ReportDependencies = {
   files: FilesService;
   font: () => Promise<Uint8Array>;
   clock?: () => string;
+  /** Set only by the signed HTTP boundary; internal job/test actors have no browser session. */
+  sessionId?: string;
   guideHosts?: readonly string[];
   costs?: (input: {
     ownerId: string;
@@ -57,6 +59,8 @@ type ExportRow = {
   revision: number;
   workspace_id: string;
   workspace_revision: number;
+  summary_revision: number;
+  created_at: string;
   operation_id: string;
   current_job_id: string | null;
   state: string;
@@ -146,7 +150,7 @@ export function createReportExports(core: V2Core, deps: ReportDependencies, port
     // capacity dispatch permit immediately before R2.
     const acquired = await core
       .statement(
-        `UPDATE v2_jobs SET status='running',phase='assembling',failure_code=NULL,retryable=0,lease_token=?,lease_until=?,fencing=fencing+1,attempts=attempts+1,updated_at=? WHERE id=? AND attempts<3 AND (status IN ('queued','failed') OR (status IN ('running','validating') AND lease_until<=?)) AND EXISTS(SELECT 1 FROM v2_operations o WHERE o.id=v2_jobs.operation_id AND o.owner_id=? AND o.state='admitted') AND EXISTS(SELECT 1 FROM v2_jobs j JOIN v2_operations o ON o.id=j.operation_id WHERE j.id=v2_jobs.id AND ${jobAlive}) RETURNING fencing`,
+        `UPDATE v2_jobs SET status='running',phase='assembling',failure_code=NULL,retryable=0,lease_token=?,lease_until=?,fencing=fencing+1,attempts=attempts+1,updated_at=? WHERE id=? AND attempts<3 AND (status IN ('queued','failed') OR (status IN ('running','validating') AND lease_until<=?)) AND EXISTS(SELECT 1 FROM v2_operations o WHERE o.id=v2_jobs.operation_id AND o.owner_id=? AND o.state='admitted') AND EXISTS(SELECT 1 FROM v2_jobs j JOIN v2_operations o ON o.id=j.operation_id WHERE j.id=v2_jobs.id AND ${jobAlive}) RETURNING fencing,attempts`,
         [
           token,
           new Date(Date.parse(time) + 300000).toISOString(),
@@ -156,15 +160,28 @@ export function createReportExports(core: V2Core, deps: ReportDependencies, port
           ownerId,
         ],
       )
-      .first<number>("fencing");
-    if (!acquired) throw new ReportError("STORAGE_UNAVAILABLE");
+      .first<{ fencing: number; attempts: number }>();
+    if (!acquired) {
+      const job = await core
+        .statement("SELECT attempts,status FROM v2_jobs WHERE id=?", [r.current_job_id])
+        .first<{ attempts: number; status: string }>();
+      throw new ReportError(
+        job?.status === "failed" && job.attempts >= 3
+          ? "EXPORT_RETRY_EXHAUSTED"
+          : "STORAGE_UNAVAILABLE",
+      );
+    }
     await core
       .statement("UPDATE v2_reports SET state='building' WHERE id=? AND current_job_id=?", [
         r.id,
         r.current_job_id,
       ])
       .run();
-    return { jobId: r.current_job_id, token, fencing: acquired };
+    return {
+      jobId: r.current_job_id,
+      token,
+      fencing: acquired.fencing,
+    };
   }
   async function persist(
     ownerId: string,
@@ -368,10 +385,18 @@ export function createReportExports(core: V2Core, deps: ReportDependencies, port
     r: ExportRow,
     blobId: string,
     kind: ExportIdentity["kind"],
+    parentReportId?: string,
   ) {
-    const data = await valid(a(ownerId), r.id);
-    const fence = await exportFence(core, a(ownerId), r, data.review.sourceDigest, now);
-    const authorize = () => fence.check(undefined, blobId);
+    const data = await ports.read(a(ownerId), r.id);
+    const authorize = storedReportFence(
+      core,
+      a(ownerId),
+      r,
+      blobId,
+      kind,
+      parentReportId,
+      deps.sessionId,
+    );
     await authorize();
     const blob = await storage.findBlob(a(ownerId), blobId);
     if (!blob || blob.kind !== kind || blob.key_version !== "report_stream_v1")
@@ -381,7 +406,7 @@ export function createReportExports(core: V2Core, deps: ReportDependencies, port
       reportWorkPlan({
         pdfBytes: kind === "report_pdf" ? blob.logical_bytes : 0,
         zipBytes: kind === "original_zip" ? blob.logical_bytes : 0,
-        sourceRows: fence.rows,
+        sourceRows: 0,
         reportFiles: data.body.selectedFiles.length,
       }),
     );
@@ -432,10 +457,13 @@ export function createReportExports(core: V2Core, deps: ReportDependencies, port
     };
   }
   async function build(actor: Actor, id: string, selected?: readonly string[]) {
+    const existing = await ports.row(actor, id);
+    if (!selected && existing.state === "ready" && existing.pdf_blob_id) return existing;
+    await requireReportConsent(core, actor);
     const data = await valid(actor, id),
       r = data.row;
     if (r.state === "ready" && r.pdf_blob_id && (!selected || r.zip_blob_id)) return r;
-    const fence = await exportFence(core, actor, r, data.review.sourceDigest, now);
+    const fence = await exportFence(core, actor, r, data.review.sourceDigest, now, deps.sessionId);
     if (fence.rows > 250) throw new ReportError("EXPORT_LIMIT_EXCEEDED");
     const l = await lease(actor.ownerId, r);
     const written: string[] = [];
@@ -449,7 +477,14 @@ export function createReportExports(core: V2Core, deps: ReportDependencies, port
           ? maskReportText(data.review.content)
           : data.review.content,
         revision: r.revision,
-        updatedAt: data.body.generatedAt,
+        updatedAt: r.created_at,
+        basis: {
+          workspaceRevision: r.workspace_revision,
+          summaryRevision: r.summary_revision,
+          generatedAt: data.body.generatedAt,
+        },
+        excludedFileCount: data.review.excludedFileIds.length,
+        maskIdentifiers: data.review.maskIdentifiers,
       });
       const choices = selected
         ? validateOriginalSelection(data.body, data.review.excludedFileIds, selected)
@@ -533,7 +568,7 @@ export function createReportExports(core: V2Core, deps: ReportDependencies, port
       // output IDs remain in the durable deletion journal, never reused.
       await core
         .statement(
-          `UPDATE v2_jobs SET status='failed',failure_code=?,retryable=1,lease_token=NULL,lease_until=NULL,updated_at=? WHERE id=? AND lease_token=? AND fencing=? AND EXISTS(SELECT 1 FROM v2_jobs j JOIN v2_operations o ON o.id=j.operation_id WHERE j.id=v2_jobs.id AND o.owner_id=? AND ${jobAlive})`,
+          `UPDATE v2_jobs SET status='failed',failure_code=?,retryable=CASE WHEN attempts<3 THEN 1 ELSE 0 END,lease_token=NULL,lease_until=NULL,updated_at=? WHERE id=? AND lease_token=? AND fencing=? AND EXISTS(SELECT 1 FROM v2_jobs j JOIN v2_operations o ON o.id=j.operation_id WHERE j.id=v2_jobs.id AND o.owner_id=? AND ${jobAlive})`,
           [
             error instanceof ReportError && error.code === "BUDGET_UNAVAILABLE"
               ? "BUDGET_UNAVAILABLE"
@@ -546,6 +581,17 @@ export function createReportExports(core: V2Core, deps: ReportDependencies, port
           ],
         )
         .run();
+      const failedJob = await core
+        .statement("SELECT retryable FROM v2_jobs WHERE id=?", [l.jobId])
+        .first<{ retryable: number }>();
+      if (
+        failedJob?.retryable === 0 &&
+        !(
+          error instanceof ReportError &&
+          ["NOT_FOUND", "STALE_REVISION", "CONSENT_REQUIRED"].includes(error.code)
+        )
+      )
+        throw new ReportError("EXPORT_RETRY_EXHAUSTED");
       throw error;
     }
   }
@@ -554,6 +600,11 @@ export function createReportExports(core: V2Core, deps: ReportDependencies, port
       const r = await build(actor, id);
       if (!r.pdf_blob_id) throw new ReportError("STORAGE_UNAVAILABLE");
       return download(actor.ownerId, r, r.pdf_blob_id, "report_pdf");
+    },
+    async storedZip(actor: Actor, id: string, parentReportId: string) {
+      const r = await ports.row(actor, id);
+      if (r.state !== "ready" || !r.zip_blob_id) throw new ReportError("NOT_FOUND");
+      return download(actor.ownerId, r, r.zip_blob_id, "original_zip", parentReportId);
     },
     async zip(actor: Actor, id: string, selected: readonly string[]) {
       const r = await build(actor, id, selected);

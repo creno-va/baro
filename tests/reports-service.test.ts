@@ -4,10 +4,48 @@ import { snapshotStatements } from "../src/server/db/v2-core";
 import { createV2OfficialSourceRepository } from "../src/server/db/v2-official-sources";
 import { createV2ReportsRepository } from "../src/server/db/v2-reports";
 import { digest } from "../src/server/modules/files/binary";
+import { OFFICIAL_CATALOG } from "../src/server/modules/legal-retrieval/v2/registry";
+import { makeChunk } from "../src/server/modules/legal-retrieval/v2/source";
 import { decryptExport, planExport } from "../src/server/modules/reports/binary";
 import { createReportsService } from "../src/server/modules/reports/service";
 import { streamChunks, zipByteLength, zipChunks } from "../src/server/modules/reports/zip";
 import { readyFile, reportFixture } from "./helpers/report-fixture";
+
+test("consent revoked during report encryption cannot publish a new report or operation", async () => {
+  const f = await reportFixture();
+  const first = await f.reports.get(f.actor.ownerId, f.workspaceId);
+  const revision = f.rev();
+  let revoked = false;
+  const raced = createReportsService(
+    {
+      ...f.core,
+      encrypt: async (...args: Parameters<typeof f.core.encrypt>) => {
+        const encrypted = await f.core.encrypt(...args);
+        if (!revoked && args[0] === "v2_reports") {
+          revoked = true;
+          f.db.sqlite.query("DELETE FROM user_consents WHERE user_id=?").run(f.actor.ownerId);
+        }
+        return encrypted;
+      },
+    },
+    f.deps,
+  );
+  await expect(
+    raced.save(f.actor.ownerId, f.workspaceId, crypto.randomUUID(), {
+      expectedRevision: first.revision,
+      content: "저장 중 동의를 철회한 합성 내용",
+      maskIdentifiers: true,
+      excludedFileIds: [],
+    }),
+  ).rejects.toThrow("CONSENT_REQUIRED");
+  expect(revoked).toBe(true);
+  expect(f.rev()).toBe(revision);
+  expect(f.db.sqlite.query("SELECT count(*) AS n FROM v2_reports").get()).toEqual({ n: 1 });
+  expect(
+    f.db.sqlite.query("SELECT count(*) AS n FROM v2_operations WHERE kind='report'").get(),
+  ).toEqual({ n: 1 });
+  expect((await f.reports.get(f.actor.ownerId, f.workspaceId)).content).toBe(first.content);
+});
 
 test("actual SQL encrypted immutable reports preserve review, masking, revision and idempotent lost responses", async () => {
   const f = await reportFixture(),
@@ -247,50 +285,30 @@ async function replaceSummary(
 }
 test("reuse bound verified official citations without retrieval; expiry invalidates an existing report and refuses new export", async () => {
   const f = await reportFixture(),
-    repository = createV2OfficialSourceRepository(f.core),
-    sourceId = crypto.randomUUID(),
-    citationId = crypto.randomUUID(),
-    officialId = crypto.randomUUID(),
-    body = "공식 출처 합성 본문",
-    contentHash = await digest(new TextEncoder().encode(body));
-  const citation = {
-    id: citationId,
-    sourceId,
-    kind: "statute" as const,
-    officialId,
-    title: "합성 검증 법령",
-    article: "제1조",
-    effectiveDate: "2026-10-01",
-    url: "https://www.law.go.kr/법령/합성",
-    verifiedAt: f.actor.now,
-    contentHash,
-  };
-  expect(
-    await repository.put(
-      {
-        sourceId,
-        sourceType: "statute",
-        officialId,
-        version: "v1",
-        section: "제1조",
-        contentHash,
-        extractorVersion: "synthetic",
-        canonicalUrl: citation.url,
-        title: citation.title,
-        body,
-        sourceDate: citation.effectiveDate,
-        fetchedAt: f.actor.now,
-        verifiedAt: f.actor.now,
-        expiresAt: "2026-10-07T00:00:00.000Z",
-        rightsProvenance: "synthetic only",
-        institutionId: null,
-        endpointId: null,
-        court: null,
-        caseNumber: null,
-      },
-      citation,
-    ),
-  ).toBe(true);
+    repository = createV2OfficialSourceRepository(f.core);
+  const chunk = await makeChunk(
+    {
+      sourceType: "statute",
+      officialId: "1706",
+      version: "284415",
+      section: "제1조",
+      canonicalUrl: "https://law.go.kr/LSW/lsInfoP.do?lsiSeq=284415",
+      title: "합성 검증 법령",
+      body: "공식 출처 합성 본문",
+      sourceDate: "2026-10-01",
+      fetchedAt: f.actor.now,
+      verifiedAt: f.actor.now,
+      rightsProvenance: OFFICIAL_CATALOG[0].rights,
+      institutionId: null,
+      endpointId: null,
+      court: null,
+      caseNumber: null,
+    },
+    f.actor.now.slice(0, 10),
+  );
+  const citation = chunk.citation,
+    citationId = citation.id;
+  expect(await repository.put(chunk.source, citation)).toBe(true);
   expect(
     await repository.bindCitation(
       { ...f.actor, workspaceId: f.workspaceId, expectedRevision: f.rev() },
@@ -373,7 +391,7 @@ test("material exclusions remove their canonical facts; foreign and stale source
   const draft = await f.reports.get(f.actor.ownerId, f.workspaceId);
   const saved = await f.reports.save(f.actor.ownerId, f.workspaceId, crypto.randomUUID(), {
     expectedRevision: draft.revision,
-    content: "직접 검토한 합성 내용",
+    content: draft.content,
     maskIdentifiers: true,
     excludedFileIds: [u.session.fileId],
   });
@@ -423,4 +441,66 @@ test("streaming ZIP rejects changed originals and unsafe names before claiming a
   expect(() => zipByteLength([{ ...source, name: "../wrong.txt" }])).toThrow(
     "EXPORT_INVALID_FILENAME",
   );
+});
+
+test("stored historical PDF keeps its exact bytes after newer source and consent changes, but owner/delete fences remain", async () => {
+  const f = await reportFixture(),
+    a = f.actor.ownerId;
+  const old = await f.reports.get(a, f.workspaceId);
+  const original = await f.reports.pdf(a, old.id),
+    bytes = await new Response(original.body).arrayBuffer();
+  await readyFile(f, "새로 추가한 합성 자료");
+  expect((await f.reports.get(a, f.workspaceId)).stale).toBe(true);
+  f.db.sqlite.query("DELETE FROM user_consents WHERE user_id=?").run(a);
+  const stored = await f.reports.pdf(a, old.id);
+  expect(await new Response(stored.body).arrayBuffer()).toEqual(bytes);
+  expect((await f.reports.get(a, f.workspaceId)).content).toBe(old.content);
+  await expect(f.reports.generate(a, f.workspaceId, crypto.randomUUID(), {})).rejects.toMatchObject(
+    { code: "CONSENT_REQUIRED" },
+  );
+  await expect(f.reports.pdf(crypto.randomUUID(), old.id)).rejects.toMatchObject({
+    code: "NOT_FOUND",
+  });
+  const late = await f.reports.pdf(a, old.id);
+  f.db.sqlite.query("DELETE FROM v2_workspaces WHERE id=?").run(f.workspaceId);
+  await expect(new Response(late.body).arrayBuffer()).rejects.toThrow();
+});
+
+test("excluding a material rebuilds the rendered review, removing its observed text from actual PDF input", async () => {
+  const f = await reportFixture(),
+    a = f.actor.ownerId,
+    u = await readyFile(f, "제외 대상 원본"),
+    fileId = u.session.fileId;
+  const id = crypto.randomUUID(),
+    entity = crypto.randomUUID();
+  const payload = await f.core.encrypt("v2_file_observations", id, a, 2, {
+    id: entity,
+    text: "제외 대상 비공개 문장",
+    position: { kind: "document", page: 1, paragraph: null, table: null },
+    certainty: "observed",
+    userEdited: false,
+    included: true,
+  });
+  f.db.sqlite
+    .query(
+      "INSERT INTO v2_file_observations(id,entity_id,file_id,revision,file_revision,ordinal,encrypted_payload) VALUES(?,?,?,2,2,0,?)",
+    )
+    .run(id, entity, fileId, payload);
+  const prior = await f.reports.get(a, f.workspaceId);
+  expect(prior.content).toContain("제외 대상 비공개 문장");
+  const saved = await f.reports.save(a, f.workspaceId, crypto.randomUUID(), {
+    expectedRevision: prior.revision,
+    content: prior.content,
+    maskIdentifiers: true,
+    excludedFileIds: [fileId],
+  });
+  expect(saved.content).not.toContain("제외 대상 비공개 문장");
+  expect(
+    (await createV2ReportsRepository(f.core).read(f.actor, saved.id))?.body.selectedFiles,
+  ).toEqual([]);
+  expect(
+    (await createV2ReportsRepository(f.core).read(f.actor, prior.id))?.body.selectedFiles,
+  ).toHaveLength(1);
+  const pdf = await f.reports.pdf(a, saved.id);
+  expect((await new Response(pdf.body).arrayBuffer()).byteLength).toBe(pdf.byteLength);
 });

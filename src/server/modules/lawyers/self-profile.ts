@@ -37,21 +37,31 @@ export function createSelfProfileService(core: V2Core, clock = () => new Date().
   const ownRow = (ownerId: string) =>
     core.statement(`${latest} AND p.owner_id=?`, [ownerId]).first<Row>();
   const service = {
-    async getMine(ownerId: string): Promise<SelfProfile> {
+    async getMine(ownerId: string, createIfMissing = true): Promise<SelfProfile> {
       const row = await ownRow(ownerId);
       if (row) {
         const profile = await decode(row);
         if (!profile) throw new LawyerError("NOT_FOUND");
         return profile;
       }
-      await createV2LawyersRepository(core).createProfile(actor(ownerId), crypto.randomUUID());
-      const p = await core
+      let p = await core
         .statement(`SELECT p.id FROM v2_profiles p WHERE p.owner_id=? AND ${alive}`, [ownerId])
         .first<{ id: string }>();
+      if (!p && createIfMissing) {
+        await createV2LawyersRepository(core).createProfile(actor(ownerId), crypto.randomUUID());
+        p = await core
+          .statement(`SELECT p.id FROM v2_profiles p WHERE p.owner_id=? AND ${alive}`, [ownerId])
+          .first<{ id: string }>();
+      }
       if (!p) throw new LawyerError("NOT_FOUND");
       return emptySelfProfile(p.id);
     },
-    async saveMine(ownerId: string, input: unknown, publish?: boolean): Promise<SelfProfile> {
+    async saveMine(
+      ownerId: string,
+      input: unknown,
+      publish?: boolean,
+      sessionId?: string,
+    ): Promise<SelfProfile> {
       const current = await service.getMine(ownerId);
       const incoming = selfProfileSchema.parse(input);
       if (current.id !== incoming.id) throw new LawyerError("NOT_FOUND");
@@ -80,8 +90,16 @@ export function createSelfProfileService(core: V2Core, clock = () => new Date().
       });
       const assets = selfAssetClaim(next);
       const claim = core.statement(
-        `INSERT INTO v2_mutation_claims(id,owner_id,target_id,revision) SELECT ?,p.owner_id,p.id,? FROM v2_profiles p WHERE p.id=? AND p.owner_id=? AND ${alive} AND ${role} AND ${currentConsentSql} AND coalesce((SELECT max(revision) FROM v2_private_snapshots WHERE target_id=p.id AND purpose='profile_revision'),1)=?${assets.sql}`,
-        [claimId, next.revision, next.id, ownerId, current.revision, ...assets.args],
+        `INSERT INTO v2_mutation_claims(id,owner_id,target_id,revision) SELECT ?,p.owner_id,p.id,? FROM v2_profiles p WHERE p.id=? AND p.owner_id=? AND ${alive} AND ${role} AND ${currentConsentSql} AND coalesce((SELECT max(revision) FROM v2_private_snapshots WHERE target_id=p.id AND purpose='profile_revision'),1)=?${assets.sql}${sessionId ? " AND EXISTS(SELECT 1 FROM session WHERE id=? AND user_id=p.owner_id AND expires_at>?)" : ""}`,
+        [
+          claimId,
+          next.revision,
+          next.id,
+          ownerId,
+          current.revision,
+          ...assets.args,
+          ...(sessionId ? [sessionId, Date.parse(clock())] : []),
+        ],
       );
       const changed = await core.changed([
         claim,
@@ -129,13 +147,14 @@ export function createSelfProfileService(core: V2Core, clock = () => new Date().
       published: boolean,
       expectedRevision: number,
       profileId: string,
+      sessionId?: string,
     ) {
       const current = await service.getMine(ownerId);
       if (current.id !== profileId) throw new LawyerError("NOT_FOUND");
       if (current.revision === expectedRevision + 1 && current.published === published)
         return current;
       if (current.revision !== expectedRevision) throw new LawyerError("STALE_REVISION");
-      return service.saveMine(ownerId, current, published);
+      return service.saveMine(ownerId, current, published, sessionId);
     },
     /** Stream fences use SQL metadata so each chunk does not decrypt every portfolio entry again. */
     async isCurrent(
@@ -148,7 +167,7 @@ export function createSelfProfileService(core: V2Core, clock = () => new Date().
         if (!sessionId) return false;
         return !!(await core
           .statement(
-            `SELECT p.id FROM v2_profiles p WHERE p.id=? AND p.owner_id=? AND ${alive} AND ${role} AND ${currentConsentSql} AND coalesce((SELECT max(revision) FROM v2_private_snapshots WHERE target_id=p.id AND purpose='profile_revision'),1)=? AND EXISTS(SELECT 1 FROM session WHERE id=? AND user_id=p.owner_id AND expires_at>?)`,
+            `SELECT p.id FROM v2_profiles p WHERE p.id=? AND p.owner_id=? AND ${alive} AND ${role} AND coalesce((SELECT max(revision) FROM v2_private_snapshots WHERE target_id=p.id AND purpose='profile_revision'),1)=? AND EXISTS(SELECT 1 FROM session WHERE id=? AND user_id=p.owner_id AND expires_at>?)`,
             [profile.id, ownerId, profile.revision, sessionId, Date.parse(clock())],
           )
           .first());
@@ -212,7 +231,8 @@ export function createSelfProfileService(core: V2Core, clock = () => new Date().
         }
         if (
           p?.published &&
-          (!filters.name || `${p.name} ${p.officeName}`.includes(filters.name)) &&
+          (!filters.name ||
+            `${p.name} ${p.officeName}`.toLowerCase().includes(filters.name.toLowerCase())) &&
           (!filters.region || p.region === filters.region) &&
           (!filters.legalField ||
             p.practiceAreas.includes(filters.legalField as SelfProfile["practiceAreas"][number]))

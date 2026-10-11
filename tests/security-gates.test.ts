@@ -17,3 +17,16 @@ test("source gate rejects dynamic fixture/runtime imports, aliased/computed payl
     productBoundaryFindings("src/server/sample.ts", 'const safe = { requestId: "opaque" };'),
   ).toEqual([]);
 });
+
+test("only the fixed v2 deletion diagnostic fields are allowed at the reviewed module", () => {
+  const file = "src/server/modules/deletion/v2-reconcile.ts";
+  const source = `console.error(JSON.stringify({event:"v2_deletion_cleanup_failed",environment:event.environment,reason:event.reason,attempts:event.attempts,ageSeconds:event.ageSeconds,}),)`;
+  expect(productBoundaryFindings(file, source)).toEqual([]);
+  for (const unsafe of [
+    source.replace("ageSeconds:event.ageSeconds,", "ageSeconds:event.ageSeconds,payload:payload,"),
+    source.replace("reason:event.reason", "reason:error.message"),
+    source.replace("console.error", "console.warn"),
+  ])
+    expect(productBoundaryFindings(file, unsafe).length).toBeGreaterThan(0);
+  expect(productBoundaryFindings("src/server/sample.ts", source).length).toBeGreaterThan(0);
+});

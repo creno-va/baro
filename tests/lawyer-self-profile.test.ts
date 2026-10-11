@@ -25,6 +25,114 @@ const complete = {
   email: "lawyer@example.invalid",
   portfolio: [{ id: "activity-1", title: "합성 공개 활동", url: "https://example.com/portfolio" }],
 };
+test("text portfolio keeps its own body through encrypted save, reconnect, publication, edit and removal", async () => {
+  const f = await fixture();
+  const service = createSelfProfileService(f.core);
+  const blank = await service.getMine(f.owner.userId);
+  const text = "제목과 다른 본문입니다.\n<script>실행하지 않는 글</script>";
+  const saved = await service.saveMine(f.owner.userId, {
+    ...blank,
+    ...complete,
+    portfolio: [{ id: "text-work", title: "작성한 활동", text, url: null }],
+  });
+  expect((await createSelfProfileService(f.core).getMine(f.owner.userId)).portfolio[0]?.text).toBe(
+    text,
+  );
+  const published = await service.publishMine(f.owner.userId, true, saved.revision, saved.id);
+  expect((await service.get(saved.id)).portfolio[0]).toMatchObject({ title: "작성한 활동", text });
+  const edited = await service.saveMine(f.owner.userId, {
+    ...published,
+    portfolio: [{ ...published.portfolio[0], text: "수정한 본문" }],
+  });
+  expect((await service.get(saved.id)).portfolio[0]?.text).toBe("수정한 본문");
+  await service.saveMine(f.owner.userId, { ...edited, portfolio: [] });
+  expect((await service.get(saved.id)).portfolio).toEqual([]);
+  expect(
+    selfProfileSchema.safeParse({
+      ...saved,
+      portfolio: [{ id: "long", title: "길이", text: "가".repeat(5001), url: null }],
+    }).success,
+  ).toBe(false);
+  expect(selfProfileSchema.parse({ ...saved, ...complete }).portfolio[0]).not.toHaveProperty(
+    "text",
+  );
+});
+
+test("renewal permits existing own profile/assets reads, blocks mutation and public visibility, creates no new profile", async () => {
+  const f = await fixture();
+  const service = createSelfProfileService(f.core);
+  const blank = await service.getMine(f.owner.userId);
+  const saved = await service.saveMine(f.owner.userId, { ...blank, ...complete });
+  const published = await service.publishMine(f.owner.userId, true, saved.revision, saved.id);
+  f.db.sqlite
+    .query("UPDATE user_consents SET privacy_version='stale' WHERE user_id=?")
+    .run(f.owner.userId);
+  expect(
+    selfProfileSchema.parse(await (await f.request("/v2/me/lawyer/self-profile")).json()),
+  ).toEqual(published);
+  expect((await f.request("/v2/me/lawyer/self-profile/assets")).status).toBe(200);
+  expect(
+    (await f.request("/v2/me/lawyer/self-profile", f.owner, "PUT", { profile: published })).status,
+  ).toBe(403);
+  expect(
+    (
+      await f.request("/v2/me/lawyer/self-profile/publication", f.owner, "POST", {
+        published: true,
+        profileId: published.id,
+        expectedRevision: published.revision,
+        consent: true,
+      })
+    ).status,
+  ).toBe(403);
+  expect((await f.request(`/v2/lawyers/self-service/${published.id}`)).status).toBe(404);
+  expect((await f.request("/v2/me/lawyer/self-profile", f.noConsent)).status).toBe(403);
+  expect(
+    f.db.sqlite.query("SELECT id FROM v2_profiles WHERE owner_id=?").get(f.noConsent.userId),
+  ).toBeNull();
+  expect((await f.request("/v2/me/lawyer/self-profile", f.other)).status).toBe(403);
+});
+
+test("domain mock keeps existing reads after renewal and denies writes, uploads and foreign access", async () => {
+  let store: LawyerMockStore | null = null;
+  let needsConsent = false;
+  let id = "owner";
+  const api = createMockLawyers({
+    read: () => store,
+    write: (next) => {
+      store = next;
+    },
+    session: async () => ({ user: { id, name: "합성", accountType: "lawyer" }, needsConsent }),
+  });
+  const blank = await api.getMine();
+  const saved = await api.saveMine({
+    ...blank,
+    ...complete,
+    portfolio: [{ id: "text", title: "제목", text: "본문", url: null }],
+  });
+  const asset = await api.uploadAsset({
+    profileId: saved.id,
+    file: new File(["synthetic"], "fixture.pdf", { type: "application/pdf" }),
+    purpose: "portfolio",
+  });
+  needsConsent = true;
+  expect(await api.getMine()).toEqual(saved);
+  expect(await api.assets()).toHaveLength(1);
+  expect(
+    (await api.assetBlob({ profileId: saved.id, assetId: asset.id, privateRead: true })).type,
+  ).toBe("application/pdf");
+  await expect(api.saveMine(saved)).rejects.toThrow("필수 동의");
+  await expect(
+    api.publishMine(true, { profileId: saved.id, expectedRevision: saved.revision }),
+  ).rejects.toThrow("필수 동의");
+  await expect(
+    api.uploadAsset({ profileId: saved.id, file: new File(["x"], "x.pdf"), purpose: "portfolio" }),
+  ).rejects.toThrow("필수 동의");
+  id = "foreign";
+  await expect(api.getMine()).rejects.toThrow("새 프로필");
+  await expect(
+    api.assetBlob({ profileId: saved.id, assetId: asset.id, privateRead: true }),
+  ).rejects.toThrow();
+});
 test("mock owner edit/publish/refresh/directory share one profile; customers cannot edit", async () => {
   let serialized: string | null = null;
   let user: { id: string; name: string; accountType: string } | null = {
@@ -114,6 +222,66 @@ async function fixture() {
     );
   return { db, owner, other, noConsent, env, core, app, request };
 }
+test("self directory and mock match Latin name/office case and literal punctuation consistently", async () => {
+  const f = await fixture();
+  const service = createSelfProfileService(f.core);
+  const blank = await service.getMine(f.owner.userId);
+  const saved = await service.saveMine(f.owner.userId, {
+    ...blank,
+    ...complete,
+    name: "합성 Alpha Lawyer",
+    officeName: "합성 Delta_100% Office",
+  });
+  const profile = await service.publishMine(f.owner.userId, true, saved.revision, saved.id);
+  let store: LawyerMockStore = {
+    profiles: [profile, { ...profile, id: "synthetic-hidden", published: false }],
+    owners: { [f.owner.userId]: profile.id },
+  };
+  const mock = createMockLawyers({
+    read: () => store,
+    write: (value) => {
+      store = value;
+    },
+    session: async () => ({ user: null, needsConsent: false }),
+  });
+  for (const query of [
+    "alpha",
+    "ALPHA",
+    "delta_100%",
+    "DELTA_100%",
+    "합성 Delta_100%",
+    "없는 사무실",
+    "DeltaX100",
+    "",
+  ]) {
+    const params = new URLSearchParams(query ? { name: query } : {});
+    const response = await f.request(`/v2/lawyers/self-service?${params}`);
+    expect(response.status).toBe(200);
+    const real = selfDirectoryPageSchema.parse(await response.json());
+    const expected = ["없는 사무실", "DeltaX100"].includes(query) ? [] : [profile.id];
+    expect(real.items.map((p) => p.id)).toEqual(expected);
+    expect(real.nextCursor).toBeNull();
+    expect((await mock.list({ query })).map((p) => p.id)).toEqual(expected);
+  }
+  for (const [region, legalField] of [
+    ["busan", "civil"],
+    ["seoul", "criminal"],
+  ] as const) {
+    const params = new URLSearchParams({ name: "delta", region, legalField });
+    const real = selfDirectoryPageSchema.parse(
+      await (await f.request(`/v2/lawyers/self-service?${params}`)).json(),
+    );
+    expect(real.items).toEqual([]);
+  }
+  expect(await mock.list({ query: "delta", region: "busan" })).toEqual([]);
+  expect(await mock.list({ query: "delta", practiceArea: "criminal" })).toEqual([]);
+  expect(
+    (await mock.list({ query: "  delta  ", region: "seoul", practiceArea: "civil" })).map(
+      (p) => p.id,
+    ),
+  ).toEqual([profile.id]);
+});
+
 test("real API stores encrypted self profiles, records publication consent, hides and cleans up", async () => {
   const f = await fixture();
   const blank = selfProfileSchema.parse(
@@ -404,5 +572,34 @@ test("publication is bound to the displayed profile and current consent, includi
     .query("UPDATE user_consents SET privacy_version='old-version' WHERE user_id=?")
     .run(f.owner.userId);
   expect((await f.request(`/v2/lawyers/self-service/${saved.id}`)).status).toBe(404);
-  expect((await f.request("/v2/me/lawyer/self-profile", f.owner)).status).toBe(403);
+  expect((await f.request("/v2/me/lawyer/self-profile", f.owner)).status).toBe(200);
 });
+
+for (const action of ["save", "publish"] as const) {
+  test(`self profile ${action} commits only while its original session remains active`, async () => {
+    const f = await fixture();
+    const service = createSelfProfileService(f.core);
+    const blank = await service.getMine(f.owner.userId);
+    const saved = await service.saveMine(f.owner.userId, { ...blank, ...complete });
+    const originalBatch = f.db.binding.batch.bind(f.db.binding);
+    let removed = false;
+    f.db.binding.batch = async (statements) => {
+      if (!removed) {
+        removed = true;
+        f.db.sqlite.query("DELETE FROM session WHERE id=?").run(f.owner.sessionId);
+      }
+      return originalBatch(statements);
+    };
+    const response = await f.request(
+      `/v2/me/lawyer/self-profile${action === "publish" ? "/publication" : ""}`,
+      f.owner,
+      action === "publish" ? "POST" : "PUT",
+      action === "publish"
+        ? { published: true, consent: true, expectedRevision: saved.revision, profileId: saved.id }
+        : { profile: { ...saved, introduction: "New synthetic introduction" } },
+    );
+    expect(response.status).toBe(409);
+    expect(removed).toBe(true);
+    expect(await service.getMine(f.owner.userId)).toEqual(saved);
+  });
+}

@@ -4,23 +4,23 @@ import {
   type V2Coverage,
   type V2ReportBody,
   type V2SourcePosition,
-  v2OfficialCitationSchema,
+  v2CoverageSchema,
+  v2OriginalManifestSchema,
   v2ReportBodySchema,
-  v2SummarySchema,
 } from "../../../contracts/v2";
 import { type Actor, aliveWorkspace, readSnapshot, type V2Core } from "../../db/v2-core";
+import { createV2FileStagingRepository } from "../../db/v2-file-staging";
 import { createV2FilesRepository } from "../../db/v2-files";
-import {
-  createV2OfficialSourceRepository,
-  type OfficialSourceWrite,
-} from "../../db/v2-official-sources";
-import { runtimeDigest } from "../../db/v2-paid-runtime";
 import { createV2WorkspaceRepository, referencesAuthorized } from "../../db/v2-workspace";
+import { digest } from "../files/binary";
+import { readBoundSource } from "../legal-retrieval/v2/bound-sources";
+import { GUIDE_HOSTS } from "../legal-retrieval/v2/registry";
 import type { ZipSource } from "./zip";
 
 export class ReportError extends Error {
   constructor(
     readonly code:
+      | "CONSENT_REQUIRED"
       | "NOT_FOUND"
       | "STALE_REVISION"
       | "REVIEW_REQUIRED"
@@ -30,7 +30,9 @@ export class ReportError extends Error {
       | "USER_QUOTA_EXCEEDED"
       | "IDEMPOTENCY_CONFLICT"
       | "LEGAL_SOURCE_UNAVAILABLE"
-      | "EXPORT_LIMIT_EXCEEDED",
+      | "EXPORT_LIMIT_EXCEEDED"
+      | "EDITS_REQUIRE_SAVE"
+      | "EXPORT_RETRY_EXHAUSTED",
   ) {
     super(code);
   }
@@ -82,7 +84,19 @@ function coverageText(value: V2Coverage | null) {
         : ""
     }`;
   }
-  return `${value.durationSeconds}초 영상 · ${value.frames.filter((f) => f.status === "processed").length}/${value.frames.length}개 표본 처리 · 장면 감지 ${value.sceneDetection === "complete" ? "완료" : "실패"} · ${value.audio ? audio(value.audio) : "오디오 없음"} · 표본 사이 구간은 원본에서 확인 필요`;
+  const gaps = value.frames.filter((frame) => frame.status !== "processed");
+  const samples = gaps.length
+    ? ` · 확인 필요: ${gaps
+        .slice(0, 20)
+        .map(
+          (frame) =>
+            `${frame.timestampSeconds}초 · 프레임 ${frame.frameIndex} ${labels[frame.status]}`,
+        )
+        .join(
+          ", ",
+        )}${gaps.length > 20 ? `, 추가 ${gaps.length - 20}개 표본은 자료 화면에서 확인` : ""}`
+    : "";
+  return `${value.durationSeconds}초 영상 · ${value.frames.filter((f) => f.status === "processed").length}/${value.frames.length}개 표본 처리${samples} · 장면 감지 ${value.sceneDetection === "complete" ? "완료" : "실패"} · ${value.audio ? audio(value.audio) : "오디오 없음"} · 표본 사이 구간은 원본에서 확인 필요`;
 }
 export async function ownedWorkspace(core: V2Core, actor: Actor, id: string) {
   opaqueIdSchema.parse(id);
@@ -98,26 +112,60 @@ export async function ownedWorkspace(core: V2Core, actor: Actor, id: string) {
 /** Internal report/storage revisions do not make the source stale. Track the
  * actual summary, messages, material coverage, actions and timeline identities. */
 export const REPORT_SOURCE_SQL = `SELECT 'summary' AS kind,s.id,s.revision AS revision,s.snapshot_id AS snapshot FROM v2_summaries s JOIN v2_intakes i ON i.summary_id=s.id WHERE i.id=?
+    UNION ALL SELECT 'fact',id,revision,encrypted_payload FROM v2_facts WHERE workspace_id=? AND summary_revision=(SELECT confirmed_summary_revision FROM v2_workspaces WHERE id=v2_facts.workspace_id) AND (snapshot_id IS NULL OR EXISTS(SELECT 1 FROM v2_private_snapshots s WHERE s.id=v2_facts.snapshot_id AND s.state='published'))
+    UNION ALL SELECT 'party',id,revision,encrypted_payload FROM v2_parties WHERE workspace_id=? AND summary_revision=(SELECT confirmed_summary_revision FROM v2_workspaces WHERE id=v2_parties.workspace_id) AND (snapshot_id IS NULL OR EXISTS(SELECT 1 FROM v2_private_snapshots s WHERE s.id=v2_parties.snapshot_id AND s.state='published'))
     UNION ALL SELECT 'file',f.id,f.revision,f.state || ':' || coalesce(f.manifest_snapshot_id,'') || ':' || coalesce(f.coverage_snapshot_id,'') || ':' || f.encrypted_payload FROM v2_files f WHERE f.workspace_id=? AND f.state!='deleting'
     UNION ALL SELECT 'message',id,revision,created_at FROM v2_messages WHERE workspace_id=?
     UNION ALL SELECT 'action',id,revision,'' FROM v2_actions WHERE workspace_id=?
     UNION ALL SELECT 'timeline',id,revision,'' FROM v2_timeline WHERE workspace_id=?
-    UNION ALL SELECT 'citation',c.id,c.snapshot_revision,c.citation_json || ':' || coalesce(s.content_hash,'') || ':' || coalesce(s.canonical_url,'') || ':' || coalesce(s.verified_at,'') || ':' || coalesce(s.expires_at,'') || ':' || CASE WHEN s.fetched_at<=? AND s.verified_at<=? AND s.expires_at>? THEN 'fresh' ELSE 'unavailable' END FROM v2_citation_bindings c LEFT JOIN v2_official_sources s ON s.source_id=c.source_id WHERE c.workspace_id=? ORDER BY kind,id`;
+    UNION ALL SELECT 'citation',c.id,c.snapshot_revision,c.citation_json || ':' || json_object('id',s.source_id,'type',s.source_type,'officialId',s.official_id,'version',s.version,'section',s.section,'hash',s.content_hash,'extractor',s.extractor_version,'url',s.canonical_url,'title',s.title,'date',s.source_date,'court',s.court,'case',s.case_number,'institution',s.institution_id,'endpoint',s.endpoint_id,'rights',s.rights_provenance,'fetched',s.fetched_at,'verified',s.verified_at,'expires',s.expires_at) || ':' || CASE WHEN s.fetched_at<=? AND s.verified_at<=? AND s.expires_at>? THEN 'fresh' ELSE 'unavailable' END FROM v2_citation_bindings c LEFT JOIN v2_official_sources s ON s.source_id=c.source_id WHERE c.workspace_id=? ORDER BY kind,id`;
 export async function reportSourceRows(core: V2Core, actor: Actor, id: string) {
-  return (
+  const rows = (
     await core
-      .statement(REPORT_SOURCE_SQL, [id, id, id, id, id, actor.now, actor.now, actor.now, id])
+      .statement(REPORT_SOURCE_SQL, [
+        id,
+        id,
+        id,
+        id,
+        id,
+        id,
+        id,
+        actor.now,
+        actor.now,
+        actor.now,
+        id,
+      ])
       .all<{ kind: string; id: string; revision: number; snapshot: string }>()
   ).results;
+  // Originals stay in individual bounded reads, never a large aggregate SQL row.
+  for (const row of rows)
+    if (row.kind === "citation")
+      row.snapshot += (await readBoundSource(core, id, row.id, actor.now, GUIDE_HOSTS))
+        ? ":verified"
+        : ":invalid";
+  return rows;
 }
 export async function sourceDigest(core: V2Core, actor: Actor, id: string) {
   const workspace = await ownedWorkspace(core, actor, id);
   const rows = await reportSourceRows(core, actor, id);
-  return runtimeDigest({
-    summary: workspace.confirmed_summary_revision,
-    status: workspace.status,
-    rows,
-  });
+  return reportSourceDigest(workspace.confirmed_summary_revision, workspace.status, rows);
+}
+export function reportSourceDigest(
+  summary: number | null,
+  status: string,
+  rows: { id: string; kind: string; revision: number; snapshot: string }[],
+) {
+  // Preserve runtimeDigest's alphabetical canonical key order for existing reports,
+  // while source identities may exceed its unrelated 64 KiB paid-proof limit.
+  return digest(
+    new TextEncoder().encode(
+      JSON.stringify({
+        rows: rows.map(({ id, kind, revision, snapshot }) => ({ id, kind, revision, snapshot })),
+        status,
+        summary,
+      }),
+    ),
+  );
 }
 /** Only reuse citations already bound by legal-retrieval. No discovery, model
  * call or legal API request belongs in the export path. */
@@ -132,73 +180,52 @@ async function verifiedCitations(
     ...new Set(refs.flatMap((ref) => (ref.kind === "official_source" ? [ref.citationId] : []))),
   ];
   if (ids.length > 50) throw new ReportError("VALIDATION_ERROR");
-  const repository = createV2OfficialSourceRepository(core, guideHosts),
-    citations: V2ReportBody["citations"] = [];
+  const citations: V2ReportBody["citations"] = [];
   for (const citationId of ids) {
-    const row = await core
-      .statement(
-        "SELECT c.citation_json,s.source_id,s.source_type,s.official_id,s.version,s.section,s.content_hash,s.extractor_version FROM v2_citation_bindings c JOIN v2_official_sources s ON s.source_id=c.source_id WHERE c.id=? AND c.workspace_id=?",
-        [citationId, id],
-      )
-      .first<{
-        citation_json: string;
-        source_id: string;
-        source_type: OfficialSourceWrite["sourceType"];
-        official_id: string;
-        version: string;
-        section: string;
-        content_hash: string;
-        extractor_version: string;
-      }>();
-    if (!row) throw new ReportError("LEGAL_SOURCE_UNAVAILABLE");
-    const parsed = v2OfficialCitationSchema(guideHosts).safeParse(JSON.parse(row.citation_json));
-    if (!parsed.success || parsed.data.id !== citationId)
-      throw new ReportError("LEGAL_SOURCE_UNAVAILABLE");
-    const c = parsed.data,
-      source = await repository.find(
-        {
-          sourceId: row.source_id,
-          sourceType: row.source_type,
-          officialId: row.official_id,
-          version: row.version,
-          section: row.section,
-          contentHash: row.content_hash,
-          extractorVersion: row.extractor_version,
-        },
-        actor.now,
-      );
-    if (
-      !source ||
-      source.sourceId !== c.sourceId ||
-      source.sourceType !== c.kind ||
-      source.contentHash !== c.contentHash ||
-      source.canonicalUrl !== c.url ||
-      source.title !== c.title ||
-      Date.parse(source.verifiedAt) !== Date.parse(c.verifiedAt) ||
-      (c.kind === "statute"
-        ? source.officialId !== c.officialId ||
-          source.section !== c.article ||
-          source.sourceDate !== c.effectiveDate
-        : c.kind === "precedent"
-          ? source.officialId !== c.officialId ||
-            source.court !== c.court ||
-            source.caseNumber !== c.caseNumber ||
-            source.sourceDate !== c.decisionDate
-          : source.institutionId !== c.institutionId ||
-            source.endpointId !== c.endpointId ||
-            source.section !== c.section ||
-            source.sourceDate !== c.publishedDate)
-    )
-      throw new ReportError("LEGAL_SOURCE_UNAVAILABLE");
-    const hash = Array.from(
-      new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(source.body))),
-      (b) => b.toString(16).padStart(2, "0"),
-    ).join("");
-    if (hash !== source.contentHash) throw new ReportError("LEGAL_SOURCE_UNAVAILABLE");
-    citations.push(c);
+    const chunk = await readBoundSource(core, id, citationId, actor.now, guideHosts);
+    if (!chunk) throw new ReportError("LEGAL_SOURCE_UNAVAILABLE");
+    citations.push(chunk.citation);
   }
   return citations;
 }
+export async function reportFile(core: V2Core, actor: Actor, fileId: string) {
+  const metadata = await createV2FilesRepository(core).metadata(actor, fileId);
+  if (!metadata) throw new ReportError("STALE_REVISION");
+  const manifestRevision = metadata.manifestSnapshotId
+    ? await core
+        .statement("SELECT revision FROM v2_private_snapshots WHERE id=?", [
+          metadata.manifestSnapshotId,
+        ])
+        .first<number>("revision")
+    : null;
+  return {
+    ...metadata,
+    manifest:
+      metadata.manifestSnapshotId && manifestRevision
+        ? await readSnapshot(
+            core,
+            actor,
+            metadata.manifestSnapshotId,
+            "file_manifest",
+            fileId,
+            manifestRevision,
+            v2OriginalManifestSchema,
+          )
+        : null,
+    coverage: metadata.coverageSnapshotId
+      ? await readSnapshot(
+          core,
+          actor,
+          metadata.coverageSnapshotId,
+          "file_coverage",
+          fileId,
+          metadata.revision,
+          v2CoverageSchema,
+        )
+      : null,
+  };
+}
+
 export async function buildReportSource(
   core: V2Core,
   actor: Actor,
@@ -209,26 +236,11 @@ export async function buildReportSource(
   const current = await ownedWorkspace(core, actor, id);
   if (current.status !== "active" || !current.confirmed_summary_revision)
     throw new ReportError("REVIEW_REQUIRED");
-  const head = await core
-    .statement(
-      "SELECT s.snapshot_id,s.revision FROM v2_intakes i JOIN v2_summaries s ON s.id=i.summary_id WHERE i.id=? AND s.revision=?",
-      [id, current.confirmed_summary_revision],
-    )
-    .first<{ snapshot_id: string; revision: number }>();
-  if (!head) throw new ReportError("REVIEW_REQUIRED");
-  const summary = await readSnapshot(
-    core,
-    actor,
-    head.snapshot_id,
-    "summary",
-    id,
-    head.revision,
-    v2SummarySchema,
-  );
-  if (!summary) throw new ReportError("NOT_FOUND");
   const digest = await sourceDigest(core, actor, id);
-  const files = createV2FilesRepository(core),
-    workspace = createV2WorkspaceRepository(core.binding, core.cipher, guideHosts);
+  const workspace = createV2WorkspaceRepository(core.binding, core.cipher, guideHosts);
+  const summary = (await workspace.readIntake(actor, id))?.summary;
+  if (!summary || summary.revision !== current.confirmed_summary_revision)
+    throw new ReportError("REVIEW_REQUIRED");
   const fileRows = await core
     .statement(
       "SELECT id,revision,state FROM v2_files WHERE workspace_id=? AND state!='deleting' ORDER BY id LIMIT 101",
@@ -244,7 +256,7 @@ export async function buildReportSource(
     coverage: string[] = [];
   for (const row of fileRows.results) {
     if (excluded.includes(row.id)) continue;
-    const file = await files.read(actor, row.id);
+    const file = await reportFile(core, actor, row.id);
     if (!file || file.revision !== row.revision) throw new ReportError("STALE_REVISION");
     if (file.status !== "ready" || !file.manifest) {
       coverage.push(
@@ -262,20 +274,45 @@ export async function buildReportSource(
     coverage.push(
       `${file.name}: ${coverageText(file.coverage)} · 추출·관찰은 진정성을 확인하지 않음`,
     );
+    let cursor = -1;
+    do {
+      const page = await createV2FileStagingRepository(core).observations(actor, row.id, cursor, 4);
+      for (const { value } of page)
+        if (value.included)
+          coverage.push(
+            `${file.name} · 자료 버전 ${file.revision} · ${sourcePositionText(value.position)} · ${value.userEdited ? "사용자 교정 · 미확인" : value.certainty === "uncertain" ? "자료 관찰 · 미확인" : "자료 관찰"}\n${value.text}`,
+          );
+      if (coverage.join("\n").length > 20000) throw new ReportError("EXPORT_LIMIT_EXCEEDED");
+      cursor = page.length === 4 ? (page.at(-1)?.ordinal ?? -1) : -1;
+    } while (cursor >= 0);
   }
   const selected = new Set(selectedFiles.map((f) => f.id));
   const allowed = (refs: V2ReportBody["facts"][number]["references"]) =>
-    refs.every((ref) => ref.kind !== "user_material" || selected.has(ref.fileId));
-  let facts = summary.facts.filter((fact) => allowed(fact.references));
-  // Excluding material also removes conflicting facts whose counterpart was
-  // excluded, instead of leaving references to a hidden item in the export.
-  while (
-    facts.some((fact) => fact.conflictingFactIds.some((fid) => !facts.some((f) => f.id === fid)))
-  ) {
-    facts = facts.filter((fact) =>
-      fact.conflictingFactIds.every((fid) => facts.some((f) => f.id === fid)),
+    refs.every(
+      (ref) =>
+        ref.kind !== "user_material" ||
+        (selected.has(ref.fileId) &&
+          selectedFiles.some(
+            (file) => file.id === ref.fileId && file.revision === ref.fileRevision,
+          )),
     );
-  }
+  const retained = summary.facts.filter((fact) => allowed(fact.references));
+  const retainedIds = new Set(retained.map((fact) => fact.id));
+  // Preserve independently sourced statements. Only remove links to hidden counterparts.
+  const facts = retained.map((fact) => {
+    const conflictingFactIds = fact.conflictingFactIds.filter((id) => retainedIds.has(id));
+    return {
+      ...fact,
+      conflictingFactIds,
+      certainty:
+        fact.certainty === "conflicting" && !conflictingFactIds.length
+          ? ("uncertain" as const)
+          : fact.certainty,
+    };
+  });
+  // Aggregate summary fields have no per-material provenance. They cannot be safely
+  // reused after source removal; leave a visible gap for review rather than guess.
+  const filtered = excluded.length > 0 || facts.length !== summary.facts.length;
   if (facts.length !== summary.facts.length)
     coverage.push(
       `제외했거나 현재 출처를 확인할 수 없는 자료를 참조한 사실 ${summary.facts.length - facts.length}개를 리포트에서 제외했습니다. 원본과 직접 확인해 주세요.`,
@@ -325,18 +362,26 @@ export async function buildReportSource(
     throw new ReportError("STALE_REVISION");
   const body = v2ReportBodySchema(guideHosts).parse({
     schemaVersion: "2",
-    overview: summary.overview,
-    parties: summary.parties,
+    overview: filtered
+      ? "자료를 제외한 리포트입니다. 남은 사실과 출처를 아래에서 확인하고 사건 개요를 직접 보완해 주세요."
+      : summary.overview,
+    parties: filtered ? [] : summary.parties,
     facts,
-    timeline,
+    timeline: timeline.sort(
+      (a, b) => (a.date ?? "9999").localeCompare(b.date ?? "9999") || a.id.localeCompare(b.id),
+    ),
     selectedFiles,
-    unknowns: summary.unknowns,
+    unknowns: filtered
+      ? [
+          "기존 종합 요약·당사자·미확인 사항은 제외 자료와의 연결을 구분할 수 없어 옮기지 않았습니다. 남은 출처로 직접 확인해 주세요.",
+        ]
+      : summary.unknowns,
     actions,
     lawyerQuestions: [],
     citations,
     legalSourceStatus: citations.length ? "verified" : "not_requested",
     notices: [
-      ...summary.notices,
+      ...(filtered ? [] : summary.notices),
       ...(summary.notices.length < 20
         ? ["법률 판단·원본 진정성·법적 효력을 보장하지 않습니다. 사용자가 검토 후 직접 전달합니다."]
         : []),
@@ -346,6 +391,15 @@ export async function buildReportSource(
   if ((await sourceDigest(core, actor, id)) !== digest) throw new ReportError("STALE_REVISION");
   return { current, digest, body, coverage };
 }
+export const sourcePositionText = (p: V2SourcePosition) =>
+  p.kind === "document"
+    ? `${p.page}쪽${p.paragraph ? ` · ${p.paragraph}번째 문단` : ""}${p.table ? ` · 표 ${p.table.index}, 행 ${p.table.row}, 열 ${p.table.column}` : ""}`
+    : p.kind === "audio"
+      ? `${p.startSeconds}–${p.endSeconds}초`
+      : p.kind === "video"
+        ? `${p.timestampSeconds}초 · 프레임 ${p.frameIndex} · ${p.sampling === "one_second" ? "1초 표본" : "장면 전환 표본"}`
+        : "이미지 관찰";
+
 export function reportText(body: V2ReportBody, coverage: readonly string[]) {
   const labels = {
     user_statement: "사용자 진술",
@@ -359,26 +413,21 @@ export function reportText(body: V2ReportBody, coverage: readonly string[]) {
     uncertain: "미확인",
     conflicting: "상반됨",
   };
-  const position = (p: V2SourcePosition) =>
-    p.kind === "document"
-      ? `${p.page}쪽${p.paragraph ? ` · ${p.paragraph}번째 문단` : ""}${p.table ? ` · 표 ${p.table.index}, 행 ${p.table.row}, 열 ${p.table.column}` : ""}`
-      : p.kind === "audio"
-        ? `${p.startSeconds}–${p.endSeconds}초`
-        : p.kind === "video"
-          ? `${p.timestampSeconds}초 · 프레임 ${p.frameIndex} · ${p.sampling === "one_second" ? "1초 표본" : "장면 전환 표본"}`
-          : "이미지 관찰";
+  const factLabel = (id: string) => `사실 ${body.facts.findIndex((fact) => fact.id === id) + 1}`;
+  const citationLabel = (id: string) =>
+    `공식 출처 ${body.citations.findIndex((citation) => citation.id === id) + 1}`;
   const refs = (references: V2ReportBody["facts"][number]["references"]) =>
     references
       .map((ref) =>
         ref.kind === "user_material"
-          ? `${body.selectedFiles.find((file) => file.id === ref.fileId)?.name ?? ref.fileId} · 자료 버전 ${ref.fileRevision} · ${position(ref.position)}`
+          ? `${body.selectedFiles.find((file) => file.id === ref.fileId)?.name ?? ref.fileId} · 자료 버전 ${ref.fileRevision} · ${sourcePositionText(ref.position)}`
           : ref.kind === "user_message"
             ? `대화 ${ref.messageId}`
             : ref.kind === "intake_narrative"
               ? `입력 버전 ${ref.intakeRevision}`
               : ref.kind === "intake_answer"
                 ? `답변 ${ref.questionId}`
-                : `공식 출처 ${ref.citationId}`,
+                : citationLabel(ref.citationId),
       )
       .join(" / ");
   const text = [
@@ -391,7 +440,7 @@ export function reportText(body: V2ReportBody, coverage: readonly string[]) {
     "사실·주장·출처",
     ...body.facts.map(
       (fact) =>
-        `${fact.text}\n[${labels[fact.attribution]} · ${certainty[fact.certainty]} · ${refs(fact.references)}${fact.conflictingFactIds.length ? ` · 상반 항목: ${fact.conflictingFactIds.join(", ")}` : ""}]`,
+        `${factLabel(fact.id)} · ${fact.text}\n[${fact.userEdited ? "사용자 교정 · " : ""}${labels[fact.attribution]} · ${certainty[fact.certainty]} · ${refs(fact.references)}${fact.conflictingFactIds.length ? ` · 상반 항목: ${fact.conflictingFactIds.map(factLabel).join(", ")}` : ""}]`,
     ),
     "",
     "미확인 사항",
@@ -400,13 +449,13 @@ export function reportText(body: V2ReportBody, coverage: readonly string[]) {
     "타임라인",
     ...body.timeline.map(
       (entry) =>
-        `${entry.date ?? "날짜 미확인"} · ${entry.event} · ${certainty[entry.certainty]} · ${refs(entry.references)}`,
+        `${entry.datePrecision === "year" ? `${entry.date?.slice(0, 4)}년` : entry.datePrecision === "month" ? entry.date?.slice(0, 7) : (entry.date ?? "날짜 미확인")} · ${entry.event} · ${certainty[entry.certainty]} · ${refs(entry.references)}`,
     ),
     "",
     "공식 출처",
     ...body.citations.map(
       (c) =>
-        `${c.title}\n${c.kind === "statute" ? `${c.article} · 시행일 ${c.effectiveDate}` : c.kind === "precedent" ? `${c.court} · ${c.caseNumber} · 선고일 ${c.decisionDate}` : `${c.section} · 게시일 ${c.publishedDate ?? "미확인"}`}\n${c.url}\n검증 시각: ${c.verifiedAt}`,
+        `${citationLabel(c.id)} · ${c.title}\n${c.kind === "statute" ? `${c.article} · 시행일 ${c.effectiveDate}` : c.kind === "precedent" ? `${c.court} · ${c.caseNumber} · 선고일 ${c.decisionDate}` : `${c.section} · 게시일 ${c.publishedDate ?? "미확인"}`}\n${c.url}\n검증 시각: ${c.verifiedAt}`,
     ),
     "",
     "준비할 행동",
@@ -422,7 +471,7 @@ export function reportText(body: V2ReportBody, coverage: readonly string[]) {
     ...body.notices,
     `작성 시각: ${body.generatedAt}`,
   ].join("\n");
-  if (text.length > 30000) throw new ReportError("VALIDATION_ERROR");
+  if (text.length > 30000) throw new ReportError("EXPORT_LIMIT_EXCEEDED");
   return text;
 }
 export function validateOriginalSelection(

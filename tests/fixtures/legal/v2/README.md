@@ -5,7 +5,7 @@
 - Base: ac756408155dd9d300129014b906984ff2f7a09f, including #54 shared v2 contracts.
 - The six preparation groups indexed by `files` remain synthetic. No actual private OC or user case is included. The two separately indexed `publicStructureEvidence` files were added during #63 implementation and are described below.
 - `adapterValidation: not_run` means the expected upstream acceptance/rejection is a future adapter requirement, not an executed result. A fixture's expected `verified` status is conditional on a future adapter, authorized source registry and claim review; it is not a claim of verified live content.
-- The tests execute manifest/hash/span integrity and existing shared-schema boundaries only. They do not exercise retrieval, caching, authorization, AI, claim entailment, production registry admission or live services.
+- The original corpus integrity tests execute manifest/hash/span integrity and shared-schema boundaries only. Runtime integration evidence added later is listed below; neither set proves live services or legal applicability.
 
 ## Files and interpretation
 
@@ -45,6 +45,8 @@ Existing shared URL checks are a minimum shape boundary, not complete SSRF prote
 The historical synthetic precedent `판례정보` wrapper was provisional and differed from the actual public example. Runtime tests explicitly wrap synthetic field values in observed `PrecService`; they also reject the old wrapper. The guide adapter uses observed `ovDiv`, `<title>`, canonical numeric document identity and the page-authored basis-date sentence, never the synthetic `data-fixture-*` attributes. Actual public EasyLaw full-page parsing was checked once without storing the full page; this is public-page parser evidence only.
 
 `tests/legal-retrieval-v2.test.ts` now executes actual generated SQLite/AES source/cache/binding and guard paths plus bounded transport, retry, stream, budget, cancellation and adapter counterexamples. `tests/citation-v2.test.ts` checks original text, half-open Unicode-safe spans, metadata/hash drift and required semantic/policy receipts. Preparation annotations and `adapterValidation: not_run` within the old groups remain historical expectations: these tests do not certify every malformed fixture through every adapter or any live credential.
+
+The #63 follow-up `tests/legal-source-integration.test.ts` sends all sixteen family scenarios through actual retrieval and the workspace chat pipeline using a deterministic model adapter. It checks attributed narrative facts, renewed lookup despite existing citations, and continued factual preparation when sources are absent. The available-source scenarios use the same synthetic statute and do not prove that statute applies to each family. Separate cases exercise final-hash cancellation/consent loss, verified-to-limited bindings, corrupted originals, excerpt omissions and exact product claims. `tests/reports-legal-sources.test.ts` checks report export and cached report freshness after source corruption or availability loss. `tests/legal-readiness-v2.test.ts` executes law, precedent and guide adapters with synthetic responses both locally and in local workerd; no external request, real model review or deployed Worker smoke is implied.
 
 ## Remaining live acceptance
 

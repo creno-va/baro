@@ -51,7 +51,7 @@ export async function reportFixture(
     )
     .run(id, f.workspaceId, snapshotId, f.actor.now);
   const envelope = await f.core.encrypt("v2_intakes", f.workspaceId, f.actor.ownerId, 1, {
-    narrative: "합성 검증용 사건 서술입니다.",
+    narrative: "합성 검증용 사건 서술이며 자료와 사실을 정리합니다.",
   });
   f.db.sqlite
     .query(

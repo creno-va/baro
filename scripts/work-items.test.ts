@@ -1,5 +1,10 @@
 import { expect, test } from "bun:test";
-import { implementationIsMerged, validateWorkGraph, type WorkGraph } from "./work-items";
+import {
+  implementationIsMerged,
+  validateWorkGraph,
+  type WorkGraph,
+  workItemProgress,
+} from "./work-items";
 
 const base: WorkGraph = {
   repository: "creno-va/baro",
@@ -65,4 +70,39 @@ test("only successful Quality gate on an actual main merge satisfies a code prer
   expect(
     validateWorkGraph({ ...base, items: [{ ...first, kind: "external", implementationPr: 88 }] }),
   ).toContain("External gate #1 cannot use an implementation PR");
+});
+
+test("final acceptance retains open external conditions while merged implementation unblocks code", () => {
+  const closed = new Set([62, 69, 162]);
+  const implemented = new Set([57, 58, 59, 63]);
+  const item = {
+    issue: 71,
+    kind: "external" as const,
+    dependsOn: [57, 58, 59, 62, 63, 69, 70, 162],
+  };
+  expect(workItemProgress(item, closed, implemented, true)).toEqual({
+    status: "IN_PROGRESS",
+    blockedBy: [57, 58, 59, 63, 70],
+  });
+  expect(workItemProgress({ ...item, kind: "implementation" }, closed, implemented, false)).toEqual(
+    {
+      status: "BLOCKED",
+      blockedBy: [70],
+    },
+  );
+  for (const issue of item.dependsOn) closed.add(issue);
+  expect(workItemProgress(item, closed, implemented, false).blockedBy).toEqual([]);
+});
+
+test("reopened implementation work remains in progress without discarding the old merged proof", () => {
+  const item = { issue: 58, kind: "implementation" as const, dependsOn: [57] };
+  const implemented = new Set([57, 58]);
+  expect(workItemProgress(item, new Set(), implemented, true)).toEqual({
+    status: "IN_PROGRESS",
+    blockedBy: [],
+  });
+  expect(workItemProgress(item, new Set(), implemented, false).status).toBe(
+    "IMPLEMENTATION_MERGED",
+  );
+  expect(implemented.has(58)).toBe(true);
 });

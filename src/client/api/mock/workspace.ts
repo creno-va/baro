@@ -1,5 +1,10 @@
 import { ZodError } from "zod";
-import type { V2UploadPart, V2UploadSession } from "../../../contracts/v2";
+import {
+  type V2UploadPart,
+  type V2UploadSession,
+  v2MessageRequestSchema,
+  v2TimelineEditRequestSchema,
+} from "../../../contracts/v2";
 import type {
   ActionView,
   CaseView,
@@ -39,7 +44,15 @@ export type WorkspaceMockState = {
     }
   >;
   fileUploadReceipts?: Record<string, { fileId: string; fingerprint: string }>;
-  reports?: Record<string, { stale: boolean; excludedFileIds: string[] }>;
+  reports?: Record<
+    string,
+    { stale: boolean; excludedFileIds: string[]; savedZip?: { id: string } | undefined }
+  >;
+  reportZips?: Record<
+    string,
+    { reportId: string; caseId: string; ownerId: string; fileIds: string[] }
+  >;
+  reportHistory?: Record<string, { savedZip?: { id: string } | undefined }>;
   [namespace: string]: unknown;
 };
 export type WorkspaceMockRuntime = {
@@ -88,7 +101,7 @@ export function requireMockCase(state: WorkspaceMockState, id: string, write = f
   if (!state.session.user) throw new WorkspaceMockError("UNAUTHENTICATED", "로그인이 필요해요.");
   if (state.deletedAccountIds?.includes(state.session.user.id))
     throw new WorkspaceMockError("UNAUTHENTICATED", "로그인이 필요해요.");
-  if (state.session.needsConsent)
+  if (write && state.session.needsConsent)
     throw new WorkspaceMockError("CONSENT_REQUIRED", "동의를 확인해 주세요.");
   const item = state.cases[id];
   if (
@@ -155,6 +168,32 @@ export function ensureMockWorkspace(state: WorkspaceMockState, id: string) {
     if (message) {
       changed = true;
       message.status = pending.failed ? "failed" : "complete";
+      const position = data.messages.indexOf(message);
+      const statement = data.messages.slice(0, position).findLast((value) => value.role === "user");
+      if (
+        !pending.failed &&
+        statement &&
+        item.summaryDetails &&
+        item.summaryDetails.facts.length < 300 &&
+        !item.summaryDetails.facts.some((fact) =>
+          fact.references.some(
+            (ref) => ref.kind === "user_message" && ref.messageId === statement.id,
+          ),
+        )
+      ) {
+        item.summaryDetails.facts.push({
+          id: crypto.randomUUID(),
+          text: [...statement.text].slice(0, 2000).join(""),
+          attribution: "user_statement",
+          certainty: "reported",
+          significance: "neutral",
+          references: [
+            { kind: "user_message", messageId: statement.id, workspaceRevision: item.revision },
+          ],
+          conflictingFactIds: [],
+          userEdited: false,
+        });
+      }
       message.text = pending.failed
         ? "예시 응답 생성에 실패했어요."
         : "추가한 내용을 저장했어요. 날짜·당사자·자료 원본을 확인하고, 불확실하거나 불리할 수 있는 사실도 함께 정리해 주세요. 이 응답은 합성 API 예시이며 실제 AI 분석이나 법률 판단이 아닙니다.";
@@ -166,6 +205,7 @@ export function ensureMockWorkspace(state: WorkspaceMockState, id: string) {
     if (pending && pending.at <= Date.now()) {
       changed = true;
       file.status = pending.failed ? "failed" : "ready";
+      file.canRetry = pending.failed;
       file.extractedText = pending.failed ? "" : (state.fileExtractions?.[file.id] ?? "");
       file.coverage = pending.failed
         ? "예시 처리 실패 · 추출 결과 없음"
@@ -228,7 +268,7 @@ export function createWorkspaceMock(runtime: WorkspaceMockRuntime) {
           if (
             typeof body.text !== "string" ||
             !body.text.trim() ||
-            body.text.length > 10000 ||
+            !v2MessageRequestSchema.safeParse(body).success ||
             !Array.isArray(body.selectedFileIds) ||
             body.selectedFileIds.some(
               (fileId) => !view.files.some((file) => file.id === fileId && file.status === "ready"),
@@ -287,15 +327,17 @@ export function createWorkspaceMock(runtime: WorkspaceMockRuntime) {
           if (
             typeof body.event !== "string" ||
             !body.event.trim() ||
-            body.event.length > 2000 ||
+            !v2TimelineEditRequestSchema.safeParse(body).success ||
             (body.date !== null &&
               (typeof body.date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(body.date)))
           )
             throw new WorkspaceMockError("VALIDATION_ERROR", "타임라인 입력을 확인해 주세요.");
+          const timeline = v2TimelineEditRequestSchema.parse(body);
           const [title, ...detail] = body.event.split("\n");
           const entry = {
             id: match[5] ? decodeURIComponent(match[5]) : crypto.randomUUID(),
             date: typeof body.date === "string" ? body.date : "",
+            datePrecision: timeline.datePrecision,
             title: title ?? "",
             detail: detail.join("\n"),
           };

@@ -569,6 +569,84 @@ test("hero footage plays continuously while idle, scroll changes only the framin
     .toBe(true);
 });
 
+test("hero playback follows the newest visibility entry after a batched scroll return", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const NativeObserver = window.IntersectionObserver;
+    window.IntersectionObserver = class extends NativeObserver {
+      constructor(callback: IntersectionObserverCallback, options?: IntersectionObserverInit) {
+        const pending: IntersectionObserverEntry[] = [];
+        super((entries, observer) => {
+          if (!entries.every((entry) => entry.target.matches(".journey-pin"))) {
+            callback(entries, observer);
+            return;
+          }
+          const latest = entries.at(-1);
+          if (!latest?.isIntersecting) {
+            pending.push(...entries);
+            document.documentElement.dataset.heroHiddenEntryQueued = "true";
+            return;
+          }
+          // A busy main thread can receive several chronological visibility entries at once.
+          callback([...pending.splice(0), ...entries], observer);
+        }, options);
+      }
+    };
+  });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await page.goto("/");
+  const film = page.locator("video[data-scroll-film]");
+  const toggle = page.locator("[data-journey-toggle]");
+  await expect.poll(() => film.evaluate((v) => !(v as HTMLVideoElement).paused)).toBe(true);
+  await page.locator("#phone-story").evaluate((element) => {
+    window.scrollTo({ top: scrollY + element.getBoundingClientRect().top, behavior: "instant" });
+  });
+  await expect(page.locator("html")).toHaveAttribute("data-hero-hidden-entry-queued", "true");
+  await expect.poll(() => film.evaluate((v) => (v as HTMLVideoElement).paused)).toBe(true);
+  await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
+  await expect(toggle).toHaveAccessibleName("첫 화면 영상 일시정지");
+  await expect.poll(() => film.evaluate((v) => !(v as HTMLVideoElement).paused)).toBe(true);
+  await toggle.click();
+  await expect(toggle).toHaveAccessibleName("첫 화면 영상 재생하기");
+  await expect.poll(() => film.evaluate((v) => (v as HTMLVideoElement).paused)).toBe(true);
+});
+
+test("an interrupted hero play request resumes without another scroll or click", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await page.goto("/");
+  const film = page.locator("video[data-scroll-film]");
+  const toggle = page.locator("[data-journey-toggle]");
+  await expect.poll(() => film.evaluate((v) => !(v as HTMLVideoElement).paused)).toBe(true);
+  await toggle.click();
+  await expect(toggle).toHaveAccessibleName("첫 화면 영상 재생하기");
+  await film.evaluate((element) => {
+    const video = element as HTMLVideoElement;
+    const play = video.play.bind(video);
+    let interrupted = false;
+    video.play = () => {
+      if (interrupted) return play();
+      interrupted = true;
+      return new Promise<void>((_, reject) => {
+        window.setTimeout(
+          () => reject(new DOMException("Synthetic interrupted play", "AbortError")),
+          50,
+        );
+      });
+    };
+  });
+  await toggle.click();
+  await expect(toggle).toHaveAccessibleName("첫 화면 영상 일시정지");
+  await expect.poll(() => film.evaluate((v) => !(v as HTMLVideoElement).paused)).toBe(true);
+  await toggle.click();
+  await expect(toggle).toHaveAccessibleName("첫 화면 영상 재생하기");
+  await expect.poll(() => film.evaluate((v) => (v as HTMLVideoElement).paused)).toBe(true);
+});
+
 test("data-saving entry leaves the hero unloaded until the visitor explicitly starts it", async ({
   page,
 }) => {
@@ -830,7 +908,7 @@ test("the ending gathers four features into the app, shows the final message and
   await expect(finale.locator("[data-finale-message]")).toHaveCSS("opacity", "0");
   await action.focus();
   await page.keyboard.press("Enter");
-  await expect(page).toHaveURL(/\/login$/);
+  await expect(page).toHaveURL(/\/login\?returnTo=%2Fapp$/);
   await expect(page.getByRole("button", { name: "Google로 계속하기" })).toBeVisible();
 });
 

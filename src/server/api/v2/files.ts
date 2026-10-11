@@ -7,6 +7,7 @@ import { createV2Core, type V2Core } from "../../db/v2-core";
 import { ProcessingError } from "../../modules/file-processing/protocol";
 import { createFileRetry } from "../../modules/file-processing/retry";
 import { FileError } from "../../modules/files/binary";
+import { createFileReviewService, FileReviewError } from "../../modules/files/review";
 import { createFilesService, type FileServiceDependencies } from "../../modules/files/service";
 import { readWorkspaceFile } from "../../modules/files/workspace-read";
 import { caseAccess } from "../case-access";
@@ -48,6 +49,20 @@ export function createFilesApi(
     return;
   });
   app.onError((error, c) => {
+    if (error instanceof FileReviewError) {
+      const status =
+        error.code === "NOT_FOUND" ? 404 : error.code === "CONSENT_REQUIRED" ? 403 : 409;
+      return c.json(
+        errorBody(
+          c,
+          error.code,
+          error.code === "CONSENT_REQUIRED"
+            ? "현재 필수 동의 후 교정을 저장할 수 있어요. 기존 자료 조회와 삭제는 가능해요."
+            : "자료가 변경됐어요. 다시 불러온 뒤 저장해 주세요.",
+        ),
+        status,
+      );
+    }
     if (error instanceof ProcessingError)
       return c.json(
         errorBody(c, "FILE_PROCESSING_FAILED", "자료 처리 준비를 확인하고 있어요.", true),
@@ -175,6 +190,60 @@ export function createFilesApi(
         await c.req.json(),
       ),
       202,
+    );
+  });
+  const review = async (env: Env) =>
+    createFileReviewService(createV2Core(env.DB, await createCaseDataCipher(env)));
+  app.get("/:caseId/files/:fileId/review", async (c) => {
+    const access = await caseAccess(c);
+    if (access.response) return access.response;
+    const query = z
+      .strictObject({ afterOrdinal: z.coerce.number().int().min(-1).max(9999).optional() })
+      .parse(c.req.query());
+    return c.json(
+      await (await review(c.env)).read(
+        access.ownerId,
+        c.req.param("caseId"),
+        c.req.param("fileId"),
+        query.afterOrdinal,
+      ),
+    );
+  });
+  app.patch("/:caseId/files/:fileId/observations", async (c) => {
+    const access = await caseAccess(c, true, true);
+    if (access.response) return access.response;
+    const revision = z.coerce.number().int().positive().parse(c.req.header("if-match"));
+    const result = await (await review(c.env)).start(
+      access.ownerId,
+      c.req.param("caseId"),
+      c.req.param("fileId"),
+      revision,
+      idempotencyKeySchema.parse(c.req.header("idempotency-key")),
+      await c.req.json(),
+    );
+    return c.json(result, result.status === "ready" ? 200 : 202);
+  });
+  app.post("/:caseId/files/:fileId/observations/:reviewId/continue", async (c) => {
+    const access = await caseAccess(c, true, true);
+    if (access.response) return access.response;
+    const result = await (await review(c.env)).advance(
+      access.ownerId,
+      c.req.param("caseId"),
+      c.req.param("fileId"),
+      c.req.param("reviewId"),
+    );
+    return c.json(result, result.status === "ready" ? 200 : 202);
+  });
+  app.delete("/:caseId/files/:fileId/observations/:reviewId", async (c) => {
+    const access = await caseAccess(c, true);
+    if (access.response) return access.response;
+    return c.json(
+      await (await review(c.env)).cancel(
+        access.ownerId,
+        c.req.param("caseId"),
+        c.req.param("fileId"),
+        c.req.param("reviewId"),
+      ),
     );
   });
   app.get("/:caseId/files/:fileId", async (c) => {

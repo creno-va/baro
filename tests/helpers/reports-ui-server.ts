@@ -37,6 +37,10 @@ const server = Bun.serve({
     if (path === "/app.js")
       return new Response(script, { headers: { "content-type": "text/javascript" } });
     if (path === "/app.css") return new Response(css, { headers: { "content-type": "text/css" } });
+    if (path === "/brand/logo.svg")
+      return new Response(Bun.file(`${root}/public/brand/logo.svg`), {
+        headers: { "content-type": "image/svg+xml" },
+      });
     if (path === "/fonts/PretendardVariable.woff2")
       return new Response(Bun.file(`${root}/public/fonts/PretendardVariable.woff2`));
     return new Response(

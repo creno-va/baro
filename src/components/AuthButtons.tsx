@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { AccountType } from "../client/api";
-import { api, apiMode, errorMessage, roleStart } from "../client/api";
+import { api, apiMode, errorMessage } from "../client/api";
+
+import { sessionDestination } from "../client/return-path";
 
 type Provider = "google" | "naver" | "kakao";
 
@@ -61,7 +63,7 @@ export function AuthButtons() {
 
     try {
       const result = await api.session.signIn(provider, accountType);
-      if (result) window.location.assign(roleStart(result));
+      if (result) window.location.assign(sessionDestination(result));
       return;
     } catch (cause) {
       setError(errorMessage(cause));

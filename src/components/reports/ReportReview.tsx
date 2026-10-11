@@ -1,10 +1,17 @@
 import { ChevronDown, Download, Eye, FileText, RefreshCw, Save, Settings2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../../client/api";
-import type { FileView, ReportView } from "../../client/api/types";
+import type { ReportView as BaseReportView, FileView } from "../../client/api/types";
+import { isExplicitSignOut } from "../../client/session-events";
 import { CaseNavigation } from "../workspace/CaseNavigation";
 import { ConfirmDialog } from "./ConfirmDialog";
-import { downloadBlob, maskReportText } from "./download";
+import { createReportMarkup } from "./document";
+import { downloadBlob } from "./download";
+
+type ReportView = BaseReportView & {
+  basis?: { workspaceRevision: number; summaryRevision: number; generatedAt: string } | undefined;
+  pdfAvailable?: boolean | undefined;
+};
 
 export function ReportReview({ caseId }: { caseId: string }) {
   const [report, setReport] = useState<ReportView | null>(null);
@@ -21,20 +28,29 @@ export function ReportReview({ caseId }: { caseId: string }) {
   const [reloadConfirm, setReloadConfirm] = useState(false);
   const [reviewed, setReviewed] = useState(false);
   const [accessChecking, setAccessChecking] = useState(true);
+  const [needsConsent, setNeedsConsent] = useState(false);
+  const [initialLimit, setInitialLimit] = useState(false);
+  const [exportExhausted, setExportExhausted] = useState(false);
   const owner = useRef<string | null>(null);
   const lock = useRef(false);
   const loadSequence = useRef(0);
+  const focusRequest = useRef(0);
   const accept = useCallback((value: ReportView) => {
     setReport(value);
     setContent(value.content);
     setMask(value.maskIdentifiers);
     setExcluded(value.excludedFileIds);
     setReviewed(false);
+    setInitialLimit(false);
+    setExportExhausted(false);
   }, []);
   const clearOwnerState = useCallback(() => {
     ++loadSequence.current;
     owner.current = null;
     setReport(null);
+    setNeedsConsent(false);
+    setInitialLimit(false);
+    setExportExhausted(false);
     setFiles([]);
     setContent("");
     setMask(false);
@@ -48,67 +64,92 @@ export function ReportReview({ caseId }: { caseId: string }) {
     setAccessChecking(false);
     setBusy("");
   }, []);
-  const verifyOwner = useCallback(async () => {
-    const session = await api.session.get();
-    const id = session.user?.id;
-    if (
-      !id ||
-      session.needsConsent ||
-      session.user?.accountType !== "customer" ||
-      (owner.current && owner.current !== id)
-    ) {
-      clearOwnerState();
-      throw Object.assign(
-        new Error(
-          session.needsConsent
-            ? "필수 동의를 다시 확인한 뒤 리포트를 불러와 주세요."
-            : session.user?.accountType !== "customer"
+  const verifyOwner = useCallback(
+    async (isCurrent?: () => boolean) => {
+      const sequence = loadSequence.current;
+      const current = isCurrent ?? (() => sequence === loadSequence.current);
+      const superseded = () =>
+        Object.assign(new Error("접근 확인 요청이 갱신됐어요."), {
+          code: "OWNER_CHECK_SUPERSEDED",
+        });
+      let session: Awaited<ReturnType<typeof api.session.get>>;
+      try {
+        session = await api.session.get();
+      } catch (e) {
+        if (!current()) throw superseded();
+        throw e;
+      }
+      if (!current()) throw superseded();
+      const id = session.user?.id;
+      if (
+        !id ||
+        session.user?.accountType !== "customer" ||
+        (owner.current && owner.current !== id)
+      ) {
+        clearOwnerState();
+        throw Object.assign(
+          new Error(
+            session.user?.accountType !== "customer"
               ? "고객 역할로 로그인한 뒤 리포트를 다시 확인해 주세요."
               : "계정 또는 접근 상태가 변경됐어요. 로그인 후 리포트를 다시 확인해 주세요.",
-        ),
-        {
-          code: !id
-            ? "UNAUTHENTICATED"
-            : session.needsConsent
-              ? "CONSENT_REQUIRED"
+          ),
+          {
+            ownerRevoked: true,
+            code: !id
+              ? "UNAUTHENTICATED"
               : session.user?.accountType !== "customer"
                 ? "ROLE_REQUIRED"
                 : "NOT_FOUND",
-        },
-      );
-    }
-    owner.current = id;
-    return id;
-  }, [clearOwnerState]);
+          },
+        );
+      }
+      setNeedsConsent(session.needsConsent);
+      owner.current = id;
+      return id;
+    },
+    [clearOwnerState],
+  );
   const load = useCallback(async () => {
     const sequence = ++loadSequence.current;
     setAccessChecking(true);
     setBusy("리포트 확인 중…");
     setError("");
     try {
-      await verifyOwner();
-      const [value, materials] = await Promise.all([
+      await verifyOwner(() => sequence === loadSequence.current);
+      const [value, materials] = await Promise.allSettled([
         api.reports.get(caseId),
         api.files.list(caseId),
       ]);
-      await verifyOwner();
+      await verifyOwner(() => sequence === loadSequence.current);
       if (sequence !== loadSequence.current) return;
-      accept(value);
-      setFiles(materials);
+      if (materials.status === "fulfilled") setFiles(materials.value);
+      if (value.status === "rejected") {
+        if (value.reason?.code === "EXPORT_LIMIT_EXCEEDED" && materials.status === "fulfilled")
+          setInitialLimit(true);
+        throw value.reason;
+      }
+      if (materials.status === "rejected") throw materials.reason;
+      accept(value.value);
       setSelected([]);
     } catch (e) {
+      const failure = e as { code?: string; ownerRevoked?: boolean };
+      if (
+        failure?.code === "OWNER_CHECK_SUPERSEDED" ||
+        (sequence !== loadSequence.current && !failure?.ownerRevoked)
+      )
+        return;
+      if ((e as { code?: string })?.code === "EXPORT_RETRY_EXHAUSTED") setExportExhausted(true);
+      if ((e as { code?: string })?.code === "CONSENT_REQUIRED") setNeedsConsent(true);
       if (
         [
           "UNAUTHENTICATED",
-          "CONSENT_REQUIRED",
           "NOT_FOUND",
           "FORBIDDEN",
           "ROLE_REQUIRED",
           "ORIGIN_NOT_ALLOWED",
         ].includes((e as { code?: string })?.code ?? "")
       )
-        clearOwnerState();
-      else if (sequence !== loadSequence.current) return;
+        if (!failure?.ownerRevoked) clearOwnerState();
       setError(e instanceof Error ? e.message : "리포트를 확인하지 못했어요.");
     } finally {
       if (sequence === loadSequence.current) {
@@ -120,29 +161,76 @@ export function ReportReview({ caseId }: { caseId: string }) {
   useEffect(() => {
     clearOwnerState();
     void load();
-    const check = () => {
+    const check = (event: Event) => {
+      if (isExplicitSignOut(event)) {
+        clearOwnerState();
+        setError("로그인 후 리포트를 다시 확인해 주세요.");
+        return;
+      }
       if (document.visibilityState === "hidden") return;
       const sequence = loadSequence.current;
+      const request = ++focusRequest.current;
+      const current = () => sequence === loadSequence.current && request === focusRequest.current;
       setAccessChecking(true);
-      void verifyOwner()
+      void (async () => {
+        await verifyOwner(current);
+        if (!current() || lock.current) return;
+        const [value, materials] = await Promise.all([
+          api.reports.get(caseId),
+          api.files.list(caseId),
+        ]);
+        await verifyOwner(current);
+        if (!current()) return;
+        setReport((existing) => {
+          if (!existing) return existing;
+          return existing.id === value.id ? value : existing;
+        });
+        setFiles(materials);
+        setSelected((ids) =>
+          ids.filter((id) => materials.some((file) => file.id === id && file.status === "ready")),
+        );
+        setReviewed(false);
+        // Content, masking and exclusions intentionally stay in the editor.
+        setNotice(
+          "사건·자료 상태를 다시 확인했어요. 다른 곳에서 새 버전을 만든 경우 다시 불러와 주세요.",
+        );
+      })()
         .catch((e: unknown) => {
-          clearOwnerState();
+          const failure = e as { code?: string; ownerRevoked?: boolean };
+          if (
+            request !== focusRequest.current ||
+            failure?.code === "OWNER_CHECK_SUPERSEDED" ||
+            (!current() && !failure?.ownerRevoked)
+          )
+            return;
+          if (
+            [
+              "UNAUTHENTICATED",
+              "NOT_FOUND",
+              "FORBIDDEN",
+              "ROLE_REQUIRED",
+              "ORIGIN_NOT_ALLOWED",
+            ].includes((e as { code?: string })?.code ?? "")
+          )
+            if (!failure?.ownerRevoked) clearOwnerState();
           setError(e instanceof Error ? e.message : "로그인 상태를 다시 확인해 주세요.");
         })
         .finally(() => {
-          if (sequence === loadSequence.current) setAccessChecking(false);
+          if (current()) setAccessChecking(false);
         });
     };
     window.addEventListener("focus", check);
     window.addEventListener("storage", check);
+    window.addEventListener("baro-session-changed", check);
     document.addEventListener("visibilitychange", check);
     return () => {
       ++loadSequence.current;
       window.removeEventListener("focus", check);
       window.removeEventListener("storage", check);
+      window.removeEventListener("baro-session-changed", check);
       document.removeEventListener("visibilitychange", check);
     };
-  }, [load, clearOwnerState, verifyOwner]);
+  }, [load, clearOwnerState, verifyOwner, caseId]);
   const dirty = Boolean(
     report &&
       (content !== report.content ||
@@ -159,6 +247,7 @@ export function ReportReview({ caseId }: { caseId: string }) {
   }, [dirty]);
   async function run(label: string, action: () => Promise<void>) {
     if (lock.current || accessChecking) return;
+    const sequence = loadSequence.current;
     lock.current = true;
     setBusy(label);
     setError("");
@@ -167,38 +256,63 @@ export function ReportReview({ caseId }: { caseId: string }) {
       await verifyOwner();
       await action();
     } catch (e) {
+      const failure = e as { code?: string; ownerRevoked?: boolean };
+      if (
+        failure?.code === "OWNER_CHECK_SUPERSEDED" ||
+        (sequence !== loadSequence.current && !failure?.ownerRevoked)
+      )
+        return;
+      if ((e as { code?: string })?.code === "EXPORT_RETRY_EXHAUSTED") setExportExhausted(true);
+      if ((e as { code?: string })?.code === "CONSENT_REQUIRED") setNeedsConsent(true);
       if (
         [
           "UNAUTHENTICATED",
-          "CONSENT_REQUIRED",
           "NOT_FOUND",
           "FORBIDDEN",
           "ROLE_REQUIRED",
           "ORIGIN_NOT_ALLOWED",
         ].includes((e as { code?: string })?.code ?? "")
-      )
-        clearOwnerState();
+      ) {
+        if (!failure?.ownerRevoked) clearOwnerState();
+      }
       setError(e instanceof Error ? e.message : "처리하지 못했어요. 다시 시도해 주세요.");
     } finally {
       lock.current = false;
-      setBusy("");
+      if (sequence === loadSequence.current) setBusy("");
     }
   }
   async function ownedResult<T>(work: Promise<T>) {
     const sequence = loadSequence.current;
     const value = await work;
-    await verifyOwner();
-    if (sequence !== loadSequence.current)
-      throw Object.assign(new Error("접근 상태를 다시 확인해 주세요."), { code: "NOT_FOUND" });
+    await verifyOwner(() => sequence === loadSequence.current);
     return value;
   }
+  const splitSave = Boolean(
+    report &&
+      content !== report.content &&
+      JSON.stringify([...excluded].sort()) !== JSON.stringify([...report.excludedFileIds].sort()),
+  );
   async function save() {
+    const pendingExclusions = excluded;
     accept(
       await ownedResult(
-        api.reports.save(caseId, { content, maskIdentifiers: mask, excludedFileIds: excluded }),
+        api.reports.save(
+          caseId,
+          {
+            content,
+            maskIdentifiers: mask,
+            excludedFileIds: splitSave ? (report?.excludedFileIds ?? []) : excluded,
+          },
+          report?.revision,
+        ),
       ),
     );
-    setNotice("검토 내용을 저장했어요.");
+    if (splitSave) {
+      setExcluded(pendingExclusions);
+      setNotice(
+        "본문 편집을 먼저 저장했어요. 자료 제외를 적용하려면 다시 저장하고 구성된 본문을 확인해 주세요.",
+      );
+    } else setNotice("검토 내용을 저장했어요.");
   }
   const toggle = (values: string[], id: string) =>
     values.includes(id) ? values.filter((x) => x !== id) : [...values, id];
@@ -245,8 +359,44 @@ export function ReportReview({ caseId }: { caseId: string }) {
             {notice}
           </p>
         )}
+        {initialLimit && !report && !accessChecking && (
+          <section className="report-options-body" aria-label="리포트 처리 한도 복구">
+            <h2>자료를 줄여 첫 리포트를 만들어요</h2>
+            <p>리포트에서 제외할 자료를 선택하세요. 원본은 그대로 보관돼요.</p>
+            {files.map((file) => (
+              <label key={file.id} className="report-check">
+                <input
+                  type="checkbox"
+                  checked={excluded.includes(file.id)}
+                  disabled={Boolean(busy) || needsConsent}
+                  onChange={() => setExcluded(toggle(excluded, file.id))}
+                />
+                {file.name} · 리포트에서 제외
+              </label>
+            ))}
+            <button
+              type="button"
+              disabled={Boolean(busy) || needsConsent || !excluded.length}
+              onClick={() =>
+                void run("리포트 생성 중…", async () => {
+                  const value = await ownedResult(api.reports.generate(caseId, excluded));
+                  accept(value);
+                  setFiles(await ownedResult(api.files.list(caseId)));
+                })
+              }
+            >
+              선택 자료를 제외하고 생성
+            </button>
+          </section>
+        )}
         {report && !accessChecking && (
           <>
+            {needsConsent && (
+              <p className="report-callout" role="status">
+                새 리포트 생성과 수정은 필수 동의 후 이용할 수 있어요. 기존 리포트와 저장된
+                PDF·ZIP은 계속 확인할 수 있어요. <a href="/consent">동의 확인</a>
+              </p>
+            )}
             <section className="report-editor" aria-labelledby="report-editor-heading">
               <div className="report-editor-heading">
                 <div>
@@ -257,10 +407,17 @@ export function ReportReview({ caseId }: { caseId: string }) {
                       {new Date(report.updatedAt).toLocaleDateString("ko-KR")}
                     </time>
                   </p>
+                  {report.basis && (
+                    <p className="report-meta">
+                      생성 기준: 요약 {report.basis.summaryRevision} · 사건{" "}
+                      {report.basis.workspaceRevision} ·{" "}
+                      {new Date(report.basis.generatedAt).toLocaleString("ko-KR")}
+                    </p>
+                  )}
                 </div>
                 <button
                   type="button"
-                  disabled={Boolean(busy)}
+                  disabled={Boolean(busy) || needsConsent}
                   onClick={(event) => {
                     event.currentTarget.focus();
                     setRegenerate(true);
@@ -271,8 +428,8 @@ export function ReportReview({ caseId }: { caseId: string }) {
               </div>
               {report.stale && (
                 <p className="report-callout report-stale" role="status">
-                  사건이나 자료가 변경됐어요. 새 버전을 만든 뒤 다시 검토해 주세요. 이전 편집 내용은
-                  현재 버전에 보관돼요.
+                  사건이나 자료가 변경됐어요. 이 리포트는 위 생성 기준의 내용이에요. 최신 내용은 새
+                  버전을 만들어 검토해 주세요. 저장된 PDF는 기존 내용으로 다운로드할 수 있어요.
                 </p>
               )}
               <div className="report-paper">
@@ -284,7 +441,7 @@ export function ReportReview({ caseId }: { caseId: string }) {
                   rows={12}
                   maxLength={30000}
                   value={content}
-                  disabled={Boolean(busy)}
+                  disabled={Boolean(busy) || needsConsent}
                   onChange={(e) => {
                     setContent(e.target.value);
                     setReviewed(false);
@@ -308,11 +465,12 @@ export function ReportReview({ caseId }: { caseId: string }) {
                 </button>
                 <button
                   type="button"
-                  disabled={Boolean(busy) || report.stale || !content.trim()}
+                  disabled={Boolean(busy) || needsConsent || report.stale || !content.trim()}
                   onClick={() => void run("저장 중…", save)}
                   className={dirty ? "report-save is-dirty" : "report-save"}
                 >
-                  <Save size={16} aria-hidden="true" /> 검토 내용 저장
+                  <Save size={16} aria-hidden="true" />{" "}
+                  {splitSave ? "본문 편집 먼저 저장" : "검토 내용 저장"}
                 </button>
               </div>
             </section>
@@ -336,7 +494,7 @@ export function ReportReview({ caseId }: { caseId: string }) {
                     <input
                       type="checkbox"
                       checked={mask}
-                      disabled={Boolean(busy)}
+                      disabled={Boolean(busy) || needsConsent}
                       onChange={(e) => {
                         setMask(e.target.checked);
                         setReviewed(false);
@@ -376,7 +534,7 @@ export function ReportReview({ caseId }: { caseId: string }) {
                           <input
                             type="checkbox"
                             checked={excluded.includes(file.id)}
-                            disabled={Boolean(busy)}
+                            disabled={Boolean(busy) || needsConsent}
                             onChange={() => {
                               setExcluded(toggle(excluded, file.id));
                               setSelected(selected.filter((id) => id !== file.id));
@@ -390,7 +548,10 @@ export function ReportReview({ caseId }: { caseId: string }) {
                             type="checkbox"
                             checked={selected.includes(file.id)}
                             disabled={
-                              Boolean(busy) || excluded.includes(file.id) || file.status !== "ready"
+                              Boolean(busy) ||
+                              needsConsent ||
+                              excluded.includes(file.id) ||
+                              file.status !== "ready"
                             }
                             onChange={() => {
                               setSelected(toggle(selected, file.id));
@@ -402,9 +563,15 @@ export function ReportReview({ caseId }: { caseId: string }) {
                       </div>
                     </div>
                   ))}
+                  {splitSave && (
+                    <p className="report-callout">
+                      본문과 제외 목록을 함께 바꿨어요. 본문을 먼저 저장한 뒤 제외를 적용해 주세요.
+                      입력한 편집은 이전 버전에 보관됩니다.
+                    </p>
+                  )}
                   <p className="report-option-note">
-                    제외 설정은 기존 리포트 문장을 자동으로 지우지 않으므로 관련 내용을 직접 수정해
-                    주세요.
+                    제외 목록을 바꾸면 자료를 기준으로 본문을 다시 구성해요. 기존 수동 편집은 이전
+                    버전에 보관돼요. 저장 후 내용을 다시 확인해 주세요.
                   </p>
                 </section>
               </div>
@@ -412,7 +579,27 @@ export function ReportReview({ caseId }: { caseId: string }) {
             {preview && (
               <section className="report-preview-section" id="report-preview-section">
                 <h2>전달 내용 미리보기</h2>
-                <pre className="report-preview">{mask ? maskReportText(content) : content}</pre>
+                <p className="report-option-note">
+                  {dirty
+                    ? "저장 전 미리보기예요. 자료 제외 설정은 저장 후 본문에 반영돼요."
+                    : "저장된 생성 기준과 검토 내용을 담은 HTML 리포트예요."}
+                </p>
+                {/* Trusted template escapes every title/body string; no user HTML is interpreted. */}
+                <section
+                  className="report-html-preview"
+                  aria-label="디자인된 HTML 리포트 미리보기"
+                  // biome-ignore lint/a11y/noNoninteractiveTabindex: The bounded report region must support keyboard scrolling.
+                  tabIndex={0}
+                  // biome-ignore lint/security/noDangerouslySetInnerHtml: createReportMarkup escapes every user-derived string.
+                  dangerouslySetInnerHTML={{
+                    __html: createReportMarkup({
+                      ...report,
+                      content,
+                      maskIdentifiers: mask,
+                      excludedFileIds: excluded,
+                    }),
+                  }}
+                />
                 <p>
                   리포트 제외 자료: {excluded.length}개 · ZIP 원본: {selected.length}개
                 </p>
@@ -434,16 +621,54 @@ export function ReportReview({ caseId }: { caseId: string }) {
                 />{" "}
                 내용·식별정보·선택한 원본을 확인했어요
               </label>
+              {exportExhausted && (
+                <div className="report-callout">
+                  <p>
+                    다운로드 재시도를 모두 사용했어요. 현재 검토 내용을 새 버전으로 저장하면 새
+                    다운로드를 준비할 수 있어요.
+                  </p>
+                  <button
+                    type="button"
+                    disabled={Boolean(busy) || needsConsent || report.stale || !content.trim()}
+                    onClick={() => void run("검토 버전 저장 중…", save)}
+                  >
+                    검토 내용을 보존하고 새 버전 저장
+                  </button>
+                </div>
+              )}
               <div className="report-actions">
                 <button
                   type="button"
                   className="primary"
-                  disabled={Boolean(busy) || report.stale || dirty || !reviewed}
+                  disabled={Boolean(busy) || dirty || !reviewed}
+                  onClick={() =>
+                    void run("HTML 준비 중…", async () => {
+                      downloadBlob(
+                        await ownedResult(api.reports.html(report.id)),
+                        `BARO-${report.id}.html`,
+                      );
+                      setNotice("HTML 리포트 다운로드를 시작했어요.");
+                    })
+                  }
+                >
+                  <Download size={16} aria-hidden="true" /> HTML 다운로드
+                </button>
+                <button
+                  type="button"
+                  disabled={
+                    Boolean(busy) ||
+                    ((report.stale || needsConsent) && !report.pdfAvailable) ||
+                    dirty ||
+                    !reviewed
+                  }
                   onClick={() =>
                     void run("PDF 준비 중…", async () => {
                       downloadBlob(
                         await ownedResult(api.reports.pdf(report.id)),
                         `BARO-${report.id}.pdf`,
+                      );
+                      setReport((current) =>
+                        current?.id === report.id ? { ...current, pdfAvailable: true } : current,
                       );
                       setNotice("PDF 다운로드를 시작했어요.");
                     })
@@ -453,12 +678,25 @@ export function ReportReview({ caseId }: { caseId: string }) {
                 </button>
                 <button
                   type="button"
-                  disabled={Boolean(busy) || report.stale || dirty || !reviewed || !selected.length}
+                  disabled={
+                    Boolean(busy) ||
+                    needsConsent ||
+                    report.stale ||
+                    dirty ||
+                    !reviewed ||
+                    !selected.length
+                  }
                   onClick={() =>
                     void run("ZIP 준비 중…", async () => {
                       downloadBlob(
                         await ownedResult(api.reports.zip(report.id, selected)),
                         `BARO-${report.id}.zip`,
+                      );
+                      const refreshed = await ownedResult(api.reports.get(caseId));
+                      setReport((current) =>
+                        current?.id === refreshed.id
+                          ? { ...current, savedZip: refreshed.savedZip }
+                          : current,
                       );
                       setNotice("ZIP 다운로드를 시작했어요.");
                     })
@@ -467,7 +705,26 @@ export function ReportReview({ caseId }: { caseId: string }) {
                   <Download size={16} aria-hidden="true" /> 선택 원본 ZIP ({selected.length})
                 </button>
               </div>
-              {selected.length > 0 && (
+              {report.savedZip && (
+                <button
+                  type="button"
+                  disabled={Boolean(busy) || dirty || !reviewed}
+                  onClick={() =>
+                    void run("저장된 ZIP 확인 중…", async () => {
+                      if (!report.savedZip) return;
+                      downloadBlob(
+                        await ownedResult(api.reports.savedZip(report.savedZip.id)),
+                        `BARO-${report.id}.zip`,
+                      );
+                      setNotice("저장된 ZIP 다운로드를 시작했어요.");
+                    })
+                  }
+                >
+                  <Download size={16} aria-hidden="true" /> 저장된 선택 원본 ZIP (
+                  {report.savedZip.fileCount}) 다시 다운로드
+                </button>
+              )}
+              {(selected.length > 0 || report.savedZip) && (
                 <p className="report-option-note">
                   PDF에서 가린 정보도 원본에는 남을 수 있어요. 원본의 개인정보도 확인해 주세요.
                 </p>
@@ -479,7 +736,7 @@ export function ReportReview({ caseId }: { caseId: string }) {
             </section>
           </>
         )}
-        {regenerate && (
+        {regenerate && report && (
           <ConfirmDialog
             title="새 버전을 만들까요?"
             busy={Boolean(busy)}
@@ -500,10 +757,16 @@ export function ReportReview({ caseId }: { caseId: string }) {
             </button>
             <button
               type="button"
-              disabled={Boolean(busy) || (dirty && !report?.stale)}
+              disabled={Boolean(busy) || needsConsent || (dirty && !report?.stale)}
               onClick={() =>
                 void run("새 버전 생성 중…", async () => {
-                  accept(await ownedResult(api.reports.generate(caseId)));
+                  const value = await ownedResult(
+                    api.reports.generate(caseId, undefined, report.revision),
+                  );
+                  const materials = await ownedResult(api.files.list(caseId));
+                  accept(value);
+                  setFiles(materials);
+                  setSelected([]);
                   setRegenerate(false);
                   setNotice("새 초안을 만들었어요. 내용을 다시 확인해 주세요.");
                 })

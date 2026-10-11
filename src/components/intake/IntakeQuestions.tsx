@@ -4,6 +4,7 @@ import { api } from "../../client/api";
 import type { QuestionsResult } from "../../client/api/cases";
 import { ApiError } from "../../client/api/core";
 import type { CaseView, QuestionView } from "../../client/api/types";
+import { accessHref } from "../../client/return-path";
 import { BrandMark } from "../ui/brand";
 import { Button, ButtonLink } from "../ui/button";
 import { Dialog } from "../ui/dialog";
@@ -41,48 +42,50 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
   const acknowledgedRevision = useRef<number | null>(null);
   const {
     ready,
+    canMutate,
     version,
     verify,
     ticket,
     current: accessCurrent,
     alive,
     deny,
-  } = useCustomerAccess(() => {
-    ++request.current;
-    draftSnapshot.current = null;
-    drafts.current.clear();
-    acknowledgedRevision.current = null;
-    setItem(null);
-    setResult(null);
-    setValue("");
-    setAnswerState(undefined);
-    setIndex(0);
-    setExit(false);
-    setEditing(false);
-    setPreparing(false);
-    setRecovering(false);
-    loaded.current = false;
-    caseSnapshot.current = null;
-    setNotice("");
-    setError(null);
-    setBusy(false);
-    pending.current = false;
-    failedOperation.current = null;
-  }, setError);
+  } = useCustomerAccess(
+    () => {
+      ++request.current;
+      draftSnapshot.current = null;
+      drafts.current.clear();
+      acknowledgedRevision.current = null;
+      setItem(null);
+      setResult(null);
+      setValue("");
+      setAnswerState(undefined);
+      setIndex(0);
+      setExit(false);
+      setEditing(false);
+      setPreparing(false);
+      setRecovering(false);
+      loaded.current = false;
+      caseSnapshot.current = null;
+      setNotice("");
+      setError(null);
+      setBusy(false);
+      pending.current = false;
+      failedOperation.current = null;
+    },
+    setError,
+    true,
+  );
   const report = useCallback(
     (cause: unknown) => {
       if ((cause as { code?: string }).code === "CONFLICT") setRecovering(false);
-      if (
-        ["UNAUTHENTICATED", "CONSENT_REQUIRED", "NOT_FOUND"].includes(
-          (cause as { code?: string }).code ?? "",
-        )
-      )
+      if (["UNAUTHENTICATED", "NOT_FOUND"].includes((cause as { code?: string }).code ?? ""))
         deny();
       setError(cause);
     },
     [deny],
   );
   const question = result?.questions[index];
+  const answerTooLong = answerState === "answered" && [...value.trim()].length > 1000;
   const dirty = value !== (question?.answer ?? "") || answerState !== question?.answerState;
   draftSnapshot.current = result
     ? { dirty: dirty || drafts.current.size > 0, revision: result.revision }
@@ -101,7 +104,8 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
     index === (result?.questions.length ?? 0) - 1 &&
     (rounds.length >= roundLimit || result?.processingStage === "summary" || editing);
   const waiting = preparing || recovering || Boolean(result?.processing);
-  const locked = busy || waiting || leaving || (error as { code?: string })?.code === "CONFLICT";
+  const locked =
+    !canMutate || busy || waiting || leaving || (error as { code?: string })?.code === "CONFLICT";
   const displayed = useRef({ index, id: question?.id });
   displayed.current = { index, id: question?.id };
   const summarizing =
@@ -125,7 +129,9 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
         <Button
           onClick={() => (dirty ? void save(true) : void advance())}
           disabled={
-            locked || (dirty && (!answerState || (answerState === "answered" && !value.trim())))
+            locked ||
+            (dirty &&
+              (!answerState || (answerState === "answered" && (!value.trim() || answerTooLong))))
           }
         >
           {dirty
@@ -345,8 +351,32 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
       );
     } else setResult(next);
   }
+  function navigateQuestion(nextIndex: number) {
+    if (
+      !ready ||
+      !result ||
+      busy ||
+      waiting ||
+      leaving ||
+      nextIndex < 0 ||
+      nextIndex >= result.questions.length
+    )
+      return;
+    if (question) {
+      if (dirty) drafts.current.set(question.id, { value, state: answerState });
+      else drafts.current.delete(question.id);
+    }
+    const epoch = ticket();
+    void transition(
+      () => {
+        setIndex(nextIndex);
+        setNotice("");
+      },
+      () => accessCurrent(epoch),
+    );
+  }
   async function advance() {
-    if (!result || pending.current || result.processing) return;
+    if (!canMutate || !result || pending.current || result.processing) return;
     ++request.current;
     setLoading(false);
     const epoch = ticket();
@@ -356,7 +386,7 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
     setError(null);
     try {
       failedOperation.current = { kind: "advance" };
-      if (!(await verify()) || !accessCurrent(epoch)) return;
+      if (!(await verify(false, true)) || !accessCurrent(epoch)) return;
       const next = await api.cases.advance(caseId, { expectedRevision: result.revision });
       if (!(await verifyCompletion(epoch))) return;
       failedOperation.current = null;
@@ -374,10 +404,11 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
   }
   async function save(move: boolean, state = answerState) {
     if (
+      !canMutate ||
       !result ||
       !question ||
       !state ||
-      (state === "answered" && !value.trim()) ||
+      (state === "answered" && (!value.trim() || [...value.trim()].length > 1000)) ||
       pending.current ||
       result.processing
     )
@@ -391,7 +422,7 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
     setNotice("");
     try {
       failedOperation.current = { kind: "save", move, state };
-      if (!(await verify()) || !accessCurrent(epoch)) return;
+      if (!(await verify(false, true)) || !accessCurrent(epoch)) return;
       const next = await api.cases.saveAnswers(caseId, {
         expectedRevision: result.revision,
         answers: [
@@ -474,6 +505,12 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
       ) : null}
       {ready && item && result ? (
         <section className="intake-scene" data-transition={leaving ? "leaving" : "idle"}>
+          {!canMutate && (
+            <p>
+              저장한 질문과 답변을 읽을 수 있어요. 변경·AI 처리에는{" "}
+              <a href={accessHref("consent")}>최신 동의 확인</a>이 필요해요.
+            </p>
+          )}
           {item.schemaVersion === "1" ? (
             <StatePanel
               variant="pending"
@@ -589,7 +626,6 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
                           <Textarea
                             id="question-answer"
                             value={answerState === "answered" ? value : ""}
-                            maxLength={1000}
                             disabled={locked}
                             onChange={(event) => {
                               setValue(event.target.value);
@@ -597,11 +633,20 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
                             }}
                             placeholder="여기에 편하게 적어주세요."
                           />
+                          {answerTooLong && (
+                            <p role="alert">
+                              답변은 1,000자까지 입력할 수 있어요. 내용을 줄인 뒤 저장해 주세요.
+                            </p>
+                          )}
                         </>
                       )}
                       {answerState === "unknown" || answerState === "skipped" ? (
                         <p className="intake-scene-answer-state">
-                          {answerState === "unknown" ? "모름" : "건너뛰기"}으로 저장했어요.
+                          {question.answerState === answerState
+                            ? answerState === "unknown"
+                              ? "모름으로 저장했어요."
+                              : "건너뛰기로 저장했어요."
+                            : "아직 저장되지 않았어요. 다시 시도해 주세요."}
                         </p>
                       ) : null}
                       <div className="intake-scene-options">
@@ -630,6 +675,16 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
                     <div className="intake-scene-action">
                       {waiting ? (
                         <PreparationStatus title={statusTitle} saved />
+                      ) : !canMutate ? (
+                        <Button
+                          className="intake-scene-primary"
+                          type="button"
+                          disabled={busy || leaving || index >= result.questions.length - 1}
+                          onClick={() => navigateQuestion(index + 1)}
+                        >
+                          다음 질문
+                          <ArrowRight size={18} aria-hidden="true" />
+                        </Button>
                       ) : (
                         <Button
                           className="intake-scene-primary"
@@ -641,7 +696,7 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
                               !result.canPrepareSummary &&
                               !dirty) ||
                             !answerState ||
-                            (answerState === "answered" && !value.trim())
+                            (answerState === "answered" && (!value.trim() || answerTooLong))
                           }
                         >
                           {busy
@@ -671,22 +726,8 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
                       <div className="intake-scene-tools">
                         <Button
                           variant="ghost"
-                          disabled={locked || index === 0}
-                          onClick={() => {
-                            if (question) {
-                              if (dirty)
-                                drafts.current.set(question.id, { value, state: answerState });
-                              else drafts.current.delete(question.id);
-                            }
-                            const epoch = ticket();
-                            void transition(
-                              () => {
-                                setIndex(index - 1);
-                                setNotice("");
-                              },
-                              () => accessCurrent(epoch),
-                            );
-                          }}
+                          disabled={busy || waiting || leaving || index === 0}
+                          onClick={() => navigateQuestion(index - 1)}
                         >
                           <ArrowLeft size={15} aria-hidden="true" />
                           이전 질문
@@ -694,7 +735,9 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
                         <Button
                           variant="ghost"
                           disabled={
-                            locked || !answerState || (answerState === "answered" && !value.trim())
+                            locked ||
+                            !answerState ||
+                            (answerState === "answered" && (!value.trim() || answerTooLong))
                           }
                           onClick={() => void save(false)}
                         >

@@ -14,6 +14,7 @@ export default {
           if (
             source === "../../client/api" &&
             (importer?.endsWith("/components/workspace/Workspace.tsx") ||
+              importer?.endsWith("/components/workspace/FileReview.tsx") ||
               importer?.endsWith("/components/intake/useCustomerAccess.ts"))
           )
             return fileURLToPath(new URL("./workspace-client-fixture.ts", import.meta.url));

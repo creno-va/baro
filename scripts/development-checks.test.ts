@@ -1,8 +1,12 @@
 import { expect, test } from "bun:test";
 import { browserTargets, unitTargets, validationScope } from "./development-checks";
 
-const browserTests = [...new Bun.Glob("tests/browser/*.e2e.ts").scanSync(".")];
-const unitTests = [...new Bun.Glob("{tests,scripts,src}/**/*.test.ts").scanSync(".")];
+const browserTests = [...new Bun.Glob("tests/browser/*.e2e.ts").scanSync(".")].map((path) =>
+  path.replaceAll("\\", "/"),
+);
+const unitTests = [...new Bun.Glob("{tests,scripts,src}/**/*.test.ts").scanSync(".")].map((path) =>
+  path.replaceAll("\\", "/"),
+);
 const aiRuntimeTests = [
   "src/server/api/health.test.ts",
   "tests/ai-preflight.test.ts",
@@ -38,7 +42,7 @@ test("dependency and deployment-only changes cannot skip AI admission and execut
     for (const required of aiRuntimeTests) expect(selected).toContain(required);
     expect(selected.some((path) => path.startsWith("tests/evals/"))).toBe(false);
   }
-});
+}, 15_000);
 
 test("AI runtime, schema, capability and dispatch changes retain the complete focused suite", async () => {
   for (const file of [
@@ -55,7 +59,7 @@ test("AI runtime, schema, capability and dispatch changes retain the complete fo
     const selected = await unitTargets([file], unitTests);
     for (const required of aiRuntimeTests) expect(selected).toContain(required);
   }
-});
+}, 15_000);
 
 test("a missing required AI regression fails closed while unrelated styles stay scoped", async () => {
   for (const missing of aiRuntimeTests)
@@ -156,4 +160,152 @@ test("source-only report and global router changes include the real download con
     expect(browserTargets([file], available)).toContain(download);
     expect(browserTargets([file], available)).not.toContain("tests/browser/evals.e2e.ts");
   }
+});
+
+test("Windows changed paths and native inventories select the same required checks as Git paths", async () => {
+  const posix = (paths: string[]) => paths.map((path) => path.replaceAll("\\", "/"));
+  const windows = (paths: string[]) => paths.map((path) => path.replaceAll("/", "\\"));
+  const availableBrowser = posix(browserTests);
+  const availableUnit = posix(unitTests);
+  const changed = ["src/server/auth/session.ts", "src/components/reports/ReportReview.tsx"];
+  expect(browserTargets(windows(changed), windows(availableBrowser))).toEqual(
+    browserTargets(changed, availableBrowser),
+  );
+  expect(await unitTargets(windows(changed), windows(availableUnit))).toEqual(
+    await unitTargets(changed, availableUnit),
+  );
+  const config = ["src/server/db/v2-core.ts", "services/file-processor/Dockerfile"];
+  expect(validationScope(windows(config))).toEqual(validationScope(config));
+  expect(validationScope(windows(config))).toEqual({ native: true, database: true });
+  await expect(
+    unitTargets(["bun.lock"], windows(availableUnit.filter((path) => path !== aiRuntimeTests[0]))),
+  ).rejects.toThrow("AI_RUNTIME_TEST_MISSING");
+});
+
+test("lawyer source changes retain portal, mock API and future recovery consumers", () => {
+  const recovery = "tests/browser/lawyer-draft-recovery.e2e.ts";
+  for (const file of ["src/components/lawyers/Editor.tsx", "src/styles/lawyers.css"]) {
+    const selected = browserTargets([file], [...browserTests, recovery]);
+    for (const name of ["directory", "lawyer-portal", "lawyer-api-mock"])
+      expect(selected).toContain(`tests/browser/${name}.e2e.ts`);
+    expect(selected).toContain(recovery);
+    expect(selected).not.toContain("tests/browser/evals.e2e.ts");
+    expect(selected).not.toContain("tests/browser/reports.e2e.ts");
+  }
+});
+
+test("report and case edits retain completion, shared and export regression consumers", () => {
+  const reports = browserTargets(["src/components/reports/ReportReview.tsx"], browserTests);
+  for (const name of ["report-html", "report-draft-revision", "report-retained-pdf"])
+    expect(reports).toContain(`tests/browser/${name}.e2e.ts`);
+  for (const file of [
+    "src/components/intake/IntakeQuestions.tsx",
+    "src/components/intake/FileReview.tsx",
+  ]) {
+    const selected = browserTargets(
+      [file],
+      [
+        ...browserTests,
+        "tests/browser/intake-persistence.e2e.ts",
+        "tests/browser/workspace-drafts.e2e.ts",
+      ],
+    );
+    for (const name of [
+      "intake-persistence",
+      "workspace-drafts",
+      "customer-completion",
+      "customer-real",
+      "workspace-shared",
+      "customer-recovery-real",
+    ])
+      expect(selected).toContain(`tests/browser/${name}.e2e.ts`);
+    expect(selected).not.toContain("tests/browser/evals.e2e.ts");
+  }
+});
+
+test("return-path and session invalidation changes cannot skip signed-in browser consumers", () => {
+  for (const file of ["src/client/return-path.ts", "src/client/session-events.ts"])
+    expect(browserTargets([file], browserTests)).toEqual(
+      browserTests.filter((file) => !file.endsWith("/evals.e2e.ts")).sort(),
+    );
+});
+
+test("browser config and fixture-only edits select their actual consumers", () => {
+  const rows = [
+    ["tests/browser/reports.config.ts", "reports"],
+    ["tests/browser/reports-account-real.config.ts", "settings"],
+    ["tests/helpers/reports-ui-api.ts", "reports"],
+    ["tests/helpers/report-real-api.ts", "report-retained-pdf"],
+    ["tests/helpers/report-http-fixture.ts", "report-html"],
+    ["tests/helpers/customer-browser-server.ts", "customer-real"],
+    ["tests/helpers/workspace-client-fixture.ts", "workspace-shared"],
+    ["tests/helpers/customer-completion.playwright.config.ts", "customer-completion"],
+    ["tests/browser/conversation.config.ts", "conversation-home"],
+    ["tests/browser/intake103.config.ts", "intake103"],
+    ["tests/browser/lawyer-public.config.ts", "lawyer-portal"],
+    ["tests/browser/integration.config.ts", "lawyer-api-mock"],
+    ["tests/helpers/browser-session-server.ts", "session"],
+    ["tests/browser/intake-persistence.config.ts", "intake-persistence"],
+    ["tests/browser/workspace-drafts.config.ts", "workspace-drafts"],
+    ["tests/browser/account-session-recovery.config.ts", "account-session-recovery"],
+  ] as const;
+  const available = [
+    ...browserTests,
+    "tests/browser/intake-persistence.e2e.ts",
+    "tests/browser/workspace-drafts.e2e.ts",
+    "tests/browser/account-session-recovery.e2e.ts",
+  ];
+  for (const [file, name] of rows) {
+    const selected = browserTargets([file], available);
+    expect(selected).toContain(`tests/browser/${name}.e2e.ts`);
+    expect(selected).not.toContain("tests/browser/evals.e2e.ts");
+    expect(() => browserTargets([file], [])).toThrow("BROWSER_FEATURE_TEST_MISSING");
+  }
+  expect(browserTargets(["playwright.config.ts"], browserTests)).toContain(
+    "tests/browser/auth.e2e.ts",
+  );
+  expect(browserTargets(["tests/fixtures/unused.txt"], browserTests)).toEqual([]);
+});
+
+test("shared contract and contract-fixture changes retain browser consumers without corpus", () => {
+  const expected = browserTests.filter((path) => !path.endsWith("/evals.e2e.ts")).sort();
+  for (const file of [
+    "src/contracts/v2/reports.ts",
+    "src/contracts/v2/files.ts",
+    "src/contracts/questions.ts",
+    "src/contracts/common.ts",
+    "src/contracts/v2/index.ts",
+    "tests/fixtures/contracts/v2/index.ts",
+    "tests/fixtures/contracts/index.ts",
+  ]) {
+    expect(browserTargets([file], browserTests)).toEqual(expected);
+    expect(browserTargets([file.replaceAll("/", "\\")], browserTests)).toEqual(expected);
+    expect(() => browserTargets([file], [])).toThrow("BROWSER_FEATURE_TEST_MISSING");
+  }
+  expect(browserTargets(["tests/fixtures/unused.txt"], browserTests)).toEqual([]);
+});
+
+test("mock review and session changes retain their browser consumers on either path separator", () => {
+  const expected = browserTests.filter((path) => !path.endsWith("/evals.e2e.ts")).sort();
+  for (const path of ["src/client/api/mock/session.ts", "src\\client\\api\\mock\\session.ts"]) {
+    expect(browserTargets([path], browserTests)).toEqual(expected);
+    expect(() => browserTargets([path], [])).toThrow("BROWSER_FEATURE_TEST_MISSING");
+  }
+  for (const path of [
+    "src/client/api/mock/file-review.ts",
+    "src\\client\\api\\mock\\file-review.ts",
+  ]) {
+    const selected = browserTargets([path], browserTests);
+    for (const name of [
+      "workspace-shared",
+      "customer-completion",
+      "report-html",
+      "reports-integrated",
+    ])
+      expect(selected).toContain(`tests/browser/${name}.e2e.ts`);
+    expect(selected).not.toContain("tests/browser/evals.e2e.ts");
+    expect(selected).not.toContain("tests/browser/lawyer-portal.e2e.ts");
+    expect(() => browserTargets([path], [])).toThrow("BROWSER_FEATURE_TEST_MISSING");
+  }
+  expect(browserTargets(["src/client/api/mock/unrelated.ts"], browserTests)).toEqual([]);
 });

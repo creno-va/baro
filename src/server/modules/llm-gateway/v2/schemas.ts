@@ -1,14 +1,15 @@
 import { z } from "zod";
-import { displayText, opaqueIdSchema } from "../../../../contracts";
+import { displayText, hasUniqueIds, opaqueIdSchema } from "../../../../contracts";
 import {
   V2_INTAKE_POLICY,
   v2ActionSchema,
   v2FactReferenceSchema,
-  v2FactsSchema,
+  v2FactSchema,
   v2QuestionsSchema,
   v2SummarySchema,
   v2TimelineEntrySchema,
 } from "../../../../contracts/v2";
+import { sourceClaimSchema } from "../../citation/v2-validate";
 import { workspaceSourceRequestSchema } from "../../legal-retrieval/v2/workspace-plans";
 
 export const workspaceQuestionsOutputSchema = z.strictObject({
@@ -24,13 +25,12 @@ export const workspaceChatOutputSchema = z.strictObject({
   text: displayText(10000),
   references: z.array(v2FactReferenceSchema).max(100),
   warnings: z.array(displayText(500)).max(20),
-  facts: v2FactsSchema.refine(
-    (facts) => facts.length <= 5,
-    "At most five fact updates per response",
-  ),
+  // Chat is a delta: conflicts may point to facts in the current summary.
+  facts: z.array(v2FactSchema).max(5).refine(hasUniqueIds, "Duplicate fact IDs"),
   actions: z.array(v2ActionSchema).max(5),
   parties: v2SummarySchema.shape.parties.max(5),
   requestedSources: z.array(workspaceSourceRequestSchema).max(2),
+  sourceClaims: z.array(sourceClaimSchema).max(50).default([]),
   timeline: z.array(v2TimelineEntrySchema).max(5),
 });
 export const workspaceAuditOutputSchema = z.strictObject({

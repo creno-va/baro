@@ -51,6 +51,7 @@ const metadataSchema = z.strictObject({
   name: v2UploadReservationRequestSchema.shape.name,
   declaredMediaType: v2UploadReservationRequestSchema.shape.mediaType,
   probe: v2FileProbeSchema.nullable(),
+  contentHash: hashSchema.optional(),
 });
 type FileRow = {
   id: string;
@@ -138,7 +139,9 @@ export function createV2FilesRepository(core: V2Core) {
       schemaVersion: "2",
       id,
       revision: row.revision,
-      ...metadata,
+      name: metadata.name,
+      declaredMediaType: metadata.declaredMediaType,
+      probe: metadata.probe,
       byteLength: row.declared_bytes,
       status: row.state,
       manifest,
@@ -537,6 +540,7 @@ export function createV2FilesRepository(core: V2Core) {
           name: body.name,
           declaredMediaType: body.mediaType,
           probe: null,
+          ...(body.contentHash ? { contentHash: body.contentHash } : {}),
         });
         const consent = await core.encrypt("v2_consents", input.consentId, g.ownerId, 1, {
           autoProcessConsentVersion: body.autoProcessConsentVersion,

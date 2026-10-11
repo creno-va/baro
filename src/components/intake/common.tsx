@@ -1,6 +1,7 @@
 import { ArrowLeft, Check } from "lucide-react";
 import { ApiError } from "../../client/api/core";
 import type { CaseView } from "../../client/api/types";
+import { accessHref } from "../../client/return-path";
 import { Button, ButtonLink } from "../ui/button";
 import { StatePanel } from "../ui/state-panel";
 
@@ -67,9 +68,9 @@ export function ErrorPanel({
         : {})}
       action={
         code === "UNAUTHENTICATED" ? (
-          <ButtonLink href="/login">로그인하기</ButtonLink>
+          <ButtonLink href={accessHref("login")}>로그인하기</ButtonLink>
         ) : code === "CONSENT_REQUIRED" ? (
-          <ButtonLink href="/consent">동의 확인</ButtonLink>
+          <ButtonLink href={accessHref("consent")}>동의 확인</ButtonLink>
         ) : retry && (!value || value.retryable || code === "CONFLICT") ? (
           <Button variant="outline" disabled={disabled} onClick={retry}>
             {code === "CONFLICT" ? "최신 내용 불러오기" : "다시 시도"}

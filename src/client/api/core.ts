@@ -11,6 +11,7 @@ export interface RequestOptions {
   method?: string;
   body?: unknown;
   key?: string;
+  signal?: AbortSignal;
 }
 export async function request<T>(
   operation: string,
@@ -34,6 +35,7 @@ export async function request<T>(
   try {
     response = await fetch(options.path, {
       method,
+      ...(options.signal ? { signal: options.signal } : {}),
       credentials: "same-origin",
       headers: {
         ...(options.body instanceof FormData ? {} : { "content-type": "application/json" }),
@@ -43,7 +45,8 @@ export async function request<T>(
         ? {}
         : { body: options.body instanceof FormData ? options.body : JSON.stringify(options.body) }),
     });
-  } catch {
+  } catch (error) {
+    if (options.signal?.aborted) throw error;
     throw new ApiError("UNAVAILABLE", "연결하지 못했어요. 다시 시도해 주세요.", true);
   }
   if (!response.ok) {

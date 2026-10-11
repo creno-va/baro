@@ -70,6 +70,9 @@ if (journey) {
           playingRequest = false;
           // A pending autoplay request must not restart a hidden or visitor-paused film.
           if (!shouldPlay()) video.pause();
+          // Scrolling or pausing can abort play before a newer request can start.
+          // Reconcile the latest visible/user state once the old promise settles.
+          else if (video.paused) schedule();
           syncButton();
         });
     }
@@ -197,7 +200,8 @@ if (journey) {
   if (pin && "IntersectionObserver" in window)
     new IntersectionObserver(
       (entries) => {
-        visible = entries[0]?.isIntersecting ?? false;
+        // A fast exit and return can be delivered together; use the newest pin state.
+        visible = entries.at(-1)?.isIntersecting ?? false;
         schedule();
       },
       { threshold: 0.01 },

@@ -69,7 +69,7 @@ export function createLawyersApi(
       }),
     );
   const selfAccess = async (c: import("hono").Context<ApiEnvironment>, mutation = false) => {
-    const a = await lawyerAccess(c, { mutation, consent: true });
+    const a = await lawyerAccess(c, { mutation, consent: mutation });
     if (a.response) return a;
     const row = await c.env.DB.prepare(
       "SELECT id FROM user WHERE id=? AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='account' AND target_id=user.id)",
@@ -86,7 +86,17 @@ export function createLawyersApi(
     const a = await selfAccess(c);
     if (a.response) return a.response;
     z.strictObject({}).parse(c.req.query());
-    const profile = await (await selfService(c.env)).getMine(a.ownerId);
+    const service = await selfService(c.env);
+    let profile: Awaited<ReturnType<typeof service.getMine>>;
+    try {
+      profile = await service.getMine(a.ownerId, false);
+    } catch (error) {
+      if (!(error instanceof LawyerError) || error.code !== "NOT_FOUND") throw error;
+      // Reading existing data needs no renewed consent; creating a first profile does.
+      const consent = await lawyerAccess(c, { consent: true });
+      if (consent.response) return consent.response;
+      profile = await service.getMine(a.ownerId);
+    }
     const after = await selfAccess(c);
     if (after.response) return after.response;
     if (after.ownerId !== a.ownerId)
@@ -96,17 +106,39 @@ export function createLawyersApi(
   app.get("/lawyer/self-profile/assets", async (c) => {
     const a = await selfAccess(c);
     if (a.response) return a.response;
+    const query = z
+      .strictObject({
+        limit: z.coerce.number().int().min(1).max(50).default(50),
+        cursor: z.string().max(512).optional(),
+      })
+      .parse(c.req.query());
+    let cursor: [string, string] | undefined;
+    if (query.cursor) {
+      let decoded: unknown;
+      try {
+        decoded = JSON.parse(atob(query.cursor));
+      } catch {
+        throw new SyntaxError("Invalid asset cursor");
+      }
+      cursor = z.tuple([z.iso.datetime(), opaqueIdSchema]).parse(decoded);
+    }
     const rows = await c.env.DB.prepare(
-      "SELECT a.id,a.revision,a.state AS status,a.purpose FROM v2_assets a JOIN v2_profiles p ON p.id=a.profile_id WHERE a.owner_id=? AND p.owner_id=a.owner_id AND a.purpose IN ('profile_photo','portfolio') AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE (target_kind='asset' AND target_id=a.id) OR (target_kind='profile' AND target_id=a.profile_id) OR (target_kind='account' AND target_id=a.owner_id)) ORDER BY a.created_at DESC LIMIT 50",
+      `SELECT a.id,a.revision,a.state AS status,a.purpose,a.created_at FROM v2_assets a JOIN v2_profiles p ON p.id=a.profile_id WHERE a.owner_id=? AND p.owner_id=a.owner_id AND a.purpose IN ('profile_photo','portfolio') AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE (target_kind='asset' AND target_id=a.id) OR (target_kind='profile' AND target_id=a.profile_id) OR (target_kind='account' AND target_id=a.owner_id)) ${cursor ? "AND (a.created_at<? OR (a.created_at=? AND a.id<?))" : ""} ORDER BY a.created_at DESC,a.id DESC LIMIT ?`,
     )
-      .bind(a.ownerId)
-      .all<{ id: string; revision: number; status: string; purpose: string }>();
+      .bind(a.ownerId, ...(cursor ? [cursor[0], cursor[0], cursor[1]] : []), query.limit + 1)
+      .all<{ id: string; revision: number; status: string; purpose: string; created_at: string }>();
+    const page = rows.results.slice(0, query.limit);
+    const last = page.at(-1);
     const after = await selfAccess(c);
     if (after.response) return after.response;
     if (after.ownerId !== a.ownerId)
       return c.json(errorBody(c, "NOT_FOUND", "자료를 찾을 수 없어요."), 404);
     return c.json({
-      items: rows.results.map((row) => ({
+      nextCursor:
+        rows.results.length > query.limit && last
+          ? btoa(JSON.stringify([last.created_at, last.id]))
+          : null,
+      items: page.map((row) => ({
         id: row.id,
         revision: row.revision,
         status: row.status,
@@ -121,7 +153,7 @@ export function createLawyersApi(
       monthlyBudgetCapEnabled: c.env.MONTHLY_BUDGET_CAP_ENABLED !== "false",
     });
     const service = createSelfProfileService(core);
-    const profile = await service.getMine(a.ownerId);
+    const profile = await service.getMine(a.ownerId, false);
     const assetId = c.req.param("assetId");
     const purpose = await core
       .statement(
@@ -148,7 +180,8 @@ export function createLawyersApi(
     return selfAssetResponse(
       await read(a.ownerId, preview, assetId, async () => {
         // Initial signed-cookie verification binds the session ID. Each chunk rechecks its
-        // expiry/revocation, role, consent and profile revision without sliding auth writes.
+        // expiry/revocation, role and profile revision without sliding auth writes.
+        // Renewed consent gates mutations/public reads, never the owner's existing download.
         return service.isCurrent(a.ownerId, profile, false, a.sessionId);
       }),
     );
@@ -157,7 +190,9 @@ export function createLawyersApi(
     const a = await selfAccess(c, true);
     if (a.response) return a.response;
     const body = z.strictObject({ profile: selfProfileSchema }).parse(await c.req.json());
-    return c.json(await (await selfService(c.env)).saveMine(a.ownerId, body.profile));
+    return c.json(
+      await (await selfService(c.env)).saveMine(a.ownerId, body.profile, undefined, a.sessionId),
+    );
   });
   app.post("/lawyer/self-profile/publication", async (c) => {
     const a = await selfAccess(c, true);
@@ -177,6 +212,7 @@ export function createLawyersApi(
         body.published,
         body.expectedRevision,
         body.profileId,
+        a.sessionId,
       ),
     );
   });

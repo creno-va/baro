@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { V2_LIMITS } from "../src/contracts/v2";
 import { createV2Core } from "../src/server/db/v2-core";
 import {
   applyReportWorkPlan,
@@ -151,4 +152,47 @@ test("single-query stream fence rechecks role, consent, same-revision source ide
   await fence.check();
   f.db.sqlite.query("DELETE FROM v2_workspaces WHERE id=?").run(f.workspaceId);
   await deny();
+});
+
+test("report work plan admits the exact query/source boundary and rejects the next chunk or source row", () => {
+  const input = { pdfBytes: 262144, sourceRows: 250, reportFiles: 33 };
+  expect(reportWorkPlan(input)).toEqual({ queries: 800, rowsRead: 2700000, rowsWritten: 1000 });
+  expect(() => reportWorkPlan({ ...input, pdfBytes: input.pdfBytes + 1 })).toThrow(
+    "EXPORT_LIMIT_EXCEEDED",
+  );
+  expect(() => reportWorkPlan({ ...input, sourceRows: input.sourceRows + 1 })).toThrow(
+    "EXPORT_LIMIT_EXCEEDED",
+  );
+});
+
+test("an actual one-upload-part ZIP preserves every byte; the next-byte multipart plan fails before original GET/export PUT", async () => {
+  const f = await reportFixture();
+  const original = "S".repeat(V2_LIMITS.chunkBytes);
+  const file = await readyFile(f, original);
+  const report = await f.reports.get(f.actor.ownerId, f.workspaceId);
+  const before = f.db.queryCount;
+  const zip = await f.reports.zip(f.actor.ownerId, report.id, crypto.randomUUID(), [
+    file.session.fileId,
+  ]);
+  const bytes = new Uint8Array(await new Response(zip.body).arrayBuffer());
+  expect(bytes.byteLength).toBe(zip.byteLength);
+  // Single-entry stored ZIP: local header includes the UTF-8 filename and no data descriptor.
+  const header = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  expect(header.getUint32(0, true)).toBe(0x04034b50);
+  const start = 30 + header.getUint16(26, true) + header.getUint16(28, true);
+  expect(bytes.subarray(start, start + file.bytes.byteLength)).toEqual(file.bytes);
+  expect(f.db.queryCount - before).toBeLessThanOrEqual(800);
+
+  const larger = await reportFixture();
+  const split = await readyFile(larger, `${original}S`);
+  const largerReport = await larger.reports.get(larger.actor.ownerId, larger.workspaceId);
+  const calls = { ...larger.bucket.calls };
+  const objects = larger.bucket.objects.size;
+  await expect(
+    larger.reports.zip(larger.actor.ownerId, largerReport.id, crypto.randomUUID(), [
+      split.session.fileId,
+    ]),
+  ).rejects.toThrow("EXPORT_LIMIT_EXCEEDED");
+  expect(larger.bucket.calls).toEqual(calls);
+  expect(larger.bucket.objects.size).toBe(objects);
 });

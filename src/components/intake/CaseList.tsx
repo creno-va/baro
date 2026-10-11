@@ -30,11 +30,15 @@ export function CaseList() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<unknown>(null);
   const request = useRef(0);
-  const { ready, version, verify, ticket, current, alive, deny } = useCustomerAccess(() => {
-    setItems([]);
-    setError(null);
-    ++request.current;
-  }, setError);
+  const { ready, version, verify, ticket, current, alive, deny } = useCustomerAccess(
+    () => {
+      setItems([]);
+      setError(null);
+      ++request.current;
+    },
+    setError,
+    true,
+  );
   const load = useCallback(async () => {
     const serial = ++request.current;
     let epoch = ticket();
