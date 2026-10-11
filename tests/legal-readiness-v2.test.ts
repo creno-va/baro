@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { convertV4MiniflareOptions, Miniflare } from "miniflare";
 import { NOW, syntheticDetail, syntheticList } from "../scripts/benchmarks/retrieval/harness";
 import { inspectLegalV2 } from "../scripts/legal-readiness-v2";
+import { workspaceGuidePlans } from "../src/server/modules/legal-retrieval/v2/workspace-plans";
 import capturedGuide from "./fixtures/legal/v2/captured-guide-structure.json";
 import precedents from "./fixtures/legal/v2/precedents.json";
 
@@ -47,6 +48,9 @@ test.each([false, true])(
     expect(receipt.status).toBe(pending ? "failed" : "passed");
     expect(receipt.requests).toBe(5);
     expect(receipt.runtimeWorker).toBe(false);
+    expect(receipt.verifiedSourceCount).toBe(pending ? 2 : 3);
+    expect(receipt.checkedClaimCount).toBe(pending ? 2 : 3);
+    expect(receipt.claimIntegrity).toBe(true);
     expect(receipt.sources.map((source) => source.sourceType)).toEqual([
       "statute",
       "precedent",
@@ -64,6 +68,35 @@ test.each([false, true])(
     expect(JSON.stringify(receipt)).not.toContain('"body"');
   },
 );
+test("pending guide alone leaves claim integrity untested", async () => {
+  const receipt = await inspectLegalV2({}, NOW, {
+    transport: transport(responses(true)),
+    plans: [workspaceGuidePlans.legal_consultation],
+  });
+  expect(receipt).toMatchObject({
+    status: "failed",
+    requests: 1,
+    verifiedSourceCount: 0,
+    checkedClaimCount: 0,
+    claimIntegrity: null,
+    outcomes: [{ kind: "official_guide", availability: "limited", reason: "update_pending" }],
+  });
+  expect(receipt.sources).toHaveLength(1);
+});
+test("unavailable sources leave claim integrity untested", async () => {
+  const receipt = await inspectLegalV2({ LAW_API_OC: "synthetic-private-only" }, NOW, {
+    transport: async () => new Response(null, { status: 403 }),
+  });
+  expect(receipt).toMatchObject({
+    status: "failed",
+    requests: 3,
+    verifiedSourceCount: 0,
+    checkedClaimCount: 0,
+    claimIntegrity: null,
+    sources: [],
+  });
+  expect(receipt.outcomes.every((outcome) => outcome.availability === "unavailable")).toBe(true);
+});
 test("v2 readiness executes product source/hash/claim checks in local workerd", async () => {
   const build = await Bun.build({
     entrypoints: ["tests/helpers/legal-readiness-worker.ts"],
@@ -94,6 +127,8 @@ test("v2 readiness executes product source/hash/claim checks in local workerd", 
       runtimeWorker: true,
       synthetic: true,
       requests: 5,
+      verifiedSourceCount: 3,
+      checkedClaimCount: 3,
       claimIntegrity: true,
     });
   } finally {

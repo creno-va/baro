@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { resolve, sep } from "node:path";
 import { executeValidation, validationCommands, validationProfiles } from "./validate";
 
 test("quick validation never builds, starts browsers, containers, remote calls or broad tests", () => {
@@ -15,7 +16,8 @@ test("quick validation never builds, starts browsers, containers, remote calls o
 test("explicit profiles preserve full browser, database, native and security coverage", () => {
   for (const profile of validationProfiles)
     expect(validationCommands(profile).length).toBeGreaterThan(0);
-  const full = validationCommands("full", "/tmp/project with spaces");
+  const root = resolve("scratch", "project with spaces");
+  const full = validationCommands("full", root);
   expect(full).toContainEqual(["bun", "test"]);
   expect(full).toContainEqual(["bun", "scripts/full-browser.ts"]);
   expect(full).toContainEqual(["bun", "run", "eval:offline"]);
@@ -26,7 +28,7 @@ test("explicit profiles preserve full browser, database, native and security cov
   for (const command of full.filter((command) => command[0] === "docker" && command[1] === "run")) {
     expect(command).toContain("none");
     expect(command).toContain("--pids-limit");
-    expect(command.some((arg) => arg.startsWith("/tmp/project with spaces/"))).toBe(true);
+    expect(command.some((arg) => arg.startsWith(`${root}${sep}`))).toBe(true);
   }
 });
 
