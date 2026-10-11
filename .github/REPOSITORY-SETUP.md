@@ -3,17 +3,19 @@
 이 디렉터리는 main 직접 개발을 끝내고 이슈 -> 브랜치 -> PR -> CI -> preview -> production
 흐름을 적용한다.
 
-## 자동화된 흐름
+## 최소 CI와 수동 실행 (2026-10-11)
 
-1. 모든 PR(stack 포함)에 `CI / Quality gate`가 실행된다.
-2. main에 merge된 commit의 CI가 성공하면 고정 `preview` 환경 배포가 실행된다.
-3. production은 `Deploy production`에 확인 문자열, 검증된 target_sha, release_mode를 지정한다.
-4. GitHub `production` Environment의 reviewer 승인을 추가하면 실제 배포 전 승인을 한 번
-   더 강제할 수 있다.
+1. PR/main에는 `CI / Quality gate` 한 job이 `bun ci`와 `bun run validate:quick`을 실행한다.
+2. 기능·브라우저·DB·Docker·보안·전체 검증은 필요할 때 로컬 `validate:*` 명령으로 수행한다.
+3. main merge/CI 성공은 배포를 시작하지 않는다. `bun run deploy:preview`로 현재 main SHA를 수동 요청한다.
+4. `bun run deploy:production --sha <full40sha>`로 preview에서 검증한 SHA를 요청한다.
+5. production Environment 승인과 동일 SHA의 main CI·preview smoke/공개 조건을 그대로 확인한다.
 
-현재 앱 scaffold가 존재하므로 CI는 `bun.lock`, `lint`, `typecheck`, `test`, `build`,
-Wrangler dry-run을 요구한다. CD는 build/dry-run 뒤 D1 migration과 배포·SHA smoke를 수행한다.
-public-beta는 실제 출시 증거 게이트를 추가로 통과해야 한다.
+`Full validation (manual)`은 명시적으로 요청할 때만 전체 검사를 원격에서 재현한다.
+`AI runtime preflight`도 workflow_dispatch 전용이다. 자동 스케줄/배포 연쇄 실행은 없다.
+시크릿은 기존 GitHub Environment에 보관한다. 로컬 CLI는 workflow 요청만 전송하며 배포 완료는
+`bun run deploy:status`와 `gh run watch <run-id> --repo creno-va/baro --exit-status`로 확인한다.
+[검증](../docs/quality/TEST-STRATEGY.md)과 [수동 배포](../docs/operations/DEPLOYMENT-OPERATIONS.md)의 준비/옵션을 따른다.
 
 ## 저장소 설정
 

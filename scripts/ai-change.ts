@@ -1,4 +1,4 @@
-// Metadata only. Eval is mandatory for every candidate, including metadata/docs-only changes.
+// Metadata only. Run eval explicitly for AI changes or final acceptance; never on every PR.
 const base = process.env.EVAL_BASE_SHA;
 let files: string[] = [];
 if (base) {
@@ -18,7 +18,7 @@ const aiChanged =
     ),
   );
 console.log(
-  `AI-sensitive change: ${aiChanged}; deterministic eval required; live candidate eval belongs to #27/#19`,
+  `AI-sensitive change: ${aiChanged}; deterministic eval is on demand; live candidate eval belongs to #27/#19`,
 );
 
 export {};

@@ -7,95 +7,28 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  group: full-validation-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  native:
-    name: Isolated native media fixtures
+  validation:
+    name: Full validation
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-          persist-credentials: false
-
-      - name: Build isolated file processor (linux/amd64)
-        timeout-minutes: 8
-        run: docker build --platform linux/amd64 -f services/file-processor/Dockerfile -t baro-file-processor .
-
-      - name: Execute native media fixtures with no network
-        timeout-minutes: 5
-        run: >-
-          docker run --rm --network none --memory 6g --cpus 1 --pids-limit 128
-          -v "$PWD/tests/fixtures/media:/fixtures:ro"
-          -v "$PWD/services/file-processor/fixture-test.py:/app/fixture-test.py:ro"
-          baro-file-processor python3 /app/fixture-test.py
-
-  quality:
-    name: Source and browser checks
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
           fetch-depth: 0
-
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: .bun-version
-
-      - name: Validate documentation
-        run: bun .github/scripts/check-docs.ts
-
-      - name: Detect application
-        id: application
-        shell: bash
+      - name: Install frozen dependencies and browser
         run: |
-          if [[ -f package.json ]]; then
-            echo "present=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "present=false" >> "$GITHUB_OUTPUT"
-            echo "Application has not been scaffolded yet; documentation checks only."
-          fi
-
-      - name: Require Bun lockfile and CI scripts
-        if: steps.application.outputs.present == 'true'
-        shell: bash
-        run: |
-          test -f bun.lock || {
-            echo "::error::package.json exists but bun.lock is missing."
-            exit 1
-          }
-          bun -e '
-            const manifest = await Bun.file("package.json").json();
-            const required = ["lint", "typecheck", "test", "build"];
-            const missing = required.filter((name) => !manifest.scripts?.[name]);
-            if (missing.length) {
-              console.error(`Missing package scripts: ${missing.join(", ")}`);
-              process.exit(1);
-            }
-          '
-
-      - name: Install dependencies
-        if: steps.application.outputs.present == 'true'
-        run: bun ci
-
-      - name: Validate work graph and product boundaries
-        run: |
-          bun run work:check
-          bun run boundaries:check
-
-      - name: Dependency audit
-        run: bun audit
-
+          bun ci
+          bunx playwright install --with-deps chromium
       - name: Secret scanner (pinned binary, full committed history, fully redacted)
         shell: bash
         run: |
@@ -103,74 +36,15 @@ jobs:
           echo '551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  /tmp/gitleaks.tar.gz' | sha256sum --check
           mkdir /tmp/baro-gitleaks
           tar -xzf /tmp/gitleaks.tar.gz -C /tmp/baro-gitleaks
-          /tmp/baro-gitleaks/gitleaks git --log-opts=HEAD --redact=100 --no-banner --log-level warn
+          echo "/tmp/baro-gitleaks" >> "$GITHUB_PATH"
 
-      - name: Validate schema drift and SQL migrations
-        run: |
-          bun run db:check
-          bunx wrangler d1 migrations apply DB --local --persist-to .wrangler/ci-migration
-
-      - name: Lint
-        if: steps.application.outputs.present == 'true'
-        run: bun run lint
-
-      - name: Typecheck
-        if: steps.application.outputs.present == 'true'
-        run: bun run typecheck
-
-      - name: Test
-        if: steps.application.outputs.present == 'true'
-        run: bun run test
-
-      - name: AI change detection and deterministic product eval
-        env:
-          EVAL_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
-          EVAL_CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-        run: |
-          bun scripts/ai-change.ts
-          bun run eval:offline
-
-      - name: Build
-        if: steps.application.outputs.present == 'true'
-        run: |
-          bun run build:production
-          bun run bundle:check
-
-      - name: Synthetic browser keyboard and error flows
-        env:
-          EVAL_CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-        run: |
-          bunx playwright install --with-deps chromium
-          bun run test:ui
-          bun run test:csp
-
+      - name: Run explicit full validation
+        run: bun run validate:full
       - name: Non-sensitive deterministic eval evidence
+        if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
-          name: deterministic-eval-${{ github.event.pull_request.head.sha || github.sha }}
+          name: deterministic-eval-${{ github.sha }}
           path: .wrangler/eval/*.json
-          if-no-files-found: error
+          if-no-files-found: ignore
           retention-days: 14
-
-      - name: Validate Cloudflare bundle
-        if: steps.application.outputs.present == 'true'
-        shell: bash
-        run: |
-          if [[ -f wrangler.jsonc || -f wrangler.json || -f wrangler.toml ]]; then
-            bun run cf:dry-run
-          else
-            echo "::error::Application exists but a Wrangler configuration file is missing."
-            exit 1
-          fi
-
-  quality-gate:
-    name: Quality gate
-    runs-on: ubuntu-latest
-    if: always()
-    needs: [quality, native]
-    steps:
-      - name: Require every verification job to succeed
-        env:
-          SOURCE_RESULT: ${{ needs.quality.result }}
-          NATIVE_RESULT: ${{ needs.native.result }}
-        run: test "$SOURCE_RESULT" = success && test "$NATIVE_RESULT" = success

@@ -274,22 +274,47 @@ export async function runBrowserTargets(targets: string[]) {
   }
 }
 
+/** Local selection includes staged, unstaged and untracked edits. Explicit candidates stay immutable. */
+export function developmentFiles(
+  suppliedBase = process.env.CHECK_BASE_SHA,
+  candidate = process.env.CHECK_CANDIDATE_SHA,
+  cwd = process.cwd(),
+) {
+  const base =
+    suppliedBase && !/^0+$/.test(suppliedBase)
+      ? suppliedBase
+      : candidate
+        ? `${candidate}^`
+        : "origin/main";
+  const diff = Bun.spawnSync(
+    [
+      "git",
+      "diff",
+      "--name-only",
+      "-z",
+      "--diff-filter=ACMRD",
+      base,
+      ...(candidate ? [candidate] : []),
+      "--",
+    ],
+    { cwd },
+  );
+  if (diff.exitCode !== 0) throw new Error("Cannot determine development check scope");
+  const files = diff.stdout.toString().split("\0").filter(Boolean);
+  if (!candidate) {
+    const untracked = Bun.spawnSync(["git", "ls-files", "--others", "--exclude-standard", "-z"], {
+      cwd,
+    });
+    if (untracked.exitCode !== 0) throw new Error("Cannot determine untracked check scope");
+    files.push(...untracked.stdout.toString().split("\0").filter(Boolean));
+  }
+  return [...new Set(files)].sort();
+}
+
 async function main() {
   const mode = process.argv[2];
   if (!["unit", "browser", "scope"].includes(mode ?? "")) throw new Error("Unknown check mode");
-  const candidate = process.env.CHECK_CANDIDATE_SHA ?? "HEAD";
-  const suppliedBase = process.env.CHECK_BASE_SHA;
-  const base = suppliedBase && !/^0+$/.test(suppliedBase) ? suppliedBase : `${candidate}^`;
-  const diff = Bun.spawnSync([
-    "git",
-    "diff",
-    "--name-only",
-    "--diff-filter=ACMRD",
-    base,
-    candidate,
-  ]);
-  if (diff.exitCode !== 0) throw new Error("Cannot determine development check scope");
-  const files = diff.stdout.toString().trim().split("\n").filter(Boolean);
+  const files = developmentFiles();
   if (mode === "scope") {
     const output = process.env.GITHUB_OUTPUT;
     if (!output) throw new Error("GITHUB_OUTPUT is missing");
