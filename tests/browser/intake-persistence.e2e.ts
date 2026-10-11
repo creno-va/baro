@@ -202,10 +202,17 @@ test("persisted emoji summary and facts remain editable and save full code point
   const fact = page.getByRole("textbox", { name: "사실 내용", exact: true });
   await expect(overview).toHaveValue("😀".repeat(3000));
   await expect(fact).toHaveValue("😀".repeat(1200));
-  await overview.press("End");
-  await overview.press("Backspace");
-  await fact.press("End");
-  await fact.press("Backspace");
+  for (const field of [overview, fact]) {
+    // macOS End scrolls a multiline textarea without moving its caret.
+    // Place only the caret explicitly; a real keypress must still edit the text.
+    await field.evaluate((element) => {
+      const input = element as HTMLTextAreaElement;
+      input.setSelectionRange(input.value.length, input.value.length);
+    });
+    await field.press("Backspace");
+  }
+  await expect(overview).toHaveValue("😀".repeat(2999));
+  await expect(fact).toHaveValue("😀".repeat(1199));
   await page.getByRole("button", { name: "수정 내용 저장", exact: true }).click();
   await expect.poll(() => writes.length).toBe(1);
   expect(writes[0]?.overview).toBe("😀".repeat(2999));
