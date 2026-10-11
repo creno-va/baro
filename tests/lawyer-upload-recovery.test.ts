@@ -1,4 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
+import { responseError } from "../src/client/api/core";
 import { createLawyerUploadClient, LawyerApiError } from "../src/client/api/lawyers";
 import { createV2LawyersRepository } from "../src/server/db/v2-lawyers";
 import { selfAssetFixture } from "./helpers/lawyer-self-assets";
@@ -20,7 +21,7 @@ function storage() {
   });
   return values;
 }
-async function fixture(stage: "reservation" | "content" | "beforeContent") {
+async function fixture(stage: "reservation" | "content" | "beforeContent" | "none") {
   const saved = storage(),
     f = await selfAssetFixture();
   const repository = createV2LawyersRepository(f.core);
@@ -207,3 +208,37 @@ test("disabled session storage still allows same-page upload recovery", async ()
   expect(f.ids.size).toBe(1);
   expect(f.puts()).toBe(1);
 });
+
+for (const freshClient of [false, true])
+  test(`explicit upload retry recovers a rejected reservation revision; fresh=${freshClient}`, async () => {
+    const f = await fixture("none");
+    let raced = false;
+    const send = async (path: string, init: RequestInit = {}) => {
+      if (init.method === "POST" && !raced) {
+        raced = true;
+        // Another tab saves after the client reads its profile revision.
+        f.revise();
+      }
+      try {
+        return await f.send(path, init);
+      } catch (error) {
+        if ((error as { code?: string }).code === "STALE_REVISION")
+          throw await responseError(
+            Response.json({ error: { code: "STALE_REVISION" } }, { status: 409 }),
+          );
+        throw error;
+      }
+    };
+    const client = createLawyerUploadClient(send);
+    await expect(client.upload(f.params.profileId, f.source, "portfolio")).rejects.toMatchObject({
+      code: "CONFLICT",
+    });
+    expect(f.ids.size).toBe(0);
+    expect(f.saved.size).toBe(0);
+    const retry = freshClient ? createLawyerUploadClient(send) : client;
+    expect((await retry.upload(f.params.profileId, f.source, "portfolio")).status).toBe("uploaded");
+    expect(f.ids.size).toBe(1);
+    expect(f.puts()).toBe(1);
+    expect(new Set(f.keys).size).toBe(2);
+    expect(f.saved.size).toBe(0);
+  });
