@@ -82,6 +82,12 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
   const excluded = page.locator(".report-material").filter({ hasText: "제외 원본.txt" });
   await openReportOptions(page);
   await excluded.getByRole("checkbox", { name: "리포트에서 제외" }).check();
+  await page.getByRole("button", { name: "본문 편집 먼저 저장" }).click();
+  await expect(
+    page.getByRole("status").filter({ hasText: "본문 편집을 먼저 저장했어요." }),
+  ).toBeVisible();
+  await expect(editor).toHaveValue(/사용자가 검토한 합성 사실/);
+  await expect(excluded.getByRole("checkbox", { name: "리포트에서 제외" })).toBeChecked();
   await page.getByRole("button", { name: "검토 내용 저장" }).click();
   await expect(
     page.getByRole("status").filter({ hasText: "검토 내용을 저장했어요." }),
@@ -213,4 +219,126 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
   ).toEqual([]);
   expect(apiRequests).toEqual([]);
   expect(externalRequests).toEqual([]);
+});
+
+test("oversized mock source shows first-report recovery and preserves the full original text", async ({
+  page,
+}) => {
+  await page.goto("/login");
+  await page.evaluate(() => {
+    const put = (name: string, value: unknown) =>
+      localStorage.setItem(`baro-api-mock-v1:${name}`, JSON.stringify(value));
+    put("session", {
+      user: { id: "synthetic-overflow-owner", name: "Synthetic", accountType: "customer" },
+      needsConsent: false,
+    });
+    put("caseOwners", { "synthetic-overflow-case": "synthetic-overflow-owner" });
+    put("cases", {
+      "synthetic-overflow-case": {
+        id: "synthetic-overflow-case",
+        title: "Synthetic overflow",
+        subjectContext: "individual",
+        stage: "active",
+        revision: 1,
+        updatedAt: "2026-10-01T00:00:00Z",
+        summary: "Synthetic reviewed facts",
+      },
+    });
+    put("files", {
+      "synthetic-overflow-case": [
+        {
+          id: "synthetic-long-file",
+          name: "긴 합성 자료.txt",
+          mimeType: "text/plain",
+          sizeBytes: 40000,
+          status: "ready",
+          coverage: "Synthetic extraction",
+          extractedText: `${"a".repeat(29999)}😀TAIL`,
+        },
+      ],
+    });
+    put("reports", {});
+  });
+  await page.goto("/cases/synthetic-overflow-case/reports");
+  await expect(
+    page.getByRole("heading", { name: "자료를 줄여 첫 리포트를 만들어요" }),
+  ).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "리포트 내용 편집" })).toBeHidden();
+  expect(
+    await page.evaluate(() => JSON.parse(localStorage.getItem("baro-api-mock-v1:reports") ?? "{}")),
+  ).toEqual({});
+  await page.getByRole("checkbox", { name: "긴 합성 자료.txt · 리포트에서 제외" }).check();
+  await page.getByRole("button", { name: "선택 자료를 제외하고 생성" }).click();
+  const editor = page.getByRole("textbox", { name: "리포트 내용 편집" });
+  await expect(editor).toBeVisible();
+  await expect(editor).toContainText("연락과 전달");
+  await page.reload();
+  await expect(editor).toBeVisible();
+  const saved = await page.evaluate(() => {
+    const files = JSON.parse(localStorage.getItem("baro-api-mock-v1:files") ?? "{}");
+    const reports = JSON.parse(localStorage.getItem("baro-api-mock-v1:reports") ?? "{}");
+    return {
+      text: files["synthetic-overflow-case"][0].extractedText as string,
+      report: reports["synthetic-overflow-case"],
+    };
+  });
+  expect(saved.text).toBe(`${"a".repeat(29999)}😀TAIL`);
+  expect(saved.report.excludedFileIds).toEqual(["synthetic-long-file"]);
+  expect(saved.report.content.isWellFormed()).toBe(true);
+});
+
+test("regeneration after focus refresh cannot replace an unseen peer report", async ({ page }) => {
+  await page.goto("/login");
+  await page.evaluate(() => {
+    const put = (name: string, value: unknown) =>
+      localStorage.setItem(`baro-api-mock-v1:${name}`, JSON.stringify(value));
+    put("session", {
+      user: { id: "synthetic-generation-owner", name: "Synthetic", accountType: "customer" },
+      needsConsent: false,
+    });
+    put("caseOwners", { "synthetic-generation-case": "synthetic-generation-owner" });
+    put("cases", {
+      "synthetic-generation-case": {
+        id: "synthetic-generation-case",
+        title: "Synthetic generation",
+        subjectContext: "individual",
+        stage: "active",
+        revision: 1,
+        updatedAt: "2026-10-01T00:00:00Z",
+        summary: "Synthetic reviewed facts",
+      },
+    });
+    put("files", {});
+    put("reports", {});
+  });
+  await page.goto("/cases/synthetic-generation-case/reports");
+  const editor = page.getByRole("textbox", { name: "리포트 내용 편집" });
+  await expect(editor).toBeVisible();
+  const displayed = await editor.inputValue();
+  const peer = await page.evaluate(() => {
+    const key = "baro-api-mock-v1:reports",
+      reports = JSON.parse(localStorage.getItem(key) ?? "{}");
+    const report = reports["synthetic-generation-case"];
+    report.id = "synthetic-peer-generation";
+    report.revision++;
+    report.content = "Synthetic unseen peer review";
+    localStorage.setItem(key, JSON.stringify(reports));
+    window.dispatchEvent(new Event("focus"));
+    return { id: report.id, revision: report.revision, content: report.content };
+  });
+  await expect(
+    page.getByRole("status").filter({ hasText: "다른 곳에서 새 버전을 만든 경우" }),
+  ).toBeVisible();
+  await expect(editor).toHaveValue(displayed);
+  await page.getByRole("button", { name: "새 버전 만들기" }).click();
+  await page.getByRole("button", { name: "새 버전 생성", exact: true }).click();
+  await expect(page.getByRole("alert")).toBeVisible();
+  await expect(editor).toHaveValue(displayed);
+  const current = await page.evaluate(
+    () =>
+      JSON.parse(localStorage.getItem("baro-api-mock-v1:reports") ?? "{}")[
+        "synthetic-generation-case"
+      ],
+  );
+  expect(current).toMatchObject(peer);
 });

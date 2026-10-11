@@ -33,7 +33,9 @@ export class ReportError extends Error {
       | "USER_QUOTA_EXCEEDED"
       | "IDEMPOTENCY_CONFLICT"
       | "LEGAL_SOURCE_UNAVAILABLE"
-      | "EXPORT_LIMIT_EXCEEDED",
+      | "EXPORT_LIMIT_EXCEEDED"
+      | "EDITS_REQUIRE_SAVE"
+      | "EXPORT_RETRY_EXHAUSTED",
   ) {
     super(code);
   }
@@ -85,7 +87,19 @@ function coverageText(value: V2Coverage | null) {
         : ""
     }`;
   }
-  return `${value.durationSeconds}초 영상 · ${value.frames.filter((f) => f.status === "processed").length}/${value.frames.length}개 표본 처리 · 장면 감지 ${value.sceneDetection === "complete" ? "완료" : "실패"} · ${value.audio ? audio(value.audio) : "오디오 없음"} · 표본 사이 구간은 원본에서 확인 필요`;
+  const gaps = value.frames.filter((frame) => frame.status !== "processed");
+  const samples = gaps.length
+    ? ` · 확인 필요: ${gaps
+        .slice(0, 20)
+        .map(
+          (frame) =>
+            `${frame.timestampSeconds}초 · 프레임 ${frame.frameIndex} ${labels[frame.status]}`,
+        )
+        .join(
+          ", ",
+        )}${gaps.length > 20 ? `, 추가 ${gaps.length - 20}개 표본은 자료 화면에서 확인` : ""}`
+    : "";
+  return `${value.durationSeconds}초 영상 · ${value.frames.filter((f) => f.status === "processed").length}/${value.frames.length}개 표본 처리${samples} · 장면 감지 ${value.sceneDetection === "complete" ? "완료" : "실패"} · ${value.audio ? audio(value.audio) : "오디오 없음"} · 표본 사이 구간은 원본에서 확인 필요`;
 }
 export async function ownedWorkspace(core: V2Core, actor: Actor, id: string) {
   opaqueIdSchema.parse(id);
@@ -321,7 +335,7 @@ export async function buildReportSource(
       for (const { value } of page)
         if (value.included)
           coverage.push(
-            `${file.name} · 자료 버전 ${file.revision} · ${sourcePositionText(value.position)} · ${value.userEdited ? "사용자 교정 · 미확인" : "자료 관찰"}\n${value.text}`,
+            `${file.name} · 자료 버전 ${file.revision} · ${sourcePositionText(value.position)} · ${value.userEdited ? "사용자 교정 · 미확인" : value.certainty === "uncertain" ? "자료 관찰 · 미확인" : "자료 관찰"}\n${value.text}`,
           );
       if (coverage.join("\n").length > 20000) throw new ReportError("EXPORT_LIMIT_EXCEEDED");
       cursor = page.length === 4 ? (page.at(-1)?.ordinal ?? -1) : -1;
@@ -337,16 +351,23 @@ export async function buildReportSource(
             (file) => file.id === ref.fileId && file.revision === ref.fileRevision,
           )),
     );
-  let facts = summary.facts.filter((fact) => allowed(fact.references));
-  // Excluding material also removes conflicting facts whose counterpart was
-  // excluded, instead of leaving references to a hidden item in the export.
-  while (
-    facts.some((fact) => fact.conflictingFactIds.some((fid) => !facts.some((f) => f.id === fid)))
-  ) {
-    facts = facts.filter((fact) =>
-      fact.conflictingFactIds.every((fid) => facts.some((f) => f.id === fid)),
-    );
-  }
+  const retained = summary.facts.filter((fact) => allowed(fact.references));
+  const retainedIds = new Set(retained.map((fact) => fact.id));
+  // Preserve independently sourced statements. Only remove links to hidden counterparts.
+  const facts = retained.map((fact) => {
+    const conflictingFactIds = fact.conflictingFactIds.filter((id) => retainedIds.has(id));
+    return {
+      ...fact,
+      conflictingFactIds,
+      certainty:
+        fact.certainty === "conflicting" && !conflictingFactIds.length
+          ? ("uncertain" as const)
+          : fact.certainty,
+    };
+  });
+  // Aggregate summary fields have no per-material provenance. They cannot be safely
+  // reused after source removal; leave a visible gap for review rather than guess.
+  const filtered = excluded.length > 0 || facts.length !== summary.facts.length;
   if (facts.length !== summary.facts.length)
     coverage.push(
       `제외했거나 현재 출처를 확인할 수 없는 자료를 참조한 사실 ${summary.facts.length - facts.length}개를 리포트에서 제외했습니다. 원본과 직접 확인해 주세요.`,
@@ -396,18 +417,26 @@ export async function buildReportSource(
     throw new ReportError("STALE_REVISION");
   const body = v2ReportBodySchema(guideHosts).parse({
     schemaVersion: "2",
-    overview: summary.overview,
-    parties: summary.parties,
+    overview: filtered
+      ? "자료를 제외한 리포트입니다. 남은 사실과 출처를 아래에서 확인하고 사건 개요를 직접 보완해 주세요."
+      : summary.overview,
+    parties: filtered ? [] : summary.parties,
     facts,
-    timeline,
+    timeline: timeline.sort(
+      (a, b) => (a.date ?? "9999").localeCompare(b.date ?? "9999") || a.id.localeCompare(b.id),
+    ),
     selectedFiles,
-    unknowns: summary.unknowns,
+    unknowns: filtered
+      ? [
+          "기존 종합 요약·당사자·미확인 사항은 제외 자료와의 연결을 구분할 수 없어 옮기지 않았습니다. 남은 출처로 직접 확인해 주세요.",
+        ]
+      : summary.unknowns,
     actions,
     lawyerQuestions: [],
     citations,
     legalSourceStatus: citations.length ? "verified" : "not_requested",
     notices: [
-      ...summary.notices,
+      ...(filtered ? [] : summary.notices),
       ...(summary.notices.length < 20
         ? ["법률 판단·원본 진정성·법적 효력을 보장하지 않습니다. 사용자가 검토 후 직접 전달합니다."]
         : []),
@@ -439,6 +468,9 @@ export function reportText(body: V2ReportBody, coverage: readonly string[]) {
     uncertain: "미확인",
     conflicting: "상반됨",
   };
+  const factLabel = (id: string) => `사실 ${body.facts.findIndex((fact) => fact.id === id) + 1}`;
+  const citationLabel = (id: string) =>
+    `공식 출처 ${body.citations.findIndex((citation) => citation.id === id) + 1}`;
   const refs = (references: V2ReportBody["facts"][number]["references"]) =>
     references
       .map((ref) =>
@@ -450,7 +482,7 @@ export function reportText(body: V2ReportBody, coverage: readonly string[]) {
               ? `입력 버전 ${ref.intakeRevision}`
               : ref.kind === "intake_answer"
                 ? `답변 ${ref.questionId}`
-                : `공식 출처 ${ref.citationId}`,
+                : citationLabel(ref.citationId),
       )
       .join(" / ");
   const text = [
@@ -463,7 +495,7 @@ export function reportText(body: V2ReportBody, coverage: readonly string[]) {
     "사실·주장·출처",
     ...body.facts.map(
       (fact) =>
-        `${fact.text}\n[${labels[fact.attribution]} · ${certainty[fact.certainty]} · ${refs(fact.references)}${fact.conflictingFactIds.length ? ` · 상반 항목: ${fact.conflictingFactIds.join(", ")}` : ""}]`,
+        `${factLabel(fact.id)} · ${fact.text}\n[${fact.userEdited ? "사용자 교정 · " : ""}${labels[fact.attribution]} · ${certainty[fact.certainty]} · ${refs(fact.references)}${fact.conflictingFactIds.length ? ` · 상반 항목: ${fact.conflictingFactIds.map(factLabel).join(", ")}` : ""}]`,
     ),
     "",
     "미확인 사항",
@@ -478,7 +510,7 @@ export function reportText(body: V2ReportBody, coverage: readonly string[]) {
     "공식 출처",
     ...body.citations.map(
       (c) =>
-        `${c.title}\n${c.kind === "statute" ? `${c.article} · 시행일 ${c.effectiveDate}` : c.kind === "precedent" ? `${c.court} · ${c.caseNumber} · 선고일 ${c.decisionDate}` : `${c.section} · 게시일 ${c.publishedDate ?? "미확인"}`}\n${c.url}\n검증 시각: ${c.verifiedAt}`,
+        `${citationLabel(c.id)} · ${c.title}\n${c.kind === "statute" ? `${c.article} · 시행일 ${c.effectiveDate}` : c.kind === "precedent" ? `${c.court} · ${c.caseNumber} · 선고일 ${c.decisionDate}` : `${c.section} · 게시일 ${c.publishedDate ?? "미확인"}`}\n${c.url}\n검증 시각: ${c.verifiedAt}`,
     ),
     "",
     "준비할 행동",
@@ -494,7 +526,7 @@ export function reportText(body: V2ReportBody, coverage: readonly string[]) {
     ...body.notices,
     `작성 시각: ${body.generatedAt}`,
   ].join("\n");
-  if (text.length > 30000) throw new ReportError("VALIDATION_ERROR");
+  if (text.length > 30000) throw new ReportError("EXPORT_LIMIT_EXCEEDED");
   return text;
 }
 export function validateOriginalSelection(

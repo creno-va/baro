@@ -47,6 +47,11 @@ export const saveReportSchema = z.strictObject({
 });
 export const generateReportSchema = z.strictObject({
   expectedRevision: z.number().int().positive().optional(),
+  excludedFileIds: z
+    .array(opaqueIdSchema)
+    .max(100)
+    .refine((ids) => new Set(ids).size === ids.length)
+    .optional(),
 });
 type Row = {
   id: string;
@@ -464,6 +469,8 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
       const exclusionsChanged =
         JSON.stringify([...value.excludedFileIds].sort()) !==
         JSON.stringify([...old.review.excludedFileIds].sort());
+      if (exclusionsChanged && value.content !== old.review.content)
+        throw new ReportError("EDITS_REQUIRE_SAVE");
       const review = {
         ...old.review,
         ...value,
@@ -501,12 +508,18 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
       const prior = await latest(a, caseId);
       if (value.expectedRevision !== undefined && value.expectedRevision !== prior?.revision)
         throw new ReportError("STALE_REVISION");
-      const source = await buildReportSource(core, a, caseId, [], deps.guideHosts);
+      const source = await buildReportSource(
+        core,
+        a,
+        caseId,
+        value.excludedFileIds ?? [],
+        deps.guideHosts,
+      );
       const review: ReportReviewData = {
         format: "client_review_v1",
         title: "사건 상담 준비 리포트",
         content: reportText(source.body, source.coverage),
-        excludedFileIds: [],
+        excludedFileIds: value.excludedFileIds ?? [],
         maskIdentifiers: false,
         sourceDigest: source.digest,
         parentReportId: null,
