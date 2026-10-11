@@ -319,26 +319,35 @@ export function createLawyerUploadClient(send = checkedAssetRequest) {
             throw error;
           }
         }
-        const reserved =
-          recovered ??
-          assetView(
-            await (
-              await send("/api/v2/me/lawyer/portfolio-assets", {
-                method: "POST",
-                headers: {
-                  "content-type": "application/json",
-                  "if-match": String(attempt.expectedRevision),
-                  "idempotency-key": attempt.key,
-                },
-                body: JSON.stringify({
-                  purpose,
-                  name,
-                  byteLength: file.size,
-                  mediaType: file.type,
-                }),
-              })
-            ).json(),
-          );
+        let reserved = recovered;
+        if (!reserved) {
+          try {
+            reserved = assetView(
+              await (
+                await send("/api/v2/me/lawyer/portfolio-assets", {
+                  method: "POST",
+                  headers: {
+                    "content-type": "application/json",
+                    "if-match": String(attempt.expectedRevision),
+                    "idempotency-key": attempt.key,
+                  },
+                  body: JSON.stringify({
+                    purpose,
+                    name,
+                    byteLength: file.size,
+                    mediaType: file.type,
+                  }),
+                })
+              ).json(),
+            );
+          } catch (error) {
+            // A definitive reservation conflict cannot be retried with its stale
+            // revision. Unknown outcomes keep the key to recover a committed upload.
+            if (error instanceof LawyerApiError && error.code === "CONFLICT")
+              remember(identity, null);
+            throw error;
+          }
+        }
         if (reserved.status === "deleting")
           throw new LawyerApiError("NOT_FOUND", "자료가 삭제 중이에요. 자료 상태를 확인해 주세요.");
         attempt.assetId = reserved.id;
