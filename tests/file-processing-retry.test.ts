@@ -2,6 +2,8 @@ import { expect, test } from "bun:test";
 import { CURRENT_POLICY_VERSIONS } from "../src/contracts/consent";
 import { createV2DeletionRepository } from "../src/server/db/v2-deletion";
 import { createV2JobsRepository } from "../src/server/db/v2-jobs";
+import { createV2DeletionReconciler } from "../src/server/modules/deletion/v2-reconcile";
+import { nativeJobId } from "../src/server/modules/file-processing/native-identity";
 import { createFileRetry } from "../src/server/modules/file-processing/retry";
 import { fixture, uploaded } from "./helpers/file-processing-fixture";
 import { seedTestSession } from "./helpers/session";
@@ -10,7 +12,7 @@ async function failedFile() {
   const f = await fixture(),
     u = await uploaded(f),
     jobs = createV2JobsRepository(f.core),
-    jobId = `file-processing-${crypto.randomUUID()}`;
+    jobId = nativeJobId("file");
   expect(
     await jobs.admitFile(
       { ...f.actor, workspaceId: f.workspaceId, expectedRevision: f.rev() },
@@ -146,4 +148,41 @@ test("failed file metadata hides retry for terminal failures and exhausted attem
   expect((await listed())[0]).toMatchObject({ canRetry: false });
   f.db.sqlite.query("UPDATE v2_jobs SET retryable=1,attempts=10 WHERE id=?").run(f.jobId);
   expect((await listed())[0]).toMatchObject({ canRetry: false });
+});
+
+test("deletion after a retry retains and revokes every native attempt before removing the original", async () => {
+  const f = await failedFile();
+  await f.retry(f.actor.ownerId, f.workspaceId, f.u.session.fileId, f.input());
+  expect(
+    await createV2DeletionRepository(f.core).file(
+      { ...f.actor, workspaceId: f.workspaceId, expectedRevision: f.rev() },
+      f.u.session.fileId,
+      2,
+    ),
+  ).toBe(true);
+  const attempts = [`${f.jobId}-1`, `${f.jobId}-2`];
+  expect(
+    f.db.sqlite
+      .query("SELECT target_id FROM v2_deletion_targets WHERE kind='job' ORDER BY target_id")
+      .all(),
+  ).toEqual(attempts.map((target_id) => ({ target_id })));
+  const revoked: string[] = [];
+  const missing = {
+    get: async () => {
+      throw new Error("instance.not_found");
+    },
+  };
+  const result = await createV2DeletionReconciler(f.core, {
+    environment: "preview",
+    privateBucket: f.bucket.port,
+    workflows: [missing, missing, missing, missing],
+    stopNative: async (id) => {
+      expect(f.bucket.objects.size).toBe(1);
+      revoked.push(id);
+    },
+    testOnlyUnmeteredStorage: true,
+  }).run();
+  expect(result).toEqual({ acquired: 1, completed: 1, retry: 0 });
+  expect(revoked).toEqual(attempts);
+  expect(f.bucket.objects.size).toBe(0);
 });

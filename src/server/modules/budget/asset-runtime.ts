@@ -5,6 +5,7 @@ import {
   type AssetProcessingParams,
   createAssetProcessingService,
 } from "../file-processing/assets";
+import { namedProcessorPort } from "../file-processing/native-identity";
 import { ProcessingError } from "../file-processing/protocol";
 import { createProcessorTransport, type ProcessingCosts } from "../file-processing/transport";
 import { createLawyerAssetsService } from "../lawyers/assets";
@@ -104,18 +105,9 @@ export async function createAssetProcessingRuntime(
       await owner.get(permit)?.after(permit, receipt);
     },
   };
-  let native: ReturnType<typeof env.FILE_PROCESSOR.get> | null = null;
   const processor = createProcessorTransport({
     costs,
-    fetch: (request) => {
-      native = env.FILE_PROCESSOR.get(env.FILE_PROCESSOR.newUniqueId());
-      return native.fetch(request);
-    },
-    stop: async () => {
-      const current = native;
-      native = null;
-      await current?.stop("SIGKILL");
-    },
+    ...namedProcessorPort(env.FILE_PROCESSOR, instanceId),
   });
   const source = createLawyerAssetsService(core, { environment, bucket: env.CASE_PRIVATE_R2 });
   const assets = createAssetProcessingService(core, {

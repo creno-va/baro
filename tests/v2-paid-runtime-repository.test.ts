@@ -324,7 +324,7 @@ test("actual upload probe composition reserves SQL cost before native transport 
     APP_ENV: "preview",
     FILE_PROCESSOR: {
       idFromName: (id: string) => {
-        expect(id).toMatch(/^probe-[a-f0-9-]{36}-1$/);
+        expect(id).toMatch(/^native-v1-probe-[a-f0-9-]{36}-1$/);
         expect(
           f.db.sqlite
             .query("SELECT runtime_instance_id FROM v2_jobs WHERE runtime_instance_id=?")
@@ -352,7 +352,7 @@ test("actual upload probe composition reserves SQL cost before native transport 
             probe: { category: "document", format: "pdf", pageCount: 1, byteLength: 100 },
           });
         },
-        stop: async () => {
+        stopProcessing: async () => {
           stops++;
         },
       }),

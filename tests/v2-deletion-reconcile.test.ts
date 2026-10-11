@@ -211,7 +211,7 @@ test("unknown missing legacy runtime never becomes a stop receipt; a determinist
     environment: "preview",
     privateBucket: f.bucketPort,
     workflows: [missing, missing, missing, missing],
-    stopProbe: async (id) => {
+    stopNative: async (id) => {
       stopped.push(id);
     },
     clock: () => at,
@@ -222,4 +222,97 @@ test("unknown missing legacy runtime never becomes a stop receipt; a determinist
   expect(
     f.db.sqlite.query("SELECT state FROM v2_deletion_targets WHERE target_id=?").get(unknown),
   ).toEqual({ state: "pending" });
+});
+
+test("Workflow absence or deletion never proves that a legacy random native process stopped", async () => {
+  for (const observed of [false, true]) {
+    const f = await reportFixture();
+    const at = new Date().toISOString(),
+      journal = crypto.randomUUID();
+    f.db.sqlite
+      .query(
+        "INSERT INTO v2_deletion_journals(id,target_kind,target_id,created_at,next_attempt_at) VALUES(?,'blob',?,?,?)",
+      )
+      .run(journal, crypto.randomUUID(), at, at);
+    const ids = [`file-processing-${crypto.randomUUID()}-1`, `${crypto.randomUUID()}-1`];
+    for (const [ordinal, id] of ids.entries())
+      f.db.sqlite
+        .query(
+          "INSERT INTO v2_deletion_targets(journal_id,kind,target_id,ordinal) VALUES(?,'job',?,?)",
+        )
+        .run(journal, id, ordinal);
+    let nativeCalls = 0;
+    const found = { get: async () => ({ delete: async () => {} }) };
+    const runner = createV2DeletionReconciler(f.core, {
+      environment: "preview",
+      workflows: [observed ? found : missing, missing, missing, missing],
+      stopNative: async () => {
+        nativeCalls++;
+      },
+      clock: () => at,
+      onFailure: () => {},
+      testOnlyUnmeteredStorage: true,
+    });
+    expect(await runner.run()).toEqual({ acquired: 1, completed: 0, retry: 1 });
+    expect(nativeCalls).toBe(0);
+    expect(
+      f.db.sqlite
+        .query("SELECT count(*) n FROM v2_deletion_targets WHERE journal_id=? AND state='pending'")
+        .get(journal),
+    ).toEqual({ n: 2 });
+  }
+});
+
+test("native revocation and Workflow stop must both succeed before the retained journal receives a receipt", async () => {
+  const f = await reportFixture();
+  let at = new Date().toISOString(),
+    nativeFails = true,
+    workflowFails = false;
+  const journal = crypto.randomUUID(),
+    id = `native-v1-file-${crypto.randomUUID()}-2`,
+    calls: string[] = [];
+  f.db.sqlite
+    .query(
+      "INSERT INTO v2_deletion_journals(id,target_kind,target_id,created_at,next_attempt_at) VALUES(?,'blob',?,?,?)",
+    )
+    .run(journal, crypto.randomUUID(), at, at);
+  f.db.sqlite
+    .query("INSERT INTO v2_deletion_targets(journal_id,kind,target_id,ordinal) VALUES(?,'job',?,0)")
+    .run(journal, id);
+  const binding = {
+    get: async () => ({
+      delete: async () => {
+        calls.push("workflow");
+        if (workflowFails) throw new Error("synthetic workflow failure");
+      },
+    }),
+  };
+  const runner = createV2DeletionReconciler(f.core, {
+    environment: "preview",
+    workflows: [binding, missing, missing, missing],
+    stopNative: async (runtime) => {
+      expect(runtime).toBe(id);
+      calls.push("native");
+      if (nativeFails) throw new Error("synthetic native failure");
+    },
+    clock: () => at,
+    onFailure: () => {},
+    testOnlyUnmeteredStorage: true,
+  });
+  expect(await runner.run()).toEqual({ acquired: 1, completed: 0, retry: 1 });
+  expect(calls).toEqual(["native"]);
+  nativeFails = false;
+  workflowFails = true;
+  at = new Date(Date.parse(at) + 61000).toISOString();
+  expect(await runner.run()).toEqual({ acquired: 1, completed: 0, retry: 1 });
+  expect(
+    f.db.sqlite.query("SELECT state FROM v2_deletion_targets WHERE target_id=?").get(id),
+  ).toEqual({ state: "pending" });
+  workflowFails = false;
+  at = new Date(Date.parse(at) + 61000).toISOString();
+  expect(await runner.run()).toEqual({ acquired: 1, completed: 1, retry: 0 });
+  expect(calls).toEqual(["native", "native", "workflow", "native", "workflow"]);
+  expect(
+    f.db.sqlite.query("SELECT state FROM v2_deletion_targets WHERE target_id=?").get(id),
+  ).toEqual({ state: "completed" });
 });

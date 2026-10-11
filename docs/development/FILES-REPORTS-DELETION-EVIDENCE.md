@@ -40,11 +40,50 @@ HTML/PDF/선택 ZIP→자료·사건·계정 삭제와 원격 negative HEAD/임�
 복구 후 재삭제는 #19 총괄이 격리 환경·최신 외부 journal·복구 관리자 조건을 확인한
 **한 번의 drill**에만 합류한다.
 
-별도 추적: `budget/processing-runtime.ts`의 임의 Container ID와 deletion reconciler의
-Workflow stop receipt 사이에 native instance 추적 공백이 있다. Workflow 중단 후
-native `finally`가 실행되지 않는 상황의 물리 삭제 완료 증거는 아직 없으며 총괄에
-재현·composition 소유권 조율을 요청했다. 이번 startup 경합 수정이나 5분 shutdown
-fallback을 그 문제의 해결 증거로 대체하지 않는다. #58/#59/#66/#67과 Goal은 미완료다.
+### Native 임시물 수명 보완 (#59/#67)
+
+총괄과 인증·AI 담당이 processing/asset runtime의 identity·binding·lifecycle 수정을
+이 담당에게 인계했다. Workflow가 없을 때 과거 `file-processing-*` native 작업의
+실제 stop 확인 없이 journal이 완료되는 로컬 SQL 재현을 확보했다.
+[PR #208](https://github.com/creno-va/baro/pull/208)에 다음 보완을 모았다.
+
+- 새 file/asset/probe job은 `native-v1-*` 이름을 사용한다. 기존 job/outbox가 보존하는
+  attempt runtime ID가 Container 이름과 같아 삭제 후에도 도달할 수 있다. schema나
+  migration을 추가하지 않는다. 실제 SQL 재시도 후 삭제에서 `-1`과 `-2` 모두
+  inventory에 남고 두 attempt를 revoke한 다음 원본이 삭제됨을 검증했다.
+  10번째 attempt ID도 54~55자로 기존 100자 opaque ID 계약을 통과한다.
+- 같은 attempt의 문서 페이지·영상 unit은 순차 실행하고 unit마다 깨끗한 native
+  process를 시작한다. 이전 DO가 재생성됐을 때 남은 process도 시작 전에 destroy한다.
+  실제 SQL/AES 2페이지 처리→파생물→coverage publication에 동일 lifecycle/proxy를
+  연결한 합성 회귀와 새 ID를 사용한 file/asset Workflow dispatch 회귀가 통과했다.
+  스트리밍 Request를 복제하지 않고 proxy에 수명 신호를 별도로 결합하여 원본 스트림을
+  유지하며 취소·삭제 신호를 함께 적용한다.
+- 삭제 RPC는 비민감 boolean tombstone을 DO storage에 저장하고, 진행 중 요청을
+  취소하며 늦게 완료하는 start까지 기다린 뒤 `destroy()`가 성공해야 반환한다.
+  재생성된 DO도 tombstone을 읽어 start를 거부한다. journal은 revoke와 Workflow
+  delete가 모두 성공한 뒤 receipt를 기록한다. persistence/destroy/Workflow 오류는
+  pending으로 남고 같은 대상 재시도가 가능하다.
+- 과거 임의 Container ID는 이름을 재구성할 수 없다. Workflow 부재뿐 아니라
+  file/asset Workflow 삭제 성공만으로도 완료 처리하지 않는다. 이 대상과 그에 묶인
+  R2 정리는 플랫폼 종료 증거가 마련될 때까지 pending이다. 기존 완료 journal을
+  이번 변경으로 소급 검증하거나 과거 random native 물리 삭제의 성공으로 간주하지 않는다.
+- SDK `@cloudflare/containers` 0.3.7의 destroy는 native destroy를 await하고 DO storage를
+  지우지 않는다. [공식 destroy 계약](https://developers.cloudflare.com/containers/api/container-class/)
+  역시 runtime이 파괴된 뒤 완료됨을 명시한다. 이는 로컬 구현·계약 확인이며 실제
+  배포 인스턴스의 종료 성공 증거는 아니다.
+- 기존 요청 deadline 265초, startup 15초/port 20초, container CPU 600초 및 memory/disk
+  비용 상한은 유지한다. unit당 새 process라는 자원 구조도 유지한다. 추가된 DO storage
+  읽기·삭제 tombstone 쓰기와 RPC의 실제 지연·청구는 원격 인수에서 확인해야 한다.
+
+로컬 lifecycle/proxy, 삭제·복구, paid admission, asset runtime 및
+transport/execution/retry/dispatch **10개 파일의 중복 없는 102개 검사**가 통과했다. 늦은 start·늦은 응답·저장 실패·
+종료 실패·재실행·순차 unit을 포함한다. `validate:quick`은 초기 테스트 타입 오류 수정 및 후속 proxy 변경 뒤 최종 통과했다.
+도구 계약 18 tests / 252 assertions도 통과했다. `validate:build`의
+production build·bundle·Worker dry-run은 통과했다. native Python/image는 변경하지
+않았고 실제 Container 실행은 원격 인수 대기다. 최신 exact-head 결과는 PR에 연결한다.
+
+#58/#59/#66/#67과 Goal은 미완료다. 전용 계정의 실제 업로드/처리/리포트/삭제와
+총괄의 한 번의 격리 복구 drill, 새 candidate의 Container 물리 종료 증거가 필요하다.
 
 ## 기존 구현·검증 기록
 

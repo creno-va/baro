@@ -8,6 +8,7 @@ import {
   type ProcessingRuntimePolicy,
 } from "../modules/budget/processing-runtime";
 import { hasCurrentConsent } from "../modules/consent/service";
+import { nativeJobId } from "../modules/file-processing/native-identity";
 import type { LawyerAssetDependencies } from "../modules/lawyers/assets";
 import { readProcessingProofs } from "./processing-proofs";
 
@@ -51,7 +52,7 @@ export function createAssetProcessingAdmission(
           request_hash: string;
         }>();
       if (!source) return false;
-      const jobId = crypto.randomUUID();
+      const jobId = nativeJobId("asset");
       const budget = createProcessingBudgetService({
         core,
         environment,
