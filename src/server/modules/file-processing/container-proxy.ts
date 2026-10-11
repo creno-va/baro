@@ -100,6 +100,12 @@ export async function proxyProcessorRequest(
   try {
     if (request.signal.aborted) throw new Error("ABORTED");
     await port.start(controller.signal);
+    if (controller.signal.aborted) {
+      // Cancellation may have stopped the instance before a delayed startup
+      // completed. Stop that late instance too, before dispatching any material.
+      await port.stop();
+      throw new Error("ABORTED");
+    }
     const headers = new Headers();
     if (!ready) {
       headers.set("content-type", "application/octet-stream");

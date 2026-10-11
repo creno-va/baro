@@ -1,5 +1,43 @@
 # 자료·리포트·삭제 구현 검증
 
+## 2026-10-11 실제 인수 재개
+
+인수 담당은 `BARO 자료·리포트·삭제 인수`, checkout `de87`, 브랜치
+`codex/58-material-acceptance`다. 기존 PR130/164 및 통합 PR167의 구현·아래 증거를
+승계한다. 총괄이 지정한 preview는 `https://preview.baro.site`, SHA
+`283af452b7093d8cac0d9aa2c41b28a22b58d5e9`이며
+[수동 배포 run38124298959](https://github.com/creno-va/baro/actions/runs/38124298959)가 성공했다.
+테스트 namespace는 `materials-de87-20261011`이다. 다른 세션 계정·사건은 사용하지 않는다.
+
+- 17:25–17:26 KST 원격 읽기: `/api/health/live`의 release가 위 SHA와 일치했다.
+  익명 요청으로 이 namespace의 자료 목록 및 HTML/PDF/ZIP 경로를 조회한 4건은
+  모두 `401 UNAUTHENTICATED`, `private, no-store`, request ID 포함이었다.
+  존재하는 계정·사건을 조회하지 않았으며 업로드·처리·삭제 성공 증거는 아니다.
+- 기존 합성 fixture 11개, 644,318 bytes의 무결성 검사를 통과했다. document/image/
+  audio/video와 손상 파일 대조군을 그대로 재사용한다. 이 검사는 OCR/Whisper 실행이 아니다.
+- Container proxy에서 시작 도중 취소가 먼저 stop을 끝낸 뒤 startup이 늦게 완료하면
+  원본 처리 POST를 보내고 인스턴스를 남기는 경합을 재현했다. 새 회귀가 수정 전 실패했다.
+  startup 직후 abort를 재검사하고 늦게 시작한 인스턴스를 다시 stop하여 원본 dispatch를
+  차단한다. 실패 응답은 기존 `PROCESSOR_UNAVAILABLE`로 제한한다.
+- 수정 후 container proxy/transport/execution/retry 및 deletion reconcile/restore
+  6개 파일의 **42 tests / 308 assertions**가 통과했다. `bun ci`, `validate:quick`,
+  `validate:build`(production build·163-file bundle·Worker dry-run)도 통과했다.
+  UI/schema/native processor 자체는 변경하지 않아 browser/db/native/full을 반복하지 않았다.
+
+다음 실제 증거는 아직 없다. 전용 폐기 가능한 OAuth 계정 2개(소유자·비소유자)가 필요하며
+총괄에 요청했다. 해당 계정에서 업로드→R2/Container/Whisper→교정/재접속→최신
+HTML/PDF/선택 ZIP→자료·사건·계정 삭제와 원격 negative HEAD/임시물 정리를 검증한다.
+복구 후 재삭제는 #19 총괄이 격리 환경·최신 외부 journal·복구 관리자 조건을 확인한
+**한 번의 drill**에만 합류한다.
+
+별도 추적: `budget/processing-runtime.ts`의 임의 Container ID와 deletion reconciler의
+Workflow stop receipt 사이에 native instance 추적 공백이 있다. Workflow 중단 후
+native `finally`가 실행되지 않는 상황의 물리 삭제 완료 증거는 아직 없으며 총괄에
+재현·composition 소유권 조율을 요청했다. 이번 startup 경합 수정이나 5분 shutdown
+fallback을 그 문제의 해결 증거로 대체하지 않는다. #58/#59/#66/#67과 Goal은 미완료다.
+
+## 기존 구현·검증 기록
+
 담당 이슈: #58, #59, #66, #67. 브랜치: `codex/58-files-reports-deletion`.
 기준 main: `c6b96656ee6e4d7c968486b47a994b2807bdeadd` (PR #125 UI, #126/#128 및 #127/#129/#131 공유 경계 포함).
 ADR-0014의 고객/변호사 MVP 및 실제 client UI/API adapter 구성을 유지한다.

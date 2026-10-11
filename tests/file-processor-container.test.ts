@@ -125,3 +125,29 @@ test("failed startup returns sanitized retryable result and stops instance", asy
   expect(await result.text()).toBe(JSON.stringify({ code: "PROCESSOR_UNAVAILABLE" }));
   expect(calls.stop).toBe(1);
 });
+
+test("cancelled startup cannot dispatch material and stops an instance that becomes ready late", async () => {
+  const controller = new AbortController();
+  const request = new Request(ingress(), { signal: controller.signal });
+  const { calls, adapter } = port(
+    new Response('{"type":"complete"}\n', {
+      headers: { "content-type": "application/x-ndjson" },
+    }),
+  );
+  let running = false;
+  adapter.start = async () => {
+    // Platform startup can finish after cancellation's first stop already returned.
+    controller.abort();
+    await Promise.resolve();
+    running = true;
+  };
+  adapter.stop = async () => {
+    calls.stop++;
+    running = false;
+  };
+  const result = await proxyProcessorRequest(request, adapter);
+  expect(calls.incoming === null).toBe(true);
+  expect(running).toBe(false);
+  expect(result.status).toBe(503);
+  expect(await result.text()).toBe(JSON.stringify({ code: "PROCESSOR_UNAVAILABLE" }));
+});
