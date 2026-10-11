@@ -269,7 +269,7 @@ export const casesMockHandlers = {
           facts: [
             {
               id: crypto.randomUUID(),
-              text: value.narrative.slice(0, 2000),
+              text: [...value.narrative].slice(0, 2000).join(""),
               attribution: "user_statement",
               certainty: "reported",
               significance: "neutral",

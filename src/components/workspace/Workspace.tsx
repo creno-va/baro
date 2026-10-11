@@ -25,6 +25,7 @@ import { Button, ButtonLink } from "../ui/button";
 import { CaseNavigation } from "./CaseNavigation";
 import { FileReview } from "./FileReview";
 import { referenceLabel, timelineDateLabel } from "./source-label";
+import { timelineDateInput, timelineEventLength } from "./timeline-draft";
 
 export type WorkspaceTab = "chat" | "files" | "timeline" | "actions";
 const tabLabels = { chat: "대화", files: "자료", timeline: "타임라인", actions: "다음 행동" };
@@ -74,11 +75,15 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
   const [error, setError] = useState<ReturnType<typeof problem> | null>(null);
   const [busy, setBusy] = useState("");
   const [draft, setDraft] = useState("");
+  const messageLength = [...draft.trim()].length;
+  const messageTooLong = messageLength > 10000;
   const [selected, setSelected] = useState<string[]>([]);
   const [notice, setNotice] = useState("");
   const [preview, setPreview] = useState<FileView | null>(null);
   const [deleteFile, setDeleteFile] = useState<FileView | null>(null);
-  const [entry, setEntry] = useState<Partial<TimelineView> | null>(null);
+  const [entry, setEntry] = useState<(Partial<TimelineView> & { expectedRevision: number }) | null>(
+    null,
+  );
   const [original, setOriginal] = useState<{ url: string; type: string } | null>(null);
   const [uploadConsent, setUploadConsent] = useState(false);
   const [retryUploads, setRetryUploads] = useState<File[]>([]);
@@ -89,6 +94,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
   } | null>(null);
   const lock = useRef(false);
   const mounted = useRef(true);
+  const linkedFile = useRef("");
   const uploadInput = useRef<HTMLInputElement>(null);
   const dialog = useRef<HTMLDialogElement>(null);
   const reviewDirty = useRef(false);
@@ -165,7 +171,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
           setTimelineRecovery(false);
           setEntry(null);
         }
-        return true;
+        return next;
       }
     } catch (cause) {
       if (alive(epoch) && serial === latest.current) showError(cause);
@@ -204,8 +210,22 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
   useEffect(() => {
     if (tab !== "files" || !ready || !view) return;
     const id = new URLSearchParams(window.location.search).get("file");
-    if (id) setPreview(view.files.find((file) => file.id === id) ?? null);
-  }, [tab, ready, view]);
+    const key = `${caseId}:${id}`;
+    const file = view.files.find((file) => file.id === id);
+    if (file && linkedFile.current !== key) {
+      linkedFile.current = key;
+      setPreview(file);
+    }
+  }, [caseId, tab, ready, view]);
+  useEffect(() => {
+    if (!draft.trim()) return;
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [draft]);
   const latestMessage = view?.messages.at(-1);
   const latestMessageContent = latestMessage
     ? `${latestMessage.id}:${latestMessage.status}:${latestMessage.text}`
@@ -265,7 +285,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
   }, [preview, deleteFile, entry]);
 
   async function run(key: string, action: (epoch: number) => Promise<void>) {
-    const readOrDelete = ["refresh", "original", "delete"].includes(key);
+    const readOrDelete = ["refresh", "history", "original", "delete"].includes(key);
     if (lock.current || !ready || (readonly && !readOrDelete)) return;
     const epoch = ticket();
     lock.current = true;
@@ -307,9 +327,33 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
       }
     }
   }
+  function historyButton(collection: "messages" | "actions" | "timeline", label: string) {
+    if (!view?.pagination?.[collection]) return null;
+    return (
+      <div className="workspace-buttons">
+        <p className="workspace-muted">
+          불러온 기록 {view[collection].length}개 · 나머지 기록을 이어서 확인할 수 있어요.
+        </p>
+        <Button
+          type="button"
+          variant="outline"
+          disabled={!!busy}
+          onClick={() =>
+            void run("history", async (epoch) => {
+              const next = await api.workspace.loadMore(caseId, collection);
+              if (!(await verify()) || !current(epoch)) return;
+              apply(next);
+            })
+          }
+        >
+          {label}
+        </Button>
+      </div>
+    );
+  }
   async function send(event: SyntheticEvent) {
     event.preventDefault();
-    if (readonly || !view || !draft.trim()) return;
+    if (readonly || !view || !draft.trim() || messageTooLong) return;
     const text = draft.trim();
     followingChat.current = true;
     await run("send", async (epoch) => {
@@ -356,6 +400,27 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
     });
     if (uploadInput.current) uploadInput.current.value = "";
   }
+  async function startEntry() {
+    if (!view || readonly) return;
+    const begin = (revision: number) =>
+      setEntry({
+        date: "",
+        datePrecision: "day",
+        title: "",
+        detail: "",
+        expectedRevision: revision,
+      });
+    if (!acknowledgedTimeline.current) {
+      begin(view.case.revision);
+      return;
+    }
+    // Closing an acknowledged write's recovery dialog does not erase its need
+    // for a verified read. A new draft must start from that refreshed snapshot.
+    await run("refresh", async (epoch) => {
+      const next = await load();
+      if (next && current(epoch)) begin(next.case.revision);
+    });
+  }
   function closeDialog() {
     if (busy || reviewBusy.current) return;
     if (
@@ -364,7 +429,6 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
     )
       return;
     reviewDirty.current = false;
-    acknowledgedTimeline.current = false;
     setTimelineRecovery(false);
     setPreview(null);
     setDeleteFile(null);
@@ -373,7 +437,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
   }
   async function saveEntry(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (readonly) return;
+    if (readonly || !entry || timelineEventLength(entry) > 2000) return;
     const values = new FormData(event.currentTarget);
     await run("timeline", async (epoch) => {
       if (acknowledgedTimeline.current) {
@@ -382,6 +446,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
       }
       const next = await api.workspace.saveTimeline(caseId, {
         ...(entry?.id ? { id: entry.id } : {}),
+        expectedRevision: entry.expectedRevision,
         date:
           !entry?.date || entry.datePrecision === "unknown"
             ? ""
@@ -555,6 +620,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                         </div>
                       </div>
                     )}
+                    {historyButton("messages", "이전 대화 더 불러오기")}
                     {view.messages.map((message) => (
                       <article
                         className={`workspace-message workspace-message--${message.role}`}
@@ -685,13 +751,13 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                       <textarea
                         ref={draftInput}
                         id="workspace-message"
-                        maxLength={10000}
                         rows={2}
                         value={draft}
                         disabled={readonly || busy === "send"}
                         onChange={(event) => setDraft(event.target.value)}
                         placeholder="추가로 기억나는 사실이나 궁금한 점을 이야기해 주세요."
-                        aria-describedby="workspace-chat-notice"
+                        aria-describedby="workspace-message-length workspace-chat-notice"
+                        aria-invalid={messageTooLong}
                         onKeyDown={(event) => {
                           if (
                             event.key === "Enter" &&
@@ -700,7 +766,8 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                             !busy &&
                             !pendingResponse &&
                             !readonly &&
-                            draft.trim()
+                            draft.trim() &&
+                            !messageTooLong
                           ) {
                             event.preventDefault();
                             event.currentTarget.form?.requestSubmit();
@@ -714,7 +781,9 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                         <Button
                           className="workspace-send"
                           type="submit"
-                          disabled={!!busy || !draft.trim() || readonly || pendingResponse}
+                          disabled={
+                            !!busy || !draft.trim() || messageTooLong || readonly || pendingResponse
+                          }
                         >
                           {busy === "send" ? (
                             <LoaderCircle className="workspace-spin" size={17} />
@@ -725,6 +794,11 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                         </Button>
                       </div>
                     </div>
+                    <p id="workspace-message-length" role={messageTooLong ? "alert" : undefined}>
+                      {messageLength.toLocaleString()} / 10,000자
+                      {messageTooLong &&
+                        " · 10,000자 이하로 줄여 주세요. 입력한 내용은 그대로 남아 있어요."}
+                    </p>
                     <p className="workspace-chat-notice" id="workspace-chat-notice">
                       BARO는 AI로 사실을 정리하며 법률 판단을 대신하지 않아요.
                       <br className="workspace-mobile-break" /> 중요한 내용은 원본과 전문가에게
@@ -874,9 +948,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                     <Button
                       variant="default"
                       disabled={!!busy || readonly}
-                      onClick={() =>
-                        setEntry({ date: "", datePrecision: "day", title: "", detail: "" })
-                      }
+                      onClick={() => void startEntry()}
                     >
                       <Plus size={17} />
                       일정 추가
@@ -891,6 +963,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                       </p>
                     </div>
                   )}
+                  {historyButton("timeline", "타임라인 더 불러오기")}
                   <ol className="workspace-timeline">
                     {[...view.timeline]
                       .sort((a, b) => (a.date || "9999").localeCompare(b.date || "9999"))
@@ -906,7 +979,12 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                             variant="ghost"
                             size="sm"
                             disabled={!!busy || readonly}
-                            onClick={() => setEntry(item)}
+                            onClick={() =>
+                              setEntry({
+                                ...item,
+                                expectedRevision: item.revision ?? view.case.revision,
+                              })
+                            }
                           >
                             편집
                           </Button>
@@ -945,6 +1023,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                       </ButtonLink>
                     </div>
                   )}
+                  {historyButton("actions", "행동 더 불러오기")}
                   <ul className="workspace-action-list">
                     {view.actions.map((action) => (
                       <li key={action.id} className={action.done ? "is-done" : ""}>
@@ -1047,10 +1126,11 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                             {fact.references.map((ref) => (
                               <span key={JSON.stringify(ref)} className="workspace-fact-source">
                                 {ref.kind === "user_material" ? (
-                                  <a href={`${base}/files`}>
+                                  <a href={`${base}/files?file=${encodeURIComponent(ref.fileId)}`}>
                                     자료:{" "}
                                     {view.files.find((file) => file.id === ref.fileId)?.name ??
-                                      "원본 범위 확인"}
+                                      "원본 범위 확인"}{" "}
+                                    · {referenceLabel(ref)}
                                   </a>
                                 ) : ref.kind === "user_message" ? (
                                   "대화에서 제공"
@@ -1277,7 +1357,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                 setEntry({
                   ...entry,
                   datePrecision: precision,
-                  date: precision === "unknown" ? "" : (entry.date ?? ""),
+                  date: timelineDateInput(entry.date ?? "", precision, entry.datePrecision),
                 });
               }}
             >
@@ -1314,7 +1394,6 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
               id="timeline-title"
               name="title"
               required
-              maxLength={300}
               disabled={readonly || !!busy || timelineRecovery}
               value={entry.title ?? ""}
               onChange={(event) => setEntry({ ...entry, title: event.target.value })}
@@ -1323,17 +1402,22 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
             <textarea
               id="timeline-detail"
               name="detail"
-              maxLength={1600}
               rows={4}
               disabled={readonly || !!busy || timelineRecovery}
               value={entry.detail ?? ""}
               onChange={(event) => setEntry({ ...entry, detail: event.target.value })}
             />
+            {timelineEventLength(entry) > 2000 && (
+              <p role="alert">일어난 일과 상세 내용은 합쳐서 2,000자까지 입력할 수 있어요.</p>
+            )}
             <div className="workspace-buttons">
               <Button variant="outline" disabled={!!busy} onClick={closeDialog}>
                 취소
               </Button>
-              <Button type="submit" disabled={!!busy || readonly}>
+              <Button
+                type="submit"
+                disabled={!!busy || readonly || timelineEventLength(entry) > 2000}
+              >
                 {busy === "timeline" ? "저장 중" : "타임라인 저장"}
               </Button>
             </div>

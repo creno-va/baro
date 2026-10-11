@@ -129,6 +129,7 @@ export const api = {
   }>("cases"),
   workspace: domain<{
     get(id: string): Promise<WorkspaceView>;
+    loadMore(id: string, collection: "messages" | "actions" | "timeline"): Promise<WorkspaceView>;
     sendMessage(
       id: string,
       input: { expectedRevision: number; text: string; selectedFileIds: string[] },
@@ -137,7 +138,7 @@ export const api = {
     setAction(id: string, actionId: string, done: boolean): Promise<WorkspaceView>;
     saveTimeline(
       id: string,
-      entry: Omit<TimelineView, "id"> & { id?: string },
+      entry: Omit<TimelineView, "id"> & { id?: string; expectedRevision?: number },
     ): Promise<WorkspaceView>;
   }>("workspace"),
   files: domain<{

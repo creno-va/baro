@@ -40,6 +40,7 @@ export type MessageView = {
 export type ActionView = { id: string; title: string; detail: string; done: boolean };
 export type TimelineView = {
   id: string;
+  revision?: number | undefined;
   date: string;
   datePrecision?: "day" | "month" | "year" | "unknown";
   title: string;
@@ -57,7 +58,9 @@ export type FileView = {
   canRetry?: boolean | undefined;
   uploadContentHash?: string | undefined;
 };
+export type WorkspaceCollection = "messages" | "actions" | "timeline";
 export type WorkspaceView = {
+  pagination?: Record<WorkspaceCollection, boolean> | undefined;
   case: CaseView;
   messages: MessageView[];
   actions: ActionView[];

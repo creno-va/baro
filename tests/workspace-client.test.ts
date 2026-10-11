@@ -337,7 +337,7 @@ test("real workspace DTOs preserve server-validated text and use entity revision
   await api.get(workspace.id);
   expect(reads.filter((path) => path.includes("/messages?"))).toHaveLength(1);
   expect(reads.filter((path) => path.endsWith("/timeline"))).toHaveLength(1);
-  expect(reads.filter((path) => path.endsWith("/workspace"))).toHaveLength(3);
+  expect(reads.filter((path) => path.endsWith("/workspace"))).toHaveLength(4);
   expect(reads.filter((path) => path.endsWith("/files"))).toHaveLength(2);
   await api.setAction(workspace.id, action.id, true);
   await api.saveTimeline(workspace.id, {
