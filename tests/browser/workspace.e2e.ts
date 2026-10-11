@@ -210,3 +210,37 @@ test("workspace panels keep their navigation, readable layouts and accessible co
   );
   await captureCaseViewports(page, "actions");
 });
+
+for (const canRetry of [true, false])
+  test(`failed materials expose processing retry only when permitted: ${canRetry}`, async ({
+    page,
+  }) => {
+    await page.goto(`${base}/files`);
+    await expect(page.getByRole("heading", { name: "아직 자료가 없어요" })).toBeVisible();
+    await page.evaluate(
+      ({ storageKey, permission }) => {
+        const state = JSON.parse(localStorage.getItem(storageKey) ?? "{}");
+        state.files["synthetic-case"] = [
+          {
+            id: "synthetic-failed-file",
+            name: "synthetic-failed.txt",
+            mimeType: "text/plain",
+            sizeBytes: 8,
+            status: "failed",
+            coverage: "합성 처리 실패",
+            extractedText: "",
+            canRetry: permission,
+          },
+        ];
+        localStorage.setItem(storageKey, JSON.stringify(state));
+      },
+      { storageKey: key, permission: canRetry },
+    );
+    await page.reload();
+    await expect(page.getByText("처리 실패", { exact: true })).toBeVisible();
+    const retry = page.getByRole("button", { name: "처리 다시 시도", exact: true });
+    if (canRetry) await expect(retry).toBeEnabled();
+    else await expect(retry).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "자료 확인", exact: true })).toBeEnabled();
+    await expect(page.getByRole("button", { name: "삭제", exact: true })).toBeEnabled();
+  });
