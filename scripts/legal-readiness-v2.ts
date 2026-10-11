@@ -65,18 +65,22 @@ export async function inspectLegalV2(
   const verified = output.outcomes
     .filter((o) => o.availability === "verified")
     .flatMap((o) => o.chunks);
-  const claimCheck = await validateV2Claims(
-    verified.map((chunk, i) => ({
-      id: `readiness_${i}`,
-      kind: "quotation",
-      text: sourceExcerpt(chunk.span.text, 1000).text,
-      citationId: chunk.citation.id,
-      startUtf16: 0,
-      endUtf16: sourceExcerpt(chunk.span.text, 1000).endUtf16,
-    })),
-    verified.map((chunk) => chunk.citation),
-    output,
-  );
+  const claims = verified.map((chunk, i) => ({
+    id: `readiness_${i}`,
+    kind: "quotation",
+    text: sourceExcerpt(chunk.span.text, 1000).text,
+    citationId: chunk.citation.id,
+    startUtf16: 0,
+    endUtf16: sourceExcerpt(chunk.span.text, 1000).endUtf16,
+  }));
+  // An empty claim set is valid to the validator but provides no readiness evidence.
+  const claimCheck = claims.length
+    ? await validateV2Claims(
+        claims,
+        verified.map((chunk) => chunk.citation),
+        output,
+      )
+    : null;
   return {
     schemaVersion: "2" as const,
     runtimeWorker: false as const,
@@ -87,7 +91,7 @@ export async function inspectLegalV2(
       plans.length === 3 &&
       new Set(plans.map((plan) => plan.kind)).size === 3 &&
       output.outcomes.every((o) => o.availability === "verified") &&
-      claimCheck.valid
+      claimCheck?.valid === true
         ? ("passed" as const)
         : ("failed" as const),
     outcomes: output.outcomes.map(({ kind, availability, reason }) => ({
@@ -104,6 +108,8 @@ export async function inspectLegalV2(
       canonicalUrl: source.canonicalUrl,
       extractorVersion: source.extractorVersion,
     })),
-    claimIntegrity: claimCheck.valid,
+    verifiedSourceCount: new Set(verified.map((chunk) => chunk.source.sourceId)).size,
+    checkedClaimCount: claims.length,
+    claimIntegrity: claimCheck?.valid ?? null,
   };
 }
