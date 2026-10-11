@@ -5,7 +5,7 @@ test("live AI inspection is read-only and preserves the failed result and saniti
   const workflow = z
     .object({
       permissions: z.record(z.string(), z.string()),
-      on: z.object({ workflow_run: z.object({ workflows: z.array(z.string()) }) }),
+      on: z.record(z.string(), z.unknown()),
       jobs: z.object({
         inspect: z.object({
           if: z.string(),
@@ -24,9 +24,8 @@ test("live AI inspection is read-only and preserves the failed result and saniti
     .parse(Bun.YAML.parse(await Bun.file(".github/workflows/ai-preflight.yml").text()));
   expect(workflow.permissions).toEqual({ contents: "read" });
   expect(workflow.jobs.inspect.environment.deployment).toBe(false);
-  expect(workflow.jobs.inspect.if).toContain("head_repository.full_name == github.repository");
-  expect(workflow.jobs.inspect.if).toContain("head_branch == 'main'");
-  expect(workflow.on.workflow_run.workflows).toEqual(["Deploy preview"]);
+  expect(workflow.jobs.inspect.if).toBe("github.ref == 'refs/heads/main'");
+  expect(Object.keys(workflow.on)).toEqual(["workflow_dispatch"]);
   const steps = workflow.jobs.inspect.steps;
   for (const step of steps) {
     if (step.uses) expect(step.uses).toMatch(/^[\w-]+\/[\w-]+@[a-f0-9]{40}$/);

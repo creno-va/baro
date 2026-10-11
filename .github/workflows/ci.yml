@@ -15,192 +15,21 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  native:
-    name: Isolated native media fixtures
+  quality-gate:
+    name: Quality gate
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 8
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
-          fetch-depth: 0
-
-      - name: Detect native changes
-        id: scope
-        env:
-          CHECK_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
-          CHECK_CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-        run: |
-          base="$CHECK_BASE_SHA"
-          if [[ -z "$base" || "$base" =~ ^0+$ ]]; then base="$CHECK_CANDIDATE_SHA^"; fi
-          if git diff --name-only "$base" "$CHECK_CANDIDATE_SHA" | grep -Eq '^(services/file-processor/|tests/fixtures/media/)'; then
-            echo "native=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "native=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Build isolated file processor (linux/amd64)
-        if: steps.scope.outputs.native == 'true'
-        timeout-minutes: 8
-        run: docker build --platform linux/amd64 -f services/file-processor/Dockerfile -t baro-file-processor .
-
-      - name: Execute native media fixtures with no network
-        if: steps.scope.outputs.native == 'true'
-        timeout-minutes: 5
-        run: >-
-          docker run --rm --network none --memory 6g --cpus 1 --pids-limit 128
-          -v "$PWD/tests/fixtures/media:/fixtures:ro"
-          -v "$PWD/services/file-processor/fixture-test.py:/app/fixture-test.py:ro"
-          baro-file-processor python3 /app/fixture-test.py
-
-      - name: Verify lossless extraction optimizations on bounded inputs
-        if: steps.scope.outputs.native == 'true'
-        timeout-minutes: 2
-        run: >-
-          docker run --rm --network none --memory 512m --cpus 1 --pids-limit 128
-          -v "$PWD/services/file-processor/performance-test.py:/app/performance-test.py:ro"
-          baro-file-processor python3 /app/performance-test.py --require-video
-
-  quality:
-    name: Source and browser checks
-    runs-on: ubuntu-latest
-    # Full shared-UI changes run every browser adapter sequentially after source checks.
-    timeout-minutes: 35
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-          persist-credentials: false
-          fetch-depth: 0
-
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: .bun-version
-
-      - name: Validate documentation
-        run: bun .github/scripts/check-docs.ts
-
-      - name: Detect application
-        id: application
-        shell: bash
-        run: |
-          if [[ -f package.json ]]; then
-            echo "present=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "present=false" >> "$GITHUB_OUTPUT"
-            echo "Application has not been scaffolded yet; documentation checks only."
-          fi
-
-      - name: Require Bun lockfile and CI scripts
-        if: steps.application.outputs.present == 'true'
-        shell: bash
-        run: |
-          test -f bun.lock || {
-            echo "::error::package.json exists but bun.lock is missing."
-            exit 1
-          }
-          bun -e '
-            const manifest = await Bun.file("package.json").json();
-            const required = ["lint", "typecheck", "test", "build"];
-            const missing = required.filter((name) => !manifest.scripts?.[name]);
-            if (missing.length) {
-              console.error(`Missing package scripts: ${missing.join(", ")}`);
-              process.exit(1);
-            }
-          '
-
-      - name: Install dependencies
-        if: steps.application.outputs.present == 'true'
+      - name: Install frozen dependencies
         run: bun ci
-
-      - name: Determine changed feature scope
-        id: scope
-        env:
-          CHECK_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
-          CHECK_CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-        run: bun scripts/development-checks.ts scope
-
-      - name: Validate work graph and product boundaries
-        run: |
-          bun run work:check
-          bun run boundaries:check
-
-      - name: Dependency audit
-        run: bun audit
-
-      - name: Secret scanner (pinned binary, full committed history, fully redacted)
-        shell: bash
-        run: |
-          curl --fail --silent --show-error --location https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz --output /tmp/gitleaks.tar.gz
-          echo '551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  /tmp/gitleaks.tar.gz' | sha256sum --check
-          mkdir /tmp/baro-gitleaks
-          tar -xzf /tmp/gitleaks.tar.gz -C /tmp/baro-gitleaks
-          /tmp/baro-gitleaks/gitleaks git --log-opts=HEAD --redact=100 --no-banner --log-level warn
-
-      - name: Validate schema drift and SQL migrations
-        if: steps.scope.outputs.database == 'true'
-        run: |
-          bun run db:check
-          bunx wrangler d1 migrations apply DB --local --persist-to .wrangler/ci-migration
-          bun scripts/apply-d1-migrations.ts preview --local --persist-to .wrangler/ci-file-import
-          bun scripts/apply-d1-migrations.ts preview --local --persist-to .wrangler/ci-file-import
-
-      - name: Lint
-        if: steps.application.outputs.present == 'true'
-        run: bun run lint
-
-      - name: Typecheck
-        if: steps.application.outputs.present == 'true'
-        run: bun run typecheck
-
-      - name: Changed feature tests
-        if: steps.application.outputs.present == 'true'
-        env:
-          CHECK_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
-          CHECK_CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-        run: bun scripts/development-checks.ts unit
-
-      - name: Build
-        if: steps.application.outputs.present == 'true'
-        run: |
-          bun run build:production
-          bun run bundle:check
-
-      - name: Changed feature browser flows
-        env:
-          CHECK_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
-          CHECK_CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-        run: |
-          python3 -m pip install --target .wrangler/pdf-check pypdf==6.12.2
-          export PYTHONPATH="$PWD/.wrangler/pdf-check${PYTHONPATH:+:$PYTHONPATH}"
-          bunx playwright install --with-deps chromium
-          bun scripts/development-checks.ts browser
-          bun run test:csp
-
-      - name: Validate Cloudflare bundle
-        if: steps.application.outputs.present == 'true'
-        shell: bash
-        run: |
-          if [[ -f wrangler.jsonc || -f wrangler.json || -f wrangler.toml ]]; then
-            bun run cf:dry-run
-          else
-            echo "::error::Application exists but a Wrangler configuration file is missing."
-            exit 1
-          fi
-
-  quality-gate:
-    name: Quality gate
-    runs-on: ubuntu-latest
-    if: always()
-    needs: [quality, native]
-    steps:
-      - name: Require every verification job to succeed
-        env:
-          SOURCE_RESULT: ${{ needs.quality.result }}
-          NATIVE_RESULT: ${{ needs.native.result }}
-        run: test "$SOURCE_RESULT" = success && test "$NATIVE_RESULT" = success
+      - name: Fast source and tooling contracts
+        run: bun run validate:quick

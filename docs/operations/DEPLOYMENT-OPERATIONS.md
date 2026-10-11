@@ -26,10 +26,10 @@ D1, Workflow, SESSION KV는 `preview`와 `production` 이름으로 각각 분리
 
 ## 브랜치와 배포
 
-- pull request: 정적·테스트·build (stacked PR도 CI 실행), PR에서는 고정 preview를 덮어쓰지 않음
-- `main`: 승인된 변경을 preview에 자동 배포
-- production: preview smoke와 출시 체크 통과 후 GitHub Environment 수동 승인
-- hotfix도 같은 테스트를 거치며 직접 콘솔 편집은 장애 봉쇄 외 금지
+- pull request/main: 빠른 `Quality gate`만 자동 실행; 무거운 검증은 필요한 범위만 로컬 실행
+- preview: 명령으로 선택한 현재 main SHA를 수동 배포; CI 성공이나 merge가 배포를 시작하지 않음
+- production: 명령으로 같은 SHA를 요청하고 preview smoke·출시 체크·Environment 승인 후 배포
+- hotfix도 필요한 기능 검증을 수행하며 직접 콘솔 편집은 장애 봉쇄 외 금지
 
 GitHub Actions는 최소 권한 OIDC 또는 환경별 제한 secret을 사용한다. production 승인자와
 배포 실행자는 가능하면 분리한다.
@@ -37,6 +37,43 @@ GitHub Actions는 최소 권한 OIDC 또는 환경별 제한 secret을 사용한
 현재 GitHub 설정: main은 Quality gate·최신 base·대화 해결·linear history를 요구하고
 승인 review 수는0이다. production Environment에는 `hyunhomon` 승인자가 있다.
 CODEOWNERS 알림은 별도 강제 승인과 같지 않다. 에이전트의 merge 권한은 사용자 지시를 따른다.
+
+### 로컬 명령으로 수동 배포
+
+Bun과 인증된 GitHub CLI(`gh auth status`)가 필요하다. Cloudflare/OAuth secret을 로컬로 가져오지 않는다.
+다음 명령은 GitHub workflow 실행을 요청하고 즉시 반환한다. 실행 요청 성공은 배포 완료가 아니다.
+
+```bash
+bun run deploy:preview                        # 현재 원격 main을 선택
+bun run deploy:preview --sha <full40sha> --plan # 실행할 요청만 확인
+bun run deploy:preview --sha <full40sha>        # 현재 main과 같아야 함
+bun run deploy:production --sha <preview에서_검증한_full40sha>
+bun run deploy:status                         # 최근 run ID·상태 확인
+
+gh run watch <run-id> --repo creno-va/baro --exit-status
+```
+
+production 기본 모드는 `foundation`이며 공개 API를 닫는다. 현재 공개 서비스에 같은 공개 모드를
+유지하려면 승인된 모드를 명시해야 한다. CLI는 공개 상태를 추측하거나 자동으로 승인하지 않는다.
+
+```bash
+bun run deploy:production --sha <full40sha> --mode public-beta
+bun run deploy:production --sha <full40sha> --mode operator-authorized --authorization <issue71_comment_id>
+```
+
+`--configure-ai`는 기존 별도 검증된 AI 설정 반영이 필요한 경우에만 명시한다.
+`--plan`은 요청 내용만 출력하며 배포하지 않는다. SHA/모드/옵션 오류는 dispatch 전에 거부한다.
+production은 SHA 생략을 허용하지 않으며 preview 성공 SHA를 사용해야 한다.
+preview는 checkout 전 및 migration 직전에 현재 원격 main과 비교해 오래된 요청을 거부한다.
+
+배포 때만 선택 환경 build·bundle·dry-run → migration → Worker/credential sync →
+SHA/schema/API smoke를 수행한다. 브라우저·native fixture·전체 단위 검사를 배포마다 다시 실행하지 않는다.
+GitHub Environment의 기존 production 승인 및 환경별 시크릿 보관은 유지한다.
+AI preflight도 자동 실행하지 않으며 필요할 때 다음 명령을 사용한다.
+
+```bash
+gh workflow run ai-preflight.yml --repo creno-va/baro --ref main -f environment=preview -f candidate_sha=<full40sha>
+```
 
 production dispatch에는 `confirmation=production`, `target_sha=<full40sha>`,
 `release_mode=foundation|public-beta`를 지정한다. 기본 foundation은 API 공개를 닫는다.
@@ -82,7 +119,7 @@ SHA의 main CI/preview deployment, production Environment의 hyunhomon 승인은
 현재 자동 smoke는 foundation health/ready·SHA·candidate schema다. 단계5/8의 전체 제품 smoke와
 backup/bookmark 기록·복구 drill 자동화는 #19에서 완료한다. migration 검증 없이 build보다
 먼저 remote DB를 바꾸지 않는다. preview migration/deploy는 cancel하지 않고 순차 실행하며
-적용 직전에 main SHA와 비교해 뒤늦게 끝난 오래된 CI 배포를 거부한다.
+적용 직전에 main SHA와 비교해 오래된 수동 배포 요청을 거부한다.
 
 같은 커밋에 공개 기능을 추가할 때 필요한 env/binding/secret이 준비되지 않았으면 공개
 전환을 하지 않는다. 실제 등록 상태는 [실행 기준](../development/EXECUTION.md)와 #27을 따른다.
@@ -181,7 +218,7 @@ P0 incident로 분류하고 신규 삭제 요청을 기록 가능한 안전한 �
 - [Workers rate limiting binding](https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/)
 - [Turnstile 시작 가이드](https://developers.cloudflare.com/turnstile/get-started/)
 
-## v2 지속 배포와 공개 게이트
+## v2 수동 배포와 공개 게이트
 
 사용자는 검증된 PR 병합·preview/production 코드 배포·승인 요건 충족 후 최초 공개를 허용했다.
 이를 production Environment 보호 규칙 삭제나 법률 승인으로 해석하지 않는다. P0.3 #19/#20/#27은
@@ -197,7 +234,7 @@ P0 incident로 분류하고 신규 삭제 요청을 기록 가능한 안전한 �
 각 수직 기능의 배포 순서:
 
 1. #53 문서와 해당 계약/DB/구현 선행 PR이 병합됐는지 확인하고 immutable full SHA를 선택한다.
-2. `bun ci`, `bun run check`, `bun run build`, `bun run cf:dry-run`과 이슈별 UI/E2E/fixture를 수행한다.
+2. `bun ci`, `bun run validate:quick`과 변경에 필요한 로컬 기능/UI/빌드 검증을 수행한다.
    DB 변경은 생성 drift·fresh/upgrade/FK·기존 v1 데이터 보존 검증을 추가한다.
 3. schema·file envelope·API·prompt/job version 및 이전 Worker/Container image와 호환성을 확인한다.
    같은 버전 tag를 덮어쓰지 않고 Container image digest를 고정한다.

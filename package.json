@@ -30,7 +30,20 @@
     "check": "bun run docs:check && bun run work:check && bun run boundaries:check && bun run lint && bun run typecheck && bun test && bun run db:check",
     "db:migrate:local": "wrangler d1 migrations apply DB --local",
     "db:migrate:preview": "bun scripts/apply-d1-migrations.ts preview",
-    "db:migrate:production": "bun scripts/apply-d1-migrations.ts production"
+    "db:migrate:production": "bun scripts/apply-d1-migrations.ts production",
+    "validate": "bun scripts/validate.ts",
+    "validate:quick": "bun scripts/validate.ts quick",
+    "validate:changed": "bun scripts/validate.ts changed",
+    "validate:unit": "bun scripts/validate.ts unit",
+    "validate:browser": "bun scripts/validate.ts browser",
+    "validate:build": "bun scripts/validate.ts build",
+    "validate:db": "bun scripts/validate.ts db",
+    "validate:native": "bun scripts/validate.ts native",
+    "validate:security": "bun scripts/validate.ts security",
+    "validate:full": "bun scripts/validate.ts full",
+    "deploy:preview": "bun scripts/deploy.ts preview",
+    "deploy:production": "bun scripts/deploy.ts production",
+    "deploy:status": "bun scripts/deploy.ts status"
   },
   "dependencies": {
     "@astrojs/cloudflare": "14.3.3",

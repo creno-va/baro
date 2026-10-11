@@ -115,23 +115,36 @@ reviewedAt은 null, 모든 external check는 false다. P0.3 milestone과 Epic #6
 
 ## 표준 검증
 
-2026-10-06 사용자 지시로 개발 중 검증은 변경 기능의 동작·권한·저장 테스트와 타입·빌드로
-제한한다. 공유 CI 변경도 명시적으로 승인받았다. 매 PR마다 기존 사례 corpus, 법률 적합성
-재평가, 전체 회귀 및 대용량 fixture를 반복하지 않는다. CI는 변경한 테스트와 기능별 테스트만
-선택하며 native 처리기와 schema 검증은 해당 파일 변경 때만 실행한다. 전체 검증은
-`Full validation (manual)` workflow에 보존한다. 아래 전체 명령을 개발 선행 조건으로
-반복하지 않는다. 외부 공개 승인 상태는 보존한다.
+2026-10-11 사용자 지시가 과거 PR마다 전체 검사·자동 배포 조건을 대체한다.
+자동 CI는 `bun ci`와 `bun run validate:quick`만 실행한다. 필수 check 이름은 `Quality gate`로
+유지하며 문서/work graph/경계/lint/typecheck 및 검증·배포 도구 계약을 확인한다.
+브라우저·Docker·DB migration·전체 단위 검사·build·eval·audit/Gitleaks는 자동 CI에서 실행하지 않는다.
+
+변경에 맞는 검증을 로컬에서 선택하고 결과와 미실행 이유를 PR에 남긴다.
 
 ```bash
 bun ci
-bun run check
-bun run build
-bun run cf:dry-run
-bun run db:generate
-git status --short
+bun run validate:quick
+bun run validate:changed          # 기본 origin/main + 커밋 전 변경/새 파일
+bun run validate:changed <base>   # 특정 기준과 비교
+bun run validate:browser <base>   # UI 영향이 있을 때
+bun run validate:build            # 빌드·Worker 영향이 있을 때
+bun run validate:db               # schema/migration 변경 때
+bun run validate:native           # 파일 처리기 변경 때
+bun run validate:security         # 의존성·보안 변경 및 출시 점검
+bun run validate:full             # 명시적인 전체 인수 점검
 ```
 
-마지막 generate는 schema drift가 없으면 파일을 만들지 않는다. migration은 append-only다. #8의 적용 순서와 비민감 preview 검증 쿼리는 [도메인 DB 운영](../operations/DOMAIN-DATABASE.md)을 따른다. secret 없는 CI가 외부 서비스에 접속하거나 모델 비용을 발생시키지 않아야 한다. 리뷰 브랜치의 prod API는 `PUBLIC_BETA_ENABLED=false`로 닫히며 병합/배포 전 원격에 적용된 것으로 해석하지 않는다. framework health 확인은 공개 기능 인수 조건을 대신하지 않는다.
+개별 테스트는 `bun test <파일>`로 실행할 수 있다. 통과한 검사를 새 변경/실패 없이 반복하지 않는다.
+DB 변경의 drift·fresh/upgrade와 이슈별 권한·저장·실패 시나리오 요구는 유지한다.
+`check` 등 기존 명령도 유지하지만 매 PR 선행 조건으로 전체 검사를 중복 실행하지 않는다.
+자동 gate 성공은 선택하지 않은 브라우저/실제 외부 연동 성공을 뜻하지 않는다.
+
+자동 CD는 없다. 배포는 `bun run deploy:preview`, `bun run deploy:production --sha <full40sha>`로
+요청하며 GitHub Environment 승인과 secret 보관은 유지한다. 배포 시 선택 환경 build·bundle·dry-run,
+migration·SHA/schema/API smoke는 원격 변경에 필요한 검사로 유지하고 제품 테스트 전체를 다시 돌리지 않는다.
+preview는 현재 원격 main의 성공한 CI를 요구하며 production은 같은 SHA의 CI·preview 성공도 요구한다.
+AI readiness는 필요할 때만 수동 실행한다. 세부 명령은 [배포 및 운영](../operations/DEPLOYMENT-OPERATIONS.md)을 따른다.
 
 ## 환경과 local 설정
 

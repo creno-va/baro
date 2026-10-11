@@ -645,6 +645,15 @@
         "docs/development/MVP-REQUIREMENTS-EVIDENCE.md"
       ],
       "validation": "remove launch notice/deactivation, restore lawyer/customer/report navigation, preserve auth/state/public gates; integrated SHA browser/CSP evidence"
+    },
+    {
+      "issue": 205,
+      "milestone": 5,
+      "kind": "implementation",
+      "dependsOn": [],
+      "owns": [".github/workflows", "scripts/validate.ts", "scripts/deploy.ts", "scripts/development-checks.ts", "scripts/verify-release.ts", "validation/deployment documentation"],
+      "docs": ["docs/quality/TEST-STRATEGY.md", "docs/operations/DEPLOYMENT-OPERATIONS.md"],
+      "validation": "fast required CI; explicit local feature/browser/database/native/security/full checks; manual immutable-SHA deployment dispatch with Environment approval and preview smoke preserved"
     }
   ]
 }

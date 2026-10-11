@@ -87,37 +87,31 @@ test("readiness is manual, main-only and cannot create deployment evidence", asy
   );
 });
 
-test("development CI checks the exact candidate and changed features without a case corpus loop", async () => {
+test("automatic CI runs only the fast source gate; heavy validation remains explicit", async () => {
   const ci = Bun.YAML.parse(await Bun.file(".github/workflows/ci.yml").text()) as {
-    jobs: {
-      quality: {
-        steps: {
-          name: string;
-          with?: { ref?: string };
-          env?: Record<string, string>;
-          run?: string;
-        }[];
-      };
-    };
+    on: Record<string, unknown>;
+    jobs: Record<string, { name: string; steps: { with?: { ref?: string }; run?: string }[] }>;
   };
-  const steps = ci.jobs.quality.steps;
-  expect(steps.find((s) => s.name === "Checkout")?.with?.ref).toBe(
-    "${{ github.event.pull_request.head.sha || github.sha }}",
-  );
-  for (const name of ["Changed feature tests", "Changed feature browser flows"]) {
-    const step = steps.find((s) => s.name === name);
-    expect(step?.env?.CHECK_CANDIDATE_SHA).toBe(
-      "${{ github.event.pull_request.head.sha || github.sha }}",
-    );
-    expect(step?.env?.GITHUB_SHA).toBeUndefined();
-  }
-  expect(steps.some((s) => s.run?.includes("eval:offline"))).toBe(false);
-  expect(steps.some((s) => s.run?.includes("bun run test:ui"))).toBe(false);
-  expect(steps.some((s) => s.run === "bun run test")).toBe(false);
+  expect(Object.keys(ci.on)).toEqual(["pull_request", "push", "workflow_dispatch"]);
+  expect(Object.keys(ci.jobs)).toEqual(["quality-gate"]);
+  const job = ci.jobs["quality-gate"];
+  expect(job?.name).toBe("Quality gate");
+  expect(job?.steps[0]?.with?.ref).toBe("${{ github.event.pull_request.head.sha || github.sha }}");
+  expect(job?.steps.flatMap((step) => (step.run ? [step.run] : []))).toEqual([
+    "bun ci",
+    "bun run validate:quick",
+  ]);
   const manual = Bun.YAML.parse(await Bun.file(".github/workflows/full-validation.yml").text()) as {
     on: Record<string, unknown>;
+    jobs: Record<string, { name: string; steps: { run?: string }[] }>;
   };
   expect(Object.keys(manual.on)).toEqual(["workflow_dispatch"]);
+  expect(Object.values(manual.jobs).some((entry) => entry.name === "Quality gate")).toBe(false);
+  expect(
+    Object.values(manual.jobs)
+      .flatMap((entry) => entry.steps)
+      .some((step) => step.run === "bun run validate:full"),
+  ).toBe(true);
 });
 
 interface DeploymentStep {
@@ -133,7 +127,12 @@ async function deploymentWorkflow(environment: "preview" | "production") {
   return Bun.YAML.parse(await Bun.file(`.github/workflows/deploy-${environment}.yml`).text()) as {
     on: { workflow_dispatch?: { inputs: Record<string, unknown> } };
     jobs: {
-      deploy: { environment: string; env: Record<string, string>; steps: DeploymentStep[] };
+      deploy: {
+        if: string;
+        environment: string;
+        env: Record<string, string>;
+        steps: DeploymentStep[];
+      };
     };
   };
 }
@@ -324,4 +323,27 @@ test("production runtime recovery preserves reviewer protection and cannot becom
     if (index !== recovery)
       expect(Object.values(step.env ?? {}).some((value) => value.includes("secrets."))).toBe(false);
   }
+});
+
+test("deployments are manual and preview validates current main before checking out code", async () => {
+  for (const environment of ["preview", "production"] as const) {
+    const workflow = await deploymentWorkflow(environment);
+    expect(Object.keys(workflow.on)).toEqual(["workflow_dispatch"]);
+    expect(workflow.jobs.deploy.if).toContain("github.ref == 'refs/heads/main'");
+    expect(workflow.on.workflow_dispatch?.inputs.target_sha).toMatchObject({
+      required: true,
+      type: "string",
+    });
+  }
+  const steps = (await deploymentWorkflow("preview")).jobs.deploy.steps;
+  const validation = steps.findIndex((step) => step.name === "Validate immutable release SHA");
+  const checkout = steps.findIndex((step) => step.uses?.startsWith("actions/checkout@"));
+  const verification = steps.findIndex((step) => step.run?.includes("--ci-only"));
+  const deploy = steps.findIndex((step) => step.uses === "./.github/actions/deploy-worker");
+  expect(validation).toBeGreaterThanOrEqual(0);
+  expect(validation).toBeLessThan(checkout);
+  expect(steps[validation]?.run).toContain("git/ref/heads/main");
+  expect(verification).toBeGreaterThan(checkout);
+  expect(verification).toBeLessThan(deploy);
+  expect(steps[checkout]?.with?.ref).toBe("${{ inputs.target_sha }}");
 });

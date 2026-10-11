@@ -45,7 +45,7 @@ draft/pending/rejected 객체를 public에 먼저 올리지 않는다.
 
 `bun run cf:dry-run`은 `--containers-rollout=none`으로 Worker bundle/binding만 검사한다.
 로컬 Docker daemon이 없는 환경에서도 실행할 수 있으며 native image 빌드 성공을 뜻하지 않는다.
-CI Quality gate가 별도로 실제 linux/amd64 image를 빌드하고 네트워크 차단·1vCPU/6GiB/PID128
+명시적 `bun run validate:native`가 실제 linux/amd64 image를 빌드하고 네트워크 차단·1vCPU/6GiB/PID128
 상한으로 합성 native fixture를 실행한다. 실제 preview/production deploy는 Container rollout을
 끄지 않고 진행하며 image/resource/처리 성공은 해당 원격 증거로 추가 확인한다.
 

@@ -63,7 +63,7 @@ PDF 리포트와 선택한 원본을 직접 전달해 변호사의 초기 사건
 | Authentication | Better Auth, Google/Naver/Kakao OAuth |
 | AI | 기존 AI Gateway Unified Billing pinned model·medium 유지, Cloudflare Whisper ASR 확장 |
 | Legal source | 공식 법령·공식 판례·공식기관 안내의 검증된 원문 |
-| Delivery | GitHub Actions, fixed preview, approved immutable production release |
+| Delivery | 최소 GitHub CI, 명령으로 요청하는 preview/production 수동 배포 |
 
 웹/API 제품 코드는 Workers Web API 와 binding을 사용합니다. Bun은 도구·테스트용이며
 Node filesystem/process는 별도 Container 처리 서비스에만 허용합니다. v2 저장소/
@@ -99,16 +99,22 @@ bun run dev
 ```
 
 ```bash
-bun ci
-bun run check
-bun run build
-bun run cf:dry-run
-bun run eval:offline
-bun run test:ui
-bun audit
-bun run build:production
-bun run bundle:check
+bun run validate:quick           # 자동 CI와 같은 빠른 검사
+bun run validate:changed         # origin/main 대비 커밋 + 로컬 수정의 관련 단위 검사
+bun run validate:browser         # 필요한 브라우저·production CSP 검사
+bun run validate:build           # production build·bundle·Worker dry-run
+bun run validate:db              # DB 변경 때 drift·migration 검사
+bun run validate:native          # 처리기 변경 때 Docker fixture 검사
+bun run validate:security        # 의존성 audit·Gitleaks 전체 이력 검사
+bun run validate:full            # 명시적인 전체 검증 때만 실행
+
+bun run deploy:preview           # 현재 원격 main을 수동 배포 요청
+bun run deploy:production --sha <preview에서_검증한_full40sha>
+bun run deploy:status            # 실행/승인 대기/실패 확인
 ```
+
+검증 명령은 [테스트 전략](./docs/quality/TEST-STRATEGY.md), 배포 옵션·승인·준비 도구는
+[배포 및 운영](./docs/operations/DEPLOYMENT-OPERATIONS.md)을 따른다.
 
 DB 변경은 generation drift·fresh/upgrade 검증을 추가합니다. Container·R2·ASR 와 모든
 역할의 실제 시연은 downstream 이슈의 검증이며 기존 offline 통과로 대체하지 않습니다.
@@ -120,7 +126,8 @@ DB 변경은 generation drift·fresh/upgrade 검증을 추가합니다. Containe
 worktree를 사용합니다. PR 검사·실패 시나리오와 리뷰를 마친 뒤 권한 범위에서 병합합니다.
 설정은 [repository setup](./.github/REPOSITORY-SETUP.md)을 따릅니다.
 
-- main CI 성공 후 고정 preview로 자동 배포합니다.
+- PR/main CI는 빠른 검사만 자동 실행하며 병합이 배포를 시작하지 않습니다.
+- preview/production 배포는 로컬 명령으로 GitHub 수동 workflow를 요청합니다.
 - production은 성공한 CI·preview smoke의 immutable SHA 와 Environment 승인을 요구합니다.
 - foundation 코드는 공개 API를 닫고 배포할 수 있습니다. 공개 전환은 실제 연동·운영·정책/법률 조건을 충족한 후에만 합니다.
 - preview: <https://preview.baro.site>, production: <https://baro.site>.

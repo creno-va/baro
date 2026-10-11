@@ -14,10 +14,10 @@ BARO의 테스트는 단순 동작뿐 아니라 소유권, 삭제, 사실 구분
 | 계층 | 대상 | 실행 시점 |
 | --- | --- | --- |
 | 정적 검사 | TypeScript strict, lint, format, Worker 호환성, secret/fixture import | 모든 PR |
-| 단위 | 상태 전이, Zod, 암호화, 정책, 인용, KST quota | 모든 PR |
-| 통합 | D1 repository/migration, Better Auth adapter, Hono route, Workflow step | 모든 PR |
-| 계약 | AI Gateway 모델 schema·과금 설정, 법률 API fixture/schema | 모든 PR + 주기적 live |
-| E2E | 로그인 이후 입력·질문·결과·삭제·오류·접근성 | PR의 합성 서명 세션/API/SQL, 별도 실제 preview smoke |
+| 단위 | 상태 전이, Zod, 암호화, 정책, 인용, KST quota | 변경 기능을 로컬에서 선택 실행 |
+| 통합 | D1 repository/migration, Better Auth adapter, Hono route, Workflow step | 관련 변경 및 인수 때 로컬 실행 |
+| 계약 | AI Gateway 모델 schema·과금 설정, 법률 API fixture/schema | 관련 변경 때; live는 명시적 요청 |
+| E2E | 로그인 이후 입력·질문·결과·삭제·오류·접근성 | UI 영향 때 로컬 선택 실행; 실제 preview smoke 별도 |
 | AI eval | 구조화, 사실성, 근거, 안전, 회귀 | AI 변경과 production 배포 |
 | 보안 | IDOR, CSRF, XSS, injection, abuse, dependency/secret | PR + 출시 전 |
 
@@ -76,27 +76,43 @@ non-critical 표현 품질 점수는 추세를 보되 위 안전 게이트를 �
 - screen reader 이름·오류·비동기 상태
 - 느린 네트워크, 새로고침, 뒤로가기, 중복 제출
 
-## CI 파이프라인
+## 자동 CI와 선택 검증 (2026-10-11)
 
-PR CI는 docs/work graph/AST boundary, `bun audit`(모든 severity), 고정 버전 Gitleaks의
-전체 Git 이력 검사(redact=100), Drizzle drift/fresh/upgrade/local workerd migration,
-lint/typecheck/unit/integration, production build/bundle 검사와 dry-run을 실행한다.
-기존 IDOR/CSRF/quota/idempotency/deletion race 테스트와 Playwright의 refresh/back/
-키보드/320px/200% 흐름도 실행한다. `evals.e2e.ts`는 50개 모두의 실제 owner-scoped API
-결과를 상세 UI에 표시하고 axe WCAG 2/2.1 A/AA 위반 0을 요구한다. 자동 axe 성공은
-모든 장애 유형에 대한 수동 보조공학 검증 완료를 뜻하지 않는다.
-`bun run build:production && bun run test:csp`는 build된 workerd의 Astro hash CSP와
-frame-ancestors header, React hydration/키보드 오류 복구, inline script 차단 및 허용된
-Turnstile origin(script 대역)을 검증한다. Astro dev는 hash CSP를 지원하지 않으므로 별도로
-실행한다. 실제 Turnstile 성공은 #27이다. [Astro CSP](https://docs.astro.build/en/reference/configuration-reference/#securitycsp)
+자동 CI는 `bun ci` → `bun run validate:quick` 한 job이며 required check 이름은 `Quality gate`다.
+문서/work graph/AST boundary/lint/typecheck와 배포·검증 도구의 기본 계약만 확인한다.
+원격 runner 시간은 실행 결과로 확인하며, 빠른 gate를 전체 기능/외부 성공 증거로 표시하지 않는다.
+
+| 로컬 명령 | 범위·준비 |
+| --- | --- |
+| `bun run validate:quick` | 자동 CI와 동일한 검사 |
+| `bun run validate:changed [base-ref]` | 관련 단위/계약 검사. 기본 origin/main 대비 현재 작업 파일, staged/unstaged/untracked 포함 |
+| `bun run validate:unit` | 모든 단위/통합 테스트 |
+| `bun run validate:browser [base-ref]` | production build/bundle, 변경 기능 Playwright, 실제 build CSP. 최초 `bunx playwright install chromium` 필요 |
+| `bun run validate:build` | production build·bundle·Cloudflare dry-run |
+| `bun run validate:db` | schema drift·fresh/upgrade 테스트·로컬 migration/import 재실행 |
+| `bun run validate:native` | linux/amd64 Docker build 및 네트워크 차단 fixture/performance 검사. Docker 필요 |
+| `bun run validate:security` | `bun audit` 및 Gitleaks 전체 HEAD 이력(redact=100). Gitleaks 8.30.1 필요 |
+| `bun run validate:full` | 위 검사와 deterministic eval·전체 브라우저 corpus. browser/Docker/Gitleaks 준비 필요 |
+
+선택 명령은 첫 실패에서 중단하며 검증 실패를 성공으로 바꾸지 않는다. 원하는 파일만 볼 때는
+`bun test <파일>`을 사용한다. 커밋만 비교하려면 `CHECK_BASE_SHA`와 `CHECK_CANDIDATE_SHA`를 지정한다.
+`origin/main`이 없는 checkout은 fetch하거나 `[base-ref]`를 명시한다.
+
+명시적 전체 검증을 원격에서 할 때만 `gh workflow run full-validation.yml --repo creno-va/baro --ref <branch>`를
+사용한다. 자동 trigger는 없으며 이 workflow의 `Full validation` check가 필수 `Quality gate`를 대체하지 않는다.
+제품 코드 변경은 관련 권한/저장/실패 검증, DB 변경은 migration 검증, 의존성/보안 변경은 보안 검사를 선택한다.
+PR에 실행 명령과 결과를 남긴다. 변경 없는 전체 회귀·대형 fixture·AI corpus를 반복하지 않는다.
+
+CSP 검사는 build된 workerd에서 수행하며 실제 Turnstile/OAuth 성공은 별도 외부 인수 증거다.
+자동 배포·배포 후 자동 AI preflight도 없다. 배포는 [수동 배포 명령](../operations/DEPLOYMENT-OPERATIONS.md)을 따른다.
 
 `bun run eval:offline`은 50개(20/15/5/5/5)의 intake→암호화 repository→실제 execution
 phase→captured 공식 법령 adapter→strict 결과→read API를 실행한다. 모델 응답은 기대
 분기를 만드는 scripted provider이므로 모델이 입력을 이해하거나 공격을 거부한다는
 증거가 아니다. 허구 사실/citation/금지 출력/schema/policy/소유권 fault 각각 한 건도
 검사 실패로 만들며 평균으로 상쇄하지 않는다. Oracle 자체 테스트도 계속 유지한다.
-`scripts/ai-change.ts`는 base SHA와 diff로 AI 관련 변경을 감지하며 eval은 모든 PR/main
-candidate에서 필수다. 실패 시 artifact 업로드·배포 전에 멈춘다.
+`scripts/ai-change.ts`는 base SHA와 diff로 AI 관련 변경을 감지한다. eval은 AI 관련 변경의
+선택 검증이나 명시적인 전체 인수 검증에서 실행하며 실패를 완료 증거로 기록하지 않는다.
 
 CI artifact의 `offline.json`/`ui.json`은 candidate SHA, mode, corpus 버전/checksum,
 fixture ID/version/finding 코드만 포함한다. 페이지 HTML/원문/응답/세션/trace는 업로드하지

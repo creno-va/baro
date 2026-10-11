@@ -38,13 +38,13 @@ Refs #
 
 ## 검증
 
-- [ ] `bun run check` (docs/work/boundaries/migration 포함)
-- [ ] `bun run lint`
-- [ ] `bun run typecheck`
-- [ ] `bun run test`
-- [ ] `bun run build`
-- [ ] `bunx wrangler deploy --dry-run` 또는 CI 동등 검사
-- [ ] 관련 E2E/접근성/수동 smoke
+- [ ] `bun run validate:quick`
+- [ ] 변경 기능 단위/계약 검사 (`validate:changed` 또는 `bun test <파일>`)
+- [ ] 필요한 UI/접근성 검사 (`validate:browser`)
+- [ ] 빌드 영향 검사 (`validate:build`)
+- [ ] DB/native/보안 변경에 해당하는 선택 검사
+
+<!-- 모든 항목을 일괄 실행하지 않습니다. 해당 없음과 이유를 적고, 전체 검증은 명시적인 인수 시점에 실행합니다. -->
 
 검증 결과와 재현 방법:
 
