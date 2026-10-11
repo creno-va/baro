@@ -1,6 +1,17 @@
 import { spawn } from "node:child_process";
 import { expect, test } from "@playwright/test";
 
+test.beforeEach(async ({ page }) => {
+  await page.route("**/api/me/session", (route) =>
+    route.fulfill({
+      json: {
+        user: { id: "synthetic-owner", name: "Synthetic", accountType: "customer" },
+        needsConsent: false,
+      },
+    }),
+  );
+});
+
 const tag = "a".repeat(64),
   marker = "baro.account-reauth.v1";
 test("settings uses real signed session, OAuth state/callback, SQL account deletion and revoked cookie", async ({

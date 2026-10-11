@@ -16,22 +16,63 @@ export const roleStart = (session: SessionView) =>
       : session.user.accountType === "lawyer"
         ? "/lawyer"
         : "/app";
+let pendingSelection: { attempt: string; ownerId: string; promise: Promise<unknown> } | undefined;
 export const sessionApi = {
   async get(): Promise<SessionView> {
     const session = await request<SessionView>("session.get", undefined, {
       path: "/api/me/session",
     });
-    if (apiMode === "real" && session.user) {
-      const selected = sessionStorage.getItem("baro-account-type");
-      if (selected === "customer" || selected === "lawyer") {
-        await request(
-          "session.accountType",
-          { accountType: selected },
-          { path: "/api/me/account-type", method: "PUT", body: { accountType: selected } },
-        );
+    if (apiMode === "real" && typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const raw = sessionStorage.getItem("baro-account-type");
+      let selected: { accountType?: unknown; attempt?: unknown; createdAt?: unknown } | null = null;
+      try {
+        selected = raw ? JSON.parse(raw) : null;
+      } catch {
         sessionStorage.removeItem("baro-account-type");
-        session.user.accountType = selected;
-        notifySessionChanged();
+      }
+      if (params.get("error") === "oauth") sessionStorage.removeItem("baro-account-type");
+      else if (
+        session.user &&
+        window.location.pathname === "/consent" &&
+        selected &&
+        (selected.accountType === "customer" || selected.accountType === "lawyer") &&
+        typeof selected.attempt === "string" &&
+        selected.attempt === params.get("loginAttempt") &&
+        typeof selected.createdAt === "number" &&
+        Date.now() - selected.createdAt >= 0 &&
+        Date.now() - selected.createdAt < 10 * 60_000
+      ) {
+        const accountType = selected.accountType;
+        const attempt = selected.attempt;
+        const ownerId = session.user.id;
+        if (pendingSelection?.attempt !== attempt || pendingSelection.ownerId !== ownerId) {
+          pendingSelection = {
+            attempt,
+            ownerId,
+            promise: request(
+              "session.accountType",
+              { accountType },
+              {
+                path: "/api/me/account-type",
+                method: "PUT",
+                body: { accountType },
+              },
+            )
+              .then((value) => {
+                if (sessionStorage.getItem("baro-account-type") === raw)
+                  sessionStorage.removeItem("baro-account-type");
+                notifySessionChanged();
+                return value;
+              })
+              .catch((error: unknown) => {
+                pendingSelection = undefined;
+                throw error;
+              }),
+          };
+        }
+        await pendingSelection.promise;
+        session.user.accountType = accountType;
       }
     }
     return session;
@@ -42,18 +83,31 @@ export const sessionApi = {
       notifySessionChanged();
       return session;
     }
-    sessionStorage.setItem("baro-account-type", accountType);
+    pendingSelection = undefined;
+    const attempt = crypto.randomUUID();
+    sessionStorage.setItem(
+      "baro-account-type",
+      JSON.stringify({ accountType, attempt, createdAt: Date.now() }),
+    );
+    const callback = new URL(
+      accessHref("consent", returnPathFromLocation() ?? undefined),
+      window.location.origin,
+    );
+    callback.searchParams.set("loginAttempt", attempt);
     const result = await authClient.signIn
       .social({
         provider,
-        callbackURL: accessHref("consent", returnPathFromLocation() ?? undefined),
+        callbackURL: `${callback.pathname}${callback.search}`,
         errorCallbackURL: accessHref("login", returnPathFromLocation() ?? undefined, "oauth"),
       })
       .catch(() => {
+        sessionStorage.removeItem("baro-account-type");
         throw new ApiError("UNAVAILABLE", "로그인을 시작하지 못했어요. 다시 시도해 주세요.", true);
       });
-    if (result.error)
+    if (result.error) {
+      sessionStorage.removeItem("baro-account-type");
       throw new ApiError("UNAVAILABLE", "로그인을 시작하지 못했어요. 다시 시도해 주세요.", true);
+    }
     return undefined;
   },
   getConsent: () =>

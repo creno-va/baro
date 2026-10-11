@@ -109,13 +109,22 @@ test("persisted role changes invalidate peer navigation without sharing session 
   await context.route("**/api/me/consent", (route) =>
     route.fulfill({ json: { needsConsent: false } }),
   );
+  await context.route("**/api/auth/sign-in/social", (route) =>
+    route.fulfill({
+      json: {
+        redirect: true,
+        url: new URL(route.request().postDataJSON().callbackURL, route.request().url()).href,
+      },
+    }),
+  );
   await page.goto("/login");
   const peer = await context.newPage();
   await peer.goto("/app");
   const peerNav = peer.getByRole("navigation", { name: "주 메뉴" });
   await expect(peerNav.getByRole("link", { name: "내 사건", exact: true })).toBeVisible();
-  await page.evaluate(() => sessionStorage.setItem("baro-account-type", "lawyer"));
-  await page.goto("/consent");
+  await page.getByRole("radio", { name: "변호사", exact: true }).check();
+  await page.getByRole("button", { name: "Google로 계속하기", exact: true }).click();
+  await expect(page).toHaveURL(/\/consent\?loginAttempt=/);
   await expect(page.getByRole("link", { name: "내 화면으로 계속하기" })).toBeVisible();
   await expect(peer).toHaveURL(/\/lawyer$/);
   await expect(peerNav.getByRole("link", { name: "변호사 프로필", exact: true })).toBeVisible();

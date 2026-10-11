@@ -168,7 +168,9 @@ export function createLawyersApi(
     const a = await selfAccess(c, true);
     if (a.response) return a.response;
     const body = z.strictObject({ profile: selfProfileSchema }).parse(await c.req.json());
-    return c.json(await (await selfService(c.env)).saveMine(a.ownerId, body.profile));
+    return c.json(
+      await (await selfService(c.env)).saveMine(a.ownerId, body.profile, undefined, a.sessionId),
+    );
   });
   app.post("/lawyer/self-profile/publication", async (c) => {
     const a = await selfAccess(c, true);
@@ -188,6 +190,7 @@ export function createLawyersApi(
         body.published,
         body.expectedRevision,
         body.profileId,
+        a.sessionId,
       ),
     );
   });

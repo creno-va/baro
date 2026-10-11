@@ -514,3 +514,32 @@ test("publication is bound to the displayed profile and current consent, includi
   expect((await f.request(`/v2/lawyers/self-service/${saved.id}`)).status).toBe(404);
   expect((await f.request("/v2/me/lawyer/self-profile", f.owner)).status).toBe(200);
 });
+
+for (const action of ["save", "publish"] as const) {
+  test(`self profile ${action} commits only while its original session remains active`, async () => {
+    const f = await fixture();
+    const service = createSelfProfileService(f.core);
+    const blank = await service.getMine(f.owner.userId);
+    const saved = await service.saveMine(f.owner.userId, { ...blank, ...complete });
+    const originalBatch = f.db.binding.batch.bind(f.db.binding);
+    let removed = false;
+    f.db.binding.batch = async (statements) => {
+      if (!removed) {
+        removed = true;
+        f.db.sqlite.query("DELETE FROM session WHERE id=?").run(f.owner.sessionId);
+      }
+      return originalBatch(statements);
+    };
+    const response = await f.request(
+      `/v2/me/lawyer/self-profile${action === "publish" ? "/publication" : ""}`,
+      f.owner,
+      action === "publish" ? "POST" : "PUT",
+      action === "publish"
+        ? { published: true, consent: true, expectedRevision: saved.revision, profileId: saved.id }
+        : { profile: { ...saved, introduction: "New synthetic introduction" } },
+    );
+    expect(response.status).toBe(409);
+    expect(removed).toBe(true);
+    expect(await service.getMine(f.owner.userId)).toEqual(saved);
+  });
+}
