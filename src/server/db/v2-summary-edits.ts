@@ -21,6 +21,7 @@ import {
   type WorkspaceGuard,
 } from "./v2-core";
 import { type MutationReceipt, mutationTools } from "./v2-mutation-receipts";
+import { createV2StagingRepository } from "./v2-staging";
 import { referenceCommitPredicate } from "./v2-workspace";
 
 const zero = "0".repeat(64);
@@ -288,6 +289,16 @@ export function createV2SummaryEditsRepository(core: V2Core) {
           1,
           initial(),
         );
+        // Only unpublished output of a terminal chat job may be abandoned.
+        // This keeps the existing source+1 edit contract and every published snapshot.
+        const abandoned = await core
+          .statement(
+            "SELECT p.id FROM v2_private_snapshots p JOIN v2_jobs j ON j.id=p.lease_job_id WHERE p.workspace_id=? AND p.owner_id=? AND p.target_id=? AND p.purpose='summary' AND p.revision=? AND p.state IN ('staging','sealed','abandoned') AND j.kind='chat_response' AND j.status IN ('failed','cancelled','superseded') AND NOT EXISTS(SELECT 1 FROM v2_summaries s WHERE s.snapshot_id=p.id)",
+            [g.workspaceId, g.ownerId, g.workspaceId, source.revision + 1],
+          )
+          .first<{ id: string }>();
+        if (abandoned && !(await createV2StagingRepository(core).abandon(g, abandoned.id)))
+          return false;
         const target = await core.encrypt(
           "v2_private_snapshots",
           input.targetSnapshotId,

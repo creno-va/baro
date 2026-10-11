@@ -2,6 +2,7 @@ import { ChevronDown, Download, Eye, FileText, RefreshCw, Save, Settings2 } from
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../../client/api";
 import type { ReportView as BaseReportView, FileView } from "../../client/api/types";
+import { isExplicitSignOut } from "../../client/session-events";
 import { CaseNavigation } from "../workspace/CaseNavigation";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { createReportMarkup } from "./document";
@@ -124,7 +125,12 @@ export function ReportReview({ caseId }: { caseId: string }) {
   useEffect(() => {
     clearOwnerState();
     void load();
-    const check = () => {
+    const check = (event: Event) => {
+      if (isExplicitSignOut(event)) {
+        clearOwnerState();
+        setError("로그인 후 리포트를 다시 확인해 주세요.");
+        return;
+      }
       if (document.visibilityState === "hidden") return;
       const sequence = loadSequence.current;
       setAccessChecking(true);
@@ -139,11 +145,13 @@ export function ReportReview({ caseId }: { caseId: string }) {
     };
     window.addEventListener("focus", check);
     window.addEventListener("storage", check);
+    window.addEventListener("baro-session-changed", check);
     document.addEventListener("visibilitychange", check);
     return () => {
       ++loadSequence.current;
       window.removeEventListener("focus", check);
       window.removeEventListener("storage", check);
+      window.removeEventListener("baro-session-changed", check);
       document.removeEventListener("visibilitychange", check);
     };
   }, [load, clearOwnerState, verifyOwner]);
@@ -253,8 +261,8 @@ export function ReportReview({ caseId }: { caseId: string }) {
           <>
             {needsConsent && (
               <p className="report-callout" role="status">
-                새 리포트 생성과 수정은 필수 동의 후 이용할 수 있어요. 기존 리포트와 저장된 PDF는
-                계속 확인할 수 있어요. <a href="/consent">동의 확인</a>
+                새 리포트 생성과 수정은 필수 동의 후 이용할 수 있어요. 기존 리포트와 저장된
+                PDF·ZIP은 계속 확인할 수 있어요. <a href="/consent">동의 확인</a>
               </p>
             )}
             <section className="report-editor" aria-labelledby="report-editor-heading">
@@ -530,6 +538,12 @@ export function ReportReview({ caseId }: { caseId: string }) {
                         await ownedResult(api.reports.zip(report.id, selected)),
                         `BARO-${report.id}.zip`,
                       );
+                      const refreshed = await ownedResult(api.reports.get(caseId));
+                      setReport((current) =>
+                        current?.id === refreshed.id
+                          ? { ...current, savedZip: refreshed.savedZip }
+                          : current,
+                      );
                       setNotice("ZIP 다운로드를 시작했어요.");
                     })
                   }
@@ -537,7 +551,26 @@ export function ReportReview({ caseId }: { caseId: string }) {
                   <Download size={16} aria-hidden="true" /> 선택 원본 ZIP ({selected.length})
                 </button>
               </div>
-              {selected.length > 0 && (
+              {report.savedZip && (
+                <button
+                  type="button"
+                  disabled={Boolean(busy) || dirty || !reviewed}
+                  onClick={() =>
+                    void run("저장된 ZIP 확인 중…", async () => {
+                      if (!report.savedZip) return;
+                      downloadBlob(
+                        await ownedResult(api.reports.savedZip(report.savedZip.id)),
+                        `BARO-${report.id}.zip`,
+                      );
+                      setNotice("저장된 ZIP 다운로드를 시작했어요.");
+                    })
+                  }
+                >
+                  <Download size={16} aria-hidden="true" /> 저장된 선택 원본 ZIP (
+                  {report.savedZip.fileCount}) 다시 다운로드
+                </button>
+              )}
+              {(selected.length > 0 || report.savedZip) && (
                 <p className="report-option-note">
                   PDF에서 가린 정보도 원본에는 남을 수 있어요. 원본의 개인정보도 확인해 주세요.
                 </p>

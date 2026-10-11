@@ -1,5 +1,9 @@
 import { afterEach, expect, test } from "bun:test";
-import { customerWorkspaceFixture, runCustomerJob as run } from "./helpers/customer-workspace";
+import {
+  confirmCustomerSummary,
+  customerWorkspaceFixture,
+  runCustomerJob as run,
+} from "./helpers/customer-workspace";
 
 const databases: Awaited<ReturnType<typeof customerWorkspaceFixture>>["db"][] = [];
 afterEach(() => {
@@ -84,6 +88,10 @@ test("saved answers, reviewed summary and ongoing chat commit with durable repla
   ).toEqual({ n: 1 });
   const actionKey = crypto.randomUUID(),
     actionRequest = { expectedRevision: 1, status: "done" };
+  await expect(
+    f.service.updateAction(f.owner.userId, f.workspace.id, "new_action", actionKey, actionRequest),
+  ).rejects.toThrow("STALE_REVISION");
+  await confirmCustomerSummary(f);
   expect(
     (
       await f.service.updateAction(

@@ -162,6 +162,7 @@ export async function readWorkspaceContext(
         row.encrypted_payload,
         v2FileObservationSchema,
       );
+      if (!value.included) continue;
       materials.push({
         reference: {
           kind: "user_material",
@@ -201,7 +202,7 @@ export async function readWorkspaceContext(
       partiesPartial: partyPage.nextId !== null,
       summaryPartial: (metadata.summary?.byteLength ?? 0) > 1048576,
       messagesPartial: history.length === 20,
-      materialsPartial: materials.length > 0,
+      materialsPartial: fileReferences.length > 0,
     },
     references: {
       intakeRevision: metadata.revision,

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../../client/api";
 import { ApiError } from "../../client/api/core";
 import type { SessionView } from "../../client/api/types";
+import { isExplicitSignOut } from "../../client/session-events";
 
 /** Customer screen boundary: revoke old responses without discarding drafts on outages. */
 export function useCustomerAccess(
@@ -122,19 +123,13 @@ export function useCustomerAccess(
     refresh();
     window.addEventListener("focus", refresh);
     window.addEventListener("pageshow", refresh);
+    const changed = (event: Event) => {
+      if (!isExplicitSignOut(event)) return refresh();
+      deny();
+      callbacks.current.report(new ApiError("UNAUTHENTICATED", "로그인이 필요해요."));
+    };
     const storage = (event: StorageEvent) => {
-      if (event.key === "better-auth.message") {
-        try {
-          const message = JSON.parse(event.newValue ?? "null");
-          if (message?.event === "session" && message?.data?.trigger === "signout") {
-            deny();
-            callbacks.current.report(new ApiError("UNAUTHENTICATED", "로그인이 필요해요."));
-            return;
-          }
-        } catch {
-          /* Untrusted messages cannot grant access; verify the server session. */
-        }
-      }
+      if (isExplicitSignOut(event)) return changed(event);
       if (
         !event.key ||
         event.key === "baro-api-mock-v1:session" ||
@@ -144,7 +139,7 @@ export function useCustomerAccess(
         refresh();
     };
     window.addEventListener("storage", storage);
-    window.addEventListener("baro-session-changed", refresh);
+    window.addEventListener("baro-session-changed", changed);
     document.addEventListener("visibilitychange", visible);
     return () => {
       mounted.current = false;
@@ -154,7 +149,7 @@ export function useCustomerAccess(
       window.removeEventListener("focus", refresh);
       window.removeEventListener("pageshow", refresh);
       window.removeEventListener("storage", storage);
-      window.removeEventListener("baro-session-changed", refresh);
+      window.removeEventListener("baro-session-changed", changed);
       document.removeEventListener("visibilitychange", visible);
     };
   }, [deny, verify]);

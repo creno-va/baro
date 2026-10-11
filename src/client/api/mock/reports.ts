@@ -14,6 +14,7 @@ import type {
   SessionView,
   WorkspaceView,
 } from "../types";
+import { mockOriginalStore } from "./files";
 
 type ReportView = BaseReportView & {
   pdfAvailable?: boolean | undefined;
@@ -33,6 +34,10 @@ export type ReportMockState = {
   files: Record<string, FileView[]>;
   reports: Record<string, ReportView>;
   reportHistory?: Record<string, ReportView>;
+  reportZips?: Record<
+    string,
+    { reportId: string; caseId: string; ownerId: string; fileIds: string[] }
+  >;
   reportSources?: Record<string, number>;
   deletedCaseIds?: string[];
   reportRequests?: Record<string, { fingerprint: string; value: ReportView }>;
@@ -171,6 +176,12 @@ function draft(
     maskIdentifiers: false,
   };
 }
+const memoryArchives = new Map<string, Blob>();
+async function archiveStore(key: string, value?: Blob) {
+  if (typeof indexedDB !== "undefined") return mockOriginalStore(key, value);
+  if (value) memoryArchives.set(key, value);
+  return memoryArchives.get(key) ?? null;
+}
 export function createReportsMockHandler(runtime: ReportMockRuntime): DomainRequest {
   const handler: DomainRequest = async <T>(path: string, init: DomainRequestInit = {}) => {
     const state = runtime.read();
@@ -270,6 +281,30 @@ export function createReportsMockHandler(runtime: ReportMockRuntime): DomainRequ
     }
     if (exportPath) {
       const id = decodeURIComponent(exportPath[1] ?? "");
+      if (exportPath[2] === "zip" && method === "GET") {
+        const saved = state.reportZips?.[id];
+        const authorized = () => {
+          const current = runtime.read(),
+            archive = current.reportZips?.[id];
+          if (!saved || !archive || current.session.user?.id !== saved.ownerId)
+            throw new ReportMockError("NOT_FOUND", "저장된 ZIP을 찾을 수 없어요.");
+          requireMockCase(current, saved.caseId, false);
+          if (
+            (current.reportHistory?.[saved.reportId] ?? current.reports[saved.caseId])?.id !==
+              saved.reportId ||
+            saved.fileIds.some(
+              (fileId) => !(current.files[saved.caseId] ?? []).some((file) => file.id === fileId),
+            )
+          )
+            throw new ReportMockError("NOT_FOUND", "리포트나 자료가 삭제됐어요.");
+        };
+        authorized();
+        if (!saved) throw new ReportMockError("NOT_FOUND", "저장된 ZIP을 찾을 수 없어요.");
+        const blob = await archiveStore(`${saved.ownerId}/${saved.caseId}/report-zip/${id}`);
+        authorized();
+        if (!blob) throw new ReportMockError("NOT_FOUND", "저장된 ZIP을 찾을 수 없어요.");
+        return blob as T;
+      }
       const report =
         state.reportHistory?.[id] ?? Object.values(state.reports).find((item) => item.id === id);
       if (!report) throw new ReportMockError("NOT_FOUND", "리포트를 찾을 수 없어요.");
@@ -339,6 +374,35 @@ export function createReportsMockHandler(runtime: ReportMockRuntime): DomainRequ
           )
         )
           throw new ReportMockError("NOT_FOUND", "내보내는 동안 자료나 로그인 상태가 변경됐어요.");
+        const archiveId = `export-${crypto.randomUUID()}`,
+          ownerId = state.session.user?.id ?? "";
+        await archiveStore(`${ownerId}/${report.caseId}/report-zip/${archiveId}`, blob);
+        runtime.update((current) => {
+          requireMockCase(current, report.caseId);
+          if (
+            current.session.user?.id !== ownerId ||
+            ids.some(
+              (fileId) => !(current.files[report.caseId] ?? []).some((file) => file.id === fileId),
+            )
+          )
+            throw new ReportMockError("NOT_FOUND", "자료나 로그인 상태가 변경됐어요.");
+          current.reportZips ??= {};
+          current.reportZips[archiveId] = {
+            reportId: report.id,
+            caseId: report.caseId,
+            ownerId,
+            fileIds: ids as string[],
+          };
+          const savedZip = {
+            id: archiveId,
+            fileCount: ids.length,
+            createdAt: new Date().toISOString(),
+          };
+          const historical = current.reportHistory?.[report.id];
+          if (historical) historical.savedZip = savedZip;
+          const latest = current.reports[report.caseId];
+          if (latest?.id === report.id) latest.savedZip = savedZip;
+        });
         return blob as T;
       }
     }

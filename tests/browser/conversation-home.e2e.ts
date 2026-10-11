@@ -52,8 +52,8 @@ test("app redirects guests, pending consent and lawyers before showing the custo
   page,
 }) => {
   const cases: { session: SessionView; path: string }[] = [
-    { session: { user: null, needsConsent: false }, path: "/login" },
-    { session: { ...customer, needsConsent: true }, path: "/consent" },
+    { session: { user: null, needsConsent: false }, path: "/login?returnTo=%2Fapp" },
+    { session: { ...customer, needsConsent: true }, path: "/consent?returnTo=%2Fapp" },
     {
       session: {
         user: { id: "conversation-lawyer", name: "합성 변호사", accountType: "lawyer" },
@@ -68,7 +68,7 @@ test("app redirects guests, pending consent and lawyers before showing the custo
       localStorage.setItem("baro-api-mock-v1:session", JSON.stringify(session));
     }, item.session);
     await page.goto("/app");
-    await expect(page).toHaveURL(new RegExp(`${item.path}$`));
+    await expect(page).toHaveURL(new URL(item.path, page.url()).href);
     await expect(page.getByRole("textbox", { name: "지금까지 있었던 일" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "저장하고 계속" })).toHaveCount(0);
   }

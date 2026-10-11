@@ -336,12 +336,25 @@ export function createFilesMock(runtime: WorkspaceMockRuntime, originals = mockO
       }
       if (request.method === "DELETE" && !kind) {
         consumeMockFault(runtime, "files.remove");
+        const archives = Object.entries(runtime.read().reportZips ?? {}).filter(
+          ([, archive]) =>
+            archive.ownerId === owner && archive.caseId === id && archive.fileIds.includes(fileId),
+        );
+        for (const [archiveId] of archives)
+          await originals(`${owner}/${id}/report-zip/${archiveId}`, null);
         await originals(`${owner}/${id}/${fileId}`, null);
         for (const part of Object.values(upload?.parts ?? {}))
           await originals(`${owner}/${id}/${fileId}/part-${part.index}`, null);
         return runtime.update((value) => {
           requireMockCase(value, id);
           value.files[id] = value.files[id]?.filter((file) => file.id !== fileId) ?? [];
+          for (const [archiveId, archive] of archives) {
+            delete value.reportZips?.[archiveId];
+            const historical = value.reportHistory?.[archive.reportId];
+            if (historical?.savedZip?.id === archiveId) delete historical.savedZip;
+            const report = value.reports?.[id];
+            if (report?.savedZip?.id === archiveId) delete report.savedZip;
+          }
           delete value.fileProcessing?.[fileId];
           delete value.fileUploads?.[fileId];
           delete value.fileExtractions?.[fileId];

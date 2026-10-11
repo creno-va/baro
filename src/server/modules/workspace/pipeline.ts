@@ -20,6 +20,8 @@ import {
   workspaceSummaryOutputSchema,
 } from "../llm-gateway/v2/schemas";
 
+import { normalizeTimelineDates } from "./timeline-dates";
+
 export type WorkspaceContext = {
   intake: V2Intake;
   confirmedSummary: V2Summary | null;
@@ -58,6 +60,9 @@ export class WorkspaceOutputPolicyError extends ModelError {
     super("POLICY_REJECTED");
   }
 }
+
+const unavailableSourceWarning =
+  "공식 자료를 확인하지 못해 법률 설명을 제공하지 않았어요. 사실 정리는 계속할 수 있어요.";
 
 const privateIdentifiers = (text: string) =>
   /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}|01[016789][- ]?\d{3,4}[- ]?\d{4}/i.test(text);
@@ -110,6 +115,37 @@ export function assertWorkspaceFacts(context: WorkspaceContext, facts: readonly 
       throw new WorkspaceOutputPolicyError("prohibited_content");
     }
   }
+}
+
+function normalizeNewFacts(context: WorkspaceContext, facts: V2Fact[]) {
+  let changed = false;
+  for (const fact of facts) {
+    if (fact.userEdited) {
+      fact.userEdited = false;
+      changed = true;
+    }
+    if (
+      fact.attribution !== "user_material" ||
+      fact.certainty === "uncertain" ||
+      fact.certainty === "conflicting"
+    )
+      continue;
+    const sources = context.materials.filter(
+      (material) =>
+        fact.references.some((ref) => JSON.stringify(ref) === JSON.stringify(material.reference)) &&
+        material.text.includes(fact.text),
+    );
+    if (
+      sources.some((source) => {
+        const coverage = source.coverage as { observationCertainty?: string; userEdited?: boolean };
+        return coverage?.observationCertainty === "uncertain" || coverage?.userEdited === true;
+      })
+    ) {
+      fact.certainty = "uncertain";
+      changed = true;
+    }
+  }
+  return changed;
 }
 
 /** The draft and independent audit remain private. No unvalidated tokens are streamed. */
@@ -202,6 +238,7 @@ export function createWorkspacePipeline(
         const draft = workspaceSummaryOutputSchema.parse(
           await call("workspace_summary", input, requestId),
         );
+        normalizeNewFacts(context, draft.facts);
         assertWorkspaceFacts(context, draft.facts);
         if (
           prohibited(draft.overview) ||
@@ -227,11 +264,7 @@ export function createWorkspacePipeline(
         };
         draft = workspaceChatOutputSchema.parse(await call("workspace_chat", context, requestId));
       }
-      if (context.sourceStatus === "unavailable")
-        draft.warnings = [
-          ...draft.warnings.slice(0, 19),
-          "공식 자료를 확인하지 못해 법률 설명을 제공하지 않았어요. 사실 정리는 계속할 수 있어요.",
-        ];
+      const factsChanged = normalizeNewFacts(context, draft.facts);
       assertWorkspaceFacts(context, draft.facts);
       assertWorkspaceReferences(context, [
         ...draft.references,
@@ -240,7 +273,11 @@ export function createWorkspacePipeline(
       ]);
       const ids = new Set([...context.facts, ...draft.facts].map((fact) => fact.id));
       if (
-        draft.facts.some((fact) => context.facts.some((existing) => existing.id === fact.id)) ||
+        draft.facts.some(
+          (fact) =>
+            context.facts.some((existing) => existing.id === fact.id) ||
+            fact.conflictingFactIds.some((id) => !ids.has(id)),
+        ) ||
         draft.actions.some(
           (action) =>
             action.revision !== 1 ||
@@ -259,6 +296,38 @@ export function createWorkspacePipeline(
         draft.parties.some((party) => prohibited(JSON.stringify(party)))
       )
         throw new WorkspaceOutputPolicyError("prohibited_content");
+      const dates = normalizeTimelineDates(
+        {
+          ...context,
+          facts: [
+            ...context.facts,
+            ...draft.facts.filter(
+              (fact) =>
+                fact.attribution === "user_statement" || fact.attribution === "user_material",
+            ),
+          ],
+        },
+        draft.timeline,
+        (ref) => sourceText(context, ref),
+      );
+      draft.timeline = dates.timeline;
+      const serverWarnings = [
+        ...(context.sourceStatus === "unavailable" ? [unavailableSourceWarning] : []),
+        ...(factsChanged
+          ? ["새 사실의 교정·미확인 표시는 원자료와 실제 사용자 수정 기록을 기준으로 유지했어요."]
+          : []),
+        ...(dates.changed
+          ? [
+              "타임라인 날짜는 원문에서 확인한 정밀도로만 표시했어요. 근거가 없으면 날짜 미확인으로 남겼어요.",
+            ]
+          : []),
+      ];
+      draft.warnings = [
+        ...draft.warnings
+          .filter((warning) => !serverWarnings.includes(warning))
+          .slice(0, 20 - serverWarnings.length),
+        ...serverWarnings,
+      ];
       await audit("workspace_chat", context, draft, requestId);
       const cited = new Set(
         [

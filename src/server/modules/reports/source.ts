@@ -472,7 +472,7 @@ export function reportText(body: V2ReportBody, coverage: readonly string[]) {
     "타임라인",
     ...body.timeline.map(
       (entry) =>
-        `${entry.date ?? "날짜 미확인"} · ${entry.event} · ${certainty[entry.certainty]} · ${refs(entry.references)}`,
+        `${entry.datePrecision === "year" ? `${entry.date?.slice(0, 4)}년` : entry.datePrecision === "month" ? entry.date?.slice(0, 7) : (entry.date ?? "날짜 미확인")} · ${entry.event} · ${certainty[entry.certainty]} · ${refs(entry.references)}`,
     ),
     "",
     "공식 출처",

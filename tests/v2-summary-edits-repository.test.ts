@@ -804,16 +804,23 @@ test("chat facts and people survive current reads, later editing and reconfirmat
   expect(JSON.parse(json)).toEqual(current?.summary);
   expect(await f.ws.readIntake(f.stranger, f.id)).toBeNull();
   const input = editInput(f, {
-    expectedRevision: 1,
+    expectedRevision: current?.summary?.revision ?? 0,
     overview: f.summary.overview,
     factEdits: [{ factId: added.id, text: "다시 확인해 교정한 사실" }],
     unknowns: ["추가 확인할 정보"],
   });
-  expect(await f.edits.begin(f.guard(), input)).toBe(true);
+  const currentSummaryId = (
+    f.db.sqlite.query("SELECT summary_id FROM v2_intakes WHERE id=?").get(f.id) as {
+      summary_id: string;
+    }
+  ).summary_id;
+  expect(current?.status).toBe("reviewing_summary");
+  expect(current?.confirmedSummaryRevision).toBeNull();
+  expect(await f.edits.begin(f.guard(), { ...input, summaryId: currentSummaryId })).toBe(true);
   await drain(f, input.id);
   expect(await f.edits.publish(f.guard(), input.id, crypto.randomUUID())).toBe(true);
   const edited = await f.ws.readIntake(f.actor, f.id);
-  expect(edited?.summary?.revision).toBe(2);
+  expect(edited?.summary?.revision).toBe(3);
   expect(edited?.summary?.facts.find((v) => v.id === added.id)?.text).toBe(
     "다시 확인해 교정한 사실",
   );
@@ -822,7 +829,7 @@ test("chat facts and people survive current reads, later editing and reconfirmat
   expect(await f.ws.confirmSummary(f.guard(), { expectedRevision: 2, summaryRevision: 1 })).toBe(
     false,
   );
-  expect(await f.ws.confirmSummary(f.guard(), { expectedRevision: 2, summaryRevision: 2 })).toBe(
+  expect(await f.ws.confirmSummary(f.guard(), { expectedRevision: 2, summaryRevision: 3 })).toBe(
     true,
   );
 });

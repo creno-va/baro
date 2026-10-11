@@ -39,7 +39,7 @@ export async function caseAccess(
         403,
       ),
     };
-  return { ownerId: session.user.id };
+  return { ownerId: session.user.id, sessionId: session.session.id };
 }
 export async function abuseAllowed(
   context: Context<ApiEnvironment>,

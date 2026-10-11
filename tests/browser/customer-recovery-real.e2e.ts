@@ -119,3 +119,91 @@ for (const operation of ["save", "confirm"] as const)
       }
     });
   }
+
+test("chat additions require the new summary confirmation in the real customer UI", async ({
+  page,
+  context,
+}) => {
+  const browserOrigin = "http://127.0.0.1:4355";
+  const server = spawn(
+    "bun",
+    ["tests/helpers/customer-browser-server.ts", browserOrigin, "pending-chat-summary"],
+    {
+      stdio: ["pipe", "pipe", "pipe"],
+    },
+  );
+  const info: {
+    origin: string;
+    id: string;
+    ownerCookie: Parameters<typeof context.addCookies>[0][number];
+  } = await new Promise((resolve, reject) => {
+    let out = "";
+    const timer = setTimeout(() => reject(new Error("Synthetic API startup timed out")), 15000);
+    server.stdout.on("data", (chunk) => {
+      out += String(chunk);
+      if (out.includes("\n")) {
+        clearTimeout(timer);
+        resolve(JSON.parse(out.split("\n")[0]!));
+      }
+    });
+    server.once("error", (error) => {
+      clearTimeout(timer);
+      reject(error);
+    });
+    server.once("exit", (code) => {
+      clearTimeout(timer);
+      if (code) reject(new Error("Synthetic API failed"));
+    });
+  });
+  try {
+    await context.addCookies([info.ownerCookie]);
+    await context.route("**/api/**", async (route) => {
+      const req = route.request(),
+        url = new URL(req.url());
+      if (!url.pathname.startsWith("/api/")) {
+        await route.continue();
+        return;
+      }
+      const response = await context.request.fetch(
+        new URL(url.pathname + url.search, info.origin).href,
+        {
+          method: req.method(),
+          headers: req.headers(),
+          data: req.postDataBuffer() ?? undefined,
+        },
+      );
+      await route.fulfill({ response });
+    });
+    await page.goto(`/cases/${info.id}`);
+    await expect(
+      page.getByText("대화를 시작하려면 최신 요약을 확인해 주세요.", { exact: true }),
+    ).toBeVisible();
+    await expect(page.getByLabel("추가 사실 또는 질문")).toBeDisabled();
+    await page.getByRole("link", { name: "요약 확인하기", exact: true }).click();
+    await expect(page).toHaveURL(new RegExp(`/cases/${info.id}/summary$`));
+    await expect(page.getByText("새로운 자료를 찾았습니다.", { exact: true })).toBeVisible();
+    await page.getByLabel("요약이 내가 이야기한 사실과 맞는지 확인했어요.").check();
+    await page.getByRole("button", { name: "요약 확인하고 계속" }).click();
+    await page.getByRole("button", { name: "확인하고 사건 열기" }).click();
+    await expect(page).toHaveURL(new RegExp(`/cases/${info.id}$`));
+    await expect(page.getByLabel("추가 사실 또는 질문")).toBeEnabled();
+    const intake = await page.evaluate(
+      async (id) =>
+        (await (await fetch(`/api/v2/cases/${id}/intake`)).json()) as {
+          confirmedSummaryRevision: number;
+          summary: { revision: number };
+        },
+      info.id,
+    );
+    expect(intake.summary.revision).toBe(2);
+    expect(intake.confirmedSummaryRevision).toBe(2);
+  } finally {
+    try {
+      await page.close();
+      await context.unrouteAll({ behavior: "wait" });
+    } finally {
+      server.stdin.end();
+      server.kill();
+    }
+  }
+});

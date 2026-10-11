@@ -167,6 +167,7 @@ export const api = {
     generate(id: string): Promise<ReportView>;
     html(id: string): Promise<Blob>;
     pdf(id: string): Promise<Blob>;
+    savedZip(id: string): Promise<Blob>;
     zip(id: string, selectedFileIds: string[]): Promise<Blob>;
   }>("reports"),
   account: domain<{
