@@ -52,7 +52,7 @@ test("HTML document stays readable on desktop/mobile and print with inert untrus
     content,
     revision: 3,
     updatedAt: "2026-10-09T03:20:00.000Z",
-    stale: false,
+    stale: true,
     maskIdentifiers: true,
     excludedFileIds: ["excluded"],
     basis: { workspaceRevision: 18, summaryRevision: 2, generatedAt: "2026-10-09T03:20:00.000Z" },
@@ -78,6 +78,11 @@ test("HTML document stays readable on desktop/mobile and print with inert untrus
   );
   await page.screenshot({ path: resolve(out, "mobile.png"), fullPage: true });
   await page.emulateMedia({ media: "print" });
+  await expect(page.getByRole("heading", { name: "생성 기준", exact: true })).toBeVisible();
+  await expect(page.locator(".meta")).toContainText("2 · 18");
+  await expect(page.locator(".meta")).toContainText("리포트 제외 자료");
+  await expect(page.locator(".meta")).toContainText("1개");
+  await expect(page.locator(".stale")).toBeVisible();
   await expect(page.getByRole("heading", { name: "자료 처리 범위", exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true,
