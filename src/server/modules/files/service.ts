@@ -300,6 +300,13 @@ export function createFilesService(core: V2Core, deps: FileServiceDependencies) 
       wrappedKey,
     );
     if ((await digest(value)) !== receipt.contentHash) throw new FileError("INVALID_FILE");
+    const { header } = await readHeader(
+      core.cipher,
+      identity(ownerId, u, p.ordinal, p.byte_length),
+      bytes,
+    );
+    // Finish asynchronous decryption before the last access fence: the caller
+    // must not receive even one plaintext chunk after a revoked request session.
     const current = await authorizedBlob(ownerId, workspaceId, u, p, requireConsent);
     if (
       !current ||
@@ -312,9 +319,7 @@ export function createFilesService(core: V2Core, deps: FileServiceDependencies) 
       throw new FileError("NOT_FOUND");
     return {
       value,
-      wrappedKey: (
-        await readHeader(core.cipher, identity(ownerId, u, p.ordinal, p.byte_length), bytes)
-      ).header.wrappedKey,
+      wrappedKey: header.wrappedKey,
       contentHash: receipt.contentHash,
     };
   };

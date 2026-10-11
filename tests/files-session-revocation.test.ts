@@ -1,5 +1,8 @@
 import { expect, test } from "bun:test";
+import { Hono } from "hono";
 import { V2_LIMITS } from "../src/contracts/v2";
+import type { ApiEnvironment } from "../src/server/api/errors";
+import { createFilesApi } from "../src/server/api/v2/files";
 import { AUTH_RETENTION_MS } from "../src/server/auth/policy";
 import { uploaded } from "./helpers/file-processing-fixture";
 import { reportHttpFixture } from "./helpers/report-http-fixture";
@@ -33,7 +36,10 @@ for (const change of ["revocation", "expiry", "retention"] as const) {
     const path = `/api/v2/cases/${f.workspaceId}/files/${f.selectedFileId}/content`;
     const response = await f.app.request(path, { headers: { cookie: f.cookie } }, f.env);
     expect(response.status).toBe(200);
-    await expect(response.arrayBuffer()).rejects.toThrow("INVALID_FILE");
+    const reader = response.body?.getReader();
+    if (!reader) throw new Error("synthetic stream missing");
+    await expect(reader.read().then(({ done }) => done)).rejects.toThrow("INVALID_FILE");
+    reader.releaseLock();
     expect((await f.app.request(path, { headers: { cookie: f.cookie } }, f.env)).status).toBe(
       change === "retention" ? 404 : 401,
     );
@@ -69,4 +75,36 @@ test("current consent is not required to finish an owned original download with 
   const saved = await f.app.request(path, { headers: { cookie: f.cookie } }, f.env);
   expect(saved.status).toBe(200);
   expect(await saved.text()).toBe(f.original);
+});
+
+test("session revoked during the last header decryption cannot release original plaintext", async () => {
+  const f = await reportHttpFixture();
+  let headers = 0;
+  const app = new Hono<ApiEnvironment>().route(
+    "/api/v2/cases",
+    createFilesApi({
+      dependencies: async (_env, core) => {
+        const decrypt = core.cipher.decrypt.bind(core.cipher);
+        core.cipher.decrypt = async (envelope, context) => {
+          const value = await decrypt(envelope, context);
+          // The receipt and two authenticated header reads use this table.
+          if (context.table === "v2_upload_parts" && ++headers === 3)
+            f.db.sqlite.query("DELETE FROM session WHERE user_id=?").run(f.actor.ownerId);
+          return value;
+        };
+        return { ...f.deps, bucket: f.bucketPort };
+      },
+    }),
+  );
+  const response = await app.request(
+    `/api/v2/cases/${f.workspaceId}/files/${f.selectedFileId}/content`,
+    { headers: { cookie: f.cookie } },
+    f.env,
+  );
+  expect(response.status).toBe(200);
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error("synthetic stream missing");
+  await expect(reader.read().then(({ done }) => done)).rejects.toThrow("INVALID_FILE");
+  reader.releaseLock();
+  expect(headers).toBe(3);
 });
