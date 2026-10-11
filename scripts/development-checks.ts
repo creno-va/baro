@@ -75,7 +75,10 @@ export function browserTargets(files: string[], available: string[]): string[] {
   const rules: [RegExp, RegExp][] = [
     [/^(?:src\/contracts\/|tests\/fixtures\/contracts\/)/, /\.e2e\.ts$/],
     // Shared session notifications and return paths affect every signed-in area.
-    [/^src\/client\/(?:session-events|return-path)\.ts$/, /\.e2e\.ts$/],
+    [/^src\/client\/(?:session-events|return-path|api\/mock\/session)\.ts$/, /\.e2e\.ts$/],
+    // Mock file review supplies both workspace corrections and report inputs.
+    [/^src\/client\/api\/mock\/file-review\.ts$/, caseFlows],
+    [/^src\/client\/api\/mock\/file-review\.ts$/, reportFlows],
     [/^playwright\.config\.ts$/, /\.e2e\.ts$/],
     [
       /^tests\/(?:browser\/(?:reports(?:-account-real|-integrated)?|report-real-download|material-report|account-session-recovery)\.config\.ts|helpers\/reports?[^/]*\.ts)$/,

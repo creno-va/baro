@@ -284,3 +284,28 @@ test("shared contract and contract-fixture changes retain browser consumers with
   }
   expect(browserTargets(["tests/fixtures/unused.txt"], browserTests)).toEqual([]);
 });
+
+test("mock review and session changes retain their browser consumers on either path separator", () => {
+  const expected = browserTests.filter((path) => !path.endsWith("/evals.e2e.ts")).sort();
+  for (const path of ["src/client/api/mock/session.ts", "src\\client\\api\\mock\\session.ts"]) {
+    expect(browserTargets([path], browserTests)).toEqual(expected);
+    expect(() => browserTargets([path], [])).toThrow("BROWSER_FEATURE_TEST_MISSING");
+  }
+  for (const path of [
+    "src/client/api/mock/file-review.ts",
+    "src\\client\\api\\mock\\file-review.ts",
+  ]) {
+    const selected = browserTargets([path], browserTests);
+    for (const name of [
+      "workspace-shared",
+      "customer-completion",
+      "report-html",
+      "reports-integrated",
+    ])
+      expect(selected).toContain(`tests/browser/${name}.e2e.ts`);
+    expect(selected).not.toContain("tests/browser/evals.e2e.ts");
+    expect(selected).not.toContain("tests/browser/lawyer-portal.e2e.ts");
+    expect(() => browserTargets([path], [])).toThrow("BROWSER_FEATURE_TEST_MISSING");
+  }
+  expect(browserTargets(["src/client/api/mock/unrelated.ts"], browserTests)).toEqual([]);
+});
