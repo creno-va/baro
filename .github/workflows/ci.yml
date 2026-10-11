@@ -66,7 +66,8 @@ jobs:
   quality:
     name: Source and browser checks
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # Full shared-UI changes run every browser adapter sequentially after source checks.
+    timeout-minutes: 35
 
     steps:
       - name: Checkout
