@@ -41,12 +41,18 @@ export function FileReview({
   canEdit,
   onChanged,
   onError,
+  onDirtyChange,
+  onBusyChange,
+  refreshVersion,
 }: {
   caseId: string;
   fileId: string;
   canEdit: boolean;
   onChanged: () => Promise<unknown>;
   onError: (cause: unknown) => unknown;
+  onDirtyChange?: (dirty: boolean) => void;
+  onBusyChange?: (busy: boolean) => void;
+  refreshVersion?: string;
 }) {
   const [review, setReview] = useState<FileReviewView | null>(null);
   const [drafts, setDrafts] = useState<Record<string, { text: string; included: boolean }>>({});
@@ -56,9 +62,17 @@ export function FileReview({
   const saved = useRef(review);
   saved.current = review;
   const draftDirty = useRef(false);
+  const batchedReviewPending = useRef(false);
   draftDirty.current = Object.keys(drafts).length > 0;
   const report = useCallback(
     (cause: unknown) => {
+      if ((cause as { batchedReviewPending?: boolean })?.batchedReviewPending)
+        batchedReviewPending.current = true;
+      const completed = (cause as { completedReviewEdits?: number })?.completedReviewEdits;
+      if (completed)
+        setNotice(
+          `${completed}개 교정은 저장했어요. 남은 교정은 아직 저장하지 못했으며 입력은 그대로 남아 있어요.`,
+        );
       setError(cause);
       return onError(cause);
     },
@@ -70,6 +84,7 @@ export function FileReview({
   const purge = useCallback(() => {
     ++serial.current;
     setReview(null);
+    batchedReviewPending.current = false;
     setError(null);
     setDrafts({});
     locked.current = false;
@@ -81,9 +96,28 @@ export function FileReview({
     true,
   );
   const dirty = Object.keys(drafts).length > 0;
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+    return () => onDirtyChange?.(false);
+  }, [dirty, onDirtyChange]);
+  useEffect(() => {
+    onBusyChange?.(busy);
+    return () => onBusyChange?.(false);
+  }, [busy, onBusyChange]);
+  useEffect(() => {
+    const warn = (event: BeforeUnloadEvent) => {
+      if (!draftDirty.current && !locked.current) return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, []);
   const canWrite = canMutate && canEdit && (error as { code?: string })?.code !== "CONFLICT";
   const load = useCallback(
     async (after = -1, replace = false) => {
+      if (batchedReviewPending.current && draftDirty.current && !replace) return;
+      if (replace) batchedReviewPending.current = false;
       const request = ++serial.current;
       let epoch = ticket();
       try {
@@ -104,7 +138,9 @@ export function FileReview({
         if (replace) setDrafts({});
         setReview((old) =>
           after < 0
-            ? next
+            ? old && draftDirty.current && !replace
+              ? { ...next, observations: old.observations, nextAfterOrdinal: old.nextAfterOrdinal }
+              : next
             : { ...next, observations: [...(old?.observations ?? []), ...next.observations] },
         );
       } catch (cause) {
@@ -113,9 +149,10 @@ export function FileReview({
     },
     [caseId, fileId, verify, ticket, current, alive, report],
   );
+  const refresh = version ? `${version}:${refreshVersion ?? ""}` : "";
   useEffect(() => {
-    if (version && !locked.current) void load();
-  }, [version, load]);
+    if (refresh && !locked.current) void load();
+  }, [refresh, load]);
   useEffect(
     () => () => {
       ++serial.current;
@@ -152,6 +189,7 @@ export function FileReview({
       old ? { ...old, pendingReview: result.status === "ready" ? null : result } : old,
     );
     if (result.status === "ready") {
+      batchedReviewPending.current = false;
       setDrafts({});
       setNotice("교정 내용을 저장했어요. 새로 접속해도 유지됩니다.");
       await load(-1, true);
@@ -165,7 +203,16 @@ export function FileReview({
       {error ? (
         <ErrorPanel
           error={error}
-          retry={() => void load(-1, (error as { code?: string })?.code === "CONFLICT")}
+          retry={() => {
+            const replace = (error as { code?: string })?.code === "CONFLICT";
+            if (
+              replace &&
+              draftDirty.current &&
+              !window.confirm("저장하지 않은 교정 내용을 버리고 최신 내용을 불러올까요?")
+            )
+              return;
+            void load(-1, replace);
+          }}
           disabled={busy}
         />
       ) : null}
@@ -218,10 +265,12 @@ export function FileReview({
                 <label htmlFor={`observation-${ordinal}`}>확인·교정한 내용</label>
                 <textarea
                   id={`observation-${ordinal}`}
-                  maxLength={5000}
                   value={draft.text}
                   onChange={(e) => update({ text: e.target.value, included: draft.included })}
                 />
+                {[...draft.text].length > 5000 && (
+                  <p role="alert">교정 내용은 5,000자 이내로 작성해 주세요.</p>
+                )}
                 <label>
                   <input
                     type="checkbox"
@@ -293,7 +342,11 @@ export function FileReview({
           ) : (
             dirty && (
               <Button
-                disabled={busy || !canWrite || Object.values(drafts).some((d) => !d.text.trim())}
+                disabled={
+                  busy ||
+                  !canWrite ||
+                  Object.values(drafts).some((d) => !d.text.trim() || [...d.text].length > 5000)
+                }
                 onClick={() =>
                   void run(async (epoch) => {
                     const result = await api.files.saveReview(
