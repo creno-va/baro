@@ -1,4 +1,5 @@
 import { type SyntheticEvent, useCallback, useEffect, useRef, useState } from "react";
+import { accessHref } from "../../client/return-path";
 import {
   type Answer,
   analysisStatusResponseSchema,
@@ -54,6 +55,10 @@ function Questions({
   }
   async function submit(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (questions.some((q) => [...value(q.id).trim()].length > 1000)) {
+      setError("답변은 각각 1,000자 이하로 줄여 주세요. 입력한 내용은 그대로 남아 있어요.");
+      return;
+    }
     const body = answersForQuestionsSchema(questions).safeParse({
       inputRevision: revision,
       answers: questions.map((q) => answers[q.id]),
@@ -115,10 +120,14 @@ function Questions({
                   답변
                   <textarea
                     aria-label={`${index + 1}번 답변`}
-                    maxLength={1000}
+                    aria-describedby={`answer-length-${question.id}`}
+                    aria-invalid={[...value(question.id).trim()].length > 1000}
                     value={value(question.id)}
                     onChange={(event) => choose(question.id, "answered", event.target.value)}
                   />
+                  <span id={`answer-length-${question.id}`}>
+                    {[...value(question.id).trim()].length.toLocaleString()} / 1,000자
+                  </span>
                 </label>
               ))}
           </fieldset>
@@ -326,49 +335,56 @@ export function CaseDetail({ caseId }: { caseId: string }) {
   const load = useCallback(
     async (signal?: AbortSignal) => {
       const ticket = ++sequence.current;
-      const response = await fetch(`/api/cases/${caseId}`, { signal: signal ?? null });
-      if (response.status === 401) {
-        window.location.assign("/login?error=session_expired");
-        return null;
+      try {
+        const response = await fetch(`/api/cases/${caseId}`, { signal: signal ?? null });
+        if (ticket !== sequence.current || signal?.aborted) return null;
+        if (response.status === 401) {
+          window.location.assign(accessHref("login", `/cases/${caseId}`, "session_expired"));
+          return null;
+        }
+        if (!response.ok) {
+          const problem = await safeError(response);
+          throw new Error(problem?.message ?? "사건을 불러오지 못했어요. 다시 확인해 주세요.");
+        }
+        const body = caseDetailResponseSchema.safeParse(await response.json());
+        if (!body.success) throw new Error("상태를 확인하지 못했어요. 다시 확인해 주세요.");
+        if (ticket !== sequence.current || signal?.aborted) return null;
+        current.current = body.data;
+        setDetail(body.data);
+        setStage(statusLabels[body.data.status]);
+        const value = body.data;
+        if (value.startedAt)
+          void trackCase("analysis_started", caseId, value.analysisId, {
+            occurredAt: value.startedAt,
+          });
+        if (value.status === "needs_clarification")
+          void trackCase("clarification_viewed", caseId, value.analysisId, {
+            questionCount: value.questions.length,
+          });
+        else if (value.result)
+          void trackCase("analysis_completed", caseId, value.analysisId, {
+            ...(value.completedAt ? { occurredAt: value.completedAt } : {}),
+            questionCount: value.questionCount ?? 0,
+            resultStatus: value.status,
+            citationCount: value.result.kind === "guidance" ? value.result.citations.length : 0,
+          });
+        else if (value.status === "failed")
+          void trackCase("analysis_failed", caseId, value.analysisId, {
+            ...(value.completedAt ? { occurredAt: value.completedAt } : {}),
+            errorCategory:
+              value.error?.code === "LEGAL_SOURCE_UNAVAILABLE"
+                ? "legal_source"
+                : value.error?.code === "ANALYSIS_TIMEOUT"
+                  ? "timeout"
+                  : "internal",
+            retryable: value.error?.retryable ?? false,
+          });
+        return body.data;
+      } catch (cause) {
+        // A superseded request must not publish an error after a newer read.
+        if (ticket !== sequence.current || signal?.aborted) return null;
+        throw cause;
       }
-      if (!response.ok) {
-        const problem = await safeError(response);
-        throw new Error(problem?.message ?? "사건을 불러오지 못했어요. 다시 확인해 주세요.");
-      }
-      const body = caseDetailResponseSchema.safeParse(await response.json());
-      if (!body.success) throw new Error("상태를 확인하지 못했어요. 다시 확인해 주세요.");
-      if (ticket !== sequence.current || signal?.aborted) return null;
-      current.current = body.data;
-      setDetail(body.data);
-      setStage(statusLabels[body.data.status]);
-      const value = body.data;
-      if (value.startedAt)
-        void trackCase("analysis_started", caseId, value.analysisId, {
-          occurredAt: value.startedAt,
-        });
-      if (value.status === "needs_clarification")
-        void trackCase("clarification_viewed", caseId, value.analysisId, {
-          questionCount: value.questions.length,
-        });
-      else if (value.result)
-        void trackCase("analysis_completed", caseId, value.analysisId, {
-          ...(value.completedAt ? { occurredAt: value.completedAt } : {}),
-          questionCount: value.questionCount ?? 0,
-          resultStatus: value.status,
-          citationCount: value.result.kind === "guidance" ? value.result.citations.length : 0,
-        });
-      else if (value.status === "failed")
-        void trackCase("analysis_failed", caseId, value.analysisId, {
-          ...(value.completedAt ? { occurredAt: value.completedAt } : {}),
-          errorCategory:
-            value.error?.code === "LEGAL_SOURCE_UNAVAILABLE"
-              ? "legal_source"
-              : value.error?.code === "ANALYSIS_TIMEOUT"
-                ? "timeout"
-                : "internal",
-          retryable: value.error?.retryable ?? false,
-        });
-      return body.data;
     },
     [caseId],
   );
@@ -382,6 +398,7 @@ export function CaseDetail({ caseId }: { caseId: string }) {
       controller?.abort();
       controller = new AbortController();
       const requestController = controller;
+      const ticket = sequence.current + 1;
       try {
         const data = await load(requestController.signal);
         if (!data || disposed) return;
@@ -395,13 +412,14 @@ export function CaseDetail({ caseId }: { caseId: string }) {
             if (
               status.success &&
               !requestController.signal.aborted &&
+              ticket === sequence.current &&
               current.current?.analysisId === status.data.analysisId
             )
               setStage(stages[status.data.status] ?? "상태 확인");
           }
         }
       } catch (cause) {
-        if (requestController.signal.aborted || disposed) return;
+        if (requestController.signal.aborted || disposed || ticket !== sequence.current) return;
         setError(cause instanceof Error ? cause.message : "상태 확인에 실패했어요.");
       }
       if (
@@ -454,7 +472,7 @@ export function CaseDetail({ caseId }: { caseId: string }) {
         },
       );
       if (response.status === 401) {
-        window.location.assign("/login?error=session_expired");
+        window.location.assign(accessHref("login", `/cases/${caseId}`, "session_expired"));
         return;
       }
       if (!response.ok) {
@@ -463,7 +481,10 @@ export function CaseDetail({ caseId }: { caseId: string }) {
         if (response.status === 409) await load();
         throw new Error(problem?.message ?? "저장하지 못했어요. 다시 시도해 주세요.");
       }
+      // Only an acknowledged success ends this request. Lost replies keep its key.
+      keys.current.delete(signature);
       if (action === "delete") {
+        sequence.current++;
         void trackCase("case_deleted", caseId, detail.analysisId);
         setDeleted(true);
         current.current = null;
@@ -515,7 +536,7 @@ export function CaseDetail({ caseId }: { caseId: string }) {
             {error}
           </p>
           {consent ? (
-            <a href="/consent">필수 동의 확인</a>
+            <a href={accessHref("consent", `/cases/${caseId}`)}>필수 동의 확인</a>
           ) : (
             <button type="button" onClick={() => refreshSignal.current?.()}>
               최신 상태 다시 확인
