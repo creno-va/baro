@@ -948,6 +948,62 @@ function receipt(
     ...overrides,
   };
 }
+test.each([false, true])(
+  "paid preparation overlaps proof reads and retains the final owner check (deleted=%s)",
+  async (deleted) => {
+    const f = await fixture();
+    const gates = {
+      pricing: Promise.withResolvers<void>(),
+      funding: Promise.withResolvers<void>(),
+    };
+    const fundingFinished = Promise.withResolvers<void>();
+    const started: string[] = [],
+      completed: string[] = [];
+    const statement = f.core.statement;
+    f.core.statement = (sql, values = []) => {
+      const prepared = statement(sql, values);
+      const kind = values[1];
+      if (
+        sql.startsWith("SELECT * FROM v2_runtime_proofs WHERE id=? AND kind=?") &&
+        (kind === "pricing" || kind === "funding")
+      ) {
+        const first = prepared.first.bind(prepared);
+        prepared.first = async <T>(column?: string): Promise<T | null> => {
+          started.push(kind);
+          await gates[kind].promise;
+          const row = column === undefined ? await first<T>() : await first<T>(column);
+          completed.push(kind);
+          if (kind === "funding") fundingFinished.resolve();
+          return row;
+        };
+      }
+      return prepared;
+    };
+    const pending = f.runtime.prepareHold(f.actor, request(f));
+    try {
+      expect(started).toEqual(["pricing", "funding"]);
+      gates.funding.resolve();
+      await fundingFinished.promise;
+      if (deleted)
+        f.db.sqlite
+          .query(
+            "INSERT INTO v2_tombstones(target_kind,target_id,deleted_at) VALUES('account',?,?)",
+          )
+          .run(f.actor.ownerId, NOW);
+      gates.pricing.resolve();
+      const paid = await pending;
+      expect(completed).toEqual(["funding", "pricing"]);
+      if (deleted) expect(paid).toBeNull();
+      else expect(paid?.reservedKrw).toBe(1000);
+      expect(f.db.sqlite.query("SELECT count(*) n FROM v2_paid_holds").get()).toEqual({ n: 0 });
+    } finally {
+      gates.pricing.resolve();
+      gates.funding.resolve();
+      await pending;
+    }
+  },
+);
+
 test("paid chat op/quota/job/outbox and exact-price hold commit atomically, immutable provenance is preserved", async () => {
   const f = await fixture(),
     a = await admit(f);
