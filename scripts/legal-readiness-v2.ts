@@ -4,7 +4,10 @@ import {
   type RetrievalPlan,
   requestSchema,
 } from "../src/server/modules/legal-retrieval/v2/contracts";
-import { createV2LegalRetrieval } from "../src/server/modules/legal-retrieval/v2/service";
+import {
+  createV2LegalRetrieval,
+  type UpstreamRejectionObservation,
+} from "../src/server/modules/legal-retrieval/v2/service";
 import type { Transport } from "../src/server/modules/legal-retrieval/v2/transport";
 import {
   isWorkspacePublicQuery,
@@ -56,6 +59,7 @@ export async function inspectLegalV2(
   let requests = 0;
   let reservations = 0;
   const requestObservations: RequestObservation[] = [];
+  const upstreamRejections: UpstreamRejectionObservation[] = [];
   const sources = new Map<string, OfficialSourceWrite>();
   const plans = options.plans ?? readinessV2Plans;
   const asOfDate = new Date(Date.parse(now) + 9 * 3600000).toISOString().slice(0, 10);
@@ -104,6 +108,9 @@ export async function inspectLegalV2(
         }
       },
       bindCitation: async (citation) => sources.has(citation.sourceId),
+      observeUpstreamRejection: ({ endpointId, category }) => {
+        upstreamRejections.push({ endpointId, category });
+      },
     },
   );
   const output = await service.retrieve(
@@ -146,6 +153,7 @@ export async function inspectLegalV2(
     reservations,
     // Snapshot only allowlisted metadata; never retain URL, headers, body or exception text.
     requestObservations: requestObservations.map((observation) => ({ ...observation })),
+    upstreamRejections: upstreamRejections.map((observation) => ({ ...observation })),
     status:
       plans.length === 3 &&
       new Set(plans.map((plan) => plan.kind)).size === 3 &&

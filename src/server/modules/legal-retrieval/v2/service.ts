@@ -4,7 +4,7 @@ import type {
   createV2OfficialSourceRepository,
   OfficialSourceIdentity,
 } from "../../../db/v2-official-sources";
-import { textHash } from "../service";
+import { type LegalUpstreamRejection, textHash, upstreamError } from "../service";
 import {
   type Access,
   EXTRACTOR_VERSION,
@@ -24,6 +24,10 @@ import { parseStatute, selectStatute } from "./statutes";
 import { createBoundedTransport, type Transport } from "./transport";
 
 type Repo = ReturnType<typeof createV2OfficialSourceRepository>;
+export type UpstreamRejectionObservation = {
+  endpointId: "moleg_eflaw_list" | "moleg_eflaw_detail" | "moleg_prec_list" | "moleg_prec_detail";
+  category: LegalUpstreamRejection;
+};
 export function createV2LegalRetrieval(
   env: Pick<Env, "LAW_API_OC">,
   repo: Repo,
@@ -32,6 +36,7 @@ export function createV2LegalRetrieval(
     timeoutMs?: number;
     sleep?: (ms: number, signal: AbortSignal) => Promise<void>;
     bindCitation: (citation: V2OfficialCitation) => Promise<boolean>;
+    observeUpstreamRejection?: (observation: UpstreamRejectionObservation) => void | Promise<void>;
   },
 ) {
   const request = createBoundedTransport(options.transport, {
@@ -53,7 +58,11 @@ export function createV2LegalRetrieval(
     }).toString();
     return url;
   }
-  async function json(url: URL, endpointId: string, access: Access) {
+  async function json(
+    url: URL,
+    endpointId: UpstreamRejectionObservation["endpointId"],
+    access: Access,
+  ) {
     const raw = await request(url, endpointId, access);
     let value: unknown;
     try {
@@ -61,8 +70,22 @@ export function createV2LegalRetrieval(
     } catch {
       throw new RetrievalFailure("schema_mismatch");
     }
-    if (value && typeof value === "object" && ("result" in value || "msg" in value))
+    if (value && typeof value === "object" && ("result" in value || "msg" in value)) {
+      // Optional tooling diagnostics contain finite labels only. Observer failure
+      // must not change the public reason, request budget, or retry behavior.
+      try {
+        if (options.observeUpstreamRejection)
+          void Promise.resolve(
+            options.observeUpstreamRejection({
+              endpointId,
+              category: upstreamError(value) ?? "upstream-error",
+            }),
+          ).catch(() => undefined);
+      } catch {
+        // Keep the original upstream rejection even if the observer throws.
+      }
       throw new RetrievalFailure("upstream_rejected");
+    }
     return value;
   }
   async function cachedChunk(

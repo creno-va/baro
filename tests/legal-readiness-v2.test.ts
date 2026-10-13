@@ -56,6 +56,7 @@ test.each([false, true])(
     ]);
     expect(receipt.requestObservations.every((request) => request.httpStatus === 200)).toBe(true);
     expect(receipt.runtimeWorker).toBe(false);
+    expect(receipt.upstreamRejections).toEqual([]);
     expect(receipt.verifiedSourceCount).toBe(pending ? 2 : 3);
     expect(receipt.checkedClaimCount).toBe(pending ? 2 : 3);
     expect(receipt.claimIntegrity).toBe(true);
@@ -134,6 +135,38 @@ test("readiness separates HTTP rejection from JSON error envelopes without retai
   expect(receipt.claimIntegrity).toBeNull();
   const serialized = JSON.stringify(receipt);
   for (const excluded of [privateValue, "OC=", "lawSearch.do", "x-private", '"msg"'])
+    expect(serialized).not.toContain(excluded);
+});
+test.each([
+  [
+    { result: "synthetic-private-code", msg: "유관기관 등록상태와 아이피 synthetic-private-oc" },
+    "upstream-registration-rejected",
+  ],
+  [
+    { result: "synthetic-private-code", msg: "API 인증키 OC를 확인 synthetic-private-oc" },
+    "upstream-credential-rejected",
+  ],
+  [
+    { result: "synthetic-private-code", msg: "알 수 없는 오류 synthetic-private-oc" },
+    "upstream-error",
+  ],
+  [{ result: "synthetic-private-code" }, "upstream-error"],
+  [{ msg: "API 인증키 OC를 확인 synthetic-private-oc" }, "upstream-error"],
+] as const)("readiness retains only finite upstream categories: %j", async (envelope, category) => {
+  const receipt = await inspectLegalV2({ LAW_API_OC: "synthetic-private-oc" }, NOW, {
+    transport: async () => Response.json(envelope),
+    plans: readinessV2Plans.slice(0, 2),
+  });
+  expect(receipt.upstreamRejections).toEqual([
+    { endpointId: "moleg_eflaw_list", category },
+    { endpointId: "moleg_prec_list", category },
+  ]);
+  expect(receipt.requests).toBe(2);
+  expect(receipt.reservations).toBe(2);
+  expect(receipt.status).toBe("failed");
+  expect(receipt.outcomes.every((outcome) => outcome.reason === "upstream_rejected")).toBe(true);
+  const serialized = JSON.stringify(receipt);
+  for (const excluded of ["synthetic-private", '"msg"', '"result"', "OC=", "lawSearch.do"])
     expect(serialized).not.toContain(excluded);
 });
 test("readiness preserves transport failures and does not record exception or unexpected header text", async () => {
