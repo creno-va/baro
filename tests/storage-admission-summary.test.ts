@@ -266,19 +266,17 @@ test("a cursor CAS race rolls back the new control instead of returning an ordin
         "INSERT INTO v2_monthly_budget(month,allocation_version,environment,limit_krw) VALUES(?,1,'preview',10000)",
       )
       .run(month);
-  const raced = createV2PaidRuntimeRepository(
-    {
-      ...f.core,
-      binding: {
-        ...f.core.binding,
-        async batch(statements: D1PreparedStatement[]) {
+  const binding = new Proxy(f.core.binding, {
+    get(target, key, receiver) {
+      if (key === "batch")
+        return async (statements: D1PreparedStatement[]) => {
           f.db.sqlite.exec("UPDATE v2_storage_carryover SET revision=revision+1 WHERE id=1");
-          return f.core.binding.batch(statements);
-        },
-      },
+          return target.batch(statements);
+        };
+      return Reflect.get(target, key, receiver);
     },
-    "preview",
-  );
+  });
+  const raced = createV2PaidRuntimeRepository({ ...f.core, binding }, "preview");
   await expect(raced.initializeControl(month, now)).rejects.toThrow("DB_OPERATION_FAILED");
   expect(f.db.sqlite.query("SELECT * FROM v2_runtime_controls WHERE month=?").all(month)).toEqual(
     [],
