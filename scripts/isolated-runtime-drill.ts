@@ -27,24 +27,33 @@ export function drillRequestBudget(
   return Math.min(maximum, remaining);
 }
 
-async function run() {
-  const candidate = sha.parse(process.env.GITHUB_SHA);
+export interface RuntimeDrillIo {
+  request: typeof fetch;
+  runWrangler(args: string[], timeout: number): Promise<void>;
+  writePrivateFile(path: string, value: unknown): Promise<void>;
+  readPrivateFile(path: string): Promise<unknown>;
+  removePrivateFile(path: string): Promise<void>;
+}
+
+export async function runRuntimeDrill(
+  environment: Record<string, string | undefined>,
+  dir: string,
+  io: RuntimeDrillIo,
+) {
+  const candidate = sha.parse(environment.GITHUB_SHA);
   if (
-    process.env.GITHUB_ACTIONS !== "true" ||
-    process.env.GITHUB_REPOSITORY !== "creno-va/baro" ||
-    process.env.GITHUB_REF !== "refs/heads/main" ||
-    process.env.DRILL_CONFIRMATION !== "isolated-synthetic-only" ||
-    process.env.CLOUDFLARE_ACCOUNT_ID !== account ||
-    !process.env.CLOUDFLARE_API_TOKEN
+    environment.GITHUB_ACTIONS !== "true" ||
+    environment.GITHUB_REPOSITORY !== "creno-va/baro" ||
+    environment.GITHUB_REF !== "refs/heads/main" ||
+    environment.DRILL_CONFIRMATION !== "isolated-synthetic-only" ||
+    environment.CLOUDFLARE_ACCOUNT_ID !== account ||
+    !environment.CLOUDFLARE_API_TOKEN
   )
     throw new Error("INVALID_EXECUTION_SCOPE");
-  const runId = process.env.GITHUB_RUN_ID ?? "";
-  const attempt = process.env.GITHUB_RUN_ATTEMPT ?? "";
+  const runId = environment.GITHUB_RUN_ID ?? "";
+  const attempt = environment.GITHUB_RUN_ATTEMPT ?? "";
   const names = runtimeDrillNames(runId, attempt);
-  const token = process.env.CLOUDFLARE_API_TOKEN;
-  const dir = resolve(".wrangler/isolated-runtime");
-  await mkdir(dir, { recursive: true, mode: 0o700 });
-  await chmod(dir, 0o700);
+  const token = environment.CLOUDFLARE_API_TOKEN;
   const receipt: Record<string, unknown> = {
     candidateSha: candidate,
     runId,
@@ -59,6 +68,7 @@ async function run() {
     checks: {},
     cleanup: {},
     passed: false,
+    evidenceWriteFailed: false,
     lastMutation: null,
     mutations: [],
   };
@@ -78,9 +88,20 @@ async function run() {
   const configPath = resolve(dir, "wrangler.json");
   const expiresAt = new Date(Date.now() + 40 * 60_000).toISOString();
   const secrets = { DRILL_TOKEN: controlToken, CASE_DATA_KEY_V1: recoveryKey };
-  async function privateFile(path: string, value: unknown) {
-    await writeFile(path, JSON.stringify(value), { mode: 0o600 });
-    await chmod(path, 0o600);
+  const privateFile = io.writePrivateFile;
+  async function saveReceipt() {
+    receipt.created = { bucket: bucketCreated, worker: workerCreated, workflow: workflowCreated };
+    try {
+      await privateFile(resolve(dir, "receipt.json"), receipt);
+    } catch {
+      failed = true;
+      receipt.passed = false;
+      receipt.evidenceWriteFailed = true;
+      receipt.failure ??= "DRILL_RECEIPT_WRITE_FAILED";
+      // Work stops before another mutation. Known-owned resources must still be cleaned up
+      // when the same disk failure prevents every cleanup checkpoint from being persisted.
+      if (!cleaning) throw new Error("DRILL_RECEIPT_WRITE_FAILED");
+    }
   }
   async function mutationCheckpoint(stage: string, state: "pending" | "observed-success") {
     const mutations = receipt.mutations as { stage: string; state: string; observedAt: string }[];
@@ -92,21 +113,29 @@ async function run() {
       mutations.push({ stage, state, observedAt: new Date().toISOString() });
     }
     receipt.lastMutation = mutations.at(-1);
-    receipt.created = { bucket: bucketCreated, worker: workerCreated, workflow: workflowCreated };
-    await privateFile(resolve(dir, "receipt.json"), receipt);
+    await saveReceipt();
   }
-  async function api(path: string, method = "GET", body?: unknown, missing = false) {
+  async function api(
+    path: string,
+    method = "GET",
+    body?: unknown,
+    missing = false,
+    onSuccess?: (result: unknown) => void,
+  ) {
     const timeout = drillRequestBudget(deadline, cleaning);
     if (method !== "GET") await mutationCheckpoint(`CF_${method}_${path}`, "pending");
     let response: Response;
     try {
-      response = await fetch(`https://api.cloudflare.com/client/v4/accounts/${account}/${path}`, {
-        method,
-        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-        redirect: "error",
-        signal: AbortSignal.timeout(timeout),
-      });
+      response = await io.request(
+        `https://api.cloudflare.com/client/v4/accounts/${account}/${path}`,
+        {
+          method,
+          headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+          ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+          redirect: "error",
+          signal: AbortSignal.timeout(timeout),
+        },
+      );
     } catch {
       throw new Error(`CF_${method}_OUTCOME_UNKNOWN`);
     }
@@ -116,37 +145,20 @@ async function run() {
       .object({ success: z.literal(true), result: z.unknown() })
       .safeParse(await response.json());
     if (!parsed.success) throw new Error(`CF_${method}_INVALID_RESPONSE`);
+    // Register validated ownership before a subsequent evidence write can fail.
+    onSuccess?.(parsed.data.result);
     if (method !== "GET") await mutationCheckpoint(`CF_${method}_${path}`, "observed-success");
     return parsed.data.result;
   }
-  async function wrangler(args: string[]) {
-    // Wrangler 4.147 may retry an identical Worker PUT up to three times internally.
+  async function wrangler(args: string[], onSuccess?: () => void) {
+    // Wrangler 4.147 retries Worker PUT and subsequent /versions POST uploads up to
+    // three times. A lost POST response may leave duplicate versions of this same Worker.
     // Bound the entire subprocess; never repeat a failed/unknown command in this runner.
     const timeout = drillRequestBudget(deadline, cleaning, Date.now(), 90_000);
     await mutationCheckpoint(`wrangler_${args[0]}`, "pending");
-    const result = Bun.spawn([process.execPath, "node_modules/wrangler/bin/wrangler.js", ...args], {
-      env: { ...process.env, WRANGLER_SEND_METRICS: "false", CI: "true" },
-      stdout: "pipe",
-      stderr: "pipe",
-    });
-    let timedOut = false;
-    const timer = setTimeout(() => {
-      timedOut = true;
-      result.kill("SIGKILL");
-    }, timeout);
-    // Never forward Wrangler logs; platform diagnostics may contain identifiers or config.
-    try {
-      await Promise.all([
-        new Response(result.stdout).arrayBuffer(),
-        new Response(result.stderr).arrayBuffer(),
-      ]);
-      const status = await result.exited;
-      if (timedOut) throw new Error("WRANGLER_OUTCOME_UNKNOWN");
-      if (status !== 0) throw new Error("WRANGLER_COMMAND_FAILED");
-      await mutationCheckpoint(`wrangler_${args[0]}`, "observed-success");
-    } finally {
-      clearTimeout(timer);
-    }
+    await io.runWrangler(args, timeout);
+    onSuccess?.();
+    await mutationCheckpoint(`wrangler_${args[0]}`, "observed-success");
   }
   async function deploy(phase: "baseline" | "key-lost" | "key-restored") {
     await privateFile(configPath, {
@@ -173,7 +185,10 @@ async function run() {
         },
       ],
     });
-    await wrangler(["deploy", "--config", configPath, "--secrets-file", secretFile]);
+    await wrangler(["deploy", "--config", configPath, "--secrets-file", secretFile], () => {
+      workerCreated = true;
+      workflowCreated = true;
+    });
   }
   async function waitForPhase(phase: "baseline" | "key-lost" | "key-restored") {
     for (let i = 0; i < 20; i++) {
@@ -207,7 +222,7 @@ async function run() {
     const timeout = drillRequestBudget(deadline, cleaning);
     const mutating = ["seed", "delete", "late", "cleanup"].includes(path);
     if (mutating) await mutationCheckpoint(`control_${path}`, "pending");
-    const response = await fetch(`${origin}/${path}`, {
+    const response = await io.request(`${origin}/${path}`, {
       method: "POST",
       headers: { authorization: `Bearer ${controlToken}` },
       redirect: "error",
@@ -228,7 +243,7 @@ async function run() {
     if (!value) throw new Error(`CHECK_${name.toUpperCase()}_FAILED`);
   }
   try {
-    await privateFile(resolve(dir, "receipt.json"), receipt);
+    await saveReceipt();
     // Never reuse existing resources, even those that happen to have a drill-looking name.
     for (const path of [
       `r2/buckets/${names.bucket}`,
@@ -243,13 +258,11 @@ async function run() {
     origin = `https://${names.worker}.${subdomain.subdomain}.workers.dev`;
     await privateFile(recoveryFile, secrets);
     await privateFile(secretFile, secrets);
-    const created = z
-      .object({ name: z.literal(names.bucket) })
-      .parse(await api("r2/buckets", "POST", { name: names.bucket }));
-    bucketCreated = created.name === names.bucket;
+    await api("r2/buckets", "POST", { name: names.bucket }, false, (result) => {
+      z.object({ name: z.literal(names.bucket) }).parse(result);
+      bucketCreated = true;
+    });
     await deploy("baseline");
-    workerCreated = true;
-    workflowCreated = true;
     await waitForPhase("baseline");
     const settings = z
       .object({ bindings: z.array(z.record(z.string(), z.unknown())) })
@@ -301,7 +314,7 @@ async function run() {
         .object({ error: z.literal("CRYPTO_DECRYPT_FAILED") })
         .safeParse(await control("recover", 502)).success,
     );
-    const saved: unknown = await Bun.file(recoveryFile).json();
+    const saved = await io.readPrivateFile(recoveryFile);
     await privateFile(secretFile, saved);
     await deploy("key-restored");
     await waitForPhase("key-restored");
@@ -352,7 +365,7 @@ async function run() {
     );
   } catch (error) {
     failed = true;
-    receipt.failure =
+    receipt.failure ??=
       error instanceof Error && /^[A-Z0-9_]+$/.test(error.message) ? error.message : "DRILL_FAILED";
   } finally {
     cleaning = true;
@@ -382,16 +395,67 @@ async function run() {
       }
     }
     receipt.completedAt = new Date().toISOString();
+    const privateFiles = await Promise.allSettled(
+      [secretFile, recoveryFile].map((path) => io.removePrivateFile(path)),
+    );
+    receipt.privateFilesRemoved = privateFiles.every((result) => result.status === "fulfilled");
+    if (!receipt.privateFilesRemoved) {
+      failed = true;
+      receipt.failure ??= "DRILL_PRIVATE_FILE_CLEANUP_FAILED";
+    }
     receipt.passed =
       !failed && Object.values(cleanup).every(Boolean) && Object.keys(cleanup).length === 4;
-    await privateFile(resolve(dir, "receipt.json"), receipt);
-    await rm(secretFile, { force: true });
-    await rm(recoveryFile, { force: true });
-    console.log(
-      JSON.stringify({ passed: receipt.passed, checks, cleanup, failure: receipt.failure ?? null }),
-    );
-    if (!receipt.passed) process.exitCode = 1;
+    await saveReceipt();
+  }
+  return receipt;
+}
+
+async function boundedWrangler(args: string[], timeout: number) {
+  const result = Bun.spawn([process.execPath, "node_modules/wrangler/bin/wrangler.js", ...args], {
+    env: { ...process.env, WRANGLER_SEND_METRICS: "false", CI: "true" },
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    result.kill("SIGKILL");
+  }, timeout);
+  // Never forward Wrangler logs; platform diagnostics may contain identifiers or config.
+  try {
+    await Promise.all([
+      new Response(result.stdout).arrayBuffer(),
+      new Response(result.stderr).arrayBuffer(),
+    ]);
+    const status = await result.exited;
+    if (timedOut) throw new Error("WRANGLER_OUTCOME_UNKNOWN");
+    if (status !== 0) throw new Error("WRANGLER_COMMAND_FAILED");
+  } finally {
+    clearTimeout(timer);
   }
 }
 
-if (import.meta.main) await run();
+if (import.meta.main) {
+  const dir = resolve(".wrangler/isolated-runtime");
+  await mkdir(dir, { recursive: true, mode: 0o700 });
+  await chmod(dir, 0o700);
+  const receipt = await runRuntimeDrill(process.env, dir, {
+    request: fetch,
+    runWrangler: boundedWrangler,
+    async writePrivateFile(path, value) {
+      await writeFile(path, JSON.stringify(value), { mode: 0o600 });
+      await chmod(path, 0o600);
+    },
+    readPrivateFile: (path) => Bun.file(path).json(),
+    removePrivateFile: (path) => rm(path, { force: true }),
+  });
+  console.log(
+    JSON.stringify({
+      passed: receipt.passed,
+      checks: receipt.checks,
+      cleanup: receipt.cleanup,
+      failure: receipt.failure ?? null,
+    }),
+  );
+  if (!receipt.passed) process.exitCode = 1;
+}
