@@ -24,6 +24,12 @@ type Faults = {
   lostDeployResponse?: boolean;
   failedDeletion?: string;
   failedPrivateRemoval?: string;
+  seedResponse?: {
+    contentType: string;
+    workerMarker: boolean;
+    body: string;
+    provenance?: "wrong-sha" | "wrong-run" | "missing";
+  };
 };
 
 async function simulate(faults: Faults = {}) {
@@ -55,6 +61,28 @@ async function simulate(faults: Faults = {}) {
           case "/ready":
             return Response.json(provenance);
           case "/seed":
+            if (faults.seedResponse)
+              return new Response(faults.seedResponse.body, {
+                status: 404,
+                headers: {
+                  "content-type": faults.seedResponse.contentType,
+                  ...(faults.seedResponse.workerMarker
+                    ? { "x-baro-drill-control": "runtime-v1" }
+                    : {}),
+                  ...(faults.seedResponse.provenance === "missing"
+                    ? {}
+                    : {
+                        "x-baro-drill-release":
+                          faults.seedResponse.provenance === "wrong-sha"
+                            ? "private-untrusted-header"
+                            : environment.GITHUB_SHA,
+                        "x-baro-drill-run":
+                          faults.seedResponse.provenance === "wrong-run"
+                            ? "private-untrusted-header"
+                            : `${environment.GITHUB_RUN_ID}-1`,
+                      }),
+                },
+              });
             return Response.json({ ...provenance, status: "seeded" });
           case "/inspect":
             return Response.json({
@@ -220,6 +248,68 @@ test("failure to persist pending work prevents the unrecorded creation", async (
   expect(result.calls).not.toContain("POST r2/buckets");
   expect(result.resources.size).toBe(0);
   expect(result.report.passed).toBe(false);
+});
+
+test("control 404 records only bounded response categories and never retries the mutation", async () => {
+  for (const [contentType, workerMarker, body, responseType, workerErrorCode] of [
+    ["application/json", true, '{"error":"NOT_FOUND"}', "json", "NOT_FOUND"],
+    ["text/html; charset=UTF-8", false, "<html>private platform diagnostic</html>", "html", null],
+    ["application/json", true, '{"error":"private platform diagnostic"}', "json", null],
+    [
+      "application/json",
+      true,
+      `{"error":"NOT_FOUND","private":"${"x".repeat(4096)}"}`,
+      "json",
+      null,
+    ],
+    ["private platform diagnostic", false, "private platform diagnostic", "other", null],
+  ] as const) {
+    const result = await simulate({ seedResponse: { contentType, workerMarker, body } });
+    expect(result.report).toMatchObject({
+      passed: false,
+      failure: "CONTROL_SEED_HTTP_404",
+      controlFailures: [
+        {
+          action: "seed",
+          status: 404,
+          workerMarkerObserved: workerMarker,
+          provenance: workerMarker ? "match" : "unavailable",
+          responseType,
+          workerErrorCode,
+        },
+      ],
+    });
+    expect(result.calls.filter((call) => call === "control /seed")).toHaveLength(1);
+    expect(result.resources.size).toBe(0);
+    expect(JSON.stringify(result.snapshots)).not.toContain("private platform diagnostic");
+    expect(JSON.stringify(result.snapshots)).not.toContain("x".repeat(4096));
+  }
+});
+
+test("an error enum is not attributed to this Worker without its matching candidate and run", async () => {
+  for (const provenance of ["wrong-sha", "wrong-run", "missing"] as const) {
+    const result = await simulate({
+      seedResponse: {
+        contentType: "application/json",
+        workerMarker: true,
+        body: '{"error":"NOT_FOUND"}',
+        provenance,
+      },
+    });
+    expect(result.report.controlFailures).toEqual([
+      {
+        action: "seed",
+        status: 404,
+        workerMarkerObserved: true,
+        responseType: "json",
+        workerErrorCode: null,
+        provenance: provenance === "missing" ? "unavailable" : "mismatch",
+      },
+    ]);
+    expect(result.report.passed).toBe(false);
+    expect(result.resources.size).toBe(0);
+    expect(JSON.stringify(result.snapshots)).not.toContain("private-untrusted-header");
+  }
 });
 
 test.each(["bucket", "worker"] as const)(

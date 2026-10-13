@@ -47,10 +47,17 @@ const keys = {
   late: "control/late-started",
 };
 
-function reply(value: unknown, status = 200) {
+function reply(value: unknown, status = 200, provenance?: { candidateSha: string; runId: string }) {
   return Response.json(value, {
     status,
-    headers: { "cache-control": "no-store", "x-content-type-options": "nosniff" },
+    headers: {
+      "cache-control": "no-store",
+      "x-content-type-options": "nosniff",
+      "x-baro-drill-control": "runtime-v1",
+      ...(provenance
+        ? { "x-baro-drill-release": provenance.candidateSha, "x-baro-drill-run": provenance.runId }
+        : {}),
+    },
   });
 }
 async function equalToken(left: string, right: string) {
@@ -113,18 +120,19 @@ export async function handleRuntimeDrill(request: Request, env: RuntimeDrillEnv)
     !(await equalToken(request.headers.get("authorization") ?? "", `Bearer ${env.DRILL_TOKEN}`))
   )
     return reply({ error: "UNAVAILABLE" }, 403);
+  const provenance = {
+    candidateSha: env.RELEASE_SHA,
+    runId: env.DRILL_RUN_ID,
+    phase: env.DRILL_PHASE,
+  };
+  const respond = (value: unknown, status = 200) => reply(value, status, provenance);
   const url = new URL(request.url);
   // No query-controlled resource IDs or request payloads are part of this control protocol.
-  if (url.search) return reply({ error: "INVALID_REQUEST" }, 400);
+  if (url.search) return respond({ error: "INVALID_REQUEST" }, 400);
   if (request.method !== "POST" || (await request.arrayBuffer()).byteLength !== 0)
-    return reply({ error: "INVALID_REQUEST" }, 400);
+    return respond({ error: "INVALID_REQUEST" }, 400);
   try {
-    const provenance = {
-      candidateSha: env.RELEASE_SHA,
-      runId: env.DRILL_RUN_ID,
-      phase: env.DRILL_PHASE,
-    };
-    if (url.pathname === "/ready") return reply(provenance);
+    if (url.pathname === "/ready") return respond(provenance);
     if (url.pathname === "/seed") {
       await claim(env, keys.seed);
       const cipher = await createCaseDataCipher(env);
@@ -138,12 +146,12 @@ export async function handleRuntimeDrill(request: Request, env: RuntimeDrillEnv)
         id: ids.active,
         params: { analysisId: ids.active.slice(0, -2), inputRevision: 1, mode: "wait" },
       });
-      return reply({ ...provenance, status: "seeded" });
+      return respond({ ...provenance, status: "seeded" });
     }
     if (url.pathname === "/inspect") {
       const status = async (id: string) =>
         (await (await env.ANALYSIS_WORKFLOW.get(id)).status()).status;
-      return reply({
+      return respond({
         ...provenance,
         completed: await status(ids.completed),
         active: await status(ids.active),
@@ -156,12 +164,12 @@ export async function handleRuntimeDrill(request: Request, env: RuntimeDrillEnv)
       const completed = await (await env.ANALYSIS_WORKFLOW.get(ids.completed)).status();
       const active = await (await env.ANALYSIS_WORKFLOW.get(ids.active)).status();
       if (completed.status !== "complete" || !["waiting", "running"].includes(active.status))
-        return reply({ error: "WORKFLOWS_NOT_READY" }, 409);
+        return respond({ error: "WORKFLOWS_NOT_READY" }, 409);
       await claim(env, keys.deletion);
       await removeWorkflow(env, ids.completed);
       await removeWorkflow(env, ids.active);
       await env.DRILL_BUCKET.delete(keys.target);
-      return reply({
+      return respond({
         ...provenance,
         completedAbsent: await absent(env, ids.completed),
         activeAbsent: await absent(env, ids.active),
@@ -171,7 +179,7 @@ export async function handleRuntimeDrill(request: Request, env: RuntimeDrillEnv)
     }
     if (url.pathname === "/late") {
       if (!(await env.DRILL_BUCKET.head(keys.deletion)))
-        return reply({ error: "DELETION_REQUIRED" }, 409);
+        return respond({ error: "DELETION_REQUIRED" }, 409);
       await claim(env, keys.late);
       // The real platform create finishes after the deletion marker; reuse product cleanup.
       await env.ANALYSIS_WORKFLOW.create({
@@ -179,22 +187,23 @@ export async function handleRuntimeDrill(request: Request, env: RuntimeDrillEnv)
         params: { analysisId: ids.late.slice(0, -2), inputRevision: 1, mode: "wait" },
       });
       await removeWorkflow(env, ids.late);
-      return reply({ ...provenance, lateAbsent: await absent(env, ids.late) });
+      return respond({ ...provenance, lateAbsent: await absent(env, ids.late) });
     }
-    if (url.pathname === "/recover") return reply({ ...provenance, ...(await verifyCipher(env)) });
+    if (url.pathname === "/recover")
+      return respond({ ...provenance, ...(await verifyCipher(env)) });
     if (url.pathname === "/cleanup") {
       for (const id of Object.values(ids)) await removeWorkflow(env, id);
       for (const key of Object.values(keys)) await env.DRILL_BUCKET.delete(key);
-      return reply({
+      return respond({
         ...provenance,
         remainingObjects: (await env.DRILL_BUCKET.list()).objects.length,
       });
     }
-    return reply({ error: "NOT_FOUND" }, 404);
+    return respond({ error: "NOT_FOUND" }, 404);
   } catch (error) {
     // Never serialize platform errors, keys, ciphertext, headers or bindings.
     if (error instanceof CaseDataCryptoError && error.code === "CRYPTO_DECRYPT_FAILED")
-      return reply({ error: "CRYPTO_DECRYPT_FAILED" }, 502);
-    return reply({ error: "DRILL_STEP_FAILED" }, 502);
+      return respond({ error: "CRYPTO_DECRYPT_FAILED" }, 502);
+    return respond({ error: "DRILL_STEP_FAILED" }, 502);
   }
 }
