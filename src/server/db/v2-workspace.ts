@@ -120,12 +120,14 @@ export async function referencesAuthorized(
     )
     .first<{ revision: number }>();
   if (!intake) return false;
-  const answers = await core
-    .statement(
-      "SELECT a.question_id FROM v2_answers a JOIN v2_question_batches b ON b.id=a.batch_id WHERE b.workspace_id=? AND a.status='answered'",
-      [g.workspaceId],
-    )
-    .all<{ question_id: string }>();
+  const answers = references.some((r) => r.kind === "intake_answer")
+    ? await core
+        .statement(
+          "SELECT a.question_id FROM v2_answers a JOIN v2_question_batches b ON b.id=a.batch_id WHERE b.workspace_id=? AND a.status='answered'",
+          [g.workspaceId],
+        )
+        .all<{ question_id: string }>()
+    : { results: [] };
   const messageIds = [
     ...new Set(references.flatMap((r) => (r.kind === "user_message" ? [r.messageId] : []))),
   ];
@@ -135,24 +137,30 @@ export async function referencesAuthorized(
   const citationIds = [
     ...new Set(references.flatMap((r) => (r.kind === "official_source" ? [r.citationId] : []))),
   ];
-  const messages = await core
-    .statement(
-      "SELECT id,workspace_revision FROM v2_messages WHERE workspace_id=? AND role='user' AND id IN (SELECT value FROM json_each(?))",
-      [g.workspaceId, JSON.stringify(messageIds)],
-    )
-    .all<{ id: string; workspace_revision: number }>();
-  const rows = await core
-    .statement(
-      "SELECT id,revision,encrypted_payload FROM v2_files WHERE workspace_id=? AND state='ready' AND id IN (SELECT value FROM json_each(?)) AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='file' AND target_id=v2_files.id)",
-      [g.workspaceId, JSON.stringify(fileIds)],
-    )
-    .all<{ id: string; revision: number; encrypted_payload: string }>();
-  const citations = await core
-    .statement(
-      "SELECT id FROM v2_citation_bindings WHERE workspace_id=? AND json_extract(citation_json,'$._availability')='verified' AND id IN (SELECT value FROM json_each(?))",
-      [g.workspaceId, JSON.stringify(citationIds)],
-    )
-    .all<{ id: string }>();
+  const messages = messageIds.length
+    ? await core
+        .statement(
+          "SELECT id,workspace_revision FROM v2_messages WHERE workspace_id=? AND role='user' AND id IN (SELECT value FROM json_each(?))",
+          [g.workspaceId, JSON.stringify(messageIds)],
+        )
+        .all<{ id: string; workspace_revision: number }>()
+    : { results: [] };
+  const rows = fileIds.length
+    ? await core
+        .statement(
+          "SELECT id,revision,encrypted_payload FROM v2_files WHERE workspace_id=? AND state='ready' AND id IN (SELECT value FROM json_each(?)) AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='file' AND target_id=v2_files.id)",
+          [g.workspaceId, JSON.stringify(fileIds)],
+        )
+        .all<{ id: string; revision: number; encrypted_payload: string }>()
+    : { results: [] };
+  const citations = citationIds.length
+    ? await core
+        .statement(
+          "SELECT id FROM v2_citation_bindings WHERE workspace_id=? AND json_extract(citation_json,'$._availability')='verified' AND id IN (SELECT value FROM json_each(?))",
+          [g.workspaceId, JSON.stringify(citationIds)],
+        )
+        .all<{ id: string }>()
+    : { results: [] };
   const files: V2ReferenceContext["files"][number][] = [];
   for (const row of rows.results) {
     const metadata = await core.decrypt(
