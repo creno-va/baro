@@ -315,3 +315,38 @@ prepared 객체는 실제 `confirmBlobDeleted`와 원자적으로 stopped/releas
 bounded inventory 등록도 인증한 coordinator만 가능하며, writer 종료를 확인하지 못한
 기존 객체는 unknown/running으로 남는다. 합성 SQLite 검사는 실제 cloud 처리나 청구,
 production funding을 입증하지 않는다. 실제 구성·smoke는 #71에 남는다.
+
+`0010_bounded_storage_admission`은 업로드 사전 검사의 이력 길이 의존성을 제거한다.
+reservation의 `live_blob_bytes`는 같은 reservation의 pending/stored/deleting blob 합계이며,
+deleted 전환 때만 차감한다. 물리 용량은 환경별 canonical total과 binding별 적용 marker를
+함께 유지한다. binding의 검증된 전환이 한 trigger 안에서 일회 delta permit, canonical,
+capacity mirror, 적용 marker를 순서대로 바꾸고 permit을 소거한다. 완료된 delta 재사용,
+canonical 직접 수정/삭제, mirror 단독 수정은 거절한다. 복구의 기존 cold SUM 재계산은 이미
+유지된 canonical과 일치해야 하며 delta를 다시 적용하지 않는다.
+
+환경별 integrity witness는 로컬 DB의 모든 live blob을 대상으로 한다. binding 누락,
+다른 환경, key/크기 불일치는 해당 환경의 witness에 남고, hot 경로는 PK prefix 존재 검사로
+차단한다. blob/binding 변경 trigger는 현재 blob/binding PK에서 witness를 다시 계산하므로
+삭제·release trigger 실행 순서에 의존하지 않는다. owner 삭제로 의무가 지워지지 않는다.
+
+carryover는 **환경별이 아닌 로컬 DB 단일 행**이다. cursor보다 이전 월의 모든 budget
+reserved+ambiguous와 미정산 maintenance를 원래 SUM과 동일하게 합산한다. 원장 변경의
+동일 트랜잭션에서 delta를 반영한다. 최초 migration은 DB 시계의 KST 월을 사용하며,
+기존 `initializeControl`이 trusted now와 DB의 현재 월이 일치할 때만 cold SUM으로 cursor를
+앞으로 이동한다. control 생성과 cursor CAS/readiness는 같은 batch이고 기존 active control을
+수정하지 않는다. 미래 control 사전 생성은 cursor를 이동하지 않는다. 누락·버전 불일치·stale
+cursor는 hot 경로에서 0으로 대체하거나 자동 복구하지 않고 admission을 거절한다.
+
+저장소 가격은 승인된 현재 월 projection에 고정한다. 이후 model 전용 가격 증거가 이 증거를
+가리지 않는다. 모든 신규 가격 변경을 자동으로 반영하는 계약은 아니다. 자금은 환경 PK의
+최신 `(verified_at,id)` funding head를 사용하고 proof INSERT와 head 이동은 원자적이다.
+최신 증거가 만료되거나 unavailable이면 과거 증거로 fallback하지 않는다. hold 생성,
+dispatch, physical I/O는 현재 head와 projection의 원래 funding 제약을 동시에 검사한다.
+새 한도 증액으로 기존 projection의 조달 한도를 넘을 수 없다. model 경로와 cold
+exposure/drain/activation의 원래 carryover SUM·승인 계약은 유지한다.
+
+마이그레이션은 기존 active control, ambiguous/charged NULL, proof와 암호문을 보존한다.
+기존 physical mirror와 binding 합계가 다르면 보정하지 않고 실패한다. 요약 backfill과 trigger
+설치 뒤 schema marker를 기록한다. 새 trigger가 만드는 행도 D1 `meta.changes`에 포함되므로,
+직접 blob/proof INSERT의 성공은 `RETURNING id` 결과로 판정하며 전역 CAS 판정을 완화하지 않는다.
+이 구조와 합성 native 측정만으로 실제 서비스의 전체 비용 상한 또는 외부 인수 성공을 주장하지 않는다.

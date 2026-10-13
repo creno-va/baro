@@ -159,7 +159,13 @@ export async function fixture(options: { throughMigration?: string } = {}) {
       now: NOW,
     });
   expect(await accounting.activateAllocation(a.month, a.version, NOW)).toBe(true);
-  expect(await runtime.initializeControl(a.month, NOW)).toBe(true);
+  if (options.throughMigration) {
+    db.sqlite
+      .query(
+        "INSERT INTO v2_runtime_controls(month,environment,pending_version,updated_at) VALUES(?,'preview',1,?)",
+      )
+      .run(a.month, NOW);
+  } else expect(await runtime.initializeControl(a.month, NOW)).toBe(true);
   const ap = { id: crypto.randomUUID(), environment: "preview" as const, allocation: a };
   expect(await runtime.putAllocationProof(ap, NOW)).toBe(true);
   const drain = await runtime.drain(a.month, 1, ap.id, NOW);

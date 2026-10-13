@@ -453,7 +453,7 @@ test("file import failure identifies the last migration without replaying partia
     schemaProgress: {
       phase: "migration-import",
       migrationOrdinal: 10,
-      migrationCount: 10,
+      migrationCount: migrations.length,
       statementOffset: 0,
       statementCount: 17,
       confirmedStatements: 322,
@@ -510,7 +510,7 @@ test("schema receipts identify the confirmed prefix and rejected ledger response
     expect(r.report.schemaProgress).toEqual({
       phase: "record-migration",
       migrationOrdinal: 7,
-      migrationCount: 10,
+      migrationCount: migrations.length,
       statementOffset: 0,
       statementCount: 0,
       confirmedStatements: 41,
@@ -537,8 +537,8 @@ test("schema receipts identify the confirmed prefix and rejected ledger response
 test("initial schema, fixture seeding and baseline observation failures have separate stages", async () => {
   for (const [failQueryAt, stage] of [
     [1, "schema-install"],
-    [13, "fixture-seed"],
-    [17, "fixture-observe"],
+    [migrations.length + 3, "fixture-seed"],
+    [migrations.length + 7, "fixture-observe"],
   ] as const) {
     const r = await execute({ failQueryAt });
     expect(r.report.stage).toBe(stage);

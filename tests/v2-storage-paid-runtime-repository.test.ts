@@ -26,6 +26,7 @@ import {
 } from "../src/server/db/v2-storage-paid-runtime";
 import { createTestDatabase } from "./helpers/d1";
 import { seedTestSession } from "./helpers/session";
+import { seedStorageAdmissionProjection } from "./helpers/storage-admission";
 
 const NOW = "2026-10-06T00:00:00.000Z",
   LATER = "2026-10-06T00:02:00.000Z",
@@ -79,15 +80,29 @@ function pricing(): PricingProof {
       processingRegion: "global",
       regionMultiplier: "1",
     },
-    prices: ["r2_class_a_requests", "r2_class_b_requests", "r2_storage_gb_months"].map((sku) => ({
-      sku: sku as "r2_class_a_requests" | "r2_class_b_requests" | "r2_storage_gb_months",
+    prices: [
+      "r2_class_a_requests",
+      "r2_class_b_requests",
+      "r2_storage_gb_months",
+      "worker_cpu_ms",
+      "d1_rows_read",
+      "d1_rows_written",
+    ].map((sku) => ({
+      sku: sku as PricingProof["prices"][number]["sku"],
       modelRates: null,
       provider: "cloudflare" as const,
       model: null,
       region: "global",
       plan: "synthetic",
       billingMode: "metered" as const,
-      unit: sku === "r2_storage_gb_months" ? ("gb_months" as const) : ("requests" as const),
+      unit:
+        sku === "r2_storage_gb_months"
+          ? "gb_months"
+          : sku === "worker_cpu_ms"
+            ? "milliseconds"
+            : sku.startsWith("d1_")
+              ? "rows"
+              : "requests",
       unitSize: "1",
       usdPerUnit: "1",
       billingQuantum: "1",
@@ -150,7 +165,13 @@ async function fixture(options: { throughMigration?: string } = {}) {
       now: NOW,
     });
   expect(await accounting.activateAllocation(a.month, a.version, NOW)).toBe(true);
-  expect(await runtime.initializeControl(a.month, NOW)).toBe(true);
+  if (options.throughMigration) {
+    db.sqlite
+      .query(
+        "INSERT INTO v2_runtime_controls(month,environment,pending_version,updated_at) VALUES(?,'preview',1,?)",
+      )
+      .run(a.month, NOW);
+  } else expect(await runtime.initializeControl(a.month, NOW)).toBe(true);
   const ap = { id: crypto.randomUUID(), environment: "preview" as const, allocation: a };
   expect(await runtime.putAllocationProof(ap, NOW)).toBe(true);
   const drain = await runtime.drain(a.month, 1, ap.id, NOW);
@@ -169,6 +190,14 @@ async function fixture(options: { throughMigration?: string } = {}) {
     fp = funding();
   expect(await runtime.putPricingProof(pp, NOW)).toBe(true);
   expect(await runtime.putFundingProof(fp, NOW)).toBe(true);
+  if (!options.throughMigration)
+    seedStorageAdmissionProjection(db, {
+      pricingId: pp.id,
+      fundingId: fp.id,
+      allocationId: ap.id,
+      now: NOW,
+      expiry: EXP,
+    });
   const workspaceId = crypto.randomUUID();
   const envelope = await core.encrypt("v2_workspaces", workspaceId, actor.ownerId, 1, {
     subjectContext: "individual",
@@ -710,22 +739,7 @@ test("another pending object cannot exceed the actual reservation or account cap
 });
 test("shared canonical Worker and D1 units remain part of the authenticated R2 footprint", async () => {
   const f = await originalFixture();
-  const basePrice = f.pp.prices[0];
-  if (!basePrice) throw new Error("Synthetic pricing missing");
-  const pp: PricingProof = {
-    ...f.pp,
-    id: crypto.randomUUID(),
-    version: 2,
-    prices: [
-      ...f.pp.prices,
-      ...(["worker_cpu_ms", "d1_rows_read", "d1_rows_written"] as const).map((sku) => ({
-        ...basePrice,
-        sku,
-        unit: sku === "worker_cpu_ms" ? ("milliseconds" as const) : ("rows" as const),
-      })),
-    ],
-  };
-  expect(await f.runtime.putPricingProof(pp, NOW)).toBe(true);
+  const pp = f.pp;
   const p = await prepare(f, {
     ...f.r,
     pricingProofId: pp.id,
@@ -1057,4 +1071,37 @@ test("0007 populated upgrade adds only jobless storage schema and preserves old 
       )
       .get(),
   ).toEqual({ count: 1 });
+});
+
+for (const phase of ["after_prepare", "after_hold"] as const)
+  test(`latest funding head replacement at ${phase} denies stale authority without refunding a hold`, async () => {
+    const f = await originalFixture(),
+      p = await prepare(f);
+    if (phase === "after_hold") expect(await admit(f, p)).toBe(true);
+    expect(
+      await f.runtime.putFundingProof(
+        { ...f.fp, id: "zz-current-funding", state: "unavailable", spendAllowanceKrw: 0 },
+        NOW,
+      ),
+    ).toBe(true);
+    if (phase === "after_prepare") expect(await admit(f, p)).toBe(false);
+    else expect(await f.storageRuntime.beforeDispatch(f.actor, p.request.attemptId)).toBeNull();
+    expect((cost(f) as { reserved_krw: number }).reserved_krw).toBe(
+      phase === "after_hold" ? 1000 : 0,
+    );
+  });
+
+test("a larger new funding allowance cannot bypass the pinned projection's original ceiling", async () => {
+  const f = await originalFixture();
+  const fp = { ...f.fp, id: "zz-larger-funding", spendAllowanceKrw: 20000 };
+  expect(await f.runtime.putFundingProof(fp, NOW)).toBe(true);
+  f.db.sqlite.exec("UPDATE v2_monthly_budget SET limit_krw=20000");
+  const p = await prepare(f, {
+    ...f.r,
+    fundingProofId: fp.id,
+    plan: { ...f.r.plan, quantities: [{ sku: "r2_class_a_requests", maximumQuantity: "11" }] },
+  });
+  expect(p.reservedKrw).toBe(11000);
+  expect(await admit(f, p)).toBe(false);
+  expect((cost(f) as { reserved_krw: number }).reserved_krw).toBe(0);
 });

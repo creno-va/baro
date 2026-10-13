@@ -133,18 +133,19 @@ export function createStorageBudgetService(options: {
     const month = usageDateKst(now).slice(0, 7);
     const ids = await options.core
       .statement(
-        `SELECT c.allocation_proof_id,
-       (SELECT id FROM v2_runtime_proofs WHERE environment=c.environment AND kind='pricing' AND verified_at<=? AND valid_until>? ORDER BY verified_at DESC,id DESC LIMIT 1) AS pricing_id,
-       (SELECT id FROM v2_runtime_proofs WHERE environment=c.environment AND kind='funding' AND verified_at<=? AND valid_until>? ORDER BY verified_at DESC,id DESC LIMIT 1) AS funding_id
+        `SELECT c.allocation_proof_id,projection.pricing_proof_id AS pricing_id,head.proof_id AS funding_id
        FROM v2_runtime_controls c JOIN v2_monthly_budget b ON b.month=c.month
+       JOIN v2_storage_projections projection ON projection.environment=c.environment AND projection.month=c.month AND projection.allocation_proof_id=c.allocation_proof_id
+       JOIN v2_storage_funding_heads head ON head.environment=c.environment
        JOIN v2_budget_allocations a ON a.month=b.month AND a.version=b.allocation_version
        JOIN v2_runtime_proofs ap ON ap.id=c.allocation_proof_id
        WHERE c.month=? AND c.environment=? AND b.environment=c.environment AND c.phase='active'
+       AND projection.created_at<=? AND projection.valid_until>?
        AND ap.kind='allocation' AND ap.environment=c.environment AND ap.verified_at<=? AND ap.valid_until>?
        AND json_extract(ap.payload_json,'$.allocation.version')=b.allocation_version
        AND json_extract(ap.payload_json,'$.allocation.manifestHash')=a.manifest_hash
        AND a.reviewed_at<=? AND a.valid_until>? AND a.funding_valid_until>?`,
-        [now, now, now, now, month, options.environment, now, now, now, now, now],
+        [month, options.environment, now, now, now, now, now, now, now],
       )
       .first<{
         allocation_proof_id: string;

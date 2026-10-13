@@ -13,6 +13,7 @@ import {
 } from "../src/server/modules/budget/storage-ledger";
 import { createLawyerAssetsService } from "../src/server/modules/lawyers/assets";
 import { fixture } from "./helpers/file-processing-fixture";
+import { seedStorageAdmissionProjection } from "./helpers/storage-admission";
 
 const NOW = "2026-10-06T00:00:00.000Z",
   EXP = "2026-11-01T00:00:00.000Z",
@@ -128,6 +129,13 @@ async function paidFixture() {
   };
   expect(await runtime.putPricingProof(pricing, NOW)).toBe(true);
   expect(await runtime.putFundingProof(funding, NOW)).toBe(true);
+  seedStorageAdmissionProjection(f.db, {
+    pricingId: pricing.id,
+    fundingId: funding.id,
+    allocationId: ap.id,
+    now: NOW,
+    expiry: EXP,
+  });
   let current = NOW,
     hook: (() => Promise<void>) | undefined,
     afterFails = false,

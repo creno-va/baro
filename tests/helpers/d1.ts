@@ -16,7 +16,17 @@ export async function createTestDatabase(
         (!options.throughMigration || name <= `${options.throughMigration}.sql`),
     )
     .sort()) {
-    sqlite.exec(await Bun.file(`drizzle/${file}`).text());
+    const migration = await Bun.file(`drizzle/${file}`).text();
+    // Most repository fixtures use an explicit October 2026 clock. Pin only
+    // the initial derived cursor; dedicated upgrade/native tests use real SQL.
+    sqlite.exec(
+      file === "0010_bounded_storage_admission.sql"
+        ? migration.replace(
+            "SELECT strftime('%Y-%m','now','+9 hours') AS month",
+            "SELECT '2026-10' AS month",
+          )
+        : migration,
+    );
   }
   const executions = new WeakMap<
     object,

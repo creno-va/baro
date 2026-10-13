@@ -63,7 +63,7 @@ function sourceQuery(r: StoragePaidHoldRequest, actor: Actor, pending: boolean) 
   const additionalBytes = pending
     ? "0"
     : `CASE WHEN ${existingPending} THEN 0 ELSE ${req("pending.logicalBytes")} END`;
-  const common = `o.id=${req("plan.operationId")} AND o.owner_id=q.owner AND o.revision=${req("plan.operationRevision")} AND o.state='admitted' AND principal.owner_id=q.owner AND ${r.intent.kind === "approved_public_copy" && !pending ? "r.state='stored'" : `r.id=${req("reservationId")} AND r.state='reserved'`} AND r.principal_id=principal.id AND EXISTS(SELECT 1 FROM v2_storage_usage usage WHERE usage.principal_id=principal.id AND usage.stored_bytes+usage.reserved_bytes+${r.intent.kind === "approved_public_copy" && !pending ? req("pending.logicalBytes") : "0"}<=10000000000) AND ${r.intent.kind === "approved_public_copy" && !pending ? "1" : `coalesce((SELECT sum(logical_bytes) FROM v2_blobs existing WHERE existing.reservation_id=r.id AND existing.state!='deleted'),0)+${additionalBytes}<=r.byte_length`} AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='account' AND target_id=q.owner) AND (EXISTS(SELECT 1 FROM v2_idempotency i WHERE i.operation_id=o.id AND i.request_hash=${req("plan.requestHash")}) OR EXISTS(SELECT 1 FROM v2_storage_paid_executions prior WHERE prior.operation_id=o.id AND json_extract(prior.payload_json,'$.plan.requestHash')=${req("plan.requestHash")}))`;
+  const common = `o.id=${req("plan.operationId")} AND o.owner_id=q.owner AND o.revision=${req("plan.operationRevision")} AND o.state='admitted' AND principal.owner_id=q.owner AND ${r.intent.kind === "approved_public_copy" && !pending ? "r.state='stored'" : `r.id=${req("reservationId")} AND r.state='reserved'`} AND r.principal_id=principal.id AND EXISTS(SELECT 1 FROM v2_storage_usage usage WHERE usage.principal_id=principal.id AND usage.stored_bytes+usage.reserved_bytes+${r.intent.kind === "approved_public_copy" && !pending ? req("pending.logicalBytes") : "0"}<=10000000000) AND ${r.intent.kind === "approved_public_copy" && !pending ? "1" : `r.live_blob_bytes+${additionalBytes}<=r.byte_length`} AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='account' AND target_id=q.owner) AND (EXISTS(SELECT 1 FROM v2_idempotency i WHERE i.operation_id=o.id AND i.request_hash=${req("plan.requestHash")}) OR EXISTS(SELECT 1 FROM v2_storage_paid_executions prior WHERE prior.operation_id=o.id AND json_extract(prior.payload_json,'$.plan.requestHash')=${req("plan.requestHash")}))`;
   let from: string, guard: string, fields: string, blobKind: string, visibility: string;
   if (r.intent.kind === "case_original") {
     from =
@@ -206,6 +206,7 @@ export function createV2StoragePaidRuntimeRepository(
           row = await core.statement(source.sql, source.values).first<{ anchor: string }>();
         if (!row) return null;
         const budget = budgetAdmissionPredicate({
+          boundedStorage: true,
           monthlyBudgetCapEnabled: core.monthlyBudgetCapEnabled,
           pricingProofId: r.pricingProofId,
           fundingProofId: r.fundingProofId,
@@ -216,7 +217,7 @@ export function createV2StoragePaidRuntimeRepository(
           now: actor.now,
         });
         const predicate = {
-          sql: `EXISTS(SELECT 1 FROM (${source.sql}) WHERE anchor=?) AND (${budget.sql}) AND NOT EXISTS(SELECT 1 FROM v2_cost_attempts WHERE id=? OR (invocation_id=? AND (attempt=? OR state IN ('reserved','ambiguous')))) AND NOT EXISTS(SELECT 1 FROM v2_storage_paid_executions WHERE plan_id=?)`,
+          sql: `EXISTS(SELECT 1 FROM (${source.sql}) WHERE anchor=?) AND (${budget.sql}) AND NOT EXISTS(SELECT 1 FROM v2_cost_attempts WHERE id=?) AND NOT EXISTS(SELECT 1 FROM v2_cost_attempts WHERE invocation_id=? AND attempt=?) AND NOT EXISTS(SELECT 1 FROM v2_cost_attempts WHERE invocation_id=? AND state IN ('reserved','ambiguous')) AND NOT EXISTS(SELECT 1 FROM v2_storage_paid_executions WHERE plan_id=?)`,
           values: [
             ...source.values,
             row.anchor,
@@ -224,6 +225,7 @@ export function createV2StoragePaidRuntimeRepository(
             r.attemptId,
             r.plan.invocationId,
             r.attempt,
+            r.plan.invocationId,
             r.planId,
           ],
         };
@@ -322,7 +324,7 @@ export function createV2StoragePaidRuntimeRepository(
         parse(opaqueIdSchema, attemptId);
         const row = await core
           .statement(
-            "SELECT h.*,ca.state AS cost_state,ca.month FROM v2_storage_paid_executions h JOIN v2_cost_attempts ca ON ca.id=h.attempt_id WHERE h.attempt_id=? AND h.state='prepared' AND ca.state='reserved'",
+            "SELECT h.*,ca.state AS cost_state,ca.month,pp.payload_json AS pricing_json,fp.payload_json AS funding_json FROM v2_storage_paid_executions h JOIN v2_cost_attempts ca ON ca.id=h.attempt_id JOIN v2_runtime_proofs pp ON pp.id=h.pricing_proof_id JOIN v2_runtime_proofs fp ON fp.id=h.funding_proof_id WHERE h.attempt_id=? AND h.state='prepared' AND ca.state='reserved'",
             [attemptId],
           )
           .first<{
@@ -332,6 +334,8 @@ export function createV2StoragePaidRuntimeRepository(
             month: string;
             pricing_proof_id: string;
             funding_proof_id: string;
+            pricing_json: string;
+            funding_json: string;
           }>();
         if (!row) return null;
         const r = parse(storagePaidHoldRequestSchema, JSON.parse(row.payload_json));
@@ -350,19 +354,19 @@ export function createV2StoragePaidRuntimeRepository(
           }) !== row.anchor_json
         )
           return null;
-        const control = `EXISTS(SELECT 1 FROM v2_runtime_controls c JOIN v2_monthly_budget budget ON budget.month=c.month JOIN v2_runtime_proofs ap ON ap.id=c.allocation_proof_id JOIN v2_runtime_proofs pp ON pp.id=? JOIN v2_runtime_proofs fp ON fp.id=? WHERE c.month=? AND c.environment=? AND c.phase='active' AND ap.kind='allocation' AND ap.environment=c.environment AND ap.verified_at<=? AND ap.valid_until>? AND json_extract(ap.payload_json,'$.allocation.version')=budget.allocation_version AND pp.environment=c.environment AND fp.environment=c.environment AND pp.verified_at<=? AND fp.verified_at<=? AND pp.valid_until>? AND fp.valid_until>?)`;
-        const args = [
-          r.pricingProofId,
-          r.fundingProofId,
-          row.month,
+        const budget = budgetAdmissionPredicate({
+          boundedStorage: true,
+          monthlyBudgetCapEnabled: core.monthlyBudgetCapEnabled,
+          pricingProofId: r.pricingProofId,
+          fundingProofId: r.fundingProofId,
+          pricingJson: row.pricing_json,
+          fundingJson: row.funding_json,
+          amount: 0, // This attempt is already included in the reserved ledger.
           environment,
-          actor.now,
-          actor.now,
-          actor.now,
-          actor.now,
-          actor.now,
-          actor.now,
-        ];
+          now: actor.now,
+        });
+        const control = budget.sql;
+        const args = budget.values;
         const ok = await core.changed([
           core.statement(
             `INSERT INTO v2_mutation_claims(id,owner_id,target_id,revision) SELECT ?,?,h.blob_id,h.target_revision FROM v2_storage_paid_executions h JOIN v2_cost_attempts ca ON ca.id=h.attempt_id WHERE h.attempt_id=? AND h.state='prepared' AND ca.state='reserved' AND h.digest=? AND h.anchor_json=? AND h.deadline_at>? AND EXISTS(SELECT 1 FROM (${pending.sql}) WHERE anchor=? AND blob_payload=?) AND ${control}`,

@@ -354,12 +354,12 @@ export function createReportExports(core: V2Core, deps: ReportDependencies, port
       await authorize();
       const committed = await core
         .statement(
-          `UPDATE v2_blobs SET state='stored' WHERE id=? AND state='pending' AND cipher_hash=? AND EXISTS(SELECT 1 FROM v2_jobs j JOIN v2_operations o ON o.id=j.operation_id WHERE j.id=? AND o.owner_id=? AND j.lease_token=? AND j.fencing=? AND j.lease_until>? AND ${jobAlive})`,
+          `UPDATE v2_blobs SET state='stored' WHERE id=? AND state='pending' AND cipher_hash=? AND EXISTS(SELECT 1 FROM v2_jobs j JOIN v2_operations o ON o.id=j.operation_id WHERE j.id=? AND o.owner_id=? AND j.lease_token=? AND j.fencing=? AND j.lease_until>? AND ${jobAlive}) RETURNING id`,
           [blobId, plan.cipherHash, l.jobId, ownerId, l.token, l.fencing, now()],
         )
-        .run();
+        .all<{ id: string }>();
       if (
-        committed.meta.changes !== 1 ||
+        committed.results.length !== 1 ||
         !(await storage.commitReservation(a(ownerId), reservationId))
       )
         throw new ReportError("NOT_FOUND");

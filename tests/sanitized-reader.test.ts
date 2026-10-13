@@ -25,6 +25,7 @@ import {
 import { createSanitizedReaders } from "../src/server/runtime/sanitized-reader";
 import { fixture } from "./helpers/file-processing-fixture";
 import { publicationFixture } from "./helpers/lawyer-publication";
+import { seedStorageAdmissionProjection } from "./helpers/storage-admission";
 
 /** Real SQLite, upload/service, framed AES and D1 intents. Native/paid/R2 are
  * explicit offline ports; actual codecs are proved in separate Linux CI. */
@@ -453,6 +454,13 @@ async function paidFixture() {
   pricing.prices.push({ ...price, sku: "r2_class_b_requests" });
   expect(await runtime.putPricingProof(pricing, NOW)).toBe(true);
   expect(await runtime.putFundingProof(funding, NOW)).toBe(true);
+  seedStorageAdmissionProjection(f.db, {
+    pricingId: pricing.id,
+    fundingId: funding.id,
+    allocationId: ap.id,
+    now: NOW,
+    expiry: EXP,
+  });
   const costs = createStorageBudgetService({
     core: f.core,
     environment: "preview",
