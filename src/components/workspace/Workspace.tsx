@@ -286,7 +286,9 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
 
   async function run(key: string, action: (epoch: number) => Promise<void>) {
     const readOrDelete = ["refresh", "history", "original", "delete"].includes(key);
-    if (lock.current || !ready || (readonly && !readOrDelete)) return;
+    // A native chooser can return while focus verification temporarily hides the
+    // workspace. Its selection still needs the same fresh owner/write preflight.
+    if (lock.current || (key !== "upload" && (!ready || (readonly && !readOrDelete)))) return;
     const epoch = ticket();
     lock.current = true;
     latest.current++;
@@ -297,7 +299,18 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
     }
     setNotice("");
     try {
-      if (!(await verify(false, !readOrDelete)) || !current(epoch)) return;
+      if (!(await verify(false, !readOrDelete)) || !current(epoch)) {
+        if (key === "upload" && alive(epoch)) {
+          operationError.current = true;
+          setError(
+            problem({
+              code: "UNAVAILABLE",
+              message: "계정 확인이 끝나면 선택한 자료의 업로드를 다시 시도해 주세요.",
+            }),
+          );
+        }
+        return;
+      }
       await action(epoch);
     } catch (cause) {
       if (!alive(epoch)) return;
@@ -377,8 +390,11 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
     });
   }
   async function upload(files: FileList | File[] | null) {
-    if (readonly || !files?.length) return;
+    if (!uploadConsent || view?.case.stage !== "active" || lock.current || !files?.length) return;
     const chosen = Array.from(files);
+    // Preserve choices on a failed/superseded preflight, just like a failed upload.
+    // An actual owner/role change still clears them through purge().
+    setRetryUploads(chosen);
     await run("upload", async (epoch) => {
       let completed = 0;
       try {
@@ -494,6 +510,18 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
   const pendingResponse = view?.messages.some((message) => message.status === "pending");
   return (
     <div className={`workspace workspace--${tab}`}>
+      {/* Keep the chooser's original node attached during temporary access checks. */}
+      <input
+        ref={uploadInput}
+        id="workspace-upload"
+        aria-label="업로드할 파일 선택"
+        type="file"
+        hidden
+        multiple
+        disabled={!!busy || !uploadConsent || view?.case.stage !== "active"}
+        accept=".txt,.pdf,.doc,.docx,.hwp,.hwpx,.xls,.xlsx,.ppt,.pptx,image/*,audio/*,video/*"
+        onChange={(event) => void upload(event.target.files)}
+      />
       <CaseNavigation
         caseId={caseId}
         title={(ready ? view?.case.title : null) ?? "사건을 불러오는 중"}
@@ -844,17 +872,6 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                       >
                         <Plus size={17} aria-hidden="true" /> 파일 선택
                       </Button>
-                      <input
-                        ref={uploadInput}
-                        id="workspace-upload"
-                        aria-label="업로드할 파일 선택"
-                        type="file"
-                        hidden
-                        multiple
-                        disabled={!!busy || readonly || !uploadConsent}
-                        accept=".txt,.pdf,.doc,.docx,.hwp,.hwpx,.xls,.xlsx,.ppt,.pptx,image/*,audio/*,video/*"
-                        onChange={(event) => void upload(event.target.files)}
-                      />
                       <p className="workspace-upload-limit">
                         문서·이미지 {V2_LIMITS.documentImageBytes / 1_000_000} MB · 음성·영상{" "}
                         {V2_LIMITS.mediaBytes / 1_000_000_000} GB까지
