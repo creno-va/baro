@@ -19,6 +19,9 @@ export function createFileStorageBudget(
     environment,
     ownerId,
     clock,
+    // This fixed runtime has no authenticated metering port: after() performs
+    // no SQL and retains unknown exposure. Adding one requires a new audited
+    // work bound, including recordRuntimeUsage's existing global freeze path.
     bounds: async (input, inputDigest, now) => {
       if (
         !hasFileStorageMeter(core) ||

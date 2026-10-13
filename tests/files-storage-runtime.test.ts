@@ -8,8 +8,12 @@ import { createV2Core } from "../src/server/db/v2-core";
 import { type CleanupLease, createV2DeletionRepository } from "../src/server/db/v2-deletion";
 import { createV2FilesRepository } from "../src/server/db/v2-files";
 import { stopUnsentOriginalWrite } from "../src/server/db/v2-original-parts";
+import { runtimeDigest } from "../src/server/db/v2-paid-runtime";
 import { createV2StorageCapacityRepository } from "../src/server/db/v2-storage-capacity";
-import type { StorageAdmission } from "../src/server/modules/budget/storage-ledger";
+import {
+  createStorageBudgetService,
+  type StorageAdmission,
+} from "../src/server/modules/budget/storage-ledger";
 import { decryptPart, digest } from "../src/server/modules/files/binary";
 import { FILE_STORAGE_WORK, fileStorageRequestCore } from "../src/server/modules/files/limits";
 import { createFileStorageBudget } from "../src/server/modules/files/runtime";
@@ -18,10 +22,15 @@ import { signedSessionCookie, testEnvironment } from "./helpers/d1";
 import { r2 } from "./helpers/file-processing-fixture";
 import { intent, NOW, ready } from "./helpers/storage-capacity";
 
+type FileStorageMetering = NonNullable<
+  Parameters<typeof createStorageBudgetService>[0]["metering"]
+>;
+
 async function fixture(
   capacityBytes?: number,
   now = NOW,
   wrapDatabase?: (db: D1Database) => D1Database,
+  metering?: FileStorageMetering,
 ) {
   const f = await ready({
     getLimit: 100,
@@ -40,7 +49,24 @@ async function fixture(
     wrapDatabase ? createV2Core(wrapDatabase(f.core.binding), f.core.cipher) : f.core,
     !!wrapDatabase,
   );
-  const paid = createFileStorageBudget(core, "preview", f.actor.ownerId, () => now);
+  const paid = metering
+    ? createStorageBudgetService({
+        core,
+        environment: "preview",
+        ownerId: f.actor.ownerId,
+        clock: () => now,
+        metering,
+        // General ledger-port test composition only. The fixed production file
+        // runtime intentionally has no metering closure or such synthetic proof.
+        bounds: async (input, inputDigest) => ({
+          inputDigest,
+          evidenceHash: "e".repeat(64),
+          verifiedAt: now,
+          validUntil: input.deadlineAt,
+          quantities: [{ sku: "r2_class_a_requests", maximumQuantity: "1" }],
+        }),
+      })
+    : createFileStorageBudget(core, "preview", f.actor.ownerId, () => now);
   const service = createFilesService(core, {
     environment: "preview",
     bucket: bucket.port,
@@ -442,6 +468,111 @@ test("a known R2 response with a lost stop receipt journals independently and re
   await cleanupRecovered(f);
   expect(f.bucket.objects.size).toBe(0);
 });
+
+test.each(["authorize", "put_throw", "no_evidence", "ledger_failure", "cleanup_failure"])(
+  "metered real storage ledger preserves recovery semantics for %s",
+  async (scenario) => {
+    let notificationReads = 0,
+      usageWrites = 0,
+      cleanupFailure = false;
+    const transports: string[] = [];
+    // Explicit synthetic authenticated console evidence, never a provider bill.
+    const metering: FileStorageMetering = async (request, permit, transport) => {
+      transports.push(transport.transport);
+      const receipt = {
+        id: crypto.randomUUID(),
+        attemptId: permit.attemptId,
+        invocationId: request.plan.invocationId,
+        providerRequestId: null,
+        dispatchToken: permit.dispatchToken,
+        observedAt: NOW,
+        transport: transport.transport,
+        definitiveNoCharge: false,
+        meteringComplete: false,
+        quantities: [],
+        chargedUsd: null,
+        modelTokenDetails: null,
+      };
+      return {
+        receipt,
+        evidence: {
+          digest: await runtimeDigest(receipt),
+          evidenceHash: "e".repeat(64),
+          method: "authenticated_console",
+          verifiedAt: NOW,
+        },
+      };
+    };
+    const f = await fixture(
+      undefined,
+      NOW,
+      (db) =>
+        faultDatabase(db, (sql, value) => {
+          if (
+            scenario === "cleanup_failure" &&
+            !cleanupFailure &&
+            sql.startsWith("UPDATE v2_physical_blob_bindings SET writer_state='stopped'")
+          ) {
+            cleanupFailure = true;
+            throw new Error("Synthetic cleanup response loss before notification");
+          }
+          if (sql.startsWith("SELECT h.state AS dispatch_state")) notificationReads++;
+          if (sql.startsWith("INSERT INTO v2_runtime_usage")) usageWrites++;
+          return value;
+        }),
+      scenario === "no_evidence" ? undefined : metering,
+    );
+    if (scenario === "put_throw") f.bucket.setPutAmbiguous(true);
+    else {
+      const before = f.paid.beforeDispatch.bind(f.paid);
+      f.paid.beforeDispatch = async (admission, access) => {
+        const permit = await before(admission, access);
+        expect(permit).not.toBeNull();
+        // Lose normal admission during the final authorize, after financial CAS.
+        try {
+          for (let i = 0; i < FILE_STORAGE_WORK.queries; i++)
+            await f.core.statement("SELECT 1").all();
+        } catch {}
+        return permit;
+      };
+    }
+    if (scenario === "ledger_failure")
+      f.db.sqlite.exec(
+        "CREATE TRIGGER synthetic_usage_failure BEFORE INSERT ON v2_runtime_usage BEGIN SELECT RAISE(ABORT,'synthetic'); END",
+      );
+    await expect(f.put()).rejects.toThrow();
+    expect(f.bucket.calls.put).toBe(scenario === "put_throw" ? 1 : 0);
+    expect(
+      f.db.sqlite
+        .query("SELECT count(*) n FROM v2_deletion_journals WHERE target_kind='blob'")
+        .get(),
+    ).toEqual({ n: 1 });
+    const recorded =
+      scenario === "authorize" || scenario === "put_throw" || scenario === "cleanup_failure";
+    if (scenario === "cleanup_failure") expect(cleanupFailure).toBe(true);
+    expect(notificationReads).toBe(scenario === "no_evidence" ? 0 : 1);
+    expect(usageWrites).toBe(recorded ? 1 : 0);
+    expect(transports).toEqual(
+      scenario === "no_evidence" ? [] : [scenario === "put_throw" ? "unknown" : "not_sent"],
+    );
+    expect(f.db.sqlite.query("SELECT state FROM v2_storage_paid_executions").get()).toEqual({
+      state: recorded ? "unknown" : "dispatched",
+    });
+    const money = f.db.sqlite
+      .query(
+        "SELECT reserved_krw,ambiguous_krw,settled_krw FROM v2_monthly_budget WHERE environment='preview'",
+      )
+      .get() as { reserved_krw: number; ambiguous_krw: number; settled_krw: number };
+    expect(recorded ? money.ambiguous_krw : money.reserved_krw).toBeGreaterThan(0);
+    expect(money.settled_krw).toBe(0);
+    await expect(f.core.statement("SELECT 1").all()).rejects.toThrow("PROCESSING_UNAVAILABLE");
+    if (scenario !== "put_throw") await cleanupRecovered(f);
+    else
+      expect(f.db.sqlite.query("SELECT writer_state FROM v2_physical_blob_bindings").get()).toEqual(
+        { writer_state: "running" },
+      );
+  },
+);
 
 test("signed global file composition stores an encrypted PDF chunk with actual workerd D1 capacity and retains unknown billing", async () => {
   setSystemTime(new Date(NOW));

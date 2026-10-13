@@ -18,6 +18,17 @@ stop/journal 응답 유실을 성공으로 바꾸지 않고 독립된 다음 정
 실제 R2 호출이 불명확한 writer는 running을 유지한다. cleanup SQL/trigger의 실행 전
 row 비용까지 전체 quote에 포함하는 작업은 위 공용 비용 상한 보완과 함께 남아 있다.
 
+일반 StorageCosts 포트에는 cleanup 후 `after` 전용 notification 단계도 한 번만
+허용한다. 기존 usage 기록의 2개 PK 조회와 최대 8개 transition statement에 해당하는
+10개 슬롯을 정상 작업에서 처음부터 분리한다. 이전처럼 닫힌 normal core에서
+통지하면 실제 metered core·기존 원장·합성 인증 증거 검사 4건이 실패하고,
+별도 단계 적용 뒤 5건 / 134 assertions가 통과했다. 증거가 있는 incomplete 통지는
+reserved→ambiguous로 기록하며, 증거 부재·원장 쓰기 실패는 reserved를 보존한다.
+cleanup 응답 유실과 무관하게 notification을 시도하고 원장 실패도 journal을 지우지
+않는다. 현재 production `createFileStorageBudget`는 metering을 받지 않는 고정
+구성이므로 `after`의 SQL은 0건이다. 미래 metering 구성·global freeze의 SQL/trigger
+상한이나 실제 사용료 계측까지 이번 기능 회귀로 인증하지 않는다.
+
 실제 `9fcf04f82c1fe5c9c10d1dae76ee4a998586604d`에서 합성 PDF를 한 번
 제출했으나 UI는 실패했고, 원격 읽기 진단은 file `reserved` / upload `open`,
 blob·part·job 0건이었다. 그 관찰만으로 PUT HTTP 상태를 추정하지 않는다.

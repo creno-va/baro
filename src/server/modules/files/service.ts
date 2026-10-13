@@ -49,7 +49,7 @@ import {
   readBounded,
   readHeader,
 } from "./binary";
-import { hasFileStorageMeter, withFileStorageCleanup } from "./limits";
+import { hasFileStorageMeter, notifyFileStorageFailure, withFileStorageCleanup } from "./limits";
 
 export type PrivateBucket = Pick<R2Bucket, "get" | "put" | "head" | "delete">;
 export type FileStorageInput = StorageCostInput;
@@ -721,7 +721,7 @@ export function createFilesService(core: V2Core, deps: FileServiceDependencies) 
         });
         if (permit && !recorded && deps.paidStorage) {
           try {
-            await deps.paidStorage.after(permit, {
+            await notifyFileStorageFailure(core, deps.paidStorage, permit, {
               transport: dispatched ? "unknown" : "not_sent",
               definitiveNoCharge: !dispatched,
               observedAt: now(),
