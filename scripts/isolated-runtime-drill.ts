@@ -1,6 +1,11 @@
 import { chmod, mkdir, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { z } from "zod";
+import {
+  DrillCommandError,
+  type DrillCommandObservation,
+  runDrillWrangler,
+} from "./isolated-drill-process";
 
 const account = "9e844969d0c44b2449f3951d1f301654";
 const sha = z.string().regex(/^[a-f0-9]{40}$/);
@@ -29,7 +34,7 @@ export function drillRequestBudget(
 
 export interface RuntimeDrillIo {
   request: typeof fetch;
-  runWrangler(args: string[], timeout: number): Promise<void>;
+  runWrangler(args: string[], timeout: number): Promise<DrillCommandObservation>;
   writePrivateFile(path: string, value: unknown): Promise<void>;
   readPrivateFile(path: string): Promise<unknown>;
   removePrivateFile(path: string): Promise<void>;
@@ -71,6 +76,8 @@ export async function runRuntimeDrill(
     evidenceWriteFailed: false,
     lastMutation: null,
     mutations: [],
+    commands: [],
+    observedResources: { worker: false, workflow: false },
   };
   const checks = receipt.checks as Record<string, boolean>;
   const cleanup = receipt.cleanup as Record<string, boolean>;
@@ -90,7 +97,12 @@ export async function runRuntimeDrill(
   const secrets = { DRILL_TOKEN: controlToken, CASE_DATA_KEY_V1: recoveryKey };
   const privateFile = io.writePrivateFile;
   async function saveReceipt() {
-    receipt.created = { bucket: bucketCreated, worker: workerCreated, workflow: workflowCreated };
+    // A completed creation command authorizes cleanup but is not a platform observation.
+    receipt.cleanupEligible = {
+      bucket: bucketCreated,
+      worker: workerCreated,
+      workflow: workflowCreated,
+    };
     try {
       await privateFile(resolve(dir, "receipt.json"), receipt);
     } catch {
@@ -103,10 +115,13 @@ export async function runRuntimeDrill(
       if (!cleaning) throw new Error("DRILL_RECEIPT_WRITE_FAILED");
     }
   }
-  async function mutationCheckpoint(stage: string, state: "pending" | "observed-success") {
+  async function mutationCheckpoint(
+    stage: string,
+    state: "pending" | "observed-success" | "command-completed",
+  ) {
     const mutations = receipt.mutations as { stage: string; state: string; observedAt: string }[];
     const last = mutations.at(-1);
-    if (state === "observed-success" && last?.stage === stage && last.state === "pending") {
+    if (state !== "pending" && last?.stage === stage && last.state === "pending") {
       last.state = state;
       last.observedAt = new Date().toISOString();
     } else {
@@ -156,9 +171,20 @@ export async function runRuntimeDrill(
     // Bound the entire subprocess; never repeat a failed/unknown command in this runner.
     const timeout = drillRequestBudget(deadline, cleaning, Date.now(), 90_000);
     await mutationCheckpoint(`wrangler_${args[0]}`, "pending");
-    await io.runWrangler(args, timeout);
+    const commands = receipt.commands as (DrillCommandObservation & { operation: string })[];
+    try {
+      const result = await io.runWrangler(args, timeout);
+      commands.push({ operation: args[0] === "deploy" ? "deploy" : "rollback", ...result });
+    } catch (error) {
+      if (error instanceof DrillCommandError)
+        commands.push({
+          operation: args[0] === "deploy" ? "deploy" : "rollback",
+          ...error.observation,
+        });
+      throw error;
+    }
     onSuccess?.();
-    await mutationCheckpoint(`wrangler_${args[0]}`, "observed-success");
+    await mutationCheckpoint(`wrangler_${args[0]}`, "command-completed");
   }
   async function deploy(phase: "baseline" | "key-lost" | "key-restored") {
     await privateFile(configPath, {
@@ -280,6 +306,7 @@ export async function runRuntimeDrill(
         ),
     );
     const baselineVersion = await activeVersion();
+    (receipt.observedResources as { worker: boolean }).worker = true;
     receipt.baselineVersion = baselineVersion;
     await control("seed");
     let ready = false;
@@ -300,6 +327,7 @@ export async function runRuntimeDrill(
       await Bun.sleep(2000);
     }
     requireCheck("platform_instances_and_encrypted_r2", ready);
+    (receipt.observedResources as { workflow: boolean }).workflow = true;
     await privateFile(secretFile, {
       ...secrets,
       CASE_DATA_KEY_V1: Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString(
@@ -410,38 +438,13 @@ export async function runRuntimeDrill(
   return receipt;
 }
 
-async function boundedWrangler(args: string[], timeout: number) {
-  const result = Bun.spawn([process.execPath, "node_modules/wrangler/bin/wrangler.js", ...args], {
-    env: { ...process.env, WRANGLER_SEND_METRICS: "false", CI: "true" },
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  let timedOut = false;
-  const timer = setTimeout(() => {
-    timedOut = true;
-    result.kill("SIGKILL");
-  }, timeout);
-  // Never forward Wrangler logs; platform diagnostics may contain identifiers or config.
-  try {
-    await Promise.all([
-      new Response(result.stdout).arrayBuffer(),
-      new Response(result.stderr).arrayBuffer(),
-    ]);
-    const status = await result.exited;
-    if (timedOut) throw new Error("WRANGLER_OUTCOME_UNKNOWN");
-    if (status !== 0) throw new Error("WRANGLER_COMMAND_FAILED");
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
 if (import.meta.main) {
   const dir = resolve(".wrangler/isolated-runtime");
   await mkdir(dir, { recursive: true, mode: 0o700 });
   await chmod(dir, 0o700);
   const receipt = await runRuntimeDrill(process.env, dir, {
     request: fetch,
-    runWrangler: boundedWrangler,
+    runWrangler: runDrillWrangler,
     async writePrivateFile(path, value) {
       await writeFile(path, JSON.stringify(value), { mode: 0o600 });
       await chmod(path, 0o600);
