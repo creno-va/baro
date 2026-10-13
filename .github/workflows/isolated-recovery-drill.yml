@@ -1,0 +1,63 @@
+name: Isolated D1 recovery drill
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: Type CREATE_AND_RESTORE_SYNTHETIC_D1 after reviewing this run's resource scope
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: isolated-d1-recovery-drill
+  cancel-in-progress: false
+
+jobs:
+  drill:
+    if: github.repository == 'creno-va/baro' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment:
+      name: preview
+      deployment: false
+    steps:
+      - name: Checkout immutable main candidate
+        timeout-minutes: 2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Setup Bun
+        timeout-minutes: 2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: .bun-version
+      - name: Install frozen dependencies
+        timeout-minutes: 4
+        run: bun ci
+      - name: Verify candidate main CI
+        timeout-minutes: 2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TARGET_SHA: ${{ github.sha }}
+        run: bun scripts/verify-release.ts "$TARGET_SHA" --ci-only
+      - name: Create restore replay and remove one synthetic-only D1
+        timeout-minutes: 10
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          DRILL_CONFIRMATION: ${{ inputs.confirmation }}
+        run: bun scripts/isolated-recovery-drill.ts
+      # Never upload the private runner journal, SQL, fixture rows, keys or raw API diagnostics.
+      - name: Save sanitized D1-only observations
+        timeout-minutes: 2
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: isolated-d1-drill-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+          path: .wrangler/isolated-recovery-drill/evidence.json
+          if-no-files-found: warn
+          retention-days: 14

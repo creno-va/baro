@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { convertV4MiniflareOptions, Miniflare } from "miniflare";
 import { NOW, syntheticDetail, syntheticList } from "../scripts/benchmarks/retrieval/harness";
-import { inspectLegalV2 } from "../scripts/legal-readiness-v2";
+import { inspectLegalV2, readinessV2Plans } from "../scripts/legal-readiness-v2";
 import { workspaceGuidePlans } from "../src/server/modules/legal-retrieval/v2/workspace-plans";
 import capturedGuide from "./fixtures/legal/v2/captured-guide-structure.json";
 import precedents from "./fixtures/legal/v2/precedents.json";
@@ -47,6 +47,14 @@ test.each([false, true])(
     });
     expect(receipt.status).toBe(pending ? "failed" : "passed");
     expect(receipt.requests).toBe(5);
+    expect(receipt.requestObservations.map((request) => request.endpoint)).toEqual([
+      "statute_list",
+      "statute_detail",
+      "precedent_list",
+      "precedent_detail",
+      "official_guide",
+    ]);
+    expect(receipt.requestObservations.every((request) => request.httpStatus === 200)).toBe(true);
     expect(receipt.runtimeWorker).toBe(false);
     expect(receipt.verifiedSourceCount).toBe(pending ? 2 : 3);
     expect(receipt.checkedClaimCount).toBe(pending ? 2 : 3);
@@ -96,6 +104,57 @@ test("unavailable sources leave claim integrity untested", async () => {
     sources: [],
   });
   expect(receipt.outcomes.every((outcome) => outcome.availability === "unavailable")).toBe(true);
+  expect(receipt.requestObservations).toEqual(
+    (["statute_list", "precedent_list", "official_guide"] as const).map((endpoint) => ({
+      endpoint,
+      httpStatus: 403,
+      contentType: "missing",
+      transport: "response",
+    })),
+  );
+});
+test("readiness separates HTTP rejection from JSON error envelopes without retaining secrets", async () => {
+  const privateValue = "synthetic-private-only";
+  const receipt = await inspectLegalV2({ LAW_API_OC: privateValue }, NOW, {
+    transport: async (url) =>
+      new Response(JSON.stringify({ result: privateValue, msg: url }), {
+        headers: { "content-type": "application/json; charset=utf-8", "x-private": privateValue },
+      }),
+    plans: readinessV2Plans.slice(0, 2),
+  });
+  expect(receipt.outcomes.every((outcome) => outcome.reason === "upstream_rejected")).toBe(true);
+  expect(receipt.requestObservations).toEqual(
+    (["statute_list", "precedent_list"] as const).map((endpoint) => ({
+      endpoint,
+      httpStatus: 200,
+      contentType: "json",
+      transport: "response",
+    })),
+  );
+  expect(receipt.claimIntegrity).toBeNull();
+  const serialized = JSON.stringify(receipt);
+  for (const excluded of [privateValue, "OC=", "lawSearch.do", "x-private", '"msg"'])
+    expect(serialized).not.toContain(excluded);
+});
+test("readiness preserves transport failures and does not record exception or unexpected header text", async () => {
+  let calls = 0;
+  const privateValue = "synthetic-private-transport";
+  const receipt = await inspectLegalV2({ LAW_API_OC: privateValue }, NOW, {
+    transport: async () => {
+      if (++calls === 1) throw new Error(privateValue);
+      return new Response(privateValue, {
+        status: 403,
+        headers: { "content-type": `private/${privateValue}` },
+      });
+    },
+    plans: readinessV2Plans.slice(0, 1),
+  });
+  expect(receipt.requests).toBe(2);
+  expect(receipt.requestObservations).toEqual([
+    { endpoint: "statute_list", httpStatus: null, contentType: null, transport: "failed" },
+    { endpoint: "statute_list", httpStatus: 403, contentType: "other", transport: "response" },
+  ]);
+  expect(JSON.stringify(receipt)).not.toContain(privateValue);
 });
 test("v2 readiness executes product source/hash/claim checks in local workerd", async () => {
   const build = await Bun.build({
