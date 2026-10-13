@@ -29,7 +29,11 @@ const policyVersions: Record<string, string> = {
   "PRIVACY-POLICY.DRAFT.md": CURRENT_POLICY_VERSIONS.privacyVersion,
   "AI-NOTICE.md": CURRENT_POLICY_VERSIONS.aiNoticeVersion,
 };
-for (const file of (await readdir("docs/policies")).filter((name) => name.endsWith(".md"))) {
+const policyFiles = (await readdir("docs/policies")).filter((name) => name.endsWith(".md"));
+for (const file of Object.keys(policyVersions)) {
+  if (!policyFiles.includes(file)) errors.push(`Missing required policy: ${file}`);
+}
+for (const file of policyFiles) {
   const content = await Bun.file(`docs/policies/${file}`).text();
   if (
     content.includes("[PUBLICATION_BLOCKER:") ||
