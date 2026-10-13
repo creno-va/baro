@@ -11,6 +11,7 @@ import {
   type V2Core,
 } from "./v2-core";
 import { type BlobRegistration, blobSchema } from "./v2-storage";
+import { isPreparedPhysicalCapacity, type PreparedPhysicalCapacity } from "./v2-storage-capacity";
 import { isPreparedStoragePaidHold, type PreparedStoragePaidHold } from "./v2-storage-paid-runtime";
 
 export interface OriginalPartRegistration {
@@ -63,10 +64,20 @@ export function prepareOriginalPart(
   actor: Actor,
   input: OriginalPartRegistration,
   paid?: PreparedStoragePaidHold,
+  physical?: PreparedPhysicalCapacity,
 ) {
   return safe(async () => {
     const { a, b, valid } = originalInput(actor, input);
     if (!valid) return false;
+    if (
+      physical &&
+      (!isPreparedPhysicalCapacity(physical) ||
+        physical.binding.blobId !== b.id ||
+        physical.binding.ownerId !== a.ownerId ||
+        physical.binding.objectKey !== `private/${b.id}` ||
+        physical.binding.maximumCipherBytes !== b.cipherBytes)
+    )
+      return false;
     if (paid) {
       const r = paid.request;
       if (
@@ -96,12 +107,18 @@ export function prepareOriginalPart(
       uploadRevision: input.uploadRevision,
       ordinal: input.ordinal,
     });
-    if (paid) {
+    if (paid || physical) {
       const claim = crypto.randomUUID();
       return core.changed([
         core.statement(
-          `INSERT INTO v2_mutation_claims(id,owner_id,target_id,revision) SELECT ?,w.owner_id,u.id,u.revision ${from} WHERE ${eligibility} AND NOT EXISTS(SELECT 1 FROM v2_blobs WHERE id=?) AND (${paid.predicate.sql})`,
-          [claim, ...values, b.id, ...paid.predicate.values],
+          `INSERT INTO v2_mutation_claims(id,owner_id,target_id,revision) SELECT ?,w.owner_id,u.id,u.revision ${from} WHERE ${eligibility} AND NOT EXISTS(SELECT 1 FROM v2_blobs WHERE id=?) AND (${paid?.predicate.sql ?? "1"}) AND (${physical?.predicate.sql ?? "1"})`,
+          [
+            claim,
+            ...values,
+            b.id,
+            ...(paid?.predicate.values ?? []),
+            ...(physical?.predicate.values ?? []),
+          ],
         ),
         core.statement(
           `INSERT INTO v2_blobs(id,principal_id,reservation_id,kind,visibility,state,object_key,logical_bytes,cipher_bytes,cipher_hash,key_version,encrypted_payload,created_at) SELECT ?,r.principal_id,r.id,'original','private','pending',?,?,?,?,?,?,? ${from} WHERE ${eligibility} AND ${sqlClaim}`,
@@ -118,7 +135,8 @@ export function prepareOriginalPart(
             claim,
           ],
         ),
-        ...(await paid.statements(core, paid.actor, claim, metadata)),
+        ...(physical ? physical.statements(core, a, claim) : []),
+        ...(paid ? await paid.statements(core, paid.actor, claim, metadata) : []),
         core.finish(claim),
       ]);
     }

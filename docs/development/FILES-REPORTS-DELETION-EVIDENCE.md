@@ -1,5 +1,45 @@
 # 자료·리포트·삭제 구현 검증
 
+## 2026-10-13 업로드 저장 연결 보완 (#58/#59/#67)
+
+실제 `9fcf04f82c1fe5c9c10d1dae76ee4a998586604d`에서 합성 PDF를 한 번
+제출했으나 UI는 실패했고, 원격 읽기 진단은 file `reserved` / upload `open`,
+blob·part·job 0건이었다. 그 관찰만으로 PUT HTTP 상태를 추정하지 않는다.
+같은 전역 signed API를 로컬 production 구성에서 실행하여 reserve 201 →
+part PUT 503 / R2 호출 0을 별도로 재현했다. 파일 의존성의
+`createStorageBudgetService`에 필수 bounds가 없어 모든 신규 PUT이 거부됐다.
+
+- 기존 저장 원장에 원본 part 전용 bounds를 연결했다. 유효한 해당 환경의
+  가격·재원·할당·물리 용량 projection이 있어야 한 번의 R2 PUT을 허용한다.
+  R2 요청뿐 아니라 Worker 요청·CPU 및 D1 읽기·쓰기 수량을 함께 예약한다.
+  이 연결은 새 proof나 provider 청구 영수증을 만들지 않는다.
+- pending 원본·비용 hold·물리 binding을 같은 D1 batch에서 승인한다. 실제
+  전송 전에 writer를 running으로 기록하고, 정확한 key/size 응답 또는 미전송
+  증거로만 stopped로 바꾼다. 불명확한 전송은 running과 삭제 journal을 보존한다.
+- part 요청의 SQL statement와 batch 각 항목을 실행 전에 계수한다. 실제 D1
+  rows_read/rows_written metadata가 없거나 누적 한도를 넘으면 후속 SQL을 중단한다.
+  이미 실행된 SQL을 취소하거나 row receipt를 청구 영수증으로 간주하지 않는다.
+  비용 예약은 검증된 provider 정산이 없으면 그대로 남는다.
+- `tests/files-storage-runtime.test.ts`는 실제 workerd D1과 모든 migration,
+  전역 signed API·실제 AES·합성 R2 adapter를 사용한다. 합성 PDF reserve 201 →
+  PUT 200, 원본 바이트 복호화 일치, physical held / writer stopped, 다섯 비용 SKU,
+  중복 PUT 없는 재시도가 통과했다. preview proof만 있는 production 구성은
+  같은 요청을 503으로 거부한다. 이는 원격 R2/OAuth/Container 성공 증거가 아니다.
+- 용량 부족·projection 만료·freeze는 R2 호출 없이 차단되고, prepare 뒤 freeze는
+  pending·binding·비용 hold를 함께 롤백한다. 늦은 PUT 도중 자료 삭제는 running
+  writer의 cleanup을 차단한다. 응답 후 첫 DELETE가 실패해도 held 상태를 유지하고,
+  재시도 DELETE와 absent HEAD 후에만 용량을 해제하며 삭제한 자료의 재업로드를 거부한다.
+- 기존 자료·원본·리포트·세션 폐기·정리 회귀 12개 파일의 90 tests /
+  1,182 assertions가 통과했다. paid storage 회귀 9 tests / 208 assertions는
+  불명확한 PUT의 cleanup 차단과 정산 저장 실패 시 원본 미공개를 포함한다.
+
+총괄이 #228 리포트 수정본을 별도로 배포하며 Safari를 소유한다. 업로드 수정본의
+동일 SHA CI·배포 및 실제 저장 proof/projection 연결 뒤에 원격 인수를 재개한다.
+이전의 OAuth 2계정 요청은 이후 사용자 지시에 따라 현재 Safari의 허가된 Kakao
+계정 한 개로 진행하는 범위로 변경됐다. 다른 세션의 계정·사건을 사용하지 않는다.
+계정 간 접근 경계와 #19 격리 복구/재삭제 훈련 등 확보하지 못한 외부 증거는
+완료로 표시하지 않으며 #58/#59/#66/#67과 Goal은 미완료로 유지한다.
+
 ## 2026-10-11 실제 인수 재개
 
 인수 담당은 `BARO 자료·리포트·삭제 인수`, checkout `de87`, 브랜치

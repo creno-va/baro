@@ -28,6 +28,7 @@ import {
 import { type CleanupLease, createV2DeletionRepository } from "../../db/v2-deletion";
 import { createV2FilesRepository } from "../../db/v2-files";
 import { type BlobRegistration, createV2StorageRepository } from "../../db/v2-storage";
+import { createV2StorageCapacityRepository, type WritePermit } from "../../db/v2-storage-capacity";
 import { isPreparedStoragePaidHold } from "../../db/v2-storage-paid-runtime";
 import type {
   StorageAdmission,
@@ -114,6 +115,7 @@ const partReceiptSchema = z.strictObject({
 export function createFilesService(core: V2Core, deps: FileServiceDependencies) {
   const files = createV2FilesRepository(core);
   const storage = createV2StorageRepository(core);
+  const capacity = createV2StorageCapacityRepository(core, deps.environment);
   const deletion = createV2DeletionRepository(core);
   const accounting = createV2AccountingRepository(core);
   const now = () =>
@@ -549,10 +551,19 @@ export function createFilesService(core: V2Core, deps: FileServiceDependencies) 
           admission.actor.ownerId !== ownerId)
       )
         throw new FileError("PROCESSING_UNAVAILABLE");
+      const admissionActor = admission?.actor ?? actor(ownerId);
+      const physical = unmeteredTest
+        ? undefined
+        : capacity.prepareCapacity(admissionActor, {
+            blobId: blob.id,
+            ownerId,
+            objectKey,
+            maximumCipherBytes: bytes.byteLength,
+          });
       let written = false;
       if (
         !(await files.prepareOriginalPart(
-          admission?.actor ?? actor(ownerId),
+          admissionActor,
           {
             uploadId: u.id,
             uploadRevision: u.revision,
@@ -560,6 +571,7 @@ export function createFilesService(core: V2Core, deps: FileServiceDependencies) 
             blob,
           },
           admission?.paid,
+          physical,
         ))
       )
         throw new FileError("CONFLICT");
@@ -569,6 +581,7 @@ export function createFilesService(core: V2Core, deps: FileServiceDependencies) 
         ])
         .first<string>("encrypted_payload");
       let permit: FileStoragePermit | null = null;
+      let writer: WritePermit | null = null;
       let dispatched = false;
       let recorded = false;
       const authorize = async () => {
@@ -604,6 +617,10 @@ export function createFilesService(core: V2Core, deps: FileServiceDependencies) 
         }
       };
       try {
+        if (physical) {
+          writer = await capacity.beginWrite(blob.id, bytes.byteLength, now());
+          if (!writer) throw new FileError("PROCESSING_UNAVAILABLE");
+        }
         if (admission && deps.paidStorage) {
           permit = await deps.paidStorage.beforeDispatch(admission, authorize);
           if (!permit) throw new FileError("PROCESSING_UNAVAILABLE");
@@ -618,6 +635,21 @@ export function createFilesService(core: V2Core, deps: FileServiceDependencies) 
             cacheControl: "private, no-store",
           },
         });
+        if (!stored || stored.key !== objectKey || stored.size !== bytes.byteLength)
+          throw new FileError("STORAGE_UNAVAILABLE");
+        if (
+          writer &&
+          !(await capacity.confirmWriterStopped(
+            writer,
+            {
+              transport: "response",
+              objectKey,
+              byteLength: bytes.byteLength,
+            },
+            now(),
+          ))
+        )
+          throw new FileError("STORAGE_UNAVAILABLE");
         if (permit && deps.paidStorage) {
           recorded = true;
           await deps.paidStorage.after(permit, {
@@ -626,8 +658,6 @@ export function createFilesService(core: V2Core, deps: FileServiceDependencies) 
             observedAt: now(),
           });
         }
-        if (!stored || stored.key !== objectKey || stored.size !== bytes.byteLength)
-          throw new FileError("STORAGE_UNAVAILABLE");
         written = true;
         await consent(ownerId);
         if (
@@ -642,6 +672,8 @@ export function createFilesService(core: V2Core, deps: FileServiceDependencies) 
         return { index, byteLength, contentHash };
       } catch (error) {
         let failure = error;
+        if (writer && !dispatched)
+          await capacity.confirmWriterStopped(writer, { transport: "not_sent" }, now());
         if (permit && !recorded && deps.paidStorage) {
           try {
             await deps.paidStorage.after(permit, {
