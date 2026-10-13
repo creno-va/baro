@@ -304,6 +304,7 @@ for (const operation of ["save", "confirm"] as const) {
     for (let i = 0; i < 6; i++)
       await page.getByRole("button", { name: "모름", exact: true }).click();
     await expect(page).toHaveURL(/\/summary$/);
+    const workspaceUrl = page.url().replace(/\/summary$/, "");
     const editor = page.getByLabel("요약 편집");
     await expect(editor).toBeVisible();
     await page.evaluate(async (operation) => {
@@ -319,10 +320,16 @@ for (const operation of ["save", "confirm"] as const) {
         release: () => {},
       };
       (window as unknown as { summaryFocusRecovery: typeof state }).summaryFocusRecovery = state;
+      const record = () =>
+        sessionStorage.setItem(
+          "summary-focus-recovery",
+          JSON.stringify({ writes: state.writes, released: state.released }),
+        );
       const method = operation === "save" ? "saveSummary" : "confirmSummary";
       const write = casesApi[method].bind(casesApi);
       casesApi[method] = async (id: string, input: unknown) => {
         ++state.writes;
+        record();
         const next = await write(id, input);
         state.acknowledged = true;
         return next;
@@ -336,6 +343,7 @@ for (const operation of ["save", "confirm"] as const) {
           await new Promise<void>((resolve) => {
             state.release = () => {
               state.released = true;
+              record();
               resolve();
             };
           });
@@ -377,17 +385,17 @@ for (const operation of ["save", "confirm"] as const) {
       await expect(editor).toHaveValue(savedSummary);
       await expect(page.getByRole("button", { name: "수정 내용 저장" })).toHaveCount(0);
     } else {
-      await expect(page.getByRole("link", { name: "사건 열기", exact: true })).toBeVisible();
+      // The same-owner postflight now finishes normally instead of falling back
+      // to a manual link after a superseded check. Retain the one-write assertion.
+      await expect(page).toHaveURL(workspaceUrl);
+      await expect(page.getByLabel("추가 사실 또는 질문")).toBeVisible();
       await expect(page.getByRole("dialog")).toHaveCount(0);
     }
     await expect(page.getByRole("alert")).toHaveCount(0);
     expect(
-      await page.evaluate(() => {
-        const state = (
-          window as unknown as { summaryFocusRecovery: { writes: number; released: boolean } }
-        ).summaryFocusRecovery;
-        return { writes: state.writes, released: state.released };
-      }),
+      await page.evaluate(() =>
+        JSON.parse(sessionStorage.getItem("summary-focus-recovery") ?? "null"),
+      ),
     ).toEqual({ writes: 1, released: true });
   });
 }
