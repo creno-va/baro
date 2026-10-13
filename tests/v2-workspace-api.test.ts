@@ -2,6 +2,7 @@ import { afterEach, expect, test } from "bun:test";
 import { Hono } from "hono";
 import type { ApiEnvironment } from "../src/server/api/errors";
 import { createWorkspacesApi } from "../src/server/api/v2/workspaces";
+import { saveAccountType } from "../src/server/auth/account-type";
 import { createTestDatabase } from "./helpers/d1";
 import { seedTestSession } from "./helpers/session";
 
@@ -101,6 +102,64 @@ test("private workspace routes reject unauthenticated owners and foreign origins
       )
     ).status,
   ).toBe(403);
+  expect(f.verified()).toBe(0);
+  expect(f.db.sqlite.query("SELECT count(*) n FROM v2_workspaces").get()).toEqual({ n: 0 });
+});
+
+for (const savedPreference of [true, false]) {
+  test(`workspace reads resolve the role once and observe later changes (saved preference: ${savedPreference})`, async () => {
+    const f = await fixture();
+    if (savedPreference) await saveAccountType(f.db.binding, f.owner.userId, "customer");
+    const prepare = f.db.binding.prepare.bind(f.db.binding);
+    let roleQueries = 0;
+    f.db.binding.prepare = (sql) => {
+      if (
+        sql === "SELECT value FROM app_metadata WHERE key=?" ||
+        sql.startsWith("SELECT role FROM v2_role_bindings")
+      )
+        roleQueries++;
+      return prepare(sql);
+    };
+    const read = () => f.app.request("/api/v2/cases", { headers: f.headers }, f.env);
+    const allowed = await read();
+    expect(allowed.status).toBe(200);
+    expect(roleQueries).toBe(savedPreference ? 1 : 2);
+    expect(allowed.headers.get("cache-control")).toBe("private, no-store");
+
+    await saveAccountType(f.db.binding, f.owner.userId, "lawyer");
+    const denied = await read();
+    expect(denied.status).toBe(403);
+    expect(await denied.json()).toMatchObject({ error: { code: "ROLE_REQUIRED" } });
+    expect(roleQueries).toBe(savedPreference ? 2 : 3);
+  });
+}
+
+test("a role change during consent verification still blocks workspace creation", async () => {
+  const f = await fixture();
+  await saveAccountType(f.db.binding, f.owner.userId, "customer");
+  const prepare = f.db.binding.prepare.bind(f.db.binding);
+  let changed = false;
+  f.db.binding.prepare = (sql) => {
+    if (!changed && sql.includes('from "user_consents"')) {
+      changed = true;
+      f.db.sqlite
+        .query("UPDATE app_metadata SET value='lawyer' WHERE key=?")
+        .run(`account-type:${f.owner.userId}`);
+    }
+    return prepare(sql);
+  };
+  const response = await f.app.request(
+    "/api/v2/cases",
+    {
+      method: "POST",
+      headers: { ...f.headers, "idempotency-key": crypto.randomUUID() },
+      body: JSON.stringify(f.input),
+    },
+    f.env,
+  );
+  expect(changed).toBe(true);
+  expect(response.status).toBe(404);
+  expect(await response.json()).toMatchObject({ error: { code: "NOT_FOUND" } });
   expect(f.verified()).toBe(0);
   expect(f.db.sqlite.query("SELECT count(*) n FROM v2_workspaces").get()).toEqual({ n: 0 });
 });
