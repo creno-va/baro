@@ -41,12 +41,24 @@ export async function exportFence(
   sessionId?: string,
 ) {
   const workspace = await ownedWorkspace(core, actor, report.workspace_id);
-  const rows = await reportSourceRows(core, actor, report.workspace_id);
+  const verifiedOriginals: string[] = [];
+  let originalBytes = 0;
+  const rows = await reportSourceRows(core, actor, report.workspace_id, (id, body) => {
+    const value = JSON.stringify([id, body]);
+    originalBytes += new TextEncoder().encode(value).byteLength;
+    // One bound value per original, with room for the source JSON and all other
+    // fence parameters. Never aggregate unbounded original bodies into a SQL row.
+    if (originalBytes > 1048576 || verifiedOriginals.length >= 50)
+      throw new ReportError("EXPORT_LIMIT_EXCEEDED");
+    verifiedOriginals.push(value);
+  });
   if (
     (await reportSourceDigest(workspace.confirmed_summary_revision, workspace.status, rows)) !==
     digest
   )
     throw new ReportError("STALE_REVISION");
+  if (rows.filter((row) => row.kind === "citation").length !== verifiedOriginals.length)
+    throw new ReportError("LEGAL_SOURCE_UNAVAILABLE");
   const json = JSON.stringify(
     rows.map((r) => ({ kind: r.kind, id: r.id, revision: r.revision, snapshot: r.snapshot })),
   );
@@ -60,14 +72,16 @@ export async function exportFence(
         session = reportSessionFence(sessionId);
       const ok = await core
         .statement(
-          `WITH source AS (${REPORT_SOURCE_SQL})
+          `WITH source AS (${REPORT_SOURCE_SQL}),
+        verified_originals(value) AS (${verifiedOriginals.length ? `VALUES ${verifiedOriginals.map(() => "(?)").join(",")}` : "SELECT NULL WHERE 0"})
         SELECT 1 AS ok FROM v2_reports r JOIN v2_workspaces w ON w.id=r.workspace_id JOIN user u ON u.id=w.owner_id
         WHERE r.id=? AND r.revision=? AND r.snapshot_id=? AND r.encrypted_payload=? AND w.owner_id=? AND w.status='active'
         AND ${aliveWorkspace} AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='report' AND target_id=r.id)
         AND coalesce((SELECT value FROM app_metadata WHERE key='account-type:'||w.owner_id),'customer')='customer'
         AND EXISTS(SELECT 1 FROM user_consents c WHERE c.user_id=w.owner_id AND c.terms_version=? AND c.privacy_version=? AND c.ai_notice_version=? AND c.over_14_confirmed=1)
         AND w.confirmed_summary_revision=?
-        AND coalesce((SELECT json_group_array(json_object('kind',kind,'id',id,'revision',revision,'snapshot',snapshot)) FROM source),'[]')=?
+        AND coalesce((SELECT json_group_array(json_object('kind',kind,'id',id,'revision',revision,'snapshot',snapshot || CASE WHEN kind='citation' THEN ':verified' ELSE '' END)) FROM source),'[]')=?
+        AND NOT EXISTS(SELECT 1 FROM verified_originals v LEFT JOIN v2_citation_bindings c ON c.workspace_id=w.id AND c.id=json_extract(v.value,'$[0]') LEFT JOIN v2_official_sources s ON s.source_id=c.source_id WHERE s.body IS NOT json_extract(v.value,'$[1]'))
         AND NOT EXISTS(SELECT 1 FROM v2_tombstones t JOIN source s ON s.kind='file' AND s.id=t.target_id WHERE t.target_kind='file')
         ${lease ? `AND EXISTS(SELECT 1 FROM v2_jobs j JOIN v2_operations o ON o.id=j.operation_id WHERE j.id=? AND o.owner_id=w.owner_id AND j.lease_token=? AND j.fencing=? AND j.lease_until>? AND j.status IN ('running','validating') AND ${jobAlive})` : ""}
         ${blobId ? "AND EXISTS(SELECT 1 FROM v2_blobs b JOIN v2_storage_reservations x ON x.id=b.reservation_id JOIN v2_billing_principals p ON p.id=b.principal_id WHERE b.id=? AND p.owner_id=w.owner_id AND b.state='stored' AND b.visibility='private' AND x.entity_id=r.id AND x.state!='released')" : ""}
@@ -84,6 +98,7 @@ export async function exportFence(
             now,
             now,
             id,
+            ...verifiedOriginals,
             report.id,
             report.revision,
             report.snapshot_id,
