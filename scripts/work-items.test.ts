@@ -106,3 +106,36 @@ test("reopened implementation work remains in progress without discarding the ol
   );
   expect(implemented.has(58)).toBe(true);
 });
+
+test("live external labels prevent ready selection without discarding merged implementation", () => {
+  const implemented = new Set([57, 58]);
+  for (const issue of [64, 58]) {
+    const item = { issue, kind: "implementation" as const, dependsOn: [57] };
+    expect(workItemProgress(item, new Set(), implemented, false, ["status:external"])).toEqual({
+      status: "EXTERNAL",
+      blockedBy: [],
+    });
+  }
+  expect([...implemented]).toEqual([57, 58]);
+});
+
+test("live blocked labels preserve dependency evidence and active ownership", () => {
+  const item = { issue: 58, kind: "implementation" as const, dependsOn: [57, 64] };
+  const implemented = new Set([57, 58]);
+  expect(workItemProgress(item, new Set(), implemented, false, ["status:blocked"])).toEqual({
+    status: "BLOCKED",
+    blockedBy: [64],
+  });
+  const waiting = ["status:external", "status:blocked"];
+  expect(workItemProgress(item, new Set(), implemented, false, waiting)).toEqual({
+    status: "EXTERNAL",
+    blockedBy: [64],
+  });
+  expect(workItemProgress(item, new Set(), implemented, true, waiting)).toEqual({
+    status: "IN_PROGRESS",
+    blockedBy: [64],
+  });
+  expect(
+    workItemProgress({ ...item, issue: 66, dependsOn: [57] }, new Set(), implemented, false).status,
+  ).toBe("READY");
+});
