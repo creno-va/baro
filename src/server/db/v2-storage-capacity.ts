@@ -53,6 +53,10 @@ export interface PreparedPhysicalCapacity {
   statements(core: V2Core, actor: Actor, claimId: string): D1PreparedStatement[];
 }
 const prepared = new WeakSet<object>();
+const preparedWrites = new WeakSet<object>();
+/** Issued before SQL, not evidence that startWrite or R2 succeeded. */
+export const isPreparedWrite = (value: unknown): value is WritePermit =>
+  typeof value === "object" && value !== null && preparedWrites.has(value);
 export const isPreparedPhysicalCapacity = (value: unknown): value is PreparedPhysicalCapacity =>
   typeof value === "object" && value !== null && prepared.has(value);
 
@@ -110,7 +114,8 @@ export function createV2StorageCapacityRepository(
   parse(z.enum(["preview", "production"]), environment);
   const proofs = createV2PaidRuntimeRepository(core, environment, verify);
   const permits = new WeakSet<object>(),
-    writers = new WeakSet<object>();
+    writers = new WeakSet<object>(),
+    unstartedWrites = new WeakSet<object>();
   const finish = (claimId: string) =>
     core.statement("DELETE FROM v2_runtime_claims WHERE id=?", [claimId]);
   return {
@@ -397,6 +402,49 @@ export function createV2StorageCapacityRepository(
       prepared.add(result);
       return result;
     },
+    /** Retain the exact token even when startWrite commits but its response is
+     * lost. This capability alone never authorizes an external dispatch. */
+    prepareWrite(input: { blobId: string; objectKey: string; byteLength: number }): WritePermit {
+      const value = parse(
+        z.strictObject({
+          blobId: opaqueIdSchema,
+          objectKey: physicalBindingSchema.shape.objectKey,
+          byteLength: physicalBindingSchema.shape.maximumCipherBytes,
+        }),
+        input,
+      );
+      const permit = Object.freeze({ ...value, environment, token: crypto.randomUUID() });
+      preparedWrites.add(permit);
+      unstartedWrites.add(permit);
+      return permit;
+    },
+    /** Exactly one start attempt. Only a confirmed true authorizes dispatch;
+     * false and a lost result can only proceed to the same-token cleanup path. */
+    beginPreparedWrite(permit: WritePermit, now: string): Promise<boolean> {
+      return safe(async () => {
+        if (!unstartedWrites.has(permit) || permit.environment !== environment) return false;
+        unstartedWrites.delete(permit);
+        writers.add(permit);
+        now = parse(iso, now);
+        const current = currentProjection(environment, now, core.monthlyBudgetCapEnabled);
+        const row = await core
+          .statement(
+            `UPDATE v2_physical_blob_bindings SET writer_state='running',writer_token=?,expected_cipher_bytes=? WHERE blob_id=? AND environment=? AND object_key=? AND state='held' AND writer_state='prepared' AND maximum_cipher_bytes>=? AND ${current.sql} AND EXISTS(SELECT 1 FROM v2_blobs b WHERE b.id=blob_id AND b.state='pending' AND b.object_key=v2_physical_blob_bindings.object_key AND b.cipher_bytes=?) RETURNING object_key`,
+            [
+              permit.token,
+              permit.byteLength,
+              permit.blobId,
+              environment,
+              permit.objectKey,
+              permit.byteLength,
+              ...current.values,
+              permit.byteLength,
+            ],
+          )
+          .first<{ object_key: string }>();
+        return row?.object_key === permit.objectKey;
+      });
+    },
     /** Exactly one native/R2 dispatch. Unknown completion keeps the durable
      * running obligation; it is never inferred from billing or a prior DELETE. */
     beginWrite(blobId: string, byteLength: number, now: string): Promise<WritePermit | null> {
@@ -420,6 +468,7 @@ export function createV2StorageCapacityRepository(
           environment,
           objectKey: row.object_key,
         });
+        preparedWrites.add(permit);
         writers.add(permit);
         return permit;
       });

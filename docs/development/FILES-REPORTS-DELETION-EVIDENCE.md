@@ -2,6 +2,22 @@
 
 ## 2026-10-13 업로드 저장 연결 보완 (#58/#59/#67)
 
+**PR229 검토 후 병합 보류:** 아래 최초 구현의 D1 row receipt 한도는 실행 전
+비용 상한의 증거가 아니었다. 공용 projection·carryover·원본 합계 조회와 트리거의
+scan을 실행 전에 제한하는 공용 계약이 필요하며 총괄이 담당을 조율한다.
+`runtime.ts`의 D1 최대 수량은 아직 승인된 상한으로 간주하지 않는다.
+
+같은 PR의 미전송 정리 보완은 SQL 전에 opaque writer token을 보유하고, 성공이
+확인된 start에만 R2 dispatch를 허용한다. start commit 뒤 row 초과·metadata 누락·
+응답 유실 3건과 stop commit 뒤 응답 유실로 journal을 건너뛰는 1건을 수정 전
+실패로 재현했다. normal query 슬롯과 6개의 cleanup 슬롯을 처음부터 분리하고,
+exact paid/upload/ordinal/blob/owner/token을 검사한 stop 1문장 및 abandon journal
+5문장을 각각 시도한다. cleanup 진입은 한 번뿐이며 정상 작업으로 돌아갈 수 없다.
+stop/journal 응답 유실을 성공으로 바꾸지 않고 독립된 다음 정리 요청으로 확인한다.
+기존 beginWrite 소비자는 유지한다. 변조·복제 permit, 다른 identity, 재시작을 거부하고
+실제 R2 호출이 불명확한 writer는 running을 유지한다. cleanup SQL/trigger의 실행 전
+row 비용까지 전체 quote에 포함하는 작업은 위 공용 비용 상한 보완과 함께 남아 있다.
+
 실제 `9fcf04f82c1fe5c9c10d1dae76ee4a998586604d`에서 합성 PDF를 한 번
 제출했으나 UI는 실패했고, 원격 읽기 진단은 file `reserved` / upload `open`,
 blob·part·job 0건이었다. 그 관찰만으로 PUT HTTP 상태를 추정하지 않는다.

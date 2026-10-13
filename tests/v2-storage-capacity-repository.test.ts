@@ -306,3 +306,52 @@ test("paid composition cannot bind a foreign/mismatched pending tuple or silentl
   expect(await f.capacity.beginWrite(i.id, 101, NOW)).toBeNull();
   expect(await f.capacity.beginWrite(i.id, 100, EXP)).toBeNull();
 });
+test("prepared writer token is retained before SQL but never grants dispatch on false, replay or substituted identity", async () => {
+  const f = await ready(),
+    i = await intent(f);
+  expect(await admit(f, i)).toBe(true);
+  f.db.sqlite.query("UPDATE v2_blobs SET cipher_bytes=100 WHERE id=?").run(i.id);
+  const before = f.db.queryCount;
+  const wrongKey = f.capacity.prepareWrite({
+    blobId: i.id,
+    objectKey: "private/wrong",
+    byteLength: 100,
+  });
+  const permit = f.capacity.prepareWrite({
+    blobId: i.id,
+    objectKey: i.input.objectKey,
+    byteLength: 100,
+  });
+  expect(f.db.queryCount).toBe(before);
+  expect(Object.isFrozen(permit)).toBe(true);
+  expect(await f.capacity.beginPreparedWrite({ ...permit }, NOW)).toBe(false);
+  expect(await f.capacity.beginPreparedWrite(wrongKey, NOW)).toBe(false);
+  expect(await f.capacity.beginPreparedWrite(wrongKey, NOW)).toBe(false);
+  expect(f.db.sqlite.query("SELECT writer_state FROM v2_physical_blob_bindings").get()).toEqual({
+    writer_state: "prepared",
+  });
+  const otherRepository = createV2StorageCapacityRepository(f.core, "preview");
+  expect(await otherRepository.beginPreparedWrite(permit, NOW)).toBe(false);
+  expect(await f.capacity.beginPreparedWrite(permit, NOW)).toBe(true);
+  expect(await f.capacity.beginPreparedWrite(permit, NOW)).toBe(false);
+  expect(await f.capacity.confirmWriterStopped(wrongKey, { transport: "not_sent" }, NOW)).toBe(
+    false,
+  );
+  expect(
+    await f.capacity.confirmWriterStopped(
+      permit,
+      { transport: "response", objectKey: "private/wrong", byteLength: 100 },
+      NOW,
+    ),
+  ).toBe(false);
+  expect(await f.capacity.confirmWriterStopped(permit, { transport: "not_sent" }, NOW)).toBe(true);
+  const restarted = f.capacity.prepareWrite({
+    blobId: i.id,
+    objectKey: i.input.objectKey,
+    byteLength: 100,
+  });
+  expect(await f.capacity.beginPreparedWrite(restarted, NOW)).toBe(false);
+  expect(f.db.sqlite.query("SELECT writer_state FROM v2_physical_blob_bindings").get()).toEqual({
+    writer_state: "stopped",
+  });
+});

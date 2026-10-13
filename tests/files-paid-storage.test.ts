@@ -359,7 +359,11 @@ test("pending envelope changed after dispatch await cannot send the captured bin
   f.setBefore(async () => {
     f.db.sqlite.exec("UPDATE v2_blobs SET encrypted_payload='removed'");
   });
-  await expect(f.put()).rejects.toThrow("CONFLICT");
+  await expect(f.put()).rejects.toThrow("STORAGE_UNAVAILABLE");
   expect(f.bucket.calls.put).toBe(0);
   expect(f.cost()).toEqual({ reserved_krw: 1000, ambiguous_krw: 0, settled_krw: 0 });
+  // The recovery capability cannot attest to a substituted pending envelope.
+  expect(f.db.sqlite.query("SELECT writer_state FROM v2_physical_blob_bindings").get()).toEqual({
+    writer_state: "running",
+  });
 });

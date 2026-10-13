@@ -1,6 +1,11 @@
 import { expect, test } from "bun:test";
 import { createV2Core } from "../src/server/db/v2-core";
-import { FILE_STORAGE_WORK, fileStorageRequestCore } from "../src/server/modules/files/limits";
+import {
+  FILE_STORAGE_CLEANUP_QUERIES,
+  FILE_STORAGE_WORK,
+  fileStorageRequestCore,
+  withFileStorageCleanup,
+} from "../src/server/modules/files/limits";
 import { fixture } from "./helpers/file-processing-fixture";
 
 test("binary-part D1 meter counts all statement surfaces and batch members before dispatch", async () => {
@@ -11,7 +16,9 @@ test("binary-part D1 meter counts all statement surfaces and batch members befor
   await core.statement("SELECT 1").run();
   await core.statement("SELECT 1").all();
   await core.binding.batch(
-    Array.from({ length: FILE_STORAGE_WORK.queries - 4 }, () => core.statement("SELECT 1")),
+    Array.from({ length: FILE_STORAGE_WORK.queries - FILE_STORAGE_CLEANUP_QUERIES - 4 }, () =>
+      core.statement("SELECT 1"),
+    ),
   );
   const before = f.db.queryCount;
   await expect(core.statement("SELECT 1").all()).rejects.toThrow("PROCESSING_UNAVAILABLE");
@@ -19,6 +26,17 @@ test("binary-part D1 meter counts all statement surfaces and batch members befor
     "PROCESSING_UNAVAILABLE",
   );
   expect(f.db.queryCount).toBe(before);
+  await withFileStorageCleanup(core, async () => {
+    await core.statement("SELECT 1").all();
+    await core.binding.batch(Array.from({ length: 5 }, () => core.statement("SELECT 1")));
+    await expect(core.statement("SELECT 1").all()).rejects.toThrow("PROCESSING_UNAVAILABLE");
+  });
+  expect(f.db.queryCount).toBe(before + FILE_STORAGE_CLEANUP_QUERIES);
+  await expect(core.statement("SELECT 1").all()).rejects.toThrow("PROCESSING_UNAVAILABLE");
+  await expect(
+    withFileStorageCleanup(core, async () => core.statement("SELECT 1").all()),
+  ).rejects.toThrow("PROCESSING_UNAVAILABLE");
+  expect(f.db.queryCount).toBe(before + FILE_STORAGE_CLEANUP_QUERIES);
 });
 
 test.each(["missing", "read", "write", "negative"])(

@@ -6,15 +6,23 @@ import { CURRENT_POLICY_VERSIONS } from "../src/contracts/consent";
 import { api } from "../src/server/api";
 import { createV2Core } from "../src/server/db/v2-core";
 import { type CleanupLease, createV2DeletionRepository } from "../src/server/db/v2-deletion";
-import { decryptPart } from "../src/server/modules/files/binary";
-import { fileStorageRequestCore } from "../src/server/modules/files/limits";
+import { createV2FilesRepository } from "../src/server/db/v2-files";
+import { stopUnsentOriginalWrite } from "../src/server/db/v2-original-parts";
+import { createV2StorageCapacityRepository } from "../src/server/db/v2-storage-capacity";
+import type { StorageAdmission } from "../src/server/modules/budget/storage-ledger";
+import { decryptPart, digest } from "../src/server/modules/files/binary";
+import { FILE_STORAGE_WORK, fileStorageRequestCore } from "../src/server/modules/files/limits";
 import { createFileStorageBudget } from "../src/server/modules/files/runtime";
 import { createFilesService } from "../src/server/modules/files/service";
 import { signedSessionCookie, testEnvironment } from "./helpers/d1";
 import { r2 } from "./helpers/file-processing-fixture";
-import { NOW, ready } from "./helpers/storage-capacity";
+import { intent, NOW, ready } from "./helpers/storage-capacity";
 
-async function fixture(capacityBytes?: number, now = NOW) {
+async function fixture(
+  capacityBytes?: number,
+  now = NOW,
+  wrapDatabase?: (db: D1Database) => D1Database,
+) {
   const f = await ready({
     getLimit: 100,
     headLimit: 100,
@@ -28,7 +36,10 @@ async function fixture(capacityBytes?: number, now = NOW) {
     .query("INSERT INTO app_metadata(key,value,updated_at) VALUES(?,'customer',?)")
     .run(`account-type:${f.actor.ownerId}`, NOW);
   const bucket = r2();
-  const core = fileStorageRequestCore(f.core, false);
+  const core = fileStorageRequestCore(
+    wrapDatabase ? createV2Core(wrapDatabase(f.core.binding), f.core.cipher) : f.core,
+    !!wrapDatabase,
+  );
   const paid = createFileStorageBudget(core, "preview", f.actor.ownerId, () => now);
   const service = createFilesService(core, {
     environment: "preview",
@@ -48,6 +59,11 @@ async function fixture(capacityBytes?: number, now = NOW) {
     bucket,
     paid,
     service,
+    cleanupService: createFilesService(f.core, {
+      environment: "preview",
+      bucket: bucket.port,
+      clock: () => now,
+    }),
     session,
     put: () =>
       service.putPart(
@@ -60,6 +76,372 @@ async function fixture(capacityBytes?: number, now = NOW) {
       ),
   };
 }
+
+async function unrelatedPending(f: Awaited<ReturnType<typeof fixture>>) {
+  const core = createV2Core(f.db.binding, f.core.cipher),
+    capacity = createV2StorageCapacityRepository(core, "preview"),
+    other = await intent({ ...f, core });
+  const physical = capacity.prepareCapacity(f.actor, other.input),
+    claim = crypto.randomUUID();
+  const revision = f.db.sqlite
+    .query("SELECT revision FROM v2_workspaces WHERE id=?")
+    .get(f.workspaceId) as { revision: number };
+  expect(
+    await core.changed([
+      core.claim(
+        { ...f.actor, workspaceId: f.workspaceId, expectedRevision: revision.revision },
+        claim,
+        physical.predicate.sql,
+        [...physical.predicate.values],
+      ),
+      other.statement(claim),
+      ...physical.statements(core, f.actor, claim),
+      core.finish(claim),
+    ]),
+  ).toBe(true);
+  const before = f.db.sqlite
+    .query("SELECT * FROM v2_physical_blob_bindings WHERE blob_id=?")
+    .get(other.id);
+  return { id: other.id, before };
+}
+
+async function cleanupRecovered(f: Awaited<ReturnType<typeof fixture>>) {
+  const core = createV2Core(f.db.binding, f.core.cipher),
+    deletion = createV2DeletionRepository(core);
+  const blob = f.db.sqlite.query("SELECT blob_id FROM v2_storage_paid_executions").get() as {
+    blob_id: string;
+  };
+  const journal = await deletion.findByTarget("blob", blob.blob_id);
+  if (!journal) throw new Error("Synthetic recovered journal missing");
+  const lease = await deletion.acquire(
+    journal.id,
+    crypto.randomUUID(),
+    NOW,
+    "2026-10-06T00:04:00.000Z",
+  );
+  if (!lease) throw new Error("Synthetic recovered lease missing");
+  expect(await f.cleanupService.cleanup(lease)).toBe(true);
+  expect(
+    f.db.sqlite
+      .query("SELECT state FROM v2_physical_blob_bindings WHERE blob_id=?")
+      .get(blob.blob_id),
+  ).toEqual({ state: "released" });
+}
+
+// Synthetic fault injection after the actual SQLite statement/batch commits.
+// Zero row metadata below is a test adapter, never a claimed native measurement.
+function faultDatabase(
+  db: D1Database,
+  fault: (sql: string, result: D1Result<unknown>) => D1Result<unknown>,
+) {
+  const sources = new WeakMap<
+    D1PreparedStatement,
+    { sql: string; statement: D1PreparedStatement }
+  >();
+  const result = <T>(sql: string, value: D1Result<T>) =>
+    fault(sql, { ...value, meta: { ...value.meta, rows_read: 0, rows_written: 0 } }) as D1Result<T>;
+  const wrap = (sql: string, statement: D1PreparedStatement): D1PreparedStatement => {
+    const value = {
+      bind: (...values: unknown[]) => wrap(sql, statement.bind(...values)),
+      all: async <T>() => result(sql, await statement.all<T>()),
+      run: async <T>() => result(sql, await statement.run<T>()),
+    } as D1PreparedStatement;
+    sources.set(value, { sql, statement });
+    return value;
+  };
+  return {
+    prepare: (sql: string) => wrap(sql, db.prepare(sql)),
+    async batch<T>(statements: D1PreparedStatement[]) {
+      const originals = statements.map((s) => {
+        const found = sources.get(s);
+        if (!found) throw new Error("Synthetic statement missing");
+        return found;
+      });
+      const values = await db.batch<T>(originals.map((v) => v.statement));
+      return values.map((v, i) => result(originals[i]?.sql ?? "", v));
+    },
+  } as D1Database;
+}
+
+test.each(["read", "missing", "lost"])(
+  "unsent writer start committed with %s response failure still records a cleanup journal",
+  async (failure) => {
+    let injected = false;
+    const f = await fixture(undefined, NOW, (db) =>
+      faultDatabase(db, (sql, value) => {
+        if (
+          !injected &&
+          sql.startsWith("UPDATE v2_physical_blob_bindings SET writer_state='running'")
+        ) {
+          injected = true;
+          if (failure === "lost") throw new Error("Synthetic committed response lost");
+          if (failure === "missing")
+            return { ...value, meta: undefined } as unknown as D1Result<unknown>;
+          return { ...value, meta: { ...value.meta, rows_read: FILE_STORAGE_WORK.rowsRead + 1 } };
+        }
+        return value;
+      }),
+    );
+    const other = await unrelatedPending(f);
+    await expect(f.put()).rejects.toThrow();
+    expect(injected).toBe(true);
+    expect(f.bucket.calls.put).toBe(0);
+    expect(
+      f.db.sqlite
+        .query("SELECT writer_state FROM v2_physical_blob_bindings WHERE blob_id!=?")
+        .get(other.id),
+    ).toEqual({
+      writer_state: "stopped",
+    });
+    expect(f.db.sqlite.query("SELECT state FROM v2_blobs WHERE id!=?").get(other.id)).toEqual({
+      state: "deleting",
+    });
+    expect(
+      f.db.sqlite
+        .query("SELECT count(*) n FROM v2_deletion_journals WHERE target_kind='blob'")
+        .get(),
+    ).toEqual({ n: 1 });
+    await cleanupRecovered(f);
+    expect(
+      f.db.sqlite.query("SELECT * FROM v2_physical_blob_bindings WHERE blob_id=?").get(other.id),
+    ).toEqual(other.before);
+  },
+);
+
+test.each(["lost", "missing", "journal"])(
+  "unsent cleanup retains independent journal work after %s response failure",
+  async (failure) => {
+    let injected = false;
+    let stopped = false;
+    const f = await fixture(undefined, NOW, (db) =>
+      faultDatabase(db, (sql, value) => {
+        const stop = sql.startsWith("UPDATE v2_physical_blob_bindings SET writer_state='stopped'");
+        stopped ||= stop;
+        if (
+          !injected &&
+          (failure === "journal"
+            ? stopped && sql.startsWith("INSERT INTO v2_mutation_claims")
+            : stop)
+        ) {
+          injected = true;
+          if (failure === "missing")
+            return { ...value, meta: undefined } as unknown as D1Result<unknown>;
+          throw new Error("Synthetic stopped response lost");
+        }
+        return value;
+      }),
+    );
+    f.paid.beforeDispatch = async () => null;
+    await expect(f.put()).rejects.toThrow();
+    expect(injected).toBe(true);
+    expect(f.bucket.calls.put).toBe(0);
+    expect(f.db.sqlite.query("SELECT writer_state FROM v2_physical_blob_bindings").get()).toEqual({
+      writer_state: "stopped",
+    });
+    expect(f.db.sqlite.query("SELECT state FROM v2_blobs").get()).toEqual({ state: "deleting" });
+    expect(
+      f.db.sqlite
+        .query("SELECT count(*) n FROM v2_deletion_journals WHERE target_kind='blob'")
+        .get(),
+    ).toEqual({ n: 1 });
+    await cleanupRecovered(f);
+  },
+);
+
+test.each(["beforeDispatch", "authorize"])(
+  "unsent cleanup survives %s query exhaustion and preserves unknown cost exposure",
+  async (stage) => {
+    const f = await fixture(undefined, NOW, (db) => faultDatabase(db, (_sql, value) => value));
+    const before = f.paid.beforeDispatch.bind(f.paid);
+    f.paid.beforeDispatch = async (admission, access) => {
+      const permit = await before(admission, access);
+      expect(permit).not.toBeNull();
+      try {
+        for (let i = 0; i < FILE_STORAGE_WORK.queries; i++)
+          await f.core.statement("SELECT 1").all();
+      } catch (error) {
+        if (stage === "beforeDispatch") throw error;
+      }
+      return permit;
+    };
+    await expect(f.put()).rejects.toThrow();
+    expect(f.bucket.calls.put).toBe(0);
+    expect(
+      f.db.sqlite.query("SELECT state,writer_state FROM v2_physical_blob_bindings").get(),
+    ).toEqual({ state: "held", writer_state: "stopped" });
+    expect(f.db.sqlite.query("SELECT state FROM v2_storage_paid_executions").get()).toEqual({
+      state: "dispatched",
+    });
+    const cost = f.db.sqlite
+      .query("SELECT reserved_krw,settled_krw FROM v2_monthly_budget WHERE environment='preview'")
+      .get() as { reserved_krw: number; settled_krw: number };
+    expect(cost.reserved_krw).toBeGreaterThan(0);
+    expect(cost.settled_krw).toBe(0);
+    await cleanupRecovered(f);
+  },
+);
+
+test("unsent token recovery rejects cloned or substituted identity and supports an already-deleting exact original", async () => {
+  const f = await fixture(),
+    saved: { admission: StorageAdmission | null } = { admission: null };
+  const prepare = f.paid.prepare.bind(f.paid);
+  f.paid.prepare = async (input) => {
+    saved.admission = await prepare(input);
+    return null;
+  };
+  await expect(f.put()).rejects.toThrow("PROCESSING_UNAVAILABLE");
+  const paid = saved.admission?.paid;
+  if (!paid) throw new Error("Synthetic admission missing");
+  const request = paid.request;
+  if (request.intent.kind !== "case_original") throw new Error("Synthetic original intent missing");
+  const blob = {
+    id: request.blobId,
+    reservationId: request.reservationId,
+    kind: "original" as const,
+    visibility: "private" as const,
+    logicalBytes: request.pending.logicalBytes,
+    cipherBytes: request.pending.cipherBytes,
+    cipherHash: request.pending.cipherHash ?? "",
+    keyVersion: "binary_v1",
+    contentHash: await digest(new TextEncoder().encode("hello")),
+  };
+  const registration = {
+    blob,
+    uploadId: request.intent.uploadId,
+    uploadRevision: request.intent.uploadRevision,
+    ordinal: request.intent.ordinal,
+  };
+  const files = createV2FilesRepository(f.core),
+    capacity = createV2StorageCapacityRepository(f.core, "preview");
+  const physical = capacity.prepareCapacity(paid.actor, {
+    blobId: blob.id,
+    ownerId: paid.actor.ownerId,
+    objectKey: `private/${blob.id}`,
+    maximumCipherBytes: blob.cipherBytes,
+  });
+  expect(await files.prepareOriginalPart(paid.actor, registration, paid, physical)).toBe(true);
+  const pendingPayload = await f.core
+    .statement("SELECT encrypted_payload FROM v2_blobs WHERE id=?", [blob.id])
+    .first<string>("encrypted_payload");
+  if (!pendingPayload) throw new Error("Synthetic pending envelope missing");
+  const writer = capacity.prepareWrite({
+    blobId: blob.id,
+    objectKey: `private/${blob.id}`,
+    byteLength: blob.cipherBytes,
+  });
+  expect(await capacity.beginPreparedWrite(writer, NOW)).toBe(true);
+  const input = { ...registration, paid, writer, pendingPayload };
+  const before = f.db.sqlite
+    .query("SELECT * FROM v2_physical_blob_bindings WHERE blob_id=?")
+    .get(blob.id);
+  for (const invalid of [
+    { ...input, writer: { ...writer } },
+    {
+      ...input,
+      writer: capacity.prepareWrite({
+        blobId: blob.id,
+        objectKey: writer.objectKey,
+        byteLength: writer.byteLength,
+      }),
+    },
+    {
+      ...input,
+      writer: createV2StorageCapacityRepository(f.core, "production").prepareWrite({
+        blobId: blob.id,
+        objectKey: writer.objectKey,
+        byteLength: writer.byteLength,
+      }),
+    },
+    { ...input, paid: { ...paid, actor: { ...paid.actor, ownerId: "foreign-owner" } } },
+    { ...input, blob: { ...blob, id: "foreign-blob" } },
+    { ...input, uploadId: "foreign-upload" },
+    { ...input, uploadRevision: input.uploadRevision + 1 },
+    { ...input, ordinal: input.ordinal + 1 },
+    { ...input, pendingPayload: "substituted-envelope" },
+  ]) {
+    expect(await stopUnsentOriginalWrite(f.core, invalid)).toBe(false);
+    expect(
+      f.db.sqlite.query("SELECT * FROM v2_physical_blob_bindings WHERE blob_id=?").get(blob.id),
+    ).toEqual(before);
+  }
+  expect(await files.abandonOriginalPart(paid.actor, blob.id)).toBe(true);
+  expect(await stopUnsentOriginalWrite(f.core, input)).toBe(true);
+  expect(await stopUnsentOriginalWrite(f.core, input)).toBe(false);
+  expect(await capacity.beginPreparedWrite(writer, NOW)).toBe(false);
+  expect(f.bucket.calls.put).toBe(0);
+  await cleanupRecovered(f);
+});
+
+test("a confirmed false start never acquires a running obligation and remains cleanable", async () => {
+  let freeze: (() => void) | undefined;
+  const f = await fixture(undefined, NOW, (db) =>
+    faultDatabase(db, (sql, value) => {
+      if (sql.startsWith("SELECT encrypted_payload FROM v2_blobs WHERE id=? AND state='pending'"))
+        freeze?.();
+      return value;
+    }),
+  );
+  freeze = () => {
+    f.db.sqlite.exec("UPDATE v2_runtime_controls SET phase='frozen'");
+  };
+  await expect(f.put()).rejects.toThrow();
+  expect(f.bucket.calls.put).toBe(0);
+  expect(
+    f.db.sqlite.query("SELECT writer_state,writer_token FROM v2_physical_blob_bindings").get(),
+  ).toEqual({ writer_state: "prepared", writer_token: null });
+  expect(f.db.sqlite.query("SELECT state FROM v2_blobs").get()).toEqual({ state: "deleting" });
+  f.db.sqlite.exec("UPDATE v2_runtime_controls SET phase='active'");
+  await cleanupRecovered(f);
+});
+
+test("an ambiguous actual PUT is never recovered as not_sent and keeps cleanup blocked", async () => {
+  const f = await fixture(undefined, NOW, (db) => faultDatabase(db, (_sql, value) => value));
+  f.bucket.setPutAmbiguous(true);
+  await expect(f.put()).rejects.toThrow();
+  expect(f.bucket.calls.put).toBe(1);
+  expect(f.bucket.objects.size).toBe(1);
+  expect(f.db.sqlite.query("SELECT writer_state FROM v2_physical_blob_bindings").get()).toEqual({
+    writer_state: "running",
+  });
+  const core = createV2Core(f.db.binding, f.core.cipher),
+    deletion = createV2DeletionRepository(core);
+  const journal = f.db.sqlite
+    .query("SELECT id FROM v2_deletion_journals WHERE target_kind='blob'")
+    .get() as { id: string };
+  const lease = await deletion.acquire(
+    journal.id,
+    crypto.randomUUID(),
+    NOW,
+    "2026-10-06T00:04:00.000Z",
+  );
+  if (!lease) throw new Error("Synthetic lease missing");
+  expect(await f.cleanupService.cleanup(lease)).toBe(false);
+  expect(f.bucket.calls.delete).toBe(0);
+});
+
+test("a known R2 response with a lost stop receipt journals independently and remains cleanable", async () => {
+  let injected = false;
+  const f = await fixture(undefined, NOW, (db) =>
+    faultDatabase(db, (sql, value) => {
+      if (
+        !injected &&
+        sql.startsWith("UPDATE v2_physical_blob_bindings SET writer_state='stopped'")
+      ) {
+        injected = true;
+        throw new Error("Synthetic stop receipt lost after actual PUT");
+      }
+      return value;
+    }),
+  );
+  await expect(f.put()).rejects.toThrow();
+  expect(f.bucket.calls.put).toBe(1);
+  expect(f.db.sqlite.query("SELECT writer_state FROM v2_physical_blob_bindings").get()).toEqual({
+    writer_state: "stopped",
+  });
+  expect(f.db.sqlite.query("SELECT count(*) n FROM v2_upload_parts").get()).toEqual({ n: 0 });
+  await cleanupRecovered(f);
+  expect(f.bucket.objects.size).toBe(0);
+});
 
 test("signed global file composition stores an encrypted PDF chunk with actual workerd D1 capacity and retains unknown billing", async () => {
   setSystemTime(new Date(NOW));
@@ -357,13 +739,13 @@ test("deletion during a late PUT retains the writer obligation, then stops it wi
   // A failed delete preserves its physical obligation. A later successful
   // DELETE + absent HEAD receipt releases it without accepting another PUT.
   f.bucket.setDeleteFails(true);
-  await expect(f.service.cleanup(lease)).rejects.toThrow();
+  await expect(f.cleanupService.cleanup(lease)).rejects.toThrow();
   expect(f.db.sqlite.query("SELECT state FROM v2_physical_blob_bindings").get()).toEqual({
     state: "held",
   });
   expect(f.bucket.objects.size).toBe(1);
   f.bucket.setDeleteFails(false);
-  expect(await f.service.cleanup(lease)).toBe(true);
+  expect(await f.cleanupService.cleanup(lease)).toBe(true);
   expect(f.bucket.objects.size).toBe(0);
   expect(f.db.sqlite.query("SELECT state FROM v2_physical_blob_bindings").get()).toEqual({
     state: "released",
@@ -371,7 +753,21 @@ test("deletion during a late PUT retains the writer obligation, then stops it wi
   expect(f.db.sqlite.query("SELECT held_bytes FROM v2_physical_storage_capacity").get()).toEqual({
     held_bytes: 0,
   });
-  await expect(f.put()).rejects.toThrow("NOT_FOUND");
+  const retry = createFilesService(createV2Core(f.db.binding, f.core.cipher), {
+    environment: "preview",
+    bucket: f.bucket.port,
+    clock: () => NOW,
+  });
+  await expect(
+    retry.putPart(
+      f.actor.ownerId,
+      f.workspaceId,
+      f.session.fileId,
+      f.session.uploadSession,
+      0,
+      new Response("hello").body,
+    ),
+  ).rejects.toThrow("NOT_FOUND");
   expect(f.bucket.calls.put).toBe(1);
   expect(f.db.sqlite.query("SELECT count(*) n FROM v2_upload_parts").get()).toEqual({ n: 0 });
 });

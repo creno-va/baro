@@ -27,6 +27,7 @@ import {
 } from "../../db/v2-core";
 import { type CleanupLease, createV2DeletionRepository } from "../../db/v2-deletion";
 import { createV2FilesRepository } from "../../db/v2-files";
+import { stopUnsentOriginalWrite } from "../../db/v2-original-parts";
 import { type BlobRegistration, createV2StorageRepository } from "../../db/v2-storage";
 import { createV2StorageCapacityRepository, type WritePermit } from "../../db/v2-storage-capacity";
 import { isPreparedStoragePaidHold } from "../../db/v2-storage-paid-runtime";
@@ -48,6 +49,7 @@ import {
   readBounded,
   readHeader,
 } from "./binary";
+import { hasFileStorageMeter, withFileStorageCleanup } from "./limits";
 
 export type PrivateBucket = Pick<R2Bucket, "get" | "put" | "head" | "delete">;
 export type FileStorageInput = StorageCostInput;
@@ -582,6 +584,8 @@ export function createFilesService(core: V2Core, deps: FileServiceDependencies) 
         .first<string>("encrypted_payload");
       let permit: FileStoragePermit | null = null;
       let writer: WritePermit | null = null;
+      let writerStopped = false;
+      let storageResponse: { objectKey: string; byteLength: number } | null = null;
       let dispatched = false;
       let recorded = false;
       const authorize = async () => {
@@ -618,8 +622,13 @@ export function createFilesService(core: V2Core, deps: FileServiceDependencies) 
       };
       try {
         if (physical) {
-          writer = await capacity.beginWrite(blob.id, bytes.byteLength, now());
-          if (!writer) throw new FileError("PROCESSING_UNAVAILABLE");
+          writer = capacity.prepareWrite({
+            blobId: blob.id,
+            objectKey,
+            byteLength: bytes.byteLength,
+          });
+          if (!(await capacity.beginPreparedWrite(writer, now())))
+            throw new FileError("PROCESSING_UNAVAILABLE");
         }
         if (admission && deps.paidStorage) {
           permit = await deps.paidStorage.beforeDispatch(admission, authorize);
@@ -637,6 +646,7 @@ export function createFilesService(core: V2Core, deps: FileServiceDependencies) 
         });
         if (!stored || stored.key !== objectKey || stored.size !== bytes.byteLength)
           throw new FileError("STORAGE_UNAVAILABLE");
+        storageResponse = { objectKey, byteLength: bytes.byteLength };
         if (
           writer &&
           !(await capacity.confirmWriterStopped(
@@ -650,6 +660,7 @@ export function createFilesService(core: V2Core, deps: FileServiceDependencies) 
           ))
         )
           throw new FileError("STORAGE_UNAVAILABLE");
+        writerStopped = true;
         if (permit && deps.paidStorage) {
           recorded = true;
           await deps.paidStorage.after(permit, {
@@ -672,8 +683,42 @@ export function createFilesService(core: V2Core, deps: FileServiceDependencies) 
         return { index, byteLength, contentHash };
       } catch (error) {
         let failure = error;
-        if (writer && !dispatched)
-          await capacity.confirmWriterStopped(writer, { transport: "not_sent" }, now());
+        // Stop and journal have independent, pre-reserved statement slots. A
+        // committed stop with a lost/invalid receipt must not skip the journal.
+        await withFileStorageCleanup(core, async () => {
+          if (writer && !writerStopped) {
+            try {
+              const stopped =
+                !dispatched && admission && pendingPayload
+                  ? await stopUnsentOriginalWrite(core, {
+                      uploadId: u.id,
+                      uploadRevision: u.revision,
+                      ordinal: index,
+                      blob,
+                      writer,
+                      paid: admission.paid,
+                      pendingPayload,
+                    })
+                  : storageResponse
+                    ? await capacity.confirmWriterStopped(
+                        writer,
+                        { transport: "response", ...storageResponse },
+                        now(),
+                      )
+                    : false;
+              if (!stopped) failure = new FileError("STORAGE_UNAVAILABLE");
+            } catch {
+              failure = new FileError("STORAGE_UNAVAILABLE");
+            }
+          }
+          try {
+            // A concurrent deletion already owns its own durable journal.
+            if (!(await files.abandonOriginalPart(actor(ownerId), blob.id)))
+              failure = new FileError("STORAGE_UNAVAILABLE");
+          } catch {
+            failure = new FileError("STORAGE_UNAVAILABLE");
+          }
+        });
         if (permit && !recorded && deps.paidStorage) {
           try {
             await deps.paidStorage.after(permit, {
@@ -685,13 +730,7 @@ export function createFilesService(core: V2Core, deps: FileServiceDependencies) 
             failure = new FileError("PROCESSING_UNAVAILABLE");
           }
         }
-        // The pending intent already survives termination. Only terminal IO can be
-        // abandoned here; no logical storage refund happens before actual cleanup.
-        const retained = await files.abandonOriginalPart(actor(ownerId), blob.id);
-        // A concurrent deletion owns any surviving object and its durable journal.
-        // Do not bypass the fenced cleanup/budget path with an untracked DELETE.
-        if (!retained) failure = new FileError("STORAGE_UNAVAILABLE");
-        if (written) {
+        if (written && !hasFileStorageMeter(core)) {
           const winner = await part(u, index);
           if (winner) {
             const accepted = await loadPart(ownerId, workspaceId, u, winner, wrappedKey);

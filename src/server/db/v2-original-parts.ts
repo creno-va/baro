@@ -11,7 +11,12 @@ import {
   type V2Core,
 } from "./v2-core";
 import { type BlobRegistration, blobSchema } from "./v2-storage";
-import { isPreparedPhysicalCapacity, type PreparedPhysicalCapacity } from "./v2-storage-capacity";
+import {
+  isPreparedPhysicalCapacity,
+  isPreparedWrite,
+  type PreparedPhysicalCapacity,
+  type WritePermit,
+} from "./v2-storage-capacity";
 import { isPreparedStoragePaidHold, type PreparedStoragePaidHold } from "./v2-storage-paid-runtime";
 
 export interface OriginalPartRegistration {
@@ -158,6 +163,67 @@ export function prepareOriginalPart(
       )
       .all<{ id: string }>();
     return result.results.length === 1;
+  });
+}
+/** Request-internal recovery only, before any R2 call. The caller retains its
+ * pre-SQL opaque token; a failed/lost start response is not a dispatch permit.
+ * Durable immutable paid identity also survives concurrent parent deletion. */
+export function stopUnsentOriginalWrite(
+  core: V2Core,
+  input: OriginalPartRegistration & {
+    writer: WritePermit;
+    paid: PreparedStoragePaidHold;
+    pendingPayload: string;
+  },
+) {
+  return safe(async () => {
+    if (!isPreparedWrite(input.writer) || !isPreparedStoragePaidHold(input.paid)) return false;
+    const { writer, paid, pendingPayload } = input;
+    const { a, b, valid } = originalInput(paid.actor, input);
+    const r = paid.request;
+    if (
+      !valid ||
+      !pendingPayload ||
+      writer.blobId !== b.id ||
+      writer.objectKey !== `private/${b.id}` ||
+      writer.byteLength !== b.cipherBytes ||
+      r.intent.kind !== "case_original" ||
+      r.intent.uploadId !== input.uploadId ||
+      r.intent.uploadRevision !== input.uploadRevision ||
+      r.intent.ordinal !== input.ordinal ||
+      r.targetKind !== "file" ||
+      r.blobId !== b.id ||
+      r.reservationId !== b.reservationId ||
+      r.pending.logicalBytes !== b.logicalBytes ||
+      r.pending.cipherBytes !== b.cipherBytes ||
+      r.pending.cipherHash !== b.cipherHash ||
+      r.pending.keyVersion !== b.keyVersion
+    )
+      return false;
+    const result = await core
+      .statement(
+        `UPDATE v2_physical_blob_bindings SET writer_state='stopped' WHERE blob_id=? AND environment=? AND owner_id=? AND object_key=? AND maximum_cipher_bytes=? AND state='held' AND writer_state='running' AND writer_token=? AND expected_cipher_bytes=? AND EXISTS(SELECT 1 FROM v2_blobs b JOIN v2_storage_paid_executions h ON h.blob_id=b.id WHERE b.id=v2_physical_blob_bindings.blob_id AND b.reservation_id=? AND b.kind='original' AND b.visibility='private' AND b.object_key=v2_physical_blob_bindings.object_key AND b.logical_bytes=? AND b.cipher_bytes=? AND b.cipher_hash=? AND b.key_version=? AND b.created_at=? AND ((b.state='pending' AND b.encrypted_payload=?) OR (b.state='deleting' AND b.encrypted_payload='removed')) AND h.attempt_id=? AND h.payload_json=?)`,
+        [
+          b.id,
+          writer.environment,
+          a.ownerId,
+          writer.objectKey,
+          b.cipherBytes,
+          writer.token,
+          writer.byteLength,
+          b.reservationId,
+          b.logicalBytes,
+          b.cipherBytes,
+          b.cipherHash,
+          b.keyVersion,
+          a.now,
+          pendingPayload,
+          r.attemptId,
+          JSON.stringify(r),
+        ],
+      )
+      .run();
+    return result.meta.changes === 1;
   });
 }
 // Called after a definitive local upload failure; exposure stays reserved until

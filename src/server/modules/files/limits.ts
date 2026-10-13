@@ -11,6 +11,13 @@ export const FILE_STORAGE_WORK = Object.freeze({
 });
 const metered = new WeakSet<V2Core>();
 export const hasFileStorageMeter = (core: V2Core) => metered.has(core);
+// One exact-token stop plus the existing five-statement abandon journal batch.
+// Normal work cannot consume these slots. Their SQL/trigger row costs must also
+// be part of the authenticated execution plan, not inferred from receipts.
+export const FILE_STORAGE_CLEANUP_QUERIES = 6;
+const cleanups = new WeakMap<V2Core, <T>(operation: () => Promise<T>) => Promise<T>>();
+export const withFileStorageCleanup = <T>(core: V2Core, operation: () => Promise<T>) =>
+  cleanups.get(core)?.(operation) ?? operation();
 
 /** Native D1 receipts, including every batch member, bound further dispatch.
  * This is an execution guard, never a provider receipt or refund. Already
@@ -20,13 +27,22 @@ export function fileStorageRequestCore(core: V2Core, requireRowMeta = true) {
     read = 0,
     written = 0,
     stopped = false;
+  let cleanupEntered = false,
+    cleanupActive = false,
+    cleanupQueries = 0;
   const originals = new WeakMap<D1PreparedStatement, D1PreparedStatement>();
   const fail = () => {
     stopped = true;
     throw new FileError("PROCESSING_UNAVAILABLE");
   };
   const charge = (count = 1) => {
-    if (stopped || queries + count > FILE_STORAGE_WORK.queries) fail();
+    if (cleanupActive) {
+      if (cleanupQueries + count > FILE_STORAGE_CLEANUP_QUERIES) fail();
+      cleanupQueries += count;
+      return;
+    }
+    if (stopped || queries + count > FILE_STORAGE_WORK.queries - FILE_STORAGE_CLEANUP_QUERIES)
+      fail();
     queries += count;
   };
   const receipt = <T>(result: D1Result<T>) => {
@@ -36,7 +52,14 @@ export function fileStorageRequestCore(core: V2Core, requireRowMeta = true) {
       fail();
     read += r ?? 0;
     written += w ?? 0;
-    if (read > FILE_STORAGE_WORK.rowsRead || written > FILE_STORAGE_WORK.rowsWritten) fail();
+    // A failed normal receipt cannot consume the separately reserved journal
+    // work. Invalid cleanup receipts still fail their own operation; the caller
+    // independently attempts the remaining exact, pre-reserved statements.
+    if (
+      !cleanupActive &&
+      (read > FILE_STORAGE_WORK.rowsRead || written > FILE_STORAGE_WORK.rowsWritten)
+    )
+      fail();
     return result;
   };
   const wrap = (statement: D1PreparedStatement): D1PreparedStatement => {
@@ -78,5 +101,16 @@ export function fileStorageRequestCore(core: V2Core, requireRowMeta = true) {
     monthlyBudgetCapEnabled: core.monthlyBudgetCapEnabled,
   });
   metered.add(result);
+  cleanups.set(result, async (operation) => {
+    if (cleanupEntered) fail();
+    cleanupEntered = true;
+    cleanupActive = true;
+    stopped = true;
+    try {
+      return await operation();
+    } finally {
+      cleanupActive = false;
+    }
+  });
   return result;
 }
