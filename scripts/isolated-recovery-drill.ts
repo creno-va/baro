@@ -88,6 +88,7 @@ export async function runRecoveryDrill(
   };
   // Persist the deterministic resource name before any creation, even if its API outcome is unknown.
   await storage.writeEvidence(report);
+  let assertionsComplete = false;
   try {
     const resource = await platform.create();
     report.databaseId = resource.databaseId;
@@ -169,7 +170,7 @@ export async function runRecoveryDrill(
     await replayDeletionJournal(db, (await reloadJournal()).journal);
     await record("repeat-replay-observed", await fixture.observe(true));
     report.stage = "cleanup";
-    report.status = "success";
+    assertionsComplete = true;
   } catch (error) {
     // Do not expose upstream SQL, rows, credentials, endpoints, stack or arbitrary API diagnostics.
     report.status = "failure";
@@ -212,6 +213,9 @@ export async function runRecoveryDrill(
       }
     }
     report.finishedAt = now();
+    // No persisted intermediate snapshot may claim success while cleanup is in progress.
+    if (assertionsComplete && report.cleanup === "confirmed-absent" && report.status === "running")
+      report.status = "success";
     await storage.writeEvidence(report);
   }
   return report;

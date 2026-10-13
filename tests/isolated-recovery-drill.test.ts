@@ -239,6 +239,15 @@ test("real product SQL deletion, snapshot restoration and external journal repla
     expect(evidence).not.toContain(secret);
 });
 
+test("interrupted intermediate evidence cannot claim success before cleanup and the terminal timestamp", async () => {
+  const { storage } = await execute();
+  const successes = storage.reports.filter((report) => report.status === "success");
+  expect(successes).toHaveLength(1);
+  expect(successes[0]?.cleanup).toBe("confirmed-absent");
+  expect(successes[0]?.finishedAt).not.toBeNull();
+  expect(storage.reports.slice(0, -1).every((report) => report.status === "running")).toBe(true);
+});
+
 test("prior drill DBs are not adopted; protected IDs (including uppercase) never reach data or delete endpoints", async () => {
   const existing = await execute({ existing: true });
   expect(existing.report.status).toBe("failure");
