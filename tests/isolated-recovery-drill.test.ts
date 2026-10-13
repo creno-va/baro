@@ -3,6 +3,7 @@ import { expect, test } from "bun:test";
 import { chmod, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { DrillCommandError, type runDrillWrangler } from "../scripts/isolated-drill-process";
 import {
   type DrillEvidence,
   type DrillStorage,
@@ -50,6 +51,9 @@ function cloud(
     failQuery?: boolean;
     failQueryAt?: number;
     invalidQueryResult?: boolean;
+    failImportAt?: number;
+    lostImportResponse?: boolean;
+    noImport?: boolean;
   } = {},
 ) {
   let sqlite = new Database(":memory:");
@@ -57,6 +61,7 @@ function cloud(
   let exists = options.existing ?? false;
   let snapshot: Uint8Array | undefined;
   let queryCount = 0;
+  let importCount = 0;
   const calls: { method: string; path: string; body?: unknown }[] = [];
   const name = `baro-drill-d1-${plan.runId}`;
   const metadata = () => ({ uuid: options.createId ?? id, name, version: "production" });
@@ -131,6 +136,47 @@ function cloud(
   }) as typeof fetch;
   return {
     fetcher,
+    runWrangler: (async (args, timeout, environment) => {
+      expect(args.slice(0, 3)).toEqual(["d1", "execute", "DRILL_DB"]);
+      expect(args).toContain("--remote");
+      expect(timeout).toBeGreaterThan(0);
+      expect(timeout).toBeLessThanOrEqual(90_000);
+      expect(environment?.CLOUDFLARE_ACCOUNT_ID).toBe(DRILL_ACCOUNT);
+      const configPath = args[args.indexOf("--config") + 1] ?? "";
+      const sqlPath = args[args.indexOf("--file") + 1] ?? "";
+      const config = JSON.parse(await readFile(configPath, "utf8"));
+      expect(config.d1_databases).toEqual([
+        { binding: "DRILL_DB", database_name: name, database_id: id },
+      ]);
+      expect((await stat(configPath)).mode & 0o777).toBe(0o600);
+      expect((await stat(sqlPath)).mode & 0o777).toBe(0o600);
+      const observation = {
+        runtime: "node" as const,
+        exitCode: 0,
+        signal: null,
+        timedOut: false,
+        durationMs: 1,
+        stdoutBytes: 0,
+        stderrBytes: 0,
+      };
+      importCount++;
+      calls.push({
+        method: "IMPORT",
+        path: `/${id}/import`,
+        body: { ordinal: importCount, configPath, sqlPath },
+      });
+      if (options.failImportAt === importCount)
+        throw new DrillCommandError("WRANGLER_COMMAND_FAILED", { ...observation, exitCode: 1 });
+      const source = await readFile(sqlPath, "utf8");
+      if (!options.noImport) sqlite.transaction(() => sqlite.exec(source))();
+      if (options.lostImportResponse)
+        throw new DrillCommandError("WRANGLER_OUTCOME_UNKNOWN", {
+          ...observation,
+          exitCode: null,
+          signal: "SIGTERM",
+        });
+      return observation;
+    }) satisfies typeof runDrillWrangler,
     calls,
     get exists() {
       return exists;
@@ -165,6 +211,8 @@ async function execute(options: Parameters<typeof cloud>[0] = {}, storage = memo
     "synthetic-test-token",
     protectedDatabases,
     fixture.fetcher,
+    undefined,
+    fixture.runWrangler,
   );
   try {
     const report = await runRecoveryDrill(plan, platform, storage, migrations);
@@ -295,7 +343,7 @@ test("a newly configured protected ID cannot be adopted even with an allowed nam
   }
 });
 
-test("identity is checked again before SQL, restore and deletion after a valid creation", async () => {
+test("identity is checked again before SQL, file import, restore and deletion after a valid creation", async () => {
   const fixture = cloud();
   let changed = false;
   const fetcher = (async (url: string | URL | Request, init?: RequestInit) => {
@@ -307,16 +355,28 @@ test("identity is checked again before SQL, restore and deletion after a valid c
     return fixture.fetcher(url, init);
   }) as typeof fetch;
   try {
-    const platform = new IsolatedD1(plan, "synthetic-test-token", protectedDatabases, fetcher);
+    const platform = new IsolatedD1(
+      plan,
+      "synthetic-test-token",
+      protectedDatabases,
+      fetcher,
+      undefined,
+      fixture.runWrangler,
+    );
     await platform.create();
     await platform.captureBookmark();
     changed = true;
     await expect(platform.database().prepare("SELECT 1").run()).rejects.toThrow();
+    await expect(platform.importMigration("0000_test.sql", "SELECT 1;")).rejects.toThrow();
     await expect(platform.restore()).rejects.toThrow();
     await expect(platform.destroy()).rejects.toThrow();
     expect(
       fixture.calls.some(
-        (c) => c.path.endsWith("/query") || c.path.endsWith("/restore") || c.method === "DELETE",
+        (c) =>
+          c.path.endsWith("/query") ||
+          c.path.endsWith("/restore") ||
+          c.method === "DELETE" ||
+          c.method === "IMPORT",
       ),
     ).toBe(false);
   } finally {
@@ -383,33 +443,89 @@ test("SQL errors and unconfirmed cleanup preserve failure and redact upstream di
   }
 });
 
-test("schema failure receipts identify the confirmed prefix and attempted batch without SQL or automatic retry", async () => {
+test("file import failure identifies the last migration without replaying partial or unknown mutations", async () => {
+  const failed = await execute({ failImportAt: 10 });
+  expect(failed.report).toMatchObject({
+    status: "failure",
+    stage: "schema-install",
+    errorCode: "WRANGLER_COMMAND_FAILED",
+    cleanup: "confirmed-absent",
+    schemaProgress: {
+      phase: "migration-import",
+      migrationOrdinal: 10,
+      migrationCount: 10,
+      statementOffset: 0,
+      statementCount: 17,
+      confirmedStatements: 322,
+      confirmedMigrations: 9,
+    },
+    lastImport: { runtime: "node", exitCode: 1, signal: null },
+  });
+  expect(failed.calls.filter((call) => call.method === "IMPORT")).toHaveLength(10);
+  const lost = await execute({ lostImportResponse: true });
+  expect(lost.report).toMatchObject({
+    status: "failure",
+    errorCode: "WRANGLER_OUTCOME_UNKNOWN",
+    cleanup: "confirmed-absent",
+    schemaProgress: { phase: "migration-import", confirmedMigrations: 0 },
+    lastImport: { runtime: "node", exitCode: null, signal: "SIGTERM" },
+  });
+  expect(lost.calls.filter((call) => call.method === "IMPORT")).toHaveLength(1);
+  for (const result of [failed, lost]) {
+    expect(result.calls.some((call) => call.path.endsWith("/restore"))).toBe(false);
+    for (const call of result.calls.filter((call) => call.method === "IMPORT")) {
+      const paths = call.body as { configPath: string; sqlPath: string };
+      expect(await Bun.file(paths.configPath).exists()).toBe(false);
+      expect(await Bun.file(paths.sqlPath).exists()).toBe(false);
+    }
+    expect(JSON.stringify(result.storage.reports)).not.toMatch(
+      /synthetic-test-token|CREATE TABLE|SELECT |migration.sql|wrangler.json/,
+    );
+  }
+});
+
+test("exit0 without an independently observed migration ledger cannot pass schema installation", async () => {
+  const result = await execute({ noImport: true });
+  expect(result.report).toMatchObject({
+    status: "failure",
+    stage: "schema-install",
+    errorCode: "DRILL_MIGRATION_RECEIPT_MISMATCH",
+    cleanup: "confirmed-absent",
+    lastImport: { exitCode: 0 },
+    schemaProgress: { phase: "record-migration", confirmedMigrations: 0 },
+  });
+  expect(result.calls.filter((call) => call.method === "IMPORT")).toHaveLength(1);
+  expect(result.calls.some((call) => call.path.endsWith("/restore"))).toBe(false);
+});
+
+test("schema receipts identify the confirmed prefix and rejected ledger response without SQL or retry", async () => {
   for (const invalidQueryResult of [false, true]) {
-    // 0000–0005 and the first 25 statements of 0006 succeeded; the next batch fails.
-    const r = await execute({ failQueryAt: 15, invalidQueryResult });
+    // Six migrations are confirmed; the seventh import's ledger read is rejected.
+    const r = await execute({ failQueryAt: 8, invalidQueryResult });
     expect(r.report.status).toBe("failure");
     expect(r.report.stage).toBe("schema-install");
     expect(r.report.errorCode).toBe(
       invalidQueryResult ? "AI_RUNTIME_D1_INVALID_RESPONSE" : "AI_RUNTIME_D1_UNAVAILABLE",
     );
     expect(r.report.schemaProgress).toEqual({
-      phase: "migration-batch",
+      phase: "record-migration",
       migrationOrdinal: 7,
       migrationCount: 10,
-      statementOffset: 25,
-      statementCount: 25,
-      confirmedStatements: 66,
+      statementOffset: 0,
+      statementCount: 0,
+      confirmedStatements: 41,
       confirmedMigrations: 6,
     });
-    expect(r.calls.filter((c) => c.path.endsWith("/query"))).toHaveLength(15);
+    expect(r.calls.filter((c) => c.path.endsWith("/query"))).toHaveLength(8);
     expect(r.calls.some((c) => c.path.endsWith("/restore"))).toBe(false);
     expect(r.report.cleanup).toBe("confirmed-absent");
     expect(
       r.storage.reports.some(
         (report) =>
           report.status === "running" &&
-          report.schemaProgress?.statementOffset === 25 &&
-          report.schemaProgress?.confirmedStatements === 66,
+          report.schemaProgress?.phase === "migration-import" &&
+          report.schemaProgress?.migrationOrdinal === 7 &&
+          report.schemaProgress?.confirmedStatements === 41,
       ),
     ).toBe(true);
     expect(JSON.stringify(r.storage.reports)).not.toMatch(
@@ -421,8 +537,8 @@ test("schema failure receipts identify the confirmed prefix and attempted batch 
 test("initial schema, fixture seeding and baseline observation failures have separate stages", async () => {
   for (const [failQueryAt, stage] of [
     [1, "schema-install"],
-    [33, "fixture-seed"],
-    [37, "fixture-observe"],
+    [13, "fixture-seed"],
+    [17, "fixture-observe"],
   ] as const) {
     const r = await execute({ failQueryAt });
     expect(r.report.stage).toBe(stage);
@@ -446,6 +562,8 @@ test("evidence disk failure after creation cannot skip the independent cleanup a
       "synthetic-test-token",
       protectedDatabases,
       fixture.fetcher,
+      undefined,
+      fixture.runWrangler,
     );
     await expect(runRecoveryDrill(plan, platform, storage, migrations)).rejects.toThrow();
     expect(fixture.exists).toBe(false);
@@ -495,6 +613,7 @@ test("the overall work deadline stops new SQL while preserving a separate cleanu
       protectedDatabases,
       fetcher,
       () => clock,
+      fixture.runWrangler,
     );
     const report = await runRecoveryDrill(plan, platform, memoryStore(), migrations);
     expect(report.status).toBe("failure");
@@ -523,6 +642,7 @@ test("cleanup has its own deadline and cannot claim absence after exhausting it"
       protectedDatabases,
       fetcher,
       () => clock,
+      fixture.runWrangler,
     );
     const report = await runRecoveryDrill(plan, platform, memoryStore(), migrations);
     expect(report.status).toBe("failure");
