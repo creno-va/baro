@@ -88,7 +88,9 @@ function wireSchema(schema: unknown): unknown {
 /** Private provider input shared by dispatch and the trusted paid-execution planner. */
 export function prepareGatewayWireInput(phase: Phase, input: unknown, correction = false) {
   const envelope = z.strictObject({ output: schemas[phase] });
-  const jsonSchema = wireSchema(z.toJSONSchema(envelope, { io: "input", unrepresentable: "any" }));
+  // Strict provider output must include defaulted fields too; input schemas mark
+  // them optional, which the provider rejects before generating a response.
+  const jsonSchema = wireSchema(z.toJSONSchema(envelope, { io: "output", unrepresentable: "any" }));
   return {
     messages: [
       {

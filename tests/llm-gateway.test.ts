@@ -1,11 +1,12 @@
 import { expect, test } from "bun:test";
-import { MODEL_ID } from "../src/server/modules/llm-gateway/prompts";
+import { MODEL_ID, prompts } from "../src/server/modules/llm-gateway/prompts";
 import {
   createLlmGateway,
   ModelError,
   type ModelMetric,
   prepareGatewayWireInput,
 } from "../src/server/modules/llm-gateway/service";
+import { workspaceChatOutputSchema } from "../src/server/modules/llm-gateway/v2/schemas";
 import { assembleVerifiedResult } from "../src/server/modules/response/validate";
 import { guidance, syntheticCitation } from "./fixtures/contracts";
 
@@ -14,6 +15,67 @@ const completion = (output: unknown) => ({
   choices: [{ message: { content: JSON.stringify({ output }) }, finish_reason: "stop" }],
   usage: { prompt_tokens: 10, completion_tokens: 20 },
 });
+for (const phase of Object.keys(prompts) as (keyof typeof prompts)[]) {
+  test(`${phase} wire schema requires every object property, including defaulted fields`, () => {
+    // The provider rejects strict schemas with omitted required properties before
+    // model execution, even when our server parser can supply their defaults.
+    const schema = prepareGatewayWireInput(phase, {}).response_format.json_schema.schema;
+    const violations: string[] = [];
+    const visit = (value: unknown, path: string) => {
+      if (!value || typeof value !== "object") return;
+      if (Array.isArray(value)) {
+        value.forEach((item, index) => {
+          visit(item, `${path}[${index}]`);
+        });
+        return;
+      }
+      const node = value as Record<string, unknown>;
+      if (node.type === "object" && node.properties) {
+        const required = Array.isArray(node.required) ? node.required : [];
+        for (const key of Object.keys(node.properties))
+          if (!required.includes(key)) violations.push(`${path}.${key} is not required`);
+        if (node.additionalProperties !== false) violations.push(`${path} is not closed`);
+      }
+      for (const [key, child] of Object.entries(node)) visit(child, `${path}.${key}`);
+    };
+    visit(schema, "schema");
+    expect(violations).toEqual([]);
+  });
+}
+
+test("explicit provider defaults remain compatible with server parsing and legacy defaults", () => {
+  const output = {
+    text: "거래 기록에서 날짜와 금액을 확인해 주세요.",
+    references: [],
+    warnings: [],
+    facts: [],
+    actions: [],
+    parties: [],
+    requestedSources: [
+      { kind: "statute", lawTitle: "민법", articles: [{ number: "750", branch: "0" }] },
+    ],
+    sourceClaims: [],
+    timeline: [],
+  };
+  expect(workspaceChatOutputSchema.parse(output)).toEqual(output);
+  const { sourceClaims: _, ...legacy } = output;
+  expect(
+    workspaceChatOutputSchema.parse({
+      ...legacy,
+      requestedSources: [{ kind: "statute", lawTitle: "민법", articles: [{ number: "750" }] }],
+    }),
+  ).toEqual(output);
+  expect(workspaceChatOutputSchema.safeParse({ ...output, unverified: true }).success).toBe(false);
+  expect(
+    workspaceChatOutputSchema.safeParse({
+      ...output,
+      requestedSources: [
+        { kind: "statute", lawTitle: "민법", articles: [{ number: "750", branch: "100" }] },
+      ],
+    }).success,
+  ).toBe(false);
+});
+
 test("question transport uses provider-supported nested unions and retains both discriminators", () => {
   const format = JSON.stringify(prepareGatewayWireInput("workspace_questions", {}).response_format);
   expect(format).not.toContain('"oneOf"');
