@@ -213,7 +213,11 @@ export function createV2WorkspaceRepository(
 ) {
   const core = createV2Core(binding, cipher);
   const accounting = createV2AccountingRepository(core);
-  const findWorkspace = async (actor: Actor, id: string): Promise<V2Workspace | null> => {
+  const findWorkspace = async (
+    actor: Actor,
+    id: string,
+    recovery = 0,
+  ): Promise<V2Workspace | null> => {
     actor = parse(actorSchema, { ownerId: actor.ownerId, now: actor.now });
     parse(opaqueIdSchema, id);
     const row = await core
@@ -261,14 +265,20 @@ export function createV2WorkspaceRepository(
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     });
-    return (await core
+    const current = await core
       .statement(
-        `SELECT w.id FROM v2_workspaces w WHERE w.id=? AND w.owner_id=? AND w.revision=? AND ${aliveWorkspace}`,
-        [id, actor.ownerId, row.revision],
+        `SELECT w.revision FROM v2_workspaces w WHERE w.id=? AND w.owner_id=? AND ${aliveWorkspace}`,
+        [id, actor.ownerId],
       )
-      .first())
-      ? value
-      : null;
+      .first<{ revision: number }>();
+    if (!current) return null;
+    if (current.revision !== row.revision) {
+      // A job can finish while the envelope is decrypted. That invalidates this
+      // snapshot, not the owner's access; never return stale data or a false 404.
+      if (recovery < 2) return findWorkspace(actor, id, recovery + 1);
+      throw new V2RepositoryError("DB_OPERATION_FAILED");
+    }
+    return value;
   };
   const readIntake = async (actor: Actor, id: string): Promise<V2Intake | null> => {
     const currentWorkspace = await findWorkspace(actor, id);
