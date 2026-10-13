@@ -17,6 +17,7 @@ export function useCustomerAccess(
   const mounted = useRef(false);
   const request = useRef(0);
   const sessionLookup = useRef<Promise<SessionView> | null>(null);
+  const latestCheck = useRef<Promise<SessionView | null> | null>(null);
   const allowed = useRef(false);
   const [canMutate, setCanMutate] = useState(false);
   const [ready, setReady] = useState(false);
@@ -24,13 +25,20 @@ export function useCustomerAccess(
   const ticket = useCallback(() => epoch.current, []);
   const alive = useCallback((value: number) => mounted.current && epoch.current === value, []);
   const current = useCallback((value: number) => alive(value) && allowed.current, [alive]);
-  const deny = useCallback(() => {
+  const revoke = useCallback(() => {
     ++epoch.current;
     allowed.current = false;
     setReady(false);
     setCanMutate(false);
     callbacks.current.purge();
   }, []);
+  const deny = useCallback(() => {
+    // A pending response from before explicit sign-out cannot grant access again.
+    ++request.current;
+    latestCheck.current = null;
+    sessionLookup.current = null;
+    revoke();
+  }, [revoke]);
   const verify = useCallback(
     async (hide = false, write = !readAccess) => {
       const serial = ++request.current;
@@ -39,63 +47,90 @@ export function useCustomerAccess(
         allowed.current = false;
         setReady(false);
       }
-      let session: SessionView;
-      const lookup = api.session.get();
-      sessionLookup.current = lookup;
-      try {
-        session = await lookup;
-      } catch (cause) {
-        if (serial !== request.current || !mounted.current) return false;
-        if ((cause as { code?: string })?.code === "UNAUTHENTICATED")
-          session = { user: null, needsConsent: false };
-        else {
-          // Keep the draft privately while an external session change is unknown.
-          // A normal mutation preflight outage may keep the verified owner's UI.
-          allowed.current = !hide && wasAllowed;
-          setReady(allowed.current);
-          throw cause;
+      const check = async (): Promise<SessionView | null> => {
+        let session: SessionView;
+        const lookup = api.session.get();
+        sessionLookup.current = lookup;
+        try {
+          session = await lookup;
+        } catch (cause) {
+          if (serial !== request.current || !mounted.current) return null;
+          if ((cause as { code?: string })?.code === "UNAUTHENTICATED")
+            session = { user: null, needsConsent: false };
+          else {
+            // Only the newest check may restore the owner's UI after an outage.
+            allowed.current = !hide && wasAllowed;
+            setReady(allowed.current);
+            throw cause;
+          }
+        } finally {
+          if (sessionLookup.current === lookup) sessionLookup.current = null;
         }
-      } finally {
-        if (sessionLookup.current === lookup) sessionLookup.current = null;
+        if (serial !== request.current || !mounted.current) return null;
+        const next = JSON.stringify([
+          session.user?.id,
+          session.user?.accountType,
+          readAccess ? null : session.needsConsent,
+        ]);
+        if (identity.current !== undefined && identity.current !== next) {
+          revoke();
+          if (!hide) setVersion((value) => value + 1);
+        }
+        identity.current = next;
+        if (
+          !session.user ||
+          (session.needsConsent && !readAccess) ||
+          session.user.accountType !== "customer"
+        ) {
+          revoke();
+          const error = new ApiError(
+            !session.user
+              ? "UNAUTHENTICATED"
+              : session.needsConsent
+                ? "CONSENT_REQUIRED"
+                : "NOT_FOUND",
+            "고객 계정으로 로그인하고 사건을 다시 열어 주세요.",
+          );
+          callbacks.current.report(error);
+          throw error;
+        }
+        setCanMutate(!session.needsConsent);
+        allowed.current = true;
+        setReady(true);
+        return session;
+      };
+      let pending: Promise<SessionView | null> | null = check();
+      latestCheck.current = pending;
+      // Focus/visibility may supersede this preflight. Follow the newest check,
+      // including one that has already settled, rather than silently cancelling.
+      while (pending) {
+        let session: SessionView | null;
+        try {
+          session = await pending;
+        } catch (cause) {
+          if (pending === latestCheck.current) throw cause;
+          pending = latestCheck.current;
+          continue;
+        }
+        if (pending !== latestCheck.current) {
+          pending = latestCheck.current;
+          continue;
+        }
+        if (!session || !mounted.current || !allowed.current) return false;
+        // A read-only focus check cannot satisfy a write's consent requirement.
+        if (session.needsConsent && write) {
+          const error = new ApiError(
+            "CONSENT_REQUIRED",
+            "고객 계정으로 로그인하고 사건을 다시 열어 주세요.",
+          );
+          callbacks.current.report(error);
+          throw error;
+        }
+        return true;
       }
-      if (serial !== request.current || !mounted.current) return false;
-      const next = JSON.stringify([
-        session.user?.id,
-        session.user?.accountType,
-        readAccess ? null : session.needsConsent,
-      ]);
-      if (identity.current !== undefined && identity.current !== next) {
-        deny();
-        if (!hide) setVersion((value) => value + 1);
-      }
-      identity.current = next;
-      if (
-        !session.user ||
-        (session.needsConsent && write) ||
-        session.user.accountType !== "customer"
-      ) {
-        if (readAccess && session.user?.accountType === "customer" && session.needsConsent) {
-          allowed.current = true;
-          setReady(true);
-          setCanMutate(false);
-        } else deny();
-        const error = new ApiError(
-          !session.user
-            ? "UNAUTHENTICATED"
-            : session.needsConsent
-              ? "CONSENT_REQUIRED"
-              : "NOT_FOUND",
-          "고객 계정으로 로그인하고 사건을 다시 열어 주세요.",
-        );
-        callbacks.current.report(error);
-        throw error;
-      }
-      setCanMutate(!session.needsConsent);
-      allowed.current = true;
-      setReady(true);
-      return true;
+      return false;
     },
-    [deny, readAccess],
+    [revoke, readAccess],
   );
   useEffect(() => {
     mounted.current = true;
@@ -145,6 +180,8 @@ export function useCustomerAccess(
       mounted.current = false;
       ++request.current;
       ++epoch.current;
+      latestCheck.current = null;
+      sessionLookup.current = null;
       clearInterval(timer);
       window.removeEventListener("focus", refresh);
       window.removeEventListener("pageshow", refresh);

@@ -11,6 +11,184 @@ test.skip(
 const key = "baro-c-contract-test-state";
 const base = "/cases/synthetic-case";
 
+test("chat retry survives overlapping focus, pageshow and visibility checks", async ({ page }) => {
+  await page.goto(base);
+  await expect(page.getByRole("heading", { name: "이제, 하나씩 풀어가요." })).toBeVisible();
+  await page.evaluate((key) => {
+    const saved = JSON.parse(localStorage.getItem(key) ?? "{}");
+    saved.faults = { "workspace.sendMessage": ["chat_failed"] };
+    localStorage.setItem(key, JSON.stringify(saved));
+  }, key);
+  await page.getByLabel("추가 사실 또는 질문").fill("동시 세션 확인 중 재시도할 합성 질문입니다.");
+  await page.getByRole("button", { name: "보내기", exact: true }).click();
+  await expect(page.getByRole("button", { name: "응답 다시 시도" })).toBeVisible();
+  await page.evaluate(async () => {
+    const path = "/tests/helpers/workspace-client-fixture.ts";
+    const { api } = (await import(path)) as typeof import("../helpers/workspace-client-fixture");
+    const original = api.session.get;
+    const owner = await original();
+    const state = window as unknown as {
+      chatSessionChecks: number;
+      chatRetryCalls: number;
+      finishChatPreflight: () => void;
+    };
+    state.chatSessionChecks = 0;
+    state.chatRetryCalls = 0;
+    api.session.get = () => {
+      if (++state.chatSessionChecks === 1)
+        return new Promise((resolve) => {
+          state.finishChatPreflight = () => resolve(owner);
+        });
+      return original();
+    };
+    const retry = api.workspace.retryMessage;
+    api.workspace.retryMessage = async (...args: Parameters<typeof retry>) => {
+      state.chatRetryCalls++;
+      return retry(...args);
+    };
+  });
+  await page.getByRole("button", { name: "응답 다시 시도" }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(() => (window as unknown as { chatSessionChecks: number }).chatSessionChecks),
+    )
+    .toBe(1);
+  await page.evaluate(() => {
+    window.dispatchEvent(new Event("focus"));
+    window.dispatchEvent(new PageTransitionEvent("pageshow"));
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  await expect
+    .poll(() =>
+      page.evaluate(() => (window as unknown as { chatSessionChecks: number }).chatSessionChecks),
+    )
+    .toBe(4);
+  await page.evaluate(() =>
+    (window as unknown as { finishChatPreflight: () => void }).finishChatPreflight(),
+  );
+  await expect(page.getByText("이 응답은 합성 API 예시", { exact: false })).toBeVisible();
+  expect(
+    await page.evaluate(() => (window as unknown as { chatRetryCalls: number }).chatRetryCalls),
+  ).toBe(1);
+});
+
+for (const order of ["foreground-first", "background-first"] as const)
+  for (const result of [
+    "same-owner",
+    "other-owner",
+    "revoked",
+    "consent",
+    "signout",
+    "unavailable",
+  ] as const)
+    test(`overlapping session checks preserve upload authorization: ${result}, ${order}`, async ({
+      page,
+    }) => {
+      await page.goto(`${base}/files`);
+      await page.getByLabel("선택 자료의 자동 처리에 동의합니다.").check();
+      await page.evaluate(async () => {
+        const path = "/tests/helpers/workspace-client-fixture.ts";
+        const { api } = (await import(
+          path
+        )) as typeof import("../helpers/workspace-client-fixture");
+        const original = api.session.get;
+        const originalSession = await original();
+        const pending: {
+          resolve: (value: Awaited<ReturnType<typeof original>>) => void;
+          reject: (cause: Error) => void;
+        }[] = [];
+        const state = window as unknown as {
+          overlapCalls: number;
+          overlapChecks: () => number;
+          prepareOverlap: (result: string) => void;
+          releaseOverlap: (index: number) => void;
+        };
+        state.overlapCalls = 0;
+        const upload = api.files.upload;
+        api.files.upload = async (...args: Parameters<typeof upload>) => {
+          state.overlapCalls++;
+          return upload(...args);
+        };
+        api.session.get = () => new Promise((resolve, reject) => pending.push({ resolve, reject }));
+        state.overlapChecks = () => pending.length;
+        let result = "same-owner";
+        let latestSession = originalSession;
+        state.prepareOverlap = (next) => {
+          result = next;
+          const key = "baro-c-contract-test-state";
+          const saved = JSON.parse(localStorage.getItem(key) ?? "{}");
+          saved.caseOwners = { "synthetic-case": "synthetic-owner" };
+          saved.session = structuredClone(originalSession);
+          if (next === "other-owner") saved.session.user.id = "other-owner";
+          if (next === "revoked") saved.session.user = null;
+          if (next === "consent") saved.session.needsConsent = true;
+          latestSession = saved.session;
+          localStorage.setItem(key, JSON.stringify(saved));
+          api.session.get = original;
+          if (next === "signout")
+            window.dispatchEvent(
+              new CustomEvent("baro-session-changed", { detail: { reason: "signout" } }),
+            );
+        };
+        state.releaseOverlap = (index) => {
+          const check = pending[index];
+          if (!check) throw new Error("Synthetic pending session check is missing");
+          if (index === 1 && result === "unavailable")
+            check.reject(Object.assign(new Error("합성 세션 확인 장애"), { code: "UNAVAILABLE" }));
+          else check.resolve(index === 0 ? originalSession : latestSession);
+        };
+      });
+      await page.getByLabel("업로드할 파일 선택", { exact: true }).setInputFiles({
+        name: "동시 계정 확인.txt",
+        mimeType: "text/plain",
+        buffer: Buffer.from("동일 고객 사전 확인과 focus가 겹치는 합성 자료"),
+      });
+      await expect
+        .poll(() =>
+          page.evaluate(() =>
+            (window as unknown as { overlapChecks: () => number }).overlapChecks(),
+          ),
+        )
+        .toBe(1);
+      await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+      await expect
+        .poll(() =>
+          page.evaluate(() =>
+            (window as unknown as { overlapChecks: () => number }).overlapChecks(),
+          ),
+        )
+        .toBe(2);
+      await page.evaluate(
+        (result) =>
+          (window as unknown as { prepareOverlap: (result: string) => void }).prepareOverlap(
+            result,
+          ),
+        result,
+      );
+      for (const index of order === "foreground-first" ? [0, 1] : [1, 0])
+        await page.evaluate(
+          (index) =>
+            (window as unknown as { releaseOverlap: (index: number) => void }).releaseOverlap(
+              index,
+            ),
+          index,
+        );
+      if (result === "same-owner") {
+        await expect(page.getByText("결과 확인 가능", { exact: true })).toBeVisible();
+        await expect(page.getByRole("button", { name: "업로드 다시 시도" })).toHaveCount(0);
+      } else if (result === "signout" || result === "revoked" || result === "other-owner") {
+        await expect(page.getByLabel("선택 자료의 자동 처리에 동의합니다.")).toHaveCount(0);
+        await expect(page.getByRole("button", { name: "업로드 다시 시도" })).toHaveCount(0);
+      } else {
+        await expect(page.getByRole("alert")).toBeVisible();
+        if (result === "unavailable")
+          await expect(page.getByRole("alert")).toContainText("합성 세션 확인 장애");
+      }
+      expect(
+        await page.evaluate(() => (window as unknown as { overlapCalls: number }).overlapCalls),
+      ).toBe(result === "same-owner" ? 1 : 0);
+    });
+
 for (const result of ["same-owner", "other-owner", "unavailable"] as const)
   test(`native file selection survives focus verification: ${result}`, async ({ page }) => {
     await page.goto(`${base}/files`);
