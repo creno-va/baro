@@ -30,19 +30,24 @@ export function workItemProgress(
   closed: ReadonlySet<number>,
   implemented: ReadonlySet<number>,
   active: boolean,
+  labels: readonly string[] = [],
 ) {
   const blockedBy = item.dependsOn.filter(
     (id) => !closed.has(id) && (item.kind === "external" || !implemented.has(id)),
   );
   const status = active
     ? "IN_PROGRESS"
-    : implemented.has(item.issue)
-      ? "IMPLEMENTATION_MERGED"
-      : item.kind === "external"
-        ? "EXTERNAL"
-        : blockedBy.length
-          ? "BLOCKED"
-          : "READY";
+    : labels.includes("status:external")
+      ? "EXTERNAL"
+      : labels.includes("status:blocked")
+        ? "BLOCKED"
+        : implemented.has(item.issue)
+          ? "IMPLEMENTATION_MERGED"
+          : item.kind === "external"
+            ? "EXTERNAL"
+            : blockedBy.length
+              ? "BLOCKED"
+              : "READY";
   return { blockedBy, status };
 }
 
@@ -208,7 +213,13 @@ if (import.meta.main) {
       prs.some((pr) =>
         new RegExp(`(?:Refs|Closes|Fixes) #${item.issue}(?!\\d)`, "i").test(pr.body),
       );
-    const { blockedBy, status } = workItemProgress(item, closed, implemented, active);
+    const { blockedBy, status } = workItemProgress(
+      item,
+      closed,
+      implemented,
+      active,
+      issue.labels.map((label) => label.name),
+    );
     const proof = implemented.has(item.issue)
       ? ` [implementation PR #${item.implementationPr} merged]`
       : "";
