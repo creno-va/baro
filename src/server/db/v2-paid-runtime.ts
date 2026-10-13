@@ -229,8 +229,10 @@ export function createV2PaidRuntimeRepository(
         )
           return null;
         if (r.attempt > r.plan.maximumAttempts || r.plan.operationRevision < 1) return null;
-        const p = await proof(r.pricingProofId, "pricing", pricingProofSchema, actor.now);
-        const f = await proof(r.fundingProofId, "funding", fundingProofSchema, actor.now);
+        const [p, f] = await Promise.all([
+          proof(r.pricingProofId, "pricing", pricingProofSchema, actor.now),
+          proof(r.fundingProofId, "funding", fundingProofSchema, actor.now),
+        ]);
         if (
           !p ||
           !f ||
