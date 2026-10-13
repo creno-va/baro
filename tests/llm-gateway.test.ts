@@ -52,7 +52,11 @@ test("explicit provider defaults remain compatible with server parsing and legac
     actions: [],
     parties: [],
     requestedSources: [
-      { kind: "statute", lawTitle: "민법", articles: [{ number: "750", branch: "0" }] },
+      {
+        kind: "statute" as const,
+        lawTitle: "민법" as const,
+        articles: [{ number: "750", branch: "0" }],
+      },
     ],
     sourceClaims: [],
     timeline: [],
