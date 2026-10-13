@@ -36,7 +36,7 @@ jobs:
           bun-version-file: .bun-version
       - name: Install frozen dependencies and verify candidate CI
         env:
-          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           bun ci
           bun scripts/verify-release.ts "$GITHUB_SHA" --ci-only

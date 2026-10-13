@@ -1,5 +1,9 @@
 import { z } from "zod";
-import { createCaseDataCipher, type EncryptionContext } from "../src/server/crypto";
+import {
+  CaseDataCryptoError,
+  createCaseDataCipher,
+  type EncryptionContext,
+} from "../src/server/crypto";
 import { removeWorkflow } from "../src/server/modules/deletion/service";
 import type { AnalysisWorkflowParams } from "../src/workflows/analysis";
 
@@ -88,7 +92,9 @@ async function verifyCipher(env: RuntimeDrillEnv) {
   for (const binding of altered) {
     try {
       await cipher.decrypt(envelope, binding);
-    } catch {
+    } catch (error) {
+      if (!(error instanceof CaseDataCryptoError) || error.code !== "CRYPTO_DECRYPT_FAILED")
+        throw error;
       rejected++;
     }
   }
@@ -185,8 +191,10 @@ export async function handleRuntimeDrill(request: Request, env: RuntimeDrillEnv)
       });
     }
     return reply({ error: "NOT_FOUND" }, 404);
-  } catch {
+  } catch (error) {
     // Never serialize platform errors, keys, ciphertext, headers or bindings.
+    if (error instanceof CaseDataCryptoError && error.code === "CRYPTO_DECRYPT_FAILED")
+      return reply({ error: "CRYPTO_DECRYPT_FAILED" }, 502);
     return reply({ error: "DRILL_STEP_FAILED" }, 502);
   }
 }

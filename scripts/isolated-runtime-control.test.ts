@@ -109,7 +109,9 @@ test("wrong recovery key and platform deletion failures never emit successful ev
   await f.call("seed");
   const saved = f.env.CASE_DATA_KEY_V1;
   f.env.CASE_DATA_KEY_V1 = Buffer.from("z".repeat(32)).toString("base64url");
-  expect((await f.call("recover")).status).toBe(502);
+  const wrongKey = await f.call("recover");
+  expect(wrongKey.status).toBe(502);
+  expect((await wrongKey.json()) as unknown).toEqual({ error: "CRYPTO_DECRYPT_FAILED" });
   f.env.CASE_DATA_KEY_V1 = saved;
   expect(await (await f.call("recover")).json()).toMatchObject({ recovered: true });
   f.failDeletion();
@@ -118,6 +120,17 @@ test("wrong recovery key and platform deletion failures never emit successful ev
   expect((await failed.json()) as unknown).toEqual({ error: "DRILL_STEP_FAILED" });
   expect(f.instances.size).toBe(2);
   expect(f.objects.has("private/drill-target")).toBe(true);
+});
+
+test("an R2 transport failure is not evidence of wrong-key rejection", async () => {
+  const f = fixture();
+  await f.call("seed");
+  f.env.DRILL_BUCKET.get = async () => {
+    throw new Error("sensitive R2 diagnostic");
+  };
+  const response = await f.call("recover");
+  expect(response.status).toBe(502);
+  expect((await response.json()) as unknown).toEqual({ error: "DRILL_STEP_FAILED" });
 });
 
 test("the work deadline closes new calls while preserving a bounded cleanup window", () => {

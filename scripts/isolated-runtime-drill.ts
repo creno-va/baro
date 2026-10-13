@@ -120,6 +120,8 @@ async function run() {
     return parsed.data.result;
   }
   async function wrangler(args: string[]) {
+    // Wrangler 4.147 may retry an identical Worker PUT up to three times internally.
+    // Bound the entire subprocess; never repeat a failed/unknown command in this runner.
     const timeout = drillRequestBudget(deadline, cleaning, Date.now(), 90_000);
     await mutationCheckpoint(`wrangler_${args[0]}`, "pending");
     const result = Bun.spawn([process.execPath, "node_modules/wrangler/bin/wrangler.js", ...args], {
@@ -295,8 +297,9 @@ async function run() {
     await waitForPhase("key-lost");
     requireCheck(
       "wrong_key_rejected",
-      z.object({ error: z.literal("DRILL_STEP_FAILED") }).safeParse(await control("recover", 502))
-        .success,
+      z
+        .object({ error: z.literal("CRYPTO_DECRYPT_FAILED") })
+        .safeParse(await control("recover", 502)).success,
     );
     const saved: unknown = await Bun.file(recoveryFile).json();
     await privateFile(secretFile, saved);

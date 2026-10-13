@@ -23,8 +23,13 @@ production 키 보관 책임자나 실제 on-call 수신/ACK를 대신하지 않
 control endpoint는 임의 ID·SQL·입력을 받지 않으며 일회성 고엔트로피 secret과 40분 유효기간을
 사용한다. 합성 암호문·키·Wrangler raw 로그는 artifact에 넣지 않는다. run별 자원 이름과
 candidate SHA·단계 결과·정리 결과만 보존한다. 생성 응답이 성공한 자원만 자동 정리하며,
-생성/배포 결과가 불명확하면 동일 요청을 반복하지 않고 해당 run의 이름으로 잔존 여부를
-확인한 뒤 별도로 정리한다. 실패 시 일반 preview/production으로 대상을 바꾸지 않는다.
+직접 API/control 변경 요청과 Wrangler 명령은 runner에서 재실행하지 않는다. Wrangler 4.147
+내부의 동일 Worker PUT 업로드 재시도는 최대 3회 가능하며 전체 하위 프로세스를 90초로
+제한한다. 같은 run의 동일 이름/코드/설정에만 적용되고, 새 이름으로 다시 만들지 않는다.
+명령 결과가 불명확하면 해당 run의 이름으로 잔존 여부를 확인한 뒤 별도로 정리한다.
+실패 시 일반 preview/production으로 대상을 바꾸지 않는다. 작업 전체는 12분이며 정리
+호출에는 별도의 요청별 상한을 적용한다. 잘못된 키 검증은 명시적인 암호 복호화 실패만
+인정하며 R2/API 통신 실패를 키 거부 성공으로 기록하지 않는다.
 
 상태: #19의 독립 계약/runbook 준비. #27 미완료로 제품 관측성·full-product smoke·trusted receipt resolver 통합은 시작하지 않았다. 실제 platform drill 성공 run URL은 없다.
 
