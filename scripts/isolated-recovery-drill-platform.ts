@@ -3,6 +3,8 @@ import { isolatedDrillResourceSchema } from "./deletion-journal";
 import { remoteBudgetD1 } from "./remote-budget-d1";
 
 export const DRILL_ACCOUNT = "9e844969d0c44b2449f3951d1f301654";
+export const DRILL_WORK_MS = 6 * 60_000;
+export const DRILL_CLEANUP_MS = 90_000;
 export const drillPlanSchema = z.strictObject({
   candidateSha: z.string().regex(/^[a-f0-9]{40}$/),
   runId: z.string().regex(/^[1-9][0-9]{0,19}$/),
@@ -53,6 +55,9 @@ export class IsolatedD1 {
   readonly #token: string;
   readonly #fetch: typeof fetch;
   readonly #protected: ProtectedDatabases;
+  readonly #clock: () => number;
+  readonly #workDeadline: number;
+  #cleanupDeadline: number | undefined;
   #created: DrillResource | undefined;
   #createAttempted = false;
   #restoreAttempted = false;
@@ -63,12 +68,15 @@ export class IsolatedD1 {
     token: string,
     protectedDatabases: ProtectedDatabases,
     fetcher = fetch,
+    clock = () => performance.now(),
   ) {
     drillPlanSchema.parse(plan);
     if (!token) throw new Error("DRILL_TOKEN_MISSING");
     this.name = `baro-drill-d1-${plan.runId}`;
     this.#token = token;
     this.#fetch = fetcher;
+    this.#clock = clock;
+    this.#workDeadline = clock() + DRILL_WORK_MS;
     this.#protected = {
       ids: new Set(protectedDatabases.ids),
       names: new Set(protectedDatabases.names),
@@ -82,13 +90,20 @@ export class IsolatedD1 {
   get creationAttempted() {
     return this.#createAttempted;
   }
-  async #request(path: string, method = "GET", body?: unknown) {
+  #signal(cleanup = false) {
+    const remaining = (cleanup ? (this.#cleanupDeadline ?? 0) : this.#workDeadline) - this.#clock();
+    if (remaining < 1)
+      throw new Error(cleanup ? "DRILL_CLEANUP_DEADLINE_EXCEEDED" : "DRILL_WORK_DEADLINE_EXCEEDED");
+    return AbortSignal.timeout(Math.min(30_000, Math.floor(remaining)));
+  }
+  async #request(path: string, method = "GET", body?: unknown, cleanup = false) {
+    const signal = this.#signal(cleanup);
     let response: Response;
     try {
       response = await this.#fetch(`${this.#base}${path}`, {
         method,
         redirect: "error",
-        signal: AbortSignal.timeout(30_000),
+        signal,
         headers: { Authorization: `Bearer ${this.#token}`, "Content-Type": "application/json" },
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       });
@@ -138,9 +153,11 @@ export class IsolatedD1 {
     await this.assertIdentity();
     return { ...this.#created };
   }
-  async assertIdentity() {
+  async assertIdentity(cleanup = false) {
     if (!this.#created || this.#deleteAttempted) throw new Error("DRILL_RESOURCE_NOT_AVAILABLE");
-    const actual = this.#safeMetadata(await this.#request(`/${this.#created.databaseId}`));
+    const actual = this.#safeMetadata(
+      await this.#request(`/${this.#created.databaseId}`, "GET", undefined, cleanup),
+    );
     if (actual.databaseId !== this.#created.databaseId)
       throw new Error("DRILL_RESOURCE_IDENTITY_CHANGED");
   }
@@ -152,7 +169,7 @@ export class IsolatedD1 {
         throw new Error("DRILL_QUERY_SCOPE_INVALID");
       await this.assertIdentity();
       // The reused D1 adapter decodes only successful per-statement receipts and never logs SQL.
-      return this.#fetch(url, { ...init, redirect: "error" });
+      return this.#fetch(url, { ...init, redirect: "error", signal: this.#signal() });
     }) as typeof fetch;
     return remoteBudgetD1(this.#token, DRILL_ACCOUNT, id, guardedFetch);
   }
@@ -180,13 +197,15 @@ export class IsolatedD1 {
     if (result.bookmark !== this.#bookmark) throw new Error("DRILL_RESTORE_BOOKMARK_MISMATCH");
   }
   async destroy() {
-    await this.assertIdentity();
+    // Reserve a separate bounded cleanup window; work cannot consume it.
+    this.#cleanupDeadline ??= this.#clock() + DRILL_CLEANUP_MS;
+    await this.assertIdentity(true);
     this.#deleteAttempted = true;
-    await this.#request(`/${this.#created?.databaseId}`, "DELETE");
+    await this.#request(`/${this.#created?.databaseId}`, "DELETE", undefined, true);
     // A 404/transport failure alone cannot establish absence; a successful name search must be empty.
     const remaining = z
       .array(z.unknown())
-      .parse(await this.#request(`?name=${this.name}&per_page=100`));
+      .parse(await this.#request(`?name=${this.name}&per_page=100`, "GET", undefined, true));
     if (remaining.length) throw new Error("DRILL_CLEANUP_UNCONFIRMED");
   }
 }

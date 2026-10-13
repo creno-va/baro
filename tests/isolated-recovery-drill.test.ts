@@ -13,6 +13,8 @@ import { loadDrillMigrations } from "../scripts/isolated-recovery-drill-fixture"
 import {
   configuredDatabases,
   DRILL_ACCOUNT,
+  DRILL_CLEANUP_MS,
+  DRILL_WORK_MS,
   type DrillPlan,
   drillPlanSchema,
   IsolatedD1,
@@ -422,6 +424,89 @@ test("journal files live outside D1 with mode600, cannot be overwritten, and are
   }
 });
 
+test("the overall work deadline stops new SQL while preserving a separate cleanup window", async () => {
+  const fixture = cloud();
+  let clock = 0;
+  const fetcher = (async (url: string | URL | Request, init?: RequestInit) => {
+    const response = await fixture.fetcher(url, init);
+    if (String(url).endsWith("/query")) clock = DRILL_WORK_MS;
+    return response;
+  }) as typeof fetch;
+  try {
+    const platform = new IsolatedD1(
+      plan,
+      "synthetic-test-token",
+      protectedDatabases,
+      fetcher,
+      () => clock,
+    );
+    const report = await runRecoveryDrill(plan, platform, memoryStore(), migrations);
+    expect(report.status).toBe("failure");
+    expect(report.errorCode).toBe("DRILL_WORK_DEADLINE_EXCEEDED");
+    expect(report.cleanup).toBe("confirmed-absent");
+    expect(fixture.calls.filter((c) => c.path.endsWith("/query"))).toHaveLength(1);
+    expect(fixture.calls.filter((c) => c.method === "DELETE")).toHaveLength(1);
+  } finally {
+    fixture.close();
+  }
+});
+
+test("cleanup has its own deadline and cannot claim absence after exhausting it", async () => {
+  const fixture = cloud();
+  let clock = 0;
+  const fetcher = (async (url: string | URL | Request, init?: RequestInit) => {
+    const response = await fixture.fetcher(url, init);
+    if (String(url).endsWith("/query")) clock = DRILL_WORK_MS;
+    else if (clock >= DRILL_WORK_MS) clock += DRILL_CLEANUP_MS;
+    return response;
+  }) as typeof fetch;
+  try {
+    const platform = new IsolatedD1(
+      plan,
+      "synthetic-test-token",
+      protectedDatabases,
+      fetcher,
+      () => clock,
+    );
+    const report = await runRecoveryDrill(plan, platform, memoryStore(), migrations);
+    expect(report.status).toBe("failure");
+    expect(report.cleanup).toBe("unconfirmed");
+    expect(fixture.exists).toBe(true);
+    expect(fixture.calls.some((c) => c.method === "DELETE")).toBe(false);
+  } finally {
+    fixture.close();
+  }
+});
+
+test("an in-flight request uses the remaining overall time instead of another full30seconds", async () => {
+  let clock = 0,
+    aborted = false;
+  const fetcher = (async (_url: string | URL | Request, init?: RequestInit) =>
+    new Promise<Response>((_resolve, reject) => {
+      const fallback = setTimeout(() => reject(new Error("unbounded request")), 500);
+      init?.signal?.addEventListener(
+        "abort",
+        () => {
+          aborted = true;
+          clearTimeout(fallback);
+          reject(new Error("synthetic abort"));
+        },
+        { once: true },
+      );
+    })) as typeof fetch;
+  const platform = new IsolatedD1(
+    plan,
+    "synthetic-test-token",
+    protectedDatabases,
+    fetcher,
+    () => clock,
+  );
+  clock = DRILL_WORK_MS - 10;
+  await expect(platform.create()).rejects.toThrow("DRILL_API_OUTCOME_UNKNOWN");
+  expect(aborted).toBe(true);
+  expect(platform.creationAttempted).toBe(false);
+});
+
 test("drill workflow is manual/main-only, uses existing preview secrets without deployments, and uploads no journal", async () => {
   const workflow = Bun.YAML.parse(
     await Bun.file(".github/workflows/isolated-recovery-drill.yml").text(),
@@ -432,6 +517,7 @@ test("drill workflow is manual/main-only, uses existing preview secrets without 
     jobs: {
       drill: {
         if: string;
+        "timeout-minutes": number;
         environment: unknown;
         steps: {
           uses?: string;
@@ -439,6 +525,7 @@ test("drill workflow is manual/main-only, uses existing preview secrets without 
           env?: Record<string, string>;
           with?: Record<string, unknown>;
           if?: string;
+          "timeout-minutes": number;
         }[];
       };
     };
@@ -459,6 +546,12 @@ test("drill workflow is manual/main-only, uses existing preview secrets without 
     // biome-ignore lint/suspicious/noTemplateCurlyInString: literal GitHub Actions expression
     DRILL_CONFIRMATION: "${{ inputs.confirmation }}",
   });
+  expect(DRILL_WORK_MS + DRILL_CLEANUP_MS).toBeLessThan(
+    (runner?.["timeout-minutes"] ?? 0) * 60_000,
+  );
+  expect(
+    workflow.jobs.drill.steps.reduce((sum, step) => sum + step["timeout-minutes"], 0),
+  ).toBeLessThan(workflow.jobs.drill["timeout-minutes"]);
   const upload = workflow.jobs.drill.steps.find((s) =>
     s.uses?.startsWith("actions/upload-artifact@"),
   );

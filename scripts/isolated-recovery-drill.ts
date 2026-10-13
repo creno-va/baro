@@ -186,6 +186,7 @@ export async function runRecoveryDrill(
       "DRILL_OWNER_STATE_MISMATCH",
       "DRILL_FOREIGN_KEY_VIOLATIONS",
       "DRILL_ACCOUNT_DELETE_REJECTED",
+      "DRILL_WORK_DEADLINE_EXCEEDED",
     ];
     report.errorCode =
       error instanceof Error && known.includes(error.message)
