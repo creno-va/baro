@@ -1,0 +1,56 @@
+name: Isolated runtime recovery drill
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: Type isolated-synthetic-only to create and remove dedicated test resources
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: baro-isolated-runtime-drill
+  cancel-in-progress: false
+
+jobs:
+  drill:
+    if: github.ref == 'refs/heads/main' && inputs.confirmation == 'isolated-synthetic-only'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: preview
+      deployment: false
+    steps:
+      - name: Checkout exact main candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: .bun-version
+      - name: Install frozen dependencies and verify candidate CI
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          bun ci
+          bun scripts/verify-release.ts "$GITHUB_SHA" --ci-only
+      - name: Run bounded synthetic platform drill
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: 9e844969d0c44b2449f3951d1f301654
+          DRILL_CONFIRMATION: ${{ inputs.confirmation }}
+        run: bun scripts/isolated-runtime-drill.ts
+      - name: Save allowlisted observation only
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: isolated-runtime-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .wrangler/isolated-runtime/receipt.json
+          if-no-files-found: error
+          retention-days: 7

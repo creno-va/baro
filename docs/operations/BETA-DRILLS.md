@@ -1,5 +1,31 @@
 # P0.3 격리 복구·rollback·경보 절차
 
+## 2026-10-13 실행 승인과 제한된 platform drill
+
+사용자가 기존 예산 내 새 합성 전용 격리 환경 구성·복구 훈련을 허용했다.
+[승인 범위와 소유권 기록](https://github.com/creno-va/baro/issues/19#issuecomment-6143268547)을
+따른다. 실제 로그인은 Safari의 Kakao 계정 하나를 작업자가 순차 사용하며, 격리 DB 내부의
+합성 owner fixture와 실제 OAuth 계정을 구분한다. 기존 실제 데이터와 계정 전체를 삭제하지 않는다.
+
+`Isolated runtime recovery drill`은 검증된 main에서 명령으로만 요청하는 수동 workflow다.
+`confirmation=isolated-synthetic-only`를 요구하며 실행 ID/attempt별 새 Worker·Workflow·private
+R2만 생성한다. 기존 자원은 drill 이름이어도 재사용하지 않는다. 일반 preview/production의
+DB·R2·키·OAuth·AI binding은 넣지 않고, preview Environment의 기존 Cloudflare 운영 토큰은
+새 테스트 자원 생성·정리에만 사용한다. 실제 토큰 권한 부족은 실패로 기록한다.
+
+이 workflow가 확인하는 것은 실제 completed/active/late 합성 Workflow에 대한 제품
+`removeWorkflow` 삭제, R2 target 삭제/다른 합성 객체 보존, 제품 암호화의 AAD 거부,
+runner의 접근 제한 키 보관본을 이용한 합성 키 복구와 같은 코드의 설정 rollback이다.
+이전 제품 release/schema 호환, D1 Time Travel, v2 전체 journal/Container cleanup,
+production 키 보관 책임자나 실제 on-call 수신/ACK를 대신하지 않는다. 각 검증의 통과는
+실행 결과를 엄격하게 확인한 경우만 기록하고 timeout·부분 실패는 성공으로 바꾸지 않는다.
+
+control endpoint는 임의 ID·SQL·입력을 받지 않으며 일회성 고엔트로피 secret과 40분 유효기간을
+사용한다. 합성 암호문·키·Wrangler raw 로그는 artifact에 넣지 않는다. run별 자원 이름과
+candidate SHA·단계 결과·정리 결과만 보존한다. 생성 응답이 성공한 자원만 자동 정리하며,
+생성/배포 결과가 불명확하면 동일 요청을 반복하지 않고 해당 run의 이름으로 잔존 여부를
+확인한 뒤 별도로 정리한다. 실패 시 일반 preview/production으로 대상을 바꾸지 않는다.
+
 상태: #19의 독립 계약/runbook 준비. #27 미완료로 제품 관측성·full-product smoke·trusted receipt resolver 통합은 시작하지 않았다. 실제 platform drill 성공 run URL은 없다.
 
 ## 실행 전 자원 확인
