@@ -32,7 +32,9 @@ const afterQuery = z.strictObject({ after: opaqueIdSchema.optional() });
 const emptyQuery = z.strictObject({});
 async function customerAccess(c: Context<ApiEnvironment>, mutation = false, consent = false) {
   const access = await caseAccess(c, mutation, consent);
-  if (access.response) return access;
+  // caseAccess already checks the customer role. Only consent verification adds
+  // an intervening database read that needs a final role check before a write.
+  if (access.response || !consent) return access;
   if ((await readAccountType(c.env.DB, access.ownerId)) !== "customer")
     return { response: c.json(errorBody(c, "NOT_FOUND", "고객 사건을 찾을 수 없어요."), 404) };
   return access;

@@ -33,6 +33,7 @@ for (const releaseOldBeforeRetry of [false, true]) {
     Object.defineProperty(globalThis, "window", {
       configurable: true,
       value: {
+        matchMedia: () => ({ matches: false }),
         turnstile: {
           render(_element: unknown, options: { callback: (token: string) => void }) {
             queueMicrotask(() => options.callback("synthetic-local-token"));

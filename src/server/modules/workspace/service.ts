@@ -293,14 +293,20 @@ export function createWorkspaceService(core: V2Core, deps: WorkspaceDependencies
     },
     async previews(ownerId: string, items: Awaited<ReturnType<typeof workspace.list>>) {
       const result: { id: string; title: string; hasSummary: boolean }[] = [];
-      for (const item of items) {
-        const metadata = await workspace.metadata(actor(ownerId), item.id);
-        if (metadata)
-          result.push({
-            id: item.id,
-            title: [...metadata.narrative].slice(0, 45).join(""),
-            hasSummary: !!metadata.summary,
-          });
+      for (let start = 0; start < items.length; start += 4) {
+        const page = await Promise.all(
+          items.slice(start, start + 4).map(async (item) => {
+            const metadata = await workspace.metadata(actor(ownerId), item.id);
+            return metadata
+              ? {
+                  id: item.id,
+                  title: [...metadata.narrative].slice(0, 45).join(""),
+                  hasSummary: !!metadata.summary,
+                }
+              : null;
+          }),
+        );
+        for (const preview of page) if (preview) result.push(preview);
       }
       return result;
     },

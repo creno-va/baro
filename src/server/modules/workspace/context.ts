@@ -37,7 +37,11 @@ export async function readWorkspaceContext(
     ? await pages.partiesPage(actor, id, revision, undefined, 8)
     : { parties: [], nextId: null };
   let summary: V2Intake["summary"] = null;
-  if (metadata.summary) {
+  if (metadata.summary && (metadata.summary.byteLength ?? Number.MAX_SAFE_INTEGER) <= 1048576) {
+    const full = await repo.readIntake(actor, id);
+    if (!full?.summary) throw new Error("Summary unavailable");
+    summary = { ...full.summary, facts: factPage.facts };
+  } else if (metadata.summary) {
     // The fixed overview precedes large fact arrays in server-authored snapshots.
     let overview = "";
     const stream = repo.summaryFragments(actor, id)[Symbol.asyncIterator]();
@@ -63,11 +67,6 @@ export async function readWorkspaceContext(
       ],
       notices: ["확인된 사건 사실을 준비하는 대화이며 법률 판단이 아닙니다."],
     };
-    if ((metadata.summary.byteLength ?? Number.MAX_SAFE_INTEGER) <= 1048576) {
-      const full = await repo.readIntake(actor, id);
-      if (!full?.summary) throw new Error("Summary unavailable");
-      summary = { ...full.summary, facts: factPage.facts };
-    }
   }
   const messageRows = (
     await core

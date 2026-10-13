@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { opaqueIdSchema } from "../../../contracts";
-import { type V2Job, v2SummarySchema } from "../../../contracts/v2";
+import { type V2Fact, type V2Job, v2SummarySchema } from "../../../contracts/v2";
 import { fragmentText, utf8Bytes, type V2Core } from "../../db/v2-core";
 import { createV2JobsRepository } from "../../db/v2-jobs";
 import { createV2StagingRepository } from "../../db/v2-staging";
@@ -18,6 +18,22 @@ export const workspaceParamsSchema = z.strictObject({
   jobId: opaqueIdSchema,
 });
 export type WorkspaceParams = z.infer<typeof workspaceParamsSchema>;
+/** Use the repository's existing page bounds without changing publication or lease guards. */
+export function* summaryFactPages(facts: readonly V2Fact[]) {
+  let page: V2Fact[] = [];
+  for (const fact of facts) {
+    if (
+      page.length &&
+      (page.length === 4 ||
+        utf8Bytes(JSON.stringify({ facts: [...page, fact], parties: [] })) > 98304)
+    ) {
+      yield page;
+      page = [];
+    }
+    page.push(fact);
+  }
+  if (page.length) yield page;
+}
 export async function executeWorkspace(
   core: V2Core,
   raw: WorkspaceParams,
@@ -156,8 +172,8 @@ export async function executeWorkspace(
       for (const [index, part] of parts.entries())
         if (!(await staging.append(guard(), id, index, part, lease)))
           throw new Error("Stale summary");
-      for (const fact of summary.facts)
-        if (!(await entities.stagePage(guard(), id, { facts: [fact], parties: [] }, lease)))
+      for (const facts of summaryFactPages(summary.facts))
+        if (!(await entities.stagePage(guard(), id, { facts, parties: [] }, lease)))
           throw new Error("Stale fact");
       for (let index = 0; index < summary.parties.length; index += 4)
         if (
