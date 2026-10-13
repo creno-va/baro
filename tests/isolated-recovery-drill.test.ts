@@ -48,12 +48,15 @@ function cloud(
     deleteDenied?: boolean;
     retainedAfterDelete?: boolean;
     failQuery?: boolean;
+    failQueryAt?: number;
+    invalidQueryResult?: boolean;
   } = {},
 ) {
   let sqlite = new Database(":memory:");
   sqlite.exec("PRAGMA foreign_keys=ON");
   let exists = options.existing ?? false;
   let snapshot: Uint8Array | undefined;
+  let queryCount = 0;
   const calls: { method: string; path: string; body?: unknown }[] = [];
   const name = `baro-drill-d1-${plan.runId}`;
   const metadata = () => ({ uuid: options.createId ?? id, name, version: "production" });
@@ -81,11 +84,14 @@ function cloud(
     if (path === `/${id}` && method === "GET")
       return ok({ ...metadata(), ...(options.wrongReadback ? { uuid: otherId } : {}) });
     if (path === `/${id}/query` && method === "POST") {
-      if (options.failQuery)
+      queryCount++;
+      if (options.failQuery || queryCount === options.failQueryAt) {
+        if (options.invalidQueryResult) return ok([]);
         return Response.json(
           { success: false, errors: [{ message: "secret SQL/row diagnostic" }] },
           { status: 403 },
         );
+      }
       const batch = body.batch as { sql: string; params: SQLQueryBindings[] }[];
       const results = sqlite.transaction(() =>
         batch.map(({ sql, params }) => {
@@ -374,6 +380,56 @@ test("SQL errors and unconfirmed cleanup preserve failure and redact upstream di
     expect(r.report.status).toBe("failure");
     if (!options.failQuery) expect(r.report.cleanup).toBe("unconfirmed");
     expect(JSON.stringify(r.storage.reports)).not.toMatch(/secret SQL|private provider|diagnostic/);
+  }
+});
+
+test("schema failure receipts identify the confirmed prefix and attempted batch without SQL or automatic retry", async () => {
+  for (const invalidQueryResult of [false, true]) {
+    // 0000–0005 and the first 25 statements of 0006 succeeded; the next batch fails.
+    const r = await execute({ failQueryAt: 15, invalidQueryResult });
+    expect(r.report.status).toBe("failure");
+    expect(r.report.stage).toBe("schema-install");
+    expect(r.report.errorCode).toBe(
+      invalidQueryResult ? "AI_RUNTIME_D1_INVALID_RESPONSE" : "AI_RUNTIME_D1_UNAVAILABLE",
+    );
+    expect(r.report.schemaProgress).toEqual({
+      phase: "migration-batch",
+      migrationOrdinal: 7,
+      migrationCount: 10,
+      statementOffset: 25,
+      statementCount: 25,
+      confirmedStatements: 66,
+      confirmedMigrations: 6,
+    });
+    expect(r.calls.filter((c) => c.path.endsWith("/query"))).toHaveLength(15);
+    expect(r.calls.some((c) => c.path.endsWith("/restore"))).toBe(false);
+    expect(r.report.cleanup).toBe("confirmed-absent");
+    expect(
+      r.storage.reports.some(
+        (report) =>
+          report.status === "running" &&
+          report.schemaProgress?.statementOffset === 25 &&
+          report.schemaProgress?.confirmedStatements === 66,
+      ),
+    ).toBe(true);
+    expect(JSON.stringify(r.storage.reports)).not.toMatch(
+      /CREATE TABLE|SELECT |secret SQL|diagnostic/,
+    );
+  }
+});
+
+test("initial schema, fixture seeding and baseline observation failures have separate stages", async () => {
+  for (const [failQueryAt, stage] of [
+    [1, "schema-install"],
+    [33, "fixture-seed"],
+    [37, "fixture-observe"],
+  ] as const) {
+    const r = await execute({ failQueryAt });
+    expect(r.report.stage).toBe(stage);
+    expect(r.report.errorCode).toBe("AI_RUNTIME_D1_UNAVAILABLE");
+    expect(r.report.schemaProgress?.phase).toBe(failQueryAt === 1 ? "create-ledger" : "complete");
+    expect(r.report.cleanup).toBe("confirmed-absent");
+    expect(r.calls.filter((c) => c.path.endsWith("/query"))).toHaveLength(failQueryAt);
   }
 });
 

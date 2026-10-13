@@ -5,6 +5,7 @@ import { deleteAccount, replayDeletionJournal } from "../src/server/modules/dele
 import { createIsolatedJournalManifest, validateIsolatedJournalManifest } from "./deletion-journal";
 import {
   type DrillMigrations,
+  type DrillSchemaProgress,
   installDrillSchema,
   loadDrillMigrations,
   seedDrillFixture,
@@ -37,6 +38,7 @@ export type DrillEvidence = {
   status: "running" | "failure" | "success";
   errorCode: string | null;
   stage: string;
+  schemaProgress: DrillSchemaProgress | null;
   cleanup: "not-created" | "unconfirmed" | "confirmed-absent";
   steps: { name: string; at: string; observations: Record<string, unknown> }[];
   unverified: readonly string[];
@@ -69,6 +71,7 @@ export async function runRecoveryDrill(
     status: "running",
     errorCode: null,
     stage: "create",
+    schemaProgress: null,
     cleanup: "not-created",
     steps: [],
     unverified: [
@@ -95,14 +98,19 @@ export async function runRecoveryDrill(
     report.creationAttempted = true;
     report.cleanup = "unconfirmed";
     await record("created-and-identity-verified");
-    report.stage = "schema-and-fixture";
+    report.stage = "schema-install";
     const db = platform.database();
-    await installDrillSchema(db, migrations);
+    await installDrillSchema(db, migrations, async (progress) => {
+      report.schemaProgress = progress;
+      await storage.writeEvidence(report);
+    });
     await record("schema-installed", {
       migrations: migrations.length,
       sourceHash: await drillHash(JSON.stringify(migrations)),
     });
+    report.stage = "fixture-seed";
     const fixture = await seedDrillFixture(db, Date.parse(now()));
+    report.stage = "fixture-observe";
     await record("baseline-observed", await fixture.observe(false));
     report.stage = "bookmark-and-delete";
     const bookmarkHash = await drillHash(await platform.captureBookmark());
@@ -187,6 +195,10 @@ export async function runRecoveryDrill(
       "DRILL_FOREIGN_KEY_VIOLATIONS",
       "DRILL_ACCOUNT_DELETE_REJECTED",
       "DRILL_WORK_DEADLINE_EXCEEDED",
+      "DRILL_MIGRATION_RECEIPT_MISMATCH",
+      "DRILL_SCHEMA_VERSION_MISSING",
+      "AI_RUNTIME_D1_UNAVAILABLE",
+      "AI_RUNTIME_D1_INVALID_RESPONSE",
     ];
     report.errorCode =
       error instanceof Error && known.includes(error.message)

@@ -13,18 +13,56 @@ export async function loadDrillMigrations() {
   );
 }
 export type DrillMigrations = Awaited<ReturnType<typeof loadDrillMigrations>>;
-export async function installDrillSchema(db: D1Database, migrations: DrillMigrations) {
+export type DrillSchemaProgress = {
+  phase: "create-ledger" | "migration-batch" | "record-migration" | "verify-ledger" | "complete";
+  migrationOrdinal: number;
+  migrationCount: number;
+  statementOffset: number;
+  statementCount: number;
+  confirmedStatements: number;
+  confirmedMigrations: number;
+};
+export async function installDrillSchema(
+  db: D1Database,
+  migrations: DrillMigrations,
+  observe: (progress: DrillSchemaProgress) => Promise<void> = async () => {},
+) {
+  let confirmedStatements = 0,
+    confirmedMigrations = 0;
+  const progress = async (
+    phase: DrillSchemaProgress["phase"],
+    migrationOrdinal = 0,
+    statementOffset = 0,
+    statementCount = 0,
+  ) =>
+    observe({
+      phase,
+      migrationOrdinal,
+      migrationCount: migrations.length,
+      statementOffset,
+      statementCount,
+      confirmedStatements,
+      confirmedMigrations,
+    });
+  await progress("create-ledger");
   await db.prepare(migrationTableSql).run();
-  for (const migration of migrations) {
+  for (const [index, migration] of migrations.entries()) {
     // Drizzle's explicit delimiters preserve semicolons inside trigger bodies.
     const statements = migration.sql
       .split("--> statement-breakpoint")
       .map((s) => s.trim())
       .filter(Boolean);
-    for (let i = 0; i < statements.length; i += 25)
-      await db.batch(statements.slice(i, i + 25).map((sql) => db.prepare(sql)));
+    for (let i = 0; i < statements.length; i += 25) {
+      const batch = statements.slice(i, i + 25);
+      await progress("migration-batch", index + 1, i, batch.length);
+      await db.batch(batch.map((sql) => db.prepare(sql)));
+      confirmedStatements += batch.length;
+    }
+    await progress("record-migration", index + 1);
     await db.prepare("INSERT INTO d1_migrations(name) VALUES(?)").bind(migration.name).run();
+    confirmedMigrations++;
   }
+  await progress("verify-ledger");
   const actual = (
     await db.prepare("SELECT name FROM d1_migrations ORDER BY id").all<{ name: string }>()
   ).results;
@@ -32,6 +70,7 @@ export async function installDrillSchema(db: D1Database, migrations: DrillMigrat
     JSON.stringify(actual.map((row) => row.name)) !== JSON.stringify(migrations.map((m) => m.name))
   )
     throw new Error("DRILL_MIGRATION_RECEIPT_MISMATCH");
+  await progress("complete");
 }
 
 export async function seedDrillFixture(db: D1Database, now: number) {
