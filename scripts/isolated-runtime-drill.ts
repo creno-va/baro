@@ -21,6 +21,73 @@ const observed = z.object({
   runId: z.string(),
   phase: z.enum(["baseline", "key-lost", "key-restored"]),
 });
+const controlError = z.enum([
+  "UNAVAILABLE",
+  "INVALID_REQUEST",
+  "NOT_FOUND",
+  "DRILL_STEP_FAILED",
+  "CRYPTO_DECRYPT_FAILED",
+  "WORKFLOWS_NOT_READY",
+  "DELETION_REQUIRED",
+]);
+/** Failure evidence contains finite categories only, never response text or arbitrary headers. */
+async function controlFailure(response: Response, candidate: string, runId: string) {
+  const workerMarkerObserved = response.headers.get("x-baro-drill-control") === "runtime-v1";
+  const release = response.headers.get("x-baro-drill-release");
+  const run = response.headers.get("x-baro-drill-run");
+  const provenance =
+    !workerMarkerObserved || !release || !run
+      ? "unavailable"
+      : release === candidate && run === runId
+        ? "match"
+        : "mismatch";
+  const mime = response.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase();
+  const responseType = !mime
+    ? "missing"
+    : mime === "application/json"
+      ? "json"
+      : mime === "text/html"
+        ? "html"
+        : mime === "text/plain"
+          ? "text"
+          : "other";
+  let workerErrorCode: z.infer<typeof controlError> | null = null;
+  // A fixed small buffer bounds even misleading Content-Length or chunked responses.
+  if (workerMarkerObserved && provenance === "match" && responseType === "json" && response.body) {
+    const reader = response.body.getReader();
+    const bytes = new Uint8Array(1024);
+    let length = 0;
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) {
+          const parsed = z
+            .object({ error: controlError })
+            .safeParse(JSON.parse(new TextDecoder().decode(bytes.subarray(0, length))));
+          if (parsed.success) workerErrorCode = parsed.data.error;
+          break;
+        }
+        if (length + value.byteLength > bytes.byteLength) break;
+        bytes.set(value, length);
+        length += value.byteLength;
+      }
+    } catch {
+      // Bad JSON/transport preserves the HTTP failure, never raw error diagnostics.
+    } finally {
+      await reader.cancel().catch(() => {});
+      reader.releaseLock();
+    }
+  } else {
+    await response.body?.cancel().catch(() => {});
+  }
+  return {
+    status: response.status,
+    workerMarkerObserved,
+    provenance,
+    responseType,
+    workerErrorCode,
+  };
+}
 export function drillRequestBudget(
   deadline: number,
   cleanup: boolean,
@@ -77,6 +144,7 @@ export async function runRuntimeDrill(
     lastMutation: null,
     mutations: [],
     commands: [],
+    controlFailures: [],
     observedResources: { worker: false, workflow: false },
   };
   const checks = receipt.checks as Record<string, boolean>;
@@ -243,7 +311,10 @@ export async function runRuntimeDrill(
       throw new Error("AMBIGUOUS_DEPLOYMENT");
     return current[0].version_id;
   }
-  async function control(path: string, expectedStatus = 200) {
+  async function control(
+    path: "ready" | "seed" | "inspect" | "recover" | "delete" | "late" | "cleanup",
+    expectedStatus = 200,
+  ) {
     if (!origin) throw new Error("ORIGIN_UNAVAILABLE");
     const timeout = drillRequestBudget(deadline, cleaning);
     const mutating = ["seed", "delete", "late", "cleanup"].includes(path);
@@ -254,8 +325,13 @@ export async function runRuntimeDrill(
       redirect: "error",
       signal: AbortSignal.timeout(timeout),
     });
-    if (response.status !== expectedStatus)
+    if (response.status !== expectedStatus) {
+      (receipt.controlFailures as unknown[]).push({
+        action: path,
+        ...(await controlFailure(response, candidate, `${runId}-${attempt}`)),
+      });
       throw new Error(`CONTROL_${path.toUpperCase()}_HTTP_${response.status}`);
+    }
     const value: unknown = await response.json();
     if (expectedStatus !== 200) return value;
     const scope = observed.parse(value);
