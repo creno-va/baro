@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { handleRuntimeDrill, type RuntimeDrillEnv } from "./isolated-runtime-control";
-import { runtimeDrillNames } from "./isolated-runtime-drill";
+import { drillRequestBudget, runtimeDrillNames } from "./isolated-runtime-drill";
 
 function fixture() {
   const objects = new Map<string, string>();
@@ -118,4 +118,11 @@ test("wrong recovery key and platform deletion failures never emit successful ev
   expect((await failed.json()) as unknown).toEqual({ error: "DRILL_STEP_FAILED" });
   expect(f.instances.size).toBe(2);
   expect(f.objects.has("private/drill-target")).toBe(true);
+});
+
+test("the work deadline closes new calls while preserving a bounded cleanup window", () => {
+  expect(() => drillRequestBudget(1000, false, 1000)).toThrow("DRILL_TIME_BUDGET_EXHAUSTED");
+  expect(drillRequestBudget(1000, false, 999)).toBe(1);
+  expect(drillRequestBudget(1000, true, 2000)).toBe(15_000);
+  expect(drillRequestBudget(200_000, false, 0, 90_000)).toBe(90_000);
 });

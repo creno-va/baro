@@ -16,6 +16,16 @@ const observed = z.object({
   runId: z.string(),
   phase: z.enum(["baseline", "key-lost", "key-restored"]),
 });
+export function drillRequestBudget(
+  deadline: number,
+  cleanup: boolean,
+  now = Date.now(),
+  maximum = 15_000,
+) {
+  const remaining = cleanup ? maximum : deadline - now;
+  if (remaining <= 0) throw new Error("DRILL_TIME_BUDGET_EXHAUSTED");
+  return Math.min(maximum, remaining);
+}
 
 async function run() {
   const candidate = sha.parse(process.env.GITHUB_SHA);
@@ -48,6 +58,9 @@ async function run() {
     onCallAlertVerified: false,
     checks: {},
     cleanup: {},
+    passed: false,
+    lastMutation: null,
+    mutations: [],
   };
   const checks = receipt.checks as Record<string, boolean>;
   const cleanup = receipt.cleanup as Record<string, boolean>;
@@ -56,6 +69,8 @@ async function run() {
   let workflowCreated = false;
   let origin: string | undefined;
   let failed = false;
+  let cleaning = false;
+  const deadline = Date.now() + 12 * 60_000;
   const controlToken = crypto.getRandomValues(new Uint8Array(32)).toHex();
   const recoveryKey = Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url");
   const secretFile = resolve(dir, "secrets.json");
@@ -67,7 +82,22 @@ async function run() {
     await writeFile(path, JSON.stringify(value), { mode: 0o600 });
     await chmod(path, 0o600);
   }
+  async function mutationCheckpoint(stage: string, state: "pending" | "observed-success") {
+    const mutations = receipt.mutations as { stage: string; state: string; observedAt: string }[];
+    const last = mutations.at(-1);
+    if (state === "observed-success" && last?.stage === stage && last.state === "pending") {
+      last.state = state;
+      last.observedAt = new Date().toISOString();
+    } else {
+      mutations.push({ stage, state, observedAt: new Date().toISOString() });
+    }
+    receipt.lastMutation = mutations.at(-1);
+    receipt.created = { bucket: bucketCreated, worker: workerCreated, workflow: workflowCreated };
+    await privateFile(resolve(dir, "receipt.json"), receipt);
+  }
   async function api(path: string, method = "GET", body?: unknown, missing = false) {
+    const timeout = drillRequestBudget(deadline, cleaning);
+    if (method !== "GET") await mutationCheckpoint(`CF_${method}_${path}`, "pending");
     let response: Response;
     try {
       response = await fetch(`https://api.cloudflare.com/client/v4/accounts/${account}/${path}`, {
@@ -75,7 +105,7 @@ async function run() {
         headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
         redirect: "error",
-        signal: AbortSignal.timeout(30_000),
+        signal: AbortSignal.timeout(timeout),
       });
     } catch {
       throw new Error(`CF_${method}_OUTCOME_UNKNOWN`);
@@ -86,20 +116,35 @@ async function run() {
       .object({ success: z.literal(true), result: z.unknown() })
       .safeParse(await response.json());
     if (!parsed.success) throw new Error(`CF_${method}_INVALID_RESPONSE`);
+    if (method !== "GET") await mutationCheckpoint(`CF_${method}_${path}`, "observed-success");
     return parsed.data.result;
   }
   async function wrangler(args: string[]) {
+    const timeout = drillRequestBudget(deadline, cleaning, Date.now(), 90_000);
+    await mutationCheckpoint(`wrangler_${args[0]}`, "pending");
     const result = Bun.spawn([process.execPath, "node_modules/wrangler/bin/wrangler.js", ...args], {
       env: { ...process.env, WRANGLER_SEND_METRICS: "false", CI: "true" },
       stdout: "pipe",
       stderr: "pipe",
     });
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      result.kill("SIGKILL");
+    }, timeout);
     // Never forward Wrangler logs; platform diagnostics may contain identifiers or config.
-    await Promise.all([
-      new Response(result.stdout).arrayBuffer(),
-      new Response(result.stderr).arrayBuffer(),
-    ]);
-    if ((await result.exited) !== 0) throw new Error("WRANGLER_COMMAND_FAILED");
+    try {
+      await Promise.all([
+        new Response(result.stdout).arrayBuffer(),
+        new Response(result.stderr).arrayBuffer(),
+      ]);
+      const status = await result.exited;
+      if (timedOut) throw new Error("WRANGLER_OUTCOME_UNKNOWN");
+      if (status !== 0) throw new Error("WRANGLER_COMMAND_FAILED");
+      await mutationCheckpoint(`wrangler_${args[0]}`, "observed-success");
+    } finally {
+      clearTimeout(timer);
+    }
   }
   async function deploy(phase: "baseline" | "key-lost" | "key-restored") {
     await privateFile(configPath, {
@@ -130,6 +175,7 @@ async function run() {
   }
   async function waitForPhase(phase: "baseline" | "key-lost" | "key-restored") {
     for (let i = 0; i < 20; i++) {
+      drillRequestBudget(deadline, cleaning);
       try {
         if (observed.parse(await control("ready")).phase === phase) return;
       } catch {
@@ -156,11 +202,14 @@ async function run() {
   }
   async function control(path: string, expectedStatus = 200) {
     if (!origin) throw new Error("ORIGIN_UNAVAILABLE");
+    const timeout = drillRequestBudget(deadline, cleaning);
+    const mutating = ["seed", "delete", "late", "cleanup"].includes(path);
+    if (mutating) await mutationCheckpoint(`control_${path}`, "pending");
     const response = await fetch(`${origin}/${path}`, {
       method: "POST",
       headers: { authorization: `Bearer ${controlToken}` },
       redirect: "error",
-      signal: AbortSignal.timeout(30_000),
+      signal: AbortSignal.timeout(timeout),
     });
     if (response.status !== expectedStatus)
       throw new Error(`CONTROL_${path.toUpperCase()}_HTTP_${response.status}`);
@@ -169,6 +218,7 @@ async function run() {
     const scope = observed.parse(value);
     if (scope.candidateSha !== candidate || scope.runId !== `${runId}-${attempt}`)
       throw new Error("CONTROL_PROVENANCE_MISMATCH");
+    if (mutating) await mutationCheckpoint(`control_${path}`, "observed-success");
     return value;
   }
   function requireCheck(name: string, value: boolean) {
@@ -176,6 +226,7 @@ async function run() {
     if (!value) throw new Error(`CHECK_${name.toUpperCase()}_FAILED`);
   }
   try {
+    await privateFile(resolve(dir, "receipt.json"), receipt);
     // Never reuse existing resources, even those that happen to have a drill-looking name.
     for (const path of [
       `r2/buckets/${names.bucket}`,
@@ -301,6 +352,7 @@ async function run() {
     receipt.failure =
       error instanceof Error && /^[A-Z0-9_]+$/.test(error.message) ? error.message : "DRILL_FAILED";
   } finally {
+    cleaning = true;
     // Only resources whose creation returned success are eligible for automatic destruction.
     // Unknown mutation outcomes are reported for operator reconciliation, never blindly retried.
     if (workerCreated) {
