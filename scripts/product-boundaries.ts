@@ -19,6 +19,8 @@ export function productBoundaryFindings(file: string, content: string): string[]
     'console.error(JSON.stringify({event:"workspace_dependency_failure",stage:failure?.stage??"unclassified",category:dependencyCategory(error),}),)',
     'console.error(JSON.stringify({event:"workspace_provider_failure",phase,category,httpStatus}),)',
   ]);
+  const reportDependencyLog =
+    'console.error(JSON.stringify({event:"report_dependency_failure",stage,category,code}))';
   function visit(node: ts.Node) {
     if (ts.isStringLiteralLike(node)) {
       const value = node.text;
@@ -61,7 +63,9 @@ export function productBoundaryFindings(file: string, content: string): string[]
             (file.replaceAll("\\", "/") === "src/server/modules/deletion/v2-reconcile.ts" &&
               call.getText(source).replace(/\s+/g, "") === v2DeletionLog) ||
             (file.replaceAll("\\", "/") === "src/server/dependency-diagnostics.ts" &&
-              dependencyLogs.has(call.getText(source).replace(/\s+/g, ""))))
+              dependencyLogs.has(call.getText(source).replace(/\s+/g, ""))) ||
+            (file.replaceAll("\\", "/") === "src/server/modules/reports/diagnostics.ts" &&
+              call.getText(source).replace(/\s+/g, "") === reportDependencyLog))
         )
       )
         findings.push("unapproved_payload_log");

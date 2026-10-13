@@ -22,6 +22,7 @@ import { jobInsertStatements } from "../../db/v2-jobs";
 import { runtimeDigest } from "../../db/v2-paid-runtime";
 import { createV2ReportsRepository } from "../../db/v2-reports";
 import { createV2StagingRepository } from "../../db/v2-staging";
+import { reportReadStep } from "./diagnostics";
 import { reportSessionFence, requireReportConsent } from "./fence";
 import {
   buildReportSource,
@@ -397,9 +398,11 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
   return {
     async get(ownerId: string, caseId: string) {
       const a = actor(ownerId),
-        prior = await latest(a, caseId);
-      if (prior) return view(a, prior.id);
-      const source = await buildReportSource(core, a, caseId, [], deps.guideHosts);
+        prior = await reportReadStep("latest", () => latest(a, caseId));
+      if (prior) return reportReadStep("view", () => view(a, prior.id));
+      const source = await reportReadStep("source", () =>
+        buildReportSource(core, a, caseId, [], deps.guideHosts),
+      );
       const review: ReportReviewData = {
         format: "client_review_v1",
         title: "사건 상담 준비 리포트",
@@ -409,17 +412,19 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
         sourceDigest: source.digest,
         parentReportId: null,
       };
-      const id = await createRecord(
-        a,
-        caseId,
-        `initial-${source.digest}`,
-        source.digest,
-        `/api/v2/cases/${caseId}/reports`,
-        source.body,
-        review,
-        1,
+      const id = await reportReadStep("create", () =>
+        createRecord(
+          a,
+          caseId,
+          `initial-${source.digest}`,
+          source.digest,
+          `/api/v2/cases/${caseId}/reports`,
+          source.body,
+          review,
+          1,
+        ),
       );
-      return view(a, id);
+      return reportReadStep("view", () => view(a, id));
     },
     async save(ownerId: string, caseId: string, key: string, input: unknown) {
       const value = saveReportSchema.parse(input),

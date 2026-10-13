@@ -3,6 +3,7 @@ import { z } from "zod";
 import { idempotencyKeySchema, opaqueIdSchema } from "../../../contracts";
 import { createCaseDataCipher } from "../../crypto";
 import { createV2Core, type V2Core, V2RepositoryError } from "../../db/v2-core";
+import { reportReadFailure } from "../../modules/reports/diagnostics";
 import { reportRequestCore } from "../../modules/reports/limits";
 import { createReportDependencies } from "../../modules/reports/runtime";
 import { createReportsService } from "../../modules/reports/service";
@@ -85,6 +86,7 @@ export function createReportsApi(
                     : 409;
       return c.json(errorBody(c, error.code, messages[error.code], status === 503), status);
     }
+    reportReadFailure(error);
     return c.json(
       errorBody(
         c,
