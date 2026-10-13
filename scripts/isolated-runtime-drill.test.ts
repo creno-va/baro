@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { basename } from "node:path";
+import { DrillCommandError } from "./isolated-drill-process";
 import { type RuntimeDrillIo, runRuntimeDrill, runtimeDrillNames } from "./isolated-runtime-drill";
 
 const environment = {
@@ -134,13 +135,31 @@ async function simulate(faults: Faults = {}) {
         expect(config.name).toBe(names.worker);
         resources.add("worker");
         resources.add("workflow");
-        if (faults.lostDeployResponse) throw new Error("WRANGLER_OUTCOME_UNKNOWN");
+        if (faults.lostDeployResponse)
+          throw new DrillCommandError("WRANGLER_OUTCOME_UNKNOWN", {
+            runtime: "node",
+            exitCode: null,
+            signal: "SIGTERM",
+            timedOut: false,
+            durationMs: 1,
+            stdoutBytes: 100,
+            stderrBytes: 50,
+          });
         phase = config.vars.DRILL_PHASE;
       } else {
         expect(args[0]).toBe("rollback");
         expect(args[1]).toBe(baselineVersion);
         phase = "baseline";
       }
+      return {
+        runtime: "node",
+        exitCode: 0,
+        signal: null,
+        timedOut: false,
+        durationMs: 1,
+        stdoutBytes: 0,
+        stderrBytes: 0,
+      };
     },
     async writePrivateFile(path, value) {
       if (basename(path) === "receipt.json") {
@@ -175,6 +194,17 @@ test("the full runner only reports success after observed resource and private-f
   const { report, resources, snapshots, removed } = await simulate();
   expect(report.passed).toBe(true);
   expect(report.evidenceWriteFailed).toBe(false);
+  expect(report.observedResources).toEqual({ worker: true, workflow: true });
+  expect(report.created).toBeUndefined();
+  expect(
+    snapshots.some(
+      (receipt) =>
+        (receipt.lastMutation as { state?: string; stage?: string } | null)?.stage ===
+          "wrangler_deploy" &&
+        (receipt.lastMutation as { state?: string }).state === "command-completed" &&
+        (receipt.observedResources as { worker: boolean }).worker === false,
+    ),
+  ).toBe(true);
   expect(resources.size).toBe(0);
   expect(removed).toEqual(["secrets.json", "recovery-key.json"]);
   expect(snapshots.filter((r) => r.passed)).toHaveLength(1);
@@ -198,14 +228,14 @@ test.each(["bucket", "worker"] as const)(
     const result = await simulate({
       failReceipt: checkpoint(
         kind === "bucket" ? "CF_POST_r2/buckets" : "wrangler_deploy",
-        "observed-success",
+        kind === "bucket" ? "observed-success" : "command-completed",
       ),
     });
     expect(result.report).toMatchObject({
       passed: false,
       evidenceWriteFailed: true,
       failure: "DRILL_RECEIPT_WRITE_FAILED",
-      created: { bucket: true, worker: kind === "worker", workflow: kind === "worker" },
+      cleanupEligible: { bucket: true, worker: kind === "worker", workflow: kind === "worker" },
       cleanup: { bucket: true },
       privateFilesRemoved: true,
     });
@@ -244,7 +274,7 @@ test.each(["bucket-response", "bucket-identity", "deployment"] as const)(
       lostDeployResponse: fault === "deployment",
     });
     expect(result.report.passed).toBe(false);
-    expect(result.report.created).toEqual({
+    expect(result.report.cleanupEligible).toEqual({
       bucket: fault === "deployment",
       worker: false,
       workflow: false,
@@ -257,6 +287,21 @@ test.each(["bucket-response", "bucket-identity", "deployment"] as const)(
       fault === "deployment" ? [`DELETE r2/buckets/${names.bucket}`] : [],
     );
     expect(result.calls).not.toContain("control /cleanup");
+    if (fault === "deployment") {
+      expect(result.report.commands).toEqual([
+        {
+          operation: "deploy",
+          runtime: "node",
+          exitCode: null,
+          signal: "SIGTERM",
+          timedOut: false,
+          durationMs: 1,
+          stdoutBytes: 100,
+          stderrBytes: 50,
+        },
+      ]);
+      expect(result.report.observedResources).toEqual({ worker: false, workflow: false });
+    }
   },
 );
 

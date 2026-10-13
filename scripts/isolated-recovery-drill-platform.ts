@@ -1,5 +1,14 @@
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { z } from "zod";
+import { migrationImport } from "./apply-d1-migrations";
 import { isolatedDrillResourceSchema } from "./deletion-journal";
+import {
+  DrillCommandError,
+  type DrillCommandObservation,
+  runDrillWrangler,
+} from "./isolated-drill-process";
 import { remoteBudgetD1 } from "./remote-budget-d1";
 
 export const DRILL_ACCOUNT = "9e844969d0c44b2449f3951d1f301654";
@@ -63,12 +72,15 @@ export class IsolatedD1 {
   #restoreAttempted = false;
   #deleteAttempted = false;
   #bookmark: string | undefined;
+  #lastImport: DrillCommandObservation | null = null;
+  readonly #runWrangler: typeof runDrillWrangler;
   constructor(
     plan: DrillPlan,
     token: string,
     protectedDatabases: ProtectedDatabases,
     fetcher = fetch,
     clock = () => performance.now(),
+    runWrangler = runDrillWrangler,
   ) {
     drillPlanSchema.parse(plan);
     if (!token) throw new Error("DRILL_TOKEN_MISSING");
@@ -76,6 +88,7 @@ export class IsolatedD1 {
     this.#token = token;
     this.#fetch = fetcher;
     this.#clock = clock;
+    this.#runWrangler = runWrangler;
     this.#workDeadline = clock() + DRILL_WORK_MS;
     this.#protected = {
       ids: new Set(protectedDatabases.ids),
@@ -89,6 +102,57 @@ export class IsolatedD1 {
   }
   get creationAttempted() {
     return this.#createAttempted;
+  }
+  get lastImport() {
+    return this.#lastImport ? { ...this.#lastImport } : null;
+  }
+  async importMigration(name: string, sql: string) {
+    await this.assertIdentity();
+    const resource = this.#created;
+    if (!resource) throw new Error("DRILL_RESOURCE_NOT_AVAILABLE");
+    const directory = await mkdtemp(join(tmpdir(), "baro-drill-migration-"));
+    this.#lastImport = null;
+    try {
+      const config = join(directory, "wrangler.json");
+      const file = join(directory, "migration.sql");
+      await writeFile(
+        config,
+        JSON.stringify({
+          name: this.name,
+          account_id: DRILL_ACCOUNT,
+          compatibility_date: "2026-10-01",
+          d1_databases: [
+            { binding: "DRILL_DB", database_name: this.name, database_id: resource.databaseId },
+          ],
+        }),
+        { mode: 0o600 },
+      );
+      await writeFile(file, migrationImport(name, sql), { mode: 0o600 });
+      await this.assertIdentity();
+      const remaining = this.#workDeadline - this.#clock();
+      if (remaining <= 0) throw new Error("DRILL_WORK_DEADLINE_EXCEEDED");
+      this.#lastImport = await this.#runWrangler(
+        [
+          "d1",
+          "execute",
+          "DRILL_DB",
+          "--config",
+          config,
+          "--remote",
+          "--file",
+          file,
+          "--yes",
+          "--json",
+        ],
+        Math.min(90_000, remaining),
+        { ...process.env, CLOUDFLARE_ACCOUNT_ID: DRILL_ACCOUNT, CLOUDFLARE_API_TOKEN: this.#token },
+      );
+    } catch (error) {
+      if (error instanceof DrillCommandError) this.#lastImport = error.observation;
+      throw error;
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
   }
   #signal(cleanup = false) {
     const remaining = (cleanup ? (this.#cleanupDeadline ?? 0) : this.#workDeadline) - this.#clock();

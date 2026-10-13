@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { deleteAccount, replayDeletionJournal } from "../src/server/modules/deletion/service";
 import { createIsolatedJournalManifest, validateIsolatedJournalManifest } from "./deletion-journal";
+import type { DrillCommandObservation } from "./isolated-drill-process";
 import {
   type DrillMigrations,
   type DrillSchemaProgress,
@@ -39,6 +40,7 @@ export type DrillEvidence = {
   errorCode: string | null;
   stage: string;
   schemaProgress: DrillSchemaProgress | null;
+  lastImport: DrillCommandObservation | null;
   cleanup: "not-created" | "unconfirmed" | "confirmed-absent";
   steps: { name: string; at: string; observations: Record<string, unknown> }[];
   unverified: readonly string[];
@@ -72,6 +74,7 @@ export async function runRecoveryDrill(
     errorCode: null,
     stage: "create",
     schemaProgress: null,
+    lastImport: null,
     cleanup: "not-created",
     steps: [],
     unverified: [
@@ -100,10 +103,16 @@ export async function runRecoveryDrill(
     await record("created-and-identity-verified");
     report.stage = "schema-install";
     const db = platform.database();
-    await installDrillSchema(db, migrations, async (progress) => {
-      report.schemaProgress = progress;
-      await storage.writeEvidence(report);
-    });
+    await installDrillSchema(
+      db,
+      migrations,
+      (name, sql) => platform.importMigration(name, sql),
+      async (progress) => {
+        report.schemaProgress = progress;
+        report.lastImport = platform.lastImport;
+        await storage.writeEvidence(report);
+      },
+    );
     await record("schema-installed", {
       migrations: migrations.length,
       sourceHash: await drillHash(JSON.stringify(migrations)),
@@ -199,12 +208,15 @@ export async function runRecoveryDrill(
       "DRILL_SCHEMA_VERSION_MISSING",
       "AI_RUNTIME_D1_UNAVAILABLE",
       "AI_RUNTIME_D1_INVALID_RESPONSE",
+      "WRANGLER_COMMAND_FAILED",
+      "WRANGLER_OUTCOME_UNKNOWN",
     ];
     report.errorCode =
       error instanceof Error && known.includes(error.message)
         ? error.message
         : "DRILL_STAGE_FAILED";
   } finally {
+    report.lastImport = platform.lastImport;
     report.creationAttempted = platform.creationAttempted;
     report.databaseId = platform.resource?.databaseId ?? null;
     if (platform.creationAttempted) report.cleanup = "unconfirmed";

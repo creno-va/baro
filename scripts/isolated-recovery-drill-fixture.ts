@@ -14,7 +14,7 @@ export async function loadDrillMigrations() {
 }
 export type DrillMigrations = Awaited<ReturnType<typeof loadDrillMigrations>>;
 export type DrillSchemaProgress = {
-  phase: "create-ledger" | "migration-batch" | "record-migration" | "verify-ledger" | "complete";
+  phase: "create-ledger" | "migration-import" | "record-migration" | "verify-ledger" | "complete";
   migrationOrdinal: number;
   migrationCount: number;
   statementOffset: number;
@@ -25,6 +25,7 @@ export type DrillSchemaProgress = {
 export async function installDrillSchema(
   db: D1Database,
   migrations: DrillMigrations,
+  importMigration: (name: string, sql: string) => Promise<void>,
   observe: (progress: DrillSchemaProgress) => Promise<void> = async () => {},
 ) {
   let confirmedStatements = 0,
@@ -47,19 +48,23 @@ export async function installDrillSchema(
   await progress("create-ledger");
   await db.prepare(migrationTableSql).run();
   for (const [index, migration] of migrations.entries()) {
-    // Drizzle's explicit delimiters preserve semicolons inside trigger bodies.
+    // Count immutable source blocks for diagnostics only. Trigger DDL uses the
+    // proven SQL-file import + ledger contract, never the REST query parser.
     const statements = migration.sql
       .split("--> statement-breakpoint")
       .map((s) => s.trim())
       .filter(Boolean);
-    for (let i = 0; i < statements.length; i += 25) {
-      const batch = statements.slice(i, i + 25);
-      await progress("migration-batch", index + 1, i, batch.length);
-      await db.batch(batch.map((sql) => db.prepare(sql)));
-      confirmedStatements += batch.length;
-    }
+    await progress("migration-import", index + 1, 0, statements.length);
+    await importMigration(migration.name, migration.sql);
     await progress("record-migration", index + 1);
-    await db.prepare("INSERT INTO d1_migrations(name) VALUES(?)").bind(migration.name).run();
+    if (
+      !(await db
+        .prepare("SELECT name FROM d1_migrations WHERE name=?")
+        .bind(migration.name)
+        .first())
+    )
+      throw new Error("DRILL_MIGRATION_RECEIPT_MISMATCH");
+    confirmedStatements += statements.length;
     confirmedMigrations++;
   }
   await progress("verify-ledger");

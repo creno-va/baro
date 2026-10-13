@@ -41,6 +41,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
+          node -e 'if (process.versions.bun || Number(process.versions.node.split(".")[0]) < 22) process.exit(1)'
           bun ci
           bun scripts/verify-release.ts "$GITHUB_SHA" --ci-only
       - name: Run bounded synthetic platform drill

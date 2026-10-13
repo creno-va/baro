@@ -38,7 +38,9 @@ jobs:
           bun-version-file: .bun-version
       - name: Install frozen dependencies
         timeout-minutes: 4
-        run: bun ci
+        run: |
+          node -e 'if (process.versions.bun || Number(process.versions.node.split(".")[0]) < 22) process.exit(1)'
+          bun ci
       - name: Verify candidate main CI
         timeout-minutes: 2
         env:
