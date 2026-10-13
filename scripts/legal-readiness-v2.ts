@@ -18,6 +18,35 @@ export const readinessV2Plans: RetrievalPlan[] = [
   workspaceGuidePlans.legal_consultation,
 ];
 
+type RequestObservation = {
+  endpoint:
+    | "statute_list"
+    | "statute_detail"
+    | "precedent_list"
+    | "precedent_detail"
+    | "official_guide"
+    | "other";
+  httpStatus: number | null;
+  contentType: "json" | "html" | "other" | "missing" | null;
+  transport: "pending" | "response" | "failed";
+};
+
+function requestEndpoint(value: string): RequestObservation["endpoint"] {
+  const url = new URL(value);
+  if (url.hostname === "www.easylaw.go.kr") return "official_guide";
+  if (url.hostname !== "www.law.go.kr") return "other";
+  const target = url.searchParams.get("target");
+  if (url.pathname === "/DRF/lawSearch.do") {
+    if (target === "eflaw") return "statute_list";
+    if (target === "prec") return "precedent_list";
+  }
+  if (url.pathname === "/DRF/lawService.do") {
+    if (target === "eflaw") return "statute_detail";
+    if (target === "prec") return "precedent_detail";
+  }
+  return "other";
+}
+
 /** CI adapter evidence only. Original responses and credential URLs never enter the receipt. */
 export async function inspectLegalV2(
   env: { LAW_API_OC?: string },
@@ -26,6 +55,7 @@ export async function inspectLegalV2(
 ) {
   let requests = 0;
   let reservations = 0;
+  const requestObservations: RequestObservation[] = [];
   const sources = new Map<string, OfficialSourceWrite>();
   const plans = options.plans ?? readinessV2Plans;
   const asOfDate = new Date(Date.parse(now) + 9 * 3600000).toISOString().slice(0, 10);
@@ -44,7 +74,34 @@ export async function inspectLegalV2(
     {
       transport: async (url, init) => {
         requests++;
-        return (options.transport ?? fetch)(url, init);
+        const observation: RequestObservation = {
+          endpoint: requestEndpoint(url),
+          httpStatus: null,
+          contentType: null,
+          transport: "pending",
+        };
+        requestObservations.push(observation);
+        try {
+          const response = await (options.transport ?? fetch)(url, init);
+          const contentType = response.headers
+            .get("content-type")
+            ?.split(";")[0]
+            ?.trim()
+            .toLowerCase();
+          observation.httpStatus = response.status;
+          observation.contentType = !contentType
+            ? "missing"
+            : contentType === "application/json" || contentType === "text/json"
+              ? "json"
+              : contentType === "text/html"
+                ? "html"
+                : "other";
+          observation.transport = "response";
+          return response;
+        } catch (error) {
+          observation.transport = "failed";
+          throw error;
+        }
       },
       bindCitation: async (citation) => sources.has(citation.sourceId),
     },
@@ -87,6 +144,8 @@ export async function inspectLegalV2(
     checkedAt: now,
     requests,
     reservations,
+    // Snapshot only allowlisted metadata; never retain URL, headers, body or exception text.
+    requestObservations: requestObservations.map((observation) => ({ ...observation })),
     status:
       plans.length === 3 &&
       new Set(plans.map((plan) => plan.kind)).size === 3 &&
