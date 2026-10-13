@@ -10,6 +10,108 @@ test.skip(
 );
 const key = "baro-c-contract-test-state";
 const base = "/cases/synthetic-case";
+
+for (const result of ["same-owner", "other-owner", "unavailable"] as const)
+  test(`native file selection survives focus verification: ${result}`, async ({ page }) => {
+    await page.goto(`${base}/files`);
+    await page.getByLabel("선택 자료의 자동 처리에 동의합니다.").check();
+    const chooserPromise = page.waitForEvent("filechooser");
+    await page.getByRole("button", { name: "파일 선택", exact: true }).click();
+    const chooser = await chooserPromise;
+
+    // Safari resumes focus verification before the native chooser delivers change.
+    // Hold that verification while delivering the choice to the original input node.
+    await page.evaluate(async () => {
+      const path = "/tests/helpers/workspace-client-fixture.ts";
+      const { api } = (await import(path)) as typeof import("../helpers/workspace-client-fixture");
+      const session = api.session.get;
+      const pending: {
+        resolve: (value: Awaited<ReturnType<typeof session>>) => void;
+        reject: (cause: Error) => void;
+      }[] = [];
+      const state = window as unknown as {
+        materialUploadCalls: number;
+        releaseMaterialCheck: (result: string) => Promise<void>;
+      };
+      state.materialUploadCalls = 0;
+      const upload = api.files.upload;
+      api.files.upload = async (...args: Parameters<typeof upload>) => {
+        state.materialUploadCalls++;
+        return upload(...args);
+      };
+      api.session.get = () => new Promise((resolve, reject) => pending.push({ resolve, reject }));
+      state.releaseMaterialCheck = async (result) => {
+        api.session.get = session;
+        if (result === "other-owner") {
+          const key = "baro-c-contract-test-state";
+          const saved = localStorage.getItem(key);
+          if (!saved) throw new Error("Synthetic owner state is missing");
+          const value = JSON.parse(saved);
+          value.caseOwners = { "synthetic-case": "synthetic-owner" };
+          value.session.user.id = "other-owner";
+          localStorage.setItem(key, JSON.stringify(value));
+        }
+        const value = await session();
+        for (const check of pending)
+          if (result === "unavailable")
+            check.reject(Object.assign(new Error("합성 세션 확인 장애"), { code: "UNAVAILABLE" }));
+          else check.resolve(value);
+      };
+      window.dispatchEvent(new Event("focus"));
+    });
+    await expect(page.getByRole("heading", { name: "사건을 불러오는 중" })).toBeVisible();
+    const original = Buffer.from("파일 선택창 복귀 중에도 보존할 합성 원본");
+    await chooser.setFiles({ name: "선택 복귀.txt", mimeType: "text/plain", buffer: original });
+    expect(
+      await page.evaluate(
+        () => (window as unknown as { materialUploadCalls: number }).materialUploadCalls,
+      ),
+    ).toBe(0);
+    await page.evaluate(
+      (result) =>
+        (
+          window as unknown as { releaseMaterialCheck: (result: string) => Promise<void> }
+        ).releaseMaterialCheck(result),
+      result,
+    );
+
+    if (result === "other-owner") {
+      await expect(page.getByRole("alert")).toBeVisible();
+      await expect(page.getByRole("button", { name: "업로드 다시 시도" })).toHaveCount(0);
+      expect(
+        await page.evaluate(
+          () => (window as unknown as { materialUploadCalls: number }).materialUploadCalls,
+        ),
+      ).toBe(0);
+      return;
+    }
+    if (result === "unavailable") {
+      await expect(page.getByRole("alert")).toContainText("합성 세션 확인 장애");
+      await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+      await page.getByRole("button", { name: "업로드 다시 시도", exact: true }).click();
+    }
+    await expect(page.getByText("결과 확인 가능", { exact: true })).toBeVisible();
+    const stored = await page.evaluate(async () => {
+      const path = "/tests/helpers/workspace-client-fixture.ts";
+      const { api } = (await import(path)) as typeof import("../helpers/workspace-client-fixture");
+      const files = await api.files.list("synthetic-case");
+      return {
+        count: files.length,
+        name: files[0]?.name,
+        text: files[0]
+          ? await (await api.files.original("synthetic-case", files[0].id)).text()
+          : null,
+        calls: (window as unknown as { materialUploadCalls: number }).materialUploadCalls,
+      };
+    });
+    expect(stored).toEqual({
+      count: 1,
+      name: "선택 복귀.txt",
+      text: original.toString(),
+      calls: 1,
+    });
+  });
+
 test("chat failure/retry, reload, action checks and timeline editing on actual case routes", async ({
   page,
 }) => {
