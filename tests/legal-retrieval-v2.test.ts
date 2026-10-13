@@ -499,6 +499,56 @@ test("unapproved query text is never sent and safe configuration errors contain 
   expect(JSON.stringify(rejected)).not.toContain("private");
 });
 
+test.each(["sync", "async", "pending"] as const)(
+  "%s diagnostic observer preserves the public rejection and single request",
+  async (failure) => {
+    const f = await fixture();
+    let requests = 0;
+    const observations: unknown[] = [];
+    const rejected = await f
+      .service({
+        transport: async () => {
+          requests++;
+          return response({ result: false, msg: "API 인증키 OC를 확인 synthetic-private" });
+        },
+        observeUpstreamRejection: (observation) => {
+          observations.push(observation);
+          if (failure === "pending") return new Promise<void>(() => {});
+          if (failure === "async") return Promise.reject(new Error("synthetic-private-observer"));
+          throw new Error("synthetic-private-observer");
+        },
+      })
+      .retrieve(input(), f.access);
+    expect(observations).toEqual([
+      { endpointId: "moleg_eflaw_list", category: "upstream-credential-rejected" },
+    ]);
+    expect(requests).toBe(1);
+    expect(f.attempts).toHaveLength(1);
+    expect(rejected.outcomes[0]?.reason).toBe("upstream_rejected");
+    expect(rejected.chunks).toEqual([]);
+    expect(JSON.stringify(rejected)).not.toContain("synthetic-private");
+  },
+);
+
+test("malformed JSON never reaches the upstream envelope observer", async () => {
+  const f = await fixture();
+  let observations = 0;
+  const rejected = await f
+    .service({
+      transport: async () =>
+        new Response("synthetic-private-json", {
+          headers: { "content-type": "application/json" },
+        }),
+      observeUpstreamRejection: () => {
+        observations++;
+      },
+    })
+    .retrieve(input(), f.access);
+  expect(observations).toBe(0);
+  expect(rejected.outcomes[0]?.reason).toBe("schema_mismatch");
+  expect(f.attempts).toHaveLength(1);
+});
+
 test.each([
   "wrongid",
   "wrongdate",

@@ -54,6 +54,10 @@ export class LegalSourceError extends Error {
 }
 type Transport = (url: string, init: RequestInit) => Promise<Response>;
 type Repo = ReturnType<typeof createDomainRepository>;
+export type LegalUpstreamRejection =
+  | "upstream-registration-rejected"
+  | "upstream-credential-rejected"
+  | "upstream-error";
 export type LegalRetrievalDiagnostic = {
   stage: "configuration" | "list" | "article" | "retrieval";
   category:
@@ -65,15 +69,13 @@ export type LegalRetrievalDiagnostic = {
     | "http-error"
     | "response-too-large"
     | "invalid-json"
-    | "upstream-registration-rejected"
-    | "upstream-credential-rejected"
-    | "upstream-error"
+    | LegalUpstreamRejection
     | "transport-unavailable"
     | "schema-mismatch"
     | "verification-failed";
   httpStatus?: number;
 };
-function upstreamError(value: unknown): LegalRetrievalDiagnostic["category"] | null {
+export function upstreamError(value: unknown): LegalUpstreamRejection | null {
   if (typeof value !== "object" || value === null || !("result" in value) || !("msg" in value))
     return null;
   // Inspect upstream wording only in memory. Never forward the message, code, URL or credential.
