@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { ProcessingArtifactScope } from "../../db/v2-paid-contracts";
 import { MAX_ARTIFACT_BYTES, ProcessingError } from "../file-processing/protocol";
 import {
   authorize,
@@ -103,6 +104,7 @@ export function createMediaGateway(
     duration: number | null,
     access: ProcessingAccess,
     permitted?: () => Promise<boolean>,
+    artifactScope?: ProcessingArtifactScope,
   ) => {
     if (!env.AI || !env.AI_GATEWAY_ID || !(await authorize(access)))
       throw new ProcessingError("MODEL_UNAVAILABLE");
@@ -120,6 +122,7 @@ export function createMediaGateway(
         durationSeconds: duration,
         model,
         wire: immutableWire,
+        ...(artifactScope ? { artifactScope } : {}),
       },
       access,
     );
@@ -223,6 +226,7 @@ export function createMediaGateway(
       startSeconds: number,
       endSeconds: number,
       access: ProcessingAccess,
+      artifactScope?: ProcessingArtifactScope,
     ) {
       if (
         bytes.byteLength < 44 ||
@@ -249,6 +253,8 @@ export function createMediaGateway(
         },
         duration,
         access,
+        undefined,
+        artifactScope,
       );
       const parsed = asrSchema.safeParse(raw);
       if (!parsed.success) throw new ProcessingError("MODEL_SCHEMA_INVALID");
@@ -289,7 +295,11 @@ export function createMediaGateway(
         })),
       };
     },
-    async observe(bytes: Uint8Array<ArrayBuffer>, access: ProcessingAccess) {
+    async observe(
+      bytes: Uint8Array<ArrayBuffer>,
+      access: ProcessingAccess,
+      artifactScope?: ProcessingArtifactScope,
+    ) {
       if (bytes.byteLength > MAX_ARTIFACT_BYTES || bytes[0] !== 0xff || bytes[1] !== 0xd8)
         throw new ProcessingError("FILE_REJECTED");
       const permitted = async () => {
@@ -310,7 +320,7 @@ export function createMediaGateway(
       };
       if (!(await permitted())) throw new ProcessingError("MODEL_UNAVAILABLE");
       const wire = prepareVisionWire(bytes);
-      const raw = await dispatch(MODEL_ID, wire, null, access, permitted);
+      const raw = await dispatch(MODEL_ID, wire, null, access, permitted, artifactScope);
       const envelope = z
         .object({
           choices: z
