@@ -7,9 +7,17 @@ import { createV2StagingRepository } from "../../db/v2-staging";
 import { createV2SummaryStagingRepository } from "../../db/v2-summary-staging";
 import { createV2WorkspaceRepository, type JobLease } from "../../db/v2-workspace";
 import { createV2WorkspaceResponseRepository } from "../../db/v2-workspace-response";
+import {
+  reportDependencyFailure,
+  reportWorkspacePolicyFailure,
+} from "../../dependency-diagnostics";
 import { ModelError } from "../llm-gateway/service";
 import { readWorkspaceContext } from "./context";
-import type { createWorkspacePipeline, WorkspaceContext } from "./pipeline";
+import {
+  type createWorkspacePipeline,
+  type WorkspaceContext,
+  WorkspaceOutputPolicyError,
+} from "./pipeline";
 
 export const workspaceParamsSchema = z.strictObject({
   ownerId: opaqueIdSchema,
@@ -242,6 +250,10 @@ export async function executeWorkspace(
     if (!written) throw new Error("Workspace changed");
     return { jobId: params.jobId, status: "completed" as const };
   } catch (error) {
+    if (error instanceof WorkspaceOutputPolicyError) reportWorkspacePolicyFailure(error.reason);
+    else if (error instanceof ModelError && error.code === "POLICY_REJECTED")
+      reportWorkspacePolicyFailure("policy_rejected");
+    else if (!(error instanceof ModelError)) reportDependencyFailure(error);
     await jobs
       .fail(
         actor(),

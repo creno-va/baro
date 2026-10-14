@@ -18,6 +18,8 @@ export function productBoundaryFindings(file: string, content: string): string[]
   const dependencyLogs = new Set([
     'console.error(JSON.stringify({event:"workspace_dependency_failure",stage:failure?.stage??"unclassified",category:dependencyCategory(error),}),)',
     'console.error(JSON.stringify({event:"workspace_provider_failure",phase,category,httpStatus}),)',
+    'console.error(JSON.stringify({event:"workspace_legal_retrieval",kind,availability,reason}))',
+    'console.error(JSON.stringify({event:"workspace_policy_failure",reason}))',
   ]);
   const reportDependencyLog =
     'console.error(JSON.stringify({event:"report_dependency_failure",stage,category,code}))';
