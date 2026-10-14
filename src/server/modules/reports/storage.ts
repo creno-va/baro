@@ -439,6 +439,7 @@ export function createReportExports(core: V2Core, deps: ReportDependencies, port
         zipBytes: kind === "original_zip" ? blob.logical_bytes : 0,
         sourceRows: 0,
         reportFiles: data.body.selectedFiles.length,
+        applicationCostLimitsEnabled: core.applicationCostLimitsEnabled,
       }),
     );
     if (
@@ -550,6 +551,7 @@ export function createReportExports(core: V2Core, deps: ReportDependencies, port
         originalParts: originalParts ?? 0,
         sourceRows: fence.rows,
         reportFiles: data.body.selectedFiles.length,
+        applicationCostLimitsEnabled: core.applicationCostLimitsEnabled,
       });
       applyReportWorkPlan(core, workPlan);
       const pdfArtifact = await persist(
