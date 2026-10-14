@@ -12,6 +12,7 @@ async function fixture() {
   const env = {
     DB: db.binding,
     APP_ENV: "preview",
+    BETTER_AUTH_SECRET: "synthetic-directory-secret-at-least-thirty-two-characters",
     CASE_DATA_KEY_V1: btoa("d".repeat(32)).replace(/=+$/, ""),
   } as Env;
   return { db, env, api: createDirectoryApi({ clock: () => "2026-10-06T00:00:00.000Z" }) };
@@ -54,5 +55,5 @@ test("public gate and expired cursors fail without treating missing data as a su
     .replaceAll("+", "-")
     .replaceAll("/", "_")
     .replace(/=+$/, "");
-  expect((await f.api.request(`/?cursor=${cursor}`, {}, f.env)).status).toBe(409);
+  expect((await f.api.request(`/?cursor=${cursor}`, {}, f.env)).status).toBe(400);
 });

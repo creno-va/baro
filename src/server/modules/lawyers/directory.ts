@@ -1,9 +1,9 @@
 import { z } from "zod";
 import { opaqueIdSchema } from "../../../contracts";
-import { type V2PublicLawyer, v2DirectoryQuerySchema } from "../../../contracts/v2";
+import type { V2PublicLawyer } from "../../../contracts/v2";
 import type { V2Core } from "../../db/v2-core";
-import { createV2DirectoryRepository, DIRECTORY_SNAPSHOT_TTL_MS } from "../../db/v2-directory";
 import { createV2LawyersRepository } from "../../db/v2-lawyers";
+import { type DirectoryOptions, directoryAdapters } from "./directory-adapters";
 
 export class DirectoryError extends Error {
   constructor(readonly code: "NOT_FOUND" | "CURSOR_EXPIRED" | "STORAGE_UNAVAILABLE") {
@@ -12,35 +12,16 @@ export class DirectoryError extends Error {
 }
 
 /** Only approved public projections are read; no case, draft or identity decryption. */
-export function createDirectoryService(core: V2Core, clock = () => new Date().toISOString()) {
-  const directory = createV2DirectoryRepository(core);
+export function createDirectoryService(
+  core: V2Core,
+  clock = () => new Date().toISOString(),
+  options?: DirectoryOptions,
+) {
   const lawyers = createV2LawyersRepository(core);
   return {
     async list(raw: Record<string, string>) {
-      const query = v2DirectoryQuerySchema.parse({
-        ...raw,
-        ...(raw.limit === undefined ? {} : { limit: Number(raw.limit) }),
-      });
-      const now = clock();
-      const result = query.cursor
-        ? await directory.page(now, query)
-        : await directory.create(now, query, {
-            id: crypto.randomUUID(),
-            expiresAt: new Date(Date.parse(now) + DIRECTORY_SNAPSHOT_TTL_MS).toISOString(),
-          });
-      if (!result) throw new DirectoryError("CURSOR_EXPIRED");
-      // A self-managed profile replaces the older reviewed projection without rewriting its history.
-      const items = [];
-      for (const item of result.items) {
-        const replaced = await core
-          .statement(
-            "SELECT s.id FROM v2_private_snapshots s JOIN v2_consents c ON c.id=s.id AND c.owner_id=s.owner_id WHERE s.target_id=? AND s.purpose='profile_revision' AND c.kind='profile_publication' AND c.version IN ('mvp-self-profile-public-v1','mvp-self-profile-private-v1') LIMIT 1",
-            [item.id],
-          )
-          .first();
-        if (!replaced) items.push(item);
-      }
-      return { ...result, items };
+      if (!options) throw new DirectoryError("STORAGE_UNAVAILABLE");
+      return directoryAdapters(core, { ...options, clock }).verified(raw);
     },
     async profile(id: string): Promise<V2PublicLawyer> {
       opaqueIdSchema.parse(id);

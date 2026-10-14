@@ -213,6 +213,11 @@ export function prepareV2RestoreReplay(
     at = literal(now);
   const scope = `SELECT d.id FROM v2_deletion_journals d JOIN json_each(${j}) source ON d.target_kind=json_extract(source.value,'$.target_kind') AND d.target_id=json_extract(source.value,'$.target_id')`;
   const sql: string[] = [];
+  // Restored tombstones may already exist. Re-delete restored projections even
+  // when ON CONFLICT prevents the insertion trigger from firing again.
+  sql.push(
+    `DELETE FROM v2_directory_entries WHERE owner_id IN (SELECT json_extract(value,'$.target_id') FROM json_each(${j}) WHERE json_extract(value,'$.target_kind')='account') OR profile_id IN (SELECT json_extract(value,'$.target_id') FROM json_each(${j}) WHERE json_extract(value,'$.target_kind')='profile') OR profile_id IN (SELECT profile_id FROM v2_directory_asset_refs WHERE asset_id IN (SELECT json_extract(value,'$.target_id') FROM json_each(${j}) WHERE json_extract(value,'$.target_kind')='asset') OR blob_id IN (SELECT json_extract(value,'$.target_id') FROM json_each(${t}) WHERE json_extract(value,'$.kind')='blob'))`,
+  );
   // A conflicting immutable ID/key means this is not the expected restore. Abort
   // the entire batch through an existing CHECK; never overwrite peer inventory.
   sql.push(

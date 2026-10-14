@@ -85,6 +85,13 @@
       "when": 1791950603359,
       "tag": "0011_runtime_refresh",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1791953979847,
+      "tag": "0012_directory_index",
+      "breakpoints": true
     }
   ]
 }

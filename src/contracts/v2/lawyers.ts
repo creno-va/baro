@@ -487,7 +487,12 @@ export const v2DirectoryQuerySchema = z.strictObject({
   name: displayText(100).optional(),
   region: v2RegionSchema.optional(),
   legalField: v2LegalFieldSchema.optional(),
-  cursor: opaqueIdSchema.optional(),
+  cursor: z
+    .string()
+    .min(1)
+    .max(2048)
+    .regex(/^[A-Za-z0-9_-]+$/)
+    .optional(),
   limit: z.number().int().min(1).max(50).default(20),
 });
 // UI derives provider links from this public office only, never from a case or user narrative.
@@ -501,7 +506,12 @@ export const v2DirectorySnapshotSchema = z.strictObject({
   rotation: z.literal("disclosed_rotation"),
   expiresAt: timestampSchema,
   items: z.array(v2PublicLawyerSchema).max(50).refine(hasUniqueIds, "Duplicate directory items"),
-  nextCursor: opaqueIdSchema.nullable(),
+  nextCursor: z
+    .string()
+    .min(1)
+    .max(2048)
+    .regex(/^[A-Za-z0-9_-]+$/)
+    .nullable(),
 });
 export const v2PublicProfileReportRequestSchema = z.strictObject({
   expectedRevision: revisionSchema,

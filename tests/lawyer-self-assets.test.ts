@@ -92,8 +92,19 @@ test("existing PDF portfolio pipeline publishes only the linked sanitized attach
   expect(response.headers.get("content-type")).toBe("application/pdf");
   expect(response.headers.get("content-disposition")).toBe('attachment; filename="portfolio.pdf"');
   expect(new Uint8Array(await response.arrayBuffer())).toEqual(f.output);
+  expect(await (await f.request("/lawyers/directory")).json()).toMatchObject({
+    items: [{ id: f.profile.id }],
+  });
   expect(await createV2DeletionRepository(f.core).asset(f.actor, f.params.assetId, 3)).toBeTruthy();
   expect((await f.request()).status).toBe(404);
+  expect(await (await f.request("/lawyers/directory")).json()).toMatchObject({ items: [] });
+  for (const table of [
+    "v2_directory_entries",
+    "v2_directory_terms",
+    "v2_directory_facets",
+    "v2_directory_asset_refs",
+  ])
+    expect(f.db.sqlite.query(`SELECT count(*) AS n FROM ${table}`).get()).toEqual({ n: 0 });
 });
 
 test("ready own upload preview works before profile attachment while public and foreign access remain denied", async () => {
