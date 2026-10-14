@@ -125,12 +125,12 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
   const chatEnd = useRef<HTMLDivElement>(null);
   const draftInput = useRef<HTMLTextAreaElement>(null);
   const latest = useRef(0);
-  const operationError = useRef(false);
+  const operationError = useRef<ReturnType<typeof problem> | null>(null);
   const acknowledgedTimeline = useRef(false);
   const [timelineRecovery, setTimelineRecovery] = useState(false);
   const purge = useCallback(() => {
     ++latest.current;
-    operationError.current = false;
+    operationError.current = null;
     acknowledgedTimeline.current = false;
     setTimelineRecovery(false);
     sendAttempt.current = null;
@@ -190,7 +190,12 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
       if (current(epoch) && serial === latest.current) {
         apply(next);
         setUploadReadbackPending(false);
-        if (!operationError.current) setError(null);
+        // A fresh read resolves its own error, not an earlier failed mutation.
+        // If a failed mutation's 404 check was interrupted, this read now
+        // confirms that the workspace itself still exists for the current owner.
+        if (operationError.current?.code === "NOT_FOUND")
+          operationError.current = { ...operationError.current, resource: true };
+        setError(operationError.current);
         if (acknowledgedTimeline.current) {
           acknowledgedTimeline.current = false;
           setTimelineRecovery(false);
@@ -324,23 +329,21 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
     latest.current++;
     setBusy(key);
     if (key !== "refresh") {
-      operationError.current = false;
+      operationError.current = null;
       setError(null);
     }
     setNotice("");
     try {
       if (!(await verify(false, !readOrDelete)) || !current(epoch)) {
         if (["upload", "file-retry"].includes(key) && alive(epoch)) {
-          operationError.current = true;
-          setError(
-            problem({
-              code: "UNAVAILABLE",
-              message:
-                key === "upload"
-                  ? "계정 확인이 끝나면 선택한 자료의 업로드를 다시 시도해 주세요."
-                  : "자료 처리 요청을 보내지 못했어요. 계정 확인 후 다시 시도해 주세요.",
-            }),
-          );
+          operationError.current = problem({
+            code: "UNAVAILABLE",
+            message:
+              key === "upload"
+                ? "계정 확인이 끝나면 선택한 자료의 업로드를 다시 시도해 주세요."
+                : "자료 처리 요청을 보내지 못했어요. 계정 확인 후 다시 시도해 주세요.",
+          });
+          setError(operationError.current);
         }
         return;
       }
@@ -348,7 +351,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
     } catch (cause) {
       if (!alive(epoch)) return;
       // A focus-triggered reload must not erase an unsuccessful mutation's error.
-      operationError.current = !readOrDelete;
+      operationError.current = readOrDelete ? null : problem(cause);
       let resource = false;
       if (problem(cause).code === "NOT_FOUND") {
         try {
@@ -362,6 +365,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
         }
       }
       const nextError = showError(cause, resource);
+      if (!readOrDelete && alive(epoch)) operationError.current = nextError;
       if (nextError.code === "CONFLICT") {
         sendAttempt.current = null;
         await load();
