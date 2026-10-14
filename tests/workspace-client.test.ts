@@ -394,7 +394,8 @@ test("real accepted chat job restores failed response after reload and retries c
       stored.delete(key);
     },
   };
-  let status: "failed" | "queued" | "completed" = "failed";
+  let status: "failed" | "queued" | "running" | "validating" | "completed" = "failed";
+  let phase = "admission";
   let currentJobId: string | null = null;
   let expectedRetry: unknown;
   const accepted = { operationId: job.operationId, jobId: job.id, status: "queued", retryAfter: 2 };
@@ -417,7 +418,7 @@ test("real accepted chat job restores failed response after reload and retries c
       return Response.json({
         ...job,
         status,
-        phase: status === "completed" ? "finished" : "admission",
+        phase: status === "completed" ? "finished" : phase,
         progressPercent: status === "completed" ? 100 : 0,
         attempts: 1,
         failure: status === "failed" ? "CITATION_INVALID" : null,
@@ -458,6 +459,17 @@ test("real accepted chat job restores failed response after reload and retries c
     "pending",
   );
   expect(expectedRetry).toEqual({ expectedRevision: 4 });
+  for (const [nextPhase, text] of [
+    ["generating", "추가한 내용을 바탕으로 답변을 작성하고 있어요."],
+    ["retrieving", "공식 법률 자료를 확인하고 있어요."],
+    ["validating", "정리한 내용과 근거를 검증하고 있어요."],
+    ["assembling", "확인한 결과를 저장하고 있어요."],
+  ]) {
+    phase = nextPhase ?? "admission";
+    status = phase === "validating" ? "validating" : "running";
+    const refreshed = await createWorkspaceApi(request, storage).get(workspace.id);
+    expect(refreshed.messages.at(-1)).toMatchObject({ status: "pending", text });
+  }
   status = "completed";
   expect((await resumed.get(workspace.id)).messages.at(-1)?.id).toBe(assistantMessage.id);
   expect(stored.size).toBe(0);

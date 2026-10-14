@@ -17,6 +17,7 @@ import {
 } from "../../contracts/v2";
 import { ApiError, apiMode, request } from "./core";
 import type { CaseView, QuestionView } from "./types";
+import { workspaceProgressText } from "./workspace-progress";
 
 export const createInputSchema = z.object({
   narrative: boundedText(20, 5000),
@@ -62,6 +63,7 @@ export type QuestionsResult = {
   roundLimit?: number;
   rounds?: QuestionRound[];
   processingStage?: "questions" | "summary";
+  processingMessage?: string;
 };
 const metadataSchema = z.object({
   schemaVersion: z.literal("2"),
@@ -311,6 +313,7 @@ async function getQuestions(id: string): Promise<QuestionsResult> {
           retryable: z.boolean(),
           failure: v2FailureCodeSchema.nullable(),
           kind: z.string().optional(),
+          phase: v2JobSchema.shape.phase.optional(),
         })
         .parse(
           await request(
@@ -322,6 +325,12 @@ async function getQuestions(id: string): Promise<QuestionsResult> {
     const processing = ["queued", "running", "validating"].includes(job.status);
     if (m.currentJobId && !processing) continue;
     result.processing = processing;
+    if (processing)
+      result.processingMessage = workspaceProgressText({
+        status: job.status as "queued" | "running" | "validating",
+        phase: job.phase ?? "admission",
+        kind: job.kind === "intake_summary" ? "intake_summary" : "intake_questions",
+      });
     result.failed = job.status === "failed";
     result.retryable = result.failed && job.retryable;
     result.failure = result.failed ? job.failure : null;
