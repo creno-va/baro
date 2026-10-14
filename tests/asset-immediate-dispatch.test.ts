@@ -82,6 +82,7 @@ async function setup(admit = true, funded = false) {
 
 function workflow() {
   const instances = new Map<string, unknown>();
+  const inputs: Parameters<AssetProcessingBinding["create"]>[0][] = [];
   let gets = 0,
     creates = 0;
   const binding: AssetProcessingBinding = {
@@ -90,13 +91,15 @@ function workflow() {
       if (!instances.has(id)) throw new Error("Synthetic missing instance");
       return { id, status: async () => ({ status: "running" }) };
     },
-    async create({ id, params }) {
+    async create(input) {
+      const { id, params } = input;
+      inputs.push(structuredClone(input));
       creates++;
       instances.set(id, params);
       return { id, status: async () => ({ status: "running" }) };
     },
   };
-  return { binding, instances, calls: () => ({ gets, creates }) };
+  return { binding, instances, inputs, calls: () => ({ gets, creates }) };
 }
 const target = (f: Awaited<ReturnType<typeof setup>>) => ({
   ownerId: f.actor.ownerId,
@@ -125,6 +128,19 @@ test("exact wake rejects a foreign owner, job or runtime then races cron through
   expect(w.instances.get(target(f).instanceId)).toEqual(f.params);
   expect((await dispatcher.dispatchOne(target(f))).dispatched).toBe(0);
   expect(w.calls().creates).toBe(1);
+});
+
+test("preview profile asset creation has no file Workflow placement hint", async () => {
+  const f = await setup(),
+    w = workflow();
+  const result = await createAssetProcessingDispatcher(f.core, {
+    binding: w.binding,
+    environment: "preview",
+    clock: () => f.actor.now,
+  }).dispatchOne(target(f));
+  expect(result.dispatched).toBe(1);
+  expect(w.inputs).toEqual([{ id: target(f).instanceId, params: f.params }]);
+  expect(w.inputs[0]).not.toHaveProperty("locationHint");
 });
 
 for (const mutation of [

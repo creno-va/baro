@@ -15,7 +15,11 @@ type DispatcherOptions<P> = {
   leaseMs?: number;
 };
 type ProcessingBinding<P> = {
-  create(input: { id: string; params: P }): Promise<Instance>;
+  create(input: {
+    id: string;
+    params: P;
+    locationHint?: WorkflowInstanceLocationHint;
+  }): Promise<Instance>;
   get(id: string): Promise<Instance>;
 };
 export type FileProcessingBinding = ProcessingBinding<FileProcessingParams>;
@@ -68,7 +72,13 @@ type Row = {
 function createProcessingDispatcher<P extends FileProcessingParams | AssetProcessingParams>(
   core: V2Core,
   options: DispatcherOptions<P>,
-  scope: { joins: string; live: string; consentValues: string[]; params: (row: Row) => P },
+  scope: {
+    joins: string;
+    live: string;
+    consentValues: string[];
+    params: (row: Row) => P;
+    previewLocationHint?: WorkflowInstanceLocationHint;
+  },
 ) {
   const { joins, live, consentValues } = scope;
   const now = () =>
@@ -175,7 +185,13 @@ function createProcessingDispatcher<P extends FileProcessingParams | AssetProces
               continue;
             }
             try {
-              const instance = await options.binding.create({ id: id.data, params });
+              const instance = await options.binding.create({
+                id: id.data,
+                params,
+                ...(options.environment === "preview" && scope.previewLocationHint
+                  ? { locationHint: scope.previewLocationHint }
+                  : {}),
+              });
               known =
                 instance.id === id.data && instanceStatuses.has((await instance.status()).status);
             } catch {
@@ -233,6 +249,8 @@ export function createFileProcessingDispatcher(
     joins,
     live,
     consentValues,
+    // Preview-only best-effort experiment; existing instances are only reconciled.
+    previewLocationHint: "apac",
     params: (row) =>
       fileProcessingParamsSchema.parse({
         ownerId: row.owner_id,
