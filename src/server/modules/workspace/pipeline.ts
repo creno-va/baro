@@ -26,7 +26,7 @@ import {
   workspaceQuestionsOutputSchema,
   workspaceSummaryOutputSchema,
 } from "../llm-gateway/v2/schemas";
-
+import type { WorkspaceAuditFailure } from "./audit-diagnostics";
 import { normalizeTimelineDates } from "./timeline-dates";
 
 export type WorkspaceContext = {
@@ -73,6 +73,7 @@ export class WorkspaceOutputPolicyError extends ModelError {
   constructor(
     readonly reason: WorkspaceOutputPolicyReason,
     readonly factFailure?: WorkspaceFactFailure,
+    readonly auditFailure?: WorkspaceAuditFailure,
   ) {
     super("POLICY_REJECTED");
   }
@@ -289,7 +290,13 @@ export function createWorkspacePipeline(
       checked.unsupportedFactIds.length ||
       checked.findings.some((f) => f.severity === "critical")
     )
-      throw new WorkspaceOutputPolicyError("audit_rejected");
+      throw new WorkspaceOutputPolicyError("audit_rejected", undefined, {
+        pass: checked.pass,
+        legalClaimsSupported: checked.legalClaimsSupported,
+        strategyDetected: checked.strategyDetected,
+        findings: checked.findings.map(({ severity, code }) => ({ severity, code })),
+        unsupportedFactCount: checked.unsupportedFactIds.length,
+      });
     return checked;
   };
   return {

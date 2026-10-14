@@ -151,6 +151,13 @@ test("legacy retryable=0 failure reuses saved answers and only publishes a newly
     jobId: failed.params.jobId,
     status: "failed",
     policyReason: "audit_rejected",
+    auditFailure: {
+      pass: false,
+      legalClaimsSupported: true,
+      strategyDetected: false,
+      findings: [],
+      unsupportedFactCount: 0,
+    },
     stageTimings: [{ stage: "context", durationMs: expect.any(Number), outcome: "failed" }],
   });
   const saved = await f.service.intake(f.owner.userId, f.workspace.id);
