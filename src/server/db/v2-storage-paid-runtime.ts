@@ -201,12 +201,17 @@ export function createV2StoragePaidRuntimeRepository(
         )
           return null;
         const amount = estimatePlanKrw(pricing, r.plan.quantities);
-        if (amount > 1000000 || amount > funding.spendAllowanceKrw) return null;
+        if (
+          core.applicationCostLimitsEnabled &&
+          (amount > 1000000 || amount > funding.spendAllowanceKrw)
+        )
+          return null;
         const source = sourceQuery(r, actor, false),
           row = await core.statement(source.sql, source.values).first<{ anchor: string }>();
         if (!row) return null;
         const budget = budgetAdmissionPredicate({
           boundedStorage: true,
+          applicationCostLimitsEnabled: core.applicationCostLimitsEnabled,
           monthlyBudgetCapEnabled: core.monthlyBudgetCapEnabled,
           pricingProofId: r.pricingProofId,
           fundingProofId: r.fundingProofId,
@@ -356,6 +361,7 @@ export function createV2StoragePaidRuntimeRepository(
           return null;
         const budget = budgetAdmissionPredicate({
           boundedStorage: true,
+          applicationCostLimitsEnabled: core.applicationCostLimitsEnabled,
           monthlyBudgetCapEnabled: core.monthlyBudgetCapEnabled,
           pricingProofId: r.pricingProofId,
           fundingProofId: r.fundingProofId,

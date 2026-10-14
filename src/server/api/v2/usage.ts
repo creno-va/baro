@@ -29,6 +29,7 @@ export function createUsageApi(
       });
       const service = createUsageService(c.env.DB, {
         ...options,
+        applicationCostLimitsEnabled: c.env.APPLICATION_COST_LIMITS_ENABLED !== "false",
         monthlyBudgetCapEnabled: c.env.MONTHLY_BUDGET_CAP_ENABLED !== "false",
         budgetProofs:
           options.budgetProofs ??

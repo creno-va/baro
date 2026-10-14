@@ -9,7 +9,8 @@ import {
 import { V2_LIMITS, v2CountSchema, v2VersionSchema, v2WaitReasonSchema } from "./common";
 
 const observedKrw = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
-const reservedKrw = observedKrw.max(V2_LIMITS.maximumAttemptKrw);
+// Numeric integrity only; cost admission policy is server-owned.
+const reservedKrw = observedKrw;
 
 function counter(limit: number, integral = true) {
   const quantity = integral ? v2CountSchema : z.number().min(0).max(Number.MAX_SAFE_INTEGER);

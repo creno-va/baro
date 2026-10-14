@@ -106,7 +106,7 @@ export function createGatewayBudgetService(options: {
       pricing.environment !== options.environment ||
       funding.environment !== options.environment ||
       funding.state === "unavailable" ||
-      funding.spendAllowanceKrw < 1
+      (options.core.applicationCostLimitsEnabled && funding.spendAllowanceKrw < 1)
     )
       return null;
     const cutoff = Math.min(

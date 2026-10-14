@@ -153,14 +153,17 @@ function funding(): FundingProof {
     validUntil: EXP,
   };
 }
-async function fixture(monthlyBudgetCapEnabled = true) {
+async function fixture(monthlyBudgetCapEnabled = true, applicationCostLimitsEnabled = true) {
   const db = await createTestDatabase();
   dbs.push(db);
   const session = await seedTestSession(db, { now: Date.parse(NOW), consent: true });
   const cipher = await createCaseDataCipher({
     CASE_DATA_KEY_V1: btoa("d".repeat(32)).replace(/=+$/u, ""),
   });
-  const core = createV2Core(db.binding, cipher, { monthlyBudgetCapEnabled }),
+  const core = createV2Core(db.binding, cipher, {
+      monthlyBudgetCapEnabled,
+      applicationCostLimitsEnabled,
+    }),
     actor: Actor = { ownerId: session.userId, now: NOW };
   const accounting = createV2AccountingRepository(core, "preview"),
     jobs = createV2JobsRepository(core),
@@ -1817,4 +1820,73 @@ test("disabled monthly cap permits paid admission beyond legacy allocation, pres
   expect(await check()).toBe(1);
   f.db.sqlite.exec("UPDATE v2_monthly_budget SET settled_krw=50000");
   expect(await check()).toBe(0);
+});
+
+test("disabled application cost limits preserve old exposure and admit, dispatch and settle beyond funding", async () => {
+  const f = await fixture(true, false);
+  f.db.sqlite.exec(
+    "UPDATE v2_monthly_budget SET limit_krw=0,settled_krw=20000,ambiguous_krw=21000,fixed_maintenance_krw=31000",
+  );
+  const originalFunding = f.db.sqlite
+    .query("SELECT * FROM v2_runtime_proofs WHERE id=?")
+    .get(f.fp.id);
+  const d = await dispatch(f);
+  expect(d.paid.reservedKrw).toBe(1000);
+  expect(
+    await f.runtime.recordUsage(
+      receipt(d, { chargedUsd: "2", meteringComplete: false, quantities: [] }),
+      NOW,
+    ),
+  ).toBe(true);
+  expect(await f.runtime.exposure(NOW)).toMatchObject({
+    phase: "active",
+    settled_krw: 22000,
+    reserved_krw: 0,
+    ambiguous_krw: 21000,
+    fixed_maintenance_krw: 31000,
+  });
+  expect(f.db.sqlite.query("SELECT * FROM v2_runtime_proofs WHERE id=?").get(f.fp.id)).toEqual(
+    originalFunding,
+  );
+});
+
+test("observation-only reservations can exceed the old per-attempt money ceiling", async () => {
+  const f = await fixture(true, false);
+  const r = request(f);
+  r.plan.quantities[0]!.maximumQuantity = "1500000";
+  const admitted = await admit(f, r);
+  expect(admitted.ok).toBe(true);
+  expect(admitted.paid.reservedKrw).toBeGreaterThan(1000000);
+  expect((await f.runtime.exposure(NOW))?.reserved_krw).toBe(admitted.paid.reservedKrw);
+  expect(f.db.sqlite.query("PRAGMA foreign_key_check").all()).toEqual([]);
+});
+
+test("cost-limit removal still rejects aggregate arithmetic that cannot be recorded exactly", async () => {
+  const f = await fixture(true, false);
+  f.db.sqlite.query("UPDATE v2_monthly_budget SET settled_krw=?").run(Number.MAX_SAFE_INTEGER - 1);
+  const a = await admit(f);
+  expect(a.ok).toBe(false);
+  expect(f.db.sqlite.query("SELECT count(*) n FROM v2_cost_attempts").get()).toEqual({ n: 0 });
+});
+
+test("disabling money limits does not authorize unavailable funding, stale proofs or deleted owners", async () => {
+  for (const failure of ["unavailable", "expired", "deleted"] as const) {
+    const f = await fixture(true, false);
+    const r = request(f);
+    if (failure === "deleted") {
+      f.db.sqlite
+        .query("INSERT INTO v2_tombstones(target_kind,target_id,deleted_at) VALUES('account',?,?)")
+        .run(f.actor.ownerId, NOW);
+    } else {
+      const proof = {
+        ...f.fp,
+        id: crypto.randomUUID(),
+        ...(failure === "unavailable" ? { state: "unavailable" as const } : { validUntil: LATER }),
+      };
+      expect(await f.runtime.putFundingProof(proof, NOW)).toBe(true);
+      r.fundingProofId = proof.id;
+    }
+    expect(await f.runtime.prepareHold(f.actor, r)).toBeNull();
+    expect(f.db.sqlite.query("SELECT count(*) n FROM v2_cost_attempts").get()).toEqual({ n: 0 });
+  }
 });

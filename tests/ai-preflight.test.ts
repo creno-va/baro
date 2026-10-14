@@ -35,6 +35,7 @@ async function fixture() {
       AI_GATEWAY_ID: "baro-preview",
       BETTER_AUTH_URL: "https://preview.baro.site",
       RELEASE_SHA: sha,
+      APPLICATION_COST_LIMITS_ENABLED: "true",
       MONTHLY_BUDGET_CAP_ENABLED: "false",
       AI_MODEL_TOKEN_BOUNDS_JSON: JSON.stringify(modelBounds(observed, provisioned.evidenceHash)),
     }).map(([name, text]) => ({ name, type: "plain_text", text })),
@@ -226,6 +227,26 @@ test("positive remaining credit or cap below the real phase reservation is not r
   const report = await inspectAiPreflight({ ...f.input, scope: "text" });
   expect(report.checks.model_paid_available).toBe(true);
   expect(report.blockers).toContain("model_reservation_headroom");
+});
+
+test("observation-only costs do not block readiness at exhausted funding, without changing any ledger", async () => {
+  const f = await fixture();
+  const policy = f.bindings.find((b) => b.name === "APPLICATION_COST_LIMITS_ENABLED");
+  if (!policy) throw new Error("Missing fixture cost policy");
+  policy.text = "false";
+  f.preview.sqlite.exec(
+    "UPDATE v2_monthly_budget SET settled_krw=283,ambiguous_krw=21895,fixed_maintenance_krw=31118,limit_krw=0",
+  );
+  const before = f.preview.sqlite.query("SELECT * FROM v2_monthly_budget").all();
+  const report = await inspectAiPreflight({ ...f.input, scope: "text" });
+  expect(report.status).toBe("configuration_ready");
+  expect(report.checks.model_reservation_headroom).toBe("not_enforced");
+  expect(report.checks.model_cost_estimate_valid).toBe(true);
+  expect(f.preview.sqlite.query("SELECT * FROM v2_monthly_budget").all()).toEqual(before);
+  policy.text = "true";
+  expect((await inspectAiPreflight({ ...f.input, scope: "text" })).blockers).toContain(
+    "model_reservation_headroom",
+  );
 });
 
 test("the deployed budget cap setting determines whether a full allocation can admit work", async () => {

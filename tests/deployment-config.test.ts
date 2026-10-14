@@ -41,6 +41,17 @@ test("current deployment configs share behavior while isolating resource identit
   expect(() => checkDeploymentConfig(changed)).not.toThrow();
 });
 
+test("neither live environment may silently restore application cost limits", () => {
+  for (const field of ["APPLICATION_COST_LIMITS_ENABLED", "MONTHLY_BUDGET_CAP_ENABLED"]) {
+    const config = structuredClone(configuration);
+    for (const environment of ["preview", "production"])
+      config.env[environment].vars[field] = "true";
+    expect(() => checkDeploymentConfig(config)).toThrow(
+      "DEPLOYMENT_APPLICATION_COST_LIMITS_MUST_BE_DISABLED",
+    );
+  }
+});
+
 test("missing bindings and different runtime behavior fail parity", () => {
   const changes = [
     (config: typeof configuration) => {

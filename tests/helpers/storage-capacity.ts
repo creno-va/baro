@@ -135,7 +135,11 @@ function funding(): FundingProof {
   };
 }
 export async function fixture(
-  options: { throughMigration?: string; pricing?: (initial: PricingProof) => PricingProof } = {},
+  options: {
+    throughMigration?: string;
+    applicationCostLimitsEnabled?: boolean;
+    pricing?: (initial: PricingProof) => PricingProof;
+  } = {},
 ) {
   const db = await createTestDatabase(options);
   dbs.push(db);
@@ -143,7 +147,9 @@ export async function fixture(
   const cipher = await createCaseDataCipher({
     CASE_DATA_KEY_V1: btoa("d".repeat(32)).replace(/=+$/u, ""),
   });
-  const core = createV2Core(db.binding, cipher),
+  const core = createV2Core(db.binding, cipher, {
+      applicationCostLimitsEnabled: options.applicationCostLimitsEnabled,
+    }),
     actor: Actor = { ownerId: session.userId, now: NOW };
   const accounting = createV2AccountingRepository(core, "preview"),
     jobs = createV2JobsRepository(core),
@@ -222,7 +228,11 @@ export function projection(f: Fixture, extra: Partial<StorageProjection> = {}): 
 }
 export async function ready(
   extra: Partial<StorageProjection> = {},
-  options: { pricing?: (initial: PricingProof) => PricingProof } = {},
+  options: {
+    throughMigration?: string;
+    applicationCostLimitsEnabled?: boolean;
+    pricing?: (initial: PricingProof) => PricingProof;
+  } = {},
 ) {
   const f = await fixture(options),
     capacity = createV2StorageCapacityRepository(f.core, "preview", verifier);

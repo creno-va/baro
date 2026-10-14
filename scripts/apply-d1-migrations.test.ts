@@ -21,7 +21,7 @@ test("SQL-file import preserves multi-statement triggers and records the same at
       files.map((name) => ({ name })),
     );
     expect(db.query("SELECT value FROM app_metadata WHERE key='schema_version'").get()).toEqual({
-      value: "0013_lawyer_storage_lookups",
+      value: "0014_cost_observation_bounds",
     });
     expect(
       db

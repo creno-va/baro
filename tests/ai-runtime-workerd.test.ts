@@ -15,7 +15,7 @@ import { signedSessionCookie, testEnvironment } from "./helpers/d1";
 
 // Wrangler pins this workerd/Miniflare pair in bun.lock. Using its actual D1
 // implementation catches SQLite authorization/SQL limits that bun:sqlite cannot.
-test("workerd D1 executes questions, outage/policy recovery, summary confirmation and chat publication", async () => {
+async function exerciseNativeRuntime(applicationCostLimitsEnabled: boolean) {
   const mf = new Miniflare(
     convertV4MiniflareOptions({
       modules: true,
@@ -34,6 +34,7 @@ test("workerd D1 executes questions, outage/policy recovery, summary confirmatio
       .sort();
     for (const db of [preview, production]) {
       for (const name of migrations) {
+        if (db === preview && name === "0014_cost_observation_bounds.sql") continue;
         const statements = (await Bun.file(`drizzle/${name}`).text())
           .split("--> statement-breakpoint")
           .map((sql) => sql.trim())
@@ -44,6 +45,7 @@ test("workerd D1 executes questions, outage/policy recovery, summary confirmatio
     const now = new Date().toISOString(),
       observed = observationSchema.parse({
         ...observation,
+        spendAllowanceKrw: applicationCostLimitsEnabled ? observation.spendAllowanceKrw : 53410,
         checkedAt: now,
         validUntil: new Date(Date.now() + 86400000).toISOString(),
       });
@@ -76,6 +78,7 @@ test("workerd D1 executes questions, outage/policy recovery, summary confirmatio
     ]);
     const key = btoa("w".repeat(32)).replace(/=+$/, ""),
       core = createV2Core(preview, await createCaseDataCipher({ CASE_DATA_KEY_V1: key }), {
+        applicationCostLimitsEnabled,
         monthlyBudgetCapEnabled: false,
       });
     let providerCalls = 0,
@@ -86,6 +89,7 @@ test("workerd D1 executes questions, outage/policy recovery, summary confirmatio
       APP_ENV: "preview",
       DB: preview,
       CASE_DATA_KEY_V1: key,
+      APPLICATION_COST_LIMITS_ENABLED: String(applicationCostLimitsEnabled),
       MONTHLY_BUDGET_CAP_ENABLED: "false",
       AI_GATEWAY_ID: "synthetic-gateway",
       AI_MODEL_TOKEN_BOUNDS_JSON: JSON.stringify(modelBounds(observed, provisioned.evidenceHash)),
@@ -237,6 +241,14 @@ test("workerd D1 executes questions, outage/policy recovery, summary confirmatio
         },
         env,
       );
+    if (!applicationCostLimitsEnabled) {
+      // Preserve an existing unknown exposure and maintenance reservation; no credit increase.
+      await preview
+        .prepare(
+          "UPDATE v2_monthly_budget SET settled_krw=283,ambiguous_krw=21895,fixed_maintenance_krw=31118,limit_krw=0",
+        )
+        .run();
+    }
     const workspace = await service.create(ownerId, crypto.randomUUID(), {
       narrative: "합성 계약 자료의 거래 날짜를 확인하고 상담을 준비하려고 합니다.",
       jurisdiction: "KR",
@@ -274,7 +286,65 @@ test("workerd D1 executes questions, outage/policy recovery, summary confirmatio
       await preview
         .prepare("SELECT reserved_krw+ambiguous_krw AS unresolved FROM v2_monthly_budget")
         .first<number>("unresolved"),
-    ).toBe(0);
+    ).toBe(applicationCostLimitsEnabled ? 0 : 21895);
+    // Upgrade with real retained plans/receipts, then inject a late D1 failure to
+    // prove rows, triggers and the schema marker roll back as one import.
+    const migration = (await Bun.file("drizzle/0014_cost_observation_bounds.sql").text())
+      .split("--> statement-breakpoint")
+      .map((sql) => sql.trim())
+      .filter(Boolean);
+    const preservedTables = [
+      "v2_runtime_plans",
+      "v2_paid_holds",
+      "v2_cost_attempts",
+      "v2_runtime_usage",
+      "v2_runtime_proofs",
+      "v2_monthly_budget",
+      "v2_jobs",
+      "v2_storage_projections",
+      "app_metadata",
+    ];
+    const snapshot = async () =>
+      Promise.all(
+        preservedTables.map(
+          async (table) => (await preview.prepare(`SELECT * FROM ${table}`).all()).results,
+        ),
+      );
+    const original = await snapshot();
+    const originalTriggers = (
+      await preview
+        .prepare("SELECT name,sql FROM sqlite_master WHERE type='trigger' ORDER BY name")
+        .all()
+    ).results;
+    await expect(
+      preview.batch([
+        ...migration.map((sql) => preview.prepare(sql)),
+        preview.prepare("SELECT json('synthetic-invalid-json')"),
+      ]),
+    ).rejects.toThrow();
+    expect(await snapshot()).toEqual(original);
+    expect(
+      (
+        await preview
+          .prepare("SELECT name,sql FROM sqlite_master WHERE type='trigger' ORDER BY name")
+          .all()
+      ).results,
+    ).toEqual(originalTriggers);
+    await preview.batch(migration.map((sql) => preview.prepare(sql)));
+    expect((await snapshot()).slice(0, -1)).toEqual(original.slice(0, -1));
+    expect(
+      (
+        await preview
+          .prepare("SELECT name,sql FROM sqlite_master WHERE type='trigger' ORDER BY name")
+          .all()
+      ).results,
+    ).toEqual(originalTriggers);
+    expect(
+      await preview
+        .prepare("SELECT value FROM app_metadata WHERE key='schema_version'")
+        .first<string>("value"),
+    ).toBe("0014_cost_observation_bounds");
+    expect((await preview.prepare("PRAGMA foreign_key_check").all()).results).toEqual([]);
     // Match the UI: answers -> advance -> failed latest job -> retry route.
     const intake = await service.intake(ownerId, workspace.id);
     expect(
@@ -451,4 +521,12 @@ test("workerd D1 executes questions, outage/policy recovery, summary confirmatio
   } finally {
     await mf.dispose();
   }
-}, 30000);
+}
+
+for (const enabled of [true, false]) {
+  test(
+    `workerd D1 executes questions, recovery and chat (cost limits=${enabled})`,
+    () => exerciseNativeRuntime(enabled),
+    30000,
+  );
+}

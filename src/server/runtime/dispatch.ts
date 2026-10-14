@@ -16,6 +16,7 @@ export async function reconcileV2Dispatch(env: Env) {
   try {
     const now = new Date().toISOString();
     const core = createV2Core(env.DB, await createCaseDataCipher(env), {
+      applicationCostLimitsEnabled: env.APPLICATION_COST_LIMITS_ENABLED !== "false",
       monthlyBudgetCapEnabled: env.MONTHLY_BUDGET_CAP_ENABLED !== "false",
     });
     const environment = env.APP_ENV === "production" ? "production" : "preview";
@@ -27,7 +28,7 @@ export async function reconcileV2Dispatch(env: Env) {
       JOIN v2_runtime_proofs allocation ON allocation.id=c.allocation_proof_id AND allocation.kind='allocation' AND allocation.environment=c.environment
       WHERE c.environment=? AND c.month=? AND c.phase='active' AND allocation.verified_at<=? AND ${allocationUntilSql("c", "allocation")}>?
       AND (${core.monthlyBudgetCapEnabled ? "0" : "1"}=1 OR b.settled_krw+b.reserved_krw+b.ambiguous_krw+b.fixed_maintenance_krw+(${carryoverSql})<=b.limit_krw)
-      AND b.settled_krw+b.reserved_krw+b.ambiguous_krw+b.fixed_maintenance_krw+(${carryoverSql})<=json_extract(funding.payload_json,'$.spendAllowanceKrw')
+      AND (${core.applicationCostLimitsEnabled ? "0" : "1"}=1 OR b.settled_krw+b.reserved_krw+b.ambiguous_krw+b.fixed_maintenance_krw+(${carryoverSql})<=json_extract(funding.payload_json,'$.spendAllowanceKrw'))
       AND funding.verified_at<=? AND funding.valid_until>? AND json_extract(funding.payload_json,'$.state') IN ('funded','trial_credit')`,
         [
           environment,

@@ -18,6 +18,7 @@ export function createModerationApi(
   const service = async (env: Env) =>
     createModerationService(
       createV2Core(env.DB, await createCaseDataCipher(env), {
+        applicationCostLimitsEnabled: env.APPLICATION_COST_LIMITS_ENABLED !== "false",
         monthlyBudgetCapEnabled: env.MONTHLY_BUDGET_CAP_ENABLED !== "false",
       }),
       options.clock ? { clock: options.clock } : {},
@@ -27,6 +28,7 @@ export function createModerationApi(
     if (a.response) return a.response;
     z.strictObject({}).parse(c.req.query());
     const core = createV2Core(c.env.DB, await createCaseDataCipher(c.env), {
+      applicationCostLimitsEnabled: c.env.APPLICATION_COST_LIMITS_ENABLED !== "false",
       monthlyBudgetCapEnabled: c.env.MONTHLY_BUDGET_CAP_ENABLED !== "false",
     });
     const review = createSubmittedAssetReview(core, {
@@ -54,6 +56,7 @@ export function createModerationApi(
     if (a.response) return a.response;
     z.strictObject({}).parse(c.req.query());
     const core = createV2Core(c.env.DB, await createCaseDataCipher(c.env), {
+      applicationCostLimitsEnabled: c.env.APPLICATION_COST_LIMITS_ENABLED !== "false",
       monthlyBudgetCapEnabled: c.env.MONTHLY_BUDGET_CAP_ENABLED !== "false",
     });
     const assets = createLawyerAssetsService(core, {

@@ -1,5 +1,7 @@
 # v2 사건 작업 공간·자료·중개 실행 계약
 
+> **2026-10-14 후속 직접 지시:** `APPLICATION_COST_LIMITS_ENABLED=false`에서는 월·누적 재원·요청 금액으로 실행을 차단하지 않는다. 금액은 추정·미정산·정산 기록이며 아래 과거 금액 한도보다 이 결정이 우선한다. 최신 가격·funding 상태/권한·실행 물량·횟수·물리 용량과 정확한 정수 원장 검사는 유지한다. 실제 관측 재원을 임의로 늘리지 않는다. 기존 결제·자동충전은 변경하지 않는다.
+
 > **2026-10-07 사용자 후속 — 이전 비용 정책보다 우선:** 계정별 AI 응답은 KST 하루200회이며 Preview/Production의 별도 전체 월 예산 차단은 해제한다. Cloudflare 기존 결제 경로에서 잔액$10 이하 시$30 자동 충전을 사용자가 직접 승인/설정했다. metering·실제 funding·가격/FX·bounded attempt·unknown 비용 보존은 유지한다. 배포 설정 `MONTHLY_BUDGET_CAP_ENABLED=false`가 예약·사용량·정산에 일관되게 적용된다. 기존 allocation 금액은 이 모드에서 소비 차단 한도가 아니며 schema0009의 기록을 보존한다.
 
 - Status: Accepted target specification; implementation and live evidence pending

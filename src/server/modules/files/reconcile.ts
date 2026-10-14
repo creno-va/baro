@@ -16,6 +16,7 @@ export async function reconcileFileUploads(env: Env): Promise<{
   if (!env.CASE_PRIVATE_R2) return { ...result, unavailable: true };
   try {
     const core = createV2Core(env.DB, await createCaseDataCipher(env), {
+      applicationCostLimitsEnabled: env.APPLICATION_COST_LIMITS_ENABLED !== "false",
       monthlyBudgetCapEnabled: env.MONTHLY_BUDGET_CAP_ENABLED !== "false",
     });
     const deletion = createV2DeletionRepository(core);

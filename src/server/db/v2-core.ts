@@ -53,7 +53,10 @@ export const workspaceGuardSql = `w.owner_id = ? AND w.id = ? AND w.revision = ?
 export function createV2Core(
   binding: D1Database,
   cipher: EnvelopeCipher,
-  options: { monthlyBudgetCapEnabled?: boolean | undefined } = {},
+  options: {
+    applicationCostLimitsEnabled?: boolean | undefined;
+    monthlyBudgetCapEnabled?: boolean | undefined;
+  } = {},
 ) {
   const sizes = new WeakMap<D1PreparedStatement, number>();
   const statement = (sql: string, values: unknown[] = []) => {
@@ -140,7 +143,9 @@ export function createV2Core(
     changed,
     encrypt,
     decrypt,
-    monthlyBudgetCapEnabled: options.monthlyBudgetCapEnabled !== false,
+    applicationCostLimitsEnabled: options.applicationCostLimitsEnabled !== false,
+    monthlyBudgetCapEnabled:
+      options.applicationCostLimitsEnabled !== false && options.monthlyBudgetCapEnabled !== false,
   };
 }
 export type V2Core = ReturnType<typeof createV2Core>;

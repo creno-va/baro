@@ -102,6 +102,7 @@ export function createReportsApi(
       throw new ReportError("STORAGE_UNAVAILABLE");
     const core = reportRequestCore(
       createV2Core(env.DB, await createCaseDataCipher(env), {
+        applicationCostLimitsEnabled: env.APPLICATION_COST_LIMITS_ENABLED !== "false",
         monthlyBudgetCapEnabled: env.MONTHLY_BUDGET_CAP_ENABLED !== "false",
       }),
       !options.testOnlyMissingD1Meta,

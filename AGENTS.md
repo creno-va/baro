@@ -17,6 +17,7 @@
 - v2 전체 개발은 `docs/development/V2-EXECUTION.md`와 #53~#71을 따른다. #53 병합/완료 뒤 제품 코드를 시작하며 미완료 P0.3 외부/공개 gate를 보존한다.
 - 일반 구현 선택과 오류 수정은 이슈 범위 안에서 판단해 진행한다. 새 모델/공급자, 공개 정책 법률 승인, 사업자 정보, 새 결제/자동 충전, production 공개 전환은 별도 결정이 필요하다.
 - 사용자 승인은 합의한 R2/Containers/Whisper, 기존 공급자·모델·결제 경로와 사용자 설정 자동충전을 유지한 실제 처리·검증된 PR 병합·수동 preview/production 배포를 허용한다. AI200/일, 질문2×3, 애플리케이션 월 cap 해제이며 유효한 가격·재원·용량과 새 요청 상한을 확인한다. 미정산 hold·실행 작업을 지우지 않는다. 새 결제수단·자동충전 변경·근거 없는 재원 확대·승인 증거 조작은 허용하지 않는다. Goal을 재생성하지 않는다.
+- 2026-10-14 후속 직접 지시: 앱의 비용 금액 제한을 두지 않는다. `APPLICATION_COST_LIMITS_ENABLED=false`에서는 월·누적 재원·요청 금액으로 admission/dispatch/refresh/preflight를 막지 않는다. 비용 추정·미정산·정산 기록과 실제 공급자 상태, 가격·권한·물리 용량·횟수·재시도 경계는 보존한다. 재원 관측값을 임의로 높이는 방식으로 구현하지 않는다.
 - 런타임은 Workers다. Bun은 도구·테스트용이다. 제품 코드에 `Bun.*`, Node filesystem/process를 추가하지 않는다. Better Auth를 위한 `nodejs_compat`는 허용된다.
 - 다른 모듈은 `llm-gateway` 밖에서 모델을 호출하거나 `legal-retrieval` 밖에서 법률 API를 호출하지 않는다.
 - 공유 계약은 `src/contracts/`, schema/migration은 DB 이슈가 소유한다. 공유 파일 변경은 선행 PR을 먼저 통합하며 서로 다른 migration 번호를 임의 생성하지 않는다.

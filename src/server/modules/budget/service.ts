@@ -33,6 +33,7 @@ function assertFresh(
   funding: FundingProof,
   now: string,
   environment: "preview" | "production",
+  applicationCostLimitsEnabled: boolean,
 ) {
   if (
     pricing.environment !== environment ||
@@ -42,7 +43,7 @@ function assertFresh(
     Date.parse(pricing.fx.asOf) > Date.parse(now) ||
     !fresh(funding.observedAt, funding.validUntil, now) ||
     funding.state === "unavailable" ||
-    funding.spendAllowanceKrw <= 0 ||
+    (applicationCostLimitsEnabled && funding.spendAllowanceKrw <= 0) ||
     pricing.prices.some((price) => !fresh(price.checkedAt, price.validUntil, now))
   )
     throw new BudgetError("BUDGET_UNAVAILABLE");
@@ -50,6 +51,7 @@ function assertFresh(
 
 /** Trusted dependency inputs only: no HTTP body is a source of price, FX, funding or clock. */
 export async function calculateQuote(input: {
+  applicationCostLimitsEnabled?: boolean | undefined;
   environment: "preview" | "production";
   now: string;
   pricing: unknown;
@@ -61,7 +63,13 @@ export async function calculateQuote(input: {
     const pricing = pricingProofSchema.parse(input.pricing);
     const funding = fundingProofSchema.parse(input.funding);
     const plan = executionPlanSchema.parse(input.plan);
-    assertFresh(pricing, funding, now, input.environment);
+    assertFresh(
+      pricing,
+      funding,
+      now,
+      input.environment,
+      input.applicationCostLimitsEnabled !== false,
+    );
     if (
       Date.parse(plan.deadlineAt) <= Date.parse(now) ||
       Date.parse(plan.deadlineAt) - Date.parse(now) > 3600000 ||
@@ -77,8 +85,8 @@ export async function calculateQuote(input: {
     const maximumInvocationKrw = estimatedKrw * plan.maximumAttempts;
     if (
       !Number.isSafeInteger(maximumInvocationKrw) ||
-      maximumInvocationKrw > 1_000_000 ||
-      maximumInvocationKrw > funding.spendAllowanceKrw
+      (input.applicationCostLimitsEnabled !== false &&
+        (maximumInvocationKrw > 1_000_000 || maximumInvocationKrw > funding.spendAllowanceKrw))
     )
       throw new BudgetError("BUDGET_UNAVAILABLE");
     const expires = Math.min(
@@ -201,6 +209,7 @@ export function budgetState(
 }
 
 export function createBudgetService(options: {
+  applicationCostLimitsEnabled?: boolean | undefined;
   environment: "preview" | "production";
   clock?: () => string;
   // Registry and persistence are server-owned adapters; missing proof means unavailable.
@@ -214,6 +223,7 @@ export function createBudgetService(options: {
       const proofs = await options.proofs(now);
       if (!proofs) throw new BudgetError("BUDGET_UNAVAILABLE");
       const quote = await calculateQuote({
+        applicationCostLimitsEnabled: options.applicationCostLimitsEnabled,
         environment: options.environment,
         now,
         ...proofs,

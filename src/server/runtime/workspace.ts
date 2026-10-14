@@ -207,6 +207,7 @@ export async function runWorkspaceRuntime(
   waitUntil: (work: Promise<void>) => void,
 ) {
   const core = createV2Core(env.DB, await createCaseDataCipher(env), {
+    applicationCostLimitsEnabled: env.APPLICATION_COST_LIMITS_ENABLED !== "false",
     monthlyBudgetCapEnabled: env.MONTHLY_BUDGET_CAP_ENABLED !== "false",
   });
   return executeWorkspace(core, params, instanceId, {

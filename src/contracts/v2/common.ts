@@ -17,7 +17,6 @@ export const V2_LIMITS = {
   dailyCases: 3,
   dailyAiResponses: 200,
   dailyMediaSeconds: 3600,
-  maximumAttemptKrw: 1_000_000,
   initialBatches: 3,
   questionsPerBatch: 5,
 } as const;

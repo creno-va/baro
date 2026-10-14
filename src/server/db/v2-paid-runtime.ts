@@ -265,7 +265,11 @@ export function createV2PaidRuntimeRepository(
         )
           return null;
         const amount = estimatePlanKrw(p.value, r.plan.quantities);
-        if (amount > 1000000 || amount > f.value.spendAllowanceKrw) return null;
+        if (
+          core.applicationCostLimitsEnabled &&
+          (amount > 1000000 || amount > f.value.spendAllowanceKrw)
+        )
+          return null;
         const owner = await core
           .statement(
             "SELECT p.id FROM v2_billing_principals p JOIN user u ON u.id=p.owner_id WHERE u.id=? AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='account' AND target_id=u.id)",
@@ -274,6 +278,7 @@ export function createV2PaidRuntimeRepository(
           .first();
         if (!owner) return null;
         return preparePaidStatements({
+          applicationCostLimitsEnabled: core.applicationCostLimitsEnabled,
           monthlyBudgetCapEnabled: core.monthlyBudgetCapEnabled,
           request: r,
           reservedKrw: amount,

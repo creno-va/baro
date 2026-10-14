@@ -1587,7 +1587,7 @@ export const v2RuntimePlans = sqliteTable(
   (t) => [
     check(
       "v2_runtime_plan_bounds",
-      sql`typeof(${t.operationRevision})='integer' AND ${t.operationRevision} BETWEEN 1 AND 9007199254740991 AND typeof(${t.targetRevision})='integer' AND ${t.targetRevision} BETWEEN 1 AND 9007199254740991 AND typeof(${t.maximumAttempts})='integer' AND ${t.maximumAttempts} BETWEEN 1 AND 10 AND typeof(${t.reservedKrw})='integer' AND ${t.reservedKrw} BETWEEN 0 AND 1000000 AND length(${t.requestHash})=64 AND length(${t.digest})=64 AND ${t.deadlineAt}>${t.createdAt} AND ${t.targetKind} IN ('workspace','file','report','profile_asset') AND length(CAST(${t.payloadJson} AS BLOB))<=65536`,
+      sql`typeof(${t.operationRevision})='integer' AND ${t.operationRevision} BETWEEN 1 AND 9007199254740991 AND typeof(${t.targetRevision})='integer' AND ${t.targetRevision} BETWEEN 1 AND 9007199254740991 AND typeof(${t.maximumAttempts})='integer' AND ${t.maximumAttempts} BETWEEN 1 AND 10 AND typeof(${t.reservedKrw})='integer' AND ${t.reservedKrw} BETWEEN 0 AND 9007199254740991 AND length(${t.requestHash})=64 AND length(${t.digest})=64 AND ${t.deadlineAt}>${t.createdAt} AND ${t.targetKind} IN ('workspace','file','report','profile_asset') AND length(CAST(${t.payloadJson} AS BLOB))<=65536`,
     ),
   ],
 );
