@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { expect, type Page, test } from "@playwright/test";
 import { captureCaseViewports } from "../helpers/case-ui-capture";
 
@@ -934,6 +935,13 @@ test("mobile keyboard dialog, empty state, quota, stale input and safe image pre
   await page.getByRole("button", { name: "자료 확인" }).click();
   await page.getByRole("button", { name: "원본 확인 · 다운로드" }).click();
   await expect(page.getByAltText("synthetic.png 원본 미리보기")).toBeVisible();
+  const downloadEvent = page.waitForEvent("download");
+  await page.getByRole("button", { name: "원본 다운로드", exact: true }).click();
+  const downloaded = await downloadEvent;
+  expect(downloaded.suggestedFilename()).toBe("synthetic.png");
+  const downloadedPath = await downloaded.path();
+  expect(downloadedPath).not.toBeNull();
+  expect(await readFile(downloadedPath!)).toEqual(bytes);
   await page.screenshot({ path: "test-results/workspace-mobile-preview.png", fullPage: true });
 });
 

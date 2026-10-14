@@ -1484,6 +1484,22 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
               >
                 원본 확인 · 다운로드
               </Button>
+              {original && (
+                <Button
+                  variant="outline"
+                  disabled={!!busy || !ready}
+                  onClick={() =>
+                    void run("original", async (epoch) => {
+                      const blob = await api.files.original(caseId, preview.id);
+                      if (!(await verify()) || !current(epoch)) return;
+                      download(blob, preview.name);
+                      setNotice("원본을 내려받았어요. 파일을 열어 확인하세요.");
+                    })
+                  }
+                >
+                  원본 다운로드
+                </Button>
+              )}
               <Button variant="ghost" onClick={closeDialog} disabled={!!busy}>
                 닫기
               </Button>
