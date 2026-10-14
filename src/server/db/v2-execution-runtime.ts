@@ -66,15 +66,20 @@ export function recordExecutionUsage(core: V2Core, verify: RuntimeProofVerifier 
   return safe(async () => {
     const r=parse(usageReceiptSchema,receipt);
     now=new Date(parse(timestampSchema,now)).toISOString();
-    const row=await core.statement("SELECT kind,payload_json,digest,environment,state,dispatch_token,transport FROM v2_execution_admissions WHERE attempt_id=?",[r.attemptId]).first<{kind:string;payload_json:string;digest:string;environment:string;state:string;dispatch_token:string|null;transport:string|null}>();
+    const row=await core.statement("SELECT kind,payload_json,digest,environment,state,dispatch_token,transport,transport_digest FROM v2_execution_admissions WHERE attempt_id=?",[r.attemptId]).first<{kind:string;payload_json:string;digest:string;environment:string;state:string;dispatch_token:string|null;transport:string|null;transport_digest:string|null}>();
     if(!row) return null;
-    if(!verify || r.observedAt>now || row.dispatch_token!==r.dispatchToken || (r.definitiveNoCharge && (row.state!=='prepared'||r.dispatchToken!==null))) return false;
+    if (!verify || Date.parse(r.observedAt)>Date.parse(now) || row.dispatch_token!==r.dispatchToken) return false;
+    if (r.definitiveNoCharge) {
+      if (r.dispatchToken!==null) return false;
+      const unsentDigest=await runtimeDigest({attemptId:r.attemptId,dispatchToken:null,transport:'not_sent',observedAt:r.observedAt});
+      if (row.state!=='prepared' && !(row.state==='final' && row.transport==='not_sent' && row.transport_digest===unsentDigest)) return false;
+    }
     const request=row.kind==='storage'?parse(storagePaidHoldRequestSchema,JSON.parse(row.payload_json)):parse(paidHoldRequestSchema,JSON.parse(row.payload_json));
     if(await runtimeDigest(request)!==row.digest || request.plan.invocationId!==r.invocationId || r.quantities.some(q=>!request.plan.quantities.some(p=>p.sku===q.sku)) || (r.meteringComplete && request.plan.quantities.some(p=>!r.quantities.some(q=>p.sku===q.sku)))) return false;
     const digest=await runtimeDigest(r),raw=await verify('usage',r,digest);
     if(!raw) return false;
     const evidence=parse(verifiedEvidenceSchema,raw);
-    if(evidence.digest!==digest || evidence.verifiedAt>now || !['provider_receipt','authenticated_console',...(r.definitiveNoCharge?['authenticated_coordinator']:[])].includes(evidence.method)) return false;
+    if(evidence.digest!==digest || Date.parse(evidence.verifiedAt)>Date.parse(now) || !['provider_receipt','authenticated_console',...(r.definitiveNoCharge?['authenticated_coordinator']:[])].includes(evidence.method)) return false;
     if(!(await recordExecutionTransport(core,{attemptId:r.attemptId,dispatchToken:r.dispatchToken,transport:r.transport,observedAt:r.observedAt}))) return false;
     try {
       const proofs=await core.statement("SELECT id,kind,payload_json,digest,verified_at FROM v2_runtime_proofs WHERE environment=? AND verified_at<=? AND ((kind='pricing' AND id=coalesce(?,(SELECT id FROM v2_runtime_proofs latest WHERE latest.environment=v2_runtime_proofs.environment AND latest.kind='pricing' AND latest.verified_at<=? ORDER BY latest.verified_at DESC,latest.id DESC LIMIT 1))) OR (kind='funding' AND id=coalesce(?,(SELECT id FROM v2_runtime_proofs latest WHERE latest.environment=v2_runtime_proofs.environment AND latest.kind='funding' AND latest.verified_at<=? ORDER BY latest.verified_at DESC,latest.id DESC LIMIT 1))))",[row.environment,r.observedAt,request.pricingProofId,r.observedAt,request.fundingProofId,r.observedAt]).all<{id:string;kind:string;payload_json:string;digest:string;verified_at:string}>();
@@ -87,14 +92,14 @@ export function recordExecutionUsage(core: V2Core, verify: RuntimeProofVerifier 
           if(!parsed.success) continue;
           const p=parsed.data;pricingId=proof.id;
           const complete=request.plan.quantities.every(q=>p.prices.some(price=>price.sku===q.sku));
-          const current=[p,p.fx,...p.prices].every(v=>v.checkedAt<=r.observedAt && v.validUntil>r.observedAt) && p.fx.asOf<=r.observedAt;
+          const current=[p,p.fx,...p.prices].every(v=>Date.parse(v.checkedAt)<=Date.parse(r.observedAt) && Date.parse(v.validUntil)>Date.parse(r.observedAt)) && Date.parse(p.fx.asOf)<=Date.parse(r.observedAt);
           pricingStatus=!complete?'incomplete':current?'current':'stale';
           if(pricingStatus==='current') { try{ chargedKrw=receiptKrw(p,r); }catch{ chargedKrw=null; } }
         } else {
           const parsed=fundingProofSchema.safeParse(value);
           if(!parsed.success) continue;
           const f=parsed.data;fundingId=proof.id;
-          fundingStatus=f.observedAt>r.observedAt||f.validUntil<=r.observedAt?'stale':f.state==='unavailable'?'unavailable':'current';
+          fundingStatus=Date.parse(f.observedAt)>Date.parse(r.observedAt)||Date.parse(f.validUntil)<=Date.parse(r.observedAt)?'stale':f.state==='unavailable'?'unavailable':'current';
         }
       }
       await core.statement(`INSERT INTO v2_execution_cost_observations(id,attempt_id,digest,payload_json,evidence_hash,verified_at,observed_at,pricing_proof_id,funding_proof_id,pricing_status,funding_status,charged_usd,charged_krw) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(attempt_id,digest) DO NOTHING`,[r.id,r.attemptId,digest,JSON.stringify(r),evidence.evidenceHash,evidence.verifiedAt,r.observedAt,pricingId,fundingId,pricingStatus,fundingStatus,r.chargedUsd,chargedKrw]).run();
