@@ -38,7 +38,7 @@ const verifier: RuntimeProofVerifier = async (kind, _payload, digest) => ({
         : kind === "usage" || kind === "maintenance"
           ? "provider_receipt"
           : "authenticated_coordinator",
-  verifiedAt: NOW,
+  verifiedAt: kind === "funding" ? (_payload as FundingProof).observedAt : NOW,
 });
 function allocation(version = 1): BudgetAllocation {
   return {
@@ -378,14 +378,25 @@ test("independent holds retain the full additive budget and funding bound under 
   expect(f.db.sqlite.query("SELECT count(*) AS n FROM v2_runtime_usage").get()).toEqual({ n: 1 });
   expect(f.db.sqlite.query("PRAGMA foreign_key_check").all()).toEqual([]);
 });
-test("independent hold cannot bypass a lower immutable funding ceiling or failed transaction", async () => {
+test("independent hold cannot bypass a lower immutable funding ceiling or return to an older head", async () => {
   const f = await fixture(),
     d = await dispatch(f);
-  const fp = { ...funding(), spendAllowanceKrw: 1500 };
-  expect(await f.runtime.putFundingProof(fp, NOW)).toBe(true);
-  const denied = await f.runtime.prepareHold(f.actor, { ...independent(d), fundingProofId: fp.id });
+  const actor = { ...f.actor, now: LATER };
+  const fp = { ...funding(), observedAt: LATER, spendAllowanceKrw: 1500 };
+  expect(await f.runtime.putFundingProof(fp, LATER)).toBe(true);
+  const denied = await f.runtime.prepareHold(actor, { ...independent(d), fundingProofId: fp.id });
   if (!denied) throw new Error("Synthetic funding proof missing");
-  expect(await f.runtime.reserveAttempt(f.actor, d.lease, denied)).toBe(false);
+  expect(await f.runtime.reserveAttempt(actor, d.lease, denied)).toBe(false);
+  const stale = await f.runtime.prepareHold(actor, independent(d));
+  if (!stale) throw new Error("Synthetic independent proof missing");
+  expect(await f.runtime.reserveAttempt(actor, d.lease, stale)).toBe(false);
+  expect((await f.runtime.exposure(NOW))?.reserved_krw).toBe(1000);
+  expect(f.db.sqlite.query("SELECT count(*) AS n FROM v2_cost_attempts").get()).toEqual({ n: 1 });
+});
+
+test("independent hold rolls back a failed transaction with a currently sufficient funding head", async () => {
+  const f = await fixture(),
+    d = await dispatch(f);
   const paid = await f.runtime.prepareHold(f.actor, independent(d));
   if (!paid) throw new Error("Synthetic independent proof missing");
   f.db.sqlite.exec(

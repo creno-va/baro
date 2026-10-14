@@ -3,6 +3,7 @@ import { readdir } from "node:fs/promises";
 import { convertV4MiniflareOptions, Miniflare } from "miniflare";
 import { createV2Core } from "../src/server/db/v2-core";
 import { createV2StorageCapacityRepository } from "../src/server/db/v2-storage-capacity";
+import { copySyntheticD1 } from "./helpers/native-d1";
 import { intent, NOW, ready, verifier } from "./helpers/storage-capacity";
 
 const migrationNames = (await readdir("drizzle")).filter((s) => /^\d{4}_.+\.sql$/.test(s)).sort();
@@ -11,13 +12,13 @@ const migrationStatements = async (name: string) =>
     .split("--> statement-breakpoint")
     .map((s) => s.trim())
     .filter(Boolean);
-const native = () =>
+const native = (d1Databases = ["DB"]) =>
   new Miniflare(
     convertV4MiniflareOptions({
       modules: true,
       script: 'export default {fetch(){return new Response("synthetic storage")}}',
       compatibilityDate: "2026-10-01",
-      d1Databases: ["DB"],
+      d1Databases,
       cf: false,
       unsafeRegisterWorker: false,
     }),
@@ -127,51 +128,16 @@ test("native D1 rolls back 0010 backfill and 0011 receipt/trigger/marker failure
 test("native D1 migrated physical admission and delta work stays constant at 100 and 10000 historical bindings", async () => {
   const observations: unknown[] = [];
   const metrics: { admissionRead: number; bindingRead: number; bindingWritten: number }[] = [];
-  for (const count of [100, 10000]) {
-    const f = await ready(),
-      i = await intent(f),
-      mf = native();
-    try {
-      const db = await mf.getD1Database("DB");
-      for (const name of migrationNames)
-        await db.batch(
-          (await migrationStatements(name)).map((sql) =>
-            db.prepare(
-              sql.replace(
-                "SELECT strftime('%Y-%m','now','+9 hours') AS month",
-                "SELECT '2026-10' AS month",
-              ),
-            ),
-          ),
-        );
-      const excluded = new Set([
-        "app_metadata",
-        "v2_physical_storage_totals",
-        "v2_physical_binding_totals",
-        "v2_physical_total_mutations",
-        "v2_storage_carryover",
-        "v2_storage_funding_heads",
-        "v2_storage_integrity_faults",
-      ]);
-      const inserts = [db.prepare("PRAGMA defer_foreign_keys=ON")];
-      const tables = f.db.sqlite
-        .query("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
-        .all() as { name: string }[];
-      for (const { name } of tables.filter((t) => !excluded.has(t.name)))
-        for (const row of f.db.sqlite.query(`SELECT * FROM ${name}`).all() as Record<
-          string,
-          unknown
-        >[])
-          inserts.push(
-            db
-              .prepare(
-                `INSERT INTO ${name}(${Object.keys(row).join(",")}) VALUES(${Object.keys(row)
-                  .map(() => "?")
-                  .join(",")})`,
-              )
-              .bind(...Object.values(row)),
-          );
-      await db.batch(inserts);
+  const mf = native(["SMALL", "LARGE"]);
+  try {
+    for (const [name, count] of [
+      ["SMALL", 100],
+      ["LARGE", 10000],
+    ] as const) {
+      const f = await ready(),
+        i = await intent(f);
+      const db = await mf.getD1Database(name);
+      await copySyntheticD1(db as unknown as D1Database, f.db.sqlite);
       // These are actual migrated source tables and triggers, not reduced shapes.
       await db
         .prepare(
@@ -244,9 +210,9 @@ test("native D1 migrated physical admission and delta work stays constant at 100
       };
       metrics.push(measured);
       observations.push({ count, ...measured, plan: plan.results });
-    } finally {
-      await mf.dispose();
     }
+  } finally {
+    await mf.dispose();
   }
   expect(metrics[1]).toEqual(metrics[0]);
   // Synthetic local runtime receipt only; auth/files/cleanup total certification
