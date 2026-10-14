@@ -435,7 +435,7 @@ test("canonical timeline save measures the complete client readback and final se
       { route: "actions", method: "GET", calls: 8, statements: 8 },
       { route: "timeline", method: "GET", calls: 8, statements: 8 },
       { route: "files", method: "GET", calls: 8, statements: 8 },
-      { route: "summary", method: "GET", calls: 14, statements: 14 },
+      { route: "summary", method: "GET", calls: 12, statements: 12 },
       { route: "workspace", method: "GET", calls: 5, statements: 5 },
       { route: "latest_job", method: "GET", calls: 6, statements: 6 },
       { route: "session", method: "GET", calls: 3, statements: 5 },
@@ -479,8 +479,8 @@ test("canonical action save retains the full readback and both session checks", 
     calls: 6,
     statements: 6,
   });
-  expect(f.rows.reduce((sum, row) => sum + row.calls, 0)).toBe(89);
-  expect(f.rows.reduce((sum, row) => sum + row.statements, 0)).toBe(101);
+  expect(f.rows.reduce((sum, row) => sum + row.calls, 0)).toBe(87);
+  expect(f.rows.reduce((sum, row) => sum + row.statements, 0)).toBe(99);
   if (process.env.BARO_WORKSPACE_LOAD_METRICS === "true")
     console.info(
       JSON.stringify({
