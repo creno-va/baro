@@ -125,7 +125,7 @@ export function createReportsApi(
     );
   });
   app.patch("/cases/:caseId/reports", async (c) => {
-    const access = await caseAccess(c, true, true);
+    const access = await caseAccess(c, true, true, true, { customerConsentSnapshot: true });
     if (access.response) return access.response;
     return c.json(
       await (await service(c.env, access.ownerId, access.sessionId)).save(
@@ -137,7 +137,7 @@ export function createReportsApi(
     );
   });
   app.post("/cases/:caseId/reports", async (c) => {
-    const access = await caseAccess(c, true, true);
+    const access = await caseAccess(c, true, true, true, { customerConsentSnapshot: true });
     if (access.response) return access.response;
     return c.json(
       await (await service(c.env, access.ownerId, access.sessionId)).generate(
@@ -208,7 +208,7 @@ export function createReportsApi(
     });
   });
   app.post("/reports/:reportId/zip", async (c) => {
-    const access = await caseAccess(c, true, true);
+    const access = await caseAccess(c, true, true, true, { customerConsentSnapshot: true });
     if (access.response) return access.response;
     const { selectedFileIds } = z
       .strictObject({

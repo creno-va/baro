@@ -313,6 +313,7 @@ export async function readSnapshot<T>(
   targetId: string,
   revision: number,
   schema: z.ZodType<T>,
+  options?: { batchInitialRead: true },
 ): Promise<T | null> {
   actor = parse(actorSchema, { ownerId: actor.ownerId, now: actor.now });
   parse(opaqueIdSchema, snapshotId);
@@ -320,17 +321,36 @@ export async function readSnapshot<T>(
   parse(revisionSchema, revision);
   const guardSql = `SELECT s.* FROM v2_private_snapshots s WHERE s.id=? AND s.owner_id=? AND s.purpose=? AND s.target_id=? AND s.revision=? AND s.state='published' AND NOT EXISTS (SELECT 1 FROM v2_tombstones WHERE (target_kind='account' AND target_id=?) OR (target_kind IN ('file','profile','report') AND target_id=s.target_id)) AND (s.workspace_id IS NULL OR EXISTS(SELECT 1 FROM v2_workspaces w WHERE w.id=s.workspace_id AND w.owner_id=s.owner_id AND ${aliveWorkspace}))`;
   const guardValues = [snapshotId, actor.ownerId, purpose, targetId, revision, actor.ownerId];
-  const header = await core
-    .statement(guardSql, guardValues)
-    .first<{ part_count: number; byte_length: number; encrypted_payload: string }>();
+  type Header = { part_count: number; byte_length: number; encrypted_payload: string };
+  type Part = { id: string; part_index: number; byte_length: number; encrypted_payload: string };
+  // Report-only opt-in: both reads observe one DB snapshot. The parts query
+  // repeats the exact owner/target/revision guard and size ceiling so a missing,
+  // revoked or oversized header never brings ciphertext into this request.
+  const initial = options?.batchInitialRead
+    ? await core.binding.batch<Header | Part>([
+        core.statement(guardSql, guardValues),
+        core.statement(
+          `SELECT p.* FROM v2_private_parts p WHERE p.snapshot_id=? AND EXISTS(${guardSql} AND s.byte_length<=?) ORDER BY p.part_index`,
+          [snapshotId, ...guardValues, MAX_REHYDRATE_BYTES],
+        ),
+      ])
+    : undefined;
+  if (initial && (!initial[0] || !initial[1])) throw new V2RepositoryError("DB_OPERATION_FAILED");
+  const header = initial
+    ? (initial[0]?.results[0] as Header | undefined)
+    : await core.statement(guardSql, guardValues).first<Header>();
   if (!header) return null;
   if (header.byte_length > MAX_REHYDRATE_BYTES)
     throw new V2RepositoryError("SNAPSHOT_STREAM_REQUIRED");
-  const { results } = await core
-    .statement("SELECT * FROM v2_private_parts WHERE snapshot_id=? ORDER BY part_index", [
-      snapshotId,
-    ])
-    .all<{ id: string; part_index: number; byte_length: number; encrypted_payload: string }>();
+  const results = initial
+    ? (initial[1]?.results as Part[])
+    : (
+        await core
+          .statement("SELECT * FROM v2_private_parts WHERE snapshot_id=? ORDER BY part_index", [
+            snapshotId,
+          ])
+          .all<Part>()
+      ).results;
   if (results.length !== header.part_count) throw new V2RepositoryError("SNAPSHOT_INVALID");
   const plaintext: string[] = [];
   let bytes = 0;

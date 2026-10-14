@@ -31,6 +31,8 @@ export function productBoundaryFindings(file: string, content: string): string[]
   // Reviewed preview timing serializer emits only a bounded numeric/enum header.
   const previewD1TimingLog =
     'console.info(JSON.stringify({event:"preview_d1_timing",measurements:timing}))';
+  const previewFileRuntimeLog =
+    'console.info(JSON.stringify({event:"preview_file_runtime_d1",phase:"runtime_admission",outcome,wallMs,sqlMs,region,colo,primary,attempts,}),)';
   function visit(node: ts.Node) {
     if (ts.isStringLiteralLike(node)) {
       const value = node.text;
@@ -80,7 +82,10 @@ export function productBoundaryFindings(file: string, content: string): string[]
               "src/server/modules/file-processing/container-diagnostics.ts" &&
               call.getText(source).replace(/\s+/g, "") === fileProcessorLog) ||
             (file.replaceAll("\\", "/") === "src/server/api/v2/workspaces.ts" &&
-              call.getText(source).replace(/\s+/g, "") === previewD1TimingLog))
+              call.getText(source).replace(/\s+/g, "") === previewD1TimingLog) ||
+            (file.replaceAll("\\", "/") ===
+              "src/server/modules/file-processing/runtime-admission-observation.ts" &&
+              call.getText(source).replace(/\s+/g, "") === previewFileRuntimeLog))
         )
       )
         findings.push("unapproved_payload_log");

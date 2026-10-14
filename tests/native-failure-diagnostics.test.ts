@@ -1,7 +1,11 @@
 import { expect, test } from "bun:test";
 import { Hono } from "hono";
 import { measureD1Work } from "./helpers/d1-work";
-import { createNativeFailureHistory, nativeFailure } from "./helpers/native-failure";
+import {
+  createNativeFailureHistory,
+  nativeFailure,
+  nativeFailureHistorySchema,
+} from "./helpers/native-failure";
 import { createNativeProgress } from "./helpers/native-progress";
 
 function database() {
@@ -55,6 +59,160 @@ test("native failure evidence retains only fixed names, codes and bounded cause 
     }),
   ).toEqual([]);
   expect(nativeFailure(Object.assign(new Error(), { cause: error }))).toHaveLength(3);
+});
+
+test("pinned RPC assertions retain only fixed failure sites and boolean assertion values", () => {
+  for (const [line, field] of [
+    [110451, "asyncClientStatus"],
+    [110459, "asyncResultType"],
+  ] as const) {
+    // Reproduced with the actual pinned bridge: an offline D1 response replaced
+    // by HTTP 409 or by a missing Promise header. This is not the CI root cause.
+    const error = Object.assign(new Error("private transport message"), {
+      name: "AssertionError",
+      code: "ERR_ASSERTION",
+      generatedMessage: true,
+      operator: "==",
+      actual: false,
+      expected: true,
+      stack: `AssertionError: private message\n at #parseAsyncResponse (/private/path/node_modules/miniflare/dist/src/index.js:${line}:1)`,
+    });
+    const failure = nativeFailure(error);
+    expect(failure[0]).toMatchObject({
+      name: "AssertionError",
+      code: "ERR_ASSERTION",
+      assertion: {
+        generatedMessage: true,
+        operator: "==",
+        actual: "false",
+        expected: "true",
+        sites: { [field]: true },
+      },
+    });
+    expect(JSON.stringify(failure)).not.toMatch(/private|message|path|stack|11045/);
+    const history = createNativeFailureHistory();
+    history.capture(error, "first");
+    expect(history.snapshot().first[0]?.details).toEqual(failure);
+  }
+});
+
+test("RPC diagnostics preserve disposed classification without serializing assertion operands", () => {
+  const disposed = Object.assign(new Error("private disposed instance"), {
+    name: "MiniflareCoreError [ERR_DISPOSED]",
+    code: "ERR_DISPOSED",
+  });
+  expect(nativeFailure(disposed)[0]).toMatchObject({
+    name: "MiniflareCoreError [ERR_DISPOSED]",
+    code: "ERR_DISPOSED",
+  });
+  const error = Object.assign(new Error("private"), {
+    name: "AssertionError",
+    code: "ERR_ASSERTION",
+    generatedMessage: "private",
+    operator: "private",
+    actual: 123456,
+    expected: "private header",
+    stack: "at #parseAsyncResponse (/private/index.js:110451:1)",
+  });
+  const failure = nativeFailure(error);
+  expect(failure[0]).toMatchObject({
+    assertion: {
+      generatedMessage: null,
+      operator: null,
+      actual: "other",
+      expected: "other",
+      sites: { asyncClientStatus: false, asyncResultType: false },
+    },
+  });
+  expect(JSON.stringify(failure)).not.toMatch(/private|123456|110451|stack/);
+});
+
+test("pinned RPC assertion locations match the installed bridge source", async () => {
+  const pkg = await Bun.file(
+    new URL("../node_modules/miniflare/package.json", import.meta.url),
+  ).json();
+  expect(pkg.version).toBe("5.20261001.0-alpha");
+  const source = (
+    await Bun.file(new URL("../node_modules/miniflare/dist/src/index.js", import.meta.url)).text()
+  ).split("\n");
+  for (const [line, expression, method, field] of [
+    [110451, "!isClientError(res.status)", "#parseAsyncResponse", "asyncClientStatus"],
+    [110459, 'typeHeader === "Promise"', "#parseAsyncResponse", "asyncResultType"],
+    [110483, "!isClientError(syncRes.status)", "#parseSyncResponse", "syncClientStatus"],
+    [110445, "res.status === 200", "#maybeThrow", "responseStatus"],
+    [110076, "message?.id === id", "receiveReply", "syncReplyIdentity"],
+  ] as const) {
+    expect(source[line - 1]).toContain(expression);
+    const error = Object.assign(new Error(), {
+      name: "AssertionError",
+      code: "ERR_ASSERTION",
+      stack: `at ${method} (/private/node_modules/miniflare/dist/src/index.js:${line}:1)`,
+    });
+    expect(nativeFailure(error)[0]?.assertion?.sites[field]).toBe(true);
+    error.stack = `at ${method} (/private/other.js:1:1)\nat other (/private/node_modules/miniflare/dist/src/index.js:${line}:1)`;
+    expect(nativeFailure(error)[0]?.assertion?.sites[field]).toBe(false);
+  }
+});
+
+test("assertion diagnostics are bounded and cannot lose the original class on hostile optional properties", () => {
+  const error = Object.assign(new Error(), {
+    name: "AssertionError",
+    code: "ERR_ASSERTION",
+    actual: null,
+    expected: undefined,
+  });
+  expect(nativeFailure(error)[0]?.assertion).toMatchObject({
+    actual: "null",
+    expected: "undefined",
+  });
+  for (const key of ["generatedMessage", "operator", "actual", "expected", "stack"]) {
+    Object.defineProperty(error, key, {
+      configurable: true,
+      get() {
+        throw new Error("private getter");
+      },
+    });
+  }
+  const history = createNativeFailureHistory();
+  history.capture(error, "first");
+  expect(history.snapshot().first[0]?.details[0]).toMatchObject({
+    name: "AssertionError",
+    code: "ERR_ASSERTION",
+    assertion: {
+      generatedMessage: null,
+      operator: null,
+      actual: "other",
+      expected: "other",
+      sites: { asyncClientStatus: false },
+    },
+  });
+  const snapshot = history.snapshot();
+  expect(JSON.stringify(snapshot)).not.toContain("private");
+  const detail = snapshot.first[0]?.details[0];
+  expect(detail?.assertion).toBeDefined();
+  for (const field of [
+    { stack: "private" },
+    { assertion: { ...detail?.assertion, actual: 123456 } },
+    { assertion: { ...detail?.assertion, operator: "private" } },
+    {
+      assertion: { ...detail?.assertion, sites: { ...detail?.assertion?.sites, arbitrary: true } },
+    },
+  ]) {
+    expect(
+      nativeFailureHistorySchema.safeParse({
+        first: [{ operation: "first", details: [{ ...detail, ...field }] }],
+        omitted: 0,
+      }).success,
+    ).toBe(false);
+  }
+  const longStack = Object.assign(new Error(), {
+    name: "AssertionError",
+    code: "ERR_ASSERTION",
+    stack: `${"x".repeat(16384)}\nat #parseAsyncResponse (/miniflare/dist/src/index.js:110451:1)`,
+  });
+  expect(nativeFailure(longStack)[0]?.assertion?.sites.asyncClientStatus).toBe(false);
+  longStack.name = "private class";
+  expect(nativeFailure(longStack)[0]?.assertion).toBeUndefined();
 });
 
 test("outer Hono middleware sees the caught original failure without changing API response", async () => {

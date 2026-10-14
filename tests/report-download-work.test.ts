@@ -75,7 +75,7 @@ function stage(sql: string): Stage {
   if (sql === REPORT_SOURCE_SQL) return "source_rows";
   if (sql.startsWith("WITH source AS")) return "export_fence";
   if (sql.startsWith("SELECT 1 FROM v2_reports r JOIN v2_workspaces")) return "stored_fence";
-  if (sql.startsWith("SELECT r.* FROM v2_reports")) return "report_access";
+  if (sql.startsWith("SELECT r.*") && sql.includes(" FROM v2_reports")) return "report_access";
   if (/^(SELECT|WITH)/.test(sql)) {
     if (sql.includes("FROM v2_private_parts")) return "snapshot_parts";
     if (sql.includes("FROM v2_private_snapshots")) return "snapshot_header";
@@ -559,6 +559,42 @@ async function fixture(readyOriginals = false, selectedCount = 4, targetZipBytes
   };
 }
 
+test("canonical four-ready report generation and review preserve source fences with bounded snapshots", async () => {
+  const f = await fixture(true, 4);
+  const initial = await f.client.get(f.workspace.id);
+  f.select("save_review");
+  const saved = await f.client.save(f.workspace.id, {
+    content: `${initial.content}\n합성 검토 저장 내용`,
+    maskIdentifiers: true,
+    excludedFileIds: [],
+  });
+  expect(saved.content).toContain("합성 검토 저장 내용");
+  expect(saved.maskIdentifiers).toBe(true);
+  f.select("generate");
+  expect((await f.client.generate(f.workspace.id)).revision).toBe(3);
+  expect(f.work.map((work) => work.sqlStages.source_rows)).toEqual([4, 5, 4]);
+  expect(
+    f.work.map(({ operation, calls, statements }) => ({ operation, calls, statements })),
+  ).toEqual([
+    { operation: "get_initial", calls: 124, statements: 163 },
+    { operation: "save_review", calls: 132, statements: 173 },
+    { operation: "generate", calls: 124, statements: 163 },
+  ]);
+  expect(f.work.every((work) => work.r2.get === 0 && work.r2.put === 0)).toBe(true);
+  if (process.env.BARO_REPORT_WORK_METRICS === "true")
+    console.info(
+      JSON.stringify({
+        event: "synthetic_report_four_ready_work",
+        operations: f.work.map(({ operation, calls, statements, sqlStages }) => ({
+          operation,
+          calls,
+          statements,
+          sqlStages,
+        })),
+      }),
+    );
+});
+
 test("canonical report v2 read/review/PDF/HTML separates database, render and offline storage work", async () => {
   const f = await fixture();
   const renderPdf = pdf.renderReportPdf,
@@ -612,13 +648,13 @@ test("canonical report v2 read/review/PDF/HTML separates database, render and of
     expect(
       f.work.map(({ operation, calls, statements }) => ({ operation, calls, statements })),
     ).toEqual([
-      { operation: "get_initial", calls: 65, statements: 86 },
-      { operation: "save_review", calls: 77, statements: 98 },
-      { operation: "get_saved", calls: 18, statements: 18 },
-      { operation: "pdf_first", calls: 103, statements: 126 },
-      { operation: "pdf_saved", calls: 35, statements: 35 },
-      { operation: "html", calls: 17, statements: 17 },
-      { operation: "generate", calls: 66, statements: 87 },
+      { operation: "get_initial", calls: 61, statements: 85 },
+      { operation: "save_review", calls: 69, statements: 95 },
+      { operation: "get_saved", calls: 15, statements: 17 },
+      { operation: "pdf_first", calls: 97, statements: 124 },
+      { operation: "pdf_saved", calls: 32, statements: 34 },
+      { operation: "html", calls: 14, statements: 16 },
+      { operation: "generate", calls: 61, statements: 85 },
     ]);
     expect(f.work.find((row) => row.operation === "pdf_first")?.pdfRender.calls).toBe(1);
     expect(f.work.find((row) => row.operation === "pdf_saved")?.pdfRender.calls).toBe(0);

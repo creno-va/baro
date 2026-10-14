@@ -7,6 +7,7 @@ import {
 } from "../file-processing/execution";
 import { namedProcessorPort } from "../file-processing/native-identity";
 import { ProcessingError } from "../file-processing/protocol";
+import { readRuntimeAdmission } from "../file-processing/runtime-admission-observation";
 import { createProcessorTransport, type ProcessingCosts } from "../file-processing/transport";
 import { createFilesService } from "../files/service";
 import { createMediaGateway, WHISPER_MODEL } from "../llm-gateway/transcription";
@@ -134,14 +135,15 @@ export async function createFileProcessingRuntime(
     applicationCostLimitsEnabled: env.APPLICATION_COST_LIMITS_ENABLED !== "false",
     monthlyBudgetCapEnabled: env.MONTHLY_BUDGET_CAP_ENABLED !== "false",
   });
-  const initialAttemptId = await core
-    .statement(
+  const initialAttemptId = await readRuntimeAdmission(
+    core.statement(
       `SELECT h.attempt_id FROM v2_execution_job_holds h JOIN v2_jobs j ON j.id=h.job_id JOIN v2_operations o ON o.id=j.operation_id
      JOIN v2_execution_attempts ca ON ca.id=h.attempt_id JOIN v2_execution_job_plans p ON p.id=h.plan_id LEFT JOIN v2_execution_admissions execution ON execution.attempt_id=h.attempt_id WHERE p.operation_revision=o.revision AND p.target_revision=j.target_revision AND (execution.runtime_instance_id=j.runtime_instance_id OR (execution.attempt_id IS NULL AND NOT EXISTS(SELECT 1 FROM v2_execution_admissions other_execution WHERE other_execution.job_id=j.id))) AND j.id=? AND o.owner_id=? AND j.runtime_instance_id=?
        AND h.state='prepared' AND ca.state='reserved' ORDER BY ca.created_at DESC,ca.id DESC LIMIT 1`,
       [params.jobId, params.ownerId, instanceId],
-    )
-    .first<string>("attempt_id");
+    ),
+    env.APP_ENV,
+  );
   const mediaPolicy = configuredMediaPolicy(env);
   const budget = createProcessingBudgetService({
     core,

@@ -61,6 +61,7 @@ type Row = {
   workspace_revision: number;
   summary_revision: number;
   snapshot_id: string;
+  review_snapshot_id?: string | null;
   operation_id: string;
   current_job_id: string | null;
   state: string;
@@ -77,12 +78,12 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
   });
   const canonical = createV2ReportsRepository(core, deps.guideHosts);
   const accounting = createV2AccountingRepository(core);
-  const row = async (a: Actor, id: string) => {
+  const row = async (a: Actor, id: string, includeReview = false) => {
     opaqueIdSchema.parse(id);
     const session = reportSessionFence(deps.sessionId);
     const result = await core
       .statement(
-        `SELECT r.* FROM v2_reports r JOIN v2_workspaces w ON w.id=r.workspace_id WHERE r.id=? AND w.owner_id=? AND EXISTS(SELECT 1 FROM user WHERE id=w.owner_id) AND coalesce((SELECT value FROM app_metadata WHERE key='account-type:'||w.owner_id),'customer')='customer' AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE (target_kind='account' AND target_id=w.owner_id) OR (target_kind='workspace' AND target_id=w.id) OR (target_kind='report' AND target_id=r.id)) ${session.sql}`,
+        `SELECT r.*${includeReview ? ", (SELECT s.id FROM v2_private_snapshots s WHERE s.owner_id=w.owner_id AND s.target_id=r.id AND s.purpose='report' AND s.revision=r.workspace_revision+1 AND s.state='published') AS review_snapshot_id" : ""} FROM v2_reports r JOIN v2_workspaces w ON w.id=r.workspace_id WHERE r.id=? AND w.owner_id=? AND EXISTS(SELECT 1 FROM user WHERE id=w.owner_id) AND coalesce((SELECT value FROM app_metadata WHERE key='account-type:'||w.owner_id),'customer')='customer' AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE (target_kind='account' AND target_id=w.owner_id) OR (target_kind='workspace' AND target_id=w.id) OR (target_kind='report' AND target_id=r.id)) ${session.sql}`,
         [id, a.ownerId, ...session.values],
       )
       .first<Row>();
@@ -99,7 +100,7 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
       .first<{ id: string; revision: number }>();
   };
   const read = async (a: Actor, id: string) => {
-    const r = await row(a, id);
+    const r = await row(a, id, true);
     const body = await readSnapshot(
       core,
       a,
@@ -108,23 +109,19 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
       id,
       r.workspace_revision,
       v2ReportBodySchema(deps.guideHosts),
+      { batchInitialRead: true },
     );
     if (!body) throw new ReportError("NOT_FOUND");
-    const reviewHead = await core
-      .statement(
-        "SELECT id FROM v2_private_snapshots WHERE owner_id=? AND target_id=? AND purpose='report' AND revision=? AND state='published'",
-        [a.ownerId, id, r.workspace_revision + 1],
-      )
-      .first<{ id: string }>();
-    const savedReview = reviewHead
+    const savedReview = r.review_snapshot_id
       ? await readSnapshot(
           core,
           a,
-          reviewHead.id,
+          r.review_snapshot_id,
           "report",
           id,
           r.workspace_revision + 1,
           reportReviewSchema,
+          { batchInitialRead: true },
         )
       : null;
     // Existing canonical reports predate the editable client snapshot. Keep
@@ -139,8 +136,12 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
       sourceDigest: "0".repeat(64),
       parentReportId: null,
     };
-    const final = await row(a, id);
-    if (r.snapshot_id !== final.snapshot_id || r.revision !== final.revision)
+    const final = await row(a, id, true);
+    if (
+      r.snapshot_id !== final.snapshot_id ||
+      r.revision !== final.revision ||
+      r.review_snapshot_id !== final.review_snapshot_id
+    )
       throw new ReportError("STALE_REVISION");
     return { row: r, body, review };
   };
