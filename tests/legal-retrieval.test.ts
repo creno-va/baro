@@ -156,10 +156,11 @@ test("official response identity/date/article tree and checksums are verified", 
 test("D1 TTL 24h, cache hash tampering and expiry fail closed, versions remain separate", async () => {
   const f = await fixture();
   let calls = 0;
-  const transport = async (url: string) => {
+  const transport = async (url: string, init: RequestInit) => {
     calls++;
     const parsed = new URL(url);
     expect(parsed.hostname).toBe("www.law.go.kr");
+    expect(new Headers(init.headers).get("Referer")).toBe("https://baro.site/");
     expect(parsed.searchParams.get("query") ?? "민법").toBe("민법");
     return Response.json(parsed.pathname.includes("lawSearch") ? list : detail);
   };

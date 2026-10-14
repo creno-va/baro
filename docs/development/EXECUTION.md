@@ -30,7 +30,7 @@
 | 디렉터리 | 변호사 모듈 + 총괄, #231/M5 | PR234 병합; 기존 공개 목록의 원격 projection 연결 미완료 | serving SHA 확인 후 bounded reindex, 철회·cursor·필터 smoke |
 | 문서·작업 체계 | 총괄, #19/#64/#71 | 현행 기준과 과거 기록 분리 중 | 문서 PR과 이슈/마일스톤의 담당·증거·다음 행동 대조 |
 | 채팅 실패·재시도 | 고객/AI, #64 / PR238 | PR238 병합, preview7a617b5/schema0013 반영. run38556937083의 foundation·9개 endpoint 통과, 당시 text preflight는 model_reservation_headroom으로 차단. 과거 provider 원인은 로그 유실로 미확정 | PR241 적용 후 합성 사건 재시도1회와 안전한 status/category 확인. 이전 여유114원·예약11,018원은 과거 차단 원인의 기록이며 현행 금액 제한이 아님. 기존 hold와 원장을 보존하고 별도 AI 응답 실패를 조사 |
-| 법률·인증·정책 점검 | 법률/인증 모듈, #27/#63/#71 | [10/14 검증](../quality/LEGAL-AUTH-VERIFICATION-2026-10-14.md): 포털 JSON 승인, mobileYn=Y 법령 목록78건 구조 확인. 합성 Bun182/브라우저40 통과, Google은 사용자 수동 검증 완료, 정책 내부 점검표 작성 | 인터넷/모바일의 승인·본문 JSON 조건 확인 후 제한 readiness. 환경별 OC 일치·Naver/Kakao·배포 Worker 증거는 별도 유지 |
+| 법률·인증·정책 점검 | 법률/인증 모듈, #27/#63/#71 | [10/14 검증](../quality/LEGAL-AUTH-VERIFICATION-2026-10-14.md): 등록 도메인 Referer 누락 확인·로컬 인터넷 JSON 거부 해결. 법령 본문 검증과 실제 판례 형식 수정. Google 사용자 수동 확인·정책 점검표 완료 | 수정 PR 병합 후 GitHub 저장 credential 및 같은 SHA Worker 검증. 기관 안내 update_pending·판례 limited·Naver/Kakao 실제 증거는 보존 |
 | 전체 실제 인수 | 각 모듈, #27/#59/#63/#64/#66/#67/#71 | OAuth/실제 모델·공식 출처·media·다운로드·복구/경보 증거 잔여 | [요구사항·증거 완료표](./MVP-REQUIREMENTS-EVIDENCE.md)의 조건별 증거 연결 |
 
 2026-10-14 채팅 수정 preview receipt: main `7a617b5acf08c7168482caa3e08ff07208416270`,

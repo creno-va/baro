@@ -102,17 +102,46 @@ bunx playwright test --config tests/browser/account-session-recovery.config.ts -
 bun run validate:quick
 ```
 
+## 21:10 KST 후속 진단 — 인터넷 Referer와 실제 판례 형식
+
+앞선 거부를 담당기관 답변 대기로 두기 전에 공식
+[지원사례 및 질의응답](https://open.law.go.kr/LSO/lab/supportCase.do)의 22/27/30번을 확인했다.
+등록 도메인과 일치하는 Referer가 없거나 다르면 인증이 실패할 수 있다고 안내한다.
+현재 v1/v2 서버 transport는 해당 헤더를 보내지 않았다. 등록된 서비스의 고정 식별자
+`Referer: https://baro.site/`를 사용하자 인터넷 JSON 응답의 거부 envelope가 사라졌다.
+`mobileYn` 추가나 포털 신청·OC·GitHub/Cloudflare secret 변경은 하지 않았다.
+
+| 검사 | 실제 결과와 경계 |
+| --- | --- |
+| 21:10:53 로컬 Bun bounded readiness | 포털 현재 OC와 등록 도메인 Referer, 요청/예약 4회. 법령 목록·조문과 판례 목록 HTTP200/JSON, 기관 안내 HTTP200/HTML. upstream rejection 0. 법령 verified, 판례 schema_mismatch, 안내 update_pending. runtimeWorker:false |
+| 민법 조문 | 공식 ID1706/version284415, sourceDate2026-03-17, contentHash `62c9abd62ae2907181f1bf7197dc2e43319221b075591dc64b6e4b09740ff64f`. 실제 본문과 인용 검사 1개 통과 |
+| 판례 진단 | display를 2로 변경한 목록 1회와 각 후보 본문 2회. 첫 후보는 HTML 전용 국세법령정보시스템으로 JSON 본문을 사용할 수 없었다. 두 번째 대법원 후보의 실제 JSON 본문은 확보했다. 이 후속 진단까지 실제 외부 요청은 총7회 |
+| 판례 파서 수정·오프라인 재검증 | 실제 목록 날짜의 점 표기, HTML 전용 자료의 빈 법원명, 목록 대표 사건번호와 본문의 병합 사건번호 표기를 확인했다. 저장 응답을 수정된 파서로 재검증해 ID624227/sourceDate2026-07-16, hash `555a812e7c4f4b687c45cb96ef0ca752350297139b27e1da120898684ebdc34b`, 본문·인용 구간 hash 일치를 확인했다. 원문/사건번호/OC는 공개 증거에서 제외 |
+
+파서는 존재하지 않는 날짜, 일반 판례의 빈 법원명, 다른 ID/법원/날짜/사건번호를 계속 거부한다.
+병합 사건은 정확한 선두 사건번호와 숫자 추가 표기만 허용하며, 캐시·표시에는 목록과 본문에서
+함께 확인한 대표 사건번호를 보존한다. 국세청 자료의 JSON 본문은 기존대로 제외한다.
+readiness는 판례 후보를 2개 확인하되 최대9회 예약과 limited 판정을 유지한다.
+이 결과는 제한된 목록의 완전성, 기관 안내 최신성, 배포 Worker 성공을 의미하지 않는다.
+
+로컬 기준은 main `134514c8668278aa46a4a8f76a596fbc051c5bd1`에 후속 PR의 작업 변경을
+적용한 상태다. 집중 Bun133개/801 assertions, `validate:quick`, `validate:build`를 통과했다.
+배포 가능한 immutable SHA와 저장된 환경 credential의 성공은 후속 GitHub 실행으로 별도 기록한다.
+민감 페이지와 원문은 권한 제한된 임시 폴더에서만 검사하고 검사 후 삭제한다.
+
 ## 남은 행동과 담당기관 문의 초안
 
 | 담당 | 다음 행동 | 완료 증거 |
 | --- | --- | --- |
-| 법률 API·설정 운영자 | 현재 포털 OC와 각 환경에 주입된 값의 비공개 일치 확인. 확인된 설정 불일치만 수정 | 원문·해시 없이 환경별 일치/불일치 결과, 확인 시각과 방법 |
-| 법률 API 담당 | 설정/조건 변경 뒤 기존 bounded readiness 1회. 별도로 배포 Worker에서 제한 검증 | 환경·정확한 SHA·시각, 목록/본문 ID·날짜·hash·span, CI adapter/Worker 구분. 실패한 원문·쿼리 URL은 제외 |
+| 법률 API·설정 운영자 | 후속 수정 병합 후 GitHub 저장 credential로 bounded readiness 1회. 실제 동작을 우선 검증하며 원문 일치를 확인했다고 추정하지 않음 | 원문·해시 없이 환경별 실제 결과, 확인 시각과 방법. 실패한 경우에만 확인된 설정 불일치 수정 |
+| 법률 API 담당 | 같은 SHA 배포 절차와 Worker 제한 검증. GitHub adapter 성공과 구분 | 환경·정확한 SHA·시각, 목록/본문 ID·날짜·hash·span, CI adapter/Worker 구분. 실패한 원문·쿼리 URL은 제외 |
 | 기관 안내 담당 | 원문 제공기관의 개정 반영 확인 후 기존 parser로 재검증 | source tuple과 검증 시각. `update_pending`을 수동으로 해제하지 않음 |
 | 인증 담당·사용자 | Google은 사용자 수동 검증 완료로 재검사 생략. Naver/Kakao 및 필요한 릴리스별 callback 증거 확인 | 공급자·환경·배포 SHA·시각·성공/취소/복귀. 사용자 확인과 도구 receipt 구분, 토큰/쿠키/실계정 상세 제외 |
 | 서비스·정책 담당 | [내부 정책 점검표](../development/LAWYER-POLICY-HANDOFF.md)의 미확정 사실·초안 불일치 정리 | 현재 사실·근거·담당·다음 행동. 외부 법률 승인·정식 게시·동의 버전 변경은 별도 |
 
-설정이 일치해도 실패 원인이 남는 경우, 아래 내용을 공식 문의용으로 사용한다. **발송하지 않았다.**
+아래는 Referer 원인을 확인하기 전의 문의 초안이며 **발송하지 않았다.** 현재 로컬 인터넷 JSON
+거부는 해결됐으므로 기관 문의를 다음 개발 작업의 선행 조건으로 요구하지 않는다. 새 환경에서
+미해결 거부가 남는 경우 현재 결과를 반영해 갱신한다.
 
 - 기존 신청은 연결/승인이고 인터넷·법령/판례 JSON 목록/본문이 선택돼 있다. 활용 목적은 입력돼 있다.
 - 포털의 로그인한 사용자 자가진단은 두 target의 이용 가능과 목록 응답을 표시한다.

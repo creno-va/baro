@@ -1,3 +1,4 @@
+import { LAW_API_REFERER } from "../request-headers";
 import { type Access, MAX_RESPONSE_BYTES, RetrievalFailure, safePermit } from "./contracts";
 import { assertOfficialUrl } from "./registry";
 
@@ -44,7 +45,9 @@ export function createBoundedTransport(
           transport(url.href, {
             redirect: "error",
             signal: controller.signal,
-            headers: { Accept: guide ? "text/html" : "application/json" },
+            headers: guide
+              ? { Accept: "text/html" }
+              : { Accept: "application/json", Referer: LAW_API_REFERER },
           }),
           aborted,
         ]);

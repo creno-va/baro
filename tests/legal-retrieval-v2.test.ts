@@ -13,6 +13,7 @@ import {
 } from "../src/server/modules/legal-retrieval/v2/contracts";
 import { parseGuide } from "../src/server/modules/legal-retrieval/v2/guides";
 import {
+  matchesPrecedentCaseNumber,
   parsePrecedent,
   precedentCandidates,
 } from "../src/server/modules/legal-retrieval/v2/precedents";
@@ -856,6 +857,49 @@ test("documented synthetic precedent fields reject altered court/date/identity a
   ).rejects.toMatchObject({ reason: "unsupported_format" });
 });
 
+test("precedent list dotted dates match compact detail dates while impossible dates and missing courts fail closed", async () => {
+  const list = precedents.find((v) => v.id === "precedent_list_candidate"),
+    detail = precedents.find((v) => v.id === "precedent_verified");
+  if (!list || !detail) throw new Error("Missing synthetic precedent");
+  const value = JSON.parse(list.response.body);
+  const row = value.PrecSearch.prec[0];
+  row.선고일자 = "2026.01.02";
+  const selected = precedentCandidates(value, "2026-10-06", 3).rows[0];
+  if (!selected) throw new Error("Missing synthetic candidate");
+  expect(selected.선고일자).toBe("2026-01-02");
+  expect(
+    (
+      await parsePrecedent(
+        syntheticPrecedentDetail(detail.response.body),
+        selected,
+        "2026-10-06",
+        NOW,
+      )
+    ).full,
+  ).toBe(true);
+  for (const invalid of [
+    "2026.02.30",
+    "2026.13.01",
+    "2026.1.02",
+    "2026/01/02",
+    "2026.01.02extra",
+  ]) {
+    row.선고일자 = invalid;
+    expect(() => precedentCandidates(value, "2026-10-06", 3)).toThrow();
+  }
+  row.선고일자 = "2027.01.02";
+  expect(precedentCandidates(value, "2026-10-06", 3).rows).toEqual([]);
+  row.선고일자 = "2026.01.02";
+  row.법원명 = "";
+  expect(() => precedentCandidates(value, "2026-10-06", 3)).toThrow();
+  row.데이터출처명 = "국세법령정보시스템";
+  const tax = precedentCandidates(value, "2026-10-06", 3).rows[0];
+  if (!tax) throw new Error("Missing synthetic tax candidate");
+  await expect(
+    parsePrecedent(syntheticPrecedentDetail(detail.response.body), tax, "2026-10-06", NOW),
+  ).rejects.toMatchObject({ reason: "unsupported_format" });
+});
+
 test("all nationwide synthetic families keep factual preparation when no source is requested, without model fallback", async () => {
   const f = await fixture();
   for (const family of families) {
@@ -895,7 +939,7 @@ test("synthetic precedent full text and actual-selector guide flow through the r
   });
 });
 
-test.each(["full", "summary", "tax"])(
+test.each(["full", "summary", "tax", "joined"])(
   "%s precedent discovery preserves full-text and unsupported source boundaries",
   async (mode) => {
     const f = await fixture();
@@ -905,6 +949,10 @@ test.each(["full", "summary", "tax"])(
     const detailBody = syntheticPrecedentDetail(detail.response.body);
     if (mode === "summary") delete detailBody.PrecService.판례내용;
     const listBody = JSON.parse(list.response.body);
+    if (mode === "joined") {
+      listBody.PrecSearch.prec[0].사건번호 = "2026다100001";
+      detailBody.PrecService.사건번호 = "2026다100001, 100002";
+    }
     let calls = 0;
     const service = f.service({
       transport: async (url) => {
@@ -915,7 +963,12 @@ test.each(["full", "summary", "tax"])(
     const plans = [{ kind: "precedent", query: "합성 개념", limit: 3 }];
     const first = await service.retrieve(input(plans), f.access);
     expect(first.chunks).toHaveLength(1);
-    if (mode === "tax") listBody.PrecSearch.prec[0].데이터출처명 = "국세법령정보시스템";
+    if (mode === "joined") expect(first.chunks[0]?.source.caseNumber).toBe("2026다100001");
+    if (mode === "tax") {
+      listBody.PrecSearch.prec[0].데이터출처명 = "국세법령정보시스템";
+      listBody.PrecSearch.prec[0].법원명 = "";
+      listBody.PrecSearch.prec[0].선고일자 = "2026.01.02";
+    }
     calls = 0;
     const repeated = await service.retrieve(input(plans), f.access);
     if (mode === "tax") {
@@ -925,11 +978,24 @@ test.each(["full", "summary", "tax"])(
     } else {
       expect(repeated.chunks[0]?.source).toEqual(first.chunks[0]?.source);
       expect(repeated.chunks[0]?.citation.id).not.toBe(first.chunks[0]?.citation.id);
-      expect(repeated.outcomes[0]?.availability).toBe(mode === "full" ? "verified" : "limited");
-      expect(calls).toBe(mode === "full" ? 1 : 2);
+      expect(repeated.outcomes[0]?.availability).toBe(mode === "summary" ? "limited" : "verified");
+      expect(calls).toBe(mode === "summary" ? 2 : 1);
     }
   },
 );
+
+test("joined decision matching rejects prefixes, later cases and unstructured suffixes", () => {
+  expect(matchesPrecedentCaseNumber("2026다100001", "2026다100001, 100002")).toBe(true);
+  for (const detail of [
+    "2026다1000010, 100002",
+    "2026다100002, 100001",
+    "2026다100001 외",
+    "2026다100001, 100002 text",
+    "2026다100001, 100002, 100002",
+    "2026다100001, 100001",
+  ])
+    expect(matchesPrecedentCaseNumber("2026다100001", detail)).toBe(false);
+});
 
 test.each(["court", "case_number", "source_date"])(
   "precedent discovered cache rejects %s mismatch against the current official candidate",

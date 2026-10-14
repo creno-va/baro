@@ -7,6 +7,7 @@ import {
   timestampSchema,
 } from "../../../contracts";
 import type { createDomainRepository } from "../../db/repository";
+import { LAW_API_REFERER } from "./request-headers";
 
 const digits = z.string().regex(/^\d{1,12}$/);
 const apiDate = z
@@ -197,6 +198,7 @@ export function createLegalRetrieval(
         const response = await transport(url.toString(), {
           signal: AbortSignal.timeout(10_000),
           redirect: "error",
+          headers: { Referer: LAW_API_REFERER },
         });
         if (response.status === 429 || response.status >= 500) {
           diagnostic({
