@@ -29,6 +29,7 @@
 | 릴리스 증거 | 총괄, #19/#71 | PR232 병합; 최종 full·동일 SHA 실제 증거 미완료 | 수동 전체 회귀→preview 제한 smoke→정확한 SHA 운영자 승인→production |
 | 디렉터리 | 변호사 모듈 + 총괄, #231/M5 | PR234 병합; 기존 공개 목록의 원격 projection 연결 미완료 | serving SHA 확인 후 bounded reindex, 철회·cursor·필터 smoke |
 | 문서·작업 체계 | 총괄, #19/#64/#71 | 현행 기준과 과거 기록 분리 중 | 문서 PR과 이슈/마일스톤의 담당·증거·다음 행동 대조 |
+| 채팅 실패·재시도 | 고객/AI, #64 / PR238 | focus 중 클릭 유실·503 안내 소실·provider HTTP 상태 누락 수정, native D1/브라우저 회귀 통과. 과거 원격 provider 원인은 로그 유실로 미확정 | PR238 동일 SHA 배포 후 합성 사건 재시도1회·안전한 status/category·원장 보존 대조. production은 현재101d809/schema0009로 preview0c62110/schema0013와 다름 |
 | 전체 실제 인수 | 각 모듈, #27/#59/#63/#64/#66/#67/#71 | OAuth/실제 모델·공식 출처·media·다운로드·복구/경보 증거 잔여 | [요구사항·증거 완료표](./MVP-REQUIREMENTS-EVIDENCE.md)의 조건별 증거 연결 |
 
 ## 검증과 배포

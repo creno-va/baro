@@ -130,6 +130,38 @@ function harness(
   return { call, gateway, requests, receipts, background, events, runs: () => runs };
 }
 
+test("raw HTTP failures preserve unpaid uncertainty and each bounded retry has its own reservation", async () => {
+  let calls = 0;
+  const h = harness(async () =>
+    ++calls === 1
+      ? Response.json({ error: { message: "Synthetic upstream outage" } }, { status: 503 })
+      : Response.json(completion()),
+  );
+  expect(await h.call()).toEqual(output);
+  await Promise.all(h.background);
+  expect(h.requests).toHaveLength(2);
+  expect(h.receipts.map(({ receipt }) => receipt.transport)).toEqual([
+    "provider_error",
+    "response",
+  ]);
+  expect(h.receipts[0]?.receipt).toMatchObject({ definitiveNoCharge: false, inputTokens: null });
+  expect(h.receipts[1]?.receipt).toMatchObject({
+    meteringStatus: "complete",
+    inputTokens: 10,
+    outputTokens: 20,
+  });
+  const denied = harness(async () => Response.json({}, { status: 503 }), {
+    beforeDispatch: async (request) =>
+      request.attemptOrdinal === 1
+        ? { invocationId: request.invocationId, attemptId: "00000000-0000-4000-8000-000000000002" }
+        : null,
+  });
+  await expect(denied.call()).rejects.toThrow("MODEL_UNAVAILABLE");
+  expect(denied.runs()).toBe(1);
+  expect(denied.receipts).toHaveLength(1);
+  expect(denied.receipts[0]?.receipt.definitiveNoCharge).toBe(false);
+});
+
 test("accounted calls require server invocation identity and denied funding does not consume quota or call model", async () => {
   const missing = harness(async () => completion());
   let quota = 0;

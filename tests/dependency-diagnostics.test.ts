@@ -2,10 +2,20 @@ import { expect, spyOn, test } from "bun:test";
 import { productBoundaryFindings } from "../scripts/product-boundaries";
 import { safe } from "../src/server/db/v2-core";
 import {
+  dependencyCategory,
   dependencyStep,
   reportDependencyFailure,
   reportProviderFailure,
 } from "../src/server/dependency-diagnostics";
+
+test("D1 depth, compound-select and function limits have a distinct safe category", () => {
+  for (const message of [
+    "D1_ERROR: Expression tree is too large (maximum depth 100)",
+    "D1_ERROR: too many terms in compound SELECT",
+    "D1_ERROR: too many arguments on function json_object",
+  ])
+    expect(dependencyCategory(new Error(message))).toBe("database_limit");
+});
 
 test("repository replacement preserves a static failure category and retry stage without private error data", async () => {
   const output = spyOn(console, "error").mockImplementation(() => {});

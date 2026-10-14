@@ -23,6 +23,40 @@
 아래에 기록했으며 별도 결과 artifact를 생성하지 않았다. 따라서 존재하지 않는 CI·배포·
 live smoke 결과 링크를 증거로 사용하지 않는다.
 
+## 2026-10-14 채팅 실패·재시도 후속
+
+기준 main `0c6211074d2d451f9cde54671b0d80cb1a402fa2`에서 #64의 실패 기록과
+#71의 10월13일 관측을 다시 대조했다. 채팅 strict schema의 기본값 필드 누락과
+workspace 읽기 경합은 PR220에 병합됐다. 아래 과거 D1 표현식 깊이 결함도 이미
+수정돼 있다. 현재 native workerd D1에서 실제 제품 API·비용 예약·암호화 경로로
+질문/채팅 HTTP400 실패→재시도202→완료를 검사했으며, 이전 ambiguous 비용과
+charged NULL을 보존한다. 모델 응답은 합성 transport이며 실제 provider 성공이 아니다.
+
+추가로 재현·수정한 경로는 다음과 같다.
+
+- 포인터를 누르는 동안 focus 계정 확인이 시작되면 조건부 workspace 렌더링이
+  재시도 버튼을 제거해 click이 전달되지 않았다. 비공개 내용은 숨기고 inert로
+  유지하며 일반 재시도 버튼은 고정된 DOM 위치에 둔다. 최신 계정·동의를 확인한
+  뒤에만 요청한다. 다른 계정·동의 필요·세션 조회 실패에서는 요청하지 않는다.
+- 재시도503 안내가 이후 focus 조회 성공으로 지워졌다. 실패한 mutation의 안내는
+  다음 명시적 시도까지 보존한다. 성공한 조회를 재시도 성공으로 표시하지 않는다.
+- [Cloudflare AI binding 구현](https://github.com/cloudflare/workerd/blob/main/src/cloudflare/internal/ai-api.ts)의
+  기본 InferenceUpstreamError에는 HTTP status가 없다. 기존 `error.status` 검사로는
+  실제 응답 상태가 사라진다. 지원되는 `returnRawResponse`로 요청별 Response를
+  받아 status와 허용된 분류만 전달한다. 공유 binding의 lastRequest 값이나 메시지의
+  내부 숫자 코드를 HTTP 상태로 추정하지 않는다. body는 상한을 두고 메모리에서만
+  읽으며 원문·사건·SQL·토큰을 로그에 남기지 않는다. 기존 개별 예약·최대3회 제한과
+  미확정 과금 보존을 유지한다. 알려진 D1 depth/compound SELECT/function 한도도
+  database_limit로 분류한다.
+
+회귀: `tests/browser/workspace.e2e.ts`, `tests/ai-runtime-workerd.test.ts`,
+`tests/llm-gateway-transport.test.ts`, `tests/llm-gateway-attempts.test.ts`,
+`tests/dependency-diagnostics.test.ts`. 포인터 재현은 수정 전 실패·수정 후 통과했다.
+실제 Safari의 과거 이벤트 순서는 확정되지 않았다. 원래 provider 로그의
+`unknown/httpStatus:null`에서 유실된 HTTP 상태를 소급 복원하거나, 스키마 결함이
+그 실제 호출의 원인이었다고 단정하지 않는다. 같은 배포 SHA에서 제한된 실제
+재시도·조회와 비용 대조는 #64/#57/#71의 외부 인수로 계속 추적한다.
+
 ## 확인된 실패 조건
 
 ### 0. 질문 생성 실패 후 재시도의 D1 SQL 표현식 깊이 초과

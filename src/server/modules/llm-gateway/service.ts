@@ -18,6 +18,7 @@ import {
   unavailableReceipt,
 } from "./attempts";
 import { MODEL_ID, type Phase, PROMPT_VERSION, prompts } from "./prompts";
+import { gatewayResponse } from "./transport";
 import {
   workspaceAuditOutputSchema,
   workspaceChatOutputSchema,
@@ -58,7 +59,10 @@ export interface GatewayBinding {
   run(
     model: string,
     input: Record<string, unknown>,
-    options: { gateway: { id: string; collectLog: false; skipCache: true } },
+    options: {
+      gateway: { id: string; collectLog: false; skipCache: true };
+      returnRawResponse?: true;
+    },
   ): Promise<unknown>;
 }
 export interface ModelMetric {
@@ -225,7 +229,8 @@ export function createLlmGateway(
           allowed
             ? env.AI.run(MODEL_ID, wireInput, {
                 gateway: { id: env.AI_GATEWAY_ID, collectLog: false, skipCache: true },
-              })
+                returnRawResponse: true,
+              }).then(gatewayResponse)
             : undefined,
         );
         if (ledger) {

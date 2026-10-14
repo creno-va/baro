@@ -103,6 +103,7 @@ test("Worker binding sends pinned structured model/privacy options and allowlist
           expect(input).not.toHaveProperty("temperature");
           expect(options).toEqual({
             gateway: { id: "synthetic-gateway", collectLog: false, skipCache: true },
+            returnRawResponse: true,
           });
           expect(JSON.stringify(input.response_format)).toContain('"strict":true');
           return completion(screening);

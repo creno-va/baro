@@ -11,6 +11,124 @@ test.skip(
 const key = "baro-c-contract-test-state";
 const base = "/cases/synthetic-case";
 
+test("chat retry 503 remains visible after focus refresh and clears after a successful retry", async ({
+  page,
+}) => {
+  await page.goto(base);
+  await expect(page.getByRole("heading", { name: "이제, 하나씩 풀어가요." })).toBeVisible();
+  await page.evaluate((key) => {
+    const saved = JSON.parse(localStorage.getItem(key) ?? "{}");
+    saved.faults = { "workspace.sendMessage": ["chat_failed"] };
+    localStorage.setItem(key, JSON.stringify(saved));
+  }, key);
+  await page.getByLabel("추가 사실 또는 질문").fill("재시도 오류 표시를 확인할 합성 질문입니다.");
+  await page.getByRole("button", { name: "보내기", exact: true }).click();
+  const retry = page.getByRole("button", { name: "응답 다시 시도", exact: true });
+  await expect(retry).toBeVisible();
+  await page.evaluate(async () => {
+    const path = "/tests/helpers/workspace-client-fixture.ts";
+    const { api } = (await import(path)) as typeof import("../helpers/workspace-client-fixture");
+    const execute = api.workspace.retryMessage;
+    api.workspace.retryMessage = async () => {
+      api.workspace.retryMessage = execute;
+      throw Object.assign(new Error("AI 설정을 확인한 뒤 다시 시도해 주세요."), {
+        code: "UNAVAILABLE",
+        status: 503,
+      });
+    };
+  });
+  await retry.click();
+  await expect(page.getByRole("alert")).toContainText("AI 설정을 확인한 뒤 다시 시도해 주세요.");
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect(page.getByRole("heading", { name: "대여금 반환 관련 자료 정리" })).toBeVisible();
+  await expect(page.getByRole("log", { name: "사건 대화" })).toBeVisible();
+  await expect(page.getByRole("alert")).toContainText("AI 설정을 확인한 뒤 다시 시도해 주세요.");
+  await retry.click();
+  await expect(page.getByText("이 응답은 합성 API 예시", { exact: false })).toBeVisible();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+});
+
+for (const result of ["same-owner", "other-owner", "consent", "unavailable"] as const)
+  test(`chat retry click waits for focus verification: ${result}`, async ({ page }) => {
+    await page.goto(base);
+    await expect(page.getByRole("heading", { name: "이제, 하나씩 풀어가요." })).toBeVisible();
+    await page.evaluate((key) => {
+      const saved = JSON.parse(localStorage.getItem(key) ?? "{}");
+      saved.faults = { "workspace.sendMessage": ["chat_failed"] };
+      localStorage.setItem(key, JSON.stringify(saved));
+    }, key);
+    await page.getByLabel("추가 사실 또는 질문").fill("초점 확인 중 재시도할 합성 질문입니다.");
+    await page.getByRole("button", { name: "보내기", exact: true }).click();
+    const retry = page.getByRole("button", { name: "응답 다시 시도", exact: true });
+    await expect(retry).toBeVisible();
+    await page.evaluate(async () => {
+      const path = "/tests/helpers/workspace-client-fixture.ts";
+      const { api } = (await import(path)) as typeof import("../helpers/workspace-client-fixture");
+      const original = api.session.get;
+      const owner = await original();
+      if (!owner.user) throw new Error("Missing synthetic owner");
+      const customer = owner.user;
+      const pending: { resolve: (value: typeof owner) => void; reject: (error: Error) => void }[] =
+        [];
+      const state = window as unknown as {
+        retryCalls: number;
+        releaseRetryCheck: (result: string) => void;
+      };
+      state.retryCalls = 0;
+      api.session.get = () => new Promise((resolve, reject) => pending.push({ resolve, reject }));
+      state.releaseRetryCheck = (result) => {
+        const next =
+          result === "other-owner"
+            ? { ...owner, user: { ...customer, id: "another-customer" } }
+            : { ...owner, needsConsent: result === "consent" };
+        api.session.get = async () => next;
+        for (const check of pending)
+          if (result === "unavailable") check.reject(new Error("합성 세션 확인 장애"));
+          else check.resolve(next);
+      };
+      const execute = api.workspace.retryMessage;
+      api.workspace.retryMessage = async (...args: Parameters<typeof execute>) => {
+        state.retryCalls++;
+        return execute(...args);
+      };
+    });
+    // The operating system may focus Safari during a pointer gesture. No private
+    // workspace content or paid request may escape the pending session check.
+    await retry.evaluate((button) =>
+      button.addEventListener(
+        "pointerdown",
+        () => {
+          window.dispatchEvent(new Event("focus"));
+        },
+        { once: true },
+      ),
+    );
+    await retry.scrollIntoViewIfNeeded();
+    const bounds = await retry.boundingBox();
+    if (!bounds) throw new Error("Missing synthetic retry button");
+    await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+    await page.mouse.down();
+    await expect(page.getByRole("heading", { name: "사건을 불러오는 중" })).toBeVisible();
+    await expect(page.getByRole("log", { name: "사건 대화" })).toBeHidden();
+    await page.mouse.up();
+    expect(
+      await page.evaluate(() => (window as unknown as { retryCalls: number }).retryCalls),
+    ).toBe(0);
+    await page.evaluate(
+      (result) =>
+        (window as unknown as { releaseRetryCheck: (result: string) => void }).releaseRetryCheck(
+          result,
+        ),
+      result,
+    );
+    if (result === "same-owner")
+      await expect(page.getByText("이 응답은 합성 API 예시", { exact: false })).toBeVisible();
+    else if (result !== "other-owner") await expect(page.getByRole("alert")).toBeVisible();
+    expect(
+      await page.evaluate(() => (window as unknown as { retryCalls: number }).retryCalls),
+    ).toBe(result === "same-owner" ? 1 : 0);
+  });
+
 test("chat retry survives overlapping focus, pageshow and visibility checks", async ({ page }) => {
   await page.goto(base);
   await expect(page.getByRole("heading", { name: "이제, 하나씩 풀어가요." })).toBeVisible();

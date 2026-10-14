@@ -288,7 +288,11 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
     const readOrDelete = ["refresh", "history", "original", "delete"].includes(key);
     // A native chooser can return while focus verification temporarily hides the
     // workspace. Its selection still needs the same fresh owner/write preflight.
-    if (lock.current || (key !== "upload" && (!ready || (readonly && !readOrDelete)))) return;
+    if (
+      lock.current ||
+      (!["upload", "chat-retry"].includes(key) && (!ready || (readonly && !readOrDelete)))
+    )
+      return;
     const epoch = ticket();
     lock.current = true;
     latest.current++;
@@ -314,7 +318,8 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
       await action(epoch);
     } catch (cause) {
       if (!alive(epoch)) return;
-      operationError.current = key === "upload";
+      // A focus-triggered reload must not erase an unsuccessful mutation's error.
+      operationError.current = !readOrDelete;
       let resource = false;
       if (problem(cause).code === "NOT_FOUND") {
         try {
@@ -583,8 +588,38 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
           <LoaderCircle className="workspace-spin" /> 사건과 저장된 자료를 불러오고 있어요.
         </div>
       )}
-      {view && ready && (
-        <>
+      {/* Keep the generic retry control mounted above the private content. Focus
+          verification hides that content, but must not swallow a pointer click.
+          run() still verifies the latest owner and consent before any request. */}
+      {tab === "chat" &&
+        view?.messages
+          .filter((message) => message.status === "failed" && message.retryable !== false)
+          .map((message) => (
+            <section className="workspace-message-failed" key={message.id} aria-label="응답 재시도">
+              <p>완료하지 못한 응답이 있어요. 같은 대화에서 다시 시도할 수 있어요.</p>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={!!busy || !canMutate || view.case.stage !== "active"}
+                onClick={() =>
+                  void run("chat-retry", async (epoch) => {
+                    const next = await api.workspace.retryMessage(caseId, message.id);
+                    if (!(await verify()) || !current(epoch)) return;
+                    apply(next);
+                    setNotice("응답을 다시 요청했어요.");
+                  })
+                }
+              >
+                응답 다시 시도
+              </Button>
+            </section>
+          ))}
+      {view && (
+        <div
+          style={{ visibility: ready ? undefined : "hidden" }}
+          inert={!ready}
+          aria-hidden={!ready}
+        >
           {!canMutate && (
             <section className="workspace-error">
               <p>
@@ -715,26 +750,6 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                                 ? "응답을 완료하지 못했어요. 내용을 확인한 뒤 새 메시지를 보내 주세요."
                                 : "응답을 완료하지 못했어요. 같은 대화에서 다시 시도할 수 있어요."}
                             </p>
-                            {message.retryable !== false && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                disabled={!!busy || readonly}
-                                onClick={() =>
-                                  void run(message.id, async (epoch) => {
-                                    const next = await api.workspace.retryMessage(
-                                      caseId,
-                                      message.id,
-                                    );
-                                    if (!(await verify()) || !current(epoch)) return;
-                                    apply(next);
-                                    setNotice("응답을 다시 요청했어요.");
-                                  })
-                                }
-                              >
-                                응답 다시 시도
-                              </Button>
-                            )}
                           </div>
                         )}
                       </article>
@@ -1231,7 +1246,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
               </div>
             </aside>
           </div>
-        </>
+        </div>
       )}
       <dialog
         ref={dialog}
