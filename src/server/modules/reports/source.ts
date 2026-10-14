@@ -238,6 +238,7 @@ export async function reportFile(core: V2Core, actor: Actor, fileId: string) {
             fileId,
             manifestRevision,
             v2OriginalManifestSchema,
+            { batchInitialRead: true },
           )
         : null,
     coverage: metadata.coverageSnapshotId
@@ -249,6 +250,7 @@ export async function reportFile(core: V2Core, actor: Actor, fileId: string) {
           fileId,
           metadata.revision,
           v2CoverageSchema,
+          { batchInitialRead: true },
         )
       : null,
   };
