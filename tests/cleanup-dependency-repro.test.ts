@@ -403,7 +403,7 @@ test("cleanup marker diagnostics reveal no provider message or embedded identifi
     ["PRIVATE Too many API requests by single Worker invocation. PRIVATE", "request_limit_marker"],
     ["PRIVATE network connection lost PRIVATE", "network_marker"],
     ["PRIVATE internal error PRIVATE", "internal_marker"],
-  ]) {
+  ] as const) {
     const details = cleanupErrorDetails(new Error(message));
     expect(details.messageClass).toBe(messageClass);
     expect(JSON.stringify(details)).not.toContain("PRIVATE");
