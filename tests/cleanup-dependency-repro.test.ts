@@ -13,16 +13,16 @@ import { digest } from "../src/server/modules/files/binary";
 import { createTestDatabase } from "./helpers/d1";
 import { r2 } from "./helpers/file-processing-fixture";
 import { seedTestSession } from "./helpers/session";
+import {
+  deletedCleanupResult,
+  missingCleanupWorkflow as missing,
+} from "./helpers/workflow-cleanup";
 
 const databases: Awaited<ReturnType<typeof createTestDatabase>>[] = [];
 afterEach(() => {
   for (const db of databases.splice(0)) db.close();
 });
-const missing = {
-  get: async () => {
-    throw new Error("instance.not_found");
-  },
-};
+
 async function fixture() {
   const db = await createTestDatabase();
   databases.push(db);
@@ -46,10 +46,7 @@ async function fixture() {
 const workflowScopes = ["file", "asset", "workspace", "profile"] as const;
 for (const { fault, index } of [
   { fault: "native_revoke" as const, index: 0 },
-  ...workflowScopes.flatMap((_, index) => [
-    { fault: "workflow_get" as const, index },
-    { fault: "workflow_delete" as const, index },
-  ]),
+  ...workflowScopes.map((_, index) => ({ fault: "workflow_delete" as const, index })),
 ])
   test(`cleanup identifies ${fault} in namespace ${workflowScopes[index]} without disclosing error data`, async () => {
     const f = await fixture(),
@@ -61,13 +58,9 @@ for (const { fault, index } of [
       .run(f.journalId, id);
     const events: CleanupFailureEvent[] = [];
     const workflow = {
-      get: async () => {
-        if (fault === "workflow_get") throw new Error("SYNTHETIC_PRIVATE_DEPENDENCY_ERROR");
-        return {
-          delete: async () => {
-            if (fault === "workflow_delete") throw new Error("SYNTHETIC_PRIVATE_DEPENDENCY_ERROR");
-          },
-        };
+      deleteBatch: async (ids: string[]) => {
+        if (fault === "workflow_delete") throw new Error("SYNTHETIC_PRIVATE_DEPENDENCY_ERROR");
+        return deletedCleanupResult(ids);
       },
     };
     const result = await createV2DeletionReconciler(f.core, {
@@ -421,7 +414,7 @@ for (const kind of [
   "hostile",
   "circular",
 ] as const) {
-  test(`cleanup ${kind} observation preserves the existing missing-instance decision and pending inventory`, async () => {
+  test(`cleanup ${kind} thrown error never becomes an absence receipt`, async () => {
     const f = await fixture();
     const id = `native-v1-asset-${crypto.randomUUID()}-1`;
     f.db.sqlite
@@ -463,7 +456,7 @@ for (const kind of [
           clock: () => f.actor.now,
           workflows: [
             {
-              get: async () => {
+              deleteBatch: async () => {
                 throw error;
               },
             },
@@ -475,40 +468,104 @@ for (const kind of [
         }).run(),
       ).toEqual({
         acquired: 1,
-        completed: kind === "exact" ? 1 : 0,
-        retry: kind === "exact" ? 0 : 1,
+        completed: 0,
+        retry: 1,
       });
-      if (kind === "exact") {
-        expect(events).toEqual([]);
-        expect(f.db.sqlite.query("SELECT count(*) n FROM v2_cleanup_receipts").get()).toEqual({
-          n: 1,
-        });
-      } else {
-        expect(events).toHaveLength(1);
-        expect(JSON.parse(events[0] ?? "null")).toEqual({
-          event: "v2_deletion_cleanup_failed",
-          environment: "preview",
-          reason: "CLEANUP_DEPENDENCY_UNAVAILABLE",
-          attempts: 1,
-          ageSeconds: 0,
-          stage: "workflow_get",
-          namespace: "file",
-          ...cleanupErrorDetails(error),
-        });
-        expect(events[0]).not.toContain("PRIVATE");
-        expect(events[0]).not.toContain(id);
-        expect(
-          f.db.sqlite
-            .query("SELECT state FROM v2_deletion_targets WHERE journal_id=?")
-            .all(f.journalId),
-        ).toEqual([{ state: "pending" }]);
-        expect(f.db.sqlite.query("SELECT count(*) n FROM v2_cleanup_receipts").get()).toEqual({
-          n: 0,
-        });
-      }
+      expect(events).toHaveLength(1);
+      expect(JSON.parse(events[0] ?? "null")).toEqual({
+        event: "v2_deletion_cleanup_failed",
+        environment: "preview",
+        reason: "CLEANUP_DEPENDENCY_UNAVAILABLE",
+        attempts: 1,
+        ageSeconds: 0,
+        stage: "workflow_delete",
+        namespace: "file",
+        ...cleanupErrorDetails(error),
+      });
+      expect(events[0]).not.toContain("PRIVATE");
+      expect(events[0]).not.toContain(id);
+      expect(
+        f.db.sqlite
+          .query("SELECT state FROM v2_deletion_targets WHERE journal_id=?")
+          .all(f.journalId),
+      ).toEqual([{ state: "pending" }]);
+      expect(f.db.sqlite.query("SELECT count(*) n FROM v2_cleanup_receipts").get()).toEqual({
+        n: 0,
+      });
       expect(f.db.sqlite.query("SELECT count(*) n FROM v2_runtime_proofs").get()).toEqual({ n: 0 });
     } finally {
       log.mockRestore();
     }
+  });
+}
+
+for (const named of [true, false]) {
+  test(`cleanup replay after deletion and later namespace failure preserves native proof: ${named}`, async () => {
+    const f = await fixture();
+    const id = named ? `native-v1-file-${crypto.randomUUID()}-1` : `${crypto.randomUUID()}-1`;
+    f.db.sqlite
+      .query(
+        "INSERT INTO v2_deletion_targets(journal_id,kind,target_id,ordinal) VALUES(?,'job',?,0)",
+      )
+      .run(f.journalId, id);
+    let at = f.actor.now,
+      present = true,
+      failProfile = true,
+      deletes = 0,
+      revocations = 0;
+    const events: CleanupFailureEvent[] = [];
+    const found = {
+      deleteBatch: async (ids: string[]) => {
+        if (!present) return missing.deleteBatch(ids);
+        present = false;
+        deletes++;
+        return deletedCleanupResult(ids);
+      },
+    };
+    const runner = createV2DeletionReconciler(f.core, {
+      environment: "preview",
+      clock: () => at,
+      workflows: [
+        named ? found : missing,
+        missing,
+        named ? missing : found,
+        {
+          deleteBatch: async (ids: string[]) => {
+            if (failProfile) throw new Error("SYNTHETIC_PRIVATE_PROFILE_FAILURE");
+            return missing.deleteBatch(ids);
+          },
+        },
+      ],
+      stopNative: async () => {
+        revocations++;
+      },
+      onFailure: (event) => events.push(event),
+    });
+    expect(await runner.run()).toEqual({ acquired: 1, completed: 0, retry: 1 });
+    expect(deletes).toBe(1);
+    expect(events[0]?.stage).toBe("workflow_delete");
+    expect(events[0]?.namespace).toBe("profile");
+    failProfile = false;
+    at = new Date(Date.parse(at) + 61000).toISOString();
+    expect(await runner.run()).toEqual({
+      acquired: 1,
+      completed: named ? 1 : 0,
+      retry: named ? 0 : 1,
+    });
+    expect(revocations).toBe(named ? 2 : 0);
+    expect(deletes).toBe(1);
+    // A UUID alone cannot distinguish historical random native jobs. This test
+    // records the unresolved recovery boundary; it must not be silently relaxed.
+    if (!named) expect(events[1]?.reason).toBe("CLEANUP_LEGACY_RUNTIME_PROOF_REQUIRED");
+    expect(
+      f.db.sqlite
+        .query("SELECT state FROM v2_deletion_targets WHERE journal_id=?")
+        .get(f.journalId),
+    ).toEqual({ state: named ? "completed" : "pending" });
+    expect(
+      f.db.sqlite
+        .query("SELECT count(*) n FROM v2_cleanup_receipts WHERE journal_id=?")
+        .get(f.journalId),
+    ).toEqual({ n: named ? 1 : 0 });
   });
 }

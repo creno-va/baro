@@ -5,6 +5,7 @@ import { createV2StorageRepository } from "../../db/v2-storage";
 import { authorizeBlobCleanup, createStorageMaintenance } from "../budget/storage-maintenance";
 import { isNamedNativeRuntime } from "../file-processing/native-identity";
 import type { PrivateBucket } from "../files/service";
+import { type CleanupWorkflow, deleteWorkflowInstance } from "./workflow-cleanup";
 
 const cleanupReasons = [
   "CLEANUP_BINDING_UNAVAILABLE",
@@ -15,6 +16,7 @@ const cleanupReasons = [
   "CLEANUP_FENCED",
   "CLEANUP_OBJECT_REMAINS",
   "CLEANUP_INVENTORY_PENDING",
+  "CLEANUP_WORKFLOW_RESPONSE_INVALID",
 ] as const;
 type CleanupStage =
   | "unknown"
@@ -57,9 +59,6 @@ function isError(error: unknown): error is Error {
   } catch {
     return false;
   }
-}
-function missingInstance(error: unknown) {
-  return isError(error) && errorField(error, "message") === "instance.not_found";
 }
 /** Fixed diagnostic labels only. A marker is never an absence receipt. */
 function cleanupMessageClass(message: unknown): CleanupErrorDetails["messageClass"] {
@@ -144,7 +143,7 @@ export async function revokeNamedProcessor(binding: Env["FILE_PROCESSOR"] | unde
   if (!binding) throw new Error("CLEANUP_BINDING_UNAVAILABLE");
   await binding.get(binding.idFromName(id)).revoke();
 }
-export type CleanupWorkflow = { get(id: string): Promise<{ delete(): Promise<void> }> };
+export type { CleanupWorkflow } from "./workflow-cleanup";
 export type DeletionCleanupDependencies = {
   environment: "preview" | "production";
   privateBucket?: PrivateBucket;
@@ -160,20 +159,10 @@ export type DeletionCleanupDependencies = {
   clock?: () => string;
   testOnlyUnmeteredStorage?: true;
 };
-/** A real platform response or the exact missing-instance sentinel is a receipt.
- * Network, authorization and arbitrary errors retain the target for retry. */
+/** Only an exact structured deletion/absence result is a receipt. All thrown
+ * errors, including missing-instance messages, retain the target for retry. */
 async function stop(binding: CleanupWorkflow | undefined, id: string, observe: ObserveStop) {
-  try {
-    const instance = await observe("workflow_get", async () => {
-      if (!binding) throw new Error("CLEANUP_BINDING_UNAVAILABLE");
-      return binding.get(id);
-    });
-    await observe("workflow_delete", () => instance.delete());
-    return true;
-  } catch (error) {
-    if (!missingInstance(error)) throw error;
-    return false;
-  }
+  return observe("workflow_delete", () => deleteWorkflowInstance(binding, id));
 }
 export function createV2DeletionReconciler(core: V2Core, deps: DeletionCleanupDependencies) {
   const now = deps.clock ?? (() => new Date().toISOString());
@@ -203,17 +192,13 @@ export function createV2DeletionReconciler(core: V2Core, deps: DeletionCleanupDe
           at: CleanupStage,
           scope: CleanupNamespace,
           work: () => Promise<T>,
-          missingAllowed = false,
         ): Promise<T> => {
           try {
             return await work();
           } catch (error) {
-            // Exact absence is handled successfully by stop(), never a failed stage.
-            if (!(missingAllowed && missingInstance(error))) {
-              stage = at;
-              namespace = scope;
-              details = cleanupErrorDetails(error);
-            }
+            stage = at;
+            namespace = scope;
+            details = cleanupErrorDetails(error);
             throw error;
           }
         };
@@ -222,7 +207,7 @@ export function createV2DeletionReconciler(core: V2Core, deps: DeletionCleanupDe
           binding: CleanupWorkflow | undefined,
           id: string,
           scope: CleanupNamespace,
-        ) => stop(binding, id, (at, work) => observe(at, scope, work, true));
+        ) => stop(binding, id, (at, work) => observe(at, scope, work));
         try {
           // Work per invocation is bounded. Receipts and remaining targets survive
           // lease expiry, partial transport failures and another scheduler's replay.

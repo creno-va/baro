@@ -19,16 +19,13 @@ import {
 import { createTestDatabase } from "./helpers/d1";
 import { fixture, uploaded } from "./helpers/file-processing-fixture";
 import { seedTestSession } from "./helpers/session";
+import { missingCleanupWorkflow as missing } from "./helpers/workflow-cleanup";
 
 const restored: Awaited<ReturnType<typeof createTestDatabase>>[] = [];
 afterEach(() => {
   for (const db of restored.splice(0)) db.close();
 });
-const missing = {
-  get: async () => {
-    throw new Error("instance.not_found");
-  },
-};
+
 const resource = {
   environment: "isolated-test" as const,
   syntheticOnly: true as const,
