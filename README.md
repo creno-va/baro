@@ -11,6 +11,8 @@ PDF 리포트와 선택한 원본을 직접 전달해 변호사의 초기 사건
 정비합니다. 질문은 최대 2차례×3문항, AI는 계정별 KST 하루200회이며 앱의 월 예산·재원·요청
 금액 차단은 해제합니다. 비용은 관측·정산하며 기존 결제 경로와 $10/$30 자동충전,
 미정산 기록을 보존합니다. `APPLICATION_COST_LIMITS_ENABLED=false`가 금액 차단을 끕니다.
+새 직접 사용자 지시 없이 비용 금액 제한을 다시 적용하지 않습니다. 문서의 과거 예산 수치보다
+[현행 비용 정책](./docs/adr/0015-maintenance-and-operating-policy.md)이 우선합니다.
 [ADR-0015](./docs/adr/0015-maintenance-and-operating-policy.md)가 현재 운영 결정입니다.
 정비 종료와 전체 MVP 실제 인수는 별개이며 [인수표](./docs/development/MVP-REQUIREMENTS-EVIDENCE.md)와 #71로 추적합니다.
 

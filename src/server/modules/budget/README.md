@@ -1,5 +1,14 @@
 # Budget
 
+Current policy (2026-10-14): `APPLICATION_COST_LIMITS_ENABLED=false` disables
+application monetary rejection by month, cumulative funding allowance or request
+amount in admission, dispatch, refresh and preflight. Amount overruns are recorded
+without freezing execution. Keep verified provider status/pricing, exact accounting,
+physical capacity, execution quantity/time/retry bounds and authorization checks.
+Do not inflate observed funding, erase holds or reintroduce a monetary gate from
+historical tests. [ADR-0015](../../../../docs/adr/0015-maintenance-and-operating-policy.md)
+supersedes previous monetary-limit instructions.
+
 Quote inputs come from trusted server dependencies. Pricing, FX, fees, funding,
 execution bounds and hidden retries are bound by an immutable proof digest.
 Money uses decimal strings and exact rational arithmetic; reservations round up
@@ -29,7 +38,8 @@ tokens. Missing verifier/pricing/funding/FX/coordination denies paid execution.
 usage display, including previous-month unresolved carryover. The final mutation
 still reserves actual capacity atomically. No model/resource call occurs here.
 A synthetic verifier is not live funding or a provider invoice. Environment-local
-circuit snapshots are not global 1M KRW ledger snapshots.
+circuit snapshots are not the global cost ledger. The historical 1M KRW allocation
+is retained as accounting history, not an application spending ceiling.
 
 No bundled price, fixed FX, default funding, payment setup or auto recharge is
 provided. Actual billing/console reconciliation remains #71.

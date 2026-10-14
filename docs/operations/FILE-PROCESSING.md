@@ -4,6 +4,11 @@
 - 기준: 2026-10-06, 명세 #53; 저장 #58, 처리 #59, 삭제 #67, 실제 검증 #71
 - 참조: [시스템](../architecture/SYSTEM.md), [암호화 키](./CASE-DATA-KEYS.md), [삭제/복구](./DELETION-RESTORE.md), [비용](./COST-CONTROLS.md)
 
+2026-10-14 현행 비용 정책은 `APPLICATION_COST_LIMITS_ENABLED=false`다. 월·누적 재원·
+요청 금액으로 업로드/처리를 막지 않으며 실제 비용·미정산은 기록한다. 기존 결제·자동충전,
+가격·공급자 상태·권한·물리 용량·파일/시간/횟수 제한은 유지한다. 아래 이전 구현·관측은
+이 정책을 되돌리는 지시가 아니다.
+
 ## 현재 구현과 새 자원 구분
 
 v1은 텍스트 사건용 D1·Workflow다. #58은 아래 R2 버킷4개를 실제 생성하고 두 private 버킷의
@@ -25,8 +30,8 @@ draft/pending/rejected 객체를 public에 먼저 올리지 않는다.
 
 ## Provisioning 순서
 
-1. 계정·환경·기존 결제 계획과 [월 예산](./COST-CONTROLS.md)을 확인한다. 합의한 예산 내
-   리소스 생성은 허용되며 새 결제수단·자동 충전·예산 확대는 별도 승인이다. Containers에 필요한
+1. 계정·환경·기존 결제 계획과 [현재 비용 정책](./COST-CONTROLS.md)을 확인한다. 승인된
+   R2/Containers/Whisper 자원을 연결하며 앱의 금액 상한을 추가하지 않는다. 기존 결제수단·자동 충전은 유지한다. Containers에 필요한
    계정 기능/계획이 현재 활성인지 확인하고 새 결제 계약이 필요한 경우 생성했다고 가정하지 않는다.
 2. 환경별 private/public bucket을 별도로 만들고 소유 계정·실제 bucket ID/이름·관리자·생성 시각을
    비민감 자원 등록부에 기록한다. private는 r2.dev/custom-domain 공개를 끄고 공유 S3 credential을 만들지 않는다.
@@ -38,7 +43,7 @@ draft/pending/rejected 객체를 public에 먼저 올리지 않는다.
 5. image를 고정 digest로 빌드/검사하고 처리 Worker/DO·Container binding을 환경별로 등록한다.
    instance type·최대 동시 실행·CPU/메모리/disk·실행 제한·idle 종료를 명시한다. 정확한 값은 실제
    최대 크기 fixture로 측정하여 #59에 기록하고 미설정 값은 fail-closed로 처리한다.
-6. public URL 없음/환경 분리/소유권/본문 무로그/비용 제한/취소·삭제를 합성 실제 파일로 검증한다.
+6. public URL 없음/환경 분리/소유권/본문 무로그/실제 비용 기록·기술적 실행 제한/취소·삭제를 합성 실제 파일로 검증한다.
    Container 프로세스 재시작·Worker rollback에서 진행 중 job이 중복 과금이나 결과 부활을 만들지 않아야 한다.
 
 ## Upload와 저장
@@ -78,7 +83,8 @@ owner에게만 제공하며 로그·경보·공개 artifact에 쓰지 않는다.
 
 사용자가 파일별 자동 처리와 외부 AI/음성 처리를 확인한 후에만 job을 생성한다. 동의 버전,
 file revision, 분석 범위, quota·비용 reservation, 실행 attempt, lease·취소 상태를 durable하게 저장한다.
-업로드 직후 quota/예산이 부족하면 `waiting-for-quota`로 표시하고 비용을 사용하지 않는다.
+업로드 직후 횟수·용량 quota가 부족하면 `waiting-for-quota`로 표시한다. 비용 금액이
+과거 예산이나 재원 관측액을 넘는다는 이유로 이 상태를 만들지 않는다.
 삭제·동의 철회·revision 변경 후 오래된 job은 시작/결과 commit을 거부한다.
 
 Container는 한 job의 복호화 stream과 제한된 output capability만 받는다. 전체 사건 snapshot,
@@ -117,6 +123,7 @@ ephemeral plaintext·temporary disk·process buffer는 성공·오류·취소 �
 result를 검증한다. 증거에는 파일 내용이나 hash 대신 합성 fixture ID·크기/coverage 건수·통과
 여부·run URL만 남긴다. 입력/원본/음성/frame은 CI artifact에 포함하지 않는다.
 
-비용 초과·parser 취약점·환경 혼합·평문 보관 의심은 새 job을 닫고 정상 조회/삭제를 유지한다.
+parser 취약점·환경 혼합·평문 보관 의심은 새 job을 닫고 정상 조회/삭제를 유지한다.
+비용 초과는 실제 원장에 기록하며 금액만으로 새 job을 닫지 않는다.
 임의 재처리 전에 기존 attempt·billing·원격 객체 상태를 조사한다. 모델 장애 때 다른 공급자로
 자동 전환하지 않는다. public 자산 문제는 공개 pointer 철회→cache purge→object 삭제를 수행한다.

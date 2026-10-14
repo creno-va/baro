@@ -1,6 +1,8 @@
 # 사건·분석 실행 계약
 
-> **2026-10-07 사용자 후속 — 이전 비용 정책보다 우선:** 계정별 AI 응답은 KST 하루200회이며 Preview/Production의 별도 전체 월 예산 차단은 해제한다. Cloudflare 기존 결제 경로에서 잔액$10 이하 시$30 자동 충전을 사용자가 직접 승인/설정했다. metering·실제 funding·가격/FX·bounded attempt·unknown 비용 보존은 유지한다. 배포 설정 `MONTHLY_BUDGET_CAP_ENABLED=false`가 예약·사용량·정산에 일관되게 적용된다. 기존 allocation 금액은 이 모드에서 소비 차단 한도가 아니며 schema0009의 기록을 보존한다.
+> **2026-10-14 현행 비용 정책:** `APPLICATION_COST_LIMITS_ENABLED=false`에서는 월·누적 재원·요청 금액으로 admission/dispatch/refresh/preflight를 막거나 비용 초과로 동결하지 않는다. 실제 비용·미정산·정산과 기존 결제/$10/$30 자동충전을 유지한다. 가격·최신 공급자 상태·권한·물리 용량·횟수·재시도 검사는 별개다. [ADR-0015](../adr/0015-maintenance-and-operating-policy.md)와 [비용 운영](../operations/COST-CONTROLS.md)이 과거 금액 차단 지시보다 우선한다.
+
+> **2026-10-07 이전 결정 기록:** 계정별 AI 하루200회와 `MONTHLY_BUDGET_CAP_ENABLED=false`로 월 cap을 해제했다. 이 기록과 schema0009 원장은 보존하며, 현행 정책은 2026-10-14의 모든 앱 비용 금액 차단 해제로 확대됐다.
 
 - Contract: v1 보존, v2 사용량·비용 실행 정본 추가 (2026-10-06)
 
@@ -67,7 +69,7 @@ active analysis는 한 case에 하나다. `cases.current_analysis_id`와 revisio
 
 명시적 사용자 retry는 실패가 retryable이고 같은 revision일 때 최대 2회다. analysis ID/revision을 유지하고 `attempt`를 증가시켜 새 instance ID `analysisId-attempt`를 만든다. 이전 instance는 terminal 상태여야 한다. 반환은 202 `{analysisId,inputRevision,status:"queued"}`다. 동시 retry는 CAS와 idempotency로 같은 attempt를 반환한다. completed/superseded 또는 non-retryable은 409다.
 
-모델 외부 호출과 checkpoint commit 사이의 crash는 중복 과금을 만들 수 있다. provider가 보장하지 않은 exactly-once를 주장하지 않는다. attempt budget, Gateway spend limit, checkpoint 재사용, ambiguous failure 관측으로 비용을 제한한다.
+모델 외부 호출과 checkpoint commit 사이의 crash는 중복 과금을 만들 수 있다. provider가 보장하지 않은 exactly-once를 주장하지 않는다. 유한한 attempt 횟수와 checkpoint 재사용으로 중복 실행을 제한하고 ambiguous 비용을 기록한다. 현행 정책에서 Gateway spend limit이나 앱 금액 차단을 다시 설정하지 않는다.
 
 ## 삭제·복구
 
@@ -106,7 +108,7 @@ polling은 1·2·4·8·15초 후 최대15초, 탭이 숨겨지면 멈춘다. ter
 ## v2 사용량과 비용
 
 - Status: Implementation target; #57 독립 계약 준비이며 제품·DB·cloud cap 구현 완료 증거가 아니다.
-- Decisions: [ADR-0013](../adr/0013-resource-admission-and-budget.md), [v2 실행 계약](./V2-CONTRACTS.md).
+- Decisions: 현행 비용 정책은 [ADR-0015](../adr/0015-maintenance-and-operating-policy.md), 이전 설계 기록은 [ADR-0013](../adr/0013-resource-admission-and-budget.md), 기능 계약은 [v2 실행 계약](./V2-CONTRACTS.md).
 - Owners: #55 schema/repository, #57 usage/budget, #58/#59 자료 admission/처리, #64 응답 publish, #67 삭제.
 - 운영 정본: [비용·환경 할당 절차](../operations/COST-CONTROLS.md), [실제 readiness](../operations/ENVIRONMENT-READINESS.md).
 
@@ -146,7 +148,7 @@ quota `reserved → consumed/released`는 reservation와 해당 day counter를 �
 released 작업의 retry는 같은 operation ID와 원래 day에서 한 슬롯을 원자적으로 다시 확보한다.
 그 day의 다른 작업 때문에 남은 allowance가 없으면 재시도를 보류하며 새 day로 옮겨 우회하지
 않는다. 이미 consumed인 operation retry는 사용자 quota를 다시 예약하지 않는다. 실제 외부
-비용은 어느 경우에도 새 attempt마다 예약한다. 미게시 실패를 환불해도 비용·abuse/retry 상한은
+비용은 어느 경우에도 새 attempt마다 예약 기록한다. 미게시 실패를 환불해도 실제 비용 기록·abuse/retry 상한은
 남는다. 삭제된 target·오래된 revision·취소/종료 lease는 quota 재예약이나 publish를 승인하지 않는다.
 
 ### 원자적 admission과 replay
@@ -183,7 +185,7 @@ claim과 같은 batch의 만료 행 제거/교체로 영구 unique 충돌을 막
 UTC timestamps는 비교/저장 전에 canonical ISO milliseconds로 정규화한다. 같은 초의
 `...00Z`와 `...00.001Z`를 문자열 형태 차이 때문에 역순으로 판정하지 않는다. quote는 서버의
 신뢰할 수 있는 가격/환율 정본으로 생성하며 client 제공 금액·providerPricingVersion을 승인
-근거로 쓰지 않는다. 실행 직전 quote/funding 유효성·target/lease·budget을 다시 확인한다.
+근거로 쓰지 않는다. 실행 직전 quote/공급자 상태의 유효성·target/lease·기술적 실행 경계를 다시 확인하며 금액으로 차단하지 않는다.
 만료 견적은 대기 사유를 남기고 재견적한다. 기존 hold의 교체/증액도 원자적이며 이전 hold를
 먼저 지워 새 비용을 승인하는 틈을 만들지 않는다.
 
@@ -208,10 +210,11 @@ release하지 않는다. 과금 없음이 나중에 명확히 확인되면 그 �
 late receipt는 기존 attempt를 정산하고 추가 모델 호출을 만들지 않는다. abort를 보장하지
 않는 binding timeout 뒤 미확정 호출과 즉시 겹치는 retry를 하지 않는다.
 
-실제 청구가 예약/월 한도를 초과해도 정산액을 잘라내거나 삭제하지 않는다. 관측 초과와
-uncertainty는 `remaining/available = max(0, limit-used-reserved)` 또는 비용 committed 합계로
-표시하고 새 paid admission을 닫는다. 환경 합계·필수 보관/읽기/삭제 비용은 운영 절차의
-versioned allocation 정본으로 제한한다. 정확한 환율·단가·funding 근거가 없으면 fail-closed다.
+실제 청구가 예약액이나 과거 월 할당액을 초과해도 정산액을 잘라내거나 삭제하지 않는다.
+관측 초과·미정산·환경별 합계·필수 보관/읽기/삭제 비용은 원장에 보존하며 그 금액으로
+새 paid admission을 닫지 않는다. `max(0, limit-used-reserved)`는 현재도 유효한
+횟수·용량 quota의 잔여 계산이며 앱 비용 제한을 복원하는 근거가 아니다.
+정확한 환율·단가·최신 공급자 상태 근거가 없으면 별도의 의존성 실패로 처리한다.
 
 ### KST 경계와 삭제 이후 정산
 

@@ -1,5 +1,7 @@
 # BARO agent working agreement
 
+> **2026-10-14 비용 제한 폐지 — 현행 지시:** 애플리케이션의 월 예산·누적 재원·요청별 금액 제한을 모두 해제한다. `APPLICATION_COST_LIMITS_ENABLED=false`가 현행 배포 기준이며, 새 직접 사용자 지시 없이 금액 상한·예산 대기·금액 초과 동결을 재도입하지 않는다. 아래 문서와 이슈의 과거 금액 제한보다 이 지시가 우선한다. [ADR-0015](./docs/adr/0015-maintenance-and-operating-policy.md)를 따른다.
+
 - 현재 운영 기준: [ADR-0015](./docs/adr/0015-maintenance-and-operating-policy.md), [실행 문서](./docs/development/EXECUTION.md). 정비 총괄은 hyunhomon / 현재 정비 채팅이며 기존 모듈 소유권을 유지한다.
 - 공개 서비스를 유지하며 신규 기능 확장 없이 비용 재개·저장·릴리스 증거·검색·문서/작업 체계를 정비한다. 정책 초안 인수와 전체 MVP 실제 인수는 구분한다.
 
@@ -16,7 +18,7 @@
 - 제품 범위는 PRD/MVP, 기술 선택은 유효 Accepted ADR, 상세 실행 계약은 architecture 문서와 계약 테스트를 따른다.
 - v2 전체 개발은 `docs/development/V2-EXECUTION.md`와 #53~#71을 따른다. #53 병합/완료 뒤 제품 코드를 시작하며 미완료 P0.3 외부/공개 gate를 보존한다.
 - 일반 구현 선택과 오류 수정은 이슈 범위 안에서 판단해 진행한다. 새 모델/공급자, 공개 정책 법률 승인, 사업자 정보, 새 결제/자동 충전, production 공개 전환은 별도 결정이 필요하다.
-- 사용자 승인은 합의한 R2/Containers/Whisper, 기존 공급자·모델·결제 경로와 사용자 설정 자동충전을 유지한 실제 처리·검증된 PR 병합·수동 preview/production 배포를 허용한다. AI200/일, 질문2×3, 애플리케이션 월 cap 해제이며 유효한 가격·재원·용량과 새 요청 상한을 확인한다. 미정산 hold·실행 작업을 지우지 않는다. 새 결제수단·자동충전 변경·근거 없는 재원 확대·승인 증거 조작은 허용하지 않는다. Goal을 재생성하지 않는다.
+- 사용자 승인은 합의한 R2/Containers/Whisper, 기존 공급자·모델·결제 경로와 사용자 설정 자동충전을 유지한 실제 처리·검증된 PR 병합·수동 preview/production 배포를 허용한다. AI200/일, 질문2×3을 유지하며 비용 금액 차단은 없다. 유효한 가격·공급자 상태·권한·물리 용량과 실행 물량·시간·시도 횟수를 확인한다. 미정산 hold·실행 작업을 지우지 않는다. 새 결제수단·자동충전 변경·재원 관측값 조작·승인 증거 조작은 허용하지 않는다. Goal을 재생성하지 않는다.
 - 2026-10-14 후속 직접 지시: 앱의 비용 금액 제한을 두지 않는다. `APPLICATION_COST_LIMITS_ENABLED=false`에서는 월·누적 재원·요청 금액으로 admission/dispatch/refresh/preflight를 막지 않는다. 비용 추정·미정산·정산 기록과 실제 공급자 상태, 가격·권한·물리 용량·횟수·재시도 경계는 보존한다. 재원 관측값을 임의로 높이는 방식으로 구현하지 않는다.
 - 런타임은 Workers다. Bun은 도구·테스트용이다. 제품 코드에 `Bun.*`, Node filesystem/process를 추가하지 않는다. Better Auth를 위한 `nodejs_compat`는 허용된다.
 - 다른 모듈은 `llm-gateway` 밖에서 모델을 호출하거나 `legal-retrieval` 밖에서 법률 API를 호출하지 않는다.

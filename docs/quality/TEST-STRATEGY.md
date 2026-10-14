@@ -1,6 +1,8 @@
 # 테스트 및 출시 품질 전략
 
-아래 기존 corpus·누적5질문·일일10회는 v1 회귀 계약이다. v2의3개 신규 사건/30응답/60분,
+> **2026-10-14 비용 정책 우선:** `APPLICATION_COST_LIMITS_ENABLED=false`에서 월 예산·누적 재원·요청 금액의 초과만으로 admission·dispatch·refresh·preflight를 차단하지 않아야 한다. 실제 사용량·가격·예약·미정산·정산과 멱등성은 보존하고, 기술 물량·시간·횟수·권한·동의·삭제 경계는 별도로 확인한다. 과거 비용 차단 테스트의 기대값을 현행 운영 요구로 복원하지 않는다. [ADR-0015](../adr/0015-maintenance-and-operating-policy.md)를 따른다.
+
+아래 기존 corpus·누적5질문·일일10회는 v1 회귀 계약이다. v2의3개 신규 사건/200응답/60분,
 연속 질문·자료·모든 역할·전체 법률군 검증은 마지막 확장과 [v2 시연 증거](./V2-UI-EVIDENCE.md)를
 따른다. 기존 green check와 health를 새 기능의 성공으로 승격하지 않는다.
 
@@ -161,7 +163,7 @@ ZIP 선택/원본 byte 검증, Pretendard font·single sharedSVG 참조도 인�
 | 검증 그룹 | 추가 필수 경계 |
 | --- | --- |
 | 계약/DB | v2 discriminated unions·role/approval·partial intake·summary confirmation·version compatibility·단일 migration 소유·fresh/upgrade/drift |
-| quota/cost | 3/4cases·200/201responses·60min·KST reset·사건원본100/101files·원본합계5GB·계정전체10GB(파생물/report포함)·pendingbytes·monthly cap disabled·verified funding ceiling·reservation race/ambiguous provider·legacy bypass |
+| quota/cost | 3/4cases·200/201responses·60min·KST reset·사건원본100/101files·원본합계5GB·계정전체10GB(파생물/report포함)·pendingbytes·APPLICATION_COST_LIMITS_ENABLED=false·월/누적재원/요청금액 초과만으로 차단하지 않음·reservation race/ambiguous provider·실제원장 보존·legacy 비용기록 우회 방지 |
 | 파일/미디어 | DOCX/HWP/HWPX/PDF500page·legacyoffice·imageOCR·audio·video60min/1GB·실제duration/magic·zipbomb/SSRF·8MiB upload/resume·coverage |
 | 암호화/삭제 | v1 envelope와chunkAEAD·DEK/IV/AAD/order/truncation·file/report/ZIP keys·lateupload/Container/modeljob·orphan·private/public R2/CDN·journal-first restore |
 | 프로필/심사 | manualverification·everypublicedit·immutable submitted·oldapprovedrevision 유지·selfapprove/revoke/concurrentdecision·privateverification 분리 |

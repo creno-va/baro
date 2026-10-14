@@ -6,7 +6,7 @@
 - Decision scope: User-approved v2 target; implementation, live capability and public approval remain unverified
 - Partial supersession: ADR-0005의 durable idempotency·bounded retry·exactly-once 과금 불가를 유지한다. v1의 과거 일 10 분석 계약은 역사로 남기고 새 서비스 신규 생성에는 일 3 사건 한도를 적용한다. 기존 v1 읽기·답변·retry·삭제와 월 비용 집계를 유지한다.
 
-> 2026-10-14 부분 대체: [ADR-0015](./0015-maintenance-and-operating-policy.md)가 질문·AI 사용량·비용 재개·운영 승인·검색의 해당 범위를 대체한다. 아래 당시 결정과 증거는 이력이며 나머지 불변조건은 유지한다.
+> 2026-10-14 부분 대체: [ADR-0015](./0015-maintenance-and-operating-policy.md)가 질문·AI 사용량·비용 재개·운영 승인·검색의 해당 범위를 대체한다. 현재 월 예산·누적 재원·요청별 금액 차단은 모두 해제되어 아래 100만원·금액 상한·예산 부족 대기를 실행 제한으로 적용하지 않는다. 당시 결정과 증거는 이력이며 사용량·물리 용량·권한·실제 비용 기록 등 나머지 불변조건은 유지한다.
 
 ## 맥락
 

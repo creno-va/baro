@@ -93,10 +93,11 @@ capability·회사명·주소·연락처·특정 사건의 검색어도 금지�
 | Profiles | 심사 대기/승인/반려 건수·대기 시간 | pending revision 노출·role 우회·공개 pointer/cache 불일치 |
 | Reports | 생성/download 완료·건수·quota·version | stale report·한글/font·ZIP 누락·owner 거부 |
 | Deletion | private/public/job/cache 단계 완료/재시도/미완료 age | 원격 삭제 실패·복구 재등장·사용자 세션 잔존 |
-| Budget | actual/reserved/unknown/projected/funding | 한도 접근·예약 누수·중복 실제 과금·metering 차이 |
+| Budget | actual/reserved/unknown/projected/funding | 예상 대비 청구 차이·예약 누수·중복 실제 과금·metering 차이; 금액만으로 실행 차단 없음 |
 
 알람 정책은 [비용 통제](./COST-CONTROLS.md)와 [drill](./BETA-DRILLS.md)을 따른다. P0는
-내용 누출/권한 우회·삭제 부활·원격 삭제 영구 실패·budget 초과 가능성이다. runtime event/code
+내용 누출/권한 우회·삭제 부활·원격 삭제 영구 실패다. 비용 차이는 관측·대조하며
+[현행 비용 정책](./COST-CONTROLS.md)에 따라 금액만으로 실행을 차단하거나 동결하지 않는다. runtime event/code
 조합·UUID·environment·release를 schema로 검사하고 receiver별 dedup key·bounded retry와 ack
 기준을 정한다. 알림에 사용자 email/IP·원문·signed URL을 붙이지 않는다. 테스트 수신처 지정과
 외부 발송 권한 없는 상태에서 email/Slack으로 자동 전송하지 않는다.

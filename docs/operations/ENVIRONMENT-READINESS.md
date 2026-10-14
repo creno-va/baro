@@ -3,6 +3,11 @@
 - Reviewed: 2026-10-14 KST; 총괄 hyunhomon / 현재 정비 채팅.
 - 상태는 확인한 시각·환경·SHA 범위만 인정한다. [ADR-0015](../adr/0015-maintenance-and-operating-policy.md)를 따른다.
 
+2026-10-14 후속 비용 정책은 `APPLICATION_COST_LIMITS_ENABLED=false`로 월·누적 재원·
+요청 금액 차단을 모두 끈다. 아래 비용 수치·원격 schema·projection은 각 run의 관측 기록이며
+현재 금액 한도나 새 배포 성공 증거가 아니다. 실제 비용 기록과 가격·공급자 상태·권한·물리
+용량/횟수 검사는 [현행 비용 운영](./COST-CONTROLS.md)을 따른다.
+
 ## 현재 확인된 운영 상태
 
 현재 공개 서비스를 유지한다. 정비 PR230/229/232/233/234/235는 main에 병합됐지만
@@ -14,7 +19,7 @@
 | --- | --- | --- |
 | 비용 DB | status [38522585343](https://github.com/creno-va/baro/actions/runs/38522585343), 양 환경 schema0009·active revision3·allocation1; projection 없음 | 총괄/#57: 최종 후보 migration 후 실제 inventory·용량과 유효한 재원으로 같은 할당 refresh |
 | 미정산 | preview ambiguous21,895원·settled283원, production ambiguous44,104원·settled532원 | 비용 모듈: 기존 hold 보존, 개별 호출의 당시 가격·청구 증거 대조 |
-| 결제·자원 | 10/14 인증된 Cloudflare 콘솔에서 Workers/R2 Paid·크레딧$39.54·기존 자동충전ON/$10/$30 확인 | 실제 누적 허용 재원·projection 유지비·새 요청 상한 확인; 설정 변경 없음 |
+| 결제·자원 | 10/14 인증된 Cloudflare 콘솔에서 Workers/R2 Paid·크레딧$39.54·기존 자동충전ON/$10/$30 확인 | 실제 재원 상태·projection 유지비·새 요청 비용 기록과 기술적 실행량 확인; 금액 부족 차단 및 결제 설정 변경 없음 |
 | 두 Gateway | 10/14 인증/ZDR ON, retry/logging/cache/spend-limit OFF, Unified Billing 확인 | #27/#57 실제 모델/사용량·provider 계약 범위 증거; 설정 화면을 실행 성공으로 표시하지 않음 |
 | 로컬 Cloudflare CLI | 현재 OAuth는 대상 운영 계정과 다름 | 기존 GitHub Environment credential workflow 사용; 토큰을 로컬/공개 로그로 추출하지 않음 |
 | production 승인 | 보호 브랜치 규칙 사용, 필수 reviewer 없음. 정확한 SHA의 두 지정 운영자 receipt 필요 | #71 hyunhomon 또는 hwangeunchan의 최대24시간 기록과 같은 SHA preview 증거 |

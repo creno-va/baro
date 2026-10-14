@@ -1,7 +1,8 @@
 # AI 분석 파이프라인
 
 계정별 AI는 KST 하루200회, 질문은 최대2차례×3문항이다. Preview/Production의
-애플리케이션 월 예산 차단은 해제하며 기존 결제·$10/$30 자동충전을 유지한다.
+애플리케이션 월·누적 재원·요청 금액 차단은 `APPLICATION_COST_LIMITS_ENABLED=false`로
+해제하며 기존 결제·$10/$30 자동충전을 유지한다. 비용 초과 금액은 기록하고 실행을 동결하지 않는다.
 실제 가격·재원·용량·bounded attempt·미정산 비용과 원장은 보존한다. 같은 할당 refresh와
 할당 변경을 구분하며 [ADR-0015](../adr/0015-maintenance-and-operating-policy.md)와
 [비용 재개](../operations/COST-REFRESH.md)를 따른다.
@@ -75,8 +76,8 @@ Structured Outputs는 형식을 보장하는 도구일 뿐 사실성과 안전�
 
 모델 호출은 Worker의 AI binding과 환경별 `AI_GATEWAY_ID`를 사용해 AI Gateway
 Unified Billing으로 보낸다. 모델 공급자 API key는 발급하거나 저장하지 않는다.
-Gateway의 payload logging은 비활성화하고 Gateway·사용자·모델 단위 spend limit을
-설정한다. Gateway와 앱 로그에는 request ID, 단계, model, latency, token count,
+Gateway의 payload logging은 비활성화하고 현재 OFF인 Gateway·사용자·모델 단위 spend limit을
+다시 설정하지 않는다. 앱 금액 차단도 복원하지 않는다. Gateway와 앱 로그에는 request ID, 단계, model, latency, token count,
 status, failure code만 허용한다. 사용자 입력·답변·결과·prompt 본문·법률 검색어에
 개인 식별 내용이 있으면 기록하지 않는다.
 모든 호출에서 `gateway:{id,collectLog:false,skipCache:true}`를 명시하고 Gateway 설정도

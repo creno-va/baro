@@ -4,6 +4,13 @@
 - Shared authority: [v2 실행 계약](./V2-CONTRACTS.md), [데이터 모델](./DATA-MODEL.md)
 - Base: `/api/v2`; strict versioned schemas in `src/contracts/` after the contract issue merges
 
+2026-10-14 현행 비용 정책은 [ADR-0015](../adr/0015-maintenance-and-operating-policy.md)를
+따른다. 아래 budget/비용 admission은 실제 비용 기록·가격/공급자 상태·실행량 검사를 뜻하며,
+`APPLICATION_COST_LIMITS_ENABLED=false`에서는 월·누적 재원·요청 금액으로 API를 거절하지 않는다.
+사용자 횟수·저장 용량·권한·재시도 제한은 유지한다.
+호환 오류 코드 `BUDGET_UNAVAILABLE`은 구성·가격·공급자 상태·물리 용량·permit 발급 실패에도
+남아 있다. 이 코드만으로 애플리케이션 금액 한도나 Cloudflare 실제 잔액 부족을 단정하지 않는다.
+
 기존 `/api`의 v1 계약·OAuth handler·동의·삭제를 유지한다. API namespace는 화면 URL과 별개다.
 private 응답은 `Cache-Control: private, no-store`를 적용한다. 공통 오류·request ID·origin·
 idempotency와 타인/없는 사건의 동일 404는 [HTTP API](./HTTP-API.md)를 따른다. 현재 production

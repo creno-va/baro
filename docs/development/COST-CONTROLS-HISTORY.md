@@ -2,6 +2,8 @@
 
 과거 관측·감사·실행 계약을 보존한다. 현재 기준은 [실행 문서](./EXECUTION.md)와 [ADR-0015](../adr/0015-maintenance-and-operating-policy.md)를 따른다.
 
+> **현행 비용 정책:** 2026-10-14에 앱의 월·누적 재원·요청 금액 차단을 모두 해제했다. 아래 100만원·재원 잔액·예산 대기는 당시 기록이며, 현재 실행 제한을 재도입하는 근거가 아니다. 실제 환경 적용은 배포 receipt로 따로 확인한다.
+
 # v2 사용량·월 비용 운영
 
 > **2026-10-07 사용자 후속 — 이전 비용 정책보다 우선:** 계정별 AI 응답은 KST 하루200회이며 Preview/Production의 별도 전체 월 예산 차단은 해제한다. Cloudflare 기존 결제 경로에서 잔액$10 이하 시$30 자동 충전을 사용자가 직접 승인/설정했다. metering·실제 funding·가격/FX·bounded attempt·unknown 비용 보존은 유지한다. 배포 설정 `MONTHLY_BUDGET_CAP_ENABLED=false`가 예약·사용량·정산에 일관되게 적용된다. 기존 allocation 금액은 이 모드에서 소비 차단 한도가 아니며 schema0009의 기록을 보존한다.

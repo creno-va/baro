@@ -2,6 +2,7 @@ import { afterEach, expect, test } from "bun:test";
 import type { V2CostAttempt, V2CostQuote, V2OperationQuota } from "../src/contracts/v2";
 import { createCaseDataCipher } from "../src/server/crypto";
 import { usageDateKst } from "../src/server/db/repository";
+import { createV2Repository } from "../src/server/db/v2";
 import {
   type BudgetAllocation,
   createV2AccountingRepository,
@@ -596,6 +597,57 @@ test("attempt retry has separate actual cost while allocation decreases retain e
     reservedKrw: 0,
     availableKrw: 30,
   });
+});
+
+test("trusted factory cost-limit opt-out preserves outstanding costs and allocation coordination", async () => {
+  const f = await fixture();
+  f.accounting = createV2Repository(f.database.binding, f.core.cipher, {
+    environment: "preview",
+    applicationCostLimitsEnabled: false,
+    monthlyBudgetCapEnabled: true,
+  }).accounting;
+  const op = await createCase(f);
+  await fund(f);
+  const q = await quote(f, 120);
+  const pending = attempt(op.operationId, q);
+  expect(await f.accounting.reserveCost(f.actor, pending)).toBe(true);
+  expect(
+    await f.accounting.reserveCost(
+      { ...f.actor, ownerId: crypto.randomUUID() },
+      attempt(op.operationId, q),
+    ),
+  ).toBe(false);
+
+  const decreased = allocation({ version: 2, previewKrw: 50, manifestHash: "b".repeat(64) });
+  expect(await f.accounting.recordAllocation(decreased)).toBe(true);
+  for (const environment of ["preview", "production"] as const) {
+    expect(await f.accounting.activateAllocation(decreased.month, 2, NOW)).toBe(false);
+    expect(
+      await f.accounting.recordAllocationAcknowledgment({
+        month: decreased.month,
+        version: decreased.version,
+        environment,
+        manifestHash: decreased.manifestHash,
+        drainReceiptId: crypto.randomUUID(),
+        now: NOW,
+      }),
+    ).toBe(true);
+  }
+  expect(await f.accounting.activateAllocation(decreased.month, 2, NOW)).toBe(true);
+  expect(await f.accounting.activateAllocation(decreased.month, 1, NOW)).toBe(false);
+  expect(await f.accounting.budget(NOW)).toMatchObject({
+    allocationVersion: 2,
+    allocatedLimitKrw: null,
+    monthlyBudgetCapEnabled: false,
+    settledKrw: 0,
+    reservedKrw: 120,
+    availableKrw: null,
+  });
+  expect(
+    f.database.sqlite
+      .query("SELECT state,reserved_krw FROM v2_cost_attempts WHERE id=?")
+      .get(pending.id),
+  ).toEqual({ state: "reserved", reserved_krw: 120 });
 });
 
 test("late month settlement uses original ledger, not the new KST month", async () => {

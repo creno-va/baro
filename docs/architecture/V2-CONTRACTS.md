@@ -2,7 +2,7 @@
 
 > **2026-10-14 후속 직접 지시:** `APPLICATION_COST_LIMITS_ENABLED=false`에서는 월·누적 재원·요청 금액으로 실행을 차단하지 않는다. 금액은 추정·미정산·정산 기록이며 아래 과거 금액 한도보다 이 결정이 우선한다. 최신 가격·funding 상태/권한·실행 물량·횟수·물리 용량과 정확한 정수 원장 검사는 유지한다. 실제 관측 재원을 임의로 늘리지 않는다. 기존 결제·자동충전은 변경하지 않는다.
 
-> **2026-10-07 사용자 후속 — 이전 비용 정책보다 우선:** 계정별 AI 응답은 KST 하루200회이며 Preview/Production의 별도 전체 월 예산 차단은 해제한다. Cloudflare 기존 결제 경로에서 잔액$10 이하 시$30 자동 충전을 사용자가 직접 승인/설정했다. metering·실제 funding·가격/FX·bounded attempt·unknown 비용 보존은 유지한다. 배포 설정 `MONTHLY_BUDGET_CAP_ENABLED=false`가 예약·사용량·정산에 일관되게 적용된다. 기존 allocation 금액은 이 모드에서 소비 차단 한도가 아니며 schema0009의 기록을 보존한다.
+> **2026-10-07 이전 결정 기록 — 현행 금액 정책은 위 2026-10-14 결정이 우선:** 계정별 AI 응답은 KST 하루200회이며 Preview/Production의 별도 전체 월 예산 차단은 해제했다. Cloudflare 기존 결제 경로에서 잔액$10 이하 시$30 자동 충전을 사용자가 직접 승인/설정했다. metering·실제 funding·가격/FX·bounded attempt·unknown 비용 보존과 schema0009 기록을 유지한다. 당시 `MONTHLY_BUDGET_CAP_ENABLED=false` 결정은 현행 모든 앱 비용 금액 차단 해제로 확대됐다.
 
 - Status: Accepted target specification; implementation and live evidence pending
 - Reviewed: 2026-10-06
@@ -46,7 +46,7 @@ v2 activation 이후 새 사건은 v2로만 생성한다. legacy `POST /api/case
 version capability gate로 닫거나 동일 하루3개 counter를 사용해야 하며 v1의 역사적10회와
 v2의3회를 합쳐 새 allowance를 만들지 않는다. 전환 당일 이미 생성한 사건도 같은 KST
 counter에 반영한다. 기존 v1 읽기/답변/retry/삭제는 유지하며 legacy 모델 attempt도 같은
-월 global budget ledger와 논리 AI 응답 quota에 묶어 비용 우회 경로를 만들지 않는다.
+월 global budget ledger와 논리 AI 응답 quota에 묶어 비용 기록 누락과 응답 횟수 우회를 막는다.
 
 | 정본 | 상태 | 전이 규칙 |
 | --- | --- | --- |
@@ -107,7 +107,10 @@ quote/funding·환경별 할당과 안전한 전환은 [비용 운영 계약](..
 | 문서·이미지 | 원본당 100MB, PDF 500페이지 | MIME/magic 실제 형식·페이지 검증. 압축/디코딩 폭증 별도 제한 |
 | 음성·영상 | 원본당 1GB, 재생 60분 | 서버 probe로 실제 시간 검증. 없는 duration을 0으로 간주하지 않음 |
 | KST 하루 | 신규 사건 3개, AI 응답 200회, media 60분 | 사용자별 원자적 reservation, KST 자정 초기화, 병렬 경계 검사 |
-| KST 월 기술 예산 | 총 1,000,000원 | 모델·ASR·Containers·저장·요청·기존 고정비, 예약과 불명확 과금 포함 |
+| 앱 비용 금액 | 월·누적 재원·요청 금액 차단 없음 | `APPLICATION_COST_LIMITS_ENABLED=false`; 실제·추정·예약·미정산 비용은 기록 |
+
+이전 명세의 KST 월 기술 예산 총1,000,000원은 역사적 설계/원장 값으로 보존하며 현재
+소비 차단 조건이 아니다. 현행 기준은 [ADR-0015](../adr/0015-maintenance-and-operating-policy.md)다.
 
 사건의 원본 5GB와 계정의 전체 저장 10GB는 별도 counter다. 파생물·PDF·ZIP은 계정
 10GB와 job별 처리/disk/출력 예약에 포함한다. 원본이 사건 상한 안에 있다는 이유로 무제한
@@ -127,15 +130,15 @@ PDF의 동일 snapshot 재다운로드와 단순 텍스트 추출은 AI 응답�
 외부 성공 이후 crash로 비용이 불명확하면 예약을 해제해 무료로 취급하지 않는다.
 견적은 조회한 공급자 가격·환율·
 검토 시각·안전 여유를 버전으로 남기고 명세에 변동 가격을 영구 상수처럼 고정하지 않는다.
-원자적 global reservation으로 예상 사용액+미확정 비용+고정비가 월 상한을 넘으면 새 유료
-작업을 대기/거부한다. quota 대기는 사유·재개 조건을 UI에 표시하며 실행 직전 다시 admission한다.
+원자적 global reservation은 예상 사용액·미확정 비용·고정비를 기록하며 합계 금액으로 새 유료
+작업을 대기/거부하지 않는다. 횟수·용량 quota 대기는 사유·재개 조건을 UI에 표시하며 실행 직전 다시 admission한다.
 cutover 당일의 기존 v1 생성분이나 저장량 재대조로 상한을 넘은 관측치도 사용량 snapshot에
 보존한다. 잔여량은 `max(0,limit-used-reserved)`이며 초과 관측치를 지우거나 한도를 높이지
 않는다. 관측 snapshot 검증과 새 작업의 원자적 admission은 별도다.
 예약 만료·취소·실패 후 원본/파생물 정리와 사용량 반환은 실제 보관 상태에 따라 멱등 처리한다.
-완료 자료와 이미 생성된 내보내기 읽기·다운로드·삭제는 AI 비용 제한이 걸려도 유지한다.
+완료 자료와 이미 생성된 내보내기 읽기·다운로드·삭제는 새 AI 작업 가능 여부와 별개로 유지한다.
 필수 읽기/삭제/정리에 필요한 기술비용도 월 기본 운영 여유로 예약한다. 새 유료 export
-조립은 별도 비용 admission이 필요하다. 새 결제·자동 충전·예산 증액은
+조립은 별도 비용 기록과 기술적 admission이 필요하며 금액으로 차단하지 않는다. 새 결제·자동 충전 설정 변경은
 이 계약의 자동 동작이 아니다. 무료 공개 가입을 특정 모집 인원으로 제한하지 않는다.
 
 ## 자료·처리·리포트
