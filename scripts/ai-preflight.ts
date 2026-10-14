@@ -223,7 +223,11 @@ export async function inspectAiPreflight(input: {
   const [year, monthNumber] = month.split("-").map(Number);
   const nextMonthAt = Date.UTC(year as number, monthNumber as number, 1) - 9 * 3_600_000;
   if (nextMonthAt <= Date.parse(now) + warningMs)
-    warnings.push("kst_month_rollover_requires_verified_allocation");
+    warnings.push(
+      applicationCostLimitsEnabled
+        ? "kst_month_rollover_requires_verified_allocation"
+        : "kst_month_rollover_cost_observation_only",
+    );
   const budgetGroups: Record<string, { available: boolean; missingSkus: string[] }> = {};
   try {
     const database = readOnly(

@@ -279,6 +279,8 @@ test("observation-only deployment remains ready without cost provisioning or ref
   expect(report.blockers).toEqual([]);
   expect(report.warnings).toContain("current_month_active_observation_unavailable");
   expect(report.warnings).toContain("next_month_active_before_horizon_observation_unavailable");
+  expect(report.warnings).toContain("kst_month_rollover_cost_observation_only");
+  expect(report.warnings).not.toContain("kst_month_rollover_requires_verified_allocation");
   expect(report.warnings).toContain("model_bounds_five_minute_horizon_observation_unavailable");
   expect(report.checks.model_skus_complete).toBe(false);
   expect(report.unverified).toContain("live-provider-success");
