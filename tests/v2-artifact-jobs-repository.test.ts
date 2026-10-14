@@ -299,6 +299,40 @@ test("actual decryption boundary rechecks current file consent and rejects publi
   expect(await storage.commitArtifactBlob(actor, lease, blob)).toBe(false);
   expect(db.sqlite.query("SELECT state FROM v2_blobs").get()).toEqual({ state: "pending" });
 });
+for (const changed of [
+  "owner",
+  "account",
+  "file",
+  "lease-expiry",
+  "revision",
+  "ciphertext",
+] as const)
+  test(`joined artifact snapshot still fences late ${changed} before commit`, async () => {
+    expect(await storage.prepareArtifactBlob(actor, lease, blob)).toBe(true);
+    const peer =
+      changed === "owner"
+        ? await seedTestSession(db, { now: Date.parse(now), consent: true })
+        : null;
+    afterDecrypt = () => {
+      if (changed === "owner")
+        db.sqlite
+          .query("UPDATE v2_workspaces SET owner_id=? WHERE id=?")
+          .run(peer?.userId ?? "unreachable_synthetic_owner", workspaceId);
+      if (changed === "account") tombstone("account", actor.ownerId);
+      if (changed === "file") tombstone("file", fileId);
+      if (changed === "lease-expiry")
+        db.sqlite.query("UPDATE v2_jobs SET lease_until=? WHERE id=?").run(now, jobId);
+      if (changed === "revision")
+        db.sqlite.query("UPDATE v2_files SET revision=revision+1 WHERE id=?").run(fileId);
+      if (changed === "ciphertext")
+        db.sqlite.query("UPDATE v2_blobs SET encrypted_payload='removed' WHERE id=?").run(blob.id);
+    };
+    expect(await storage.commitArtifactBlob(actor, lease, blob)).toBe(false);
+    expect(db.sqlite.query("SELECT state FROM v2_blobs WHERE id=?").get(blob.id)).toEqual({
+      state: "pending",
+    });
+    expect(db.sqlite.query("SELECT count(*) AS n FROM v2_mutation_claims").get()).toEqual({ n: 0 });
+  });
 test("prepare encrypt-boundary deletion and final SQL failure cannot expose partial stored artifacts", async () => {
   beforeEncrypt = () => tombstone("file", fileId);
   expect(await storage.prepareArtifactBlob(actor, lease, blob)).toBe(false);

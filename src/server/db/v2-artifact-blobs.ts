@@ -117,20 +117,14 @@ export function commitArtifactBlob(
   return safe(async () => {
     const { a, b, valid, values } = input(actor, lease, blob);
     if (!valid) return false;
+    // These independent tuple checks share one snapshot. The encrypted payload
+    // and every eligibility/writer predicate are still checked by the final CAS.
     const row = await core
       .statement(
-        `SELECT j.target_id,j.target_revision,j.operation_id ${from} WHERE ${eligibility()}`,
-        values,
-      )
-      .first<Target>();
-    if (!row) return false;
-    const pending = await core
-      .statement(
-        "SELECT b.encrypted_payload,b.created_at FROM v2_blobs b JOIN v2_billing_principals p ON p.id=b.principal_id WHERE b.id=? AND p.owner_id=? AND b.reservation_id=? AND b.state='pending' AND b.kind='derivative' AND b.visibility='private' AND b.object_key=? AND b.logical_bytes=? AND b.cipher_bytes=? AND b.cipher_hash=? AND b.key_version=?",
+        `SELECT j.target_id,j.target_revision,j.operation_id,b.encrypted_payload,b.created_at ${from} JOIN v2_blobs b ON b.reservation_id=r.id AND b.principal_id=p.id WHERE ${eligibility()} AND b.id=? AND b.state='pending' AND b.kind='derivative' AND b.visibility='private' AND b.object_key=? AND b.logical_bytes=? AND b.cipher_bytes=? AND b.cipher_hash=? AND b.key_version=?`,
         [
+          ...values,
           b.id,
-          a.ownerId,
-          b.reservationId,
           `private/${b.id}`,
           b.logicalBytes,
           b.cipherBytes,
@@ -138,8 +132,9 @@ export function commitArtifactBlob(
           b.keyVersion,
         ],
       )
-      .first<{ encrypted_payload: string; created_at: string }>();
-    if (!pending || Date.parse(pending.created_at) > Date.parse(a.now)) return false;
+      .first<Target & { encrypted_payload: string; created_at: string }>();
+    if (!row || Date.parse(row.created_at) > Date.parse(a.now)) return false;
+    const pending = row;
     const metadata = await core.decrypt(
       "v2_blobs",
       b.id,

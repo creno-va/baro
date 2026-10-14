@@ -27,7 +27,29 @@ async function setup(pageCount = 1) {
   const f = await fixture();
   const meter = countD1Calls(f.db.binding);
   const authorization = { reads: 0 };
+  const hotReads = {
+    transport: 0,
+    artifactTarget: 0,
+    pendingArtifact: 0,
+    checkpoint: 0,
+    checkpointRevision: 0,
+  };
   meter.before((statements) => {
+    for (const sql of statements) {
+      if (
+        sql.startsWith(
+          "SELECT state,dispatch_token,transport,transport_observed_at FROM v2_execution_admissions",
+        )
+      )
+        hotReads.transport++;
+      if (sql.startsWith("SELECT j.target_id,j.target_revision,j.operation_id FROM v2_jobs"))
+        hotReads.artifactTarget++;
+      if (sql.startsWith("SELECT b.encrypted_payload,b.created_at FROM v2_blobs"))
+        hotReads.pendingArtifact++;
+      if (sql.startsWith("SELECT id FROM v2_job_checkpoints WHERE")) hotReads.checkpoint++;
+      if (sql.startsWith("SELECT coalesce(max(revision),0)+1 AS revision FROM v2_job_checkpoints"))
+        hotReads.checkpointRevision++;
+    }
     authorization.reads += statements.filter((sql) =>
       sql.startsWith("SELECT j.lease_token,j.fencing,j.lease_until,j.status,w.revision"),
     ).length;
@@ -168,12 +190,14 @@ async function setup(pageCount = 1) {
     original,
     meter,
     authorization,
+    hotReads,
   };
 }
 
 for (const pageCount of [1, 2])
   test(`canonical observation-only ${pageCount}-page extraction stores bounded ciphertext and publishes actual text`, async () => {
     const f = await setup(pageCount);
+    const initialHotReads = { ...f.hotReads };
     const stages: { stage: string; calls: number; statements: number; authorizations: number }[] =
       [];
     const measure = async <T>(stage: string, action: () => Promise<T>) => {
@@ -226,16 +250,30 @@ for (const pageCount of [1, 2])
     // Measured with this exact canonical fixture before the same-snapshot JOIN:
     // 1 page: 1330 calls / 1561 SQL / 308 authorization boundaries.
     // 2 pages: 2380 calls / 2773 SQL / 555 authorization boundaries.
+    // After current consent JOIN: 715/946 and 1271/1664, unchanged 308/555 guards.
+    // Same-snapshot artifact/checkpoint reads remove another 11/19 calls/SQL.
     // Counts are local method calls, not network time or native rows read.
-    expect(stages.reduce((sum, stage) => sum + stage.calls, 0)).toBe(pageCount === 1 ? 715 : 1271);
+    expect(stages.reduce((sum, stage) => sum + stage.calls, 0)).toBe(pageCount === 1 ? 704 : 1252);
     expect(stages.reduce((sum, stage) => sum + stage.statements, 0)).toBe(
-      pageCount === 1 ? 946 : 1664,
+      pageCount === 1 ? 935 : 1645,
     );
     expect(stages.reduce((sum, stage) => sum + stage.authorizations, 0)).toBe(
       pageCount === 1 ? 308 : 555,
     );
     if (process.env.BARO_FILE_PROCESSING_WORK === "true")
-      console.info(JSON.stringify({ event: "synthetic_file_processing_work", pageCount, stages }));
+      console.info(
+        JSON.stringify({
+          event: "synthetic_file_processing_work",
+          pageCount,
+          stages,
+          hotReads: Object.fromEntries(
+            Object.entries(f.hotReads).map(([name, count]) => [
+              name,
+              count - initialHotReads[name as keyof typeof initialHotReads],
+            ]),
+          ),
+        }),
+      );
     const output = await createV2FilesRepository(f.core).read(
       { ownerId: f.actor.ownerId, now: new Date().toISOString() },
       f.session.fileId,
@@ -272,6 +310,46 @@ for (const pageCount of [1, 2])
     const original = await f.service().content(f.actor.ownerId, f.workspaceId, f.session.fileId);
     expect(new Uint8Array(await new Response(original.body).arrayBuffer())).toEqual(f.original);
     expect(f.db.sqlite.query("PRAGMA foreign_key_check").all()).toEqual([]);
+  });
+
+for (const changed of ["consent", "account", "file", "lease-expiry", "target-revision"] as const)
+  test(`combined checkpoint snapshot cannot commit after late ${changed}`, async () => {
+    const f = await setup();
+    await f.execution.initialize();
+    let injected = false;
+    f.meter.after((statements) => {
+      if (
+        injected ||
+        !statements.some((sql) => sql.startsWith("SELECT (SELECT id FROM v2_job_checkpoints"))
+      )
+        return;
+      injected = true;
+      if (changed === "consent")
+        f.db.sqlite.query("DELETE FROM user_consents WHERE user_id=?").run(f.actor.ownerId);
+      if (changed === "account" || changed === "file")
+        f.db.sqlite
+          .query("INSERT INTO v2_tombstones VALUES(?,?,?)")
+          .run(
+            changed,
+            changed === "account" ? f.actor.ownerId : f.session.fileId,
+            new Date().toISOString(),
+          );
+      if (changed === "lease-expiry")
+        f.db.sqlite
+          .query("UPDATE v2_jobs SET lease_until='2020-01-01T00:00:00.000Z' WHERE id=?")
+          .run(f.params.jobId);
+      if (changed === "target-revision")
+        f.db.sqlite
+          .query("UPDATE v2_files SET revision=revision+1 WHERE id=?")
+          .run(f.session.fileId);
+    });
+    await expect(f.execution.extractUnit(0, new AbortController().signal)).rejects.toMatchObject({
+      code: "STALE_REVISION",
+    });
+    expect(injected).toBe(true);
+    expect(f.db.sqlite.query("SELECT count(*) AS n FROM v2_job_checkpoints").get()).toEqual({
+      n: 0,
+    });
   });
 
 for (const mutation of [
