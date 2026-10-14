@@ -1,7 +1,7 @@
 import { z } from "zod";
 
-// Independent #19 contract preparation. The production release checker is not wired to it yet.
-// A receipt resolver must verify CI/platform artifacts; manually constructed booleans are not receipts.
+// Used by the public release checker with GitHub producer/artifact verification.
+// Manually constructed booleans are not receipts; older SHA evidence fails closed.
 export const releaseChecks = [
   "oauth",
   "turnstile",

@@ -14,7 +14,7 @@ const approvalSchema = z.strictObject({
 export function verifyLaunchAuthorization(comment: unknown, targetSha: string, now: number) {
   const parsed = z
     .object({
-      user: z.object({ login: z.literal("hwangeunchan"), type: z.literal("User") }),
+      user: z.object({ login: z.enum(["hyunhomon", "hwangeunchan"]), type: z.literal("User") }),
       issue_url: z.literal("https://api.github.com/repos/creno-va/baro/issues/71"),
       body: z.string(),
     })

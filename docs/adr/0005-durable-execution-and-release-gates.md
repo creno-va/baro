@@ -7,6 +7,8 @@
 - Related: [실행 계약](../architecture/DOMAIN-LIFECYCLE.md)
 - Partial supersession (2026-10-06): workspace는 [ADR-0006](./0006-continuous-case-workspace-and-navigation.md), 객체 정리는 [ADR-0008](./0008-private-files-and-report-handoff.md), 비용 admission은 [ADR-0013](./0013-resource-admission-and-budget.md)으로 확장한다. CAS·outbox·삭제·공개 gate는 유지한다.
 
+> 2026-10-14 부분 대체: [ADR-0015](./0015-maintenance-and-operating-policy.md)가 질문·AI 사용량·비용 재개·운영 승인·검색의 해당 범위를 대체한다. 아래 당시 결정과 증거는 이력이며 나머지 불변조건은 유지한다.
+
 ## 맥락
 
 D1 commit과 Workflow 시작은 하나의 트랜잭션이 아니다. 모델 호출이 성공한 직후 결과 저장 전에 실행이 끊기면 재실행에서 비용이 중복될 수 있다. Workflow step 결과와 event payload도 저장되므로 D1만 암호화해서는 원문 저장을 제한할 수 없다. 또한 현재 production CD는 preview 검증 커밋을 고정하지 않는다.

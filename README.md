@@ -128,7 +128,7 @@ worktree를 사용합니다. PR 검사·실패 시나리오와 리뷰를 마친 
 
 - PR/main CI는 빠른 검사만 자동 실행하며 병합이 배포를 시작하지 않습니다.
 - preview/production 배포는 로컬 명령으로 GitHub 수동 workflow를 요청합니다.
-- production은 성공한 CI·preview smoke의 immutable SHA 와 Environment 승인을 요구합니다.
+- production은 성공한 CI·preview smoke의 immutable SHA 와 SHA별 운영자 승인 receipt를 요구합니다.
 - foundation 코드는 공개 API를 닫고 배포할 수 있습니다. 공개 전환은 실제 연동·운영·정책/법률 조건을 충족한 후에만 합니다.
 - preview: <https://preview.baro.site>, production: <https://baro.site>.
 - 환경별 DB·Workflow·R2·Container·OAuth·Gateway·키와 secret은 분리합니다.

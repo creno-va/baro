@@ -6,6 +6,8 @@
 - Decision scope: User-approved v2 target; implementation, live capability and public approval remain unverified
 - Partial supersession: ADR-0005의 durable idempotency·bounded retry·exactly-once 과금 불가를 유지한다. v1의 과거 일 10 분석 계약은 역사로 남기고 새 서비스 신규 생성에는 일 3 사건 한도를 적용한다. 기존 v1 읽기·답변·retry·삭제와 월 비용 집계를 유지한다.
 
+> 2026-10-14 부분 대체: [ADR-0015](./0015-maintenance-and-operating-policy.md)가 질문·AI 사용량·비용 재개·운영 승인·검색의 해당 범위를 대체한다. 아래 당시 결정과 증거는 이력이며 나머지 불변조건은 유지한다.
+
 ## 맥락
 
 문서 100개·1GBmedia·반복 chat은 사건수만 제한하면 비용/저장량을 통제할 수 없다. 동시에 retry를 새요청으로 세면 사용자 quota를 부당하게 소비하고 실제 vendor 비용을 누락한다.

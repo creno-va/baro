@@ -6,6 +6,8 @@
 - Related: [BARO PRD](../PRD.md)
 - Partial supersession (2026-10-06): v2 지속 workspace는 [ADR-0006](./0006-continuous-case-workspace-and-navigation.md)으로 확장한다. 이 ADR의 모듈·사실·안전·검증 경계는 유지한다.
 
+> 2026-10-14 부분 대체: [ADR-0015](./0015-maintenance-and-operating-policy.md)가 질문·AI 사용량·비용 재개·운영 승인·검색의 해당 범위를 대체한다. 아래 당시 결정과 증거는 이력이며 나머지 불변조건은 유지한다.
+
 ## 맥락
 
 BARO는 사용자의 법률 문제를 구조화하고, 확인할 쟁점과 준비할 자료 및 일반적인

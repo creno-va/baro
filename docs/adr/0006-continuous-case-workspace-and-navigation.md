@@ -6,6 +6,8 @@
 - Decision scope: User-approved v2 target; implementation, live capability and public approval remain unverified
 - Partial supersession: ADR-0001의 파이프라인 안전 경계와 ADR-0005의 CAS/outbox/삭제 보장은 유지한다. v1 단일 분석·한 묶음 질문은 새 v2 사건에만 대체하며 기존 데이터 계약은 유지한다.
 
+> 2026-10-14 부분 대체: [ADR-0015](./0015-maintenance-and-operating-policy.md)가 질문·AI 사용량·비용 재개·운영 승인·검색의 해당 범위를 대체한다. 아래 당시 결정과 증거는 이력이며 나머지 불변조건은 유지한다.
+
 ## 맥락
 
 한 번의 분석으로 끝나는 개인 간 대여 UI는 반복 질문·자료 추가·사실 정정·변호사 상담 전후 준비를 표현하지 못한다. 상태와 원문을 느슨한 채팅 기록만으로 저장하면 수정·삭제·출처·재시도 정합성이 무너진다.
