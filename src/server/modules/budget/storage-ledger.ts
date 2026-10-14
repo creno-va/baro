@@ -318,7 +318,9 @@ export function createStorageBudgetService(options: {
         return (await access()) && Date.parse(actor().now) < state.cutoff;
       };
       try {
-        if (!(await checkpoint())) return null;
+        // Only priced mode reads external state in proofs(). Observation-only
+        // mode keeps the immediate pre/post dispatch checks below.
+        if (options.core.applicationCostLimitsEnabled && !(await checkpoint())) return null;
         const proof = await proofs(actor().now, checkpoint);
         if (
           !proof ||
