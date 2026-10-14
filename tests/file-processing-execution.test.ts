@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { createV2Core } from "../src/server/db/v2-core";
 import { createV2FilesRepository } from "../src/server/db/v2-files";
 import { createV2JobsRepository } from "../src/server/db/v2-jobs";
 import { createProcessorLifecycle } from "../src/server/modules/file-processing/container-lifecycle";
@@ -13,7 +14,7 @@ import { createMediaGateway } from "../src/server/modules/llm-gateway/transcript
 import { fixture, uploaded } from "./helpers/file-processing-fixture";
 
 const signal = () => new AbortController().signal;
-async function setup(options: { before?: () => void; corrupt?: boolean } = {}) {
+async function setup(options: { before?: () => void; after?: () => void; corrupt?: boolean } = {}) {
   const f = await fixture({
     probe: async (input) => {
       await new Response(input.open()).arrayBuffer();
@@ -25,10 +26,21 @@ async function setup(options: { before?: () => void; corrupt?: boolean } = {}) {
       };
     },
   });
+  f.db.sqlite
+    .query(
+      "INSERT INTO v2_physical_storage_capacity(environment,capacity_bytes) VALUES('preview',1000000)",
+    )
+    .run();
   const original = new TextEncoder().encode("first synthetic page\fsecond synthetic page");
   const u = await uploaded(f, original),
     jobId = nativeJobId("file"),
     operationId = crypto.randomUUID();
+  // Explicit fixture inventory for its already-written synthetic original.
+  f.db.sqlite
+    .query(
+      "INSERT INTO v2_physical_blob_bindings(blob_id,environment,owner_id,object_key,maximum_cipher_bytes,state,writer_state,inventory_hash,created_at) SELECT id,'preview',?,object_key,cipher_bytes,'held','stopped',?,? FROM v2_blobs WHERE kind='original'",
+    )
+    .run(f.actor.ownerId, "d".repeat(64), f.actor.now);
   const jobs = createV2JobsRepository(f.core);
   expect(
     await jobs.admitFile(
@@ -42,6 +54,15 @@ async function setup(options: { before?: () => void; corrupt?: boolean } = {}) {
       },
     ),
   ).toBe(true);
+  expect(
+    await jobs.acquire(
+      f.actor,
+      jobId,
+      crypto.randomUUID(),
+      new Date(Date.parse(f.actor.now) + 300000).toISOString(),
+    ),
+  ).not.toBeNull();
+  f.core = createV2Core(f.db.binding, f.core.cipher, { applicationCostLimitsEnabled: false });
   let nativeCalls = 0;
   const receipts: string[] = [];
   // Explicit offline adapter. This tests lifecycle/fencing/AES/storage publication,
@@ -53,6 +74,7 @@ async function setup(options: { before?: () => void; corrupt?: boolean } = {}) {
     },
     after: async (_, r) => {
       receipts.push(r.transport);
+      options.after?.();
     },
   };
   let running = false,
@@ -321,4 +343,27 @@ test("fencing change during real output PUT prevents late blob promotion and que
       .get(),
   ).toEqual({ n: 1 });
   expect(f.db.sqlite.query("SELECT count(*) AS n FROM v2_job_checkpoints").get()).toEqual({ n: 0 });
+});
+
+test("derivative receipt recording failure cannot skip its cleanup journal", async () => {
+  let receipts = 0;
+  const f = await setup({
+    after: () => {
+      if (++receipts >= 2) throw new Error("Synthetic receipt failure");
+    },
+  });
+  await f.execution.initialize();
+  await expect(f.execution.extractUnit(0, signal())).rejects.toMatchObject({
+    code: "STORAGE_UNAVAILABLE",
+  });
+  expect(
+    f.db.sqlite
+      .query(
+        "SELECT b.state,p.writer_state FROM v2_blobs b JOIN v2_physical_blob_bindings p ON p.blob_id=b.id WHERE b.kind='derivative'",
+      )
+      .get(),
+  ).toEqual({ state: "deleting", writer_state: "stopped" });
+  expect(
+    f.db.sqlite.query("SELECT count(*) n FROM v2_deletion_targets WHERE kind='blob'").get(),
+  ).toEqual({ n: 1 });
 });

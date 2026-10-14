@@ -291,8 +291,13 @@ export function createV2StorageRepository(core: V2Core) {
         ]);
       });
     },
-    prepareArtifactBlob(actor: Actor, lease: JobLease, blob: BlobRegistration) {
-      return prepareArtifactBlob(core, actor, lease, blob);
+    prepareArtifactBlob(
+      actor: Actor,
+      lease: JobLease,
+      blob: BlobRegistration,
+      physical?: PreparedPhysicalCapacity,
+    ) {
+      return prepareArtifactBlob(core, actor, lease, blob, physical);
     },
     commitArtifactBlob(actor: Actor, lease: JobLease, blob: BlobRegistration) {
       return commitArtifactBlob(core, actor, lease, blob);

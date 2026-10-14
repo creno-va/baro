@@ -17,9 +17,11 @@ import { stopExpiredUndispatchedJob } from "../../db/v2-expired-undispatched-job
 import { createV2FileStagingRepository } from "../../db/v2-file-staging";
 import { createV2FilesRepository } from "../../db/v2-files";
 import { createV2JobsRepository, jobAlive } from "../../db/v2-jobs";
+import { runtimeDigest } from "../../db/v2-paid-runtime";
 import type { PreparedPaidHold } from "../../db/v2-paid-statements";
 import { createV2StagingRepository } from "../../db/v2-staging";
 import { type BlobRegistration, createV2StorageRepository } from "../../db/v2-storage";
+import { createV2StorageCapacityRepository, type WritePermit } from "../../db/v2-storage-capacity";
 import type { JobLease } from "../../db/v2-workspace";
 import { hasCurrentConsent } from "../consent/service";
 import { digest, readBounded } from "../files/binary";
@@ -30,6 +32,7 @@ import { ProcessingError, type ProcessorManifest, processorManifestSchema } from
 import {
   authorize,
   type ProcessingAccess,
+  type ProcessingCostPermit,
   type ProcessingCosts,
   type ProcessorTransport,
 } from "./transport";
@@ -141,7 +144,8 @@ export function createFileProcessingExecution(
   const params = fileProcessingParamsSchema.parse(paramsInput);
   const files = createV2FilesRepository(core),
     jobs = createV2JobsRepository(core),
-    storage = createV2StorageRepository(core);
+    storage = createV2StorageRepository(core),
+    capacity = createV2StorageCapacityRepository(core, options.environment);
   const staging = createV2StagingRepository(core),
     fileStaging = createV2FileStagingRepository(core);
   const now = () =>
@@ -265,7 +269,7 @@ export function createFileProcessingExecution(
     fileId: params.fileId,
     fileRevision: params.fileRevision,
   });
-  const read = async (blobId: string) => {
+  const read = async (blobId: string, scope: string) => {
     await renew();
     const blob = await storage.findBlob(actor(), blobId);
     if (
@@ -274,13 +278,33 @@ export function createFileProcessingExecution(
       blob.key_version !== "artifact_v1"
     )
       throw new ProcessingError("STORAGE_UNAVAILABLE");
+    const legacyInput = {
+      service: "requests" as const,
+      action: "r2_get" as const,
+      identity: `get:${blobId}:${blob.cipher_hash}`,
+      byteLength: blob.cipher_bytes,
+      durationSeconds: null,
+    };
+    const legacyInvocation = `media-${await runtimeDigest({
+      run: options.instanceId,
+      inputDigest: await runtimeDigest({ ...legacyInput, wireHash: null }),
+    })}`;
+    // Old deployments used one GET identity for every read of this blob. Keep
+    // that identity until its real response is final: an absent/uncertain old
+    // attempt and concurrent old/new runners then compete through the same CAS.
+    // Only a confirmed response permits separate subsequent Workflow stages.
+    const confirmedLegacy = await core
+      .statement(
+        `SELECT 1 AS confirmed WHERE EXISTS(SELECT 1 FROM v2_execution_admissions WHERE invocation_id=? AND job_id=? AND state='final' AND transport='response') OR EXISTS(SELECT 1 FROM v2_runtime_plans p JOIN v2_paid_holds h ON h.plan_id=p.id JOIN v2_runtime_usage receipt ON receipt.attempt_id=h.attempt_id WHERE p.invocation_id=? AND h.job_id=? AND h.state='final' AND receipt.outcome='settled' AND json_extract(receipt.payload_json,'$.transport')='response' AND json_extract(receipt.payload_json,'$.dispatchToken')=h.dispatch_token)`,
+        [legacyInvocation, params.jobId, legacyInvocation, params.jobId],
+      )
+      .first();
     const permit = await options.costs.before(
       {
-        service: "requests",
-        action: "r2_get",
-        identity: `get:${blobId}:${blob.cipher_hash}`,
-        byteLength: blob.cipher_bytes,
-        durationSeconds: null,
+        ...legacyInput,
+        identity: confirmedLegacy
+          ? `get:${await digest(new TextEncoder().encode(`${scope}:${blobId}:${blob.cipher_hash}`))}`
+          : legacyInput.identity,
       },
       access(new AbortController().signal),
     );
@@ -322,7 +346,7 @@ export function createFileProcessingExecution(
     const c = await renew();
     const existing = await storage.findBlob(actor(), blobId);
     if (existing) {
-      const old = await read(blobId);
+      const old = await read(blobId, `verify-write:${blobId}`);
       try {
         if ((await digest(old)) !== (await digest(bytes)))
           throw new ProcessingError("FILE_REJECTED");
@@ -395,58 +419,76 @@ export function createFileProcessingExecution(
         .first();
       if (occupied) blobId = crypto.randomUUID();
     }
-    const permit = await options.costs.before(
-      {
-        service: "storage",
-        action: "r2_put",
-        identity: await digest(bytes),
-        byteLength: bytes.byteLength,
-        durationSeconds: null,
-      },
-      access(signal),
-    );
-    if (!permit) throw new ProcessingError("BUDGET_UNAVAILABLE");
     const encrypted = await encryptArtifact(core.cipher, identity(blobId), bytes);
-    const operation = await core
-      .statement("SELECT operation_id FROM v2_jobs WHERE id=?", [params.jobId])
-      .first<string>("operation_id");
-    if (!operation) throw new ProcessingError("STALE_REVISION");
-    const reservationId = await idFor(`reservation:${blobId}`);
-    const reserved = await core
-      .statement("SELECT id FROM v2_storage_reservations WHERE id=? AND state='reserved'", [
-        reservationId,
-      ])
-      .first();
-    if (
-      !reserved &&
-      !(await storage.reserveArtifact((await guard()).guard, {
-        id: reservationId,
-        artifactId: blobId,
-        target: { kind: "file", id: params.fileId, revision: params.fileRevision },
-        operationId: operation,
-        byteLength: bytes.byteLength,
-      }))
-    )
-      throw new ProcessingError("STORAGE_UNAVAILABLE");
-    const blob: BlobRegistration = {
-      id: blobId,
-      reservationId,
-      kind: "derivative",
-      visibility: "private",
-      logicalBytes: bytes.byteLength,
-      cipherBytes: encrypted.byteLength,
-      cipherHash: await digest(encrypted),
-      contentHash: await digest(bytes),
-      keyVersion: "artifact_v1",
-    };
-    if (!(await storage.prepareArtifactBlob(actor(), c.lease, blob)))
-      throw new ProcessingError("STALE_REVISION");
-    let sent = false;
+    let permit: ProcessingCostPermit | null = null;
+    let writer: WritePermit | null = null;
+    let sent = false,
+      returned = false,
+      writerStopped = false,
+      observed = false;
+    let responseEvidence: { transport: "response"; objectKey: string; byteLength: number } | null =
+      null;
     try {
-      if (!(await authorize(access(signal)))) {
-        await options.costs.after(permit, { transport: "not_sent" });
-        throw new ProcessingError("STALE_REVISION");
-      }
+      const operation = await core
+        .statement("SELECT operation_id FROM v2_jobs WHERE id=?", [params.jobId])
+        .first<string>("operation_id");
+      if (!operation) throw new ProcessingError("STALE_REVISION");
+      const reservationId = await idFor(`reservation:${blobId}`);
+      const reserved = await core
+        .statement("SELECT id FROM v2_storage_reservations WHERE id=? AND state='reserved'", [
+          reservationId,
+        ])
+        .first();
+      if (
+        !reserved &&
+        !(await storage.reserveArtifact((await guard()).guard, {
+          id: reservationId,
+          artifactId: blobId,
+          target: { kind: "file", id: params.fileId, revision: params.fileRevision },
+          operationId: operation,
+          byteLength: bytes.byteLength,
+        }))
+      )
+        throw new ProcessingError("STORAGE_UNAVAILABLE");
+      const blob: BlobRegistration = {
+        id: blobId,
+        reservationId,
+        kind: "derivative",
+        visibility: "private",
+        logicalBytes: bytes.byteLength,
+        cipherBytes: encrypted.byteLength,
+        cipherHash: await digest(encrypted),
+        contentHash: await digest(bytes),
+        keyVersion: "artifact_v1",
+      };
+      const prepareActor = actor();
+      const physical = capacity.prepareCapacity(prepareActor, {
+        blobId,
+        ownerId: params.ownerId,
+        objectKey: `private/${blobId}`,
+        maximumCipherBytes: encrypted.byteLength,
+      });
+      if (!(await storage.prepareArtifactBlob(prepareActor, c.lease, blob, physical)))
+        throw new ProcessingError("STORAGE_UNAVAILABLE");
+      permit = await options.costs.before(
+        {
+          service: "requests",
+          action: "r2_put",
+          identity: `artifact-put:${blobId}:${blob.cipherHash}`,
+          byteLength: encrypted.byteLength,
+          durationSeconds: null,
+        },
+        access(signal),
+      );
+      if (!permit) throw new ProcessingError("BUDGET_UNAVAILABLE");
+      writer = capacity.prepareWrite({
+        blobId,
+        objectKey: `private/${blobId}`,
+        byteLength: encrypted.byteLength,
+      });
+      if (!(await capacity.beginPreparedWrite(writer, actor().now)))
+        throw new ProcessingError("STORAGE_UNAVAILABLE");
+      if (!(await authorize(access(signal)))) throw new ProcessingError("STALE_REVISION");
       sent = true;
       const actual = await options.bucket.put(`private/${blobId}`, encrypted, {
         httpMetadata: {
@@ -454,26 +496,58 @@ export function createFileProcessingExecution(
           cacheControl: "private, no-store",
         },
       });
-      await options.costs.after(permit, { transport: "response" });
+      returned = true;
       if (!actual || actual.key !== `private/${blobId}` || actual.size !== encrypted.byteLength)
         throw new ProcessingError("STORAGE_UNAVAILABLE");
+      responseEvidence = { transport: "response", objectKey: actual.key, byteLength: actual.size };
+      writerStopped = await capacity.confirmWriterStopped(writer, responseEvidence, actor().now);
+      if (!writerStopped) throw new ProcessingError("STORAGE_UNAVAILABLE");
+      await options.costs.after(permit, { transport: "response" });
+      observed = true;
       await guard();
       if (!(await storage.commitArtifactBlob(actor(), c.lease, blob)))
         throw new ProcessingError("STALE_REVISION");
       await commitReservation(blobId);
       return blobId;
     } catch (error) {
-      if (!(error instanceof ProcessingError))
-        await options.costs.after(permit, { transport: sent ? "unknown" : "not_sent" });
-      await storage.abandonArtifactBlob(actor(), blobId);
-      if (error instanceof ProcessingError) throw error;
+      let failure = error;
+      // An unknown PUT retains its running writer and physical capacity. Only
+      // this exact token's real receipt or a locally unsent call can stop it.
+      if (writer && !writerStopped && (!sent || responseEvidence)) {
+        try {
+          writerStopped = await capacity.confirmWriterStopped(
+            writer,
+            responseEvidence ?? { transport: "not_sent" },
+            actor().now,
+          );
+        } catch {
+          failure = new ProcessingError("STORAGE_UNAVAILABLE");
+        }
+      }
+      if (permit && !observed) {
+        try {
+          await options.costs.after(permit, {
+            transport: returned ? "response" : sent ? "unknown" : "not_sent",
+          });
+        } catch {
+          failure = new ProcessingError("STORAGE_UNAVAILABLE");
+        }
+      }
+      // Ledger recording and cleanup are independent: either failure retains
+      // the physical obligation and must not skip the other recovery action.
+      try {
+        await storage.abandonArtifactBlob(actor(), blobId);
+      } catch {
+        failure = new ProcessingError("STORAGE_UNAVAILABLE");
+      }
+      if (failure instanceof ProcessingError) throw failure;
       throw new ProcessingError("STORAGE_UNAVAILABLE");
     } finally {
       encrypted.fill(0);
     }
   };
-  const json = async <T>(blobId: string, codec: z.ZodType<T>) => {
-    const bytes = await read(blobId);
+  const json = async <T>(blobId: string, codec: z.ZodType<T>, scope: string) => {
+    const bytes = await read(blobId, scope);
     try {
       return codec.parse(JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)));
     } finally {
@@ -583,7 +657,7 @@ export function createFileProcessingExecution(
       await renew();
       const old = await receipt(`unit:${unit}`);
       if (old?.[0]) {
-        const saved = await json(old[0], processorManifestSchema);
+        const saved = await json(old[0], processorManifestSchema, `extract:${unit}:resume`);
         return { artifactCount: saved.artifacts.length };
       }
       const source = await options.files.content(params.ownerId, params.workspaceId, params.fileId);
@@ -607,7 +681,7 @@ export function createFileProcessingExecution(
       if (metadata.probe.category === "video" && unit > 0) {
         const previous = await receipt(`unit:${unit - 1}`);
         if (!previous?.[0]) throw new ProcessingError("FILE_PROCESSING_FAILED");
-        const before = await json(previous[0], processorManifestSchema);
+        const before = await json(previous[0], processorManifestSchema, `extract:${unit}:previous`);
         if (before.unit !== unit - 1) throw new ProcessingError("FILE_REJECTED");
         frameOffset = before.frameOffset + before.decodedFrameCount;
       }
@@ -650,13 +724,17 @@ export function createFileProcessingExecution(
       if (await receipt(`result:${unit}:${index}`)) return { status: "saved" as const };
       const saved = await receipt(`unit:${unit}`);
       if (!saved?.[0]) throw new ProcessingError("FILE_PROCESSING_FAILED");
-      const manifest = await json(saved[0], processorManifestSchema);
+      const manifest = await json(
+        saved[0],
+        processorManifestSchema,
+        `interpret:${unit}:${index}:manifest`,
+      );
       const artifact = manifest.artifacts[index];
       if (!artifact) throw new ProcessingError("FILE_REJECTED");
       const rawIds = await receipt(`raw:${unit}:${index}`);
       if (!rawIds?.[0]) throw new ProcessingError("FILE_PROCESSING_FAILED");
       const blobId = rawIds[0],
-        bytes = await read(blobId);
+        bytes = await read(blobId, `interpret:${unit}:${index}:artifact`);
       const scope = await idFor(`observation:${unit}:${index}`);
       const result: Result = { observations: [], derivatives: [], status: "processed" };
       try {
@@ -766,16 +844,20 @@ export function createFileProcessingExecution(
     async prepareUnit(unit: number, signal: AbortSignal) {
       await renew();
       const old = await receipt(`plan:${unit}`);
-      if (old?.[0]) return { artifactCount: (await json(old[0], unitPlanSchema)).results.length };
+      if (old?.[0])
+        return {
+          artifactCount: (await json(old[0], unitPlanSchema, `prepare:${unit}:resume`)).results
+            .length,
+        };
       const saved = await receipt(`unit:${unit}`);
       if (!saved?.[0]) throw new ProcessingError("FILE_PROCESSING_FAILED");
-      const manifest = await json(saved[0], processorManifestSchema);
+      const manifest = await json(saved[0], processorManifestSchema, `prepare:${unit}:manifest`);
       let observationOrdinal = 0,
         derivativeOrdinal = 0;
       if (unit > 0) {
         const previous = await receipt(`plan:${unit - 1}`);
         if (!previous?.[0]) throw new ProcessingError("FILE_PROCESSING_FAILED");
-        const plan = await json(previous[0], unitPlanSchema);
+        const plan = await json(previous[0], unitPlanSchema, `prepare:${unit}:previous`);
         if (plan.unit !== unit - 1 || plan.totalUnits !== manifest.totalUnits)
           throw new ProcessingError("FILE_REJECTED");
         observationOrdinal = plan.observationOrdinal + plan.observationCount;
@@ -787,7 +869,11 @@ export function createFileProcessingExecution(
       for (const artifact of manifest.artifacts) {
         const saved = await receipt(`result:${unit}:${artifact.index}`);
         if (!saved?.[0]) throw new ProcessingError("FILE_PROCESSING_FAILED");
-        const result = await json(saved[0], resultSchema);
+        const result = await json(
+          saved[0],
+          resultSchema,
+          `prepare:${unit}:result:${artifact.index}`,
+        );
         observationCount += result.observations.length;
         derivativeCount += result.derivatives.length;
         if (
@@ -824,13 +910,17 @@ export function createFileProcessingExecution(
       for (let unit = 0; unit < totalUnits; unit++) {
         const receiptIds = await receipt(`unit:${unit}`);
         if (!receiptIds?.[0]) throw new ProcessingError("FILE_PROCESSING_FAILED");
-        const manifest = await json(receiptIds[0], processorManifestSchema);
+        const manifest = await json(
+          receiptIds[0],
+          processorManifestSchema,
+          `publication:${unit}:manifest`,
+        );
         if (manifest.unit !== unit || manifest.totalUnits !== totalUnits)
           throw new ProcessingError("FILE_REJECTED");
         if (!coverage) coverage = initialCoverage(manifest.probe);
         const planReceipt = await receipt(`plan:${unit}`);
         if (!planReceipt?.[0]) throw new ProcessingError("FILE_PROCESSING_FAILED");
-        const plan = await json(planReceipt[0], unitPlanSchema);
+        const plan = await json(planReceipt[0], unitPlanSchema, `publication:${unit}:plan`);
         if (
           plan.unit !== unit ||
           plan.totalUnits !== totalUnits ||
@@ -967,10 +1057,10 @@ export function createFileProcessingExecution(
       if (signal.aborted) throw new ProcessingError("JOB_TIMEOUT");
       const ids = await receipt("publication");
       if (!ids?.[0]) throw new ProcessingError("FILE_PROCESSING_FAILED");
-      const publication = await json(ids[0], publicationSchema),
+      const publication = await json(ids[0], publicationSchema, `coverage:${index}:publication`),
         id = publication.parts[index];
       if (!id) throw new ProcessingError("FILE_REJECTED");
-      const bytes = await read(id);
+      const bytes = await read(id, `coverage:${index}:part`);
       try {
         const part = new TextDecoder("utf-8", { fatal: true }).decode(bytes),
           c = await renew();
@@ -987,7 +1077,7 @@ export function createFileProcessingExecution(
     async resultPages(unit: number, index: number) {
       const ids = await receipt(`plan:${unit}`);
       if (!ids?.[0]) throw new ProcessingError("FILE_PROCESSING_FAILED");
-      const plan = await json(ids[0], unitPlanSchema),
+      const plan = await json(ids[0], unitPlanSchema, `pages:${unit}:${index}:plan`),
         result = plan.results[index];
       if (!result) throw new ProcessingError("FILE_REJECTED");
       return { pageCount: Math.ceil(Math.max(result.observations, result.derivatives) / 4) };
@@ -997,8 +1087,12 @@ export function createFileProcessingExecution(
       const ids = await receipt(`plan:${unit}`),
         publicationIds = await receipt("publication");
       if (!ids?.[0] || !publicationIds?.[0]) throw new ProcessingError("FILE_PROCESSING_FAILED");
-      const plan = await json(ids[0], unitPlanSchema),
-        publication = await json(publicationIds[0], publicationSchema);
+      const plan = await json(ids[0], unitPlanSchema, `result:${unit}:${index}:${page}:plan`),
+        publication = await json(
+          publicationIds[0],
+          publicationSchema,
+          `result:${unit}:${index}:${page}:publication`,
+        );
       const item = plan.results[index];
       if (
         !item ||
@@ -1007,7 +1101,7 @@ export function createFileProcessingExecution(
         page >= Math.ceil(Math.max(item.observations, item.derivatives) / 4)
       )
         throw new ProcessingError("FILE_REJECTED");
-      const result = await json(item.id, resultSchema);
+      const result = await json(item.id, resultSchema, `result:${unit}:${index}:${page}:data`);
       if (
         result.observations.length !== item.observations ||
         result.derivatives.length !== item.derivatives
@@ -1050,7 +1144,7 @@ export function createFileProcessingExecution(
         };
       const ids = await receipt("publication");
       if (!ids?.[0]) throw new ProcessingError("FILE_PROCESSING_FAILED");
-      const p = await json(ids[0], publicationSchema),
+      const p = await json(ids[0], publicationSchema, "publish:publication"),
         c = await renew();
       if (
         signal.aborted ||

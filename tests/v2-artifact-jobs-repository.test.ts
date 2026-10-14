@@ -9,6 +9,7 @@ import { createV2Core } from "../src/server/db/v2-core";
 import { createV2DeletionRepository } from "../src/server/db/v2-deletion";
 import { createV2JobsRepository, jobInsertStatements } from "../src/server/db/v2-jobs";
 import { type BlobRegistration, createV2StorageRepository } from "../src/server/db/v2-storage";
+import { createV2StorageCapacityRepository } from "../src/server/db/v2-storage-capacity";
 import type { JobLease } from "../src/server/db/v2-workspace";
 import { createTestDatabase } from "./helpers/d1";
 import { seedTestSession } from "./helpers/session";
@@ -399,4 +400,86 @@ test("same-fence recovery promotes the original verified tuple and pending looku
   expect(await storage.commitArtifactBlob(actor, lease, captured.blob)).toBe(true);
   expect(await storage.findPendingArtifactBlob(actor, lease, blob.id)).toBeNull();
   expect(await storage.abandonArtifactBlob(actor, blob.id)).toBe(false);
+});
+
+test("physical derivative admission is exact and publication waits for its real stopped writer", async () => {
+  core = createV2Core(db.binding, core.cipher, { applicationCostLimitsEnabled: false });
+  storage = createV2StorageRepository(core);
+  const capacity = createV2StorageCapacityRepository(core, "preview");
+  db.sqlite
+    .query(
+      "INSERT INTO v2_physical_storage_capacity(environment,capacity_bytes) VALUES('preview',1000)",
+    )
+    .run();
+  const physical = capacity.prepareCapacity(actor, {
+    blobId: blob.id,
+    ownerId: actor.ownerId,
+    objectKey: `private/${blob.id}`,
+    maximumCipherBytes: blob.cipherBytes,
+  });
+  expect(await storage.prepareArtifactBlob(actor, lease, blob, { ...physical })).toBe(false);
+  expect(
+    await storage.prepareArtifactBlob(
+      actor,
+      lease,
+      { ...blob, cipherBytes: blob.cipherBytes - 1 },
+      physical,
+    ),
+  ).toBe(false);
+  expect(await storage.prepareArtifactBlob(actor, lease, blob, physical)).toBe(true);
+  expect(await storage.commitArtifactBlob(actor, lease, blob)).toBe(false);
+  const writer = capacity.prepareWrite({
+    blobId: blob.id,
+    objectKey: `private/${blob.id}`,
+    byteLength: blob.cipherBytes,
+  });
+  expect(await capacity.beginPreparedWrite(writer, actor.now)).toBe(true);
+  expect(await storage.commitArtifactBlob(actor, lease, blob)).toBe(false);
+  expect(
+    await capacity.confirmWriterStopped(
+      writer,
+      { transport: "response", objectKey: `private/${blob.id}`, byteLength: blob.cipherBytes - 1 },
+      actor.now,
+    ),
+  ).toBe(false);
+  expect(await storage.commitArtifactBlob(actor, lease, blob)).toBe(false);
+  expect(
+    await capacity.confirmWriterStopped(
+      writer,
+      { transport: "response", objectKey: `private/${blob.id}`, byteLength: blob.cipherBytes },
+      actor.now,
+    ),
+  ).toBe(true);
+  expect(await storage.commitArtifactBlob(actor, lease, blob)).toBe(true);
+  expect(
+    db.sqlite
+      .query("SELECT held_bytes FROM v2_physical_storage_capacity WHERE environment='preview'")
+      .get(),
+  ).toEqual({ held_bytes: blob.cipherBytes });
+});
+
+test("physical derivative preparation keeps the post-encryption deletion fence atomic", async () => {
+  core = createV2Core(db.binding, core.cipher, { applicationCostLimitsEnabled: false });
+  storage = createV2StorageRepository(core);
+  const capacity = createV2StorageCapacityRepository(core, "preview");
+  db.sqlite
+    .query(
+      "INSERT INTO v2_physical_storage_capacity(environment,capacity_bytes) VALUES('preview',1000)",
+    )
+    .run();
+  const physical = capacity.prepareCapacity(actor, {
+    blobId: blob.id,
+    ownerId: actor.ownerId,
+    objectKey: `private/${blob.id}`,
+    maximumCipherBytes: blob.cipherBytes,
+  });
+  beforeEncrypt = (context) => {
+    if (context.table === "v2_blobs") tombstone("account", actor.ownerId);
+  };
+  expect(await storage.prepareArtifactBlob(actor, lease, blob, physical)).toBe(false);
+  expect(db.sqlite.query("SELECT count(*) n FROM v2_blobs").get()).toEqual({ n: 0 });
+  expect(db.sqlite.query("SELECT count(*) n FROM v2_physical_blob_bindings").get()).toEqual({
+    n: 0,
+  });
+  expect(db.sqlite.query("SELECT count(*) n FROM v2_mutation_claims").get()).toEqual({ n: 0 });
 });
