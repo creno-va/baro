@@ -99,7 +99,11 @@ test("workerd D1 executes questions, outage/policy recovery, summary confirmatio
       AI: {
         async run(_model: string, input: Record<string, unknown>) {
           providerCalls++;
-          if (unavailable) throw new Error("Synthetic provider outage");
+          if (unavailable)
+            return Response.json(
+              { error: { message: "Invalid schema for response_format: synthetic rejection" } },
+              { status: 400 },
+            );
           const phase = (input.response_format as { json_schema: { name: string } }).json_schema
             .name;
           const messages = input.messages as { content: string }[];
@@ -197,7 +201,7 @@ test("workerd D1 executes questions, outage/policy recovery, summary confirmatio
               ],
             };
           }
-          return {
+          return Response.json({
             id: `synthetic-receipt-${providerCalls}`,
             service_tier: "default",
             choices: [{ message: { content: JSON.stringify({ output }) }, finish_reason: "stop" }],
@@ -206,7 +210,7 @@ test("workerd D1 executes questions, outage/policy recovery, summary confirmatio
               completion_tokens: 100,
               prompt_tokens_details: { cached_tokens: 0, cache_write_tokens: 0 },
             },
-          };
+          });
         },
       },
     } as unknown as Env;
@@ -394,8 +398,28 @@ test("workerd D1 executes questions, outage/policy recovery, summary confirmatio
     });
     expect(chat.status).toBe(202);
     const chatJob = (await chat.json()) as { jobId: string };
+    unavailable = true;
+    expect((await execute(chatJob.jobId)).status).toBe("failed");
+    expect(await service.job(ownerId, workspace.id, chatJob.jobId)).toMatchObject({
+      status: "failed",
+      failure: "MODEL_UNAVAILABLE",
+      retryable: true,
+    });
+    unavailable = false;
+    const chatRetry = await request(
+      `/api/v2/cases/${workspace.id}/workspace-jobs/${chatJob.jobId}/retry`,
+      "POST",
+      { expectedRevision: (await service.find(ownerId, workspace.id)).workspaceRevision },
+    );
+    expect(chatRetry.status).toBe(202);
+    const replayedRetry = await request(
+      `/api/v2/cases/${workspace.id}/workspace-jobs/${chatJob.jobId}/retry`,
+      "POST",
+      { expectedRevision: (await service.find(ownerId, workspace.id)).workspaceRevision },
+    );
+    expect(replayedRetry.status).toBe(202);
     expect((await execute(chatJob.jobId)).status).toBe("completed");
-    expect(providerCalls).toBe(13);
+    expect(providerCalls).toBe(14);
     const messages = await request(`/api/v2/cases/${workspace.id}/messages`);
     expect(messages.status).toBe(200);
     expect(await messages.json()).toMatchObject({
@@ -414,9 +438,16 @@ test("workerd D1 executes questions, outage/policy recovery, summary confirmatio
         .prepare("SELECT count(*) AS n FROM v2_cost_attempts WHERE state='settled'")
         .first<number>("n"),
     ).toBe(12);
+    expect(
+      await preview
+        .prepare(
+          "SELECT count(*) AS n FROM v2_cost_attempts WHERE state='ambiguous' AND charged_krw IS NULL",
+        )
+        .first<number>("n"),
+    ).toBe(2);
     // Replay cannot emit another model request or duplicate published entities.
     expect((await execute(chatJob.jobId)).status).toBe("completed");
-    expect(providerCalls).toBe(13);
+    expect(providerCalls).toBe(14);
   } finally {
     await mf.dispose();
   }

@@ -11,6 +11,8 @@ export type DependencyCategory =
   | "provider_auth"
   | "provider_budget"
   | "provider_rate"
+  | "provider_request"
+  | "provider_unavailable"
   | "unknown";
 export type DependencyStage =
   | "retry_job"
@@ -36,7 +38,7 @@ export function dependencyCategory(error: unknown): DependencyCategory {
   if (/ambiguous column|no such (?:column|table)|syntax error/i.test(message))
     return "database_query";
   if (
-    /too many SQL variables|too many subrequests|SQLITE_TOOBIG|query.*too (?:large|complex)/i.test(
+    /too many SQL variables|too many subrequests|SQLITE_TOOBIG|query.*too (?:large|complex)|expression tree is too large|too many terms in compound SELECT|too many arguments on function/i.test(
       message,
     )
   )
@@ -57,8 +59,13 @@ export function dependencyCategory(error: unknown): DependencyCategory {
   return "unknown";
 }
 /** Retain only a category when repositories replace platform errors with safe errors. */
-export function rememberDependencyFailure(target: object, original: unknown) {
-  failures.set(target, { category: dependencyCategory(original) });
+export function rememberDependencyFailure(
+  target: object,
+  original: unknown,
+  fallback: DependencyCategory = "unknown",
+) {
+  const category = dependencyCategory(original);
+  failures.set(target, { category: category === "unknown" ? fallback : category });
 }
 export async function dependencyStep<T>(
   stage: DependencyStage,
@@ -110,6 +117,8 @@ export function reportProviderFailure(failure: {
     "provider_auth",
     "provider_budget",
     "provider_rate",
+    "provider_request",
+    "provider_unavailable",
   ].includes(failure.category)
     ? failure.category
     : "unknown";
