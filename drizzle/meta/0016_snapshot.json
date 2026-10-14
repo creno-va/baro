@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "0d1fdf07-1565-4838-a957-f4cbcbdc4607",
+  "id": "a9607e1c-efb0-4cb6-91bf-cc1f3eec37db",
   "prevId": "4105f33a-570f-4957-83ad-7be9373a3b63",
   "tables": {
     "account": {
@@ -2402,6 +2402,14 @@
         "v2_execution_observation_payload": {
           "name": "v2_execution_observation_payload",
           "value": "json_valid(\"v2_execution_cost_observations\".\"payload_json\") AND json_extract(\"v2_execution_cost_observations\".\"payload_json\",'$.attemptId')=\"v2_execution_cost_observations\".\"attempt_id\" AND json_extract(\"v2_execution_cost_observations\".\"payload_json\",'$.observedAt')=\"v2_execution_cost_observations\".\"observed_at\""
+        },
+        "v2_execution_observation_fields": {
+          "name": "v2_execution_observation_fields",
+          "value": "json_type(\"v2_execution_cost_observations\".\"payload_json\",'$.id') IS 'text' AND json_extract(\"v2_execution_cost_observations\".\"payload_json\",'$.id') IS \"v2_execution_cost_observations\".\"id\" AND json_type(\"v2_execution_cost_observations\".\"payload_json\",'$.attemptId') IS 'text' AND json_type(\"v2_execution_cost_observations\".\"payload_json\",'$.observedAt') IS 'text' AND json_type(\"v2_execution_cost_observations\".\"payload_json\",'$.transport') IS 'text' AND json_extract(\"v2_execution_cost_observations\".\"payload_json\",'$.transport') IN ('response','unknown','not_sent','provider_error') AND json_type(\"v2_execution_cost_observations\".\"payload_json\",'$.quantities') IS 'array' AND json_array_length(\"v2_execution_cost_observations\".\"payload_json\",'$.quantities')<=32 AND json_type(\"v2_execution_cost_observations\".\"payload_json\",'$.chargedUsd') IN ('null','text') AND json_extract(\"v2_execution_cost_observations\".\"payload_json\",'$.chargedUsd') IS \"v2_execution_cost_observations\".\"charged_usd\" AND length(CAST(\"v2_execution_cost_observations\".\"payload_json\" AS BLOB))<=65536 AND length(\"v2_execution_cost_observations\".\"digest\")=64 AND \"v2_execution_cost_observations\".\"digest\" NOT GLOB '*[^0-9a-f]*' AND length(\"v2_execution_cost_observations\".\"evidence_hash\")=64 AND \"v2_execution_cost_observations\".\"evidence_hash\" NOT GLOB '*[^0-9a-f]*' AND \"v2_execution_cost_observations\".\"observed_at\"<=\"v2_execution_cost_observations\".\"verified_at\""
+        },
+        "v2_execution_observation_references": {
+          "name": "v2_execution_observation_references",
+          "value": "((\"v2_execution_cost_observations\".\"pricing_status\"='missing')=(\"v2_execution_cost_observations\".\"pricing_proof_id\" IS NULL)) AND ((\"v2_execution_cost_observations\".\"funding_status\"='missing')=(\"v2_execution_cost_observations\".\"funding_proof_id\" IS NULL))"
         },
         "v2_execution_price_status": {
           "name": "v2_execution_price_status",
