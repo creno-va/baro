@@ -310,9 +310,23 @@ export function createV2WorkspaceRepository(
       row.encrypted_payload,
       z.strictObject({ narrative: v2CreateCaseRequestSchema.shape.narrative }),
     );
-    const batches = await core
-      .statement("SELECT * FROM v2_question_batches WHERE workspace_id=? ORDER BY ordinal", [id])
-      .all<{ id: string; revision: number; encrypted_payload: string }>();
+    // Both sets belong to this already authorized workspace. Keep the final
+    // workspace/intake fence after all decryption, as in metadata().
+    const [batches, answers] = await core.binding.batch<{
+      id: string;
+      revision: number;
+      encrypted_payload: string;
+      batch_id?: string;
+    }>([
+      core.statement("SELECT * FROM v2_question_batches WHERE workspace_id=? ORDER BY ordinal", [
+        id,
+      ]),
+      core.statement(
+        "SELECT a.* FROM v2_answers a JOIN v2_question_batches b ON b.id=a.batch_id WHERE b.workspace_id=? ORDER BY a.question_id",
+        [id],
+      ),
+    ]);
+    if (!batches || !answers) throw new V2RepositoryError("DB_OPERATION_FAILED");
     const decoded: V2QuestionBatch[] = [];
     for (const batch of batches.results) {
       const body = await core.decrypt(
@@ -323,11 +337,8 @@ export function createV2WorkspaceRepository(
         batch.encrypted_payload,
         v2QuestionBatchSchema,
       );
-      const answers = await core
-        .statement("SELECT * FROM v2_answers WHERE batch_id=? ORDER BY question_id", [batch.id])
-        .all<{ id: string; revision: number; encrypted_payload: string }>();
       body.answers = [];
-      for (const answer of answers.results)
+      for (const answer of answers.results.filter((answer) => answer.batch_id === batch.id))
         body.answers.push(
           await core.decrypt(
             "v2_answers",

@@ -22,19 +22,34 @@ export const meApi = new Hono<ApiEnvironment>()
   .get("/session", async (context) => {
     const session = await getSession(context);
     if (!session) return context.json({ user: null, needsConsent: false });
-    const deleted = await context.env.DB.prepare(
-      "SELECT target_id FROM v2_tombstones WHERE target_kind='account' AND target_id=?",
-    )
-      .bind(session.user.id)
-      .first();
-    if (deleted) return context.json({ user: null, needsConsent: false });
-    const [accountType, current] = await Promise.all([
-      readAccountType(context.env.DB, session.user.id),
-      hasCurrentConsent(drizzle(context.env.DB, { schema }), session.user.id),
+    // These owner flags are independent after Better Auth has verified the
+    // session. Read one snapshot without caching any authorization state.
+    const [deleted, preference, consent] = await context.env.DB.batch<{ value?: string }>([
+      context.env.DB.prepare(
+        "SELECT target_id FROM v2_tombstones WHERE target_kind='account' AND target_id=?",
+      ).bind(session.user.id),
+      context.env.DB.prepare("SELECT value FROM app_metadata WHERE key=?").bind(
+        `account-type:${session.user.id}`,
+      ),
+      context.env.DB.prepare(
+        "SELECT user_id FROM user_consents WHERE user_id=? AND terms_version=? AND privacy_version=? AND ai_notice_version=? AND over_14_confirmed=1",
+      ).bind(
+        session.user.id,
+        CURRENT_POLICY_VERSIONS.termsVersion,
+        CURRENT_POLICY_VERSIONS.privacyVersion,
+        CURRENT_POLICY_VERSIONS.aiNoticeVersion,
+      ),
     ]);
+    if (!deleted || !preference || !consent) throw new Error("SESSION_STATE_UNAVAILABLE");
+    if (deleted.results.length) return context.json({ user: null, needsConsent: false });
+    const saved = accountTypeSchema.safeParse(preference.results[0]?.value);
+    // Keep the existing role-binding fallback for missing/invalid preferences.
+    const accountType = saved.success
+      ? saved.data
+      : await readAccountType(context.env.DB, session.user.id);
     return context.json({
       user: { id: session.user.id, name: session.user.name, accountType },
-      needsConsent: !current,
+      needsConsent: consent.results.length === 0,
     });
   })
   .put("/account-type", async (context) => {

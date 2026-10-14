@@ -102,13 +102,13 @@ test("canonical answer save avoids duplicate reads while verifying the acknowled
   expect((await fetch("/api/me/session")).ok).toBe(true);
   expect(result.questions[0]?.answer).toBe(f.input.answers[0]?.value);
   expect(result.revision).toBe(f.before.workspaceRevision + 1);
-  // Same local fixture before this change: 9 HTTP / 76 D1 calls / 85 SQL.
+  // Same local fixture before batching: 8 HTTP / 62 D1 calls / 74 SQL.
   // Counts measure local D1 method calls, never native rows or network latency.
   expect(f.rows).toHaveLength(8);
-  expect(f.rows.reduce((n, r) => n + r.calls, 0)).toBe(62);
+  expect(f.rows.reduce((n, r) => n + r.calls, 0)).toBe(55);
   expect(f.rows.reduce((n, r) => n + r.statements, 0)).toBe(74);
   expect(f.rows.filter((r) => r.method === "PUT")).toEqual([
-    { route: "intake/answers", method: "PUT", calls: 22, statements: 33 },
+    { route: "intake/answers", method: "PUT", calls: 21, statements: 33 },
   ]);
 });
 
@@ -274,3 +274,83 @@ for (const change of ["revision", "deleted", "owner"] as const)
     expect(changed).toBe(true);
     expect(meter.work).toEqual({ calls: 3, statements: 4 });
   });
+
+for (const change of ["revision", "deleted", "owner"] as const)
+  test(`readIntake's final fence rejects ${change} after the combined answer read`, async () => {
+    const f = await fixture();
+    const foreign = change === "owner" ? await seedTestSession(f.db, { consent: true }) : null;
+    const meter = countD1Calls(f.db.binding);
+    let changed = false;
+    meter.after((statements) => {
+      if (!statements.some((sql) => sql.startsWith("SELECT a.* FROM v2_answers"))) return;
+      changed = true;
+      if (foreign)
+        f.db.sqlite
+          .query("UPDATE v2_workspaces SET owner_id=? WHERE id=?")
+          .run(foreign.userId, f.workspace.id);
+      else if (change === "deleted")
+        f.db.sqlite
+          .query(
+            "INSERT INTO v2_tombstones(target_kind,target_id,deleted_at) VALUES('workspace',?,?)",
+          )
+          .run(f.workspace.id, f.now);
+      else
+        f.db.sqlite
+          .query("UPDATE v2_intakes SET revision=revision+1 WHERE id=?")
+          .run(f.workspace.id);
+    });
+    const repository = createV2WorkspaceRepository(meter.binding, f.core.cipher);
+    expect(
+      await repository.readIntake({ ownerId: f.owner.userId, now: f.now }, f.workspace.id),
+    ).toBeNull();
+    expect(changed).toBe(true);
+    expect(meter.work).toEqual({ calls: 5, statements: 6 });
+  });
+
+test("readIntake keeps answers attached to their question batch across both rounds", async () => {
+  const f = await fixture();
+  await f.service.answers(f.owner.userId, f.workspace.id, crypto.randomUUID(), {
+    expectedRevision: f.intake.revision,
+    answers: f.intake.batches[0]?.questions.map((question) => ({
+      questionId: question.id,
+      status: "unknown",
+    })),
+  });
+  expect((await runCustomerJob(f, "intake_questions", true, undefined, 3)).result.status).toBe(
+    "completed",
+  );
+  const second = await f.service.intake(f.owner.userId, f.workspace.id);
+  const secondQuestion = second?.batches[1]?.questions[0];
+  if (!second || !secondQuestion) throw new Error("Missing synthetic second round");
+  await f.service.answers(f.owner.userId, f.workspace.id, crypto.randomUUID(), {
+    expectedRevision: second.revision,
+    answers: [{ questionId: secondQuestion.id, status: "answered", value: "합성 2차 답변" }],
+  });
+  const meter = countD1Calls(f.db.binding);
+  const repository = createV2WorkspaceRepository(meter.binding, f.core.cipher);
+  const result = await repository.readIntake(
+    { ownerId: f.owner.userId, now: f.now },
+    f.workspace.id,
+  );
+  expect(result?.batches).toHaveLength(2);
+  expect(result?.batches[0]?.answers).toHaveLength(3);
+  expect(result?.batches[0]?.answers.every((answer) => answer.status === "unknown")).toBe(true);
+  expect(result?.batches[1]?.answers).toEqual([
+    { questionId: secondQuestion.id, status: "answered", value: "합성 2차 답변" },
+  ]);
+  expect(meter.work).toEqual({ calls: 5, statements: 6 });
+  // The actual preview measurement edited a question in the second round.
+  const workspace = await f.service.find(f.owner.userId, f.workspace.id);
+  expect((await fetch("/api/me/session")).ok).toBe(true);
+  const saved = await casesApi.saveAnswers(f.workspace.id, {
+    expectedRevision: workspace.workspaceRevision,
+    answers: [{ questionId: secondQuestion.id, state: "answered", value: "합성 2차 답변 수정" }],
+  });
+  expect((await fetch("/api/me/session")).ok).toBe(true);
+  expect(saved.questions.find((question) => question.id === secondQuestion.id)?.answer).toBe(
+    "합성 2차 답변 수정",
+  );
+  expect(f.rows).toHaveLength(8);
+  expect(f.rows.reduce((n, row) => n + row.calls, 0)).toBe(55);
+  expect(f.rows.reduce((n, row) => n + row.statements, 0)).toBe(74);
+});
