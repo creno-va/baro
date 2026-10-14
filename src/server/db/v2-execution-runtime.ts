@@ -108,44 +108,47 @@ export function recordExecutionTransport(
     parse(opaqueIdSchema, value.attemptId);
     if (value.dispatchToken !== null) parse(opaqueIdSchema, value.dispatchToken);
     const observedAt = new Date(parse(timestampSchema, value.observedAt)).toISOString();
+    const digest = await runtimeDigest({ ...value, observedAt });
+    // Record the issued dispatch at one atomic observation point. These are
+    // receipt predicates, not permission to perform more IO: a later owner or
+    // lease change must not erase real transport evidence for the original
+    // immutable admission. Final rows remain immutable, including exact replay.
+    const changed = await core
+      .statement(
+        `UPDATE v2_execution_admissions SET state=?,transport=?,transport_observed_at=?,transport_digest=?
+        WHERE attempt_id=? AND dispatch_token IS ?
+        AND (state IN ('dispatched','unknown') OR (state='prepared' AND ?='not_sent'))
+        AND (transport_observed_at IS NULL OR transport_observed_at<=?) RETURNING attempt_id`,
+        [
+          value.transport === "unknown" ? "unknown" : "final",
+          value.transport,
+          observedAt,
+          digest,
+          value.attemptId,
+          value.dispatchToken,
+          value.transport,
+          observedAt,
+        ],
+      )
+      .first<{ attempt_id: string }>();
+    if (changed) return true;
+    // A non-transition still distinguishes the historical paid route (null)
+    // from a conflicting observation (false) or immutable final replay (true).
     const row = await core
       .statement(
-        "SELECT state,dispatch_token,transport,transport_observed_at FROM v2_execution_admissions WHERE attempt_id=?",
+        "SELECT state,dispatch_token,transport FROM v2_execution_admissions WHERE attempt_id=?",
         [value.attemptId],
       )
       .first<{
         state: string;
         dispatch_token: string | null;
         transport: string | null;
-        transport_observed_at: string | null;
       }>();
     if (!row) return null;
-    if (
-      row.dispatch_token !== value.dispatchToken ||
-      (row.state === "prepared" && value.transport !== "not_sent")
-    )
-      return false;
-    if (row.state === "final") return row.transport === value.transport;
-    if (row.transport_observed_at && observedAt < row.transport_observed_at) return false;
-    const digest = await runtimeDigest({ ...value, observedAt });
     return (
-      (
-        await core
-          .statement(
-            `UPDATE v2_execution_admissions SET state=?,transport=?,transport_observed_at=?,transport_digest=? WHERE attempt_id=? AND state=? AND dispatch_token IS ? AND (transport_observed_at IS NULL OR transport_observed_at<=?)`,
-            [
-              value.transport === "unknown" ? "unknown" : "final",
-              value.transport,
-              observedAt,
-              digest,
-              value.attemptId,
-              row.state,
-              value.dispatchToken,
-              observedAt,
-            ],
-          )
-          .run()
-      ).meta.changes === 1
+      row.dispatch_token === value.dispatchToken &&
+      row.state === "final" &&
+      row.transport === value.transport
     );
   });
 }

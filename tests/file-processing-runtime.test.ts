@@ -37,9 +37,8 @@ async function setup(pageCount = 1) {
   meter.before((statements) => {
     for (const sql of statements) {
       if (
-        sql.startsWith(
-          "SELECT state,dispatch_token,transport,transport_observed_at FROM v2_execution_admissions",
-        )
+        sql.startsWith("SELECT state,dispatch_token,transport") &&
+        sql.includes("FROM v2_execution_admissions")
       )
         hotReads.transport++;
       if (sql.startsWith("SELECT j.target_id,j.target_revision,j.operation_id FROM v2_jobs"))
@@ -252,10 +251,11 @@ for (const pageCount of [1, 2])
     // 2 pages: 2380 calls / 2773 SQL / 555 authorization boundaries.
     // After current consent JOIN: 715/946 and 1271/1664, unchanged 308/555 guards.
     // Same-snapshot artifact/checkpoint reads remove another 11/19 calls/SQL.
+    // Atomic transport observations remove another 21/38 calls/SQL.
     // Counts are local method calls, not network time or native rows read.
-    expect(stages.reduce((sum, stage) => sum + stage.calls, 0)).toBe(pageCount === 1 ? 704 : 1252);
+    expect(stages.reduce((sum, stage) => sum + stage.calls, 0)).toBe(pageCount === 1 ? 683 : 1214);
     expect(stages.reduce((sum, stage) => sum + stage.statements, 0)).toBe(
-      pageCount === 1 ? 935 : 1645,
+      pageCount === 1 ? 914 : 1607,
     );
     expect(stages.reduce((sum, stage) => sum + stage.authorizations, 0)).toBe(
       pageCount === 1 ? 308 : 555,
