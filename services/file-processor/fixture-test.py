@@ -11,7 +11,7 @@ import tempfile
 FIXTURES = Path("/fixtures")
 CASES = [("text-two-pages.pdf", "document", "pdf"), ("scan-image-only.pdf", "document", "pdf"),
          ("utf8-markers.txt", "document", "txt"), ("not-a-pdf.pdf", "document", "txt"), ("image-markers.png", "image", "png"),
-         ("image-markers.jpg", "image", "jpeg"), ("speech-ko.wav", "audio", "wav"),
+         ("image-markers.jpg", "image", "jpeg"), ("image-markers.heic", "image", "heic"), ("speech-ko.wav", "audio", "wav"),
          ("speech-en.wav", "audio", "wav"), ("scenes-silent.mp4", "video", "mp4"),
          ("scenes-speech.mp4", "video", "mp4")]
 count = 0

@@ -269,8 +269,8 @@
       "byteLength": 57,
       "declaredFormat": "pdf",
       "actualFormat": "txt",
-      "expectedRejection": "format mismatch; extension must not grant PDF admission",
-      "verification": "Known text bytes with no PDF signature; product rejection expectation is unexecuted."
+      "expectedFormat": "txt; the filename must not grant PDF admission",
+      "verification": "Known UTF-8 text bytes with no PDF signature; actual-content native fixture checks expect TXT."
     },
     {
       "fixtureId": "truncated-video-mp4",

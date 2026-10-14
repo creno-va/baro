@@ -1,0 +1,9 @@
+*.doc binary
+*.docx binary
+*.xls binary
+*.xlsx binary
+*.ppt binary
+*.pptx binary
+*.hwp binary
+*.hwpx binary
+*.txt binary

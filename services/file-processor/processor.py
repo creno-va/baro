@@ -1,8 +1,8 @@
 """Offline native extraction. No network/model access, input names or content logs.
 
 The parent enforces a whole-job timeout and destroys this job's private directory.
-Only PDF/text, supported raster codecs and FFmpeg-readable media are processed;
-office/HWP archives are explicitly unsupported, never mislabeled as complete.
+Office/HWP inputs normalize to a private PDF before the same page extractor;
+no source filename, macro, external reference or converter log is trusted.
 """
 import hashlib
 import json
@@ -16,6 +16,8 @@ import sys
 import io
 import wave
 from PIL import Image, ImageOps
+import office
+import heif
 
 Image.MAX_IMAGE_PIXELS = 40_000_000
 MAX_ARTIFACT = 1_048_576
@@ -80,7 +82,24 @@ def inspect(source):
             raise Rejected("LIMIT")
         return dict(category="document", format="pdf", byteLength=size, pageCount=int(pages[1]))
     if magic.startswith((b"PK\x03\x04", b"\xd0\xcf\x11\xe0")):
-        raise Rejected("UNSUPPORTED_FORMAT")
+        try:
+            fmt = office.detect(source)
+            if fmt is None:
+                raise Rejected("UNSUPPORTED_FORMAT")
+            normalized = office.normalize(source, source.parent, fmt)
+            converted = inspect(normalized)
+            if converted["category"] != "document" or converted["format"] != "pdf":
+                raise Rejected("INVALID_MEDIA")
+            return dict(category="document", format=fmt, byteLength=size, pageCount=converted["pageCount"])
+        except office.OfficeError as error:
+            raise Rejected(str(error)) from None
+    if heif.is_heic(source):
+        try:
+            metadata = heif.inspect_heic(source)
+            return dict(category="image", format="heic", byteLength=size,
+                        width=metadata["width"], height=metadata["height"])
+        except heif.HeifError:
+            raise Rejected("INVALID_MEDIA") from None
     try:
         with Image.open(source) as image:
             formats = {"JPEG": "jpeg", "PNG": "png", "WEBP": "webp", "GIF": "gif",
@@ -200,6 +219,10 @@ def process(source, root, probe, unit, frame_offset):
     pages = []
     if category == "document":
         is_text = probe["format"] == "txt"
+        # inspect() made this PDF during this invocation; it is never reused
+        # across units or requests, and original bytes/hash remain unchanged.
+        if probe["format"] not in {"txt", "pdf"}:
+            source = root / "normalized.pdf"
         pages = [dict(page=unit + 1, status="missing")]
         for page in [unit + 1]:
             position = dict(kind="document", page=page, paragraph=None, table=None)
@@ -230,9 +253,16 @@ def process(source, root, probe, unit, frame_offset):
                         pageCount=probe["pageCount"], pages=pages)
     elif category == "image":
         path = root / "artifact-000000.jpg"
-        with Image.open(source) as image:
+        if probe["format"] == "heic":
+            try:
+                image, multi = heif.open_primary(source, root)
+            except heif.HeifError:
+                raise Rejected("INVALID_MEDIA") from None
+        else:
+            image = Image.open(source)
             # EXIF/ICC are not passed to the JPEG encoder; GIF/TIFF first frame => partial.
             multi = getattr(image, "n_frames", 1) > 1
+        with image:
             # Decode before thumbnail so JPEG draft/downsampling cannot change pixels.
             # An already RGB raster needs no full-size copy from convert("RGB").
             image = normalized_rgb(image)

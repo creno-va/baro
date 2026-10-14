@@ -4,3 +4,8 @@
 !services/file-processor/Dockerfile
 !services/file-processor/server.mjs
 !services/file-processor/processor.py
+!services/file-processor/office.py
+!services/file-processor/office-convert.py
+!services/file-processor/build-hwp.py
+!services/file-processor/heif.py
+!services/file-processor/heif-native.c

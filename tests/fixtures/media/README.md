@@ -16,7 +16,7 @@ PDF cross-reference offsets and the UTF-8 fixture's original line endings.
 | image-markers.png / image-markers.jpg | 1000 x 700; Pillow decode; synthetic labels and a green triangle; no supplied EXIF |
 | speech-ko.wav / speech-en.wav | 7.15 / 6.515 s; 16 kHz mono signed 16-bit PCM; non-silent samples |
 | scenes-silent.mp4 / scenes-speech.mp4 | Each 8 s, 10 fps, 80 frames, 640 x 360 H.264; no audio / Korean synthetic speech in AAC |
-| not-a-pdf.pdf | 57-byte text with a PDF extension; expected product format-mismatch rejection remains unexecuted |
+| not-a-pdf.pdf | 57-byte valid UTF-8 text with a PDF extension; the actual-content parser identifies TXT, never PDF based on the name |
 | truncated-video.mp4 | 128-byte local MP4 truncation; FFmpeg rejects incomplete stream; product rejection remains unexecuted |
 
 All text and shapes were locally authored. WAV files were made solely for fixture creation
@@ -66,3 +66,15 @@ retry, cancellation, deletion, quota/budget behavior or zip-bomb defenses. Offic
 HEIC and other media formats/codecs remain distinct fixture and processing coverage gaps.
 Do not reduce supported product scope to this corpus. #59 product work still requires
 #57/#58 CLOSED with their prerequisite PRs merged; actual media smoke remains #71.
+
+## Native format extension (2026-10-15)
+
+The original 11-input preparation manifest above remains historical. The added
+`image-markers.heic` is an entirely synthetic HEIC encoding of the existing PNG,
+created with the installed macOS `sips` tool (15,063 bytes, 1000×700). Actual
+Linux tests compare its primary pixels/orientation with the PNG, verify metadata
+removal, and exercise multiple-image/size/corruption/cleanup controls. Its source
+and Office/HWP fixtures are documented in
+[the native document corpus](../native-documents/README.md).
+The native processor suite now includes this image; real upload/provider/UI
+evidence is tracked separately by the MVP verification task.
