@@ -545,7 +545,7 @@ for (const collection of ["messages", "actions", "timeline"] as const) {
     const read = (id = empty.id) => f.transport(`/api/v2/cases/${id}/${collection}`);
     const response = await read();
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ items: [], nextCursor: null });
+    expect((await response.json()) as unknown).toEqual({ items: [], nextCursor: null });
     let rowsRead = 0;
     f.afterSql((statements) => {
       if (statements.some((sql) => sql.startsWith(`SELECT * FROM v2_${collection}`))) rowsRead++;
@@ -617,7 +617,7 @@ for (const collection of ["messages", "actions", "timeline"] as const) {
         const response = await f.transport(`/api/v2/cases/${f.workspace.id}/${collection}`);
         expect(changed).toBe(true);
         expect(response.status).toBe(200);
-        expect(await response.json()).toEqual({ items: [], nextCursor: null });
+        expect((await response.json()) as unknown).toEqual({ items: [], nextCursor: null });
       });
 }
 
