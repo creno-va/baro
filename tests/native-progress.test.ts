@@ -107,6 +107,15 @@ test("native progress allowlists hostile runtime fields and preserves unavailabl
   f.progress.observe(() => ({
     providerCalls: Number.NaN,
     requestOrdinal: -1,
+    databaseFailureHistory: {
+      first: [
+        {
+          operation: "first",
+          details: [{ name: "Error", code: "private-id", category: "unknown", knownFailure: null }],
+        },
+      ],
+      omitted: 0,
+    },
     databaseTrace: {
       operation: "private-sql",
       state: "private-error",

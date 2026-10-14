@@ -1,3 +1,4 @@
+import { nativeFailureHistorySchema } from "./native-failure";
 import {
   nativeD1MeasurementsSchema,
   nativeHostMeasurementsSchema,
@@ -43,6 +44,7 @@ type Counters = {
   providerCalls?: number;
   requestOrdinal?: number;
   databaseMeasurements?: unknown;
+  databaseFailureHistory?: unknown;
   recoveryMeasurements?: unknown;
   hostMeasurements?: unknown;
   hostBaseline?: unknown;
@@ -128,6 +130,13 @@ export function createNativeProgress(
         completedPhases: completedPhases.map((value) => ({ ...value })),
         providerCalls: count(counters.providerCalls),
         requestOrdinal: count(counters.requestOrdinal),
+        ...(nativeFailureHistorySchema.safeParse(counters.databaseFailureHistory).success
+          ? {
+              databaseFailureHistory: nativeFailureHistorySchema.parse(
+                counters.databaseFailureHistory,
+              ),
+            }
+          : {}),
         ...(nativeD1MeasurementsSchema.safeParse(counters.databaseMeasurements).success
           ? {
               databaseMeasurements: nativeD1MeasurementsSchema.parse(counters.databaseMeasurements),
