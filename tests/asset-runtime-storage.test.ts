@@ -352,7 +352,7 @@ test("writer-stop persistence failure preserves independent cleanup and the real
     expect(f.bucket.objects.has(`private/${derivative.id}`)).toBe(true);
   }));
 
-test("asset runtime preserves all current/source boundaries with 77 fewer D1 reads", () =>
+test("asset runtime preserves all current/source boundaries with 80 fewer D1 reads", () =>
   withFixedLength(async () => {
     let measured!: ReturnType<typeof countD1Calls>;
     const f = await setup((database) => {
@@ -375,8 +375,9 @@ test("asset runtime preserves all current/source boundaries with 77 fewer D1 rea
     expect(await f.runtime.run(new AbortController().signal)).toMatchObject({ status: "ready" });
     // Same factory + one-chunk JPEG baseline: 173 calls / 209 statements.
     // PR269 combined current-source reads to 111/147. The five original source
-    // boundaries now combine 4 further reads into 1 each: 96/132, without cache.
-    expect(measured.work).toEqual({ calls: 96, statements: 132 });
+    // boundaries combine 4 further reads into 1 each: 96/132, without cache.
+    // Atomic transport receipt updates remove three further roundtrips: 93/129.
+    expect(measured.work).toEqual({ calls: 93, statements: 129 });
     expect(currentReads).toBe(31);
     expect(originalSnapshotReads).toBe(5);
     expect(separateConsentReads).toBe(3);
