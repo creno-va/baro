@@ -11,6 +11,7 @@ import { createProcessorTransport, type ProcessingCosts } from "../file-processi
 import { createFilesService } from "../files/service";
 import { createMediaGateway, WHISPER_MODEL } from "../llm-gateway/transcription";
 import type { GatewayExecutionBinding } from "./gateway-ledger";
+import { configuredMediaPolicy } from "./media-capability";
 import { createProcessingBudgetService } from "./processing-ledger";
 
 export type ProcessingRuntimePolicy = Pick<
@@ -141,13 +142,19 @@ export async function createFileProcessingRuntime(
       [params.jobId, params.ownerId, instanceId],
     )
     .first<string>("attempt_id");
+  const mediaPolicy = configuredMediaPolicy(env);
   const budget = createProcessingBudgetService({
     core,
     environment,
     ownerId: params.ownerId,
     ...(initialAttemptId ? { initialAttemptId } : {}),
     ...policy,
-    bounds: policy.bounds ?? boundedProcessingResources,
+    bounds:
+      policy.bounds ??
+      (async (input, inputDigest, now) =>
+        input.service === "model"
+          ? mediaPolicy.bounds(input, inputDigest, now)
+          : boundedProcessingResources(input, inputDigest, now)),
     binding: (now) => jobBinding(core, params, instanceId, now, environment, initialAttemptId),
   });
   let execution: ReturnType<typeof createFileProcessingExecution>;
@@ -187,7 +194,7 @@ export async function createFileProcessingRuntime(
       {
         costs,
         waitUntil,
-        ...(policy.visionCapability ? { visionCapability: policy.visionCapability } : {}),
+        visionCapability: policy.visionCapability ?? mediaPolicy.visionCapability,
       },
     ),
   });

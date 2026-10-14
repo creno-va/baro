@@ -80,7 +80,7 @@ function trueType(bytes: Uint8Array) {
     descent: Math.round((data.getInt16(hhea + 6) * 1000) / upem),
   };
 }
-export function renderReportPdf(
+export async function renderReportPdf(
   fontBytes: Uint8Array,
   input: {
     title: string;
@@ -139,7 +139,16 @@ export function renderReportPdf(
     ]);
   const catalog = object(""),
     pages = object("");
-  const fontFile = object(stream(fontBytes, `/Length1 ${fontBytes.length}`));
+  // PDF FlateDecode uses the zlib-wrapped "deflate" format. Keep the entire
+  // original TrueType program and all glyph mappings; Length1 is decoded size.
+  const fontStream = new Response(fontBytes.slice()).body;
+  if (!fontStream) throw new Error("REPORT_FONT_INVALID");
+  const compressedFont = new Uint8Array(
+    await new Response(fontStream.pipeThrough(new CompressionStream("deflate"))).arrayBuffer(),
+  );
+  const fontFile = object(
+    stream(compressedFont, `/Filter /FlateDecode /Length1 ${fontBytes.length}`),
+  );
   const descriptor = object(
     `<< /Type /FontDescriptor /FontName /BaroReport /Flags 4 /FontBBox [-1000 -1000 3000 3000] /ItalicAngle 0 /Ascent ${font.ascent} /Descent ${font.descent} /CapHeight 700 /StemV 80 /FontFile2 ${fontFile} 0 R >>`,
   );

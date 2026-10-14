@@ -73,7 +73,11 @@ export function createBoundedTransport(
         if (declared && (!/^\d+$/.test(declared) || Number(declared) > MAX_RESPONSE_BYTES)) {
           throw rejectBody("too_large");
         }
-        if (!response.body) throw new RetrievalFailure("schema_mismatch");
+        if (!response.body)
+          throw new RetrievalFailure("schema_mismatch", {
+            stage: "response_body",
+            issues: [{ field: "body", expected: "nonempty_body" }],
+          });
         const reader = response.body.getReader();
         const decoder = new TextDecoder("utf-8", { fatal: true });
         let text = "",
@@ -87,19 +91,29 @@ export function createBoundedTransport(
             try {
               text += decoder.decode(item.value, { stream: true });
             } catch {
-              throw new RetrievalFailure("schema_mismatch");
+              throw new RetrievalFailure("schema_mismatch", {
+                stage: "response_body",
+                issues: [{ field: "encoding", expected: "utf8" }],
+              });
             }
           }
           try {
             text += decoder.decode();
           } catch {
-            throw new RetrievalFailure("schema_mismatch");
+            throw new RetrievalFailure("schema_mismatch", {
+              stage: "response_body",
+              issues: [{ field: "encoding", expected: "utf8" }],
+            });
           }
         } finally {
           void reader.cancel().catch(() => {});
           reader.releaseLock();
         }
-        if (declared && Number(declared) !== bytes) throw new RetrievalFailure("schema_mismatch");
+        if (declared && Number(declared) !== bytes)
+          throw new RetrievalFailure("schema_mismatch", {
+            stage: "response_body",
+            issues: [{ field: "length", expected: "declared_bytes" }],
+          });
         if (!(await safePermit(access.authorize))) throw new RetrievalFailure("not_authorized");
         return text;
       } catch (error) {

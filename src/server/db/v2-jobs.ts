@@ -585,6 +585,19 @@ export function createV2JobsRepository(core: V2Core) {
         return core.changed(statements);
       });
     },
+    latestWorkspace(actor: Actor, workspaceId: string) {
+      return safe(async () => {
+        actor = parse(actorSchema, { ownerId: actor.ownerId, now: actor.now });
+        parse(opaqueIdSchema, workspaceId);
+        const row = await core
+          .statement(
+            "SELECT j.* FROM v2_jobs j JOIN v2_operations o ON o.id=j.operation_id WHERE o.owner_id=? AND j.workspace_id=? AND j.target_kind='workspace' AND j.kind IN ('intake_questions','intake_summary','chat_response') AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='account' AND target_id=o.owner_id) ORDER BY j.target_revision DESC,j.created_at DESC,j.id DESC LIMIT 1",
+            [actor.ownerId, workspaceId],
+          )
+          .first<JobRow>();
+        return row ? jobDto(row) : null;
+      });
+    },
     find(actor: Actor, jobId: string) {
       return safe(async () => {
         actor = parse(actorSchema, { ownerId: actor.ownerId, now: actor.now });

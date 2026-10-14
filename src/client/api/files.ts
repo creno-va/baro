@@ -7,6 +7,7 @@ import {
   v2CoverageSchema,
   v2FailureCodeSchema,
   v2FileObservationSchema,
+  v2FileProcessingSchema,
   v2FileSchema,
   v2ObservationEditInputSchema,
   v2ObservationEditRequestSchema,
@@ -32,6 +33,7 @@ export const fileViewSchema = z.object({
   extractedText: z.string(),
   canStartProcessing: z.boolean().optional(),
   canRetry: z.boolean().optional(),
+  processing: v2FileProcessingSchema.optional(),
   uploadContentHash: z.string().optional(),
   createdAt: z.iso.datetime({ offset: true }).optional(),
   failure: v2FailureCodeSchema.nullable().optional(),
@@ -44,6 +46,7 @@ const metadataSchema = z.object({
   byteLength: z.number(),
   contentHash: z.string().optional(),
   canRetry: z.boolean().optional(),
+  processing: v2FileProcessingSchema.optional(),
   createdAt: z.iso.datetime({ offset: true }).optional(),
   failure: v2FailureCodeSchema.nullable().optional(),
   status: z.enum([
@@ -219,7 +222,10 @@ export function createFilesApi(request: WorkspaceTransport) {
                 ? "failed"
                 : row.status === "reserved" || row.status === "uploading"
                   ? "uploading"
-                  : row.status === "processing"
+                  : row.status === "processing" ||
+                      (row.status === "queued" &&
+                        row.processing &&
+                        row.processing.status !== "queued")
                     ? "processing"
                     : "waiting",
           coverage: "처리 결과는 아직 확인할 수 없어요.",
@@ -228,6 +234,7 @@ export function createFilesApi(request: WorkspaceTransport) {
           canRetry: row.canRetry ?? false,
           createdAt: row.createdAt,
           failure: row.failure,
+          processing: row.processing,
         };
         if (row.status === "ready") {
           const detail = await request(`${base(id)}/files/${encodeURIComponent(row.id)}`);
@@ -477,7 +484,7 @@ export function createFilesApi(request: WorkspaceTransport) {
         { method: "DELETE" },
       );
     },
-    async retry(id: string, fileId: string) {
+    async retry(id: string, fileId: string, onAccepted?: () => void) {
       await list(id);
       const value = await workspaceJson(
         request,
@@ -488,6 +495,14 @@ export function createFilesApi(request: WorkspaceTransport) {
         }),
       );
       const mock = fileViewSchema.safeParse(value);
+      const accepted = mock.success ? mock.data : metadataSchema.parse(value);
+      if (accepted.id !== fileId)
+        throw workspaceError("VALIDATION_ERROR", "자료 처리 접수 결과를 확인하지 못했어요.");
+      // Only a validated response for this exact file acknowledges the request.
+      // A display callback must not turn an accepted write into a retryable error.
+      try {
+        onAccepted?.();
+      } catch {}
       if (mock.success) return mock.data;
       const found = (await list(id)).find((file) => file.id === fileId);
       if (!found) throw workspaceError("NOT_FOUND", "자료를 찾을 수 없어요.");

@@ -26,6 +26,64 @@ type CleanupStage =
   | "inventory_sql";
 type CleanupNamespace = "unknown" | "file" | "asset" | "workspace" | "profile";
 type ObserveStop = <T>(stage: CleanupStage, work: () => Promise<T>) => Promise<T>;
+type CleanupErrorDetails = {
+  errorShape: "error" | "non_error";
+  errorName: "Error" | "TypeError" | "WorkflowError" | "other";
+  messageClass: "instance_missing_exact" | "instance_missing_wrapped" | "other";
+  codeClass: "absent" | "numeric" | "other" | "unreadable";
+  httpStatus: number | null;
+};
+const unreadable = Symbol("unreadable");
+function errorField(error: unknown, field: "name" | "message" | "code" | "status"): unknown {
+  if (!error || (typeof error !== "object" && typeof error !== "function")) return undefined;
+  try {
+    return Reflect.get(error, field);
+  } catch {
+    return unreadable;
+  }
+}
+function isError(error: unknown): error is Error {
+  try {
+    return error instanceof Error;
+  } catch {
+    return false;
+  }
+}
+function missingInstance(error: unknown) {
+  return isError(error) && errorField(error, "message") === "instance.not_found";
+}
+/** Diagnostics only. Never infer a missing instance from a wrapped message.
+ * The exact wrapped form comes from pinned Miniflare's createWorkflowError;
+ * neither arbitrary prefixes/suffixes nor user data are included in the output. */
+export function cleanupErrorDetails(error: unknown): CleanupErrorDetails {
+  const name = errorField(error, "name"),
+    message = errorField(error, "message"),
+    code = errorField(error, "code"),
+    status = errorField(error, "status");
+  return {
+    errorShape: isError(error) ? "error" : "non_error",
+    errorName:
+      name === "Error" || name === "TypeError" || name === "WorkflowError" ? name : "other",
+    messageClass:
+      message === "instance.not_found"
+        ? "instance_missing_exact"
+        : message === "(instance.not_found) Instance does not exist"
+          ? "instance_missing_wrapped"
+          : "other",
+    codeClass:
+      code === unreadable
+        ? "unreadable"
+        : code === undefined
+          ? "absent"
+          : typeof code === "number" && Number.isFinite(code)
+            ? "numeric"
+            : "other",
+    httpStatus:
+      typeof status === "number" && Number.isInteger(status) && status >= 100 && status <= 599
+        ? status
+        : null,
+  };
+}
 export type CleanupFailureEvent = {
   event: "v2_deletion_cleanup_failed";
   environment: "preview" | "production";
@@ -34,7 +92,7 @@ export type CleanupFailureEvent = {
   ageSeconds: number;
   stage: CleanupStage;
   namespace: CleanupNamespace;
-};
+} & CleanupErrorDetails;
 function reportCleanupFailure(event: CleanupFailureEvent) {
   console.error(
     JSON.stringify({
@@ -45,6 +103,11 @@ function reportCleanupFailure(event: CleanupFailureEvent) {
       ageSeconds: event.ageSeconds,
       stage: event.stage,
       namespace: event.namespace,
+      errorShape: event.errorShape,
+      errorName: event.errorName,
+      messageClass: event.messageClass,
+      codeClass: event.codeClass,
+      httpStatus: event.httpStatus,
     }),
   );
 }
@@ -82,7 +145,7 @@ async function stop(binding: CleanupWorkflow | undefined, id: string, observe: O
     await observe("workflow_delete", () => instance.delete());
     return true;
   } catch (error) {
-    if (!(error instanceof Error && error.message === "instance.not_found")) throw error;
+    if (!missingInstance(error)) throw error;
     return false;
   }
 }
@@ -109,6 +172,7 @@ export function createV2DeletionReconciler(core: V2Core, deps: DeletionCleanupDe
         let failure: CleanupFailureEvent["reason"] | undefined;
         let stage: CleanupStage = "unknown",
           namespace: CleanupNamespace = "unknown";
+        let details: CleanupErrorDetails | undefined;
         const observe = async <T>(
           at: CleanupStage,
           scope: CleanupNamespace,
@@ -119,11 +183,10 @@ export function createV2DeletionReconciler(core: V2Core, deps: DeletionCleanupDe
             return await work();
           } catch (error) {
             // Exact absence is handled successfully by stop(), never a failed stage.
-            if (
-              !(missingAllowed && error instanceof Error && error.message === "instance.not_found")
-            ) {
+            if (!(missingAllowed && missingInstance(error))) {
               stage = at;
               namespace = scope;
+              details = cleanupErrorDetails(error);
             }
             throw error;
           }
@@ -287,10 +350,11 @@ export function createV2DeletionReconciler(core: V2Core, deps: DeletionCleanupDe
           }
         } catch (error) {
           // Never log provider errors, IDs, keys, SQL or payloads.
-          failure =
-            error instanceof Error && cleanupReasons.some((reason) => reason === error.message)
-              ? (error.message as CleanupFailureEvent["reason"])
-              : "CLEANUP_DEPENDENCY_UNAVAILABLE";
+          const message = isError(error) ? errorField(error, "message") : undefined;
+          failure = cleanupReasons.some((reason) => reason === message)
+            ? (message as CleanupFailureEvent["reason"])
+            : "CLEANUP_DEPENDENCY_UNAVAILABLE";
+          details ??= cleanupErrorDetails(error);
         }
         result.retry++;
         const failedAt = now();
@@ -306,6 +370,7 @@ export function createV2DeletionReconciler(core: V2Core, deps: DeletionCleanupDe
             reason: failure,
             stage,
             namespace,
+            ...(details ?? cleanupErrorDetails(undefined)),
             attempts: journal.attempts + 1,
             ageSeconds: Math.max(
               0,

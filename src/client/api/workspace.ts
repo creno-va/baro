@@ -5,6 +5,7 @@ import {
   v2ActionSchema,
   v2FactReferenceSchema,
   v2FailureCodeSchema,
+  v2FileProcessingSchema,
   v2JobSchema,
   v2SummarySchema,
   v2TimelineEntrySchema,
@@ -108,6 +109,7 @@ const fileViewSchema = z.object({
   extractedText: z.string(),
   canStartProcessing: z.boolean().optional(),
   canRetry: z.boolean().optional(),
+  processing: v2FileProcessingSchema.optional(),
   createdAt: z.iso.datetime({ offset: true }).optional(),
   failure: v2FailureCodeSchema.nullable().optional(),
 });

@@ -16,6 +16,15 @@ import {
   v2VersionSchema,
 } from "./common";
 import { v2SourcePositionSchema } from "./sources";
+import { v2JobSchema } from "./workspace";
+
+/** Last observed active job state, not an ETA or a processing start timestamp. */
+export const v2FileProcessingSchema = z.strictObject({
+  status: z.enum(["queued", "running", "validating"]),
+  phase: v2JobSchema.shape.phase,
+  updatedAt: timestampSchema,
+});
+export type V2FileProcessing = z.infer<typeof v2FileProcessingSchema>;
 
 export const v2FileCategorySchema = z.enum(["document", "image", "audio", "video"]);
 export const v2FileProbeSchema = z.discriminatedUnion("category", [

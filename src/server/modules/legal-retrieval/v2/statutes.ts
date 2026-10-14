@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { displayText } from "../../../../contracts";
+import { dateSchema, displayText } from "../../../../contracts";
 import { apiDate, digits, RetrievalFailure, type RetrievalPlan } from "./contracts";
 import { OFFICIAL_CATALOG } from "./registry";
 import { type LegalSchemaDiagnostic, legalSchemaDiagnostic } from "./schema-diagnostics";
@@ -87,7 +87,11 @@ const detail = z.object({
 });
 function nested(value: unknown, depth = 0): string[] {
   if (value === undefined) return [];
-  if (depth > 3) throw new RetrievalFailure("schema_mismatch");
+  if (depth > 3)
+    throw new RetrievalFailure("schema_mismatch", {
+      stage: "statute_nested",
+      issues: [{ field: "paragraph", expected: "object_or_array" }],
+    });
   const values = Array.isArray(value) ? value : [value];
   if (values.length > 1000) throw new RetrievalFailure("too_large");
   return values.flatMap((raw) => {
@@ -110,6 +114,36 @@ function nested(value: unknown, depth = 0): string[] {
       ...nested(row.목, depth + 1),
     ].filter((v): v is string => !!v);
   });
+}
+function statuteText(value: string) {
+  // Official JSON uses literal Korean amendment annotations, not HTML tags.
+  // Escape only this bounded date grammar; the strict markup parser still
+  // handles everything else, and entity decoding preserves the original text.
+  const annotated = value.replace(
+    /<(개정|신설|삭제)([\t ][^<>]{1,2000})>/g,
+    (whole, _kind, dates: string) => {
+      const valid = dates.split(",").every((part) => {
+        const date = /^\s*(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})\.?\s*$/.exec(part);
+        return (
+          date &&
+          dateSchema.safeParse(
+            `${date[1]}-${date[2]?.padStart(2, "0")}-${date[3]?.padStart(2, "0")}`,
+          ).success
+        );
+      });
+      return valid ? `&lt;${whole.slice(1, -1)}&gt;` : whole;
+    },
+  );
+  try {
+    return plainText(annotated);
+  } catch (error) {
+    if (error instanceof RetrievalFailure && error.reason === "schema_mismatch")
+      throw new RetrievalFailure("schema_mismatch", {
+        stage: "statute_text",
+        issues: [{ field: "article_text", expected: "plain_text" }],
+      });
+    throw error;
+  }
 }
 export async function parseStatute(
   value: unknown,
@@ -138,7 +172,7 @@ export async function parseStatute(
   if (chosen.length !== 1) throw new RetrievalFailure("identity_mismatch");
   const row = chosen[0];
   if (!row) throw new RetrievalFailure("no_results");
-  const text = plainText(
+  const text = statuteText(
     [...(Array.isArray(row.조문내용) ? row.조문내용 : [row.조문내용]), ...nested(row.항)].join(
       "\n",
     ),

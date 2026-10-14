@@ -158,11 +158,12 @@ export function createFileProcessingExecution(
   const consent = async () =>
     await hasCurrentConsent(drizzle(core.binding, { schema }), params.ownerId);
   const current = async (): Promise<JobContext | null> => {
-    if (!(await consent())) return null;
     const a = actor();
+    // Read current policy consent and this exact live job/source together.
+    // Every transport, stream and publication caller keeps its existing check.
     const row = await core
       .statement(
-        `SELECT j.lease_token,j.fencing,j.lease_until,j.status,w.revision FROM v2_jobs j JOIN v2_operations o ON o.id=j.operation_id JOIN v2_files f ON f.id=j.target_id JOIN v2_workspaces w ON w.id=f.workspace_id WHERE j.id=? AND o.owner_id=? AND j.runtime_instance_id=? AND j.target_kind='file' AND j.target_revision=? AND f.workspace_id=? AND o.state='admitted' AND w.status IN ('active','intake') AND j.status IN ('running','validating') AND j.lease_until>? AND ${jobAlive} AND EXISTS(SELECT 1 FROM v2_consents WHERE owner_id=o.owner_id AND file_id=f.id AND kind='auto_processing' AND version=?)`,
+        `SELECT j.lease_token,j.fencing,j.lease_until,j.status,w.revision FROM v2_jobs j JOIN v2_operations o ON o.id=j.operation_id JOIN v2_files f ON f.id=j.target_id JOIN v2_workspaces w ON w.id=f.workspace_id WHERE j.id=? AND o.owner_id=? AND j.runtime_instance_id=? AND j.target_kind='file' AND j.target_revision=? AND f.workspace_id=? AND o.state='admitted' AND w.status IN ('active','intake') AND j.status IN ('running','validating') AND j.lease_until>? AND ${jobAlive} AND EXISTS(SELECT 1 FROM v2_consents WHERE owner_id=o.owner_id AND file_id=f.id AND kind='auto_processing' AND version=?) AND EXISTS(SELECT 1 FROM user_consents consent WHERE consent.user_id=o.owner_id AND consent.terms_version=? AND consent.privacy_version=? AND consent.ai_notice_version=? AND consent.over_14_confirmed=1)`,
         [
           params.jobId,
           params.ownerId,
@@ -170,6 +171,9 @@ export function createFileProcessingExecution(
           params.fileRevision,
           params.workspaceId,
           a.now,
+          CURRENT_POLICY_VERSIONS.aiNoticeVersion,
+          CURRENT_POLICY_VERSIONS.termsVersion,
+          CURRENT_POLICY_VERSIONS.privacyVersion,
           CURRENT_POLICY_VERSIONS.aiNoticeVersion,
         ],
       )
@@ -180,7 +184,7 @@ export function createFileProcessingExecution(
         status: string;
         revision: number;
       }>();
-    return row && (await consent())
+    return row
       ? {
           lease: { jobId: params.jobId, token: row.lease_token, fencing: row.fencing },
           guard: { ...a, workspaceId: params.workspaceId, expectedRevision: row.revision },

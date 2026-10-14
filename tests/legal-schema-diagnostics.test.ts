@@ -131,6 +131,28 @@ test("list, nested content and invalid JSON failures remain separate without res
   });
 });
 
+test("amendment text passes retrieval while rejected text exposes only finite stage labels", async () => {
+  for (const [text, available] of [
+    ["합성 조문 <개정 2013. 8. 13.>", true],
+    ["합성 조문 <개정 private response>", false],
+  ] as const) {
+    const { result, calls } = await probe((_list, detail) => {
+      const article = detail.법령.조문.조문단위[0];
+      if (!article) throw new Error("Missing synthetic article");
+      article.조문내용 = text;
+    });
+    expect(calls).toBe(2);
+    expect(result.outcomes[0]?.availability).toBe(available ? "verified" : "unavailable");
+    expect(result.claimIntegrity).toBe(available ? true : null);
+    if (!available)
+      expect(result.outcomes[0]?.schemaFailure).toEqual({
+        stage: "statute_text",
+        issues: [{ field: "article_text", expected: "plain_text" }],
+      });
+    expect(JSON.stringify(legalDiagnosticReceipt(result))).not.toContain("private response");
+  }
+});
+
 test("schema paths and forged diagnostics cannot escape the finite output contract", () => {
   const failure = new z.ZodError([
     { code: "custom", path: ["private-id", 888], message: "private input SQL stack" },

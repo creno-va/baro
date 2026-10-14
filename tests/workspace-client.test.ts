@@ -262,6 +262,65 @@ test("real file adapter surfaces unavailable processing API instead of generatin
   expect(calls).toContain("/api/v2/cases/case/files/file/retry");
 });
 
+for (const outcome of [
+  "accepted",
+  "callback-throws",
+  "readback-fails",
+  "wrong-file",
+  "invalid-shape",
+  "http-failure",
+] as const)
+  test(`file retry acknowledges exact validated POST before readback: ${outcome}`, async () => {
+    let lists = 0,
+      posts = 0,
+      acknowledged = 0;
+    const acknowledgedAfterLists: number[] = [];
+    const row = {
+      id: "file",
+      revision: 1,
+      name: "synthetic.pdf",
+      declaredMediaType: "application/pdf",
+      byteLength: 10,
+      status: "queued",
+    };
+    const client = createFilesApi(async (path, init) => {
+      if (path.endsWith("/workspace")) return Response.json({ workspaceRevision: 2 });
+      if (path.endsWith("/files")) {
+        lists++;
+        if (lists > 1 && outcome === "readback-fails")
+          return Response.json({ error: { code: "UNAVAILABLE" } }, { status: 503 });
+        return Response.json([{ ...row, status: lists === 1 ? "failed" : "queued" }]);
+      }
+      expect(init?.method).toBe("POST");
+      posts++;
+      expect(acknowledged).toBe(0);
+      if (outcome === "http-failure")
+        return Response.json({ error: { code: "UNAVAILABLE" } }, { status: 503 });
+      return Response.json(
+        outcome === "invalid-shape"
+          ? { id: "file" }
+          : outcome === "wrong-file"
+            ? { ...row, id: "another-file" }
+            : row,
+        { status: 202 },
+      );
+    });
+    const result = client.retry("case", "file", () => {
+      acknowledged++;
+      acknowledgedAfterLists.push(lists);
+      if (outcome === "callback-throws") throw new Error("Synthetic display callback failure");
+    });
+    if (["accepted", "callback-throws"].includes(outcome))
+      expect(await result).toMatchObject({ id: "file", status: "waiting" });
+    else await expect(result).rejects.toBeDefined();
+    expect(posts).toBe(1);
+    expect(acknowledged).toBe(
+      ["accepted", "callback-throws", "readback-fails"].includes(outcome) ? 1 : 0,
+    );
+    expect(acknowledgedAfterLists).toEqual(acknowledged ? [1] : []);
+    expect(lists).toBe(["accepted", "callback-throws", "readback-fails"].includes(outcome) ? 2 : 1);
+  });
+
 test("chunk upload retries reuse reservation and preserve exact original bytes after client reload", async () => {
   const f = fixture();
   await f.client.get("synthetic-case");
@@ -704,3 +763,58 @@ for (const canRetry of [true, false])
       canRetry,
     );
   });
+
+for (const status of ["queued", "running", "validating"] as const)
+  test(`file metadata client preserves actual processing ${status} without another request`, async () => {
+    const processing = { status, phase: "extracting", updatedAt: "2026-10-15T00:01:00.000Z" };
+    let calls = 0;
+    const files = createFilesApi(async () => {
+      calls++;
+      return Response.json([
+        {
+          id: "synthetic-file",
+          revision: 2,
+          name: "synthetic.pdf",
+          declaredMediaType: "application/pdf",
+          byteLength: 100,
+          status: "queued",
+          createdAt: "2026-10-14T00:00:00.000Z",
+          processing,
+        },
+      ]);
+    });
+    expect((await files.list("synthetic-case"))[0]).toMatchObject({
+      status: status === "queued" ? "waiting" : "processing",
+      processing,
+      canRetry: false,
+      canStartProcessing: false,
+    });
+    expect(calls).toBe(1);
+  });
+
+test("direct workspace DTO keeps optional processing metadata across reload", async () => {
+  const f = fixture();
+  const processing = {
+    status: "running" as const,
+    phase: "observing" as const,
+    updatedAt: "2026-10-15T00:01:00.000Z",
+  };
+  f.runtime.update((state) => {
+    state.files["synthetic-case"] = [
+      {
+        id: "synthetic-file",
+        name: "synthetic.pdf",
+        mimeType: "application/pdf",
+        sizeBytes: 100,
+        status: "processing",
+        coverage: "",
+        extractedText: "",
+        processing,
+      },
+    ];
+  });
+  expect((await f.client.get("synthetic-case")).files[0]?.processing).toEqual(processing);
+  expect(
+    (await createWorkspaceApi(f.transport).get("synthetic-case")).files[0]?.processing,
+  ).toEqual(processing);
+});

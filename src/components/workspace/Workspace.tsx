@@ -30,7 +30,7 @@ import { Button, ButtonLink } from "../ui/button";
 import { CaseNavigation } from "./CaseNavigation";
 import { ElapsedTime } from "./ElapsedTime";
 import { FileReview } from "./FileReview";
-import { fileFailureLabel, uploadProgressLabel } from "./processing-progress";
+import { fileFailureLabel, fileProcessingLabel, uploadProgressLabel } from "./processing-progress";
 import { referenceLabel, timelineDateLabel } from "./source-label";
 import { timelineDateInput, timelineEventLength } from "./timeline-draft";
 
@@ -94,6 +94,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
   const [original, setOriginal] = useState<{ url: string; type: string } | null>(null);
   const [uploadConsent, setUploadConsent] = useState(false);
   const [retryUploads, setRetryUploads] = useState<File[]>([]);
+  const [acceptedFileRetries, setAcceptedFileRetries] = useState<string[]>([]);
   const [uploadProgress, setUploadProgress] = useState<{
     startedAt: number;
     fileName: string;
@@ -141,6 +142,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
     setOriginal(null);
     setUploadConsent(false);
     setRetryUploads([]);
+    setAcceptedFileRetries([]);
     setUploadProgress(null);
     setNotice("");
     setBusy("");
@@ -164,6 +166,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
 
   const apply = useCallback((next: WorkspaceView) => {
     setView(next);
+    setAcceptedFileRetries([]);
     setSelected((ids) =>
       ids.filter((id) => next.files.some((file) => file.id === id && file.status === "ready")),
     );
@@ -305,7 +308,8 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
     // workspace. Its selection still needs the same fresh owner/write preflight.
     if (
       lock.current ||
-      (!["upload", "chat-retry"].includes(key) && (!ready || (readonly && !readOrDelete)))
+      (!["upload", "chat-retry", "file-retry"].includes(key) &&
+        (!ready || (readonly && !readOrDelete)))
     )
       return;
     const epoch = ticket();
@@ -319,12 +323,15 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
     setNotice("");
     try {
       if (!(await verify(false, !readOrDelete)) || !current(epoch)) {
-        if (key === "upload" && alive(epoch)) {
+        if (["upload", "file-retry"].includes(key) && alive(epoch)) {
           operationError.current = true;
           setError(
             problem({
               code: "UNAVAILABLE",
-              message: "계정 확인이 끝나면 선택한 자료의 업로드를 다시 시도해 주세요.",
+              message:
+                key === "upload"
+                  ? "계정 확인이 끝나면 선택한 자료의 업로드를 다시 시도해 주세요."
+                  : "자료 처리 요청을 보내지 못했어요. 계정 확인 후 다시 시도해 주세요.",
             }),
           );
         }
@@ -359,6 +366,33 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
         setBusy("");
       }
     }
+  }
+  async function retryFile(fileId: string) {
+    await run("file-retry", async (epoch) => {
+      let accepted = false;
+      try {
+        await api.files.retry(caseId, fileId, () => {
+          accepted = true;
+          if (!alive(epoch)) return;
+          setAcceptedFileRetries((ids) => (ids.includes(fileId) ? ids : [...ids, fileId]));
+          setNotice("자료 처리 요청이 접수됐어요. 최신 상태를 확인하고 있어요.");
+        });
+      } catch (cause) {
+        if (accepted && alive(epoch))
+          setNotice(
+            "자료 처리 요청은 접수됐지만 최신 상태를 확인하지 못했어요. 새로고침으로 확인해 주세요.",
+          );
+        throw cause;
+      }
+      if (!alive(epoch)) return;
+      const next = await load();
+      if (!alive(epoch)) return;
+      setNotice(
+        next
+          ? "자료 처리 요청이 접수됐어요. 아래에서 처리 상태를 확인할 수 있어요."
+          : "자료 처리 요청은 접수됐지만 최신 상태를 확인하지 못했어요. 새로고침으로 확인해 주세요.",
+      );
+    });
   }
   function historyButton(collection: "messages" | "actions" | "timeline", label: string) {
     if (!view?.pagination?.[collection]) return null;
@@ -572,7 +606,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
         fileCount={ready ? view?.files.length : undefined}
       />
       <div className="workspace-feedback" aria-live="polite" aria-atomic="true">
-        {notice}
+        {notice || (busy === "file-retry" ? "자료 처리 요청을 확인하고 있어요…" : "")}
       </div>
       {error && (
         <section className="workspace-error" role="alert">
@@ -585,7 +619,9 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                 : ["UNAUTHENTICATED", "CONSENT_REQUIRED", "NOT_FOUND"].includes(error.code) &&
                     !error.resource
                   ? "계정 또는 사건 접근이 바뀌어 이전 내용을 비웠어요."
-                  : "입력한 내용은 보존돼요. 확인한 뒤 다시 시도해 주세요."}
+                  : acceptedFileRetries.length
+                    ? "자료 처리 요청은 이미 접수됐어요. 다시 요청하지 말고 새로고침으로 최신 상태를 확인해 주세요."
+                    : "입력한 내용은 보존돼요. 확인한 뒤 다시 시도해 주세요."}
           </p>
           <div className="workspace-buttons">
             {!!retryUploads.length && (
@@ -621,6 +657,19 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
           </div>
         </section>
       )}
+      {!error && !busy && acceptedFileRetries.length > 0 && (
+        <Button
+          variant="outline"
+          onClick={() =>
+            void run("refresh", async (epoch) => {
+              const next = await load();
+              if (next && current(epoch)) setNotice("접수한 자료의 최신 상태를 확인했어요.");
+            })
+          }
+        >
+          접수 상태 다시 확인
+        </Button>
+      )}
       {!view && !error && (
         <div className="workspace-loading" role="status">
           <LoaderCircle className="workspace-spin" /> 사건과 저장된 자료를 불러오고 있어요.
@@ -652,6 +701,35 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
               </Button>
             </section>
           ))}
+      {tab === "files" &&
+        view?.files
+          .filter((file) => (file.status === "failed" && file.canRetry) || file.canStartProcessing)
+          .map((file) => (
+            <section className="workspace-message-failed" key={file.id} aria-label="자료 처리 요청">
+              {/* Keep the control and its position through a focus check, but
+                  hide its private label from pixels and accessibility together. */}
+              <p
+                style={{ visibility: ready ? undefined : "hidden" }}
+                aria-hidden={!ready}
+                inert={!ready}
+              >
+                {file.name}
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={
+                  !!busy ||
+                  !canMutate ||
+                  view.case.stage !== "active" ||
+                  acceptedFileRetries.includes(file.id)
+                }
+                onClick={() => void retryFile(file.id)}
+              >
+                {file.canStartProcessing ? "자료 처리 시작" : "처리 다시 시도"}
+              </Button>
+            </section>
+          ))}
       {view && (
         <div
           style={{ visibility: ready ? undefined : "hidden" }}
@@ -672,7 +750,9 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
               <p>
                 {view.case.stage === "archived"
                   ? "보관된 사건이에요. 저장된 내용을 확인할 수 있어요."
-                  : "대화를 시작하려면 최신 요약을 확인해 주세요."}
+                  : view.messages.length
+                    ? "요약이 변경되어 다시 확인이 필요해요. 확인한 뒤 대화를 이어갈 수 있어요."
+                    : "대화를 시작하려면 최신 요약을 확인해 주세요."}
               </p>
               {view.case.stage !== "archived" && (
                 <ButtonLink href={`${base}/summary`}>요약 확인하기</ButtonLink>
@@ -991,7 +1071,19 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                         <p className="workspace-coverage">
                           {file.coverage || "추출 범위는 처리가 끝난 뒤 확인할 수 있어요."}
                         </p>
-                        {file.createdAt &&
+                        {file.processing && ["processing", "waiting"].includes(file.status) && (
+                          <div className="workspace-muted">
+                            <p>{fileProcessingLabel(file.processing)}</p>
+                            <p>
+                              <ElapsedTime
+                                startedAt={file.processing.updatedAt}
+                                label="마지막 상태 갱신 후"
+                              />
+                            </p>
+                          </div>
+                        )}
+                        {!file.processing &&
+                          file.createdAt &&
                           ["uploading", "processing", "waiting"].includes(file.status) && (
                             <p className="workspace-muted">
                               <ElapsedTime startedAt={file.createdAt} label="자료 등록 후" />
@@ -1017,22 +1109,6 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                           >
                             자료 확인
                           </Button>
-                          {((file.status === "failed" && file.canRetry) ||
-                            file.canStartProcessing) && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              disabled={!!busy || readonly}
-                              onClick={() =>
-                                void run(file.id, async () => {
-                                  await api.files.retry(caseId, file.id);
-                                  await load();
-                                })
-                              }
-                            >
-                              {file.canStartProcessing ? "자료 처리 시작" : "처리 다시 시도"}
-                            </Button>
-                          )}
                           <Button
                             variant="ghost"
                             size="sm"

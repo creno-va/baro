@@ -6,6 +6,7 @@ import { createFilesApi } from "../src/server/api/v2/files";
 import { createCaseDataCipher } from "../src/server/crypto";
 import { createV2AccountingRepository } from "../src/server/db/v2-accounting";
 import { createV2Core } from "../src/server/db/v2-core";
+import { createV2JobsRepository } from "../src/server/db/v2-jobs";
 import {
   createFileProcessingDispatcher,
   type FileProcessingBinding,
@@ -32,7 +33,12 @@ function deferred() {
 // Actual signed API access, migrations, AES, storage and processing admission.
 // Only external R2/probe/Workflow transports use synthetic local adapters.
 async function fixture(
-  options: { failAck?: boolean; taskThrows?: boolean; concurrentCron?: boolean } = {},
+  options: {
+    failAck?: boolean;
+    taskThrows?: boolean;
+    concurrentCron?: boolean;
+    uploadedOnly?: boolean;
+  } = {},
 ) {
   const db = await createTestDatabase();
   databases.push(db);
@@ -130,6 +136,7 @@ async function fixture(
       "INSERT INTO v2_physical_storage_capacity(environment,capacity_bytes) VALUES('preview',1000000)",
     )
     .run();
+  let processingEnabled = !options.uploadedOnly;
   const app = new Hono<ApiEnvironment>().route(
     "/v2/cases",
     createFilesApi({
@@ -157,6 +164,7 @@ async function fixture(
                   })
               : undefined,
           ),
+          ...(!processingEnabled ? { enqueueProcessing: async () => false } : {}),
           probe: async (input) => {
             const bytes = await new Response(input.open()).arrayBuffer();
             expect(bytes.byteLength).toBe(input.byteLength);
@@ -264,6 +272,12 @@ async function fixture(
   });
   return {
     db,
+    core,
+    app,
+    env,
+    headers,
+    execution,
+    clock,
     actor,
     workspaceId,
     fileId: reserved.fileId,
@@ -276,6 +290,9 @@ async function fixture(
     outbox,
     dispatcher,
     created: () => created,
+    enableProcessing: () => {
+      processingEnabled = true;
+    },
     beforeGet: (hook: () => void) => {
       beforeGet = hook;
     },
@@ -435,4 +452,279 @@ test("ambiguous wake preserves the lease and recovers the same instance without 
       .query("SELECT attempt_id,state FROM v2_execution_admissions WHERE kind='job'")
       .all(),
   ).toEqual(journal);
+});
+
+async function retryFixture() {
+  const f = await fixture();
+  f.releaseAck.resolve();
+  expect((await f.complete(false)).status).toBe(200);
+  const initial = f.outbox();
+  const attempt = f.db.sqlite
+    .query("SELECT attempt_id FROM v2_execution_admissions WHERE job_id=?")
+    .get(initial.job_id) as { attempt_id: string };
+  const jobs = createV2JobsRepository(f.core);
+  const acquired = await jobs.acquire(
+    f.actor,
+    initial.job_id,
+    crypto.randomUUID(),
+    new Date(Date.parse(f.actor.now) + 60000).toISOString(),
+    attempt.attempt_id,
+  );
+  expect(acquired).not.toBeNull();
+  if (!acquired) throw new Error("SYNTHETIC_LEASE_MISSING");
+  expect(await jobs.fail(f.actor, acquired.lease, "FILE_PROCESSING_FAILED", true)).toBe(true);
+  const runtime = `${initial.job_id}-2`;
+  const retryOutbox = () =>
+    f.db.sqlite
+      .query(
+        "SELECT state,attempts,target_id,job_id,next_attempt_at FROM v2_outbox WHERE kind='job_dispatch' AND target_id=?",
+      )
+      .get(runtime) as ReturnType<typeof f.outbox>;
+  const retry = (withContext = true, authenticated = true) =>
+    f.app.request(
+      `/v2/cases/${f.workspaceId}/files/${f.fileId}/retry`,
+      {
+        method: "POST",
+        headers: {
+          ...(authenticated ? f.headers : { origin: f.env.BETTER_AUTH_URL }),
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          expectedRevision: (
+            f.db.sqlite
+              .query("SELECT revision FROM v2_workspaces WHERE id=?")
+              .get(f.workspaceId) as { revision: number }
+          ).revision,
+          fileRevision: 2,
+        }),
+      },
+      f.env,
+      withContext ? f.execution : undefined,
+    );
+  return { ...f, initial, runtime, retryOutbox, retry };
+}
+
+test("signed failed-file retry immediately wakes only its newly committed runtime", async () => {
+  const f = await retryFixture();
+  const response = await f.retry();
+  expect(response.status).toBe(202);
+  expect(await response.json()).toMatchObject({ id: f.fileId, status: "queued" });
+  await Promise.all(f.pending);
+  expect(f.pending).toHaveLength(1);
+  expect(f.created()).toBe(1);
+  expect(f.retryOutbox()).toMatchObject({
+    state: "dispatched",
+    attempts: 1,
+    target_id: f.runtime,
+    job_id: f.initial.job_id,
+  });
+  expect(f.outbox()).toEqual(f.initial);
+  expect((await f.retry()).status).toBe(202);
+  expect(f.pending).toHaveLength(1);
+  expect((await f.dispatcher.dispatch()).dispatched).toBe(0);
+});
+
+function gateRetryReadback(
+  f: Awaited<ReturnType<typeof retryFixture>>,
+  mode: "success" | "failure" | "missing",
+) {
+  const entered = deferred(),
+    release = deferred();
+  const prepare = f.db.binding.prepare.bind(f.db.binding);
+  let seen = false;
+  f.db.binding.prepare = (sql) => {
+    const wrap = (statement: D1PreparedStatement): D1PreparedStatement =>
+      new Proxy(statement, {
+        get(target, property) {
+          if (property === "bind") return (...values: unknown[]) => wrap(target.bind(...values));
+          if (property === "first")
+            return async (column?: string) => {
+              const next = f.db.sqlite
+                .query("SELECT runtime_instance_id FROM v2_jobs WHERE id=?")
+                .get(f.initial.job_id) as { runtime_instance_id: string };
+              if (
+                !seen &&
+                sql.startsWith("SELECT f.* FROM v2_files f JOIN") &&
+                next.runtime_instance_id === f.runtime
+              ) {
+                seen = true;
+                entered.resolve();
+                await release.promise;
+                if (mode === "failure") throw new Error("SYNTHETIC_READBACK_FAILURE");
+                if (mode === "missing")
+                  f.db.sqlite
+                    .query("INSERT INTO v2_tombstones VALUES('file',?,?)")
+                    .run(f.fileId, f.actor.now);
+              }
+              return column === undefined ? target.first() : target.first(column);
+            };
+          const value = Reflect.get(target, property);
+          return typeof value === "function" ? value.bind(target) : value;
+        },
+      });
+    return sql.startsWith("SELECT f.* FROM v2_files f JOIN") ? wrap(prepare(sql)) : prepare(sql);
+  };
+  return { entered, release };
+}
+
+for (const mode of ["success", "failure", "missing"] as const) {
+  test(`retry ${mode} metadata readback never wakes before a successful response`, async () => {
+    const f = await retryFixture();
+    const gate = gateRetryReadback(f, mode);
+    const request = f.retry();
+    await gate.entered.promise;
+    const before = f.retryOutbox();
+    expect(before).toMatchObject({ state: "pending", attempts: 0 });
+    expect(f.pending).toHaveLength(0);
+    expect(f.created()).toBe(0);
+    gate.release.resolve();
+    const response = await request;
+    expect(response.status).toBe(mode === "failure" ? 500 : 202);
+    await Promise.all(f.pending);
+    if (mode === "success") {
+      expect(f.pending).toHaveLength(1);
+      expect(f.created()).toBe(1);
+    } else {
+      if (mode === "missing") expect(await response.json()).toBeNull();
+      expect(f.pending).toHaveLength(0);
+      expect(f.created()).toBe(0);
+      expect(f.retryOutbox()).toEqual(before);
+      if (mode === "failure") expect((await f.dispatcher.dispatch()).dispatched).toBe(1);
+    }
+  });
+}
+
+test("retry without execution context preserves accepted outbox for cron", async () => {
+  const f = await retryFixture();
+  expect((await f.retry(false)).status).toBe(202);
+  expect(f.pending).toHaveLength(0);
+  expect(f.created()).toBe(0);
+  expect(f.retryOutbox()).toMatchObject({ state: "pending", attempts: 0 });
+  expect((await f.dispatcher.dispatch()).dispatched).toBe(1);
+  expect(f.created()).toBe(1);
+});
+
+test("retry cold dispatch failure cannot turn accepted metadata into an error", async () => {
+  const f = await retryFixture();
+  const prepare = f.db.binding.prepare.bind(f.db.binding);
+  let failures = 0;
+  f.db.binding.prepare = (sql) => {
+    if (sql.includes("FROM v2_outbox outbox JOIN v2_jobs j") && failures++ === 0)
+      throw new Error("SYNTHETIC_DISPATCH_FAILURE");
+    return prepare(sql);
+  };
+  expect((await f.retry()).status).toBe(202);
+  await Promise.all(f.pending);
+  expect(f.pending).toHaveLength(1);
+  expect(failures).toBe(1);
+  expect(f.created()).toBe(0);
+  expect(f.retryOutbox()).toMatchObject({ state: "pending", attempts: 0 });
+  expect((await f.dispatcher.dispatch()).dispatched).toBe(1);
+});
+
+test("retry ambiguity and cron recover the exact new instance without another creation", async () => {
+  const f = await retryFixture();
+  f.ambiguous(true);
+  expect((await f.retry()).status).toBe(202);
+  await Promise.all(f.pending);
+  expect(f.created()).toBe(1);
+  const journal = f.db.sqlite
+    .query(
+      "SELECT attempt_id,state FROM v2_execution_admissions WHERE kind='job' ORDER BY attempt_id",
+    )
+    .all();
+  expect(f.retryOutbox()).toMatchObject({ state: "pending", attempts: 1, target_id: f.runtime });
+  expect((await f.dispatcher.dispatch()).dispatched).toBe(0);
+  expect((await f.retry()).status).toBe(202);
+  expect(f.pending).toHaveLength(1);
+  f.advance();
+  f.ambiguous(false);
+  expect((await f.dispatcher.dispatch()).dispatched).toBe(1);
+  expect(f.created()).toBe(1);
+  expect(
+    f.db.sqlite
+      .query(
+        "SELECT attempt_id,state FROM v2_execution_admissions WHERE kind='job' ORDER BY attempt_id",
+      )
+      .all(),
+  ).toEqual(journal);
+});
+
+test("retry and scheduled dispatch racing after readback keep one exact runtime", async () => {
+  const f = await retryFixture();
+  const gate = gateRetryReadback(f, "success");
+  const request = f.retry();
+  await gate.entered.promise;
+  const scheduled = f.dispatcher.dispatch();
+  gate.release.resolve();
+  expect((await request).status).toBe(202);
+  await Promise.all([...f.pending, scheduled]);
+  expect(f.created()).toBe(1);
+  expect(f.retryOutbox()).toMatchObject({ state: "dispatched", target_id: f.runtime, attempts: 1 });
+});
+
+for (const revoked of ["policy", "file_consent", "workspace", "file", "pointer"] as const) {
+  test(`retry wake rechecks current ${revoked} before Workflow creation`, async () => {
+    const f = await retryFixture();
+    f.beforeGet(() => {
+      if (revoked === "policy")
+        f.db.sqlite.query("DELETE FROM user_consents WHERE user_id=?").run(f.actor.ownerId);
+      else if (revoked === "file_consent")
+        f.db.sqlite.query("DELETE FROM v2_consents WHERE file_id=?").run(f.fileId);
+      else if (revoked === "pointer")
+        f.db.sqlite.query("UPDATE v2_files SET current_job_id=NULL WHERE id=?").run(f.fileId);
+      else
+        f.db.sqlite
+          .query("INSERT OR IGNORE INTO v2_tombstones VALUES(?,?,?)")
+          .run(revoked, revoked === "file" ? f.fileId : f.workspaceId, f.actor.now);
+    });
+    expect((await f.retry()).status).toBe(202);
+    await Promise.all(f.pending);
+    expect(f.created()).toBe(0);
+    expect(f.retryOutbox()).toMatchObject({ state: "pending", target_id: f.runtime });
+  });
+}
+
+test("unsigned retry cannot reach new admission or wake", async () => {
+  const f = await retryFixture();
+  expect((await f.retry(true, false)).status).toBe(401);
+  expect(f.pending).toHaveLength(0);
+  expect(f.retryOutbox()).toBeNull();
+  expect(f.created()).toBe(0);
+});
+
+test("uploaded-file retry reuses initial admission wake after its metadata ACK", async () => {
+  const f = await fixture({ uploadedOnly: true });
+  expect((await f.complete()).status).toBe(200);
+  expect(f.outbox()).toBeNull();
+  expect(f.pending).toHaveLength(0);
+  f.enableProcessing();
+  const request = f.app.request(
+    `/v2/cases/${f.workspaceId}/files/${f.fileId}/retry`,
+    {
+      method: "POST",
+      headers: { ...f.headers, "content-type": "application/json" },
+      body: JSON.stringify({
+        expectedRevision: (
+          f.db.sqlite.query("SELECT revision FROM v2_workspaces WHERE id=?").get(f.workspaceId) as {
+            revision: number;
+          }
+        ).revision,
+        fileRevision: 2,
+      }),
+    },
+    f.env,
+    f.execution,
+  );
+  await f.ackEntered.promise;
+  expect(f.pending).toHaveLength(0);
+  expect(f.created()).toBe(0);
+  f.releaseAck.resolve();
+  const response = await request;
+  expect(response.status).toBe(202);
+  expect(await response.json()).toMatchObject({ status: "queued", id: f.fileId });
+  await Promise.all(f.pending);
+  expect(f.pending).toHaveLength(1);
+  expect(f.created()).toBe(1);
+  expect(f.outbox()).toMatchObject({ state: "dispatched", target_id: `${f.outbox().job_id}-1` });
 });
