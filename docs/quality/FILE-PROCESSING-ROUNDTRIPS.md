@@ -89,3 +89,36 @@ outside this patch. No caches, skipped checks, timeout changes or retries are ad
 
 These counts use offline adapters and do not establish remote elapsed-time improvement.
 The remaining 1146 calls and 555 current checks are still a material latency concern.
+
+## Preview location and latency observation
+
+The preview runtime now observes its existing initial admission lookup, before the first
+Workflow step. This is the same bounded `SELECT ... LIMIT 1`: preview uses `all()` once
+and selects the first row's `attempt_id`, while production retains `first("attempt_id")`.
+There are no added SQL statements, database writes, diagnostic endpoints or external
+requests. Owner/runtime/operation predicates and all later authorization checks remain.
+
+One `preview_file_runtime_d1` event is emitted per runtime entry (including a resumed
+entry). Its fixed phase is `runtime_admission`. Fields contain only outcome, the await's
+`wallMs`, D1 `sqlMs`, known D1 region, three-uppercase-letter D1 colo, primary status and
+reported attempt count. Missing, malformed or unavailable metadata is `null`; a missing
+clock is not reported as zero. Query text, parameters, result rows, identities and errors
+are never logged. Metadata/clock/logger failures cannot change the original result or
+exception. This is a first-call sample, not a full Workflow average. Wall time minus SQL
+time also includes runtime, routing and queue overhead and is not pure network latency.
+
+Cloudflare's [D1 metadata documentation](https://developers.cloudflare.com/d1/worker-api/return-object/)
+defines SQL duration as excluding network time. Its [query API](https://developers.cloudflare.com/api/resources/d1/subresources/database/methods/query/)
+and pinned runtime types also expose the database-serving colo. This observes the D1
+callee; it does not reveal the Workflow execution colo. `request.cf.colo` describes the
+[incoming request's data center](https://developers.cloudflare.com/workers/runtime-apis/request/#incomingrequestcfproperties),
+and Workflow events do not provide that request property.
+
+[Worker placement](https://developers.cloudflare.com/workers/configuration/placement/)
+documents fetch-handler scope, so enabling it is not evidence that Workflow steps moved.
+The [2025-02-13 changelog](https://developers.cloudflare.com/workers/platform/changelog/#2025-02-13)
+also removed automatic D1-binding colocation. Independently, the [Workflow create API](https://developers.cloudflare.com/api/resources/workflows/subresources/instances/methods/create/)
+and pinned `WorkflowInstanceCreateOptions` support a best-effort `locationHint` for new
+instances. No placement, location hint, replication, database creation or relocation is
+changed here. The recorded preview DB region is APAC, but that alone does not establish
+its exact colo or prove geographic round trips caused the observed latency.
