@@ -15,6 +15,11 @@ reconciliation failures are separate operational observations and must not turn
 a successful product operation into a failure. No default funding, fabricated
 zero cost, new payment method or auto-recharge change is authorized.
 
+Model receipt database failures emit a sanitized `model_cost_observation_failure`
+diagnostic while preserving the dispatched hold and valid model output. Receipt
+identity/CAS rejection, invalid output and actual provider failures still fail;
+the observer does not manufacture a receipt or repeat the model call.
+
 User quotas, physical byte/file capacity, authenticated ownership, signatures,
 revision/CAS, fencing, leases, tombstones, actual runtime credentials, provider
 errors and technical execution bounds remain enforced. The wire planner still

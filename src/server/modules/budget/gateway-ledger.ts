@@ -1,12 +1,13 @@
 import { z } from "zod";
 import { opaqueIdSchema, revisionSchema, timestampSchema } from "../../../contracts";
 import { v2HashSchema } from "../../../contracts/v2";
-import { actorSchema, type V2Core } from "../../db/v2-core";
+import { actorSchema, type V2Core, V2RepositoryError } from "../../db/v2-core";
 import { jobAlive } from "../../db/v2-jobs";
 import { createV2PaidRuntimeRepository, runtimeDigest } from "../../db/v2-paid-runtime";
 import type { PreparedPaidHold } from "../../db/v2-paid-statements";
 import { allocationUntilSql } from "../../db/v2-runtime-authority";
 import { type JobLease, leaseSchema } from "../../db/v2-workspace";
+import { reportCostObservationFailure } from "../../dependency-diagnostics";
 import type {
   GatewayAttemptHandle,
   GatewayAttemptLedger,
@@ -398,6 +399,22 @@ export function createGatewayBudgetService(options: {
           try {
             if (!(await runtime.recordUsage(receipt, now)))
               throw new BudgetError("BUDGET_UNAVAILABLE");
+          } catch (error) {
+            if (
+              options.core.applicationCostLimitsEnabled ||
+              !(error instanceof V2RepositoryError) ||
+              error.code !== "DB_OPERATION_FAILED"
+            )
+              throw error;
+            // Receipt persistence is observational. The committed dispatch and
+            // unresolved hold remain for reconciliation; do not rerun the model
+            // or manufacture a refund/receipt when the accounting write fails.
+            // Invalid receipts and failed identity/CAS checks still reject above.
+            try {
+              reportCostObservationFailure(state.admission.execution.descriptor.phase, error);
+            } catch {
+              // Diagnostic transport cannot turn a valid model response into a failure.
+            }
           } finally {
             usages.delete(digest);
           }

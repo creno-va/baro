@@ -417,7 +417,7 @@ test("timeout retains liability and later records usage on the same attempt with
   expect(h.requests).toHaveLength(1);
 });
 
-test("durable receipt failure suppresses output and correction, and sanitizes persistence errors", async () => {
+test("unclassified ledger failure suppresses output and correction without exposing private errors", async () => {
   for (const raw of [completion(), { ...completion(), choices: [] }]) {
     const h = harness(async () => raw, {
       afterTransport: async () => {

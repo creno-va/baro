@@ -185,7 +185,8 @@ export function createLlmGateway(
           try {
             await ledger.afterTransport(handle, receipt);
           } catch {
-            // Persistence failures must neither publish output nor retry a paid call.
+            // Unhandled ledger/integrity failures must not publish or retry.
+            // The concrete ledger isolates observation-only accounting outages.
             throw new ModelError("MODEL_UNAVAILABLE");
           }
         };

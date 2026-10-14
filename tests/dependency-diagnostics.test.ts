@@ -4,6 +4,7 @@ import { safe } from "../src/server/db/v2-core";
 import {
   dependencyCategory,
   dependencyStep,
+  reportCostObservationFailure,
   reportDependencyFailure,
   reportLegalRetrieval,
   reportProviderFailure,
@@ -17,6 +18,31 @@ test("D1 depth, compound-select and function limits have a distinct safe categor
     "D1_ERROR: too many arguments on function json_object",
   ])
     expect(dependencyCategory(new Error(message))).toBe("database_limit");
+});
+
+test("cost observation diagnostics expose only a clamped phase and static error category", () => {
+  const output = spyOn(console, "error").mockImplementation(() => {});
+  try {
+    reportCostObservationFailure("workspace_chat", new Error("D1_ERROR: private SQL sentinel"));
+    reportCostObservationFailure("private phase sentinel", new Error("private receipt sentinel"));
+    expect(output.mock.calls.map(([value]) => JSON.parse(String(value)))).toEqual([
+      {
+        event: "model_cost_observation_failure",
+        phase: "workspace_chat",
+        category: "database_unavailable",
+      },
+      { event: "model_cost_observation_failure", phase: "unclassified", category: "unknown" },
+    ]);
+    expect(JSON.stringify(output.mock.calls)).not.toContain("sentinel");
+    expect(
+      productBoundaryFindings(
+        "src/server/dependency-diagnostics.ts",
+        "console.error(JSON.stringify({event:'model_cost_observation_failure',phase,category,receipt}))",
+      ),
+    ).toContain("unapproved_payload_log");
+  } finally {
+    output.mockRestore();
+  }
 });
 
 test("legal and draft diagnostics expose enum outcomes without private source payloads", () => {
