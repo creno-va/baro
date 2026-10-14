@@ -34,7 +34,9 @@ async function exerciseNativeRuntime(applicationCostLimitsEnabled: boolean) {
       .sort();
     for (const db of [preview, production]) {
       for (const name of migrations) {
-        if (db === preview && name === "0014_cost_observation_bounds.sql") continue;
+        // Preview starts on the real pre-upgrade schema. Production is the fresh
+        // latest-schema reference; never apply a later migration before an older one.
+        if (db === preview && name >= "0014_") continue;
         const statements = (await Bun.file(`drizzle/${name}`).text())
           .split("--> statement-breakpoint")
           .map((sql) => sql.trim())
@@ -77,10 +79,11 @@ async function exerciseNativeRuntime(applicationCostLimitsEnabled: boolean) {
         ),
     ]);
     const key = btoa("w".repeat(32)).replace(/=+$/, ""),
-      core = createV2Core(preview, await createCaseDataCipher({ CASE_DATA_KEY_V1: key }), {
-        applicationCostLimitsEnabled,
-        monthlyBudgetCapEnabled: false,
-      });
+      cipher = await createCaseDataCipher({ CASE_DATA_KEY_V1: key });
+    let core = createV2Core(preview, cipher, {
+      applicationCostLimitsEnabled: true,
+      monthlyBudgetCapEnabled: false,
+    });
     let providerCalls = 0,
       unavailable = false,
       auditRejected = false;
@@ -89,7 +92,7 @@ async function exerciseNativeRuntime(applicationCostLimitsEnabled: boolean) {
       APP_ENV: "preview",
       DB: preview,
       CASE_DATA_KEY_V1: key,
-      APPLICATION_COST_LIMITS_ENABLED: String(applicationCostLimitsEnabled),
+      APPLICATION_COST_LIMITS_ENABLED: "true",
       MONTHLY_BUDGET_CAP_ENABLED: "false",
       AI_GATEWAY_ID: "synthetic-gateway",
       AI_MODEL_TOKEN_BOUNDS_JSON: JSON.stringify(modelBounds(observed, provisioned.evidenceHash)),
@@ -218,7 +221,7 @@ async function exerciseNativeRuntime(applicationCostLimitsEnabled: boolean) {
         },
       },
     } as unknown as Env;
-    const service = createWorkspaceService(core, createWorkspaceDependencies(core, env));
+    let service = createWorkspaceService(core, createWorkspaceDependencies(core, env));
     const cookie = await signedSessionCookie(sessionToken, env.BETTER_AUTH_SECRET);
     const app = new Hono().route(
       "/api/v2/cases",
@@ -241,14 +244,6 @@ async function exerciseNativeRuntime(applicationCostLimitsEnabled: boolean) {
         },
         env,
       );
-    if (!applicationCostLimitsEnabled) {
-      // Preserve an existing unknown exposure and maintenance reservation; no credit increase.
-      await preview
-        .prepare(
-          "UPDATE v2_monthly_budget SET settled_krw=283,ambiguous_krw=21895,fixed_maintenance_krw=31118,limit_krw=0",
-        )
-        .run();
-    }
     const workspace = await service.create(ownerId, crypto.randomUUID(), {
       narrative: "합성 계약 자료의 거래 날짜를 확인하고 상담을 준비하려고 합니다.",
       jurisdiction: "KR",
@@ -286,13 +281,9 @@ async function exerciseNativeRuntime(applicationCostLimitsEnabled: boolean) {
       await preview
         .prepare("SELECT reserved_krw+ambiguous_krw AS unresolved FROM v2_monthly_budget")
         .first<number>("unresolved"),
-    ).toBe(applicationCostLimitsEnabled ? 0 : 21895);
-    // Upgrade with real retained plans/receipts, then inject a late D1 failure to
-    // prove rows, triggers and the schema marker roll back as one import.
-    const migration = (await Bun.file("drizzle/0014_cost_observation_bounds.sql").text())
-      .split("--> statement-breakpoint")
-      .map((sql) => sql.trim())
-      .filter(Boolean);
+    ).toBe(0);
+    // Upgrade populated 0013 -> 0014 -> 0015 in order. A failure in either
+    // import must roll back data, tables, triggers and the schema marker.
     const preservedTables = [
       "v2_runtime_plans",
       "v2_paid_holds",
@@ -310,50 +301,64 @@ async function exerciseNativeRuntime(applicationCostLimitsEnabled: boolean) {
           async (table) => (await preview.prepare(`SELECT * FROM ${table}`).all()).results,
         ),
       );
-    const original = await snapshot();
-    expect(original[1]?.length).toBeGreaterThan(0);
-    const originalTriggers = (
-      await preview
-        .prepare("SELECT name,sql FROM sqlite_master WHERE type='trigger' ORDER BY name")
-        .all()
-    ).results;
-    await expect(
-      preview.batch([
-        ...migration.map((sql) => preview.prepare(sql)),
-        preview.prepare("SELECT json('synthetic-invalid-json')"),
-      ]),
-    ).rejects.toThrow();
-    expect(await snapshot()).toEqual(original);
-    expect(
+    const schema = async (db: D1Database) =>
       (
-        await preview
-          .prepare("SELECT name,sql FROM sqlite_master WHERE type='trigger' ORDER BY name")
+        await db
+          .prepare(
+            "SELECT type,name,sql FROM sqlite_master WHERE type IN ('table','index','trigger') ORDER BY type,name",
+          )
           .all()
-      ).results,
-    ).toEqual(originalTriggers);
-    // Remote imports must not depend on deferred-FK state surviving statement
-    // boundaries. Check every intermediate schema as well as the final rows.
-    const upgraded = await preview.batch(
-      migration.flatMap((sql) => [
-        preview.prepare(sql),
-        preview.prepare("PRAGMA foreign_key_check"),
-      ]),
-    );
-    for (let i = 1; i < upgraded.length; i += 2) expect(upgraded[i]?.results).toEqual([]);
-    expect((await snapshot()).slice(0, -1)).toEqual(original.slice(0, -1));
-    expect(
-      (
+      ).results;
+    for (const name of migrations.filter((name) => name >= "0014_")) {
+      const migration = (await Bun.file(`drizzle/${name}`).text())
+        .split("--> statement-breakpoint")
+        .map((sql) => sql.trim())
+        .filter(Boolean);
+      const original = await snapshot();
+      expect(original[1]?.length).toBeGreaterThan(0);
+      const originalSchema = await schema(preview);
+      await expect(
+        preview.batch([
+          ...migration.map((sql) => preview.prepare(sql)),
+          preview.prepare("SELECT json('synthetic-invalid-json')"),
+        ]),
+      ).rejects.toThrow();
+      expect(await snapshot()).toEqual(original);
+      expect(await schema(preview)).toEqual(originalSchema);
+      // Remote imports must not depend on deferred-FK state surviving statement
+      // boundaries. Check every intermediate schema as well as the final rows.
+      const upgraded = await preview.batch(
+        migration.flatMap((sql) => [
+          preview.prepare(sql),
+          preview.prepare("PRAGMA foreign_key_check"),
+        ]),
+      );
+      for (let i = 1; i < upgraded.length; i += 2) expect(upgraded[i]?.results).toEqual([]);
+      expect((await snapshot()).slice(0, -1)).toEqual(original.slice(0, -1));
+      expect(
         await preview
-          .prepare("SELECT name,sql FROM sqlite_master WHERE type='trigger' ORDER BY name")
-          .all()
-      ).results,
-    ).toEqual(originalTriggers);
-    expect(
+          .prepare("SELECT value FROM app_metadata WHERE key='schema_version'")
+          .first<string>("value"),
+      ).toBe(name.slice(0, -4));
+      expect((await preview.prepare("PRAGMA foreign_key_check").all()).results).toEqual([]);
+    }
+    expect(await schema(preview)).toEqual(await schema(production));
+    // The new no-cap runtime requires 0015's accounting tables. Exercise it only
+    // after the populated upgrade, retaining earlier paid plans and receipts.
+    env.APPLICATION_COST_LIMITS_ENABLED = String(applicationCostLimitsEnabled);
+    core = createV2Core(preview, cipher, {
+      applicationCostLimitsEnabled,
+      monthlyBudgetCapEnabled: false,
+    });
+    service = createWorkspaceService(core, createWorkspaceDependencies(core, env));
+    if (!applicationCostLimitsEnabled) {
+      // Preserve an existing unknown exposure and maintenance reservation; no credit increase.
       await preview
-        .prepare("SELECT value FROM app_metadata WHERE key='schema_version'")
-        .first<string>("value"),
-    ).toBe("0014_cost_observation_bounds");
-    expect((await preview.prepare("PRAGMA foreign_key_check").all()).results).toEqual([]);
+        .prepare(
+          "UPDATE v2_monthly_budget SET settled_krw=283,ambiguous_krw=21895,fixed_maintenance_krw=31118,limit_krw=0",
+        )
+        .run();
+    }
     // Match the UI: answers -> advance -> failed latest job -> retry route.
     const intake = await service.intake(ownerId, workspace.id);
     expect(

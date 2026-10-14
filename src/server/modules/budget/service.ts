@@ -19,6 +19,7 @@ export class BudgetError extends Error {
   }
 }
 export type VerifiedQuote = {
+  observationOnly?: boolean;
   quote: V2CostQuote;
   pricing: PricingProof;
   funding: FundingProof;
@@ -38,13 +39,21 @@ function assertFresh(
   if (
     pricing.environment !== environment ||
     funding.environment !== environment ||
-    !fresh(pricing.checkedAt, pricing.validUntil, now) ||
-    !fresh(pricing.fx.checkedAt, pricing.fx.validUntil, now) ||
+    Date.parse(pricing.checkedAt) > Date.parse(now) ||
+    Date.parse(pricing.fx.checkedAt) > Date.parse(now) ||
     Date.parse(pricing.fx.asOf) > Date.parse(now) ||
-    !fresh(funding.observedAt, funding.validUntil, now) ||
-    funding.state === "unavailable" ||
+    Date.parse(funding.observedAt) > Date.parse(now) ||
+    (applicationCostLimitsEnabled &&
+      (!fresh(pricing.checkedAt, pricing.validUntil, now) ||
+        !fresh(pricing.fx.checkedAt, pricing.fx.validUntil, now) ||
+        !fresh(funding.observedAt, funding.validUntil, now) ||
+        funding.state === "unavailable")) ||
     (applicationCostLimitsEnabled && funding.spendAllowanceKrw <= 0) ||
-    pricing.prices.some((price) => !fresh(price.checkedAt, price.validUntil, now))
+    pricing.prices.some(
+      (price) =>
+        Date.parse(price.checkedAt) > Date.parse(now) ||
+        (applicationCostLimitsEnabled && !fresh(price.checkedAt, price.validUntil, now)),
+    )
   )
     throw new BudgetError("BUDGET_UNAVAILABLE");
 }
@@ -73,12 +82,15 @@ export async function calculateQuote(input: {
     if (
       Date.parse(plan.deadlineAt) <= Date.parse(now) ||
       Date.parse(plan.deadlineAt) - Date.parse(now) > 3600000 ||
-      [pricing, pricing.fx, funding, ...pricing.prices].some(
-        (proof) => Date.parse(proof.validUntil) < Date.parse(plan.deadlineAt),
-      ) ||
-      plan.quantities.some(
-        (item) => pricing.prices.find((price) => price.sku === item.sku)?.billingMode !== "metered",
-      )
+      (input.applicationCostLimitsEnabled !== false &&
+        [pricing, pricing.fx, funding, ...pricing.prices].some(
+          (proof) => Date.parse(proof.validUntil) < Date.parse(plan.deadlineAt),
+        )) ||
+      (input.applicationCostLimitsEnabled !== false &&
+        plan.quantities.some(
+          (item) =>
+            pricing.prices.find((price) => price.sku === item.sku)?.billingMode !== "metered",
+        ))
     )
       throw new BudgetError("BUDGET_UNAVAILABLE");
     const estimatedKrw = estimatePlanKrw(pricing, plan.quantities);
@@ -89,15 +101,18 @@ export async function calculateQuote(input: {
         (maximumInvocationKrw > 1_000_000 || maximumInvocationKrw > funding.spendAllowanceKrw))
     )
       throw new BudgetError("BUDGET_UNAVAILABLE");
-    const expires = Math.min(
-      ...[
-        pricing.validUntil,
-        pricing.fx.validUntil,
-        funding.validUntil,
-        plan.deadlineAt,
-        ...pricing.prices.map((price) => price.validUntil),
-      ].map(Date.parse),
-    );
+    const expires =
+      input.applicationCostLimitsEnabled === false
+        ? Date.parse(plan.deadlineAt)
+        : Math.min(
+            ...[
+              pricing.validUntil,
+              pricing.fx.validUntil,
+              funding.validUntil,
+              plan.deadlineAt,
+              ...pricing.prices.map((price) => price.validUntil),
+            ].map(Date.parse),
+          );
     const proofHash = await runtimeDigest({ pricing, funding, plan });
     const quote = v2CostQuoteSchema.parse({
       id: crypto.randomUUID(),
@@ -110,7 +125,15 @@ export async function calculateQuote(input: {
       safetyMarginRatio: Number(pricing.safetyMarginRatio),
       estimatedKrw,
     });
-    return { quote, pricing, funding, plan, proofHash, maximumInvocationKrw };
+    return {
+      quote,
+      pricing,
+      funding,
+      plan,
+      proofHash,
+      maximumInvocationKrw,
+      observationOnly: input.applicationCostLimitsEnabled === false,
+    };
   } catch (error) {
     if (error instanceof BudgetError) throw error;
     throw new BudgetError("BUDGET_UNAVAILABLE");
@@ -146,6 +169,13 @@ export function assessReceipt(hold: VerifiedQuote, attemptId: string, input: unk
         hold.plan.quantities.some(
           (bound) => !receipt.quantities.some((item) => item.sku === bound.sku),
         ))
+    )
+      return { receipt, outcome: "ambiguous" as const, chargedKrw: null };
+    if (
+      hold.observationOnly &&
+      [hold.pricing, hold.pricing.fx, ...hold.pricing.prices].some(
+        (observation) => !fresh(observation.checkedAt, observation.validUntil, receipt.observedAt),
+      )
     )
       return { receipt, outcome: "ambiguous" as const, chargedKrw: null };
     const chargedKrw = receiptKrw(hold.pricing, receipt);

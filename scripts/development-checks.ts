@@ -31,7 +31,7 @@ function affectsAiRuntime(file: string): boolean {
     /^src\/(?:worker\.ts$|env\.d\.ts$|contracts\/|workflows\/|server\/(?:runtime\/|db\/|crypto\/|api\/(?:index\.ts$|v2\/(?:workspaces|files|reports)\.ts$)|modules\/(?:budget|llm-gateway|legal-retrieval|workspace|file-processing|asset-processing)\/))/.test(
       file,
     ) ||
-    /^(?:\.github\/(?:workflows|actions)\/|drizzle\/|services\/file-processor\/|scripts\/(?:development-checks|provision-ai-budget|remote-budget-d1|apply-d1-migrations|ai-preflight|smoke|check-deployment|check-runtime-secrets)\.ts$)/.test(
+    /^(?:\.github\/(?:workflows|actions)\/|drizzle\/|services\/file-processor\/|scripts\/(?:development-checks|provision-ai-budget|configure-ai-runtime|remote-budget-d1|apply-d1-migrations|ai-preflight|smoke|check-deployment|check-runtime-secrets)\.ts$)/.test(
       file,
     )
   );

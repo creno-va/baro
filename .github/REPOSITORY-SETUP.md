@@ -17,6 +17,14 @@
 `bun run deploy:status`와 `gh run watch <run-id> --repo creno-va/baro --exit-status`로 확인한다.
 [검증](../docs/quality/TEST-STRATEGY.md)과 [수동 배포](../docs/operations/DEPLOYMENT-OPERATIONS.md)의 준비/옵션을 따른다.
 
+프리베타는 [비용 관측 전용](../docs/operations/PREBETA-COST-POLICY.md)이다.
+`APPLICATION_COST_LIMITS_ENABLED=false`에서 금액·가격/FX/funding 누락/만료·월할당·수동
+refresh·유지비·비용 IO를 workflow/배포의 승인 조건으로 만들지 않는다. 사용자 재지시 전
+재도입하지 않으며 실제 binding/credential·schema·보안·정확한 SHA/운영자 승인은 유지한다.
+공용 배포 action의 모델 capability 설정은 비용 관측 갱신과 별개다. `configuration_ready`를
+실제 제품 성공으로 표시하지 않는다. 공개 저장소/표준runner 관측과 조직 budget 조회의
+권한 한계는 위 정책 문서에 보존한다.
+
 ## 저장소 설정
 
 GitHub Settings에서 다음을 설정한다.
@@ -24,10 +32,10 @@ GitHub Settings에서 다음을 설정한다.
 ### Environments
 
 - `preview`: 고정 preview Worker용 secret
-- `production`: production Worker용 secret과 required reviewer
+- `production`: production Worker용 secret과 보호 브랜치 규칙. 현재 필수 reviewer는 없으며 정확한 SHA의 지정 운영자 receipt로 배포 승인을 확인한다.
 
 각 Environment에 `CLOUDFLARE_API_TOKEN` secret을 추가한다. 토큰은 대상 Cloudflare
-계정의 BARO Worker와 필요한 D1/Workflow/KV 리소스에만 권한을 제한한다. R2는 현재 불필요하다. 로컬
+계정의 BARO Worker와 필요한 D1/Workflow/KV/R2/Containers 리소스에만 권한을 제한한다. 로컬
 `wrangler login` OAuth token을 복사하지 않는다.
 
 Cloudflare account ID는 공개 식별자이며 workflow에
@@ -43,9 +51,11 @@ Cloudflare account ID는 공개 식별자이며 workflow에
 - 관리자 우회는 긴급상황 외 금지
 
 첫 CI run으로 check 이름이 생성된 뒤 `Quality gate`를 required status check로 선택한다.
-2026-10-05 확인: 위 보호 설정 적용됨, required approving review count=0,
+이전2026-10-05 확인: 위 보호 설정 적용됨, required approving review count=0,
 CODEOWNERS review 강제 없음, 관리자 우회 방지 활성. production Environment reviewer는
-`hyunhomon`이다. 자동 merge가 켜져 있어도 사용자 작업 권한을 자동 부여하지 않는다.
+당시 `hyunhomon`이었다. 현행 reviewer/승인 방식은 위 환경 설명과
+[배포 운영](../docs/operations/DEPLOYMENT-OPERATIONS.md)을 따른다.
+자동 merge가 켜져 있어도 사용자 작업 권한을 자동 부여하지 않는다.
 
 ## 앱 scaffold 계약
 
@@ -74,9 +84,9 @@ Wrangler 설정이나 Git에 쓰지 않는다.
 
 ## R2
 
-현재 Accepted 설계는 사건 데이터를 D1에 저장하며 R2 binding이 필요하지 않다. 이후
-검증된 문서·대용량 artifact 저장 요구가 생기면 별도 ADR과 데이터 보존·삭제 정책을
-승인한 뒤 R2를 추가한다.
+v1의 R2 불필요 결정은 이전 범위다. 현행 v2는 환경별 private/public R2 binding을 사용하며
+실제 자원·권한·물리 용량·writer·삭제 경계는 [자료 처리 운영](../docs/operations/FILE-PROCESSING.md)을
+따른다. 비용 가격/재원 관측 만료와 물리 자원 미설정을 같은 blocker로 취급하지 않는다.
 
 ## 공급망 관리
 

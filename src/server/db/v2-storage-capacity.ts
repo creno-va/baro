@@ -69,6 +69,14 @@ function currentProjection(
   monthlyBudgetCapEnabled: boolean,
   applicationCostLimitsEnabled: boolean,
 ) {
+  if (!applicationCostLimitsEnabled) {
+    return {
+      sql: `EXISTS(SELECT 1 FROM v2_physical_storage_capacity capacity
+        JOIN v2_physical_storage_totals total ON total.environment=capacity.environment AND total.version=1 AND total.held_bytes=capacity.held_bytes
+        WHERE capacity.environment=? AND NOT EXISTS(SELECT 1 FROM v2_storage_integrity_faults WHERE environment=capacity.environment))`,
+      values: [environment],
+    };
+  }
   return {
     sql: `EXISTS(SELECT 1 FROM v2_storage_projections projection JOIN v2_physical_storage_capacity capacity ON capacity.environment=projection.environment
     JOIN v2_physical_storage_totals total ON total.environment=projection.environment AND total.version=1 AND total.held_bytes=capacity.held_bytes
@@ -420,6 +428,14 @@ export function createV2StorageCapacityRepository(
             throw new Error("CAPACITY_SCOPE_INVALID");
           parse(opaqueIdSchema, claimId);
           return [
+            ...(!core.applicationCostLimitsEnabled
+              ? [
+                  core.statement(
+                    `INSERT INTO v2_cost_execution_policy(environment,limits_enabled) SELECT ?,0 WHERE ${sqlClaim} ON CONFLICT(environment) DO UPDATE SET limits_enabled=0`,
+                    [environment, claimId],
+                  ),
+                ]
+              : []),
             core.statement(
               `INSERT INTO v2_physical_blob_bindings(blob_id,environment,owner_id,object_key,maximum_cipher_bytes,state,created_at) SELECT ?,?,?,?,?,'held',? WHERE ${sqlClaim} ON CONFLICT(blob_id) DO NOTHING`,
               [
@@ -562,6 +578,7 @@ export function createV2StorageCapacityRepository(
       return safe(async () => {
         const io = parse(maintenanceIOSchema, input);
         now = parse(iso, now);
+        await core.ensureObservationMonth(environment, now);
         const current = currentProjection(
           environment,
           now,
@@ -582,19 +599,36 @@ export function createV2StorageCapacityRepository(
               : io.action === "head"
                 ? "head_limit"
                 : "delete_limit";
-        const result = await core
-          .statement(
-            `UPDATE v2_storage_projections SET ${column}=${column}+1 WHERE environment=? AND month=? AND ${column}<${limit} AND ${current.sql} AND EXISTS(SELECT 1 FROM v2_physical_blob_bindings binding JOIN v2_blobs b ON b.id=binding.blob_id WHERE binding.blob_id=? AND binding.environment=? AND binding.state='held' AND binding.object_key=? AND b.object_key=binding.object_key AND b.cipher_bytes<=binding.maximum_cipher_bytes AND b.state ${io.action === "delete" ? "='deleting'" : io.action === "get" ? "='stored'" : "IN ('stored','deleting')"}) RETURNING id`,
-            [
-              environment,
-              usageDateKst(now).slice(0, 7),
-              ...current.values,
-              io.blobId,
-              environment,
-              row.object_key,
-            ],
-          )
-          .first<{ id: string }>();
+        const result = !core.applicationCostLimitsEnabled
+          ? await core
+              .statement(
+                `INSERT INTO v2_storage_io_counters(environment,month,${column})
+             SELECT ?,?,1 WHERE ${current.sql} AND EXISTS(SELECT 1 FROM v2_physical_blob_bindings binding JOIN v2_blobs b ON b.id=binding.blob_id
+             WHERE binding.blob_id=? AND binding.environment=? AND binding.state='held' AND binding.object_key=? AND b.object_key=binding.object_key AND b.cipher_bytes<=binding.maximum_cipher_bytes AND b.state ${io.action === "delete" ? "='deleting'" : io.action === "get" ? "='stored'" : "IN ('stored','deleting')"})
+             ON CONFLICT(environment,month) DO UPDATE SET ${column}=${column}+1 RETURNING month AS id`,
+                [
+                  environment,
+                  usageDateKst(now).slice(0, 7),
+                  ...current.values,
+                  io.blobId,
+                  environment,
+                  row.object_key,
+                ],
+              )
+              .first<{ id: string }>()
+          : await core
+              .statement(
+                `UPDATE v2_storage_projections SET ${column}=${column}+1 WHERE environment=? AND month=? AND ${column}<${limit} AND ${current.sql} AND EXISTS(SELECT 1 FROM v2_physical_blob_bindings binding JOIN v2_blobs b ON b.id=binding.blob_id WHERE binding.blob_id=? AND binding.environment=? AND binding.state='held' AND binding.object_key=? AND b.object_key=binding.object_key AND b.cipher_bytes<=binding.maximum_cipher_bytes AND b.state ${io.action === "delete" ? "='deleting'" : io.action === "get" ? "='stored'" : "IN ('stored','deleting')"}) RETURNING id`,
+                [
+                  environment,
+                  usageDateKst(now).slice(0, 7),
+                  ...current.values,
+                  io.blobId,
+                  environment,
+                  row.object_key,
+                ],
+              )
+              .first<{ id: string }>();
         if (!result) return null;
         const permit = Object.freeze({
           ...io,
@@ -619,14 +653,14 @@ export function createV2StorageCapacityRepository(
       return Boolean(
         await core
           .statement(
-            `SELECT b.id FROM v2_blobs b JOIN v2_physical_blob_bindings binding ON binding.blob_id=b.id WHERE b.id=? AND b.object_key=? AND binding.object_key=b.object_key AND binding.environment=? AND binding.state='held' AND b.cipher_bytes<=binding.maximum_cipher_bytes AND b.state ${permit.action === "delete" ? "='deleting'" : permit.action === "get" ? "='stored'" : "IN ('stored','deleting')"} AND EXISTS(SELECT 1 FROM v2_storage_projections WHERE id=? AND environment=? AND month=?) AND ${current.sql}`,
+            `SELECT b.id FROM v2_blobs b JOIN v2_physical_blob_bindings binding ON binding.blob_id=b.id WHERE b.id=? AND b.object_key=? AND binding.object_key=b.object_key AND binding.environment=? AND binding.state='held' AND b.cipher_bytes<=binding.maximum_cipher_bytes AND b.state ${permit.action === "delete" ? "='deleting'" : permit.action === "get" ? "='stored'" : "IN ('stored','deleting')"} AND ${core.applicationCostLimitsEnabled ? "EXISTS(SELECT 1 FROM v2_storage_projections WHERE id=? AND environment=? AND month=?)" : "EXISTS(SELECT 1 FROM v2_storage_io_counters WHERE month=? AND environment=?)"} AND ${current.sql}`,
             [
               permit.blobId,
               permit.objectKey,
               environment,
               permit.projectionId,
               environment,
-              usageDateKst(now).slice(0, 7),
+              ...(core.applicationCostLimitsEnabled ? [usageDateKst(now).slice(0, 7)] : []),
               ...current.values,
             ],
           )

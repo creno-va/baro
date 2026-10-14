@@ -9,9 +9,11 @@ PDF 리포트와 선택한 원본을 직접 전달해 변호사의 초기 사건
 고객/변호사 두 역할의 v2 기능은 main에 통합됐으며 기존 v1 데이터·읽기·삭제를 보존합니다.
 현재 공개 서비스를 유지하면서 신규 기능 확장을 멈추고 비용 재개·저장·릴리스 증거·검색을
 정비합니다. 질문은 최대 2차례×3문항, AI는 계정별 KST 하루200회이며 앱의 월 예산·재원·요청
-금액 차단은 해제합니다. 비용은 관측·정산하며 기존 결제 경로와 $10/$30 자동충전,
-미정산 기록을 보존합니다. `APPLICATION_COST_LIMITS_ENABLED=false`가 금액 차단을 끕니다.
-새 직접 사용자 지시 없이 비용 금액 제한을 다시 적용하지 않습니다. 문서의 과거 예산 수치보다
+금액뿐 아니라 가격/FX/funding 관측 누락·만료·월별 할당·수동 refresh·유지비·비용 IO 예약으로
+기능이나 배포를 막지 않습니다. `APPLICATION_COST_LIMITS_ENABLED=false`는 비용 관측 전용입니다.
+기존 결제·$10/$30 자동충전과 실제 비용·미정산 기록, 기술용량·사용자 quota·권한은 보존합니다.
+[정책과 구현 진행 상태](./docs/operations/PREBETA-COST-POLICY.md)를 확인하며 새 직접 사용자 지시 전
+비용 차단을 재도입하지 않습니다. 문서의 과거 예산 수치보다
 [현행 비용 정책](./docs/adr/0015-maintenance-and-operating-policy.md)이 우선합니다.
 [ADR-0015](./docs/adr/0015-maintenance-and-operating-policy.md)가 현재 운영 결정입니다.
 정비 종료와 전체 MVP 실제 인수는 별개이며 [인수표](./docs/development/MVP-REQUIREMENTS-EVIDENCE.md)와 #71로 추적합니다.
@@ -45,7 +47,7 @@ PDF 리포트와 선택한 원본을 직접 전달해 변호사의 초기 사건
 기존 심사 backend는 보존하며 이번 MVP UI에 노출하지 않습니다. role 선택을 자격 확인으로 표시하지 않습니다.
 
 문서·이미지·음성·영상의 실제 처리와 coverage, private 원본/파생물/리포트의 삭제,
-사용량·실제 비용 원장과 승인된 환경별 비용 설정을 검증합니다. 세부 한도와 완료 기준은 [PRD](./docs/PRD.md),
+사용량·실제 비용 원장을 보존하고 비용 관측은 제품 실행·배포와 분리합니다. 세부 한도와 완료 기준은 [PRD](./docs/PRD.md),
 [MVP](./docs/product/MVP-SPEC.md), [실제 UI 시연 행렬](./docs/product/UI-DEMONSTRATION.md)이 정본입니다.
 
 기존 v1 사건·schemaVersion 1·분석 결과·읽기·삭제는 보존하고 사용자 승인 없이 재분석하지 않습니다.

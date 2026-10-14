@@ -31,8 +31,9 @@ v2 구현을 시작할 때는 [실행 계획](./development/V2-EXECUTION.md)과
 [v2 HTTP API](./architecture/V2-HTTP-API.md), [UI 증거 계약](./quality/V2-UI-EVIDENCE.md)을 함께 읽는다.
 자료·미디어는 [파일 처리 운영](./operations/FILE-PROCESSING.md),
 사용량과 비용 관측·정산은 [비용 운영](./operations/COST-CONTROLS.md)을 따른다.
-월 예산·누적 재원·요청 금액 차단은 모두 해제한 상태가 현행 기준이다. 과거 문서의
-금액 상한을 다시 적용하지 않으며 [ADR-0015](./adr/0015-maintenance-and-operating-policy.md)를 우선한다.
+현행은 [프리베타 비용 관측 전용](./operations/PREBETA-COST-POLICY.md)이다. 금액·가격/FX/funding
+누락/만료·월할당·refresh·유지비·비용 IO로 기능/배포를 막지 않으며 사용자 재지시 전 재도입하지
+않는다. 정책과 실제 구현/배포 잔여를 구분하고 [ADR-0015](./adr/0015-maintenance-and-operating-policy.md)를 우선한다.
 
 ## 책임과 우선순위
 

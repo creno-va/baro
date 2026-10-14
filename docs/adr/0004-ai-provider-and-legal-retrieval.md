@@ -6,7 +6,7 @@
 - Last verified: 2026-10-05
 - Amended: 2026-10-05 — AI Gateway Unified Billing 채택
 - Partial supersession (2026-10-06): ASR/multimodal은 [ADR-0010](./0010-multimodal-ai-and-transcription.md), 공식 출처는 [ADR-0011](./0011-verified-official-source-expansion.md)로 확장한다. 기존 pinned model·medium·Gateway·자동 fallback 금지는 유지한다.
-- Partial supersession (2026-10-14): [ADR-0015](./0015-maintenance-and-operating-policy.md)가 아래 금액 차단 결정을 대체한다. 월·누적 재원·요청 금액 차단은 해제하며, 과거 Gateway/사용자/모델 spend limit 설정 지시를 복원하지 않는다. 기존 공급자·모델·결제 설정과 실제 비용 관측은 유지한다.
+- Partial supersession (2026-10-14): [ADR-0015](./0015-maintenance-and-operating-policy.md)와 [현행 정책](../operations/PREBETA-COST-POLICY.md)이 아래 비용 차단 결정을 대체한다. 금액·가격/FX/funding 누락/만료·월할당·refresh·비용 IO는 실행/배포 승인 조건이 아니다. 사용자 재지시 전 과거 Gateway/사용자/모델 spend limit을 재도입하지 않는다. 기존 공급자·모델·결제 설정과 실제 비용 관측, 기술 한도·권한·실제 provider 오류는 유지한다.
 
 ## 맥락
 

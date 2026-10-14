@@ -95,29 +95,39 @@ export function createGatewayBudgetService(options: {
     const values = await Promise.all([
       runtime.findProof(binding.pricingProofId, now),
       runtime.findProof(binding.fundingProofId, now),
-      runtime.findProof(binding.allocationProofId, now),
+      options.core.applicationCostLimitsEnabled
+        ? runtime.findProof(binding.allocationProofId, now)
+        : null,
     ]);
     const [p, f, a] = values;
-    if (!p || !f || !a || p.kind !== "pricing" || f.kind !== "funding" || a.kind !== "allocation")
+    if (
+      !p ||
+      !f ||
+      p.kind !== "pricing" ||
+      f.kind !== "funding" ||
+      (options.core.applicationCostLimitsEnabled && a?.kind !== "allocation")
+    )
       return null;
     const pricing = pricingProofSchema.parse(p.payload),
       funding = fundingProofSchema.parse(f.payload);
     if (
       pricing.environment !== options.environment ||
       funding.environment !== options.environment ||
-      funding.state === "unavailable" ||
+      (options.core.applicationCostLimitsEnabled && funding.state === "unavailable") ||
       (options.core.applicationCostLimitsEnabled && funding.spendAllowanceKrw < 1)
     )
       return null;
-    const cutoff = Math.min(
-      ...[
-        p.validUntil,
-        f.validUntil,
-        a.validUntil,
-        pricing.fx.validUntil,
-        ...pricing.prices.map((v) => v.validUntil),
-      ].map(Date.parse),
-    );
+    const cutoff = !options.core.applicationCostLimitsEnabled
+      ? Number.POSITIVE_INFINITY
+      : Math.min(
+          ...[
+            p.validUntil,
+            f.validUntil,
+            ...(a ? [a.validUntil] : []),
+            pricing.fx.validUntil,
+            ...pricing.prices.map((v) => v.validUntil),
+          ].map(Date.parse),
+        );
     return { pricing, funding, cutoff };
   }
   async function prepare(
@@ -142,7 +152,8 @@ export function createGatewayBudgetService(options: {
     if (
       !proof ||
       proof.cutoff < Date.parse(binding.deadlineAt) ||
-      Date.parse(execution.descriptor.validUntil) < Date.parse(binding.deadlineAt)
+      (options.core.applicationCostLimitsEnabled &&
+        Date.parse(execution.descriptor.validUntil) < Date.parse(binding.deadlineAt))
     )
       return null;
     const r = paidHoldRequestSchema.parse({
@@ -187,7 +198,9 @@ export function createGatewayBudgetService(options: {
         Math.min(
           proof.cutoff,
           Date.parse(binding.deadlineAt),
-          Date.parse(execution.descriptor.validUntil),
+          options.core.applicationCostLimitsEnabled
+            ? Date.parse(execution.descriptor.validUntil)
+            : Number.POSITIVE_INFINITY,
         )
     )
       return null;
@@ -298,7 +311,9 @@ export function createGatewayBudgetService(options: {
             p.cutoff,
             Date.parse(state.expiresAt),
             Date.parse(binding.deadlineAt),
-            Date.parse(state.admission.execution.descriptor.validUntil),
+            options.core.applicationCostLimitsEnabled
+              ? Date.parse(state.admission.execution.descriptor.validUntil)
+              : Number.POSITIVE_INFINITY,
           );
           if (Date.parse(clock()) >= cutoff) return false;
           const dispatched = await runtime.beforeDispatch(actor(), state.lease, handle.attemptId);
@@ -306,7 +321,7 @@ export function createGatewayBudgetService(options: {
           state.token = dispatched.dispatchToken;
           const current = await options.core
             .statement(
-              `SELECT j.lease_until,p.deadline_at,pp.valid_until AS pricing_until,fp.valid_until AS funding_until,${allocationUntilSql("c", "ap")} AS allocation_until FROM v2_jobs j JOIN v2_operations o ON o.id=j.operation_id JOIN v2_paid_holds h ON h.job_id=j.id JOIN v2_runtime_plans p ON p.id=h.plan_id JOIN v2_cost_attempts ca ON ca.id=h.attempt_id JOIN v2_runtime_controls c ON c.month=ca.month JOIN v2_runtime_proofs pp ON pp.id=p.pricing_proof_id JOIN v2_runtime_proofs fp ON fp.id=p.funding_proof_id JOIN v2_runtime_proofs ap ON ap.id=c.allocation_proof_id JOIN v2_storage_funding_heads head ON head.environment=c.environment AND head.proof_id=fp.id AND head.verified_at=fp.verified_at WHERE h.attempt_id=? AND h.dispatch_token=? AND j.lease_token=? AND j.fencing=? AND j.status IN ('running','validating') AND o.owner_id=? AND o.state='admitted' AND p.operation_revision=o.revision AND c.phase='active' AND c.environment=? AND ${jobAlive}`,
+              `SELECT j.lease_until,p.deadline_at,pp.valid_until AS pricing_until,fp.valid_until AS funding_until,${allocationUntilSql("c", "ap")} AS allocation_until FROM v2_jobs j JOIN v2_operations o ON o.id=j.operation_id JOIN v2_paid_holds h ON h.job_id=j.id JOIN v2_runtime_plans p ON p.id=h.plan_id JOIN v2_cost_attempts ca ON ca.id=h.attempt_id LEFT JOIN v2_runtime_controls c ON c.month=ca.month JOIN v2_runtime_proofs pp ON pp.id=p.pricing_proof_id JOIN v2_runtime_proofs fp ON fp.id=p.funding_proof_id LEFT JOIN v2_runtime_proofs ap ON ap.id=c.allocation_proof_id LEFT JOIN v2_storage_funding_heads head ON head.environment=c.environment AND head.proof_id=fp.id AND head.verified_at=fp.verified_at WHERE h.attempt_id=? AND h.dispatch_token=? AND j.lease_token=? AND j.fencing=? AND j.status IN ('running','validating') AND o.owner_id=? AND o.state='admitted' AND p.operation_revision=o.revision AND (${options.core.applicationCostLimitsEnabled ? "0" : "1"}=1 OR (c.phase='active' AND c.environment=pp.environment AND head.proof_id=fp.id)) AND pp.environment=? AND ${jobAlive}`,
               [
                 handle.attemptId,
                 state.token,
@@ -327,7 +342,14 @@ export function createGatewayBudgetService(options: {
           // while D1 awaits. The subsequent not_sent receipt must fail the DB CAS.
           if (
             !current ||
-            Date.parse(clock()) >= Math.min(cutoff, ...Object.values(current).map(Date.parse))
+            Date.parse(clock()) >=
+              Math.min(
+                cutoff,
+                ...(options.core.applicationCostLimitsEnabled
+                  ? Object.values(current)
+                  : [current.lease_until, current.deadline_at]
+                ).map(Date.parse),
+              )
           )
             return false;
           state.confirmed = true;

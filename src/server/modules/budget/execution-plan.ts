@@ -65,6 +65,7 @@ export const isVerifiedExecution = (value: unknown): value is VerifiedExecution 
  * Gateway builder. Bound provenance is verified over the complete descriptor.
  */
 export function createGatewayExecutionPlanner(options: {
+  applicationCostLimitsEnabled?: boolean | undefined;
   input: (request: GatewayAttemptRequest) => Promise<unknown>;
   bounds: (
     wire: ReturnType<typeof prepareGatewayWireInput>,
@@ -73,6 +74,7 @@ export function createGatewayExecutionPlanner(options: {
   verifyBounds?: Parameters<typeof createExecutionPlanner>[0]["verifyBounds"];
 }) {
   return createExecutionPlanner({
+    applicationCostLimitsEnabled: options.applicationCostLimitsEnabled,
     ...(options.verifyBounds ? { verifyBounds: options.verifyBounds } : {}),
     async expected(request, now) {
       const wire = prepareGatewayWireInput(
@@ -99,6 +101,7 @@ export function createGatewayExecutionPlanner(options: {
  * client boolean can provide this evidence. Missing closure denies execution.
  */
 export function createExecutionPlanner(options: {
+  applicationCostLimitsEnabled?: boolean | undefined;
   expected: (request: GatewayAttemptRequest, now: string) => Promise<unknown>;
   verifyBounds?: (
     descriptor: ExecutionDescriptor,
@@ -129,7 +132,8 @@ export function createExecutionPlanner(options: {
         d.outputTokenUpperBound > d.modelOutputTokenLimit ||
         (d.basis === "verified_model_context_limit" && input !== BigInt(d.modelInputTokenLimit)) ||
         Date.parse(d.checkedAt) > Date.parse(now) ||
-        Date.parse(d.validUntil) <= Date.parse(now)
+        (options.applicationCostLimitsEnabled !== false &&
+          Date.parse(d.validUntil) <= Date.parse(now))
       )
         return null;
       Object.freeze(d.vision);

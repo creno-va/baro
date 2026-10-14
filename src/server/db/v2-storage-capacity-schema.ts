@@ -1,5 +1,47 @@
 import { sql } from "drizzle-orm";
-import { check, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import {
+  check,
+  integer,
+  primaryKey,
+  sqliteTable,
+  text,
+  uniqueIndex,
+} from "drizzle-orm/sqlite-core";
+
+// Only trusted runtime configuration writes this policy. Missing rows preserve
+// the strict legacy policy; observations never manufacture funding authority.
+export const v2CostExecutionPolicy = sqliteTable(
+  "v2_cost_execution_policy",
+  {
+    environment: text("environment").primaryKey(),
+    limitsEnabled: integer("limits_enabled").notNull().default(1),
+  },
+  (t) => [
+    check(
+      "v2_cost_execution_policy_bounds",
+      sql`${t.environment} IN ('preview','production') AND ${t.limitsEnabled} IN (0,1)`,
+    ),
+  ],
+);
+
+// Attempt counts are observations, not prepaid GET/HEAD/DELETE allowances.
+export const v2StorageIoCounters = sqliteTable(
+  "v2_storage_io_counters",
+  {
+    environment: text("environment").notNull(),
+    month: text("month").notNull(),
+    gets: integer("gets").notNull().default(0),
+    heads: integer("heads").notNull().default(0),
+    deletes: integer("deletes").notNull().default(0),
+  },
+  (t) => [
+    primaryKey({ columns: [t.environment, t.month] }),
+    check(
+      "v2_storage_io_counter_bounds",
+      sql`${t.environment} IN ('preview','production') AND typeof(${t.gets})='integer' AND ${t.gets}>=0 AND typeof(${t.heads})='integer' AND ${t.heads}>=0 AND typeof(${t.deletes})='integer' AND ${t.deletes}>=0`,
+    ),
+  ],
+);
 
 // No owner/blob cascade: physical obligations survive source/account deletion.
 export const v2PhysicalStorageCapacity = sqliteTable(

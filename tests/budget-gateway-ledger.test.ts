@@ -156,14 +156,18 @@ function descriptor(r: GatewayAttemptRequest): ExecutionDescriptor {
     validUntil: EXP,
   };
 }
-async function fixture(limit = 100, configure?: (d: ExecutionDescriptor) => void) {
+async function fixture(
+  limit = 100,
+  configure?: (d: ExecutionDescriptor) => void,
+  applicationCostLimitsEnabled = true,
+) {
   const db = await createTestDatabase();
   dbs.push(db);
   const session = await seedTestSession(db, { now: Date.parse(NOW), consent: true });
   const cipher = await createCaseDataCipher({
     CASE_DATA_KEY_V1: btoa("g".repeat(32)).replace(/=+$/, ""),
   });
-  const core = createV2Core(db.binding, cipher),
+  const core = createV2Core(db.binding, cipher, { applicationCostLimitsEnabled }),
     ownerId = session.userId;
   let current = NOW;
   const actor = { ownerId, now: NOW },
@@ -175,9 +179,10 @@ async function fixture(limit = 100, configure?: (d: ExecutionDescriptor) => void
   const d = descriptor(request);
   configure?.(d);
   const planner = createGatewayExecutionPlanner({
+    applicationCostLimitsEnabled,
     input: async () => PRIVATE_INPUT,
     bounds: async () => d,
-    verifyBounds: async (_d, digest, now) => ({ digest, evidenceHash: HASH, verifiedAt: now }),
+    verifyBounds: async (_d, digest) => ({ digest, evidenceHash: HASH, verifiedAt: NOW }),
   });
   const service = createGatewayBudgetService({
     core,
@@ -764,4 +769,69 @@ test("restore binds same immutable prepared plan; stale fence cannot dispatch", 
   expect(await a.ledger.confirmDispatch(handle)).toBe(false);
   expect(f.db.sqlite.query("SELECT state FROM v2_paid_holds").get()).toEqual({ state: "prepared" });
   expect((await f.runtime.exposure(NOW))?.reserved_krw).toBe(1);
+});
+
+test("observation-only gateway keeps model bounds and dispatches after all financial evidence expires", async () => {
+  const expires = "2026-10-06T00:00:01.000Z";
+  const f = await fixture(
+    100,
+    (d) => {
+      d.validUntil = expires;
+    },
+    false,
+  );
+  const p = {
+    ...f.pp,
+    id: "zz-expired-pricing",
+    validUntil: expires,
+    fx: { ...f.pp.fx, validUntil: expires },
+    prices: f.pp.prices.map((p) => ({ ...p, validUntil: expires })),
+  };
+  const funding = {
+    ...f.fp,
+    id: "zz-expired-funding",
+    state: "unavailable" as const,
+    spendAllowanceKrw: 0,
+    validUntil: expires,
+  };
+  expect(await f.runtime.putPricingProof(p, NOW)).toBe(true);
+  expect(await f.runtime.putFundingProof(funding, NOW)).toBe(true);
+  f.binding.pricingProofId = p.id;
+  f.binding.fundingProofId = funding.id;
+  f.db.sqlite.exec("UPDATE v2_runtime_controls SET phase='frozen'");
+  f.setNow("2026-10-06T00:00:02.000Z");
+  const a = await f.admit();
+  let calls = 0;
+  const gateway = createLlmGateway(
+    {
+      APP_ENV: "preview",
+      AI_GATEWAY_ID: "synthetic",
+      AI: {
+        run: async () => {
+          calls++;
+          return response();
+        },
+      },
+    },
+    { attemptLedger: a.ledger },
+  );
+  expect(
+    await gateway.call(
+      "screening",
+      PRIVATE_INPUT,
+      "synthetic-request",
+      async () => true,
+      undefined,
+      f.binding.invocationId,
+    ),
+  ).toMatchObject({ inScope: true });
+  await Promise.all(a.background);
+  expect(calls).toBe(1);
+  expect(f.db.sqlite.query("SELECT outcome,charged_krw FROM v2_runtime_usage").get()).toEqual({
+    outcome: "ambiguous",
+    charged_krw: null,
+  });
+  expect((await f.runtime.findProof(p.id, "2026-10-06T00:00:02.000Z"))?.payload).toEqual(p);
+  const overBound = { ...f.request, outputTokenUpperBound: 50000 };
+  expect(await f.service.prepareAdmission(f.binding, overBound)).toBeNull();
 });

@@ -7,9 +7,11 @@
 ## 현재 범위와 작업 순서
 
 현재 공개 서비스를 유지하고 신규 기능 확장을 멈춘다. 고객/변호사 두 역할, 질문 최대
-2차례×3문항, KST AI 하루200회, 애플리케이션 비용 금액 차단 해제와 기존 결제·자동충전을
+2차례×3문항, KST AI 하루200회, 프리베타 비용 관측 전용과 기존 결제·자동충전을
 유지한다. 정책 초안과 사업자 플레이스홀더는 #20/#70의 초안 인수 범위다. 실제 법률 승인이나
 독립 외부 검증 완료를 의미하지 않는다. 정비 종료와 전체 MVP 인수 종료는 별도로 판정한다.
+비용의 금액·가격/FX/funding 누락/만료·월할당·수동 refresh·유지비·비용 예약 IO로 기능이나
+배포를 막지 않는다. 새 직접 사용자 지시 전 재도입 금지이며, [현행 정책과 적용 상태](../operations/PREBETA-COST-POLICY.md)를 따른다.
 
 1. README·이슈 명세를 읽고 bun run work:next로 GitHub 선행 구현·열린 PR·작업자를 확인한다.
 2. 선행 구현 PR의 검토·필수 CI·main 병합 후 제품 코드를 시작한다. 실제 외부 인수로 열린
@@ -17,37 +19,61 @@
 3. 이슈에 담당·브랜치·현재 blocker·다음 행동을 기록하고 status:in-progress를 붙인다.
    기존 작업/PR을 재사용하고 깨끗한 main에서 codex/<issue>-<purpose> 브랜치를 만든다.
 4. 공유 계약·schema는 먼저 조율한다. migration 최신 번호를 확인해 한 담당자가 순차 배정한다.
-   0010은 보존하며 현재 구현의 최신 migration은 0014이다. 원격 적용은 배포 증거로 확인한다.
+   0010은 보존하며 04f25f8 배포에는0014까지 포함된다. 관측 분리0015는 이번 작업 중이며 원격 적용을 주장하지 않는다.
 5. 변경별 검증 후 PR로 제출하고 검토·CI가 통과한 정확한 head만 정상 병합한다.
 
 ## 담당·blocker·다음 행동
 
 | 작업 | 담당/이슈 | 현재 상태·blocker | 다음 행동 |
 | --- | --- | --- | --- |
-| 업로드·물리 용량 | 자료 모듈 + 총괄, #58 | PR230→229→235 병합; 원격 inventory/projection·실제 cleanup 미검증 | 실제 opaque inventory와 writer 상태 확인 후 용량 연결·제한 upload/delete |
-| 비용 갱신·재개 | 비용 모듈 + 총괄, #57 | PR241 금액 차단 해제와 회귀 병합. 코드 병합과 환경별 적용 완료는 구분 | 새 설정과0014를 같은 배포 SHA에 반영. 비용 금액으로 막지 않으며 최신 공급자 상태/권한·물리 용량·실제 비용 대조는 유지 |
-| 릴리스 증거 | 총괄, #19/#71 | PR232 병합; 최종 full·동일 SHA 실제 증거 미완료 | 수동 전체 회귀→preview 제한 smoke→정확한 SHA 운영자 승인→production |
+| 업로드·물리 용량 | 자료 모듈 + 총괄, #58 | PR230→229→235와0014가04f25f8에 포함돼 배포됨. production storage 초기화 성공; 실제 업로드/ZIP/cleanup은 이번 receipt에 없음 | 물리 inventory/writer 경계를 유지하며 남은 자료 경로의 구현·실제 증거를 구분 |
+| 비용 관측 분리 | 비용 모듈 + 총괄, #57 | 04f25f8에 금액 차단 해제 배포. 만료/월할당/refresh/비용 IO 병목 분리는 `codex/57-prebeta-cost-observation-only`에서 구현 중, PR/배포 pending | 비용 metadata를 실행·배포 승인에서 분리하고 기존 관측·hold·원장/보안/기술 상한 보존. 관측 날짜·금액 조작 금지 |
+| 릴리스 증거 | 총괄, #19/#71 | 04f25f8 동일 SHA CI·preview·production 성공, 실제 일반 채팅·리포트/PDF/HTML 확인 | 이번 관측 분리의 새 PR/배포 증거를 별도 기록. 기존 성공을 새 변경 또는 전체 MVP 완료로 확대하지 않음 |
 | 디렉터리 | 변호사 모듈 + 총괄, #231/M5 | PR234 병합; 기존 공개 목록의 원격 projection 연결 미완료 | serving SHA 확인 후 bounded reindex, 철회·cursor·필터 smoke |
 | 문서·작업 체계 | 총괄, #19/#64/#71 | 현행 기준과 과거 기록 분리 중 | 문서 PR과 이슈/마일스톤의 담당·증거·다음 행동 대조 |
-| 채팅 실패·재시도 | 고객/AI, #64 / PR238 | PR238 병합, preview7a617b5/schema0013 반영. run38556937083의 foundation·9개 endpoint 통과, 당시 text preflight는 model_reservation_headroom으로 차단. 과거 provider 원인은 로그 유실로 미확정 | PR241 적용 후 합성 사건 재시도1회와 안전한 status/category 확인. 이전 여유114원·예약11,018원은 과거 차단 원인의 기록이며 현행 금액 제한이 아님. 기존 hold와 원장을 보존하고 별도 AI 응답 실패를 조사 |
+| 채팅 실패·재시도 | 고객/AI, #64 / PR238 | production04f25f8에서 21:32:46 KST 새 일반 채팅 요청,21:33 실제 assistant 본문 확인 | 이전7a617b5 비용 실패와 원인 미확정 provider 실패를 역사로 보존. 비용 관측 만료 후 실패 방지는 이번 변경의 별도 범위 |
+| 리포트·다운로드 | 자료 모듈, #66 | production04f25f8에서21:34:37 KST 리포트v3 생성, PDF3페이지/3,144,078bytes 실제 수신·한글 렌더, HTML14,572bytes 실제 수신 | 선택 원본 ZIP/업로드/삭제와 다른 media 경로는 별도 잔여로 유지 |
 | 법률·인증·정책 점검 | 법률/인증 모듈, #27/#63/#71 | [10/14 검증](../quality/LEGAL-AUTH-VERIFICATION-2026-10-14.md): 등록 도메인 Referer 누락 확인·로컬 인터넷 JSON 거부 해결. 법령 본문 검증과 실제 판례 형식 수정. Google 사용자 수동 확인·정책 점검표 완료 | 수정 PR 병합 후 GitHub 저장 credential 및 같은 SHA Worker 검증. 기관 안내 update_pending·판례 limited·Naver/Kakao 실제 증거는 보존 |
 | 전체 실제 인수 | 각 모듈, #27/#59/#63/#64/#66/#67/#71 | OAuth/실제 모델·공식 출처·media·다운로드·복구/경보 증거 잔여 | [요구사항·증거 완료표](./MVP-REQUIREMENTS-EVIDENCE.md)의 조건별 증거 연결 |
 
-2026-10-14 채팅 수정 preview receipt: main `7a617b5acf08c7168482caa3e08ff07208416270`,
+## 2026-10-14 실제 배포·제품 receipt
+
+배포 SHA `04f25f804f02e0f221f4b34be0f03edc3d0afd00`의
+[main CI38563034585](https://github.com/creno-va/baro/actions/runs/38563034585),
+[preview38563613354](https://github.com/creno-va/baro/actions/runs/38563613354),
+[production38563979183](https://github.com/creno-va/baro/actions/runs/38563979183)가 성공했다.
+production [저장 초기화38564333321](https://github.com/creno-va/baro/actions/runs/38564333321)는
+21:30:58 KST, [같은 할당 refresh38564475420](https://github.com/creno-va/baro/actions/runs/38564475420)는
+21:31:57 KST에 완료됐다. 이 refresh는 당시 실행한 절차이며 앞으로의 기능 사용 선행 조건이 아니다.
+일반 채팅과 리포트/PDF/HTML의 실제 확인 범위는 위 표와
+[#71 종합 receipt](https://github.com/creno-va/baro/issues/71#issuecomment-6168531808)를 따른다.
+법률 query의 `POLICY_REJECTED`는 별도 정책 결과이며 이번 실제 업로드/ZIP 인수는 미확인이다.
+
+22시경 KST 인증 콘솔에서 Workers Paid, 양 Gateway Spend Limits OFF/Rate Limit Requests OFF,
+production Dynamic Routes 없음, Unified Billing credit$39.21와 기존 자동충전ON/$10/$30을 확인했다.
+GitHub 공개 저장소의 모든 workflow는 표준ubuntu-latest runner다. 조직 budget 조회는 권한/404로
+전체 상태를 확인하지 못했으며 “조직 예산 없음”으로 단정하지 않는다. 자세한 범위는
+[비용 정책의 외부 설정 관측](../operations/PREBETA-COST-POLICY.md#외부-설정-관측-범위)을 따른다.
+
+## 이전 비용 차단 관측과 후속 구현
+
+**이전 실패 기록:** 2026-10-14 채팅 수정 preview receipt: main `7a617b5acf08c7168482caa3e08ff07208416270`,
 [main CI38556751515](https://github.com/creno-va/baro/actions/runs/38556751515) 성공.
 [preview38556937083](https://github.com/creno-va/baro/actions/runs/38556937083)는 Worker 반영과
 schema/endpoint 검사는 통과했지만 AI 재원 검사 실패로 전체 실패다. 검증된 배포 성공이나
 실제 채팅 성공으로 기록하지 않는다. 미정산21,895원·정산283원·유지비 예약31,118원을
-보존했다. production 배포 및 유료 모델 호출은 수행하지 않았다.
+보존했다. 그 run에서는 production 배포 및 유료 모델 호출을 수행하지 않았다.
 
 2026-10-14 후속 직접 지시로 금액 차단 정책을 변경한다. #57의
 [PR241](https://github.com/creno-va/baro/pull/241)은 `APPLICATION_COST_LIMITS_ENABLED=false`로
 월·누적 재원·요청 금액의 admission/dispatch/refresh/preflight 차단을 해제한다.
-위 7a617b5 실패는 당시 정책의 실제 기록으로 보존한다. 새 모드는 기존 비용·미정산을
-관측·정산하며 가격/최신 funding 상태·권한·물리 용량·횟수 경계를 유지한다.
+위 7a617b5 실패는 당시 정책의 실제 기록으로 보존한다. PR241 단계에 남았던 가격/재원
+만료·월할당·수동 refresh·비용 예약 IO의 차단도 후속 직접 지시로 제거한다. 비용 원장·
+관측 사실·기술용량·AI200/일·권한·실제 공급자 오류는 유지한다.
 0014 예약 금액 표현 변경은 #55에 단일 작성자를 기록했으며 과거 migration은 보존한다.
-새 직접 사용자 지시 없이 금액 상한·예산 대기·비용 초과 동결을 다시 적용하지 않는다.
-`codex/57-remove-cost-blocking`은 PR241을 재사용하며 잔여 문서·재사용 API의 정합성을 보완한다.
+새 직접 사용자 지시 없이 금액 상한·비용 관측 만료·예산 대기·비용 초과 동결을 다시 적용하지 않는다.
+`codex/57-prebeta-cost-observation-only`의 코드·0015·배포 도구·문서 변경은 구현 중이며
+병합·배포 pending이다. 이미 배포한04f25f8의 성공과 구분한다.
 배포 진행 상태는 GitHub run의 실제 SHA·결과로 확인하며 다른 세션의 진행 중 배포를 중복 실행하지 않는다.
 
 ## 검증과 배포
@@ -59,7 +85,7 @@ bun ci 후 validate:quick과 해당 기능의 인증·소유권·CAS·멱등 재
 
 모든 구현·문서가 병합된 최종 main SHA를 명시해 GitHub 수동 validate:full을 한 차례
 수행한다. 실제 checkout SHA를 증거에 기록하고 CI에서는 유료 호출을 하지 않는다.
-같은 SHA를 preview에 배포해 합성 계정·자료로 비용 재개, 업로드, 리포트·다운로드·삭제,
+같은 SHA를 preview에 배포해 합성 계정·자료로 업로드, 리포트·다운로드·삭제,
 디렉터리를 제한 검증한다. production은 같은 SHA와 #71의 유효한 운영자 승인 기록이
 필수다. 승인자는 hyunhomon 또는 hwangeunchan, 정확한 SHA와 최대24시간 유효기간을 검사한다.
 현재 Environment에 필수 reviewer가 있다는 가정은 하지 않는다. 비공개 합성 고객 흐름을
@@ -72,10 +98,10 @@ bun ci 후 validate:quick과 해당 기능의 인증·소유권·CAS·멱등 재
 
 ## 데이터·비용·권한 경계
 
-미정산 비용·실행 작업·v1 암호문·공개/자격 표시·삭제 journal을 보존한다. 같은 할당
-refresh는 현재 revision과 유효 가격·최신 재원·용량 근거를 원자적으로 검사하고 응답 유실은
-동일 입력·operation key로 복구한다. 할당 변경은 기존 양 환경 조율을 유지한다.
-만료·중단 재원을 과거 값으로 대체하지 않으며 당시 호출은 당시 가격으로 정산한다.
+미정산 비용·실행 작업·v1 암호문·공개/자격 표시·삭제 journal을 보존한다. 비용 관측의
+누락·만료·월 전환·refresh 미완료는 실행·배포를 막지 않는다. 관측 도구는 사실대로
+unknown/stale를 기록하고 날짜/재원 금액을 늘리지 않는다. 당시 호출은 당시 근거로 정산한다.
+물리 용량·서명/권한·revision/CAS·writer/lease 검사는 비용 관측과 분리한다.
 
 새 모델/공급자·새 결제수단/자동충전 변경·법률 승인·실제 사업자 사실을 임의 결정하지 않는다.
 기존 사용자 승인 결제 경로와 자동충전은 유지한다. OAuth 키·실제 사건·토큰·원문·stack/SQL을

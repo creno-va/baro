@@ -25,7 +25,7 @@ on:
         type: string
         default: ''
       configure_ai:
-        description: Apply verified AI bounds, pricing, funding and real two-environment budget coordination
+        description: Compatibility input; model bounds are configured automatically without cost refresh
         type: boolean
         default: false
 

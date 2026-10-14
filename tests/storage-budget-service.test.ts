@@ -128,7 +128,12 @@ function funding(): FundingProof {
   };
 }
 async function fixture(
-  options: { throughMigration?: string; skipPricing?: boolean; skipFunding?: boolean } = {},
+  options: {
+    throughMigration?: string;
+    skipPricing?: boolean;
+    skipFunding?: boolean;
+    applicationCostLimitsEnabled?: boolean;
+  } = {},
 ) {
   const db = await createTestDatabase(options);
   dbs.push(db);
@@ -136,7 +141,9 @@ async function fixture(
   const cipher = await createCaseDataCipher({
     CASE_DATA_KEY_V1: btoa("d".repeat(32)).replace(/=+$/u, ""),
   });
-  const core = createV2Core(db.binding, cipher),
+  const core = createV2Core(db.binding, cipher, {
+      applicationCostLimitsEnabled: options.applicationCostLimitsEnabled,
+    }),
     actor: Actor = { ownerId: session.userId, now: NOW };
   const accounting = createV2AccountingRepository(core, "preview"),
     jobs = createV2JobsRepository(core),
@@ -202,7 +209,11 @@ async function fixture(
 
 async function originalFixture(
   kind: "case_original" | "lawyer_original" = "case_original",
-  options: { skipPricing?: boolean; skipFunding?: boolean } = {},
+  options: {
+    skipPricing?: boolean;
+    skipFunding?: boolean;
+    applicationCostLimitsEnabled?: boolean;
+  } = {},
 ) {
   const f = await fixture(options),
     id = crypto.randomUUID(),
@@ -638,4 +649,47 @@ test("newer unrelated pricing does not hide the approved storage projection bund
   expect(admission.request.pricingProofId).toBe(f.pp.id);
   await admitted(f, admission);
   expect(await costs.beforeDispatch(admission, async () => true)).not.toBeNull();
+});
+
+test("observation-only jobless storage dispatch survives expired pricing and funding without relaxing consent", async () => {
+  const f = await originalFixture("case_original", { applicationCostLimitsEnabled: false });
+  const p = {
+    ...f.pp,
+    id: "zz-expired-storage-pricing",
+    validUntil: LATER,
+    fx: { ...f.pp.fx, validUntil: LATER },
+    prices: f.pp.prices.map((p) => ({ ...p, validUntil: LATER })),
+  };
+  const funding = {
+    ...f.fp,
+    id: "zz-expired-storage-funding",
+    state: "unavailable" as const,
+    spendAllowanceKrw: 0,
+    validUntil: LATER,
+  };
+  expect(await f.runtime.putPricingProof(p, NOW)).toBe(true);
+  expect(await f.runtime.putFundingProof(funding, NOW)).toBe(true);
+  f.db.sqlite.exec("UPDATE v2_runtime_controls SET phase='frozen'");
+  const now = "2026-10-06T00:03:00.000Z",
+    deadlineAt = "2026-10-06T00:04:00.000Z";
+  const service = createStorageBudgetService({
+    core: f.core,
+    environment: "preview",
+    ownerId: f.actor.ownerId,
+    clock: () => now,
+    bounds: async (_input, inputDigest) => ({
+      inputDigest,
+      evidenceHash: HASH,
+      verifiedAt: now,
+      validUntil: deadlineAt,
+      quantities: [{ sku: "r2_class_a_requests", maximumQuantity: "1" }],
+    }),
+  });
+  const a = await prepared(service, { ...input(f), deadlineAt });
+  expect(a.request.pricingProofId).toBe(p.id);
+  expect(a.request.fundingProofId).toBe(funding.id);
+  await admitted(f, a);
+  expect(await service.beforeDispatch(a, async () => true)).not.toBeNull();
+  expect(money(f)).toEqual({ reserved_krw: 1000, ambiguous_krw: 0, settled_krw: 0 });
+  expect(f.db.sqlite.query("PRAGMA foreign_key_check").all()).toEqual([]);
 });

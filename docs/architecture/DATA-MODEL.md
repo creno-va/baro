@@ -254,11 +254,13 @@ short/long 각각 ordinary/cache-read/cache-write6개와 출력2개의 단가를
 실제 일반 입력은 전체에서 cache-read/write를 뺀 값이다. 요청의 default tier와 실제 응답 등급을
 대조하며 누락·모순·미지원 등급은 ambiguous로 남긴다. 인증된 실제 청구 근거는 별도로 검증한다.
 
-paid admission은 비용 준비를 독립 INSERT한 뒤 quota/job을 쓰는 방식이 아니라 동일 claim/batch다.
+0007 당시 paid admission은 비용 준비와 quota/job을 동일 claim/batch에 결합했다.
 이미 dispatched인 시도의 not_sent 재생은 prepared/tokenless CAS로 거부한다. 삭제·lease 만료 뒤
 late receipt도 원래 attempt에 기록하며 case 원문은 비용 저장소에 포함하지 않는다. runtime control
-초기화 뒤 hold를 생략한 v2 admission/acquire도 차단한다. 실제 서비스의 price/funding/FX verifier가
-없으면 실행을 허용하지 않는다. 합성 테스트 verifier를 production 근거로 사용하지 않는다.
+초기화 뒤 hold를 요구했던 계약은 과거 비용 차단 설계다. 현행 관측 전용 정책에서는 비용
+proof의 누락/만료나 비용 기록 오류로 제품 실행을 막지 않는다. 기존 배포의 증거 만료/월/IO
+차단 해제와 가격 proof 자체가 없는 신규 환경 bootstrap의 잔여 결합은
+[구현 상태](../operations/PREBETA-COST-POLICY.md)를 구분해 따른다. 합성 verifier를 실제 근거로 쓰지 않는다.
 
 공식 source discovery는 content hash를 아직 모르는 단계에서 공개 identity/version/section/
 extractor로 최신 유효 cache를 조회한다. private query를 저장하지 않으며 최대2회 indexed query,
@@ -277,8 +279,8 @@ physical tuple·가격/funding/plan을 연결한다. AI job이나 lease를 대�
 저장량·비용·intent 전체를 rollback한다. 비용 anchor에는 원본/프로필 ciphertext를 복제하지 않고
 opaque ID/revision/physical metadata와 SHA만 남긴다. 소비자는 이 공유 구현의 main 병합 뒤 연결한다.
 
-dispatch는 현재 정책·file 자동 처리 동의·소유권·revision·만료·삭제·공개 자격/수동 승인과 funding을
-재확인하는 일회 CAS다. 미확정 비용을 유지하고 실제 검증된 usage만 기존 정산 계약으로 반영한다.
+dispatch는 현재 정책·file 자동 처리 동의·소유권·revision·서명/lease 만료·삭제·공개 자격/수동 승인을
+재확인하는 일회 CAS다. funding 관측 누락·만료는 비용 상태이며 dispatch를 거절하지 않는다. 미확정 비용을 유지하고 실제 검증된 usage만 기존 정산 계약으로 반영한다.
 계정 삭제·월 전환 뒤 receipt도 원래 attempt/month에 정산한다. 합성 SQL/AES 검증은 실제 R2 청구,
 보관 비용 조달, 공개 UI·운영 검증의 완료 증거가 아니다.
 ## 물리 저장 용량과 월별 유지 비용
@@ -296,25 +298,25 @@ cascade가 없으며 월 변경이나 계정 삭제로 용량 의무가 사라�
 Worker/D1 상한을 기존 decimal 계산기로 합산한다. 결과는 `v2_maintenance_exposure`의
 reserved 추정값과 `fixed_maintenance_krw`로 기록하며 실제 청구 receipt가 아니다.
 무료 tier, 추정 보관 만료, 자동 원문 삭제로 비용을 줄였다고 주장하지 않는다.
-과거 최초 설계는 projection 기록 뒤 drain/양 환경 증거로 활성화했다. 현행 동일 할당의
-초기 연결·갱신은 [COST-REFRESH](../operations/COST-REFRESH.md)의 절차를 사용하고, 할당 변경만 기존 조율을 유지한다. 초기화된 용량이
-있으면 새 월도 projection 없이 활성화할 수 없다. 만료되거나 누락된 증거는 I/O를 거절한다.
+과거 설계는 projection·drain/양 환경 증거·새 월/만료 검사를 실행 승인에 사용했다.
+현행 [관측 정책](../operations/PREBETA-COST-POLICY.md)은 물리 capacity와 비용 projection을
+분리한다. 비용 projection/월별 승인/가격·funding 만료나 refresh 미완료로 I/O를 막지 않는다.
 
 `prepareCapacity(actor, binding)`의 branded predicate를 실제 pending 객체의 기존
 mutation claim에 합치고, pending INSERT 뒤 `statements(core, actor, claimId)`를 같은
 D1 batch 안에 넣는다. missing/mismatched pending은 batch 전체를 취소한다. actor는
 준비 시각을 포함한 같은 snapshot이어야 한다. `beginWrite(blobId, byteLength, now)`는
-실제 알려진 암호문 wire 길이, pending key, 승인 용량과 현재 projection을 확인하여
+실제 알려진 암호문 wire 길이, pending key와 물리 용량을 확인하여
 prepared→running 한 번만 전이하고 scoped permit을 반환한다. 실제 R2 반환 key/길이가
 일치하거나 transport가 전혀 호출되지 않았을 때만 `confirmWriterStopped`를 호출한다.
 완료를 모르는 writer는 running과 용량을 유지한다. 진행 중 DELETE receipt는 용량을
 반환하지 않으며, writer 완료 후 다시 실제 DELETE를 확인해야 한다. never-started
 prepared 객체는 실제 `confirmBlobDeleted`와 원자적으로 stopped/released 된다.
 
-`beforeMaintenanceIO`는 실제 held 객체와 현재 projection의 bounded counter를 원자적으로
-차감해 일회용 permit을 만든다. `consumeMaintenanceIO`는 같은 repository에서 정확한
-객체 key·상태·월을 재확인한다. caller는 각 await 후 현재 소유권·동의·moderation과
-삭제 상태를 별도로 확인한다. 알 수 없는 I/O는 counter를 환급하지 않는다. 과거 객체의
+`beforeMaintenanceIO`/`consumeMaintenanceIO`는 실제 held 객체·정확한 key·상태와 일회 permit의
+무결성을 확인한다. 과거 비용 projection의 GET/HEAD/DELETE 각50회 counter 소진이나 월·만료는
+현행 I/O 차단 근거가 아니다. caller는 각 await 후 현재 소유권·동의·moderation과 삭제 상태를
+별도로 확인한다. 비용 IO 관측값과 실제 기술적 실행 상한을 혼용하지 않는다. 과거 객체의
 bounded inventory 등록도 인증한 coordinator만 가능하며, writer 종료를 확인하지 못한
 기존 객체는 unknown/running으로 남는다. 합성 SQLite 검사는 실제 cloud 처리나 청구,
 production funding을 입증하지 않는다. 실제 구성·smoke는 #71에 남는다.
@@ -338,16 +340,16 @@ reserved+ambiguous와 미정산 maintenance를 원래 SUM과 동일하게 합산
 기존 `initializeControl`이 trusted now와 DB의 현재 월이 일치할 때만 cold SUM으로 cursor를
 앞으로 이동한다. control 생성과 cursor CAS/readiness는 같은 batch이고 기존 active control을
 수정하지 않는다. 미래 control 사전 생성은 cursor를 이동하지 않는다. 누락·버전 불일치·stale
-cursor는 hot 경로에서 0으로 대체하거나 자동 복구하지 않고 admission을 거절한다.
+cursor를0으로 대체해 과거 비용을 지우지 않는다. 이 비용 상태만으로 제품 admission을
+거절했던0010 당시 계약은 현행 관측 전용 정책으로 대체한다.
 
 저장소 가격은 승인된 현재 월 projection에 고정한다. 이후 model 전용 가격 증거가 이 증거를
 가리지 않는다. 모든 신규 가격 변경을 자동으로 반영하는 계약은 아니다. 자금은 환경 PK의
 최신 `(verified_at,id)` funding head를 사용하고 proof INSERT와 head 이동은 원자적이다.
-최신 증거가 만료되거나 unavailable이면 과거 증거로 fallback하지 않는다. hold 생성,
-dispatch, physical I/O는 현재 head와 projection 근거의 상태·유효성을 동시에 검사한다.
-금액 제한이 꺼진 현행 모드에서는 기존 projection의 재원 관측액이나 할당액 초과를
-차단 조건으로 사용하지 않는다. 실제 관측값을 늘리거나 기존 원장을 지우지 않는다. model 경로와 cold
-exposure/drain/activation의 원래 carryover SUM·승인 계약은 유지한다.
+최신 증거가 만료되거나 unavailable이면 과거 증거로 fallback하지 않고 사실대로 관측한다.
+현행 false 모드에서 hold/dispatch/physical I/O는 금액·비용 head/projection 만료·월별
+승인·수동 refresh·비용 IO counter로 차단하지 않는다. 실제 관측값을 늘리거나 기존 원장을
+지우지 않는다. 과거 carryover SUM·drain/activation 기록은 보존하지만 실행 허가로 쓰지 않는다.
 
 마이그레이션은 기존 active control, ambiguous/charged NULL, proof와 암호문을 보존한다.
 기존 physical mirror와 binding 합계가 다르면 보정하지 않고 실패한다. 요약 backfill과 trigger

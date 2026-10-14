@@ -220,6 +220,54 @@ test("verified existing funding permits operator-authorized automatic recharge",
     quote({ funding: { ...proofs().funding, autoRecharge: true } }),
   ).resolves.toBeDefined();
 });
+test("observation-only quotes retain expired price and funding evidence without a financial deadline", async () => {
+  const value = proofs();
+  value.pricing.validUntil = NOW;
+  value.pricing.fx.validUntil = NOW;
+  firstPrice(value).validUntil = NOW;
+  value.funding.validUntil = NOW;
+  value.funding.state = "unavailable";
+  value.funding.spendAllowanceKrw = 0;
+  const original = JSON.stringify(value);
+  const result = await calculateQuote({
+    environment: "preview",
+    now: NOW,
+    ...value,
+    applicationCostLimitsEnabled: false,
+  });
+  expect(result.quote.estimatedKrw).toBeGreaterThan(0);
+  expect(result.quote.validUntil).toBe(value.plan.deadlineAt);
+  expect(JSON.stringify(value)).toBe(original);
+  const attemptId = crypto.randomUUID();
+  expect(assessReceipt(result, attemptId, receipt(result, attemptId))).toMatchObject({
+    outcome: "ambiguous",
+    chargedKrw: null,
+  });
+});
+test("an authenticated free price is distinct from missing or expired usage in observation-only mode", async () => {
+  const value = proofs();
+  firstPrice(value).billingMode = "verified_free";
+  firstPrice(value).usdPerUnit = "0";
+  const hold = await calculateQuote({
+    environment: "preview",
+    now: NOW,
+    ...value,
+    applicationCostLimitsEnabled: false,
+  });
+  expect(hold.quote.estimatedKrw).toBe(0);
+  const id = crypto.randomUUID();
+  expect(assessReceipt(hold, id, receipt(hold, id))).toMatchObject({
+    outcome: "settled",
+    chargedKrw: 0,
+  });
+  expect(
+    assessReceipt(hold, id, receipt(hold, id, { meteringComplete: false, quantities: [] })),
+  ).toMatchObject({ outcome: "ambiguous", chargedKrw: null });
+  expect(assessReceipt(hold, id, receipt(hold, id, { observedAt: END }))).toMatchObject({
+    outcome: "ambiguous",
+    chargedKrw: null,
+  });
+});
 test("refusal/malformed output transport still settles actual scalar usage before output validation", async () => {
   const hold = await quote();
   const attemptId = crypto.randomUUID();

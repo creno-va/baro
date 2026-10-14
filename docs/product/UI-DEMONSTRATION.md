@@ -1,6 +1,6 @@
 # BARO v2 기능별 실제 UI 시연 행렬
 
-> **2026-10-14 비용 정책 우선:** [ADR-0015](../adr/0015-maintenance-and-operating-policy.md)와 PR241에 따라 `APPLICATION_COST_LIMITS_ENABLED=false`로 월 예산·누적 재원·요청 금액 차단을 해제한다. 비용 예약·미정산·정산은 기록이며 금액만으로 작업을 거절하지 않는다. 사용 횟수·파일/물리 용량·시간·시도 횟수·권한·동의·삭제 경계는 유지한다. 과거 비용 차단 증거는 현행 차단 요구가 아니다.
+> **2026-10-14 프리베타 비용 관측 전용 — 현행 지시:** `APPLICATION_COST_LIMITS_ENABLED=false`에서 비용 금액·가격/FX/funding 관측 누락·만료·월별 할당·비용 승인·수동 refresh·유지비·비용 예약 IO 횟수로 기능이나 배포를 막지 않는다. 사용자 재지시 전 재도입 금지. 비용 원장·관측 사실은 보존하며 관측 시각/금액을 조작하지 않는다. AI200/일·실제 기술용량/횟수·권한/보안/무결성·실제 공급자 오류는 유지한다. 아래 과거 비용 차단 지시·실패 기록보다 [현행 정책과 구현 상태](../operations/PREBETA-COST-POLICY.md)가 우선한다.
 > **2026-10-06 사용자 개정 — 아래 이전 범위보다 우선한다.** MVP는 고객/변호사 두 역할이며 통합 로그인에서 선택한다. 변호사 승인 어드민·자격 심사·반려·승인대기 UX는 제외한다. 실제 제품 client UI 동일 구현체를 API mock adapter로 먼저 완성하고 기능 연결을 병렬 진행한다. 별도 /mock UI는 만들지 않는다. [5세션 계획](../development/PARALLEL-UI-SPRINT.md)의 실제 착수부터 2시간 sprint를 적용하며 독립 UI는 DB/AI/OAuth/backend CI/A 이슈 종료를 기다리지 않는다. 완료된 코드/이슈/증거를 보존하고 새 DB/비용 선행 이슈를 추가하지 않는다. AI 품질 확대는 모든 UX 연결 뒤다. P0.3/#70/#71 외부·정책·production·공개 gate는 보존하며 mock 성공을 실제 외부 성공으로 표시하지 않는다. [ADR-0014](../adr/0014-mvp-two-roles-and-api-mock-first.md)가 대체 범위를 기록한다.
 
 - Version: 2.0

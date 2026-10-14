@@ -615,7 +615,11 @@ export function createV2JobsRepository(core: V2Core) {
         )
           return null;
         if (paidAttemptId) parse(opaqueIdSchema, paidAttemptId);
-        const paid = paidAcquirePredicate(paidAttemptId, actor.now);
+        const paid = paidAcquirePredicate(
+          paidAttemptId,
+          actor.now,
+          core.applicationCostLimitsEnabled,
+        );
         const claimId = crypto.randomUUID();
         const acquired = await core.changed([
           core.statement(

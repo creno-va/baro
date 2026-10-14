@@ -35,7 +35,7 @@ Accepted 내용을 바꿀 때 새 ADR을 만들고 대체 범위를 명시한다
 | [0010](./0010-multimodal-ai-and-transcription.md) | 멀티모달 분석과 음성 전사의 모델 경계 | Accepted v2 target |
 | [0011](./0011-verified-official-source-expansion.md) | 검증된 공식 법률 출처의 확대 | Accepted v2 target |
 | [0012](./0012-shared-ui-system-and-brand-assets.md) | 공통 UI 시스템·한글 폰트·브랜드 자산 | Accepted v2 target |
-| [0013](./0013-resource-admission-and-budget.md) | 자료·AI 사용량과 기술 예산 admission | Accepted; 금액 제한은 0015로 폐지, 사용량·물리 용량·원장 유지 |
+| [0013](./0013-resource-admission-and-budget.md) | 자료·AI 사용량과 기술 예산 admission | Accepted; 비용 금액·관측/만료/승인 차단은 0015로 폐지, 사용량·물리 용량·원장 유지 |
 | [0014](./0014-mvp-two-roles-and-api-mock-first.md) | 고객·변호사 MVP와 API mock 우선 병렬 개발 | Accepted; 0007 MVP 심사 범위 부분 대체 |
 | [0015](./0015-maintenance-and-operating-policy.md) | MVP 운영 기준과 정비 인수 경계 | Accepted; 질문·비용·승인·검색 부분 대체 |
 
@@ -49,7 +49,7 @@ Accepted 내용을 바꿀 때 새 ADR을 만들고 대체 범위를 명시한다
 | 0004 | 0010,0011 | ASR/multimodal·공식 판례/기관 안내 추가 / pinned text model·medium·Gateway·자동 fallback 금지 유지 |
 | 0004 | 0015 | 과거 spend limit 설정 지시 대체 / 기존 공급자·모델·결제 설정·실제 비용 관측 유지 |
 | 0005 | 0006,0008,0013 | workspace·객체 삭제·다차원 사용량/예산 확장 / guardedwrite·outbox·비중복 userquota·실제 retry 비용·공개 gate 유지 |
-| 0013 | 0015 | 월·누적 재원·요청 금액 차단 폐지 / 비용 기록·사용량·물리 용량·권한 유지 |
+| 0013 | 0015 | 비용 금액·관측 누락/만료·월할당·refresh·비용 IO 차단 폐지 / 비용 기록·사용량·물리 용량·권한 유지 |
 
 v1 데이터·계약·읽기/삭제는 그대로 유지하고 v2 추가 schema/contract는 선행 PR을 통합한다.
 신규 ADR의 Accepted는 사용자가 승인한 방향이며 P0.3 또는 v2 마일스톤 완료의 증거가 아니다.

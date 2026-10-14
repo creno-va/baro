@@ -57,7 +57,25 @@ export const observationSchema = z.strictObject({
 });
 export type AiRuntimeObservation = z.infer<typeof observationSchema>;
 
-export function modelBounds(observation: AiRuntimeObservation, evidenceHash: string) {
+// The historical capability observation is independent of billing approval, FX,
+// available credit and refresh. Its original dates are provenance, not renewed
+// billing authority; observation-only runtime ignores the legacy expiry field.
+export const modelCapabilitySchema = observationSchema
+  .pick({
+    checkedAt: true,
+    validUntil: true,
+    model: true,
+    contextTokens: true,
+    maximumOutputTokens: true,
+    modelReference: true,
+    outputReference: true,
+  })
+  .strip();
+
+export function modelBounds(
+  observation: z.infer<typeof modelCapabilitySchema>,
+  evidenceHash: string,
+) {
   return {
     bounds: {
       basis: "verified_model_context_limit",
@@ -115,14 +133,32 @@ export async function observeAiRuntime(
     now = new Date().toISOString();
   if (
     Date.parse(o.checkedAt) > Date.parse(now) ||
-    Date.parse(o.validUntil) <= Date.parse(now) ||
-    Date.parse(now) - Date.parse(o.checkedAt) > 86400000 ||
     o.pricing.fx.krwPerUsd !== o.fx.krwPerUsd ||
     o.pricing.fx.asOf !== o.fx.asOf
   )
     throw new Error("AI_RUNTIME_OBSERVATION_STALE");
   const evidenceHash = await runtimeDigest(o),
     month = usageDateKst(now).slice(0, 7);
+  if (
+    Date.parse(o.validUntil) <= Date.parse(now) ||
+    Date.parse(now) - Date.parse(o.checkedAt) > 86400000
+  ) {
+    return {
+      evidenceHash,
+      month,
+      mode,
+      costObservationState: "stale" as const,
+      observedAt: o.checkedAt,
+      validUntil: o.validUntil,
+      results: Object.keys(bindings).map((environment) => ({
+        environment,
+        observationInstalled: false,
+        pricingInstalled: false,
+        refreshCommitted: false,
+        control: null,
+      })),
+    };
+  }
   const results = [];
   for (const environment of ["preview", "production"] as const) {
     const binding = bindings[environment];
@@ -156,14 +192,13 @@ export async function observeAiRuntime(
     if (!(await runtime.putFundingProof(fp, now)))
       throw new Error("AI_RUNTIME_OBSERVATION_REJECTED");
     const pricingInstalled = await runtime.putPricingProof(pp, now);
-    if (!pricingInstalled && mode === "refresh") throw new Error("AI_RUNTIME_PRICING_REQUIRED");
     const operationDigest = await runtimeDigest({
       evidenceHash,
       operationKey: runtimeRefreshSchema.shape.id.parse(operationKey),
     });
     const id = `refresh-${environment}-${operationDigest}`;
     let committed = false;
-    if (mode === "refresh") {
+    if (mode === "refresh" && pricingInstalled) {
       const saved = await core
         .statement("SELECT payload_json FROM v2_runtime_refreshes WHERE id=? AND environment=?", [
           id,
@@ -177,23 +212,24 @@ export async function observeAiRuntime(
           [month, environment],
         )
         .first<string>("allocation_proof_id");
-      if (!exposure || !allocationId) throw new Error("AI_RUNTIME_ALLOCATION_REQUIRED");
       const request = saved
         ? runtimeRefreshSchema.parse(JSON.parse(saved).request)
-        : {
-            id,
-            month,
-            expectedControlRevision: exposure.control_revision,
-            allocationVersion: exposure.allocation_version,
-            allocationProofId: allocationId,
-            pricingProofId: pp.id,
-            fundingProofId: fp.id,
-          };
-      if (request.pricingProofId !== pp.id || request.fundingProofId !== fp.id)
+        : exposure && allocationId
+          ? {
+              id,
+              month,
+              expectedControlRevision: exposure.control_revision,
+              allocationVersion: exposure.allocation_version,
+              allocationProofId: allocationId,
+              pricingProofId: pp.id,
+              fundingProofId: fp.id,
+            }
+          : null;
+      if (request && (request.pricingProofId !== pp.id || request.fundingProofId !== fp.id))
         throw new Error("AI_RUNTIME_REFRESH_IDENTITY_MISMATCH");
       const renew = createV2RuntimeRefreshRepository(core, environment, verify);
-      committed = await renew.refresh(request, now);
-      if (!committed) {
+      committed = request ? await renew.refresh(request, now) : false;
+      if (request && !committed) {
         const concurrent = await core
           .statement("SELECT payload_json FROM v2_runtime_refreshes WHERE id=? AND environment=?", [
             id,
@@ -206,7 +242,6 @@ export async function observeAiRuntime(
             committed = await renew.refresh(original, now);
         }
       }
-      if (!committed) throw new Error(`AI_RUNTIME_REFRESH_CONFLICT_${environment.toUpperCase()}`);
     }
     results.push({
       environment,
@@ -217,7 +252,15 @@ export async function observeAiRuntime(
     });
   }
   if (!results.length) throw new Error("AI_RUNTIME_ENVIRONMENT_REQUIRED");
-  return { evidenceHash, month, mode, results };
+  return {
+    evidenceHash,
+    month,
+    mode,
+    costObservationState: "observed" as const,
+    observedAt: o.checkedAt,
+    validUntil: o.validUntil,
+    results,
+  };
 }
 
 /** Explicit reallocation: both genuine drains are still required. */
@@ -530,25 +573,11 @@ if (import.meta.main) {
                 mode as "observe" | "refresh",
                 process.env.AI_RUNTIME_OPERATION_KEY ?? "default",
               );
-      const updatesBounds = mode === "refresh" || mode === "reallocate";
-      const bounds = JSON.stringify(
-        modelBounds(observation, "evidenceHash" in result ? result.evidenceHash : ""),
-      );
-      for (const environment of updatesBounds ? Object.keys(selected) : []) {
-        const child = Bun.spawn(
-          ["bunx", "wrangler", "secret", "put", "AI_MODEL_TOKEN_BOUNDS_JSON", "--env", environment],
-          { stdin: "pipe", stdout: "pipe", stderr: "pipe" },
-        );
-        child.stdin.write(bounds);
-        child.stdin.end();
-        await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text()]);
-        if ((await child.exited) !== 0) throw new Error("AI_RUNTIME_BOUNDS_DEPLOY_FAILED");
-      }
       console.log(
         JSON.stringify({
           ...result,
           candidateSha: sha,
-          modelBoundsConfigured: updatesBounds,
+          modelBoundsConfigured: false,
           autoRecharge: true,
         }),
       );

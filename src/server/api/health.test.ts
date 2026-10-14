@@ -223,6 +223,26 @@ describe("AI configuration health", () => {
     });
   }
 
+  test("observation-only configuration ignores historical cost expiry but preserves technical bounds", async () => {
+    const f = configurationFixture();
+    f.env.APPLICATION_COST_LIMITS_ENABLED = "false";
+    f.config.bounds.checkedAt = new Date(Date.parse(f.now) - 3600000).toISOString();
+    f.config.verifiedAt = f.config.bounds.checkedAt;
+    f.config.bounds.validUntil = f.now;
+    const encoded = JSON.stringify(f.config);
+    f.env.AI_MODEL_TOKEN_BOUNDS_JSON = encoded;
+    const ready = await inspectAiConfiguration(f.env, f.now);
+    expect(ready.status).toBe("ready");
+    expect(ready.reservations).toHaveLength(4);
+    expect(f.env.AI_MODEL_TOKEN_BOUNDS_JSON).toBe(encoded);
+    f.env.AI_MODEL_TOKEN_BOUNDS_JSON = JSON.stringify({
+      ...f.config,
+      bounds: { ...f.config.bounds, modelOutputTokenLimit: 2400 },
+    });
+    expect((await inspectAiConfiguration(f.env, f.now)).status).toBe("not_ready");
+    expect(f.calls()).toBe(0);
+  });
+
   test("verified tokenizer reservations match the planner including framing and vision", async () => {
     const f = configurationFixture();
     f.env.AI_MODEL_TOKEN_BOUNDS_JSON = JSON.stringify({

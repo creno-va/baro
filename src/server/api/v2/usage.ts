@@ -19,14 +19,21 @@ export function createUsageApi(
     if (!z.strictObject({}).safeParse(c.req.query()).success || (await c.req.text()).length > 0)
       return c.json(errorBody(c, "VALIDATION_ERROR", "사용량 조회 조건을 확인해 주세요."), 400);
     try {
-      const proofCore = createV2Core(c.env.DB, {
-        async encrypt() {
-          throw new Error("Usage proof reader cannot encrypt private data");
+      const proofCore = createV2Core(
+        c.env.DB,
+        {
+          async encrypt() {
+            throw new Error("Usage proof reader cannot encrypt private data");
+          },
+          async decrypt() {
+            throw new Error("Usage proof reader cannot decrypt private data");
+          },
         },
-        async decrypt() {
-          throw new Error("Usage proof reader cannot decrypt private data");
+        {
+          applicationCostLimitsEnabled: c.env.APPLICATION_COST_LIMITS_ENABLED !== "false",
+          monthlyBudgetCapEnabled: c.env.MONTHLY_BUDGET_CAP_ENABLED !== "false",
         },
-      });
+      );
       const service = createUsageService(c.env.DB, {
         ...options,
         applicationCostLimitsEnabled: c.env.APPLICATION_COST_LIMITS_ENABLED !== "false",

@@ -1,8 +1,8 @@
 # P0.3 격리 복구·rollback·경보 절차
 
 2026-10-14 현행 비용 정책은 [비용 운영](./COST-CONTROLS.md)을 따른다.
-`APPLICATION_COST_LIMITS_ENABLED=false`에서 월·누적 재원·요청 금액으로 실행을 막거나
-동결하지 않는다. 실제 비용 기록·기존 결제 경로·자원 격리·기술적 상한은 유지한다.
+`APPLICATION_COST_LIMITS_ENABLED=false`에서 금액·가격/FX/funding 누락/만료·월할당·
+refresh·유지비·비용 IO로 실행/배포를 막거나 동결하지 않는다. 실제 비용 기록·기존 결제 경로·자원 격리·기술적 상한은 유지한다.
 아래 날짜가 있는 이전 예산 승인 기록은 역사이며 현재 금액 한도를 복원하는 근거가 아니다.
 
 ## 2026-10-13 실행 승인과 제한된 platform drill
@@ -82,7 +82,7 @@ D1 Time Travel은 paid 30일/free 7일이며 실제 account plan 확인이 필�
 
 #53의 아래 계획은 실제 실행 성공 증거가 아니다. P0.3 #19/#27의 dependency와 기존 증거를
 보존하고 v2 R2·Container·role·비용 범위를 추가한다. 자원·실제 비용은 기존 사용자 승인과
-[ADR-0015](../adr/0015-maintenance-and-operating-policy.md)의 금액 차단 해제·실제 비용 기록·유효 가격/공급자 상태·기술적 실행 경계를 따른다.
+[현행 관측 정책](./PREBETA-COST-POLICY.md)의 비용 비차단·실제 기록 보존·권한/기술적 실행 경계를 따른다.
 production/일반 preview DB 덮어쓰기는 이 drill에 포함하지 않는다.
 
 먼저 allowlist 자원 등록부로 계정·D1 ID/이름·private/public R2·Worker/Workflow/DO/Container
@@ -98,7 +98,7 @@ production/일반 preview DB 덮어쓰기는 이 drill에 포함하지 않는다
 | Restore | baseline bookmark 후 삭제, 최신 journal을 DB 밖 보관, ingress/cron/dispatch 중단 후 격리 restore | journal replay 전 재개 금지, FK0/대상0·정상 owner decrypt·R2 orphan/누락 처리 |
 | Worker/Image rollback | 이전 검증 Worker version 및 Container digest로 복귀 | SHA/image/schema/key/manifest 양립, 진행 job 중복 실행·실제 비용 없음 |
 | 알림 | cleanup/crypto/source/timeout/budget/role 실패를 제한적으로 발생 | strict metadata만 수신, ack·dedup·복구·미수신 실패 판정 |
-| 비용 | 병렬 reservation·retry·unknown charge·월 경계·금액 초과를 테스트 | userquota 중복 차감 없음, 실제 비용·미정산 보존, 금액만으로 admission/dispatch/refresh/preflight 차단·동결 없음; 기술적 quota는 유지 |
+| 비용 | 병렬 reservation·retry·unknown charge·월 경계·금액 초과를 테스트 | userquota 중복 차감 없음, 실제 비용·미정산 보존, 금액·가격/재원 만료·월할당·refresh·비용 IO로 admission/dispatch/preflight 차단·동결 없음; 기술적 quota는 유지 |
 
 삭제 drill의 Container는 종료 여부와 temporary disk/재사용 instance 흔적을 확인한다. R2의
 original/part/derived/export·public copy와 CDN cache를 검사한다. D1 restore 결과만으로 R2

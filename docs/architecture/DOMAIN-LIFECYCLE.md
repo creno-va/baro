@@ -1,6 +1,6 @@
 # 사건·분석 실행 계약
 
-> **2026-10-14 현행 비용 정책:** `APPLICATION_COST_LIMITS_ENABLED=false`에서는 월·누적 재원·요청 금액으로 admission/dispatch/refresh/preflight를 막거나 비용 초과로 동결하지 않는다. 실제 비용·미정산·정산과 기존 결제/$10/$30 자동충전을 유지한다. 가격·최신 공급자 상태·권한·물리 용량·횟수·재시도 검사는 별개다. [ADR-0015](../adr/0015-maintenance-and-operating-policy.md)와 [비용 운영](../operations/COST-CONTROLS.md)이 과거 금액 차단 지시보다 우선한다.
+> **2026-10-14 프리베타 비용 관측 전용 — 현행 지시:** `APPLICATION_COST_LIMITS_ENABLED=false`에서 비용 금액·가격/FX/funding 관측 누락·만료·월별 할당·비용 승인·수동 refresh·유지비·비용 예약 IO 횟수로 기능이나 배포를 막지 않는다. 사용자 재지시 전 재도입 금지. 비용 원장·관측 사실은 보존하며 관측 시각/금액을 조작하지 않는다. AI200/일·실제 기술용량/횟수·권한/보안/무결성·실제 공급자 오류는 유지한다. 아래 과거 비용 차단 지시·실패 기록보다 [현행 정책과 구현 상태](../operations/PREBETA-COST-POLICY.md)가 우선한다.
 
 > **2026-10-07 이전 결정 기록:** 계정별 AI 하루200회와 `MONTHLY_BUDGET_CAP_ENABLED=false`로 월 cap을 해제했다. 이 기록과 schema0009 원장은 보존하며, 현행 정책은 2026-10-14의 모든 앱 비용 금액 차단 해제로 확대됐다.
 
@@ -185,9 +185,9 @@ claim과 같은 batch의 만료 행 제거/교체로 영구 unique 충돌을 막
 UTC timestamps는 비교/저장 전에 canonical ISO milliseconds로 정규화한다. 같은 초의
 `...00Z`와 `...00.001Z`를 문자열 형태 차이 때문에 역순으로 판정하지 않는다. quote는 서버의
 신뢰할 수 있는 가격/환율 정본으로 생성하며 client 제공 금액·providerPricingVersion을 승인
-근거로 쓰지 않는다. 실행 직전 quote/공급자 상태의 유효성·target/lease·기술적 실행 경계를 다시 확인하며 금액으로 차단하지 않는다.
-만료 견적은 대기 사유를 남기고 재견적한다. 기존 hold의 교체/증액도 원자적이며 이전 hold를
-먼저 지워 새 비용을 승인하는 틈을 만들지 않는다.
+근거로 쓰지 않는다. 실행 직전 target/lease·권한·기술적 실행 경계를 다시 확인한다.
+비용 quote/FX/funding의 누락·만료는 stale/unknown 관측이며 재견적·수동 refresh를 기다려
+실행을 막지 않는다. 기존 hold를 보존하고 비용 기록 갱신 실패를 제품 실패로 전파하지 않는다.
 
 ### 실제 비용과 불명확한 실행
 
@@ -197,7 +197,7 @@ UTC timestamps는 비교/저장 전에 canonical ISO milliseconds로 정규화�
 상한에 포함한다. 최대 입력/출력·프레임/chunk·실행 시간 근거가 없는 paid 작업은 보류한다.
 
 provider 응답의 허용된 request 상관 ID·token/duration 등 usage는 출력 schema/정책 검증에
-성공했는지와 별개로 먼저 durable 정산한다. 유효하지 않은 JSON·거절·길이 종료도 과금될 수
+성공했는지와 별개로 정산 근거를 보존한다. 비용 기록 오류가 정상 제품 결과를 실패로 바꾸지 않는다. 유효하지 않은 JSON·거절·길이 종료도 과금될 수
 있다. usage 미확인/timeout/외부 성공 후 checkpoint 전 crash는0원이 아니라 `ambiguous`다.
 observer/로그 best-effort 전달을 ledger 정본으로 사용하지 않는다. 사건 원문·파일명·prompt/
 response·인증 URL·token·stack을 비용 기록에 넣지 않는다.
@@ -214,13 +214,14 @@ late receipt는 기존 attempt를 정산하고 추가 모델 호출을 만들지
 관측 초과·미정산·환경별 합계·필수 보관/읽기/삭제 비용은 원장에 보존하며 그 금액으로
 새 paid admission을 닫지 않는다. `max(0, limit-used-reserved)`는 현재도 유효한
 횟수·용량 quota의 잔여 계산이며 앱 비용 제한을 복원하는 근거가 아니다.
-정확한 환율·단가·최신 공급자 상태 근거가 없으면 별도의 의존성 실패로 처리한다.
+가격·환율·funding 관측이 없거나 오래됐으면 unknown/stale로 기록하고 실행 의존성 실패로
+처리하지 않는다. 실제 provider API 오류·필수 credential 부재는 별도 기술 실패다.
 
 ### KST 경계와 삭제 이후 정산
 
 KST 다음 자정은 usage day의15:00 UTC다. 자정 전 예약의 완료/retry는 원래 day를 정산하고
 새 요청만 새 day를 사용한다. 월 전환은 과거 settled/ambiguous/hold를 지우지 않는다. 새 달
-maintenance·보관 비용·진행 중 exposure를 예약하고 공급자의 UTC 일/구독 갱신 기간과
+maintenance·보관 비용·진행 중 exposure를 관측하고 공급자의 UTC 일/구독 갱신 기간과
 대조한다. carry-over exposure reference와 실제 청구를 구분해 누락/중복 합산을 막는다.
 
 사건 원본100개/5GB와 계정 전체10GB는 별도 scope다. pending 원본은 두 scope에 예약하고

@@ -1,6 +1,6 @@
 # 동일 클라이언트와 API mock 계약
 
-> **2026-10-14 사용자 개정 — 이전 비용 정책보다 우선:** `APPLICATION_COST_LIMITS_ENABLED=false`로 월 예산·누적 재원·요청별 금액에 따른 애플리케이션 차단을 모두 해제한다. 10/07의 월 cap 해제보다 넓은 범위이며, 사용자 직접 요청 없이 금액 한도를 복원하지 않는다. 계정별 AI 응답 KST 하루200회, 기술 물량·시간·횟수, 권한·동의, 실제 비용·미정산 원장은 유지한다. 기존 Cloudflare 결제·자동 충전 설정은 변경하지 않는다. 실제 공급자 거절이나 구성·가격·상태 누락은 금액 한도와 별개로 오류가 될 수 있으며, `BUDGET_UNAVAILABLE` 코드만으로 잔액 부족을 단정하지 않는다. 코드 병합과 실제 배포 반영은 별도 증거로 확인한다. [ADR-0015](../adr/0015-maintenance-and-operating-policy.md)를 따른다.
+> **2026-10-14 프리베타 비용 관측 전용 — 현행 지시:** `APPLICATION_COST_LIMITS_ENABLED=false`에서 비용 금액·가격/FX/funding 관측 누락·만료·월별 할당·비용 승인·수동 refresh·유지비·비용 예약 IO 횟수로 기능이나 배포를 막지 않는다. 사용자 재지시 전 재도입 금지. 비용 원장·관측 사실은 보존하며 관측 시각/금액을 조작하지 않는다. AI200/일·실제 기술용량/횟수·권한/보안/무결성·실제 공급자 오류는 유지한다. 아래 과거 비용 차단 지시·실패 기록보다 [현행 정책과 구현 상태](../operations/PREBETA-COST-POLICY.md)가 우선한다.
 
 - Status: Accepted implementation plan
 - Updated: 2026-10-14
@@ -22,8 +22,8 @@ mock과 real은 동일한 화면 DTO를 반환한다. 실제 구현되지 않은
 local/격리된 preview에서 명시적으로 `PUBLIC_API_MODE=mock`을 선택한다. 기본은 `real`이다.
 2026-10-07 사용자 후속 지시에 따라 배포되는 preview도 `PUBLIC_API_MODE=real`을 사용하고
 production과 같은 bundle 검사를 거친다. mock은 명시적으로 선택한 local/격리된 검증에만 사용한다.
-실제 공급자 설정·가격/funding·승인 증거가 없으면 기존 API 오류를 그대로 처리하며 mock으로
-대체하지 않는다. preview는 해당 환경의 same-origin API를 쓰며 production credential·DB를 복제하지 않는다.
+실제 runtime binding/credential·권한·provider 오류는 API 오류로 처리하며 mock으로 대체하지
+않는다. 가격/funding 관측의 누락·만료나 비용 승인을 API 실패 이유로 요구하지 않는다. preview는 해당 환경의 same-origin API를 쓰며 production credential·DB를 복제하지 않는다.
 production 빌드/실행에는 mock 응답을 허용하지 않는다. mock 페이지를 그리기 위한 local/preview
 client-side 진입은 기존 실제 API의 인증·동의·owner·public gate를 해제하지 않는다.
 명시적 mock 화면에는 작은 `API 예시 응답으로 보기` 표시를 제공한다.

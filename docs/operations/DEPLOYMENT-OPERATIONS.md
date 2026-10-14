@@ -61,7 +61,12 @@ bun run deploy:production --sha <full40sha> --mode public-beta
 bun run deploy:production --sha <full40sha> --mode operator-authorized --authorization <issue71_comment_id>
 ```
 
-`--configure-ai`는 기존 별도 검증된 AI 설정 반영이 필요한 경우에만 명시한다.
+공용 배포 action은 `scripts/configure-ai-runtime.ts`로 환경별 모델 capability를 설정한다.
+`--configure-ai`/`configure_ai`는 호환 입력이며 비용 refresh/reallocate를 호출하지 않는다.
+[관측 전용 정책](./PREBETA-COST-POLICY.md)에 따라 금액·가격/FX/funding 만료·월할당·수동
+refresh를 배포 선행 조건으로 요구하지 않는다. 기존 관측 시각은 보존하고 실제 binding·
+credential·schema·보안·모델 context/output·운영자 승인은 계속 검사한다.
+preflight `configuration_ready`는 구성 검사 결과이며 실제 제품 기능 성공을 보장하지 않는다.
 `--plan`은 요청 내용만 출력하며 배포하지 않는다. SHA/모드/옵션 오류는 dispatch 전에 거부한다.
 production은 SHA 생략을 허용하지 않으며 preview 성공 SHA를 사용해야 한다.
 preview는 checkout 전 및 migration 직전에 현재 원격 main과 비교해 오래된 요청을 거부한다.
@@ -133,7 +138,7 @@ schema/prompt를 사용할 수 있으므로 호환 기간을 둔다.
 - OAuth callback과 allowed origin이 정확한 HTTPS URL임
 - AI Gateway payload logging이 꺼짐
 - AI Gateway Unified Billing의 실제 상태·잔액과 기존 결제·자동충전을 관측하며 현재 OFF인 spend limit을 재설정하지 않음
-- preview/production의 `APPLICATION_COST_LIMITS_ENABLED=false`와 `MONTHLY_BUDGET_CAP_ENABLED=false`를 유지하며 월·누적 재원·요청 금액 차단을 복원하지 않음 ([현행 비용 정책](./COST-CONTROLS.md))
+- preview/production의 `APPLICATION_COST_LIMITS_ENABLED=false`와 `MONTHLY_BUDGET_CAP_ENABLED=false`를 유지하며 금액·비용 관측 누락/만료·월할당·refresh·비용 IO 차단을 복원하지 않음 ([현행 비용 정책](./PREBETA-COST-POLICY.md)). 향후 명시적 재승인 없이는 변경 금지이며 flag만 true로 바꾸지 않고0015의 환경별 DB policy 동기화가 필요함
 - production에서 법률 fixture adapter와 source map 원문 노출이 비활성화됨
 - CSP가 OAuth와 Turnstile을 막거나 과도하게 열지 않음
 - current policy version이 게시된 문서 버전과 일치함
