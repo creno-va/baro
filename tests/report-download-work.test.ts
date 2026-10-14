@@ -651,8 +651,8 @@ test("canonical report v2 read/review/PDF/HTML separates database, render and of
       { operation: "get_initial", calls: 61, statements: 85 },
       { operation: "save_review", calls: 69, statements: 95 },
       { operation: "get_saved", calls: 15, statements: 17 },
-      { operation: "pdf_first", calls: 97, statements: 127 },
-      { operation: "pdf_saved", calls: 31, statements: 34 },
+      { operation: "pdf_first", calls: 97, statements: 124 },
+      { operation: "pdf_saved", calls: 32, statements: 34 },
       { operation: "html", calls: 14, statements: 16 },
       { operation: "generate", calls: 61, statements: 85 },
     ]);
