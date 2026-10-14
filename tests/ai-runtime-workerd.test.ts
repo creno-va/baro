@@ -311,6 +311,7 @@ async function exerciseNativeRuntime(applicationCostLimitsEnabled: boolean) {
         ),
       );
     const original = await snapshot();
+    expect(original[1]?.length).toBeGreaterThan(0);
     const originalTriggers = (
       await preview
         .prepare("SELECT name,sql FROM sqlite_master WHERE type='trigger' ORDER BY name")
@@ -330,7 +331,15 @@ async function exerciseNativeRuntime(applicationCostLimitsEnabled: boolean) {
           .all()
       ).results,
     ).toEqual(originalTriggers);
-    await preview.batch(migration.map((sql) => preview.prepare(sql)));
+    // Remote imports must not depend on deferred-FK state surviving statement
+    // boundaries. Check every intermediate schema as well as the final rows.
+    const upgraded = await preview.batch(
+      migration.flatMap((sql) => [
+        preview.prepare(sql),
+        preview.prepare("PRAGMA foreign_key_check"),
+      ]),
+    );
+    for (let i = 1; i < upgraded.length; i += 2) expect(upgraded[i]?.results).toEqual([]);
     expect((await snapshot()).slice(0, -1)).toEqual(original.slice(0, -1));
     expect(
       (
