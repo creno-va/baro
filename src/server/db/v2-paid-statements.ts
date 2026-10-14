@@ -277,7 +277,7 @@ export function paidAcquirePredicate(
 ): { sql: string; values: unknown[] } {
   if (!applicationCostLimitsEnabled)
     return {
-      sql: `EXISTS(SELECT 1 FROM v2_execution_job_holds h JOIN v2_execution_attempts ca ON ca.id=h.attempt_id JOIN v2_execution_job_plans p ON p.id=h.plan_id WHERE h.attempt_id=? AND h.job_id=j.id AND h.state='prepared' AND ca.state='reserved' AND ca.operation_id=j.operation_id AND p.job_id=j.id AND p.target_kind=j.target_kind AND p.target_id=j.target_id AND p.target_revision=j.target_revision AND p.deadline_at>?)`,
+      sql: `EXISTS(SELECT 1 FROM v2_execution_job_holds h JOIN v2_execution_attempts ca ON ca.id=h.attempt_id JOIN v2_execution_job_plans p ON p.id=h.plan_id WHERE h.attempt_id=? AND h.job_id=j.id AND h.state='prepared' AND ca.state='reserved' AND ca.operation_id=j.operation_id AND p.job_id=j.id AND p.target_kind=j.target_kind AND p.target_id=j.target_id AND p.target_revision=j.target_revision AND p.deadline_at>? AND (NOT EXISTS(SELECT 1 FROM v2_execution_admissions e WHERE e.attempt_id=h.attempt_id) OR EXISTS(SELECT 1 FROM v2_execution_admissions e WHERE e.attempt_id=h.attempt_id AND e.runtime_instance_id=j.runtime_instance_id)))`,
       values: [attemptId, now],
     };
   return {

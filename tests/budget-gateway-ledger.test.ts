@@ -519,8 +519,10 @@ test("receipt SQL rollback preserves valid output only in observation mode and k
   const diagnostics = spyOn(console, "error").mockImplementation(() => {});
   try {
     for (const applicationCostLimitsEnabled of [true, false]) {
-      const f = await fixture(100, undefined, applicationCostLimitsEnabled),
+      const f = await fixture(100, undefined, true),
         a = await f.admit();
+      // This is an existing priced hold restored after the policy changes.
+      f.core.applicationCostLimitsEnabled = applicationCostLimitsEnabled;
       let runs = 0;
       f.db.sqlite.exec(
         "CREATE TRIGGER fail_gateway_receipt BEFORE INSERT ON v2_cost_receipts BEGIN SELECT RAISE(ABORT,'private SQL sentinel'); END",
@@ -593,8 +595,9 @@ test("observation receipt write failure does not turn provider, policy or schema
   const diagnostics = spyOn(console, "error").mockImplementation(() => {});
   try {
     for (const kind of ["provider", "policy", "schema"] as const) {
-      const f = await fixture(100, undefined, false),
+      const f = await fixture(100, undefined, true),
         a = await f.admit();
+      f.core.applicationCostLimitsEnabled = false;
       let runs = 0;
       f.db.sqlite.exec(
         "CREATE TRIGGER fail_gateway_receipt BEFORE INSERT ON v2_cost_receipts BEGIN SELECT RAISE(ABORT,'private SQL sentinel'); END",

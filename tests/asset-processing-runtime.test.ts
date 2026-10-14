@@ -1,7 +1,14 @@
 import { expect, test } from "bun:test";
 import { createV2JobsRepository } from "../src/server/db/v2-jobs";
 import { createV2LawyersRepository } from "../src/server/db/v2-lawyers";
+import {
+  createV2PaidRuntimeRepository,
+  paidHoldRequestSchema,
+} from "../src/server/db/v2-paid-runtime";
 import { createV2StorageRepository } from "../src/server/db/v2-storage";
+import { createAssetProcessingRuntime } from "../src/server/modules/budget/asset-runtime";
+import { createProcessingBudgetService } from "../src/server/modules/budget/processing-ledger";
+import { boundedProcessingResources } from "../src/server/modules/budget/processing-runtime";
 import { createAssetProcessingExecution } from "../src/server/modules/file-processing/asset-execution";
 import { runAssetProcessing } from "../src/server/modules/file-processing/asset-runner";
 import {
@@ -10,6 +17,7 @@ import {
 } from "../src/server/modules/file-processing/dispatch";
 import { nativeJobId } from "../src/server/modules/file-processing/native-identity";
 import { createAssetProcessingAdmission } from "../src/server/runtime/asset-admission";
+import { readProcessingProofs } from "../src/server/runtime/processing-proofs";
 import { fixture } from "./helpers/file-processing-fixture";
 import { seedTestSession } from "./helpers/session";
 
@@ -203,4 +211,174 @@ test("bounded sanitizer Workflow sanitizes failure output and clears its request
   expect(result).toEqual({ status: "stopped", code: "FILE_PROCESSING_FAILED" });
   expect(signal?.aborted).toBe(true);
   expect(JSON.stringify(result)).not.toContain("private provider");
+});
+
+test("actual asset runtime restores the current same-clock retry after null funding becomes observed", async () => {
+  const f = await setup(false);
+  // Synthetic local transport. Reaching this port proves the real runtime
+  // restored and dispatched its exact admission, without any provider call.
+  f.actor.now = new Date().toISOString();
+  f.core.applicationCostLimitsEnabled = false;
+  const env = {
+    APP_ENV: "preview",
+    APPLICATION_COST_LIMITS_ENABLED: "false",
+    DB: f.db.binding,
+    CASE_DATA_KEY_V1: btoa("k".repeat(32)).replace(/=+$/, ""),
+    CASE_PRIVATE_R2: f.bucket.port,
+    ASSET_PROCESSING: {},
+    FILE_PROCESSOR: {
+      idFromName: (name: string) => name,
+      get: () => ({
+        fetch: () => {
+          throw new Error("Unexpected processor call");
+        },
+      }),
+    },
+  } as unknown as Env;
+  expect(
+    await createAssetProcessingAdmission(f.core, env, {}, () => f.actor.now).enqueueProcessing?.({
+      ...f.params,
+      operationId: f.operationId,
+    }),
+  ).toBe(true);
+  const old = f.db.sqlite
+    .query(
+      "SELECT attempt_id,job_id,runtime_instance_id,payload_json FROM v2_execution_admissions WHERE kind='job'",
+    )
+    .get() as {
+    attempt_id: string;
+    job_id: string;
+    runtime_instance_id: string;
+    payload_json: string;
+  };
+  const original = paidHoldRequestSchema.parse(JSON.parse(old.payload_json));
+  expect(original.fundingProofId).toBeNull();
+  const firstLease = await f.jobs.acquire(
+    f.actor,
+    old.job_id,
+    crypto.randomUUID(),
+    new Date(Date.parse(f.actor.now) + 300000).toISOString(),
+    old.attempt_id,
+  );
+  if (!firstLease) throw new Error("Synthetic first lease absent");
+  // Failure before dispatch leaves the old prepared hold intact. Equal clock
+  // values cannot identify which immutable runtime owns the retry admission.
+  expect(await f.jobs.fail(f.actor, firstLease.lease, "FILE_PROCESSING_FAILED", true)).toBe(true);
+  const proofId = crypto.randomUUID();
+  const runtime = createV2PaidRuntimeRepository(
+    f.core,
+    "preview",
+    async (_kind, _payload, digest) => ({
+      digest,
+      evidenceHash: "e".repeat(64),
+      method: "authenticated_console",
+      verifiedAt: f.actor.now,
+    }),
+  );
+  expect(
+    await runtime.putFundingProof(
+      {
+        id: proofId,
+        environment: "preview",
+        state: "trial_credit",
+        existingPaymentPath: true,
+        autoRecharge: false,
+        spendAllowanceKrw: 10000,
+        reference: "synthetic retry funding observation",
+        observedAt: f.actor.now,
+        validUntil: new Date(Date.parse(f.actor.now) + 3600000).toISOString(),
+      },
+      f.actor.now,
+    ),
+  ).toBe(true);
+  const nextInstance = `${old.job_id}-2`;
+  const budget = createProcessingBudgetService({
+    core: f.core,
+    environment: "preview",
+    ownerId: f.actor.ownerId,
+    clock: () => f.actor.now,
+    bounds: boundedProcessingResources,
+    binding: async (now) => {
+      const proofs = await readProcessingProofs(f.core, "preview", now);
+      if (!proofs) return null;
+      return {
+        ...proofs,
+        operationId: f.operationId,
+        operationRevision: original.plan.operationRevision,
+        requestHash: original.plan.requestHash,
+        jobId: old.job_id,
+        targetKind: "profile_asset",
+        targetId: f.params.assetId,
+        targetRevision: 1,
+        invocationId: nextInstance,
+        maximumAttempts: 1,
+        deadlineAt: new Date(Date.parse(now) + 300000).toISOString(),
+      };
+    },
+  });
+  const blob = f.db.sqlite
+    .query(
+      "SELECT id,cipher_hash,cipher_bytes FROM v2_blobs WHERE id=(SELECT original_blob_id FROM v2_assets WHERE id=?)",
+    )
+    .get(f.params.assetId) as { id: string; cipher_hash: string; cipher_bytes: number };
+  f.db.sqlite
+    .query(
+      "INSERT INTO v2_physical_storage_capacity(environment,capacity_bytes) VALUES('preview',1000000)",
+    )
+    .run();
+  f.db.sqlite
+    .query(
+      "INSERT INTO v2_physical_blob_bindings(blob_id,environment,owner_id,object_key,maximum_cipher_bytes,state,writer_state,inventory_hash,created_at) SELECT id,'preview',?,object_key,cipher_bytes,'held','stopped','dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd',? FROM v2_blobs WHERE id=?",
+    )
+    .run(f.actor.ownerId, f.actor.now, blob.id);
+  const prepared = await budget.prepareInitial({
+    service: "requests",
+    action: "r2_get",
+    identity: `asset-original:${blob.id}:${blob.cipher_hash}`,
+    byteLength: blob.cipher_bytes,
+    durationSeconds: null,
+  });
+  if (!prepared) throw new Error("Synthetic retry admission absent");
+  expect(prepared.request.fundingProofId).toBe(proofId);
+  expect(await f.jobs.retryAsset(prepared.actor, old.job_id, prepared.paid)).toBe(true);
+  expect(
+    await f.jobs.acquire(
+      f.actor,
+      old.job_id,
+      crypto.randomUUID(),
+      new Date(Date.parse(f.actor.now) + 300000).toISOString(),
+      old.attempt_id,
+    ),
+  ).toBeNull();
+  const execution = await createAssetProcessingRuntime(
+    env,
+    { ...f.params, jobId: old.job_id },
+    nextInstance,
+  );
+  await expect(execution.run(new AbortController().signal)).rejects.toMatchObject({
+    code: "STORAGE_UNAVAILABLE",
+  });
+  expect(f.bucket.calls.get).toBe(1);
+  expect(
+    f.db.sqlite
+      .query(
+        "SELECT state,runtime_instance_id,dispatch_token FROM v2_execution_admissions WHERE attempt_id=?",
+      )
+      .get(old.attempt_id),
+  ).toEqual({
+    state: "prepared",
+    runtime_instance_id: old.runtime_instance_id,
+    dispatch_token: null,
+  });
+  expect(
+    f.db.sqlite
+      .query(
+        "SELECT state,runtime_instance_id,transport FROM v2_execution_admissions WHERE attempt_id=?",
+      )
+      .get(prepared.request.attemptId),
+  ).toEqual({ state: "unknown", runtime_instance_id: nextInstance, transport: "unknown" });
+  expect(f.db.sqlite.query("SELECT count(*) n FROM v2_execution_admissions").get()).toEqual({
+    n: 2,
+  });
+  expect(f.db.sqlite.query("SELECT count(*) n FROM v2_cost_attempts").get()).toEqual({ n: 0 });
 });
