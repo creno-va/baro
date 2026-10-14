@@ -16,7 +16,7 @@ import {
   createV2RuntimeRefreshRepository,
   runtimeRefreshSchema,
 } from "../src/server/db/v2-runtime-refresh";
-import type { initializeEmptyStorage } from "./initialize-storage";
+import type { initializeEmptyPhysicalStorage, initializeEmptyStorage } from "./initialize-storage";
 import { remoteBudgetD1 } from "./remote-budget-d1";
 
 export const observationSchema = z.strictObject({
@@ -511,7 +511,13 @@ if (import.meta.main) {
     if (!token || !sha || !/^[a-f0-9]{40}$/.test(sha))
       throw new Error("AI_RUNTIME_DEPLOYMENT_INPUT_INVALID");
     const config = (await Bun.file("wrangler.jsonc").json()) as {
-      env: Record<string, { d1_databases: { database_id: string }[] }>;
+      env: Record<
+        string,
+        {
+          d1_databases: { database_id: string }[];
+          vars?: { APPLICATION_COST_LIMITS_ENABLED?: string };
+        }
+      >;
     };
     const account = process.env.CLOUDFLARE_ACCOUNT_ID;
     if (!account) throw new Error("AI_RUNTIME_ACCOUNT_MISSING");
@@ -526,15 +532,17 @@ if (import.meta.main) {
     if (mode === "status")
       console.log(JSON.stringify({ ...(await inspectAiRuntime(selected)), candidateSha: sha }));
     else {
-      const observation = observationSchema.parse(
-        process.env.AI_RUNTIME_OBSERVATION_JSON
-          ? JSON.parse(process.env.AI_RUNTIME_OBSERVATION_JSON)
-          : await Bun.file("docs/operations/AI-RUNTIME-OBSERVATION.json").json(),
-      );
+      const readObservation = async () =>
+        observationSchema.parse(
+          process.env.AI_RUNTIME_OBSERVATION_JSON
+            ? JSON.parse(process.env.AI_RUNTIME_OBSERVATION_JSON)
+            : await Bun.file("docs/operations/AI-RUNTIME-OBSERVATION.json").json(),
+        );
       let result:
         | Awaited<ReturnType<typeof observeAiRuntime>>
         | Awaited<ReturnType<typeof provisionAiRuntime>>
-        | Awaited<ReturnType<typeof initializeEmptyStorage>>;
+        | Awaited<ReturnType<typeof initializeEmptyStorage>>
+        | Awaited<ReturnType<typeof initializeEmptyPhysicalStorage>>;
       if (mode === "initialize-storage") {
         const environment = target as RuntimeEnvironment;
         const configuration = JSON.parse(process.env.STORAGE_INITIALIZATION_JSON ?? "null");
@@ -554,16 +562,29 @@ if (import.meta.main) {
           .parse(await health.json());
         if (!health.ok || live.release !== sha || live.environment !== environment)
           throw new Error("AI_RUNTIME_SERVING_SHA_MISMATCH");
-        const { initializeEmptyStorage } = await import("./initialize-storage");
-        result = await initializeEmptyStorage(
-          bindings[environment],
-          environment,
-          observation,
-          configuration,
-          process.env.AI_RUNTIME_OPERATION_KEY ?? "default",
-          sha,
+        const { initializeEmptyStorage, initializeEmptyPhysicalStorage } = await import(
+          "./initialize-storage"
         );
-      } else
+        const key = process.env.AI_RUNTIME_OPERATION_KEY ?? "default";
+        result =
+          config.env[environment]?.vars?.APPLICATION_COST_LIMITS_ENABLED === "false"
+            ? await initializeEmptyPhysicalStorage(
+                bindings[environment],
+                environment,
+                configuration,
+                key,
+                sha,
+              )
+            : await initializeEmptyStorage(
+                bindings[environment],
+                environment,
+                await readObservation(),
+                configuration,
+                key,
+                sha,
+              );
+      } else {
+        const observation = await readObservation();
         result =
           mode === "reallocate"
             ? await provisionAiRuntime(bindings, observation)
@@ -573,12 +594,14 @@ if (import.meta.main) {
                 mode as "observe" | "refresh",
                 process.env.AI_RUNTIME_OPERATION_KEY ?? "default",
               );
+      }
       console.log(
         JSON.stringify({
           ...result,
           candidateSha: sha,
-          modelBoundsConfigured: false,
-          autoRecharge: true,
+          ...("initializationId" in result
+            ? {}
+            : { modelBoundsConfigured: false, autoRecharge: true }),
         }),
       );
     }

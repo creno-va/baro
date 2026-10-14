@@ -33,6 +33,128 @@ export const emptyStorageInitializationSchema = storageProjectionSchema
   })
   .strict();
 
+// Legacy financial/IO fields may accompany an older operator request, but are
+// deliberately not part of physical authorization or this operation's identity.
+export const emptyPhysicalStorageInitializationSchema = emptyStorageInitializationSchema
+  .pick({ capacityBytes: true, expectedReleaseSha: true, inventory: true })
+  .strip();
+
+/** Initialize only an empty physical ledger. Cost observations and financial
+ * control phases are neither read nor changed; the authenticated inventory is
+ * still required and is never represented as a provider/billing receipt. */
+export async function initializeEmptyPhysicalStorage(
+  binding: D1Database,
+  environment: "preview" | "production",
+  rawConfiguration: unknown,
+  operationKey: string,
+  servingSha: string,
+  clock = () => new Date().toISOString(),
+) {
+  const configuration = emptyPhysicalStorageInitializationSchema.parse(rawConfiguration);
+  const now = new Date(clock()).toISOString();
+  if (
+    configuration.inventory.environment !== environment ||
+    configuration.expectedReleaseSha !== servingSha ||
+    !/^[a-f0-9]{40}$/.test(servingSha) ||
+    !operationKey ||
+    operationKey.length > 128
+  )
+    throw new Error("STORAGE_INITIALIZATION_INPUT_INVALID");
+  const core = operationsCore(binding);
+  const digest = await runtimeDigest({
+    kind: "empty_physical_storage",
+    configuration,
+    operationKey,
+    environment,
+  });
+  const marker = `storage-physical-initialization:${environment}`;
+  const receipt = JSON.stringify({
+    version: 1,
+    digest,
+    capacityBytes: configuration.capacityBytes,
+    inventoryHash: await runtimeDigest(configuration.inventory),
+    inventoryCheckedAt: configuration.inventory.checkedAt,
+    releaseSha: servingSha,
+  });
+  const readReceipt = () =>
+    core.statement("SELECT value FROM app_metadata WHERE key=?", [marker]).first<string>("value");
+  const matchesCapacity = () =>
+    core
+      .statement(
+        "SELECT 1 FROM v2_physical_storage_capacity c JOIN v2_physical_storage_totals t ON t.environment=c.environment AND t.version=1 AND t.held_bytes=c.held_bytes JOIN v2_cost_execution_policy p ON p.environment=c.environment AND p.limits_enabled=0 WHERE c.environment=? AND c.capacity_bytes=? AND NOT EXISTS(SELECT 1 FROM v2_storage_integrity_faults WHERE environment=c.environment)",
+        [environment, configuration.capacityBytes],
+      )
+      .first();
+  const previous = await readReceipt();
+  if (previous !== null && previous !== receipt)
+    throw new Error("STORAGE_INITIALIZATION_IDENTITY_MISMATCH");
+  const result = (replayed: boolean) => ({
+    environment,
+    initializationId: `physical-storage-${digest}`,
+    capacityBytes: configuration.capacityBytes,
+    replayed,
+    nextAction: "none" as const,
+  });
+  // Exact committed retries remain valid after inventory ages or new objects
+  // are admitted. They attest the original initialization, not a fresh scan.
+  if (previous !== null) {
+    if (!(await matchesCapacity())) throw new Error("STORAGE_INITIALIZATION_PHYSICAL_CONFLICT");
+    return result(true);
+  }
+  if (
+    Date.parse(configuration.inventory.checkedAt) > Date.parse(now) ||
+    Date.parse(now) - Date.parse(configuration.inventory.checkedAt) > 300000
+  )
+    throw new Error("STORAGE_INITIALIZATION_INPUT_INVALID");
+  const hasExecutionJournal = await core
+    .statement("SELECT 1 FROM sqlite_master WHERE type='table' AND name='v2_execution_admissions'")
+    .first();
+  // The journal is additive to older schemas. Live storage executions require
+  // reconciliation under a physical lock; historical final records are kept.
+  const empty = `NOT EXISTS(SELECT 1 FROM v2_blobs)
+    AND NOT EXISTS(SELECT 1 FROM v2_physical_blob_bindings)
+    AND NOT EXISTS(SELECT 1 FROM v2_storage_paid_executions)
+    AND NOT EXISTS(SELECT 1 FROM v2_jobs WHERE status IN ('queued','running','validating'))
+    ${hasExecutionJournal ? "AND NOT EXISTS(SELECT 1 FROM v2_execution_admissions WHERE environment=? AND kind='storage' AND state IN ('prepared','dispatched','unknown'))" : ""}
+    AND NOT EXISTS(SELECT 1 FROM v2_physical_storage_capacity WHERE environment=?)
+    AND NOT EXISTS(SELECT 1 FROM v2_storage_integrity_faults WHERE environment=?)
+    AND EXISTS(SELECT 1 FROM v2_physical_storage_totals WHERE environment=? AND version=1 AND held_bytes=0)`;
+  const claim = crypto.randomUUID();
+  const claimed = "EXISTS(SELECT 1 FROM v2_runtime_claims WHERE id=?)";
+  const batch = await binding.batch([
+    core.statement(
+      `INSERT INTO v2_runtime_claims(id,owner_id,target_id,revision) SELECT ?,?,?,0 WHERE ${empty} AND NOT EXISTS(SELECT 1 FROM app_metadata WHERE key=?)`,
+      [
+        claim,
+        environment,
+        digest,
+        ...(hasExecutionJournal ? [environment] : []),
+        environment,
+        environment,
+        environment,
+        marker,
+      ],
+    ),
+    core.statement(
+      `INSERT INTO v2_cost_execution_policy(environment,limits_enabled) SELECT ?,0 WHERE ${claimed} ON CONFLICT(environment) DO UPDATE SET limits_enabled=0`,
+      [environment, claim],
+    ),
+    core.statement(
+      `INSERT INTO v2_physical_storage_capacity(environment,capacity_bytes) SELECT ?,? WHERE ${claimed}`,
+      [environment, configuration.capacityBytes, claim],
+    ),
+    core.statement(`INSERT INTO app_metadata(key,value) SELECT ?,? WHERE ${claimed}`, [
+      marker,
+      receipt,
+      claim,
+    ]),
+    core.statement("DELETE FROM v2_runtime_claims WHERE id=?", [claim]),
+  ]);
+  if ((await readReceipt()) !== receipt || !(await matchesCapacity()))
+    throw new Error("STORAGE_INITIALIZATION_PHYSICAL_CONFLICT");
+  return result(batch[0]?.meta.changes !== 1);
+}
+
 export async function initializeEmptyStorage(
   binding: D1Database,
   environment: "preview" | "production",
