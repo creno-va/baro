@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { createFilesApi } from "../src/client/api/files";
 import { createFilesMock } from "../src/client/api/mock/files";
 import { createWorkspaceMock, type WorkspaceMockRuntime } from "../src/client/api/mock/workspace";
+import type { FileUploadProgress } from "../src/client/api/types";
 import {
   createWorkspaceApi,
   workspaceMutation,
@@ -289,6 +290,78 @@ test("chunk upload retries reuse reservation and preserve exact original bytes a
   });
 });
 
+test("upload progress counts only acknowledged parts and preserves recovery after a failed part", async () => {
+  const f = fixture();
+  await f.client.get("synthetic-case");
+  f.runtime.update((state) => {
+    state.faults = { "files.uploadPart": ["UNAVAILABLE"] };
+  });
+  const file = new File(["합성 진행 자료"], "progress.txt", { type: "text/plain" });
+  const events: FileUploadProgress[] = [];
+  await expect(
+    createFilesApi(f.transport).upload("synthetic-case", file, (value) => events.push(value)),
+  ).rejects.toMatchObject({ code: "UNAVAILABLE" });
+  expect(events.map((event) => event.stage)).toEqual(["hashing", "preparing", "uploading"]);
+  expect(
+    events.every((event) => event.completedBytes === 0 && event.totalBytes === file.size),
+  ).toBe(true);
+  events.length = 0;
+  const uploaded = await createFilesApi(f.transport).upload("synthetic-case", file, (value) => {
+    events.push(value);
+    // A broken display observer cannot turn a committed upload into a failed one.
+    throw new Error("Synthetic display failure");
+  });
+  expect(events.map((event) => [event.stage, event.completedBytes])).toEqual([
+    ["hashing", 0],
+    ["preparing", 0],
+    ["uploading", 0],
+    ["uploading", file.size],
+    ["checking", file.size],
+    ["confirming", file.size],
+  ]);
+  expect(
+    await (await createFilesApi(f.transport).original("synthetic-case", uploaded.id)).text(),
+  ).toBe(await file.text());
+  expect(await createFilesApi(f.transport).list("synthetic-case")).toHaveLength(1);
+});
+
+test("file progress preserves the server registration timestamp and safe failure across client reload", async () => {
+  const createdAt = "2026-10-06T00:00:00.000Z";
+  const transport = async () =>
+    Response.json([
+      {
+        id: "file-pending",
+        revision: 1,
+        name: "pending.txt",
+        declaredMediaType: "text/plain",
+        byteLength: 10,
+        status: "queued",
+        createdAt,
+        failure: null,
+      },
+      {
+        id: "file-failed",
+        revision: 1,
+        name: "failed.txt",
+        declaredMediaType: "text/plain",
+        byteLength: 10,
+        status: "failed",
+        createdAt,
+        failure: "JOB_TIMEOUT",
+        canRetry: true,
+      },
+    ]);
+  const first = await createFilesApi(transport).list("case");
+  expect(first[0]).toMatchObject({ status: "waiting", createdAt, failure: null });
+  expect(first[1]).toMatchObject({
+    status: "failed",
+    createdAt,
+    failure: "JOB_TIMEOUT",
+    canRetry: true,
+  });
+  expect(await createFilesApi(transport).list("case")).toEqual(first);
+});
+
 test("real workspace DTOs preserve server-validated text and use entity revisions for edits", async () => {
   const writes: { path: string; body: unknown }[] = [];
   const reads: string[] = [];
@@ -468,7 +541,11 @@ test("real accepted chat job restores failed response after reload and retries c
     phase = nextPhase ?? "admission";
     status = phase === "validating" ? "validating" : "running";
     const refreshed = await createWorkspaceApi(request, storage).get(workspace.id);
-    expect(refreshed.messages.at(-1)).toMatchObject({ status: "pending", text });
+    expect(refreshed.messages.at(-1)).toMatchObject({
+      status: "pending",
+      text,
+      statusUpdatedAt: job.updatedAt,
+    });
   }
   status = "completed";
   expect((await resumed.get(workspace.id)).messages.at(-1)?.id).toBe(assistantMessage.id);

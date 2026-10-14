@@ -5,6 +5,7 @@ import type {
   CaseView,
   FileReviewProgress,
   FileReviewView,
+  FileUploadProgress,
   FileView,
   LawyerView,
   Provider,
@@ -154,7 +155,11 @@ export const api = {
     ): Promise<FileReviewProgress>;
     continueReview(id: string, fileId: string, reviewId: string): Promise<FileReviewProgress>;
     discardReview(id: string, fileId: string, reviewId: string): Promise<void>;
-    upload(id: string, file: File): Promise<FileView>;
+    upload(
+      id: string,
+      file: File,
+      onProgress?: (value: FileUploadProgress) => void,
+    ): Promise<FileView>;
     retry(id: string, fileId: string): Promise<FileView>;
     remove(id: string, fileId: string): Promise<FileView[]>;
     original(id: string, fileId: string): Promise<Blob>;

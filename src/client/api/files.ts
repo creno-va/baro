@@ -5,6 +5,7 @@ import {
   V2_LIMITS,
   type V2Coverage,
   v2CoverageSchema,
+  v2FailureCodeSchema,
   v2FileObservationSchema,
   v2FileSchema,
   v2ObservationEditInputSchema,
@@ -12,7 +13,7 @@ import {
   v2UploadReservationRequestSchema,
   v2UploadSessionSchema,
 } from "../../contracts/v2";
-import type { FileReviewProgress, FileReviewView, FileView } from "./types";
+import type { FileReviewProgress, FileReviewView, FileUploadProgress, FileView } from "./types";
 import {
   type WorkspaceTransport,
   workspaceError,
@@ -32,6 +33,8 @@ export const fileViewSchema = z.object({
   canStartProcessing: z.boolean().optional(),
   canRetry: z.boolean().optional(),
   uploadContentHash: z.string().optional(),
+  createdAt: z.iso.datetime({ offset: true }).optional(),
+  failure: v2FailureCodeSchema.nullable().optional(),
 });
 const metadataSchema = z.object({
   id: z.string(),
@@ -41,6 +44,8 @@ const metadataSchema = z.object({
   byteLength: z.number(),
   contentHash: z.string().optional(),
   canRetry: z.boolean().optional(),
+  createdAt: z.iso.datetime({ offset: true }).optional(),
+  failure: v2FailureCodeSchema.nullable().optional(),
   status: z.enum([
     "reserved",
     "uploading",
@@ -221,6 +226,8 @@ export function createFilesApi(request: WorkspaceTransport) {
           extractedText: "",
           canStartProcessing: row.status === "uploaded",
           canRetry: row.canRetry ?? false,
+          createdAt: row.createdAt,
+          failure: row.failure,
         };
         if (row.status === "ready") {
           const detail = await request(`${base(id)}/files/${encodeURIComponent(row.id)}`);
@@ -239,10 +246,22 @@ export function createFilesApi(request: WorkspaceTransport) {
     } while (cursor && output.length < 1000);
     return output;
   }
-  async function upload(id: string, file: File): Promise<FileView> {
+  async function upload(
+    id: string,
+    file: File,
+    onProgress?: (value: FileUploadProgress) => void,
+  ): Promise<FileView> {
+    const progress = (stage: FileUploadProgress["stage"], completedBytes = 0) => {
+      // Display callbacks must not change an upload's result or idempotent recovery.
+      try {
+        onProgress?.({ stage, completedBytes, totalBytes: file.size });
+      } catch {}
+    };
     validateUpload(file);
     const name = file.name.trim();
+    progress("hashing");
     const contentHash = await hash(file);
+    progress("preparing");
     const identity = `${id}:${name}:${file.size}:${contentHash}`;
     const attempt = uploads.get(identity) ?? {
       expectedRevision: await workspaceRevision(id),
@@ -259,7 +278,7 @@ export function createFilesApi(request: WorkspaceTransport) {
     const current = await list(id);
     if (attempt.session && !current.some((item) => item.id === attempt.session?.fileId)) {
       uploads.delete(identity);
-      return upload(id, file);
+      return upload(id, file, onProgress);
     }
     let session = attempt.session;
     if (!session) {
@@ -305,6 +324,7 @@ export function createFilesApi(request: WorkspaceTransport) {
       return existing;
     }
     const parts = [];
+    progress("uploading");
     for (let start = 0, index = 0; start < file.size; start += session.chunkBytes, index++) {
       const chunk = file.slice(start, start + session.chunkBytes);
       const part = { index, byteLength: chunk.size, contentHash: await hash(chunk) };
@@ -321,8 +341,10 @@ export function createFilesApi(request: WorkspaceTransport) {
         },
       );
       parts.push(part);
+      progress("uploading", start + chunk.size);
     }
     const manifest = { byteLength: file.size, contentHash, parts };
+    progress("checking", file.size);
     await workspaceJson(
       request,
       `${base(id)}/files/${encodeURIComponent(session.fileId)}/complete`,
@@ -332,6 +354,7 @@ export function createFilesApi(request: WorkspaceTransport) {
         manifest,
       }),
     );
+    progress("confirming", file.size);
     const result = (await list(id)).find((item) => item.id === session.fileId);
     if (!result) throw workspaceError("UNAVAILABLE", "파일 저장 상태를 다시 확인해 주세요.", true);
     uploads.delete(identity);

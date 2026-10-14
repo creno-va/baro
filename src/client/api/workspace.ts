@@ -4,6 +4,7 @@ import {
   v2AcceptedOperationSchema,
   v2ActionSchema,
   v2FactReferenceSchema,
+  v2FailureCodeSchema,
   v2JobSchema,
   v2SummarySchema,
   v2TimelineEntrySchema,
@@ -107,6 +108,8 @@ const fileViewSchema = z.object({
   extractedText: z.string(),
   canStartProcessing: z.boolean().optional(),
   canRetry: z.boolean().optional(),
+  createdAt: z.iso.datetime({ offset: true }).optional(),
+  failure: v2FailureCodeSchema.nullable().optional(),
 });
 export const workspaceViewSchema = z.object({
   case: z.object({
@@ -127,6 +130,7 @@ export const workspaceViewSchema = z.object({
       status: z.enum(["pending", "complete", "failed"]),
       retryable: z.boolean().optional(),
       createdAt: z.string(),
+      statusUpdatedAt: z.iso.datetime({ offset: true }).optional(),
       ...messageSources,
     }),
   ),
@@ -409,6 +413,7 @@ export function createWorkspaceApi(
             job.failure !== "POLICY_REJECTED" &&
             job.attempts < 10,
           createdAt: job.updatedAt,
+          statusUpdatedAt: job.updatedAt,
           warnings:
             job.status === "failed" &&
             ["CITATION_INVALID", "POLICY_REJECTED", "MODEL_SCHEMA_INVALID"].includes(

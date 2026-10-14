@@ -1,4 +1,9 @@
-import type { V2Coverage, V2FactReference, V2FileObservation } from "../../contracts/v2";
+import type {
+  V2Coverage,
+  V2FactReference,
+  V2FailureCode,
+  V2FileObservation,
+} from "../../contracts/v2";
 import type { V2Summary } from "../../contracts/v2/intake";
 
 export type AccountType = "customer" | "lawyer";
@@ -33,6 +38,7 @@ export type MessageView = {
   status: "pending" | "complete" | "failed";
   retryable?: boolean | undefined;
   createdAt: string;
+  statusUpdatedAt?: string | undefined;
   references?: V2FactReference[];
   citations?: { id: string; title: string; url: string }[];
   warnings?: string[];
@@ -57,6 +63,13 @@ export type FileView = {
   canStartProcessing?: boolean | undefined;
   canRetry?: boolean | undefined;
   uploadContentHash?: string | undefined;
+  createdAt?: string | undefined;
+  failure?: V2FailureCode | null | undefined;
+};
+export type FileUploadProgress = {
+  stage: "checking_access" | "hashing" | "preparing" | "uploading" | "checking" | "confirming";
+  completedBytes: number;
+  totalBytes: number;
 };
 export type WorkspaceCollection = "messages" | "actions" | "timeline";
 export type WorkspaceView = {
