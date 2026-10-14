@@ -1,16 +1,16 @@
 import { z } from "zod";
 import { opaqueIdSchema, timestampSchema } from "../src/contracts";
-import { v2ProfileRevisionSchema } from "../src/contracts/v2";
 import { createCaseDataCipher, type EnvelopeCipher } from "../src/server/crypto";
 import { usageDateKst } from "../src/server/db/repository";
 import { quotaPredicate } from "../src/server/db/v2-accounting";
-import { createV2Core } from "../src/server/db/v2-core";
+import { createV2Core, readSnapshot } from "../src/server/db/v2-core";
 import { runtimeDigest } from "../src/server/db/v2-paid-runtime";
 import {
   createV2WorkspaceRepository,
   workspaceCreateDataSchema,
 } from "../src/server/db/v2-workspace";
 import { workspaceCreationSourcePredicate } from "../src/server/db/v2-workspace-create-guard";
+import { selfProfileSchema } from "../src/server/modules/lawyers/self-profile-contract";
 import { remoteBudgetD1 } from "./remote-budget-d1";
 import { verifyRelease } from "./verify-release";
 
@@ -155,41 +155,48 @@ export async function preparePreviewCustomerFixture(input: {
   )
     return outcome("blocked", "SCHEMA_MISMATCH");
 
-  // Exact bounded source lookup; never enumerate/decrypt unrelated profiles.
+  // The MVP self-profile is a versioned private snapshot, not the legacy
+  // v2_profile_revisions record or p.revision. Only its latest private consent
+  // relation is eligible; never enumerate/decrypt unrelated profiles.
   const row = await db
     .prepare(
-      `SELECT p.owner_id,p.revision,r.id,r.status,r.encrypted_payload FROM v2_profiles p JOIN v2_profile_revisions r ON r.profile_id=p.id AND r.revision=p.revision WHERE p.id=? AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE (target_kind='profile' AND target_id=p.id) OR (target_kind='account' AND target_id=p.owner_id))`,
+      `SELECT p.owner_id,s.revision,s.id,s.encrypted_payload FROM v2_profiles p
+      JOIN v2_private_snapshots s ON s.target_id=p.id AND s.owner_id=p.owner_id AND s.purpose='profile_revision'
+      JOIN v2_consents c ON c.id=s.id AND c.owner_id=p.owner_id AND c.revision=s.revision AND c.kind='profile_publication'
+      WHERE p.id=? AND s.state='published' AND s.workspace_id IS NULL AND c.version='mvp-self-profile-private-v1'
+      AND s.revision=(SELECT max(revision) FROM v2_private_snapshots WHERE target_id=p.id AND purpose='profile_revision')
+      AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE (target_kind='profile' AND target_id=p.id) OR (target_kind='account' AND target_id=p.owner_id))`,
     )
     .bind(PROFILE_ID)
     .first<{
       owner_id: string;
       revision: number;
       id: string;
-      status: string;
       encrypted_payload: string;
     }>();
-  if (row?.status !== "draft") return outcome("blocked", "SOURCE_UNAVAILABLE");
+  if (!row) return outcome("blocked", "SOURCE_UNAVAILABLE");
   const ownerId = opaqueIdSchema.parse(row.owner_id);
-  const profile = await core.decrypt(
-    "v2_profile_revisions",
+  const profile = await readSnapshot(
+    core,
+    { ownerId, now },
     row.id,
-    ownerId,
+    "profile_revision",
+    PROFILE_ID,
     row.revision,
-    row.encrypted_payload,
-    v2ProfileRevisionSchema,
+    selfProfileSchema,
   );
   if (
-    profile.id !== row.id ||
-    profile.profileId !== PROFILE_ID ||
+    !profile ||
+    profile.id !== PROFILE_ID ||
     profile.revision !== row.revision ||
-    profile.status !== "draft" ||
-    profile.content.name !== "합성검증 프로필 1014" ||
-    profile.content.office?.name !== "합성 테스트 사무실"
+    profile.published ||
+    profile.name !== "합성검증 프로필 1014" ||
+    profile.officeName !== "합성 테스트 사무실"
   )
     return outcome("blocked", "SOURCE_MARKER_MISMATCH");
   const source = {
     profileId: PROFILE_ID,
-    revisionId: row.id,
+    snapshotId: row.id,
     revision: row.revision,
     encryptedPayload: row.encrypted_payload,
   };
