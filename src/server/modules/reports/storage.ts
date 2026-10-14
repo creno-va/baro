@@ -502,7 +502,7 @@ export function createReportExports(core: V2Core, deps: ReportDependencies, port
       const font = await deps.font();
       const authorize = () => fence.check(l);
       await authorize();
-      const pdf = renderReportPdf(font, {
+      const pdf = await renderReportPdf(font, {
         title: data.review.title,
         content: data.review.maskIdentifiers
           ? maskReportText(data.review.content)
