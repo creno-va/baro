@@ -622,6 +622,7 @@ test("signed global file composition stores an encrypted PDF chunk with actual w
           "v2_storage_funding_heads",
           "v2_storage_integrity_faults",
           "v2_storage_carryover",
+          "v2_directory_epoch",
         ].includes(name)
       )
         continue;

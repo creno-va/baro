@@ -4,10 +4,11 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: Observe installs evidence; refresh resumes the same allocation; reallocate requires both real drains
+        description: Status is read-only; observe installs evidence; refresh resumes; reallocate requires both drains
         required: true
         type: choice
         options:
+          - status
           - observe
           - refresh
           - reallocate
@@ -26,7 +27,7 @@ on:
         type: string
       observation_json:
         description: Fresh non-secret operator observation; no tokens, private data, or payment changes
-        required: true
+        required: false
         type: string
       confirmation:
         description: Repeat the selected mode after reviewing the observation

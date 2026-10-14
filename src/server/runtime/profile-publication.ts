@@ -1,11 +1,17 @@
 import { createCaseDataCipher } from "../crypto";
 import { createV2Core } from "../db/v2-core";
-import { createStorageBudgetService } from "../modules/budget/storage-ledger";
-import type { PublicationDependencies } from "../modules/lawyers/publication";
+import {
+  createLawyerPublicationService,
+  type PublicationDependencies,
+} from "../modules/lawyers/publication";
 import {
   createProfilePublicationExecution,
   type ProfilePublicationParams,
 } from "../modules/lawyers/publication-execution";
+import {
+  createLawyerStorageBudget,
+  lawyerStorageRequestCore,
+} from "../modules/lawyers/storage-runtime";
 import { createSanitizedReaders } from "./sanitized-reader";
 
 /** Only the deployment composition may supply a verified storage admission or
@@ -21,23 +27,25 @@ export async function createProfilePublicationRuntime(
     monthlyBudgetCapEnabled: env.MONTHLY_BUDGET_CAP_ENABLED !== "false",
   });
   const environment = env.APP_ENV === "production" ? "production" : "preview";
-  return createProfilePublicationExecution(
-    core,
-    {
-      environment,
-      paidStorage: (ownerId) => createStorageBudgetService({ core, environment, ownerId }),
-      ...(env.CASE_PRIVATE_R2
-        ? {
-            openSanitized: createSanitizedReaders(core, {
-              environment,
-              bucket: env.CASE_PRIVATE_R2,
-            }).publication,
-          }
-        : {}),
-      ...capabilities,
-      publicBucket: env.PROFILE_PUBLIC_R2,
-    },
-    params,
-    instanceId,
-  );
+  const dependencies = (requestCore: typeof core): PublicationDependencies => ({
+    environment,
+    paidStorage: (ownerId) => createLawyerStorageBudget(requestCore, environment, ownerId),
+    ...(env.CASE_PRIVATE_R2
+      ? {
+          openSanitized: createSanitizedReaders(requestCore, {
+            environment,
+            bucket: env.CASE_PRIVATE_R2,
+          }).publication,
+        }
+      : {}),
+    ...capabilities,
+    publicBucket: env.PROFILE_PUBLIC_R2,
+  });
+  return createProfilePublicationExecution(core, dependencies(core), params, instanceId, () => {
+    const requestCore =
+      environment === "preview" && capabilities.testOnlyUnmeteredStorage === true
+        ? core
+        : lawyerStorageRequestCore(core);
+    return createLawyerPublicationService(requestCore, dependencies(requestCore));
+  });
 }

@@ -516,6 +516,7 @@ export const v2StorageReservations = sqliteTable(
   },
   (t) => [
     uniqueIndex("v2_storage_target_unique").on(t.targetId, t.kind),
+    index("v2_storage_entity_history").on(t.entityId, t.kind, t.createdAt, t.id),
     check(
       "v2_storage_reservation_kind",
       sql`${t.kind} IN ('case_original','derived_report','lawyer_asset') AND ${t.byteLength} BETWEEN 1 AND 10000000000`,
@@ -688,6 +689,15 @@ export const v2Blobs = sqliteTable(
     approvedRevisionId: text("approved_revision_id"),
   },
   (t) => [
+    index("v2_blob_reservation_state").on(t.reservationId, t.state, t.id),
+    index("v2_blob_public_source").on(
+      t.sourceBlobId,
+      t.sourceAssetRevision,
+      t.approvedRevisionId,
+      t.kind,
+      t.state,
+      t.id,
+    ),
     check(
       "v2_blob_enum",
       sql`${t.kind} IN ('original','derivative','report_pdf','original_zip','verification','portfolio_original','portfolio_sanitized','profile_photo_original','profile_photo_sanitized','public_copy') AND ${t.visibility} IN ('private','staging','public') AND ${t.state} IN ('pending','stored','deleting','deleted')`,
@@ -1003,6 +1013,7 @@ export const v2ProfileRevisions = sqliteTable(
   },
   (t) => [
     uniqueIndex("v2_profile_revision_unique").on(t.profileId, t.revision),
+    index("v2_profile_approved_revision").on(t.profileId, t.status, t.revision),
     check(
       "v2_profile_revision_status",
       sql`${t.status} IN ('draft','submitted','approved','rejected','withdrawn') AND ${t.revision} >= 1 AND (${t.status} NOT IN ('submitted','approved','rejected') OR (${t.submittedAt} IS NOT NULL AND ${t.applicationId} IS NOT NULL)) AND (${t.status} NOT IN ('approved','rejected') OR ${t.decidedAt} IS NOT NULL)`,

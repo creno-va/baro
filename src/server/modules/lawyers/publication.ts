@@ -13,15 +13,18 @@ import { actorSchema, hashSchema, type V2Core } from "../../db/v2-core";
 import { type CleanupLease, createV2DeletionRepository } from "../../db/v2-deletion";
 import { createV2LawyersRepository } from "../../db/v2-lawyers";
 import { createV2StorageRepository } from "../../db/v2-storage";
+import { createV2StorageCapacityRepository, type WritePermit } from "../../db/v2-storage-capacity";
 import { isPreparedStoragePaidHold } from "../../db/v2-storage-paid-runtime";
 import type { StorageCosts, StoragePermit } from "../budget/storage-ledger";
 import { authorizeBlobCleanup, createStorageMaintenance } from "../budget/storage-maintenance";
 import { hasCurrentConsent } from "../consent/service";
 import { hex } from "../files/binary";
+import { notifyFileStorageFailure, withFileStorageCleanup } from "../files/limits";
 import type { PrivateBucket } from "../files/service";
 import { boundedReader } from "./asset-binary";
 import type { OpenSanitizedAsset } from "./sanitized";
 import { LawyerError } from "./service";
+import { hasLawyerStorageMeter } from "./storage-runtime";
 
 export type PublicationDependencies = {
   environment?: "preview" | "production";
@@ -81,6 +84,7 @@ type Source = {
 /** Internal outbox consumer only. Each copy is a bounded invocation; finalize
  * atomically publishes only after every immutable approved asset has a receipt. */
 export function createLawyerPublicationService(core: V2Core, deps: PublicationDependencies) {
+  const capacity = createV2StorageCapacityRepository(core, deps.environment ?? "preview");
   const repository = createV2LawyersRepository(core);
   const storage = createV2StorageRepository(core);
   const deletion = createV2DeletionRepository(core);
@@ -372,6 +376,14 @@ export function createLawyerPublicationService(core: V2Core, deps: PublicationDe
           admission.actor.ownerId !== ownerId)
       )
         throw new LawyerError("PROCESSING_UNAVAILABLE");
+      const physical = hasLawyerStorageMeter(core)
+        ? capacity.prepareCapacity(admission?.actor ?? actor(ownerId), {
+            blobId,
+            ownerId,
+            objectKey: `public/${blobId}`,
+            maximumCipherBytes: source.byteLength,
+          })
+        : undefined;
       if (
         !(await storage.prepareApprovedPublicCopy(
           admission?.actor ?? actor(ownerId),
@@ -384,6 +396,7 @@ export function createLawyerPublicationService(core: V2Core, deps: PublicationDe
             reservationId,
           },
           admission?.paid,
+          physical,
         ))
       )
         throw new LawyerError("STALE_REVISION");
@@ -425,6 +438,9 @@ export function createLawyerPublicationService(core: V2Core, deps: PublicationDe
         putStarted = false,
         getStarted = false,
         recorded = false;
+      let writerPermit: WritePermit | null = null,
+        writerStopped = false,
+        responseEvidence: { objectKey: string; byteLength: number } | null = null;
       const decoderInput: PublicationSanitizedInput = {
         ownerId,
         profileId,
@@ -433,6 +449,15 @@ export function createLawyerPublicationService(core: V2Core, deps: PublicationDe
         sourceBlobId: source.blobId,
       };
       try {
+        if (physical) {
+          writerPermit = capacity.prepareWrite({
+            blobId,
+            objectKey: `public/${blobId}`,
+            byteLength: source.byteLength,
+          });
+          if (!(await capacity.beginPreparedWrite(writerPermit, now())))
+            throw new LawyerError("PROCESSING_UNAVAILABLE");
+        }
         if (admission && costs) {
           permit = await costs.beforeDispatch(admission, access);
           if (!permit) throw new LawyerError("PROCESSING_UNAVAILABLE");
@@ -501,6 +526,19 @@ export function createLawyerPublicationService(core: V2Core, deps: PublicationDe
           await Promise.allSettled([saved, copied]);
           throw error;
         }
+        if (!receipt || receipt.key !== `public/${blobId}` || receipt.size !== source.byteLength)
+          throw new LawyerError("ASSET_NOT_READY");
+        responseEvidence = { objectKey: receipt.key, byteLength: receipt.size };
+        if (
+          writerPermit &&
+          !(await capacity.confirmWriterStopped(
+            writerPermit,
+            { transport: "response", ...responseEvidence },
+            now(),
+          ))
+        )
+          throw new LawyerError("PROCESSING_UNAVAILABLE");
+        writerStopped = true;
         if (permit && costs) {
           recorded = true;
           await costs.after(permit, {
@@ -509,8 +547,6 @@ export function createLawyerPublicationService(core: V2Core, deps: PublicationDe
             observedAt: now(),
           });
         }
-        if (!receipt || receipt.key !== `public/${blobId}` || receipt.size !== source.byteLength)
-          throw new LawyerError("ASSET_NOT_READY");
         if (!(await access())) throw new LawyerError("STALE_REVISION");
         if (
           !(await storage.registerApprovedPublicCopy(
@@ -538,9 +574,34 @@ export function createLawyerPublicationService(core: V2Core, deps: PublicationDe
         return { assetId, blobId };
       } catch (error) {
         let failure = error;
+        await withFileStorageCleanup(core, async () => {
+          if (writerPermit && !writerStopped && (!putStarted || responseEvidence)) {
+            try {
+              if (
+                !(await capacity.confirmWriterStopped(
+                  writerPermit,
+                  responseEvidence
+                    ? { transport: "response", ...responseEvidence }
+                    : { transport: "not_sent" },
+                  now(),
+                ))
+              )
+                failure = new LawyerError("PROCESSING_UNAVAILABLE");
+            } catch {
+              failure = new LawyerError("PROCESSING_UNAVAILABLE");
+            }
+          }
+          await storage.abandonApprovedPublicCopy(actor(ownerId), blobId).catch(() => false);
+          if (putStarted)
+            await storage
+              .requeueApprovedPublicCopyCleanup(actor(ownerId), captured)
+              .catch(() => null);
+        }).catch(() => {
+          failure = new LawyerError("PROCESSING_UNAVAILABLE");
+        });
         if (permit && costs && !recorded) {
           try {
-            await costs.after(permit, {
+            await notifyFileStorageFailure(core, costs, permit, {
               transport: getStarted || putStarted ? "unknown" : "not_sent",
               definitiveNoCharge: !getStarted && !putStarted,
               observedAt: now(),
@@ -548,12 +609,6 @@ export function createLawyerPublicationService(core: V2Core, deps: PublicationDe
           } catch {
             failure = new LawyerError("PROCESSING_UNAVAILABLE");
           }
-        }
-        await storage.abandonApprovedPublicCopy(actor(ownerId), blobId).catch(() => false);
-        if (putStarted) {
-          await storage
-            .requeueApprovedPublicCopyCleanup(actor(ownerId), captured)
-            .catch(() => null);
         }
         throw failure;
       } finally {

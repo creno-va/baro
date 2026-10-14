@@ -1,8 +1,8 @@
 import { type Context, Hono, type Next } from "hono";
 import { getAuth } from "../auth";
 import { AuthConfigurationError } from "../auth/env";
-import { createStorageBudgetService } from "../modules/budget/storage-ledger";
 import { createFileStorageBudget } from "../modules/files/runtime";
+import { createLawyerStorageBudget } from "../modules/lawyers/storage-runtime";
 import { createAssetProcessingAdmission } from "../runtime/asset-admission";
 import { createFileProcessingAdmission } from "../runtime/file-admission";
 import { createSanitizedReaders } from "../runtime/sanitized-reader";
@@ -99,11 +99,11 @@ export const api = new Hono<ApiEnvironment>()
         bucket: env.CASE_PRIVATE_R2,
         paidStorage: (requestedOwnerId) => {
           if (requestedOwnerId !== ownerId) throw new Error("Owner scope mismatch");
-          return createStorageBudgetService({
+          return createLawyerStorageBudget(
             core,
+            env.APP_ENV === "production" ? "production" : "preview",
             ownerId,
-            environment: env.APP_ENV === "production" ? "production" : "preview",
-          });
+          );
         },
         ...createAssetProcessingAdmission(core, env),
       }),

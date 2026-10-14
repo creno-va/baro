@@ -369,18 +369,18 @@ export function createV2StoragePaidRuntimeRepository(
         const args = budget.values;
         const ok = await core.changed([
           core.statement(
-            `INSERT INTO v2_mutation_claims(id,owner_id,target_id,revision) SELECT ?,?,h.blob_id,h.target_revision FROM v2_storage_paid_executions h JOIN v2_cost_attempts ca ON ca.id=h.attempt_id WHERE h.attempt_id=? AND h.state='prepared' AND ca.state='reserved' AND h.digest=? AND h.anchor_json=? AND h.deadline_at>? AND EXISTS(SELECT 1 FROM (${pending.sql}) WHERE anchor=? AND blob_payload=?) AND ${control}`,
+            `WITH captured_source AS MATERIALIZED(${pending.sql}),funded AS MATERIALIZED(SELECT 1 WHERE ${control}) INSERT INTO v2_mutation_claims(id,owner_id,target_id,revision) SELECT ?,?,h.blob_id,h.target_revision FROM v2_storage_paid_executions h JOIN v2_cost_attempts ca ON ca.id=h.attempt_id CROSS JOIN funded WHERE h.attempt_id=? AND h.state='prepared' AND ca.state='reserved' AND h.digest=? AND h.anchor_json=? AND h.deadline_at>? AND EXISTS(SELECT 1 FROM captured_source WHERE anchor=? AND blob_payload=?)`,
             [
+              ...pending.values,
+              ...args,
               claim,
               actor.ownerId,
               attemptId,
               row.digest,
               row.anchor_json,
               actor.now,
-              ...pending.values,
               captured.anchor,
               captured.blob_payload,
-              ...args,
             ],
           ),
           core.statement(
@@ -394,15 +394,15 @@ export function createV2StoragePaidRuntimeRepository(
         // the admission await. A denied read retains the dispatched exposure.
         const final = await core
           .statement(
-            `SELECT h.attempt_id FROM v2_storage_paid_executions h WHERE h.attempt_id=? AND h.dispatch_token=? AND h.deadline_at>? AND EXISTS(SELECT 1 FROM (${pending.sql}) WHERE anchor=? AND blob_payload=?) AND ${control}`,
+            `WITH captured_source AS MATERIALIZED(${pending.sql}),funded AS MATERIALIZED(SELECT 1 WHERE ${control}) SELECT h.attempt_id FROM v2_storage_paid_executions h CROSS JOIN funded WHERE h.attempt_id=? AND h.dispatch_token=? AND h.deadline_at>? AND EXISTS(SELECT 1 FROM captured_source WHERE anchor=? AND blob_payload=?)`,
             [
+              ...pending.values,
+              ...args,
               attemptId,
               token,
               actor.now,
-              ...pending.values,
               captured.anchor,
               captured.blob_payload,
-              ...args,
             ],
           )
           .first();

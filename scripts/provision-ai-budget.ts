@@ -385,12 +385,74 @@ export async function provisionAiRuntime(
   };
 }
 
+/** Read-only, allowlisted operational summary. No private payload or proof
+ * reference is returned; absence of a migrated capability stays explicit. */
+export async function inspectAiRuntime(bindings: Partial<Record<RuntimeEnvironment, D1Database>>) {
+  const results = [];
+  for (const environment of ["preview", "production"] as const) {
+    const binding = bindings[environment];
+    if (!binding) continue;
+    const core = operationsCore(binding);
+    const available = new Set(
+      (
+        await core
+          .statement(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('v2_storage_projections','v2_storage_carryover','v2_storage_funding_heads','v2_physical_blob_bindings')",
+          )
+          .all<{ name: string }>()
+      ).results.map((r) => r.name),
+    );
+    const schema = await core
+      .statement("SELECT value FROM app_metadata WHERE key='schema_version'")
+      .first<string>("value");
+    const control = await core
+      .statement(
+        "SELECT c.month,c.phase,c.revision,c.pending_version,b.allocation_version,b.limit_krw,b.settled_krw,b.reserved_krw,b.ambiguous_krw,b.fixed_maintenance_krw FROM v2_runtime_controls c LEFT JOIN v2_monthly_budget b ON b.month=c.month AND b.environment=c.environment WHERE c.environment=? ORDER BY c.month DESC LIMIT 1",
+        [environment],
+      )
+      .first();
+    const funding = await core
+      .statement(
+        `SELECT json_extract(p.payload_json,'$.state') AS state,json_extract(p.payload_json,'$.spendAllowanceKrw') AS spendAllowanceKrw,json_extract(p.payload_json,'$.observedAt') AS observedAt,p.valid_until AS validUntil FROM v2_runtime_proofs p ${available.has("v2_storage_funding_heads") ? "JOIN v2_storage_funding_heads head ON head.proof_id=p.id AND head.environment=p.environment" : ""} WHERE p.environment=? AND p.kind='funding' ORDER BY p.verified_at DESC,p.id DESC LIMIT 1`,
+        [environment],
+      )
+      .first();
+    const projection = available.has("v2_storage_projections")
+      ? await core
+          .statement(
+            "SELECT month,capacity_bytes,reserved_krw,get_limit,head_limit,delete_limit,gets,heads,deletes,valid_until FROM v2_storage_projections WHERE environment=? ORDER BY month DESC LIMIT 1",
+            [environment],
+          )
+          .first()
+      : null;
+    const carryover = available.has("v2_storage_carryover")
+      ? await core
+          .statement(
+            "SELECT cursor_month,budget_krw,maintenance_krw FROM v2_storage_carryover WHERE id=1",
+          )
+          .first()
+      : null;
+    results.push({
+      environment,
+      schema,
+      control,
+      funding,
+      fundingAuthority: available.has("v2_storage_funding_heads")
+        ? "latest_head"
+        : "legacy_observation_only",
+      projection,
+      carryover,
+    });
+  }
+  return { mode: "status", observedAt: new Date().toISOString(), results };
+}
+
 if (import.meta.main) {
   try {
     const token = process.env.CLOUDFLARE_API_TOKEN;
     const [sha, mode = "refresh", target = "both"] = process.argv.slice(2);
     if (
-      !["observe", "refresh", "reallocate"].includes(mode) ||
+      !["status", "observe", "refresh", "reallocate"].includes(mode) ||
       !["preview", "production", "both"].includes(target) ||
       (mode === "reallocate" && target !== "both")
     )
@@ -402,11 +464,6 @@ if (import.meta.main) {
     };
     const account = process.env.CLOUDFLARE_ACCOUNT_ID;
     if (!account) throw new Error("AI_RUNTIME_ACCOUNT_MISSING");
-    const observation = observationSchema.parse(
-      process.env.AI_RUNTIME_OBSERVATION_JSON
-        ? JSON.parse(process.env.AI_RUNTIME_OBSERVATION_JSON)
-        : await Bun.file("docs/operations/AI-RUNTIME-OBSERVATION.json").json(),
-    );
     const bindings = Object.fromEntries(
       ["preview", "production"].map((e) => [
         e,
@@ -415,34 +472,43 @@ if (import.meta.main) {
     ) as Record<"preview" | "production", D1Database>;
     const selected =
       target === "both" ? bindings : { [target]: bindings[target as RuntimeEnvironment] };
-    const result =
-      mode === "reallocate"
-        ? await provisionAiRuntime(bindings, observation)
-        : await observeAiRuntime(
-            selected,
-            observation,
-            mode as "observe" | "refresh",
-            process.env.AI_RUNTIME_OPERATION_KEY ?? "default",
-          );
-    const bounds = JSON.stringify(modelBounds(observation, result.evidenceHash));
-    for (const environment of mode === "observe" ? [] : Object.keys(selected)) {
-      const child = Bun.spawn(
-        ["bunx", "wrangler", "secret", "put", "AI_MODEL_TOKEN_BOUNDS_JSON", "--env", environment],
-        { stdin: "pipe", stdout: "pipe", stderr: "pipe" },
+    if (mode === "status")
+      console.log(JSON.stringify({ ...(await inspectAiRuntime(selected)), candidateSha: sha }));
+    else {
+      const observation = observationSchema.parse(
+        process.env.AI_RUNTIME_OBSERVATION_JSON
+          ? JSON.parse(process.env.AI_RUNTIME_OBSERVATION_JSON)
+          : await Bun.file("docs/operations/AI-RUNTIME-OBSERVATION.json").json(),
       );
-      child.stdin.write(bounds);
-      child.stdin.end();
-      await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text()]);
-      if ((await child.exited) !== 0) throw new Error("AI_RUNTIME_BOUNDS_DEPLOY_FAILED");
+      const result =
+        mode === "reallocate"
+          ? await provisionAiRuntime(bindings, observation)
+          : await observeAiRuntime(
+              selected,
+              observation,
+              mode as "observe" | "refresh",
+              process.env.AI_RUNTIME_OPERATION_KEY ?? "default",
+            );
+      const bounds = JSON.stringify(modelBounds(observation, result.evidenceHash));
+      for (const environment of mode === "observe" ? [] : Object.keys(selected)) {
+        const child = Bun.spawn(
+          ["bunx", "wrangler", "secret", "put", "AI_MODEL_TOKEN_BOUNDS_JSON", "--env", environment],
+          { stdin: "pipe", stdout: "pipe", stderr: "pipe" },
+        );
+        child.stdin.write(bounds);
+        child.stdin.end();
+        await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text()]);
+        if ((await child.exited) !== 0) throw new Error("AI_RUNTIME_BOUNDS_DEPLOY_FAILED");
+      }
+      console.log(
+        JSON.stringify({
+          ...result,
+          candidateSha: sha,
+          modelBoundsConfigured: mode !== "observe",
+          autoRecharge: true,
+        }),
+      );
     }
-    console.log(
-      JSON.stringify({
-        ...result,
-        candidateSha: sha,
-        modelBoundsConfigured: mode !== "observe",
-        autoRecharge: true,
-      }),
-    );
   } catch (error) {
     console.error(
       error instanceof Error && /^AI_RUNTIME_[A-Z_]+$/.test(error.message)

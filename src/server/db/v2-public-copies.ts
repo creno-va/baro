@@ -8,6 +8,7 @@ import {
   storagePredicate,
   storageReservationStatements,
 } from "./v2-storage";
+import { isPreparedPhysicalCapacity, type PreparedPhysicalCapacity } from "./v2-storage-capacity";
 import { isPreparedStoragePaidHold, type PreparedStoragePaidHold } from "./v2-storage-paid-runtime";
 
 export interface PublicCopyIntent {
@@ -66,10 +67,19 @@ export function prepareApprovedPublicCopy(
   actor: Actor,
   input: PublicCopyIntent,
   paid?: PreparedStoragePaidHold,
+  physical?: PreparedPhysicalCapacity,
 ) {
   return safe(async () => {
     const validated = validate(actor, input);
     actor = validated.actor;
+    if (
+      physical &&
+      (!isPreparedPhysicalCapacity(physical) ||
+        physical.binding.blobId !== input.blobId ||
+        physical.binding.ownerId !== actor.ownerId ||
+        physical.binding.objectKey !== `public/${input.blobId}`)
+    )
+      return false;
     if (
       paid &&
       (!isPreparedStoragePaidHold(paid) ||
@@ -130,9 +140,8 @@ export function prepareApprovedPublicCopy(
       capacity = storagePredicate(actor.ownerId, source.logical_bytes);
     return core.changed([
       core.statement(
-        `INSERT INTO v2_mutation_claims(id,owner_id,target_id,revision) SELECT ?,a.owner_id,a.id,a.revision ${sourceFrom} WHERE ${sourceGuard} AND a.encrypted_payload=? AND revision.encrypted_payload=? AND source.encrypted_payload=? AND source.logical_bytes=? AND ${capacity.sql} AND NOT EXISTS(SELECT 1 FROM v2_storage_reservations WHERE id=? OR target_id=?) AND NOT EXISTS(SELECT 1 FROM v2_blobs WHERE id=?) ${paid ? `AND (${paid.predicate.sql})` : ""}`,
+        `WITH eligible AS MATERIALIZED(SELECT a.owner_id,a.id,a.revision ${sourceFrom} WHERE ${sourceGuard} AND a.encrypted_payload=? AND revision.encrypted_payload=? AND source.encrypted_payload=? AND source.logical_bytes=? AND ${capacity.sql} AND NOT EXISTS(SELECT 1 FROM v2_storage_reservations WHERE id=? OR target_id=?) AND NOT EXISTS(SELECT 1 FROM v2_blobs WHERE id=?)),funded AS MATERIALIZED(SELECT 1 WHERE ${paid?.predicate.sql ?? "1"}),physical AS MATERIALIZED(SELECT 1 WHERE ${physical?.predicate.sql ?? "1"}) INSERT INTO v2_mutation_claims(id,owner_id,target_id,revision) SELECT ?,eligible.owner_id,eligible.id,eligible.revision FROM eligible CROSS JOIN funded CROSS JOIN physical`,
         [
-          claimId,
           ...validated.values,
           source.asset_payload,
           source.revision_payload,
@@ -143,6 +152,8 @@ export function prepareApprovedPublicCopy(
           input.blobId,
           input.blobId,
           ...(paid ? paid.predicate.values : []),
+          ...(physical?.predicate.values ?? []),
+          claimId,
         ],
       ),
       ...storageReservationStatements(
@@ -174,6 +185,7 @@ export function prepareApprovedPublicCopy(
           claimId,
         ],
       ),
+      ...(physical ? physical.statements(core, actor, claimId) : []),
       ...(paid ? await paid.statements(core, paid.actor, claimId, anchor) : []),
       core.finish(claimId),
     ]);

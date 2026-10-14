@@ -8,6 +8,7 @@ import {
 import { type Actor, actorSchema, parse, safe, sqlClaim, type V2Core } from "./v2-core";
 import { findPendingSanitizedAssetBlob } from "./v2-sanitized-asset-blobs";
 import { type BlobRegistration, blobSchema } from "./v2-storage";
+import { isPreparedPhysicalCapacity, type PreparedPhysicalCapacity } from "./v2-storage-capacity";
 import { isPreparedStoragePaidHold, type PreparedStoragePaidHold } from "./v2-storage-paid-runtime";
 import { type JobLease, leaseSchema } from "./v2-workspace";
 
@@ -256,12 +257,21 @@ export function prepareAssetUpload(
   actor: Actor,
   input: AssetUploadIntent,
   paid?: PreparedStoragePaidHold,
+  physical?: PreparedPhysicalCapacity,
 ) {
   return safe(async () => {
     actor = parse(actorSchema, actor);
     for (const id of [input.assetId, input.blobId, input.reservationId]) parse(opaqueIdSchema, id);
     parse(revisionSchema, input.assetRevision);
     if (input.keyVersion !== "asset_binary_v1") return false;
+    if (
+      physical &&
+      (!isPreparedPhysicalCapacity(physical) ||
+        physical.binding.blobId !== input.blobId ||
+        physical.binding.ownerId !== actor.ownerId ||
+        physical.binding.objectKey !== `private/${input.blobId}`)
+    )
+      return false;
     if (
       paid &&
       (!isPreparedStoragePaidHold(paid) ||
@@ -302,7 +312,7 @@ export function prepareAssetUpload(
       profileId: row.profile_id,
       assetPayload: row.encrypted_payload,
     });
-    if (paid) {
+    if (paid || physical) {
       const claim = crypto.randomUUID();
       const anchor =
         "a.encrypted_payload=? AND a.purpose=? AND a.profile_id=? AND r.byte_length=? AND NOT EXISTS(SELECT 1 FROM v2_blobs WHERE id=?) AND NOT EXISTS(SELECT 1 FROM v2_blobs WHERE reservation_id=r.id AND state!='deleted')";
@@ -315,8 +325,14 @@ export function prepareAssetUpload(
       ];
       return core.changed([
         core.statement(
-          `INSERT INTO v2_mutation_claims(id,owner_id,target_id,revision) SELECT ?,a.owner_id,a.id,a.revision ${from} WHERE ${eligible} AND ${anchor} AND (${paid.predicate.sql})`,
-          [claim, ...values, ...anchorValues, ...paid.predicate.values],
+          `WITH source AS MATERIALIZED(SELECT a.owner_id,a.id,a.revision ${from} WHERE ${eligible} AND ${anchor}), funded AS MATERIALIZED(SELECT 1 WHERE ${paid?.predicate.sql ?? "1"}), physical AS MATERIALIZED(SELECT 1 WHERE ${physical?.predicate.sql ?? "1"}) INSERT INTO v2_mutation_claims(id,owner_id,target_id,revision) SELECT ?,source.owner_id,source.id,source.revision FROM source CROSS JOIN funded CROSS JOIN physical`,
+          [
+            ...values,
+            ...anchorValues,
+            ...(paid?.predicate.values ?? []),
+            ...(physical?.predicate.values ?? []),
+            claim,
+          ],
         ),
         core.statement(
           `INSERT INTO v2_blobs(id,principal_id,reservation_id,kind,visibility,state,object_key,logical_bytes,cipher_bytes,cipher_hash,key_version,encrypted_payload,created_at) SELECT ?,r.principal_id,r.id,?,'private','pending',?,r.byte_length,0,NULL,?,?,? ${from} WHERE ${eligible} AND ${anchor} AND ${sqlClaim}`,
@@ -332,7 +348,8 @@ export function prepareAssetUpload(
             claim,
           ],
         ),
-        ...(await paid.statements(core, paid.actor, claim, envelope)),
+        ...(physical ? physical.statements(core, actor, claim) : []),
+        ...(paid ? await paid.statements(core, paid.actor, claim, envelope) : []),
         core.finish(claim),
       ]);
     }

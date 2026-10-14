@@ -49,6 +49,7 @@ export function createProfilePublicationExecution(
   deps: PublicationDependencies,
   input: ProfilePublicationParams,
   instanceId: string,
+  copyService?: () => ReturnType<typeof createLawyerPublicationService>,
 ) {
   const params = profilePublicationParamsSchema.parse(input);
   if (instanceId !== profilePublicationInstanceId(params)) throw new LawyerError("NOT_FOUND");
@@ -96,14 +97,15 @@ export function createProfilePublicationExecution(
       try {
         const row = await current();
         if (!row) return { status: "stopped" };
-        const ids = await publication.approvedAssetIds(
+        const copy = copyService?.() ?? publication;
+        const ids = await copy.approvedAssetIds(
           row.owner_id,
           params.profileId,
           params.approvedRevision,
         );
         const assetId = ids[index];
         if (!assetId) return { status: "stopped" };
-        await publication.copyApprovedAsset(
+        await copy.copyApprovedAsset(
           row.owner_id,
           params.profileId,
           params.approvedRevision,

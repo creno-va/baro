@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import observation from "../docs/operations/AI-RUNTIME-OBSERVATION.json";
 import {
+  inspectAiRuntime,
   modelBounds,
   observationSchema,
   observeAiRuntime,
@@ -13,6 +14,38 @@ import { createWorkspaceService } from "../src/server/modules/workspace/service"
 import { createWorkspaceDependencies } from "../src/server/runtime/workspace";
 import { createTestDatabase } from "./helpers/d1";
 import { seedTestSession } from "./helpers/session";
+
+test("runtime status is read-only and exposes only the operational allowlist", async () => {
+  const db = await createTestDatabase();
+  try {
+    await seedTestSession(db, { consent: true });
+    const before = db.sqlite.serialize();
+    const statements: string[] = [];
+    const prepare = db.binding.prepare.bind(db.binding);
+    db.binding.prepare = (sql) => {
+      statements.push(sql);
+      return prepare(sql);
+    };
+    const status = await inspectAiRuntime({ preview: db.binding });
+    expect(statements.length).toBeGreaterThan(0);
+    expect(statements.every((sql) => /^SELECT\b/i.test(sql))).toBe(true);
+    expect(db.sqlite.serialize()).toEqual(before);
+    expect(status.results).toHaveLength(1);
+    expect(status.results[0]?.schema).toBe("0013_lawyer_storage_lookups");
+    expect(Object.keys(status.results[0] ?? {}).sort()).toEqual([
+      "carryover",
+      "control",
+      "environment",
+      "funding",
+      "fundingAuthority",
+      "projection",
+      "schema",
+    ]);
+    expect(JSON.stringify(status)).not.toMatch(/email|token|payload_json|owner_id|reference/i);
+  } finally {
+    db.close();
+  }
+});
 
 test("a fresh customer can admit their first text-only AI job without a prior file upload", async () => {
   const preview = await createTestDatabase(),
