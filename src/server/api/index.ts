@@ -95,7 +95,7 @@ export const api = new Hono<ApiEnvironment>()
   .route(
     "/v2/me",
     createLawyersApi({
-      dependencies: async (env, core, ownerId) => ({
+      dependencies: async (env, core, ownerId, afterUpload) => ({
         bucket: env.CASE_PRIVATE_R2,
         paidStorage: (requestedOwnerId) => {
           if (requestedOwnerId !== ownerId) throw new Error("Owner scope mismatch");
@@ -105,7 +105,7 @@ export const api = new Hono<ApiEnvironment>()
             ownerId,
           );
         },
-        ...createAssetProcessingAdmission(core, env),
+        ...createAssetProcessingAdmission(core, env, {}, undefined, afterUpload),
       }),
     }),
   )

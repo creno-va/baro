@@ -8,6 +8,7 @@ import {
   type ProcessingRuntimePolicy,
 } from "../modules/budget/processing-runtime";
 import { hasCurrentConsent } from "../modules/consent/service";
+import { createAssetProcessingDispatcher } from "../modules/file-processing/dispatch";
 import { nativeJobId } from "../modules/file-processing/native-identity";
 import type { LawyerAssetDependencies } from "../modules/lawyers/assets";
 import { readProcessingProofs } from "./processing-proofs";
@@ -19,6 +20,7 @@ export function createAssetProcessingAdmission(
   env: Env,
   policy: ProcessingRuntimePolicy = {},
   clock = () => new Date().toISOString(),
+  afterUpload?: (task: () => Promise<void>) => void,
 ): Pick<LawyerAssetDependencies, "enqueueProcessing"> {
   const environment = env.APP_ENV === "production" ? "production" : "preview";
   return {
@@ -87,11 +89,32 @@ export function createAssetProcessingAdmission(
         durationSeconds: null,
       });
       if (!prepared) return false;
-      return createV2JobsRepository(core).admitAsset(
+      const admitted = await createV2JobsRepository(core).admitAsset(
         prepared.actor,
         { assetId: input.assetId, assetRevision: input.assetRevision, jobId },
         prepared.paid,
       );
+      if (admitted && !core.applicationCostLimitsEnabled && afterUpload) {
+        // Registration is inert. The HTTP handler starts this only after all
+        // foreground readback succeeds, retaining the same request work meter.
+        // Scheduled recovery remains authoritative if registration or wake fails.
+        try {
+          afterUpload(async () => {
+            try {
+              await createAssetProcessingDispatcher(core, {
+                environment,
+                binding: env.ASSET_PROCESSING,
+                clock,
+              }).dispatchOne({ ownerId: input.ownerId, jobId, instanceId: `${jobId}-1` });
+            } catch {
+              // Keep the exact durable outbox and existing recovery lease.
+            }
+          });
+        } catch {
+          // A background scheduling failure cannot undo committed admission.
+        }
+      }
+      return admitted;
     },
   };
 }
