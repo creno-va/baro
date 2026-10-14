@@ -247,6 +247,30 @@ late writer의 stop 및 negative HEAD를 확인해야 한다. 누락/불명확�
 
 ## 로컬 검증
 
+### 2026-10-14 업로드 통합 후보 (#230 → #229)
+
+#230의 bounded admission/trigger 보완을 먼저 main에 병합했다. 기존 `0010`은
+변경하지 않았다. #229를 그 위에 rebase하면서 원본의 reservation 합계를
+`live_blob_bytes`와 현재 blob PK 조회로 대체했다. 실제 D1의 expression depth
+오류는 비용 조건을 모두 보존한 균형 AND와 materialized claim으로 수정했다.
+writer 정지 성공 여부는 trigger의 `meta.changes` 대신 own-statement RETURNING으로
+판단한다. fixture는 최초 proof를 projection 전에 만들고 파생 원장을 직접 복사하지 않는다.
+
+- 관련 7개 파일: **143 tests / 2499 assertions**, 실패 0.
+- 서명된 전역 API + 실제 workerd D1 + 합성 PDF/R2: 인증부터 PUT/writer 종료까지
+  **76 statements / 460 rows read / 71 rows written**. 예약 5 SKU 및 멱등 재시도,
+  환경이 다른 proof 거부, 암호문 복호화 일치를 검증했다. 작은 합성 파일의 측정이다.
+- #230의 100/10,000개 합성 원장 비교는 admission read 13, binding read 30/write 13으로
+  같았다. 원본 claim도 과거 blob 전체 합계에 의존하지 않는다.
+- 실패 cleanup 6문장과 원장 통지 10문장은 정상 슬롯에서 미리 분리한다.
+  고정 production 구성의 통지는 SQL 0건이며 미정산 비용은 예약으로 보존한다.
+  미래 metering 포트를 추가할 때는 global freeze까지 별도 비용 검증이 필요하다.
+
+합성 실측은 공급자 청구 정산이나 원격 최대 파일/Container 성공 증거가 아니다.
+변호사 자산·공개 복사는 기존 필수 paid/physical admission을 유지하며 가격·용량
+proof가 없는 원격 경로를 성공으로 표시하지 않는다. 최종 후보의 전체 회귀 및 같은
+SHA의 preview/production 제한 인수는 #19/#57/#58/#71에 남는다.
+
 최종 명령 결과와 exact-head CI는 기능 PR 및 담당 이슈 댓글에 연결한다.
 같은 checkout의 browser/dev/build 검사는 순차 실행한다. 모든 입력은 합성이다.
 검증 산출물은 ignored `.wrangler`/`test-results`에 두며 민감 원문·secret을 게시하지 않는다.

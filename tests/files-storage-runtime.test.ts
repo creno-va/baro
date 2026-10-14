@@ -19,6 +19,7 @@ import { FILE_STORAGE_WORK, fileStorageRequestCore } from "../src/server/modules
 import { createFileStorageBudget } from "../src/server/modules/files/runtime";
 import { createFilesService } from "../src/server/modules/files/service";
 import { signedSessionCookie, testEnvironment } from "./helpers/d1";
+import { measureD1Work } from "./helpers/d1-work";
 import { r2 } from "./helpers/file-processing-fixture";
 import { intent, NOW, ready } from "./helpers/storage-capacity";
 
@@ -609,6 +610,20 @@ test("signed global file composition stores an encrypted PDF chunk with actual w
     for (const { name } of f.db.sqlite
       .query("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
       .all() as { name: string }[]) {
+      // Migration-owned derived rows already exist in native D1. Source-row
+      // INSERT triggers reconstruct them; importing canonical mirrors directly
+      // would bypass the production integrity contract.
+      if (
+        [
+          "v2_physical_storage_totals",
+          "v2_physical_binding_totals",
+          "v2_physical_total_mutations",
+          "v2_storage_funding_heads",
+          "v2_storage_integrity_faults",
+          "v2_storage_carryover",
+        ].includes(name)
+      )
+        continue;
       for (const row of f.db.sqlite.query(`SELECT * FROM ${name}`).all() as Record<
         string,
         unknown
@@ -626,9 +641,10 @@ test("signed global file composition stores an encrypted PDF chunk with actual w
       }
     }
     await db.batch(inserts);
+    const measured = measureD1Work(db);
     const bucket = r2(),
       env = {
-        ...testEnvironment(db),
+        ...testEnvironment(measured.binding),
         APP_ENV: "preview",
         CASE_PRIVATE_R2: bucket.port,
         CASE_DATA_KEY_V1: btoa("d".repeat(32)).replace(/=+$/, ""),
@@ -685,7 +701,12 @@ test("signed global file composition stores an encrypted PDF chunk with actual w
         },
         env,
       );
+    measured.reset();
     expect((await put()).status).toBe(200);
+    expect(measured.work.statements).toBeLessThanOrEqual(FILE_STORAGE_WORK.queries + 20);
+    expect(measured.work.rowsRead).toBeLessThanOrEqual(FILE_STORAGE_WORK.rowsRead + 1000);
+    expect(measured.work.rowsWritten).toBeLessThanOrEqual(FILE_STORAGE_WORK.rowsWritten + 100);
+    console.info("Synthetic signed native upload D1 work", measured.work);
     expect(bucket.calls.put).toBe(1);
     const core = createV2Core(db, f.core.cipher);
     const plan = await core

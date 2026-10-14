@@ -134,7 +134,9 @@ function funding(): FundingProof {
     validUntil: EXP,
   };
 }
-export async function fixture(options: { throughMigration?: string } = {}) {
+export async function fixture(
+  options: { throughMigration?: string; pricing?: (initial: PricingProof) => PricingProof } = {},
+) {
   const db = await createTestDatabase(options);
   dbs.push(db);
   const session = await seedTestSession(db, { now: Date.parse(NOW), consent: true });
@@ -180,7 +182,7 @@ export async function fixture(options: { throughMigration?: string } = {}) {
   };
   expect(await runtime.putRemoteDrainProof(remote, NOW)).toBe(true);
   expect(await runtime.activate(a.month, 2, ap.id, drain.id, remote.id, NOW)).toBe(true);
-  const pp = pricing(),
+  const pp = options.pricing?.(pricing()) ?? pricing(),
     fp = funding();
   expect(await runtime.putPricingProof(pp, NOW)).toBe(true);
   expect(await runtime.putFundingProof(fp, NOW)).toBe(true);
@@ -218,8 +220,11 @@ export function projection(f: Fixture, extra: Partial<StorageProjection> = {}): 
     ...extra,
   };
 }
-export async function ready(extra: Partial<StorageProjection> = {}) {
-  const f = await fixture(),
+export async function ready(
+  extra: Partial<StorageProjection> = {},
+  options: { pricing?: (initial: PricingProof) => PricingProof } = {},
+) {
+  const f = await fixture(options),
     capacity = createV2StorageCapacityRepository(f.core, "preview", verifier);
   expect(await f.runtime.freeze("2026-10", 3, 1, NOW)).toBe(true);
   const p = projection(f, extra);

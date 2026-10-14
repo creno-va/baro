@@ -33,7 +33,7 @@ const pendingMetadataSchema = z.strictObject({
   ordinal: z.number().int().min(0).max(119),
 });
 function originalPartGuard(actor: Actor, input: OriginalPartRegistration, b: BlobRegistration) {
-  const eligibility = `u.id=? AND u.revision=? AND u.state='open' AND u.encrypted_payload IS NULL AND u.expires_at>? AND w.owner_id=? AND ${aliveWorkspace} AND f.state IN ('reserved','uploading') AND r.id=? AND r.kind='case_original' AND r.state='reserved' AND r.entity_id=f.id AND r.target_id=f.id AND r.workspace_id=w.id AND r.operation_id=f.operation_id AND p.owner_id=w.owner_id AND o.owner_id=w.owner_id AND o.state='admitted' AND u.reserved_bytes=f.declared_bytes AND r.byte_length=u.reserved_bytes AND EXISTS(SELECT 1 FROM v2_consents c WHERE c.file_id=f.id AND c.owner_id=w.owner_id AND c.kind='auto_processing') AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='file' AND target_id=f.id) AND ?<ceil(u.reserved_bytes/8388608.0) AND ?=min(8388608,u.reserved_bytes-?*8388608) AND NOT EXISTS(SELECT 1 FROM v2_upload_parts WHERE upload_id=u.id AND ordinal=?) AND coalesce((SELECT sum(logical_bytes) FROM v2_blobs WHERE reservation_id=r.id AND state!='deleted' AND id!=?),0)+?<=r.byte_length`;
+  const eligibility = `u.id=? AND u.revision=? AND u.state='open' AND u.encrypted_payload IS NULL AND u.expires_at>? AND w.owner_id=? AND ${aliveWorkspace} AND f.state IN ('reserved','uploading') AND r.id=? AND r.kind='case_original' AND r.state='reserved' AND r.entity_id=f.id AND r.target_id=f.id AND r.workspace_id=w.id AND r.operation_id=f.operation_id AND p.owner_id=w.owner_id AND o.owner_id=w.owner_id AND o.state='admitted' AND u.reserved_bytes=f.declared_bytes AND r.byte_length=u.reserved_bytes AND EXISTS(SELECT 1 FROM v2_consents c WHERE c.file_id=f.id AND c.owner_id=w.owner_id AND c.kind='auto_processing') AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='file' AND target_id=f.id) AND ?<ceil(u.reserved_bytes/8388608.0) AND ?=min(8388608,u.reserved_bytes-?*8388608) AND NOT EXISTS(SELECT 1 FROM v2_upload_parts WHERE upload_id=u.id AND ordinal=?) AND r.live_blob_bytes-coalesce((SELECT logical_bytes FROM v2_blobs WHERE id=? AND reservation_id=r.id AND state!='deleted'),0)+?<=r.byte_length`;
   const values = [
     input.uploadId,
     input.uploadRevision,
@@ -116,13 +116,16 @@ export function prepareOriginalPart(
       const claim = crypto.randomUUID();
       return core.changed([
         core.statement(
-          `INSERT INTO v2_mutation_claims(id,owner_id,target_id,revision) SELECT ?,w.owner_id,u.id,u.revision ${from} WHERE ${eligibility} AND NOT EXISTS(SELECT 1 FROM v2_blobs WHERE id=?) AND (${paid?.predicate.sql ?? "1"}) AND (${physical?.predicate.sql ?? "1"})`,
+          `WITH original AS MATERIALIZED (SELECT w.owner_id,u.id,u.revision ${from} WHERE ${eligibility} AND NOT EXISTS(SELECT 1 FROM v2_blobs WHERE id=?)),
+          funded AS MATERIALIZED (SELECT 1 WHERE ${paid?.predicate.sql ?? "1"}),
+          physical AS MATERIALIZED (SELECT 1 WHERE ${physical?.predicate.sql ?? "1"})
+          INSERT INTO v2_mutation_claims(id,owner_id,target_id,revision) SELECT ?,original.owner_id,original.id,original.revision FROM original CROSS JOIN funded CROSS JOIN physical`,
           [
-            claim,
             ...values,
             b.id,
             ...(paid?.predicate.values ?? []),
             ...(physical?.predicate.values ?? []),
+            claim,
           ],
         ),
         core.statement(
@@ -202,7 +205,7 @@ export function stopUnsentOriginalWrite(
       return false;
     const result = await core
       .statement(
-        `UPDATE v2_physical_blob_bindings SET writer_state='stopped' WHERE blob_id=? AND environment=? AND owner_id=? AND object_key=? AND maximum_cipher_bytes=? AND state='held' AND writer_state='running' AND writer_token=? AND expected_cipher_bytes=? AND EXISTS(SELECT 1 FROM v2_blobs b JOIN v2_storage_paid_executions h ON h.blob_id=b.id WHERE b.id=v2_physical_blob_bindings.blob_id AND b.reservation_id=? AND b.kind='original' AND b.visibility='private' AND b.object_key=v2_physical_blob_bindings.object_key AND b.logical_bytes=? AND b.cipher_bytes=? AND b.cipher_hash=? AND b.key_version=? AND b.created_at=? AND ((b.state='pending' AND b.encrypted_payload=?) OR (b.state='deleting' AND b.encrypted_payload='removed')) AND h.attempt_id=? AND h.payload_json=?)`,
+        `UPDATE v2_physical_blob_bindings SET writer_state='stopped' WHERE blob_id=? AND environment=? AND owner_id=? AND object_key=? AND maximum_cipher_bytes=? AND state='held' AND writer_state='running' AND writer_token=? AND expected_cipher_bytes=? AND EXISTS(SELECT 1 FROM v2_blobs b JOIN v2_storage_paid_executions h ON h.blob_id=b.id WHERE b.id=v2_physical_blob_bindings.blob_id AND b.reservation_id=? AND b.kind='original' AND b.visibility='private' AND b.object_key=v2_physical_blob_bindings.object_key AND b.logical_bytes=? AND b.cipher_bytes=? AND b.cipher_hash=? AND b.key_version=? AND b.created_at=? AND ((b.state='pending' AND b.encrypted_payload=?) OR (b.state='deleting' AND b.encrypted_payload='removed')) AND h.attempt_id=? AND h.payload_json=?) RETURNING blob_id`,
         [
           b.id,
           writer.environment,
@@ -222,8 +225,8 @@ export function stopUnsentOriginalWrite(
           JSON.stringify(r),
         ],
       )
-      .run();
-    return result.meta.changes === 1;
+      .all<{ blob_id: string }>();
+    return result.results.length === 1;
   });
 }
 // Called after a definitive local upload failure; exposure stays reserved until

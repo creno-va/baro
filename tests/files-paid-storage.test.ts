@@ -1,15 +1,13 @@
 import { expect, test } from "bun:test";
 import { CURRENT_POLICY_VERSIONS } from "../src/contracts/consent";
 import { createV2DeletionRepository } from "../src/server/db/v2-deletion";
-import type { PricingProof, RuntimeProofVerifier } from "../src/server/db/v2-paid-runtime";
+import type { RuntimeProofVerifier } from "../src/server/db/v2-paid-runtime";
 import { createV2StoragePaidRuntimeRepository } from "../src/server/db/v2-storage-paid-runtime";
 import { createFilesService, type FileStorageCosts } from "../src/server/modules/files/service";
 import { fixture, r2 } from "./helpers/file-processing-fixture";
-import { seedStorageAdmissionProjection } from "./helpers/storage-admission";
 import { ready } from "./helpers/storage-capacity";
 
 const NOW = "2026-10-06T00:00:00.000Z",
-  EXP = "2026-11-01T00:00:00.000Z",
   HASH = "a".repeat(64);
 // Synthetic evidence only; the actual migrated SQLite/AES/R2 adapter consumer is tested.
 const verify: RuntimeProofVerifier = async (kind, _value, digest) => ({
@@ -26,7 +24,18 @@ const verify: RuntimeProofVerifier = async (kind, _value, digest) => ({
           : "authenticated_coordinator",
 });
 async function paidFixture() {
-  const p = await ready();
+  // The same immutable proof bundle funds physical capacity and each PUT.
+  const p = await ready(
+    {},
+    {
+      pricing: (initial) => ({
+        ...initial,
+        prices: initial.prices.map((price) =>
+          price.sku === "r2_class_a_requests" ? { ...price, usdPerUnit: "1" } : price,
+        ),
+      }),
+    },
+  );
   const f = {
     ...p,
     bucket: r2(),
@@ -39,69 +48,11 @@ async function paidFixture() {
         ).revision,
       ),
   };
-  const runtime = f.runtime;
   f.db.sqlite
     .query("INSERT INTO v2_case_original_usage(workspace_id) VALUES(?)")
     .run(f.workspaceId);
-  const pricing: PricingProof = {
-    id: crypto.randomUUID(),
-    version: 1,
-    environment: "preview",
-    modelBillingPolicy: null,
-    prices: [
-      {
-        sku: "r2_class_a_requests",
-        provider: "cloudflare",
-        model: null,
-        modelRates: null,
-        region: "global",
-        plan: "synthetic",
-        billingMode: "metered",
-        unit: "requests",
-        unitSize: "1",
-        usdPerUnit: "1",
-        billingQuantum: "1",
-        officialUrl: "https://developers.cloudflare.com/r2/pricing/",
-        checkedAt: NOW,
-        validUntil: EXP,
-      },
-    ],
-    fx: {
-      krwPerUsd: "1000",
-      authority: "synthetic",
-      referenceUrl: "https://example.test/fx",
-      asOf: NOW,
-      checkedAt: NOW,
-      validUntil: EXP,
-    },
-    taxRatio: "0",
-    feeRatio: "0",
-    safetyMarginRatio: "0",
-    hiddenAttemptMultiplier: 1,
-    hiddenRetryReference: "synthetic",
-    checkedAt: NOW,
-    validUntil: EXP,
-  };
-  const funding = {
-    id: crypto.randomUUID(),
-    environment: "preview" as const,
-    state: "trial_credit" as const,
-    existingPaymentPath: true as const,
-    autoRecharge: false as const,
-    spendAllowanceKrw: 10000,
-    reference: "synthetic",
-    observedAt: NOW,
-    validUntil: EXP,
-  };
-  expect(await runtime.putPricingProof(pricing, NOW)).toBe(true);
-  expect(await runtime.putFundingProof(funding, NOW)).toBe(true);
-  seedStorageAdmissionProjection(f.db, {
-    pricingId: pricing.id,
-    fundingId: funding.id,
-    allocationId: ap.id,
-    now: NOW,
-    expiry: EXP,
-  });
+  const pricing = f.pp,
+    funding = f.fp;
   const storage = createV2StoragePaidRuntimeRepository(f.core, "preview", verify);
   let current = NOW,
     beforeHook: (() => Promise<void>) | undefined,
