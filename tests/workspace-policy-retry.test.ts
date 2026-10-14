@@ -349,3 +349,30 @@ test("editing saved answers supersedes a policy failure and allows a fresh gener
   expect((await runCustomerJob(f, "intake_questions")).result.status).toBe("completed");
   expect((await f.service.intake(f.owner.userId, f.workspace.id))?.batches).toHaveLength(2);
 });
+
+test("terminal content rejection keeps only the strict internal receipt and leaves output unpublished", async () => {
+  const f = await fixture();
+  const contentFailure = {
+    field: "action_state" as const,
+    category: "invalid_revision" as const,
+    canonicalRefusalOpening: true,
+  };
+  const failed = await runCustomerJob(f, "intake_questions", true, async () => {
+    throw new WorkspaceOutputPolicyError(
+      "prohibited_content",
+      undefined,
+      undefined,
+      contentFailure,
+    );
+  });
+  expect(failed.result).toMatchObject({
+    status: "failed",
+    policyReason: "prohibited_content",
+    contentFailure,
+  });
+  expect((await f.service.intake(f.owner.userId, f.workspace.id))?.batches).toEqual([]);
+  expect(await f.service.job(f.owner.userId, f.workspace.id, failed.params.jobId)).toMatchObject({
+    status: "failed",
+    failure: "POLICY_REJECTED",
+  });
+});

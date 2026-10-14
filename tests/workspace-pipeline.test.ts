@@ -734,3 +734,228 @@ test.each(["user_message", "user_material"] as const)(
     }
   },
 );
+
+test("chat generation is told the exact standalone refusal contract enforced by the guard", async () => {
+  const { prompts } = await import("../src/server/modules/llm-gateway/prompts");
+  expect(prompts.workspace_chat).toContain(
+    "소송 전략은 제공하지 않으며 사실과 자료 정리를 돕겠습니다.",
+  );
+  expect(prompts.workspace_chat).toContain("entire first line");
+  expect(prompts.workspace_chat).toContain("facts, actions, timeline or parties");
+});
+
+test.each([
+  "소송 전략은 알려드릴 수 없지만 확인된 사실과 자료를 정리해 드리겠습니다.",
+  "**소송 전략은 제공하지 않으며 사실과 자료 정리를 돕겠습니다.**",
+  "소송 전략은 제공하지 않으며 사실과 자료 정리를 돕겠습니다. 자료를 정리할 수 있습니다.",
+])("a noncanonical refusal remains withheld before audit: %s", async (text) => {
+  const { value, calls } = pipeline((phase) =>
+    phase === "workspace_audit" ? approved : chatText(text),
+  );
+  await expect(value.chat(confirmedChatContext(), "synthetic_variant")).rejects.toMatchObject({
+    reason: "prohibited_content",
+  });
+  expect(calls.map((call) => call.phase)).toEqual(["workspace_chat"]);
+});
+
+test.each([
+  ["소송 전략은 알려드릴 수 없어요.", "strategy", false],
+  [
+    "소송 전략은 제공하지 않으며 사실과 자료 정리를 돕겠습니다.\n협상 전략을 세워야 합니다.",
+    "strategy",
+    true,
+  ],
+  [
+    "소송 전략은 제공하지 않으며 사실과 자료 정리를 돕겠습니다.\n반드시 승소합니다.",
+    "outcome_claim",
+    true,
+  ],
+  [
+    "소송 전략은 제공하지 않으며 사실과 자료 정리를 돕겠습니다.\n변호사로서 설명합니다.",
+    "professional_role",
+    true,
+  ],
+  [
+    "소송 전략은 제공하지 않으며 사실과 자료 정리를 돕겠습니다.\n연락처는 synthetic@example.test입니다.",
+    "private_identifier",
+    true,
+  ],
+])(
+  "chat policy receipt identifies only the matching text category: %s",
+  async (text, category, canonical) => {
+    const { value, calls } = pipeline((phase) =>
+      phase === "workspace_audit" ? approved : chatText(text),
+    );
+    await expect(value.chat(confirmedChatContext(), "synthetic_receipt")).rejects.toMatchObject({
+      reason: "prohibited_content",
+      contentFailure: { field: "chat_text", category, canonicalRefusalOpening: canonical },
+    });
+    expect(calls.map((call) => call.phase)).toEqual(["workspace_chat"]);
+  },
+);
+
+function diagnosticFirst<T>(values: T[]): T {
+  const value = values[0];
+  if (!value) throw new Error("Synthetic diagnostic entity absent");
+  return value;
+}
+function diagnosticDraft() {
+  const fact: V2Fact = {
+    id: "private-synthetic-fact-id",
+    text: "확인이 더 필요할 수 있습니다.",
+    attribution: "ai_organization",
+    certainty: "uncertain",
+    significance: "neutral",
+    references: [],
+    conflictingFactIds: [],
+    userEdited: false,
+  };
+  return {
+    ...chatText("소송 전략은 제공하지 않으며 사실과 자료 정리를 돕겠습니다."),
+    facts: [fact],
+    actions: [
+      {
+        id: "private-synthetic-action-id",
+        revision: 1,
+        kind: "organize_materials" as const,
+        title: "자료 정리",
+        instructions: "보관된 자료를 확인해 주세요.",
+        caution: "원본을 확인해 주세요.",
+        status: "todo" as "todo" | "done",
+        factIds: [] as string[],
+        references: [],
+      },
+    ],
+    timeline: [
+      {
+        id: "private-synthetic-timeline-id",
+        revision: 1,
+        date: null,
+        datePrecision: "unknown" as const,
+        event: "날짜가 확인되지 않았습니다.",
+        certainty: "uncertain" as const,
+        references: [],
+        factIds: [] as string[],
+        userEdited: false,
+      },
+    ],
+    parties: [{ id: "private-synthetic-party-id", label: "상대방", role: "당사자" }],
+  };
+}
+
+test.each([
+  [
+    "fact_relation",
+    "duplicate_fact_id",
+    (draft: ReturnType<typeof diagnosticDraft>, saved: WorkspaceContext) => {
+      saved.facts = [structuredClone(diagnosticFirst(draft.facts))];
+    },
+  ],
+  [
+    "fact_relation",
+    "unknown_conflicting_fact",
+    (draft: ReturnType<typeof diagnosticDraft>) => {
+      diagnosticFirst(draft.facts).certainty = "conflicting";
+      diagnosticFirst(draft.facts).conflictingFactIds = ["private-missing-id"];
+    },
+  ],
+  [
+    "action_state",
+    "invalid_revision",
+    (draft: ReturnType<typeof diagnosticDraft>) => {
+      diagnosticFirst(draft.actions).revision = 2;
+    },
+  ],
+  [
+    "action_state",
+    "invalid_status",
+    (draft: ReturnType<typeof diagnosticDraft>) => {
+      diagnosticFirst(draft.actions).status = "done";
+    },
+  ],
+  [
+    "action_relation",
+    "unknown_fact",
+    (draft: ReturnType<typeof diagnosticDraft>) => {
+      diagnosticFirst(draft.actions).factIds = ["private-missing-id"];
+    },
+  ],
+  [
+    "action_text",
+    "strategy",
+    (draft: ReturnType<typeof diagnosticDraft>) => {
+      diagnosticFirst(draft.actions).instructions =
+        "소송 전략은 제공하지 않으며 사실과 자료 정리를 돕겠습니다.";
+    },
+  ],
+  [
+    "timeline_state",
+    "invalid_revision",
+    (draft: ReturnType<typeof diagnosticDraft>) => {
+      diagnosticFirst(draft.timeline).revision = 2;
+    },
+  ],
+  [
+    "timeline_state",
+    "user_edited",
+    (draft: ReturnType<typeof diagnosticDraft>) => {
+      diagnosticFirst(draft.timeline).userEdited = true;
+    },
+  ],
+  [
+    "timeline_relation",
+    "unknown_fact",
+    (draft: ReturnType<typeof diagnosticDraft>) => {
+      diagnosticFirst(draft.timeline).factIds = ["private-missing-id"];
+    },
+  ],
+  [
+    "timeline_event",
+    "strategy",
+    (draft: ReturnType<typeof diagnosticDraft>) => {
+      diagnosticFirst(draft.timeline).event = "협상 전략을 세웠습니다.";
+    },
+  ],
+  [
+    "party",
+    "professional_role",
+    (draft: ReturnType<typeof diagnosticDraft>) => {
+      diagnosticFirst(draft.parties).role = "변호사로서 설명합니다.";
+    },
+  ],
+] as const)(
+  "chat policy receipt separates %s / %s without retaining entity IDs",
+  async (field, category, change) => {
+    const draft = diagnosticDraft(),
+      saved = confirmedChatContext();
+    change(draft, saved);
+    const { value, calls } = pipeline((phase) => (phase === "workspace_audit" ? approved : draft));
+    let failure: WorkspaceOutputPolicyError | undefined;
+    try {
+      await value.chat(saved, "synthetic_structural_receipt");
+    } catch (error) {
+      if (error instanceof WorkspaceOutputPolicyError) failure = error;
+      else throw error;
+    }
+    expect(failure?.reason).toBe("prohibited_content");
+    expect(failure?.contentFailure).toEqual({ field, category, canonicalRefusalOpening: true });
+    expect(JSON.stringify(failure?.contentFailure)).not.toContain("private-");
+    expect(calls.map((call) => call.phase)).toEqual(["workspace_chat"]);
+  },
+);
+
+test.each(["private_identifier", "strategy"] as const)(
+  "fact receipt preserves the original %s guard",
+  async (category) => {
+    const draft = diagnosticDraft();
+    diagnosticFirst(draft.facts).text =
+      category === "strategy" ? "소송 전략을 세워야 합니다." : "synthetic@example.test";
+    const { value } = pipeline((phase) => (phase === "workspace_audit" ? approved : draft));
+    await expect(
+      value.chat(confirmedChatContext(), "synthetic_fact_receipt"),
+    ).rejects.toMatchObject({
+      reason: "prohibited_content",
+      contentFailure: { field: "fact_text", category, canonicalRefusalOpening: null },
+    });
+  },
+);

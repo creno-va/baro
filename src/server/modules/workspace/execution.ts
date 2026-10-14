@@ -14,6 +14,7 @@ import {
 } from "../../dependency-diagnostics";
 import { ModelError } from "../llm-gateway/service";
 import { safeWorkspaceAuditFailure } from "./audit-diagnostics";
+import { safeWorkspaceContentFailure } from "./content-diagnostics";
 import { readWorkspaceContext } from "./context";
 import {
   type createWorkspacePipeline,
@@ -300,6 +301,10 @@ export async function executeWorkspace(
       error instanceof WorkspaceOutputPolicyError && error.reason === "audit_rejected"
         ? safeWorkspaceAuditFailure(error.auditFailure)
         : undefined;
+    const contentFailure =
+      error instanceof WorkspaceOutputPolicyError && error.reason === "prohibited_content"
+        ? safeWorkspaceContentFailure(error.contentFailure)
+        : undefined;
     if (!(error instanceof ModelError)) reportDependencyFailure(error);
     await jobs
       .fail(
@@ -316,6 +321,7 @@ export async function executeWorkspace(
       ...(policyReason ? { policyReason } : {}),
       ...(factFailure ? { factFailure } : {}),
       ...(auditFailure ? { auditFailure } : {}),
+      ...(contentFailure ? { contentFailure } : {}),
     };
   }
 }

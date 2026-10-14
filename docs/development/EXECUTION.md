@@ -34,7 +34,7 @@
 | 채팅 실패·재시도 | 고객/AI, #64 / PR238 | production04f25f8에서 21:32:46 KST 새 일반 채팅 요청,21:33 실제 assistant 본문 확인 | 이전7a617b5 비용 실패와 원인 미확정 provider 실패를 역사로 보존. 비용 관측 만료 후 실패 방지는 이번 변경의 별도 범위 |
 | 리포트·다운로드 | 자료 모듈, #66 | production04f25f8에서21:34:37 KST 리포트v3 생성, PDF3페이지/3,144,078bytes 실제 수신·한글 렌더, HTML14,572bytes 실제 수신 | 선택 원본 ZIP/업로드/삭제와 다른 media 경로는 별도 잔여로 유지 |
 | 법률·인증·정책 점검 | 법률/인증 모듈, #27/#63/#71 | [10/14 검증](../quality/LEGAL-AUTH-VERIFICATION-2026-10-14.md): 등록 도메인 Referer 누락 확인·로컬 인터넷 JSON 거부 해결. 법령 본문 검증과 실제 판례 형식 수정. Google 사용자 수동 확인·정책 점검표 완료 | 수정 PR 병합 후 GitHub 저장 credential 및 같은 SHA Worker 검증. 기관 안내 update_pending·판례 limited·Naver/Kakao 실제 증거는 보존 |
-| 전체 실제 인수 | 각 모듈, #27/#59/#63/#64/#66/#67/#71 | preview71892c5에서 Kakao 두 역할·동일 이메일 연결·프로필 저장/공개/철회·검색/외부연결 실제 확인. 고객 생성의 수동 Turnstile 및 실제 업로드 정제 실패·간헐 native full 실패 미해결 | [단일 실제 인수 추적](../quality/PREBETA-MVP-LIVE-ACCEPTANCE.md)에서 재현·원인·수정·버전·결과 관리. preview 전체 핵심 흐름 완료 전 production 배포 금지 |
+| 전체 실제 인수 | 각 모듈, #27/#59/#63/#64/#66/#67/#71 | 단일 추적표에 버전별 실제 Kakao 두 역할·질문/요약/채팅/공식 법률 질의·자료 처리·HTML/PDF/ZIP·프로필 공개/철회 결과 기록. 8ebfbaf DOCX 본문/표/두쪽 및 원본 일치 확인. 수동 Turnstile은 사용자 보류, 지연과 간헐 native 원인 미확정. 큰 자료의 사건 화면 오류 수정 PR288 병합 후 preview 재확인 대기 | [단일 실제 인수 추적](../quality/PREBETA-MVP-LIVE-ACCEPTANCE.md)을 현재 결과 정본으로 사용. 이전 오류와 성공을 다른 버전에 그대로 적용하지 않음. preview 전체 핵심 흐름 완료 전 production 배포 금지 |
 
 ## 2026-10-14 실제 배포·제품 receipt
 
