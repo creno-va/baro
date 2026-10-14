@@ -165,7 +165,7 @@ test("report work plan admits the exact query/source boundary and rejects the ne
   );
 });
 
-test("an actual one-upload-part ZIP preserves every byte; the next-byte multipart plan fails before original GET/export PUT", async () => {
+test("an actual one-upload-part ZIP preserves every byte; an oversized multipart plan fails before original GET/export PUT", async () => {
   const f = await reportFixture();
   const original = "S".repeat(V2_LIMITS.chunkBytes);
   const file = await readyFile(f, original);
@@ -184,7 +184,10 @@ test("an actual one-upload-part ZIP preserves every byte; the next-byte multipar
   expect(f.db.queryCount - before).toBeLessThanOrEqual(800);
 
   const larger = await reportFixture();
-  const split = await readyFile(larger, `${original}S`);
+  // Lossless PDF font compression leaves room for an 8MiB + 1-byte source in
+  // the unchanged query envelope. Two full original parts still exceed it.
+  // The exact one-query/one-source boundary is asserted separately above.
+  const split = await readyFile(larger, original.repeat(2));
   const largerReport = await larger.reports.get(larger.actor.ownerId, larger.workspaceId);
   const calls = { ...larger.bucket.calls };
   const objects = larger.bucket.objects.size;
