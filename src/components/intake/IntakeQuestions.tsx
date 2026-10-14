@@ -100,13 +100,17 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
   const roundLimit = Math.max(result?.roundLimit ?? 2, ...rounds.map((r) => r.ordinal));
   const roundIndex = question ? round.questionIds.indexOf(question.id) : 0;
   const lastInRound = roundIndex === round.questionIds.length - 1;
-  const canNavigateSavedAnswer =
-    !dirty &&
-    !!question?.answerState &&
-    !error &&
-    !failedOperation.current &&
-    !recovering &&
-    !!result?.questions[index + 1];
+  const cleanSavedAnswer =
+    !dirty && !!question?.answerState && !error && !failedOperation.current && !recovering;
+  const canNavigateSavedAnswer = cleanSavedAnswer && !!result?.questions[index + 1];
+  const canAdvanceSavedAnswer =
+    cleanSavedAnswer &&
+    !!result &&
+    !result.failed &&
+    !result.complete &&
+    index === result.questions.length - 1 &&
+    drafts.current.size === 0;
+  const requiresAdvanceRetry = !!error && failedOperation.current?.kind === "advance" && !dirty;
   const finalQuestion =
     index === (result?.questions.length ?? 0) - 1 &&
     (rounds.length >= roundLimit || result?.processingStage === "summary" || editing);
@@ -593,8 +597,11 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
                   <form
                     onSubmit={(event) => {
                       event.preventDefault();
+                      if (requiresAdvanceRetry) return;
                       if (canNavigateSavedAnswer) {
                         navigateQuestion(index + 1);
+                      } else if (canAdvanceSavedAnswer) {
+                        void advance();
                       } else if (result.failed && !dirty) {
                         if (result.retryable || result.canPrepareSummary) void advance();
                       } else void save(true);
@@ -704,6 +711,7 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
                           type="submit"
                           disabled={
                             locked ||
+                            requiresAdvanceRetry ||
                             (result.failed &&
                               !result.retryable &&
                               !result.canPrepareSummary &&
@@ -717,11 +725,15 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
                             ? "답변을 저장하고 있어요"
                             : canNavigateSavedAnswer
                               ? "다음 질문"
-                              : finalQuestion
-                                ? "저장하고 요약 보기"
-                                : lastInRound && round.ordinal < roundLimit
-                                  ? `저장하고 ${round.ordinal + 1}차 질문 보기`
-                                  : "저장하고 다음 질문"}
+                              : canAdvanceSavedAnswer
+                                ? finalQuestion
+                                  ? "요약 보기"
+                                  : "다음 질문 준비하기"
+                                : finalQuestion
+                                  ? "저장하고 요약 보기"
+                                  : lastInRound && round.ordinal < roundLimit
+                                    ? `저장하고 ${round.ordinal + 1}차 질문 보기`
+                                    : "저장하고 다음 질문"}
                           <ArrowRight size={18} aria-hidden="true" />
                         </Button>
                       )}
