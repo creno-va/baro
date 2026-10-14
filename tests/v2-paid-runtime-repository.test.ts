@@ -6,7 +6,7 @@ import {
   createV2AccountingRepository,
 } from "../src/server/db/v2-accounting";
 import { type Actor, createV2Core, V2RepositoryError } from "../src/server/db/v2-core";
-import { recordExecutionTransport } from "../src/server/db/v2-execution-runtime";
+import { dispatchExecution, recordExecutionTransport } from "../src/server/db/v2-execution-runtime";
 import { createV2FilesRepository } from "../src/server/db/v2-files";
 import { createV2JobsRepository } from "../src/server/db/v2-jobs";
 import { createV2LawyersRepository } from "../src/server/db/v2-lawyers";
@@ -2157,6 +2157,175 @@ test("unpriced unsent receipt can resume after optional observation append fails
   expect(await f.runtime.recordUsage({ ...r, observedAt: "2026-10-06T00:00:01.000Z" }, LATER)).toBe(
     false,
   );
+});
+
+async function executionDispatchFixture(applicationCostLimitsEnabled = false) {
+  const f = await fixture(true, applicationCostLimitsEnabled),
+    a = await admit(f);
+  expect(a.ok).toBe(true);
+  const acquired = await f.jobs.acquire(
+    f.actor,
+    a.r.jobId,
+    crypto.randomUUID(),
+    LATER,
+    a.r.attemptId,
+  );
+  if (!acquired) throw Error("Synthetic dispatch lease missing");
+  const meter = countD1Calls(f.db.binding),
+    core = createV2Core(meter.binding, f.core.cipher, { applicationCostLimitsEnabled }),
+    runtime = createV2PaidRuntimeRepository(core, "preview", verifier);
+  const row = () =>
+    f.db.sqlite
+      .query<Record<string, unknown>, [string]>(
+        "SELECT * FROM v2_execution_admissions WHERE attempt_id=?",
+      )
+      .get(a.r.attemptId);
+  return { ...f, ...a, meter, core, runtime, lease: acquired.lease, row };
+}
+
+test("execution dispatch preserves the exact admission in two D1 calls and has one concurrent winner", async () => {
+  const f = await executionDispatchFixture(),
+    before = f.row();
+  const handle = await f.runtime.beforeDispatch(f.actor, f.lease, f.r.attemptId);
+  expect(handle).not.toBeNull();
+  if (!handle) throw Error("Synthetic dispatch missing");
+  expect(f.meter.work).toEqual({ calls: 2, statements: 2 });
+  expect(f.row()).toEqual({
+    ...before,
+    state: "dispatched",
+    lease_token: f.lease.token,
+    fencing: f.lease.fencing,
+    dispatch_token: handle.dispatchToken,
+    dispatched_at: NOW,
+  });
+  expect(f.db.sqlite.query("SELECT * FROM v2_mutation_claims").all()).toEqual([]);
+  expect(await f.runtime.beforeDispatch(f.actor, f.lease, f.r.attemptId)).toBeNull();
+
+  const concurrent = await executionDispatchFixture();
+  const winners = await Promise.all(
+    [0, 1].map(() =>
+      concurrent.runtime.beforeDispatch(concurrent.actor, concurrent.lease, concurrent.r.attemptId),
+    ),
+  );
+  expect(winners.filter(Boolean)).toHaveLength(1);
+  expect(concurrent.row()).toMatchObject({
+    state: "dispatched",
+    dispatch_token: winners.find(Boolean)?.dispatchToken,
+  });
+});
+
+test("execution dispatch distinguishes absent historical paid attempts from rejected execution admissions", async () => {
+  const f = await executionDispatchFixture(true);
+  expect(
+    await dispatchExecution(f.core, "preview", f.actor, f.lease, crypto.randomUUID()),
+  ).toBeUndefined();
+  expect(
+    await dispatchExecution(f.core, "preview", f.actor, f.lease, f.r.attemptId),
+  ).toBeUndefined();
+  const handle = await f.runtime.beforeDispatch(f.actor, f.lease, f.r.attemptId);
+  expect(handle).not.toBeNull();
+  expect(
+    f.db.sqlite.query("SELECT state FROM v2_paid_holds WHERE attempt_id=?").get(f.r.attemptId),
+  ).toEqual({ state: "dispatched" });
+  expect(f.row()).toBeNull();
+  const execution = await executionDispatchFixture();
+  expect(
+    await dispatchExecution(
+      execution.core,
+      "production",
+      execution.actor,
+      execution.lease,
+      execution.r.attemptId,
+    ),
+  ).toBeNull();
+  expect(execution.row()).toMatchObject({ state: "prepared", dispatch_token: null });
+});
+
+for (const boundary of ["before CAS", "after CAS"] as const)
+  for (const changed of ["owner", "source", "lease", "runtime", "operation", "deletion"] as const)
+    test(`execution dispatch denies ${changed} changed ${boundary} without losing dispatch evidence`, async () => {
+      const f = await executionDispatchFixture();
+      const other =
+        changed === "owner"
+          ? await seedTestSession(f.db, { now: Date.parse(NOW), consent: true })
+          : null;
+      let injected = false;
+      const mutate = (statements: string[]) => {
+        if (
+          injected ||
+          !statements.some((sql) =>
+            sql.startsWith("UPDATE v2_execution_admissions SET state='dispatched'"),
+          )
+        )
+          return;
+        injected = true;
+        if (changed === "owner")
+          f.db.sqlite
+            .query("UPDATE v2_workspaces SET owner_id=? WHERE id=?")
+            .run(other?.userId ?? "missing", f.workspaceId);
+        if (changed === "source")
+          f.db.sqlite
+            .query("UPDATE v2_workspaces SET revision=revision+1 WHERE id=?")
+            .run(f.workspaceId);
+        if (changed === "lease")
+          f.db.sqlite
+            .query("UPDATE v2_jobs SET lease_token=?,fencing=fencing+1 WHERE id=?")
+            .run(crypto.randomUUID(), f.r.jobId);
+        if (changed === "runtime")
+          f.db.sqlite
+            .query("UPDATE v2_jobs SET runtime_instance_id=? WHERE id=?")
+            .run(crypto.randomUUID(), f.r.jobId);
+        if (changed === "operation")
+          f.db.sqlite
+            .query("UPDATE v2_operations SET revision=revision+1 WHERE id=?")
+            .run(f.r.plan.operationId);
+        if (changed === "deletion")
+          f.db.sqlite
+            .query(
+              "INSERT INTO v2_tombstones(target_kind,target_id,deleted_at) VALUES('account',?,?)",
+            )
+            .run(f.actor.ownerId, NOW);
+      };
+      (boundary === "before CAS" ? f.meter.before : f.meter.after)(mutate);
+      expect(await f.runtime.beforeDispatch(f.actor, f.lease, f.r.attemptId)).toBeNull();
+      expect(injected).toBe(true);
+      expect(f.row()).toMatchObject(
+        boundary === "before CAS"
+          ? { state: "prepared", dispatch_token: null }
+          : { state: "dispatched", lease_token: f.lease.token, fencing: f.lease.fencing },
+      );
+      expect(f.db.sqlite.query("SELECT count(*) n FROM v2_paid_holds").get()).toEqual({ n: 0 });
+    });
+
+test("execution dispatch rolls back database failure and retains a committed dispatch after response loss", async () => {
+  const f = await executionDispatchFixture(),
+    before = f.row();
+  f.db.sqlite.exec(
+    "CREATE TRIGGER synthetic_dispatch_failure BEFORE UPDATE ON v2_execution_admissions BEGIN SELECT RAISE(ABORT,'synthetic'); END",
+  );
+  await expect(f.runtime.beforeDispatch(f.actor, f.lease, f.r.attemptId)).rejects.toMatchObject({
+    code: "DB_OPERATION_FAILED",
+  });
+  expect(f.row()).toEqual(before);
+  f.db.sqlite.exec("DROP TRIGGER synthetic_dispatch_failure");
+  f.meter.after((sql) => {
+    if (
+      sql.some((value) => value.startsWith("UPDATE v2_execution_admissions SET state='dispatched'"))
+    )
+      throw Error("Synthetic dispatch response loss");
+  });
+  await expect(f.runtime.beforeDispatch(f.actor, f.lease, f.r.attemptId)).rejects.toMatchObject({
+    code: "DB_OPERATION_FAILED",
+  });
+  const committed = f.row();
+  expect(committed).toMatchObject({
+    state: "dispatched",
+    lease_token: f.lease.token,
+    fencing: f.lease.fencing,
+  });
+  f.meter.after(() => {});
+  expect(await f.runtime.beforeDispatch(f.actor, f.lease, f.r.attemptId)).toBeNull();
+  expect(f.row()).toEqual(committed);
 });
 
 function transportFixture(f: Fixture, d: Awaited<ReturnType<typeof dispatch>>) {
