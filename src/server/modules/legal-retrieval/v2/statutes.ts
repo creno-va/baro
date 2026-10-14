@@ -2,8 +2,23 @@ import { z } from "zod";
 import { displayText } from "../../../../contracts";
 import { apiDate, digits, RetrievalFailure, type RetrievalPlan } from "./contracts";
 import { OFFICIAL_CATALOG } from "./registry";
+import { type LegalSchemaDiagnostic, legalSchemaDiagnostic } from "./schema-diagnostics";
 import { makeChunk } from "./source";
 import { plainText } from "./text";
+
+function parseSchema<T>(
+  schema: z.ZodType<T>,
+  value: unknown,
+  stage: LegalSchemaDiagnostic["stage"],
+) {
+  try {
+    return schema.parse(value);
+  } catch (error) {
+    if (error instanceof z.ZodError)
+      throw new RetrievalFailure("schema_mismatch", legalSchemaDiagnostic(stage, error));
+    throw error;
+  }
+}
 
 const candidateSchema = z.object({
   법령ID: digits,
@@ -29,7 +44,7 @@ export function selectStatute(
   asOfDate: string,
   observedDate = asOfDate,
 ) {
-  const list = listSchema.parse(value).LawSearch;
+  const list = parseSchema(listSchema, value, "statute_list").LawSearch;
   const rows = list.law ? (Array.isArray(list.law) ? list.law : [list.law]) : [];
   if (list.totalCnt > 100 || list.totalCnt !== rows.length)
     throw new RetrievalFailure("history_incomplete");
@@ -76,15 +91,17 @@ function nested(value: unknown, depth = 0): string[] {
   const values = Array.isArray(value) ? value : [value];
   if (values.length > 1000) throw new RetrievalFailure("too_large");
   return values.flatMap((raw) => {
-    const row = z
-      .object({
+    const row = parseSchema(
+      z.object({
         항내용: z.string().optional(),
         호내용: z.string().optional(),
         목내용: z.string().optional(),
         호: z.unknown().optional(),
         목: z.unknown().optional(),
-      })
-      .parse(raw);
+      }),
+      raw,
+      "statute_nested",
+    );
     return [
       row.항내용,
       row.호내용,
@@ -101,7 +118,7 @@ export async function parseStatute(
   asOfDate: string,
   now: string,
 ) {
-  const root = detail.parse(value).법령,
+  const root = parseSchema(detail, value, "statute_detail").법령,
     basic = root.기본정보;
   if (
     basic.법령ID !== candidate.법령ID ||

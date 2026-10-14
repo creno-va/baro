@@ -4,19 +4,35 @@ import { expect, type Page, test } from "@playwright/test";
 // these tests never create a real job or represent external AI success.
 async function savedIntake(
   page: Page,
-  options: { retryable?: boolean; processing?: boolean; needsConsent?: boolean } = {},
+  options: {
+    retryable?: boolean;
+    processing?: boolean;
+    needsConsent?: boolean;
+    failed?: boolean;
+    rounds?: 1 | 2;
+    answerState?: "answered" | "unknown" | "skipped";
+    choice?: boolean;
+    complete?: boolean;
+  } = {},
 ) {
   const caseId = "synthetic-saved-review";
+  const count = (options.rounds ?? 2) * 3;
   await page.addInitScript(
-    ({ id, needsConsent }) => {
+    ({ id, needsConsent, count, answerState, choice }) => {
       const owner = "synthetic-saved-review-owner";
-      const questions = Array.from({ length: 6 }, (_, index) => ({
+      const questions = Array.from({ length: count }, (_, index) => ({
         id: `saved-${index}`,
         text: `합성 저장 질문 ${index + 1}`,
         kind: "text",
         answerState: "answered",
         answer: `합성 저장 답변 ${index + 1}`,
       }));
+      const last = questions.at(-1);
+      if (last) {
+        last.answerState = answerState;
+        last.answer = answerState === "answered" ? (choice ? "선택 A" : last.answer) : "";
+        if (choice) Object.assign(last, { kind: "choice", options: ["선택 A", "선택 B"] });
+      }
       const values = {
         session: {
           user: { id: owner, name: "합성 검증 고객", accountType: "customer" },
@@ -39,26 +55,34 @@ async function savedIntake(
           [id]: {
             narrative: "실제 인물이나 계약이 없는 합성 검증 사건입니다.",
             questions,
-            rounds: [
-              { ordinal: 1, questionIds: questions.slice(0, 3).map((q) => q.id) },
-              { ordinal: 2, questionIds: questions.slice(3).map((q) => q.id) },
-            ],
+            rounds: Array.from({ length: count / 3 }, (_, index) => ({
+              ordinal: index + 1,
+              questionIds: questions.slice(index * 3, index * 3 + 3).map((q) => q.id),
+            })),
           },
         },
       };
       for (const [key, value] of Object.entries(values))
         localStorage.setItem(`baro-api-mock-v1:${key}`, JSON.stringify(value));
-      localStorage.setItem("synthetic-review-advance-calls", "0");
-      localStorage.setItem("synthetic-review-save-calls", "0");
+      // Preserve evidence when a completed response navigates to the summary document.
+      for (const key of ["synthetic-review-advance-calls", "synthetic-review-save-calls"])
+        if (localStorage.getItem(key) === null) localStorage.setItem(key, "0");
     },
-    { id: caseId, needsConsent: options.needsConsent ?? false },
+    {
+      id: caseId,
+      needsConsent: options.needsConsent ?? false,
+      count,
+      answerState: options.answerState ?? "answered",
+      choice: options.choice ?? false,
+    },
   );
   const state = {
-    failed: !options.processing,
+    failed: options.failed ?? !options.processing,
     retryable: options.retryable ?? true,
-    failure: options.processing ? null : "POLICY_REJECTED",
+    failure: options.processing || options.failed === false ? null : "POLICY_REJECTED",
     processing: options.processing ?? false,
-    processingStage: "summary",
+    processingStage: count === 6 ? "summary" : "questions",
+    ...(options.complete === undefined ? {} : { complete: options.complete }),
   };
   await page.route("**/src/client/api/cases.ts*", async (route) => {
     const response = await route.fetch();
@@ -70,8 +94,9 @@ const syntheticReviewRead = casesApi.getQuestions;
 const syntheticReviewSave = casesApi.saveAnswers;
 const syntheticReviewState = ${JSON.stringify(state)};
 casesApi.getQuestions = async (...args) => ({ ...await syntheticReviewRead(...args), ...syntheticReviewState });
-casesApi.advance = async (id) => {
+casesApi.advance = async (id, input) => {
   localStorage.setItem("synthetic-review-advance-calls", String(Number(localStorage.getItem("synthetic-review-advance-calls")) + 1));
+  localStorage.setItem("synthetic-review-advance-revision", String(input.expectedRevision));
   return casesApi.getQuestions(id);
 };
 casesApi.saveAnswers = async (...args) => {
@@ -81,8 +106,12 @@ casesApi.saveAnswers = async (...args) => {
 `,
     });
   });
-  await page.goto(`/cases/${caseId}/intake`);
-  await expect(page.getByRole("heading", { name: "합성 저장 질문 6", exact: true })).toBeVisible();
+  await page.goto(
+    `/cases/${caseId}/intake?question=${count - 1}${options.complete ? "&edit=1" : ""}`,
+  );
+  await expect(
+    page.getByRole("heading", { name: `합성 저장 질문 ${count}`, exact: true }),
+  ).toBeVisible();
   return page.evaluate(() => localStorage.getItem("baro-api-mock-v1:intake"));
 }
 
@@ -96,12 +125,204 @@ async function previousQuestion(page: Page, ordinal: number) {
   }
 }
 
+for (const rounds of [1, 2] as const) {
+  test(`clean saved round ${rounds} boundary advances once without saving again`, async ({
+    page,
+  }) => {
+    const before = await savedIntake(page, { failed: false, rounds });
+    await page
+      .getByRole("button", { name: /^(저장하고 )?(요약 보기|2차 질문 보기|다음 질문 준비하기)$/ })
+      .click();
+    await expect.poll(() => calls(page)).toEqual({ advance: 1, save: 0 });
+    expect(
+      await page.evaluate(() => localStorage.getItem("synthetic-review-advance-revision")),
+    ).toBe("12");
+    expect(await page.evaluate(() => localStorage.getItem("baro-api-mock-v1:intake"))).toBe(before);
+    await expect(
+      page.getByRole("button", {
+        name: rounds === 2 ? "요약 보기" : "다음 질문 준비하기",
+        exact: true,
+      }),
+    ).toBeVisible();
+  });
+}
+
 async function calls(page: Page) {
   return page.evaluate(() => ({
     advance: Number(localStorage.getItem("synthetic-review-advance-calls")),
     save: Number(localStorage.getItem("synthetic-review-save-calls")),
   }));
 }
+
+for (const answer of ["unknown", "skipped", "choice"] as const) {
+  test(`clean saved ${answer} final answer advances without a write`, async ({ page }) => {
+    const before = await savedIntake(page, {
+      failed: false,
+      ...(answer === "choice" ? { choice: true } : { answerState: answer }),
+    });
+    await page.getByRole("button", { name: "요약 보기", exact: true }).click();
+    await expect.poll(() => calls(page)).toEqual({ advance: 1, save: 0 });
+    expect(await page.evaluate(() => localStorage.getItem("baro-api-mock-v1:intake"))).toBe(before);
+  });
+}
+
+for (const change of ["text", "choice", "unknown", "skipped"] as const) {
+  test(`changed ${change} final answer still saves before advancing`, async ({ page }) => {
+    await savedIntake(page, { failed: false, choice: change === "choice" });
+    if (change === "unknown" || change === "skipped") {
+      await page
+        .getByRole("button", { name: change === "unknown" ? "모름" : "건너뛰기", exact: true })
+        .click();
+    } else {
+      if (change === "choice")
+        await page.getByRole("radio", { name: "선택 B", exact: true }).check();
+      else
+        await page
+          .getByRole("textbox", { name: "답변", exact: true })
+          .fill("수정된 마지막 합성 답변");
+      await page.getByRole("button", { name: "저장하고 요약 보기", exact: true }).click();
+    }
+    await expect.poll(() => calls(page)).toEqual({ advance: 1, save: 1 });
+    expect(
+      await page.evaluate(() => localStorage.getItem("synthetic-review-advance-revision")),
+    ).toBe("13");
+  });
+}
+
+test("editing an already completed summary keeps its existing invalidation path", async ({
+  page,
+}) => {
+  await savedIntake(page, { failed: false, complete: true });
+  await expect(page.getByRole("button", { name: "요약 보기", exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "저장하고 요약 보기", exact: true }).click();
+  await expect.poll(() => calls(page)).toEqual({ advance: 1, save: 1 });
+});
+
+for (const change of ["owner", "consent"] as const) {
+  test(`clean final advance rechecks ${change} before mutation`, async ({ page }) => {
+    await savedIntake(page, { failed: false });
+    await page.evaluate((change) => {
+      const session = JSON.parse(localStorage.getItem("baro-api-mock-v1:session") ?? "null");
+      if (change === "owner") session.user.id = "synthetic-other-owner";
+      else session.needsConsent = true;
+      localStorage.setItem("baro-api-mock-v1:session", JSON.stringify(session));
+    }, change);
+    await page.getByRole("button", { name: "요약 보기", exact: true }).click();
+    if (change === "owner")
+      await expect(
+        page.getByRole("heading", { name: "합성 저장 질문 6", exact: true }),
+      ).toHaveCount(0);
+    else await expect(page.getByRole("link", { name: "동의 확인", exact: true })).toBeVisible();
+    expect(await calls(page)).toEqual({ advance: 0, save: 0 });
+  });
+}
+
+test("clean final admission failure retries only advance with the same revision", async ({
+  page,
+}) => {
+  await savedIntake(page, { failed: false });
+  await page.evaluate(async () => {
+    const casesPath = "/src/client/api/cases.ts";
+    const corePath = "/src/client/api/core.ts";
+    const { casesApi } = await import(casesPath);
+    const { ApiError } = await import(corePath);
+    const original = casesApi.advance;
+    let first = true;
+    casesApi.advance = async (...args: Parameters<typeof original>) => {
+      const value = await original(...args);
+      if (first) {
+        first = false;
+        throw new ApiError("UNAVAILABLE", "합성 작업 접수 연결 실패", true);
+      }
+      return value;
+    };
+  });
+  await page.getByRole("button", { name: "요약 보기", exact: true }).click();
+  await expect(
+    page.getByRole("alert").filter({ hasText: "합성 작업 접수 연결 실패" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "저장하고 요약 보기", exact: true }),
+  ).toBeDisabled();
+  await page
+    .locator("form")
+    .evaluate((form) =>
+      form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })),
+    );
+  expect(await calls(page)).toEqual({ advance: 1, save: 0 });
+  await page.getByRole("button", { name: "다시 시도", exact: true }).click();
+  await expect.poll(() => calls(page)).toEqual({ advance: 2, save: 0 });
+  expect(await page.evaluate(() => localStorage.getItem("synthetic-review-advance-revision"))).toBe(
+    "12",
+  );
+});
+
+test("clean final revision conflict requires explicit refresh without saving", async ({ page }) => {
+  await savedIntake(page, { failed: false });
+  await page.evaluate(async () => {
+    const casesPath = "/src/client/api/cases.ts";
+    const corePath = "/src/client/api/core.ts";
+    const { casesApi } = await import(casesPath);
+    const { ApiError } = await import(corePath);
+    const original = casesApi.advance;
+    casesApi.advance = async (...args: Parameters<typeof original>) => {
+      await original(...args);
+      throw new ApiError("CONFLICT", "합성 최신 답변 충돌");
+    };
+  });
+  await page.getByRole("button", { name: "요약 보기", exact: true }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "합성 최신 답변 충돌" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "최신 내용 불러오기", exact: true })).toBeEnabled();
+  await expect(
+    page.getByRole("button", { name: "저장하고 요약 보기", exact: true }),
+  ).toBeDisabled();
+  expect(await calls(page)).toEqual({ advance: 1, save: 0 });
+});
+
+test("pending clean final advance locks repeated submission and ignores a signed-out response", async ({
+  page,
+}) => {
+  await savedIntake(page, { failed: false });
+  await page.evaluate(async () => {
+    const casesPath = "/src/client/api/cases.ts";
+    const { casesApi } = await import(casesPath);
+    const original = casesApi.advance;
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    Object.assign(window, { releaseSyntheticAdvance: release });
+    casesApi.advance = async (...args: Parameters<typeof original>) => {
+      const result = await original(...args);
+      await gate;
+      return result;
+    };
+  });
+  await page.getByRole("button", { name: "요약 보기", exact: true }).click();
+  await expect.poll(() => calls(page)).toEqual({ advance: 1, save: 0 });
+  await expect(
+    page.getByRole("status").filter({ hasText: "사건 요약을 정리하고 있어요" }),
+  ).toBeVisible();
+  await page
+    .locator("form")
+    .evaluate((form) =>
+      form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })),
+    );
+  expect(await calls(page)).toEqual({ advance: 1, save: 0 });
+  await page.evaluate(() => {
+    localStorage.setItem(
+      "baro-api-mock-v1:session",
+      JSON.stringify({ user: null, needsConsent: false }),
+    );
+    window.dispatchEvent(
+      new CustomEvent("baro-session-changed", { detail: { reason: "signout" } }),
+    );
+    Reflect.get(window, "releaseSyntheticAdvance")();
+  });
+  await expect(page.getByRole("heading", { name: "합성 저장 질문 6", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "로그인하기", exact: true })).toBeVisible();
+  expect(await calls(page)).toEqual({ advance: 1, save: 0 });
+});
 
 for (const retryable of [true, false]) {
   test(`failed summary reviews a previous saved answer without generation; retryable=${retryable}`, async ({

@@ -13,6 +13,7 @@ import {
   reportWorkspacePolicyFailure,
 } from "../../dependency-diagnostics";
 import { ModelError } from "../llm-gateway/service";
+import { safeWorkspaceAuditFailure } from "./audit-diagnostics";
 import { readWorkspaceContext } from "./context";
 import {
   type createWorkspacePipeline,
@@ -295,6 +296,10 @@ export async function executeWorkspace(
       error instanceof WorkspaceOutputPolicyError && error.factFailure
         ? reportWorkspaceFactFailure(error.factFailure, "terminal")
         : undefined;
+    const auditFailure =
+      error instanceof WorkspaceOutputPolicyError && error.reason === "audit_rejected"
+        ? safeWorkspaceAuditFailure(error.auditFailure)
+        : undefined;
     if (!(error instanceof ModelError)) reportDependencyFailure(error);
     await jobs
       .fail(
@@ -310,6 +315,7 @@ export async function executeWorkspace(
       stageTimings,
       ...(policyReason ? { policyReason } : {}),
       ...(factFailure ? { factFailure } : {}),
+      ...(auditFailure ? { auditFailure } : {}),
     };
   }
 }

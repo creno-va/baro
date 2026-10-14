@@ -11,13 +11,15 @@ import { countD1Calls } from "./helpers/d1-call-count";
 import { seedTestSession } from "./helpers/session";
 
 const originalFetch = globalThis.fetch;
+const originalInfo = console.info;
 const databases: Awaited<ReturnType<typeof customerWorkspaceFixture>>["db"][] = [];
 afterEach(() => {
   globalThis.fetch = originalFetch;
+  console.info = originalInfo;
   for (const db of databases.splice(0)) db.close();
 });
 
-async function fixture() {
+async function fixture(environment: Env["APP_ENV"] = "local") {
   const f = await customerWorkspaceFixture(new Date().toISOString());
   databases.push(f.db);
   expect((await runCustomerJob(f, "intake_questions", true, undefined, 3)).result.status).toBe(
@@ -41,6 +43,7 @@ async function fixture() {
     }),
   );
   const rows: { route: string; method: string; calls: number; statements: number }[] = [];
+  const timings: { route: string; header: string | null }[] = [];
   let cookie = f.owner.cookie;
   let beforeSql: (statements: string[]) => void = () => {};
   const transport = async (path: string, init?: RequestInit) => {
@@ -66,17 +69,21 @@ async function fixture() {
       },
       {
         ...f.owner.env,
+        APP_ENV: environment,
+        PUBLIC_BETA_ENABLED: environment === "production" ? "true" : "false",
         DB: meter.binding,
         CASE_DATA_KEY_V1: btoa("w".repeat(32)).replace(/=+$/, ""),
         APPLICATION_COST_LIMITS_ENABLED: "false",
       },
     );
     Object.assign(row, meter.work);
+    timings.push({ route: row.route, header: response.headers.get("server-timing") });
     return response;
   };
   // The actual resumed owner is already onboarded and has a current session.
   expect((await transport("/api/me/session")).ok).toBe(true);
   rows.length = 0;
+  timings.length = 0;
   globalThis.fetch = ((path, init) => transport(String(path), init)) as typeof fetch;
   return {
     ...f,
@@ -84,6 +91,7 @@ async function fixture() {
     intake,
     input,
     rows,
+    timings,
     transport,
     setCookie: (value: string) => {
       cookie = value;
@@ -110,6 +118,82 @@ test("canonical answer save avoids duplicate reads while verifying the acknowled
   expect(f.rows.filter((r) => r.method === "PUT")).toEqual([
     { route: "intake/answers", method: "PUT", calls: 21, statements: 33 },
   ]);
+});
+
+for (const environment of ["preview", "production"] as const)
+  test(`${environment} answer save keeps all native calls and applies only preview domain timing`, async () => {
+    const logs: unknown[][] = [];
+    console.info = (...values) => {
+      logs.push(values);
+    };
+    const f = await fixture(environment);
+    expect((await fetch("/api/me/session")).ok).toBe(true);
+    const result = await casesApi.saveAnswers(f.workspace.id, f.input);
+    expect((await fetch("/api/me/session")).ok).toBe(true);
+    expect(result.questions[0]?.answer).toBe(f.input.answers[0]?.value);
+    expect(f.rows).toHaveLength(8);
+    expect(f.rows.reduce((n, row) => n + row.calls, 0)).toBe(55);
+    expect(f.rows.reduce((n, row) => n + row.statements, 0)).toBe(74);
+    if (environment === "production") {
+      expect(f.timings.every((timing) => timing.header === null)).toBe(true);
+      expect(logs).toHaveLength(0);
+      return;
+    }
+    expect(
+      f.timings
+        .filter((timing) => timing.route === "session")
+        .every((timing) => timing.header === null),
+    ).toBe(true);
+    const headers = f.timings.filter((timing) => timing.header !== null);
+    expect(headers).toHaveLength(5);
+    expect(logs).toEqual(
+      headers.map(({ header }) => [
+        JSON.stringify({ event: "preview_d1_timing", measurements: header }),
+      ]),
+    );
+    const counts = {
+      workspace: ["workspace_read", 2, 2],
+      intake: ["intake_read", 5, 6],
+      "intake/answers": ["answers_save", 16, 28],
+      "workspace-jobs/latest": ["latest_job_read", 4, 4],
+    } as const;
+    for (const { route, header } of headers) {
+      const expected = counts[route as keyof typeof counts];
+      expect(expected).toBeDefined();
+      expect(header).toContain(`operation;desc="${expected[0]}"`);
+      expect(header).toContain(`d1_calls;desc="${expected[1]}"`);
+      expect(header).toContain(`d1_statements;desc="${expected[2]}"`);
+      expect(header).toContain('scope;desc="workspace_domain_auth_excluded"');
+      // The SQLite fixture has no native timing/region/attempt metadata.
+      expect(header).toContain(`d1_sql;desc="unknown;0/${expected[2]} statements"`);
+      expect(header).toContain('d1_attempts;desc="unknown max;0 known"');
+      expect(header).toContain('d1_region;desc="unknown;0 known"');
+      expect(header?.length).toBeLessThanOrEqual(1024);
+      for (const secret of [
+        f.workspace.id,
+        f.owner.userId,
+        f.owner.cookie,
+        f.input.answers[0]?.value,
+      ])
+        expect(header).not.toContain(secret);
+    }
+  });
+
+test("preview domain failure keeps its original response and a bounded timing header", async () => {
+  console.info = () => {
+    throw new Error("synthetic observer failure");
+  };
+  const f = await fixture("preview");
+  const missing = crypto.randomUUID();
+  const response = await f.transport(`/api/v2/cases/${missing}/workspace`);
+  expect(response.status).toBe(404);
+  expect(await response.json()).toMatchObject({ error: { code: "NOT_FOUND" } });
+  expect(response.headers.get("cache-control")).toBe("private, no-store");
+  const header = response.headers.get("server-timing");
+  expect(header).toContain('operation;desc="workspace_read"');
+  expect(header).toContain('d1_calls;desc="1"');
+  expect(header).not.toContain(missing);
+  expect(header?.length).toBeLessThanOrEqual(1024);
 });
 
 test("a peer answer after the PUT acknowledgment forces a fresh intake read", async () => {

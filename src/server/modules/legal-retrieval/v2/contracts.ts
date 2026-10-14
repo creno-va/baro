@@ -2,6 +2,7 @@ import { z } from "zod";
 import { dateSchema, displayText, timestampSchema } from "../../../../contracts";
 import type { V2OfficialCitation } from "../../../../contracts/v2";
 import type { OfficialSourceWrite } from "../../../db/v2-official-sources";
+import type { LegalSchemaDiagnostic } from "./schema-diagnostics";
 
 export const digits = z
   .union([z.string().regex(/^\d{1,12}$/), z.number().int().nonnegative().max(999999999999)])
@@ -111,7 +112,10 @@ export type FailureReason =
   | "image_omitted"
   | "cache_invalid";
 export class RetrievalFailure extends Error {
-  constructor(readonly reason: FailureReason) {
+  constructor(
+    readonly reason: FailureReason,
+    readonly schemaFailure?: LegalSchemaDiagnostic,
+  ) {
     super(`LEGAL_RETRIEVAL_${reason.toUpperCase()}`);
   }
 }
@@ -126,6 +130,7 @@ export type SourceOutcome = {
   availability: Availability;
   reason: FailureReason | null;
   chunks: SourceChunk[];
+  schemaFailure?: LegalSchemaDiagnostic;
 };
 export type RetrievalOutput = {
   schemaVersion: "2";

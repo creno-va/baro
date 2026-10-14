@@ -1,6 +1,6 @@
-import { inspectLegalV2 } from "./legal-readiness-v2";
+import { inspectLegalV2, legalDiagnosticReceipt, legalReadinessScope } from "./legal-readiness-v2";
 
-// Run only after credential/approval conditions change. Never execute from an offline check.
+// Run only after reviewed credential/approval/diagnostic changes. Never execute offline.
 if (import.meta.main) {
   const checkedAt = new Date().toISOString();
   const candidateSha = process.env.READINESS_CANDIDATE_SHA ?? "";
@@ -16,11 +16,16 @@ if (import.meta.main) {
   try {
     if (!/^[a-f0-9]{40}$/.test(candidateSha)) throw new Error();
     if (!process.env.LAW_API_OC) throw new Error();
+    const selected = legalReadinessScope(process.env.READINESS_LEGAL_SCOPE ?? "standard");
+    const observed = await inspectLegalV2({ LAW_API_OC: process.env.LAW_API_OC }, checkedAt, {
+      plans: selected.plans,
+    });
     report = {
       ...report,
-      ...(await inspectLegalV2({ LAW_API_OC: process.env.LAW_API_OC ?? "" }, checkedAt)),
+      ...(selected.scope === "standard" ? observed : legalDiagnosticReceipt(observed)),
+      scope: selected.scope,
     };
-    if (report.status !== "passed") process.exitCode = 1;
+    if (report.status !== "passed" && report.status !== "diagnostic_passed") process.exitCode = 1;
   } catch {
     process.exitCode = 1;
   }

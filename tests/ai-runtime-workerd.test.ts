@@ -33,14 +33,17 @@ import {
 import { signedSessionCookie, testEnvironment } from "./helpers/d1";
 import { measureD1Work } from "./helpers/d1-work";
 import { nativeFailure } from "./helpers/native-failure";
+import { createNativeTestRegistry, type NativeLifetime } from "./helpers/native-lifetime";
 import { createNativeProgress } from "./helpers/native-progress";
 
+const nativeTests = createNativeTestRegistry();
 let activeProgress: ReturnType<typeof createNativeProgress> | undefined;
-afterEach(() => {
+afterEach(async () => {
   // Bun can end a timed-out test before its pending native Promise settles.
-  // This only snapshots memory and clears the diagnostic timer; no DB/IO probe.
+  // Snapshot memory and clear the diagnostic timer before joining runtime cleanup.
   activeProgress?.finish(false);
   activeProgress = undefined;
+  await nativeTests.stop();
 });
 
 /** Failure-only synthetic diagnostics: never serialize rows, identities, text or errors. */
@@ -141,7 +144,10 @@ async function nativeAdmissionDiagnostics(
 
 // Wrangler pins this workerd/Miniflare pair in bun.lock. Using its actual D1
 // implementation catches SQLite authorization/SQL limits that bun:sqlite cannot.
-async function exerciseNativeRuntime(applicationCostLimitsEnabled: boolean) {
+async function exerciseNativeRuntime(
+  applicationCostLimitsEnabled: boolean,
+  lifetime: NativeLifetime,
+) {
   const started = performance.now();
   const progress = createNativeProgress(applicationCostLimitsEnabled);
   activeProgress = progress;
@@ -155,6 +161,7 @@ async function exerciseNativeRuntime(applicationCostLimitsEnabled: boolean) {
       unsafeRegisterWorker: false,
     }),
   );
+  lifetime.own(() => mf.dispose());
   let completed = false;
   try {
     const preview = (await mf.getD1Database("PREVIEW")) as unknown as D1Database,
@@ -166,6 +173,7 @@ async function exerciseNativeRuntime(applicationCostLimitsEnabled: boolean) {
     progress.enter("schema", "migrate");
     for (const db of [preview, production, upgrade]) {
       for (const name of migrations) {
+        lifetime.check();
         // Product runtimes require latest schema. A separate native database
         // retains the real pre-upgrade schema for the populated upgrade below.
         if (db === upgrade && name >= "0014_") continue;
@@ -245,6 +253,7 @@ async function exerciseNativeRuntime(applicationCostLimitsEnabled: boolean) {
       },
       AI: {
         async run(_model: string, input: Record<string, unknown>) {
+          lifetime.check();
           providerCalls++;
           if (unavailable)
             return Response.json(
@@ -409,6 +418,7 @@ async function exerciseNativeRuntime(applicationCostLimitsEnabled: boolean) {
         }),
       );
     const request = async (path: string, method = "GET", body?: unknown) => {
+      lifetime.check();
       progress.boundary("request");
       requestOrdinal++;
       requestPhase = "access_or_read";
@@ -434,24 +444,28 @@ async function exerciseNativeRuntime(applicationCostLimitsEnabled: boolean) {
         env,
       );
       if (response.status >= 500) {
-        console.error("Synthetic native request failure diagnostics", {
-          requestedCostLimitsEnabled: applicationCostLimitsEnabled,
-          activeCostLimitsEnabled: env.APPLICATION_COST_LIMITS_ENABLED !== "false",
-          requestOrdinal,
-          requestPhase,
-          status: response.status,
-          durationMs: Math.round(performance.now() - started),
-          providerCalls,
-          error: requestFailure,
-          databaseFailureCategories: databaseFailures,
-          databaseFailureDetails,
-          databaseTrace: { ...measured.trace },
-          databaseWork: {
-            statements: measured.work.statements - beforeWork.statements,
-            rowsRead: measured.work.rowsRead - beforeWork.rowsRead,
-            rowsWritten: measured.work.rowsWritten - beforeWork.rowsWritten,
-          },
-        });
+        // JSON preserves the bounded safe cause chains that Bun inspection collapses.
+        console.error(
+          "Synthetic native request failure diagnostics",
+          JSON.stringify({
+            requestedCostLimitsEnabled: applicationCostLimitsEnabled,
+            activeCostLimitsEnabled: env.APPLICATION_COST_LIMITS_ENABLED !== "false",
+            requestOrdinal,
+            requestPhase,
+            status: response.status,
+            durationMs: Math.round(performance.now() - started),
+            providerCalls,
+            error: requestFailure,
+            databaseFailureCategories: databaseFailures,
+            databaseFailureDetails,
+            databaseTrace: { ...measured.trace },
+            databaseWork: {
+              statements: measured.work.statements - beforeWork.statements,
+              rowsRead: measured.work.rowsRead - beforeWork.rowsRead,
+              rowsWritten: measured.work.rowsWritten - beforeWork.rowsWritten,
+            },
+          }),
+        );
         // Exact failed request only, never a previous job from this workspace.
         try {
           const saved = await preview
@@ -460,19 +474,25 @@ async function exerciseNativeRuntime(applicationCostLimitsEnabled: boolean) {
             )
             .bind(ownerId, key)
             .first<{ id: string }>();
-          console.error("Synthetic native request receipt diagnostics", {
-            requestOrdinal,
-            jobCreated: !!saved,
-            ...(saved
-              ? await nativeAdmissionDiagnostics(core, env, ownerId, workspace.id, saved.id)
-              : {}),
-          });
+          console.error(
+            "Synthetic native request receipt diagnostics",
+            JSON.stringify({
+              requestOrdinal,
+              jobCreated: !!saved,
+              ...(saved
+                ? await nativeAdmissionDiagnostics(core, env, ownerId, workspace.id, saved.id)
+                : {}),
+            }),
+          );
         } catch (error) {
-          console.error("Synthetic native request receipt diagnostics", {
-            requestOrdinal,
-            probeComplete: false,
-            error: nativeFailure(error),
-          });
+          console.error(
+            "Synthetic native request receipt diagnostics",
+            JSON.stringify({
+              requestOrdinal,
+              probeComplete: false,
+              error: nativeFailure(error),
+            }),
+          );
         }
       }
       return response;
@@ -515,32 +535,38 @@ async function exerciseNativeRuntime(applicationCostLimitsEnabled: boolean) {
     if (result.status !== "completed") {
       // Both variants first run a priced baseline, then upgrade populated legacy
       // rows before switching mode. Never label this failure as unpriced execution.
-      console.error("Synthetic native initial runtime diagnostics", {
-        requestedCostLimitsEnabled: applicationCostLimitsEnabled,
-        activeCostLimitsEnabled: env.APPLICATION_COST_LIMITS_ENABLED !== "false",
-        providerCalls,
-        setupDurationMs: Math.round(admissionStarted - started),
-        admissionDurationMs: Math.round(runtimeStarted - admissionStarted),
-        runtimeDurationMs: Math.round(runtimeFinished - runtimeStarted),
-        receiptWaitDurationMs: Math.round(performance.now() - runtimeFinished),
-        stageTimings:
-          "stageTimings" in result
-            ? result.stageTimings.map(({ stage, durationMs, outcome }) => ({
-                stage,
-                durationMs,
-                outcome,
-              }))
-            : [],
-        databaseWork: { ...measured.work },
-        databaseFailureCategories: databaseFailures,
-        databaseFailureDetails,
-        databaseTrace: { ...measured.trace },
-      });
+      console.error(
+        "Synthetic native initial runtime diagnostics",
+        JSON.stringify({
+          requestedCostLimitsEnabled: applicationCostLimitsEnabled,
+          activeCostLimitsEnabled: env.APPLICATION_COST_LIMITS_ENABLED !== "false",
+          providerCalls,
+          setupDurationMs: Math.round(admissionStarted - started),
+          admissionDurationMs: Math.round(runtimeStarted - admissionStarted),
+          runtimeDurationMs: Math.round(runtimeFinished - runtimeStarted),
+          receiptWaitDurationMs: Math.round(performance.now() - runtimeFinished),
+          stageTimings:
+            "stageTimings" in result
+              ? result.stageTimings.map(({ stage, durationMs, outcome }) => ({
+                  stage,
+                  durationMs,
+                  outcome,
+                }))
+              : [],
+          databaseWork: { ...measured.work },
+          databaseFailureCategories: databaseFailures,
+          databaseFailureDetails,
+          databaseTrace: { ...measured.trace },
+        }),
+      );
       // Emit the already-available failure evidence before further D1 reads, so
       // a slow diagnostic probe cannot hide the stage near the test deadline.
-      console.error("Synthetic native initial admission diagnostics", {
-        ...(await nativeAdmissionDiagnostics(core, env, ownerId, workspace.id, queued.jobId)),
-      });
+      console.error(
+        "Synthetic native initial admission diagnostics",
+        JSON.stringify({
+          ...(await nativeAdmissionDiagnostics(core, env, ownerId, workspace.id, queued.jobId)),
+        }),
+      );
     }
     expect(result.status).toBe("completed");
     expect(providerCalls).toBe(2);
@@ -570,6 +596,7 @@ async function exerciseNativeRuntime(applicationCostLimitsEnabled: boolean) {
     ).results;
     const copied: D1PreparedStatement[] = [upgrade.prepare("PRAGMA defer_foreign_keys=ON")];
     for (const { name } of oldTables) {
+      lifetime.check();
       // These rows are derived by the immutable funding-proof insert trigger.
       if (name === "v2_storage_funding_heads") continue;
       const existing = (await upgrade.prepare(`SELECT * FROM "${name}"`).all()).results;
@@ -623,6 +650,7 @@ async function exerciseNativeRuntime(applicationCostLimitsEnabled: boolean) {
           .all()
       ).results;
     for (const name of migrations.filter((name) => name >= "0014_")) {
+      lifetime.check();
       const migration = (await Bun.file(`drizzle/${name}`).text())
         .split("--> statement-breakpoint")
         .map((sql) => sql.trim())
@@ -695,6 +723,7 @@ async function exerciseNativeRuntime(applicationCostLimitsEnabled: boolean) {
     expect(next.status).toBe(202);
     const failedJob = (await next.json()) as { jobId: string };
     const execute = async (jobId: string) => {
+      lifetime.check();
       progress.boundary("readback");
       const job = await service.job(ownerId, workspace.id, jobId);
       if (job.target.kind !== "workspace") throw new Error("Wrong synthetic job target");
@@ -727,12 +756,15 @@ async function exerciseNativeRuntime(applicationCostLimitsEnabled: boolean) {
     expect(latest.status).toBe(200);
     const failed = (await latest.json()) as { status: string; retryable: boolean };
     if (failed.status !== "failed" || !failed.retryable) {
-      console.error("Synthetic native admission diagnostics", {
-        applicationCostLimitsEnabled,
-        providerReached: providerCalls > callsBeforeOutage,
-        providerCallsDuringOutage: providerCalls - callsBeforeOutage,
-        ...(await nativeAdmissionDiagnostics(core, env, ownerId, workspace.id, failedJob.jobId)),
-      });
+      console.error(
+        "Synthetic native admission diagnostics",
+        JSON.stringify({
+          applicationCostLimitsEnabled,
+          providerReached: providerCalls > callsBeforeOutage,
+          providerCallsDuringOutage: providerCalls - callsBeforeOutage,
+          ...(await nativeAdmissionDiagnostics(core, env, ownerId, workspace.id, failedJob.jobId)),
+        }),
+      );
     }
     expect(failed).toMatchObject({ status: "failed", retryable: true });
     unavailable = false;
@@ -885,7 +917,7 @@ async function exerciseNativeRuntime(applicationCostLimitsEnabled: boolean) {
     progress.enter("cleanup", "dispose");
     let cleanupComplete = false;
     try {
-      await mf.dispose();
+      await lifetime.dispose();
       cleanupComplete = true;
     } finally {
       progress.finish(completed && cleanupComplete);
@@ -896,7 +928,7 @@ async function exerciseNativeRuntime(applicationCostLimitsEnabled: boolean) {
 for (const enabled of [true, false]) {
   test(
     `workerd D1 executes questions, recovery and chat (cost limits=${enabled})`,
-    () => exerciseNativeRuntime(enabled),
+    () => nativeTests.run((lifetime) => exerciseNativeRuntime(enabled, lifetime)),
     30000,
   );
 }

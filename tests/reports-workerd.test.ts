@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { afterEach, test as bunTest, expect } from "bun:test";
 import { readdir } from "node:fs/promises";
 import { Hono } from "hono";
 import { convertV4MiniflareOptions, Miniflare } from "miniflare";
@@ -6,6 +6,7 @@ import { createReportsApi } from "../src/server/api/v2/reports";
 import { createV2Core } from "../src/server/db/v2-core";
 import { createV2OfficialSourceRepository } from "../src/server/db/v2-official-sources";
 import { createFilesService } from "../src/server/modules/files/service";
+import { readBoundSourceBatch } from "../src/server/modules/legal-retrieval/v2/bound-sources";
 import { OFFICIAL_CATALOG } from "../src/server/modules/legal-retrieval/v2/registry";
 import { makeChunk } from "../src/server/modules/legal-retrieval/v2/source";
 import { exportFence } from "../src/server/modules/reports/fence";
@@ -17,12 +18,18 @@ import {
   sourceDigest,
 } from "../src/server/modules/reports/source";
 import { signedSessionCookie, testEnvironment } from "./helpers/d1";
+import { countD1Calls } from "./helpers/d1-call-count";
+import { createNativeTestRegistry, type NativeLifetime } from "./helpers/native-lifetime";
 import { reportFixture } from "./helpers/report-fixture";
 
 type Fixture = Awaited<ReturnType<typeof reportFixture>>;
 type SourceRow = Awaited<ReturnType<typeof reportSourceRows>>[number];
 const legacySql = await Bun.file("tests/fixtures/reports/source-before-d1-limits.sql").text();
 const args = (id: string, now: string) => [id, id, id, id, id, id, id, now, now, now, id];
+const nativeTests = createNativeTestRegistry();
+afterEach(() => nativeTests.stop());
+const test = (name: string, run: (lifetime: NativeLifetime) => Promise<void>, timeout: number) =>
+  bunTest(name, () => nativeTests.run(run), timeout);
 
 function officialChunk(now: string, body = "합성 공식 원문") {
   return makeChunk(
@@ -48,9 +55,11 @@ function officialChunk(now: string, body = "합성 공식 원문") {
 }
 
 async function nativeFixture(
+  lifetime: NativeLifetime,
   f: Fixture,
   run: (core: ReturnType<typeof createV2Core>) => Promise<void>,
 ) {
+  lifetime.check();
   // Real pinned workerd D1, not bun:sqlite's more permissive compound SELECT limit.
   const mf = new Miniflare(
     convertV4MiniflareOptions({
@@ -62,9 +71,11 @@ async function nativeFixture(
       unsafeRegisterWorker: false,
     }),
   );
+  lifetime.own(() => mf.dispose());
   try {
     const db = (await mf.getD1Database("DB")) as unknown as D1Database;
     for (const name of (await readdir("drizzle")).filter((n) => /^\d{4}_.+\.sql$/.test(n)).sort()) {
+      lifetime.check();
       const sql = (await Bun.file(`drizzle/${name}`).text())
         .split("--> statement-breakpoint")
         .map((s) => s.trim())
@@ -94,6 +105,7 @@ async function nativeFixture(
       "v2_official_sources",
       "v2_citation_bindings",
     ]) {
+      lifetime.check();
       for (const row of f.db.sqlite.query(`SELECT * FROM ${table}`).all() as Record<
         string,
         unknown
@@ -114,18 +126,19 @@ async function nativeFixture(
       .prepare("INSERT INTO app_metadata(key,value,updated_at) VALUES(?,'customer',?)")
       .bind(`account-type:${f.actor.ownerId}`, f.actor.now)
       .run();
+    lifetime.check();
     await run(createV2Core(db, f.core.cipher));
   } finally {
-    await mf.dispose();
+    await lifetime.dispose();
   }
 }
 
-test("workerd D1 admits a first signed report with no files and fences source/session changes", async () => {
+test("workerd D1 admits a first signed report with no files and fences source/session changes", async (lifetime) => {
   const f = await reportFixture();
   f.db.sqlite
     .query("UPDATE session SET created_at=?,expires_at=? WHERE user_id=?")
     .run(Date.now(), Date.now() + 3600000, f.actor.ownerId);
-  await nativeFixture(f, async (core) => {
+  await nativeFixture(lifetime, f, async (core) => {
     // The old query failed at prepare time even when there were no citations.
     await expect(core.statement(legacySql, args(f.workspaceId, f.actor.now)).all()).rejects.toThrow(
       "too many terms in compound SELECT",
@@ -196,7 +209,7 @@ test("workerd D1 admits a first signed report with no files and fences source/se
   });
 }, 30000);
 
-test("workerd export fence accepts a verified citation and rejects original, identity, availability and expiry drift", async () => {
+test("workerd export fence accepts a verified citation and rejects original, identity, availability and expiry drift", async (lifetime) => {
   const f = await reportFixture(),
     repo = createV2OfficialSourceRepository(f.core);
   const chunk = await officialChunk(f.actor.now);
@@ -207,7 +220,7 @@ test("workerd export fence accepts a verified citation and rejects original, ide
       chunk.citation,
     ),
   ).toBe(true);
-  await nativeFixture(f, async (core) => {
+  await nativeFixture(lifetime, f, async (core) => {
     const view = await createReportsService(core, f.deps).get(f.actor.ownerId, f.workspaceId);
     const row = await core
       .statement(
@@ -270,7 +283,7 @@ test("workerd export fence accepts a verified citation and rejects original, ide
   });
 }, 30000);
 
-test("workerd citation fence allows 50 bound originals and rejects count or serialized byte overflow", async () => {
+test("workerd citation fence allows 50 bound originals and rejects count or serialized byte overflow", async (lifetime) => {
   const f = await reportFixture(),
     repo = createV2OfficialSourceRepository(f.core);
   const chunk = await officialChunk(f.actor.now);
@@ -283,7 +296,10 @@ test("workerd citation fence allows 50 bound originals and rejects count or seri
       ),
     ).toBe(true);
   }
-  await nativeFixture(f, async (core) => {
+  await nativeFixture(lifetime, f, async (nativeCore) => {
+    const started = performance.now();
+    const meter = countD1Calls(nativeCore.binding);
+    const core = createV2Core(meter.binding, nativeCore.cipher);
     const view = await createReportsService(core, f.deps).get(f.actor.ownerId, f.workspaceId);
     const row = await core
       .statement(
@@ -301,6 +317,17 @@ test("workerd citation fence allows 50 bound originals and rejects count or seri
     const digest = await sourceDigest(core, f.actor, f.workspaceId);
     const fence = await exportFence(core, f.actor, row, digest, () => f.actor.now);
     await fence.check();
+    // Includes all six fresh verification passes, not just one cached source digest.
+    expect(meter.work.calls).toBeLessThanOrEqual(220);
+    console.info(
+      "Synthetic report citation fence",
+      JSON.stringify({
+        citations: 50,
+        d1Calls: meter.work.calls,
+        d1Statements: meter.work.statements,
+        elapsedMs: Math.round(performance.now() - started),
+      }),
+    );
     await core
       .statement(
         "INSERT INTO v2_citation_bindings SELECT 'citation_50',workspace_id,source_id,snapshot_revision,json_set(citation_json,'$.id','citation_50') FROM v2_citation_bindings WHERE id='citation_0'",
@@ -329,7 +356,31 @@ test("workerd citation fence allows 50 bound originals and rejects count or seri
   });
 }, 30000);
 
-test("workerd source rows preserve legacy bytes, digest and binary citation ordering with nulls and escaping", async () => {
+test("workerd bound reads preserve four separate maximum-size originals", async (lifetime) => {
+  const f = await reportFixture();
+  const repo = createV2OfficialSourceRepository(f.core);
+  const chunk = await officialChunk(f.actor.now, "x".repeat(1048576));
+  expect(await repo.put(chunk.source, chunk.citation)).toBe(true);
+  const ids = ["max_0", "max_1", "max_2", "max_3"];
+  for (const id of ids) {
+    expect(
+      await repo.bindCitation(
+        { ...f.actor, workspaceId: f.workspaceId, expectedRevision: f.rev() },
+        { ...chunk.citation, id },
+      ),
+    ).toBe(true);
+  }
+  await nativeFixture(lifetime, f, async (core) => {
+    const rows = await readBoundSourceBatch(core, f.workspaceId, ids, f.actor.now);
+    expect(rows.map((row) => row?.citation.id)).toEqual(ids);
+    for (const row of rows) {
+      expect(row?.source).toEqual(chunk.source);
+      expect(row?.span).toEqual(chunk.span);
+    }
+  });
+}, 30000);
+
+test("workerd source rows preserve legacy bytes, digest and binary citation ordering with nulls and escaping", async (lifetime) => {
   const f = await reportFixture(),
     id = f.workspaceId,
     now = f.actor.now;
@@ -393,7 +444,7 @@ test("workerd source rows preserve legacy bytes, digest and binary citation orde
       await repo.bindCitation({ ...f.actor, workspaceId: id, expectedRevision: f.rev() }, citation),
     ).toBe(true);
   }
-  await nativeFixture(f, async (core) => {
+  await nativeFixture(lifetime, f, async (core) => {
     for (const date of [now, "2027-10-06T00:00:00.000Z"]) {
       const expected = f.db.sqlite.query(legacySql).all(...args(id, date)) as SourceRow[];
       const actual = (await core.statement(REPORT_SOURCE_SQL, args(id, date)).all<SourceRow>())

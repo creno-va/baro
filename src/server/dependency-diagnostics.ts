@@ -1,3 +1,5 @@
+import { safeLegalSchemaDiagnostic } from "./modules/legal-retrieval/v2/schema-diagnostics";
+
 /** Static categories only: original messages, SQL, identities and causes never leave here. */
 export type DependencyCategory =
   | "database_constraint"
@@ -162,6 +164,7 @@ export function reportLegalRetrieval(outcome: {
   kind: string;
   availability: string;
   reason: string | null;
+  schemaFailure?: unknown;
 }) {
   const kind = ["statute", "precedent", "official_guide"].includes(outcome.kind)
     ? outcome.kind
@@ -200,7 +203,9 @@ export function reportLegalRetrieval(outcome: {
         ? outcome.reason
         : "unknown";
   console.error(JSON.stringify({ event: "workspace_legal_retrieval", kind, availability, reason }));
-  return { kind, availability, reason };
+  const schemaFailure =
+    reason === "schema_mismatch" ? safeLegalSchemaDiagnostic(outcome.schemaFailure) : undefined;
+  return { kind, availability, reason, ...(schemaFailure ? { schemaFailure } : {}) };
 }
 
 /** Keep a generated draft private even when explaining why it was rejected. */

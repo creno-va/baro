@@ -11,9 +11,16 @@ on:
           - production
         default: preview
       check_legal:
-        description: Preview only; recheck official legal API after credential or approval changes
+        description: Preview only; check official legal API after reviewed credential or diagnostic changes
         type: boolean
         default: false
+      legal_scope:
+        description: Full source readiness or one fixed housing-statute diagnostic (not release evidence)
+        type: choice
+        options:
+          - standard
+          - housing_article_3_2
+        default: standard
       check_gateway:
         description: Recheck Gateway metadata only after token read permission changes
         type: boolean
@@ -58,6 +65,7 @@ jobs:
         env:
           LAW_API_OC: ${{ secrets.LAW_API_OC }}
           READINESS_CANDIDATE_SHA: ${{ github.sha }}
+          READINESS_LEGAL_SCOPE: ${{ inputs.legal_scope }}
         run: bun scripts/legal-readiness.ts
       - name: Save allowlisted readiness observation
         if: always()

@@ -230,11 +230,19 @@ test.each([
           pass: false,
           strategyDetected: true,
           findings: [{ severity: "critical", code: "legal_strategy" }],
+          unsupportedFactIds: ["synthetic-private-fact"],
         }
       : chatText(text),
   );
   await expect(value.chat(confirmedChatContext(), "synthetic_audit")).rejects.toMatchObject({
     reason: "audit_rejected",
+    auditFailure: {
+      pass: false,
+      legalClaimsSupported: true,
+      strategyDetected: true,
+      findings: [{ severity: "critical", code: "legal_strategy" }],
+      unsupportedFactCount: 1,
+    },
   });
   expect(calls.map((call) => call.phase)).toEqual(["workspace_chat", "workspace_audit"]);
   expect(calls.at(-1)?.input).toMatchObject({ draft: { text } });

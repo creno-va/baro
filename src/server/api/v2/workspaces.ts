@@ -4,6 +4,7 @@ import { idempotencyKeySchema, opaqueIdSchema, timestampSchema } from "../../../
 import { v2CreateCaseRequestSchema } from "../../../contracts/v2";
 import { readAccountType } from "../../auth/account-type";
 import { createCaseDataCipher } from "../../crypto";
+import { createPreviewD1Timing, type PreviewD1Operation } from "../../db/preview-d1-timing";
 import { createV2Core, type V2Core, V2RepositoryError } from "../../db/v2-core";
 import { reportDependencyFailure } from "../../dependency-diagnostics";
 import { verifyTurnstile } from "../../modules/intake/service";
@@ -46,12 +47,35 @@ export function createWorkspacesApi(
   } = {},
 ) {
   const app = new Hono<ApiEnvironment>();
+  const timings = new WeakMap<
+    Context<ApiEnvironment>,
+    NonNullable<ReturnType<typeof createPreviewD1Timing>>
+  >();
+  const domainBinding = (c: Context<ApiEnvironment>, operation: PreviewD1Operation) => {
+    const timing = createPreviewD1Timing(c.env.DB, c.env.APP_ENV, operation);
+    if (!timing) return c.env.DB;
+    timings.set(c, timing);
+    return timing.binding;
+  };
   app.use("*", async (c, next) => {
     c.header("cache-control", "private, no-store");
     c.header("x-content-type-options", "nosniff");
     if (c.env.APP_ENV === "production" && c.env.PUBLIC_BETA_ENABLED !== "true")
       return c.json(errorBody(c, "BETA_NOT_OPEN", "공개 베타를 준비하고 있어요."), 503);
     await next();
+    // Only these non-streaming preview domain operations are observed. Auth
+    // keeps the original Env/binding and its existing Better Auth cache.
+    try {
+      const timing = timings.get(c)?.finish();
+      if (timing) {
+        c.header("server-timing", timing, { append: true });
+        // The same bounded numeric/enum receipt is readable in preview logs
+        // without enabling browser debugging or recording request identifiers.
+        console.info(JSON.stringify({ event: "preview_d1_timing", measurements: timing }));
+      }
+    } catch {
+      // An optional response diagnostic must not change the product result.
+    }
     c.header("cache-control", "private, no-store");
     return;
   });
@@ -84,8 +108,8 @@ export function createWorkspacesApi(
     reportDependencyFailure(error);
     return c.json(errorBody(c, "DEPENDENCY_UNAVAILABLE", "사건을 불러오지 못했어요.", true), 503);
   });
-  const service = async (env: Env, ownerId: string) => {
-    const core = createV2Core(env.DB, await createCaseDataCipher(env), {
+  const service = async (env: Env, ownerId: string, binding = env.DB) => {
+    const core = createV2Core(binding, await createCaseDataCipher(env), {
       applicationCostLimitsEnabled: env.APPLICATION_COST_LIMITS_ENABLED !== "false",
       monthlyBudgetCapEnabled: env.MONTHLY_BUDGET_CAP_ENABLED !== "false",
     });
@@ -127,13 +151,23 @@ export function createWorkspacesApi(
     const a = await customerAccess(c);
     if (a.response) return a.response;
     emptyQuery.parse(c.req.query());
-    return c.json(await (await service(c.env, a.ownerId)).find(a.ownerId, c.req.param("id")));
+    return c.json(
+      await (await service(c.env, a.ownerId, domainBinding(c, "workspace_read"))).find(
+        a.ownerId,
+        c.req.param("id"),
+      ),
+    );
   });
   app.get("/:id/intake", async (c) => {
     const a = await customerAccess(c);
     if (a.response) return a.response;
     emptyQuery.parse(c.req.query());
-    return c.json(await (await service(c.env, a.ownerId)).intake(a.ownerId, c.req.param("id")));
+    return c.json(
+      await (await service(c.env, a.ownerId, domainBinding(c, "intake_read"))).intake(
+        a.ownerId,
+        c.req.param("id"),
+      ),
+    );
   });
   app.get("/:id/summary", async (c) => {
     const a = await customerAccess(c);
@@ -194,7 +228,11 @@ export function createWorkspacesApi(
       emptyQuery.parse(c.req.query());
       const key = idempotencyKeySchema.parse(c.req.header("idempotency-key"));
       const body: unknown = await c.req.json(),
-        s = await service(c.env, a.ownerId),
+        s = await service(
+          c.env,
+          a.ownerId,
+          name === "answers" ? domainBinding(c, "answers_save") : c.env.DB,
+        ),
         id = c.req.param("id");
       if (name === "advance" || name === "send") {
         if (!(await abuseAllowed(c, a.ownerId, false)))
@@ -277,7 +315,12 @@ export function createWorkspacesApi(
     const a = await customerAccess(c);
     if (a.response) return a.response;
     emptyQuery.parse(c.req.query());
-    return c.json(await (await service(c.env, a.ownerId)).latestJob(a.ownerId, c.req.param("id")));
+    return c.json(
+      await (await service(c.env, a.ownerId, domainBinding(c, "latest_job_read"))).latestJob(
+        a.ownerId,
+        c.req.param("id"),
+      ),
+    );
   });
   app.get("/:id/workspace-jobs/:jobId", async (c) => {
     const a = await customerAccess(c);

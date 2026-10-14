@@ -65,6 +65,11 @@ test("readiness is manual, main-only and cannot create deployment evidence", asy
         default: "preview",
       },
       check_legal: { type: "boolean", default: false },
+      legal_scope: {
+        type: "choice",
+        options: ["standard", "housing_article_3_2"],
+        default: "standard",
+      },
     },
   });
   expect(
@@ -80,6 +85,11 @@ test("readiness is manual, main-only and cannot create deployment evidence", asy
       (step) => step.name === "Verify v2 official law precedent and guide integrity",
     )?.if,
   ).toBe("always() && inputs.check_legal && inputs.target_environment == 'preview'");
+  expect(workflow.jobs.inspect.steps.find((step) => step.env?.LAW_API_OC)?.env).toMatchObject({
+    LAW_API_OC: "${{ secrets.LAW_API_OC }}",
+    READINESS_CANDIDATE_SHA: "${{ github.sha }}",
+    READINESS_LEGAL_SCOPE: "${{ inputs.legal_scope }}",
+  });
   const artifact = workflow.jobs.inspect.steps.find(
     (step) => step.name === "Save allowlisted readiness observation",
   );

@@ -19,6 +19,7 @@ import {
 import { parseGuide } from "./guides";
 import { parsePrecedent, precedentCandidates } from "./precedents";
 import { assertCanonicalUrl, guideUrl, OFFICIAL_CATALOG } from "./registry";
+import { safeLegalSchemaDiagnostic } from "./schema-diagnostics";
 import { makeChunk } from "./source";
 import { parseStatute, selectStatute } from "./statutes";
 import { createBoundedTransport, type Transport } from "./transport";
@@ -68,7 +69,10 @@ export function createV2LegalRetrieval(
     try {
       value = JSON.parse(raw);
     } catch {
-      throw new RetrievalFailure("schema_mismatch");
+      throw new RetrievalFailure("schema_mismatch", {
+        stage: "response_json",
+        issues: [{ field: "response", expected: "json" }],
+      });
     }
     if (value && typeof value === "object" && ("result" in value || "msg" in value)) {
       // Optional tooling diagnostics contain finite labels only. Observer failure
@@ -338,11 +342,16 @@ export function createV2LegalRetrieval(
               : error instanceof z.ZodError
                 ? "schema_mismatch"
                 : "upstream_unavailable";
+          const schemaFailure =
+            error instanceof RetrievalFailure && error.reason === "schema_mismatch"
+              ? safeLegalSchemaDiagnostic(error.schemaFailure)
+              : undefined;
           outcomes.push({
             kind: plan.kind,
             availability: "unavailable",
             reason: failure,
             chunks: [],
+            ...(schemaFailure ? { schemaFailure } : {}),
           });
         }
       }

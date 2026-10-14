@@ -46,7 +46,7 @@ export const officialSourceIdentitySchema = sourceSchema.pick({
   extractorVersion: true,
 });
 export type OfficialSourceIdentity = z.infer<typeof officialSourceIdentitySchema>;
-type SourceRow = {
+export type SourceRow = {
   source_id: string;
   source_type: OfficialSourceWrite["sourceType"];
   official_id: string;
@@ -67,7 +67,7 @@ type SourceRow = {
   court: string | null;
   case_number: string | null;
 };
-function decodeSource(row: SourceRow): OfficialSourceWrite {
+export function decodeSource(row: SourceRow): OfficialSourceWrite {
   return parse(sourceSchema, {
     sourceId: row.source_id,
     sourceType: row.source_type,

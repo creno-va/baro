@@ -4,6 +4,7 @@ import {
   type RetrievalPlan,
   requestSchema,
 } from "../src/server/modules/legal-retrieval/v2/contracts";
+import { safeLegalSchemaDiagnostic } from "../src/server/modules/legal-retrieval/v2/schema-diagnostics";
 import {
   createV2LegalRetrieval,
   type UpstreamRejectionObservation,
@@ -22,6 +23,19 @@ export const readinessV2Plans: RetrievalPlan[] = [
   { kind: "precedent", query: "대여금", limit: 2 },
   workspaceGuidePlans.legal_consultation,
 ];
+
+/** Fixed public diagnostic only; callers cannot supply case text or arbitrary URLs. */
+export function legalReadinessScope(scope: string = "standard") {
+  if (scope === "standard") return { scope, plans: readinessV2Plans };
+  if (scope === "housing_article_3_2")
+    return {
+      scope,
+      plans: [
+        { kind: "statute", lawTitle: "주택임대차보호법", articles: [{ number: "3", branch: "2" }] },
+      ] satisfies RetrievalPlan[],
+    };
+  throw new Error("INVALID_LEGAL_DIAGNOSTIC_SCOPE");
+}
 
 type RequestObservation = {
   endpoint:
@@ -163,11 +177,10 @@ export async function inspectLegalV2(
       claimCheck?.valid === true
         ? ("passed" as const)
         : ("failed" as const),
-    outcomes: output.outcomes.map(({ kind, availability, reason }) => ({
-      kind,
-      availability,
-      reason,
-    })),
+    outcomes: output.outcomes.map(({ kind, availability, reason, schemaFailure: failure }) => {
+      const schemaFailure = safeLegalSchemaDiagnostic(failure);
+      return { kind, availability, reason, ...(schemaFailure ? { schemaFailure } : {}) };
+    }),
     sources: output.chunks.map(({ source }) => ({
       sourceType: source.sourceType,
       officialId: source.officialId,
@@ -180,5 +193,28 @@ export async function inspectLegalV2(
     verifiedSourceCount: new Set(verified.map((chunk) => chunk.source.sourceId)).size,
     checkedClaimCount: claims.length,
     claimIntegrity: claimCheck?.valid ?? null,
+  };
+}
+
+/** A diagnostic is not readiness evidence and retains no public source IDs or URLs either. */
+export function legalDiagnosticReceipt(observed: Awaited<ReturnType<typeof inspectLegalV2>>) {
+  return {
+    schemaVersion: observed.schemaVersion,
+    runtimeWorker: false as const,
+    checkedAt: observed.checkedAt,
+    requests: observed.requests,
+    reservations: observed.reservations,
+    requestObservations: observed.requestObservations,
+    upstreamRejections: observed.upstreamRejections,
+    outcomes: observed.outcomes,
+    verifiedSourceCount: observed.verifiedSourceCount,
+    checkedClaimCount: observed.checkedClaimCount,
+    claimIntegrity: observed.claimIntegrity,
+    status:
+      observed.outcomes.length > 0 &&
+      observed.outcomes.every((outcome) => outcome.availability === "verified") &&
+      observed.claimIntegrity === true
+        ? ("diagnostic_passed" as const)
+        : ("diagnostic_failed" as const),
   };
 }

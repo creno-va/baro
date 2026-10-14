@@ -27,6 +27,9 @@ export function productBoundaryFindings(file: string, content: string): string[]
     'console.error(JSON.stringify({event:"report_dependency_failure",stage,category,code}))';
   const fileProcessorLog =
     'console.error(JSON.stringify({event:"file_processor_failure",stage,category,durationMs,httpStatus}),)';
+  // Reviewed preview timing serializer emits only a bounded numeric/enum header.
+  const previewD1TimingLog =
+    'console.info(JSON.stringify({event:"preview_d1_timing",measurements:timing}))';
   function visit(node: ts.Node) {
     if (ts.isStringLiteralLike(node)) {
       const value = node.text;
@@ -74,7 +77,9 @@ export function productBoundaryFindings(file: string, content: string): string[]
               call.getText(source).replace(/\s+/g, "") === reportDependencyLog) ||
             (file.replaceAll("\\", "/") ===
               "src/server/modules/file-processing/container-diagnostics.ts" &&
-              call.getText(source).replace(/\s+/g, "") === fileProcessorLog))
+              call.getText(source).replace(/\s+/g, "") === fileProcessorLog) ||
+            (file.replaceAll("\\", "/") === "src/server/api/v2/workspaces.ts" &&
+              call.getText(source).replace(/\s+/g, "") === previewD1TimingLog))
         )
       )
         findings.push("unapproved_payload_log");

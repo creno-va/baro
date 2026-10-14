@@ -38,6 +38,7 @@ export function createFilesApi(
       env: Env,
       core: V2Core,
       ownerId: string,
+      afterComplete?: (task: () => Promise<void>) => void,
     ) => Promise<Omit<FileServiceDependencies, "environment">>;
   } = {},
 ) {
@@ -91,7 +92,13 @@ export function createFilesApi(
     }
     return c.json(errorBody(c, "INTERNAL_ERROR", "자료 요청을 처리하지 못했어요.", true), 500);
   });
-  const service = async (env: Env, ownerId: string, sessionId?: string, storagePart = false) => {
+  const service = async (
+    env: Env,
+    ownerId: string,
+    sessionId?: string,
+    storagePart = false,
+    afterComplete?: (task: () => Promise<void>) => void,
+  ) => {
     if (options.testOnlyMissingD1Meta && env.APP_ENV === "production")
       throw new FileError("PROCESSING_UNAVAILABLE");
     const base = createV2Core(env.DB, await createCaseDataCipher(env), {
@@ -100,7 +107,7 @@ export function createFilesApi(
     });
     const core = storagePart ? fileStorageRequestCore(base, !options.testOnlyMissingD1Meta) : base;
     return createFilesService(core, {
-      ...(await options.dependencies?.(env, core, ownerId)),
+      ...(await options.dependencies?.(env, core, ownerId, afterComplete)),
       environment: env.APP_ENV === "production" ? "production" : "preview",
       ...(sessionId ? { sessionId } : {}),
     });
@@ -174,14 +181,24 @@ export function createFilesApi(
   app.post("/:caseId/files/:fileId/complete", async (c) => {
     const access = await caseAccess(c, true, true);
     if (access.response) return access.response;
-    return c.json(
-      await (await service(c.env, access.ownerId)).complete(
-        access.ownerId,
-        c.req.param("caseId"),
-        c.req.param("fileId"),
-        await c.req.json(),
-      ),
+    const admittedTasks: Array<() => Promise<void>> = [];
+    const response = c.json(
+      await (
+        await service(c.env, access.ownerId, undefined, false, (task) => admittedTasks.push(task))
+      ).complete(access.ownerId, c.req.param("caseId"), c.req.param("fileId"), await c.req.json()),
     );
+    for (const task of admittedTasks) {
+      try {
+        c.executionCtx.waitUntil(
+          Promise.resolve()
+            .then(task)
+            .catch(() => {}),
+        );
+      } catch {
+        // Missing request context cannot undo the committed outbox; cron recovers it.
+      }
+    }
+    return response;
   });
   app.post("/:caseId/files/:fileId/retry", async (c) => {
     const access = await caseAccess(c, true, true);
