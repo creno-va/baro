@@ -44,7 +44,14 @@ async function runGate(documents: Record<string, string>) {
     );
     const child = Bun.spawn(
       [process.execPath, fileURLToPath(new URL("../scripts/check-release.ts", import.meta.url))],
-      { cwd: root, stdout: "pipe", stderr: "pipe" },
+      {
+        cwd: root,
+        stdout: "pipe",
+        stderr: "pipe",
+        // The policy fixture deliberately has no candidate or live credentials.
+        // A manual validation workflow supplies these for its own release only.
+        env: { ...process.env, TARGET_SHA: undefined, GITHUB_TOKEN: undefined },
+      },
     );
     const [code, stdout, stderr] = await Promise.all([
       child.exited,
