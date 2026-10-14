@@ -18,8 +18,8 @@ PDF 한글 렌더를 확인했으며 업로드/ZIP/삭제 전체는 이 증거 �
 [배포·제품 receipt](https://github.com/creno-va/baro/issues/71#issuecomment-6168531808)와
 [외부 설정 감사 범위](./PREBETA-COST-POLICY.md#외부-설정-관측-범위)를 따른다.
 
-이번 관측 분리 변경과0015는 `codex/57-prebeta-cost-observation-only`에서 구현 중이며
-PR/배포 pending이다. 04f25f8 성공을 이번 변경의 성공으로 표시하지 않는다.
+관측 분리 변경과0015는 PR247에 병합했다. PR248의 모델 timeout 조정과 통합한 동일 SHA의
+배포·실제 결과는 #71 receipt를 따른다. 04f25f8 성공을 이번 변경의 성공으로 표시하지 않는다.
 
 ## 이전 관측과 남은 범위
 

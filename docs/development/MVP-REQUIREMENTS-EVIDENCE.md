@@ -39,7 +39,7 @@ browser 통과는 구현 범위의 증거다. 최종 후보 full과 실제 플�
 | F010~F012/자기 프로필·공개 목록·연락 | 변호사 모듈 #62/#61, #231 | 공개 최소 필드·이름/사무실 부분검색·필터·daily cursor·철회/삭제·자격 표시; production 가짜 공개 프로필 금지 |
 | F013/admin 심사 UX | ADR-0014 범위 제외 | 기존 backend와 검증된 자격 표시 보존. 자기 선택 role을 자격 승인으로 표시하지 않음 |
 | F014/삭제·복구 | 삭제 모듈 #67, 총괄 #19 | 실제 object/instance·late completion·외부 journal·격리 restore/re-delete·rollback·경보 ACK |
-| F015/비용 관측·사용량 | 비용 모듈 #57, 총괄 #58/#71 | 비용 관측 전용 정책. 기존 운영 환경 만료·월·IO 분리 PR/배포 pending, 신규 환경 proof 결합 잔여. 원장·hold·AI200/일·물리/권한 경계 보존 |
+| F015/비용 관측·사용량 | 비용 모듈 #57, 총괄 #58/#71 | PR247 비용 관측 분리 병합. 동일 SHA 배포·실제 결과는 #71 receipt, 신규 환경 proof 결합 잔여. 원장·hold·AI200/일·물리/권한 경계 보존 |
 | UI/재동의·legacy·보안·접근성 | 각 client 모듈 #69/#71 | 재동의 전 기존 읽기/다운로드/삭제·변경 차단, v1 보존, mobile/keyboard/CSP·같은 SHA full |
 | 정책/공개 문구 | #20/#70 초안 범위 완료, 총괄 #71 | Draft·placeholder 유지, 실제 법률 승인 미확인 사실 보존 |
 
