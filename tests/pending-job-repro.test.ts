@@ -1135,3 +1135,77 @@ test("the actual workerd D1 parser and transactional batch recover a terminal jo
     await mf.dispose();
   }
 }, 60000);
+
+test.each([0, 1, 9, 16])(
+  "minute rotation visits all %i persistent unknown candidates within one bounded cycle",
+  async (count) => {
+    const f = await fixture();
+    const jobs = createV2JobsRepository(f.core);
+    const ids = new Set<string>();
+    const platform = workflowBinding();
+    let time = Date.parse(f.actor.now);
+    const clock = () => new Date(time).toISOString();
+    for (let n = 0; n < count; n++) {
+      const u = await uploaded(f);
+      const jobId = nativeJobId("file");
+      expect(
+        await jobs.admitFile(
+          { ...f.actor, workspaceId: f.workspaceId, expectedRevision: f.rev() },
+          {
+            fileId: u.session.fileId,
+            fileRevision: 2,
+            jobId,
+            admission: {
+              operationId: crypto.randomUUID(),
+              key: crypto.randomUUID(),
+              requestHash: u.manifest.contentHash,
+            },
+            quotas: [],
+          },
+        ),
+      ).toBe(true);
+      ids.add(`${jobId}-1`);
+      expect(
+        await jobs.acquire(
+          f.actor,
+          jobId,
+          crypto.randomUUID(),
+          new Date(time + 300000).toISOString(),
+        ),
+      ).not.toBeNull();
+    }
+    // Dispatch first, then expire the actual acquired leases. None of the
+    // inspected unknown platform states may change a job or its outbox.
+    const dispatcher = createFileProcessingDispatcher(f.core, {
+      binding: platform.binding,
+      clock,
+    });
+    // A running row may only reconcile an existing immutable instance.
+    for (const id of ids) await platform.binding.create({ id });
+    expect((await dispatcher.dispatch(20)).dispatched).toBe(count);
+    time += 300001;
+    const before = f.db.sqlite.query("SELECT * FROM v2_jobs ORDER BY id").all();
+    const outboxBefore = f.db.sqlite.query("SELECT * FROM v2_outbox ORDER BY id").all();
+    const seen: string[] = [];
+    let tickCalls = 0;
+    const files = {
+      async get(id: string) {
+        tickCalls++;
+        seen.push(id);
+        return { id, status: async () => ({ status: "unknown" }) };
+      },
+    };
+    for (let tick = 0; tick < Math.max(1, Math.ceil(count / 8)); tick++) {
+      tickCalls = 0;
+      const result = await reconcileStoppedJobs(f.core, { files, clock });
+      expect(result.recovered).toBe(0);
+      expect(result.inspected).toBe(tickCalls);
+      expect(tickCalls).toBeLessThanOrEqual(8);
+      time += 60000;
+    }
+    expect(new Set(seen)).toEqual(ids);
+    expect(seen).toHaveLength(count);
+    expect(f.db.sqlite.query("SELECT * FROM v2_jobs ORDER BY id").all()).toEqual(before);
+    expect(f.db.sqlite.query("SELECT * FROM v2_outbox ORDER BY id").all()).toEqual(outboxBefore);
+  },
+);
