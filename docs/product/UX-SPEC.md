@@ -1,9 +1,8 @@
 # BARO v2 UX 및 화면 상태 명세
-> **2026-10-06 사용자 개정 — 아래 이전 범위보다 우선한다.** MVP는 고객/변호사 두 역할이며 통합 로그인에서 선택한다. 변호사 승인 어드민·자격 심사·반려·승인대기 UX는 제외한다. 실제 제품 client UI 동일 구현체를 API mock adapter로 먼저 완성하고 기능 연결을 병렬 진행한다. 별도 /mock UI는 만들지 않는다. [5세션 계획](../development/PARALLEL-UI-SPRINT.md)의 실제 착수부터 2시간 sprint를 적용하며 독립 UI는 DB/AI/OAuth/backend CI/A 이슈 종료를 기다리지 않는다. 완료된 코드/이슈/증거를 보존하고 새 DB/비용 선행 이슈를 추가하지 않는다. AI 품질 확대는 모든 UX 연결 뒤다. P0.3/#70/#71 외부·정책·production·공개 gate는 보존하며 mock 성공을 실제 외부 성공으로 표시하지 않는다. [ADR-0014](../adr/0014-mvp-two-roles-and-api-mock-first.md)가 대체 범위를 기록한다.
 
 - Version: 2.0
-- Status: Implementation-ready target; rendered evidence pending
-- Updated: 2026-10-06
+- Status: Current MVP scope; implementation integrated; final live acceptance pending
+- Updated: 2026-10-14
 - Related: [PRD](../PRD.md), [시연 기준](./UI-DEMONSTRATION.md)
 
 ## 디자인 시스템과 전역 원칙
@@ -32,7 +31,7 @@ BARO text는 접근 가능한 브랜드 이름으로 제공하며 SVG 교체·�
 | `/` | 서비스 가치·준비 흐름·디렉터리 진입 | 공개 전 안내, 공개됨, 인증됨 |
 | `/lawyers` | 공개 개인 프로필 검색·객관적 필터 | 로딩·빈 결과·지역/분야 부족·오류·pagination |
 | `/lawyers/:lawyerId` | 사진·소개·사무실·분야·포트폴리오·직접 연락 | 공개·숨김/없는프로필·포트폴리오 미리보기 |
-| `/help`, 정책 경로 | 실제 지원·한도·처리·비자문·개인정보 안내 | 게시 승인 버전, draft 분리 |
+| `/help`, 정책 경로 | 실제 지원·한도·처리·비자문·개인정보 안내 | 수용된 초안·placeholder, 실제 법률/게시 승인 미확인 표시 |
 | `/login`, `/consent` | OAuth·동의·연령·복귀 경로 | 취소·오류·만료·재동의·미성년 |
 | `/cases` | 내 사건 대시보드 | 빈 목록·v1/v2·최근작업·실패·삭제 |
 | `/cases/new` | 개인/기업·초기 narrative·처리 고지 | 입력·Turnstile·중복·일한도 |

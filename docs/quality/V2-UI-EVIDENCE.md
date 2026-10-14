@@ -9,7 +9,9 @@
 판정한다. 화면 존재·목록 manifest·문서·mocked test·health200·green CI만으로 대체하지 않는다.
 현재 표는 요구사항이며 체크된 결과가 아니다. 각 행의 구현과 독립 오류 검증, browser 관찰과
 실제 외부 연동 근거가 필요하다. 외부 사람/계정/법률 조건이 남아도 독립 개발을 계속하되 전체
-완료로 축소 보고하지 않는다. P0.3 #19/#20/#27과 v2 승인 [#70](https://github.com/creno-va/baro/issues/70)을 보존한다.
+완료로 축소 보고하지 않는다. #19/#27/#71의 실제 외부·운영 인수를 보존한다.
+#20/#70은 정책 초안·플레이스홀더 인수 완료이며 실제 법률 승인이 아니다. 현재 기준은
+[ADR-0015](../adr/0015-maintenance-and-operating-policy.md)를 따른다.
 
 ## 증거 종류와 정본
 
@@ -40,7 +42,7 @@ assertion만으로 시각적 품질을 완료하지 않고 대표 화면 screens
 | --- | --- | --- | --- |
 | U01 | Google/Naver/Kakao 실제 성공→필수 동의·14세→dashboard | 취소·state mismatch·만료·정책 변경·cross origin | #27/#68/#69 |
 | U02 | 개인/기업 사건 생성→저장 목록→새로고침·재접속 | 기업 단일owner, 중복 클릭·Turnstile·3/4번째 admission | #55/#57/#64/#65 |
-| U03 | 큰 틀 질문→답변 기반 새 묶음→unknown/skip→중단/재개 | 최대3묶음×5문항 기본, 질문 중복·invalid choice·오래된 revision | #64/#65 |
+| U03 | 큰 틀 질문→답변 기반 새 묶음→unknown/skip→중단/재개 | 최대2차례×3문항, 질문 중복·invalid choice·오래된 revision; 기존 사건 읽기 호환 | #64/#65 |
 | U04 | 요약 수정→상충/불리한 사실 확인→최신 요약 confirm | 늦은 AI summary·확인 전 navigation·허구 사실 차단 | #64/#65 |
 | U05 | 친숙한 채팅→재접속 후 history→새 자료/사실의 diff | stale job·중복 send·provider outage·검증 전 token 노출 금지 | #64/#65 |
 | U06 | timeline/행동 todo·done·skip 수정→저장 유지 | 법적 결론·승패/협상/소송전략·자동 상대방 연락 없음 | #64/#65 |
@@ -97,7 +99,7 @@ mailto/tel 연결 확인까지며 실제 제3자에게 상담 메시지를 발�
 | Q07 | monthlybudget·ASR/vision/Container cost·ambiguousretry | reserve/actual/reconcile증거, 구매/자동충전없음, 기술100만원/법률별도 |
 | Q08 | optin/nooptin/optout·PII없음·v1/v2 metric분리 | network/storage/schema검사·종료후삭제·syntheticcohort 제외 |
 | Q09 | preview/production 같은release·API/server+Container parity | CI/mainimmutableSHA·image digest·health+실제smoke·Environment승인 |
-| Q10 | 실제OAuth/model/ASR/vision/lawsource·정책게시/법률근거 | #27/#70/#71 각 live/human evidence; Boolean만존재하는 기록거부 |
+| Q10 | 실제OAuth/model/ASR/vision/lawsource·정책/법률근거 구분 | #27/#71 각 live/human evidence; #70 초안 인수를 법률 승인으로 승격하지 않음; 출처 없는 Boolean 거부 |
 
 자동 axe WCAG A/AA finding0은 수동 keyboard/zoom/assistive 확인을 대체하지 않는다.
 파일 다운로드 UI가200이어도 PDF를 실제 render해 한글/레이아웃/내용을 확인하고 ZIP entries와

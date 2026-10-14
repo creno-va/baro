@@ -1,11 +1,13 @@
 # 시스템 설계
 
-- Status: v1 implemented contract; v2 accepted target pending implementation
+- Status: v1 preserved; v2 implementation integrated; operational maintenance and live acceptance in progress
 - Related decisions: [ADR-0001](../adr/0001-mvp-system-boundaries-and-ai-pipeline.md), [ADR-0002](../adr/0002-web-stack-and-cloudflare-runtime.md)
 
 기존 섹션은 v1 운영/계약의 정본이다. v2는 아래 확장과 [v2 실행 계약](./V2-CONTRACTS.md),
 [v2 HTTP API](./V2-HTTP-API.md)를 따른다. 문서의 target binding·Container·새 파일 처리 경로는
-아직 배포 증거가 아니며 현재 공개 gate와 v1 데이터·읽기·삭제를 유지한다.
+구현은 PR167과 후속 정비 PR로 main에 통합됐다. 실제 배포·외부 인수는 SHA별 증거로 확인하며
+현재 공개 서비스와 v1 데이터·읽기·삭제를 유지한다. [ADR-0015](../adr/0015-maintenance-and-operating-policy.md),
+[검색 구조](./DIRECTORY-SEARCH.md), [비용 재개](../operations/COST-REFRESH.md)가 현행 정비 기준이다.
 
 ## 컨텍스트
 

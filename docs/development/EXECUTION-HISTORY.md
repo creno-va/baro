@@ -1,0 +1,196 @@
+# 2026-10-14 정비 전 보존 기록
+
+이 문서는 당시 기록이다. 현재 실행·인수 기준은 [EXECUTION](./EXECUTION.md)과 [ADR-0015](../adr/0015-maintenance-and-operating-policy.md)를 따른다. 당시 미완료·금액·담당·승인 상태를 현재 상태로 해석하지 않는다.
+
+# 에이전트 실행 기준
+> **2026-10-09 정합성:** 질문 최대 2차례×3문항(PR154), AI200회/일·월 cap 해제·기존 사용자 설정 $10/$30 자동충전(#57/PR143)이 확인된 최신 기준이다. 아래 과거 30회/100만원·충전 금지 기록은 당시 증거로 보존한다. 새 정책/지출 승인이나 운영 설정 변경이 아니다. [요구사항·증거 완료표](MVP-REQUIREMENTS-EVIDENCE.md)가 현재 담당·미완료 조건 정본이다.
+> **2026-10-06 사용자 개정 — 아래 이전 범위보다 우선한다.** MVP는 고객/변호사 두 역할이며 통합 로그인에서 선택한다. 변호사 승인 어드민·자격 심사·반려·승인대기 UX는 제외한다. 실제 제품 client UI 동일 구현체를 API mock adapter로 먼저 완성하고 기능 연결을 병렬 진행한다. 별도 /mock UI는 만들지 않는다. [5세션 계획](PARALLEL-UI-SPRINT.md)의 실제 착수부터 2시간 sprint를 적용하며 독립 UI는 DB/AI/OAuth/backend CI/A 이슈 종료를 기다리지 않는다. 완료된 코드/이슈/증거를 보존하고 새 DB/비용 선행 이슈를 추가하지 않는다. AI 품질 확대는 모든 UX 연결 뒤다. P0.3/#70/#71 외부·정책·production·공개 gate는 보존하며 mock 성공을 실제 외부 성공으로 표시하지 않는다. [ADR-0014](../adr/0014-mvp-two-roles-and-api-mock-first.md)가 대체 범위를 기록한다.
+
+- Reviewed: 2026-10-06
+- 목적: 사용자의 매 작업 지시 없이 이슈 선택부터 검증된 PR까지 진행할 수 있게 한다.
+
+## 2026-10-11 완료 인수 책임 인계
+
+사용자가 새로 지정한 `BARO 완료 총괄`이 #19/#20/#70/#71, 공통 계약·migration 조율·CI·
+공통 실행 문서와 후속 PR 검토·순차 병합·수동 배포·최종 완료 판정을 맡는다. 기존 A는
+`283af452b7093d8cac0d9aa2c41b28a22b58d5e9`의 preview/production 배포와 smoke를 마친 뒤
+2026-10-11 17:25:59 KST에 운영 lock을 해제하고 책임을 인계했다.
+[최종 배포·인계 receipt](https://github.com/creno-va/baro/issues/71#issuecomment-6107111207)가 정본이다.
+기존 리뷰 담당도 수정 중 파일·진행 중 병합·미해결 지적 없이 후속 검토 책임을 인계했다.
+
+- 자료·리포트·삭제 인수: #58/#59/#66/#67 모듈/API와 관련 테스트·자료 증거. 처리 Container의
+  identity/lifecycle에 한해 processing/asset runtime 접점을 조율해 함께 소유한다.
+- 인증·AI·법률 연동 인수: #27/#57/#63/#64 모듈/API와 관련 테스트·인증/AI 증거. 기존 A의
+  완료 구현을 재작성하지 않고 실제 OAuth/모델 V18/법률/비용 등 남은 검증과 재현된 결함을 맡는다.
+- 공통 계약/schema/migration/CI/공통 문서 변경은 총괄에게 요청한다. 작업자는 별도 checkout과
+  합성 계정·사건을 사용하며 다른 세션의 자료를 읽거나 삭제하지 않는다. 격리 restore는 총괄이
+  자원·최신 외부 journal·복구 관리자·승인 조건을 확인한 뒤 한 번의 조율된 drill로 수행한다.
+
+아래 과거 A/B/C 소유 표와 중간 실패 기록은 역사로 보존한다. 현재 담당은 위 인계가 우선한다.
+새 세션의 Goal은 사용자의 명시적 요청에 따른 것이며 추가 채팅/에이전트/스케줄 생성 권한으로
+확대하지 않는다. 배포·합성 검사 성공은 외부·운영·정책 승인 또는 전체 Goal 완료가 아니다.
+
+## V2 전체 서비스 실행
+
+새 제품 범위와 이슈 #53~#71은 [V2 실행 계획](V2-EXECUTION.md)을 따른다.
+마일스톤 6/#101~#106은 실제 client UI+API mock, 마일스톤 5는 고객/변호사 기능 연결을 추적한다.
+#70/#71 외부 연동·배포·공개 gate는 별도로 남기며 승인 어드민 UI는 제외한다.
+이하 기존 구현과 P0.3 exit는 역사와 현재 외부 gate로 유지한다. #53 명세 PR 병합 전
+v2 제품 코드를 시작하지 않는다. P0.3의 사람/외부 blocker를 허위 종료하지 않고 사용자 Goal이
+허용한 독립 후속 작업을 진행한다. 증거는 [V2 검증 기록](V2-VALIDATION.md)에 누적한다.
+
+## 현재 구현과 목표 구분
+
+main은 P0.1의 shared 계약·암호화·OAuth/동의·도메인 repository·offline harness에 더해
+P0.2의 admission/read/delete/answers/retry API, 공식 법령 검색, pinned AI Gateway,
+암호화 checkpoint Workflow, 목록/입력/상세/결과 UI와 선택 비민감 지표/피드백을 포함한다.
+기존 v1 schema baseline은 `0005_deletion_cleanup`이다. #55의 additive
+`0006_v2_domain_foundation`은 v2 저장소를 추가하며 기존 migration/인증/사건 데이터를 보존한다.
+원격 적용은 해당 릴리스의 ready schema와 연결된 배포 증거로 별도 확인한다.
+합성 adapter는 테스트에만 사용하며 제품의 모델/인증 fallback이 아니다. 선택 지표는
+동의 후 해당 탭의 세션 저장소에만 기록하고 외부 공급자를 도입하지 않는다.
+검증 경계와 인수 조건별 증거는 [P0.2 검증 기록](P0.2-VALIDATION.md)을 따른다.
+P0.3의 인수 조건별 구현/외부 미검증 증거는 [P0.3 검증 기록](P0.3-VALIDATION.md)을 따른다.
+P0.3 #18은 50개 제품 runner/상세 UI와 자동 접근성, dependency/secret/source/bundle
+검사 및 AI 변경 감지 eval을 PR CI에 연결한다. 실행 명령과 합성/외부 검증 경계는
+[테스트 전략](../quality/TEST-STRATEGY.md)에 기록한다. 실제 모델 품질은 여전히 #27이다.
+계정 삭제와 settings, 공유 cleanup scheduler, restore journal 재적용의 offline 검증은
+#17이며 [삭제/복구 절차](../operations/DELETION-RESTORE.md)를 따른다.
+실제 모델 품질·platform Workflow timing·외부 OAuth/Turnstile/Gateway 성공,
+복구/rollback 및 공개 정책은 P0.3 #18/#19/#20/#27이다. `Implementation-ready`는
+목표 계약이며 외부 승인 완료를 뜻하지 않는다. 원격 schema는 배포 health로 확인한다.
+
+실제 진행 상태의 정본은 GitHub 이슈/PR이며 의존성과 소유 경계는 [작업 그래프](work-items.json)다.
+2026-10-06 사용자 승인에 따라 후속 개발은 선행 구현 PR의 CI 성공과 main 병합으로 시작한다.
+실제 외부 검증이 남은 이슈는 OPEN으로 보존하며 구현 병합을 이슈/마일스톤 완료로 표시하지 않는다.
+그래프의 `implementationPr`는 검토된 전체 구현 PR만 지정하며 `work:next`가 실제 main 병합과
+Quality gate 성공을 조회한다. Fixture-only PR은 지정하지 않고 external 항목은 이 예외를 사용할 수 없다.
+외부/최종 인수 항목은 선행 이슈가 실제 CLOSED여야 충족되며, 선행 구현 PR의 병합만으로
+OPEN 외부 조건을 목록에서 제외하지 않는다. 진행 중인 보완은 `IN_PROGRESS`로 표시하고
+기존 구현 PR 병합 증거를 함께 표시한다. `IMPLEMENTATION_MERGED`도 이슈 완료는 아니다.
+마일스톤은 전체 완료 게이트다. 기존 Goal은 삭제됐으며 기능 연결·검증·배포 루프로 진행한다.
+
+## 작업 선택·인계
+
+2026-10-06 최신 지시는 승인 어드민을 MVP에서 제외하고 실제 client UI를 API mock으로 먼저 완성한다.
+[client 계약](CLIENT-API-CONTRACT.md)과 [5세션 계획](PARALLEL-UI-SPRINT.md)이 정본이다.
+#102~#106은 명시적 독립 client 범위이므로 A CLOSED/병합 및 backend·외부 gate를 기다리지 않는다.
+실제 기능 연결은 기존 검토된 main 구현을 재사용한다. 새 선행 운영/DB/비용 기능을 늘리지 않는다.
+개발 선행은 검토된 구현 PR의 CI 성공과 main 병합이다. 이슈 본문의 역사적
+`CLOSED + PR main 병합` 문구보다 이 합의를 우선한다. 실제 외부 검증이 남은 이슈는 OPEN으로
+보존하고 공개 완료 판단에서 검사한다. #59/#60은 PR89의 성공한 CI와 main 병합을 사용한다.
+
+검증은 변경한 candidate에서 필요한 실패 시나리오와 mandatory checks를 수행한다.
+통과한 검사는 새 변경이나 실패 원인 없이 반복하지 않는다. 외부 blocker는 필요한 담당 행동을
+한 번 기록하고, 조건이 바뀌었을 때 다시 검증한다. OAuth·정책 대기는 독립 UI/API 구현을 막지 않는다.
+CI secret scan은 HEAD에 도달 가능한 전체 커밋 이력을 검사해 다른 작업 ref의 영향을 분리한다.
+합성 테스트 오탐은 확인된 정확한 fingerprint만 제외하며 경로·규칙 전체를 제외하지 않는다.
+
+`bun run work:next`는 GitHub open 이슈, 실제 선행 상태, 열린 PR과 로컬 그래프를 비교한다. ready 중 P0와 번호 순으로 하나를 택한다. 시작 시 이슈에 브랜치와 작업 범위를 적고 `status:in-progress`를 붙인다. 이 라벨이 붙은 작업은 다른 에이전트가 시작하지 않는다. 작업을 멈출 때 재현 명령, 남은 인수 조건, blocker, PR을 남기고 라벨을 제거한다.
+
+명세·테스트 대역으로 가능한 구현과 실제 콘솔/정책 승인 검증을 분리한다. 외부 승인 대기 때문에 offline 개발 전체를 멈추지 않는다. 독립된 ready 이슈가 없을 때만 구체적인 외부 blocker를 보고한다. 이 문서나 CLI는 모델을 자동 실행하거나 GitHub issue를 agent에게 자동 배정하지 않는다. 그런 상시 실행은 별도의 실행기·스케줄과 사용자 권한이 필요하다.
+
+## 작업 경계
+
+| 영역 | 소유 이슈/기준 | 충돌 방지 |
+| --- | --- | --- |
+| 인증 테이블·user_consents·세션 middleware | #10, PR #35 | #8은 기존 auth migration을 재작성하지 않음 |
+| 도메인 DB·repository·migration | #8 | 모든 후속 schema 요청을 먼저 통합 |
+| 암호화 | #9 | envelope 계약으로 #8과 독립 개발 |
+| 사건 생성·quota·outbox | #11 | read/delete API #12와 파일 분리 |
+| AI adapter | #15 | Workflow와 순환 의존 없이 shared contract와 대역 사용 |
+| 법률 adapter | #14 | AI 생성과 독립, 공식 schema fixture로 검증 |
+| screening·질문·Workflow | #13 | #11/#14/#15 통합 후 시작 |
+| 사건 UI | #16 | 로그인·동의 UI는 #10 소유, UI 상태는 UX 명세 정본 |
+| 상세·질문·결과 UI | #29 | #16은 목록·입력만 소유 |
+| shared 계약 | #28 | 후속 모듈이 서로 다른 타입을 재정의하지 않음 |
+| offline fixture/harness | #31 | #18의 출시 검증 도구를 선행 구축 |
+| 성공 지표·선택 피드백 | #30 | opt-in과 allowlist, #20 정책과 동기화 |
+| eval/E2E | #18 | 합성 fixture·harness는 즉시, live gate는 통합 뒤 |
+| 배포·외부 검증 | #19 | 코드 완료와 환경 readiness를 구분 |
+| 공개 정책/외부 랜딩 | #20 | 법률 승인과 사업자 사실은 human-required |
+
+## 마일스톤 exit 기준
+
+- P0.1: #8/#9/#10/#26/#28/#31 offline 인수 조건 + migration/암호화/세션/동의 통합 검증. OAuth 콘솔 승인·실제 callback은 #27이며 이 단계의 offline 개발을 막지 않는다.
+- P0.2: #11~#16/#29/#30 계약·실패·중복·삭제 가드 테스트, 합성 흐름으로 입력→질문→검증된 결과 통합.
+- P0.3: #17~#20/#27 완료, 실제 provider smoke와 eval 증거, 공개 정책 확정, 복구/삭제 drill. 여기서만 공개 베타 전환한다.
+
+## 외부 readiness
+
+| 항목 | 확인된 상태 | 완료 증거/담당 |
+| --- | --- | --- |
+| 도메인·D1·Workflow·KV | preview/prod scaffold 배포 완료 | #19의 health/ready smoke |
+| 운영 OAuth | 운영 Worker secret 7개 등록, 실제 callback 미검증 | 환경 readiness 이슈, 공급자 callback·테스터 승인 |
+| 개발/preview OAuth | preview signing secret 생성·양쪽 등록, auth origin 일치. 공급자 client 6개 미등록 | 별도 client/callback·tester·앱 승인과 성공/취소 검증. Google 콘솔 로그인 필요 |
+| 법률 OC | `crenova` 승인 정보 수신 | #14 live schema/응답 검증; 요청 URL 로그에 OC를 남기지 않음 |
+| Turnstile | preview 전용 widget·site key 변수·secret 등록, Managed/pre-clearance 없음 | case_create action과 실제 성공·실패·재사용 검증 |
+| AI Gateway | baro-preview 생성, 인증 필수/logging·cache OFF/Unified Billing, 기존 credit $10/auto recharge OFF | preview binding 배포, 호출 한도 승인·live eval·provider ZDR 확인. 새 구매 안 함 |
+| 암호화 키 | preview V1 생성·GitHub preview/Worker 등록, private 전달 파일 ACL 제한 | wrapper는 V1만 연결. 별도 복구 관리자·rotation 통합·live 복구 증거 필요 |
+| 플랫폼 로그/백업 | invocationLogs false, observability enabled/sampling1/tail0. plan·보존 미확정 | payload 예외/retention·접근, D1 paid30/free7와 journal 목표35일 대조 |
+| 정책/랜딩 | Draft blocker 유지. 별도 랜딩 PR 1 병합·Pages 반영, 범위 밖 주장 6종 제거 | 사업자 사실·법률 검토·게시/버전 승인 |
+| #19 통합/drill | #18 완료, #27 OPEN이므로 BLOCKED | 독립 candidate/경보 계약·격리 runbook만 완료. 환경/합성 전용 자원/테스트 수신처·발송 권한 확보 뒤 통합 |
+
+실제 관측 시각·필요 secret/담당 행동은 [환경 readiness](../operations/ENVIRONMENT-READINESS.md),
+격리 복구·rollback·경보 절차는 [Beta drills](../operations/BETA-DRILLS.md)에 기록한다.
+foundation health 성공은 OAuth→사건→Workflow→법령→결과→삭제 또는 live model 평가의
+증거가 아니다. 기존 release checker의 boolean 형태를 새 candidate의 증거로 인정하지
+않으며, #27 뒤 trusted receipt resolver와 배포 gate 통합이 필요하다. 정책은 Draft,
+reviewedAt은 null, 모든 external check는 false다. P0.3 milestone과 Epic #6은 OPEN 유지한다.
+
+## 표준 검증
+
+2026-10-11 사용자 지시가 과거 PR마다 전체 검사·자동 배포 조건을 대체한다.
+자동 CI는 `bun ci`와 `bun run validate:quick`만 실행한다. 필수 check 이름은 `Quality gate`로
+유지하며 문서/work graph/경계/lint/typecheck 및 검증·배포 도구 계약을 확인한다.
+브라우저·Docker·DB migration·전체 단위 검사·build·eval·audit/Gitleaks는 자동 CI에서 실행하지 않는다.
+
+변경에 맞는 검증을 로컬에서 선택하고 결과와 미실행 이유를 PR에 남긴다.
+
+```bash
+bun ci
+bun run validate:quick
+bun run validate:changed          # 기본 origin/main + 커밋 전 변경/새 파일
+bun run validate:changed <base>   # 특정 기준과 비교
+bun run validate:browser <base>   # UI 영향이 있을 때
+bun run validate:build            # 빌드·Worker 영향이 있을 때
+bun run validate:db               # schema/migration 변경 때
+bun run validate:native           # 파일 처리기 변경 때
+bun run validate:security         # 의존성·보안 변경 및 출시 점검
+bun run validate:full             # 명시적인 전체 인수 점검
+```
+
+개별 테스트는 `bun test <파일>`로 실행할 수 있다. 통과한 검사를 새 변경/실패 없이 반복하지 않는다.
+DB 변경의 drift·fresh/upgrade와 이슈별 권한·저장·실패 시나리오 요구는 유지한다.
+`check` 등 기존 명령도 유지하지만 매 PR 선행 조건으로 전체 검사를 중복 실행하지 않는다.
+자동 gate 성공은 선택하지 않은 브라우저/실제 외부 연동 성공을 뜻하지 않는다.
+
+자동 CD는 없다. 배포는 `bun run deploy:preview`, `bun run deploy:production --sha <full40sha>`로
+요청하며 GitHub Environment 승인과 secret 보관은 유지한다. 배포 시 선택 환경 build·bundle·dry-run,
+migration·SHA/schema/API smoke는 원격 변경에 필요한 검사로 유지하고 제품 테스트 전체를 다시 돌리지 않는다.
+preview는 현재 원격 main의 성공한 CI를 요구하며 production은 같은 SHA의 CI·preview 성공도 요구한다.
+AI readiness는 필요할 때만 수동 실행한다. 세부 명령은 [배포 및 운영](../operations/DEPLOYMENT-OPERATIONS.md)을 따른다.
+
+## 환경과 local 설정
+
+`.env.example`을 `.env`, `.dev.vars.example`을 `.dev.vars`로 복사한다. `.env`는 브라우저에 노출 가능한 `PUBLIC_*`만, `.dev.vars`는 Worker 설정만 포함한다. 운영 OAuth 키가 입력된 현재 로컬 파일은 dev 전용 값으로 교체하기 전 실제 OAuth 개발에 쓰지 않는다. 현재 PC의 다른 앱과 4321 포트가 충돌하면 `bun run dev -- --port 4322`를 쓰고 개발용 `BETTER_AUTH_URL`과 callback도 같은 port로 맞춘다.
+
+현재 consent 버전은 개발 검증용이며 공개 초안의 승인 버전이 아니다. #20의 공개 승인 시 게시 문서의 버전과 `CURRENT_POLICY_VERSIONS`를 함께 확정한다. release gate가 일치 여부를 검사한다.
+
+## 사용자 개입이 필요한 범위
+
+기능 구현·테스트 대역·PR 수정·기존 계약의 모호함 해소는 에이전트가 수행한다. 기존 Goal은 삭제됐고 재생성하지 않는다. 현재 작업의 PR 통합/배포는 A가 직접 사용자 지시와
+현행 환경 보호 규칙을 확인해 수행한다. 비용은 #57/PR143의 확인된 후속 결정만 반영하며
+새 결제수단·기존 설정 밖 충전 변경·추가 승인 범위는 추론하지 않는다.
+OAuth 테스터/공급자 앱 승인, 법률 검토·사업자 사실과 실제 공개 근거는 외부 책임으로 남는다.
+`Quality gate`는 코드 게이트이고 법률/실서비스 승인 증거를 대신하지 않는다.
+과거 `hyunhomon` 승인 기록과 후속 #71 운영자 배포 지시를 보존하며, A가 배포 시점의 실제 production Environment 보호 규칙을 확인하고 우회하지 않는다.
+
+## 2026-10-09 3세션 보완·현재 인수 정본
+
+현재 A는 고객/공통 통합·배포, B는 자료/리포트/삭제, C는 변호사와 계획/work-items/요구 증거를 소유한다.
+과거 5세션 mock sprint·완료 증거는 역사로 보존하고 새 세션/Goal/에이전트를 만들지 않는다.
+#162는 M5와 #69/#71의 최종 인수 대상이다. #62/#69의 이전 완료 증거를 유지하면서
+텍스트 포트폴리오·재동의 전 읽기와 누락 검증만 재개한다. [요구사항·증거 완료표](MVP-REQUIREMENTS-EVIDENCE.md)는
+모든 F/UI 행의 담당·시나리오·기대 결과·증거 종류·SHA/결과와 외부 담당 행동을 연결한다.
+#71은 이관 필수 조건·알려진 결함·외부/사람 승인이 모두 충족된 뒤 마지막으로 닫는다.

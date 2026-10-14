@@ -1,6 +1,4 @@
 # BARO
-> **2026-10-09 정합성:** 질문 최대 2차례×3문항(PR154), AI200회/일·월 cap 해제·기존 사용자 설정 $10/$30 자동충전(#57/PR143)이 확인된 최신 기준이다. 아래 과거 30회/100만원·충전 금지 기록은 당시 증거로 보존한다. 새 정책/지출 승인이나 운영 설정 변경이 아니다. [요구사항·증거 완료표](./docs/development/MVP-REQUIREMENTS-EVIDENCE.md)가 현재 담당·미완료 조건 정본이다.
-> **2026-10-06 사용자 개정 — 아래 이전 범위보다 우선한다.** MVP는 고객/변호사 두 역할이며 통합 로그인에서 선택한다. 변호사 승인 어드민·자격 심사·반려·승인대기 UX는 제외한다. 실제 제품 client UI 동일 구현체를 API mock adapter로 먼저 완성하고 기능 연결을 병렬 진행한다. 별도 /mock UI는 만들지 않는다. [5세션 계획](./docs/development/PARALLEL-UI-SPRINT.md)의 실제 착수부터 2시간 sprint를 적용하며 독립 UI는 DB/AI/OAuth/backend CI/A 이슈 종료를 기다리지 않는다. 완료된 코드/이슈/증거를 보존하고 새 DB/비용 선행 이슈를 추가하지 않는다. AI 품질 확대는 모든 UX 연결 뒤다. P0.3/#70/#71 외부·정책·production·공개 gate는 보존하며 mock 성공을 실제 외부 성공으로 표시하지 않는다. [ADR-0014](./docs/adr/0014-mvp-two-roles-and-api-mock-first.md)가 대체 범위를 기록한다.
 
 [![CI](https://github.com/creno-va/baro/actions/workflows/ci.yml/badge.svg)](https://github.com/creno-va/baro/actions/workflows/ci.yml)
 
@@ -8,10 +6,12 @@ BARO는 사용자가 변호사의 프로필을 살펴보고 직접 연락하며,
 자료·타임라인·준비할 행동을 정리하는 대한민국 웹 서비스입니다. 사용자가 확인한
 PDF 리포트와 선택한 원본을 직접 전달해 변호사의 초기 사건 이해를 돕습니다.
 
-> 현재 구현은 v1 개인 간 금전 대여 분석·저장·삭제입니다. v2 변호사 디렉터리·
-> 적응형 질문·지속 채팅·자료 처리·리포트 전달은 전체 개발 목표입니다.
-> P0.3 실제 외부 연동·운영·정책 승인과 v2 전체 시연은 미완료이며 공개 API는
-> 기본 비활성화입니다. 문서 개정은 구현이나 법률 승인 완료를 뜻하지 않습니다.
+고객/변호사 두 역할의 v2 기능은 main에 통합됐으며 기존 v1 데이터·읽기·삭제를 보존합니다.
+현재 공개 서비스를 유지하면서 신규 기능 확장을 멈추고 비용 재개·저장·릴리스 증거·검색을
+정비합니다. 질문은 최대 2차례×3문항, AI는 계정별 KST 하루200회이며 앱 월 예산 차단은
+해제합니다. 기존 결제 경로와 $10/$30 자동충전을 유지하고 미정산 비용은 보존합니다.
+[ADR-0015](./docs/adr/0015-maintenance-and-operating-policy.md)가 현재 운영 결정입니다.
+정비 종료와 전체 MVP 실제 인수는 별개이며 [인수표](./docs/development/MVP-REQUIREMENTS-EVIDENCE.md)와 #71로 추적합니다.
 
 2026-10-07 사용자 후속 지시에 따라 배포되는 preview와 production은 실제 same-origin API를
 사용합니다. 예시 adapter는 명시적 local/격리 검증에 보존합니다. 실제 외부 설정이 없으면
@@ -23,7 +23,7 @@ PDF 리포트와 선택한 원본을 직접 전달해 변호사의 초기 사건
 법률 판단·소송 전략·사건 수임을 대신하지 않습니다. 변호사 선택과 실제 연락·자료
 전달은 사용자가 직접 수행합니다.
 
-## v2 전체 서비스 목표
+## 현재 MVP 범위
 
 대한민국 법률이 적용되는 만 14세 이상 개인과 기업을 대상으로 모든 사건 가족의
 사실 정리와 변호사 탐색을 지원합니다. 기업 사건도 한 계정이 소유하며 팀 공동 편집은
@@ -47,7 +47,8 @@ PDF 리포트와 선택한 원본을 직접 전달해 변호사의 초기 사건
 
 기존 v1 사건·schemaVersion 1·분석 결과·읽기·삭제는 보존하고 사용자 승인 없이 재분석하지 않습니다.
 마일스톤 6은 같은 client UI의 API mock 시연, 마일스톤 5는 고객/변호사 실제 기능 연결입니다.
-외부 연동·preview/production·법률/정책·최초 공개 gate는 #71에 남깁니다.
+외부 연동·운영 복구·최종 후보 검증·동일 SHA 배포 인수는 #71에 남깁니다.
+정책 초안과 사업자 플레이스홀더는 #20/#70의 초안 인수 완료 범위이며 실제 법률 승인은 아닙니다.
 
 ## 기술 방향
 
@@ -83,8 +84,8 @@ Node filesystem/process는 별도 Container 처리 서비스에만 허용합니�
 6. [AI](./docs/architecture/AI-PIPELINE.md), [공식 출처](./docs/architecture/LEGAL-RETRIEVAL.md)
 7. [보안](./docs/security/SECURITY-PRIVACY.md), [테스트](./docs/quality/TEST-STRATEGY.md), [배포](./docs/operations/DEPLOYMENT-OPERATIONS.md)
 
-[공개 정책 초안](./docs/policies/)은 법률 검토·사업자 사실·게시 버전 승인 전 공개본으로
-사용하지 않습니다. 기술적으로 production에 배포하는 것과 일반 사용자 공개 전환을 구분합니다.
+[공개 정책 초안](./docs/policies/)과 사업자 플레이스홀더는 합의한 초안 상태로 유지합니다.
+초안 수용, 현재 공개 운영 허가, 독립 외부 검증과 실제 법률 승인을 각각 구분합니다.
 
 ## 로컬 개발과 검증
 
@@ -106,7 +107,7 @@ bun run validate:build           # production build·bundle·Worker dry-run
 bun run validate:db              # DB 변경 때 drift·migration 검사
 bun run validate:native          # 처리기 변경 때 Docker fixture 검사
 bun run validate:security        # 의존성 audit·Gitleaks 전체 이력 검사
-bun run validate:full            # 명시적인 전체 검증 때만 실행
+bun run validate:full            # 최종 후보 SHA의 수동 GitHub workflow에서 전체 검증
 
 bun run deploy:preview           # 현재 원격 main을 수동 배포 요청
 bun run deploy:production --sha <preview에서_검증한_full40sha>
@@ -128,11 +129,13 @@ worktree를 사용합니다. PR 검사·실패 시나리오와 리뷰를 마친 
 
 - PR/main CI는 빠른 검사만 자동 실행하며 병합이 배포를 시작하지 않습니다.
 - preview/production 배포는 로컬 명령으로 GitHub 수동 workflow를 요청합니다.
-- production은 성공한 CI·preview smoke의 immutable SHA 와 SHA별 운영자 승인 receipt를 요구합니다.
-- foundation 코드는 공개 API를 닫고 배포할 수 있습니다. 공개 전환은 실제 연동·운영·정책/법률 조건을 충족한 후에만 합니다.
+- production은 성공한 CI·preview smoke의 같은 SHA와 #71의 운영자 승인 receipt를 요구합니다. 작성자는 hyunhomon 또는 hwangeunchan이며 최대24시간 유효합니다.
+- 현재 공개 서비스는 유지합니다. 기존 정식 공개 checker의 미완료 정책·외부 조건은 그대로 검사하며 초안 인수를 법률 승인으로 바꾸지 않습니다.
 - preview: <https://preview.baro.site>, production: <https://baro.site>.
 - 환경별 DB·Workflow·R2·Container·OAuth·Gateway·키와 secret은 분리합니다.
 - 전체 개발은 [마일스톤 5](https://github.com/creno-va/baro/milestone/5)에서 추적하고 실제 시연 증거로 판정합니다.
+
+과거 제품·운영 기준은 [README 이력](./docs/development/README-HISTORY.md)에 보존합니다.
 
 ## 보안 문제
 

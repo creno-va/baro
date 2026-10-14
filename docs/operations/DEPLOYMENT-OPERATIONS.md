@@ -1,6 +1,6 @@
 # 배포 및 운영
 
-- v1 실제 배포와 v2 구현 목표를 구분한다. #53은 문서 변경이며 리소스/공개 상태를 바꾸지 않는다.
+- v2 구현은 main에 통합됐으며 현재 공개 서비스를 유지한다. 새 후보 배포·실제 인수는 SHA별 증거로 구분한다. 현행 기준은 [ADR-0015](../adr/0015-maintenance-and-operating-policy.md)다.
 - v2 자원·파일 처리·예산은 [자료 처리](./FILE-PROCESSING.md), [비용 통제](./COST-CONTROLS.md),
   [삭제/복구](./DELETION-RESTORE.md)를 함께 따른다.
 
@@ -10,7 +10,7 @@
 | --- | --- | --- |
 | local | 개발·단위/통합 테스트 | local D1, 법률 fixture, 개발 OAuth 또는 mock |
 | preview | 통합·실제 OAuth smoke | 전용 D1/Workflow/Gateway/OAuth, 실제 법률 API |
-| production | 현재 foundation; 승인 후 공개 서비스 | 전용 리소스와 secret, 실제 연동은 별도 검증 |
+| production | 현재 공개 서비스 유지·수동 후보 배포 | 전용 리소스와 secret, 실제 외부 인수·운영자 승인 증거 구분 |
 
 환경 간 DB·KV·암호화/세션 서명 key는 분리한다. OAuth client는 2026-10-07 사용자 명시
 승인으로 Preview/Production에서 같은 Google/Naver/Kakao 앱을 공유한다. 두 환경의 callback과
@@ -242,12 +242,13 @@ P0 incident로 분류하고 신규 삭제 요청을 기록 가능한 안전한 �
    R2가 D1 Time Travel로 함께 복구된다고 가정하지 않는다.
 5. build/dry-run 성공 후 additive migration→환경별 Worker/Workflow/Container 배포 순서를 지킨다.
    준비되지 않은 binding/secret/자원/모델 capability는 gate를 닫아 실패를 명확히 표시한다.
-6. preview health/ready SHA/schema/image 및 실제 사용자·변호사·심사자 흐름과 실패 복구를 시연한다.
-   public edit 심사 중 approved revision 유지, 사건 원문 운영자 접근 거부, download 파일 내용을 확인한다.
+6. preview health/ready SHA/schema/image와 고객·변호사 두 역할의 제한 합성 흐름·실패 복구를 시연한다.
+   승인 어드민 UX는 MVP에서 제외한다. 기존 approved revision·자격 표시, 원문 접근 차단·download 내용을 확인한다.
 7. CI/preview 증거와 같은 SHA로 production foundation을 SHA별 운영자 승인 후 배포하고 health/ready를
    확인한다. 화면/링크가 떠 있다는 사실을 production 사용자 API 공개 성공으로 표현하지 않는다.
-8. 공개 전환은 #70의 실제 사업자/법률/정책/국외 처리 근거와 #71의 same-SHA live/UI/drill/cost
-   증거를 trusted gate가 확인한 뒤 진행한다. 공개 직후 역할별 smoke와 비용/삭제/오류를 관찰한다.
+8. 현재 공개 서비스를 유지한다. #20/#70 정책 초안·플레이스홀더 인수는 실제 법률 승인이 아니다.
+   기존 정식 공개 checker의 미완료 정책/외부 조건과 #71의 same-SHA live/UI/drill/cost는 계속
+   별도 검사한다. production 비공개 합성 고객 흐름을 확인하며 가짜 공개 변호사는 게시하지 않는다.
 
 legacy `check-release.ts`의 boolean 문서는 실제 receipt가 아니다. #19/#71 통합 전 public-beta를
 수동 true로 통과시키지 않는다. 새 candidate는 repo/workflow/event/SHA/환경/완료/success/해시/
