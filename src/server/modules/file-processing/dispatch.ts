@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { timestampSchema } from "../../../contracts";
+import { opaqueIdSchema, timestampSchema } from "../../../contracts";
 import { CURRENT_POLICY_VERSIONS } from "../../../contracts/consent";
 import type { V2Core } from "../../db/v2-core";
 import { stopExpiredUndispatchedJob } from "../../db/v2-expired-undispatched-job";
@@ -32,6 +32,12 @@ const instanceStatuses = new Set([
   "rollingBack",
 ]);
 const instanceIdSchema = z.string().regex(/^[A-Za-z0-9_][A-Za-z0-9_-]{0,99}$/);
+const dispatchTargetSchema = z.strictObject({
+  ownerId: opaqueIdSchema,
+  jobId: opaqueIdSchema,
+  instanceId: instanceIdSchema,
+});
+type DispatchTarget = z.infer<typeof dispatchTargetSchema>;
 const consentValues = [
   CURRENT_POLICY_VERSIONS.termsVersion,
   CURRENT_POLICY_VERSIONS.privacyVersion,
@@ -75,15 +81,20 @@ function createProcessingDispatcher<P extends FileProcessingParams | AssetProces
     .min(1000)
     .max(300000)
     .parse(options.leaseMs ?? 60000);
-  return {
-    async dispatch(limit = 8) {
+  const dispatcher = {
+    async dispatch(limit = 8, target?: DispatchTarget) {
       z.number().int().min(1).max(20).parse(limit);
       if (!options.binding) return { dispatched: 0, pending: 0, available: false };
       const rows = (
         await core
           .statement(
-            `SELECT outbox.id,outbox.operation_id,outbox.job_id,j.runtime_instance_id,o.owner_id,j.workspace_id,j.profile_id,j.target_id,j.target_revision,outbox.revision,outbox.attempts,outbox.next_attempt_at,outbox.created_at,j.status ${joins} WHERE ${live} AND outbox.state IN ('pending','failed') AND outbox.next_attempt_at<=? ORDER BY outbox.created_at,outbox.id LIMIT ?`,
-            [...consentValues, now(), limit],
+            `SELECT outbox.id,outbox.operation_id,outbox.job_id,j.runtime_instance_id,o.owner_id,j.workspace_id,j.profile_id,j.target_id,j.target_revision,outbox.revision,outbox.attempts,outbox.next_attempt_at,outbox.created_at,j.status ${joins} WHERE ${live} AND outbox.state IN ('pending','failed') AND outbox.next_attempt_at<=? ${target ? "AND o.owner_id=? AND j.id=? AND j.runtime_instance_id=?" : ""} ORDER BY outbox.created_at,outbox.id LIMIT ?`,
+            [
+              ...consentValues,
+              now(),
+              ...(target ? [target.ownerId, target.jobId, target.instanceId] : []),
+              limit,
+            ],
           )
           .all<Row>()
       ).results;
@@ -204,6 +215,13 @@ function createProcessingDispatcher<P extends FileProcessingParams | AssetProces
       }
       return { dispatched, pending, available: true };
     },
+  };
+  return {
+    dispatch: (limit = 8) => dispatcher.dispatch(limit),
+    // Same claim, reauthorization and immutable instance path as scheduled
+    // recovery. The request can only wake its own already committed job.
+    dispatchOne: (target: DispatchTarget) =>
+      dispatcher.dispatch(1, dispatchTargetSchema.parse(target)),
   };
 }
 

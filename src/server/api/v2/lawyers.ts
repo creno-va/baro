@@ -58,7 +58,12 @@ export function privateLawyerApi() {
 export const expectedRevisionBody = z.strictObject({ expectedRevision: revisionSchema });
 export function createLawyersApi(
   options: {
-    dependencies?: (env: Env, core: V2Core, ownerId: string) => Promise<LawyerDependencies>;
+    dependencies?: (
+      env: Env,
+      core: V2Core,
+      ownerId: string,
+      afterUpload?: (task: () => Promise<void>) => void,
+    ) => Promise<LawyerDependencies>;
     selfAssetDecoder?: OpenSanitizedAsset;
   } = {},
 ) {
@@ -226,7 +231,11 @@ export function createLawyersApi(
     });
     return createLawyersService(core, await options.dependencies?.(env, core, ownerId));
   };
-  const assets = async (env: Env, ownerId: string) => {
+  const assets = async (
+    env: Env,
+    ownerId: string,
+    afterUpload?: (task: () => Promise<void>) => void,
+  ) => {
     const core = lawyerStorageRequestCore(
       createV2Core(env.DB, await createCaseDataCipher(env), {
         applicationCostLimitsEnabled: env.APPLICATION_COST_LIMITS_ENABLED !== "false",
@@ -235,7 +244,7 @@ export function createLawyersApi(
       env.APP_ENV !== "local",
     );
     return createLawyerAssetsService(core, {
-      ...(await options.dependencies?.(env, core, ownerId)),
+      ...(await options.dependencies?.(env, core, ownerId, afterUpload)),
       environment: env.APP_ENV === "production" ? "production" : "preview",
     });
   };
@@ -382,15 +391,22 @@ export function createLawyersApi(
       c.req.header("content-type") !== "application/octet-stream"
     )
       throw new LawyerError("ASSET_NOT_READY");
-    return c.json(
-      await (await assets(c.env, a.ownerId)).upload(
-        a.ownerId,
-        c.req.param("assetId"),
-        Number(match),
-        Number(length),
-        c.req.raw.body,
-      ),
-    );
+    const admittedTasks: Array<() => Promise<void>> = [];
+    const result = await (
+      await assets(c.env, a.ownerId, (task) => admittedTasks.push(task))
+    ).upload(a.ownerId, c.req.param("assetId"), Number(match), Number(length), c.req.raw.body);
+    for (const task of admittedTasks) {
+      try {
+        c.executionCtx.waitUntil(
+          Promise.resolve()
+            .then(task)
+            .catch(() => {}),
+        );
+      } catch {
+        // The committed outbox still has scheduled recovery.
+      }
+    }
+    return c.json(result);
   });
   app.get("/lawyer/assets/:assetId/content", async (c) => {
     const a = await lawyerAccess(c);
