@@ -13,6 +13,7 @@ import {
   type ProcessingRuntimePolicy,
 } from "../modules/budget/processing-runtime";
 import { hasCurrentConsent } from "../modules/consent/service";
+import { createFileProcessingDispatcher } from "../modules/file-processing/dispatch";
 import { admitFileProcessing } from "../modules/file-processing/execution";
 import { namedProcessorPort, nativeJobId } from "../modules/file-processing/native-identity";
 import { ProcessingError } from "../modules/file-processing/protocol";
@@ -26,6 +27,7 @@ export function createFileProcessingAdmission(
   env: Env,
   policy: ProcessingRuntimePolicy = {},
   clock = () => new Date().toISOString(),
+  afterComplete?: (task: () => Promise<void>) => void,
 ): Pick<FileServiceDependencies, "probe" | "enqueueProcessing"> {
   const environment = env.APP_ENV === "production" ? "production" : "preview";
   const actor = (ownerId: string): Actor => ({ ownerId, now: clock() });
@@ -225,6 +227,25 @@ export function createFileProcessingAdmission(
         paid: admission.paid,
         admissionActor: admission.actor,
       });
+      if (!core.applicationCostLimitsEnabled && afterComplete) {
+        // Inert registration only: the HTTP handler starts this after the full
+        // complete response succeeds. Keep the same core and durable runtime ID.
+        try {
+          afterComplete(async () => {
+            try {
+              await createFileProcessingDispatcher(core, {
+                environment,
+                binding: env.FILE_PROCESSING,
+                clock,
+              }).dispatchOne({ ownerId: input.ownerId, jobId, instanceId: `${jobId}-1` });
+            } catch {
+              // The exact outbox/lease remains available to scheduled recovery.
+            }
+          });
+        } catch {
+          // Registration failure cannot turn committed admission into a failure.
+        }
+      }
       return true;
     },
   };

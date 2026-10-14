@@ -128,14 +128,14 @@ export const api = new Hono<ApiEnvironment>()
   .route(
     "/v2/cases",
     createFilesApi({
-      dependencies: async (env, core, ownerId) => ({
+      dependencies: async (env, core, ownerId, afterComplete) => ({
         bucket: env.CASE_PRIVATE_R2,
         paidStorage: createFileStorageBudget(
           core,
           env.APP_ENV === "production" ? "production" : "preview",
           ownerId,
         ),
-        ...createFileProcessingAdmission(core, env),
+        ...createFileProcessingAdmission(core, env, {}, undefined, afterComplete),
       }),
     }),
   )
