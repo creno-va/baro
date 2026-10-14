@@ -23,7 +23,7 @@ const native = () =>
     }),
   );
 
-test("native D1 batch rolls back every 0010 DDL, marker and migration-ledger write on a backfill mismatch", async () => {
+test("native D1 rolls back 0010 backfill and 0011 receipt/trigger/marker failures with the whole migration ledger", async () => {
   const mf = native();
   try {
     const db = await mf.getD1Database("DB");
@@ -73,6 +73,52 @@ test("native D1 batch rolls back every 0010 DDL, marker and migration-ledger wri
     expect(
       await db.prepare("SELECT value FROM app_metadata WHERE key='schema_version'").first("value"),
     ).toBe("0009_storage_capacity_maintenance");
+    // Reuse the same migrated native database to avoid launching another
+    // workerd process merely for the next additive upgrade's rollback check.
+    await db
+      .prepare("UPDATE v2_physical_storage_capacity SET held_bytes=0 WHERE environment='preview'")
+      .run();
+    await db.batch(
+      (await migrationStatements("0010_bounded_storage_admission.sql")).map((sql) =>
+        db.prepare(sql),
+      ),
+    );
+    const projectionBefore = await db
+      .prepare(
+        "SELECT sql FROM sqlite_master WHERE type='trigger' AND name='v2_storage_projection_immutable'",
+      )
+      .first("sql");
+    await db
+      .prepare(
+        "CREATE TRIGGER synthetic_failed_0011 BEFORE UPDATE ON app_metadata WHEN NEW.key='schema_version' AND NEW.value='0011_runtime_refresh' BEGIN SELECT RAISE(ABORT,'SYNTHETIC_MIGRATION_FAILURE'); END",
+      )
+      .run();
+    const batch = [
+      ...(await migrationStatements("0011_runtime_refresh.sql")).map((sql) => db.prepare(sql)),
+      db.prepare("INSERT INTO d1_migrations(name) VALUES('0011_runtime_refresh.sql')"),
+    ];
+    await expect(db.batch(batch)).rejects.toThrow();
+    expect(
+      (await db.prepare("SELECT name FROM sqlite_master WHERE name='v2_runtime_refreshes'").all())
+        .results,
+    ).toEqual([]);
+    expect(
+      await db
+        .prepare(
+          "SELECT sql FROM sqlite_master WHERE type='trigger' AND name='v2_storage_projection_immutable'",
+        )
+        .first("sql"),
+    ).toBe(projectionBefore);
+    expect(
+      await db.prepare("SELECT value FROM app_metadata WHERE key='schema_version'").first("value"),
+    ).toBe("0010_bounded_storage_admission");
+    expect((await db.prepare("SELECT * FROM d1_migrations").all()).results).toEqual([]);
+    await db.prepare("DROP TRIGGER synthetic_failed_0011").run();
+    await db.batch(batch);
+    expect(
+      await db.prepare("SELECT value FROM app_metadata WHERE key='schema_version'").first("value"),
+    ).toBe("0011_runtime_refresh");
+    expect((await db.prepare("PRAGMA foreign_key_check").all()).results).toEqual([]);
   } finally {
     await mf.dispose();
   }

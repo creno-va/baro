@@ -46,7 +46,7 @@ test("missing verifier and stale control/proof/configuration fail closed", async
   ).toBe(false);
   const short = { ...f.fp, id: crypto.randomUUID(), validUntil: LATER };
   expect(await f.runtime.putFundingProof(short, NOW)).toBe(true);
-  expect(await capacity.reserveProjection(projection(f, { fundingProofId: short.id }), NOW)).toBe(
+  expect(await capacity.reserveProjection(projection(f, { fundingProofId: short.id }), LATER)).toBe(
     false,
   );
   expect(held(f)).toBeNull();
@@ -206,6 +206,9 @@ test("actual populated 0008 -> 0009 preserves session, AES ciphertext, funding a
     }),
   ).toBe(JSON.stringify({ contentHash: HASH }));
   expect(await f.runtime.freeze("2026-10", 3, 1, NOW)).toBe(true);
+  // Current runtime is exercised only after the full additive upgrade.
+  f.db.sqlite.exec(await Bun.file("drizzle/0010_bounded_storage_admission.sql").text());
+  f.db.sqlite.exec(await Bun.file("drizzle/0011_runtime_refresh.sql").text());
   const capacity = createV2StorageCapacityRepository(f.core, "preview", verifier);
   expect(await capacity.reserveProjection(projection(f), NOW)).toBe(false);
   expect(
@@ -354,4 +357,27 @@ test("prepared writer token is retained before SQL but never grants dispatch on 
   expect(f.db.sqlite.query("SELECT writer_state FROM v2_physical_blob_bindings").get()).toEqual({
     writer_state: "stopped",
   });
+});
+
+test("short fresh funding reserves the full ceiling but expires authority at the observation boundary", async () => {
+  const f = await fixture(),
+    capacity = createV2StorageCapacityRepository(f.core, "preview", verifier);
+  const short = { ...f.fp, id: "zz-short-observation", validUntil: LATER };
+  expect(await f.runtime.putFundingProof(short, NOW)).toBe(true);
+  expect(
+    await capacity.reserveProjection(
+      projection(f, { expectedControlRevision: 3, fundingProofId: short.id }),
+      NOW,
+    ),
+  ).toBe(true);
+  const row = f.db.sqlite
+    .query("SELECT payload_json,valid_until,reserved_krw FROM v2_storage_projections")
+    .get() as { payload_json: string; valid_until: string; reserved_krw: number };
+  expect(row.valid_until).toBe(LATER);
+  expect(JSON.parse(row.payload_json).quantities[0]).toEqual({
+    sku: "r2_storage_gb_months",
+    maximumQuantity: "100",
+  });
+  expect(row.reserved_krw).toBeGreaterThan(0);
+  expect((await f.runtime.exposure(NOW))?.phase).toBe("frozen");
 });

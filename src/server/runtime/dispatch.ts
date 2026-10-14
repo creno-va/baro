@@ -1,6 +1,8 @@
 import { createCaseDataCipher } from "../crypto";
 import { usageDateKst } from "../db/repository";
 import { createV2Core } from "../db/v2-core";
+import { carryoverSql } from "../db/v2-paid-statements";
+import { allocationUntilSql } from "../db/v2-runtime-authority";
 import {
   createAssetProcessingDispatcher,
   createFileProcessingDispatcher,
@@ -21,12 +23,24 @@ export async function reconcileV2Dispatch(env: Env) {
       .statement(
         `SELECT c.month FROM v2_runtime_controls c
       JOIN v2_monthly_budget b ON b.month=c.month AND b.environment=c.environment
+      JOIN v2_storage_funding_heads head ON head.environment=c.environment JOIN v2_runtime_proofs funding ON funding.id=head.proof_id AND funding.verified_at=head.verified_at AND funding.environment=c.environment AND funding.kind='funding'
       JOIN v2_runtime_proofs allocation ON allocation.id=c.allocation_proof_id AND allocation.kind='allocation' AND allocation.environment=c.environment
-      WHERE c.environment=? AND c.month=? AND c.phase='active' AND allocation.verified_at<=? AND allocation.valid_until>?
-      AND b.settled_krw+b.reserved_krw+b.ambiguous_krw+b.fixed_maintenance_krw<=b.limit_krw
-      AND EXISTS(SELECT 1 FROM v2_runtime_proofs funding WHERE funding.environment=c.environment AND funding.kind='funding'
-        AND funding.verified_at<=? AND funding.valid_until>? AND json_extract(funding.payload_json,'$.state') IN ('funded','trial_credit'))`,
-        [environment, usageDateKst(now).slice(0, 7), now, now, now, now],
+      WHERE c.environment=? AND c.month=? AND c.phase='active' AND allocation.verified_at<=? AND ${allocationUntilSql("c", "allocation")}>?
+      AND (${core.monthlyBudgetCapEnabled ? "0" : "1"}=1 OR b.settled_krw+b.reserved_krw+b.ambiguous_krw+b.fixed_maintenance_krw+(${carryoverSql})<=b.limit_krw)
+      AND b.settled_krw+b.reserved_krw+b.ambiguous_krw+b.fixed_maintenance_krw+(${carryoverSql})<=json_extract(funding.payload_json,'$.spendAllowanceKrw')
+      AND funding.verified_at<=? AND funding.valid_until>? AND json_extract(funding.payload_json,'$.state') IN ('funded','trial_credit')`,
+        [
+          environment,
+          usageDateKst(now).slice(0, 7),
+          now,
+          now,
+          usageDateKst(now).slice(0, 7),
+          usageDateKst(now).slice(0, 7),
+          usageDateKst(now).slice(0, 7),
+          usageDateKst(now).slice(0, 7),
+          now,
+          now,
+        ],
       )
       .first();
     if (!control) return { available: false };

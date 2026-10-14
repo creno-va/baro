@@ -15,6 +15,7 @@ import {
   createV2PaidRuntimeRepository,
   runtimeDigest,
 } from "../../db/v2-paid-runtime";
+import { allocationUntilSql } from "../../db/v2-runtime-authority";
 import {
   type StoragePaidHoldRequest,
   storagePaidHoldRequestSchema,
@@ -141,10 +142,10 @@ export function createStorageBudgetService(options: {
        JOIN v2_runtime_proofs ap ON ap.id=c.allocation_proof_id
        WHERE c.month=? AND c.environment=? AND b.environment=c.environment AND c.phase='active'
        AND projection.created_at<=? AND projection.valid_until>?
-       AND ap.kind='allocation' AND ap.environment=c.environment AND ap.verified_at<=? AND ap.valid_until>?
+       AND ap.kind='allocation' AND ap.environment=c.environment AND ap.verified_at<=? AND ${allocationUntilSql("c", "ap")}>?
        AND json_extract(ap.payload_json,'$.allocation.version')=b.allocation_version
        AND json_extract(ap.payload_json,'$.allocation.manifestHash')=a.manifest_hash
-       AND a.reviewed_at<=? AND a.valid_until>? AND a.funding_valid_until>?`,
+       AND a.reviewed_at<=? AND ${allocationUntilSql("c", "ap", "a.valid_until")}>? AND ${allocationUntilSql("c", "ap", "a.funding_valid_until")}>?`,
         [month, options.environment, now, now, now, now, now, now, now],
       )
       .first<{
@@ -175,8 +176,6 @@ export function createStorageBudgetService(options: {
         a.validUntil,
         pricing.fx.validUntil,
         ...pricing.prices.map((v) => v.validUntil),
-        allocation.allocation.validUntil,
-        allocation.allocation.fundingValidUntil,
       ].map(Date.parse),
     );
     if (
@@ -302,7 +301,7 @@ export function createStorageBudgetService(options: {
         if (!(await checkpoint()) || !dispatch) return null;
         const current = await options.core
           .statement(
-            `SELECT h.deadline_at,pp.valid_until AS pricing_until,fp.valid_until AS funding_until,ap.valid_until AS allocation_until FROM v2_storage_paid_executions h JOIN v2_cost_attempts ca ON ca.id=h.attempt_id JOIN v2_runtime_controls c ON c.month=ca.month JOIN v2_runtime_proofs pp ON pp.id=h.pricing_proof_id JOIN v2_runtime_proofs fp ON fp.id=h.funding_proof_id JOIN v2_runtime_proofs ap ON ap.id=c.allocation_proof_id WHERE h.attempt_id=? AND h.state='dispatched' AND h.dispatch_token=? AND ca.state='reserved' AND c.phase='active' AND c.environment=? AND c.allocation_proof_id=?`,
+            `SELECT h.deadline_at,pp.valid_until AS pricing_until,fp.valid_until AS funding_until,${allocationUntilSql("c", "ap")} AS allocation_until FROM v2_storage_paid_executions h JOIN v2_cost_attempts ca ON ca.id=h.attempt_id JOIN v2_runtime_controls c ON c.month=ca.month JOIN v2_runtime_proofs pp ON pp.id=h.pricing_proof_id JOIN v2_runtime_proofs fp ON fp.id=h.funding_proof_id JOIN v2_runtime_proofs ap ON ap.id=c.allocation_proof_id JOIN v2_storage_funding_heads head ON head.environment=c.environment AND head.proof_id=fp.id AND head.verified_at=fp.verified_at WHERE h.attempt_id=? AND h.state='dispatched' AND h.dispatch_token=? AND ca.state='reserved' AND c.phase='active' AND c.environment=? AND c.allocation_proof_id=?`,
             [dispatch.attemptId, dispatch.dispatchToken, options.environment, state.allocationId],
           )
           .first<{

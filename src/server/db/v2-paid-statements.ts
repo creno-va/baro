@@ -1,6 +1,7 @@
 import { usageDateKst } from "./repository";
 import { type Actor, sqlClaim, type V2Core } from "./v2-core";
 import type { PaidHoldRequest } from "./v2-paid-contracts";
+import { allocationUntilSql } from "./v2-runtime-authority";
 
 export const carryoverSql =
   "coalesce((SELECT sum(reserved_krw+ambiguous_krw) FROM v2_monthly_budget WHERE month<?),0)+coalesce((SELECT sum(amount_krw) FROM v2_maintenance_exposure WHERE month<? AND state IN ('reserved','ambiguous')),0)";
@@ -32,7 +33,7 @@ export function budgetAdmissionPredicate(input: {
     : carryoverSql;
   const carryoverJoin = input.boundedStorage
     ? "JOIN v2_storage_carryover storage_carryover ON storage_carryover.id=1 AND storage_carryover.version=1 AND storage_carryover.cursor_month=b.month JOIN v2_storage_funding_heads funding_head ON funding_head.environment=b.environment JOIN v2_storage_projections storage_projection ON storage_projection.environment=b.environment AND storage_projection.month=b.month JOIN v2_runtime_proofs projection_funding ON projection_funding.id=storage_projection.funding_proof_id"
-    : "";
+    : "JOIN v2_storage_funding_heads funding_head ON funding_head.environment=b.environment";
   const storageGuard = input.boundedStorage
     ? `AND funding_head.proof_id=fp.id AND funding_head.verified_at=fp.verified_at AND storage_projection.pricing_proof_id=pp.id AND storage_projection.allocation_proof_id=ap.id AND storage_projection.created_at<=? AND storage_projection.valid_until>? AND projection_funding.kind='funding' AND projection_funding.environment=b.environment AND projection_funding.payload_json=json_extract(storage_projection.payload_json,'$.fundingJson') AND projection_funding.verified_at<=? AND projection_funding.valid_until>? AND json_extract(projection_funding.payload_json,'$.state') IN ('funded','trial_credit') AND b.settled_krw+b.reserved_krw+b.ambiguous_krw+b.fixed_maintenance_krw+(${carryover})+?<=json_extract(projection_funding.payload_json,'$.spendAllowanceKrw')`
     : "";
@@ -45,12 +46,13 @@ export function budgetAdmissionPredicate(input: {
     "ap.environment=b.environment",
     "json_extract(ap.payload_json,'$.allocation.version')=b.allocation_version",
     "json_extract(ap.payload_json,'$.allocation.manifestHash')=a.manifest_hash",
-    "ap.valid_until>?",
+    `${allocationUntilSql("c", "ap")}>?`,
     "ap.verified_at<=?",
     "pp.kind='pricing'",
     "fp.kind='funding'",
     "pp.environment=b.environment",
     "fp.environment=b.environment",
+    "funding_head.proof_id=fp.id AND funding_head.verified_at=fp.verified_at",
     "pp.payload_json=?",
     "fp.payload_json=?",
     "pp.verified_at<=?",
@@ -58,8 +60,8 @@ export function budgetAdmissionPredicate(input: {
     "pp.valid_until>?",
     "fp.valid_until>?",
     "a.reviewed_at<=?",
-    "a.valid_until>?",
-    "a.funding_valid_until>?",
+    `${allocationUntilSql("c", "ap", "a.valid_until")}>?`,
+    `${allocationUntilSql("c", "ap", "a.funding_valid_until")}>?`,
     "a.funding_state IN ('funded','trial_credit')",
     `(${input.monthlyBudgetCapEnabled === false ? "1" : "0"}=1 OR b.settled_krw+b.reserved_krw+b.ambiguous_krw+b.fixed_maintenance_krw+(${carryover})+?<=b.limit_krw)`,
     `b.settled_krw+b.reserved_krw+b.ambiguous_krw+b.fixed_maintenance_krw+(${carryover})+?<=json_extract(fp.payload_json,'$.spendAllowanceKrw')`,
@@ -248,7 +250,7 @@ export function paidAcquirePredicate(
   now: string,
 ): { sql: string; values: unknown[] } {
   return {
-    sql: `((NOT EXISTS(SELECT 1 FROM v2_runtime_controls) AND NOT EXISTS(SELECT 1 FROM v2_paid_holds WHERE job_id=j.id)) OR EXISTS(SELECT 1 FROM v2_paid_holds h JOIN v2_cost_attempts ca ON ca.id=h.attempt_id JOIN v2_runtime_plans p ON p.id=h.plan_id JOIN v2_runtime_controls c ON c.month=ca.month JOIN v2_monthly_budget b ON b.month=c.month JOIN v2_runtime_proofs ap ON ap.id=c.allocation_proof_id JOIN v2_runtime_proofs pp ON pp.id=p.pricing_proof_id JOIN v2_runtime_proofs fp ON fp.id=p.funding_proof_id WHERE h.attempt_id=? AND h.job_id=j.id AND h.state='prepared' AND ca.state='reserved' AND ca.operation_id=j.operation_id AND p.target_id=j.target_id AND p.target_revision=j.target_revision AND p.deadline_at>? AND pp.valid_until>? AND fp.valid_until>? AND c.phase='active' AND ap.valid_until>? AND json_extract(ap.payload_json,'$.allocation.version')=b.allocation_version))`,
+    sql: `((NOT EXISTS(SELECT 1 FROM v2_runtime_controls) AND NOT EXISTS(SELECT 1 FROM v2_paid_holds WHERE job_id=j.id)) OR EXISTS(SELECT 1 FROM v2_paid_holds h JOIN v2_cost_attempts ca ON ca.id=h.attempt_id JOIN v2_runtime_plans p ON p.id=h.plan_id JOIN v2_runtime_controls c ON c.month=ca.month JOIN v2_monthly_budget b ON b.month=c.month JOIN v2_runtime_proofs ap ON ap.id=c.allocation_proof_id JOIN v2_runtime_proofs pp ON pp.id=p.pricing_proof_id JOIN v2_runtime_proofs fp ON fp.id=p.funding_proof_id JOIN v2_storage_funding_heads head ON head.environment=c.environment AND head.proof_id=fp.id AND head.verified_at=fp.verified_at WHERE h.attempt_id=? AND h.job_id=j.id AND h.state='prepared' AND ca.state='reserved' AND ca.operation_id=j.operation_id AND p.target_id=j.target_id AND p.target_revision=j.target_revision AND p.deadline_at>? AND pp.valid_until>? AND fp.valid_until>? AND c.phase='active' AND ${allocationUntilSql("c", "ap")}>? AND json_extract(ap.payload_json,'$.allocation.version')=b.allocation_version))`,
     values: [attemptId, now, now, now, now],
   };
 }

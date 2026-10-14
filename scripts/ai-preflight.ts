@@ -288,7 +288,6 @@ export async function inspectAiPreflight(input: {
               pricing.data.validUntil,
               pricing.data.fx.validUntil,
               funding.data.validUntil,
-              allocation.data.allocation.fundingValidUntil,
               ...prices.map((price) => price.validUntil),
             ].map(Date.parse),
           ),

@@ -54,7 +54,6 @@ export function createPaidAvailability(
           p.validUntil,
           f.validUntil,
           a.validUntil,
-          allocation.allocation.fundingValidUntil,
           pricing.fx.validUntil,
           ...pricing.prices.map((v) => v.validUntil),
         ].map(Date.parse),
@@ -67,8 +66,8 @@ export function createPaidAvailability(
         e.carryover_krw;
       const control = await core
         .statement(
-          "SELECT allocation_proof_id FROM v2_runtime_controls WHERE month=? AND phase='active' AND environment=?",
-          [e.month, environment],
+          "SELECT c.allocation_proof_id FROM v2_runtime_controls c JOIN v2_storage_funding_heads head ON head.environment=c.environment WHERE c.month=? AND c.phase='active' AND c.environment=? AND head.proof_id=?",
+          [e.month, environment, ids.fundingProofId],
         )
         .first<string>("allocation_proof_id");
       const freshNow = Date.parse(clock());
