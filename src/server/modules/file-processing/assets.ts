@@ -2,6 +2,7 @@ import { sha256 } from "@noble/hashes/sha2.js";
 import { drizzle } from "drizzle-orm/d1";
 import { z } from "zod";
 import { opaqueIdSchema, timestampSchema } from "../../../contracts";
+import { CURRENT_POLICY_VERSIONS } from "../../../contracts/consent";
 import { v2PortfolioAssetSchema } from "../../../contracts/v2";
 import * as schema from "../../db/schema";
 import { hashSchema, type V2Core } from "../../db/v2-core";
@@ -67,7 +68,9 @@ export function createAssetProcessingService(
   const consent = (ownerId: string) =>
     hasCurrentConsent(drizzle(core.binding, { schema }), ownerId);
   const current = async (params: AssetProcessingParams, lease: JobLease) => {
-    if (!(await consent(params.ownerId)) || lease.jobId !== params.jobId) return null;
+    if (lease.jobId !== params.jobId) return null;
+    // Observe consent and the exact live source/lease in the same database read.
+    // Every caller still rechecks at its original transport/stream boundary.
     const row = await core
       .statement(
         `SELECT j.operation_id,a.original_blob_id,a.purpose,a.encrypted_payload AS asset_payload,original.encrypted_payload AS source_payload,original.cipher_bytes,original.cipher_hash
@@ -78,6 +81,7 @@ export function createAssetProcessingService(
       AND j.status IN ('running','validating') AND o.state IN ('admitted','ambiguous') AND ${jobAlive}
       AND a.owner_id=o.owner_id AND p.owner_id=o.owner_id AND a.state='sanitizing' AND a.purpose IN ('profile_photo','portfolio')
       AND original.state='stored' AND original.visibility='private' AND principal.owner_id=o.owner_id
+      AND EXISTS(SELECT 1 FROM user_consents consent WHERE consent.user_id=o.owner_id AND consent.terms_version=? AND consent.privacy_version=? AND consent.ai_notice_version=? AND consent.over_14_confirmed=1)
       AND ((a.purpose='profile_photo' AND original.kind='profile_photo_original') OR (a.purpose='portfolio' AND original.kind='portfolio_original'))`,
         [
           params.jobId,
@@ -89,6 +93,9 @@ export function createAssetProcessingService(
           lease.token,
           lease.fencing,
           actor(params.ownerId).now,
+          CURRENT_POLICY_VERSIONS.termsVersion,
+          CURRENT_POLICY_VERSIONS.privacyVersion,
+          CURRENT_POLICY_VERSIONS.aiNoticeVersion,
         ],
       )
       .first<{
@@ -100,7 +107,7 @@ export function createAssetProcessingService(
         cipher_bytes: number;
         cipher_hash: string;
       }>();
-    return row && (await consent(params.ownerId)) ? row : null;
+    return row;
   };
   const receiptId = (
     params: AssetProcessingParams,

@@ -8,82 +8,14 @@ import {
   lawyerStorageRequestCore,
 } from "../src/server/modules/lawyers/storage-runtime";
 import { createAssetProcessingAdmission } from "../src/server/runtime/asset-admission";
+import { countD1Calls } from "./helpers/d1-call-count";
 import { fixture } from "./helpers/file-processing-fixture";
 
 // Counts D1 method calls, not network time or native D1 rows read. SQLite/AES,
 // storage admission, writer fences and Workflow admission are real; R2 is local.
-function countCalls(database: D1Database) {
-  const work = { calls: 0, statements: 0 };
-  const sources = new WeakMap<
-    D1PreparedStatement,
-    { statement: D1PreparedStatement; sql: string }
-  >();
-  let after: (sql: string[]) => void = () => {};
-  const wrap = (statement: D1PreparedStatement, sql: string): D1PreparedStatement => {
-    const result = {
-      bind: (...values: unknown[]) => wrap(statement.bind(...values), sql),
-      async all<T>() {
-        work.calls++;
-        work.statements++;
-        const result = await statement.all<T>();
-        after([sql]);
-        return result;
-      },
-      async first<T>(column?: string) {
-        work.calls++;
-        work.statements++;
-        const result =
-          column === undefined ? await statement.first<T>() : await statement.first<T>(column);
-        after([sql]);
-        return result;
-      },
-      async raw<T>(options?: { columnNames?: boolean }) {
-        work.calls++;
-        work.statements++;
-        const result = options?.columnNames
-          ? await statement.raw<T>({ columnNames: true })
-          : await statement.raw<T>();
-        after([sql]);
-        return result;
-      },
-      async run<T>() {
-        work.calls++;
-        work.statements++;
-        const result = await statement.run<T>();
-        after([sql]);
-        return result;
-      },
-    } as D1PreparedStatement;
-    sources.set(result, { statement, sql });
-    return result;
-  };
-  return {
-    work,
-    reset: () => Object.assign(work, { calls: 0, statements: 0 }),
-    after: (hook: typeof after) => {
-      after = hook;
-    },
-    binding: {
-      prepare: (sql: string) => wrap(database.prepare(sql), sql),
-      async batch<T>(statements: D1PreparedStatement[]) {
-        const inputs = statements.map((statement) => {
-          const source = sources.get(statement);
-          if (!source) throw Error("Synthetic statement missing");
-          return source;
-        });
-        work.calls++;
-        work.statements += inputs.length;
-        const result = await database.batch<T>(inputs.map((input) => input.statement));
-        after(inputs.map((input) => input.sql));
-        return result;
-      },
-    } as D1Database,
-  };
-}
-
 async function setup() {
   const f = await fixture();
-  const measured = countCalls(f.db.binding);
+  const measured = countD1Calls(f.db.binding);
   const base = createV2Core(measured.binding, f.core.cipher, {
     applicationCostLimitsEnabled: false,
   });
