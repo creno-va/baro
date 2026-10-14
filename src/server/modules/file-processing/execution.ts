@@ -401,9 +401,9 @@ export function createFileProcessingExecution(
             saved.fill(0);
           }
           await guard();
-          if (!(await storage.commitArtifactBlob(actor(), (await guard()).lease, b)))
+          if (!(await storage.commitArtifactAndReservation(actor(), (await guard()).lease, b)))
             throw new ProcessingError("STALE_REVISION");
-          await commitReservation(blobId);
+          await guard();
           return blobId;
         }
       }
@@ -429,23 +429,23 @@ export function createFileProcessingExecution(
     let responseEvidence: { transport: "response"; objectKey: string; byteLength: number } | null =
       null;
     try {
-      const operation = await core
-        .statement("SELECT operation_id FROM v2_jobs WHERE id=?", [params.jobId])
-        .first<string>("operation_id");
-      if (!operation) throw new ProcessingError("STALE_REVISION");
       const reservationId = await idFor(`reservation:${blobId}`);
-      const reserved = await core
-        .statement("SELECT id FROM v2_storage_reservations WHERE id=? AND state='reserved'", [
-          reservationId,
-        ])
-        .first();
+      // Both preparation facts share a snapshot; the later reservation and blob
+      // mutations still independently compare their current source/lease tuple.
+      const preparation = await core
+        .statement(
+          "SELECT j.operation_id,EXISTS(SELECT 1 FROM v2_storage_reservations WHERE id=? AND state='reserved') AS reserved FROM v2_jobs j WHERE j.id=?",
+          [reservationId, params.jobId],
+        )
+        .first<{ operation_id: string; reserved: number }>();
+      if (!preparation) throw new ProcessingError("STALE_REVISION");
       if (
-        !reserved &&
+        !preparation.reserved &&
         !(await storage.reserveArtifact((await guard()).guard, {
           id: reservationId,
           artifactId: blobId,
           target: { kind: "file", id: params.fileId, revision: params.fileRevision },
-          operationId: operation,
+          operationId: preparation.operation_id,
           byteLength: bytes.byteLength,
         }))
       )
@@ -505,9 +505,9 @@ export function createFileProcessingExecution(
       await options.costs.after(permit, { transport: "response" });
       observed = true;
       await guard();
-      if (!(await storage.commitArtifactBlob(actor(), c.lease, blob)))
+      if (!(await storage.commitArtifactAndReservation(actor(), c.lease, blob)))
         throw new ProcessingError("STALE_REVISION");
-      await commitReservation(blobId);
+      await guard();
       return blobId;
     } catch (error) {
       let failure = error;

@@ -1,8 +1,17 @@
 import { z } from "zod";
 import { opaqueIdSchema, revisionSchema } from "../../contracts";
-import { type Actor, actorSchema, hashSchema, parse, safe, sqlClaim, type V2Core } from "./v2-core";
+import {
+  type Actor,
+  actorSchema,
+  aliveWorkspace,
+  hashSchema,
+  parse,
+  safe,
+  sqlClaim,
+  type V2Core,
+} from "./v2-core";
 import { jobAlive } from "./v2-jobs";
-import { type BlobRegistration, blobSchema } from "./v2-storage";
+import { type BlobRegistration, blobSchema, reservationAlive } from "./v2-storage";
 import { isPreparedPhysicalCapacity, type PreparedPhysicalCapacity } from "./v2-storage-capacity";
 import { type JobLease, leaseSchema } from "./v2-workspace";
 
@@ -113,6 +122,7 @@ export function commitArtifactBlob(
   actor: Actor,
   lease: JobLease,
   blob: BlobRegistration,
+  commitReservation = false,
 ) {
   return safe(async () => {
     const { a, b, valid, values } = input(actor, lease, blob);
@@ -159,9 +169,16 @@ export function commitArtifactBlob(
     // Historical unbound pending rows keep their exact lease/hash recovery.
     // New physically bound rows cannot publish an unresolved or replaced writer.
     const physicalReceipt = `NOT EXISTS(SELECT 1 FROM v2_physical_blob_bindings WHERE blob_id=b.id) OR EXISTS(SELECT 1 FROM v2_physical_blob_bindings physical WHERE physical.blob_id=b.id AND physical.owner_id=p.owner_id AND physical.object_key=b.object_key AND physical.state='held' AND physical.writer_state='stopped' AND physical.maximum_cipher_bytes=b.cipher_bytes AND physical.expected_cipher_bytes=b.cipher_bytes)`;
+    // Eligibility already requires exactly this reserved derived artifact's
+    // logical bytes; the final CAS excludes every other live blob. Publishing
+    // this single blob therefore satisfies commitReservation's stored-byte sum.
+    // Keep its owner/alive predicates and require the usage row in the same CAS.
+    const reservation = commitReservation
+      ? ` AND ${reservationAlive} AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='account' AND target_id=p.owner_id) AND (r.workspace_id IS NULL OR EXISTS(SELECT 1 FROM v2_workspaces w WHERE w.id=r.workspace_id AND w.owner_id=p.owner_id AND ${aliveWorkspace})) AND EXISTS(SELECT 1 FROM v2_storage_usage usage WHERE usage.principal_id=p.id AND usage.reserved_bytes>=r.byte_length)`
+      : "";
     return core.changed([
       core.statement(
-        `INSERT INTO v2_mutation_claims(id,owner_id,target_id,revision) SELECT ?,o.owner_id,f.id,f.revision ${from} WHERE ${eligibility()} AND j.target_id=? AND j.target_revision=? AND j.operation_id=? AND EXISTS(SELECT 1 FROM v2_blobs b WHERE b.id=? AND b.principal_id=r.principal_id AND b.reservation_id=r.id AND b.state='pending' AND b.kind='derivative' AND b.visibility='private' AND b.object_key=? AND b.logical_bytes=? AND b.cipher_bytes=? AND b.cipher_hash=? AND b.key_version=? AND b.encrypted_payload=? AND b.created_at=? AND (${physicalReceipt})) AND NOT EXISTS(SELECT 1 FROM v2_blobs WHERE reservation_id=r.id AND state!='deleted' AND id!=?)`,
+        `INSERT INTO v2_mutation_claims(id,owner_id,target_id,revision) SELECT ?,o.owner_id,f.id,f.revision ${from} WHERE ${eligibility()} AND j.target_id=? AND j.target_revision=? AND j.operation_id=? AND EXISTS(SELECT 1 FROM v2_blobs b WHERE b.id=? AND b.principal_id=r.principal_id AND b.reservation_id=r.id AND b.state='pending' AND b.kind='derivative' AND b.visibility='private' AND b.object_key=? AND b.logical_bytes=? AND b.cipher_bytes=? AND b.cipher_hash=? AND b.key_version=? AND b.encrypted_payload=? AND b.created_at=? AND (${physicalReceipt})) AND NOT EXISTS(SELECT 1 FROM v2_blobs WHERE reservation_id=r.id AND state!='deleted' AND id!=?)${reservation}`,
         [
           claimId,
           ...values,
@@ -183,6 +200,18 @@ export function commitArtifactBlob(
         `UPDATE v2_blobs SET state='stored',encrypted_payload=? WHERE id=? AND ${sqlClaim}`,
         [payload, b.id, claimId],
       ),
+      ...(commitReservation
+        ? [
+            core.statement(
+              `UPDATE v2_storage_usage SET reserved_bytes=reserved_bytes-(SELECT byte_length FROM v2_storage_reservations WHERE id=?),stored_bytes=stored_bytes+(SELECT byte_length FROM v2_storage_reservations WHERE id=?) WHERE principal_id=(SELECT principal_id FROM v2_storage_reservations WHERE id=?) AND ${sqlClaim}`,
+              [b.reservationId, b.reservationId, b.reservationId, claimId],
+            ),
+            core.statement(
+              `UPDATE v2_storage_reservations SET state='stored' WHERE id=? AND ${sqlClaim}`,
+              [b.reservationId, claimId],
+            ),
+          ]
+        : []),
       core.finish(claimId),
     ]);
   });

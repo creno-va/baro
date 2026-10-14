@@ -134,6 +134,8 @@ export type BlobRegistration = z.infer<typeof blobSchema>;
 const reservationAlive = `((r.kind='case_original' AND EXISTS(SELECT 1 FROM v2_files f WHERE f.id=r.entity_id AND f.workspace_id=r.workspace_id AND f.state!='deleting' AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='file' AND target_id=f.id))) OR
  (r.kind='lawyer_asset' AND EXISTS(SELECT 1 FROM v2_assets a JOIN v2_profiles profile ON profile.id=a.profile_id WHERE a.id=r.entity_id AND a.owner_id=p.owner_id AND a.state!='deleting' AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE (target_kind='asset' AND target_id=a.id) OR (target_kind='profile' AND target_id=profile.id)))) OR
  (r.kind='derived_report' AND EXISTS(SELECT 1 FROM v2_operations o WHERE o.id=r.operation_id AND o.owner_id=p.owner_id AND o.state IN ('admitted','ambiguous','completed') AND (r.entity_id=o.id OR EXISTS(SELECT 1 FROM v2_files f WHERE f.id=r.entity_id AND f.workspace_id=r.workspace_id AND f.state!='deleting') OR EXISTS(SELECT 1 FROM v2_reports report WHERE report.id=r.entity_id AND report.workspace_id=r.workspace_id)) AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind IN ('file','report') AND target_id=r.entity_id))))`;
+
+export { reservationAlive };
 export function createV2StorageRepository(core: V2Core) {
   const accounting = createV2AccountingRepository(core);
   return {
@@ -301,6 +303,11 @@ export function createV2StorageRepository(core: V2Core) {
     },
     commitArtifactBlob(actor: Actor, lease: JobLease, blob: BlobRegistration) {
       return commitArtifactBlob(core, actor, lease, blob);
+    },
+    /** File-processing publication and exact derived reservation usage share
+     * one transaction. Legacy callers retain the separate-commit method. */
+    commitArtifactAndReservation(actor: Actor, lease: JobLease, blob: BlobRegistration) {
+      return commitArtifactBlob(core, actor, lease, blob, true);
     },
     abandonArtifactBlob(actor: Actor, blobId: string) {
       return abandonArtifactBlob(core, actor, blobId);
