@@ -12,6 +12,7 @@ import { boundedProcessingResources } from "../budget/processing-runtime";
 import { hasCurrentConsent } from "../consent/service";
 import { FileError } from "../files/binary";
 import type { FileServiceDependencies } from "../files/service";
+import { createFileProcessingDispatcher } from "./dispatch";
 
 /** Retry keeps the original operation and immutable source, but attaches a new
  * paid hold, runtime instance and fencing token through the existing jobs CAS. */
@@ -19,6 +20,7 @@ export function createFileRetry(
   core: V2Core,
   env: Env,
   deps: Pick<FileServiceDependencies, "enqueueProcessing" | "testOnlyUnmeteredStorage" | "clock">,
+  afterRetry?: (task: () => Promise<void>) => void,
 ) {
   const clock = deps.clock ?? (() => new Date().toISOString());
   const environment = env.APP_ENV === "production" ? "production" : "preview";
@@ -95,6 +97,7 @@ export function createFileRetry(
     if (!row || !original?.manifest) throw new FileError("CONFLICT");
     if (!row.request_hash) throw new FileError("PROCESSING_UNAVAILABLE");
     const requestHash = row.request_hash;
+    const instanceId = `${row.id}-${row.attempts + 1}`;
     const budget = createProcessingBudgetService({
       core,
       environment,
@@ -113,7 +116,7 @@ export function createFileRetry(
               targetKind: "file",
               targetId: fileId,
               targetRevision: file.revision,
-              invocationId: `${row.id}-${row.attempts + 1}`,
+              invocationId: instanceId,
               maximumAttempts: 1,
               deadlineAt: new Date(Date.parse(now) + 300000).toISOString(),
             }
@@ -133,6 +136,20 @@ export function createFileRetry(
     if (!test && !paid) throw new FileError("PROCESSING_UNAVAILABLE");
     if (!(await jobs.retry({ ...g, now: paid?.actor.now ?? clock() }, row.id, paid?.paid)))
       throw new FileError("CONFLICT");
-    return files.metadata({ ...g, now: clock() }, fileId);
+    const result = await files.metadata({ ...g, now: clock() }, fileId);
+    if (result?.status === "queued" && !core.applicationCostLimitsEnabled && afterRetry) {
+      try {
+        afterRetry(async () => {
+          await createFileProcessingDispatcher(core, {
+            environment,
+            binding: env.FILE_PROCESSING,
+            clock,
+          }).dispatchOne({ ownerId, jobId: row.id, instanceId });
+        });
+      } catch {
+        // The durable outbox remains available to scheduled dispatch.
+      }
+    }
+    return result;
   };
 }

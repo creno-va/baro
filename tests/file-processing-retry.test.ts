@@ -186,3 +186,21 @@ test("deletion after a retry retains and revokes every native attempt before rem
   expect(revoked).toEqual(attempts);
   expect(f.bucket.objects.size).toBe(0);
 });
+
+test("priced-mode failed retry keeps cron-only delivery", async () => {
+  const f = await failedFile();
+  expect(f.core.applicationCostLimitsEnabled).toBe(true);
+  const tasks: Array<() => Promise<void>> = [];
+  const retry = createFileRetry(
+    f.core,
+    { APP_ENV: "preview" } as Env,
+    { testOnlyUnmeteredStorage: true, clock: () => f.actor.now },
+    (task) => {
+      tasks.push(task);
+    },
+  );
+  expect((await retry(f.actor.ownerId, f.workspaceId, f.u.session.fileId, f.input()))?.status).toBe(
+    "queued",
+  );
+  expect(tasks).toHaveLength(0);
+});

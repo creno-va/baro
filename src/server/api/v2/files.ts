@@ -207,16 +207,33 @@ export function createFilesApi(
       applicationCostLimitsEnabled: c.env.APPLICATION_COST_LIMITS_ENABLED !== "false",
       monthlyBudgetCapEnabled: c.env.MONTHLY_BUDGET_CAP_ENABLED !== "false",
     });
-    const deps = (await options.dependencies?.(c.env, core, access.ownerId)) ?? {};
-    return c.json(
-      await createFileRetry(core, c.env, deps)(
-        access.ownerId,
-        c.req.param("caseId"),
-        c.req.param("fileId"),
-        await c.req.json(),
-      ),
-      202,
+    const admittedTasks: Array<() => Promise<void>> = [];
+    const remember = (task: () => Promise<void>) => {
+      admittedTasks.push(task);
+    };
+    const deps = (await options.dependencies?.(c.env, core, access.ownerId, remember)) ?? {};
+    const result = await createFileRetry(core, c.env, deps, remember)(
+      access.ownerId,
+      c.req.param("caseId"),
+      c.req.param("fileId"),
+      await c.req.json(),
     );
+    const response = c.json(result, 202);
+    // Uploaded-file admission also registers a cold task. Do not start either
+    // path until the final metadata readback and response construction succeed.
+    if (result?.status === "queued")
+      for (const task of admittedTasks) {
+        try {
+          c.executionCtx.waitUntil(
+            Promise.resolve()
+              .then(task)
+              .catch(() => {}),
+          );
+        } catch {
+          // Missing request context cannot undo the committed outbox; cron recovers it.
+        }
+      }
+    return response;
   });
   const review = async (env: Env) =>
     createFileReviewService(createV2Core(env.DB, await createCaseDataCipher(env)));
