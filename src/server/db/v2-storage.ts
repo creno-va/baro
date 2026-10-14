@@ -146,8 +146,13 @@ export function createV2StorageRepository(core: V2Core) {
         ? requeueAssetUploadCleanup(core, actor, captured)
         : Promise.resolve(null);
     },
-    prepareSanitizedAssetBlob(actor: Actor, lease: JobLease, blob: BlobRegistration) {
-      return prepareSanitizedAssetBlob(core, actor, lease, blob);
+    prepareSanitizedAssetBlob(
+      actor: Actor,
+      lease: JobLease,
+      blob: BlobRegistration,
+      physical?: PreparedPhysicalCapacity,
+    ) {
+      return prepareSanitizedAssetBlob(core, actor, lease, blob, physical);
     },
     commitSanitizedAssetBlob(actor: Actor, lease: JobLease, blob: BlobRegistration) {
       return commitSanitizedAssetBlob(core, actor, lease, blob);

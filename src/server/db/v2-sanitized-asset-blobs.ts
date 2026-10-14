@@ -8,6 +8,7 @@ import {
   storagePredicate,
   storageReservationStatements,
 } from "./v2-storage";
+import { isPreparedPhysicalCapacity, type PreparedPhysicalCapacity } from "./v2-storage-capacity";
 import { type JobLease, leaseSchema } from "./v2-workspace";
 
 const from = `FROM v2_jobs j JOIN v2_operations o ON o.id=j.operation_id JOIN v2_assets a ON a.id=j.target_id JOIN v2_profiles profile ON profile.id=a.profile_id JOIN v2_blobs original ON original.id=a.original_blob_id JOIN v2_storage_reservations original_res ON original_res.id=original.reservation_id JOIN v2_billing_principals principal ON principal.id=original.principal_id`;
@@ -57,12 +58,22 @@ export function prepareSanitizedAssetBlob(
   actor: Actor,
   lease: JobLease,
   input: BlobRegistration,
+  physical?: PreparedPhysicalCapacity,
 ) {
   return safe(async () => {
     actor = parse(actorSchema, actor);
     parse(leaseSchema, lease);
     const b = parse(blobSchema, input);
     if (!valid(b)) return false;
+    if (
+      physical &&
+      (!isPreparedPhysicalCapacity(physical) ||
+        physical.binding.ownerId !== actor.ownerId ||
+        physical.binding.blobId !== b.id ||
+        physical.binding.objectKey !== `private/${b.id}` ||
+        physical.binding.maximumCipherBytes !== b.cipherBytes)
+    )
+      return false;
     const source = await core
       .statement(`${select} WHERE ${alive()}`, values(actor, lease))
       .first<Source>();
@@ -83,7 +94,7 @@ export function prepareSanitizedAssetBlob(
       capacity = storagePredicate(actor.ownerId, b.logicalBytes);
     return core.changed([
       core.statement(
-        `INSERT INTO v2_mutation_claims(id,owner_id,target_id,revision) SELECT ?,a.owner_id,a.id,a.revision ${from} WHERE ${alive()} AND a.encrypted_payload=? AND a.purpose=? AND original.id=? AND original.encrypted_payload=? AND ${capacity.sql} AND NOT EXISTS(SELECT 1 FROM v2_storage_reservations WHERE id=? OR target_id=?) AND NOT EXISTS(SELECT 1 FROM v2_blobs WHERE id=?)`,
+        `INSERT INTO v2_mutation_claims(id,owner_id,target_id,revision) SELECT ?,a.owner_id,a.id,a.revision ${from} WHERE ${alive()} AND a.encrypted_payload=? AND a.purpose=? AND original.id=? AND original.encrypted_payload=? AND ${capacity.sql} AND (${physical?.predicate.sql ?? "1"}) AND NOT EXISTS(SELECT 1 FROM v2_storage_reservations WHERE id=? OR target_id=?) AND NOT EXISTS(SELECT 1 FROM v2_blobs WHERE id=?)`,
         [
           claimId,
           ...values(actor, lease),
@@ -92,6 +103,7 @@ export function prepareSanitizedAssetBlob(
           source.original_id,
           source.original_payload,
           ...capacity.values,
+          ...(physical?.predicate.values ?? []),
           b.reservationId,
           b.id,
           b.id,
@@ -130,6 +142,7 @@ export function prepareSanitizedAssetBlob(
           claimId,
         ],
       ),
+      ...(physical ? physical.statements(core, actor, claimId) : []),
       core.finish(claimId),
     ]);
   });
@@ -243,9 +256,13 @@ export function commitSanitizedAssetBlob(
       }),
       claimId = crypto.randomUUID(),
       source = pending.source;
+    // Historical unbound pending rows retain the existing source/lease recovery
+    // path. Once physically bound, publication needs the exact stopped writer;
+    // a failed/unknown PUT must remain pending for reconciliation or cleanup.
+    const physicalReceipt = `NOT EXISTS(SELECT 1 FROM v2_physical_blob_bindings WHERE blob_id=b.id) OR EXISTS(SELECT 1 FROM v2_physical_blob_bindings physical WHERE physical.blob_id=b.id AND physical.owner_id=principal.owner_id AND physical.object_key=b.object_key AND physical.state='held' AND physical.writer_state='stopped' AND physical.maximum_cipher_bytes=b.cipher_bytes AND physical.expected_cipher_bytes=b.cipher_bytes)`;
     return core.changed([
       core.statement(
-        `INSERT INTO v2_mutation_claims(id,owner_id,target_id,revision) SELECT ?,a.owner_id,a.id,a.revision ${from} WHERE ${alive()} AND a.encrypted_payload=? AND a.purpose=? AND original.id=? AND original.encrypted_payload=? AND EXISTS(SELECT 1 FROM v2_blobs b JOIN v2_storage_reservations r ON r.id=b.reservation_id WHERE b.id=? AND r.id=? AND r.principal_id=principal.id AND b.principal_id=principal.id AND r.entity_id=a.id AND r.target_id=b.id AND r.kind='lawyer_asset' AND r.state='reserved' AND r.operation_id=o.id AND r.byte_length=? AND b.state='pending' AND b.kind=? AND b.visibility='staging' AND b.object_key=? AND b.logical_bytes=? AND b.cipher_bytes=? AND b.cipher_hash=? AND b.key_version=? AND b.encrypted_payload=? AND b.source_blob_id=original.id AND b.source_asset_revision=a.revision)`,
+        `INSERT INTO v2_mutation_claims(id,owner_id,target_id,revision) SELECT ?,a.owner_id,a.id,a.revision ${from} WHERE ${alive()} AND a.encrypted_payload=? AND a.purpose=? AND original.id=? AND original.encrypted_payload=? AND EXISTS(SELECT 1 FROM v2_blobs b JOIN v2_storage_reservations r ON r.id=b.reservation_id WHERE b.id=? AND r.id=? AND r.principal_id=principal.id AND b.principal_id=principal.id AND r.entity_id=a.id AND r.target_id=b.id AND r.kind='lawyer_asset' AND r.state='reserved' AND r.operation_id=o.id AND r.byte_length=? AND b.state='pending' AND b.kind=? AND b.visibility='staging' AND b.object_key=? AND b.logical_bytes=? AND b.cipher_bytes=? AND b.cipher_hash=? AND b.key_version=? AND b.encrypted_payload=? AND b.source_blob_id=original.id AND b.source_asset_revision=a.revision AND (${physicalReceipt}))`,
         [
           claimId,
           ...values(actor, lease),
