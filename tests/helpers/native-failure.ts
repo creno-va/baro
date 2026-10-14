@@ -10,6 +10,9 @@ const names = [
   "ZodError",
   "V2RepositoryError",
   "DrizzleQueryError",
+  "AssertionError",
+  "MiniflareCoreError [ERR_DISPOSED]",
+  "MiniflareCoreError [ERR_RUNTIME_FAILURE]",
 ] as const;
 const codes = [
   "REPOSITORY_INPUT_INVALID",
@@ -26,6 +29,8 @@ const codes = [
   "ECONNRESET",
   "EPIPE",
   "ERR_RUNTIME_FAILURE",
+  "ERR_ASSERTION",
+  "ERR_DISPOSED",
 ] as const;
 const knownMessages = [
   "Native D1 measurement missing",
@@ -55,6 +60,19 @@ const categories = [
   "provider_unavailable",
   "unknown",
 ] as const;
+const assertionSchema = z.strictObject({
+  generatedMessage: z.boolean().nullable(),
+  operator: z.literal("==").nullable(),
+  actual: z.enum(["true", "false", "null", "undefined", "other"]),
+  expected: z.enum(["true", "false", "null", "undefined", "other"]),
+  sites: z.strictObject({
+    asyncClientStatus: z.boolean(),
+    asyncResultType: z.boolean(),
+    syncClientStatus: z.boolean(),
+    responseStatus: z.boolean(),
+    syncReplyIdentity: z.boolean(),
+  }),
+});
 const chainSchema = z
   .array(
     z.strictObject({
@@ -62,6 +80,7 @@ const chainSchema = z
       code: z.enum(codes).nullable(),
       category: z.enum(categories),
       knownFailure: z.enum(knownMessages).nullable(),
+      assertion: assertionSchema.optional(),
     }),
   )
   .max(3);
@@ -76,6 +95,49 @@ export const nativeFailureHistorySchema = z.strictObject({
     .max(8),
   omitted: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
 });
+
+const unreadable = Symbol("unreadable");
+function diagnosticProperty(error: object, key: string): unknown {
+  try {
+    return Reflect.get(error, key);
+  } catch {
+    return unreadable;
+  }
+}
+function assertionOperand(value: unknown) {
+  if (value === true) return "true";
+  if (value === false) return "false";
+  if (value === null) return "null";
+  if (value === undefined) return "undefined";
+  return "other";
+}
+function assertionEvidence(error: object): z.infer<typeof assertionSchema> {
+  const generatedMessage = diagnosticProperty(error, "generatedMessage"),
+    stack = diagnosticProperty(error, "stack");
+  // These sites are for the pinned Miniflare 5.20261001.0-alpha only. A source
+  // contract test requires review on upgrades. Never retain stack/path/line,
+  // arbitrary operands (including RPC reference IDs), or assertion messages.
+  const frames = typeof stack === "string" ? stack.slice(0, 16384).split("\n").slice(0, 64) : [];
+  const at = (method: string, line: number) =>
+    frames.some(
+      (frame) =>
+        frame.includes(method) &&
+        frame.replaceAll("\\", "/").includes(`/miniflare/dist/src/index.js:${line}:`),
+    );
+  return {
+    generatedMessage: typeof generatedMessage === "boolean" ? generatedMessage : null,
+    operator: diagnosticProperty(error, "operator") === "==" ? "==" : null,
+    actual: assertionOperand(diagnosticProperty(error, "actual")),
+    expected: assertionOperand(diagnosticProperty(error, "expected")),
+    sites: {
+      asyncClientStatus: at("#parseAsyncResponse", 110451),
+      asyncResultType: at("#parseAsyncResponse", 110459),
+      syncClientStatus: at("#parseSyncResponse", 110483),
+      responseStatus: at("#maybeThrow", 110445),
+      syncReplyIdentity: at("receiveReply", 110076),
+    },
+  };
+}
 
 /** Keep the first bounded failures independently of per-request trace resets.
  * Captured errors are immediately reduced to the existing fixed allowlists. */
@@ -99,12 +161,7 @@ export function createNativeFailureHistory() {
 
 /** Synthetic test evidence only: never retain errors, messages, SQL or identities. */
 export function nativeFailure(error: unknown) {
-  const chain: {
-    name: string;
-    code: string | null;
-    category: string;
-    knownFailure: string | null;
-  }[] = [];
+  const chain: z.infer<typeof chainSchema> = [];
   const seen = new Set<object>();
   for (
     let depth = 0;
@@ -117,16 +174,13 @@ export function nativeFailure(error: unknown) {
       const code = "code" in error ? error.code : null;
       const message = "message" in error ? error.message : null;
       chain.push({
-        name:
-          typeof name === "string" && (names as readonly string[]).includes(name)
-            ? name
-            : "unknown",
-        code: typeof code === "string" && (codes as readonly string[]).includes(code) ? code : null,
+        name: names.find((allowed) => allowed === name) ?? "unknown",
+        code: codes.find((allowed) => allowed === code) ?? null,
         category: dependencyCategory(error),
-        knownFailure:
-          typeof message === "string" && (knownMessages as readonly string[]).includes(message)
-            ? message
-            : null,
+        knownFailure: knownMessages.find((allowed) => allowed === message) ?? null,
+        ...(name === "AssertionError" && code === "ERR_ASSERTION"
+          ? { assertion: assertionEvidence(error) }
+          : {}),
       });
       error = "cause" in error ? error.cause : null;
     } catch {
