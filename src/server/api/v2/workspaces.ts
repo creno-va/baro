@@ -67,7 +67,12 @@ export function createWorkspacesApi(
     // keeps the original Env/binding and its existing Better Auth cache.
     try {
       const timing = timings.get(c)?.finish();
-      if (timing) c.header("server-timing", timing, { append: true });
+      if (timing) {
+        c.header("server-timing", timing, { append: true });
+        // The same bounded numeric/enum receipt is readable in preview logs
+        // without enabling browser debugging or recording request identifiers.
+        console.info(JSON.stringify({ event: "preview_d1_timing", measurements: timing }));
+      }
     } catch {
       // An optional response diagnostic must not change the product result.
     }

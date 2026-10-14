@@ -11,9 +11,11 @@ import { countD1Calls } from "./helpers/d1-call-count";
 import { seedTestSession } from "./helpers/session";
 
 const originalFetch = globalThis.fetch;
+const originalInfo = console.info;
 const databases: Awaited<ReturnType<typeof customerWorkspaceFixture>>["db"][] = [];
 afterEach(() => {
   globalThis.fetch = originalFetch;
+  console.info = originalInfo;
   for (const db of databases.splice(0)) db.close();
 });
 
@@ -120,6 +122,10 @@ test("canonical answer save avoids duplicate reads while verifying the acknowled
 
 for (const environment of ["preview", "production"] as const)
   test(`${environment} answer save keeps all native calls and applies only preview domain timing`, async () => {
+    const logs: unknown[][] = [];
+    console.info = (...values) => {
+      logs.push(values);
+    };
     const f = await fixture(environment);
     expect((await fetch("/api/me/session")).ok).toBe(true);
     const result = await casesApi.saveAnswers(f.workspace.id, f.input);
@@ -130,6 +136,7 @@ for (const environment of ["preview", "production"] as const)
     expect(f.rows.reduce((n, row) => n + row.statements, 0)).toBe(74);
     if (environment === "production") {
       expect(f.timings.every((timing) => timing.header === null)).toBe(true);
+      expect(logs).toHaveLength(0);
       return;
     }
     expect(
@@ -139,6 +146,11 @@ for (const environment of ["preview", "production"] as const)
     ).toBe(true);
     const headers = f.timings.filter((timing) => timing.header !== null);
     expect(headers).toHaveLength(5);
+    expect(logs).toEqual(
+      headers.map(({ header }) => [
+        JSON.stringify({ event: "preview_d1_timing", measurements: header }),
+      ]),
+    );
     const counts = {
       workspace: ["workspace_read", 2, 2],
       intake: ["intake_read", 5, 6],
@@ -168,6 +180,9 @@ for (const environment of ["preview", "production"] as const)
   });
 
 test("preview domain failure keeps its original response and a bounded timing header", async () => {
+  console.info = () => {
+    throw new Error("synthetic observer failure");
+  };
   const f = await fixture("preview");
   const missing = crypto.randomUUID();
   const response = await f.transport(`/api/v2/cases/${missing}/workspace`);
