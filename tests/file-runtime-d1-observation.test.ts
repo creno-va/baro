@@ -154,6 +154,44 @@ test("a backwards clock is unknown and a measured zero duration remains zero", a
   }
 });
 
+test("clock samples may be epoch milliseconds while only the elapsed duration is bounded", async () => {
+  const output = spyOn(console, "info").mockImplementation(() => {});
+  try {
+    for (const start of [1_000_000_001, 1_792_009_000_000, Number.MAX_SAFE_INTEGER - 1000]) {
+      const f = fixture();
+      let reads = 0;
+      expect(await readRuntimeAdmission(f.statement, "preview", () => start + 100 * reads++)).toBe(
+        "synthetic-private-attempt",
+      );
+      expect(f.calls).toEqual(["all"]);
+      expect(output.mock.calls.at(-1)).toEqual([JSON.stringify(observation)]);
+    }
+  } finally {
+    output.mockRestore();
+  }
+});
+
+test("invalid epoch samples and excessive elapsed durations stay unknown", async () => {
+  const output = spyOn(console, "info").mockImplementation(() => {});
+  try {
+    for (const [start, end] of [
+      [1_792_009_000_000, 1_792_008_999_999],
+      [1_792_009_000_000, 1_793_009_000_001],
+      [Number.MAX_SAFE_INTEGER + 1, Number.MAX_SAFE_INTEGER + 1],
+      [1_792_009_000_000, NaN],
+      [Infinity, 1_792_009_000_100],
+    ] as const) {
+      const f = fixture();
+      let reads = 0;
+      await readRuntimeAdmission(f.statement, "preview", () => (reads++ === 0 ? start : end));
+      expect(output.mock.calls.at(-1)).toEqual([JSON.stringify({ ...observation, wallMs: null })]);
+      expect(f.calls).toEqual(["all"]);
+    }
+  } finally {
+    output.mockRestore();
+  }
+});
+
 test("missing or malformed metadata stays null without inventing a geographic location", async () => {
   for (const meta of [
     undefined,
