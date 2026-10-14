@@ -1,18 +1,13 @@
 import { expect, test } from "bun:test";
 import { CURRENT_POLICY_VERSIONS } from "../src/contracts/consent";
-import { createV2AccountingRepository } from "../src/server/db/v2-accounting";
-import {
-  createV2PaidRuntimeRepository,
-  type PricingProof,
-  type RuntimeProofVerifier,
-} from "../src/server/db/v2-paid-runtime";
+import { createV2DeletionRepository } from "../src/server/db/v2-deletion";
+import type { RuntimeProofVerifier } from "../src/server/db/v2-paid-runtime";
 import { createV2StoragePaidRuntimeRepository } from "../src/server/db/v2-storage-paid-runtime";
 import { createFilesService, type FileStorageCosts } from "../src/server/modules/files/service";
-import { fixture } from "./helpers/file-processing-fixture";
-import { seedStorageAdmissionProjection } from "./helpers/storage-admission";
+import { fixture, r2 } from "./helpers/file-processing-fixture";
+import { ready } from "./helpers/storage-capacity";
 
 const NOW = "2026-10-06T00:00:00.000Z",
-  EXP = "2026-11-01T00:00:00.000Z",
   HASH = "a".repeat(64);
 // Synthetic evidence only; the actual migrated SQLite/AES/R2 adapter consumer is tested.
 const verify: RuntimeProofVerifier = async (kind, _value, digest) => ({
@@ -29,109 +24,35 @@ const verify: RuntimeProofVerifier = async (kind, _value, digest) => ({
           : "authenticated_coordinator",
 });
 async function paidFixture() {
-  const f = await fixture(),
-    accounting = createV2AccountingRepository(f.core, "preview"),
-    runtime = createV2PaidRuntimeRepository(f.core, "preview", verify);
-  const allocation = {
-    month: "2026-10",
-    version: 1,
-    previewKrw: 10000,
-    productionKrw: 20000,
-    sharedFixedKrw: 100,
-    maintenanceReserveKrw: 100,
-    pricingProvenance: "synthetic",
-    fxProvenance: "synthetic",
-    fundingProvenance: "synthetic",
-    reviewedAt: NOW,
-    validUntil: EXP,
-    fundingState: "trial_credit" as const,
-    fundingValidUntil: EXP,
-    manifestHash: HASH,
-  };
-  await accounting.recordAllocation(allocation);
-  for (const environment of ["preview", "production"] as const)
-    await accounting.recordAllocationAcknowledgment({
-      month: allocation.month,
-      version: 1,
-      environment,
-      manifestHash: HASH,
-      drainReceiptId: crypto.randomUUID(),
-      now: NOW,
-    });
-  expect(await accounting.activateAllocation(allocation.month, 1, NOW)).toBe(true);
-  expect(await runtime.initializeControl(allocation.month, NOW)).toBe(true);
-  const ap = { id: crypto.randomUUID(), environment: "preview" as const, allocation };
-  expect(await runtime.putAllocationProof(ap, NOW)).toBe(true);
-  const drain = await runtime.drain(allocation.month, 1, ap.id, NOW);
-  if (!drain) throw new Error("Synthetic drain missing");
-  expect(await runtime.putRemoteDrainProof(drain, NOW)).toBe(true);
-  const remote = {
-    ...drain,
-    id: crypto.randomUUID(),
-    environment: "production" as const,
-    limitKrw: 20000,
-  };
-  expect(await runtime.putRemoteDrainProof(remote, NOW)).toBe(true);
-  expect(await runtime.activate(allocation.month, 2, ap.id, drain.id, remote.id, NOW)).toBe(true);
-  const pricing: PricingProof = {
-    id: crypto.randomUUID(),
-    version: 1,
-    environment: "preview",
-    modelBillingPolicy: null,
-    prices: [
-      {
-        sku: "r2_class_a_requests",
-        provider: "cloudflare",
-        model: null,
-        modelRates: null,
-        region: "global",
-        plan: "synthetic",
-        billingMode: "metered",
-        unit: "requests",
-        unitSize: "1",
-        usdPerUnit: "1",
-        billingQuantum: "1",
-        officialUrl: "https://developers.cloudflare.com/r2/pricing/",
-        checkedAt: NOW,
-        validUntil: EXP,
-      },
-    ],
-    fx: {
-      krwPerUsd: "1000",
-      authority: "synthetic",
-      referenceUrl: "https://example.test/fx",
-      asOf: NOW,
-      checkedAt: NOW,
-      validUntil: EXP,
+  // The same immutable proof bundle funds physical capacity and each PUT.
+  const p = await ready(
+    {},
+    {
+      pricing: (initial) => ({
+        ...initial,
+        prices: initial.prices.map((price) =>
+          price.sku === "r2_class_a_requests" ? { ...price, usdPerUnit: "1" } : price,
+        ),
+      }),
     },
-    taxRatio: "0",
-    feeRatio: "0",
-    safetyMarginRatio: "0",
-    hiddenAttemptMultiplier: 1,
-    hiddenRetryReference: "synthetic",
-    checkedAt: NOW,
-    validUntil: EXP,
+  );
+  const f = {
+    ...p,
+    bucket: r2(),
+    rev: () =>
+      Number(
+        (
+          p.db.sqlite.query("SELECT revision FROM v2_workspaces WHERE id=?").get(p.workspaceId) as {
+            revision: number;
+          }
+        ).revision,
+      ),
   };
-  const funding = {
-    id: crypto.randomUUID(),
-    environment: "preview" as const,
-    state: "trial_credit" as const,
-    existingPaymentPath: true as const,
-    autoRecharge: false as const,
-    spendAllowanceKrw: 10000,
-    reference: "synthetic",
-    observedAt: NOW,
-    validUntil: EXP,
-  };
-  expect(await runtime.putPricingProof(pricing, NOW)).toBe(true);
-  expect(await runtime.putFundingProof(funding, NOW)).toBe(true);
-  seedStorageAdmissionProjection(f.db, {
-    pricingId: pricing.id,
-    fundingId: funding.id,
-    allocationId: ap.id,
-    now: NOW,
-    expiry: EXP,
-  });
+  f.db.sqlite
+    .query("INSERT INTO v2_case_original_usage(workspace_id) VALUES(?)")
+    .run(f.workspaceId);
+  const pricing = f.pp,
+    funding = f.fp;
   const storage = createV2StoragePaidRuntimeRepository(f.core, "preview", verify);
   let current = NOW,
     beforeHook: (() => Promise<void>) | undefined,
@@ -266,6 +187,9 @@ test("actual file consumer atomically binds encrypted pending intent and hold; P
   });
   expect(f.db.sqlite.query("SELECT count(*) n FROM v2_upload_parts").get()).toEqual({ n: 1 });
   expect(f.db.sqlite.query("SELECT count(*) n FROM v2_jobs").get()).toEqual({ n: 0 });
+  expect(
+    f.db.sqlite.query("SELECT state,writer_state FROM v2_physical_blob_bindings").get(),
+  ).toEqual({ state: "held", writer_state: "stopped" });
 });
 test("pending INSERT failure rolls back financial hold; concurrent uploads admit at most one exact ordinal", async () => {
   const f = await paidFixture();
@@ -299,6 +223,9 @@ test("fresh clock after dispatch await denies expired remote PUT without refundi
   expect(f.bucket.calls.put).toBe(0);
   expect(f.observations).toEqual(["not_sent"]);
   expect(f.cost()).toEqual({ reserved_krw: 1000, ambiguous_krw: 0, settled_krw: 0 });
+  expect(f.db.sqlite.query("SELECT writer_state FROM v2_physical_blob_bindings").get()).toEqual({
+    writer_state: "stopped",
+  });
 });
 test("actual R2 ambiguity and ledger persistence failure block original receipt publication", async () => {
   const f = await paidFixture();
@@ -307,12 +234,31 @@ test("actual R2 ambiguity and ledger persistence failure block original receipt 
   expect(f.observations).toEqual(["unknown"]);
   expect(f.cost()).toEqual({ reserved_krw: 0, ambiguous_krw: 1000, settled_krw: 0 });
   expect(f.db.sqlite.query("SELECT count(*) n FROM v2_upload_parts").get()).toEqual({ n: 0 });
+  expect(
+    f.db.sqlite.query("SELECT state,writer_state FROM v2_physical_blob_bindings").get(),
+  ).toEqual({ state: "held", writer_state: "running" });
+  const deletion = createV2DeletionRepository(f.core);
+  const blob = f.db.sqlite.query("SELECT id FROM v2_blobs").get() as { id: string };
+  const journal = await deletion.findByTarget("blob", blob.id);
+  if (!journal) throw new Error("Synthetic ambiguous write journal missing");
+  const lease = await deletion.acquire(
+    journal.id,
+    crypto.randomUUID(),
+    NOW,
+    "2026-10-06T00:04:00.000Z",
+  );
+  if (!lease) throw new Error("Synthetic cleanup lease missing");
+  expect(await f.service.cleanup(lease)).toBe(false);
+  expect(f.bucket.calls.delete).toBe(0);
   const g = await paidFixture();
   g.setFailure();
   await expect(g.put()).rejects.toThrow();
   expect(g.cost()).toEqual({ reserved_krw: 1000, ambiguous_krw: 0, settled_krw: 0 });
   expect(g.db.sqlite.query("SELECT state FROM v2_blobs").get()).toEqual({ state: "deleting" });
   expect(g.db.sqlite.query("SELECT count(*) n FROM v2_upload_parts").get()).toEqual({ n: 0 });
+  expect(
+    g.db.sqlite.query("SELECT state,writer_state FROM v2_physical_blob_bindings").get(),
+  ).toEqual({ state: "held", writer_state: "stopped" });
 });
 test("production cannot use the explicit unmetered offline dependency", async () => {
   const f = await fixture();
@@ -364,7 +310,11 @@ test("pending envelope changed after dispatch await cannot send the captured bin
   f.setBefore(async () => {
     f.db.sqlite.exec("UPDATE v2_blobs SET encrypted_payload='removed'");
   });
-  await expect(f.put()).rejects.toThrow("CONFLICT");
+  await expect(f.put()).rejects.toThrow("STORAGE_UNAVAILABLE");
   expect(f.bucket.calls.put).toBe(0);
   expect(f.cost()).toEqual({ reserved_krw: 1000, ambiguous_krw: 0, settled_krw: 0 });
+  // The recovery capability cannot attest to a substituted pending envelope.
+  expect(f.db.sqlite.query("SELECT writer_state FROM v2_physical_blob_bindings").get()).toEqual({
+    writer_state: "running",
+  });
 });

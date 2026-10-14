@@ -30,6 +30,7 @@ async function fixture() {
   const app = new Hono().route("/api/v2/cases", createWorkspacesApi()).route(
     "/api/v2/cases",
     createFilesApi({
+      testOnlyMissingD1Meta: true,
       dependencies: async () => ({
         bucket: bucket as any,
         testOnlyUnmeteredStorage: true,

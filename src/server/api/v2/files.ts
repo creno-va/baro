@@ -7,6 +7,7 @@ import { createV2Core, type V2Core } from "../../db/v2-core";
 import { ProcessingError } from "../../modules/file-processing/protocol";
 import { createFileRetry } from "../../modules/file-processing/retry";
 import { FileError } from "../../modules/files/binary";
+import { fileStorageRequestCore } from "../../modules/files/limits";
 import { createFileReviewService, FileReviewError } from "../../modules/files/review";
 import { createFilesService, type FileServiceDependencies } from "../../modules/files/service";
 import { readWorkspaceFile } from "../../modules/files/workspace-read";
@@ -31,6 +32,8 @@ const publicFileError: Record<FileError["code"], V2ErrorCode> = {
 /** Mounted at /v2/cases. Dependencies are server composition, never request fields. */
 export function createFilesApi(
   options: {
+    /** Explicit offline SQLite adapter only; native D1 must supply row metadata. */
+    testOnlyMissingD1Meta?: true;
     dependencies?: (
       env: Env,
       core: V2Core,
@@ -88,10 +91,13 @@ export function createFilesApi(
     }
     return c.json(errorBody(c, "INTERNAL_ERROR", "자료 요청을 처리하지 못했어요.", true), 500);
   });
-  const service = async (env: Env, ownerId: string, sessionId?: string) => {
-    const core = createV2Core(env.DB, await createCaseDataCipher(env), {
+  const service = async (env: Env, ownerId: string, sessionId?: string, storagePart = false) => {
+    if (options.testOnlyMissingD1Meta && env.APP_ENV === "production")
+      throw new FileError("PROCESSING_UNAVAILABLE");
+    const base = createV2Core(env.DB, await createCaseDataCipher(env), {
       monthlyBudgetCapEnabled: env.MONTHLY_BUDGET_CAP_ENABLED !== "false",
     });
+    const core = storagePart ? fileStorageRequestCore(base, !options.testOnlyMissingD1Meta) : base;
     return createFilesService(core, {
       ...(await options.dependencies?.(env, core, ownerId)),
       environment: env.APP_ENV === "production" ? "production" : "preview",
@@ -154,7 +160,7 @@ export function createFilesApi(
       throw new FileError("INVALID_FILE");
     const uploadId = opaqueIdSchema.parse(c.req.header("x-upload-session"));
     return c.json(
-      await (await service(c.env, access.ownerId)).putPart(
+      await (await service(c.env, access.ownerId, undefined, true)).putPart(
         access.ownerId,
         c.req.param("caseId"),
         c.req.param("fileId"),

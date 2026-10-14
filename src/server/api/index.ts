@@ -2,6 +2,7 @@ import { type Context, Hono, type Next } from "hono";
 import { getAuth } from "../auth";
 import { AuthConfigurationError } from "../auth/env";
 import { createStorageBudgetService } from "../modules/budget/storage-ledger";
+import { createFileStorageBudget } from "../modules/files/runtime";
 import { createAssetProcessingAdmission } from "../runtime/asset-admission";
 import { createFileProcessingAdmission } from "../runtime/file-admission";
 import { createSanitizedReaders } from "../runtime/sanitized-reader";
@@ -129,11 +130,11 @@ export const api = new Hono<ApiEnvironment>()
     createFilesApi({
       dependencies: async (env, core, ownerId) => ({
         bucket: env.CASE_PRIVATE_R2,
-        paidStorage: createStorageBudgetService({
+        paidStorage: createFileStorageBudget(
           core,
+          env.APP_ENV === "production" ? "production" : "preview",
           ownerId,
-          environment: env.APP_ENV === "production" ? "production" : "preview",
-        }),
+        ),
         ...createFileProcessingAdmission(core, env),
       }),
     }),

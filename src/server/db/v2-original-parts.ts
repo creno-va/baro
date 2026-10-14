@@ -11,6 +11,12 @@ import {
   type V2Core,
 } from "./v2-core";
 import { type BlobRegistration, blobSchema } from "./v2-storage";
+import {
+  isPreparedPhysicalCapacity,
+  isPreparedWrite,
+  type PreparedPhysicalCapacity,
+  type WritePermit,
+} from "./v2-storage-capacity";
 import { isPreparedStoragePaidHold, type PreparedStoragePaidHold } from "./v2-storage-paid-runtime";
 
 export interface OriginalPartRegistration {
@@ -27,7 +33,7 @@ const pendingMetadataSchema = z.strictObject({
   ordinal: z.number().int().min(0).max(119),
 });
 function originalPartGuard(actor: Actor, input: OriginalPartRegistration, b: BlobRegistration) {
-  const eligibility = `u.id=? AND u.revision=? AND u.state='open' AND u.encrypted_payload IS NULL AND u.expires_at>? AND w.owner_id=? AND ${aliveWorkspace} AND f.state IN ('reserved','uploading') AND r.id=? AND r.kind='case_original' AND r.state='reserved' AND r.entity_id=f.id AND r.target_id=f.id AND r.workspace_id=w.id AND r.operation_id=f.operation_id AND p.owner_id=w.owner_id AND o.owner_id=w.owner_id AND o.state='admitted' AND u.reserved_bytes=f.declared_bytes AND r.byte_length=u.reserved_bytes AND EXISTS(SELECT 1 FROM v2_consents c WHERE c.file_id=f.id AND c.owner_id=w.owner_id AND c.kind='auto_processing') AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='file' AND target_id=f.id) AND ?<ceil(u.reserved_bytes/8388608.0) AND ?=min(8388608,u.reserved_bytes-?*8388608) AND NOT EXISTS(SELECT 1 FROM v2_upload_parts WHERE upload_id=u.id AND ordinal=?) AND coalesce((SELECT sum(logical_bytes) FROM v2_blobs WHERE reservation_id=r.id AND state!='deleted' AND id!=?),0)+?<=r.byte_length`;
+  const eligibility = `u.id=? AND u.revision=? AND u.state='open' AND u.encrypted_payload IS NULL AND u.expires_at>? AND w.owner_id=? AND ${aliveWorkspace} AND f.state IN ('reserved','uploading') AND r.id=? AND r.kind='case_original' AND r.state='reserved' AND r.entity_id=f.id AND r.target_id=f.id AND r.workspace_id=w.id AND r.operation_id=f.operation_id AND p.owner_id=w.owner_id AND o.owner_id=w.owner_id AND o.state='admitted' AND u.reserved_bytes=f.declared_bytes AND r.byte_length=u.reserved_bytes AND EXISTS(SELECT 1 FROM v2_consents c WHERE c.file_id=f.id AND c.owner_id=w.owner_id AND c.kind='auto_processing') AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='file' AND target_id=f.id) AND ?<ceil(u.reserved_bytes/8388608.0) AND ?=min(8388608,u.reserved_bytes-?*8388608) AND NOT EXISTS(SELECT 1 FROM v2_upload_parts WHERE upload_id=u.id AND ordinal=?) AND r.live_blob_bytes-coalesce((SELECT logical_bytes FROM v2_blobs WHERE id=? AND reservation_id=r.id AND state!='deleted'),0)+?<=r.byte_length`;
   const values = [
     input.uploadId,
     input.uploadRevision,
@@ -63,10 +69,20 @@ export function prepareOriginalPart(
   actor: Actor,
   input: OriginalPartRegistration,
   paid?: PreparedStoragePaidHold,
+  physical?: PreparedPhysicalCapacity,
 ) {
   return safe(async () => {
     const { a, b, valid } = originalInput(actor, input);
     if (!valid) return false;
+    if (
+      physical &&
+      (!isPreparedPhysicalCapacity(physical) ||
+        physical.binding.blobId !== b.id ||
+        physical.binding.ownerId !== a.ownerId ||
+        physical.binding.objectKey !== `private/${b.id}` ||
+        physical.binding.maximumCipherBytes !== b.cipherBytes)
+    )
+      return false;
     if (paid) {
       const r = paid.request;
       if (
@@ -96,12 +112,21 @@ export function prepareOriginalPart(
       uploadRevision: input.uploadRevision,
       ordinal: input.ordinal,
     });
-    if (paid) {
+    if (paid || physical) {
       const claim = crypto.randomUUID();
       return core.changed([
         core.statement(
-          `INSERT INTO v2_mutation_claims(id,owner_id,target_id,revision) SELECT ?,w.owner_id,u.id,u.revision ${from} WHERE ${eligibility} AND NOT EXISTS(SELECT 1 FROM v2_blobs WHERE id=?) AND (${paid.predicate.sql})`,
-          [claim, ...values, b.id, ...paid.predicate.values],
+          `WITH original AS MATERIALIZED (SELECT w.owner_id,u.id,u.revision ${from} WHERE ${eligibility} AND NOT EXISTS(SELECT 1 FROM v2_blobs WHERE id=?)),
+          funded AS MATERIALIZED (SELECT 1 WHERE ${paid?.predicate.sql ?? "1"}),
+          physical AS MATERIALIZED (SELECT 1 WHERE ${physical?.predicate.sql ?? "1"})
+          INSERT INTO v2_mutation_claims(id,owner_id,target_id,revision) SELECT ?,original.owner_id,original.id,original.revision FROM original CROSS JOIN funded CROSS JOIN physical`,
+          [
+            ...values,
+            b.id,
+            ...(paid?.predicate.values ?? []),
+            ...(physical?.predicate.values ?? []),
+            claim,
+          ],
         ),
         core.statement(
           `INSERT INTO v2_blobs(id,principal_id,reservation_id,kind,visibility,state,object_key,logical_bytes,cipher_bytes,cipher_hash,key_version,encrypted_payload,created_at) SELECT ?,r.principal_id,r.id,'original','private','pending',?,?,?,?,?,?,? ${from} WHERE ${eligibility} AND ${sqlClaim}`,
@@ -118,7 +143,8 @@ export function prepareOriginalPart(
             claim,
           ],
         ),
-        ...(await paid.statements(core, paid.actor, claim, metadata)),
+        ...(physical ? physical.statements(core, a, claim) : []),
+        ...(paid ? await paid.statements(core, paid.actor, claim, metadata) : []),
         core.finish(claim),
       ]);
     }
@@ -139,6 +165,67 @@ export function prepareOriginalPart(
         ],
       )
       .all<{ id: string }>();
+    return result.results.length === 1;
+  });
+}
+/** Request-internal recovery only, before any R2 call. The caller retains its
+ * pre-SQL opaque token; a failed/lost start response is not a dispatch permit.
+ * Durable immutable paid identity also survives concurrent parent deletion. */
+export function stopUnsentOriginalWrite(
+  core: V2Core,
+  input: OriginalPartRegistration & {
+    writer: WritePermit;
+    paid: PreparedStoragePaidHold;
+    pendingPayload: string;
+  },
+) {
+  return safe(async () => {
+    if (!isPreparedWrite(input.writer) || !isPreparedStoragePaidHold(input.paid)) return false;
+    const { writer, paid, pendingPayload } = input;
+    const { a, b, valid } = originalInput(paid.actor, input);
+    const r = paid.request;
+    if (
+      !valid ||
+      !pendingPayload ||
+      writer.blobId !== b.id ||
+      writer.objectKey !== `private/${b.id}` ||
+      writer.byteLength !== b.cipherBytes ||
+      r.intent.kind !== "case_original" ||
+      r.intent.uploadId !== input.uploadId ||
+      r.intent.uploadRevision !== input.uploadRevision ||
+      r.intent.ordinal !== input.ordinal ||
+      r.targetKind !== "file" ||
+      r.blobId !== b.id ||
+      r.reservationId !== b.reservationId ||
+      r.pending.logicalBytes !== b.logicalBytes ||
+      r.pending.cipherBytes !== b.cipherBytes ||
+      r.pending.cipherHash !== b.cipherHash ||
+      r.pending.keyVersion !== b.keyVersion
+    )
+      return false;
+    const result = await core
+      .statement(
+        `UPDATE v2_physical_blob_bindings SET writer_state='stopped' WHERE blob_id=? AND environment=? AND owner_id=? AND object_key=? AND maximum_cipher_bytes=? AND state='held' AND writer_state='running' AND writer_token=? AND expected_cipher_bytes=? AND EXISTS(SELECT 1 FROM v2_blobs b JOIN v2_storage_paid_executions h ON h.blob_id=b.id WHERE b.id=v2_physical_blob_bindings.blob_id AND b.reservation_id=? AND b.kind='original' AND b.visibility='private' AND b.object_key=v2_physical_blob_bindings.object_key AND b.logical_bytes=? AND b.cipher_bytes=? AND b.cipher_hash=? AND b.key_version=? AND b.created_at=? AND ((b.state='pending' AND b.encrypted_payload=?) OR (b.state='deleting' AND b.encrypted_payload='removed')) AND h.attempt_id=? AND h.payload_json=?) RETURNING blob_id`,
+        [
+          b.id,
+          writer.environment,
+          a.ownerId,
+          writer.objectKey,
+          b.cipherBytes,
+          writer.token,
+          writer.byteLength,
+          b.reservationId,
+          b.logicalBytes,
+          b.cipherBytes,
+          b.cipherHash,
+          b.keyVersion,
+          a.now,
+          pendingPayload,
+          r.attemptId,
+          JSON.stringify(r),
+        ],
+      )
+      .all<{ blob_id: string }>();
     return result.results.length === 1;
   });
 }

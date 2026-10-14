@@ -38,6 +38,7 @@ export async function reportHttpFixture() {
     .route(
       "/api/v2/cases",
       createFilesApi({
+        testOnlyMissingD1Meta: true,
         dependencies: async () => ({
           ...f.deps,
           bucket: f.bucketPort,

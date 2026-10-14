@@ -1,5 +1,72 @@
 # 자료·리포트·삭제 구현 검증
 
+## 2026-10-13 업로드 저장 연결 보완 (#58/#59/#67)
+
+**PR229 검토 후 병합 보류:** 아래 최초 구현의 D1 row receipt 한도는 실행 전
+비용 상한의 증거가 아니었다. 공용 projection·carryover·원본 합계 조회와 트리거의
+scan을 실행 전에 제한하는 공용 계약이 필요하며 총괄이 담당을 조율한다.
+`runtime.ts`의 D1 최대 수량은 아직 승인된 상한으로 간주하지 않는다.
+
+같은 PR의 미전송 정리 보완은 SQL 전에 opaque writer token을 보유하고, 성공이
+확인된 start에만 R2 dispatch를 허용한다. start commit 뒤 row 초과·metadata 누락·
+응답 유실 3건과 stop commit 뒤 응답 유실로 journal을 건너뛰는 1건을 수정 전
+실패로 재현했다. normal query 슬롯과 6개의 cleanup 슬롯을 처음부터 분리하고,
+exact paid/upload/ordinal/blob/owner/token을 검사한 stop 1문장 및 abandon journal
+5문장을 각각 시도한다. cleanup 진입은 한 번뿐이며 정상 작업으로 돌아갈 수 없다.
+stop/journal 응답 유실을 성공으로 바꾸지 않고 독립된 다음 정리 요청으로 확인한다.
+기존 beginWrite 소비자는 유지한다. 변조·복제 permit, 다른 identity, 재시작을 거부하고
+실제 R2 호출이 불명확한 writer는 running을 유지한다. cleanup SQL/trigger의 실행 전
+row 비용까지 전체 quote에 포함하는 작업은 위 공용 비용 상한 보완과 함께 남아 있다.
+
+일반 StorageCosts 포트에는 cleanup 후 `after` 전용 notification 단계도 한 번만
+허용한다. 기존 usage 기록의 2개 PK 조회와 최대 8개 transition statement에 해당하는
+10개 슬롯을 정상 작업에서 처음부터 분리한다. 이전처럼 닫힌 normal core에서
+통지하면 실제 metered core·기존 원장·합성 인증 증거 검사 4건이 실패하고,
+별도 단계 적용 뒤 5건 / 134 assertions가 통과했다. 증거가 있는 incomplete 통지는
+reserved→ambiguous로 기록하며, 증거 부재·원장 쓰기 실패는 reserved를 보존한다.
+cleanup 응답 유실과 무관하게 notification을 시도하고 원장 실패도 journal을 지우지
+않는다. 현재 production `createFileStorageBudget`는 metering을 받지 않는 고정
+구성이므로 `after`의 SQL은 0건이다. 미래 metering 구성·global freeze의 SQL/trigger
+상한이나 실제 사용료 계측까지 이번 기능 회귀로 인증하지 않는다.
+
+실제 `9fcf04f82c1fe5c9c10d1dae76ee4a998586604d`에서 합성 PDF를 한 번
+제출했으나 UI는 실패했고, 원격 읽기 진단은 file `reserved` / upload `open`,
+blob·part·job 0건이었다. 그 관찰만으로 PUT HTTP 상태를 추정하지 않는다.
+같은 전역 signed API를 로컬 production 구성에서 실행하여 reserve 201 →
+part PUT 503 / R2 호출 0을 별도로 재현했다. 파일 의존성의
+`createStorageBudgetService`에 필수 bounds가 없어 모든 신규 PUT이 거부됐다.
+
+- 기존 저장 원장에 원본 part 전용 bounds를 연결했다. 유효한 해당 환경의
+  가격·재원·할당·물리 용량 projection이 있어야 한 번의 R2 PUT을 허용한다.
+  R2 요청뿐 아니라 Worker 요청·CPU 및 D1 읽기·쓰기 수량을 함께 예약한다.
+  이 연결은 새 proof나 provider 청구 영수증을 만들지 않는다.
+- pending 원본·비용 hold·물리 binding을 같은 D1 batch에서 승인한다. 실제
+  전송 전에 writer를 running으로 기록하고, 정확한 key/size 응답 또는 미전송
+  증거로만 stopped로 바꾼다. 불명확한 전송은 running과 삭제 journal을 보존한다.
+- part 요청의 SQL statement와 batch 각 항목을 실행 전에 계수한다. 실제 D1
+  rows_read/rows_written metadata가 없거나 누적 한도를 넘으면 후속 SQL을 중단한다.
+  이미 실행된 SQL을 취소하거나 row receipt를 청구 영수증으로 간주하지 않는다.
+  비용 예약은 검증된 provider 정산이 없으면 그대로 남는다.
+- `tests/files-storage-runtime.test.ts`는 실제 workerd D1과 모든 migration,
+  전역 signed API·실제 AES·합성 R2 adapter를 사용한다. 합성 PDF reserve 201 →
+  PUT 200, 원본 바이트 복호화 일치, physical held / writer stopped, 다섯 비용 SKU,
+  중복 PUT 없는 재시도가 통과했다. preview proof만 있는 production 구성은
+  같은 요청을 503으로 거부한다. 이는 원격 R2/OAuth/Container 성공 증거가 아니다.
+- 용량 부족·projection 만료·freeze는 R2 호출 없이 차단되고, prepare 뒤 freeze는
+  pending·binding·비용 hold를 함께 롤백한다. 늦은 PUT 도중 자료 삭제는 running
+  writer의 cleanup을 차단한다. 응답 후 첫 DELETE가 실패해도 held 상태를 유지하고,
+  재시도 DELETE와 absent HEAD 후에만 용량을 해제하며 삭제한 자료의 재업로드를 거부한다.
+- 기존 자료·원본·리포트·세션 폐기·정리 회귀 12개 파일의 90 tests /
+  1,182 assertions가 통과했다. paid storage 회귀 9 tests / 208 assertions는
+  불명확한 PUT의 cleanup 차단과 정산 저장 실패 시 원본 미공개를 포함한다.
+
+총괄이 #228 리포트 수정본을 별도로 배포하며 Safari를 소유한다. 업로드 수정본의
+동일 SHA CI·배포 및 실제 저장 proof/projection 연결 뒤에 원격 인수를 재개한다.
+이전의 OAuth 2계정 요청은 이후 사용자 지시에 따라 현재 Safari의 허가된 Kakao
+계정 한 개로 진행하는 범위로 변경됐다. 다른 세션의 계정·사건을 사용하지 않는다.
+계정 간 접근 경계와 #19 격리 복구/재삭제 훈련 등 확보하지 못한 외부 증거는
+완료로 표시하지 않으며 #58/#59/#66/#67과 Goal은 미완료로 유지한다.
+
 ## 2026-10-11 실제 인수 재개
 
 인수 담당은 `BARO 자료·리포트·삭제 인수`, checkout `de87`, 브랜치
@@ -179,6 +246,30 @@ late writer의 stop 및 negative HEAD를 확인해야 한다. 누락/불명확�
 기능 PR은 `Refs`를 사용하며 담당 이슈를 닫지 않는다.
 
 ## 로컬 검증
+
+### 2026-10-14 업로드 통합 후보 (#230 → #229)
+
+#230의 bounded admission/trigger 보완을 먼저 main에 병합했다. 기존 `0010`은
+변경하지 않았다. #229를 그 위에 rebase하면서 원본의 reservation 합계를
+`live_blob_bytes`와 현재 blob PK 조회로 대체했다. 실제 D1의 expression depth
+오류는 비용 조건을 모두 보존한 균형 AND와 materialized claim으로 수정했다.
+writer 정지 성공 여부는 trigger의 `meta.changes` 대신 own-statement RETURNING으로
+판단한다. fixture는 최초 proof를 projection 전에 만들고 파생 원장을 직접 복사하지 않는다.
+
+- 관련 7개 파일: **143 tests / 2499 assertions**, 실패 0.
+- 서명된 전역 API + 실제 workerd D1 + 합성 PDF/R2: 인증부터 PUT/writer 종료까지
+  **76 statements / 460 rows read / 71 rows written**. 예약 5 SKU 및 멱등 재시도,
+  환경이 다른 proof 거부, 암호문 복호화 일치를 검증했다. 작은 합성 파일의 측정이다.
+- #230의 100/10,000개 합성 원장 비교는 admission read 13, binding read 30/write 13으로
+  같았다. 원본 claim도 과거 blob 전체 합계에 의존하지 않는다.
+- 실패 cleanup 6문장과 원장 통지 10문장은 정상 슬롯에서 미리 분리한다.
+  고정 production 구성의 통지는 SQL 0건이며 미정산 비용은 예약으로 보존한다.
+  미래 metering 포트를 추가할 때는 global freeze까지 별도 비용 검증이 필요하다.
+
+합성 실측은 공급자 청구 정산이나 원격 최대 파일/Container 성공 증거가 아니다.
+변호사 자산·공개 복사는 기존 필수 paid/physical admission을 유지하며 가격·용량
+proof가 없는 원격 경로를 성공으로 표시하지 않는다. 최종 후보의 전체 회귀 및 같은
+SHA의 preview/production 제한 인수는 #19/#57/#58/#71에 남는다.
 
 최종 명령 결과와 exact-head CI는 기능 PR 및 담당 이슈 댓글에 연결한다.
 같은 checkout의 browser/dev/build 검사는 순차 실행한다. 모든 입력은 합성이다.
