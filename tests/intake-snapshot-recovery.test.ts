@@ -83,6 +83,26 @@ function fixture(kind: "first" | "second" | "summary" = "first") {
   return { before, after, workspace, job };
 }
 
+test("intake refresh reports the persisted audit phase without claiming completion", async () => {
+  const f = fixture();
+  globalThis.fetch = (async (input) => {
+    const url = String(input);
+    if (url.endsWith("/workspace")) return Response.json(f.workspace(false));
+    if (url.endsWith("/intake")) return Response.json(f.before);
+    return Response.json({
+      ...f.job,
+      status: "validating",
+      phase: "validating",
+      progressPercent: 0,
+    });
+  }) as typeof fetch;
+  expect(await casesApi.getQuestions(ID)).toMatchObject({
+    processing: true,
+    complete: false,
+    processingMessage: "정리한 내용과 근거를 검증하고 있어요.",
+  });
+});
+
 for (const kind of ["first", "second", "summary"] as const)
   test(`${kind} completion between metadata and job reads returns the published result without a refresh`, async () => {
     const f = fixture(kind);

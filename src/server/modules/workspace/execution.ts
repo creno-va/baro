@@ -18,6 +18,7 @@ import {
   type WorkspaceContext,
   WorkspaceOutputPolicyError,
 } from "./pipeline";
+import { createWorkspaceProgress, type WorkspaceProgress } from "./progress";
 
 export const workspaceParamsSchema = z.strictObject({
   ownerId: opaqueIdSchema,
@@ -54,6 +55,7 @@ export async function executeWorkspace(
       job: V2Job,
       lease: JobLease,
       context: WorkspaceContext,
+      progress: WorkspaceProgress,
     ) => Promise<ReturnType<typeof createWorkspacePipeline>>;
   },
 ) {
@@ -100,7 +102,31 @@ export async function executeWorkspace(
       workspaceId: params.workspaceId,
       expectedRevision: params.workspaceRevision,
     });
+  let checkpointRevision = 0;
+  const progress = createWorkspaceProgress(async (phase) => {
+    if (!checkpointRevision)
+      checkpointRevision =
+        (await core
+          .statement(
+            "SELECT coalesce(max(revision),0)+1 AS revision FROM v2_job_checkpoints WHERE job_id=?",
+            [params.jobId],
+          )
+          .first<number>("revision")) ?? 1;
+    if (
+      !(await jobs.checkpoint(actor(), lease, {
+        id: crypto.randomUUID(),
+        revision: checkpointRevision++,
+        phase,
+        // Work is not proportional to tokens or phases. Show the actual stage,
+        // retaining zero until publication instead of inventing a percentage.
+        progress: 0,
+        opaqueIds: [],
+      }))
+    )
+      throw new ModelError("MODEL_UNAVAILABLE");
+  });
   try {
+    await progress.enter("context");
     const latest =
       acquired.job.kind === "chat_response"
         ? await workspace.userMessage(actor(), params.workspaceId, acquired.job.operationId)
@@ -112,7 +138,7 @@ export async function executeWorkspace(
       latest?.role === "user" ? latest : undefined,
       options.guideHosts,
     );
-    const pipeline = await options.pipeline(acquired.job, lease, context);
+    const pipeline = await options.pipeline(acquired.job, lease, context, progress);
     const fresh = async () => {
       if (!(await options.authorize(params.ownerId))) throw new ModelError("MODEL_UNAVAILABLE");
       const renewalActor = actor();
@@ -130,6 +156,7 @@ export async function executeWorkspace(
     if (acquired.job.kind === "intake_questions") {
       const questions = await pipeline.questions(context, params.jobId);
       await fresh();
+      await progress.enter("publication");
       written = await workspace.writeBatch(
         guard(),
         {
@@ -144,6 +171,7 @@ export async function executeWorkspace(
     } else if (acquired.job.kind === "intake_summary") {
       const draft = await pipeline.summary(context, params.jobId);
       await fresh();
+      await progress.enter("publication");
       const row = await core
         .statement(
           "SELECT coalesce(max(revision),0)+1 revision FROM v2_summaries WHERE workspace_id=?",
@@ -223,6 +251,7 @@ export async function executeWorkspace(
     } else if (acquired.job.kind === "chat_response") {
       const response = await pipeline.chat(context, params.jobId);
       await fresh();
+      await progress.enter("publication");
       written = await createV2WorkspaceResponseRepository(core, options.guideHosts).commit(
         guard(),
         lease,
@@ -248,8 +277,13 @@ export async function executeWorkspace(
       );
     }
     if (!written) throw new Error("Workspace changed");
-    return { jobId: params.jobId, status: "completed" as const };
+    return {
+      jobId: params.jobId,
+      status: "completed" as const,
+      stageTimings: progress.finish("completed"),
+    };
   } catch (error) {
+    const stageTimings = progress.finish("failed");
     const policyReason =
       error instanceof WorkspaceOutputPolicyError
         ? reportWorkspacePolicyFailure(error.reason)
@@ -268,6 +302,7 @@ export async function executeWorkspace(
     return {
       jobId: params.jobId,
       status: "failed" as const,
+      stageTimings,
       ...(policyReason ? { policyReason } : {}),
     };
   }

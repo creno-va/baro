@@ -111,7 +111,9 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
   const summarizing =
     result?.processingStage === "summary" ||
     (rounds.length >= roundLimit && result?.questions.every((q) => q.answerState));
-  const statusTitle = summarizing ? "사건 요약을 정리하고 있어요" : "다음 질문을 준비하고 있어요";
+  const statusTitle =
+    result?.processingMessage ??
+    (summarizing ? "사건 요약을 정리하고 있어요" : "다음 질문을 준비하고 있어요");
   const failureTitle =
     result?.failure === "POLICY_REJECTED" || result?.failure === "MODEL_SCHEMA_INVALID"
       ? "AI가 다음 질문이나 요약을 준비하지 못했어요."

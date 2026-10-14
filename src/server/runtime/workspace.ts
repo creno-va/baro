@@ -215,7 +215,7 @@ export async function runWorkspaceRuntime(
   const result = await executeWorkspace(core, params, instanceId, {
     guideHosts: GUIDE_HOSTS,
     authorize: (ownerId) => hasCustomerWorkspaceAccess(core, ownerId),
-    pipeline: async (job, lease) => {
+    pipeline: async (job, lease, _context, progress) => {
       const row = await core
         .statement(
           "SELECT h.attempt_id,p.payload_json,coalesce(c.allocation_proof_id,'observation-only') AS allocation_proof_id FROM v2_paid_holds h JOIN v2_runtime_plans p ON p.id=h.plan_id JOIN v2_cost_attempts a ON a.id=h.attempt_id LEFT JOIN v2_runtime_controls c ON c.month=a.month AND c.environment=? WHERE h.job_id=? AND h.state='prepared' AND p.target_revision=? AND p.deadline_at>? ORDER BY h.attempt_id LIMIT 1",
@@ -241,6 +241,7 @@ export async function runWorkspaceRuntime(
       };
       const gateway: ReturnType<typeof createLlmGateway> = {
         async call(phase, input, requestId, reserve, reserveCorrection, invocationId) {
+          await progress.enter(phase === "workspace_audit" ? "audit" : "generation");
           if (!(await hasCustomerWorkspaceAccess(core, params.ownerId)))
             throw new Error("Customer access unavailable");
           const currentId = invocationId ?? invocation(phase),
@@ -311,6 +312,7 @@ export async function runWorkspaceRuntime(
         reserve: async () => hasCustomerWorkspaceAccess(core, params.ownerId),
         invocation,
         retrieve: async (context, requests) => {
+          await progress.enter("retrieval");
           const sourceRepository = createV2OfficialSourceRepository(core, GUIDE_HOSTS);
           const authorize = async () => {
             if (!(await hasCustomerWorkspaceAccess(core, params.ownerId))) return false;

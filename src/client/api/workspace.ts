@@ -13,6 +13,7 @@ import {
 import { ApiError } from "./errors";
 import { createFilesApi } from "./files";
 import type { ActionView, CaseView, MessageView, TimelineView, WorkspaceView } from "./types";
+import { workspaceProgressText } from "./workspace-progress";
 
 /** Shared transport returns a Response for both mock and same-origin real requests. */
 export type WorkspaceTransport = (path: string, init?: RequestInit) => Promise<Response>;
@@ -400,10 +401,7 @@ export function createWorkspaceApi(
         messages.push({
           id: messageId,
           role: "assistant",
-          text:
-            job.status === "failed"
-              ? "응답을 완료하지 못했어요."
-              : "추가된 내용을 정리하고 있어요.",
+          text: job.status === "failed" ? "응답을 완료하지 못했어요." : workspaceProgressText(job),
           status: job.status === "failed" ? "failed" : "pending",
           retryable:
             job.status === "failed" &&

@@ -45,10 +45,12 @@ async function fixture() {
     { monthlyBudgetCapEnabled: false },
   );
   const calls: string[] = [];
+  const observedPhases: { status: string; phase: string; progress: number }[] = [];
   let transportError = false,
     invalidDraft = false,
     repeatedQuestions = false,
     rejectedAudit = false,
+    requestSources = false,
     phaseDurationMs = 0;
   const env = {
     ...owner.env,
@@ -71,6 +73,13 @@ async function fixture() {
         };
         const phase = wire.response_format.json_schema.name;
         calls.push(phase);
+        const active = await core
+          .statement(
+            "SELECT j.status,j.phase,j.progress FROM v2_jobs j JOIN v2_workspaces w ON w.current_job_id=j.id WHERE w.id=?",
+            [workspace.id],
+          )
+          .first<{ status: string; phase: string; progress: number }>();
+        if (active) observedPhases.push(active);
         if (phaseDurationMs) setSystemTime(new Date(Date.now() + phaseDurationMs));
         if (transportError) throw new Error("Synthetic provider unavailable");
         const context = JSON.parse(wire.messages[1]?.content ?? "null").data as WorkspaceContext;
@@ -131,7 +140,10 @@ async function fixture() {
             facts: [],
             actions: [],
             parties: [],
-            requestedSources: [],
+            requestedSources:
+              requestSources && !context.sourceLookupPerformed
+                ? [{ kind: "precedent", concept: "임대차" }]
+                : [],
             timeline: [],
           };
         }
@@ -194,6 +206,10 @@ async function fixture() {
     service,
     workspace,
     calls,
+    observedPhases,
+    requestLegalSources: () => {
+      requestSources = true;
+    },
     execute,
     advance,
     failTransport: (value: boolean) => {
@@ -218,7 +234,20 @@ test("funded runtime completes two follow-up rounds, summary and chat through th
   const f = await fixture();
   for (let index = 0; index < 2; index++) {
     const queued = await f.advance();
-    expect((await f.execute(queued.jobId)).status).toBe("completed");
+    const result = await f.execute(queued.jobId);
+    expect(result.status).toBe("completed");
+    expect("stageTimings" in result && result.stageTimings?.map((timing) => timing.stage)).toEqual([
+      "context",
+      "generation",
+      "audit",
+      "publication",
+    ]);
+    if ("stageTimings" in result)
+      for (const timing of result.stageTimings ?? []) {
+        expect(timing.outcome).toBe("completed");
+        expect(timing.durationMs).toBeGreaterThanOrEqual(0);
+        expect(Object.keys(timing).sort()).toEqual(["durationMs", "outcome", "stage"]);
+      }
     const intake = await f.service.intake(f.owner.userId, f.workspace.id);
     const batch = intake?.batches[index];
     if (!batch || !intake) throw new Error("Question batch missing");
@@ -243,6 +272,12 @@ test("funded runtime completes two follow-up rounds, summary and chat through th
   });
   expect((await f.execute(chat.jobId)).status).toBe("completed");
   expect(f.calls).toHaveLength(8);
+  expect(f.observedPhases).toEqual(
+    Array.from({ length: 4 }, () => [
+      { status: "running", phase: "generating", progress: 0 },
+      { status: "validating", phase: "validating", progress: 0 },
+    ]).flat(),
+  );
   expect(f.calls.filter((phase) => phase.includes("audit"))).toHaveLength(4);
   expect((await f.service.messages(f.owner.userId, f.workspace.id)).map((m) => m.role)).toContain(
     "assistant",
@@ -263,6 +298,60 @@ test("schema correction is separately paid and its validated result is published
   expect((await f.execute(queued.jobId)).status).toBe("completed");
   expect(f.calls).toHaveLength(3);
   expect(f.calls[2]).toContain("audit");
+});
+
+test("legal lookup records retrieval between generation and audit even when the source is unavailable", async () => {
+  const f = await fixture();
+  for (let index = 0; index < 2; index++) {
+    const queued = await f.advance();
+    await f.execute(queued.jobId);
+    const intake = await f.service.intake(f.owner.userId, f.workspace.id);
+    const batch = intake?.batches[index];
+    if (!intake || !batch) throw new Error("Question batch missing");
+    await f.service.answers(f.owner.userId, f.workspace.id, crypto.randomUUID(), {
+      expectedRevision: intake.revision,
+      answers: batch.questions.map((question) => ({ questionId: question.id, status: "unknown" })),
+    });
+  }
+  await f.execute((await f.advance()).jobId);
+  const intake = await f.service.intake(f.owner.userId, f.workspace.id);
+  if (!intake?.summary) throw new Error("Summary missing");
+  await f.service.confirm(f.owner.userId, f.workspace.id, crypto.randomUUID(), {
+    expectedRevision: intake.revision,
+    summaryRevision: intake.summary.revision,
+  });
+  f.requestLegalSources();
+  const chat = await f.service.send(f.owner.userId, f.workspace.id, crypto.randomUUID(), {
+    expectedRevision: (await f.service.find(f.owner.userId, f.workspace.id)).workspaceRevision,
+    text: "임대차 관련 공식 자료를 확인하고 싶습니다.",
+    selectedFileIds: [],
+  });
+  // The fixture has no law API credential, so this cannot make a live external request.
+  const result = await f.execute(chat.jobId);
+  expect(result.status).toBe("completed");
+  expect("stageTimings" in result && result.stageTimings?.map((timing) => timing.stage)).toEqual([
+    "context",
+    "generation",
+    "retrieval",
+    "generation",
+    "audit",
+    "publication",
+  ]);
+  expect(result.legalRetrieval).toEqual([
+    { kind: "precedent", availability: "unavailable", reason: "configuration_missing" },
+  ]);
+  expect(
+    f.preview.sqlite
+      .query("SELECT phase FROM v2_job_checkpoints WHERE job_id=? ORDER BY revision")
+      .all(chat.jobId),
+  ).toEqual([
+    { phase: "admission" },
+    { phase: "generating" },
+    { phase: "retrieving" },
+    { phase: "generating" },
+    { phase: "validating" },
+    { phase: "assembling" },
+  ]);
 });
 
 test("a repeated follow-up is regenerated with paid admission and preserves the saved answer", async () => {
@@ -384,10 +473,16 @@ test("provider outage preserves failure and a user retry runs with a new paid ad
   const f = await fixture();
   f.failTransport(true);
   const queued = await f.advance();
-  expect((await f.execute(queued.jobId)).status).toBe("failed");
+  const result = await f.execute(queued.jobId);
+  expect(result.status).toBe("failed");
+  expect("stageTimings" in result && result.stageTimings?.at(-1)).toMatchObject({
+    stage: "generation",
+    outcome: "failed",
+  });
   const failed = await f.service.job(f.owner.userId, f.workspace.id, queued.jobId);
   expect(failed.failure).toBe("MODEL_UNAVAILABLE");
   expect(failed.retryable).toBe(true);
+  expect(failed.phase).toBe("generating");
   f.failTransport(false);
   const current = await f.service.find(f.owner.userId, f.workspace.id);
   await f.service.retry(f.owner.userId, f.workspace.id, queued.jobId, {
