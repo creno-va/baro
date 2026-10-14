@@ -65,7 +65,7 @@ function transport(f: Fixture, cookie = f.cookie) {
 }
 const path = (f: Fixture) => `/api/v2/cases/${f.workspaceId}/files/${f.selectedFileId}`;
 
-test("large observations keep compact bound while workspace and report lists read only coverage", async () => {
+test("large observations keep compact bound while workspace reads metadata and report lists read coverage", async () => {
   const f = await reportHttpFixture();
   f.app.route("/api/v2/cases", createWorkspacesApi());
   for (let i = 0; i < 4; i++) await readyFile(f, `합성 추가 원본 ${i}`);
@@ -115,7 +115,7 @@ test("large observations keep compact bound while workspace and report lists rea
   expect(workspace.files).toHaveLength(6);
   expect(workspace.files.find((file) => file.id === f.selectedFileId)).toMatchObject({
     extractedText: "",
-    coverage: "문서 1쪽 중 1쪽 확인 가능",
+    coverage: "자료 확인에서 처리 범위를 확인할 수 있어요.",
   });
   expect((await client.getFiles(f.workspaceId)).files).toHaveLength(6);
   const files = createFilesApi(call);
