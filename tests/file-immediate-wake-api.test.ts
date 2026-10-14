@@ -11,6 +11,7 @@ import {
   createFileProcessingDispatcher,
   type FileProcessingBinding,
 } from "../src/server/modules/file-processing/dispatch";
+import { ProcessingError } from "../src/server/modules/file-processing/protocol";
 import { digest } from "../src/server/modules/files/binary";
 import { createFileStorageBudget } from "../src/server/modules/files/runtime";
 import type { PrivateBucket } from "../src/server/modules/files/service";
@@ -38,6 +39,7 @@ async function fixture(
     taskThrows?: boolean;
     concurrentCron?: boolean;
     uploadedOnly?: boolean;
+    probeFailure?: "FILE_REJECTED" | "FILE_PROCESSING_FAILED";
   } = {},
 ) {
   const db = await createTestDatabase();
@@ -168,6 +170,7 @@ async function fixture(
           probe: async (input) => {
             const bytes = await new Response(input.open()).arrayBuffer();
             expect(bytes.byteLength).toBe(input.byteLength);
+            if (options.probeFailure) throw new ProcessingError(options.probeFailure);
             return {
               category: "document",
               format: "txt",
@@ -303,6 +306,27 @@ async function fixture(
       time += 61000;
     },
   };
+}
+
+for (const probeFailure of ["FILE_REJECTED", "FILE_PROCESSING_FAILED"] as const) {
+  test(`signed file probe ${probeFailure} preserves parts and distinguishes permanent rejection`, async () => {
+    const f = await fixture({ probeFailure });
+    const objects = [...f.objects].map(([key, value]) => [key, [...value]]);
+    const response = await f.complete();
+    const rejected = probeFailure === "FILE_REJECTED";
+    expect(response.status).toBe(rejected ? 400 : 503);
+    expect(await response.json()).toMatchObject({
+      error: { code: probeFailure, retryable: !rejected },
+    });
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
+    expect(f.pending).toHaveLength(0);
+    expect(f.created()).toBe(0);
+    expect(f.outbox()).toBeNull();
+    expect([...f.objects].map(([key, value]) => [key, [...value]])).toEqual(objects);
+    expect(
+      f.db.sqlite.query("SELECT state,current_job_id FROM v2_files WHERE id=?").get(f.fileId),
+    ).toEqual({ state: "reserved", current_job_id: null });
+  });
 }
 
 test("signed file complete wakes its committed exact job only after the admission ACK", async () => {
