@@ -606,7 +606,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
         fileCount={ready ? view?.files.length : undefined}
       />
       <div className="workspace-feedback" aria-live="polite" aria-atomic="true">
-        {notice}
+        {notice || (busy === "file-retry" ? "자료 처리 요청을 확인하고 있어요…" : "")}
       </div>
       {error && (
         <section className="workspace-error" role="alert">
