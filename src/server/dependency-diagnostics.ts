@@ -11,6 +11,7 @@ export type DependencyCategory =
   | "provider_auth"
   | "provider_budget"
   | "provider_rate"
+  | "provider_timeout"
   | "provider_request"
   | "provider_unavailable"
   | "unknown";
@@ -117,6 +118,7 @@ export function reportProviderFailure(failure: {
     "provider_auth",
     "provider_budget",
     "provider_rate",
+    "provider_timeout",
     "provider_request",
     "provider_unavailable",
   ].includes(failure.category)
