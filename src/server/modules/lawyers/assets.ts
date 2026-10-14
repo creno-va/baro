@@ -6,6 +6,7 @@ import {
   revisionSchema,
   timestampSchema,
 } from "../../../contracts";
+import { CURRENT_POLICY_VERSIONS } from "../../../contracts/consent";
 import { v2LawyerAssetUploadRequestSchema } from "../../../contracts/v2";
 import * as schema from "../../db/schema";
 import { createV2AccountingRepository } from "../../db/v2-accounting";
@@ -67,6 +68,7 @@ type BlobRow = {
   logical_bytes: number;
   key_version: string;
 };
+type OriginalScope = { profileId: string; assetRevision: number };
 
 export function createLawyerAssetsService(core: V2Core, deps: LawyerAssetDependencies) {
   const capacity = createV2StorageCapacityRepository(core, deps.environment);
@@ -112,16 +114,51 @@ export function createLawyerAssetsService(core: V2Core, deps: LawyerAssetDepende
     if (!value || value.logical_bytes !== row.byte_length) throw new LawyerError("NOT_FOUND");
     return value;
   };
+  // A processor source read observes the same owner, consent, source and exact
+  // asset revision in one snapshot. Its caller still checks the live job lease
+  // separately at every original IO/decryption boundary.
+  const originalSnapshot = (ownerId: string, id: string, scope: OriginalScope) => {
+    opaqueIdSchema.parse(id);
+    return core
+      .statement(
+        `SELECT b.* FROM v2_assets a JOIN v2_profiles p ON p.id=a.profile_id
+        JOIN v2_blobs b ON b.id=a.original_blob_id
+        JOIN v2_storage_reservations r ON r.id=b.reservation_id AND r.entity_id=a.id AND r.kind='lawyer_asset'
+        JOIN v2_billing_principals reserved_principal ON reserved_principal.id=r.principal_id
+        JOIN v2_billing_principals principal ON principal.id=b.principal_id
+        WHERE a.id=? AND a.owner_id=? AND a.profile_id=? AND a.revision=? AND a.state IN ('uploaded','sanitizing')
+        AND reserved_principal.owner_id=a.owner_id AND principal.owner_id=a.owner_id AND r.state!='released'
+        AND b.state='stored' AND b.visibility='private' AND b.key_version='asset_binary_v1'
+        AND b.kind IN ('verification','portfolio_original','profile_photo_original') AND b.logical_bytes=r.byte_length
+        AND EXISTS(SELECT 1 FROM user_consents consent WHERE consent.user_id=a.owner_id AND consent.terms_version=? AND consent.privacy_version=? AND consent.ai_notice_version=? AND consent.over_14_confirmed=1)
+        AND NOT EXISTS(SELECT 1 FROM v2_tombstones t WHERE (t.target_kind='account' AND t.target_id=a.owner_id) OR (t.target_kind='profile' AND t.target_id=p.id) OR (t.target_kind='asset' AND t.target_id=a.id))`,
+        [
+          id,
+          ownerId,
+          scope.profileId,
+          scope.assetRevision,
+          CURRENT_POLICY_VERSIONS.termsVersion,
+          CURRENT_POLICY_VERSIONS.privacyVersion,
+          CURRENT_POLICY_VERSIONS.aiNoticeVersion,
+        ],
+      )
+      .first<BlobRow>();
+  };
   const open = async (
     ownerId: string,
     id: string,
     additionalAuth: () => Promise<boolean> = async () => true,
+    processorScope?: OriginalScope,
   ) => {
     if (!(await additionalAuth())) throw new LawyerError("NOT_FOUND");
-    if (!(await hasCurrentConsent(drizzle(core.binding, { schema }), ownerId)))
-      throw new LawyerError("PROCESSING_UNAVAILABLE");
-    const row = await assetRow(ownerId, id);
-    const original = await blob(row, ownerId);
+    let original: BlobRow | null;
+    if (processorScope) original = await originalSnapshot(ownerId, id, processorScope);
+    else {
+      if (!(await hasCurrentConsent(drizzle(core.binding, { schema }), ownerId)))
+        throw new LawyerError("PROCESSING_UNAVAILABLE");
+      original = await blob(await assetRow(ownerId, id), ownerId);
+    }
+    if (!original) throw new LawyerError("NOT_FOUND");
     const receipt = await core.decrypt(
       "v2_blobs",
       original.id,
@@ -131,6 +168,19 @@ export function createLawyerAssetsService(core: V2Core, deps: LawyerAssetDepende
       z.strictObject({ contentHash: hashSchema }),
     );
     const authorized = async () => {
+      if (processorScope) {
+        if (!(await additionalAuth())) return false;
+        try {
+          const current = await originalSnapshot(ownerId, id, processorScope);
+          return (
+            current?.id === original.id &&
+            current.cipher_hash === original.cipher_hash &&
+            current.encrypted_payload === original.encrypted_payload
+          );
+        } catch {
+          return false;
+        }
+      }
       if (
         !(await additionalAuth()) ||
         !(await hasCurrentConsent(drizzle(core.binding, { schema }), ownerId))
@@ -190,20 +240,10 @@ export function createLawyerAssetsService(core: V2Core, deps: LawyerAssetDepende
     ) {
       opaqueIdSchema.parse(input.profileId);
       revisionSchema.parse(input.assetRevision);
-      const permitted = async () => {
-        if (!(await authorized())) return false;
-        try {
-          const current = await assetRow(input.ownerId, input.assetId);
-          return (
-            current.profile_id === input.profileId &&
-            current.revision === input.assetRevision &&
-            ["uploaded", "sanitizing"].includes(current.state)
-          );
-        } catch {
-          return false;
-        }
-      };
-      return open(input.ownerId, input.assetId, permitted);
+      return open(input.ownerId, input.assetId, authorized, {
+        profileId: input.profileId,
+        assetRevision: input.assetRevision,
+      });
     },
     async list(ownerId: string, group: "verification" | "portfolio", after?: string, limit = 20) {
       z.number().int().min(1).max(20).parse(limit);

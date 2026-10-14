@@ -8,6 +8,7 @@ import { createLawyerAssetsService } from "../src/server/modules/lawyers/assets"
 import { createAssetProcessingAdmission } from "../src/server/runtime/asset-admission";
 import { countD1Calls } from "./helpers/d1-call-count";
 import { fixture } from "./helpers/file-processing-fixture";
+import { seedTestSession } from "./helpers/session";
 
 // Only native codec output and R2 IO are local adapters. Admission, encryption,
 // actual runtime factory, source decoding, physical ledger and publication run.
@@ -351,7 +352,7 @@ test("writer-stop persistence failure preserves independent cleanup and the real
     expect(f.bucket.objects.has(`private/${derivative.id}`)).toBe(true);
   }));
 
-test("asset runtime checks current consent and source atomically with 62 fewer D1 reads", () =>
+test("asset runtime preserves all current/source boundaries with 77 fewer D1 reads", () =>
   withFixedLength(async () => {
     let measured!: ReturnType<typeof countD1Calls>;
     const f = await setup((database) => {
@@ -359,6 +360,7 @@ test("asset runtime checks current consent and source atomically with 62 fewer D
       return measured.binding;
     });
     let currentReads = 0,
+      originalSnapshotReads = 0,
       separateConsentReads = 0;
     measured.after((statements) => {
       for (const sql of statements) {
@@ -366,14 +368,18 @@ test("asset runtime checks current consent and source atomically with 62 fewer D
           currentReads++;
           expect(sql).toContain("EXISTS(SELECT 1 FROM user_consents consent");
           expect(sql).toContain("consent.over_14_confirmed=1");
-        } else if (sql.includes("user_consents")) separateConsentReads++;
+        } else if (sql.includes("reserved_principal.owner_id=a.owner_id")) originalSnapshotReads++;
+        else if (sql.includes("user_consents")) separateConsentReads++;
       }
     });
     expect(await f.runtime.run(new AbortController().signal)).toMatchObject({ status: "ready" });
     // Same factory + one-chunk JPEG baseline: 173 calls / 209 statements.
-    expect(measured.work).toEqual({ calls: 111, statements: 147 });
+    // PR269 combined current-source reads to 111/147. The five original source
+    // boundaries now combine 4 further reads into 1 each: 96/132, without cache.
+    expect(measured.work).toEqual({ calls: 96, statements: 132 });
     expect(currentReads).toBe(31);
-    expect(separateConsentReads).toBe(8);
+    expect(originalSnapshotReads).toBe(5);
+    expect(separateConsentReads).toBe(3);
     expect(f.nativeCalls()).toBe(1);
     expect(f.bucket.calls.put).toBe(2);
     const stageTimings = f.runtime.timings();
@@ -394,6 +400,188 @@ test("asset runtime checks current consent and source atomically with 62 fewer D
       expect(timing.durationMs).toBeGreaterThanOrEqual(0);
     }
   }));
+
+for (const boundary of [1, 2, 3, 4, 5])
+  test(`original source boundary ${boundary} rechecks consent before IO or plaintext yield`, () =>
+    withFixedLength(async () => {
+      let measured!: ReturnType<typeof countD1Calls>;
+      const f = await setup((database) => {
+        measured = countD1Calls(database);
+        return measured.binding;
+      });
+      let reads = 0;
+      measured.before((statements) => {
+        if (!statements.some((sql) => sql.includes("reserved_principal.owner_id=a.owner_id")))
+          return;
+        if (++reads === boundary)
+          f.db.sqlite.query("DELETE FROM user_consents WHERE user_id=?").run(f.params.ownerId);
+      });
+      await expect(f.runtime.run(new AbortController().signal)).rejects.toMatchObject({
+        code: boundary <= 3 ? "STORAGE_UNAVAILABLE" : "FILE_PROCESSING_FAILED",
+      });
+      expect(reads).toBe(boundary);
+      expect(f.bucket.calls.get).toBe(boundary <= 2 ? 0 : 1);
+      expect(f.nativeCalls()).toBe(boundary <= 3 ? 0 : 1);
+      expect(f.bucket.calls.put).toBe(1);
+    }));
+
+for (const mutation of [
+  "terms",
+  "privacy",
+  "ai_notice",
+  "over14",
+  "owner",
+  "profile",
+  "revision",
+  "state",
+  "account_deleted",
+  "profile_deleted",
+  "asset_deleted",
+  "source_deleted",
+  "source_hash",
+  "source_payload",
+  "reservation_released",
+  "reservation_bytes",
+] as const)
+  test(`final original source snapshot rejects ${mutation} before decrypted bytes leave the worker`, () =>
+    withFixedLength(async () => {
+      let measured!: ReturnType<typeof countD1Calls>;
+      const f = await setup((database) => {
+        measured = countD1Calls(database);
+        return measured.binding;
+      });
+      const foreign = await seedTestSession(f.db, { consent: true });
+      const foreignProfile = crypto.randomUUID();
+      expect(
+        await createV2LawyersRepository(f.core).createProfile(
+          { ownerId: foreign.userId, now: f.actor.now },
+          foreignProfile,
+        ),
+      ).toBe(true);
+      let reads = 0;
+      measured.before((statements) => {
+        if (
+          !statements.some((sql) => sql.includes("reserved_principal.owner_id=a.owner_id")) ||
+          ++reads !== 5
+        )
+          return;
+        if (["terms", "privacy", "ai_notice"].includes(mutation)) {
+          const column =
+            mutation === "terms"
+              ? "terms_version"
+              : mutation === "privacy"
+                ? "privacy_version"
+                : "ai_notice_version";
+          f.db.sqlite
+            .query(`UPDATE user_consents SET ${column}='stale' WHERE user_id=?`)
+            .run(f.params.ownerId);
+        } else if (mutation === "over14")
+          f.db.sqlite
+            .query("UPDATE user_consents SET over_14_confirmed=0 WHERE user_id=?")
+            .run(f.params.ownerId);
+        else if (mutation === "owner")
+          f.db.sqlite
+            .query("UPDATE v2_assets SET owner_id=? WHERE id=?")
+            .run(foreign.userId, f.params.assetId);
+        else if (mutation === "profile")
+          f.db.sqlite
+            .query("UPDATE v2_assets SET profile_id=? WHERE id=?")
+            .run(foreignProfile, f.params.assetId);
+        else if (mutation === "revision")
+          f.db.sqlite
+            .query("UPDATE v2_assets SET revision=revision+1 WHERE id=?")
+            .run(f.params.assetId);
+        else if (mutation === "state")
+          f.db.sqlite.query("UPDATE v2_assets SET state='failed' WHERE id=?").run(f.params.assetId);
+        else if (mutation === "source_deleted")
+          f.db.sqlite
+            .query(
+              "UPDATE v2_blobs SET state='deleting' WHERE id=(SELECT original_blob_id FROM v2_assets WHERE id=?)",
+            )
+            .run(f.params.assetId);
+        else if (mutation === "source_hash")
+          f.db.sqlite
+            .query(
+              "UPDATE v2_blobs SET cipher_hash=? WHERE id=(SELECT original_blob_id FROM v2_assets WHERE id=?)",
+            )
+            .run("0".repeat(64), f.params.assetId);
+        else if (mutation === "source_payload")
+          f.db.sqlite
+            .query(
+              "UPDATE v2_blobs SET encrypted_payload='changed-synthetic-ciphertext' WHERE id=(SELECT original_blob_id FROM v2_assets WHERE id=?)",
+            )
+            .run(f.params.assetId);
+        else if (mutation === "reservation_released")
+          f.db.sqlite
+            .query(
+              "UPDATE v2_storage_reservations SET state='released' WHERE id=(SELECT reservation_id FROM v2_blobs WHERE id=(SELECT original_blob_id FROM v2_assets WHERE id=?))",
+            )
+            .run(f.params.assetId);
+        else if (mutation === "reservation_bytes")
+          f.db.sqlite
+            .query(
+              "UPDATE v2_storage_reservations SET byte_length=byte_length+1 WHERE id=(SELECT reservation_id FROM v2_blobs WHERE id=(SELECT original_blob_id FROM v2_assets WHERE id=?))",
+            )
+            .run(f.params.assetId);
+        else
+          f.db.sqlite
+            .query("INSERT INTO v2_tombstones(target_kind,target_id,deleted_at) VALUES(?,?,?)")
+            .run(
+              mutation === "account_deleted"
+                ? "account"
+                : mutation === "profile_deleted"
+                  ? "profile"
+                  : "asset",
+              mutation === "account_deleted"
+                ? f.params.ownerId
+                : mutation === "profile_deleted"
+                  ? f.params.profileId
+                  : f.params.assetId,
+              new Date().toISOString(),
+            );
+      });
+      await expect(f.runtime.run(new AbortController().signal)).rejects.toMatchObject({
+        code: "FILE_PROCESSING_FAILED",
+      });
+      expect(reads).toBe(5);
+      expect(f.nativeCalls()).toBe(1);
+      expect(f.bucket.calls.put).toBe(1);
+    }));
+
+for (const mutation of ["lease_expired", "lease_fenced"] as const)
+  test(`original source keeps its final job authorization after ${mutation}`, () =>
+    withFixedLength(async () => {
+      let measured!: ReturnType<typeof countD1Calls>;
+      const f = await setup((database) => {
+        measured = countD1Calls(database);
+        return measured.binding;
+      });
+      let sourceReads = 0,
+        changed = false;
+      measured.before((statements) => {
+        if (statements.some((sql) => sql.includes("reserved_principal.owner_id=a.owner_id")))
+          sourceReads++;
+        if (
+          changed ||
+          sourceReads !== 4 ||
+          !statements.some((sql) => sql.includes("original.encrypted_payload AS source_payload"))
+        )
+          return;
+        changed = true;
+        if (mutation === "lease_expired")
+          f.db.sqlite
+            .query("UPDATE v2_jobs SET lease_until='2000-01-01T00:00:00.000Z' WHERE id=?")
+            .run(f.params.jobId);
+        else
+          f.db.sqlite.query("UPDATE v2_jobs SET fencing=fencing+1 WHERE id=?").run(f.params.jobId);
+      });
+      await expect(f.runtime.run(new AbortController().signal)).rejects.toMatchObject({
+        code: "FILE_PROCESSING_FAILED",
+      });
+      expect(changed).toBe(true);
+      expect(sourceReads).toBe(4);
+      expect(f.bucket.calls.put).toBe(1);
+    }));
 
 for (const mutation of [
   "consent_removed",
