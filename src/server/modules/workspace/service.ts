@@ -314,7 +314,7 @@ export function createWorkspaceService(core: V2Core, deps: WorkspaceDependencies
       const request = v2CreateCaseRequestSchema.parse(raw);
       const { turnstileToken: _, ...business } = request;
       const a = await admission(key, business);
-      const result = await workspace.create(actor(ownerId), crypto.randomUUID(), request, a);
+      const result = await workspace.create(actor(ownerId), crypto.randomUUID(), business, a);
       if (result.kind === "conflict") throw new WorkspaceError("IDEMPOTENCY_CONFLICT");
       if (result.kind === "rejected") throw new WorkspaceError("USER_QUOTA_EXCEEDED");
       const id = result.kind === "created" ? result.workspace?.id : result.operation.workspace_id;

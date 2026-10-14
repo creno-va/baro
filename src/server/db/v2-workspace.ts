@@ -56,6 +56,16 @@ import {
 import { appendSummaryEntities, summaryAdditions } from "./v2-current-summary";
 import { type MutationReceipt, mutationTools } from "./v2-mutation-receipts";
 import { createV2StagingRepository } from "./v2-staging";
+import {
+  type WorkspaceCreationSource,
+  workspaceCreationSourcePredicate,
+} from "./v2-workspace-create-guard";
+
+export const workspaceCreateDataSchema = v2CreateCaseRequestSchema.omit({ turnstileToken: true });
+export type WorkspaceCreateData = z.infer<typeof workspaceCreateDataSchema>;
+// Existing server callers may still supply the full validated HTTP input. The
+// business-only form lets internal data preparation avoid inventing a token.
+const repositoryCreateSchema = z.union([workspaceCreateDataSchema, v2CreateCaseRequestSchema]);
 
 export interface Admission {
   operationId: string;
@@ -539,12 +549,21 @@ export function createV2WorkspaceRepository(
     accounting,
     findWorkspace: (actor: Actor, id: string) => safe(() => findWorkspace(actor, id)),
     readIntake: (actor: Actor, id: string) => safe(() => readIntake(actor, id)),
-    create(actor: Actor, id: string, request: V2CreateCaseRequest, admission: Admission) {
+    create(
+      actor: Actor,
+      id: string,
+      request: WorkspaceCreateData | V2CreateCaseRequest,
+      admission: Admission,
+      source?: WorkspaceCreationSource,
+    ) {
       return safe(async () => {
         actor = parse(actorSchema, { ownerId: actor.ownerId, now: actor.now });
         parse(opaqueIdSchema, id);
-        const body = parse(v2CreateCaseRequestSchema, request);
+        const body = parse(repositoryCreateSchema, request);
         parse(admissionSchema, admission);
+        const fence = source
+          ? workspaceCreationSourcePredicate(source, actor.ownerId)
+          : { sql: "1", values: [] };
         const replay = await accounting.findOperation(
           actor,
           "/api/v2/cases",
@@ -564,7 +583,7 @@ export function createV2WorkspaceRepository(
         });
         const success = await core.changed([
           core.statement(
-            `INSERT INTO v2_mutation_claims(id,owner_id,target_id,revision) SELECT ?,id,?,1 FROM user WHERE id=? AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE ((target_kind='account' AND target_id=?) OR (target_kind='workspace' AND target_id=?))) AND (${predicate.sql}) AND NOT EXISTS(SELECT 1 FROM v2_idempotency WHERE owner_id=? AND route='/api/v2/cases' AND key=? AND expires_at>?)`,
+            `INSERT INTO v2_mutation_claims(id,owner_id,target_id,revision) SELECT ?,id,?,1 FROM user WHERE id=? AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE ((target_kind='account' AND target_id=?) OR (target_kind='workspace' AND target_id=?))) AND (${predicate.sql}) AND (${fence.sql}) AND NOT EXISTS(SELECT 1 FROM v2_workspaces WHERE id=?) AND NOT EXISTS(SELECT 1 FROM v2_operations WHERE id=?) AND NOT EXISTS(SELECT 1 FROM v2_idempotency WHERE owner_id=? AND route='/api/v2/cases' AND key=? AND expires_at>?)`,
             [
               claimId,
               id,
@@ -572,6 +591,9 @@ export function createV2WorkspaceRepository(
               actor.ownerId,
               id,
               ...predicate.values,
+              ...fence.values,
+              id,
+              admission.operationId,
               actor.ownerId,
               admission.key,
               actor.now,
