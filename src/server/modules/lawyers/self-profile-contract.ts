@@ -72,7 +72,7 @@ export const selfProfileSchema = z
 export type SelfProfile = z.infer<typeof selfProfileSchema>;
 export const selfDirectoryPageSchema = z.strictObject({
   items: selfProfileSchema.array().max(50),
-  nextCursor: z.string().min(1).max(128).nullable(),
+  nextCursor: z.string().min(1).max(2048).nullable(),
 });
 export function isDuplicateProfileSave(current: SelfProfile, incoming: SelfProfile) {
   return (

@@ -1,6 +1,7 @@
 import { ArrowRight, ChevronDown, Info, MapPin, Search, UserRound } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, type LawyerView, lawyerErrorMessage } from "../../client/api/lawyers";
+import { api, lawyerErrorMessage } from "../../client/api/lawyers";
+import type { DirectoryItem } from "../../contracts/v2";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { PageHeader } from "../ui/page-header";
@@ -10,33 +11,41 @@ import { AssetPhoto } from "./AssetPhoto";
 import { FIELD_LABELS, REGION_LABELS } from "./labels";
 
 export function Directory({ preview = false }: { preview?: boolean }) {
-  const [items, setItems] = useState<LawyerView[]>([]);
-  const [visibleCount, setVisibleCount] = useState(20);
+  const [items, setItems] = useState<DirectoryItem[]>([]);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState("");
   const [ready, setReady] = useState(false);
   const [filters, setFilters] = useState({ name: "", region: "", legalField: "" });
   const current = useRef<AbortController | null>(null);
   const query = useRef("");
-  const load = useCallback(async (params: URLSearchParams) => {
+  const load = useCallback(async (params: URLSearchParams, cursor?: string) => {
     current.current?.abort();
     const controller = new AbortController();
     current.current = controller;
     setBusy(true);
     setError("");
-    setItems([]);
-    setVisibleCount(20);
+    if (!cursor) {
+      setItems([]);
+      setNextCursor(null);
+    }
     try {
-      const page = await api.lawyers.list(
+      const page = await api.lawyers.listPage(
         {
           query: params.get("name") ?? "",
           region: params.get("region") ?? "",
           practiceArea: params.get("legalField") ?? "",
         },
+        cursor,
         controller.signal,
       );
       if (controller.signal.aborted) return;
-      setItems(page);
+      setItems((previous) =>
+        cursor
+          ? [...previous, ...page.items.filter((item) => !previous.some((p) => p.id === item.id))]
+          : page.items,
+      );
+      setNextCursor(page.nextCursor);
     } catch (cause) {
       if (!controller.signal.aborted) setError(lawyerErrorMessage(cause));
     } finally {
@@ -168,7 +177,7 @@ export function Directory({ preview = false }: { preview?: boolean }) {
       <div className="directory-results-heading">
         <h2>공개 프로필</h2>
         {!busy && !error && items.length > 0 && (
-          <p role="status">공개 프로필 {items.length}개를 찾았어요.</p>
+          <p role="status">공개 프로필 {items.length}개를 불러왔어요.</p>
         )}
       </div>
       {error && (
@@ -180,7 +189,7 @@ export function Directory({ preview = false }: { preview?: boolean }) {
           }
         />
       )}
-      {!busy && !error && items.length === 0 && (
+      {!busy && !error && items.length === 0 && !nextCursor && (
         <StatePanel
           variant="empty"
           title="조건에 맞는 공개 프로필이 없어요."
@@ -201,7 +210,7 @@ export function Directory({ preview = false }: { preview?: boolean }) {
         />
       )}
       <div className="directory-results" aria-busy={busy}>
-        {items.slice(0, visibleCount).map((lawyer) => (
+        {items.map((lawyer) => (
           <Card key={lawyer.id} className="directory-profile">
             <CardHeader className="directory-profile__header">
               <div className="directory-profile__photo">
@@ -232,7 +241,11 @@ export function Directory({ preview = false }: { preview?: boolean }) {
                   <li key={field}>{FIELD_LABELS[field as keyof typeof FIELD_LABELS] ?? field}</li>
                 ))}
               </ul>
-              <p className="directory-profile__disclosure">본인 작성 정보 · 자격 확인 표시 없음</p>
+              <p className="directory-profile__disclosure">
+                {lawyer.verificationStatus === "verified"
+                  ? "자격 확인된 공개 프로필"
+                  : "본인 작성 정보 · 자격 확인 표시 없음"}
+              </p>
               <a
                 className="directory-profile__link"
                 href={`/lawyers/${encodeURIComponent(lawyer.id)}`}
@@ -245,12 +258,12 @@ export function Directory({ preview = false }: { preview?: boolean }) {
         ))}
       </div>
       {busy && <StatePanel variant="loading" title="공개 프로필을 불러오고 있어요." />}
-      {items.length > visibleCount && !error && (
+      {nextCursor && !error && (
         <Button
           variant="outline"
           className="directory-more"
           disabled={busy}
-          onClick={() => setVisibleCount((count) => count + 20)}
+          onClick={() => void load(new URLSearchParams(query.current), nextCursor)}
         >
           더 보기
           <ChevronDown size={17} aria-hidden="true" />

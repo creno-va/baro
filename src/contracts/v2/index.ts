@@ -1,4 +1,5 @@
 export * from "./common";
+export * from "./directory";
 export * from "./files";
 export * from "./intake";
 export * from "./lawyers";

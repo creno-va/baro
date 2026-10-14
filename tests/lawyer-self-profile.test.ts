@@ -431,7 +431,7 @@ test("customer preference overrides legacy lawyer access while preserving existi
   expect((await f.request("/v2/me/lawyer/self-profile")).status).toBe(200);
 });
 
-test("self directory advances filtered empty pages and returns profiles beyond the first page", async () => {
+test("self directory adapter seeks indexed matches without enumerating unrelated profiles", async () => {
   const f = await fixture();
   const service = createSelfProfileService(f.core);
   const profiles = [];
@@ -453,17 +453,8 @@ test("self directory advances filtered empty pages and returns profiles beyond t
   const first = selfDirectoryPageSchema.parse(
     await (await f.request(`/v2/lawyers/self-service?limit=1&name=${wanted.name}`)).json(),
   );
-  expect(first.items).toEqual([]);
-  expect(first.nextCursor).toBe(firstProfile.id);
-  const second = selfDirectoryPageSchema.parse(
-    await (
-      await f.request(
-        `/v2/lawyers/self-service?limit=1&name=${wanted.name}&cursor=${first.nextCursor}`,
-      )
-    ).json(),
-  );
-  expect(second.items).toEqual([wanted]);
-  expect(second.nextCursor).toBeNull();
+  expect(first.items).toEqual([wanted]);
+  // The name index seeks matching candidates directly, without walking unrelated profiles.
 });
 test("self API denies wrong role, missing consent, cross-owner, origin and production gate", async () => {
   const f = await fixture();

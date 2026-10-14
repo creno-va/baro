@@ -5,22 +5,27 @@ const original = globalThis.fetch;
 afterEach(() => {
   globalThis.fetch = original;
 });
-const snapshot = {
-  schemaVersion: "2",
-  snapshotId: "synthetic-directory",
-  rotation: "disclosed_rotation",
-  expiresAt: "2026-10-06T00:05:00Z",
+const cursor = "synthetic-next-page-cursor-at-least-thirty-two-characters";
+const page = {
   items: [],
-  nextCursor: "synthetic-next",
+  nextCursor: cursor,
+  expiresAt: "2026-10-14T00:05:00Z",
+  rotation: { day: "2026-10-14", algorithm: "daily_sha256_pivot_v1" },
 };
-test("cancelling directory pagination aborts its fetch and never starts self-service requests", async () => {
-  const controller = new AbortController();
+test("directory fetches one page until the caller requests the next, propagating cancellation", async () => {
   const paths: string[] = [];
+  globalThis.fetch = (async (path) => {
+    paths.push(String(path));
+    return Response.json(page);
+  }) as typeof fetch;
+  const first = await lawyers.listPage({ query: "합성" });
+  expect(first.nextCursor).toBe(cursor);
+  expect(paths).toHaveLength(1);
+  const controller = new AbortController();
   globalThis.fetch = (async (path, init) => {
     paths.push(String(path));
     expect(init?.signal).toBe(controller.signal);
-    if (paths.length === 1) return Response.json(snapshot);
-    return await new Promise<Response>((_, reject) => {
+    return new Promise<Response>((_, reject) => {
       init?.signal?.addEventListener(
         "abort",
         () => reject(new DOMException("cancelled", "AbortError")),
@@ -29,7 +34,12 @@ test("cancelling directory pagination aborts its fetch and never starts self-ser
       controller.abort();
     });
   }) as typeof fetch;
-  await expect(lawyers.list({}, controller.signal)).rejects.toMatchObject({ name: "AbortError" });
+  await expect(
+    lawyers.listPage({ query: "합성" }, cursor, controller.signal),
+  ).rejects.toMatchObject({ name: "AbortError" });
   expect(paths).toHaveLength(2);
-  expect(paths.every((path) => !path.includes("self-service"))).toBe(true);
+  expect(paths[1]).toContain(`cursor=${cursor}`);
+  expect(
+    paths.every((path) => path.includes("/lawyers/directory?") && !path.includes("self-service")),
+  ).toBe(true);
 });

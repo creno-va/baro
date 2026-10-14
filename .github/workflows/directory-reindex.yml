@@ -1,0 +1,58 @@
+name: Directory reindex (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_environment:
+        description: Environment already serving the candidate
+        required: true
+        type: choice
+        options: [preview, production]
+      target_sha:
+        description: Exact deployed SHA; the Workflow checks its own RELEASE_SHA
+        required: true
+        type: string
+      after:
+        description: Opaque continuation from a previous bounded run, otherwise empty
+        required: false
+        type: string
+      confirmation:
+        description: Type reindex-public-directory
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: baro-directory-reindex-${{ inputs.target_environment }}
+  cancel-in-progress: false
+
+jobs:
+  reindex:
+    if: github.ref == 'refs/heads/main' && (github.actor == 'hyunhomon' || github.actor == 'hwangeunchan') && inputs.confirmation == 'reindex-public-directory'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: ${{ inputs.target_environment }}
+      deployment: false
+    steps:
+      - name: Checkout coordinator
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: .bun-version
+      - name: Install frozen dependencies
+        run: bun ci
+      - name: Reindex already-public sources with bounded steps
+        env:
+          CLOUDFLARE_ACCOUNT_ID: 9e844969d0c44b2449f3951d1f301654
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          DIRECTORY_ENVIRONMENT: ${{ inputs.target_environment }}
+          DIRECTORY_SHA: ${{ inputs.target_sha }}
+          DIRECTORY_AFTER: ${{ inputs.after }}
+        run: bun scripts/reindex-directory.ts

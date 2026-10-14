@@ -32,6 +32,11 @@ idempotency를 동일 guarded batch로 승인한다. 202에는 `{operationId,job
 
 ## 공개 변호사 탐색
 
+현재 목록은 [디렉터리 검색 계약](DIRECTORY-SEARCH.md)을 따른다.
+`GET /lawyers/directory`는 이름·사무실 부분검색, 지역·분야, 기본20개와 암호화된 다음 cursor를
+지원한다. 기존 `/lawyers` 및 `/lawyers/self-service`는 같은 조회의 호환 adapter다.
+목록 카드의 자격 표시는 공개 출처를 유지하며 본인 작성 프로필을 자격 승인으로 바꾸지 않는다.
+
 | Method/path | 입력·응답 | Gate |
 | --- | --- | --- |
 | `GET /lawyers` | 선택 지역·분야·cursor → approved revision의 card, 객관적 필터, 회전 설명, nextCursor | 비로그인. raw 사건 입력·맞춤 순위 파라미터 거부 |

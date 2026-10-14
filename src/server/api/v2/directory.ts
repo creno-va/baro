@@ -1,14 +1,17 @@
 import { type Context, Hono } from "hono";
 import { z } from "zod";
-import { v2DirectoryQuerySchema } from "../../../contracts/v2";
+import { directorySearchSchema } from "../../../contracts/v2";
 import { createCaseDataCipher } from "../../crypto";
 import { createV2Core, V2RepositoryError } from "../../db/v2-core";
+import { createIndexedDirectory } from "../../db/v2-directory-index";
 import { createV2StorageCapacityRepository } from "../../db/v2-storage-capacity";
 import {
   createDirectoryService,
   DirectoryError,
   publicProfileQuerySchema,
 } from "../../modules/lawyers/directory";
+import { directoryAdapters } from "../../modules/lawyers/directory-adapters";
+import { DirectoryIndexError } from "../../modules/lawyers/directory-cursor";
 import { readPublicAsset } from "../../modules/lawyers/public-read";
 import type { OpenSanitizedAsset } from "../../modules/lawyers/sanitized";
 import { createSelfAssetReader, selfAssetResponse } from "../../modules/lawyers/self-assets";
@@ -28,6 +31,19 @@ export function createDirectoryApi(
     return;
   });
   app.onError((error, c) => {
+    if (error instanceof DirectoryIndexError) {
+      const code = error.code === "INVALID_CURSOR" ? "VALIDATION_ERROR" : error.code;
+      return c.json(
+        errorBody(
+          c,
+          code,
+          code === "CURSOR_EXPIRED"
+            ? "목록이 갱신됐어요. 다시 검색해 주세요."
+            : "검색을 다시 시도해 주세요.",
+        ),
+        code === "CURSOR_EXPIRED" ? 409 : code === "STORAGE_UNAVAILABLE" ? 503 : 400,
+      );
+    }
     if (error instanceof LawyerError && error.code === "NOT_FOUND")
       return c.json(errorBody(c, "NOT_FOUND", "공개된 프로필을 찾을 수 없어요."), 404);
     if (
@@ -50,24 +66,67 @@ export function createDirectoryApi(
       );
     return c.json(errorBody(c, "DEPENDENCY_UNAVAILABLE", "프로필을 불러오지 못했어요.", true), 503);
   });
+  const indexOptions = (env: Env) => ({
+    secret: env.BETTER_AUTH_SECRET,
+    scope: `${env.APP_ENV}:${env.RELEASE_SHA ?? "local"}`,
+    ...(options.clock ? { clock: options.clock } : {}),
+  });
+  // Public directory cards need neither the case key nor a private-data cipher.
+  const publicCore = (env: Env) =>
+    createV2Core(env.DB, {
+      async encrypt() {
+        throw new Error("PUBLIC_DIRECTORY_PRIVATE_ACCESS");
+      },
+      async decrypt() {
+        throw new Error("PUBLIC_DIRECTORY_PRIVATE_ACCESS");
+      },
+    });
   const service = async (env: Env) =>
     createDirectoryService(
       createV2Core(env.DB, await createCaseDataCipher(env), {
         monthlyBudgetCapEnabled: env.MONTHLY_BUDGET_CAP_ENABLED !== "false",
       }),
       options.clock,
+      indexOptions(env),
     );
-  app.get("/", async (c) => c.json(await (await service(c.env)).list(c.req.query())));
-  app.get("/self-service", async (c) => {
+  app.get("/directory", async (c) => {
     const raw = c.req.query();
-    const query = v2DirectoryQuerySchema.parse({
+    const query = directorySearchSchema.parse({
       ...raw,
       ...(raw.limit === undefined ? {} : { limit: Number(raw.limit) }),
     });
+    const { items, nextCursor, expiresAt, rotation } = await createIndexedDirectory(
+      publicCore(c.env),
+      indexOptions(c.env),
+    ).page(query);
+    return c.json({ items, nextCursor, expiresAt, rotation });
+  });
+  app.get("/directory/:id/photo", async (c) => {
+    const { revision } = z
+      .strictObject({ revision: z.coerce.number().int().positive() })
+      .parse(c.req.query());
+    const bytes = await createIndexedDirectory(publicCore(c.env), indexOptions(c.env)).photo(
+      c.req.param("id"),
+      revision,
+    );
+    if (!bytes) throw new LawyerError("NOT_FOUND");
+    return new Response(bytes, {
+      headers: {
+        "content-type": "image/jpeg",
+        "cache-control": "no-store",
+        "x-content-type-options": "nosniff",
+        "cross-origin-resource-policy": "same-origin",
+      },
+    });
+  });
+  app.get("/", async (c) =>
+    c.json(await directoryAdapters(publicCore(c.env), indexOptions(c.env)).verified(c.req.query())),
+  );
+  app.get("/self-service", async (c) => {
     const core = createV2Core(c.env.DB, await createCaseDataCipher(c.env), {
       monthlyBudgetCapEnabled: c.env.MONTHLY_BUDGET_CAP_ENABLED !== "false",
     });
-    return c.json(await createSelfProfileService(core, options.clock).list(query));
+    return c.json(await directoryAdapters(core, indexOptions(c.env)).self(c.req.query()));
   });
   app.get("/self-service/:id/assets/:assetId", async (c) => {
     publicProfileQuerySchema.parse(c.req.query());

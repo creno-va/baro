@@ -16,6 +16,7 @@ test("all workflow actions use immutable commits and valid YAML", async () => {
     "ci.yml",
     "full-validation.yml",
     "cost-operations.yml",
+    "directory-reindex.yml",
     "deploy-preview.yml",
     "deploy-production.yml",
     "environment-readiness.yml",

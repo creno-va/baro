@@ -2,6 +2,10 @@ import { z } from "zod";
 import { opaqueIdSchema } from "../../../contracts";
 import { CURRENT_POLICY_VERSIONS } from "../../../contracts/consent";
 import { readSnapshot, snapshotStatements, sqlClaim, type V2Core } from "../../db/v2-core";
+import {
+  directoryProjectionStatements,
+  selfDirectoryProjection,
+} from "../../db/v2-directory-projection";
 import { createV2LawyersRepository } from "../../db/v2-lawyers";
 import { requireSelfAssets, selfAssetClaim } from "./self-assets";
 import {
@@ -88,6 +92,9 @@ export function createSelfProfileService(core: V2Core, clock = () => new Date().
         scope: "photo/introduction/practice/office/contact/portfolio",
         acceptedAt: now,
       });
+      const listing = next.published
+        ? await selfDirectoryProjection(core, ownerId, snapshotId, next, now)
+        : null;
       const assets = selfAssetClaim(next);
       const claim = core.statement(
         `INSERT INTO v2_mutation_claims(id,owner_id,target_id,revision) SELECT ?,p.owner_id,p.id,? FROM v2_profiles p WHERE p.id=? AND p.owner_id=? AND ${alive} AND ${role} AND ${currentConsentSql} AND coalesce((SELECT max(revision) FROM v2_private_snapshots WHERE target_id=p.id AND purpose='profile_revision'),1)=?${assets.sql}${sessionId ? " AND EXISTS(SELECT 1 FROM session WHERE id=? AND user_id=p.owner_id AND expires_at>?)" : ""}`,
@@ -137,6 +144,14 @@ export function createSelfProfileService(core: V2Core, clock = () => new Date().
           `DELETE FROM v2_private_snapshots WHERE target_id=? AND purpose='profile_revision' AND revision<? AND ${sqlClaim}`,
           [next.id, next.revision, claimId],
         ),
+        ...(listing
+          ? directoryProjectionStatements(core, listing, claimId)
+          : [
+              core.statement(
+                `DELETE FROM v2_directory_entries WHERE profile_id=? AND ${sqlClaim}`,
+                [next.id, claimId],
+              ),
+            ]),
         core.finish(claimId),
       ]);
       if (!changed) throw new LawyerError("STALE_REVISION");
@@ -204,45 +219,6 @@ export function createSelfProfileService(core: V2Core, clock = () => new Date().
         .first<Row>();
       if (!current) throw new LawyerError("NOT_FOUND");
       return profile;
-    },
-    async list(filters: {
-      name?: string | undefined;
-      region?: string | undefined;
-      legalField?: string | undefined;
-      cursor?: string | undefined;
-      limit?: number | undefined;
-    }) {
-      const limit = filters.limit ?? 20;
-      const rows = await core
-        .statement(
-          `${latest} AND c.version=? AND ${role} AND ${currentConsentSql} AND p.id>? ORDER BY p.id LIMIT ?`,
-          [publicVersion, filters.cursor ?? "", limit + 1],
-        )
-        .all<Row>();
-      const items: SelfProfile[] = [];
-      const page = rows.results.slice(0, limit);
-      for (const row of page) {
-        let p: SelfProfile;
-        try {
-          p = await service.get(row.id);
-        } catch (error) {
-          if (error instanceof LawyerError && error.code === "NOT_FOUND") continue;
-          throw error;
-        }
-        if (
-          p?.published &&
-          (!filters.name ||
-            `${p.name} ${p.officeName}`.toLowerCase().includes(filters.name.toLowerCase())) &&
-          (!filters.region || p.region === filters.region) &&
-          (!filters.legalField ||
-            p.practiceAreas.includes(filters.legalField as SelfProfile["practiceAreas"][number]))
-        )
-          items.push(p);
-      }
-      return {
-        items,
-        nextCursor: rows.results.length > limit ? (page.at(-1)?.id ?? null) : null,
-      };
     },
   };
   return service;

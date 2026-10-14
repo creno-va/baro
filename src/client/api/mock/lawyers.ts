@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { directoryPageSchema } from "../../../contracts/v2";
 import {
   emptySelfProfile,
   isDuplicateProfileSave,
@@ -268,6 +269,53 @@ export const mockLawyers = createMockLawyers({
   },
 });
 export const lawyersMockHandlers = {
+  "lawyers.listPage": async (input: { filters?: LawyerFilters; cursor?: string }) => {
+    const filters = input.filters ?? {};
+    const identity = JSON.stringify(filters);
+    const now = Date.now();
+    let offset = 0,
+      expiresAt = new Date(now + 300000).toISOString();
+    if (input.cursor) {
+      const previous = z
+        .strictObject({
+          identity: z.string(),
+          offset: z.number().int().nonnegative(),
+          expiresAt: z.iso.datetime(),
+        })
+        .parse(JSON.parse(atob(input.cursor.replaceAll("-", "+").replaceAll("_", "/"))));
+      if (previous.identity !== identity || Date.parse(previous.expiresAt) <= now)
+        throw new LawyerApiError("CONFLICT", "목록이 갱신됐어요. 다시 검색해 주세요.");
+      offset = previous.offset;
+      expiresAt = previous.expiresAt;
+    }
+    const rows = await mockLawyers.list(filters);
+    return directoryPageSchema.parse({
+      items: rows.slice(offset, offset + 20).map((p) => ({
+        id: p.id,
+        revision: p.revision,
+        name: p.name,
+        officeName: p.officeName,
+        introduction: p.introduction,
+        region: p.region,
+        practiceAreas: p.practiceAreas,
+        photoUrl: p.photoUrl,
+        photoAssetId: p.photoAssetId ?? null,
+        verificationStatus: p.verificationStatus,
+      })),
+      nextCursor:
+        rows.length > offset + 20
+          ? btoa(JSON.stringify({ identity, offset: offset + 20, expiresAt }))
+              .replaceAll("+", "-")
+              .replaceAll("/", "_")
+              .replace(/=+$/, "")
+          : null,
+      expiresAt,
+      rotation: {
+        day: new Date(now + 9 * 3600000).toISOString().slice(0, 10),
+        algorithm: "daily_sha256_pivot_v1",
+      },
+    });
+  },
   "lawyers.removeAsset": (input: { assetId: string }) => mockLawyers.removeAsset(input),
   "lawyers.assets": () => mockLawyers.assets(),
   "lawyers.uploadAsset": (input: {

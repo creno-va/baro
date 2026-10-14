@@ -1,13 +1,13 @@
 import { z } from "zod";
 import {
+  type DirectoryPage,
+  directoryPageSchema,
   type V2PublicLawyer,
-  v2DirectorySnapshotSchema,
   v2PortfolioAssetSchema,
   v2PublicLawyerSchema,
 } from "../../contracts/v2";
 import {
   type SelfProfile,
-  selfDirectoryPageSchema,
   selfProfileSchema,
 } from "../../server/modules/lawyers/self-profile-contract";
 import {
@@ -80,35 +80,22 @@ export function fromVerified(p: V2PublicLawyer): LawyerView {
   };
 }
 const real = {
-  async list(filters: LawyerFilters = {}, signal?: AbortSignal): Promise<LawyerView[]> {
-    const params = new URLSearchParams();
+  async listPage(
+    filters: LawyerFilters = {},
+    cursor?: string,
+    signal?: AbortSignal,
+  ): Promise<DirectoryPage> {
+    const params = new URLSearchParams({ limit: "20" });
     if (filters.query?.trim()) params.set("name", filters.query.trim());
     if (filters.region) params.set("region", filters.region);
     if (filters.practiceArea) params.set("legalField", filters.practiceArea);
-    const first = v2DirectorySnapshotSchema.parse(
-      await request(`/api/v2/lawyers?${params}`, "GET", undefined, signal),
+    if (cursor) params.set("cursor", cursor);
+    return directoryPageSchema.parse(
+      await request(`/api/v2/lawyers/directory?${params}`, "GET", undefined, signal),
     );
-    const items = first.items.map(fromVerified);
-    let cursor = first.nextCursor;
-    while (cursor) {
-      params.set("cursor", cursor);
-      const page = v2DirectorySnapshotSchema.parse(
-        await request(`/api/v2/lawyers?${params}`, "GET", undefined, signal),
-      );
-      items.push(...page.items.map(fromVerified));
-      cursor = page.nextCursor;
-    }
-    params.delete("cursor");
-    const own: SelfProfile[] = [];
-    do {
-      const page = selfDirectoryPageSchema.parse(
-        await request(`/api/v2/lawyers/self-service?${params}`, "GET", undefined, signal),
-      );
-      own.push(...page.items);
-      cursor = page.nextCursor;
-      if (cursor) params.set("cursor", cursor);
-    } while (cursor);
-    return rotateLawyers([...own, ...items.filter((p) => !own.some((s) => s.id === p.id))]);
+  },
+  async list(filters: LawyerFilters = {}, signal?: AbortSignal) {
+    return (await real.listPage(filters, undefined, signal)).items;
   },
   async get(id: string): Promise<LawyerView> {
     try {
@@ -157,6 +144,12 @@ async function adapter() {
   return real;
 }
 const mockTransport = {
+  listPage: (filters: LawyerFilters = {}, cursor?: string, signal?: AbortSignal) =>
+    sharedRequest<DirectoryPage>(
+      "lawyers.listPage",
+      { filters, cursor },
+      { ...(signal ? { signal } : {}) },
+    ),
   list: (filters: LawyerFilters = {}, signal?: AbortSignal) =>
     sharedRequest<LawyerView[]>("lawyers.list", filters, { ...(signal ? { signal } : {}) }),
   get: (id: string) => sharedRequest<LawyerView>("lawyers.get", { id }),
@@ -172,6 +165,12 @@ const mockTransport = {
   },
 };
 export const lawyers = {
+  async listPage(filters: LawyerFilters = {}, cursor?: string, signal?: AbortSignal) {
+    signal?.throwIfAborted();
+    const page = await (await adapter()).listPage(filters, cursor, signal);
+    signal?.throwIfAborted();
+    return page;
+  },
   async list(filters: LawyerFilters = {}, signal?: AbortSignal) {
     signal?.throwIfAborted();
     const result = await (await adapter()).list(filters, signal);

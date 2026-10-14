@@ -23,6 +23,10 @@ import {
 } from "../../contracts/v2";
 import { createV2AccountingRepository, operationStatements } from "./v2-accounting";
 import { type Actor, actorSchema, parse, safe, sqlClaim, type V2Core } from "./v2-core";
+import {
+  directoryProjectionStatements,
+  verifiedDirectoryProjection,
+} from "./v2-directory-projection";
 import { storagePredicate, storageReservationStatements } from "./v2-storage";
 import {
   type Admission,
@@ -1128,6 +1132,13 @@ export function createV2LawyersRepository(core: V2Core) {
         if (!row) return false;
         const approved = await decodeRevision(row);
         if (JSON.stringify(approved.content) !== JSON.stringify(publicDto.content)) return false;
+        const listing = await verifiedDirectoryProjection(
+          actor.ownerId,
+          row.id,
+          publicDto,
+          publicBlobIds,
+          actor.now,
+        );
         const claimId = crypto.randomUUID();
         const statements = [
           core.statement(
@@ -1218,6 +1229,7 @@ export function createV2LawyersRepository(core: V2Core) {
             `UPDATE v2_profiles SET approved_revision_id=?,updated_at=? WHERE id=? AND ${sqlClaim}`,
             [row.id, actor.now, lawyer.id, claimId],
           ),
+          ...directoryProjectionStatements(core, listing, claimId),
           core.finish(claimId),
         );
         return core.changed(statements);
