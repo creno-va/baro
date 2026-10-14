@@ -354,7 +354,7 @@ test("canonical timeline save measures the complete client readback and final se
       { route: "actions", method: "GET", calls: 10, statements: 10 },
       { route: "timeline", method: "GET", calls: 10, statements: 10 },
       { route: "files", method: "GET", calls: 8, statements: 8 },
-      { route: "summary", method: "GET", calls: 18, statements: 19 },
+      { route: "summary", method: "GET", calls: 14, statements: 14 },
       { route: "workspace", method: "GET", calls: 5, statements: 5 },
       { route: "latest_job", method: "GET", calls: 7, statements: 7 },
       { route: "session", method: "GET", calls: 3, statements: 5 },

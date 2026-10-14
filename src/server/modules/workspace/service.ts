@@ -325,6 +325,9 @@ export function createWorkspaceService(core: V2Core, deps: WorkspaceDependencies
       await find(ownerId, id);
       return workspace.metadata(actor(ownerId), id);
     },
+    async summaryAvailable(ownerId: string, id: string) {
+      return workspace.summaryAvailable(actor(ownerId), id);
+    },
     async *summary(ownerId: string, id: string) {
       await find(ownerId, id);
       yield* workspace.summaryFragments(actor(ownerId), id);

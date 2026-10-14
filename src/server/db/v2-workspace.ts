@@ -761,6 +761,20 @@ export function createV2WorkspaceRepository(
           : null;
       });
     },
+    summaryAvailable(actor: Actor, id: string) {
+      return safe(async () => {
+        actor = parse(actorSchema, { ownerId: actor.ownerId, now: actor.now });
+        parse(opaqueIdSchema, id);
+        // Header preflight only. The stream independently rereads its owner,
+        // current summary/revision and encrypted snapshot before yielding.
+        return !!(await core
+          .statement(
+            `SELECT i.id FROM v2_intakes i JOIN v2_summaries s ON s.id=i.summary_id JOIN v2_workspaces w ON w.id=i.id WHERE i.id=? AND w.owner_id=? AND ${aliveWorkspace}`,
+            [id, actor.ownerId],
+          )
+          .first());
+      });
+    },
     async *summaryFragments(actor: Actor, id: string) {
       actor = parse(actorSchema, { ownerId: actor.ownerId, now: actor.now });
       const row = await core
