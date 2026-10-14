@@ -266,8 +266,9 @@ export async function buildReportSource(
     throw new ReportError("REVIEW_REQUIRED");
   const digest = await sourceDigest(core, actor, id);
   const workspace = createV2WorkspaceRepository(core.binding, core.cipher, guideHosts);
-  const summary = (await workspace.readIntake(actor, id))?.summary;
-  if (!summary || summary.revision !== current.confirmed_summary_revision)
+  const intake = await workspace.readIntake(actor, id),
+    summary = intake?.summary;
+  if (!intake || !summary || summary.revision !== current.confirmed_summary_revision)
     throw new ReportError("REVIEW_REQUIRED");
   const fileRows = await core
     .statement(
@@ -417,7 +418,19 @@ export async function buildReportSource(
     generatedAt: actor.now,
   });
   if ((await sourceDigest(core, actor, id)) !== digest) throw new ReportError("STALE_REVISION");
-  return { current, digest, body, coverage };
+  // Display-only metadata from the same authenticated intake read. Never use
+  // reference/fact order as a question number or modify canonical provenance.
+  const display: ReportDisplayContext = {
+    intakeRevision: intake.revision,
+    questions: intake.batches.flatMap((batch) =>
+      batch.questions.map((question, index) => ({
+        id: question.id,
+        round: batch.ordinal,
+        number: index + 1,
+      })),
+    ),
+  };
+  return { current, digest, body, coverage, display };
 }
 export const sourcePositionText = (p: V2SourcePosition) =>
   p.kind === "document"
@@ -428,7 +441,15 @@ export const sourcePositionText = (p: V2SourcePosition) =>
         ? `${p.timestampSeconds}초 · 프레임 ${p.frameIndex} · ${p.sampling === "one_second" ? "1초 표본" : "장면 전환 표본"}`
         : "이미지 관찰";
 
-export function reportText(body: V2ReportBody, coverage: readonly string[]) {
+type ReportDisplayContext = {
+  readonly intakeRevision: number;
+  readonly questions: readonly { id: string; round: number; number: number }[];
+};
+export function reportText(
+  body: V2ReportBody,
+  coverage: readonly string[],
+  display?: ReportDisplayContext,
+) {
   const labels = {
     user_statement: "사용자 진술",
     user_material: "자료 관찰",
@@ -441,6 +462,17 @@ export function reportText(body: V2ReportBody, coverage: readonly string[]) {
     uncertain: "미확인",
     conflicting: "상반됨",
   };
+  const actionStatus = { todo: "진행 전", done: "완료", skipped: "건너뜀" };
+  const answerLabel = (questionId: string, revision: number) => {
+    const matches =
+      display?.intakeRevision === revision
+        ? display.questions.filter((question) => question.id === questionId)
+        : [];
+    const question = matches.length === 1 ? matches[0] : undefined;
+    // Historical bodies may not retain their question metadata. Preserve their
+    // revision and source kind without exposing IDs or guessing a question order.
+    return `${question ? `${question.round}차 질문 ${question.number}번 답변` : "추가 질문에 대한 답변"} · 입력 버전 ${revision}`;
+  };
   const factLabel = (id: string) => `사실 ${body.facts.findIndex((fact) => fact.id === id) + 1}`;
   const citationLabel = (id: string) =>
     `공식 출처 ${body.citations.findIndex((citation) => citation.id === id) + 1}`;
@@ -450,11 +482,11 @@ export function reportText(body: V2ReportBody, coverage: readonly string[]) {
         ref.kind === "user_material"
           ? `${body.selectedFiles.find((file) => file.id === ref.fileId)?.name ?? ref.fileId} · 자료 버전 ${ref.fileRevision} · ${sourcePositionText(ref.position)}`
           : ref.kind === "user_message"
-            ? `대화 ${ref.messageId}`
+            ? "추가 대화의 사용자 진술"
             : ref.kind === "intake_narrative"
               ? `입력 버전 ${ref.intakeRevision}`
               : ref.kind === "intake_answer"
-                ? `답변 ${ref.questionId}`
+                ? answerLabel(ref.questionId, ref.intakeRevision)
                 : citationLabel(ref.citationId),
       )
       .join(" / ");
@@ -489,7 +521,7 @@ export function reportText(body: V2ReportBody, coverage: readonly string[]) {
     "준비할 행동",
     ...body.actions.map(
       (entry) =>
-        `${entry.title} (${entry.status})\n${entry.instructions}\n주의: ${entry.caution}\n출처: ${refs(entry.references)}`,
+        `${entry.title} (${actionStatus[entry.status]})\n${entry.instructions}\n주의: ${entry.caution}\n출처: ${refs(entry.references)}`,
     ),
     "",
     "자료 처리 범위",

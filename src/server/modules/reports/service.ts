@@ -406,7 +406,7 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
       const review: ReportReviewData = {
         format: "client_review_v1",
         title: "사건 상담 준비 리포트",
-        content: reportText(source.body, source.coverage),
+        content: reportText(source.body, source.coverage, source.display),
         excludedFileIds: [],
         maskIdentifiers: false,
         sourceDigest: source.digest,
@@ -479,7 +479,9 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
       const review = {
         ...old.review,
         ...value,
-        content: exclusionsChanged ? reportText(source.body, source.coverage) : value.content,
+        content: exclusionsChanged
+          ? reportText(source.body, source.coverage, source.display)
+          : value.content,
         format: "client_review_v1" as const,
         sourceDigest: source.digest,
       };
@@ -523,7 +525,7 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
       const review: ReportReviewData = {
         format: "client_review_v1",
         title: "사건 상담 준비 리포트",
-        content: reportText(source.body, source.coverage),
+        content: reportText(source.body, source.coverage, source.display),
         excludedFileIds: value.excludedFileIds ?? [],
         maskIdentifiers: false,
         sourceDigest: source.digest,
