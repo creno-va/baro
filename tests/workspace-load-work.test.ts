@@ -431,9 +431,9 @@ test("canonical timeline save measures the complete client readback and final se
       },
       { route: "workspace", method: "GET", calls: 5, statements: 5 },
       { route: "intake", method: "GET", calls: 8, statements: 9 },
-      { route: "messages", method: "GET", calls: 10, statements: 10 },
-      { route: "actions", method: "GET", calls: 10, statements: 10 },
-      { route: "timeline", method: "GET", calls: 10, statements: 10 },
+      { route: "messages", method: "GET", calls: 8, statements: 8 },
+      { route: "actions", method: "GET", calls: 8, statements: 8 },
+      { route: "timeline", method: "GET", calls: 8, statements: 8 },
       { route: "files", method: "GET", calls: 8, statements: 8 },
       { route: "summary", method: "GET", calls: 14, statements: 14 },
       { route: "workspace", method: "GET", calls: 5, statements: 5 },
@@ -479,8 +479,8 @@ test("canonical action save retains the full readback and both session checks", 
     calls: 6,
     statements: 6,
   });
-  expect(f.rows.reduce((sum, row) => sum + row.calls, 0)).toBe(95);
-  expect(f.rows.reduce((sum, row) => sum + row.statements, 0)).toBe(107);
+  expect(f.rows.reduce((sum, row) => sum + row.calls, 0)).toBe(89);
+  expect(f.rows.reduce((sum, row) => sum + row.statements, 0)).toBe(101);
   if (process.env.BARO_WORKSPACE_LOAD_METRICS === "true")
     console.info(
       JSON.stringify({
@@ -513,6 +513,113 @@ test("warm focus keeps the same request and session boundaries", async () => {
       }),
     );
 });
+
+test("cold focus measures every collection with the same fresh session boundaries", async () => {
+  const f = await fixture();
+  const client = createWorkspaceApi(f.transport, null);
+  f.reset();
+  await f.session();
+  await f.session();
+  expect(await client.get(f.workspace.id)).toEqual(f.view);
+  await f.session();
+  if (process.env.BARO_WORKSPACE_LOAD_METRICS === "true")
+    console.info(
+      JSON.stringify({
+        event: "synthetic_workspace_cold_focus_work",
+        http: f.rows.length,
+        calls: f.rows.reduce((sum, row) => sum + row.calls, 0),
+        statements: f.rows.reduce((sum, row) => sum + row.statements, 0),
+      }),
+    );
+});
+
+for (const collection of ["messages", "actions", "timeline"] as const) {
+  test(`${collection} distinguishes an empty owned case from absent, foreign and deleted cases`, async () => {
+    const f = await fixture();
+    const empty = await f.service.create(f.owner.userId, crypto.randomUUID(), {
+      narrative: "아직 메시지와 준비 목록이 없는 별도의 합성 사건입니다.",
+      subjectContext: "individual",
+      jurisdiction: "KR",
+      turnstileToken: "synthetic",
+    });
+    const read = (id = empty.id) => f.transport(`/api/v2/cases/${id}/${collection}`);
+    const response = await read();
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ items: [], nextCursor: null });
+    let rowsRead = 0;
+    f.afterSql((statements) => {
+      if (statements.some((sql) => sql.startsWith(`SELECT * FROM v2_${collection}`))) rowsRead++;
+    });
+    expect((await read(crypto.randomUUID())).status).toBe(404);
+    expect(
+      await f.repository[collection]({ ownerId: f.owner.userId, now: f.now }, crypto.randomUUID()),
+    ).toEqual([]);
+    const peer = await seedTestSession(f.db, { consent: true });
+    f.db.sqlite.query("UPDATE v2_workspaces SET owner_id=? WHERE id=?").run(peer.userId, empty.id);
+    expect((await read()).status).toBe(404);
+    f.db.sqlite
+      .query("UPDATE v2_workspaces SET owner_id=? WHERE id=?")
+      .run(f.owner.userId, empty.id);
+    f.db.sqlite.query("INSERT INTO v2_tombstones VALUES('workspace',?,?)").run(empty.id, f.now);
+    expect((await read()).status).toBe(404);
+    expect(rowsRead).toBe(0);
+  });
+
+  test(`${collection} rechecks account deletion after the first workspace decrypt before reading rows`, async () => {
+    const f = await fixture();
+    let changed = false;
+    let rowsRead = 0;
+    f.afterSql((statements) => {
+      if (statements.some((sql) => sql.startsWith(`SELECT * FROM v2_${collection}`))) rowsRead++;
+      if (changed || !statements.some((sql) => sql.startsWith("SELECT w.* FROM v2_workspaces")))
+        return;
+      changed = true;
+      f.db.sqlite
+        .query("INSERT INTO v2_tombstones VALUES('account',?,?)")
+        .run(f.owner.userId, f.now);
+    });
+    expect((await f.transport(`/api/v2/cases/${f.workspace.id}/${collection}`)).status).toBe(404);
+    expect(changed).toBe(true);
+    expect(rowsRead).toBe(0);
+  });
+
+  for (const phase of ["before-entity-decrypt", "after-entity-decrypt"] as const)
+    for (const change of ["owner", "account", "workspace", "revision"] as const)
+      test(`${collection} final snapshot suppresses ${change} changes ${phase}`, async () => {
+        const f = await fixture();
+        const peer = await seedTestSession(f.db, { consent: true });
+        let changed = false;
+        let workspaceReads = 0;
+        f.afterSql((statements) => {
+          const workspace = statements.some((sql) =>
+            sql.startsWith("SELECT w.* FROM v2_workspaces"),
+          );
+          if (workspace) workspaceReads++;
+          const atBoundary =
+            phase === "before-entity-decrypt"
+              ? statements.some((sql) => sql.startsWith(`SELECT * FROM v2_${collection}`))
+              : workspace && workspaceReads === 2;
+          if (changed || !atBoundary) return;
+          changed = true;
+          if (change === "owner")
+            f.db.sqlite
+              .query("UPDATE v2_workspaces SET owner_id=? WHERE id=?")
+              .run(peer.userId, f.workspace.id);
+          if (change === "account" || change === "workspace")
+            f.db.sqlite
+              .query("INSERT INTO v2_tombstones VALUES(?,?,?)")
+              .run(change, change === "account" ? f.owner.userId : f.workspace.id, f.now);
+          if (change === "revision")
+            f.db.sqlite
+              .query("UPDATE v2_workspaces SET revision=revision+1 WHERE id=?")
+              .run(f.workspace.id);
+        });
+        const response = await f.transport(`/api/v2/cases/${f.workspace.id}/${collection}`);
+        expect(changed).toBe(true);
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual({ items: [], nextCursor: null });
+      });
+}
 
 function entityRequest(
   f: Awaited<ReturnType<typeof fixture>>,

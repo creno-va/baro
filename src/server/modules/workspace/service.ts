@@ -441,16 +441,19 @@ export function createWorkspaceService(core: V2Core, deps: WorkspaceDependencies
       limit = 20,
       before?: { createdAt: string; id: string },
     ) {
-      await find(ownerId, id);
-      return workspace.messages(actor(ownerId), id, limit, before);
+      const items = await workspace.readMessages(actor(ownerId), id, limit, before);
+      if (!items) throw new WorkspaceError("NOT_FOUND");
+      return items;
     },
     async actions(ownerId: string, id: string, after?: string) {
-      await find(ownerId, id);
-      return workspace.actions(actor(ownerId), id, after, 8);
+      const items = await workspace.readActions(actor(ownerId), id, after, 8);
+      if (!items) throw new WorkspaceError("NOT_FOUND");
+      return items;
     },
     async timeline(ownerId: string, id: string, after?: string) {
-      await find(ownerId, id);
-      return workspace.timeline(actor(ownerId), id, after, 8);
+      const items = await workspace.readTimeline(actor(ownerId), id, after, 8);
+      if (!items) throw new WorkspaceError("NOT_FOUND");
+      return items;
     },
     async updateAction(ownerId: string, id: string, actionId: string, key: string, raw: unknown) {
       const body = v2ActionUpdateRequestSchema.parse(raw);
