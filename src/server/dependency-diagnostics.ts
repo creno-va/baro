@@ -179,6 +179,7 @@ export function reportLegalRetrieval(outcome: {
         ? outcome.reason
         : "unknown";
   console.error(JSON.stringify({ event: "workspace_legal_retrieval", kind, availability, reason }));
+  return { kind, availability, reason };
 }
 
 /** Keep a generated draft private even when explaining why it was rejected. */
@@ -196,4 +197,5 @@ export function reportWorkspacePolicyFailure(value: unknown) {
       ? value
       : "unknown";
   console.error(JSON.stringify({ event: "workspace_policy_failure", reason }));
+  return reason;
 }

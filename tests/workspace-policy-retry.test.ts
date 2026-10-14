@@ -100,7 +100,11 @@ test("legacy retryable=0 failure reuses saved answers and only publishes a newly
   const f = await fixture();
   await answeredBatch(f);
   const failed = await runCustomerJob(f, "intake_questions", false);
-  expect(failed.result.status).toBe("failed");
+  expect(failed.result).toEqual({
+    jobId: failed.params.jobId,
+    status: "failed",
+    policyReason: "audit_rejected",
+  });
   const saved = await f.service.intake(f.owner.userId, f.workspace.id);
   const job = await f.service.job(f.owner.userId, f.workspace.id, failed.params.jobId);
   expect(job).toMatchObject({

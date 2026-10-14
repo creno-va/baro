@@ -250,10 +250,13 @@ export async function executeWorkspace(
     if (!written) throw new Error("Workspace changed");
     return { jobId: params.jobId, status: "completed" as const };
   } catch (error) {
-    if (error instanceof WorkspaceOutputPolicyError) reportWorkspacePolicyFailure(error.reason);
-    else if (error instanceof ModelError && error.code === "POLICY_REJECTED")
-      reportWorkspacePolicyFailure("policy_rejected");
-    else if (!(error instanceof ModelError)) reportDependencyFailure(error);
+    const policyReason =
+      error instanceof WorkspaceOutputPolicyError
+        ? reportWorkspacePolicyFailure(error.reason)
+        : error instanceof ModelError && error.code === "POLICY_REJECTED"
+          ? reportWorkspacePolicyFailure("policy_rejected")
+          : undefined;
+    if (!(error instanceof ModelError)) reportDependencyFailure(error);
     await jobs
       .fail(
         actor(),
@@ -262,6 +265,10 @@ export async function executeWorkspace(
         error instanceof ModelError && error.code === "MODEL_UNAVAILABLE",
       )
       .catch(() => false);
-    return { jobId: params.jobId, status: "failed" as const };
+    return {
+      jobId: params.jobId,
+      status: "failed" as const,
+      ...(policyReason ? { policyReason } : {}),
+    };
   }
 }
