@@ -641,25 +641,43 @@ export function createAssetProcessingService(
           revision: params.assetRevision + 1,
         };
       } catch (error) {
+        let failure = error;
         // A confirmed response or a locally unsent write can close only this
         // writer token. Unknown PUT completion retains its physical obligation.
-        if (writer && !writerStopped && (!putSent || responseEvidence))
-          await capacity.confirmWriterStopped(
-            writer,
-            responseEvidence ?? { transport: "not_sent" },
-            actor(params.ownerId).now,
-          );
+        if (writer && !writerStopped && (!putSent || responseEvidence)) {
+          try {
+            if (
+              !(await capacity.confirmWriterStopped(
+                writer,
+                responseEvidence ?? { transport: "not_sent" },
+                actor(params.ownerId).now,
+              ))
+            )
+              failure = new ProcessingError("STORAGE_UNAVAILABLE");
+          } catch {
+            failure = new ProcessingError("STORAGE_UNAVAILABLE");
+          }
+        }
+        // A failed stop or observation must not suppress the independent
+        // durable cleanup intent for this exact output generation.
+        if (prepared)
+          await storage.abandonSanitizedAssetBlob(actor(params.ownerId), prepared.id).catch(() => {
+            failure = new ProcessingError("STORAGE_UNAVAILABLE");
+          });
+        if (captured && putSent) {
+          // Freeze the exact prePUT generation for funded cleanup. A missing
+          // object is harmless; this path must not make an unreserved HEAD call.
+          await storage
+            .requeueSanitizedAssetBlobCleanup(actor(params.ownerId), captured)
+            .catch(() => {
+              failure = new ProcessingError("STORAGE_UNAVAILABLE");
+            });
+        }
         if (permit && !permitObserved)
           await options.costs.after(permit, {
             transport: !putSent ? "not_sent" : putReturned ? "response" : "unknown",
           });
-        if (prepared) await storage.abandonSanitizedAssetBlob(actor(params.ownerId), prepared.id);
-        if (captured && putSent) {
-          // Freeze the exact prePUT generation for funded cleanup. A missing
-          // object is harmless; this path must not make an unreserved HEAD call.
-          await storage.requeueSanitizedAssetBlobCleanup(actor(params.ownerId), captured);
-        }
-        if (error instanceof ProcessingError) throw error;
+        if (failure instanceof ProcessingError) throw failure;
         throw new ProcessingError("FILE_PROCESSING_FAILED");
       } finally {
         await stream.return(undefined);

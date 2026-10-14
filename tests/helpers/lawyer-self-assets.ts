@@ -102,6 +102,17 @@ export async function selfAssetFixture(
     new Date(Date.parse(f.actor.now) + 300000).toISOString(),
   );
   if (!granted) throw new Error("Synthetic actual lease missing");
+  f.db.sqlite
+    .query(
+      "INSERT INTO v2_physical_storage_capacity(environment,capacity_bytes) VALUES('preview',100000000)",
+    )
+    .run();
+  f.db.sqlite
+    .query(
+      "INSERT INTO v2_physical_blob_bindings(blob_id,environment,owner_id,object_key,maximum_cipher_bytes,inventory_hash,state,writer_state,created_at) SELECT id,'preview',?,object_key,cipher_bytes,?,'held','stopped',? FROM v2_blobs WHERE id=(SELECT original_blob_id FROM v2_assets WHERE id=?)",
+    )
+    .run(f.actor.ownerId, "e".repeat(64), f.actor.now, reserved.assetId);
+
   const params = {
     ownerId: f.actor.ownerId,
     profileId,
@@ -171,6 +182,7 @@ export async function selfAssetFixture(
     createAssetProcessingService(
       {
         ...f.core,
+        applicationCostLimitsEnabled: false,
         encrypt: async (...args: Parameters<typeof f.core.encrypt>) => {
           if (args[0] === "v2_assets" && args[3] === 3) options.beforeReady?.();
           return f.core.encrypt(...args);

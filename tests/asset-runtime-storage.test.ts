@@ -303,3 +303,37 @@ for (const outcome of ["unknown", "wrong-receipt"] as const) {
       ).toEqual({ n: 0 });
     }));
 }
+
+test("writer-stop persistence failure preserves independent cleanup and the real response", () =>
+  withFixedLength(async () => {
+    const f = await setup();
+    f.db.sqlite.exec(`CREATE TEMP TRIGGER synthetic_stop_failure BEFORE UPDATE OF writer_state ON v2_physical_blob_bindings
+      WHEN NEW.writer_state='stopped' AND OLD.writer_state='running' BEGIN SELECT RAISE(ABORT,'synthetic stop failure'); END`);
+    await expect(f.runtime.run(new AbortController().signal)).rejects.toMatchObject({
+      code: "STORAGE_UNAVAILABLE",
+    });
+    const derivative = f.db.sqlite
+      .query(
+        "SELECT b.id,b.state,p.writer_state,p.state physical_state FROM v2_blobs b JOIN v2_physical_blob_bindings p ON p.blob_id=b.id WHERE b.visibility='staging'",
+      )
+      .get() as { id: string };
+    expect(derivative).toMatchObject({
+      state: "deleting",
+      writer_state: "running",
+      physical_state: "held",
+    });
+    expect(
+      f.db.sqlite
+        .query("SELECT count(*) n FROM v2_deletion_targets WHERE kind='blob' AND target_id=?")
+        .get(derivative.id),
+    ).toEqual({ n: 1 });
+    expect(
+      f.db.sqlite
+        .query(
+          "SELECT state,transport FROM v2_execution_admissions WHERE json_extract(payload_json,'$.plan.quantities[0].sku')='r2_class_a_requests'",
+        )
+        .get(),
+    ).toEqual({ state: "final", transport: "response" });
+    expect(f.bucket.calls.put).toBe(2);
+    expect(f.bucket.objects.has(`private/${derivative.id}`)).toBe(true);
+  }));
