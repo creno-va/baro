@@ -27,6 +27,7 @@ import {
 } from "../src/server/modules/budget/storage-ledger";
 import { createTestDatabase } from "./helpers/d1";
 import { seedTestSession } from "./helpers/session";
+import { seedStorageAdmissionProjection } from "./helpers/storage-admission";
 
 const NOW = "2026-10-06T00:00:00.000Z",
   LATER = "2026-10-06T00:02:00.000Z",
@@ -153,7 +154,13 @@ async function fixture(
       now: NOW,
     });
   expect(await accounting.activateAllocation(a.month, a.version, NOW)).toBe(true);
-  expect(await runtime.initializeControl(a.month, NOW)).toBe(true);
+  if (options.throughMigration) {
+    db.sqlite
+      .query(
+        "INSERT INTO v2_runtime_controls(month,environment,pending_version,updated_at) VALUES(?,'preview',1,?)",
+      )
+      .run(a.month, NOW);
+  } else expect(await runtime.initializeControl(a.month, NOW)).toBe(true);
   const ap = { id: crypto.randomUUID(), environment: "preview" as const, allocation: a };
   expect(await runtime.putAllocationProof(ap, NOW)).toBe(true);
   const drain = await runtime.drain(a.month, 1, ap.id, NOW);
@@ -172,6 +179,14 @@ async function fixture(
     fp = funding();
   if (!options.skipPricing) expect(await runtime.putPricingProof(pp, NOW)).toBe(true);
   if (!options.skipFunding) expect(await runtime.putFundingProof(fp, NOW)).toBe(true);
+  if (!options.throughMigration)
+    seedStorageAdmissionProjection(db, {
+      pricingId: pp.id,
+      fundingId: fp.id,
+      allocationId: ap.id,
+      now: NOW,
+      expiry: EXP,
+    });
   const workspaceId = crypto.randomUUID();
   const envelope = await core.encrypt("v2_workspaces", workspaceId, actor.ownerId, 1, {
     subjectContext: "individual",
@@ -579,4 +594,48 @@ test("actual authenticated late receipt settles after owner deletion without new
   expect(money(f)).toEqual({ reserved_krw: 0, ambiguous_krw: 0, settled_krw: 500 });
   await costs.after(p, { transport: "response", definitiveNoCharge: false, observedAt: now });
   expect(money(f)).toEqual({ reserved_krw: 0, ambiguous_krw: 0, settled_krw: 500 });
+});
+
+test("an expired latest funding head never falls back to an older unexpired proof", async () => {
+  const f = await originalFixture();
+  expect(
+    await f.runtime.putFundingProof(
+      { ...f.fp, id: "zz-expiring-funding", validUntil: "2026-10-06T00:00:30.000Z" },
+      NOW,
+    ),
+  ).toBe(true);
+  const costs = createStorageBudgetService({
+    core: f.core,
+    environment: "preview",
+    ownerId: f.actor.ownerId,
+    clock: () => "2026-10-06T00:01:00.000Z",
+    bounds,
+  });
+  expect(await costs.prepare(input(f))).toBeNull();
+  expect(money(f)).toEqual({ reserved_krw: 0, ambiguous_krw: 0, settled_krw: 0 });
+});
+
+test("newer unrelated pricing does not hide the approved storage projection bundle", async () => {
+  const f = await originalFixture();
+  expect(
+    await f.runtime.putPricingProof(
+      {
+        ...f.pp,
+        id: "zz-unrelated-pricing",
+        prices: f.pp.prices.filter((p) => p.sku !== "r2_class_a_requests"),
+      },
+      NOW,
+    ),
+  ).toBe(true);
+  const costs = createStorageBudgetService({
+    core: f.core,
+    environment: "preview",
+    ownerId: f.actor.ownerId,
+    clock: () => NOW,
+    bounds,
+  });
+  const admission = await prepared(costs, input(f));
+  expect(admission.request.pricingProofId).toBe(f.pp.id);
+  await admitted(f, admission);
+  expect(await costs.beforeDispatch(admission, async () => true)).not.toBeNull();
 });

@@ -354,6 +354,7 @@ export const v2Idempotency = sqliteTable(
   },
   (t) => [
     primaryKey({ columns: [t.ownerId, t.route, t.key] }),
+    index("v2_idempotency_operation_request_idx").on(t.operationId, t.requestHash),
     check(
       "v2_idempotency_hash",
       sql`length(${t.requestHash}) = 64 AND ${t.requestHash} NOT GLOB '*[^0-9a-f]*'`,
@@ -510,6 +511,7 @@ export const v2StorageReservations = sqliteTable(
     kind: text("kind").notNull(),
     byteLength: integer("byte_length").notNull(),
     state: text("state").notNull().default("reserved"),
+    liveBlobBytes: integer("live_blob_bytes").notNull().default(0),
     createdAt: created(),
   },
   (t) => [
@@ -628,6 +630,9 @@ export const v2CostAttempts = sqliteTable(
   },
   (t) => [
     uniqueIndex("v2_invocation_attempt_unique").on(t.invocationId, t.attempt),
+    index("v2_unresolved_invocation_idx")
+      .on(t.invocationId)
+      .where(sql`${t.state} IN ('reserved','ambiguous')`),
     check(
       "v2_cost_attempt_state",
       sql`${t.state} IN ('reserved','settled','ambiguous','released') AND ${t.attempt} BETWEEN 1 AND 10 AND ${t.reservedKrw} >= 0 AND ((${t.state} = 'settled' AND ${t.chargedKrw} IS NOT NULL AND ${t.chargedKrw} >= 0) OR (${t.state} != 'settled' AND ${t.chargedKrw} IS NULL))`,
@@ -900,6 +905,7 @@ export const v2Consents = sqliteTable(
     createdAt: created(),
   },
   (t) => [
+    index("v2_file_consent_idx").on(t.fileId, t.ownerId, t.kind, t.version),
     check(
       "v2_consent_kind",
       sql`${t.kind} IN ('auto_processing','original_export','profile_publication')`,
@@ -1765,6 +1771,10 @@ export const v2StoragePaidExecutions = sqliteTable(
   (t) => [
     uniqueIndex("v2_storage_paid_plan_unique").on(t.planId),
     index("v2_storage_paid_intent_idx").on(t.blobId, t.state),
+    index("v2_storage_paid_operation_request_idx").on(
+      t.operationId,
+      sql`json_extract(${t.payloadJson},'$.plan.requestHash')`,
+    ),
     check(
       "v2_storage_paid_bounds",
       sql`${t.targetKind} IN ('file','profile_asset') AND ${t.scope} IN ('case_original','lawyer_original','approved_public_copy') AND typeof(${t.operationRevision})='integer' AND ${t.operationRevision} BETWEEN 1 AND 9007199254740991 AND typeof(${t.targetRevision})='integer' AND ${t.targetRevision} BETWEEN 1 AND 9007199254740991 AND length(${t.digest})=64 AND length(${t.evidenceHash})=64 AND length(CAST(${t.payloadJson} AS BLOB))<=65536 AND length(CAST(${t.anchorJson} AS BLOB))<=1048576 AND ${t.deadlineAt}>${t.createdAt}`,

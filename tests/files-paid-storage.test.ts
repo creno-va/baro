@@ -9,6 +9,7 @@ import {
 import { createV2StoragePaidRuntimeRepository } from "../src/server/db/v2-storage-paid-runtime";
 import { createFilesService, type FileStorageCosts } from "../src/server/modules/files/service";
 import { fixture } from "./helpers/file-processing-fixture";
+import { seedStorageAdmissionProjection } from "./helpers/storage-admission";
 
 const NOW = "2026-10-06T00:00:00.000Z",
   EXP = "2026-11-01T00:00:00.000Z",
@@ -124,6 +125,13 @@ async function paidFixture() {
   };
   expect(await runtime.putPricingProof(pricing, NOW)).toBe(true);
   expect(await runtime.putFundingProof(funding, NOW)).toBe(true);
+  seedStorageAdmissionProjection(f.db, {
+    pricingId: pricing.id,
+    fundingId: funding.id,
+    allocationId: ap.id,
+    now: NOW,
+    expiry: EXP,
+  });
   const storage = createV2StoragePaidRuntimeRepository(f.core, "preview", verify);
   let current = NOW,
     beforeHook: (() => Promise<void>) | undefined,

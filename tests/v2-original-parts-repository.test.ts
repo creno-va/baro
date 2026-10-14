@@ -1,4 +1,6 @@
 import { afterEach, expect, test } from "bun:test";
+import { readdir } from "node:fs/promises";
+import { convertV4MiniflareOptions, Miniflare } from "miniflare";
 import { z } from "zod";
 import { createCaseDataCipher, type EnvelopeCipher } from "../src/server/crypto";
 import { createV2AccountingRepository } from "../src/server/db/v2-accounting";
@@ -19,8 +21,8 @@ afterEach(() => {
     db.close();
   }
 });
-async function fixture(bytes = 100) {
-  const db = await createTestDatabase();
+async function fixture(bytes = 100, throughMigration?: string) {
+  const db = await createTestDatabase(throughMigration ? { throughMigration } : {});
   databases.push(db);
   const user = await seedTestSession(db, { now: Date.parse(NOW), consent: true });
   const cipher = await createCaseDataCipher({
@@ -411,3 +413,106 @@ test("cleanup journal failure rolls pending abandonment back and another owner c
   expect(rows(f)).toEqual(before);
   expect(f.db.sqlite.query("SELECT * FROM v2_deletion_journals").all()).toEqual([]);
 });
+
+test("native D1 original INSERT returns its own row when triggers increase meta.changes", async () => {
+  const baseline = "0009_storage_capacity_maintenance";
+  const f = await fixture(100, baseline);
+  const mf = new Miniflare(
+    convertV4MiniflareOptions({
+      modules: true,
+      script:
+        'export default { fetch() { return new Response("synthetic original trigger test"); } }',
+      compatibilityDate: "2026-10-01",
+      d1Databases: ["DB"],
+      cf: false,
+      unsafeRegisterWorker: false,
+    }),
+  );
+  try {
+    const db = (await mf.getD1Database("DB")) as unknown as D1Database;
+    const migrations = (await readdir("drizzle")).filter((n) => /^\d{4}_.+\.sql$/.test(n)).sort();
+    const apply = async (name: string) =>
+      db.batch(
+        (await Bun.file(`drizzle/${name}`).text())
+          .split("--> statement-breakpoint")
+          .map((s) => s.trim())
+          .filter(Boolean)
+          .map((s) => db.prepare(s)),
+      );
+    for (const name of migrations.filter((n) => n <= `${baseline}.sql`)) await apply(name);
+    const inserts = [db.prepare("PRAGMA defer_foreign_keys=ON")];
+    for (const { name } of f.db.sqlite
+      .query("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
+      .all() as { name: string }[]) {
+      if (name === "app_metadata") continue;
+      for (const row of f.db.sqlite.query(`SELECT * FROM ${name}`).all() as Record<
+        string,
+        unknown
+      >[]) {
+        inserts.push(
+          db
+            .prepare(
+              `INSERT INTO ${name}(${Object.keys(row).join(",")}) VALUES(${Object.keys(row)
+                .map(() => "?")
+                .join(",")})`,
+            )
+            .bind(...Object.values(row)),
+        );
+      }
+    }
+    await db.batch(inserts);
+    // Apply future summary migrations to populated source rows; do not copy
+    // derived counters over the values their triggers/migrations calculate.
+    for (const name of migrations.filter((n) => n > `${baseline}.sql`)) await apply(name);
+    let insertChanges = 0;
+    const observed = <T>(sql: string, result: D1Result<T>) => {
+      if (sql.startsWith("INSERT INTO v2_blobs")) insertChanges = result.meta.changes;
+      return result;
+    };
+    const wrap = (sql: string, statement: D1PreparedStatement): D1PreparedStatement => ({
+      bind: (...values: unknown[]) => wrap(sql, statement.bind(...values)),
+      first: statement.first.bind(statement),
+      raw: statement.raw.bind(statement),
+      all: async <T>() => observed(sql, await statement.all<T>()),
+      run: async <T>() => observed(sql, await statement.run<T>()),
+    });
+    const core = createV2Core(
+      { prepare: (sql: string) => wrap(sql, db.prepare(sql)) } as D1Database,
+      f.cipher,
+    );
+    const files = createV2FilesRepository(core);
+    await db
+      .prepare(
+        "CREATE TRIGGER synthetic_reject_original BEFORE INSERT ON v2_blobs BEGIN SELECT RAISE(ABORT,'synthetic'); END",
+      )
+      .run();
+    await expect(files.prepareOriginalPart(f.actor, f.input)).rejects.toThrow(
+      "DB_OPERATION_FAILED",
+    );
+    expect(await db.prepare("SELECT count(*) AS n FROM v2_blobs").first<number>("n")).toBe(0);
+    expect(
+      await db
+        .prepare("SELECT live_blob_bytes AS n FROM v2_storage_reservations")
+        .first<number>("n"),
+    ).toBe(0);
+    await db.prepare("DROP TRIGGER synthetic_reject_original").run();
+    const inserted = await files.prepareOriginalPart(f.actor, f.input);
+    expect(insertChanges).toBeGreaterThan(1);
+    expect(
+      await db
+        .prepare("SELECT live_blob_bytes AS n FROM v2_storage_reservations")
+        .first<number>("n"),
+    ).toBe(100);
+    expect(inserted).toBe(true);
+    expect(await files.prepareOriginalPart(f.actor, f.input)).toBe(false);
+    expect(
+      await files.prepareOriginalPart(
+        { ...f.actor, ownerId: "foreign-owner" },
+        { ...f.input, blob: { ...f.input.blob, id: crypto.randomUUID() } },
+      ),
+    ).toBe(false);
+    expect(await db.prepare("SELECT count(*) AS n FROM v2_blobs").first<number>("n")).toBe(1);
+  } finally {
+    await mf.dispose();
+  }
+}, 30000);

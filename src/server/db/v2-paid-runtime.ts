@@ -23,6 +23,7 @@ import {
   preparePaidStatements,
 } from "./v2-paid-statements";
 import { recordRuntimeUsage } from "./v2-paid-usage";
+import { initializeStorageControl } from "./v2-storage-carryover";
 import { type JobLease, leaseSchema } from "./v2-workspace";
 
 export * from "./v2-paid-contracts";
@@ -145,7 +146,7 @@ export function createV2PaidRuntimeRepository(
       (
         await core
           .statement(
-            "INSERT INTO v2_runtime_proofs(id,kind,environment,digest,payload_json,evidence_hash,verification_method,verified_at,valid_until) VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO NOTHING",
+            "INSERT INTO v2_runtime_proofs(id,kind,environment,digest,payload_json,evidence_hash,verification_method,verified_at,valid_until) VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO NOTHING RETURNING id",
             [
               p.id,
               kind,
@@ -158,8 +159,8 @@ export function createV2PaidRuntimeRepository(
               new Date(expiry).toISOString(),
             ],
           )
-          .run()
-      ).meta.changes === 1
+          .all<{ id: string }>()
+      ).results.length === 1
     );
   }
   async function proof<T>(
@@ -414,16 +415,7 @@ export function createV2PaidRuntimeRepository(
       return safe(async () => {
         parse(monthSchema, month);
         now = parse(iso, now);
-        return (
-          (
-            await core
-              .statement(
-                "INSERT INTO v2_runtime_controls(month,environment,pending_version,updated_at) SELECT month,environment,allocation_version,? FROM v2_monthly_budget WHERE month=? AND environment=? ON CONFLICT(month) DO NOTHING",
-                [now, month, environment],
-              )
-              .run()
-          ).meta.changes === 1
-        );
+        return initializeStorageControl(core, environment, month, now);
       });
     },
     freeze(month: string, expectedRevision: number, nextVersion: number, now: string) {

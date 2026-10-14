@@ -122,6 +122,15 @@ test("populated 0006→0007 preserves all 82 old table rows and ciphertext bytes
 test("upgraded retained ambiguity prevents paid execution without authenticated proofs; deletion preserves financial exposure", async () => {
   const f = await fixture();
   f.db.sqlite.exec(await Bun.file("drizzle/0007_runtime_paid_execution.sql").text());
+  for (const name of [
+    "0008_storage_paid_execution",
+    "0009_storage_capacity_maintenance",
+    "0010_bounded_storage_admission",
+  ])
+    for (const sql of (await Bun.file(`drizzle/${name}.sql`).text())
+      .split("--> statement-breakpoint")
+      .filter((sql) => sql.trim()))
+      f.db.sqlite.query(sql).run();
   const runtime = createV2PaidRuntimeRepository(f.core, "preview");
   expect(await runtime.initializeControl("2026-10", NOW)).toBe(true);
   expect((await runtime.exposure(NOW))?.phase).toBe("frozen");

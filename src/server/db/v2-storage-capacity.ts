@@ -61,6 +61,10 @@ export const isPreparedPhysicalCapacity = (value: unknown): value is PreparedPhy
 function currentProjection(environment: string, now: string, monthlyBudgetCapEnabled: boolean) {
   return {
     sql: `EXISTS(SELECT 1 FROM v2_storage_projections projection JOIN v2_physical_storage_capacity capacity ON capacity.environment=projection.environment
+    JOIN v2_physical_storage_totals total ON total.environment=projection.environment AND total.version=1 AND total.held_bytes=capacity.held_bytes
+    JOIN v2_storage_carryover carry ON carry.id=1 AND carry.version=1 AND carry.cursor_month=projection.month
+    JOIN v2_storage_funding_heads funding_head ON funding_head.environment=projection.environment
+    JOIN v2_runtime_proofs latest_funding ON latest_funding.id=funding_head.proof_id AND latest_funding.verified_at=funding_head.verified_at
     JOIN v2_runtime_controls control ON control.month=projection.month AND control.environment=projection.environment
     JOIN v2_monthly_budget budget ON budget.month=projection.month AND budget.environment=projection.environment
     JOIN v2_maintenance_exposure maintenance ON maintenance.id=projection.maintenance_id AND maintenance.month=projection.month
@@ -74,10 +78,13 @@ function currentProjection(environment: string, now: string, monthlyBudgetCapEna
     AND pricing.payload_json=json_extract(projection.payload_json,'$.pricingJson') AND funding.payload_json=json_extract(projection.payload_json,'$.fundingJson') AND allocation.payload_json=json_extract(projection.payload_json,'$.allocationJson')
     AND pricing.environment=projection.environment AND pricing.kind='pricing' AND funding.environment=projection.environment AND funding.kind='funding' AND allocation.environment=projection.environment AND allocation.kind='allocation'
     AND pricing.verified_at<=? AND funding.verified_at<=? AND allocation.verified_at<=? AND pricing.valid_until>? AND funding.valid_until>? AND allocation.valid_until>?
-    AND (${monthlyBudgetCapEnabled ? "0" : "1"}=1 OR budget.settled_krw+budget.reserved_krw+budget.ambiguous_krw+budget.fixed_maintenance_krw+(${carryoverSql})<=budget.limit_krw)
-    AND budget.settled_krw+budget.reserved_krw+budget.ambiguous_krw+budget.fixed_maintenance_krw+(${carryoverSql})<=json_extract(funding.payload_json,'$.spendAllowanceKrw')
+    AND (${monthlyBudgetCapEnabled ? "0" : "1"}=1 OR budget.settled_krw+budget.reserved_krw+budget.ambiguous_krw+budget.fixed_maintenance_krw+(carry.budget_krw+carry.maintenance_krw)<=budget.limit_krw)
+    AND budget.settled_krw+budget.reserved_krw+budget.ambiguous_krw+budget.fixed_maintenance_krw+(carry.budget_krw+carry.maintenance_krw)<=json_extract(funding.payload_json,'$.spendAllowanceKrw')
     AND json_extract(funding.payload_json,'$.state') IN ('funded','trial_credit')
-    AND NOT EXISTS(SELECT 1 FROM v2_blobs b LEFT JOIN v2_physical_blob_bindings binding ON binding.blob_id=b.id WHERE b.state!='deleted' AND (binding.blob_id IS NULL OR binding.state!='held' OR binding.environment!=projection.environment OR binding.object_key!=b.object_key OR b.cipher_bytes>binding.maximum_cipher_bytes)))`,
+    AND latest_funding.kind='funding' AND latest_funding.environment=projection.environment AND latest_funding.verified_at<=? AND latest_funding.valid_until>?
+    AND json_extract(latest_funding.payload_json,'$.state') IN ('funded','trial_credit')
+    AND budget.settled_krw+budget.reserved_krw+budget.ambiguous_krw+budget.fixed_maintenance_krw+carry.budget_krw+carry.maintenance_krw<=json_extract(latest_funding.payload_json,'$.spendAllowanceKrw')
+    AND NOT EXISTS(SELECT 1 FROM v2_storage_integrity_faults WHERE environment=projection.environment))`,
     values: [
       environment,
       usageDateKst(now).slice(0, 7),
@@ -89,10 +96,8 @@ function currentProjection(environment: string, now: string, monthlyBudgetCapEna
       now,
       now,
       now,
-      usageDateKst(now).slice(0, 7),
-      usageDateKst(now).slice(0, 7),
-      usageDateKst(now).slice(0, 7),
-      usageDateKst(now).slice(0, 7),
+      now,
+      now,
     ],
   };
 }

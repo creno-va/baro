@@ -301,7 +301,7 @@ export function createV2StorageRepository(core: V2Core) {
         });
         const result = await core
           .statement(
-            `INSERT INTO v2_blobs(id,principal_id,reservation_id,kind,visibility,state,object_key,logical_bytes,cipher_bytes,cipher_hash,key_version,encrypted_payload,created_at) SELECT ?,r.principal_id,r.id,?,?,'stored',?,?,?,?,?,?,? FROM v2_storage_reservations r JOIN v2_billing_principals p ON p.id=r.principal_id WHERE r.id=? AND p.owner_id=? AND r.state IN ('reserved','stored') AND ${reservationAlive} AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='account' AND target_id=p.owner_id) AND (r.workspace_id IS NULL OR EXISTS(SELECT 1 FROM v2_workspaces w WHERE w.id=r.workspace_id AND w.owner_id=p.owner_id AND ${aliveWorkspace})) AND coalesce((SELECT sum(logical_bytes) FROM v2_blobs WHERE reservation_id=r.id AND state!='deleted'),0)+?<=r.byte_length`,
+            `INSERT INTO v2_blobs(id,principal_id,reservation_id,kind,visibility,state,object_key,logical_bytes,cipher_bytes,cipher_hash,key_version,encrypted_payload,created_at) SELECT ?,r.principal_id,r.id,?,?,'stored',?,?,?,?,?,?,? FROM v2_storage_reservations r JOIN v2_billing_principals p ON p.id=r.principal_id WHERE r.id=? AND p.owner_id=? AND r.state IN ('reserved','stored') AND ${reservationAlive} AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='account' AND target_id=p.owner_id) AND (r.workspace_id IS NULL OR EXISTS(SELECT 1 FROM v2_workspaces w WHERE w.id=r.workspace_id AND w.owner_id=p.owner_id AND ${aliveWorkspace})) AND coalesce((SELECT sum(logical_bytes) FROM v2_blobs WHERE reservation_id=r.id AND state!='deleted'),0)+?<=r.byte_length RETURNING id`,
             [
               b.id,
               b.kind,
@@ -318,8 +318,8 @@ export function createV2StorageRepository(core: V2Core) {
               b.logicalBytes,
             ],
           )
-          .run();
-        return result.meta.changes === 1;
+          .all<{ id: string }>();
+        return result.results.length === 1;
       });
     },
     reserveAssetCopy(
@@ -430,7 +430,7 @@ export function createV2StorageRepository(core: V2Core) {
           (
             await core
               .statement(
-                `INSERT INTO v2_blobs(id,principal_id,reservation_id,kind,visibility,state,object_key,logical_bytes,cipher_bytes,cipher_hash,key_version,encrypted_payload,created_at,source_blob_id,source_asset_revision,approved_revision_id) SELECT ?,reservation.principal_id,reservation.id,'public_copy','public','stored',?,?,?,?,?,?,?,a.sanitized_blob_id,a.revision,revision.id FROM v2_storage_reservations reservation JOIN v2_billing_principals principal ON principal.id=reservation.principal_id JOIN v2_assets a ON a.id=reservation.entity_id JOIN v2_profiles p ON p.id=a.profile_id JOIN v2_profile_revision_assets ra ON ra.asset_id=a.id AND ra.asset_revision=a.revision JOIN v2_profile_revisions revision ON revision.id=ra.revision_id JOIN v2_blobs source ON source.id=a.sanitized_blob_id WHERE reservation.id=? AND reservation.kind='lawyer_asset' AND reservation.state='reserved' AND principal.owner_id=? AND a.owner_id=principal.owner_id AND a.id=? AND a.revision=? AND a.state='ready' AND revision.id=? AND revision.status='approved' AND source.id=? AND source.state='stored' AND source.visibility='staging' AND source.encrypted_payload=? AND source.logical_bytes=? AND reservation.byte_length=? AND NOT EXISTS(SELECT 1 FROM v2_blobs WHERE reservation_id=reservation.id AND state!='deleted') AND EXISTS(SELECT 1 FROM v2_role_bindings WHERE owner_id=a.owner_id AND role='verified_lawyer') AND EXISTS(SELECT 1 FROM v2_applications WHERE id=revision.application_id AND owner_id=a.owner_id AND status='approved') AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE (target_kind='account' AND target_id=a.owner_id) OR (target_kind='profile' AND target_id=p.id) OR (target_kind='asset' AND target_id=a.id))`,
+                `INSERT INTO v2_blobs(id,principal_id,reservation_id,kind,visibility,state,object_key,logical_bytes,cipher_bytes,cipher_hash,key_version,encrypted_payload,created_at,source_blob_id,source_asset_revision,approved_revision_id) SELECT ?,reservation.principal_id,reservation.id,'public_copy','public','stored',?,?,?,?,?,?,?,a.sanitized_blob_id,a.revision,revision.id FROM v2_storage_reservations reservation JOIN v2_billing_principals principal ON principal.id=reservation.principal_id JOIN v2_assets a ON a.id=reservation.entity_id JOIN v2_profiles p ON p.id=a.profile_id JOIN v2_profile_revision_assets ra ON ra.asset_id=a.id AND ra.asset_revision=a.revision JOIN v2_profile_revisions revision ON revision.id=ra.revision_id JOIN v2_blobs source ON source.id=a.sanitized_blob_id WHERE reservation.id=? AND reservation.kind='lawyer_asset' AND reservation.state='reserved' AND principal.owner_id=? AND a.owner_id=principal.owner_id AND a.id=? AND a.revision=? AND a.state='ready' AND revision.id=? AND revision.status='approved' AND source.id=? AND source.state='stored' AND source.visibility='staging' AND source.encrypted_payload=? AND source.logical_bytes=? AND reservation.byte_length=? AND NOT EXISTS(SELECT 1 FROM v2_blobs WHERE reservation_id=reservation.id AND state!='deleted') AND EXISTS(SELECT 1 FROM v2_role_bindings WHERE owner_id=a.owner_id AND role='verified_lawyer') AND EXISTS(SELECT 1 FROM v2_applications WHERE id=revision.application_id AND owner_id=a.owner_id AND status='approved') AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE (target_kind='account' AND target_id=a.owner_id) OR (target_kind='profile' AND target_id=p.id) OR (target_kind='asset' AND target_id=a.id)) RETURNING id`,
                 [
                   b.id,
                   `public/${b.id}`,
@@ -451,8 +451,8 @@ export function createV2StorageRepository(core: V2Core) {
                   b.logicalBytes,
                 ],
               )
-              .run()
-          ).meta.changes === 1
+              .all<{ id: string }>()
+          ).results.length === 1
         );
       });
     },

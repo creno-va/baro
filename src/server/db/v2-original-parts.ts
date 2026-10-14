@@ -124,7 +124,7 @@ export function prepareOriginalPart(
     }
     const result = await core
       .statement(
-        `INSERT INTO v2_blobs(id,principal_id,reservation_id,kind,visibility,state,object_key,logical_bytes,cipher_bytes,cipher_hash,key_version,encrypted_payload,created_at) SELECT ?,r.principal_id,r.id,'original','private','pending',?,?,?,?,?,?,? ${from} WHERE ${eligibility} AND NOT EXISTS(SELECT 1 FROM v2_blobs WHERE id=?)`,
+        `INSERT INTO v2_blobs(id,principal_id,reservation_id,kind,visibility,state,object_key,logical_bytes,cipher_bytes,cipher_hash,key_version,encrypted_payload,created_at) SELECT ?,r.principal_id,r.id,'original','private','pending',?,?,?,?,?,?,? ${from} WHERE ${eligibility} AND NOT EXISTS(SELECT 1 FROM v2_blobs WHERE id=?) RETURNING id`,
         [
           b.id,
           `private/${b.id}`,
@@ -138,8 +138,8 @@ export function prepareOriginalPart(
           b.id,
         ],
       )
-      .run();
-    return result.meta.changes === 1;
+      .all<{ id: string }>();
+    return result.results.length === 1;
   });
 }
 // Called after a definitive local upload failure; exposure stays reserved until

@@ -71,6 +71,13 @@
       "when": 1791269194316,
       "tag": "0009_storage_capacity_maintenance",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1791902348053,
+      "tag": "0010_bounded_storage_admission",
+      "breakpoints": true
     }
   ]
 }

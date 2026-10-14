@@ -67,7 +67,7 @@ export function prepareArtifactBlob(
       (
         await core
           .statement(
-            `INSERT INTO v2_blobs(id,principal_id,reservation_id,kind,visibility,state,object_key,logical_bytes,cipher_bytes,cipher_hash,key_version,encrypted_payload,created_at) SELECT ?,r.principal_id,r.id,'derivative','private','pending',?,?,?,?,?,?,? ${from} WHERE ${eligibility()} AND j.target_id=? AND j.target_revision=? AND j.operation_id=? AND NOT EXISTS(SELECT 1 FROM v2_blobs WHERE id=?) AND NOT EXISTS(SELECT 1 FROM v2_blobs WHERE reservation_id=r.id AND state!='deleted')`,
+            `INSERT INTO v2_blobs(id,principal_id,reservation_id,kind,visibility,state,object_key,logical_bytes,cipher_bytes,cipher_hash,key_version,encrypted_payload,created_at) SELECT ?,r.principal_id,r.id,'derivative','private','pending',?,?,?,?,?,?,? ${from} WHERE ${eligibility()} AND j.target_id=? AND j.target_revision=? AND j.operation_id=? AND NOT EXISTS(SELECT 1 FROM v2_blobs WHERE id=?) AND NOT EXISTS(SELECT 1 FROM v2_blobs WHERE reservation_id=r.id AND state!='deleted') RETURNING id`,
             [
               b.id,
               `private/${b.id}`,
@@ -84,8 +84,8 @@ export function prepareArtifactBlob(
               b.id,
             ],
           )
-          .run()
-      ).meta.changes === 1
+          .all<{ id: string }>()
+      ).results.length === 1
     );
   });
 }

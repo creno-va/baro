@@ -6,6 +6,9 @@ export const carryoverSql =
   "coalesce((SELECT sum(reserved_krw+ambiguous_krw) FROM v2_monthly_budget WHERE month<?),0)+coalesce((SELECT sum(amount_krw) FROM v2_maintenance_exposure WHERE month<? AND state IN ('reserved','ambiguous')),0)";
 export function budgetAdmissionPredicate(input: {
   monthlyBudgetCapEnabled?: boolean | undefined;
+  /** Only storage admission opts into the migration-owned bounded snapshot.
+   * Model admission and cold coordination keep the original audited SUM. */
+  boundedStorage?: true;
   pricingProofId: string;
   fundingProofId: string;
   pricingJson: string;
@@ -16,8 +19,17 @@ export function budgetAdmissionPredicate(input: {
 }) {
   const { amount, environment, now } = input;
   const month = usageDateKst(now).slice(0, 7);
+  const carryover = input.boundedStorage
+    ? "storage_carryover.budget_krw+storage_carryover.maintenance_krw"
+    : carryoverSql;
+  const carryoverJoin = input.boundedStorage
+    ? "JOIN v2_storage_carryover storage_carryover ON storage_carryover.id=1 AND storage_carryover.version=1 AND storage_carryover.cursor_month=b.month JOIN v2_storage_funding_heads funding_head ON funding_head.environment=b.environment JOIN v2_storage_projections storage_projection ON storage_projection.environment=b.environment AND storage_projection.month=b.month JOIN v2_runtime_proofs projection_funding ON projection_funding.id=storage_projection.funding_proof_id"
+    : "";
+  const storageGuard = input.boundedStorage
+    ? `AND funding_head.proof_id=fp.id AND funding_head.verified_at=fp.verified_at AND storage_projection.pricing_proof_id=pp.id AND storage_projection.allocation_proof_id=ap.id AND storage_projection.created_at<=? AND storage_projection.valid_until>? AND projection_funding.kind='funding' AND projection_funding.environment=b.environment AND projection_funding.payload_json=json_extract(storage_projection.payload_json,'$.fundingJson') AND projection_funding.verified_at<=? AND projection_funding.valid_until>? AND json_extract(projection_funding.payload_json,'$.state') IN ('funded','trial_credit') AND b.settled_krw+b.reserved_krw+b.ambiguous_krw+b.fixed_maintenance_krw+(${carryover})+?<=json_extract(projection_funding.payload_json,'$.spendAllowanceKrw')`
+    : "";
   return {
-    sql: `EXISTS(SELECT 1 FROM v2_monthly_budget b JOIN v2_runtime_controls c ON c.month=b.month JOIN v2_budget_allocations a ON a.month=b.month AND a.version=b.allocation_version JOIN v2_runtime_proofs ap ON ap.id=c.allocation_proof_id JOIN v2_runtime_proofs pp ON pp.id=? JOIN v2_runtime_proofs fp ON fp.id=? WHERE b.month=? AND b.environment=? AND c.environment=b.environment AND c.phase='active' AND ap.kind='allocation' AND ap.environment=b.environment AND json_extract(ap.payload_json,'$.allocation.version')=b.allocation_version AND json_extract(ap.payload_json,'$.allocation.manifestHash')=a.manifest_hash AND ap.valid_until>? AND ap.verified_at<=? AND pp.kind='pricing' AND fp.kind='funding' AND pp.environment=b.environment AND fp.environment=b.environment AND pp.payload_json=? AND fp.payload_json=? AND pp.verified_at<=? AND fp.verified_at<=? AND pp.valid_until>? AND fp.valid_until>? AND a.reviewed_at<=? AND a.valid_until>? AND a.funding_valid_until>? AND a.funding_state IN ('funded','trial_credit') AND (${input.monthlyBudgetCapEnabled === false ? "1" : "0"}=1 OR b.settled_krw+b.reserved_krw+b.ambiguous_krw+b.fixed_maintenance_krw+(${carryoverSql})+?<=b.limit_krw) AND b.settled_krw+b.reserved_krw+b.ambiguous_krw+b.fixed_maintenance_krw+(${carryoverSql})+?<=json_extract(fp.payload_json,'$.spendAllowanceKrw') AND json_extract(fp.payload_json,'$.state') IN ('funded','trial_credit'))`,
+    sql: `EXISTS(SELECT 1 FROM v2_monthly_budget b ${carryoverJoin} JOIN v2_runtime_controls c ON c.month=b.month JOIN v2_budget_allocations a ON a.month=b.month AND a.version=b.allocation_version JOIN v2_runtime_proofs ap ON ap.id=c.allocation_proof_id JOIN v2_runtime_proofs pp ON pp.id=? JOIN v2_runtime_proofs fp ON fp.id=? WHERE b.month=? AND b.environment=? AND c.environment=b.environment AND c.phase='active' AND ap.kind='allocation' AND ap.environment=b.environment AND json_extract(ap.payload_json,'$.allocation.version')=b.allocation_version AND json_extract(ap.payload_json,'$.allocation.manifestHash')=a.manifest_hash AND ap.valid_until>? AND ap.verified_at<=? AND pp.kind='pricing' AND fp.kind='funding' AND pp.environment=b.environment AND fp.environment=b.environment AND pp.payload_json=? AND fp.payload_json=? AND pp.verified_at<=? AND fp.verified_at<=? AND pp.valid_until>? AND fp.valid_until>? AND a.reviewed_at<=? AND a.valid_until>? AND a.funding_valid_until>? AND a.funding_state IN ('funded','trial_credit') AND (${input.monthlyBudgetCapEnabled === false ? "1" : "0"}=1 OR b.settled_krw+b.reserved_krw+b.ambiguous_krw+b.fixed_maintenance_krw+(${carryover})+?<=b.limit_krw) AND b.settled_krw+b.reserved_krw+b.ambiguous_krw+b.fixed_maintenance_krw+(${carryover})+?<=json_extract(fp.payload_json,'$.spendAllowanceKrw') AND json_extract(fp.payload_json,'$.state') IN ('funded','trial_credit') ${storageGuard})`,
     values: [
       input.pricingProofId,
       input.fundingProofId,
@@ -34,12 +46,11 @@ export function budgetAdmissionPredicate(input: {
       now,
       now,
       now,
-      month,
-      month,
+      ...(input.boundedStorage ? [] : [month, month]),
       amount,
-      month,
-      month,
+      ...(input.boundedStorage ? [] : [month, month]),
       amount,
+      ...(input.boundedStorage ? [now, now, now, now, amount] : []),
     ],
   };
 }

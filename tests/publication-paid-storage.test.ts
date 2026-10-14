@@ -16,6 +16,7 @@ import {
   type PublicationSanitizedInput,
 } from "../src/server/modules/lawyers/publication";
 import { publicationFixture } from "./helpers/lawyer-publication";
+import { seedStorageAdmissionProjection } from "./helpers/storage-admission";
 
 const NOW = new Date().toISOString(),
   EXP = new Date(Date.now() + 30 * 86400000).toISOString(),
@@ -134,6 +135,13 @@ async function paidFixture() {
   pricing.prices.push({ ...price, sku: "r2_class_b_requests" });
   expect(await runtime.putPricingProof(pricing, NOW)).toBe(true);
   expect(await runtime.putFundingProof(funding, NOW)).toBe(true);
+  seedStorageAdmissionProjection(f.db, {
+    pricingId: pricing.id,
+    fundingId: funding.id,
+    allocationId: ap.id,
+    now: NOW,
+    expiry: EXP,
+  });
   let current = new Date().toISOString(),
     hook: (() => Promise<void>) | undefined,
     decoderHook: (() => Promise<void>) | undefined,

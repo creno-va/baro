@@ -340,7 +340,7 @@ export function prepareAssetUpload(
       (
         await core
           .statement(
-            `INSERT INTO v2_blobs(id,principal_id,reservation_id,kind,visibility,state,object_key,logical_bytes,cipher_bytes,cipher_hash,key_version,encrypted_payload,created_at) SELECT ?,r.principal_id,r.id,?,'private','pending',?,r.byte_length,0,NULL,?,?,? ${from} WHERE ${eligible} AND a.encrypted_payload=? AND a.purpose=? AND a.profile_id=? AND r.byte_length=? AND NOT EXISTS(SELECT 1 FROM v2_blobs WHERE id=?) AND NOT EXISTS(SELECT 1 FROM v2_blobs WHERE reservation_id=r.id AND state!='deleted')`,
+            `INSERT INTO v2_blobs(id,principal_id,reservation_id,kind,visibility,state,object_key,logical_bytes,cipher_bytes,cipher_hash,key_version,encrypted_payload,created_at) SELECT ?,r.principal_id,r.id,?,'private','pending',?,r.byte_length,0,NULL,?,?,? ${from} WHERE ${eligible} AND a.encrypted_payload=? AND a.purpose=? AND a.profile_id=? AND r.byte_length=? AND NOT EXISTS(SELECT 1 FROM v2_blobs WHERE id=?) AND NOT EXISTS(SELECT 1 FROM v2_blobs WHERE reservation_id=r.id AND state!='deleted') RETURNING id`,
             [
               input.blobId,
               kind(row.purpose),
@@ -356,8 +356,8 @@ export function prepareAssetUpload(
               input.blobId,
             ],
           )
-          .run()
-      ).meta.changes === 1
+          .all<{ id: string }>()
+      ).results.length === 1
     );
   });
 }
