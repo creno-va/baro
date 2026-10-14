@@ -57,6 +57,7 @@ export function FileReview({
   const [review, setReview] = useState<FileReviewView | null>(null);
   const [drafts, setDrafts] = useState<Record<string, { text: string; included: boolean }>>({});
   const [busy, setBusy] = useState(false);
+  const [loadingAfter, setLoadingAfter] = useState<number | null>(null);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState<unknown>(null);
   const saved = useRef(review);
@@ -81,6 +82,8 @@ export function FileReview({
   const [limit, setLimit] = useState(100);
   const serial = useRef(0),
     locked = useRef(false);
+  const readRequest = useRef<number | null>(null);
+  const failedReadAfter = useRef<number | null>(null);
   const purge = useCallback(() => {
     ++serial.current;
     setReview(null);
@@ -89,6 +92,9 @@ export function FileReview({
     setDrafts({});
     locked.current = false;
     setBusy(false);
+    readRequest.current = null;
+    failedReadAfter.current = null;
+    setLoadingAfter(null);
   }, []);
   const { ready, canMutate, version, verify, ticket, current, alive } = useCustomerAccess(
     purge,
@@ -115,13 +121,19 @@ export function FileReview({
   }, []);
   const canWrite = canMutate && canEdit && (error as { code?: string })?.code !== "CONFLICT";
   const load = useCallback(
-    async (after = -1, replace = false) => {
+    async (after = -1, replace = false, afterWrite = false) => {
+      // Read requests are independent of the mutation lock. Only a mutation's
+      // own completed-write refresh may load while that lock is held.
+      if (readRequest.current !== null || (locked.current && !afterWrite)) return;
       if (batchedReviewPending.current && draftDirty.current && !replace) return;
       if (replace) batchedReviewPending.current = false;
       const request = ++serial.current;
+      readRequest.current = request;
+      failedReadAfter.current = null;
+      setLoadingAfter(after);
       let epoch = ticket();
       try {
-        if (!(await verify())) return;
+        if (!(await verify()) || request !== serial.current) return;
         epoch = ticket();
         const next = await api.files.review(caseId, fileId, after);
         if (!(await verify()) || !current(epoch) || request !== serial.current) return;
@@ -144,7 +156,15 @@ export function FileReview({
             : { ...next, observations: [...(old?.observations ?? []), ...next.observations] },
         );
       } catch (cause) {
-        if (alive(epoch) && request === serial.current) report(cause);
+        if (alive(epoch) && request === serial.current) {
+          failedReadAfter.current = after;
+          report(cause);
+        }
+      } finally {
+        if (readRequest.current === request) {
+          readRequest.current = null;
+          setLoadingAfter(null);
+        }
       }
     },
     [caseId, fileId, verify, ticket, current, alive, report],
@@ -156,12 +176,14 @@ export function FileReview({
   useEffect(
     () => () => {
       ++serial.current;
+      readRequest.current = null;
     },
     [],
   );
   async function run(action: (epoch: number) => Promise<void>, write = true) {
-    if (locked.current || (write && !canWrite)) return;
+    if (locked.current || readRequest.current !== null || (write && !canWrite)) return;
     locked.current = true;
+    failedReadAfter.current = null;
     setBusy(true);
     setNotice("");
     const epoch = ticket();
@@ -192,13 +214,13 @@ export function FileReview({
       batchedReviewPending.current = false;
       setDrafts({});
       setNotice("교정 내용을 저장했어요. 새로 접속해도 유지됩니다.");
-      await load(-1, true);
+      await load(-1, true, true);
       if (current(epoch)) await onChanged();
     }
   }
   const rows = review?.coverage ? coverageRows(review.coverage) : [];
   return (
-    <section aria-label="자료 내용 검토" aria-busy={busy}>
+    <section aria-label="자료 내용 검토" aria-busy={busy || loadingAfter !== null}>
       <h3>자료 내용 검토</h3>
       {error ? (
         <ErrorPanel
@@ -211,15 +233,24 @@ export function FileReview({
               !window.confirm("저장하지 않은 교정 내용을 버리고 최신 내용을 불러올까요?")
             )
               return;
-            void load(-1, replace);
+            void load(replace ? -1 : (failedReadAfter.current ?? -1), replace);
           }}
-          disabled={busy}
+          disabled={busy || loadingAfter !== null}
         />
       ) : null}
       {!ready || !review ? (
-        <p role="status">처리 위치와 저장한 교정 내용을 불러오고 있어요.</p>
+        !error || loadingAfter !== null ? (
+          <p role="status">처리 위치와 저장한 교정 내용을 불러오고 있어요.</p>
+        ) : null
       ) : (
         <>
+          {loadingAfter !== null && (
+            <p role="status">
+              {loadingAfter >= 0
+                ? "다음 처리 내용을 불러오고 있어요."
+                : "처리 위치와 저장한 교정 내용을 다시 확인하고 있어요."}
+            </p>
+          )}
           {!canMutate && (
             <p>
               기존 자료를 읽을 수 있어요. 수정하려면{" "}
@@ -287,7 +318,7 @@ export function FileReview({
           {review.nextAfterOrdinal !== null && (
             <Button
               variant="outline"
-              disabled={busy || dirty}
+              disabled={busy || loadingAfter !== null || dirty}
               onClick={() => void load(review.nextAfterOrdinal ?? -1)}
             >
               다음 처리 내용 보기
@@ -302,7 +333,7 @@ export function FileReview({
               </p>
               {review.pendingReview.status === "saving" && (
                 <Button
-                  disabled={busy || !canWrite}
+                  disabled={busy || loadingAfter !== null || !canWrite}
                   onClick={() =>
                     void run(async (epoch) =>
                       progress(
@@ -321,7 +352,7 @@ export function FileReview({
               )}
               <Button
                 variant="outline"
-                disabled={busy}
+                disabled={busy || loadingAfter !== null}
                 onClick={() =>
                   void run(async (epoch) => {
                     await api.files.discardReview(
@@ -331,7 +362,7 @@ export function FileReview({
                     );
                     if (current(epoch)) {
                       setDrafts({});
-                      await load();
+                      await load(-1, false, true);
                     }
                   }, false)
                 }
@@ -344,6 +375,7 @@ export function FileReview({
               <Button
                 disabled={
                   busy ||
+                  loadingAfter !== null ||
                   !canWrite ||
                   Object.values(drafts).some((d) => !d.text.trim() || [...d.text].length > 5000)
                 }
