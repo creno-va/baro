@@ -16,6 +16,43 @@ const databases: Awaited<ReturnType<typeof createTestDatabase>>[] = [];
 afterEach(() => {
   for (const db of databases.splice(0)) db.close();
 });
+test.each([301, 302, 303, 307, 308])(
+  "official retrieval rejects redirect %i without following or retrying",
+  async (status) => {
+    const f = await fixture();
+    let calls = 0;
+    let waits = 0;
+    let cancelled = false;
+    const observations: LegalRetrievalDiagnostic[] = [];
+    const adapter = createLegalRetrieval(
+      { LAW_API_OC: "synthetic-private-oc" },
+      f.repo,
+      async (_url, init) => {
+        calls++;
+        expect(init.redirect).toBe("manual");
+        return new Response(
+          new ReadableStream({
+            cancel() {
+              cancelled = true;
+            },
+          }),
+          { status, headers: { location: "https://untrusted.example.invalid/collect" } },
+        );
+      },
+      async () => {
+        waits++;
+      },
+      (value) => observations.push(value),
+    );
+    await expect(adapter.retrieve(["loan"], "2026-10-05", NOW)).rejects.toThrow(
+      "LEGAL_SOURCE_UNAVAILABLE",
+    );
+    expect(calls).toBe(1);
+    expect(waits).toBe(0);
+    expect(cancelled).toBe(true);
+    expect(observations).toEqual([{ stage: "list", category: "http-error", httpStatus: status }]);
+  },
+);
 test("HTTP 200 error envelopes distinguish registration and credential rejection without raw diagnostics", async () => {
   const f = await fixture();
   const sensitive = "synthetic-private-oc https://example.test/?OC=synthetic-private-oc";

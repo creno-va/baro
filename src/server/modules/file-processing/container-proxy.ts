@@ -134,7 +134,9 @@ export async function proxyProcessorRequest(
           headers,
           ...(ready ? {} : { body: request.body }),
           signal: controller.signal,
-          redirect: "error",
+          // Workers supports manual/follow. Surface redirects to the !ok
+          // rejection below without forwarding private material to another URL.
+          redirect: "manual",
         }),
       ),
     );
