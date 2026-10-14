@@ -57,6 +57,7 @@ async function fixture() {
     },
   };
   const queries: { sql: string; parameters: number; bytes: number }[] = [];
+  const records = new WeakMap<D1PreparedStatement, () => void>();
   const instrument = (statement: D1PreparedStatement, sql: string, values: unknown[] = []) => {
     const bind = statement.bind.bind(statement);
     statement.bind = (...parameters: unknown[]) => instrument(bind(...parameters), sql, parameters);
@@ -66,6 +67,7 @@ async function fixture() {
         parameters: values.length,
         bytes: utf8Bytes(sql) + utf8Bytes(JSON.stringify(values)),
       });
+    records.set(statement, record);
     const first = statement.first.bind(statement);
     const all = statement.all.bind(statement);
     statement.first = ((...args: Parameters<typeof first>) => {
@@ -81,7 +83,10 @@ async function fixture() {
   // Decorating actual statements preserves the helper's transaction identity.
   const binding = {
     prepare: (sql: string) => instrument(db.binding.prepare(sql), sql),
-    batch: (statements: D1PreparedStatement[]) => db.binding.batch(statements),
+    batch: (statements: D1PreparedStatement[]) => {
+      for (const statement of statements) records.get(statement)?.();
+      return db.binding.batch(statements);
+    },
   } as unknown as D1Database;
   const core = createV2Core(binding, cipher);
   const ws = createV2WorkspaceRepository(binding, cipher);

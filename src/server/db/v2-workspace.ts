@@ -680,17 +680,24 @@ export function createV2WorkspaceRepository(
           row.encrypted_payload,
           z.strictObject({ narrative: v2CreateCaseRequestSchema.shape.narrative }),
         );
-        const batchRows = await core
-          .statement("SELECT * FROM v2_question_batches WHERE workspace_id=? ORDER BY ordinal", [
-            id,
-          ])
-          .all<{ id: string; revision: number; encrypted_payload: string }>();
-        const answerRows = await core
-          .statement(
+        // These independent reads share one snapshot/round trip. Keep the owner
+        // check above and the final intake/revision fence after decryption.
+        const [batchRows, answerRows] = await core.binding.batch<{
+          id: string;
+          revision: number;
+          encrypted_payload: string;
+          batch_id?: string;
+        }>([
+          core.statement(
+            "SELECT * FROM v2_question_batches WHERE workspace_id=? ORDER BY ordinal",
+            [id],
+          ),
+          core.statement(
             "SELECT a.* FROM v2_answers a JOIN v2_question_batches b ON b.id=a.batch_id WHERE b.workspace_id=? ORDER BY a.question_id",
             [id],
-          )
-          .all<{ id: string; batch_id: string; revision: number; encrypted_payload: string }>();
+          ),
+        ]);
+        if (!batchRows || !answerRows) throw new V2RepositoryError("DB_OPERATION_FAILED");
         const batches = [];
         for (const batch of batchRows.results) {
           const body = await core.decrypt(
