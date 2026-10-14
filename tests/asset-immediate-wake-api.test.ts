@@ -84,7 +84,8 @@ async function fixture(
         return base.all<T>();
       },
       run: <T>() => base.run<T>(),
-      first: <T>(column?: string) => base.first<T>(column),
+      first: <T>(column?: string) =>
+        column === undefined ? base.first<T>() : base.first<T>(column),
       raw: <T>() => base.raw<T>(),
     } as D1PreparedStatement;
     originals.set(statement, base);
