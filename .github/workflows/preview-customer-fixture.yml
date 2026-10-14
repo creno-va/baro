@@ -1,0 +1,57 @@
+name: Prepare one preview customer fixture (manual)
+run-name: ${{ inputs.mode == 'create' && 'Preview customer fixture create' || 'Preview customer fixture status' }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_sha:
+        description: Exact current main and serving preview SHA with successful main CI
+        required: true
+        type: string
+      mode:
+        description: Status only, or one fixed synthetic intake preparation; never verifies UI creation or Turnstile
+        required: true
+        default: status
+        type: choice
+        options:
+          - status
+          - create
+
+permissions:
+  contents: read
+  actions: read
+
+# Serialize with preview deployment so the checked serving version stays stable.
+concurrency:
+  group: cloudflare-preview
+  cancel-in-progress: false
+
+jobs:
+  fixture:
+    if: github.ref == 'refs/heads/main' && (github.actor == 'hyunhomon' || github.actor == 'hwangeunchan') && (github.triggering_actor == 'hyunhomon' || github.triggering_actor == 'hwangeunchan') && github.sha == inputs.target_sha
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: preview
+      deployment: false
+    steps:
+      - name: Checkout exact coordinator
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: .bun-version
+      - name: Install frozen dependencies
+        run: bun ci
+      - name: Check or prepare the fixed synthetic intake
+        env:
+          FIXTURE_ENVIRONMENT: preview
+          TARGET_SHA: ${{ inputs.target_sha }}
+          FIXTURE_MODE: ${{ inputs.mode }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CASE_DATA_KEY_V1: ${{ secrets.CASE_DATA_KEY_V1 }}
+        run: bun scripts/preview-customer-fixture.ts "$TARGET_SHA" "$FIXTURE_MODE"
