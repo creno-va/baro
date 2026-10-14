@@ -197,28 +197,96 @@ test("expired and old security records are cleaned without deleting users or cur
   }
 });
 
-test("same email does not implicitly link another provider", async () => {
-  const fixture = await createOAuthFixture("google");
-  try {
-    const now = Date.now();
-    fixture.database.sqlite
-      .query(
-        "INSERT INTO user(id,name,email,email_verified,created_at,updated_at) VALUES('existing','Synthetic','google@example.test',1,?,?)",
-      )
-      .run(now, now);
-    const started = await fixture.begin();
-    const response = await fixture.callback(started.state, started.cookie);
-    expect(response.headers.get("location")).toContain("account_not_linked");
-    expect(fixture.database.sqlite.query("SELECT count(*) AS count FROM account").get()).toEqual({
-      count: 0,
+for (const providerId of ["google", "kakao"] as const) {
+  test(`${providerId} verified same-email login preserves the existing owner and account`, async () => {
+    const fixture = await createOAuthFixture(providerId, "shared@example.test");
+    try {
+      const now = Date.now();
+      fixture.database.sqlite
+        .query(
+          "INSERT INTO user(id,name,email,email_verified,created_at,updated_at) VALUES('existing','Existing owner','shared@example.test',1,?,?)",
+        )
+        .run(now, now);
+      fixture.database.sqlite
+        .query(
+          "INSERT INTO account(id,user_id,provider_id,account_id,created_at,updated_at) VALUES('prior','existing','naver','prior-subject',?,?)",
+        )
+        .run(now, now);
+      fixture.database.sqlite
+        .query("INSERT INTO app_metadata(key,value) VALUES('account-type:existing','customer')")
+        .run();
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const started = await fixture.begin();
+        const response = await fixture.callback(started.state, started.cookie);
+        expect(response.headers.get("location")).toBe("/consent");
+        const session = await fixture.auth.api.getSession({
+          headers: new Headers({ cookie: responseCookies(response) }),
+        });
+        expect(session?.user.id).toBe("existing");
+        expect(session?.user.name).toBe("Existing owner");
+        expect(hasRecentOAuthAuthentication(session?.session ?? null)).toBe(true);
+      }
+      expect(fixture.database.sqlite.query("SELECT count(*) count FROM user").get()).toEqual({
+        count: 1,
+      });
+      expect(
+        fixture.database.sqlite
+          .query("SELECT user_id,provider_id FROM account ORDER BY provider_id")
+          .all(),
+      ).toEqual(
+        [providerId, "naver"].sort().map((provider_id) => ({ user_id: "existing", provider_id })),
+      );
+      expect(
+        fixture.database.sqlite
+          .query("SELECT value FROM app_metadata WHERE key='account-type:existing'")
+          .get(),
+      ).toEqual({ value: "customer" });
+      expect(
+        fixture.database.sqlite
+          .query("SELECT access_token,refresh_token,id_token FROM account WHERE provider_id=?")
+          .get(providerId),
+      ).toEqual({ access_token: null, refresh_token: null, id_token: null });
+    } finally {
+      fixture.database.close();
+    }
+  });
+}
+
+for (const localVerified of [false, true]) {
+  for (const providerVerified of [false, true]) {
+    if (localVerified && providerVerified) continue;
+    test(`same email requires both verification proofs: local=${localVerified}, provider=${providerVerified}`, async () => {
+      const fixture = await createOAuthFixture("kakao", "shared@example.test");
+      try {
+        const provider = fixture.context.socialProviders.find((value) => value.id === "kakao");
+        if (!provider) throw new Error("Missing synthetic provider");
+        const original = provider.getUserInfo;
+        provider.getUserInfo = async (...args) => {
+          const result = await original(...args);
+          if (result?.user) result.user.emailVerified = providerVerified;
+          return result;
+        };
+        const now = Date.now();
+        fixture.database.sqlite
+          .query(
+            "INSERT INTO user(id,name,email,email_verified,created_at,updated_at) VALUES('existing','Synthetic','shared@example.test',?,?,?)",
+          )
+          .run(localVerified ? 1 : 0, now, now);
+        const started = await fixture.begin();
+        const response = await fixture.callback(started.state, started.cookie);
+        expect(response.headers.get("location")).toContain("account_not_linked");
+        expect(fixture.database.sqlite.query("SELECT count(*) count FROM account").get()).toEqual({
+          count: 0,
+        });
+        expect(fixture.database.sqlite.query("SELECT count(*) count FROM session").get()).toEqual({
+          count: 0,
+        });
+      } finally {
+        fixture.database.close();
+      }
     });
-    expect(fixture.database.sqlite.query("SELECT count(*) AS count FROM session").get()).toEqual({
-      count: 0,
-    });
-  } finally {
-    fixture.database.close();
   }
-});
+}
 
 test("cleanup failure remains observable without exposing adapter SQL, tokens or cause", async () => {
   const database = {

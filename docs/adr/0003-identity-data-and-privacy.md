@@ -2,7 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-10-04
-- Amended: 2026-10-05 — Naver OAuth 추가
+- Amended: 2026-10-05 — Naver OAuth 추가; 2026-10-14 — 사용자 결정으로 검증된 동일 이메일 소셜 연결 허용
 - Owners: Engineering, Product
 - Partial supersession (2026-10-06): 공개 역할은 [ADR-0007](./0007-lawyer-directory-verification-and-moderation.md), R2/파생물/리포트의 저장·삭제는 [ADR-0008](./0008-private-files-and-report-handoff.md)으로 확장한다. 기존 인증·owner·암호화·삭제까지 보관은 유지한다.
 
@@ -19,6 +19,7 @@
   않는다.
 - 이용자는 만 14세 이상을 스스로 확인한다. 생년월일은 저장하지 않는다.
 - 계정과 사건은 최초 출시부터 저장한다.
+- 2026-10-14 사용자 결정: 기존 계정과 새 OAuth 공급자 양쪽에서 소유가 검증된 동일 이메일은 기존 owner로 연결한다. 기존 사건·프로필·역할·동의와 자격 경계를 보존하며, 공급자 신뢰 예외로 미검증 이메일을 연결하거나 다른 이메일을 병합하지 않는다.
 - 사건 원문, 추가 답변, AI 결과는 AES-256-GCM으로 애플리케이션 계층에서 암호화한다.
 - 키는 버전별 Worker secret으로 관리하고 D1에는 키 버전, 임의 IV, 인증 태그가 포함된
   암호문만 저장한다. 검색·목록에 필요한 최소 메타데이터만 평문으로 둔다.

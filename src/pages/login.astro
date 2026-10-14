@@ -9,13 +9,16 @@ import "../styles/login.css";
 
 // biome-ignore lint/correctness/noUnusedVariables: Used in the Astro template.
 const oauthFailed = Astro.url.searchParams.has("error");
+const oauthErrors = Astro.url.searchParams.getAll("error");
 // biome-ignore lint/correctness/noUnusedVariables: Used in the Astro template.
 const errorMessage =
-  Astro.url.searchParams.get("error") === "access_denied"
-    ? "로그인을 취소했어요. 원하는 계정을 다시 선택해 주세요."
-    : Astro.url.searchParams.get("error") === "session_expired"
-      ? "안전한 이용을 위해 다시 로그인해 주세요."
-      : "로그인이 완료되지 않았어요. 다시 선택해 주세요.";
+  oauthErrors.includes("account_not_linked") || oauthErrors.includes("unable_to_link_account")
+    ? "이메일 소유 확인이 없어 계정을 연결하지 못했어요. 이메일이 인증된 소셜 계정이나 기존에 사용한 로그인 방법으로 계속해 주세요."
+    : oauthErrors.includes("access_denied")
+      ? "로그인을 취소했어요. 원하는 계정을 다시 선택해 주세요."
+      : oauthErrors.includes("session_expired")
+        ? "안전한 이용을 위해 다시 로그인해 주세요."
+        : "로그인이 완료되지 않았어요. 다시 선택해 주세요.";
 ---
 
 <BaseLayout title="로그인 — BARO" description="Google, Naver 또는 Kakao 계정으로 BARO에 로그인합니다.">
