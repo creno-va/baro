@@ -750,7 +750,9 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
               <p>
                 {view.case.stage === "archived"
                   ? "보관된 사건이에요. 저장된 내용을 확인할 수 있어요."
-                  : "대화를 시작하려면 최신 요약을 확인해 주세요."}
+                  : view.messages.length
+                    ? "요약이 변경되어 다시 확인이 필요해요. 확인한 뒤 대화를 이어갈 수 있어요."
+                    : "대화를 시작하려면 최신 요약을 확인해 주세요."}
               </p>
               {view.case.stage !== "archived" && (
                 <ButtonLink href={`${base}/summary`}>요약 확인하기</ButtonLink>
