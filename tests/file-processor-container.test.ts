@@ -126,6 +126,31 @@ test("failed startup returns sanitized retryable result and stops instance", asy
   expect(calls.stop).toBe(1);
 });
 
+test("failed startup cancels unread private input before returning a response", async () => {
+  for (const cancellationFails of [false, true]) {
+    let cancelled = 0;
+    const input = new ReadableStream<Uint8Array>(
+      {
+        cancel() {
+          cancelled++;
+          if (cancellationFails) throw new Error("synthetic upstream cancellation failure");
+        },
+      },
+      { highWaterMark: 0 },
+    );
+    const request = new Request(ingress(), { body: input });
+    const { calls, adapter } = port(new Response());
+    adapter.start = async () => {
+      throw new Error("synthetic startup failure");
+    };
+    const result = await proxyProcessorRequest(request, adapter);
+    expect(result.status).toBe(503);
+    expect(calls.incoming).toBeNull();
+    expect(calls.stop).toBe(1);
+    expect(cancelled).toBe(1);
+  }
+});
+
 test("cancelled startup cannot dispatch material and stops an instance that becomes ready late", async () => {
   const controller = new AbortController();
   const request = new Request(ingress(), { signal: controller.signal });

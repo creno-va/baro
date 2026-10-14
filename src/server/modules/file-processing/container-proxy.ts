@@ -197,6 +197,10 @@ export async function proxyProcessorRequest(
     });
   } catch {
     await finish().catch(() => {});
+    // Startup may fail before fetch ever takes ownership of this private stream.
+    // Release its upstream RPC/read resources after stopping native work; an
+    // already-forwarded locked stream remains governed by controller.abort().
+    if (request.body && !request.body.locked) await request.body.cancel().catch(() => {});
     return failure("PROCESSOR_UNAVAILABLE", 503);
   }
 }
