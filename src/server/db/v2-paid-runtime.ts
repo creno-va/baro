@@ -23,6 +23,7 @@ import {
   preparePaidStatements,
 } from "./v2-paid-statements";
 import { recordRuntimeUsage } from "./v2-paid-usage";
+import { allocationUntilSql } from "./v2-runtime-authority";
 import { initializeStorageControl } from "./v2-storage-carryover";
 import { type JobLease, leaseSchema } from "./v2-workspace";
 
@@ -193,10 +194,11 @@ export function createV2PaidRuntimeRepository(
         parse(opaqueIdSchema, id);
         const row = await core
           .statement(
-            "SELECT * FROM v2_runtime_proofs WHERE id=? AND environment=? AND verified_at<=? AND valid_until>?",
+            `SELECT p.*,CASE WHEN p.kind='allocation' THEN coalesce((SELECT ${allocationUntilSql("c", "p", "min(p.valid_until,json_extract(p.payload_json,'$.allocation.validUntil'),json_extract(p.payload_json,'$.allocation.fundingValidUntil'))")} FROM v2_runtime_controls c WHERE c.environment=p.environment AND c.allocation_proof_id=p.id AND c.phase='active'),min(p.valid_until,json_extract(p.payload_json,'$.allocation.validUntil'),json_extract(p.payload_json,'$.allocation.fundingValidUntil'))) ELSE p.valid_until END AS effective_valid_until
+             FROM v2_runtime_proofs p WHERE p.id=? AND p.environment=? AND p.verified_at<=? AND effective_valid_until>?`,
             [id, environment, now, now],
           )
-          .first<ProofRow>();
+          .first<ProofRow & { effective_valid_until: string }>();
         if (!row || (await runtimeDigest(JSON.parse(row.payload_json))) !== row.digest) return null;
         return {
           id: row.id,
@@ -204,7 +206,7 @@ export function createV2PaidRuntimeRepository(
           digest: row.digest,
           evidenceHash: row.evidence_hash,
           verifiedAt: row.verified_at,
-          validUntil: row.valid_until,
+          validUntil: row.effective_valid_until,
           payload: JSON.parse(row.payload_json) as unknown,
         };
       });
@@ -326,7 +328,7 @@ export function createV2PaidRuntimeRepository(
           claimId = crypto.randomUUID();
         const ok = await core.changed([
           core.statement(
-            `INSERT INTO v2_mutation_claims(id,owner_id,target_id,revision) SELECT ?,o.owner_id,j.id,j.target_revision FROM v2_jobs j JOIN v2_operations o ON o.id=j.operation_id JOIN v2_paid_holds h ON h.job_id=j.id JOIN v2_cost_attempts ca ON ca.id=h.attempt_id JOIN v2_runtime_plans p ON p.id=h.plan_id JOIN v2_runtime_controls c ON c.month=ca.month JOIN v2_runtime_proofs pp ON pp.id=p.pricing_proof_id JOIN v2_runtime_proofs fp ON fp.id=p.funding_proof_id JOIN v2_runtime_proofs ap ON ap.id=c.allocation_proof_id JOIN v2_monthly_budget b ON b.month=c.month WHERE j.id=? AND o.owner_id=? AND j.lease_token=? AND j.fencing=? AND j.lease_until>? AND j.status IN ('running','validating') AND o.state='admitted' AND h.attempt_id=? AND h.state='prepared' AND ca.state='reserved' AND ca.operation_id=o.id AND p.operation_revision=o.revision AND p.job_id=j.id AND p.target_kind=j.target_kind AND p.target_id=j.target_id AND p.target_revision=j.target_revision AND p.deadline_at>? AND pp.valid_until>? AND fp.valid_until>? AND ap.valid_until>? AND c.phase='active' AND c.environment=? AND json_extract(ap.payload_json,'$.allocation.version')=b.allocation_version AND ${jobAlive}`,
+            `INSERT INTO v2_mutation_claims(id,owner_id,target_id,revision) SELECT ?,o.owner_id,j.id,j.target_revision FROM v2_jobs j JOIN v2_operations o ON o.id=j.operation_id JOIN v2_paid_holds h ON h.job_id=j.id JOIN v2_cost_attempts ca ON ca.id=h.attempt_id JOIN v2_runtime_plans p ON p.id=h.plan_id JOIN v2_runtime_controls c ON c.month=ca.month JOIN v2_runtime_proofs pp ON pp.id=p.pricing_proof_id JOIN v2_runtime_proofs fp ON fp.id=p.funding_proof_id JOIN v2_runtime_proofs ap ON ap.id=c.allocation_proof_id JOIN v2_monthly_budget b ON b.month=c.month JOIN v2_storage_funding_heads head ON head.environment=c.environment AND head.proof_id=fp.id AND head.verified_at=fp.verified_at WHERE j.id=? AND o.owner_id=? AND j.lease_token=? AND j.fencing=? AND j.lease_until>? AND j.status IN ('running','validating') AND o.state='admitted' AND h.attempt_id=? AND h.state='prepared' AND ca.state='reserved' AND ca.operation_id=o.id AND p.operation_revision=o.revision AND p.job_id=j.id AND p.target_kind=j.target_kind AND p.target_id=j.target_id AND p.target_revision=j.target_revision AND p.deadline_at>? AND pp.valid_until>? AND fp.valid_until>? AND ${allocationUntilSql("c", "ap")}>? AND c.phase='active' AND c.environment=? AND json_extract(ap.payload_json,'$.allocation.version')=b.allocation_version AND ${jobAlive}`,
             [
               claimId,
               lease.jobId,

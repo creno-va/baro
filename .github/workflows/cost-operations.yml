@@ -1,0 +1,72 @@
+name: Cost operations (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Observe installs evidence; refresh resumes the same allocation; reallocate requires both real drains
+        required: true
+        type: choice
+        options:
+          - observe
+          - refresh
+          - reallocate
+      target_environment:
+        description: Reallocation requires both environments
+        required: true
+        type: choice
+        options:
+          - preview
+          - production
+          - both
+      operation_key:
+        description: Stable request key for retries; change for a separate configuration operation
+        required: true
+        default: default
+        type: string
+      observation_json:
+        description: Fresh non-secret operator observation; no tokens, private data, or payment changes
+        required: true
+        type: string
+      confirmation:
+        description: Repeat the selected mode after reviewing the observation
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: baro-cost-operations
+  cancel-in-progress: false
+
+jobs:
+  operations:
+    if: github.ref == 'refs/heads/main' && (github.actor == 'hyunhomon' || github.actor == 'hwangeunchan') && inputs.confirmation == inputs.mode
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: production
+      deployment: false
+    steps:
+      - name: Checkout current coordinator
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: .bun-version
+      - name: Install frozen dependencies
+        run: bun ci
+      - name: Run explicit cost operation
+        env:
+          CLOUDFLARE_ACCOUNT_ID: 9e844969d0c44b2449f3951d1f301654
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          COORDINATOR_SHA: ${{ github.sha }}
+          COST_MODE: ${{ inputs.mode }}
+          COST_ENVIRONMENT: ${{ inputs.target_environment }}
+          AI_RUNTIME_OPERATION_KEY: ${{ inputs.operation_key }}
+          AI_RUNTIME_OBSERVATION_JSON: ${{ inputs.observation_json }}
+        run: bun scripts/provision-ai-budget.ts "$COORDINATOR_SHA" "$COST_MODE" "$COST_ENVIRONMENT"

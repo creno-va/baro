@@ -18,5 +18,105 @@
   "contextTokens": 1050000,
   "maximumOutputTokens": 128000,
   "modelReference": "https://developers.cloudflare.com/ai/models/openai/gpt-6-sol/",
-  "outputReference": "https://developers.openai.com/api/docs/models/gpt-6-sol"
+  "outputReference": "https://developers.openai.com/api/docs/models/gpt-6-sol",
+  "spendAllowanceKrw": 54068,
+  "pricing": {
+    "prices": [
+      {
+        "sku": "model_input_tokens",
+        "usdPerUnit": "5.50",
+        "modelRates": [
+          {
+            "contextTier": "short",
+            "cacheClass": "ordinary",
+            "usdPerUnit": "2"
+          },
+          {
+            "contextTier": "short",
+            "cacheClass": "cached_read",
+            "usdPerUnit": "0.20"
+          },
+          {
+            "contextTier": "short",
+            "cacheClass": "cache_write",
+            "usdPerUnit": "2.50"
+          },
+          {
+            "contextTier": "long",
+            "cacheClass": "ordinary",
+            "usdPerUnit": "4"
+          },
+          {
+            "contextTier": "long",
+            "cacheClass": "cached_read",
+            "usdPerUnit": "0.40"
+          },
+          {
+            "contextTier": "long",
+            "cacheClass": "cache_write",
+            "usdPerUnit": "5"
+          }
+        ],
+        "provider": "openai",
+        "model": "openai/gpt-6-sol",
+        "region": "global",
+        "plan": "AI Gateway Unified Billing",
+        "billingMode": "metered",
+        "unit": "tokens",
+        "unitSize": "1000000",
+        "billingQuantum": "1",
+        "officialUrl": "https://developers.cloudflare.com/ai/models/openai/gpt-6-sol/",
+        "checkedAt": "2026-10-06T21:01:08.000Z",
+        "validUntil": "2026-10-31T15:00:00.000Z"
+      },
+      {
+        "sku": "model_output_tokens",
+        "usdPerUnit": "16.50",
+        "modelRates": [
+          {
+            "contextTier": "short",
+            "cacheClass": "not_applicable",
+            "usdPerUnit": "10"
+          },
+          {
+            "contextTier": "long",
+            "cacheClass": "not_applicable",
+            "usdPerUnit": "15"
+          }
+        ],
+        "provider": "openai",
+        "model": "openai/gpt-6-sol",
+        "region": "global",
+        "plan": "AI Gateway Unified Billing",
+        "billingMode": "metered",
+        "unit": "tokens",
+        "unitSize": "1000000",
+        "billingQuantum": "1",
+        "officialUrl": "https://developers.cloudflare.com/ai/models/openai/gpt-6-sol/",
+        "checkedAt": "2026-10-06T21:01:08.000Z",
+        "validUntil": "2026-10-31T15:00:00.000Z"
+      }
+    ],
+    "modelBillingPolicy": {
+      "contextThresholdTokens": 272000,
+      "serviceTier": "default",
+      "processingRegion": "global",
+      "regionMultiplier": "1.10"
+    },
+    "fx": {
+      "krwPerUsd": "1351.70",
+      "asOf": "2026-10-06T08:55:16.000Z",
+      "authority": "Industrial Bank of Korea: sending remittance rate, 2026-10-06",
+      "referenceUrl": "https://global.ibk.co.kr/en/services/ExchangeRate/USD",
+      "checkedAt": "2026-10-06T21:01:08.000Z",
+      "validUntil": "2026-10-31T15:00:00.000Z"
+    },
+    "taxRatio": "0.10",
+    "feeRatio": "0.05",
+    "safetyMarginRatio": "0.20",
+    "hiddenAttemptMultiplier": 1,
+    "hiddenRetryReference": "Gateway retry OFF; application attempts each reserve their own hold",
+    "checkedAt": "2026-10-06T21:01:08.000Z",
+    "validUntil": "2026-10-31T15:00:00.000Z"
+  }
 }

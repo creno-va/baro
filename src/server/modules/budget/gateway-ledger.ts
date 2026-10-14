@@ -5,6 +5,7 @@ import { actorSchema, type V2Core } from "../../db/v2-core";
 import { jobAlive } from "../../db/v2-jobs";
 import { createV2PaidRuntimeRepository, runtimeDigest } from "../../db/v2-paid-runtime";
 import type { PreparedPaidHold } from "../../db/v2-paid-statements";
+import { allocationUntilSql } from "../../db/v2-runtime-authority";
 import { type JobLease, leaseSchema } from "../../db/v2-workspace";
 import type {
   GatewayAttemptHandle,
@@ -305,7 +306,7 @@ export function createGatewayBudgetService(options: {
           state.token = dispatched.dispatchToken;
           const current = await options.core
             .statement(
-              `SELECT j.lease_until,p.deadline_at,pp.valid_until AS pricing_until,fp.valid_until AS funding_until,ap.valid_until AS allocation_until FROM v2_jobs j JOIN v2_operations o ON o.id=j.operation_id JOIN v2_paid_holds h ON h.job_id=j.id JOIN v2_runtime_plans p ON p.id=h.plan_id JOIN v2_cost_attempts ca ON ca.id=h.attempt_id JOIN v2_runtime_controls c ON c.month=ca.month JOIN v2_runtime_proofs pp ON pp.id=p.pricing_proof_id JOIN v2_runtime_proofs fp ON fp.id=p.funding_proof_id JOIN v2_runtime_proofs ap ON ap.id=c.allocation_proof_id WHERE h.attempt_id=? AND h.dispatch_token=? AND j.lease_token=? AND j.fencing=? AND j.status IN ('running','validating') AND o.owner_id=? AND o.state='admitted' AND p.operation_revision=o.revision AND c.phase='active' AND c.environment=? AND ${jobAlive}`,
+              `SELECT j.lease_until,p.deadline_at,pp.valid_until AS pricing_until,fp.valid_until AS funding_until,${allocationUntilSql("c", "ap")} AS allocation_until FROM v2_jobs j JOIN v2_operations o ON o.id=j.operation_id JOIN v2_paid_holds h ON h.job_id=j.id JOIN v2_runtime_plans p ON p.id=h.plan_id JOIN v2_cost_attempts ca ON ca.id=h.attempt_id JOIN v2_runtime_controls c ON c.month=ca.month JOIN v2_runtime_proofs pp ON pp.id=p.pricing_proof_id JOIN v2_runtime_proofs fp ON fp.id=p.funding_proof_id JOIN v2_runtime_proofs ap ON ap.id=c.allocation_proof_id JOIN v2_storage_funding_heads head ON head.environment=c.environment AND head.proof_id=fp.id AND head.verified_at=fp.verified_at WHERE h.attempt_id=? AND h.dispatch_token=? AND j.lease_token=? AND j.fencing=? AND j.status IN ('running','validating') AND o.owner_id=? AND o.state='admitted' AND p.operation_revision=o.revision AND c.phase='active' AND c.environment=? AND ${jobAlive}`,
               [
                 handle.attemptId,
                 state.token,

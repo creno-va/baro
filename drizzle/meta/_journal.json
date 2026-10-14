@@ -78,6 +78,13 @@
       "when": 1791902348053,
       "tag": "0010_bounded_storage_admission",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1791950603359,
+      "tag": "0011_runtime_refresh",
+      "breakpoints": true
     }
   ]
 }

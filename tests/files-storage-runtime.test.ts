@@ -8,7 +8,8 @@ import { createV2Core } from "../src/server/db/v2-core";
 import { type CleanupLease, createV2DeletionRepository } from "../src/server/db/v2-deletion";
 import { createV2FilesRepository } from "../src/server/db/v2-files";
 import { stopUnsentOriginalWrite } from "../src/server/db/v2-original-parts";
-import { runtimeDigest } from "../src/server/db/v2-paid-runtime";
+import { createV2PaidRuntimeRepository, runtimeDigest } from "../src/server/db/v2-paid-runtime";
+import { createV2RuntimeRefreshRepository } from "../src/server/db/v2-runtime-refresh";
 import { createV2StorageCapacityRepository } from "../src/server/db/v2-storage-capacity";
 import {
   createStorageBudgetService,
@@ -21,7 +22,7 @@ import { createFilesService } from "../src/server/modules/files/service";
 import { signedSessionCookie, testEnvironment } from "./helpers/d1";
 import { measureD1Work } from "./helpers/d1-work";
 import { r2 } from "./helpers/file-processing-fixture";
-import { intent, NOW, ready } from "./helpers/storage-capacity";
+import { intent, NOW, ready, verifier } from "./helpers/storage-capacity";
 
 type FileStorageMetering = NonNullable<
   Parameters<typeof createStorageBudgetService>[0]["metering"]
@@ -785,6 +786,32 @@ test("signed global file composition stores an encrypted PDF chunk with actual w
       .first<{ reserved_krw: number; settled_krw: number }>();
     expect(exposure?.reserved_krw).toBeGreaterThan(0);
     expect(exposure?.settled_krw).toBe(0);
+    const runtime = createV2PaidRuntimeRepository(core, "preview", verifier);
+    const current = await runtime.exposure(NOW);
+    if (!current) throw new Error("Synthetic native runtime missing");
+    expect(await runtime.freeze("2026-10", current.control_revision, 1, NOW)).toBe(true);
+    const updatedPrice = { ...f.pp, id: "zz-native-refreshed-price" };
+    const updatedFunding = { ...f.fp, id: "zz-native-refreshed-funding" };
+    expect(await runtime.putPricingProof(updatedPrice, NOW)).toBe(true);
+    expect(await runtime.putFundingProof(updatedFunding, NOW)).toBe(true);
+    expect(
+      await createV2RuntimeRefreshRepository(core, "preview", verifier).refresh(
+        {
+          id: "native-same-allocation-refresh",
+          month: "2026-10",
+          expectedControlRevision: current.control_revision + 1,
+          allocationVersion: 1,
+          allocationProofId: f.ap.id,
+          pricingProofId: updatedPrice.id,
+          fundingProofId: updatedFunding.id,
+        },
+        NOW,
+      ),
+    ).toBe(true);
+    expect((await runtime.exposure(NOW))?.reserved_krw).toBe(exposure?.reserved_krw);
+    expect(
+      await core.statement("SELECT count(*) n FROM v2_runtime_refreshes").first<number>("n"),
+    ).toBe(1);
     const stored = [...bucket.objects.values()][0];
     if (!stored) throw new Error("Synthetic R2 object missing");
     expect(

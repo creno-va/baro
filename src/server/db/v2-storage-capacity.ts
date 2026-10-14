@@ -16,6 +16,7 @@ import {
   runtimeDigest,
 } from "./v2-paid-runtime";
 import { carryoverSql } from "./v2-paid-statements";
+import { allocationUntilSql } from "./v2-runtime-authority";
 import {
   type MaintenanceIO,
   maintenanceIOSchema,
@@ -81,7 +82,7 @@ function currentProjection(environment: string, now: string, monthlyBudgetCapEna
     AND maintenance.state IN ('reserved','ambiguous') AND maintenance.amount_krw=projection.reserved_krw
     AND pricing.payload_json=json_extract(projection.payload_json,'$.pricingJson') AND funding.payload_json=json_extract(projection.payload_json,'$.fundingJson') AND allocation.payload_json=json_extract(projection.payload_json,'$.allocationJson')
     AND pricing.environment=projection.environment AND pricing.kind='pricing' AND funding.environment=projection.environment AND funding.kind='funding' AND allocation.environment=projection.environment AND allocation.kind='allocation'
-    AND pricing.verified_at<=? AND funding.verified_at<=? AND allocation.verified_at<=? AND pricing.valid_until>? AND funding.valid_until>? AND allocation.valid_until>?
+    AND pricing.verified_at<=? AND funding.verified_at<=? AND allocation.verified_at<=? AND pricing.valid_until>? AND funding.valid_until>? AND ${allocationUntilSql("control", "allocation")}>?
     AND (${monthlyBudgetCapEnabled ? "0" : "1"}=1 OR budget.settled_krw+budget.reserved_krw+budget.ambiguous_krw+budget.fixed_maintenance_krw+(carry.budget_krw+carry.maintenance_krw)<=budget.limit_krw)
     AND budget.settled_krw+budget.reserved_krw+budget.ambiguous_krw+budget.fixed_maintenance_krw+(carry.budget_krw+carry.maintenance_krw)<=json_extract(funding.payload_json,'$.spendAllowanceKrw')
     AND json_extract(funding.payload_json,'$.state') IN ('funded','trial_credit')
@@ -124,7 +125,7 @@ export function createV2StorageCapacityRepository(
         const p = parse(storageProjectionSchema, input);
         now = parse(iso, now);
         if (!verify || p.month !== usageDateKst(now).slice(0, 7)) return false;
-        const end = new Date(
+        const monthEnd = new Date(
           Date.UTC(Number(p.month.slice(0, 4)), Number(p.month.slice(5, 7)), 1) - 9 * 3600000,
         ).toISOString();
         const pr = await proofs.findProof(p.pricingProofId, now),
@@ -135,6 +136,22 @@ export function createV2StorageCapacityRepository(
         const pricing = parse(pricingProofSchema, pr.payload),
           funding = parse(fundingProofSchema, fr.payload),
           allocation = parse(allocationProofSchema, ar.payload);
+        // Charge the full conservative capacity/IO plan, while permission
+        // expires with the shortest current observation instead of inventing
+        // month-long funding validity.
+        const end = new Date(
+          Math.min(
+            ...[
+              monthEnd,
+              pr.validUntil,
+              fr.validUntil,
+              ar.validUntil,
+              pricing.fx.validUntil,
+              ...pricing.prices.map((v) => v.validUntil),
+            ].map(Date.parse),
+          ),
+        ).toISOString();
+        if (Date.parse(end) <= Date.parse(now)) return false;
         const count = p.getLimit + p.headLimit + p.deleteLimit;
         const quantities: ExecutionPlan["quantities"] = [
           {
@@ -169,7 +186,7 @@ export function createV2StorageCapacityRepository(
           Date.parse(pricing.fx.asOf) > Date.parse(now) ||
           Date.parse(funding.observedAt) > Date.parse(now) ||
           Date.parse(funding.validUntil) < Date.parse(end) ||
-          Date.parse(allocation.allocation.validUntil) < Date.parse(end) ||
+          Date.parse(ar.validUntil) < Date.parse(end) ||
           quantities.some((q) => {
             const rate = pricing.prices.find((price) => price.sku === q.sku);
             return (
@@ -197,7 +214,12 @@ export function createV2StorageCapacityRepository(
         };
         const json = JSON.stringify(payload),
           digest = await runtimeDigest(payload);
-        if (amount < 1 || amount > limit || new TextEncoder().encode(json).length > 262144)
+        if (
+          amount < 1 ||
+          amount > 1000000 ||
+          (core.monthlyBudgetCapEnabled && amount > limit) ||
+          new TextEncoder().encode(json).length > 262144
+        )
           return false;
         const evidence = await verify("maintenance", payload, digest);
         if (!evidence) return false;
@@ -223,10 +245,10 @@ export function createV2StorageCapacityRepository(
           )
           .first<number>("count");
         if (inventoryCount) return false;
-        const inventoryGuard = `NOT EXISTS(SELECT 1 FROM v2_blobs live LEFT JOIN v2_physical_blob_bindings binding ON binding.blob_id=live.id WHERE live.state!='deleted' AND (binding.blob_id IS NULL OR binding.state!='held' OR binding.environment!=? OR binding.object_key!=live.object_key OR binding.maximum_cipher_bytes<live.cipher_bytes)) AND NOT EXISTS(SELECT 1 FROM v2_physical_blob_bindings WHERE environment=? AND inventory_hash IS NOT NULL AND inventory_hash!=?) AND EXISTS(SELECT 1 FROM v2_budget_allocations a WHERE a.month=b.month AND a.version=b.allocation_version AND a.version=json_extract(allocation.payload_json,'$.allocation.version') AND a.manifest_hash=json_extract(allocation.payload_json,'$.allocation.manifestHash') AND a.preview_krw=json_extract(allocation.payload_json,'$.allocation.previewKrw') AND a.production_krw=json_extract(allocation.payload_json,'$.allocation.productionKrw') AND a.valid_until>=?)`;
+        const inventoryGuard = `NOT EXISTS(SELECT 1 FROM v2_blobs live LEFT JOIN v2_physical_blob_bindings binding ON binding.blob_id=live.id WHERE live.state!='deleted' AND (binding.blob_id IS NULL OR binding.state!='held' OR binding.environment!=? OR binding.object_key!=live.object_key OR binding.maximum_cipher_bytes<live.cipher_bytes)) AND NOT EXISTS(SELECT 1 FROM v2_physical_blob_bindings WHERE environment=? AND inventory_hash IS NOT NULL AND inventory_hash!=?) AND EXISTS(SELECT 1 FROM v2_budget_allocations a WHERE a.month=b.month AND a.version=b.allocation_version AND a.version=json_extract(allocation.payload_json,'$.allocation.version') AND a.manifest_hash=json_extract(allocation.payload_json,'$.allocation.manifestHash') AND a.preview_krw=json_extract(allocation.payload_json,'$.allocation.previewKrw') AND a.production_krw=json_extract(allocation.payload_json,'$.allocation.productionKrw') AND ${allocationUntilSql("c", "allocation", "a.valid_until")}>=?)`;
         return core.changed([
           core.statement(
-            `INSERT INTO v2_runtime_claims(id,owner_id,target_id,revision) SELECT ?,?,b.month,c.revision FROM v2_monthly_budget b JOIN v2_runtime_controls c ON c.month=b.month JOIN v2_runtime_proofs pricing ON pricing.id=? JOIN v2_runtime_proofs funding ON funding.id=? JOIN v2_runtime_proofs allocation ON allocation.id=? WHERE b.month=? AND b.environment=? AND c.environment=b.environment AND c.revision=? AND c.phase IN ('frozen','drained') AND pricing.payload_json=? AND funding.payload_json=? AND allocation.payload_json=? AND pricing.valid_until>=? AND funding.valid_until>=? AND allocation.valid_until>=? AND NOT EXISTS(SELECT 1 FROM v2_storage_projections WHERE environment=? AND month=?) AND coalesce((SELECT held_bytes FROM v2_physical_storage_capacity WHERE environment=?),0)<=? AND b.settled_krw+b.reserved_krw+b.ambiguous_krw+b.fixed_maintenance_krw+(${carryoverSql})+?<=min(?,json_extract(funding.payload_json,'$.spendAllowanceKrw')) AND ${inventoryGuard}`,
+            `INSERT INTO v2_runtime_claims(id,owner_id,target_id,revision) SELECT ?,?,b.month,c.revision FROM v2_monthly_budget b JOIN v2_runtime_controls c ON c.month=b.month JOIN v2_runtime_proofs pricing ON pricing.id=? JOIN v2_runtime_proofs funding ON funding.id=? JOIN v2_storage_funding_heads head ON head.environment=b.environment AND head.proof_id=funding.id AND head.verified_at=funding.verified_at JOIN v2_runtime_proofs allocation ON allocation.id=? WHERE b.month=? AND b.environment=? AND c.environment=b.environment AND c.revision=? AND c.phase IN ('active','frozen','drained') AND pricing.payload_json=? AND funding.payload_json=? AND allocation.payload_json=? AND pricing.valid_until>=? AND funding.valid_until>=? AND ${allocationUntilSql("c", "allocation")}>=? AND NOT EXISTS(SELECT 1 FROM v2_storage_projections WHERE environment=? AND month=?) AND coalesce((SELECT held_bytes FROM v2_physical_storage_capacity WHERE environment=?),0)<=? AND b.settled_krw+b.reserved_krw+b.ambiguous_krw+b.fixed_maintenance_krw+(${carryoverSql})+?<=(CASE WHEN ${core.monthlyBudgetCapEnabled ? "1" : "0"}=1 THEN min(?,json_extract(funding.payload_json,'$.spendAllowanceKrw')) ELSE json_extract(funding.payload_json,'$.spendAllowanceKrw') END) AND ${inventoryGuard}`,
             [
               claimId,
               environment,
@@ -257,8 +279,12 @@ export function createV2StorageCapacityRepository(
             ],
           ),
           core.statement(
-            `INSERT INTO v2_physical_storage_capacity(environment,capacity_bytes) SELECT ?,? WHERE ${fin} ON CONFLICT(environment) DO UPDATE SET capacity_bytes=excluded.capacity_bytes,revision=revision+1`,
-            [environment, p.capacityBytes, claimId],
+            `INSERT INTO v2_physical_storage_capacity(environment,capacity_bytes) SELECT ?,? WHERE ${fin} AND NOT EXISTS(SELECT 1 FROM v2_physical_storage_capacity WHERE environment=?)`,
+            [environment, p.capacityBytes, claimId, environment],
+          ),
+          core.statement(
+            `UPDATE v2_physical_storage_capacity SET capacity_bytes=?,revision=revision+1 WHERE environment=? AND capacity_bytes!=? AND ${fin}`,
+            [p.capacityBytes, environment, p.capacityBytes, claimId],
           ),
           core.statement(
             `INSERT INTO v2_maintenance_exposure(id,month,reference_hash,amount_krw,state,created_at) SELECT ?,?,?,?,'reserved',? WHERE ${fin}`,

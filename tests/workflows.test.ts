@@ -15,6 +15,7 @@ test("all workflow actions use immutable commits and valid YAML", async () => {
   for (const file of [
     "ci.yml",
     "full-validation.yml",
+    "cost-operations.yml",
     "deploy-preview.yml",
     "deploy-production.yml",
     "environment-readiness.yml",

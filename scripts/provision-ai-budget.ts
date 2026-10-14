@@ -5,18 +5,37 @@ import {
   createV2AccountingRepository,
 } from "../src/server/db/v2-accounting";
 import { createV2Core } from "../src/server/db/v2-core";
+import { decimalSchema, pricingProofSchema } from "../src/server/db/v2-paid-contracts";
 import {
   createV2PaidRuntimeRepository,
   type PricingProof,
   type RuntimeProofVerifier,
   runtimeDigest,
 } from "../src/server/db/v2-paid-runtime";
+import {
+  createV2RuntimeRefreshRepository,
+  runtimeRefreshSchema,
+} from "../src/server/db/v2-runtime-refresh";
 import { remoteBudgetD1 } from "./remote-budget-d1";
 
 export const observationSchema = z.strictObject({
   checkedAt: z.iso.datetime(),
   validUntil: z.iso.datetime(),
-  creditUsd: z.literal("40.00"),
+  creditUsd: decimalSchema,
+  spendAllowanceKrw: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
+  fundingState: z.enum(["funded", "trial_credit", "unavailable"]).default("funded"),
+  pricing: z
+    .strictObject(pricingProofSchema.shape)
+    .omit({ id: true, version: true, environment: true })
+    .refine(
+      (p) =>
+        pricingProofSchema.safeParse({
+          ...p,
+          id: "observation-template",
+          version: 1,
+          environment: "preview",
+        }).success,
+    ),
   existingPaymentPath: z.literal(true),
   autoRecharge: z.literal(true),
   thresholdUsd: z.literal("10.00"),
@@ -24,9 +43,9 @@ export const observationSchema = z.strictObject({
   authorizedByDirectUserInstruction: z.literal(true),
   monthlyBudgetCapEnabled: z.literal(false),
   fx: z.strictObject({
-    krwPerUsd: z.literal("1351.70"),
+    krwPerUsd: decimalSchema.refine((v) => /[1-9]/.test(v)),
     asOf: z.iso.datetime(),
-    authority: z.literal("Industrial Bank of Korea: sending remittance rate, 2026-10-06"),
+    authority: z.string().min(1).max(200),
     referenceUrl: z.literal("https://global.ibk.co.kr/en/services/ExchangeRate/USD"),
   }),
   model: z.literal("openai/gpt-6-sol"),
@@ -59,66 +78,148 @@ export function pricing(
   environment: "preview" | "production",
   o: AiRuntimeObservation,
 ): PricingProof {
-  const fresh = { checkedAt: o.checkedAt, validUntil: o.validUntil };
-  return {
+  return pricingProofSchema.parse({
+    ...o.pricing,
     id: crypto.randomUUID(),
     version: 1,
     environment,
-    prices: [
-      {
-        sku: "model_input_tokens" as const,
-        usdPerUnit: "5.50",
-        modelRates: [
-          { contextTier: "short" as const, cacheClass: "ordinary" as const, usdPerUnit: "2" },
-          { contextTier: "short" as const, cacheClass: "cached_read" as const, usdPerUnit: "0.20" },
-          { contextTier: "short" as const, cacheClass: "cache_write" as const, usdPerUnit: "2.50" },
-          { contextTier: "long" as const, cacheClass: "ordinary" as const, usdPerUnit: "4" },
-          { contextTier: "long" as const, cacheClass: "cached_read" as const, usdPerUnit: "0.40" },
-          { contextTier: "long" as const, cacheClass: "cache_write" as const, usdPerUnit: "5" },
-        ],
-      },
-      {
-        sku: "model_output_tokens" as const,
-        usdPerUnit: "16.50",
-        modelRates: [
-          {
-            contextTier: "short" as const,
-            cacheClass: "not_applicable" as const,
-            usdPerUnit: "10",
-          },
-          { contextTier: "long" as const, cacheClass: "not_applicable" as const, usdPerUnit: "15" },
-        ],
-      },
-    ].map((p) => ({
-      ...p,
-      provider: "openai" as const,
-      model: o.model,
-      region: "global",
-      plan: "AI Gateway Unified Billing",
-      billingMode: "metered" as const,
-      unit: "tokens" as const,
-      unitSize: "1000000",
-      billingQuantum: "1",
-      officialUrl: o.modelReference,
-      ...fresh,
-    })),
-    modelBillingPolicy: {
-      contextThresholdTokens: 272000,
-      serviceTier: "default",
-      processingRegion: "global",
-      regionMultiplier: "1.10",
-    },
-    fx: { ...o.fx, ...fresh },
-    taxRatio: "0.10",
-    feeRatio: "0.05",
-    safetyMarginRatio: "0.20",
-    hiddenAttemptMultiplier: 1,
-    hiddenRetryReference: "Gateway retry OFF; application attempts each reserve their own hold",
-    ...fresh,
-  };
+  });
 }
 
-/** Existing repository primitives coordinate both real databases; no fake remote drain receipts. */
+type RuntimeEnvironment = "preview" | "production";
+function operationsCore(binding: D1Database) {
+  return createV2Core(
+    binding,
+    {
+      async encrypt() {
+        throw new Error("Coordinator has no private data access");
+      },
+      async decrypt() {
+        throw new Error("Coordinator has no private data access");
+      },
+    },
+    { monthlyBudgetCapEnabled: false },
+  );
+}
+
+/** Installation is separate from activation. Inputs are operator observations,
+ * never user API bodies; unavailable funding is installed as the latest head. */
+export async function observeAiRuntime(
+  bindings: Partial<Record<RuntimeEnvironment, D1Database>>,
+  raw: unknown,
+  mode: "observe" | "refresh" = "observe",
+  operationKey = "default",
+) {
+  const o = observationSchema.parse(raw),
+    now = new Date().toISOString();
+  if (
+    Date.parse(o.checkedAt) > Date.parse(now) ||
+    Date.parse(o.validUntil) <= Date.parse(now) ||
+    Date.parse(now) - Date.parse(o.checkedAt) > 86400000 ||
+    o.pricing.fx.krwPerUsd !== o.fx.krwPerUsd ||
+    o.pricing.fx.asOf !== o.fx.asOf
+  )
+    throw new Error("AI_RUNTIME_OBSERVATION_STALE");
+  const evidenceHash = await runtimeDigest(o),
+    month = usageDateKst(now).slice(0, 7);
+  const results = [];
+  for (const environment of ["preview", "production"] as const) {
+    const binding = bindings[environment];
+    if (!binding) continue;
+    const core = operationsCore(binding);
+    const verify: RuntimeProofVerifier = async (kind, _payload, digest) => ({
+      digest,
+      evidenceHash,
+      verifiedAt: o.checkedAt,
+      method:
+        kind === "pricing"
+          ? "official_document"
+          : kind === "funding"
+            ? "authenticated_console"
+            : "authenticated_coordinator",
+    });
+    const runtime = createV2PaidRuntimeRepository(core, environment, verify);
+    const pp = { ...pricing(environment, o), id: `price-${environment}-${evidenceHash}` };
+    const fp = {
+      id: `fund-${environment}-${evidenceHash}`,
+      environment,
+      state: o.fundingState,
+      existingPaymentPath: true,
+      autoRecharge: true,
+      spendAllowanceKrw: o.spendAllowanceKrw,
+      reference: `Authenticated existing billing observation ${evidenceHash}; existing auto-recharge $10/$30`,
+      observedAt: o.checkedAt,
+      validUntil: o.validUntil,
+    } as const;
+    // A funding stop must not be suppressed by an unrelated expired price.
+    if (!(await runtime.putFundingProof(fp, now)))
+      throw new Error("AI_RUNTIME_OBSERVATION_REJECTED");
+    const pricingInstalled = await runtime.putPricingProof(pp, now);
+    if (!pricingInstalled && mode === "refresh") throw new Error("AI_RUNTIME_PRICING_REQUIRED");
+    const operationDigest = await runtimeDigest({
+      evidenceHash,
+      operationKey: runtimeRefreshSchema.shape.id.parse(operationKey),
+    });
+    const id = `refresh-${environment}-${operationDigest}`;
+    let committed = false;
+    if (mode === "refresh") {
+      const saved = await core
+        .statement("SELECT payload_json FROM v2_runtime_refreshes WHERE id=? AND environment=?", [
+          id,
+          environment,
+        ])
+        .first<string>("payload_json");
+      const exposure = await runtime.exposure(now);
+      const allocationId = await core
+        .statement(
+          "SELECT allocation_proof_id FROM v2_runtime_controls WHERE month=? AND environment=?",
+          [month, environment],
+        )
+        .first<string>("allocation_proof_id");
+      if (!exposure || !allocationId) throw new Error("AI_RUNTIME_ALLOCATION_REQUIRED");
+      const request = saved
+        ? runtimeRefreshSchema.parse(JSON.parse(saved).request)
+        : {
+            id,
+            month,
+            expectedControlRevision: exposure.control_revision,
+            allocationVersion: exposure.allocation_version,
+            allocationProofId: allocationId,
+            pricingProofId: pp.id,
+            fundingProofId: fp.id,
+          };
+      if (request.pricingProofId !== pp.id || request.fundingProofId !== fp.id)
+        throw new Error("AI_RUNTIME_REFRESH_IDENTITY_MISMATCH");
+      const renew = createV2RuntimeRefreshRepository(core, environment, verify);
+      committed = await renew.refresh(request, now);
+      if (!committed) {
+        const concurrent = await core
+          .statement("SELECT payload_json FROM v2_runtime_refreshes WHERE id=? AND environment=?", [
+            id,
+            environment,
+          ])
+          .first<string>("payload_json");
+        if (concurrent) {
+          const original = runtimeRefreshSchema.parse(JSON.parse(concurrent).request);
+          if (original.pricingProofId === pp.id && original.fundingProofId === fp.id)
+            committed = await renew.refresh(original, now);
+        }
+      }
+      if (!committed) throw new Error(`AI_RUNTIME_REFRESH_CONFLICT_${environment.toUpperCase()}`);
+    }
+    results.push({
+      environment,
+      observationInstalled: true,
+      pricingInstalled,
+      refreshCommitted: committed,
+      control: await runtime.exposure(now),
+    });
+  }
+  if (!results.length) throw new Error("AI_RUNTIME_ENVIRONMENT_REQUIRED");
+  return { evidenceHash, month, mode, results };
+}
+
+/** Explicit reallocation: both genuine drains are still required. */
 export async function provisionAiRuntime(
   bindings: Record<"preview" | "production", D1Database>,
   raw: unknown,
@@ -126,6 +227,7 @@ export async function provisionAiRuntime(
   const o = observationSchema.parse(raw),
     now = new Date().toISOString();
   if (
+    o.fundingState === "unavailable" ||
     Date.parse(o.checkedAt) > Date.parse(now) ||
     Date.parse(o.validUntil) <= Date.parse(now) ||
     Date.parse(now) - Date.parse(o.checkedAt) > 24 * 60 * 60 * 1000
@@ -169,10 +271,10 @@ export async function provisionAiRuntime(
   const observed = await Promise.all(
     peers.map(async (p) => ({
       allocations: await p.core
-        .statement("SELECT count(*) AS n FROM v2_budget_allocations")
+        .statement("SELECT count(*) AS n FROM v2_budget_allocations WHERE month=?", [month])
         .first<number>("n"),
       costs: await p.core
-        .statement("SELECT count(*) AS n FROM v2_cost_attempts")
+        .statement("SELECT count(*) AS n FROM v2_cost_attempts WHERE month=?", [month])
         .first<number>("n"),
       exposure: await p.runtime.exposure(now),
     })),
@@ -182,9 +284,7 @@ export async function provisionAiRuntime(
   );
   if (
     !bootstrap &&
-    observed.some(
-      (s) => !s.exposure || s.exposure.reserved_krw !== 0 || s.exposure.ambiguous_krw !== 0,
-    )
+    observed.some((s) => s.exposure?.reserved_krw !== 0 || s.exposure.ambiguous_krw !== 0)
   )
     throw new Error("AI_RUNTIME_DRAIN_REQUIRED");
   const version = Math.max(0, ...observed.map((s) => s.exposure?.allocation_version ?? 0)) + 1;
@@ -201,7 +301,7 @@ export async function provisionAiRuntime(
       "Authenticated existing Cloudflare payment path with user-approved $10/$30 auto recharge",
     reviewedAt: o.checkedAt,
     validUntil: o.validUntil,
-    fundingState: "funded" as const,
+    fundingState: o.fundingState,
     fundingValidUntil: o.validUntil,
   };
   const allocation: BudgetAllocation = { ...manifest, manifestHash: await runtimeDigest(manifest) };
@@ -261,12 +361,11 @@ export async function provisionAiRuntime(
         {
           id: crypto.randomUUID(),
           environment: p.environment,
-          state: "funded",
+          state: o.fundingState,
           existingPaymentPath: true,
           autoRecharge: true,
-          spendAllowanceKrw: Number.MAX_SAFE_INTEGER,
-          reference:
-            "Authenticated Cloudflare billing: existing credit $40; authorized auto-recharge $10/$30; no application monthly cap",
+          spendAllowanceKrw: o.spendAllowanceKrw,
+          reference: `Authenticated existing billing observation ${evidenceHash}; existing auto-recharge $10/$30; no application monthly cap`,
           observedAt: o.checkedAt,
           validUntil: o.validUntil,
         },
@@ -289,7 +388,13 @@ export async function provisionAiRuntime(
 if (import.meta.main) {
   try {
     const token = process.env.CLOUDFLARE_API_TOKEN;
-    const sha = process.argv[2];
+    const [sha, mode = "refresh", target = "both"] = process.argv.slice(2);
+    if (
+      !["observe", "refresh", "reallocate"].includes(mode) ||
+      !["preview", "production", "both"].includes(target) ||
+      (mode === "reallocate" && target !== "both")
+    )
+      throw new Error("AI_RUNTIME_OPERATION_INVALID");
     if (!token || !sha || !/^[a-f0-9]{40}$/.test(sha))
       throw new Error("AI_RUNTIME_DEPLOYMENT_INPUT_INVALID");
     const config = (await Bun.file("wrangler.jsonc").json()) as {
@@ -298,7 +403,9 @@ if (import.meta.main) {
     const account = process.env.CLOUDFLARE_ACCOUNT_ID;
     if (!account) throw new Error("AI_RUNTIME_ACCOUNT_MISSING");
     const observation = observationSchema.parse(
-      await Bun.file("docs/operations/AI-RUNTIME-OBSERVATION.json").json(),
+      process.env.AI_RUNTIME_OBSERVATION_JSON
+        ? JSON.parse(process.env.AI_RUNTIME_OBSERVATION_JSON)
+        : await Bun.file("docs/operations/AI-RUNTIME-OBSERVATION.json").json(),
     );
     const bindings = Object.fromEntries(
       ["preview", "production"].map((e) => [
@@ -306,9 +413,19 @@ if (import.meta.main) {
         remoteBudgetD1(token, account, config.env[e]?.d1_databases[0]?.database_id ?? ""),
       ]),
     ) as Record<"preview" | "production", D1Database>;
-    const result = await provisionAiRuntime(bindings, observation);
+    const selected =
+      target === "both" ? bindings : { [target]: bindings[target as RuntimeEnvironment] };
+    const result =
+      mode === "reallocate"
+        ? await provisionAiRuntime(bindings, observation)
+        : await observeAiRuntime(
+            selected,
+            observation,
+            mode as "observe" | "refresh",
+            process.env.AI_RUNTIME_OPERATION_KEY ?? "default",
+          );
     const bounds = JSON.stringify(modelBounds(observation, result.evidenceHash));
-    for (const environment of ["preview", "production"]) {
+    for (const environment of mode === "observe" ? [] : Object.keys(selected)) {
       const child = Bun.spawn(
         ["bunx", "wrangler", "secret", "put", "AI_MODEL_TOKEN_BOUNDS_JSON", "--env", environment],
         { stdin: "pipe", stdout: "pipe", stderr: "pipe" },
@@ -322,7 +439,7 @@ if (import.meta.main) {
       JSON.stringify({
         ...result,
         candidateSha: sha,
-        modelBoundsConfigured: true,
+        modelBoundsConfigured: mode !== "observe",
         autoRecharge: true,
       }),
     );
