@@ -204,13 +204,7 @@ export function createWorkspaceService(core: V2Core, deps: WorkspaceDependencies
     },
     async latestJob(ownerId: string, id: string) {
       const current = await find(ownerId, id);
-      const row = await core
-        .statement(
-          "SELECT j.id FROM v2_jobs j JOIN v2_operations o ON o.id=j.operation_id WHERE o.owner_id=? AND j.workspace_id=? AND j.target_kind='workspace' AND j.kind IN ('intake_questions','intake_summary','chat_response') ORDER BY j.target_revision DESC,j.created_at DESC,j.id DESC LIMIT 1",
-          [ownerId, id],
-        )
-        .first<{ id: string }>();
-      const job = row ? await jobs.find(actor(ownerId), row.id) : null;
+      const job = await jobs.latestWorkspace(actor(ownerId), id);
       return job ? { ...job, retryable: canRetryV2Job(job, current) } : null;
     },
     async retry(ownerId: string, id: string, jobId: string, raw: unknown) {
@@ -468,9 +462,9 @@ export function createWorkspaceService(core: V2Core, deps: WorkspaceDependencies
         body,
         "chat",
       );
-      const g = await guard(ownerId, id);
-      if (!m.replay && (await find(ownerId, id)).currentJobId)
-        throw new WorkspaceError("STALE_REVISION");
+      const current = await find(ownerId, id);
+      const g = { ...actor(ownerId), workspaceId: id, expectedRevision: current.workspaceRevision };
+      if (!m.replay && current.currentJobId) throw new WorkspaceError("STALE_REVISION");
       const row = await core
         .statement(
           "SELECT id,revision,encrypted_payload FROM v2_actions WHERE workspace_id=? AND entity_id=?",
@@ -549,9 +543,9 @@ export function createWorkspaceService(core: V2Core, deps: WorkspaceDependencies
         body,
         "chat",
       );
-      const g = await guard(ownerId, id);
-      if (!m.replay && (await find(ownerId, id)).currentJobId)
-        throw new WorkspaceError("STALE_REVISION");
+      const current = await find(ownerId, id);
+      const g = { ...actor(ownerId), workspaceId: id, expectedRevision: current.workspaceRevision };
+      if (!m.replay && current.currentJobId) throw new WorkspaceError("STALE_REVISION");
       const row = await core
         .statement(
           "SELECT id,revision,encrypted_payload FROM v2_timeline WHERE workspace_id=? AND entity_id=?",

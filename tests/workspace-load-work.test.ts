@@ -16,6 +16,7 @@ import {
 } from "./helpers/customer-workspace";
 import { countD1Calls } from "./helpers/d1-call-count";
 import { r2, uploaded } from "./helpers/file-processing-fixture";
+import { seedTestSession } from "./helpers/session";
 
 const databases: Awaited<ReturnType<typeof customerWorkspaceFixture>>["db"][] = [];
 afterEach(() => {
@@ -193,6 +194,8 @@ async function fixture() {
     .route("/api/v2/cases", createFilesApi());
   const rows: RequestWork[] = [];
   let start = performance.now();
+  let beforeSql: (statements: string[]) => void = () => {};
+  let afterSql: (statements: string[]) => void = () => {};
   const transport = async (path: string, init?: RequestInit) => {
     if (!path.startsWith("/api/")) throw new Error("Unexpected external request");
     const suffix = path.split("/").slice(5).join("/").split("?")[0];
@@ -203,14 +206,18 @@ async function fixture() {
           ? "latest_job"
           : suffix?.startsWith("timeline")
             ? "timeline"
-            : ["workspace", "intake", "messages", "actions", "files", "summary"].includes(
-                  suffix ?? "",
-                )
-              ? (suffix as Route)
-              : (() => {
-                  throw new Error("Unexpected synthetic route");
-                })();
+            : suffix?.startsWith("actions")
+              ? "actions"
+              : ["workspace", "intake", "messages", "actions", "files", "summary"].includes(
+                    suffix ?? "",
+                  )
+                ? (suffix as Route)
+                : (() => {
+                    throw new Error("Unexpected synthetic route");
+                  })();
     const meter = countD1Calls(f.db.binding);
+    meter.before((statements) => beforeSql(statements));
+    meter.after((statements) => afterSql(statements));
     const row: RequestWork = {
       route,
       method: init?.method ?? "GET",
@@ -296,6 +303,13 @@ async function fixture() {
   return {
     ...f,
     rows,
+    transport,
+    beforeSql: (hook: typeof beforeSql) => {
+      beforeSql = hook;
+    },
+    afterSql: (hook: typeof afterSql) => {
+      afterSql = hook;
+    },
     session,
     client,
     view,
@@ -345,8 +359,8 @@ test("canonical timeline save measures the complete client readback and final se
       {
         route: "timeline",
         method,
-        calls: method === "POST" ? 13 : 16,
-        statements: method === "POST" ? 20 : 23,
+        calls: method === "POST" ? 13 : 14,
+        statements: method === "POST" ? 20 : 21,
       },
       { route: "workspace", method: "GET", calls: 5, statements: 5 },
       { route: "intake", method: "GET", calls: 8, statements: 9 },
@@ -356,7 +370,7 @@ test("canonical timeline save measures the complete client readback and final se
       { route: "files", method: "GET", calls: 8, statements: 8 },
       { route: "summary", method: "GET", calls: 14, statements: 14 },
       { route: "workspace", method: "GET", calls: 5, statements: 5 },
-      { route: "latest_job", method: "GET", calls: 7, statements: 7 },
+      { route: "latest_job", method: "GET", calls: 6, statements: 6 },
       { route: "session", method: "GET", calls: 3, statements: 5 },
     ]);
     if (process.env.BARO_WORKSPACE_LOAD_METRICS === "true")
@@ -379,4 +393,241 @@ test("canonical timeline save measures the complete client readback and final se
       );
     before = after;
   }
+});
+
+test("canonical action save retains the full readback and both session checks", async () => {
+  const f = await fixture();
+  const action = f.view.actions[0];
+  if (!action) throw new Error("Missing synthetic action");
+  f.reset();
+  await f.session();
+  const next = await f.client.setAction(f.workspace.id, action.id, true);
+  await f.session();
+  expect(next.actions.find((value) => value.id === action.id)?.done).toBe(true);
+  expect(next.case.revision).toBe(f.view.case.revision + 1);
+  // Same synthetic fixture before these two query merges: 100 calls / 112 SQL.
+  expect(f.rows).toHaveLength(12);
+  expect(f.rows.find((row) => row.method === "PUT")).toMatchObject({ calls: 15, statements: 22 });
+  expect(f.rows.find((row) => row.route === "latest_job")).toMatchObject({
+    calls: 6,
+    statements: 6,
+  });
+  expect(f.rows.reduce((sum, row) => sum + row.calls, 0)).toBe(97);
+  expect(f.rows.reduce((sum, row) => sum + row.statements, 0)).toBe(109);
+  if (process.env.BARO_WORKSPACE_LOAD_METRICS === "true")
+    console.info(
+      JSON.stringify({
+        event: "synthetic_workspace_action_work",
+        http: f.rows.length,
+        calls: f.rows.reduce((sum, row) => sum + row.calls, 0),
+        statements: f.rows.reduce((sum, row) => sum + row.statements, 0),
+      }),
+    );
+});
+
+test("warm focus keeps the same request and session boundaries", async () => {
+  const f = await fixture();
+  f.reset();
+  await f.session(); // Focus verification.
+  await f.session(); // The load preflight.
+  expect(await f.client.get(f.workspace.id)).toEqual(f.view);
+  await f.session(); // The final render verification.
+  // Before the latest-job merge: 34 calls / 40 SQL at these exact boundaries.
+  expect(f.rows).toHaveLength(7);
+  expect(f.rows.reduce((sum, row) => sum + row.calls, 0)).toBe(33);
+  expect(f.rows.reduce((sum, row) => sum + row.statements, 0)).toBe(39);
+  if (process.env.BARO_WORKSPACE_LOAD_METRICS === "true")
+    console.info(
+      JSON.stringify({
+        event: "synthetic_workspace_focus_work",
+        http: f.rows.length,
+        calls: f.rows.reduce((sum, row) => sum + row.calls, 0),
+        statements: f.rows.reduce((sum, row) => sum + row.statements, 0),
+      }),
+    );
+});
+
+function entityRequest(
+  f: Awaited<ReturnType<typeof fixture>>,
+  kind: "actions" | "timeline",
+  missing = false,
+) {
+  const value = kind === "actions" ? f.view.actions[0] : f.view.timeline[0];
+  if (!value) throw new Error("Missing synthetic entity");
+  const id = missing ? crypto.randomUUID() : value.id;
+  const body =
+    kind === "actions"
+      ? { expectedRevision: 1, status: "done" }
+      : { expectedRevision: 1, date: null, datePrecision: "unknown", event: "수정한 합성 일정" };
+  return {
+    id,
+    path: `/api/v2/cases/${f.workspace.id}/${kind}/${id}`,
+    init: {
+      method: "PUT",
+      headers: { "content-type": "application/json", "idempotency-key": crypto.randomUUID() },
+      body: JSON.stringify(body),
+    },
+  };
+}
+
+for (const kind of ["actions", "timeline"] as const) {
+  test(`${kind} missing entity remains HTTP 404 without a write receipt`, async () => {
+    const f = await fixture();
+    const input = entityRequest(f, kind, true);
+    expect((await f.transport(input.path, input.init)).status).toBe(404);
+    expect(
+      f.db.sqlite
+        .query("SELECT count(*) n FROM v2_idempotency WHERE key=?")
+        .get(input.init.headers["idempotency-key"]),
+    ).toEqual({ n: 0 });
+  });
+
+  test(`${kind} still rechecks owner deletion after the fresh workspace decrypt`, async () => {
+    const f = await fixture();
+    const input = entityRequest(f, kind);
+    let workspaceReads = 0;
+    f.afterSql((statements) => {
+      if (!statements.some((sql) => sql.startsWith("SELECT w.* FROM v2_workspaces"))) return;
+      if (++workspaceReads !== 2) return; // mutation() snapshot, then the fresh guard snapshot.
+      f.db.sqlite
+        .query("INSERT INTO v2_tombstones VALUES('account',?,?)")
+        .run(f.owner.userId, f.now);
+    });
+    expect((await f.transport(input.path, input.init)).status).toBe(404);
+    expect(workspaceReads).toBe(2);
+    expect(
+      f.db.sqlite.query(`SELECT revision FROM v2_${kind} WHERE entity_id=?`).get(input.id),
+    ).toEqual({ revision: 1 });
+  });
+
+  for (const change of ["owner", "account", "workspace", "revision", "current-job"] as const)
+    test(`${kind} keeps the final atomic write fence after its fresh snapshot: ${change}`, async () => {
+      const f = await fixture();
+      const peer = await seedTestSession(f.db, { consent: true });
+      const input = entityRequest(f, kind);
+      const before = f.db.sqlite
+        .query(`SELECT revision,encrypted_payload FROM v2_${kind} WHERE entity_id=?`)
+        .get(input.id);
+      let changed = false;
+      f.beforeSql((statements) => {
+        if (changed || !statements.some((sql) => sql.startsWith("INSERT INTO v2_mutation_claims")))
+          return;
+        changed = true;
+        if (change === "owner")
+          f.db.sqlite
+            .query("UPDATE v2_workspaces SET owner_id=? WHERE id=?")
+            .run(peer.userId, f.workspace.id);
+        if (change === "account" || change === "workspace")
+          f.db.sqlite
+            .query("INSERT INTO v2_tombstones VALUES(?,?,?)")
+            .run(change, change === "account" ? f.owner.userId : f.workspace.id, f.now);
+        if (change === "revision")
+          f.db.sqlite
+            .query("UPDATE v2_workspaces SET revision=revision+1 WHERE id=?")
+            .run(f.workspace.id);
+        if (change === "current-job")
+          f.db.sqlite
+            .query(
+              "UPDATE v2_workspaces SET current_job_id=(SELECT id FROM v2_jobs WHERE workspace_id=? AND target_kind='workspace' LIMIT 1) WHERE id=?",
+            )
+            .run(f.workspace.id, f.workspace.id);
+      });
+      const response = await f.transport(input.path, input.init);
+      expect(changed).toBe(true);
+      expect(response.status).toBe(409);
+      expect(
+        f.db.sqlite
+          .query(`SELECT revision,encrypted_payload FROM v2_${kind} WHERE entity_id=?`)
+          .get(input.id),
+      ).toEqual(before);
+      expect(
+        f.db.sqlite
+          .query("SELECT count(*) n FROM v2_idempotency WHERE key=?")
+          .get(input.init.headers["idempotency-key"]),
+      ).toEqual({ n: 0 });
+    });
+}
+
+test("latest workspace job keeps exact revision/time/id order and excludes newer file jobs", async () => {
+  const f = await fixture();
+  const path = `/api/v2/cases/${f.workspace.id}/workspace-jobs/latest`;
+  const query =
+    "SELECT id FROM v2_jobs WHERE workspace_id=? AND target_kind='workspace' ORDER BY target_revision DESC,created_at DESC,id DESC LIMIT 1";
+  const read = async () => {
+    const response = await f.transport(path);
+    expect(response.status).toBe(200);
+    return (await response.json()) as {
+      id: string;
+      target: { kind: string };
+      status: string;
+      phase: string;
+    };
+  };
+  f.db.sqlite
+    .query("UPDATE v2_jobs SET target_revision=999 WHERE workspace_id=? AND target_kind='file'")
+    .run(f.workspace.id);
+  expect((await read()).id).toBe(
+    (f.db.sqlite.query(query).get(f.workspace.id) as { id: string }).id,
+  );
+  // Equal revisions must still use created_at, and equal timestamps use descending ID.
+  f.db.sqlite
+    .query("UPDATE v2_jobs SET target_revision=10 WHERE workspace_id=? AND target_kind='workspace'")
+    .run(f.workspace.id);
+  expect((await read()).id).toBe(
+    (f.db.sqlite.query(query).get(f.workspace.id) as { id: string }).id,
+  );
+  f.db.sqlite
+    .query("UPDATE v2_jobs SET created_at=? WHERE workspace_id=? AND target_kind='workspace'")
+    .run(f.now, f.workspace.id);
+  const expected = (f.db.sqlite.query(query).get(f.workspace.id) as { id: string }).id;
+  expect(await read()).toMatchObject({ id: expected, target: { kind: "workspace" } });
+  f.beforeSql((statements) => {
+    if (
+      statements.some(
+        (sql) => sql.startsWith("SELECT j.*") && sql.includes("ORDER BY j.target_revision"),
+      )
+    )
+      f.db.sqlite
+        .query("UPDATE v2_jobs SET status='cancelled',failure_code=NULL,retryable=0 WHERE id=?")
+        .run(expected);
+  });
+  expect(await read()).toMatchObject({ id: expected, status: "cancelled" });
+});
+
+test("latest job preserves null for no jobs and HTTP 404 for absent or foreign workspaces", async () => {
+  const f = await fixture();
+  const empty = await f.service.create(f.owner.userId, crypto.randomUUID(), {
+    narrative: "아직 작업을 접수하지 않은 별도 합성 사건입니다.",
+    subjectContext: "individual",
+    jurisdiction: "KR",
+    turnstileToken: "synthetic",
+  });
+  const response = await f.transport(`/api/v2/cases/${empty.id}/workspace-jobs/latest`);
+  expect(response.status).toBe(200);
+  expect(await response.json()).toBeNull();
+  expect(
+    (await f.transport(`/api/v2/cases/${crypto.randomUUID()}/workspace-jobs/latest`)).status,
+  ).toBe(404);
+  const peer = await seedTestSession(f.db, { consent: true });
+  f.db.sqlite.query("UPDATE v2_workspaces SET owner_id=? WHERE id=?").run(peer.userId, empty.id);
+  expect((await f.transport(`/api/v2/cases/${empty.id}/workspace-jobs/latest`)).status).toBe(404);
+});
+
+test("latest job observes account deletion at its combined selection and DTO read", async () => {
+  const f = await fixture();
+  let changed = false;
+  f.beforeSql((statements) => {
+    if (
+      !statements.some(
+        (sql) => sql.startsWith("SELECT j.*") && sql.includes("ORDER BY j.target_revision"),
+      )
+    )
+      return;
+    changed = true;
+    f.db.sqlite.query("INSERT INTO v2_tombstones VALUES('account',?,?)").run(f.owner.userId, f.now);
+  });
+  const response = await f.transport(`/api/v2/cases/${f.workspace.id}/workspace-jobs/latest`);
+  expect(changed).toBe(true);
+  expect(response.status).toBe(200);
+  expect(await response.json()).toBeNull();
 });
