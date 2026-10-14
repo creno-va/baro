@@ -3,11 +3,13 @@ export function ConfirmDialog({
   title,
   children,
   busy,
+  busyLabel,
   onCancel,
 }: {
   title: string;
   children: ReactNode;
   busy: boolean;
+  busyLabel?: string;
   onCancel: () => void;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
@@ -35,7 +37,7 @@ export function ConfirmDialog({
       }}
     >
       <h2 id={id}>{title}</h2>
-      {busy && <p role="status">요청을 처리하고 있어요…</p>}
+      {busy && <p role="status">{busyLabel ?? "요청을 처리하고 있어요…"}</p>}
       {children}
     </dialog>
   );
