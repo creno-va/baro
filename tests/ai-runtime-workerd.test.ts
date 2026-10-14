@@ -587,6 +587,27 @@ async function exerciseNativeRuntime(
     // Copy actual synthetic legacy-path rows into the old schema. Current
     // product code must not be run against an unapplied required migration.
     progress.enter("migration", "copy");
+    const fixtureCopyStarted = performance.now();
+    let fixtureCopyReadCalls = 1;
+    let fixtureCopyReadStatements = 1;
+    let fixtureCopyMaximumBatch = 1;
+    // The native bridge has per-call overhead. Keep the same row/column reads
+    // while sending independent fixture queries in bounded batches.
+    async function readFixture<T>(db: D1Database, statements: D1PreparedStatement[]) {
+      const results: D1Result<T>[] = [];
+      for (let start = 0; start < statements.length; start += 16) {
+        lifetime.check();
+        const batch = statements.slice(start, start + 16);
+        fixtureCopyReadCalls++;
+        fixtureCopyReadStatements += batch.length;
+        fixtureCopyMaximumBatch = Math.max(fixtureCopyMaximumBatch, batch.length);
+        const rows = await db.batch<T>(batch);
+        lifetime.check();
+        expect(rows).toHaveLength(batch.length);
+        results.push(...rows);
+      }
+      return results;
+    }
     const oldTables = (
       await upgrade
         .prepare(
@@ -595,22 +616,49 @@ async function exerciseNativeRuntime(
         .all<{ name: string }>()
     ).results;
     const copied: D1PreparedStatement[] = [upgrade.prepare("PRAGMA defer_foreign_keys=ON")];
-    for (const { name } of oldTables) {
+    // These rows are derived by the immutable funding-proof insert trigger.
+    const copyTables = oldTables.filter(({ name }) => name !== "v2_storage_funding_heads");
+    const existing = await readFixture<Record<string, unknown>>(
+      upgrade,
+      copyTables.map(({ name }) => upgrade.prepare(`SELECT * FROM "${name}"`)),
+    );
+    const emptyTables = copyTables.filter((_, index) => existing[index]?.results.length === 0);
+    const columnRows = await readFixture<{ name: string }>(
+      upgrade,
+      emptyTables.map(({ name }) => upgrade.prepare(`PRAGMA table_info("${name}")`)),
+    );
+    const columnsByTable = new Map<string, string[]>();
+    for (const [index, { name }] of emptyTables.entries()) {
+      const columns = columnRows[index]?.results.map((column) => column.name);
+      if (!columns?.length) throw new Error("Synthetic fixture columns missing");
+      columnsByTable.set(name, columns);
+    }
+    const source = await readFixture<Record<string, unknown>>(
+      preview,
+      copyTables.map(({ name }) =>
+        preview.prepare(
+          `SELECT ${
+            columnsByTable
+              .get(name)
+              ?.map((column) => `"${column}"`)
+              .join(",") ?? "*"
+          } FROM "${name}"`,
+        ),
+      ),
+    );
+    for (const [index, { name }] of copyTables.entries()) {
       lifetime.check();
-      // These rows are derived by the immutable funding-proof insert trigger.
-      if (name === "v2_storage_funding_heads") continue;
-      const existing = (await upgrade.prepare(`SELECT * FROM "${name}"`).all()).results;
-      if (existing.length) {
-        expect((await preview.prepare(`SELECT * FROM "${name}"`).all()).results).toEqual(existing);
+      const targetRows = existing[index]?.results;
+      const sourceRows = source[index]?.results;
+      if (!targetRows || !sourceRows) throw new Error("Synthetic fixture rows missing");
+      if (targetRows.length) {
+        expect(sourceRows).toEqual(targetRows);
         continue;
       }
-      const columns = (
-        await upgrade.prepare(`PRAGMA table_info("${name}")`).all<{ name: string }>()
-      ).results.map((column) => column.name);
+      const columns = columnsByTable.get(name);
+      if (!columns) throw new Error("Synthetic fixture columns missing");
       const quoted = columns.map((column) => `"${column}"`).join(",");
-      for (const row of (
-        await preview.prepare(`SELECT ${quoted} FROM "${name}"`).all<Record<string, unknown>>()
-      ).results) {
+      for (const row of sourceRows) {
         copied.push(
           upgrade
             .prepare(`INSERT INTO "${name}"(${quoted}) VALUES(${columns.map(() => "?").join(",")})`)
@@ -619,11 +667,31 @@ async function exerciseNativeRuntime(
       }
     }
     await upgrade.batch(copied);
-    for (const { name } of oldTables) {
-      expect(
-        (await upgrade.prepare(`SELECT * FROM "${name}" ORDER BY rowid`).all()).results,
-      ).toEqual((await preview.prepare(`SELECT * FROM "${name}" ORDER BY rowid`).all()).results);
+    const [actual, expected] = await Promise.all(
+      [upgrade, preview].map((db) =>
+        readFixture(
+          db,
+          oldTables.map(({ name }) => db.prepare(`SELECT * FROM "${name}" ORDER BY rowid`)),
+        ),
+      ),
+    );
+    for (const [index] of oldTables.entries()) {
+      const actualRows = actual?.[index]?.results;
+      const expectedRows = expected?.[index]?.results;
+      if (!actualRows || !expectedRows) throw new Error("Synthetic fixture final rows missing");
+      expect(actualRows).toEqual(expectedRows);
     }
+    console.info(
+      "Synthetic native fixture copy measurements",
+      JSON.stringify({
+        requestedCostLimitsEnabled: applicationCostLimitsEnabled,
+        tables: oldTables.length,
+        readCalls: fixtureCopyReadCalls,
+        readStatements: fixtureCopyReadStatements,
+        maximumReadBatch: fixtureCopyMaximumBatch,
+        durationMs: Math.round(performance.now() - fixtureCopyStarted),
+      }),
+    );
     const preservedTables = [
       "v2_runtime_plans",
       "v2_paid_holds",
