@@ -262,6 +262,65 @@ test("real file adapter surfaces unavailable processing API instead of generatin
   expect(calls).toContain("/api/v2/cases/case/files/file/retry");
 });
 
+for (const outcome of [
+  "accepted",
+  "callback-throws",
+  "readback-fails",
+  "wrong-file",
+  "invalid-shape",
+  "http-failure",
+] as const)
+  test(`file retry acknowledges exact validated POST before readback: ${outcome}`, async () => {
+    let lists = 0,
+      posts = 0,
+      acknowledged = 0;
+    const acknowledgedAfterLists: number[] = [];
+    const row = {
+      id: "file",
+      revision: 1,
+      name: "synthetic.pdf",
+      declaredMediaType: "application/pdf",
+      byteLength: 10,
+      status: "queued",
+    };
+    const client = createFilesApi(async (path, init) => {
+      if (path.endsWith("/workspace")) return Response.json({ workspaceRevision: 2 });
+      if (path.endsWith("/files")) {
+        lists++;
+        if (lists > 1 && outcome === "readback-fails")
+          return Response.json({ error: { code: "UNAVAILABLE" } }, { status: 503 });
+        return Response.json([{ ...row, status: lists === 1 ? "failed" : "queued" }]);
+      }
+      expect(init?.method).toBe("POST");
+      posts++;
+      expect(acknowledged).toBe(0);
+      if (outcome === "http-failure")
+        return Response.json({ error: { code: "UNAVAILABLE" } }, { status: 503 });
+      return Response.json(
+        outcome === "invalid-shape"
+          ? { id: "file" }
+          : outcome === "wrong-file"
+            ? { ...row, id: "another-file" }
+            : row,
+        { status: 202 },
+      );
+    });
+    const result = client.retry("case", "file", () => {
+      acknowledged++;
+      acknowledgedAfterLists.push(lists);
+      if (outcome === "callback-throws") throw new Error("Synthetic display callback failure");
+    });
+    if (["accepted", "callback-throws"].includes(outcome))
+      expect(await result).toMatchObject({ id: "file", status: "waiting" });
+    else await expect(result).rejects.toBeDefined();
+    expect(posts).toBe(1);
+    expect(acknowledged).toBe(
+      ["accepted", "callback-throws", "readback-fails"].includes(outcome) ? 1 : 0,
+    );
+    expect(acknowledgedAfterLists).toEqual(acknowledged ? [1] : []);
+    expect(lists).toBe(["accepted", "callback-throws", "readback-fails"].includes(outcome) ? 2 : 1);
+  });
+
 test("chunk upload retries reuse reservation and preserve exact original bytes after client reload", async () => {
   const f = fixture();
   await f.client.get("synthetic-case");

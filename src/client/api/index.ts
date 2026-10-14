@@ -160,7 +160,7 @@ export const api = {
       file: File,
       onProgress?: (value: FileUploadProgress) => void,
     ): Promise<FileView>;
-    retry(id: string, fileId: string): Promise<FileView>;
+    retry(id: string, fileId: string, onAccepted?: () => void): Promise<FileView>;
     remove(id: string, fileId: string): Promise<FileView[]>;
     original(id: string, fileId: string): Promise<Blob>;
   }>("files"),

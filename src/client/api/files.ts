@@ -477,7 +477,7 @@ export function createFilesApi(request: WorkspaceTransport) {
         { method: "DELETE" },
       );
     },
-    async retry(id: string, fileId: string) {
+    async retry(id: string, fileId: string, onAccepted?: () => void) {
       await list(id);
       const value = await workspaceJson(
         request,
@@ -488,6 +488,14 @@ export function createFilesApi(request: WorkspaceTransport) {
         }),
       );
       const mock = fileViewSchema.safeParse(value);
+      const accepted = mock.success ? mock.data : metadataSchema.parse(value);
+      if (accepted.id !== fileId)
+        throw workspaceError("VALIDATION_ERROR", "자료 처리 접수 결과를 확인하지 못했어요.");
+      // Only a validated response for this exact file acknowledges the request.
+      // A display callback must not turn an accepted write into a retryable error.
+      try {
+        onAccepted?.();
+      } catch {}
       if (mock.success) return mock.data;
       const found = (await list(id)).find((file) => file.id === fileId);
       if (!found) throw workspaceError("NOT_FOUND", "자료를 찾을 수 없어요.");

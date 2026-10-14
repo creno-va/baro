@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 import { captureCaseViewports } from "../helpers/case-ui-capture";
 
 // This isolated C contract suite also runs before A's shared facade is available.
@@ -10,6 +10,230 @@ test.skip(
 );
 const key = "baro-c-contract-test-state";
 const base = "/cases/synthetic-case";
+
+async function prepareFileRetry(page: Page) {
+  await page.goto(`${base}/files`);
+  await expect(page.getByRole("heading", { name: "아직 자료가 없어요" })).toBeVisible();
+  await page.evaluate((key) => {
+    const state = JSON.parse(localStorage.getItem(key) ?? "{}");
+    state.caseOwners = { "synthetic-case": state.session.user.id };
+    state.files["synthetic-case"] = ["first", "selected"].map((id) => ({
+      id,
+      name: `${id}-private.pdf`,
+      mimeType: "application/pdf",
+      sizeBytes: 10,
+      status: "failed",
+      coverage: "private synthetic coverage",
+      extractedText: "",
+      failure: "FILE_PROCESSING_FAILED",
+      canRetry: true,
+      createdAt: "2026-10-15T00:00:00.000Z",
+    }));
+    localStorage.setItem(key, JSON.stringify(state));
+  }, key);
+  await page.reload();
+  const retry = page.getByRole("button", { name: "처리 다시 시도", exact: true }).nth(1);
+  await expect(retry).toBeVisible();
+  await page.evaluate(async (key) => {
+    const path = "/tests/helpers/workspace-client-fixture.ts";
+    const { api } = (await import(path)) as typeof import("../helpers/workspace-client-fixture");
+    const owner = await api.session.get();
+    const pending: { resolve: (value: typeof owner) => void; reject: (reason: Error) => void }[] =
+      [];
+    const state = window as unknown as {
+      retryIds: string[];
+      releaseFileFocus: (result?: string) => void;
+    };
+    state.retryIds = [];
+    api.session.get = () => new Promise((resolve, reject) => pending.push({ resolve, reject }));
+    state.releaseFileFocus = (result = "same-owner") => {
+      if (!owner.user) throw new Error("Missing synthetic owner");
+      const next = {
+        ...owner,
+        user:
+          result === "signed-out"
+            ? null
+            : {
+                ...owner.user,
+                id: result === "other-owner" ? "other-owner" : owner.user.id,
+                accountType: result === "lawyer" ? ("lawyer" as const) : ("customer" as const),
+              },
+        needsConsent: result === "consent",
+      };
+      const saved = JSON.parse(localStorage.getItem(key) ?? "{}");
+      saved.session = next;
+      localStorage.setItem(key, JSON.stringify(saved));
+      api.session.get = async () => next;
+      for (const check of pending)
+        if (result === "unavailable") check.reject(new Error("Synthetic session outage"));
+        else check.resolve(next);
+    };
+    const execute = api.files.retry;
+    api.files.retry = async (...args: Parameters<typeof execute>) => {
+      state.retryIds.push(args[1]);
+      return execute(...args);
+    };
+  }, key);
+  return retry;
+}
+async function releaseFileFocus(page: Page, result = "same-owner") {
+  await page.evaluate(
+    (result) =>
+      (window as unknown as { releaseFileFocus: (result: string) => void }).releaseFileFocus(
+        result,
+      ),
+    result,
+  );
+}
+async function retryIds(page: Page) {
+  return page.evaluate(() => (window as unknown as { retryIds: string[] }).retryIds);
+}
+for (const scenario of [
+  "normal",
+  "focus",
+  "other-owner",
+  "lawyer",
+  "consent",
+  "signed-out",
+  "unavailable",
+  "revoked",
+  "double",
+  "drag",
+  "pointer-cancel",
+] as const)
+  test(`file retry pointer preserves selected target and security: ${scenario}`, async ({
+    page,
+  }) => {
+    const retry = await prepareFileRetry(page);
+    if (scenario !== "normal")
+      await retry.evaluate((button) =>
+        button.addEventListener(
+          "pointerdown",
+          () => {
+            window.dispatchEvent(new Event("focus"));
+          },
+          { once: true },
+        ),
+      );
+    await retry.scrollIntoViewIfNeeded();
+    const bounds = await retry.boundingBox();
+    if (!bounds) throw new Error("Missing synthetic retry button");
+    await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+    await page.mouse.down();
+    if (scenario !== "normal") {
+      await expect(page.getByRole("heading", { name: "사건을 불러오는 중" })).toBeVisible();
+      await expect(retry).toBeVisible();
+      await expect(page.getByText("selected-private.pdf", { exact: true }).first()).toBeHidden();
+      await expect(page.getByText("first-private.pdf", { exact: true }).first()).toBeHidden();
+      await expect(page.getByRole("heading", { name: "selected-private.pdf" })).toBeHidden();
+      await expect(page.getByText("private synthetic coverage").first()).toBeHidden();
+      expect(await retry.getAttribute("title")).toBeNull();
+      expect(await retry.getAttribute("aria-label")).toBeNull();
+      expect(await retry.boundingBox()).toEqual(bounds);
+    }
+    expect(await retryIds(page)).toEqual([]);
+    if (scenario === "drag" || scenario === "pointer-cancel") {
+      if (scenario === "pointer-cancel") await retry.dispatchEvent("pointercancel");
+      await page.mouse.move(0, 0);
+    }
+    await page.mouse.up();
+    if (scenario === "double")
+      await page.mouse.click(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+    if (scenario === "revoked")
+      await page.evaluate(() =>
+        window.dispatchEvent(
+          new CustomEvent("baro-session-changed", { detail: { reason: "signout" } }),
+        ),
+      );
+    expect(await retryIds(page)).toEqual([]);
+    await releaseFileFocus(
+      page,
+      ["other-owner", "lawyer", "consent", "signed-out", "unavailable"].includes(scenario)
+        ? scenario
+        : "same-owner",
+    );
+    const accepted = ["normal", "focus", "double"].includes(scenario);
+    if (accepted) {
+      await expect.poll(() => retryIds(page)).toEqual(["selected"]);
+      await expect(
+        page.getByText("자료 처리 요청이 접수됐어요. 아래에서 처리 상태를 확인할 수 있어요.", {
+          exact: true,
+        }),
+      ).toBeVisible();
+      await expect(page.getByRole("alert")).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "처리 다시 시도", exact: true })).toHaveCount(
+        1,
+      );
+    } else {
+      if (["consent", "signed-out", "unavailable", "lawyer", "revoked"].includes(scenario))
+        await expect(page.getByRole("alert")).toBeVisible();
+      else
+        await expect(
+          page.getByRole("heading", {
+            name: scenario === "other-owner" ? "사건을 불러오는 중" : "대여금 반환 관련 자료 정리",
+          }),
+        ).toBeVisible();
+      expect(await retryIds(page)).toEqual([]);
+      if (["other-owner", "lawyer", "signed-out", "revoked"].includes(scenario))
+        await expect(page.getByText("selected-private.pdf", { exact: true })).toHaveCount(0);
+    }
+  });
+
+test("file retry ACK survives readback failure and recovers by reading without resending", async ({
+  page,
+}) => {
+  const retry = await prepareFileRetry(page);
+  await releaseFileFocus(page);
+  await page.evaluate(async () => {
+    const path = "/tests/helpers/workspace-client-fixture.ts";
+    const { api } = (await import(path)) as typeof import("../helpers/workspace-client-fixture");
+    const execute = api.files.retry;
+    api.files.retry = async (...args: Parameters<typeof execute>) => {
+      await execute(...args);
+      throw Object.assign(new Error("Synthetic readback failure"), { code: "UNAVAILABLE" });
+    };
+  });
+  await retry.click();
+  await expect(
+    page.getByText(
+      "자료 처리 요청은 접수됐지만 최신 상태를 확인하지 못했어요. 새로고침으로 확인해 주세요.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await expect(page.getByRole("alert")).toContainText("자료 처리 요청은 이미 접수됐어요.");
+  await expect(retry).toBeDisabled();
+  expect(await retryIds(page)).toEqual(["selected"]);
+  await page.getByRole("button", { name: "새로고침 · 다시 확인", exact: true }).click();
+  await expect(page.getByRole("button", { name: "처리 다시 시도", exact: true })).toHaveCount(1);
+  expect(await retryIds(page)).toEqual(["selected"]);
+});
+
+test("file retry ACK is retained when the complete workspace read fails", async ({ page }) => {
+  const retry = await prepareFileRetry(page);
+  await releaseFileFocus(page);
+  await page.evaluate(async () => {
+    const path = "/tests/helpers/workspace-client-fixture.ts";
+    const { api } = (await import(path)) as typeof import("../helpers/workspace-client-fixture");
+    const read = api.workspace.get;
+    api.workspace.get = async () => {
+      api.workspace.get = read;
+      throw Object.assign(new Error("Synthetic workspace read failure"), { code: "UNAVAILABLE" });
+    };
+  });
+  await retry.click();
+  await expect(
+    page.getByText(
+      "자료 처리 요청은 접수됐지만 최신 상태를 확인하지 못했어요. 새로고침으로 확인해 주세요.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await expect(page.getByRole("alert")).toContainText("자료 처리 요청은 이미 접수됐어요.");
+  await expect(retry).toBeDisabled();
+  expect(await retryIds(page)).toEqual(["selected"]);
+  await page.getByRole("button", { name: "새로고침 · 다시 확인", exact: true }).click();
+  await expect(page.getByRole("button", { name: "처리 다시 시도", exact: true })).toHaveCount(1);
+  expect(await retryIds(page)).toEqual(["selected"]);
+});
 
 test("upload progress shows distinct stages and elapsed time, then retains failure recovery", async ({
   page,
