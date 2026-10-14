@@ -72,7 +72,10 @@ export async function makeChunk(
     /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?:^|[^\uD800-\uDBFF])[\uDC00-\uDFFF]/.test(input.body) ||
     /<\/?[a-z!][^>]*>/i.test(input.body)
   )
-    throw new RetrievalFailure("schema_mismatch");
+    throw new RetrievalFailure("schema_mismatch", {
+      stage: "source_body",
+      issues: [{ field: "body", expected: "plain_text" }],
+    });
   if (
     input.sourceDate !== null &&
     (!dateSchema.safeParse(input.sourceDate).success || input.sourceDate > asOfDate)
@@ -104,7 +107,7 @@ export async function makeChunk(
     contentHash,
     url: source.canonicalUrl,
   };
-  const citation = v2OfficialCitationSchema(GUIDE_HOSTS).parse(
+  const parsedCitation = v2OfficialCitationSchema(GUIDE_HOSTS).safeParse(
     source.sourceType === "statute"
       ? {
           ...base,
@@ -131,6 +134,12 @@ export async function makeChunk(
             publishedDate: source.sourceDate,
           },
   );
+  if (!parsedCitation.success)
+    throw new RetrievalFailure("schema_mismatch", {
+      stage: "source_citation",
+      issues: [{ field: "citation", expected: "valid_citation" }],
+    });
+  const citation = parsedCitation.data;
   return {
     citation,
     source,

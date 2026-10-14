@@ -28,7 +28,16 @@ const fields = {
   목내용: ["subitem_text", "text"],
 } as const;
 export const legalSchemaDiagnosticSchema = z.strictObject({
-  stage: z.enum(["statute_list", "statute_detail", "statute_nested", "response_json"]),
+  stage: z.enum([
+    "statute_list",
+    "statute_detail",
+    "statute_nested",
+    "statute_text",
+    "response_json",
+    "response_body",
+    "source_body",
+    "source_citation",
+  ]),
   issues: z
     .array(
       z.strictObject({
@@ -36,6 +45,10 @@ export const legalSchemaDiagnosticSchema = z.strictObject({
           "root",
           "response",
           "unknown",
+          "body",
+          "encoding",
+          "length",
+          "citation",
           ...Object.values(fields).map(([field]) => field),
         ]),
         expected: z.enum([
@@ -49,6 +62,11 @@ export const legalSchemaDiagnosticSchema = z.strictObject({
           "text_or_array",
           "json",
           "unknown",
+          "nonempty_body",
+          "utf8",
+          "declared_bytes",
+          "plain_text",
+          "valid_citation",
         ]),
       }),
     )
