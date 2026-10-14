@@ -91,6 +91,27 @@ export function reportDependencyFailure(error: unknown) {
     }),
   );
 }
+
+/** An accounting outage is separate from provider/product failure; never log the receipt. */
+export function reportCostObservationFailure(phaseInput: string, error: unknown) {
+  const phase = [
+    "minimize",
+    "screening",
+    "structure",
+    "questions",
+    "generation",
+    "validation",
+    "workspace_questions",
+    "workspace_summary",
+    "workspace_chat",
+    "workspace_audit",
+  ].includes(phaseInput)
+    ? phaseInput
+    : "unclassified";
+  const category = dependencyCategory(error);
+  console.error(JSON.stringify({ event: "model_cost_observation_failure", phase, category }));
+}
+
 export function reportProviderFailure(failure: {
   phase: string;
   category: DependencyCategory;

@@ -1,4 +1,4 @@
-import { afterEach, expect, test } from "bun:test";
+import { afterEach, expect, spyOn, test } from "bun:test";
 import { createCaseDataCipher } from "../src/server/crypto";
 import { createV2AccountingRepository } from "../src/server/db/v2-accounting";
 import { createV2Core } from "../src/server/db/v2-core";
@@ -510,39 +510,142 @@ test("timeout durable ambiguity blocks overlap; late usage settles original atte
   expect(runs).toBe(1);
 });
 
-test("receipt SQL rollback suppresses output and preserves exposure", async () => {
-  const f = await fixture(),
-    a = await f.admit();
-  let runs = 0;
-  f.db.sqlite.exec(
-    "CREATE TRIGGER fail_gateway_receipt BEFORE INSERT ON v2_cost_receipts BEGIN SELECT RAISE(ABORT,'synthetic'); END",
-  );
-  const gateway = createLlmGateway(
-    {
-      APP_ENV: "preview",
-      AI_GATEWAY_ID: "synthetic",
-      AI: {
-        run: async () => {
-          runs++;
-          return response();
+test("receipt SQL rollback preserves valid output only in observation mode and keeps the dispatched hold", async () => {
+  const diagnostics = spyOn(console, "error").mockImplementation(() => {});
+  try {
+    for (const applicationCostLimitsEnabled of [true, false]) {
+      const f = await fixture(100, undefined, applicationCostLimitsEnabled),
+        a = await f.admit();
+      let runs = 0;
+      f.db.sqlite.exec(
+        "CREATE TRIGGER fail_gateway_receipt BEFORE INSERT ON v2_cost_receipts BEGIN SELECT RAISE(ABORT,'private SQL sentinel'); END",
+      );
+      const gateway = createLlmGateway(
+        {
+          APP_ENV: "preview",
+          AI_GATEWAY_ID: "synthetic",
+          AI: {
+            run: async () => {
+              runs++;
+              return response();
+            },
+          },
         },
-      },
-    },
-    { attemptLedger: a.ledger },
-  );
-  await expect(
-    gateway.call(
-      "screening",
-      PRIVATE_INPUT,
-      "synthetic-request",
-      async () => true,
-      undefined,
-      f.binding.invocationId,
-    ),
-  ).rejects.toThrow("MODEL_UNAVAILABLE");
-  expect(runs).toBe(1);
-  expect((await f.runtime.exposure(NOW))?.reserved_krw).toBe(1);
-  expect(f.db.sqlite.query("SELECT count(*) n FROM v2_runtime_usage").get()).toEqual({ n: 0 });
+        { attemptLedger: a.ledger },
+      );
+      const result = gateway.call(
+        "screening",
+        PRIVATE_INPUT,
+        "synthetic-request",
+        async () => true,
+        undefined,
+        f.binding.invocationId,
+      );
+      if (applicationCostLimitsEnabled) await expect(result).rejects.toThrow("MODEL_UNAVAILABLE");
+      else expect(await result).toMatchObject({ inScope: true });
+      await Promise.all(a.background);
+      expect(runs).toBe(1);
+      expect((await f.runtime.exposure(NOW))?.reserved_krw).toBe(1);
+      expect(f.db.sqlite.query("SELECT state,charged_krw FROM v2_cost_attempts").get()).toEqual({
+        state: "reserved",
+        charged_krw: null,
+      });
+      expect(
+        f.db.sqlite.query("SELECT state,dispatch_token FROM v2_paid_holds").get(),
+      ).toMatchObject({ state: "dispatched", dispatch_token: expect.any(String) });
+      expect(f.db.sqlite.query("SELECT count(*) n FROM v2_runtime_usage").get()).toEqual({ n: 0 });
+      expect(f.db.sqlite.query("SELECT count(*) n FROM v2_cost_receipts").get()).toEqual({ n: 0 });
+      // Receipt identity/CAS refusal is not a persistence outage. Observation
+      // mode cannot refund a dispatched call by presenting an unsent receipt.
+      await expect(
+        a.ledger.afterTransport(
+          { invocationId: f.binding.invocationId, attemptId: a.admission.request.attemptId },
+          {
+            transport: "not_sent",
+            definitiveNoCharge: true,
+            providerRequestId: null,
+            inputTokens: null,
+            outputTokens: null,
+            cachedInputTokens: null,
+            cacheWriteInputTokens: null,
+            serviceTier: null,
+            meteringStatus: "incomplete",
+            observedAt: NOW,
+          },
+        ),
+      ).rejects.toThrow("BUDGET_UNAVAILABLE");
+      expect((await f.runtime.exposure(NOW))?.reserved_krw).toBe(1);
+    }
+    expect(diagnostics.mock.calls.map(([value]) => JSON.parse(value))).toEqual([
+      { event: "model_cost_observation_failure", phase: "screening", category: "unknown" },
+    ]);
+  } finally {
+    diagnostics.mockRestore();
+  }
+});
+
+test("observation receipt write failure does not turn provider, policy or schema rejection into success", async () => {
+  const diagnostics = spyOn(console, "error").mockImplementation(() => {});
+  try {
+    for (const kind of ["provider", "policy", "schema"] as const) {
+      const f = await fixture(100, undefined, false),
+        a = await f.admit();
+      let runs = 0;
+      f.db.sqlite.exec(
+        "CREATE TRIGGER fail_gateway_receipt BEFORE INSERT ON v2_cost_receipts BEGIN SELECT RAISE(ABORT,'private SQL sentinel'); END",
+      );
+      const gateway = createLlmGateway(
+        {
+          APP_ENV: "preview",
+          AI_GATEWAY_ID: "synthetic",
+          AI: {
+            run: async () => {
+              runs++;
+              if (kind === "provider")
+                throw Object.assign(new Error("private provider sentinel"), { status: 403 });
+              return {
+                ...response(),
+                choices: [
+                  {
+                    message: {
+                      content: "invalid schema",
+                      ...(kind === "policy" ? { refusal: "synthetic policy refusal" } : {}),
+                    },
+                    finish_reason: "stop",
+                  },
+                ],
+              };
+            },
+          },
+        },
+        { attemptLedger: a.ledger },
+      );
+      await expect(
+        gateway.call(
+          "screening",
+          PRIVATE_INPUT,
+          "synthetic-request",
+          async () => true,
+          async () => false,
+          f.binding.invocationId,
+        ),
+      ).rejects.toThrow(
+        kind === "policy"
+          ? "POLICY_REJECTED"
+          : kind === "schema"
+            ? "MODEL_SCHEMA_INVALID"
+            : "MODEL_UNAVAILABLE",
+      );
+      await Promise.all(a.background);
+      expect(runs).toBe(1);
+      expect((await f.runtime.exposure(NOW))?.reserved_krw).toBe(1);
+      expect(f.db.sqlite.query("SELECT count(*) n FROM v2_runtime_usage").get()).toEqual({ n: 0 });
+    }
+    expect(diagnostics).toHaveBeenCalledTimes(3);
+    expect(JSON.stringify(diagnostics.mock.calls)).not.toContain("sentinel");
+  } finally {
+    diagnostics.mockRestore();
+  }
 });
 
 test("paid availability requires durable exact proof/control and includes old unresolved carryover", async () => {
