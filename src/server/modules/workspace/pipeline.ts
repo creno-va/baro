@@ -250,10 +250,25 @@ export function createWorkspacePipeline(
       return await generateAndValidate(context);
     } catch (error) {
       if (!(error instanceof WorkspaceOutputPolicyError)) throw error;
-      if (error.factFailure) reportWorkspaceFactFailure(error.factFailure, "draft_retry");
+      const factFailure = error.factFailure
+        ? reportWorkspaceFactFailure(error.factFailure, "draft_retry")
+        : undefined;
       // One newly admitted generation, with a sanitized reason and full revalidation.
       // Provider refusals and infrastructure failures do not enter this recovery path.
-      return generateAndValidate({ ...context, draftCorrection: { reason: error.reason } });
+      return generateAndValidate({
+        ...context,
+        draftCorrection: {
+          reason: error.reason,
+          ...(factFailure
+            ? {
+                factFailure: {
+                  category: factFailure.category,
+                  referenceKind: factFailure.referenceKind,
+                },
+              }
+            : {}),
+        },
+      });
     }
   };
   const audit = async (

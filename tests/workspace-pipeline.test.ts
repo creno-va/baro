@@ -492,21 +492,36 @@ test("unsupported fact details distinguish missing text, altered quotations and 
   ).not.toThrow();
 });
 
-test("summary source failures regenerate once and retain phase-aware independent validation", async () => {
+test("summary paraphrase rejection forwards only safe source detail and audits the exact replacement", async () => {
   let generated = 0;
   const saved = context();
+  const before = structuredClone(saved);
   const { value, calls } = pipeline((phase, input) => {
     if (phase === "workspace_audit") {
       expect(input).toMatchObject({ phase: "workspace_summary" });
       return approved;
     }
     generated += 1;
+    expect(input).toEqual(
+      generated === 1
+        ? before
+        : {
+            ...before,
+            draftCorrection: {
+              reason: "unsupported_fact",
+              factFailure: {
+                category: "source_text_mismatch",
+                referenceKind: "intake_narrative",
+              },
+            },
+          },
+    );
     return {
       overview: "상대방에게 받은 요구와 보유 자료를 확인하는 요약입니다.",
       facts: [
         reportedFact(
           generated === 1
-            ? "합의금 500만원을 요구했습니다."
+            ? "상대방은 합의금으로 300만원을 요구했습니다."
             : "상대방이 합의금 300만원을 요구했습니다.",
         ),
       ],
@@ -521,4 +536,193 @@ test("summary source failures regenerate once and retain phase-aware independent
     "workspace_summary",
     "workspace_audit",
   ]);
+  expect(saved).toEqual(before);
 });
+
+test("an answer quote cannot gain its question context and retries with the exact answer source", async () => {
+  const saved = context();
+  const batch = saved.intake.batches[0];
+  if (!batch) throw new Error("Synthetic batch absent");
+  batch.answers = [{ questionId: "q2", status: "answered", value: "지난달입니다." }];
+  saved.references.answeredQuestionIds = ["q2"];
+  const before = structuredClone(saved);
+  let generated = 0;
+  const { value, calls } = pipeline((phase, input) => {
+    if (phase === "workspace_audit") return approved;
+    generated++;
+    if (generated === 2)
+      expect(input).toEqual({
+        ...before,
+        draftCorrection: {
+          reason: "unsupported_fact",
+          factFailure: { category: "source_text_mismatch", referenceKind: "intake_answer" },
+        },
+      });
+    return {
+      overview: "사건 시점에 대한 사용자 답변을 정리합니다.",
+      facts: [
+        {
+          ...reportedFact(generated === 1 ? "사건은 지난달입니다." : "지난달입니다."),
+          references: [{ kind: "intake_answer", questionId: "q2", intakeRevision: 3 }],
+        },
+      ],
+      parties: [],
+      unknowns: [],
+      notices: ["사용자 확인이 필요합니다."],
+    };
+  });
+  expect((await value.summary(saved, "synthetic-answer")).facts[0]?.text).toBe("지난달입니다.");
+  expect(calls.map((call) => call.phase)).toEqual([
+    "workspace_summary",
+    "workspace_summary",
+    "workspace_audit",
+  ]);
+  expect(saved).toEqual(before);
+});
+
+test.each(["paraphrase", "official_source", "private_quote"] as const)(
+  "summary %s remains rejected after its one correction and never reaches audit",
+  async (kind) => {
+    const saved = context();
+    saved.references.verifiedCitationIds = ["synthetic_citation"];
+    saved.intake.narrative += " 연락처는 synthetic@example.test입니다.";
+    const fact =
+      kind === "official_source"
+        ? {
+            ...reportedFact("공식 자료의 합성 문장"),
+            attribution: "official_source" as const,
+            references: [{ kind: "official_source" as const, citationId: "synthetic_citation" }],
+          }
+        : reportedFact(
+            kind === "private_quote"
+              ? "연락처는 synthetic@example.test입니다."
+              : "상대방은 합의금으로 300만원을 요구했습니다.",
+          );
+    const { value, calls } = pipeline(() => ({
+      overview: "사용자 진술을 정리합니다.",
+      facts: [fact],
+      parties: [],
+      unknowns: [],
+      notices: ["사용자 확인이 필요합니다."],
+    }));
+    await expect(value.summary(saved, "synthetic-invalid-summary")).rejects.toMatchObject({
+      code: "POLICY_REJECTED",
+      reason: kind === "private_quote" ? "prohibited_content" : "unsupported_fact",
+    });
+    expect(calls.map((call) => call.phase)).toEqual(["workspace_summary", "workspace_summary"]);
+    const corrected = calls[1];
+    if (!corrected) throw new Error("Synthetic correction absent");
+    const correction = (corrected.input as { draftCorrection: unknown }).draftCorrection;
+    expect(correction).toEqual(
+      kind === "private_quote"
+        ? { reason: "prohibited_content" }
+        : {
+            reason: "unsupported_fact",
+            factFailure: {
+              category: kind === "official_source" ? "claim_text_missing" : "source_text_mismatch",
+              referenceKind: kind === "official_source" ? "official_source" : "intake_narrative",
+            },
+          },
+    );
+  },
+);
+
+test("draft correction never forwards unrecognized detail or extra error properties", async () => {
+  let generated = 0;
+  const saved = context();
+  const { value, calls } = pipeline((phase, input) => {
+    if (phase === "workspace_audit") return approved;
+    generated++;
+    if (generated === 1)
+      throw new WorkspaceOutputPolicyError("unsupported_fact", {
+        category: "synthetic-private-error",
+        referenceKind: "synthetic-private-reference",
+        attribution: "user_statement",
+        factCount: 1,
+        referenceCount: 1,
+        availableSourceCount: 1,
+        text: "synthetic-private-draft",
+        sourceId: "synthetic-private-source",
+      } as unknown as ConstructorParameters<typeof WorkspaceOutputPolicyError>[1]);
+    expect(input).toEqual({
+      ...saved,
+      draftCorrection: {
+        reason: "unsupported_fact",
+        factFailure: { category: "unknown", referenceKind: "unknown" },
+      },
+    });
+    return {
+      overview: "사용자 진술을 정리합니다.",
+      facts: [reportedFact("상대방이 합의금 300만원을 요구했습니다.")],
+      parties: [],
+      unknowns: [],
+      notices: ["사용자 확인이 필요합니다."],
+    };
+  });
+  expect((await value.summary(saved, "synthetic-allowlist")).facts).toHaveLength(1);
+  expect(calls).toHaveLength(3);
+});
+
+test.each(["user_message", "user_material"] as const)(
+  "chat %s facts still require exact excerpts and independently audit accepted quotes",
+  async (kind) => {
+    const saved = confirmedChatContext();
+    const text = "계약서를 보관했습니다.";
+    if (!saved.latestMessage) throw new Error("Synthetic message absent");
+    saved.latestMessage.text = text;
+    const reference =
+      kind === "user_message"
+        ? {
+            kind,
+            messageId: saved.latestMessage.id,
+            workspaceRevision: saved.latestMessage.workspaceRevision,
+          }
+        : {
+            kind,
+            fileId: "synthetic_file",
+            fileRevision: 1,
+            position: { kind: "document" as const, page: 1, paragraph: null, table: null },
+          };
+    if (reference.kind === "user_message")
+      saved.references.messages = [
+        { id: reference.messageId, workspaceRevision: reference.workspaceRevision },
+      ];
+    else {
+      saved.references.files = [
+        {
+          id: reference.fileId,
+          revision: reference.fileRevision,
+          category: "document",
+          pageCount: 1,
+        },
+      ];
+      saved.materials = [{ reference, text, coverage: {} }];
+    }
+    for (const exact of [false, true]) {
+      const { value, calls } = pipeline((phase) =>
+        phase === "workspace_audit"
+          ? approved
+          : {
+              ...chatText("보관한 자료를 확인했습니다."),
+              facts: [
+                {
+                  ...reportedFact(exact ? text : "사용자는 계약서를 보관했습니다."),
+                  attribution: kind === "user_material" ? "user_material" : "user_statement",
+                  references: [reference],
+                },
+              ],
+            },
+      );
+      if (exact) {
+        expect((await value.chat(saved, "synthetic-chat-exact")).facts[0]?.text).toBe(text);
+        expect(calls.map((call) => call.phase)).toEqual(["workspace_chat", "workspace_audit"]);
+      } else {
+        await expect(value.chat(saved, "synthetic-chat-altered")).rejects.toMatchObject({
+          reason: "unsupported_fact",
+          factFailure: { category: "source_text_mismatch", referenceKind: kind },
+        });
+        expect(calls.map((call) => call.phase)).toEqual(["workspace_chat"]);
+      }
+    }
+  },
+);
