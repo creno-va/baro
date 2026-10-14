@@ -413,6 +413,20 @@ export function createWorkspacePipeline(
           reviews,
         );
         if (!result.valid) throw new WorkspaceOutputPolicyError("unsupported_fact");
+        // Claims are independently audited and integrity-checked above. Preserve
+        // their provenance even when the model omitted the redundant message ref.
+        // Publication rechecks these refs against current citation bindings.
+        const referenced = new Set(
+          draft.references.flatMap((ref) =>
+            ref.kind === "official_source" ? [ref.citationId] : [],
+          ),
+        );
+        for (const citationId of claimIds) {
+          if (!referenced.has(citationId))
+            draft.references.push({ kind: "official_source", citationId });
+        }
+        if (draft.references.length > 100)
+          throw new WorkspaceOutputPolicyError("unauthorized_reference");
       }
       const cited = new Set(
         [
