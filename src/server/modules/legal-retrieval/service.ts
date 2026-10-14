@@ -215,6 +215,7 @@ export function createLegalRetrieval(
           throw new LegalSourceError();
         }
         if (!response.ok) {
+          void response.body?.cancel().catch(() => {});
           diagnostic({
             stage,
             category: [401, 403].includes(response.status) ? "access-denied" : "http-error",

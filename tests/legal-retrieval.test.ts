@@ -22,6 +22,7 @@ test.each([301, 302, 303, 307, 308])(
     const f = await fixture();
     let calls = 0;
     let waits = 0;
+    let cancelled = false;
     const observations: LegalRetrievalDiagnostic[] = [];
     const adapter = createLegalRetrieval(
       { LAW_API_OC: "synthetic-private-oc" },
@@ -29,10 +30,14 @@ test.each([301, 302, 303, 307, 308])(
       async (_url, init) => {
         calls++;
         expect(init.redirect).toBe("manual");
-        return new Response(null, {
-          status,
-          headers: { location: "https://untrusted.example.invalid/collect" },
-        });
+        return new Response(
+          new ReadableStream({
+            cancel() {
+              cancelled = true;
+            },
+          }),
+          { status, headers: { location: "https://untrusted.example.invalid/collect" } },
+        );
       },
       async () => {
         waits++;
@@ -44,6 +49,7 @@ test.each([301, 302, 303, 307, 308])(
     );
     expect(calls).toBe(1);
     expect(waits).toBe(0);
+    expect(cancelled).toBe(true);
     expect(observations).toEqual([{ stage: "list", category: "http-error", httpStatus: status }]);
   },
 );
