@@ -38,6 +38,7 @@ test("runtime status is read-only and exposes only the operational allowlist", a
       "environment",
       "funding",
       "fundingAuthority",
+      "initializationPrerequisites",
       "projection",
       "schema",
     ]);

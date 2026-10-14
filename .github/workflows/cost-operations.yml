@@ -12,6 +12,7 @@ on:
           - observe
           - refresh
           - reallocate
+          - initialize-storage
       target_environment:
         description: Reallocation requires both environments
         required: true
@@ -27,6 +28,10 @@ on:
         type: string
       observation_json:
         description: Fresh non-secret operator observation; no tokens, private data, or payment changes
+        required: false
+        type: string
+      storage_initialization_json:
+        description: initialize-storage only; fresh authenticated empty bucket observation, exact serving SHA, revision and bounded capacity/IO
         required: false
         type: string
       confirmation:
@@ -70,4 +75,5 @@ jobs:
           COST_ENVIRONMENT: ${{ inputs.target_environment }}
           AI_RUNTIME_OPERATION_KEY: ${{ inputs.operation_key }}
           AI_RUNTIME_OBSERVATION_JSON: ${{ inputs.observation_json }}
+          STORAGE_INITIALIZATION_JSON: ${{ inputs.storage_initialization_json }}
         run: bun scripts/provision-ai-budget.ts "$COORDINATOR_SHA" "$COST_MODE" "$COST_ENVIRONMENT"
