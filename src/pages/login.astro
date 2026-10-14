@@ -12,9 +12,11 @@ const oauthFailed = Astro.url.searchParams.has("error");
 const oauthErrors = Astro.url.searchParams.getAll("error");
 // biome-ignore lint/correctness/noUnusedVariables: Used in the Astro template.
 const errorMessage =
-  oauthErrors.includes("account_not_linked") || oauthErrors.includes("unable_to_link_account")
+  oauthErrors.includes("account_not_linked")
     ? "이메일 소유 확인이 없어 계정을 연결하지 못했어요. 이메일이 인증된 소셜 계정이나 기존에 사용한 로그인 방법으로 계속해 주세요."
-    : oauthErrors.includes("access_denied")
+    : oauthErrors.includes("unable_to_link_account")
+      ? "계정 연결을 완료하지 못했어요. 잠시 후 다시 시도하거나 기존에 사용한 로그인 방법으로 계속해 주세요."
+      : oauthErrors.includes("access_denied")
       ? "로그인을 취소했어요. 원하는 계정을 다시 선택해 주세요."
       : oauthErrors.includes("session_expired")
         ? "안전한 이용을 위해 다시 로그인해 주세요."

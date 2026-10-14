@@ -22,6 +22,7 @@ test("callback cancellation and expired sessions show safe messages", async ({ p
     ["session_expired", "안전한 이용을 위해 다시 로그인해 주세요."],
     ["state_mismatch", "로그인이 완료되지 않았어요."],
     ["oauth&error=account_not_linked", "이메일 소유 확인이 없어 계정을 연결하지 못했어요."],
+    ["oauth&error=unable_to_link_account", "계정 연결을 완료하지 못했어요."],
     ["oauth&error=access_denied", "로그인을 취소했어요."],
   ] as const) {
     await page.goto(`/login?error=${error}&error_description=untrusted-raw-detail`);
