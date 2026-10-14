@@ -22,6 +22,7 @@ export function productBoundaryFindings(file: string, content: string): string[]
     'console.error(JSON.stringify({event:"workspace_policy_failure",reason}))',
     'console.error(JSON.stringify({event:"workspace_fact_failure",stage,category,attribution,referenceKind,factCount,referenceCount,availableSourceCount,}),)',
     'console.error(JSON.stringify({event:"model_cost_observation_failure",phase,category}))',
+    'console.error(JSON.stringify({event:"cost_observation_failure",phase:"month_bucket",category}),)',
   ]);
   const reportDependencyLog =
     'console.error(JSON.stringify({event:"report_dependency_failure",stage,category,code}))';

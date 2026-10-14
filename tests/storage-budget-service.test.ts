@@ -706,6 +706,9 @@ for (const kind of ["case_original", "lawyer_original"] as const)
       applicationCostLimitsEnabled: false,
       skipCostMetadata: true,
     });
+    f.core.ensureObservationMonth = async () => {
+      throw Error("Synthetic false storage must not depend on a financial calendar bucket");
+    };
     let now = NOW;
     const costs = createStorageBudgetService({
       core: f.core,

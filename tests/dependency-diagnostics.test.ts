@@ -7,6 +7,7 @@ import {
   reportCostObservationFailure,
   reportDependencyFailure,
   reportLegalRetrieval,
+  reportMonthBucketObservationFailure,
   reportProviderFailure,
   reportWorkspaceFactFailure,
   reportWorkspacePolicyFailure,
@@ -108,6 +109,38 @@ test("cost observation diagnostics expose only a clamped phase and static error 
         "console.error(JSON.stringify({event:'model_cost_observation_failure',phase,category,receipt}))",
       ),
     ).toContain("unapproved_payload_log");
+  } finally {
+    output.mockRestore();
+  }
+});
+
+test("monthly observation diagnostics remain distinct from execution failures and omit raw data", () => {
+  const output = spyOn(console, "error").mockImplementation(() => {});
+  try {
+    reportMonthBucketObservationFailure(new Error("D1_ERROR: private month SQL sentinel"));
+    expect(output.mock.calls).toEqual([
+      [
+        JSON.stringify({
+          event: "cost_observation_failure",
+          phase: "month_bucket",
+          category: "database_unavailable",
+        }),
+      ],
+    ]);
+    expect(JSON.stringify(output.mock.calls)).not.toContain("sentinel");
+    expect(
+      productBoundaryFindings(
+        "src/server/dependency-diagnostics.ts",
+        'console.error(JSON.stringify({event:"cost_observation_failure",phase:"month_bucket",category}),)',
+      ),
+    ).toEqual([]);
+    for (const raw of ["month", "sql", "params", "error", "ownerId"])
+      expect(
+        productBoundaryFindings(
+          "src/server/dependency-diagnostics.ts",
+          `console.error(JSON.stringify({event:"cost_observation_failure",phase:"month_bucket",category,${raw}}),)`,
+        ),
+      ).toContain("unapproved_payload_log");
   } finally {
     output.mockRestore();
   }

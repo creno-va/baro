@@ -47,3 +47,45 @@ are local method/statement counts, not network durations or D1 rows read. The re
 preview `3283811` PDF/WAV/PNG durations remain historical remote evidence; a new preview
 measurement is required to establish elapsed-time improvement. The remaining 1184 calls
 and 555 current checks for this fixture are not described as a solved latency problem.
+
+## Dispatch follow-up
+
+Base `1de0d785c080188eb7d6a97f6ba76dd161741e74` includes the changes above.
+Each `current()` call already reads owner, operation/job/source, current policy and file
+consent, revision and lease in one SQL snapshot. There are no internal round trips left
+to combine in that function. This follow-up preserves every call and its position.
+
+| Canonical document | Before D1 calls / SQL statements | After D1 calls / SQL statements | Current checks before / after |
+| --- | --- | --- | --- |
+| 1 page | 665 / 884 | 644 / 821 | 308 / 308 |
+| 2 pages | 1184 / 1557 | 1146 / 1443 | 555 / 555 |
+
+`dispatchExecution` previously read admission existence, created a guarded temporary
+claim, updated the admission and removed the claim in a batch, then performed a fresh
+receipt read. A single guarded `UPDATE ... RETURNING` now checks the same admission,
+principal/owner, environment, operation, immutable runtime/target, current source, lease,
+deadline and prepared state at its state transition. The separate fresh receipt read
+remains unchanged. A late deletion or source/lease replacement denies a permit while
+preserving evidence of the committed dispatch. This saves one D1 call and three SQL
+statements per successful dispatch: 21 dispatches for one page and 38 for two pages.
+
+A zero-row update still reads existence. Only an absent admission can use the historical
+priced route; an existing rejected or dispatched admission returns no permit. Historical
+priced dispatch adds one unsuccessful D1 update before its original path. Neither route
+changes admission payloads, scope/digests, transition/immutability triggers or unknown
+transport recovery. Tests cover one concurrent winner, exact admission preservation,
+before/after-CAS owner/source/lease/runtime/operation/deletion changes, SQL rollback and
+post-commit response loss. Existing cross-route, scoped/unscoped model/GET, immutable
+scope tampering and unknown/response recovery regressions remain covered.
+
+The two-page profile before this follow-up also has 49 lease renewals, 29 checkpoint
+reads, 42 stored-blob reads and 38 transport records. Transport records are durable
+recovery evidence, including the rule that only a confirmed legacy GET response permits
+a later scoped invocation; they cannot be dropped as optional financial metadata.
+The later `prepareUnit` call resumes the immutable plan and reads its artifact count.
+It does not repeat extraction or model interpretation. Reusing those results across
+Workflow steps would change the existing recovery and fresh-check boundaries and is
+outside this patch. No caches, skipped checks, timeout changes or retries are added.
+
+These counts use offline adapters and do not establish remote elapsed-time improvement.
+The remaining 1146 calls and 555 current checks are still a material latency concern.

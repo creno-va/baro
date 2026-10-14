@@ -1,6 +1,6 @@
 import { opaqueIdSchema, timestampSchema } from "../../contracts";
 import { reportDependencyFailure } from "../dependency-diagnostics";
-import { type Actor, parse, safe, sqlClaim, type V2Core } from "./v2-core";
+import { type Actor, parse, safe, type V2Core } from "./v2-core";
 import { jobAlive } from "./v2-jobs";
 import {
   fundingProofSchema,
@@ -23,26 +23,27 @@ export async function dispatchExecution(
   lease: JobLease,
   attemptId: string,
 ) {
-  const present = await core
-    .statement("SELECT 1 FROM v2_execution_admissions WHERE attempt_id=?", [attemptId])
-    .first();
-  if (!present) return undefined;
-  const token = crypto.randomUUID(),
-    claim = crypto.randomUUID();
-  const ok = await core.changed([
-    core.statement(
-      `INSERT INTO v2_mutation_claims(id,owner_id,target_id,revision)
-      SELECT ?,o.owner_id,j.id,j.target_revision FROM v2_execution_admissions a
+  const token = crypto.randomUUID();
+  // One statement checks the exact current admission and wins its dispatch.
+  // Keep the fresh read below: a change after this commit must deny permission
+  // while retaining the irreversible dispatch evidence.
+  const dispatched = await core
+    .statement(
+      `UPDATE v2_execution_admissions SET state='dispatched',lease_token=?,fencing=?,dispatch_token=?,dispatched_at=?
+      WHERE attempt_id=? AND EXISTS(SELECT 1 FROM v2_execution_admissions a
       JOIN v2_jobs j ON j.id=a.job_id JOIN v2_operations o ON o.id=j.operation_id
       JOIN v2_billing_principals p ON p.id=a.principal_id
-      WHERE a.attempt_id=? AND a.kind='job' AND a.environment=? AND a.state='prepared'
+      WHERE a.attempt_id=v2_execution_admissions.attempt_id AND a.kind='job' AND a.environment=? AND a.state='prepared'
       AND a.job_id=? AND a.runtime_instance_id=j.runtime_instance_id AND p.owner_id=? AND o.owner_id=p.owner_id AND o.id=a.operation_id
       AND o.revision=a.operation_revision AND o.state='admitted'
       AND j.target_kind=a.target_kind AND j.target_id=a.target_id AND j.target_revision=a.target_revision
       AND j.status IN ('running','validating') AND j.lease_token=? AND j.fencing=? AND j.lease_until>?
-      AND a.deadline_at>? AND ${jobAlive}`,
+      AND a.deadline_at>? AND ${jobAlive}) RETURNING attempt_id`,
       [
-        claim,
+        lease.token,
+        lease.fencing,
+        token,
+        actor.now,
         attemptId,
         environment,
         lease.jobId,
@@ -52,14 +53,16 @@ export async function dispatchExecution(
         actor.now,
         actor.now,
       ],
-    ),
-    core.statement(
-      `UPDATE v2_execution_admissions SET state='dispatched',lease_token=?,fencing=?,dispatch_token=?,dispatched_at=? WHERE attempt_id=? AND ${sqlClaim}`,
-      [lease.token, lease.fencing, token, actor.now, attemptId, claim],
-    ),
-    core.finish(claim),
-  ]);
-  if (!ok) return null;
+    )
+    .first<{ attempt_id: string }>();
+  if (!dispatched) {
+    // Only an absent admission may use the historical priced route. A stale,
+    // already dispatched or conflicting execution admission must never fall back.
+    const present = await core
+      .statement("SELECT 1 FROM v2_execution_admissions WHERE attempt_id=?", [attemptId])
+      .first();
+    return present ? null : undefined;
+  }
   const row = await core
     .statement(
       `SELECT a.plan_id,a.digest,a.payload_json,a.invocation_id,a.attempt

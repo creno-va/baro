@@ -21,6 +21,9 @@ export function ReportReview({ caseId }: { caseId: string }) {
   const [excluded, setExcluded] = useState<string[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
   const [busy, setBusy] = useState("");
+  const [busyStartedAt, setBusyStartedAt] = useState<number | null>(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [zipRefreshFailed, setZipRefreshFailed] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [preview, setPreview] = useState(false);
@@ -43,6 +46,7 @@ export function ReportReview({ caseId }: { caseId: string }) {
     setReviewed(false);
     setInitialLimit(false);
     setExportExhausted(false);
+    setZipRefreshFailed(false);
   }, []);
   const clearOwnerState = useCallback(() => {
     ++loadSequence.current;
@@ -63,7 +67,18 @@ export function ReportReview({ caseId }: { caseId: string }) {
     setReviewed(false);
     setAccessChecking(false);
     setBusy("");
+    setBusyStartedAt(null);
+    setZipRefreshFailed(false);
   }, []);
+  useEffect(() => {
+    setElapsedSeconds(0);
+    if (busyStartedAt === null) return;
+    const timer = window.setInterval(
+      () => setElapsedSeconds(Math.max(0, Math.floor((performance.now() - busyStartedAt) / 1000))),
+      1000,
+    );
+    return () => window.clearInterval(timer);
+  }, [busyStartedAt]);
   const verifyOwner = useCallback(
     async (isCurrent?: () => boolean) => {
       const sequence = loadSequence.current;
@@ -113,6 +128,7 @@ export function ReportReview({ caseId }: { caseId: string }) {
     const sequence = ++loadSequence.current;
     setAccessChecking(true);
     setBusy("리포트 확인 중…");
+    setBusyStartedAt(performance.now());
     setError("");
     try {
       await verifyOwner(() => sequence === loadSequence.current);
@@ -154,6 +170,7 @@ export function ReportReview({ caseId }: { caseId: string }) {
     } finally {
       if (sequence === loadSequence.current) {
         setBusy("");
+        setBusyStartedAt(null);
         setAccessChecking(false);
       }
     }
@@ -249,11 +266,13 @@ export function ReportReview({ caseId }: { caseId: string }) {
     if (lock.current || accessChecking) return;
     const sequence = loadSequence.current;
     lock.current = true;
-    setBusy(label);
+    setBusy("계정 접근 상태 확인 중…");
+    setBusyStartedAt(performance.now());
     setError("");
     setNotice("");
     try {
       await verifyOwner();
+      setBusy(label);
       await action();
     } catch (e) {
       const failure = e as { code?: string; ownerRevoked?: boolean };
@@ -278,14 +297,50 @@ export function ReportReview({ caseId }: { caseId: string }) {
       setError(e instanceof Error ? e.message : "처리하지 못했어요. 다시 시도해 주세요.");
     } finally {
       lock.current = false;
-      if (sequence === loadSequence.current) setBusy("");
+      if (sequence === loadSequence.current) {
+        setBusy("");
+        setBusyStartedAt(null);
+      }
     }
   }
   async function ownedResult<T>(work: Promise<T>) {
     const sequence = loadSequence.current;
     const value = await work;
+    if (sequence === loadSequence.current) setBusy("접근 권한 다시 확인 중…");
     await verifyOwner(() => sequence === loadSequence.current);
     return value;
+  }
+  async function refreshSavedZip(reportId: string) {
+    const sequence = loadSequence.current;
+    setZipRefreshFailed(false);
+    setBusy("저장된 ZIP 정보 확인 중…");
+    try {
+      const refreshed = await ownedResult(api.reports.get(caseId));
+      setReport((current) =>
+        current?.id === reportId && current.id === refreshed.id
+          ? { ...current, savedZip: refreshed.savedZip }
+          : current,
+      );
+    } catch (e) {
+      const failure = e as { code?: string; ownerRevoked?: boolean };
+      if (
+        sequence !== loadSequence.current ||
+        failure?.ownerRevoked ||
+        [
+          "OWNER_CHECK_SUPERSEDED",
+          "UNAUTHENTICATED",
+          "NOT_FOUND",
+          "FORBIDDEN",
+          "ROLE_REQUIRED",
+          "ORIGIN_NOT_ALLOWED",
+          "CONSENT_REQUIRED",
+        ].includes(failure?.code ?? "")
+      )
+        throw e;
+      // The file was already handed to the browser. Only retry this metadata
+      // read; do not turn a later read failure into another ZIP operation.
+      setZipRefreshFailed(true);
+    }
   }
   const splitSave = Boolean(
     report &&
@@ -316,6 +371,7 @@ export function ReportReview({ caseId }: { caseId: string }) {
   }
   const toggle = (values: string[], id: string) =>
     values.includes(id) ? values.filter((x) => x !== id) : [...values, id];
+  const progressText = `${busy || "계정 접근 상태 확인 중…"}${busyStartedAt !== null ? ` · 요청 시작 후 ${elapsedSeconds}초` : ""}`;
   return (
     <div className="report-review report-workspace" aria-busy={Boolean(busy) || accessChecking}>
       <CaseNavigation
@@ -334,7 +390,7 @@ export function ReportReview({ caseId }: { caseId: string }) {
         </header>
         {(busy || accessChecking) && (
           <p role="status" className="report-progress">
-            {busy || "계정 접근 상태 확인 중…"}
+            {progressText}
           </p>
         )}
         {error && !regenerate && !reloadConfirm && (
@@ -359,6 +415,23 @@ export function ReportReview({ caseId }: { caseId: string }) {
             {notice}
           </p>
         )}
+        {zipRefreshFailed && report && (
+          <div className="report-error" role="alert">
+            <p>다운로드는 시작했지만 저장된 ZIP 정보를 확인하지 못했어요.</p>
+            <button
+              type="button"
+              disabled={Boolean(busy) || accessChecking}
+              onClick={() =>
+                void run("저장된 ZIP 정보 확인 중…", async () => {
+                  await refreshSavedZip(report.id);
+                  setNotice("ZIP 다운로드는 이미 시작했어요. 다운로드 목록을 확인해 주세요.");
+                })
+              }
+            >
+              저장된 ZIP 정보 다시 확인
+            </button>
+          </div>
+        )}
         {initialLimit && !report && !accessChecking && (
           <section className="report-options-body" aria-label="리포트 처리 한도 복구">
             <h2>자료를 줄여 첫 리포트를 만들어요</h2>
@@ -381,6 +454,7 @@ export function ReportReview({ caseId }: { caseId: string }) {
                 void run("리포트 생성 중…", async () => {
                   const value = await ownedResult(api.reports.generate(caseId, excluded));
                   accept(value);
+                  setBusy("자료 목록 확인 중…");
                   setFiles(await ownedResult(api.files.list(caseId)));
                 })
               }
@@ -692,13 +766,8 @@ export function ReportReview({ caseId }: { caseId: string }) {
                         await ownedResult(api.reports.zip(report.id, selected)),
                         `BARO-${report.id}.zip`,
                       );
-                      const refreshed = await ownedResult(api.reports.get(caseId));
-                      setReport((current) =>
-                        current?.id === refreshed.id
-                          ? { ...current, savedZip: refreshed.savedZip }
-                          : current,
-                      );
                       setNotice("ZIP 다운로드를 시작했어요.");
+                      await refreshSavedZip(report.id);
                     })
                   }
                 >
@@ -740,6 +809,7 @@ export function ReportReview({ caseId }: { caseId: string }) {
           <ConfirmDialog
             title="새 버전을 만들까요?"
             busy={Boolean(busy)}
+            busyLabel={progressText}
             onCancel={() => setRegenerate(false)}
           >
             <p>
@@ -763,6 +833,7 @@ export function ReportReview({ caseId }: { caseId: string }) {
                   const value = await ownedResult(
                     api.reports.generate(caseId, undefined, report.revision),
                   );
+                  setBusy("자료 목록 확인 중…");
                   const materials = await ownedResult(api.files.list(caseId));
                   accept(value);
                   setFiles(materials);
@@ -780,6 +851,7 @@ export function ReportReview({ caseId }: { caseId: string }) {
           <ConfirmDialog
             title="저장 내용을 다시 불러올까요?"
             busy={Boolean(busy)}
+            busyLabel={progressText}
             onCancel={() => setReloadConfirm(false)}
           >
             <p>저장하지 않은 편집 내용은 사라져요. 현재 편집 내용을 보관하려면 취소해 주세요.</p>
