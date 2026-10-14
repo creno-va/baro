@@ -444,24 +444,28 @@ async function exerciseNativeRuntime(
         env,
       );
       if (response.status >= 500) {
-        console.error("Synthetic native request failure diagnostics", {
-          requestedCostLimitsEnabled: applicationCostLimitsEnabled,
-          activeCostLimitsEnabled: env.APPLICATION_COST_LIMITS_ENABLED !== "false",
-          requestOrdinal,
-          requestPhase,
-          status: response.status,
-          durationMs: Math.round(performance.now() - started),
-          providerCalls,
-          error: requestFailure,
-          databaseFailureCategories: databaseFailures,
-          databaseFailureDetails,
-          databaseTrace: { ...measured.trace },
-          databaseWork: {
-            statements: measured.work.statements - beforeWork.statements,
-            rowsRead: measured.work.rowsRead - beforeWork.rowsRead,
-            rowsWritten: measured.work.rowsWritten - beforeWork.rowsWritten,
-          },
-        });
+        // JSON preserves the bounded safe cause chains that Bun inspection collapses.
+        console.error(
+          "Synthetic native request failure diagnostics",
+          JSON.stringify({
+            requestedCostLimitsEnabled: applicationCostLimitsEnabled,
+            activeCostLimitsEnabled: env.APPLICATION_COST_LIMITS_ENABLED !== "false",
+            requestOrdinal,
+            requestPhase,
+            status: response.status,
+            durationMs: Math.round(performance.now() - started),
+            providerCalls,
+            error: requestFailure,
+            databaseFailureCategories: databaseFailures,
+            databaseFailureDetails,
+            databaseTrace: { ...measured.trace },
+            databaseWork: {
+              statements: measured.work.statements - beforeWork.statements,
+              rowsRead: measured.work.rowsRead - beforeWork.rowsRead,
+              rowsWritten: measured.work.rowsWritten - beforeWork.rowsWritten,
+            },
+          }),
+        );
         // Exact failed request only, never a previous job from this workspace.
         try {
           const saved = await preview
@@ -470,19 +474,25 @@ async function exerciseNativeRuntime(
             )
             .bind(ownerId, key)
             .first<{ id: string }>();
-          console.error("Synthetic native request receipt diagnostics", {
-            requestOrdinal,
-            jobCreated: !!saved,
-            ...(saved
-              ? await nativeAdmissionDiagnostics(core, env, ownerId, workspace.id, saved.id)
-              : {}),
-          });
+          console.error(
+            "Synthetic native request receipt diagnostics",
+            JSON.stringify({
+              requestOrdinal,
+              jobCreated: !!saved,
+              ...(saved
+                ? await nativeAdmissionDiagnostics(core, env, ownerId, workspace.id, saved.id)
+                : {}),
+            }),
+          );
         } catch (error) {
-          console.error("Synthetic native request receipt diagnostics", {
-            requestOrdinal,
-            probeComplete: false,
-            error: nativeFailure(error),
-          });
+          console.error(
+            "Synthetic native request receipt diagnostics",
+            JSON.stringify({
+              requestOrdinal,
+              probeComplete: false,
+              error: nativeFailure(error),
+            }),
+          );
         }
       }
       return response;
@@ -525,32 +535,38 @@ async function exerciseNativeRuntime(
     if (result.status !== "completed") {
       // Both variants first run a priced baseline, then upgrade populated legacy
       // rows before switching mode. Never label this failure as unpriced execution.
-      console.error("Synthetic native initial runtime diagnostics", {
-        requestedCostLimitsEnabled: applicationCostLimitsEnabled,
-        activeCostLimitsEnabled: env.APPLICATION_COST_LIMITS_ENABLED !== "false",
-        providerCalls,
-        setupDurationMs: Math.round(admissionStarted - started),
-        admissionDurationMs: Math.round(runtimeStarted - admissionStarted),
-        runtimeDurationMs: Math.round(runtimeFinished - runtimeStarted),
-        receiptWaitDurationMs: Math.round(performance.now() - runtimeFinished),
-        stageTimings:
-          "stageTimings" in result
-            ? result.stageTimings.map(({ stage, durationMs, outcome }) => ({
-                stage,
-                durationMs,
-                outcome,
-              }))
-            : [],
-        databaseWork: { ...measured.work },
-        databaseFailureCategories: databaseFailures,
-        databaseFailureDetails,
-        databaseTrace: { ...measured.trace },
-      });
+      console.error(
+        "Synthetic native initial runtime diagnostics",
+        JSON.stringify({
+          requestedCostLimitsEnabled: applicationCostLimitsEnabled,
+          activeCostLimitsEnabled: env.APPLICATION_COST_LIMITS_ENABLED !== "false",
+          providerCalls,
+          setupDurationMs: Math.round(admissionStarted - started),
+          admissionDurationMs: Math.round(runtimeStarted - admissionStarted),
+          runtimeDurationMs: Math.round(runtimeFinished - runtimeStarted),
+          receiptWaitDurationMs: Math.round(performance.now() - runtimeFinished),
+          stageTimings:
+            "stageTimings" in result
+              ? result.stageTimings.map(({ stage, durationMs, outcome }) => ({
+                  stage,
+                  durationMs,
+                  outcome,
+                }))
+              : [],
+          databaseWork: { ...measured.work },
+          databaseFailureCategories: databaseFailures,
+          databaseFailureDetails,
+          databaseTrace: { ...measured.trace },
+        }),
+      );
       // Emit the already-available failure evidence before further D1 reads, so
       // a slow diagnostic probe cannot hide the stage near the test deadline.
-      console.error("Synthetic native initial admission diagnostics", {
-        ...(await nativeAdmissionDiagnostics(core, env, ownerId, workspace.id, queued.jobId)),
-      });
+      console.error(
+        "Synthetic native initial admission diagnostics",
+        JSON.stringify({
+          ...(await nativeAdmissionDiagnostics(core, env, ownerId, workspace.id, queued.jobId)),
+        }),
+      );
     }
     expect(result.status).toBe("completed");
     expect(providerCalls).toBe(2);
@@ -740,12 +756,15 @@ async function exerciseNativeRuntime(
     expect(latest.status).toBe(200);
     const failed = (await latest.json()) as { status: string; retryable: boolean };
     if (failed.status !== "failed" || !failed.retryable) {
-      console.error("Synthetic native admission diagnostics", {
-        applicationCostLimitsEnabled,
-        providerReached: providerCalls > callsBeforeOutage,
-        providerCallsDuringOutage: providerCalls - callsBeforeOutage,
-        ...(await nativeAdmissionDiagnostics(core, env, ownerId, workspace.id, failedJob.jobId)),
-      });
+      console.error(
+        "Synthetic native admission diagnostics",
+        JSON.stringify({
+          applicationCostLimitsEnabled,
+          providerReached: providerCalls > callsBeforeOutage,
+          providerCallsDuringOutage: providerCalls - callsBeforeOutage,
+          ...(await nativeAdmissionDiagnostics(core, env, ownerId, workspace.id, failedJob.jobId)),
+        }),
+      );
     }
     expect(failed).toMatchObject({ status: "failed", retryable: true });
     unavailable = false;
