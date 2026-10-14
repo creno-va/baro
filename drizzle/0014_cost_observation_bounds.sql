@@ -1,7 +1,6 @@
 -- Preserve all evidence rows and restore dependent immutable/capacity triggers in the same D1 import.
 -- Only numeric representation changes; no funding value or recorded cost is rewritten.
-PRAGMA defer_foreign_keys=ON;
---> statement-breakpoint
+-- Stage the referencing holds too, so no statement leaves a dangling foreign key.
 DROP TRIGGER v2_physical_binding_insert;
 --> statement-breakpoint
 DROP TRIGGER v2_runtime_plans_delete_immutable;
@@ -41,6 +40,10 @@ CREATE TABLE `__new_v2_runtime_plans` (
 --> statement-breakpoint
 INSERT INTO `__new_v2_runtime_plans`("id", "operation_id", "operation_revision", "request_hash", "invocation_id", "pricing_proof_id", "funding_proof_id", "job_id", "target_kind", "target_id", "target_revision", "digest", "payload_json", "evidence_hash", "verified_at", "maximum_attempts", "reserved_krw", "deadline_at", "created_at") SELECT "id", "operation_id", "operation_revision", "request_hash", "invocation_id", "pricing_proof_id", "funding_proof_id", "job_id", "target_kind", "target_id", "target_revision", "digest", "payload_json", "evidence_hash", "verified_at", "maximum_attempts", "reserved_krw", "deadline_at", "created_at" FROM `v2_runtime_plans`;
 --> statement-breakpoint
+CREATE TABLE `__preserved_v2_paid_holds` AS SELECT * FROM `v2_paid_holds`;
+--> statement-breakpoint
+DROP TABLE `v2_paid_holds`;
+--> statement-breakpoint
 DROP TABLE `v2_runtime_plans`;
 --> statement-breakpoint
 CREATE TABLE `v2_runtime_plans` (
@@ -71,6 +74,24 @@ CREATE TABLE `v2_runtime_plans` (
 INSERT INTO `v2_runtime_plans`("id", "operation_id", "operation_revision", "request_hash", "invocation_id", "pricing_proof_id", "funding_proof_id", "job_id", "target_kind", "target_id", "target_revision", "digest", "payload_json", "evidence_hash", "verified_at", "maximum_attempts", "reserved_krw", "deadline_at", "created_at") SELECT "id", "operation_id", "operation_revision", "request_hash", "invocation_id", "pricing_proof_id", "funding_proof_id", "job_id", "target_kind", "target_id", "target_revision", "digest", "payload_json", "evidence_hash", "verified_at", "maximum_attempts", "reserved_krw", "deadline_at", "created_at" FROM `__new_v2_runtime_plans`;
 --> statement-breakpoint
 DROP TABLE `__new_v2_runtime_plans`;
+--> statement-breakpoint
+CREATE TABLE `v2_paid_holds` (
+	`attempt_id` text PRIMARY KEY NOT NULL,
+	`plan_id` text NOT NULL,
+	`job_id` text NOT NULL,
+	`state` text DEFAULT 'prepared' NOT NULL,
+	`lease_token` text,
+	`fencing` integer,
+	`dispatch_token` text,
+	`dispatched_at` text,
+	FOREIGN KEY (`attempt_id`) REFERENCES `v2_cost_attempts`(`id`) ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY (`plan_id`) REFERENCES `v2_runtime_plans`(`id`) ON UPDATE no action ON DELETE no action,
+	CONSTRAINT "v2_paid_hold_state" CHECK("v2_paid_holds"."state" IN ('prepared','dispatched','unknown','final') AND ("v2_paid_holds"."fencing" IS NULL OR (typeof("v2_paid_holds"."fencing")='integer' AND "v2_paid_holds"."fencing" BETWEEN 1 AND 9007199254740991)) AND ("v2_paid_holds"."state" IN ('prepared','final') OR ("v2_paid_holds"."dispatch_token" IS NOT NULL AND "v2_paid_holds"."lease_token" IS NOT NULL AND "v2_paid_holds"."fencing" IS NOT NULL AND "v2_paid_holds"."dispatched_at" IS NOT NULL)))
+);
+--> statement-breakpoint
+INSERT INTO `v2_paid_holds`("attempt_id", "plan_id", "job_id", "state", "lease_token", "fencing", "dispatch_token", "dispatched_at") SELECT "attempt_id", "plan_id", "job_id", "state", "lease_token", "fencing", "dispatch_token", "dispatched_at" FROM `__preserved_v2_paid_holds`;
+--> statement-breakpoint
+DROP TABLE `__preserved_v2_paid_holds`;
 --> statement-breakpoint
 CREATE TABLE `__new_v2_storage_projections` (
 	`id` text PRIMARY KEY NOT NULL,
@@ -165,5 +186,3 @@ CREATE TRIGGER v2_storage_projection_immutable BEFORE UPDATE ON v2_storage_proje
 CREATE TRIGGER v2_storage_projection_no_delete BEFORE DELETE ON v2_storage_projections BEGIN SELECT RAISE(ABORT,'STORAGE_PROJECTION_IMMUTABLE'); END;
 --> statement-breakpoint
 INSERT INTO app_metadata(key,value) VALUES ('schema_version','0014_cost_observation_bounds') ON CONFLICT(key) DO UPDATE SET value=excluded.value;
---> statement-breakpoint
-PRAGMA defer_foreign_keys=OFF;
