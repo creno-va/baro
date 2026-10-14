@@ -271,6 +271,12 @@ export type RuntimeProofVerifier = (
   payload: unknown,
   digest: string,
 ) => Promise<VerifiedEvidence | null>;
+/** Server-validated position in the immutable native manifest, never model wire input. */
+export const processingArtifactScopeSchema = z.strictObject({
+  unit: z.number().int().min(0).max(99999),
+  index: z.number().int().min(0).max(19999),
+});
+export type ProcessingArtifactScope = z.infer<typeof processingArtifactScopeSchema>;
 export const paidHoldRequestSchema = z.strictObject({
   attemptId: opaqueIdSchema,
   quoteId: opaqueIdSchema.nullable(),
@@ -283,6 +289,8 @@ export const paidHoldRequestSchema = z.strictObject({
   targetKind: z.enum(["workspace", "file", "report", "profile_asset"]),
   targetId: opaqueIdSchema,
   targetRevision: revisionSchema,
+  // No default: historical request JSON and its immutable digest stay unchanged.
+  artifactScope: processingArtifactScopeSchema.optional(),
   plan: executionPlanSchema,
 });
 export type PaidHoldRequest = z.infer<typeof paidHoldRequestSchema>;

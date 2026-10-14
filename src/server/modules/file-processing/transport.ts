@@ -1,6 +1,7 @@
 import { sha256 } from "@noble/hashes/sha2.js";
 import { z } from "zod";
 import { v2FileProbeSchema } from "../../../contracts/v2";
+import type { ProcessingArtifactScope } from "../../db/v2-paid-contracts";
 import { digest, hex } from "../files/binary";
 import {
   decodeArtifact,
@@ -25,6 +26,7 @@ export interface ProcessingCosts {
       action?: "container_probe" | "container_process" | "r2_get" | "r2_put" | "asr" | "vision";
       model?: string;
       wire?: Readonly<Record<string, unknown>>;
+      artifactScope?: ProcessingArtifactScope;
     },
     access: ProcessingAccess,
   ): Promise<ProcessingCostPermit | null>;

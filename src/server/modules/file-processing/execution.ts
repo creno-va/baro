@@ -769,6 +769,7 @@ export function createFileProcessingExecution(
             artifact.position.startSeconds,
             artifact.position.endSeconds,
             access(signal),
+            { unit, index },
           );
           result.status = output.status;
           result.observations = output.segments.length
@@ -804,7 +805,7 @@ export function createFileProcessingExecution(
           }
         } else {
           try {
-            const output = await options.media.observe(bytes, access(signal));
+            const output = await options.media.observe(bytes, access(signal), { unit, index });
             result.status = artifact.multiFrame ? "low_quality" : output.quality;
             result.observations = output.texts.flatMap((text, n) =>
               texts(text, artifact.position, `${scope}-${n}`),

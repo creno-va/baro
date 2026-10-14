@@ -823,3 +823,32 @@ test("latest job observes account deletion at its combined selection and DTO rea
   expect(response.status).toBe(200);
   expect(await response.json()).toBeNull();
 });
+
+test("canonical files-page focus retains fresh session boundaries without summary or other collections", async () => {
+  const f = await fixture();
+  const client = createWorkspaceApi(f.transport, null);
+  f.reset();
+  await f.session();
+  await f.session();
+  const view = await client.getFiles(f.workspace.id);
+  await f.session();
+  expect(view.files).toEqual(f.view.files);
+  expect(view.case.revision).toBe(f.view.case.revision);
+  expect(f.rows.map((row) => row.route)).toEqual([
+    "session",
+    "session",
+    "workspace",
+    "files",
+    "workspace",
+    "session",
+  ]);
+  if (process.env.BARO_WORKSPACE_LOAD_METRICS === "true")
+    console.info(
+      JSON.stringify({
+        event: "synthetic_files_page_focus_work",
+        http: f.rows.length,
+        calls: f.rows.reduce((sum, row) => sum + row.calls, 0),
+        statements: f.rows.reduce((sum, row) => sum + row.statements, 0),
+      }),
+    );
+});

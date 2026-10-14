@@ -109,8 +109,8 @@ test("observation-only reserve/upload/admission counts D1 calls without cost met
   const f = await setup();
   expect(f.measured.work).toEqual({ calls: 6, statements: 14 });
   expect(await f.upload()).toMatchObject({ revision: 2, processingQueued: true });
-  // Baseline: 52 calls / 79 statements. Four duplicate read calls are removed.
-  expect(f.measured.work).toEqual({ calls: 48, statements: 75 });
+  // Baseline: 52/79. Four duplicate reads and one atomic receipt read are removed.
+  expect(f.measured.work).toEqual({ calls: 47, statements: 74 });
   expect(f.puts()).toBe(1);
   expect(f.db.sqlite.query("SELECT count(*) n FROM v2_runtime_proofs").get()).toEqual({ n: 0 });
   expect(f.db.sqlite.query("SELECT writer_state FROM v2_physical_blob_bindings").get()).toEqual({

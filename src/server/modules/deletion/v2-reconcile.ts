@@ -6,6 +6,7 @@ import { authorizeBlobCleanup, createStorageMaintenance } from "../budget/storag
 import { isNamedNativeRuntime } from "../file-processing/native-identity";
 import type { PrivateBucket } from "../files/service";
 import { type CleanupWorkflow, deleteWorkflowInstance } from "./workflow-cleanup";
+import { provesWorkspaceOnlyCleanup } from "./workspace-cleanup-proof";
 
 const cleanupReasons = [
   "CLEANUP_BINDING_UNAVAILABLE",
@@ -239,6 +240,20 @@ export function createV2DeletionReconciler(core: V2Core, deps: DeletionCleanupDe
                   if (
                     !named &&
                     (!observed || nativeObserved || /^file-processing-/.test(target.target_id)) &&
+                    !(
+                      !observed &&
+                      !nativeObserved &&
+                      journal.target_kind === "workspace" &&
+                      (await inventory(() =>
+                        provesWorkspaceOnlyCleanup(
+                          core,
+                          lease,
+                          target.target_id,
+                          deps.environment,
+                          now,
+                        ),
+                      ))
+                    ) &&
                     !(await deps.confirmLegacyJob?.(target.target_id))
                   )
                     throw new Error("CLEANUP_LEGACY_RUNTIME_PROOF_REQUIRED");

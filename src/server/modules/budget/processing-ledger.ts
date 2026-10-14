@@ -7,6 +7,7 @@ import {
   type ExecutionPlan,
   type PaidHoldRequest,
   paidHoldRequestSchema,
+  processingArtifactScopeSchema,
   runtimeDigest,
   type UsageReceipt,
   type VerifiedEvidence,
@@ -108,6 +109,74 @@ export function createProcessingBudgetService(options: {
           : null,
   );
 
+  async function invocationFor(
+    input: Input,
+    inputDigest: string,
+    binding: GatewayExecutionBinding,
+  ): Promise<string | null> {
+    const invocation = (identity: string) =>
+      runtimeDigest({ run: binding.invocationId, inputDigest: identity }).then(
+        (id) => `media-${id}`,
+      );
+    if (input.artifactScope === undefined) return invocation(inputDigest);
+    const scope = processingArtifactScopeSchema.safeParse(input.artifactScope);
+    if (
+      !scope.success ||
+      binding.targetKind !== "file" ||
+      !(
+        (input.service === "model" && input.action === "vision") ||
+        (input.service === "asr" && input.action === "asr")
+      )
+    )
+      return null;
+    const { artifactScope: _scope, ...legacyInput } = input;
+    const legacyDigest = await inputIdentity(legacyInput);
+    if (!legacyDigest) return null;
+    const legacyInvocation = await invocation(legacyDigest);
+    const row = await options.core
+      .statement(
+        `SELECT p.payload_json,p.digest,h.state,
+         (EXISTS(SELECT 1 FROM v2_execution_admissions a WHERE a.attempt_id=h.attempt_id AND a.state='final' AND a.transport='response')
+          OR EXISTS(SELECT 1 FROM v2_runtime_usage u WHERE u.attempt_id=h.attempt_id AND u.outcome='settled' AND json_extract(u.payload_json,'$.transport')='response' AND json_extract(u.payload_json,'$.dispatchToken')=h.dispatch_token)) AS responded
+         FROM v2_execution_job_plans p JOIN v2_execution_job_holds h ON h.plan_id=p.id
+         WHERE p.invocation_id=? AND h.job_id=?`,
+        [legacyInvocation, binding.jobId],
+      )
+      .first<{ payload_json: string; digest: string; state: string; responded: number }>();
+    // The first caller must compete with old and new callers through the SAME
+    // legacy invocation CAS. Its immutable request records which position won.
+    if (!row) return legacyInvocation;
+    const parsed = paidHoldRequestSchema.safeParse(JSON.parse(row.payload_json));
+    if (!parsed.success) return null;
+    const saved = parsed.data;
+    if (
+      (await runtimeDigest(saved)) !== row.digest ||
+      saved.jobId !== binding.jobId ||
+      saved.attempt !== 1 ||
+      saved.plan.maximumAttempts !== 1 ||
+      saved.plan.invocationId !== legacyInvocation ||
+      saved.plan.operationId !== binding.operationId ||
+      saved.plan.operationRevision !== binding.operationRevision ||
+      saved.plan.requestHash !== binding.requestHash ||
+      saved.targetKind !== binding.targetKind ||
+      saved.targetId !== binding.targetId ||
+      saved.targetRevision !== binding.targetRevision ||
+      saved.service !== input.service ||
+      !saved.artifactScope
+    )
+      return null;
+    if (
+      saved.artifactScope.unit === scope.data.unit &&
+      saved.artifactScope.index === scope.data.index
+    )
+      return legacyInvocation;
+    // A response before the result checkpoint never frees the SAME position.
+    // Only immutable evidence of a different completed position permits another
+    // invocation. Historical unscoped or unresolved records remain untouched;
+    // they require an explicit user retry with a new runtime.
+    return row.state === "final" && row.responded === 1 ? invocation(inputDigest) : null;
+  }
+
   async function prepareInitial(input: Input): Promise<ProcessingAdmission | null> {
     const a = actor();
     const immutable = JSON.parse(JSON.stringify(input)) as Input;
@@ -125,6 +194,8 @@ export function createProcessingBudgetService(options: {
     if (!inputDigest) return null;
     const binding = await options.binding(a.now);
     if (!binding || !options.bounds) return null;
+    const invocationId = await invocationFor(immutable, inputDigest, binding);
+    if (!invocationId) return null;
     const parsed = proofSchema.safeParse(await options.bounds(immutable, inputDigest, a.now));
     if (!parsed.success) return null;
     const proof = parsed.data;
@@ -147,13 +218,14 @@ export function createProcessingBudgetService(options: {
       targetKind: binding.targetKind,
       targetId: binding.targetId,
       targetRevision: binding.targetRevision,
+      ...(immutable.artifactScope ? { artifactScope: immutable.artifactScope } : {}),
       plan: {
         operationId: binding.operationId,
         operationRevision: binding.operationRevision,
         requestHash: binding.requestHash,
         // Stable within the server's run and immutable action. Workflow replay
         // cannot turn an unresolved call into a fresh billing invocation.
-        invocationId: `media-${await runtimeDigest({ run: binding.invocationId, inputDigest })}`,
+        invocationId,
         maximumAttempts: 1,
         deadlineAt: binding.deadlineAt,
         quantities: proof.quantities,

@@ -236,6 +236,7 @@ export function createWorkspaceApi(
     id: string,
     recovery = 0,
     more?: "messages" | "actions" | "timeline",
+    filesOnly = false,
   ): Promise<CustomerWorkspaceView> {
     const response = await request(`${base(id)}/workspace`);
     if (response.status === 404) {
@@ -268,6 +269,8 @@ export function createWorkspaceApi(
     const value: unknown = await (await workspaceResponse(response)).json();
     if (workspaceViewSchema.safeParse(value).success) {
       const view = parseView(value);
+      if (filesOnly && view.case.id !== id)
+        throw workspaceError("NOT_FOUND", "사건을 찾을 수 없어요.");
       schemaVersions.set(id, view.case.schemaVersion ?? "2");
       workspaceRevisions.set(id, view.case.revision);
       for (const action of view.actions)
@@ -279,6 +282,37 @@ export function createWorkspaceApi(
     const w = v2WorkspaceSchema.parse(value);
     schemaVersions.set(id, "2");
     workspaceRevisions.set(id, w.workspaceRevision);
+    if (filesOnly) {
+      // A files-page projection does not claim to load the summary or any other
+      // collection. Keep its before/after workspace fence while each existing
+      // metadata read retains its owner, file, decrypt and current-job fences.
+      const fileViews = await files.list(id, { metadataOnly: true });
+      const settled = v2WorkspaceSchema.parse(
+        await workspaceJson(request, `${base(id)}/workspace`),
+      );
+      if (w.id !== id || settled.id !== id || settled.workspaceRevision !== w.workspaceRevision)
+        throw workspaceError(
+          "UNAVAILABLE",
+          "사건이 갱신되어 최신 자료 목록을 다시 불러와 주세요.",
+          true,
+        );
+      return {
+        case: {
+          id: w.id,
+          title: w.title,
+          subjectContext: w.subjectContext,
+          stage: w.status,
+          revision: w.workspaceRevision,
+          updatedAt: w.updatedAt,
+          summary: "",
+          schemaVersion: "2",
+        },
+        files: fileViews,
+        messages: [],
+        actions: [],
+        timeline: [],
+      };
+    }
     const cached = snapshots.get(id);
     const limits = historyLimits.get(id) ?? { messages: 500, actions: 1000, timeline: 1000 };
     let [intake, messagesRaw, actionsRaw, timelineRaw, fileViews] = await Promise.all([
@@ -560,6 +594,7 @@ export function createWorkspaceApi(
   }
   return {
     get,
+    getFiles: (id: string) => get(id, 0, undefined, true),
     async loadMore(id: string, collection: "messages" | "actions" | "timeline") {
       // Serialize continuation reads so repeated clicks cannot append the same page.
       const previous = pageRequests.get(id) ?? Promise.resolve();

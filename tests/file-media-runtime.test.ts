@@ -4,13 +4,27 @@ import { modelBounds, modelCapabilitySchema } from "../scripts/provision-ai-budg
 import { CURRENT_POLICY_VERSIONS } from "../src/contracts/consent";
 import { createV2Core } from "../src/server/db/v2-core";
 import { createV2FilesRepository } from "../src/server/db/v2-files";
-import { createFileProcessingRuntime } from "../src/server/modules/budget/processing-runtime";
+import {
+  createV2PaidRuntimeRepository,
+  paidHoldRequestSchema,
+  processingArtifactScopeSchema,
+  runtimeDigest,
+} from "../src/server/db/v2-paid-runtime";
+import { configuredMediaPolicy } from "../src/server/modules/budget/media-capability";
+import { createProcessingBudgetService } from "../src/server/modules/budget/processing-ledger";
+import {
+  boundedProcessingResources,
+  createFileProcessingRuntime,
+} from "../src/server/modules/budget/processing-runtime";
+import { ProcessingError } from "../src/server/modules/file-processing/protocol";
+import { createFileRetry } from "../src/server/modules/file-processing/retry";
 import { digest } from "../src/server/modules/files/binary";
 import { fileStorageRequestCore } from "../src/server/modules/files/limits";
 import { createFileStorageBudget } from "../src/server/modules/files/runtime";
 import { createFilesService } from "../src/server/modules/files/service";
 import { MODEL_ID } from "../src/server/modules/llm-gateway/prompts";
-import { WHISPER_MODEL } from "../src/server/modules/llm-gateway/transcription";
+import { createMediaGateway, WHISPER_MODEL } from "../src/server/modules/llm-gateway/transcription";
+import { prepareVisionWire } from "../src/server/modules/llm-gateway/vision-wire";
 import { createFileProcessingAdmission } from "../src/server/runtime/file-admission";
 import { fixture } from "./helpers/file-processing-fixture";
 import { seedTestSession } from "./helpers/session";
@@ -21,12 +35,14 @@ async function setupImage(
   options: {
     audio?: boolean;
     video?: boolean;
+    videoFrames?: number;
     config?: string;
     result?: unknown;
     reject?: boolean;
     afterModel?: () => void;
   } = {},
 ) {
+  const frameCount = options.videoFrames ?? 1;
   const f = await fixture();
   const core = createV2Core(f.db.binding, f.core.cipher, {
     applicationCostLimitsEnabled: false,
@@ -46,7 +62,7 @@ async function setupImage(
         category: "video",
         format: "mp4",
         byteLength: original.length,
-        durationSeconds: 1,
+        durationSeconds: frameCount,
         hasAudio: false,
       }
     : options.audio
@@ -128,24 +144,22 @@ async function setupImage(
             unit,
             totalUnits: 1,
             frameOffset: 0,
-            decodedFrameCount: options.video ? 1 : 0,
+            decodedFrameCount: options.video ? frameCount : 0,
             probe,
             coverage: options.video
               ? {
                   category: "video",
-                  durationSeconds: 1,
+                  durationSeconds: frameCount,
                   status: "partial",
                   hasAudio: false,
                   audio: null,
-                  frames: [
-                    {
-                      id: "synthetic-frame",
-                      timestampSeconds: 0,
-                      frameIndex: 0,
-                      sampling: "one_second",
-                      status: "missing",
-                    },
-                  ],
+                  frames: Array.from({ length: frameCount }, (_, index) => ({
+                    id: `synthetic-frame-${index}`,
+                    timestampSeconds: index,
+                    frameIndex: index,
+                    sampling: "one_second",
+                    status: "missing",
+                  })),
                   sceneDetection: "complete",
                   sceneFrameCount: 0,
                 }
@@ -163,25 +177,32 @@ async function setupImage(
                     status: "partial",
                     observation: "missing",
                   },
-            artifacts: [
-              {
-                index: 0,
-                kind: options.video ? "frame" : options.audio ? "audio" : "image",
-                position: options.video
-                  ? { kind: "video", timestampSeconds: 0, frameIndex: 0, sampling: "one_second" }
-                  : options.audio
-                    ? { kind: "audio", startSeconds: 0, endSeconds: 1 }
-                    : { kind: "image", region: null },
-                byteLength: original.length,
-                contentHash,
-              },
-            ],
-            outputBytes: original.length,
+            artifacts: Array.from({ length: options.video ? frameCount : 1 }, (_, index) => ({
+              index,
+              kind: options.video ? "frame" : options.audio ? "audio" : "image",
+              position: options.video
+                ? {
+                    kind: "video",
+                    timestampSeconds: index,
+                    frameIndex: index,
+                    sampling: "one_second",
+                  }
+                : options.audio
+                  ? { kind: "audio", startSeconds: 0, endSeconds: 1 }
+                  : { kind: "image", region: null },
+              byteLength: original.length,
+              contentHash,
+            })),
+            outputBytes: original.length * (options.video ? frameCount : 1),
           };
           return new Response(
             `${[
               { type: "manifest", value: manifest },
-              { type: "artifact", index: 0, data: btoa(String.fromCharCode(...original)) },
+              ...manifest.artifacts.map(({ index }) => ({
+                type: "artifact",
+                index,
+                data: btoa(String.fromCharCode(...original)),
+              })),
               { type: "complete" },
             ]
               .map((record) => JSON.stringify(record))
@@ -262,12 +283,15 @@ async function extracted(f: Awaited<ReturnType<typeof setupImage>>) {
   await f.execution.initialize();
   await f.execution.extractUnit(0, signal());
 }
-async function publish(f: Awaited<ReturnType<typeof setupImage>>) {
+async function publish(f: Awaited<ReturnType<typeof setupImage>>, artifacts = 1) {
   await f.execution.prepareUnit(0, signal());
   const p = await f.execution.preparePublication(1, signal());
   for (let i = 0; i < p.partCount; i++) await f.execution.stageCoveragePart(i, signal());
-  const pages = await f.execution.resultPages(0, 0);
-  for (let i = 0; i < pages.pageCount; i++) await f.execution.stageResultPage(0, 0, i, signal());
+  for (let artifact = 0; artifact < artifacts; artifact++) {
+    const pages = await f.execution.resultPages(0, artifact);
+    for (let i = 0; i < pages.pageCount; i++)
+      await f.execution.stageResultPage(0, artifact, i, signal());
+  }
   await f.execution.publish(signal());
   return createV2FilesRepository(f.core).read(
     { ownerId: f.actor.ownerId, now: new Date().toISOString() },
@@ -406,4 +430,346 @@ test("canonical video frame preserves sampled position and derivative with the s
     kind: "sampled_frame",
     contentHash: await digest(f.original),
   });
+});
+
+test("distinct video positions with identical JPEG bytes each retain a logical model invocation", async () => {
+  const f = await setupImage({ video: true, videoFrames: 2 });
+  await extracted(f);
+  await f.execution.interpretArtifact(0, 0, signal());
+  expect(f.calls.model).toBe(1);
+  await f.execution.interpretArtifact(0, 1, signal());
+  expect(f.calls.model).toBe(2);
+  expect(f.wires[0]).toEqual(f.wires[1]);
+  const journal = f.db.sqlite
+    .query(
+      "SELECT count(*) n,count(DISTINCT invocation_id) invocations FROM v2_execution_admissions WHERE service='model' AND state='final' AND transport='response'",
+    )
+    .get();
+  expect(journal).toEqual({ n: 2, invocations: 2 });
+  const restarted = await createFileProcessingRuntime(
+    f.env,
+    f.params,
+    `${f.params.jobId}-1`,
+    () => {},
+  );
+  await restarted.interpretArtifact(0, 0, signal());
+  await restarted.interpretArtifact(0, 1, signal());
+  expect(f.calls.model).toBe(2);
+  const output = await publish(f, 2);
+  expect(output?.coverage).toMatchObject({
+    status: "complete",
+    frames: [
+      { timestampSeconds: 0, status: "processed" },
+      { timestampSeconds: 1, status: "processed" },
+    ],
+  });
+  expect(output?.observations.map((x) => x.position)).toMatchObject([
+    { timestampSeconds: 0, frameIndex: 0 },
+    { timestampSeconds: 1, frameIndex: 1 },
+  ]);
+});
+
+async function mediaLedger(f: Awaited<ReturnType<typeof setupImage>>) {
+  const row = f.db.sqlite
+    .query(
+      "SELECT payload_json FROM v2_execution_admissions WHERE job_id=? AND service='container' ORDER BY created_at LIMIT 1",
+    )
+    .get(f.params.jobId) as { payload_json: string };
+  const initial = paidHoldRequestSchema.parse(JSON.parse(row.payload_json));
+  const policy = configuredMediaPolicy(f.env);
+  const budget = createProcessingBudgetService({
+    core: f.core,
+    environment: "preview",
+    ownerId: f.actor.ownerId,
+    bounds: (input, hash, now) =>
+      input.service === "model"
+        ? policy.bounds(input, hash, now)
+        : boundedProcessingResources(input, hash, now),
+    binding: async (now) => ({
+      operationId: initial.plan.operationId,
+      operationRevision: initial.plan.operationRevision,
+      requestHash: initial.plan.requestHash,
+      jobId: f.params.jobId,
+      targetKind: "file",
+      targetId: f.params.fileId,
+      targetRevision: f.params.fileRevision,
+      pricingProofId: null,
+      fundingProofId: null,
+      allocationProofId: null,
+      invocationId: `${f.params.jobId}-1`,
+      maximumAttempts: 1,
+      deadlineAt: new Date(Date.parse(now) + 300000).toISOString(),
+    }),
+  });
+  const wire = prepareVisionWire(f.original);
+  const bytes = new TextEncoder().encode(JSON.stringify(wire));
+  const input = {
+    service: "model" as const,
+    action: "vision" as const,
+    model: MODEL_ID,
+    identity: await digest(bytes),
+    byteLength: bytes.length,
+    durationSeconds: null,
+    wire,
+  };
+  const lease = await f.execution.currentLease();
+  const costs = budget.costs(lease);
+  const access = {
+    signal: signal(),
+    authorize: async () => {
+      await f.execution.currentLease();
+      return true;
+    },
+  };
+  const gateway = createMediaGateway(f.env, {
+    costs,
+    waitUntil: () => {},
+    visionCapability: policy.visionCapability,
+  });
+  return { budget, costs, lease, access, input, gateway };
+}
+
+for (const state of ["prepared", "dispatched", "unknown", "not_sent", "response"] as const)
+  test(`historical unscoped model ${state} cannot fund a new scoped call or rewrite its evidence`, async () => {
+    const f = await setupImage({ video: true, videoFrames: 2 });
+    await extracted(f);
+    const old = await mediaLedger(f);
+    if (state === "prepared") {
+      const admission = await old.budget.prepareInitial(old.input);
+      if (!admission) throw new Error("Synthetic admission missing");
+      expect(
+        await createV2PaidRuntimeRepository(f.core, "preview").reserveAttempt(
+          admission.actor,
+          old.lease,
+          admission.paid,
+        ),
+      ).toBe(true);
+    } else {
+      const permit = await old.costs.before(old.input, old.access);
+      if (!permit) throw new Error("Synthetic permit missing");
+      if (state !== "dispatched") await old.costs.after(permit, { transport: state });
+    }
+    const before = f.db.sqlite
+      .query("SELECT * FROM v2_execution_admissions WHERE service='model'")
+      .all();
+    for (const index of [0, 1])
+      await expect(f.execution.interpretArtifact(0, index, signal())).rejects.toMatchObject({
+        code: "BUDGET_UNAVAILABLE",
+      });
+    expect(f.calls.model).toBe(0);
+    expect(
+      f.db.sqlite.query("SELECT * FROM v2_execution_admissions WHERE service='model'").all(),
+    ).toEqual(before);
+  });
+
+test("model response before checkpoint remains attached to the same position on restart", async () => {
+  const f = await setupImage();
+  await extracted(f);
+  f.bucket.setPutHook(async () => {
+    throw new Error("synthetic result-write interruption");
+  });
+  await expect(f.execution.interpretArtifact(0, 0, signal())).rejects.toBeDefined();
+  expect(f.calls.model).toBe(1);
+  const before = f.db.sqlite
+    .query("SELECT * FROM v2_execution_admissions WHERE service='model'")
+    .all();
+  expect(before).toMatchObject([{ state: "final", transport: "response" }]);
+  f.bucket.setPutHook(async () => {});
+  const restarted = await createFileProcessingRuntime(
+    f.env,
+    f.params,
+    `${f.params.jobId}-1`,
+    () => {},
+  );
+  await expect(restarted.interpretArtifact(0, 0, signal())).rejects.toMatchObject({
+    code: "BUDGET_UNAVAILABLE",
+  });
+  expect(f.calls.model).toBe(1);
+  expect(
+    f.db.sqlite.query("SELECT * FROM v2_execution_admissions WHERE service='model'").all(),
+  ).toEqual(before);
+});
+
+test("identical audio bytes in distinct server units retain exact wire while replay is blocked", async () => {
+  const f = await setupImage({ audio: true });
+  await extracted(f);
+  const { gateway, access } = await mediaLedger(f);
+  await gateway.transcribe(f.original, 0, 1, access, { unit: 0, index: 0 });
+  await gateway.transcribe(f.original, 30, 31, access, { unit: 1, index: 0 });
+  expect(f.calls.model).toBe(2);
+  expect(f.wires[0]).toEqual(f.wires[1]);
+  await expect(
+    gateway.transcribe(f.original, 0, 1, access, { unit: 0, index: 0 }),
+  ).rejects.toMatchObject({ code: "BUDGET_UNAVAILABLE" });
+  await expect(
+    gateway.transcribe(f.original, 30, 31, access, { unit: 1, index: 0 }),
+  ).rejects.toMatchObject({ code: "BUDGET_UNAVAILABLE" });
+  expect(f.calls.model).toBe(2);
+  expect(
+    f.db.sqlite
+      .query(
+        "SELECT count(*) n,count(DISTINCT invocation_id) invocations FROM v2_execution_admissions WHERE service='asr' AND state='final'",
+      )
+      .get(),
+  ).toEqual({ n: 2, invocations: 2 });
+});
+
+test("scoped unknown keeps both its own replay and an unproven next position blocked", async () => {
+  const f = await setupImage({ reject: true });
+  await extracted(f);
+  const { gateway, access } = await mediaLedger(f);
+  await expect(gateway.observe(f.original, access, { unit: 0, index: 0 })).rejects.toMatchObject({
+    code: "MODEL_UNAVAILABLE",
+  });
+  for (const index of [0, 1])
+    await expect(gateway.observe(f.original, access, { unit: 0, index })).rejects.toMatchObject({
+      code: "BUDGET_UNAVAILABLE",
+    });
+  expect(f.calls.model).toBe(1);
+  expect(
+    f.db.sqlite
+      .query("SELECT state,transport FROM v2_execution_admissions WHERE service='model'")
+      .all(),
+  ).toEqual([{ state: "unknown", transport: "unknown" }]);
+});
+
+test("scope is strict server metadata and absent legacy JSON keeps its exact digest", async () => {
+  const f = await setupImage();
+  await extracted(f);
+  const old = await mediaLedger(f);
+  const admission = await old.budget.prepareInitial(old.input);
+  if (!admission) throw new Error("Synthetic admission missing");
+  expect("artifactScope" in admission.request).toBe(false);
+  expect(await runtimeDigest(paidHoldRequestSchema.parse(admission.request))).toBe(
+    await runtimeDigest(admission.request),
+  );
+  for (const scope of [
+    { unit: -1, index: 0 },
+    { unit: 0, index: 20000 },
+    { unit: 0.5, index: 0 },
+    { unit: 0, index: 0, extra: true },
+  ])
+    expect(processingArtifactScopeSchema.safeParse(scope).success).toBe(false);
+  expect(
+    await old.budget.prepareInitial({ ...old.input, artifactScope: { unit: -1, index: 0 } }),
+  ).toBeNull();
+});
+
+test("concurrent first scoped positions compete for the same legacy admission", async () => {
+  const f = await setupImage();
+  await extracted(f);
+  const one = await mediaLedger(f),
+    two = await mediaLedger(f);
+  const permits = await Promise.all([
+    one.costs.before({ ...one.input, artifactScope: { unit: 0, index: 0 } }, one.access),
+    two.costs.before({ ...two.input, artifactScope: { unit: 0, index: 1 } }, two.access),
+  ]);
+  expect(permits.filter(Boolean)).toHaveLength(1);
+  expect(
+    f.db.sqlite.query("SELECT count(*) n FROM v2_execution_admissions WHERE service='model'").get(),
+  ).toEqual({ n: 1 });
+});
+
+test("old unscoped caller claiming after new lookup wins the original CAS", async () => {
+  const f = await setupImage();
+  await extracted(f);
+  const old = await mediaLedger(f);
+  const prepare = f.db.binding.prepare.bind(f.db.binding);
+  let injected = false;
+  f.db.binding.prepare = (sql: string) => {
+    const wrap = (statement: D1PreparedStatement): D1PreparedStatement => {
+      const bind = statement.bind.bind(statement),
+        first = statement.first.bind(statement);
+      statement.bind = (...values: unknown[]) => wrap(bind(...values));
+      if (sql.startsWith("SELECT p.payload_json,p.digest,h.state,")) {
+        statement.first = (async (column?: string) => {
+          const row = await (column === undefined ? first() : first(column));
+          if (!injected) {
+            injected = true;
+            expect(row).toBeNull();
+            expect(await old.costs.before(old.input, old.access)).not.toBeNull();
+          }
+          return row;
+        }) as D1PreparedStatement["first"];
+      }
+      return statement;
+    };
+    return wrap(prepare(sql));
+  };
+  await expect(f.execution.interpretArtifact(0, 0, signal())).rejects.toMatchObject({
+    code: "BUDGET_UNAVAILABLE",
+  });
+  expect(injected).toBe(true);
+  expect(f.calls.model).toBe(0);
+  expect(
+    f.db.sqlite
+      .query(
+        "SELECT state,json_extract(payload_json,'$.artifactScope') scope FROM v2_execution_admissions WHERE service='model'",
+      )
+      .all(),
+  ).toEqual([{ state: "dispatched", scope: null }]);
+});
+
+test("completed first scope permits one concurrent next scope and its immutable position cannot change", async () => {
+  const f = await setupImage();
+  await extracted(f);
+  const first = await mediaLedger(f);
+  await first.gateway.observe(f.original, first.access, { unit: 0, index: 0 });
+  const one = await mediaLedger(f),
+    two = await mediaLedger(f);
+  const permits = await Promise.all([
+    one.costs.before({ ...one.input, artifactScope: { unit: 0, index: 1 } }, one.access),
+    two.costs.before({ ...two.input, artifactScope: { unit: 0, index: 1 } }, two.access),
+  ]);
+  expect(permits.filter(Boolean)).toHaveLength(1);
+  expect(
+    f.db.sqlite.query("SELECT count(*) n FROM v2_execution_admissions WHERE service='model'").get(),
+  ).toEqual({ n: 2 });
+  expect(() =>
+    f.db.sqlite.exec(
+      "UPDATE v2_execution_admissions SET payload_json=json_set(payload_json,'$.artifactScope.index',99) WHERE service='model'",
+    ),
+  ).toThrow();
+  const third = await mediaLedger(f);
+  expect(
+    await third.costs.before(
+      { ...third.input, artifactScope: { unit: 0, index: 1 } },
+      third.access,
+    ),
+  ).toBeNull();
+  expect(f.calls.model).toBe(1);
+});
+
+test("explicit retry starts a new runtime while preserving historical unscoped model evidence", async () => {
+  const f = await setupImage({ video: true, videoFrames: 2 });
+  await extracted(f);
+  const old = await mediaLedger(f);
+  const permit = await old.costs.before(old.input, old.access);
+  if (!permit) throw new Error("Synthetic permit missing");
+  await old.costs.after(permit, { transport: "response" });
+  const before = f.db.sqlite
+    .query("SELECT * FROM v2_execution_admissions WHERE service='model'")
+    .all();
+  await expect(f.execution.interpretArtifact(0, 1, signal())).rejects.toMatchObject({
+    code: "BUDGET_UNAVAILABLE",
+  });
+  await f.execution.fail(new ProcessingError("BUDGET_UNAVAILABLE"));
+  const retry = createFileRetry(f.core, f.env, {});
+  const queued = await retry(f.actor.ownerId, f.workspaceId, f.params.fileId, {
+    expectedRevision: f.rev(),
+    fileRevision: f.params.fileRevision,
+  });
+  expect(queued?.status).toBe("queued");
+  f.execution = await createFileProcessingRuntime(f.env, f.params, `${f.params.jobId}-2`, () => {});
+  await extracted(f);
+  await f.execution.interpretArtifact(0, 0, signal());
+  await f.execution.interpretArtifact(0, 1, signal());
+  expect(f.calls.model).toBe(2);
+  const output = await publish(f, 2);
+  expect(output?.coverage).toMatchObject({ status: "complete" });
+  expect(
+    f.db.sqlite
+      .query("SELECT * FROM v2_execution_admissions WHERE service='model' AND attempt_id=?")
+      .all(permit.attemptId),
+  ).toEqual(before);
 });
