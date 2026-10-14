@@ -8,7 +8,6 @@ import {
   v2FailureCodeSchema,
   v2FileObservationSchema,
   v2FileProcessingSchema,
-  v2FileSchema,
   v2ObservationEditInputSchema,
   v2ObservationEditRequestSchema,
   v2UploadReservationRequestSchema,
@@ -240,15 +239,26 @@ export function createFilesApi(request: WorkspaceTransport) {
           processing: row.processing,
         };
         if (row.status === "ready" && !options.metadataOnly) {
-          const detail = await request(`${base(id)}/files/${encodeURIComponent(row.id)}`);
+          const detail = await request(
+            `${base(id)}/files/${encodeURIComponent(row.id)}?view=coverage`,
+          );
           if (detail.ok) {
-            const parsed = v2FileSchema.parse(await detail.json());
+            const parsed = z
+              .strictObject({
+                id: metadataSchema.shape.id,
+                revision: metadataSchema.shape.revision,
+                status: z.literal("ready"),
+                coverage: v2CoverageSchema,
+              })
+              .parse(await detail.json());
+            if (parsed.id !== row.id || parsed.revision !== row.revision)
+              throw workspaceError(
+                "UNAVAILABLE",
+                "자료가 갱신되어 최신 목록을 다시 불러와 주세요.",
+                true,
+              );
             file.coverage = coverageLabel(parsed.coverage);
-            file.extractedText = parsed.observations
-              .filter((item) => item.included)
-              .map((item) => `${item.certainty === "uncertain" ? "[확인 필요] " : ""}${item.text}`)
-              .join("\n\n");
-          } else if (detail.status !== 404) await workspaceResponse(detail);
+          } else await workspaceResponse(detail);
         }
         output.push(file);
       }
