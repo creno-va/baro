@@ -20,13 +20,16 @@ test("source gate rejects dynamic fixture/runtime imports, aliased/computed payl
 
 test("only the fixed v2 deletion diagnostic fields are allowed at the reviewed module", () => {
   const file = "src/server/modules/deletion/v2-reconcile.ts";
-  const source = `console.error(JSON.stringify({event:"v2_deletion_cleanup_failed",environment:event.environment,reason:event.reason,attempts:event.attempts,ageSeconds:event.ageSeconds,stage:event.stage,namespace:event.namespace,}),)`;
+  const source = `console.error(JSON.stringify({event:"v2_deletion_cleanup_failed",environment:event.environment,reason:event.reason,attempts:event.attempts,ageSeconds:event.ageSeconds,stage:event.stage,namespace:event.namespace,errorShape:event.errorShape,errorName:event.errorName,messageClass:event.messageClass,codeClass:event.codeClass,httpStatus:event.httpStatus,}),)`;
   expect(productBoundaryFindings(file, source)).toEqual([]);
   for (const unsafe of [
     source.replace("ageSeconds:event.ageSeconds,", "ageSeconds:event.ageSeconds,payload:payload,"),
     source.replace("reason:event.reason", "reason:error.message"),
     source.replace("stage:event.stage", "stage:error.message"),
     source.replace("namespace:event.namespace", "namespace:target.target_id"),
+    source.replace("messageClass:event.messageClass", "messageClass:error.message"),
+    source.replace("codeClass:event.codeClass", "codeClass:error.code"),
+    source.replace("httpStatus:event.httpStatus", "httpStatus:error.status"),
     source.replace("console.error", "console.warn"),
   ])
     expect(productBoundaryFindings(file, unsafe).length).toBeGreaterThan(0);
