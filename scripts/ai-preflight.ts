@@ -335,10 +335,15 @@ export async function inspectAiPreflight(input: {
     else check("database_read_available", false);
   }
   if (scope === "all") {
-    // These product paths currently omit the required ledgers/capability attestations.
-    // Installing price rows alone cannot make their execution ready.
+    // AnalysisWorkflow still creates the gateway without its required attempt
+    // ledger. Keep this known technical composition failure separate from costs.
     check("legacy_analysis_attempt_ledger_wired", false);
-    check("media_storage_vision_metering_wired", false);
+    // The current file runtime supplies costs, bounds and vision capability.
+    // This metadata/SELECT inspector does not execute that composition, inspect
+    // its per-call receipts or prove external success. Do not infer either a
+    // missing implementation or successful media execution from binding rows.
+    checks.media_storage_vision_metering_wired = "not_inspected";
+    warnings.push("media_runtime_requires_separate_acceptance");
   }
   return {
     version: 1,

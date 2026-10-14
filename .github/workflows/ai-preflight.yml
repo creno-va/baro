@@ -42,7 +42,7 @@ jobs:
           bun-version-file: .bun-version
       - name: Install frozen dependencies
         run: bun ci
-      - name: Inspect AI configuration and durable funding
+      - name: Inspect AI configuration and optional cost observations
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: 9e844969d0c44b2449f3951d1f301654
