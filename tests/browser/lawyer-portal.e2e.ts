@@ -78,20 +78,29 @@ test("portal saves photo and portfolio, previews, publishes to directory, refres
           ? { contentType: "image/jpeg", body: photoBytes }
           : { status: 404, json: {} },
       );
-    if (url.pathname === "/api/v2/lawyers")
+    if (url.pathname === "/api/v2/lawyers/directory")
       return route.fulfill({
         json: {
-          schemaVersion: "2",
-          snapshotId: "synthetic-list",
-          rotation: "disclosed_rotation",
-          expiresAt: "2026-10-06T00:05:00Z",
-          items: [],
+          items: profile.published
+            ? [
+                {
+                  id: profile.id,
+                  revision: profile.revision,
+                  name: profile.name,
+                  officeName: profile.officeName,
+                  introduction: profile.introduction,
+                  region: profile.region,
+                  practiceAreas: profile.practiceAreas,
+                  photoUrl: profile.photoUrl,
+                  photoAssetId: profile.photoAssetId,
+                  verificationStatus: profile.verificationStatus,
+                },
+              ]
+            : [],
           nextCursor: null,
+          expiresAt: "2099-01-01T00:00:00Z",
+          rotation: { day: "2026-10-14", algorithm: "daily_sha256_pivot_v1" },
         },
-      });
-    if (url.pathname === "/api/v2/lawyers/self-service")
-      return route.fulfill({
-        json: { items: profile.published ? [profile] : [], nextCursor: null },
       });
     return route.fulfill(profile.published ? { json: profile } : { status: 404, json: {} });
   });
