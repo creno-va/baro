@@ -16,6 +16,7 @@ import {
   createV2RuntimeRefreshRepository,
   runtimeRefreshSchema,
 } from "../src/server/db/v2-runtime-refresh";
+import type { initializeEmptyStorage } from "./initialize-storage";
 import { remoteBudgetD1 } from "./remote-budget-d1";
 
 export const observationSchema = z.strictObject({
@@ -87,7 +88,7 @@ export function pricing(
 }
 
 type RuntimeEnvironment = "preview" | "production";
-function operationsCore(binding: D1Database) {
+export function operationsCore(binding: D1Database) {
   return createV2Core(
     binding,
     {
@@ -432,6 +433,11 @@ export async function inspectAiRuntime(bindings: Partial<Record<RuntimeEnvironme
           )
           .first()
       : null;
+    const initializationPrerequisites = await core
+      .statement(
+        `SELECT (SELECT count(*) FROM v2_blobs) AS recordedBlobs,(SELECT count(*) FROM v2_storage_paid_executions) AS storageExecutions,(SELECT count(*) FROM v2_jobs WHERE status IN ('queued','running','validating')) AS unfinishedJobs,${available.has("v2_physical_blob_bindings") ? "(SELECT count(*) FROM v2_physical_blob_bindings)" : "NULL"} AS physicalBindings`,
+      )
+      .first();
     results.push({
       environment,
       schema,
@@ -442,6 +448,7 @@ export async function inspectAiRuntime(bindings: Partial<Record<RuntimeEnvironme
         : "legacy_observation_only",
       projection,
       carryover,
+      initializationPrerequisites,
     });
   }
   return { mode: "status", observedAt: new Date().toISOString(), results };
@@ -452,9 +459,10 @@ if (import.meta.main) {
     const token = process.env.CLOUDFLARE_API_TOKEN;
     const [sha, mode = "refresh", target = "both"] = process.argv.slice(2);
     if (
-      !["status", "observe", "refresh", "reallocate"].includes(mode) ||
+      !["status", "observe", "refresh", "reallocate", "initialize-storage"].includes(mode) ||
       !["preview", "production", "both"].includes(target) ||
-      (mode === "reallocate" && target !== "both")
+      (mode === "reallocate" && target !== "both") ||
+      (mode === "initialize-storage" && target === "both")
     )
       throw new Error("AI_RUNTIME_OPERATION_INVALID");
     if (!token || !sha || !/^[a-f0-9]{40}$/.test(sha))
@@ -480,17 +488,53 @@ if (import.meta.main) {
           ? JSON.parse(process.env.AI_RUNTIME_OBSERVATION_JSON)
           : await Bun.file("docs/operations/AI-RUNTIME-OBSERVATION.json").json(),
       );
-      const result =
-        mode === "reallocate"
-          ? await provisionAiRuntime(bindings, observation)
-          : await observeAiRuntime(
-              selected,
-              observation,
-              mode as "observe" | "refresh",
-              process.env.AI_RUNTIME_OPERATION_KEY ?? "default",
-            );
-      const bounds = JSON.stringify(modelBounds(observation, result.evidenceHash));
-      for (const environment of mode === "observe" ? [] : Object.keys(selected)) {
+      let result:
+        | Awaited<ReturnType<typeof observeAiRuntime>>
+        | Awaited<ReturnType<typeof provisionAiRuntime>>
+        | Awaited<ReturnType<typeof initializeEmptyStorage>>;
+      if (mode === "initialize-storage") {
+        const environment = target as RuntimeEnvironment;
+        const configuration = JSON.parse(process.env.STORAGE_INITIALIZATION_JSON ?? "null");
+        const origin =
+          environment === "preview" ? "https://preview.baro.site" : "https://baro.site";
+        const health = await fetch(`${origin}/api/health/live`, {
+          redirect: "error",
+          signal: AbortSignal.timeout(15000),
+        });
+        const live = z
+          .object({
+            status: z.literal("ok"),
+            service: z.literal("baro"),
+            release: z.string(),
+            environment: z.string(),
+          })
+          .parse(await health.json());
+        if (!health.ok || live.release !== sha || live.environment !== environment)
+          throw new Error("AI_RUNTIME_SERVING_SHA_MISMATCH");
+        const { initializeEmptyStorage } = await import("./initialize-storage");
+        result = await initializeEmptyStorage(
+          bindings[environment],
+          environment,
+          observation,
+          configuration,
+          process.env.AI_RUNTIME_OPERATION_KEY ?? "default",
+          sha,
+        );
+      } else
+        result =
+          mode === "reallocate"
+            ? await provisionAiRuntime(bindings, observation)
+            : await observeAiRuntime(
+                selected,
+                observation,
+                mode as "observe" | "refresh",
+                process.env.AI_RUNTIME_OPERATION_KEY ?? "default",
+              );
+      const updatesBounds = mode === "refresh" || mode === "reallocate";
+      const bounds = JSON.stringify(
+        modelBounds(observation, "evidenceHash" in result ? result.evidenceHash : ""),
+      );
+      for (const environment of updatesBounds ? Object.keys(selected) : []) {
         const child = Bun.spawn(
           ["bunx", "wrangler", "secret", "put", "AI_MODEL_TOKEN_BOUNDS_JSON", "--env", environment],
           { stdin: "pipe", stdout: "pipe", stderr: "pipe" },
@@ -504,14 +548,14 @@ if (import.meta.main) {
         JSON.stringify({
           ...result,
           candidateSha: sha,
-          modelBoundsConfigured: mode !== "observe",
+          modelBoundsConfigured: updatesBounds,
           autoRecharge: true,
         }),
       );
     }
   } catch (error) {
     console.error(
-      error instanceof Error && /^AI_RUNTIME_[A-Z_]+$/.test(error.message)
+      error instanceof Error && /^(AI_RUNTIME|STORAGE_INITIALIZATION)_[A-Z_]+$/.test(error.message)
         ? error.message
         : "AI_RUNTIME_PROVISION_FAILED",
     );

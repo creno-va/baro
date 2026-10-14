@@ -372,4 +372,8 @@ test("cost operations are manual and operator-scoped, with observations passed a
   );
   expect(step?.env?.AI_RUNTIME_OBSERVATION_JSON).toBe("$" + "{{ inputs.observation_json }}");
   expect(step?.run).not.toContain("inputs.observation_json");
+  expect(step?.env?.STORAGE_INITIALIZATION_JSON).toBe(
+    "$" + "{{ inputs.storage_initialization_json }}",
+  );
+  expect(step?.run).not.toContain("inputs.storage_initialization_json");
 });

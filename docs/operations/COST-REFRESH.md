@@ -59,6 +59,22 @@ zero-state를 검사하며 과거 달 원장은 보존한다. 같은 할당 갱�
 
 ## 저장 projection 초기 연결
 
+수동 Cost operations의 `initialize-storage`는 **기록된 객체·저장 실행·진행 job이 없는 초기
+환경**만 지원한다. target은 한 환경이며 `storage_initialization_json`에 현재 serving SHA,
+현재 control revision, capacity/IO 상한, 인증 콘솔에서 실제 확인한 두 R2 버킷의 객체0개와
+5분 이내 관측 시각을 받는다. CLI는 해당 환경 health의 실제 SHA를 먼저 대조한다.
+그 JSON은 사용자 API 입력이 아니며 관측 시각 갱신만으로 실제 inventory 확인을 대신하지 않는다.
+
+최신 가격·재원 observe 후 exact revision의 freeze와 요청 digest receipt를 같은 batch로
+기록한다. receipt는 비민감 `app_metadata` 운영 키에 보존한다. projection/유지비 예약은
+기존 coordinator를 사용하며 아직 활성화하지 않는다. 같은 관측과 operation key의 유실
+응답은 freeze/projection을 다시 만들지 않고 복구한다. 별도 `refresh`가 같은 할당을 재개한다.
+후속 refresh 뒤 초기 연결의 동일 요청을 재조회해도 추가 유지비·동결을 만들지 않는다.
+
+비어 있지 않은 환경·이전 저장 실행·미완료 job은 초기 연결로 우회하지 않는다. 입력이
+부족하거나 CAS/가격/재원 검사가 실패하면 실행 권한을 만들지 않고 기존 데이터·hold·job을
+보존한다. 이미 freeze가 commit된 실패는 frozen과 receipt를 유지하며 원인 수정 후 재시도한다.
+
 기존 reserveProjection/bindInventory coordinator 경계를 사용한다. 실제 opaque inventory를
 확인한 뒤 용량·유지비·IO 상한을 예약한다. 첫 projection은 active/frozen/drained의 정확한
 revision에서 예약할 수 있고 같은 batch에서 control을 frozen으로 만든다. 이어 같은 할당
