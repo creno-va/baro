@@ -86,6 +86,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
   const messageTooLong = messageLength > 10000;
   const [selected, setSelected] = useState<string[]>([]);
   const [notice, setNotice] = useState("");
+  const [uploadReadbackPending, setUploadReadbackPending] = useState(false);
   const [preview, setPreview] = useState<FileView | null>(null);
   const [deleteFile, setDeleteFile] = useState<FileView | null>(null);
   const [entry, setEntry] = useState<(Partial<TimelineView> & { expectedRevision: number }) | null>(
@@ -142,6 +143,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
     setOriginal(null);
     setUploadConsent(false);
     setRetryUploads([]);
+    setUploadReadbackPending(false);
     setAcceptedFileRetries([]);
     setUploadProgress(null);
     setNotice("");
@@ -183,6 +185,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
       if (serial !== latest.current || !(await verify())) return false;
       if (current(epoch) && serial === latest.current) {
         apply(next);
+        setUploadReadbackPending(false);
         if (!operationError.current) setError(null);
         if (acknowledgedTimeline.current) {
           acknowledgedTimeline.current = false;
@@ -462,6 +465,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
     setRetryUploads(chosen);
     await run("upload", async (epoch) => {
       let completed = 0;
+      let refreshed = false;
       try {
         for (const file of chosen) {
           if (!current(epoch)) return;
@@ -475,13 +479,23 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                 value,
               });
           });
-          if (!current(epoch)) return;
+          if (!alive(epoch)) return;
           completed++;
-          await load();
+          // The upload API already checked this exact file after its ACK. A
+          // later whole-workspace read failure must never resend accepted files.
+          setRetryUploads(chosen.slice(completed));
+          setUploadReadbackPending(true);
+          refreshed = Boolean(await load());
+          if (!alive(epoch)) return;
+          if (!refreshed)
+            setNotice(
+              "자료는 접수됐지만 최신 목록을 확인하지 못했어요. 새로고침으로 확인해 주세요.",
+            );
         }
         if (!current(epoch)) return;
         setRetryUploads([]);
-        setNotice("자료를 저장했어요. 처리 상태와 확인 가능한 범위를 확인해 주세요.");
+        if (refreshed)
+          setNotice("자료를 저장했어요. 처리 상태와 확인 가능한 범위를 확인해 주세요.");
       } catch (cause) {
         if (!current(epoch)) return;
         setRetryUploads(chosen.slice(completed));
@@ -619,9 +633,11 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                 : ["UNAUTHENTICATED", "CONSENT_REQUIRED", "NOT_FOUND"].includes(error.code) &&
                     !error.resource
                   ? "계정 또는 사건 접근이 바뀌어 이전 내용을 비웠어요."
-                  : acceptedFileRetries.length
-                    ? "자료 처리 요청은 이미 접수됐어요. 다시 요청하지 말고 새로고침으로 최신 상태를 확인해 주세요."
-                    : "입력한 내용은 보존돼요. 확인한 뒤 다시 시도해 주세요."}
+                  : uploadReadbackPending
+                    ? "이미 접수된 자료는 다시 업로드하지 않아도 돼요. 새로고침으로 최신 목록을 확인해 주세요."
+                    : acceptedFileRetries.length
+                      ? "자료 처리 요청은 이미 접수됐어요. 다시 요청하지 말고 새로고침으로 최신 상태를 확인해 주세요."
+                      : "입력한 내용은 보존돼요. 확인한 뒤 다시 시도해 주세요."}
           </p>
           <div className="workspace-buttons">
             {!!retryUploads.length && (
@@ -657,7 +673,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
           </div>
         </section>
       )}
-      {!error && !busy && acceptedFileRetries.length > 0 && (
+      {!error && !busy && (acceptedFileRetries.length > 0 || uploadReadbackPending) && (
         <Button
           variant="outline"
           onClick={() =>
