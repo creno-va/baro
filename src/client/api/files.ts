@@ -192,7 +192,7 @@ export function createFilesApi(request: WorkspaceTransport) {
       .parse(await workspaceJson(request, `${base(id)}/workspace`));
     return "workspaceRevision" in value ? value.workspaceRevision : value.case.revision;
   }
-  async function list(id: string): Promise<FileView[]> {
+  async function list(id: string, options: { metadataOnly?: true } = {}): Promise<FileView[]> {
     let cursor: string | undefined;
     const output: FileView[] = [];
     do {
@@ -228,7 +228,10 @@ export function createFilesApi(request: WorkspaceTransport) {
                         row.processing.status !== "queued")
                     ? "processing"
                     : "waiting",
-          coverage: "처리 결과는 아직 확인할 수 없어요.",
+          coverage:
+            options.metadataOnly && row.status === "ready"
+              ? "자료 확인에서 처리 범위를 확인할 수 있어요."
+              : "처리 결과는 아직 확인할 수 없어요.",
           extractedText: "",
           canStartProcessing: row.status === "uploaded",
           canRetry: row.canRetry ?? false,
@@ -236,7 +239,7 @@ export function createFilesApi(request: WorkspaceTransport) {
           failure: row.failure,
           processing: row.processing,
         };
-        if (row.status === "ready") {
+        if (row.status === "ready" && !options.metadataOnly) {
           const detail = await request(`${base(id)}/files/${encodeURIComponent(row.id)}`);
           if (detail.ok) {
             const parsed = v2FileSchema.parse(await detail.json());
@@ -257,6 +260,7 @@ export function createFilesApi(request: WorkspaceTransport) {
     id: string,
     file: File,
     onProgress?: (value: FileUploadProgress) => void,
+    options: { metadataOnly?: true } = {},
   ): Promise<FileView> {
     const progress = (stage: FileUploadProgress["stage"], completedBytes = 0) => {
       // Display callbacks must not change an upload's result or idempotent recovery.
@@ -282,10 +286,10 @@ export function createFilesApi(request: WorkspaceTransport) {
       autoProcessConsentVersion: CURRENT_POLICY_VERSIONS.aiNoticeVersion,
       contentHash,
     };
-    const current = await list(id);
+    const current = await list(id, options);
     if (attempt.session && !current.some((item) => item.id === attempt.session?.fileId)) {
       uploads.delete(identity);
-      return upload(id, file, onProgress);
+      return upload(id, file, onProgress, options);
     }
     let session = attempt.session;
     if (!session) {
@@ -325,7 +329,7 @@ export function createFilesApi(request: WorkspaceTransport) {
         throw cause;
       }
     }
-    const existing = (await list(id)).find((item) => item.id === session.fileId);
+    const existing = (await list(id, options)).find((item) => item.id === session.fileId);
     if (existing && existing.status !== "uploading") {
       uploads.delete(identity);
       return existing;
@@ -362,7 +366,7 @@ export function createFilesApi(request: WorkspaceTransport) {
       }),
     );
     progress("confirming", file.size);
-    const result = (await list(id)).find((item) => item.id === session.fileId);
+    const result = (await list(id, options)).find((item) => item.id === session.fileId);
     if (!result) throw workspaceError("UNAVAILABLE", "파일 저장 상태를 다시 확인해 주세요.", true);
     uploads.delete(identity);
     return result;
@@ -484,8 +488,13 @@ export function createFilesApi(request: WorkspaceTransport) {
         { method: "DELETE" },
       );
     },
-    async retry(id: string, fileId: string, onAccepted?: () => void) {
-      await list(id);
+    async retry(
+      id: string,
+      fileId: string,
+      onAccepted?: () => void,
+      options: { metadataOnly?: true } = {},
+    ) {
+      await list(id, options);
       const value = await workspaceJson(
         request,
         `${base(id)}/files/${encodeURIComponent(fileId)}/retry`,
@@ -504,7 +513,7 @@ export function createFilesApi(request: WorkspaceTransport) {
         onAccepted?.();
       } catch {}
       if (mock.success) return mock.data;
-      const found = (await list(id)).find((file) => file.id === fileId);
+      const found = (await list(id, options)).find((file) => file.id === fileId);
       if (!found) throw workspaceError("NOT_FOUND", "자료를 찾을 수 없어요.");
       return found;
     },

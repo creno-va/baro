@@ -209,15 +209,15 @@ test("file retry ACK survives readback failure and recovers by reading without r
   expect(await retryIds(page)).toEqual(["selected"]);
 });
 
-test("file retry ACK is retained when the complete workspace read fails", async ({ page }) => {
+test("file retry ACK is retained when the files-page read fails", async ({ page }) => {
   const retry = await prepareFileRetry(page);
   await releaseFileFocus(page);
   await page.evaluate(async () => {
     const path = "/tests/helpers/workspace-client-fixture.ts";
     const { api } = (await import(path)) as typeof import("../helpers/workspace-client-fixture");
-    const read = api.workspace.get;
-    api.workspace.get = async () => {
-      api.workspace.get = read;
+    const read = api.workspace.getFiles;
+    api.workspace.getFiles = async () => {
+      api.workspace.getFiles = read;
       throw Object.assign(new Error("Synthetic workspace read failure"), { code: "UNAVAILABLE" });
     };
   });
@@ -293,9 +293,7 @@ test("upload progress shows distinct stages and elapsed time, then retains failu
   await expect(page.getByText(/업로드 시작 후/)).toHaveCount(0);
 });
 
-test("accepted upload keeps refresh recovery after whole-workspace readback fails", async ({
-  page,
-}) => {
+test("accepted upload keeps refresh recovery after files-page readback fails", async ({ page }) => {
   await page.goto(`${base}/files`);
   await expect(page.getByRole("heading", { name: "아직 자료가 없어요" })).toBeVisible();
   await page.evaluate(async () => {
@@ -307,9 +305,9 @@ test("accepted upload keeps refresh recovery after whole-workspace readback fail
     api.files.upload = async (...args: Parameters<typeof upload>) => {
       state.uploadedNames.push(args[1].name);
       const result = await upload(...args);
-      const get = api.workspace.get;
-      api.workspace.get = async () => {
-        api.workspace.get = get;
+      const get = api.workspace.getFiles;
+      api.workspace.getFiles = async () => {
+        api.workspace.getFiles = get;
         throw Object.assign(new Error("합성 최신 목록 조회 실패"), { code: "UNAVAILABLE" });
       };
       return result;
@@ -354,9 +352,9 @@ test("partial upload readback failure retries only the unaccepted remainder", as
         throw Object.assign(new Error("합성 두 번째 전송 실패"), { code: "UNAVAILABLE" });
       const result = await upload(...args);
       if (state.uploadedNames.length === 1) {
-        const get = api.workspace.get;
-        api.workspace.get = async () => {
-          api.workspace.get = get;
+        const get = api.workspace.getFiles;
+        api.workspace.getFiles = async () => {
+          api.workspace.getFiles = get;
           throw Object.assign(new Error("합성 최신 목록 조회 실패"), { code: "UNAVAILABLE" });
         };
       }
@@ -409,9 +407,9 @@ for (const changed of ["other-owner", "lawyer", "signed-out"] as const)
       api.files.upload = async (...args: Parameters<typeof upload>) => {
         state.uploadCount++;
         const result = await upload(...args);
-        const get = api.workspace.get;
-        api.workspace.get = async (...read: Parameters<typeof get>) => {
-          api.workspace.get = get;
+        const get = api.workspace.getFiles;
+        api.workspace.getFiles = async (...read: Parameters<typeof get>) => {
+          api.workspace.getFiles = get;
           const oldView = await get(...read);
           return new Promise((resolve) => {
             state.releaseUploadReadback = () => resolve(oldView);
@@ -481,9 +479,9 @@ test("accepted upload recovery stays read-only after consent withdrawal", async 
       const saved = JSON.parse(localStorage.getItem(key) ?? "{}");
       saved.session.needsConsent = true;
       localStorage.setItem(key, JSON.stringify(saved));
-      const get = api.workspace.get;
-      api.workspace.get = async () => {
-        api.workspace.get = get;
+      const get = api.workspace.getFiles;
+      api.workspace.getFiles = async () => {
+        api.workspace.getFiles = get;
         throw Object.assign(new Error("합성 최신 목록 조회 실패"), { code: "UNAVAILABLE" });
       };
       return result;

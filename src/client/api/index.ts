@@ -130,6 +130,7 @@ export const api = {
   }>("cases"),
   workspace: domain<{
     get(id: string): Promise<WorkspaceView>;
+    getFiles(id: string): Promise<WorkspaceView>;
     loadMore(id: string, collection: "messages" | "actions" | "timeline"): Promise<WorkspaceView>;
     sendMessage(
       id: string,
@@ -159,8 +160,14 @@ export const api = {
       id: string,
       file: File,
       onProgress?: (value: FileUploadProgress) => void,
+      options?: { metadataOnly?: true },
     ): Promise<FileView>;
-    retry(id: string, fileId: string, onAccepted?: () => void): Promise<FileView>;
+    retry(
+      id: string,
+      fileId: string,
+      onAccepted?: () => void,
+      options?: { metadataOnly?: true },
+    ): Promise<FileView>;
     remove(id: string, fileId: string): Promise<FileView[]>;
     original(id: string, fileId: string): Promise<Blob>;
   }>("files"),

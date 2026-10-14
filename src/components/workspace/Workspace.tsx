@@ -175,13 +175,17 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
     setPreview((file) => (file ? (next.files.find((item) => item.id === file.id) ?? null) : null));
   }, []);
   const fileReviewError = useCallback((cause: unknown) => showError(cause, true), [showError]);
+  const readView = useCallback(
+    () => (tab === "files" ? api.workspace.getFiles(caseId) : api.workspace.get(caseId)),
+    [caseId, tab],
+  );
   const load = useCallback(async () => {
     const serial = ++latest.current;
     let epoch = ticket();
     try {
       if (!(await verify()) || serial !== latest.current) return false;
       epoch = ticket();
-      const next = await api.workspace.get(caseId);
+      const next = await readView();
       if (serial !== latest.current || !(await verify())) return false;
       if (current(epoch) && serial === latest.current) {
         apply(next);
@@ -198,7 +202,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
       if (alive(epoch) && serial === latest.current) showError(cause);
     }
     return false;
-  }, [caseId, apply, verify, ticket, current, alive, showError]);
+  }, [readView, apply, verify, ticket, current, alive, showError]);
   useEffect(() => {
     mounted.current = true;
     if (version && !lock.current) void load();
@@ -348,7 +352,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
       let resource = false;
       if (problem(cause).code === "NOT_FOUND") {
         try {
-          const next = await api.workspace.get(caseId);
+          const next = await readView();
           if (!(await verify()) || !current(epoch)) return;
           apply(next);
           resource = true;
@@ -374,12 +378,17 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
     await run("file-retry", async (epoch) => {
       let accepted = false;
       try {
-        await api.files.retry(caseId, fileId, () => {
-          accepted = true;
-          if (!alive(epoch)) return;
-          setAcceptedFileRetries((ids) => (ids.includes(fileId) ? ids : [...ids, fileId]));
-          setNotice("자료 처리 요청이 접수됐어요. 최신 상태를 확인하고 있어요.");
-        });
+        await api.files.retry(
+          caseId,
+          fileId,
+          () => {
+            accepted = true;
+            if (!alive(epoch)) return;
+            setAcceptedFileRetries((ids) => (ids.includes(fileId) ? ids : [...ids, fileId]));
+            setNotice("자료 처리 요청이 접수됐어요. 최신 상태를 확인하고 있어요.");
+          },
+          { metadataOnly: true },
+        );
       } catch (cause) {
         if (accepted && alive(epoch))
           setNotice(
@@ -469,16 +478,21 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
       try {
         for (const file of chosen) {
           if (!current(epoch)) return;
-          await api.files.upload(caseId, file, (value) => {
-            if (current(epoch))
-              setUploadProgress({
-                startedAt,
-                fileName: file.name,
-                index: completed + 1,
-                total: chosen.length,
-                value,
-              });
-          });
+          await api.files.upload(
+            caseId,
+            file,
+            (value) => {
+              if (current(epoch))
+                setUploadProgress({
+                  startedAt,
+                  fileName: file.name,
+                  index: completed + 1,
+                  total: chosen.length,
+                  value,
+                });
+            },
+            { metadataOnly: true },
+          );
           if (!alive(epoch)) return;
           completed++;
           // The upload API already checked this exact file after its ACK. A
@@ -1289,113 +1303,130 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
               )}
             </section>
             <aside className="workspace-sidebar" aria-label="사건 요약 및 준비 현황">
-              <details className="workspace-context">
-                <summary>
-                  <FileText size={17} />
-                  <span>사건 요약과 준비 현황</span>
-                  <ChevronDown size={16} />
-                </summary>
-                <div className="workspace-context-content">
-                  <section>
-                    <h2>현재까지 정리한 내용</h2>
-                    <p className="workspace-summary">
-                      {view.case.summary || "확인한 요약이 아직 없어요."}
-                    </p>
-                    <a href={`${base}/summary`}>
-                      요약 검토하기 <ArrowRight size={14} />
-                    </a>
-                  </section>
-                  {!!view.facts?.length && (
+              {tab === "files" ? (
+                <section className="workspace-context-content">
+                  <h2>사건 요약과 준비 현황</h2>
+                  <p>
+                    자료의 처리 상태는 이 화면에서 확인할 수 있어요. 사건 요약은 요약 페이지에서
+                    확인해 주세요.
+                  </p>
+                  <a href={`${base}/summary`}>
+                    요약 검토하기 <ArrowRight size={14} />
+                  </a>
+                </section>
+              ) : (
+                <details className="workspace-context">
+                  <summary>
+                    <FileText size={17} />
+                    <span>사건 요약과 준비 현황</span>
+                    <ChevronDown size={16} />
+                  </summary>
+                  <div className="workspace-context-content">
                     <section>
-                      <h2>확인할 사실</h2>
-                      <ul className="workspace-facts">
-                        {view.facts.map((fact) => (
-                          <li key={fact.id}>
-                            <p>{fact.text}</p>
-                            <small>
-                              {fact.attribution === "user_statement"
-                                ? "사용자 진술"
-                                : fact.attribution === "official_source"
-                                  ? "공식 자료"
-                                  : "자료에서 추출"}{" "}
-                              ·{" "}
-                              {fact.certainty === "uncertain"
-                                ? "불확실"
-                                : fact.certainty === "observed"
-                                  ? "자료에서 관찰"
-                                  : "보고된 사실"}
-                              {fact.significance === "unfavorable" ? " · 불리한 사실" : ""}
-                              {fact.conflictingFactIds.length ? " · 서로 다른 진술 확인 필요" : ""}
-                            </small>
-                            {fact.references.map((ref) => (
-                              <span key={JSON.stringify(ref)} className="workspace-fact-source">
-                                {ref.kind === "user_material" ? (
-                                  <a href={`${base}/files?file=${encodeURIComponent(ref.fileId)}`}>
-                                    자료:{" "}
-                                    {view.files.find((file) => file.id === ref.fileId)?.name ??
-                                      "원본 범위 확인"}{" "}
-                                    · {referenceLabel(ref)}
-                                  </a>
-                                ) : ref.kind === "user_message" ? (
-                                  "대화에서 제공"
-                                ) : ref.kind === "intake_answer" ? (
-                                  "질문 답변에서 제공"
-                                ) : ref.kind === "intake_narrative" ? (
-                                  "처음 제공한 이야기"
-                                ) : (
-                                  "공식 출처"
-                                )}
-                              </span>
-                            ))}
-                          </li>
-                        ))}
-                      </ul>
+                      <h2>현재까지 정리한 내용</h2>
+                      <p className="workspace-summary">
+                        {view.case.summary || "확인한 요약이 아직 없어요."}
+                      </p>
+                      <a href={`${base}/summary`}>
+                        요약 검토하기 <ArrowRight size={14} />
+                      </a>
                     </section>
-                  )}
-                  {!!view.people?.length && (
+                    {!!view.facts?.length && (
+                      <section>
+                        <h2>확인할 사실</h2>
+                        <ul className="workspace-facts">
+                          {view.facts.map((fact) => (
+                            <li key={fact.id}>
+                              <p>{fact.text}</p>
+                              <small>
+                                {fact.attribution === "user_statement"
+                                  ? "사용자 진술"
+                                  : fact.attribution === "official_source"
+                                    ? "공식 자료"
+                                    : "자료에서 추출"}{" "}
+                                ·{" "}
+                                {fact.certainty === "uncertain"
+                                  ? "불확실"
+                                  : fact.certainty === "observed"
+                                    ? "자료에서 관찰"
+                                    : "보고된 사실"}
+                                {fact.significance === "unfavorable" ? " · 불리한 사실" : ""}
+                                {fact.conflictingFactIds.length
+                                  ? " · 서로 다른 진술 확인 필요"
+                                  : ""}
+                              </small>
+                              {fact.references.map((ref) => (
+                                <span key={JSON.stringify(ref)} className="workspace-fact-source">
+                                  {ref.kind === "user_material" ? (
+                                    <a
+                                      href={`${base}/files?file=${encodeURIComponent(ref.fileId)}`}
+                                    >
+                                      자료:{" "}
+                                      {view.files.find((file) => file.id === ref.fileId)?.name ??
+                                        "원본 범위 확인"}{" "}
+                                      · {referenceLabel(ref)}
+                                    </a>
+                                  ) : ref.kind === "user_message" ? (
+                                    "대화에서 제공"
+                                  ) : ref.kind === "intake_answer" ? (
+                                    "질문 답변에서 제공"
+                                  ) : ref.kind === "intake_narrative" ? (
+                                    "처음 제공한 이야기"
+                                  ) : (
+                                    "공식 출처"
+                                  )}
+                                </span>
+                              ))}
+                            </li>
+                          ))}
+                        </ul>
+                      </section>
+                    )}
+                    {!!view.people?.length && (
+                      <section>
+                        <h2>관련 인물</h2>
+                        <ul className="workspace-facts">
+                          {view.people.map((person) => (
+                            <li key={person.id}>
+                              <strong>{person.label}</strong>
+                              <p>{person.role}</p>
+                            </li>
+                          ))}
+                        </ul>
+                      </section>
+                    )}
+                    {!!view.unknowns?.length && (
+                      <section>
+                        <h2>아직 확인할 내용</h2>
+                        <ul className="workspace-facts">
+                          {view.unknowns.map((unknown) => (
+                            <li key={unknown}>{unknown}</li>
+                          ))}
+                        </ul>
+                      </section>
+                    )}
+                    {view.notices?.map((notice) => (
+                      <p key={notice} className="workspace-muted">
+                        {notice}
+                      </p>
+                    ))}
                     <section>
-                      <h2>관련 인물</h2>
-                      <ul className="workspace-facts">
-                        {view.people.map((person) => (
-                          <li key={person.id}>
-                            <strong>{person.label}</strong>
-                            <p>{person.role}</p>
-                          </li>
-                        ))}
-                      </ul>
+                      <h2>준비 현황</h2>
+                      <a href={`${base}/files`}>
+                        자료 <span>{view.files.length}개</span>
+                      </a>
+                      <a href={`${base}/timeline`}>
+                        타임라인 <span>{view.timeline.length}개</span>
+                      </a>
+                      <a href={`${base}/actions`}>
+                        다음 행동{" "}
+                        <span>{view.actions.filter((action) => !action.done).length}개 남음</span>
+                      </a>
+                      <p>리포트에서 내용을 검토하고 전달할 자료를 직접 선택할 수 있어요.</p>
                     </section>
-                  )}
-                  {!!view.unknowns?.length && (
-                    <section>
-                      <h2>아직 확인할 내용</h2>
-                      <ul className="workspace-facts">
-                        {view.unknowns.map((unknown) => (
-                          <li key={unknown}>{unknown}</li>
-                        ))}
-                      </ul>
-                    </section>
-                  )}
-                  {view.notices?.map((notice) => (
-                    <p key={notice} className="workspace-muted">
-                      {notice}
-                    </p>
-                  ))}
-                  <section>
-                    <h2>준비 현황</h2>
-                    <a href={`${base}/files`}>
-                      자료 <span>{view.files.length}개</span>
-                    </a>
-                    <a href={`${base}/timeline`}>
-                      타임라인 <span>{view.timeline.length}개</span>
-                    </a>
-                    <a href={`${base}/actions`}>
-                      다음 행동{" "}
-                      <span>{view.actions.filter((action) => !action.done).length}개 남음</span>
-                    </a>
-                    <p>리포트에서 내용을 검토하고 전달할 자료를 직접 선택할 수 있어요.</p>
-                  </section>
-                </div>
-              </details>
+                  </div>
+                </details>
+              )}
               <div className="workspace-context-footer">
                 <p className="workspace-saved">
                   <CheckCheck size={14} />
