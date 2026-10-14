@@ -334,7 +334,9 @@ export function createWorkspaceApi(
           ? extendPage(cached.timelineRaw, (cursor) => allEntities(id, "timeline", cursor))
           : Promise.resolve(cached.timelineRaw)
         : allEntities(id, "timeline", null, limits.timeline),
-      files.list(id),
+      // Chat/history use material names and states. Coverage is read by the
+      // files review and report screens at their existing fresh boundaries.
+      files.list(id, { metadataOnly: true }),
     ]);
     const metadata = z
       .object({ narrative: z.string(), summary: z.object({ revision: z.number() }).nullable() })
