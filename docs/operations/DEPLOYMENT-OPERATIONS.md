@@ -28,14 +28,14 @@ D1, Workflow, SESSION KV는 `preview`와 `production` 이름으로 각각 분리
 
 - pull request/main: 빠른 `Quality gate`만 자동 실행; 무거운 검증은 필요한 범위만 로컬 실행
 - preview: 명령으로 선택한 현재 main SHA를 수동 배포; CI 성공이나 merge가 배포를 시작하지 않음
-- production: 명령으로 같은 SHA를 요청하고 preview smoke·출시 체크·Environment 승인 후 배포
+- production: 명령으로 같은 SHA를 요청하고 preview smoke·출시 체크·SHA별 운영자 승인 후 배포
 - hotfix도 필요한 기능 검증을 수행하며 직접 콘솔 편집은 장애 봉쇄 외 금지
 
 GitHub Actions는 최소 권한 OIDC 또는 환경별 제한 secret을 사용한다. production 승인자와
 배포 실행자는 가능하면 분리한다.
 
 현재 GitHub 설정: main은 Quality gate·최신 base·대화 해결·linear history를 요구하고
-승인 review 수는0이다. production Environment에는 `hyunhomon` 승인자가 있다.
+승인 review 수는0이다. production Environment에는 필수 reviewer가 없고 보호 브랜치 규칙을 사용한다. 배포는 SHA별 운영자 승인 receipt로 확인한다.
 CODEOWNERS 알림은 별도 강제 승인과 같지 않다. 에이전트의 merge 권한은 사용자 지시를 따른다.
 
 ### 로컬 명령으로 수동 배포
@@ -68,7 +68,7 @@ preview는 checkout 전 및 migration 직전에 현재 원격 main과 비교해 
 
 배포 때만 선택 환경 build·bundle·dry-run → migration → Worker/credential sync →
 SHA/schema/API smoke를 수행한다. 브라우저·native fixture·전체 단위 검사를 배포마다 다시 실행하지 않는다.
-GitHub Environment의 기존 production 승인 및 환경별 시크릿 보관은 유지한다.
+GitHub Environment의 보호 브랜치 규칙과 환경별 시크릿 보관을 유지한다. 수동 production은 두 지정 운영자 중 한 명의 SHA별 receipt로 승인한다.
 AI preflight도 자동 실행하지 않으며 필요할 때 다음 명령을 사용한다.
 
 ```bash
@@ -87,7 +87,7 @@ ready의 schema version은 checkout한 candidate의 Drizzle journal 마지막 ta
 서로 다른 시도의 부분 성공을 합쳐 통과시키지 않는다.
 실패 출력은 endpoint·유한 오류 코드·시도 수만 포함하며 응답 원문이나 stack을 남기지 않는다.
 public-beta는 `bun run release:check`로 정책 Approved 상태와 release-evidence를 확인한다.
-향후 #18/#19의 실제 eval/E2E/live smoke artifact를 해당 증거 URL에 연결해야 하며
+후보 SHA는 `TARGET_SHA` 또는 `release:check <sha>`로 명시하고 후보 DTO와 신뢰된 GitHub producer의 실행·산출물 digest를 확인한다. #18/#19의 실제 eval/E2E/live smoke가 없는 항목은 실패로 남으며
 boolean 수동 변경만으로 실제 검증을 대신하지 않는다.
 
 ## 2026-10-07 사용자 명시 공개 승인 예외
@@ -96,11 +96,11 @@ boolean 수동 변경만으로 실제 검증을 대신하지 않는다.
 이 직접 승인은 독립 외부 receipt/법률 검토자·사업자 원문 검증과 구분해 기록한다.
 기존 `public-beta`의 `release:check`, 정책 Draft 및 미완료 release evidence는 수정하지 않는다.
 
-이번 공개는 `release_mode=operator-authorized`와 #71의 지정 운영자 `hwangeunchan`이
+이번 공개는 `release_mode=operator-authorized`와 #71의 지정 운영자 `hyunhomon` 또는 `hwangeunchan`이
 기록한 직접 사용자 승인 receipt를 사용한다. `launch_authorization_comment`는 해당 댓글의
 숫자 ID이며 실행 script가 GitHub에서 읽어 issue/author/직접 사용자 지시·정확한 targetSHA·
 최대24시간 유효기간을 검사한다. 독립 external 완료와 혼동하는 receipt는 거부한다.
-SHA의 main CI/preview deployment, production Environment의 hyunhomon 승인은 그대로 필수다.
+SHA의 main CI/preview deployment, production의 SHA별 운영자 승인 receipt는 필수다. Environment는 보호 브랜치 규칙을 사용하며 필수 reviewer는 설정되어 있지 않다.
 사람 승인 없이 이 예외를 만들거나 future SHA에 재사용하지 않는다. 운영자가 공개를 승인한
 사실과 실제 OAuth/사건/프로필 및 외부·정책 증거의 확인 범위는 각각 journal에 기록한다.
 
@@ -141,7 +141,7 @@ schema/prompt를 사용할 수 있으므로 호환 기간을 둔다.
 
 `Recover production runtime`은 main의 검증된 복구 코드로 현재 공개 중인 production SHA의
 누락 설정만 복구한다. `confirmation=production`, `expected_live_sha=<현재 full40 SHA>`를
-지정하고 기존 production Environment 승인을 받는다. 일반 배포와 같은
+지정하고 유효한 SHA별 운영자 승인 receipt를 확인한다. 일반 배포와 같은
 `cloudflare-production` concurrency를 사용하며 공개 gate, Worker 코드, migration은 변경하지 않는다.
 새 production 배포 성공 증거를 만들지 않으며 이후 코드 배포는 기존 release 절차를 따른다.
 
@@ -244,7 +244,7 @@ P0 incident로 분류하고 신규 삭제 요청을 기록 가능한 안전한 �
    준비되지 않은 binding/secret/자원/모델 capability는 gate를 닫아 실패를 명확히 표시한다.
 6. preview health/ready SHA/schema/image 및 실제 사용자·변호사·심사자 흐름과 실패 복구를 시연한다.
    public edit 심사 중 approved revision 유지, 사건 원문 운영자 접근 거부, download 파일 내용을 확인한다.
-7. CI/preview 증거와 같은 SHA로 production foundation을 Environment 승인 후 배포하고 health/ready를
+7. CI/preview 증거와 같은 SHA로 production foundation을 SHA별 운영자 승인 후 배포하고 health/ready를
    확인한다. 화면/링크가 떠 있다는 사실을 production 사용자 API 공개 성공으로 표현하지 않는다.
 8. 공개 전환은 #70의 실제 사업자/법률/정책/국외 처리 근거와 #71의 same-SHA live/UI/drill/cost
    증거를 trusted gate가 확인한 뒤 진행한다. 공개 직후 역할별 smoke와 비용/삭제/오류를 관찰한다.
@@ -273,7 +273,7 @@ manifest/키/revision을 읽지 못하면 해당 기능을 닫고 forward-fix한
 두 환경은 `.github/actions/deploy-worker/action.yml`의 동일한 절차로 배포한다.
 같은 immutable SHA에 대해 real API 빌드 → bundle/dry-run 검증 → 생성된 Worker 환경 확인 →
 D1 migration → 환경별 OAuth 6개 secret 동기화 → release/schema/API smoke를 수행한다.
-production의 CI·preview 증거, GitHub Environment 승인과 공개 모드 검증은 이 공통 절차 전에 유지한다.
+production의 CI·preview 증거, SHA별 운영자 승인과 공개 모드 검증은 이 공통 절차 전에 유지한다.
 `sync_oauth` 선택지는 제거했으며 각 Environment의 credential을 매번 사용한다.
 
 두 GitHub Environment 모두 `PUBLIC_TURNSTILE_SITE_KEY` 변수가 필요하다. 해당 환경의

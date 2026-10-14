@@ -21,6 +21,13 @@ function comment(overrides: Record<string, unknown> = {}) {
 }
 test("explicit launch authorization is scoped to an immutable SHA and bounded time", () => {
   expect(verifyLaunchAuthorization(comment(), sha, now)).toBe(true);
+  expect(
+    verifyLaunchAuthorization(
+      { ...comment(), user: { login: "hyunhomon", type: "User" } },
+      sha,
+      now,
+    ),
+  ).toBe(true);
   expect(verifyLaunchAuthorization(comment(), "b".repeat(40), now)).toBe(false);
   expect(verifyLaunchAuthorization(comment(), sha, Number.NaN)).toBe(false);
   for (const data of [

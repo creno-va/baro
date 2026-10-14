@@ -37,6 +37,7 @@ Accepted 내용을 바꿀 때 새 ADR을 만들고 대체 범위를 명시한다
 | [0012](./0012-shared-ui-system-and-brand-assets.md) | 공통 UI 시스템·한글 폰트·브랜드 자산 | Accepted v2 target |
 | [0013](./0013-resource-admission-and-budget.md) | 자료·AI 사용량과 기술 예산 admission | Accepted v2 target |
 | [0014](./0014-mvp-two-roles-and-api-mock-first.md) | 고객·변호사 MVP와 API mock 우선 병렬 개발 | Accepted; 0007 MVP 심사 범위 부분 대체 |
+| [0015](./0015-maintenance-and-operating-policy.md) | MVP 운영 기준과 정비 인수 경계 | Accepted; 질문·비용·승인·검색 부분 대체 |
 
 ## v2 부분 대체 관계
 

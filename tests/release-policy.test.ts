@@ -57,10 +57,10 @@ async function runGate(documents: Record<string, string>) {
   }
 }
 
-test("release document gate retains its existing approved, version-matched success path", async () => {
+test("approved version-matched policy documents alone cannot grant a public release", async () => {
   const result = await runGate(approved());
-  expect(result.code).toBe(0);
-  expect(result.stderr).toBe("");
+  expect(result.code).toBe(1);
+  expect(result.stderr).toContain("A full candidate SHA is required");
 });
 
 for (const missing of Object.keys(policies)) {

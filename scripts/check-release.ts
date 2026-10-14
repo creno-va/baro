@@ -1,6 +1,8 @@
 import { readdir } from "node:fs/promises";
 import { z } from "zod";
 import { CURRENT_POLICY_VERSIONS } from "../src/contracts/consent";
+import { validateReleaseCandidate } from "./release-candidate";
+import { githubReceiptResolver, githubReleaseGet } from "./release-receipts";
 
 const required = [
   "oauth",
@@ -53,6 +55,22 @@ for (const check of required) {
     errors.push(`Missing release evidence: ${check}`);
 }
 if (!evidence.reviewedAt) errors.push("Release evidence is not reviewed");
+const targetSha = process.argv[2] ?? process.env.TARGET_SHA;
+if (!targetSha || !/^[a-f0-9]{40}$/.test(targetSha)) {
+  errors.push("A full candidate SHA is required");
+} else {
+  try {
+    const token = process.env.GITHUB_TOKEN;
+    if (!token) throw new Error("Missing GitHub verification credentials");
+    await validateReleaseCandidate(
+      await Bun.file("docs/quality/release-candidate.json").json(),
+      targetSha,
+      githubReceiptResolver(githubReleaseGet(token)),
+    );
+  } catch {
+    errors.push("Candidate release receipts are missing or unverified");
+  }
+}
 if (errors.length) {
   console.error(errors.join("\n"));
   process.exit(1);
