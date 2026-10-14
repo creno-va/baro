@@ -61,10 +61,31 @@ async function photoData(file: File) {
     bitmap.close();
   }
 }
+type VerifiedSession = {
+  identity: string;
+  epoch: number;
+  changed: boolean;
+  canMutate: boolean;
+};
+const busyLabels = {
+  load: "내 프로필을 불러오고 있어요.",
+  session: "로그인 상태를 확인하고 있어요.",
+  save: "프로필을 저장하고 있어요.",
+  publish: "프로필을 공개하고 있어요.",
+  hide: "프로필을 비공개로 전환하고 있어요.",
+  assets: "업로드 자료 상태를 확인하고 있어요.",
+  remove: "자료 삭제를 접수하고 있어요.",
+  uploadSession: "업로드 전 로그인 상태를 확인하고 있어요.",
+  photo: "프로필 사진을 준비하고 있어요.",
+  upload: "자료를 업로드하고 있어요.",
+  uploadResult: "업로드 결과를 확인하고 있어요.",
+  download: "자료를 다운로드하고 있어요.",
+};
 export function Editor() {
   const [saved, setSaved] = useState<LawyerView | null>(null);
   const [draft, setDraft] = useState<LawyerView | null>(null);
-  const [busy, setBusy] = useState(true);
+  const [busyAction, setBusyAction] = useState<keyof typeof busyLabels | null>("load");
+  const busy = busyAction !== null;
   const [canMutate, setCanMutate] = useState(false);
   const [accessUnknown, setAccessUnknown] = useState(false);
   const [error, setError] = useState("");
@@ -84,6 +105,7 @@ export function Editor() {
   const owner = useRef<string | null>(null);
   const epoch = useRef(0);
   const sessionRequest = useRef(0);
+  const latestSessionCheck = useRef<Promise<VerifiedSession | null> | null>(null);
   const profileRequest = useRef(0);
   const clear = useCallback(() => {
     epoch.current += 1;
@@ -104,51 +126,74 @@ export function Editor() {
   }, []);
   const verify = useCallback(async () => {
     const request = ++sessionRequest.current;
-    let session: Awaited<ReturnType<typeof sessionApi.get>>;
-    try {
-      session = await sessionApi.get();
-    } catch (cause) {
-      if (request !== sessionRequest.current) return null;
-      const code = (cause as { code?: string })?.code;
-      if (["UNAUTHENTICATED", "FORBIDDEN", "ROLE_REQUIRED"].includes(code ?? "")) {
-        owner.current = null;
-        clear();
-        setBusy(false);
-        setError(lawyerErrorMessage(cause));
-        setErrorCode(code ?? "UNAUTHENTICATED");
-        return null;
-      } else {
-        setAccessUnknown(true);
-        setCanMutate(false);
-        setPreview(false);
-        setConfirmDiscard(false);
-        setConfirmPublish(false);
-        setPublicationConsent(false);
+    const check = async (): Promise<VerifiedSession | null> => {
+      let session: Awaited<ReturnType<typeof sessionApi.get>>;
+      try {
+        session = await sessionApi.get();
+      } catch (cause) {
+        if (request !== sessionRequest.current) return null;
+        const code = (cause as { code?: string })?.code;
+        if (["UNAUTHENTICATED", "FORBIDDEN", "ROLE_REQUIRED"].includes(code ?? "")) {
+          owner.current = null;
+          clear();
+          setBusyAction(null);
+          setError(lawyerErrorMessage(cause));
+          setErrorCode(code ?? "UNAUTHENTICATED");
+          return null;
+        } else {
+          setAccessUnknown(true);
+          setCanMutate(false);
+          setPreview(false);
+          setConfirmDiscard(false);
+          setConfirmPublish(false);
+          setPublicationConsent(false);
+        }
+        throw cause;
       }
-      throw cause;
+      if (request !== sessionRequest.current) return null;
+      const identity = session.user
+        ? `${session.user.id}:${session.user.accountType}:${session.needsConsent}`
+        : "signed-out";
+      const changed = owner.current !== identity;
+      if (changed) {
+        owner.current = identity;
+        clear();
+      }
+      if (session.user?.accountType !== "lawyer") {
+        clear();
+        setBusyAction(null);
+        setErrorCode("UNAUTHENTICATED");
+        setError("변호사 역할로 로그인해 주세요.");
+        return null;
+      }
+      setAccessUnknown(false);
+      setCanMutate(!session.needsConsent);
+      return { identity, epoch: epoch.current, changed, canMutate: !session.needsConsent };
+    };
+    let pending: Promise<VerifiedSession | null> | null = check();
+    latestSessionCheck.current = pending;
+    // Returning from the file picker may supersede an action's session check.
+    // Follow the latest authoritative result without cancelling the action or
+    // accepting an older account/consent result, even if the new check settled.
+    while (pending) {
+      let checked: VerifiedSession | null;
+      try {
+        checked = await pending;
+      } catch (cause) {
+        if (pending === latestSessionCheck.current) throw cause;
+        pending = latestSessionCheck.current;
+        continue;
+      }
+      if (pending !== latestSessionCheck.current) {
+        pending = latestSessionCheck.current;
+        continue;
+      }
+      return checked;
     }
-    if (request !== sessionRequest.current) return null;
-    const identity = session.user
-      ? `${session.user.id}:${session.user.accountType}:${session.needsConsent}`
-      : "signed-out";
-    const changed = owner.current !== identity;
-    if (changed) {
-      owner.current = identity;
-      clear();
-    }
-    if (session.user?.accountType !== "lawyer") {
-      clear();
-      setBusy(false);
-      setErrorCode("UNAUTHENTICATED");
-      setError("변호사 역할로 로그인해 주세요.");
-      return null;
-    }
-    setAccessUnknown(false);
-    setCanMutate(!session.needsConsent);
-    return { identity, epoch: epoch.current, changed, canMutate: !session.needsConsent };
+    return null;
   }, [clear]);
   const load = useCallback(async () => {
-    setBusy(true);
+    setBusyAction("load");
     let run = profileRequest.current;
     try {
       const checked = await verify();
@@ -177,7 +222,7 @@ export function Editor() {
       setError(lawyerErrorMessage(cause));
       setErrorCode(cause instanceof LawyerApiError ? cause.code : "");
     } finally {
-      if (run === profileRequest.current) setBusy(false);
+      if (run === profileRequest.current) setBusyAction(null);
     }
   }, [verify, clear]);
   useEffect(() => {
@@ -190,7 +235,7 @@ export function Editor() {
         if (alive && checked?.changed) await load();
       } catch (cause) {
         if (!alive) return;
-        setBusy(false);
+        setBusyAction(null);
         setError(lawyerErrorMessage(cause));
       }
     };
@@ -202,6 +247,7 @@ export function Editor() {
       alive = false;
       epoch.current += 1;
       sessionRequest.current += 1;
+      latestSessionCheck.current = null;
       window.removeEventListener("focus", refresh);
       window.removeEventListener("pageshow", refresh);
       window.removeEventListener("storage", refresh);
@@ -217,7 +263,7 @@ export function Editor() {
     return () => window.removeEventListener("beforeunload", leave);
   }, [dirty]);
   async function restoreAccess() {
-    setBusy(true);
+    setBusyAction("session");
     try {
       const checked = await verify();
       if (!checked) return;
@@ -229,7 +275,7 @@ export function Editor() {
     } catch (cause) {
       fail(cause);
     } finally {
-      setBusy(false);
+      setBusyAction(null);
     }
   }
   const patch = (field: keyof LawyerView, value: unknown) => {
@@ -248,13 +294,17 @@ export function Editor() {
       fail(cause);
     } catch (sessionError) {
       if (epoch.current !== startEpoch) return;
-      setBusy(false);
+      setBusyAction(null);
       fail(sessionError);
     }
   };
-  const mutate = async (operation: () => Promise<LawyerView>, message: string) => {
+  const mutate = async (
+    operation: () => Promise<LawyerView>,
+    message: string,
+    action: "save" | "publish" | "hide",
+  ) => {
     const startEpoch = epoch.current;
-    setBusy(true);
+    setBusyAction(action);
     setError("");
     setNotice("");
     try {
@@ -282,12 +332,12 @@ export function Editor() {
     } catch (cause) {
       await failForOwner(cause, startEpoch);
     } finally {
-      if (epoch.current === startEpoch) setBusy(false);
+      if (epoch.current === startEpoch) setBusyAction(null);
     }
   };
   const save = async () => {
     if (!draft || busy || !canMutate) return;
-    await mutate(() => api.lawyers.saveMine(draft), "프로필을 저장했어요.");
+    await mutate(() => api.lawyers.saveMine(draft), "프로필을 저장했어요.", "save");
   };
   const publish = async (published: boolean) => {
     if (!saved || busy || !canMutate || (published && dirty)) return;
@@ -296,6 +346,7 @@ export function Editor() {
       published
         ? "프로필을 공개했어요. 디렉터리에서 확인할 수 있어요."
         : "프로필을 비공개로 전환했어요.",
+      published ? "publish" : "hide",
     );
   };
   const attach = (asset: LawyerAssetView) => {
@@ -320,7 +371,11 @@ export function Editor() {
     setNotice("자료를 연결했어요. 프로필을 저장하면 반영돼요.");
   };
   const refreshAssets = async () => {
+    if (busy) return;
     const startEpoch = epoch.current;
+    setBusyAction("assets");
+    setError("");
+    setNotice("");
     try {
       const checked = await verify();
       if (!checked || checked.epoch !== startEpoch) return;
@@ -332,13 +387,16 @@ export function Editor() {
         return;
       }
       setAssets(items);
+      setNotice(items.length ? "자료 상태를 확인했어요." : "업로드한 자료가 없어요.");
     } catch (cause) {
       await failForOwner(cause, startEpoch);
+    } finally {
+      if (epoch.current === startEpoch) setBusyAction(null);
     }
   };
   const removeAsset = async (asset: LawyerAssetView) => {
     const startEpoch = epoch.current;
-    setBusy(true);
+    setBusyAction("remove");
     setError("");
     try {
       const checked = await verify();
@@ -359,13 +417,13 @@ export function Editor() {
     } catch (cause) {
       await failForOwner(cause, startEpoch);
     } finally {
-      if (epoch.current === startEpoch) setBusy(false);
+      if (epoch.current === startEpoch) setBusyAction(null);
     }
   };
   const upload = async (file: File, purpose: "profile_photo" | "portfolio") => {
     if (!draft || busy || !canMutate) return;
     const startEpoch = epoch.current;
-    setBusy(true);
+    setBusyAction("uploadSession");
     setError("");
     setNotice("");
     try {
@@ -376,6 +434,7 @@ export function Editor() {
       let selected = file,
         previewData: string | null = null;
       if (purpose === "profile_photo") {
+        setBusyAction("photo");
         previewData = await photoData(file);
         selected = new File(
           [Uint8Array.from(atob(previewData.split(",")[1] ?? ""), (c) => c.charCodeAt(0))],
@@ -384,8 +443,10 @@ export function Editor() {
         );
       }
       if (epoch.current !== startEpoch) return;
+      setBusyAction("upload");
       const asset = await lawyerAssets.upload(draft.id, selected, purpose);
       if (epoch.current !== startEpoch) return;
+      setBusyAction("uploadResult");
       const after = await verify();
       if (!after || after.epoch !== startEpoch) {
         if (after?.changed) await load();
@@ -402,7 +463,7 @@ export function Editor() {
     } catch (cause) {
       await failForOwner(cause, startEpoch);
     } finally {
-      if (epoch.current === startEpoch) setBusy(false);
+      if (epoch.current === startEpoch) setBusyAction(null);
     }
   };
   // Capture the displayed owner; do not deliver a completed download to a new account.
@@ -414,7 +475,9 @@ export function Editor() {
     return !!checked && checked.identity === displayedOwner && checked.epoch === displayedEpoch;
   };
   const downloadExisting = async (asset: LawyerAssetView, index: number) => {
-    if (!draft) return;
+    if (!draft || busy) return;
+    setBusyAction("download");
+    setError("");
     try {
       await downloadLawyerAsset(
         draft.id,
@@ -425,6 +488,8 @@ export function Editor() {
       );
     } catch (cause) {
       await failForOwner(cause, displayedEpoch);
+    } finally {
+      if (epoch.current === displayedEpoch) setBusyAction(null);
     }
   };
   return (
@@ -459,7 +524,7 @@ export function Editor() {
             errorCode === "CONFLICT"
               ? "지금 작성한 내용은 그대로 남아 있어요. 최신 내용을 불러오면 현재 변경을 버릴지 먼저 확인해요."
               : draft
-                ? "입력한 내용은 그대로 남아 있어요. 내용을 확인한 뒤 다시 저장해 주세요."
+                ? "입력한 내용은 그대로 남아 있어요. 자료 상태를 확인하거나 실패한 작업을 다시 시도해 주세요."
                 : "본인 계정의 프로필만 관리할 수 있어요."
           }
           action={
@@ -491,7 +556,9 @@ export function Editor() {
           {notice}
         </p>
       )}
-      {busy && !draft && <StatePanel variant="loading" title="내 프로필을 불러오고 있어요." />}
+      {busyAction && !accessUnknown && (
+        <StatePanel variant="loading" title={busyLabels[busyAction]} />
+      )}
       {draft && !accessUnknown && (
         <>
           {!canMutate && (
@@ -948,7 +1015,7 @@ export function Editor() {
                   </p>
                   <Button type="submit" disabled={busy || !canMutate || !dirty}>
                     <Save size={16} />
-                    {busy ? "저장 중…" : "프로필 저장"}
+                    {busyAction === "save" ? "저장 중…" : "프로필 저장"}
                   </Button>
                 </div>
               </fieldset>
