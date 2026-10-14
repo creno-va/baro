@@ -6,6 +6,7 @@ import { createReportsApi } from "../src/server/api/v2/reports";
 import { createV2Core } from "../src/server/db/v2-core";
 import { createV2OfficialSourceRepository } from "../src/server/db/v2-official-sources";
 import { createFilesService } from "../src/server/modules/files/service";
+import { readBoundSourceBatch } from "../src/server/modules/legal-retrieval/v2/bound-sources";
 import { OFFICIAL_CATALOG } from "../src/server/modules/legal-retrieval/v2/registry";
 import { makeChunk } from "../src/server/modules/legal-retrieval/v2/source";
 import { exportFence } from "../src/server/modules/reports/fence";
@@ -17,6 +18,7 @@ import {
   sourceDigest,
 } from "../src/server/modules/reports/source";
 import { signedSessionCookie, testEnvironment } from "./helpers/d1";
+import { countD1Calls } from "./helpers/d1-call-count";
 import { createNativeTestRegistry, type NativeLifetime } from "./helpers/native-lifetime";
 import { reportFixture } from "./helpers/report-fixture";
 
@@ -294,7 +296,10 @@ test("workerd citation fence allows 50 bound originals and rejects count or seri
       ),
     ).toBe(true);
   }
-  await nativeFixture(lifetime, f, async (core) => {
+  await nativeFixture(lifetime, f, async (nativeCore) => {
+    const started = performance.now();
+    const meter = countD1Calls(nativeCore.binding);
+    const core = createV2Core(meter.binding, nativeCore.cipher);
     const view = await createReportsService(core, f.deps).get(f.actor.ownerId, f.workspaceId);
     const row = await core
       .statement(
@@ -312,6 +317,17 @@ test("workerd citation fence allows 50 bound originals and rejects count or seri
     const digest = await sourceDigest(core, f.actor, f.workspaceId);
     const fence = await exportFence(core, f.actor, row, digest, () => f.actor.now);
     await fence.check();
+    // Includes all six fresh verification passes, not just one cached source digest.
+    expect(meter.work.calls).toBeLessThanOrEqual(220);
+    console.info(
+      "Synthetic report citation fence",
+      JSON.stringify({
+        citations: 50,
+        d1Calls: meter.work.calls,
+        d1Statements: meter.work.statements,
+        elapsedMs: Math.round(performance.now() - started),
+      }),
+    );
     await core
       .statement(
         "INSERT INTO v2_citation_bindings SELECT 'citation_50',workspace_id,source_id,snapshot_revision,json_set(citation_json,'$.id','citation_50') FROM v2_citation_bindings WHERE id='citation_0'",
@@ -337,6 +353,30 @@ test("workerd citation fence allows 50 bound originals and rejects count or seri
     await expect(exportFence(core, f.actor, row, digest, () => f.actor.now)).rejects.toThrow(
       "EXPORT_LIMIT_EXCEEDED",
     );
+  });
+}, 30000);
+
+test("workerd bound reads preserve four separate maximum-size originals", async (lifetime) => {
+  const f = await reportFixture();
+  const repo = createV2OfficialSourceRepository(f.core);
+  const chunk = await officialChunk(f.actor.now, "x".repeat(1048576));
+  expect(await repo.put(chunk.source, chunk.citation)).toBe(true);
+  const ids = ["max_0", "max_1", "max_2", "max_3"];
+  for (const id of ids) {
+    expect(
+      await repo.bindCitation(
+        { ...f.actor, workspaceId: f.workspaceId, expectedRevision: f.rev() },
+        { ...chunk.citation, id },
+      ),
+    ).toBe(true);
+  }
+  await nativeFixture(lifetime, f, async (core) => {
+    const rows = await readBoundSourceBatch(core, f.workspaceId, ids, f.actor.now);
+    expect(rows.map((row) => row?.citation.id)).toEqual(ids);
+    for (const row of rows) {
+      expect(row?.source).toEqual(chunk.source);
+      expect(row?.span).toEqual(chunk.span);
+    }
   });
 }, 30000);
 

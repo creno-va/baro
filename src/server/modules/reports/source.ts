@@ -13,7 +13,7 @@ import { createV2FileStagingRepository } from "../../db/v2-file-staging";
 import { createV2FilesRepository } from "../../db/v2-files";
 import { createV2WorkspaceRepository, referencesAuthorized } from "../../db/v2-workspace";
 import { digest } from "../files/binary";
-import { readBoundSource } from "../legal-retrieval/v2/bound-sources";
+import { BOUND_SOURCE_BATCH_SIZE, readBoundSourceBatch } from "../legal-retrieval/v2/bound-sources";
 import { GUIDE_HOSTS } from "../legal-retrieval/v2/registry";
 import type { ZipSource } from "./zip";
 
@@ -146,12 +146,22 @@ export async function reportSourceRows(
       ])
       .all<{ kind: string; id: string; revision: number; snapshot: string }>()
   ).results;
-  // Originals stay in individual bounded reads, never a large aggregate SQL row.
-  for (const row of rows) {
-    if (row.kind !== "citation") continue;
-    const source = await readBoundSource(core, id, row.id, actor.now, GUIDE_HOSTS);
-    row.snapshot += source ? ":verified" : ":invalid";
-    if (source) verifiedOriginal?.(row.id, source.source.body);
+  // Keep original bodies bounded in memory and preserve the ordered digest/callback.
+  const citations = rows.filter((row) => row.kind === "citation");
+  for (let offset = 0; offset < citations.length; offset += BOUND_SOURCE_BATCH_SIZE) {
+    const page = citations.slice(offset, offset + BOUND_SOURCE_BATCH_SIZE);
+    const sources = await readBoundSourceBatch(
+      core,
+      id,
+      page.map((row) => row.id),
+      actor.now,
+      GUIDE_HOSTS,
+    );
+    for (const [index, row] of page.entries()) {
+      const source = sources[index];
+      row.snapshot += source ? ":verified" : ":invalid";
+      if (source) verifiedOriginal?.(row.id, source.source.body);
+    }
   }
   return rows;
 }
@@ -191,10 +201,18 @@ async function verifiedCitations(
   ];
   if (ids.length > 50) throw new ReportError("VALIDATION_ERROR");
   const citations: V2ReportBody["citations"] = [];
-  for (const citationId of ids) {
-    const chunk = await readBoundSource(core, id, citationId, actor.now, guideHosts);
-    if (!chunk) throw new ReportError("LEGAL_SOURCE_UNAVAILABLE");
-    citations.push(chunk.citation);
+  for (let offset = 0; offset < ids.length; offset += BOUND_SOURCE_BATCH_SIZE) {
+    const chunks = await readBoundSourceBatch(
+      core,
+      id,
+      ids.slice(offset, offset + BOUND_SOURCE_BATCH_SIZE),
+      actor.now,
+      guideHosts,
+    );
+    for (const chunk of chunks) {
+      if (!chunk) throw new ReportError("LEGAL_SOURCE_UNAVAILABLE");
+      citations.push(chunk.citation);
+    }
   }
   return citations;
 }
