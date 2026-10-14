@@ -430,7 +430,7 @@ export function AccountSettings() {
         <div className="settings-usage-guide">
           <p className="settings-muted">
             사건별 원본은 최대 100개·5GB예요. 문서·이미지 100MB, 음성·영상 1GB, PDF 500쪽, 미디어
-            60분 한도를 적용해요. 처리 예산이나 용량에 따라 자동 처리가 대기할 수 있어요.
+            60분 한도를 적용해요. 실제 처리 용량이나 서비스 장애로 자동 처리가 대기할 수 있어요.
           </p>
           <a className="settings-text-link" href="/help#limits">
             한도와 대기 도움말 <ChevronRight size={16} aria-hidden="true" />
