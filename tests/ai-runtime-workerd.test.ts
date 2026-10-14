@@ -32,6 +32,7 @@ import {
 } from "../src/server/runtime/workspace";
 import { signedSessionCookie, testEnvironment } from "./helpers/d1";
 import { measureD1Work } from "./helpers/d1-work";
+import { nativeFailure } from "./helpers/native-failure";
 
 /** Failure-only synthetic diagnostics: never serialize rows, identities, text or errors. */
 async function nativeAdmissionDiagnostics(
@@ -206,9 +207,11 @@ async function exerciseNativeRuntime(applicationCostLimitsEnabled: boolean) {
       unavailable = false,
       auditRejected = false;
     const databaseFailures: DependencyCategory[] = [],
-      measured = measureD1Work(preview, (error) =>
-        databaseFailures.push(dependencyCategory(error)),
-      );
+      databaseFailureDetails: ReturnType<typeof nativeFailure>[] = [],
+      measured = measureD1Work(preview, (error) => {
+        databaseFailures.push(dependencyCategory(error));
+        databaseFailureDetails.push(nativeFailure(error));
+      });
     const env = {
       ...testEnvironment(preview),
       APP_ENV: "preview",
@@ -345,14 +348,52 @@ async function exerciseNativeRuntime(applicationCostLimitsEnabled: boolean) {
     } as unknown as Env;
     let service = createWorkspaceService(core, createWorkspaceDependencies(core, env));
     const cookie = await signedSessionCookie(sessionToken, env.BETTER_AUTH_SECRET);
-    const app = new Hono().route(
-      "/api/v2/cases",
-      createWorkspacesApi({
-        dependencies: async (bindings, c) => createWorkspaceDependencies(c, bindings),
-      }),
-    );
-    const request = async (path: string, method = "GET", body?: unknown) =>
-      app.request(
+    let requestPhase = "access_or_read",
+      requestOrdinal = 0;
+    let requestFailure: ReturnType<typeof nativeFailure> = [];
+    const app = new Hono()
+      .use("*", async (c, next) => {
+        await next();
+        // Hono retains the caught error on Context after the real API onError
+        // handler responds. Observe it without replacing that product handler.
+        if (c.error) requestFailure = nativeFailure(c.error);
+      })
+      .route(
+        "/api/v2/cases",
+        createWorkspacesApi({
+          dependencies: async (bindings, c) => {
+            const dependencies = createWorkspaceDependencies(c, bindings);
+            return {
+              ...dependencies,
+              async prepareJob(input) {
+                requestPhase = "prepare_job";
+                const prepared = await dependencies.prepareJob?.(input);
+                requestPhase = prepared ? "job_commit" : "prepare_rejected";
+                return prepared ?? null;
+              },
+              async dispatch() {
+                requestPhase = "dispatch";
+                try {
+                  return await dependencies.dispatch?.();
+                } finally {
+                  requestPhase = "receipt";
+                }
+              },
+            };
+          },
+        }),
+      );
+    const request = async (path: string, method = "GET", body?: unknown) => {
+      requestOrdinal++;
+      requestPhase = "access_or_read";
+      requestFailure = [];
+      databaseFailures.length = 0;
+      databaseFailureDetails.length = 0;
+      measured.resetTrace();
+      const beforeWork = { ...measured.work },
+        started = performance.now();
+      const key = crypto.randomUUID();
+      const response = await app.request(
         path,
         {
           method,
@@ -360,12 +401,56 @@ async function exerciseNativeRuntime(applicationCostLimitsEnabled: boolean) {
             cookie,
             origin: env.BETTER_AUTH_URL,
             "content-type": "application/json",
-            "idempotency-key": crypto.randomUUID(),
+            "idempotency-key": key,
           },
           ...(body === undefined ? {} : { body: JSON.stringify(body) }),
         },
         env,
       );
+      if (response.status >= 500) {
+        console.error("Synthetic native request failure diagnostics", {
+          requestedCostLimitsEnabled: applicationCostLimitsEnabled,
+          activeCostLimitsEnabled: env.APPLICATION_COST_LIMITS_ENABLED !== "false",
+          requestOrdinal,
+          requestPhase,
+          status: response.status,
+          durationMs: Math.round(performance.now() - started),
+          providerCalls,
+          error: requestFailure,
+          databaseFailureCategories: databaseFailures,
+          databaseFailureDetails,
+          databaseTrace: { ...measured.trace },
+          databaseWork: {
+            statements: measured.work.statements - beforeWork.statements,
+            rowsRead: measured.work.rowsRead - beforeWork.rowsRead,
+            rowsWritten: measured.work.rowsWritten - beforeWork.rowsWritten,
+          },
+        });
+        // Exact failed request only, never a previous job from this workspace.
+        try {
+          const saved = await preview
+            .prepare(
+              "SELECT j.id FROM v2_idempotency i JOIN v2_operations o ON o.id=i.operation_id JOIN v2_jobs j ON j.operation_id=o.id WHERE o.owner_id=? AND i.key=? LIMIT 1",
+            )
+            .bind(ownerId, key)
+            .first<{ id: string }>();
+          console.error("Synthetic native request receipt diagnostics", {
+            requestOrdinal,
+            jobCreated: !!saved,
+            ...(saved
+              ? await nativeAdmissionDiagnostics(core, env, ownerId, workspace.id, saved.id)
+              : {}),
+          });
+        } catch (error) {
+          console.error("Synthetic native request receipt diagnostics", {
+            requestOrdinal,
+            probeComplete: false,
+            error: nativeFailure(error),
+          });
+        }
+      }
+      return response;
+    };
     const workspace = await service.create(ownerId, crypto.randomUUID(), {
       narrative: "합성 계약 자료의 거래 날짜를 확인하고 상담을 준비하려고 합니다.",
       jurisdiction: "KR",
@@ -381,7 +466,9 @@ async function exerciseNativeRuntime(applicationCostLimitsEnabled: boolean) {
     expect(queued.status).toBe("queued");
     const pending: Promise<void>[] = [];
     measured.reset();
+    measured.resetTrace();
     databaseFailures.length = 0;
+    databaseFailureDetails.length = 0;
     const runtimeStarted = performance.now();
     const result = await runWorkspaceRuntime(
       env,
@@ -417,6 +504,8 @@ async function exerciseNativeRuntime(applicationCostLimitsEnabled: boolean) {
             : [],
         databaseWork: { ...measured.work },
         databaseFailureCategories: databaseFailures,
+        databaseFailureDetails,
+        databaseTrace: { ...measured.trace },
       });
       // Emit the already-available failure evidence before further D1 reads, so
       // a slow diagnostic probe cannot hide the stage near the test deadline.
