@@ -100,6 +100,16 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
   const roundLimit = Math.max(result?.roundLimit ?? 2, ...rounds.map((r) => r.ordinal));
   const roundIndex = question ? round.questionIds.indexOf(question.id) : 0;
   const lastInRound = roundIndex === round.questionIds.length - 1;
+  const canNavigateSavedAnswer =
+    !dirty &&
+    !!question?.answerState &&
+    !error &&
+    !failedOperation.current &&
+    !recovering &&
+    !result?.failed &&
+    !lastInRound &&
+    !!result?.questions[index + 1] &&
+    round.questionIds.includes(result.questions[index + 1]?.id ?? "");
   const finalQuestion =
     index === (result?.questions.length ?? 0) - 1 &&
     (rounds.length >= roundLimit || result?.processingStage === "summary" || editing);
@@ -588,6 +598,8 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
                       event.preventDefault();
                       if (result.failed && !dirty) {
                         if (result.retryable || result.canPrepareSummary) void advance();
+                      } else if (canNavigateSavedAnswer) {
+                        navigateQuestion(index + 1);
                       } else void save(true);
                     }}
                   >
@@ -644,11 +656,13 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
                       )}
                       {answerState === "unknown" || answerState === "skipped" ? (
                         <p className="intake-scene-answer-state">
-                          {question.answerState === answerState
-                            ? answerState === "unknown"
-                              ? "모름으로 저장했어요."
-                              : "건너뛰기로 저장했어요."
-                            : "아직 저장되지 않았어요. 다시 시도해 주세요."}
+                          {busy && failedOperation.current?.kind === "save"
+                            ? "답변을 저장하고 있어요."
+                            : question.answerState === answerState
+                              ? answerState === "unknown"
+                                ? "모름으로 저장했어요."
+                                : "건너뛰기로 저장했어요."
+                              : "아직 저장되지 않았어요. 다시 시도해 주세요."}
                         </p>
                       ) : null}
                       <div className="intake-scene-options">
@@ -703,11 +717,13 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
                         >
                           {busy
                             ? "답변을 저장하고 있어요"
-                            : finalQuestion
-                              ? "저장하고 요약 보기"
-                              : lastInRound && round.ordinal < roundLimit
-                                ? `저장하고 ${round.ordinal + 1}차 질문 보기`
-                                : "저장하고 다음 질문"}
+                            : canNavigateSavedAnswer
+                              ? "다음 질문"
+                              : finalQuestion
+                                ? "저장하고 요약 보기"
+                                : lastInRound && round.ordinal < roundLimit
+                                  ? `저장하고 ${round.ordinal + 1}차 질문 보기`
+                                  : "저장하고 다음 질문"}
                           <ArrowRight size={18} aria-hidden="true" />
                         </Button>
                       )}

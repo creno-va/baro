@@ -9,9 +9,15 @@ import {
 import { batch, intake, summary, workspace } from "../fixtures/contracts/v2";
 
 const id = "synthetic-answer-case";
-async function fixture(page: Page, value?: string, reject = false) {
+async function fixture(
+  page: Page,
+  value?: string,
+  reject = false,
+  options: { includeNext?: boolean; gateSave?: Promise<void> } = {},
+) {
   const question = batch.questions[0];
   if (!question) throw new Error("MISSING_SYNTHETIC_QUESTION");
+  const questions = options.includeNext ? batch.questions : [question];
   let saved = v2IntakeSchema.parse({
     ...intake,
     status: "collecting",
@@ -19,7 +25,7 @@ async function fixture(page: Page, value?: string, reject = false) {
     batches: [
       {
         ...batch,
-        questions: [question],
+        questions,
         answers:
           value === undefined
             ? []
@@ -35,11 +41,13 @@ async function fixture(page: Page, value?: string, reject = false) {
     legacySnapshotId: null,
   });
   const writes: { status: string; value?: string }[] = [];
+  const requests: string[] = [];
   let fail = reject;
   await page.route("**/api/**", async (route) => {
     const req = route.request(),
       u = new URL(req.url());
     if (!u.pathname.startsWith("/api/")) return route.continue();
+    requests.push(`${req.method()} ${u.pathname}`);
     if (u.pathname === "/api/me/session")
       return route.fulfill({
         json: {
@@ -53,6 +61,7 @@ async function fixture(page: Page, value?: string, reject = false) {
     if (u.pathname.endsWith("/intake/answers") && req.method() === "PUT") {
       const answer = answerSchema.parse(req.postDataJSON().answers[0]);
       writes.push(answer);
+      await options.gateSave;
       if (fail)
         return route.fulfill({
           status: 503,
@@ -61,7 +70,7 @@ async function fixture(page: Page, value?: string, reject = false) {
       saved = v2IntakeSchema.parse({
         ...saved,
         revision: saved.revision + 1,
-        batches: [{ ...batch, questions: [question], answers: [answer] }],
+        batches: [{ ...batch, questions, answers: [answer] }],
       });
       current = v2WorkspaceSchema.parse({
         ...current,
@@ -76,11 +85,68 @@ async function fixture(page: Page, value?: string, reject = false) {
   await expect(page.getByRole("textbox", { name: "답변", exact: true })).toBeVisible();
   return {
     writes,
+    requests,
     allowSave: () => {
       fail = false;
     },
   };
 }
+
+test("unchanged saved answers navigate inside the same round without API requests after reload", async ({
+  page,
+}) => {
+  const f = await fixture(page, "저장된 합성 답변", false, { includeNext: true });
+  await page.reload();
+  await expect(page.getByRole("textbox", { name: "답변", exact: true })).toHaveValue(
+    "저장된 합성 답변",
+  );
+  const before = f.requests.length;
+  await page.getByRole("button", { name: "다음 질문", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "사건의 날짜를 알고 있나요?" })).toBeVisible();
+  expect(f.writes).toHaveLength(0);
+  expect(f.requests).toHaveLength(before);
+});
+
+test("edited answers still save before same-round navigation and a final answer still advances", async ({
+  page,
+}) => {
+  const f = await fixture(page, "저장된 합성 답변", false, { includeNext: true });
+  await page.getByRole("textbox", { name: "답변", exact: true }).fill("수정한 합성 답변");
+  await page.getByRole("button", { name: "저장하고 다음 질문", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "사건의 날짜를 알고 있나요?" })).toBeVisible();
+  expect(f.writes).toEqual([{ questionId: "q1", status: "answered", value: "수정한 합성 답변" }]);
+  await page.getByRole("radio", { name: "알고 있음", exact: true }).check();
+  await page.getByRole("button", { name: "저장하고 2차 질문 보기", exact: true }).click();
+  await expect
+    .poll(() =>
+      f.requests.some(
+        (request) => request.endsWith("/intake/advance") && request.startsWith("POST "),
+      ),
+    )
+    .toBe(true);
+  expect(f.writes).toHaveLength(2);
+});
+
+for (const state of ["unknown", "skipped"] as const)
+  test(`pending ${state} save displays saving before an actual rejected result`, async ({
+    page,
+  }) => {
+    let release!: () => void;
+    const gateSave = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const f = await fixture(page, undefined, true, { gateSave });
+    await page
+      .getByRole("button", { name: state === "unknown" ? "모름" : "건너뛰기", exact: true })
+      .click();
+    await expect.poll(() => f.writes.length).toBe(1);
+    const label = page.locator(".intake-scene-answer-state");
+    await expect(label).toHaveText("답변을 저장하고 있어요.");
+    await expect(label).not.toContainText("다시 시도");
+    release();
+    await expect(label).toHaveText("아직 저장되지 않았어요. 다시 시도해 주세요.");
+    await expect(page.getByRole("alert")).toBeVisible();
+  });
 
 for (const state of ["unknown", "skipped"] as const)
   test(`a rejected ${state} save remains unsaved until acknowledged`, async ({ page }) => {
