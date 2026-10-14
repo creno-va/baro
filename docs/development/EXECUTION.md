@@ -29,8 +29,15 @@
 | 릴리스 증거 | 총괄, #19/#71 | PR232 병합; 최종 full·동일 SHA 실제 증거 미완료 | 수동 전체 회귀→preview 제한 smoke→정확한 SHA 운영자 승인→production |
 | 디렉터리 | 변호사 모듈 + 총괄, #231/M5 | PR234 병합; 기존 공개 목록의 원격 projection 연결 미완료 | serving SHA 확인 후 bounded reindex, 철회·cursor·필터 smoke |
 | 문서·작업 체계 | 총괄, #19/#64/#71 | 현행 기준과 과거 기록 분리 중 | 문서 PR과 이슈/마일스톤의 담당·증거·다음 행동 대조 |
-| 채팅 실패·재시도 | 고객/AI, #64 / PR238 | focus 중 클릭 유실·503 안내 소실·provider HTTP 상태 누락 수정, native D1/브라우저 회귀 통과. 과거 원격 provider 원인은 로그 유실로 미확정 | PR238 동일 SHA 배포 후 합성 사건 재시도1회·안전한 status/category·원장 보존 대조. production은 현재101d809/schema0009로 preview0c62110/schema0013와 다름 |
+| 채팅 실패·재시도 | 고객/AI, #64 / PR238 | PR238 병합, preview7a617b5/schema0013 반영. run38556937083의 foundation·9개 endpoint 통과, text preflight는 model_reservation_headroom으로 차단. 과거 provider 원인은 로그 유실로 미확정 | 재원·기존 비용 대조 후 합성 사건 재시도1회와 안전한 status/category 검증. 기존 비용53,296원/검증 상한53,410원으로 여유114원, 채팅 예약11,018원 부족. #57의 최신 재원 또는 공급자 정산 증거 필요; hold 임의 해제·재원 확대 금지 |
 | 전체 실제 인수 | 각 모듈, #27/#59/#63/#64/#66/#67/#71 | OAuth/실제 모델·공식 출처·media·다운로드·복구/경보 증거 잔여 | [요구사항·증거 완료표](./MVP-REQUIREMENTS-EVIDENCE.md)의 조건별 증거 연결 |
+
+2026-10-14 채팅 수정 preview receipt: main `7a617b5acf08c7168482caa3e08ff07208416270`,
+[main CI38556751515](https://github.com/creno-va/baro/actions/runs/38556751515) 성공.
+[preview38556937083](https://github.com/creno-va/baro/actions/runs/38556937083)는 Worker 반영과
+schema/endpoint 검사는 통과했지만 AI 재원 검사 실패로 전체 실패다. 검증된 배포 성공이나
+실제 채팅 성공으로 기록하지 않는다. 미정산21,895원·정산283원·유지비 예약31,118원을
+보존했다. production 배포 및 유료 모델 호출은 수행하지 않았다.
 
 ## 검증과 배포
 
