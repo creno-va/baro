@@ -80,7 +80,7 @@ CREATE TRIGGER v2_execution_admission_no_delete BEFORE DELETE ON v2_execution_ad
 CREATE TRIGGER v2_execution_transition BEFORE UPDATE ON v2_execution_admissions WHEN NOT (
  (OLD.state='prepared' AND NEW.state='dispatched' AND NEW.transport IS NULL)
  OR (OLD.state='prepared' AND NEW.state='final' AND NEW.transport='not_sent' AND NEW.dispatch_token IS NULL)
- OR (OLD.state IN ('dispatched','unknown') AND NEW.state IN ('unknown','final') AND NEW.dispatch_token IS OLD.dispatch_token AND NEW.dispatched_at IS OLD.dispatched_at AND NEW.lease_token IS OLD.lease_token AND NEW.fencing IS OLD.fencing AND NEW.transport IN ('response','provider_error','unknown') AND (NEW.state='unknown')=(NEW.transport='unknown'))
+ OR (OLD.state IN ('dispatched','unknown') AND NEW.state IN ('unknown','final') AND NEW.dispatch_token IS OLD.dispatch_token AND NEW.dispatched_at IS OLD.dispatched_at AND NEW.lease_token IS OLD.lease_token AND NEW.fencing IS OLD.fencing AND NEW.transport IN ('response','provider_error','unknown','not_sent') AND (NEW.state='unknown')=(NEW.transport='unknown'))
 ) BEGIN SELECT RAISE(ABORT,'EXECUTION_STATE_CONFLICT'); END;
 --> statement-breakpoint
 CREATE TRIGGER v2_execution_cross_route_insert BEFORE INSERT ON v2_execution_admissions WHEN
@@ -114,3 +114,8 @@ CREATE VIEW v2_execution_storage_holds AS SELECT * FROM v2_storage_paid_executio
 
 --> statement-breakpoint
 UPDATE app_metadata SET value='0016_unpriced_execution',updated_at=CURRENT_TIMESTAMP WHERE key='schema_version';
+
+--> statement-breakpoint
+CREATE TRIGGER v2_priced_job_plan_cross_route BEFORE INSERT ON v2_runtime_plans WHEN EXISTS(SELECT 1 FROM v2_execution_admissions WHERE plan_id=NEW.id) BEGIN SELECT RAISE(ABORT,'EXECUTION_PLAN_CONFLICT'); END;
+--> statement-breakpoint
+CREATE TRIGGER v2_priced_storage_plan_cross_route BEFORE INSERT ON v2_storage_paid_executions WHEN EXISTS(SELECT 1 FROM v2_execution_admissions WHERE plan_id=NEW.plan_id) BEGIN SELECT RAISE(ABORT,'EXECUTION_PLAN_CONFLICT'); END;
