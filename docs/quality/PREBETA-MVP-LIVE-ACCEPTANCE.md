@@ -18,7 +18,7 @@
 | F005 / UI06,08 | 일반 채팅·공식 출처 법률 질의, 실제 답변·저장, 실패·복구·대기 상태 | 7110113 일반 채팅 실제응답·새로고침보존 성공, 날짜정확성 P18. 법률질의 실제 audit_rejected 및 statute schema_mismatch 재현(P01) |
 | F006 / UI07 | 사실·인물·타임라인·다음 행동 편집, 날짜 정밀도, 새로고침 유지 | 7110113 사실·인물목록조회,월단위합성일정생성→날짜미상/제목/내용편집→새로고침보존성공. 다음행동 완료→새로고침 유지→취소 성공(24.713/38.462초 관측 상한). 사실·인물 편집은 미확인 |
 | F007~008 / UI09~13 | 문서·이미지·음성·영상 업로드/실제 처리, 조회·다운로드·교정·제외·coverage | 7110113 합성2쪽PDF 저장·원본다운로드 성공.25842B/SHA-256 일치,한글/영문/도형2쪽 실제렌더확인. 자동처리 BUDGET_UNAVAILABLE 실패(P19),교정/coverage·다른형식 미확인 |
-| F009 / UI14~16,29,35 | 새 리포트·마스킹/제외·HTML/PDF/선택 ZIP, 실제 파일 내용·열기 | 7110113 새 리포트 자동생성→본문 검토편집→버전2 저장→확인 체크→HTML/PDF 실제다운로드 성공. HTML14,008B Safari 열기·한글본문 확인, PDF3,141,674B/2쪽 실제렌더·검토수정문장 확인. 마스킹/제외/ZIP·새로고침 유지 미확인, 지연 P04와 출처표시 P21 조사 |
+| F009 / UI14~16,29,35 | 새 리포트·마스킹/제외·HTML/PDF/선택 ZIP, 실제 파일 내용·열기 | 7110113 새 리포트 자동생성→본문 검토편집→버전2 저장→확인 체크→HTML/PDF 실제다운로드 성공. HTML14,008B Safari 열기·한글본문 확인, PDF3,141,674B/2쪽 실제렌더·검토수정문장 확인. 새로고침27.111초 관측에검토본복원·확인체크초기화 성공. 합성3종식별정보미리보기가림확인; 실제가림파일/제외/ZIP 미확인, 지연 P04와 출처표시 P21 조사 |
 | F010~011 / UI19~20 | 변호사 자기 프로필·사진·텍스트/이미지/PDF 포트폴리오 저장·재접속·미리보기·공개·철회 | f2a4fd5 실제 PNG 정제→사진 연결·저장·새로고침·공개 익명 이미지 표시 성공. PDF 정제→포트폴리오 연결·저장·다운로드 성공; 실제 파일 두 쪽을 렌더해 합성 영문·한글·도형 확인. 재로그인 뒤 연결 유지, 비공개 전환(4.360초 관측 상한)→로그아웃→상세와 이전 PDF URL NOT_FOUND 확인. 앞선 텍스트 저장·검색·미저장 변경 복구 성공 포함. 처리 지연 P04 조사 중 |
 | F012 / UI17~18 | 익명 목록/프로필, 검색/필터/페이지/부족 결과, 연락/길찾기 URL | d2c825f 익명 목록·합성 프로필 상세·이름+서울+부동산 결합 검색(관측 상한1.352초)·새로고침 조건 유지·불일치 형사 필터 결과 없음·초기화 복구 성공. 이메일 href 확인, example.org 외부 상담·네이버/카카오/Google 지도 실제 화면 이동과 합성 목적지 전달 확인. 실제 메시지/전화 미발송. 복수 페이지 경계는 미확인 |
 | F014 / UI24~26 | 합성 자료/사건 삭제·재인증·늦은 완료 차단·legacy 보존 | 미확인 |
@@ -51,6 +51,7 @@
 | P19 | 7110113 합성PDF업로드 후 자동처리 실패, 자료분석·교정 불가 | 실제extract 단계BUDGET_UNAVAILABLE. canonical runtime에서 derivative PUT의 storage/r2_put 계약 불일치와 정상 다음 단계 manifest GET identity 충돌 재현. 외부 최초 throw 위치와 동일한지는 미확정 | requests/r2_put·실제 암호문 크기·원자 physical binding·writer receipt 연결. 단계별 GET은 과거 final(response) 뒤에만 분리하며 unknown/CAS/원장 보존. canonical21검사/190assert·관련DAL/실행·quick/build/DB·독립검토 통과; 배포 후 동일PDF 명시 재시도 예정 | 7110113 | 원본25842B와SHA-256 일치·2쪽실제렌더성공, 자동처리는실패로기록 |
 | P20 | 삭제 후 물리 정리가 장시간 반복실패 | 7110113 preview scheduled 로그 v2_deletion_cleanup_failed/CLEANUP_DEPENDENCY_UNAVAILABLE,02:29:53KST age7339초/attempts65. 정확한dependency원인미확정 | 실패 await의 고정 stage/namespace만 추가. native/Workflow/R2/SQL15검사89assert·기존15검사·quick·독립검토 통과. 배포 후 자연 cron 관측 전 원인 미확정 | 7110113 | 과거합성asset목록제외만으로삭제완료선언하지않음 |
 | P21 | 실제 리포트 HTML/PDF에 답변 UUID·todo가 표시돼 사람이 출처와 진행 상태를 읽기 어려움 | report source가 questionId와 내부 상태 enum을 그대로 문장화 | 참조 무결성은 유지하며 표시 문구 최소 수정 조사 | 7110113 | 실제 다운로드 두 형식에서 재현, 수정·배포·재확인 전 |
+| P22 | 고객 이미지·영상 프레임 분석이 관측 없이 부분 처리로 끝날 수 있음 | 제품 Workflow에서 visionCapability가 연결되지 않고 기본 vision bounds도 null. observe는 MODEL_UNAVAILABLE, interpret는 missing으로 기록하는 코드 확인 | 기존 허용 모델/llm-gateway·배포 기술 bounds 연결의 최소 수정 진행. 새 공급자/모델 결정 없음 | 현재 코드 확인, 실제 이미지·영상 실행 전 | PDF 추출과 분리; 실제 vision 성공 미확인 |
 
 ## 후속 수정·실제 재확인 대기
 
@@ -130,3 +131,5 @@
 - HTML14,008B SHA256 `be767958d0e3b1d2864bcb062c990c29a8c1723025e841aeece70d902e350dd2`, Safari로실제열어검토문장·날짜미상일정·실패자료coverage확인. PDF3,141,674B SHA256 `b108dd38c63a3ad36f1ccb8f2eb726421e545773041cde072b14fb84b3cc59e6`, 2쪽/추출2,148자 및 양쪽실제렌더한글·본문확인. 원본후처리실패를리포트가성공으로표시하지않음.
 - aa26b6a [고정조문진단38608968125](https://github.com/creno-va/baro/actions/runs/38608968125)은 preview credential CI adapter, runtimeWorker=false, diagnostic_failed. statute_list3회 모두transport failed/HTTP·contentType null/timeout, source0건. Worker schema_mismatch의원인증거가아니며기존조건재반복없음. 다음preview의Workflow 고정필드진단으로구분한다.
 - 다음 배포 후보의 파일 GET 호환 제한: 매GET 확인SELECT1개 추가. 첫 legacy GET 확정응답 후 같은phase 재진입은 scoped GET 최대1회 추가가능하나 unknown 중복은 허용하지않음. production 전기존active old job확인필요. PDF text추출은Container pdftotext/Tesseract이며그성공을OpenAI vision/Whisper 외부성공으로기록하지않는다.
+- summary availability preflight를 전체intake조회5D1/6SQL에서같은owner·aliveWorkspace·current summary관계SELECT1개로축소. 이후본문stream의암호·hash·owner·삭제·revision/summary 변경검사및최종clientfence유지. canonical 타임라인생성12HTTP/100D1/113SQL→12/96/108, 편집12/103/116→12/99/111. 실제네트워크지연감소와구분한다. 통합focused17검사154assert 통과.
+- 다음preview후보 통합: 파일runtime·DAL·삭제진단·보안72검사586assert, summary17검사154assert 통과. quick18검사259assert·타입/경계 및 최종build 성공. DB schema변경없으며파일물리경계수정의fresh/upgrade·drift는담당checkout에서통과.
