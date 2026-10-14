@@ -25,9 +25,15 @@ export function createV2Repository(
     environment: "preview" | "production";
     guideHosts?: readonly string[];
     verifyRuntimeProof?: RuntimeProofVerifier;
+    /** Trusted runtime configuration, never values supplied by an HTTP body. */
+    applicationCostLimitsEnabled?: boolean | undefined;
+    monthlyBudgetCapEnabled?: boolean | undefined;
   },
 ) {
-  const core = createV2Core(binding, cipher);
+  const core = createV2Core(binding, cipher, {
+    applicationCostLimitsEnabled: options.applicationCostLimitsEnabled,
+    monthlyBudgetCapEnabled: options.monthlyBudgetCapEnabled,
+  });
   return {
     accounting: createV2AccountingRepository(core, options.environment),
     paidRuntime: createV2PaidRuntimeRepository(

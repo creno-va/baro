@@ -208,7 +208,9 @@ file DEK wrap, part IV/AAD, ordered manifest와 hash는 blob revision에 묶으�
 ### 저장·조회와 대용량 실행 경계
 
 `src/server/db/v2.ts`의 `createV2Repository`는 환경별 preview/production 예산 allocation을
-명시적으로 받아 typed repository를 연결한다. schema 적용이나 외부 호출은 수행하지 않는다.
+명시적으로 받아 typed repository를 연결한다. allocation 금액은 기존 원장 값이며
+`APPLICATION_COST_LIMITS_ENABLED=false`에서 월·누적 재원·요청 금액 차단에 사용하지 않는다.
+현행 정책은 [ADR-0015](../adr/0015-maintenance-and-operating-policy.md)다. schema 적용이나 외부 호출은 수행하지 않는다.
 HTTP/Workflow는 세션·동의·abuse gate를 적용한 뒤 이 저장 primitive를 사용한다.
 
 - 모든 새 v2 INTEGER metadata는 비음수·정확한 JS safe integer 범위를 INSERT/UPDATE
@@ -243,7 +245,7 @@ HTTP/Workflow는 세션·동의·abuse gate를 적용한 뒤 이 저장 primitiv
 | `v2_runtime_proofs` | immutable versioned pricing/funding/allocation/drain, 공식 reference·canonical UTC·trusted verification digest/evidence |
 | `v2_runtime_plans`, `v2_paid_holds` | operation/invocation/attempt·target/revision·최대 SKU quantity와 가격/FX/수수료 상한, current lease/fence/dispatch token |
 | `v2_runtime_usage` | allowlisted usage와 provider correlation, 원래 proof 기반 정산·불완전 late evidence, 무과금 추정 금지 |
-| `v2_runtime_controls`, `v2_runtime_drains` | 환경 freeze/drain/version CAS·합계 한도·신뢰 가능한 전환 acknowledgement |
+| `v2_runtime_controls`, `v2_runtime_drains` | 환경 freeze/drain/version CAS·신뢰 가능한 전환 acknowledgement; 현행 모드에서는 금액 초과 동결 없음 |
 | `v2_maintenance_exposure`, `v2_maintenance_evidence`, `v2_runtime_claims` | 필수 유지·이전 월 미확정 의무, immutable 근거와 원자적 financial claim |
 
 돈은 decimal string과 BigInt 유리수로 계산하고 KRW는 보수적으로 올림한다. pinned 모델은 입력
@@ -294,7 +296,8 @@ cascade가 없으며 월 변경이나 계정 삭제로 용량 의무가 사라�
 Worker/D1 상한을 기존 decimal 계산기로 합산한다. 결과는 `v2_maintenance_exposure`의
 reserved 추정값과 `fixed_maintenance_krw`로 기록하며 실제 청구 receipt가 아니다.
 무료 tier, 추정 보관 만료, 자동 원문 삭제로 비용을 줄였다고 주장하지 않는다.
-projection을 기록한 뒤 새 drain/양쪽 환경 증거를 통해 활성화한다. 초기화된 용량이
+과거 최초 설계는 projection 기록 뒤 drain/양 환경 증거로 활성화했다. 현행 동일 할당의
+초기 연결·갱신은 [COST-REFRESH](../operations/COST-REFRESH.md)의 절차를 사용하고, 할당 변경만 기존 조율을 유지한다. 초기화된 용량이
 있으면 새 월도 projection 없이 활성화할 수 없다. 만료되거나 누락된 증거는 I/O를 거절한다.
 
 `prepareCapacity(actor, binding)`의 branded predicate를 실제 pending 객체의 기존
@@ -341,8 +344,9 @@ cursor는 hot 경로에서 0으로 대체하거나 자동 복구하지 않고 ad
 가리지 않는다. 모든 신규 가격 변경을 자동으로 반영하는 계약은 아니다. 자금은 환경 PK의
 최신 `(verified_at,id)` funding head를 사용하고 proof INSERT와 head 이동은 원자적이다.
 최신 증거가 만료되거나 unavailable이면 과거 증거로 fallback하지 않는다. hold 생성,
-dispatch, physical I/O는 현재 head와 projection의 원래 funding 제약을 동시에 검사한다.
-새 한도 증액으로 기존 projection의 조달 한도를 넘을 수 없다. model 경로와 cold
+dispatch, physical I/O는 현재 head와 projection 근거의 상태·유효성을 동시에 검사한다.
+금액 제한이 꺼진 현행 모드에서는 기존 projection의 재원 관측액이나 할당액 초과를
+차단 조건으로 사용하지 않는다. 실제 관측값을 늘리거나 기존 원장을 지우지 않는다. model 경로와 cold
 exposure/drain/activation의 원래 carryover SUM·승인 계약은 유지한다.
 
 마이그레이션은 기존 active control, ambiguous/charged NULL, proof와 암호문을 보존한다.

@@ -1,9 +1,9 @@
 # 동일 클라이언트와 API mock 계약
 
-> **2026-10-07 사용자 후속 — 이전 비용 정책보다 우선:** 계정별 AI 응답은 KST 하루200회이며 Preview/Production의 별도 전체 월 예산 차단은 해제한다. Cloudflare 기존 결제 경로에서 잔액$10 이하 시$30 자동 충전을 사용자가 직접 승인/설정했다. metering·실제 funding·가격/FX·bounded attempt·unknown 비용 보존은 유지한다. 배포 설정 `MONTHLY_BUDGET_CAP_ENABLED=false`가 예약·사용량·정산에 일관되게 적용된다. 기존 allocation 금액은 이 모드에서 소비 차단 한도가 아니며 schema0009의 기록을 보존한다.
+> **2026-10-14 사용자 개정 — 이전 비용 정책보다 우선:** `APPLICATION_COST_LIMITS_ENABLED=false`로 월 예산·누적 재원·요청별 금액에 따른 애플리케이션 차단을 모두 해제한다. 10/07의 월 cap 해제보다 넓은 범위이며, 사용자 직접 요청 없이 금액 한도를 복원하지 않는다. 계정별 AI 응답 KST 하루200회, 기술 물량·시간·횟수, 권한·동의, 실제 비용·미정산 원장은 유지한다. 기존 Cloudflare 결제·자동 충전 설정은 변경하지 않는다. 실제 공급자 거절이나 구성·가격·상태 누락은 금액 한도와 별개로 오류가 될 수 있으며, `BUDGET_UNAVAILABLE` 코드만으로 잔액 부족을 단정하지 않는다. 코드 병합과 실제 배포 반영은 별도 증거로 확인한다. [ADR-0015](../adr/0015-maintenance-and-operating-policy.md)를 따른다.
 
 - Status: Accepted implementation plan
-- Updated: 2026-10-07
+- Updated: 2026-10-14
 - 사용자 결정: 실제 클라이언트 UI 하나를 만들고 API 응답만 mock으로 대체한다.
 - 실행: [5세션 계획](./PARALLEL-UI-SPRINT.md). 기존 공유 서버 계약은 `src/contracts/v2/`를 보존한다.
 

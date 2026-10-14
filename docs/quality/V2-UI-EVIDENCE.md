@@ -1,5 +1,7 @@
 # v2 전체 기능 시연·완료 증거 계약
 
+> **2026-10-14 비용 정책 우선:** [ADR-0015](../adr/0015-maintenance-and-operating-policy.md)/PR241에 따라 월 예산·누적 재원·요청 금액 차단을 해제한다. `APPLICATION_COST_LIMITS_ENABLED=false`에서 비용은 관측·예약·미정산·정산 기록이며 기능 차단 금액이 아니다. 파일/물리 용량·시간·사용/시도 횟수·보안 검사는 유지한다. 기존 결제·$10/$30 자동충전 외 새 외부 결제 설정은 변경하지 않는다.
+
 - Status: Required evidence; v2 implementation/demo/live/public approval not yet proven
 - Tracking: [#69](https://github.com/creno-va/baro/issues/69), [#71](https://github.com/creno-va/baro/issues/71)
 - Product scenarios: [UI demonstration](../product/UI-DEMONSTRATION.md)
@@ -55,14 +57,14 @@ assertion만으로 시각적 품질을 완료하지 않고 대표 화면 screens
 | U13 | PDF/선택 원본 ZIP을 실제 다운로드·열어 확인 | 한글 font·긴표/페이지·원본hash·제외자료/PII선택·다른owner 차단 | #66/#69 |
 | U14 | 변호사 목록/지역·분야→프로필→연락/길찾기 | emptyregion·cursor회전·사건fit/유료우선 없음·외부주소와 link검증 | #61 |
 | U15 | 연락 경로 선택 후 workspace 사실/자료/report 갱신 | counsel전략 대체·자동전송 없음, 기존 report snapshot 유지 | #64/#65/#66 |
-| U16 | quota잔여·대기·KST재개·같은 operation retry | day30/31responses·60minmedia·전역예산·retry중복quota/실제비용 | #57/#59/#64 |
+| U16 | quota잔여·기술한도 대기·KST재개·같은 operation retry | day200/201responses·60minmedia·월/누적재원/요청금액 차단 없음·retry중복quota/실제비용 | #57/#59/#64 |
 | U17 | archive/재개, 개별자료·사건 삭제→읽기 불가 | upload/model/Container/report가 늦게 끝난 race·R2 orphan | #67 |
 | U18 | 최근 OAuth→계정 삭제→로그아웃→자기자료 접근 불가 | sliding는 최근인증 아님·동의변경중삭제·다른owner영향 없음 | #67/#69 |
 | U19 | 기존v1 읽기·답변·retry·삭제→명시적v2 전환 | additive migration·legacy snapshot 보존·자동재분석 없음·legacy10+v2 3quota/cost우회없음 | #54/#55/#57/#65/#67 |
 
 U08의 대용량 경계는 서버 fixture만으로 browser의 resumable upload를 증명하지 않는다.
 로컬 합성 생성파일/stream으로 byte·page/duration 경계를 만들고 preview 실제 경로에서 재개·
-처리·메모리/비용 제한을 확인한다. 영상 표본을 실제 일부만 처리했다면 미완료 coverage를
+처리·메모리/물량 한도와 실제 비용 기록을 확인한다. 영상 표본을 실제 일부만 처리했다면 미완료 coverage를
 표시하며 60분 전체 처리 기능의 완료는 별도 끝까지 실행한 증거가 필요하다.
 
 ## 변호사·심사자·공개 방문자 시연
@@ -96,7 +98,7 @@ mailto/tel 연결 확인까지며 실제 제3자에게 상담 메시지를 발�
 | Q04 | built Worker CSP/hydration·OAuth/Turnstile·font·download | 실제배포header·콘솔오류확인·interaction, unsafe-inline/eval 무분별 허용 없음 |
 | Q05 | role/IDOR/CSRF/XSS/promptinjection/fileSSRF | route+SQL+blob/job/report crossowner rejection, critical bypass0 |
 | Q06 | 삭제·keyrotation·backuprestore·publicpurge·rollback·alert | 실제격리platform drill+trusted receipts, journalfirst/revocation/ack |
-| Q07 | monthlybudget·ASR/vision/Container cost·ambiguousretry | reserve/actual/reconcile증거, 구매/자동충전없음, 기술100만원/법률별도 |
+| Q07 | ASR/vision/Container cost·ambiguousretry·금액 차단 해제 | reserve/actual/reconcile증거·미정산 보존·월/누적재원/요청금액만으로 차단 없음·기존 결제/$10/$30 자동충전 유지 |
 | Q08 | optin/nooptin/optout·PII없음·v1/v2 metric분리 | network/storage/schema검사·종료후삭제·syntheticcohort 제외 |
 | Q09 | preview/production 같은release·API/server+Container parity | CI/mainimmutableSHA·image digest·health+실제smoke·Environment승인 |
 | Q10 | 실제OAuth/model/ASR/vision/lawsource·정책/법률근거 구분 | #27/#71 각 live/human evidence; #70 초안 인수를 법률 승인으로 승격하지 않음; 출처 없는 Boolean 거부 |

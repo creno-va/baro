@@ -1,4 +1,6 @@
 # BARO v2 기능별 실제 UI 시연 행렬
+
+> **2026-10-14 비용 정책 우선:** [ADR-0015](../adr/0015-maintenance-and-operating-policy.md)와 PR241에 따라 `APPLICATION_COST_LIMITS_ENABLED=false`로 월 예산·누적 재원·요청 금액 차단을 해제한다. 비용 예약·미정산·정산은 기록이며 금액만으로 작업을 거절하지 않는다. 사용 횟수·파일/물리 용량·시간·시도 횟수·권한·동의·삭제 경계는 유지한다. 과거 비용 차단 증거는 현행 차단 요구가 아니다.
 > **2026-10-06 사용자 개정 — 아래 이전 범위보다 우선한다.** MVP는 고객/변호사 두 역할이며 통합 로그인에서 선택한다. 변호사 승인 어드민·자격 심사·반려·승인대기 UX는 제외한다. 실제 제품 client UI 동일 구현체를 API mock adapter로 먼저 완성하고 기능 연결을 병렬 진행한다. 별도 /mock UI는 만들지 않는다. [5세션 계획](../development/PARALLEL-UI-SPRINT.md)의 실제 착수부터 2시간 sprint를 적용하며 독립 UI는 DB/AI/OAuth/backend CI/A 이슈 종료를 기다리지 않는다. 완료된 코드/이슈/증거를 보존하고 새 DB/비용 선행 이슈를 추가하지 않는다. AI 품질 확대는 모든 UX 연결 뒤다. P0.3/#70/#71 외부·정책·production·공개 gate는 보존하며 mock 성공을 실제 외부 성공으로 표시하지 않는다. [ADR-0014](../adr/0014-mvp-two-roles-and-api-mock-first.md)가 대체 범위를 기록한다.
 
 - Version: 2.0
@@ -42,7 +44,7 @@ UI-21~23은 ADR-0014에 따라 MVP 제외이며 원래 요구는 아래 역사 �
 | UI-09 / F007 | 문서/PDF100MB 이하·이미지 실제 upload/처리 |100MB 경계·PDF 500/501쪽·손상/암호보호·MIME 위조·삭제/취소 | #58,#59,#65,#69 |
 | UI-10 / F007 | 실제음성 upload→전체전사→시간위치 | 1GB/60 분경계·무음/언어/손상·day 60분·retry 이중 quota 방지 | #57,#58,#59,#65,#69,#71 |
 | UI-11 / F007 | 실제영상→전체음성·1초/장면 frame→내용확인 | failed/timegap·coverage 표시·매 frame 확인주장금지·실제 codec | #59,#65,#69,#71 |
-| UI-12 / F007 |동의→upload→처리,대기→재개/삭제 |동의없음·월예산·병렬예약·원본 100/101개·case5GB·account10GB | #57,#58,#59,#65,#69 |
+| UI-12 / F007 |동의→upload→처리,대기→재개/삭제 |동의없음·병렬예약·원본 100/101개·case5GB·account10GB·비용금액만으로 차단하지 않음 | #57,#58,#59,#65,#69 |
 | UI-13 / F008 |원본 preview/download·자동추출확인/교정/분석제외 |정확한 처리/누락 page/time 근거·교정/제외 저장·privateURL 만료·cross-owner·cache·deleted 자산 404 | #58,#59,#65,#69 |
 | UI-14 / F009 |최신 확인 facts/summary/files→새 reportversion→PDFpreview |옛 리포트 다운로드·revision/stale 표시·포함/제외·이름등기본유지·마스킹편집·공백/모순 | #66,#69 |
 | UI-15 / F009 |한글 PDF 다운로드후실제로열기 |폰트/줄바꿈/긴 text·pagebreak·timestamp/인용·생성실패/중복 | #66,#69,#71 |
@@ -81,7 +83,7 @@ contact 시연은 실제 링크 이동까지만 한다. 실제 상담 메시지 
 | 계약/version·DB 보존 | strict rejection·fresh/upgrade·schema drift·실제 SQL concurrency/IDOR·v1 fixture 유지 | #54,#55,#69 |
 | 모델/법률출처 | 기본 사실/비자문·출처 경계 및 실제 pinned model/Whisper/source smoke 유지; 광범위 가족별 품질 개선은 UX 연결 뒤 | #59,#63,#64,#69,#71 |
 | 원본/처리 coverage | 실제 R2/Container의 4 범주처리·timestamps/pages/hash·누락/제한·private cipher/object 권한 | #58,#59,#69,#71 |
-| quota/비용 | concurrency/KST/월경계·operation replay·예약회수·actualretryledger·승인된 월cap 해제·bounded attempt·actual ledger | #57,#69,#71 |
+| quota/비용 | concurrency/KST/월경계·operation replay·예약회수·actualretryledger·월/누적재원/요청금액 차단 해제·bounded attempt·미정산/실제 ledger 보존 | #57,#69,#71 |
 | 삭제/복구 | 실제 object/instance 삭제·격리 restore+최신 journal·rollback·경보수신 receipt | #67,#71, 기존#19/#27 |
 | public 기능/정책 | approved 문서 URL/version·검토자/시각/범위·사업자사실·행동승인·자기 프로필 표현 정합 | #68,#70, 기존#20 |
 | 지속배포 | PRCI→previewSHA→smoke→productionSHA, migration/image/font/asset release 일치 | #71 |

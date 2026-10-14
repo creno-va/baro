@@ -5,10 +5,15 @@
 
 ## 권한과 현재 상태
 
-AI는 KST 하루200회, 질문 최대2×3이며 애플리케이션 월 예산 차단은 해제한다.
+AI는 KST 하루200회, 질문 최대2×3이며 2026-10-14 사용자 후속 지시에 따라
+애플리케이션의 월·누적 재원·요청 금액 차단을 모두 해제한다.
+`APPLICATION_COST_LIMITS_ENABLED=false`에서 admission/dispatch/refresh/preflight는
+금액 부족이나 예약 초과 청구로 실행을 막거나 동결하지 않는다.
 기존 모델·공급자·결제 경로·사용자 설정 자동충전($10/$30)은 유지한다. 과거 100만원
-allocation 금액과 원장은 보존하며 cap-off 모드에서 월 소비 차단 한도로 사용하지 않는다.
-유효한 가격·최신 재원·물리 용량·새 요청의 전체 비용 상한은 계속 확인한다. 월 cap 해제가
+allocation 금액과 원장은 보존하며 소비 차단 한도로 사용하지 않는다.
+유효한 가격·최신 공급자 상태·권한·물리 용량·실행 물량/시간/횟수 경계는 유지하고
+새 요청의 예상 비용은 기록한다. `MONTHLY_BUDGET_CAP_ENABLED=false`만으로는 이 정책을
+충족하지 않으며 더 넓은 `APPLICATION_COST_LIMITS_ENABLED=false`를 함께 유지한다. 금액 차단 해제가
 무한 재원, 실제 0원 과금, 미정산 삭제나 새 결제·자동충전 변경 승인을 의미하지 않는다.
 
 2026-10-14 인증된 콘솔에서 Workers Paid/R2 Paid, Gateway 기존 크레딧 $39.54,
@@ -16,11 +21,11 @@ allocation 금액과 원장은 보존하며 cap-off 모드에서 월 소비 차�
 OFF, 인증/ZDR은 ON이었다. 결제·충전 설정은 변경하지 않았다. 이는 실제 입력을 준비하기
 위한 시점 관측이며 개별 attempt 청구 증거나 만료 없는 실행 권한은 아니다.
 
-실제 status run38522585343은 양 환경 schema0009·기존 allocation1·projection 없음과
+**이전 관측 기록:** 실제 status run38522585343은 양 환경 schema0009·기존 allocation1·projection 없음과
 미정산 preview21,895원/production44,104원을 반환했다. 이 금액을 지우지 않고 최종 후보
 migration·실제 inventory/projection·최신 관측을 적용해야 한다. 당시 과거 funding의 최대정수
-허용액을 새 실제 재원으로 재사용하지 않는다. credit만으로 기존 노출과 새 상한을 보장하지
-못하면 승인된 결제 경로의 재원 근거를 추가 확인하거나 차단을 유지한다.
+허용액을 새 실제 재원으로 재사용하지 않는다. 이 기록은 당시 상태이며 현행 금액 차단
+근거가 아니다. 현재 credit·누적 노출액은 사실대로 관측하고 금액 부족으로 앱 실행을 막지 않는다.
 
 ## 제품 제한
 
@@ -37,7 +42,7 @@ migration·실제 inventory/projection·최신 관측을 적용해야 한다. �
 
 KST day는 서버가 정하고 병렬 작업의 예약은 D1 atomic/CAS로 처리한다. 클라이언트 시간,
 rate-limit binding이나 화면 counter를 정본 quota로 사용하지 않는다. audio+video가 일일
-60분이더라도 file CPU/frame/token/storage cost는 전역 ledger에서 따로 제한한다.
+60분이더라도 file CPU/frame/token/storage의 기술적 실행량 경계는 따로 적용하며 비용은 전역 ledger에 기록한다.
 
 ## Ledger와 reservation
 
@@ -46,8 +51,8 @@ provider request 상관관계를 갖되 prompt·파일명·원본·결과·이�
 일일 counter/잔여량은 owner에게만 노출하고 전역 원가는 운영자의 비민감 집계로 제공한다.
 
 1. admission 전에 resource 타입·최대 입력/출력·media duration/frame 수·instance type/실행 시간·
-   storage 예상량·retry 상한으로 최대 비용을 예약한다. 필요한 가격/환율/funding 정보가 없거나
-   현재 budget과 outstanding reservation에 들어오지 않으면 실행을 보류한다.
+   storage 예상량·retry 상한으로 최대 예상 비용을 예약 기록한다. 필요한 가격/환율/공급자 상태
+   근거가 없으면 실행을 보류하지만, budget·재원 허용액·누적 예약액과의 금액 비교로는 차단하지 않는다.
 2. 원격 호출 직전 attempt 예약을 durable하게 기록한다. unknown timeout/crash는 예약을 임의
    해제하지 않고 remote request/DO/job handle과 billing을 대조한다. 사용자 논리 작업 재시도는
    동일 user reservation을 쓰고 원격 attempt마다 실제 비용을 추가한다.
@@ -75,7 +80,7 @@ physical 저장량과 요청 수·bounded retry를 연결한다. 공개 ledger�
 가격·환율·funding은 각각 검토 시각/validUntil이 있는 근거다. 실행 직전 canonical UTC
 milliseconds로 유효성을 다시 확인한다. funding에는 실제 plan/capability·결제 경로·현재 credit/
 이미 예약된 credit·auto recharge 상태·spend 설정 관측 시각을 포함한다. stale/미확인 funding은
-예산이 남아도 paid fail-closed다. quote 갱신/증액은 기존 hold를 보존한 원자적 교체이며 만료
+금액과 무관하게 공급자 상태를 확인할 수 없으므로 paid fail-closed다. quote 갱신/증액은 기존 hold를 보존한 원자적 교체이며 만료
 quote를 실행하거나 새 월/가격 버전이라는 이유로 예전 미확정 hold를 지우지 않는다.
 
 USD/KRW는 검증 가능한 기관의 날짜 있는 값과 실제 청구 환율/수수료를 대조한다. 현재 문서에
@@ -114,7 +119,7 @@ freeze/drain·상호 receipt 조율을 유지하고 미정산 hold를 지워 dra
 새 달은 이월 노출과 새 달의 실제 권한을 확인한다. 자세한 운영 입력·초기 projection과
 경합/응답 유실/월 경계 검사는 [비용 갱신·재개](./COST-REFRESH.md)를 따른다.
 
-## 실행 상한과 정산
+## 기술적 실행 상한과 비용 정산
 
 Gateway retry는 실제 환경에서 OFF를 확인하며 SDK/transport 숨은 retry도 예약 상한에
 포함한다. timeout은 원격 abort 증거가 아니며 같은 불명확 작업을 새 호출로 반복하지 않는다.

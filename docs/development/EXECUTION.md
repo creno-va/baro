@@ -25,11 +25,11 @@
 | 작업 | 담당/이슈 | 현재 상태·blocker | 다음 행동 |
 | --- | --- | --- | --- |
 | 업로드·물리 용량 | 자료 모듈 + 총괄, #58 | PR230→229→235 병합; 원격 inventory/projection·실제 cleanup 미검증 | 실제 opaque inventory와 writer 상태 확인 후 용량 연결·제한 upload/delete |
-| 비용 갱신·재개 | 비용 모듈 + 총괄, #57 | 후속 직접 지시의 금액 차단 해제 구현·회귀 검증 중. 현재 preview0013은 금액 차단 상태, production0009는 별도 환경 | 새 설정과0014를 같은 preview SHA에 반영해 금액 차단 해제·기존 원장 보존 검증. 최신 상태/권한·실제 비용 대조는 유지 |
+| 비용 갱신·재개 | 비용 모듈 + 총괄, #57 | PR241 금액 차단 해제와 회귀 병합. 코드 병합과 환경별 적용 완료는 구분 | 새 설정과0014를 같은 배포 SHA에 반영. 비용 금액으로 막지 않으며 최신 공급자 상태/권한·물리 용량·실제 비용 대조는 유지 |
 | 릴리스 증거 | 총괄, #19/#71 | PR232 병합; 최종 full·동일 SHA 실제 증거 미완료 | 수동 전체 회귀→preview 제한 smoke→정확한 SHA 운영자 승인→production |
 | 디렉터리 | 변호사 모듈 + 총괄, #231/M5 | PR234 병합; 기존 공개 목록의 원격 projection 연결 미완료 | serving SHA 확인 후 bounded reindex, 철회·cursor·필터 smoke |
 | 문서·작업 체계 | 총괄, #19/#64/#71 | 현행 기준과 과거 기록 분리 중 | 문서 PR과 이슈/마일스톤의 담당·증거·다음 행동 대조 |
-| 채팅 실패·재시도 | 고객/AI, #64 / PR238 | PR238 병합, preview7a617b5/schema0013 반영. run38556937083의 foundation·9개 endpoint 통과, text preflight는 model_reservation_headroom으로 차단. 과거 provider 원인은 로그 유실로 미확정 | 재원·기존 비용 대조 후 합성 사건 재시도1회와 안전한 status/category 검증. 기존 비용53,296원/검증 상한53,410원으로 여유114원, 채팅 예약11,018원 부족. #57의 최신 재원 또는 공급자 정산 증거 필요; hold 임의 해제·재원 확대 금지 |
+| 채팅 실패·재시도 | 고객/AI, #64 / PR238 | PR238 병합, preview7a617b5/schema0013 반영. run38556937083의 foundation·9개 endpoint 통과, 당시 text preflight는 model_reservation_headroom으로 차단. 과거 provider 원인은 로그 유실로 미확정 | PR241 적용 후 합성 사건 재시도1회와 안전한 status/category 확인. 이전 여유114원·예약11,018원은 과거 차단 원인의 기록이며 현행 금액 제한이 아님. 기존 hold와 원장을 보존하고 별도 AI 응답 실패를 조사 |
 | 법률·인증·정책 점검 | 법률/인증 모듈, #27/#63/#71 | [10/14 검증](../quality/LEGAL-AUTH-VERIFICATION-2026-10-14.md): 포털 JSON 승인, mobileYn=Y 법령 목록78건 구조 확인. 합성 Bun182/브라우저40 통과, Google은 사용자 수동 검증 완료, 정책 내부 점검표 작성 | 인터넷/모바일의 승인·본문 JSON 조건 확인 후 제한 readiness. 환경별 OC 일치·Naver/Kakao·배포 Worker 증거는 별도 유지 |
 | 전체 실제 인수 | 각 모듈, #27/#59/#63/#64/#66/#67/#71 | OAuth/실제 모델·공식 출처·media·다운로드·복구/경보 증거 잔여 | [요구사항·증거 완료표](./MVP-REQUIREMENTS-EVIDENCE.md)의 조건별 증거 연결 |
 
@@ -41,11 +41,14 @@ schema/endpoint 검사는 통과했지만 AI 재원 검사 실패로 전체 실�
 보존했다. production 배포 및 유료 모델 호출은 수행하지 않았다.
 
 2026-10-14 후속 직접 지시로 금액 차단 정책을 변경한다. #57의
-`codex/57-disable-application-cost-limits`는 `APPLICATION_COST_LIMITS_ENABLED=false`로
+[PR241](https://github.com/creno-va/baro/pull/241)은 `APPLICATION_COST_LIMITS_ENABLED=false`로
 월·누적 재원·요청 금액의 admission/dispatch/refresh/preflight 차단을 해제한다.
 위 7a617b5 실패는 당시 정책의 실제 기록으로 보존한다. 새 모드는 기존 비용·미정산을
 관측·정산하며 가격/최신 funding 상태·권한·물리 용량·횟수 경계를 유지한다.
 0014 예약 금액 표현 변경은 #55에 단일 작성자를 기록했으며 과거 migration은 보존한다.
+새 직접 사용자 지시 없이 금액 상한·예산 대기·비용 초과 동결을 다시 적용하지 않는다.
+`codex/57-remove-cost-blocking`은 PR241을 재사용하며 잔여 문서·재사용 API의 정합성을 보완한다.
+배포 진행 상태는 GitHub run의 실제 SHA·결과로 확인하며 다른 세션의 진행 중 배포를 중복 실행하지 않는다.
 
 ## 검증과 배포
 

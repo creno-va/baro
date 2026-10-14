@@ -1,5 +1,7 @@
 # 보안 및 개인정보 설계
 
+> **2026-10-14 비용 정책:** 애플리케이션 월 예산·누적 재원·요청 금액 차단을 해제한다(`APPLICATION_COST_LIMITS_ENABLED=false`, [ADR-0015](../adr/0015-maintenance-and-operating-policy.md)). 실제 비용·예약·미정산 기록은 보존한다. 이 변경은 인증·소유권·동의·암호화·개인정보·삭제·남용 방지 또는 파일/시간/횟수의 기술 한도를 해제하지 않으며, 외부 결제 설정 변경 권한을 추가하지 않는다.
+
 - Status: Required for public beta
 - Data owner: CRENOVA
 - Scope: web app, Worker, Workflow, D1, OAuth, AI and legal-source adapters

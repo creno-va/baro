@@ -1,5 +1,7 @@
 # 프로젝트 전체 리뷰 — 자율 개발 준비도
 
+> **현행 비용 정책 우선(2026-10-14):** 아래는 당시 관측·판단을 보존한 이력이다. 월 예산·누적 재원·요청 금액 차단은 [ADR-0015](../adr/0015-maintenance-and-operating-policy.md)/PR241에서 해제했다(`APPLICATION_COST_LIMITS_ENABLED=false`). 과거 spend gate를 복원하지 않으며 실제 비용 기록·기술 한도·개인정보/권한 검사는 유지한다.
+
 아래는 2026-10-05의 역사적 리뷰/검증 기록이며 현재 배포 상태가 아니다. v2의 전체 기능
 완료 기준은 [v2 시연 증거](./V2-UI-EVIDENCE.md), 목표 계약은 [v2 실행 계약](../architecture/V2-CONTRACTS.md)를
 따른다. 이전 준비도 리뷰와 v1 offline 결과를 v2 UI·실제 외부·법률 승인으로 해석하지 않는다.

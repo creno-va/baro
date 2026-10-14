@@ -148,7 +148,9 @@ evidence로 보존하되 금액을 반환하지 않는다. 계정 삭제나 원�
 같은 CAS에서 확인해야만 비용을 반환하며, 다른 Worker의 dispatched attempt를 취소하지 못한다.
 
 환경 간 allocation은 freeze→감소/drain→신뢰 가능한 양쪽 acknowledgement→증가/resume 순서다.
-전역100만원은 환경 cap과 shared 의무의 합계이며 두 D1의 batch를 전역 atomic으로 표현하지 않는다.
+전역100만원은 이전 설계의 환경 cap과 shared 의무 합계였으며 현행 실행 한도가 아니다.
+`APPLICATION_COST_LIMITS_ENABLED=false`에서는 월·누적 재원·요청 금액 초과로 실행을 막지 않는다.
+[현행 비용 정책](./COST-CONTROLS.md)을 따르며 두 D1의 batch를 전역 atomic으로 표현하지 않는다.
 이전 월 미정산 hold와 maintenance exposure를 새 월 여유로 지우지 않는다. 필수 유지 비용,
 청구 대조·읽기·삭제는 새 paid admission과 구분한다. 실제 funding·환율·청구·전환 증거는 #57/#71이다.
 
