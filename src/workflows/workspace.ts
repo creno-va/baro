@@ -4,7 +4,8 @@ import { runWorkspaceRuntime } from "../server/runtime/workspace";
 
 export class WorkspaceWorkflow extends WorkflowEntrypoint<Env, WorkspaceParams> {
   override async run(event: WorkflowEvent<WorkspaceParams>, step: WorkflowStep) {
-    // Step state contains opaque references and status only, never case content or model output.
+    // Step state contains opaque references, status and finite diagnostic codes only,
+    // never case content, source text, credentials or model output.
     return step.do(
       "prepare workspace response",
       // Intake recovery can execute generation + audit twice. Each gateway phase

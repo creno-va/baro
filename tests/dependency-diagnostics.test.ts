@@ -22,7 +22,7 @@ test("D1 depth, compound-select and function limits have a distinct safe categor
 test("legal and draft diagnostics expose enum outcomes without private source payloads", () => {
   const output = spyOn(console, "error").mockImplementation(() => {});
   try {
-    reportLegalRetrieval({
+    const legal = reportLegalRetrieval({
       kind: "statute",
       availability: "unavailable",
       reason: "configuration_missing",
@@ -30,13 +30,22 @@ test("legal and draft diagnostics expose enum outcomes without private source pa
       url: "https://example.test/?OC=private-token",
       chunks: [{ source: { body: "private-body" } }],
     } as Parameters<typeof reportLegalRetrieval>[0]);
-    reportLegalRetrieval({
+    const unknownLegal = reportLegalRetrieval({
       kind: "private-kind",
       availability: "private-state",
       reason: "private-reason",
     });
-    reportWorkspacePolicyFailure("audit_rejected");
-    reportWorkspacePolicyFailure(new Error("private-draft"));
+    const policy = reportWorkspacePolicyFailure("audit_rejected");
+    const unknownPolicy = reportWorkspacePolicyFailure(new Error("private-draft"));
+    // The durable Workflow receipt uses exactly the same clamped data as logging.
+    const receipt = { legal, unknownLegal, policy, unknownPolicy };
+    expect(receipt).toEqual({
+      legal: { kind: "statute", availability: "unavailable", reason: "configuration_missing" },
+      unknownLegal: { kind: "unknown", availability: "unknown", reason: "unknown" },
+      policy: "audit_rejected",
+      unknownPolicy: "unknown",
+    });
+    expect(JSON.stringify(receipt)).not.toContain("private");
     expect(output.mock.calls.map(([value]) => JSON.parse(String(value)))).toEqual([
       {
         event: "workspace_legal_retrieval",

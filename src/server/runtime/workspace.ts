@@ -211,7 +211,8 @@ export async function runWorkspaceRuntime(
     applicationCostLimitsEnabled: env.APPLICATION_COST_LIMITS_ENABLED !== "false",
     monthlyBudgetCapEnabled: env.MONTHLY_BUDGET_CAP_ENABLED !== "false",
   });
-  return executeWorkspace(core, params, instanceId, {
+  const legalRetrieval: ReturnType<typeof reportLegalRetrieval>[] = [];
+  const result = await executeWorkspace(core, params, instanceId, {
     guideHosts: GUIDE_HOSTS,
     authorize: (ownerId) => hasCustomerWorkspaceAccess(core, ownerId),
     pipeline: async (job, lease) => {
@@ -355,7 +356,7 @@ export async function runWorkspaceRuntime(
               signal: AbortSignal.timeout(120000),
             },
           );
-          for (const outcome of output.outcomes) reportLegalRetrieval(outcome);
+          for (const outcome of output.outcomes) legalRetrieval.push(reportLegalRetrieval(outcome));
           const sources = await projectWorkspaceSources(output);
           return {
             ...context,
@@ -369,4 +370,7 @@ export async function runWorkspaceRuntime(
       });
     },
   });
+  // The internal Workflow receipt remains inspectable when a console event is absent.
+  // Public job responses still come from the unchanged repository contract.
+  return { ...result, ...(legalRetrieval.length ? { legalRetrieval } : {}) };
 }
