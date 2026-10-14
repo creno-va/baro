@@ -9,9 +9,14 @@
 live/ready SHA와 같아야 한다. preview Environment의 기존 암호화 키와 D1 권한을 마지막
 step에만 제공한다. production 대상, 임의 owner·SQL·본문·fixture key 입력은 없다.
 
-`status`는 읽기 전용이다. `create`는 exact profile ID의 현재 draft 한 건만 복호화하여
-지정된 이름·사무실 marker를 대조한다. 고객 역할·현재 필수 동의·삭제 여부와 일일 사건
-3건 한도를 확인한다. profile/revision/ciphertext, 고객 역할, 현재 동의는 canonical
+`status`는 읽기 전용이다. `create`는 exact profile ID의 최신 MVP self-profile snapshot
+한 건만 canonical `readSnapshot`으로 복호화하여 비공개 상태와 지정된 이름·사무실 marker를
+대조한다. `v2_private_snapshots`의 `published`는 저장 완료 상태이며, 공개 여부는 같은
+snapshot ID·owner·revision의 `profile_publication` consent가 `mvp-self-profile-private-v1`이고
+복호화한 self-profile의 `published=false`인지 함께 확인한다. legacy `v2_profile_revisions`는
+지원하지 않으며 `v2_profiles.revision`을 self-profile revision으로 사용하지 않는다.
+고객 역할·현재 필수 동의·삭제 여부와 일일 사건 3건 한도를 확인한다.
+snapshot ID/최신 revision/ciphertext·비공개 consent 관계, 고객 역할, 현재 동의는 canonical
 생성 claim에서 다시 검사한다. 인증·세션·역할·동의·Turnstile 설정은 쓰지 않는다.
 
 HTTP 생성 API는 기존 Turnstile 및 abuse 검사를 계속 사용한다. 내부 저장 함수의

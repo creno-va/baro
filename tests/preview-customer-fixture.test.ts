@@ -9,10 +9,13 @@ import {
 } from "../scripts/preview-customer-fixture";
 import type { ApiEnvironment } from "../src/server/api/errors";
 import { createWorkspacesApi } from "../src/server/api/v2/workspaces";
+import { saveAccountType } from "../src/server/auth/account-type";
 import { createCaseDataCipher, type EnvelopeCipher } from "../src/server/crypto";
 import { createV2Core } from "../src/server/db/v2-core";
 import { createV2LawyersRepository } from "../src/server/db/v2-lawyers";
 import { createV2WorkspaceRepository } from "../src/server/db/v2-workspace";
+import { workspaceCreationSourcePredicate } from "../src/server/db/v2-workspace-create-guard";
+import { createSelfProfileService } from "../src/server/modules/lawyers/self-profile";
 import { createTestDatabase } from "./helpers/d1";
 import { seedTestSession } from "./helpers/session";
 
@@ -35,22 +38,26 @@ async function fixture(name = "합성검증 프로필 1014") {
   const actor = { ownerId: owner.userId, now: NOW };
   const lawyers = createV2LawyersRepository(core);
   expect(await lawyers.createProfile(actor, PROFILE)).toBe(true);
-  expect(
-    await lawyers.saveProfileDraft(actor, PROFILE, 1, crypto.randomUUID(), {
-      name,
-      office: {
-        name: "합성 테스트 사무실",
-        country: "KR",
-        region: "seoul",
-        address: "합성 테스트 주소",
-        addressDetail: null,
-        postalCode: null,
-      },
-    }),
-  ).toBe(true);
-  db.sqlite
-    .query("INSERT INTO app_metadata(key,value) VALUES(?,'customer')")
-    .run(`account-type:${owner.userId}`);
+  await saveAccountType(db.binding, owner.userId, "lawyer");
+  const profiles = createSelfProfileService(core, () => NOW);
+  const saved = await profiles.saveMine(owner.userId, {
+    ...(await profiles.getMine(owner.userId)),
+    name,
+    officeName: "합성 테스트 사무실",
+    introduction: "실제 인물 없이 시험하는 합성 프로필입니다.",
+    address: "합성 테스트 주소",
+    region: "seoul",
+    practiceAreas: ["civil"],
+    email: "synthetic@example.test",
+  });
+  const published = await profiles.publishMine(owner.userId, true, saved.revision, PROFILE);
+  const privateProfile = await profiles.publishMine(
+    owner.userId,
+    false,
+    published.revision,
+    PROFILE,
+  );
+  await saveAccountType(db.binding, owner.userId, "customer");
   let probes = 0;
   const prepare = (overrides: Partial<Parameters<typeof preparePreviewCustomerFixture>[0]> = {}) =>
     preparePreviewCustomerFixture({
@@ -67,11 +74,40 @@ async function fixture(name = "합성검증 프로필 1014") {
   const n = (table: string) =>
     (db.sqlite.query(`SELECT count(*) n FROM ${table}`).get() as { n: number }).n;
   const changes = () => (db.sqlite.query("SELECT total_changes() n").get() as { n: number }).n;
-  return { db, owner, cipher, core, actor, prepare, n, changes, probes: () => probes };
+  return {
+    db,
+    owner,
+    cipher,
+    core,
+    actor,
+    profiles,
+    privateProfile,
+    prepare,
+    n,
+    changes,
+    probes: () => probes,
+  };
+}
+
+async function reviseProfile(f: Awaited<ReturnType<typeof fixture>>, publish = false) {
+  await saveAccountType(f.db.binding, f.owner.userId, "lawyer");
+  const current = await f.profiles.getMine(f.owner.userId);
+  if (publish) await f.profiles.publishMine(f.owner.userId, true, current.revision, PROFILE);
+  else
+    await f.profiles.saveMine(f.owner.userId, {
+      ...current,
+      introduction: `${current.introduction} 후속 합성 수정입니다.`,
+    });
+  await saveAccountType(f.db.binding, f.owner.userId, "customer");
 }
 
 test("one real SQLite encrypted intake consumes one quota and preserves identity, profile and cost records", async () => {
   const f = await fixture();
+  expect(f.n("v2_profile_revisions")).toBe(0);
+  expect(f.privateProfile.published).toBe(false);
+  expect(f.privateProfile.revision).toBe(4);
+  expect(f.db.sqlite.query("SELECT revision FROM v2_profiles").get()).toEqual({ revision: 1 });
+  expect(await f.profiles.getMine(f.owner.userId)).toEqual(f.privateProfile);
   const protectedTables = [
     "user",
     "session",
@@ -79,6 +115,9 @@ test("one real SQLite encrypted intake consumes one quota and preserves identity
     "v2_role_bindings",
     "v2_profiles",
     "v2_profile_revisions",
+    "v2_private_snapshots",
+    "v2_private_parts",
+    "v2_consents",
     "v2_cost_attempts",
     "v2_execution_admissions",
     "v2_runtime_proofs",
@@ -204,6 +243,105 @@ test("a wrong encryption key cannot identify the source and changes no rows", as
   expect(f.probes()).toBe(0);
 });
 
+test("legacy draft storage alone is unsupported even with matching synthetic markers", async () => {
+  const db = await createTestDatabase();
+  databases.push(db);
+  const owner = await seedTestSession(db, { now: Date.parse(NOW), consent: true });
+  const cipher = await createCaseDataCipher({
+    CASE_DATA_KEY_V1: btoa("q".repeat(32)).replace(/=+$/, ""),
+  });
+  const repository = createV2LawyersRepository(createV2Core(db.binding, cipher));
+  const actor = { ownerId: owner.userId, now: NOW };
+  expect(await repository.createProfile(actor, PROFILE)).toBe(true);
+  expect(
+    await repository.saveProfileDraft(actor, PROFILE, 1, crypto.randomUUID(), {
+      name: "합성검증 프로필 1014",
+      office: {
+        name: "합성 테스트 사무실",
+        country: "KR",
+        region: "seoul",
+        address: "합성 테스트 주소",
+        addressDetail: null,
+        postalCode: null,
+      },
+    }),
+  ).toBe(true);
+  const before = db.sqlite.query("SELECT total_changes() n").get();
+  let probes = 0;
+  const result = await preparePreviewCustomerFixture({
+    db: db.binding,
+    cipher,
+    mode: "create",
+    now: NOW,
+    verifyAtomicity: async () => {
+      probes++;
+      return true;
+    },
+  });
+  expect(result.code).toBe("SOURCE_UNAVAILABLE");
+  expect(result.domainCreateInvoked).toBe(false);
+  expect(probes).toBe(0);
+  expect(db.sqlite.query("SELECT total_changes() n").get()).toEqual(before);
+});
+
+test.each([
+  "public",
+  "public-payload",
+  "consent-missing",
+  "consent-version",
+  "consent-revision",
+  "consent-owner",
+  "snapshot-state",
+])("current MVP source with %s is rejected before any write or probe", async (kind) => {
+  const f = await fixture();
+  if (kind === "public" || kind === "public-payload") await reviseProfile(f, true);
+  if (kind === "public-payload")
+    f.db.sqlite.exec("UPDATE v2_consents SET version='mvp-self-profile-private-v1'");
+  if (kind === "consent-missing") f.db.sqlite.exec("DELETE FROM v2_consents");
+  if (kind === "consent-version")
+    f.db.sqlite.exec("UPDATE v2_consents SET version='unsupported-private-version'");
+  if (kind === "consent-revision") f.db.sqlite.exec("UPDATE v2_consents SET revision=revision+1");
+  if (kind === "consent-owner") {
+    const other = await seedTestSession(f.db, { now: Date.parse(NOW), consent: true });
+    f.db.sqlite.query("UPDATE v2_consents SET owner_id=?").run(other.userId);
+  }
+  if (kind === "snapshot-state")
+    f.db.sqlite.exec("UPDATE v2_private_snapshots SET state='staging'");
+  const before = f.changes();
+  const result = await f.prepare();
+  expect(result.code).toBe(
+    kind === "public-payload" ? "SOURCE_MARKER_MISMATCH" : "SOURCE_UNAVAILABLE",
+  );
+  expect(result.domainCreateInvoked).toBe(false);
+  expect(f.changes()).toBe(before);
+  expect(f.probes()).toBe(0);
+  expect(f.n("v2_workspaces")).toBe(0);
+});
+
+test.each([false, true])(
+  "a newer self-profile (published=%s) after preflight rejects the intent claim",
+  async (publish) => {
+    const f = await fixture();
+    const result = await f.prepare({
+      verifyAtomicity: async () => {
+        await reviseProfile(f, publish);
+        return true;
+      },
+    });
+    expect(result.code).toBe("CLAIM_REJECTED");
+    expect(result.phase).toBe("intent");
+    expect(result.domainCreateInvoked).toBe(false);
+    expect(
+      f.db.sqlite
+        .query(
+          "SELECT 1 FROM app_metadata WHERE key='baro-test-fixture:customer-intake-v1:attempt'",
+        )
+        .get(),
+    ).toBeNull();
+    expect(f.n("v2_workspaces") + f.n("v2_operations") + f.n("v2_quota_reservations")).toBe(0);
+  },
+);
+
 test("concurrent invocations admit at most one fixed workspace and quota", async () => {
   const f = await fixture();
   const results = await Promise.all([f.prepare(), f.prepare()]);
@@ -249,7 +387,48 @@ test.each([
   expect(f.n("v2_workspaces")).toBe(0);
 });
 
-test.each(["role", "consent", "profile-revision", "profile-cipher", "account-tombstone", "quota"])(
+test("source fence binds the exact current snapshot identity, revision and ciphertext", async () => {
+  const f = await fixture();
+  const row = f.db.sqlite
+    .query(
+      "SELECT id,revision,encrypted_payload FROM v2_private_snapshots WHERE purpose='profile_revision'",
+    )
+    .get() as {
+    id: string;
+    revision: number;
+    encrypted_payload: string;
+  };
+  const source = {
+    profileId: PROFILE,
+    snapshotId: row.id,
+    revision: row.revision,
+    encryptedPayload: row.encrypted_payload,
+  };
+  for (const patch of [
+    {},
+    { snapshotId: crypto.randomUUID() },
+    { revision: row.revision + 1 },
+    { encryptedPayload: `${row.encrypted_payload}x` },
+  ]) {
+    const fence = workspaceCreationSourcePredicate({ ...source, ...patch }, f.owner.userId);
+    const actual = await f.db.binding
+      .prepare(`SELECT 1 WHERE ${fence.sql}`)
+      .bind(...fence.values)
+      .first();
+    expect(Boolean(actual)).toBe(Object.keys(patch).length === 0);
+  }
+});
+
+test.each([
+  "role",
+  "consent",
+  "profile-revision",
+  "profile-public",
+  "profile-state",
+  "profile-consent",
+  "account-tombstone",
+  "quota",
+])(
   "canonical claim rejects %s change after the latch and before encrypted domain admission",
   async (kind) => {
     const f = await fixture();
@@ -265,12 +444,12 @@ test.each(["role", "consent", "profile-revision", "profile-cipher", "account-tom
               .query("UPDATE app_metadata SET value='lawyer' WHERE key=?")
               .run(`account-type:${f.owner.userId}`);
           if (kind === "consent") f.db.sqlite.exec("DELETE FROM user_consents");
-          if (kind === "profile-revision")
-            f.db.sqlite.exec("UPDATE v2_profiles SET revision=revision+1");
-          if (kind === "profile-cipher")
-            f.db.sqlite.exec(
-              "UPDATE v2_profile_revisions SET encrypted_payload=encrypted_payload||'x'",
-            );
+          if (kind === "profile-revision" || kind === "profile-public")
+            await reviseProfile(f, kind === "profile-public");
+          if (kind === "profile-state")
+            f.db.sqlite.exec("UPDATE v2_private_snapshots SET state='staging'");
+          if (kind === "profile-consent")
+            f.db.sqlite.exec("UPDATE v2_consents SET version='mvp-self-profile-public-v1'");
           if (kind === "account-tombstone")
             f.db.sqlite
               .query("INSERT INTO v2_tombstones VALUES('account',?,?)")
