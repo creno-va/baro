@@ -90,6 +90,22 @@ outside this patch. No caches, skipped checks, timeout changes or retries are ad
 These counts use offline adapters and do not establish remote elapsed-time improvement.
 The remaining 1146 calls and 555 current checks are still a material latency concern.
 
+### Asset fixture count reconciliation
+
+On `8ebfbafcb2d551c860e51f7728821cf9630bea5b`, the same one-chunk JPEG asset fixture
+uses **91 D1 calls / 120 SQL statements**, replacing the stale expectation of 93/129.
+Its observed three guarded dispatches each save one call and three statements, while
+all three fresh dispatch receipt reads remain. Separating the required maintenance
+policy write from the optional monthly financial insert adds one call and no SQL:
+`93 - 3 + 1 = 91` calls and `129 - 9 = 120` statements. The fixture observes each of
+those two maintenance writes as a separate call; physical admission's separate guarded
+policy write remains inside its original transaction.
+
+The test still verifies 31 current checks, five original-source snapshots, three separate
+consent reads, one native-adapter invocation and the real encrypted-output publication.
+This corrects test expectations after already-merged changes; it changes no product code,
+authorization boundary or limit and does not establish remote latency improvement.
+
 ## Preview location and latency observation
 
 The preview runtime now observes its existing initial admission lookup, before the first

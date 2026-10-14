@@ -352,7 +352,7 @@ test("writer-stop persistence failure preserves independent cleanup and the real
     expect(f.bucket.objects.has(`private/${derivative.id}`)).toBe(true);
   }));
 
-test("asset runtime preserves all current/source boundaries with 80 fewer D1 reads", () =>
+test("asset runtime preserves current/source boundaries with guarded dispatch and isolated observations", () =>
   withFixedLength(async () => {
     let measured!: ReturnType<typeof countD1Calls>;
     const f = await setup((database) => {
@@ -361,7 +361,11 @@ test("asset runtime preserves all current/source boundaries with 80 fewer D1 rea
     });
     let currentReads = 0,
       originalSnapshotReads = 0,
-      separateConsentReads = 0;
+      separateConsentReads = 0,
+      dispatches = 0,
+      dispatchReadbacks = 0,
+      maintenancePolicyCalls = 0,
+      monthBucketCalls = 0;
     measured.after((statements) => {
       for (const sql of statements) {
         if (sql.includes("original.encrypted_payload AS source_payload")) {
@@ -370,6 +374,19 @@ test("asset runtime preserves all current/source boundaries with 80 fewer D1 rea
           expect(sql).toContain("consent.over_14_confirmed=1");
         } else if (sql.includes("reserved_principal.owner_id=a.owner_id")) originalSnapshotReads++;
         else if (sql.includes("user_consents")) separateConsentReads++;
+        if (sql.startsWith("UPDATE v2_execution_admissions SET state='dispatched'")) dispatches++;
+        if (sql.startsWith("SELECT a.plan_id,a.digest,a.payload_json,a.invocation_id,a.attempt"))
+          dispatchReadbacks++;
+        if (
+          sql.startsWith("INSERT INTO v2_cost_execution_policy(environment,limits_enabled) VALUES")
+        ) {
+          expect(statements).toHaveLength(1);
+          maintenancePolicyCalls++;
+        }
+        if (sql.startsWith("INSERT INTO v2_monthly_budget")) {
+          expect(statements).toHaveLength(1);
+          monthBucketCalls++;
+        }
       }
     });
     expect(await f.runtime.run(new AbortController().signal)).toMatchObject({ status: "ready" });
@@ -377,7 +394,16 @@ test("asset runtime preserves all current/source boundaries with 80 fewer D1 rea
     // PR269 combined current-source reads to 111/147. The five original source
     // boundaries combine 4 further reads into 1 each: 96/132, without cache.
     // Atomic transport receipt updates remove three further roundtrips: 93/129.
-    expect(measured.work).toEqual({ calls: 93, statements: 129 });
+    // Three guarded dispatches each remove one call / three statements (90/120).
+    // Isolating the optional month insert from required policy adds one call,
+    // with the same two statements. All three fresh dispatch readbacks remain.
+    expect(measured.work).toEqual({ calls: 91, statements: 120 });
+    expect({ dispatches, dispatchReadbacks, maintenancePolicyCalls, monthBucketCalls }).toEqual({
+      dispatches: 3,
+      dispatchReadbacks: 3,
+      maintenancePolicyCalls: 1,
+      monthBucketCalls: 1,
+    });
     expect(currentReads).toBe(31);
     expect(originalSnapshotReads).toBe(5);
     expect(separateConsentReads).toBe(3);

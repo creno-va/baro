@@ -10,7 +10,7 @@ import { FileError } from "../../modules/files/binary";
 import { fileStorageRequestCore } from "../../modules/files/limits";
 import { createFileReviewService, FileReviewError } from "../../modules/files/review";
 import { createFilesService, type FileServiceDependencies } from "../../modules/files/service";
-import { readWorkspaceFile } from "../../modules/files/workspace-read";
+import { readWorkspaceFile, readWorkspaceFileCoverage } from "../../modules/files/workspace-read";
 import { caseAccess } from "../case-access";
 import { type ApiEnvironment, errorBody } from "../errors";
 
@@ -301,13 +301,18 @@ export function createFilesApi(
   app.get("/:caseId/files/:fileId", async (c) => {
     const access = await caseAccess(c);
     if (access.response) return access.response;
-    z.strictObject({}).parse(c.req.query());
+    const query = z.strictObject({ view: z.literal("coverage").optional() }).parse(c.req.query());
     const core = createV2Core(c.env.DB, await createCaseDataCipher(c.env), {
       applicationCostLimitsEnabled: c.env.APPLICATION_COST_LIMITS_ENABLED !== "false",
       monthlyBudgetCapEnabled: c.env.MONTHLY_BUDGET_CAP_ENABLED !== "false",
     });
     return c.json(
-      await readWorkspaceFile(core, access.ownerId, c.req.param("caseId"), c.req.param("fileId")),
+      await (query.view === "coverage" ? readWorkspaceFileCoverage : readWorkspaceFile)(
+        core,
+        access.ownerId,
+        c.req.param("caseId"),
+        c.req.param("fileId"),
+      ),
     );
   });
   app.get("/:caseId/files/:fileId/content", async (c) => {

@@ -83,6 +83,7 @@ idempotency를 동일 guarded batch로 승인한다. 202에는 `{operationId,job
 | Method/path | 업무 계약 | Gate |
 | --- | --- | --- |
 | `GET /cases/:caseId/files` | private metadata·처리 coverage·추출 revision | owner |
+| `GET /cases/:caseId/files/:fileId?view=coverage` | 목록용 `{id,revision,status,coverage}`; 관측/파생물 원문을 읽지 않음 | owner·전후 file revision/상태/metadata·coverage snapshot 무결성·probe 일치 검증. view 생략 시 기존 compact 원문 읽기의 각 8개 상한 유지 |
 | `POST /cases/:caseId/files` | `{name,byteLength,mediaType,autoProcessConsentVersion}` → fileId/uploadSession/chunkBytes | owner·동의·count/storage 예약; client MIME/시간은 신뢰하지 않음 |
 | `PUT /cases/:caseId/files/:fileId/parts/:partNumber` | bounded binary part, part hash/idempotency → accepted | session/origin/upload expiry·소유권·총 reserved bytes, chunk 암호화 후 R2 |
 | `POST /cases/:caseId/files/:fileId/complete` | ordered manifest/총크기/hash 검증 → uploaded+처리 outbox | 실제 magic·size·PDF page·media duration 검사; 자동 처리 admission |

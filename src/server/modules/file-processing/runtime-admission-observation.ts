@@ -2,6 +2,13 @@ const regions = ["ENAM", "WNAM", "WEUR", "EEUR", "APAC", "OC"] as const;
 const maximum = 1_000_000_000;
 const number = (value: unknown): value is number =>
   typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= maximum;
+// Workers uses the UNIX epoch as performance.timeOrigin (0). Apply the
+// telemetry duration ceiling to the difference, never the absolute samples.
+const clockSample = (value: unknown): value is number =>
+  typeof value === "number" &&
+  Number.isFinite(value) &&
+  value >= 0 &&
+  value <= Number.MAX_SAFE_INTEGER;
 const optional = <T>(read: () => T): T | null => {
   try {
     return read();
@@ -33,7 +40,8 @@ export async function readRuntimeAdmission(
     // parameters, result rows, IDs and the original exception are never logged.
     try {
       const ended = optional(clock);
-      const wallMs = number(started) && number(ended) ? milliseconds(ended - started) : null;
+      const wallMs =
+        clockSample(started) && clockSample(ended) ? milliseconds(ended - started) : null;
       const meta = optional(() => result?.meta);
       const sqlMs = milliseconds(optional(() => meta?.timings?.sql_duration_ms));
       const regionInput = optional(() => meta?.served_by_region);

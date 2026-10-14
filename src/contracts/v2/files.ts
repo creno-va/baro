@@ -349,7 +349,7 @@ export const v2FileSchema = z
     if (file.coverage !== null && !coverageMatchesProbe(file.coverage, file.probe)) return false;
     return true;
   }, "Inconsistent file lifecycle, probe, coverage or source position");
-function coverageMatchesProbe(coverage: V2Coverage, probe: V2FileProbe) {
+export function coverageMatchesProbe(coverage: V2Coverage, probe: V2FileProbe) {
   if (coverage.category !== probe.category) return false;
   if (coverage.category === "document" && probe.category === "document")
     return coverage.pageCount === probe.pageCount;

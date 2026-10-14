@@ -3,9 +3,17 @@ import { resolve } from "node:path";
 
 const root = resolve(import.meta.dir, "../..");
 const httpFixture = Bun.env.BARO_REPORT_HTTP_FIXTURE === "true";
+const fileReviewFixture = Bun.env.BARO_FILE_REVIEW_HTTP_FIXTURE === "true";
 const bundle = await Bun.build({
   entrypoints: [
-    resolve(import.meta.dir, httpFixture ? "report-real-entry.tsx" : "reports-ui-entry.tsx"),
+    resolve(
+      import.meta.dir,
+      fileReviewFixture
+        ? "file-review-entry.tsx"
+        : httpFixture
+          ? "report-real-entry.tsx"
+          : "reports-ui-entry.tsx",
+    ),
   ],
   target: "browser",
   define: { "import.meta.env.PUBLIC_API_MODE": '"real"' },
@@ -15,7 +23,10 @@ const bundle = await Bun.build({
       name: "reports-test-api",
       setup(build) {
         build.onResolve({ filter: /^\.\.\/(?:\.\.\/)?client\/api$/ }, () => ({
-          path: resolve(import.meta.dir, httpFixture ? "report-real-api.ts" : "reports-ui-api.ts"),
+          path: resolve(
+            import.meta.dir,
+            httpFixture || fileReviewFixture ? "report-real-api.ts" : "reports-ui-api.ts",
+          ),
         }));
       },
     },
