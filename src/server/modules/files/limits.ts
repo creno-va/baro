@@ -37,7 +37,19 @@ export function notifyFileStorageFailure(
 /** Native D1 receipts, including every batch member, bound further dispatch.
  * This is an execution guard, never a provider receipt or refund. Already
  * committed intents survive a missing/over-limit response for later cleanup. */
-export function fileStorageRequestCore(core: V2Core, requireRowMeta = true) {
+export function fileStorageRequestCore(
+  core: V2Core,
+  requireRowMeta = true,
+  policy: {
+    work?: { queries: number; rowsRead: number; rowsWritten: number; cpuMs: number };
+    cleanupQueries?: number;
+    notificationQueries?: number;
+    failure?: () => Error;
+  } = {},
+) {
+  const work = policy.work ?? FILE_STORAGE_WORK;
+  const cleanupLimit = policy.cleanupQueries ?? FILE_STORAGE_CLEANUP_QUERIES;
+  const notificationLimit = policy.notificationQueries ?? FILE_STORAGE_NOTIFICATION_QUERIES;
   let queries = 0,
     read = 0,
     written = 0,
@@ -51,25 +63,20 @@ export function fileStorageRequestCore(core: V2Core, requireRowMeta = true) {
   const originals = new WeakMap<D1PreparedStatement, D1PreparedStatement>();
   const fail = () => {
     stopped = true;
-    throw new FileError("PROCESSING_UNAVAILABLE");
+    throw policy.failure?.() ?? new FileError("PROCESSING_UNAVAILABLE");
   };
   const charge = (count = 1) => {
     if (notificationActive) {
-      if (notificationQueries + count > FILE_STORAGE_NOTIFICATION_QUERIES) fail();
+      if (notificationQueries + count > notificationLimit) fail();
       notificationQueries += count;
       return;
     }
     if (cleanupActive) {
-      if (cleanupQueries + count > FILE_STORAGE_CLEANUP_QUERIES) fail();
+      if (cleanupQueries + count > cleanupLimit) fail();
       cleanupQueries += count;
       return;
     }
-    if (
-      stopped ||
-      queries + count >
-        FILE_STORAGE_WORK.queries - FILE_STORAGE_CLEANUP_QUERIES - FILE_STORAGE_NOTIFICATION_QUERIES
-    )
-      fail();
+    if (stopped || queries + count > work.queries - cleanupLimit - notificationLimit) fail();
     queries += count;
   };
   const receipt = <T>(result: D1Result<T>) => {
@@ -85,7 +92,7 @@ export function fileStorageRequestCore(core: V2Core, requireRowMeta = true) {
     if (
       !cleanupActive &&
       !notificationActive &&
-      (read > FILE_STORAGE_WORK.rowsRead || written > FILE_STORAGE_WORK.rowsWritten)
+      (read > work.rowsRead || written > work.rowsWritten)
     )
       fail();
     return result;

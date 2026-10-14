@@ -6,7 +6,7 @@
 ## 운영 입력
 
 운영 도구만 가격·재원 관측을 받는다. 사용자 API에는 이 입력이나 재개 권한이 없다.
-`scripts/provision-ai-budget.ts <sha> <observe|refresh|reallocate> <preview|production|both>`를
+`scripts/provision-ai-budget.ts <sha> <status|observe|refresh|reallocate> <preview|production|both>`를
 사용한다. 기본은 `refresh`, reallocate는 both가 필수다. 수동 Cost operations workflow는
 main에서 두 지정 운영자만 실행한다. 관측 JSON은 환경변수로 전달하며 shell 코드에 삽입하지 않는다.
 
@@ -28,6 +28,10 @@ main에서 두 지정 운영자만 실행한다. 관측 JSON은 환경변수로 
 증거가 아니며 stale 검사로 적용되지 않는다. 실제 새 근거는 운영자가 확인해 별도로 입력한다.
 
 ## 세 작업의 차이
+
+`status`는 관측 입력 없이 현재 schema, control revision, 원장 노출액, 최신 재원 head,
+저장 projection과 이월만 읽는다. 비공개 payload·계정·증거 reference는 반환하지 않는다.
+0010 이전 DB의 재원 기록은 legacy observation으로 표시하며 현재 실행 권한으로 해석하지 않는다.
 
 `observe`는 안정적인 관측 digest로 immutable pricing/funding proof를 설치한다. control을
 활성화하거나 AI bounds secret을 바꾸지 않는다. 최신 중단 재원은 즉시 다음 처리를 막는다.
@@ -70,7 +74,20 @@ projection이 없거나 새 요청의 전체 상한이 보장되지 않으면 PU
 응답 유실·마지막 SQL 실패 rollback·월 경계 replay를 검사한다. Native D1에서 갱신과
 0011 DDL/trigger/schema marker/마이그레이션 원장의 실패 rollback을 확인한다.
 0010은 수정하지 않는다. 100/10,000 물리 원장의 hot admission은 read13, binding read30/write13
-으로 유지된다. 로컬 signed upload는 read471/write71, 76 SQL이며 실제 청구 증거가 아니다.
+으로 유지된다. 고객 원본의 로컬 signed upload는 read471/write71, 76 SQL이며 실제 청구 증거가 아니다.
+
+변호사 원본 PUT과 승인된 공개 복사도 인증부터 원장 통지까지 별도 실행 상한을 사용한다.
+원본은 암호문 최대 크기, 공개 복사는 원본 GET과 목적 PUT을 함께 예약한다. 용량 예약과
+유료 호출 예약은 pending 생성과 동일 batch이며, 정확한 writer token·응답 크기·stream 종료를
+확인한 뒤 writer를 stopped로 기록한다. 늦거나 응답이 없는 PUT은 running/미정산으로 보존한다.
+실패 시 normal 작업이 소진할 수 없는 cleanup 24문장과 원장 통지 10문장을 사용한다.
+공급자 사용량 증거가 없는 성공 응답도 실제 비용 0원이나 정산 완료로 바꾸지 않는다.
+
+0013은 공개 복사 source, reservation blob, entity history와 approved revision 조회 index만
+추가한다. Native D1 합성 검증에서 인증을 포함한 변호사 원본은 83 SQL/read470/write76,
+공개 복사는 이력 100개와 10,000개 모두 95 SQL/read608/write79였다. 단일 실행 예약은
+Worker 1회/CPU 300,000ms, D1 read 1,010,000/write6,000 및 해당 R2 호출을 포함한다.
+0013의 실패 batch는 index와 schema marker를 함께 rollback한다.
 
 최신 실제 재원·가격·inventory 입력, 최종 후보 전체 회귀, 같은 SHA 배포 및 실제 제한 smoke,
 원래 호출의 공급자 청구 대조는 #19/#57/#58/#71에 남긴다. 구현 병합으로 #57이나 #71을 닫지 않는다.

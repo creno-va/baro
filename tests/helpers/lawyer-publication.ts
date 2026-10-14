@@ -43,9 +43,11 @@ function fixed(length: number) {
     },
   });
 }
-export async function publicationFixture() {
-  const db = await createTestDatabase();
-  databases.push(db);
+export async function publicationFixture(
+  existing?: Awaited<ReturnType<typeof createTestDatabase>>,
+) {
+  const db = existing ?? (await createTestDatabase());
+  if (!existing) databases.push(db);
   const owner = await seedTestSession(db, { consent: true });
   const moderator = await seedTestSession(db, { consent: true, oauthAuthenticatedAt: Date.now() });
   const env = { ...owner.env, CASE_DATA_KEY_V1: btoa("k".repeat(32)).replace(/=+$/, "") };

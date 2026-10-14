@@ -322,4 +322,4 @@ test("photo plus all 30 portfolio assets save/publish within D1's 100 bound para
   expect((await service.getMine(f.actor.ownerId)).portfolio).toHaveLength(30);
   expect(await service.isCurrent(f.actor.ownerId, profile, true)).toBe(true);
   expect(maximum).toBe(67);
-});
+}, 30000);

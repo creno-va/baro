@@ -12,14 +12,17 @@ import { createV2AccountingRepository } from "../../db/v2-accounting";
 import { actorSchema, hashSchema, type V2Core } from "../../db/v2-core";
 import { createV2LawyersRepository } from "../../db/v2-lawyers";
 import { type BlobRegistration, createV2StorageRepository } from "../../db/v2-storage";
+import { createV2StorageCapacityRepository, type WritePermit } from "../../db/v2-storage-capacity";
 import { isPreparedStoragePaidHold } from "../../db/v2-storage-paid-runtime";
 import type { StorageCosts, StoragePermit } from "../budget/storage-ledger";
 import { createStorageMaintenance } from "../budget/storage-maintenance";
 import { hasCurrentConsent } from "../consent/service";
 import { digest } from "../files/binary";
+import { notifyFileStorageFailure, withFileStorageCleanup } from "../files/limits";
 import type { PrivateBucket } from "../files/service";
 import { decryptAssetBinary, prepareAssetBinary } from "./asset-binary";
 import { LawyerError } from "./service";
+import { hasLawyerStorageMeter } from "./storage-runtime";
 
 export type LawyerAssetDependencies = {
   environment: "preview" | "production";
@@ -66,6 +69,7 @@ type BlobRow = {
 };
 
 export function createLawyerAssetsService(core: V2Core, deps: LawyerAssetDependencies) {
+  const capacity = createV2StorageCapacityRepository(core, deps.environment);
   const repository = createV2LawyersRepository(core);
   const storage = createV2StorageRepository(core);
   const accounting = createV2AccountingRepository(core);
@@ -325,6 +329,18 @@ export function createLawyerAssetsService(core: V2Core, deps: LawyerAssetDepende
       const blobId = crypto.randomUUID();
       const reserved = await repository.readAsset(actor(ownerId), assetId);
       if (!reserved || !("request" in reserved)) throw new LawyerError("STALE_REVISION");
+      const binary = await prepareAssetBinary(
+        core.cipher,
+        {
+          environment: deps.environment,
+          ownerId,
+          assetId,
+          assetRevision: expectedRevision,
+          blobId,
+          byteLength,
+        },
+        { name: reserved.request.name, mediaType: reserved.request.mediaType },
+      );
       const costs = deps.paidStorage?.(ownerId);
       if (!costs && !unmeteredTest) throw new LawyerError("PROCESSING_UNAVAILABLE");
       const operation = await core
@@ -366,6 +382,14 @@ export function createLawyerAssetsService(core: V2Core, deps: LawyerAssetDepende
           admission.actor.ownerId !== ownerId)
       )
         throw new LawyerError("PROCESSING_UNAVAILABLE");
+      const physical = hasLawyerStorageMeter(core)
+        ? capacity.prepareCapacity(admission?.actor ?? actor(ownerId), {
+            blobId,
+            ownerId,
+            objectKey: `private/${blobId}`,
+            maximumCipherBytes: binary.cipherBytes,
+          })
+        : undefined;
       if (
         !(await storage.prepareAssetUpload(
           admission?.actor ?? actor(ownerId),
@@ -377,6 +401,7 @@ export function createLawyerAssetsService(core: V2Core, deps: LawyerAssetDepende
             keyVersion: "asset_binary_v1",
           },
           admission?.paid,
+          physical,
         ))
       )
         throw new LawyerError("STALE_REVISION");
@@ -390,6 +415,9 @@ export function createLawyerAssetsService(core: V2Core, deps: LawyerAssetDepende
       let permit: StoragePermit | null = null,
         sent = false,
         recorded = false;
+      let writerPermit: WritePermit | null = null,
+        writerStopped = false,
+        responseEvidence: { objectKey: string; byteLength: number } | null = null;
       const authorize = async () => {
         try {
           await allow(ownerId);
@@ -423,21 +451,18 @@ export function createLawyerAssetsService(core: V2Core, deps: LawyerAssetDepende
         }
       };
       try {
-        const binary = await prepareAssetBinary(
-          core.cipher,
-          {
-            environment: deps.environment,
-            ownerId,
-            assetId,
-            assetRevision: expectedRevision,
-            blobId,
-            byteLength,
-          },
-          { name: reserved.request.name, mediaType: reserved.request.mediaType },
-        );
         const pipe =
           deps.fixedLengthStream?.(binary.cipherBytes) ?? new FixedLengthStream(binary.cipherBytes);
         const writer = pipe.writable.getWriter();
+        if (physical) {
+          writerPermit = capacity.prepareWrite({
+            blobId,
+            objectKey: `private/${blobId}`,
+            byteLength: binary.cipherBytes,
+          });
+          if (!(await capacity.beginPreparedWrite(writerPermit, now())))
+            throw new LawyerError("PROCESSING_UNAVAILABLE");
+        }
         if (admission && costs) {
           permit = await costs.beforeDispatch(admission, authorize);
           if (!permit) throw new LawyerError("PROCESSING_UNAVAILABLE");
@@ -462,6 +487,19 @@ export function createLawyerAssetsService(core: V2Core, deps: LawyerAssetDepende
           await Promise.allSettled([saved, encoded]);
           throw error;
         }
+        if (!receipt || receipt.key !== `private/${blobId}` || receipt.size !== binary.cipherBytes)
+          throw new LawyerError("ASSET_NOT_READY");
+        responseEvidence = { objectKey: receipt.key, byteLength: receipt.size };
+        if (
+          writerPermit &&
+          !(await capacity.confirmWriterStopped(
+            writerPermit,
+            { transport: "response", ...responseEvidence },
+            now(),
+          ))
+        )
+          throw new LawyerError("PROCESSING_UNAVAILABLE");
+        writerStopped = true;
         if (permit && costs) {
           recorded = true;
           await costs.after(permit, {
@@ -470,8 +508,6 @@ export function createLawyerAssetsService(core: V2Core, deps: LawyerAssetDepende
             observedAt: now(),
           });
         }
-        if (!receipt || receipt.key !== `private/${blobId}` || receipt.size !== binary.cipherBytes)
-          throw new LawyerError("ASSET_NOT_READY");
         if (!(await authorize())) throw new LawyerError("STALE_REVISION");
         const registration: BlobRegistration = {
           id: blobId,
@@ -515,9 +551,34 @@ export function createLawyerAssetsService(core: V2Core, deps: LawyerAssetDepende
         };
       } catch (error) {
         let failure = error;
+        await withFileStorageCleanup(core, async () => {
+          if (writerPermit && !writerStopped && (!sent || responseEvidence)) {
+            try {
+              if (
+                !(await capacity.confirmWriterStopped(
+                  writerPermit,
+                  responseEvidence
+                    ? { transport: "response", ...responseEvidence }
+                    : { transport: "not_sent" },
+                  now(),
+                ))
+              )
+                failure = new LawyerError("PROCESSING_UNAVAILABLE");
+            } catch {
+              failure = new LawyerError("PROCESSING_UNAVAILABLE");
+            }
+          }
+          await storage.abandonAssetUpload(actor(ownerId), blobId).catch(() => false);
+          if (sent)
+            await storage
+              .requeueAssetUploadCleanup(actor(ownerId), capturedIntent)
+              .catch(() => null);
+        }).catch(() => {
+          failure = new LawyerError("PROCESSING_UNAVAILABLE");
+        });
         if (permit && costs && !recorded) {
           try {
-            await costs.after(permit, {
+            await notifyFileStorageFailure(core, costs, permit, {
               transport: sent ? "unknown" : "not_sent",
               definitiveNoCharge: !sent,
               observedAt: now(),
@@ -526,11 +587,8 @@ export function createLawyerAssetsService(core: V2Core, deps: LawyerAssetDepende
             failure = new LawyerError("PROCESSING_UNAVAILABLE");
           }
         }
-        await storage.abandonAssetUpload(actor(ownerId), blobId).catch(() => false);
         // A sent PUT may have produced a late object even when its reply failed.
         // Requeue the captured generation without another unbudgeted R2 HEAD.
-        if (sent)
-          await storage.requeueAssetUploadCleanup(actor(ownerId), capturedIntent).catch(() => null);
         throw failure;
       }
     },

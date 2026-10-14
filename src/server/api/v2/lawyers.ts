@@ -17,6 +17,7 @@ import {
   type LawyerDependencies,
   LawyerError,
 } from "../../modules/lawyers/service";
+import { lawyerStorageRequestCore } from "../../modules/lawyers/storage-runtime";
 import { type ApiEnvironment, errorBody } from "../errors";
 
 export function privateLawyerApi() {
@@ -223,9 +224,12 @@ export function createLawyersApi(
     return createLawyersService(core, await options.dependencies?.(env, core, ownerId));
   };
   const assets = async (env: Env, ownerId: string) => {
-    const core = createV2Core(env.DB, await createCaseDataCipher(env), {
-      monthlyBudgetCapEnabled: env.MONTHLY_BUDGET_CAP_ENABLED !== "false",
-    });
+    const core = lawyerStorageRequestCore(
+      createV2Core(env.DB, await createCaseDataCipher(env), {
+        monthlyBudgetCapEnabled: env.MONTHLY_BUDGET_CAP_ENABLED !== "false",
+      }),
+      env.APP_ENV !== "local",
+    );
     return createLawyerAssetsService(core, {
       ...(await options.dependencies?.(env, core, ownerId)),
       environment: env.APP_ENV === "production" ? "production" : "preview",

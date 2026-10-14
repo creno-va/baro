@@ -455,7 +455,7 @@ export function createV2StorageCapacityRepository(
         const current = currentProjection(environment, now, core.monthlyBudgetCapEnabled);
         const row = await core
           .statement(
-            `UPDATE v2_physical_blob_bindings SET writer_state='running',writer_token=?,expected_cipher_bytes=? WHERE blob_id=? AND environment=? AND object_key=? AND state='held' AND writer_state='prepared' AND maximum_cipher_bytes>=? AND ${current.sql} AND EXISTS(SELECT 1 FROM v2_blobs b WHERE b.id=blob_id AND b.state='pending' AND b.object_key=v2_physical_blob_bindings.object_key AND b.cipher_bytes=?) RETURNING object_key`,
+            `UPDATE v2_physical_blob_bindings SET writer_state='running',writer_token=?,expected_cipher_bytes=? WHERE blob_id=? AND environment=? AND object_key=? AND state='held' AND writer_state='prepared' AND maximum_cipher_bytes>=? AND ${current.sql} AND EXISTS(SELECT 1 FROM v2_blobs b WHERE b.id=blob_id AND b.state='pending' AND b.object_key=v2_physical_blob_bindings.object_key AND (b.cipher_bytes=? OR (b.cipher_bytes=0 AND b.cipher_hash IS NULL AND ((b.kind IN ('verification','portfolio_original','profile_photo_original') AND b.visibility='private' AND b.key_version='asset_binary_v1' AND ?>b.logical_bytes AND ?<=b.logical_bytes+4100+ceil(b.logical_bytes/8388608.0)*16) OR (b.kind='public_copy' AND b.visibility='public' AND b.key_version IS NULL AND b.logical_bytes=?))))) RETURNING object_key`,
             [
               permit.token,
               permit.byteLength,
@@ -464,6 +464,9 @@ export function createV2StorageCapacityRepository(
               permit.objectKey,
               permit.byteLength,
               ...current.values,
+              permit.byteLength,
+              permit.byteLength,
+              permit.byteLength,
               permit.byteLength,
             ],
           )
