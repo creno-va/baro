@@ -2,10 +2,37 @@ import { Database } from "bun:sqlite";
 import { expect, test } from "bun:test";
 import {
   executionOutput,
+  migrationFailureCategory,
+  migrationFailureCode,
   migrationImport,
   migrationTableSql,
   pendingMigrations,
 } from "./apply-d1-migrations";
+
+test("migration diagnostics retain stable D1 codes without SQL, private rows or arbitrary errors", () => {
+  for (const [raw, expected] of [
+    ["private SQL: FOREIGN KEY constraint failed", "foreign_key"],
+    ["CHECK constraint failed: private row", "check_constraint"],
+    ["UNIQUE constraint failed: private column", "unique_constraint"],
+    ["no such table: private_table", "missing_schema"],
+    ["private table already exists", "schema_conflict"],
+    ["near private: syntax error", "sql_syntax"],
+    ["private token authentication error", "authorization"],
+    ["private SQL: too many SQL variables", "query_limit"],
+    ["private row IMMUTABLE_RUNTIME_EVIDENCE", "immutable_evidence"],
+    ["private unknown provider error", "unknown"],
+  ] as const) {
+    expect(migrationFailureCategory(raw)).toBe(expected);
+  }
+  expect(migrationFailureCode(new Error("D1_MIGRATION_EXECUTION_FAILED"))).toBe(
+    "D1_MIGRATION_EXECUTION_FAILED",
+  );
+  expect(migrationFailureCode(new Error("D1_QUERY_OUTPUT_INVALID"))).toBe(
+    "D1_QUERY_OUTPUT_INVALID",
+  );
+  expect(migrationFailureCode(new Error("PRIVATE_ROW_OR_SQL"))).toBe("D1_MIGRATION_FAILED");
+  expect(migrationFailureCode({ message: "MIGRATION_HISTORY_GAP" })).toBe("D1_MIGRATION_FAILED");
+});
 
 test("SQL-file import preserves multi-statement triggers and records the same atomic migration", async () => {
   const db = new Database(":memory:");
