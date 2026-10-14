@@ -294,7 +294,7 @@ export function createLlmGateway(
           const status = providerStatus(error);
           options.observeFailure?.({
             phase,
-            category: dependencyCategory(error),
+            category: timedOut ? "provider_timeout" : dependencyCategory(error),
             httpStatus: status,
           });
           try {

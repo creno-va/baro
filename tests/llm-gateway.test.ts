@@ -205,6 +205,7 @@ test("transient/correction combined budget, strict unknown fields, credit refusa
     "MODEL_UNAVAILABLE",
   );
   calls = 0;
+  const timeoutFailures: unknown[] = [];
   const timeout = createLlmGateway(
     {
       AI_GATEWAY_ID: "synthetic",
@@ -215,12 +216,15 @@ test("transient/correction combined budget, strict unknown fields, credit refusa
         },
       },
     },
-    { timeoutMs: 5 },
+    { timeoutMs: 5, observeFailure: (failure) => timeoutFailures.push(failure) },
   );
   await expect(timeout.call("screening", {}, "safe", async () => true)).rejects.toThrow(
     "MODEL_UNAVAILABLE",
   );
   expect(calls).toBe(1);
+  expect(timeoutFailures).toEqual([
+    { phase: "screening", category: "provider_timeout", httpStatus: null },
+  ]);
 });
 test("critical policy/citation findings and prohibited output fail closed without correction", async () => {
   const retrieval = {

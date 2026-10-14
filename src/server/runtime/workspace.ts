@@ -300,6 +300,9 @@ export async function runWorkspaceRuntime(
           return createLlmGateway(env, {
             attemptLedger: ledger,
             observeFailure: reportProviderFailure,
+            // Observed model responses can exceed one minute. Each phase still
+            // fits its renewed five-minute lease; timeout never retries a live call.
+            timeoutMs: 120000,
           }).call(phase, input, requestId, reserve, reserveCorrection, currentId);
         },
       };
