@@ -1,6 +1,26 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
+import type { DirectoryItem, DirectoryPage } from "../../src/contracts/v2";
 import { publicLawyer } from "../fixtures/contracts/v2";
+
+const directoryLawyer: DirectoryItem = {
+  id: publicLawyer.id,
+  revision: publicLawyer.approvedRevision,
+  name: publicLawyer.content.name,
+  officeName: publicLawyer.content.office.name,
+  introduction: publicLawyer.content.introduction,
+  region: publicLawyer.content.office.region,
+  practiceAreas: publicLawyer.content.legalFields,
+  photoUrl: `/api/v2/lawyers/${publicLawyer.id}/assets/${publicLawyer.content.photoAssetId}`,
+  photoAssetId: publicLawyer.content.photoAssetId,
+  verificationStatus: "verified",
+};
+const directoryPage = (items: DirectoryItem[] = []): DirectoryPage => ({
+  items,
+  nextCursor: null,
+  expiresAt: "2099-01-01T00:00:00Z",
+  rotation: { day: "2026-10-14", algorithm: "daily_sha256_pivot_v1" },
+});
 
 test("directory filters, empty supply, approved detail and office-only contact work at 320px", async ({
   page,
@@ -9,8 +29,6 @@ test("directory filters, empty supply, approved detail and office-only contact w
   await page.route("**/api/v2/lawyers**", (route) => {
     const url = new URL(route.request().url());
     seen.push(url);
-    if (url.pathname === "/api/v2/lawyers/self-service")
-      return route.fulfill({ json: { items: [], nextCursor: null } });
     if (url.pathname.startsWith("/api/v2/lawyers/self-service/"))
       return route.fulfill({ status: 404, json: {} });
     if (url.pathname.includes("/assets/"))
@@ -21,17 +39,11 @@ test("directory filters, empty supply, approved detail and office-only contact w
           "base64",
         ),
       });
-    if (url.pathname !== "/api/v2/lawyers") return route.fulfill({ json: publicLawyer });
-    return route.fulfill({
-      json: {
-        schemaVersion: "2",
-        snapshotId: "synthetic-directory",
-        rotation: "disclosed_rotation",
-        expiresAt: "2026-10-06T00:05:00Z",
-        items: url.searchParams.get("region") === "jeju" ? [] : [publicLawyer],
-        nextCursor: null,
-      },
-    });
+    if (url.pathname === "/api/v2/lawyers/directory")
+      return route.fulfill({
+        json: directoryPage(url.searchParams.get("region") === "jeju" ? [] : [directoryLawyer]),
+      });
+    return route.fulfill({ json: publicLawyer });
   });
   await page.setViewportSize({ width: 320, height: 760 });
   await page.goto("/lawyers");
@@ -67,21 +79,8 @@ test("directory filters, empty supply, approved detail and office-only contact w
 });
 test("directory transport failure can be retried without stale results", async ({ page }) => {
   let fail = true;
-  await page.route("**/api/v2/lawyers**", (route) =>
-    new URL(route.request().url()).pathname === "/api/v2/lawyers/self-service"
-      ? route.fulfill({ json: { items: [], nextCursor: null } })
-      : fail
-        ? route.fulfill({ status: 503, json: {} })
-        : route.fulfill({
-            json: {
-              schemaVersion: "2",
-              snapshotId: "synthetic-directory",
-              rotation: "disclosed_rotation",
-              expiresAt: "2026-10-06T00:05:00Z",
-              items: [],
-              nextCursor: null,
-            },
-          }),
+  await page.route("**/api/v2/lawyers/directory?*", (route) =>
+    route.fulfill(fail ? { status: 503, json: {} } : { json: directoryPage() }),
   );
   await page.goto("/lawyers");
   await expect(page.getByRole("alert")).toBeVisible();
@@ -106,21 +105,10 @@ test("URL restores before input; a slow initial response cannot erase fast edits
   const initialGate = new Promise<void>((resolve) => {
     releaseInitial = resolve;
   });
-  await page.route("**/api/v2/lawyers**", async (route) => {
+  await page.route("**/api/v2/lawyers/directory?*", async (route) => {
     const url = new URL(route.request().url());
-    if (url.pathname.endsWith("self-service"))
-      return route.fulfill({ json: { items: [], nextCursor: null } });
     if (url.searchParams.get("name") === "URL 초기 조건") await initialGate;
-    return route.fulfill({
-      json: {
-        schemaVersion: "2",
-        snapshotId: "synthetic-search",
-        rotation: "disclosed_rotation",
-        expiresAt: "2026-10-07T00:05:00Z",
-        items: [],
-        nextCursor: null,
-      },
-    });
+    return route.fulfill({ json: directoryPage() });
   });
   await page.goto("/lawyers?name=URL%20초기%20조건&region=busan&legalField=civil", {
     waitUntil: "commit",
