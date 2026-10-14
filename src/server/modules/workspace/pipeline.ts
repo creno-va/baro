@@ -80,6 +80,15 @@ const prohibited = (text: string) =>
     text,
   );
 
+const factualPreparationRefusal = "소송 전략은 제공하지 않으며 사실과 자료 정리를 돕겠습니다.";
+function prohibitedChatText(text: string) {
+  if (privateIdentifiers(text)) return true;
+  const [opening, ...remaining] = text.trim().split(/\r?\n/u);
+  // Only this exact standalone opening is a known refusal, not strategy.
+  // Keep every other line under the guard and send the full original to audit.
+  return prohibited(opening === factualPreparationRefusal ? remaining.join("\n") : text);
+}
+
 function sourceText(context: WorkspaceContext, ref: V2FactReference) {
   if (ref.kind === "intake_narrative") return context.intake.narrative;
   if (ref.kind === "intake_answer") {
@@ -327,7 +336,7 @@ export function createWorkspacePipeline(
             entry.factIds.some((id) => !ids.has(id)) ||
             prohibited(entry.event),
         ) ||
-        prohibited(draft.text) ||
+        prohibitedChatText(draft.text) ||
         draft.parties.some((party) => prohibited(JSON.stringify(party)))
       )
         throw new WorkspaceOutputPolicyError("prohibited_content");

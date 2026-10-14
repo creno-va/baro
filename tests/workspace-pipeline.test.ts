@@ -75,6 +75,171 @@ function pipeline(reply: (phase: Phase, input: unknown) => unknown | Promise<unk
   };
 }
 
+function confirmedChatContext(): WorkspaceContext {
+  const saved = context();
+  const summary = {
+    schemaVersion: "2" as const,
+    revision: 1,
+    intakeRevision: saved.intake.revision,
+    createdAt: "2026-10-14T00:00:00.000Z",
+    overview: "합성 자료 정리",
+    facts: [],
+    parties: [],
+    unknowns: [],
+    notices: ["합성 검증"],
+  };
+  return {
+    ...saved,
+    intake: { ...saved.intake, status: "confirmed", confirmedSummaryRevision: 1 },
+    confirmedSummary: summary,
+    latestMessage: {
+      schemaVersion: "2",
+      id: "synthetic_message",
+      operationId: "synthetic_operation",
+      workspaceRevision: 1,
+      createdAt: summary.createdAt,
+      role: "user",
+      text: "자료 정리에 관해 알려 주세요.",
+      selectedFileIds: [],
+    },
+  };
+}
+
+const chatText = (text: string) => ({
+  text,
+  references: [],
+  warnings: [],
+  facts: [],
+  actions: [],
+  parties: [],
+  requestedSources: [],
+  sourceClaims: [],
+  timeline: [],
+});
+
+test("exact standalone strategy refusal reaches audit with its full original text", async () => {
+  const safe = "소송 전략은 제공하지 않으며 사실과 자료 정리를 돕겠습니다.";
+  const { value, calls } = pipeline((phase) =>
+    phase === "workspace_audit" ? approved : chatText(safe),
+  );
+  expect((await value.chat(confirmedChatContext(), "synthetic_refusal")).text).toBe(safe);
+  expect(calls.map((call) => call.phase)).toEqual(["workspace_chat", "workspace_audit"]);
+  expect(calls.at(-1)?.input).toMatchObject({ draft: { text: safe } });
+});
+
+test("exact refusal opening preserves factual preparation and full audit input", async () => {
+  const safe =
+    "소송 전략은 제공하지 않으며 사실과 자료 정리를 돕겠습니다.\n보유 자료와 아직 확인하지 못한 사실을 구분할 수 있습니다.";
+  const { value, calls } = pipeline((phase) =>
+    phase === "workspace_audit" ? approved : chatText(safe),
+  );
+  expect((await value.chat(confirmedChatContext(), "synthetic_preparation")).text).toBe(safe);
+  expect(calls.at(-1)?.input).toMatchObject({ draft: { text: safe } });
+});
+
+test("factual preparation without the strategy phrase reaches the independent audit", async () => {
+  const safe = "법률 판단을 대신할 수는 없으며 사실과 자료 정리를 돕겠습니다.";
+  const { value, calls } = pipeline((phase) =>
+    phase === "workspace_audit" ? approved : chatText(safe),
+  );
+  expect((await value.chat(confirmedChatContext(), "synthetic_neutral")).text).toBe(safe);
+  expect(calls.map((call) => call.phase)).toEqual(["workspace_chat", "workspace_audit"]);
+});
+
+test.each(["fact", "action"])(
+  "chat refusal exception never applies to a structured %s",
+  async (field) => {
+    const refusal = "소송 전략은 제공하지 않으며 사실과 자료 정리를 돕겠습니다.";
+    const draft = {
+      ...chatText(refusal),
+      facts:
+        field === "fact"
+          ? [
+              {
+                id: "synthetic_fact",
+                text: refusal,
+                attribution: "ai_organization",
+                certainty: "uncertain",
+                significance: "neutral",
+                references: [],
+                conflictingFactIds: [],
+                userEdited: false,
+              },
+            ]
+          : [],
+      actions:
+        field === "action"
+          ? [
+              {
+                id: "synthetic_action",
+                revision: 1,
+                kind: "organize_materials",
+                title: "자료 정리",
+                instructions: refusal,
+                caution: "원문을 확인해 주세요.",
+                status: "todo",
+                factIds: [],
+                references: [],
+              },
+            ]
+          : [],
+    };
+    const { value, calls } = pipeline((phase) => (phase === "workspace_audit" ? approved : draft));
+    await expect(value.chat(confirmedChatContext(), "synthetic_structured")).rejects.toMatchObject({
+      reason: "prohibited_content",
+    });
+    expect(calls.map((call) => call.phase)).toEqual(["workspace_chat"]);
+  },
+);
+
+test.each([
+  "소송 전략으로 상대방에게 먼저 가압류를 예고하세요.",
+  "협상 전략을 세워 합의금을 높게 요구하세요.",
+  "승소 확률은 90%입니다.",
+  "변호사로서 반드시 승소한다고 말씀드립니다.",
+  "소송 전략은 제공하지 않으며 사실과 자료 정리를 돕겠습니다. 먼저 가압류를 예고하세요.",
+  "소송 전략은 제공하지 않으며 사실과 자료 정리를 돕겠습니다.\n협상 전략으로 합의금을 높게 요구하세요.",
+  '"소송 전략은 제공하지 않으며 사실과 자료 정리를 돕겠습니다."',
+  "‘소송 전략은 제공하지 않으며 사실과 자료 정리를 돕겠습니다.’",
+  "그는 소송 전략은 제공하지 않으며 사실과 자료 정리를 돕겠습니다.",
+  "소송 전략을 제공하지 않는 것은 아닙니다.",
+  "소송 전략은 제공하지 않으며 사실과 자료 정리를 돕겠습니다.라는 말은 사실이 아닙니다.",
+  "소송 전략은 제공하지 않으며 사실과 자료 정리를 돕겠습니다. 연락처는 synthetic@example.test입니다.",
+  "소송 전략은 제공하지 않으며 사실과 자료 정리를 돕겠습니다.\n연락처는 synthetic@example.test입니다.",
+  "소송 전략은 제공하지 않으며 사실과 자료 정리를 돕겠습니다.\n연락처는 010-1234-5678입니다.",
+  "소송 전략은 제공하지 않으며 사실과 자료 정리를 돕겠습니다.\n반드시 승소합니다.",
+])("deterministic guard withholds prohibited synthetic output: %s", async (text) => {
+  const { value, calls } = pipeline((phase) =>
+    phase === "workspace_audit" ? approved : chatText(text),
+  );
+  await expect(value.chat(confirmedChatContext(), "synthetic_unsafe")).rejects.toMatchObject({
+    reason: "prohibited_content",
+  });
+  expect(calls.map((call) => call.phase)).toEqual(["workspace_chat"]);
+});
+
+test.each([
+  "상대방에게 먼저 가압류를 예고해 합의금을 높게 요구하세요.",
+  "소송 전략은 제공하지 않으며 사실과 자료 정리를 돕겠습니다.",
+  "소송 전략은 제공하지 않으며 사실과 자료 정리를 돕겠습니다.\n상대방에게 먼저 가압류를 예고해 합의금을 높게 요구하세요.",
+])("a refusal cannot bypass independent audit rejection: %s", async (text) => {
+  const { value, calls } = pipeline((phase) =>
+    phase === "workspace_audit"
+      ? {
+          ...approved,
+          pass: false,
+          strategyDetected: true,
+          findings: [{ severity: "critical", code: "legal_strategy" }],
+        }
+      : chatText(text),
+  );
+  await expect(value.chat(confirmedChatContext(), "synthetic_audit")).rejects.toMatchObject({
+    reason: "audit_rejected",
+  });
+  expect(calls.map((call) => call.phase)).toEqual(["workspace_chat", "workspace_audit"]);
+  expect(calls.at(-1)?.input).toMatchObject({ draft: { text } });
+});
+
 test.each(["answered", "unknown", "skipped"] as const)(
   "the second follow-up replaces a repeated %s question without changing saved answers",
   async (status) => {
