@@ -1,6 +1,7 @@
 import { createCaseDataCipher } from "../../crypto";
 import { createV2Core } from "../../db/v2-core";
 import { createAssetProcessingExecution } from "../file-processing/asset-execution";
+import { createAssetTiming } from "../file-processing/asset-timing";
 import {
   type AssetProcessingParams,
   createAssetProcessingService,
@@ -19,6 +20,8 @@ export async function createAssetProcessingRuntime(
   instanceId: string,
   policy: ProcessingRuntimePolicy = {},
 ) {
+  const timing = createAssetTiming();
+  timing.enter("initialization");
   if (!env.CASE_PRIVATE_R2 || !env.FILE_PROCESSOR) throw new ProcessingError("STORAGE_UNAVAILABLE");
   const core = createV2Core(env.DB, await createCaseDataCipher(env), {
     applicationCostLimitsEnabled: env.APPLICATION_COST_LIMITS_ENABLED !== "false",
@@ -120,12 +123,18 @@ export async function createAssetProcessingRuntime(
     processor,
     costs,
     openOriginal: source.openOriginal,
+    timing,
   });
-  return createAssetProcessingExecution(core, params, {
+  const execution = createAssetProcessingExecution(core, params, {
     environment,
     instanceId,
     initialAttemptId: initial,
     completed: assets.completed,
     sanitize: assets.sanitize,
+    timing,
   });
+  // Factory setup happens before the Workflow step is scheduled. Do not count
+  // scheduling delay as initialization or as part of the sanitizer step.
+  timing.leave();
+  return execution;
 }

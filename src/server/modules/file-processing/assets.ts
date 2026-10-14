@@ -15,6 +15,7 @@ import { hasCurrentConsent } from "../consent/service";
 import { hex } from "../files/binary";
 import type { PrivateBucket } from "../files/service";
 import { boundedReader } from "../lawyers/asset-binary";
+import type { AssetTiming } from "./asset-timing";
 import { ProcessingError } from "./protocol";
 import { createSanitizedEncoder, decryptSanitizedFrame } from "./sanitized-binary";
 import type { SanitizedManifest } from "./sanitized-protocol";
@@ -45,6 +46,7 @@ export function createAssetProcessingService(
     processor?: ProcessorTransport;
     costs: ProcessingCosts;
     clock?: () => string;
+    timing?: AssetTiming;
     fixedLength?: (size: number) => {
       readable: ReadableStream<Uint8Array>;
       writable: WritableStream<Uint8Array>;
@@ -317,6 +319,7 @@ export function createAssetProcessingService(
   return {
     completed,
     async sanitize(input: AssetProcessingParams, lease: JobLease, signal: AbortSignal) {
+      options.timing?.enter("source_authorization");
       const params = assetProcessingParamsSchema.parse(input);
       if (signal.aborted) throw new ProcessingError("STALE_REVISION");
       const completedFence =
@@ -334,6 +337,7 @@ export function createAssetProcessingService(
       if (!source || signal.aborted) throw new ProcessingError("STALE_REVISION");
       const recovered = await storedReceipt(params, lease);
       if (recovered) {
+        options.timing?.enter("publication");
         if (
           !(await authorize(access)) ||
           recovered.originalId !== source.original_blob_id ||
@@ -390,6 +394,7 @@ export function createAssetProcessingService(
       }
       let original: Awaited<ReturnType<NonNullable<typeof options.openOriginal>>>;
       try {
+        options.timing?.enter("original_open");
         original = await options.openOriginal(params, access.authorize);
         await options.costs.after(originalPermit, { transport: "response" });
       } catch {
@@ -429,10 +434,12 @@ export function createAssetProcessingService(
         byteLength: number;
       } | null = null;
       try {
+        options.timing?.enter("processor_roundtrip");
         const first = await stream.next();
         if (first.done || first.value.type !== "manifest")
           throw new ProcessingError("FILE_REJECTED");
         const manifest: SanitizedManifest = first.value.manifest;
+        options.timing?.enter("output_preparation");
         if (
           (value.kind === "pdf") !== (manifest.format === "pdf") ||
           (source.purpose === "profile_photo" && manifest.format !== "jpeg")
@@ -581,6 +588,7 @@ export function createAssetProcessingService(
         }
         const fixed =
           options.fixedLength?.(wire.cipherBytes) ?? new FixedLengthStream(wire.cipherBytes);
+        options.timing?.enter("output_stream_put");
         const pumping = body.pipeTo(fixed.writable);
         putSent = true;
         const [receipt] = await Promise.all([
@@ -605,6 +613,7 @@ export function createAssetProcessingService(
           objectKey: receipt.key,
           byteLength: receipt.size,
         };
+        options.timing?.enter("publication");
         writerStopped = await capacity.confirmWriterStopped(
           writer,
           responseEvidence,
@@ -648,6 +657,7 @@ export function createAssetProcessingService(
           revision: params.assetRevision + 1,
         };
       } catch (error) {
+        options.timing?.enter("cleanup");
         let failure = error;
         // A confirmed response or a locally unsent write can close only this
         // writer token. Unknown PUT completion retains its physical obligation.
@@ -687,6 +697,7 @@ export function createAssetProcessingService(
         if (failure instanceof ProcessingError) throw failure;
         throw new ProcessingError("FILE_PROCESSING_FAILED");
       } finally {
+        options.timing?.enter("cleanup");
         await stream.return(undefined);
         await original.body.cancel().catch(() => {});
       }

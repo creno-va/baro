@@ -376,6 +376,23 @@ test("asset runtime checks current consent and source atomically with 62 fewer D
     expect(separateConsentReads).toBe(8);
     expect(f.nativeCalls()).toBe(1);
     expect(f.bucket.calls.put).toBe(2);
+    const stageTimings = f.runtime.timings();
+    expect(stageTimings.map(({ stage }) => stage)).toEqual([
+      "initialization",
+      "lease_acquisition",
+      "source_authorization",
+      "original_open",
+      "processor_roundtrip",
+      "output_preparation",
+      "output_stream_put",
+      "publication",
+      "cleanup",
+    ]);
+    for (const timing of stageTimings) {
+      expect(Object.keys(timing).sort()).toEqual(["durationMs", "stage"]);
+      expect(Number.isSafeInteger(timing.durationMs)).toBe(true);
+      expect(timing.durationMs).toBeGreaterThanOrEqual(0);
+    }
   }));
 
 for (const mutation of [

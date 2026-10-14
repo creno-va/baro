@@ -3,6 +3,7 @@ import type { V2Core } from "../../db/v2-core";
 import { stopExpiredUndispatchedJob } from "../../db/v2-expired-undispatched-job";
 import { createV2JobsRepository, jobAlive } from "../../db/v2-jobs";
 import type { JobLease } from "../../db/v2-workspace";
+import type { AssetTiming } from "./asset-timing";
 import type { AssetProcessingParams } from "./assets";
 import { ProcessingError } from "./protocol";
 
@@ -16,6 +17,7 @@ export function createAssetProcessingExecution(
     instanceId: string;
     initialAttemptId: string | null;
     clock?: () => string;
+    timing?: AssetTiming;
     completed: (
       input: AssetProcessingParams,
     ) => Promise<{ status: "ready"; assetId: string; revision: number } | null>;
@@ -35,7 +37,9 @@ export function createAssetProcessingExecution(
   });
   let lease: JobLease | null = null;
   return {
+    timings: () => options.timing?.finish() ?? [],
     async run(signal: AbortSignal) {
+      options.timing?.enter("lease_acquisition");
       const completed = await options.completed(params);
       if (completed) return completed;
       if (signal.aborted) throw new ProcessingError("JOB_TIMEOUT");
@@ -93,6 +97,7 @@ export function createAssetProcessingExecution(
       return options.sanitize(params, lease, signal);
     },
     async fail(error: unknown) {
+      options.timing?.enter("failure_record");
       const code = error instanceof ProcessingError ? error.code : "FILE_PROCESSING_FAILED";
       if (lease)
         await jobs.fail(
