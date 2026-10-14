@@ -1,7 +1,7 @@
 # 프리베타 MVP 실제 인수 추적
 
 - 시작: 2026-10-14 KST, #71. 직접 사용자 지시에 따른 preview 우선 검증.
-- 작업 브랜치: `codex/71-preview-mvp-completion` → `codex/71-live-verification`.
+- 작업 브랜치: `codex/71-preview-mvp-completion` → `codex/71-live-verification` → `codex/71-preview-validation`.
 - 시작 시 main: `f44f8d09c79ab402c08b0b85cfb014c632048a01`.
 - 시작 시 실제 preview live/ready: `1059887ae8ad1998b6e5432c6ba2da4d5ed4679e`, schema `0015_cost_observation_only`.
 - 이전 세션의 성공은 재검증 출발점이며 현재 인수 결과가 아니다. production 반복 검증/배포는 preview 핵심 흐름 완료 후 같은 SHA로만 한다.
@@ -19,11 +19,11 @@
 | F006 / UI07 | 사실·인물·타임라인·다음 행동 편집, 날짜 정밀도, 새로고침 유지 | 미확인 |
 | F007~008 / UI09~13 | 문서·이미지·음성·영상 업로드/실제 처리, 조회·다운로드·교정·제외·coverage | 미확인 |
 | F009 / UI14~16,29,35 | 새 리포트·마스킹/제외·HTML/PDF/선택 ZIP, 실제 파일 내용·열기 | 미확인 |
-| F010~011 / UI19~20 | 변호사 자기 프로필·사진·텍스트/이미지/PDF 포트폴리오 저장·재접속·미리보기·공개·철회 | d2c825f 실제 Kakao 변호사 로그인, 합성 프로필 저장(관측 상한3.534초)·새로고침 후 이름/사무실/연락처/지역 유지 확인. 텍스트 포트폴리오 저장·미리보기·실제 공개 및 익명 상세 본문 확인. 재로그인 후 텍스트 유지, 비공개 전환 뒤 로그아웃·익명 상세 차단·목록 제외 확인. 사진/PDF 업로드 무반응(P07) 수정 후 재확인 대기 |
+| F010~011 / UI19~20 | 변호사 자기 프로필·사진·텍스트/이미지/PDF 포트폴리오 저장·재접속·미리보기·공개·철회 | d2c825f 실제 Kakao 변호사 로그인, 합성 프로필 저장(관측 상한3.534초)·새로고침 후 이름/사무실/연락처/지역 유지 확인. 텍스트 포트폴리오 저장·미리보기·실제 공개 및 익명 상세 본문 확인. 미저장 변경 계속 편집/버리기·저장 값 복원 확인. 재로그인 후 텍스트 유지, 비공개 전환 뒤 로그아웃·익명 상세 차단·목록 제외 확인. 71892c5 사진 접수·busy·서버 작업 생성 확인, 정제 실패(P09). PDF 실제 재확인 대기 |
 | F012 / UI17~18 | 익명 목록/프로필, 검색/필터/페이지/부족 결과, 연락/길찾기 URL | d2c825f 익명 목록·합성 프로필 상세·이름+서울+부동산 결합 검색(관측 상한1.352초)·새로고침 조건 유지·불일치 형사 필터 결과 없음·초기화 복구 성공. 이메일 href 확인, example.org 외부 상담·네이버/카카오/Google 지도 실제 화면 이동과 합성 목적지 전달 확인. 실제 메시지/전화 미발송. 복수 페이지 경계는 미확인 |
 | F014 / UI24~26 | 합성 자료/사건 삭제·재인증·늦은 완료 차단·legacy 보존 | 미확인 |
 | F015 | 비용 관측 누락/만료/금액 비차단, quota/물리/보안 유지, 실제 원장 보존 | 코드·외부 설정 조사 중 |
-| UI27~28,30~34 | 화면 폭·키보드·CSP·동의/재동의·역할/소유권·새로고침 | d2c825f 고객 역할로 /lawyer 직접 진입 시 편집 숨김·변호사 로그인 안내 확인. 다른 권한/소유권 시나리오 미확인 |
+| UI27~28,30~34 | 화면 폭·키보드·CSP·동의/재동의·역할/소유권·새로고침 | d2c825f 고객 역할로 /lawyer 직접 진입 시 편집 숨김·변호사 로그인 안내 확인. 로그아웃 후 /app 로그인 요구, 익명 자기 프로필·private assets API401 확인. 비공개 public profile API404 확인. 다른 소유권 시나리오 미확인 |
 | 최종 릴리스 | 변경별 검사·최종 SHA full·preview 전체 핵심 흐름·동일 SHA production | 미완료; production 배포 미실행 |
 
 ## 단일 문제 목록
@@ -32,14 +32,18 @@
 | --- | --- | --- | --- | --- | --- |
 | P05 | Kakao OAuth 후 `/login?error=oauth&error=account_not_linked`; 로그인 불가, 일반 재시도 안내만 표시 | `disableImplicitLinking=true`가 검증된 동일 이메일도 차단. 중복 error query에서 첫 값만 읽음 | PR252 병합: 양쪽 검증된 이메일 연결·owner 보존·중복 오류 안내. DB20검사175assert와 로컬 브라우저 callback 안내 검사 통과 | preview1059887에서 재현 → d2c825f 수정 배포 | Safari 실제 Kakao 로그인 성공(클릭→callback 화면4.95초 상한, UI 자동화 포함), 기존 동의 완료·10/7 기존 사건 목록 유지. DB 삭제 없음 |
 | P01 | 기존 법률 질의 POLICY_REJECTED; 답변 미제공. 현재 preview에서 합성 법률 질문으로 재현 예정 | 미확정. 제공자 거절·출처·draft/audit 정책을 구분해야 함 | PR250 진단 및 PR254 검증된 sourceClaims의 공식 출처 반영 배포. 실제 법률 질문 재현 후 policyReason 확인 필요 | d2c825f | 미확인 |
-| P02 | 간헐 작업 접수 실패 및 native full 실패. 실제 UI 실패와 테스트 실패를 분리 조사 | native 과거 실패는 HTTP202·lease 획득 뒤 admission INTERNAL_ERROR. true/false 비용 모드 모두 발생. 단순 접수 거절/lease renew false와 다름. 정확한 throw 위치 미확정 | PR251 실패 진단/fixture 수정 배포. 이미 통과한 반복 검사는 중단 | d2c825f | 이전 full 실패는 미해결 유지. 실제 UI 실패 원인은 별도 재현 필요 |
-| P03 | 비용 관측 원본 없는 신규 환경/필수 SKU 누락 시 기능 차단 가능 | `processing-proofs`가 가격/funding head·SKU를 필수 요구하고 기존 hold의 금액/FK가 실행과 결합 | PR253 비용 정산 DB 장애 격리 병합. additive0016 기술 admission·선택적 비용 관측 분리 구현 중. 원장/hold와 실제 값 보존 | PR253 정산 장애 격리는 d2c825f 배포; 0016 미배포 | 현행 preview 가격/재원은 존재하므로 누락 조건 성공으로 기록하지 않음 |
+| P02 | 간헐 작업 접수 실패 및 native full 실패. 실제 UI 실패와 테스트 실패를 분리 조사 | 과거 실패는 HTTP202·lease 획득 뒤 admission INTERNAL_ERROR. 71892c5 full에서는 비용 false 변형의 **false 전환 전 legacy true baseline** 첫 질문이 failed. runtime diagnostic unclassified/unknown이며 정확한 throw 위치 미확정 | PR251 진단 배포. 새 실패의 단계·시간·호출 수·안전한 DB 상태를 수집하는 test-only 진단 준비. timeout 변경 없음 | 71892c5 | full38582027656의 bun test 2099 pass/1 fail. 진단 추가 후 native 1회 2 pass/470assert/5.34초는 비재현이며 해결 증거 아님. 실제 UI 실패는 별도 확인 필요 |
+| P03 | 비용 관측 원본 없는 신규 환경/필수 SKU 누락 시 기능 차단 가능 | `processing-proofs`가 가격/funding head·SKU를 필수 요구하고 기존 hold의 금액/FK가 실행과 결합 | PR253 비용 정산 DB 장애 격리. PR259 additive0016 기술 admission·선택적 비용 관측 분리. 독립 검토와 DB/native/복구/빌드 검증 통과. 원장/hold와 실제 값 보존 | 71892c5·schema0016 배포 | 실제 schema 및 이전 reserved/ambiguous 원장 보존 확인. 현행 preview 가격/재원은 존재하므로 누락 조건 실제 성공으로 기록하지 않음 |
 | P04 | 주요 AI 흐름 장기 대기 | 이전60초 timeout→120초 변경만 존재. 실행 중 단계가 admission으로 남아 사용자에게 실제 진행 구간을 알리지 못함. 현재 실제 단계별 지연 원인은 미확정 | PR255 실제 generation/retrieval/audit/publication 단계·단계 소요시간·새로고침 진행 상태 배포 | d2c825f | stage 시간에는 admission/settlement 등 해당 구간 오버헤드 포함. 순수 provider latency로 표현하지 않음 |
-| P06 | 설정 화면이 false 비용 모드에서도 ‘처리 예산이나 용량에 따라 대기’라고 안내 | 공통 한도 안내에 과거 비용 정책 문구 잔존 | 실제 처리 용량·서비스 장애 안내로 수정 | d2c825f에서 재현; 수정 미배포 | 배포 후 재확인 예정 |
-| P07 | Safari 프로필 사진 image-markers.png 및 포트폴리오 text-two-pages.pdf 선택·업로드: 잠깐 busy 후 성공/실패 안내나 등록 자료 없이 종료 | file picker 복귀 focus의 인증 재조회와 upload verify가 같은 request counter를 공유. supersede 시 조용히 null 반환. 사진/PDF × preflight/postflight 경합 로컬 브라우저4개에서 원본 코드 실패 재현 | [#256](https://github.com/creno-va/baro/issues/256), PR257 최신 authoritative 인증 결과 추종과 owner/role/epoch 보호·작업별 대기 안내 수정. 원본 실패4개 포함 보호 반례·기존 흐름·진행 안내30개, quick/build 통과 | d2c825f 실제 UI 재현 | 두 종류 모두 재현, 자료 상태 확인 후에도 빈 목록. 업로드 성공으로 기록하지 않음 |
+| P06 | 설정 화면이 false 비용 모드에서도 ‘처리 예산이나 용량에 따라 대기’라고 안내 | 공통 한도 안내에 과거 비용 정책 문구 잔존 | PR258 실제 처리 용량·서비스 장애 안내로 수정 | 71892c5 | 배포 후 화면 재확인 예정 |
+| P07 | Safari 프로필 사진 image-markers.png 및 포트폴리오 text-two-pages.pdf 선택·업로드: 잠깐 busy 후 성공/실패 안내나 등록 자료 없이 종료 | file picker 복귀 focus의 인증 재조회와 upload verify가 같은 request counter를 공유. supersede 시 조용히 null 반환. 사진/PDF × preflight/postflight 경합 로컬 브라우저4개에서 원본 코드 실패 재현 | [#256](https://github.com/creno-va/baro/issues/256), PR257 최신 authoritative 인증 결과 추종과 owner/role/epoch 보호·작업별 대기 안내 수정. 원본 실패4개 포함 보호 반례·기존 흐름·진행 안내30개, quick/build 통과 | d2c825f 재현 → 71892c5 수정 배포 | 실제 사진은 busy 안내→자료 접수→Workflow 생성까지 진행하여 무응답 경합 해소 확인. 후속 정제 실패 P09로 전체 업로드 성공은 아님. PDF 실제 재확인 대기 |
+| P08 | chat의 정확한 거절 문장 ‘소송 전략은 제공하지 않으며 사실과 자료 정리를 돕겠습니다.’가 audit 전에 POLICY_REJECTED | 금칙 키워드가 명시적 거절 문장에도 적용됨. 합성 재현이며 P01 실제 외부 원인과 구분 | PR260 chat 첫 줄 완전 일치만 구분; 전체 개인정보/원문 audit 및 나머지 필드 검사 유지. focused121검사502assert, quick 통과 | 71892c5 | 실제 외부 재확인 미확인 |
+| P09 | 합성 PNG를 프로필 사진으로 선택하면 접수 후 자료 상태 확인에서 처리 실패. 실제 이미지 조회·연결 불가 | 23:41 KST 실제 정제 단계16.099초 후 FILE_PROCESSING_FAILED. Container Stopped, 상세 위치 Newark, VMStopped는 Workflow 종료5초 뒤 cleanup일 수 있어 원인으로 단정하지 않음. 15초 instance 확보 timeout은 가설이며 아직 미확정. 별도로 성공한 합성 sanitizer 응답 뒤 R2 PUT bound 누락으로 BUDGET_UNAVAILABLE가 발생하는 후속 결함은 로컬 재현 | 실제 Container/Workflow 증거 조사, 정제 결과의 물리 용량·writer 보호를 유지하는 저장 경로 수정 중. 동일 실패 조건의 업로드 반복 없음 | 71892c5 | 업로드 시작14:41:04.497Z, busy5.457초·접수 안내 관측33.268초(자동화 포함 상한). Workflow14:41:25~41Z, 총16.668초/정제16.099초. Workflow Completed는 제품 output stopped/FILE_PROCESSING_FAILED이므로 성공 아님 |
 
 ## 외부 설정 관측
 
+- 두 번째 preview `71892c5c6fa27175afd8557e7d4c738a0bfd27e8`: PR257~260 병합. [main CI38582009239](https://github.com/creno-va/baro/actions/runs/38582009239), [배포38582240689](https://github.com/creno-va/baro/actions/runs/38582240689) 성공. live/ready 동일 SHA·schema0016 확인. [full38582027656](https://github.com/creno-va/baro/actions/runs/38582027656)은 bun test 2099 pass/1 fail이며 이후 build/DB/browser/native 단계 미실행. production 미변경.
+- 0016 배포 뒤 비용 읽기 [run38582642732](https://github.com/creno-va/baro/actions/runs/38582642732), 2026-10-14T14:40:52.317Z: 이전 reserved0/ambiguous21895 및 funding 관측 보존. 최초 실제 사진 업로드 전 admissions0/unpricedAdmissions0/knownObservedKrw null. null을 비용0으로 표현하지 않으며 기존 physical capacity100GB를 재초기화하지 않음.
 - 첫 수정 preview: `d2c825fd593dcc18c056b825db463e91276100a2`, [main CI38577059453](https://github.com/creno-va/baro/actions/runs/38577059453), [배포38577245433](https://github.com/creno-va/baro/actions/runs/38577245433) 성공. live/ready 동일 SHA·schema0015를 직접 확인. PR252~255 포함이며 새0016 비용 분리는 아직 미포함.
 - 같은 d2c825f의 진행 단계 변경 뒤 필요한 native D1 회귀 `ai-runtime-workerd.test.ts` 1회: true/false2검사194assert 통과(4.43초), 외부 provider는 대역. 간헐 원인이 해결됐다는 증거로 확대하지 않고 동일 상태 반복 검사는 하지 않음.
 
