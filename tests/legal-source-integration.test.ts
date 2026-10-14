@@ -3,6 +3,7 @@ import { fixture, plan, type syntheticDetail } from "../scripts/benchmarks/retri
 import { createCaseDataCipher } from "../src/server/crypto";
 import { createV2Core } from "../src/server/db/v2-core";
 import { createV2OfficialSourceRepository } from "../src/server/db/v2-official-sources";
+import { referencesAuthorized } from "../src/server/db/v2-workspace";
 import { textHash } from "../src/server/modules/legal-retrieval/service";
 import { GUIDE_HOSTS } from "../src/server/modules/legal-retrieval/v2/registry";
 import { createV2LegalRetrieval } from "../src/server/modules/legal-retrieval/v2/service";
@@ -296,59 +297,83 @@ test("future promulgation fails even if list and detail agree", async () => {
   }
 });
 
-test.each(["quotation", "legal_explanation", "altered_quote", "missing_claim", "audit_rejected"])(
-  "product %s uses original/span integrity and independent claim review",
-  async (mode) => {
-    const f = await fixture(createV2LegalRetrieval);
-    try {
-      await f.service.retrieve(f.input([plan(["598"])]), f.access);
-      const { context } = await contextFor(f),
-        chunk = context.sourceRetrieval?.chunks[0];
-      if (!chunk) throw new Error("Missing synthetic source");
-      const quote =
-        mode === "legal_explanation"
-          ? "합성 자료의 내용은 원문 확인이 필요합니다."
-          : mode === "altered_quote"
-            ? "원문에 없는 합성 인용"
-            : chunk.source.body;
-      const ref = { kind: "official_source" as const, citationId: chunk.citation.id };
-      const draft = {
-        ...chatDraft(),
-        text: quote,
-        references: [ref],
-        sourceClaims:
-          mode === "missing_claim"
-            ? []
-            : [
-                {
-                  id: "synthetic_claim",
-                  kind: mode === "legal_explanation" ? "legal_explanation" : "quotation",
-                  text: quote,
-                  citationId: chunk.citation.id,
-                  startUtf16: 0,
-                  endUtf16: chunk.source.body.length,
-                },
-              ],
-      };
-      const pipeline = createWorkspacePipeline(
-        {
-          call: async (phase, input) => {
-            expect(JSON.stringify(input)).not.toContain('"sourceRetrieval"');
-            return phase === "workspace_audit"
-              ? { ...approved, pass: mode !== "audit_rejected" }
-              : draft;
-          },
+test.each([
+  "quotation",
+  "legal_explanation",
+  "claim_only",
+  "claim_reference_limit",
+  "altered_quote",
+  "missing_claim",
+  "audit_rejected",
+])("product %s uses original/span integrity and independent claim review", async (mode) => {
+  const f = await fixture(createV2LegalRetrieval);
+  try {
+    await f.service.retrieve(f.input([plan(["598"])]), f.access);
+    const { core, context } = await contextFor(f),
+      chunk = context.sourceRetrieval?.chunks[0];
+    if (!chunk) throw new Error("Missing synthetic source");
+    const quote =
+      mode === "legal_explanation"
+        ? "합성 자료의 내용은 원문 확인이 필요합니다."
+        : mode === "altered_quote"
+          ? "원문에 없는 합성 인용"
+          : chunk.source.body;
+    const ref = { kind: "official_source" as const, citationId: chunk.citation.id };
+    const draft = {
+      ...chatDraft(),
+      text: quote,
+      references:
+        mode === "claim_only"
+          ? []
+          : mode === "claim_reference_limit"
+            ? Array.from({ length: 100 }, () => ({
+                kind: "intake_narrative" as const,
+                intakeRevision: context.intake.revision,
+              }))
+            : [ref],
+      sourceClaims:
+        mode === "missing_claim"
+          ? []
+          : [
+              {
+                id: "synthetic_claim",
+                kind: mode === "legal_explanation" ? "legal_explanation" : "quotation",
+                text: quote,
+                citationId: chunk.citation.id,
+                startUtf16: 0,
+                endUtf16: chunk.source.body.length,
+              },
+            ],
+    };
+    const pipeline = createWorkspacePipeline(
+      {
+        call: async (phase, input) => {
+          expect(JSON.stringify(input)).not.toContain('"sourceRetrieval"');
+          return phase === "workspace_audit"
+            ? { ...approved, pass: mode !== "audit_rejected" }
+            : draft;
         },
-        { reserve: async () => true, invocation: () => crypto.randomUUID() },
-      );
-      if (["altered_quote", "missing_claim", "audit_rejected"].includes(mode))
-        await expect(pipeline.chat(context, "synthetic")).rejects.toThrow();
-      else expect((await pipeline.chat(context, "synthetic")).citations).toHaveLength(1);
-    } finally {
-      f.db.close();
+      },
+      { reserve: async () => true, invocation: () => crypto.randomUUID() },
+    );
+    if (
+      ["altered_quote", "missing_claim", "audit_rejected", "claim_reference_limit"].includes(mode)
+    )
+      await expect(pipeline.chat(context, "synthetic")).rejects.toThrow();
+    else {
+      const result = await pipeline.chat(context, "synthetic");
+      expect(result.citations).toEqual([chunk.citation]);
+      expect(result.references).toEqual([ref]);
+      if (mode === "claim_only") {
+        expect(await referencesAuthorized(core, f.guard, result.references)).toBe(true);
+        f.db.sqlite.query("DELETE FROM v2_citation_bindings WHERE id=?").run(chunk.citation.id);
+        expect(await referencesAuthorized(core, f.guard, result.references)).toBe(false);
+      }
     }
-  },
-);
+  } finally {
+    f.db.close();
+  }
+});
 
 for (const scenario of families) {
   test(`${scenario.family}/${scenario.sourceState}: real retrieval and chat retain attributed factual preparation`, async () => {
