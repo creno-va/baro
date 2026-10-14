@@ -1,6 +1,6 @@
 import { mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { z } from "zod";
 
 const migrationName = z.string().regex(/^\d{4}_[a-z0-9_]+\.sql$/);
@@ -34,6 +34,37 @@ const resultsSchema = z.array(
   z.object({ success: z.literal(true), results: z.array(z.record(z.string(), z.unknown())) }),
 );
 
+/** Only these categories may escape the CLI boundary; never forward SQL or row values. */
+export function migrationFailureCategory(output: string) {
+  if (/foreign key constraint failed/i.test(output)) return "foreign_key";
+  if (/check constraint failed/i.test(output)) return "check_constraint";
+  if (/unique constraint failed/i.test(output)) return "unique_constraint";
+  if (/no such (?:table|column|trigger)/i.test(output)) return "missing_schema";
+  if (/already exists/i.test(output)) return "schema_conflict";
+  if (/syntax error|incomplete input/i.test(output)) return "sql_syntax";
+  if (/not authorized|authentication error|authorization failed|code: 10000/i.test(output))
+    return "authorization";
+  if (/SQLITE_TOOBIG|too many (?:SQL variables|terms)|statement too long/i.test(output))
+    return "query_limit";
+  if (/IMMUTABLE_RUNTIME_EVIDENCE|STORAGE_PROJECTION_IMMUTABLE/i.test(output))
+    return "immutable_evidence";
+  return "unknown";
+}
+
+const failureCodes = new Set([
+  "D1_MIGRATION_EXECUTION_FAILED",
+  "D1_QUERY_OUTPUT_INVALID",
+  "MIGRATION_HISTORY_UNKNOWN",
+  "MIGRATION_HISTORY_GAP",
+  "MIGRATION_RECEIPT_MISSING",
+  "REMOTE_PERSIST_NOT_ALLOWED",
+]);
+export function migrationFailureCode(error: unknown) {
+  return error instanceof Error && failureCodes.has(error.message)
+    ? error.message
+    : "D1_MIGRATION_FAILED";
+}
+
 /** Remote file imports emit Wrangler progress text even with --json.
  * Their authoritative receipt is the separate ledger query, not CLI stdout. */
 export function executionOutput(args: string[], code: number, stdout: string) {
@@ -62,8 +93,9 @@ async function main() {
         ];
   if (!local && persist.length) throw new Error("REMOTE_PERSIST_NOT_ALLOWED");
   const base = [
-    "bunx",
-    "wrangler",
+    "node",
+    "--no-warnings",
+    resolve("node_modules/wrangler/wrangler-dist/cli.js"),
     "d1",
     "execute",
     "DB",
@@ -74,18 +106,45 @@ async function main() {
     "--json",
     "--yes",
   ];
-  const run = async (args: string[]) => {
-    const child = Bun.spawn([...base, ...args], { stdout: "pipe", stderr: "pipe" });
-    const [stdout, , code] = await Promise.all([
+  const run = async (
+    stage: "ledger-create" | "history-read" | "migration-import" | "receipt-read",
+    args: string[],
+  ) => {
+    console.log(JSON.stringify({ mode: "d1-migrate", stage, status: "started" }));
+    const child = Bun.spawn([...base, ...args], {
+      env: { ...process.env, WRANGLER_SEND_METRICS: "false" },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const [stdout, stderr, code] = await Promise.all([
       new Response(child.stdout).text(),
       new Response(child.stderr).text(),
       child.exited,
     ]);
-    // CLI/API diagnostics can contain query payloads. Expose only a stable code.
-    return executionOutput(args, code, stdout);
+    try {
+      // Direct Node execution preserves termination failures hidden by CLI wrappers.
+      if (child.signalCode) throw new Error("D1_MIGRATION_EXECUTION_FAILED");
+      return executionOutput(args, code, stdout);
+    } catch (error) {
+      console.error(
+        JSON.stringify({
+          mode: "d1-migrate",
+          stage,
+          status: "failed",
+          code: migrationFailureCode(error),
+          category: migrationFailureCategory(`${stdout}\n${stderr}`),
+          exitCode: code,
+          terminated: child.signalCode !== null,
+        }),
+      );
+      throw error;
+    }
   };
-  await run(["--command", migrationTableSql]);
-  const history = await run(["--command", "SELECT name FROM d1_migrations ORDER BY id"]);
+  await run("ledger-create", ["--command", migrationTableSql]);
+  const history = await run("history-read", [
+    "--command",
+    "SELECT name FROM d1_migrations ORDER BY id",
+  ]);
   const applied = history.flatMap((result) =>
     result.results.map((row) => migrationName.parse(row.name)),
   );
@@ -96,8 +155,9 @@ async function main() {
     for (const name of pending) {
       const path = join(directory, name);
       await writeFile(path, migrationImport(name, await Bun.file(join("drizzle", name)).text()));
-      await run(["--file", path]);
-      const recorded = await run([
+      console.log(JSON.stringify({ mode: "d1-migrate", migration: name }));
+      await run("migration-import", ["--file", path]);
+      const recorded = await run("receipt-read", [
         "--command",
         `SELECT name FROM d1_migrations WHERE name='${name}'`,
       ]);
@@ -113,11 +173,7 @@ async function main() {
 
 if (import.meta.main) {
   main().catch((error) => {
-    console.error(
-      error instanceof Error && /^[A-Z_]+$/.test(error.message)
-        ? error.message
-        : "D1_MIGRATION_FAILED",
-    );
+    console.error(migrationFailureCode(error));
     process.exitCode = 1;
   });
 }
