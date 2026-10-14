@@ -106,10 +106,7 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
     !error &&
     !failedOperation.current &&
     !recovering &&
-    !result?.failed &&
-    !lastInRound &&
-    !!result?.questions[index + 1] &&
-    round.questionIds.includes(result.questions[index + 1]?.id ?? "");
+    !!result?.questions[index + 1];
   const finalQuestion =
     index === (result?.questions.length ?? 0) - 1 &&
     (rounds.length >= roundLimit || result?.processingStage === "summary" || editing);
@@ -596,10 +593,10 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
                   <form
                     onSubmit={(event) => {
                       event.preventDefault();
-                      if (result.failed && !dirty) {
-                        if (result.retryable || result.canPrepareSummary) void advance();
-                      } else if (canNavigateSavedAnswer) {
+                      if (canNavigateSavedAnswer) {
                         navigateQuestion(index + 1);
+                      } else if (result.failed && !dirty) {
+                        if (result.retryable || result.canPrepareSummary) void advance();
                       } else void save(true);
                     }}
                   >
@@ -710,7 +707,8 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
                             (result.failed &&
                               !result.retryable &&
                               !result.canPrepareSummary &&
-                              !dirty) ||
+                              !dirty &&
+                              !canNavigateSavedAnswer) ||
                             !answerState ||
                             (answerState === "answered" && (!value.trim() || answerTooLong))
                           }
