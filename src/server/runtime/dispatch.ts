@@ -9,9 +9,10 @@ import {
 } from "../modules/file-processing/dispatch";
 import { createProfilePublicationDispatcher } from "../modules/lawyers/publication-dispatch";
 import { createWorkspaceDispatcher } from "../modules/workspace/dispatch";
+import { reconcileStoppedJobs } from "./job-recovery";
 
-/** Scheduled recovery only dispatches admitted immutable IDs. The coordinator
- * must have activated real funding, including fixed platform maintenance. */
+/** Recover confirmed terminal instances, then dispatch admitted immutable IDs.
+ * Funding policy applies only when application cost limits are enabled. */
 export async function reconcileV2Dispatch(env: Env) {
   try {
     const now = new Date().toISOString();
@@ -20,6 +21,10 @@ export async function reconcileV2Dispatch(env: Env) {
       monthlyBudgetCapEnabled: env.MONTHLY_BUDGET_CAP_ENABLED !== "false",
     });
     const environment = env.APP_ENV === "production" ? "production" : "preview";
+    const stopped = await reconcileStoppedJobs(core, {
+      files: env.FILE_PROCESSING,
+      workspaces: env.WORKSPACE_PROCESSING,
+    });
     const control =
       !core.applicationCostLimitsEnabled ||
       (await core
@@ -61,7 +66,7 @@ export async function reconcileV2Dispatch(env: Env) {
     const workspaces = await createWorkspaceDispatcher(core, {
       binding: env.WORKSPACE_PROCESSING,
     }).dispatch(4);
-    return { available: true, files, assets, profiles, workspaces };
+    return { available: true, files, assets, profiles, workspaces, stopped };
   } catch {
     // Payloads, SQL and provider failures must not enter scheduled logs.
     return { available: false };
