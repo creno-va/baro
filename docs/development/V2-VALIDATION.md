@@ -6,13 +6,13 @@
 각 PR의 정확한 head·CI와 로컬 SQL/native/browser 결과는 해당 PR/run에 기록한다.
 04f25f8의 같은 SHA CI·preview·production과 실제 일반 채팅·PDF/HTML은
 [receipt](https://github.com/creno-va/baro/issues/71#issuecomment-6168531808) 범위에서 확인했다.
-이번 비용 관측 분리 변경/0015는 구현 중이며 PR/배포 pending이다. 새로운 결과를 과거 SHA에 소급 적용하지 않는다. 정책 초안·placeholder는 #20/#70 초안 인수 범위이고
+비용 관측 분리/0015는 PR247에 병합했다. 통합 SHA의 배포·실제 결과는 #71 receipt를 따른다. 새로운 결과를 과거 SHA에 소급 적용하지 않는다. 정책 초안·placeholder는 #20/#70 초안 인수 범위이고
 법률 승인이나 공급자 계약 사실을 뜻하지 않는다.
 
 | 범위 | 구현 검증 | 실제 인수 잔여 |
 | --- | --- | --- |
 | 금액 차단 해제 | PR241과0014가04f25f8에 배포됨 | 실제 일반 채팅/PDF/HTML receipt 보존; 전체 경로 인수로 확대하지 않음 |
-| 비용 관측 분리 | 기존 proof가 있는 환경의 만료·월·IO 차단 분리 구현 중 | #57 PR/배포 pending, 가격 proof 없는 신규 환경 bootstrap 결합 잔여; 비용 정책 재도입 금지 |
+| 비용 관측 분리 | PR247 병합: 기존 proof가 있는 환경의 만료·월·IO 차단 분리, 원장/hold 보존 회귀 통과 | #57/#71 동일 SHA receipt; 가격 proof 없는 신규 환경 bootstrap 결합 잔여, 비용 정책 재도입 금지 |
 | 원본/공개 복사 | 인증/소유권·writer start/stop 응답 유실·late PUT·cleanup·native D1 상한 | #58 실제 inventory/projection·R2·실패 cleanup |
 | 검색 | 공개 최소 projection·한글/영문/특수문자·필터·cursor·철회/삭제·100/10,000 native | #231 bounded 원격 reindex·같은 SHA smoke |
 | 릴리스 | 후보/환경/종류/reference/hash 검증·두 운영자 정확한 SHA/만료·manual full checkout SHA | #19/#71 최종 full·같은 SHA preview/prod·실제 승인 |

@@ -2,8 +2,8 @@
 
 - 결정: 2026-10-14 사용자 직접 지시. [ADR-0015](../adr/0015-maintenance-and-operating-policy.md)의 후속 범위.
 - 적용: `APPLICATION_COST_LIMITS_ENABLED=false`인 preview/production과 해당 배포·운영 도구.
-- 구현 상태: `04f25f8`은 금액 비교 차단 해제까지 배포됐다. 아래 비용 관측과 실행의 완전한 분리는
-  `codex/57-prebeta-cost-observation-only`의 로컬 변경이며, 별도 PR·배포 증거 전에는 적용 완료로 쓰지 않는다.
+- 구현 상태: [PR247](https://github.com/creno-va/baro/pull/247)에서 기존 운영 환경의 비용 관측과
+  실행 분리를 병합했다. 배포와 실제 기능 결과는 #71의 동일 SHA receipt를 따르며 전체 MVP 완료와 구분한다.
 - 이번 변경 범위는 실제 가격/funding proof·물리 capacity가 이미 있는 운영 환경의 만료·월·비용 IO 병목 분리다.
   **가격 proof 자체가 없는 신규 환경 bootstrap에는 비용 증거 결합이 아직 남는다.** 가짜 가격을 만들지 않고
   nullable 관측 원장으로 분리하는 후속 구현이 필요하다. 이 잔여는 정책의 예외 승인이나 새 비용 gate의 근거가 아니다.
@@ -60,6 +60,14 @@ observe/refresh/과거 allocation 운영 도구는 관측 자료를 관리할 �
 
 ## 현재 실제 증거와 이번 변경의 경계
 
+PR247/248 통합 소스는 `1059887ae8ad1998b6e5432c6ba2da4d5ed4679e`다.
+[main CI](https://github.com/creno-va/baro/actions/runs/38569017779)와
+[preview](https://github.com/creno-va/baro/actions/runs/38569246700)는 성공했다.
+[production 실행](https://github.com/creno-va/baro/actions/runs/38569688687)의 최종 결과와
+실제 채팅/리포트 결과는 [#71](https://github.com/creno-va/baro/issues/71)에서 확인한다.
+[실행 승인 기록](https://github.com/creno-va/baro/issues/71#issuecomment-6169091362)은 이미 받은
+직접 사용자 지시를 해당 SHA에 적용한 기록이며 새로운 인간 승인이나 독립 외부 인수가 아니다.
+
 `04f25f804f02e0f221f4b34be0f03edc3d0afd00`에서 [CI](https://github.com/creno-va/baro/actions/runs/38563034585),
 [preview](https://github.com/creno-va/baro/actions/runs/38563613354),
 [production](https://github.com/creno-va/baro/actions/runs/38563979183) 배포가 성공했다.
@@ -73,8 +81,9 @@ HTML 14,572 bytes의 실제 파일 수신을 확인했다. 업로드와 선택 �
 법률 질의의 `POLICY_REJECTED`는 별도 정책 결과다.
 [종합 receipt](https://github.com/creno-va/baro/issues/71#issuecomment-6168531808)를 따른다.
 이 성공은 이번 비용 관측 분리 변경이나 전체 MVP 인수의 완료 증거가 아니다.
-후속 실제 법률 채팅의 `provider_model` enum 검증 실패는 별도 진단 중이다. timeout은
-확정 원인이 아니며 실제 provider/응답 검증 실패가 비용 분리만으로 해결됐다고 쓰지 않는다.
+후속 법률 채팅은 60초 timeout 뒤 약69초에 실제 모델 응답/정산이 도착한 것으로 확인됐다.
+[PR248](https://github.com/creno-va/baro/pull/248)은 작업 공간 모델 대기를120초로 늘리고
+`provider_timeout` 진단을 분리한다. 이전 `POLICY_REJECTED`나 다른 공급자 오류까지 같은 원인으로 단정하지 않는다.
 
 ## 외부 설정 관측 범위
 

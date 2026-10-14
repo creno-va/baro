@@ -12,7 +12,7 @@ M2/M3의 v1 구현과 M6의 동일 client/API mock UX 완료 이력을 유지한
 2. PR230→229·233/235/241과0014는04f25f8로 배포됐다. 비용 관측과 writer/cleanup·
    변호사 원본/공개 복사의 기술 경계를 분리한다. `APPLICATION_COST_LIMITS_ENABLED=false`에서
    금액·가격/FX/funding 누락/만료·월할당·refresh·유지비·비용 IO가 기능/배포를 막지 않는 것이
-   [현행 정책](../operations/PREBETA-COST-POLICY.md)이다. 이번 분리 구현은 PR/배포 pending이며
+   [현행 정책](../operations/PREBETA-COST-POLICY.md)이다. 분리 구현은 PR247에 병합했으며 배포·실제 결과는 #71 receipt를 따른다.
    새 환경 가격 proof bootstrap 결합은 잔여다. 사용자 재지시 전 비용 차단을 재도입하지 않는다.
 3. PR232의 후보 결합 증거와 정확한 SHA 운영자 승인, PR234의 D1 공개 projection/keyset 검색을
    적용한다. 디렉터리 원격 reindex·제한 smoke는 M5/#231로 추적한다.
