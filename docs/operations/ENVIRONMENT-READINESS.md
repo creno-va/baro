@@ -23,10 +23,11 @@
 
 ## 남은 실제 인수
 
-#27 인증 모듈은 환경별 실제 OAuth 성공·취소/만료·Turnstile·복귀와 모델 retry를 확인한다.
+#27 Google은 10/14 사용자 수동 검증 완료 확인으로 추가 재검사를 생략한다. Naver/Kakao와
+릴리스별 OAuth·Turnstile·복귀 및 모델 retry 증거는 별도이며 사용자 확인을 도구 receipt로 바꾸지 않는다.
 #63 법률 모듈은 10/14 로그인한 신청에서 법령·판례 JSON 목록/본문과 목적·도메인을 확인했다.
-공식 자가진단은 목록을 표시하지만 직접 인터넷 요청은 현재 OC로도 거부되며 `mobileYn=Y`에서만
-목록 표시 차이가 관찰됐다. [범위별 검증 기록](../quality/LEGAL-AUTH-VERIFICATION-2026-10-14.md)의
+공식 자가진단은 목록을 표시하지만 직접 인터넷 법령 요청은 현재 OC로도 거부되며 `mobileYn=Y`에서
+목록78건 schema/날짜·후보 선택을 확인했다. [범위별 검증 기록](../quality/LEGAL-AUTH-VERIFICATION-2026-10-14.md)의
 승인 범위·본문 JSON 조건을 담당기관에 확인하고, 실제 설정/조건 수정 뒤 bounded source
 tuple/span을 확보한다. 기관 안내 `update_pending`과 환경별 비밀값 일치·배포 Worker 성공은
 별도 미완료다. 기존 API 실패의 조건이 바뀌기 전 같은 호출을 반복하지 않는다.
