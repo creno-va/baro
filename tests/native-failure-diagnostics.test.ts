@@ -1,7 +1,8 @@
 import { expect, test } from "bun:test";
 import { Hono } from "hono";
 import { measureD1Work } from "./helpers/d1-work";
-import { nativeFailure } from "./helpers/native-failure";
+import { createNativeFailureHistory, nativeFailure } from "./helpers/native-failure";
+import { createNativeProgress } from "./helpers/native-progress";
 
 function database() {
   const state = { missing: false, reject: false, prepareReject: false };
@@ -128,4 +129,68 @@ test("D1 sync prepare and batch observation retain failure type while valid rows
     state: "failed",
     measurementMetadataPresent: false,
   });
+});
+
+test("a runtime failure survives the next successful request reset in the failure snapshot", async () => {
+  const f = database(),
+    requestFailures: unknown[] = [],
+    history = createNativeFailureHistory(),
+    emitted: unknown[] = [];
+  const measured = measureD1Work(f.binding, (error) => {
+    requestFailures.push(nativeFailure(error));
+    history.capture(error, measured.trace.operation);
+  });
+  f.state.missing = true;
+  await expect(measured.binding.prepare("synthetic").first()).rejects.toThrow();
+  // The canonical outage runtime is followed by latest-job GET before assertion.
+  requestFailures.length = 0;
+  measured.resetTrace();
+  f.state.missing = false;
+  expect(await measured.binding.prepare("synthetic").first<number>("value")).toBe(7);
+  const progress = createNativeProgress(true, {
+    emit: (snapshot) => emitted.push(snapshot),
+    schedule: () => 1,
+    cancel: () => {},
+  });
+  progress.observe(() => ({
+    databaseTrace: measured.trace,
+    databaseFailureHistory: history.snapshot(),
+  }));
+  progress.report("failure");
+  progress.finish(false);
+  expect(requestFailures).toEqual([]);
+  expect(emitted).toHaveLength(1);
+  expect(emitted[0]).toMatchObject({
+    lastMeasuredPreviewTrace: { operation: "first", state: "completed" },
+    databaseFailureHistory: {
+      first: [{ operation: "first", details: [{ knownFailure: "Native D1 measurement missing" }] }],
+      omitted: 0,
+    },
+  });
+});
+
+test("failure history is bounded, immutable to observers and cannot change the original error", async () => {
+  const history = createNativeFailureHistory();
+  const failure = new TypeError("private SQL input and token");
+  const statement = {
+    all: async () => {
+      throw failure;
+    },
+  };
+  const db = { prepare: () => statement } as unknown as D1Database;
+  const measured = measureD1Work(db, (error) => history.capture(error, measured.trace.operation));
+  for (let n = 0; n < 11; n++) {
+    try {
+      await measured.binding.prepare("private").first();
+      throw new Error("Expected synthetic failure");
+    } catch (error) {
+      expect(error).toBe(failure);
+    }
+  }
+  const snapshot = history.snapshot();
+  expect(snapshot.first).toHaveLength(8);
+  expect(snapshot.omitted).toBe(3);
+  snapshot.first.length = 0;
+  expect(history.snapshot().first).toHaveLength(8);
+  expect(JSON.stringify(history.snapshot())).not.toMatch(/private|SQL|input|token|stack/);
 });

@@ -436,61 +436,70 @@ test("same-fence recovery promotes the original verified tuple and pending looku
   expect(await storage.abandonArtifactBlob(actor, blob.id)).toBe(false);
 });
 
-test("physical derivative admission is exact and publication waits for its real stopped writer", async () => {
-  core = createV2Core(db.binding, core.cipher, { applicationCostLimitsEnabled: false });
-  storage = createV2StorageRepository(core);
-  const capacity = createV2StorageCapacityRepository(core, "preview");
-  db.sqlite
-    .query(
-      "INSERT INTO v2_physical_storage_capacity(environment,capacity_bytes) VALUES('preview',1000)",
-    )
-    .run();
-  const physical = capacity.prepareCapacity(actor, {
-    blobId: blob.id,
-    ownerId: actor.ownerId,
-    objectKey: `private/${blob.id}`,
-    maximumCipherBytes: blob.cipherBytes,
-  });
-  expect(await storage.prepareArtifactBlob(actor, lease, blob, { ...physical })).toBe(false);
-  expect(
-    await storage.prepareArtifactBlob(
-      actor,
-      lease,
-      { ...blob, cipherBytes: blob.cipherBytes - 1 },
-      physical,
-    ),
-  ).toBe(false);
-  expect(await storage.prepareArtifactBlob(actor, lease, blob, physical)).toBe(true);
-  expect(await storage.commitArtifactBlob(actor, lease, blob)).toBe(false);
-  const writer = capacity.prepareWrite({
-    blobId: blob.id,
-    objectKey: `private/${blob.id}`,
-    byteLength: blob.cipherBytes,
-  });
-  expect(await capacity.beginPreparedWrite(writer, actor.now)).toBe(true);
-  expect(await storage.commitArtifactBlob(actor, lease, blob)).toBe(false);
-  expect(
-    await capacity.confirmWriterStopped(
-      writer,
-      { transport: "response", objectKey: `private/${blob.id}`, byteLength: blob.cipherBytes - 1 },
-      actor.now,
-    ),
-  ).toBe(false);
-  expect(await storage.commitArtifactBlob(actor, lease, blob)).toBe(false);
-  expect(
-    await capacity.confirmWriterStopped(
-      writer,
-      { transport: "response", objectKey: `private/${blob.id}`, byteLength: blob.cipherBytes },
-      actor.now,
-    ),
-  ).toBe(true);
-  expect(await storage.commitArtifactBlob(actor, lease, blob)).toBe(true);
-  expect(
+for (const atomic of [false, true])
+  test(`physical derivative publication waits for its real stopped writer: atomic=${atomic}`, async () => {
+    const commit = () =>
+      atomic
+        ? storage.commitArtifactAndReservation(actor, lease, blob)
+        : storage.commitArtifactBlob(actor, lease, blob);
+    core = createV2Core(db.binding, core.cipher, { applicationCostLimitsEnabled: false });
+    storage = createV2StorageRepository(core);
+    const capacity = createV2StorageCapacityRepository(core, "preview");
     db.sqlite
-      .query("SELECT held_bytes FROM v2_physical_storage_capacity WHERE environment='preview'")
-      .get(),
-  ).toEqual({ held_bytes: blob.cipherBytes });
-});
+      .query(
+        "INSERT INTO v2_physical_storage_capacity(environment,capacity_bytes) VALUES('preview',1000)",
+      )
+      .run();
+    const physical = capacity.prepareCapacity(actor, {
+      blobId: blob.id,
+      ownerId: actor.ownerId,
+      objectKey: `private/${blob.id}`,
+      maximumCipherBytes: blob.cipherBytes,
+    });
+    expect(await storage.prepareArtifactBlob(actor, lease, blob, { ...physical })).toBe(false);
+    expect(
+      await storage.prepareArtifactBlob(
+        actor,
+        lease,
+        { ...blob, cipherBytes: blob.cipherBytes - 1 },
+        physical,
+      ),
+    ).toBe(false);
+    expect(await storage.prepareArtifactBlob(actor, lease, blob, physical)).toBe(true);
+    expect(await commit()).toBe(false);
+    const writer = capacity.prepareWrite({
+      blobId: blob.id,
+      objectKey: `private/${blob.id}`,
+      byteLength: blob.cipherBytes,
+    });
+    expect(await capacity.beginPreparedWrite(writer, actor.now)).toBe(true);
+    expect(await commit()).toBe(false);
+    expect(
+      await capacity.confirmWriterStopped(
+        writer,
+        {
+          transport: "response",
+          objectKey: `private/${blob.id}`,
+          byteLength: blob.cipherBytes - 1,
+        },
+        actor.now,
+      ),
+    ).toBe(false);
+    expect(await commit()).toBe(false);
+    expect(
+      await capacity.confirmWriterStopped(
+        writer,
+        { transport: "response", objectKey: `private/${blob.id}`, byteLength: blob.cipherBytes },
+        actor.now,
+      ),
+    ).toBe(true);
+    expect(await commit()).toBe(true);
+    expect(
+      db.sqlite
+        .query("SELECT held_bytes FROM v2_physical_storage_capacity WHERE environment='preview'")
+        .get(),
+    ).toEqual({ held_bytes: blob.cipherBytes });
+  });
 
 test("physical derivative preparation keeps the post-encryption deletion fence atomic", async () => {
   core = createV2Core(db.binding, core.cipher, { applicationCostLimitsEnabled: false });
@@ -517,3 +526,157 @@ test("physical derivative preparation keeps the post-encryption deletion fence a
   });
   expect(db.sqlite.query("SELECT count(*) n FROM v2_mutation_claims").get()).toEqual({ n: 0 });
 });
+
+async function stoppedPhysicalArtifact() {
+  core = createV2Core(db.binding, core.cipher, { applicationCostLimitsEnabled: false });
+  storage = createV2StorageRepository(core);
+  const capacity = createV2StorageCapacityRepository(core, "preview");
+  db.sqlite
+    .query(
+      "INSERT INTO v2_physical_storage_capacity(environment,capacity_bytes) VALUES('preview',1000)",
+    )
+    .run();
+  const physical = capacity.prepareCapacity(actor, {
+    blobId: blob.id,
+    ownerId: actor.ownerId,
+    objectKey: `private/${blob.id}`,
+    maximumCipherBytes: blob.cipherBytes,
+  });
+  expect(await storage.prepareArtifactBlob(actor, lease, blob, physical)).toBe(true);
+  const writer = capacity.prepareWrite({
+    blobId: blob.id,
+    objectKey: `private/${blob.id}`,
+    byteLength: blob.cipherBytes,
+  });
+  expect(await capacity.beginPreparedWrite(writer, actor.now)).toBe(true);
+  expect(
+    await capacity.confirmWriterStopped(
+      writer,
+      { transport: "response", objectKey: `private/${blob.id}`, byteLength: blob.cipherBytes },
+      actor.now,
+    ),
+  ).toBe(true);
+}
+
+test("file-processing atomic publication commits exact logical usage once and retains physical capacity", async () => {
+  await stoppedPhysicalArtifact();
+  expect(
+    (
+      await Promise.all([
+        storage.commitArtifactAndReservation(actor, lease, blob),
+        storage.commitArtifactAndReservation(actor, lease, blob),
+      ])
+    ).filter(Boolean),
+  ).toHaveLength(1);
+  expect(db.sqlite.query("SELECT state FROM v2_blobs WHERE id=?").get(blob.id)).toEqual({
+    state: "stored",
+  });
+  expect(
+    db.sqlite.query("SELECT state FROM v2_storage_reservations WHERE id=?").get(blob.reservationId),
+  ).toEqual({ state: "stored" });
+  expect(db.sqlite.query("SELECT reserved_bytes,stored_bytes FROM v2_storage_usage").get()).toEqual(
+    { reserved_bytes: 0, stored_bytes: blob.logicalBytes },
+  );
+  expect(db.sqlite.query("SELECT held_bytes FROM v2_physical_storage_capacity").get()).toEqual({
+    held_bytes: blob.cipherBytes,
+  });
+  expect(await storage.commitReservation(actor, blob.reservationId)).toBe(false);
+  expect(await storage.commitArtifactAndReservation(actor, lease, blob)).toBe(false);
+});
+
+for (const changed of [
+  "consent",
+  "owner",
+  "account",
+  "workspace",
+  "file",
+  "lease",
+  "revision",
+  "ciphertext",
+  "bytes",
+  "writer",
+  "receipt-bytes",
+  "reservation-bytes",
+  "usage-missing",
+  "usage-short",
+] as const)
+  test(`atomic artifact and usage publication rejects late ${changed}`, async () => {
+    await stoppedPhysicalArtifact();
+    const peer =
+      changed === "owner"
+        ? await seedTestSession(db, { now: Date.parse(now), consent: true })
+        : null;
+    afterDecrypt = () => {
+      afterDecrypt = undefined;
+      if (changed === "consent") db.sqlite.query("DELETE FROM v2_consents").run();
+      if (changed === "owner")
+        db.sqlite
+          .query("UPDATE v2_workspaces SET owner_id=? WHERE id=?")
+          .run(peer?.userId ?? "synthetic_missing", workspaceId);
+      if (changed === "account" || changed === "workspace" || changed === "file")
+        tombstone(
+          changed,
+          changed === "account" ? actor.ownerId : changed === "workspace" ? workspaceId : fileId,
+        );
+      if (changed === "lease")
+        db.sqlite.query("UPDATE v2_jobs SET lease_until=? WHERE id=?").run(now, jobId);
+      if (changed === "revision")
+        db.sqlite.query("UPDATE v2_files SET revision=revision+1 WHERE id=?").run(fileId);
+      if (changed === "ciphertext")
+        db.sqlite.query("UPDATE v2_blobs SET encrypted_payload='removed' WHERE id=?").run(blob.id);
+      if (changed === "bytes")
+        db.sqlite.query("UPDATE v2_blobs SET cipher_bytes=cipher_bytes-1 WHERE id=?").run(blob.id);
+      if (changed === "writer")
+        db.sqlite
+          .query("UPDATE v2_physical_blob_bindings SET writer_state='running' WHERE blob_id=?")
+          .run(blob.id);
+      if (changed === "receipt-bytes")
+        db.sqlite
+          .query(
+            "UPDATE v2_physical_blob_bindings SET expected_cipher_bytes=expected_cipher_bytes-1 WHERE blob_id=?",
+          )
+          .run(blob.id);
+      if (changed === "reservation-bytes")
+        db.sqlite
+          .query("UPDATE v2_storage_reservations SET byte_length=byte_length+1 WHERE id=?")
+          .run(blob.reservationId);
+      if (changed === "usage-missing") db.sqlite.query("DELETE FROM v2_storage_usage").run();
+      if (changed === "usage-short")
+        db.sqlite.query("UPDATE v2_storage_usage SET reserved_bytes=0").run();
+    };
+    // The existing physical ledger forbids rewriting a stopped writer or its
+    // expected byte receipt. That failed interleave also aborts publication.
+    if (changed === "writer" || changed === "receipt-bytes")
+      await expect(storage.commitArtifactAndReservation(actor, lease, blob)).rejects.toMatchObject({
+        code: "DB_OPERATION_FAILED",
+      });
+    else expect(await storage.commitArtifactAndReservation(actor, lease, blob)).toBe(false);
+    expect(db.sqlite.query("SELECT state FROM v2_blobs WHERE id=?").get(blob.id)).toEqual({
+      state: "pending",
+    });
+    expect(
+      db.sqlite
+        .query("SELECT state FROM v2_storage_reservations WHERE id=?")
+        .get(blob.reservationId),
+    ).toEqual({ state: "reserved" });
+    expect(db.sqlite.query("SELECT count(*) n FROM v2_mutation_claims").get()).toEqual({ n: 0 });
+    if (changed !== "usage-missing" && changed !== "usage-short")
+      expect(
+        db.sqlite.query("SELECT reserved_bytes,stored_bytes FROM v2_storage_usage").get(),
+      ).toEqual({ reserved_bytes: 100, stored_bytes: 0 });
+  });
+
+for (const table of ["v2_blobs", "v2_storage_usage", "v2_storage_reservations"] as const)
+  test(`atomic artifact publication rolls back every change on ${table} write failure`, async () => {
+    await stoppedPhysicalArtifact();
+    db.sqlite.exec(
+      `CREATE TRIGGER synthetic_atomic_failure BEFORE UPDATE ON ${table} BEGIN SELECT RAISE(ABORT,'synthetic'); END`,
+    );
+    const before = snapshot();
+    const physical = db.sqlite.query("SELECT * FROM v2_physical_blob_bindings").all();
+    await expect(storage.commitArtifactAndReservation(actor, lease, blob)).rejects.toMatchObject({
+      code: "DB_OPERATION_FAILED",
+    });
+    expect(snapshot()).toEqual(before);
+    expect(db.sqlite.query("SELECT * FROM v2_physical_blob_bindings").all()).toEqual(physical);
+  });

@@ -252,10 +252,12 @@ for (const pageCount of [1, 2])
     // After current consent JOIN: 715/946 and 1271/1664, unchanged 308/555 guards.
     // Same-snapshot artifact/checkpoint reads remove another 11/19 calls/SQL.
     // Atomic transport observations remove another 21/38 calls/SQL.
+    // Preparation snapshot removes 6/10 calls; atomic blob/reservation commit
+    // removes another 12/20 calls, retaining all 308/555 authorization boundaries.
     // Counts are local method calls, not network time or native rows read.
-    expect(stages.reduce((sum, stage) => sum + stage.calls, 0)).toBe(pageCount === 1 ? 683 : 1214);
+    expect(stages.reduce((sum, stage) => sum + stage.calls, 0)).toBe(pageCount === 1 ? 665 : 1184);
     expect(stages.reduce((sum, stage) => sum + stage.statements, 0)).toBe(
-      pageCount === 1 ? 914 : 1607,
+      pageCount === 1 ? 884 : 1557,
     );
     expect(stages.reduce((sum, stage) => sum + stage.authorizations, 0)).toBe(
       pageCount === 1 ? 308 : 555,
@@ -312,45 +314,52 @@ for (const pageCount of [1, 2])
     expect(f.db.sqlite.query("PRAGMA foreign_key_check").all()).toEqual([]);
   });
 
-for (const changed of ["consent", "account", "file", "lease-expiry", "target-revision"] as const)
-  test(`combined checkpoint snapshot cannot commit after late ${changed}`, async () => {
-    const f = await setup();
-    await f.execution.initialize();
-    let injected = false;
-    f.meter.after((statements) => {
-      if (
-        injected ||
-        !statements.some((sql) => sql.startsWith("SELECT (SELECT id FROM v2_job_checkpoints"))
-      )
-        return;
-      injected = true;
-      if (changed === "consent")
-        f.db.sqlite.query("DELETE FROM user_consents WHERE user_id=?").run(f.actor.ownerId);
-      if (changed === "account" || changed === "file")
-        f.db.sqlite
-          .query("INSERT INTO v2_tombstones VALUES(?,?,?)")
-          .run(
-            changed,
-            changed === "account" ? f.actor.ownerId : f.session.fileId,
-            new Date().toISOString(),
-          );
-      if (changed === "lease-expiry")
-        f.db.sqlite
-          .query("UPDATE v2_jobs SET lease_until='2020-01-01T00:00:00.000Z' WHERE id=?")
-          .run(f.params.jobId);
-      if (changed === "target-revision")
-        f.db.sqlite
-          .query("UPDATE v2_files SET revision=revision+1 WHERE id=?")
-          .run(f.session.fileId);
+for (const boundary of ["checkpoint", "preparation"] as const)
+  for (const changed of ["consent", "account", "file", "lease-expiry", "target-revision"] as const)
+    test(`combined ${boundary} snapshot cannot commit after late ${changed}`, async () => {
+      const f = await setup();
+      await f.execution.initialize();
+      let injected = false;
+      f.meter.after((statements) => {
+        if (
+          injected ||
+          !statements.some((sql) =>
+            sql.startsWith(
+              boundary === "checkpoint"
+                ? "SELECT (SELECT id FROM v2_job_checkpoints"
+                : "SELECT j.operation_id,EXISTS(SELECT 1 FROM v2_storage_reservations",
+            ),
+          )
+        )
+          return;
+        injected = true;
+        if (changed === "consent")
+          f.db.sqlite.query("DELETE FROM user_consents WHERE user_id=?").run(f.actor.ownerId);
+        if (changed === "account" || changed === "file")
+          f.db.sqlite
+            .query("INSERT INTO v2_tombstones VALUES(?,?,?)")
+            .run(
+              changed,
+              changed === "account" ? f.actor.ownerId : f.session.fileId,
+              new Date().toISOString(),
+            );
+        if (changed === "lease-expiry")
+          f.db.sqlite
+            .query("UPDATE v2_jobs SET lease_until='2020-01-01T00:00:00.000Z' WHERE id=?")
+            .run(f.params.jobId);
+        if (changed === "target-revision")
+          f.db.sqlite
+            .query("UPDATE v2_files SET revision=revision+1 WHERE id=?")
+            .run(f.session.fileId);
+      });
+      await expect(f.execution.extractUnit(0, new AbortController().signal)).rejects.toMatchObject({
+        code: "STALE_REVISION",
+      });
+      expect(injected).toBe(true);
+      expect(f.db.sqlite.query("SELECT count(*) AS n FROM v2_job_checkpoints").get()).toEqual({
+        n: 0,
+      });
     });
-    await expect(f.execution.extractUnit(0, new AbortController().signal)).rejects.toMatchObject({
-      code: "STALE_REVISION",
-    });
-    expect(injected).toBe(true);
-    expect(f.db.sqlite.query("SELECT count(*) AS n FROM v2_job_checkpoints").get()).toEqual({
-      n: 0,
-    });
-  });
 
 for (const mutation of [
   "none",

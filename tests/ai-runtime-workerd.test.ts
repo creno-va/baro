@@ -32,7 +32,7 @@ import {
 } from "../src/server/runtime/workspace";
 import { signedSessionCookie, testEnvironment } from "./helpers/d1";
 import { measureD1Work } from "./helpers/d1-work";
-import { nativeFailure } from "./helpers/native-failure";
+import { createNativeFailureHistory, nativeFailure } from "./helpers/native-failure";
 import { createNativeTestRegistry, type NativeLifetime } from "./helpers/native-lifetime";
 import {
   createNativeRecoveryMeasurements,
@@ -235,9 +235,11 @@ async function exerciseNativeRuntime(
       auditRejected = false;
     const databaseFailures: DependencyCategory[] = [],
       databaseFailureDetails: ReturnType<typeof nativeFailure>[] = [],
+      databaseFailureHistory = createNativeFailureHistory(),
       measured = measureD1Work(preview, (error) => {
         databaseFailures.push(dependencyCategory(error));
         databaseFailureDetails.push(nativeFailure(error));
+        databaseFailureHistory.capture(error, measured.trace.operation);
       });
     recovery.observe(() => nativeRecoveryWork(measured.measurements(), providerMeasurements));
     let core = createV2Core(measured.binding, cipher, {
@@ -406,6 +408,7 @@ async function exerciseNativeRuntime(
       requestOrdinal,
       databaseTrace: measured.trace,
       databaseMeasurements: measured.measurements(),
+      databaseFailureHistory: databaseFailureHistory.snapshot(),
       recoveryMeasurements: recovery.snapshot(),
       providerMeasurements,
       hostBaseline,
@@ -849,9 +852,8 @@ async function exerciseNativeRuntime(
     progress.enter("recovery", "runtime");
     unavailable = true;
     const callsBeforeOutage = providerCalls;
-    expect((await recovery.run("outage_runtime", () => execute(failedJob.jobId))).status).toBe(
-      "failed",
-    );
+    const outageOutcome = await recovery.run("outage_runtime", () => execute(failedJob.jobId));
+    expect(outageOutcome.status).toBe("failed");
     const latest = await recovery.run("outage_latest", () =>
       request(`/api/v2/cases/${workspace.id}/workspace-jobs/latest`),
     );
@@ -864,6 +866,15 @@ async function exerciseNativeRuntime(
           applicationCostLimitsEnabled,
           providerReached: providerCalls > callsBeforeOutage,
           providerCallsDuringOutage: providerCalls - callsBeforeOutage,
+          stageTimings:
+            "stageTimings" in outageOutcome
+              ? outageOutcome.stageTimings.map(({ stage, durationMs, outcome }) => ({
+                  stage,
+                  durationMs,
+                  outcome,
+                }))
+              : [],
+          databaseFailureHistory: databaseFailureHistory.snapshot(),
           ...(await nativeAdmissionDiagnostics(core, env, ownerId, workspace.id, failedJob.jobId)),
         }),
       );
