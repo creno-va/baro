@@ -220,3 +220,80 @@ export function reportWorkspacePolicyFailure(value: unknown) {
   console.error(JSON.stringify({ event: "workspace_policy_failure", reason }));
   return reason;
 }
+
+export type WorkspaceFactFailure = {
+  category:
+    | "source_text_unavailable"
+    | "source_text_mismatch"
+    | "claim_text_missing"
+    | "claim_reference_mismatch";
+  attribution: "user_statement" | "user_material" | "official_source" | "ai_organization";
+  referenceKind:
+    | "intake_narrative"
+    | "intake_answer"
+    | "user_message"
+    | "user_material"
+    | "official_source"
+    | "mixed"
+    | "none";
+  factCount: number;
+  referenceCount: number;
+  availableSourceCount: number;
+};
+
+/** Explain a rejected attribution without recording text, IDs or source lengths. */
+export function reportWorkspaceFactFailure(value: unknown, boundary: unknown) {
+  const detail = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+  const select = (candidate: unknown, allowed: readonly string[]) =>
+    typeof candidate === "string" && allowed.includes(candidate) ? candidate : "unknown";
+  const count = (candidate: unknown) =>
+    typeof candidate === "number" && Number.isFinite(candidate) && candidate >= 0
+      ? Math.min(1000, Math.floor(candidate))
+      : null;
+  const stage = select(boundary, ["draft_retry", "terminal"]);
+  const category = select(detail.category, [
+    "source_text_unavailable",
+    "source_text_mismatch",
+    "claim_text_missing",
+    "claim_reference_mismatch",
+  ]);
+  const attribution = select(detail.attribution, [
+    "user_statement",
+    "user_material",
+    "official_source",
+    "ai_organization",
+  ]);
+  const referenceKind = select(detail.referenceKind, [
+    "intake_narrative",
+    "intake_answer",
+    "user_message",
+    "user_material",
+    "official_source",
+    "mixed",
+    "none",
+  ]);
+  const factCount = count(detail.factCount);
+  const referenceCount = count(detail.referenceCount);
+  const availableSourceCount = count(detail.availableSourceCount);
+  console.error(
+    JSON.stringify({
+      event: "workspace_fact_failure",
+      stage,
+      category,
+      attribution,
+      referenceKind,
+      factCount,
+      referenceCount,
+      availableSourceCount,
+    }),
+  );
+  return {
+    stage,
+    category,
+    attribution,
+    referenceKind,
+    factCount,
+    referenceCount,
+    availableSourceCount,
+  };
+}

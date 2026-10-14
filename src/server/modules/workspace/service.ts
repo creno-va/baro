@@ -95,8 +95,8 @@ export function createWorkspaceService(core: V2Core, deps: WorkspaceDependencies
     const route = `/api/v2/cases/${id}/${path}`;
     const replay = await accounting.findOperation(actor(ownerId), route, a.key, a.requestHash);
     if (replay?.kind === "conflict") throw new WorkspaceError("IDEMPOTENCY_CONFLICT");
-    await find(ownerId, id);
-    return { receipt: { ...a, route, kind }, replay: replay?.kind === "replay" };
+    const current = await find(ownerId, id);
+    return { receipt: { ...a, route, kind }, replay: replay?.kind === "replay", current };
   };
   const replayCreate = async (ownerId: string, key: string, raw: unknown) => {
     const { turnstileToken: _, ...business } = v2CreateCaseRequestSchema.parse(raw);
@@ -333,7 +333,13 @@ export function createWorkspaceService(core: V2Core, deps: WorkspaceDependencies
       const request = v2AnswersRequestSchema.parse(raw);
       const m = await mutation(ownerId, id, key, "intake/answers", request, "question_batch");
       if (m.replay) return workspace.metadata(actor(ownerId), id);
-      const g = await guard(ownerId, id);
+      // mutation() just verified this owner and workspace revision. The answer
+      // repository still rereads its intake and atomically claims this revision.
+      const g = {
+        ...actor(ownerId),
+        workspaceId: id,
+        expectedRevision: m.current.workspaceRevision,
+      };
       const intake = await workspace.metadata(g, id),
         batch = intake?.batches.find((candidate) =>
           request.answers.every((answer) =>

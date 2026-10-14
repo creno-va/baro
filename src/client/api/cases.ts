@@ -276,15 +276,26 @@ function isCurrentFailure(job: Awaited<ReturnType<typeof latestIntakeJob>>, revi
     revision <= job.target.workspaceRevision + 1
   );
 }
-async function getQuestions(id: string): Promise<QuestionsResult> {
+async function getQuestions(
+  id: string,
+  acknowledged?: { metadata: Metadata | null; workspaceRevision: number },
+): Promise<QuestionsResult> {
   if (apiMode === "mock") return request("cases.getQuestions", { id });
   // A completion clears the intake pointer and publishes its result atomically,
   // but these HTTP reads are separate snapshots. Never stop polling on an older
   // intake just because a later job read observes its completion.
   for (let attempt = 0; attempt < 2; attempt++) {
-    const [w, m] = await Promise.all([workspace(id), readMetadata(id)]);
+    const [w, m] = await Promise.all([
+      workspace(id),
+      // A PUT already returns an owner-checked, revision-fenced intake snapshot.
+      // Reuse it only once, against a fresh workspace and the normal job checks.
+      attempt === 0 && acknowledged?.metadata ? acknowledged.metadata : readMetadata(id),
+    ]);
     if (
       !m ||
+      (attempt === 0 &&
+        acknowledged?.metadata &&
+        w.workspaceRevision !== acknowledged.workspaceRevision) ||
       (w.status === "intake" && w.currentJobId !== m.currentJobId) ||
       w.intakeRevision !== m.revision
     )
@@ -588,25 +599,32 @@ export const casesApi = {
         },
       );
     const { key, saved } = await intakeRequest("cases.saveAnswers", id, input, false);
-    await request(
-      "cases.saveAnswers",
-      { id, ...input },
-      {
-        path: path(id, "intake/answers"),
-        method: "PUT",
-        body: {
-          expectedRevision: saved.revision,
-          answers: input.answers.map((a) => ({
-            questionId: a.questionId,
-            status: a.state,
-            ...(a.state === "answered" ? { value: a.value } : {}),
-          })),
+    const acknowledged = metadataSchema.nullable().parse(
+      await request(
+        "cases.saveAnswers",
+        { id, ...input },
+        {
+          path: path(id, "intake/answers"),
+          method: "PUT",
+          body: {
+            expectedRevision: saved.revision,
+            answers: input.answers.map((a) => ({
+              questionId: a.questionId,
+              status: a.state,
+              ...(a.state === "answered" ? { value: a.value } : {}),
+            })),
+          },
+          key,
         },
-        key,
-      },
+      ),
     );
     // The expected revision identifies this answer submission, including completed duplicates.
-    return getQuestions(id);
+    return getQuestions(id, {
+      metadata: acknowledged,
+      // A normal answer mutation advances the workspace exactly once. If a
+      // peer mutation or an older replay moved it further, reread the intake.
+      workspaceRevision: input.expectedRevision + 1,
+    });
   },
   async advance(id: string, raw: { expectedRevision: number }): Promise<QuestionsResult> {
     const input = validate(revisionInputSchema, raw);

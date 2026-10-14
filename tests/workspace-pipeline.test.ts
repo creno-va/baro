@@ -428,6 +428,70 @@ test("reported settlement amounts and legal topics require exact sources and con
   ).toThrow(WorkspaceOutputPolicyError);
 });
 
+test("unsupported fact details distinguish missing text, altered quotations and claim references without accepting them", () => {
+  const saved = context();
+  const rejected = (fact: V2Fact, claims: Parameters<typeof assertWorkspaceFacts>[2] = []) => {
+    try {
+      assertWorkspaceFacts(saved, [fact], claims);
+    } catch (error) {
+      expect(error).toBeInstanceOf(WorkspaceOutputPolicyError);
+      expect(error).toMatchObject({ reason: "unsupported_fact", code: "POLICY_REJECTED" });
+      return (error as WorkspaceOutputPolicyError).factFailure;
+    }
+    throw new Error("Synthetic unsupported fact was accepted");
+  };
+  expect(rejected(reportedFact("상대방이 합의금 500만원을 요구했습니다."))).toEqual({
+    category: "source_text_mismatch",
+    attribution: "user_statement",
+    referenceKind: "intake_narrative",
+    factCount: 1,
+    referenceCount: 1,
+    availableSourceCount: 1,
+  });
+  // Missing trusted text is distinct from a changed quote even when the ref is authorized.
+  saved.references.answeredQuestionIds = ["q2"];
+  expect(
+    rejected({
+      ...reportedFact("확인한 내용"),
+      references: [{ kind: "intake_answer", questionId: "q2", intakeRevision: 3 }],
+    }),
+  ).toMatchObject({
+    category: "source_text_unavailable",
+    referenceKind: "intake_answer",
+    availableSourceCount: 0,
+  });
+  saved.references.verifiedCitationIds = ["citation_a", "citation_b"];
+  const official: V2Fact = {
+    ...reportedFact("공식 자료의 합성 문장"),
+    attribution: "official_source",
+    references: [{ kind: "official_source", citationId: "citation_a" }],
+  };
+  expect(rejected(official)).toMatchObject({
+    category: "claim_text_missing",
+    attribution: "official_source",
+    referenceKind: "official_source",
+    availableSourceCount: 0,
+  });
+  const claim = {
+    id: "synthetic_claim",
+    text: official.text,
+    kind: "quotation" as const,
+    citationId: "citation_b",
+    startUtf16: 0,
+    endUtf16: official.text.length,
+  };
+  expect(rejected(official, [claim])).toMatchObject({
+    category: "claim_reference_mismatch",
+    availableSourceCount: 1,
+  });
+  expect(() =>
+    assertWorkspaceFacts(saved, [official], [{ ...claim, citationId: "citation_a" }]),
+  ).not.toThrow();
+  expect(() =>
+    assertWorkspaceFacts(saved, [reportedFact("상대방이 합의금 300만원을 요구했습니다.")]),
+  ).not.toThrow();
+});
+
 test("summary source failures regenerate once and retain phase-aware independent validation", async () => {
   let generated = 0;
   const saved = context();

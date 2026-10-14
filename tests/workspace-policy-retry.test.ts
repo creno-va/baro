@@ -1,7 +1,10 @@
-import { afterEach, expect, test } from "bun:test";
+import { afterEach, expect, spyOn, test } from "bun:test";
 import { canRetryV2Job } from "../src/server/db/v2-job-retry";
 import { executeWorkspace } from "../src/server/modules/workspace/execution";
-import { createWorkspacePipeline } from "../src/server/modules/workspace/pipeline";
+import {
+  createWorkspacePipeline,
+  WorkspaceOutputPolicyError,
+} from "../src/server/modules/workspace/pipeline";
 import { customerWorkspaceFixture, runCustomerJob } from "./helpers/customer-workspace";
 
 const NOW = "2026-10-06T00:00:00.000Z";
@@ -52,6 +55,50 @@ async function failAttempt(f: Fixture, id: string) {
     ),
   ).toBe(true);
 }
+
+test("summary fact rejection records only enum counts for both drafts and preserves failed job recovery", async () => {
+  const f = await fixture();
+  await answeredBatch(f);
+  await answeredBatch(f);
+  const detail = {
+    category: "source_text_mismatch" as const,
+    attribution: "user_statement" as const,
+    referenceKind: "intake_answer" as const,
+    factCount: 3,
+    referenceCount: 1,
+    availableSourceCount: 1,
+  };
+  const output = spyOn(console, "error").mockImplementation(() => {});
+  let calls = 0;
+  try {
+    const failed = await runCustomerJob(f, "intake_summary", true, async () => {
+      calls++;
+      throw new WorkspaceOutputPolicyError("unsupported_fact", detail);
+    });
+    expect(calls).toBe(2);
+    expect(failed.result).toMatchObject({
+      status: "failed",
+      policyReason: "unsupported_fact",
+      factFailure: { stage: "terminal", ...detail },
+    });
+    expect(
+      output.mock.calls
+        .map(([value]) => JSON.parse(String(value)))
+        .filter((value) => value.event === "workspace_fact_failure"),
+    ).toEqual([
+      { event: "workspace_fact_failure", stage: "draft_retry", ...detail },
+      { event: "workspace_fact_failure", stage: "terminal", ...detail },
+    ]);
+    expect(await f.service.job(f.owner.userId, f.workspace.id, failed.params.jobId)).toMatchObject({
+      status: "failed",
+      failure: "POLICY_REJECTED",
+      retryable: true,
+    });
+    expect((await f.service.intake(f.owner.userId, f.workspace.id))?.summary).toBeNull();
+  } finally {
+    output.mockRestore();
+  }
+});
 
 test("retry eligibility only recovers intake policy failures and enforces separate attempt caps", () => {
   const job: Parameters<typeof canRetryV2Job>[0] = {

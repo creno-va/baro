@@ -20,6 +20,7 @@ export function productBoundaryFindings(file: string, content: string): string[]
     'console.error(JSON.stringify({event:"workspace_provider_failure",phase,category,httpStatus}),)',
     'console.error(JSON.stringify({event:"workspace_legal_retrieval",kind,availability,reason}))',
     'console.error(JSON.stringify({event:"workspace_policy_failure",reason}))',
+    'console.error(JSON.stringify({event:"workspace_fact_failure",stage,category,attribution,referenceKind,factCount,referenceCount,availableSourceCount,}),)',
     'console.error(JSON.stringify({event:"model_cost_observation_failure",phase,category}))',
   ]);
   const reportDependencyLog =
