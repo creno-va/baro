@@ -5,15 +5,39 @@ import { OFFICIAL_CATALOG } from "./registry";
 import { makeChunk } from "./source";
 import { plainText } from "./text";
 
-const candidate = z.object({
-  판례일련번호: digits,
-  사건명: displayText(500),
-  사건번호: displayText(200),
-  선고일자: apiDate,
-  법원명: displayText(200),
-  데이터출처명: z.string().optional(),
-});
+// Actual PrecSearch lists use YYYY.MM.DD; details also use compact YYYYMMDD.
+// Normalize only the observed notation, then retain apiDate's calendar checks.
+const precedentDate = z.preprocess(
+  (value) =>
+    typeof value === "string" && /^\d{4}\.\d{2}\.\d{2}$/.test(value)
+      ? value.replaceAll(".", "")
+      : value,
+  apiDate,
+);
+const candidate = z
+  .object({
+    판례일련번호: digits,
+    사건명: displayText(500),
+    사건번호: displayText(200),
+    선고일자: precedentDate,
+    법원명: z.union([displayText(200), z.literal("")]),
+    데이터출처명: z.string().optional(),
+  })
+  .refine((row) => row.법원명 !== "" || row.데이터출처명 === "국세법령정보시스템", {
+    path: ["법원명"],
+    message: "A supported precedent must identify its court",
+  });
 export type PrecedentCandidate = z.infer<typeof candidate>;
+export function matchesPrecedentCaseNumber(listNumber: string, detailNumber: string) {
+  if (listNumber === detailNumber) return true;
+  // A captured joined decision lists its leading case number but its detail
+  // appends same-year/type serials (e.g. 2026다100001, 100002). Match the complete
+  // leading number, never a substring, a later number or an arbitrary suffix.
+  if (!/^\d{4}[가-힣]{1,4}\d{1,10}(?:,\s*\d{1,10})+$/.test(detailNumber)) return false;
+  const [leading, ...serials] = detailNumber.split(/,\s*/);
+  const leadingSerial = leading?.match(/[가-힣]+(\d+)$/)?.[1];
+  return leading === listNumber && new Set([leadingSerial, ...serials]).size === serials.length + 1;
+}
 export function precedentCandidates(value: unknown, asOfDate: string, limit: number) {
   const root = z
     .object({
@@ -46,7 +70,7 @@ export async function parsePrecedent(
         판례정보일련번호: digits,
         사건명: displayText(500),
         사건번호: displayText(200),
-        선고일자: apiDate,
+        선고일자: precedentDate,
         법원명: displayText(200),
         판결요지: z.string().optional(),
         판례내용: z.string().optional(),
@@ -56,7 +80,7 @@ export async function parsePrecedent(
   if (
     root.판례정보일련번호 !== expected.판례일련번호 ||
     root.사건명 !== expected.사건명 ||
-    root.사건번호 !== expected.사건번호 ||
+    !matchesPrecedentCaseNumber(expected.사건번호, root.사건번호) ||
     root.선고일자 !== expected.선고일자 ||
     root.법원명 !== expected.법원명
   )
@@ -81,7 +105,9 @@ export async function parsePrecedent(
       institutionId: null,
       endpointId: null,
       court: root.법원명,
-      caseNumber: root.사건번호,
+      // Keep the exact verified discovery number for cache metadata checks.
+      // A joined detail's leading case still identifies this same official ID.
+      caseNumber: expected.사건번호,
     },
     asOfDate,
   );

@@ -27,9 +27,10 @@ function responses(pending = false) {
   };
 }
 function transport(input: ReturnType<typeof responses>) {
-  return async (value: string) => {
+  return async (value: string, init: RequestInit) => {
     const url = new URL(value),
       guide = url.hostname.includes("easylaw");
+    expect(new Headers(init.headers).get("Referer")).toBe(guide ? null : "https://baro.site/");
     const key = guide
       ? "guide"
       : `${url.searchParams.get("target")}_${url.pathname.endsWith("lawSearch.do") ? "list" : "detail"}`;

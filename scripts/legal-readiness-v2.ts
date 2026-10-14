@@ -17,7 +17,9 @@ import { sourceExcerpt } from "../src/server/modules/legal-retrieval/v2/workspac
 
 export const readinessV2Plans: RetrievalPlan[] = [
   { kind: "statute", lawTitle: "민법", articles: [{ number: "598", branch: "0" }] },
-  { kind: "precedent", query: "대여금", limit: 1 },
+  // A newest tax-source row can be HTML-only. Inspect two candidates while
+  // retaining the same nine-reservation cap and explicit limited status.
+  { kind: "precedent", query: "대여금", limit: 2 },
   workspaceGuidePlans.legal_consultation,
 ];
 
