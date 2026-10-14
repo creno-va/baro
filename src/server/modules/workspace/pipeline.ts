@@ -17,7 +17,7 @@ import { claimReviewHash, type SourceClaim, validateV2Claims } from "../citation
 import type { RetrievalOutput } from "../legal-retrieval/v2/contracts";
 import type { WorkspaceSourceRequest } from "../legal-retrieval/v2/workspace-plans";
 import type { projectWorkspaceSources } from "../legal-retrieval/v2/workspace-sources";
-import type { Phase } from "../llm-gateway/prompts";
+import { type Phase, workspaceStrategyRefusal } from "../llm-gateway/prompts";
 import type { createLlmGateway } from "../llm-gateway/service";
 import { ModelError } from "../llm-gateway/service";
 import {
@@ -27,6 +27,7 @@ import {
   workspaceSummaryOutputSchema,
 } from "../llm-gateway/v2/schemas";
 import type { WorkspaceAuditFailure } from "./audit-diagnostics";
+import type { WorkspaceContentFailure } from "./content-diagnostics";
 import { normalizeTimelineDates } from "./timeline-dates";
 
 export type WorkspaceContext = {
@@ -74,6 +75,7 @@ export class WorkspaceOutputPolicyError extends ModelError {
     readonly reason: WorkspaceOutputPolicyReason,
     readonly factFailure?: WorkspaceFactFailure,
     readonly auditFailure?: WorkspaceAuditFailure,
+    readonly contentFailure?: WorkspaceContentFailure,
   ) {
     super("POLICY_REJECTED");
   }
@@ -90,13 +92,74 @@ const prohibited = (text: string) =>
     text,
   );
 
-const factualPreparationRefusal = "소송 전략은 제공하지 않으며 사실과 자료 정리를 돕겠습니다.";
+const factualPreparationRefusal = workspaceStrategyRefusal;
 function prohibitedChatText(text: string) {
   if (privateIdentifiers(text)) return true;
   const [opening, ...remaining] = text.trim().split(/\r?\n/u);
   // Only this exact standalone opening is a known refusal, not strategy.
   // Keep every other line under the guard and send the full original to audit.
   return prohibited(opening === factualPreparationRefusal ? remaining.join("\n") : text);
+}
+
+// Diagnostics run only after the unchanged rejection predicate has matched.
+function textFailure(
+  field: WorkspaceContentFailure["field"],
+  text: string,
+  canonicalRefusalOpening: boolean | null = null,
+): WorkspaceContentFailure {
+  const category = privateIdentifiers(text)
+    ? "private_identifier"
+    : /(?:고소|소송|협상)\s*전략/i.test(text)
+      ? "strategy"
+      : /승소\s*(확률|가능성\s*\d|보장)|반드시\s*승소|무조건\s*(승소|이깁)/i.test(text)
+        ? "outcome_claim"
+        : /변호사로서/i.test(text)
+          ? "professional_role"
+          : "unclassified";
+  return { field, category, canonicalRefusalOpening };
+}
+function chatContentFailure(
+  context: WorkspaceContext,
+  draft: ReturnType<typeof workspaceChatOutputSchema.parse>,
+  ids: Set<string>,
+): WorkspaceContentFailure {
+  const [opening, ...remaining] = draft.text.trim().split(/\r?\n/u);
+  const canonical = opening === factualPreparationRefusal;
+  const entity = (
+    field: WorkspaceContentFailure["field"],
+    category: WorkspaceContentFailure["category"],
+  ): WorkspaceContentFailure => ({ field, category, canonicalRefusalOpening: canonical });
+  for (const fact of draft.facts) {
+    if (context.facts.some((existing) => existing.id === fact.id))
+      return entity("fact_relation", "duplicate_fact_id");
+    if (fact.conflictingFactIds.some((id) => !ids.has(id)))
+      return entity("fact_relation", "unknown_conflicting_fact");
+  }
+  for (const action of draft.actions) {
+    if (action.revision !== 1) return entity("action_state", "invalid_revision");
+    if (action.status !== "todo") return entity("action_state", "invalid_status");
+    if (action.factIds.some((id) => !ids.has(id))) return entity("action_relation", "unknown_fact");
+    const text = `${action.title} ${action.instructions} ${action.caution}`;
+    if (prohibited(text)) return textFailure("action_text", text, canonical);
+  }
+  for (const entry of draft.timeline) {
+    if (entry.revision !== 1) return entity("timeline_state", "invalid_revision");
+    if (entry.userEdited) return entity("timeline_state", "user_edited");
+    if (entry.factIds.some((id) => !ids.has(id)))
+      return entity("timeline_relation", "unknown_fact");
+    if (prohibited(entry.event)) return textFailure("timeline_event", entry.event, canonical);
+  }
+  if (prohibitedChatText(draft.text))
+    return textFailure(
+      "chat_text",
+      privateIdentifiers(draft.text) || !canonical ? draft.text : remaining.join("\n"),
+      canonical,
+    );
+  for (const party of draft.parties) {
+    const text = JSON.stringify(party);
+    if (prohibited(text)) return textFailure("party", text, canonical);
+  }
+  return entity("chat_draft", "unclassified");
 }
 
 function sourceText(context: WorkspaceContext, ref: V2FactReference) {
@@ -163,7 +226,13 @@ export function assertWorkspaceFacts(
         );
       // A verbatim attributed report of a demand or legal topic is not AI advice.
       // It still must not expose identifiers, and the independent audit checks attribution.
-      if (privateIdentifiers(fact.text)) throw new WorkspaceOutputPolicyError("prohibited_content");
+      if (privateIdentifiers(fact.text))
+        throw new WorkspaceOutputPolicyError(
+          "prohibited_content",
+          undefined,
+          undefined,
+          textFailure("fact_text", fact.text),
+        );
     } else if (
       fact.attribution === "official_source" &&
       !claims.some(
@@ -181,7 +250,12 @@ export function assertWorkspaceFacts(
         matchingClaims.length,
       );
     } else if (prohibited(fact.text)) {
-      throw new WorkspaceOutputPolicyError("prohibited_content");
+      throw new WorkspaceOutputPolicyError(
+        "prohibited_content",
+        undefined,
+        undefined,
+        textFailure("fact_text", fact.text),
+      );
     }
   }
 }
@@ -398,7 +472,12 @@ export function createWorkspacePipeline(
         prohibitedChatText(draft.text) ||
         draft.parties.some((party) => prohibited(JSON.stringify(party)))
       )
-        throw new WorkspaceOutputPolicyError("prohibited_content");
+        throw new WorkspaceOutputPolicyError(
+          "prohibited_content",
+          undefined,
+          undefined,
+          chatContentFailure(context, draft, ids),
+        );
       const dates = normalizeTimelineDates(
         {
           ...context,
