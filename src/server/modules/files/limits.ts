@@ -16,9 +16,10 @@ export const hasFileStorageMeter = (core: V2Core) => metered.has(core);
 // Normal work cannot consume these slots. Their SQL/trigger row costs must also
 // be part of the authenticated execution plan, not inferred from receipts.
 export const FILE_STORAGE_CLEANUP_QUERIES = 6;
-// recordRuntimeUsage(storage=true): two PK reads and at most eight transition
-// statements. Receipt construction must fit this separate one-shot allowance.
-export const FILE_STORAGE_NOTIFICATION_QUERIES = 10;
+// Journal routing uses one PK lookup before historical recordRuntimeUsage:
+// two PK reads and at most eight transition statements. The new journal path
+// fits within the same allowance. Total per-request work remains 200 queries.
+export const FILE_STORAGE_NOTIFICATION_QUERIES = 11;
 const cleanups = new WeakMap<V2Core, <T>(operation: () => Promise<T>) => Promise<T>>();
 const notifications = new WeakMap<V2Core, <T>(operation: () => Promise<T>) => Promise<T>>();
 export const withFileStorageCleanup = <T>(core: V2Core, operation: () => Promise<T>) =>

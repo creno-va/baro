@@ -4,9 +4,12 @@
 - 적용: `APPLICATION_COST_LIMITS_ENABLED=false`인 preview/production과 해당 배포·운영 도구.
 - 구현 상태: [PR247](https://github.com/creno-va/baro/pull/247)에서 기존 운영 환경의 비용 관측과
   실행 분리를 병합했다. 배포와 실제 기능 결과는 #71의 동일 SHA receipt를 따르며 전체 MVP 완료와 구분한다.
-- 이번 변경 범위는 실제 가격/funding proof·물리 capacity가 이미 있는 운영 환경의 만료·월·비용 IO 병목 분리다.
-  **가격 proof 자체가 없는 신규 환경 bootstrap에는 비용 증거 결합이 아직 남는다.** 가짜 가격을 만들지 않고
-  nullable 관측 원장으로 분리하는 후속 구현이 필요하다. 이 잔여는 정책의 예외 승인이나 새 비용 gate의 근거가 아니다.
+- 후속0016 구현은 신규 실행을 비용 proof와 독립적인 기술 admission journal로 분리한다.
+  가격/FX/funding/SKU가 없거나 만료돼도 실제 모델·처리·저장 호출의 기술 권한을 확인하고 진행한다.
+  실제 provider 사용량이 확인되면 nullable 비용 관측을 추가하고, 금액은 해당 가격·환율까지
+  확인될 때만 기록한다. 기존 paid hold·미정산·가격·재원 행은 이동하거나 해제하지 않으며
+  재시작/재시도는 원래 실행과 run을 복원한다.
+  이 문서는 구현 계약이며 병합·배포·실제 외부 성공은 별도의 동일 SHA 증거로 확인한다.
   preflight `configuration_ready`는 구성 검사 결과이며 실제 기능 성공 보장이 아니다.
 
 ## 실행을 막지 않는 비용 정보
@@ -57,6 +60,25 @@
 observe/refresh/과거 allocation 운영 도구는 관측 자료를 관리할 수 있지만 제품 실행의 선행 조건이
 아니다. 실제 물리 자원 초기화와 비용 기록 갱신은 구분한다. 기존 공급자·모델·결제수단과
 사용자 설정 자동충전($10/$30)은 유지하며 이 정책으로 새 결제 설정을 만들지 않는다.
+
+## 비용 없는 물리 초기화와 관측 조회
+
+`initialize-storage`의 비용 관측 전용 경로에는 observation JSON, allocation/control revision,
+가격/FX/funding, 월별 projection, IO 비용 예약이 필요하지 않다. 설정은 환경, 정확한 현재
+serving SHA, 실제 capacityBytes(최대100GB),5분 이내의 인증된 private/public 빈 inventory다.
+같은 operation key와 동일한 설정으로만 receipt를 재사용한다. capacity/policy/receipt 기록과
+DB의 빈 객체·producer·실행·정합 totals 검사를 한 transaction으로 수행한다. 이미 물리 capacity가
+있으면 덮어쓰지 않고 기존 capacity와 실제 binding/totals 검사를 계속 사용한다.
+
+기록 또는 실제 버킷이 비어 있지 않은 신규 환경의 reconciliation은 아직 별도의 물리 writer
+잠금과 inventory 인수가 필요하다. 비용 `phase='frozen'`는 비용 관측 전용 런타임을 멈추지 않으므로
+물리 잠금의 증거로 사용할 수 없다. 이를 가격·재원 갱신으로 해결됐다고 기록하지 않는다.
+
+운영 `status`의 `executionObservations`는 admission 수, 미확정 transport 수, 가격 미확정 수와
+알려진 비용 합계를 분리한다. 알려진 금액이 없으면 합계는 null이며0원 성공이 아니다.
+기술 dispatch 기록이 실패하면 실제 IO를 시작하지 않는다. 실제 IO 후 관측 DB 기록만 실패하면
+성공 결과를 보존하고 기존 dispatched/unknown 실행과 안전한 진단을 남긴다. 사용량·가격·시간을
+채워 넣거나 같은 실행을 자동 중복 호출하여 관측을 복구하지 않는다.
 
 ## 현재 실제 증거와 이번 변경의 경계
 

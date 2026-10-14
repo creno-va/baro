@@ -13,11 +13,11 @@ const inputSchema = z.strictObject({
   now: timestampSchema.transform((v) => new Date(v).toISOString()),
 });
 export type ExpiredUndispatchedJobInput = z.infer<typeof inputSchema>;
-const released = `h.state='final' AND ca.state='released' AND h.dispatch_token IS NULL AND EXISTS(SELECT 1 FROM v2_runtime_usage u WHERE u.attempt_id=ca.id AND u.outcome='released' AND json_extract(u.payload_json,'$.transport')='not_sent' AND json_extract(u.payload_json,'$.definitiveNoCharge')=1 AND json_extract(u.payload_json,'$.dispatchToken') IS NULL)`;
+const released = `h.state='final' AND ca.state='released' AND h.dispatch_token IS NULL AND (EXISTS(SELECT 1 FROM v2_execution_admissions e WHERE e.attempt_id=h.attempt_id AND e.state='final' AND e.transport='not_sent' AND e.dispatch_token IS NULL) OR EXISTS(SELECT 1 FROM v2_runtime_usage u WHERE u.attempt_id=ca.id AND u.outcome='released' AND json_extract(u.payload_json,'$.transport')='not_sent' AND json_extract(u.payload_json,'$.definitiveNoCharge')=1 AND json_extract(u.payload_json,'$.dispatchToken') IS NULL))`;
 const prepared = "h.state='prepared' AND ca.state='reserved' AND h.dispatch_token IS NULL";
-const current = `j.status='queued' AND j.target_kind IN ('file','profile_asset') AND o.state='admitted' AND ca.operation_id=o.id AND p.operation_id=o.id AND p.operation_revision=o.revision AND p.job_id=j.id AND p.target_kind=j.target_kind AND p.target_id=j.target_id AND p.target_revision=j.target_revision AND p.created_at=j.updated_at AND ${jobAlive} AND NOT EXISTS(SELECT 1 FROM v2_paid_holds fresh JOIN v2_cost_attempts fc ON fc.id=fresh.attempt_id JOIN v2_runtime_plans fp ON fp.id=fresh.plan_id WHERE fresh.job_id=j.id AND fp.operation_revision=o.revision AND fp.target_revision=j.target_revision AND fc.state IN ('reserved','ambiguous') AND (fresh.dispatch_token IS NOT NULL OR fp.deadline_at>?))`;
+const current = `j.status='queued' AND j.target_kind IN ('file','profile_asset') AND o.state='admitted' AND ca.operation_id=o.id AND p.operation_id=o.id AND p.operation_revision=o.revision AND p.job_id=j.id AND p.target_kind=j.target_kind AND p.target_id=j.target_id AND p.target_revision=j.target_revision AND p.created_at=j.updated_at AND ${jobAlive} AND NOT EXISTS(SELECT 1 FROM v2_execution_job_holds fresh JOIN v2_execution_attempts fc ON fc.id=fresh.attempt_id JOIN v2_execution_job_plans fp ON fp.id=fresh.plan_id WHERE fresh.job_id=j.id AND fp.operation_revision=o.revision AND fp.target_revision=j.target_revision AND fc.state IN ('reserved','ambiguous') AND (fresh.dispatch_token IS NOT NULL OR fp.deadline_at>?))`;
 const joins =
-  "v2_jobs j JOIN v2_operations o ON o.id=j.operation_id JOIN v2_paid_holds h ON h.job_id=j.id JOIN v2_runtime_plans p ON p.id=h.plan_id JOIN v2_cost_attempts ca ON ca.id=h.attempt_id JOIN v2_monthly_budget budget ON budget.month=ca.month";
+  "v2_jobs j JOIN v2_operations o ON o.id=j.operation_id JOIN v2_execution_job_holds h ON h.job_id=j.id JOIN v2_execution_job_plans p ON p.id=h.plan_id JOIN v2_execution_attempts ca ON ca.id=h.attempt_id LEFT JOIN v2_monthly_budget budget ON budget.month=ca.month LEFT JOIN v2_execution_admissions execution ON execution.attempt_id=h.attempt_id";
 
 /** A trusted Workflow recovery entry, never a client receipt endpoint. Each
  * refund uses the existing final prepared/reserved/null-token CAS. A dispatched
@@ -34,7 +34,7 @@ export function stopExpiredUndispatchedJob(
       { ownerId, jobId, instanceId, now } = input;
     const row = await core
       .statement(
-        `SELECT h.attempt_id,p.digest,p.invocation_id,p.deadline_at,j.fencing,j.updated_at,ca.state AS cost_state,j.target_kind,j.target_id,j.target_revision,o.revision AS operation_revision FROM ${joins} WHERE j.id=? AND o.owner_id=? AND j.runtime_instance_id=? AND budget.environment=? AND p.deadline_at<=? AND (${prepared} OR (${released})) AND ${current} ORDER BY p.created_at DESC,p.id DESC LIMIT 1`,
+        `SELECT h.attempt_id,p.digest,p.invocation_id,p.deadline_at,j.fencing,j.updated_at,ca.state AS cost_state,j.target_kind,j.target_id,j.target_revision,o.revision AS operation_revision FROM ${joins} WHERE j.id=? AND o.owner_id=? AND j.runtime_instance_id=? AND coalesce(budget.environment,execution.environment)=? AND p.deadline_at<=? AND (${prepared} OR (${released})) AND ${current} ORDER BY p.created_at DESC,p.id DESC LIMIT 1`,
         [jobId, ownerId, instanceId, environment, now, now],
       )
       .first<{
@@ -88,7 +88,7 @@ export function stopExpiredUndispatchedJob(
     const claim = crypto.randomUUID();
     return core.changed([
       core.statement(
-        `INSERT INTO v2_mutation_claims(id,owner_id,target_id,revision) SELECT ?,o.owner_id,j.id,j.target_revision FROM ${joins} WHERE j.id=? AND o.owner_id=? AND j.runtime_instance_id=? AND budget.environment=? AND h.attempt_id=? AND p.digest=? AND p.deadline_at<=? AND j.fencing=? AND j.updated_at=? AND j.target_kind=? AND j.target_id=? AND j.target_revision=? AND o.revision=? AND (${released}) AND ${current}`,
+        `INSERT INTO v2_mutation_claims(id,owner_id,target_id,revision) SELECT ?,o.owner_id,j.id,j.target_revision FROM ${joins} WHERE j.id=? AND o.owner_id=? AND j.runtime_instance_id=? AND coalesce(budget.environment,execution.environment)=? AND h.attempt_id=? AND p.digest=? AND p.deadline_at<=? AND j.fencing=? AND j.updated_at=? AND j.target_kind=? AND j.target_id=? AND j.target_revision=? AND o.revision=? AND (${released}) AND ${current}`,
         [
           claim,
           jobId,

@@ -23,11 +23,12 @@ const verify: RuntimeProofVerifier = async (kind, _value, digest) => ({
           ? "provider_receipt"
           : "authenticated_coordinator",
 });
-async function paidFixture() {
+async function paidFixture(applicationCostLimitsEnabled = true) {
   // The same immutable proof bundle funds physical capacity and each PUT.
   const p = await ready(
     {},
     {
+      applicationCostLimitsEnabled,
       pricing: (initial) => ({
         ...initial,
         prices: initial.prices.map((price) =>
@@ -63,10 +64,10 @@ async function paidFixture() {
     async prepare(input) {
       const request = {
         attemptId: crypto.randomUUID(),
-        quoteId: crypto.randomUUID(),
+        quoteId: applicationCostLimitsEnabled ? crypto.randomUUID() : null,
         planId: crypto.randomUUID(),
-        pricingProofId: pricing.id,
-        fundingProofId: funding.id,
+        pricingProofId: applicationCostLimitsEnabled ? pricing.id : null,
+        fundingProofId: applicationCostLimitsEnabled ? funding.id : null,
         attempt: input.attemptOrdinal,
         service: input.service,
         targetKind: input.targetKind,
@@ -102,6 +103,14 @@ async function paidFixture() {
     async after(permit, transport) {
       observations.push(transport.transport);
       if (persistenceFails) throw new Error("Synthetic durable failure");
+      if (!applicationCostLimitsEnabled) {
+        await storage.recordTransport({
+          ...permit,
+          transport: transport.transport,
+          observedAt: transport.observedAt,
+        });
+        return;
+      }
       // Local PUT is never authenticated billing evidence: retain full exposure.
       await storage.recordUsage(
         {
@@ -316,5 +325,40 @@ test("pending envelope changed after dispatch await cannot send the captured bin
   // The recovery capability cannot attest to a substituted pending envelope.
   expect(f.db.sqlite.query("SELECT writer_state FROM v2_physical_blob_bindings").get()).toEqual({
     writer_state: "running",
+  });
+});
+
+test("unpriced original consumer publishes actual stored part and preserves physical writer fences", async () => {
+  const f = await paidFixture(false);
+  await f.put();
+  expect(f.bucket.calls.put).toBe(1);
+  expect(f.db.sqlite.query("SELECT state,transport FROM v2_execution_admissions").get()).toEqual({
+    state: "final",
+    transport: "response",
+  });
+  expect(f.db.sqlite.query("SELECT count(*) n FROM v2_upload_parts").get()).toEqual({ n: 1 });
+  expect(
+    f.db.sqlite.query("SELECT state,writer_state FROM v2_physical_blob_bindings").get(),
+  ).toEqual({ state: "held", writer_state: "stopped" });
+  expect(f.db.sqlite.query("SELECT count(*) n FROM v2_cost_attempts").get()).toEqual({ n: 0 });
+});
+
+test("unpriced revoked original stops its exact unsent writer without sending R2 or releasing physical exposure", async () => {
+  const f = await paidFixture(false);
+  f.setBefore(async () => {
+    f.db.sqlite.exec("DELETE FROM v2_consents");
+  });
+  await expect(f.put()).rejects.toThrow("CONFLICT");
+  expect(f.bucket.calls.put).toBe(0);
+  expect(
+    f.db.sqlite.query("SELECT state,writer_state FROM v2_physical_blob_bindings").get(),
+  ).toEqual({ state: "held", writer_state: "stopped" });
+  expect(f.db.sqlite.query("SELECT state,transport FROM v2_execution_admissions").get()).toEqual({
+    state: "final",
+    transport: "not_sent",
+  });
+  expect(f.db.sqlite.query("SELECT count(*) n FROM v2_upload_parts").get()).toEqual({ n: 0 });
+  expect(f.db.sqlite.query("SELECT count(*) n FROM v2_execution_cost_observations").get()).toEqual({
+    n: 0,
   });
 });

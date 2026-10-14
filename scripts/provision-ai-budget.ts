@@ -16,7 +16,7 @@ import {
   createV2RuntimeRefreshRepository,
   runtimeRefreshSchema,
 } from "../src/server/db/v2-runtime-refresh";
-import type { initializeEmptyStorage } from "./initialize-storage";
+import type { initializeEmptyPhysicalStorage, initializeEmptyStorage } from "./initialize-storage";
 import { remoteBudgetD1 } from "./remote-budget-d1";
 
 export const observationSchema = z.strictObject({
@@ -441,7 +441,7 @@ export async function inspectAiRuntime(bindings: Partial<Record<RuntimeEnvironme
       (
         await core
           .statement(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('v2_storage_projections','v2_storage_carryover','v2_storage_funding_heads','v2_physical_blob_bindings')",
+            "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('v2_storage_projections','v2_storage_carryover','v2_storage_funding_heads','v2_physical_blob_bindings','v2_execution_admissions','v2_execution_cost_observations')",
           )
           .all<{ name: string }>()
       ).results.map((r) => r.name),
@@ -476,6 +476,32 @@ export async function inspectAiRuntime(bindings: Partial<Record<RuntimeEnvironme
           )
           .first()
       : null;
+    const executions =
+      available.has("v2_execution_admissions") && available.has("v2_execution_cost_observations")
+        ? (
+            await core
+              .statement(
+                `SELECT a.state,(SELECT o.charged_krw FROM v2_execution_cost_observations o WHERE o.attempt_id=a.attempt_id AND o.charged_krw IS NOT NULL ORDER BY o.observed_at DESC,o.verified_at DESC,o.id DESC LIMIT 1) AS known_krw FROM v2_execution_admissions a WHERE a.environment=?`,
+                [environment],
+              )
+              .all<{ state: string; known_krw: number | null }>()
+          ).results
+        : null;
+    const known =
+      executions?.flatMap((r) => (r.known_krw === null ? [] : [BigInt(r.known_krw)])) ?? [];
+    const executionObservations = executions
+      ? {
+          admissions: executions.length,
+          unresolvedTransport: executions.filter(
+            (r) => r.state === "dispatched" || r.state === "unknown",
+          ).length,
+          unpricedAdmissions: executions.filter((r) => r.known_krw === null).length,
+          // Decimal integer text preserves exact totals beyond JS safe-integer range.
+          knownObservedKrw: known.length
+            ? known.reduce((sum, value) => sum + value, 0n).toString()
+            : null,
+        }
+      : null;
     const initializationPrerequisites = await core
       .statement(
         `SELECT (SELECT count(*) FROM v2_blobs) AS recordedBlobs,(SELECT count(*) FROM v2_storage_paid_executions) AS storageExecutions,(SELECT count(*) FROM v2_jobs WHERE status IN ('queued','running','validating')) AS unfinishedJobs,${available.has("v2_physical_blob_bindings") ? "(SELECT count(*) FROM v2_physical_blob_bindings)" : "NULL"} AS physicalBindings`,
@@ -492,6 +518,7 @@ export async function inspectAiRuntime(bindings: Partial<Record<RuntimeEnvironme
       projection,
       carryover,
       initializationPrerequisites,
+      executionObservations,
     });
   }
   return { mode: "status", observedAt: new Date().toISOString(), results };
@@ -511,7 +538,13 @@ if (import.meta.main) {
     if (!token || !sha || !/^[a-f0-9]{40}$/.test(sha))
       throw new Error("AI_RUNTIME_DEPLOYMENT_INPUT_INVALID");
     const config = (await Bun.file("wrangler.jsonc").json()) as {
-      env: Record<string, { d1_databases: { database_id: string }[] }>;
+      env: Record<
+        string,
+        {
+          d1_databases: { database_id: string }[];
+          vars?: { APPLICATION_COST_LIMITS_ENABLED?: string };
+        }
+      >;
     };
     const account = process.env.CLOUDFLARE_ACCOUNT_ID;
     if (!account) throw new Error("AI_RUNTIME_ACCOUNT_MISSING");
@@ -526,15 +559,17 @@ if (import.meta.main) {
     if (mode === "status")
       console.log(JSON.stringify({ ...(await inspectAiRuntime(selected)), candidateSha: sha }));
     else {
-      const observation = observationSchema.parse(
-        process.env.AI_RUNTIME_OBSERVATION_JSON
-          ? JSON.parse(process.env.AI_RUNTIME_OBSERVATION_JSON)
-          : await Bun.file("docs/operations/AI-RUNTIME-OBSERVATION.json").json(),
-      );
+      const readObservation = async () =>
+        observationSchema.parse(
+          process.env.AI_RUNTIME_OBSERVATION_JSON
+            ? JSON.parse(process.env.AI_RUNTIME_OBSERVATION_JSON)
+            : await Bun.file("docs/operations/AI-RUNTIME-OBSERVATION.json").json(),
+        );
       let result:
         | Awaited<ReturnType<typeof observeAiRuntime>>
         | Awaited<ReturnType<typeof provisionAiRuntime>>
-        | Awaited<ReturnType<typeof initializeEmptyStorage>>;
+        | Awaited<ReturnType<typeof initializeEmptyStorage>>
+        | Awaited<ReturnType<typeof initializeEmptyPhysicalStorage>>;
       if (mode === "initialize-storage") {
         const environment = target as RuntimeEnvironment;
         const configuration = JSON.parse(process.env.STORAGE_INITIALIZATION_JSON ?? "null");
@@ -554,16 +589,29 @@ if (import.meta.main) {
           .parse(await health.json());
         if (!health.ok || live.release !== sha || live.environment !== environment)
           throw new Error("AI_RUNTIME_SERVING_SHA_MISMATCH");
-        const { initializeEmptyStorage } = await import("./initialize-storage");
-        result = await initializeEmptyStorage(
-          bindings[environment],
-          environment,
-          observation,
-          configuration,
-          process.env.AI_RUNTIME_OPERATION_KEY ?? "default",
-          sha,
+        const { initializeEmptyStorage, initializeEmptyPhysicalStorage } = await import(
+          "./initialize-storage"
         );
-      } else
+        const key = process.env.AI_RUNTIME_OPERATION_KEY ?? "default";
+        result =
+          config.env[environment]?.vars?.APPLICATION_COST_LIMITS_ENABLED === "false"
+            ? await initializeEmptyPhysicalStorage(
+                bindings[environment],
+                environment,
+                configuration,
+                key,
+                sha,
+              )
+            : await initializeEmptyStorage(
+                bindings[environment],
+                environment,
+                await readObservation(),
+                configuration,
+                key,
+                sha,
+              );
+      } else {
+        const observation = await readObservation();
         result =
           mode === "reallocate"
             ? await provisionAiRuntime(bindings, observation)
@@ -573,12 +621,14 @@ if (import.meta.main) {
                 mode as "observe" | "refresh",
                 process.env.AI_RUNTIME_OPERATION_KEY ?? "default",
               );
+      }
       console.log(
         JSON.stringify({
           ...result,
           candidateSha: sha,
-          modelBoundsConfigured: false,
-          autoRecharge: true,
+          ...("initializationId" in result
+            ? {}
+            : { modelBoundsConfigured: false, autoRecharge: true }),
         }),
       );
     }

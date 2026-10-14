@@ -43,7 +43,7 @@ async function nativeAdmissionDiagnostics(
     const now = new Date().toISOString();
     const row = await core
       .statement(
-        "SELECT h.state,p.payload_json,p.digest,p.evidence_hash FROM v2_paid_holds h JOIN v2_runtime_plans p ON p.id=h.plan_id WHERE h.job_id=? ORDER BY h.attempt_id LIMIT 1",
+        "SELECT h.state,p.payload_json,p.digest,p.evidence_hash FROM v2_execution_job_holds h JOIN v2_execution_job_plans p ON p.id=h.plan_id WHERE h.job_id=? ORDER BY h.attempt_id LIMIT 1",
         [jobId],
       )
       .first<{ state: string; payload_json: string; digest: string; evidence_hash: string }>();
@@ -111,22 +111,23 @@ async function exerciseNativeRuntime(applicationCostLimitsEnabled: boolean) {
       modules: true,
       script: 'export default { fetch() { return new Response("local AI runtime test"); } }',
       compatibilityDate: "2026-10-01",
-      d1Databases: ["PREVIEW", "PRODUCTION"],
+      d1Databases: ["PREVIEW", "PRODUCTION", "UPGRADE"],
       cf: false,
       unsafeRegisterWorker: false,
     }),
   );
   try {
     const preview = (await mf.getD1Database("PREVIEW")) as unknown as D1Database,
-      production = (await mf.getD1Database("PRODUCTION")) as unknown as D1Database;
+      production = (await mf.getD1Database("PRODUCTION")) as unknown as D1Database,
+      upgrade = (await mf.getD1Database("UPGRADE")) as unknown as D1Database;
     const migrations = (await readdir("drizzle"))
       .filter((name) => /^\d{4}_.+\.sql$/.test(name))
       .sort();
-    for (const db of [preview, production]) {
+    for (const db of [preview, production, upgrade]) {
       for (const name of migrations) {
-        // Preview starts on the real pre-upgrade schema. Production is the fresh
-        // latest-schema reference; never apply a later migration before an older one.
-        if (db === preview && name >= "0014_") continue;
+        // Product runtimes require latest schema. A separate native database
+        // retains the real pre-upgrade schema for the populated upgrade below.
+        if (db === upgrade && name >= "0014_") continue;
         const statements = (await Bun.file(`drizzle/${name}`).text())
           .split("--> statement-breakpoint")
           .map((sql) => sql.trim())
@@ -372,8 +373,46 @@ async function exerciseNativeRuntime(applicationCostLimitsEnabled: boolean) {
         .prepare("SELECT reserved_krw+ambiguous_krw AS unresolved FROM v2_monthly_budget")
         .first<number>("unresolved"),
     ).toBe(0);
-    // Upgrade populated 0013 -> 0014 -> 0015 in order. A failure in either
+    // Upgrade populated 0013 -> 0014 -> 0015 -> 0016 in order. A failure in any
     // import must roll back data, tables, triggers and the schema marker.
+    // Copy actual synthetic legacy-path rows into the old schema. Current
+    // product code must not be run against an unapplied required migration.
+    const oldTables = (
+      await upgrade
+        .prepare(
+          "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' AND name!='app_metadata'",
+        )
+        .all<{ name: string }>()
+    ).results;
+    const copied: D1PreparedStatement[] = [upgrade.prepare("PRAGMA defer_foreign_keys=ON")];
+    for (const { name } of oldTables) {
+      // These rows are derived by the immutable funding-proof insert trigger.
+      if (name === "v2_storage_funding_heads") continue;
+      const existing = (await upgrade.prepare(`SELECT * FROM "${name}"`).all()).results;
+      if (existing.length) {
+        expect((await preview.prepare(`SELECT * FROM "${name}"`).all()).results).toEqual(existing);
+        continue;
+      }
+      const columns = (
+        await upgrade.prepare(`PRAGMA table_info("${name}")`).all<{ name: string }>()
+      ).results.map((column) => column.name);
+      const quoted = columns.map((column) => `"${column}"`).join(",");
+      for (const row of (
+        await preview.prepare(`SELECT ${quoted} FROM "${name}"`).all<Record<string, unknown>>()
+      ).results) {
+        copied.push(
+          upgrade
+            .prepare(`INSERT INTO "${name}"(${quoted}) VALUES(${columns.map(() => "?").join(",")})`)
+            .bind(...columns.map((column) => row[column])),
+        );
+      }
+    }
+    await upgrade.batch(copied);
+    for (const { name } of oldTables) {
+      expect(
+        (await upgrade.prepare(`SELECT * FROM "${name}" ORDER BY rowid`).all()).results,
+      ).toEqual((await preview.prepare(`SELECT * FROM "${name}" ORDER BY rowid`).all()).results);
+    }
     const preservedTables = [
       "v2_runtime_plans",
       "v2_paid_holds",
@@ -388,14 +427,14 @@ async function exerciseNativeRuntime(applicationCostLimitsEnabled: boolean) {
     const snapshot = async () =>
       Promise.all(
         preservedTables.map(
-          async (table) => (await preview.prepare(`SELECT * FROM ${table}`).all()).results,
+          async (table) => (await upgrade.prepare(`SELECT * FROM ${table}`).all()).results,
         ),
       );
     const schema = async (db: D1Database) =>
       (
         await db
           .prepare(
-            "SELECT type,name,sql FROM sqlite_master WHERE type IN ('table','index','trigger') ORDER BY type,name",
+            "SELECT type,name,sql FROM sqlite_master WHERE type IN ('table','index','trigger','view') ORDER BY type,name",
           )
           .all()
       ).results;
@@ -406,35 +445,35 @@ async function exerciseNativeRuntime(applicationCostLimitsEnabled: boolean) {
         .filter(Boolean);
       const original = await snapshot();
       expect(original[1]?.length).toBeGreaterThan(0);
-      const originalSchema = await schema(preview);
+      const originalSchema = await schema(upgrade);
       await expect(
-        preview.batch([
-          ...migration.map((sql) => preview.prepare(sql)),
-          preview.prepare("SELECT json('synthetic-invalid-json')"),
+        upgrade.batch([
+          ...migration.map((sql) => upgrade.prepare(sql)),
+          upgrade.prepare("SELECT json('synthetic-invalid-json')"),
         ]),
       ).rejects.toThrow();
       expect(await snapshot()).toEqual(original);
-      expect(await schema(preview)).toEqual(originalSchema);
+      expect(await schema(upgrade)).toEqual(originalSchema);
       // Remote imports must not depend on deferred-FK state surviving statement
       // boundaries. Check every intermediate schema as well as the final rows.
-      const upgraded = await preview.batch(
+      const upgraded = await upgrade.batch(
         migration.flatMap((sql) => [
-          preview.prepare(sql),
-          preview.prepare("PRAGMA foreign_key_check"),
+          upgrade.prepare(sql),
+          upgrade.prepare("PRAGMA foreign_key_check"),
         ]),
       );
       for (let i = 1; i < upgraded.length; i += 2) expect(upgraded[i]?.results).toEqual([]);
       expect((await snapshot()).slice(0, -1)).toEqual(original.slice(0, -1));
       expect(
-        await preview
+        await upgrade
           .prepare("SELECT value FROM app_metadata WHERE key='schema_version'")
           .first<string>("value"),
       ).toBe(name.slice(0, -4));
-      expect((await preview.prepare("PRAGMA foreign_key_check").all()).results).toEqual([]);
+      expect((await upgrade.prepare("PRAGMA foreign_key_check").all()).results).toEqual([]);
     }
-    expect(await schema(preview)).toEqual(await schema(production));
-    // The new no-cap runtime requires 0015's accounting tables. Exercise it only
-    // after the populated upgrade, retaining earlier paid plans and receipts.
+    expect(await schema(upgrade)).toEqual(await schema(production));
+    // Exercise observation mode on the current schema while retaining every
+    // earlier paid plan, hold and receipt from the same product database.
     env.APPLICATION_COST_LIMITS_ENABLED = String(applicationCostLimitsEnabled);
     core = createV2Core(preview, cipher, {
       applicationCostLimitsEnabled,
@@ -619,16 +658,28 @@ async function exerciseNativeRuntime(applicationCostLimitsEnabled: boolean) {
     expect(await service.timeline(ownerId, workspace.id)).toHaveLength(1);
     expect(
       await preview
-        .prepare("SELECT count(*) AS n FROM v2_cost_attempts WHERE state='settled'")
+        .prepare("SELECT count(*) AS n FROM v2_execution_attempts WHERE state='settled'")
         .first<number>("n"),
-    ).toBe(12);
+    ).toBe(applicationCostLimitsEnabled ? 12 : 14);
     expect(
       await preview
         .prepare(
-          "SELECT count(*) AS n FROM v2_cost_attempts WHERE state='ambiguous' AND charged_krw IS NULL",
+          "SELECT count(*) AS n FROM v2_execution_attempts WHERE state='ambiguous' AND charged_krw IS NULL",
         )
         .first<number>("n"),
-    ).toBe(2);
+    ).toBe(applicationCostLimitsEnabled ? 2 : 0);
+    if (!applicationCostLimitsEnabled) {
+      expect(
+        await preview.prepare("SELECT count(*) n FROM v2_cost_attempts").first<number>("n"),
+      ).toBe(2);
+      expect(
+        await preview
+          .prepare(
+            "SELECT count(*) n FROM v2_execution_cost_observations WHERE charged_krw IS NULL",
+          )
+          .first<number>("n"),
+      ).toBe(2);
+    }
     // Replay cannot emit another model request or duplicate published entities.
     expect((await execute(chatJob.jobId)).status).toBe("completed");
     expect(providerCalls).toBe(14);

@@ -11,18 +11,25 @@ export async function readProcessingProofs(
   sku: string | null = "container_cpu_seconds",
 ) {
   if (!core.applicationCostLimitsEnabled) {
-    return core
-      .statement(
-        `SELECT pricing.id AS pricingProofId,funding.id AS fundingProofId,'observation-only' AS allocationProofId
-       FROM v2_runtime_proofs pricing JOIN v2_storage_funding_heads head ON head.environment=pricing.environment
-       JOIN v2_runtime_proofs funding ON funding.id=head.proof_id AND funding.verified_at=head.verified_at
-       WHERE pricing.environment=? AND pricing.kind='pricing' AND funding.environment=pricing.environment AND funding.kind='funding'
-       AND pricing.verified_at<=? AND funding.verified_at<=?
-       AND (? IS NULL OR EXISTS(SELECT 1 FROM json_each(pricing.payload_json,'$.prices') WHERE json_extract(value,'$.sku')=?))
-       ORDER BY pricing.verified_at DESC,pricing.id DESC LIMIT 1`,
-        [environment, now, now, sku, sku],
-      )
-      .first<{ pricingProofId: string; fundingProofId: string; allocationProofId: string }>();
+    // Each existing observation is independent. Missing pricing, SKU, FX or
+    // funding never becomes a fabricated proof or an execution prerequisite.
+    try {
+      const row = await core
+        .statement(
+          `SELECT
+        (SELECT id FROM v2_runtime_proofs WHERE environment=? AND kind='pricing' AND verified_at<=? ORDER BY verified_at DESC,id DESC LIMIT 1) AS pricingProofId,
+        (SELECT id FROM v2_runtime_proofs WHERE environment=? AND kind='funding' AND verified_at<=? ORDER BY verified_at DESC,id DESC LIMIT 1) AS fundingProofId`,
+          [environment, now, environment, now],
+        )
+        .first<{ pricingProofId: string | null; fundingProofId: string | null }>();
+      return {
+        pricingProofId: row?.pricingProofId ?? null,
+        fundingProofId: row?.fundingProofId ?? null,
+        allocationProofId: null,
+      };
+    } catch {
+      return { pricingProofId: null, fundingProofId: null, allocationProofId: null };
+    }
   }
   return core
     .statement(

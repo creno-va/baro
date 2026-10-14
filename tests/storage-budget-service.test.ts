@@ -5,7 +5,7 @@ import {
   type BudgetAllocation,
   createV2AccountingRepository,
 } from "../src/server/db/v2-accounting";
-import { type Actor, createV2Core, sqlClaim } from "../src/server/db/v2-core";
+import { type Actor, createV2Core, sqlClaim, V2RepositoryError } from "../src/server/db/v2-core";
 import { createV2FilesRepository } from "../src/server/db/v2-files";
 import { createV2JobsRepository } from "../src/server/db/v2-jobs";
 import { createV2LawyersRepository } from "../src/server/db/v2-lawyers";
@@ -132,6 +132,7 @@ async function fixture(
     throughMigration?: string;
     skipPricing?: boolean;
     skipFunding?: boolean;
+    skipCostMetadata?: boolean;
     applicationCostLimitsEnabled?: boolean;
   } = {},
 ) {
@@ -149,51 +150,53 @@ async function fixture(
     jobs = createV2JobsRepository(core),
     runtime = createV2PaidRuntimeRepository(core, "preview", verifier);
   await accounting.ensurePrincipal(actor);
-  const a = allocation();
-  await accounting.recordAllocation(a);
-  for (const environment of ["preview", "production"] as const)
-    await accounting.recordAllocationAcknowledgment({
-      month: a.month,
-      version: a.version,
-      environment,
-      manifestHash: HASH,
-      drainReceiptId: crypto.randomUUID(),
-      now: NOW,
-    });
-  expect(await accounting.activateAllocation(a.month, a.version, NOW)).toBe(true);
-  if (options.throughMigration) {
-    db.sqlite
-      .query(
-        "INSERT INTO v2_runtime_controls(month,environment,pending_version,updated_at) VALUES(?,'preview',1,?)",
-      )
-      .run(a.month, NOW);
-  } else expect(await runtime.initializeControl(a.month, NOW)).toBe(true);
-  const ap = { id: crypto.randomUUID(), environment: "preview" as const, allocation: a };
-  expect(await runtime.putAllocationProof(ap, NOW)).toBe(true);
-  const drain = await runtime.drain(a.month, 1, ap.id, NOW);
-  expect(drain).not.toBeNull();
-  if (!drain) throw new Error("synthetic fixture drain missing");
-  expect(await runtime.putRemoteDrainProof(drain, NOW)).toBe(true);
-  const remote = {
-    ...drain,
-    id: crypto.randomUUID(),
-    environment: "production" as const,
-    limitKrw: 20000,
-  };
-  expect(await runtime.putRemoteDrainProof(remote, NOW)).toBe(true);
-  expect(await runtime.activate(a.month, 2, ap.id, drain.id, remote.id, NOW)).toBe(true);
   const pp = pricing(),
     fp = funding();
-  if (!options.skipPricing) expect(await runtime.putPricingProof(pp, NOW)).toBe(true);
-  if (!options.skipFunding) expect(await runtime.putFundingProof(fp, NOW)).toBe(true);
-  if (!options.throughMigration)
-    seedStorageAdmissionProjection(db, {
-      pricingId: pp.id,
-      fundingId: fp.id,
-      allocationId: ap.id,
-      now: NOW,
-      expiry: EXP,
-    });
+  if (!options.skipCostMetadata) {
+    const a = allocation();
+    await accounting.recordAllocation(a);
+    for (const environment of ["preview", "production"] as const)
+      await accounting.recordAllocationAcknowledgment({
+        month: a.month,
+        version: a.version,
+        environment,
+        manifestHash: HASH,
+        drainReceiptId: crypto.randomUUID(),
+        now: NOW,
+      });
+    expect(await accounting.activateAllocation(a.month, a.version, NOW)).toBe(true);
+    if (options.throughMigration) {
+      db.sqlite
+        .query(
+          "INSERT INTO v2_runtime_controls(month,environment,pending_version,updated_at) VALUES(?,'preview',1,?)",
+        )
+        .run(a.month, NOW);
+    } else expect(await runtime.initializeControl(a.month, NOW)).toBe(true);
+    const ap = { id: crypto.randomUUID(), environment: "preview" as const, allocation: a };
+    expect(await runtime.putAllocationProof(ap, NOW)).toBe(true);
+    const drain = await runtime.drain(a.month, 1, ap.id, NOW);
+    expect(drain).not.toBeNull();
+    if (!drain) throw new Error("synthetic fixture drain missing");
+    expect(await runtime.putRemoteDrainProof(drain, NOW)).toBe(true);
+    const remote = {
+      ...drain,
+      id: crypto.randomUUID(),
+      environment: "production" as const,
+      limitKrw: 20000,
+    };
+    expect(await runtime.putRemoteDrainProof(remote, NOW)).toBe(true);
+    expect(await runtime.activate(a.month, 2, ap.id, drain.id, remote.id, NOW)).toBe(true);
+    if (!options.skipPricing) expect(await runtime.putPricingProof(pp, NOW)).toBe(true);
+    if (!options.skipFunding) expect(await runtime.putFundingProof(fp, NOW)).toBe(true);
+    if (!options.throughMigration)
+      seedStorageAdmissionProjection(db, {
+        pricingId: pp.id,
+        fundingId: fp.id,
+        allocationId: ap.id,
+        now: NOW,
+        expiry: EXP,
+      });
+  }
   const workspaceId = crypto.randomUUID();
   const envelope = await core.encrypt("v2_workspaces", workspaceId, actor.ownerId, 1, {
     subjectContext: "individual",
@@ -204,7 +207,7 @@ async function fixture(
       "INSERT INTO v2_workspaces(id,owner_id,status,confirmed_summary_revision,encrypted_payload,created_at,updated_at) VALUES(?,?,'active',1,?,?,?)",
     )
     .run(workspaceId, actor.ownerId, envelope, NOW, NOW);
-  return { db, core, actor, accounting, jobs, runtime, pp, fp, workspaceId, ap, drain, remote };
+  return { db, core, actor, accounting, jobs, runtime, pp, fp, workspaceId };
 }
 
 async function originalFixture(
@@ -212,6 +215,7 @@ async function originalFixture(
   options: {
     skipPricing?: boolean;
     skipFunding?: boolean;
+    skipCostMetadata?: boolean;
     applicationCostLimitsEnabled?: boolean;
   } = {},
 ) {
@@ -686,10 +690,237 @@ test("observation-only jobless storage dispatch survives expired pricing and fun
     }),
   });
   const a = await prepared(service, { ...input(f), deadlineAt });
-  expect(a.request.pricingProofId).toBe(p.id);
-  expect(a.request.fundingProofId).toBe(funding.id);
+  expect(a.request.pricingProofId).toBeNull();
+  expect(a.request.fundingProofId).toBeNull();
+  expect(a.request.quoteId).toBeNull();
+  expect(a.paid.reservedKrw).toBeNull();
   await admitted(f, a);
   expect(await service.beforeDispatch(a, async () => true)).not.toBeNull();
-  expect(money(f)).toEqual({ reserved_krw: 1000, ambiguous_krw: 0, settled_krw: 0 });
+  expect(money(f)).toEqual({ reserved_krw: 0, ambiguous_krw: 0, settled_krw: 0 });
   expect(f.db.sqlite.query("PRAGMA foreign_key_check").all()).toEqual([]);
+});
+
+for (const kind of ["case_original", "lawyer_original"] as const)
+  test(`unpriced ${kind} executes without any cost metadata and preserves actual transport without invented billing`, async () => {
+    const f = await originalFixture(kind, {
+      applicationCostLimitsEnabled: false,
+      skipCostMetadata: true,
+    });
+    let now = NOW;
+    const costs = createStorageBudgetService({
+      core: f.core,
+      environment: "preview",
+      ownerId: f.actor.ownerId,
+      clock: () => now,
+      bounds,
+    });
+    const a = await prepared(costs, input(f));
+    expect([
+      a.request.pricingProofId,
+      a.request.fundingProofId,
+      a.request.quoteId,
+      a.paid.reservedKrw,
+    ]).toEqual([null, null, null, null]);
+    await admitted(f, a);
+    expect(
+      await f.storageRuntime.beforeDispatch(
+        { ...f.actor, ownerId: "another-owner" },
+        a.request.attemptId,
+      ),
+    ).toBeNull();
+    expect(await costs.beforeDispatch({ ...a }, async () => true)).toBeNull();
+    const permit = await costs.beforeDispatch(a, async () => true);
+    expect(permit).not.toBeNull();
+    if (!permit) throw new Error("Synthetic dispatch missing");
+    expect(await costs.beforeDispatch(a, async () => true)).toBeNull();
+    now = "2026-10-06T00:00:01.000Z";
+    await costs.after(
+      { ...permit },
+      { transport: "response", definitiveNoCharge: false, observedAt: now },
+    );
+    expect(f.db.sqlite.query("SELECT state,transport FROM v2_execution_admissions").get()).toEqual({
+      state: "dispatched",
+      transport: null,
+    });
+    await costs.after(permit, {
+      transport: "response",
+      definitiveNoCharge: false,
+      observedAt: now,
+    });
+    expect(
+      f.db.sqlite
+        .query("SELECT state,transport,transport_observed_at FROM v2_execution_admissions")
+        .get(),
+    ).toEqual({ state: "final", transport: "response", transport_observed_at: now });
+    expect(
+      f.db.sqlite.query("SELECT reserved_krw,charged_krw FROM v2_execution_attempts").get(),
+    ).toEqual({ reserved_krw: null, charged_krw: null });
+    for (const table of [
+      "v2_runtime_proofs",
+      "v2_runtime_controls",
+      "v2_monthly_budget",
+      "v2_cost_quotes",
+      "v2_cost_attempts",
+      "v2_execution_cost_observations",
+    ])
+      expect(f.db.sqlite.query(`SELECT count(*) AS n FROM ${table}`).get()).toEqual({ n: 0 });
+    expect(f.db.sqlite.query("PRAGMA foreign_key_check").all()).toEqual([]);
+  });
+
+test("unpriced storage keeps consent, pending hashes, expiry and unresolved invocation fences", async () => {
+  for (const failure of ["consent", "pending", "expiry", "unknown"] as const) {
+    const f = await originalFixture("case_original", {
+      applicationCostLimitsEnabled: false,
+      skipCostMetadata: true,
+    });
+    let now = NOW;
+    const costs = createStorageBudgetService({
+      core: f.core,
+      environment: "preview",
+      ownerId: f.actor.ownerId,
+      clock: () => now,
+      bounds,
+    });
+    const a = await prepared(costs, input(f));
+    await admitted(f, a);
+    if (failure === "consent")
+      f.db.sqlite.query("DELETE FROM user_consents WHERE user_id=?").run(f.actor.ownerId);
+    if (failure === "pending")
+      f.db.sqlite
+        .query("UPDATE v2_blobs SET cipher_hash=? WHERE id=?")
+        .run("b".repeat(64), a.request.blobId);
+    if (failure === "expiry") now = LATER;
+    const permit = await costs.beforeDispatch(a, async () => true);
+    if (failure !== "unknown") {
+      expect(permit).toBeNull();
+      expect(f.db.sqlite.query("SELECT state FROM v2_execution_admissions").get()).toEqual({
+        state: "prepared",
+      });
+    } else {
+      if (!permit) throw new Error("Synthetic dispatch missing");
+      await costs.after(permit, {
+        transport: "unknown",
+        definitiveNoCharge: false,
+        observedAt: now,
+      });
+      expect(
+        f.db.sqlite.query("SELECT state,transport FROM v2_execution_admissions").get(),
+      ).toEqual({ state: "unknown", transport: "unknown" });
+      const retry = await prepared(costs, { ...input(f), attemptOrdinal: 2 });
+      expect(
+        await f.core
+          .statement(`SELECT 1 WHERE ${retry.paid.predicate.sql}`, [...retry.paid.predicate.values])
+          .first(),
+      ).toBeNull();
+      expect(await costs.prepare({ ...input(f), attemptOrdinal: 3 })).toBeNull();
+      now = "2026-10-06T00:00:01.000Z";
+      await costs.after(permit, {
+        transport: "response",
+        definitiveNoCharge: false,
+        observedAt: now,
+      });
+      expect(
+        f.db.sqlite.query("SELECT state,transport FROM v2_execution_admissions").get(),
+      ).toEqual({ state: "final", transport: "response" });
+    }
+  }
+});
+
+for (const outage of ["transport", "metering"] as const)
+  test(`post-IO ${outage} persistence outage cannot fail unpriced storage or invent a receipt`, async () => {
+    const f = await originalFixture("case_original", {
+      applicationCostLimitsEnabled: false,
+      skipCostMetadata: true,
+    });
+    const costs = createStorageBudgetService({
+      core: f.core,
+      environment: "preview",
+      ownerId: f.actor.ownerId,
+      clock: () => NOW,
+      bounds,
+      ...(outage === "metering"
+        ? {
+            metering: async () => {
+              throw new V2RepositoryError("DB_OPERATION_FAILED");
+            },
+          }
+        : {}),
+    });
+    const a = await prepared(costs, input(f));
+    await admitted(f, a);
+    const permit = await costs.beforeDispatch(a, async () => true);
+    if (!permit) throw new Error("Synthetic dispatch missing");
+    const statement = f.core.statement;
+    if (outage === "transport")
+      f.core.statement = (sql, values) => {
+        if (sql.startsWith("UPDATE v2_execution_admissions SET state=?"))
+          throw new Error("D1_ERROR: synthetic unavailable");
+        return statement(sql, values);
+      };
+    await expect(
+      costs.after(permit, { transport: "response", definitiveNoCharge: false, observedAt: NOW }),
+    ).resolves.toBeUndefined();
+    expect(f.db.sqlite.query("SELECT state,transport FROM v2_execution_admissions").get()).toEqual(
+      outage === "transport"
+        ? { state: "dispatched", transport: null }
+        : { state: "final", transport: "response" },
+    );
+    expect(
+      f.db.sqlite.query("SELECT count(*) n FROM v2_execution_cost_observations").get(),
+    ).toEqual({ n: 0 });
+  });
+
+test("unpriced storage still denies pre-dispatch persistence failure and propagates non-accounting errors", async () => {
+  const f = await originalFixture("case_original", {
+    applicationCostLimitsEnabled: false,
+    skipCostMetadata: true,
+  });
+  const costs = createStorageBudgetService({
+    core: f.core,
+    environment: "preview",
+    ownerId: f.actor.ownerId,
+    clock: () => NOW,
+    bounds,
+    metering: async () => {
+      throw new V2RepositoryError("REPOSITORY_INPUT_INVALID");
+    },
+  });
+  const a = await prepared(costs, input(f));
+  await admitted(f, a);
+  const statement = f.core.statement;
+  f.core.statement = (sql, values) => {
+    if (sql.includes("INSERT INTO v2_mutation_claims"))
+      throw new Error("D1_ERROR: synthetic unavailable");
+    return statement(sql, values);
+  };
+  expect(await costs.beforeDispatch(a, async () => true)).toBeNull();
+  expect(f.db.sqlite.query("SELECT state FROM v2_execution_admissions").get()).toEqual({
+    state: "prepared",
+  });
+  f.core.statement = statement;
+  const g = await originalFixture("case_original", {
+    applicationCostLimitsEnabled: false,
+    skipCostMetadata: true,
+  });
+  const invalidCosts = createStorageBudgetService({
+    core: g.core,
+    environment: "preview",
+    ownerId: g.actor.ownerId,
+    clock: () => NOW,
+    bounds,
+    metering: async () => {
+      throw new V2RepositoryError("REPOSITORY_INPUT_INVALID");
+    },
+  });
+  const invalid = await prepared(invalidCosts, input(g));
+  await admitted(g, invalid);
+  const permit = await invalidCosts.beforeDispatch(invalid, async () => true);
+  if (!permit) throw new Error("Synthetic dispatch missing");
+  await expect(
+    invalidCosts.after(permit, {
+      transport: "response",
+      definitiveNoCharge: false,
+      observedAt: NOW,
+    }),
+  ).rejects.toThrow("REPOSITORY_INPUT_INVALID");
 });

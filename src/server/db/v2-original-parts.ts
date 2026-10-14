@@ -205,7 +205,7 @@ export function stopUnsentOriginalWrite(
       return false;
     const result = await core
       .statement(
-        `UPDATE v2_physical_blob_bindings SET writer_state='stopped' WHERE blob_id=? AND environment=? AND owner_id=? AND object_key=? AND maximum_cipher_bytes=? AND state='held' AND writer_state='running' AND writer_token=? AND expected_cipher_bytes=? AND EXISTS(SELECT 1 FROM v2_blobs b JOIN v2_storage_paid_executions h ON h.blob_id=b.id WHERE b.id=v2_physical_blob_bindings.blob_id AND b.reservation_id=? AND b.kind='original' AND b.visibility='private' AND b.object_key=v2_physical_blob_bindings.object_key AND b.logical_bytes=? AND b.cipher_bytes=? AND b.cipher_hash=? AND b.key_version=? AND b.created_at=? AND ((b.state='pending' AND b.encrypted_payload=?) OR (b.state='deleting' AND b.encrypted_payload='removed')) AND h.attempt_id=? AND h.payload_json=?) RETURNING blob_id`,
+        `UPDATE v2_physical_blob_bindings SET writer_state='stopped' WHERE blob_id=? AND environment=? AND owner_id=? AND object_key=? AND maximum_cipher_bytes=? AND state='held' AND writer_state='running' AND writer_token=? AND expected_cipher_bytes=? AND EXISTS(SELECT 1 FROM v2_blobs b JOIN v2_execution_storage_holds h ON h.blob_id=b.id WHERE b.id=v2_physical_blob_bindings.blob_id AND b.reservation_id=? AND b.kind='original' AND b.visibility='private' AND b.object_key=v2_physical_blob_bindings.object_key AND b.logical_bytes=? AND b.cipher_bytes=? AND b.cipher_hash=? AND b.key_version=? AND b.created_at=? AND ((b.state='pending' AND b.encrypted_payload=?) OR (b.state='deleting' AND b.encrypted_payload='removed')) AND h.attempt_id=? AND h.payload_json=?) RETURNING blob_id`,
         [
           b.id,
           writer.environment,

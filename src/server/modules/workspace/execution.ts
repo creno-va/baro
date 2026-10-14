@@ -81,7 +81,7 @@ export async function executeWorkspace(
     return { jobId: params.jobId, status: "stopped" as const };
   const paid = await core
     .statement(
-      "SELECT h.attempt_id FROM v2_paid_holds h JOIN v2_runtime_plans p ON p.id=h.plan_id WHERE h.job_id=? AND h.state='prepared' AND p.target_revision=? AND p.deadline_at>? ORDER BY h.attempt_id LIMIT 1",
+      "SELECT h.attempt_id FROM v2_execution_job_holds h JOIN v2_execution_job_plans p ON p.id=h.plan_id WHERE h.job_id=? AND h.state='prepared' AND p.target_revision=? AND p.deadline_at>? ORDER BY h.attempt_id LIMIT 1",
       [params.jobId, params.workspaceRevision, clock()],
     )
     .first<{ attempt_id: string }>();

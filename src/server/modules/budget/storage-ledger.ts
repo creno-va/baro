@@ -1,7 +1,13 @@
 import { z } from "zod";
 import { opaqueIdSchema, revisionSchema, timestampSchema } from "../../../contracts";
 import { usageDateKst } from "../../db/repository";
-import { type Actor, actorSchema, hashSchema, type V2Core } from "../../db/v2-core";
+import {
+  type Actor,
+  actorSchema,
+  hashSchema,
+  type V2Core,
+  V2RepositoryError,
+} from "../../db/v2-core";
 import {
   executionPlanSchema,
   fundingProofSchema,
@@ -24,7 +30,7 @@ import {
   createV2StoragePaidRuntimeRepository,
   type PreparedStoragePaidHold,
 } from "../../db/v2-storage-paid-runtime";
-import { readProcessingProofs } from "../../runtime/processing-proofs";
+import { reportDependencyFailure } from "../../dependency-diagnostics";
 
 const descriptorSchema = z.strictObject({
   runId: opaqueIdSchema,
@@ -127,28 +133,35 @@ export function createStorageBudgetService(options: {
           : null,
   );
   const proofsRuntime = createV2PaidRuntimeRepository(options.core, options.environment);
-  type State = { cutoff: number; allocationId: string; attempted: boolean };
+  type State = { cutoff: number; allocationId: string | null; attempted: boolean };
   const admissions = new WeakMap<object, State>();
   const permits = new WeakMap<object, { admission: StorageAdmission; terminal: boolean }>();
 
+  async function observe<T>(action: () => Promise<T>): Promise<T | null> {
+    try {
+      return await action();
+    } catch (error) {
+      if (
+        options.core.applicationCostLimitsEnabled ||
+        !(error instanceof V2RepositoryError) ||
+        error.code !== "DB_OPERATION_FAILED"
+      )
+        throw error;
+      // Real IO already happened. Keep the dispatched journal intact if its
+      // observation cannot be stored; an accounting outage cannot undo it.
+      reportDependencyFailure(error);
+      return null;
+    }
+  }
+
   async function proofs(now: string, checkpoint: () => Promise<boolean> = async () => true) {
-    if (!options.core.applicationCostLimitsEnabled) {
-      const ids = await readProcessingProofs(options.core, options.environment, now, null);
-      if (!ids || !(await checkpoint())) return null;
-      const [p, f] = await Promise.all([
-        proofsRuntime.findProof(ids.pricingProofId, now),
-        proofsRuntime.findProof(ids.fundingProofId, now),
-      ]);
-      if (p?.kind !== "pricing" || f?.kind !== "funding" || !(await checkpoint())) return null;
-      pricingProofSchema.parse(p.payload);
-      fundingProofSchema.parse(f.payload);
+    if (!options.core.applicationCostLimitsEnabled)
       return {
-        pricingId: p.id,
-        fundingId: f.id,
-        allocationId: ids.allocationProofId,
+        pricingId: null,
+        fundingId: null,
+        allocationId: null,
         cutoff: Number.POSITIVE_INFINITY,
       };
-    }
     const month = usageDateKst(now).slice(0, 7);
     const ids = await options.core
       .statement(
@@ -242,7 +255,7 @@ export function createStorageBudgetService(options: {
         if (!proof || proof.cutoff < Date.parse(input.deadlineAt)) return null;
         const request = storagePaidHoldRequestSchema.parse({
           attemptId: crypto.randomUUID(),
-          quoteId: crypto.randomUUID(),
+          quoteId: options.core.applicationCostLimitsEnabled ? crypto.randomUUID() : null,
           planId: crypto.randomUUID(),
           pricingProofId: proof.pricingId,
           fundingProofId: proof.fundingId,
@@ -318,29 +331,25 @@ export function createStorageBudgetService(options: {
           return null;
         const dispatch = await runtime.beforeDispatch(actor(), admission.request.attemptId);
         if (!(await checkpoint()) || !dispatch) return null;
-        const current = await options.core
-          .statement(
-            `SELECT h.deadline_at,pp.valid_until AS pricing_until,fp.valid_until AS funding_until,${allocationUntilSql("c", "ap")} AS allocation_until FROM v2_storage_paid_executions h JOIN v2_cost_attempts ca ON ca.id=h.attempt_id LEFT JOIN v2_runtime_controls c ON c.month=ca.month JOIN v2_runtime_proofs pp ON pp.id=h.pricing_proof_id JOIN v2_runtime_proofs fp ON fp.id=h.funding_proof_id LEFT JOIN v2_runtime_proofs ap ON ap.id=c.allocation_proof_id LEFT JOIN v2_storage_funding_heads head ON head.environment=c.environment AND head.proof_id=fp.id AND head.verified_at=fp.verified_at WHERE h.attempt_id=? AND h.state='dispatched' AND h.dispatch_token=? AND ca.state='reserved' AND pp.environment=? AND (${options.core.applicationCostLimitsEnabled ? "0" : "1"}=1 OR (c.phase='active' AND c.environment=pp.environment AND head.proof_id=fp.id AND c.allocation_proof_id=?))`,
-            [dispatch.attemptId, dispatch.dispatchToken, options.environment, state.allocationId],
-          )
-          .first<{
-            deadline_at: string;
-            pricing_until: string;
-            funding_until: string;
-            allocation_until: string;
-          }>();
-        if (
-          !(await checkpoint()) ||
-          !current ||
-          Date.parse(actor().now) >=
-            Math.min(
-              ...(options.core.applicationCostLimitsEnabled
-                ? Object.values(current)
-                : [current.deadline_at]
-              ).map(Date.parse),
+        if (options.core.applicationCostLimitsEnabled) {
+          const current = await options.core
+            .statement(
+              `SELECT h.deadline_at,pp.valid_until AS pricing_until,fp.valid_until AS funding_until,${allocationUntilSql("c", "ap")} AS allocation_until FROM v2_storage_paid_executions h JOIN v2_cost_attempts ca ON ca.id=h.attempt_id JOIN v2_runtime_controls c ON c.month=ca.month JOIN v2_runtime_proofs pp ON pp.id=h.pricing_proof_id JOIN v2_runtime_proofs fp ON fp.id=h.funding_proof_id JOIN v2_runtime_proofs ap ON ap.id=c.allocation_proof_id JOIN v2_storage_funding_heads head ON head.environment=c.environment AND head.proof_id=fp.id AND head.verified_at=fp.verified_at WHERE h.attempt_id=? AND h.state='dispatched' AND h.dispatch_token=? AND ca.state='reserved' AND pp.environment=? AND c.phase='active' AND c.environment=pp.environment AND c.allocation_proof_id=?`,
+              [dispatch.attemptId, dispatch.dispatchToken, options.environment, state.allocationId],
             )
-        )
-          return null;
+            .first<{
+              deadline_at: string;
+              pricing_until: string;
+              funding_until: string;
+              allocation_until: string;
+            }>();
+          if (
+            !(await checkpoint()) ||
+            !current ||
+            Date.parse(actor().now) >= Math.min(...Object.values(current).map(Date.parse))
+          )
+            return null;
+        }
         const permit = Object.freeze({
           attemptId: dispatch.attemptId,
           dispatchToken: dispatch.dispatchToken,
@@ -353,10 +362,23 @@ export function createStorageBudgetService(options: {
     },
     async after(permit, value) {
       const issued = permits.get(permit);
-      if (!issued || issued.terminal || !options.metering) return;
+      if (!issued || issued.terminal) return;
       const transport = transportSchema.parse(value),
         now = actor().now;
-      const actual = await options.metering(issued.admission.request, permit, transport, now);
+      if (!options.core.applicationCostLimitsEnabled)
+        await observe(() =>
+          runtime.recordTransport({
+            attemptId: permit.attemptId,
+            dispatchToken: permit.dispatchToken,
+            transport: transport.transport,
+            observedAt: now,
+          }),
+        );
+      if (!options.metering) return;
+      const metering = options.metering;
+      const actual = await observe(() =>
+        metering(issued.admission.request, permit, transport, now),
+      );
       if (!actual) return;
       const receipt = usageReceiptSchema.parse(actual.receipt);
       if (
@@ -369,7 +391,7 @@ export function createStorageBudgetService(options: {
       if (actual.evidence.digest !== hash) return;
       usages.set(hash, actual.evidence);
       try {
-        if (await runtime.recordUsage(receipt, actor().now))
+        if (await observe(() => runtime.recordUsage(receipt, actor().now)))
           issued.terminal =
             receipt.definitiveNoCharge ||
             receipt.chargedUsd !== null ||

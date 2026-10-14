@@ -39,9 +39,9 @@ const bindingSchema = z.strictObject({
   invocationId: opaqueIdSchema,
   maximumAttempts: z.number().int().min(1).max(3),
   deadlineAt: timestampSchema,
-  pricingProofId: opaqueIdSchema,
-  fundingProofId: opaqueIdSchema,
-  allocationProofId: opaqueIdSchema,
+  pricingProofId: opaqueIdSchema.nullable(),
+  fundingProofId: opaqueIdSchema.nullable(),
+  allocationProofId: opaqueIdSchema.nullable(),
 });
 export type GatewayExecutionBinding = z.infer<typeof bindingSchema>;
 export type GatewayAdmission = {
@@ -93,6 +93,7 @@ export function createGatewayBudgetService(options: {
   const runtime = createV2PaidRuntimeRepository(options.core, options.environment, verify);
 
   async function proofs(binding: GatewayExecutionBinding, now: string) {
+    if (!options.core.applicationCostLimitsEnabled) return { cutoff: Number.POSITIVE_INFINITY };
     const values = await Promise.all([
       runtime.findProof(binding.pricingProofId, now),
       runtime.findProof(binding.fundingProofId, now),
@@ -159,7 +160,11 @@ export function createGatewayBudgetService(options: {
       return null;
     const r = paidHoldRequestSchema.parse({
       attemptId: existing?.attemptId ?? crypto.randomUUID(),
-      quoteId: existing?.quoteId ?? crypto.randomUUID(),
+      quoteId: existing
+        ? existing.quoteId
+        : options.core.applicationCostLimitsEnabled
+          ? crypto.randomUUID()
+          : null,
       planId: existing?.planId ?? crypto.randomUUID(),
       pricingProofId: binding.pricingProofId,
       fundingProofId: binding.fundingProofId,
@@ -225,7 +230,7 @@ export function createGatewayBudgetService(options: {
       opaqueIdSchema.parse(attemptId);
       const row = await options.core
         .statement(
-          "SELECT p.payload_json,p.digest,p.evidence_hash FROM v2_paid_holds h JOIN v2_runtime_plans p ON p.id=h.plan_id JOIN v2_jobs j ON j.id=h.job_id JOIN v2_operations o ON o.id=j.operation_id WHERE h.attempt_id=? AND h.state='prepared' AND o.owner_id=?",
+          "SELECT p.payload_json,p.digest,p.evidence_hash FROM v2_execution_job_holds h JOIN v2_execution_job_plans p ON p.id=h.plan_id JOIN v2_jobs j ON j.id=h.job_id JOIN v2_operations o ON o.id=j.operation_id WHERE h.attempt_id=? AND h.state='prepared' AND o.owner_id=?",
           [attemptId, options.ownerId],
         )
         .first<{ payload_json: string; digest: string; evidence_hash: string }>();
@@ -322,7 +327,7 @@ export function createGatewayBudgetService(options: {
           state.token = dispatched.dispatchToken;
           const current = await options.core
             .statement(
-              `SELECT j.lease_until,p.deadline_at,pp.valid_until AS pricing_until,fp.valid_until AS funding_until,${allocationUntilSql("c", "ap")} AS allocation_until FROM v2_jobs j JOIN v2_operations o ON o.id=j.operation_id JOIN v2_paid_holds h ON h.job_id=j.id JOIN v2_runtime_plans p ON p.id=h.plan_id JOIN v2_cost_attempts ca ON ca.id=h.attempt_id LEFT JOIN v2_runtime_controls c ON c.month=ca.month JOIN v2_runtime_proofs pp ON pp.id=p.pricing_proof_id JOIN v2_runtime_proofs fp ON fp.id=p.funding_proof_id LEFT JOIN v2_runtime_proofs ap ON ap.id=c.allocation_proof_id LEFT JOIN v2_storage_funding_heads head ON head.environment=c.environment AND head.proof_id=fp.id AND head.verified_at=fp.verified_at WHERE h.attempt_id=? AND h.dispatch_token=? AND j.lease_token=? AND j.fencing=? AND j.status IN ('running','validating') AND o.owner_id=? AND o.state='admitted' AND p.operation_revision=o.revision AND (${options.core.applicationCostLimitsEnabled ? "0" : "1"}=1 OR (c.phase='active' AND c.environment=pp.environment AND head.proof_id=fp.id)) AND pp.environment=? AND ${jobAlive}`,
+              `SELECT j.lease_until,p.deadline_at,pp.valid_until AS pricing_until,fp.valid_until AS funding_until,${allocationUntilSql("c", "ap")} AS allocation_until FROM v2_jobs j JOIN v2_operations o ON o.id=j.operation_id JOIN v2_execution_job_holds h ON h.job_id=j.id JOIN v2_execution_job_plans p ON p.id=h.plan_id JOIN v2_execution_attempts ca ON ca.id=h.attempt_id LEFT JOIN v2_runtime_controls c ON c.month=ca.month LEFT JOIN v2_runtime_proofs pp ON pp.id=p.pricing_proof_id LEFT JOIN v2_runtime_proofs fp ON fp.id=p.funding_proof_id LEFT JOIN v2_runtime_proofs ap ON ap.id=c.allocation_proof_id LEFT JOIN v2_storage_funding_heads head ON head.environment=c.environment AND head.proof_id=fp.id AND head.verified_at=fp.verified_at WHERE h.attempt_id=? AND h.dispatch_token=? AND j.lease_token=? AND j.fencing=? AND j.status IN ('running','validating') AND o.owner_id=? AND o.state='admitted' AND p.operation_revision=o.revision AND (${options.core.applicationCostLimitsEnabled ? "0" : "1"}=1 OR (c.phase='active' AND c.environment=pp.environment AND head.proof_id=fp.id)) AND (${options.core.applicationCostLimitsEnabled ? "0" : "1"}=1 OR pp.environment=?) AND ${jobAlive}`,
               [
                 handle.attemptId,
                 state.token,

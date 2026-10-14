@@ -218,7 +218,7 @@ export async function runWorkspaceRuntime(
     pipeline: async (job, lease, _context, progress) => {
       const row = await core
         .statement(
-          "SELECT h.attempt_id,p.payload_json,coalesce(c.allocation_proof_id,'observation-only') AS allocation_proof_id FROM v2_paid_holds h JOIN v2_runtime_plans p ON p.id=h.plan_id JOIN v2_cost_attempts a ON a.id=h.attempt_id LEFT JOIN v2_runtime_controls c ON c.month=a.month AND c.environment=? WHERE h.job_id=? AND h.state='prepared' AND p.target_revision=? AND p.deadline_at>? ORDER BY h.attempt_id LIMIT 1",
+          "SELECT h.attempt_id,p.payload_json,c.allocation_proof_id FROM v2_execution_job_holds h JOIN v2_execution_job_plans p ON p.id=h.plan_id JOIN v2_execution_attempts a ON a.id=h.attempt_id LEFT JOIN v2_runtime_controls c ON c.month=a.month AND c.environment=? WHERE h.job_id=? AND h.state='prepared' AND p.target_revision=? AND p.deadline_at>? ORDER BY h.attempt_id LIMIT 1",
           [
             env.APP_ENV === "production" ? "production" : "preview",
             job.id,

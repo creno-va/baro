@@ -55,6 +55,8 @@ async function heldFixture(applicationCostLimitsEnabled = true) {
   f.db.sqlite
     .query("INSERT INTO v2_case_original_usage(workspace_id) VALUES(?)")
     .run(f.workspaceId);
+  // Seed a historical priced upload before switching this fixture to observation mode.
+  f.core.applicationCostLimitsEnabled = true;
   const core = fileStorageRequestCore(f.core, false);
   const service = createFilesService(core, {
     environment: "preview",
@@ -76,6 +78,7 @@ async function heldFixture(applicationCostLimitsEnabled = true) {
     0,
     new Response("hello").body,
   );
+  f.core.applicationCostLimitsEnabled = applicationCostLimitsEnabled;
   // Synthetic already-running job: refresh must preserve its opaque lease and state.
   f.db.sqlite
     .query(
@@ -131,10 +134,11 @@ test("observation-only refresh and physical upload retain costs above the finite
     0,
     new Response("hello").body,
   );
-  expect(f.db.sqlite.query("SELECT * FROM v2_cost_attempts").all()).toEqual(
-    expect.arrayContaining(oldAttempts),
-  );
-  expect(f.db.sqlite.query("SELECT count(*) n FROM v2_cost_attempts").get()).toEqual({ n: 2 });
+  expect(oldAttempts).toHaveLength(1);
+  expect(f.db.sqlite.query("SELECT * FROM v2_cost_attempts").all()).toEqual(oldAttempts);
+  expect(
+    f.db.sqlite.query("SELECT count(*) n FROM v2_execution_admissions WHERE kind='storage'").get(),
+  ).toEqual({ n: 1 });
   expect(
     f.db.sqlite.query("SELECT payload_json FROM v2_runtime_proofs WHERE id=?").get(o.funding.id),
   ).toEqual({ payload_json: JSON.stringify(o.funding) });

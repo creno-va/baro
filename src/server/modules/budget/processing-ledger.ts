@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { timestampSchema } from "../../../contracts";
-import { type Actor, actorSchema, type V2Core } from "../../db/v2-core";
+import { type Actor, actorSchema, type V2Core, V2RepositoryError } from "../../db/v2-core";
+import { recordExecutionTransport } from "../../db/v2-execution-runtime";
 import {
   createV2PaidRuntimeRepository,
   type ExecutionPlan,
@@ -12,6 +13,7 @@ import {
 } from "../../db/v2-paid-runtime";
 import type { PreparedPaidHold } from "../../db/v2-paid-statements";
 import { type JobLease, leaseSchema } from "../../db/v2-workspace";
+import { reportDependencyFailure } from "../../dependency-diagnostics";
 import {
   authorize,
   type ProcessingCostPermit,
@@ -135,7 +137,7 @@ export function createProcessingBudgetService(options: {
       return null;
     const parsedRequest = paidHoldRequestSchema.safeParse({
       attemptId: crypto.randomUUID(),
-      quoteId: crypto.randomUUID(),
+      quoteId: options.core.applicationCostLimitsEnabled ? crypto.randomUUID() : null,
       planId: crypto.randomUUID(),
       pricingProofId: binding.pricingProofId,
       fundingProofId: binding.fundingProofId,
@@ -197,7 +199,7 @@ export function createProcessingBudgetService(options: {
           const identity = await inputIdentity(input);
           const row = await options.core
             .statement(
-              `SELECT p.payload_json,p.digest FROM v2_paid_holds h JOIN v2_runtime_plans p ON p.id=h.plan_id
+              `SELECT p.payload_json,p.digest FROM v2_execution_job_holds h JOIN v2_execution_job_plans p ON p.id=h.plan_id
              WHERE h.attempt_id=? AND h.job_id=? AND h.state='prepared'`,
               [pendingPersisted, lease.jobId],
             )
@@ -269,7 +271,35 @@ export function createProcessingBudgetService(options: {
         // Until authenticated metering arrives, including late ASR/model output,
         // retain the complete reservation instead of guessing token/CPU costs.
         const a = actor();
-        const metered = await options.metering?.(issuedPermit.request, permit, receipt, a.now);
+        try {
+          await recordExecutionTransport(options.core, {
+            attemptId: permit.attemptId,
+            dispatchToken: permit.dispatchToken,
+            transport: receipt.transport,
+            observedAt: a.now,
+          });
+        } catch (error) {
+          if (
+            options.core.applicationCostLimitsEnabled ||
+            !(error instanceof V2RepositoryError) ||
+            error.code !== "DB_OPERATION_FAILED"
+          )
+            throw error;
+          reportDependencyFailure(error);
+        }
+        let metered: Awaited<ReturnType<NonNullable<typeof options.metering>>> | undefined;
+        try {
+          metered = await options.metering?.(issuedPermit.request, permit, receipt, a.now);
+        } catch (error) {
+          if (
+            options.core.applicationCostLimitsEnabled ||
+            !(error instanceof V2RepositoryError) ||
+            error.code !== "DB_OPERATION_FAILED"
+          )
+            throw error;
+          reportDependencyFailure(error);
+          return;
+        }
         if (!metered) return;
         const r = metered.receipt;
         if (
@@ -283,6 +313,14 @@ export function createProcessingBudgetService(options: {
         receipts.set(hash, metered.evidence);
         try {
           if (await runtime.recordUsage(r, a.now)) issuedPermit.observed = true;
+        } catch (error) {
+          if (
+            options.core.applicationCostLimitsEnabled ||
+            !(error instanceof V2RepositoryError) ||
+            error.code !== "DB_OPERATION_FAILED"
+          )
+            throw error;
+          reportDependencyFailure(error);
         } finally {
           receipts.delete(hash);
         }

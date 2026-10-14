@@ -76,19 +76,29 @@ async function jobBinding(
   instanceId: string,
   now: string,
   environment: "preview" | "production",
+  initialAttemptId: string | null,
 ): Promise<GatewayExecutionBinding | null> {
   const row = await core
     .statement(
       `SELECT o.id AS operationId,o.revision AS operationRevision,i.request_hash AS requestHash,
       j.id AS jobId,j.target_kind AS targetKind,j.target_id AS targetId,j.target_revision AS targetRevision,
-      p.pricing_proof_id AS pricingProofId,p.funding_proof_id AS fundingProofId,coalesce(c.allocation_proof_id,'observation-only') AS allocationProofId
+      p.pricing_proof_id AS pricingProofId,p.funding_proof_id AS fundingProofId,c.allocation_proof_id AS allocationProofId
      FROM v2_jobs j JOIN v2_operations o ON o.id=j.operation_id JOIN v2_idempotency i ON i.operation_id=o.id
-     JOIN v2_paid_holds h ON h.job_id=j.id JOIN v2_runtime_plans p ON p.id=h.plan_id
-     JOIN v2_cost_attempts ca ON ca.id=h.attempt_id LEFT JOIN v2_runtime_controls c ON c.month=ca.month
+     JOIN v2_execution_job_holds h ON h.job_id=j.id JOIN v2_execution_job_plans p ON p.id=h.plan_id LEFT JOIN v2_execution_admissions execution ON execution.attempt_id=h.attempt_id
+     JOIN v2_execution_attempts ca ON ca.id=h.attempt_id LEFT JOIN v2_runtime_controls c ON c.month=ca.month
      WHERE j.id=? AND o.owner_id=? AND j.runtime_instance_id=? AND j.target_kind='file'
-       AND j.target_id=? AND j.target_revision=? AND (${core.applicationCostLimitsEnabled ? "0" : "1"}=1 OR (c.phase='active' AND c.environment=?))
-     ORDER BY p.created_at,p.id LIMIT 1`,
-      [params.jobId, params.ownerId, instanceId, params.fileId, params.fileRevision, environment],
+       AND j.target_id=? AND j.target_revision=? AND p.operation_revision=o.revision AND p.target_revision=j.target_revision AND (execution.runtime_instance_id=j.runtime_instance_id OR (execution.attempt_id IS NULL AND NOT EXISTS(SELECT 1 FROM v2_execution_admissions other_execution WHERE other_execution.job_id=j.id))) AND (? IS NULL OR h.attempt_id=?) AND (${core.applicationCostLimitsEnabled ? "0" : "1"}=1 OR (c.phase='active' AND c.environment=?))
+     ORDER BY p.created_at DESC,p.id DESC LIMIT 1`,
+      [
+        params.jobId,
+        params.ownerId,
+        instanceId,
+        params.fileId,
+        params.fileRevision,
+        initialAttemptId,
+        initialAttemptId,
+        environment,
+      ],
     )
     .first<Omit<GatewayExecutionBinding, "invocationId" | "maximumAttempts" | "deadlineAt">>();
   return row
@@ -121,9 +131,9 @@ export async function createFileProcessingRuntime(
   });
   const initialAttemptId = await core
     .statement(
-      `SELECT h.attempt_id FROM v2_paid_holds h JOIN v2_jobs j ON j.id=h.job_id JOIN v2_operations o ON o.id=j.operation_id
-     JOIN v2_cost_attempts ca ON ca.id=h.attempt_id WHERE j.id=? AND o.owner_id=? AND j.runtime_instance_id=?
-       AND h.state='prepared' AND ca.state='reserved' ORDER BY ca.created_at,ca.id LIMIT 1`,
+      `SELECT h.attempt_id FROM v2_execution_job_holds h JOIN v2_jobs j ON j.id=h.job_id JOIN v2_operations o ON o.id=j.operation_id
+     JOIN v2_execution_attempts ca ON ca.id=h.attempt_id JOIN v2_execution_job_plans p ON p.id=h.plan_id LEFT JOIN v2_execution_admissions execution ON execution.attempt_id=h.attempt_id WHERE p.operation_revision=o.revision AND p.target_revision=j.target_revision AND (execution.runtime_instance_id=j.runtime_instance_id OR (execution.attempt_id IS NULL AND NOT EXISTS(SELECT 1 FROM v2_execution_admissions other_execution WHERE other_execution.job_id=j.id))) AND j.id=? AND o.owner_id=? AND j.runtime_instance_id=?
+       AND h.state='prepared' AND ca.state='reserved' ORDER BY ca.created_at DESC,ca.id DESC LIMIT 1`,
       [params.jobId, params.ownerId, instanceId],
     )
     .first<string>("attempt_id");
@@ -134,7 +144,7 @@ export async function createFileProcessingRuntime(
     ...(initialAttemptId ? { initialAttemptId } : {}),
     ...policy,
     bounds: policy.bounds ?? boundedProcessingResources,
-    binding: (now) => jobBinding(core, params, instanceId, now, environment),
+    binding: (now) => jobBinding(core, params, instanceId, now, environment, initialAttemptId),
   });
   let execution: ReturnType<typeof createFileProcessingExecution>;
   const ledgers = new Map<string, ProcessingCosts>();

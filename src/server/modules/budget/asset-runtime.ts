@@ -27,10 +27,10 @@ export async function createAssetProcessingRuntime(
   const environment = env.APP_ENV === "production" ? "production" : "preview";
   const initial = await core
     .statement(
-      `SELECT h.attempt_id FROM v2_paid_holds h JOIN v2_jobs j ON j.id=h.job_id JOIN v2_operations o ON o.id=j.operation_id
-      JOIN v2_cost_attempts a ON a.id=h.attempt_id WHERE j.id=? AND o.owner_id=? AND j.runtime_instance_id=?
+      `SELECT h.attempt_id FROM v2_execution_job_holds h JOIN v2_jobs j ON j.id=h.job_id JOIN v2_operations o ON o.id=j.operation_id
+      JOIN v2_execution_attempts a ON a.id=h.attempt_id JOIN v2_execution_job_plans p ON p.id=h.plan_id LEFT JOIN v2_execution_admissions execution ON execution.attempt_id=h.attempt_id WHERE p.operation_revision=o.revision AND p.target_revision=j.target_revision AND (execution.runtime_instance_id=j.runtime_instance_id OR (execution.attempt_id IS NULL AND NOT EXISTS(SELECT 1 FROM v2_execution_admissions other_execution WHERE other_execution.job_id=j.id))) AND j.id=? AND o.owner_id=? AND j.runtime_instance_id=?
       AND j.target_kind='profile_asset' AND j.kind='portfolio_sanitize' AND j.profile_id=? AND j.target_id=? AND j.target_revision=?
-      AND h.state='prepared' AND a.state='reserved' ORDER BY a.created_at,a.id LIMIT 1`,
+      AND h.state='prepared' AND a.state='reserved' ORDER BY a.created_at DESC,a.id DESC LIMIT 1`,
       [
         params.jobId,
         params.ownerId,
@@ -53,13 +53,13 @@ export async function createAssetProcessingRuntime(
         .statement(
           `SELECT o.id AS operationId,o.revision AS operationRevision,i.request_hash AS requestHash,
           j.id AS jobId,j.target_kind AS targetKind,j.target_id AS targetId,j.target_revision AS targetRevision,
-          p.pricing_proof_id AS pricingProofId,p.funding_proof_id AS fundingProofId,coalesce(c.allocation_proof_id,'observation-only') AS allocationProofId
+          p.pricing_proof_id AS pricingProofId,p.funding_proof_id AS fundingProofId,c.allocation_proof_id AS allocationProofId
           FROM v2_jobs j JOIN v2_operations o ON o.id=j.operation_id JOIN v2_idempotency i ON i.operation_id=o.id
-          JOIN v2_paid_holds h ON h.job_id=j.id JOIN v2_runtime_plans p ON p.id=h.plan_id
-          JOIN v2_cost_attempts a ON a.id=h.attempt_id LEFT JOIN v2_runtime_controls c ON c.month=a.month
+          JOIN v2_execution_job_holds h ON h.job_id=j.id JOIN v2_execution_job_plans p ON p.id=h.plan_id LEFT JOIN v2_execution_admissions execution ON execution.attempt_id=h.attempt_id
+          JOIN v2_execution_attempts a ON a.id=h.attempt_id LEFT JOIN v2_runtime_controls c ON c.month=a.month
           WHERE j.id=? AND o.owner_id=? AND j.runtime_instance_id=? AND j.target_kind='profile_asset'
-          AND j.profile_id=? AND j.target_id=? AND j.target_revision=? AND (${core.applicationCostLimitsEnabled ? "0" : "1"}=1 OR (c.environment=? AND c.phase='active'))
-          ORDER BY p.created_at,p.id LIMIT 1`,
+          AND j.profile_id=? AND j.target_id=? AND j.target_revision=? AND p.operation_revision=o.revision AND p.target_revision=j.target_revision AND (execution.runtime_instance_id=j.runtime_instance_id OR (execution.attempt_id IS NULL AND NOT EXISTS(SELECT 1 FROM v2_execution_admissions other_execution WHERE other_execution.job_id=j.id))) AND (? IS NULL OR h.attempt_id=?) AND (${core.applicationCostLimitsEnabled ? "0" : "1"}=1 OR (c.environment=? AND c.phase='active'))
+          ORDER BY p.created_at DESC,p.id DESC LIMIT 1`,
           [
             params.jobId,
             params.ownerId,
@@ -67,6 +67,8 @@ export async function createAssetProcessingRuntime(
             params.profileId,
             params.assetId,
             params.assetRevision,
+            initial,
+            initial,
             environment,
           ],
         )
