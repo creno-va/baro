@@ -5,10 +5,12 @@ import { convertV4MiniflareOptions, Miniflare } from "miniflare";
 import observation from "../docs/operations/AI-RUNTIME-OBSERVATION.json";
 import { modelBounds, observationSchema, provisionAiRuntime } from "../scripts/provision-ai-budget";
 import { CURRENT_POLICY_VERSIONS } from "../src/contracts/consent";
+import { v2JobSchema } from "../src/contracts/v2";
 import { createWorkspacesApi } from "../src/server/api/v2/workspaces";
 import { createCaseDataCipher } from "../src/server/crypto";
 import { createV2Core, type V2Core } from "../src/server/db/v2-core";
 import { runtimeDigest } from "../src/server/db/v2-paid-runtime";
+import { type DependencyCategory, dependencyCategory } from "../src/server/dependency-diagnostics";
 import { paidHoldRequestSchema } from "../src/server/modules/budget/contracts";
 import { createGatewayExecutionPlanner } from "../src/server/modules/budget/execution-plan";
 import { MODEL_ID } from "../src/server/modules/llm-gateway/prompts";
@@ -29,6 +31,7 @@ import {
   workspaceTokenBounds,
 } from "../src/server/runtime/workspace";
 import { signedSessionCookie, testEnvironment } from "./helpers/d1";
+import { measureD1Work } from "./helpers/d1-work";
 
 /** Failure-only synthetic diagnostics: never serialize rows, identities, text or errors. */
 async function nativeAdmissionDiagnostics(
@@ -38,9 +41,31 @@ async function nativeAdmissionDiagnostics(
   workspaceId: string,
   jobId: string,
 ) {
-  const result: Record<string, boolean | number> = { probeComplete: false };
+  const result: Record<string, boolean | number | string | null> = { probeComplete: false };
   try {
     const now = new Date().toISOString();
+    const job = await core
+      .statement("SELECT status,phase,failure_code,attempts,lease_until FROM v2_jobs WHERE id=?", [
+        jobId,
+      ])
+      .first<{
+        status: unknown;
+        phase: unknown;
+        failure_code: unknown;
+        attempts: unknown;
+        lease_until: string | null;
+      }>();
+    result.jobPresent = !!job;
+    if (job) {
+      result.jobStatus = v2JobSchema.shape.status.parse(job.status);
+      result.jobPhase = v2JobSchema.shape.phase.parse(job.phase);
+      result.jobFailure = v2JobSchema.shape.failure.parse(job.failure_code);
+      result.jobAttempts = v2JobSchema.shape.attempts.parse(job.attempts);
+      result.jobLeasePresent = job.lease_until !== null;
+      result.jobLeaseRemainingMs = job.lease_until
+        ? Date.parse(job.lease_until) - Date.parse(now)
+        : null;
+    }
     const row = await core
       .statement(
         "SELECT h.state,p.payload_json,p.digest,p.evidence_hash FROM v2_execution_job_holds h JOIN v2_execution_job_plans p ON p.id=h.plan_id WHERE h.job_id=? ORDER BY h.attempt_id LIMIT 1",
@@ -65,7 +90,7 @@ async function nativeAdmissionDiagnostics(
       result[`${kind}VerifiedByNow`] = proof?.verified === 1;
       result[`${kind}Fresh`] = proof?.fresh === 1;
     }
-    // The failed second-question job resets status/currentJobId only; the shared
+    // A failed question job resets status/currentJobId only; the shared
     // context reader normalizes both, so its exact wire can still be compared.
     const input = workspaceModelInput(
       await readWorkspaceContext(core, { ownerId, now }, workspaceId),
@@ -97,7 +122,8 @@ async function nativeAdmissionDiagnostics(
     result.executionVerified = !!execution;
     result.executionEvidenceMatches = execution?.evidenceHash === row.evidence_hash;
     result.probeComplete = true;
-  } catch {
+  } catch (error) {
+    result.probeFailureCategory = dependencyCategory(error);
     // Preserve the original failing assertion without leaking the probe error.
   }
   return result;
@@ -106,6 +132,7 @@ async function nativeAdmissionDiagnostics(
 // Wrangler pins this workerd/Miniflare pair in bun.lock. Using its actual D1
 // implementation catches SQLite authorization/SQL limits that bun:sqlite cannot.
 async function exerciseNativeRuntime(applicationCostLimitsEnabled: boolean) {
+  const started = performance.now();
   const mf = new Miniflare(
     convertV4MiniflareOptions({
       modules: true,
@@ -178,10 +205,14 @@ async function exerciseNativeRuntime(applicationCostLimitsEnabled: boolean) {
     let providerCalls = 0,
       unavailable = false,
       auditRejected = false;
+    const databaseFailures: DependencyCategory[] = [],
+      measured = measureD1Work(preview, (error) =>
+        databaseFailures.push(dependencyCategory(error)),
+      );
     const env = {
       ...testEnvironment(preview),
       APP_ENV: "preview",
-      DB: preview,
+      DB: measured.binding,
       CASE_DATA_KEY_V1: key,
       APPLICATION_COST_LIMITS_ENABLED: "true",
       MONTHLY_BUDGET_CAP_ENABLED: "false",
@@ -341,6 +372,7 @@ async function exerciseNativeRuntime(applicationCostLimitsEnabled: boolean) {
       subjectContext: "individual",
       turnstileToken: "synthetic",
     });
+    const admissionStarted = performance.now();
     const admission = await request(`/api/v2/cases/${workspace.id}/intake/advance`, "POST", {
       expectedRevision: workspace.workspaceRevision,
     });
@@ -348,6 +380,9 @@ async function exerciseNativeRuntime(applicationCostLimitsEnabled: boolean) {
     const queued = (await admission.json()) as { status: string; jobId: string };
     expect(queued.status).toBe("queued");
     const pending: Promise<void>[] = [];
+    measured.reset();
+    databaseFailures.length = 0;
+    const runtimeStarted = performance.now();
     const result = await runWorkspaceRuntime(
       env,
       {
@@ -359,7 +394,36 @@ async function exerciseNativeRuntime(applicationCostLimitsEnabled: boolean) {
       `${queued.jobId}-1`,
       (promise) => pending.push(promise),
     );
+    const runtimeFinished = performance.now();
     await Promise.all(pending);
+    if (result.status !== "completed") {
+      // Both variants first run a priced baseline, then upgrade populated legacy
+      // rows before switching mode. Never label this failure as unpriced execution.
+      console.error("Synthetic native initial runtime diagnostics", {
+        requestedCostLimitsEnabled: applicationCostLimitsEnabled,
+        activeCostLimitsEnabled: env.APPLICATION_COST_LIMITS_ENABLED !== "false",
+        providerCalls,
+        setupDurationMs: Math.round(admissionStarted - started),
+        admissionDurationMs: Math.round(runtimeStarted - admissionStarted),
+        runtimeDurationMs: Math.round(runtimeFinished - runtimeStarted),
+        receiptWaitDurationMs: Math.round(performance.now() - runtimeFinished),
+        stageTimings:
+          "stageTimings" in result
+            ? result.stageTimings.map(({ stage, durationMs, outcome }) => ({
+                stage,
+                durationMs,
+                outcome,
+              }))
+            : [],
+        databaseWork: { ...measured.work },
+        databaseFailureCategories: databaseFailures,
+      });
+      // Emit the already-available failure evidence before further D1 reads, so
+      // a slow diagnostic probe cannot hide the stage near the test deadline.
+      console.error("Synthetic native initial admission diagnostics", {
+        ...(await nativeAdmissionDiagnostics(core, env, ownerId, workspace.id, queued.jobId)),
+      });
+    }
     expect(result.status).toBe("completed");
     expect(providerCalls).toBe(2);
     expect((await service.intake(ownerId, workspace.id))?.batches).toHaveLength(1);
