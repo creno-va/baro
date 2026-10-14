@@ -15,8 +15,8 @@ function inputs(): Record<string, string | undefined> {
     ...Object.fromEntries(oauthSecretNames.map((name) => [name, `fixture-${name}`])),
   };
 }
-function generated(environment: DeploymentEnvironment) {
-  const config = structuredClone(configuration);
+function generated(environment: DeploymentEnvironment, source = configuration) {
+  const config = structuredClone(source);
   const built = { ...config, ...config.env[environment] };
   delete built.env;
   built.main = "entry.mjs";
@@ -39,6 +39,94 @@ test("current deployment configs share behavior while isolating resource identit
   changed.env.production.kv_namespaces[0].id = "another-production-session-store";
   changed.env.production.workflows[0].name = "another-production-analysis";
   expect(() => checkDeploymentConfig(changed)).not.toThrow();
+});
+
+test("only the exact preview smart-placement experiment may differ from production", () => {
+  const config = structuredClone(configuration);
+  delete config.env.preview.placement;
+  expect(() => checkDeploymentConfig(config)).not.toThrow();
+  config.env.preview.placement = { mode: "smart" };
+  const before = JSON.stringify(config);
+  expect(() => checkDeploymentConfig(config)).not.toThrow();
+  expect(JSON.stringify(config)).toBe(before);
+  for (const environment of ["preview", "production"] as const)
+    expect(() =>
+      checkBuiltDeployment(config, generated(environment, config), environment),
+    ).not.toThrow();
+});
+
+test("placement cannot be inherited from root or configured on production", () => {
+  for (const target of ["root", "production"] as const)
+    for (const placement of [undefined, null, {}, { mode: "off" }, { mode: "smart" }]) {
+      const config = structuredClone(configuration);
+      (target === "root" ? config : config.env.production).placement = placement;
+      expect(() => checkDeploymentConfig(config)).toThrow(
+        "DEPLOYMENT_PLACEMENT_EXPERIMENT_INVALID",
+      );
+    }
+});
+
+test("preview placement rejects every option beyond the exact smart mode", () => {
+  for (const placement of [
+    undefined,
+    null,
+    [],
+    "smart",
+    {},
+    { mode: "off" },
+    { mode: "SMART" },
+    { mode: "targeted", region: "aws:ap-northeast-2" },
+    { mode: "smart", hint: "apac" },
+    { mode: "smart", region: "aws:ap-northeast-2" },
+    { mode: "smart", host: "synthetic.example:443" },
+    { mode: "smart", hostname: "synthetic.example" },
+    { mode: "smart", extra: undefined },
+  ]) {
+    const config = structuredClone(configuration);
+    config.env.preview.placement = placement;
+    expect(() => checkDeploymentConfig(config)).toThrow("DEPLOYMENT_PLACEMENT_EXPERIMENT_INVALID");
+  }
+});
+
+test("the placement exception cannot hide a different binding, limit or feature flag", () => {
+  for (const change of [
+    (config: typeof configuration) => {
+      config.env.preview.workflows[0].binding = "OTHER_BINDING";
+    },
+    (config: typeof configuration) => {
+      config.env.preview.ratelimits[0].simple.limit += 1;
+    },
+    (config: typeof configuration) => {
+      config.env.preview.vars.APPLICATION_COST_LIMITS_ENABLED = "true";
+    },
+  ]) {
+    const config = structuredClone(configuration);
+    config.env.preview.placement = { mode: "smart" };
+    change(config);
+    expect(() => checkDeploymentConfig(config)).toThrow("DEPLOYMENT_CONFIG_PARITY_MISMATCH");
+  }
+});
+
+test("built placement must match the selected environment including production absence", () => {
+  const config = structuredClone(configuration);
+  config.env.preview.placement = { mode: "smart" };
+  for (const placement of [undefined, null, { mode: "off" }, { mode: "smart", hint: "apac" }]) {
+    const built = generated("preview", config);
+    if (placement === undefined) delete built.placement;
+    else built.placement = placement;
+    expect(() => checkBuiltDeployment(config, built, "preview")).toThrow(
+      "DEPLOYMENT_BUILT_RUNTIME_MISMATCH",
+    );
+  }
+  for (const placement of [null, { mode: "off" }, { mode: "smart" }]) {
+    const baseline = structuredClone(config);
+    delete baseline.env.preview.placement;
+    const built = generated("production", baseline);
+    built.placement = placement;
+    expect(() => checkBuiltDeployment(baseline, built, "production")).toThrow(
+      "DEPLOYMENT_BUILT_RUNTIME_MISMATCH",
+    );
+  }
 });
 
 test("neither live environment may silently restore application cost limits", () => {

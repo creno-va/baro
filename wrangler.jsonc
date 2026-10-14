@@ -105,6 +105,9 @@
   ],
   "env": {
     "preview": {
+      "placement": {
+        "mode": "smart"
+      },
       "ratelimits": [
         {
           "name": "CASE_IP_LIMIT",
