@@ -50,7 +50,15 @@ function createConfiguredAuth(env: Env) {
     },
     account: {
       accountLinking: {
-        disableImplicitLinking: true,
+        // The same verified email may use another OAuth provider without losing
+        // its owner/data. Neither an unverified local email nor an unverified
+        // provider claim is enough to attach a new sign-in method.
+        enabled: true,
+        disableImplicitLinking: false,
+        requireLocalEmailVerified: true,
+        trustedProviders: [],
+        allowDifferentEmails: false,
+        updateUserInfoOnLink: false,
       },
     },
     session: {
