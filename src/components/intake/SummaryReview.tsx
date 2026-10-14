@@ -460,7 +460,7 @@ export function SummaryReview({ caseId }: { caseId: string }) {
                     }
                   >
                     <Save size={16} aria-hidden="true" />
-                    {busy && failedOperation.current === "save" ? "저장 중…" : "수정 내용 저장"}
+                    {busy ? "저장 중…" : "수정 내용 저장"}
                   </Button>
                   <Button
                     variant="ghost"
@@ -479,7 +479,11 @@ export function SummaryReview({ caseId }: { caseId: string }) {
                 </div>
               ) : null}
               <p className="intake-scene-notice" role="status">
-                {dirty ? "수정 내용을 저장하면 계속할 수 있어요." : notice}
+                {dirty
+                  ? busy
+                    ? "수정한 요약을 저장하고 있어요."
+                    : "수정 내용을 저장하면 계속할 수 있어요."
+                  : notice}
               </p>
               <label className="intake-confirm-check">
                 <input

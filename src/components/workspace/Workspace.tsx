@@ -1502,8 +1502,9 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
               <strong>{deleteFile.name}</strong> 원본과 처리 결과를 삭제할까요?
             </p>
             <p>
-              삭제한 자료는 대화·리포트의 자료 선택에서 제외됩니다. 이미 저장된 대화 내용은 다시
-              검토해 주세요.
+              이 자료를 포함한 저장 리포트와 서버의 PDF·ZIP 내보내기도 함께 삭제되며 되돌릴 수
+              없어요. 필요한 리포트는 먼저 다운로드해 주세요. 이미 저장된 대화 내용과 다운로드한
+              파일은 남으므로 다시 검토해 주세요.
             </p>
             <div className="workspace-buttons">
               <Button variant="outline" disabled={!!busy} onClick={closeDialog}>
