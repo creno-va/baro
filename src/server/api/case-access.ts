@@ -1,6 +1,6 @@
 import { drizzle } from "drizzle-orm/d1";
 import type { Context } from "hono";
-import { readAccountType } from "../auth/account-type";
+import { readAccountType, readCustomerConsentSnapshot } from "../auth/account-type";
 import { getSession } from "../auth/session";
 import * as schema from "../db/schema";
 import { hasCurrentConsent } from "../modules/consent/service";
@@ -12,6 +12,7 @@ export async function caseAccess(
   mutation = false,
   consent = false,
   customer = true,
+  options: { customerConsentSnapshot?: true } = {},
 ) {
   if (mutation && !hasAllowedOrigin(context.req.raw, context.env.BETTER_AUTH_URL))
     return {
@@ -25,14 +26,27 @@ export async function caseAccess(
     return {
       response: context.json(errorBody(context, "UNAUTHENTICATED", "로그인이 필요해요."), 401),
     };
-  if (customer && (await readAccountType(context.env.DB, session.user.id)) !== "customer")
+  const snapshot =
+    customer && consent && options.customerConsentSnapshot
+      ? await readCustomerConsentSnapshot(context.env.DB, session.user.id)
+      : undefined;
+  if (
+    customer &&
+    (snapshot?.accountType ?? (await readAccountType(context.env.DB, session.user.id))) !==
+      "customer"
+  )
     return {
       response: context.json(
         errorBody(context, "ROLE_REQUIRED", "고객 이용 유형으로 로그인해 주세요."),
         403,
       ),
     };
-  if (consent && !(await hasCurrentConsent(drizzle(context.env.DB, { schema }), session.user.id)))
+  if (
+    consent &&
+    !(snapshot
+      ? snapshot.currentConsent
+      : await hasCurrentConsent(drizzle(context.env.DB, { schema }), session.user.id))
+  )
     return {
       response: context.json(
         errorBody(context, "CONSENT_REQUIRED", "현재 필수 동의가 필요해요."),

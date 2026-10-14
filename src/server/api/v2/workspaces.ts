@@ -2,7 +2,6 @@ import { type Context, Hono } from "hono";
 import { z } from "zod";
 import { idempotencyKeySchema, opaqueIdSchema, timestampSchema } from "../../../contracts";
 import { v2CreateCaseRequestSchema } from "../../../contracts/v2";
-import { readAccountType } from "../../auth/account-type";
 import { createCaseDataCipher } from "../../crypto";
 import { createPreviewD1Timing, type PreviewD1Operation } from "../../db/preview-d1-timing";
 import { createV2Core, type V2Core, V2RepositoryError } from "../../db/v2-core";
@@ -32,13 +31,9 @@ function before(value?: string) {
 const afterQuery = z.strictObject({ after: opaqueIdSchema.optional() });
 const emptyQuery = z.strictObject({});
 async function customerAccess(c: Context<ApiEnvironment>, mutation = false, consent = false) {
-  const access = await caseAccess(c, mutation, consent);
-  // caseAccess already checks the customer role. Only consent verification adds
-  // an intervening database read that needs a final role check before a write.
-  if (access.response || !consent) return access;
-  if ((await readAccountType(c.env.DB, access.ownerId)) !== "customer")
-    return { response: c.json(errorBody(c, "NOT_FOUND", "고객 사건을 찾을 수 없어요."), 404) };
-  return access;
+  // Role and consent share one fresh DB snapshot, so no intervening consent
+  // read can invalidate a separately read role. Domain/CAS fences remain fresh.
+  return caseAccess(c, mutation, consent, true, { customerConsentSnapshot: true });
 }
 export function createWorkspacesApi(
   options: {
