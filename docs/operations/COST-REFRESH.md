@@ -5,6 +5,12 @@
 
 ## 운영 입력
 
+2026-10-14 후속 직접 지시로 `APPLICATION_COST_LIMITS_ENABLED=false`를 preview/production
+설정에 적용한다. 이 모드에서는 월·재원·요청 금액과 예약 초과 청구를 이유로 실행을
+막거나 동결하지 않는다. 원장 관측값은 그대로 보존한다. `spendAllowanceKrw`를 실제보다
+큰 수로 대체하지 않으며 아래 금액 허용 검사는 비용 제한을 명시적으로 켠 격리 검증에서만
+차단 조건이다. 최신 funding 상태/만료·가격·권한·용량·횟수 검사는 계속 적용한다.
+
 운영 도구만 가격·재원 관측을 받는다. 사용자 API에는 이 입력이나 재개 권한이 없다.
 `scripts/provision-ai-budget.ts <sha> <status|observe|refresh|reallocate> <preview|production|both>`를
 사용한다. 기본은 `refresh`, reallocate는 both가 필수다. 수동 Cost operations workflow는
@@ -17,7 +23,8 @@ main에서 두 지정 운영자만 실행한다. 관측 JSON은 환경변수로 
   기존 모델과 Cloudflare Whisper 식별자·공식 출처 계약은 그대로 검사한다.
 - `spendAllowanceKrw`: 원장이 사용하는 **누적 지출 허용 상한**이다. 현재 추가 재원에 이미
   정산된 금액을 더한 기준 등 산정 근거를 확인한다. 원장의 정산·미정산·유지비·이월과 새
-  최대 비용이 이 상한 안에 있어야 한다. 현재 잔액을 무한 재원으로 해석하지 않는다.
+  최대 비용을 대조하되 비용 제한이 꺼진 배포에서는 금액으로 차단하지 않는다. 현재 잔액을
+  무한 재원으로 해석하거나 관측 숫자를 변경하지 않는다.
 - `fundingState`: funded / trial_credit / unavailable. 중단 관측은 observe로 최신 head에
   설치한다. 최신 head가 중단·만료되면 과거 funded 값으로 돌아가지 않는다.
 - 기존 결제 경로·자동충전 true·$10/$30·월 cap false는 유지한다. 이 도구는 결제수단이나
@@ -85,6 +92,12 @@ refresh로 활성화한다. 기존 blob의 미확인 writer를 stopped로 추정
 projection이 없거나 새 요청의 전체 상한이 보장되지 않으면 PUT은 계속 거부한다.
 
 ## 검증과 남은 실제 인수
+
+0014는 runtime plan과 storage projection 예약 금액을 정확한 정수 범위로 기록할 수 있게
+한다. 누적 비용·기존 hold·미정산·원본 proof는 그대로 복사하고 같은 원자적 import에서
+의존 trigger와 index를 복원한다. [D1의 FK 지연 검사](https://developers.cloudflare.com/d1/sql-api/foreign-keys/)
+중에도 기존 FK를 삭제하지 않으며 실패 시 행·trigger·schema marker가 함께 복구된다.
+금액 한도 해제는 실제 공급자 성공이나 독립 외부 인수 완료가 아니다.
 
 합성 원장·업로드 hold·running lease·만료된 allocation·최신 재원 중단/만료·동시 갱신·
 응답 유실·마지막 SQL 실패 rollback·월 경계 replay를 검사한다. Native D1에서 갱신과

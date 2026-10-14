@@ -124,6 +124,7 @@ export function reportRequestCore(core: V2Core, requireRowMeta = true) {
     },
   });
   return createV2Core(binding, core.cipher, {
+    applicationCostLimitsEnabled: core.applicationCostLimitsEnabled,
     monthlyBudgetCapEnabled: core.monthlyBudgetCapEnabled,
   });
 }

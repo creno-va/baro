@@ -31,6 +31,49 @@ test("authenticated projection reserves exact estimates without fabricating a se
     n: 1,
   });
 });
+
+test("0014 preserves populated storage evidence, bindings and immutable triggers with atomic rollback", async () => {
+  const f = await ready({}, { throughMigration: "0013_lawyer_storage_lookups" });
+  expect(await admit(f, await intent(f))).toBe(true);
+  const migration = await Bun.file("drizzle/0014_cost_observation_bounds.sql").text();
+  const tables = (
+    f.db.sqlite
+      .query(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name!='app_metadata' ORDER BY name",
+      )
+      .all() as { name: string }[]
+  ).map((r) => r.name);
+  const snapshot = () => tables.map((table) => f.db.sqlite.query(`SELECT * FROM "${table}"`).all());
+  const before = snapshot();
+  const triggers = f.db.sqlite
+    .query("SELECT name,sql FROM sqlite_master WHERE type='trigger' ORDER BY name")
+    .all();
+  expect(() =>
+    f.db.sqlite.transaction(() => {
+      f.db.sqlite.exec(migration);
+      f.db.sqlite.exec("SELECT json('synthetic-invalid-json')");
+    })(),
+  ).toThrow();
+  expect(snapshot()).toEqual(before);
+  expect(
+    f.db.sqlite
+      .query("SELECT name,sql FROM sqlite_master WHERE type='trigger' ORDER BY name")
+      .all(),
+  ).toEqual(triggers);
+  expect(
+    f.db.sqlite.query("SELECT value FROM app_metadata WHERE key='schema_version'").get(),
+  ).toEqual({ value: "0013_lawyer_storage_lookups" });
+  f.db.sqlite.transaction(() => f.db.sqlite.exec(migration))();
+  expect(snapshot()).toEqual(before);
+  expect(
+    f.db.sqlite
+      .query("SELECT name,sql FROM sqlite_master WHERE type='trigger' ORDER BY name")
+      .all(),
+  ).toEqual(triggers);
+  expect(f.db.sqlite.query("PRAGMA foreign_key_check").all()).toEqual([]);
+  expect(() => f.db.sqlite.exec("DELETE FROM v2_storage_projections")).toThrow();
+  expect(() => f.db.sqlite.exec("UPDATE v2_storage_projections SET reserved_krw=1")).toThrow();
+});
 test("missing verifier and stale control/proof/configuration fail closed", async () => {
   const f = await fixture(),
     capacity = createV2StorageCapacityRepository(f.core, "preview", verifier);

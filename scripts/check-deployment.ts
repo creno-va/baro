@@ -92,6 +92,14 @@ export function checkDeploymentConfig(config: unknown): void {
     fail("CONFIG_PARITY_MISMATCH");
   for (const [path, identity] of left.identities)
     if (identity === right.identities.get(path)) fail("RESOURCE_NOT_ISOLATED");
+  for (const environment of [preview, production]) {
+    const vars = object(environment.vars);
+    if (
+      vars.APPLICATION_COST_LIMITS_ENABLED !== "false" ||
+      vars.MONTHLY_BUDGET_CAP_ENABLED !== "false"
+    )
+      fail("APPLICATION_COST_LIMITS_MUST_BE_DISABLED");
+  }
 }
 
 export function checkDeploymentInputs(inputs: Record<string, string | undefined>): void {

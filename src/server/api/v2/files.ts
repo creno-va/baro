@@ -95,6 +95,7 @@ export function createFilesApi(
     if (options.testOnlyMissingD1Meta && env.APP_ENV === "production")
       throw new FileError("PROCESSING_UNAVAILABLE");
     const base = createV2Core(env.DB, await createCaseDataCipher(env), {
+      applicationCostLimitsEnabled: env.APPLICATION_COST_LIMITS_ENABLED !== "false",
       monthlyBudgetCapEnabled: env.MONTHLY_BUDGET_CAP_ENABLED !== "false",
     });
     const core = storagePart ? fileStorageRequestCore(base, !options.testOnlyMissingD1Meta) : base;
@@ -186,6 +187,7 @@ export function createFilesApi(
     const access = await caseAccess(c, true, true);
     if (access.response) return access.response;
     const core = createV2Core(c.env.DB, await createCaseDataCipher(c.env), {
+      applicationCostLimitsEnabled: c.env.APPLICATION_COST_LIMITS_ENABLED !== "false",
       monthlyBudgetCapEnabled: c.env.MONTHLY_BUDGET_CAP_ENABLED !== "false",
     });
     const deps = (await options.dependencies?.(c.env, core, access.ownerId)) ?? {};
@@ -258,6 +260,7 @@ export function createFilesApi(
     if (access.response) return access.response;
     z.strictObject({}).parse(c.req.query());
     const core = createV2Core(c.env.DB, await createCaseDataCipher(c.env), {
+      applicationCostLimitsEnabled: c.env.APPLICATION_COST_LIMITS_ENABLED !== "false",
       monthlyBudgetCapEnabled: c.env.MONTHLY_BUDGET_CAP_ENABLED !== "false",
     });
     return c.json(

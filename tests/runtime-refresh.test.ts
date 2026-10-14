@@ -50,8 +50,8 @@ async function observation(f: Awaited<ReturnType<typeof fixture>>, at = LATER) {
   return { pricing, funding, request, runtime };
 }
 
-async function heldFixture() {
-  const f = await ready();
+async function heldFixture(applicationCostLimitsEnabled = true) {
+  const f = await ready({}, { applicationCostLimitsEnabled });
   f.db.sqlite
     .query("INSERT INTO v2_case_original_usage(workspace_id) VALUES(?)")
     .run(f.workspaceId);
@@ -87,6 +87,58 @@ async function heldFixture() {
   expect(await f.runtime.freeze("2026-10", exposure.control_revision, 1, NOW)).toBe(true);
   return f;
 }
+
+test("observation-only refresh and physical upload retain costs above the finite funding observation", async () => {
+  const f = await heldFixture(false);
+  f.db.sqlite.exec("UPDATE v2_monthly_budget SET settled_krw=60000,limit_krw=0");
+  const before = await f.runtime.exposure(NOW);
+  const oldAttempts = f.db.sqlite.query("SELECT * FROM v2_cost_attempts").all();
+  const o = await observation(f);
+  const renew = createV2RuntimeRefreshRepository(f.core, "preview", verifier);
+  expect(await renew.refresh(o.request, LATER)).toBe(true);
+  expect(await f.runtime.exposure(LATER)).toMatchObject({
+    phase: "active",
+    settled_krw: 60000,
+    ambiguous_krw: before?.ambiguous_krw,
+  });
+  const core = fileStorageRequestCore(f.core, false);
+  const service = createFilesService(core, {
+    environment: "preview",
+    bucket: r2().port,
+    clock: () => LATER,
+    paidStorage: createFileStorageBudget(core, "preview", f.actor.ownerId, () => LATER),
+  });
+  const row = f.db.sqlite
+    .query("SELECT revision FROM v2_workspaces WHERE id=?")
+    .get(f.workspaceId) as { revision: number };
+  const upload = await service.reserve(
+    f.actor.ownerId,
+    f.workspaceId,
+    row.revision,
+    crypto.randomUUID(),
+    {
+      name: "합성 추가.txt",
+      mediaType: "text/plain",
+      byteLength: 5,
+      autoProcessConsentVersion: CURRENT_POLICY_VERSIONS.aiNoticeVersion,
+    },
+  );
+  await service.putPart(
+    f.actor.ownerId,
+    f.workspaceId,
+    upload.fileId,
+    upload.uploadSession,
+    0,
+    new Response("hello").body,
+  );
+  expect(f.db.sqlite.query("SELECT * FROM v2_cost_attempts").all()).toEqual(
+    expect.arrayContaining(oldAttempts),
+  );
+  expect(f.db.sqlite.query("SELECT count(*) n FROM v2_cost_attempts").get()).toEqual({ n: 2 });
+  expect(
+    f.db.sqlite.query("SELECT payload_json FROM v2_runtime_proofs WHERE id=?").get(o.funding.id),
+  ).toEqual({ payload_json: JSON.stringify(o.funding) });
+});
 
 test("same allocation resumes with real unresolved upload hold and running lease, preserving original proofs and counters", async () => {
   const f = await heldFixture(),

@@ -99,7 +99,7 @@ export function operationsCore(binding: D1Database) {
         throw new Error("Coordinator has no private data access");
       },
     },
-    { monthlyBudgetCapEnabled: false },
+    { applicationCostLimitsEnabled: false, monthlyBudgetCapEnabled: false },
   );
 }
 
@@ -259,7 +259,7 @@ export async function provisionAiRuntime(
           throw new Error("Coordinator has no private data access");
         },
       },
-      { monthlyBudgetCapEnabled: false },
+      { applicationCostLimitsEnabled: false, monthlyBudgetCapEnabled: false },
     );
     return {
       environment,

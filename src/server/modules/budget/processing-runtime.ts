@@ -116,6 +116,7 @@ export async function createFileProcessingRuntime(
     throw new ProcessingError("MODEL_UNAVAILABLE");
   const environment = env.APP_ENV === "production" ? "production" : "preview";
   const core = createV2Core(env.DB, await createCaseDataCipher(env), {
+    applicationCostLimitsEnabled: env.APPLICATION_COST_LIMITS_ENABLED !== "false",
     monthlyBudgetCapEnabled: env.MONTHLY_BUDGET_CAP_ENABLED !== "false",
   });
   const initialAttemptId = await core

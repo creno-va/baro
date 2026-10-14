@@ -184,7 +184,7 @@ export function createStorageBudgetService(options: {
       allocation.environment !== options.environment ||
       allocation.allocation.month !== month ||
       funding.state === "unavailable" ||
-      funding.spendAllowanceKrw < 1 ||
+      (options.core.applicationCostLimitsEnabled && funding.spendAllowanceKrw < 1) ||
       Date.parse(funding.observedAt) > Date.parse(now) ||
       Date.parse(pricing.checkedAt) > Date.parse(now) ||
       Date.parse(pricing.fx.asOf) > Date.parse(now) ||

@@ -86,6 +86,7 @@ export function createWorkspacesApi(
   });
   const service = async (env: Env, ownerId: string) => {
     const core = createV2Core(env.DB, await createCaseDataCipher(env), {
+      applicationCostLimitsEnabled: env.APPLICATION_COST_LIMITS_ENABLED !== "false",
       monthlyBudgetCapEnabled: env.MONTHLY_BUDGET_CAP_ENABLED !== "false",
     });
     return createWorkspaceService(core, await options.dependencies?.(env, core, ownerId));

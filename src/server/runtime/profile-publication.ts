@@ -24,6 +24,7 @@ export async function createProfilePublicationRuntime(
   capabilities: Omit<PublicationDependencies, "publicBucket" | "fixedLengthStream"> = {},
 ) {
   const core = createV2Core(env.DB, await createCaseDataCipher(env), {
+    applicationCostLimitsEnabled: env.APPLICATION_COST_LIMITS_ENABLED !== "false",
     monthlyBudgetCapEnabled: env.MONTHLY_BUDGET_CAP_ENABLED !== "false",
   });
   const environment = env.APP_ENV === "production" ? "production" : "preview";

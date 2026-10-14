@@ -84,6 +84,7 @@ export function createDirectoryApi(
   const service = async (env: Env) =>
     createDirectoryService(
       createV2Core(env.DB, await createCaseDataCipher(env), {
+        applicationCostLimitsEnabled: env.APPLICATION_COST_LIMITS_ENABLED !== "false",
         monthlyBudgetCapEnabled: env.MONTHLY_BUDGET_CAP_ENABLED !== "false",
       }),
       options.clock,
@@ -124,6 +125,7 @@ export function createDirectoryApi(
   );
   app.get("/self-service", async (c) => {
     const core = createV2Core(c.env.DB, await createCaseDataCipher(c.env), {
+      applicationCostLimitsEnabled: c.env.APPLICATION_COST_LIMITS_ENABLED !== "false",
       monthlyBudgetCapEnabled: c.env.MONTHLY_BUDGET_CAP_ENABLED !== "false",
     });
     return c.json(await directoryAdapters(core, indexOptions(c.env)).self(c.req.query()));
@@ -131,6 +133,7 @@ export function createDirectoryApi(
   app.get("/self-service/:id/assets/:assetId", async (c) => {
     publicProfileQuerySchema.parse(c.req.query());
     const core = createV2Core(c.env.DB, await createCaseDataCipher(c.env), {
+      applicationCostLimitsEnabled: c.env.APPLICATION_COST_LIMITS_ENABLED !== "false",
       monthlyBudgetCapEnabled: c.env.MONTHLY_BUDGET_CAP_ENABLED !== "false",
     });
     const service = createSelfProfileService(core, options.clock);
@@ -157,6 +160,7 @@ export function createDirectoryApi(
   app.get("/self-service/:id", async (c) => {
     publicProfileQuerySchema.parse(c.req.query());
     const core = createV2Core(c.env.DB, await createCaseDataCipher(c.env), {
+      applicationCostLimitsEnabled: c.env.APPLICATION_COST_LIMITS_ENABLED !== "false",
       monthlyBudgetCapEnabled: c.env.MONTHLY_BUDGET_CAP_ENABLED !== "false",
     });
     return c.json(await createSelfProfileService(core, options.clock).get(c.req.param("id")));
@@ -164,6 +168,7 @@ export function createDirectoryApi(
   const publicAsset = async (c: Context<ApiEnvironment>) => {
     publicProfileQuerySchema.parse(c.req.query());
     const core = createV2Core(c.env.DB, await createCaseDataCipher(c.env), {
+      applicationCostLimitsEnabled: c.env.APPLICATION_COST_LIMITS_ENABLED !== "false",
       monthlyBudgetCapEnabled: c.env.MONTHLY_BUDGET_CAP_ENABLED !== "false",
     });
     const directory = createDirectoryService(core, options.clock);

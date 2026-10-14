@@ -41,6 +41,7 @@ export function createUsageService(
   binding: D1Database,
   options: {
     environment: "preview" | "production";
+    applicationCostLimitsEnabled?: boolean;
     monthlyBudgetCapEnabled?: boolean;
     clock?: () => string;
     paidAvailable?: (now: string) => Promise<boolean>;
@@ -62,7 +63,10 @@ export function createUsageService(
         throw new Error("Counter service cannot decrypt private data");
       },
     },
-    { monthlyBudgetCapEnabled: options.monthlyBudgetCapEnabled },
+    {
+      applicationCostLimitsEnabled: options.applicationCostLimitsEnabled,
+      monthlyBudgetCapEnabled: options.monthlyBudgetCapEnabled,
+    },
   );
   const accounting = createV2AccountingRepository(core, options.environment);
   const storage = createV2StorageRepository(core);

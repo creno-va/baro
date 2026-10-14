@@ -133,6 +133,7 @@ export function fileStorageRequestCore(
     },
   } as D1Database;
   const result = createV2Core(binding, core.cipher, {
+    applicationCostLimitsEnabled: core.applicationCostLimitsEnabled,
     monthlyBudgetCapEnabled: core.monthlyBudgetCapEnabled,
   });
   metered.add(result);

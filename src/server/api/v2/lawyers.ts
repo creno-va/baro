@@ -66,6 +66,7 @@ export function createLawyersApi(
   const selfService = async (env: Env) =>
     createSelfProfileService(
       createV2Core(env.DB, await createCaseDataCipher(env), {
+        applicationCostLimitsEnabled: env.APPLICATION_COST_LIMITS_ENABLED !== "false",
         monthlyBudgetCapEnabled: env.MONTHLY_BUDGET_CAP_ENABLED !== "false",
       }),
     );
@@ -151,6 +152,7 @@ export function createLawyersApi(
     const a = await selfAccess(c);
     if (a.response) return a.response;
     const core = createV2Core(c.env.DB, await createCaseDataCipher(c.env), {
+      applicationCostLimitsEnabled: c.env.APPLICATION_COST_LIMITS_ENABLED !== "false",
       monthlyBudgetCapEnabled: c.env.MONTHLY_BUDGET_CAP_ENABLED !== "false",
     });
     const service = createSelfProfileService(core);
@@ -219,6 +221,7 @@ export function createLawyersApi(
   });
   const service = async (env: Env, ownerId: string) => {
     const core = createV2Core(env.DB, await createCaseDataCipher(env), {
+      applicationCostLimitsEnabled: env.APPLICATION_COST_LIMITS_ENABLED !== "false",
       monthlyBudgetCapEnabled: env.MONTHLY_BUDGET_CAP_ENABLED !== "false",
     });
     return createLawyersService(core, await options.dependencies?.(env, core, ownerId));
@@ -226,6 +229,7 @@ export function createLawyersApi(
   const assets = async (env: Env, ownerId: string) => {
     const core = lawyerStorageRequestCore(
       createV2Core(env.DB, await createCaseDataCipher(env), {
+        applicationCostLimitsEnabled: env.APPLICATION_COST_LIMITS_ENABLED !== "false",
         monthlyBudgetCapEnabled: env.MONTHLY_BUDGET_CAP_ENABLED !== "false",
       }),
       env.APP_ENV !== "local",

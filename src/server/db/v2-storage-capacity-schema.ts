@@ -44,7 +44,7 @@ export const v2StorageProjections = sqliteTable(
     uniqueIndex("v2_storage_projection_month").on(t.environment, t.month),
     check(
       "v2_storage_projection_bounds",
-      sql`${t.environment} IN ('preview','production') AND typeof(${t.capacityBytes})='integer' AND ${t.capacityBytes} BETWEEN 1 AND 100000000000 AND typeof(${t.reservedKrw})='integer' AND ${t.reservedKrw} BETWEEN 1 AND 1000000 AND length(${t.digest})=64 AND length(CAST(${t.payloadJson} AS BLOB))<=262144 AND ${t.validUntil}>${t.createdAt}`,
+      sql`${t.environment} IN ('preview','production') AND typeof(${t.capacityBytes})='integer' AND ${t.capacityBytes} BETWEEN 1 AND 100000000000 AND typeof(${t.reservedKrw})='integer' AND ${t.reservedKrw} BETWEEN 1 AND 9007199254740991 AND length(${t.digest})=64 AND length(CAST(${t.payloadJson} AS BLOB))<=262144 AND ${t.validUntil}>${t.createdAt}`,
     ),
     check(
       "v2_storage_projection_counters",

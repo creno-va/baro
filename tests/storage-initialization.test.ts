@@ -176,7 +176,7 @@ test("a genuine existing pending blob is preserved and requires explicit nonempt
   expect(f.db.sqlite.query("SELECT * FROM v2_storage_projections").all()).toEqual([]);
 });
 
-test("unfinished producer jobs and insufficient funding remain intact instead of being drained or forgiven for bootstrap", async () => {
+test("bootstrap keeps unfinished producers blocked but records exposure above the observed funding amount", async () => {
   const { f, configuration, observation, run } = await setup();
   const operation = crypto.randomUUID(),
     job = crypto.randomUUID();
@@ -200,14 +200,21 @@ test("unfinished producer jobs and insufficient funding remain intact instead of
   });
   f.db.sqlite.query("UPDATE v2_jobs SET status='cancelled' WHERE id=?").run(job);
   f.db.sqlite.exec("UPDATE v2_monthly_budget SET reserved_krw=123,ambiguous_krw=456");
-  await expect(run(configuration, { ...observation, spendAllowanceKrw: 1 })).rejects.toThrow(
-    "STORAGE_INITIALIZATION_PROJECTION_REJECTED",
-  );
+  expect(
+    (await run(configuration, { ...observation, spendAllowanceKrw: 1 })).activatedByThisOperation,
+  ).toBe(false);
   expect(
     f.db.sqlite.query("SELECT reserved_krw,ambiguous_krw FROM v2_monthly_budget").get(),
   ).toEqual({ reserved_krw: 123, ambiguous_krw: 456 });
-  expect(f.db.sqlite.query("SELECT * FROM v2_storage_projections").all()).toEqual([]);
-  expect(f.db.sqlite.query("SELECT * FROM v2_maintenance_exposure").all()).toEqual([]);
+  expect(f.db.sqlite.query("SELECT * FROM v2_storage_projections").all()).toHaveLength(1);
+  expect(f.db.sqlite.query("SELECT * FROM v2_maintenance_exposure").all()).toHaveLength(1);
+  expect(
+    f.db.sqlite
+      .query(
+        "SELECT json_extract(p.payload_json,'$.spendAllowanceKrw') AS allowance FROM v2_storage_funding_heads h JOIN v2_runtime_proofs p ON p.id=h.proof_id",
+      )
+      .get(),
+  ).toEqual({ allowance: 1 });
 });
 
 test("a concurrent pending object between observation and freeze cannot acquire an empty-inventory receipt", async () => {

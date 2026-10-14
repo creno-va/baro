@@ -166,6 +166,10 @@ export async function inspectAiPreflight(input: {
     "budget_cap_setting_valid",
     ["true", "false"].includes(String(text("MONTHLY_BUDGET_CAP_ENABLED"))),
   );
+  check(
+    "application_cost_limits_setting_valid",
+    ["true", "false"].includes(String(text("APPLICATION_COST_LIMITS_ENABLED"))),
+  );
   if (binding("AI_MODEL_TOKEN_BOUNDS_JSON", "secret_text")) {
     checks.model_bounds = "secret_present";
   } else {
@@ -225,7 +229,10 @@ export async function inspectAiPreflight(input: {
           throw new Error("PRIVATE_DATA_FORBIDDEN");
         },
       },
-      { monthlyBudgetCapEnabled: text("MONTHLY_BUDGET_CAP_ENABLED") !== "false" },
+      {
+        applicationCostLimitsEnabled: text("APPLICATION_COST_LIMITS_ENABLED") !== "false",
+        monthlyBudgetCapEnabled: text("MONTHLY_BUDGET_CAP_ENABLED") !== "false",
+      },
     );
     const baseline = await core
       .statement("SELECT value FROM app_metadata WHERE key='schema_version'")
@@ -270,12 +277,14 @@ export async function inspectAiPreflight(input: {
           exposure.fixed_maintenance_krw +
           exposure.carryover_krw +
           reserve;
-        check(
-          "model_reservation_headroom",
-          Number.isSafeInteger(total) &&
+        check("model_cost_estimate_valid", Number.isSafeInteger(total));
+        if (core.applicationCostLimitsEnabled) {
+          check(
+            "model_reservation_headroom",
             total <= funding.data.spendAllowanceKrw &&
-            (!core.monthlyBudgetCapEnabled || total <= exposure.limit_krw),
-        );
+              (!core.monthlyBudgetCapEnabled || total <= exposure.limit_krw),
+          );
+        } else checks.model_reservation_headroom = "not_enforced";
       }
       if (pricing.success && funding.success && allocation.success && p && f && a) {
         expiry(

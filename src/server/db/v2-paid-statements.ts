@@ -14,6 +14,7 @@ function allConditions(conditions: readonly string[]): string {
   return `(${allConditions(conditions.slice(0, middle))} AND ${allConditions(conditions.slice(middle))})`;
 }
 export function budgetAdmissionPredicate(input: {
+  applicationCostLimitsEnabled?: boolean | undefined;
   monthlyBudgetCapEnabled?: boolean | undefined;
   /** Only storage admission opts into the migration-owned bounded snapshot.
    * Model admission and cold coordination keep the original audited SUM. */
@@ -35,7 +36,7 @@ export function budgetAdmissionPredicate(input: {
     ? "JOIN v2_storage_carryover storage_carryover ON storage_carryover.id=1 AND storage_carryover.version=1 AND storage_carryover.cursor_month=b.month JOIN v2_storage_funding_heads funding_head ON funding_head.environment=b.environment JOIN v2_storage_projections storage_projection ON storage_projection.environment=b.environment AND storage_projection.month=b.month JOIN v2_runtime_proofs projection_funding ON projection_funding.id=storage_projection.funding_proof_id"
     : "JOIN v2_storage_funding_heads funding_head ON funding_head.environment=b.environment";
   const storageGuard = input.boundedStorage
-    ? `AND funding_head.proof_id=fp.id AND funding_head.verified_at=fp.verified_at AND storage_projection.pricing_proof_id=pp.id AND storage_projection.allocation_proof_id=ap.id AND storage_projection.created_at<=? AND storage_projection.valid_until>? AND projection_funding.kind='funding' AND projection_funding.environment=b.environment AND projection_funding.payload_json=json_extract(storage_projection.payload_json,'$.fundingJson') AND projection_funding.verified_at<=? AND projection_funding.valid_until>? AND json_extract(projection_funding.payload_json,'$.state') IN ('funded','trial_credit') AND b.settled_krw+b.reserved_krw+b.ambiguous_krw+b.fixed_maintenance_krw+(${carryover})+?<=json_extract(projection_funding.payload_json,'$.spendAllowanceKrw')`
+    ? `AND funding_head.proof_id=fp.id AND funding_head.verified_at=fp.verified_at AND storage_projection.pricing_proof_id=pp.id AND storage_projection.allocation_proof_id=ap.id AND storage_projection.created_at<=? AND storage_projection.valid_until>? AND projection_funding.kind='funding' AND projection_funding.environment=b.environment AND projection_funding.payload_json=json_extract(storage_projection.payload_json,'$.fundingJson') AND projection_funding.verified_at<=? AND projection_funding.valid_until>? AND json_extract(projection_funding.payload_json,'$.state') IN ('funded','trial_credit') AND (${input.applicationCostLimitsEnabled === false ? "1" : "0"}=1 OR b.settled_krw+b.reserved_krw+b.ambiguous_krw+b.fixed_maintenance_krw+(${carryover})+?<=json_extract(projection_funding.payload_json,'$.spendAllowanceKrw'))`
     : "";
   const conditions = [
     "b.month=?",
@@ -63,8 +64,10 @@ export function budgetAdmissionPredicate(input: {
     `${allocationUntilSql("c", "ap", "a.valid_until")}>?`,
     `${allocationUntilSql("c", "ap", "a.funding_valid_until")}>?`,
     "a.funding_state IN ('funded','trial_credit')",
+    // Preserve exact ledger arithmetic even when monetary policy is disabled.
+    `b.settled_krw+b.reserved_krw+b.ambiguous_krw+b.fixed_maintenance_krw+(${carryover})+?<=9007199254740991`,
     `(${input.monthlyBudgetCapEnabled === false ? "1" : "0"}=1 OR b.settled_krw+b.reserved_krw+b.ambiguous_krw+b.fixed_maintenance_krw+(${carryover})+?<=b.limit_krw)`,
-    `b.settled_krw+b.reserved_krw+b.ambiguous_krw+b.fixed_maintenance_krw+(${carryover})+?<=json_extract(fp.payload_json,'$.spendAllowanceKrw')`,
+    `(${input.applicationCostLimitsEnabled === false ? "1" : "0"}=1 OR b.settled_krw+b.reserved_krw+b.ambiguous_krw+b.fixed_maintenance_krw+(${carryover})+?<=json_extract(fp.payload_json,'$.spendAllowanceKrw'))`,
     "json_extract(fp.payload_json,'$.state') IN ('funded','trial_credit')",
     ...(input.boundedStorage ? [storageGuard.slice(4)] : []),
   ];
@@ -90,6 +93,8 @@ export function budgetAdmissionPredicate(input: {
       amount,
       ...(input.boundedStorage ? [] : [month, month]),
       amount,
+      ...(input.boundedStorage ? [] : [month, month]),
+      amount,
       ...(input.boundedStorage ? [now, now, now, now, amount] : []),
     ],
   };
@@ -106,6 +111,7 @@ export function isPreparedPaidHold(value: unknown): value is PreparedPaidHold {
 }
 export function preparePaidStatements(input: {
   request: PaidHoldRequest;
+  applicationCostLimitsEnabled?: boolean | undefined;
   monthlyBudgetCapEnabled?: boolean | undefined;
   reservedKrw: number;
   planHash: string;
@@ -131,6 +137,7 @@ export function preparePaidStatements(input: {
   // Distinct authenticated phases reserve additive holds. Reusing an unresolved
   // invocation is denied even if only the attempt identifier changes.
   const budget = budgetAdmissionPredicate({
+    applicationCostLimitsEnabled: input.applicationCostLimitsEnabled,
     monthlyBudgetCapEnabled: input.monthlyBudgetCapEnabled,
     pricingProofId: r.pricingProofId,
     fundingProofId: r.fundingProofId,

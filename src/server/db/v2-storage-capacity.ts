@@ -63,7 +63,12 @@ export const isPreparedPhysicalCapacity = (value: unknown): value is PreparedPhy
 
 // The current month has already reserved the full approved physical ceiling,
 // rather than prorating a newly uploaded object or imposing a retention expiry.
-function currentProjection(environment: string, now: string, monthlyBudgetCapEnabled: boolean) {
+function currentProjection(
+  environment: string,
+  now: string,
+  monthlyBudgetCapEnabled: boolean,
+  applicationCostLimitsEnabled: boolean,
+) {
   return {
     sql: `EXISTS(SELECT 1 FROM v2_storage_projections projection JOIN v2_physical_storage_capacity capacity ON capacity.environment=projection.environment
     JOIN v2_physical_storage_totals total ON total.environment=projection.environment AND total.version=1 AND total.held_bytes=capacity.held_bytes
@@ -84,11 +89,11 @@ function currentProjection(environment: string, now: string, monthlyBudgetCapEna
     AND pricing.environment=projection.environment AND pricing.kind='pricing' AND funding.environment=projection.environment AND funding.kind='funding' AND allocation.environment=projection.environment AND allocation.kind='allocation'
     AND pricing.verified_at<=? AND funding.verified_at<=? AND allocation.verified_at<=? AND pricing.valid_until>? AND funding.valid_until>? AND ${allocationUntilSql("control", "allocation")}>?
     AND (${monthlyBudgetCapEnabled ? "0" : "1"}=1 OR budget.settled_krw+budget.reserved_krw+budget.ambiguous_krw+budget.fixed_maintenance_krw+(carry.budget_krw+carry.maintenance_krw)<=budget.limit_krw)
-    AND budget.settled_krw+budget.reserved_krw+budget.ambiguous_krw+budget.fixed_maintenance_krw+(carry.budget_krw+carry.maintenance_krw)<=json_extract(funding.payload_json,'$.spendAllowanceKrw')
+    AND (${applicationCostLimitsEnabled ? "0" : "1"}=1 OR budget.settled_krw+budget.reserved_krw+budget.ambiguous_krw+budget.fixed_maintenance_krw+(carry.budget_krw+carry.maintenance_krw)<=json_extract(funding.payload_json,'$.spendAllowanceKrw'))
     AND json_extract(funding.payload_json,'$.state') IN ('funded','trial_credit')
     AND latest_funding.kind='funding' AND latest_funding.environment=projection.environment AND latest_funding.verified_at<=? AND latest_funding.valid_until>?
     AND json_extract(latest_funding.payload_json,'$.state') IN ('funded','trial_credit')
-    AND budget.settled_krw+budget.reserved_krw+budget.ambiguous_krw+budget.fixed_maintenance_krw+carry.budget_krw+carry.maintenance_krw<=json_extract(latest_funding.payload_json,'$.spendAllowanceKrw')
+    AND (${applicationCostLimitsEnabled ? "0" : "1"}=1 OR budget.settled_krw+budget.reserved_krw+budget.ambiguous_krw+budget.fixed_maintenance_krw+carry.budget_krw+carry.maintenance_krw<=json_extract(latest_funding.payload_json,'$.spendAllowanceKrw'))
     AND NOT EXISTS(SELECT 1 FROM v2_storage_integrity_faults WHERE environment=projection.environment))`,
     values: [
       environment,
@@ -216,7 +221,7 @@ export function createV2StorageCapacityRepository(
           digest = await runtimeDigest(payload);
         if (
           amount < 1 ||
-          amount > 1000000 ||
+          (core.applicationCostLimitsEnabled && amount > 1000000) ||
           (core.monthlyBudgetCapEnabled && amount > limit) ||
           new TextEncoder().encode(json).length > 262144
         )
@@ -248,7 +253,7 @@ export function createV2StorageCapacityRepository(
         const inventoryGuard = `NOT EXISTS(SELECT 1 FROM v2_blobs live LEFT JOIN v2_physical_blob_bindings binding ON binding.blob_id=live.id WHERE live.state!='deleted' AND (binding.blob_id IS NULL OR binding.state!='held' OR binding.environment!=? OR binding.object_key!=live.object_key OR binding.maximum_cipher_bytes<live.cipher_bytes)) AND NOT EXISTS(SELECT 1 FROM v2_physical_blob_bindings WHERE environment=? AND inventory_hash IS NOT NULL AND inventory_hash!=?) AND EXISTS(SELECT 1 FROM v2_budget_allocations a WHERE a.month=b.month AND a.version=b.allocation_version AND a.version=json_extract(allocation.payload_json,'$.allocation.version') AND a.manifest_hash=json_extract(allocation.payload_json,'$.allocation.manifestHash') AND a.preview_krw=json_extract(allocation.payload_json,'$.allocation.previewKrw') AND a.production_krw=json_extract(allocation.payload_json,'$.allocation.productionKrw') AND ${allocationUntilSql("c", "allocation", "a.valid_until")}>=?)`;
         return core.changed([
           core.statement(
-            `INSERT INTO v2_runtime_claims(id,owner_id,target_id,revision) SELECT ?,?,b.month,c.revision FROM v2_monthly_budget b JOIN v2_runtime_controls c ON c.month=b.month JOIN v2_runtime_proofs pricing ON pricing.id=? JOIN v2_runtime_proofs funding ON funding.id=? JOIN v2_storage_funding_heads head ON head.environment=b.environment AND head.proof_id=funding.id AND head.verified_at=funding.verified_at JOIN v2_runtime_proofs allocation ON allocation.id=? WHERE b.month=? AND b.environment=? AND c.environment=b.environment AND c.revision=? AND c.phase IN ('active','frozen','drained') AND pricing.payload_json=? AND funding.payload_json=? AND allocation.payload_json=? AND pricing.valid_until>=? AND funding.valid_until>=? AND ${allocationUntilSql("c", "allocation")}>=? AND NOT EXISTS(SELECT 1 FROM v2_storage_projections WHERE environment=? AND month=?) AND coalesce((SELECT held_bytes FROM v2_physical_storage_capacity WHERE environment=?),0)<=? AND b.settled_krw+b.reserved_krw+b.ambiguous_krw+b.fixed_maintenance_krw+(${carryoverSql})+?<=(CASE WHEN ${core.monthlyBudgetCapEnabled ? "1" : "0"}=1 THEN min(?,json_extract(funding.payload_json,'$.spendAllowanceKrw')) ELSE json_extract(funding.payload_json,'$.spendAllowanceKrw') END) AND ${inventoryGuard}`,
+            `INSERT INTO v2_runtime_claims(id,owner_id,target_id,revision) SELECT ?,?,b.month,c.revision FROM v2_monthly_budget b JOIN v2_runtime_controls c ON c.month=b.month JOIN v2_runtime_proofs pricing ON pricing.id=? JOIN v2_runtime_proofs funding ON funding.id=? JOIN v2_storage_funding_heads head ON head.environment=b.environment AND head.proof_id=funding.id AND head.verified_at=funding.verified_at JOIN v2_runtime_proofs allocation ON allocation.id=? WHERE b.month=? AND b.environment=? AND c.environment=b.environment AND c.revision=? AND c.phase IN ('active','frozen','drained') AND pricing.payload_json=? AND funding.payload_json=? AND allocation.payload_json=? AND pricing.valid_until>=? AND funding.valid_until>=? AND ${allocationUntilSql("c", "allocation")}>=? AND NOT EXISTS(SELECT 1 FROM v2_storage_projections WHERE environment=? AND month=?) AND coalesce((SELECT held_bytes FROM v2_physical_storage_capacity WHERE environment=?),0)<=? AND (${core.applicationCostLimitsEnabled ? "0" : "1"}=1 OR b.settled_krw+b.reserved_krw+b.ambiguous_krw+b.fixed_maintenance_krw+(${carryoverSql})+?<=(CASE WHEN ${core.monthlyBudgetCapEnabled ? "1" : "0"}=1 THEN min(?,json_extract(funding.payload_json,'$.spendAllowanceKrw')) ELSE json_extract(funding.payload_json,'$.spendAllowanceKrw') END)) AND ${inventoryGuard}`,
             [
               claimId,
               environment,
@@ -389,7 +394,12 @@ export function createV2StorageCapacityRepository(
       actor = parse(actorSchema, actor);
       const binding = Object.freeze(parse(physicalBindingSchema, input));
       if (binding.ownerId !== actor.ownerId) throw new Error("CAPACITY_SCOPE_INVALID");
-      const current = currentProjection(environment, actor.now, core.monthlyBudgetCapEnabled);
+      const current = currentProjection(
+        environment,
+        actor.now,
+        core.monthlyBudgetCapEnabled,
+        core.applicationCostLimitsEnabled,
+      );
       const predicate = {
         sql: `${current.sql} AND EXISTS(SELECT 1 FROM v2_physical_storage_capacity c WHERE c.environment=? AND c.held_bytes+CASE WHEN EXISTS(SELECT 1 FROM v2_physical_blob_bindings b WHERE b.blob_id=? AND b.environment=c.environment AND b.owner_id=? AND b.object_key=? AND b.maximum_cipher_bytes=? AND b.state='held') THEN 0 ELSE ? END<=c.capacity_bytes)`,
         values: [
@@ -452,7 +462,12 @@ export function createV2StorageCapacityRepository(
         unstartedWrites.delete(permit);
         writers.add(permit);
         now = parse(iso, now);
-        const current = currentProjection(environment, now, core.monthlyBudgetCapEnabled);
+        const current = currentProjection(
+          environment,
+          now,
+          core.monthlyBudgetCapEnabled,
+          core.applicationCostLimitsEnabled,
+        );
         const row = await core
           .statement(
             `UPDATE v2_physical_blob_bindings SET writer_state='running',writer_token=?,expected_cipher_bytes=? WHERE blob_id=? AND environment=? AND object_key=? AND state='held' AND writer_state='prepared' AND maximum_cipher_bytes>=? AND ${current.sql} AND EXISTS(SELECT 1 FROM v2_blobs b WHERE b.id=blob_id AND b.state='pending' AND b.object_key=v2_physical_blob_bindings.object_key AND (b.cipher_bytes=? OR (b.cipher_bytes=0 AND b.cipher_hash IS NULL AND ((b.kind IN ('verification','portfolio_original','profile_photo_original') AND b.visibility='private' AND b.key_version='asset_binary_v1' AND ?>b.logical_bytes AND ?<=b.logical_bytes+4100+ceil(b.logical_bytes/8388608.0)*16) OR (b.kind='public_copy' AND b.visibility='public' AND b.key_version IS NULL AND b.logical_bytes=?))))) RETURNING object_key`,
@@ -481,7 +496,12 @@ export function createV2StorageCapacityRepository(
         parse(opaqueIdSchema, blobId);
         parse(z.number().int().positive().max(100000000000), byteLength);
         now = parse(iso, now);
-        const current = currentProjection(environment, now, core.monthlyBudgetCapEnabled),
+        const current = currentProjection(
+            environment,
+            now,
+            core.monthlyBudgetCapEnabled,
+            core.applicationCostLimitsEnabled,
+          ),
           token = crypto.randomUUID();
         const row = await core
           .statement(
@@ -542,7 +562,12 @@ export function createV2StorageCapacityRepository(
       return safe(async () => {
         const io = parse(maintenanceIOSchema, input);
         now = parse(iso, now);
-        const current = currentProjection(environment, now, core.monthlyBudgetCapEnabled);
+        const current = currentProjection(
+          environment,
+          now,
+          core.monthlyBudgetCapEnabled,
+          core.applicationCostLimitsEnabled,
+        );
         const row = await core
           .statement(
             `SELECT binding.object_key FROM v2_physical_blob_bindings binding JOIN v2_blobs b ON b.id=binding.blob_id WHERE binding.blob_id=? AND binding.environment=? AND binding.state='held' AND b.object_key=binding.object_key AND b.cipher_bytes<=binding.maximum_cipher_bytes AND b.state ${io.action === "delete" ? "='deleting'" : io.action === "get" ? "='stored'" : "IN ('stored','deleting')"}`,
@@ -585,7 +610,12 @@ export function createV2StorageCapacityRepository(
     async consumeMaintenanceIO(permit: MaintenancePermit, now: string) {
       if (!permits.delete(permit) || permit.environment !== environment) return false;
       now = parse(iso, now);
-      const current = currentProjection(environment, now, core.monthlyBudgetCapEnabled);
+      const current = currentProjection(
+        environment,
+        now,
+        core.monthlyBudgetCapEnabled,
+        core.applicationCostLimitsEnabled,
+      );
       return Boolean(
         await core
           .statement(

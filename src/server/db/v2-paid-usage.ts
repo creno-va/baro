@@ -178,7 +178,14 @@ export function recordRuntimeUsage(
       ]),
       core.statement(
         `UPDATE v2_runtime_controls SET phase='frozen',local_drain_id=NULL,revision=revision+1,updated_at=? WHERE (?=1 OR (${core.monthlyBudgetCapEnabled ? "1" : "0"}=1 AND EXISTS(SELECT 1 FROM v2_monthly_budget b WHERE b.month=v2_runtime_controls.month AND b.settled_krw+b.reserved_krw+b.ambiguous_krw+b.fixed_maintenance_krw>b.limit_krw))) AND ${financialClaim}`,
-        [now, amountOverflow || (charged !== null && charged > row.reserved_krw) ? 1 : 0, claimId],
+        [
+          now,
+          amountOverflow ||
+          (core.applicationCostLimitsEnabled && charged !== null && charged > row.reserved_krw)
+            ? 1
+            : 0,
+          claimId,
+        ],
       ),
       financialFinish(core, claimId),
     ]);

@@ -133,7 +133,7 @@ export function createV2RuntimeRefreshRepository(
           maintenanceKrw = estimatePlanKrw(pricing, prior.quantities);
           if (
             maintenanceKrw < 1 ||
-            maintenanceKrw > 1000000 ||
+            (core.applicationCostLimitsEnabled && maintenanceKrw > 1000000) ||
             prior.quantities.some((q) => {
               const p = pricing.prices.find((v) => v.sku === q.sku);
               return (
@@ -207,7 +207,7 @@ export function createV2RuntimeRefreshRepository(
               AND pp.kind='pricing' AND fp.kind='funding' AND pp.environment=c.environment AND fp.environment=c.environment
               AND pp.payload_json=? AND fp.payload_json=? AND pp.verified_at<=? AND fp.verified_at<=? AND pp.valid_until>=? AND fp.valid_until>=?
               AND json_extract(fp.payload_json,'$.state') IN ('funded','trial_credit')
-              AND b.settled_krw+b.reserved_krw+b.ambiguous_krw+b.fixed_maintenance_krw+(${carryoverSql})+?<=json_extract(fp.payload_json,'$.spendAllowanceKrw')
+              AND (${core.applicationCostLimitsEnabled ? "0" : "1"}=1 OR b.settled_krw+b.reserved_krw+b.ambiguous_krw+b.fixed_maintenance_krw+(${carryoverSql})+?<=json_extract(fp.payload_json,'$.spendAllowanceKrw'))
               AND (?=1 OR b.settled_krw+b.reserved_krw+b.ambiguous_krw+b.fixed_maintenance_krw+(${carryoverSql})+?<=b.limit_krw)
               AND NOT EXISTS(SELECT 1 FROM v2_storage_integrity_faults WHERE environment=c.environment)
               AND ${storageGuard} AND NOT EXISTS(SELECT 1 FROM v2_runtime_refreshes WHERE id=?)`,

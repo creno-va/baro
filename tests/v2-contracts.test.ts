@@ -827,7 +827,7 @@ test("truthful over-budget actual charges remain recordable while new paid admis
   const observed = { ...budget, settledKrw: overage, availableKrw: 0 };
   accepts(v2BudgetLedgerSchema, observed);
   rejects(v2BudgetAdmissionSchema(observed, time), quote);
-  rejects(v2CostAttemptSchema, { ...costAttempt, reservedKrw: overage });
+  accepts(v2CostAttemptSchema, { ...costAttempt, reservedKrw: overage });
   rejects(v2CostAttemptSchema, { ...costAttempt, state: "settled", chargedKrw: 0.1 });
   rejects(v2BudgetLedgerSchema, {
     ...budget,
