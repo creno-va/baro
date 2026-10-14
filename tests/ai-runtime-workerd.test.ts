@@ -7,11 +7,101 @@ import { modelBounds, observationSchema, provisionAiRuntime } from "../scripts/p
 import { CURRENT_POLICY_VERSIONS } from "../src/contracts/consent";
 import { createWorkspacesApi } from "../src/server/api/v2/workspaces";
 import { createCaseDataCipher } from "../src/server/crypto";
-import { createV2Core } from "../src/server/db/v2-core";
-import type { WorkspaceContext } from "../src/server/modules/workspace/pipeline";
+import { createV2Core, type V2Core } from "../src/server/db/v2-core";
+import { runtimeDigest } from "../src/server/db/v2-paid-runtime";
+import { paidHoldRequestSchema } from "../src/server/modules/budget/contracts";
+import { createGatewayExecutionPlanner } from "../src/server/modules/budget/execution-plan";
+import { MODEL_ID } from "../src/server/modules/llm-gateway/prompts";
+import {
+  gatewayWireIdentity,
+  prepareGatewayWireInput,
+} from "../src/server/modules/llm-gateway/service";
+import { readWorkspaceContext } from "../src/server/modules/workspace/context";
+import {
+  type WorkspaceContext,
+  workspaceModelInput,
+} from "../src/server/modules/workspace/pipeline";
 import { createWorkspaceService } from "../src/server/modules/workspace/service";
-import { createWorkspaceDependencies, runWorkspaceRuntime } from "../src/server/runtime/workspace";
+import {
+  configuredBounds,
+  createWorkspaceDependencies,
+  runWorkspaceRuntime,
+  workspaceTokenBounds,
+} from "../src/server/runtime/workspace";
 import { signedSessionCookie, testEnvironment } from "./helpers/d1";
+
+/** Failure-only synthetic diagnostics: never serialize rows, identities, text or errors. */
+async function nativeAdmissionDiagnostics(
+  core: V2Core,
+  env: Env,
+  ownerId: string,
+  workspaceId: string,
+  jobId: string,
+) {
+  const result: Record<string, boolean | number> = { probeComplete: false };
+  try {
+    const now = new Date().toISOString();
+    const row = await core
+      .statement(
+        "SELECT h.state,p.payload_json,p.digest,p.evidence_hash FROM v2_paid_holds h JOIN v2_runtime_plans p ON p.id=h.plan_id WHERE h.job_id=? ORDER BY h.attempt_id LIMIT 1",
+        [jobId],
+      )
+      .first<{ state: string; payload_json: string; digest: string; evidence_hash: string }>();
+    result.holdPresent = !!row;
+    if (!row) return result;
+    result.holdPrepared = row.state === "prepared";
+    const plan = paidHoldRequestSchema.parse(JSON.parse(row.payload_json));
+    result.planDigestMatches = (await runtimeDigest(plan)) === row.digest;
+    result.deadlineRemainingMs = Date.parse(plan.plan.deadlineAt) - Date.parse(now);
+    const proofs = await core
+      .statement(
+        "SELECT kind,verified_at<=? verified,valid_until>? fresh FROM v2_runtime_proofs WHERE id IN (?,?,(SELECT allocation_proof_id FROM v2_runtime_controls WHERE environment='preview' LIMIT 1))",
+        [now, now, plan.pricingProofId, plan.fundingProofId],
+      )
+      .all<{ kind: string; verified: number; fresh: number }>();
+    for (const kind of ["pricing", "funding", "allocation"]) {
+      const proof = proofs.results.find((value) => value.kind === kind);
+      result[`${kind}Present`] = !!proof;
+      result[`${kind}VerifiedByNow`] = proof?.verified === 1;
+      result[`${kind}Fresh`] = proof?.fresh === 1;
+    }
+    // The failed second-question job resets status/currentJobId only; the shared
+    // context reader normalizes both, so its exact wire can still be compared.
+    const input = workspaceModelInput(
+      await readWorkspaceContext(core, { ownerId, now }, workspaceId),
+    );
+    const config = configuredBounds(env);
+    result.boundsConfigured = !!config;
+    const wire = prepareGatewayWireInput("workspace_questions", input);
+    const execution = await createGatewayExecutionPlanner({
+      applicationCostLimitsEnabled: core.applicationCostLimitsEnabled,
+      input: async () => input,
+      bounds: async (value) => workspaceTokenBounds(config, value.max_completion_tokens),
+      verifyBounds: async (_descriptor, digest, at) =>
+        config && Date.parse(config.verifiedAt) <= Date.parse(at)
+          ? { digest, evidenceHash: config.evidenceHash, verifiedAt: config.verifiedAt }
+          : null,
+    }).verify(
+      {
+        invocationId: plan.plan.invocationId,
+        requestId: jobId,
+        phase: "workspace_questions",
+        model: MODEL_ID,
+        attemptOrdinal: 1,
+        correction: false,
+        ...(await gatewayWireIdentity(wire)),
+        outputTokenUpperBound: wire.max_completion_tokens,
+      },
+      now,
+    );
+    result.executionVerified = !!execution;
+    result.executionEvidenceMatches = execution?.evidenceHash === row.evidence_hash;
+    result.probeComplete = true;
+  } catch {
+    // Preserve the original failing assertion without leaking the probe error.
+  }
+  return result;
+}
 
 // Wrangler pins this workerd/Miniflare pair in bun.lock. Using its actual D1
 // implementation catches SQLite authorization/SQL limits that bun:sqlite cannot.
@@ -401,10 +491,20 @@ async function exerciseNativeRuntime(applicationCostLimitsEnabled: boolean) {
       return outcome;
     };
     unavailable = true;
+    const callsBeforeOutage = providerCalls;
     expect((await execute(failedJob.jobId)).status).toBe("failed");
     const latest = await request(`/api/v2/cases/${workspace.id}/workspace-jobs/latest`);
     expect(latest.status).toBe(200);
-    expect(await latest.json()).toMatchObject({ status: "failed", retryable: true });
+    const failed = (await latest.json()) as { status: string; retryable: boolean };
+    if (failed.status !== "failed" || !failed.retryable) {
+      console.error("Synthetic native admission diagnostics", {
+        applicationCostLimitsEnabled,
+        providerReached: providerCalls > callsBeforeOutage,
+        providerCallsDuringOutage: providerCalls - callsBeforeOutage,
+        ...(await nativeAdmissionDiagnostics(core, env, ownerId, workspace.id, failedJob.jobId)),
+      });
+    }
+    expect(failed).toMatchObject({ status: "failed", retryable: true });
     unavailable = false;
     auditRejected = true;
     const retry = await request(

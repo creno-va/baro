@@ -1,5 +1,6 @@
 import { Database } from "bun:sqlite";
 import { expect, test } from "bun:test";
+import migrationJournal from "../drizzle/meta/_journal.json";
 import {
   executionOutput,
   migrationFailureCategory,
@@ -48,7 +49,7 @@ test("SQL-file import preserves multi-statement triggers and records the same at
       files.map((name) => ({ name })),
     );
     expect(db.query("SELECT value FROM app_metadata WHERE key='schema_version'").get()).toEqual({
-      value: "0014_cost_observation_bounds",
+      value: migrationJournal.entries.at(-1)?.tag,
     });
     expect(
       db
