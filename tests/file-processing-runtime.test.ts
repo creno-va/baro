@@ -17,6 +17,7 @@ import { fileStorageRequestCore } from "../src/server/modules/files/limits";
 import { createFileStorageBudget } from "../src/server/modules/files/runtime";
 import { createFilesService } from "../src/server/modules/files/service";
 import { createFileProcessingAdmission } from "../src/server/runtime/file-admission";
+import { countD1Calls } from "./helpers/d1-call-count";
 import { fixture } from "./helpers/file-processing-fixture";
 import { seedTestSession } from "./helpers/session";
 
@@ -24,7 +25,14 @@ import { seedTestSession } from "./helpers/session";
  * R2/native adapters. This never claims a real Container/provider success. */
 async function setup(pageCount = 1) {
   const f = await fixture();
-  const core = createV2Core(f.db.binding, f.core.cipher, {
+  const meter = countD1Calls(f.db.binding);
+  const authorization = { reads: 0 };
+  meter.before((statements) => {
+    authorization.reads += statements.filter((sql) =>
+      sql.startsWith("SELECT j.lease_token,j.fencing,j.lease_until,j.status,w.revision"),
+    ).length;
+  });
+  const core = createV2Core(meter.binding, f.core.cipher, {
     applicationCostLimitsEnabled: false,
     monthlyBudgetCapEnabled: false,
   });
@@ -40,7 +48,7 @@ async function setup(pageCount = 1) {
     APP_ENV: "preview",
     APPLICATION_COST_LIMITS_ENABLED: "false",
     MONTHLY_BUDGET_CAP_ENABLED: "false",
-    DB: f.db.binding,
+    DB: meter.binding,
     CASE_DATA_KEY_V1: btoa("k".repeat(32)).replace(/=+$/, ""),
     CASE_PRIVATE_R2: f.bucket.port,
     FILE_PROCESSING: {},
@@ -148,15 +156,44 @@ async function setup(pageCount = 1) {
     jobId: job.id,
   };
   const execution = await createFileProcessingRuntime(env, params, `${job.id}-1`, () => {});
-  return { ...f, core, env, calls, session, params, execution, service, original };
+  return {
+    ...f,
+    core,
+    env,
+    calls,
+    session,
+    params,
+    execution,
+    service,
+    original,
+    meter,
+    authorization,
+  };
 }
 
 for (const pageCount of [1, 2])
   test(`canonical observation-only ${pageCount}-page extraction stores bounded ciphertext and publishes actual text`, async () => {
     const f = await setup(pageCount);
+    const stages: { stage: string; calls: number; statements: number; authorizations: number }[] =
+      [];
+    const measure = async <T>(stage: string, action: () => Promise<T>) => {
+      const before = { ...f.meter.work, authorizations: f.authorization.reads };
+      const value = await action();
+      stages.push({
+        stage,
+        calls: f.meter.work.calls - before.calls,
+        statements: f.meter.work.statements - before.statements,
+        authorizations: f.authorization.reads - before.authorizations,
+      });
+      return value;
+    };
     const signal = new AbortController().signal;
-    expect((await f.execution.initialize()).totalUnits).toBe(pageCount);
-    expect((await f.execution.extractUnit(0, signal)).artifactCount).toBe(1);
+    expect((await measure("initialize", () => f.execution.initialize())).totalUnits).toBe(
+      pageCount,
+    );
+    expect((await measure("extract", () => f.execution.extractUnit(0, signal))).artifactCount).toBe(
+      1,
+    );
     expect(f.calls).toEqual({ probe: 1, process: 1, stop: 2 });
     // Resume with the real immutable job and stored checkpoints, without another native dispatch.
     const execution = await createFileProcessingRuntime(
@@ -166,21 +203,39 @@ for (const pageCount of [1, 2])
       () => {},
     );
     for (let unit = 0; unit < pageCount; unit++) {
-      if (unit) await execution.extractUnit(unit, signal);
-      await execution.interpretArtifact(unit, 0, signal);
-      await execution.prepareUnit(unit, signal);
+      if (unit) await measure("extract", () => execution.extractUnit(unit, signal));
+      await measure("interpret", () => execution.interpretArtifact(unit, 0, signal));
+      await measure("prepare_unit", () => execution.prepareUnit(unit, signal));
     }
-    const publication = await execution.preparePublication(pageCount, signal);
+    const publication = await measure("prepare_publication", () =>
+      execution.preparePublication(pageCount, signal),
+    );
     for (let part = 0; part < publication.partCount; part++)
-      await execution.stageCoveragePart(part, signal);
+      await measure("stage_coverage", () => execution.stageCoveragePart(part, signal));
     for (let unit = 0; unit < pageCount; unit++) {
-      expect((await execution.prepareUnit(unit, signal)).artifactCount).toBe(1); // Workflow result-count phase
-      const pages = await execution.resultPages(unit, 0);
+      expect(
+        (await measure("prepare_unit_resume", () => execution.prepareUnit(unit, signal)))
+          .artifactCount,
+      ).toBe(1); // Workflow result-count phase
+      const pages = await measure("result_pages", () => execution.resultPages(unit, 0));
       for (let page = 0; page < pages.pageCount; page++)
-        await execution.stageResultPage(unit, 0, page, signal);
+        await measure("stage_result", () => execution.stageResultPage(unit, 0, page, signal));
     }
     expect(f.calls.process).toBe(pageCount);
-    expect((await execution.publish(signal)).status).toBe("ready");
+    expect((await measure("publish", () => execution.publish(signal))).status).toBe("ready");
+    // Measured with this exact canonical fixture before the same-snapshot JOIN:
+    // 1 page: 1330 calls / 1561 SQL / 308 authorization boundaries.
+    // 2 pages: 2380 calls / 2773 SQL / 555 authorization boundaries.
+    // Counts are local method calls, not network time or native rows read.
+    expect(stages.reduce((sum, stage) => sum + stage.calls, 0)).toBe(pageCount === 1 ? 715 : 1271);
+    expect(stages.reduce((sum, stage) => sum + stage.statements, 0)).toBe(
+      pageCount === 1 ? 946 : 1664,
+    );
+    expect(stages.reduce((sum, stage) => sum + stage.authorizations, 0)).toBe(
+      pageCount === 1 ? 308 : 555,
+    );
+    if (process.env.BARO_FILE_PROCESSING_WORK === "true")
+      console.info(JSON.stringify({ event: "synthetic_file_processing_work", pageCount, stages }));
     const output = await createV2FilesRepository(f.core).read(
       { ownerId: f.actor.ownerId, now: new Date().toISOString() },
       f.session.fileId,
@@ -218,6 +273,117 @@ for (const pageCount of [1, 2])
     expect(new Uint8Array(await new Response(original.body).arrayBuffer())).toEqual(f.original);
     expect(f.db.sqlite.query("PRAGMA foreign_key_check").all()).toEqual([]);
   });
+
+for (const mutation of [
+  "none",
+  "consent",
+  "terms",
+  "privacy",
+  "ai-notice",
+  "auto-consent",
+  "auto-version",
+  "owner",
+  "account",
+  "workspace",
+  "file",
+  "revision",
+  "lease-expiry",
+  "runtime",
+  "job-state",
+  "file-job",
+] as const)
+  test(`each current file authorization reads one fresh snapshot: ${mutation}`, async () => {
+    const f = await setup();
+    await f.execution.initialize();
+    const first = await f.execution.currentLease();
+    const mutate = async () => {
+      if (mutation === "consent")
+        f.db.sqlite.query("DELETE FROM user_consents WHERE user_id=?").run(f.actor.ownerId);
+      if (mutation === "terms")
+        f.db.sqlite
+          .query("UPDATE user_consents SET terms_version='previous' WHERE user_id=?")
+          .run(f.actor.ownerId);
+      if (mutation === "privacy")
+        f.db.sqlite
+          .query("UPDATE user_consents SET privacy_version='previous' WHERE user_id=?")
+          .run(f.actor.ownerId);
+      if (mutation === "ai-notice")
+        f.db.sqlite
+          .query("UPDATE user_consents SET ai_notice_version='previous' WHERE user_id=?")
+          .run(f.actor.ownerId);
+      if (mutation === "auto-consent")
+        f.db.sqlite.query("DELETE FROM v2_consents WHERE file_id=?").run(f.session.fileId);
+      if (mutation === "auto-version")
+        f.db.sqlite
+          .query("UPDATE v2_consents SET version='previous' WHERE file_id=?")
+          .run(f.session.fileId);
+      if (mutation === "owner") {
+        const peer = await seedTestSession(f.db, { consent: true });
+        f.db.sqlite
+          .query("UPDATE v2_workspaces SET owner_id=? WHERE id=?")
+          .run(peer.userId, f.workspaceId);
+      }
+      if (mutation === "account" || mutation === "workspace" || mutation === "file")
+        f.db.sqlite
+          .query("INSERT INTO v2_tombstones VALUES(?,?,?)")
+          .run(
+            mutation,
+            mutation === "account"
+              ? f.actor.ownerId
+              : mutation === "workspace"
+                ? f.workspaceId
+                : f.session.fileId,
+            new Date().toISOString(),
+          );
+      if (mutation === "revision")
+        f.db.sqlite
+          .query("UPDATE v2_files SET revision=revision+1 WHERE id=?")
+          .run(f.session.fileId);
+      if (mutation === "lease-expiry")
+        f.db.sqlite
+          .query("UPDATE v2_jobs SET lease_until='2020-01-01T00:00:00.000Z' WHERE id=?")
+          .run(f.params.jobId);
+      if (mutation === "runtime")
+        f.db.sqlite
+          .query("UPDATE v2_jobs SET runtime_instance_id='different-runtime' WHERE id=?")
+          .run(f.params.jobId);
+      if (mutation === "job-state")
+        f.db.sqlite.query("UPDATE v2_jobs SET status='cancelled' WHERE id=?").run(f.params.jobId);
+      if (mutation === "file-job")
+        f.db.sqlite
+          .query("UPDATE v2_files SET current_job_id=NULL WHERE id=?")
+          .run(f.session.fileId);
+    };
+    await mutate();
+    f.meter.reset();
+    if (mutation === "none") expect(await f.execution.currentLease()).toEqual(first);
+    else await expect(f.execution.currentLease()).rejects.toMatchObject({ code: "STALE_REVISION" });
+    expect(f.meter.work).toEqual({ calls: 1, statements: 1 });
+    expect(f.calls.process).toBe(0);
+  });
+
+test("consent revoked immediately after one job snapshot is checked again before native IO", async () => {
+  const f = await setup();
+  await f.execution.initialize();
+  let revoked = false;
+  f.meter.after((statements) => {
+    if (
+      !revoked &&
+      statements.some((sql) =>
+        sql.startsWith("SELECT j.lease_token,j.fencing,j.lease_until,j.status,w.revision"),
+      )
+    ) {
+      revoked = true;
+      f.db.sqlite.query("DELETE FROM user_consents WHERE user_id=?").run(f.actor.ownerId);
+    }
+  });
+  await expect(f.execution.extractUnit(0, new AbortController().signal)).rejects.toMatchObject({
+    code: "STALE_REVISION",
+  });
+  expect(revoked).toBe(true);
+  expect(f.calls.process).toBe(0);
+  expect(f.bucket.calls.put).toBe(1);
+});
 
 for (const failure of ["unknown", "wrong_receipt"] as const)
   test(`customer derivative ${failure} preserves writer capacity and forbids duplicate native dispatch`, async () => {
