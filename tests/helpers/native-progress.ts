@@ -1,3 +1,10 @@
+import {
+  nativeD1MeasurementsSchema,
+  nativeHostMeasurementsSchema,
+  nativeProviderMeasurementsSchema,
+  nativeRecoveryMeasurementsSchema,
+} from "./native-measurements";
+
 const phases = [
   "bootstrap",
   "schema",
@@ -35,6 +42,11 @@ type Counters = {
   activeCostLimitsEnabled?: boolean;
   providerCalls?: number;
   requestOrdinal?: number;
+  databaseMeasurements?: unknown;
+  recoveryMeasurements?: unknown;
+  hostMeasurements?: unknown;
+  hostBaseline?: unknown;
+  providerMeasurements?: unknown;
   databaseTrace?: {
     operation?: string;
     state?: string;
@@ -116,6 +128,31 @@ export function createNativeProgress(
         completedPhases: completedPhases.map((value) => ({ ...value })),
         providerCalls: count(counters.providerCalls),
         requestOrdinal: count(counters.requestOrdinal),
+        ...(nativeD1MeasurementsSchema.safeParse(counters.databaseMeasurements).success
+          ? {
+              databaseMeasurements: nativeD1MeasurementsSchema.parse(counters.databaseMeasurements),
+            }
+          : {}),
+        ...(nativeRecoveryMeasurementsSchema.safeParse(counters.recoveryMeasurements).success
+          ? {
+              recoveryMeasurements: nativeRecoveryMeasurementsSchema.parse(
+                counters.recoveryMeasurements,
+              ),
+            }
+          : {}),
+        ...(nativeHostMeasurementsSchema.safeParse(counters.hostMeasurements).success
+          ? { hostMeasurements: nativeHostMeasurementsSchema.parse(counters.hostMeasurements) }
+          : {}),
+        ...(nativeHostMeasurementsSchema.safeParse(counters.hostBaseline).success
+          ? { hostBaseline: nativeHostMeasurementsSchema.parse(counters.hostBaseline) }
+          : {}),
+        ...(nativeProviderMeasurementsSchema.safeParse(counters.providerMeasurements).success
+          ? {
+              providerMeasurements: nativeProviderMeasurementsSchema.parse(
+                counters.providerMeasurements,
+              ),
+            }
+          : {}),
         // Setup/migration also use direct bindings. This is the last measured
         // preview operation, not necessarily the current boundary's database.
         lastMeasuredPreviewTrace: trace
