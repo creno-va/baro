@@ -133,3 +133,65 @@ export function reportProviderFailure(failure: {
     JSON.stringify({ event: "workspace_provider_failure", phase, category, httpStatus }),
   );
 }
+
+/** Retrieval diagnostics never include query text, URLs, source bodies or credentials. */
+export function reportLegalRetrieval(outcome: {
+  kind: string;
+  availability: string;
+  reason: string | null;
+}) {
+  const kind = ["statute", "precedent", "official_guide"].includes(outcome.kind)
+    ? outcome.kind
+    : "unknown";
+  const availability = ["verified", "limited", "unavailable", "not_requested"].includes(
+    outcome.availability,
+  )
+    ? outcome.availability
+    : "unknown";
+  const reason =
+    outcome.reason === null
+      ? null
+      : [
+            "configuration_missing",
+            "not_authorized",
+            "budget_exhausted",
+            "cancelled",
+            "timeout",
+            "rate_limited",
+            "upstream_unavailable",
+            "upstream_rejected",
+            "schema_mismatch",
+            "too_large",
+            "unsafe_url",
+            "identity_mismatch",
+            "date_invalid",
+            "no_results",
+            "history_incomplete",
+            "unsupported_format",
+            "rights_unverified",
+            "unknown_publication_date",
+            "update_pending",
+            "image_omitted",
+            "cache_invalid",
+          ].includes(outcome.reason)
+        ? outcome.reason
+        : "unknown";
+  console.error(JSON.stringify({ event: "workspace_legal_retrieval", kind, availability, reason }));
+}
+
+/** Keep a generated draft private even when explaining why it was rejected. */
+export function reportWorkspacePolicyFailure(value: unknown) {
+  const reason =
+    typeof value === "string" &&
+    [
+      "unauthorized_reference",
+      "unsupported_fact",
+      "prohibited_content",
+      "question_repetition",
+      "audit_rejected",
+      "policy_rejected",
+    ].includes(value)
+      ? value
+      : "unknown";
+  console.error(JSON.stringify({ event: "workspace_policy_failure", reason }));
+}

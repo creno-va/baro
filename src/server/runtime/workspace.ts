@@ -7,7 +7,7 @@ import { createV2AccountingRepository } from "../db/v2-accounting";
 import { createV2Core, type V2Core } from "../db/v2-core";
 import { createV2JobsRepository } from "../db/v2-jobs";
 import { createV2OfficialSourceRepository } from "../db/v2-official-sources";
-import { reportProviderFailure } from "../dependency-diagnostics";
+import { reportLegalRetrieval, reportProviderFailure } from "../dependency-diagnostics";
 import { paidHoldRequestSchema } from "../modules/budget/contracts";
 import {
   createGatewayExecutionPlanner,
@@ -351,6 +351,7 @@ export async function runWorkspaceRuntime(
               signal: AbortSignal.timeout(120000),
             },
           );
+          for (const outcome of output.outcomes) reportLegalRetrieval(outcome);
           const sources = await projectWorkspaceSources(output);
           return {
             ...context,
