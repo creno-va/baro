@@ -6,6 +6,7 @@ import { digest } from "../src/server/modules/files/binary";
 import type { PrivateBucket } from "../src/server/modules/files/service";
 import { createLawyerAssetsService } from "../src/server/modules/lawyers/assets";
 import { createAssetProcessingAdmission } from "../src/server/runtime/asset-admission";
+import { countD1Calls } from "./helpers/d1-call-count";
 import { fixture } from "./helpers/file-processing-fixture";
 
 // Only native codec output and R2 IO are local adapters. Admission, encryption,
@@ -24,7 +25,7 @@ function fixed(length: number) {
   });
 }
 
-async function setup() {
+async function setup(wrapDatabase: (database: D1Database) => D1Database = (db) => db) {
   const f = await fixture();
   f.actor.now = new Date().toISOString();
   const clock = () => new Date().toISOString();
@@ -82,10 +83,11 @@ async function setup() {
   f.core.applicationCostLimitsEnabled = false;
   let nativeCalls = 0,
     stops = 0;
+  let beforeNativeResponse = () => {};
   const env = {
     APP_ENV: "preview",
     APPLICATION_COST_LIMITS_ENABLED: "false",
-    DB: f.db.binding,
+    DB: wrapDatabase(f.db.binding),
     CASE_DATA_KEY_V1: btoa("k".repeat(32)).replace(/=+$/, ""),
     CASE_PRIVATE_R2: bucket,
     ASSET_PROCESSING: {},
@@ -98,6 +100,7 @@ async function setup() {
         fetch: async (request: Request) => {
           nativeCalls++;
           expect(new Uint8Array(await request.arrayBuffer())).toEqual(original);
+          beforeNativeResponse();
           const encoded = Buffer.from(original).toString("base64");
           return new Response(
             `${[
@@ -156,7 +159,17 @@ async function setup() {
     jobId: job.id,
   };
   const runtime = await createAssetProcessingRuntime(env, params, job.runtime_instance_id);
-  return { ...f, runtime, params, original, nativeCalls: () => nativeCalls, stops: () => stops };
+  return {
+    ...f,
+    runtime,
+    params,
+    original,
+    nativeCalls: () => nativeCalls,
+    stops: () => stops,
+    beforeNativeResponse: (hook: () => void) => {
+      beforeNativeResponse = hook;
+    },
+  };
 }
 
 async function withFixedLength(run: () => Promise<void>) {
@@ -336,4 +349,145 @@ test("writer-stop persistence failure preserves independent cleanup and the real
     ).toEqual({ state: "final", transport: "response" });
     expect(f.bucket.calls.put).toBe(2);
     expect(f.bucket.objects.has(`private/${derivative.id}`)).toBe(true);
+  }));
+
+test("asset runtime checks current consent and source atomically with 62 fewer D1 reads", () =>
+  withFixedLength(async () => {
+    let measured!: ReturnType<typeof countD1Calls>;
+    const f = await setup((database) => {
+      measured = countD1Calls(database);
+      return measured.binding;
+    });
+    let currentReads = 0,
+      separateConsentReads = 0;
+    measured.after((statements) => {
+      for (const sql of statements) {
+        if (sql.includes("original.encrypted_payload AS source_payload")) {
+          currentReads++;
+          expect(sql).toContain("EXISTS(SELECT 1 FROM user_consents consent");
+          expect(sql).toContain("consent.over_14_confirmed=1");
+        } else if (sql.includes("user_consents")) separateConsentReads++;
+      }
+    });
+    expect(await f.runtime.run(new AbortController().signal)).toMatchObject({ status: "ready" });
+    // Same factory + one-chunk JPEG baseline: 173 calls / 209 statements.
+    expect(measured.work).toEqual({ calls: 111, statements: 147 });
+    expect(currentReads).toBe(31);
+    expect(separateConsentReads).toBe(8);
+    expect(f.nativeCalls()).toBe(1);
+    expect(f.bucket.calls.put).toBe(2);
+    const stageTimings = f.runtime.timings();
+    expect(stageTimings.map(({ stage }) => stage)).toEqual([
+      "initialization",
+      "lease_acquisition",
+      "source_authorization",
+      "original_open",
+      "processor_roundtrip",
+      "output_preparation",
+      "output_stream_put",
+      "publication",
+      "cleanup",
+    ]);
+    for (const timing of stageTimings) {
+      expect(Object.keys(timing).sort()).toEqual(["durationMs", "stage"]);
+      expect(Number.isSafeInteger(timing.durationMs)).toBe(true);
+      expect(timing.durationMs).toBeGreaterThanOrEqual(0);
+    }
+  }));
+
+for (const mutation of [
+  "consent_removed",
+  "terms",
+  "privacy",
+  "ai_notice",
+  "account_deleted",
+  "profile_deleted",
+  "asset_deleted",
+  "source_deleted",
+  "lease_expired",
+  "lease_fenced",
+] as const) {
+  test(`atomic asset read denies ${mutation} immediately before its first current-source query`, () =>
+    withFixedLength(async () => {
+      let measured!: ReturnType<typeof countD1Calls>;
+      const f = await setup((database) => {
+        measured = countD1Calls(database);
+        return measured.binding;
+      });
+      let changed = false;
+      measured.before((statements) => {
+        if (
+          changed ||
+          !statements.some((sql) => sql.includes("original.encrypted_payload AS source_payload"))
+        )
+          return;
+        changed = true;
+        if (mutation === "consent_removed")
+          f.db.sqlite.query("DELETE FROM user_consents WHERE user_id=?").run(f.params.ownerId);
+        else if (mutation === "terms")
+          f.db.sqlite
+            .query("UPDATE user_consents SET terms_version='revoked' WHERE user_id=?")
+            .run(f.params.ownerId);
+        else if (mutation === "privacy")
+          f.db.sqlite
+            .query("UPDATE user_consents SET privacy_version='revoked' WHERE user_id=?")
+            .run(f.params.ownerId);
+        else if (mutation === "ai_notice")
+          f.db.sqlite
+            .query("UPDATE user_consents SET ai_notice_version='revoked' WHERE user_id=?")
+            .run(f.params.ownerId);
+        else if (mutation === "source_deleted")
+          f.db.sqlite
+            .query(
+              "UPDATE v2_blobs SET state='deleting' WHERE id=(SELECT original_blob_id FROM v2_assets WHERE id=?)",
+            )
+            .run(f.params.assetId);
+        else if (mutation === "lease_expired")
+          f.db.sqlite
+            .query("UPDATE v2_jobs SET lease_until='2000-01-01T00:00:00.000Z' WHERE id=?")
+            .run(f.params.jobId);
+        else if (mutation === "lease_fenced")
+          f.db.sqlite.query("UPDATE v2_jobs SET fencing=fencing+1 WHERE id=?").run(f.params.jobId);
+        else
+          f.db.sqlite
+            .query("INSERT INTO v2_tombstones(target_kind,target_id,deleted_at) VALUES(?,?,?)")
+            .run(
+              mutation === "account_deleted"
+                ? "account"
+                : mutation === "profile_deleted"
+                  ? "profile"
+                  : "asset",
+              mutation === "account_deleted"
+                ? f.params.ownerId
+                : mutation === "profile_deleted"
+                  ? f.params.profileId
+                  : f.params.assetId,
+              new Date().toISOString(),
+            );
+      });
+      await expect(f.runtime.run(new AbortController().signal)).rejects.toMatchObject({
+        code: "STALE_REVISION",
+      });
+      expect(changed).toBe(true);
+      expect(f.nativeCalls()).toBe(0);
+      expect(f.bucket.calls.get).toBe(0);
+      expect(f.bucket.calls.put).toBe(1);
+    }));
+}
+
+test("consent revoked after native input is consumed still rejects output before its PUT", () =>
+  withFixedLength(async () => {
+    const f = await setup();
+    f.beforeNativeResponse(() => {
+      f.db.sqlite.query("DELETE FROM user_consents WHERE user_id=?").run(f.params.ownerId);
+    });
+    await expect(f.runtime.run(new AbortController().signal)).rejects.toMatchObject({
+      code: "STALE_REVISION",
+    });
+    expect(f.nativeCalls()).toBe(1);
+    expect(f.stops()).toBe(1);
+    expect(f.bucket.calls.put).toBe(1);
+    expect(
+      f.db.sqlite.query("SELECT count(*) n FROM v2_blobs WHERE visibility='staging'").get(),
+    ).toEqual({ n: 0 });
   }));

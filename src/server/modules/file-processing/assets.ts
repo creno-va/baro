@@ -2,6 +2,7 @@ import { sha256 } from "@noble/hashes/sha2.js";
 import { drizzle } from "drizzle-orm/d1";
 import { z } from "zod";
 import { opaqueIdSchema, timestampSchema } from "../../../contracts";
+import { CURRENT_POLICY_VERSIONS } from "../../../contracts/consent";
 import { v2PortfolioAssetSchema } from "../../../contracts/v2";
 import * as schema from "../../db/schema";
 import { hashSchema, type V2Core } from "../../db/v2-core";
@@ -14,6 +15,7 @@ import { hasCurrentConsent } from "../consent/service";
 import { hex } from "../files/binary";
 import type { PrivateBucket } from "../files/service";
 import { boundedReader } from "../lawyers/asset-binary";
+import type { AssetTiming } from "./asset-timing";
 import { ProcessingError } from "./protocol";
 import { createSanitizedEncoder, decryptSanitizedFrame } from "./sanitized-binary";
 import type { SanitizedManifest } from "./sanitized-protocol";
@@ -44,6 +46,7 @@ export function createAssetProcessingService(
     processor?: ProcessorTransport;
     costs: ProcessingCosts;
     clock?: () => string;
+    timing?: AssetTiming;
     fixedLength?: (size: number) => {
       readable: ReadableStream<Uint8Array>;
       writable: WritableStream<Uint8Array>;
@@ -67,7 +70,9 @@ export function createAssetProcessingService(
   const consent = (ownerId: string) =>
     hasCurrentConsent(drizzle(core.binding, { schema }), ownerId);
   const current = async (params: AssetProcessingParams, lease: JobLease) => {
-    if (!(await consent(params.ownerId)) || lease.jobId !== params.jobId) return null;
+    if (lease.jobId !== params.jobId) return null;
+    // Observe consent and the exact live source/lease in the same database read.
+    // Every caller still rechecks at its original transport/stream boundary.
     const row = await core
       .statement(
         `SELECT j.operation_id,a.original_blob_id,a.purpose,a.encrypted_payload AS asset_payload,original.encrypted_payload AS source_payload,original.cipher_bytes,original.cipher_hash
@@ -78,6 +83,7 @@ export function createAssetProcessingService(
       AND j.status IN ('running','validating') AND o.state IN ('admitted','ambiguous') AND ${jobAlive}
       AND a.owner_id=o.owner_id AND p.owner_id=o.owner_id AND a.state='sanitizing' AND a.purpose IN ('profile_photo','portfolio')
       AND original.state='stored' AND original.visibility='private' AND principal.owner_id=o.owner_id
+      AND EXISTS(SELECT 1 FROM user_consents consent WHERE consent.user_id=o.owner_id AND consent.terms_version=? AND consent.privacy_version=? AND consent.ai_notice_version=? AND consent.over_14_confirmed=1)
       AND ((a.purpose='profile_photo' AND original.kind='profile_photo_original') OR (a.purpose='portfolio' AND original.kind='portfolio_original'))`,
         [
           params.jobId,
@@ -89,6 +95,9 @@ export function createAssetProcessingService(
           lease.token,
           lease.fencing,
           actor(params.ownerId).now,
+          CURRENT_POLICY_VERSIONS.termsVersion,
+          CURRENT_POLICY_VERSIONS.privacyVersion,
+          CURRENT_POLICY_VERSIONS.aiNoticeVersion,
         ],
       )
       .first<{
@@ -100,7 +109,7 @@ export function createAssetProcessingService(
         cipher_bytes: number;
         cipher_hash: string;
       }>();
-    return row && (await consent(params.ownerId)) ? row : null;
+    return row;
   };
   const receiptId = (
     params: AssetProcessingParams,
@@ -310,6 +319,7 @@ export function createAssetProcessingService(
   return {
     completed,
     async sanitize(input: AssetProcessingParams, lease: JobLease, signal: AbortSignal) {
+      options.timing?.enter("source_authorization");
       const params = assetProcessingParamsSchema.parse(input);
       if (signal.aborted) throw new ProcessingError("STALE_REVISION");
       const completedFence =
@@ -327,6 +337,7 @@ export function createAssetProcessingService(
       if (!source || signal.aborted) throw new ProcessingError("STALE_REVISION");
       const recovered = await storedReceipt(params, lease);
       if (recovered) {
+        options.timing?.enter("publication");
         if (
           !(await authorize(access)) ||
           recovered.originalId !== source.original_blob_id ||
@@ -383,6 +394,7 @@ export function createAssetProcessingService(
       }
       let original: Awaited<ReturnType<NonNullable<typeof options.openOriginal>>>;
       try {
+        options.timing?.enter("original_open");
         original = await options.openOriginal(params, access.authorize);
         await options.costs.after(originalPermit, { transport: "response" });
       } catch {
@@ -422,10 +434,12 @@ export function createAssetProcessingService(
         byteLength: number;
       } | null = null;
       try {
+        options.timing?.enter("processor_roundtrip");
         const first = await stream.next();
         if (first.done || first.value.type !== "manifest")
           throw new ProcessingError("FILE_REJECTED");
         const manifest: SanitizedManifest = first.value.manifest;
+        options.timing?.enter("output_preparation");
         if (
           (value.kind === "pdf") !== (manifest.format === "pdf") ||
           (source.purpose === "profile_photo" && manifest.format !== "jpeg")
@@ -574,6 +588,7 @@ export function createAssetProcessingService(
         }
         const fixed =
           options.fixedLength?.(wire.cipherBytes) ?? new FixedLengthStream(wire.cipherBytes);
+        options.timing?.enter("output_stream_put");
         const pumping = body.pipeTo(fixed.writable);
         putSent = true;
         const [receipt] = await Promise.all([
@@ -598,6 +613,7 @@ export function createAssetProcessingService(
           objectKey: receipt.key,
           byteLength: receipt.size,
         };
+        options.timing?.enter("publication");
         writerStopped = await capacity.confirmWriterStopped(
           writer,
           responseEvidence,
@@ -641,6 +657,7 @@ export function createAssetProcessingService(
           revision: params.assetRevision + 1,
         };
       } catch (error) {
+        options.timing?.enter("cleanup");
         let failure = error;
         // A confirmed response or a locally unsent write can close only this
         // writer token. Unknown PUT completion retains its physical obligation.
@@ -680,6 +697,7 @@ export function createAssetProcessingService(
         if (failure instanceof ProcessingError) throw failure;
         throw new ProcessingError("FILE_PROCESSING_FAILED");
       } finally {
+        options.timing?.enter("cleanup");
         await stream.return(undefined);
         await original.body.cancel().catch(() => {});
       }
