@@ -270,7 +270,12 @@ export function createReportExports(core: V2Core, deps: ReportDependencies, port
       throw error;
     }
     let writer: WritePermit | null = null,
-      sent = false;
+      writerStopped = false,
+      sent = false,
+      putReturned = false;
+    let responseEvidence:
+      | { transport: "response"; objectKey: string; byteLength: number }
+      | undefined;
     let abortProducer: (() => Promise<void>) | undefined;
     let costs: ProcessingCosts | undefined,
       permit: Awaited<ReturnType<ProcessingCosts["before"]>> = null;
@@ -338,18 +343,16 @@ export function createReportExports(core: V2Core, deps: ReportDependencies, port
           cacheControl: "private, no-store",
         },
       });
+      putReturned = true;
       await fixed.done;
       if (!result || result.key !== key || result.size !== plan.cipherBytes)
         throw new ReportError("STORAGE_UNAVAILABLE");
-      if (
-        writer &&
-        !(await capacity.confirmWriterStopped(
-          writer,
-          { transport: "response", objectKey: key, byteLength: plan.cipherBytes },
-          now(),
-        ))
-      )
-        throw new ReportError("STORAGE_UNAVAILABLE");
+      responseEvidence = { transport: "response", objectKey: key, byteLength: plan.cipherBytes };
+      if (writer) {
+        if (!(await capacity.confirmWriterStopped(writer, responseEvidence, now())))
+          throw new ReportError("STORAGE_UNAVAILABLE");
+        writerStopped = true;
+      }
       if (costs && permit) await costs.after(permit, { transport: "response" });
       await authorize();
       const committed = await core
@@ -371,12 +374,40 @@ export function createReportExports(core: V2Core, deps: ReportDependencies, port
       };
     } catch (error) {
       allowReportCleanup(core);
-      await abortProducer?.();
-      if (writer && !sent)
-        await capacity.confirmWriterStopped(writer, { transport: "not_sent" }, now());
-      if (costs && permit) await costs.after(permit, { transport: sent ? "unknown" : "not_sent" });
-      await abandon(blobId);
-      if (error instanceof ReportError) throw error;
+      let failure = error;
+      await abortProducer?.().catch(() => {
+        failure = new ReportError("STORAGE_UNAVAILABLE");
+      });
+      // A failed local write receipt cannot erase an actual R2 response. Only
+      // exact response evidence or an unsent write can stop this writer token.
+      if (writer && !writerStopped && (!sent || responseEvidence)) {
+        try {
+          if (
+            !(await capacity.confirmWriterStopped(
+              writer,
+              responseEvidence ?? { transport: "not_sent" },
+              now(),
+            ))
+          )
+            failure = new ReportError("STORAGE_UNAVAILABLE");
+        } catch {
+          failure = new ReportError("STORAGE_UNAVAILABLE");
+        }
+      }
+      // Cleanup intent is independent of writer-stop and observation writes.
+      // Unknown writers retain their physical obligation until proven stopped.
+      await abandon(blobId).catch(() => {
+        failure = new ReportError("STORAGE_UNAVAILABLE");
+      });
+      if (costs && permit)
+        await costs
+          .after(permit, {
+            transport: !sent ? "not_sent" : putReturned ? "response" : "unknown",
+          })
+          .catch(() => {
+            failure = new ReportError("STORAGE_UNAVAILABLE");
+          });
+      if (failure instanceof ReportError) throw failure;
       throw new ReportError("STORAGE_UNAVAILABLE");
     }
   }

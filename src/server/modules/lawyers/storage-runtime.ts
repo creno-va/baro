@@ -60,7 +60,10 @@ export function createLawyerStorageBudget(
       const bytes = original
         ? maximumAssetCipherBytes(input.pending.logicalBytes)
         : input.pending.logicalBytes;
-      for (const at of [now, input.deadlineAt]) {
+      // Observation-only physical capacity has no financial expiry. Its
+      // predicate is identical at both times; the atomic claim rechecks it.
+      const capacityTimes = core.applicationCostLimitsEnabled ? [now, input.deadlineAt] : [now];
+      for (const at of capacityTimes) {
         const physical = capacity.prepareCapacity(
           { ownerId, now: at },
           {
