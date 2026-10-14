@@ -8,6 +8,7 @@ import { hashSchema, type V2Core } from "../../db/v2-core";
 import { createV2JobsRepository, jobAlive } from "../../db/v2-jobs";
 import { createV2LawyersRepository } from "../../db/v2-lawyers";
 import { type BlobRegistration, createV2StorageRepository } from "../../db/v2-storage";
+import { createV2StorageCapacityRepository, type WritePermit } from "../../db/v2-storage-capacity";
 import type { JobLease } from "../../db/v2-workspace";
 import { hasCurrentConsent } from "../consent/service";
 import { hex } from "../files/binary";
@@ -54,6 +55,7 @@ export function createAssetProcessingService(
   },
 ) {
   const storage = createV2StorageRepository(core),
+    capacity = createV2StorageCapacityRepository(core, options.environment),
     jobs = createV2JobsRepository(core),
     lawyers = createV2LawyersRepository(core);
   const actor = (ownerId: string) => ({
@@ -411,6 +413,14 @@ export function createAssetProcessingService(
       let putSent = false,
         putReturned = false;
       let permit: Awaited<ReturnType<ProcessingCosts["before"]>> = null;
+      let permitObserved = false;
+      let writer: WritePermit | null = null;
+      let writerStopped = false;
+      let responseEvidence: {
+        transport: "response";
+        objectKey: string;
+        byteLength: number;
+      } | null = null;
       try {
         const first = await stream.next();
         if (first.done || first.value.type !== "manifest")
@@ -488,7 +498,14 @@ export function createAssetProcessingService(
           }))
         )
           throw new ProcessingError("STALE_REVISION");
-        if (!(await storage.prepareSanitizedAssetBlob(actor(params.ownerId), lease, prepared)))
+        const prepareActor = actor(params.ownerId);
+        const physical = capacity.prepareCapacity(prepareActor, {
+          blobId,
+          ownerId: params.ownerId,
+          objectKey: `private/${blobId}`,
+          maximumCipherBytes: wire.cipherBytes,
+        });
+        if (!(await storage.prepareSanitizedAssetBlob(prepareActor, lease, prepared, physical)))
           throw new ProcessingError("STALE_REVISION");
         captured = await storage.captureSanitizedAssetBlobIntent(
           actor(params.ownerId),
@@ -498,7 +515,7 @@ export function createAssetProcessingService(
         if (!captured) throw new ProcessingError("STALE_REVISION");
         permit = await options.costs.before(
           {
-            service: "storage",
+            service: "requests",
             action: "r2_put",
             identity: `asset-put:${blobId}:${wire.cipherHash}`,
             byteLength: wire.cipherBytes,
@@ -507,6 +524,13 @@ export function createAssetProcessingService(
           access,
         );
         if (!permit) throw new ProcessingError("BUDGET_UNAVAILABLE");
+        writer = capacity.prepareWrite({
+          blobId,
+          objectKey: `private/${blobId}`,
+          byteLength: wire.cipherBytes,
+        });
+        if (!(await capacity.beginPreparedWrite(writer, actor(params.ownerId).now)))
+          throw new ProcessingError("STORAGE_UNAVAILABLE");
         let index = 0;
         const body = new ReadableStream<Uint8Array>(
           {
@@ -546,7 +570,6 @@ export function createAssetProcessingService(
           { highWaterMark: 0 },
         );
         if (!(await authorize(access))) {
-          await options.costs.after(permit, { transport: "not_sent" });
           throw new ProcessingError("STALE_REVISION");
         }
         const fixed =
@@ -563,15 +586,27 @@ export function createAssetProcessingService(
           pumping,
         ]);
         putReturned = true;
-        await options.costs.after(permit, { transport: "response" });
         if (
           !receipt ||
           receipt.key !== `private/${blobId}` ||
           receipt.size !== wire.cipherBytes ||
-          !encoder.complete() ||
-          !(await authorize(access))
+          !encoder.complete()
         )
           throw new ProcessingError("STORAGE_UNAVAILABLE");
+        responseEvidence = {
+          transport: "response",
+          objectKey: receipt.key,
+          byteLength: receipt.size,
+        };
+        writerStopped = await capacity.confirmWriterStopped(
+          writer,
+          responseEvidence,
+          actor(params.ownerId).now,
+        );
+        if (!writerStopped) throw new ProcessingError("STORAGE_UNAVAILABLE");
+        await options.costs.after(permit, { transport: "response" });
+        permitObserved = true;
+        if (!(await authorize(access))) throw new ProcessingError("STALE_REVISION");
         if (!(await storage.commitSanitizedAssetBlob(actor(params.ownerId), lease, prepared)))
           throw new ProcessingError("STALE_REVISION");
         // commitSanitizedAssetBlob transfers its actual reservation atomically.
@@ -606,8 +641,18 @@ export function createAssetProcessingService(
           revision: params.assetRevision + 1,
         };
       } catch (error) {
-        if (permit && putSent && !putReturned)
-          await options.costs.after(permit, { transport: "unknown" });
+        // A confirmed response or a locally unsent write can close only this
+        // writer token. Unknown PUT completion retains its physical obligation.
+        if (writer && !writerStopped && (!putSent || responseEvidence))
+          await capacity.confirmWriterStopped(
+            writer,
+            responseEvidence ?? { transport: "not_sent" },
+            actor(params.ownerId).now,
+          );
+        if (permit && !permitObserved)
+          await options.costs.after(permit, {
+            transport: !putSent ? "not_sent" : putReturned ? "response" : "unknown",
+          });
         if (prepared) await storage.abandonSanitizedAssetBlob(actor(params.ownerId), prepared.id);
         if (captured && putSent) {
           // Freeze the exact prePUT generation for funded cleanup. A missing

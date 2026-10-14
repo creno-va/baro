@@ -95,6 +95,17 @@ async function setup(
     new Date(Date.parse(f.actor.now) + 300000).toISOString(),
   );
   if (!granted) throw new Error("Synthetic actual lease missing");
+  f.core.applicationCostLimitsEnabled = false;
+  f.db.sqlite
+    .query(
+      "INSERT INTO v2_physical_storage_capacity(environment,capacity_bytes) VALUES('preview',1000000)",
+    )
+    .run();
+  f.db.sqlite
+    .query(
+      "INSERT INTO v2_physical_blob_bindings(blob_id,environment,owner_id,object_key,maximum_cipher_bytes,inventory_hash,state,writer_state,created_at) SELECT id,'preview',?,object_key,cipher_bytes,?,'held','stopped',? FROM v2_blobs WHERE id=(SELECT original_blob_id FROM v2_assets WHERE id=?)",
+    )
+    .run(f.actor.ownerId, "e".repeat(64), f.actor.now, reserved.assetId);
   const params = {
     ownerId: f.actor.ownerId,
     profileId,
@@ -381,19 +392,12 @@ test("actual stored-before-ready SQL crash recovers from the same fenced receipt
     f.db.sqlite.query("SELECT count(*) AS count FROM v2_blobs WHERE visibility='public'").get(),
   ).toEqual({ count: 0 });
 });
-for (const column of ["source_asset_revision", "cipher_hash", "object_key"] as const) {
+for (const column of ["source_asset_revision", "cipher_hash"] as const) {
   test(`stored recovery rejects drifted ${column} without another paid dispatch`, async () => {
     const f = await crashAfterStored();
     f.db.sqlite
       .query(`UPDATE v2_blobs SET ${column}=? WHERE id=?`)
-      .run(
-        column === "source_asset_revision"
-          ? 99
-          : column === "cipher_hash"
-            ? "0".repeat(64)
-            : "private/foreign",
-        f.storedBlobId,
-      );
+      .run(column === "source_asset_revision" ? 99 : "0".repeat(64), f.storedBlobId);
     const calls = { ...f.bucket.calls },
       native = f.nativeCalls(),
       costs = f.receipts.length;
@@ -405,6 +409,20 @@ for (const column of ["source_asset_revision", "cipher_hash", "object_key"] as c
     expect(f.receipts.length).toBe(costs);
   });
 }
+test("physical binding rejects stored object-key drift before recovery", async () => {
+  const f = await crashAfterStored();
+  expect(() =>
+    f.db.sqlite
+      .query("UPDATE v2_blobs SET object_key='private/foreign' WHERE id=?")
+      .run(f.storedBlobId),
+  ).toThrow("PHYSICAL_BLOB_CAPACITY_BOUND");
+  const calls = { ...f.bucket.calls };
+  expect(await f.processing.sanitize(f.params, f.lease, signal())).toMatchObject({
+    status: "ready",
+  });
+  expect(f.bucket.calls).toEqual(calls);
+  expect(f.nativeCalls()).toBe(1);
+});
 test("stored recovery cannot adopt another fence or a deleted asset", async () => {
   const f = await crashAfterStored(),
     calls = { ...f.bucket.calls };

@@ -42,6 +42,10 @@ export const boundedProcessingResources: NonNullable<ProcessingRuntimePolicy["bo
     ];
   } else if (input.service === "requests" && input.action === "r2_get") {
     quantities = [{ sku: "r2_class_b_requests", maximumQuantity: "2" }];
+  } else if (input.service === "requests" && input.action === "r2_put") {
+    // One bounded derivative PUT. Its actual encrypted bytes require a separate
+    // physical capacity and writer capability; this is no retention estimate.
+    quantities = [{ sku: "r2_class_a_requests", maximumQuantity: "1" }];
   } else if (
     input.service === "asr" &&
     input.action === "asr" &&
