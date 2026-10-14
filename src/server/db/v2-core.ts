@@ -6,7 +6,10 @@ import {
   MAX_PLAINTEXT_BYTES,
   V2_SNAPSHOT_PURPOSES,
 } from "../crypto";
-import { rememberDependencyFailure } from "../dependency-diagnostics";
+import {
+  rememberDependencyFailure,
+  reportMonthBucketObservationFailure,
+} from "../dependency-diagnostics";
 
 export class V2RepositoryError extends Error {
   constructor(
@@ -107,16 +110,24 @@ export function createV2Core(
     parse(z.enum(["preview", "production"]), environment);
     const at = Date.parse(parse(timestampSchema, now));
     const month = new Date(at + 9 * 3600000).toISOString().slice(0, 7);
-    await binding.batch([
-      statement(
-        "INSERT INTO v2_cost_execution_policy(environment,limits_enabled) VALUES(?,0) ON CONFLICT(environment) DO UPDATE SET limits_enabled=0",
-        [environment],
-      ),
-      statement(
+    // Physical storage triggers require the server-owned policy. Its failure is
+    // still fatal; only the independent financial calendar bucket is optional.
+    await statement(
+      "INSERT INTO v2_cost_execution_policy(environment,limits_enabled) VALUES(?,0) ON CONFLICT(environment) DO UPDATE SET limits_enabled=0",
+      [environment],
+    ).run();
+    try {
+      await statement(
         "INSERT INTO v2_monthly_budget(month,allocation_version,environment,limit_krw) VALUES(?,1,?,0) ON CONFLICT(month) DO NOTHING",
         [month, environment],
-      ),
-    ]);
+      ).run();
+    } catch (error) {
+      try {
+        reportMonthBucketObservationFailure(error);
+      } catch {
+        // Diagnostic availability cannot turn a cost observation into an IO gate.
+      }
+    }
   };
   const encrypt = (
     table: Extract<EncryptionContext, { revision: number }>["table"],

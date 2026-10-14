@@ -1864,6 +1864,9 @@ test("disabled application cost limits preserve old exposure and admit, dispatch
 
 test("observation-only reservations can exceed the old per-attempt money ceiling", async () => {
   const f = await fixture(true, false);
+  f.core.ensureObservationMonth = async () => {
+    throw Error("Synthetic false execution must not depend on a financial calendar bucket");
+  };
   const r = request(f);
   r.plan.quantities[0]!.maximumQuantity = "1500000";
   const admitted = await admit(f, r);

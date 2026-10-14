@@ -114,6 +114,14 @@ export function reportCostObservationFailure(phaseInput: string, error: unknown)
   console.error(JSON.stringify({ event: "model_cost_observation_failure", phase, category }));
 }
 
+/** The optional financial bucket is not a workspace or model execution failure. */
+export function reportMonthBucketObservationFailure(error: unknown) {
+  const category = dependencyCategory(error);
+  console.error(
+    JSON.stringify({ event: "cost_observation_failure", phase: "month_bucket", category }),
+  );
+}
+
 export function reportProviderFailure(failure: {
   phase: string;
   category: DependencyCategory;

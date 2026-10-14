@@ -254,8 +254,10 @@ for (const pageCount of [1, 2])
     // Atomic transport observations remove another 21/38 calls/SQL.
     // Preparation snapshot removes 6/10 calls; atomic blob/reservation commit
     // removes another 12/20 calls, retaining all 308/555 authorization boundaries.
+    // Isolating the optional maintenance month write adds one call per original
+    // GET; policy and month remain separate SQL with all other work unchanged.
     // Counts are local method calls, not network time or native rows read.
-    expect(stages.reduce((sum, stage) => sum + stage.calls, 0)).toBe(pageCount === 1 ? 665 : 1184);
+    expect(stages.reduce((sum, stage) => sum + stage.calls, 0)).toBe(pageCount === 1 ? 666 : 1186);
     expect(stages.reduce((sum, stage) => sum + stage.statements, 0)).toBe(
       pageCount === 1 ? 884 : 1557,
     );
