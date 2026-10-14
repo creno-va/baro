@@ -35,8 +35,16 @@ const verify: RuntimeProofVerifier = async (kind, _value, digest) => ({
           ? "provider_receipt"
           : "authenticated_coordinator",
 });
-async function paidFixture() {
-  const f = await publicationFixture(),
+async function paidFixture(applicationCostLimitsEnabled = true) {
+  const original = await publicationFixture();
+  const f = {
+      ...original,
+      core: {
+        ...original.core,
+        applicationCostLimitsEnabled,
+        monthlyBudgetCapEnabled: applicationCostLimitsEnabled,
+      },
+    },
     accounting = createV2AccountingRepository(f.core, "preview"),
     runtime = createV2PaidRuntimeRepository(f.core, "preview", verify);
   const allocation = {
@@ -352,4 +360,20 @@ test("postdispatch expired clock denies the private decoder without refunding it
   await expect(f.copy()).rejects.toThrow();
   expect(f.calls).toEqual({ get: 0, head: 0 });
   expect(f.cost()).toEqual({ reserved_krw: 2000, ambiguous_krw: 0, settled_krw: 0 });
+});
+
+test("unpriced approved public copy uses actual bytes and its own immutable journal", async () => {
+  const f = await paidFixture(false);
+  await f.copy();
+  expect(f.count()).toBe(1);
+  expect(
+    f.db.sqlite.query("SELECT state,transport,scope FROM v2_execution_admissions").get(),
+  ).toEqual({ state: "final", transport: "response", scope: "approved_public_copy" });
+  expect(f.db.sqlite.query("SELECT state FROM v2_blobs WHERE kind='public_copy'").get()).toEqual({
+    state: "stored",
+  });
+  expect(f.db.sqlite.query("SELECT count(*) n FROM v2_cost_attempts").get()).toEqual({ n: 0 });
+  expect(f.db.sqlite.query("SELECT count(*) n FROM v2_execution_cost_observations").get()).toEqual({
+    n: 0,
+  });
 });
