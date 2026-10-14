@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { afterEach, expect, test } from "bun:test";
 import { readdir } from "node:fs/promises";
 import { Hono } from "hono";
 import { convertV4MiniflareOptions, Miniflare } from "miniflare";
@@ -33,6 +33,15 @@ import {
 import { signedSessionCookie, testEnvironment } from "./helpers/d1";
 import { measureD1Work } from "./helpers/d1-work";
 import { nativeFailure } from "./helpers/native-failure";
+import { createNativeProgress } from "./helpers/native-progress";
+
+let activeProgress: ReturnType<typeof createNativeProgress> | undefined;
+afterEach(() => {
+  // Bun can end a timed-out test before its pending native Promise settles.
+  // This only snapshots memory and clears the diagnostic timer; no DB/IO probe.
+  activeProgress?.finish(false);
+  activeProgress = undefined;
+});
 
 /** Failure-only synthetic diagnostics: never serialize rows, identities, text or errors. */
 async function nativeAdmissionDiagnostics(
@@ -134,6 +143,8 @@ async function nativeAdmissionDiagnostics(
 // implementation catches SQLite authorization/SQL limits that bun:sqlite cannot.
 async function exerciseNativeRuntime(applicationCostLimitsEnabled: boolean) {
   const started = performance.now();
+  const progress = createNativeProgress(applicationCostLimitsEnabled);
+  activeProgress = progress;
   const mf = new Miniflare(
     convertV4MiniflareOptions({
       modules: true,
@@ -144,6 +155,7 @@ async function exerciseNativeRuntime(applicationCostLimitsEnabled: boolean) {
       unsafeRegisterWorker: false,
     }),
   );
+  let completed = false;
   try {
     const preview = (await mf.getD1Database("PREVIEW")) as unknown as D1Database,
       production = (await mf.getD1Database("PRODUCTION")) as unknown as D1Database,
@@ -151,6 +163,7 @@ async function exerciseNativeRuntime(applicationCostLimitsEnabled: boolean) {
     const migrations = (await readdir("drizzle"))
       .filter((name) => /^\d{4}_.+\.sql$/.test(name))
       .sort();
+    progress.enter("schema", "migrate");
     for (const db of [preview, production, upgrade]) {
       for (const name of migrations) {
         // Product runtimes require latest schema. A separate native database
@@ -170,10 +183,12 @@ async function exerciseNativeRuntime(applicationCostLimitsEnabled: boolean) {
         checkedAt: now,
         validUntil: new Date(Date.now() + 86400000).toISOString(),
       });
+    progress.enter("provision", "provision");
     const provisioned = await provisionAiRuntime({ preview, production }, observed),
       ownerId = crypto.randomUUID(),
       sessionId = crypto.randomUUID(),
       sessionToken = `synthetic-session-${sessionId}`;
+    progress.boundary("seed");
     await preview.batch([
       preview
         .prepare(
@@ -351,6 +366,12 @@ async function exerciseNativeRuntime(applicationCostLimitsEnabled: boolean) {
     let requestPhase = "access_or_read",
       requestOrdinal = 0;
     let requestFailure: ReturnType<typeof nativeFailure> = [];
+    progress.observe(() => ({
+      activeCostLimitsEnabled: env.APPLICATION_COST_LIMITS_ENABLED !== "false",
+      providerCalls,
+      requestOrdinal,
+      databaseTrace: measured.trace,
+    }));
     const app = new Hono()
       .use("*", async (c, next) => {
         await next();
@@ -366,17 +387,21 @@ async function exerciseNativeRuntime(applicationCostLimitsEnabled: boolean) {
             return {
               ...dependencies,
               async prepareJob(input) {
+                progress.boundary("prepare_job");
                 requestPhase = "prepare_job";
                 const prepared = await dependencies.prepareJob?.(input);
                 requestPhase = prepared ? "job_commit" : "prepare_rejected";
+                progress.boundary("request");
                 return prepared ?? null;
               },
               async dispatch() {
+                progress.boundary("dispatch");
                 requestPhase = "dispatch";
                 try {
                   return await dependencies.dispatch?.();
                 } finally {
                   requestPhase = "receipt";
+                  progress.boundary("receipt");
                 }
               },
             };
@@ -384,6 +409,7 @@ async function exerciseNativeRuntime(applicationCostLimitsEnabled: boolean) {
         }),
       );
     const request = async (path: string, method = "GET", body?: unknown) => {
+      progress.boundary("request");
       requestOrdinal++;
       requestPhase = "access_or_read";
       requestFailure = [];
@@ -451,6 +477,7 @@ async function exerciseNativeRuntime(applicationCostLimitsEnabled: boolean) {
       }
       return response;
     };
+    progress.enter("baseline", "create");
     const workspace = await service.create(ownerId, crypto.randomUUID(), {
       narrative: "합성 계약 자료의 거래 날짜를 확인하고 상담을 준비하려고 합니다.",
       jurisdiction: "KR",
@@ -470,6 +497,7 @@ async function exerciseNativeRuntime(applicationCostLimitsEnabled: boolean) {
     databaseFailures.length = 0;
     databaseFailureDetails.length = 0;
     const runtimeStarted = performance.now();
+    progress.boundary("runtime");
     const result = await runWorkspaceRuntime(
       env,
       {
@@ -482,6 +510,7 @@ async function exerciseNativeRuntime(applicationCostLimitsEnabled: boolean) {
       (promise) => pending.push(promise),
     );
     const runtimeFinished = performance.now();
+    progress.boundary("runtime_receipts");
     await Promise.all(pending);
     if (result.status !== "completed") {
       // Both variants first run a priced baseline, then upgrade populated legacy
@@ -515,6 +544,7 @@ async function exerciseNativeRuntime(applicationCostLimitsEnabled: boolean) {
     }
     expect(result.status).toBe("completed");
     expect(providerCalls).toBe(2);
+    progress.boundary("readback");
     expect((await service.intake(ownerId, workspace.id))?.batches).toHaveLength(1);
     expect(
       await preview
@@ -530,6 +560,7 @@ async function exerciseNativeRuntime(applicationCostLimitsEnabled: boolean) {
     // import must roll back data, tables, triggers and the schema marker.
     // Copy actual synthetic legacy-path rows into the old schema. Current
     // product code must not be run against an unapplied required migration.
+    progress.enter("migration", "copy");
     const oldTables = (
       await upgrade
         .prepare(
@@ -599,6 +630,7 @@ async function exerciseNativeRuntime(applicationCostLimitsEnabled: boolean) {
       const original = await snapshot();
       expect(original[1]?.length).toBeGreaterThan(0);
       const originalSchema = await schema(upgrade);
+      progress.boundary("rollback");
       await expect(
         upgrade.batch([
           ...migration.map((sql) => upgrade.prepare(sql)),
@@ -609,6 +641,7 @@ async function exerciseNativeRuntime(applicationCostLimitsEnabled: boolean) {
       expect(await schema(upgrade)).toEqual(originalSchema);
       // Remote imports must not depend on deferred-FK state surviving statement
       // boundaries. Check every intermediate schema as well as the final rows.
+      progress.boundary("upgrade");
       const upgraded = await upgrade.batch(
         migration.flatMap((sql) => [
           upgrade.prepare(sql),
@@ -627,6 +660,7 @@ async function exerciseNativeRuntime(applicationCostLimitsEnabled: boolean) {
     expect(await schema(upgrade)).toEqual(await schema(production));
     // Exercise observation mode on the current schema while retaining every
     // earlier paid plan, hold and receipt from the same product database.
+    progress.enter("advance", "readback");
     env.APPLICATION_COST_LIMITS_ENABLED = String(applicationCostLimitsEnabled);
     core = createV2Core(preview, cipher, {
       applicationCostLimitsEnabled,
@@ -661,6 +695,7 @@ async function exerciseNativeRuntime(applicationCostLimitsEnabled: boolean) {
     expect(next.status).toBe(202);
     const failedJob = (await next.json()) as { jobId: string };
     const execute = async (jobId: string) => {
+      progress.boundary("readback");
       const job = await service.job(ownerId, workspace.id, jobId);
       if (job.target.kind !== "workspace") throw new Error("Wrong synthetic job target");
       const instanceId = await preview
@@ -668,6 +703,7 @@ async function exerciseNativeRuntime(applicationCostLimitsEnabled: boolean) {
         .bind(jobId)
         .first<string>("runtime_instance_id");
       const background: Promise<void>[] = [];
+      progress.boundary("runtime");
       const outcome = await runWorkspaceRuntime(
         env,
         {
@@ -679,9 +715,11 @@ async function exerciseNativeRuntime(applicationCostLimitsEnabled: boolean) {
         instanceId ?? "missing",
         (promise) => background.push(promise),
       );
+      progress.boundary("runtime_receipts");
       await Promise.all(background);
       return outcome;
     };
+    progress.enter("recovery", "runtime");
     unavailable = true;
     const callsBeforeOutage = providerCalls;
     expect((await execute(failedJob.jobId)).status).toBe("failed");
@@ -730,6 +768,7 @@ async function exerciseNativeRuntime(applicationCostLimitsEnabled: boolean) {
     expect(policyRetry.status).toBe(202);
     expect((await execute(failedJob.jobId)).status).toBe("completed");
     expect(providerCalls).toBe(9);
+    progress.enter("summary", "readback");
     // Continue every paid product phase on native D1, including encrypted
     // staging/publishing of facts, parties, timeline and actions.
     for (const batchIndex of [1]) {
@@ -767,6 +806,7 @@ async function exerciseNativeRuntime(applicationCostLimitsEnabled: boolean) {
     });
     expect(confirmed.status).toBe(200);
     expect(await confirmed.json()).toMatchObject({ status: "active" });
+    progress.enter("chat", "request");
     const chat = await request(`/api/v2/cases/${workspace.id}/messages`, "POST", {
       expectedRevision: (await service.find(ownerId, workspace.id)).workspaceRevision,
       text: "새로운 자료를 찾았습니다.",
@@ -834,10 +874,22 @@ async function exerciseNativeRuntime(applicationCostLimitsEnabled: boolean) {
       ).toBe(2);
     }
     // Replay cannot emit another model request or duplicate published entities.
+    progress.enter("replay", "runtime");
     expect((await execute(chatJob.jobId)).status).toBe("completed");
     expect(providerCalls).toBe(14);
+    completed = true;
+  } catch (error) {
+    progress.report("failure");
+    throw error;
   } finally {
-    await mf.dispose();
+    progress.enter("cleanup", "dispose");
+    let cleanupComplete = false;
+    try {
+      await mf.dispose();
+      cleanupComplete = true;
+    } finally {
+      progress.finish(completed && cleanupComplete);
+    }
   }
 }
 
