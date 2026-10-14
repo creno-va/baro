@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { timestampSchema } from "../../../contracts";
 import {
   type V2Intake,
   type V2UserMessage,
@@ -16,6 +17,16 @@ import { readBoundSource } from "../legal-retrieval/v2/bound-sources";
 import { EXTRACTOR_VERSION, type SourceChunk } from "../legal-retrieval/v2/contracts";
 import { projectWorkspaceSources } from "../legal-retrieval/v2/workspace-sources";
 import type { WorkspaceContext } from "./pipeline";
+
+/** Korea's request calendar is independent of stored UTC/event timestamps. */
+export function workspaceCalendar(now: string) {
+  return {
+    localDate: new Date(Date.parse(timestampSchema.parse(now)) + 9 * 3600000)
+      .toISOString()
+      .slice(0, 10),
+    timeZone: "Asia/Seoul" as const,
+  };
+}
 
 /** Bounded context retains every saved row; the model is told which rows are included. */
 export async function readWorkspaceContext(
@@ -123,10 +134,12 @@ export async function readWorkspaceContext(
     if (chunk) chunks.push(chunk);
     else rejectedSources++;
   }
+  // The trusted request clock defines Korea's calendar day, not saved UTC metadata.
+  const calendar = workspaceCalendar(actor.now);
   const sources = await projectWorkspaceSources(
     {
       schemaVersion: "2",
-      asOfDate: new Date(Date.parse(actor.now) + 9 * 3600000).toISOString().slice(0, 10),
+      asOfDate: calendar.localDate,
       chunks,
       outcomes: chunks.map((chunk) => ({
         kind: chunk.citation.kind,
@@ -221,6 +234,7 @@ export async function readWorkspaceContext(
     latestMessage: latest ? normalized(latest) : null,
     history: history.map((message) => ({ ...message, createdAt: "1970-01-01T00:00:00.000Z" })),
     ...sources,
+    calendar,
     sourceLookupPerformed: false,
     contextCoverage: {
       factsPartial: factPage.nextId !== null,

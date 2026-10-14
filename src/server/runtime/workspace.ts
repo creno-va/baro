@@ -34,7 +34,7 @@ import {
   ModelError,
   prepareGatewayWireInput,
 } from "../modules/llm-gateway/service";
-import { readWorkspaceContext } from "../modules/workspace/context";
+import { readWorkspaceContext, workspaceCalendar } from "../modules/workspace/context";
 import { createWorkspaceDispatcher } from "../modules/workspace/dispatch";
 import { executeWorkspace, type WorkspaceParams } from "../modules/workspace/execution";
 import { createWorkspacePipeline, workspaceModelInput } from "../modules/workspace/pipeline";
@@ -181,8 +181,7 @@ export function createWorkspaceDependencies(core: V2Core, env: Env): WorkspaceDe
         GUIDE_HOSTS,
       );
       const invocationId = crypto.randomUUID(),
-        phase = phaseFor(input.kind),
-        r = await request(phase, context, invocationId, input.jobId);
+        phase = phaseFor(input.kind);
       const binding: GatewayExecutionBinding = {
         ...proofs,
         operationId: input.admission.operationId,
@@ -196,8 +195,23 @@ export function createWorkspaceDependencies(core: V2Core, env: Env): WorkspaceDe
         maximumAttempts: 3,
         deadlineAt: new Date(Date.parse(now) + 300000).toISOString(),
       };
-      const prepared = await budget(core, env, input.ownerId, context).prepareAdmission(binding, r);
-      return prepared ? { paid: prepared.paid, actor: prepared.actor } : null;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const r = await request(phase, context, invocationId, input.jobId);
+        const prepared = await budget(core, env, input.ownerId, context).prepareAdmission(
+          binding,
+          r,
+        );
+        if (!prepared) return null;
+        const calendar = workspaceCalendar(prepared.actor.now);
+        if (context.calendar?.localDate === calendar.localDate)
+          return { paid: prepared.paid, actor: prepared.actor };
+        // Midnight may pass while reading context. These are uncommitted SQL
+        // capabilities, not a persisted hold or provider call. Re-prepare once
+        // so the eventual immutable plan.created_at and complete wire agree.
+        // sourceRetrieval.asOfDate retains its actual context-read day.
+        context.calendar = calendar;
+      }
+      return null;
     },
   };
 }
@@ -215,10 +229,10 @@ export async function runWorkspaceRuntime(
   const result = await executeWorkspace(core, params, instanceId, {
     guideHosts: GUIDE_HOSTS,
     authorize: (ownerId) => hasCustomerWorkspaceAccess(core, ownerId),
-    pipeline: async (job, lease, _context, progress) => {
+    pipeline: async (job, lease, context, progress) => {
       const row = await core
         .statement(
-          "SELECT h.attempt_id,p.payload_json,c.allocation_proof_id FROM v2_execution_job_holds h JOIN v2_execution_job_plans p ON p.id=h.plan_id JOIN v2_execution_attempts a ON a.id=h.attempt_id LEFT JOIN v2_runtime_controls c ON c.month=a.month AND c.environment=? WHERE h.job_id=? AND h.state='prepared' AND p.target_revision=? AND p.deadline_at>? ORDER BY h.attempt_id LIMIT 1",
+          "SELECT h.attempt_id,p.payload_json,p.created_at,c.allocation_proof_id FROM v2_execution_job_holds h JOIN v2_execution_job_plans p ON p.id=h.plan_id JOIN v2_execution_attempts a ON a.id=h.attempt_id LEFT JOIN v2_runtime_controls c ON c.month=a.month AND c.environment=? WHERE h.job_id=? AND h.state='prepared' AND p.target_revision=? AND p.deadline_at>? ORDER BY h.attempt_id LIMIT 1",
           [
             env.APP_ENV === "production" ? "production" : "preview",
             job.id,
@@ -226,9 +240,18 @@ export async function runWorkspaceRuntime(
             new Date().toISOString(),
           ],
         )
-        .first<{ attempt_id: string; payload_json: string; allocation_proof_id: string }>();
+        .first<{
+          attempt_id: string;
+          payload_json: string;
+          created_at: string;
+          allocation_proof_id: string;
+        }>();
       if (!row) throw new Error("Paid admission unavailable");
       const original = paidHoldRequestSchema.parse(JSON.parse(row.payload_json));
+      // Restore the same request-day input even when dispatch crosses midnight.
+      // Lease, consent, source expiry and provider receipts still use the live clock.
+      // Source retrieval also keeps its actual read/retrieval day, independently.
+      context.calendar = workspaceCalendar(row.created_at);
       const primary = phaseFor(job.kind);
       let firstInvocation = true,
         initialUsed = false;

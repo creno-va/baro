@@ -30,6 +30,8 @@ import {
 import { normalizeTimelineDates } from "./timeline-dates";
 
 export type WorkspaceContext = {
+  /** Server clock only; never derived from user text or persisted event timestamps. */
+  calendar?: { localDate: string; timeZone: "Asia/Seoul" };
   intake: V2Intake;
   confirmedSummary: V2Summary | null;
   messages: V2UserMessage[];
