@@ -1173,6 +1173,9 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                           <span>
                             <strong>{action.title}</strong>
                             <small>{action.detail}</small>
+                            {busy === action.id && (
+                              <small role="status">완료 표시를 저장하고 있어요…</small>
+                            )}
                           </span>
                         </label>
                       </li>

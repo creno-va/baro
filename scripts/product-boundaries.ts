@@ -13,7 +13,7 @@ export function productBoundaryFindings(file: string, content: string): string[]
   const approvedLog =
     'console.error(JSON.stringify({event:"deletion_cleanup_failed",jobId:row.id,attempts:Math.min(attempt,CLEANUP_ATTEMPTS),}),)';
   const v2DeletionLog =
-    'console.error(JSON.stringify({event:"v2_deletion_cleanup_failed",environment:event.environment,reason:event.reason,attempts:event.attempts,ageSeconds:event.ageSeconds,}),)';
+    'console.error(JSON.stringify({event:"v2_deletion_cleanup_failed",environment:event.environment,reason:event.reason,attempts:event.attempts,ageSeconds:event.ageSeconds,stage:event.stage,namespace:event.namespace,}),)';
   // Only the reviewed enum-only diagnostics module may emit these exact fields.
   const dependencyLogs = new Set([
     'console.error(JSON.stringify({event:"workspace_dependency_failure",stage:failure?.stage??"unclassified",category:dependencyCategory(error),}),)',

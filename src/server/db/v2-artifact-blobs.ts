@@ -3,6 +3,7 @@ import { opaqueIdSchema, revisionSchema } from "../../contracts";
 import { type Actor, actorSchema, hashSchema, parse, safe, sqlClaim, type V2Core } from "./v2-core";
 import { jobAlive } from "./v2-jobs";
 import { type BlobRegistration, blobSchema } from "./v2-storage";
+import { isPreparedPhysicalCapacity, type PreparedPhysicalCapacity } from "./v2-storage-capacity";
 import { type JobLease, leaseSchema } from "./v2-workspace";
 
 const metadataSchema = z.strictObject({
@@ -44,10 +45,20 @@ export function prepareArtifactBlob(
   actor: Actor,
   lease: JobLease,
   blob: BlobRegistration,
+  physical?: PreparedPhysicalCapacity,
 ) {
   return safe(async () => {
     const { a, b, valid, values } = input(actor, lease, blob);
     if (!valid) return false;
+    if (
+      physical &&
+      (!isPreparedPhysicalCapacity(physical) ||
+        physical.binding.ownerId !== a.ownerId ||
+        physical.binding.blobId !== b.id ||
+        physical.binding.objectKey !== `private/${b.id}` ||
+        physical.binding.maximumCipherBytes !== b.cipherBytes)
+    )
+      return false;
     const row = await core
       .statement(
         `SELECT j.target_id,j.target_revision,j.operation_id ${from} WHERE ${eligibility()}`,
@@ -63,30 +74,38 @@ export function prepareArtifactBlob(
       targetRevision: row.target_revision,
       operationId: row.operation_id,
     });
-    return (
-      (
-        await core
-          .statement(
-            `INSERT INTO v2_blobs(id,principal_id,reservation_id,kind,visibility,state,object_key,logical_bytes,cipher_bytes,cipher_hash,key_version,encrypted_payload,created_at) SELECT ?,r.principal_id,r.id,'derivative','private','pending',?,?,?,?,?,?,? ${from} WHERE ${eligibility()} AND j.target_id=? AND j.target_revision=? AND j.operation_id=? AND NOT EXISTS(SELECT 1 FROM v2_blobs WHERE id=?) AND NOT EXISTS(SELECT 1 FROM v2_blobs WHERE reservation_id=r.id AND state!='deleted') RETURNING id`,
-            [
-              b.id,
-              `private/${b.id}`,
-              b.logicalBytes,
-              b.cipherBytes,
-              b.cipherHash,
-              b.keyVersion,
-              payload,
-              a.now,
-              ...values,
-              row.target_id,
-              row.target_revision,
-              row.operation_id,
-              b.id,
-            ],
-          )
-          .all<{ id: string }>()
-      ).results.length === 1
-    );
+    const claimId = crypto.randomUUID();
+    return core.changed([
+      core.statement(
+        `INSERT INTO v2_mutation_claims(id,owner_id,target_id,revision) SELECT ?,o.owner_id,f.id,f.revision ${from} WHERE ${eligibility()} AND j.target_id=? AND j.target_revision=? AND j.operation_id=? AND (${physical?.predicate.sql ?? "1"}) AND NOT EXISTS(SELECT 1 FROM v2_blobs WHERE id=?) AND NOT EXISTS(SELECT 1 FROM v2_blobs WHERE reservation_id=r.id AND state!='deleted')`,
+        [
+          claimId,
+          ...values,
+          row.target_id,
+          row.target_revision,
+          row.operation_id,
+          ...(physical?.predicate.values ?? []),
+          b.id,
+        ],
+      ),
+      core.statement(
+        `INSERT INTO v2_blobs(id,principal_id,reservation_id,kind,visibility,state,object_key,logical_bytes,cipher_bytes,cipher_hash,key_version,encrypted_payload,created_at) SELECT ?,principal_id,id,'derivative','private','pending',?,?,?,?,?,?,? FROM v2_storage_reservations WHERE id=? AND ${sqlClaim}`,
+        [
+          b.id,
+          `private/${b.id}`,
+          b.logicalBytes,
+          b.cipherBytes,
+          b.cipherHash,
+          b.keyVersion,
+          payload,
+          a.now,
+          b.reservationId,
+          claimId,
+        ],
+      ),
+      ...(physical ? physical.statements(core, a, claimId) : []),
+      core.finish(claimId),
+    ]);
   });
 }
 export function commitArtifactBlob(
@@ -142,9 +161,12 @@ export function commitArtifactBlob(
       contentHash: b.contentHash,
     });
     const claimId = crypto.randomUUID();
+    // Historical unbound pending rows keep their exact lease/hash recovery.
+    // New physically bound rows cannot publish an unresolved or replaced writer.
+    const physicalReceipt = `NOT EXISTS(SELECT 1 FROM v2_physical_blob_bindings WHERE blob_id=b.id) OR EXISTS(SELECT 1 FROM v2_physical_blob_bindings physical WHERE physical.blob_id=b.id AND physical.owner_id=p.owner_id AND physical.object_key=b.object_key AND physical.state='held' AND physical.writer_state='stopped' AND physical.maximum_cipher_bytes=b.cipher_bytes AND physical.expected_cipher_bytes=b.cipher_bytes)`;
     return core.changed([
       core.statement(
-        `INSERT INTO v2_mutation_claims(id,owner_id,target_id,revision) SELECT ?,o.owner_id,f.id,f.revision ${from} WHERE ${eligibility()} AND j.target_id=? AND j.target_revision=? AND j.operation_id=? AND EXISTS(SELECT 1 FROM v2_blobs WHERE id=? AND principal_id=r.principal_id AND reservation_id=r.id AND state='pending' AND kind='derivative' AND visibility='private' AND object_key=? AND logical_bytes=? AND cipher_bytes=? AND cipher_hash=? AND key_version=? AND encrypted_payload=? AND created_at=?) AND NOT EXISTS(SELECT 1 FROM v2_blobs WHERE reservation_id=r.id AND state!='deleted' AND id!=?)`,
+        `INSERT INTO v2_mutation_claims(id,owner_id,target_id,revision) SELECT ?,o.owner_id,f.id,f.revision ${from} WHERE ${eligibility()} AND j.target_id=? AND j.target_revision=? AND j.operation_id=? AND EXISTS(SELECT 1 FROM v2_blobs b WHERE b.id=? AND b.principal_id=r.principal_id AND b.reservation_id=r.id AND b.state='pending' AND b.kind='derivative' AND b.visibility='private' AND b.object_key=? AND b.logical_bytes=? AND b.cipher_bytes=? AND b.cipher_hash=? AND b.key_version=? AND b.encrypted_payload=? AND b.created_at=? AND (${physicalReceipt})) AND NOT EXISTS(SELECT 1 FROM v2_blobs WHERE reservation_id=r.id AND state!='deleted' AND id!=?)`,
         [
           claimId,
           ...values,

@@ -16,12 +16,24 @@ const cleanupReasons = [
   "CLEANUP_OBJECT_REMAINS",
   "CLEANUP_INVENTORY_PENDING",
 ] as const;
+type CleanupStage =
+  | "unknown"
+  | "native_revoke"
+  | "workflow_get"
+  | "workflow_delete"
+  | "r2_delete"
+  | "r2_head"
+  | "inventory_sql";
+type CleanupNamespace = "unknown" | "file" | "asset" | "workspace" | "profile";
+type ObserveStop = <T>(stage: CleanupStage, work: () => Promise<T>) => Promise<T>;
 export type CleanupFailureEvent = {
   event: "v2_deletion_cleanup_failed";
   environment: "preview" | "production";
   reason: (typeof cleanupReasons)[number] | "CLEANUP_DEPENDENCY_UNAVAILABLE";
   attempts: number;
   ageSeconds: number;
+  stage: CleanupStage;
+  namespace: CleanupNamespace;
 };
 function reportCleanupFailure(event: CleanupFailureEvent) {
   console.error(
@@ -31,6 +43,8 @@ function reportCleanupFailure(event: CleanupFailureEvent) {
       reason: event.reason,
       attempts: event.attempts,
       ageSeconds: event.ageSeconds,
+      stage: event.stage,
+      namespace: event.namespace,
     }),
   );
 }
@@ -59,10 +73,13 @@ export type DeletionCleanupDependencies = {
 };
 /** A real platform response or the exact missing-instance sentinel is a receipt.
  * Network, authorization and arbitrary errors retain the target for retry. */
-async function stop(binding: CleanupWorkflow | undefined, id: string) {
-  if (!binding) throw new Error("CLEANUP_BINDING_UNAVAILABLE");
+async function stop(binding: CleanupWorkflow | undefined, id: string, observe: ObserveStop) {
   try {
-    await (await binding.get(id)).delete();
+    const instance = await observe("workflow_get", async () => {
+      if (!binding) throw new Error("CLEANUP_BINDING_UNAVAILABLE");
+      return binding.get(id);
+    });
+    await observe("workflow_delete", () => instance.delete());
     return true;
   } catch (error) {
     if (!(error instanceof Error && error.message === "instance.not_found")) throw error;
@@ -90,20 +107,48 @@ export function createV2DeletionReconciler(core: V2Core, deps: DeletionCleanupDe
         if (!lease) continue;
         result.acquired++;
         let failure: CleanupFailureEvent["reason"] | undefined;
+        let stage: CleanupStage = "unknown",
+          namespace: CleanupNamespace = "unknown";
+        const observe = async <T>(
+          at: CleanupStage,
+          scope: CleanupNamespace,
+          work: () => Promise<T>,
+          missingAllowed = false,
+        ): Promise<T> => {
+          try {
+            return await work();
+          } catch (error) {
+            // Exact absence is handled successfully by stop(), never a failed stage.
+            if (
+              !(missingAllowed && error instanceof Error && error.message === "instance.not_found")
+            ) {
+              stage = at;
+              namespace = scope;
+            }
+            throw error;
+          }
+        };
+        const inventory = <T>(work: () => Promise<T>) => observe("inventory_sql", "unknown", work);
+        const stopWorkflow = (
+          binding: CleanupWorkflow | undefined,
+          id: string,
+          scope: CleanupNamespace,
+        ) => stop(binding, id, (at, work) => observe(at, scope, work, true));
         try {
           // Work per invocation is bounded. Receipts and remaining targets survive
           // lease expiry, partial transport failures and another scheduler's replay.
-          for (const target of await deletion.targets(lease, now(), 8)) {
+          for (const target of await inventory(() => deletion.targets(lease, now(), 8))) {
             if (target.kind === "job" || target.kind === "legacy_workflow") {
               if (target.kind === "legacy_workflow")
-                await stop(deps.legacyWorkflow, target.target_id);
+                await stopWorkflow(deps.legacyWorkflow, target.target_id, "unknown");
               else if (!/^report-local-[a-f0-9-]{36}-1$/.test(target.target_id)) {
                 const named = isNamedNativeRuntime(target.target_id);
                 if (named) {
-                  if (!deps.stopNative) throw new Error("CLEANUP_BINDING_UNAVAILABLE");
+                  const stopNative = deps.stopNative;
+                  if (!stopNative) throw new Error("CLEANUP_BINDING_UNAVAILABLE");
                   // Revoke first: a Workflow may already have dispatched a late
                   // native request, or may outlive a failed Workflow deletion.
-                  await deps.stopNative(target.target_id);
+                  await observe("native_revoke", "unknown", () => stopNative(target.target_id));
                 }
                 const probe = named && /^(?:native-v1-)?probe-/.test(target.target_id);
                 if (!probe) {
@@ -111,7 +156,9 @@ export function createV2DeletionReconciler(core: V2Core, deps: DeletionCleanupDe
                   let observed = false;
                   let nativeObserved = false;
                   for (const [index, binding] of deps.workflows.entries()) {
-                    const found = await stop(binding, target.target_id);
+                    const scope =
+                      (["file", "asset", "workspace", "profile"] as const)[index] ?? "unknown";
+                    const found = await stopWorkflow(binding, target.target_id, scope);
                     observed = found || observed;
                     nativeObserved = (index < 2 && found) || nativeObserved;
                   }
@@ -126,36 +173,42 @@ export function createV2DeletionReconciler(core: V2Core, deps: DeletionCleanupDe
               // Local report jobs never invoke a Workflow. Their running R2 writer
               // is independently fenced below; a cancelled lease cannot send new I/O.
               if (
-                !(await deletion.recordReceipt(lease, {
-                  kind: target.kind,
-                  targetId: target.target_id,
-                  receiptId: crypto.randomUUID(),
-                  now: now(),
-                }))
+                !(await inventory(() =>
+                  deletion.recordReceipt(lease, {
+                    kind: target.kind,
+                    targetId: target.target_id,
+                    receiptId: crypto.randomUUID(),
+                    now: now(),
+                  }),
+                ))
               )
                 throw new Error("CLEANUP_FENCED");
             } else if (target.kind === "blob") {
-              const blob = await core
-                .statement(
-                  "SELECT visibility,object_key,cipher_hash,state FROM v2_blobs WHERE id=?",
-                  [target.target_id],
-                )
-                .first<{
-                  visibility: string;
-                  object_key: string;
-                  cipher_hash: string | null;
-                  state: string;
-                }>();
+              const blob = await inventory(() =>
+                core
+                  .statement(
+                    "SELECT visibility,object_key,cipher_hash,state FROM v2_blobs WHERE id=?",
+                    [target.target_id],
+                  )
+                  .first<{
+                    visibility: string;
+                    object_key: string;
+                    cipher_hash: string | null;
+                    state: string;
+                  }>(),
+              );
               if (!blob || blob.object_key !== target.object_key)
                 throw new Error("CLEANUP_INVENTORY_INVALID");
               if (blob.state === "deleted") {
                 if (
-                  !(await deletion.recordReceipt(lease, {
-                    kind: "blob",
-                    targetId: target.target_id,
-                    receiptId: crypto.randomUUID(),
-                    now: now(),
-                  }))
+                  !(await inventory(() =>
+                    deletion.recordReceipt(lease, {
+                      kind: "blob",
+                      targetId: target.target_id,
+                      receiptId: crypto.randomUUID(),
+                      now: now(),
+                    }),
+                  ))
                 )
                   throw new Error("CLEANUP_FENCED");
                 continue;
@@ -164,20 +217,23 @@ export function createV2DeletionReconciler(core: V2Core, deps: DeletionCleanupDe
               const bucket = blob.visibility === "public" ? deps.publicBucket : deps.privateBucket;
               if (!bucket || !new RegExp(`^${prefix}/[A-Za-z0-9_-]{1,128}$`).test(blob.object_key))
                 throw new Error("CLEANUP_BUCKET_UNAVAILABLE");
-              const authorize = async () =>
-                (await authorizeBlobCleanup(
-                  core,
-                  lease,
-                  target.target_id,
-                  blob.object_key,
-                  now(),
-                )) &&
-                !(await core
-                  .statement(
-                    "SELECT 1 FROM v2_deletion_targets b JOIN v2_deletion_targets jobs ON jobs.journal_id=b.journal_id WHERE b.kind='blob' AND b.target_id=? AND jobs.kind IN ('job','legacy_workflow') AND jobs.state='pending' LIMIT 1",
-                    [target.target_id],
-                  )
-                  .first());
+              const authorize = () =>
+                inventory(
+                  async () =>
+                    (await authorizeBlobCleanup(
+                      core,
+                      lease,
+                      target.target_id,
+                      blob.object_key,
+                      now(),
+                    )) &&
+                    !(await core
+                      .statement(
+                        "SELECT 1 FROM v2_deletion_targets b JOIN v2_deletion_targets jobs ON jobs.journal_id=b.journal_id WHERE b.kind='blob' AND b.target_id=? AND jobs.kind IN ('job','legacy_workflow') AND jobs.state='pending' LIMIT 1",
+                        [target.target_id],
+                      )
+                      .first()),
+                );
               if (
                 !(await authorize()) ||
                 (!test &&
@@ -189,38 +245,43 @@ export function createV2DeletionReconciler(core: V2Core, deps: DeletionCleanupDe
                   )))
               )
                 throw new Error("CLEANUP_WRITER_OR_BUDGET_PENDING");
-              await bucket.delete(blob.object_key);
+              await observe("r2_delete", "unknown", () => bucket.delete(blob.object_key));
               if (
                 !(await authorize()) ||
                 (!test &&
                   !(await maintenance.admit(target.target_id, blob.object_key, "head", authorize)))
               )
                 throw new Error("CLEANUP_FENCED");
-              if (await bucket.head(blob.object_key)) throw new Error("CLEANUP_OBJECT_REMAINS");
+              if (await observe("r2_head", "unknown", () => bucket.head(blob.object_key)))
+                throw new Error("CLEANUP_OBJECT_REMAINS");
               if (
-                !(await storage.confirmBlobDeleted(target.target_id, now(), {
-                  lease,
-                  receiptId: crypto.randomUUID(),
-                  objectKey: blob.object_key,
-                  cipherHash: blob.cipher_hash,
-                }))
+                !(await inventory(() =>
+                  storage.confirmBlobDeleted(target.target_id, now(), {
+                    lease,
+                    receiptId: crypto.randomUUID(),
+                    objectKey: blob.object_key,
+                    cipherHash: blob.cipher_hash,
+                  }),
+                ))
               )
                 throw new Error("CLEANUP_FENCED");
             } else {
               // SQL checks the complete retained blob inventory, including late
               // arrivals, and that every job/blob target has an earlier receipt.
               if (
-                !(await storage.confirmEmptyReservation(lease, {
-                  receiptId: crypto.randomUUID(),
-                  reservationId: target.target_id,
-                  now: now(),
-                  inventoryVerified: true,
-                }))
+                !(await inventory(() =>
+                  storage.confirmEmptyReservation(lease, {
+                    receiptId: crypto.randomUUID(),
+                    reservationId: target.target_id,
+                    now: now(),
+                    inventoryVerified: true,
+                  }),
+                ))
               )
                 throw new Error("CLEANUP_INVENTORY_PENDING");
             }
           }
-          if (await deletion.finish(lease, now())) {
+          if (await inventory(() => deletion.finish(lease, now()))) {
             result.completed++;
             continue;
           }
@@ -243,6 +304,8 @@ export function createV2DeletionReconciler(core: V2Core, deps: DeletionCleanupDe
             event: "v2_deletion_cleanup_failed",
             environment: deps.environment,
             reason: failure,
+            stage,
+            namespace,
             attempts: journal.attempts + 1,
             ageSeconds: Math.max(
               0,

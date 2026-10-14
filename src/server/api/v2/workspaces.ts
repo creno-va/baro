@@ -174,8 +174,8 @@ export function createWorkspacesApi(
     if (a.response) return a.response;
     emptyQuery.parse(c.req.query());
     const s = await service(c.env, a.ownerId);
-    const intake = await s.intake(a.ownerId, c.req.param("id"));
-    if (!intake?.summary) throw new WorkspaceError("NOT_FOUND");
+    if (!(await s.summaryAvailable(a.ownerId, c.req.param("id"))))
+      throw new WorkspaceError("NOT_FOUND");
     const fragments = s.summary(a.ownerId, c.req.param("id"))[Symbol.asyncIterator]();
     const encoder = new TextEncoder();
     let complete = false;
