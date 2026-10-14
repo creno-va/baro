@@ -76,8 +76,9 @@ D1 Time Travel은 paid 30일/free 7일이며 실제 account plan 확인이 필�
 ## v2 격리 drill 목표 (#71)
 
 #53의 아래 계획은 실제 실행 성공 증거가 아니다. P0.3 #19/#27의 dependency와 기존 증거를
-보존하고 v2 R2·Container·role·budget 범위를 추가한다. 자원 생성/실제 비용은 월100만 원
-승인 범위에서 가능하지만 production/일반 preview DB 덮어쓰기는 이 drill에 포함하지 않는다.
+보존하고 v2 R2·Container·role·비용 범위를 추가한다. 자원·실제 비용은 기존 사용자 승인과
+[ADR-0015](../adr/0015-maintenance-and-operating-policy.md)의 유효 가격·재원·상한 조건을 따른다.
+production/일반 preview DB 덮어쓰기는 이 drill에 포함하지 않는다.
 
 먼저 allowlist 자원 등록부로 계정·D1 ID/이름·private/public R2·Worker/Workflow/DO/Container
 이름·image digest·키 version·관리자를 확인한다. `baro-drill-*` 이름만 보고 격리를 추정하지 않는다.

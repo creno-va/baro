@@ -1,8 +1,8 @@
 # BARO 문서 지도
 
-[PRD v2](./PRD.md)는 사용자가 승인한 전체 서비스 방향이다. 현재 v1 구현과 v2 목표,
-실제 capability·정책 승인·public 출시를 구분한다. Implementation-ready/Accepted는
-기술 목표이며 구현·외부 검증·법률 승인 완료를 뜻하지 않는다.
+[PRD](./PRD.md)는 현재 고객/변호사 MVP 범위다. 통합된 v2 구현, 보존된 v1 계약과
+실제 외부 인수를 구분한다. 현재 공개 서비스를 유지하며 [ADR-0015](./adr/0015-maintenance-and-operating-policy.md)의
+비용·릴리스·검색·문서 정비를 우선한다. 정책 초안 인수와 법률 승인은 별개다.
 
 실제 진행 상태의 정본은 GitHub 이슈/PR·CI·배포이고, 이슈 선택은
 [실행 기준](./development/EXECUTION.md)과 [작업 그래프](./development/work-items.json)를 따른다.
@@ -11,14 +11,14 @@
 
 ## 읽는 순서
 
-2026-10-06 최신 MVP 실행은 [동일 client/API mock 계약](./development/CLIENT-API-CONTRACT.md),
-[5세션 실행·시작 프롬프트](./development/PARALLEL-UI-SPRINT.md), [ADR-0014](./adr/0014-mvp-two-roles-and-api-mock-first.md)를 먼저 읽는다.
-고객/변호사 두 역할이며 승인 어드민은 제외한다. 기존 backend/증거와 외부 공개 gate는 보존한다.
+현재는 [실행 기준](./development/EXECUTION.md), [인수표](./development/MVP-REQUIREMENTS-EVIDENCE.md),
+ADR-0015를 먼저 읽는다. 동일 client/API mock과 5세션 sprint는 M6 완료 이력이며 실제
+기능 인수와 구분한다. 고객/변호사 두 역할·승인 어드민 제외와 기존 backend/증거는 보존한다.
 
 1. [PRD](./PRD.md): 핵심가치·대상·제품경계·한도·완료기준
 2. [MVP](./product/MVP-SPEC.md), [UX](./product/UX-SPEC.md), [로드맵](./product/ROADMAP.md)
 3. [실제 UI 시연 행렬](./product/UI-DEMONSTRATION.md): 기능/실패/역할별필수증거
-4. [ADR](./adr/README.md): 0001~0005 유지경계, 0006~0013 v2 목표, 0014 MVP 부분 대체
+4. [ADR](./adr/README.md): 기존 유지경계와 v2, 0014 두 역할 MVP, 0015 운영 정비·부분 대체
 5. [시스템](./architecture/SYSTEM.md), [데이터](./architecture/DATA-MODEL.md), [API](./architecture/HTTP-API.md)
 6. [실행계약](./architecture/DOMAIN-LIFECYCLE.md), [AI](./architecture/AI-PIPELINE.md), [공식자료](./architecture/LEGAL-RETRIEVAL.md)
 7. [보안](./security/SECURITY-PRIVACY.md), [인증수명](./security/AUTH-LIFECYCLE.md), [테스트](./quality/TEST-STRATEGY.md), [AI 사전 검사 감사](./quality/AI-PREFLIGHT-AUDIT.md)

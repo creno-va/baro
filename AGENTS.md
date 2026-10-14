@@ -1,7 +1,7 @@
 # BARO agent working agreement
 
-> **2026-10-11 사용자 개정 — 검증·배포 실행 방식:** 자동 GitHub CI는 `bun run validate:quick`의 문서/경계/lint/typecheck/도구 계약만 실행한다. 기능 검증은 변경에 맞춰 `validate:changed`, `validate:browser`, `validate:db`, `validate:native`, `validate:security`, `validate:build`를 로컬에서 선택 실행하고, `validate:full`은 명시적인 전체 점검 때만 실행한다. 통과한 검사를 변경 없이 반복하지 않는다. 자동 배포와 배포 후 자동 AI 점검은 없다. 배포가 필요할 때 `bun run deploy:preview`, `bun run deploy:production --sha <full40sha>`로 GitHub 수동 workflow를 실행한다. production Environment 승인·secret 보관·동일 SHA CI/preview smoke·공개/외부 인수 조건은 유지한다.
-> **2026-10-06 사용자 개정 — 아래 이전 범위보다 우선한다.** MVP는 고객/변호사 두 역할이며 통합 로그인에서 선택한다. 변호사 승인 어드민·자격 심사·반려·승인대기 UX는 제외한다. 실제 제품 client UI 동일 구현체를 API mock adapter로 먼저 완성하고 기능 연결을 병렬 진행한다. 별도 /mock UI는 만들지 않는다. [5세션 계획](./docs/development/PARALLEL-UI-SPRINT.md)의 실제 착수부터 2시간 sprint를 적용하며 독립 UI는 DB/AI/OAuth/backend CI/A 이슈 종료를 기다리지 않는다. 완료된 코드/이슈/증거를 보존하고 새 DB/비용 선행 이슈를 추가하지 않는다. AI 품질 확대는 모든 UX 연결 뒤다. P0.3/#70/#71 외부·정책·production·공개 gate는 보존하며 mock 성공을 실제 외부 성공으로 표시하지 않는다. [ADR-0014](./docs/adr/0014-mvp-two-roles-and-api-mock-first.md)가 대체 범위를 기록한다.
+- 현재 운영 기준: [ADR-0015](./docs/adr/0015-maintenance-and-operating-policy.md), [실행 문서](./docs/development/EXECUTION.md). 정비 총괄은 hyunhomon / 현재 정비 채팅이며 기존 모듈 소유권을 유지한다.
+- 공개 서비스를 유지하며 신규 기능 확장 없이 비용 재개·저장·릴리스 증거·검색·문서/작업 체계를 정비한다. 정책 초안 인수와 전체 MVP 실제 인수는 구분한다.
 
 ## 작업 시작
 
@@ -16,7 +16,7 @@
 - 제품 범위는 PRD/MVP, 기술 선택은 유효 Accepted ADR, 상세 실행 계약은 architecture 문서와 계약 테스트를 따른다.
 - v2 전체 개발은 `docs/development/V2-EXECUTION.md`와 #53~#71을 따른다. #53 병합/완료 뒤 제품 코드를 시작하며 미완료 P0.3 외부/공개 gate를 보존한다.
 - 일반 구현 선택과 오류 수정은 이슈 범위 안에서 판단해 진행한다. 새 모델/공급자, 공개 정책 법률 승인, 사업자 정보, 새 결제/자동 충전, production 공개 전환은 별도 결정이 필요하다.
-- 사용자 승인은 합의한 R2/Containers/Whisper 리소스와 월 기술100만원 내 실제 처리 비용, 검증된 PR 병합, preview/production 배포와 승인 요건 충족 후 최초 공개를 허용한다. 기존 Goal은 삭제됐으며 재생성하지 않는다. 새 결제수단·자동 충전·예산 확대·승인 증거 조작은 허용하지 않는다.
+- 사용자 승인은 합의한 R2/Containers/Whisper, 기존 공급자·모델·결제 경로와 사용자 설정 자동충전을 유지한 실제 처리·검증된 PR 병합·수동 preview/production 배포를 허용한다. AI200/일, 질문2×3, 애플리케이션 월 cap 해제이며 유효한 가격·재원·용량과 새 요청 상한을 확인한다. 미정산 hold·실행 작업을 지우지 않는다. 새 결제수단·자동충전 변경·근거 없는 재원 확대·승인 증거 조작은 허용하지 않는다. Goal을 재생성하지 않는다.
 - 런타임은 Workers다. Bun은 도구·테스트용이다. 제품 코드에 `Bun.*`, Node filesystem/process를 추가하지 않는다. Better Auth를 위한 `nodejs_compat`는 허용된다.
 - 다른 모듈은 `llm-gateway` 밖에서 모델을 호출하거나 `legal-retrieval` 밖에서 법률 API를 호출하지 않는다.
 - 공유 계약은 `src/contracts/`, schema/migration은 DB 이슈가 소유한다. 공유 파일 변경은 선행 PR을 먼저 통합하며 서로 다른 migration 번호를 임의 생성하지 않는다.
@@ -27,6 +27,10 @@
 
 `bun ci` 후 `bun run validate:quick`과 변경한 기능의 필요한 로컬 검증·실패 시나리오를 실행한다. 빌드 영향은 `validate:build`, DB 변경은 `validate:db`의 schema drift·fresh/upgrade 검증을 수행한다. 브라우저/native/전체 검증을 모든 PR마다 반복하지 않는다. 외부 키가 없어도 offline 검증과 PR은 완료한다.
 
+최종 main SHA의 `validate:full`을 수동 GitHub workflow에서 수행한다. 실제 검사한 SHA를 기록하고 유료 호출은 CI에서 하지 않는다. 같은 SHA의 preview 제한 smoke 후 production에 배포한다. #71 운영자 승인 기록은 hyunhomon 또는 hwangeunchan, 정확한 SHA, 최대24시간 유효기간을 검사한다. 현재 GitHub Environment에 필수 reviewer가 있다는 가정은 하지 않는다. 현재 공개 운영 허가·정책 초안 수용과 독립 외부 검증·법률 승인은 각각 구분한다. 실패한 외부 검증은 원인/조건 변경 전 반복하지 않는다.
+
 기능 코드는 PR로 제출한다. 모든 인수 조건과 CI가 통과한 경우에만 `Closes #N`을 쓴다. 실제 외부 smoke가 남으면 `Refs #N`과 해당 외부 검증 이슈를 연결하고, 로컬 대역 테스트를 실제 로그인 성공으로 표현하지 않는다. CI 실패는 수정하며 변경 없음 상태를 반복 보고하지 않는다.
 
 merge/배포 권한은 현재 사용자 지시를 따른다. 권한이 없으면 검증된 PR을 남긴다. production Environment 승인·공개 출시 게이트를 우회하지 않는다. 범위 내 작업이 막히면 다른 ready 이슈를 진행할 수 있으며 blocker는 GitHub와 실행 문서에 구체적인 필드·행동으로 기록한다.
+
+과거 작업 지시는 [합의 이력](./docs/development/AGENTS-HISTORY.md)에 보존한다. 정비 종료만으로 #71 전체 인수를 완료하지 않는다.

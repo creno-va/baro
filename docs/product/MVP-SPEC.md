@@ -1,10 +1,8 @@
 # BARO v2 전체 서비스 기능 명세
-> **2026-10-09 정합성:** 질문 최대 2차례×3문항(PR154), AI200회/일·월 cap 해제·기존 사용자 설정 $10/$30 자동충전(#57/PR143)이 확인된 최신 기준이다. 아래 과거 30회/100만원·충전 금지 기록은 당시 증거로 보존한다. 새 정책/지출 승인이나 운영 설정 변경이 아니다. [요구사항·증거 완료표](../development/MVP-REQUIREMENTS-EVIDENCE.md)가 현재 담당·미완료 조건 정본이다.
-> **2026-10-06 사용자 개정 — 아래 이전 범위보다 우선한다.** MVP는 고객/변호사 두 역할이며 통합 로그인에서 선택한다. 변호사 승인 어드민·자격 심사·반려·승인대기 UX는 제외한다. 실제 제품 client UI 동일 구현체를 API mock adapter로 먼저 완성하고 기능 연결을 병렬 진행한다. 별도 /mock UI는 만들지 않는다. [5세션 계획](../development/PARALLEL-UI-SPRINT.md)의 실제 착수부터 2시간 sprint를 적용하며 독립 UI는 DB/AI/OAuth/backend CI/A 이슈 종료를 기다리지 않는다. 완료된 코드/이슈/증거를 보존하고 새 DB/비용 선행 이슈를 추가하지 않는다. AI 품질 확대는 모든 UX 연결 뒤다. P0.3/#70/#71 외부·정책·production·공개 gate는 보존하며 mock 성공을 실제 외부 성공으로 표시하지 않는다. [ADR-0014](../adr/0014-mvp-two-roles-and-api-mock-first.md)가 대체 범위를 기록한다.
 
 - Version: 2.0
-- Status: Implementation-ready target; not implementation or public approval evidence
-- Updated: 2026-10-06
+- Status: Current MVP scope; implementation integrated; final live acceptance pending
+- Updated: 2026-10-14
 - Related: [PRD](../PRD.md), [시연 행렬](./UI-DEMONSTRATION.md)
 
 ## 현재 구현과 전환
@@ -12,7 +10,10 @@
 v1은 개인 간 대여·한 묶음 최대 다섯 질문·구조화 결과·저장·삭제다.
 기존 schemaVersion 1 데이터·읽기·삭제·기존 인용을 보존한다. v2는 독립적인
 workspace/version 계약과 additive schema로 확장하며 기존 사건을 자동 재분석하지 않는다.
-제품 목표 변경이 이미 배포된 v1의 기능 확대를 뜻하지 않는다.
+고객·자료·리포트·변호사 구현은 PR167로 main에 통합됐다. 현재 공개 서비스를 유지하며
+신규 확장 대신 [ADR-0015](../adr/0015-maintenance-and-operating-policy.md)의 운영 정비를 수행한다.
+질문2×3·AI200/일·월 cap 해제·기존 결제/자동충전, 미정산 보존 재개와 bounded 검색이 현재 기준이다.
+정비 완료와 #71 전체 실제 인수는 구분한다. 정책 초안/사업자 플레이스홀더는 #20/#70 초안 인수 범위다.
 
 ## 공통 조건
 
@@ -130,7 +131,8 @@ AI 응답을 따로 늘리지 않지만 실제 비용은 모두 계산한다. qu
 
 승인 어드민·자격 신청·반려·재신청·승인대기는 MVP에서 제외한다. 기존 서버 심사 계약은
 역사와 기존 데이터 보존을 위해 유지한다. 공개할 자산을 사용자가 명시적으로 선택하며
-private 사건 자료를 프로필에 자동 공유하지 않는다. 실제 서비스 공개/법률·정책 승인은 #70/#71 별도다.
+private 사건 자료를 프로필에 자동 공유하지 않는다. 정책 초안 수용과 실제 법률 승인을 구분하며
+전체 실제 인수는 #71에서 검증한다. 공개 운영 허가를 독립 외부 검증 완료로 표시하지 않는다.
 
 ## 삭제·복구와 v1 회귀
 

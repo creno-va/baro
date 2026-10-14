@@ -1,10 +1,8 @@
 # BARO Product Requirements Document
-> **2026-10-09 정합성:** 질문 최대 2차례×3문항(PR154), AI200회/일·월 cap 해제·기존 사용자 설정 $10/$30 자동충전(#57/PR143)이 확인된 최신 기준이다. 아래 과거 30회/100만원·충전 금지 기록은 당시 증거로 보존한다. 새 정책/지출 승인이나 운영 설정 변경이 아니다. [요구사항·증거 완료표](./development/MVP-REQUIREMENTS-EVIDENCE.md)가 현재 담당·미완료 조건 정본이다.
-> **2026-10-06 사용자 개정 — 아래 이전 범위보다 우선한다.** MVP는 고객/변호사 두 역할이며 통합 로그인에서 선택한다. 변호사 승인 어드민·자격 심사·반려·승인대기 UX는 제외한다. 실제 제품 client UI 동일 구현체를 API mock adapter로 먼저 완성하고 기능 연결을 병렬 진행한다. 별도 /mock UI는 만들지 않는다. [5세션 계획](./development/PARALLEL-UI-SPRINT.md)의 실제 착수부터 2시간 sprint를 적용하며 독립 UI는 DB/AI/OAuth/backend CI/A 이슈 종료를 기다리지 않는다. 완료된 코드/이슈/증거를 보존하고 새 DB/비용 선행 이슈를 추가하지 않는다. AI 품질 확대는 모든 UX 연결 뒤다. P0.3/#70/#71 외부·정책·production·공개 gate는 보존하며 mock 성공을 실제 외부 성공으로 표시하지 않는다. [ADR-0014](./adr/0014-mvp-two-roles-and-api-mock-first.md)가 대체 범위를 기록한다.
 
 - Version: 2.0
-- Status: Approved product direction; implementation and public approval pending
-- Updated: 2026-10-06
+- Status: Current MVP scope; implementation integrated; final live acceptance pending
+- Updated: 2026-10-14
 - Market: 대한민국
 - Delivery: [BARO MVP — Customer/lawyer functional UX](https://github.com/creno-va/baro/milestone/5)
 
@@ -15,15 +13,16 @@ BARO의 핵심 가치는 사용자가 변호사의 공개 프로필을 살펴보
 검토 가능한 준비 행동을 돕는다. 사용자는 정리한 리포트와 선택한 원본을 변호사에게
 직접 전달해 초기 사건 이해에 필요한 반복 설명을 줄일 수 있다.
 
-이 문서는 사용자가 승인한 v2 목표다. 현재 구현은 개인 간 금전 대여 사건의 v1
-입력·한 묶음 질문·분석·저장·삭제이며, 새 변호사·자료·채팅 기능은 아직 구현되지 않았다.
-P0.3의 실제 외부 연동·운영·정책 조건과 v2 개발 완료는 별개다.
+이 문서는 현재 고객/변호사 MVP 범위다. v2 사건·자료·채팅·변호사 기능은 PR167로 main에
+통합됐으며 기존 v1 읽기·삭제를 보존한다. 현재 공개 서비스를 유지하면서 신규 확장을 멈추고
+비용 재개·저장·릴리스 증거·디렉터리 검색을 정비한다. 구현과 실제 외부·운영 인수는 별개다.
 [실행 기준](./development/EXECUTION.md)과 GitHub가 실제 진행 상태의 정본이다.
 
 BARO는 변호사나 법률사무소가 아니며, 수임·법률 판단·소송 전략을 대신하지 않는다.
 초기 서비스는 무료이며 변호사 소개·중개 수수료를 받지 않는다. 수수료 부재만으로
 적법성을 단정하지 않는다. 확대된 제품과 공개 문구의 법률 검토·정책 승인 근거는
-현재 없으며, production 코드 배포 허용은 공개 승인 증거를 대신하지 않는다.
+현재 미완료다. 정책 초안·사업자 플레이스홀더는 #20/#70의 초안 인수 범위로 수용됐으며,
+현재 공개 운영 허가와 독립 외부 검증·실제 법률 승인은 각각 구분한다.
 
 ## 2. 대상과 해결할 문제
 
@@ -167,10 +166,11 @@ shadcn 기반 컴포넌트, 파란색 primary, Lucide, Pretendard 와 공통 SVG
 상담이나 수임 성공을 주장하지 않는다. 선택 analytics는 명시적 opt-in cohort만 포함하며
 민감 입력·자료명·원문·검색어·연락처를 수집하지 않는다. 새 목표 수치는 실제 표본 후 결정한다.
 
-기능 단위로 검증·CI·preview·production 배포를 반복한다. 공개 전환에는 정책·법률 검토·
-실제 외부 연동·운영 증거와 SHA별 운영자 승인 receipt가 필요하다. 승인 근거 미확보 상태는
-미완료로 유지하고 독립 개발을 계속한다. API mock UI(마일스톤 6), 실제 기능(마일스톤 5),
-외부/최초 공개(#71)를 구분하며 기존 Goal은 재생성하지 않는다.
+변경별 검증 후 최종 main SHA의 전체 회귀를 수동 GitHub workflow로 수행하고 같은 SHA를
+preview 제한 smoke와 production에 사용한다. production 운영자 승인은 hyunhomon 또는
+hwangeunchan의 정확한 SHA 기록이며 최대24시간 유효하다. 기존 정식 공개 checker의 미완료
+정책·외부 조건은 보존한다. API mock UI(M6 완료 이력), 실제 기능·인수(M5), 전체 실제 인수
+(#71)를 구분한다. 정비 완료로 #71을 조기 종료하지 않는다. 현재 기준은 [ADR-0015](./adr/0015-maintenance-and-operating-policy.md)다.
 
 ## 11. 관련 문서
 
