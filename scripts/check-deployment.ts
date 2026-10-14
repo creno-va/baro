@@ -56,8 +56,8 @@ function assertIdentity(config: Configuration, environment: DeploymentEnvironmen
     fail("ENVIRONMENT_IDENTITY_MISMATCH");
 }
 
-// Only these resource identities may differ; binding names, classes, flags,
-// limits and feature switches must be identical. Never normalize arbitrary text.
+// Only these resource identities may differ after validating the separate preview
+// placement experiment; bindings, classes, flags and limits remain identical.
 const isolatedIdentity =
   /^(?:name|vars\.(?:APP_ENV|BETTER_AUTH_URL|AI_GATEWAY_ID)|routes\[\d+\]\.pattern|kv_namespaces\[\d+\]\.id|d1_databases\[\d+\]\.(?:database_id|database_name)|workflows\[\d+\]\.name|r2_buckets\[\d+\]\.bucket_name|containers\[\d+\]\.name)$/;
 function normalized(config: Configuration) {
@@ -81,12 +81,36 @@ function normalized(config: Configuration) {
   return { configuration: visit(config, ""), identities };
 }
 
+function previewParityConfiguration(
+  root: Configuration,
+  preview: Configuration,
+  production: Configuration,
+): Configuration {
+  // Placement is inheritable in Wrangler. Forbid root/production even when off,
+  // and never normalize a broader placement object or any other runtime setting.
+  if (Object.hasOwn(root, "placement") || Object.hasOwn(production, "placement"))
+    fail("PLACEMENT_EXPERIMENT_INVALID");
+  if (!Object.hasOwn(preview, "placement")) return preview;
+  const placement = preview.placement;
+  if (
+    !placement ||
+    typeof placement !== "object" ||
+    Array.isArray(placement) ||
+    Object.keys(placement).length !== 1 ||
+    (placement as Configuration).mode !== "smart"
+  )
+    fail("PLACEMENT_EXPERIMENT_INVALID");
+  const comparable = { ...preview };
+  delete comparable.placement;
+  return comparable;
+}
+
 export function checkDeploymentConfig(config: unknown): void {
   const preview = selected(config, "preview");
   const production = selected(config, "production");
   assertIdentity(preview, "preview");
   assertIdentity(production, "production");
-  const left = normalized(preview),
+  const left = normalized(previewParityConfiguration(object(config), preview, production)),
     right = normalized(production);
   if (canonical(left.configuration) !== canonical(right.configuration))
     fail("CONFIG_PARITY_MISMATCH");
@@ -122,6 +146,7 @@ function runtimeSignature(config: Configuration) {
     vars: config.vars,
     compatibility_date: config.compatibility_date,
     compatibility_flags: config.compatibility_flags,
+    placement: config.placement,
     routes: config.routes,
     ai: config.ai,
     assets: { binding: object(config.assets).binding },

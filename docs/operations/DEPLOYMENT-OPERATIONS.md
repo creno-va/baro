@@ -297,3 +297,27 @@ API smoke는 인증 cookie 없이 session, 공개 변호사 목록, 사건/자�
 production foundation에서는 `503 BETA_NOT_OPEN`을 요구한다. health 성공만으로
 API가 열렸다고 판정하지 않으며, 이 검사는 실제 OAuth callback·Turnstile·AI 처리의
 성공을 대신하지 않는다. API 노출 모드는 승인된 production release mode로만 결정한다.
+
+### 프리뷰 HTTP Smart Placement 실험
+
+P04의 HTTP/D1 대기 원인 구분을 위해 `env.preview.placement`의 정확한
+`{"mode":"smart"}`만 허용한다. 최상위와 production에는 placement를 두지 않는다.
+`check-deployment.ts`는 이 조건을 먼저 검사한 뒤 preview의 해당 단일 키만 동등성 비교에서
+제외하며, 나머지 binding·권한·한도·기능 설정은 기존처럼 비교한다. 생성된 Worker의
+placement도 runtime signature에 포함하므로 preview 누락과 production 유입은 거절한다.
+설정 제거로 실험을 종료할 수 있으며 production 적용이나 출시 승인으로 확대하지 않는다.
+
+현재는 실험 후보이며 배포·성능 개선은 미확인이다. 기존 HTTP 표본의 D1 대기627ms/5호출과
+확인된 SQL0.243ms(6문장 중2개 표본)는 대기 조사 근거이지 순수 네트워크 시간의 확정값이 아니다.
+실험 전후 동일 합성 흐름의 SHA·클릭부터 완료까지의 시간·D1 호출 수/대기·SQL 표본 범위를
+함께 남긴다. 기존 domain timing에는 인증 시간이 포함되지 않는다.
+
+[공식 Placement 문서](https://developers.cloudflare.com/workers/configuration/placement/)의
+적용 범위는 HTTP fetch이며 별도 Workflow의 실행 위치를 설정하지 않는다. file Workflow의
+APAC hint 실험과 분리한다. 여러 위치의 지속적 트래픽과 최대15분 분석이 필요할 수 있고
+최소 요청 수는 보장되지 않는다. 상태/분석 시각만으로 개별 실행 위치를 단정하지 않는다.
+실제 관측한 `cf-placement`의 `remote-XXX`/`local-XXX`를 실행 위치 근거로 사용하되,
+브라우저 응답에 노출되지 않으면 미확인으로 남긴다. ingress `request.cf.colo`와 D1 colo는
+각각 별도 위치다. [Request duration analytics](https://developers.cloudflare.com/workers/observability/metrics-and-analytics/#request-duration)의
+Smart 적용/기본1% 비적용 표본도 비교할 수 있으나 표본 부족과 전체 HTTP 작업 혼합을 명시한다.
+동일 SHA preview 인수와 production Environment·운영자·공개 출시 gate는 계속 유지한다.
