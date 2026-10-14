@@ -273,10 +273,10 @@ export type RuntimeProofVerifier = (
 ) => Promise<VerifiedEvidence | null>;
 export const paidHoldRequestSchema = z.strictObject({
   attemptId: opaqueIdSchema,
-  quoteId: opaqueIdSchema,
+  quoteId: opaqueIdSchema.nullable(),
   planId: opaqueIdSchema,
-  pricingProofId: opaqueIdSchema,
-  fundingProofId: opaqueIdSchema,
+  pricingProofId: opaqueIdSchema.nullable(),
+  fundingProofId: opaqueIdSchema.nullable(),
   attempt: z.number().int().min(1).max(10),
   service: z.enum(["model", "asr", "container", "storage", "requests", "fixed_operation"]),
   jobId: opaqueIdSchema,
