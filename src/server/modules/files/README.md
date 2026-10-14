@@ -13,11 +13,15 @@ key/size and the durable pending intent must match before the atomic part receip
 can publish. The original manifest validates ordered parts and incremental SHA-256
 without retaining the whole file. Download rechecks current access per part.
 
-Server composition supplies storage cost admission, a trusted byte-format probe
+Server composition supplies physical storage admission, cost observation, a trusted byte-format probe
 and processing enqueue. Missing admission/probe denies new writes/finalization;
 the client cannot provide evidence or mark a file processed. The Worker currently
-binds private storage; actual pricing/funding and the Container processor remain
-#59/#71 work. Public profile assets use a separate binding and are never returned
+binds private storage; actual Container processing remains #59/#71 evidence work.
+Under [cost observation only](../../../../docs/operations/PREBETA-COST-POLICY.md), missing/stale
+pricing/funding, monthly cost projection, refresh and historical IO50 reservations
+must not block upload/read/download/delete. Physical capacity, writer/lease,
+ownership/signatures and actual provider errors remain. The canonical document
+separates current deployment from the new implementation and bootstrap remainder. Public profile assets use a separate binding and are never returned
 by this private API. The public gate stays intact.
 
 Failed writes retain a durable cleanup intent. Deletion revokes access immediately,

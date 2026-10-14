@@ -96,7 +96,17 @@ export function recordRuntimeUsage(
     let charged: number | null = null,
       amountOverflow = false;
     try {
-      charged = receiptKrw(p, r);
+      // A stale rate can estimate a reservation, never prove today's KRW
+      // charge. Keep provider quantities/USD and unresolved exposure intact.
+      const current = [p, p.fx, ...p.prices].every(
+        (observation) =>
+          Date.parse(observation.checkedAt) <= Date.parse(r.observedAt) &&
+          Date.parse(observation.validUntil) > Date.parse(r.observedAt),
+      );
+      charged =
+        !core.applicationCostLimitsEnabled && !current && !r.definitiveNoCharge
+          ? null
+          : receiptKrw(p, r);
     } catch {
       amountOverflow = true;
     }
@@ -116,7 +126,7 @@ export function recordRuntimeUsage(
         ),
         core.statement(
           `UPDATE v2_runtime_controls SET phase='frozen',local_drain_id=NULL,revision=revision+1,updated_at=? WHERE ?=1 AND ${financialClaim}`,
-          [now, amountOverflow ? 1 : 0, claimId],
+          [now, core.applicationCostLimitsEnabled && amountOverflow ? 1 : 0, claimId],
         ),
         financialFinish(core, claimId),
       ]);
@@ -180,7 +190,7 @@ export function recordRuntimeUsage(
         `UPDATE v2_runtime_controls SET phase='frozen',local_drain_id=NULL,revision=revision+1,updated_at=? WHERE (?=1 OR (${core.monthlyBudgetCapEnabled ? "1" : "0"}=1 AND EXISTS(SELECT 1 FROM v2_monthly_budget b WHERE b.month=v2_runtime_controls.month AND b.settled_krw+b.reserved_krw+b.ambiguous_krw+b.fixed_maintenance_krw>b.limit_krw))) AND ${financialClaim}`,
         [
           now,
-          amountOverflow ||
+          (core.applicationCostLimitsEnabled && amountOverflow) ||
           (core.applicationCostLimitsEnabled && charged !== null && charged > row.reserved_krw)
             ? 1
             : 0,

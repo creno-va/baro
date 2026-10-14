@@ -92,7 +92,7 @@ crash/retry 때 중복 차감·중복 호출을 막는다. 운영자 역할은 t
 적용 전 fresh/upgrade는 v1 auth/consent/cases/analysis/feedback/journal row와 모든 FK/암호문을
 비교한다. migration 후 같은 SHA의 health schema/version, 실제 workspace upload/chat/export/
 moderation/reload를 검증한다. 로그에는 aggregate schema/FK/count만 남기고 원문·SQL dump를
-artifact에 올리지 않는다. quota는 [비용 계약](./COST-CONTROLS.md)의 KST3/30/60min/10GB와
+artifact에 올리지 않는다. quota는 [비용 계약](./COST-CONTROLS.md)의 KST3/200/60min/10GB와
 atomic reservation을 적용하며 기존 v1의 `<10` 검사 통과를 v2 quota 성공으로 취급하지 않는다.
 
 R2 bytes와 DB inventory, job lease·object revision·public pointer를 함께 reconcile한다. R2
@@ -135,11 +135,11 @@ plan, hold, usage, control, drain, maintenance와 claim 저장소9개를 추가�
 schema marker는0007이며 실제 원격 적용·같은 SHA 배포 결과는 별도 증거가 필요하다.
 
 가격·funding·allocation은 trusted server verifier가 정본 digest와 evidence를 확인한 뒤 immutable
-proof로 저장한다. proof가 없거나 만료되면 paid hold를 만들지 않는다. `prepareHold`의 준비 객체는
-동일 guarded admission transaction 안에서 operation/quota/job/outbox와 비용을 함께 기록한다.
-현재 lease/revision·동의·tombstone과 proof 유효성을 acquire 및 최종 `beforeDispatch`에서 확인한다.
-runtime control을 초기화한 뒤에는 hold를 생략한 기존 v2 admission/acquire를 허용하지 않는다.
-HTTP/Workflow 소비자는 #87 공유 PR main 병합 뒤 연결하며 실제 factory가 없는 paid 실행은 닫는다.
+proof로 저장한다. 0007 당시 비용 proof/hold를 guarded admission과 acquire/dispatch의 필수
+조건으로 결합했다. 현행 관측 전용 정책에서는 비용 누락/만료·월할당·refresh·기록 오류로
+실행을 막지 않는다. lease/revision·동의·tombstone·권한·실제 기술 capacity는 계속 검사한다.
+기존 운영 환경의 만료 분리와 가격 proof 자체가 없는 새 환경 bootstrap 잔여는
+[구현 상태](./PREBETA-COST-POLICY.md)를 따른다.
 
 Gateway receipt의 input/output·cache-read/write·실제 tier를 정본 가격 matrix와 대조한다. cache
 누락·불일치·timeout은 ambiguous hold로 남는다. 늦은 불완전 usage도 동일 attempt의 immutable
@@ -147,9 +147,9 @@ evidence로 보존하되 금액을 반환하지 않는다. 계정 삭제나 원�
 청구는 원래 가격 근거로 정산한다. not_sent 후보는 prepared/reserved와 dispatch token 부재를
 같은 CAS에서 확인해야만 비용을 반환하며, 다른 Worker의 dispatched attempt를 취소하지 못한다.
 
-환경 간 allocation은 freeze→감소/drain→신뢰 가능한 양쪽 acknowledgement→증가/resume 순서다.
+과거 환경 간 비용 allocation은 freeze→감소/drain→양쪽 acknowledgement→증가/resume 순서였다.
 전역100만원은 이전 설계의 환경 cap과 shared 의무 합계였으며 현행 실행 한도가 아니다.
-`APPLICATION_COST_LIMITS_ENABLED=false`에서는 월·누적 재원·요청 금액 초과로 실행을 막지 않는다.
+`APPLICATION_COST_LIMITS_ENABLED=false`에서는 금액·가격/FX/funding 누락/만료·월할당·refresh·비용 IO로 실행이나 배포를 막지 않는다.
 [현행 비용 정책](./COST-CONTROLS.md)을 따르며 두 D1의 batch를 전역 atomic으로 표현하지 않는다.
 이전 월 미정산 hold와 maintenance exposure를 새 월 여유로 지우지 않는다. 필수 유지 비용,
 청구 대조·읽기·삭제는 새 paid admission과 구분한다. 실제 funding·환율·청구·전환 증거는 #57/#71이다.
@@ -178,8 +178,8 @@ stdout은 JSON으로 파싱하지 않고 exit code와 별도 ledger query로 적
 응답은 성공 JSON을 엄격하게 검증하며 raw CLI/SQL 진단을 로그로 보내지 않는다.
 
 private 원본 파일과 변호사 원본 GET, private/publiccopy cleanup의 DELETE·HEAD는 실제 IO
-직전에 현재 월 storage projection과 capacity binding의 일회 permit을 소비한다. 한도 소진·
-proof 만료·동의/소유 변경 시 IO를 중단한다. cleanup은 현재 journal token·fencing·lease를
+직전에 capacity binding·객체 상태와 일회 permit을 확인한다. 비용 projection의 만료·월전환·
+비용 IO50 소진은 차단 사유가 아니다. 실제 서명/동의/소유 변경 시 IO를 중단한다. cleanup은 현재 journal token·fencing·lease를
 확인하고 running writer를 보존한다. 불확실한 IO의 카운터는 반환하지 않으며 DELETE 이후
 HEAD까지 허용·확인된 경우에만 cleanup receipt를 기록한다. 업로드 완료는 처리기가 읽는
 한 번의 stream에서 모든 part·전체 hash를 검증하고, 끝까지 검증되지 않으면 완료하지 않는다.

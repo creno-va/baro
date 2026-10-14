@@ -178,16 +178,19 @@ export function createV2StoragePaidRuntimeRepository(
         const pricing = parse(pricingProofSchema, pricingRow.payload),
           funding = parse(fundingProofSchema, fundingRow.payload);
         if (
-          funding.state === "unavailable" ||
+          (core.applicationCostLimitsEnabled && funding.state === "unavailable") ||
           Date.parse(funding.observedAt) > now ||
-          Date.parse(funding.validUntil) < deadline ||
+          (core.applicationCostLimitsEnabled && Date.parse(funding.validUntil) < deadline) ||
           [pricing, pricing.fx, ...pricing.prices].some(
-            (p) => Date.parse(p.checkedAt) > now || Date.parse(p.validUntil) < deadline,
+            (p) =>
+              Date.parse(p.checkedAt) > now ||
+              (core.applicationCostLimitsEnabled && Date.parse(p.validUntil) < deadline),
           ) ||
           Date.parse(pricing.fx.asOf) > now ||
-          r.plan.quantities.some(
-            (q) => pricing.prices.find((p) => p.sku === q.sku)?.billingMode !== "metered",
-          )
+          (core.applicationCostLimitsEnabled &&
+            r.plan.quantities.some(
+              (q) => pricing.prices.find((p) => p.sku === q.sku)?.billingMode !== "metered",
+            ))
         )
           return null;
         const digest = await runtimeDigest(r),
@@ -209,6 +212,7 @@ export function createV2StoragePaidRuntimeRepository(
         const source = sourceQuery(r, actor, false),
           row = await core.statement(source.sql, source.values).first<{ anchor: string }>();
         if (!row) return null;
+        await core.ensureObservationMonth(environment, actor.now);
         const budget = budgetAdmissionPredicate({
           boundedStorage: true,
           applicationCostLimitsEnabled: core.applicationCostLimitsEnabled,

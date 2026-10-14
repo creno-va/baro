@@ -53,12 +53,12 @@ export async function createAssetProcessingRuntime(
         .statement(
           `SELECT o.id AS operationId,o.revision AS operationRevision,i.request_hash AS requestHash,
           j.id AS jobId,j.target_kind AS targetKind,j.target_id AS targetId,j.target_revision AS targetRevision,
-          p.pricing_proof_id AS pricingProofId,p.funding_proof_id AS fundingProofId,c.allocation_proof_id AS allocationProofId
+          p.pricing_proof_id AS pricingProofId,p.funding_proof_id AS fundingProofId,coalesce(c.allocation_proof_id,'observation-only') AS allocationProofId
           FROM v2_jobs j JOIN v2_operations o ON o.id=j.operation_id JOIN v2_idempotency i ON i.operation_id=o.id
           JOIN v2_paid_holds h ON h.job_id=j.id JOIN v2_runtime_plans p ON p.id=h.plan_id
-          JOIN v2_cost_attempts a ON a.id=h.attempt_id JOIN v2_runtime_controls c ON c.month=a.month
+          JOIN v2_cost_attempts a ON a.id=h.attempt_id LEFT JOIN v2_runtime_controls c ON c.month=a.month
           WHERE j.id=? AND o.owner_id=? AND j.runtime_instance_id=? AND j.target_kind='profile_asset'
-          AND j.profile_id=? AND j.target_id=? AND j.target_revision=? AND c.environment=? AND c.phase='active'
+          AND j.profile_id=? AND j.target_id=? AND j.target_revision=? AND (${core.applicationCostLimitsEnabled ? "0" : "1"}=1 OR (c.environment=? AND c.phase='active'))
           ORDER BY p.created_at,p.id LIMIT 1`,
           [
             params.jobId,

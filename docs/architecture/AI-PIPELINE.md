@@ -1,11 +1,11 @@
 # AI 분석 파이프라인
 
 계정별 AI는 KST 하루200회, 질문은 최대2차례×3문항이다. Preview/Production의
-애플리케이션 월·누적 재원·요청 금액 차단은 `APPLICATION_COST_LIMITS_ENABLED=false`로
-해제하며 기존 결제·$10/$30 자동충전을 유지한다. 비용 초과 금액은 기록하고 실행을 동결하지 않는다.
-실제 가격·재원·용량·bounded attempt·미정산 비용과 원장은 보존한다. 같은 할당 refresh와
-할당 변경을 구분하며 [ADR-0015](../adr/0015-maintenance-and-operating-policy.md)와
-[비용 재개](../operations/COST-REFRESH.md)를 따른다.
+`APPLICATION_COST_LIMITS_ENABLED=false`는 [비용 관측 전용](../operations/PREBETA-COST-POLICY.md)이다.
+금액·가격/FX/funding 누락/만료·월할당·수동 refresh·비용 model bounds 만료로 실행을 막지 않는다.
+기존 결제·$10/$30 자동충전·미정산 원장은 보존한다. 모델 context/output·vision 지원의 실제
+기술 한도, bounded attempt·권한·물리 용량·실제 provider 오류는 유지한다. 사용자 재지시 전
+비용 차단을 재도입하지 않으며 관측 날짜·재원을 조작하지 않는다.
 
 - Orchestrator: Cloudflare Workflows
 - Model path: Cloudflare AI binding -> AI Gateway Unified Billing -> third-party model

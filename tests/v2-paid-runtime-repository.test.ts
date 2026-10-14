@@ -1869,7 +1869,7 @@ test("cost-limit removal still rejects aggregate arithmetic that cannot be recor
   expect(f.db.sqlite.query("SELECT count(*) n FROM v2_cost_attempts").get()).toEqual({ n: 0 });
 });
 
-test("disabling money limits does not authorize unavailable funding, stale proofs or deleted owners", async () => {
+test("observation-only mode ignores unavailable or expiring funding but still rejects deleted owners", async () => {
   for (const failure of ["unavailable", "expired", "deleted"] as const) {
     const f = await fixture(true, false);
     const r = request(f);
@@ -1886,7 +1886,96 @@ test("disabling money limits does not authorize unavailable funding, stale proof
       expect(await f.runtime.putFundingProof(proof, NOW)).toBe(true);
       r.fundingProofId = proof.id;
     }
-    expect(await f.runtime.prepareHold(f.actor, r)).toBeNull();
+    const paid = await f.runtime.prepareHold(f.actor, r);
+    if (failure === "deleted") expect(paid).toBeNull();
+    else expect(paid).not.toBeNull();
     expect(f.db.sqlite.query("SELECT count(*) n FROM v2_cost_attempts").get()).toEqual({ n: 0 });
   }
+});
+
+test("observation-only execution crosses financial expiry and month without rewriting evidence or releasing prior exposure", async () => {
+  const f = await fixture(true, false);
+  const originalProofs = f.db.sqlite.query("SELECT * FROM v2_runtime_proofs ORDER BY id").all();
+  f.db.sqlite.exec(
+    "UPDATE v2_monthly_budget SET ambiguous_krw=1234; UPDATE v2_runtime_controls SET phase='frozen'",
+  );
+  f.actor.now = "2026-11-02T00:00:00.000Z";
+  const r = request(f);
+  r.plan.deadlineAt = "2026-11-02T00:05:00.000Z";
+  const admitted = await admit(f, r);
+  expect(admitted.ok).toBe(true);
+  const acquired = await f.jobs.acquire(
+    f.actor,
+    r.jobId,
+    crypto.randomUUID(),
+    r.plan.deadlineAt,
+    r.attemptId,
+  );
+  expect(acquired).not.toBeNull();
+  if (!acquired) throw new Error("synthetic lease missing");
+  const handle = await f.runtime.beforeDispatch(f.actor, acquired.lease, r.attemptId);
+  expect(handle).not.toBeNull();
+  if (!handle) throw new Error("synthetic dispatch missing");
+  expect(
+    await f.runtime.recordUsage(
+      {
+        id: crypto.randomUUID(),
+        attemptId: r.attemptId,
+        invocationId: r.plan.invocationId,
+        providerRequestId: "synthetic-expired-price-response",
+        dispatchToken: handle.dispatchToken,
+        observedAt: f.actor.now,
+        transport: "response",
+        definitiveNoCharge: false,
+        meteringComplete: true,
+        quantities: [
+          { sku: "model_input_tokens", quantity: "500" },
+          { sku: "model_output_tokens", quantity: "50" },
+        ],
+        chargedUsd: null,
+        modelTokenDetails: {
+          cachedInputTokens: 0,
+          cacheWriteInputTokens: 0,
+          serviceTier: "default",
+        },
+      },
+      f.actor.now,
+    ),
+  ).toBe(true);
+  expect(
+    f.db.sqlite.query("SELECT month,ambiguous_krw FROM v2_monthly_budget ORDER BY month").all(),
+  ).toEqual([
+    { month: "2026-10", ambiguous_krw: 1234 },
+    { month: "2026-11", ambiguous_krw: admitted.paid.reservedKrw },
+  ]);
+  expect(f.db.sqlite.query("SELECT outcome,charged_krw FROM v2_runtime_usage").get()).toEqual({
+    outcome: "ambiguous",
+    charged_krw: null,
+  });
+  expect(f.db.sqlite.query("SELECT * FROM v2_runtime_proofs ORDER BY id").all()).toEqual(
+    originalProofs,
+  );
+  expect(
+    f.db.sqlite.query("SELECT count(*) n FROM v2_budget_allocations WHERE month='2026-11'").get(),
+  ).toEqual({ n: 0 });
+  expect(f.db.sqlite.query("PRAGMA foreign_key_check").all()).toEqual([]);
+});
+
+test("recording and settling maintenance observations do not freeze execution when financial limits are disabled", async () => {
+  const f = await fixture(true, false);
+  const before = await f.runtime.exposure(NOW);
+  if (!before) throw new Error("synthetic initial exposure missing");
+  const id = crypto.randomUUID();
+  expect(
+    await f.runtime.recordMaintenance(
+      { id, month: "2026-10", referenceHash: "b".repeat(64), amountKrw: 50000, state: "reserved" },
+      NOW,
+    ),
+  ).toBe(true);
+  expect(await f.runtime.settleMaintenance(id, "reserved", 60000, NOW)).toBe(true);
+  expect(await f.runtime.exposure(NOW)).toMatchObject({
+    phase: before.phase,
+    control_revision: before.control_revision,
+    fixed_maintenance_krw: 60000,
+  });
 });

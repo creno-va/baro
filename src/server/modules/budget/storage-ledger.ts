@@ -24,6 +24,7 @@ import {
   createV2StoragePaidRuntimeRepository,
   type PreparedStoragePaidHold,
 } from "../../db/v2-storage-paid-runtime";
+import { readProcessingProofs } from "../../runtime/processing-proofs";
 
 const descriptorSchema = z.strictObject({
   runId: opaqueIdSchema,
@@ -131,6 +132,23 @@ export function createStorageBudgetService(options: {
   const permits = new WeakMap<object, { admission: StorageAdmission; terminal: boolean }>();
 
   async function proofs(now: string, checkpoint: () => Promise<boolean> = async () => true) {
+    if (!options.core.applicationCostLimitsEnabled) {
+      const ids = await readProcessingProofs(options.core, options.environment, now, null);
+      if (!ids || !(await checkpoint())) return null;
+      const [p, f] = await Promise.all([
+        proofsRuntime.findProof(ids.pricingProofId, now),
+        proofsRuntime.findProof(ids.fundingProofId, now),
+      ]);
+      if (p?.kind !== "pricing" || f?.kind !== "funding" || !(await checkpoint())) return null;
+      pricingProofSchema.parse(p.payload);
+      fundingProofSchema.parse(f.payload);
+      return {
+        pricingId: p.id,
+        fundingId: f.id,
+        allocationId: ids.allocationProofId,
+        cutoff: Number.POSITIVE_INFINITY,
+      };
+    }
     const month = usageDateKst(now).slice(0, 7);
     const ids = await options.core
       .statement(
@@ -139,7 +157,7 @@ export function createStorageBudgetService(options: {
        JOIN v2_storage_projections projection ON projection.environment=c.environment AND projection.month=c.month AND projection.allocation_proof_id=c.allocation_proof_id
        JOIN v2_storage_funding_heads head ON head.environment=c.environment
        JOIN v2_budget_allocations a ON a.month=b.month AND a.version=b.allocation_version
-       JOIN v2_runtime_proofs ap ON ap.id=c.allocation_proof_id
+       LEFT JOIN v2_runtime_proofs ap ON ap.id=c.allocation_proof_id
        WHERE c.month=? AND c.environment=? AND b.environment=c.environment AND c.phase='active'
        AND projection.created_at<=? AND projection.valid_until>?
        AND ap.kind='allocation' AND ap.environment=c.environment AND ap.verified_at<=? AND ${allocationUntilSql("c", "ap")}>?
@@ -291,9 +309,10 @@ export function createStorageBudgetService(options: {
         const proof = await proofs(actor().now, checkpoint);
         if (
           !proof ||
-          proof.pricingId !== admission.request.pricingProofId ||
-          proof.fundingId !== admission.request.fundingProofId ||
-          proof.allocationId !== state.allocationId ||
+          (options.core.applicationCostLimitsEnabled &&
+            (proof.pricingId !== admission.request.pricingProofId ||
+              proof.fundingId !== admission.request.fundingProofId ||
+              proof.allocationId !== state.allocationId)) ||
           !(await checkpoint())
         )
           return null;
@@ -301,7 +320,7 @@ export function createStorageBudgetService(options: {
         if (!(await checkpoint()) || !dispatch) return null;
         const current = await options.core
           .statement(
-            `SELECT h.deadline_at,pp.valid_until AS pricing_until,fp.valid_until AS funding_until,${allocationUntilSql("c", "ap")} AS allocation_until FROM v2_storage_paid_executions h JOIN v2_cost_attempts ca ON ca.id=h.attempt_id JOIN v2_runtime_controls c ON c.month=ca.month JOIN v2_runtime_proofs pp ON pp.id=h.pricing_proof_id JOIN v2_runtime_proofs fp ON fp.id=h.funding_proof_id JOIN v2_runtime_proofs ap ON ap.id=c.allocation_proof_id JOIN v2_storage_funding_heads head ON head.environment=c.environment AND head.proof_id=fp.id AND head.verified_at=fp.verified_at WHERE h.attempt_id=? AND h.state='dispatched' AND h.dispatch_token=? AND ca.state='reserved' AND c.phase='active' AND c.environment=? AND c.allocation_proof_id=?`,
+            `SELECT h.deadline_at,pp.valid_until AS pricing_until,fp.valid_until AS funding_until,${allocationUntilSql("c", "ap")} AS allocation_until FROM v2_storage_paid_executions h JOIN v2_cost_attempts ca ON ca.id=h.attempt_id LEFT JOIN v2_runtime_controls c ON c.month=ca.month JOIN v2_runtime_proofs pp ON pp.id=h.pricing_proof_id JOIN v2_runtime_proofs fp ON fp.id=h.funding_proof_id LEFT JOIN v2_runtime_proofs ap ON ap.id=c.allocation_proof_id LEFT JOIN v2_storage_funding_heads head ON head.environment=c.environment AND head.proof_id=fp.id AND head.verified_at=fp.verified_at WHERE h.attempt_id=? AND h.state='dispatched' AND h.dispatch_token=? AND ca.state='reserved' AND pp.environment=? AND (${options.core.applicationCostLimitsEnabled ? "0" : "1"}=1 OR (c.phase='active' AND c.environment=pp.environment AND head.proof_id=fp.id AND c.allocation_proof_id=?))`,
             [dispatch.attemptId, dispatch.dispatchToken, options.environment, state.allocationId],
           )
           .first<{
@@ -313,7 +332,13 @@ export function createStorageBudgetService(options: {
         if (
           !(await checkpoint()) ||
           !current ||
-          Date.parse(actor().now) >= Math.min(...Object.values(current).map(Date.parse))
+          Date.parse(actor().now) >=
+            Math.min(
+              ...(options.core.applicationCostLimitsEnabled
+                ? Object.values(current)
+                : [current.deadline_at]
+              ).map(Date.parse),
+            )
         )
           return null;
         const permit = Object.freeze({

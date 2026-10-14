@@ -1,47 +1,38 @@
 # Budget
 
-Current policy (2026-10-14): `APPLICATION_COST_LIMITS_ENABLED=false` disables
-application monetary rejection by month, cumulative funding allowance or request
-amount in admission, dispatch, refresh and preflight. Amount overruns are recorded
-without freezing execution. Keep verified provider status/pricing, exact accounting,
-physical capacity, execution quantity/time/retry bounds and authorization checks.
-Do not inflate observed funding, erase holds or reintroduce a monetary gate from
-historical tests. [ADR-0015](../../../../docs/adr/0015-maintenance-and-operating-policy.md)
-supersedes previous monetary-limit instructions.
+Current policy (2026-10-14): `APPLICATION_COST_LIMITS_ENABLED=false` means
+**cost observation only**. See the [canonical policy and implementation status](../../../../docs/operations/PREBETA-COST-POLICY.md).
+Do not reject, wait, freeze or fail a feature/deployment because of monetary
+amounts, missing/stale pricing/FX/funding, monthly allocation/control, cost
+approval/refresh, maintenance reservations, past estimate overruns, or cost-derived
+IO counters (including the historical 50 GET/HEAD/DELETE reservations).
+Do not restore these gates without a new explicit user instruction.
 
-Quote inputs come from trusted server dependencies. Pricing, FX, fees, funding,
-execution bounds and hidden retries are bound by an immutable proof digest.
-Money uses decimal strings and exact rational arithmetic; reservations round up
-to integer KRW. Actual receipts omit the reservation safety margin and preserve
-overruns. Missing/stale proof or an unsupported free allowance fails closed.
+Preserve actual observations, prices, usage, receipts, estimates, unsettled costs
+and holds. Missing/stale facts remain unknown/stale. Do not inflate funding or
+rewrite checkedAt/validUntil to claim a fresh observation. Cost persistence or
+reconciliation failures are separate operational observations and must not turn
+a successful product operation into a failure. No default funding, fabricated
+zero cost, new payment method or auto-recharge change is authorized.
 
-Receipts contain only bounded identifiers, metered quantities and charge scalars.
-They are persisted before output validation, including refusal/invalid output.
-Unknown or incomplete usage retains exposure. Only definitively unsent calls may
-release; expired proof/account deletion does not discard a late verified bill.
+User quotas, physical byte/file capacity, authenticated ownership, signatures,
+revision/CAS, fencing, leases, tombstones, actual runtime credentials, provider
+errors and technical execution bounds remain enforced. The wire planner still
+requires a real context/output bound and applicable vision capability; an expiry
+inherited from billing metadata is not a model capability failure. Bytes alone
+do not prove tokens. No model/resource call occurs in this module.
 
-Canonical schemas and pricing/receipt arithmetic come from the merged shared
-runtime DB contract. `createGatewayBudgetService` prepares a branded hold for the
-job repository's atomic admission. The caller uses the returned captured actor
-with that batch; dispatch uses a fresh server clock and current job/fence guard.
-`createLedger` binds the actual Gateway metadata to the original complete-wire
-and token-bound evidence. Retry/correction reserves a separate actual attempt;
-restored initial holds retain the same immutable evidence and skip double holds.
-Unknown costs survive timeout and deletion. Only the DB's prepared/tokenless CAS
-can confirm a `release_candidate`; a committed dispatch cannot be refunded locally.
+Accounting uses trusted evidence, exact decimal/rational arithmetic and original
+attempt identities. Receipts contain bounded identifiers, metered quantities and
+charge scalars, without prompt/file/output/token secrets. Unknown costs survive
+timeouts and deletion; a late bill can be reconciled to the original price.
+A committed dispatch cannot be refunded by treating an ambiguous call as unsent.
 
-The planner receives exact identity from the shared Gateway wire builder. It
-requires an authenticated tokenizer/framing or model-context upper bound, plus
-vision capability/dimension evidence when applicable. Bytes alone never prove
-tokens. Missing verifier/pricing/funding/FX/coordination denies paid execution.
-`createPaidAvailability` connects those durable proofs and current control to
-usage display, including previous-month unresolved carryover. The final mutation
-still reserves actual capacity atomically. No model/resource call occurs here.
-A synthetic verifier is not live funding or a provider invoice. Environment-local
-circuit snapshots are not the global cost ledger. The historical 1M KRW allocation
-is retained as accounting history, not an application spending ceiling.
+The historical allocation/proof/refresh records remain available for accounting.
+Their absence, expiry or monthly rollover is not admission authority in the
+observation-only mode. Physical reservations and job ownership guards remain
+atomic. Cost bookkeeping must not reintroduce a product dependency through a
+shared transaction or availability adapter. A synthetic verifier or local test
+does not establish live funding or a provider invoice.
 
-No bundled price, fixed FX, default funding, payment setup or auto recharge is
-provided. Actual billing/console reconciliation remains #71.
-
-Authoritative contract: [cost controls](../../../../docs/operations/COST-CONTROLS.md).
+Authoritative operations: [cost observation](../../../../docs/operations/COST-CONTROLS.md).

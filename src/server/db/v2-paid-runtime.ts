@@ -90,14 +90,21 @@ export async function runtimeDigest(payload: unknown): Promise<string> {
     b.toString(16).padStart(2, "0"),
   ).join("");
 }
-function freshPricing(p: PricingProof, now: string, deadline: string): boolean {
+function freshPricing(
+  p: PricingProof,
+  now: string,
+  deadline: string,
+  requireFresh = true,
+): boolean {
   const start = Date.parse(now),
     end = Date.parse(deadline);
   return (
     end > start &&
     end - start <= 3600000 &&
     [p, p.fx, ...p.prices].every(
-      (item) => Date.parse(item.checkedAt) <= start && Date.parse(item.validUntil) >= end,
+      (item) =>
+        Date.parse(item.checkedAt) <= start &&
+        (!requireFresh || Date.parse(item.validUntil) >= end),
     ) &&
     Date.parse(p.fx.asOf) <= start
   );
@@ -173,7 +180,7 @@ export function createV2PaidRuntimeRepository(
     parse(opaqueIdSchema, id);
     const row = await core
       .statement(
-        "SELECT * FROM v2_runtime_proofs WHERE id=? AND kind=? AND verified_at<=? AND valid_until>?",
+        `SELECT * FROM v2_runtime_proofs WHERE id=? AND kind=? AND verified_at<=? AND (${core.applicationCostLimitsEnabled ? "0" : "1"}=1 OR valid_until>?)`,
         [id, kind, now, now],
       )
       .first<ProofRow>();
@@ -195,7 +202,7 @@ export function createV2PaidRuntimeRepository(
         const row = await core
           .statement(
             `SELECT p.*,CASE WHEN p.kind='allocation' THEN coalesce((SELECT ${allocationUntilSql("c", "p", "min(p.valid_until,json_extract(p.payload_json,'$.allocation.validUntil'),json_extract(p.payload_json,'$.allocation.fundingValidUntil'))")} FROM v2_runtime_controls c WHERE c.environment=p.environment AND c.allocation_proof_id=p.id AND c.phase='active'),min(p.valid_until,json_extract(p.payload_json,'$.allocation.validUntil'),json_extract(p.payload_json,'$.allocation.fundingValidUntil'))) ELSE p.valid_until END AS effective_valid_until
-             FROM v2_runtime_proofs p WHERE p.id=? AND p.environment=? AND p.verified_at<=? AND effective_valid_until>?`,
+             FROM v2_runtime_proofs p WHERE p.id=? AND p.environment=? AND p.verified_at<=? AND (${core.applicationCostLimitsEnabled ? "0" : "1"}=1 OR effective_valid_until>?)`,
             [id, environment, now, now],
           )
           .first<ProofRow & { effective_valid_until: string }>();
@@ -241,16 +248,18 @@ export function createV2PaidRuntimeRepository(
           !f ||
           p.value.environment !== environment ||
           f.value.environment !== environment ||
-          !freshPricing(p.value, actor.now, r.plan.deadlineAt) ||
-          f.value.state === "unavailable" ||
+          !freshPricing(p.value, actor.now, r.plan.deadlineAt, core.applicationCostLimitsEnabled) ||
+          (core.applicationCostLimitsEnabled && f.value.state === "unavailable") ||
           Date.parse(f.value.observedAt) > Date.parse(actor.now) ||
-          Date.parse(f.value.validUntil) < Date.parse(r.plan.deadlineAt)
+          (core.applicationCostLimitsEnabled &&
+            Date.parse(f.value.validUntil) < Date.parse(r.plan.deadlineAt))
         )
           return null;
         if (
-          r.plan.quantities.some(
-            (q) => p.value.prices.find((price) => price.sku === q.sku)?.billingMode !== "metered",
-          ) ||
+          (core.applicationCostLimitsEnabled &&
+            r.plan.quantities.some(
+              (q) => p.value.prices.find((price) => price.sku === q.sku)?.billingMode !== "metered",
+            )) ||
           !verify
         )
           return null;
@@ -277,6 +286,7 @@ export function createV2PaidRuntimeRepository(
           )
           .first();
         if (!owner) return null;
+        await core.ensureObservationMonth(environment, actor.now);
         return preparePaidStatements({
           applicationCostLimitsEnabled: core.applicationCostLimitsEnabled,
           monthlyBudgetCapEnabled: core.monthlyBudgetCapEnabled,
@@ -333,7 +343,7 @@ export function createV2PaidRuntimeRepository(
           claimId = crypto.randomUUID();
         const ok = await core.changed([
           core.statement(
-            `INSERT INTO v2_mutation_claims(id,owner_id,target_id,revision) SELECT ?,o.owner_id,j.id,j.target_revision FROM v2_jobs j JOIN v2_operations o ON o.id=j.operation_id JOIN v2_paid_holds h ON h.job_id=j.id JOIN v2_cost_attempts ca ON ca.id=h.attempt_id JOIN v2_runtime_plans p ON p.id=h.plan_id JOIN v2_runtime_controls c ON c.month=ca.month JOIN v2_runtime_proofs pp ON pp.id=p.pricing_proof_id JOIN v2_runtime_proofs fp ON fp.id=p.funding_proof_id JOIN v2_runtime_proofs ap ON ap.id=c.allocation_proof_id JOIN v2_monthly_budget b ON b.month=c.month JOIN v2_storage_funding_heads head ON head.environment=c.environment AND head.proof_id=fp.id AND head.verified_at=fp.verified_at WHERE j.id=? AND o.owner_id=? AND j.lease_token=? AND j.fencing=? AND j.lease_until>? AND j.status IN ('running','validating') AND o.state='admitted' AND h.attempt_id=? AND h.state='prepared' AND ca.state='reserved' AND ca.operation_id=o.id AND p.operation_revision=o.revision AND p.job_id=j.id AND p.target_kind=j.target_kind AND p.target_id=j.target_id AND p.target_revision=j.target_revision AND p.deadline_at>? AND pp.valid_until>? AND fp.valid_until>? AND ${allocationUntilSql("c", "ap")}>? AND c.phase='active' AND c.environment=? AND json_extract(ap.payload_json,'$.allocation.version')=b.allocation_version AND ${jobAlive}`,
+            `INSERT INTO v2_mutation_claims(id,owner_id,target_id,revision) SELECT ?,o.owner_id,j.id,j.target_revision FROM v2_jobs j JOIN v2_operations o ON o.id=j.operation_id JOIN v2_paid_holds h ON h.job_id=j.id JOIN v2_cost_attempts ca ON ca.id=h.attempt_id JOIN v2_runtime_plans p ON p.id=h.plan_id LEFT JOIN v2_runtime_controls c ON c.month=ca.month JOIN v2_runtime_proofs pp ON pp.id=p.pricing_proof_id JOIN v2_runtime_proofs fp ON fp.id=p.funding_proof_id LEFT JOIN v2_runtime_proofs ap ON ap.id=c.allocation_proof_id LEFT JOIN v2_monthly_budget b ON b.month=c.month LEFT JOIN v2_storage_funding_heads head ON head.environment=c.environment AND head.proof_id=fp.id AND head.verified_at=fp.verified_at WHERE j.id=? AND o.owner_id=? AND j.lease_token=? AND j.fencing=? AND j.lease_until>? AND j.status IN ('running','validating') AND o.state='admitted' AND h.attempt_id=? AND h.state='prepared' AND ca.state='reserved' AND ca.operation_id=o.id AND p.operation_revision=o.revision AND p.job_id=j.id AND p.target_kind=j.target_kind AND p.target_id=j.target_id AND p.target_revision=j.target_revision AND p.deadline_at>? AND (${core.applicationCostLimitsEnabled ? "0" : "1"}=1 OR (pp.valid_until>? AND fp.valid_until>? AND ${allocationUntilSql("c", "ap")}>? AND c.phase='active' AND c.environment=pp.environment AND head.proof_id=fp.id AND json_extract(ap.payload_json,'$.allocation.version')=b.allocation_version)) AND pp.environment=? AND ${jobAlive}`,
             [
               claimId,
               lease.jobId,
@@ -358,7 +368,7 @@ export function createV2PaidRuntimeRepository(
         if (!ok) return null;
         const binding = await core
           .statement(
-            `SELECT h.plan_id,p.digest,p.pricing_proof_id,p.funding_proof_id,ca.quote_id,ca.invocation_id,ca.attempt FROM v2_paid_holds h JOIN v2_runtime_plans p ON p.id=h.plan_id JOIN v2_cost_attempts ca ON ca.id=h.attempt_id JOIN v2_jobs j ON j.id=h.job_id JOIN v2_operations o ON o.id=j.operation_id JOIN v2_runtime_controls c ON c.month=ca.month WHERE h.attempt_id=? AND h.dispatch_token=? AND j.lease_token=? AND j.fencing=? AND j.lease_until>? AND o.owner_id=? AND c.phase='active' AND ${jobAlive}`,
+            `SELECT h.plan_id,p.digest,p.pricing_proof_id,p.funding_proof_id,ca.quote_id,ca.invocation_id,ca.attempt FROM v2_paid_holds h JOIN v2_runtime_plans p ON p.id=h.plan_id JOIN v2_cost_attempts ca ON ca.id=h.attempt_id JOIN v2_jobs j ON j.id=h.job_id JOIN v2_operations o ON o.id=j.operation_id LEFT JOIN v2_runtime_controls c ON c.month=ca.month WHERE h.attempt_id=? AND h.dispatch_token=? AND j.lease_token=? AND j.fencing=? AND j.lease_until>? AND o.owner_id=? AND (${core.applicationCostLimitsEnabled ? "0" : "1"}=1 OR c.phase='active') AND ${jobAlive}`,
             [attemptId, token, lease.token, lease.fencing, actor.now, actor.ownerId],
           )
           .first<{
@@ -690,7 +700,7 @@ export function createV2PaidRuntimeRepository(
             [p.amountKrw, p.month, claimId],
           ),
           core.statement(
-            `UPDATE v2_runtime_controls SET phase='frozen',local_drain_id=NULL,revision=revision+1,updated_at=? WHERE ${financialClaim}`,
+            `UPDATE v2_runtime_controls SET phase='frozen',local_drain_id=NULL,revision=revision+1,updated_at=? WHERE ${core.applicationCostLimitsEnabled ? "1" : "0"}=1 AND ${financialClaim}`,
             [now, claimId],
           ),
           financialFinish(core, claimId),
@@ -769,7 +779,7 @@ export function createV2PaidRuntimeRepository(
             [chargedKrw, id, claimId],
           ),
           core.statement(
-            `UPDATE v2_runtime_controls SET phase='frozen',local_drain_id=NULL,revision=revision+1,updated_at=? WHERE ${financialClaim}`,
+            `UPDATE v2_runtime_controls SET phase='frozen',local_drain_id=NULL,revision=revision+1,updated_at=? WHERE ${core.applicationCostLimitsEnabled ? "1" : "0"}=1 AND ${financialClaim}`,
             [now, claimId],
           ),
           financialFinish(core, claimId),

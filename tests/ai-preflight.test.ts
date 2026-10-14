@@ -76,6 +76,7 @@ async function fixture() {
           APP_ENV: text("APP_ENV"),
           RELEASE_SHA: text("RELEASE_SHA"),
           AI_GATEWAY_ID: text("AI_GATEWAY_ID"),
+          APPLICATION_COST_LIMITS_ENABLED: text("APPLICATION_COST_LIMITS_ENABLED"),
           AI_MODEL_TOKEN_BOUNDS_JSON:
             bounds?.type === "secret_text"
               ? JSON.stringify(modelBounds(observed, provisioned.evidenceHash))
@@ -246,6 +247,49 @@ test("observation-only costs do not block readiness at exhausted funding, withou
   policy.text = "true";
   expect((await inspectAiPreflight({ ...f.input, scope: "text" })).blockers).toContain(
     "model_reservation_headroom",
+  );
+});
+
+test("observation-only deployment remains ready without cost provisioning or refresh at month rollover", async () => {
+  const f = await fixture(),
+    empty = await createTestDatabase();
+  databases.push(empty);
+  const policy = f.bindings.find((b) => b.name === "APPLICATION_COST_LIMITS_ENABLED");
+  const bounds = f.bindings.find((b) => b.name === "AI_MODEL_TOKEN_BOUNDS_JSON");
+  if (!policy || !bounds) throw new Error("Missing fixture policy");
+  policy.text = "false";
+  const original = JSON.parse(String(bounds.text));
+  original.bounds.checkedAt = "2026-01-01T00:00:00.000Z";
+  original.verifiedAt = original.bounds.checkedAt;
+  original.bounds.validUntil = "2026-02-01T00:00:00.000Z";
+  bounds.text = JSON.stringify(original);
+  const before = empty.sqlite.serialize();
+  const report = await inspectAiPreflight({
+    ...f.input,
+    scope: "text",
+    database: empty.binding,
+    now: "2026-10-31T14:59:00.000Z",
+  });
+  expect(report.status).toBe("configuration_ready");
+  expect(report.costPolicy).toBe("observation_only");
+  expect(report.blockers).toEqual([]);
+  expect(report.warnings).toContain("current_month_active_observation_unavailable");
+  expect(report.warnings).toContain("next_month_active_before_horizon_observation_unavailable");
+  expect(report.warnings).toContain("model_bounds_five_minute_horizon_observation_unavailable");
+  expect(report.checks.model_skus_complete).toBe(false);
+  expect(report.unverified).toContain("live-provider-success");
+  expect(empty.sqlite.serialize()).toEqual(before);
+  expect(bounds.text).toBe(JSON.stringify(original));
+  const all = await inspectAiPreflight({ ...f.input, database: empty.binding });
+  expect(all.status).toBe("blocked");
+  expect(all.blockers).toContain("media_storage_vision_metering_wired");
+  expect(all.blockers).toContain("legacy_analysis_attempt_ledger_wired");
+  f.bindings.splice(
+    f.bindings.findIndex((value) => value.name === "AI"),
+    1,
+  );
+  expect((await inspectAiPreflight({ ...f.input, database: empty.binding })).blockers).toContain(
+    "binding_AI",
   );
 });
 

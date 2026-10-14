@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: Status is read-only; observe installs evidence; refresh resumes; reallocate requires both drains
+        description: Optional cost records only; stale observations never pause product execution; reallocate requires both drains
         required: true
         type: choice
         options:
@@ -27,7 +27,7 @@ on:
         default: default
         type: string
       observation_json:
-        description: Fresh non-secret operator observation; no tokens, private data, or payment changes
+        description: Non-secret operator observation; original dates retained and stale data reported without activation
         required: false
         type: string
       storage_initialization_json:

@@ -54,10 +54,12 @@ export async function inspectAiConfiguration(
     if (
       !config ||
       !Number.isFinite(Date.parse(now)) ||
-      Date.parse(config.bounds.validUntil) <= Date.parse(now) + 300_000
+      (env.APPLICATION_COST_LIMITS_ENABLED !== "false" &&
+        Date.parse(config.bounds.validUntil) <= Date.parse(now) + 300_000)
     )
       return unavailable;
     const planner = createGatewayExecutionPlanner({
+      applicationCostLimitsEnabled: env.APPLICATION_COST_LIMITS_ENABLED !== "false",
       input: async () => ({}),
       bounds: async (wire) => workspaceTokenBounds(config, wire.max_completion_tokens),
       verifyBounds: async (_descriptor, digest) => ({

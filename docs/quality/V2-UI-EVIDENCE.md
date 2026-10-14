@@ -1,6 +1,6 @@
 # v2 전체 기능 시연·완료 증거 계약
 
-> **2026-10-14 비용 정책 우선:** [ADR-0015](../adr/0015-maintenance-and-operating-policy.md)/PR241에 따라 월 예산·누적 재원·요청 금액 차단을 해제한다. `APPLICATION_COST_LIMITS_ENABLED=false`에서 비용은 관측·예약·미정산·정산 기록이며 기능 차단 금액이 아니다. 파일/물리 용량·시간·사용/시도 횟수·보안 검사는 유지한다. 기존 결제·$10/$30 자동충전 외 새 외부 결제 설정은 변경하지 않는다.
+> **2026-10-14 프리베타 비용 관측 전용 — 현행 지시:** `APPLICATION_COST_LIMITS_ENABLED=false`에서 비용 금액·가격/FX/funding 관측 누락·만료·월별 할당·비용 승인·수동 refresh·유지비·비용 예약 IO 횟수로 기능이나 배포를 막지 않는다. 사용자 재지시 전 재도입 금지. 비용 원장·관측 사실은 보존하며 관측 시각/금액을 조작하지 않는다. AI200/일·실제 기술용량/횟수·권한/보안/무결성·실제 공급자 오류는 유지한다. 아래 과거 비용 차단 지시·실패 기록보다 [현행 정책과 구현 상태](../operations/PREBETA-COST-POLICY.md)가 우선한다.
 
 - Status: Required evidence; v2 implementation/demo/live/public approval not yet proven
 - Tracking: [#69](https://github.com/creno-va/baro/issues/69), [#71](https://github.com/creno-va/baro/issues/71)

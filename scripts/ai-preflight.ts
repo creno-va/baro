@@ -119,12 +119,20 @@ export async function inspectAiPreflight(input: {
     "media-storage-vision-capability-metering",
   ];
   const checks: Record<string, boolean | string> = {};
+  let applicationCostLimitsEnabled = true;
   const check = (name: string, passed: boolean) => {
     checks[name] = passed;
     if (!passed) blockers.push(name);
   };
+  const observeCost = (name: string, passed: boolean) => {
+    checks[name] = passed;
+    if (!passed) {
+      if (applicationCostLimitsEnabled) blockers.push(name);
+      else warnings.push(`${name}_observation_unavailable`);
+    }
+  };
   const expiry = (name: string, cutoff: number) => {
-    check(
+    observeCost(
       `${name}_five_minute_horizon`,
       Number.isFinite(cutoff) && cutoff > Date.parse(now) + horizonMs,
     );
@@ -152,6 +160,7 @@ export async function inspectAiPreflight(input: {
   const binding = (name: string, type: string) =>
     configured.find((value) => value.name === name && value.type === type);
   const text = (name: string) => binding(name, "plain_text")?.text;
+  applicationCostLimitsEnabled = text("APPLICATION_COST_LIMITS_ENABLED") !== "false";
   for (const [name, type] of Object.entries(bindings)) {
     if (scope === "text" && !["DB", "AI", "WORKSPACE_PROCESSING"].includes(name)) continue;
     check(`binding_${name}`, !!binding(name, type));
@@ -185,6 +194,7 @@ export async function inspectAiPreflight(input: {
     if (bounds) expiry("model_bounds", Date.parse(bounds.bounds.validUntil));
   }
   let reservations: z.infer<typeof reservationSchema>[] | null = null;
+  let schemaRead = false;
   try {
     const response = await fetcher(`${target.origin}/api/health/ai-configuration`, {
       method: "GET",
@@ -230,7 +240,10 @@ export async function inspectAiPreflight(input: {
         },
       },
       {
-        applicationCostLimitsEnabled: text("APPLICATION_COST_LIMITS_ENABLED") !== "false",
+        // Inspect the original proof validity even when execution no longer
+        // depends on it. A permissive runtime reader must not turn missing or
+        // expired observations into a falsely healthy billing report.
+        applicationCostLimitsEnabled: true,
         monthlyBudgetCapEnabled: text("MONTHLY_BUDGET_CAP_ENABLED") !== "false",
       },
     );
@@ -238,9 +251,11 @@ export async function inspectAiPreflight(input: {
       .statement("SELECT value FROM app_metadata WHERE key='schema_version'")
       .first<string>("value");
     check("schema_matches", baseline === journal.entries.at(-1)?.tag);
+    schemaRead = true;
+    check("database_read_available", true);
     const runtime = createV2PaidRuntimeRepository(core, environment);
     const exposure = await runtime.exposure(now);
-    check("current_month_active", exposure?.month === month && exposure.phase === "active");
+    observeCost("current_month_active", exposure?.month === month && exposure.phase === "active");
     for (const [name, skus] of Object.entries(groups)) {
       if (scope === "text" && name !== "model") continue;
       const ids = await readProcessingProofs(core, environment, now, skus[0]);
@@ -259,8 +274,8 @@ export async function inspectAiPreflight(input: {
         (sku) => !prices.some((price) => price.sku === sku && price.billingMode === "metered"),
       );
       budgetGroups[name] = { available, missingSkus };
-      check(`${name}_paid_available`, available);
-      check(`${name}_skus_complete`, missingSkus.length === 0);
+      observeCost(`${name}_paid_available`, available);
+      observeCost(`${name}_skus_complete`, missingSkus.length === 0);
       if (name === "model" && reservations && pricing.success && funding.success && exposure) {
         const reserve = Math.max(
           ...reservations.map((r) =>
@@ -277,8 +292,8 @@ export async function inspectAiPreflight(input: {
           exposure.fixed_maintenance_krw +
           exposure.carryover_krw +
           reserve;
-        check("model_cost_estimate_valid", Number.isSafeInteger(total));
-        if (core.applicationCostLimitsEnabled) {
+        observeCost("model_cost_estimate_valid", Number.isSafeInteger(total));
+        if (applicationCostLimitsEnabled) {
           check(
             "model_reservation_headroom",
             total <= funding.data.spendAllowanceKrw &&
@@ -305,15 +320,19 @@ export async function inspectAiPreflight(input: {
     }
     if (nextMonthAt <= Date.parse(now) + horizonMs) {
       const nextNow = new Date(nextMonthAt).toISOString();
-      const next = await createPaidAvailability(core, environment, {
-        proofs: () => readProcessingProofs(core, environment, nextNow, "model_input_tokens"),
-        clock: () => nextNow,
-      })();
-      check("next_month_active_before_horizon", next);
+      const nextExposure = await runtime.exposure(nextNow);
+      const next =
+        nextExposure?.month === usageDateKst(nextNow).slice(0, 7) &&
+        nextExposure.phase === "active" &&
+        (await createPaidAvailability(core, environment, {
+          proofs: () => readProcessingProofs(core, environment, nextNow, "model_input_tokens"),
+          clock: () => nextNow,
+        })());
+      observeCost("next_month_active_before_horizon", next);
     }
-    check("database_read_available", true);
   } catch {
-    check("database_read_available", false);
+    if (schemaRead) observeCost("cost_observation_read_available", false);
+    else check("database_read_available", false);
   }
   if (scope === "all") {
     // These product paths currently omit the required ledgers/capability attestations.
@@ -326,6 +345,7 @@ export async function inspectAiPreflight(input: {
     checkedAt: now,
     environment,
     scope,
+    costPolicy: applicationCostLimitsEnabled ? "enforced" : "observation_only",
     candidateSha,
     month,
     status: blockers.length ? ("blocked" as const) : ("configuration_ready" as const),

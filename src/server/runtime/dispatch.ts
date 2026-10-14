@@ -20,9 +20,11 @@ export async function reconcileV2Dispatch(env: Env) {
       monthlyBudgetCapEnabled: env.MONTHLY_BUDGET_CAP_ENABLED !== "false",
     });
     const environment = env.APP_ENV === "production" ? "production" : "preview";
-    const control = await core
-      .statement(
-        `SELECT c.month FROM v2_runtime_controls c
+    const control =
+      !core.applicationCostLimitsEnabled ||
+      (await core
+        .statement(
+          `SELECT c.month FROM v2_runtime_controls c
       JOIN v2_monthly_budget b ON b.month=c.month AND b.environment=c.environment
       JOIN v2_storage_funding_heads head ON head.environment=c.environment JOIN v2_runtime_proofs funding ON funding.id=head.proof_id AND funding.verified_at=head.verified_at AND funding.environment=c.environment AND funding.kind='funding'
       JOIN v2_runtime_proofs allocation ON allocation.id=c.allocation_proof_id AND allocation.kind='allocation' AND allocation.environment=c.environment
@@ -30,20 +32,20 @@ export async function reconcileV2Dispatch(env: Env) {
       AND (${core.monthlyBudgetCapEnabled ? "0" : "1"}=1 OR b.settled_krw+b.reserved_krw+b.ambiguous_krw+b.fixed_maintenance_krw+(${carryoverSql})<=b.limit_krw)
       AND (${core.applicationCostLimitsEnabled ? "0" : "1"}=1 OR b.settled_krw+b.reserved_krw+b.ambiguous_krw+b.fixed_maintenance_krw+(${carryoverSql})<=json_extract(funding.payload_json,'$.spendAllowanceKrw'))
       AND funding.verified_at<=? AND funding.valid_until>? AND json_extract(funding.payload_json,'$.state') IN ('funded','trial_credit')`,
-        [
-          environment,
-          usageDateKst(now).slice(0, 7),
-          now,
-          now,
-          usageDateKst(now).slice(0, 7),
-          usageDateKst(now).slice(0, 7),
-          usageDateKst(now).slice(0, 7),
-          usageDateKst(now).slice(0, 7),
-          now,
-          now,
-        ],
-      )
-      .first();
+          [
+            environment,
+            usageDateKst(now).slice(0, 7),
+            now,
+            now,
+            usageDateKst(now).slice(0, 7),
+            usageDateKst(now).slice(0, 7),
+            usageDateKst(now).slice(0, 7),
+            usageDateKst(now).slice(0, 7),
+            now,
+            now,
+          ],
+        )
+        .first());
     if (!control) return { available: false };
     const files = await createFileProcessingDispatcher(core, {
       environment,

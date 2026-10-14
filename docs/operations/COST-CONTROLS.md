@@ -1,31 +1,25 @@
 # 사용량·실제 비용 운영
 
 - Reviewed: 2026-10-14 KST; 담당 #57 비용 모듈 / 총괄 hyunhomon.
-- 현재 결정: [ADR-0015](../adr/0015-maintenance-and-operating-policy.md), 실행: [비용 갱신·재개](./COST-REFRESH.md).
+- 현행 정본: [프리베타 비용 관측 전용 정책](./PREBETA-COST-POLICY.md), [ADR-0015](../adr/0015-maintenance-and-operating-policy.md).
+- 관측 도구: [비용 기록 갱신](./COST-REFRESH.md). 전체 관측 분리 구현·배포 상태는 현행 정본에 기록한다.
 
-## 권한과 현재 상태
+## 비용 관측과 실행의 분리
 
-AI는 KST 하루200회, 질문 최대2×3이며 2026-10-14 사용자 후속 지시에 따라
-애플리케이션의 월·누적 재원·요청 금액 차단을 모두 해제한다.
-`APPLICATION_COST_LIMITS_ENABLED=false`에서 admission/dispatch/refresh/preflight는
-금액 부족이나 예약 초과 청구로 실행을 막거나 동결하지 않는다.
-기존 모델·공급자·결제 경로·사용자 설정 자동충전($10/$30)은 유지한다. 과거 100만원
-allocation 금액과 원장은 보존하며 소비 차단 한도로 사용하지 않는다.
-유효한 가격·최신 공급자 상태·권한·물리 용량·실행 물량/시간/횟수 경계는 유지하고
-새 요청의 예상 비용은 기록한다. `MONTHLY_BUDGET_CAP_ENABLED=false`만으로는 이 정책을
-충족하지 않으며 더 넓은 `APPLICATION_COST_LIMITS_ENABLED=false`를 함께 유지한다. 금액 차단 해제가
-무한 재원, 실제 0원 과금, 미정산 삭제나 새 결제·자동충전 변경 승인을 의미하지 않는다.
+`APPLICATION_COST_LIMITS_ENABLED=false`에서 월 예산·재원·요청 금액과 예약 초과뿐 아니라
+가격/FX/funding의 누락·만료, 월별 allocation/control, 비용 승인·수동 refresh, 유지비,
+비용 예약 GET/HEAD/DELETE 횟수로 기능이나 배포를 거절·대기·동결하지 않는다.
+과거 각50회 IO 예약은 다운로드·삭제 quota가 아니다. 사용자 재지시 전 비용 차단을 재도입하지 않는다.
+`MONTHLY_BUDGET_CAP_ENABLED=false`만으로는 이 정책을 충족하지 않는다.
 
-2026-10-14 인증된 콘솔에서 Workers Paid/R2 Paid, Gateway 기존 크레딧 $39.54,
-자동충전 ON/$10/$30을 읽기 전용으로 확인했다. 두 Gateway의 retry/logging/cache/spend-limit은
-OFF, 인증/ZDR은 ON이었다. 결제·충전 설정은 변경하지 않았다. 이는 실제 입력을 준비하기
-위한 시점 관측이며 개별 attempt 청구 증거나 만료 없는 실행 권한은 아니다.
+기존 모델·공급자·결제 경로·사용자 설정 자동충전($10/$30)을 유지한다. 관측 원본과
+실제·추정·예약·미정산 비용은 보존하며 확인되지 않은 가격/재원을0원이나 무한 재원으로
+만들지 않는다. 관측 시각·validUntil·spendAllowanceKrw를 실행 허용 목적으로 늘리지 않는다.
+비용 기록 실패는 별도 운영 관측으로 남기며 정상 제품 작업의 실패로 전파하지 않는다.
 
-**이전 관측 기록:** 실제 status run38522585343은 양 환경 schema0009·기존 allocation1·projection 없음과
-미정산 preview21,895원/production44,104원을 반환했다. 이 금액을 지우지 않고 최종 후보
-migration·실제 inventory/projection·최신 관측을 적용해야 한다. 당시 과거 funding의 최대정수
-허용액을 새 실제 재원으로 재사용하지 않는다. 이 기록은 당시 상태이며 현행 금액 차단
-근거가 아니다. 현재 credit·누적 노출액은 사실대로 관측하고 금액 부족으로 앱 실행을 막지 않는다.
+실제 binding/credential·공급자 API 오류, 인증/권한/무결성, 물리 저장 용량, 처리 시간·메모리·
+query·모델 context/output·재시도 상한은 별도다. 비용 metadata의 stale 상태를 실제 공급자
+장애나 credential 부재로 표시하지 않는다. 신규 모델/결제 설정 변경 권한은 추가하지 않는다.
 
 ## 제품 제한
 
@@ -35,106 +29,48 @@ migration·실제 inventory/projection·최신 관측을 적용해야 한다. �
 | 계정·KST 일일 | AI 응답 200회 | 공개할 질문 묶음·요약·채팅·AI 자료 해석마다 예약; 내부 phase/교정은 추가 응답 아님 |
 | 계정·KST 일일 | audio/video 처리 60분 | video audio와 frame 처리 하나의 media duration; 동일 작업 retry 중복 차감 없음 |
 | 계정 저장 | 10,000,000,000 bytes | 사건/프로필 원본·파생·리포트·ZIP와 pending 예약 |
-| 사건 원본·파일 수 | 원본 합계 5,000,000,000 bytes / 원본 100개 | pending 원본 예약 포함, 복제 원본도 별도 업로드이면 파일 1개. 파생물·리포트는 계정 10GB와 처리 제한에 포함 |
+| 사건 원본·파일 수 | 원본 합계 5,000,000,000 bytes / 원본 100개 | pending 원본 예약 포함; 파생물·리포트는 계정 10GB와 처리 제한에 포함 |
 | 문서·이미지 | 파일당 100,000,000 bytes | 업로드 실측 원본 bytes |
 | audio/video | 파일당 1,000,000,000 bytes / 60분 | bytes와 duration 모두 통과 |
 | PDF | 파일당 500 pages | 파싱 후 page 상한 검사; byte 한도도 적용 |
 
-KST day는 서버가 정하고 병렬 작업의 예약은 D1 atomic/CAS로 처리한다. 클라이언트 시간,
-rate-limit binding이나 화면 counter를 정본 quota로 사용하지 않는다. audio+video가 일일
-60분이더라도 file CPU/frame/token/storage의 기술적 실행량 경계는 따로 적용하며 비용은 전역 ledger에 기록한다.
+KST day는 서버가 정하며 사용자 quota·실제 물리 예약의 병렬 처리는 D1 atomic/CAS로 보호한다.
+클라이언트 시간이나 화면 counter를 정본 quota로 사용하지 않는다. 비용 예약의 IO 횟수와
+제품/기술 한도를 혼용하지 않는다.
 
-## Ledger와 reservation
+## Ledger와 관측
 
-user quota와 실제 비용 ledger는 분리한다. 각각 operation/idempotency/candidate/환경/attempt와
-provider request 상관관계를 갖되 prompt·파일명·원본·결과·이메일·토큰을 저장하지 않는다.
-일일 counter/잔여량은 owner에게만 노출하고 전역 원가는 운영자의 비민감 집계로 제공한다.
+사용자 quota와 비용 원장은 분리한다. operation/idempotency/candidate/환경/attempt와 provider
+request 상관관계를 남기되 prompt·파일명·원본·결과·이메일·토큰은 기록하지 않는다.
+일일 counter는 owner에게만, 전역 원가는 운영자에게 비민감 집계로 제공한다.
 
-1. admission 전에 resource 타입·최대 입력/출력·media duration/frame 수·instance type/실행 시간·
-   storage 예상량·retry 상한으로 최대 예상 비용을 예약 기록한다. 필요한 가격/환율/공급자 상태
-   근거가 없으면 실행을 보류하지만, budget·재원 허용액·누적 예약액과의 금액 비교로는 차단하지 않는다.
-2. 원격 호출 직전 attempt 예약을 durable하게 기록한다. unknown timeout/crash는 예약을 임의
-   해제하지 않고 remote request/DO/job handle과 billing을 대조한다. 사용자 논리 작업 재시도는
-   동일 user reservation을 쓰고 원격 attempt마다 실제 비용을 추가한다.
-3. 실제 model token·ASR duration·Container CPU/memory/disk/시간·R2 storage/A/B ops·Worker/
-   DO/Workflow/D1/로그·network 비용을 reconcile한다. rounding·최소 청구·부가세·환전 비용과
-   실제 invoice 금액을 보수적으로 포함한다. 한 서비스의 free egress를 다른 서비스에 일반화하지 않는다.
-4. 월 rollover는 KST를 제품 기준으로 하되 공급자의 billing 기간과 겹치는 사용량을 대조한다.
-   carry-over storage·진행 중 exposure·기본 계획 요금을 새 달 admission에 반영한다. 과거
-   attempt의 원래 월 정산과 새 달의 보수적 exposure reference를 구분해 실제 청구를 두 번
-   합산하지 않는다. 달력 경계에서 비용을 지우거나 동시에 두 번 실행하지 않는다.
+확인 가능한 가격·FX·사용량·receipt로 예상/실제 비용을 기록한다. 공식 SKU/모델/지역·단위·
+확인일·URL과 실제 청구 환율/수수료의 근거를 유지한다. 정수 KRW 또는 정확한 decimal로
+계산하고 추정치와 최종 청구를 구분한다. 누락·만료 정보는 unknown/stale로 표시한다.
+무료 포함량이나 할인은 계정 전체와 billing 기간의 실제 잔여 근거가 있을 때만 산정에 사용한다.
+근거 부족은 비용의 불확실성이며 실행 거절 사유가 아니다.
 
-가격 근거는 공식 SKU/모델/지역·단위·확인일·URL을 기록하고 환율은 운영자가 지정한 검증
-가능한 기관/실제 청구 환율과 확인일을 기록한다. 임의 고정 환율로 실행 비용을 확정하지 않는다.
-계산은 정수 KRW minor 단위 또는 정확한 decimal로 하며 상한 예약은 위쪽으로 반올림한다.
+unknown timeout/crash의 hold는 임의 해제하지 않는다. remote request/DO/job handle과
+billing을 사후 대조한다. 원래 호출의 가격과 실제 receipt를 연결하고 이전 월 비용·이월을
+지우거나 이중 정산하지 않는다. 비용 기록/정산 오류가 나더라도 이미 완료한 제품 결과를
+실패로 바꾸지 않는다. 사후 대조가 가능한 비민감 상태를 보존한다.
 
-## 검증된 quote와 funding
+## 운영과 기술 경계
 
-quote는 내부 가격 registry의 immutable 버전에서 서버가 계산한다. 기록할 입력은 공급자/SKU/
-모델/지역·계정 plan·billing mode·단위와 단가·공식 근거 URL·확인일·유효 기한·환율의 기관/
-기준일/확인일·세금/환전/수수료와 안전 여유다. operation의 고정 입력 hash/revision·최대 입력/
-출력 token·ASR chunk duration/overlap·frame 수·Container instance type/CPU/실행/idle deadline·
-physical 저장량과 요청 수·bounded retry를 연결한다. 공개 ledger의 pricing version 이름만으로
-해당 단가/환율이 검증됐다고 주장하지 않는다. client quote를 신뢰하거나 누락값을0으로 채우지 않는다.
+배포는 필수 모델 capability와 binding을 구성하며 비용 refresh/reallocate를 선행 조건으로
+요구하지 않는다. 모델 context/output·vision 지원의 실제 기술 근거는 유지한다.
+과거 billing 관측과 묶인 모델 bounds의 비용 유효기간은 실행 승인 조건이 아니다.
+관측의 checkedAt/validUntil을 그대로 보존하며 현재 관측처럼 다시 쓰지 않는다.
 
-가격·환율·funding은 각각 검토 시각/validUntil이 있는 근거다. 실행 직전 canonical UTC
-milliseconds로 유효성을 다시 확인한다. funding에는 실제 plan/capability·결제 경로·현재 credit/
-이미 예약된 credit·auto recharge 상태·spend 설정 관측 시각을 포함한다. stale/미확인 funding은
-금액과 무관하게 공급자 상태를 확인할 수 없으므로 paid fail-closed다. quote 갱신/증액은 기존 hold를 보존한 원자적 교체이며 만료
-quote를 실행하거나 새 월/가격 버전이라는 이유로 예전 미확정 hold를 지우지 않는다.
+물리 용량 초기 연결은 실제 inventory·writer·객체 상태를 확인한다. 비용 projection의
+없음/월 전환/만료를 물리 용량 부족으로 간주하지 않는다. 서명·소유권·tombstone·lease·
+fencing 검사는 유지한다. 확인되지 않은 writer는 running/held, 미확정 비용은 ambiguous로
+보존한다. 실제 공급자의 거절·timeout이나 처리 OOM은 비용 정책 해제로 숨기지 않는다.
 
-USD/KRW는 검증 가능한 기관의 날짜 있는 값과 실제 청구 환율/수수료를 대조한다. 현재 문서에
-검증된 환율값·실제 invoice/tax가 없으며 임의 고정 환율로 실행 비용을 확정하지 않는다.
-주말/휴일 또는 갱신 실패도 최신 확인일과 명시한 freshness 정책으로 판단하고0원으로 처리하지
-않는다. 사용량만 있어 계산한 금액은 근거가 있는 추정 정산이며 공급자 최종 청구 대조 전 상태를
-구분한다. usage도 없으면 chargedKrw를0으로 채우지 않고 ambiguous 예약을 유지한다.
+## 실제 증거와 이력
 
-2026-10-14 공식 문서 재확인에서 아래 단가를 확인했다. 변동 가능 reference 입력이며 계정에
-Paid/Containers/R2/Whisper가 활성화됐거나 청구액이 확정됐다는 증거는 아니다. 새 quote 때
-공식 가격을 재확인하고 무료 포함량은 account 전체와 billing 기간의 실제 잔여량을 대조한다.
-환경마다 같은 free allowance를 중복 적용하지 않는다. 확인되지 않은 할인/캐시 hit를 예약에 적용하지 않는다.
-
-| 서비스 | 확인된 가격 입력 | quote/정산 경계 |
-| --- | --- | --- |
-| [Workers](https://developers.cloudflare.com/workers/platform/pricing/) | Free100,000requests/day·10msCPU/invocation. Paid최소$5/month,10Mrequests·30MCPU-ms/month포함, 초과$0.30/Mrequests·$0.02/MCPU-ms | account 고정비는1회; CPU/요청·DO/Workflow/로그 등 별도 metered 비용 포함 |
-| [D1](https://developers.cloudflare.com/d1/platform/pricing/) | Free5Mrows read/day·100Kwrite/day·5GB. Paid25Bread·50Mwrite/month·5GB포함, 초과$0.001/Mread·$1/Mwrite·$0.75/GB-month | meta.rows_read/rows_written·index/삭제/DDL·DB storage; 무료일은00:00UTC, 월 포함량은 구독 갱신 기준 |
-| [R2 Standard](https://developers.cloudflare.com/r2/pricing/) | $0.015/GB-month·A$4.50/M·B$0.36/M, 무료10GB-month·A1M·B10M/month | 일별 peak 평균과 다음 billing unit 올림, parts·복사본·cipher bytes 포함. Delete/AbortMultipartUpload 무료여도 Worker/D1은 별도 |
-| [Containers](https://developers.cloudflare.com/containers/platform/pricing/) | Paid포함량25GiB-hours memory·375vCPU-minutes·200GB-hours disk/month; 초과$0.0000025/GiB-second·$0.000020/vCPU-second·$0.00000007/GB-second. Korea egress$0.05/GB | 10ms billing, provisioned memory/disk·activeCPU·idle/egress·Worker/DO/로그. 실제 배치 지역과 남은 포함량 확인 |
-| [Whisper 모델](https://developers.cloudflare.com/workers-ai/models/whisper-large-v3-turbo/), [플랫폼 표](https://developers.cloudflare.com/workers-ai/platform/pricing/) | 모델페이지$0.000513/audio-minute, 플랫폼 표$0.0005와46.63neurons/minute | 표시 정밀도 차이를0비용으로 해석하지 않음. 더 높은 확인값·단위 올림·chunk overlap·retry를 예약하고 실제 neuron/billing 대조 |
-| [gpt-6-sol](https://developers.cloudflare.com/ai/models/openai/gpt-6-sol/) | per1Mtokens short 일반/cache-read/cache-write 입력$2/$0.20/$2.50·출력$10, long$4/$0.40/$5·출력$15 | 전체 입력272,000tokens 초과 시 long. cache-write는 일반 입력에 중복 합산하지 않음; 실제 context/cache/tier/지역과 Gateway usage 확인 |
-| [AI Gateway](https://developers.cloudflare.com/ai-gateway/reference/pricing/), [Unified Billing](https://developers.cloudflare.com/ai-gateway/features/unified-billing/) | core 기능 무료, credit 구매 수수료5%, inference provider 가격 전달 | 기존 credit 원가/새 구매 수수료의 회계 범위를 분리해 중복 합산하지 않음. 실제 funding/로그 과금은 별도 확인 |
-
-
-## 같은 할당 갱신과 할당 변경
-
-운영 도구는 status(읽기 전용), observe(관측 설치), refresh(같은 할당 재개), reallocate
-(할당 변경)를 구분한다. 사용자 API는 가격·재원 근거나 재개 권한을 받지 않는다.
-refresh는 동일 allocation/manifest·현재 control revision을 검사하며 hold·실행 중 job·quota·
-원래 호출의 가격을 보존한다. 새 권한·추가 유지비·projection 갱신과 활성화는 같은 batch다.
-응답 유실은 동일 관측과 operation key로 재시도하고 완료 receipt를 재사용한다.
-최신 재원이 unavailable/만료면 과거 funded proof로 돌아가지 않는다.
-
-환경별 DB.batch는 전역 atomic이 아니다. allocation 금액·version 변경은 기존 양 환경
-freeze/drain·상호 receipt 조율을 유지하고 미정산 hold를 지워 drain을 통과시키지 않는다.
-새 달은 이월 노출과 새 달의 실제 권한을 확인한다. 자세한 운영 입력·초기 projection과
-경합/응답 유실/월 경계 검사는 [비용 갱신·재개](./COST-REFRESH.md)를 따른다.
-
-## 기술적 실행 상한과 비용 정산
-
-Gateway retry는 실제 환경에서 OFF를 확인하며 SDK/transport 숨은 retry도 예약 상한에
-포함한다. timeout은 원격 abort 증거가 아니며 같은 불명확 작업을 새 호출로 반복하지 않는다.
-원본 PUT·변호사 자산·공개 복사는 인증부터 GET/PUT·writer 종료·실패 cleanup·원장 통지를
-포함한다. 물리 용량과 저장 유지비/IO는 별도로 예약한다. exact-token 종료 증거가 없는
-writer는 running/held, 공급자 계측이 없는 비용은 reserved/ambiguous로 유지한다.
-
-Containers는 CPU·provisioned memory/disk·idle·network·Worker/DO/로그를 고려하고
-독립 deadline과 실제 stop/destroy 상태를 검증한다. media·vision 등 필요한 SKU/capability의
-유효 근거가 없으면 해당 경로만 unavailable로 남기며 임의 무료 처리하지 않는다.
-무료 포함량은 계정 전체·실제 billing 기간의 남은 양을 확인한 경우만 적용한다.
-
-## 검증과 이력
-
-변경별 SQL/native/실패 검증과 최종 후보 수동 full을 수행한다. 같은 SHA preview/production
-제한 실제 smoke·자료 정리·공급자 청구 대조는 #57/#58/#71의 실제 인수다. 로컬 D1 사용량은
-호출 상한 검증이며 실제 청구액이 아니다. 이전 plan/credit/월 cap·전환 계약과 실패 관측은
+04f25f8의 채팅·PDF/HTML 실제 성공과 외부 설정 관측은
+[현행 정책의 증거](./PREBETA-COST-POLICY.md#현재-실제-증거와-이번-변경의-경계)를 따른다.
+이 기록은 관측 분리 변경 전체의 적용 완료나 모든 외부 인수의 완료를 뜻하지 않는다.
+이전 SKU 가격표, 비용 만료 차단·refresh·할당 전환 계약과 실패 관측은
 [비용 운영 이력](../development/COST-CONTROLS-HISTORY.md)에 보존한다.

@@ -249,14 +249,13 @@ test("production verifies immutable preview and launch evidence before shared de
   );
   const steps = (await deploymentAction()).runs.steps;
   const migration = steps.findIndex((s) => s.name === "Apply validated migrations");
-  const ai = steps.findIndex((s) => s.name === "Configure verified AI runtime");
+  const ai = steps.findIndex((s) => s.name === "Configure model capability independently of costs");
   const deploy = steps.findIndex((s) => s.uses?.startsWith("cloudflare/"));
   expect(ai).toBeGreaterThan(migration);
   expect(ai).toBeLessThan(deploy);
-  expect(steps[ai]?.if).toBe(
-    "inputs.target-environment == 'production' && inputs.configure-ai == 'true'",
-  );
-  expect(steps[ai]?.run).toBe('bun scripts/provision-ai-budget.ts "$RELEASE_SHA"');
+  expect(steps[ai]?.if).toBeUndefined();
+  expect(steps[ai]?.run).toBe('bun scripts/configure-ai-runtime.ts "$DEPLOY_ENVIRONMENT"');
+  expect(steps.some((step) => step.run?.includes("provision-ai-budget"))).toBe(false);
 });
 
 test("production runtime recovery preserves reviewer protection and cannot become release evidence", async () => {

@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import observation from "../docs/operations/AI-RUNTIME-OBSERVATION.json";
+import { modelCapabilityConfiguration } from "../scripts/configure-ai-runtime";
 import {
   inspectAiRuntime,
   modelBounds,
@@ -14,6 +15,50 @@ import { createWorkspaceService } from "../src/server/modules/workspace/service"
 import { createWorkspaceDependencies } from "../src/server/runtime/workspace";
 import { createTestDatabase } from "./helpers/d1";
 import { seedTestSession } from "./helpers/session";
+
+test("model capability configuration is independent of billing fields and preserves original dates", async () => {
+  const original = await modelCapabilityConfiguration(observation, "2027-01-01T00:00:00.000Z");
+  const changed = await modelCapabilityConfiguration(
+    {
+      ...observation,
+      fundingState: "unavailable",
+      pricing: null,
+      fx: null,
+      authorizedByDirectUserInstruction: false,
+    },
+    "2027-01-01T00:00:00.000Z",
+  );
+  expect(changed).toEqual(original);
+  expect(changed.bounds.checkedAt).toBe(observation.checkedAt);
+  expect(changed.bounds.validUntil).toBe(observation.validUntil);
+  expect(changed.verifiedAt).toBe(observation.checkedAt);
+  await expect(
+    modelCapabilityConfiguration({ ...observation, contextTokens: 1 }),
+  ).rejects.toThrow();
+  await expect(
+    modelCapabilityConfiguration({ ...observation, checkedAt: "2099-01-01T00:00:00.000Z" }),
+  ).rejects.toThrow();
+});
+
+test("stale optional cost refresh reports its original observation without changing any ledger", async () => {
+  const db = await createTestDatabase();
+  try {
+    const before = db.sqlite.serialize();
+    const stale = {
+      ...observation,
+      checkedAt: "2026-01-01T00:00:00.000Z",
+      validUntil: "2026-02-01T00:00:00.000Z",
+    };
+    const result = await observeAiRuntime({ preview: db.binding }, stale, "refresh");
+    expect(result.costObservationState).toBe("stale");
+    expect(result.observedAt).toBe(stale.checkedAt);
+    expect(result.results[0]?.refreshCommitted).toBe(false);
+    expect(result.results[0]?.observationInstalled).toBe(false);
+    expect(db.sqlite.serialize()).toEqual(before);
+  } finally {
+    db.close();
+  }
+});
 
 test("runtime status is read-only and exposes only the operational allowlist", async () => {
   const db = await createTestDatabase();
@@ -31,7 +76,7 @@ test("runtime status is read-only and exposes only the operational allowlist", a
     expect(statements.every((sql) => /^SELECT\b/i.test(sql))).toBe(true);
     expect(db.sqlite.serialize()).toEqual(before);
     expect(status.results).toHaveLength(1);
-    expect(status.results[0]?.schema).toBe("0014_cost_observation_bounds");
+    expect(status.results[0]?.schema).toBe("0015_cost_observation_only");
     expect(Object.keys(status.results[0] ?? {}).sort()).toEqual([
       "carryover",
       "control",

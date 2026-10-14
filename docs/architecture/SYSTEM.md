@@ -119,7 +119,7 @@ OAuth client, D1, Gateway, 키를 공유하지 않는다.
 - 재시도 단계는 `analysisId + inputRevision + step` 멱등성 키를 사용한다.
 - Workflow 재개는 checkpoint를 재사용하고 usage를 중복 차감하지 않는다. 외부 호출 성공과
   commit 사이 crash의 중복 과금은 보장할 수 없으므로 bounded attempt로 실행을 제한하고 실제·미정산 비용을 기록한다.
-  [현행 비용 정책](../operations/COST-CONTROLS.md)에 따라 앱의 월·누적 재원·요청 금액으로 실행을 차단하지 않는다.
+  [현행 비용 관측 정책](../operations/PREBETA-COST-POLICY.md)에 따라 금액·가격/FX/funding 누락/만료·월할당·refresh·유지비·비용 IO로 실행이나 배포를 차단하지 않는다.
 - 법률 출처·안전 검사 실패는 결과 축소 또는 전체 실패로 닫는다.
 - 알 수 없는 사건과 타인 사건은 모두 동일한 404 응답으로 존재를 숨긴다.
 

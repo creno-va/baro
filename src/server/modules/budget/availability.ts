@@ -21,6 +21,9 @@ export function createPaidAvailability(
 ) {
   const runtime = createV2PaidRuntimeRepository(core, environment);
   return async (_snapshotNow?: string) => {
+    // This API reports financial waiting only. Actual binding, permission,
+    // execution and physical capacity checks remain on each operation.
+    if (!core.applicationCostLimitsEnabled) return true;
     try {
       const clock = () =>
         new Date(

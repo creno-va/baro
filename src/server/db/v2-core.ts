@@ -97,6 +97,27 @@ export function createV2Core(
       throw new V2RepositoryError("SNAPSHOT_STREAM_REQUIRED");
     return (await binding.batch(statements))[0]?.meta.changes === 1;
   };
+  /** Server-owned observation policy. A new calendar bucket records future
+   * costs without inventing an allocation, funding observation or price. */
+  const ensureObservationMonth = async (
+    environment: "preview" | "production",
+    now: string,
+  ): Promise<void> => {
+    if (options.applicationCostLimitsEnabled !== false) return;
+    parse(z.enum(["preview", "production"]), environment);
+    const at = Date.parse(parse(timestampSchema, now));
+    const month = new Date(at + 9 * 3600000).toISOString().slice(0, 7);
+    await binding.batch([
+      statement(
+        "INSERT INTO v2_cost_execution_policy(environment,limits_enabled) VALUES(?,0) ON CONFLICT(environment) DO UPDATE SET limits_enabled=0",
+        [environment],
+      ),
+      statement(
+        "INSERT INTO v2_monthly_budget(month,allocation_version,environment,limit_krw) VALUES(?,1,?,0) ON CONFLICT(month) DO NOTHING",
+        [month, environment],
+      ),
+    ]);
+  };
   const encrypt = (
     table: Extract<EncryptionContext, { revision: number }>["table"],
     rowId: string,
@@ -141,6 +162,7 @@ export function createV2Core(
     finish,
     bump,
     changed,
+    ensureObservationMonth,
     encrypt,
     decrypt,
     applicationCostLimitsEnabled: options.applicationCostLimitsEnabled !== false,
