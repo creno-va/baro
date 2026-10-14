@@ -11,6 +11,174 @@ test.skip(
 const key = "baro-c-contract-test-state";
 const base = "/cases/synthetic-case";
 
+test("upload progress shows distinct stages and elapsed time, then retains failure recovery", async ({
+  page,
+}) => {
+  const now = new Date("2026-10-15T00:00:00.000Z");
+  await page.clock.setFixedTime(now);
+  await page.goto(`${base}/files`);
+  await expect(page.getByRole("heading", { name: "아직 자료가 없어요" })).toBeVisible();
+  await page.evaluate(async () => {
+    const path = "/tests/helpers/workspace-client-fixture.ts";
+    const { api } = (await import(path)) as typeof import("../helpers/workspace-client-fixture");
+    const state = window as unknown as {
+      uploadStage: (stage: "uploading" | "checking" | "confirming") => void;
+      failUpload: () => void;
+    };
+    api.files.upload = async (_id, file, onProgress) =>
+      new Promise((_resolve, reject) => {
+        onProgress?.({ stage: "hashing", completedBytes: 0, totalBytes: file.size });
+        state.uploadStage = (stage) =>
+          onProgress?.({
+            stage,
+            completedBytes: stage === "uploading" ? 0 : file.size,
+            totalBytes: file.size,
+          });
+        state.failUpload = () =>
+          reject(Object.assign(new Error("합성 업로드 연결 오류"), { code: "UNAVAILABLE" }));
+      });
+  });
+  await page.getByLabel("선택 자료의 자동 처리에 동의합니다.").check();
+  await page.getByLabel("업로드할 파일 선택", { exact: true }).setInputFiles({
+    name: "progress.txt",
+    mimeType: "text/plain",
+    buffer: Buffer.from("합성 자료"),
+  });
+  await expect(page.getByText("원본 파일 확인 중", { exact: true })).toBeVisible();
+  await page.clock.setFixedTime(new Date(now.getTime() + 65_000));
+  await expect(page.getByText("업로드 시작 후 1분 5초", { exact: true })).toBeVisible();
+  await page.evaluate(() =>
+    (window as unknown as { uploadStage: (stage: string) => void }).uploadStage("uploading"),
+  );
+  await expect(page.getByText("원본 파일 전송 중", { exact: true })).toBeVisible();
+  await expect(page.getByText(/저장 확인된 전송량 0 \/ /)).toBeVisible();
+  await page.evaluate(() =>
+    (window as unknown as { uploadStage: (stage: string) => void }).uploadStage("checking"),
+  );
+  await expect(
+    page.getByText("서버에서 파일 형식과 저장 내용 확인 중", { exact: true }),
+  ).toBeVisible();
+  await page.evaluate(() =>
+    (window as unknown as { uploadStage: (stage: string) => void }).uploadStage("confirming"),
+  );
+  await expect(page.getByText("접수 결과 확인 중", { exact: true })).toBeVisible();
+  await page.evaluate(() => (window as unknown as { failUpload: () => void }).failUpload());
+  await expect(page.getByRole("alert")).toContainText("합성 업로드 연결 오류");
+  await expect(page.getByRole("button", { name: "업로드 다시 시도", exact: true })).toBeVisible();
+  await expect(page.getByText(/업로드 시작 후/)).toHaveCount(0);
+});
+
+test("an old owner upload cannot clear the next owner's progress", async ({ page }) => {
+  await page.goto(`${base}/files`);
+  await expect(page.getByRole("heading", { name: "아직 자료가 없어요" })).toBeVisible();
+  await page.evaluate(async () => {
+    const path = "/tests/helpers/workspace-client-fixture.ts";
+    const { api } = (await import(path)) as typeof import("../helpers/workspace-client-fixture");
+    const state = window as unknown as { uploadFailures: (() => void)[] };
+    state.uploadFailures = [];
+    api.files.upload = async (_id, file, onProgress) =>
+      new Promise((_resolve, reject) => {
+        onProgress?.({ stage: "hashing", completedBytes: 0, totalBytes: file.size });
+        state.uploadFailures.push(() =>
+          reject(Object.assign(new Error("합성 연결 오류"), { code: "UNAVAILABLE" })),
+        );
+      });
+  });
+  await page.getByLabel("선택 자료의 자동 처리에 동의합니다.").check();
+  await page.getByLabel("업로드할 파일 선택", { exact: true }).setInputFiles({
+    name: "first.txt",
+    mimeType: "text/plain",
+    buffer: Buffer.from("첫 합성 자료"),
+  });
+  await expect(page.getByText("first.txt · 1/1개", { exact: true })).toBeVisible();
+  await page.evaluate((key) => {
+    const state = JSON.parse(localStorage.getItem(key) ?? "{}");
+    state.session.user.id = "another-customer";
+    localStorage.setItem(key, JSON.stringify(state));
+    window.dispatchEvent(new Event("focus"));
+  }, key);
+  await expect(page.getByLabel("선택 자료의 자동 처리에 동의합니다.")).not.toBeChecked();
+  await page.getByLabel("선택 자료의 자동 처리에 동의합니다.").check();
+  await page.getByLabel("업로드할 파일 선택", { exact: true }).setInputFiles({
+    name: "second.txt",
+    mimeType: "text/plain",
+    buffer: Buffer.from("다음 합성 자료"),
+  });
+  await expect(page.getByText("second.txt · 1/1개", { exact: true })).toBeVisible();
+  await page.evaluate(() =>
+    (window as unknown as { uploadFailures: (() => void)[] }).uploadFailures[0]?.(),
+  );
+  await expect(page.getByText("second.txt · 1/1개", { exact: true })).toBeVisible();
+  await expect(page.getByText(/업로드 시작 후/)).toHaveCount(1);
+  await page.evaluate(() =>
+    (window as unknown as { uploadFailures: (() => void)[] }).uploadFailures[1]?.(),
+  );
+  await expect(page.getByRole("button", { name: "업로드 다시 시도", exact: true })).toBeVisible();
+});
+
+test("pending server timestamps survive reload and terminal file/chat states remove elapsed timers", async ({
+  page,
+}) => {
+  await page.clock.setFixedTime(new Date("2026-10-15T00:01:05.000Z"));
+  await page.goto(`${base}/files`);
+  await expect(page.getByRole("heading", { name: "아직 자료가 없어요" })).toBeVisible();
+  await page.evaluate((key) => {
+    const state = JSON.parse(localStorage.getItem(key) ?? "{}");
+    state.files["synthetic-case"] = [
+      {
+        id: "progress-file",
+        name: "progress.txt",
+        mimeType: "text/plain",
+        sizeBytes: 10,
+        status: "processing",
+        coverage: "처리 결과는 아직 확인할 수 없어요.",
+        extractedText: "",
+        createdAt: "2026-10-15T00:00:00.000Z",
+      },
+    ];
+    state.workspace["synthetic-case"].messages = [
+      {
+        id: "progress-chat",
+        role: "assistant",
+        text: "공식 법률 자료를 확인하고 있어요.",
+        status: "pending",
+        createdAt: "2026-10-15T00:00:00.000Z",
+        statusUpdatedAt: "2026-10-15T00:00:00.000Z",
+      },
+    ];
+    localStorage.setItem(key, JSON.stringify(state));
+  }, key);
+  await page.reload();
+  await expect(page.getByText("자료 등록 후 1분 5초", { exact: true })).toBeVisible();
+  await page.evaluate((key) => {
+    const state = JSON.parse(localStorage.getItem(key) ?? "{}");
+    Object.assign(state.files["synthetic-case"][0], {
+      status: "failed",
+      failure: "JOB_TIMEOUT",
+      canRetry: true,
+    });
+    localStorage.setItem(key, JSON.stringify(state));
+    window.dispatchEvent(new Event("focus"));
+  }, key);
+  await expect(page.getByText(/자료 처리가 제한 시간 안에 끝나지 않았어요/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "처리 다시 시도", exact: true })).toBeVisible();
+  await expect(page.getByText(/자료 등록 후/)).toHaveCount(0);
+  await page.goto(base);
+  await expect(page.getByText("공식 법률 자료를 확인하고 있어요.", { exact: true })).toBeVisible();
+  await expect(page.getByText("· 마지막 상태 변경 후 1분 5초", { exact: true })).toBeVisible();
+  await page.evaluate((key) => {
+    const state = JSON.parse(localStorage.getItem(key) ?? "{}");
+    Object.assign(state.workspace["synthetic-case"].messages[0], {
+      status: "failed",
+      retryable: true,
+    });
+    localStorage.setItem(key, JSON.stringify(state));
+    window.dispatchEvent(new Event("focus"));
+  }, key);
+  await expect(page.getByRole("button", { name: "응답 다시 시도", exact: true })).toBeVisible();
+  await expect(page.getByText(/마지막 상태 변경 후/)).toHaveCount(0);
+});
+
 test("chat retry 503 remains visible after focus refresh and clears after a successful retry", async ({
   page,
 }) => {

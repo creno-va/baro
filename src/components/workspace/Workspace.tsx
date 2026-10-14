@@ -14,7 +14,12 @@ import {
 } from "lucide-react";
 import { type SyntheticEvent, useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../../client/api";
-import type { FileView, TimelineView, WorkspaceView } from "../../client/api/types";
+import type {
+  FileUploadProgress,
+  FileView,
+  TimelineView,
+  WorkspaceView,
+} from "../../client/api/types";
 import type { CustomerWorkspaceView } from "../../client/api/workspace";
 import { accessHref } from "../../client/return-path";
 import { V2_LIMITS } from "../../contracts/v2";
@@ -23,7 +28,9 @@ import { useCustomerAccess } from "../intake/useCustomerAccess";
 import { BrandMark } from "../ui/brand";
 import { Button, ButtonLink } from "../ui/button";
 import { CaseNavigation } from "./CaseNavigation";
+import { ElapsedTime } from "./ElapsedTime";
 import { FileReview } from "./FileReview";
+import { fileFailureLabel, uploadProgressLabel } from "./processing-progress";
 import { referenceLabel, timelineDateLabel } from "./source-label";
 import { timelineDateInput, timelineEventLength } from "./timeline-draft";
 
@@ -87,6 +94,13 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
   const [original, setOriginal] = useState<{ url: string; type: string } | null>(null);
   const [uploadConsent, setUploadConsent] = useState(false);
   const [retryUploads, setRetryUploads] = useState<File[]>([]);
+  const [uploadProgress, setUploadProgress] = useState<{
+    startedAt: number;
+    fileName: string;
+    index: number;
+    total: number;
+    value: FileUploadProgress;
+  } | null>(null);
   const sendAttempt = useRef<{
     expectedRevision: number;
     text: string;
@@ -127,6 +141,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
     setOriginal(null);
     setUploadConsent(false);
     setRetryUploads([]);
+    setUploadProgress(null);
     setNotice("");
     setBusy("");
     setError(null);
@@ -397,6 +412,17 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
   async function upload(files: FileList | File[] | null) {
     if (!uploadConsent || view?.case.stage !== "active" || lock.current || !files?.length) return;
     const chosen = Array.from(files);
+    const uploadEpoch = ticket();
+    const startedAt = Date.now();
+    const first = chosen[0];
+    if (!first) return;
+    setUploadProgress({
+      startedAt,
+      fileName: first.name,
+      index: 1,
+      total: chosen.length,
+      value: { stage: "checking_access", completedBytes: 0, totalBytes: first.size },
+    });
     // Preserve choices on a failed/superseded preflight, just like a failed upload.
     // An actual owner/role change still clears them through purge().
     setRetryUploads(chosen);
@@ -405,7 +431,16 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
       try {
         for (const file of chosen) {
           if (!current(epoch)) return;
-          await api.files.upload(caseId, file);
+          await api.files.upload(caseId, file, (value) => {
+            if (current(epoch))
+              setUploadProgress({
+                startedAt,
+                fileName: file.name,
+                index: completed + 1,
+                total: chosen.length,
+                value,
+              });
+          });
           if (!current(epoch)) return;
           completed++;
           await load();
@@ -419,7 +454,10 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
         throw cause;
       }
     });
-    if (uploadInput.current) uploadInput.current.value = "";
+    if (alive(uploadEpoch)) {
+      setUploadProgress(null);
+      if (uploadInput.current) uploadInput.current.value = "";
+    }
   }
   async function startEntry() {
     if (!view || readonly) return;
@@ -741,6 +779,12 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                           <span className="workspace-status">
                             <LoaderCircle size={15} className="workspace-spin" /> 응답 준비 중 ·
                             저장된 대화는 유지돼요
+                            {message.statusUpdatedAt && (
+                              <ElapsedTime
+                                startedAt={message.statusUpdatedAt}
+                                label="· 마지막 상태 변경 후"
+                              />
+                            )}
                           </span>
                         )}
                         {message.status === "failed" && (
@@ -893,9 +937,33 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                       </p>
                     </div>
                     {busy === "upload" && (
-                      <p role="status">
-                        <LoaderCircle size={17} className="workspace-spin" /> 자료 저장 중
-                      </p>
+                      <div role="status">
+                        <p>
+                          <LoaderCircle size={17} className="workspace-spin" />{" "}
+                          {uploadProgress
+                            ? uploadProgressLabel(uploadProgress.value)
+                            : "자료 저장 중"}
+                        </p>
+                        {uploadProgress && (
+                          <>
+                            <p>
+                              {uploadProgress.fileName} · {uploadProgress.index}/
+                              {uploadProgress.total}개
+                            </p>
+                            {uploadProgress.value.stage === "uploading" && (
+                              <p>
+                                저장 확인된 전송량{" "}
+                                {uploadProgress.value.completedBytes.toLocaleString("ko-KR")} /{" "}
+                                {uploadProgress.value.totalBytes.toLocaleString("ko-KR")} 바이트
+                              </p>
+                            )}
+                            <ElapsedTime
+                              startedAt={uploadProgress.startedAt}
+                              label="업로드 시작 후"
+                            />
+                          </>
+                        )}
+                      </div>
                     )}
                   </div>
                   {!view.files.length && (
@@ -923,6 +991,15 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                         <p className="workspace-coverage">
                           {file.coverage || "추출 범위는 처리가 끝난 뒤 확인할 수 있어요."}
                         </p>
+                        {file.createdAt &&
+                          ["uploading", "processing", "waiting"].includes(file.status) && (
+                            <p className="workspace-muted">
+                              <ElapsedTime startedAt={file.createdAt} label="자료 등록 후" />
+                            </p>
+                          )}
+                        {file.status === "failed" && (
+                          <p className="workspace-muted">{fileFailureLabel(file)}</p>
+                        )}
                         {file.status === "uploading" && (
                           <p className="workspace-muted">
                             업로드가 중단됐다면 같은 원본 파일을 다시 선택해 이어서 저장하세요.
