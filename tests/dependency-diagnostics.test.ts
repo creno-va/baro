@@ -8,8 +8,76 @@ import {
   reportDependencyFailure,
   reportLegalRetrieval,
   reportProviderFailure,
+  reportWorkspaceFactFailure,
   reportWorkspacePolicyFailure,
 } from "../src/server/dependency-diagnostics";
+
+test("fact diagnostics clamp enums and counts and reject raw log fields", () => {
+  const output = spyOn(console, "error").mockImplementation(() => {});
+  try {
+    const receipt = reportWorkspaceFactFailure(
+      {
+        category: "source_text_mismatch",
+        attribution: "user_statement",
+        referenceKind: "intake_answer",
+        factCount: 4,
+        referenceCount: 2,
+        availableSourceCount: 1,
+        text: "private statement sentinel",
+        questionId: "private question sentinel",
+      },
+      "terminal",
+    );
+    expect(receipt).toEqual({
+      stage: "terminal",
+      category: "source_text_mismatch",
+      attribution: "user_statement",
+      referenceKind: "intake_answer",
+      factCount: 4,
+      referenceCount: 2,
+      availableSourceCount: 1,
+    });
+    expect(output.mock.calls[0]).toEqual([
+      JSON.stringify({ event: "workspace_fact_failure", ...receipt }),
+    ]);
+    expect(
+      reportWorkspaceFactFailure(
+        {
+          category: "private sentinel",
+          attribution: "private sentinel",
+          referenceKind: "private sentinel",
+          factCount: Infinity,
+          referenceCount: 1000000,
+          availableSourceCount: -1,
+        },
+        "private sentinel",
+      ),
+    ).toEqual({
+      stage: "unknown",
+      category: "unknown",
+      attribution: "unknown",
+      referenceKind: "unknown",
+      factCount: null,
+      referenceCount: 1000,
+      availableSourceCount: null,
+    });
+    expect(JSON.stringify(output.mock.calls)).not.toContain("sentinel");
+    const allowed =
+      'console.error(JSON.stringify({event:"workspace_fact_failure",stage,category,attribution,referenceKind,factCount,referenceCount,availableSourceCount,}),)';
+    expect(productBoundaryFindings("src/server/dependency-diagnostics.ts", allowed)).toEqual([]);
+    expect(productBoundaryFindings("src/server/other.ts", allowed)).toContain(
+      "unapproved_payload_log",
+    );
+    expect(
+      productBoundaryFindings(
+        "src/server/dependency-diagnostics.ts",
+        allowed.replace("availableSourceCount,", "availableSourceCount,text,"),
+      ),
+    ).toContain("unapproved_payload_log");
+  } finally {
+    output.mockRestore();
+  }
+});
 
 test("D1 depth, compound-select and function limits have a distinct safe category", () => {
   for (const message of [

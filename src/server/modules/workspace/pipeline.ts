@@ -9,6 +9,10 @@ import type {
   V2UserMessage,
 } from "../../../contracts/v2";
 import { V2_INTAKE_POLICY, v2ReferenceIsAuthorized } from "../../../contracts/v2";
+import {
+  reportWorkspaceFactFailure,
+  type WorkspaceFactFailure,
+} from "../../dependency-diagnostics";
 import { claimReviewHash, type SourceClaim, validateV2Claims } from "../citation/v2-validate";
 import type { RetrievalOutput } from "../legal-retrieval/v2/contracts";
 import type { WorkspaceSourceRequest } from "../legal-retrieval/v2/workspace-plans";
@@ -64,7 +68,10 @@ export type WorkspaceOutputPolicyReason =
 
 /** A rejected generated draft can be regenerated; a provider refusal cannot. */
 export class WorkspaceOutputPolicyError extends ModelError {
-  constructor(readonly reason: WorkspaceOutputPolicyReason) {
+  constructor(
+    readonly reason: WorkspaceOutputPolicyReason,
+    readonly factFailure?: WorkspaceFactFailure,
+  ) {
     super("POLICY_REJECTED");
   }
 }
@@ -123,12 +130,34 @@ export function assertWorkspaceFacts(
   facts: readonly V2Fact[],
   claims: readonly SourceClaim[] = [],
 ) {
+  const unsupported = (
+    fact: V2Fact,
+    category: WorkspaceFactFailure["category"],
+    availableSourceCount: number,
+  ) => {
+    const kinds = new Set(fact.references.map((ref) => ref.kind));
+    return new WorkspaceOutputPolicyError("unsupported_fact", {
+      category,
+      attribution: fact.attribution,
+      referenceKind: kinds.size > 1 ? "mixed" : (fact.references[0]?.kind ?? "none"),
+      factCount: facts.length,
+      referenceCount: fact.references.length,
+      availableSourceCount,
+    });
+  };
   for (const fact of facts) {
     assertWorkspaceReferences(context, fact.references);
     // Reported statements and extracted observations cannot gain invented numbers or facts.
     if (fact.attribution === "user_statement" || fact.attribution === "user_material") {
-      if (!fact.references.some((ref) => sourceText(context, ref)?.includes(fact.text)))
-        throw new WorkspaceOutputPolicyError("unsupported_fact");
+      const sources = fact.references
+        .map((ref) => sourceText(context, ref))
+        .filter((text): text is string => typeof text === "string");
+      if (!sources.some((text) => text.includes(fact.text)))
+        throw unsupported(
+          fact,
+          sources.length ? "source_text_mismatch" : "source_text_unavailable",
+          sources.length,
+        );
       // A verbatim attributed report of a demand or legal topic is not AI advice.
       // It still must not expose identifiers, and the independent audit checks attribution.
       if (privateIdentifiers(fact.text)) throw new WorkspaceOutputPolicyError("prohibited_content");
@@ -142,7 +171,12 @@ export function assertWorkspaceFacts(
           ),
       )
     ) {
-      throw new WorkspaceOutputPolicyError("unsupported_fact");
+      const matchingClaims = claims.filter((claim) => claim.text === fact.text);
+      throw unsupported(
+        fact,
+        matchingClaims.length ? "claim_reference_mismatch" : "claim_text_missing",
+        matchingClaims.length,
+      );
     } else if (prohibited(fact.text)) {
       throw new WorkspaceOutputPolicyError("prohibited_content");
     }
@@ -216,6 +250,7 @@ export function createWorkspacePipeline(
       return await generateAndValidate(context);
     } catch (error) {
       if (!(error instanceof WorkspaceOutputPolicyError)) throw error;
+      if (error.factFailure) reportWorkspaceFactFailure(error.factFailure, "draft_retry");
       // One newly admitted generation, with a sanitized reason and full revalidation.
       // Provider refusals and infrastructure failures do not enter this recovery path.
       return generateAndValidate({ ...context, draftCorrection: { reason: error.reason } });

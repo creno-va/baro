@@ -9,6 +9,7 @@ import { createV2WorkspaceRepository, type JobLease } from "../../db/v2-workspac
 import { createV2WorkspaceResponseRepository } from "../../db/v2-workspace-response";
 import {
   reportDependencyFailure,
+  reportWorkspaceFactFailure,
   reportWorkspacePolicyFailure,
 } from "../../dependency-diagnostics";
 import { ModelError } from "../llm-gateway/service";
@@ -290,6 +291,10 @@ export async function executeWorkspace(
         : error instanceof ModelError && error.code === "POLICY_REJECTED"
           ? reportWorkspacePolicyFailure("policy_rejected")
           : undefined;
+    const factFailure =
+      error instanceof WorkspaceOutputPolicyError && error.factFailure
+        ? reportWorkspaceFactFailure(error.factFailure, "terminal")
+        : undefined;
     if (!(error instanceof ModelError)) reportDependencyFailure(error);
     await jobs
       .fail(
@@ -304,6 +309,7 @@ export async function executeWorkspace(
       status: "failed" as const,
       stageTimings,
       ...(policyReason ? { policyReason } : {}),
+      ...(factFailure ? { factFailure } : {}),
     };
   }
 }
