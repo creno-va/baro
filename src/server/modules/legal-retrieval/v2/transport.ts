@@ -43,7 +43,9 @@ export function createBoundedTransport(
         );
         const response = await Promise.race([
           transport(url.href, {
-            redirect: "error",
+            // Workers rejects redirect:"error" before sending the request.
+            // Manual preserves the no-follow boundary; all 3xx fail below.
+            redirect: "manual",
             signal: controller.signal,
             headers: guide
               ? { Accept: "text/html" }

@@ -197,7 +197,9 @@ export function createLegalRetrieval(
       try {
         const response = await transport(url.toString(), {
           signal: AbortSignal.timeout(10_000),
-          redirect: "error",
+          // Workers supports manual/follow only. Reject non-OK responses below
+          // without following Location or disclosing the credential elsewhere.
+          redirect: "manual",
           headers: { Referer: LAW_API_REFERER },
         });
         if (response.status === 429 || response.status >= 500) {

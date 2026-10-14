@@ -729,6 +729,48 @@ test("stream limits count bytes despite deceptive Content-Length and cancel over
   expect(cancelled).toBe(true);
 });
 
+test.each([301, 302, 303, 307, 308])(
+  "bounded transport rejects redirect %i without following, retrying or retaining its body",
+  async (status) => {
+    let calls = 0;
+    let reservations = 0;
+    let waits = 0;
+    let cancelled = false;
+    const transport = createBoundedTransport(
+      async (_url, init) => {
+        calls++;
+        expect(init.redirect).toBe("manual");
+        return new Response(
+          new ReadableStream({
+            cancel() {
+              cancelled = true;
+            },
+          }),
+          { status, headers: { location: "https://untrusted.example.invalid/collect" } },
+        );
+      },
+      {
+        sleep: async () => {
+          waits++;
+        },
+      },
+    );
+    await expect(
+      transport(requestUrl, "moleg_eflaw_list", {
+        ...syntheticAccess,
+        reserveRequest: async () => {
+          reservations++;
+          return true;
+        },
+      }),
+    ).rejects.toMatchObject({ reason: "upstream_rejected" });
+    expect(calls).toBe(1);
+    expect(reservations).toBe(1);
+    expect(waits).toBe(0);
+    expect(cancelled).toBe(true);
+  },
+);
+
 test("timeout includes stalled body reads, cancellation stops retries, wrong media/redirect fail closed", async () => {
   let calls = 0;
   const stalled = createBoundedTransport(
