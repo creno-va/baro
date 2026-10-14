@@ -1,3 +1,5 @@
+import { processorStage, reportProcessorFailure } from "./container-diagnostics";
+
 /** Internal-only ingress. Never forward case/session headers into the native service. */
 export interface ProcessorContainerPort {
   start(signal: AbortSignal): Promise<void>;
@@ -93,7 +95,7 @@ export async function proxyProcessorRequest(
     clearTimeout(timer);
     signal.removeEventListener("abort", abort);
     controller.abort();
-    await port.stop();
+    await processorStage("cleanup", () => port.stop());
   };
   const abort = () => {
     controller.abort();
@@ -103,7 +105,7 @@ export async function proxyProcessorRequest(
   signal.addEventListener("abort", abort, { once: true });
   try {
     if (signal.aborted) throw new Error("ABORTED");
-    await port.start(controller.signal);
+    await processorStage("startup", () => port.start(controller.signal));
     if (controller.signal.aborted) {
       // Cancellation may have stopped the instance before a delayed startup
       // completed. Stop that late instance too, before dispatching any material.
@@ -124,16 +126,25 @@ export async function proxyProcessorRequest(
       if (unit !== null) headers.set("x-baro-unit", unit);
       if (frameOffset !== null) headers.set("x-baro-frame-offset", frameOffset);
     }
-    const response = await port.fetch(
-      new Request(`http://processor.internal${url.pathname}`, {
-        method: request.method,
-        headers,
-        ...(ready ? {} : { body: request.body }),
-        signal: controller.signal,
-        redirect: "error",
-      }),
+    const responseStarted = performance.now();
+    const response = await processorStage("dispatch", () =>
+      port.fetch(
+        new Request(`http://processor.internal${url.pathname}`, {
+          method: request.method,
+          headers,
+          ...(ready ? {} : { body: request.body }),
+          signal: controller.signal,
+          redirect: "error",
+        }),
+      ),
     );
     if (!response.ok || !response.body) {
+      reportProcessorFailure(
+        "response",
+        new Error("NATIVE_RESPONSE_FAILED"),
+        performance.now() - responseStarted,
+        response.status,
+      );
       const error = await nativeFailure(response);
       await finish();
       return response.status === 409 ? failure("BUSY", 409) : error;
@@ -144,11 +155,17 @@ export async function proxyProcessorRequest(
         ? contentType === "application/x-ndjson"
         : contentType.startsWith("application/json"))
     ) {
+      reportProcessorFailure(
+        "response",
+        new Error("INVALID_OUTPUT"),
+        performance.now() - responseStarted,
+      );
       await response.body.cancel();
       await finish();
       return failure("INVALID_OUTPUT", 503);
     }
     const reader = response.body.getReader();
+    const streamStarted = performance.now();
     const body = new ReadableStream<Uint8Array>(
       {
         async pull(stream) {
@@ -160,7 +177,8 @@ export async function proxyProcessorRequest(
               await finish();
               stream.close();
             } else stream.enqueue(next.value);
-          } catch {
+          } catch (error) {
+            reportProcessorFailure("stream", error, performance.now() - streamStarted);
             await reader.cancel().catch(() => {});
             await finish().catch(() => {});
             stream.error(new Error("PROCESSOR_UNAVAILABLE"));
@@ -179,6 +197,10 @@ export async function proxyProcessorRequest(
     });
   } catch {
     await finish().catch(() => {});
+    // Startup may fail before fetch ever takes ownership of this private stream.
+    // Release its upstream RPC/read resources after stopping native work; an
+    // already-forwarded locked stream remains governed by controller.abort().
+    if (request.body && !request.body.locked) await request.body.cancel().catch(() => {});
     return failure("PROCESSOR_UNAVAILABLE", 503);
   }
 }

@@ -1,3 +1,4 @@
+import { processorStage } from "./container-diagnostics";
 import { type ProcessorContainerPort, proxyProcessorRequest } from "./container-proxy";
 
 type ActiveRequest = {
@@ -25,7 +26,7 @@ export function createProcessorLifecycle(port: NativeLifecyclePort) {
       // A cancelled start can finish late. Do not acknowledge destruction until
       // that start has settled, and never let it dispatch another raw request.
       await current.starting?.catch(() => {});
-      await port.destroy();
+      await processorStage("cleanup", () => port.destroy());
       if (active === current) active = null;
     })().catch((error: unknown) => {
       current.finishing = null;
@@ -37,7 +38,7 @@ export function createProcessorLifecycle(port: NativeLifecyclePort) {
   function stop(): Promise<void> {
     if (active) return finish(active);
     if (!idleCleanup)
-      idleCleanup = port.destroy().finally(() => {
+      idleCleanup = processorStage("cleanup", () => port.destroy()).finally(() => {
         idleCleanup = null;
       });
     return idleCleanup;
@@ -67,13 +68,13 @@ export function createProcessorLifecycle(port: NativeLifecyclePort) {
         {
           start(signal) {
             current.starting = (async () => {
-              if (await port.isRevoked()) revoked = true;
+              if (await processorStage("revocation_read", () => port.isRevoked())) revoked = true;
               if (revoked || signal.aborted) throw new Error("REVOKED");
               // A reconstructed DO may still have an old native process. Every
               // unit starts on an empty instance, never on its leftover plaintext.
-              await port.destroy();
+              await processorStage("reset", () => port.destroy());
               if (revoked || signal.aborted) throw new Error("REVOKED");
-              await port.start(signal);
+              await processorStage("startup", () => port.start(signal));
             })();
             return current.starting;
           },

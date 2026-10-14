@@ -265,6 +265,13 @@ test("photo plus all 30 portfolio assets save/publish within D1's 100 bound para
       f.original.length,
       new Response(f.original).body,
     );
+    // This fixture's unmetered upload adapter needs a truthful synthetic
+    // inventory binding before the actual sanitizer's physical admission.
+    f.db.sqlite
+      .query(
+        "INSERT INTO v2_physical_blob_bindings(blob_id,environment,owner_id,object_key,maximum_cipher_bytes,inventory_hash,state,writer_state,created_at) SELECT id,'preview',?,object_key,cipher_bytes,?,'held','stopped',? FROM v2_blobs WHERE id=(SELECT original_blob_id FROM v2_assets WHERE id=?)",
+      )
+      .run(f.actor.ownerId, "e".repeat(64), f.actor.now, reserved.assetId);
     const jobId = crypto.randomUUID();
     expect(
       await f.jobs.admitAsset(f.actor, { assetId: reserved.assetId, assetRevision: 2, jobId }),

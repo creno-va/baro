@@ -24,6 +24,8 @@ export function productBoundaryFindings(file: string, content: string): string[]
   ]);
   const reportDependencyLog =
     'console.error(JSON.stringify({event:"report_dependency_failure",stage,category,code}))';
+  const fileProcessorLog =
+    'console.error(JSON.stringify({event:"file_processor_failure",stage,category,durationMs,httpStatus}),)';
   function visit(node: ts.Node) {
     if (ts.isStringLiteralLike(node)) {
       const value = node.text;
@@ -68,7 +70,10 @@ export function productBoundaryFindings(file: string, content: string): string[]
             (file.replaceAll("\\", "/") === "src/server/dependency-diagnostics.ts" &&
               dependencyLogs.has(call.getText(source).replace(/\s+/g, ""))) ||
             (file.replaceAll("\\", "/") === "src/server/modules/reports/diagnostics.ts" &&
-              call.getText(source).replace(/\s+/g, "") === reportDependencyLog))
+              call.getText(source).replace(/\s+/g, "") === reportDependencyLog) ||
+            (file.replaceAll("\\", "/") ===
+              "src/server/modules/file-processing/container-diagnostics.ts" &&
+              call.getText(source).replace(/\s+/g, "") === fileProcessorLog))
         )
       )
         findings.push("unapproved_payload_log");

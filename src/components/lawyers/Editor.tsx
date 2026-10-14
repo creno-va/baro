@@ -889,7 +889,7 @@ export function Editor() {
                               {asset.status === "ready"
                                 ? "연결 가능"
                                 : asset.status === "failed"
-                                  ? "처리 실패 · 파일을 확인하고 다시 선택하세요"
+                                  ? "처리 실패 · 업로드를 다시 시도할 수 있어요"
                                   : "처리 대기 또는 진행 중"}
                             </span>
                             <Button
