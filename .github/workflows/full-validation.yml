@@ -44,6 +44,11 @@ jobs:
         run: |
           bun ci
           bunx playwright install --with-deps chromium
+      - name: Install pinned PDF verification dependency
+        run: |
+          python3 -m venv "$RUNNER_TEMP/baro-full-python"
+          "$RUNNER_TEMP/baro-full-python/bin/python" -m pip install --require-hashes --only-binary=:all: -r tests/browser/requirements.txt
+          echo "$RUNNER_TEMP/baro-full-python/bin" >> "$GITHUB_PATH"
       - name: Secret scanner (pinned binary, full committed history, fully redacted)
         shell: bash
         run: |
