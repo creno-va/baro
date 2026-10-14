@@ -6,6 +6,7 @@ import {
   createV2AccountingRepository,
 } from "../src/server/db/v2-accounting";
 import { type Actor, createV2Core, V2RepositoryError } from "../src/server/db/v2-core";
+import { recordExecutionTransport } from "../src/server/db/v2-execution-runtime";
 import { createV2FilesRepository } from "../src/server/db/v2-files";
 import { createV2JobsRepository } from "../src/server/db/v2-jobs";
 import { createV2LawyersRepository } from "../src/server/db/v2-lawyers";
@@ -25,6 +26,7 @@ import { createV2UploadProbeRepository } from "../src/server/db/v2-upload-probe"
 import { createProcessingBudgetService } from "../src/server/modules/budget/processing-ledger";
 import { createFileProcessingAdmission } from "../src/server/runtime/file-admission";
 import { createTestDatabase } from "./helpers/d1";
+import { countD1Calls } from "./helpers/d1-call-count";
 import { seedTestSession } from "./helpers/session";
 
 const NOW = "2026-10-06T00:00:00.000Z",
@@ -2152,4 +2154,216 @@ test("unpriced unsent receipt can resume after optional observation append fails
   expect(await f.runtime.recordUsage({ ...r, observedAt: "2026-10-06T00:00:01.000Z" }, LATER)).toBe(
     false,
   );
+});
+
+function transportFixture(f: Fixture, d: Awaited<ReturnType<typeof dispatch>>) {
+  const meter = countD1Calls(f.db.binding);
+  const core = createV2Core(meter.binding, f.core.cipher, { applicationCostLimitsEnabled: false });
+  const input = {
+    attemptId: d.r.attemptId,
+    dispatchToken: d.handle.dispatchToken,
+    observedAt: NOW,
+    transport: "response" as const,
+  };
+  const row = () =>
+    f.db.sqlite
+      .query<Record<string, unknown>, [string]>(
+        "SELECT * FROM v2_execution_admissions WHERE attempt_id=?",
+      )
+      .get(input.attemptId);
+  return { meter, core, input, row };
+}
+
+for (const transport of ["response", "provider_error", "unknown", "not_sent"] as const)
+  test(`transport observation commits ${transport} in one atomic D1 call without changing its admission`, async () => {
+    const f = await fixture(true, false),
+      d = await dispatch(f);
+    const t = transportFixture(f, d),
+      before = t.row();
+    expect(before).not.toBeNull();
+    expect(await recordExecutionTransport(t.core, { ...t.input, transport })).toBe(true);
+    expect(t.meter.work).toEqual({ calls: 1, statements: 1 });
+    expect(t.row()).toEqual({
+      ...before,
+      state: transport === "unknown" ? "unknown" : "final",
+      transport,
+      transport_observed_at: NOW,
+      transport_digest: await runtimeDigest({ ...t.input, transport }),
+    });
+    expect(await f.runtime.beforeDispatch(f.actor, d.lease, d.r.attemptId)).toBeNull();
+    expect(
+      f.db.sqlite.query("SELECT count(*) n FROM v2_execution_cost_observations").get(),
+    ).toEqual({ n: 0 });
+  });
+
+test("transport observation preserves missing and historical paid attempts without creating a journal row", async () => {
+  const f = await fixture(),
+    d = await dispatch(f),
+    t = transportFixture(f, d);
+  const hold = f.db.sqlite
+    .query("SELECT * FROM v2_paid_holds WHERE attempt_id=?")
+    .get(d.r.attemptId);
+  expect(await recordExecutionTransport(t.core, t.input)).toBeNull();
+  expect(
+    await recordExecutionTransport(t.core, { ...t.input, attemptId: crypto.randomUUID() }),
+  ).toBeNull();
+  expect(
+    f.db.sqlite.query("SELECT * FROM v2_paid_holds WHERE attempt_id=?").get(d.r.attemptId),
+  ).toEqual(hold);
+  expect(f.db.sqlite.query("SELECT count(*) n FROM v2_execution_admissions").get()).toEqual({
+    n: 0,
+  });
+});
+
+test("transport observation cannot convert a prepared attempt to sent or accept a foreign dispatch token", async () => {
+  const f = await fixture(true, false),
+    a = await admit(f);
+  const input = { attemptId: a.r.attemptId, dispatchToken: null, observedAt: NOW };
+  for (const transport of ["response", "provider_error", "unknown"] as const)
+    expect(await recordExecutionTransport(f.core, { ...input, transport })).toBe(false);
+  expect(
+    await recordExecutionTransport(f.core, {
+      ...input,
+      dispatchToken: crypto.randomUUID(),
+      transport: "not_sent",
+    }),
+  ).toBe(false);
+  expect(await recordExecutionTransport(f.core, { ...input, transport: "not_sent" })).toBe(true);
+  const stopped = f.db.sqlite.query("SELECT * FROM v2_execution_admissions").get();
+  expect(
+    await recordExecutionTransport(f.core, { ...input, transport: "not_sent", observedAt: LATER }),
+  ).toBe(true);
+  expect(await recordExecutionTransport(f.core, { ...input, transport: "response" })).toBe(false);
+  expect(f.db.sqlite.query("SELECT * FROM v2_execution_admissions").get()).toEqual(stopped);
+});
+
+test("transport observation keeps monotonic unknown evidence and immutable final replay", async () => {
+  const f = await fixture(true, false),
+    d = await dispatch(f),
+    t = transportFixture(f, d);
+  expect(
+    await recordExecutionTransport(t.core, { ...t.input, dispatchToken: crypto.randomUUID() }),
+  ).toBe(false);
+  expect(t.row()).toMatchObject({ state: "dispatched", transport: null });
+  expect(
+    await recordExecutionTransport(t.core, { ...t.input, transport: "unknown", observedAt: LATER }),
+  ).toBe(true);
+  const unknown = t.row();
+  for (const transport of ["unknown", "response", "provider_error", "not_sent"] as const)
+    expect(await recordExecutionTransport(t.core, { ...t.input, transport })).toBe(false);
+  expect(t.row()).toEqual(unknown);
+  expect(await recordExecutionTransport(t.core, { ...t.input, observedAt: LATER })).toBe(true);
+  const settled = t.row();
+  expect(await recordExecutionTransport(t.core, t.input)).toBe(true);
+  expect(
+    await recordExecutionTransport(t.core, { ...t.input, transport: "unknown", observedAt: EXP }),
+  ).toBe(false);
+  expect(
+    await recordExecutionTransport(t.core, {
+      ...t.input,
+      transport: "provider_error",
+      observedAt: EXP,
+    }),
+  ).toBe(false);
+  expect(
+    await recordExecutionTransport(t.core, { ...t.input, dispatchToken: crypto.randomUUID() }),
+  ).toBe(false);
+  expect(t.row()).toEqual(settled);
+});
+
+for (const transport of ["unknown", "response"] as const)
+  test(`transport observation rejects an older unknown writer after concurrent ${transport}`, async () => {
+    const f = await fixture(true, false),
+      d = await dispatch(f),
+      t = transportFixture(f, d);
+    expect(await recordExecutionTransport(f.core, { ...t.input, transport: "unknown" })).toBe(true);
+    const digest = await runtimeDigest({ ...t.input, transport, observedAt: LATER });
+    let injected = false;
+    t.meter.before((sql) => {
+      if (
+        injected ||
+        !sql.some((value) => value.startsWith("UPDATE v2_execution_admissions SET state="))
+      )
+        return;
+      injected = true;
+      f.db.sqlite
+        .query(
+          "UPDATE v2_execution_admissions SET state=?,transport=?,transport_observed_at=?,transport_digest=? WHERE attempt_id=?",
+        )
+        .run(
+          transport === "unknown" ? "unknown" : "final",
+          transport,
+          LATER,
+          digest,
+          d.r.attemptId,
+        );
+    });
+    expect(await recordExecutionTransport(t.core, { ...t.input, transport: "unknown" })).toBe(
+      false,
+    );
+    expect(injected).toBe(true);
+    expect(t.row()).toMatchObject({
+      state: transport === "unknown" ? "unknown" : "final",
+      transport,
+      transport_observed_at: LATER,
+      transport_digest: digest,
+    });
+  });
+
+test("transport observation records the original dispatch despite late owner deletion and lease replacement", async () => {
+  const f = await fixture(true, false),
+    d = await dispatch(f),
+    t = transportFixture(f, d);
+  const before = t.row();
+  let replaced = false;
+  t.meter.before((sql) => {
+    if (
+      replaced ||
+      !sql.some((value) => value.startsWith("UPDATE v2_execution_admissions SET state="))
+    )
+      return;
+    replaced = true;
+    f.db.sqlite
+      .query("UPDATE v2_jobs SET lease_token=?,fencing=fencing+1,lease_until=? WHERE id=?")
+      .run(crypto.randomUUID(), EXP, d.r.jobId);
+    f.db.sqlite.query("DELETE FROM user WHERE id=?").run(f.actor.ownerId);
+  });
+  expect(await recordExecutionTransport(t.core, t.input)).toBe(true);
+  expect(replaced).toBe(true);
+  expect(t.row()).toEqual({
+    ...before,
+    state: "final",
+    transport: "response",
+    transport_observed_at: NOW,
+    transport_digest: await runtimeDigest(t.input),
+  });
+  expect(await f.runtime.beforeDispatch(f.actor, d.lease, d.r.attemptId)).toBeNull();
+  expect(
+    await f.runtime.recordUsage(
+      receipt(d, { chargedUsd: null, meteringComplete: false, quantities: [] }),
+      NOW,
+    ),
+  ).toBe(true);
+  expect(f.db.sqlite.query("SELECT count(*) n FROM v2_execution_cost_observations").get()).toEqual({
+    n: 1,
+  });
+});
+
+test("transport observation response loss preserves the completed journal and resumes without new dispatch", async () => {
+  const f = await fixture(true, false),
+    d = await dispatch(f),
+    t = transportFixture(f, d);
+  t.meter.after((sql) => {
+    if (sql.some((value) => value.startsWith("UPDATE v2_execution_admissions SET state=")))
+      throw new Error("Synthetic journal response loss");
+  });
+  await expect(recordExecutionTransport(t.core, t.input)).rejects.toMatchObject({
+    code: "DB_OPERATION_FAILED",
+  });
+  const committed = t.row();
+  expect(committed).toMatchObject({ state: "final", transport: "response" });
+  t.meter.after(() => {});
+  expect(await recordExecutionTransport(t.core, t.input)).toBe(true);
+  expect(t.row()).toEqual(committed);
+  expect(await f.runtime.beforeDispatch(f.actor, d.lease, d.r.attemptId)).toBeNull();
 });

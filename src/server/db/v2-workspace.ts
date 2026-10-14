@@ -779,7 +779,10 @@ export function createV2WorkspaceRepository(
       actor = parse(actorSchema, { ownerId: actor.ownerId, now: actor.now });
       const row = await core
         .statement(
-          `SELECT i.summary_id,s.snapshot_id,s.revision,w.revision AS workspace_revision FROM v2_intakes i JOIN v2_summaries s ON s.id=i.summary_id JOIN v2_workspaces w ON w.id=i.id WHERE i.id=? AND w.owner_id=? AND ${aliveWorkspace}`,
+          `SELECT i.summary_id,s.snapshot_id,s.revision,w.revision AS workspace_revision,
+            (EXISTS(SELECT 1 FROM v2_facts WHERE workspace_id=w.id AND summary_revision=s.revision AND snapshot_id IS NULL)
+              OR EXISTS(SELECT 1 FROM v2_parties WHERE workspace_id=w.id AND summary_revision=s.revision AND snapshot_id IS NULL)) AS has_additions
+            FROM v2_intakes i JOIN v2_summaries s ON s.id=i.summary_id JOIN v2_workspaces w ON w.id=i.id WHERE i.id=? AND w.owner_id=? AND ${aliveWorkspace}`,
           [id, actor.ownerId],
         )
         .first<{
@@ -787,12 +790,19 @@ export function createV2WorkspaceRepository(
           snapshot_id: string;
           revision: number;
           workspace_revision: number;
+          has_additions: number;
         }>();
       if (!row) return;
-      for await (const part of appendSummaryEntities(
-        createV2StagingRepository(core).fragments(actor, row.snapshot_id),
-        (kind) => summaryAdditions(core, actor, id, row.revision, kind),
-      )) {
+      const source = createV2StagingRepository(core).fragments(actor, row.snapshot_id);
+      // Current writers publish complete snapshots. Only legacy rows need the
+      // two additions scans. Keep the workspace revision fence in either path:
+      // file deletion/correction can change references without replacing summary.
+      const fragments = row.has_additions
+        ? appendSummaryEntities(source, (kind) =>
+            summaryAdditions(core, actor, id, row.revision, kind),
+          )
+        : source;
+      for await (const part of fragments) {
         if (
           !(await core
             .statement(

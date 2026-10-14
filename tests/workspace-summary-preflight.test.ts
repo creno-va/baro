@@ -2,6 +2,7 @@ import { afterEach, expect, spyOn, test } from "bun:test";
 import { Hono } from "hono";
 import { createWorkspacesApi } from "../src/server/api/v2/workspaces";
 import { saveAccountType } from "../src/server/auth/account-type";
+import { snapshotStatements } from "../src/server/db/v2-core";
 import { createV2DeletionRepository } from "../src/server/db/v2-deletion";
 import { createV2WorkspaceRepository } from "../src/server/db/v2-workspace";
 import { customerWorkspaceFixture, runCustomerJob } from "./helpers/customer-workspace";
@@ -222,4 +223,115 @@ test("summary existence cannot bypass the stream hash check on same-length alter
     code: "SNAPSHOT_INVALID",
   });
   expect(altered).toBe(true);
+});
+
+for (const kind of ["facts", "parties", "both"] as const) {
+  test(`summary stream preserves legacy ${kind} outside the immutable snapshot`, async () => {
+    const f = await fixture();
+    const intake = await f.repository.readIntake(
+      { ownerId: f.owner.userId, now: f.now },
+      f.workspace.id,
+    );
+    if (!intake?.summary) throw new Error("Missing synthetic summary");
+    const originalFact = intake.summary.facts[0];
+    if (!originalFact) throw new Error("Missing synthetic fact");
+    const fact = {
+      ...originalFact,
+      id: crypto.randomUUID(),
+      text: "과거 방식 합성 사실",
+    };
+    const party = { id: crypto.randomUUID(), label: "합성 인물", role: "과거 방식 합성 역할" };
+    for (const [table, value] of [
+      ["v2_facts", fact],
+      ["v2_parties", party],
+    ] as const) {
+      if (
+        (table === "v2_facts" && kind === "parties") ||
+        (table === "v2_parties" && kind === "facts")
+      )
+        continue;
+      const id = crypto.randomUUID();
+      const payload = await f.core.encrypt(
+        table,
+        id,
+        f.owner.userId,
+        intake.summary.revision,
+        value,
+      );
+      f.db.sqlite
+        .query(
+          `INSERT INTO ${table}(id,entity_id,workspace_id,revision,summary_revision,encrypted_payload) VALUES(?,?,?,?,?,?)`,
+        )
+        .run(
+          id,
+          value.id,
+          f.workspace.id,
+          intake.summary.revision,
+          intake.summary.revision,
+          payload,
+        );
+    }
+    const response = await f.request();
+    expect(response.status).toBe(200);
+    const result = (await response.json()) as typeof intake.summary;
+    expect(result.facts).toEqual(
+      kind === "parties" ? intake.summary.facts : [...intake.summary.facts, fact],
+    );
+    expect(result.parties).toEqual(
+      kind === "facts" ? intake.summary.parties : [...intake.summary.parties, party],
+    );
+  });
+}
+
+test("a later summary chunk remains fenced after an earlier chunk has been read", async () => {
+  const f = await fixture();
+  const actor = { ownerId: f.owner.userId, now: f.now };
+  const intake = await f.repository.readIntake(actor, f.workspace.id);
+  const workspace = await f.service.find(f.owner.userId, f.workspace.id);
+  if (!intake?.summary) throw new Error("Missing synthetic summary");
+  const snapshotId = crypto.randomUUID();
+  const claim = crypto.randomUUID();
+  await f.core.binding.batch([
+    f.core.claim(
+      { ...actor, workspaceId: f.workspace.id, expectedRevision: workspace.workspaceRevision },
+      claim,
+    ),
+    ...(await snapshotStatements(
+      f.core,
+      {
+        id: snapshotId,
+        ownerId: actor.ownerId,
+        workspaceId: f.workspace.id,
+        targetId: f.workspace.id,
+        revision: 2,
+        purpose: "summary",
+        now: f.now,
+      },
+      {
+        ...intake.summary,
+        revision: 2,
+        unknowns: Array.from({ length: 24 }, () => "가".repeat(1000)),
+      },
+      claim,
+    )),
+    f.core.finish(claim),
+  ]);
+  f.db.sqlite
+    .query("UPDATE v2_summaries SET revision=2,snapshot_id=? WHERE workspace_id=?")
+    .run(snapshotId, f.workspace.id);
+  let parts = 0;
+  f.meter.after((sql) => {
+    if (!sql.some((s) => s.startsWith("SELECT * FROM v2_private_parts"))) return;
+    parts++;
+    if (parts === 2)
+      f.db.sqlite
+        .query("UPDATE v2_workspaces SET revision=revision+1 WHERE id=?")
+        .run(f.workspace.id);
+  });
+  const response = await f.request();
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error("Missing synthetic stream");
+  expect((await reader.read()).done).toBe(false);
+  await expect(reader.read()).rejects.toMatchObject({ code: "STALE_REVISION" });
+  expect(parts).toBe(2);
 });

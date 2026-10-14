@@ -220,20 +220,16 @@ export function createFileProcessingExecution(
     ids: string[],
   ) => {
     const checkpointId = await idFor(`checkpoint:${scope}`);
-    const existing = await core
-      .statement("SELECT id FROM v2_job_checkpoints WHERE id=? AND job_id=? AND fencing=?", [
-        checkpointId,
-        params.jobId,
-        (await guard()).lease.fencing,
-      ])
-      .first();
-    if (existing) return;
-    const nextRevision = await core
+    // Existence and the next revision are independent at this checkpoint read.
+    // The final job guard and atomic checkpoint write still resolve races.
+    const snapshot = await core
       .statement(
-        "SELECT coalesce(max(revision),0)+1 AS revision FROM v2_job_checkpoints WHERE job_id=?",
-        [params.jobId],
+        "SELECT (SELECT id FROM v2_job_checkpoints WHERE id=? AND job_id=? AND fencing=?) AS id,(SELECT coalesce(max(revision),0)+1 FROM v2_job_checkpoints WHERE job_id=?) AS revision",
+        [checkpointId, params.jobId, (await guard()).lease.fencing, params.jobId],
       )
-      .first<number>("revision");
+      .first<{ id: string | null; revision: number }>();
+    if (snapshot?.id) return;
+    const nextRevision = snapshot?.revision;
     if (!nextRevision) throw new ProcessingError("FILE_PROCESSING_FAILED");
     if (
       !(await jobs.checkpoint(actor(), (await guard()).lease, {
