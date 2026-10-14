@@ -4,7 +4,7 @@
 - 적용: `APPLICATION_COST_LIMITS_ENABLED=false`인 preview/production과 해당 배포·운영 도구.
 - 구현 상태: [PR247](https://github.com/creno-va/baro/pull/247)에서 기존 운영 환경의 비용 관측과
   실행 분리를 병합했다. 배포와 실제 기능 결과는 #71의 동일 SHA receipt를 따르며 전체 MVP 완료와 구분한다.
-- 후속0016 구현은 신규 실행을 비용 proof와 독립적인 기술 admission journal로 분리한다.
+- [PR259](https://github.com/creno-va/baro/pull/259)의0016 구현은 신규 실행을 비용 proof와 독립적인 기술 admission journal로 분리한다.
   가격/FX/funding/SKU가 없거나 만료돼도 실제 모델·처리·저장 호출의 기술 권한을 확인하고 진행한다.
   실제 provider 사용량이 확인되면 nullable 비용 관측을 추가하고, 금액은 해당 가격·환율까지
   확인될 때만 기록한다. 기존 paid hold·미정산·가격·재원 행은 이동하거나 해제하지 않으며
@@ -81,6 +81,8 @@ DB의 빈 객체·producer·실행·정합 totals 검사를 한 transaction으�
 채워 넣거나 같은 실행을 자동 중복 호출하여 관측을 복구하지 않는다.
 
 ## 현재 실제 증거와 이번 변경의 경계
+
+0016은 preview `71892c5c6fa27175afd8557e7d4c738a0bfd27e8`에 [배포38582240689](https://github.com/creno-va/baro/actions/runs/38582240689)되었고 live/ready schema0016 및 기존 원장 보존을 확인했다. 실제 자료 정제 실패와 전체 검증 실패가 있어 production에는 승격하지 않았다. 최신 결과는 [단일 실제 인수 추적](../quality/PREBETA-MVP-LIVE-ACCEPTANCE.md)을 따른다. 아래 이전 성공 기록으로 새 버전의 기능 성공을 가정하지 않는다.
 
 PR247/248 통합 소스는 `1059887ae8ad1998b6e5432c6ba2da4d5ed4679e`다.
 [main CI](https://github.com/creno-va/baro/actions/runs/38569017779)와

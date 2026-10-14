@@ -1,6 +1,6 @@
 # 에이전트 실행 기준
 
-- Reviewed: 2026-10-14 KST
+- Reviewed: 2026-10-15 KST
 - 정비 총괄: hyunhomon / 현재 정비 채팅. 기존 모듈 소유권은 유지한다.
 - 결정: [ADR-0015](../adr/0015-maintenance-and-operating-policy.md), 제품: [PRD](../PRD.md), 상세: [v2 실행 계약](../architecture/V2-CONTRACTS.md).
 
@@ -19,7 +19,7 @@
 3. 이슈에 담당·브랜치·현재 blocker·다음 행동을 기록하고 status:in-progress를 붙인다.
    기존 작업/PR을 재사용하고 깨끗한 main에서 codex/<issue>-<purpose> 브랜치를 만든다.
 4. 공유 계약·schema는 먼저 조율한다. migration 최신 번호를 확인해 한 담당자가 순차 배정한다.
-   0010은 보존하며 PR247은 관측 분리0015를 추가한다. 실제 원격 schema와 적용 SHA는 #71 배포 receipt를 따른다.
+   0010은 보존하며 PR247은0015, PR259는 기술 admission·선택적 비용 관측0016을 추가했다. 실제 원격 schema와 적용 SHA는 #71 배포 receipt를 따른다.
 5. 변경별 검증 후 PR로 제출하고 검토·CI가 통과한 정확한 head만 정상 병합한다.
 
 ## 담당·blocker·다음 행동
@@ -27,14 +27,14 @@
 | 작업 | 담당/이슈 | 현재 상태·blocker | 다음 행동 |
 | --- | --- | --- | --- |
 | 업로드·물리 용량 | 자료 모듈 + 총괄, #58 | PR230→229→235와0014가04f25f8에 포함돼 배포됨. production storage 초기화 성공; 실제 업로드/ZIP/cleanup은 이번 receipt에 없음 | 물리 inventory/writer 경계를 유지하며 남은 자료 경로의 구현·실제 증거를 구분 |
-| 비용 관측 분리 | 비용 모듈 + 총괄, #57 | PR247 병합: 기존 운영 환경의 만료/월할당/refresh/비용 IO 병목 분리. 동일 SHA 배포·실제 결과는 #71 receipt | 가격/funding 원본 없는 신규 환경 bootstrap 결합 잔여. 기존 관측·hold·원장/보안/기술 상한 보존, 비용 차단 재도입 금지 |
+| 비용 관측 분리 | 비용 모듈 + 총괄, #57 | PR247/259 병합; preview71892c5·schema0016에서 기술 admission과 선택적 관측 분리, 기존 원장 보존 확인. 가격/funding 없는 물리 bootstrap도 구현·로컬 검증 | 기존 관측·hold·원장/보안/기술 상한 보존. 비용 차단 재도입 금지. 실제 preview 핵심 흐름은 아래 단일 추적표에서 별도 인수 |
 | 릴리스 증거 | 총괄, #19/#71 | 04f25f8 동일 SHA CI·preview·production 성공, 실제 일반 채팅·리포트/PDF/HTML 확인 | 이번 관측 분리의 새 PR/배포 증거를 별도 기록. 기존 성공을 새 변경 또는 전체 MVP 완료로 확대하지 않음 |
 | 디렉터리 | 변호사 모듈 + 총괄, #231/M5 | PR234 병합; 기존 공개 목록의 원격 projection 연결 미완료 | serving SHA 확인 후 bounded reindex, 철회·cursor·필터 smoke |
 | 문서·작업 체계 | 총괄, #19/#64/#71 | 현행 기준과 과거 기록 분리 중 | 문서 PR과 이슈/마일스톤의 담당·증거·다음 행동 대조 |
 | 채팅 실패·재시도 | 고객/AI, #64 / PR238 | production04f25f8에서 21:32:46 KST 새 일반 채팅 요청,21:33 실제 assistant 본문 확인 | 이전7a617b5 비용 실패와 원인 미확정 provider 실패를 역사로 보존. 비용 관측 만료 후 실패 방지는 이번 변경의 별도 범위 |
 | 리포트·다운로드 | 자료 모듈, #66 | production04f25f8에서21:34:37 KST 리포트v3 생성, PDF3페이지/3,144,078bytes 실제 수신·한글 렌더, HTML14,572bytes 실제 수신 | 선택 원본 ZIP/업로드/삭제와 다른 media 경로는 별도 잔여로 유지 |
 | 법률·인증·정책 점검 | 법률/인증 모듈, #27/#63/#71 | [10/14 검증](../quality/LEGAL-AUTH-VERIFICATION-2026-10-14.md): 등록 도메인 Referer 누락 확인·로컬 인터넷 JSON 거부 해결. 법령 본문 검증과 실제 판례 형식 수정. Google 사용자 수동 확인·정책 점검표 완료 | 수정 PR 병합 후 GitHub 저장 credential 및 같은 SHA Worker 검증. 기관 안내 update_pending·판례 limited·Naver/Kakao 실제 증거는 보존 |
-| 전체 실제 인수 | 각 모듈, #27/#59/#63/#64/#66/#67/#71 | OAuth/실제 모델·공식 출처·media·다운로드·복구/경보 증거 잔여 | [요구사항·증거 완료표](./MVP-REQUIREMENTS-EVIDENCE.md)의 조건별 증거 연결 |
+| 전체 실제 인수 | 각 모듈, #27/#59/#63/#64/#66/#67/#71 | preview71892c5에서 Kakao 두 역할·동일 이메일 연결·프로필 저장/공개/철회·검색/외부연결 실제 확인. 고객 생성의 수동 Turnstile 및 실제 업로드 정제 실패·간헐 native full 실패 미해결 | [단일 실제 인수 추적](../quality/PREBETA-MVP-LIVE-ACCEPTANCE.md)에서 재현·원인·수정·버전·결과 관리. preview 전체 핵심 흐름 완료 전 production 배포 금지 |
 
 ## 2026-10-14 실제 배포·제품 receipt
 
