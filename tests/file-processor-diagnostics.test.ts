@@ -1,4 +1,5 @@
 import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
+import { productBoundaryFindings } from "../scripts/product-boundaries";
 import {
   processorFailureCategory,
   reportProcessorFailure,
@@ -8,6 +9,26 @@ import { createProcessorLifecycle } from "../src/server/modules/file-processing/
 const log = spyOn(console, "error");
 afterEach(() => log.mockClear());
 afterAll(() => log.mockRestore());
+
+test("only the reviewed container diagnostic file may log its exact sanitized fields", async () => {
+  const path = "src/server/modules/file-processing/container-diagnostics.ts";
+  const source = await Bun.file(path).text();
+  expect(productBoundaryFindings(path, source)).toEqual([]);
+  expect(
+    productBoundaryFindings("src/server/modules/file-processing/container-proxy.ts", source),
+  ).toContain("unapproved_payload_log");
+  for (const unsafe of [
+    'console.error(JSON.stringify({event:"file_processor_failure",stage,category,durationMs,httpStatus,error}),)',
+    'console.error(JSON.stringify({event:"file_processor_failure",stage,category,durationMs,httpStatus,message:error.message}),)',
+    'console.error(JSON.stringify({event:"file_processor_failure",stage,category,durationMs,httpStatus,stack:error.stack}),)',
+    'console.error(JSON.stringify({event:"file_processor_failure",stage,category,durationMs,httpStatus,...payload}),)',
+    'console.error(JSON.stringify({event:"file_processor_failure",stage,category:error.message,durationMs,httpStatus}),)',
+    "console.error(error)",
+    'console["error"](JSON.stringify({event:"file_processor_failure",stage,category,durationMs,httpStatus}))',
+    "const emit = console.error; emit(error)",
+  ])
+    expect(productBoundaryFindings(path, unsafe)).toContain("unapproved_payload_log");
+});
 
 function capture() {
   log.mockImplementation(() => {});

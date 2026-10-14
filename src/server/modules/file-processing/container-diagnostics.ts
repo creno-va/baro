@@ -47,32 +47,30 @@ export function processorFailureCategory(error: unknown) {
 /** Worker telemetry only. Native output, headers, request identities and error
  * objects never reach logs, even when the SDK embeds them in its exception. */
 export function reportProcessorFailure(
-  stage: string,
+  stageInput: string,
   error: unknown,
-  durationMs: number,
-  httpStatus?: number,
+  durationInput: number,
+  statusInput?: number,
 ) {
   try {
     if (error && typeof error === "object") {
       if (reported.has(error)) return;
       reported.add(error);
     }
+    const stage = stages.includes(stageInput as ProcessorStage) ? stageInput : "unclassified";
+    const category = processorFailureCategory(error);
+    const durationMs = Number.isFinite(durationInput)
+      ? Math.min(3_600_000, Math.max(0, Math.round(durationInput)))
+      : null;
+    const httpStatus =
+      typeof statusInput === "number" &&
+      Number.isInteger(statusInput) &&
+      statusInput >= 400 &&
+      statusInput <= 599
+        ? statusInput
+        : null;
     console.error(
-      JSON.stringify({
-        event: "file_processor_failure",
-        stage: stages.includes(stage as ProcessorStage) ? stage : "unclassified",
-        category: processorFailureCategory(error),
-        durationMs: Number.isFinite(durationMs)
-          ? Math.min(3_600_000, Math.max(0, Math.round(durationMs)))
-          : null,
-        httpStatus:
-          typeof httpStatus === "number" &&
-          Number.isInteger(httpStatus) &&
-          httpStatus >= 400 &&
-          httpStatus <= 599
-            ? httpStatus
-            : null,
-      }),
+      JSON.stringify({ event: "file_processor_failure", stage, category, durationMs, httpStatus }),
     );
   } catch {
     // Diagnostic transport cannot alter cleanup, cancellation or access checks.
