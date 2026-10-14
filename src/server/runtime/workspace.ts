@@ -1,5 +1,4 @@
 import { drizzle } from "drizzle-orm/d1";
-import { z } from "zod";
 import { readAccountType } from "../auth/account-type";
 import { createCaseDataCipher } from "../crypto";
 import * as schema from "../db/schema";
@@ -9,15 +8,12 @@ import { createV2JobsRepository } from "../db/v2-jobs";
 import { createV2OfficialSourceRepository } from "../db/v2-official-sources";
 import { reportLegalRetrieval, reportProviderFailure } from "../dependency-diagnostics";
 import { paidHoldRequestSchema } from "../modules/budget/contracts";
-import {
-  createGatewayExecutionPlanner,
-  executionDescriptorSchema,
-  type TokenBounds,
-} from "../modules/budget/execution-plan";
+import { createGatewayExecutionPlanner, type TokenBounds } from "../modules/budget/execution-plan";
 import {
   createGatewayBudgetService,
   type GatewayExecutionBinding,
 } from "../modules/budget/gateway-ledger";
+import { configuredBounds } from "../modules/budget/model-configuration";
 import { hasCurrentConsent } from "../modules/consent/service";
 import { GUIDE_HOSTS } from "../modules/legal-retrieval/v2/registry";
 import { createV2LegalRetrieval } from "../modules/legal-retrieval/v2/service";
@@ -49,26 +45,7 @@ export async function hasCustomerWorkspaceAccess(core: V2Core, ownerId: string) 
   );
 }
 
-const boundsConfigSchema = z.strictObject({
-  bounds: executionDescriptorSchema.omit({
-    model: true,
-    phase: true,
-    correction: true,
-    wireInputSha256: true,
-    inputBytes: true,
-    outputTokenUpperBound: true,
-  }),
-  evidenceHash: z.string().regex(/^[a-f0-9]{64}$/),
-  verifiedAt: z.string().datetime(),
-});
-/** Only a deployment-owned setting can supply authenticated model capability bounds. */
-export function configuredBounds(env: Env) {
-  try {
-    return boundsConfigSchema.parse(JSON.parse(env.AI_MODEL_TOKEN_BOUNDS_JSON ?? "null"));
-  } catch {
-    return null;
-  }
-}
+export { configuredBounds } from "../modules/budget/model-configuration";
 
 /** The same complete-wire reservation is used by admission and configuration inspection. */
 export function workspaceTokenBounds(
