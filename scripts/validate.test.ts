@@ -25,6 +25,12 @@ test("explicit profiles preserve full browser, database, native and security cov
   expect(full).toContainEqual(["bun", "run", "test:csp"]);
   expect(full).toContainEqual(["bun", "run", "cf:dry-run"]);
   expect(full.filter((command) => command.includes("build:production"))).toHaveLength(1);
+  for (const script of [
+    "office-security-test.py",
+    "heif-fixture-test.py",
+    "office-fixture-test.py",
+  ])
+    expect(full.some((command) => command.at(-1) === `/app/${script}`)).toBe(true);
   for (const command of full.filter((command) => command[0] === "docker" && command[1] === "run")) {
     expect(command).toContain("none");
     expect(command).toContain("--pids-limit");

@@ -34,6 +34,11 @@ import { signedSessionCookie, testEnvironment } from "./helpers/d1";
 import { measureD1Work } from "./helpers/d1-work";
 import { nativeFailure } from "./helpers/native-failure";
 import { createNativeTestRegistry, type NativeLifetime } from "./helpers/native-lifetime";
+import {
+  createNativeRecoveryMeasurements,
+  nativeHostMeasurements,
+  nativeRecoveryWork,
+} from "./helpers/native-measurements";
 import { createNativeProgress } from "./helpers/native-progress";
 
 const nativeTests = createNativeTestRegistry();
@@ -149,6 +154,9 @@ async function exerciseNativeRuntime(
   lifetime: NativeLifetime,
 ) {
   const started = performance.now();
+  const recovery = createNativeRecoveryMeasurements(),
+    hostBaseline = nativeHostMeasurements();
+  const providerMeasurements = { calls: 0, wallMs: 0, maximumWallMs: 0 };
   const progress = createNativeProgress(applicationCostLimitsEnabled);
   activeProgress = progress;
   const mf = new Miniflare(
@@ -222,10 +230,6 @@ async function exerciseNativeRuntime(
     ]);
     const key = btoa("w".repeat(32)).replace(/=+$/, ""),
       cipher = await createCaseDataCipher({ CASE_DATA_KEY_V1: key });
-    let core = createV2Core(preview, cipher, {
-      applicationCostLimitsEnabled: true,
-      monthlyBudgetCapEnabled: false,
-    });
     let providerCalls = 0,
       unavailable = false,
       auditRejected = false;
@@ -235,6 +239,27 @@ async function exerciseNativeRuntime(
         databaseFailures.push(dependencyCategory(error));
         databaseFailureDetails.push(nativeFailure(error));
       });
+    recovery.observe(() => nativeRecoveryWork(measured.measurements(), providerMeasurements));
+    let core = createV2Core(measured.binding, cipher, {
+      applicationCostLimitsEnabled: true,
+      monthlyBudgetCapEnabled: false,
+    });
+    const measureProvider =
+      (run: (model: string, input: Record<string, unknown>) => Promise<Response>) =>
+      async (model: string, input: Record<string, unknown>) => {
+        const providerStarted = performance.now();
+        try {
+          return await run(model, input);
+        } finally {
+          const elapsed = Math.max(0, performance.now() - providerStarted);
+          providerMeasurements.calls++;
+          providerMeasurements.wallMs += elapsed;
+          providerMeasurements.maximumWallMs = Math.max(
+            providerMeasurements.maximumWallMs,
+            elapsed,
+          );
+        }
+      };
     const env = {
       ...testEnvironment(preview),
       APP_ENV: "preview",
@@ -252,7 +277,7 @@ async function exerciseNativeRuntime(
         create: async ({ id }: { id: string }) => ({ id }),
       },
       AI: {
-        async run(_model: string, input: Record<string, unknown>) {
+        run: measureProvider(async (_model: string, input: Record<string, unknown>) => {
           lifetime.check();
           providerCalls++;
           if (unavailable)
@@ -367,7 +392,7 @@ async function exerciseNativeRuntime(
               prompt_tokens_details: { cached_tokens: 0, cache_write_tokens: 0 },
             },
           });
-        },
+        }),
       },
     } as unknown as Env;
     let service = createWorkspaceService(core, createWorkspaceDependencies(core, env));
@@ -380,6 +405,11 @@ async function exerciseNativeRuntime(
       providerCalls,
       requestOrdinal,
       databaseTrace: measured.trace,
+      databaseMeasurements: measured.measurements(),
+      recoveryMeasurements: recovery.snapshot(),
+      providerMeasurements,
+      hostBaseline,
+      hostMeasurements: nativeHostMeasurements(),
     }));
     const app = new Hono()
       .use("*", async (c, next) => {
@@ -758,7 +788,7 @@ async function exerciseNativeRuntime(
     // earlier paid plan, hold and receipt from the same product database.
     progress.enter("advance", "readback");
     env.APPLICATION_COST_LIMITS_ENABLED = String(applicationCostLimitsEnabled);
-    core = createV2Core(preview, cipher, {
+    core = createV2Core(measured.binding, cipher, {
       applicationCostLimitsEnabled,
       monthlyBudgetCapEnabled: false,
     });
@@ -795,7 +825,7 @@ async function exerciseNativeRuntime(
       progress.boundary("readback");
       const job = await service.job(ownerId, workspace.id, jobId);
       if (job.target.kind !== "workspace") throw new Error("Wrong synthetic job target");
-      const instanceId = await preview
+      const instanceId = await measured.binding
         .prepare("SELECT runtime_instance_id FROM v2_jobs WHERE id=?")
         .bind(jobId)
         .first<string>("runtime_instance_id");
@@ -819,8 +849,12 @@ async function exerciseNativeRuntime(
     progress.enter("recovery", "runtime");
     unavailable = true;
     const callsBeforeOutage = providerCalls;
-    expect((await execute(failedJob.jobId)).status).toBe("failed");
-    const latest = await request(`/api/v2/cases/${workspace.id}/workspace-jobs/latest`);
+    expect((await recovery.run("outage_runtime", () => execute(failedJob.jobId))).status).toBe(
+      "failed",
+    );
+    const latest = await recovery.run("outage_latest", () =>
+      request(`/api/v2/cases/${workspace.id}/workspace-jobs/latest`),
+    );
     expect(latest.status).toBe(200);
     const failed = (await latest.json()) as { status: string; retryable: boolean };
     if (failed.status !== "failed" || !failed.retryable) {
@@ -837,37 +871,68 @@ async function exerciseNativeRuntime(
     expect(failed).toMatchObject({ status: "failed", retryable: true });
     unavailable = false;
     auditRejected = true;
-    const retry = await request(
-      `/api/v2/cases/${workspace.id}/workspace-jobs/${failedJob.jobId}/retry`,
-      "POST",
-      { expectedRevision: (await service.find(ownerId, workspace.id)).workspaceRevision },
+    const retryRevision = await recovery.run("policy_retry_revision", () =>
+      service.find(ownerId, workspace.id),
+    );
+    const retry = await recovery.run("policy_retry_request", () =>
+      request(`/api/v2/cases/${workspace.id}/workspace-jobs/${failedJob.jobId}/retry`, "POST", {
+        expectedRevision: retryRevision.workspaceRevision,
+      }),
     );
     expect(retry.status).toBe(202);
-    expect((await execute(failedJob.jobId)).status).toBe("failed");
-    expect(await service.job(ownerId, workspace.id, failedJob.jobId)).toMatchObject({
+    expect(
+      (await recovery.run("policy_rejected_runtime", () => execute(failedJob.jobId))).status,
+    ).toBe("failed");
+    expect(
+      await recovery.run("policy_job_readback", () =>
+        service.job(ownerId, workspace.id, failedJob.jobId),
+      ),
+    ).toMatchObject({
       status: "failed",
       failure: "POLICY_REJECTED",
       attempts: 2,
       retryable: true,
     });
     expect(
-      await preview
-        .prepare("SELECT retryable FROM v2_jobs WHERE id=?")
-        .bind(failedJob.jobId)
-        .first<number>("retryable"),
+      await recovery.run("policy_flag_readback", () =>
+        measured.binding
+          .prepare("SELECT retryable FROM v2_jobs WHERE id=?")
+          .bind(failedJob.jobId)
+          .first<number>("retryable"),
+      ),
     ).toBe(0);
     // Exercise the legacy retryable=0 branch on native D1 with real paid predicates.
     // The first retry's rejected drafts remain unpublished and its answers remain saved.
-    expect((await service.intake(ownerId, workspace.id))?.batches).toHaveLength(1);
+    expect(
+      (await recovery.run("policy_intake_readback", () => service.intake(ownerId, workspace.id)))
+        ?.batches,
+    ).toHaveLength(1);
     auditRejected = false;
-    const policyRetry = await request(
-      `/api/v2/cases/${workspace.id}/workspace-jobs/${failedJob.jobId}/retry`,
-      "POST",
-      { expectedRevision: (await service.find(ownerId, workspace.id)).workspaceRevision },
+    const recoveryRevision = await recovery.run("recovery_revision", () =>
+      service.find(ownerId, workspace.id),
+    );
+    const policyRetry = await recovery.run("recovery_request", () =>
+      request(`/api/v2/cases/${workspace.id}/workspace-jobs/${failedJob.jobId}/retry`, "POST", {
+        expectedRevision: recoveryRevision.workspaceRevision,
+      }),
     );
     expect(policyRetry.status).toBe(202);
-    expect((await execute(failedJob.jobId)).status).toBe("completed");
+    expect((await recovery.run("recovery_runtime", () => execute(failedJob.jobId))).status).toBe(
+      "completed",
+    );
     expect(providerCalls).toBe(9);
+    console.info(
+      "Synthetic native recovery measurements",
+      JSON.stringify({
+        requestedCostLimitsEnabled: applicationCostLimitsEnabled,
+        elapsedMs: Math.round(performance.now() - started),
+        recovery: recovery.snapshot(),
+        database: measured.measurements(),
+        provider: providerMeasurements,
+        hostBaseline,
+        host: nativeHostMeasurements(),
+      }),
+    );
     progress.enter("summary", "readback");
     // Continue every paid product phase on native D1, including encrypted
     // staging/publishing of facts, parties, timeline and actions.

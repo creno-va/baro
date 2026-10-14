@@ -199,3 +199,32 @@ test("an actual one-upload-part ZIP preserves every byte; an oversized multipart
   expect(larger.bucket.calls).toEqual(calls);
   expect(larger.bucket.objects.size).toBe(objects);
 });
+
+test("observation-only original read plan uses the bounded current kernel while priced/default plans keep their historical allowance", () => {
+  const input = {
+    pdfBytes: 5 * 262144,
+    zipBytes: 11 * 262144,
+    selectedFiles: 4,
+    originalParts: 4,
+    sourceRows: 250,
+    reportFiles: 4,
+  };
+  expect(reportWorkPlan({ ...input, applicationCostLimitsEnabled: false })).toEqual({
+    queries: 800,
+    rowsRead: 2700000,
+    rowsWritten: 1000,
+  });
+  expect(() =>
+    reportWorkPlan({ ...input, zipBytes: input.zipBytes + 1, applicationCostLimitsEnabled: false }),
+  ).toThrow("EXPORT_LIMIT_EXCEEDED");
+  expect(() =>
+    reportWorkPlan({ ...input, originalParts: 5, applicationCostLimitsEnabled: false }),
+  ).toThrow("EXPORT_LIMIT_EXCEEDED");
+  expect(() =>
+    reportWorkPlan({ ...input, sourceRows: 251, applicationCostLimitsEnabled: false }),
+  ).toThrow("EXPORT_LIMIT_EXCEEDED");
+  expect(() => reportWorkPlan({ ...input, applicationCostLimitsEnabled: true })).toThrow(
+    "EXPORT_LIMIT_EXCEEDED",
+  );
+  expect(() => reportWorkPlan(input)).toThrow("EXPORT_LIMIT_EXCEEDED");
+});

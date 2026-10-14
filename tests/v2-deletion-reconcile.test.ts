@@ -6,12 +6,10 @@ import { r2 } from "./helpers/file-processing-fixture";
 import { publicationFixture } from "./helpers/lawyer-publication";
 import { readyFile, reportFixture } from "./helpers/report-fixture";
 import { admit, HASH, held, intent, NOW, ready } from "./helpers/storage-capacity";
-
-const missing = {
-  get: async () => {
-    throw new Error("instance.not_found");
-  },
-};
+import {
+  deletedCleanupResult,
+  missingCleanupWorkflow as missing,
+} from "./helpers/workflow-cleanup";
 
 test("actual physical writer and exhausted cleanup allowance prevent any R2 delete; expired lease cannot issue a receipt", async () => {
   const f = await ready({ deleteLimit: 5, headLimit: 5 }),
@@ -157,13 +155,10 @@ test("account deletion captures publication runtime, clears private staging/publ
   let fail = true,
     at = new Date().toISOString();
   const binding = {
-    get: async (id: string) => {
-      if (id !== runtimeId) throw new Error("instance.not_found");
-      return {
-        delete: async () => {
-          if (fail) throw new Error("synthetic network failure");
-        },
-      };
+    deleteBatch: async (ids: string[]) => {
+      if (ids[0] !== runtimeId) return missing.deleteBatch(ids);
+      if (fail) throw new Error("synthetic network failure");
+      return deletedCleanupResult(ids);
     },
   };
   const runner = createV2DeletionReconciler(f.core, {
@@ -242,7 +237,7 @@ test("Workflow absence or deletion never proves that a legacy random native proc
         )
         .run(journal, id, ordinal);
     let nativeCalls = 0;
-    const found = { get: async () => ({ delete: async () => {} }) };
+    const found = { deleteBatch: async (ids: string[]) => deletedCleanupResult(ids) };
     const runner = createV2DeletionReconciler(f.core, {
       environment: "preview",
       workflows: [observed ? found : missing, missing, missing, missing],
@@ -280,12 +275,11 @@ test("native revocation and Workflow stop must both succeed before the retained 
     .query("INSERT INTO v2_deletion_targets(journal_id,kind,target_id,ordinal) VALUES(?,'job',?,0)")
     .run(journal, id);
   const binding = {
-    get: async () => ({
-      delete: async () => {
-        calls.push("workflow");
-        if (workflowFails) throw new Error("synthetic workflow failure");
-      },
-    }),
+    deleteBatch: async (ids: string[]) => {
+      calls.push("workflow");
+      if (workflowFails) throw new Error("synthetic workflow failure");
+      return deletedCleanupResult(ids);
+    },
   };
   const runner = createV2DeletionReconciler(f.core, {
     environment: "preview",

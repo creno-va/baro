@@ -1,0 +1,54 @@
+{
+  "synthetic": true,
+  "expectedPages": 2,
+  "expectedTable": {
+    "rows": 2,
+    "columns": 2
+  },
+  "expectedMarkers": [
+    "합성 자료 첫째 쪽",
+    "BLUEBOX17",
+    "합성 표",
+    "ORANGECIRCLE42",
+    "합성 자료 둘째 쪽",
+    "END_NATIVE_DOCUMENT"
+  ],
+  "generationChecks": [
+    "source archive SHA-256",
+    "own document readback",
+    "page-break structure",
+    "all markers",
+    "two independent writes have identical bytes"
+  ],
+  "renderVerification": "separate converter regression; generation alone does not verify rendered pagination",
+  "sources": {
+    "hwplib": {
+      "version": "1.1.11",
+      "commit": "6746c27f17ebf5277493206284aa32044a1839c4",
+      "url": "https://codeload.github.com/neolord0/hwplib/tar.gz/6746c27f17ebf5277493206284aa32044a1839c4",
+      "archive": "hwplib.tar.gz",
+      "sha256": "ace70253a63099e54b34770b5deec0b27a45677016cb4887fecf191d98768f95",
+      "license": "Apache-2.0"
+    },
+    "hwpxlib": {
+      "version": "1.0.9",
+      "commit": "f9fd2255ac0fc57414e0b657d115e7de51d31c65",
+      "url": "https://codeload.github.com/neolord0/hwpxlib/tar.gz/f9fd2255ac0fc57414e0b657d115e7de51d31c65",
+      "archive": "hwpxlib.tar.gz",
+      "sha256": "cdcd9c854c9f51cf218dad524eb2e0b2836de0ec9f04a18ec179354bfaa1251b",
+      "license": "Apache-2.0"
+    }
+  },
+  "fixtures": [
+    {
+      "file": "synthetic-two-page.hwp",
+      "sha256": "92b5483bb95ed927b1eba09c0e66cbb6f1bffcb938a3ec61fc563b81a253b86e",
+      "bytes": 4096
+    },
+    {
+      "file": "synthetic-two-page.hwpx",
+      "sha256": "5e7e467c9dc5c8774497d3e49cae6555c6a8a89b8a15cdb0480c7c11a0ce1c57",
+      "bytes": 6807
+    }
+  ]
+}

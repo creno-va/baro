@@ -2,6 +2,7 @@
 *.pdf binary
 *.png binary
 *.jpg binary
+*.heic binary
 *.wav binary
 *.mp4 binary
 *.txt binary

@@ -7,6 +7,7 @@ import { nativeJobId } from "../src/server/modules/file-processing/native-identi
 import { createFileRetry } from "../src/server/modules/file-processing/retry";
 import { fixture, uploaded } from "./helpers/file-processing-fixture";
 import { seedTestSession } from "./helpers/session";
+import { missingCleanupWorkflow as missing } from "./helpers/workflow-cleanup";
 
 async function failedFile() {
   const f = await fixture(),
@@ -167,11 +168,7 @@ test("deletion after a retry retains and revokes every native attempt before rem
       .all(),
   ).toEqual(attempts.map((target_id) => ({ target_id })));
   const revoked: string[] = [];
-  const missing = {
-    get: async () => {
-      throw new Error("instance.not_found");
-    },
-  };
+
   const result = await createV2DeletionReconciler(f.core, {
     environment: "preview",
     privateBucket: f.bucket.port,

@@ -1,5 +1,12 @@
+import { createNativeMeasurements } from "./native-measurements";
+
 /** Native D1 measurements, including auth queries outside the domain core. */
-export function measureD1Work(database: D1Database, onFailure?: (error: unknown) => void) {
+export function measureD1Work(
+  database: D1Database,
+  onFailure?: (error: unknown) => void,
+  clock?: () => number,
+) {
+  const measurements = createNativeMeasurements(clock);
   const trace = {
     operation: "none" as "none" | "prepare" | "bind" | "all" | "run" | "first" | "raw" | "batch",
     state: "idle" as "idle" | "pending" | "completed" | "failed",
@@ -7,15 +14,21 @@ export function measureD1Work(database: D1Database, onFailure?: (error: unknown)
     maximumBoundParameters: 0,
     maximumBatchStatements: 0,
   };
-  const capture = async <T>(operation: typeof trace.operation, action: () => Promise<T>) => {
+  const capture = async <T>(
+    operation: "all" | "run" | "first" | "raw" | "batch",
+    action: () => Promise<T>,
+  ) => {
+    const finish = measurements.begin(operation);
     trace.operation = operation;
     trace.state = "pending";
     trace.measurementMetadataPresent = null;
     try {
       const result = await action();
       trace.state = "completed";
+      finish();
       return result;
     } catch (error) {
+      finish(true);
       trace.operation = operation;
       trace.state = "failed";
       onFailure?.(error);
@@ -30,6 +43,7 @@ export function measureD1Work(database: D1Database, onFailure?: (error: unknown)
       Number.isSafeInteger(value.meta.rows_read) &&
       Number.isSafeInteger(value.meta.rows_written);
     if (!trace.measurementMetadataPresent) throw new Error("Native D1 measurement missing");
+    measurements.sql(value.meta.duration);
     work.statements++;
     work.rowsRead += value.meta.rows_read;
     work.rowsWritten += value.meta.rows_written;
@@ -38,14 +52,17 @@ export function measureD1Work(database: D1Database, onFailure?: (error: unknown)
   const wrap = (statement: D1PreparedStatement): D1PreparedStatement => {
     const result = {
       bind: (...values: unknown[]) => {
+        const finish = measurements.begin("bind");
         trace.maximumBoundParameters = Math.max(trace.maximumBoundParameters, values.length);
         trace.operation = "bind";
         trace.state = "pending";
         try {
           const bound = wrap(statement.bind(...values));
+          finish();
           trace.state = "completed";
           return bound;
         } catch (error) {
+          finish(true);
           trace.state = "failed";
           onFailure?.(error);
           throw error;
@@ -75,6 +92,7 @@ export function measureD1Work(database: D1Database, onFailure?: (error: unknown)
   return {
     work,
     trace,
+    measurements: measurements.snapshot,
     resetTrace: () =>
       Object.assign(trace, {
         operation: "none",
@@ -86,13 +104,16 @@ export function measureD1Work(database: D1Database, onFailure?: (error: unknown)
     reset: () => Object.assign(work, { statements: 0, rowsRead: 0, rowsWritten: 0 }),
     binding: {
       prepare: (sql: string) => {
+        const finish = measurements.begin("prepare");
         trace.operation = "prepare";
         trace.state = "pending";
         try {
           const prepared = wrap(database.prepare(sql));
+          finish();
           trace.state = "completed";
           return prepared;
         } catch (error) {
+          finish(true);
           trace.state = "failed";
           onFailure?.(error);
           throw error;

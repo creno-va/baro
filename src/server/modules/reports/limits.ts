@@ -25,13 +25,25 @@ export function reportWorkPlan(input: {
   originalParts?: number;
   sourceRows: number;
   reportFiles: number;
+  applicationCostLimitsEnabled?: boolean;
 }): ReportWorkPlan {
   const chunks = Math.ceil(input.pdfBytes / 262144) + Math.ceil((input.zipBytes ?? 0) / 262144);
+  // The observation-only original reader uses ten SQL statements per part:
+  // part + initial provenance (2), month observations (2), physical/counter/
+  // consume checks (3), pre-GET + post-decrypt + ZIP-yield fences (3).
+  // Each file also has eight content metadata/manifest reads, one EOF session
+  // read and three ZIP source fences; twenty retains conservative headroom.
+  // Keep the larger historical allowance for priced/custom compositions, and
+  // retain all three original passes and the unchanged hard request ceiling.
+  const originalPartQueries = input.applicationCostLimitsEnabled === false ? 10 : 32;
+  const originalFileQueries = input.applicationCostLimitsEnabled === false ? 20 : 24;
   const queries =
     300 +
     5 * chunks +
     input.reportFiles * 15 +
-    3 * ((input.selectedFiles ?? 0) * 24 + (input.originalParts ?? 0) * 32);
+    3 *
+      ((input.selectedFiles ?? 0) * originalFileQueries +
+        (input.originalParts ?? 0) * originalPartQueries);
   if (input.sourceRows > 250 || queries > REPORT_QUERY_LIMIT - 100)
     throw new ReportError("EXPORT_LIMIT_EXCEEDED");
   return {
