@@ -1,3 +1,5 @@
+import { observeD1Awaits } from "./observe-d1-awaits";
+
 const operations = ["workspace_read", "intake_read", "answers_save", "latest_job_read"] as const;
 export type PreviewD1Operation = (typeof operations)[number];
 const regions = ["ENAM", "WNAM", "WEUR", "EEUR", "APAC", "OC"] as const;
@@ -51,7 +53,6 @@ export function createPreviewD1Timing(
     regionsKnown: 0,
   };
   const observedRegions = new Set<string>();
-  const originals = new WeakMap<D1PreparedStatement, D1PreparedStatement>();
   let sealed = false;
   const observe = (results: readonly D1Result<unknown>[], statements: number) => {
     let sql = 0,
@@ -114,53 +115,7 @@ export function createPreviewD1Timing(
         });
     }
   };
-  const wrap = (statement: D1PreparedStatement): D1PreparedStatement => {
-    const wrapped = {
-      bind: (...values: unknown[]) => wrap(statement.bind(...values)),
-      all: <T>() =>
-        capture(
-          1,
-          () => statement.all<T>(),
-          (result) => [result],
-        ),
-      run: <T>() =>
-        capture(
-          1,
-          () => statement.run<T>(),
-          (result) => [result],
-        ),
-      first: <T>(column?: string) =>
-        capture(1, () =>
-          column === undefined ? statement.first<T>() : statement.first<T>(column),
-        ),
-      raw: <T>(options?: { columnNames?: boolean }) =>
-        capture<T[] | [string[], ...T[]]>(1, () =>
-          options === undefined
-            ? statement.raw<T>()
-            : (
-                statement.raw as (value: {
-                  columnNames?: boolean;
-                }) => Promise<T[] | [string[], ...T[]]>
-              ).call(statement, options),
-        ),
-    } as D1PreparedStatement;
-    originals.set(wrapped, statement);
-    return wrapped;
-  };
-  const binding = {
-    prepare: (sql: string) => wrap(database.prepare(sql)),
-    batch: <T>(statements: D1PreparedStatement[]) =>
-      capture(
-        statements.length,
-        () =>
-          database.batch<T>(statements.map((statement) => originals.get(statement) ?? statement)),
-        (results) => results,
-      ),
-    exec: (sql: string) => database.exec(sql),
-    dump: () => database.dump(),
-    withSession: (constraint?: D1SessionBookmark | D1SessionConstraint) =>
-      database.withSession(constraint),
-  } as D1Database;
+  const binding = observeD1Awaits(database, capture);
   return {
     binding,
     finish(): string | null {

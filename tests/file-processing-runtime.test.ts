@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { afterEach, expect, spyOn, test } from "bun:test";
 import { z } from "zod";
 import { CURRENT_POLICY_VERSIONS } from "../src/contracts/consent";
 import { createV2Core } from "../src/server/db/v2-core";
@@ -20,6 +20,11 @@ import { createFileProcessingAdmission } from "../src/server/runtime/file-admiss
 import { countD1Calls } from "./helpers/d1-call-count";
 import { fixture } from "./helpers/file-processing-fixture";
 import { seedTestSession } from "./helpers/session";
+
+const phaseLogSpies: ReturnType<typeof spyOn<typeof console, "info">>[] = [];
+afterEach(() => {
+  for (const spy of phaseLogSpies.splice(0)) spy.mockRestore();
+});
 
 /** Canonical admission/ledger/runtime with SQLite, AES and explicit offline
  * R2/native adapters. This never claims a real Container/provider success. */
@@ -195,6 +200,15 @@ async function setup(pageCount = 1) {
 
 for (const pageCount of [1, 2])
   test(`canonical observation-only ${pageCount}-page extraction stores bounded ciphertext and publishes actual text`, async () => {
+    const phaseLogs: Record<string, unknown>[] = [];
+    const originalInfo = console.info.bind(console);
+    phaseLogSpies.push(
+      spyOn(console, "info").mockImplementation((value) => {
+        const entry = JSON.parse(value);
+        if (entry.event === "preview_file_phase_awaits") phaseLogs.push(entry);
+        else originalInfo(value);
+      }),
+    );
     const f = await setup(pageCount);
     const initialHotReads = { ...f.hotReads };
     const stages: { stage: string; calls: number; statements: number; authorizations: number }[] =
@@ -266,6 +280,27 @@ for (const pageCount of [1, 2])
     expect(stages.reduce((sum, stage) => sum + stage.authorizations, 0)).toBe(
       pageCount === 1 ? 308 : 555,
     );
+    // The exact existing SQLite/AES/R2 runtime keeps all calls and guards. Phase
+    // observation counts method awaits only, including their ledger/fence work.
+    const measuredStages = stages.filter((stage) =>
+      ["prepare_publication", "stage_result"].includes(stage.stage),
+    );
+    expect(phaseLogs).toHaveLength(measuredStages.length);
+    for (const [index, stage] of measuredStages.entries()) {
+      const entry = phaseLogs[index];
+      expect(entry).toMatchObject({
+        phase: stage.stage,
+        outcome: "success",
+        d1Calls: stage.calls,
+        d1Failed: 0,
+        d1TimedCalls: stage.calls,
+        r2Calls: stage.stage === "prepare_publication" ? 2 * pageCount + 2 : 3,
+        r2Failed: 0,
+      });
+      expect(entry?.d1AwaitMs).toBeNumber();
+      expect(entry?.r2AwaitMs).toBeNumber();
+      expect(entry?.overallMs).toBeNumber();
+    }
     if (process.env.BARO_FILE_PROCESSING_WORK === "true")
       console.info(
         JSON.stringify({
