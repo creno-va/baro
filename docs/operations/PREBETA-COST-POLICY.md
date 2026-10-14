@@ -125,3 +125,27 @@ GitHub 저장소는 PUBLIC이며 확인한 모든 workflow는 표준 `ubuntu-lat
 표시됐으며 조직 budget 화면도404였다. 따라서 **조직 budget 전체가 없다고 확인한 것은 아니다.**
 접근 가능한 실행 상태와 조직 전체 설정의 미확인 범위를 구분한다. 이404는 현재 배포 blocker가
 아니며 추가 로그인을 요구하지 않는다. 개인 이메일·invoice는 기록하지 않는다.
+
+## 2026-10-15 코드·설정 재대조
+
+`a601faae36e739eef4ab22d828c2e353a649bd09` 기준으로 AGENTS·실행 문서·Wrangler·배포
+action과 모델/자료/저장/dispatch 경로를 다시 읽었다. Wrangler의 기본·preview·production은
+두 비용 flag가 false이며, false 경로는 가격/funding/SKU가 없어도 기술 journal로 admission한다.
+금액·만료·월별 control/projection·비용 IO50을 새로운 실행 조건으로 사용하는 경로는 이번
+검토에서 추가로 확인하지 못했다. 비용 견적 도구와 true/과거 paid 경로의 엄격한 검사를
+false 제품 경로의 차단으로 혼동하지 않는다. `BUDGET_UNAVAILABLE`만으로 비용 원인을
+단정하지 않으며 실제 lease·writer·byte·권한·실행 기록 실패와 구분한다.
+
+배포는 비용 refresh 없이 원래 모델 capability 시각과 기술 상한을 설정한다. smoke의 `text`
+preflight는 실제 구성·schema·SHA·환경 검사를 계속 수행하며 비용 정보는 관측 경고로만
+남긴다. 별도 수동 `all` preflight는 실제 media 실행을 검사하지 않았음을 명시한다. 현재
+legacy 분석의 attempt ledger 미연결은 기술 blocker로 보존하며, media 전체 미연결이라는
+과거 고정 단정은 제거한다. [검사 범위](../quality/AI-PREFLIGHT-AUDIT.md#2026-10-15-사전검사-범위-재대조)를 따른다.
+
+같은 날 GitHub 읽기 전용 조회에서 저장소 PUBLIC과 repo/preview/production 변수에 비용
+flag override가 없음을 재확인했다. 환경 변수는 공개 site key의 이름만 확인했으며 값·secret은
+출력하지 않았다. Cloudflare의 위 console 관측은 10월14일의 실제 증거로 보존하고 이번
+소스 점검을 새 콘솔 확인으로 표시하지 않는다. 조직 전체 budget, 실제 공급자 잔액의 현재값,
+가격/funding을 제거한 실제 배포의 외부 처리 성공은 이번 감사에서 확인하지 않았다.
+기존 사용자 데이터나 원장을 지워 누락 조건을 만들지 않았으며 전체 MVP·production 인수
+완료 선언으로 사용하지 않는다.

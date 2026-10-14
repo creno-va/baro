@@ -1,5 +1,6 @@
 import { afterEach, expect, test } from "bun:test";
 import { Hono } from "hono";
+import { casesApi } from "../src/client/api/cases";
 import { createWorkspaceApi } from "../src/client/api/workspace";
 import { meApi } from "../src/server/api/me";
 import { createFilesApi } from "../src/server/api/v2/files";
@@ -32,6 +33,7 @@ type Route =
   | "timeline"
   | "files"
   | "summary"
+  | "confirm"
   | "latest_job";
 type RequestWork = {
   route: Route;
@@ -41,8 +43,20 @@ type RequestWork = {
   startedMs: number;
   headersMs: number;
   completedMs: number;
+  queryFamilies: string[][];
 };
 const round = (n: number) => Math.round(n * 1000) / 1000;
+function queryFamily(sql: string) {
+  if (sql.startsWith("SELECT coalesce(") && sql.includes("AS current_consent"))
+    return "customer_access";
+  const table = /\bfrom\s+["`]?([a-z0-9_]+)/i.exec(sql)?.[1]?.toLowerCase();
+  if (table === "session") return "auth_session";
+  if (table === "user") return "auth_user";
+  if (table === "app_metadata" || table === "v2_role_bindings") return "account_role";
+  if (table === "user_consents") return "current_consent";
+  if (table === "v2_tombstones") return "account_tombstone";
+  return "domain";
+}
 
 /** Actual Hono/AES/SQLite contracts and client get/save path; synthetic provider/R2 only.
  * Local call counts and wall time are not remote D1 SQL time or browser measurements. */
@@ -204,19 +218,24 @@ async function fixture() {
         ? "session"
         : suffix === "workspace-jobs/latest"
           ? "latest_job"
-          : suffix?.startsWith("timeline")
-            ? "timeline"
-            : suffix?.startsWith("actions")
-              ? "actions"
-              : ["workspace", "intake", "messages", "actions", "files", "summary"].includes(
-                    suffix ?? "",
-                  )
-                ? (suffix as Route)
-                : (() => {
-                    throw new Error("Unexpected synthetic route");
-                  })();
+          : suffix === "summary/confirm"
+            ? "confirm"
+            : suffix?.startsWith("timeline")
+              ? "timeline"
+              : suffix?.startsWith("actions")
+                ? "actions"
+                : ["workspace", "intake", "messages", "actions", "files", "summary"].includes(
+                      suffix ?? "",
+                    )
+                  ? (suffix as Route)
+                  : (() => {
+                      throw new Error("Unexpected synthetic route");
+                    })();
     const meter = countD1Calls(f.db.binding);
-    meter.before((statements) => beforeSql(statements));
+    meter.before((statements) => {
+      row.queryFamilies.push(statements.map(queryFamily));
+      beforeSql(statements);
+    });
     meter.after((statements) => afterSql(statements));
     const row: RequestWork = {
       route,
@@ -226,6 +245,7 @@ async function fixture() {
       startedMs: performance.now() - start,
       headersMs: 0,
       completedMs: 0,
+      queryFamilies: [],
     };
     rows.push(row);
     const response = await app.request(
@@ -320,6 +340,53 @@ async function fixture() {
   };
 }
 
+test("canonical summary read, save and confirmation separate fresh authorization from domain work", async () => {
+  const f = await fixture();
+  const previousFetch = globalThis.fetch;
+  globalThis.fetch = ((path, init) => f.transport(String(path), init)) as typeof fetch;
+  try {
+    let item = await casesApi.get(f.workspace.id);
+    for (const operation of ["focus", "save", "confirm", "reload"] as const) {
+      f.reset();
+      if (operation === "focus" || operation === "reload") await f.session();
+      await f.session();
+      item =
+        operation === "save"
+          ? await casesApi.saveSummary(f.workspace.id, {
+              expectedRevision: item.revision,
+              summary: "확인 상태와 실제 사용자 사실을 유지하는 합성 요약 수정입니다.",
+            })
+          : operation === "confirm"
+            ? await casesApi.confirmSummary(f.workspace.id, { expectedRevision: item.revision })
+            : await casesApi.get(f.workspace.id);
+      await f.session();
+      expect(item.summaryDetails).toBeDefined();
+      if (operation === "save") expect(item.stage).toBe("summary");
+      if (operation === "confirm") expect(item.stage).toBe("active");
+      expect(f.rows.every((row) => row.calls === row.queryFamilies.length)).toBe(true);
+      if (process.env.BARO_WORKSPACE_ACCESS_METRICS === "true")
+        console.info(
+          JSON.stringify({
+            event: "synthetic_summary_access_work",
+            operation,
+            http: f.rows.length,
+            calls: f.rows.reduce((sum, row) => sum + row.calls, 0),
+            statements: f.rows.reduce((sum, row) => sum + row.statements, 0),
+            routes: f.rows.map(({ route, method, calls, statements, queryFamilies }) => ({
+              route,
+              method,
+              calls,
+              statements,
+              queryFamilies,
+            })),
+          }),
+        );
+    }
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
+
 test("canonical timeline save measures the complete client readback and final session check", async () => {
   const f = await fixture();
   let before = f.view;
@@ -359,14 +426,14 @@ test("canonical timeline save measures the complete client readback and final se
       {
         route: "timeline",
         method,
-        calls: method === "POST" ? 13 : 14,
-        statements: method === "POST" ? 20 : 21,
+        calls: method === "POST" ? 11 : 12,
+        statements: method === "POST" ? 18 : 19,
       },
       { route: "workspace", method: "GET", calls: 5, statements: 5 },
       { route: "intake", method: "GET", calls: 8, statements: 9 },
-      { route: "messages", method: "GET", calls: 10, statements: 10 },
-      { route: "actions", method: "GET", calls: 10, statements: 10 },
-      { route: "timeline", method: "GET", calls: 10, statements: 10 },
+      { route: "messages", method: "GET", calls: 8, statements: 8 },
+      { route: "actions", method: "GET", calls: 8, statements: 8 },
+      { route: "timeline", method: "GET", calls: 8, statements: 8 },
       { route: "files", method: "GET", calls: 8, statements: 8 },
       { route: "summary", method: "GET", calls: 14, statements: 14 },
       { route: "workspace", method: "GET", calls: 5, statements: 5 },
@@ -407,13 +474,13 @@ test("canonical action save retains the full readback and both session checks", 
   expect(next.case.revision).toBe(f.view.case.revision + 1);
   // Same synthetic fixture before these two query merges: 100 calls / 112 SQL.
   expect(f.rows).toHaveLength(12);
-  expect(f.rows.find((row) => row.method === "PUT")).toMatchObject({ calls: 15, statements: 22 });
+  expect(f.rows.find((row) => row.method === "PUT")).toMatchObject({ calls: 13, statements: 20 });
   expect(f.rows.find((row) => row.route === "latest_job")).toMatchObject({
     calls: 6,
     statements: 6,
   });
-  expect(f.rows.reduce((sum, row) => sum + row.calls, 0)).toBe(97);
-  expect(f.rows.reduce((sum, row) => sum + row.statements, 0)).toBe(109);
+  expect(f.rows.reduce((sum, row) => sum + row.calls, 0)).toBe(89);
+  expect(f.rows.reduce((sum, row) => sum + row.statements, 0)).toBe(101);
   if (process.env.BARO_WORKSPACE_LOAD_METRICS === "true")
     console.info(
       JSON.stringify({
@@ -447,6 +514,113 @@ test("warm focus keeps the same request and session boundaries", async () => {
     );
 });
 
+test("cold focus measures every collection with the same fresh session boundaries", async () => {
+  const f = await fixture();
+  const client = createWorkspaceApi(f.transport, null);
+  f.reset();
+  await f.session();
+  await f.session();
+  expect(await client.get(f.workspace.id)).toEqual(f.view);
+  await f.session();
+  if (process.env.BARO_WORKSPACE_LOAD_METRICS === "true")
+    console.info(
+      JSON.stringify({
+        event: "synthetic_workspace_cold_focus_work",
+        http: f.rows.length,
+        calls: f.rows.reduce((sum, row) => sum + row.calls, 0),
+        statements: f.rows.reduce((sum, row) => sum + row.statements, 0),
+      }),
+    );
+});
+
+for (const collection of ["messages", "actions", "timeline"] as const) {
+  test(`${collection} distinguishes an empty owned case from absent, foreign and deleted cases`, async () => {
+    const f = await fixture();
+    const empty = await f.service.create(f.owner.userId, crypto.randomUUID(), {
+      narrative: "아직 메시지와 준비 목록이 없는 별도의 합성 사건입니다.",
+      subjectContext: "individual",
+      jurisdiction: "KR",
+      turnstileToken: "synthetic",
+    });
+    const read = (id = empty.id) => f.transport(`/api/v2/cases/${id}/${collection}`);
+    const response = await read();
+    expect(response.status).toBe(200);
+    expect((await response.json()) as unknown).toEqual({ items: [], nextCursor: null });
+    let rowsRead = 0;
+    f.afterSql((statements) => {
+      if (statements.some((sql) => sql.startsWith(`SELECT * FROM v2_${collection}`))) rowsRead++;
+    });
+    expect((await read(crypto.randomUUID())).status).toBe(404);
+    expect(
+      await f.repository[collection]({ ownerId: f.owner.userId, now: f.now }, crypto.randomUUID()),
+    ).toEqual([]);
+    const peer = await seedTestSession(f.db, { consent: true });
+    f.db.sqlite.query("UPDATE v2_workspaces SET owner_id=? WHERE id=?").run(peer.userId, empty.id);
+    expect((await read()).status).toBe(404);
+    f.db.sqlite
+      .query("UPDATE v2_workspaces SET owner_id=? WHERE id=?")
+      .run(f.owner.userId, empty.id);
+    f.db.sqlite.query("INSERT INTO v2_tombstones VALUES('workspace',?,?)").run(empty.id, f.now);
+    expect((await read()).status).toBe(404);
+    expect(rowsRead).toBe(0);
+  });
+
+  test(`${collection} rechecks account deletion after the first workspace decrypt before reading rows`, async () => {
+    const f = await fixture();
+    let changed = false;
+    let rowsRead = 0;
+    f.afterSql((statements) => {
+      if (statements.some((sql) => sql.startsWith(`SELECT * FROM v2_${collection}`))) rowsRead++;
+      if (changed || !statements.some((sql) => sql.startsWith("SELECT w.* FROM v2_workspaces")))
+        return;
+      changed = true;
+      f.db.sqlite
+        .query("INSERT INTO v2_tombstones VALUES('account',?,?)")
+        .run(f.owner.userId, f.now);
+    });
+    expect((await f.transport(`/api/v2/cases/${f.workspace.id}/${collection}`)).status).toBe(404);
+    expect(changed).toBe(true);
+    expect(rowsRead).toBe(0);
+  });
+
+  for (const phase of ["before-entity-decrypt", "after-entity-decrypt"] as const)
+    for (const change of ["owner", "account", "workspace", "revision"] as const)
+      test(`${collection} final snapshot suppresses ${change} changes ${phase}`, async () => {
+        const f = await fixture();
+        const peer = await seedTestSession(f.db, { consent: true });
+        let changed = false;
+        let workspaceReads = 0;
+        f.afterSql((statements) => {
+          const workspace = statements.some((sql) =>
+            sql.startsWith("SELECT w.* FROM v2_workspaces"),
+          );
+          if (workspace) workspaceReads++;
+          const atBoundary =
+            phase === "before-entity-decrypt"
+              ? statements.some((sql) => sql.startsWith(`SELECT * FROM v2_${collection}`))
+              : workspace && workspaceReads === 2;
+          if (changed || !atBoundary) return;
+          changed = true;
+          if (change === "owner")
+            f.db.sqlite
+              .query("UPDATE v2_workspaces SET owner_id=? WHERE id=?")
+              .run(peer.userId, f.workspace.id);
+          if (change === "account" || change === "workspace")
+            f.db.sqlite
+              .query("INSERT INTO v2_tombstones VALUES(?,?,?)")
+              .run(change, change === "account" ? f.owner.userId : f.workspace.id, f.now);
+          if (change === "revision")
+            f.db.sqlite
+              .query("UPDATE v2_workspaces SET revision=revision+1 WHERE id=?")
+              .run(f.workspace.id);
+        });
+        const response = await f.transport(`/api/v2/cases/${f.workspace.id}/${collection}`);
+        expect(changed).toBe(true);
+        expect(response.status).toBe(200);
+        expect((await response.json()) as unknown).toEqual({ items: [], nextCursor: null });
+      });
+}
+
 function entityRequest(
   f: Awaited<ReturnType<typeof fixture>>,
   kind: "actions" | "timeline",
@@ -471,6 +645,24 @@ function entityRequest(
 }
 
 for (const kind of ["actions", "timeline"] as const) {
+  test(`${kind} account deletion immediately before the access snapshot remains HTTP 404`, async () => {
+    const f = await fixture();
+    const input = entityRequest(f, kind);
+    let changed = false;
+    f.beforeSql((statements) => {
+      if (changed || !statements.some((sql) => sql.includes("AS current_consent"))) return;
+      changed = true;
+      f.db.sqlite
+        .query("INSERT INTO v2_tombstones VALUES('account',?,?)")
+        .run(f.owner.userId, f.now);
+    });
+    expect((await f.transport(input.path, input.init)).status).toBe(404);
+    expect(changed).toBe(true);
+    expect(
+      f.db.sqlite.query(`SELECT revision FROM v2_${kind} WHERE entity_id=?`).get(input.id),
+    ).toEqual({ revision: 1 });
+  });
+
   test(`${kind} missing entity remains HTTP 404 without a write receipt`, async () => {
     const f = await fixture();
     const input = entityRequest(f, kind, true);

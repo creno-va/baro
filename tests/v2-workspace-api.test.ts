@@ -134,32 +134,37 @@ for (const savedPreference of [true, false]) {
   });
 }
 
-test("a role change during consent verification still blocks workspace creation", async () => {
-  const f = await fixture();
-  await saveAccountType(f.db.binding, f.owner.userId, "customer");
-  const prepare = f.db.binding.prepare.bind(f.db.binding);
-  let changed = false;
-  f.db.binding.prepare = (sql) => {
-    if (!changed && sql.includes('from "user_consents"')) {
-      changed = true;
-      f.db.sqlite
-        .query("UPDATE app_metadata SET value='lawyer' WHERE key=?")
-        .run(`account-type:${f.owner.userId}`);
-    }
-    return prepare(sql);
-  };
-  const response = await f.app.request(
-    "/api/v2/cases",
-    {
-      method: "POST",
-      headers: { ...f.headers, "idempotency-key": crypto.randomUUID() },
-      body: JSON.stringify(f.input),
-    },
-    f.env,
-  );
-  expect(changed).toBe(true);
-  expect(response.status).toBe(404);
-  expect(await response.json()).toMatchObject({ error: { code: "NOT_FOUND" } });
-  expect(f.verified()).toBe(0);
-  expect(f.db.sqlite.query("SELECT count(*) n FROM v2_workspaces").get()).toEqual({ n: 0 });
-});
+for (const change of ["role", "consent"] as const)
+  test(`a ${change} change before the shared access snapshot blocks workspace creation`, async () => {
+    const f = await fixture();
+    await saveAccountType(f.db.binding, f.owner.userId, "customer");
+    const prepare = f.db.binding.prepare.bind(f.db.binding);
+    let changed = false;
+    f.db.binding.prepare = (sql) => {
+      if (!changed && sql.includes("AS current_consent")) {
+        changed = true;
+        if (change === "role")
+          f.db.sqlite
+            .query("UPDATE app_metadata SET value='lawyer' WHERE key=?")
+            .run(`account-type:${f.owner.userId}`);
+        else f.db.sqlite.query("DELETE FROM user_consents WHERE user_id=?").run(f.owner.userId);
+      }
+      return prepare(sql);
+    };
+    const response = await f.app.request(
+      "/api/v2/cases",
+      {
+        method: "POST",
+        headers: { ...f.headers, "idempotency-key": crypto.randomUUID() },
+        body: JSON.stringify(f.input),
+      },
+      f.env,
+    );
+    expect(changed).toBe(true);
+    expect(response.status).toBe(403);
+    expect(await response.json()).toMatchObject({
+      error: { code: change === "role" ? "ROLE_REQUIRED" : "CONSENT_REQUIRED" },
+    });
+    expect(f.verified()).toBe(0);
+    expect(f.db.sqlite.query("SELECT count(*) n FROM v2_workspaces").get()).toEqual({ n: 0 });
+  });

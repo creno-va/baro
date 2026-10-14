@@ -111,12 +111,13 @@ test("canonical answer save avoids duplicate reads while verifying the acknowled
   expect(result.questions[0]?.answer).toBe(f.input.answers[0]?.value);
   expect(result.revision).toBe(f.before.workspaceRevision + 1);
   // Same local fixture before batching: 8 HTTP / 62 D1 calls / 74 SQL.
+  // Latest-job selection removes one call/SQL; the role-consent snapshot removes two.
   // Counts measure local D1 method calls, never native rows or network latency.
   expect(f.rows).toHaveLength(8);
-  expect(f.rows.reduce((n, r) => n + r.calls, 0)).toBe(55);
-  expect(f.rows.reduce((n, r) => n + r.statements, 0)).toBe(74);
+  expect(f.rows.reduce((n, r) => n + r.calls, 0)).toBe(52);
+  expect(f.rows.reduce((n, r) => n + r.statements, 0)).toBe(71);
   expect(f.rows.filter((r) => r.method === "PUT")).toEqual([
-    { route: "intake/answers", method: "PUT", calls: 21, statements: 33 },
+    { route: "intake/answers", method: "PUT", calls: 19, statements: 31 },
   ]);
 });
 
@@ -132,8 +133,8 @@ for (const environment of ["preview", "production"] as const)
     expect((await fetch("/api/me/session")).ok).toBe(true);
     expect(result.questions[0]?.answer).toBe(f.input.answers[0]?.value);
     expect(f.rows).toHaveLength(8);
-    expect(f.rows.reduce((n, row) => n + row.calls, 0)).toBe(55);
-    expect(f.rows.reduce((n, row) => n + row.statements, 0)).toBe(74);
+    expect(f.rows.reduce((n, row) => n + row.calls, 0)).toBe(52);
+    expect(f.rows.reduce((n, row) => n + row.statements, 0)).toBe(71);
     if (environment === "production") {
       expect(f.timings.every((timing) => timing.header === null)).toBe(true);
       expect(logs).toHaveLength(0);
@@ -155,7 +156,7 @@ for (const environment of ["preview", "production"] as const)
       workspace: ["workspace_read", 2, 2],
       intake: ["intake_read", 5, 6],
       "intake/answers": ["answers_save", 16, 28],
-      "workspace-jobs/latest": ["latest_job_read", 4, 4],
+      "workspace-jobs/latest": ["latest_job_read", 3, 3],
     } as const;
     for (const { route, header } of headers) {
       const expected = counts[route as keyof typeof counts];
@@ -435,6 +436,6 @@ test("readIntake keeps answers attached to their question batch across both roun
     "합성 2차 답변 수정",
   );
   expect(f.rows).toHaveLength(8);
-  expect(f.rows.reduce((n, row) => n + row.calls, 0)).toBe(55);
-  expect(f.rows.reduce((n, row) => n + row.statements, 0)).toBe(74);
+  expect(f.rows.reduce((n, row) => n + row.calls, 0)).toBe(52);
+  expect(f.rows.reduce((n, row) => n + row.statements, 0)).toBe(71);
 });

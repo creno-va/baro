@@ -183,7 +183,7 @@ test("current chat facts/people and reconfirmed corrections propagate to reports
     "사용자가 교정한 합성 자료 보관 사실",
     party.label,
     "교정 사실과 연결한 최신 날짜 미상 사건",
-    "연결 자료 확인 (done)",
+    "연결 자료 확인 (완료)",
   ])
     expect(current.content).toContain(text);
   expect(current.content).not.toContain(fact.text);

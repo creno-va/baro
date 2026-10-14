@@ -29,7 +29,16 @@ type ObserveStop = <T>(stage: CleanupStage, work: () => Promise<T>) => Promise<T
 type CleanupErrorDetails = {
   errorShape: "error" | "non_error";
   errorName: "Error" | "TypeError" | "WorkflowError" | "other";
-  messageClass: "instance_missing_exact" | "instance_missing_wrapped" | "other";
+  messageClass:
+    | "instance_missing_exact"
+    | "instance_missing_wrapped"
+    | "instance_missing_marker"
+    | "workflow_missing_marker"
+    | "invalid_identifier_marker"
+    | "request_limit_marker"
+    | "network_marker"
+    | "internal_marker"
+    | "other";
   codeClass: "absent" | "numeric" | "other" | "unreadable";
   httpStatus: number | null;
 };
@@ -52,6 +61,28 @@ function isError(error: unknown): error is Error {
 function missingInstance(error: unknown) {
   return isError(error) && errorField(error, "message") === "instance.not_found";
 }
+/** Fixed diagnostic labels only. A marker is never an absence receipt. */
+function cleanupMessageClass(message: unknown): CleanupErrorDetails["messageClass"] {
+  if (message === "instance.not_found") return "instance_missing_exact";
+  if (message === "(instance.not_found) Instance does not exist") return "instance_missing_wrapped";
+  if (typeof message !== "string" || message.length > 4096) return "other";
+  const text = message.toLowerCase();
+  if (text.includes("instance.not_found") || text.includes("instance does not exist"))
+    return "instance_missing_marker";
+  if (text.includes("workflow.not_found")) return "workflow_missing_marker";
+  if (
+    text.includes("invalid id") ||
+    text.includes("invalid_id") ||
+    text.includes("invalid identifier")
+  )
+    return "invalid_identifier_marker";
+  if (text.includes("too many subrequests") || text.includes("too many api requests"))
+    return "request_limit_marker";
+  if (text.includes("network connection") || text.includes("network error"))
+    return "network_marker";
+  if (text.includes("internal error")) return "internal_marker";
+  return "other";
+}
 /** Diagnostics only. Never infer a missing instance from a wrapped message.
  * The exact wrapped form comes from pinned Miniflare's createWorkflowError;
  * neither arbitrary prefixes/suffixes nor user data are included in the output. */
@@ -64,12 +95,7 @@ export function cleanupErrorDetails(error: unknown): CleanupErrorDetails {
     errorShape: isError(error) ? "error" : "non_error",
     errorName:
       name === "Error" || name === "TypeError" || name === "WorkflowError" ? name : "other",
-    messageClass:
-      message === "instance.not_found"
-        ? "instance_missing_exact"
-        : message === "(instance.not_found) Instance does not exist"
-          ? "instance_missing_wrapped"
-          : "other",
+    messageClass: cleanupMessageClass(message),
     codeClass:
       code === unreadable
         ? "unreadable"

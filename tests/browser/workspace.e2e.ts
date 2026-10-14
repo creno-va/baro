@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { expect, type Page, test } from "@playwright/test";
 import { captureCaseViewports } from "../helpers/case-ui-capture";
 
@@ -290,6 +291,223 @@ test("upload progress shows distinct stages and elapsed time, then retains failu
   await expect(page.getByRole("alert")).toContainText("합성 업로드 연결 오류");
   await expect(page.getByRole("button", { name: "업로드 다시 시도", exact: true })).toBeVisible();
   await expect(page.getByText(/업로드 시작 후/)).toHaveCount(0);
+});
+
+test("accepted upload keeps refresh recovery after whole-workspace readback fails", async ({
+  page,
+}) => {
+  await page.goto(`${base}/files`);
+  await expect(page.getByRole("heading", { name: "아직 자료가 없어요" })).toBeVisible();
+  await page.evaluate(async () => {
+    const path = "/tests/helpers/workspace-client-fixture.ts";
+    const { api } = (await import(path)) as typeof import("../helpers/workspace-client-fixture");
+    const state = window as unknown as { uploadedNames: string[] };
+    state.uploadedNames = [];
+    const upload = api.files.upload;
+    api.files.upload = async (...args: Parameters<typeof upload>) => {
+      state.uploadedNames.push(args[1].name);
+      const result = await upload(...args);
+      const get = api.workspace.get;
+      api.workspace.get = async () => {
+        api.workspace.get = get;
+        throw Object.assign(new Error("합성 최신 목록 조회 실패"), { code: "UNAVAILABLE" });
+      };
+      return result;
+    };
+  });
+  await page.getByLabel("선택 자료의 자동 처리에 동의합니다.").check();
+  await page.getByLabel("업로드할 파일 선택", { exact: true }).setInputFiles({
+    name: "accepted-once.txt",
+    mimeType: "text/plain",
+    buffer: Buffer.from("synthetic accepted file"),
+  });
+  await expect(page.getByRole("alert")).toContainText("합성 최신 목록 조회 실패");
+  await expect(
+    page.getByText("자료는 접수됐지만 최신 목록을 확인하지 못했어요. 새로고침으로 확인해 주세요.", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "아직 자료가 없어요" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "업로드 다시 시도", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("alert")).toContainText(
+    "이미 접수된 자료는 다시 업로드하지 않아도 돼요",
+  );
+  await page.getByRole("button", { name: "새로고침 · 다시 확인", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "accepted-once.txt", exact: true })).toBeVisible();
+  expect(
+    await page.evaluate(() => (window as unknown as { uploadedNames: string[] }).uploadedNames),
+  ).toEqual(["accepted-once.txt"]);
+});
+
+test("partial upload readback failure retries only the unaccepted remainder", async ({ page }) => {
+  await page.goto(`${base}/files`);
+  await expect(page.getByRole("heading", { name: "아직 자료가 없어요" })).toBeVisible();
+  await page.evaluate(async () => {
+    const path = "/tests/helpers/workspace-client-fixture.ts";
+    const { api } = (await import(path)) as typeof import("../helpers/workspace-client-fixture");
+    const state = window as unknown as { uploadedNames: string[] };
+    state.uploadedNames = [];
+    const upload = api.files.upload;
+    api.files.upload = async (...args: Parameters<typeof upload>) => {
+      state.uploadedNames.push(args[1].name);
+      if (state.uploadedNames.length === 2)
+        throw Object.assign(new Error("합성 두 번째 전송 실패"), { code: "UNAVAILABLE" });
+      const result = await upload(...args);
+      if (state.uploadedNames.length === 1) {
+        const get = api.workspace.get;
+        api.workspace.get = async () => {
+          api.workspace.get = get;
+          throw Object.assign(new Error("합성 최신 목록 조회 실패"), { code: "UNAVAILABLE" });
+        };
+      }
+      return result;
+    };
+  });
+  await page.getByLabel("선택 자료의 자동 처리에 동의합니다.").check();
+  await page.getByLabel("업로드할 파일 선택", { exact: true }).setInputFiles([
+    { name: "accepted-first.txt", mimeType: "text/plain", buffer: Buffer.from("synthetic first") },
+    {
+      name: "unaccepted-second.txt",
+      mimeType: "text/plain",
+      buffer: Buffer.from("synthetic second"),
+    },
+  ]);
+  await expect(page.getByRole("alert")).toContainText("합성 두 번째 전송 실패");
+  await expect(page.getByRole("alert")).toContainText(
+    "이미 접수된 자료는 다시 업로드하지 않아도 돼요",
+  );
+  await page.getByRole("button", { name: "업로드 다시 시도", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "accepted-first.txt", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "unaccepted-second.txt", exact: true }),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(() => (window as unknown as { uploadedNames: string[] }).uploadedNames),
+  ).toEqual(["accepted-first.txt", "unaccepted-second.txt", "unaccepted-second.txt"]);
+});
+
+for (const changed of ["other-owner", "lawyer", "signed-out"] as const)
+  test(`accepted upload readback cannot restore revoked private content: ${changed}`, async ({
+    page,
+  }) => {
+    await page.goto(`${base}/files`);
+    await expect(page.getByRole("heading", { name: "아직 자료가 없어요" })).toBeVisible();
+    await page.evaluate(async (key) => {
+      const path = "/tests/helpers/workspace-client-fixture.ts";
+      const { api } = (await import(path)) as typeof import("../helpers/workspace-client-fixture");
+      const saved = JSON.parse(localStorage.getItem(key) ?? "{}");
+      saved.caseOwners = { "synthetic-case": saved.session.user.id };
+      localStorage.setItem(key, JSON.stringify(saved));
+      const state = window as unknown as {
+        uploadCount: number;
+        releaseUploadReadback?: () => void;
+      };
+      state.uploadCount = 0;
+      const upload = api.files.upload;
+      api.files.upload = async (...args: Parameters<typeof upload>) => {
+        state.uploadCount++;
+        const result = await upload(...args);
+        const get = api.workspace.get;
+        api.workspace.get = async (...read: Parameters<typeof get>) => {
+          api.workspace.get = get;
+          const oldView = await get(...read);
+          return new Promise((resolve) => {
+            state.releaseUploadReadback = () => resolve(oldView);
+          });
+        };
+        return result;
+      };
+    }, key);
+    await page.getByLabel("선택 자료의 자동 처리에 동의합니다.").check();
+    await page.getByLabel("업로드할 파일 선택", { exact: true }).setInputFiles({
+      name: "accepted-private.txt",
+      mimeType: "text/plain",
+      buffer: Buffer.from("synthetic private content"),
+    });
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () =>
+            !!(window as unknown as { releaseUploadReadback?: () => void }).releaseUploadReadback,
+        ),
+      )
+      .toBe(true);
+    await page.evaluate(
+      ({ key, changed }) => {
+        const saved = JSON.parse(localStorage.getItem(key) ?? "{}");
+        if (changed === "signed-out") saved.session.user = null;
+        else if (changed === "lawyer") saved.session.user.accountType = "lawyer";
+        else saved.session.user.id = "other-owner";
+        localStorage.setItem(key, JSON.stringify(saved));
+        window.dispatchEvent(new Event("focus"));
+      },
+      { key, changed },
+    );
+    await expect(page.getByRole("alert")).toBeVisible();
+    await page.evaluate(() =>
+      (window as unknown as { releaseUploadReadback: () => void }).releaseUploadReadback(),
+    );
+    await expect(page.getByText("accepted-private.txt", { exact: true })).toHaveCount(0);
+    await expect(
+      page.getByText("자료를 저장했어요. 처리 상태와 확인 가능한 범위를 확인해 주세요.", {
+        exact: true,
+      }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: "접수 상태 다시 확인", exact: true }),
+    ).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "업로드 다시 시도", exact: true })).toHaveCount(
+      0,
+    );
+    expect(
+      await page.evaluate(() => (window as unknown as { uploadCount: number }).uploadCount),
+    ).toBe(1);
+  });
+
+test("accepted upload recovery stays read-only after consent withdrawal", async ({ page }) => {
+  await page.goto(`${base}/files`);
+  await expect(page.getByRole("heading", { name: "아직 자료가 없어요" })).toBeVisible();
+  await page.evaluate(async (key) => {
+    const path = "/tests/helpers/workspace-client-fixture.ts";
+    const { api } = (await import(path)) as typeof import("../helpers/workspace-client-fixture");
+    const state = window as unknown as { uploadCount: number };
+    state.uploadCount = 0;
+    const upload = api.files.upload;
+    api.files.upload = async (...args: Parameters<typeof upload>) => {
+      state.uploadCount++;
+      const result = await upload(...args);
+      const saved = JSON.parse(localStorage.getItem(key) ?? "{}");
+      saved.session.needsConsent = true;
+      localStorage.setItem(key, JSON.stringify(saved));
+      const get = api.workspace.get;
+      api.workspace.get = async () => {
+        api.workspace.get = get;
+        throw Object.assign(new Error("합성 최신 목록 조회 실패"), { code: "UNAVAILABLE" });
+      };
+      return result;
+    };
+  }, key);
+  await page.getByLabel("선택 자료의 자동 처리에 동의합니다.").check();
+  await page.getByLabel("업로드할 파일 선택", { exact: true }).setInputFiles({
+    name: "accepted-before-consent.txt",
+    mimeType: "text/plain",
+    buffer: Buffer.from("synthetic consent boundary"),
+  });
+  await expect(page.getByRole("alert")).toContainText(
+    "이미 접수된 자료는 다시 업로드하지 않아도 돼요",
+  );
+  await expect(page.getByRole("button", { name: "업로드 다시 시도", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "파일 선택", exact: true })).toBeDisabled();
+  await page.getByRole("button", { name: "새로고침 · 다시 확인", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "accepted-before-consent.txt", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "파일 선택", exact: true })).toBeDisabled();
+  expect(
+    await page.evaluate(() => (window as unknown as { uploadCount: number }).uploadCount),
+  ).toBe(1);
 });
 
 test("an old owner upload cannot clear the next owner's progress", async ({ page }) => {
@@ -934,6 +1152,13 @@ test("mobile keyboard dialog, empty state, quota, stale input and safe image pre
   await page.getByRole("button", { name: "자료 확인" }).click();
   await page.getByRole("button", { name: "원본 확인 · 다운로드" }).click();
   await expect(page.getByAltText("synthetic.png 원본 미리보기")).toBeVisible();
+  const downloadEvent = page.waitForEvent("download");
+  await page.getByRole("button", { name: "원본 다운로드", exact: true }).click();
+  const downloaded = await downloadEvent;
+  expect(downloaded.suggestedFilename()).toBe("synthetic.png");
+  const downloadedPath = await downloaded.path();
+  expect(downloadedPath).not.toBeNull();
+  expect(await readFile(downloadedPath!)).toEqual(bytes);
   await page.screenshot({ path: "test-results/workspace-mobile-preview.png", fullPage: true });
 });
 

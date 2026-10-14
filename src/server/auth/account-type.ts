@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { CURRENT_POLICY_VERSIONS } from "../../contracts/consent";
 export const accountTypeSchema = z.enum(["customer", "lawyer"]);
 export type AccountType = z.infer<typeof accountTypeSchema>;
 const preferenceKey = (ownerId: string) => `account-type:${ownerId}`;
@@ -16,6 +17,29 @@ export async function readAccountType(db: D1Database, ownerId: string): Promise<
     .bind(ownerId)
     .first();
   return existing ? "lawyer" : "customer";
+}
+
+/** Fresh role and consent from one DB snapshot; never retained across requests. */
+export async function readCustomerConsentSnapshot(db: D1Database, ownerId: string) {
+  const row = await db
+    .prepare(
+      `SELECT coalesce((SELECT value FROM app_metadata WHERE key=? AND value IN ('customer','lawyer')),
+        CASE WHEN EXISTS(SELECT 1 FROM v2_role_bindings WHERE owner_id=? AND role IN ('lawyer_applicant','verified_lawyer')) THEN 'lawyer' ELSE 'customer' END) AS account_type,
+        EXISTS(SELECT 1 FROM user_consents WHERE user_id=? AND terms_version=? AND privacy_version=? AND ai_notice_version=? AND over_14_confirmed=1) AS current_consent`,
+    )
+    .bind(
+      preferenceKey(ownerId),
+      ownerId,
+      ownerId,
+      CURRENT_POLICY_VERSIONS.termsVersion,
+      CURRENT_POLICY_VERSIONS.privacyVersion,
+      CURRENT_POLICY_VERSIONS.aiNoticeVersion,
+    )
+    .first<{ account_type: string; current_consent: number }>();
+  const accountType = accountTypeSchema.safeParse(row?.account_type);
+  if (!accountType.success || (row?.current_consent !== 0 && row?.current_consent !== 1))
+    throw new Error("ACCOUNT_ACCESS_UNAVAILABLE");
+  return { accountType: accountType.data, currentConsent: row.current_consent === 1 };
 }
 export async function saveAccountType(
   db: D1Database,

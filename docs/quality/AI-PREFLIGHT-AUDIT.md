@@ -222,7 +222,27 @@ Bun 1.3.14를 사용했다. 특히 preview/production ledger 누락, vision capa
 storage bounds 누락을 거부하는 테스트가 통과했다. 이는 위 제품 조합에서 실패하는 이유를
 뒷받침하며 live 성공 증거가 아니다.
 
-## 사전검사 완료 판정
+## 2026-10-15 사전검사 범위 재대조
+
+현재 고객 자료 factory는 `costs`, 기술 bounds, `configuredMediaPolicy`의 vision capability를
+연결한다. 따라서 과거 `media_storage_vision_metering_wired=false` 고정 진단은 현재 구현의
+검사 결과가 아니다. 사전검사는 이 항목을 `not_inspected`로 기록하고
+`media_runtime_requires_separate_acceptance` 경고와 media/provider 미검증 항목을 남긴다.
+필수 R2/Container/Workflow binding의 누락은 여전히 실제 설정 blocker다.
+
+기존 `AnalysisWorkflow`는 여전히 `createLlmGateway(this.env)`에 attempt ledger를 전달하지
+않고 gateway는 preview/production에서 이를 거부한다. 이는 비용 관측 누락이 아닌 현재
+기술 조합 누락이므로 `legacy_analysis_attempt_ledger_wired` blocker를 유지한다.
+이 항목을 제거하거나 legacy 재분석을 성공으로 표시하지 않는다.
+
+`all`은 전체 실제 인수 검사가 아니다. metadata와 D1 SELECT만으로 원격 파일 처리·media
+capability·실제 사용량/정산·provider 성공을 확인할 수 없다. 별도 동일 SHA의 실제 자료·
+산출물·다운로드와 원장 관측 receipt가 필요하다. `text` 배포 smoke의 기존 binding·키·
+schema·모델 context/output·정확한 SHA/환경 attestation 검사는 그대로 유지한다.
+false 모드에서는 모든 scope의 비용 누락·만료·SKU·월별 할당은 경고이며 기술 오류와 구분한다.
+아래 10월7일 기록은 당시 상태로 보존하며 현재 판정에는 이 후속 범위를 적용한다.
+
+## 2026-10-07 사전검사 완료 판정 기록
 
 `bun scripts/ai-preflight.ts preview <40자리 배포 SHA> all`은 전체 검사이며 `text`는
 v2 질문·요약·채팅 설정 검사다. production은 첫 인자를 `production`으로 바꾼다.

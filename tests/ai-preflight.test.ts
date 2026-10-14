@@ -147,7 +147,7 @@ test("the remote D1 transport sends only SELECT batches and exports no raw rows"
   expect(JSON.stringify(report)).not.toContain("payload_json");
 });
 
-test("default all scope never labels model-only proofs or unwired legacy/media as ready", async () => {
+test("all scope retains the legacy technical blocker and does not attest media composition", async () => {
   const f = await fixture(),
     report = await inspectAiPreflight(f.input);
   expect(report.status).toBe("blocked");
@@ -156,7 +156,11 @@ test("default all scope never labels model-only proofs or unwired legacy/media a
   expect(report.budgetGroups.asr?.missingSkus).toEqual(["asr_seconds"]);
   expect(report.budgetGroups.storage?.missingSkus).toContain("r2_storage_gb_months");
   expect(report.blockers).toContain("legacy_analysis_attempt_ledger_wired");
-  expect(report.blockers).toContain("media_storage_vision_metering_wired");
+  expect(report.blockers).not.toContain("media_storage_vision_metering_wired");
+  expect(report.checks.media_storage_vision_metering_wired).toBe("not_inspected");
+  expect(report.warnings).toContain("media_runtime_requires_separate_acceptance");
+  expect(report.unverified).toContain("media-storage-vision-capability-metering");
+  expect(report.unverified).toContain("live-provider-success");
 });
 
 test("hidden bounds require runtime attestation and malformed plaintext cannot pass", async () => {
@@ -275,6 +279,8 @@ test("observation-only deployment remains ready without cost provisioning or ref
   expect(report.blockers).toEqual([]);
   expect(report.warnings).toContain("current_month_active_observation_unavailable");
   expect(report.warnings).toContain("next_month_active_before_horizon_observation_unavailable");
+  expect(report.warnings).toContain("kst_month_rollover_cost_observation_only");
+  expect(report.warnings).not.toContain("kst_month_rollover_requires_verified_allocation");
   expect(report.warnings).toContain("model_bounds_five_minute_horizon_observation_unavailable");
   expect(report.checks.model_skus_complete).toBe(false);
   expect(report.unverified).toContain("live-provider-success");
@@ -282,8 +288,11 @@ test("observation-only deployment remains ready without cost provisioning or ref
   expect(bounds.text).toBe(JSON.stringify(original));
   const all = await inspectAiPreflight({ ...f.input, database: empty.binding });
   expect(all.status).toBe("blocked");
-  expect(all.blockers).toContain("media_storage_vision_metering_wired");
-  expect(all.blockers).toContain("legacy_analysis_attempt_ledger_wired");
+  expect(all.blockers).toEqual(["legacy_analysis_attempt_ledger_wired"]);
+  expect(all.checks.media_storage_vision_metering_wired).toBe("not_inspected");
+  expect(all.warnings).toContain("media_runtime_requires_separate_acceptance");
+  expect(all.unverified).toContain("media-storage-vision-capability-metering");
+  expect(empty.sqlite.serialize()).toEqual(before);
   f.bindings.splice(
     f.bindings.findIndex((value) => value.name === "AI"),
     1,
@@ -291,6 +300,24 @@ test("observation-only deployment remains ready without cost provisioning or ref
   expect((await inspectAiPreflight({ ...f.input, database: empty.binding })).blockers).toContain(
     "binding_AI",
   );
+});
+
+test("all scope still blocks missing media bindings without claiming a runtime probe", async () => {
+  const f = await fixture();
+  const policy = f.bindings.find((b) => b.name === "APPLICATION_COST_LIMITS_ENABLED");
+  if (!policy) throw new Error("Missing fixture cost policy");
+  policy.text = "false";
+  for (const name of ["CASE_PRIVATE_R2", "FILE_PROCESSOR", "FILE_PROCESSING"]) {
+    const index = f.bindings.findIndex((binding) => binding.name === name);
+    const [removed] = f.bindings.splice(index, 1);
+    const report = await inspectAiPreflight(f.input);
+    expect(report.status).toBe("blocked");
+    expect(report.blockers).toContain(`binding_${name}`);
+    expect(report.checks.media_storage_vision_metering_wired).toBe("not_inspected");
+    expect(report.unverified).toContain("media-storage-vision-capability-metering");
+    expect(JSON.stringify(report)).not.toContain(secret);
+    if (removed) f.bindings.splice(index, 0, removed);
+  }
 });
 
 test("the deployed budget cap setting determines whether a full allocation can admit work", async () => {

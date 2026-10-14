@@ -67,6 +67,15 @@ export function createFilesApi(
         status,
       );
     }
+    if (error instanceof ProcessingError && error.code === "FILE_REJECTED")
+      return c.json(
+        errorBody(
+          c,
+          "FILE_REJECTED",
+          "파일 형식과 내용을 확인해 주세요. 암호·보호를 해제하거나 지원하는 형식으로 저장한 뒤 다시 추가해 주세요.",
+        ),
+        400,
+      );
     if (error instanceof ProcessingError)
       return c.json(
         errorBody(c, "FILE_PROCESSING_FAILED", "자료 처리 준비를 확인하고 있어요.", true),

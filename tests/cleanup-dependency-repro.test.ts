@@ -321,7 +321,10 @@ test("cleanup classification requires exact public messages and bounded numeric 
     "prefix instance.not_found",
     "instance.not_found suffix",
   ])
-    expect(cleanupErrorDetails(new Error(message))).toEqual(defaults);
+    expect(cleanupErrorDetails(new Error(message))).toEqual({
+      ...defaults,
+      messageClass: "instance_missing_marker",
+    });
   for (const status of [99, 600, 404.1, Infinity, NaN, "404", {}, null])
     expect(
       cleanupErrorDetails(Object.assign(new TypeError("PRIVATE"), { status })).httpStatus,
@@ -392,7 +395,32 @@ test("cleanup never serializes circular, throwing-getter, proxy or non-error det
   expect(cleanupErrorDetails(proxy).errorShape).toBe("non_error");
 });
 
-for (const kind of ["exact", "wrapped", "non_error_exact", "hostile", "circular"] as const) {
+test("cleanup marker diagnostics reveal no provider message or embedded identifiers", () => {
+  for (const [message, messageClass] of [
+    ["PRIVATE instance.not_found PRIVATE", "instance_missing_marker"],
+    ["PRIVATE workflow.not_found PRIVATE", "workflow_missing_marker"],
+    ["PRIVATE Invalid identifier PRIVATE", "invalid_identifier_marker"],
+    ["PRIVATE Too many API requests by single Worker invocation. PRIVATE", "request_limit_marker"],
+    ["PRIVATE network connection lost PRIVATE", "network_marker"],
+    ["PRIVATE internal error PRIVATE", "internal_marker"],
+  ] as const) {
+    const details = cleanupErrorDetails(new Error(message));
+    expect(details.messageClass).toBe(messageClass);
+    expect(JSON.stringify(details)).not.toContain("PRIVATE");
+  }
+  expect(cleanupErrorDetails(new Error(`instance.not_found${"x".repeat(4096)}`)).messageClass).toBe(
+    "other",
+  );
+});
+
+for (const kind of [
+  "exact",
+  "wrapped",
+  "marker",
+  "non_error_exact",
+  "hostile",
+  "circular",
+] as const) {
   test(`cleanup ${kind} observation preserves the existing missing-instance decision and pending inventory`, async () => {
     const f = await fixture();
     const id = `native-v1-asset-${crypto.randomUUID()}-1`;
@@ -404,6 +432,7 @@ for (const kind of ["exact", "wrapped", "non_error_exact", "hostile", "circular"
     let error: unknown = new Error(
       kind === "exact" ? "instance.not_found" : "(instance.not_found) Instance does not exist",
     );
+    if (kind === "marker") error = new Error("PRIVATE instance.not_found PRIVATE");
     if (kind === "non_error_exact")
       error = { message: "instance.not_found", name: "WorkflowError", status: 404, code: 10001 };
     if (kind === "hostile") {

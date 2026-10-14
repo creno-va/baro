@@ -555,7 +555,7 @@ export function createV2WorkspaceRepository(
     statements.push(...mutation.complete(claimId), core.finish(claimId));
     return core.changed(statements);
   };
-  return {
+  const repository = {
     core,
     accounting,
     findWorkspace: (actor: Actor, id: string) => safe(() => findWorkspace(actor, id)),
@@ -1181,7 +1181,7 @@ export function createV2WorkspaceRepository(
           : null;
       });
     },
-    messages(
+    readMessages(
       actor: Actor,
       workspaceId: string,
       limit = 20,
@@ -1190,7 +1190,7 @@ export function createV2WorkspaceRepository(
       return safe(async () => {
         actor = parse(actorSchema, { ownerId: actor.ownerId, now: actor.now });
         const current = await findWorkspace(actor, workspaceId);
-        if (!current) return [];
+        if (!current) return null;
         parse(z.number().int().min(1).max(50), limit);
         const rows = await core
           .statement(
@@ -1329,12 +1329,12 @@ export function createV2WorkspaceRepository(
         ]);
       });
     },
-    actions(actor: Actor, workspaceId: string, afterId?: string, limit = 4) {
+    readActions(actor: Actor, workspaceId: string, afterId?: string, limit = 4) {
       return safe(async () => {
         actor = parse(actorSchema, { ownerId: actor.ownerId, now: actor.now });
         parse(z.number().int().min(1).max(8), limit);
         const current = await findWorkspace(actor, workspaceId);
-        if (!current) return [];
+        if (!current) return null;
         const rows = await core
           .statement(
             `SELECT * FROM v2_actions WHERE workspace_id=? ${afterId ? "AND entity_id>?" : ""} ORDER BY entity_id LIMIT ?`,
@@ -1359,12 +1359,12 @@ export function createV2WorkspaceRepository(
           : [];
       });
     },
-    timeline(actor: Actor, workspaceId: string, afterId?: string, limit = 4) {
+    readTimeline(actor: Actor, workspaceId: string, afterId?: string, limit = 4) {
       return safe(async () => {
         actor = parse(actorSchema, { ownerId: actor.ownerId, now: actor.now });
         parse(z.number().int().min(1).max(8), limit);
         const current = await findWorkspace(actor, workspaceId);
-        if (!current) return [];
+        if (!current) return null;
         const rows = await core
           .statement(
             `SELECT * FROM v2_timeline WHERE workspace_id=? ${afterId ? "AND entity_id>?" : ""} ORDER BY entity_id LIMIT ?`,
@@ -1388,6 +1388,25 @@ export function createV2WorkspaceRepository(
           ? values
           : [];
       });
+    },
+  };
+  return {
+    ...repository,
+    // Required API reads distinguish inaccessible workspaces from empty lists.
+    // Existing internal pagination callers keep their array-only contract.
+    async messages(
+      actor: Actor,
+      workspaceId: string,
+      limit = 20,
+      before?: { createdAt: string; id: string },
+    ) {
+      return (await repository.readMessages(actor, workspaceId, limit, before)) ?? [];
+    },
+    async actions(actor: Actor, workspaceId: string, afterId?: string, limit = 4) {
+      return (await repository.readActions(actor, workspaceId, afterId, limit)) ?? [];
+    },
+    async timeline(actor: Actor, workspaceId: string, afterId?: string, limit = 4) {
+      return (await repository.readTimeline(actor, workspaceId, afterId, limit)) ?? [];
     },
   };
 }
