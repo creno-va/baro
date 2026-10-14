@@ -3,6 +3,7 @@ import { opaqueIdSchema, timestampSchema } from "../../contracts";
 import { usageDateKst } from "./repository";
 import { allocationSchema } from "./v2-accounting";
 import { type Actor, actorSchema, hashSchema, parse, safe, sqlClaim, type V2Core } from "./v2-core";
+import { dispatchExecution, recordExecutionUsage } from "./v2-execution-runtime";
 import { jobAlive } from "./v2-jobs";
 import {
   estimatePlanKrw,
@@ -21,6 +22,7 @@ import {
   isPreparedPaidHold,
   type PreparedPaidHold,
   preparePaidStatements,
+  prepareUnpricedStatements,
 } from "./v2-paid-statements";
 import { recordRuntimeUsage } from "./v2-paid-usage";
 import { allocationUntilSql } from "./v2-runtime-authority";
@@ -195,8 +197,9 @@ export function createV2PaidRuntimeRepository(
     putAllocationProof: (p: AllocationProof, now: string) =>
       safe(() => putProof("allocation", p, now)),
     putRemoteDrainProof: (p: DrainProof, now: string) => safe(() => putProof("drain", p, now)),
-    findProof(id: string, now: string) {
+    findProof(id: string | null, now: string) {
       return safe(async () => {
+        if (id === null) return null;
         now = parse(iso, now);
         parse(opaqueIdSchema, id);
         const row = await core
@@ -239,6 +242,41 @@ export function createV2PaidRuntimeRepository(
         )
           return null;
         if (r.attempt > r.plan.maximumAttempts || r.plan.operationRevision < 1) return null;
+        if (!core.applicationCostLimitsEnabled) {
+          if (
+            !verify ||
+            Date.parse(r.plan.deadlineAt) <= Date.parse(actor.now) ||
+            Date.parse(r.plan.deadlineAt) - Date.parse(actor.now) > 3600000
+          )
+            return null;
+          const planHash = await runtimeDigest(r),
+            raw = await verify("execution", r, planHash);
+          if (!raw) return null;
+          const e = parse(verifiedEvidenceSchema, raw);
+          if (
+            e.digest !== planHash ||
+            e.method !== "authenticated_coordinator" ||
+            Date.parse(e.verifiedAt) > Date.parse(actor.now)
+          )
+            return null;
+          const owner = await core
+            .statement(
+              "SELECT p.id FROM v2_billing_principals p JOIN user u ON u.id=p.owner_id WHERE u.id=? AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='account' AND target_id=u.id)",
+              [actor.ownerId],
+            )
+            .first();
+          if (!owner) return null;
+          return prepareUnpricedStatements({
+            request: r,
+            planHash,
+            evidenceHash: e.evidenceHash,
+            verifiedAt: e.verifiedAt,
+            environment,
+            now: actor.now,
+            ownerId: actor.ownerId,
+          });
+        }
+        if (!r.pricingProofId || !r.fundingProofId || !r.quoteId) return null;
         const [p, f] = await Promise.all([
           proof(r.pricingProofId, "pricing", pricingProofSchema, actor.now),
           proof(r.fundingProofId, "funding", fundingProofSchema, actor.now),
@@ -339,6 +377,8 @@ export function createV2PaidRuntimeRepository(
         actor = parse(actorSchema, actor);
         parse(leaseSchema, lease);
         parse(opaqueIdSchema, attemptId);
+        const execution = await dispatchExecution(core, environment, actor, lease, attemptId);
+        if (execution !== undefined) return execution;
         const token = crypto.randomUUID(),
           claimId = crypto.randomUUID();
         const ok = await core.changed([
@@ -400,8 +440,9 @@ export function createV2PaidRuntimeRepository(
     },
     // Verification occurs before ledger writes. It can authenticate late receipts
     // after owner/job deletion; neither case data nor a live user FK is required.
-    recordUsage(receipt: UsageReceipt, now: string) {
-      return recordRuntimeUsage(core, verify, receipt, now);
+    async recordUsage(receipt: UsageReceipt, now: string) {
+      const execution = await recordExecutionUsage(core, verify, receipt, now);
+      return execution === null ? recordRuntimeUsage(core, verify, receipt, now) : execution;
     },
     exposure(now: string) {
       return safe(async () => {

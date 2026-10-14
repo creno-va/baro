@@ -130,14 +130,18 @@ function funding(): FundingProof {
     validUntil: EXP,
   };
 }
-async function fixture(options: { throughMigration?: string } = {}) {
+async function fixture(
+  options: { throughMigration?: string; applicationCostLimitsEnabled?: boolean } = {},
+) {
   const db = await createTestDatabase(options);
   dbs.push(db);
   const session = await seedTestSession(db, { now: Date.parse(NOW), consent: true });
   const cipher = await createCaseDataCipher({
     CASE_DATA_KEY_V1: btoa("d".repeat(32)).replace(/=+$/u, ""),
   });
-  const core = createV2Core(db.binding, cipher),
+  const core = createV2Core(db.binding, cipher, {
+      applicationCostLimitsEnabled: options.applicationCostLimitsEnabled,
+    }),
     actor: Actor = { ownerId: session.userId, now: NOW };
   const accounting = createV2AccountingRepository(core, "preview"),
     jobs = createV2JobsRepository(core),
@@ -187,8 +191,11 @@ async function fixture(options: { throughMigration?: string } = {}) {
   return { db, core, actor, accounting, jobs, runtime, pp, fp, workspaceId, ap, drain, remote };
 }
 
-async function originalFixture(kind: "case_original" | "lawyer_original" = "case_original") {
-  const f = await fixture(),
+async function originalFixture(
+  kind: "case_original" | "lawyer_original" = "case_original",
+  applicationCostLimitsEnabled = true,
+) {
+  const f = await fixture({ applicationCostLimitsEnabled }),
     id = crypto.randomUUID(),
     reservationId = crypto.randomUUID(),
     uploadId = crypto.randomUUID();
@@ -283,8 +290,14 @@ async function originalFixture(kind: "case_original" | "lawyer_original" = "case
   };
 }
 
-async function queued(kind: "file" | "profile_asset" = "file") {
-  const f = await originalFixture(kind === "file" ? "case_original" : "lawyer_original"),
+async function queued(
+  kind: "file" | "profile_asset" = "file",
+  applicationCostLimitsEnabled = true,
+) {
+  const f = await originalFixture(
+      kind === "file" ? "case_original" : "lawyer_original",
+      applicationCostLimitsEnabled,
+    ),
     jobId = crypto.randomUUID();
   const request: PaidHoldRequest = {
     attemptId: f.r.attemptId,
@@ -704,3 +717,37 @@ test("actual file Workflow initialize stops expired initial admission without R2
   });
   expect(money(f)).toEqual({ reserved_krw: 0, ambiguous_krw: 0, settled_krw: 0 });
 });
+
+for (const kind of ["file", "profile_asset"] as const)
+  test(`unpriced expired ${kind} recovers original quota and immutable execution without a financial receipt`, async () => {
+    const f = await queued(kind, false);
+    const oldMoney = money(f);
+    expect(await stopExpiredUndispatchedJob(f.core, "preview", f.stop)).toBe(true);
+    expect(
+      f.db.sqlite.query("SELECT state,transport,dispatch_token FROM v2_execution_admissions").get(),
+    ).toEqual({ state: "final", transport: "not_sent", dispatch_token: null });
+    expect(f.db.sqlite.query("SELECT count(*) n FROM v2_runtime_usage").get()).toEqual({ n: 0 });
+    expect(money(f)).toEqual(oldMoney);
+    expect(
+      f.db.sqlite.query("SELECT status,retryable FROM v2_jobs WHERE id=?").get(f.jobId),
+    ).toEqual({ status: "failed", retryable: 1 });
+    expect(await stopExpiredUndispatchedJob(f.core, "preview", f.stop)).toBe(false);
+    const retryRequest = {
+      ...f.request,
+      attemptId: crypto.randomUUID(),
+      planId: crypto.randomUUID(),
+      quoteId: null,
+      pricingProofId: null,
+      fundingProofId: null,
+      plan: {
+        ...f.request.plan,
+        invocationId: crypto.randomUUID(),
+        deadlineAt: "2026-10-06T00:05:00.000Z",
+      },
+    };
+    const retry = await f.runtime.prepareHold({ ...f.actor, now: LATER }, retryRequest);
+    expect(retry).not.toBeNull();
+    expect(f.db.sqlite.query("SELECT count(*) n FROM v2_execution_admissions").get()).toEqual({
+      n: 1,
+    });
+  });

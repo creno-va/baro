@@ -31,7 +31,7 @@ on:
         required: false
         type: string
       storage_initialization_json:
-        description: initialize-storage only; fresh authenticated empty bucket observation, exact serving SHA, revision and bounded capacity/IO
+        description: initialize-storage only; fresh authenticated empty bucket inventory, exact serving SHA and bounded physical capacity; no cost observation required
         required: false
         type: string
       confirmation:

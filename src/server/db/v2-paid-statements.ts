@@ -19,8 +19,8 @@ export function budgetAdmissionPredicate(input: {
   /** Only storage admission opts into the migration-owned bounded snapshot.
    * Model admission and cold coordination keep the original audited SUM. */
   boundedStorage?: true;
-  pricingProofId: string;
-  fundingProofId: string;
+  pricingProofId: string | null;
+  fundingProofId: string | null;
   pricingJson: string;
   fundingJson: string;
   amount: number;
@@ -119,7 +119,7 @@ export function budgetAdmissionPredicate(input: {
 }
 export interface PreparedPaidHold {
   readonly request: PaidHoldRequest;
-  readonly reservedKrw: number;
+  readonly reservedKrw: number | null;
   readonly predicate: { sql: string; values: unknown[] };
   statements(core: V2Core, actor: Actor, claimId: string): D1PreparedStatement[];
 }
@@ -277,11 +277,90 @@ export function paidAcquirePredicate(
 ): { sql: string; values: unknown[] } {
   if (!applicationCostLimitsEnabled)
     return {
-      sql: `EXISTS(SELECT 1 FROM v2_paid_holds h JOIN v2_cost_attempts ca ON ca.id=h.attempt_id JOIN v2_runtime_plans p ON p.id=h.plan_id WHERE h.attempt_id=? AND h.job_id=j.id AND h.state='prepared' AND ca.state='reserved' AND ca.operation_id=j.operation_id AND p.job_id=j.id AND p.target_kind=j.target_kind AND p.target_id=j.target_id AND p.target_revision=j.target_revision AND p.deadline_at>?)`,
+      sql: `EXISTS(SELECT 1 FROM v2_execution_job_holds h JOIN v2_execution_attempts ca ON ca.id=h.attempt_id JOIN v2_execution_job_plans p ON p.id=h.plan_id WHERE h.attempt_id=? AND h.job_id=j.id AND h.state='prepared' AND ca.state='reserved' AND ca.operation_id=j.operation_id AND p.job_id=j.id AND p.target_kind=j.target_kind AND p.target_id=j.target_id AND p.target_revision=j.target_revision AND p.deadline_at>?)`,
       values: [attemptId, now],
     };
   return {
     sql: `((NOT EXISTS(SELECT 1 FROM v2_runtime_controls) AND NOT EXISTS(SELECT 1 FROM v2_paid_holds WHERE job_id=j.id)) OR EXISTS(SELECT 1 FROM v2_paid_holds h JOIN v2_cost_attempts ca ON ca.id=h.attempt_id JOIN v2_runtime_plans p ON p.id=h.plan_id JOIN v2_runtime_controls c ON c.month=ca.month JOIN v2_monthly_budget b ON b.month=c.month JOIN v2_runtime_proofs ap ON ap.id=c.allocation_proof_id JOIN v2_runtime_proofs pp ON pp.id=p.pricing_proof_id JOIN v2_runtime_proofs fp ON fp.id=p.funding_proof_id JOIN v2_storage_funding_heads head ON head.environment=c.environment AND head.proof_id=fp.id AND head.verified_at=fp.verified_at WHERE h.attempt_id=? AND h.job_id=j.id AND h.state='prepared' AND ca.state='reserved' AND ca.operation_id=j.operation_id AND p.target_id=j.target_id AND p.target_revision=j.target_revision AND p.deadline_at>? AND pp.valid_until>? AND fp.valid_until>? AND c.phase='active' AND ${allocationUntilSql("c", "ap")}>? AND json_extract(ap.payload_json,'$.allocation.version')=b.allocation_version))`,
     values: [attemptId, now, now, now, now],
   };
+}
+
+/** An authenticated execution capability, with unknown money represented as NULL.
+ * The job admission's existing claim atomically binds quota, operation and journal. */
+export function prepareUnpricedStatements(input: {
+  request: PaidHoldRequest;
+  planHash: string;
+  evidenceHash: string;
+  verifiedAt: string;
+  environment: "preview" | "production";
+  now: string;
+  ownerId: string;
+}): PreparedPaidHold {
+  const r = JSON.parse(JSON.stringify(input.request)) as PaidHoldRequest;
+  const predicate = {
+    sql: `NOT EXISTS(SELECT 1 FROM v2_execution_attempts WHERE id=? OR (invocation_id=? AND (attempt=? OR state IN ('reserved','ambiguous')))) AND NOT EXISTS(SELECT 1 FROM v2_execution_job_plans WHERE id=?) AND NOT EXISTS(SELECT 1 FROM v2_execution_storage_holds WHERE plan_id=?)`,
+    values: [r.attemptId, r.plan.invocationId, r.attempt, r.planId, r.planId],
+  };
+  const prepared: PreparedPaidHold = {
+    request: r,
+    reservedKrw: null,
+    predicate,
+    statements(core, actor, claimId) {
+      if (actor.ownerId !== input.ownerId || actor.now !== input.now)
+        throw new Error("RUNTIME_HOLD_ACTOR_MISMATCH");
+      return [
+        core.statement(
+          `INSERT INTO v2_execution_admissions(attempt_id,plan_id,principal_id,environment,kind,operation_id,operation_revision,request_hash,invocation_id,attempt,service,job_id,runtime_instance_id,target_kind,target_id,target_revision,digest,payload_json,evidence_hash,verified_at,deadline_at,created_at)
+        SELECT ?,?,p.id,?,'job',?,?,?,?,?,?,?,j.runtime_instance_id,?,?,?,?,?,?,?,?,? FROM v2_billing_principals p JOIN v2_operations o ON o.owner_id=p.owner_id JOIN v2_jobs j ON j.operation_id=o.id
+        WHERE p.owner_id=? AND o.id=? AND o.revision=? AND j.id=? AND j.target_kind=? AND j.target_id=? AND j.target_revision=?
+        AND (EXISTS(SELECT 1 FROM v2_idempotency i WHERE i.operation_id=o.id AND i.request_hash=?) OR EXISTS(SELECT 1 FROM v2_execution_job_plans prior WHERE prior.operation_id=o.id AND prior.request_hash=?)) AND ${sqlClaim}`,
+          [
+            r.attemptId,
+            r.planId,
+            input.environment,
+            r.plan.operationId,
+            r.plan.operationRevision,
+            r.plan.requestHash,
+            r.plan.invocationId,
+            r.attempt,
+            r.service,
+            r.jobId,
+            r.targetKind,
+            r.targetId,
+            r.targetRevision,
+            input.planHash,
+            JSON.stringify(r),
+            input.evidenceHash,
+            input.verifiedAt,
+            r.plan.deadlineAt,
+            input.now,
+            actor.ownerId,
+            r.plan.operationId,
+            r.plan.operationRevision,
+            r.jobId,
+            r.targetKind,
+            r.targetId,
+            r.targetRevision,
+            r.plan.requestHash,
+            r.plan.requestHash,
+            claimId,
+          ],
+        ),
+        core.statement(
+          "UPDATE v2_mutation_claims SET verified=(SELECT count(*)=1 FROM v2_execution_admissions WHERE attempt_id=?) WHERE id=?",
+          [r.attemptId, claimId],
+        ),
+      ];
+    },
+  };
+  const freeze = (value: unknown): void => {
+    if (value && typeof value === "object") {
+      for (const v of Object.values(value)) freeze(v);
+      Object.freeze(value);
+    }
+  };
+  freeze(prepared);
+  trustedHolds.add(prepared);
+  return prepared;
 }

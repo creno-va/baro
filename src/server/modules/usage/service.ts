@@ -46,9 +46,9 @@ export function createUsageService(
     clock?: () => string;
     paidAvailable?: (now: string) => Promise<boolean>;
     budgetProofs?: (environment: "preview" | "production") => Promise<{
-      pricingProofId: string;
-      fundingProofId: string;
-      allocationProofId: string;
+      pricingProofId: string | null;
+      fundingProofId: string | null;
+      allocationProofId: string | null;
     } | null>;
     processingAvailable?: () => Promise<boolean>;
   },

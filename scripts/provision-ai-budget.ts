@@ -441,7 +441,7 @@ export async function inspectAiRuntime(bindings: Partial<Record<RuntimeEnvironme
       (
         await core
           .statement(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('v2_storage_projections','v2_storage_carryover','v2_storage_funding_heads','v2_physical_blob_bindings')",
+            "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('v2_storage_projections','v2_storage_carryover','v2_storage_funding_heads','v2_physical_blob_bindings','v2_execution_admissions','v2_execution_cost_observations')",
           )
           .all<{ name: string }>()
       ).results.map((r) => r.name),
@@ -476,6 +476,32 @@ export async function inspectAiRuntime(bindings: Partial<Record<RuntimeEnvironme
           )
           .first()
       : null;
+    const executions =
+      available.has("v2_execution_admissions") && available.has("v2_execution_cost_observations")
+        ? (
+            await core
+              .statement(
+                `SELECT a.state,(SELECT o.charged_krw FROM v2_execution_cost_observations o WHERE o.attempt_id=a.attempt_id AND o.charged_krw IS NOT NULL ORDER BY o.observed_at DESC,o.verified_at DESC,o.id DESC LIMIT 1) AS known_krw FROM v2_execution_admissions a WHERE a.environment=?`,
+                [environment],
+              )
+              .all<{ state: string; known_krw: number | null }>()
+          ).results
+        : null;
+    const known =
+      executions?.flatMap((r) => (r.known_krw === null ? [] : [BigInt(r.known_krw)])) ?? [];
+    const executionObservations = executions
+      ? {
+          admissions: executions.length,
+          unresolvedTransport: executions.filter(
+            (r) => r.state === "dispatched" || r.state === "unknown",
+          ).length,
+          unpricedAdmissions: executions.filter((r) => r.known_krw === null).length,
+          // Decimal integer text preserves exact totals beyond JS safe-integer range.
+          knownObservedKrw: known.length
+            ? known.reduce((sum, value) => sum + value, 0n).toString()
+            : null,
+        }
+      : null;
     const initializationPrerequisites = await core
       .statement(
         `SELECT (SELECT count(*) FROM v2_blobs) AS recordedBlobs,(SELECT count(*) FROM v2_storage_paid_executions) AS storageExecutions,(SELECT count(*) FROM v2_jobs WHERE status IN ('queued','running','validating')) AS unfinishedJobs,${available.has("v2_physical_blob_bindings") ? "(SELECT count(*) FROM v2_physical_blob_bindings)" : "NULL"} AS physicalBindings`,
@@ -492,6 +518,7 @@ export async function inspectAiRuntime(bindings: Partial<Record<RuntimeEnvironme
       projection,
       carryover,
       initializationPrerequisites,
+      executionObservations,
     });
   }
   return { mode: "status", observedAt: new Date().toISOString(), results };

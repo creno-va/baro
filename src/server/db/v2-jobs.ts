@@ -191,7 +191,7 @@ export function createV2JobsRepository(core: V2Core) {
         if (!row) return false;
         return core.changed([
           core.statement(
-            `INSERT INTO v2_mutation_claims(id,owner_id,target_id,revision) SELECT ?,a.owner_id,a.id,a.revision FROM v2_assets a JOIN v2_profiles p ON p.id=a.profile_id WHERE a.id=? AND a.owner_id=? AND a.revision=? AND a.state IN ('reserved','uploaded') AND a.current_job_id IS NULL AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE (target_kind='account' AND target_id=a.owner_id) OR (target_kind='profile' AND target_id=p.id) OR (target_kind='asset' AND target_id=a.id)) AND EXISTS(SELECT 1 FROM v2_storage_reservations r JOIN v2_blobs b ON b.reservation_id=r.id JOIN v2_operations o ON o.id=r.operation_id WHERE r.entity_id=a.id AND r.operation_id=? AND b.state='stored' AND b.visibility='private' AND ((a.purpose='portfolio' AND b.kind='portfolio_original') OR (a.purpose='profile_photo' AND b.kind='profile_photo_original')) AND o.state='admitted') AND (${paid?.predicate.sql ?? "NOT EXISTS(SELECT 1 FROM v2_runtime_controls)"})`,
+            `INSERT INTO v2_mutation_claims(id,owner_id,target_id,revision) SELECT ?,a.owner_id,a.id,a.revision FROM v2_assets a JOIN v2_profiles p ON p.id=a.profile_id WHERE a.id=? AND a.owner_id=? AND a.revision=? AND a.state IN ('reserved','uploaded') AND a.current_job_id IS NULL AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE (target_kind='account' AND target_id=a.owner_id) OR (target_kind='profile' AND target_id=p.id) OR (target_kind='asset' AND target_id=a.id)) AND EXISTS(SELECT 1 FROM v2_storage_reservations r JOIN v2_blobs b ON b.reservation_id=r.id JOIN v2_operations o ON o.id=r.operation_id WHERE r.entity_id=a.id AND r.operation_id=? AND b.state='stored' AND b.visibility='private' AND ((a.purpose='portfolio' AND b.kind='portfolio_original') OR (a.purpose='profile_photo' AND b.kind='profile_photo_original')) AND o.state='admitted') AND (${paid?.predicate.sql ?? (core.applicationCostLimitsEnabled ? "NOT EXISTS(SELECT 1 FROM v2_runtime_controls)" : "0")})`,
             [
               claimId,
               input.assetId,
@@ -246,7 +246,9 @@ export function createV2JobsRepository(core: V2Core) {
           .first<JobRow>();
         if (!row) return false;
         const bound = await core
-          .statement("SELECT attempt_id FROM v2_paid_holds WHERE job_id=? LIMIT 1", [jobId])
+          .statement("SELECT attempt_id FROM v2_execution_job_holds WHERE job_id=? LIMIT 1", [
+            jobId,
+          ])
           .first();
         if (bound && !paid) return false;
         if (
@@ -263,7 +265,7 @@ export function createV2JobsRepository(core: V2Core) {
         const claimId = crypto.randomUUID();
         return core.changed([
           core.statement(
-            `INSERT INTO v2_mutation_claims(id,owner_id,target_id,revision) SELECT ?,o.owner_id,j.id,j.target_revision FROM v2_jobs j JOIN v2_operations o ON o.id=j.operation_id JOIN v2_assets a ON a.id=j.target_id JOIN v2_profiles p ON p.id=a.profile_id WHERE j.id=? AND o.owner_id=? AND j.target_kind='profile_asset' AND j.status='failed' AND j.retryable=1 AND j.attempts<10 AND a.owner_id=o.owner_id AND a.revision=j.target_revision AND a.current_job_id IS NULL AND a.state='failed' AND ${quotaRetryPredicate} AND (${paid?.predicate.sql ?? "NOT EXISTS(SELECT 1 FROM v2_runtime_controls)"}) AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE (target_kind='account' AND target_id=o.owner_id) OR (target_kind='profile' AND target_id=p.id) OR (target_kind='asset' AND target_id=a.id))`,
+            `INSERT INTO v2_mutation_claims(id,owner_id,target_id,revision) SELECT ?,o.owner_id,j.id,j.target_revision FROM v2_jobs j JOIN v2_operations o ON o.id=j.operation_id JOIN v2_assets a ON a.id=j.target_id JOIN v2_profiles p ON p.id=a.profile_id WHERE j.id=? AND o.owner_id=? AND j.target_kind='profile_asset' AND j.status='failed' AND j.retryable=1 AND j.attempts<10 AND a.owner_id=o.owner_id AND a.revision=j.target_revision AND a.current_job_id IS NULL AND a.state='failed' AND ${quotaRetryPredicate} AND (${paid?.predicate.sql ?? (core.applicationCostLimitsEnabled ? "NOT EXISTS(SELECT 1 FROM v2_runtime_controls)" : "0")}) AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE (target_kind='account' AND target_id=o.owner_id) OR (target_kind='profile' AND target_id=p.id) OR (target_kind='asset' AND target_id=a.id))`,
             [claimId, jobId, actor.ownerId, ...(paid?.predicate.values ?? [])],
           ),
           ...quotaRetryStatements(core, jobId, claimId),
@@ -370,7 +372,7 @@ export function createV2JobsRepository(core: V2Core) {
           core.claim(
             g,
             claimId,
-            `${predicates.map((p) => `(${p.sql})`).join(" AND ") || "1"} AND (${paid?.predicate.sql ?? "NOT EXISTS(SELECT 1 FROM v2_runtime_controls)"}) AND w.status!='archived' AND EXISTS(SELECT 1 FROM v2_files f WHERE f.id=? AND f.workspace_id=w.id AND f.revision=? AND f.encrypted_payload=? AND f.state='uploaded' AND f.current_job_id IS NULL) AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='file' AND target_id=?) AND NOT EXISTS(SELECT 1 FROM v2_idempotency WHERE owner_id=w.owner_id AND route=? AND key=? AND expires_at>?)`,
+            `${predicates.map((p) => `(${p.sql})`).join(" AND ") || "1"} AND (${paid?.predicate.sql ?? (core.applicationCostLimitsEnabled ? "NOT EXISTS(SELECT 1 FROM v2_runtime_controls)" : "0")}) AND w.status!='archived' AND EXISTS(SELECT 1 FROM v2_files f WHERE f.id=? AND f.workspace_id=w.id AND f.revision=? AND f.encrypted_payload=? AND f.state='uploaded' AND f.current_job_id IS NULL) AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='file' AND target_id=?) AND NOT EXISTS(SELECT 1 FROM v2_idempotency WHERE owner_id=w.owner_id AND route=? AND key=? AND expires_at>?)`,
             [
               ...predicates.flatMap((p) => p.values),
               ...(paid?.predicate.values ?? []),
@@ -512,7 +514,7 @@ export function createV2JobsRepository(core: V2Core) {
           core.claim(
             g,
             claimId,
-            `${predicate.sql} AND (${paid?.predicate.sql ?? "NOT EXISTS(SELECT 1 FROM v2_runtime_controls)"}) AND ${lifecycle} AND w.current_job_id IS NULL AND NOT EXISTS(SELECT 1 FROM v2_idempotency WHERE owner_id=w.owner_id AND route=? AND key=? AND expires_at>?)`,
+            `${predicate.sql} AND (${paid?.predicate.sql ?? (core.applicationCostLimitsEnabled ? "NOT EXISTS(SELECT 1 FROM v2_runtime_controls)" : "0")}) AND ${lifecycle} AND w.current_job_id IS NULL AND NOT EXISTS(SELECT 1 FROM v2_idempotency WHERE owner_id=w.owner_id AND route=? AND key=? AND expires_at>?)`,
             [...predicate.values, ...(paid?.predicate.values ?? []), route, admission.key, g.now],
           ),
           ...operationStatements(
@@ -799,7 +801,9 @@ export function createV2JobsRepository(core: V2Core) {
           .first<JobRow>();
         if (!row) return false;
         const bound = await core
-          .statement("SELECT attempt_id FROM v2_paid_holds WHERE job_id=? LIMIT 1", [jobId])
+          .statement("SELECT attempt_id FROM v2_execution_job_holds WHERE job_id=? LIMIT 1", [
+            jobId,
+          ])
           .first();
         if (bound && !paid) return false;
         if (
@@ -830,7 +834,7 @@ export function createV2JobsRepository(core: V2Core) {
             // Keep the independent funding predicate beside the correlated job
             // check. Nesting it inside that EXISTS exceeds workerd D1's SQL
             // expression depth even though desktop SQLite accepts the query.
-            `EXISTS(SELECT 1 FROM v2_jobs j WHERE j.id=? AND j.workspace_id=w.id AND ${v2JobRetryPredicate} AND ${quotaRetryPredicate} AND ${target} AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind=j.target_kind AND target_id=j.target_id)) AND (${paid?.predicate.sql ?? "NOT EXISTS(SELECT 1 FROM v2_runtime_controls)"})`,
+            `EXISTS(SELECT 1 FROM v2_jobs j WHERE j.id=? AND j.workspace_id=w.id AND ${v2JobRetryPredicate} AND ${quotaRetryPredicate} AND ${target} AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind=j.target_kind AND target_id=j.target_id)) AND (${paid?.predicate.sql ?? (core.applicationCostLimitsEnabled ? "NOT EXISTS(SELECT 1 FROM v2_runtime_controls)" : "0")})`,
             [jobId, ...(paid?.predicate.values ?? [])],
           ),
           ...quotaRetryStatements(core, jobId, claimId),

@@ -160,6 +160,7 @@ async function fixture(
   limit = 100,
   configure?: (d: ExecutionDescriptor) => void,
   applicationCostLimitsEnabled = true,
+  metadata: "full" | "none" | "missing_sku" = "full",
 ) {
   const db = await createTestDatabase();
   dbs.push(db);
@@ -208,34 +209,8 @@ async function fixture(
     fundingValidUntil: EXP,
     manifestHash: HASH,
   };
-  expect(await accounting.recordAllocation(allocation)).toBe(true);
-  for (const environment of ["preview", "production"] as const)
-    expect(
-      await accounting.recordAllocationAcknowledgment({
-        month: allocation.month,
-        version: 1,
-        environment,
-        manifestHash: HASH,
-        drainReceiptId: crypto.randomUUID(),
-        now: NOW,
-      }),
-    ).toBe(true);
-  expect(await accounting.activateAllocation(allocation.month, 1, NOW)).toBe(true);
   const runtime = service.runtime;
-  expect(await runtime.initializeControl(allocation.month, NOW)).toBe(true);
   const ap = { id: crypto.randomUUID(), environment: "preview" as const, allocation };
-  expect(await runtime.putAllocationProof(ap, NOW)).toBe(true);
-  const drain = await runtime.drain(allocation.month, 1, ap.id, NOW);
-  if (!drain) throw new Error("synthetic drain");
-  expect(await runtime.putRemoteDrainProof(drain, NOW)).toBe(true);
-  const remote = {
-    ...drain,
-    id: crypto.randomUUID(),
-    environment: "production" as const,
-    limitKrw: 100,
-  };
-  expect(await runtime.putRemoteDrainProof(remote, NOW)).toBe(true);
-  expect(await runtime.activate(allocation.month, 2, ap.id, drain.id, remote.id, NOW)).toBe(true);
   const pp = pricing(),
     fp = {
       id: crypto.randomUUID(),
@@ -248,8 +223,38 @@ async function fixture(
       observedAt: NOW,
       validUntil: EXP,
     };
-  expect(await runtime.putPricingProof(pp, NOW)).toBe(true);
-  expect(await runtime.putFundingProof(fp, NOW)).toBe(true);
+  if (metadata === "missing_sku")
+    pp.prices = pp.prices.filter((p) => p.sku !== "model_output_tokens");
+  if (metadata !== "none") {
+    expect(await accounting.recordAllocation(allocation)).toBe(true);
+    for (const environment of ["preview", "production"] as const)
+      expect(
+        await accounting.recordAllocationAcknowledgment({
+          month: allocation.month,
+          version: 1,
+          environment,
+          manifestHash: HASH,
+          drainReceiptId: crypto.randomUUID(),
+          now: NOW,
+        }),
+      ).toBe(true);
+    expect(await accounting.activateAllocation(allocation.month, 1, NOW)).toBe(true);
+    expect(await runtime.initializeControl(allocation.month, NOW)).toBe(true);
+    expect(await runtime.putAllocationProof(ap, NOW)).toBe(true);
+    const drain = await runtime.drain(allocation.month, 1, ap.id, NOW);
+    if (!drain) throw new Error("synthetic drain");
+    expect(await runtime.putRemoteDrainProof(drain, NOW)).toBe(true);
+    const remote = {
+      ...drain,
+      id: crypto.randomUUID(),
+      environment: "production" as const,
+      limitKrw: 100,
+    };
+    expect(await runtime.putRemoteDrainProof(remote, NOW)).toBe(true);
+    expect(await runtime.activate(allocation.month, 2, ap.id, drain.id, remote.id, NOW)).toBe(true);
+    expect(await runtime.putPricingProof(pp, NOW)).toBe(true);
+    expect(await runtime.putFundingProof(fp, NOW)).toBe(true);
+  }
   const workspaceId = crypto.randomUUID();
   const envelope = await core.encrypt("v2_workspaces", workspaceId, ownerId, 1, {
     subjectContext: "individual",
@@ -271,9 +276,9 @@ async function fixture(
     invocationId,
     maximumAttempts: 3,
     deadlineAt: "2026-10-06T00:01:00.000Z",
-    pricingProofId: pp.id,
-    fundingProofId: fp.id,
-    allocationProofId: ap.id,
+    pricingProofId: metadata === "none" ? null : pp.id,
+    fundingProofId: metadata === "none" ? null : fp.id,
+    allocationProofId: metadata === "none" ? null : ap.id,
   };
   async function admit(b = binding, r = request) {
     const admission = await service.prepareAdmission(b, r);
@@ -930,11 +935,255 @@ test("observation-only gateway keeps model bounds and dispatches after all finan
   ).toMatchObject({ inScope: true });
   await Promise.all(a.background);
   expect(calls).toBe(1);
-  expect(f.db.sqlite.query("SELECT outcome,charged_krw FROM v2_runtime_usage").get()).toEqual({
-    outcome: "ambiguous",
+  expect(
+    f.db.sqlite
+      .query("SELECT pricing_status,charged_krw FROM v2_execution_cost_observations")
+      .get(),
+  ).toEqual({
+    pricing_status: "stale",
     charged_krw: null,
   });
   expect((await f.runtime.findProof(p.id, "2026-10-06T00:00:02.000Z"))?.payload).toEqual(p);
   const overBound = { ...f.request, outputTokenUpperBound: 50000 };
   expect(await f.service.prepareAdmission(f.binding, overBound)).toBeNull();
+});
+
+for (const metadata of ["none", "missing_sku"] as const) {
+  test(`observation-only model runs and stores actual usage with ${metadata} cost metadata`, async () => {
+    const f = await fixture(100, undefined, false, metadata);
+    const a = await f.admit();
+    const beforeProofs = f.db.sqlite.query("SELECT * FROM v2_runtime_proofs ORDER BY id").all();
+    let calls = 0;
+    const gateway = createLlmGateway(
+      {
+        APP_ENV: "preview",
+        AI_GATEWAY_ID: "synthetic",
+        AI: {
+          run: async () => {
+            calls++;
+            return response();
+          },
+        },
+      },
+      { attemptLedger: a.ledger },
+    );
+    expect(
+      await gateway.call(
+        "screening",
+        PRIVATE_INPUT,
+        "synthetic-request",
+        async () => true,
+        undefined,
+        f.binding.invocationId,
+      ),
+    ).toMatchObject({ inScope: true });
+    await Promise.all(a.background);
+    expect(calls).toBe(1);
+    expect(f.db.sqlite.query("SELECT state,transport FROM v2_execution_admissions").get()).toEqual({
+      state: "final",
+      transport: "response",
+    });
+    const observation = f.db.sqlite
+      .query(
+        "SELECT pricing_status,funding_status,charged_usd,charged_krw,payload_json FROM v2_execution_cost_observations",
+      )
+      .get() as { payload_json: string };
+    expect(observation).toMatchObject({
+      pricing_status: metadata === "none" ? "missing" : "incomplete",
+      funding_status: metadata === "none" ? "missing" : "current",
+      charged_usd: null,
+      charged_krw: null,
+    });
+    expect(JSON.parse(observation.payload_json)).toMatchObject({
+      providerRequestId: "chatcmpl-synthetic",
+      quantities: [
+        { sku: "model_input_tokens", quantity: "10" },
+        { sku: "model_output_tokens", quantity: "20" },
+      ],
+    });
+    expect(f.db.sqlite.query("SELECT count(*) n FROM v2_cost_attempts").get()).toEqual({ n: 0 });
+    expect(f.db.sqlite.query("SELECT count(*) n FROM v2_cost_quotes").get()).toEqual({ n: 0 });
+    expect(f.db.sqlite.query("SELECT * FROM v2_runtime_proofs ORDER BY id").all()).toEqual(
+      beforeProofs,
+    );
+    if (metadata === "none")
+      expect(f.db.sqlite.query("SELECT count(*) n FROM v2_monthly_budget").get()).toEqual({ n: 0 });
+    expect(f.db.sqlite.query("PRAGMA foreign_key_check").all()).toEqual([]);
+  });
+}
+
+test("unpriced admission restores exact wire evidence and refuses stale lease or duplicate dispatch", async () => {
+  const f = await fixture(100, undefined, false, "none"),
+    a = await f.admit();
+  const restored = await f.service.restoreAdmission(
+    f.binding,
+    f.request,
+    a.admission.request.attemptId,
+  );
+  expect(restored?.request).toEqual(a.admission.request);
+  expect(
+    await f.service.restoreAdmission(
+      f.binding,
+      { ...f.request, wireInputSha256: "b".repeat(64) },
+      a.admission.request.attemptId,
+    ),
+  ).toBeNull();
+  if (!restored) throw new Error("synthetic restore missing");
+  const ledger = f.service.createLedger({
+    binding: f.binding,
+    initial: restored,
+    lease: async () => ({ lease: a.acquired.lease, expiresAt: "2026-10-06T00:02:00.000Z" }),
+    waitUntil: () => {},
+  });
+  const h = await ledger.beforeDispatch(f.request);
+  expect(h).not.toBeNull();
+  if (!h) throw new Error("synthetic handle missing");
+  expect(await ledger.confirmDispatch(h)).toBe(true);
+  expect(await ledger.confirmDispatch(h)).toBe(false);
+  expect(await f.runtime.beforeDispatch(f.actor, a.acquired.lease, h.attemptId)).toBeNull();
+  expect(
+    await f.service.restoreAdmission(f.binding, f.request, a.admission.request.attemptId),
+  ).toBeNull();
+  expect(f.db.sqlite.query("SELECT count(*) n FROM v2_execution_admissions").get()).toEqual({
+    n: 1,
+  });
+});
+
+test("unpriced unknown transport retains unresolved execution and prevents overlapping retry", async () => {
+  const f = await fixture(100, undefined, false, "none"),
+    a = await f.admit();
+  const h = await a.ledger.beforeDispatch(f.request);
+  if (!h) throw new Error("synthetic handle missing");
+  expect(await a.ledger.confirmDispatch(h)).toBe(true);
+  await a.ledger.afterTransport(h, {
+    transport: "unknown",
+    providerRequestId: null,
+    inputTokens: null,
+    outputTokens: null,
+    cachedInputTokens: null,
+    cacheWriteInputTokens: null,
+    serviceTier: null,
+    meteringStatus: "incomplete",
+    observedAt: NOW,
+    definitiveNoCharge: false,
+  });
+  expect(await a.ledger.beforeDispatch({ ...f.request, attemptOrdinal: 2 })).toBeNull();
+  expect(f.db.sqlite.query("SELECT state,transport FROM v2_execution_admissions").get()).toEqual({
+    state: "unknown",
+    transport: "unknown",
+  });
+  expect(
+    f.db.sqlite.query("SELECT charged_krw,charged_usd FROM v2_execution_cost_observations").get(),
+  ).toEqual({ charged_krw: null, charged_usd: null });
+});
+
+test("unpriced observation append failure preserves a valid response and technical completion", async () => {
+  const f = await fixture(100, undefined, false, "none"),
+    a = await f.admit();
+  f.db.sqlite.exec(
+    "CREATE TRIGGER synthetic_observation_failure BEFORE INSERT ON v2_execution_cost_observations BEGIN SELECT RAISE(ABORT,'synthetic'); END",
+  );
+  let calls = 0;
+  const gateway = createLlmGateway(
+    {
+      APP_ENV: "preview",
+      AI_GATEWAY_ID: "synthetic",
+      AI: {
+        run: async () => {
+          calls++;
+          return response();
+        },
+      },
+    },
+    { attemptLedger: a.ledger },
+  );
+  expect(
+    await gateway.call(
+      "screening",
+      PRIVATE_INPUT,
+      "synthetic-request",
+      async () => true,
+      undefined,
+      f.binding.invocationId,
+    ),
+  ).toMatchObject({ inScope: true });
+  await Promise.all(a.background);
+  expect(calls).toBe(1);
+  expect(f.db.sqlite.query("SELECT state,transport FROM v2_execution_admissions").get()).toEqual({
+    state: "final",
+    transport: "response",
+  });
+  expect(f.db.sqlite.query("SELECT count(*) n FROM v2_execution_cost_observations").get()).toEqual({
+    n: 0,
+  });
+  expect(f.db.sqlite.query("SELECT count(*) n FROM v2_cost_attempts").get()).toEqual({ n: 0 });
+});
+
+test("unpriced model preserves technical bounds, admission durability and actual provider rejection", async () => {
+  const f = await fixture(100, undefined, false, "none");
+  expect(
+    await f.service.prepareAdmission(f.binding, { ...f.request, outputTokenUpperBound: 50000 }),
+  ).toBeNull();
+  const a = await f.admit();
+  let calls = 0;
+  const gateway = createLlmGateway(
+    {
+      APP_ENV: "preview",
+      AI_GATEWAY_ID: "synthetic",
+      AI: {
+        run: async () => {
+          calls++;
+          throw new Error("synthetic provider rejection");
+        },
+      },
+    },
+    { attemptLedger: a.ledger },
+  );
+  await expect(
+    gateway.call(
+      "screening",
+      PRIVATE_INPUT,
+      "synthetic-request",
+      async () => true,
+      undefined,
+      f.binding.invocationId,
+    ),
+  ).rejects.toThrow();
+  expect(calls).toBe(1);
+  expect(f.db.sqlite.query("SELECT state FROM v2_execution_admissions").get()).toEqual({
+    state: "unknown",
+  });
+  const g = await fixture(100, undefined, false, "none"),
+    b = await g.admit();
+  g.db.sqlite.exec(
+    "CREATE TRIGGER synthetic_dispatch_failure BEFORE UPDATE ON v2_execution_admissions BEGIN SELECT RAISE(ABORT,'synthetic'); END",
+  );
+  let forbiddenCalls = 0;
+  const blocked = createLlmGateway(
+    {
+      APP_ENV: "preview",
+      AI_GATEWAY_ID: "synthetic",
+      AI: {
+        run: async () => {
+          forbiddenCalls++;
+          return response();
+        },
+      },
+    },
+    { attemptLedger: b.ledger },
+  );
+  await expect(
+    blocked.call(
+      "screening",
+      PRIVATE_INPUT,
+      "synthetic-request",
+      async () => true,
+      undefined,
+      g.binding.invocationId,
+    ),
+  ).rejects.toThrow();
+  expect(forbiddenCalls).toBe(0);
+  expect(g.db.sqlite.query("SELECT state FROM v2_execution_admissions").get()).toEqual({
+    state: "prepared",
+  });
 });

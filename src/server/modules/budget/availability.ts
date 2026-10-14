@@ -12,9 +12,9 @@ export function createPaidAvailability(
   environment: "preview" | "production",
   options: {
     proofs: () => Promise<{
-      pricingProofId: string;
-      fundingProofId: string;
-      allocationProofId: string;
+      pricingProofId: string | null;
+      fundingProofId: string | null;
+      allocationProofId: string | null;
     } | null>;
     clock?: () => string;
   },

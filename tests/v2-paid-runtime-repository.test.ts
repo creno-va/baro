@@ -5,7 +5,7 @@ import {
   type BudgetAllocation,
   createV2AccountingRepository,
 } from "../src/server/db/v2-accounting";
-import { type Actor, createV2Core } from "../src/server/db/v2-core";
+import { type Actor, createV2Core, V2RepositoryError } from "../src/server/db/v2-core";
 import { createV2FilesRepository } from "../src/server/db/v2-files";
 import { createV2JobsRepository } from "../src/server/db/v2-jobs";
 import { createV2LawyersRepository } from "../src/server/db/v2-lawyers";
@@ -37,7 +37,7 @@ afterEach(() => {
 });
 // Explicit synthetic authenticator. This is not actual pricing/funding/provider
 // evidence, and no network/cloud/model call is performed by this suite.
-const verifier: RuntimeProofVerifier = async (kind, _payload, digest) => ({
+const verifier: RuntimeProofVerifier = async (kind, payload, digest) => ({
   digest,
   evidenceHash: "e".repeat(64),
   method:
@@ -48,7 +48,14 @@ const verifier: RuntimeProofVerifier = async (kind, _payload, digest) => ({
         : kind === "usage" || kind === "maintenance"
           ? "provider_receipt"
           : "authenticated_coordinator",
-  verifiedAt: NOW,
+  verifiedAt:
+    kind === "usage" &&
+    payload &&
+    typeof payload === "object" &&
+    "observedAt" in payload &&
+    typeof payload.observedAt === "string"
+      ? payload.observedAt
+      : NOW,
 });
 function allocation(version = 1): BudgetAllocation {
   return {
@@ -214,8 +221,8 @@ async function fixture(monthlyBudgetCapEnabled = true, applicationCostLimitsEnab
 }
 type Fixture = Awaited<ReturnType<typeof fixture>>;
 
-async function uploadProbeFixture() {
-  const f = await fixture();
+async function uploadProbeFixture(applicationCostLimitsEnabled = true) {
+  const f = await fixture(true, applicationCostLimitsEnabled);
   f.db.sqlite
     .query("INSERT INTO v2_case_original_usage(workspace_id) VALUES(?)")
     .run(f.workspaceId);
@@ -1831,7 +1838,7 @@ test("disabled application cost limits preserve old exposure and admit, dispatch
     .query("SELECT * FROM v2_runtime_proofs WHERE id=?")
     .get(f.fp.id);
   const d = await dispatch(f);
-  expect(d.paid.reservedKrw).toBe(1000);
+  expect(d.paid.reservedKrw).toBeNull();
   expect(
     await f.runtime.recordUsage(
       receipt(d, { chargedUsd: "2", meteringComplete: false, quantities: [] }),
@@ -1840,11 +1847,14 @@ test("disabled application cost limits preserve old exposure and admit, dispatch
   ).toBe(true);
   expect(await f.runtime.exposure(NOW)).toMatchObject({
     phase: "active",
-    settled_krw: 22000,
+    settled_krw: 20000,
     reserved_krw: 0,
     ambiguous_krw: 21000,
     fixed_maintenance_krw: 31000,
   });
+  expect(
+    f.db.sqlite.query("SELECT charged_krw,charged_usd FROM v2_execution_cost_observations").get(),
+  ).toEqual({ charged_krw: 2000, charged_usd: "2" });
   expect(f.db.sqlite.query("SELECT * FROM v2_runtime_proofs WHERE id=?").get(f.fp.id)).toEqual(
     originalFunding,
   );
@@ -1856,16 +1866,16 @@ test("observation-only reservations can exceed the old per-attempt money ceiling
   r.plan.quantities[0]!.maximumQuantity = "1500000";
   const admitted = await admit(f, r);
   expect(admitted.ok).toBe(true);
-  expect(admitted.paid.reservedKrw).toBeGreaterThan(1000000);
-  expect((await f.runtime.exposure(NOW))?.reserved_krw).toBe(admitted.paid.reservedKrw);
+  expect(admitted.paid.reservedKrw).toBeNull();
+  expect((await f.runtime.exposure(NOW))?.reserved_krw).toBe(0);
   expect(f.db.sqlite.query("PRAGMA foreign_key_check").all()).toEqual([]);
 });
 
-test("cost-limit removal still rejects aggregate arithmetic that cannot be recorded exactly", async () => {
+test("observation-only execution does not require safe headroom in the historical money accumulator", async () => {
   const f = await fixture(true, false);
   f.db.sqlite.query("UPDATE v2_monthly_budget SET settled_krw=?").run(Number.MAX_SAFE_INTEGER - 1);
   const a = await admit(f);
-  expect(a.ok).toBe(false);
+  expect(a.ok).toBe(true);
   expect(f.db.sqlite.query("SELECT count(*) n FROM v2_cost_attempts").get()).toEqual({ n: 0 });
 });
 
@@ -1944,12 +1954,13 @@ test("observation-only execution crosses financial expiry and month without rewr
   ).toBe(true);
   expect(
     f.db.sqlite.query("SELECT month,ambiguous_krw FROM v2_monthly_budget ORDER BY month").all(),
-  ).toEqual([
-    { month: "2026-10", ambiguous_krw: 1234 },
-    { month: "2026-11", ambiguous_krw: admitted.paid.reservedKrw },
-  ]);
-  expect(f.db.sqlite.query("SELECT outcome,charged_krw FROM v2_runtime_usage").get()).toEqual({
-    outcome: "ambiguous",
+  ).toEqual([{ month: "2026-10", ambiguous_krw: 1234 }]);
+  expect(
+    f.db.sqlite
+      .query("SELECT pricing_status,charged_krw FROM v2_execution_cost_observations")
+      .get(),
+  ).toEqual({
+    pricing_status: "stale",
     charged_krw: null,
   });
   expect(f.db.sqlite.query("SELECT * FROM v2_runtime_proofs ORDER BY id").all()).toEqual(
@@ -1978,4 +1989,167 @@ test("recording and settling maintenance observations do not freeze execution wh
     control_revision: before.control_revision,
     fixed_maintenance_krw: 60000,
   });
+});
+
+test("unpriced processing restores exact admission and records local transport without fake provider usage", async () => {
+  const f = await uploadProbeFixture(false);
+  const context = await f.probes.context(f.actor, f.uploadId, 1);
+  if (!context) throw new Error("synthetic context missing");
+  const jobId = crypto.randomUUID();
+  const runId = crypto.randomUUID();
+  let ticks = 0;
+  let meteringFailure: "none" | "database" | "provider" = "none";
+  const options: Parameters<typeof createProcessingBudgetService>[0] = {
+    core: f.core,
+    environment: "preview",
+    ownerId: f.actor.ownerId,
+    clock: () => new Date(Date.parse(NOW) + ++ticks).toISOString(),
+    binding: async () => ({
+      ...context,
+      jobId,
+      targetKind: "file",
+      targetId: f.fileId,
+      targetRevision: context.fileRevision,
+      invocationId: runId,
+      maximumAttempts: 1,
+      deadlineAt: "2026-10-06T00:05:00.000Z",
+      pricingProofId: null,
+      fundingProofId: null,
+      allocationProofId: null,
+    }),
+    metering: async () => {
+      if (meteringFailure === "database") throw new V2RepositoryError("DB_OPERATION_FAILED");
+      if (meteringFailure === "provider")
+        throw new Error("synthetic non-accounting provider failure");
+      return null;
+    },
+    bounds: async (_input, inputDigest) => ({
+      inputDigest,
+      evidenceHash: HASH,
+      verifiedAt: NOW,
+      validUntil: EXP,
+      quantities: [
+        { sku: "container_cpu_seconds", maximumQuantity: "600" },
+        { sku: "container_memory_gib_seconds", maximumQuantity: "3600" },
+        { sku: "container_disk_gb_seconds", maximumQuantity: "7200" },
+      ],
+    }),
+  };
+  const service = createProcessingBudgetService(options);
+  const input = {
+    service: "container" as const,
+    action: "container_probe" as const,
+    identity: `probe:${HASH}:0:0`,
+    byteLength: 100,
+    durationSeconds: null,
+  };
+  const admission = await service.prepareInitial(input);
+  expect(admission).not.toBeNull();
+  if (!admission) throw new Error("synthetic admission missing");
+  expect(f.db.sqlite.query("SELECT count(*) n FROM v2_paid_holds").get()).toEqual({ n: 0 });
+  const lease = await f.probes.attach(
+    admission.actor,
+    { uploadId: f.uploadId, uploadRevision: 1, leaseUntil: "2026-10-06T00:05:00.000Z" },
+    admission.paid,
+  );
+  if (!lease) throw new Error("synthetic lease missing");
+  const costs = createProcessingBudgetService({
+    ...options,
+    initialAttemptId: admission.request.attemptId,
+  }).costs(lease);
+  const access = { authorize: async () => true, signal: new AbortController().signal };
+  expect(await costs.before({ ...input, identity: "substituted" }, access)).toBeNull();
+  const permit = await costs.before(input, access);
+  expect(permit).not.toBeNull();
+  if (!permit) throw new Error("synthetic permit missing");
+  expect(await service.costs(lease, admission).before(input, access)).toBeNull();
+  await costs.after({ ...permit }, { transport: "response", rawUsage: { chargedUsd: "0" } });
+  await costs.after(permit, { transport: "response" });
+  meteringFailure = "database";
+  await costs.after(permit, { transport: "response" });
+  meteringFailure = "provider";
+  await expect(costs.after(permit, { transport: "response" })).rejects.toThrow(
+    "synthetic non-accounting provider failure",
+  );
+  meteringFailure = "none";
+  expect(await costs.before(input, access)).toBeNull();
+  const next = await costs.before(
+    { ...input, identity: `process:${HASH}:1:0`, action: "container_process" },
+    access,
+  );
+  expect(next).not.toBeNull();
+  if (!next) throw new Error("synthetic next permit missing");
+  expect(
+    f.db.sqlite
+      .query("SELECT state,transport FROM v2_execution_admissions WHERE attempt_id=?")
+      .get(permit.attemptId),
+  ).toEqual({ state: "final", transport: "response" });
+  expect(f.db.sqlite.query("SELECT count(*) n FROM v2_execution_admissions").get()).toEqual({
+    n: 2,
+  });
+  expect(f.db.sqlite.query("SELECT count(*) n FROM v2_cost_attempts").get()).toEqual({ n: 0 });
+  expect(f.db.sqlite.query("SELECT count(*) n FROM v2_execution_cost_observations").get()).toEqual({
+    n: 0,
+  });
+  f.db.sqlite.exec(
+    "CREATE TRIGGER synthetic_completion_failure BEFORE UPDATE ON v2_execution_admissions BEGIN SELECT RAISE(ABORT,'synthetic'); END",
+  );
+  await costs.after(next, { transport: "response" });
+  expect(
+    f.db.sqlite
+      .query("SELECT state FROM v2_execution_admissions WHERE attempt_id=?")
+      .get(next.attemptId),
+  ).toEqual({ state: "dispatched" });
+});
+
+test("unpriced genuine late receipt after account deletion preserves nullable ledger and deduplicates exact replay", async () => {
+  const f = await fixture(true, false),
+    d = await dispatch(f);
+  f.db.sqlite.query("DELETE FROM user WHERE id=?").run(f.actor.ownerId);
+  const r = receipt(d, { chargedUsd: null, meteringComplete: false, quantities: [] });
+  expect(await f.runtime.recordUsage(r, NOW)).toBe(true);
+  expect(await f.runtime.recordUsage(r, NOW)).toBe(true);
+  expect(f.db.sqlite.query("SELECT count(*) n FROM v2_execution_cost_observations").get()).toEqual({
+    n: 1,
+  });
+  expect(f.db.sqlite.query("SELECT charged_krw FROM v2_execution_cost_observations").get()).toEqual(
+    { charged_krw: null },
+  );
+  expect(f.db.sqlite.query("PRAGMA foreign_key_check").all()).toEqual([]);
+});
+
+test("unpriced unsent receipt can resume after optional observation append fails", async () => {
+  const f = await fixture(true, false),
+    a = await admit(f);
+  const r = {
+    id: crypto.randomUUID(),
+    attemptId: a.r.attemptId,
+    invocationId: a.r.plan.invocationId,
+    providerRequestId: null,
+    dispatchToken: null,
+    observedAt: NOW,
+    transport: "not_sent" as const,
+    definitiveNoCharge: true,
+    meteringComplete: false,
+    quantities: [],
+    chargedUsd: null,
+    modelTokenDetails: null,
+  };
+  f.db.sqlite.exec(
+    "CREATE TRIGGER synthetic_unsent_observation_failure BEFORE INSERT ON v2_execution_cost_observations BEGIN SELECT RAISE(ABORT,'synthetic'); END",
+  );
+  expect(await f.runtime.recordUsage(r, NOW)).toBe(true);
+  expect(f.db.sqlite.query("SELECT state,transport FROM v2_execution_admissions").get()).toEqual({
+    state: "final",
+    transport: "not_sent",
+  });
+  f.db.sqlite.exec("DROP TRIGGER synthetic_unsent_observation_failure");
+  expect(await f.runtime.recordUsage(r, NOW)).toBe(true);
+  expect(await f.runtime.recordUsage(r, NOW)).toBe(true);
+  expect(f.db.sqlite.query("SELECT count(*) n FROM v2_execution_cost_observations").get()).toEqual({
+    n: 1,
+  });
+  expect(await f.runtime.recordUsage({ ...r, observedAt: "2026-10-06T00:00:01.000Z" }, LATER)).toBe(
+    false,
+  );
 });

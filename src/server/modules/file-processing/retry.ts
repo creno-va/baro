@@ -81,7 +81,7 @@ export function createFileRetry(
     if (file.status !== "failed") throw new FileError("CONFLICT");
     const row = await core
       .statement(
-        `SELECT j.id,j.attempts,j.operation_id,o.revision AS operation_revision,coalesce((SELECT request_hash FROM v2_runtime_plans WHERE operation_id=o.id AND job_id=j.id ORDER BY created_at,id LIMIT 1),(SELECT request_hash FROM v2_idempotency WHERE operation_id=o.id LIMIT 1)) AS request_hash FROM v2_jobs j JOIN v2_operations o ON o.id=j.operation_id WHERE j.target_kind='file' AND j.target_id=? AND j.target_revision=? AND j.kind='file_processing' AND j.status='failed' AND j.retryable=1 AND o.owner_id=? ORDER BY j.updated_at DESC,j.id DESC LIMIT 1`,
+        `SELECT j.id,j.attempts,j.operation_id,o.revision AS operation_revision,coalesce((SELECT request_hash FROM v2_execution_job_plans WHERE operation_id=o.id AND job_id=j.id ORDER BY created_at,id LIMIT 1),(SELECT request_hash FROM v2_idempotency WHERE operation_id=o.id LIMIT 1)) AS request_hash FROM v2_jobs j JOIN v2_operations o ON o.id=j.operation_id WHERE j.target_kind='file' AND j.target_id=? AND j.target_revision=? AND j.kind='file_processing' AND j.status='failed' AND j.retryable=1 AND o.owner_id=? ORDER BY j.updated_at DESC,j.id DESC LIMIT 1`,
         [fileId, file.revision, ownerId],
       )
       .first<{
