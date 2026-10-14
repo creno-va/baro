@@ -7,6 +7,7 @@ import {
   v2CoverageSchema,
   v2FailureCodeSchema,
   v2FileObservationSchema,
+  v2FileProcessingSchema,
   v2FileSchema,
   v2ObservationEditInputSchema,
   v2ObservationEditRequestSchema,
@@ -32,6 +33,7 @@ export const fileViewSchema = z.object({
   extractedText: z.string(),
   canStartProcessing: z.boolean().optional(),
   canRetry: z.boolean().optional(),
+  processing: v2FileProcessingSchema.optional(),
   uploadContentHash: z.string().optional(),
   createdAt: z.iso.datetime({ offset: true }).optional(),
   failure: v2FailureCodeSchema.nullable().optional(),
@@ -44,6 +46,7 @@ const metadataSchema = z.object({
   byteLength: z.number(),
   contentHash: z.string().optional(),
   canRetry: z.boolean().optional(),
+  processing: v2FileProcessingSchema.optional(),
   createdAt: z.iso.datetime({ offset: true }).optional(),
   failure: v2FailureCodeSchema.nullable().optional(),
   status: z.enum([
@@ -219,7 +222,10 @@ export function createFilesApi(request: WorkspaceTransport) {
                 ? "failed"
                 : row.status === "reserved" || row.status === "uploading"
                   ? "uploading"
-                  : row.status === "processing"
+                  : row.status === "processing" ||
+                      (row.status === "queued" &&
+                        row.processing &&
+                        row.processing.status !== "queued")
                     ? "processing"
                     : "waiting",
           coverage: "처리 결과는 아직 확인할 수 없어요.",
@@ -228,6 +234,7 @@ export function createFilesApi(request: WorkspaceTransport) {
           canRetry: row.canRetry ?? false,
           createdAt: row.createdAt,
           failure: row.failure,
+          processing: row.processing,
         };
         if (row.status === "ready") {
           const detail = await request(`${base(id)}/files/${encodeURIComponent(row.id)}`);

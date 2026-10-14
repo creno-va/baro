@@ -898,3 +898,224 @@ test("10000 observations and 20000 derivatives publish and paginate losslessly t
   // Its elapsed deadline is not a Worker or per-stage SLA. Preserve all maximum
   // counts and bounds; the slower host exceeded the previous 180-second window.
 }, 600_000);
+
+test("file list exposes the exact current processing checkpoint without additional queries", async () => {
+  const f = await fixture();
+  const p = await processing(f);
+  const at = "2026-10-06T00:01:00.000Z";
+  expect(p.current.operationId).toBe(p.input.operationId);
+  expect(p.current.operationId).not.toBe(p.r.input.admission.operationId);
+  expect(
+    await f.jobs.checkpoint({ ...f.actor, now: at }, p.lease, {
+      id: crypto.randomUUID(),
+      revision: 1,
+      phase: "extracting",
+      progress: 1,
+      opaqueIds: [],
+    }),
+  ).toBe(true);
+  const before = f.database.queryCount;
+  const listed = await f.files.listMetadata(f.actor, f.workspaceId);
+  expect(f.database.queryCount - before).toBe(2);
+  expect(listed[0]?.status).toBe("queued");
+  expect(listed[0]).toMatchObject({
+    processing: { status: "running", phase: "extracting", updatedAt: at },
+  });
+});
+
+for (const mismatch of [
+  "pointer",
+  "revision",
+  "operation",
+  "operation_owner",
+  "operation_state",
+  "workspace",
+  "completed",
+  "failed",
+  "file_state",
+  "archived",
+] as const)
+  test(`file list omits processing for a noncurrent or inactive relation: ${mismatch}`, async () => {
+    const f = await fixture();
+    const p = await processing(f);
+    const db = f.database.sqlite;
+    const id = p.current.id;
+    const job = p.lease.jobId;
+    if (mismatch === "pointer")
+      db.query("UPDATE v2_files SET current_job_id=NULL WHERE id=?").run(id);
+    if (mismatch === "revision")
+      db.query("UPDATE v2_jobs SET target_revision=target_revision+1 WHERE id=?").run(job);
+    if (mismatch === "operation")
+      db.query("UPDATE v2_files SET operation_id=? WHERE id=?").run(
+        p.r.input.admission.operationId,
+        id,
+      );
+    if (mismatch === "operation_owner") {
+      const other = await seedTestSession(f.database, { now: Date.parse(NOW), consent: true });
+      db.query("UPDATE v2_operations SET owner_id=? WHERE id=?").run(
+        other.userId,
+        p.input.operationId,
+      );
+    }
+    if (mismatch === "operation_state")
+      db.query("UPDATE v2_operations SET state='failed' WHERE id=?").run(p.input.operationId);
+    if (mismatch === "workspace") {
+      const other = crypto.randomUUID();
+      db.query(
+        "INSERT INTO v2_workspaces(id,owner_id,status,confirmed_summary_revision,encrypted_payload,created_at,updated_at) SELECT ?,owner_id,status,confirmed_summary_revision,encrypted_payload,created_at,updated_at FROM v2_workspaces WHERE id=?",
+      ).run(other, f.workspaceId);
+      db.query("UPDATE v2_jobs SET workspace_id=? WHERE id=?").run(other, job);
+    }
+    if (mismatch === "completed")
+      db.query(
+        "UPDATE v2_jobs SET status='completed',phase='finished',progress=100 WHERE id=?",
+      ).run(job);
+    if (mismatch === "failed")
+      db.query(
+        "UPDATE v2_jobs SET status='failed',failure_code='FILE_PROCESSING_FAILED' WHERE id=?",
+      ).run(job);
+    if (mismatch === "file_state")
+      db.query(
+        "UPDATE v2_files SET state='failed',failure_code='FILE_PROCESSING_FAILED' WHERE id=?",
+      ).run(id);
+    if (mismatch === "archived")
+      db.query("UPDATE v2_workspaces SET status='archived',archived_from='active' WHERE id=?").run(
+        f.workspaceId,
+      );
+    const listed = await f.files.listMetadata(f.actor, f.workspaceId);
+    expect(listed).toHaveLength(1);
+    expect(listed[0]?.processing).toBeUndefined();
+  });
+
+for (const change of [
+  "file_deleted",
+  "workspace_deleted",
+  "account_deleted",
+  "pointer",
+  "operation",
+  "revision",
+  "ciphertext",
+  "phase",
+] as const)
+  test(`file list final processing fence observes a change during metadata decryption: ${change}`, async () => {
+    const f = await fixture();
+    const p = await processing(f);
+    const decrypt = f.core.cipher.decrypt.bind(f.core.cipher);
+    let changed = false;
+    f.core.cipher.decrypt = async (envelope, context) => {
+      const value = await decrypt(envelope, context);
+      if (!changed && context.table === "v2_files") {
+        changed = true;
+        const db = f.database.sqlite;
+        if (change.endsWith("_deleted")) {
+          const kind = change.split("_")[0] ?? "";
+          db.query("INSERT INTO v2_tombstones VALUES(?,?,?)").run(
+            kind,
+            kind === "file" ? p.current.id : kind === "workspace" ? f.workspaceId : f.actor.ownerId,
+            NOW,
+          );
+        }
+        if (change === "pointer")
+          db.query("UPDATE v2_files SET current_job_id=NULL WHERE id=?").run(p.current.id);
+        if (change === "operation")
+          db.query("UPDATE v2_files SET operation_id=? WHERE id=?").run(
+            p.r.input.admission.operationId,
+            p.current.id,
+          );
+        if (change === "revision")
+          db.query("UPDATE v2_files SET revision=revision+1 WHERE id=?").run(p.current.id);
+        if (change === "ciphertext")
+          db.query("UPDATE v2_files SET encrypted_payload='synthetic-stale' WHERE id=?").run(
+            p.current.id,
+          );
+        if (change === "phase")
+          db.query(
+            "UPDATE v2_jobs SET phase='observing',updated_at='2026-10-06T00:01:00.000Z' WHERE id=?",
+          ).run(p.lease.jobId);
+      }
+      return value;
+    };
+    const listed = await f.files.listMetadata(f.actor, f.workspaceId);
+    expect(changed).toBe(true);
+    if (change === "phase")
+      expect(listed[0]?.processing).toEqual({
+        status: "running",
+        phase: "observing",
+        updatedAt: "2026-10-06T00:01:00.000Z",
+      });
+    else expect(listed).toEqual([]);
+  });
+
+test("file list processing metadata retains actual queued, renewed and retried job timestamps", async () => {
+  const f = await fixture();
+  const u = await upload(f);
+  const jobId = crypto.randomUUID();
+  expect(
+    await f.jobs.admitFile(guard(f), {
+      fileId: u.value.id,
+      fileRevision: 2,
+      jobId,
+      admission: admission(),
+      quotas: [],
+    }),
+  ).toBe(true);
+  const list = async () => (await f.files.listMetadata(f.actor, f.workspaceId))[0];
+  expect((await list())?.processing).toEqual({
+    status: "queued",
+    phase: "admission",
+    updatedAt: NOW,
+  });
+  const acquired = await f.jobs.acquire(
+    f.actor,
+    jobId,
+    crypto.randomUUID(),
+    "2026-10-06T00:02:00.000Z",
+  );
+  if (!acquired) throw new Error("Synthetic acquire failed");
+  const renewedAt = "2026-10-06T00:00:30.000Z";
+  expect(
+    await f.jobs.renew({ ...f.actor, now: renewedAt }, acquired.lease, "2026-10-06T00:03:00.000Z"),
+  ).toBe(true);
+  expect((await list())?.processing).toEqual({
+    status: "running",
+    phase: "admission",
+    updatedAt: renewedAt,
+  });
+  expect(
+    await f.jobs.fail(
+      { ...f.actor, now: renewedAt },
+      acquired.lease,
+      "FILE_PROCESSING_FAILED",
+      true,
+    ),
+  ).toBe(true);
+  expect((await list())?.processing).toBeUndefined();
+  const retriedAt = "2026-10-06T00:01:00.000Z";
+  expect(await f.jobs.retry({ ...guard(f), now: retriedAt }, jobId)).toBe(true);
+  expect((await list())?.processing).toEqual({
+    status: "queued",
+    phase: "admission",
+    updatedAt: retriedAt,
+  });
+  expect((await list())?.createdAt).toBe(NOW);
+  expect(
+    await f.files.listMetadata({ ...f.actor, ownerId: crypto.randomUUID() }, f.workspaceId),
+  ).toEqual([]);
+});
+
+test("file list processing lookup fails closed when the final database read fails", async () => {
+  const f = await fixture();
+  await processing(f);
+  const statement = f.core.statement.bind(f.core);
+  f.core.statement = (sql, values) => {
+    const query = statement(sql, values);
+    if (sql.includes("AS processing_status"))
+      query.all = async () => {
+        throw new Error("synthetic database unavailable");
+      };
+    return query;
+  };
+  await expect(f.files.listMetadata(f.actor, f.workspaceId)).rejects.toMatchObject({
+    code: "DB_OPERATION_FAILED",
+  });
+});

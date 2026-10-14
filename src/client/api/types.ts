@@ -3,6 +3,7 @@ import type {
   V2FactReference,
   V2FailureCode,
   V2FileObservation,
+  V2FileProcessing,
 } from "../../contracts/v2";
 import type { V2Summary } from "../../contracts/v2/intake";
 
@@ -62,6 +63,7 @@ export type FileView = {
   extractedText: string;
   canStartProcessing?: boolean | undefined;
   canRetry?: boolean | undefined;
+  processing?: V2FileProcessing | undefined;
   uploadContentHash?: string | undefined;
   createdAt?: string | undefined;
   failure?: V2FailureCode | null | undefined;

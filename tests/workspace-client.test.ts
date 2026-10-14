@@ -763,3 +763,58 @@ for (const canRetry of [true, false])
       canRetry,
     );
   });
+
+for (const status of ["queued", "running", "validating"] as const)
+  test(`file metadata client preserves actual processing ${status} without another request`, async () => {
+    const processing = { status, phase: "extracting", updatedAt: "2026-10-15T00:01:00.000Z" };
+    let calls = 0;
+    const files = createFilesApi(async () => {
+      calls++;
+      return Response.json([
+        {
+          id: "synthetic-file",
+          revision: 2,
+          name: "synthetic.pdf",
+          declaredMediaType: "application/pdf",
+          byteLength: 100,
+          status: "queued",
+          createdAt: "2026-10-14T00:00:00.000Z",
+          processing,
+        },
+      ]);
+    });
+    expect((await files.list("synthetic-case"))[0]).toMatchObject({
+      status: status === "queued" ? "waiting" : "processing",
+      processing,
+      canRetry: false,
+      canStartProcessing: false,
+    });
+    expect(calls).toBe(1);
+  });
+
+test("direct workspace DTO keeps optional processing metadata across reload", async () => {
+  const f = fixture();
+  const processing = {
+    status: "running" as const,
+    phase: "observing" as const,
+    updatedAt: "2026-10-15T00:01:00.000Z",
+  };
+  f.runtime.update((state) => {
+    state.files["synthetic-case"] = [
+      {
+        id: "synthetic-file",
+        name: "synthetic.pdf",
+        mimeType: "application/pdf",
+        sizeBytes: 100,
+        status: "processing",
+        coverage: "",
+        extractedText: "",
+        processing,
+      },
+    ];
+  });
+  expect((await f.client.get("synthetic-case")).files[0]?.processing).toEqual(processing);
+  expect(
+    (await createWorkspaceApi(f.transport).get("synthetic-case")).files[0]?.processing,
+  ).toEqual(processing);
+});

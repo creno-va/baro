@@ -1034,3 +1034,109 @@ for (const canRetry of [true, false])
     await expect(page.getByRole("button", { name: "자료 확인", exact: true })).toBeEnabled();
     await expect(page.getByRole("button", { name: "삭제", exact: true })).toBeEnabled();
   });
+
+test("current file checkpoint and status update survive reload and reset on explicit retry", async ({
+  page,
+}) => {
+  await page.clock.setFixedTime(new Date("2026-10-15T00:02:05.000Z"));
+  await page.goto(`${base}/files`);
+  await expect(page.getByRole("heading", { name: "아직 자료가 없어요" })).toBeVisible();
+  await page.evaluate((key) => {
+    const state = JSON.parse(localStorage.getItem(key) ?? "{}");
+    state.files["synthetic-case"] = [
+      {
+        id: "checkpoint-file",
+        name: "checkpoint.pdf",
+        mimeType: "application/pdf",
+        sizeBytes: 100,
+        status: "waiting",
+        coverage: "처리 결과는 아직 확인할 수 없어요.",
+        extractedText: "",
+        createdAt: "2026-10-14T23:15:00.000Z",
+        processing: { status: "queued", phase: "admission", updatedAt: "2026-10-15T00:01:00.000Z" },
+      },
+    ];
+    localStorage.setItem(key, JSON.stringify(state));
+  }, key);
+  await page.reload();
+  await expect(
+    page.getByText("자료 처리 요청이 접수되어 시작을 기다리고 있어요.", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText("마지막 상태 갱신 후 1분 5초", { exact: true })).toBeVisible();
+  await expect(page.getByText(/자료 등록 후/)).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "처리 다시 시도", exact: true })).toHaveCount(0);
+  for (const phase of [
+    "admission",
+    "extracting",
+    "observing",
+    "assembling",
+    "retrieving",
+  ] as const) {
+    await page.evaluate(
+      ({ key, phase }) => {
+        const state = JSON.parse(localStorage.getItem(key) ?? "{}");
+        Object.assign(state.files["synthetic-case"][0], {
+          status: "processing",
+          processing: { status: "running", phase, updatedAt: "2026-10-15T00:02:00.000Z" },
+        });
+        localStorage.setItem(key, JSON.stringify(state));
+        window.dispatchEvent(new Event("focus"));
+      },
+      { key, phase },
+    );
+    const labels = {
+      admission: "자료를 처리하고 있어요.",
+      extracting: "처리 중 · 최근 확인 단계: 자료 추출",
+      observing: "처리 중 · 최근 확인 단계: 내용 확인",
+      assembling: "처리 중 · 최근 확인 단계: 결과 정리",
+      retrieving: "자료를 처리하고 있어요.",
+    };
+    await expect(page.getByText(labels[phase], { exact: true })).toBeVisible();
+    await expect(page.getByText("마지막 상태 갱신 후 5초", { exact: true })).toBeVisible();
+  }
+  await page.reload();
+  await expect(page.getByText("자료를 처리하고 있어요.", { exact: true })).toBeVisible();
+  await expect(page.getByText("마지막 상태 갱신 후 5초", { exact: true })).toBeVisible();
+  await page.evaluate(async (key) => {
+    const state = JSON.parse(localStorage.getItem(key) ?? "{}");
+    Object.assign(state.files["synthetic-case"][0], {
+      status: "failed",
+      processing: undefined,
+      failure: "FILE_PROCESSING_FAILED",
+      canRetry: true,
+    });
+    localStorage.setItem(key, JSON.stringify(state));
+    const path = "/tests/helpers/workspace-client-fixture.ts";
+    const { api } = (await import(path)) as typeof import("../helpers/workspace-client-fixture");
+    api.files.retry = async (_caseId, id) => {
+      const next = JSON.parse(localStorage.getItem(key) ?? "{}");
+      const file = next.files["synthetic-case"].find((file: { id: string }) => file.id === id);
+      Object.assign(file, {
+        status: "waiting",
+        canRetry: false,
+        failure: null,
+        processing: { status: "queued", phase: "admission", updatedAt: "2026-10-15T00:02:00.000Z" },
+      });
+      localStorage.setItem(key, JSON.stringify(next));
+      return file;
+    };
+    window.dispatchEvent(new Event("focus"));
+  }, key);
+  await expect(page.getByText(/저장된 원본으로 처리를 다시 시도/)).toBeVisible();
+  await expect(page.getByText(/마지막 상태 갱신 후/)).toHaveCount(0);
+  await page.getByRole("button", { name: "처리 다시 시도", exact: true }).click();
+  await expect(
+    page.getByText("자료 처리 요청이 접수되어 시작을 기다리고 있어요.", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText("마지막 상태 갱신 후 5초", { exact: true })).toBeVisible();
+  await expect(page.getByText(/자료 등록 후/)).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "처리 다시 시도", exact: true })).toHaveCount(0);
+  await page.evaluate((key) => {
+    const state = JSON.parse(localStorage.getItem(key) ?? "{}");
+    Object.assign(state.files["synthetic-case"][0], { status: "ready", processing: undefined });
+    localStorage.setItem(key, JSON.stringify(state));
+    window.dispatchEvent(new Event("focus"));
+  }, key);
+  await expect(page.getByText("결과 확인 가능", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText(/마지막 상태 갱신 후|최근 확인 단계|자료 등록 후/)).toHaveCount(0);
+});

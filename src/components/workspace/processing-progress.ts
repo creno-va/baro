@@ -38,3 +38,16 @@ export function fileFailureLabel(file: Pick<FileView, "failure" | "canRetry">): 
     ? `${reason} 저장된 원본으로 처리를 다시 시도할 수 있어요.`
     : `${reason} 자료 확인에서 원본을 확인하거나 자료를 삭제할 수 있어요.`;
 }
+
+/** Checkpoints describe the last recorded stage; they do not prove the current substep. */
+export function fileProcessingLabel(processing: NonNullable<FileView["processing"]>): string {
+  if (processing.status === "queued") return "자료 처리 요청이 접수되어 시작을 기다리고 있어요.";
+  const stages: Partial<Record<typeof processing.phase, string>> = {
+    extracting: "자료 추출",
+    transcribing: "음성 전사",
+    observing: "내용 확인",
+    assembling: "결과 정리",
+  };
+  const stage = stages[processing.phase];
+  return stage ? `처리 중 · 최근 확인 단계: ${stage}` : "자료를 처리하고 있어요.";
+}

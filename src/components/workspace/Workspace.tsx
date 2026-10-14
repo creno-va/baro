@@ -30,7 +30,7 @@ import { Button, ButtonLink } from "../ui/button";
 import { CaseNavigation } from "./CaseNavigation";
 import { ElapsedTime } from "./ElapsedTime";
 import { FileReview } from "./FileReview";
-import { fileFailureLabel, uploadProgressLabel } from "./processing-progress";
+import { fileFailureLabel, fileProcessingLabel, uploadProgressLabel } from "./processing-progress";
 import { referenceLabel, timelineDateLabel } from "./source-label";
 import { timelineDateInput, timelineEventLength } from "./timeline-draft";
 
@@ -1071,7 +1071,19 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                         <p className="workspace-coverage">
                           {file.coverage || "추출 범위는 처리가 끝난 뒤 확인할 수 있어요."}
                         </p>
-                        {file.createdAt &&
+                        {file.processing && ["processing", "waiting"].includes(file.status) && (
+                          <div className="workspace-muted">
+                            <p>{fileProcessingLabel(file.processing)}</p>
+                            <p>
+                              <ElapsedTime
+                                startedAt={file.processing.updatedAt}
+                                label="마지막 상태 갱신 후"
+                              />
+                            </p>
+                          </div>
+                        )}
+                        {!file.processing &&
+                          file.createdAt &&
                           ["uploading", "processing", "waiting"].includes(file.status) && (
                             <p className="workspace-muted">
                               <ElapsedTime startedAt={file.createdAt} label="자료 등록 후" />
