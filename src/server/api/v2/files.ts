@@ -25,7 +25,9 @@ const publicFileError: Record<FileError["code"], V2ErrorCode> = {
   NOT_FOUND: "NOT_FOUND",
   CONFLICT: "INVALID_STATE",
   BODY_TOO_LARGE: "BODY_TOO_LARGE",
-  INVALID_FILE: "FILE_REJECTED",
+  // Part/manifest validation can fail before native format admission; the
+  // unchanged original may still be recoverable through the same session.
+  INVALID_FILE: "VALIDATION_ERROR",
   STORAGE_UNAVAILABLE: "STORAGE_UNAVAILABLE",
   PROCESSING_UNAVAILABLE: "FILE_PROCESSING_FAILED",
 };

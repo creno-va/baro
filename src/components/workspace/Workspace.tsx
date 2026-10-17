@@ -52,6 +52,7 @@ function problem(cause: unknown) {
     "CONFLICT",
     "QUOTA_EXCEEDED",
     "VALIDATION_ERROR",
+    "FILE_REJECTED",
     "UNAVAILABLE",
   ].includes(error?.code ?? "");
   return {
@@ -516,7 +517,11 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
           setNotice("자료를 저장했어요. 처리 상태와 확인 가능한 범위를 확인해 주세요.");
       } catch (cause) {
         if (!current(epoch)) return;
-        setRetryUploads(chosen.slice(completed));
+        // A definitive format rejection needs a changed file. Preserve only
+        // later selections; ambiguous responses retain the exact same input.
+        setRetryUploads(
+          chosen.slice(completed + (problem(cause).code === "FILE_REJECTED" ? 1 : 0)),
+        );
         throw cause;
       }
     });
@@ -648,14 +653,16 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
               ? "최신 내용을 불러왔어요. 입력은 유지됩니다. 확인한 뒤 다시 저장해 주세요."
               : error.code === "QUOTA_EXCEEDED"
                 ? "저장된 사건은 보존돼요. 사용량에서 한도를 확인할 수 있어요."
-                : ["UNAUTHENTICATED", "CONSENT_REQUIRED", "NOT_FOUND"].includes(error.code) &&
-                    !error.resource
-                  ? "계정 또는 사건 접근이 바뀌어 이전 내용을 비웠어요."
-                  : uploadReadbackPending
-                    ? "이미 접수된 자료는 다시 업로드하지 않아도 돼요. 새로고침으로 최신 목록을 확인해 주세요."
-                    : acceptedFileRetries.length
-                      ? "자료 처리 요청은 이미 접수됐어요. 다시 요청하지 말고 새로고침으로 최신 상태를 확인해 주세요."
-                      : "입력한 내용은 보존돼요. 확인한 뒤 다시 시도해 주세요."}
+                : error.code === "FILE_REJECTED"
+                  ? "수정한 파일을 새로 선택해 주세요. 기존 자료는 목록에서 확인하거나 삭제할 수 있어요."
+                  : ["UNAUTHENTICATED", "CONSENT_REQUIRED", "NOT_FOUND"].includes(error.code) &&
+                      !error.resource
+                    ? "계정 또는 사건 접근이 바뀌어 이전 내용을 비웠어요."
+                    : uploadReadbackPending
+                      ? "이미 접수된 자료는 다시 업로드하지 않아도 돼요. 새로고침으로 최신 목록을 확인해 주세요."
+                      : acceptedFileRetries.length
+                        ? "자료 처리 요청은 이미 접수됐어요. 다시 요청하지 말고 새로고침으로 최신 상태를 확인해 주세요."
+                        : "입력한 내용은 보존돼요. 확인한 뒤 다시 시도해 주세요."}
           </p>
           <div className="workspace-buttons">
             {!!retryUploads.length && (

@@ -131,6 +131,7 @@ export type ApiErrorView = {
     | "CONFLICT"
     | "QUOTA_EXCEEDED"
     | "VALIDATION_ERROR"
+    | "FILE_REJECTED"
     | "UNAVAILABLE";
   message: string;
   retryable: boolean;

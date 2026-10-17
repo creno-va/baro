@@ -12,6 +12,81 @@ test.skip(
 const key = "baro-c-contract-test-state";
 const base = "/cases/synthetic-case";
 
+for (const remainder of [false, true])
+  test(`permanent file rejection requires a changed file and preserves only unattempted selections: ${remainder}`, async ({
+    page,
+  }) => {
+    await page.goto(`${base}/files`);
+    await expect(page.getByRole("heading", { name: "아직 자료가 없어요" })).toBeVisible();
+    await page.evaluate(async () => {
+      const fixturePath = "/tests/helpers/workspace-client-fixture.ts";
+      const { api } = (await import(
+        fixturePath
+      )) as typeof import("../helpers/workspace-client-fixture");
+      const responsePath = "/src/client/api/workspace.ts";
+      const { workspaceResponse } = (await import(
+        responsePath
+      )) as typeof import("../../src/client/api/workspace");
+      const upload = api.files.upload;
+      const state = window as unknown as { rejectedUploadNames: string[] };
+      state.rejectedUploadNames = [];
+      api.files.upload = async (...args: Parameters<typeof upload>) => {
+        state.rejectedUploadNames.push(args[1].name);
+        if (args[1].name === "protected.xls")
+          await workspaceResponse(
+            Response.json(
+              {
+                error: {
+                  code: "FILE_REJECTED",
+                  retryable: false,
+                  message: "UNTRUSTED_PROVIDER_DETAIL",
+                },
+              },
+              { status: 400 },
+            ),
+          );
+        return upload(...args);
+      };
+    });
+    await page.getByLabel("선택 자료의 자동 처리에 동의합니다.").check();
+    const names = remainder ? ["accepted.txt", "protected.xls", "later.txt"] : ["protected.xls"];
+    await page.getByLabel("업로드할 파일 선택", { exact: true }).setInputFiles(
+      names.map((name) => ({
+        name,
+        mimeType: "text/plain",
+        buffer: Buffer.from("Synthetic selected bytes"),
+      })),
+    );
+    const alert = page.getByRole("alert");
+    await expect(alert).toContainText(
+      "암호·보호를 해제하거나 지원하는 형식으로 저장한 뒤 다시 추가해 주세요.",
+    );
+    await expect(alert).not.toContainText("UNTRUSTED_PROVIDER_DETAIL");
+    await expect(page.getByText(/업로드 시작 후/)).toHaveCount(0);
+    const retry = page.getByRole("button", { name: "업로드 다시 시도", exact: true });
+    if (remainder) {
+      await expect(retry).toBeEnabled();
+      await retry.click();
+      await expect(page.getByRole("heading", { name: "later.txt", exact: true })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "accepted.txt", exact: true })).toBeVisible();
+    }
+    await expect(retry).toHaveCount(0);
+    if (!remainder) {
+      await page.getByLabel("업로드할 파일 선택", { exact: true }).setInputFiles({
+        name: "corrected.txt",
+        mimeType: "text/plain",
+        buffer: Buffer.from("Synthetic corrected original bytes"),
+      });
+      await expect(page.getByRole("heading", { name: "corrected.txt", exact: true })).toBeVisible();
+      names.push("corrected.txt");
+    }
+    expect(
+      await page.evaluate(
+        () => (window as unknown as { rejectedUploadNames: string[] }).rejectedUploadNames,
+      ),
+    ).toEqual(names);
+  });
+
 async function prepareFileRetry(page: Page) {
   await page.goto(`${base}/files`);
   await expect(page.getByRole("heading", { name: "아직 자료가 없어요" })).toBeVisible();
@@ -77,6 +152,49 @@ async function prepareFileRetry(page: Page) {
   }, key);
   return retry;
 }
+
+test("non-format upload validation preserves the unchanged file for explicit recovery", async ({
+  page,
+}) => {
+  await page.goto(`${base}/files`);
+  await expect(page.getByRole("heading", { name: "아직 자료가 없어요" })).toBeVisible();
+  await page.evaluate(async () => {
+    const fixturePath = "/tests/helpers/workspace-client-fixture.ts";
+    const { api } = (await import(
+      fixturePath
+    )) as typeof import("../helpers/workspace-client-fixture");
+    const responsePath = "/src/client/api/workspace.ts";
+    const { workspaceResponse } = (await import(
+      responsePath
+    )) as typeof import("../../src/client/api/workspace");
+    const upload = api.files.upload;
+    const state = window as unknown as { partRetryFiles: File[] };
+    state.partRetryFiles = [];
+    api.files.upload = async (...args: Parameters<typeof upload>) => {
+      state.partRetryFiles.push(args[1]);
+      if (state.partRetryFiles.length === 1)
+        await workspaceResponse(
+          Response.json({ error: { code: "VALIDATION_ERROR", retryable: false } }, { status: 400 }),
+        );
+      return upload(...args);
+    };
+  });
+  await page.getByLabel("선택 자료의 자동 처리에 동의합니다.").check();
+  await page.getByLabel("업로드할 파일 선택", { exact: true }).setInputFiles({
+    name: "same-original.txt",
+    mimeType: "text/plain",
+    buffer: Buffer.from("Synthetic interrupted original"),
+  });
+  await expect(page.getByRole("alert")).toContainText("입력 또는 파일 형식·크기를 확인해 주세요.");
+  await page.getByRole("button", { name: "업로드 다시 시도", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "same-original.txt", exact: true })).toBeVisible();
+  expect(
+    await page.evaluate(() => {
+      const files = (window as unknown as { partRetryFiles: File[] }).partRetryFiles;
+      return files.length === 2 && files[0] === files[1];
+    }),
+  ).toBe(true);
+});
 async function releaseFileFocus(page: Page, result = "same-owner") {
   await page.evaluate(
     (result) =>

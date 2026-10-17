@@ -39,9 +39,11 @@ export async function workspaceResponse(response: Response) {
               ? "CONFLICT"
               : response.status === 429
                 ? "QUOTA_EXCEEDED"
-                : response.status === 400 || response.status === 413
-                  ? "VALIDATION_ERROR"
-                  : "UNAVAILABLE";
+                : response.status === 400 && wireCode === "FILE_REJECTED"
+                  ? "FILE_REJECTED"
+                  : response.status === 400 || response.status === 413
+                    ? "VALIDATION_ERROR"
+                    : "UNAVAILABLE";
     const messages: Record<string, string> = {
       UNAUTHENTICATED: "로그인한 뒤 사건을 이어서 확인해 주세요.",
       CONSENT_REQUIRED: "최신 동의 내용을 확인해 주세요.",
@@ -49,12 +51,14 @@ export async function workspaceResponse(response: Response) {
       CONFLICT: "다른 화면에서 내용이 바뀌었어요. 최신 내용을 확인해 주세요.",
       QUOTA_EXCEEDED: "사용 한도에 도달했어요. 저장된 내용은 보존됩니다.",
       VALIDATION_ERROR: "입력 또는 파일 형식·크기를 확인해 주세요.",
+      FILE_REJECTED:
+        "파일 형식과 내용을 확인해 주세요. 암호·보호를 해제하거나 지원하는 형식으로 저장한 뒤 다시 추가해 주세요.",
       UNAVAILABLE: "지금 요청을 처리할 수 없어요. 잠시 후 다시 시도해 주세요.",
     };
     throw workspaceError(
       code,
       messages[code] ?? "지금 요청을 처리할 수 없어요. 잠시 후 다시 시도해 주세요.",
-      value?.error?.retryable === true || response.status >= 500,
+      code !== "FILE_REJECTED" && (value?.error?.retryable === true || response.status >= 500),
     );
   }
   return response;
