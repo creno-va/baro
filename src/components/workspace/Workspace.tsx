@@ -52,6 +52,7 @@ function problem(cause: unknown) {
     "CONFLICT",
     "QUOTA_EXCEEDED",
     "VALIDATION_ERROR",
+    "FILE_REJECTED",
     "UNAVAILABLE",
   ].includes(error?.code ?? "");
   return {
@@ -156,6 +157,11 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
   const access = useCustomerAccess(purge, (cause) => setError(problem(cause)), true);
   const { ready, canMutate, version, verify, ticket, current, alive, deny } = access;
   const readonly = !ready || !canMutate || view?.case.stage !== "active";
+  const privateContent = {
+    style: { visibility: ready ? undefined : ("hidden" as const) },
+    inert: !ready,
+    "aria-hidden": !ready,
+  };
   const showError = useCallback(
     (cause: unknown, resource = false) => {
       const next = { ...problem(cause), resource };
@@ -220,7 +226,10 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
     if (!view || view.case.schemaVersion === "1") return;
     const pending =
       view.messages.some((message) => message.status === "pending") ||
-      view.files.some((file) => ["uploading", "processing", "waiting"].includes(file.status));
+      view.files.some(
+        (file) =>
+          !file.uploadRejection && ["uploading", "processing", "waiting"].includes(file.status),
+      );
     if (!pending) return;
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout>;
@@ -315,12 +324,12 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
   }, [preview, deleteFile, entry]);
 
   async function run(key: string, action: (epoch: number) => Promise<void>) {
-    const readOrDelete = ["refresh", "history", "original", "delete"].includes(key);
-    // A native chooser can return while focus verification temporarily hides the
-    // workspace. Its selection still needs the same fresh owner/write preflight.
+    const readOrDelete = ["refresh", "history", "original", "delete", "file-preview"].includes(key);
+    // Chooser selections and generic controls can complete during a focus check.
+    // Each action still needs its fresh owner and read/write access preflight.
     if (
       lock.current ||
-      (!["upload", "chat-retry", "file-retry"].includes(key) &&
+      (!["refresh", "upload", "chat-retry", "file-retry", "file-preview"].includes(key) &&
         (!ready || (readonly && !readOrDelete)))
     )
       return;
@@ -516,7 +525,11 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
           setNotice("자료를 저장했어요. 처리 상태와 확인 가능한 범위를 확인해 주세요.");
       } catch (cause) {
         if (!current(epoch)) return;
-        setRetryUploads(chosen.slice(completed));
+        // A definitive format rejection needs a changed file. Preserve only
+        // later selections; ambiguous responses retain the exact same input.
+        setRetryUploads(
+          chosen.slice(completed + (problem(cause).code === "FILE_REJECTED" ? 1 : 0)),
+        );
         throw cause;
       }
     });
@@ -633,7 +646,10 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
       />
       <CaseNavigation
         caseId={caseId}
-        title={(ready ? view?.case.title : null) ?? "사건을 불러오는 중"}
+        title={
+          (ready ? view?.case.title : null) ??
+          (error ? "사건을 확인할 수 없어요" : "사건을 불러오는 중")
+        }
         active={tab}
         fileCount={ready ? view?.files.length : undefined}
       />
@@ -648,14 +664,16 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
               ? "최신 내용을 불러왔어요. 입력은 유지됩니다. 확인한 뒤 다시 저장해 주세요."
               : error.code === "QUOTA_EXCEEDED"
                 ? "저장된 사건은 보존돼요. 사용량에서 한도를 확인할 수 있어요."
-                : ["UNAUTHENTICATED", "CONSENT_REQUIRED", "NOT_FOUND"].includes(error.code) &&
-                    !error.resource
-                  ? "계정 또는 사건 접근이 바뀌어 이전 내용을 비웠어요."
-                  : uploadReadbackPending
-                    ? "이미 접수된 자료는 다시 업로드하지 않아도 돼요. 새로고침으로 최신 목록을 확인해 주세요."
-                    : acceptedFileRetries.length
-                      ? "자료 처리 요청은 이미 접수됐어요. 다시 요청하지 말고 새로고침으로 최신 상태를 확인해 주세요."
-                      : "입력한 내용은 보존돼요. 확인한 뒤 다시 시도해 주세요."}
+                : error.code === "FILE_REJECTED"
+                  ? "수정한 파일을 새로 선택해 주세요. 기존 자료는 목록에서 확인하거나 삭제할 수 있어요."
+                  : ["UNAUTHENTICATED", "CONSENT_REQUIRED", "NOT_FOUND"].includes(error.code) &&
+                      !error.resource
+                    ? "계정 또는 사건 접근이 바뀌어 이전 내용을 비웠어요."
+                    : uploadReadbackPending
+                      ? "이미 접수된 자료는 다시 업로드하지 않아도 돼요. 새로고침으로 최신 목록을 확인해 주세요."
+                      : acceptedFileRetries.length
+                        ? "자료 처리 요청은 이미 접수됐어요. 다시 요청하지 말고 새로고침으로 최신 상태를 확인해 주세요."
+                        : "입력한 내용은 보존돼요. 확인한 뒤 다시 시도해 주세요."}
           </p>
           <div className="workspace-buttons">
             {!!retryUploads.length && (
@@ -765,13 +783,11 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
             </section>
           ))}
       {view && (
-        <div
-          style={{ visibility: ready ? undefined : "hidden" }}
-          inert={!ready}
-          aria-hidden={!ready}
-        >
+        // Only the generic file-preview controls survive a focus check. Their
+        // private content has the same gate below; all other tabs keep this gate.
+        <div {...(tab === "files" ? {} : privateContent)}>
           {!canMutate && (
-            <section className="workspace-error">
+            <section className="workspace-error" {...privateContent}>
               <p>
                 저장한 사건·자료는 읽을 수 있어요. 새 대화·수정·처리는 최신 동의 확인 후 사용할 수
                 있어요.
@@ -780,7 +796,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
             </section>
           )}
           {view.case.stage !== "active" && (
-            <section className="workspace-error">
+            <section className="workspace-error" {...privateContent}>
               <p>
                 {view.case.stage === "archived"
                   ? "보관된 사건이에요. 저장된 내용을 확인할 수 있어요."
@@ -1010,13 +1026,13 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
               )}
               {tab === "files" && (
                 <>
-                  <div className="workspace-section-heading">
+                  <div className="workspace-section-heading" {...privateContent}>
                     <div>
                       <h2>사건 자료</h2>
                       <p>흩어진 자료를 한곳에 모아두세요.</p>
                     </div>
                   </div>
-                  <div className="workspace-upload">
+                  <div className="workspace-upload" {...privateContent}>
                     <div className="workspace-upload-intro">
                       <span className="workspace-upload-icon">
                         <Upload size={22} />
@@ -1081,7 +1097,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                     )}
                   </div>
                   {!view.files.length && (
-                    <div className="workspace-empty">
+                    <div className="workspace-empty" {...privateContent}>
                       <FolderOpen size={30} />
                       <h3>아직 자료가 없어요</h3>
                       <p>자료 없이도 대화를 이어갈 수 있어요. 준비되면 원본을 추가하세요.</p>
@@ -1090,23 +1106,23 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                   <ul className="workspace-file-list">
                     {view.files.map((file) => (
                       <li key={file.id}>
-                        <div className="workspace-file-title">
+                        <div className="workspace-file-title" {...privateContent}>
                           <FileText size={24} />
                           <div>
                             <h3>{file.name}</h3>
                             <p>
                               {size(file.sizeBytes)} ·{" "}
                               <span className={`workspace-status workspace-status--${file.status}`}>
-                                {fileStatus[file.status]}
+                                {file.uploadRejection ? "등록 거절" : fileStatus[file.status]}
                               </span>
                             </p>
                           </div>
                         </div>
-                        <p className="workspace-coverage">
+                        <p className="workspace-coverage" {...privateContent}>
                           {file.coverage || "추출 범위는 처리가 끝난 뒤 확인할 수 있어요."}
                         </p>
                         {file.processing && ["processing", "waiting"].includes(file.status) && (
-                          <div className="workspace-muted">
+                          <div className="workspace-muted" {...privateContent}>
                             <p>{fileProcessingLabel(file.processing)}</p>
                             <p>
                               <ElapsedTime
@@ -1117,28 +1133,35 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                           </div>
                         )}
                         {!file.processing &&
+                          !file.uploadRejection &&
                           file.createdAt &&
                           ["uploading", "processing", "waiting"].includes(file.status) && (
-                            <p className="workspace-muted">
+                            <p className="workspace-muted" {...privateContent}>
                               <ElapsedTime startedAt={file.createdAt} label="자료 등록 후" />
                             </p>
                           )}
                         {file.status === "failed" && (
-                          <p className="workspace-muted">{fileFailureLabel(file)}</p>
+                          <p className="workspace-muted" {...privateContent}>
+                            {fileFailureLabel(file)}
+                          </p>
                         )}
                         {file.status === "uploading" && (
-                          <p className="workspace-muted">
-                            업로드가 중단됐다면 같은 원본 파일을 다시 선택해 이어서 저장하세요.
-                            만료된 업로드는 삭제한 뒤 다시 추가할 수 있어요.
+                          <p className="workspace-muted" {...privateContent}>
+                            {file.uploadRejection
+                              ? "파일 등록이 거절됐어요. 암호·보호를 해제하거나 지원하는 형식으로 저장한 파일을 새로 선택해 주세요."
+                              : "등록이 아직 완료되지 않았어요. 전송이 중단된 경우 같은 원본을 다시 선택해 이어서 저장할 수 있어요. 파일 거절 안내를 받았다면 수정한 파일을 새로 선택해 주세요. 만료된 업로드는 삭제한 뒤 다시 추가할 수 있어요."}
                           </p>
                         )}
                         <div className="workspace-buttons">
                           <Button
                             variant="outline"
                             size="sm"
+                            disabled={!!busy}
                             onClick={() => {
-                              setPreview(file);
-                              setOriginal(null);
+                              void run("file-preview", async () => {
+                                setPreview(file);
+                                setOriginal(null);
+                              });
                             }}
                           >
                             자료 확인
@@ -1146,6 +1169,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                           <Button
                             variant="ghost"
                             size="sm"
+                            {...privateContent}
                             disabled={!!busy || !ready}
                             onClick={() => setDeleteFile(file)}
                           >
@@ -1306,7 +1330,11 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                 </>
               )}
             </section>
-            <aside className="workspace-sidebar" aria-label="사건 요약 및 준비 현황">
+            <aside
+              className="workspace-sidebar"
+              aria-label="사건 요약 및 준비 현황"
+              {...privateContent}
+            >
               {tab === "files" ? (
                 <section className="workspace-context-content">
                   <h2>사건 요약과 준비 현황</h2>
@@ -1488,8 +1516,15 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
           <div className="workspace-preview" hidden={!ready} inert={!ready}>
             <h3>{preview.name}</h3>
             <p>
-              {fileStatus[preview.status]} · {size(preview.sizeBytes)}
+              {preview.uploadRejection ? "등록 거절" : fileStatus[preview.status]} ·{" "}
+              {size(preview.sizeBytes)}
             </p>
+            {preview.uploadRejection && (
+              <p>
+                파일 등록이 거절됐어요. 암호·보호를 해제하거나 지원하는 형식으로 저장한 파일을 새로
+                선택해 주세요.
+              </p>
+            )}
             <h4>처리 범위</h4>
             <p>{preview.coverage || "추출 범위를 아직 확인할 수 없어요."}</p>
             <FileReview

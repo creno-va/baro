@@ -377,6 +377,41 @@ test("terminal content rejection keeps only the strict internal receipt and leav
   });
 });
 
+test.each(["valid", "invalid_reason", "wrong_scope"] as const)(
+  "terminal source audit reason stays private and strict: %s",
+  async (mode) => {
+    const f = await fixture();
+    const detail = {
+      pass: false,
+      legalClaimsSupported: true,
+      strategyDetected: false,
+      unsupportedFactCount: 0,
+      findings: [
+        {
+          severity: "critical",
+          code: "wrong_reference",
+          target: mode === "wrong_scope" ? "response_text" : "source_claim",
+          basis: "verified_source",
+          sourceClaimReason:
+            mode === "invalid_reason" ? "private synthetic source text" : "source_freshness",
+        },
+      ],
+    };
+    const failed = await runCustomerJob(f, "intake_questions", true, async () => {
+      const error = new WorkspaceOutputPolicyError("audit_rejected");
+      Object.assign(error, { auditFailure: detail });
+      throw error;
+    });
+    expect(failed.result).toMatchObject({ status: "failed", policyReason: "audit_rejected" });
+    if (mode === "valid") expect(failed.result).toHaveProperty("auditFailure", detail);
+    else expect(failed.result).not.toHaveProperty("auditFailure");
+    const job = await f.service.job(f.owner.userId, f.workspace.id, failed.params.jobId);
+    expect(job).toMatchObject({ status: "failed", failure: "POLICY_REJECTED" });
+    expect(JSON.stringify(job)).not.toContain("sourceClaimReason");
+    expect((await f.service.intake(f.owner.userId, f.workspace.id))?.batches).toEqual([]);
+  },
+);
+
 test.each([
   "quotation_mismatch",
   "raw synthetic source text",

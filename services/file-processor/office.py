@@ -23,8 +23,12 @@ class OfficeError(Exception):
     """The message is one fixed public rejection code, never parser output."""
 
 
+class DefinitiveOfficeRejection(OfficeError):
+    """An explicit input/protection refusal, never parser or process failure."""
+
+
 def _reject():
-    raise OfficeError("UNSUPPORTED_FORMAT")
+    raise DefinitiveOfficeRejection("UNSUPPORTED_FORMAT")
 
 
 def _xml(data):
@@ -281,7 +285,9 @@ def normalize(source, root, fmt):
     if result.returncode != 0:
         # Exit 2 is a known input/protection rejection. Startup, process death,
         # timeout and unknown UNO failures remain recoverable service failures.
-        raise OfficeError("INVALID_MEDIA" if result.returncode == 2 else "PROCESSING_FAILED")
+        if result.returncode == 2:
+            raise DefinitiveOfficeRejection("INVALID_MEDIA")
+        raise OfficeError("PROCESSING_FAILED")
     if not output.is_file():
         raise OfficeError("PROCESSING_FAILED")
     if not 0 < output.stat().st_size <= MAX_INPUT:

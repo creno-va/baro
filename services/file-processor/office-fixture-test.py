@@ -26,7 +26,7 @@ selected = sys.argv[1:] or list(CASES)
 assert selected and all(fmt in CASES for fmt in selected)
 
 
-def execute(source, mode, unit=0, expect_success=True):
+def execute(source, mode, unit=0, expect_success=True, definitive=False):
     with tempfile.TemporaryDirectory(prefix="baro-office-fixture-") as temporary:
         root = Path(temporary)
         shutil.copyfile(source, root / "input")
@@ -39,8 +39,11 @@ def execute(source, mode, unit=0, expect_success=True):
         assert hashlib.sha256((root / "input").read_bytes()).digest() == original
         if not expect_success:
             assert result.returncode != 0 and not (root / "manifest.json").exists()
-            code = json.loads((root / "error.json").read_text())["code"]
+            failure = json.loads((root / "error.json").read_text())
+            code = failure["code"]
             assert code in {"UNSUPPORTED_FORMAT", "INVALID_MEDIA", "LIMIT", "OUTPUT_LIMIT"}
+            if definitive:
+                assert failure == {"code": code, "rejection": "office_input"}
             return None, "", elapsed
         code = json.loads((root / "error.json").read_text())["code"] if (root / "error.json").exists() else None
         assert result.returncode == 0, {"mode": mode, "unit": unit, "nativeCode": code}
@@ -132,7 +135,7 @@ if "doc" in selected:
     execute(FIXTURES / "encrypted.docx", "probe", expect_success=False)
     print("Native encrypted OOXML rejection: 1 PASS", flush=True)
 if "xls" in selected:
-    execute(FIXTURES / "protected.xls", "probe", expect_success=False)
+    execute(FIXTURES / "protected.xls", "probe", expect_success=False, definitive=True)
     print("Native protected legacy spreadsheet rejection: 1 PASS", flush=True)
 
 print("Native document conversion checks passed (synthetic local codecs; not cloud/provider evidence)")

@@ -186,6 +186,43 @@ test("modal traps focus, closes with Escape, restores opener and uses visible fo
   );
 });
 
+for (const activation of ["pointer", "keyboard"] as const)
+  test(`mobile menu restores its trigger after ${activation} activation without relying on mouse focus`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await openInteractiveFixture(page);
+    const opener = page.getByRole("button", { name: "메뉴 열기", exact: true });
+    await expect(opener).toBeEnabled();
+    if (activation === "pointer") {
+      await page.locator("body").evaluate((body) => {
+        body.tabIndex = -1;
+        body.focus();
+      });
+      // Model a pointer activation that does not focus the button, as observed
+      // in Safari. Keep the actual click and all product dialog behavior intact.
+      await opener.evaluate((button) => {
+        button.addEventListener("mousedown", (event) => event.preventDefault(), { once: true });
+      });
+      await expect(opener).not.toBeFocused();
+      await opener.click();
+    } else {
+      await opener.focus();
+      await page.keyboard.press("Enter");
+    }
+    const menu = page.getByRole("dialog", { name: "메뉴", exact: true });
+    await expect(menu).toBeVisible();
+    const close = menu.getByRole("button", { name: "닫기", exact: true });
+    await expect(close).toBeFocused();
+    await page.keyboard.press("Shift+Tab");
+    await expect(menu.getByRole("link", { name: "이용 유형 변경", exact: true })).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(close).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(menu).not.toBeVisible();
+    await expect(opener).toBeFocused();
+  });
+
 test("320px mobile sheet and 200% layout preserve all states and local font", async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 760 });
   await openInteractiveFixture(page);

@@ -338,7 +338,11 @@ export function AppNavigation({
             aria-expanded={open}
             aria-haspopup="dialog"
             disabled={!ready}
-            onClick={() => setOpen(true)}
+            onClick={(event) => {
+              // Pointer activation does not always focus the button before the sheet opens.
+              event.currentTarget.focus();
+              setOpen(true);
+            }}
           >
             <Menu aria-hidden="true" size={22} />
           </Button>

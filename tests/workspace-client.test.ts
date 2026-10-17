@@ -69,6 +69,29 @@ function settle(runtime: WorkspaceMockRuntime) {
       for (const pending of Object.values(workspace.pending ?? {})) pending.at = 0;
   });
 }
+for (const [status, wireCode, code, retryable] of [
+  [400, "FILE_REJECTED", "FILE_REJECTED", false],
+  [400, "UNRECOGNIZED", "VALIDATION_ERROR", true],
+  [503, "FILE_REJECTED", "UNAVAILABLE", true],
+  [409, "FILE_REJECTED", "CONFLICT", true],
+  [401, "FILE_REJECTED", "UNAUTHENTICATED", true],
+] as const)
+  test(`only definitive file rejection receives a trusted permanent recovery message: ${status}/${wireCode}`, async () => {
+    const cause = await workspaceResponse(
+      Response.json(
+        {
+          error: { code: wireCode, retryable: true, message: "UNTRUSTED_PROVIDER_DETAIL" },
+        },
+        { status },
+      ),
+    ).catch((cause: unknown) => cause);
+    expect(cause).toMatchObject({ code, retryable });
+    expect((cause as Error).message).not.toContain("UNTRUSTED_PROVIDER_DETAIL");
+    if (code === "FILE_REJECTED")
+      expect((cause as Error).message).toBe(
+        "파일 형식과 내용을 확인해 주세요. 암호·보호를 해제하거나 지원하는 형식으로 저장한 뒤 다시 추가해 주세요.",
+      );
+  });
 test("saved conversation survives new client; failed response retries without duplicating user message", async () => {
   const f = fixture();
   let view = await f.client.get("synthetic-case");

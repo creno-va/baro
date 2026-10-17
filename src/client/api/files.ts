@@ -34,6 +34,7 @@ export const fileViewSchema = z.object({
   canRetry: z.boolean().optional(),
   processing: v2FileProcessingSchema.optional(),
   uploadContentHash: z.string().optional(),
+  uploadRejection: z.literal("FILE_REJECTED").optional(),
   createdAt: z.iso.datetime({ offset: true }).optional(),
   failure: v2FailureCodeSchema.nullable().optional(),
 });
@@ -44,6 +45,7 @@ const metadataSchema = z.object({
   declaredMediaType: z.string(),
   byteLength: z.number(),
   contentHash: z.string().optional(),
+  uploadRejection: z.literal("FILE_REJECTED").optional(),
   canRetry: z.boolean().optional(),
   processing: v2FileProcessingSchema.optional(),
   createdAt: z.iso.datetime({ offset: true }).optional(),
@@ -237,6 +239,7 @@ export function createFilesApi(request: WorkspaceTransport) {
           canRetry: row.canRetry ?? false,
           createdAt: row.createdAt,
           failure: row.failure,
+          uploadRejection: row.uploadRejection,
           processing: row.processing,
         };
         if (row.status === "ready" && !options.metadataOnly) {
@@ -344,6 +347,12 @@ export function createFilesApi(request: WorkspaceTransport) {
       }
     }
     const existing = (await list(id, options)).find((item) => item.id === session.fileId);
+    if (existing?.uploadRejection)
+      throw workspaceError(
+        "FILE_REJECTED",
+        "파일 형식과 내용을 확인해 주세요. 암호·보호를 해제하거나 지원하는 형식으로 저장한 뒤 다시 추가해 주세요.",
+        false,
+      );
     if (existing && existing.status !== "uploading") {
       uploads.delete(identity);
       return existing;

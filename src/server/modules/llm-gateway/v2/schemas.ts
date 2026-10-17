@@ -60,6 +60,15 @@ export const workspaceAuditBasisSchema = z.enum([
   "policy",
   "unknown",
 ]);
+export const workspaceAuditSourceClaimReasonSchema = z.enum([
+  "citation_unavailable",
+  "source_identity_mismatch",
+  "quotation_text_or_span_mismatch",
+  "source_semantics_mismatch",
+  "source_freshness",
+  "coverage_overstatement",
+  "unknown",
+]);
 export const workspaceAuditFindingSchema = z.strictObject({
   severity: z.enum(["critical", "warning"]),
   code: z.enum([
@@ -75,6 +84,7 @@ export const workspaceAuditFindingSchema = z.strictObject({
   // Older local fixtures may omit these diagnostics; absence is not evidence.
   target: workspaceAuditTargetSchema.default("unknown"),
   basis: workspaceAuditBasisSchema.default("unknown"),
+  sourceClaimReason: workspaceAuditSourceClaimReasonSchema.default("unknown"),
 });
 export const workspaceAuditOutputSchema = z.strictObject({
   pass: z.boolean(),

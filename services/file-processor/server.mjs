@@ -12,10 +12,10 @@ import { pipeline } from "node:stream/promises";
 const MAX_BYTES = 1_000_000_000;
 const MAX_LINE = 1_500_000;
 let busy = false;
-const response = (res, status, code) => {
+const response = (res, status, code, rejection) => {
   if (res.headersSent) return res.destroy();
   res.writeHead(status, { "content-type": "application/json", "cache-control": "no-store" });
-  res.end(JSON.stringify({ code }));
+  res.end(JSON.stringify(rejection ? { code, rejection } : { code }));
 };
 export const server = createServer(async (req, res) => {
   if (req.url === "/ready" && req.method === "GET") return response(res, 200, "READY");
@@ -87,9 +87,13 @@ export const server = createServer(async (req, res) => {
       )
         ? safe.code
         : "PROCESSING_FAILED";
+      const rejection = req.url === "/probe" &&
+        ["UNSUPPORTED_FORMAT", "INVALID_MEDIA"].includes(code) &&
+        safe.rejection === "office_input" &&
+        Object.keys(safe).length === 2 ? "office_input" : undefined;
       await rm(root, { recursive: true, force: true });
       root = undefined;
-      return response(res, 422, code);
+      return response(res, 422, code, rejection);
     }
     const manifestFile = join(root, "manifest.json");
     if ((await stat(manifestFile)).size > MAX_LINE - 100) throw new Error("OUTPUT_LIMIT");

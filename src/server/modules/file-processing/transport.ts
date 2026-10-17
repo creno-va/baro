@@ -4,7 +4,9 @@ import { v2FileProbeSchema } from "../../../contracts/v2";
 import type { ProcessingArtifactScope } from "../../db/v2-paid-contracts";
 import { digest, hex } from "../files/binary";
 import {
+  DefinitiveFileRejection,
   decodeArtifact,
+  definitiveRejectionSchema,
   ProcessingError,
   type ProcessorArtifact,
   type ProcessorManifest,
@@ -42,6 +44,33 @@ export const authorize = async (access: ProcessingAccess) => {
     return false;
   }
 };
+
+async function hasDefinitiveRejection(response: Response): Promise<boolean> {
+  if (
+    !response.body ||
+    response.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase() !== "application/json"
+  )
+    return false;
+  const reader = response.body.getReader();
+  const bytes = new Uint8Array(1024);
+  let count = 0;
+  try {
+    for (;;) {
+      const item = await reader.read();
+      if (item.done) break;
+      if (count + item.value.byteLength > bytes.byteLength) return false;
+      bytes.set(item.value, count);
+      count += item.value.byteLength;
+    }
+    const raw = new TextDecoder("utf-8", { fatal: true }).decode(bytes.subarray(0, count));
+    return definitiveRejectionSchema.safeParse(JSON.parse(raw)).success;
+  } catch {
+    return false;
+  } finally {
+    await reader.cancel().catch(() => {});
+    reader.releaseLock();
+  }
+}
 export function createProcessorTransport(options: {
   fetch: (request: Request) => Promise<Response>;
   stop: () => Promise<void>;
@@ -99,6 +128,15 @@ export function createProcessorTransport(options: {
         throw new ProcessingError("STALE_REVISION");
       }
       if (response.status !== 200 || !response.body || response.redirected) {
+        if (
+          kind === "probe" &&
+          response.status === 422 &&
+          !response.redirected &&
+          (await hasDefinitiveRejection(response))
+        ) {
+          if (!(await authorize(access))) throw new ProcessingError("STALE_REVISION");
+          throw new DefinitiveFileRejection();
+        }
         await response.body?.cancel();
         throw new ProcessingError(
           response.status === 422 ? "FILE_REJECTED" : "FILE_PROCESSING_FAILED",

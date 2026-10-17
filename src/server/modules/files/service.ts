@@ -40,6 +40,7 @@ import type {
 } from "../budget/storage-ledger";
 import { authorizeBlobCleanup, createStorageMaintenance } from "../budget/storage-maintenance";
 import { hasCurrentConsent } from "../consent/service";
+import { DefinitiveFileRejection } from "../file-processing/protocol";
 import {
   decryptPart,
   digest,
@@ -76,6 +77,7 @@ export type FileServiceDependencies = {
     uploadRevision: number;
     byteLength: number;
     contentHash: string;
+    requestSessionId?: string;
     open: () => ReadableStream<Uint8Array>;
   }) => Promise<unknown>;
   enqueueProcessing?: (input: {
@@ -384,6 +386,8 @@ export function createFilesService(core: V2Core, deps: FileServiceDependencies) 
     async resumeUpload(ownerId: string, workspaceId: string, fileId: string) {
       await consent(ownerId);
       const u = await session(ownerId, workspaceId, fileId, undefined, true);
+      if ((await files.metadata(actor(ownerId), fileId))?.uploadRejection)
+        throw new DefinitiveFileRejection();
       return v2UploadSessionSchema.parse({
         schemaVersion: "2",
         fileId: u.file_id,
@@ -784,6 +788,7 @@ export function createFilesService(core: V2Core, deps: FileServiceDependencies) 
       if (!deps.probe) throw new FileError("PROCESSING_UNAVAILABLE");
       const manifest = v2OriginalManifestSchema.parse(request.manifest);
       const reserved = await files.metadata(actor(ownerId), fileId);
+      if (reserved?.uploadRejection) throw new DefinitiveFileRejection();
       if (
         manifest.byteLength !== u.reserved_bytes ||
         (reserved?.contentHash && reserved.contentHash !== manifest.contentHash)
@@ -800,6 +805,7 @@ export function createFilesService(core: V2Core, deps: FileServiceDependencies) 
           uploadRevision: u.revision,
           byteLength: u.reserved_bytes,
           contentHash: manifest.contentHash,
+          ...(deps.sessionId ? { requestSessionId: deps.sessionId } : {}),
           open: () => {
             if (opened) throw new FileError("INVALID_FILE");
             opened = true;

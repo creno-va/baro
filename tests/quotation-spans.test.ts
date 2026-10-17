@@ -130,6 +130,66 @@ async function fixture(body = `${"합성 머리말 😀\n".repeat(650)}${quote}\
   return { chunk, context, retrieval, claim, draft };
 }
 
+test.each([
+  undefined,
+  "unknown",
+  "citation_unavailable",
+  "source_identity_mismatch",
+  "quotation_text_or_span_mismatch",
+  "source_semantics_mismatch",
+  "source_freshness",
+  "coverage_overstatement",
+])("valid quotations still fail a critical audit with diagnostic reason %s", async (reason) => {
+  const f = await fixture();
+  f.claim.startUtf16 = f.chunk.source.body.indexOf(quote);
+  f.claim.endUtf16 = f.claim.startUtf16 + quote.length;
+  const before = structuredClone(f.context);
+  const calls: string[] = [];
+  const pipeline = createWorkspacePipeline(
+    {
+      call: async (phase, input) => {
+        calls.push(phase);
+        if (phase !== "workspace_audit") return f.draft;
+        expect(input).toMatchObject({
+          context: { sourceTexts: f.context.sourceTexts, citations: f.context.citations },
+          draft: { sourceClaims: [f.claim] },
+        });
+        return {
+          ...approved,
+          findings: [
+            {
+              severity: "critical",
+              code: "wrong_reference",
+              target: "source_claim",
+              basis: "verified_source",
+              ...(reason === undefined ? {} : { sourceClaimReason: reason }),
+            },
+          ],
+        };
+      },
+    },
+    { reserve: async () => true, invocation: () => crypto.randomUUID() },
+  );
+  await expect(pipeline.chat(f.context, "synthetic_source_audit_reason")).rejects.toMatchObject({
+    reason: "audit_rejected",
+    auditFailure: {
+      pass: true,
+      legalClaimsSupported: true,
+      findings: [
+        {
+          severity: "critical",
+          code: "wrong_reference",
+          target: "source_claim",
+          basis: "verified_source",
+          sourceClaimReason: reason ?? "unknown",
+        },
+      ],
+    },
+  });
+  expect(calls).toEqual(["workspace_chat", "workspace_audit"]);
+  expect(f.context).toEqual(before);
+});
+
 test("long Korean/newline/astral quotation with wrong offsets is realigned before the final audit", async () => {
   const f = await fixture();
   expect(await validateV2Claims([f.claim], [f.chunk.citation], f.retrieval)).toMatchObject({

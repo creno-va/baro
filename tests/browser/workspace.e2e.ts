@@ -12,6 +12,483 @@ test.skip(
 const key = "baro-c-contract-test-state";
 const base = "/cases/synthetic-case";
 
+for (const pending of ["none", "file", "message"] as const)
+  test(`definitive refusal stops polling without hiding other pending work: ${pending}`, async ({
+    page,
+  }) => {
+    await page.clock.install();
+    await page.goto(`${base}/files`);
+    await expect(page.getByRole("heading", { name: "아직 자료가 없어요" })).toBeVisible();
+    await page.evaluate(
+      ({ key, pending }) => {
+        const state = JSON.parse(localStorage.getItem(key) ?? "{}");
+        const rejected = {
+          id: "rejected-source",
+          name: "protected-synthetic.xls",
+          mimeType: "application/vnd.ms-excel",
+          sizeBytes: 100,
+          status: "uploading",
+          coverage: "처리 결과는 아직 확인할 수 없어요.",
+          extractedText: "",
+          uploadRejection: "FILE_REJECTED",
+        };
+        state.files["synthetic-case"] = [rejected];
+        if (pending === "file")
+          state.files["synthetic-case"].push({
+            ...rejected,
+            id: "unfinished-source",
+            name: "unfinished-synthetic.txt",
+            uploadRejection: undefined,
+          });
+        if (pending === "message")
+          state.workspace["synthetic-case"].messages.push({
+            id: "unfinished-message",
+            role: "assistant",
+            status: "pending",
+            text: "",
+            createdAt: "2026-10-06T00:00:00.000Z",
+          });
+        localStorage.setItem(key, JSON.stringify(state));
+      },
+      { key, pending },
+    );
+    await page.reload();
+    await expect(page.getByText("등록 거절", { exact: true })).toBeVisible();
+    await page.evaluate(async () => {
+      const path = "/tests/helpers/workspace-client-fixture.ts";
+      const { api } = (await import(path)) as typeof import("../helpers/workspace-client-fixture");
+      const state = window as unknown as { pendingReads: number };
+      state.pendingReads = 0;
+      const read = api.workspace.getFiles;
+      api.workspace.getFiles = async (...args: Parameters<typeof read>) => {
+        state.pendingReads++;
+        return read(...args);
+      };
+    });
+    await page.clock.fastForward(10_000);
+    const reads = () =>
+      page.evaluate(() => (window as unknown as { pendingReads: number }).pendingReads);
+    if (pending === "none") expect(await reads()).toBe(0);
+    else await expect.poll(reads).toBeGreaterThan(0);
+  });
+
+test("persisted format refusal remains clear after reload and account re-entry", async ({
+  page,
+}) => {
+  await page.goto(`${base}/files`);
+  await expect(page.getByRole("heading", { name: "아직 자료가 없어요" })).toBeVisible();
+  await page.evaluate((key) => {
+    const state = JSON.parse(localStorage.getItem(key) ?? "{}");
+    state.files["synthetic-case"] = [
+      {
+        id: "rejected-source",
+        name: "protected-synthetic.xls",
+        mimeType: "application/vnd.ms-excel",
+        sizeBytes: 100,
+        status: "uploading",
+        coverage: "처리 결과는 아직 확인할 수 없어요.",
+        extractedText: "",
+        uploadRejection: "FILE_REJECTED",
+        createdAt: "2026-10-06T00:00:00.000Z",
+      },
+      {
+        id: "interrupted-source",
+        name: "interrupted-synthetic.txt",
+        mimeType: "text/plain",
+        sizeBytes: 100,
+        status: "uploading",
+        coverage: "처리 결과는 아직 확인할 수 없어요.",
+        extractedText: "",
+      },
+    ];
+    localStorage.setItem(key, JSON.stringify(state));
+  }, key);
+  await page.reload();
+  const rejected = page
+    .locator(".workspace-file-list > li")
+    .filter({ has: page.getByRole("heading", { name: "protected-synthetic.xls", exact: true }) });
+  await expect(rejected.getByText("등록 거절", { exact: true })).toBeVisible();
+  await expect(
+    rejected.getByText(
+      "파일 등록이 거절됐어요. 암호·보호를 해제하거나 지원하는 형식으로 저장한 파일을 새로 선택해 주세요.",
+    ),
+  ).toBeVisible();
+  await expect(rejected.getByText(/같은 원본|자료 등록 후/)).toHaveCount(0);
+  await expect(page.getByText(/전송이 중단된 경우 같은 원본/)).toBeVisible();
+  await page.evaluate((key) => {
+    const state = JSON.parse(localStorage.getItem(key) ?? "{}");
+    state.session.user = null;
+    localStorage.setItem(key, JSON.stringify(state));
+  }, key);
+  await page.reload();
+  await expect(page.getByRole("alert").first()).toBeVisible();
+  await expect(page.getByText("protected-synthetic.xls", { exact: true })).toHaveCount(0);
+  await page.evaluate((key) => {
+    const state = JSON.parse(localStorage.getItem(key) ?? "{}");
+    state.session.user = { id: "synthetic-owner", name: "합성 사용자", accountType: "customer" };
+    localStorage.setItem(key, JSON.stringify(state));
+  }, key);
+  await page.reload();
+  await expect(rejected.getByText("등록 거절", { exact: true })).toBeVisible();
+  await rejected.getByRole("button", { name: "자료 확인", exact: true }).click();
+  await expect(page.getByRole("dialog").getByText(/등록 거절 ·/)).toBeVisible();
+  await expect(
+    page.getByRole("dialog").getByRole("button", { name: "원본 확인 · 다운로드" }),
+  ).toBeDisabled();
+});
+
+for (const scenario of [
+  "normal",
+  "focus",
+  "other-owner",
+  "lawyer",
+  "signed-out",
+  "unavailable",
+  "consent",
+  "revoked",
+  "double",
+  "drag",
+  "pointer-cancel",
+  "pointer-down-only",
+] as const)
+  test(`file preview pointer preserves explicit selection and access: ${scenario}`, async ({
+    page,
+  }) => {
+    await page.goto(`${base}/files`);
+    await expect(page.getByRole("heading", { name: "아직 자료가 없어요" })).toBeVisible();
+    await page.evaluate((key) => {
+      const saved = JSON.parse(localStorage.getItem(key) ?? "{}");
+      saved.caseOwners = { "synthetic-case": saved.session.user.id };
+      saved.files["synthetic-case"] = Array.from({ length: 20 }, (_, index) => ({
+        id: `preview-${index}`,
+        name: `private-preview-${index}.pdf`,
+        mimeType: "application/pdf",
+        sizeBytes: 100,
+        status: "ready",
+        coverage: "private synthetic preview coverage",
+        extractedText: "Synthetic material text",
+      }));
+      localStorage.setItem(key, JSON.stringify(saved));
+    }, key);
+    await page.reload();
+    const openers = page.getByRole("button", { name: "자료 확인", exact: true });
+    await expect(openers).toHaveCount(20);
+    const opener = openers.nth(19);
+    await opener.scrollIntoViewIfNeeded();
+    await page.evaluate(async (key) => {
+      const path = "/tests/helpers/workspace-client-fixture.ts";
+      const { api } = (await import(path)) as typeof import("../helpers/workspace-client-fixture");
+      const session = api.session.get;
+      const owner = await session();
+      const pending: { resolve: (value: typeof owner) => void; reject: (cause: Error) => void }[] =
+        [];
+      const state = window as unknown as {
+        previewReads: string[];
+        releasePreviewCheck: (result: string) => void;
+      };
+      state.previewReads = [];
+      api.session.get = () => new Promise((resolve, reject) => pending.push({ resolve, reject }));
+      state.releasePreviewCheck = (result) => {
+        const saved = JSON.parse(localStorage.getItem(key) ?? "{}");
+        if (result === "other-owner") saved.session.user.id = "other-preview-owner";
+        if (result === "lawyer") saved.session.user.accountType = "lawyer";
+        if (result === "signed-out") saved.session.user = null;
+        if (result === "consent") saved.session.needsConsent = true;
+        localStorage.setItem(key, JSON.stringify(saved));
+        api.session.get =
+          result === "unavailable"
+            ? async () => {
+                throw new Error("Synthetic session unavailable");
+              }
+            : session;
+        for (const check of pending)
+          if (result === "unavailable") check.reject(new Error("Synthetic session unavailable"));
+          else check.resolve(saved.session);
+      };
+      const review = api.files.review;
+      api.files.review = async (...args: Parameters<typeof review>) => {
+        state.previewReads.push(args[1]);
+        return review(...args);
+      };
+    }, key);
+    if (scenario !== "normal")
+      await opener.evaluate((button) =>
+        button.addEventListener(
+          "pointerdown",
+          () => {
+            window.dispatchEvent(new Event("focus"));
+          },
+          { once: true },
+        ),
+      );
+    const bounds = await opener.boundingBox();
+    if (!bounds) throw new Error("Missing synthetic preview button");
+    const reads = () =>
+      page.evaluate(() => (window as unknown as { previewReads: string[] }).previewReads);
+    await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+    await page.mouse.down();
+    if (scenario !== "normal") {
+      await expect(
+        page.getByRole("heading", { name: "사건을 불러오는 중", exact: true }),
+      ).toBeVisible();
+      await expect(opener).toBeVisible();
+      expect(await opener.boundingBox()).toEqual(bounds);
+      await expect(page.getByText("private-preview-19.pdf", { exact: true })).toBeHidden();
+      await expect(page.getByText("private-preview-0.pdf", { exact: true })).toBeHidden();
+      await expect(page.getByText("private synthetic preview coverage").first()).toBeHidden();
+      await expect(page.getByRole("button", { name: "삭제", exact: true }).first()).toBeHidden();
+      await expect(page.getByLabel("선택 자료의 자동 처리에 동의합니다.")).toBeHidden();
+      await expect(
+        page.getByRole("complementary", { name: "사건 요약 및 준비 현황" }),
+      ).toBeHidden();
+      expect(await opener.getAttribute("title")).toBeNull();
+      expect(await opener.getAttribute("aria-label")).toBeNull();
+    }
+    expect(await reads()).toEqual([]);
+    await expect(page.getByRole("dialog")).not.toBeVisible();
+    if (["drag", "pointer-cancel"].includes(scenario)) {
+      if (scenario === "pointer-cancel") await opener.dispatchEvent("pointercancel");
+      await page.mouse.move(0, 0);
+    }
+    if (scenario !== "pointer-down-only") await page.mouse.up();
+    if (scenario === "double")
+      await page.mouse.click(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+    if (scenario === "revoked")
+      await page.evaluate(() =>
+        window.dispatchEvent(
+          new CustomEvent("baro-session-changed", { detail: { reason: "signout" } }),
+        ),
+      );
+    expect(await reads()).toEqual([]);
+    await expect(page.getByRole("dialog")).not.toBeVisible();
+    await page.evaluate((scenario) => {
+      (window as unknown as { releasePreviewCheck: (result: string) => void }).releasePreviewCheck(
+        scenario,
+      );
+    }, scenario);
+    const accepted = ["normal", "focus", "consent", "double"].includes(scenario);
+    if (accepted) {
+      await expect(page.getByRole("dialog")).toBeVisible();
+      await expect(
+        page
+          .getByRole("dialog")
+          .getByRole("heading", { name: "private-preview-19.pdf", exact: true }),
+      ).toBeVisible();
+      await expect.poll(reads).toEqual(["preview-19"]);
+    } else {
+      if (["drag", "pointer-cancel", "pointer-down-only"].includes(scenario))
+        await expect(
+          page.getByRole("heading", { name: "대여금 반환 관련 자료 정리", exact: true }),
+        ).toBeVisible();
+      else await expect(page.getByRole("alert").first()).toBeVisible();
+      await expect(page.getByRole("dialog")).not.toBeVisible();
+      expect(await reads()).toEqual([]);
+    }
+    if (scenario === "pointer-down-only") {
+      await opener.dispatchEvent("pointercancel");
+      await page.mouse.move(0, 0);
+      await page.mouse.up();
+      expect(await reads()).toEqual([]);
+    }
+  });
+
+for (const outcome of ["lawyer", "signed-out", "other-owner", "not-found", "unavailable"] as const)
+  test(`workspace title leaves pending state after a terminal access check: ${outcome}`, async ({
+    page,
+  }) => {
+    await page.goto(`${base}/timeline`);
+    await expect(
+      page.getByRole("heading", { name: "대여금 반환 관련 자료 정리", exact: true }),
+    ).toBeVisible();
+    await expect(page.getByRole("button", { name: "일정 추가", exact: true })).toBeEnabled();
+    await page.evaluate(
+      async ({ key, outcome }) => {
+        const path = "/tests/helpers/workspace-client-fixture.ts";
+        const { api } = (await import(
+          path
+        )) as typeof import("../helpers/workspace-client-fixture");
+        const session = api.session.get;
+        const read = api.workspace.get;
+        const owner = await session();
+        const pending: {
+          resolve: (value: typeof owner) => void;
+          reject: (cause: Error) => void;
+        }[] = [];
+        api.session.get = () => new Promise((resolve, reject) => pending.push({ resolve, reject }));
+        const state = window as unknown as {
+          finishCaseTitleCheck: () => void;
+          restoreCaseTitleCheck: () => void;
+          caseTitleSessionChecks: number;
+        };
+        state.caseTitleSessionChecks = 0;
+        const checkedSession = () => {
+          state.caseTitleSessionChecks++;
+          return session();
+        };
+        state.restoreCaseTitleCheck = () => {
+          api.session.get = checkedSession;
+          api.workspace.get = read;
+        };
+        state.finishCaseTitleCheck = () => {
+          if (outcome === "unavailable") {
+            const failure = Object.assign(new Error("합성 계정 확인 장애"), {
+              code: "UNAVAILABLE",
+            });
+            api.session.get = async () => {
+              throw failure;
+            };
+            for (const check of pending) check.reject(failure);
+            return;
+          }
+          const saved = JSON.parse(localStorage.getItem(key) ?? "{}");
+          saved.caseOwners = { "synthetic-case": owner.user?.id };
+          if (outcome === "signed-out") saved.session.user = null;
+          if (outcome === "lawyer") saved.session.user.accountType = "lawyer";
+          if (outcome === "other-owner") saved.session.user.id = "other-owner";
+          localStorage.setItem(key, JSON.stringify(saved));
+          api.session.get = checkedSession;
+          if (outcome === "not-found")
+            api.workspace.get = async () => {
+              throw Object.assign(new Error("합성 사건 없음"), { code: "NOT_FOUND" });
+            };
+          for (const check of pending) check.resolve(saved.session);
+        };
+        window.dispatchEvent(new Event("focus"));
+      },
+      { key, outcome },
+    );
+    await expect(
+      page.getByRole("heading", { name: "사건을 불러오는 중", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "대여금 반환 관련 자료 정리", exact: true }),
+    ).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "일정 추가", exact: true })).toBeHidden();
+    await page.evaluate(() =>
+      (window as unknown as { finishCaseTitleCheck: () => void }).finishCaseTitleCheck(),
+    );
+    await expect(page.getByRole("alert")).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "사건을 확인할 수 없어요", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "사건을 불러오는 중", exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole("heading", { name: "대여금 반환 관련 자료 정리", exact: true }),
+    ).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "일정 추가", exact: true })).toBeHidden();
+    if (outcome === "signed-out")
+      await expect(page.getByRole("link", { name: "로그인", exact: true }).last()).toBeVisible();
+    else
+      await expect(
+        page.getByRole("button", { name: "새로고침 · 다시 확인", exact: true }),
+      ).toBeEnabled();
+    if (outcome === "unavailable") {
+      await page.evaluate(() =>
+        (window as unknown as { restoreCaseTitleCheck: () => void }).restoreCaseTitleCheck(),
+      );
+      await page.getByRole("button", { name: "새로고침 · 다시 확인", exact: true }).click();
+      await expect(
+        page.getByRole("heading", { name: "대여금 반환 관련 자료 정리", exact: true }),
+      ).toBeVisible();
+      await expect(page.getByRole("button", { name: "일정 추가", exact: true })).toBeEnabled();
+      await expect(
+        page.getByRole("heading", { name: "사건을 확인할 수 없어요", exact: true }),
+      ).toHaveCount(0);
+    } else if (outcome !== "signed-out") {
+      const checks = () =>
+        page.evaluate(
+          () => (window as unknown as { caseTitleSessionChecks: number }).caseTitleSessionChecks,
+        );
+      const before = await checks();
+      await page.getByRole("button", { name: "새로고침 · 다시 확인", exact: true }).click();
+      await expect.poll(checks).toBeGreaterThan(before);
+      await expect(
+        page.getByRole("heading", { name: "사건을 확인할 수 없어요", exact: true }),
+      ).toBeVisible();
+      await expect(
+        page.getByRole("heading", { name: "대여금 반환 관련 자료 정리", exact: true }),
+      ).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "일정 추가", exact: true })).toBeHidden();
+    }
+  });
+
+for (const remainder of [false, true])
+  test(`permanent file rejection requires a changed file and preserves only unattempted selections: ${remainder}`, async ({
+    page,
+  }) => {
+    await page.goto(`${base}/files`);
+    await expect(page.getByRole("heading", { name: "아직 자료가 없어요" })).toBeVisible();
+    await page.evaluate(async () => {
+      const fixturePath = "/tests/helpers/workspace-client-fixture.ts";
+      const { api } = (await import(
+        fixturePath
+      )) as typeof import("../helpers/workspace-client-fixture");
+      const responsePath = "/src/client/api/workspace.ts";
+      const { workspaceResponse } = (await import(
+        responsePath
+      )) as typeof import("../../src/client/api/workspace");
+      const upload = api.files.upload;
+      const state = window as unknown as { rejectedUploadNames: string[] };
+      state.rejectedUploadNames = [];
+      api.files.upload = async (...args: Parameters<typeof upload>) => {
+        state.rejectedUploadNames.push(args[1].name);
+        if (args[1].name === "protected.xls")
+          await workspaceResponse(
+            Response.json(
+              {
+                error: {
+                  code: "FILE_REJECTED",
+                  retryable: false,
+                  message: "UNTRUSTED_PROVIDER_DETAIL",
+                },
+              },
+              { status: 400 },
+            ),
+          );
+        return upload(...args);
+      };
+    });
+    await page.getByLabel("선택 자료의 자동 처리에 동의합니다.").check();
+    const names = remainder ? ["accepted.txt", "protected.xls", "later.txt"] : ["protected.xls"];
+    await page.getByLabel("업로드할 파일 선택", { exact: true }).setInputFiles(
+      names.map((name) => ({
+        name,
+        mimeType: "text/plain",
+        buffer: Buffer.from("Synthetic selected bytes"),
+      })),
+    );
+    const alert = page.getByRole("alert");
+    await expect(alert).toContainText(
+      "암호·보호를 해제하거나 지원하는 형식으로 저장한 뒤 다시 추가해 주세요.",
+    );
+    await expect(alert).not.toContainText("UNTRUSTED_PROVIDER_DETAIL");
+    await expect(page.getByText(/업로드 시작 후/)).toHaveCount(0);
+    const retry = page.getByRole("button", { name: "업로드 다시 시도", exact: true });
+    if (remainder) {
+      await expect(retry).toBeEnabled();
+      await retry.click();
+      await expect(page.getByRole("heading", { name: "later.txt", exact: true })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "accepted.txt", exact: true })).toBeVisible();
+    }
+    await expect(retry).toHaveCount(0);
+    if (!remainder) {
+      await page.getByLabel("업로드할 파일 선택", { exact: true }).setInputFiles({
+        name: "corrected.txt",
+        mimeType: "text/plain",
+        buffer: Buffer.from("Synthetic corrected original bytes"),
+      });
+      await expect(page.getByRole("heading", { name: "corrected.txt", exact: true })).toBeVisible();
+      names.push("corrected.txt");
+    }
+    expect(
+      await page.evaluate(
+        () => (window as unknown as { rejectedUploadNames: string[] }).rejectedUploadNames,
+      ),
+    ).toEqual(names);
+  });
+
 async function prepareFileRetry(page: Page) {
   await page.goto(`${base}/files`);
   await expect(page.getByRole("heading", { name: "아직 자료가 없어요" })).toBeVisible();
@@ -77,6 +554,49 @@ async function prepareFileRetry(page: Page) {
   }, key);
   return retry;
 }
+
+test("non-format upload validation preserves the unchanged file for explicit recovery", async ({
+  page,
+}) => {
+  await page.goto(`${base}/files`);
+  await expect(page.getByRole("heading", { name: "아직 자료가 없어요" })).toBeVisible();
+  await page.evaluate(async () => {
+    const fixturePath = "/tests/helpers/workspace-client-fixture.ts";
+    const { api } = (await import(
+      fixturePath
+    )) as typeof import("../helpers/workspace-client-fixture");
+    const responsePath = "/src/client/api/workspace.ts";
+    const { workspaceResponse } = (await import(
+      responsePath
+    )) as typeof import("../../src/client/api/workspace");
+    const upload = api.files.upload;
+    const state = window as unknown as { partRetryFiles: File[] };
+    state.partRetryFiles = [];
+    api.files.upload = async (...args: Parameters<typeof upload>) => {
+      state.partRetryFiles.push(args[1]);
+      if (state.partRetryFiles.length === 1)
+        await workspaceResponse(
+          Response.json({ error: { code: "VALIDATION_ERROR", retryable: false } }, { status: 400 }),
+        );
+      return upload(...args);
+    };
+  });
+  await page.getByLabel("선택 자료의 자동 처리에 동의합니다.").check();
+  await page.getByLabel("업로드할 파일 선택", { exact: true }).setInputFiles({
+    name: "same-original.txt",
+    mimeType: "text/plain",
+    buffer: Buffer.from("Synthetic interrupted original"),
+  });
+  await expect(page.getByRole("alert")).toContainText("입력 또는 파일 형식·크기를 확인해 주세요.");
+  await page.getByRole("button", { name: "업로드 다시 시도", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "same-original.txt", exact: true })).toBeVisible();
+  expect(
+    await page.evaluate(() => {
+      const files = (window as unknown as { partRetryFiles: File[] }).partRetryFiles;
+      return files.length === 2 && files[0] === files[1];
+    }),
+  ).toBe(true);
+});
 async function releaseFileFocus(page: Page, result = "same-owner") {
   await page.evaluate(
     (result) =>
@@ -171,7 +691,8 @@ for (const scenario of [
       else
         await expect(
           page.getByRole("heading", {
-            name: scenario === "other-owner" ? "사건을 불러오는 중" : "대여금 반환 관련 자료 정리",
+            name:
+              scenario === "other-owner" ? "사건을 확인할 수 없어요" : "대여금 반환 관련 자료 정리",
           }),
         ).toBeVisible();
       expect(await retryIds(page)).toEqual([]);

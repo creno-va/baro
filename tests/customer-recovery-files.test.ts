@@ -5,9 +5,16 @@ import { createFilesApi as createClient, validateUpload } from "../src/client/ap
 import { CURRENT_POLICY_VERSIONS } from "../src/contracts/consent";
 import { createFilesApi } from "../src/server/api/v2/files";
 import { createWorkspacesApi } from "../src/server/api/v2/workspaces";
+import { storedFileMetadataSchema } from "../src/server/db/v2-files";
+import {
+  DefinitiveFileRejection,
+  ProcessingError,
+} from "../src/server/modules/file-processing/protocol";
 import { customerWorkspaceFixture } from "./helpers/customer-workspace";
 
-async function fixture() {
+async function fixture(
+  probeFailure?: "DEFINITIVE_REJECTION" | "FILE_REJECTED" | "FILE_PROCESSING_FAILED",
+) {
   const f = await customerWorkspaceFixture(new Date().toISOString());
   const objects = new Map<string, Uint8Array>();
   const bucket = {
@@ -39,6 +46,13 @@ async function fixture() {
           const reader = input.open().getReader();
           while (!(await reader.read()).done) {}
           reader.releaseLock();
+          if (probeFailure) {
+            const failure = probeFailure;
+            probeFailure = undefined;
+            throw failure === "DEFINITIVE_REJECTION"
+              ? new DefinitiveFileRejection()
+              : new ProcessingError(failure);
+          }
           return {
             category: "document",
             format: "txt",
@@ -62,8 +76,139 @@ async function fixture() {
       },
       env,
     );
-  return { ...f, raw };
+  return { ...f, raw, objects };
 }
+
+for (const failure of ["DEFINITIVE_REJECTION", "FILE_REJECTED", "FILE_PROCESSING_FAILED"] as const)
+  test(`actual signed probe rejection reaches the client without losing stored parts: ${failure}`, async () => {
+    const f = await fixture(failure);
+    try {
+      const calls: string[] = [];
+      const client = createClient(async (path, init) => {
+        calls.push(`${init?.method ?? "GET"} ${path}`);
+        return f.raw(path, init);
+      });
+      const source = new File(["Synthetic original awaiting admission"], "original.txt", {
+        type: "text/plain",
+      });
+      await expect(client.upload(f.workspace.id, source)).rejects.toMatchObject({
+        code: failure === "DEFINITIVE_REJECTION" ? "FILE_REJECTED" : "UNAVAILABLE",
+        retryable: failure !== "DEFINITIVE_REJECTION",
+        ...(failure === "DEFINITIVE_REJECTION"
+          ? {
+              message:
+                "파일 형식과 내용을 확인해 주세요. 암호·보호를 해제하거나 지원하는 형식으로 저장한 뒤 다시 추가해 주세요.",
+            }
+          : {}),
+      });
+      const stored = [...f.objects].map<[string, number[]]>(([key, bytes]) => [key, [...bytes]]);
+      expect(stored).toHaveLength(1);
+      const pending = await client.list(f.workspace.id);
+      expect(pending).toHaveLength(1);
+      const pendingFile = pending[0];
+      if (!pendingFile) throw new Error("Missing synthetic pending original");
+      expect(pendingFile.status).toBe("uploading");
+      expect(pendingFile.canRetry).toBe(false);
+      expect(pendingFile.canStartProcessing).toBe(false);
+      expect(f.db.sqlite.query("SELECT count(*) AS count FROM v2_outbox").get()).toEqual({
+        count: 0,
+      });
+      await expect(client.original(f.workspace.id, pendingFile.id)).rejects.toMatchObject({
+        code: "NOT_FOUND",
+      });
+      expect([...f.objects].map(([key, bytes]) => [key, [...bytes]])).toEqual(stored);
+      expect(calls.filter((call) => call.endsWith("/complete"))).toHaveLength(1);
+      if (failure !== "DEFINITIVE_REJECTION") {
+        const recovered = await client.upload(f.workspace.id, source);
+        expect(recovered.id).toBe(pendingFile.id);
+        expect(await (await client.original(f.workspace.id, recovered.id)).text()).toBe(
+          await source.text(),
+        );
+        expect(
+          calls.filter((call) => call === `POST /api/v2/cases/${f.workspace.id}/files`),
+        ).toHaveLength(1);
+        expect(f.db.sqlite.query("SELECT count(*) AS count FROM v2_upload_sessions").get()).toEqual(
+          { count: 1 },
+        );
+      } else {
+        const corrected = new File(["Synthetic corrected original bytes"], source.name, {
+          type: source.type,
+        });
+        const uploaded = await client.upload(f.workspace.id, corrected);
+        expect(uploaded.id).not.toBe(pendingFile.id);
+        expect(await (await client.original(f.workspace.id, uploaded.id)).text()).toBe(
+          await corrected.text(),
+        );
+        for (const [key, bytes] of stored)
+          expect(Array.from(f.objects.get(key) ?? [])).toEqual(bytes);
+        expect(f.db.sqlite.query("SELECT count(*) AS count FROM v2_upload_sessions").get()).toEqual(
+          { count: 2 },
+        );
+      }
+    } finally {
+      f.db.close();
+    }
+  });
+
+test("persisted format refusal stops the same original after reload while a corrected file resumes normally", async () => {
+  const f = await fixture("DEFINITIVE_REJECTION");
+  try {
+    const writes: string[] = [];
+    const request = (path: string, init?: RequestInit) => {
+      if (init?.method && init.method !== "GET") writes.push(`${init.method} ${path}`);
+      return f.raw(path, init);
+    };
+    const client = createClient(request),
+      source = new File(["synthetic rejected bytes"], "source.txt", { type: "text/plain" });
+    await expect(client.upload(f.workspace.id, source)).rejects.toMatchObject({
+      code: "FILE_REJECTED",
+    });
+    const row = f.db.sqlite
+      .query("SELECT id,revision,encrypted_payload FROM v2_files WHERE workspace_id=?")
+      .get(f.workspace.id) as { id: string; revision: number; encrypted_payload: string };
+    const metadata = await f.core.decrypt(
+      "v2_files",
+      row.id,
+      f.owner.userId,
+      row.revision,
+      row.encrypted_payload,
+      storedFileMetadataSchema,
+    );
+    // The probe repository's fenced writer is tested separately; this adapter
+    // fixture supplies its exact durable result to the real signed API/client.
+    f.db.sqlite.query("UPDATE v2_files SET encrypted_payload=? WHERE id=?").run(
+      await f.core.encrypt("v2_files", row.id, f.owner.userId, row.revision, {
+        ...metadata,
+        uploadRejection: "FILE_REJECTED",
+      }),
+      row.id,
+    );
+    const original = [...f.objects].map(([id, bytes]) => [id, Array.from(bytes)] as const);
+    writes.length = 0;
+    expect(await createClient(request).list(f.workspace.id)).toMatchObject([
+      { id: row.id, uploadRejection: "FILE_REJECTED", status: "uploading" },
+    ]);
+    for (const current of [client, createClient(request)])
+      await expect(current.upload(f.workspace.id, source)).rejects.toMatchObject({
+        code: "FILE_REJECTED",
+        retryable: false,
+      });
+    expect(writes).toEqual([]);
+    const corrected = new File(["synthetic corrected bytes"], source.name, { type: source.type });
+    const result = await createClient(request).upload(f.workspace.id, corrected);
+    expect(result.id).not.toBe(row.id);
+    expect(await (await client.original(f.workspace.id, result.id)).text()).toBe(
+      await corrected.text(),
+    );
+    for (const [id, bytes] of original) expect(Array.from(f.objects.get(id) ?? [])).toEqual(bytes);
+    expect(f.db.sqlite.query("SELECT count(*) n FROM v2_upload_sessions").get()).toEqual({ n: 2 });
+    expect(
+      f.db.sqlite.query("SELECT state FROM v2_upload_sessions WHERE file_id=?").get(row.id),
+    ).toEqual({ state: "open" });
+  } finally {
+    f.db.close();
+  }
+});
 
 for (const useFreshClient of [false, true])
   test(`resume interrupted whitespace-named upload without a duplicate; fresh client=${useFreshClient}`, async () => {
@@ -100,6 +245,50 @@ for (const useFreshClient of [false, true])
       f.db.close();
     }
   });
+
+test("a short part body retains the same original and session for explicit upload recovery", async () => {
+  const f = await fixture();
+  try {
+    let shorten = true;
+    const calls: string[] = [];
+    const client = createClient(async (path, init) => {
+      calls.push(`${init?.method ?? "GET"} ${path}`);
+      if (shorten && init?.method === "PUT" && path.endsWith("/parts/0")) {
+        shorten = false;
+        const body = init.body;
+        if (!(body instanceof Blob)) throw new Error("Expected synthetic part blob");
+        return f.raw(path, { ...init, body: body.slice(0, body.size - 1) });
+      }
+      return f.raw(path, init);
+    });
+    const source = new File(["Synthetic full original bytes"], "interrupted.txt", {
+      type: "text/plain",
+    });
+    await expect(client.upload(f.workspace.id, source)).rejects.toMatchObject({
+      code: "VALIDATION_ERROR",
+      retryable: false,
+    });
+    expect(f.objects.size).toBe(0);
+    const pending = await client.list(f.workspace.id);
+    expect(pending).toHaveLength(1);
+    const pendingFile = pending[0];
+    if (!pendingFile) throw new Error("Missing synthetic short-part original");
+    expect(pendingFile.status).toBe("uploading");
+    const recovered = await client.upload(f.workspace.id, source);
+    expect(recovered.id).toBe(pendingFile.id);
+    expect(await (await client.original(f.workspace.id, recovered.id)).text()).toBe(
+      await source.text(),
+    );
+    expect(
+      calls.filter((call) => call === `POST /api/v2/cases/${f.workspace.id}/files`),
+    ).toHaveLength(1);
+    expect(f.db.sqlite.query("SELECT count(*) AS count FROM v2_upload_sessions").get()).toEqual({
+      count: 1,
+    });
+  } finally {
+    f.db.close();
+  }
+});
 
 for (const useFreshClient of [false, true])
   test(`delete interrupted upload then re-add; fresh client=${useFreshClient}`, async () => {
