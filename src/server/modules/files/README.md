@@ -24,6 +24,20 @@ ownership/signatures and actual provider errors remain. The canonical document
 separates current deployment from the new implementation and bootstrap remainder. Public profile assets use a separate binding and are never returned
 by this private API. The public gate stays intact.
 
+An explicit native Office input/protection refusal is distinct from a failed probe
+transport. Only the bounded, strict `office_input` refusal receipt can become
+`DefinitiveFileRejection`; ordinary 422 responses, protocol faults, timeouts and
+authorization changes cannot. The inline probe lease records a verified refusal
+as optional `uploadRejection: FILE_REJECTED` in the existing encrypted file
+metadata, fenced by the same owner, upload, file metadata, lease, current consent
+and requesting session. This does not finalize or fail the upload, release its
+storage/paid reservations, erase original parts, or create an original manifest.
+Fresh list/session reads preserve the refusal so the UI requests a corrected file
+and stops polling that terminal admission result. Unclassified legacy pending
+uploads retain conditional interrupted-transfer recovery; no refusal is inferred
+from missing results. Other processing failures remain retryable and retain the
+same upload identity. A corrected file gets a new reservation.
+
 Failed writes retain a durable cleanup intent. Deletion revokes access immediately,
 while R2 delete plus negative head and a current journal lease are required for a
 blob receipt. Cleanup of a failed chunk preserves a live upload's reservation.

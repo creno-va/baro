@@ -65,6 +65,7 @@ export type FileView = {
   canRetry?: boolean | undefined;
   processing?: V2FileProcessing | undefined;
   uploadContentHash?: string | undefined;
+  uploadRejection?: "FILE_REJECTED" | undefined;
   createdAt?: string | undefined;
   failure?: V2FailureCode | null | undefined;
 };

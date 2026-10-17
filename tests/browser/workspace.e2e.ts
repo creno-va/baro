@@ -12,6 +12,131 @@ test.skip(
 const key = "baro-c-contract-test-state";
 const base = "/cases/synthetic-case";
 
+for (const pending of ["none", "file", "message"] as const)
+  test(`definitive refusal stops polling without hiding other pending work: ${pending}`, async ({
+    page,
+  }) => {
+    await page.clock.install();
+    await page.goto(`${base}/files`);
+    await expect(page.getByRole("heading", { name: "아직 자료가 없어요" })).toBeVisible();
+    await page.evaluate(
+      ({ key, pending }) => {
+        const state = JSON.parse(localStorage.getItem(key) ?? "{}");
+        const rejected = {
+          id: "rejected-source",
+          name: "protected-synthetic.xls",
+          mimeType: "application/vnd.ms-excel",
+          sizeBytes: 100,
+          status: "uploading",
+          coverage: "처리 결과는 아직 확인할 수 없어요.",
+          extractedText: "",
+          uploadRejection: "FILE_REJECTED",
+        };
+        state.files["synthetic-case"] = [rejected];
+        if (pending === "file")
+          state.files["synthetic-case"].push({
+            ...rejected,
+            id: "unfinished-source",
+            name: "unfinished-synthetic.txt",
+            uploadRejection: undefined,
+          });
+        if (pending === "message")
+          state.workspace["synthetic-case"].messages.push({
+            id: "unfinished-message",
+            role: "assistant",
+            status: "pending",
+            text: "",
+            createdAt: "2026-10-06T00:00:00.000Z",
+          });
+        localStorage.setItem(key, JSON.stringify(state));
+      },
+      { key, pending },
+    );
+    await page.reload();
+    await expect(page.getByText("등록 거절", { exact: true })).toBeVisible();
+    await page.evaluate(async () => {
+      const path = "/tests/helpers/workspace-client-fixture.ts";
+      const { api } = (await import(path)) as typeof import("../helpers/workspace-client-fixture");
+      const state = window as unknown as { pendingReads: number };
+      state.pendingReads = 0;
+      const read = api.workspace.getFiles;
+      api.workspace.getFiles = async (...args: Parameters<typeof read>) => {
+        state.pendingReads++;
+        return read(...args);
+      };
+    });
+    await page.clock.fastForward(10_000);
+    const reads = () =>
+      page.evaluate(() => (window as unknown as { pendingReads: number }).pendingReads);
+    if (pending === "none") expect(await reads()).toBe(0);
+    else await expect.poll(reads).toBeGreaterThan(0);
+  });
+
+test("persisted format refusal remains clear after reload and account re-entry", async ({
+  page,
+}) => {
+  await page.goto(`${base}/files`);
+  await expect(page.getByRole("heading", { name: "아직 자료가 없어요" })).toBeVisible();
+  await page.evaluate((key) => {
+    const state = JSON.parse(localStorage.getItem(key) ?? "{}");
+    state.files["synthetic-case"] = [
+      {
+        id: "rejected-source",
+        name: "protected-synthetic.xls",
+        mimeType: "application/vnd.ms-excel",
+        sizeBytes: 100,
+        status: "uploading",
+        coverage: "처리 결과는 아직 확인할 수 없어요.",
+        extractedText: "",
+        uploadRejection: "FILE_REJECTED",
+        createdAt: "2026-10-06T00:00:00.000Z",
+      },
+      {
+        id: "interrupted-source",
+        name: "interrupted-synthetic.txt",
+        mimeType: "text/plain",
+        sizeBytes: 100,
+        status: "uploading",
+        coverage: "처리 결과는 아직 확인할 수 없어요.",
+        extractedText: "",
+      },
+    ];
+    localStorage.setItem(key, JSON.stringify(state));
+  }, key);
+  await page.reload();
+  const rejected = page
+    .locator(".workspace-file-list > li")
+    .filter({ has: page.getByRole("heading", { name: "protected-synthetic.xls", exact: true }) });
+  await expect(rejected.getByText("등록 거절", { exact: true })).toBeVisible();
+  await expect(
+    rejected.getByText(
+      "파일 등록이 거절됐어요. 암호·보호를 해제하거나 지원하는 형식으로 저장한 파일을 새로 선택해 주세요.",
+    ),
+  ).toBeVisible();
+  await expect(rejected.getByText(/같은 원본|자료 등록 후/)).toHaveCount(0);
+  await expect(page.getByText(/전송이 중단된 경우 같은 원본/)).toBeVisible();
+  await page.evaluate((key) => {
+    const state = JSON.parse(localStorage.getItem(key) ?? "{}");
+    state.session.user = null;
+    localStorage.setItem(key, JSON.stringify(state));
+  }, key);
+  await page.reload();
+  await expect(page.getByRole("alert").first()).toBeVisible();
+  await expect(page.getByText("protected-synthetic.xls", { exact: true })).toHaveCount(0);
+  await page.evaluate((key) => {
+    const state = JSON.parse(localStorage.getItem(key) ?? "{}");
+    state.session.user = { id: "synthetic-owner", name: "합성 사용자", accountType: "customer" };
+    localStorage.setItem(key, JSON.stringify(state));
+  }, key);
+  await page.reload();
+  await expect(rejected.getByText("등록 거절", { exact: true })).toBeVisible();
+  await rejected.getByRole("button", { name: "자료 확인", exact: true }).click();
+  await expect(page.getByRole("dialog").getByText(/등록 거절 ·/)).toBeVisible();
+  await expect(
+    page.getByRole("dialog").getByRole("button", { name: "원본 확인 · 다운로드" }),
+  ).toBeDisabled();
+});
+
 for (const scenario of [
   "normal",
   "focus",

@@ -226,7 +226,10 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
     if (!view || view.case.schemaVersion === "1") return;
     const pending =
       view.messages.some((message) => message.status === "pending") ||
-      view.files.some((file) => ["uploading", "processing", "waiting"].includes(file.status));
+      view.files.some(
+        (file) =>
+          !file.uploadRejection && ["uploading", "processing", "waiting"].includes(file.status),
+      );
     if (!pending) return;
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout>;
@@ -1110,7 +1113,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                             <p>
                               {size(file.sizeBytes)} ·{" "}
                               <span className={`workspace-status workspace-status--${file.status}`}>
-                                {fileStatus[file.status]}
+                                {file.uploadRejection ? "등록 거절" : fileStatus[file.status]}
                               </span>
                             </p>
                           </div>
@@ -1130,6 +1133,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                           </div>
                         )}
                         {!file.processing &&
+                          !file.uploadRejection &&
                           file.createdAt &&
                           ["uploading", "processing", "waiting"].includes(file.status) && (
                             <p className="workspace-muted" {...privateContent}>
@@ -1143,8 +1147,9 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                         )}
                         {file.status === "uploading" && (
                           <p className="workspace-muted" {...privateContent}>
-                            업로드가 중단됐다면 같은 원본 파일을 다시 선택해 이어서 저장하세요.
-                            만료된 업로드는 삭제한 뒤 다시 추가할 수 있어요.
+                            {file.uploadRejection
+                              ? "파일 등록이 거절됐어요. 암호·보호를 해제하거나 지원하는 형식으로 저장한 파일을 새로 선택해 주세요."
+                              : "등록이 아직 완료되지 않았어요. 전송이 중단된 경우 같은 원본을 다시 선택해 이어서 저장할 수 있어요. 파일 거절 안내를 받았다면 수정한 파일을 새로 선택해 주세요. 만료된 업로드는 삭제한 뒤 다시 추가할 수 있어요."}
                           </p>
                         )}
                         <div className="workspace-buttons">
@@ -1511,8 +1516,15 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
           <div className="workspace-preview" hidden={!ready} inert={!ready}>
             <h3>{preview.name}</h3>
             <p>
-              {fileStatus[preview.status]} · {size(preview.sizeBytes)}
+              {preview.uploadRejection ? "등록 거절" : fileStatus[preview.status]} ·{" "}
+              {size(preview.sizeBytes)}
             </p>
+            {preview.uploadRejection && (
+              <p>
+                파일 등록이 거절됐어요. 암호·보호를 해제하거나 지원하는 형식으로 저장한 파일을 새로
+                선택해 주세요.
+              </p>
+            )}
             <h4>처리 범위</h4>
             <p>{preview.coverage || "추출 범위를 아직 확인할 수 없어요."}</p>
             <FileReview

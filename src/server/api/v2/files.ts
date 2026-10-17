@@ -4,7 +4,7 @@ import { idempotencyKeySchema, opaqueIdSchema, revisionSchema } from "../../../c
 import type { V2ErrorCode } from "../../../contracts/v2";
 import { createCaseDataCipher } from "../../crypto";
 import { createV2Core, type V2Core } from "../../db/v2-core";
-import { ProcessingError } from "../../modules/file-processing/protocol";
+import { DefinitiveFileRejection, ProcessingError } from "../../modules/file-processing/protocol";
 import { createFileRetry } from "../../modules/file-processing/retry";
 import { FileError } from "../../modules/files/binary";
 import { fileStorageRequestCore } from "../../modules/files/limits";
@@ -69,7 +69,7 @@ export function createFilesApi(
         status,
       );
     }
-    if (error instanceof ProcessingError && error.code === "FILE_REJECTED")
+    if (error instanceof DefinitiveFileRejection)
       return c.json(
         errorBody(
           c,
@@ -195,7 +195,9 @@ export function createFilesApi(
     const admittedTasks: Array<() => Promise<void>> = [];
     const response = c.json(
       await (
-        await service(c.env, access.ownerId, undefined, false, (task) => admittedTasks.push(task))
+        await service(c.env, access.ownerId, access.sessionId, false, (task) =>
+          admittedTasks.push(task),
+        )
       ).complete(access.ownerId, c.req.param("caseId"), c.req.param("fileId"), await c.req.json()),
     );
     for (const task of admittedTasks) {

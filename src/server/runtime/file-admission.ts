@@ -16,7 +16,7 @@ import { hasCurrentConsent } from "../modules/consent/service";
 import { createFileProcessingDispatcher } from "../modules/file-processing/dispatch";
 import { admitFileProcessing } from "../modules/file-processing/execution";
 import { namedProcessorPort, nativeJobId } from "../modules/file-processing/native-identity";
-import { ProcessingError } from "../modules/file-processing/protocol";
+import { DefinitiveFileRejection, ProcessingError } from "../modules/file-processing/protocol";
 import { createProcessorTransport } from "../modules/file-processing/transport";
 import type { FileServiceDependencies } from "../modules/files/service";
 
@@ -126,7 +126,7 @@ export function createFileProcessingAdmission(
         costs: budget.costs(lease, admission),
         ...namedProcessorPort(env.FILE_PROCESSOR, invocationId),
       });
-      let succeeded = false;
+      let finished = false;
       try {
         const result = await processor.probe(input, access);
         if (
@@ -139,10 +139,26 @@ export function createFileProcessingAdmission(
           ))
         )
           throw new ProcessingError("STALE_REVISION");
-        succeeded = true;
+        finished = true;
         return result;
+      } catch (error) {
+        if (error instanceof DefinitiveFileRejection) {
+          if (
+            !(await probes.finish(
+              actor(input.ownerId),
+              input.uploadSession,
+              input.uploadRevision,
+              lease,
+              "rejected",
+              input.requestSessionId,
+            ))
+          )
+            throw new ProcessingError("STALE_REVISION");
+          finished = true;
+        }
+        throw error;
       } finally {
-        if (!succeeded)
+        if (!finished)
           await probes
             .finish(actor(input.ownerId), input.uploadSession, input.uploadRevision, lease, false)
             .catch(() => false);

@@ -5,10 +5,16 @@ import { createFilesApi as createClient, validateUpload } from "../src/client/ap
 import { CURRENT_POLICY_VERSIONS } from "../src/contracts/consent";
 import { createFilesApi } from "../src/server/api/v2/files";
 import { createWorkspacesApi } from "../src/server/api/v2/workspaces";
-import { ProcessingError } from "../src/server/modules/file-processing/protocol";
+import { storedFileMetadataSchema } from "../src/server/db/v2-files";
+import {
+  DefinitiveFileRejection,
+  ProcessingError,
+} from "../src/server/modules/file-processing/protocol";
 import { customerWorkspaceFixture } from "./helpers/customer-workspace";
 
-async function fixture(probeFailure?: "FILE_REJECTED" | "FILE_PROCESSING_FAILED") {
+async function fixture(
+  probeFailure?: "DEFINITIVE_REJECTION" | "FILE_REJECTED" | "FILE_PROCESSING_FAILED",
+) {
   const f = await customerWorkspaceFixture(new Date().toISOString());
   const objects = new Map<string, Uint8Array>();
   const bucket = {
@@ -43,7 +49,9 @@ async function fixture(probeFailure?: "FILE_REJECTED" | "FILE_PROCESSING_FAILED"
           if (probeFailure) {
             const failure = probeFailure;
             probeFailure = undefined;
-            throw new ProcessingError(failure);
+            throw failure === "DEFINITIVE_REJECTION"
+              ? new DefinitiveFileRejection()
+              : new ProcessingError(failure);
           }
           return {
             category: "document",
@@ -71,7 +79,7 @@ async function fixture(probeFailure?: "FILE_REJECTED" | "FILE_PROCESSING_FAILED"
   return { ...f, raw, objects };
 }
 
-for (const failure of ["FILE_REJECTED", "FILE_PROCESSING_FAILED"] as const)
+for (const failure of ["DEFINITIVE_REJECTION", "FILE_REJECTED", "FILE_PROCESSING_FAILED"] as const)
   test(`actual signed probe rejection reaches the client without losing stored parts: ${failure}`, async () => {
     const f = await fixture(failure);
     try {
@@ -84,9 +92,9 @@ for (const failure of ["FILE_REJECTED", "FILE_PROCESSING_FAILED"] as const)
         type: "text/plain",
       });
       await expect(client.upload(f.workspace.id, source)).rejects.toMatchObject({
-        code: failure === "FILE_REJECTED" ? "FILE_REJECTED" : "UNAVAILABLE",
-        retryable: failure !== "FILE_REJECTED",
-        ...(failure === "FILE_REJECTED"
+        code: failure === "DEFINITIVE_REJECTION" ? "FILE_REJECTED" : "UNAVAILABLE",
+        retryable: failure !== "DEFINITIVE_REJECTION",
+        ...(failure === "DEFINITIVE_REJECTION"
           ? {
               message:
                 "파일 형식과 내용을 확인해 주세요. 암호·보호를 해제하거나 지원하는 형식으로 저장한 뒤 다시 추가해 주세요.",
@@ -110,7 +118,7 @@ for (const failure of ["FILE_REJECTED", "FILE_PROCESSING_FAILED"] as const)
       });
       expect([...f.objects].map(([key, bytes]) => [key, [...bytes]])).toEqual(stored);
       expect(calls.filter((call) => call.endsWith("/complete"))).toHaveLength(1);
-      if (failure === "FILE_PROCESSING_FAILED") {
+      if (failure !== "DEFINITIVE_REJECTION") {
         const recovered = await client.upload(f.workspace.id, source);
         expect(recovered.id).toBe(pendingFile.id);
         expect(await (await client.original(f.workspace.id, recovered.id)).text()).toBe(
@@ -141,6 +149,66 @@ for (const failure of ["FILE_REJECTED", "FILE_PROCESSING_FAILED"] as const)
       f.db.close();
     }
   });
+
+test("persisted format refusal stops the same original after reload while a corrected file resumes normally", async () => {
+  const f = await fixture("DEFINITIVE_REJECTION");
+  try {
+    const writes: string[] = [];
+    const request = (path: string, init?: RequestInit) => {
+      if (init?.method && init.method !== "GET") writes.push(`${init.method} ${path}`);
+      return f.raw(path, init);
+    };
+    const client = createClient(request),
+      source = new File(["synthetic rejected bytes"], "source.txt", { type: "text/plain" });
+    await expect(client.upload(f.workspace.id, source)).rejects.toMatchObject({
+      code: "FILE_REJECTED",
+    });
+    const row = f.db.sqlite
+      .query("SELECT id,revision,encrypted_payload FROM v2_files WHERE workspace_id=?")
+      .get(f.workspace.id) as { id: string; revision: number; encrypted_payload: string };
+    const metadata = await f.core.decrypt(
+      "v2_files",
+      row.id,
+      f.owner.userId,
+      row.revision,
+      row.encrypted_payload,
+      storedFileMetadataSchema,
+    );
+    // The probe repository's fenced writer is tested separately; this adapter
+    // fixture supplies its exact durable result to the real signed API/client.
+    f.db.sqlite.query("UPDATE v2_files SET encrypted_payload=? WHERE id=?").run(
+      await f.core.encrypt("v2_files", row.id, f.owner.userId, row.revision, {
+        ...metadata,
+        uploadRejection: "FILE_REJECTED",
+      }),
+      row.id,
+    );
+    const original = [...f.objects].map(([id, bytes]) => [id, Array.from(bytes)] as const);
+    writes.length = 0;
+    expect(await createClient(request).list(f.workspace.id)).toMatchObject([
+      { id: row.id, uploadRejection: "FILE_REJECTED", status: "uploading" },
+    ]);
+    for (const current of [client, createClient(request)])
+      await expect(current.upload(f.workspace.id, source)).rejects.toMatchObject({
+        code: "FILE_REJECTED",
+        retryable: false,
+      });
+    expect(writes).toEqual([]);
+    const corrected = new File(["synthetic corrected bytes"], source.name, { type: source.type });
+    const result = await createClient(request).upload(f.workspace.id, corrected);
+    expect(result.id).not.toBe(row.id);
+    expect(await (await client.original(f.workspace.id, result.id)).text()).toBe(
+      await corrected.text(),
+    );
+    for (const [id, bytes] of original) expect(Array.from(f.objects.get(id) ?? [])).toEqual(bytes);
+    expect(f.db.sqlite.query("SELECT count(*) n FROM v2_upload_sessions").get()).toEqual({ n: 2 });
+    expect(
+      f.db.sqlite.query("SELECT state FROM v2_upload_sessions WHERE file_id=?").get(row.id),
+    ).toEqual({ state: "open" });
+  } finally {
+    f.db.close();
+  }
+});
 
 for (const useFreshClient of [false, true])
   test(`resume interrupted whitespace-named upload without a duplicate; fresh client=${useFreshClient}`, async () => {

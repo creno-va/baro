@@ -112,6 +112,7 @@ const fileViewSchema = z.object({
   coverage: z.string(),
   extractedText: z.string(),
   canStartProcessing: z.boolean().optional(),
+  uploadRejection: z.literal("FILE_REJECTED").optional(),
   canRetry: z.boolean().optional(),
   processing: v2FileProcessingSchema.optional(),
   createdAt: z.iso.datetime({ offset: true }).optional(),

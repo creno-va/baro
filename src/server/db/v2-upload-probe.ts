@@ -1,5 +1,7 @@
 import { z } from "zod";
 import { opaqueIdSchema, revisionSchema, timestampSchema } from "../../contracts";
+import { CURRENT_POLICY_VERSIONS } from "../../contracts/consent";
+import { AUTH_RETENTION_MS } from "../auth/policy";
 import {
   type Actor,
   actorSchema,
@@ -9,6 +11,7 @@ import {
   sqlClaim,
   type V2Core,
 } from "./v2-core";
+import { storedFileMetadataSchema } from "./v2-files";
 import { isPreparedPaidHold, type PreparedPaidHold } from "./v2-paid-statements";
 import { type JobLease, leaseSchema } from "./v2-workspace";
 
@@ -145,12 +148,66 @@ export function createV2UploadProbeRepository(core: V2Core) {
       uploadId: string,
       uploadRevision: number,
       lease: JobLease,
-      succeeded: boolean,
+      outcome: boolean | "rejected",
+      sessionId?: string,
     ) {
       return safe(async () => {
         const a = parse(actorSchema, actor),
           l = parse(leaseSchema, lease);
-        parse(z.boolean(), succeeded);
+        parse(z.union([z.boolean(), z.literal("rejected")]), outcome);
+        if (sessionId !== undefined) parse(opaqueIdSchema, sessionId);
+        const succeeded = outcome === true;
+        let rejected: { previous: string; envelope: string } | undefined;
+        if (outcome === "rejected") {
+          const row = await core
+            .statement(`SELECT f.id,f.revision,f.encrypted_payload ${from} WHERE ${eligible}`, [
+              uploadId,
+              uploadRevision,
+              a.now,
+              a.ownerId,
+            ])
+            .first<{ id: string; revision: number; encrypted_payload: string }>();
+          if (!row) return false;
+          const metadata = await core.decrypt(
+            "v2_files",
+            row.id,
+            a.ownerId,
+            row.revision,
+            row.encrypted_payload,
+            storedFileMetadataSchema,
+          );
+          if (metadata.probe !== null) return false;
+          rejected = {
+            previous: row.encrypted_payload,
+            envelope: await core.encrypt("v2_files", row.id, a.ownerId, row.revision, {
+              ...metadata,
+              uploadRejection: "FILE_REJECTED",
+            }),
+          };
+        }
+        // Only a trusted native refusal uses this extra fence. Ordinary cleanup
+        // still releases its own probe lease after access is revoked.
+        const refusalFence = rejected
+          ? {
+              sql: `AND f.encrypted_payload=?
+            AND coalesce((SELECT value FROM app_metadata WHERE key='account-type:'||w.owner_id),'customer')='customer'
+            AND EXISTS(SELECT 1 FROM user_consents c WHERE c.user_id=w.owner_id
+              AND c.terms_version=? AND c.privacy_version=? AND c.ai_notice_version=? AND c.over_14_confirmed=1)
+            AND EXISTS(SELECT 1 FROM v2_consents WHERE file_id=f.id AND owner_id=w.owner_id
+              AND kind='auto_processing' AND version=?)
+            ${sessionId ? `AND EXISTS(SELECT 1 FROM session s WHERE s.id=? AND s.user_id=w.owner_id AND s.expires_at>? AND s.created_at>?)` : ""}`,
+              values: [
+                rejected.previous,
+                CURRENT_POLICY_VERSIONS.termsVersion,
+                CURRENT_POLICY_VERSIONS.privacyVersion,
+                CURRENT_POLICY_VERSIONS.aiNoticeVersion,
+                CURRENT_POLICY_VERSIONS.aiNoticeVersion,
+                ...(sessionId
+                  ? [sessionId, Date.parse(a.now), Date.parse(a.now) - AUTH_RETENTION_MS]
+                  : []),
+              ],
+            }
+          : { sql: "", values: [] };
         const claimId = crypto.randomUUID();
         return core.changed([
           core.statement(
@@ -159,7 +216,8 @@ export function createV2UploadProbeRepository(core: V2Core) {
             JOIN v2_jobs j ON j.id=f.current_job_id AND j.operation_id=o.id
             WHERE ${eligible} AND j.id=? AND j.target_kind='file' AND j.target_id=f.id
             AND j.target_revision=f.revision AND j.lease_token=? AND j.fencing=? AND j.lease_until>?
-            AND j.status IN ('running','validating') AND NOT EXISTS(SELECT 1 FROM v2_outbox WHERE job_id=j.id)`,
+            AND j.status IN ('running','validating') AND NOT EXISTS(SELECT 1 FROM v2_outbox WHERE job_id=j.id)
+            ${refusalFence.sql}`,
             [
               claimId,
               uploadId,
@@ -170,11 +228,13 @@ export function createV2UploadProbeRepository(core: V2Core) {
               l.token,
               l.fencing,
               a.now,
+              ...refusalFence.values,
             ],
           ),
           core.statement(
-            `UPDATE v2_files SET current_job_id=NULL WHERE current_job_id=? AND ${sqlClaim}`,
-            [l.jobId, claimId],
+            `UPDATE v2_files SET current_job_id=NULL,encrypted_payload=coalesce(?,encrypted_payload)
+            WHERE current_job_id=? AND ${sqlClaim}`,
+            [rejected?.envelope ?? null, l.jobId, claimId],
           ),
           core.statement(
             `UPDATE v2_jobs SET status=?,phase='finished',progress=?,failure_code=NULL,retryable=0,

@@ -1,5 +1,8 @@
 import { afterEach, expect, test } from "bun:test";
+import { Hono } from "hono";
+import { createFilesApi as createFileClient } from "../src/client/api/files";
 import { CURRENT_POLICY_VERSIONS } from "../src/contracts/consent";
+import { createFilesApi } from "../src/server/api/v2/files";
 import { createCaseDataCipher } from "../src/server/crypto";
 import {
   type BudgetAllocation,
@@ -24,8 +27,9 @@ import { createV2ReportsRepository } from "../src/server/db/v2-reports";
 import { createV2StorageRepository } from "../src/server/db/v2-storage";
 import { createV2UploadProbeRepository } from "../src/server/db/v2-upload-probe";
 import { createProcessingBudgetService } from "../src/server/modules/budget/processing-ledger";
+import { DefinitiveFileRejection } from "../src/server/modules/file-processing/protocol";
 import { createFileProcessingAdmission } from "../src/server/runtime/file-admission";
-import { createTestDatabase } from "./helpers/d1";
+import { createTestDatabase, signedSessionCookie } from "./helpers/d1";
 import { countD1Calls } from "./helpers/d1-call-count";
 import { seedTestSession } from "./helpers/session";
 
@@ -219,7 +223,21 @@ async function fixture(monthlyBudgetCapEnabled = true, applicationCostLimitsEnab
       "INSERT INTO v2_workspaces(id,owner_id,status,confirmed_summary_revision,encrypted_payload,created_at,updated_at) VALUES(?,?,'active',1,?,?,?)",
     )
     .run(workspaceId, actor.ownerId, envelope, NOW, NOW);
-  return { db, core, actor, accounting, jobs, runtime, pp, fp, workspaceId, ap, drain, remote };
+  return {
+    db,
+    core,
+    actor,
+    accounting,
+    jobs,
+    runtime,
+    pp,
+    fp,
+    workspaceId,
+    ap,
+    drain,
+    remote,
+    owner: session,
+  };
 }
 type Fixture = Awaited<ReturnType<typeof fixture>>;
 
@@ -322,109 +340,133 @@ async function uploadProbeFixture(applicationCostLimitsEnabled = true) {
   return { ...f, uploadId, fileId, probes, prepare, containerPricing: completePricing };
 }
 
-test("actual upload probe composition reserves SQL cost before native transport and suppresses deleted results", async () => {
-  const f = await uploadProbeFixture();
-  f.db.sqlite
-    .query("UPDATE v2_consents SET version=? WHERE file_id=?")
-    .run(CURRENT_POLICY_VERSIONS.aiNoticeVersion, f.fileId);
-  let calls = 0,
-    stops = 0,
-    ticks = 0,
-    removeDuringDispatch = false;
-  // Explicit synthetic Container transport; production composition uses the DO binding.
-  const env = {
-    APP_ENV: "preview",
-    FILE_PROCESSOR: {
-      idFromName: (id: string) => {
-        expect(id).toMatch(/^native-v1-probe-[a-f0-9-]{36}-1$/);
-        expect(
-          f.db.sqlite
-            .query("SELECT runtime_instance_id FROM v2_jobs WHERE runtime_instance_id=?")
-            .get(id),
-        ).toEqual({ runtime_instance_id: id });
-        return {};
-      },
-      get: () => ({
-        fetch: async (request: Request) => {
-          calls++;
+for (const result of ["success", "refused", "protocol", "unavailable"] as const)
+  test(`actual upload probe composition preserves admission and suppresses deleted results: ${result}`, async () => {
+    const f = await uploadProbeFixture();
+    f.db.sqlite
+      .query("UPDATE v2_consents SET version=? WHERE file_id=?")
+      .run(CURRENT_POLICY_VERSIONS.aiNoticeVersion, f.fileId);
+    let calls = 0,
+      stops = 0,
+      ticks = 0,
+      removeDuringDispatch = false;
+    // Explicit synthetic Container transport; production composition uses the DO binding.
+    const env = {
+      APP_ENV: "preview",
+      FILE_PROCESSOR: {
+        idFromName: (id: string) => {
+          expect(id).toMatch(/^native-v1-probe-[a-f0-9-]{36}-1$/);
           expect(
             f.db.sqlite
-              .query("SELECT count(*) n FROM v2_paid_holds WHERE state='dispatched'")
-              .get(),
-          ).toEqual({ n: calls });
-          await request.body?.cancel();
-          if (removeDuringDispatch)
-            f.db.sqlite
-              .query(
-                "INSERT INTO v2_tombstones(target_kind,target_id,deleted_at) VALUES('file',?,?)",
-              )
-              .run(f.fileId, NOW);
-          return Response.json({
-            version: 1,
-            probe: { category: "document", format: "pdf", pageCount: 1, byteLength: 100 },
-          });
+              .query("SELECT runtime_instance_id FROM v2_jobs WHERE runtime_instance_id=?")
+              .get(id),
+          ).toEqual({ runtime_instance_id: id });
+          return {};
         },
-        stopProcessing: async () => {
-          stops++;
-        },
-      }),
-    },
-  } as unknown as Env;
-  const admission = createFileProcessingAdmission(
-    f.core,
-    env,
-    {
-      bounds: async (_input, inputDigest, now) => ({
-        inputDigest,
-        evidenceHash: HASH,
-        verifiedAt: now,
-        validUntil: new Date(Date.parse(now) + 300000).toISOString(),
-        quantities: [{ sku: "container_cpu_seconds", maximumQuantity: "600" }],
-      }),
-    },
-    () => new Date(Date.parse(NOW) + ++ticks).toISOString(),
-  );
-  const input = {
-    ownerId: f.actor.ownerId,
-    workspaceId: f.workspaceId,
-    fileId: f.fileId,
-    uploadSession: f.uploadId,
-    uploadRevision: 1,
-    byteLength: 100,
-    contentHash: HASH,
-    open: () =>
-      new ReadableStream<Uint8Array>({
-        start(controller) {
-          controller.enqueue(new Uint8Array(100));
-          controller.close();
-        },
-      }),
-  };
-  const probe = admission.probe;
-  if (!probe) throw new Error("synthetic probe missing");
-  expect(await probe(input)).toEqual({
-    category: "document",
-    format: "pdf",
-    pageCount: 1,
-    byteLength: 100,
+        get: () => ({
+          fetch: async (request: Request) => {
+            calls++;
+            expect(
+              f.db.sqlite
+                .query("SELECT count(*) n FROM v2_paid_holds WHERE state='dispatched'")
+                .get(),
+            ).toEqual({ n: calls });
+            await request.body?.cancel();
+            if (removeDuringDispatch)
+              f.db.sqlite
+                .query(
+                  "INSERT INTO v2_tombstones(target_kind,target_id,deleted_at) VALUES('file',?,?)",
+                )
+                .run(f.fileId, NOW);
+            if (result === "refused")
+              return Response.json(
+                { code: "INVALID_MEDIA", rejection: "office_input" },
+                { status: 422 },
+              );
+            if (result === "unavailable")
+              return Response.json({ code: "PROCESSING_FAILED" }, { status: 422 });
+            return Response.json({
+              version: 1,
+              probe: {
+                category: "document",
+                format: "pdf",
+                pageCount: 1,
+                byteLength: result === "protocol" ? 99 : 100,
+              },
+            });
+          },
+          stopProcessing: async () => {
+            stops++;
+          },
+        }),
+      },
+    } as unknown as Env;
+    const admission = createFileProcessingAdmission(
+      f.core,
+      env,
+      {
+        bounds: async (_input, inputDigest, now) => ({
+          inputDigest,
+          evidenceHash: HASH,
+          verifiedAt: now,
+          validUntil: new Date(Date.parse(now) + 300000).toISOString(),
+          quantities: [{ sku: "container_cpu_seconds", maximumQuantity: "600" }],
+        }),
+      },
+      () => new Date(Date.parse(NOW) + ++ticks).toISOString(),
+    );
+    const input = {
+      ownerId: f.actor.ownerId,
+      requestSessionId: f.owner.sessionId,
+      workspaceId: f.workspaceId,
+      fileId: f.fileId,
+      uploadSession: f.uploadId,
+      uploadRevision: 1,
+      byteLength: 100,
+      contentHash: HASH,
+      open: () =>
+        new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(new Uint8Array(100));
+            controller.close();
+          },
+        }),
+    };
+    const probe = admission.probe;
+    if (!probe) throw new Error("synthetic probe missing");
+    if (result === "success")
+      expect(await probe(input)).toEqual({
+        category: "document",
+        format: "pdf",
+        pageCount: 1,
+        byteLength: 100,
+      });
+    else if (result === "refused")
+      await expect(probe(input)).rejects.toBeInstanceOf(DefinitiveFileRejection);
+    else
+      await expect(probe(input)).rejects.toMatchObject({
+        code: "FILE_REJECTED",
+      });
+    expect(
+      (await createV2FilesRepository(f.core).metadata(f.actor, f.fileId))?.uploadRejection,
+    ).toBe(result === "refused" ? "FILE_REJECTED" : undefined);
+    expect(calls).toBe(1);
+    expect(stops).toBe(1);
+    expect(
+      f.db.sqlite.query("SELECT state,current_job_id FROM v2_files WHERE id=?").get(f.fileId),
+    ).toEqual({ state: "reserved", current_job_id: null });
+    expect(f.db.sqlite.query("SELECT count(*) n FROM v2_outbox").get()).toEqual({ n: 0 });
+    expect(f.db.sqlite.query("SELECT count(*) n FROM v2_runtime_usage").get()).toEqual({ n: 0 });
+    removeDuringDispatch = true;
+    await expect(probe(input)).rejects.toThrow("STALE_REVISION");
+    expect(calls).toBe(2);
+    expect(stops).toBe(2);
+    expect(
+      f.db.sqlite.query("SELECT count(*) n FROM v2_cost_attempts WHERE state='reserved'").get(),
+    ).toEqual({ n: 2 });
+    await expect(probe(input)).rejects.toThrow("STALE_REVISION");
+    expect(calls).toBe(2);
   });
-  expect(calls).toBe(1);
-  expect(stops).toBe(1);
-  expect(
-    f.db.sqlite.query("SELECT state,current_job_id FROM v2_files WHERE id=?").get(f.fileId),
-  ).toEqual({ state: "reserved", current_job_id: null });
-  expect(f.db.sqlite.query("SELECT count(*) n FROM v2_outbox").get()).toEqual({ n: 0 });
-  expect(f.db.sqlite.query("SELECT count(*) n FROM v2_runtime_usage").get()).toEqual({ n: 0 });
-  removeDuringDispatch = true;
-  await expect(probe(input)).rejects.toThrow("STALE_REVISION");
-  expect(calls).toBe(2);
-  expect(stops).toBe(2);
-  expect(
-    f.db.sqlite.query("SELECT count(*) n FROM v2_cost_attempts WHERE state='reserved'").get(),
-  ).toEqual({ n: 2 });
-  await expect(probe(input)).rejects.toThrow("STALE_REVISION");
-  expect(calls).toBe(2);
-});
 
 test("processing cost bridge uses advancing time, restores actual admission and retains additive unknown exposure", async () => {
   const f = await uploadProbeFixture();
@@ -604,6 +646,160 @@ test("inline upload probe owner, revision, consent and timeout reject before cre
   expect(f.db.sqlite.query("SELECT count(*) n FROM v2_paid_holds").get()).toEqual({ n: 0 });
   expect(f.db.sqlite.query("SELECT count(*) n FROM v2_jobs").get()).toEqual({ n: 0 });
 });
+
+test("definitive probe refusal survives a new metadata reader without completing or releasing the upload", async () => {
+  const f = await uploadProbeFixture(),
+    { paid } = await f.prepare();
+  f.db.sqlite
+    .query("UPDATE v2_consents SET version=? WHERE file_id=?")
+    .run(CURRENT_POLICY_VERSIONS.aiNoticeVersion, f.fileId);
+  const lease = await f.probes.attach(
+    f.actor,
+    { uploadId: f.uploadId, uploadRevision: 1, leaseUntil: "2026-10-06T00:05:00.000Z" },
+    paid,
+  );
+  if (!lease) throw new Error("Synthetic probe lease missing");
+  const before = f.db.sqlite.query("SELECT * FROM v2_storage_reservations").all();
+  expect(await f.probes.finish(f.actor, f.uploadId, 1, lease, "rejected")).toBe(true);
+  const file = await createV2FilesRepository(f.core).metadata(f.actor, f.fileId);
+  expect(file).toMatchObject({
+    status: "reserved",
+    failure: null,
+    revision: 1,
+    probe: null,
+    manifestSnapshotId: null,
+    uploadRejection: "FILE_REJECTED",
+  });
+  expect(
+    f.db.sqlite
+      .query("SELECT state,encrypted_payload FROM v2_upload_sessions WHERE id=?")
+      .get(f.uploadId),
+  ).toEqual({ state: "open", encrypted_payload: null });
+  expect(f.db.sqlite.query("SELECT * FROM v2_storage_reservations").all()).toEqual(before);
+  expect(f.db.sqlite.query("SELECT count(*) n FROM v2_outbox").get()).toEqual({ n: 0 });
+  // A new signed request/client has no memory of the original failed upload.
+  const now = Date.now();
+  f.db.sqlite
+    .query("UPDATE session SET created_at=?,expires_at=? WHERE id=?")
+    .run(now, now + 3600000, f.owner.sessionId);
+  const env = { ...f.owner.env, CASE_DATA_KEY_V1: btoa("d".repeat(32)).replace(/=+$/u, "") };
+  const app = new Hono().route("/api/v2/cases", createFilesApi({ testOnlyMissingD1Meta: true }));
+  let cookie = f.owner.cookie;
+  const request = async (path: string, init?: RequestInit) =>
+    app.request(
+      path,
+      {
+        ...init,
+        headers: {
+          ...Object.fromEntries(new Headers(init?.headers)),
+          cookie,
+          origin: env.BETTER_AUTH_URL,
+        },
+      },
+      env,
+    );
+  expect(await createFileClient(request).list(f.workspaceId)).toMatchObject([
+    {
+      id: f.fileId,
+      status: "uploading",
+      uploadRejection: "FILE_REJECTED",
+      canRetry: false,
+      canStartProcessing: false,
+    },
+  ]);
+  await expect(createFileClient(request).original(f.workspaceId, f.fileId)).rejects.toMatchObject({
+    code: "NOT_FOUND",
+  });
+  f.db.sqlite.query("DELETE FROM session WHERE id=?").run(f.owner.sessionId);
+  await expect(createFileClient(request).list(f.workspaceId)).rejects.toMatchObject({
+    code: "UNAUTHENTICATED",
+  });
+  const newId = crypto.randomUUID(),
+    token = `synthetic-relogin-${newId}`;
+  f.db.sqlite
+    .query(
+      "INSERT INTO session(id,user_id,token,expires_at,created_at,updated_at) VALUES(?,?,?,?,?,?)",
+    )
+    .run(newId, f.actor.ownerId, token, now + 3600000, now, now);
+  cookie = await signedSessionCookie(token, env.BETTER_AUTH_SECRET);
+  expect(await createFileClient(request).list(f.workspaceId)).toMatchObject([
+    { id: f.fileId, status: "uploading", uploadRejection: "FILE_REJECTED" },
+  ]);
+});
+
+for (const changed of [
+  "owner",
+  "role",
+  "consent",
+  "file-consent",
+  "session",
+  "metadata",
+  "finished",
+  "expired",
+] as const)
+  test(`definitive refusal publication rejects a concurrent ${changed} change`, async () => {
+    const f = await uploadProbeFixture(),
+      { paid } = await f.prepare();
+    const otherOwner =
+      changed === "owner" ? await seedTestSession(f.db, { now: Date.parse(NOW) }) : undefined;
+    f.db.sqlite
+      .query("UPDATE v2_consents SET version=? WHERE file_id=?")
+      .run(CURRENT_POLICY_VERSIONS.aiNoticeVersion, f.fileId);
+    const session = f.db.sqlite
+      .query("SELECT id FROM session WHERE user_id=?")
+      .get(f.actor.ownerId) as { id: string };
+    const lease = await f.probes.attach(
+      f.actor,
+      { uploadId: f.uploadId, uploadRevision: 1, leaseUntil: "2026-10-06T00:05:00.000Z" },
+      paid,
+    );
+    if (!lease) throw new Error("Synthetic probe lease missing");
+    const encrypt = f.core.encrypt;
+    f.core.encrypt = async (...args: Parameters<typeof encrypt>) => {
+      const envelope = await encrypt(...args);
+      if (otherOwner)
+        f.db.sqlite
+          .query("UPDATE v2_workspaces SET owner_id=? WHERE id=?")
+          .run(otherOwner.userId, f.workspaceId);
+      if (changed === "role")
+        f.db.sqlite
+          .query("INSERT INTO app_metadata(key,value) VALUES(?,'lawyer')")
+          .run(`account-type:${f.actor.ownerId}`);
+      if (changed === "consent")
+        f.db.sqlite.query("DELETE FROM user_consents WHERE user_id=?").run(f.actor.ownerId);
+      if (changed === "file-consent")
+        f.db.sqlite.query("UPDATE v2_consents SET version='old' WHERE file_id=?").run(f.fileId);
+      if (changed === "session")
+        f.db.sqlite.query("DELETE FROM session WHERE id=?").run(session.id);
+      if (changed === "metadata")
+        f.db.sqlite.query("UPDATE v2_files SET encrypted_payload=? WHERE id=?").run(
+          await encrypt(args[0], args[1], args[2], args[3], {
+            name: "changed.pdf",
+            declaredMediaType: "application/pdf",
+            probe: null,
+          }),
+          f.fileId,
+        );
+      if (changed === "finished")
+        expect(await f.probes.finish(f.actor, f.uploadId, 1, lease, true)).toBe(true);
+      if (changed === "expired")
+        f.db.sqlite.query("UPDATE v2_jobs SET lease_until=? WHERE id=?").run(NOW, lease.jobId);
+      return envelope;
+    };
+    expect(await f.probes.finish(f.actor, f.uploadId, 1, lease, "rejected", session.id)).toBe(
+      false,
+    );
+    if (changed !== "owner")
+      expect(
+        (await createV2FilesRepository(f.core).metadata(f.actor, f.fileId))?.uploadRejection,
+      ).toBeUndefined();
+    expect(
+      f.db.sqlite.query("SELECT state,failure_code FROM v2_files WHERE id=?").get(f.fileId),
+    ).toEqual({ state: "reserved", failure_code: null });
+    expect(
+      f.db.sqlite.query("SELECT state FROM v2_upload_sessions WHERE id=?").get(f.uploadId),
+    ).toEqual({ state: "open" });
+  });
 
 test("inline upload probe expired lease can be replaced without refunding unknown exposure or reviving old results", async () => {
   const f = await uploadProbeFixture(),
