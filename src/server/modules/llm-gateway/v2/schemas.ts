@@ -33,25 +33,52 @@ export const workspaceChatOutputSchema = z.strictObject({
   sourceClaims: z.array(sourceClaimSchema).max(50).default([]),
   timeline: z.array(v2TimelineEntrySchema).max(5),
 });
+export const workspaceAuditTargetSchema = z.enum([
+  "response_text",
+  "fact",
+  "party",
+  "action",
+  "timeline",
+  "warning",
+  "source_claim",
+  "question",
+  "summary",
+  "unknown",
+]);
+export const workspaceAuditBasisSchema = z.enum([
+  "intake_narrative",
+  "intake_answer",
+  "confirmed_summary",
+  "current_fact",
+  "user_message",
+  "assistant_history",
+  "selected_material",
+  "verified_source",
+  "server_calendar",
+  "coverage_limit",
+  "draft_internal",
+  "policy",
+  "unknown",
+]);
+export const workspaceAuditFindingSchema = z.strictObject({
+  severity: z.enum(["critical", "warning"]),
+  code: z.enum([
+    "unsupported_fact",
+    "wrong_reference",
+    "legal_strategy",
+    "unsupported_legal_claim",
+    "privacy",
+    "coverage",
+    "contradiction",
+    "question_repetition",
+  ]),
+  // Older local fixtures may omit these diagnostics; absence is not evidence.
+  target: workspaceAuditTargetSchema.default("unknown"),
+  basis: workspaceAuditBasisSchema.default("unknown"),
+});
 export const workspaceAuditOutputSchema = z.strictObject({
   pass: z.boolean(),
-  findings: z
-    .array(
-      z.strictObject({
-        severity: z.enum(["critical", "warning"]),
-        code: z.enum([
-          "unsupported_fact",
-          "wrong_reference",
-          "legal_strategy",
-          "unsupported_legal_claim",
-          "privacy",
-          "coverage",
-          "contradiction",
-          "question_repetition",
-        ]),
-      }),
-    )
-    .max(30),
+  findings: z.array(workspaceAuditFindingSchema).max(30),
   unsupportedFactIds: z.array(opaqueIdSchema).max(300),
   legalClaimsSupported: z.boolean(),
   strategyDetected: z.boolean(),
