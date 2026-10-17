@@ -12,6 +12,128 @@ test.skip(
 const key = "baro-c-contract-test-state";
 const base = "/cases/synthetic-case";
 
+for (const outcome of ["lawyer", "signed-out", "other-owner", "not-found", "unavailable"] as const)
+  test(`workspace title leaves pending state after a terminal access check: ${outcome}`, async ({
+    page,
+  }) => {
+    await page.goto(`${base}/timeline`);
+    await expect(
+      page.getByRole("heading", { name: "대여금 반환 관련 자료 정리", exact: true }),
+    ).toBeVisible();
+    await expect(page.getByRole("button", { name: "일정 추가", exact: true })).toBeEnabled();
+    await page.evaluate(
+      async ({ key, outcome }) => {
+        const path = "/tests/helpers/workspace-client-fixture.ts";
+        const { api } = (await import(
+          path
+        )) as typeof import("../helpers/workspace-client-fixture");
+        const session = api.session.get;
+        const read = api.workspace.get;
+        const owner = await session();
+        const pending: {
+          resolve: (value: typeof owner) => void;
+          reject: (cause: Error) => void;
+        }[] = [];
+        api.session.get = () => new Promise((resolve, reject) => pending.push({ resolve, reject }));
+        const state = window as unknown as {
+          finishCaseTitleCheck: () => void;
+          restoreCaseTitleCheck: () => void;
+          caseTitleSessionChecks: number;
+        };
+        state.caseTitleSessionChecks = 0;
+        const checkedSession = () => {
+          state.caseTitleSessionChecks++;
+          return session();
+        };
+        state.restoreCaseTitleCheck = () => {
+          api.session.get = checkedSession;
+          api.workspace.get = read;
+        };
+        state.finishCaseTitleCheck = () => {
+          if (outcome === "unavailable") {
+            const failure = Object.assign(new Error("합성 계정 확인 장애"), {
+              code: "UNAVAILABLE",
+            });
+            api.session.get = async () => {
+              throw failure;
+            };
+            for (const check of pending) check.reject(failure);
+            return;
+          }
+          const saved = JSON.parse(localStorage.getItem(key) ?? "{}");
+          saved.caseOwners = { "synthetic-case": owner.user?.id };
+          if (outcome === "signed-out") saved.session.user = null;
+          if (outcome === "lawyer") saved.session.user.accountType = "lawyer";
+          if (outcome === "other-owner") saved.session.user.id = "other-owner";
+          localStorage.setItem(key, JSON.stringify(saved));
+          api.session.get = checkedSession;
+          if (outcome === "not-found")
+            api.workspace.get = async () => {
+              throw Object.assign(new Error("합성 사건 없음"), { code: "NOT_FOUND" });
+            };
+          for (const check of pending) check.resolve(saved.session);
+        };
+        window.dispatchEvent(new Event("focus"));
+      },
+      { key, outcome },
+    );
+    await expect(
+      page.getByRole("heading", { name: "사건을 불러오는 중", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "대여금 반환 관련 자료 정리", exact: true }),
+    ).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "일정 추가", exact: true })).toBeHidden();
+    await page.evaluate(() =>
+      (window as unknown as { finishCaseTitleCheck: () => void }).finishCaseTitleCheck(),
+    );
+    await expect(page.getByRole("alert")).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "사건을 확인할 수 없어요", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "사건을 불러오는 중", exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole("heading", { name: "대여금 반환 관련 자료 정리", exact: true }),
+    ).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "일정 추가", exact: true })).toBeHidden();
+    if (outcome === "signed-out")
+      await expect(page.getByRole("link", { name: "로그인", exact: true }).last()).toBeVisible();
+    else
+      await expect(
+        page.getByRole("button", { name: "새로고침 · 다시 확인", exact: true }),
+      ).toBeEnabled();
+    if (outcome === "unavailable") {
+      await page.evaluate(() =>
+        (window as unknown as { restoreCaseTitleCheck: () => void }).restoreCaseTitleCheck(),
+      );
+      await page.getByRole("button", { name: "새로고침 · 다시 확인", exact: true }).click();
+      await expect(
+        page.getByRole("heading", { name: "대여금 반환 관련 자료 정리", exact: true }),
+      ).toBeVisible();
+      await expect(page.getByRole("button", { name: "일정 추가", exact: true })).toBeEnabled();
+      await expect(
+        page.getByRole("heading", { name: "사건을 확인할 수 없어요", exact: true }),
+      ).toHaveCount(0);
+    } else if (outcome !== "signed-out") {
+      const checks = () =>
+        page.evaluate(
+          () => (window as unknown as { caseTitleSessionChecks: number }).caseTitleSessionChecks,
+        );
+      const before = await checks();
+      await page.getByRole("button", { name: "새로고침 · 다시 확인", exact: true }).click();
+      await expect.poll(checks).toBeGreaterThan(before);
+      await expect(
+        page.getByRole("heading", { name: "사건을 확인할 수 없어요", exact: true }),
+      ).toBeVisible();
+      await expect(
+        page.getByRole("heading", { name: "대여금 반환 관련 자료 정리", exact: true }),
+      ).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "일정 추가", exact: true })).toBeHidden();
+    }
+  });
+
 for (const remainder of [false, true])
   test(`permanent file rejection requires a changed file and preserves only unattempted selections: ${remainder}`, async ({
     page,
@@ -289,7 +411,8 @@ for (const scenario of [
       else
         await expect(
           page.getByRole("heading", {
-            name: scenario === "other-owner" ? "사건을 불러오는 중" : "대여금 반환 관련 자료 정리",
+            name:
+              scenario === "other-owner" ? "사건을 확인할 수 없어요" : "대여금 반환 관련 자료 정리",
           }),
         ).toBeVisible();
       expect(await retryIds(page)).toEqual([]);

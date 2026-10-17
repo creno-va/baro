@@ -321,7 +321,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
     // workspace. Its selection still needs the same fresh owner/write preflight.
     if (
       lock.current ||
-      (!["upload", "chat-retry", "file-retry"].includes(key) &&
+      (!["refresh", "upload", "chat-retry", "file-retry"].includes(key) &&
         (!ready || (readonly && !readOrDelete)))
     )
       return;
@@ -638,7 +638,10 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
       />
       <CaseNavigation
         caseId={caseId}
-        title={(ready ? view?.case.title : null) ?? "사건을 불러오는 중"}
+        title={
+          (ready ? view?.case.title : null) ??
+          (error ? "사건을 확인할 수 없어요" : "사건을 불러오는 중")
+        }
         active={tab}
         fileCount={ready ? view?.files.length : undefined}
       />
