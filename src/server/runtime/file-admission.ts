@@ -42,6 +42,7 @@ export function createFileProcessingAdmission(
         actor(input.ownerId),
         input.uploadSession,
         input.uploadRevision,
+        input.contentHash,
       );
       if (
         !context ||
@@ -91,6 +92,8 @@ export function createFileProcessingAdmission(
         {
           uploadId: input.uploadSession,
           uploadRevision: input.uploadRevision,
+          contentHash: input.contentHash,
+          uploadPayload: context.uploadPayload,
           leaseUntil: new Date(Date.parse(admission.actor.now) + 300000).toISOString(),
         },
         admission.paid,
@@ -105,7 +108,7 @@ export function createFileProcessingAdmission(
             .statement(
               `SELECT j.id FROM v2_jobs j JOIN v2_operations o ON o.id=j.operation_id
           WHERE j.id=? AND o.owner_id=? AND j.lease_token=? AND j.fencing=? AND j.lease_until>? AND j.status='running' AND ${jobAlive}
-          AND EXISTS(SELECT 1 FROM v2_upload_sessions WHERE id=? AND file_id=j.target_id AND revision=? AND state='open' AND encrypted_payload IS NULL AND expires_at>?)
+          AND EXISTS(SELECT 1 FROM v2_upload_sessions WHERE id=? AND file_id=j.target_id AND revision=? AND state='open' AND encrypted_payload IS ? AND expires_at>?)
           AND EXISTS(SELECT 1 FROM v2_consents WHERE file_id=j.target_id AND owner_id=o.owner_id AND kind='auto_processing' AND version=?)`,
               [
                 lease.jobId,
@@ -115,6 +118,7 @@ export function createFileProcessingAdmission(
                 now,
                 input.uploadSession,
                 input.uploadRevision,
+                context.uploadPayload,
                 now,
                 CURRENT_POLICY_VERSIONS.aiNoticeVersion,
               ],
@@ -136,6 +140,8 @@ export function createFileProcessingAdmission(
             input.uploadRevision,
             lease,
             true,
+            undefined,
+            context.uploadPayload,
           ))
         )
           throw new ProcessingError("STALE_REVISION");
@@ -151,6 +157,7 @@ export function createFileProcessingAdmission(
               lease,
               "rejected",
               input.requestSessionId,
+              context.uploadPayload,
             ))
           )
             throw new ProcessingError("STALE_REVISION");
@@ -160,7 +167,15 @@ export function createFileProcessingAdmission(
       } finally {
         if (!finished)
           await probes
-            .finish(actor(input.ownerId), input.uploadSession, input.uploadRevision, lease, false)
+            .finish(
+              actor(input.ownerId),
+              input.uploadSession,
+              input.uploadRevision,
+              lease,
+              false,
+              undefined,
+              context.uploadPayload,
+            )
             .catch(() => false);
       }
     },

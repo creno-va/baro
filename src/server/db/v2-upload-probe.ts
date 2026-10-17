@@ -6,6 +6,7 @@ import {
   type Actor,
   actorSchema,
   aliveWorkspace,
+  hashSchema,
   parse,
   safe,
   sqlClaim,
@@ -18,7 +19,7 @@ import { type JobLease, leaseSchema } from "./v2-workspace";
 const from = `FROM v2_upload_sessions u JOIN v2_files f ON f.id=u.file_id
   JOIN v2_workspaces w ON w.id=f.workspace_id JOIN v2_operations o ON o.id=f.operation_id
   JOIN v2_idempotency i ON i.operation_id=o.id AND i.owner_id=o.owner_id`;
-const eligible = `u.id=? AND u.revision=? AND u.state='open' AND u.encrypted_payload IS NULL
+const eligible = `u.id=? AND u.revision=? AND u.state='open'
   AND u.expires_at>? AND f.state IN ('reserved','uploading') AND w.owner_id=?
   AND o.owner_id=w.owner_id AND o.state='admitted' AND o.kind='file_extract' AND ${aliveWorkspace}
   AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='file' AND target_id=f.id)
@@ -29,18 +30,25 @@ const eligible = `u.id=? AND u.revision=? AND u.state='open' AND u.encrypted_pay
  * Neither completion nor expiry changes the upload operation or file revision.
  */
 export function createV2UploadProbeRepository(core: V2Core) {
-  const context = (actor: Actor, uploadId: string, uploadRevision: number) => {
+  const context = async (
+    actor: Actor,
+    uploadId: string,
+    uploadRevision: number,
+    contentHash?: string,
+  ) => {
     const a = parse(actorSchema, actor);
     parse(opaqueIdSchema, uploadId);
     parse(revisionSchema, uploadRevision);
-    return core
+    if (contentHash !== undefined) parse(hashSchema, contentHash);
+    const row = await core
       .statement(
-        `SELECT o.id AS operationId,o.revision AS operationRevision,i.request_hash AS requestHash,
+        `SELECT u.encrypted_payload AS uploadPayload,o.id AS operationId,o.revision AS operationRevision,i.request_hash AS requestHash,
         w.id AS workspaceId,f.id AS fileId,f.revision AS fileRevision,u.reserved_bytes AS byteLength
         ${from} WHERE ${eligible}`,
         [uploadId, uploadRevision, a.now, a.ownerId],
       )
       .first<{
+        uploadPayload: string | null;
         operationId: string;
         operationRevision: number;
         requestHash: string;
@@ -49,13 +57,32 @@ export function createV2UploadProbeRepository(core: V2Core) {
         fileRevision: number;
         byteLength: number;
       }>();
+    if (!row || row.uploadPayload === null) return row;
+    // A completed source read can precede a failed workspace CAS. Its digest
+    // seals the same original; it does not mean the upload was finalized.
+    if (contentHash === undefined) return null;
+    const original = await core.decrypt(
+      "v2_upload_sessions",
+      uploadId,
+      a.ownerId,
+      uploadRevision,
+      row.uploadPayload,
+      z.strictObject({ contentHash: hashSchema }),
+    );
+    return original.contentHash === contentHash ? row : null;
   };
   return {
-    context: (actor: Actor, uploadId: string, uploadRevision: number) =>
-      safe(() => context(actor, uploadId, uploadRevision)),
+    context: (actor: Actor, uploadId: string, uploadRevision: number, contentHash?: string) =>
+      safe(() => context(actor, uploadId, uploadRevision, contentHash)),
     attach(
       actor: Actor,
-      input: { uploadId: string; uploadRevision: number; leaseUntil: string },
+      input: {
+        uploadId: string;
+        uploadRevision: number;
+        leaseUntil: string;
+        contentHash?: string;
+        uploadPayload?: string | null;
+      },
       paid?: PreparedPaidHold,
     ) {
       return safe(async (): Promise<JobLease | null> => {
@@ -69,10 +96,11 @@ export function createV2UploadProbeRepository(core: V2Core) {
           Date.parse(until) - Date.parse(a.now) > 300_000
         )
           return null;
-        const current = await context(a, input.uploadId, input.uploadRevision);
+        const current = await context(a, input.uploadId, input.uploadRevision, input.contentHash);
         const r = paid.request;
         if (
           !current ||
+          current.uploadPayload !== (input.uploadPayload ?? null) ||
           r.targetKind !== "file" ||
           r.targetId !== current.fileId ||
           r.targetRevision !== current.fileRevision ||
@@ -91,7 +119,7 @@ export function createV2UploadProbeRepository(core: V2Core) {
           core.statement(
             `INSERT INTO v2_mutation_claims(id,owner_id,target_id,revision)
             SELECT ?,w.owner_id,f.id,f.revision ${from} WHERE ${eligible}
-            AND o.id=? AND o.revision=? AND i.request_hash=? AND f.id=? AND f.revision=?
+            AND u.encrypted_payload IS ? AND o.id=? AND o.revision=? AND i.request_hash=? AND f.id=? AND f.revision=?
             AND (f.current_job_id IS NULL OR ${previousExpired}) AND (${paid.predicate.sql})`,
             [
               claimId,
@@ -99,6 +127,7 @@ export function createV2UploadProbeRepository(core: V2Core) {
               input.uploadRevision,
               a.now,
               a.ownerId,
+              current.uploadPayload,
               current.operationId,
               current.operationRevision,
               current.requestHash,
@@ -150,22 +179,23 @@ export function createV2UploadProbeRepository(core: V2Core) {
       lease: JobLease,
       outcome: boolean | "rejected",
       sessionId?: string,
+      uploadPayload: string | null = null,
     ) {
       return safe(async () => {
         const a = parse(actorSchema, actor),
           l = parse(leaseSchema, lease);
         parse(z.union([z.boolean(), z.literal("rejected")]), outcome);
         if (sessionId !== undefined) parse(opaqueIdSchema, sessionId);
+        parse(z.string().nullable(), uploadPayload);
         const succeeded = outcome === true;
         let rejected: { previous: string; envelope: string } | undefined;
         if (outcome === "rejected") {
           const row = await core
-            .statement(`SELECT f.id,f.revision,f.encrypted_payload ${from} WHERE ${eligible}`, [
-              uploadId,
-              uploadRevision,
-              a.now,
-              a.ownerId,
-            ])
+            .statement(
+              `SELECT f.id,f.revision,f.encrypted_payload ${from} WHERE ${eligible}
+              AND u.encrypted_payload IS ?`,
+              [uploadId, uploadRevision, a.now, a.ownerId, uploadPayload],
+            )
             .first<{ id: string; revision: number; encrypted_payload: string }>();
           if (!row) return false;
           const metadata = await core.decrypt(
@@ -214,7 +244,7 @@ export function createV2UploadProbeRepository(core: V2Core) {
             `INSERT INTO v2_mutation_claims(id,owner_id,target_id,revision)
             SELECT ?,w.owner_id,j.id,j.target_revision ${from}
             JOIN v2_jobs j ON j.id=f.current_job_id AND j.operation_id=o.id
-            WHERE ${eligible} AND j.id=? AND j.target_kind='file' AND j.target_id=f.id
+            WHERE ${eligible} AND u.encrypted_payload IS ? AND j.id=? AND j.target_kind='file' AND j.target_id=f.id
             AND j.target_revision=f.revision AND j.lease_token=? AND j.fencing=? AND j.lease_until>?
             AND j.status IN ('running','validating') AND NOT EXISTS(SELECT 1 FROM v2_outbox WHERE job_id=j.id)
             ${refusalFence.sql}`,
@@ -224,6 +254,7 @@ export function createV2UploadProbeRepository(core: V2Core) {
               uploadRevision,
               a.now,
               a.ownerId,
+              uploadPayload,
               l.jobId,
               l.token,
               l.fencing,

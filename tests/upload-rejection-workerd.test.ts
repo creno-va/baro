@@ -4,6 +4,7 @@ import { CURRENT_POLICY_VERSIONS } from "../src/contracts/consent";
 import { createV2Core } from "../src/server/db/v2-core";
 import { createV2FilesRepository } from "../src/server/db/v2-files";
 import { createV2UploadProbeRepository } from "../src/server/db/v2-upload-probe";
+import { digest } from "../src/server/modules/files/binary";
 import { fixture } from "./helpers/file-processing-fixture";
 import { copySyntheticD1 } from "./helpers/native-d1";
 import { nativeD1Transport, nativeD1TransportWorker } from "./helpers/native-d1-transport";
@@ -20,7 +21,7 @@ test("workerd D1 atomically publishes upload refusal and fences session/metadata
         modules: true,
         script: nativeD1TransportWorker,
         compatibilityDate: "2026-10-01",
-        d1Databases: ["ACCEPT", "SESSION", "METADATA"],
+        d1Databases: ["ACCEPT", "SESSION", "METADATA", "SEALED", "SOURCE"],
         cf: false,
         unsafeRegisterWorker: false,
       }),
@@ -28,7 +29,7 @@ test("workerd D1 atomically publishes upload refusal and fences session/metadata
     lifetime.own(() => mf.dispose());
     await mf.ready;
 
-    for (const changed of ["ACCEPT", "SESSION", "METADATA"] as const) {
+    for (const changed of ["ACCEPT", "SESSION", "METADATA", "SEALED", "SOURCE"] as const) {
       lifetime.check();
       const f = await fixture();
       const upload = await f.service.reserve(
@@ -52,6 +53,18 @@ test("workerd D1 atomically publishes upload refusal and fences session/metadata
         0,
         new Response(new Uint8Array([1, 2, 3])).body,
       );
+      const hash = await digest(new Uint8Array([1, 2, 3]));
+      const sealed = changed === "SEALED" || changed === "SOURCE";
+      const accepts = changed === "ACCEPT" || changed === "SEALED";
+      if (sealed)
+        expect(
+          await createV2FilesRepository(f.core).recordOriginalDigest(
+            f.actor,
+            upload.uploadSession,
+            1,
+            hash,
+          ),
+        ).toBe(true);
       const row = f.db.sqlite
         .query("SELECT operation_id,revision FROM v2_files WHERE id=?")
         .get(upload.fileId) as { operation_id: string; revision: number };
@@ -94,6 +107,11 @@ test("workerd D1 atomically publishes upload refusal and fences session/metadata
         .prepare("SELECT * FROM v2_upload_sessions WHERE id=?")
         .bind(upload.uploadSession)
         .first<Record<string, unknown>>();
+      const uploadPayload = uploadBefore?.encrypted_payload;
+      if (uploadPayload !== null && typeof uploadPayload !== "string")
+        throw new Error("Synthetic source receipt missing");
+      const context = await probes.context(f.actor, upload.uploadSession, 1, hash);
+      expect(context?.uploadPayload).toBe(uploadPayload);
       const retainedTables = [
         "v2_storage_reservations",
         "v2_upload_parts",
@@ -112,15 +130,29 @@ test("workerd D1 atomically publishes upload refusal and fences session/metadata
       expect(parts.length).toBeGreaterThan(0);
 
       let raced = false;
+      let changedSource: string | undefined;
       const encrypt = core.encrypt;
-      if (changed !== "ACCEPT")
+      if (!accepts)
         core.encrypt = async (...args: Parameters<typeof encrypt>) => {
           const envelope = await encrypt(...args);
           expect(raced).toBe(false);
           raced = true;
           if (changed === "SESSION")
             await db.prepare("DELETE FROM session WHERE id=?").bind(session.id).run();
-          else {
+          else if (changed === "SOURCE") {
+            changedSource = await encrypt(
+              "v2_upload_sessions",
+              upload.uploadSession,
+              f.actor.ownerId,
+              1,
+              { contentHash: hash },
+            );
+            expect(changedSource).not.toBe(uploadPayload);
+            await db
+              .prepare("UPDATE v2_upload_sessions SET encrypted_payload=? WHERE id=?")
+              .bind(changedSource, upload.uploadSession)
+              .run();
+          } else {
             const replacement = await encrypt(args[0], args[1], args[2], args[3], {
               name: "synthetic-concurrent.xls",
               declaredMediaType: "application/vnd.ms-excel",
@@ -134,11 +166,19 @@ test("workerd D1 atomically publishes upload refusal and fences session/metadata
           return envelope;
         };
       expect(
-        await probes.finish(f.actor, upload.uploadSession, 1, lease, "rejected", session.id),
-      ).toBe(changed === "ACCEPT");
-      expect(raced).toBe(changed !== "ACCEPT");
+        await probes.finish(
+          f.actor,
+          upload.uploadSession,
+          1,
+          lease,
+          "rejected",
+          session.id,
+          uploadPayload,
+        ),
+      ).toBe(accepts);
+      expect(raced).toBe(!accepts);
       const metadata = await createV2FilesRepository(core).metadata(f.actor, upload.fileId);
-      expect(metadata?.uploadRejection).toBe(changed === "ACCEPT" ? "FILE_REJECTED" : undefined);
+      expect(metadata?.uploadRejection).toBe(accepts ? "FILE_REJECTED" : undefined);
       if (changed === "METADATA") expect(metadata?.name).toBe("synthetic-concurrent.xls");
       expect(
         await db
@@ -151,7 +191,9 @@ test("workerd D1 atomically publishes upload refusal and fences session/metadata
           .prepare("SELECT * FROM v2_upload_sessions WHERE id=?")
           .bind(upload.uploadSession)
           .first<Record<string, unknown>>(),
-      ).toEqual(uploadBefore);
+      ).toEqual(
+        changedSource ? { ...uploadBefore, encrypted_payload: changedSource } : uploadBefore,
+      );
       for (const [index, table] of retainedTables.entries()) {
         const previous = retained[index];
         if (!previous) throw new Error("Synthetic retained table missing");
@@ -162,14 +204,14 @@ test("workerd D1 atomically publishes upload refusal and fences session/metadata
           .prepare("SELECT current_job_id FROM v2_files WHERE id=?")
           .bind(upload.fileId)
           .first<string>("current_job_id"),
-      ).toBe(changed === "ACCEPT" ? null : lease.jobId);
+      ).toBe(accepts ? null : lease.jobId);
       expect(
         await db
           .prepare("SELECT status,lease_token,fencing FROM v2_jobs WHERE id=?")
           .bind(lease.jobId)
           .first<{ status: string; lease_token: string | null; fencing: number }>(),
       ).toEqual(
-        changed === "ACCEPT"
+        accepts
           ? { status: "cancelled", lease_token: null, fencing: 2 }
           : { status: "running", lease_token: lease.token, fencing: 1 },
       );
