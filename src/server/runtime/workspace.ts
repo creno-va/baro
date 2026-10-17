@@ -14,6 +14,10 @@ import {
   type GatewayExecutionBinding,
 } from "../modules/budget/gateway-ledger";
 import { configuredBounds } from "../modules/budget/model-configuration";
+import {
+  type QuotationResolution,
+  safeQuotationResolution,
+} from "../modules/citation/quotation-spans";
 import { hasCurrentConsent } from "../modules/consent/service";
 import { GUIDE_HOSTS } from "../modules/legal-retrieval/v2/registry";
 import { createV2LegalRetrieval } from "../modules/legal-retrieval/v2/service";
@@ -203,6 +207,7 @@ export async function runWorkspaceRuntime(
     monthlyBudgetCapEnabled: env.MONTHLY_BUDGET_CAP_ENABLED !== "false",
   });
   const legalRetrieval: ReturnType<typeof reportLegalRetrieval>[] = [];
+  let quotationResolution: QuotationResolution | undefined;
   const result = await executeWorkspace(core, params, instanceId, {
     guideHosts: GUIDE_HOSTS,
     authorize: (ownerId) => hasCustomerWorkspaceAccess(core, ownerId),
@@ -311,6 +316,9 @@ export async function runWorkspaceRuntime(
       return createWorkspacePipeline(gateway, {
         reserve: async () => hasCustomerWorkspaceAccess(core, params.ownerId),
         invocation,
+        observeQuotationResolution: (value) => {
+          quotationResolution = safeQuotationResolution(value);
+        },
         retrieve: async (context, requests) => {
           await progress.enter("retrieval");
           const sourceRepository = createV2OfficialSourceRepository(core, GUIDE_HOSTS);
@@ -374,5 +382,9 @@ export async function runWorkspaceRuntime(
   });
   // The internal Workflow receipt remains inspectable when a console event is absent.
   // Public job responses still come from the unchanged repository contract.
-  return { ...result, ...(legalRetrieval.length ? { legalRetrieval } : {}) };
+  return {
+    ...result,
+    ...(legalRetrieval.length ? { legalRetrieval } : {}),
+    ...(quotationResolution ? { quotationResolution } : {}),
+  };
 }
