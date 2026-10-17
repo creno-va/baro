@@ -1,5 +1,8 @@
 import { afterEach, expect, test } from "bun:test";
+import { Hono } from "hono";
+import { createWorkspaceApi } from "../src/client/api/workspace";
 import { CURRENT_POLICY_VERSIONS } from "../src/contracts";
+import { createFilesApi } from "../src/server/api/v2/files";
 import { createCaseDataCipher } from "../src/server/crypto";
 import {
   type BudgetAllocation,
@@ -29,6 +32,7 @@ import {
 } from "../src/server/modules/file-processing/transport";
 import { createFilesService, type PrivateBucket } from "../src/server/modules/files/service";
 import { createMediaGateway } from "../src/server/modules/llm-gateway/transcription";
+import { workspace } from "./fixtures/contracts/v2";
 import { createTestDatabase } from "./helpers/d1";
 import { seedTestSession } from "./helpers/session";
 
@@ -188,7 +192,21 @@ async function fixture(
       "INSERT INTO v2_workspaces(id,owner_id,status,confirmed_summary_revision,encrypted_payload,created_at,updated_at) VALUES(?,?,'active',1,?,?,?)",
     )
     .run(workspaceId, actor.ownerId, envelope, NOW, NOW);
-  return { db, core, actor, accounting, jobs, runtime, pp, fp, workspaceId, ap, drain, remote };
+  return {
+    db,
+    core,
+    actor,
+    accounting,
+    jobs,
+    runtime,
+    pp,
+    fp,
+    workspaceId,
+    ap,
+    drain,
+    remote,
+    session,
+  };
 }
 
 async function originalFixture(
@@ -750,4 +768,133 @@ for (const kind of ["file", "profile_asset"] as const)
     expect(f.db.sqlite.query("SELECT count(*) n FROM v2_execution_admissions").get()).toEqual({
       n: 1,
     });
+  });
+
+for (const mode of ["stable", "expiry", "checkpoint", "deleting", "tombstone"] as const)
+  test(`HTTP metadata pagination never treats an unstable short page as exhaustion: ${mode}`, async () => {
+    const f = await queued("file", false);
+    const files = createV2FilesRepository(f.core);
+    const revision = () =>
+      (
+        f.db.sqlite.query("SELECT revision FROM v2_workspaces WHERE id=?").get(f.workspaceId) as {
+          revision: number;
+        }
+      ).revision;
+    for (let index = 0; index < 20; index++)
+      expect(
+        await files.reserve(
+          { ...f.actor, workspaceId: f.workspaceId, expectedRevision: revision() },
+          {
+            name: `synthetic-${index}.txt`,
+            byteLength: 10,
+            mediaType: "text/plain",
+            autoProcessConsentVersion: CURRENT_POLICY_VERSIONS.aiNoticeVersion,
+          },
+          {
+            fileId: `zz_synthetic_${String(index).padStart(2, "0")}`,
+            uploadId: crypto.randomUUID(),
+            reservationId: crypto.randomUUID(),
+            consentId: crypto.randomUUID(),
+            expiresAt: EXP,
+            admission: {
+              operationId: crypto.randomUUID(),
+              key: crypto.randomUUID(),
+              requestHash: HASH,
+            },
+          },
+        ),
+      ).not.toBeNull();
+    const before = revision();
+    const acquired =
+      mode === "checkpoint"
+        ? await f.jobs.acquire(f.actor, f.jobId, crypto.randomUUID(), LATER, f.request.attemptId)
+        : null;
+    if (mode === "checkpoint") expect(acquired).not.toBeNull();
+    if (mode === "deleting")
+      f.db.sqlite.query("UPDATE v2_files SET state='deleting' WHERE id='zz_synthetic_00'").run();
+    if (mode === "tombstone")
+      f.db.sqlite.query("INSERT INTO v2_tombstones VALUES('file','zz_synthetic_00',?)").run(NOW);
+    // The domain fixture uses an explicit October clock. Only its synthetic
+    // signed HTTP session is refreshed for the actual auth middleware clock.
+    const sessionNow = Date.now();
+    f.db.sqlite
+      .query("UPDATE session SET created_at=?,updated_at=?,expires_at=? WHERE id=?")
+      .run(sessionNow, sessionNow, sessionNow + 3600000, f.session.sessionId);
+    const env = {
+      ...f.session.env,
+      CASE_DATA_KEY_V1: btoa("d".repeat(32)).replace(/=+$/, ""),
+      APPLICATION_COST_LIMITS_ENABLED: "false",
+    };
+    let changed = false,
+      metadataReads = 0;
+    const app = new Hono().route(
+      "/api/v2/cases",
+      createFilesApi({
+        dependencies: async (_env, core) => {
+          const statement = core.statement.bind(core);
+          core.statement = (sql, values) => {
+            if (sql.startsWith("SELECT f.* FROM v2_files") || sql.includes("AS processing_status"))
+              metadataReads++;
+            return statement(sql, values);
+          };
+          const decrypt = core.cipher.decrypt.bind(core.cipher);
+          core.cipher.decrypt = async (envelope, context) => {
+            const value = await decrypt(envelope, context);
+            if (!changed && context.table === "v2_files") {
+              changed = true;
+              if (mode === "expiry")
+                expect(await stopExpiredUndispatchedJob(f.core, "preview", f.stop)).toBe(true);
+              if (mode === "checkpoint" && acquired)
+                expect(
+                  await f.jobs.checkpoint(f.actor, acquired.lease, {
+                    id: crypto.randomUUID(),
+                    revision: 1,
+                    phase: "observing",
+                    progress: 1,
+                    opaqueIds: [],
+                  }),
+                ).toBe(true);
+            }
+            return value;
+          };
+          return {};
+        },
+      }),
+    );
+    const calls: string[] = [];
+    const client = createWorkspaceApi(async (path) => {
+      calls.push(path);
+      if (path.endsWith("/workspace"))
+        return Response.json({ ...workspace, id: f.workspaceId, workspaceRevision: revision() });
+      const response = await app.request(path, { headers: { cookie: f.session.cookie } }, env);
+      if (!response.ok) {
+        expect(response.status).toBe(503);
+        const error = await response.clone().text();
+        expect(error).toContain('"code":"STORAGE_UNAVAILABLE"');
+        expect(error).toContain('"retryable":true');
+      }
+      return response;
+    });
+    if (mode === "expiry") {
+      await expect(client.getFiles(f.workspaceId)).rejects.toMatchObject({
+        code: "UNAVAILABLE",
+        retryable: true,
+      });
+      expect(calls).toHaveLength(2); // Before + failed first page, no automatic retry.
+      expect(metadataReads).toBe(2);
+      calls.length = 0;
+      metadataReads = 0;
+    }
+    const view = await client.getFiles(f.workspaceId);
+    expect(changed).toBe(true);
+    expect(revision()).toBe(before);
+    expect(view.files).toHaveLength(mode === "deleting" || mode === "tombstone" ? 20 : 21);
+    expect(calls).toHaveLength(4); // Before + two pages + final workspace fence.
+    expect(metadataReads).toBe(4); // The same two DAL reads per page, no extra queries.
+    if (mode === "expiry")
+      expect(view.files.find((file) => file.id === f.r.targetId)?.status).toBe("failed");
+    if (mode === "checkpoint")
+      expect(view.files.find((file) => file.id === f.r.targetId)?.processing?.phase).toBe(
+        "observing",
+      );
   });

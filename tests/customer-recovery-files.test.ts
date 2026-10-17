@@ -418,3 +418,67 @@ test("an unknown reservation response retains its original key and revision acro
     f.db.close();
   }
 });
+
+for (const lost of ["reservation", "complete"] as const)
+  test(`unstable metadata read preserves an unknown ${lost} attempt until explicit recovery`, async () => {
+    const f = await fixture();
+    try {
+      let loseAck = true,
+        rejectList = false;
+      const reservations: { key: string | null; revision: string | null }[] = [];
+      const writes: string[] = [];
+      const client = createClient(async (path, init) => {
+        if (!init?.method && path.endsWith("/files") && rejectList) {
+          rejectList = false;
+          return Response.json(
+            { error: { code: "STORAGE_UNAVAILABLE", retryable: true } },
+            { status: 503 },
+          );
+        }
+        if (init?.method) writes.push(`${init.method} ${path}`);
+        if (init?.method === "POST" && path.endsWith("/files")) {
+          const headers = new Headers(init.headers);
+          reservations.push({
+            key: headers.get("idempotency-key"),
+            revision: headers.get("if-match"),
+          });
+          if (loseAck && lost === "reservation") {
+            loseAck = false;
+            throw new TypeError("Synthetic unknown reservation outcome");
+          }
+        }
+        const response = await f.raw(path, init);
+        if (loseAck && lost === "complete" && path.endsWith("/complete")) {
+          expect(response.ok).toBe(true);
+          loseAck = false;
+          throw new TypeError("Synthetic unknown complete outcome");
+        }
+        return response;
+      });
+      const source = new File(["Synthetic preserved recovery bytes"], "preserved.txt", {
+        type: "text/plain",
+      });
+      await expect(
+        client.upload(f.workspace.id, source, undefined, { metadataOnly: true }),
+      ).rejects.toThrow(`Synthetic unknown ${lost} outcome`);
+      rejectList = true;
+      const before = writes.length;
+      await expect(
+        client.upload(f.workspace.id, source, undefined, { metadataOnly: true }),
+      ).rejects.toMatchObject({ code: "UNAVAILABLE", retryable: true });
+      expect(writes).toHaveLength(before); // No mutation or automatic retry after the denied page.
+      const saved = await client.upload(f.workspace.id, source, undefined, { metadataOnly: true });
+      expect(reservations).toHaveLength(lost === "reservation" ? 2 : 1);
+      if (lost === "reservation") expect(reservations[1]).toEqual(reservations[0]);
+      expect(writes.filter((path) => path.includes("/parts/"))).toHaveLength(1);
+      expect(writes.filter((path) => path.endsWith("/complete"))).toHaveLength(1);
+      expect(f.db.sqlite.query("SELECT count(*) AS count FROM v2_upload_sessions").get()).toEqual({
+        count: 1,
+      });
+      expect(await (await client.original(f.workspace.id, saved.id)).text()).toBe(
+        await source.text(),
+      );
+    } finally {
+      f.db.close();
+    }
+  });
