@@ -4,7 +4,8 @@ import type { V2Core } from "../../../db/v2-core";
 import { decodeSource, type SourceRow } from "../../../db/v2-official-sources";
 import { EXTRACTOR_VERSION, MAX_SOURCE_BYTES, type SourceChunk } from "./contracts";
 import { OFFICIAL_CATALOG } from "./registry";
-import { makeChunk } from "./source";
+import { citationMatchesReverifiedSource, makeChunk } from "./source";
+import { NO_NEWER_CONFLICTING_SOURCE_SQL } from "./source-authority";
 
 // At most four separate 1 MiB originals per read; never aggregate bodies in SQL.
 export const BOUND_SOURCE_BATCH_SIZE = 4;
@@ -26,7 +27,7 @@ export async function readBoundSourceBatch(
       (
         await core
           .statement(
-            `SELECT b.id AS citation_id,b.citation_json,s.* FROM v2_citation_bindings b JOIN v2_official_sources s ON s.source_id=b.source_id WHERE b.workspace_id=? AND b.id IN (${citationIds.map(() => "?").join(",")}) AND s.fetched_at<=? AND s.verified_at<=? AND s.expires_at>? AND length(CAST(s.body AS BLOB))<=?`,
+            `SELECT b.id AS citation_id,b.citation_json,s.* FROM v2_citation_bindings b JOIN v2_official_sources s ON s.source_id=b.source_id WHERE b.workspace_id=? AND b.id IN (${citationIds.map(() => "?").join(",")}) AND s.fetched_at<=? AND s.verified_at<=? AND s.expires_at>? AND length(CAST(s.body AS BLOB))<=? AND ${NO_NEWER_CONFLICTING_SOURCE_SQL}`,
             [workspaceId, ...citationIds, now, now, now, MAX_SOURCE_BYTES],
           )
           .all<BoundRow>()
@@ -61,7 +62,7 @@ export async function readBoundSourceBatch(
           rebuilt.source.sourceId === source.sourceId &&
             rebuilt.source.contentHash === source.contentHash &&
             rebuilt.source.expiresAt === source.expiresAt &&
-            JSON.stringify({ ...rebuilt.citation, id: citation.id }) === JSON.stringify(citation)
+            citationMatchesReverifiedSource(citation, rebuilt.citation)
             ? { ...rebuilt, source, citation }
             : null,
         );

@@ -1,5 +1,5 @@
 import { dateSchema, displayText, timestampSchema } from "../../../../contracts";
-import { v2OfficialCitationSchema } from "../../../../contracts/v2";
+import { type V2OfficialCitation, v2OfficialCitationSchema } from "../../../../contracts/v2";
 import type { OfficialSourceWrite } from "../../../db/v2-official-sources";
 import { textHash } from "../service";
 import {
@@ -9,6 +9,25 @@ import {
   type SourceChunk,
 } from "./contracts";
 import { assertCanonicalUrl, GUIDE_HOSTS, guideUrl } from "./registry";
+
+/** A stored citation preserves its original verification time. A later genuine
+ * verification can renew the identical original, without rewriting that receipt.
+ * Callers still verify the current original's hash, availability and freshness;
+ * new bindings must retain the repository's exact-time check. */
+export function citationMatchesReverifiedSource(
+  citation: V2OfficialCitation,
+  current: V2OfficialCitation,
+): boolean {
+  const originalTime = timestampSchema.safeParse(citation.verifiedAt);
+  const currentTime = timestampSchema.safeParse(current.verifiedAt);
+  return (
+    originalTime.success &&
+    currentTime.success &&
+    Date.parse(originalTime.data) <= Date.parse(currentTime.data) &&
+    JSON.stringify({ ...current, id: citation.id, verifiedAt: citation.verifiedAt }) ===
+      JSON.stringify(citation)
+  );
+}
 
 export async function makeChunk(
   input: Omit<OfficialSourceWrite, "sourceId" | "contentHash" | "extractorVersion" | "expiresAt">,

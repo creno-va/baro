@@ -60,7 +60,9 @@ for (const refresh of [false, true])
       await bind(f, next, later);
       expect(await readBoundSource(f.core, f.workspaceId, next.citation.id, later)).not.toBeNull();
     }
-    expect(await readBoundSource(f.core, f.workspaceId, old.citation.id, later)).toBeNull();
+    const priorSource = await readBoundSource(f.core, f.workspaceId, old.citation.id, later);
+    if (refresh) expect(priorSource?.citation).toEqual(old.citation);
+    else expect(priorSource).toBeNull();
     const reports = createReportsService(f.core, { ...f.deps, clock: () => later });
     expect((await reports.get(f.actor.ownerId, f.workspaceId)).stale).toBe(true);
     const generated = await reports.generate(f.actor.ownerId, f.workspaceId, crypto.randomUUID(), {

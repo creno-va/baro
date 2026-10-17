@@ -4,7 +4,7 @@ import { v2CitationsForRetrievedSourcesSchema } from "../../../contracts/v2";
 import { textHash } from "../legal-retrieval/service";
 import { EXTRACTOR_VERSION, type RetrievalOutput } from "../legal-retrieval/v2/contracts";
 import { GUIDE_HOSTS } from "../legal-retrieval/v2/registry";
-import { makeChunk } from "../legal-retrieval/v2/source";
+import { citationMatchesReverifiedSource, makeChunk } from "../legal-retrieval/v2/source";
 
 export const sourceClaimSchema = z
   .strictObject({
@@ -88,7 +88,7 @@ export async function validateV2Claims(
         chunk.source.sourceId !== rebuilt.source.sourceId ||
         chunk.source.contentHash !== rebuilt.source.contentHash ||
         chunk.source.extractorVersion !== EXTRACTOR_VERSION ||
-        JSON.stringify({ ...rebuilt.citation, id: citation.id }) !== JSON.stringify(citation) ||
+        !citationMatchesReverifiedSource(citation, rebuilt.citation) ||
         chunk.span.text !== chunk.source.body ||
         chunk.span.startUtf16 !== 0 ||
         chunk.span.endUtf16 !== chunk.source.body.length

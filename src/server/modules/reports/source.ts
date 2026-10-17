@@ -15,6 +15,7 @@ import { createV2WorkspaceRepository, referencesAuthorized } from "../../db/v2-w
 import { digest } from "../files/binary";
 import { BOUND_SOURCE_BATCH_SIZE, readBoundSourceBatch } from "../legal-retrieval/v2/bound-sources";
 import { GUIDE_HOSTS } from "../legal-retrieval/v2/registry";
+import { NO_NEWER_CONFLICTING_SOURCE_SQL } from "../legal-retrieval/v2/source-authority";
 import type { ZipSource } from "./zip";
 
 export class ReportError extends Error {
@@ -114,7 +115,10 @@ export async function ownedWorkspace(core: V2Core, actor: Actor, id: string) {
  * D1 limits each compound SELECT to five terms. Keep this one ordered statement
  * for exportFence, nesting two groups of four without changing bind order.
  * json_set appends the final keys within D1's 32-argument function limit while
- * preserving JSON key order and null values used by existing source digests. */
+ * preserving JSON key order and null values used by existing source digests.
+ * A competing original can invalidate a bound source without modifying its row.
+ * Freeze that authority state here so the final export fence sees the same
+ * newer/equal-time conflict predicate as the hash-verified source reader. */
 export const REPORT_SOURCE_SQL = `SELECT * FROM (SELECT 'summary' AS kind,s.id,s.revision AS revision,s.snapshot_id AS snapshot FROM v2_summaries s JOIN v2_intakes i ON i.summary_id=s.id WHERE i.id=?
     UNION ALL SELECT 'fact',id,revision,encrypted_payload FROM v2_facts WHERE workspace_id=? AND summary_revision=(SELECT confirmed_summary_revision FROM v2_workspaces WHERE id=v2_facts.workspace_id) AND (snapshot_id IS NULL OR EXISTS(SELECT 1 FROM v2_private_snapshots s WHERE s.id=v2_facts.snapshot_id AND s.state='published'))
     UNION ALL SELECT 'party',id,revision,encrypted_payload FROM v2_parties WHERE workspace_id=? AND summary_revision=(SELECT confirmed_summary_revision FROM v2_workspaces WHERE id=v2_parties.workspace_id) AND (snapshot_id IS NULL OR EXISTS(SELECT 1 FROM v2_private_snapshots s WHERE s.id=v2_parties.snapshot_id AND s.state='published'))
@@ -122,7 +126,7 @@ export const REPORT_SOURCE_SQL = `SELECT * FROM (SELECT 'summary' AS kind,s.id,s
     ) UNION ALL SELECT * FROM (SELECT 'message',id,revision,created_at FROM v2_messages WHERE workspace_id=?
     UNION ALL SELECT 'action',id,revision,'' FROM v2_actions WHERE workspace_id=?
     UNION ALL SELECT 'timeline',id,revision,'' FROM v2_timeline WHERE workspace_id=?
-    UNION ALL SELECT 'citation',c.id,c.snapshot_revision,c.citation_json || ':' || json_set(json_object('id',s.source_id,'type',s.source_type,'officialId',s.official_id,'version',s.version,'section',s.section,'hash',s.content_hash,'extractor',s.extractor_version,'url',s.canonical_url,'title',s.title,'date',s.source_date,'court',s.court,'case',s.case_number,'institution',s.institution_id,'endpoint',s.endpoint_id,'rights',s.rights_provenance,'fetched',s.fetched_at),'$.verified',s.verified_at,'$.expires',s.expires_at) || ':' || CASE WHEN s.fetched_at<=? AND s.verified_at<=? AND s.expires_at>? THEN 'fresh' ELSE 'unavailable' END FROM v2_citation_bindings c LEFT JOIN v2_official_sources s ON s.source_id=c.source_id WHERE c.workspace_id=?) ORDER BY kind,id`;
+    UNION ALL SELECT 'citation',c.id,c.snapshot_revision,c.citation_json || ':' || json_set(json_object('id',s.source_id,'type',s.source_type,'officialId',s.official_id,'version',s.version,'section',s.section,'hash',s.content_hash,'extractor',s.extractor_version,'url',s.canonical_url,'title',s.title,'date',s.source_date,'court',s.court,'case',s.case_number,'institution',s.institution_id,'endpoint',s.endpoint_id,'rights',s.rights_provenance,'fetched',s.fetched_at),'$.verified',s.verified_at,'$.expires',s.expires_at) || ':' || CASE WHEN s.fetched_at<=? AND s.verified_at<=? AND s.expires_at>? THEN 'fresh' ELSE 'unavailable' END || CASE WHEN ${NO_NEWER_CONFLICTING_SOURCE_SQL} THEN '' ELSE ':superseded' END FROM v2_citation_bindings c LEFT JOIN v2_official_sources s ON s.source_id=c.source_id WHERE c.workspace_id=?) ORDER BY kind,id`;
 export async function reportSourceRows(
   core: V2Core,
   actor: Actor,

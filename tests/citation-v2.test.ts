@@ -48,6 +48,64 @@ test("exact source text/span/hash and server-owned citation permit a quotation, 
   const f = await fixture();
   expect((await validateV2Claims([f.claim], [f.chunk.citation], f.retrieval)).valid).toBe(true);
 });
+test("renewed identical original validates the canonical old citation and exact original span", async () => {
+  const f = await fixture();
+  const original = structuredClone(f.chunk.citation);
+  const fresh = await makeChunk(
+    {
+      ...f.chunk.source,
+      fetchedAt: "2026-10-07T01:00:00.000Z",
+      verifiedAt: "2026-10-07T01:00:00.000Z",
+    },
+    "2026-10-07",
+  );
+  f.chunk.source = fresh.source;
+  f.retrieval.asOfDate = "2026-10-07";
+  expect((await validateV2Claims([f.claim], [f.chunk.citation], f.retrieval)).valid).toBe(true);
+  expect(f.chunk.citation).toEqual(original);
+  expect(f.chunk.source.verifiedAt).toBe("2026-10-07T01:00:00.000Z");
+  const explanation = { ...f.claim, kind: "legal_explanation" as const };
+  expect((await validateV2Claims([explanation], [f.chunk.citation], f.retrieval)).valid).toBe(
+    false,
+  );
+  const review = {
+    claimId: explanation.id,
+    claimHash: await claimReviewHash(explanation, f.retrieval.asOfDate),
+    sourceHash: f.chunk.citation.contentHash,
+    accepted: true,
+    policyAccepted: true,
+  };
+  expect(
+    (await validateV2Claims([explanation], [f.chunk.citation], f.retrieval, [review])).valid,
+  ).toBe(true);
+  expect(
+    (
+      await validateV2Claims([explanation], [f.chunk.citation], f.retrieval, [
+        { ...review, claimHash: await claimReviewHash(explanation, "2026-10-06") },
+      ])
+    ).valid,
+  ).toBe(false);
+  // A model cannot turn its own earlier timestamp into an allowlisted receipt.
+  expect(
+    (
+      await validateV2Claims(
+        [f.claim],
+        [{ ...f.chunk.citation, verifiedAt: "2026-10-05T00:00:00.000Z" }],
+        f.retrieval,
+      )
+    ).valid,
+  ).toBe(false);
+});
+test.each(["future_citation", "invalid_citation", "reversed_source"])(
+  "renewal rejects %s verification times",
+  async (mode) => {
+    const f = await fixture();
+    if (mode === "future_citation") f.chunk.citation.verifiedAt = "2026-10-07T00:00:00.000Z";
+    if (mode === "invalid_citation") f.chunk.citation.verifiedAt = "not-a-time";
+    if (mode === "reversed_source") f.chunk.source.verifiedAt = "2026-10-05T23:59:00.000Z";
+    expect((await validateV2Claims([f.claim], [f.chunk.citation], f.retrieval)).valid).toBe(false);
+  },
+);
 test.each(["text", "hash", "span", "metadata", "unknown", "limited", "surrogate"])(
   "%s mismatch rejects the claim",
   async (mode) => {

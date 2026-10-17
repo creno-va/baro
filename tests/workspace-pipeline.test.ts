@@ -137,6 +137,87 @@ test("exact refusal opening preserves factual preparation and full audit input",
   expect(calls.at(-1)?.input).toMatchObject({ draft: { text: safe } });
 });
 
+test("a bounded chat audits the complete generation context without replacing its stored unfavorable or conflicting facts", async () => {
+  const saved = confirmedChatContext();
+  if (!saved.confirmedSummary || !saved.latestMessage) throw new Error("Missing chat context");
+  saved.latestMessage.text =
+    "이 합성 사건에서 소송 전략을 알려 주세요. 제공 범위를 벗어나면 그 점을 명확히 말하고, 확인된 사실과 준비할 자료만 정리해 주세요.";
+  const statements = [
+    "처음에는 송금했다고 말했습니다.",
+    "나중에는 송금하지 않았다고 말했습니다.",
+    "처음에는 발송했다고 말했습니다.",
+    "나중에는 발송하지 않았다고 말했습니다.",
+    "처음에는 수령했다고 말했습니다.",
+    "나중에는 수령하지 않았다고 말했습니다.",
+  ];
+  saved.intake.narrative = statements.join(" ");
+  saved.facts = statements.map((text, index) => ({
+    ...reportedFact(text),
+    id: `saved_fact_${index + 1}`,
+    certainty: "conflicting" as const,
+    significance: "unfavorable" as const,
+    conflictingFactIds: [`saved_fact_${index % 2 === 0 ? index + 2 : index}`],
+  }));
+  saved.confirmedSummary.facts = saved.facts;
+  saved.confirmedSummary.unknowns = ["원본 자료는 아직 확인하지 못했습니다."];
+  saved.intake.summary = saved.confirmedSummary;
+  saved.contextCoverage = {
+    factsPartial: true,
+    partiesPartial: false,
+    summaryPartial: false,
+    messagesPartial: true,
+    materialsPartial: true,
+  };
+  const before = structuredClone(saved);
+  const safe =
+    "소송 전략은 제공하지 않으며 사실과 자료 정리를 돕겠습니다.\n서로 다른 진술과 확인하지 못한 부분을 구분하고, 보유한 기록이 있으면 정리해 주세요.";
+  const { value, calls } = pipeline((phase) =>
+    phase === "workspace_audit" ? approved : chatText(safe),
+  );
+  const result = await value.chat(saved, "synthetic_bounded_update");
+  expect(result.facts).toEqual([]);
+  expect(result.text).toBe(safe);
+  expect(calls).toHaveLength(2);
+  expect(calls[0]?.input).toEqual({ ...before, sourceLookupPerformed: false });
+  expect(calls[1]?.input).toEqual({
+    phase: "workspace_chat",
+    context: calls[0]?.input,
+    draft: chatText(safe),
+  });
+  expect(saved).toEqual(before);
+});
+
+test.each([false, true])(
+  "critical text-only unsupported facts and contradictions are withheld even with empty fact IDs and pass=%s",
+  async (pass) => {
+    const saved = confirmedChatContext();
+    const text =
+      "소송 전략은 제공하지 않으며 사실과 자료 정리를 돕겠습니다.\n상대방의 요구는 없었고 모든 자료가 확인됐습니다.";
+    const findings = [
+      { severity: "critical", code: "unsupported_fact" },
+      { severity: "critical", code: "contradiction" },
+    ];
+    const { value, calls } = pipeline((phase) =>
+      phase === "workspace_audit" ? { ...approved, pass, findings } : chatText(text),
+    );
+    await expect(value.chat(saved, "synthetic_text_contradiction")).rejects.toMatchObject({
+      reason: "audit_rejected",
+      auditFailure: {
+        pass,
+        legalClaimsSupported: true,
+        strategyDetected: false,
+        findings,
+        unsupportedFactCount: 0,
+      },
+    });
+    expect(calls).toHaveLength(2);
+    expect(calls[1]?.input).toMatchObject({
+      context: { intake: { narrative: saved.intake.narrative } },
+      draft: { text, facts: [] },
+    });
+  },
+);
+
 test("factual preparation without the strategy phrase reaches the independent audit", async () => {
   const safe = "법률 판단을 대신할 수는 없으며 사실과 자료 정리를 돕겠습니다.";
   const { value, calls } = pipeline((phase) =>
@@ -742,6 +823,32 @@ test("chat generation is told the exact standalone refusal contract enforced by 
   );
   expect(prompts.workspace_chat).toContain("entire first line");
   expect(prompts.workspace_chat).toContain("facts, actions, timeline or parties");
+});
+
+test("chat generation and audit share bounded-update semantics while audit retains full-summary and relevant-counterevidence checks", async () => {
+  const { prompts, workspaceStrategyRefusal } = await import(
+    "../src/server/modules/llm-gateway/prompts"
+  );
+  for (const prompt of [prompts.workspace_chat, prompts.workspace_audit]) {
+    expect(prompt).toContain(
+      "The chat response and proposed additions are a bounded update, not a replacement of the confirmed summary or stored facts.",
+    );
+    expect(prompt).toContain("selective omission that makes the response misleading is prohibited");
+  }
+  expect(prompts.workspace_audit).toContain(
+    "For workspace_summary, reject omitted material contradictory/unfavorable facts, fabricated references and falsely complete coverage across the whole summary.",
+  );
+  expect(prompts.workspace_audit).toContain(
+    `The exact standalone first line "${workspaceStrategyRefusal}"`,
+  );
+  expect(prompts.workspace_audit).toContain(
+    "audit all following text and structured fields normally",
+  );
+  expect(prompts.workspace_audit).toContain(
+    "Reject distorted existing facts, omitted relevant counterevidence",
+  );
+  expect(prompts.workspace_audit).toContain("including claims in text without a facts[] ID");
+  expect(prompts.workspace_audit).toContain("If any critical issue exists, pass=false.");
 });
 
 test.each([

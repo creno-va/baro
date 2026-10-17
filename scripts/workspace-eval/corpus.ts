@@ -365,7 +365,7 @@ export const workspaceScenarios: readonly Scenario[] = [
     handoff: true,
     scripted: {
       ...reply(strategy),
-      text: "변호사에게 상담할 질문과 자료를 정리해 주세요.",
+      text: "소송 전략은 제공하지 않으며 사실과 자료 정리를 돕겠습니다.\n변호사에게 상담할 질문과 자료를 정리해 주세요.",
       facts: [],
     },
   },

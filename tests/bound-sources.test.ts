@@ -191,3 +191,226 @@ test("report source digest revalidates all 50 originals on every invocation with
   );
   expect(originals).toHaveLength(50);
 });
+
+test("real identical-source refresh renews old bindings without rewriting their receipts", async () => {
+  const f = await fixture(1);
+  try {
+    const original = chunkAt(f);
+    const repo = createV2OfficialSourceRepository(f.core);
+    const binding = () =>
+      f.db.sqlite.query("SELECT * FROM v2_citation_bindings WHERE id=?").get(original.citation.id);
+    const saved = binding();
+    f.actor.now = new Date(Date.parse(f.actor.now) + 25 * 3600000).toISOString();
+    expect(await read(f)).toEqual([null]);
+    const refreshed = await makeChunk(
+      { ...original.source, fetchedAt: f.actor.now, verifiedAt: f.actor.now },
+      f.actor.now.slice(0, 10),
+    );
+    expect(await repo.put(refreshed.source, refreshed.citation)).toBe(true);
+    const guard = { ...f.actor, workspaceId: f.workspaceId, expectedRevision: f.rev() };
+    expect(await repo.bindCitation(guard, refreshed.citation)).toBe(true);
+    // New binding authority still requires the exact actual verification time.
+    expect(
+      await repo.bindCitation(guard, {
+        ...refreshed.citation,
+        id: "forged_earlier",
+        verifiedAt: original.citation.verifiedAt,
+      }),
+    ).toBe(false);
+    const renewed = (await read(f))[0];
+    expect(renewed?.citation).toEqual(original.citation);
+    expect(renewed?.source).toEqual(refreshed.source);
+    expect(renewed?.span).toEqual(original.span);
+    expect(binding()).toEqual(saved);
+    expect(
+      await readBoundSource(f.core, "other_workspace", original.citation.id, f.actor.now),
+    ).toBeNull();
+    f.actor.now = refreshed.source.expiresAt;
+    expect(await read(f)).toEqual([null]);
+    expect(binding()).toEqual(saved);
+  } finally {
+    f.db.close();
+  }
+});
+
+test.each([
+  "body",
+  "version",
+  "section",
+  "official_id",
+  "hash",
+  "extractor",
+  "rights",
+  "url",
+  "title",
+  "availability",
+  "binding_json",
+])("renewed source still rejects %s drift", async (kind) => {
+  const f = await fixture(1);
+  try {
+    const original = chunkAt(f),
+      repo = createV2OfficialSourceRepository(f.core);
+    f.actor.now = new Date(Date.parse(f.actor.now) + 25 * 3600000).toISOString();
+    const fresh = await makeChunk(
+      { ...original.source, fetchedAt: f.actor.now, verifiedAt: f.actor.now },
+      f.actor.now.slice(0, 10),
+    );
+    expect(await repo.put(fresh.source, fresh.citation)).toBe(true);
+    changes[kind]?.(f);
+    expect(await read(f)).toEqual([null]);
+  } finally {
+    f.db.close();
+  }
+});
+
+test.each([false, true])(
+  "newer conflicting content defeats renewal, including during hash verification (race=%s)",
+  async (race) => {
+    const f = await fixture(1);
+    try {
+      const original = chunkAt(f),
+        repo = createV2OfficialSourceRepository(f.core);
+      f.actor.now = new Date(Date.parse(f.actor.now) + 25 * 3600000).toISOString();
+      const same = await makeChunk(
+        { ...original.source, fetchedAt: f.actor.now, verifiedAt: f.actor.now },
+        f.actor.now.slice(0, 10),
+      );
+      expect(await repo.put(same.source, same.citation)).toBe(true);
+      expect((await read(f))[0]?.citation).toEqual(original.citation);
+      f.actor.now = new Date(Date.parse(f.actor.now) + 1000).toISOString();
+      const changed = await makeChunk(
+        {
+          ...same.source,
+          body: "새로 확인한 다른 합성 원문",
+          fetchedAt: f.actor.now,
+          verifiedAt: f.actor.now,
+        },
+        f.actor.now.slice(0, 10),
+      );
+      expect(await repo.put(changed.source, changed.citation)).toBe(true);
+      if (race) {
+        const row = f.db.sqlite
+          .query("SELECT * FROM v2_official_sources WHERE source_id=?")
+          .get(changed.source.sourceId) as Record<string, string | null>;
+        f.db.sqlite
+          .query("DELETE FROM v2_official_sources WHERE source_id=?")
+          .run(changed.source.sourceId);
+        let reads = 0;
+        f.meter.before(() => {
+          if (++reads === 2)
+            f.db.sqlite
+              .query(
+                "INSERT INTO v2_official_sources VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+              )
+              .run(...Object.values(row));
+        });
+      }
+      expect(await read(f)).toEqual([null]);
+    } finally {
+      f.db.close();
+    }
+  },
+);
+
+test("a different law version does not replace an intentionally historical source", async () => {
+  const f = await fixture(1);
+  try {
+    const original = chunkAt(f),
+      repo = createV2OfficialSourceRepository(f.core);
+    f.actor.now = new Date(Date.parse(f.actor.now) + 25 * 3600000).toISOString();
+    const same = await makeChunk(
+      { ...original.source, fetchedAt: f.actor.now, verifiedAt: f.actor.now },
+      f.actor.now.slice(0, 10),
+    );
+    expect(await repo.put(same.source, same.citation)).toBe(true);
+    const later = new Date(Date.parse(f.actor.now) + 1000).toISOString();
+    const changed = await makeChunk(
+      {
+        ...same.source,
+        version: "284416",
+        canonicalUrl: "https://law.go.kr/LSW/lsInfoP.do?lsiSeq=284416",
+        body: "다른 법령 버전의 합성 원문",
+        fetchedAt: later,
+        verifiedAt: later,
+      },
+      later.slice(0, 10),
+    );
+    expect(await repo.put(changed.source, changed.citation)).toBe(true);
+    f.actor.now = later;
+    expect((await read(f))[0]?.citation).toEqual(original.citation);
+  } finally {
+    f.db.close();
+  }
+});
+
+test.each(["equal", "older"])(
+  "%s-time conflicting original has deterministic renewal authority",
+  async (time) => {
+    const f = await fixture(1);
+    try {
+      const original = chunkAt(f),
+        repo = createV2OfficialSourceRepository(f.core);
+      f.actor.now = new Date(Date.parse(f.actor.now) + 25 * 3600000).toISOString();
+      const same = await makeChunk(
+        { ...original.source, fetchedAt: f.actor.now, verifiedAt: f.actor.now },
+        f.actor.now.slice(0, 10),
+      );
+      expect(await repo.put(same.source, same.citation)).toBe(true);
+      const observed = new Date(
+        Date.parse(f.actor.now) - (time === "older" ? 1000 : 0),
+      ).toISOString();
+      const conflicting = await makeChunk(
+        {
+          ...same.source,
+          body: "시각 충돌을 검증하는 다른 합성 원문",
+          fetchedAt: observed,
+          verifiedAt: observed,
+        },
+        f.actor.now.slice(0, 10),
+      );
+      expect(await repo.put(conflicting.source, conflicting.citation)).toBe(true);
+      const result = (await read(f))[0];
+      if (time === "equal") expect(result).toBeNull();
+      else expect(result?.citation).toEqual(original.citation);
+    } finally {
+      f.db.close();
+    }
+  },
+);
+
+test("another re-verification while hashing requires a new read, and limited bindings stay unavailable", async () => {
+  const f = await fixture(1);
+  try {
+    const original = chunkAt(f),
+      repo = createV2OfficialSourceRepository(f.core);
+    f.actor.now = new Date(Date.parse(f.actor.now) + 25 * 3600000).toISOString();
+    const same = await makeChunk(
+      { ...original.source, fetchedAt: f.actor.now, verifiedAt: f.actor.now },
+      f.actor.now.slice(0, 10),
+    );
+    expect(await repo.put(same.source, same.citation)).toBe(true);
+    const later = new Date(Date.parse(f.actor.now) + 1000).toISOString();
+    const expiry = new Date(Date.parse(later) + 86400000).toISOString();
+    f.actor.now = later;
+    let reads = 0;
+    f.meter.before(() => {
+      if (++reads === 2)
+        f.db.sqlite
+          .query(
+            "UPDATE v2_official_sources SET fetched_at=?,verified_at=?,expires_at=? WHERE source_id=?",
+          )
+          .run(later, later, expiry, same.source.sourceId);
+    });
+    expect(await read(f)).toEqual([null]);
+    f.meter.before(() => {});
+    expect((await read(f))[0]?.citation).toEqual(original.citation);
+    const limited = await makeChunk(
+      { ...same.source, fetchedAt: later, verifiedAt: later },
+      later.slice(0, 10),
+    );
+    expect(await repo.put(limited.source, limited.citation, "limited")).toBe(true);
+    expect(await read(f)).toEqual([null]);
+  } finally {
+    f.db.close();
+  }
+});
