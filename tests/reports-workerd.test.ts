@@ -31,13 +31,13 @@ afterEach(() => nativeTests.stop());
 const test = (name: string, run: (lifetime: NativeLifetime) => Promise<void>, timeout: number) =>
   bunTest(name, () => nativeTests.run(run), timeout);
 
-function officialChunk(now: string, body = "합성 공식 원문") {
+function officialChunk(now: string, body = "합성 공식 원문", section = "제1조") {
   return makeChunk(
     {
       sourceType: "statute",
       officialId: "1706",
       version: "284415",
-      section: "제1조",
+      section,
       canonicalUrl: "https://law.go.kr/LSW/lsInfoP.do?lsiSeq=284415",
       title: "합성 공식 출처",
       body,
@@ -283,6 +283,62 @@ test("workerd export fence accepts a verified citation and rejects original, ide
   });
 }, 30000);
 
+test("workerd final export fence sees new and removed conflicting official originals", async (lifetime) => {
+  const f = await reportFixture(),
+    repo = createV2OfficialSourceRepository(f.core),
+    chunk = await officialChunk(f.actor.now);
+  expect(await repo.put(chunk.source, chunk.citation)).toBe(true);
+  expect(
+    await repo.bindCitation(
+      { ...f.actor, workspaceId: f.workspaceId, expectedRevision: f.rev() },
+      chunk.citation,
+    ),
+  ).toBe(true);
+  await nativeFixture(lifetime, f, async (core) => {
+    const view = await createReportsService(core, f.deps).get(f.actor.ownerId, f.workspaceId);
+    const row = await core
+      .statement(
+        "SELECT id,revision,workspace_id,snapshot_id,encrypted_payload FROM v2_reports WHERE id=?",
+        [view.id],
+      )
+      .first<{
+        id: string;
+        revision: number;
+        workspace_id: string;
+        snapshot_id: string;
+        encrypted_payload: string;
+      }>();
+    if (!row) throw new Error("Synthetic report missing");
+    const digest = await sourceDigest(core, f.actor, f.workspaceId);
+    const fence = await exportFence(core, f.actor, row, digest, () => f.actor.now, undefined, [
+      chunk.citation.id,
+    ]);
+    await fence.check();
+    const conflict = await officialChunk(f.actor.now, "합성 원문의 다른 본문");
+    expect(
+      await createV2OfficialSourceRepository(core).put(conflict.source, conflict.citation),
+    ).toBe(true);
+    await expect(fence.check()).rejects.toThrow("STALE_REVISION");
+    const invalidDigest = await sourceDigest(core, f.actor, f.workspaceId);
+    expect(invalidDigest).not.toBe(digest);
+    const invalidFence = await exportFence(
+      core,
+      f.actor,
+      row,
+      invalidDigest,
+      () => f.actor.now,
+      undefined,
+      [],
+    );
+    await invalidFence.check();
+    await core
+      .statement("DELETE FROM v2_official_sources WHERE source_id=?", [conflict.source.sourceId])
+      .run();
+    await expect(invalidFence.check()).rejects.toThrow("STALE_REVISION");
+    await fence.check();
+  });
+}, 30000);
+
 test("workerd citation fence allows 50 bound originals and rejects count or serialized byte overflow", async (lifetime) => {
   const f = await reportFixture(),
     repo = createV2OfficialSourceRepository(f.core);
@@ -338,7 +394,7 @@ test("workerd citation fence allows 50 bound originals and rejects count or seri
     );
     await core.statement("DELETE FROM v2_citation_bindings").run();
     // Original text fits the legal source limit, but JSON escaping exceeds the fence envelope.
-    const large = await officialChunk(f.actor.now, `합성${"\u0001".repeat(180000)}`);
+    const large = await officialChunk(f.actor.now, `합성${"\u0001".repeat(180000)}`, "제2조");
     const nativeRepo = createV2OfficialSourceRepository(core);
     expect(await nativeRepo.put(large.source, large.citation)).toBe(true);
     const revision = await core
@@ -423,7 +479,7 @@ test("workerd source rows preserve legacy bytes, digest and binary citation orde
         sourceType: "statute",
         officialId: "1706",
         version: "284415",
-        section: "제1조",
+        section: citationId === "citation_A" ? "제1조" : "제2조",
         canonicalUrl: "https://law.go.kr/LSW/lsInfoP.do?lsiSeq=284415",
         title: '합성 "인용" \\ 줄바꿈\n검증',
         body: `합성 공식 원문 ${citationId}`,
