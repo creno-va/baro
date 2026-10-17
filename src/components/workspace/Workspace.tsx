@@ -905,8 +905,8 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                           <div className="workspace-message-failed">
                             <p>
                               {message.retryable === false
-                                ? "응답을 완료하지 못했어요. 내용을 확인한 뒤 새 메시지를 보내 주세요."
-                                : "응답을 완료하지 못했어요. 같은 대화에서 다시 시도할 수 있어요."}
+                                ? "내용을 확인한 뒤 새 메시지를 보내 주세요."
+                                : "같은 대화에서 다시 시도할 수 있어요."}
                             </p>
                           </div>
                         )}
