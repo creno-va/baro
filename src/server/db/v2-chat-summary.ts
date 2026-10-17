@@ -1,5 +1,9 @@
 import { type V2Fact, type V2Summary, v2FactSchema, v2SummarySchema } from "../../contracts/v2";
 import {
+  createWorkspacePublicationDiagnostics,
+  type WorkspacePublicationFailure,
+} from "../workspace-publication-diagnostics";
+import {
   fragmentText,
   sqlClaim,
   utf8Bytes,
@@ -126,10 +130,18 @@ export async function prepareChatSummary(
   sourceRevision: number,
   additions: { facts: V2Fact[]; parties: V2Summary["parties"] },
   guideHosts: readonly string[],
+  diagnostics = createWorkspacePublicationDiagnostics(),
 ) {
+  const invalid = (reason: WorkspacePublicationFailure["reason"] = "snapshot_invalid") => {
+    diagnostics.failed(reason);
+    return new V2RepositoryError("SNAPSHOT_INVALID");
+  };
+  diagnostics.at("summary_metadata");
   const workspace = createV2WorkspaceRepository(core.binding, core.cipher, guideHosts);
   const metadata = await workspace.metadata(g, g.workspaceId);
-  if (!metadata?.summary || metadata.summary.revision !== sourceRevision) throw invalid();
+  if (!metadata?.summary || metadata.summary.revision !== sourceRevision)
+    throw invalid("summary_mismatch");
+  diagnostics.at("summary_revision");
   const revision = (
     await core
       .statement(
@@ -138,13 +150,14 @@ export async function prepareChatSummary(
       )
       .first<{ revision: number }>()
   )?.revision;
-  if (!revision || revision <= sourceRevision) throw invalid();
+  if (!revision || revision <= sourceRevision) throw invalid("summary_revision_invalid");
   const snapshotId = crypto.randomUUID(),
     staging = createV2StagingRepository(core);
   const counts = { facts: 0, parties: 0, unknowns: 0, notices: 0 };
   const build = async function* (
     stage?: (field: "facts" | "parties", value: unknown) => Promise<void>,
   ) {
+    diagnostics.at("summary_copy");
     const ids = { facts: new Set<string>(), parties: new Set<string>() },
       conflicts: string[] = [];
     let firstField = true,
@@ -154,13 +167,13 @@ export async function prepareChatSummary(
       let value: unknown;
       if (field === "facts") {
         const fact = v2FactSchema.parse(raw);
-        if (ids.facts.has(fact.id)) throw invalid();
+        if (ids.facts.has(fact.id)) throw invalid("duplicate_fact_id");
         ids.facts.add(fact.id);
         conflicts.push(...fact.conflictingFactIds);
         value = fact;
       } else if (field === "parties") {
         const party = v2SummarySchema.shape.parties.element.parse(raw);
-        if (ids.parties.has(party.id)) throw invalid();
+        if (ids.parties.has(party.id)) throw invalid("duplicate_party_id");
         ids.parties.add(party.id);
         value = party;
       } else if (field === "unknowns" || field === "notices")
@@ -168,17 +181,21 @@ export async function prepareChatSummary(
       else {
         value = v2SummarySchema.shape[field].parse(raw);
         if (field === "revision") {
-          if (value !== sourceRevision) throw invalid();
+          if (value !== sourceRevision) throw invalid("summary_revision_invalid");
           value = revision;
         }
-        if (field === "intakeRevision" && value !== metadata.revision) throw invalid();
+        if (field === "intakeRevision" && value !== metadata.revision)
+          throw invalid("summary_mismatch");
         if (field === "createdAt") value = g.now;
       }
       if (arrays.has(field)) {
         const name = field as keyof typeof counts;
         if (++counts[name] > { facts: 300, parties: 30, unknowns: 100, notices: 10 }[name])
-          throw invalid();
-        if (stage && (field === "facts" || field === "parties")) await stage(field, value);
+          throw invalid("summary_count_exceeded");
+        if (stage && (field === "facts" || field === "parties")) {
+          await stage(field, value);
+          diagnostics.at("summary_copy");
+        }
       }
       const output = `${arrays.has(field) && !firstItem ? "," : ""}${JSON.stringify(value)}`;
       firstItem = false;
@@ -197,7 +214,8 @@ export async function prepareChatSummary(
         yield "]";
       }
     }
-    if (!counts.notices || conflicts.some((id) => !ids.facts.has(id))) throw invalid();
+    if (!counts.notices) throw invalid("summary_notices_missing");
+    if (conflicts.some((id) => !ids.facts.has(id))) throw invalid("summary_conflict_invalid");
     yield "}";
   };
   const packed = async function* (source: AsyncIterable<string>) {
@@ -215,6 +233,7 @@ export async function prepareChatSummary(
     partCount++;
     byteLength += utf8Bytes(text);
   }
+  diagnostics.at("summary_begin");
   if (
     !(await staging.begin(
       g,
@@ -229,8 +248,9 @@ export async function prepareChatSummary(
       lease,
     ))
   )
-    throw invalid();
+    throw invalid("claim_not_acquired");
   const stage = async (field: "facts" | "parties", raw: unknown) => {
+    diagnostics.at("summary_entities");
     const value = raw as V2Fact | V2Summary["parties"][number],
       id = crypto.randomUUID();
     const table = field === "facts" ? "v2_facts" : "v2_parties";
@@ -280,11 +300,16 @@ export async function prepareChatSummary(
       );
     }
     statements.push(core.finish(claimId));
-    if (!(await core.changed(statements))) throw invalid();
+    if (!(await core.changed(statements))) throw invalid("claim_not_acquired");
   };
   let index = 0;
-  for await (const text of packed(build(stage)))
-    if (!(await staging.append(g, snapshotId, index++, text, lease))) throw invalid();
+  for await (const text of packed(build(stage))) {
+    diagnostics.at("summary_append");
+    if (!(await staging.append(g, snapshotId, index++, text, lease)))
+      throw invalid("claim_not_acquired");
+    diagnostics.at("summary_copy");
+  }
+  diagnostics.at("summary_seal");
   if (
     !(await staging.seal(
       g,
@@ -293,7 +318,7 @@ export async function prepareChatSummary(
       lease,
     ))
   )
-    throw invalid();
+    throw invalid("claim_not_acquired");
   return {
     snapshotId,
     summaryId: crypto.randomUUID(),
