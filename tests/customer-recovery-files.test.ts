@@ -241,3 +241,117 @@ test("both standard TIFF filename extensions pass upload validation", () => {
       ),
     ).not.toThrow();
 });
+
+async function publishSyntheticRevision(f: Awaited<ReturnType<typeof fixture>>) {
+  const current = await f.service.find(f.owner.userId, f.workspace.id);
+  const guard = {
+    ownerId: f.owner.userId,
+    workspaceId: f.workspace.id,
+    expectedRevision: current.workspaceRevision,
+    now: f.now,
+  };
+  const claim = crypto.randomUUID();
+  // The same atomic workspace revision increment used by file publication;
+  // this test does not claim to execute the native processor itself.
+  expect(
+    await f.core.changed([
+      f.core.claim(guard, claim),
+      f.core.bump(guard, claim),
+      f.core.finish(claim),
+    ]),
+  ).toBe(true);
+}
+
+for (const timing of ["during-list", "after-revision"] as const)
+  test(`new upload reconciles metadata before freezing its revision, retaining later CAS: ${timing}`, async () => {
+    const f = await fixture();
+    try {
+      let changed = false,
+        reservations = 0;
+      const calls: string[] = [];
+      const client = createClient(async (path, init) => {
+        const method = init?.method ?? "GET";
+        calls.push(`${method} ${path}`);
+        if (method === "POST" && path.endsWith("/files")) reservations++;
+        const response = await f.raw(path, init);
+        if (
+          !changed &&
+          method === "GET" &&
+          path.endsWith(timing === "during-list" ? "/files" : "/workspace")
+        ) {
+          changed = true;
+          await publishSyntheticRevision(f);
+        }
+        return response;
+      });
+      const source = new File(
+        ["Synthetic original survives a concurrent publication"],
+        "publication.txt",
+        { type: "text/plain" },
+      );
+      if (timing === "during-list") {
+        const result = await client.upload(f.workspace.id, source, undefined, {
+          metadataOnly: true,
+        });
+        expect(result.status).toBe("waiting");
+        expect(calls).toHaveLength(8); // Same two revision reads and three metadata lists, no retry.
+        expect(await (await client.original(f.workspace.id, result.id)).text()).toBe(
+          await source.text(),
+        );
+      } else {
+        await expect(
+          client.upload(f.workspace.id, source, undefined, { metadataOnly: true }),
+        ).rejects.toMatchObject({ code: "CONFLICT" });
+        expect(calls).toHaveLength(3);
+        expect(await client.list(f.workspace.id)).toEqual([]);
+        expect(f.db.sqlite.query("SELECT count(*) AS count FROM v2_upload_sessions").get()).toEqual(
+          { count: 0 },
+        );
+      }
+      expect(reservations).toBe(1);
+    } finally {
+      f.db.close();
+    }
+  });
+
+test("an unknown reservation response retains its original key and revision across an explicit retry", async () => {
+  const f = await fixture();
+  try {
+    const reservations: { key: string | null; revision: string | null }[] = [];
+    const client = createClient(async (path, init) => {
+      if (init?.method === "POST" && path.endsWith("/files")) {
+        const headers = new Headers(init.headers);
+        reservations.push({
+          key: headers.get("idempotency-key"),
+          revision: headers.get("if-match"),
+        });
+        if (reservations.length === 1) throw new TypeError("Synthetic unknown reservation outcome");
+      }
+      return f.raw(path, init);
+    });
+    const source = new File(["Synthetic uncertain original"], "unknown.txt", {
+      type: "text/plain",
+    });
+    await expect(
+      client.upload(f.workspace.id, source, undefined, { metadataOnly: true }),
+    ).rejects.toThrow("unknown reservation outcome");
+    await publishSyntheticRevision(f);
+    await expect(
+      client.upload(f.workspace.id, source, undefined, { metadataOnly: true }),
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+    expect(reservations).toHaveLength(2);
+    expect(reservations[1]).toEqual(reservations[0]);
+    expect(await client.list(f.workspace.id)).toEqual([]);
+    // Only the definite conflict releases the old key. A further user retry
+    // creates one fresh reservation, preserving the original bytes.
+    const result = await client.upload(f.workspace.id, source, undefined, { metadataOnly: true });
+    expect(reservations).toHaveLength(3);
+    expect(reservations[2]?.key).not.toBe(reservations[0]?.key);
+    expect(reservations[2]?.revision).not.toBe(reservations[0]?.revision);
+    expect(await (await client.original(f.workspace.id, result.id)).text()).toBe(
+      await source.text(),
+    );
+  } finally {
+    f.db.close();
+  }
+});
