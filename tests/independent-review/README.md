@@ -4,7 +4,7 @@
 
 ## 실행
 
-저장소의 Bun 1.3.14와 Node runtime을 PATH에 둔다. Astro dev의 Node 실행에는 실제 Node를 사용한다.
+저장소의 `.bun-version`에 고정된 Bun과 Node runtime을 PATH에 둔다. Astro dev의 Node 실행에는 실제 Node를 사용한다.
 
 ```sh
 bun ci

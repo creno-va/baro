@@ -11,6 +11,29 @@ const workflowSchema = z.object({
   ),
 });
 
+test("local and every CI Bun host use the same pinned stable toolchain", async () => {
+  const version = (await Bun.file(".bun-version").text()).trim();
+  expect(version).toMatch(/^\d+\.\d+\.\d+$/);
+  expect(Bun.version).toBe(version);
+  expect((await Bun.file("package.json").json()).packageManager).toBe(`bun@${version}`);
+  let setupCount = 0;
+  for await (const path of new Bun.Glob(".github/workflows/*.yml").scan(".")) {
+    const workflow = Bun.YAML.parse(await Bun.file(path).text()) as {
+      jobs: Record<string, { steps: { uses?: string; with?: Record<string, unknown> }[] }>;
+    };
+    for (const job of Object.values(workflow.jobs)) {
+      for (const step of job.steps) {
+        if (!step.uses?.startsWith("oven-sh/setup-bun@")) continue;
+        setupCount++;
+        expect(step.with?.["bun-version-file"]).toBe(".bun-version");
+        expect(step.with?.["bun-version"]).toBeUndefined();
+        expect(step.with?.["bun-download-url"]).toBeUndefined();
+      }
+    }
+  }
+  expect(setupCount).toBeGreaterThan(0);
+});
+
 test("all workflow actions use immutable commits and valid YAML", async () => {
   for (const file of [
     "ci.yml",
