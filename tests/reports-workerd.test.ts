@@ -478,3 +478,46 @@ test("workerd source rows preserve legacy bytes, digest and binary citation orde
     }
   });
 }, 30000);
+
+test("workerd export keeps historical invalid markers without authorizing required expired citations", async (lifetime) => {
+  const f = await reportFixture(),
+    repo = createV2OfficialSourceRepository(f.core);
+  const past = new Date(Date.parse(f.actor.now) - 2 * 86400000).toISOString();
+  const old = await officialChunk(past);
+  expect(await repo.put(old.source, old.citation)).toBe(true);
+  expect(
+    await repo.bindCitation(
+      { ...f.actor, now: past, workspaceId: f.workspaceId, expectedRevision: f.rev() },
+      old.citation,
+    ),
+  ).toBe(true);
+  await nativeFixture(lifetime, f, async (core) => {
+    const view = await createReportsService(core, f.deps).get(f.actor.ownerId, f.workspaceId);
+    const row = await core
+      .statement(
+        "SELECT id,revision,workspace_id,snapshot_id,encrypted_payload FROM v2_reports WHERE id=?",
+        [view.id],
+      )
+      .first<{
+        id: string;
+        revision: number;
+        workspace_id: string;
+        snapshot_id: string;
+        encrypted_payload: string;
+      }>();
+    if (!row) throw new Error("Synthetic report missing");
+    const digest = await sourceDigest(core, f.actor, f.workspaceId);
+    const fence = await exportFence(core, f.actor, row, digest, () => f.actor.now, undefined, []);
+    await fence.check();
+    await expect(
+      exportFence(core, f.actor, row, digest, () => f.actor.now, undefined, [old.citation.id]),
+    ).rejects.toThrow("LEGAL_SOURCE_UNAVAILABLE");
+    await core
+      .statement(
+        "UPDATE v2_citation_bindings SET snapshot_revision=snapshot_revision+1 WHERE id=?",
+        [old.citation.id],
+      )
+      .run();
+    await expect(fence.check()).rejects.toThrow("STALE_REVISION");
+  });
+}, 30000);
