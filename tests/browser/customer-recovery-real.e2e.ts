@@ -176,7 +176,9 @@ test("chat additions require the new summary confirmation in the real customer U
     });
     await page.goto(`/cases/${info.id}`);
     await expect(
-      page.getByText("대화를 시작하려면 최신 요약을 확인해 주세요.", { exact: true }),
+      page.getByText("요약이 변경되어 다시 확인이 필요해요. 확인한 뒤 대화를 이어갈 수 있어요.", {
+        exact: true,
+      }),
     ).toBeVisible();
     await expect(page.getByLabel("추가 사실 또는 질문")).toBeDisabled();
     await page.getByRole("link", { name: "요약 확인하기", exact: true }).click();
