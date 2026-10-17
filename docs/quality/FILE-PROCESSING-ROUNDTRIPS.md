@@ -57,8 +57,8 @@ to combine in that function. This follow-up preserves every call and its positio
 
 | Canonical document | Before D1 calls / SQL statements | After D1 calls / SQL statements | Current checks before / after |
 | --- | --- | --- | --- |
-| 1 page | 665 / 884 | 644 / 821 | 308 / 308 |
-| 2 pages | 1184 / 1557 | 1146 / 1443 | 555 / 555 |
+| 1 page | 665 / 884 | 645 / 821 | 308 / 308 |
+| 2 pages | 1184 / 1557 | 1148 / 1443 | 555 / 555 |
 
 `dispatchExecution` previously read admission existence, created a guarded temporary
 claim, updated the admission and removed the claim in a batch, then performed a fresh
@@ -68,6 +68,8 @@ deadline and prepared state at its state transition. The separate fresh receipt 
 remains unchanged. A late deletion or source/lease replacement denies a permit while
 preserving evidence of the committed dispatch. This saves one D1 call and three SQL
 statements per successful dispatch: 21 dispatches for one page and 38 for two pages.
+The current totals also include the isolated optional maintenance-month observation:
+one extra call for one page and two for two pages, with no extra SQL statements.
 
 A zero-row update still reads existence. Only an absent admission can use the historical
 priced route; an existing rejected or dispatched admission returns no permit. Historical
@@ -88,7 +90,7 @@ Workflow steps would change the existing recovery and fresh-check boundaries and
 outside this patch. No caches, skipped checks, timeout changes or retries are added.
 
 These counts use offline adapters and do not establish remote elapsed-time improvement.
-The remaining 1146 calls and 555 current checks are still a material latency concern.
+The remaining 1148 calls and 555 current checks are still a material latency concern.
 
 ### Asset fixture count reconciliation
 

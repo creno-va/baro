@@ -33,6 +33,8 @@ export function productBoundaryFindings(file: string, content: string): string[]
     'console.info(JSON.stringify({event:"preview_d1_timing",measurements:timing}))';
   const previewFileRuntimeLog =
     'console.info(JSON.stringify({event:"preview_file_runtime_d1",phase:"runtime_admission",outcome,wallMs,sqlMs,region,colo,primary,attempts,}),)';
+  const previewFilePhaseLog =
+    'console.info(JSON.stringify({event:"preview_file_phase_awaits",phase,outcome,overallMs,d1Calls,d1Failed,d1TimedCalls,d1AwaitMs,r2Calls,r2Failed,r2TimedCalls,r2AwaitMs,}),)';
   function visit(node: ts.Node) {
     if (ts.isStringLiteralLike(node)) {
       const value = node.text;
@@ -85,7 +87,10 @@ export function productBoundaryFindings(file: string, content: string): string[]
               call.getText(source).replace(/\s+/g, "") === previewD1TimingLog) ||
             (file.replaceAll("\\", "/") ===
               "src/server/modules/file-processing/runtime-admission-observation.ts" &&
-              call.getText(source).replace(/\s+/g, "") === previewFileRuntimeLog))
+              call.getText(source).replace(/\s+/g, "") === previewFileRuntimeLog) ||
+            (file.replaceAll("\\", "/") ===
+              "src/server/modules/file-processing/phase-observation.ts" &&
+              call.getText(source).replace(/\s+/g, "") === previewFilePhaseLog))
         )
       )
         findings.push("unapproved_payload_log");

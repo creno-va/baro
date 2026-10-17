@@ -12,6 +12,10 @@ import {
   reportWorkspaceFactFailure,
   reportWorkspacePolicyFailure,
 } from "../../dependency-diagnostics";
+import {
+  safeWorkspacePublicationFailure,
+  type WorkspacePublicationFailure,
+} from "../../workspace-publication-diagnostics";
 import { ModelError } from "../llm-gateway/service";
 import { safeWorkspaceAuditFailure } from "./audit-diagnostics";
 import { safeWorkspaceContentFailure } from "./content-diagnostics";
@@ -105,6 +109,7 @@ export async function executeWorkspace(
       workspaceId: params.workspaceId,
       expectedRevision: params.workspaceRevision,
     });
+  let publicationFailure: WorkspacePublicationFailure | undefined;
   let checkpointRevision = 0;
   const progress = createWorkspaceProgress(async (phase) => {
     if (!checkpointRevision)
@@ -277,6 +282,9 @@ export async function executeWorkspace(
           actions: response.actions,
           timeline: response.timeline,
         },
+        (failure) => {
+          publicationFailure = safeWorkspacePublicationFailure(failure);
+        },
       );
     }
     if (!written) throw new Error("Workspace changed");
@@ -322,6 +330,7 @@ export async function executeWorkspace(
       ...(factFailure ? { factFailure } : {}),
       ...(auditFailure ? { auditFailure } : {}),
       ...(contentFailure ? { contentFailure } : {}),
+      ...(publicationFailure ? { publicationFailure } : {}),
     };
   }
 }

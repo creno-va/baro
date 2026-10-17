@@ -6,6 +6,7 @@ import {
   type FileProcessingParams,
 } from "../file-processing/execution";
 import { namedProcessorPort } from "../file-processing/native-identity";
+import { createFilePhaseObservation } from "../file-processing/phase-observation";
 import { ProcessingError } from "../file-processing/protocol";
 import { readRuntimeAdmission } from "../file-processing/runtime-admission-observation";
 import { createProcessorTransport, type ProcessingCosts } from "../file-processing/transport";
@@ -131,7 +132,9 @@ export async function createFileProcessingRuntime(
   if (!env.CASE_PRIVATE_R2 || !env.FILE_PROCESSOR || !env.AI || !env.AI_GATEWAY_ID)
     throw new ProcessingError("MODEL_UNAVAILABLE");
   const environment = env.APP_ENV === "production" ? "production" : "preview";
-  const core = createV2Core(env.DB, await createCaseDataCipher(env), {
+  const observation = createFilePhaseObservation(env.DB, env.CASE_PRIVATE_R2, env.APP_ENV);
+  const bucket = observation?.bucket ?? env.CASE_PRIVATE_R2;
+  const core = createV2Core(observation?.database ?? env.DB, await createCaseDataCipher(env), {
     applicationCostLimitsEnabled: env.APPLICATION_COST_LIMITS_ENABLED !== "false",
     monthlyBudgetCapEnabled: env.MONTHLY_BUDGET_CAP_ENABLED !== "false",
   });
@@ -187,8 +190,8 @@ export async function createFileProcessingRuntime(
     environment,
     instanceId,
     ...(initialAttemptId ? { initialAttemptId } : {}),
-    files: createFilesService(core, { environment, bucket: env.CASE_PRIVATE_R2 }),
-    bucket: env.CASE_PRIVATE_R2,
+    files: createFilesService(core, { environment, bucket }),
+    bucket,
     processor,
     costs,
     media: createMediaGateway(
@@ -200,5 +203,12 @@ export async function createFileProcessingRuntime(
       },
     ),
   });
-  return execution;
+  if (!observation) return execution;
+  return {
+    ...execution,
+    preparePublication: (...args: Parameters<typeof execution.preparePublication>) =>
+      observation.measure("prepare_publication", () => execution.preparePublication(...args)),
+    stageResultPage: (...args: Parameters<typeof execution.stageResultPage>) =>
+      observation.measure("stage_result", () => execution.stageResultPage(...args)),
+  };
 }

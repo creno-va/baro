@@ -32,6 +32,7 @@ import {
 } from "../src/server/runtime/workspace";
 import { signedSessionCookie, testEnvironment } from "./helpers/d1";
 import { measureD1Work } from "./helpers/d1-work";
+import { nativeD1Transport, nativeD1TransportWorker } from "./helpers/native-d1-transport";
 import { createNativeFailureHistory, nativeFailure } from "./helpers/native-failure";
 import { createNativeTestRegistry, type NativeLifetime } from "./helpers/native-lifetime";
 import {
@@ -162,7 +163,8 @@ async function exerciseNativeRuntime(
   const mf = new Miniflare(
     convertV4MiniflareOptions({
       modules: true,
-      script: 'export default { fetch() { return new Response("local AI runtime test"); } }',
+      script: nativeD1TransportWorker,
+      host: "127.0.0.1",
       compatibilityDate: "2026-10-01",
       d1Databases: ["PREVIEW", "PRODUCTION", "UPGRADE"],
       cf: false,
@@ -172,9 +174,10 @@ async function exerciseNativeRuntime(
   lifetime.own(() => mf.dispose());
   let completed = false;
   try {
-    const preview = (await mf.getD1Database("PREVIEW")) as unknown as D1Database,
-      production = (await mf.getD1Database("PRODUCTION")) as unknown as D1Database,
-      upgrade = (await mf.getD1Database("UPGRADE")) as unknown as D1Database;
+    await mf.ready;
+    const preview = nativeD1Transport(mf, "PREVIEW"),
+      production = nativeD1Transport(mf, "PRODUCTION"),
+      upgrade = nativeD1Transport(mf, "UPGRADE");
     const migrations = (await readdir("drizzle"))
       .filter((name) => /^\d{4}_.+\.sql$/.test(name))
       .sort();
