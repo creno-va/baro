@@ -3,17 +3,28 @@ import {
   workspaceAuditBasisSchema,
   workspaceAuditFindingSchema,
   workspaceAuditOutputSchema,
+  workspaceAuditSourceClaimReasonSchema,
   workspaceAuditTargetSchema,
 } from "../llm-gateway/v2/schemas";
 
 const auditFailureSchema = workspaceAuditOutputSchema.omit({ unsupportedFactIds: true }).extend({
-  // Preserve older receipts exactly; new model findings include both enums.
+  // Preserve older receipts exactly; missing metadata is not new evidence.
   findings: z
     .array(
-      workspaceAuditFindingSchema.omit({ target: true, basis: true }).extend({
-        target: workspaceAuditTargetSchema.optional(),
-        basis: workspaceAuditBasisSchema.optional(),
-      }),
+      workspaceAuditFindingSchema
+        .omit({ target: true, basis: true, sourceClaimReason: true })
+        .extend({
+          target: workspaceAuditTargetSchema.optional(),
+          basis: workspaceAuditBasisSchema.optional(),
+          sourceClaimReason: workspaceAuditSourceClaimReasonSchema.optional(),
+        })
+        .refine(
+          (finding) =>
+            finding.sourceClaimReason === undefined ||
+            (finding.severity === "critical" &&
+              finding.target === "source_claim" &&
+              finding.basis === "verified_source"),
+        ),
     )
     .max(30),
   unsupportedFactCount: z.number().int().min(0).max(300),

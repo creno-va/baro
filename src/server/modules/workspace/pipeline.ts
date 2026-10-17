@@ -372,11 +372,14 @@ export function createWorkspacePipeline(
         pass: checked.pass,
         legalClaimsSupported: checked.legalClaimsSupported,
         strategyDetected: checked.strategyDetected,
-        findings: checked.findings.map(({ severity, code, target, basis }) => ({
+        findings: checked.findings.map(({ severity, code, target, basis, sourceClaimReason }) => ({
           severity,
           code,
           target,
           basis,
+          ...(severity === "critical" && target === "source_claim" && basis === "verified_source"
+            ? { sourceClaimReason }
+            : {}),
         })),
         unsupportedFactCount: checked.unsupportedFactIds.length,
       });

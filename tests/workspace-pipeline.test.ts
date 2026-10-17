@@ -247,6 +247,34 @@ test("factual preparation without the strategy phrase reaches the independent au
   expect(calls.map((call) => call.phase)).toEqual(["workspace_chat", "workspace_audit"]);
 });
 
+test.each([
+  { severity: "warning", target: "source_claim", basis: "verified_source" },
+  { severity: "critical", target: "response_text", basis: "verified_source" },
+  { severity: "critical", target: "source_claim", basis: "assistant_history" },
+])("unrelated audit findings do not acquire source claim reasons: %j", async (location) => {
+  const findings = [{ code: "wrong_reference" as const, ...location }];
+  const { value, calls } = pipeline((phase) =>
+    phase === "workspace_audit"
+      ? {
+          ...approved,
+          pass: false,
+          findings: findings.map((finding) => ({
+            ...finding,
+            sourceClaimReason: "source_freshness",
+          })),
+        }
+      : chatText("기록을 확인합니다."),
+  );
+  try {
+    await value.chat(confirmedChatContext(), "synthetic_unrelated_audit_reason");
+    throw new Error("Synthetic audit rejection was accepted");
+  } catch (error) {
+    expect(error).toBeInstanceOf(WorkspaceOutputPolicyError);
+    expect((error as WorkspaceOutputPolicyError).auditFailure?.findings).toEqual(findings);
+  }
+  expect(calls).toHaveLength(2);
+});
+
 test.each(["fact", "action"])(
   "chat refusal exception never applies to a structured %s",
   async (field) => {
