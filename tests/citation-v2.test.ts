@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { safeClaimFailure } from "../src/server/modules/citation/claim-diagnostics";
 import { claimReviewHash, validateV2Claims } from "../src/server/modules/citation/v2-validate";
 import { textHash } from "../src/server/modules/legal-retrieval/service";
 import type { RetrievalOutput } from "../src/server/modules/legal-retrieval/v2/contracts";
@@ -103,7 +104,14 @@ test.each(["future_citation", "invalid_citation", "reversed_source"])(
     if (mode === "future_citation") f.chunk.citation.verifiedAt = "2026-10-07T00:00:00.000Z";
     if (mode === "invalid_citation") f.chunk.citation.verifiedAt = "not-a-time";
     if (mode === "reversed_source") f.chunk.source.verifiedAt = "2026-10-05T23:59:00.000Z";
-    expect((await validateV2Claims([f.claim], [f.chunk.citation], f.retrieval)).valid).toBe(false);
+    expect(await validateV2Claims([f.claim], [f.chunk.citation], f.retrieval)).toMatchObject({
+      valid: false,
+      failure: {
+        future_citation: "citation_verification_time",
+        invalid_citation: "server_citation_schema",
+        reversed_source: "source_rebuild",
+      }[mode],
+    });
   },
 );
 test.each(["text", "hash", "span", "metadata", "unknown", "limited", "surrogate"])(
@@ -125,7 +133,18 @@ test.each(["text", "hash", "span", "metadata", "unknown", "limited", "surrogate"
       claim.startUtf16 = f.chunk.source.body.indexOf("😀") + 1;
       claim.text = f.chunk.source.body.slice(claim.startUtf16);
     }
-    expect((await validateV2Claims([claim], [citation], f.retrieval)).valid).toBe(false);
+    expect(await validateV2Claims([claim], [citation], f.retrieval)).toMatchObject({
+      valid: false,
+      failure: {
+        text: "quotation_mismatch",
+        hash: "source_identity",
+        span: "claim_span_bounds",
+        metadata: "citation_allowlist",
+        unknown: "claim_source_missing",
+        limited: "verified_source_missing",
+        surrogate: "claim_unicode_boundary",
+      }[mode],
+    });
   },
 );
 test("intact source does not approve an unrelated legal explanation without exact semantic and policy review", async () => {
@@ -191,4 +210,52 @@ test.each([
       )
     ).valid,
   ).toBe(false);
+});
+
+test("claim diagnostics are strict enums and do not accept details, identifiers or raw causes", () => {
+  expect(safeClaimFailure("quotation_mismatch")).toBe("quotation_mismatch");
+  for (const unsafe of [
+    "synthetic private source text",
+    "citation_private_id",
+    "quotation_mismatch: source text",
+    { reason: "quotation_mismatch", text: "synthetic source", startUtf16: 7 },
+    { reason: "quotation_mismatch" },
+    null,
+    0,
+  ])
+    expect(safeClaimFailure(unsafe)).toBeUndefined();
+});
+
+test("source and receipt diagnostics preserve exact rejection and all accepted/rejected claim IDs internally", async () => {
+  const f = await fixture();
+  const rejected = { ...f.claim, id: "rejected_claim", text: "合成" };
+  expect(await validateV2Claims([f.claim, rejected], [f.chunk.citation], f.retrieval)).toEqual({
+    valid: false,
+    accepted: [f.claim.id],
+    rejected: [rejected.id],
+    failure: "quotation_mismatch",
+  });
+  const explanation = { ...f.claim, kind: "legal_explanation" as const };
+  expect(await validateV2Claims([explanation], [f.chunk.citation], f.retrieval)).toMatchObject({
+    valid: false,
+    failure: "semantic_receipt",
+  });
+  for (const mode of [
+    "source_hash",
+    "source_extractor",
+    "citation_identity",
+    "source_span",
+  ] as const) {
+    const input = structuredClone(f.retrieval),
+      chunk = input.chunks[0];
+    if (!chunk) throw new Error("Missing synthetic chunk");
+    if (mode === "source_hash") chunk.source.contentHash = "f".repeat(64);
+    if (mode === "source_extractor") chunk.source.extractorVersion = "synthetic_drift";
+    if (mode === "citation_identity") chunk.citation.title = "다른 합성 제목";
+    if (mode === "source_span") chunk.span.startUtf16 = 1;
+    expect(await validateV2Claims([f.claim], [chunk.citation], input)).toMatchObject({
+      valid: false,
+      failure: mode,
+    });
+  }
 });

@@ -376,3 +376,29 @@ test("terminal content rejection keeps only the strict internal receipt and leav
     failure: "POLICY_REJECTED",
   });
 });
+
+test.each([
+  "quotation_mismatch",
+  "raw synthetic source text",
+  { reason: "quotation_mismatch", citationId: "synthetic_id" },
+])(
+  "terminal claim rejection exposes only a finite enum and keeps the failed draft unpublished (%j)",
+  async (detail) => {
+    const f = await fixture();
+    const failed = await runCustomerJob(f, "intake_questions", true, async () => {
+      const error = new WorkspaceOutputPolicyError("unsupported_fact");
+      // Deliberately malformed internal values must not escape as Workflow output.
+      Object.assign(error, { claimFailure: detail });
+      throw error;
+    });
+    expect(failed.result).toMatchObject({ status: "failed", policyReason: "unsupported_fact" });
+    if (detail === "quotation_mismatch")
+      expect(failed.result).toHaveProperty("claimFailure", detail);
+    else expect(failed.result).not.toHaveProperty("claimFailure");
+    expect((await f.service.intake(f.owner.userId, f.workspace.id))?.batches).toEqual([]);
+    expect(await f.service.job(f.owner.userId, f.workspace.id, failed.params.jobId)).toMatchObject({
+      status: "failed",
+      failure: "POLICY_REJECTED",
+    });
+  },
+);

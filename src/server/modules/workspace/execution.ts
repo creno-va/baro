@@ -16,6 +16,7 @@ import {
   safeWorkspacePublicationFailure,
   type WorkspacePublicationFailure,
 } from "../../workspace-publication-diagnostics";
+import { safeClaimFailure } from "../citation/claim-diagnostics";
 import { ModelError } from "../llm-gateway/service";
 import { safeWorkspaceAuditFailure } from "./audit-diagnostics";
 import { safeWorkspaceContentFailure } from "./content-diagnostics";
@@ -313,6 +314,10 @@ export async function executeWorkspace(
       error instanceof WorkspaceOutputPolicyError && error.reason === "prohibited_content"
         ? safeWorkspaceContentFailure(error.contentFailure)
         : undefined;
+    const claimFailure =
+      error instanceof WorkspaceOutputPolicyError && error.reason === "unsupported_fact"
+        ? safeClaimFailure(error.claimFailure)
+        : undefined;
     if (!(error instanceof ModelError)) reportDependencyFailure(error);
     await jobs
       .fail(
@@ -330,6 +335,7 @@ export async function executeWorkspace(
       ...(factFailure ? { factFailure } : {}),
       ...(auditFailure ? { auditFailure } : {}),
       ...(contentFailure ? { contentFailure } : {}),
+      ...(claimFailure ? { claimFailure } : {}),
       ...(publicationFailure ? { publicationFailure } : {}),
     };
   }
