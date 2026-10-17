@@ -4,9 +4,12 @@ import { Hono } from "hono";
 import { convertV4MiniflareOptions, Miniflare } from "miniflare";
 import { createReportsApi } from "../src/server/api/v2/reports";
 import { createV2Core } from "../src/server/db/v2-core";
+import { createV2JobsRepository } from "../src/server/db/v2-jobs";
 import { createV2OfficialSourceRepository } from "../src/server/db/v2-official-sources";
+import { createV2WorkspaceResponseRepository } from "../src/server/db/v2-workspace-response";
 import { createFilesService } from "../src/server/modules/files/service";
 import { readBoundSourceBatch } from "../src/server/modules/legal-retrieval/v2/bound-sources";
+import { capturePublicationSourceAuthority } from "../src/server/modules/legal-retrieval/v2/publication-authority";
 import { OFFICIAL_CATALOG } from "../src/server/modules/legal-retrieval/v2/registry";
 import { makeChunk } from "../src/server/modules/legal-retrieval/v2/source";
 import { exportFence } from "../src/server/modules/reports/fence";
@@ -575,5 +578,149 @@ test("workerd export keeps historical invalid markers without authorizing requir
       )
       .run();
     await expect(fence.check()).rejects.toThrow("STALE_REVISION");
+  });
+}, 30000);
+
+test("workerd D1 freezes renewed official source authority in the atomic publication claim", async (lifetime) => {
+  const f = await reportFixture();
+  const original = await officialChunk(f.actor.now),
+    repo = createV2OfficialSourceRepository(f.core);
+  const guard = () => ({ ...f.actor, workspaceId: f.workspaceId, expectedRevision: f.rev() });
+  expect(await repo.put(original.source, original.citation)).toBe(true);
+  expect(await repo.bindCitation(guard(), original.citation)).toBe(true);
+  f.actor.now = new Date(Date.parse(f.actor.now) + 25 * 3600000).toISOString();
+  const refreshed = await officialChunk(f.actor.now);
+  expect(await repo.put(refreshed.source, refreshed.citation)).toBe(true);
+  expect(await repo.bindCitation(guard(), refreshed.citation)).toBe(true);
+  await nativeFixture(lifetime, f, async (core) => {
+    const authority = await capturePublicationSourceAuthority(
+      core,
+      guard(),
+      [{ kind: "official_source", citationId: original.citation.id }],
+      [original.citation],
+      [],
+    );
+    if (!authority) throw new Error("Missing synthetic renewed source authority");
+    const claim = async () => {
+      const id = crypto.randomUUID();
+      return core.changed([
+        core.claim(guard(), id, authority.sql, authority.values(f.actor.now)),
+        core.finish(id),
+      ]);
+    };
+    expect(await claim()).toBe(true);
+    const sources = createV2OfficialSourceRepository(core);
+    const differentVersion = await makeChunk(
+      {
+        ...original.source,
+        version: "284416",
+        canonicalUrl: "https://law.go.kr/LSW/lsInfoP.do?lsiSeq=284416",
+        body: "다른 버전의 합성 원문",
+        fetchedAt: f.actor.now,
+        verifiedAt: f.actor.now,
+      },
+      f.actor.now.slice(0, 10),
+    );
+    expect(await sources.put(differentVersion.source, differentVersion.citation)).toBe(true);
+    expect(await claim()).toBe(true);
+    // Native D1 enforces exact original bytes after JS hash verification too.
+    await core
+      .statement("UPDATE v2_official_sources SET body=? WHERE source_id=?", [
+        "변조된 합성 원문",
+        original.source.sourceId,
+      ])
+      .run();
+    expect(await claim()).toBe(false);
+    await core
+      .statement("UPDATE v2_official_sources SET body=? WHERE source_id=?", [
+        original.source.body,
+        original.source.sourceId,
+      ])
+      .run();
+    expect(await claim()).toBe(true);
+    const conflict = await officialChunk(f.actor.now, "새로운 동일 버전의 합성 원문");
+    const jobs = createV2JobsRepository(core),
+      jobId = crypto.randomUUID(),
+      operationId = crypto.randomUUID();
+    expect(
+      await jobs.admitWorkspace(
+        guard(),
+        { operationId, key: crypto.randomUUID(), requestHash: "a".repeat(64) },
+        jobId,
+        "chat_response",
+        {
+          id: crypto.randomUUID(),
+          request: { text: "합성 확인", selectedFileIds: [], expectedRevision: f.rev() },
+        },
+      ),
+    ).toBe(true);
+    const revision = (
+      await core
+        .statement("SELECT revision FROM v2_workspaces WHERE id=?", [f.workspaceId])
+        .first<{ revision: number }>()
+    )?.revision;
+    if (!revision) throw new Error("Missing synthetic workspace");
+    const activeGuard = { ...guard(), expectedRevision: revision };
+    const acquired = await jobs.acquire(
+      f.actor,
+      jobId,
+      crypto.randomUUID(),
+      new Date(Date.parse(f.actor.now) + 240000).toISOString(),
+    );
+    if (!acquired) throw new Error("Missing synthetic lease");
+    const input = {
+      message: {
+        schemaVersion: "2" as const,
+        id: crypto.randomUUID(),
+        operationId,
+        workspaceRevision: revision,
+        createdAt: f.actor.now,
+        role: "assistant" as const,
+        safety: "validated" as const,
+        text: original.source.body,
+        references: [{ kind: "official_source" as const, citationId: original.citation.id }],
+        citations: [original.citation],
+        warnings: [],
+      },
+      facts: [],
+      parties: [],
+      actions: [],
+      timeline: [],
+    };
+    // Execute the complete production claim too: its combined expression depth
+    // is stricter in native D1 than the focused helper query or Bun SQLite.
+    const committing = createV2WorkspaceResponseRepository({
+      ...core,
+      encrypt: async (...args: Parameters<typeof core.encrypt>) => {
+        const encrypted = await core.encrypt(...args);
+        if (args[0] === "v2_messages")
+          expect(await sources.put(conflict.source, conflict.citation)).toBe(true);
+        return encrypted;
+      },
+    });
+    expect(await committing.commit(activeGuard, acquired.lease, input)).toBe(false);
+    expect(await jobs.find(f.actor, jobId)).toMatchObject({ status: "running" });
+    expect(
+      await core
+        .statement("SELECT count(*) AS n FROM v2_messages WHERE role='assistant'")
+        .first<{ n: number }>(),
+    ).toEqual({ n: 0 });
+    expect(
+      await core.statement("SELECT count(*) AS n FROM v2_mutation_claims").first<{ n: number }>(),
+    ).toEqual({
+      n: 0,
+    });
+    await core
+      .statement("DELETE FROM v2_official_sources WHERE source_id=?", [conflict.source.sourceId])
+      .run();
+    expect(
+      await createV2WorkspaceResponseRepository(core).commit(activeGuard, acquired.lease, input),
+    ).toBe(true);
+    expect(await jobs.find(f.actor, jobId)).toMatchObject({ status: "completed" });
+    expect(
+      await core
+        .statement("SELECT count(*) AS n FROM v2_messages WHERE role='assistant'")
+        .first<{ n: number }>(),
+    ).toEqual({ n: 1 });
   });
 }, 30000);

@@ -11,6 +11,7 @@ import {
   v2SummarySchema,
   v2TimelineEntrySchema,
 } from "../../contracts/v2";
+import { capturePublicationSourceAuthority } from "../modules/legal-retrieval/v2/publication-authority";
 import {
   createWorkspacePublicationDiagnostics,
   type WorkspacePublicationFailure,
@@ -46,6 +47,7 @@ export function createV2WorkspaceResponseRepository(
       const diagnostics = createWorkspacePublicationDiagnostics(onFailure);
       const operation = async () => {
         g = parse(guardSchema, g);
+        const startedAt = performance.now();
         const message = parse(v2MessageSchema(guideHosts), input.message);
         if (message.role !== "assistant" || message.workspaceRevision !== g.expectedRevision)
           return diagnostics.reject("message_mismatch");
@@ -71,6 +73,14 @@ export function createV2WorkspaceResponseRepository(
         diagnostics.at("references");
         if (!(await referencesAuthorized(core, g, references)))
           return diagnostics.reject("reference_unauthorized");
+        const sourceAuthority = await capturePublicationSourceAuthority(
+          core,
+          g,
+          references,
+          message.citations,
+          guideHosts,
+        );
+        if (!sourceAuthority) return diagnostics.reject("reference_unauthorized");
         diagnostics.at("fact_ids");
         const existing = (
           await core
@@ -128,11 +138,11 @@ export function createV2WorkspaceResponseRepository(
         const claimId = crypto.randomUUID(),
           execution = leasePredicate(lease, g.workspaceId, g.expectedRevision, g.now),
           refs = referenceCommitPredicate(references);
-        const statements = [
+        const claim = () =>
           core.claim(
             g,
             claimId,
-            `${execution.sql} AND w.status='active' AND w.current_job_id=? AND w.confirmed_summary_revision=? AND EXISTS(SELECT 1 FROM v2_jobs WHERE id=? AND operation_id=? AND kind='chat_response') AND ${refs.sql} AND ${summaryGuard}
+            `${execution.sql} AND w.status='active' AND w.current_job_id=? AND w.confirmed_summary_revision=? AND EXISTS(SELECT 1 FROM v2_jobs WHERE id=? AND operation_id=? AND kind='chat_response') AND ${refs.sql} AND ${sourceAuthority.sql} AND ${summaryGuard}
           AND (SELECT count(*) FROM v2_facts WHERE workspace_id=w.id AND summary_revision=?) + ? <= 300
           AND (SELECT count(*) FROM v2_parties WHERE workspace_id=w.id AND summary_revision=?) + ? <= 30
           AND NOT EXISTS(SELECT 1 FROM v2_facts WHERE workspace_id=w.id AND summary_revision=? AND entity_id IN (SELECT value FROM json_each(?)))
@@ -146,6 +156,11 @@ export function createV2WorkspaceResponseRepository(
               lease.jobId,
               message.operationId,
               ...refs.values,
+              ...sourceAuthority.values(
+                new Date(
+                  Date.parse(g.now) + Math.max(0, performance.now() - startedAt),
+                ).toISOString(),
+              ),
               ...(summary
                 ? [
                     summary.snapshotId,
@@ -167,8 +182,8 @@ export function createV2WorkspaceResponseRepository(
               JSON.stringify(actions.map((a) => a.id)),
               JSON.stringify(timeline.map((t) => t.id)),
             ],
-          ),
-        ];
+          );
+        const statements: D1PreparedStatement[] = [];
         diagnostics.at("action_encryption");
         for (const action of actions) {
           const id = crypto.randomUUID(),
@@ -241,6 +256,8 @@ export function createV2WorkspaceResponseRepository(
           core.bump(g, claimId),
           core.finish(claimId),
         );
+        diagnostics.at("claim_prepare");
+        statements.unshift(claim());
         diagnostics.at("commit");
         return (await core.changed(statements)) || diagnostics.reject("claim_not_acquired");
       };
