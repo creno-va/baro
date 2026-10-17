@@ -1,4 +1,5 @@
 import { processorStage, reportProcessorFailure } from "./container-diagnostics";
+import { definitiveRejectionSchema } from "./protocol";
 
 /** Internal-only ingress. Never forward case/session headers into the native service. */
 export interface ProcessorContainerPort {
@@ -11,7 +12,7 @@ const maximumBytes = 1_000_000_000;
 const failure = (code: string, status: number) =>
   Response.json({ code }, { status, headers: { "cache-control": "no-store" } });
 
-async function nativeFailure(response: Response): Promise<Response> {
+async function nativeFailure(response: Response, probe: boolean): Promise<Response> {
   const reader = response.body?.getReader();
   try {
     if (response.status !== 422 || !reader) return failure("PROCESSOR_UNAVAILABLE", 503);
@@ -30,7 +31,19 @@ async function nativeFailure(response: Response): Promise<Response> {
       bytes.set(chunk, offset);
       offset += chunk.byteLength;
     }
-    const parsed: unknown = JSON.parse(new TextDecoder().decode(bytes));
+    const parsed: unknown = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
+    const rejection = definitiveRejectionSchema.safeParse(parsed);
+    if (
+      probe &&
+      !response.redirected &&
+      response.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase() ===
+        "application/json" &&
+      rejection.success
+    )
+      return Response.json(rejection.data, {
+        status: 422,
+        headers: { "cache-control": "no-store" },
+      });
     if (
       typeof parsed === "object" &&
       parsed !== null &&
@@ -147,8 +160,10 @@ export async function proxyProcessorRequest(
         performance.now() - responseStarted,
         response.status,
       );
-      const error = await nativeFailure(response);
+      const error = await nativeFailure(response, url.pathname === "/probe");
+      if (controller.signal.aborted) throw new Error("ABORTED");
       await finish();
+      if (signal.aborted) throw new Error("ABORTED");
       return response.status === 409 ? failure("BUSY", 409) : error;
     }
     const contentType = response.headers.get("content-type") ?? "";

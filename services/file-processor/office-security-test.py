@@ -5,6 +5,13 @@ import unittest
 import zipfile
 import subprocess
 import struct
+import json
+import sys
+import os
+import hashlib
+import http.client
+import selectors
+import shutil
 from unittest.mock import patch
 
 import office
@@ -38,13 +45,100 @@ class OfficePackageSecurity(unittest.TestCase):
     def test_converter_unavailability_is_not_a_permanent_input_rejection(self):
         for status, code in [(2, "INVALID_MEDIA"), (1, "PROCESSING_FAILED"), (-9, "PROCESSING_FAILED")]:
             with patch.object(office.subprocess, "run", return_value=subprocess.CompletedProcess([], status)) as run:
-                with self.assertRaisesRegex(office.OfficeError, "^" + code + "$"):
+                with self.assertRaisesRegex(office.OfficeError, "^" + code + "$") as caught:
                     office.normalize(self.source, self.root, "docx")
+                self.assertEqual(isinstance(caught.exception, office.DefinitiveOfficeRejection), status == 2)
                 self.assertEqual(run.call_count, 1)
                 self.assertEqual(run.call_args.kwargs["timeout"], 120)
         with patch.object(office.subprocess, "run", return_value=subprocess.CompletedProcess([], 0)):
             with self.assertRaisesRegex(office.OfficeError, "^PROCESSING_FAILED$"):
                 office.normalize(self.source, self.root, "docx")
+
+    def test_only_explicit_office_refusals_reach_the_probe_marker(self):
+        import processor
+        self.package(main='<workbook><workbookProtection lockStructure="1"/></workbook>')
+        with patch.object(sys, "argv", ["processor.py", str(self.root), "probe", "0"]):
+            self.assertEqual(processor.main(), 1)
+        self.assertEqual(json.loads((self.root / "error.json").read_text()),
+                         {"code": "UNSUPPORTED_FORMAT", "rejection": "office_input"})
+        for status in [2, 1, -9]:
+            with patch.object(office, "detect", return_value="xls"), \
+                    patch.object(office.subprocess, "run", return_value=subprocess.CompletedProcess([], status)), \
+                    patch.object(sys, "argv", ["processor.py", str(self.root), "probe", "0"]):
+                self.assertEqual(processor.main(), 1)
+            expected = {"code": "INVALID_MEDIA", "rejection": "office_input"} if status == 2 else {"code": "PROCESSING_FAILED"}
+            self.assertEqual(json.loads((self.root / "error.json").read_text()), expected)
+
+    def test_parser_timeout_and_io_failures_never_receive_the_probe_marker(self):
+        import processor
+        self.package()
+        failures = [OSError("synthetic"), ValueError("synthetic"),
+                    subprocess.TimeoutExpired("synthetic", 120),
+                    office.OfficeError("INVALID_MEDIA"), office.OfficeError("OUTPUT_LIMIT")]
+        for error in failures:
+            with patch.object(office, "normalize", side_effect=error), \
+                    patch.object(sys, "argv", ["processor.py", str(self.root), "probe", "0"]):
+                self.assertEqual(processor.main(), 1)
+            failure = json.loads((self.root / "error.json").read_text())
+            self.assertEqual(set(failure), {"code"})
+        # HEIC/native command rejection already shares INVALID_MEDIA; it must
+        # remain non-definitive even though the public code matches Office.
+        with patch.object(processor, "inspect", side_effect=processor.Rejected("INVALID_MEDIA")), \
+                patch.object(sys, "argv", ["processor.py", str(self.root), "probe", "0"]):
+            self.assertEqual(processor.main(), 1)
+        self.assertEqual(json.loads((self.root / "error.json").read_text()), {"code": "INVALID_MEDIA"})
+
+    def test_actual_http_probe_preserves_only_the_explicit_refusal(self):
+        # Startup-only local shims: actual ingress/hash/child/error/cleanup code.
+        # These synthetic packages fail before a converter or network is used.
+        directory = pathlib.Path(__file__).parent.resolve()
+        source = (directory / "server.mjs").read_text()
+        for before, after in [
+            ('spawn("python3",', 'spawn(' + json.dumps(sys.executable) + ','),
+            ('"/app/processor.py"', json.dumps(str(directory / "processor.py"))),
+            ('server.listen(8080, "0.0.0.0");',
+             'server.listen(0, "127.0.0.1", () => process.stdout.write(String(server.address().port) + "\\n"));'),
+        ]:
+            self.assertEqual(source.count(before), 1)
+            source = source.replace(before, after)
+        script = self.root / "server.mjs"
+        script.write_text(source)
+        node = shutil.which("node")
+        self.assertIsNotNone(node)
+        child = subprocess.Popen([node, str(script)], stdout=subprocess.PIPE,
+                                 stderr=subprocess.DEVNULL, env={**os.environ, "TMPDIR": str(self.root)})
+        try:
+            with selectors.DefaultSelector() as selector:
+                selector.register(child.stdout, selectors.EVENT_READ)
+                self.assertTrue(selector.select(5), "Synthetic native server did not start")
+            port = int(child.stdout.readline())
+            self.package(main='<workbook><workbookProtection lockStructure="1"/></workbook>')
+            protected = self.source.read_bytes()
+            for data, mismatch, expected in [
+                (protected, False, {"code": "UNSUPPORTED_FORMAT", "rejection": "office_input"}),
+                (b"PK\x03\x04truncated", False, {"code": "INVALID_MEDIA"}),
+                (protected, True, {"code": "PROCESSING_FAILED"}),
+            ]:
+                connection = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+                try:
+                    connection.request("POST", "/probe", body=data, headers={
+                        "x-baro-capability": "0" * 64, "x-baro-bytes": str(len(data)),
+                        "x-baro-hash": "0" * 64 if mismatch else hashlib.sha256(data).hexdigest(),
+                    })
+                    response = connection.getresponse()
+                    self.assertEqual(response.status, 422)
+                    self.assertEqual(json.loads(response.read(1024)), expected)
+                    self.assertFalse(list(self.root.glob("baro-job-*")))
+                finally:
+                    connection.close()
+        finally:
+            child.terminate()
+            try:
+                child.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                child.kill()
+                child.wait(timeout=5)
+            child.stdout.close()
 
     def test_external_relationship_is_rejected_before_conversion(self):
         for target in ("https://example.invalid/private", "file:///etc/passwd"):

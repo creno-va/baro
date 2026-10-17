@@ -33,6 +33,10 @@ class Rejected(Exception):
     pass
 
 
+class DefinitiveRejected(Rejected):
+    """Only an explicit Office input/protection refusal may use this marker."""
+
+
 def command(args, timeout=60):
     result = subprocess.run(args, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                             stderr=subprocess.DEVNULL, timeout=timeout, check=False,
@@ -91,6 +95,8 @@ def inspect(source):
             if converted["category"] != "document" or converted["format"] != "pdf":
                 raise Rejected("INVALID_MEDIA")
             return dict(category="document", format=fmt, byteLength=size, pageCount=converted["pageCount"])
+        except office.DefinitiveOfficeRejection as error:
+            raise DefinitiveRejected(str(error)) from None
         except office.OfficeError as error:
             raise Rejected(str(error)) from None
     if heif.is_heic(source):
@@ -455,7 +461,10 @@ def main():
     except Exception as error:
         # Never expose native errors, filenames, extracted text, paths, or stack traces.
         code = str(error) if isinstance(error, Rejected) else "PROCESSING_FAILED"
-        (root / "error.json").write_text(json.dumps({"code": code}), encoding="utf-8")
+        failure = {"code": code}
+        if isinstance(error, DefinitiveRejected):
+            failure["rejection"] = "office_input"
+        (root / "error.json").write_text(json.dumps(failure), encoding="utf-8")
         return 1
     return 0
 

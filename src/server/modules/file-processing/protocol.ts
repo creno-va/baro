@@ -168,6 +168,18 @@ export class ProcessingError extends Error {
   }
 }
 
+/** A bounded, authorized native probe explicitly refused this Office input. */
+export class DefinitiveFileRejection extends ProcessingError {
+  constructor() {
+    super("FILE_REJECTED");
+  }
+}
+
+export const definitiveRejectionSchema = z.strictObject({
+  code: z.enum(["UNSUPPORTED_FORMAT", "INVALID_MEDIA"]),
+  rejection: z.literal("office_input"),
+});
+
 /** Incremental UTF-8/line framing, one artifact buffer at a time. Full responses are never buffered. */
 export async function* processorLines(body: ReadableStream<Uint8Array>, signal: AbortSignal) {
   const reader = body.getReader();
