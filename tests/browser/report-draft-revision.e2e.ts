@@ -28,6 +28,8 @@ async function progressFixture(
 ) {
   await page.route("**/api/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
+    // Vite module URLs also contain /api/; only intercept application API routes.
+    if (!path.startsWith("/api/")) return route.continue();
     if (path === "/api/me/session")
       return handlers.session
         ? handlers.session(route)
@@ -449,7 +451,7 @@ test("focus refresh preserves unsaved text and generation refreshes material cho
   await editor.fill("저장하지 않은 독립 상담 질문");
   stale = true;
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
-  await expect(page.getByText(/사건이나 자료가 변경됐어요/)).toBeVisible();
+  await expect(page.getByText(/사건·자료 또는 공식 출처의 확인 상태가 바뀌었어요/)).toBeVisible();
   await expect(editor).toHaveValue("저장하지 않은 독립 상담 질문");
   await expect(page.getByRole("button", { name: "검토 내용 저장", exact: true })).toBeDisabled();
   peerFile = true;
