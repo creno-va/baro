@@ -23,6 +23,7 @@ import {
   parse,
   readSnapshot,
   type V2Core,
+  V2RepositoryError,
   type WorkspaceGuard,
 } from "../../db/v2-core";
 import { type CleanupLease, createV2DeletionRepository } from "../../db/v2-deletion";
@@ -395,7 +396,13 @@ export function createFilesService(core: V2Core, deps: FileServiceDependencies) 
     async list(ownerId: string, workspaceId: string, afterId?: string) {
       await workspace(ownerId, workspaceId);
       if (afterId) parse(opaqueIdSchema, afterId);
-      const result = await files.listMetadata(actor(ownerId), workspaceId, 20, afterId);
+      const result = await files
+        .listMetadata(actor(ownerId), workspaceId, 20, afterId, { requireStablePage: true })
+        .catch((error) => {
+          if (error instanceof V2RepositoryError && error.code === "SNAPSHOT_INVALID")
+            throw new FileError("STORAGE_UNAVAILABLE");
+          throw error;
+        });
       for (const file of result) {
         if (file.status !== "failed") continue;
         const eligible = await core

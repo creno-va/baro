@@ -464,7 +464,13 @@ export function createV2FilesRepository(core: V2Core) {
           : null;
       });
     },
-    listMetadata(actor: Actor, workspaceId: string, limit = 20, afterId?: string) {
+    listMetadata(
+      actor: Actor,
+      workspaceId: string,
+      limit = 20,
+      afterId?: string,
+      options: { requireStablePage?: true } = {},
+    ) {
       return safe(async () => {
         actor = parse(actorSchema, { ownerId: actor.ownerId, now: actor.now });
         parse(opaqueIdSchema, workspaceId);
@@ -493,7 +499,7 @@ export function createV2FilesRepository(core: V2Core) {
               processing_updated_at: string | null;
             }
           >();
-        return values.flatMap((value) => {
+        const result = values.flatMap((value) => {
           const now = current.results.find((entry) => entry.id === value.id);
           if (
             !now ||
@@ -520,6 +526,11 @@ export function createV2FilesRepository(core: V2Core) {
             },
           ];
         });
+        // Array pagination treats a short page as the end. An HTTP caller must
+        // not confuse rows lost at the existing final fence with exhaustion.
+        if (options.requireStablePage && result.length !== rows.results.length)
+          throw new V2RepositoryError("SNAPSHOT_INVALID");
+        return result;
       });
     },
     async *coverageFragments(actor: Actor, id: string) {
