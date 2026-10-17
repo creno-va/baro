@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { Hono } from "hono";
+import { z } from "zod";
 import { createFilesApi as createClient, validateUpload } from "../src/client/api/files";
 import { CURRENT_POLICY_VERSIONS } from "../src/contracts/consent";
 import { createFilesApi } from "../src/server/api/v2/files";
@@ -232,6 +233,68 @@ test("legacy reservations remain readable and cannot be resumed using name and s
     f.db.close();
   }
 });
+
+for (const loseCompleteAck of [false, true])
+  test(`twentieth actual upload remains discoverable without duplicate writes; lost complete ACK=${loseCompleteAck}`, async () => {
+    const f = await fixture();
+    try {
+      const seed = createClient(f.raw);
+      for (let index = 0; index < 19; index++)
+        await seed.upload(
+          f.workspace.id,
+          new File([`Synthetic original ${index}`], `original-${index}.txt`, {
+            type: "text/plain",
+          }),
+          undefined,
+          { metadataOnly: true },
+        );
+      const writes: string[] = [];
+      let lost = false;
+      const client = createClient(async (path, init) => {
+        if (init?.method) writes.push(`${init.method} ${path}`);
+        const response = await f.raw(path, init);
+        if (loseCompleteAck && !lost && path.endsWith("/complete")) {
+          expect(response.ok).toBe(true);
+          lost = true;
+          throw new TypeError("Synthetic lost complete response");
+        }
+        return response;
+      });
+      const original = "Synthetic twentieth original with exact bytes";
+      const source = new File([original], "twentieth.txt", { type: "text/plain" });
+      if (loseCompleteAck)
+        await expect(
+          client.upload(f.workspace.id, source, undefined, { metadataOnly: true }),
+        ).rejects.toThrow("Synthetic lost complete response");
+      const uploaded = await client.upload(f.workspace.id, source, undefined, {
+        metadataOnly: true,
+      });
+      expect(uploaded.status).toBe("waiting");
+      expect(writes.filter((path) => path.endsWith("/files"))).toHaveLength(1);
+      expect(writes.filter((path) => path.includes("/parts/"))).toHaveLength(1);
+      expect(writes.filter((path) => path.endsWith("/complete"))).toHaveLength(1);
+      expect(f.db.sqlite.query("SELECT count(*) AS count FROM v2_upload_sessions").get()).toEqual({
+        count: 20,
+      });
+      const pageSchema = z.array(z.object({ id: z.string() }));
+      const firstPage = pageSchema.parse(
+        await (await f.raw(`/api/v2/cases/${f.workspace.id}/files`)).json(),
+      );
+      expect(firstPage).toHaveLength(20);
+      expect(
+        pageSchema.parse(
+          await (
+            await f.raw(`/api/v2/cases/${f.workspace.id}/files?afterId=${firstPage.at(-1)?.id}`)
+          ).json(),
+        ),
+      ).toEqual([]);
+      const reloaded = createClient(f.raw);
+      expect(await reloaded.list(f.workspace.id, { metadataOnly: true })).toHaveLength(20);
+      expect(await (await reloaded.original(f.workspace.id, uploaded.id)).text()).toBe(original);
+    } finally {
+      f.db.close();
+    }
+  });
 
 test("both standard TIFF filename extensions pass upload validation", () => {
   for (const extension of ["tif", "tiff", "TIF", "TIFF"])

@@ -202,7 +202,8 @@ export function createFilesApi(request: WorkspaceTransport) {
       const views = z.array(fileViewSchema).safeParse(raw);
       if (views.success) {
         for (const file of views.data) uploadHashes.set(`${id}:${file.id}`, file.uploadContentHash);
-        return views.data;
+        // An empty terminal metadata page also matches this legacy view schema.
+        return [...output, ...views.data];
       }
       const rows = z.array(metadataSchema).parse(raw);
       for (const row of rows) {

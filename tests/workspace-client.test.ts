@@ -384,6 +384,52 @@ test("upload progress counts only acknowledged parts and preserves recovery afte
   expect(await createFilesApi(f.transport).list("synthetic-case")).toHaveLength(1);
 });
 
+for (const count of [0, 19, 20, 21, 40, 41])
+  test(`metadata pagination preserves ${count} rows through an empty terminal page`, async () => {
+    const rows = Array.from({ length: count }, (_, index) => ({
+      id: `file_${String(index).padStart(3, "0")}`,
+      revision: 1,
+      name: `synthetic-${index}.txt`,
+      declaredMediaType: "text/plain",
+      byteLength: 10,
+      status: "uploaded",
+    }));
+    const cursors: (string | null)[] = [];
+    const client = createFilesApi(async (path) => {
+      const afterId = new URL(path, "https://synthetic.test").searchParams.get("afterId");
+      cursors.push(afterId);
+      return Response.json(rows.filter((row) => !afterId || row.id > afterId).slice(0, 20));
+    });
+    expect((await client.list("case", { metadataOnly: true })).map((file) => file.id)).toEqual(
+      rows.map((row) => row.id),
+    );
+    expect(cursors).toEqual([
+      null,
+      ...rows.filter((_, index) => (index + 1) % 20 === 0).map((row) => row.id),
+    ]);
+  });
+
+test("deleting metadata remains hidden without truncating subsequent pages", async () => {
+  const rows = Array.from({ length: 40 }, (_, index) => ({
+    id: `file_${String(index).padStart(3, "0")}`,
+    revision: 1,
+    name: `synthetic-${index}.txt`,
+    declaredMediaType: "text/plain",
+    byteLength: 10,
+    status: index < 20 || index === 39 ? "deleting" : "uploaded",
+  }));
+  const cursors: (string | null)[] = [];
+  const client = createFilesApi(async (path) => {
+    const afterId = new URL(path, "https://synthetic.test").searchParams.get("afterId");
+    cursors.push(afterId);
+    return Response.json(rows.filter((row) => !afterId || row.id > afterId).slice(0, 20));
+  });
+  expect((await client.list("case", { metadataOnly: true })).map((file) => file.id)).toEqual(
+    rows.filter((row) => row.status !== "deleting").map((row) => row.id),
+  );
+  expect(cursors).toEqual([null, "file_019", "file_039"]);
+});
+
 test("file progress preserves the server registration timestamp and safe failure across client reload", async () => {
   const createdAt = "2026-10-06T00:00:00.000Z";
   const transport = async () =>
