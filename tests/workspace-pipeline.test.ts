@@ -218,6 +218,26 @@ test.each([false, true])(
   },
 );
 
+test.each([
+  { target: "response_text", basis: "current_fact" },
+  { target: "response_text", basis: "assistant_history" },
+  { target: "unknown", basis: "unknown" },
+])("finding location metadata never changes critical rejection: %j", async (location) => {
+  const text = "보유 기록을 정리해 주세요.";
+  const findings = [{ severity: "critical", code: "contradiction", ...location }];
+  const { value, calls } = pipeline((phase) =>
+    phase === "workspace_audit" ? { ...approved, findings } : chatText(text),
+  );
+  await expect(
+    value.chat(confirmedChatContext(), "synthetic_audit_location"),
+  ).rejects.toMatchObject({
+    reason: "audit_rejected",
+    auditFailure: { pass: true, findings, unsupportedFactCount: 0 },
+  });
+  expect(calls).toHaveLength(2);
+  expect(calls[1]?.input).toMatchObject({ draft: { text } });
+});
+
 test("factual preparation without the strategy phrase reaches the independent audit", async () => {
   const safe = "법률 판단을 대신할 수는 없으며 사실과 자료 정리를 돕겠습니다.";
   const { value, calls } = pipeline((phase) =>

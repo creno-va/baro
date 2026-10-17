@@ -4,9 +4,13 @@ import { snapshotStatements } from "../src/server/db/v2-core";
 import { createV2OfficialSourceRepository } from "../src/server/db/v2-official-sources";
 import { OFFICIAL_CATALOG } from "../src/server/modules/legal-retrieval/v2/registry";
 import { makeChunk } from "../src/server/modules/legal-retrieval/v2/source";
+import { workspaceChatOutputSchema } from "../src/server/modules/llm-gateway/v2/schemas";
 import { buildReportSource } from "../src/server/modules/reports/source";
 import { readWorkspaceContext } from "../src/server/modules/workspace/context";
-import { createWorkspacePipeline } from "../src/server/modules/workspace/pipeline";
+import {
+  createWorkspacePipeline,
+  WorkspaceOutputPolicyError,
+} from "../src/server/modules/workspace/pipeline";
 import { reportFixture } from "./helpers/report-fixture";
 
 // Real SQLite/AES repositories and product source/report/chat consumers. The
@@ -186,43 +190,103 @@ test("identical source renewal recovers report facts/actions/timeline and subseq
     context.sourceRetrieval?.chunks.find((c) => c.citation.id === original.citation.id)?.source
       .verifiedAt,
   ).toBe(refreshed.source.verifiedAt);
-  const pipeline = createWorkspacePipeline(
-    {
-      call: async (phase) =>
-        phase === "workspace_audit"
-          ? {
-              pass: true,
-              findings: [],
-              unsupportedFactIds: [],
-              legalClaimsSupported: true,
-              strategyDetected: false,
-            }
-          : {
-              text: original.source.body,
-              references: [reference],
-              warnings: [],
-              facts: [],
-              parties: [],
-              actions: [],
-              timeline: [],
-              requestedSources: [],
-              sourceClaims: [
-                {
-                  id: "new_claim",
-                  kind: "quotation",
-                  text: original.source.body,
-                  citationId: original.citation.id,
-                  startUtf16: 0,
-                  endUtf16: original.source.body.length,
-                },
-              ],
-            },
-    },
-    { reserve: async () => true, invocation: () => crypto.randomUUID() },
-  );
-  expect((await pipeline.chat(context, "synthetic_renewed_chat")).citations).toEqual([
-    original.citation,
-  ]);
+  const draft = workspaceChatOutputSchema.parse({
+    text: original.source.body,
+    references: [reference],
+    warnings: [],
+    facts: [],
+    parties: [],
+    actions: [],
+    timeline: [],
+    requestedSources: [],
+    sourceClaims: [
+      {
+        id: "new_claim",
+        kind: "quotation",
+        text: original.source.body,
+        citationId: original.citation.id,
+        startUtf16: 0,
+        endUtf16: original.source.body.length,
+      },
+    ],
+  });
+  const modes = [
+    "valid",
+    "explanation",
+    "new_fact",
+    "retrieval_missing",
+    "excerpt_missing",
+    "excerpt_span_bounds",
+    "claim_schema",
+    "quotation_mismatch",
+    "citation_allowlist",
+    "retrieval_hash",
+  ] as const;
+  for (const mode of modes) {
+    const input = structuredClone(context),
+      output = structuredClone(draft);
+    const claim = output.sourceClaims[0],
+      cited = input.citations.find((c) => c.id === original.citation.id);
+    if (!claim || !cited) throw new Error("Missing synthetic claim/citation");
+    if (mode === "explanation") claim.kind = "legal_explanation";
+    if (mode === "new_fact")
+      output.facts = [
+        { ...summary.facts[0], id: "new_official_fact" } as V2Summary["facts"][number],
+      ];
+    if (mode === "retrieval_missing") delete input.sourceRetrieval;
+    if (mode === "excerpt_missing") input.sourceTexts = [];
+    if (mode === "excerpt_span_bounds")
+      input.sourceTexts = [{ citationId: original.citation.id, text: "합성" }];
+    if (mode === "claim_schema") output.sourceClaims.push({ ...claim });
+    if (mode === "quotation_mismatch") {
+      output.text = "합성 변조 문장";
+      claim.text = output.text;
+    }
+    if (mode === "citation_allowlist")
+      input.citations = input.citations.map((c) =>
+        c.id === cited.id ? { ...c, title: "다른 합성 제목" } : c,
+      );
+    if (mode === "retrieval_hash") {
+      if (!input.sourceRetrieval) throw new Error("Missing synthetic retrieval");
+      input.sourceRetrieval.retrievalHash = "f".repeat(64);
+    }
+    let audited = 0;
+    const pipeline = createWorkspacePipeline(
+      {
+        call: async (phase) => {
+          if (phase !== "workspace_audit") return output;
+          audited++;
+          return {
+            pass: true,
+            findings: [],
+            unsupportedFactIds: [],
+            legalClaimsSupported: true,
+            strategyDetected: false,
+          };
+        },
+      },
+      { reserve: async () => true, invocation: () => crypto.randomUUID() },
+    );
+    if (mode === "valid" || mode === "explanation" || mode === "new_fact") {
+      expect((await pipeline.chat(input, "synthetic_renewed_chat")).citations).toEqual([
+        original.citation,
+      ]);
+    } else {
+      try {
+        await pipeline.chat(input, "synthetic_rejected_renewed_chat");
+        throw new Error("Invalid synthetic claim was accepted");
+      } catch (error) {
+        expect(error).toBeInstanceOf(WorkspaceOutputPolicyError);
+        expect(error).toMatchObject({ reason: "unsupported_fact", claimFailure: mode });
+        expect(JSON.stringify((error as WorkspaceOutputPolicyError).claimFailure)).not.toContain(
+          original.citation.id,
+        );
+      }
+    }
+    // All malformed claims below pass the independent synthetic audit before the
+    // unchanged integrity guard rejects them. This is not provider evidence.
+    expect(audited).toBe(1);
+  }
   expect(history()).toEqual(saved);
   f.actor.now = refreshed.source.expiresAt;
   await expect(buildReportSource(f.core, f.actor, f.workspaceId, [])).rejects.toThrow(

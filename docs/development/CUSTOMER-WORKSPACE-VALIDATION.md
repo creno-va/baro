@@ -29,7 +29,7 @@
 
 ## 재실행 가능한 증거
 
-아래 명령은 같은 checkout에서 순차 실행한다. Bun 1.3.14와 Node를 PATH에 둔다.
+아래 명령은 같은 checkout에서 순차 실행한다. `.bun-version`에 고정된 Bun과 Node를 PATH에 둔다.
 
 ```sh
 bun ci

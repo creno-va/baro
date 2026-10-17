@@ -284,6 +284,10 @@ export function createFilesApi(request: WorkspaceTransport) {
     const contentHash = await hash(file);
     progress("preparing");
     const identity = `${id}:${name}:${file.size}:${contentHash}`;
+    const current = await list(id, options);
+    // Reconcile interrupted uploads before freezing a new reservation's CAS.
+    // Background processing can publish while this paginated list is read.
+    // An existing ambiguous attempt retains its exact key and revision.
     const attempt = uploads.get(identity) ?? {
       expectedRevision: await workspaceRevision(id),
       key: crypto.randomUUID(),
@@ -296,7 +300,6 @@ export function createFilesApi(request: WorkspaceTransport) {
       autoProcessConsentVersion: CURRENT_POLICY_VERSIONS.aiNoticeVersion,
       contentHash,
     };
-    const current = await list(id, options);
     if (attempt.session && !current.some((item) => item.id === attempt.session?.fileId)) {
       uploads.delete(identity);
       return upload(id, file, onProgress, options);

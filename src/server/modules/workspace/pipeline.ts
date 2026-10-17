@@ -13,6 +13,7 @@ import {
   reportWorkspaceFactFailure,
   type WorkspaceFactFailure,
 } from "../../dependency-diagnostics";
+import type { ClaimFailure } from "../citation/claim-diagnostics";
 import { claimReviewHash, type SourceClaim, validateV2Claims } from "../citation/v2-validate";
 import type { RetrievalOutput } from "../legal-retrieval/v2/contracts";
 import type { WorkspaceSourceRequest } from "../legal-retrieval/v2/workspace-plans";
@@ -76,6 +77,7 @@ export class WorkspaceOutputPolicyError extends ModelError {
     readonly factFailure?: WorkspaceFactFailure,
     readonly auditFailure?: WorkspaceAuditFailure,
     readonly contentFailure?: WorkspaceContentFailure,
+    readonly claimFailure?: ClaimFailure,
   ) {
     super("POLICY_REJECTED");
   }
@@ -368,7 +370,12 @@ export function createWorkspacePipeline(
         pass: checked.pass,
         legalClaimsSupported: checked.legalClaimsSupported,
         strategyDetected: checked.strategyDetected,
-        findings: checked.findings.map(({ severity, code }) => ({ severity, code })),
+        findings: checked.findings.map(({ severity, code, target, basis }) => ({
+          severity,
+          code,
+          target,
+          basis,
+        })),
         unsupportedFactCount: checked.unsupportedFactIds.length,
       });
     return checked;
@@ -532,16 +539,20 @@ export function createWorkspacePipeline(
       const checked = await audit("workspace_chat", context, draft, requestId);
       if (draft.sourceClaims.length) {
         const retrieval = context.sourceRetrieval;
-        if (
-          !retrieval ||
-          draft.sourceClaims.some((claim) => {
-            const source = context.sourceTexts?.find(
-              (text) => text.citationId === claim.citationId,
-            );
-            return !source || claim.endUtf16 > source.text.length;
-          })
-        )
-          throw new WorkspaceOutputPolicyError("unsupported_fact");
+        const rejectClaim = (failure: ClaimFailure) =>
+          new WorkspaceOutputPolicyError(
+            "unsupported_fact",
+            undefined,
+            undefined,
+            undefined,
+            failure,
+          );
+        if (!retrieval) throw rejectClaim("retrieval_missing");
+        for (const claim of draft.sourceClaims) {
+          const source = context.sourceTexts?.find((text) => text.citationId === claim.citationId);
+          if (!source) throw rejectClaim("excerpt_missing");
+          if (claim.endUtf16 > source.text.length) throw rejectClaim("excerpt_span_bounds");
+        }
         const reviews = await Promise.all(
           draft.sourceClaims.map(async (claim) => ({
             claimId: claim.id,
@@ -559,7 +570,15 @@ export function createWorkspacePipeline(
           retrieval,
           reviews,
         );
-        if (!result.valid) throw new WorkspaceOutputPolicyError("unsupported_fact");
+        if (!result.valid) {
+          throw new WorkspaceOutputPolicyError(
+            "unsupported_fact",
+            undefined,
+            undefined,
+            undefined,
+            result.failure,
+          );
+        }
         // Claims are independently audited and integrity-checked above. Preserve
         // their provenance even when the model omitted the redundant message ref.
         // Publication rechecks these refs against current citation bindings.
