@@ -12,6 +12,161 @@ test.skip(
 const key = "baro-c-contract-test-state";
 const base = "/cases/synthetic-case";
 
+for (const scenario of [
+  "normal",
+  "focus",
+  "other-owner",
+  "lawyer",
+  "signed-out",
+  "unavailable",
+  "consent",
+  "revoked",
+  "double",
+  "drag",
+  "pointer-cancel",
+  "pointer-down-only",
+] as const)
+  test(`file preview pointer preserves explicit selection and access: ${scenario}`, async ({
+    page,
+  }) => {
+    await page.goto(`${base}/files`);
+    await expect(page.getByRole("heading", { name: "아직 자료가 없어요" })).toBeVisible();
+    await page.evaluate((key) => {
+      const saved = JSON.parse(localStorage.getItem(key) ?? "{}");
+      saved.caseOwners = { "synthetic-case": saved.session.user.id };
+      saved.files["synthetic-case"] = Array.from({ length: 20 }, (_, index) => ({
+        id: `preview-${index}`,
+        name: `private-preview-${index}.pdf`,
+        mimeType: "application/pdf",
+        sizeBytes: 100,
+        status: "ready",
+        coverage: "private synthetic preview coverage",
+        extractedText: "Synthetic material text",
+      }));
+      localStorage.setItem(key, JSON.stringify(saved));
+    }, key);
+    await page.reload();
+    const openers = page.getByRole("button", { name: "자료 확인", exact: true });
+    await expect(openers).toHaveCount(20);
+    const opener = openers.nth(19);
+    await opener.scrollIntoViewIfNeeded();
+    await page.evaluate(async (key) => {
+      const path = "/tests/helpers/workspace-client-fixture.ts";
+      const { api } = (await import(path)) as typeof import("../helpers/workspace-client-fixture");
+      const session = api.session.get;
+      const owner = await session();
+      const pending: { resolve: (value: typeof owner) => void; reject: (cause: Error) => void }[] =
+        [];
+      const state = window as unknown as {
+        previewReads: string[];
+        releasePreviewCheck: (result: string) => void;
+      };
+      state.previewReads = [];
+      api.session.get = () => new Promise((resolve, reject) => pending.push({ resolve, reject }));
+      state.releasePreviewCheck = (result) => {
+        const saved = JSON.parse(localStorage.getItem(key) ?? "{}");
+        if (result === "other-owner") saved.session.user.id = "other-preview-owner";
+        if (result === "lawyer") saved.session.user.accountType = "lawyer";
+        if (result === "signed-out") saved.session.user = null;
+        if (result === "consent") saved.session.needsConsent = true;
+        localStorage.setItem(key, JSON.stringify(saved));
+        api.session.get =
+          result === "unavailable"
+            ? async () => {
+                throw new Error("Synthetic session unavailable");
+              }
+            : session;
+        for (const check of pending)
+          if (result === "unavailable") check.reject(new Error("Synthetic session unavailable"));
+          else check.resolve(saved.session);
+      };
+      const review = api.files.review;
+      api.files.review = async (...args: Parameters<typeof review>) => {
+        state.previewReads.push(args[1]);
+        return review(...args);
+      };
+    }, key);
+    if (scenario !== "normal")
+      await opener.evaluate((button) =>
+        button.addEventListener(
+          "pointerdown",
+          () => {
+            window.dispatchEvent(new Event("focus"));
+          },
+          { once: true },
+        ),
+      );
+    const bounds = await opener.boundingBox();
+    if (!bounds) throw new Error("Missing synthetic preview button");
+    const reads = () =>
+      page.evaluate(() => (window as unknown as { previewReads: string[] }).previewReads);
+    await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+    await page.mouse.down();
+    if (scenario !== "normal") {
+      await expect(
+        page.getByRole("heading", { name: "사건을 불러오는 중", exact: true }),
+      ).toBeVisible();
+      await expect(opener).toBeVisible();
+      expect(await opener.boundingBox()).toEqual(bounds);
+      await expect(page.getByText("private-preview-19.pdf", { exact: true })).toBeHidden();
+      await expect(page.getByText("private-preview-0.pdf", { exact: true })).toBeHidden();
+      await expect(page.getByText("private synthetic preview coverage").first()).toBeHidden();
+      await expect(page.getByRole("button", { name: "삭제", exact: true }).first()).toBeHidden();
+      await expect(page.getByLabel("선택 자료의 자동 처리에 동의합니다.")).toBeHidden();
+      await expect(
+        page.getByRole("complementary", { name: "사건 요약 및 준비 현황" }),
+      ).toBeHidden();
+      expect(await opener.getAttribute("title")).toBeNull();
+      expect(await opener.getAttribute("aria-label")).toBeNull();
+    }
+    expect(await reads()).toEqual([]);
+    await expect(page.getByRole("dialog")).not.toBeVisible();
+    if (["drag", "pointer-cancel"].includes(scenario)) {
+      if (scenario === "pointer-cancel") await opener.dispatchEvent("pointercancel");
+      await page.mouse.move(0, 0);
+    }
+    if (scenario !== "pointer-down-only") await page.mouse.up();
+    if (scenario === "double")
+      await page.mouse.click(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+    if (scenario === "revoked")
+      await page.evaluate(() =>
+        window.dispatchEvent(
+          new CustomEvent("baro-session-changed", { detail: { reason: "signout" } }),
+        ),
+      );
+    expect(await reads()).toEqual([]);
+    await expect(page.getByRole("dialog")).not.toBeVisible();
+    await page.evaluate((scenario) => {
+      (window as unknown as { releasePreviewCheck: (result: string) => void }).releasePreviewCheck(
+        scenario,
+      );
+    }, scenario);
+    const accepted = ["normal", "focus", "consent", "double"].includes(scenario);
+    if (accepted) {
+      await expect(page.getByRole("dialog")).toBeVisible();
+      await expect(
+        page
+          .getByRole("dialog")
+          .getByRole("heading", { name: "private-preview-19.pdf", exact: true }),
+      ).toBeVisible();
+      await expect.poll(reads).toEqual(["preview-19"]);
+    } else {
+      if (["drag", "pointer-cancel", "pointer-down-only"].includes(scenario))
+        await expect(
+          page.getByRole("heading", { name: "대여금 반환 관련 자료 정리", exact: true }),
+        ).toBeVisible();
+      else await expect(page.getByRole("alert").first()).toBeVisible();
+      await expect(page.getByRole("dialog")).not.toBeVisible();
+      expect(await reads()).toEqual([]);
+    }
+    if (scenario === "pointer-down-only") {
+      await opener.dispatchEvent("pointercancel");
+      await page.mouse.move(0, 0);
+      await page.mouse.up();
+      expect(await reads()).toEqual([]);
+    }
+  });
+
 for (const outcome of ["lawyer", "signed-out", "other-owner", "not-found", "unavailable"] as const)
   test(`workspace title leaves pending state after a terminal access check: ${outcome}`, async ({
     page,

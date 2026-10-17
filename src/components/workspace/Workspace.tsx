@@ -157,6 +157,11 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
   const access = useCustomerAccess(purge, (cause) => setError(problem(cause)), true);
   const { ready, canMutate, version, verify, ticket, current, alive, deny } = access;
   const readonly = !ready || !canMutate || view?.case.stage !== "active";
+  const privateContent = {
+    style: { visibility: ready ? undefined : ("hidden" as const) },
+    inert: !ready,
+    "aria-hidden": !ready,
+  };
   const showError = useCallback(
     (cause: unknown, resource = false) => {
       const next = { ...problem(cause), resource };
@@ -316,12 +321,12 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
   }, [preview, deleteFile, entry]);
 
   async function run(key: string, action: (epoch: number) => Promise<void>) {
-    const readOrDelete = ["refresh", "history", "original", "delete"].includes(key);
-    // A native chooser can return while focus verification temporarily hides the
-    // workspace. Its selection still needs the same fresh owner/write preflight.
+    const readOrDelete = ["refresh", "history", "original", "delete", "file-preview"].includes(key);
+    // Chooser selections and generic controls can complete during a focus check.
+    // Each action still needs its fresh owner and read/write access preflight.
     if (
       lock.current ||
-      (!["refresh", "upload", "chat-retry", "file-retry"].includes(key) &&
+      (!["refresh", "upload", "chat-retry", "file-retry", "file-preview"].includes(key) &&
         (!ready || (readonly && !readOrDelete)))
     )
       return;
@@ -775,13 +780,11 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
             </section>
           ))}
       {view && (
-        <div
-          style={{ visibility: ready ? undefined : "hidden" }}
-          inert={!ready}
-          aria-hidden={!ready}
-        >
+        // Only the generic file-preview controls survive a focus check. Their
+        // private content has the same gate below; all other tabs keep this gate.
+        <div {...(tab === "files" ? {} : privateContent)}>
           {!canMutate && (
-            <section className="workspace-error">
+            <section className="workspace-error" {...privateContent}>
               <p>
                 저장한 사건·자료는 읽을 수 있어요. 새 대화·수정·처리는 최신 동의 확인 후 사용할 수
                 있어요.
@@ -790,7 +793,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
             </section>
           )}
           {view.case.stage !== "active" && (
-            <section className="workspace-error">
+            <section className="workspace-error" {...privateContent}>
               <p>
                 {view.case.stage === "archived"
                   ? "보관된 사건이에요. 저장된 내용을 확인할 수 있어요."
@@ -1020,13 +1023,13 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
               )}
               {tab === "files" && (
                 <>
-                  <div className="workspace-section-heading">
+                  <div className="workspace-section-heading" {...privateContent}>
                     <div>
                       <h2>사건 자료</h2>
                       <p>흩어진 자료를 한곳에 모아두세요.</p>
                     </div>
                   </div>
-                  <div className="workspace-upload">
+                  <div className="workspace-upload" {...privateContent}>
                     <div className="workspace-upload-intro">
                       <span className="workspace-upload-icon">
                         <Upload size={22} />
@@ -1091,7 +1094,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                     )}
                   </div>
                   {!view.files.length && (
-                    <div className="workspace-empty">
+                    <div className="workspace-empty" {...privateContent}>
                       <FolderOpen size={30} />
                       <h3>아직 자료가 없어요</h3>
                       <p>자료 없이도 대화를 이어갈 수 있어요. 준비되면 원본을 추가하세요.</p>
@@ -1100,7 +1103,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                   <ul className="workspace-file-list">
                     {view.files.map((file) => (
                       <li key={file.id}>
-                        <div className="workspace-file-title">
+                        <div className="workspace-file-title" {...privateContent}>
                           <FileText size={24} />
                           <div>
                             <h3>{file.name}</h3>
@@ -1112,11 +1115,11 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                             </p>
                           </div>
                         </div>
-                        <p className="workspace-coverage">
+                        <p className="workspace-coverage" {...privateContent}>
                           {file.coverage || "추출 범위는 처리가 끝난 뒤 확인할 수 있어요."}
                         </p>
                         {file.processing && ["processing", "waiting"].includes(file.status) && (
-                          <div className="workspace-muted">
+                          <div className="workspace-muted" {...privateContent}>
                             <p>{fileProcessingLabel(file.processing)}</p>
                             <p>
                               <ElapsedTime
@@ -1129,15 +1132,17 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                         {!file.processing &&
                           file.createdAt &&
                           ["uploading", "processing", "waiting"].includes(file.status) && (
-                            <p className="workspace-muted">
+                            <p className="workspace-muted" {...privateContent}>
                               <ElapsedTime startedAt={file.createdAt} label="자료 등록 후" />
                             </p>
                           )}
                         {file.status === "failed" && (
-                          <p className="workspace-muted">{fileFailureLabel(file)}</p>
+                          <p className="workspace-muted" {...privateContent}>
+                            {fileFailureLabel(file)}
+                          </p>
                         )}
                         {file.status === "uploading" && (
-                          <p className="workspace-muted">
+                          <p className="workspace-muted" {...privateContent}>
                             업로드가 중단됐다면 같은 원본 파일을 다시 선택해 이어서 저장하세요.
                             만료된 업로드는 삭제한 뒤 다시 추가할 수 있어요.
                           </p>
@@ -1146,9 +1151,12 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                           <Button
                             variant="outline"
                             size="sm"
+                            disabled={!!busy}
                             onClick={() => {
-                              setPreview(file);
-                              setOriginal(null);
+                              void run("file-preview", async () => {
+                                setPreview(file);
+                                setOriginal(null);
+                              });
                             }}
                           >
                             자료 확인
@@ -1156,6 +1164,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                           <Button
                             variant="ghost"
                             size="sm"
+                            {...privateContent}
                             disabled={!!busy || !ready}
                             onClick={() => setDeleteFile(file)}
                           >
@@ -1316,7 +1325,11 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                 </>
               )}
             </section>
-            <aside className="workspace-sidebar" aria-label="사건 요약 및 준비 현황">
+            <aside
+              className="workspace-sidebar"
+              aria-label="사건 요약 및 준비 현황"
+              {...privateContent}
+            >
               {tab === "files" ? (
                 <section className="workspace-context-content">
                   <h2>사건 요약과 준비 현황</h2>
