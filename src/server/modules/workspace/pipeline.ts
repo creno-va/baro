@@ -14,6 +14,7 @@ import {
   type WorkspaceFactFailure,
 } from "../../dependency-diagnostics";
 import type { ClaimFailure } from "../citation/claim-diagnostics";
+import { type QuotationResolution, resolveQuotationSpans } from "../citation/quotation-spans";
 import { claimReviewHash, type SourceClaim, validateV2Claims } from "../citation/v2-validate";
 import type { RetrievalOutput } from "../legal-retrieval/v2/contracts";
 import type { WorkspaceSourceRequest } from "../legal-retrieval/v2/workspace-plans";
@@ -306,6 +307,7 @@ export function createWorkspacePipeline(
   deps: {
     reserve: (phase: Phase) => Promise<boolean>;
     invocation: (phase: Phase) => string;
+    observeQuotationResolution?: (resolution: QuotationResolution) => void;
     retrieve?: (
       context: WorkspaceContext,
       requests: WorkspaceSourceRequest[],
@@ -536,6 +538,15 @@ export function createWorkspacePipeline(
         )
       )
         throw new WorkspaceOutputPolicyError("unsupported_fact");
+      if (draft.sourceClaims.some((claim) => claim.kind === "quotation")) {
+        const resolved = resolveQuotationSpans(draft.sourceClaims, context);
+        draft.sourceClaims = resolved.claims;
+        // Diagnostic observers cannot affect acceptance. Audit and claim hashes
+        // below both receive these final coordinates, never a pre-repair receipt.
+        try {
+          deps.observeQuotationResolution?.(resolved.resolution);
+        } catch {}
+      }
       const checked = await audit("workspace_chat", context, draft, requestId);
       if (draft.sourceClaims.length) {
         const retrieval = context.sourceRetrieval;
