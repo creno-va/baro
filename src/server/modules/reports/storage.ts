@@ -495,7 +495,15 @@ export function createReportExports(core: V2Core, deps: ReportDependencies, port
     const data = await valid(actor, id),
       r = data.row;
     if (r.state === "ready" && r.pdf_blob_id && (!selected || r.zip_blob_id)) return r;
-    const fence = await exportFence(core, actor, r, data.review.sourceDigest, now, deps.sessionId);
+    const fence = await exportFence(
+      core,
+      actor,
+      r,
+      data.review.sourceDigest,
+      now,
+      deps.sessionId,
+      data.body.citations.map((citation) => citation.id),
+    );
     if (fence.rows > 250) throw new ReportError("EXPORT_LIMIT_EXCEEDED");
     const l = await lease(actor.ownerId, r);
     const written: string[] = [];

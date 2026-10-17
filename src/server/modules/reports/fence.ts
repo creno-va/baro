@@ -4,12 +4,15 @@ import { AUTH_RETENTION_MS } from "../../auth/policy";
 import { type Actor, aliveWorkspace, type V2Core } from "../../db/v2-core";
 import { jobAlive } from "../../db/v2-jobs";
 import type { JobLease } from "../../db/v2-workspace";
+import { BOUND_SOURCE_BATCH_SIZE } from "../legal-retrieval/v2/bound-sources";
+import { MAX_SOURCE_BYTES } from "../legal-retrieval/v2/contracts";
 import {
   ownedWorkspace,
   REPORT_SOURCE_SQL,
   ReportError,
   reportSourceDigest,
   reportSourceRows,
+  sourceDigest,
 } from "./source";
 
 /** Bind HTTP report work to the exact authenticated session, not any session for its owner. */
@@ -39,11 +42,14 @@ export async function exportFence(
   digest: string,
   clock: () => string,
   sessionId?: string,
+  requiredCitationIds?: readonly string[],
 ) {
   const workspace = await ownedWorkspace(core, actor, report.workspace_id);
   const verifiedOriginals: string[] = [];
+  const verifiedCitationIds = new Set<string>();
   let originalBytes = 0;
   const rows = await reportSourceRows(core, actor, report.workspace_id, (id, body) => {
+    verifiedCitationIds.add(id);
     const value = JSON.stringify([id, body]);
     originalBytes += new TextEncoder().encode(value).byteLength;
     // One bound value per original, with room for the source JSON and all other
@@ -57,8 +63,59 @@ export async function exportFence(
     digest
   )
     throw new ReportError("STALE_REVISION");
-  if (rows.filter((row) => row.kind === "citation").length !== verifiedOriginals.length)
+  // The immutable, schema-validated report body supplies its complete citation
+  // set. Historical workspace citations may be expired or unavailable without
+  // appearing anywhere in this report. They remain in the source digest; only
+  // their absence from this report avoids requiring a new verification receipt.
+  // Keep the stricter historical default for callers without a canonical body.
+  const required =
+    requiredCitationIds ?? rows.filter((row) => row.kind === "citation").map((row) => row.id);
+  if (required.some((id) => !verifiedCitationIds.has(id)))
     throw new ReportError("LEGAL_SOURCE_UNAVAILABLE");
+  const unverifiedCitationIds = rows
+    .filter((row) => row.kind === "citation" && !verifiedCitationIds.has(row.id))
+    .map((row) => row.id);
+  const unverifiedOriginals: [string, string | null][] = [];
+  let originalBodies = verifiedOriginals.length;
+  // An unused invalid body is not authority for this report, but a repair can
+  // change the full source digest from invalid to verified. Freeze its bounded
+  // bytes too so that the final SQL check preserves that freshness boundary.
+  // Expired/oversized/absent originals remain null: changing their eligibility
+  // is independently visible in the source tuple or this bounded projection.
+  const boundedBody =
+    "CASE WHEN s.fetched_at<=? AND s.verified_at<=? AND s.expires_at>? AND length(CAST(s.body AS BLOB))<=? THEN s.body ELSE NULL END";
+  for (let offset = 0; offset < unverifiedCitationIds.length; offset += BOUND_SOURCE_BATCH_SIZE) {
+    const ids = unverifiedCitationIds.slice(offset, offset + BOUND_SOURCE_BATCH_SIZE);
+    const originals = (
+      await core
+        .statement(
+          `SELECT b.id,${boundedBody} AS body FROM v2_citation_bindings b LEFT JOIN v2_official_sources s ON s.source_id=b.source_id WHERE b.workspace_id=? AND b.id IN (SELECT value FROM json_each(?))`,
+          [
+            actor.now,
+            actor.now,
+            actor.now,
+            MAX_SOURCE_BYTES,
+            report.workspace_id,
+            JSON.stringify(ids),
+          ],
+        )
+        .all<{ id: string; body: string | null }>()
+    ).results;
+    if (originals.length !== ids.length) throw new ReportError("STALE_REVISION");
+    for (const original of originals) {
+      const value: [string, string | null] = [original.id, original.body];
+      originalBytes += new TextEncoder().encode(JSON.stringify(value)).byteLength;
+      if (original.body !== null) originalBodies++;
+      if (originalBytes > 1048576 || originalBodies > 50)
+        throw new ReportError("EXPORT_LIMIT_EXCEEDED");
+      unverifiedOriginals.push(value);
+    }
+  }
+  if (
+    unverifiedOriginals.length &&
+    (await sourceDigest(core, actor, report.workspace_id)) !== digest
+  )
+    throw new ReportError("STALE_REVISION");
   const json = JSON.stringify(
     rows.map((r) => ({ kind: r.kind, id: r.id, revision: r.revision, snapshot: r.snapshot })),
   );
@@ -73,15 +130,17 @@ export async function exportFence(
       const ok = await core
         .statement(
           `WITH source AS (${REPORT_SOURCE_SQL}),
-        verified_originals(value) AS (${verifiedOriginals.length ? `VALUES ${verifiedOriginals.map(() => "(?)").join(",")}` : "SELECT NULL WHERE 0"})
+        verified_originals(value) AS (${verifiedOriginals.length ? `VALUES ${verifiedOriginals.map(() => "(?)").join(",")}` : "SELECT NULL WHERE 0"}),
+        unverified_originals(value) AS (SELECT value FROM json_each(?))
         SELECT 1 AS ok FROM v2_reports r JOIN v2_workspaces w ON w.id=r.workspace_id JOIN user u ON u.id=w.owner_id
         WHERE r.id=? AND r.revision=? AND r.snapshot_id=? AND r.encrypted_payload=? AND w.owner_id=? AND w.status='active'
         AND ${aliveWorkspace} AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='report' AND target_id=r.id)
         AND coalesce((SELECT value FROM app_metadata WHERE key='account-type:'||w.owner_id),'customer')='customer'
         AND EXISTS(SELECT 1 FROM user_consents c WHERE c.user_id=w.owner_id AND c.terms_version=? AND c.privacy_version=? AND c.ai_notice_version=? AND c.over_14_confirmed=1)
         AND w.confirmed_summary_revision=?
-        AND coalesce((SELECT json_group_array(json_object('kind',kind,'id',id,'revision',revision,'snapshot',snapshot || CASE WHEN kind='citation' THEN ':verified' ELSE '' END)) FROM source),'[]')=?
+        AND coalesce((SELECT json_group_array(json_object('kind',kind,'id',id,'revision',revision,'snapshot',snapshot || CASE WHEN kind='citation' THEN CASE WHEN id IN (SELECT value FROM json_each(?)) THEN ':invalid' ELSE ':verified' END ELSE '' END)) FROM source),'[]')=?
         AND NOT EXISTS(SELECT 1 FROM verified_originals v LEFT JOIN v2_citation_bindings c ON c.workspace_id=w.id AND c.id=json_extract(v.value,'$[0]') LEFT JOIN v2_official_sources s ON s.source_id=c.source_id WHERE s.body IS NOT json_extract(v.value,'$[1]'))
+        AND NOT EXISTS(SELECT 1 FROM unverified_originals v LEFT JOIN v2_citation_bindings c ON c.workspace_id=w.id AND c.id=json_extract(v.value,'$[0]') LEFT JOIN v2_official_sources s ON s.source_id=c.source_id WHERE (${boundedBody}) IS NOT json_extract(v.value,'$[1]'))
         AND NOT EXISTS(SELECT 1 FROM v2_tombstones t JOIN source s ON s.kind='file' AND s.id=t.target_id WHERE t.target_kind='file')
         ${lease ? `AND EXISTS(SELECT 1 FROM v2_jobs j JOIN v2_operations o ON o.id=j.operation_id WHERE j.id=? AND o.owner_id=w.owner_id AND j.lease_token=? AND j.fencing=? AND j.lease_until>? AND j.status IN ('running','validating') AND ${jobAlive})` : ""}
         ${blobId ? "AND EXISTS(SELECT 1 FROM v2_blobs b JOIN v2_storage_reservations x ON x.id=b.reservation_id JOIN v2_billing_principals p ON p.id=b.principal_id WHERE b.id=? AND p.owner_id=w.owner_id AND b.state='stored' AND b.visibility='private' AND x.entity_id=r.id AND x.state!='released')" : ""}
@@ -99,6 +158,7 @@ export async function exportFence(
             now,
             id,
             ...verifiedOriginals,
+            JSON.stringify(unverifiedOriginals),
             report.id,
             report.revision,
             report.snapshot_id,
@@ -108,7 +168,12 @@ export async function exportFence(
             CURRENT_POLICY_VERSIONS.privacyVersion,
             CURRENT_POLICY_VERSIONS.aiNoticeVersion,
             workspace.confirmed_summary_revision,
+            JSON.stringify(unverifiedCitationIds),
             json,
+            now,
+            now,
+            now,
+            MAX_SOURCE_BYTES,
             ...(lease ? [lease.jobId, lease.token, lease.fencing, now] : []),
             ...(blobId ? [blobId] : []),
             ...session.values,

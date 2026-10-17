@@ -502,8 +502,9 @@ export function ReportReview({ caseId }: { caseId: string }) {
               </div>
               {report.stale && (
                 <p className="report-callout report-stale" role="status">
-                  사건이나 자료가 변경됐어요. 이 리포트는 위 생성 기준의 내용이에요. 최신 내용은 새
-                  버전을 만들어 검토해 주세요. 저장된 PDF는 기존 내용으로 다운로드할 수 있어요.
+                  사건·자료 또는 공식 출처의 확인 상태가 바뀌었어요. 이 리포트는 위 생성 기준의
+                  내용이에요. 새 버전 만들기로 현재 내용을 확인해 주세요. 저장된 HTML과 PDF는 기존
+                  내용으로 다운로드할 수 있어요.
                 </p>
               )}
               <div className="report-paper">
