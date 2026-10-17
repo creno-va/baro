@@ -206,7 +206,7 @@ test("peer answer changes preserve the unsaved draft until explicit conflict rec
   await expect(page.getByRole("button", { name: "저장하고 다음 질문" })).toBeDisabled();
   await page.getByRole("button", { name: "최신 내용 불러오기" }).click();
   await expect(editor).toHaveValue("다른 탭에서 저장한 답변");
-  await expect(page.getByRole("button", { name: "저장하고 다음 질문" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "다음 질문", exact: true })).toBeEnabled();
 });
 
 async function recoveryWorkspace(page: Page) {
@@ -336,37 +336,39 @@ test("pending workspace files keep polling after a transient failure and stop on
   await page.evaluate(async () => {
     const modulePath = "/src/client/api/index.ts";
     const { api } = await import(modulePath);
-    const original = api.workspace.get.bind(api.workspace);
+    const original = api.workspace.getFiles.bind(api.workspace);
     const state = { reads: 0 };
     (window as unknown as { customerPoll: typeof state }).customerPoll = state;
-    api.workspace = {
-      ...api.workspace,
-      get: async (id: string) => {
-        const owned = new Error().stack?.includes("Workspace.tsx");
-        if (!owned) return original(id);
-        const ordinal = ++state.reads;
-        if (ordinal === 2)
-          throw Object.assign(new Error("합성 일시 조회 실패"), {
-            code: "UNAVAILABLE",
-            retryable: true,
-          });
-        const value = await original(id);
-        return {
-          ...value,
-          files: [
-            {
-              id: "synthetic-processing-file",
-              name: "합성 처리 자료.txt",
-              mimeType: "text/plain",
-              sizeBytes: 12,
-              status: ordinal === 1 ? "processing" : "ready",
-              coverage: "합성 처리 범위",
-              extractedText: "합성 추출 내용",
-            },
-          ],
-        };
-      },
+    const getFiles = async (id: string) => {
+      const owned = new Error().stack?.includes("Workspace.tsx");
+      if (!owned) return original(id);
+      const ordinal = ++state.reads;
+      if (ordinal === 2)
+        throw Object.assign(new Error("합성 일시 조회 실패"), {
+          code: "UNAVAILABLE",
+          retryable: true,
+        });
+      const value = await original(id);
+      return {
+        ...value,
+        files: [
+          {
+            id: "synthetic-processing-file",
+            name: "합성 처리 자료.txt",
+            mimeType: "text/plain",
+            sizeBytes: 12,
+            status: ordinal === 1 ? "processing" : "ready",
+            coverage: "합성 처리 범위",
+            extractedText: "합성 추출 내용",
+          },
+        ],
+      };
     };
+    api.workspace = new Proxy(api.workspace, {
+      get(target, key, receiver) {
+        return key === "getFiles" ? getFiles : Reflect.get(target, key, receiver);
+      },
+    });
     window.dispatchEvent(new Event("focus"));
   });
   const reads = () =>
@@ -711,7 +713,7 @@ test("two-round mobile flow saves/reloads/resumes/back edits/skips and reaches w
   await expect(page.getByRole("status").filter({ hasText: "답변이 저장됐어요" })).toBeVisible();
   await page.reload();
   await expect(page.getByRole("textbox", { name: "답변", exact: true })).toHaveValue("2026년 9월");
-  await page.getByRole("button", { name: "저장하고 다음 질문" }).click();
+  await page.getByRole("button", { name: "다음 질문", exact: true }).click();
   await expect(page.getByRole("heading", { name: "얼마의 금액이 관련되어 있나요?" })).toBeVisible();
   await openAnswerTools(page);
   await page.getByRole("button", { name: "이전 질문" }).click();
@@ -742,7 +744,7 @@ test("two-round mobile flow saves/reloads/resumes/back edits/skips and reaches w
   await openAnswerTools(page);
   await page.getByRole("button", { name: "이전 질문" }).click();
   await expect(page.getByRole("textbox", { name: "답변", exact: true })).toHaveValue("2026년 8월");
-  await page.getByRole("button", { name: "저장하고 다음 질문" }).click();
+  await page.getByRole("button", { name: "다음 질문", exact: true }).click();
   await page.getByRole("button", { name: "건너뛰기", exact: true }).click();
   await expect(page.getByText("1차 질문 · 3 / 3", { exact: true })).toBeVisible();
   expect(
@@ -899,9 +901,10 @@ test("summary returns to editable questions and regenerates after a prior answer
   await expect(page).toHaveURL(/\/summary/);
   await page.getByRole("link", { name: "이전 답변 수정하기" }).click();
   await page.getByRole("textbox", { name: "답변", exact: true }).fill("2026년 7월로 수정");
-  for (let index = 0; index < 5; index++)
-    await page.getByRole("button", { name: /^저장하고 (다음 질문|2차 질문 보기)$/ }).click();
-  await page.getByRole("button", { name: "저장하고 요약 보기" }).click();
+  await page.getByRole("button", { name: "저장하고 다음 질문", exact: true }).click();
+  for (let index = 1; index < 5; index++)
+    await page.getByRole("button", { name: "다음 질문", exact: true }).click();
+  await page.getByRole("button", { name: "요약 보기", exact: true }).click();
   await expect(page).toHaveURL(/\/summary/);
   await expect(page.getByRole("textbox", { name: "요약 편집" })).toHaveValue(/2026년 7월로 수정/);
 });
@@ -990,7 +993,7 @@ for (const editing of [false, true]) {
       await page.getByRole("link", { name: "이전 답변 수정하기" }).click();
       await expect(page).toHaveURL(/edit=1/);
       for (let index = 0; index < 5; index++)
-        await page.getByRole("button", { name: /^저장하고 (다음 질문|2차 질문 보기)$/ }).click();
+        await page.getByRole("button", { name: "다음 질문", exact: true }).click();
     }
     const second = page.getByRole("heading", {
       name: "내 입장에 불리하거나, 서로 다르게 기억하는 내용이 있나요?",
