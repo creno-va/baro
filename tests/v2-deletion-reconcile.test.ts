@@ -92,6 +92,7 @@ test("actual journal cursor retries partial R2 deletes, releases original/report
     environment: "preview",
     privateBucket: f.bucketPort,
     workflows: [missing, missing, missing, missing],
+    stopNative: async () => {},
     clock: () => at,
     testOnlyUnmeteredStorage: true,
   });

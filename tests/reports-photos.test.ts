@@ -255,3 +255,31 @@ test("real report renderer composition admits bounded native work with missing c
     n: 0,
   });
 });
+
+test("deletion during the selected original read prevents publishing a photo preview", async () => {
+  const f = await photoFixture(),
+    owner = f.actor.ownerId,
+    draft = await f.reports.get(owner, f.workspaceId);
+  const saved = await f.reports.save(owner, f.workspaceId, crypto.randomUUID(), {
+    expectedRevision: draft.revision,
+    content: draft.content,
+    maskIdentifiers: false,
+    excludedFileIds: [],
+    includedPhotoIds: [f.id],
+  });
+  let opened = 0;
+  const service = createReportsService(f.core, {
+    ...f.deps,
+    files: {
+      ...f.service,
+      content: async (...args) => {
+        const source = await f.service.content(...args);
+        opened++;
+        f.db.sqlite.query("DELETE FROM v2_files WHERE id=?").run(f.id);
+        return source;
+      },
+    },
+  });
+  await expect(service.html(owner, saved.id)).rejects.toThrow();
+  expect(opened).toBe(1);
+});

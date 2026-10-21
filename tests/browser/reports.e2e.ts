@@ -402,3 +402,39 @@ test("account deletion preserves signed session, OAuth callback and SQL revoke g
     child.kill();
   }
 });
+
+test("selected photos survive reload, appear in the HTML preview, and disappear when identifier masking is enabled", async ({
+  page,
+}) => {
+  await page.goto("/cases/case-demo/reports");
+  await prepareSavedPdf(page);
+  await page.reload();
+  await openReportOptions(page);
+  await expect(
+    page.getByRole("checkbox", { name: "PDF에 근거 사진 포함", exact: true }),
+  ).toBeChecked();
+  await page.getByRole("button", { name: "전달 내용 미리보기", exact: true }).click();
+  const image = page
+    .locator(".report-html-preview")
+    .getByAltText("선택 근거 사진 1", { exact: true });
+  await expect(image).toBeVisible();
+  expect(
+    await image.evaluate(
+      (element: HTMLImageElement) => element.complete && element.naturalWidth > 0,
+    ),
+  ).toBe(true);
+  await page
+    .getByRole("checkbox", { name: "전화번호·이메일·주민등록번호 가리기", exact: true })
+    .check();
+  await page.getByRole("button", { name: "검토 내용 저장", exact: true }).click();
+  await page.getByRole("button", { name: "전달 내용 미리보기", exact: true }).click();
+  await expect(
+    page.locator(".report-html-preview").getByAltText("선택 근거 사진 1", { exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("checkbox", { name: "PDF에 근거 사진 포함", exact: true }),
+  ).toBeChecked();
+  await expect(
+    page.getByRole("checkbox", { name: "PDF에 근거 사진 포함", exact: true }),
+  ).toBeDisabled();
+});

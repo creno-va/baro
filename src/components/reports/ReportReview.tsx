@@ -148,7 +148,6 @@ export function ReportReview({ caseId }: { caseId: string }) {
       }
       if (materials.status === "rejected") throw materials.reason;
       accept(value.value);
-      setIncludedPhotos([]);
     } catch (e) {
       const failure = e as { code?: string; ownerRevoked?: boolean };
       if (

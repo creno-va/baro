@@ -95,7 +95,7 @@ export function createReportMarkup(report: ReportDocument, embedded = false) {
   const photoMarkup = photos
     .map((photo, index) => {
       if (!/^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(photo.dataUrl)) return "";
-      return `<figure class="evidence-photo"><img src="${photo.dataUrl}" alt="선택 근거 사진 ${index + 1}"/><figcaption><strong>근거 사진 ${index + 1} · ${escapeHtml(photo.name)}</strong><br>자료 버전 ${photo.revision} · 이미지 1<br>사진의 상태·문서 기재 내용은 원인·촬영 시점·의학적 판단·진정성을 확인한 결과가 아닙니다.</figcaption></figure>`;
+      return `<figure class="evidence-photo"><img src="${photo.dataUrl}" alt="선택 근거 사진 ${index + 1}"/><figcaption><strong>근거 사진 ${index + 1} · ${escapeHtml(photo.name)}</strong><br>자료 버전 ${photo.revision} · 이미지 1 · 리포트용 사본(크기 조정·회전·재인코딩)<br>사진의 상태·문서 기재 내용은 원인·촬영 시점·의학적 판단·진정성을 확인한 결과가 아닙니다.</figcaption></figure>`;
     })
     .join("");
   const photoSection = photoMarkup

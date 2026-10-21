@@ -62,6 +62,8 @@ export type ReportDependencies = {
   }) => Promise<ProcessingCosts>;
   /** Preview-only explicit test composition. Never selected from a request. */
   testOnlyUnmeteredStorage?: true;
+  /** Explicit offline text renderer for preview fixtures with real storage admission. */
+  testOnlyLegacyPdf?: true;
   /** FixedLengthStream in Workers; the test adapter consumes a regular stream. */
   fixedLength?: (
     body: ReadableStream<Uint8Array>,
@@ -99,6 +101,9 @@ export function createReportExports(core: V2Core, deps: ReportDependencies, port
   const now = deps.clock ?? (() => new Date().toISOString());
   const maintenance = createStorageMaintenance(core, deps.environment, now);
   const test = deps.environment === "preview" && deps.testOnlyUnmeteredStorage === true;
+  if (deps.testOnlyLegacyPdf && deps.environment !== "preview")
+    throw new ReportError("STORAGE_UNAVAILABLE");
+  const legacyRenderer = test || deps.testOnlyLegacyPdf === true;
   if (deps.testOnlyUnmeteredStorage && !test) throw new ReportError("BUDGET_UNAVAILABLE");
   const bucket = () => {
     if (!deps.bucket) throw new ReportError("STORAGE_UNAVAILABLE");
@@ -571,7 +576,7 @@ export function createReportExports(core: V2Core, deps: ReportDependencies, port
             sourceRows: fence.rows,
             reportFiles: data.body.selectedFiles.length,
           })
-        : test && !report.photos.length
+        : legacyRenderer && !report.photos.length
           ? await renderReportPdf(await deps.font(), {
               ...report,
               content: report.maskIdentifiers ? maskReportText(report.content) : report.content,

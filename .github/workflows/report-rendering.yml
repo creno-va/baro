@@ -28,7 +28,7 @@ jobs:
   render:
     name: HTML/PDF native rendering
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -42,6 +42,13 @@ jobs:
         run: |
           bun scripts/report-native-fixture.ts
           chmod a+rwx .wrangler/report-native
+      - name: Install pinned offline PDF verification dependency
+        run: |
+          python3 -m venv "$RUNNER_TEMP/baro-report-python"
+          "$RUNNER_TEMP/baro-report-python/bin/python" -m pip install --require-hashes --only-binary=:all: -r tests/browser/requirements.txt
+          echo "$RUNNER_TEMP/baro-report-python/bin" >> "$GITHUB_PATH"
+      - name: Unit and integration regressions on Linux
+        run: bun test
       - name: Build the pinned PDF runtime layer
         run: docker build --target office-runtime -f services/file-processor/Dockerfile -t baro-report-rendering .
       - name: Render and inspect offline PDF

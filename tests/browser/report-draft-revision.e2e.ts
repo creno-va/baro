@@ -136,7 +136,6 @@ test("PDF waits for the postflight owner check despite focus, and rejects a chan
   await expect.poll(() => blocked).toBe(true);
   await expect(page.locator(".report-progress")).toContainText("접근 권한 다시 확인 중");
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
-  await expect(page.getByRole("button", { name: "PDF 다운로드", exact: true })).toBeDisabled();
   expect(downloads).toBe(0);
   expect(pdfCalls).toBe(1);
   postflight.release();

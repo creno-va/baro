@@ -161,6 +161,7 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
       )
       .first<{ id: string; created_at: string; file_count: number }>();
     const archive = saved ? await read(a, saved.id) : null;
+    const candidates = stale ? [] : await photoCandidates(core, a, data.body);
     await row(a, id);
     return {
       ...(saved && archive?.review.parentReportId === id && saved.file_count > 0
@@ -180,7 +181,7 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
       },
       pdfAvailable: data.row.state === "ready" && !!data.row.pdf_blob_id,
       includedPhotoIds: data.review.includedPhotoIds ?? [],
-      photoCandidates: stale ? [] : await photoCandidates(core, a, data.body),
+      photoCandidates: candidates,
       excludedFileIds: data.review.excludedFileIds,
       maskIdentifiers: data.review.maskIdentifiers,
     };
