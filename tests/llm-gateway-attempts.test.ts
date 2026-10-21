@@ -565,3 +565,16 @@ test("partial or invalid metering never invents cache zeros, a price tier, or co
   }
   expect(responseReceipt({ ...completion(), usage: [] }).meteringStatus).toBe("invalid");
 });
+
+test("Gemini standard tier maps to default without inventing absent cache or usage counts", () => {
+  const receipt = responseReceipt({
+    service_tier: "standard",
+    usage: { prompt_tokens: 8, completion_tokens: 13 },
+  });
+  expect(receipt.serviceTier).toBe("default");
+  expect(receipt.inputTokens).toBe(8);
+  expect(receipt.outputTokens).toBe(13);
+  expect(receipt.cachedInputTokens).toBeNull();
+  expect(receipt.cacheWriteInputTokens).toBeNull();
+  expect(receipt.meteringStatus).toBe("incomplete");
+});

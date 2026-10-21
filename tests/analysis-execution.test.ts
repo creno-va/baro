@@ -189,7 +189,7 @@ test("synthetic admission to official citations/result, checkpoint replay, re-re
   for (const phase of phases.slice(2)) await f.execute().phase(phase);
   const analysis = await f.repo.findCurrentAnalysis(f.session.userId, f.caseId);
   expect(analysis?.status).toBe("completed");
-  expect(analysis?.modelId).toBe("openai/gpt-6-sol");
+  expect(analysis?.modelId).toBe("google/gemini-3.8-flash");
   const result = await api.request(
     `/cases/${f.caseId}`,
     { headers: { cookie: f.session.cookie } },

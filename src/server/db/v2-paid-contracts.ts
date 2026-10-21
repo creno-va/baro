@@ -6,8 +6,9 @@ import {
 } from "../../contracts";
 import { v2HashSchema } from "../../contracts/v2";
 
-// Existing accepted model identifiers, not a provider/model selection mechanism.
-const MODEL_ID = "openai/gpt-6-sol";
+import { LEGACY_MODEL_ID, MODEL_ID } from "../model-policy";
+
+// Historical proofs stay readable; dispatch only accepts the current model.
 const timestampSchema = inputTimestampSchema.transform((value) => new Date(value).toISOString());
 
 // Decimal strings are never converted to binary floats for money arithmetic.
@@ -52,14 +53,15 @@ const officialUrl = z.url().refine((url) => {
       "developers.openai.com",
       "openai.com",
       "platform.openai.com",
+      "ai.google.dev",
     ].includes(value.hostname)
   );
 }, "Official pricing reference required");
 const priceSchema = z
   .strictObject({
     sku: costSkuSchema,
-    provider: z.enum(["cloudflare", "openai"]),
-    model: z.enum([MODEL_ID, "@cf/openai/whisper-large-v3-turbo"]).nullable(),
+    provider: z.enum(["cloudflare", "openai", "google"]),
+    model: z.enum([MODEL_ID, LEGACY_MODEL_ID, "@cf/openai/whisper-large-v3-turbo"]).nullable(),
     region: z.string().min(1).max(100),
     plan: z.string().min(1).max(100),
     billingMode: z.enum(["metered", "verified_free"]),
@@ -89,7 +91,8 @@ const priceSchema = z
     "Missing price cannot become zero",
   )
   .refine((price) => {
-    if (price.sku.startsWith("model_")) return price.model === MODEL_ID;
+    if (price.sku.startsWith("model_"))
+      return price.model === MODEL_ID || price.model === LEGACY_MODEL_ID;
     if (price.sku === "asr_seconds") return price.model === "@cf/openai/whisper-large-v3-turbo";
     return price.model === null;
   }, "Only agreed model/ASR identifiers are allowed")
@@ -121,7 +124,7 @@ export const pricingProofSchema = z
     prices: z.array(priceSchema).min(1).max(32),
     modelBillingPolicy: z
       .strictObject({
-        contextThresholdTokens: z.literal(272000),
+        contextThresholdTokens: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
         serviceTier: z.literal("default"),
         processingRegion: z.string().min(1).max(100),
         regionMultiplier: positiveDecimal,
@@ -199,6 +202,7 @@ export const executionPlanSchema = z
     operationRevision: revisionSchema,
     requestHash: v2HashSchema,
     invocationId: opaqueIdSchema,
+    model: z.enum([MODEL_ID, LEGACY_MODEL_ID, "@cf/openai/whisper-large-v3-turbo"]).optional(),
     maximumAttempts: z.number().int().min(1).max(10),
     deadlineAt: timestampSchema,
     // Per actual transport attempt; the proof multiplier covers hidden provider retries.

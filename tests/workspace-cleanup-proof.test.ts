@@ -1,5 +1,4 @@
 import { afterEach, expect, test } from "bun:test";
-import observation from "../docs/operations/AI-RUNTIME-OBSERVATION.json";
 import { modelBounds, observationSchema } from "../scripts/provision-ai-budget";
 import { CURRENT_POLICY_VERSIONS } from "../src/contracts/consent";
 import { createCaseDataCipher } from "../src/server/crypto";
@@ -15,6 +14,7 @@ import { createWorkspaceService } from "../src/server/modules/workspace/service"
 import { createWorkspaceDependencies } from "../src/server/runtime/workspace";
 import { createTestDatabase } from "./helpers/d1";
 import { r2 } from "./helpers/file-processing-fixture";
+import observation from "./helpers/gemini-observation";
 import { seedTestSession } from "./helpers/session";
 import {
   deletedCleanupResult,

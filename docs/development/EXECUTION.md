@@ -26,6 +26,7 @@
 
 | 작업 | 담당/이슈 | 현재 상태·blocker | 다음 행동 |
 | --- | --- | --- | --- |
+| Gemini 모델·질문 하네스 | AI / #305 | 2026-10-21 사용자 승인, 별도 codex/305-gemini-flash-pipeline worktree. #304 법률 API와 PR303 UI 범위 분리 | ADR-0016·고정 평가·quick/build·CI 검증 후 별도 PR 병합. 실제 모델·배포 인수는 별도 receipt |
 | 업로드·물리 용량 | 자료 모듈 + 총괄, #58 | PR230→229→235와0014가04f25f8에 포함돼 배포됨. production storage 초기화 성공; 실제 업로드/ZIP/cleanup은 이번 receipt에 없음 | 물리 inventory/writer 경계를 유지하며 남은 자료 경로의 구현·실제 증거를 구분 |
 | 비용 관측 분리 | 비용 모듈 + 총괄, #57 | PR247/259 병합; preview71892c5·schema0016에서 기술 admission과 선택적 관측 분리, 기존 원장 보존 확인. 가격/funding 없는 물리 bootstrap도 구현·로컬 검증 | 기존 관측·hold·원장/보안/기술 상한 보존. 비용 차단 재도입 금지. 실제 preview 핵심 흐름은 아래 단일 추적표에서 별도 인수 |
 | 릴리스 증거 | 총괄, #19/#71 | 04f25f8 동일 SHA CI·preview·production 성공, 실제 일반 채팅·리포트/PDF/HTML 확인 | 이번 관측 분리의 새 PR/배포 증거를 별도 기록. 기존 성공을 새 변경 또는 전체 MVP 완료로 확대하지 않음 |

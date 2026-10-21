@@ -2,7 +2,6 @@ import { afterEach, expect, test } from "bun:test";
 import { readdir } from "node:fs/promises";
 import { Hono } from "hono";
 import { convertV4MiniflareOptions, Miniflare } from "miniflare";
-import observation from "../docs/operations/AI-RUNTIME-OBSERVATION.json";
 import { modelBounds, observationSchema, provisionAiRuntime } from "../scripts/provision-ai-budget";
 import { CURRENT_POLICY_VERSIONS } from "../src/contracts/consent";
 import { v2JobSchema } from "../src/contracts/v2";
@@ -32,6 +31,7 @@ import {
 } from "../src/server/runtime/workspace";
 import { signedSessionCookie, testEnvironment } from "./helpers/d1";
 import { measureD1Work } from "./helpers/d1-work";
+import observation from "./helpers/gemini-observation";
 import { nativeD1Transport, nativeD1TransportWorker } from "./helpers/native-d1-transport";
 import { createNativeFailureHistory, nativeFailure } from "./helpers/native-failure";
 import { createNativeTestRegistry, type NativeLifetime } from "./helpers/native-lifetime";

@@ -1,5 +1,4 @@
 import { afterEach, expect, setSystemTime, test } from "bun:test";
-import observation from "../docs/operations/AI-RUNTIME-OBSERVATION.json";
 import { modelBounds, observationSchema, provisionAiRuntime } from "../scripts/provision-ai-budget";
 import { createCaseDataCipher } from "../src/server/crypto";
 import { createV2Core } from "../src/server/db/v2-core";
@@ -13,6 +12,7 @@ import {
   runWorkspaceRuntime,
 } from "../src/server/runtime/workspace";
 import { createTestDatabase } from "./helpers/d1";
+import observation from "./helpers/gemini-observation";
 import { seedTestSession } from "./helpers/session";
 
 const databases: Awaited<ReturnType<typeof createTestDatabase>>[] = [];

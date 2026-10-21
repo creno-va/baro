@@ -19,6 +19,8 @@ import {
   uuidSchema,
 } from "../../contracts";
 import type { EnvelopeCipher } from "../crypto";
+import { MODEL_ID } from "../model-policy";
+import { PROMPT_VERSION } from "../modules/llm-gateway/prompts";
 import {
   ACTIVE_ANALYSIS_STATUSES,
   analyses,
@@ -366,7 +368,7 @@ export function createDomainRepository(binding: D1Database, cipher: EnvelopeCiph
         const g = parse(guardSchema, input);
         const encrypted = await cipher.encrypt(plaintext, field(g, "encrypted_context"));
         const result = await statement(
-          `UPDATE analyses SET encrypted_context=?,updated_at=?,started_at=COALESCE(started_at,?),model_id='openai/gpt-6-sol',prompt_version='1.0.0',schema_version='1',policy_version='1.0.0' WHERE id=? AND encrypted_context IS ? AND ${currentGuard}`,
+          `UPDATE analyses SET encrypted_context=?,updated_at=?,started_at=COALESCE(started_at,?),model_id='${MODEL_ID}',prompt_version='${PROMPT_VERSION}',schema_version='1',policy_version='1.0.0' WHERE id=? AND encrypted_context IS ? AND ${currentGuard}`,
           [encrypted, parse(nowSchema, now), now, g.analysisId, previous, ...guardValues(g)],
         ).run();
         return result.meta.changes === 1;
