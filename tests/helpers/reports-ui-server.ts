@@ -42,7 +42,8 @@ const css =
   globalCss +
   (await Bun.file(`${root}/src/styles/workspace.css`).text()) +
   (await Bun.file(`${root}/src/styles/reports.css`).text()) +
-  (await Bun.file(`${root}/src/styles/settings.css`).text());
+  (await Bun.file(`${root}/src/styles/settings.css`).text()) +
+  "body>p{padding:12px;background:#edf4ff}main#root{padding:20px}";
 const server = Bun.serve({
   hostname: "127.0.0.1",
   port: Number(Bun.env.BARO_REPORT_TEST_PORT ?? 4343),
@@ -60,8 +61,14 @@ const server = Bun.serve({
     if (path === "/fonts/PretendardVariable.woff2")
       return new Response(Bun.file(`${root}/public/fonts/PretendardVariable.woff2`));
     return new Response(
-      '<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>BARO D - 합성 브라우저 검증</title><link rel="stylesheet" href="/app.css"></head><body><p style="padding:12px;background:#edf4ff">API 예시 응답으로 보기 · 독립 D 브라우저 검증</p><main id="root" style="padding:20px"></main><script type="module" src="/app.js"></script></body></html>',
-      { headers: { "content-type": "text/html;charset=utf-8" } },
+      '<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>BARO D - 합성 브라우저 검증</title><link rel="stylesheet" href="/app.css"></head><body><p>API 예시 응답으로 보기 · 독립 D 브라우저 검증</p><main id="root"></main><script type="module" src="/app.js"></script></body></html>',
+      {
+        headers: {
+          "content-type": "text/html;charset=utf-8",
+          "content-security-policy":
+            "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; object-src 'none'; base-uri 'self'",
+        },
+      },
     );
   },
 });

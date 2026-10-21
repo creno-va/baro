@@ -499,10 +499,11 @@ export function ReportReview({ caseId }: { caseId: string }) {
                       const blob = await ownedResult(api.reports.html(report.id));
                       const html = await ownedResult(blob.text());
                       const document = new DOMParser().parseFromString(html, "text/html");
-                      const main = document.querySelector("main"),
-                        style = document.querySelector("style");
-                      if (!main || !style) throw new Error("미리보기를 확인하지 못했어요.");
-                      setSavedPreview(`<style>${style.textContent}</style>${main.innerHTML}`);
+                      const main = document.querySelector("main");
+                      if (!main) throw new Error("미리보기를 확인하지 못했어요.");
+                      // The page loads the report stylesheet as an approved
+                      // static asset. Do not insert inline styles under CSP.
+                      setSavedPreview(main.innerHTML);
                       setPreview(true);
                     });
                   }}

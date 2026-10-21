@@ -423,6 +423,10 @@ test("selected photos survive reload, appear in the HTML preview, and disappear 
       (element: HTMLImageElement) => element.complete && element.naturalWidth > 0,
     ),
   ).toBe(true);
+  const imageBox = await image.boundingBox();
+  const previewBox = await page.locator(".report-html-preview").boundingBox();
+  expect(imageBox?.width).toBeLessThanOrEqual(previewBox?.width ?? 0);
+  await expect(page.locator(".report-html-preview style")).toHaveCount(0);
   await page
     .getByRole("checkbox", { name: "전화번호·이메일·주민등록번호 가리기", exact: true })
     .check();

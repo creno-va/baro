@@ -17,7 +17,7 @@ Vision은 보이는 상태, 문서 기재, 확인 필요를 한국어로 구분�
 
 ## 조판과 저장
 
-동일한 `createReportHtml`을 미리보기와 PDF 입력으로 사용한다. 사용자의 문자열은 모두 escape하며 사진은 해시가 확인된 private 원본의 data URL만 사용한다. PDF 입력에는 기존 배포 TTF를 내장한다. 기존 비공개 Container에 고정 WeasyPrint62.3-1을 추가하고 JS 없이 A4로 조판한다. URL fetcher는 허용 data 이미지/TTF와 고정 브랜드 SVG만 받는다. 외부 HTTP·로컬 파일·임의 SVG를 차단한다. 사진을 미리 검증하여 잘못된 사진을 조용히 빠뜨리지 않는다. EXIF 회전 후 재인코딩으로 PDF 사진의 메타데이터를 없앤다. 문서100페이지·입력20MB·출력24MB·240초 처리와 기존 stop/revoke를 유지한다.
+동일한 `createReportHtml`을 미리보기와 PDF 입력으로 사용한다. 사건 화면에서는 허용된 정적 reports stylesheet로 사진 크기와 조판을 표시하고 응답의 inline style은 삽입하지 않는다. 사용자의 문자열은 모두 escape하며 사진은 해시가 확인된 private 원본의 data URL만 사용한다. PDF 입력에는 기존 배포 TTF를 내장한다. 기존 비공개 Container에 고정 WeasyPrint62.3-1을 추가하고 JS 없이 A4로 조판한다. URL fetcher는 허용 data 이미지/TTF와 고정 브랜드 SVG만 받는다. 외부 HTTP·로컬 파일·임의 SVG를 차단한다. 사진을 미리 검증하여 잘못된 사진을 조용히 빠뜨리지 않는다. EXIF 회전 후 재인코딩으로 PDF 사진의 메타데이터를 없앤다. 문서100페이지·입력20MB·출력24MB·240초 처리와 기존 stop/revoke를 유지한다.
 
 신규 report job은 회수 가능한 `native-v1-report-UUID-1` runtime 이름을 사용한다. 기존 draft의 report-local 이름은 동일 lease 아래 CAS로 등록 전환한다. 삭제는 native를 먼저 revoke하고 Workflow가 없는 보고서 작업을 구분한다. native 실행은 기존 기술 admission과 비용 관측을 거친다. 가격/재원 관측 누락은 관측 전용 모드의 실행을 막지 않으며 usage는 unknown을 보존한다. PDF는 기존 암호화/물리 용량/lease/fence 경로로 저장한다. 실제 runtime에 텍스트 PDF fallback은 없다. 기존 writer는 명시적 preview 테스트 대역에만 남긴다.
 
