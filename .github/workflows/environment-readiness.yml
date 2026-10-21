@@ -15,10 +15,13 @@ on:
         type: boolean
         default: false
       legal_scope:
-        description: Full source readiness or one fixed housing-statute diagnostic (not release evidence)
+        description: Full source readiness or a fixed public source diagnostic (not release evidence)
         type: choice
         options:
           - standard
+          - core_sources
+          - statute_matrix
+          - precedent_matrix
           - housing_article_3_2
         default: standard
       check_gateway:

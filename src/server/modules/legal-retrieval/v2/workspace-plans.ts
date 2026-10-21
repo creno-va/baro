@@ -1,16 +1,17 @@
 import { z } from "zod";
 import { planSchema, type RetrievalPlan } from "./contracts";
 
-// Observed existing registry page only. Models select keys, never document IDs/URLs.
+// Observed general legal-aid page in the existing admitted registry.
+// Models select keys, never document IDs/URLs; pending updates remain limited.
 export const workspaceGuidePlans = {
   legal_consultation: {
     kind: "official_guide",
     institutionId: "moleg_easylaw",
     endpointId: "easylaw_text_section",
-    csmSeq: "734",
-    ccfNo: "3",
-    cciNo: "1",
-    cnpClsNo: "4",
+    csmSeq: "568",
+    ccfNo: "2",
+    cciNo: "2",
+    cnpClsNo: "1",
   },
 } as const satisfies Record<string, RetrievalPlan>;
 

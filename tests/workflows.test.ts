@@ -90,7 +90,13 @@ test("readiness is manual, main-only and cannot create deployment evidence", asy
       check_legal: { type: "boolean", default: false },
       legal_scope: {
         type: "choice",
-        options: ["standard", "housing_article_3_2"],
+        options: [
+          "standard",
+          "core_sources",
+          "statute_matrix",
+          "precedent_matrix",
+          "housing_article_3_2",
+        ],
         default: "standard",
       },
     },

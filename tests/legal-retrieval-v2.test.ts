@@ -4,6 +4,7 @@ import { createV2Core } from "../src/server/db/v2-core";
 import { createV2DeletionRepository } from "../src/server/db/v2-deletion";
 import { createV2OfficialSourceRepository } from "../src/server/db/v2-official-sources";
 import { createV2WorkspaceRepository } from "../src/server/db/v2-workspace";
+import { validateV2Claims } from "../src/server/modules/citation/v2-validate";
 import { textHash } from "../src/server/modules/legal-retrieval/service";
 import { createWorkspaceSourceAuthorization } from "../src/server/modules/legal-retrieval/v2/authorization";
 import {
@@ -26,8 +27,11 @@ import {
   parseStatute,
   parseStatuteCandidate,
   selectStatute,
+  selectStatuteHistory,
 } from "../src/server/modules/legal-retrieval/v2/statutes";
 import { createBoundedTransport } from "../src/server/modules/legal-retrieval/v2/transport";
+import { workspaceRetrievalPlans } from "../src/server/modules/legal-retrieval/v2/workspace-plans";
+import { projectWorkspaceSources } from "../src/server/modules/legal-retrieval/v2/workspace-sources";
 import officialList from "./fixtures/legal/official-list.json";
 import officialDetail from "./fixtures/legal/official-sample.json";
 import capturedGuide from "./fixtures/legal/v2/captured-guide-structure.json";
@@ -163,6 +167,116 @@ test("captured official statute list/detail parse exact identity, dates, article
   expect(chunk.source.body).toContain("소비대차");
   expect(chunk.source.body).not.toContain("OC=");
 });
+
+function syntheticLongHistory() {
+  const base = officialList.LawSearch.law[0];
+  if (!base) throw new Error("Missing synthetic history base");
+  const current = structuredClone(base);
+  const older = Array.from({ length: 100 }, (_, index) => ({
+    ...current,
+    // One promulgation legitimately has multiple effective-date rows.
+    법령일련번호: index === 0 ? current.법령일련번호 : String(800000 + index),
+    시행일자: new Date(Date.UTC(1990, 0, index + 1)).toISOString().slice(0, 10).replaceAll("-", ""),
+    공포일자: "19890101",
+  }));
+  const firstPage = { LawSearch: { totalCnt: 101, page: 1, law: older } };
+  const lastPage = { LawSearch: { totalCnt: 101, page: 2, law: [current] } };
+  return [firstPage, lastPage] as const;
+}
+
+test("complete multi-page statute history selects the valid version and caches only the verified original", async () => {
+  const f = await fixture(),
+    pages = syntheticLongHistory();
+  const calls: string[] = [];
+  const service = f.service({
+    transport: async (raw) => {
+      const url = new URL(raw);
+      calls.push(
+        url.pathname.endsWith("lawSearch.do") ? `list_${url.searchParams.get("page")}` : "detail",
+      );
+      return response(
+        url.pathname.endsWith("lawSearch.do")
+          ? pages[Number(url.searchParams.get("page")) - 1]
+          : officialDetail,
+      );
+    },
+  });
+  for (const cached of [false, true]) {
+    calls.length = 0;
+    const result = await service.retrieve(input(), f.access);
+    expect(result.outcomes[0]?.availability).toBe("verified");
+    expect(result.chunks[0]?.source.version).toBe("284415");
+    expect(calls).toEqual(cached ? ["list_1", "list_2"] : ["list_1", "list_2", "detail"]);
+  }
+  expect(f.attempts).toHaveLength(5);
+});
+
+test.each(["missing", "overlap", "changed_total", "wrong_page"])(
+  "statute pagination rejects %s history instead of publishing a partial version",
+  async (mode) => {
+    const pages = syntheticLongHistory();
+    const second = pages[1];
+    if (mode === "missing") second.LawSearch.law = [];
+    if (mode === "overlap") {
+      const first = pages[0].LawSearch.law[0];
+      if (!first) throw new Error("Missing synthetic history row");
+      second.LawSearch.law = [first];
+    }
+    if (mode === "changed_total") second.LawSearch.totalCnt = 102;
+    if (mode === "wrong_page") second.LawSearch.page = 1;
+    await expect(
+      selectStatuteHistory(pages[0], async () => second, statutePlan, "2026-10-06"),
+    ).rejects.toMatchObject({ reason: "history_incomplete" });
+  },
+);
+
+test("statute history page limit stops before issuing more upstream requests", async () => {
+  const pages = syntheticLongHistory();
+  pages[0].LawSearch.totalCnt = 501;
+  let extra = 0;
+  await expect(
+    selectStatuteHistory(
+      pages[0],
+      async () => {
+        extra++;
+        return pages[1];
+      },
+      statutePlan,
+      "2026-10-06",
+    ),
+  ).rejects.toMatchObject({ reason: "history_incomplete" });
+  expect(extra).toBe(0);
+});
+
+test.each(["quota", "consent", "cancel"])(
+  "statute page two respects %s before making the next upstream request",
+  async (mode) => {
+    const f = await fixture(),
+      pages = syntheticLongHistory(),
+      controller = new AbortController();
+    let calls = 0;
+    const service = f.service({
+      transport: async () => {
+        calls++;
+        if (mode === "consent")
+          f.db.sqlite.query("DELETE FROM user_consents WHERE user_id=?").run(f.actor.ownerId);
+        if (mode === "cancel") controller.abort();
+        return response(pages[0]);
+      },
+    });
+    const result = await service.retrieve(input(), {
+      ...f.access,
+      signal: controller.signal,
+      reserveRequest: async (attempt) =>
+        mode !== "quota" || attempt.endpointId !== "moleg_eflaw_list" || calls === 0,
+    });
+    expect(result.chunks).toEqual([]);
+    expect(result.outcomes[0]?.reason).toBe(
+      mode === "quota" ? "budget_exhausted" : mode === "consent" ? "not_authorized" : "cancelled",
+    );
+    expect(calls).toBe(1);
+  },
+);
 
 test("actual SQL discovery cache needs no caller source keys and preserves fresh workspace citations", async () => {
   const f = await fixture();
@@ -689,6 +803,7 @@ test("precedent requests use bounded dated lists and the validated ID for detail
         type: "JSON",
         query: "합성 개념",
         search: "2",
+        datSrcNm: "대법원",
         display: "3",
         page: "1",
         sort: "ddes",
@@ -702,6 +817,97 @@ test("precedent requests use bounded dated lists and the validated ID for detail
         type: "JSON",
         ID: "90000000201",
       },
+    },
+  ]);
+});
+
+test("top-one court precedent remains bound and quotable while larger search coverage stays partial", async () => {
+  const f = await fixture();
+  const list = precedents.find((v) => v.id === "precedent_list_candidate");
+  const detail = precedents.find((v) => v.id === "precedent_verified");
+  if (!list || !detail) throw new Error("Missing synthetic precedent");
+  const body = JSON.parse(list.response.body);
+  body.PrecSearch.totalCnt = 200;
+  let calls = 0;
+  const service = f.service({
+    transport: async (raw) => {
+      calls++;
+      const url = new URL(raw);
+      if (url.pathname.endsWith("lawSearch.do")) {
+        expect(url.searchParams.get("datSrcNm")).toBe("대법원");
+        expect(url.searchParams.get("display")).toBe("1");
+        return response(body);
+      }
+      return response(syntheticPrecedentDetail(detail.response.body));
+    },
+  });
+  const plans = workspaceRetrievalPlans([{ kind: "precedent", concept: "대여금" }]);
+  for (const cached of [false, true]) {
+    calls = 0;
+    const result = await service.retrieve(input(plans), f.access);
+    expect(result.outcomes[0]).toMatchObject({
+      availability: "verified",
+      reason: null,
+      searchTruncated: true,
+    });
+    const projected = await projectWorkspaceSources(result);
+    expect(projected.citations).toHaveLength(1);
+    expect(projected.sourceCoverage.sourcesPartial).toBe(true);
+    expect(projected.sourceCoverage.outcomes[0]?.searchTruncated).toBe(true);
+    const citation = projected.citations[0];
+    const excerpt = projected.sourceTexts[0];
+    if (!citation || !excerpt) throw new Error("Missing verified precedent");
+    expect(
+      (
+        await validateV2Claims(
+          [
+            {
+              id: "synthetic_claim",
+              kind: "quotation",
+              text: excerpt.text,
+              citationId: citation.id,
+              startUtf16: 0,
+              endUtf16: excerpt.text.length,
+            },
+          ],
+          projected.citations,
+          projected.sourceRetrieval,
+        )
+      ).valid,
+    ).toBe(true);
+    expect(calls).toBe(cached ? 1 : 2);
+  }
+  expect(f.db.sqlite.query("SELECT count(*) AS n FROM v2_citation_bindings").get()).toEqual({
+    n: 2,
+  });
+});
+
+test("precedent source filter remains server-selected and cannot admit arbitrary source parameters", () => {
+  const url = new URL(
+    "https://www.law.go.kr/DRF/lawSearch.do?target=prec&type=JSON&datSrcNm=대법원",
+  );
+  expect(assertOfficialUrl(url.href).hostname).toBe("www.law.go.kr");
+  for (const source of ["국세법령정보시스템", "arbitrary", ""]) {
+    url.searchParams.set("datSrcNm", source);
+    expect(() => assertOfficialUrl(url.href)).toThrow();
+  }
+  url.searchParams.set("datSrcNm", "대법원");
+  url.searchParams.append("datSrcNm", "대법원");
+  expect(() => assertOfficialUrl(url.href)).toThrow();
+});
+
+test("general consultation selects general legal aid rather than crime-victim eligibility", () => {
+  expect(
+    workspaceRetrievalPlans([{ kind: "official_guide", guideKey: "legal_consultation" }]),
+  ).toEqual([
+    {
+      kind: "official_guide",
+      institutionId: "moleg_easylaw",
+      endpointId: "easylaw_text_section",
+      csmSeq: "568",
+      ccfNo: "2",
+      cciNo: "2",
+      cnpClsNo: "1",
     },
   ]);
 });
