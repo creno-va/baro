@@ -46,6 +46,8 @@ test("dependency and deployment-only changes cannot skip AI admission and execut
 
 test("AI runtime, schema, capability and dispatch changes retain the complete focused suite", async () => {
   for (const file of [
+    "src/server/model-policy.ts",
+    "docs/operations/GEMINI-MODEL-CAPABILITY.json",
     "src/server/runtime/workspace.ts",
     "src/server/runtime/processing-proofs.ts",
     "src/server/modules/llm-gateway/service.ts",

@@ -1,5 +1,4 @@
 import { expect, test } from "bun:test";
-import observation from "../docs/operations/AI-RUNTIME-OBSERVATION.json";
 import { modelBounds, modelCapabilitySchema } from "../scripts/provision-ai-budget";
 import { runtimeDigest } from "../src/server/db/v2-paid-runtime";
 import { configuredMediaPolicy } from "../src/server/modules/budget/media-capability";
@@ -11,6 +10,7 @@ import {
   isDocumentedVisionSupport,
   prepareVisionWire,
 } from "../src/server/modules/llm-gateway/vision-wire";
+import observation from "./helpers/gemini-observation";
 
 const now = "2026-10-15T03:00:00.000Z";
 function config() {
@@ -59,7 +59,7 @@ test("stale cost observation permits exact full-context technical execution with
   expect(prepared).toMatchObject({
     inputDigest: inputHash,
     quantities: [
-      { sku: "model_input_tokens", maximumQuantity: "1046000" },
+      { sku: "model_input_tokens", maximumQuantity: "1044576" },
       { sku: "model_output_tokens", maximumQuantity: "4000" },
     ],
     verifiedAt: now,
@@ -168,4 +168,13 @@ test("wire changes retain a distinct execution evidence digest", async () => {
   expect(first).not.toBeNull();
   expect(second).not.toBeNull();
   expect(first?.evidenceHash).not.toBe(second?.evidenceHash);
+});
+
+test("legacy or unbound model capability never authorizes Gemini vision", async () => {
+  const current = config();
+  for (const model of ["openai/gpt-6-sol", undefined]) {
+    const value = { ...current, model };
+    expect(await policy(value).visionCapability(now)).toBeNull();
+    expect(await policy(value).bounds(await input(), inputHash, now)).toBeNull();
+  }
 });

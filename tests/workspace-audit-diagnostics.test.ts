@@ -187,5 +187,5 @@ test("provider output requires bounded diagnostics but permits unknown without i
     "This classification only explains a finding already reached; it must not create a finding, change pass or severity, or replace any semantic or policy check.",
   );
   expect(wire.max_completion_tokens).toBe(2400);
-  expect(wire.store).toBe(false);
+  expect(wire).not.toHaveProperty("store");
 });

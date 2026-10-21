@@ -84,8 +84,8 @@ test("question transport uses provider-supported nested unions and retains both 
   const format = JSON.stringify(prepareGatewayWireInput("workspace_questions", {}).response_format);
   expect(format).not.toContain('"oneOf"');
   expect(format).toContain('"anyOf"');
-  expect(format).toContain('"const":"text"');
-  expect(format).toContain('"const":"choice"');
+  expect(format).toContain('"enum":["text"]');
+  expect(format).toContain('"enum":["choice"]');
   expect(format).toContain('"additionalProperties":false');
 });
 test("Worker binding sends pinned structured model/privacy options and allowlisted metadata", async () => {
@@ -97,8 +97,8 @@ test("Worker binding sends pinned structured model/privacy options and allowlist
       AI: {
         run: async (model, input, options) => {
           expect(model).toBe(MODEL_ID);
-          expect(input.reasoning_effort).toBe("medium");
-          expect(input.store).toBe(false);
+          expect(input.reasoning_effort).toBe("low");
+          expect(input).not.toHaveProperty("store");
           expect(input.service_tier).toBe("default");
           expect(input).not.toHaveProperty("temperature");
           expect(options).toEqual({
@@ -268,4 +268,44 @@ test("critical policy/citation findings and prohibited output fail closed withou
     "POLICY_REJECTED",
   );
   expect(calls).toBe(1);
+});
+
+test("Gemini thinking policy separates bounded generation from independent audit", () => {
+  expect(MODEL_ID).toBe("google/gemini-3.8-flash");
+  for (const phase of Object.keys(prompts) as (keyof typeof prompts)[]) {
+    const wire = prepareGatewayWireInput(phase, {});
+    expect(wire.reasoning_effort).toBe(
+      phase === "workspace_audit" || phase === "validation" ? "medium" : "low",
+    );
+    expect(wire).not.toHaveProperty("store");
+    expect(JSON.stringify(wire)).not.toContain('"reasoning_effort":"minimal"');
+  }
+});
+
+test("Gemini content filtering is a policy refusal and never consumes a schema correction", async () => {
+  let calls = 0,
+    corrections = 0;
+  const gateway = createLlmGateway({
+    AI_GATEWAY_ID: "synthetic",
+    AI: {
+      run: async () => {
+        calls++;
+        return { choices: [{ message: { content: null }, finish_reason: "content_filter" }] };
+      },
+    },
+  });
+  await expect(
+    gateway.call(
+      "workspace_questions",
+      {},
+      "safe",
+      async () => true,
+      async () => {
+        corrections++;
+        return true;
+      },
+    ),
+  ).rejects.toThrow("POLICY_REJECTED");
+  expect(calls).toBe(1);
+  expect(corrections).toBe(0);
 });

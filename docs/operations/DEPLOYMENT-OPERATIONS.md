@@ -61,7 +61,9 @@ bun run deploy:production --sha <full40sha> --mode public-beta
 bun run deploy:production --sha <full40sha> --mode operator-authorized --authorization <issue71_comment_id>
 ```
 
-공용 배포 action은 `scripts/configure-ai-runtime.ts`로 환경별 모델 capability를 설정한다.
+공용 배포 action은 `scripts/configure-ai-runtime.ts`로 환경별 Gemini 3.8 Flash capability를 설정한다.
+정본은 `GEMINI-MODEL-CAPABILITY.json`의 문서 관측이며, 기존 `AI-RUNTIME-OBSERVATION.json`의 GPT 재원/가격/관측 시각은 변경하지 않는다.
+새 설정은 모델 ID를 포함해 이전 GPT 기술 한도를 Gemini로 재사용하지 않는다. 이 설정 성공은 실제 공급자 호출·질문 품질·개인정보 조건의 인수가 아니다.
 `--configure-ai`/`configure_ai`는 호환 입력이며 비용 refresh/reallocate를 호출하지 않는다.
 [관측 전용 정책](./PREBETA-COST-POLICY.md)에 따라 금액·가격/FX/funding 만료·월할당·수동
 refresh를 배포 선행 조건으로 요구하지 않는다. 기존 관측 시각은 보존하고 실제 binding·

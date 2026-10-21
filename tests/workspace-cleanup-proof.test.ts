@@ -1,5 +1,4 @@
-import { afterEach, expect, test } from "bun:test";
-import observation from "../docs/operations/AI-RUNTIME-OBSERVATION.json";
+import { afterEach, expect, setSystemTime, test } from "bun:test";
 import { modelBounds, observationSchema } from "../scripts/provision-ai-budget";
 import { CURRENT_POLICY_VERSIONS } from "../src/contracts/consent";
 import { createCaseDataCipher } from "../src/server/crypto";
@@ -15,6 +14,7 @@ import { createWorkspaceService } from "../src/server/modules/workspace/service"
 import { createWorkspaceDependencies } from "../src/server/runtime/workspace";
 import { createTestDatabase } from "./helpers/d1";
 import { r2 } from "./helpers/file-processing-fixture";
+import observation from "./helpers/gemini-observation";
 import { seedTestSession } from "./helpers/session";
 import {
   deletedCleanupResult,
@@ -23,10 +23,15 @@ import {
 
 const databases: Awaited<ReturnType<typeof createTestDatabase>>[] = [];
 afterEach(() => {
+  setSystemTime();
   for (const db of databases.splice(0)) db.close();
 });
 type Row = Record<string, unknown>;
 async function fixture(withAnchor = true) {
+  // SQLite now uses wall time even when Bun Date is mocked by calendar tests.
+  // Keep synthetic admission before the SQL deletion journal; future-row guards stay tested.
+  setSystemTime();
+  setSystemTime(new Date(Date.now() - 1000));
   const db = await createTestDatabase();
   databases.push(db);
   const owner = await seedTestSession(db, { consent: true });

@@ -1,5 +1,4 @@
 import { expect, test } from "bun:test";
-import observation from "../docs/operations/AI-RUNTIME-OBSERVATION.json";
 import { modelCapabilityConfiguration } from "../scripts/configure-ai-runtime";
 import {
   inspectAiRuntime,
@@ -14,6 +13,7 @@ import { createV2Core } from "../src/server/db/v2-core";
 import { createWorkspaceService } from "../src/server/modules/workspace/service";
 import { createWorkspaceDependencies } from "../src/server/runtime/workspace";
 import { createTestDatabase } from "./helpers/d1";
+import observation from "./helpers/gemini-observation";
 import { seedTestSession } from "./helpers/session";
 
 test("model capability configuration is independent of billing fields and preserves original dates", async () => {
@@ -251,7 +251,7 @@ test("stale or unapproved funding cannot initialize either database", async () =
 test("model capability bounds cover the maximum product output without replacing the agreed model", () => {
   const bounds = modelBounds(observationSchema.parse(observation), "a".repeat(64)).bounds;
   expect(bounds.modelInputTokenLimit).toBe(bounds.modelContextTokenLimit);
-  expect(bounds.modelOutputTokenLimit).toBe(128000);
+  expect(bounds.modelOutputTokenLimit).toBe(65536);
 });
 
 test("observations accept new balances/FX without activation; same-allocation refresh preserves holds and retries exactly once", async () => {
@@ -379,4 +379,16 @@ test("a fresh funding stop is installed even when the accompanying pricing autho
   } finally {
     db.close();
   }
+});
+
+test("historical GPT capability cannot silently configure Gemini and old observation remains readable", async () => {
+  const historical = await Bun.file("docs/operations/AI-RUNTIME-OBSERVATION.json").json();
+  expect(observationSchema.parse(historical).model).toBe("openai/gpt-6-sol");
+  await expect(modelCapabilityConfiguration(historical)).rejects.toThrow();
+  const documented = await Bun.file("docs/operations/GEMINI-MODEL-CAPABILITY.json").json();
+  const result = await modelCapabilityConfiguration(documented, "2027-01-01T00:00:00.000Z");
+  expect(result.model).toBe("google/gemini-3.8-flash");
+  expect(result.bounds.modelContextTokenLimit).toBe(1048576);
+  expect(result.bounds.modelOutputTokenLimit).toBe(65536);
+  expect(result.verifiedAt).toBe(documented.checkedAt);
 });

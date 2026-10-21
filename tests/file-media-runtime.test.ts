@@ -1,5 +1,4 @@
 import { expect, test } from "bun:test";
-import observation from "../docs/operations/AI-RUNTIME-OBSERVATION.json";
 import { modelBounds, modelCapabilitySchema } from "../scripts/provision-ai-budget";
 import { CURRENT_POLICY_VERSIONS } from "../src/contracts/consent";
 import { createV2Core } from "../src/server/db/v2-core";
@@ -27,6 +26,7 @@ import { createMediaGateway, WHISPER_MODEL } from "../src/server/modules/llm-gat
 import { prepareVisionWire } from "../src/server/modules/llm-gateway/vision-wire";
 import { createFileProcessingAdmission } from "../src/server/runtime/file-admission";
 import { fixture } from "./helpers/file-processing-fixture";
+import observation from "./helpers/gemini-observation";
 import { seedTestSession } from "./helpers/session";
 
 /** Canonical runtime/ledger with explicit offline native, R2 and model adapters.
@@ -320,9 +320,8 @@ for (const audio of [false, true])
     ).toEqual({ state: "final", transport: "response" });
     if (!audio)
       expect(f.wires[0]).toMatchObject({
-        reasoning_effort: "medium",
+        reasoning_effort: "low",
         max_completion_tokens: 4000,
-        store: false,
       });
     const restored = await createV2FilesRepository(f.core).read(
       { ownerId: f.actor.ownerId, now: new Date().toISOString() },

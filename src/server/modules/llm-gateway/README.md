@@ -1,18 +1,21 @@
-# Structured Worker adapter
+# LLM Gateway
 
-Pinned model: openai/gpt-6-sol, Chat Completions, reasoning_effort=medium.
-Prompt/policy versions live in prompts.ts; every response is an output envelope validated against the existing strict shared schemas. JSON Schema represents input shape; semantic refinements run in Zod again.
+Pinned model: `google/gemini-3.8-flash`, Cloudflare AI binding / AI Gateway Unified Billing, Chat Completions.
+Text generation and vision use `reasoning_effort=low`; independent workspace audit and v1 validation use `medium`. Thinking remains internal. No fallback model, provider key, external search tool or unvalidated token streaming is enabled.
 
-Official support checked 2026-10-05:
-- https://developers.cloudflare.com/ai/models/openai/gpt-6-sol/ (Chat Completions, response_format, reasoning_effort)
-- https://developers.cloudflare.com/ai-gateway/usage/worker-binding-methods/ (binding, collectLog, skipCache)
-- https://developers.openai.com/api/docs/models/gpt-6-sol (medium reasoning)
-- https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create (strict json_schema, store=false)
+Official support checked 2026-10-21:
+- https://developers.cloudflare.com/ai/models/google/gemini-3.8-flash/
+- https://developers.cloudflare.com/ai-gateway/usage/worker-binding-methods/
+- https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash
+- https://ai.google.dev/gemini-api/docs/openai
+- https://ai.google.dev/gemini-api/docs/structured-output
 
-Calls use an attempt callback before every external attempt. Technical invocation/retry guards remain required; cost observation failures must not turn into execution denial under the [current policy](../../../../docs/operations/PREBETA-COST-POLICY.md). #13 must persist reservations and checkpoints; this adapter never resets a durable budget. Network/429/5xx and schema correction share at most three calls; schema correction happens once. Binding timeout is ambiguous and ends the phase without overlapping an immediate retry. Exactly-once billing is not promised.
+The existing Chat Completions envelope and server-side Zod validation remain. Schema conformance is not evidence of factual correctness; exact user excerpts, authorized references, source spans and independent audit still govern publication. Gateway payload logging and response caching remain disabled. OpenAI-specific `store=false` is not sent to Gemini and is not claimed as a Google retention guarantee. Provider privacy/retention validation is separate from logging and code merge.
 
-No provider keys or fallback model are accepted. Runtime code has no test-fixture imports. Missing configuration or an actual provider credit/spend refusal fails closed; this is distinct from the cost metadata gates disabled by `APPLICATION_COST_LIMITS_ENABLED=false`. Stale pricing/funding, monthly allocations, refresh and cost-derived model bounds expiry must not masquerade as missing runtime capability. Only fixed metadata fields reach the observer. Actual Gateway credits, logging, existing provider settings and approved live synthetic response smoke remain #27; no costs are incurred by offline tests.
+Prompt v1.1.0 / workspace v2.2.0 asks for specific factual checking instructions and answer formats, neutrally clarifies missing or contradictory facts, preserves unknown/skip and never claims complete understanding. Initial follow-up remains two rounds of up to three questions. Remaining gaps survive summary review and can be clarified in chat. Instructions are factual preparation, never legal strategy.
 
-File image/frame composition uses the pinned model's documented image-input support and the deployment-owned model context/output configuration. The server permits exactly one bounded JPEG with the shared `low` detail wire, medium reasoning and a 4,000-token output cap. It reserves the entire remaining model context as a conservative technical maximum; this is not measured usage or a price observation. The exact model/action/wire digest and existing job/lease/consent/quota controls still govern dispatch.
+Every external attempt uses the durable attempt ledger and technical guards. At most three combined transient/schema attempts per call, one schema correction, and no overlapping immediate retry after an ambiguous timeout. v2 calls retain their 120-second timeout and renewed five-minute lease. Costs are observations under [current policy](../../../../docs/operations/PREBETA-COST-POLICY.md); missing/stale cost metadata does not deny execution.
 
-Documented support is a server-only identity with no fabricated live-account observation or expiry. Existing separately supplied expiring capability callbacks still expire normally. Observation-only mode preserves the original model configuration provenance and ignores its historical cost refresh expiry, while rejecting missing, future or incompatible technical limits. Account/model acceptance and image contents remain an explicit live-preview verification; provider failures keep missing/partial coverage and unknown transport exposure without automatic retries. Cloudflare-hosted Whisper uses its existing separate bounded PCM-duration path.
+Current model capacity comes from [documentary capability](../../../../docs/operations/GEMINI-MODEL-CAPABILITY.json), not the historical GPT account observation. The configuration records its model identity; previous bounds cannot be relabeled as Gemini support. Existing GPT observations, immutable plans, holds and records remain readable. New plans bind the model, and mismatched historical prices stay incomplete instead of pricing Gemini as GPT.
+
+Vision retains one bounded JPEG, `low` image detail, 4,000 output tokens, exact wire identity and source/consent/lease guards. Whisper ASR is unchanged. Model/account acceptance and multilingual/vision quality require separate live synthetic receipts; offline success never proves them.
