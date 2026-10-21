@@ -283,3 +283,23 @@ test("deletion during the selected original read prevents publishing a photo pre
   await expect(service.html(owner, saved.id)).rejects.toThrow();
   expect(opened).toBe(1);
 });
+
+test("historical photo preview keeps its immutable basis after an unrelated source update, while new PDF generation stays fenced", async () => {
+  const f = await photoFixture(),
+    owner = f.actor.ownerId,
+    draft = await f.reports.get(owner, f.workspaceId);
+  const saved = await f.reports.save(owner, f.workspaceId, crypto.randomUUID(), {
+    expectedRevision: draft.revision,
+    content: draft.content,
+    maskIdentifiers: false,
+    excludedFileIds: [],
+    includedPhotoIds: [f.id],
+  });
+  f.db.sqlite
+    .query("UPDATE v2_workspaces SET confirmed_summary_revision=2,revision=revision+1 WHERE id=?")
+    .run(f.workspaceId);
+  const html = await f.reports.html(owner, saved.id);
+  expect(html).toContain("이전 생성 기준");
+  expect(html).toContain("data:image/jpeg;base64,");
+  await expect(f.reports.pdf(owner, saved.id)).rejects.toThrow("STALE_REVISION");
+});

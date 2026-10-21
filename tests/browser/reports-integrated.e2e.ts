@@ -27,9 +27,11 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
   await page.getByRole("radio", { name: /^고객/ }).check();
   await page.getByRole("button", { name: "Google로 계속하기" }).click();
   await expect(page).toHaveURL(/\/consent$/);
-  await page.getByRole("link", { name: "AI 이용 고지", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "AI 이용 고지 초안" })).toBeVisible();
-  await page.goBack();
+  const policyOpened = context.waitForEvent("page");
+  await page.getByRole("link", { name: /^AI 이용 고지/ }).click();
+  const policy = await policyOpened;
+  await expect(policy.getByRole("heading", { name: "AI 이용 고지 초안" })).toBeVisible();
+  await policy.close();
   await page
     .getByRole("checkbox", {
       name: "이용약관, 개인정보 처리방침, AI 이용 고지를 확인하고 동의합니다.",

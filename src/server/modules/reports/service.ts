@@ -566,8 +566,21 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
       const authorize = async () => {
         await row(a, id);
         await ownedWorkspace(core, a, data.row.workspace_id);
-        if ((await sourceDigest(core, a, data.row.workspace_id)) !== data.review.sourceDigest)
-          throw new ReportError("STALE_REVISION");
+        const selectedPhotos = data.body.selectedFiles.filter((file) =>
+          data.review.includedPhotoIds?.includes(file.id),
+        );
+        const current = await core
+          .statement(
+            "SELECT count(*) AS n FROM v2_files f JOIN json_each(?) selected ON f.id=json_extract(selected.value,'$.id') AND f.revision=json_extract(selected.value,'$.revision') WHERE f.workspace_id=? AND f.state='ready' AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='file' AND target_id=f.id)",
+            [
+              JSON.stringify(
+                selectedPhotos.map((file) => ({ id: file.id, revision: file.revision })),
+              ),
+              data.row.workspace_id,
+            ],
+          )
+          .first<number>("n");
+        if (current !== selectedPhotos.length) throw new ReportError("STALE_REVISION");
       };
       const photos =
         report.maskIdentifiers || !data.review.includedPhotoIds?.length
