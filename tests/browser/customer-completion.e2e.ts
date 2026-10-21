@@ -211,7 +211,6 @@ test("reconsent keeps existing case and source visible, restricts writes and ret
   await page.getByLabel("이용약관, 개인정보 처리방침, AI 이용 고지를 확인하고 동의합니다.").check();
   await page.getByLabel("만 14세 이상입니다.").check();
   await page.getByRole("button", { name: "동의하고 계속하기" }).click();
-  await page.getByRole("link", { name: "내 화면으로 계속하기" }).click();
   await expect(page).toHaveURL(`${base}/files`);
   await expect(page.getByLabel("선택 자료의 자동 처리에 동의합니다.")).toBeEnabled();
 });
@@ -225,10 +224,7 @@ test("login preserves a permitted path and rejects an external return destinatio
   await page.getByLabel("이용약관, 개인정보 처리방침, AI 이용 고지를 확인하고 동의합니다.").check();
   await page.getByLabel("만 14세 이상입니다.").check();
   await page.getByRole("button", { name: "동의하고 계속하기" }).click();
-  await expect(page.getByRole("link", { name: "내 화면으로 계속하기" })).toHaveAttribute(
-    "href",
-    `${base}/timeline`,
-  );
+  await expect(page).toHaveURL(`${base}/timeline`);
   await page.goto("/login?returnTo=https%3A%2F%2Fexample.com%2Fevil");
   await page.getByRole("button", { name: "Google로 계속하기" }).click();
   await expect(page).toHaveURL(/\/app$/);

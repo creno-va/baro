@@ -783,6 +783,9 @@
   color: var(--muted-foreground);
 }
 .workspace-dialog {
+  position: fixed;
+  inset: 0;
+  margin: auto;
   width: min(640px, calc(var(--workspace-viewport-width, 100vw) - 32px));
   max-height: calc(var(--workspace-viewport-height, 100dvh) - 40px);
   border: 1px solid var(--border);

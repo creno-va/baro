@@ -21,7 +21,6 @@ test("customer login consent logout share the product shell without external API
   await page.getByRole("checkbox", { name: /이용약관, 개인정보/ }).check();
   await page.getByRole("checkbox", { name: "만 14세 이상입니다." }).check();
   await page.getByRole("button", { name: "동의하고 계속하기" }).click();
-  await page.getByRole("link", { name: "내 화면으로 계속하기" }).click();
   await expect(page).toHaveURL(/\/app$/);
   await expect(page.getByRole("textbox", { name: "지금까지 있었던 일" })).toBeVisible();
   await page.reload();
@@ -52,7 +51,6 @@ test("customer completes intake workspace original ZIP report and cascading dele
   await page.getByRole("checkbox", { name: /이용약관, 개인정보/ }).check();
   await page.getByRole("checkbox", { name: "만 14세 이상입니다." }).check();
   await page.getByRole("button", { name: "동의하고 계속하기" }).click();
-  await page.getByRole("link", { name: "내 화면으로 계속하기" }).click();
   await expect(page).toHaveURL(/\/app$/);
   await page
     .getByLabel("지금까지 있었던 일")
@@ -85,6 +83,21 @@ test("customer completes intake workspace original ZIP report and cascading dele
   await expect(page.locator(".workspace-status--ready")).toBeVisible({ timeout: 15000 });
   await page.getByRole("link", { name: "타임라인", exact: true }).click();
   await page.getByRole("button", { name: "일정 추가" }).click();
+  for (const viewport of [
+    { width: 320, height: 760 },
+    { width: 1440, height: 900 },
+  ]) {
+    await page.setViewportSize(viewport);
+    const modal = await page.getByRole("dialog").boundingBox();
+    expect(modal).not.toBeNull();
+    expect(Math.abs((modal?.x ?? 0) + (modal?.width ?? 0) / 2 - viewport.width / 2)).toBeLessThan(
+      2,
+    );
+    expect(Math.abs((modal?.y ?? 0) + (modal?.height ?? 0) / 2 - viewport.height / 2)).toBeLessThan(
+      2,
+    );
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
   await page.getByLabel("어떤 일이 있었나요?").fill("반환 약속 확인");
   await page.getByLabel("날짜 (모르면 비워 두세요)").fill("2026-10-01");
   await page.getByRole("button", { name: "타임라인 저장" }).click();
@@ -108,12 +121,78 @@ test("customer completes intake workspace original ZIP report and cascading dele
   await page.screenshot({ path: ".wrangler/customer-integration-390.png", fullPage: true });
   await page.goto("/settings");
   await page.getByRole("button", { name: "사건 삭제", exact: true }).click();
+  for (const viewport of [
+    { width: 320, height: 760 },
+    { width: 1440, height: 900 },
+  ]) {
+    await page.setViewportSize(viewport);
+    const modal = await page.getByRole("dialog").boundingBox();
+    expect(modal).not.toBeNull();
+    expect(Math.abs((modal?.x ?? 0) + (modal?.width ?? 0) / 2 - viewport.width / 2)).toBeLessThan(
+      2,
+    );
+    expect(Math.abs((modal?.y ?? 0) + (modal?.height ?? 0) / 2 - viewport.height / 2)).toBeLessThan(
+      2,
+    );
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
   await page.getByLabel("삭제 확인 — DELETE 입력").fill("DELETE");
   await page.getByRole("button", { name: "삭제 요청 확인" }).click();
   await expect(page.getByRole("dialog")).not.toBeVisible();
   await page.goto(`${casePath}/reports`);
   await expect(page.getByRole("alert")).toBeVisible();
   expect(requests).toEqual([]);
+});
+
+test("service screens reflow at phone, tablet and desktop widths", async ({ page }) => {
+  test.setTimeout(120000);
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      "baro-api-mock-v1:session",
+      JSON.stringify({
+        user: { id: "responsive-customer", name: "합성 고객", accountType: "customer" },
+        needsConsent: false,
+      }),
+    );
+  });
+  for (const viewport of [
+    { width: 320, height: 760 },
+    { width: 390, height: 844 },
+    { width: 900, height: 768 },
+    { width: 1440, height: 900 },
+  ]) {
+    await page.setViewportSize(viewport);
+    for (const path of [
+      "/app",
+      "/cases",
+      "/cases/new",
+      "/lawyers",
+      "/settings",
+      "/help",
+      "/policies/terms",
+    ]) {
+      await page.goto(path);
+      await expect(page.locator("astro-island[ssr]")).toHaveCount(0);
+      if (path === "/app" || path === "/cases/new")
+        await expect(page.getByLabel("지금까지 있었던 일")).toBeEnabled();
+      if (path === "/lawyers")
+        await expect(page.getByRole("link", { name: "김예시", exact: true })).toBeVisible();
+      if (path === "/settings")
+        await expect(page.getByRole("button", { name: "다시 확인", exact: true })).toBeEnabled();
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+        ),
+        `${path} at ${viewport.width}`,
+      ).toBe(true);
+    }
+    await page.goto("/help#limits");
+    if (viewport.width <= 900) {
+      const target = await page.locator("#limits").boundingBox();
+      const header = await page.locator(".app-header").boundingBox();
+      expect(target?.y).toBeGreaterThanOrEqual((header?.y ?? 0) + (header?.height ?? 0));
+    }
+  }
 });
 
 async function openCustomerHome(page: Page) {

@@ -11,7 +11,6 @@ async function login(page: Page, role: "고객" | "변호사" = "고객") {
   await page.getByRole("checkbox", { name: /이용약관, 개인정보/ }).check();
   await page.getByRole("checkbox", { name: "만 14세 이상입니다." }).check();
   await page.getByRole("button", { name: "동의하고 계속하기" }).click();
-  await page.getByRole("link", { name: "내 화면으로 계속하기" }).click();
 }
 async function createActiveCase(page: Page, confirm = true) {
   await page.goto("/cases/new");
@@ -40,7 +39,6 @@ async function changeToLawyer(page: Page) {
   await page.getByRole("checkbox", { name: /이용약관, 개인정보/ }).check();
   await page.getByRole("checkbox", { name: "만 14세 이상입니다." }).check();
   await page.getByRole("button", { name: "동의하고 계속하기" }).click();
-  await page.getByRole("link", { name: "내 화면으로 계속하기" }).click();
 }
 test.beforeEach(async ({ page }) => {
   await page.route("**/api/**", (route) => {

@@ -45,6 +45,9 @@ test("branded social login stays accessible on narrow phones and desktop", async
   for (const viewport of [
     { width: 320, height: 760 },
     { width: 390, height: 844 },
+    { width: 768, height: 1024 },
+    { width: 1366, height: 768 },
+    { width: 1920, height: 1080 },
     { width: 1440, height: 1000 },
   ]) {
     await page.setViewportSize(viewport);
@@ -72,7 +75,82 @@ test("branded social login stays accessible on narrow phones and desktop", async
         () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
       ),
     ).toBe(true);
+    if (viewport.width > 800) {
+      const intro = await page.locator(".login-intro").boundingBox();
+      const panel = await page.locator(".login-panel").boundingBox();
+      expect(panel?.x).toBeGreaterThan((intro?.x ?? 0) + (intro?.width ?? 0));
+      for (const role of ["고객", "변호사"]) {
+        await page.getByRole("radio", { name: role, exact: true }).check();
+        expect(
+          await page.evaluate(() => document.documentElement.scrollHeight),
+        ).toBeLessThanOrEqual(viewport.height);
+      }
+    }
     expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+    if (viewport.width === 1366 || viewport.width === 390) {
+      await page.getByRole("radio", { name: "고객", exact: true }).check();
+      await page.getByRole("heading", { name: "로그인 · 회원가입", exact: true }).click();
+      await page.screenshot({ path: `.wrangler/ui-302-login-${viewport.width}.png` });
+    }
+  }
+});
+
+for (const [accountType, returnTo, destination] of [
+  ["customer", "/cases/synthetic-case/files", "/cases/synthetic-case/files"],
+  ["lawyer", "/settings", "/settings"],
+  ["customer", "https://example.com/evil", "/app"],
+  ["lawyer", "/cases/private-case", "/lawyer"],
+] as const) {
+  test(`current consent continues automatically: ${accountType} ${returnTo}`, async ({ page }) => {
+    await page.route("**/api/me/session", (route) =>
+      route.fulfill({
+        json: {
+          user: { id: "synthetic-owner", name: "합성 이용자", accountType },
+          needsConsent: false,
+        },
+      }),
+    );
+    let writes = 0;
+    await page.route("**/api/me/consent", (route) => {
+      if (route.request().method() !== "GET") writes++;
+      return route.fulfill({ json: { needsConsent: false } });
+    });
+    const content = await page.request.get(`/consent?returnTo=${encodeURIComponent(returnTo)}`);
+    expect(await content.text()).not.toContain("시작 전에");
+    await page.goto(`/consent?returnTo=${encodeURIComponent(returnTo)}`);
+    await expect(page).toHaveURL(new RegExp(`${destination}$`));
+    expect(writes).toBe(0);
+    await expect(page.getByRole("button", { name: "동의하고 계속하기" })).toHaveCount(0);
+  });
+}
+
+test("required consent fits desktop and phone and policy links preserve the form", async ({
+  page,
+}) => {
+  await page.route("**/api/me/consent", (route) => route.fulfill({ json: { needsConsent: true } }));
+  for (const viewport of [
+    { width: 1440, height: 900 },
+    { width: 320, height: 760 },
+  ]) {
+    await page.setViewportSize(viewport);
+    await page.goto("/consent?returnTo=%2Fsettings");
+    const save = page.getByRole("button", { name: "동의하고 계속하기" });
+    await expect(save).toBeDisabled();
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+      ),
+    ).toBe(true);
+    expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+    await page.getByRole("checkbox").first().check();
+    const links = page.getByRole("navigation", { name: "정책 원문" }).getByRole("link");
+    await expect(links).toHaveCount(3);
+    for (const link of await links.all()) await expect(link).toHaveAttribute("target", "_blank");
+    await expect(page.getByRole("checkbox").first()).toBeChecked();
+    await expect(page.getByRole("link", { name: "취소하고 돌아가기" })).toHaveAttribute(
+      "href",
+      "/login?returnTo=%2Fsettings",
+    );
   }
 });
 
@@ -138,11 +216,8 @@ test("keyboard role selection reaches the lawyer destination after a synthetic O
   expect(callback.pathname).toBe("/consent");
   expect(callback.searchParams.get("loginAttempt")).toBeTruthy();
   expect((await saveRole).postDataJSON()).toEqual({ accountType: "lawyer" });
-  await expect(page).toHaveURL(callback.href);
-  await expect(page.getByRole("link", { name: "내 화면으로 계속하기" })).toHaveAttribute(
-    "href",
-    "/lawyer",
-  );
+  await expect(page).toHaveURL(/\/lawyer$/);
+  await expect(page.getByRole("checkbox")).toHaveCount(0);
 });
 
 test("provider errors are recoverable and a synthetic redirect reaches consent", async ({
@@ -172,7 +247,7 @@ test("provider errors are recoverable and a synthetic redirect reaches consent",
   await expect(page).toHaveURL(/\/consent\?loginAttempt=/);
 });
 
-test("consent loading failure retries; keyboard checks gate save, failure recovers and completion focuses the link", async ({
+test("consent loading failure retries; keyboard checks gate save, failure recovers and continues automatically", async ({
   page,
 }) => {
   let reads = 0;
@@ -219,11 +294,7 @@ test("consent loading failure retries; keyboard checks gate save, failure recove
   await expect(page.getByRole("alert")).toContainText("동의를 저장하지 못했어요.");
   await expect(save).toBeFocused();
   await page.keyboard.press("Enter");
-  await expect(page.getByRole("link", { name: "내 화면으로 계속하기" })).toBeFocused();
-  await expect(page.getByRole("link", { name: "내 화면으로 계속하기" })).toHaveAttribute(
-    "href",
-    "/app",
-  );
+  await expect(page).toHaveURL(/\/app$/);
 });
 
 test("app hides the composer while session checks are pending or fail and supports retry", async ({

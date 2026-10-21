@@ -351,6 +351,7 @@ body {
 }
 .app-frame .case-shell {
   max-width: 1040px;
+  padding-bottom: 24px;
 }
 .app-frame .case-utilities {
   color: #626d80;
