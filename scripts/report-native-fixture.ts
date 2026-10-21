@@ -1,8 +1,10 @@
-import { mkdir } from "node:fs/promises";
+import { chmod, mkdir } from "node:fs/promises";
 import { createReportHtml } from "../src/components/reports/document";
 
 const root = ".wrangler/report-native";
 await mkdir(root, { recursive: true });
+// Synthetic QA output only: the non-root Container UID differs from CI owner.
+await chmod(root, 0o777);
 const jpeg = new Uint8Array(await Bun.file("tests/fixtures/media/image-markers.jpg").arrayBuffer());
 const font = new Uint8Array(await Bun.file("public/fonts/BaroReport-Regular.ttf").arrayBuffer());
 const base64 = (bytes: Uint8Array) => Buffer.from(bytes).toString("base64");
