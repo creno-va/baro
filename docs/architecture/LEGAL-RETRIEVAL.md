@@ -122,6 +122,13 @@ safe extraction을 갖추고 redirect·사설IP·임의 URL을 거부한다. raw
 active content는 공개 cache에도 그대로 복사하지 않는다. 기준일/본문/hash가 불명확하면
 사용자에게 확인 필요를 표시하고 단순 검색 snippet으로 인용하지 않는다.
 
+v2 법령 목록은 페이지당100행·최대5페이지 안에서 전체 시행 이력을 확인한다. 총 건수/페이지/
+이력 식별자(법령ID+MST+시행일)의 누락·중복·변화 또는 상한 초과는 history_incomplete로
+실패하며 전체30회·workspace12회 상한을 늘리지 않는다. 판례 검색은 공식 문서의
+datSrcNm=대법원으로 법원 corpus를 고정한다. top-N 검색의 미열거 결과는 searchTruncated와
+sourcesPartial로 표시하며, 선택 원문의 식별/날짜/본문/hash 검증 성공과 구분한다. 이는 모든
+관련 판례를 찾았다는 뜻이 아니며 summary-only/HTML-only/기관 안내 개정 대기는 계속 제한한다.
+
 공식 출처 unavailable 시 사실 정리·자료 목록·선택 원본 내보내기는 유지할 수 있다.
 법적 판단·기한·전략은 생성하지 않고 검증 못한 법률 설명은 PDF/채팅에서 제외한다.
 source cache의 hash mismatch, 잘못된 판례 ID/선고일, stale guide, redirect 위조,

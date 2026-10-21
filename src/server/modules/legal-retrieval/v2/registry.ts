@@ -63,7 +63,18 @@ export function assertOfficialUrl(value: string, guide = false) {
         ? ["OC", "target", "type", "query", "LID", "nw", "sort", "display", "page", "efYd"]
         : ["OC", "target", "type", "MST", "efYd", "JO"]
       : url.pathname.endsWith("lawSearch.do")
-        ? ["OC", "target", "type", "query", "search", "display", "page", "sort", "prncYd"]
+        ? [
+            "OC",
+            "target",
+            "type",
+            "query",
+            "search",
+            "display",
+            "page",
+            "sort",
+            "prncYd",
+            "datSrcNm",
+          ]
         : ["OC", "target", "type", "ID"];
   for (const key of url.searchParams.keys())
     if (!allowed.includes(key) || url.searchParams.getAll(key).length !== 1)
@@ -73,6 +84,8 @@ export function assertOfficialUrl(value: string, guide = false) {
     (!["eflaw", "prec"].includes(url.searchParams.get("target") ?? "") ||
       url.searchParams.get("type") !== "JSON")
   )
+    throw new RetrievalFailure("unsafe_url");
+  if (url.searchParams.has("datSrcNm") && url.searchParams.get("datSrcNm") !== "대법원")
     throw new RetrievalFailure("unsafe_url");
   if (guide && allowed.some((key) => !/^\d{1,12}$/.test(url.searchParams.get(key) ?? "")))
     throw new RetrievalFailure("unsafe_url");

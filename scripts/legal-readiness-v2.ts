@@ -18,8 +18,8 @@ import { sourceExcerpt } from "../src/server/modules/legal-retrieval/v2/workspac
 
 export const readinessV2Plans: RetrievalPlan[] = [
   { kind: "statute", lawTitle: "민법", articles: [{ number: "598", branch: "0" }] },
-  // A newest tax-source row can be HTML-only. Inspect two candidates while
-  // retaining the same nine-reservation cap and explicit limited status.
+  // The product selects the documented court corpus. Two bounded originals,
+  // not exhaustive case-law coverage; retain the nine-reservation cap.
   { kind: "precedent", query: "대여금", limit: 2 },
   workspaceGuidePlans.legal_consultation,
 ];
@@ -27,6 +27,26 @@ export const readinessV2Plans: RetrievalPlan[] = [
 /** Fixed public diagnostic only; callers cannot supply case text or arbitrary URLs. */
 export function legalReadinessScope(scope: string = "standard") {
   if (scope === "standard") return { scope, plans: readinessV2Plans };
+  if (scope === "core_sources")
+    return { scope, plans: readinessV2Plans.filter((plan) => plan.kind !== "official_guide") };
+  if (scope === "statute_matrix")
+    return {
+      scope,
+      plans: [
+        { kind: "statute", lawTitle: "형법", articles: [{ number: "347", branch: "0" }] },
+        { kind: "statute", lawTitle: "근로기준법", articles: [{ number: "23", branch: "0" }] },
+        { kind: "statute", lawTitle: "개인정보 보호법", articles: [{ number: "15", branch: "0" }] },
+      ] satisfies RetrievalPlan[],
+    };
+  if (scope === "precedent_matrix")
+    return {
+      scope,
+      plans: ["임대차", "임금", "손해배상"].map((query) => ({
+        kind: "precedent",
+        query,
+        limit: 1,
+      })) satisfies RetrievalPlan[],
+    };
   if (scope === "housing_article_3_2")
     return {
       scope,
@@ -48,6 +68,7 @@ type RequestObservation = {
   httpStatus: number | null;
   contentType: "json" | "html" | "other" | "missing" | null;
   transport: "pending" | "response" | "failed";
+  durationMs: number;
 };
 
 function requestEndpoint(value: string): RequestObservation["endpoint"] {
@@ -72,6 +93,7 @@ export async function inspectLegalV2(
   now: string,
   options: { transport?: Transport; plans?: RetrievalPlan[] } = {},
 ) {
+  const diagnosticStarted = performance.now();
   let requests = 0;
   let reservations = 0;
   const requestObservations: RequestObservation[] = [];
@@ -99,8 +121,10 @@ export async function inspectLegalV2(
           httpStatus: null,
           contentType: null,
           transport: "pending",
+          durationMs: 0,
         };
         requestObservations.push(observation);
+        const started = performance.now();
         try {
           const response = await (options.transport ?? fetch)(url, init);
           const contentType = response.headers
@@ -121,6 +145,10 @@ export async function inspectLegalV2(
         } catch (error) {
           observation.transport = "failed";
           throw error;
+        } finally {
+          // Header/transport latency only; body parsing and integrity checks
+          // are covered by the complete diagnostic duration below.
+          observation.durationMs = Math.max(0, Math.round(performance.now() - started));
         }
       },
       bindCitation: async (citation) => sources.has(citation.sourceId),
@@ -165,6 +193,7 @@ export async function inspectLegalV2(
     schemaVersion: "2" as const,
     runtimeWorker: false as const,
     checkedAt: now,
+    durationMs: Math.max(0, Math.round(performance.now() - diagnosticStarted)),
     requests,
     reservations,
     // Snapshot only allowlisted metadata; never retain URL, headers, body or exception text.
@@ -177,10 +206,18 @@ export async function inspectLegalV2(
       claimCheck?.valid === true
         ? ("passed" as const)
         : ("failed" as const),
-    outcomes: output.outcomes.map(({ kind, availability, reason, schemaFailure: failure }) => {
-      const schemaFailure = safeLegalSchemaDiagnostic(failure);
-      return { kind, availability, reason, ...(schemaFailure ? { schemaFailure } : {}) };
-    }),
+    outcomes: output.outcomes.map(
+      ({ kind, availability, reason, searchTruncated, schemaFailure: failure }) => {
+        const schemaFailure = safeLegalSchemaDiagnostic(failure);
+        return {
+          kind,
+          availability,
+          reason,
+          ...(searchTruncated === undefined ? {} : { searchTruncated }),
+          ...(schemaFailure ? { schemaFailure } : {}),
+        };
+      },
+    ),
     sources: output.chunks.map(({ source }) => ({
       sourceType: source.sourceType,
       officialId: source.officialId,
@@ -202,6 +239,7 @@ export function legalDiagnosticReceipt(observed: Awaited<ReturnType<typeof inspe
     schemaVersion: observed.schemaVersion,
     runtimeWorker: false as const,
     checkedAt: observed.checkedAt,
+    durationMs: observed.durationMs,
     requests: observed.requests,
     reservations: observed.reservations,
     requestObservations: observed.requestObservations,
