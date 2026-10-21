@@ -175,7 +175,12 @@ export const api = {
     get(id: string): Promise<ReportView>;
     save(
       id: string,
-      input: { content: string; maskIdentifiers: boolean; excludedFileIds: string[] },
+      input: {
+        content: string;
+        maskIdentifiers: boolean;
+        includedPhotoIds?: string[];
+        excludedFileIds: string[];
+      },
       expectedRevision?: number,
     ): Promise<ReportView>;
     generate(

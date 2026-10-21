@@ -77,7 +77,7 @@ export function createProcessorTransport(options: {
   costs: ProcessingCosts;
 }) {
   const start = async (
-    kind: "probe" | "process_unit" | "sanitize",
+    kind: "probe" | "process_unit" | "sanitize" | "report",
     input: {
       byteLength: number;
       contentHash: string;
@@ -105,7 +105,14 @@ export function createProcessorTransport(options: {
     }
     let sent = false;
     try {
-      const path = kind === "probe" ? "/probe" : kind === "sanitize" ? "/sanitize" : "/process";
+      const path =
+        kind === "probe"
+          ? "/probe"
+          : kind === "sanitize"
+            ? "/sanitize"
+            : kind === "report"
+              ? "/report"
+              : "/process";
       const request = new Request(`http://processor.internal${path}`, {
         method: "POST",
         headers: {
@@ -151,6 +158,56 @@ export function createProcessorTransport(options: {
     }
   };
   return {
+    async renderReport(html: string, access: ProcessingAccess) {
+      const bytes = new TextEncoder().encode(html);
+      if (bytes.length < 1 || bytes.length > 20_000_000) throw new ProcessingError("FILE_REJECTED");
+      let response: Response | undefined;
+      try {
+        response = await start(
+          "report",
+          {
+            byteLength: bytes.length,
+            contentHash: await digest(bytes),
+            open: () => new Response(bytes).body as ReadableStream<Uint8Array>,
+          },
+          access,
+        );
+        if (!response.body || response.headers.get("content-type") !== "application/pdf")
+          throw new ProcessingError("FILE_PROCESSING_FAILED");
+        const reader = response.body.getReader();
+        const chunks: Uint8Array[] = [];
+        let size = 0;
+        try {
+          for (;;) {
+            const item = await reader.read();
+            if (item.done) break;
+            size += item.value.length;
+            if (size > 24_000_000 || !(await authorize(access)))
+              throw new ProcessingError("FILE_PROCESSING_FAILED");
+            chunks.push(item.value);
+          }
+        } finally {
+          await reader.cancel().catch(() => {});
+          reader.releaseLock();
+        }
+        const output = new Uint8Array(size);
+        let offset = 0;
+        for (const chunk of chunks) {
+          output.set(chunk, offset);
+          offset += chunk.length;
+        }
+        if (
+          new TextDecoder().decode(output.subarray(0, 5)) !== "%PDF-" ||
+          !(await authorize(access))
+        )
+          throw new ProcessingError("FILE_PROCESSING_FAILED");
+        return output;
+      } finally {
+        bytes.fill(0);
+        await response?.body?.cancel().catch(() => {});
+        await options.stop();
+      }
+    },
     async *sanitize(
       input: { byteLength: number; contentHash: string; open: () => ReadableStream<Uint8Array> },
       access: ProcessingAccess,

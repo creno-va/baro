@@ -19,14 +19,14 @@ export function ReportReview({ caseId }: { caseId: string }) {
   const [content, setContent] = useState("");
   const [mask, setMask] = useState(false);
   const [excluded, setExcluded] = useState<string[]>([]);
-  const [selected, setSelected] = useState<string[]>([]);
+  const [includedPhotos, setIncludedPhotos] = useState<string[]>([]);
   const [busy, setBusy] = useState("");
   const [busyStartedAt, setBusyStartedAt] = useState<number | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
-  const [zipRefreshFailed, setZipRefreshFailed] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [preview, setPreview] = useState(false);
+  const [savedPreview, setSavedPreview] = useState("");
   const [regenerate, setRegenerate] = useState(false);
   const [reloadConfirm, setReloadConfirm] = useState(false);
   const [reviewed, setReviewed] = useState(false);
@@ -40,13 +40,15 @@ export function ReportReview({ caseId }: { caseId: string }) {
   const focusRequest = useRef(0);
   const accept = useCallback((value: ReportView) => {
     setReport(value);
+    setIncludedPhotos(value.includedPhotoIds ?? []);
+    setSavedPreview("");
+    setPreview(false);
     setContent(value.content);
     setMask(value.maskIdentifiers);
     setExcluded(value.excludedFileIds);
     setReviewed(false);
     setInitialLimit(false);
     setExportExhausted(false);
-    setZipRefreshFailed(false);
   }, []);
   const clearOwnerState = useCallback(() => {
     ++loadSequence.current;
@@ -59,16 +61,16 @@ export function ReportReview({ caseId }: { caseId: string }) {
     setContent("");
     setMask(false);
     setExcluded([]);
-    setSelected([]);
+    setIncludedPhotos([]);
     setNotice("");
     setPreview(false);
+    setSavedPreview("");
     setRegenerate(false);
     setReloadConfirm(false);
     setReviewed(false);
     setAccessChecking(false);
     setBusy("");
     setBusyStartedAt(null);
-    setZipRefreshFailed(false);
   }, []);
   useEffect(() => {
     setElapsedSeconds(0);
@@ -146,7 +148,6 @@ export function ReportReview({ caseId }: { caseId: string }) {
       }
       if (materials.status === "rejected") throw materials.reason;
       accept(value.value);
-      setSelected([]);
     } catch (e) {
       const failure = e as { code?: string; ownerRevoked?: boolean };
       if (
@@ -203,7 +204,7 @@ export function ReportReview({ caseId }: { caseId: string }) {
           return existing.id === value.id ? value : existing;
         });
         setFiles(materials);
-        setSelected((ids) =>
+        setIncludedPhotos((ids) =>
           ids.filter((id) => materials.some((file) => file.id === id && file.status === "ready")),
         );
         setReviewed(false);
@@ -252,6 +253,7 @@ export function ReportReview({ caseId }: { caseId: string }) {
     report &&
       (content !== report.content ||
         mask !== report.maskIdentifiers ||
+        JSON.stringify(includedPhotos) !== JSON.stringify(report.includedPhotoIds ?? []) ||
         JSON.stringify(excluded) !== JSON.stringify(report.excludedFileIds)),
   );
   useEffect(() => {
@@ -310,38 +312,6 @@ export function ReportReview({ caseId }: { caseId: string }) {
     await verifyOwner(() => sequence === loadSequence.current);
     return value;
   }
-  async function refreshSavedZip(reportId: string) {
-    const sequence = loadSequence.current;
-    setZipRefreshFailed(false);
-    setBusy("저장된 ZIP 정보 확인 중…");
-    try {
-      const refreshed = await ownedResult(api.reports.get(caseId));
-      setReport((current) =>
-        current?.id === reportId && current.id === refreshed.id
-          ? { ...current, savedZip: refreshed.savedZip }
-          : current,
-      );
-    } catch (e) {
-      const failure = e as { code?: string; ownerRevoked?: boolean };
-      if (
-        sequence !== loadSequence.current ||
-        failure?.ownerRevoked ||
-        [
-          "OWNER_CHECK_SUPERSEDED",
-          "UNAUTHENTICATED",
-          "NOT_FOUND",
-          "FORBIDDEN",
-          "ROLE_REQUIRED",
-          "ORIGIN_NOT_ALLOWED",
-          "CONSENT_REQUIRED",
-        ].includes(failure?.code ?? "")
-      )
-        throw e;
-      // The file was already handed to the browser. Only retry this metadata
-      // read; do not turn a later read failure into another ZIP operation.
-      setZipRefreshFailed(true);
-    }
-  }
   const splitSave = Boolean(
     report &&
       content !== report.content &&
@@ -356,6 +326,7 @@ export function ReportReview({ caseId }: { caseId: string }) {
           {
             content,
             maskIdentifiers: mask,
+            includedPhotoIds: includedPhotos,
             excludedFileIds: splitSave ? (report?.excludedFileIds ?? []) : excluded,
           },
           report?.revision,
@@ -414,23 +385,6 @@ export function ReportReview({ caseId }: { caseId: string }) {
           <p role="status" className="report-success">
             {notice}
           </p>
-        )}
-        {zipRefreshFailed && report && (
-          <div className="report-error" role="alert">
-            <p>다운로드는 시작했지만 저장된 ZIP 정보를 확인하지 못했어요.</p>
-            <button
-              type="button"
-              disabled={Boolean(busy) || accessChecking}
-              onClick={() =>
-                void run("저장된 ZIP 정보 확인 중…", async () => {
-                  await refreshSavedZip(report.id);
-                  setNotice("ZIP 다운로드는 이미 시작했어요. 다운로드 목록을 확인해 주세요.");
-                })
-              }
-            >
-              저장된 ZIP 정보 다시 확인
-            </button>
-          </div>
         )}
         {initialLimit && !report && !accessChecking && (
           <section className="report-options-body" aria-label="리포트 처리 한도 복구">
@@ -503,8 +457,8 @@ export function ReportReview({ caseId }: { caseId: string }) {
               {report.stale && (
                 <p className="report-callout report-stale" role="status">
                   사건·자료 또는 공식 출처의 확인 상태가 바뀌었어요. 이 리포트는 위 생성 기준의
-                  내용이에요. 새 버전 만들기로 현재 내용을 확인해 주세요. 저장된 HTML과 PDF는 기존
-                  내용으로 다운로드할 수 있어요.
+                  내용이에요. 새 버전 만들기로 현재 내용을 확인해 주세요. 저장된 PDF는 기존 내용으로
+                  다운로드할 수 있어요.
                 </p>
               )}
               <div className="report-paper">
@@ -531,7 +485,28 @@ export function ReportReview({ caseId }: { caseId: string }) {
               <div className="report-editor-tools">
                 <button
                   type="button"
-                  onClick={() => setPreview(!preview)}
+                  onClick={() => {
+                    if (preview) {
+                      setPreview(false);
+                      return;
+                    }
+                    if (dirty) {
+                      setSavedPreview("");
+                      setPreview(true);
+                      return;
+                    }
+                    void run("리포트 확인 중…", async () => {
+                      const blob = await ownedResult(api.reports.html(report.id));
+                      const html = await ownedResult(blob.text());
+                      const document = new DOMParser().parseFromString(html, "text/html");
+                      const main = document.querySelector("main");
+                      if (!main) throw new Error("미리보기를 확인하지 못했어요.");
+                      // The page loads the report stylesheet as an approved
+                      // static asset. Do not insert inline styles under CSP.
+                      setSavedPreview(main.innerHTML);
+                      setPreview(true);
+                    });
+                  }}
                   aria-expanded={preview}
                   aria-controls={preview ? "report-preview-section" : undefined}
                 >
@@ -555,7 +530,8 @@ export function ReportReview({ caseId }: { caseId: string }) {
                 <span>
                   <strong>개인정보·자료 설정</strong>
                   <span className="report-options-status">
-                    {mask ? "자동 가림 켜짐" : "자동 가림 꺼짐"} · 원본 {selected.length}개
+                    {mask ? "자동 가림 켜짐" : "자동 가림 꺼짐"} · 근거 사진{" "}
+                    {mask ? 0 : includedPhotos.length}개
                     {excluded.length > 0 ? ` · 자료 ${excluded.length}개 제외` : ""}
                   </span>
                 </span>
@@ -583,10 +559,10 @@ export function ReportReview({ caseId }: { caseId: string }) {
                   </p>
                 </section>
                 <section aria-labelledby="report-files-heading">
-                  <h2 id="report-files-heading">자료 제외와 원본 선택</h2>
+                  <h2 id="report-files-heading">자료 제외와 근거 사진 선택</h2>
                   <p>
-                    리포트에서 제외할 자료와 ZIP에 넣을 원본은 별도로 선택해요. 원본이 많거나 크면
-                    선택을 줄여 나눠 다운로드해 주세요.
+                    본문에서 제외할 자료와 PDF에 포함할 근거 사진을 선택하세요. 사진 속 식별정보는
+                    직접 확인해 주세요.
                   </p>
                   {!files.length && <p>등록한 자료가 없어요. PDF만 다운로드할 수 있어요.</p>}
                   {files.map((file) => (
@@ -612,7 +588,7 @@ export function ReportReview({ caseId }: { caseId: string }) {
                             disabled={Boolean(busy) || needsConsent}
                             onChange={() => {
                               setExcluded(toggle(excluded, file.id));
-                              setSelected(selected.filter((id) => id !== file.id));
+                              setIncludedPhotos(includedPhotos.filter((id) => id !== file.id));
                               setReviewed(false);
                             }}
                           />{" "}
@@ -621,19 +597,22 @@ export function ReportReview({ caseId }: { caseId: string }) {
                         <label className="report-check">
                           <input
                             type="checkbox"
-                            checked={selected.includes(file.id)}
+                            checked={includedPhotos.includes(file.id)}
                             disabled={
                               Boolean(busy) ||
                               needsConsent ||
                               excluded.includes(file.id) ||
-                              file.status !== "ready"
+                              mask ||
+                              file.status !== "ready" ||
+                              !report.photoCandidates?.some((photo) => photo.id === file.id) ||
+                              (!includedPhotos.includes(file.id) && includedPhotos.length >= 12)
                             }
                             onChange={() => {
-                              setSelected(toggle(selected, file.id));
+                              setIncludedPhotos(toggle(includedPhotos, file.id));
                               setReviewed(false);
                             }}
                           />{" "}
-                          ZIP에 원본 포함
+                          PDF에 근거 사진 포함
                         </label>
                       </div>
                     </div>
@@ -645,8 +624,12 @@ export function ReportReview({ caseId }: { caseId: string }) {
                     </p>
                   )}
                   <p className="report-option-note">
-                    제외 목록을 바꾸면 자료를 기준으로 본문을 다시 구성해요. 기존 수동 편집은 이전
-                    버전에 보관돼요. 저장 후 내용을 다시 확인해 주세요.
+                    근거 사진은 JPEG·PNG·WebP, 한 장 5MB 이하·총 8MB 이하·최대 12장을 선택할 수
+                    있어요. 다른 형식은 JPG나 PNG 사본을 추가해 주세요. 사진 속 이름·번호 등은
+                    자동으로 가려지지 않아요. 식별정보 자동 가림을 켜면 선택한 사진도 모두 빠져요.
+                    사진을 넣으려면 직접 개인정보를 확인하고 자동 가림을 꺼 주세요. 제외 목록을
+                    바꾸면 자료를 기준으로 본문을 다시 구성해요. 기존 수동 편집은 이전 버전에
+                    보관돼요. 저장 후 내용을 다시 확인해 주세요.
                   </p>
                 </section>
               </div>
@@ -656,7 +639,7 @@ export function ReportReview({ caseId }: { caseId: string }) {
                 <h2>전달 내용 미리보기</h2>
                 <p className="report-option-note">
                   {dirty
-                    ? "저장 전 미리보기예요. 자료 제외 설정은 저장 후 본문에 반영돼요."
+                    ? "저장 전 본문 미리보기예요. 자료 제외와 선택 사진은 저장한 뒤 미리보기를 다시 열어 확인하세요."
                     : "저장된 생성 기준과 검토 내용을 담은 HTML 리포트예요."}
                 </p>
                 {/* Trusted template escapes every title/body string; no user HTML is interpreted. */}
@@ -667,16 +650,20 @@ export function ReportReview({ caseId }: { caseId: string }) {
                   tabIndex={0}
                   // biome-ignore lint/security/noDangerouslySetInnerHtml: createReportMarkup escapes every user-derived string.
                   dangerouslySetInnerHTML={{
-                    __html: createReportMarkup({
-                      ...report,
-                      content,
-                      maskIdentifiers: mask,
-                      excludedFileIds: excluded,
-                    }),
+                    __html:
+                      !dirty && savedPreview
+                        ? savedPreview
+                        : createReportMarkup({
+                            ...report,
+                            content,
+                            maskIdentifiers: mask,
+                            excludedFileIds: excluded,
+                          }),
                   }}
                 />
                 <p>
-                  리포트 제외 자료: {excluded.length}개 · ZIP 원본: {selected.length}개
+                  리포트 제외 자료: {excluded.length}개 · 근거 사진:{" "}
+                  {mask ? 0 : includedPhotos.length}개
                 </p>
               </section>
             )}
@@ -694,7 +681,7 @@ export function ReportReview({ caseId }: { caseId: string }) {
                   disabled={Boolean(busy) || dirty}
                   onChange={(e) => setReviewed(e.target.checked)}
                 />{" "}
-                내용·식별정보·선택한 원본을 확인했어요
+                내용·식별정보·선택한 사진을 확인했어요
               </label>
               {exportExhausted && (
                 <div className="report-callout">
@@ -715,21 +702,6 @@ export function ReportReview({ caseId }: { caseId: string }) {
                 <button
                   type="button"
                   className="primary"
-                  disabled={Boolean(busy) || dirty || !reviewed}
-                  onClick={() =>
-                    void run("HTML 준비 중…", async () => {
-                      downloadBlob(
-                        await ownedResult(api.reports.html(report.id)),
-                        `BARO-${report.id}.html`,
-                      );
-                      setNotice("HTML 리포트 다운로드를 시작했어요.");
-                    })
-                  }
-                >
-                  <Download size={16} aria-hidden="true" /> HTML 다운로드
-                </button>
-                <button
-                  type="button"
                   disabled={
                     Boolean(busy) ||
                     ((report.stale || needsConsent) && !report.pdfAvailable) ||
@@ -751,54 +723,10 @@ export function ReportReview({ caseId }: { caseId: string }) {
                 >
                   <Download size={16} aria-hidden="true" /> PDF 다운로드
                 </button>
-                <button
-                  type="button"
-                  disabled={
-                    Boolean(busy) ||
-                    needsConsent ||
-                    report.stale ||
-                    dirty ||
-                    !reviewed ||
-                    !selected.length
-                  }
-                  onClick={() =>
-                    void run("ZIP 준비 중…", async () => {
-                      downloadBlob(
-                        await ownedResult(api.reports.zip(report.id, selected)),
-                        `BARO-${report.id}.zip`,
-                      );
-                      setNotice("ZIP 다운로드를 시작했어요.");
-                      await refreshSavedZip(report.id);
-                    })
-                  }
-                >
-                  <Download size={16} aria-hidden="true" /> 선택 원본 ZIP ({selected.length})
-                </button>
               </div>
-              {report.savedZip && (
-                <button
-                  type="button"
-                  disabled={Boolean(busy) || dirty || !reviewed}
-                  onClick={() =>
-                    void run("저장된 ZIP 확인 중…", async () => {
-                      if (!report.savedZip) return;
-                      downloadBlob(
-                        await ownedResult(api.reports.savedZip(report.savedZip.id)),
-                        `BARO-${report.id}.zip`,
-                      );
-                      setNotice("저장된 ZIP 다운로드를 시작했어요.");
-                    })
-                  }
-                >
-                  <Download size={16} aria-hidden="true" /> 저장된 선택 원본 ZIP (
-                  {report.savedZip.fileCount}) 다시 다운로드
-                </button>
-              )}
-              {(selected.length > 0 || report.savedZip) && (
-                <p className="report-option-note">
-                  PDF에서 가린 정보도 원본에는 남을 수 있어요. 원본의 개인정보도 확인해 주세요.
-                </p>
-              )}
+              <p className="report-option-note">
+                리포트는 PDF로 저장해요. 선택 사진의 개인정보와 본문·출처를 확인한 뒤 전달해 주세요.
+              </p>
               <p className="report-export-notice">
                 AI가 정리한 상담 준비 자료예요. 법률 판단·원본의 진정성·법적 효력을 보장하지 않아요.
                 변호사에게 전달하는 것은 직접 결정하고 진행해 주세요.
@@ -838,7 +766,7 @@ export function ReportReview({ caseId }: { caseId: string }) {
                   const materials = await ownedResult(api.files.list(caseId));
                   accept(value);
                   setFiles(materials);
-                  setSelected([]);
+                  setIncludedPhotos([]);
                   setRegenerate(false);
                   setNotice("새 초안을 만들었어요. 내용을 다시 확인해 주세요.");
                 })

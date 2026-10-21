@@ -1,5 +1,8 @@
 # BARO v2 전체 서비스 기능 명세
 
+> 2026-10-21 직접 사용자 후속 지시(#312): 리포트는 서비스 UI 톤의 HTML로 구성하고 사용자 저장 UI는 PDF만 제공한다. 사용자가 선택한 상해·진단서 등 근거 사진과 자료 버전을 포함할 수 있다. 식별정보 자동 가림 시 사진은 통째로 제외한다. 기존 ZIP 원본 보관/API 이력은 보존하며 아래 과거 PDF·ZIP UI 명세보다 [사진·PDF 계약](../architecture/REPORT-PHOTOS-PDF.md)이 우선한다.
+
+
 - Version: 2.0
 - Status: Current MVP scope; implementation integrated; final live acceptance pending
 - Updated: 2026-10-14

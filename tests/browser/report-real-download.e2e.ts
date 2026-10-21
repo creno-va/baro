@@ -1,11 +1,11 @@
 import { type ChildProcess, execFileSync, spawn } from "node:child_process";
-import { mkdir, readFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { expect, test } from "@playwright/test";
 import { openReportOptions } from "../helpers/report-controls";
 
-test("ReportReview uses signed real SQL routes and downloads a Korean font PDF and exact selected original ZIP", async ({
+test("ReportReview uses signed real SQL routes and saves a Korean font PDF from the reviewed HTML document", async ({
   page,
   context,
 }, testInfo) => {
@@ -88,16 +88,15 @@ test("ReportReview uses signed real SQL routes and downloads a Korean font PDF a
     ).toBeVisible();
     await expect(previewDocument).toContainText("[전화번호 가림]");
     await expect(previewDocument).not.toContainText("010-1234-5678");
-    await page
-      .locator(".report-material")
-      .filter({ hasText: `${Buffer.byteLength(seed.original)}바이트` })
-      .getByRole("checkbox", { name: "ZIP에 원본 포함" })
-      .check();
-    await page.getByRole("checkbox", { name: "내용·식별정보·선택한 원본을 확인했어요" }).check();
-    const htmlEvent = page.waitForEvent("download");
-    await page.getByRole("button", { name: "HTML 다운로드", exact: true }).click();
-    const html = await htmlEvent;
-    const htmlText = await readFile((await html.path()) as string, "utf8");
+    await page.getByRole("checkbox", { name: "내용·식별정보·선택한 사진을 확인했어요" }).check();
+    await expect(page.getByRole("button", { name: /HTML 다운로드|선택 원본 ZIP/ })).toHaveCount(0);
+    // Read the internal HTML preview endpoint; user saving exposes PDF only.
+    const savedReport = (await (
+      await page.request.get(`${seed.origin}/api/v2/cases/${seed.caseId}/reports`)
+    ).json()) as { id: string };
+    const htmlText = await (
+      await page.request.get(`${seed.origin}/api/v2/reports/${savedReport.id}/html`)
+    ).text();
     expect(htmlText).toContain('data-baro-report="1"');
     expect(htmlText).toContain("[전화번호 가림]");
     expect(htmlText).not.toContain("010-1234-5678");
@@ -110,24 +109,6 @@ test("ReportReview uses signed real SQL routes and downloads a Korean font PDF a
     expect(bytes.subarray(0, 5).toString()).toBe("%PDF-");
     expect(bytes.toString()).toContain("/FontFile2");
     expect(bytes.toString()).toContain("/ToUnicode");
-    const zipEvent = page.waitForEvent("download");
-    await page.getByRole("button", { name: /선택 원본 ZIP/ }).click();
-    const zip = await zipEvent;
-    const zipPath = await zip.path();
-    const parsed = JSON.parse(
-      execFileSync(
-        process.platform === "win32" ? "python" : "python3",
-        [
-          "-c",
-          "import json,sys,zipfile; z=zipfile.ZipFile(sys.argv[1]); print(json.dumps([(i.filename,z.read(i).decode('utf-8')) for i in z.infolist()]))",
-          zipPath as string,
-        ],
-        { encoding: "utf8" },
-      ),
-    );
-    expect(parsed).toHaveLength(1);
-    expect(parsed[0][0]).toBe("합성💙 자료.txt");
-    expect(parsed[0][1]).toBe(seed.original);
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
@@ -136,8 +117,7 @@ test("ReportReview uses signed real SQL routes and downloads a Korean font PDF a
     const out = process.env.BARO_REPORT_EVIDENCE_DIR ?? testInfo.outputPath("synthetic-downloads");
     await mkdir(out, { recursive: true });
     await pdf.saveAs(resolve(out, "real-korean-report.pdf"));
-    await html.saveAs(resolve(out, "real-korean-report.html"));
-    await zip.saveAs(resolve(out, "real-selected-originals.zip"));
+    await writeFile(resolve(out, "real-korean-report.html"), htmlText);
     await page.screenshot({ path: resolve(out, "real-report-mobile.png"), fullPage: true });
     // Print the actual downloaded file, rather than a second synthetic template.
     const printPage = await context.newPage();

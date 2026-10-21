@@ -225,7 +225,8 @@ export function createV2DeletionReconciler(core: V2Core, deps: DeletionCleanupDe
                   // native request, or may outlive a failed Workflow deletion.
                   await observe("native_revoke", "unknown", () => stopNative(target.target_id));
                 }
-                const probe = named && /^(?:native-v1-)?probe-/.test(target.target_id);
+                const probe =
+                  named && /^(?:(?:native-v1-)?probe|native-v1-report)-/.test(target.target_id);
                 if (!probe) {
                   if (deps.workflows.length !== 4) throw new Error("CLEANUP_BINDING_UNAVAILABLE");
                   let observed = false;

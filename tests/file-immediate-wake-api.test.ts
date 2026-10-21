@@ -11,7 +11,10 @@ import {
   createFileProcessingDispatcher,
   type FileProcessingBinding,
 } from "../src/server/modules/file-processing/dispatch";
-import { ProcessingError } from "../src/server/modules/file-processing/protocol";
+import {
+  DefinitiveFileRejection,
+  ProcessingError,
+} from "../src/server/modules/file-processing/protocol";
 import { digest } from "../src/server/modules/files/binary";
 import { createFileStorageBudget } from "../src/server/modules/files/runtime";
 import type { PrivateBucket } from "../src/server/modules/files/service";
@@ -170,6 +173,7 @@ async function fixture(
           probe: async (input) => {
             const bytes = await new Response(input.open()).arrayBuffer();
             expect(bytes.byteLength).toBe(input.byteLength);
+            if (options.probeFailure === "FILE_REJECTED") throw new DefinitiveFileRejection();
             if (options.probeFailure) throw new ProcessingError(options.probeFailure);
             return {
               category: "document",

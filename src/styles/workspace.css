@@ -18,7 +18,7 @@
   margin-bottom: 6px;
   min-height: 44px;
 }
-/* The five pages share one quiet case header and persistent navigation. */
+/* Case pages share one quiet header and persistent navigation. */
 .case-navigation {
   margin-bottom: 40px;
   view-transition-name: case-navigation;
@@ -913,7 +913,8 @@
     font-size: 1.05rem;
   }
   .workspace-tabs {
-    justify-content: space-between;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 4px;
   }
   .workspace-tabs a {

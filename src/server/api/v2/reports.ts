@@ -161,7 +161,7 @@ export function createReportsApi(
     return new Response(document, {
       headers: {
         "content-type": "text/html; charset=utf-8",
-        "content-disposition": attachmentFilename(`BARO-${id}.html`),
+        "content-disposition": "inline",
         "cache-control": "private, no-store",
         "x-content-type-options": "nosniff",
         "content-security-policy":

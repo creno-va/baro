@@ -158,7 +158,7 @@ test("customer login consent logout share the product shell without external API
   expect(requests).toEqual([]);
 });
 
-test("customer completes intake workspace original ZIP report and cascading deletion on one product UI", async ({
+test("customer completes intake workspace original PDF report and cascading deletion on one product UI", async ({
   page,
 }) => {
   test.setTimeout(120000);
@@ -231,17 +231,14 @@ test("customer completes intake workspace original ZIP report and cascading dele
   await page.goto(`${casePath}/reports`);
   await expect(page.getByLabel("리포트 내용 편집")).toBeVisible();
   await openReportOptions(page);
-  await page.getByRole("checkbox", { name: "ZIP에 원본 포함" }).check();
-  await page.getByRole("checkbox", { name: "내용·식별정보·선택한 원본을 확인했어요" }).check();
+  await expect(page.getByRole("checkbox", { name: "PDF에 근거 사진 포함" })).toBeDisabled();
+  await page.getByRole("checkbox", { name: "내용·식별정보·선택한 사진을 확인했어요" }).check();
   const pdfPromise = page.waitForEvent("download");
   await page.getByRole("button", { name: "PDF 다운로드", exact: true }).click();
   const pdf = await pdfPromise;
   expect(pdf.suggestedFilename()).toMatch(/\.pdf$/);
   await pdf.saveAs(".wrangler/integration-synthetic.pdf");
-  const zipPromise = page.waitForEvent("download");
-  await page.getByRole("button", { name: "선택 원본 ZIP (1)" }).click();
-  const zip = await zipPromise;
-  await zip.saveAs(".wrangler/integration-synthetic.zip");
+  await expect(page.getByRole("button", { name: /HTML 다운로드|선택 원본 ZIP/ })).toHaveCount(0);
   await page.screenshot({ path: ".wrangler/customer-integration-390.png", fullPage: true });
   await page.goto("/settings");
   await page.getByRole("button", { name: "사건 삭제", exact: true }).click();

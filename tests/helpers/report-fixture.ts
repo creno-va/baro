@@ -76,6 +76,7 @@ export async function reportFixture(
     files: f.service,
     clock: () => f.actor.now,
     testOnlyUnmeteredStorage: true as const,
+    testOnlyLegacyPdf: true as const,
     font: async () =>
       new Uint8Array(await Bun.file("public/fonts/BaroReport-Regular.ttf").arrayBuffer()),
     fixedLength: (body: ReadableStream<Uint8Array>) => ({ body, done: Promise.resolve() }),

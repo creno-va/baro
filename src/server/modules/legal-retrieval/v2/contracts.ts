@@ -131,6 +131,8 @@ export type SourceOutcome = {
   reason: FailureReason | null;
   chunks: SourceChunk[];
   schemaFailure?: LegalSchemaDiagnostic;
+  /** A bounded precedent search is partial discovery, not an unverified original. */
+  searchTruncated?: boolean;
 };
 export type RetrievalOutput = {
   schemaVersion: "2";

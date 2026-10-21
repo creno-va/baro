@@ -90,6 +90,8 @@ export type WorkspaceView = {
   notices?: string[];
 };
 export type ReportView = {
+  includedPhotoIds?: string[] | undefined;
+  photoCandidates?: { id: string; name: string; revision: number }[] | undefined;
   savedZip?: { id: string; fileCount: number; createdAt: string } | undefined;
   basis?: { workspaceRevision: number; summaryRevision: number; generatedAt: string } | undefined;
   pdfAvailable?: boolean | undefined;

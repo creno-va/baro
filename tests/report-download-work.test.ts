@@ -444,6 +444,17 @@ async function fixture(readyOriginals = false, selectedCount = 4, targetZipBytes
         const dependencies = createReportDependencies(env, core, ownerId, () => f.now);
         return {
           ...dependencies,
+          // Explicit offline renderer; native HTML/PDF layout has its own
+          // Container fixture. Keep this test about SQL and export fences.
+          renderPdf: async () =>
+            pdf.renderReportPdf(font, {
+              title: "합성 사건 리포트",
+              content: "합성 오프라인 조판 대역",
+              revision: 1,
+              updatedAt: f.now,
+              maskIdentifiers: false,
+              excludedFileCount: 0,
+            }),
           font: async () => {
             const row = active,
               start = performance.now();
@@ -576,9 +587,9 @@ test("canonical four-ready report generation and review preserve source fences w
   expect(
     f.work.map(({ operation, calls, statements }) => ({ operation, calls, statements })),
   ).toEqual([
-    { operation: "get_initial", calls: 124, statements: 163 },
-    { operation: "save_review", calls: 132, statements: 173 },
-    { operation: "generate", calls: 124, statements: 163 },
+    { operation: "get_initial", calls: 127, statements: 166 },
+    { operation: "save_review", calls: 135, statements: 176 },
+    { operation: "generate", calls: 127, statements: 166 },
   ]);
   expect(f.work.every((work) => work.r2.get === 0 && work.r2.put === 0)).toBe(true);
   if (process.env.BARO_REPORT_WORK_METRICS === "true")
@@ -651,9 +662,9 @@ test("canonical report v2 read/review/PDF/HTML separates database, render and of
       { operation: "get_initial", calls: 61, statements: 85 },
       { operation: "save_review", calls: 69, statements: 95 },
       { operation: "get_saved", calls: 15, statements: 17 },
-      { operation: "pdf_first", calls: 97, statements: 124 },
+      { operation: "pdf_first", calls: 99, statements: 126 },
       { operation: "pdf_saved", calls: 32, statements: 34 },
-      { operation: "html", calls: 14, statements: 16 },
+      { operation: "html", calls: 20, statements: 24 },
       { operation: "generate", calls: 61, statements: 85 },
     ]);
     expect(f.work.find((row) => row.operation === "pdf_first")?.pdfRender.calls).toBe(1);

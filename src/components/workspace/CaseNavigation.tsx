@@ -5,6 +5,7 @@ const menus = [
   { id: "files", label: "자료", path: "/files" },
   { id: "timeline", label: "타임라인", path: "/timeline" },
   { id: "actions", label: "다음 행동", path: "/actions" },
+  { id: "precedents", label: "판례", path: "/precedents" },
   { id: "reports", label: "리포트", path: "/reports" },
 ] as const;
 

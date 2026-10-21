@@ -45,6 +45,7 @@ export const reportReviewSchema = z.strictObject({
   content: z.string().min(1).max(30000),
   excludedFileIds: z.array(opaqueIdSchema).max(100),
   maskIdentifiers: z.boolean(),
+  includedPhotoIds: z.array(opaqueIdSchema).max(12).optional(),
   sourceDigest: z.string().regex(/^[a-f0-9]{64}$/),
   parentReportId: opaqueIdSchema.nullable(),
 });

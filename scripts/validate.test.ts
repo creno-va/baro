@@ -26,6 +26,7 @@ test("explicit profiles preserve full browser, database, native and security cov
   expect(full).toContainEqual(["bun", "run", "cf:dry-run"]);
   expect(full.filter((command) => command.includes("build:production"))).toHaveLength(1);
   for (const script of [
+    "report-test.py",
     "office-security-test.py",
     "heif-fixture-test.py",
     "office-fixture-test.py",
