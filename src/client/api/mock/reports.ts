@@ -513,7 +513,8 @@ export function createReportsMock(runtime: ReportMockRuntime) {
   const handle = createReportsMockHandler(runtime);
   return async (request: Request): Promise<Response | null> => {
     const path = new URL(request.url).pathname;
-    if (!/^\/api\/v2\/(cases\/[^/]+\/reports|reports\/[^/]+\/(pdf|zip))$/.test(path)) return null;
+    if (!/^\/api\/v2\/(cases\/[^/]+\/reports|reports\/[^/]+\/(html|pdf|zip))$/.test(path))
+      return null;
     try {
       const result = await handle(path, {
         method: request.method,

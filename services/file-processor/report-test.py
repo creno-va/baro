@@ -6,10 +6,17 @@ import tempfile
 from pathlib import Path
 from PIL import Image
 from report import render, resource
+from weasyprint import HTML
+from weasyprint.formatting_structure.boxes import TextBox
 
 root = Path("/report-fixture")
 source = (root / "report.html").read_text(encoding="utf-8")
 output = root / "report.pdf"
+document = HTML(string=source, url_fetcher=resource).render()
+for page in document.pages:
+    for box in page._page_box.descendants():
+        if isinstance(box, TextBox):
+            assert box.position_x + box.width <= page.width - 55, (box.text, box.position_x, box.width, page.width)
 output.write_bytes(render(source))
 text = subprocess.check_output(["pdftotext", "-layout", str(output), "-"]).decode("utf-8")
 for phrase in ["사건 상담 준비", "촬영 날짜", "선택한 근거 사진", "자료 버전 3", "자료 버전 4", "합성 기록 25"]:

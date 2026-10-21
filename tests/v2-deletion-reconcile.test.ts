@@ -310,3 +310,33 @@ test("native revocation and Workflow stop must both succeed before the retained 
     f.db.sqlite.query("SELECT state FROM v2_deletion_targets WHERE target_id=?").get(id),
   ).toEqual({ state: "completed" });
 });
+
+test("named native report cleanup revokes the renderer without requiring a Workflow instance", async () => {
+  const f = await reportFixture(),
+    at = new Date().toISOString(),
+    journal = crypto.randomUUID(),
+    id = `native-v1-report-${crypto.randomUUID()}-1`;
+  f.db.sqlite
+    .query(
+      "INSERT INTO v2_deletion_journals(id,target_kind,target_id,created_at,next_attempt_at) VALUES(?,'blob',?,?,?)",
+    )
+    .run(journal, crypto.randomUUID(), at, at);
+  f.db.sqlite
+    .query("INSERT INTO v2_deletion_targets(journal_id,kind,target_id,ordinal) VALUES(?,'job',?,0)")
+    .run(journal, id);
+  const calls: string[] = [];
+  const runner = createV2DeletionReconciler(f.core, {
+    environment: "preview",
+    workflows: [],
+    stopNative: async (runtime) => {
+      calls.push(runtime);
+    },
+    clock: () => at,
+    testOnlyUnmeteredStorage: true,
+  });
+  expect(await runner.run()).toEqual({ acquired: 1, completed: 1, retry: 0 });
+  expect(calls).toEqual([id]);
+  expect(
+    f.db.sqlite.query("SELECT state FROM v2_deletion_targets WHERE target_id=?").get(id),
+  ).toEqual({ state: "completed" });
+});

@@ -102,31 +102,17 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
   await openReportOptions(page);
   await expect(excluded.getByRole("checkbox", { name: "리포트에서 제외" })).toBeChecked();
   await openReportOptions(page);
-  await expect(excluded.getByRole("checkbox", { name: "ZIP에 원본 포함" })).toBeDisabled();
-  await page
-    .locator(".report-material")
-    .filter({ hasText: "선택 원본.txt" })
-    .getByRole("checkbox", { name: "ZIP에 원본 포함" })
-    .check();
+  await expect(excluded.getByRole("checkbox", { name: "PDF에 근거 사진 포함" })).toBeDisabled();
   await page.getByRole("button", { name: "전달 내용 미리보기" }).click();
   await expect(page.locator(".report-html-preview")).toContainText("[전화번호 가림]");
   await expect(page.locator(".report-html-preview")).not.toContainText("010-1234-5678");
-  await page.getByRole("checkbox", { name: "내용·식별정보·선택한 원본을 확인했어요" }).check();
+  await page.getByRole("checkbox", { name: "내용·식별정보·선택한 사진을 확인했어요" }).check();
   const pdfEvent = page.waitForEvent("download");
   await page.getByRole("button", { name: "PDF 다운로드", exact: true }).click();
   const pdfPath = resolve(artifacts, "integrated-report.pdf");
   await (await pdfEvent).saveAs(pdfPath);
   expect((await readFile(pdfPath)).subarray(0, 5).toString()).toBe("%PDF-");
-  const zipEvent = page.waitForEvent("download");
-  await page.getByRole("button", { name: /선택 원본 ZIP/ }).click();
-  const zipPath = resolve(artifacts, "integrated-originals.zip");
-  await (await zipEvent).saveAs(zipPath);
-  const zip = await readFile(zipPath);
-  expect(zip.readUInt32LE(0)).toBe(0x04034b50);
-  expect(zip.subarray(30, 30 + zip.readUInt16LE(26)).toString("utf8")).toBe("001-선택 원본.txt");
-  const payload = 30 + zip.readUInt16LE(26) + zip.readUInt16LE(28);
-  expect(zip.subarray(payload, payload + zip.readUInt32LE(18)).toString("utf8")).toBe(originalText);
-  expect(zip.readUInt16LE(zip.length - 12)).toBe(1);
+  await expect(page.getByRole("button", { name: /HTML 다운로드|선택 원본 ZIP/ })).toHaveCount(0);
   expect((await new AxeBuilder({ page }).include(".report-review").analyze()).violations).toEqual(
     [],
   );

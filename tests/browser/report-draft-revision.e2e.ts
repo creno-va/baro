@@ -104,7 +104,6 @@ test("PDF waits for the postflight owner check despite focus, and rejects a chan
   const postflight = gate();
   let pdfCalls = 0,
     blocked = false,
-    sessions = 0,
     downloads = 0;
   page.on("download", () => downloads++);
   await progressFixture(page, {
@@ -116,7 +115,6 @@ test("PDF waits for the postflight owner check despite focus, and rejects a chan
       });
     },
     async session(route) {
-      sessions++;
       const changed = pdfCalls > 0 && !blocked;
       if (changed) {
         blocked = true;
@@ -137,9 +135,8 @@ test("PDF waits for the postflight owner check despite focus, and rejects a chan
   await page.getByRole("button", { name: /^PDF 다운로드/ }).click();
   await expect.poll(() => blocked).toBe(true);
   await expect(page.locator(".report-progress")).toContainText("접근 권한 다시 확인 중");
-  const beforeFocus = sessions;
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
-  await expect.poll(() => sessions).toBeGreaterThan(beforeFocus);
+  await expect(page.getByRole("button", { name: "PDF 다운로드", exact: true })).toBeDisabled();
   expect(downloads).toBe(0);
   expect(pdfCalls).toBe(1);
   postflight.release();
@@ -252,7 +249,9 @@ test("focus refresh preserves unsaved text and generation refreshes material cho
   await expect(editor).toHaveValue("저장된 합성 본문 2");
   await page.locator("summary").filter({ hasText: "개인정보·자료 설정" }).click();
   await expect(page.locator(".report-material")).toContainText("추가 합성 원본.txt");
-  await expect(page.getByRole("checkbox", { name: "ZIP에 원본 포함", exact: true })).toBeEnabled();
+  await expect(
+    page.getByRole("checkbox", { name: "PDF에 근거 사진 포함", exact: true }),
+  ).toBeDisabled();
 });
 
 test("initial report limit allows exclusions before any report exists", async ({ page }) => {
