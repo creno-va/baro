@@ -75,7 +75,6 @@ test("integrated lawyer login/consent/editor uses persistent API mock with no re
   await page.getByRole("checkbox", { name: /이용약관, 개인정보 처리방침/ }).check();
   await page.getByRole("checkbox", { name: "만 14세 이상입니다." }).check();
   await page.getByRole("button", { name: "동의하고 계속하기" }).click();
-  await page.getByRole("link", { name: "내 화면으로 계속하기" }).click();
   await expect(page).toHaveURL(/\/lawyer/);
   await page.getByLabel("이름", { exact: true }).fill("E 통합 시연 변호사");
   await page.getByLabel("사무실 이름").fill("합성 시연 사무실");

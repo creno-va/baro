@@ -1,11 +1,13 @@
 import type { TimelineView } from "../../client/api/types";
 import type { V2FactReference, V2SourcePosition } from "../../contracts/v2";
+import { secondsLabel } from "../../utils/time";
 export function positionLabel(position: V2SourcePosition): string {
   if (position.kind === "document")
     return `${position.page}쪽${position.paragraph ? ` · ${position.paragraph}번째 문단` : ""}${position.table ? ` · 표 ${position.table.index}, ${position.table.row}행 ${position.table.column}열` : ""}`;
-  if (position.kind === "audio") return `${position.startSeconds}–${position.endSeconds}초`;
+  if (position.kind === "audio")
+    return `${secondsLabel(position.startSeconds)}–${secondsLabel(position.endSeconds)}초`;
   if (position.kind === "video")
-    return `${position.timestampSeconds}초 · 프레임 ${position.frameIndex}`;
+    return `${secondsLabel(position.timestampSeconds)}초 · 프레임 ${position.frameIndex}`;
   return position.region
     ? `이미지 영역 (${Math.round(position.region.x * 100)}%, ${Math.round(position.region.y * 100)}%)`
     : "이미지 전체";

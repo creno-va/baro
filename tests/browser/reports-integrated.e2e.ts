@@ -37,7 +37,6 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
     .check();
   await page.getByRole("checkbox", { name: "만 14세 이상입니다." }).check();
   await page.getByRole("button", { name: "동의하고 계속하기" }).click();
-  await page.getByRole("link", { name: "내 화면으로 계속하기" }).click();
   const ownerId = await page.evaluate(
     () => JSON.parse(localStorage.getItem("baro-api-mock-v1:session") ?? "{}").user.id as string,
   );

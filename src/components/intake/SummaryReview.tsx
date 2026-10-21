@@ -2,7 +2,7 @@ import { ArrowRight, Check, Save } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../../client/api";
 import { ApiError } from "../../client/api/core";
-import type { CaseView } from "../../client/api/types";
+import type { CaseView, FileView } from "../../client/api/types";
 import { accessHref } from "../../client/return-path";
 import type { V2Fact } from "../../contracts/v2";
 import { BrandMark } from "../ui/brand";
@@ -10,11 +10,23 @@ import { Button, ButtonLink } from "../ui/button";
 import { Dialog } from "../ui/dialog";
 import { Textarea } from "../ui/form";
 import { StatePanel } from "../ui/state-panel";
+import { CaseMaterials } from "../workspace/CaseMaterials";
 import { BackToCases, ErrorPanel } from "./common";
 import { useCustomerAccess } from "./useCustomerAccess";
 
 export function SummaryReview({ caseId }: { caseId: string }) {
   const [item, setItem] = useState<CaseView | null>(null);
+  const [activeEditor, setActiveEditor] = useState(false);
+  const editingActive = activeEditor || item?.stage === "active";
+  const [files, setFiles] = useState<FileView[]>([]);
+  const [materialsError, setMaterialsError] = useState(false);
+  const base = `/cases/${encodeURIComponent(caseId)}`;
+  const [returnHref, setReturnHref] = useState(base);
+  useEffect(() => {
+    // Accept a fixed workspace tab only; never navigate to an arbitrary URL.
+    const tab = new URLSearchParams(window.location.search).get("from");
+    setReturnHref(["files", "timeline", "actions"].includes(tab ?? "") ? `${base}/${tab}` : base);
+  }, [base]);
   const [summary, setSummary] = useState("");
   const [factEdits, setFactEdits] = useState<
     Record<string, Pick<V2Fact, "text" | "certainty" | "conflictingFactIds">>
@@ -42,6 +54,8 @@ export function SummaryReview({ caseId }: { caseId: string }) {
       acknowledged.current = false;
       setRecovering(false);
       setItem(null);
+      setActiveEditor(false);
+      setFiles([]);
       setSummary("");
       setFactEdits({});
       setUnknownsDraft(null);
@@ -87,7 +101,13 @@ export function SummaryReview({ caseId }: { caseId: string }) {
       try {
         if (!(await verify()) || serial !== request.current) return;
         epoch = ticket();
-        const next = await api.cases.get(caseId);
+        const [next, materials] = await Promise.all([
+          api.cases.get(caseId),
+          api.files.list(caseId, { metadataOnly: true }).then(
+            (files) => ({ files, failed: false }),
+            () => ({ files: [] as FileView[], failed: true }),
+          ),
+        ]);
         // An earlier focus read must not replace a newer read or completed write.
         if (serial !== request.current) return;
         if (!(await verify()) || !current(epoch) || serial !== request.current) return;
@@ -107,6 +127,9 @@ export function SummaryReview({ caseId }: { caseId: string }) {
         setRecovering(false);
         const changed = savedItem.current?.revision !== next.revision;
         setItem(next);
+        if (next.stage === "active") setActiveEditor(true);
+        setFiles(materials.files);
+        setMaterialsError(materials.failed);
         if (replace) {
           setFactEdits({});
           setUnknownsDraft(null);
@@ -160,7 +183,8 @@ export function SummaryReview({ caseId }: { caseId: string }) {
       if (!(await verify(false, true)) || !current(epoch)) return;
       if (!canMutate) return;
       failedOperation.current = "save";
-      const next = await api.cases.saveSummary(caseId, {
+      const wasActive = editingActive;
+      let next = await api.cases.saveSummary(caseId, {
         expectedRevision: item.revision,
         summary: summary.trim(),
         ...(Object.keys(factEdits).length
@@ -181,6 +205,20 @@ export function SummaryReview({ caseId }: { caseId: string }) {
       failedOperation.current = null;
       setRecovering(true);
       if (!(await verify()) || !current(epoch)) return;
+      if (wasActive) {
+        // Saving an active summary invalidates its confirmation on the server.
+        // The explicit Save and apply action confirms this acknowledged revision.
+        setItem(next);
+        setSummary(next.summary);
+        setFactEdits({});
+        setUnknownsDraft(null);
+        setChecked(true);
+        failedOperation.current = "confirm";
+        next = await api.cases.confirmSummary(caseId, { expectedRevision: next.revision });
+        acknowledged.current = true;
+        failedOperation.current = null;
+        if (!(await verify()) || !current(epoch)) return;
+      }
       acknowledged.current = false;
       setRecovering(false);
       failedOperation.current = null;
@@ -204,8 +242,8 @@ export function SummaryReview({ caseId }: { caseId: string }) {
       }
     }
   }
-  async function confirm() {
-    if (!item || !checked || dirty || pending.current) return;
+  async function confirm(explicitActiveApply = false) {
+    if (!item || (!checked && !explicitActiveApply) || dirty || pending.current) return;
     ++request.current;
     setLoading(false);
     const epoch = ticket();
@@ -224,7 +262,7 @@ export function SummaryReview({ caseId }: { caseId: string }) {
       setRecovering(false);
       failedOperation.current = null;
       setItem(next);
-      window.location.assign(`/cases/${encodeURIComponent(caseId)}`);
+      window.location.assign(returnHref);
     } catch (cause) {
       if (alive(epoch)) {
         if (["UNAUTHENTICATED", "NOT_FOUND"].includes((cause as { code?: string }).code ?? ""))
@@ -240,10 +278,16 @@ export function SummaryReview({ caseId }: { caseId: string }) {
     }
   }
   return (
-    <div className="intake-flow">
+    <div className={`intake-flow${editingActive ? " intake-active-summary" : ""}`}>
       <nav className="intake-scene-nav" aria-label="사건 정리 탐색">
-        <BackToCases />
-        <span>요약 확인</span>
+        {editingActive ? (
+          <ButtonLink variant="ghost" href={returnHref}>
+            작업 공간으로 돌아가기
+          </ButtonLink>
+        ) : (
+          <BackToCases />
+        )}
+        <span>{editingActive ? "사건 요약 편집" : "요약 확인"}</span>
       </nav>
       {loading && !item && !error ? (
         <StatePanel variant="loading" title="저장한 요약을 불러오고 있어요." />
@@ -273,8 +317,14 @@ export function SummaryReview({ caseId }: { caseId: string }) {
             <span className="intake-scene-emblem" aria-hidden="true">
               <BrandMark size={48} />
             </span>
-            <h1 id="summary-heading">이야기를 이렇게 정리했어요</h1>
-            <p>내용이 맞는지 확인하고, 필요한 부분만 고쳐주세요.</p>
+            <h1 id="summary-heading">
+              {editingActive ? "사건 요약을 확인해요" : "이야기를 이렇게 정리했어요"}
+            </h1>
+            <p>
+              {editingActive
+                ? "저장한 요약과 추가 자료를 확인하고 필요한 부분을 수정하세요."
+                : "내용이 맞는지 확인하고, 필요한 부분만 고쳐주세요."}
+            </p>
           </header>
           {item.schemaVersion === "1" || item.stage === "archived" ? (
             <StatePanel
@@ -298,247 +348,283 @@ export function SummaryReview({ caseId }: { caseId: string }) {
               }
             />
           ) : (
-            <>
-              {item.stage === "active" && (
-                <ButtonLink href={`/cases/${encodeURIComponent(caseId)}`}>
-                  사건 열기
-                  <ArrowRight size={16} aria-hidden="true" />
-                </ButtonLink>
-              )}
-              {!canMutate && (
-                <p>
-                  저장한 요약을 읽을 수 있어요. 수정·확인하려면{" "}
-                  <a href={accessHref("consent")}>최신 동의 확인</a>이 필요해요.
-                </p>
-              )}
-              <div className="intake-scene-composer">
-                <label htmlFor="case-summary" className="sr-only">
-                  요약 편집
-                </label>
-                <Textarea
-                  id="case-summary"
-                  value={summary}
-                  onChange={(event) => {
-                    setSummary(event.target.value);
-                    setChecked(false);
-                    setConfirming(false);
-                    setNotice("");
-                  }}
-                  disabled={
-                    !canMutate ||
-                    busy ||
-                    recovering ||
-                    (error as { code?: string })?.code === "CONFLICT"
-                  }
-                  aria-describedby="summary-help"
-                />
-                <p id="summary-help" className="intake-count">
-                  {[...summary].length.toLocaleString()} / 5,000자
-                </p>
-                {summaryTooLong && <p role="alert">요약은 5,000자까지 입력할 수 있어요.</p>}
-              </div>
-              {item.summaryDetails && (
-                <section aria-label="구조화된 사실 편집">
-                  <h2>사실·모순·정보 공백 확인</h2>
-                  {item.summaryDetails.facts.map((fact) => {
-                    const edit = factEdits[fact.id] ?? fact;
-                    const update = (change: Partial<typeof edit>) => {
-                      setFactEdits((old) => ({
-                        ...old,
-                        [fact.id]: {
-                          text: edit.text,
-                          certainty:
-                            change.text !== undefined && edit.certainty === "observed"
-                              ? "uncertain"
-                              : edit.certainty,
-                          conflictingFactIds: edit.conflictingFactIds,
-                          ...change,
-                        },
-                      }));
-                      setChecked(false);
-                      setConfirming(false);
-                    };
-                    return (
-                      <fieldset
-                        key={fact.id}
-                        disabled={locked || fact.attribution === "official_source"}
-                      >
-                        <legend>
-                          {fact.significance === "unfavorable" ? "불리한 사실 · " : ""}
-                          {fact.attribution === "official_source"
-                            ? "공식 출처 사실 (직접 변경할 수 없음)"
-                            : "사용자가 확인할 사실"}
-                        </legend>
-                        <label htmlFor={`fact-${fact.id}`}>사실 내용</label>
-                        <Textarea
-                          id={`fact-${fact.id}`}
-                          value={edit.text}
-                          onChange={(e) => update({ text: e.target.value })}
-                        />
-                        {[...edit.text].length > 2000 && (
-                          <p role="alert">사실 내용은 2,000자까지 입력할 수 있어요.</p>
-                        )}
-                        <label>
-                          확인 상태
-                          <select
-                            aria-label="확인 상태"
-                            value={edit.certainty}
-                            onChange={(e) => {
-                              const certainty = e.target.value as V2Fact["certainty"];
-                              update({
-                                certainty,
-                                conflictingFactIds:
-                                  certainty === "conflicting" ? edit.conflictingFactIds : [],
-                              });
-                            }}
-                          >
-                            {fact.attribution === "user_statement" && (
-                              <option value="reported">사용자 진술</option>
-                            )}
-                            {edit.certainty === "observed" && (
-                              <option value="observed">자료에서 관찰됨</option>
-                            )}
-                            <option value="uncertain">확인 필요</option>
-                            <option value="conflicting">다른 사실과 모순</option>
-                          </select>
-                        </label>
-                        {edit.certainty === "conflicting" && (
-                          <label>
-                            모순되는 사실 선택
-                            <select
-                              aria-label="모순되는 사실 선택"
-                              multiple
-                              value={edit.conflictingFactIds}
-                              onChange={(e) =>
-                                update({
-                                  conflictingFactIds: Array.from(
-                                    e.target.selectedOptions,
-                                    (o) => o.value,
-                                  ),
-                                })
-                              }
-                            >
-                              {item.summaryDetails?.facts
-                                .filter((v) => v.id !== fact.id)
-                                .map((v) => (
-                                  <option key={v.id} value={v.id}>
-                                    {v.text.slice(0, 80)}
-                                  </option>
-                                ))}
-                            </select>
-                          </label>
-                        )}
-                      </fieldset>
-                    );
-                  })}
-                  <label htmlFor="summary-unknowns">확인할 정보 공백 (한 줄에 하나)</label>
+            <div className="summary-editor-layout">
+              <aside className="summary-materials-column">
+                <CaseMaterials caseId={caseId} files={files} facts={item.summaryDetails?.facts} />
+                {materialsError && (
+                  <p role="status">
+                    자료 목록을 불러오지 못했어요.{" "}
+                    <a href={`${base}/files`}>자료 화면에서 다시 확인</a>
+                  </p>
+                )}
+              </aside>
+              <div className="summary-edit-column">
+                {!canMutate && (
+                  <p>
+                    저장한 요약을 읽을 수 있어요. 수정·확인하려면{" "}
+                    <a href={accessHref("consent")}>최신 동의 확인</a>이 필요해요.
+                  </p>
+                )}
+                <div className="intake-scene-composer">
+                  <label htmlFor="case-summary" className="sr-only">
+                    요약 편집
+                  </label>
                   <Textarea
-                    id="summary-unknowns"
-                    value={unknownsDraft ?? item.summaryDetails.unknowns.join("\n")}
-                    disabled={locked}
-                    onChange={(e) => {
-                      setUnknownsDraft(e.target.value);
-                      setChecked(false);
-                      setConfirming(false);
-                    }}
-                  />
-                </section>
-              )}
-              {dirty ? (
-                <div className="intake-scene-tools">
-                  <Button
-                    variant="outline"
-                    onClick={() => void save()}
-                    disabled={
-                      !canMutate ||
-                      busy ||
-                      recovering ||
-                      !summary.trim() ||
-                      summaryTooLong ||
-                      factTooLong ||
-                      (error as { code?: string })?.code === "CONFLICT"
-                    }
-                  >
-                    <Save size={16} aria-hidden="true" />
-                    {busy ? "저장 중…" : "수정 내용 저장"}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    onClick={() => {
-                      setSummary(item.summary);
-                      setFactEdits({});
-                      setUnknownsDraft(null);
+                    id="case-summary"
+                    value={summary}
+                    onChange={(event) => {
+                      setSummary(event.target.value);
                       setChecked(false);
                       setConfirming(false);
                       setNotice("");
                     }}
-                    disabled={locked}
-                  >
-                    수정 취소
-                  </Button>
+                    disabled={
+                      !canMutate ||
+                      busy ||
+                      recovering ||
+                      (error as { code?: string })?.code === "CONFLICT"
+                    }
+                    aria-describedby="summary-help"
+                  />
+                  <p id="summary-help" className="intake-count">
+                    {[...summary].length.toLocaleString()} / 5,000자
+                  </p>
+                  {summaryTooLong && <p role="alert">요약은 5,000자까지 입력할 수 있어요.</p>}
                 </div>
-              ) : null}
-              <p className="intake-scene-notice" role="status">
-                {dirty
-                  ? busy
-                    ? "수정한 요약을 저장하고 있어요."
-                    : "수정 내용을 저장하면 계속할 수 있어요."
-                  : notice}
-              </p>
-              <label className="intake-confirm-check">
-                <input
-                  ref={confirmation}
-                  type="checkbox"
-                  checked={checked}
-                  onChange={(event) => {
-                    setChecked(event.target.checked);
-                    setConfirming(false);
-                  }}
-                  disabled={locked || dirty}
-                />
-                <span>요약이 내가 이야기한 사실과 맞는지 확인했어요.</span>
-              </label>
-              <Button
-                className="intake-scene-primary"
-                onClick={() => setConfirming(true)}
-                disabled={
-                  !canMutate ||
-                  busy ||
-                  recovering ||
-                  dirty ||
-                  !checked ||
-                  !summary.trim() ||
-                  (error as { code?: string })?.code === "CONFLICT"
-                }
-              >
-                요약 확인하고 계속
-                <ArrowRight size={18} aria-hidden="true" />
-              </Button>
-              <Dialog
-                open={confirming}
-                onOpenChange={setConfirming}
-                title="이제 사건 정리를 시작할까요?"
-              >
-                <div className="intake-actions">
-                  <Button onClick={() => void confirm()} disabled={locked}>
-                    <Check size={18} aria-hidden="true" />
-                    {busy ? "확인 중…" : "확인하고 사건 열기"}
-                  </Button>
-                  <Button variant="outline" onClick={() => setConfirming(false)} disabled={locked}>
-                    취소
-                  </Button>
-                </div>
-              </Dialog>
-              <div className="intake-scene-tools">
-                <ButtonLink
-                  variant="ghost"
-                  href={`/cases/${encodeURIComponent(caseId)}/intake?question=0&edit=1`}
-                >
-                  이전 답변 수정하기
-                </ButtonLink>
+                {item.summaryDetails && (
+                  <section aria-label="구조화된 사실 편집">
+                    <h2>사실·모순·정보 공백 확인</h2>
+                    <p id="fact-certainty-help" className="intake-muted">
+                      내가 설명한 내용은 ‘사용자 진술’, 기억이나 근거를 더 확인해야 하면 ‘아직
+                      확인하지 못했어요’를 선택하세요.
+                    </p>
+                    {item.summaryDetails.facts.map((fact) => {
+                      const edit = factEdits[fact.id] ?? fact;
+                      const update = (change: Partial<typeof edit>) => {
+                        setFactEdits((old) => ({
+                          ...old,
+                          [fact.id]: {
+                            text: edit.text,
+                            certainty:
+                              change.text !== undefined && edit.certainty === "observed"
+                                ? "uncertain"
+                                : edit.certainty,
+                            conflictingFactIds: edit.conflictingFactIds,
+                            ...change,
+                          },
+                        }));
+                        setChecked(false);
+                        setConfirming(false);
+                      };
+                      return (
+                        <fieldset
+                          key={fact.id}
+                          disabled={locked || fact.attribution === "official_source"}
+                        >
+                          <legend>
+                            {fact.significance === "unfavorable" ? "불리한 사실 · " : ""}
+                            {fact.attribution === "official_source"
+                              ? "공식 출처 사실 (직접 변경할 수 없음)"
+                              : "사용자가 확인할 사실"}
+                          </legend>
+                          <label htmlFor={`fact-${fact.id}`}>사실 내용</label>
+                          <Textarea
+                            id={`fact-${fact.id}`}
+                            rows={Math.min(8, Math.max(3, Math.ceil(edit.text.length / 40)))}
+                            value={edit.text}
+                            onChange={(e) => update({ text: e.target.value })}
+                          />
+                          {[...edit.text].length > 2000 && (
+                            <p role="alert">사실 내용은 2,000자까지 입력할 수 있어요.</p>
+                          )}
+                          <label>
+                            확인 상태
+                            <select
+                              aria-label="확인 상태"
+                              aria-describedby="fact-certainty-help"
+                              value={edit.certainty}
+                              onChange={(e) => {
+                                const certainty = e.target.value as V2Fact["certainty"];
+                                update({
+                                  certainty,
+                                  conflictingFactIds:
+                                    certainty === "conflicting" ? edit.conflictingFactIds : [],
+                                });
+                              }}
+                            >
+                              {fact.attribution === "user_statement" && (
+                                <option value="reported">사용자 진술</option>
+                              )}
+                              {edit.certainty === "observed" && (
+                                <option value="observed">자료에서 관찰됨</option>
+                              )}
+                              <option value="uncertain">아직 확인하지 못했어요</option>
+                              <option value="conflicting">다른 사실과 모순</option>
+                            </select>
+                          </label>
+                          {edit.certainty === "conflicting" && (
+                            <fieldset className="summary-conflicts">
+                              <legend>
+                                모순되는 사실 선택 · {edit.conflictingFactIds.length}개 선택
+                              </legend>
+                              {item.summaryDetails?.facts
+                                .filter((v) => v.id !== fact.id)
+                                .map((v) => (
+                                  <label
+                                    key={v.id}
+                                    data-selected={edit.conflictingFactIds.includes(v.id)}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={edit.conflictingFactIds.includes(v.id)}
+                                      onChange={(event) =>
+                                        update({
+                                          conflictingFactIds: event.target.checked
+                                            ? [...edit.conflictingFactIds, v.id]
+                                            : edit.conflictingFactIds.filter((id) => id !== v.id),
+                                        })
+                                      }
+                                    />
+                                    <span>{v.text}</span>
+                                  </label>
+                                ))}
+                            </fieldset>
+                          )}
+                        </fieldset>
+                      );
+                    })}
+                    <label htmlFor="summary-unknowns">확인할 정보 공백 (한 줄에 하나)</label>
+                    <Textarea
+                      id="summary-unknowns"
+                      value={unknownsDraft ?? item.summaryDetails.unknowns.join("\n")}
+                      disabled={locked}
+                      onChange={(e) => {
+                        setUnknownsDraft(e.target.value);
+                        setChecked(false);
+                        setConfirming(false);
+                      }}
+                    />
+                  </section>
+                )}
+                {dirty ? (
+                  <div className="intake-scene-tools">
+                    <Button
+                      variant="outline"
+                      onClick={() => void save()}
+                      disabled={
+                        !canMutate ||
+                        busy ||
+                        recovering ||
+                        !summary.trim() ||
+                        summaryTooLong ||
+                        factTooLong ||
+                        (error as { code?: string })?.code === "CONFLICT"
+                      }
+                    >
+                      <Save size={16} aria-hidden="true" />
+                      {busy
+                        ? "저장 중…"
+                        : editingActive
+                          ? "수정 내용 저장하고 적용"
+                          : "수정 내용 저장"}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      onClick={() => {
+                        setSummary(item.summary);
+                        setFactEdits({});
+                        setUnknownsDraft(null);
+                        setChecked(false);
+                        setConfirming(false);
+                        setNotice("");
+                      }}
+                      disabled={locked}
+                    >
+                      수정 취소
+                    </Button>
+                  </div>
+                ) : null}
+                <p className="intake-scene-notice" role="status">
+                  {dirty
+                    ? busy
+                      ? "수정한 요약을 저장하고 있어요."
+                      : "수정 내용을 저장하면 계속할 수 있어요."
+                    : notice}
+                </p>
+                {editingActive ? (
+                  <div className="intake-actions">
+                    {item.stage === "summary" && (
+                      <Button disabled={locked || dirty} onClick={() => void confirm(true)}>
+                        저장한 수정 내용 적용
+                      </Button>
+                    )}
+                    <ButtonLink href={returnHref} variant="outline">
+                      {dirty ? "저장하지 않고 돌아가기" : "작업 공간으로 돌아가기"}
+                    </ButtonLink>
+                  </div>
+                ) : (
+                  <>
+                    <label className="intake-confirm-check">
+                      <input
+                        ref={confirmation}
+                        type="checkbox"
+                        checked={checked}
+                        onChange={(event) => {
+                          setChecked(event.target.checked);
+                          setConfirming(false);
+                        }}
+                        disabled={locked || dirty}
+                      />
+                      <span>요약이 내가 이야기한 사실과 맞는지 확인했어요.</span>
+                    </label>
+                    <Button
+                      className="intake-scene-primary"
+                      onClick={() => setConfirming(true)}
+                      disabled={
+                        !canMutate ||
+                        busy ||
+                        recovering ||
+                        dirty ||
+                        !checked ||
+                        !summary.trim() ||
+                        (error as { code?: string })?.code === "CONFLICT"
+                      }
+                    >
+                      요약 확인하고 계속
+                      <ArrowRight size={18} aria-hidden="true" />
+                    </Button>
+                    <Dialog
+                      open={confirming}
+                      onOpenChange={setConfirming}
+                      title="이제 사건 정리를 시작할까요?"
+                    >
+                      <div className="intake-actions">
+                        <Button onClick={() => void confirm()} disabled={locked}>
+                          <Check size={18} aria-hidden="true" />
+                          {busy ? "확인 중…" : "확인하고 사건 열기"}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          onClick={() => setConfirming(false)}
+                          disabled={locked}
+                        >
+                          취소
+                        </Button>
+                      </div>
+                    </Dialog>
+                    <div className="intake-scene-tools">
+                      <ButtonLink
+                        variant="ghost"
+                        href={`/cases/${encodeURIComponent(caseId)}/intake?question=0&edit=1`}
+                      >
+                        이전 답변 수정하기
+                      </ButtonLink>
+                    </div>
+                  </>
+                )}
+                <p className="intake-scene-notice">AI가 정리한 내용이며, 법률 판단은 아니에요.</p>
               </div>
-              <p className="intake-scene-notice">AI가 정리한 내용이며, 법률 판단은 아니에요.</p>
-            </>
+            </div>
           )}
         </section>
       ) : null}

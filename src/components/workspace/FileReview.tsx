@@ -4,6 +4,7 @@ import { ApiError } from "../../client/api/core";
 import type { FileReviewProgress, FileReviewView } from "../../client/api/types";
 import { accessHref } from "../../client/return-path";
 import type { V2Coverage } from "../../contracts/v2";
+import { secondsLabel } from "../../utils/time";
 import { ErrorPanel } from "../intake/common";
 import { useCustomerAccess } from "../intake/useCustomerAccess";
 import { Button } from "../ui/button";
@@ -20,14 +21,18 @@ function coverageRows(value: V2Coverage): string[] {
   const audio = (v: {
     intervals: { startSeconds: number; endSeconds: number; status: string }[];
   }) =>
-    v.intervals.map((p) => `${p.startSeconds}–${p.endSeconds}초 · ${status[p.status] ?? p.status}`);
+    v.intervals.map(
+      (p) =>
+        `${secondsLabel(p.startSeconds)}–${secondsLabel(p.endSeconds)}초 · ${status[p.status] ?? p.status}`,
+    );
   if (value.category === "document")
     return value.pages.map((p) => `${p.page}쪽 · ${status[p.status]}`);
   if (value.category === "image") return [`이미지 · ${status[value.observation]}`];
   if (value.category === "audio") return audio(value.audio);
   return [
     ...value.frames.map(
-      (p) => `영상 ${p.timestampSeconds}초 · 프레임 ${p.frameIndex} · ${status[p.status]}`,
+      (p) =>
+        `영상 ${secondsLabel(p.timestampSeconds)}초 · 프레임 ${p.frameIndex} · ${status[p.status]}`,
     ),
     ...(value.audio ? audio(value.audio).map((p) => `음성 ${p}`) : []),
     ...(value.sceneDetection === "failed"
@@ -150,7 +155,11 @@ export function FileReview({
         if (replace) setDrafts({});
         setReview((old) =>
           after < 0
-            ? old && draftDirty.current && !replace
+            ? old &&
+              !replace &&
+              (draftDirty.current ||
+                (old.file.revision === next.file.revision &&
+                  old.workspaceRevision === next.workspaceRevision))
               ? { ...next, observations: old.observations, nextAfterOrdinal: old.nextAfterOrdinal }
               : next
             : { ...next, observations: [...(old?.observations ?? []), ...next.observations] },
@@ -221,7 +230,7 @@ export function FileReview({
   const rows = review?.coverage ? coverageRows(review.coverage) : [];
   return (
     <section aria-label="자료 내용 검토" aria-busy={busy || loadingAfter !== null}>
-      <h3>자료 내용 검토</h3>
+      <h3>추출 내용 확인·수정</h3>
       {error ? (
         <ErrorPanel
           error={error}
@@ -244,10 +253,10 @@ export function FileReview({
         ) : null
       ) : (
         <>
-          {loadingAfter !== null && (
+          {loadingAfter !== null && loadingAfter >= 0 && (
             <p role="status">
               {loadingAfter >= 0
-                ? "다음 처리 내용을 불러오고 있어요."
+                ? "추출 내용을 더 불러오고 있어요."
                 : "처리 위치와 저장한 교정 내용을 다시 확인하고 있어요."}
             </p>
           )}
@@ -287,7 +296,11 @@ export function FileReview({
                 return copy;
               });
             return (
-              <fieldset key={value.id} disabled={busy || !canWrite || !!review.pendingReview}>
+              <fieldset
+                className="file-review-item"
+                key={value.id}
+                disabled={busy || !canWrite || !!review.pendingReview}
+              >
                 <legend>{positionLabel(value.position)}</legend>
                 <details>
                   <summary>원본 추출 내용</summary>
@@ -295,6 +308,7 @@ export function FileReview({
                 </details>
                 <label htmlFor={`observation-${ordinal}`}>확인·교정한 내용</label>
                 <textarea
+                  rows={Math.min(10, Math.max(2, Math.ceil(draft.text.length / 45)))}
                   id={`observation-${ordinal}`}
                   value={draft.text}
                   onChange={(e) => update({ text: e.target.value, included: draft.included })}
@@ -321,8 +335,14 @@ export function FileReview({
               disabled={busy || loadingAfter !== null || dirty}
               onClick={() => void load(review.nextAfterOrdinal ?? -1)}
             >
-              다음 처리 내용 보기
+              추출 내용 더 보기
             </Button>
+          )}
+          {review.nextAfterOrdinal !== null && (
+            <p className="workspace-muted">
+              추출 내용이 더 있어요. {review.observations.length}개를 불러왔어요.
+              {dirty ? " 수정 내용을 저장한 뒤 더 볼 수 있어요." : ""}
+            </p>
           )}
           {review.pendingReview ? (
             <div role="status">

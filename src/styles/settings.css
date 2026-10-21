@@ -340,7 +340,7 @@
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  min-height: 38px;
+  min-height: 44px;
   color: var(--primary);
   font-size: 12px;
   font-weight: 550;
@@ -349,7 +349,7 @@
   flex-shrink: 0;
   gap: 5px;
   padding: 7px 10px;
-  min-height: 40px;
+  min-height: 44px;
   border-color: transparent;
   background: var(--muted);
   color: var(--muted-foreground);
@@ -630,7 +630,7 @@
     margin-bottom: 10px;
   }
   .account-settings .settings-refresh {
-    min-height: 40px;
+    min-height: 44px;
     padding: 9px 13px;
     font-size: 12px;
   }

@@ -55,6 +55,7 @@ export type TimelineView = {
 };
 export type FileView = {
   id: string;
+  revision?: number | undefined;
   name: string;
   mimeType: string;
   sizeBytes: number;

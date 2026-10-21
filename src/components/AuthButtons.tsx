@@ -7,9 +7,9 @@ import { sessionDestination } from "../client/return-path";
 type Provider = "google" | "naver" | "kakao";
 
 const providers: Array<{ id: Provider; label: string; name: string }> = [
-  { id: "kakao", label: "Kakao로 계속하기", name: "Kakao" },
-  { id: "naver", label: "Naver로 계속하기", name: "Naver" },
-  { id: "google", label: "Google로 계속하기", name: "Google" },
+  { id: "kakao", label: "Kakao로 계속하기", name: "카카오로 계속하기" },
+  { id: "naver", label: "Naver로 계속하기", name: "네이버로 계속하기" },
+  { id: "google", label: "Google로 계속하기", name: "Google로 계속하기" },
 ];
 
 function ProviderIcon({ provider }: { provider: Provider }) {
@@ -76,7 +76,11 @@ export function AuthButtons() {
       {apiMode === "mock" && (
         <p className="login-demo-note">API 예시 모드 · 합성 계정으로 시연합니다.</p>
       )}
-      <fieldset className="login-account-type" disabled={!ready || pendingProvider !== null}>
+      <fieldset
+        className="login-account-type"
+        aria-describedby="login-role-description"
+        disabled={!ready || pendingProvider !== null}
+      >
         <legend>어떤 목적으로 이용하시나요?</legend>
         <label>
           <input
@@ -99,7 +103,7 @@ export function AuthButtons() {
           <span>변호사</span>
         </label>
       </fieldset>
-      <p className="login-role-description" aria-live="polite">
+      <p id="login-role-description" className="login-role-description" aria-live="polite">
         {accountType === "customer"
           ? "내 사건과 상담 준비 자료를 정리할게요."
           : "내 프로필을 작성하고 공개 범위를 설정할게요."}
