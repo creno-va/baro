@@ -333,13 +333,10 @@ for (const purpose of ["photo", "pdf"] as const) {
       "consent",
       "unavailable",
     ] as const) {
-      if (
-        outcome !== "same" &&
-        (purpose !== "pdf" ||
-          (stage === "postflight" && !["other-owner", "signed-out"].includes(outcome)))
-      )
-        continue;
-      test(`file picker focus ${purpose} upload ${stage}: ${outcome}`, async ({ page }) => {
+      if (outcome !== "same" && purpose !== "pdf") continue;
+      test(`file picker ${outcome === "same" ? "focus" : "session invalidation"} ${purpose} upload ${stage}: ${outcome}`, async ({
+        page,
+      }) => {
         let session: {
           user: { id: string; name: string; accountType: "lawyer" | "customer" } | null;
           needsConsent: boolean;
@@ -370,11 +367,13 @@ for (const purpose of ["photo", "pdf"] as const) {
         const pending: (() => Promise<void>)[] = [];
         let uploads = 0;
         let uploadedBytes = 0;
+        let sessionRequests = 0;
         await page.route("**/api/**", async (route) => {
           const request = route.request();
           const path = new URL(request.url()).pathname;
           if (!path.startsWith("/api/")) return route.continue();
           if (path === "/api/me/session") {
+            sessionRequests++;
             const response = unavailable
               ? { status: 503, json: { error: { code: "INTERNAL_ERROR", retryable: true } } }
               : { json: session };
@@ -437,6 +436,23 @@ for (const purpose of ["photo", "pdf"] as const) {
         });
         await page.goto("/lawyer");
         await expect(page.getByLabel("이름", { exact: true })).toBeEnabled();
+        await page.evaluate(async () => {
+          const path = "/src/client/api/session.ts";
+          const { sessionApi } = (await import(
+            path
+          )) as typeof import("../../src/client/api/session");
+          const tracker = window as unknown as { profileSessionReads: number };
+          tracker.profileSessionReads = 0;
+          const get = sessionApi.get;
+          sessionApi.get = async (...args: Parameters<typeof get>) => {
+            tracker.profileSessionReads++;
+            return get(...args);
+          };
+        });
+        const sessionReads = () =>
+          page.evaluate(
+            () => (window as unknown as { profileSessionReads: number }).profileSessionReads,
+          );
         const png = await page.evaluate(() => {
           const canvas = document.createElement("canvas");
           canvas.width = canvas.height = 24;
@@ -480,10 +496,25 @@ for (const purpose of ["photo", "pdf"] as const) {
           };
         if (outcome === "consent") session = { ...session, needsConsent: true };
         if (outcome === "unavailable") unavailable = true;
-        await page.evaluate(() => window.dispatchEvent(new Event("focus")));
-        await expect.poll(() => pending.length).toBeGreaterThan(1);
-        // A later focus check supersedes the operation check. Resolve the newest
-        // checks first so an already-settled authoritative result is also covered.
+        const readsBeforeEvent = await sessionReads();
+        await page.evaluate((same) => {
+          window.dispatchEvent(
+            same
+              ? new Event("focus")
+              : new StorageEvent("storage", {
+                  key: "baro-session-changed",
+                  newValue: "synthetic-account-invalidation",
+                }),
+          );
+        }, outcome === "same");
+        // Prove the event actually invoked verification. Ordinary file-picker
+        // focus shares the held HTTP read; an explicit peer invalidation must
+        // bypass it and obtain a new authoritative account/consent response.
+        await expect.poll(sessionReads).toBeGreaterThan(readsBeforeEvent);
+        if (outcome === "same") expect(pending).toHaveLength(1);
+        else await expect.poll(() => pending.length).toBeGreaterThan(1);
+        // Resolve invalidation checks before the old owner's captured response.
+        // No old response may restore permissions or attach an upload afterwards.
         holdSessions = false;
         await Promise.all(pending.slice(1).map((release) => release()));
         await pending[0]?.();
@@ -524,6 +555,15 @@ for (const purpose of ["photo", "pdf"] as const) {
           );
         else await expect(page.getByLabel("활동 제목 1", { exact: true })).toHaveValue("공개 자료");
         await expect(page.getByRole("button", { name: "프로필 저장", exact: true })).toBeEnabled();
+        const settledSessionReads = sessionRequests;
+        await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+        await expect.poll(() => sessionRequests).toBeGreaterThan(settledSessionReads);
+        // Sharing must end when the response settles: the next foreground check
+        // reads current permissions while keeping the connected unsaved asset.
+        await expect(
+          page.getByRole("list", { name: "업로드 자료 상태" }).getByRole("listitem"),
+        ).toHaveCount(1);
+        expect(uploads).toBe(1);
       });
     }
   }

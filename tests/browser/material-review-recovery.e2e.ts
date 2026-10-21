@@ -94,7 +94,7 @@ test("material focus refresh preserves a dirty later page and still detects a pe
   const state = await fixture(page);
   const fields = page.getByRole("dialog").getByLabel("확인·교정한 내용");
   await expect(fields).toHaveCount(4);
-  await page.getByRole("button", { name: "다음 처리 내용 보기", exact: true }).click();
+  await page.getByRole("button", { name: "추출 내용 더 보기", exact: true }).click();
   await expect(fields).toHaveCount(5);
   await fields.nth(4).fill("저장 전 다섯 번째 교정");
   await page.evaluate(async () => {
@@ -196,7 +196,7 @@ test("partial large correction keeps its original retry baseline across focus re
 }) => {
   const state = await fixture(page);
   const fields = page.getByRole("dialog").getByLabel("확인·교정한 내용");
-  await page.getByRole("button", { name: "다음 처리 내용 보기", exact: true }).click();
+  await page.getByRole("button", { name: "추출 내용 더 보기", exact: true }).click();
   await expect(fields).toHaveCount(5);
   for (let i = 0; i < 5; i++) await fields.nth(i).fill("가".repeat(5000));
   let starts = 0,
