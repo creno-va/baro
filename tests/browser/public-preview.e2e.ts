@@ -142,8 +142,7 @@ test("intake opens an active workspace with lawyer navigation and report control
   await expect(page.getByRole("button", { name: "PDF 다운로드" })).toBeDisabled();
   await page.getByLabel("내용·식별정보·선택한 사진을 확인했어요").check();
   await expect(page.getByRole("button", { name: "PDF 다운로드" })).toBeEnabled();
-  // ZIP still needs a selected original file.
-  await expect(page.getByRole("button", { name: /선택 원본 ZIP/ })).toBeDisabled();
+  await expect(page.getByRole("button", { name: /HTML 다운로드|선택 원본 ZIP/ })).toHaveCount(0);
   await tabs.getByRole("link", { name: "대화", exact: true }).click();
   await expect(page.getByRole("textbox", { name: "추가 사실 또는 질문" })).toBeEnabled();
 });
