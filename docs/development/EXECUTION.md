@@ -26,6 +26,7 @@
 
 | 작업 | 담당/이슈 | 현재 상태·blocker | 다음 행동 |
 | --- | --- | --- | --- |
+| 사진 근거·PDF 리포트 | AI/자료, #312 | 2026-10-21 직접 요청, codex/312-photo-evidence-pdf. #307 첨부 UI·#304 법률 범위 분리, migration 없음 | 상해/진단서 관찰·확인 지침, 선택 사진·출처와 HTML→PDF, PDF만 저장. quick/build·브라우저·native 조판 CI 후 별도 PR 병합; 외부 모델/배포 인수 별도 |
 | Gemini 모델·질문 하네스 | AI / #305 | 2026-10-21 사용자 승인, 별도 codex/305-gemini-flash-pipeline worktree. #304 법률 API와 PR303 UI 범위 분리 | ADR-0016·고정 평가·quick/build·CI 검증 후 별도 PR 병합. 실제 모델·배포 인수는 별도 receipt |
 | 사건 관련 판례 탐색 | 법률/UI / #308·PR311 | 2026-10-21 직접 기능 구현 요청. 선행 PR306 직접 승인 후 main bab5c76 통합. 별도 페이지/API·주제 추천·서명 원문 조회 구현, 로컬 workerd/D1 실제 공식 판례6건 검색/읽기 성공 | quick/build·관련 회귀·브라우저/접근성 및 정확한 PR head CI 증거를 #308에 기록. PR311 병합·preview/production 반영은 각각의 승인/검증 조건 유지 |
 | 업로드·물리 용량 | 자료 모듈 + 총괄, #58 | PR230→229→235와0014가04f25f8에 포함돼 배포됨. production storage 초기화 성공; 실제 업로드/ZIP/cleanup은 이번 receipt에 없음 | 물리 inventory/writer 경계를 유지하며 남은 자료 경로의 구현·실제 증거를 구분 |

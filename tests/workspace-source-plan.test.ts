@@ -27,7 +27,15 @@ test("workspace article limits reject omissions and guide keys resolve only serv
   ).toThrow();
   expect(
     workspaceRetrievalPlans([{ kind: "official_guide", guideKey: "legal_consultation" }])[0],
-  ).toMatchObject({ kind: "official_guide", csmSeq: "734", cnpClsNo: "4" });
+  ).toMatchObject({
+    kind: "official_guide",
+    endpointId: "easylaw_text_section",
+    institutionId: "moleg_easylaw",
+    csmSeq: "568",
+    ccfNo: "2",
+    cciNo: "2",
+    cnpClsNo: "1",
+  });
   expect(() =>
     workspaceRetrievalPlans([
       { kind: "official_guide", guideKey: "legal_consultation", csmSeq: "999" },

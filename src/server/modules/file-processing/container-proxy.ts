@@ -83,11 +83,12 @@ export async function proxyProcessorRequest(
     url.search ||
     (!ready &&
       (request.method !== "POST" ||
-        !["/probe", "/process", "/sanitize"].includes(url.pathname) ||
+        !["/probe", "/process", "/sanitize", "/report"].includes(url.pathname) ||
         !bytes ||
         !/^[1-9]\d{0,9}$/.test(bytes) ||
         Number(bytes) > maximumBytes ||
         (url.pathname === "/sanitize" && Number(bytes) > 100_000_000) ||
+        (url.pathname === "/report" && Number(bytes) > 20_000_000) ||
         !hash ||
         !/^[a-f0-9]{64}$/.test(hash) ||
         !request.body ||
@@ -168,9 +169,11 @@ export async function proxyProcessorRequest(
     }
     const contentType = response.headers.get("content-type") ?? "";
     if (
-      !(["/process", "/sanitize"].includes(url.pathname)
-        ? contentType === "application/x-ndjson"
-        : contentType.startsWith("application/json"))
+      !(url.pathname === "/report"
+        ? contentType === "application/pdf"
+        : ["/process", "/sanitize"].includes(url.pathname)
+          ? contentType === "application/x-ndjson"
+          : contentType.startsWith("application/json"))
     ) {
       reportProcessorFailure(
         "response",

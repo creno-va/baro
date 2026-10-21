@@ -18,6 +18,11 @@ const reportSchema = z.object({
   stale: z.boolean(),
   excludedFileIds: z.array(z.string()),
   maskIdentifiers: z.boolean(),
+  includedPhotoIds: z.array(z.string()).max(12).optional(),
+  photoCandidates: z
+    .array(z.object({ id: z.string(), name: z.string(), revision: z.number().int().positive() }))
+    .max(100)
+    .optional(),
   basis: z
     .object({
       workspaceRevision: z.number().int().positive(),
@@ -37,6 +42,11 @@ const reportSchema = z.object({
 export const reportSaveSchema = z.object({
   content: z.string().trim().min(1, "내용을 입력해 주세요.").max(30000),
   maskIdentifiers: z.boolean(),
+  includedPhotoIds: z
+    .array(z.string())
+    .max(12)
+    .refine((ids) => new Set(ids).size === ids.length)
+    .optional(),
   excludedFileIds: z
     .array(z.string())
     .max(100)
@@ -139,7 +149,7 @@ export function createReportsClient(request: DomainRequest) {
         !(result instanceof Blob) ||
         result.type.split(";")[0] !== "text/html" ||
         !result.size ||
-        result.size > 500000
+        result.size > 30_000_000
       )
         throw new Error("HTML 리포트를 확인하지 못했어요. 다시 시도해 주세요.");
       const text = await result.text();

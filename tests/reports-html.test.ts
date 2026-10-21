@@ -51,7 +51,7 @@ test("HTML endpoint reads the exact saved masked report before re-consent; cross
   expect(response.headers.get("content-type")).toContain("text/html");
   expect(response.headers.get("content-security-policy")).toContain("sandbox");
   expect(response.headers.get("cache-control")).toBe("private, no-store");
-  expect(response.headers.get("content-disposition")).toContain("attachment");
+  expect(response.headers.get("content-disposition")).toBe("inline");
   expect(html).toContain("저장된 교정 [전화번호 가림]");
   expect(html).not.toContain("010-1234-5678");
   expect(html).toContain("&lt;script&gt;");

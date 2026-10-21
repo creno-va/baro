@@ -37,7 +37,7 @@ RUN cc -std=c11 -D_POSIX_C_SOURCE=200809L -O2 -Wall -Wextra -Werror \
 FROM node:24-trixie-slim@sha256:173f125896c3b47ddf056734c7ea789d04595a6a08769a8f78e0df642781fb66 AS office-runtime
 # Native tools stay in this standalone service, never the Workers bundle.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3 python3-pil ffmpeg poppler-utils tesseract-ocr tesseract-ocr-kor \
+    python3 python3-pil weasyprint=62.3-1 ffmpeg poppler-utils tesseract-ocr tesseract-ocr-kor \
     libreoffice-writer=4:25.2.3-2+deb13u8 libreoffice-calc=4:25.2.3-2+deb13u8 \
     libreoffice-impress=4:25.2.3-2+deb13u8 libreoffice-java-common=4:25.2.3-2+deb13u8 \
     python3-uno=4:25.2.3-2+deb13u8 python3-olefile=0.47-1 \
@@ -77,7 +77,7 @@ RUN /usr/lib/libreoffice/program/unopkg add --shared --suppress-license /opt/bar
 WORKDIR /app
 COPY services/file-processor/server.mjs services/file-processor/processor.py \
     services/file-processor/office.py services/file-processor/office-convert.py \
-    services/file-processor/heif.py ./
+    services/file-processor/heif.py services/file-processor/report.py ./
 USER node
 ENV NODE_ENV=production PYTHONDONTWRITEBYTECODE=1
 EXPOSE 8080

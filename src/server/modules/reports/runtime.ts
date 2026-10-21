@@ -3,12 +3,16 @@ import { runtimeDigest } from "../../db/v2-paid-runtime";
 import { createV2StorageCapacityRepository } from "../../db/v2-storage-capacity";
 import { readProcessingProofs } from "../../runtime/processing-proofs";
 import { createProcessingBudgetService } from "../budget/processing-ledger";
+import { boundedProcessingResources } from "../budget/processing-runtime";
+import { namedProcessorPort } from "../file-processing/native-identity";
+import { createProcessorTransport } from "../file-processing/transport";
 import { createFilesService } from "../files/service";
+import { REPORT_QUERY_LIMIT, REPORT_ROW_LIMIT } from "./limits";
 import type { ReportDependencies } from "./storage";
 
 /** Real Workers bindings only. Report drafts need no model/provider calls.
- * R2 writes require the existing monthly physical-retention projection and an
- * authenticated pricing/funding plan. No missing proof falls back to a mock.
+ * Native HTML rendering and R2 writes retain technical admissions and private
+ * storage fences. Missing cost observations do not block observation-only mode.
  */
 export function createReportDependencies(
   env: Env,
@@ -17,7 +21,7 @@ export function createReportDependencies(
   clock = () => new Date().toISOString(),
 ): ReportDependencies {
   const environment = env.APP_ENV === "production" ? "production" : "preview";
-  return {
+  const deps: ReportDependencies = {
     environment,
     clock,
     bucket: env.CASE_PRIVATE_R2,
@@ -62,6 +66,12 @@ export function createReportDependencies(
             : null;
         },
         bounds: async (descriptor, inputDigest, now) => {
+          if (
+            descriptor.service === "container" &&
+            descriptor.action === "container_process" &&
+            descriptor.byteLength <= 20_000_000
+          )
+            return boundedProcessingResources(descriptor, inputDigest, now);
           if (descriptor.service !== "requests" || descriptor.action !== "r2_put") return null;
           const binding = await core
             .statement(
@@ -115,4 +125,48 @@ export function createReportDependencies(
       return budget.costs(input.lease);
     },
   };
+  deps.renderPdf = async (html, input) => {
+    if (!env.FILE_PROCESSOR || !deps.costs) throw new Error("REPORT_RENDERER_UNAVAILABLE");
+    let runtimeId = await core
+      .statement(
+        "SELECT runtime_instance_id FROM v2_jobs WHERE id=? AND lease_token=? AND fencing=? AND status='running'",
+        [input.lease.jobId, input.lease.token, input.lease.fencing],
+      )
+      .first<string>("runtime_instance_id");
+    if (runtimeId && /^report-local-[a-f0-9-]{36}-1$/.test(runtimeId)) {
+      const upgraded = runtimeId.replace("report-local-", "native-v1-report-");
+      const updated = await core
+        .statement(
+          "UPDATE v2_jobs SET runtime_instance_id=? WHERE id=? AND runtime_instance_id=? AND lease_token=? AND fencing=? AND status='running'",
+          [upgraded, input.lease.jobId, runtimeId, input.lease.token, input.lease.fencing],
+        )
+        .run();
+      if (updated.meta.changes !== 1) throw new Error("REPORT_RENDERER_UNAVAILABLE");
+      runtimeId = upgraded;
+    }
+    if (!runtimeId || !/^native-v1-report-[a-f0-9-]{36}-1$/.test(runtimeId))
+      throw new Error("REPORT_RENDERER_UNAVAILABLE");
+    const costs = await deps.costs({
+      ownerId,
+      reportId: input.reportId,
+      blobId: `renderer-${input.lease.fencing}`,
+      operationId: input.operationId,
+      sourceRevision: input.sourceRevision,
+      lease: input.lease,
+      workPlan: { queries: REPORT_QUERY_LIMIT, rowsRead: REPORT_ROW_LIMIT, rowsWritten: 1000 },
+    });
+    const processor = createProcessorTransport({
+      ...namedProcessorPort(env.FILE_PROCESSOR, runtimeId),
+      costs,
+    });
+    const signal = AbortSignal.timeout(265_000);
+    return processor.renderReport(html, {
+      signal,
+      authorize: async () => {
+        await input.authorize();
+        return true;
+      },
+    });
+  };
+  return deps;
 }

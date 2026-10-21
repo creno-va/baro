@@ -27,13 +27,14 @@ export const server = createServer(async (req, res) => {
   // Internal ingress only. Worker DO supplies a fresh per-request capability; no public route.
   if (
     req.method !== "POST" ||
-    !["/probe", "/process", "/sanitize"].includes(req.url) ||
+    !["/probe", "/process", "/sanitize", "/report"].includes(req.url) ||
     typeof capability !== "string" ||
     !/^[a-f0-9]{64}$/.test(capability) ||
     !Number.isSafeInteger(size) ||
     size < 1 ||
     size > MAX_BYTES ||
     (req.url === "/sanitize" && size > 100_000_000) ||
+    (req.url === "/report" && size > 20_000_000) ||
     !Number.isInteger(frameOffset) || frameOffset < 0 || frameOffset > 10_000_000 || !Number.isInteger(unit) ||
     unit < 0 ||
     unit >= 100_000 ||
@@ -74,7 +75,7 @@ export const server = createServer(async (req, res) => {
       signal: abort.signal,
     });
     if (received !== size || hasher.digest("hex") !== hash) throw new Error("INVALID_REQUEST");
-    child = spawn("python3", ["/app/processor.py", root, req.url.slice(1), String(unit), String(frameOffset)], {
+    child = spawn("python3", [req.url === "/report" ? "/app/report.py" : "/app/processor.py", root, req.url.slice(1), String(unit), String(frameOffset)], {
       stdio: ["ignore", "ignore", "ignore"],
       env: { PATH: "/usr/bin:/bin", PYTHONDONTWRITEBYTECODE: "1", HOME: root },
       detached: true,
@@ -94,6 +95,15 @@ export const server = createServer(async (req, res) => {
       await rm(root, { recursive: true, force: true });
       root = undefined;
       return response(res, 422, code, rejection);
+    }
+    if (req.url === "/report") {
+      const output = join(root, "report.pdf");
+      const size = (await stat(output)).size;
+      if (size < 5 || size > 24_000_000) throw new Error("OUTPUT_LIMIT");
+      res.writeHead(200, { "content-type": "application/pdf", "cache-control": "no-store", "content-length": size });
+      const file = await open(output, "r");
+      try { await pipeline(file.createReadStream(), res, { signal: abort.signal }); } finally { await file.close().catch(() => {}); }
+      return;
     }
     const manifestFile = join(root, "manifest.json");
     if ((await stat(manifestFile)).size > MAX_LINE - 100) throw new Error("OUTPUT_LIMIT");

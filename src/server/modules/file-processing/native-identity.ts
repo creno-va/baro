@@ -5,7 +5,7 @@ export function nativeJobId(kind: "file" | "asset" | "probe") {
 }
 
 export function isNamedNativeRuntime(id: string) {
-  return /^(?:native-v1-(?:file|asset|probe)|probe)-[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}-[1-9][0-9]*$/.test(
+  return /^(?:native-v1-(?:file|asset|probe|report)|probe)-[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}-[1-9][0-9]*$/.test(
     id,
   );
 }

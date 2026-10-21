@@ -140,7 +140,7 @@ test("intake opens an active workspace with lawyer navigation and report control
   await expect(page.getByRole("textbox", { name: "리포트 내용 편집" })).toBeEnabled();
   await expect(page.getByRole("button", { name: "검토 내용 저장" })).toBeEnabled();
   await expect(page.getByRole("button", { name: "PDF 다운로드" })).toBeDisabled();
-  await page.getByLabel("내용·식별정보·선택한 원본을 확인했어요").check();
+  await page.getByLabel("내용·식별정보·선택한 사진을 확인했어요").check();
   await expect(page.getByRole("button", { name: "PDF 다운로드" })).toBeEnabled();
   // ZIP still needs a selected original file.
   await expect(page.getByRole("button", { name: /선택 원본 ZIP/ })).toBeDisabled();

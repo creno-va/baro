@@ -30,8 +30,8 @@ const initial: ReportMockState & { lawyers: unknown } = {
     "case-demo": [
       {
         id: "file-demo",
-        name: "합성 자료.txt",
-        mimeType: "text/plain",
+        name: "합성 자료.jpg",
+        mimeType: "image/jpeg",
         sizeBytes: 25,
         status: "ready",
         coverage: "합성 텍스트 전체",
@@ -56,11 +56,7 @@ function update<T>(action: (state: ReportMockState) => T) {
 const runtime = {
   read,
   update,
-  original: async () =>
-    new Blob(["합성 원본: PDF에서 가린 010-1234-5678도 원본에는 남습니다."], {
-      type: "text/plain",
-    }),
-  removeOriginals: async () => {},
+  original: async () => (await fetch("/synthetic-photo.jpg")).blob(),
 };
 const handleReports = createReportsMock(runtime),
   handleAccount = createAccountMock(runtime);
