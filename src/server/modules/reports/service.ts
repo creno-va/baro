@@ -24,6 +24,7 @@ import { createV2ReportsRepository } from "../../db/v2-reports";
 import { createV2StagingRepository } from "../../db/v2-staging";
 import { reportReadStep } from "./diagnostics";
 import { reportSessionFence, requireReportConsent } from "./fence";
+import { loadReportPhotos, photoCandidates, validatePhotos } from "./photos";
 import {
   buildReportSource,
   ownedWorkspace,
@@ -41,6 +42,11 @@ export const saveReportSchema = z.strictObject({
   expectedRevision: z.number().int().positive(),
   content: z.string().trim().min(1).max(30000),
   maskIdentifiers: z.boolean(),
+  includedPhotoIds: z
+    .array(opaqueIdSchema)
+    .max(12)
+    .refine((ids) => new Set(ids).size === ids.length)
+    .optional(),
   excludedFileIds: z
     .array(opaqueIdSchema)
     .max(100)
@@ -173,6 +179,8 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
         generatedAt: data.body.generatedAt,
       },
       pdfAvailable: data.row.state === "ready" && !!data.row.pdf_blob_id,
+      includedPhotoIds: data.review.includedPhotoIds ?? [],
+      photoCandidates: stale ? [] : await photoCandidates(core, a, data.body),
       excludedFileIds: data.review.excludedFileIds,
       maskIdentifiers: data.review.maskIdentifiers,
     };
@@ -255,7 +263,7 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
         : {}),
     });
     const operationId = crypto.randomUUID(),
-      jobId = `report-local-${crypto.randomUUID()}`,
+      jobId = `native-v1-report-${crypto.randomUUID()}`,
       claimId = crypto.randomUUID();
     const payload = await core.encrypt("v2_reports", id, a.ownerId, version, { request });
     const g = { ...a, workspaceId: caseId, expectedRevision: current.revision };
@@ -477,9 +485,12 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
         JSON.stringify([...old.review.excludedFileIds].sort());
       if (exclusionsChanged && value.content !== old.review.content)
         throw new ReportError("EDITS_REQUIRE_SAVE");
+      const includedPhotoIds = value.includedPhotoIds ?? old.review.includedPhotoIds ?? [];
+      await validatePhotos(core, a, source.body, includedPhotoIds, value.excludedFileIds);
       const review = {
         ...old.review,
         ...value,
+        includedPhotoIds,
         content: exclusionsChanged
           ? reportText(source.body, source.coverage, source.display)
           : value.content,
@@ -550,7 +561,27 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
     async html(ownerId: string, id: string) {
       const a = actor(ownerId);
       const report = await view(a, id);
-      const document = createReportHtml(report);
+      const data = await read(a, id);
+      const authorize = async () => {
+        await row(a, id);
+        await ownedWorkspace(core, a, data.row.workspace_id);
+        if ((await sourceDigest(core, a, data.row.workspace_id)) !== data.review.sourceDigest)
+          throw new ReportError("STALE_REVISION");
+      };
+      const photos =
+        report.maskIdentifiers || !data.review.includedPhotoIds?.length
+          ? []
+          : await loadReportPhotos(
+              core,
+              a,
+              data.row.workspace_id,
+              data.body,
+              data.review.includedPhotoIds,
+              data.review.excludedFileIds,
+              deps.files,
+              authorize,
+            );
+      const document = createReportHtml({ ...report, photos });
       // Saved-report presentation only; no new AI processing, report revision or blob.
       // Recheck ownership and deletion after all asynchronous source reads.
       await row(a, id);

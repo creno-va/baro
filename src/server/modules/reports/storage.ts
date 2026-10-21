@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { createReportHtml } from "../../../components/reports/document";
 import { maskReportText } from "../../../components/reports/download";
 import type { V2ReportBody } from "../../../contracts/v2";
 import type { Actor, V2Core } from "../../db/v2-core";
@@ -19,6 +20,7 @@ import {
   reportWorkPlan,
 } from "./limits";
 import { renderReportPdf } from "./pdf";
+import { loadReportPhotos } from "./photos";
 import {
   ownedWorkspace,
   ReportError,
@@ -33,6 +35,18 @@ export type ReportDependencies = {
   bucket?: PrivateBucket;
   files: FilesService;
   font: () => Promise<Uint8Array>;
+  renderPdf?: (
+    html: string,
+    input: {
+      authorize: () => Promise<void>;
+      lease: JobLease;
+      reportId: string;
+      operationId: string;
+      sourceRevision: number;
+      sourceRows: number;
+      reportFiles: number;
+    },
+  ) => Promise<Uint8Array>;
   clock?: () => string;
   /** Set only by the signed HTTP boundary; internal job/test actors have no browser session. */
   sessionId?: string;
@@ -492,6 +506,7 @@ export function createReportExports(core: V2Core, deps: ReportDependencies, port
     const existing = await ports.row(actor, id);
     if (!selected && existing.state === "ready" && existing.pdf_blob_id) return existing;
     await requireReportConsent(core, actor);
+    if (!test && !deps.costs) throw new ReportError("BUDGET_UNAVAILABLE");
     const data = await valid(actor, id),
       r = data.row;
     if (r.state === "ready" && r.pdf_blob_id && (!selected || r.zip_blob_id)) return r;
@@ -511,21 +526,62 @@ export function createReportExports(core: V2Core, deps: ReportDependencies, port
       const font = await deps.font();
       const authorize = () => fence.check(l);
       await authorize();
-      const pdf = await renderReportPdf(font, {
+      const report = {
         title: data.review.title,
-        content: data.review.maskIdentifiers
-          ? maskReportText(data.review.content)
-          : data.review.content,
+        content: data.review.content,
         revision: r.revision,
         updatedAt: r.created_at,
+        stale: false,
         basis: {
           workspaceRevision: r.workspace_revision,
           summaryRevision: r.summary_revision,
           generatedAt: data.body.generatedAt,
         },
-        excludedFileCount: data.review.excludedFileIds.length,
+        excludedFileIds: data.review.excludedFileIds,
         maskIdentifiers: data.review.maskIdentifiers,
-      });
+        photos:
+          data.review.maskIdentifiers || !data.review.includedPhotoIds?.length
+            ? []
+            : await loadReportPhotos(
+                core,
+                actor,
+                r.workspace_id,
+                data.body,
+                data.review.includedPhotoIds,
+                data.review.excludedFileIds,
+                deps.files,
+                authorize,
+              ),
+      };
+      let rawFont = "";
+      for (let offset = 0; offset < font.length; offset += 8192)
+        rawFont += String.fromCharCode(...font.subarray(offset, offset + 8192));
+      const html = createReportHtml(report, `data:font/ttf;base64,${btoa(rawFont)}`);
+      rawFont = "";
+      await authorize();
+      // The legacy text writer is an explicit preview test adapter only. Real
+      // runtimes must render the same HTML document as the review screen.
+      const pdf = deps.renderPdf
+        ? await deps.renderPdf(html, {
+            authorize,
+            lease: l,
+            reportId: r.id,
+            operationId: r.operation_id,
+            sourceRevision: r.workspace_revision,
+            sourceRows: fence.rows,
+            reportFiles: data.body.selectedFiles.length,
+          })
+        : test && !report.photos.length
+          ? await renderReportPdf(await deps.font(), {
+              ...report,
+              content: report.maskIdentifiers ? maskReportText(report.content) : report.content,
+              excludedFileCount: report.excludedFileIds.length,
+            })
+          : (() => {
+              throw new ReportError("STORAGE_UNAVAILABLE");
+            })();
+      await authorize();
+
       const choices = selected
         ? validateOriginalSelection(data.body, data.review.excludedFileIds, selected)
         : [];

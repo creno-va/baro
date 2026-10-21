@@ -48,6 +48,8 @@ const server = Bun.serve({
   port: Number(Bun.env.BARO_REPORT_TEST_PORT ?? 4343),
   fetch(request) {
     const path = new URL(request.url).pathname;
+    if (path === "/synthetic-photo.jpg")
+      return new Response(Bun.file(`${root}/tests/fixtures/media/image-markers.jpg`));
     if (path === "/app.js")
       return new Response(script, { headers: { "content-type": "text/javascript" } });
     if (path === "/app.css") return new Response(css, { headers: { "content-type": "text/css" } });

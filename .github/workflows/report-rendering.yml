@@ -1,0 +1,63 @@
+name: Report rendering
+
+on:
+  pull_request:
+    paths:
+      - "services/file-processor/**"
+      - "src/components/reports/**"
+      - "src/server/modules/reports/**"
+      - "scripts/report-native-fixture.ts"
+      - ".github/workflows/report-rendering.yml"
+  push:
+    branches: [main]
+    paths:
+      - "services/file-processor/**"
+      - "src/components/reports/**"
+      - "src/server/modules/reports/**"
+      - "scripts/report-native-fixture.ts"
+      - ".github/workflows/report-rendering.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: report-rendering-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  render:
+    name: HTML/PDF native rendering
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: .bun-version
+      - run: bun ci
+      - name: Prepare synthetic application HTML
+        run: |
+          bun scripts/report-native-fixture.ts
+          chmod a+rwx .wrangler/report-native
+      - name: Build the pinned PDF runtime layer
+        run: docker build --target office-runtime -f services/file-processor/Dockerfile -t baro-report-rendering .
+      - name: Render and inspect offline PDF
+        run: |
+          docker run --rm --network none --user node --memory 6g --cpus 1 --pids-limit 128 --cap-drop ALL --read-only --tmpfs /tmp:rw,nosuid,nodev,size=256m \
+            -v "$PWD/.wrangler/report-native:/report-fixture" \
+            -v "$PWD/services/file-processor/report.py:/app/report.py:ro" \
+            -v "$PWD/services/file-processor/report-test.py:/app/report-test.py:ro" \
+            baro-report-rendering python3 /app/report-test.py
+      - name: Retain synthetic PDF and rendered pages for visual review
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: report-rendering-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            .wrangler/report-native/report.pdf
+            .wrangler/report-native/report-page-*.png
+          if-no-files-found: error
+          retention-days: 7

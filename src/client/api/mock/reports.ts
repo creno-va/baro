@@ -181,6 +181,14 @@ function draft(
     stale: false,
     excludedFileIds: excluded,
     maskIdentifiers: false,
+    includedPhotoIds: [],
+    photoCandidates: files
+      .filter(
+        (file) =>
+          /^(image\/jpeg|image\/png|image\/webp)$/.test(file.mimeType) &&
+          file.sizeBytes <= 5_000_000,
+      )
+      .map((file) => ({ id: file.id, name: file.name, revision: file.revision ?? 1 })),
   };
 }
 const memoryArchives = new Map<string, Blob>();
@@ -260,6 +268,24 @@ export function createReportsMockHandler(runtime: ReportMockRuntime): DomainRequ
             const allowed = new Set((current.files[id] ?? []).map((file) => file.id));
             if (input.excludedFileIds.some((fileId) => !allowed.has(fileId)))
               throw new ReportMockError("VALIDATION_ERROR", "제외할 자료를 다시 확인해 주세요.");
+            const photos = input.includedPhotoIds ?? prior.includedPhotoIds ?? [];
+            if (
+              photos.some(
+                (fileId) =>
+                  input.excludedFileIds.includes(fileId) ||
+                  !(current.files[id] ?? []).some(
+                    (file) =>
+                      file.id === fileId &&
+                      file.status === "ready" &&
+                      /^image\/(jpeg|png|webp)$/.test(file.mimeType) &&
+                      file.sizeBytes <= 5_000_000,
+                  ),
+              ) ||
+              (current.files[id] ?? [])
+                .filter((file) => photos.includes(file.id))
+                .reduce((sum, file) => sum + file.sizeBytes, 0) > 8_000_000
+            )
+              throw new ReportMockError("VALIDATION_ERROR", "선택 사진을 다시 확인해 주세요.");
             const exclusionsChanged =
               JSON.stringify([...input.excludedFileIds].sort()) !==
               JSON.stringify([...prior.excludedFileIds].sort());
@@ -334,7 +360,34 @@ export function createReportsMockHandler(runtime: ReportMockRuntime): DomainRequ
         const stale =
           (state.reportSources?.[id] ?? state.cases[report.caseId]?.revision) !==
           state.cases[report.caseId]?.revision;
-        return new Blob([createReportHtml({ ...report, stale })], {
+        const photos = [];
+        const ownerId = state.session.user?.id;
+        if (!report.maskIdentifiers)
+          for (const fileId of report.includedPhotoIds ?? []) {
+            const file = (state.files[report.caseId] ?? []).find(
+              (item) => item.id === fileId && item.status === "ready",
+            );
+            if (!file || report.excludedFileIds.includes(fileId))
+              throw new ReportMockError("NOT_FOUND", "사진을 확인하지 못했어요.");
+            const original = await runtime.original(report.caseId, fileId);
+            if (original.size > 5_000_000)
+              throw new ReportMockError("EXPORT_LIMIT_EXCEEDED", "사진 크기를 줄여 주세요.");
+            const bytes = new Uint8Array(await original.arrayBuffer());
+            let raw = "";
+            for (let i = 0; i < bytes.length; i += 8192)
+              raw += String.fromCharCode(...bytes.subarray(i, i + 8192));
+            photos.push({
+              id: fileId,
+              name: file.name,
+              revision: file.revision ?? 1,
+              dataUrl: `data:${file.mimeType};base64,${btoa(raw)}`,
+            });
+          }
+        const current = runtime.read();
+        requireMockCase(current, report.caseId, false);
+        if (current.session.user?.id !== ownerId)
+          throw new ReportMockError("NOT_FOUND", "계정이 바뀌었어요.");
+        return new Blob([createReportHtml({ ...report, stale, photos })], {
           type: "text/html;charset=utf-8",
         }) as T;
       }
