@@ -9,6 +9,7 @@ import { StatePanel } from "../ui/state-panel";
 import { ApiModeNotice } from "./ApiModeNotice";
 import { AssetPhoto } from "./AssetPhoto";
 import { FIELD_LABELS, REGION_LABELS } from "./labels";
+import { lawyerProfileHref } from "./navigation";
 
 export function Directory({ preview = false }: { preview?: boolean }) {
   const [items, setItems] = useState<DirectoryItem[]>([]);
@@ -224,7 +225,7 @@ export function Directory({ preview = false }: { preview?: boolean }) {
               </div>
               <div className="directory-profile__identity">
                 <CardTitle>
-                  <a href={`/lawyers/${encodeURIComponent(lawyer.id)}`}>{lawyer.name}</a>
+                  <a href={lawyerProfileHref(lawyer.id, query.current)}>{lawyer.name}</a>
                   <span>변호사</span>
                 </CardTitle>
                 <p>{lawyer.officeName}</p>
@@ -248,7 +249,7 @@ export function Directory({ preview = false }: { preview?: boolean }) {
               </p>
               <a
                 className="directory-profile__link"
-                href={`/lawyers/${encodeURIComponent(lawyer.id)}`}
+                href={lawyerProfileHref(lawyer.id, query.current)}
               >
                 프로필과 연락처 보기
                 <ArrowRight size={18} aria-hidden="true" />

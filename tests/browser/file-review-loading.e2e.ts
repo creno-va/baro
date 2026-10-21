@@ -100,12 +100,12 @@ test("slow next page announces loading immediately and ignores duplicate clicks"
 }) => {
   const state = await fixture(page);
   state.next = gate();
-  const next = page.getByRole("button", { name: "다음 처리 내용 보기", exact: true });
+  const next = page.getByRole("button", { name: "추출 내용 더 보기", exact: true });
   await next.evaluate((button: HTMLButtonElement) => {
     button.click();
     button.click();
   });
-  await expect(page.getByRole("status")).toContainText("다음 처리 내용을 불러오고 있어요.");
+  await expect(page.getByRole("status")).toContainText("추출 내용을 더 불러오고 있어요.");
   await expect(next).toBeDisabled();
   await expect.poll(() => state.reads.filter((r) => r.after >= 0).length).toBe(1);
   await expect(page.getByRole("region", { name: "자료 내용 검토" })).toHaveAttribute(
@@ -127,14 +127,14 @@ test("focus during a pending read preserves draft edits and permits the complete
 }) => {
   const state = await fixture(page);
   state.next = gate();
-  await page.getByRole("button", { name: "다음 처리 내용 보기", exact: true }).click();
+  await page.getByRole("button", { name: "추출 내용 더 보기", exact: true }).click();
   const fields = page.getByLabel("확인·교정한 내용");
   await fields.first().fill("조회 중 작성한 합성 교정");
   const save = page.getByRole("button", { name: "교정 내용 저장", exact: true });
   await expect(save).toBeDisabled();
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
   await expect(fields.first()).toHaveValue("조회 중 작성한 합성 교정");
-  await expect(page.getByRole("status")).toContainText("다음 처리 내용을 불러오고 있어요.");
+  await expect(page.getByRole("status")).toContainText("추출 내용을 더 불러오고 있어요.");
   state.next.release();
   await expect(fields).toHaveCount(2);
   await expect(fields.first()).toHaveValue("조회 중 작성한 합성 교정");
@@ -152,7 +152,7 @@ test("a failed later page retries its cursor and preserves earlier rows and dirt
   page,
 }) => {
   const state = await fixture(page);
-  const next = page.getByRole("button", { name: "다음 처리 내용 보기", exact: true });
+  const next = page.getByRole("button", { name: "추출 내용 더 보기", exact: true });
   const fields = page.getByLabel("확인·교정한 내용");
   await next.click();
   await expect(fields).toHaveCount(2);
@@ -172,11 +172,27 @@ test("a failed later page retries its cursor and preserves earlier rows and dirt
   expect(state.writes).toBe(0);
 });
 
+test("background verification retains already opened extraction pages without a loading replacement", async ({
+  page,
+}) => {
+  await fixture(page);
+  await page.getByRole("button", { name: "추출 내용 더 보기", exact: true }).click();
+  const fields = page.getByLabel("확인·교정한 내용");
+  await expect(fields).toHaveCount(2);
+  const first = await fields.first().elementHandle();
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect(fields).toHaveCount(2);
+  expect(await fields.first().evaluate((node, original) => node === original, first)).toBe(true);
+  await expect(page.getByText("처리 위치와 저장한 교정 내용을 다시 확인하고 있어요.")).toHaveCount(
+    0,
+  );
+});
+
 for (const revoked of ["owner", "role", "signout"] as const)
   test(`late page response is discarded after ${revoked} changes`, async ({ page }) => {
     const state = await fixture(page);
     state.next = gate();
-    await page.getByRole("button", { name: "다음 처리 내용 보기", exact: true }).click();
+    await page.getByRole("button", { name: "추출 내용 더 보기", exact: true }).click();
     await expect.poll(() => state.reads.filter((r) => r.after >= 0).length).toBe(1);
     if (revoked === "owner") state.owner = "synthetic-other-owner";
     if (revoked === "role") state.role = "lawyer";
@@ -199,7 +215,7 @@ test("consent withdrawal keeps read access and drafts but cannot enable a correc
 }) => {
   const state = await fixture(page);
   state.next = gate();
-  await page.getByRole("button", { name: "다음 처리 내용 보기", exact: true }).click();
+  await page.getByRole("button", { name: "추출 내용 더 보기", exact: true }).click();
   const fields = page.getByLabel("확인·교정한 내용");
   await fields.first().fill("재동의 전 보존할 교정");
   state.needsConsent = true;
@@ -218,20 +234,20 @@ test("an old file response cannot finish the new file's loading state", async ({
   const old = gate(),
     nextFile = gate();
   state.next = old;
-  await page.getByRole("button", { name: "다음 처리 내용 보기", exact: true }).click();
+  await page.getByRole("button", { name: "추출 내용 더 보기", exact: true }).click();
   await expect.poll(() => state.reads.filter((r) => r.after >= 0).length).toBe(1);
   await page.getByRole("button", { name: "합성 두 번째 자료 열기", exact: true }).click();
   const fields = page.getByLabel("확인·교정한 내용");
   await expect(fields.first()).toHaveValue("synthetic-file-b 합성 원본 0");
   state.next = nextFile;
-  const next = page.getByRole("button", { name: "다음 처리 내용 보기", exact: true });
+  const next = page.getByRole("button", { name: "추출 내용 더 보기", exact: true });
   await next.click();
   await expect
     .poll(() => state.reads.filter((r) => r.file === "synthetic-file-b" && r.after >= 0).length)
     .toBe(1);
   old.release();
   await expect(next).toBeDisabled();
-  await expect(page.getByRole("status")).toContainText("다음 처리 내용을 불러오고 있어요.");
+  await expect(page.getByRole("status")).toContainText("추출 내용을 더 불러오고 있어요.");
   await expect(fields).toHaveCount(1);
   nextFile.release();
   await expect(fields).toHaveCount(2);
@@ -244,7 +260,7 @@ test("a revision conflict requires explicit replacement and keeps drafts until c
 }) => {
   const state = await fixture(page);
   state.next = gate();
-  await page.getByRole("button", { name: "다음 처리 내용 보기", exact: true }).click();
+  await page.getByRole("button", { name: "추출 내용 더 보기", exact: true }).click();
   const fields = page.getByLabel("확인·교정한 내용");
   await fields.first().fill("충돌 뒤에도 보존할 교정");
   state.revision++;

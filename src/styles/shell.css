@@ -351,6 +351,7 @@ body {
 }
 .app-frame .case-shell {
   max-width: 1040px;
+  padding-bottom: 24px;
 }
 .app-frame .case-utilities {
   color: #626d80;
@@ -470,6 +471,14 @@ body {
   }
   .ui-sheet {
     border: 0;
+    background: var(--muted);
+  }
+  .ui-sheet .ui-dialog__header {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
     background: var(--muted);
   }
   .ui-sheet .sidebar-account {

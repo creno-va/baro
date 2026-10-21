@@ -24,6 +24,7 @@ import {
 
 export const fileViewSchema = z.object({
   id: z.string(),
+  revision: z.number().int().positive().optional(),
   name: z.string(),
   mimeType: z.string(),
   sizeBytes: z.number().nonnegative(),
@@ -214,6 +215,7 @@ export function createFilesApi(request: WorkspaceTransport) {
         if (row.status === "deleting") continue;
         const file: FileView = {
           id: row.id,
+          revision: row.revision,
           name: row.name,
           mimeType: row.declaredMediaType,
           sizeBytes: row.byteLength,

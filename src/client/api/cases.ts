@@ -460,6 +460,11 @@ export const casesApi = {
   async list(): Promise<CaseView[]> {
     if (apiMode === "mock") return request("cases.list");
     const items: CaseView[] = [];
+    // Start both generations together; older records must not delay the v2 list.
+    const firstV2 = request("cases.listV2", undefined, { path: "/api/v2/cases?limit=50" }).then(
+      (value) => ({ value, error: null }),
+      (error: unknown) => ({ value: null, error }),
+    );
     let cursor: string | null = null;
     do {
       const page = caseListResponseSchema.parse(
@@ -493,9 +498,14 @@ export const casesApi = {
               .optional(),
           })
           .parse(
-            await request("cases.listV2", undefined, {
-              path: `/api/v2/cases?limit=50${cursor ? `&before=${encodeURIComponent(cursor)}` : ""}`,
-            }),
+            cursor
+              ? await request("cases.listV2", undefined, {
+                  path: `/api/v2/cases?limit=50&before=${encodeURIComponent(cursor)}`,
+                })
+              : await firstV2.then((result) => {
+                  if (result.error) throw result.error;
+                  return result.value;
+                }),
           );
         if (page.previews) {
           for (const item of page.items) {

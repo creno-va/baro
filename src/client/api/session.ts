@@ -17,11 +17,34 @@ export const roleStart = (session: SessionView) =>
         ? "/lawyer"
         : "/app";
 let pendingSelection: { attempt: string; ownerId: string; promise: Promise<unknown> } | undefined;
+let pendingRead: Promise<SessionView> | undefined;
+if (typeof window !== "undefined") {
+  window.addEventListener("baro-session-changed", () => {
+    pendingRead = undefined;
+  });
+  window.addEventListener("storage", () => {
+    pendingRead = undefined;
+  });
+}
+function readSession() {
+  // Share simultaneous shell/island reads, without caching settled permissions.
+  if (!pendingRead) {
+    const pending = request<SessionView>("session.get", undefined, { path: "/api/me/session" });
+    pendingRead = pending;
+    void pending
+      .finally(() => {
+        if (pendingRead === pending) pendingRead = undefined;
+      })
+      .catch(() => {});
+  }
+  return pendingRead.then((session) => ({
+    ...session,
+    user: session.user ? { ...session.user } : null,
+  }));
+}
 export const sessionApi = {
   async get(): Promise<SessionView> {
-    const session = await request<SessionView>("session.get", undefined, {
-      path: "/api/me/session",
-    });
+    const session = await readSession();
     if (apiMode === "real" && typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       const raw = sessionStorage.getItem("baro-account-type");

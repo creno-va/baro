@@ -871,9 +871,11 @@ export function ReportReview({ caseId }: { caseId: string }) {
             </button>
           </ConfirmDialog>
         )}
-        <footer>
-          <a href={`/cases/${encodeURIComponent(caseId)}`}>사건으로 돌아가기</a> ·{" "}
-          <a href="/help">리포트·삭제 도움말</a> ·{" "}
+        <footer className="report-footer-links">
+          <a className="report-return-link" href={`/cases/${encodeURIComponent(caseId)}`}>
+            사건으로 돌아가기
+          </a>
+          <a href="/help#deletion">사건·리포트 삭제 안내</a>
           <a href="/policies/privacy">개인정보 처리방침 초안</a>
         </footer>
       </div>

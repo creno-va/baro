@@ -16,6 +16,7 @@
   max-width: 760px;
   margin: 0 auto;
 }
+
 .intake-steps {
   list-style: none;
   display: flex;
@@ -1127,4 +1128,95 @@
   ::view-transition-new(*) {
     animation: none;
   }
+}
+
+.intake-case-grid > li {
+  position: relative;
+  min-width: 0;
+}
+.intake-case-grid .intake-case-card {
+  padding-bottom: 68px;
+}
+.intake-case-grid .case-list-delete {
+  position: absolute;
+  right: 16px;
+  bottom: 12px;
+  min-height: 44px;
+}
+.summary-conflicts {
+  margin-top: 16px;
+}
+.summary-conflicts label {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  min-height: 44px;
+  margin: 8px 0;
+  cursor: pointer;
+}
+.summary-conflicts label[data-selected="true"] {
+  background: #edf4ff;
+  border-color: #3775df;
+  color: #173d77;
+}
+.summary-conflicts input {
+  flex-shrink: 0;
+  margin-top: 5px;
+}
+.summary-conflicts span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.intake-active-summary {
+  max-width: 1040px;
+}
+.summary-edit-column,
+.summary-materials-column {
+  min-width: 0;
+}
+.summary-materials-column:empty {
+  display: none;
+}
+.intake-active-summary .intake-scene {
+  max-width: none;
+  padding-top: 16px;
+}
+.intake-active-summary .intake-scene-emblem {
+  display: none;
+}
+.intake-active-summary .summary-edit-column textarea:not(#case-summary) {
+  min-height: 110px;
+}
+.intake-active-summary #case-summary {
+  min-height: 200px;
+}
+@media (min-width: 1200px) {
+  .intake-active-summary .summary-editor-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 280px;
+    gap: 28px;
+    align-items: start;
+  }
+  .intake-active-summary .summary-materials-column {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .intake-active-summary .summary-edit-column {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .intake-active-summary .case-materials {
+    margin-top: 0;
+  }
+  .intake-active-summary .summary-edit-column > section > fieldset {
+    padding: 16px;
+    margin: 16px 0;
+  }
+}
+.intake-active-summary .intake-scene-heading {
+  padding-block: 24px;
 }

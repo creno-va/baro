@@ -71,6 +71,11 @@
   scroll-margin-top: 2rem;
   border-color: #78a6e4;
 }
+@media (max-width: 900px) {
+  .app-frame .policy-card:target {
+    scroll-margin-top: 96px;
+  }
+}
 .help-document details {
   border-top: 1px solid var(--color-border);
   padding-block: 0.8rem;
