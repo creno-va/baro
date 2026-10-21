@@ -30,6 +30,9 @@ Bun1.4.0 `bun ci` 완료. 관련 단위53개 통과: 저장 메시지의 첨부 
 보존하므로 기존 숨김 검사의 트리거를 명시적인 세션 변경으로 바로잡았다. owner/role/
 만료 시 삭제와 동의 만료 시 읽기 전용 검증은 유지한다. 빌드 Worker CSP 브라우저1개 통과.
 
-`validate:build` 통과: production 빌드, bundle, Worker dry-run. `validate:quick` 최종 결과와
-PR/CI의 정확한 head는 PR 본문 및 이슈 receipt에 기록한다. 실제 OAuth·모델 호출·배포는
+최신 main76643b7(PR309 CI 성공)을 충돌 없이 통합한 제품 head
+`8c7919f17ee5e1b0d76d8e62278ed7e9028b5542`에서 `validate:quick`(19개 quick 계약 검사 포함),
+관련 단위53개, `validate:build`(production 빌드, bundle, Worker dry-run)를 순차 실행해 통과했다.
+이후 커밋은 이 검증 기록만 갱신한다. [PR310](https://github.com/creno-va/baro/pull/310)의
+최종 head/CI는 PR 본문 및 이슈 receipt에 기록한다. 실제 OAuth·모델 호출·배포는
 이번 검증에 포함하지 않으며 합성 결과를 #71 전체 실제 인수로 확대하지 않는다.
