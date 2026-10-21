@@ -1,0 +1,37 @@
+{
+  "schemaVersion": "2",
+  "workspaceRevision": 7,
+  "summaryRevision": 2,
+  "checkedAt": "2026-10-21T00:00:00.000Z",
+  "topics": ["loan"],
+  "status": "complete",
+  "searchTruncated": true,
+  "items": [
+    {
+      "id": "synthetic_precedent_citation",
+      "readToken": "synthetic_research_receipt.synthetic_signature",
+      "citation": {
+        "id": "synthetic_precedent_citation",
+        "sourceId": "synthetic_precedent_source",
+        "title": "합성 판례 검토 자료",
+        "verifiedAt": "2026-10-21T00:00:00.000Z",
+        "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "kind": "precedent",
+        "officialId": "90000000201",
+        "court": "합성 법원",
+        "caseNumber": "합성 사건번호",
+        "decisionDate": "2026-01-02",
+        "url": "https://www.law.go.kr/LSW/precInfoP.do?precSeq=90000000201"
+      },
+      "matchedTopics": ["loan"],
+      "excerpt": {
+        "text": "합성 검증용 본문입니다.",
+        "startUtf16": 0,
+        "endUtf16": 13,
+        "fullLengthUtf16": 13,
+        "truncated": false
+      }
+    }
+  ],
+  "unavailableTopics": []
+}
