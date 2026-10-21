@@ -22,6 +22,51 @@ const directoryPage = (items: DirectoryItem[] = []): DirectoryPage => ({
   rotation: { day: "2026-10-14", algorithm: "daily_sha256_pivot_v1" },
 });
 
+test("profile round trip retains applied search filters after reload and ignores unrelated return parameters", async ({
+  page,
+}) => {
+  await page.route("**/api/v2/lawyers**", (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (path === "/api/v2/lawyers/directory")
+      return route.fulfill({ json: directoryPage([directoryLawyer]) });
+    if (path.includes("/assets/")) return route.fulfill({ status: 404 });
+    return route.fulfill({ json: publicLawyer });
+  });
+  const filters = new URLSearchParams({
+    name: directoryLawyer.name,
+    region: "seoul",
+    legalField: "company",
+  });
+  const listPath = `/lawyers?${filters}`;
+  for (const width of [320, 1024]) {
+    await page.setViewportSize({ width, height: 760 });
+    await page.goto(listPath);
+    const profile = page.getByRole("link", { name: "프로필과 연락처 보기" });
+    await expect(profile).toBeVisible();
+    await page.getByLabel("이름 또는 사무실", { exact: true }).fill("검색하지 않은 입력");
+    await expect(profile).toHaveAttribute("href", `/lawyers/${directoryLawyer.id}?${filters}`);
+    await profile.click();
+    await page.reload();
+    await expect(page.getByRole("link", { name: "변호사 목록으로", exact: true })).toHaveAttribute(
+      "href",
+      listPath,
+    );
+    await page.getByRole("link", { name: "변호사 목록으로", exact: true }).click();
+    await expect(page.getByLabel("이름 또는 사무실", { exact: true })).toHaveValue(
+      directoryLawyer.name,
+    );
+    await expect(page.getByRole("combobox", { name: "지역", exact: true })).toHaveValue("seoul");
+    await expect(page.getByRole("combobox", { name: "분야", exact: true })).toHaveValue("company");
+  }
+  await page.goto(
+    `/lawyers/${directoryLawyer.id}?region=seoul&returnTo=https://example.com&unknown=secret&legalField=invalid`,
+  );
+  await expect(page.getByRole("link", { name: "변호사 목록으로", exact: true })).toHaveAttribute(
+    "href",
+    "/lawyers?region=seoul",
+  );
+});
+
 test("directory filters, empty supply, approved detail and office-only contact work at 320px", async ({
   page,
 }) => {

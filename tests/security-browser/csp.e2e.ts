@@ -1,4 +1,5 @@
 import { expect, type Locator, test } from "@playwright/test";
+import type { DirectoryPage } from "../../src/contracts/v2";
 import { publicLawyer } from "../fixtures/contracts/v2";
 
 async function scrollScene(scene: Locator, pinSelector: string, progress: number) {
@@ -373,19 +374,30 @@ test("built public directory and detail hydrate under hash CSP with no case data
     if (path.includes("/assets/")) return route.fulfill({ status: 404, body: "" });
     return route.fulfill({
       json:
-        path === "/api/v2/lawyers"
-          ? {
-              schemaVersion: "2",
-              snapshotId: "synthetic-csp-directory",
-              rotation: "disclosed_rotation",
-              expiresAt: "2026-10-06T00:05:00Z",
-              items: [publicLawyer],
+        path === "/api/v2/lawyers/directory"
+          ? ({
+              rotation: { day: "2026-10-21", algorithm: "daily_sha256_pivot_v1" },
+              expiresAt: "2099-01-01T00:00:00Z",
+              items: [
+                {
+                  id: publicLawyer.id,
+                  revision: publicLawyer.approvedRevision,
+                  name: publicLawyer.content.name,
+                  officeName: publicLawyer.content.office.name,
+                  introduction: publicLawyer.content.introduction,
+                  region: publicLawyer.content.office.region,
+                  practiceAreas: publicLawyer.content.legalFields,
+                  photoUrl: null,
+                  photoAssetId: null,
+                  verificationStatus: "verified",
+                },
+              ],
               nextCursor: null,
-            }
+            } satisfies DirectoryPage)
           : publicLawyer,
     });
   });
-  const response = await page.goto("/lawyers");
+  const response = await page.goto("/lawyers?region=seoul");
   expect(response?.headers()["content-security-policy"]).toContain("sha256-");
   expect(response?.headers()["cache-control"]).toContain("no-transform");
   await expect(page.getByRole("link", { name: "프로필과 연락처 보기" })).toBeVisible();
@@ -396,6 +408,12 @@ test("built public directory and detail hydrate under hash CSP with no case data
   expect(await page.getByRole("link", { name: "Google 길찾기" }).getAttribute("href")).not.toMatch(
     /caseId|token|narrative/,
   );
+  await expect(page.getByRole("link", { name: "변호사 목록으로", exact: true })).toHaveAttribute(
+    "href",
+    "/lawyers?region=seoul",
+  );
+  await page.getByRole("link", { name: "변호사 목록으로", exact: true }).click();
+  await expect(page.getByRole("combobox", { name: "지역", exact: true })).toHaveValue("seoul");
   expect(violations).toEqual([]);
 });
 

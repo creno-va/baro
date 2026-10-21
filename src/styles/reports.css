@@ -518,6 +518,15 @@
   .report-editor-heading,
   .report-editor-tools {
     gap: 4px;
+    flex-wrap: wrap;
+  }
+  .report-editor-heading > div {
+    flex: 1 1 210px;
+    min-width: 0;
+  }
+  .report-workspace .report-editor-heading button {
+    flex-shrink: 0;
+    white-space: nowrap;
   }
   .report-workspace .report-editor-heading button,
   .report-workspace .report-editor-tools button {

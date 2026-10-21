@@ -473,6 +473,14 @@ body {
     border: 0;
     background: var(--muted);
   }
+  .ui-sheet .ui-dialog__header {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--muted);
+  }
   .ui-sheet .sidebar-account {
     margin-top: 32px;
   }
