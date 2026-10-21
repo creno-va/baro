@@ -32,6 +32,7 @@ const listSchema = z.object({
   LawSearch: z.object({
     law: z.union([candidateSchema, z.array(candidateSchema).max(100)]).optional(),
     totalCnt: z.coerce.number().int().min(0),
+    page: z.coerce.number().int().positive().optional(),
   }),
 });
 export type LawCandidate = z.infer<typeof candidateSchema>;
@@ -48,6 +49,53 @@ export function selectStatute(
   const rows = list.law ? (Array.isArray(list.law) ? list.law : [list.law]) : [];
   if (list.totalCnt > 100 || list.totalCnt !== rows.length)
     throw new RetrievalFailure("history_incomplete");
+  return selectStatuteRows(rows, plan, asOfDate, observedDate);
+}
+
+// Each official page remains <=100 rows. Never treat a truncated first page as
+// complete history, or fetch unbounded pages under a broad title match.
+export const MAX_STATUTE_HISTORY_PAGES = 5;
+export async function selectStatuteHistory(
+  firstPage: unknown,
+  loadPage: (page: number) => Promise<unknown>,
+  plan: Extract<RetrievalPlan, { kind: "statute" }>,
+  asOfDate: string,
+  observedDate = asOfDate,
+) {
+  const first = parseSchema(listSchema, firstPage, "statute_list").LawSearch;
+  const pages = Math.max(1, Math.ceil(first.totalCnt / 100));
+  if (pages > MAX_STATUTE_HISTORY_PAGES) throw new RetrievalFailure("history_incomplete");
+  const rows: LawCandidate[] = [];
+  const versions = new Set<string>();
+  for (let page = 1; page <= pages; page++) {
+    const current =
+      page === 1 ? first : parseSchema(listSchema, await loadPage(page), "statute_list").LawSearch;
+    const batch = current.law ? (Array.isArray(current.law) ? current.law : [current.law]) : [];
+    const expected = Math.min(100, first.totalCnt - (page - 1) * 100);
+    if (
+      current.totalCnt !== first.totalCnt ||
+      batch.length !== expected ||
+      (current.page !== undefined && current.page !== page)
+    )
+      throw new RetrievalFailure("history_incomplete");
+    for (const row of batch) {
+      // One promulgation can have multiple effective-date versions. MST alone
+      // is not a page identity; preserve each documented 시행일 history row.
+      const identity = JSON.stringify([row.법령ID, row.법령일련번호, row.시행일자]);
+      if (versions.has(identity)) throw new RetrievalFailure("history_incomplete");
+      versions.add(identity);
+      rows.push(row);
+    }
+  }
+  return selectStatuteRows(rows, plan, asOfDate, observedDate);
+}
+
+function selectStatuteRows(
+  rows: LawCandidate[],
+  plan: Extract<RetrievalPlan, { kind: "statute" }>,
+  asOfDate: string,
+  observedDate: string,
+) {
   if (rows.some((row) => row.공포일자 > observedDate)) throw new RetrievalFailure("date_invalid");
   const candidates = rows
     .filter(

@@ -67,7 +67,7 @@ PDF 리포트와 선택한 원본을 직접 전달해 변호사의 초기 사건
 | Database / jobs | D1·Drizzle, Workflows |
 | Files / reports | R2 private 원본·파생물·리포트 / 승인된 public profile 자산 분리 |
 | Authentication | Better Auth, Google/Naver/Kakao OAuth |
-| AI | 기존 AI Gateway Unified Billing pinned model·medium 유지, Cloudflare Whisper ASR 확장 |
+| AI | AI Gateway Unified Billing Gemini 3.8 Flash, 생성 low·감사 medium, Cloudflare Whisper ASR |
 | Legal source | 공식 법령·공식 판례·공식기관 안내의 검증된 원문 |
 | Delivery | 최소 GitHub CI, 명령으로 요청하는 preview/production 수동 배포 |
 

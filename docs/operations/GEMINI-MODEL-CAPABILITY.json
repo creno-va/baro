@@ -1,0 +1,9 @@
+{
+  "checkedAt": "2026-10-21T11:04:56.000Z",
+  "validUntil": "2026-10-22T11:04:56.000Z",
+  "model": "google/gemini-3.8-flash",
+  "contextTokens": 1048576,
+  "maximumOutputTokens": 65536,
+  "modelReference": "https://developers.cloudflare.com/ai/models/google/gemini-3.8-flash/",
+  "outputReference": "https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash"
+}

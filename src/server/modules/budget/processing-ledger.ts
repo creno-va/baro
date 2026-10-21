@@ -220,6 +220,7 @@ export function createProcessingBudgetService(options: {
       targetRevision: binding.targetRevision,
       ...(immutable.artifactScope ? { artifactScope: immutable.artifactScope } : {}),
       plan: {
+        ...(immutable.model ? { model: immutable.model } : {}),
         operationId: binding.operationId,
         operationRevision: binding.operationRevision,
         requestHash: binding.requestHash,

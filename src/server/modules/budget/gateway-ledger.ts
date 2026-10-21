@@ -113,6 +113,7 @@ export function createGatewayBudgetService(options: {
     const pricing = pricingProofSchema.parse(p.payload),
       funding = fundingProofSchema.parse(f.payload);
     if (
+      pricing.prices.some((price) => price.sku.startsWith("model_") && price.model !== MODEL_ID) ||
       pricing.environment !== options.environment ||
       funding.environment !== options.environment ||
       (options.core.applicationCostLimitsEnabled && funding.state === "unavailable") ||
@@ -175,6 +176,7 @@ export function createGatewayBudgetService(options: {
       targetId: binding.targetId,
       targetRevision: binding.targetRevision,
       plan: {
+        model: MODEL_ID,
         operationId: binding.operationId,
         operationRevision: binding.operationRevision,
         requestHash: binding.requestHash,

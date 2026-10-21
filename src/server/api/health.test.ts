@@ -30,15 +30,16 @@ function configurationFixture() {
   const now = new Date().toISOString();
   const secret = "configuration-secret-must-not-be-returned";
   const config = {
+    model: "google/gemini-3.8-flash",
     bounds: {
       basis: "verified_model_context_limit",
       tokenizerRevision: secret,
-      textTokensUpperBound: 1050000,
+      textTokensUpperBound: 1048576,
       framingTokensUpperBound: 0,
       vision: null,
-      modelInputTokenLimit: 1050000,
-      modelContextTokenLimit: 1050000,
-      modelOutputTokenLimit: 128000,
+      modelInputTokenLimit: 1048576,
+      modelContextTokenLimit: 1048576,
+      modelOutputTokenLimit: 65536,
       checkedAt: now,
       validUntil: new Date(Date.parse(now) + 3600000).toISOString(),
     },
@@ -80,10 +81,10 @@ describe("AI configuration health", () => {
       environment: "preview",
       release: "a".repeat(40),
       reservations: [
-        { phase: "workspace_questions", inputTokens: 1047600, outputTokens: 2400 },
-        { phase: "workspace_summary", inputTokens: 1040000, outputTokens: 10000 },
-        { phase: "workspace_chat", inputTokens: 1040000, outputTokens: 10000 },
-        { phase: "workspace_audit", inputTokens: 1047600, outputTokens: 2400 },
+        { phase: "workspace_questions", inputTokens: 1046176, outputTokens: 2400 },
+        { phase: "workspace_summary", inputTokens: 1038576, outputTokens: 10000 },
+        { phase: "workspace_chat", inputTokens: 1038576, outputTokens: 10000 },
+        { phase: "workspace_audit", inputTokens: 1046176, outputTokens: 2400 },
       ],
     });
     expect(JSON.stringify(body)).not.toContain(f.secret);

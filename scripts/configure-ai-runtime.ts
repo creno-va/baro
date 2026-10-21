@@ -1,7 +1,7 @@
 import { runtimeDigest } from "../src/server/db/v2-paid-runtime";
 import { modelBounds, modelCapabilitySchema } from "./provision-ai-budget";
 
-/** Read only model capability fields from the historical observation. Never
+/** Read only model capability fields from the documented model capability observation. Never
  * renew its dates, inspect credit, mutate accounting, or require cost refresh.
  * Deployed observation-only runtime retains technical token/vision boundaries.
  */
@@ -21,7 +21,7 @@ if (import.meta.main) {
     const [environment, ...extra] = process.argv.slice(2);
     if ((environment !== "preview" && environment !== "production") || extra.length)
       throw new Error("AI_RUNTIME_ENVIRONMENT_REQUIRED");
-    const source = await Bun.file("docs/operations/AI-RUNTIME-OBSERVATION.json").json();
+    const source = await Bun.file("docs/operations/GEMINI-MODEL-CAPABILITY.json").json();
     const bounds = await modelCapabilityConfiguration(source);
     const child = Bun.spawn(
       ["bunx", "wrangler", "secret", "put", "AI_MODEL_TOKEN_BOUNDS_JSON", "--env", environment],

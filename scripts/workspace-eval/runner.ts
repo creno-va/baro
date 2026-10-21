@@ -17,6 +17,8 @@ export const humanChecks = [
   "citations",
   "strategy",
   "coverage",
+  "concrete_clarification",
+  "uncertainty",
 ] as const;
 const digestSchema = z.string().regex(/^[a-f0-9]{64}$/);
 const shaSchema = z.string().regex(/^(local|[a-f0-9]{40})$/);
@@ -102,7 +104,7 @@ function findings(s: Scenario, output: unknown): string[] {
   const o = output as {
     facts?: V2Fact[];
     unknowns?: string[];
-    questions?: unknown[];
+    questions?: { prompt: string }[];
     warnings?: string[];
     timeline?: { date: string | null; datePrecision: string }[];
     citations?: unknown[];
@@ -149,6 +151,22 @@ function findings(s: Scenario, output: unknown): string[] {
       o.citations?.length)
   )
     result.push("source_failure_not_preserved");
+  if (s.clarification) {
+    const text =
+      s.phase === "workspace_questions"
+        ? (o.questions ?? []).map((q) => q.prompt).join("\n")
+        : (o.text ?? "");
+    if (
+      !s.clarification.anchors.some((anchor) => text.includes(anchor)) ||
+      !s.clarification.answerCues.some((cue) => text.includes(cue))
+    )
+      result.push("concrete_clarification_missing");
+    if (
+      s.clarification.uncertaintyCues &&
+      !s.clarification.uncertaintyCues.some((cue) => text.includes(cue))
+    )
+      result.push("clarification_uncertainty_missing");
+  }
   if (s.handoff && (!o.text?.includes("변호사") || !/자료|정리|상담/.test(o.text)))
     result.push("strategy_handoff_missing");
   return result;

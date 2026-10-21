@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MODEL_ID } from "../src/server/model-policy";
 import type { ModelMetric } from "../src/server/modules/llm-gateway/service";
 
 export const PROBE_PROTOCOL_VERSION = 2 as const;
@@ -43,7 +44,7 @@ const reportSchema = z
         z.strictObject({
           requestId: z.literal(PROBE_REQUEST_ID),
           phase: z.literal("screening"),
-          model: z.literal("openai/gpt-6-sol"),
+          model: z.literal(MODEL_ID),
           latencyMs: z.number().finite().min(0),
           inputTokens: z.number().int().min(0).nullable(),
           outputTokens: z.number().int().min(0).nullable(),

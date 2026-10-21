@@ -57,11 +57,11 @@ async function replaceDraft(replay: Replay, id: string, output: unknown) {
   ).wireInputSha256;
 }
 test("current v2 corpus runs actual gateway/schema/pipeline, covers every critical scope and never declares live completion", () => {
-  expect(baseline.report.scenarios).toHaveLength(56);
+  expect(baseline.report.scenarios).toHaveLength(60);
   expect(baseline.report.deterministicCritical).toBe(0);
   expect(baseline.report.policy).toEqual({ followupRounds: 2, questionsPerBatch: 3 });
   expect(baseline.report.mode).toBe("scripted-v2-pipeline");
-  expect(baseline.report.missingHumanReviews).toBe(56);
+  expect(baseline.report.missingHumanReviews).toBe(60);
   expect(baseline.report.liveExecutionVerified).toBe(false);
   expect(baseline.report.closureReady).toBe(false);
   for (const id of ["questions-round-cap", "chat-reconfirmation-required"]) {
@@ -74,7 +74,7 @@ test("current v2 corpus runs actual gateway/schema/pipeline, covers every critic
 });
 test("synthetic plan exports current contexts and expectations without scripted answers or provider calls", async () => {
   const plan = await evaluationPlan(sha);
-  expect(plan.scenarios).toHaveLength(56);
+  expect(plan.scenarios).toHaveLength(60);
   expect(plan.corpusSha256).toBe(baseline.report.corpusSha256);
   expect(plan.gatewayContractSha256).toBe(baseline.report.gatewayContractSha256);
   expect(plan.scenarios.some((s) => "scripted" in s)).toBe(false);
@@ -150,7 +150,7 @@ test("safe generic chat text still fails when it drops the requested lawyer hand
 });
 test("missing human review stays missing and one critical human finding cannot be averaged away", async () => {
   const missing = await evaluateWorkspace(sha, trace());
-  expect(missing.report.missingHumanReviews).toBe(56);
+  expect(missing.report.missingHumanReviews).toBe(60);
   const replay = reviewed();
   required(requiredReview(replay).checks).result = "critical";
   const result = await evaluateWorkspace(sha, replay);
@@ -223,7 +223,7 @@ test("CLI refuses incomplete captured evaluation and emits a safe failure report
   const dirty = (await new Response(status.stdout).text()).trim();
   expect(await status.exited).toBe(0);
   if (dirty) expect(missing.stderr).toContain("V2 evaluation failed");
-  else expect(missing.stdout).toContain("56 missing reviews");
+  else expect(missing.stdout).toContain("60 missing reviews");
   const invalid = await cli(["--replay", `${path}-private-sentinel`]);
   expect(invalid.code).toBe(1);
   expect(invalid.stderr).not.toContain("private-sentinel");
@@ -239,4 +239,19 @@ test("uncommitted or untracked source cannot be attributed to the clean candidat
   expect(evaluationCandidate(sha, " M src/server/runtime/workspace.ts")).toBe("local");
   expect(evaluationCandidate(sha, "?? scripts/eval-workspace.ts")).toBe("local");
   expect(() => evaluationCandidate("invented", "")).toThrow("EVAL_CHECKOUT_UNAVAILABLE");
+});
+
+test("vague schema-valid clarification fails the concrete case-understanding evaluation", async () => {
+  const replay = trace(),
+    id = "chat-ambiguous-party-event";
+  const scenario = workspaceScenarios.find((s) => s.id === id);
+  await replaceDraft(replay, id, {
+    ...(scenario?.scripted as object),
+    text: "상황을 자세히 설명해 주세요.",
+  });
+  const result = await evaluateWorkspace(sha, replay);
+  expect(result.report.scenarios.find((s) => s.id === id)?.critical).toEqual([
+    "concrete_clarification_missing",
+    "clarification_uncertainty_missing",
+  ]);
 });

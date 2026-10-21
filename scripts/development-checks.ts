@@ -25,6 +25,7 @@ function normalizedPaths(paths: string[]): string[] {
 }
 function affectsAiRuntime(file: string): boolean {
   return (
+    ["src/server/model-policy.ts", "docs/operations/GEMINI-MODEL-CAPABILITY.json"].includes(file) ||
     /^(?:package\.json|bun\.lock|\.bun-version|wrangler(?:\.[^/]+)?\.(?:jsonc?|toml)|astro\.config\.ts|tsconfig(?:\.[^/]+)?\.json)$/.test(
       file,
     ) ||
