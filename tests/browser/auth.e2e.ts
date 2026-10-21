@@ -28,15 +28,15 @@ test("callback cancellation and expired sessions show safe messages", async ({ p
     await page.goto(`/login?error=${error}&error_description=untrusted-raw-detail`);
     await expect(page.getByRole("alert")).toContainText(message);
     await expect(page.locator("body")).not.toContainText("untrusted-raw-detail");
-    const captionBounds = await page.locator(".login-intro__caption").boundingBox();
+    const descriptionBounds = await page.locator(".login-panel__description").boundingBox();
     const errorBounds = await page.getByRole("alert").boundingBox();
     const roleBounds = await page
       .getByRole("group", { name: "어떤 목적으로 이용하시나요?" })
       .boundingBox();
-    if (!captionBounds || !errorBounds || !roleBounds) {
-      throw new Error("Login caption, error and account choices must remain visible.");
+    if (!descriptionBounds || !errorBounds || !roleBounds) {
+      throw new Error("Login instructions, error and account choices must remain visible.");
     }
-    expect(errorBounds.y).toBeGreaterThanOrEqual(captionBounds.y + captionBounds.height);
+    expect(errorBounds.y).toBeGreaterThanOrEqual(descriptionBounds.y + descriptionBounds.height);
     expect(roleBounds.y).toBeGreaterThanOrEqual(errorBounds.y + errorBounds.height);
   }
 });

@@ -341,8 +341,9 @@
     margin-bottom: 20px;
     font-size: 13px;
   }
-  .login-intro__headline {
-    font-size: 22px;
+  .login-intro__headline,
+  .login-intro__caption {
+    display: none;
   }
 }
 @media (prefers-reduced-motion: reduce) {
