@@ -185,7 +185,7 @@ test("material links open once and preserve a later manual selection", async ({ 
   await expect(dialog.getByRole("heading", { name: files[1].name, exact: true })).toBeVisible();
 });
 
-test("an unsent chat warns before following the upload link", async ({ page }) => {
+test("chat attachment chooser keeps the unsent message in the conversation", async ({ page }) => {
   await page.route("**/api/**", async (route) => {
     const u = new URL(route.request().url());
     if (!u.pathname.startsWith("/api/")) return route.continue();
@@ -201,15 +201,18 @@ test("an unsent chat warns before following the upload link", async ({ page }) =
   });
   await page.goto(base);
   await page.getByLabel("추가 사실 또는 질문").fill("미전송 합성 초안");
-  const prompt = page.waitForEvent("dialog");
-  const click = page
-    .getByRole("link", { name: "자료 추가", exact: true })
-    .click({ noWaitAfter: true });
-  const dialog = await prompt;
-  expect(dialog.type()).toBe("beforeunload");
-  await dialog.dismiss();
-  await click;
+  const chooser = page.waitForEvent("filechooser");
+  await page.getByRole("button", { name: "사진·파일 첨부", exact: true }).click();
+  await (await chooser).setFiles({
+    name: "합성.txt",
+    mimeType: "text/plain",
+    buffer: Buffer.from("합성 원본"),
+  });
+  await expect(page).toHaveURL(new RegExp(`${base}$`));
   await expect(page.getByLabel("추가 사실 또는 질문")).toHaveValue("미전송 합성 초안");
+  await expect(page.getByRole("list", { name: "이번 메시지의 첨부 파일" })).toContainText(
+    "합성.txt",
+  );
 });
 
 test("fact sources identify the referenced material and page", async ({ page }) => {

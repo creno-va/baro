@@ -139,6 +139,7 @@ export const workspaceViewSchema = z.object({
       retryable: z.boolean().optional(),
       createdAt: z.string(),
       statusUpdatedAt: z.iso.datetime({ offset: true }).optional(),
+      selectedFileIds: v2UserMessageSchema.shape.selectedFileIds.optional(),
       ...messageSources,
     }),
   ),
@@ -242,7 +243,7 @@ export function createWorkspaceApi(
     id: string,
     recovery = 0,
     more?: "messages" | "actions" | "timeline",
-    filesOnly = false,
+    filesOnly: boolean | "evidence" = false,
   ): Promise<CustomerWorkspaceView> {
     const response = await request(`${base(id)}/workspace`);
     if (response.status === 404) {
@@ -289,10 +290,18 @@ export function createWorkspaceApi(
     schemaVersions.set(id, "2");
     workspaceRevisions.set(id, w.workspaceRevision);
     if (filesOnly) {
-      // A files-page projection does not claim to load the summary or any other
-      // collection. Keep its before/after workspace fence while each existing
-      // metadata read retains its owner, file, decrypt and current-job fences.
-      const fileViews = await files.list(id, { metadataOnly: true });
+      // Default material reads stay metadata-only. Explicit evidence navigation
+      // also reads current facts and at most 100 recent messages, never file bodies,
+      // actions or timeline. Fence both projections against a workspace change.
+      const [fileViews, evidenceSummary, evidenceMessages] = await Promise.all([
+        files.list(id, { metadataOnly: true }),
+        filesOnly === "evidence" && w.confirmedSummaryRevision !== null
+          ? workspaceJson(request, `${base(id)}/summary`).then((value) =>
+              v2SummarySchema.parse(value),
+            )
+          : Promise.resolve(null),
+        filesOnly === "evidence" ? allMessages(id, null, 100) : Promise.resolve(null),
+      ]);
       const settled = v2WorkspaceSchema.parse(
         await workspaceJson(request, `${base(id)}/workspace`),
       );
@@ -314,7 +323,18 @@ export function createWorkspaceApi(
           schemaVersion: "2",
         },
         files: fileViews,
-        messages: [],
+        messages:
+          evidenceMessages?.items
+            .filter((message) => message.role === "assistant")
+            .map((message) => ({
+              id: message.id,
+              role: message.role,
+              text: message.text,
+              createdAt: message.createdAt,
+              status: "complete" as const,
+              references: message.references,
+            })) ?? [],
+        ...(evidenceSummary ? { facts: evidenceSummary.facts } : {}),
         actions: [],
         timeline: [],
       };
@@ -401,7 +421,7 @@ export function createWorkspaceApi(
         createdAt: m.createdAt,
         ...(m.role === "assistant"
           ? { references: m.references, citations: m.citations, warnings: m.warnings }
-          : {}),
+          : { selectedFileIds: m.selectedFileIds }),
       }));
     let jobId = w.currentJobId ?? rememberedJob(id);
     let latestJob: z.infer<typeof v2JobSchema> | null = null;
@@ -602,7 +622,8 @@ export function createWorkspaceApi(
   }
   return {
     get,
-    getFiles: (id: string) => get(id, 0, undefined, true),
+    getFiles: (id: string, options?: { evidence?: boolean }) =>
+      get(id, 0, undefined, options?.evidence ? "evidence" : true),
     async loadMore(id: string, collection: "messages" | "actions" | "timeline") {
       // Serialize continuation reads so repeated clicks cannot append the same page.
       const previous = pageRequests.get(id) ?? Promise.resolve();

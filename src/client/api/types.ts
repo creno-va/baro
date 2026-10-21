@@ -33,6 +33,7 @@ export type QuestionView = {
   answerState?: "answered" | "unknown" | "skipped";
 };
 export type MessageView = {
+  selectedFileIds?: string[] | undefined;
   id: string;
   role: "user" | "assistant";
   text: string;

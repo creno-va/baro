@@ -227,7 +227,7 @@ test("owner replacement after a mutation and read failure purges the stored erro
 });
 
 for (const change of ["same-owner", "owner", "role", "consent", "expired"] as const)
-  test(`files focus keeps private content hidden until current access is known: ${change}`, async ({
+  test(`explicit session change hides private files until current access is known: ${change}`, async ({
     page,
   }) => {
     const state = await setup(page);
@@ -240,7 +240,7 @@ for (const change of ["same-owner", "owner", "role", "consent", "expired"] as co
     state.pauseSession = new Promise<void>((resolve) => {
       release = resolve;
     });
-    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await page.evaluate(() => window.dispatchEvent(new Event("baro-session-changed")));
     await expect(
       page.getByRole("heading", { name: "private-ready.pdf", exact: true }),
     ).not.toBeVisible();

@@ -496,6 +496,9 @@ test("built Worker mobile menu, brand, local font and error state work without C
   await page.setViewportSize({ width: 320, height: 760 });
   const casesResponse = await page.goto("/cases");
   expect(casesResponse?.headers()["content-security-policy"]).toContain("media-src 'self' data:");
+  expect(casesResponse?.headers()["content-security-policy"]).toContain(
+    "img-src 'self' data: blob:",
+  );
   await expect(page.getByRole("alert")).toContainText(
     "요청을 완료하지 못했어요. 다시 시도해 주세요.",
   );
