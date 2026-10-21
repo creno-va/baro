@@ -244,8 +244,8 @@ async function admit(f: Fixture, r = request(f)) {
   );
   return { ok, r, paid };
 }
-async function dispatch(f: Fixture) {
-  const admitted = await admit(f);
+async function dispatch(f: Fixture, r = request(f)) {
+  const admitted = await admit(f, r);
   expect(admitted.ok).toBe(true);
   const lease = await f.jobs.acquire(
     f.actor,
@@ -408,4 +408,27 @@ test("independent hold rolls back a failed transaction with a currently sufficie
   expect((await f.runtime.exposure(NOW))?.reserved_krw).toBe(1000);
   expect(f.db.sqlite.query("SELECT count(*) AS n FROM v2_cost_attempts").get()).toEqual({ n: 1 });
   expect(f.db.sqlite.query("SELECT count(*) AS n FROM v2_mutation_claims").get()).toEqual({ n: 0 });
+});
+
+test("historical model-less execution cannot be priced using a later Gemini proof", async () => {
+  const f = await fixture();
+  f.core.applicationCostLimitsEnabled = false;
+  const gemini = structuredClone(f.pp);
+  gemini.id = crypto.randomUUID();
+  for (const price of gemini.prices) {
+    price.model = "google/gemini-3.8-flash";
+    price.provider = "google";
+  }
+  expect(await f.runtime.putPricingProof(gemini, NOW)).toBe(true);
+  const legacy = request(f);
+  legacy.quoteId = null;
+  legacy.pricingProofId = gemini.id;
+  const d = await dispatch(f, legacy);
+  expect(d.r.plan).not.toHaveProperty("model");
+  expect(await f.runtime.recordUsage(receipt(d), NOW)).toBe(true);
+  expect(
+    f.db.sqlite
+      .query("SELECT pricing_status,charged_krw FROM v2_execution_cost_observations")
+      .get(),
+  ).toEqual({ pricing_status: "incomplete", charged_krw: null });
 });

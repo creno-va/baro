@@ -87,7 +87,7 @@ function harness(initial: Record<string, unknown> = {}, env = configuration) {
         {
           requestId: PROBE_REQUEST_ID,
           phase: "screening",
-          model: "openai/gpt-6-sol",
+          model: "google/gemini-3.8-flash",
           latencyMs: 1,
           inputTokens: 2,
           outputTokens: 3,
@@ -273,7 +273,7 @@ test("durable reservation caps provider attempts and replay cannot reset budget"
       metrics.push({
         requestId: PROBE_REQUEST_ID,
         phase: "screening",
-        model: "openai/gpt-6-sol",
+        model: "google/gemini-3.8-flash",
         latencyMs: 1,
         inputTokens: null,
         outputTokens: null,

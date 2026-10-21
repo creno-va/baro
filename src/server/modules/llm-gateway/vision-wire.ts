@@ -5,9 +5,9 @@ import { MODEL_ID } from "./prompts";
 export const VISION_OUTPUT_TOKENS = 4000;
 /** Documented model/transport support, not a live account result or a cost proof.
  * Sources checked during implementation; no synthetic verification/expiry date:
- * https://developers.openai.com/api/docs/models/gpt-6-sol
- * https://developers.cloudflare.com/ai/models/openai/gpt-6-sol/
- * https://developers.openai.com/api/docs/guides/images-vision
+ * https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash
+ * https://developers.cloudflare.com/ai/models/google/gemini-3.8-flash/
+ * https://ai.google.dev/gemini-api/docs/openai
  */
 const documentedSupport = Object.freeze({
   basis: "official_model_documentation" as const,
@@ -42,9 +42,8 @@ function wireForUrl(url: string) {
         ],
       },
     ],
-    reasoning_effort: "medium",
+    reasoning_effort: "low",
     max_completion_tokens: VISION_OUTPUT_TOKENS,
-    store: false,
     service_tier: "default",
     response_format: {
       type: "json_schema",

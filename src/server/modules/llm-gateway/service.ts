@@ -17,7 +17,7 @@ import {
   responseReceipt,
   unavailableReceipt,
 } from "./attempts";
-import { MODEL_ID, type Phase, PROMPT_VERSION, prompts } from "./prompts";
+import { MODEL_ID, type Phase, PROMPT_VERSION, prompts, WORKSPACE_PROMPT_VERSION } from "./prompts";
 import { gatewayResponse } from "./transport";
 import {
   workspaceAuditOutputSchema,
@@ -84,7 +84,11 @@ function wireSchema(schema: unknown): unknown {
         .filter(([key]) => key !== "$schema")
         // Zod discriminated unions emit oneOf; the provider supports anyOf.
         // Server-side Zod parsing still enforces the original exact union.
-        .map(([key, value]) => [key === "oneOf" ? "anyOf" : key, wireSchema(value)]),
+        .map(([key, value]) =>
+          key === "const"
+            ? ["enum", [value]]
+            : [key === "oneOf" ? "anyOf" : key, wireSchema(value)],
+        ),
     );
   }
   return schema;
@@ -99,7 +103,7 @@ export function prepareGatewayWireInput(phase: Phase, input: unknown, correction
     messages: [
       {
         role: "system",
-        content: `BARO prompt ${phase.startsWith("workspace_") ? "2.1.0" : PROMPT_VERSION}. ${prompts[phase]}`,
+        content: `BARO prompt ${phase.startsWith("workspace_") ? WORKSPACE_PROMPT_VERSION : PROMPT_VERSION}. ${prompts[phase]}`,
       },
       {
         role: "user",
@@ -111,9 +115,8 @@ export function prepareGatewayWireInput(phase: Phase, input: unknown, correction
         }),
       },
     ],
-    reasoning_effort: "medium",
+    reasoning_effort: phase === "workspace_audit" || phase === "validation" ? "medium" : "low",
     max_completion_tokens: limits[phase],
-    store: false,
     service_tier: "default",
     response_format: {
       type: "json_schema",
@@ -365,7 +368,11 @@ export function createLlmGateway(
           })
           .safeParse(raw);
         let output: unknown = null;
-        if (completion.success && completion.data.choices[0]?.message.refusal)
+        if (
+          completion.success &&
+          (completion.data.choices[0]?.message.refusal ||
+            completion.data.choices[0]?.finish_reason === "content_filter")
+        )
           throw new ModelError("POLICY_REJECTED");
         if (completion.success && completion.data.choices[0]?.finish_reason === "stop") {
           try {

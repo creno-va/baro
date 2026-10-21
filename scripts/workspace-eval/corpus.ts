@@ -2,7 +2,7 @@ import type { V2Fact, V2FactReference } from "../../src/contracts/v2";
 import { v2IntakeSchema, v2SummarySchema } from "../../src/contracts/v2";
 import type { WorkspaceContext } from "../../src/server/modules/workspace/pipeline";
 
-export const CORPUS_VERSION = "workspace-v2-1";
+export const CORPUS_VERSION = "workspace-v2-2";
 export type Scenario = {
   id: string;
   phase: "workspace_questions" | "workspace_summary" | "workspace_chat";
@@ -14,6 +14,7 @@ export type Scenario = {
   unknowns?: boolean;
   conflict?: boolean;
   handoff?: boolean;
+  clarification?: { anchors: string[]; answerCues: string[]; uncertaintyCues?: string[] };
   scripted: unknown;
 };
 const now = "2026-10-10T00:00:00.000Z";
@@ -370,5 +371,64 @@ export const workspaceScenarios: readonly Scenario[] = [
     },
   },
   ...domainScenarios,
+  ...[
+    {
+      id: "questions-specific-transfer-date",
+      narrative: "송금 기록이 있습니다. 지난달쯤 보냈는데 날짜가 기억나지 않습니다.",
+      prompt:
+        "송금 기록에서 해당 이체 날짜를 확인해 YYYY-MM-DD로 적어 주세요. 확인하기 어려우면 모름으로 답해 주세요.",
+      anchors: ["송금", "이체"],
+      answerCues: ["YYYY-MM-DD", "년", "월", "날짜"],
+      uncertaintyCues: ["모름", "어려우", "미확인"],
+    },
+    {
+      id: "questions-conflicting-payment",
+      narrative: "처음에는 대금을 모두 받았다고 적었지만 입금 내역에는 일부 금액만 보입니다.",
+      prompt:
+        "대금을 모두 받았다는 진술과 입금 내역이 다릅니다. 확인 가능한 기록을 기준으로 수령 상태를 전액·일부·미확인 중 골라 주세요.",
+      anchors: ["대금", "입금", "수령"],
+      answerCues: ["전액", "일부"],
+      uncertaintyCues: ["미확인", "모름"],
+    },
+    {
+      id: "questions-record-not-assumed",
+      narrative: "물건을 받았는지 기억나지 않고 배송 기록이 있는지도 모릅니다.",
+      prompt:
+        "배송 기록을 가지고 있다면 수령 여부를 확인해 받음·못 받음·미확인 중 골라 주세요. 기록이 없으면 모름으로 답해 주세요.",
+      anchors: ["배송", "수령", "물건"],
+      answerCues: ["받음", "수령"],
+      uncertaintyCues: ["있다면", "있으면", "경우"],
+    },
+  ].map(({ id, narrative, prompt, anchors, answerCues, uncertaintyCues }) => {
+    const c = context();
+    c.intake.narrative = narrative;
+    return {
+      id,
+      phase: "workspace_questions" as const,
+      context: c,
+      clarification: { anchors, answerCues, uncertaintyCues },
+      scripted: { questions: [question("clarify", prompt)] },
+    };
+  }),
+  (() => {
+    const c = chat(
+      "그 사람이 그때 보냈다고 했습니다. 누구인지와 보낸 것이 무엇인지는 아직 적지 않았습니다.",
+    );
+    return {
+      id: "chat-ambiguous-party-event",
+      phase: "workspace_chat" as const,
+      context: c,
+      clarification: {
+        anchors: ["그 사람", "상대방", "당사자"],
+        answerCues: ["역할", "구매자", "판매자"],
+        uncertaintyCues: ["미확인", "확인되지", "불명확", "아직"],
+      },
+      scripted: {
+        ...reply(c),
+        facts: [],
+        text: "'그 사람'이 누구를 가리키는지 아직 미확인입니다. 이름 대신 구매자·판매자처럼 사건에서의 역할로 적어 주세요.",
+      },
+    };
+  })(),
 ];
 for (const s of workspaceScenarios) v2IntakeSchema.parse(s.context.intake);

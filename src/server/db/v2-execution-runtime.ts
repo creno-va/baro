@@ -1,5 +1,6 @@
 import { opaqueIdSchema, timestampSchema } from "../../contracts";
 import { reportDependencyFailure } from "../dependency-diagnostics";
+import { LEGACY_MODEL_ID } from "../model-policy";
 import { type Actor, parse, safe, type V2Core } from "./v2-core";
 import { jobAlive } from "./v2-jobs";
 import {
@@ -277,7 +278,16 @@ export function recordExecutionUsage(
           const p = parsed.data;
           pricingId = proof.id;
           const complete = request.plan.quantities.every((q) =>
-            p.prices.some((price) => price.sku === q.sku),
+            p.prices.some(
+              (price) =>
+                price.sku === q.sku &&
+                ((!q.sku.startsWith("model_") && q.sku !== "asr_seconds") ||
+                  price.model ===
+                    (request.plan.model ??
+                      (q.sku === "asr_seconds"
+                        ? "@cf/openai/whisper-large-v3-turbo"
+                        : LEGACY_MODEL_ID))),
+            ),
           );
           const current =
             [p, p.fx, ...p.prices].every(

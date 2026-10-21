@@ -76,7 +76,7 @@ export function responseReceipt(raw: unknown): GatewayTransportReceipt {
   ];
   const [inputTokens, outputTokens, cachedInputTokens, cacheWriteInputTokens] =
     counts.map(tokenCount);
-  const tier = value?.service_tier;
+  const tier = value?.service_tier === "standard" ? "default" : value?.service_tier;
   const serviceTier =
     tier === "default" || tier === "flex" || tier === "scale" || tier === "priority" ? tier : null;
   const malformed =

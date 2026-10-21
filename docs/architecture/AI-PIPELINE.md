@@ -9,7 +9,7 @@
 
 - Orchestrator: Cloudflare Workflows
 - Model path: Cloudflare AI binding -> AI Gateway Unified Billing -> third-party model
-- Initial model: `openai/gpt-6-sol`, reasoning `medium`
+- Current model: `google/gemini-3.8-flash`; 생성·vision `low`, 감사·validation `medium`. [ADR-0016](../adr/0016-gemini-flash-thinking-pipeline.md).
 
 아래 기존 단일 사건 분석은 v1 호환 계약이다. 통합된 v2의 연속 작업과 multimodal 경로는 마지막 확장을
 따르며 실제 모델 지원/응답/안전 품질은 live 증거로 확인한다. model 이름이나 문서만으로
@@ -82,7 +82,7 @@ status, failure code만 허용한다. 사용자 입력·답변·결과·prompt �
 개인 식별 내용이 있으면 기록하지 않는다.
 모든 호출에서 `gateway:{id,collectLog:false,skipCache:true}`를 명시하고 Gateway 설정도
 검증한다. 호출 shape는 초기 모델의 Chat Completions와 `response_format`으로 고정하며
-reasoning은 `medium`, 출력 상한은 단계별로 둔다. Responses 형식을 혼합하지 않는다.
+reasoning은 생성 `low`·감사 `medium`, 출력 상한은 단계별로 둔다. Responses 형식을 혼합하지 않는다.
 모델 catalog 지원과 실제 JSON Schema 응답은 #15/#27의 live 합성 요청으로 검증한다.
 provider 보존/무학습 설정은 Gateway 로그 설정과 별도로 법률/계약 검증 대상이다.
 
@@ -114,7 +114,7 @@ provider 보존/무학습 설정은 Gateway 로그 설정과 별도로 법률/�
   적용하며 chat/파일/리포트에는 확대하지 않는다. 추가 모델 호출은 각각 실제 비용을
   예약·정산하고 기존 소유권·revision·quota·삭제·lease 검증을 유지한다.
 - v2 workspace는 유료 단계마다 유효한 5분 lease를 갱신한다. 최대 4개 생성/audit
-  단계를 허용하는 Workflow의 외부 timeout은 20분이며 단계별 호출 횟수·60초 timeout은
+  단계를 허용하는 Workflow의 외부 timeout은 20분이며 단계별 호출 횟수·120초 timeout은
   늘리지 않는다. 검증 중인 초안은 Workflow step 상태나 사용자에게 노출하지 않는다.
 - Workflow step은 암호화 checkpoint/reference와 결과 hash를 재사용한다. 외부 호출 성공과
   checkpoint commit 사이의 crash는 중복 과금이 가능하므로 exactly-once를 보장하지 않는다.
@@ -146,7 +146,7 @@ failure가 하나라도 있으면 배포를 막는다. 샘플·프롬프트·예
 [v2 실행 계약](./V2-CONTRACTS.md)을 사용한다. workspace를 완료 terminal로 닫지 않고
 intake/question job, summary review, confirmed summary, chat/action job, file interpretation,
 report snapshot을 독립 versioned operation으로 나눈다. 2026-10-07 사용자 요청에 따라
-새 intake는 한 번에 한 문항, 총 최대 두 후속 질문 뒤 사용자 요약 확인을 받는다.
+새 intake는 한 묶음 최대3문항, 총 최대 두 후속 질문 묶음 뒤 사용자 요약 확인을 받는다.
 모름·건너뛰기도 한도에 포함하고 남은 정보 공백은 요약에 보존한다. 기존 사건의 저장된
 질문·답변은 그대로 읽고 수정할 수 있다. 이후에도 질문·사실 수정·자료 추가를 계속 처리한다.
 
@@ -164,10 +164,17 @@ report snapshot을 독립 versioned operation으로 나눈다. 2026-10-07 사용
 policy/citation/fact critical failure가 있는 초안을 채팅에 그대로 streaming하지 않는다.
 operation이 실패해도 사용자 message·원본 자료·이전 확정 결과는 보존하고 재시도/보완을 안내한다.
 
+## 구체적 확인 질문과 모델 전환 하네스
+
+질문은 사건의 특정 행위·역할·시점·상충 진술을 짚고, 실제 자료가 있을 때 확인할 위치와 답변 형식을 안내한다. 추상적 추가 설명 요청만으로 사건을 이해했다고 처리하지 않는다. 한 문항은 한 사실만 묻고, unknown/skip을 추정하거나 반복 요구하지 않는다. 남은 공백은 요약 unknowns와 후속 chat에 남긴다. 사실 정리 지시는 법률 전략·제출·협상 지시가 아니다.
+
+현재 고정 v2 평가셋은60개이며 구체적 질문·모순 확인·자료 부재·모호한 당사자 재질문 시나리오와 human review의 concrete_clarification/uncertainty 차원을 포함한다. Schema·대역 audit 통과만으로 질문의 실사용 품질 또는 실제 Gemini 성공을 주장하지 않는다. 모델/wire/prompt 변경은 이전 replay identity와 구분한다.
+
+현재 모델 기술 한도는 GEMINI-MODEL-CAPABILITY.json을 배포 도구가 읽는다. 과거 GPT 비용/재원 관측 파일은 그대로 보존한다. 새 plan의 모델과 맞지 않는 가격은 incomplete로 남기며 기능을 차단하지 않는다. 공급자 보존·무학습 검증은 모델 교체/로컬 검사와 별도다.
+
 ## v2 multimodal 경로와 실제 지원 확인
 
-모든 모델 호출은 `llm-gateway`가 소유한다. 기존 pinned text/vision 후보 모델의 Gateway
-Unified Billing 경로와 reasoning medium을 유지한다. vision은 실제 account/model의 입력
+모든 모델 호출은 `llm-gateway`가 소유한다. Gemini 3.8 Flash의 Gateway Unified Billing 경로와 생성/vision low·감사 medium을 사용한다. vision은 실제 account/model의 입력
 shape·이미지 byte/token 제한·응답 schema·개인정보/저장 조건을 합성 이미지로 먼저 검증한다.
 문서에서 명시하지 않은 raw PDF/동영상 업로드 기능이나 자동 fallback 모델은 가정하지 않는다.
 검증 실패는 capability blocker이며 텍스트만 처리한 결과를 완전한 영상 분석으로 표시하지 않는다.

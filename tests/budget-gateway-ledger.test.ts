@@ -83,8 +83,8 @@ function pricing(): PricingProof {
     },
     prices: ["model_input_tokens", "model_output_tokens"].map((sku) => ({
       sku: sku as "model_input_tokens" | "model_output_tokens",
-      provider: "openai",
-      model: "openai/gpt-6-sol",
+      provider: "google",
+      model: "google/gemini-3.8-flash",
       region: "global",
       plan: "synthetic",
       billingMode: "metered",
@@ -129,7 +129,7 @@ async function capture(invocationId: string): Promise<GatewayAttemptRequest> {
     invocationId,
     requestId: "synthetic-request",
     phase: "screening",
-    model: "openai/gpt-6-sol",
+    model: "google/gemini-3.8-flash",
     attemptOrdinal: 1,
     correction: false,
     ...(await gatewayWireIdentity(wire)),
@@ -161,6 +161,7 @@ async function fixture(
   configure?: (d: ExecutionDescriptor) => void,
   applicationCostLimitsEnabled = true,
   metadata: "full" | "none" | "missing_sku" = "full",
+  legacyPrices = false,
 ) {
   const db = await createTestDatabase();
   dbs.push(db);
@@ -211,18 +212,23 @@ async function fixture(
   };
   const runtime = service.runtime;
   const ap = { id: crypto.randomUUID(), environment: "preview" as const, allocation };
-  const pp = pricing(),
-    fp = {
-      id: crypto.randomUUID(),
-      environment: "preview" as const,
-      state: "trial_credit" as const,
-      existingPaymentPath: true as const,
-      autoRecharge: false as const,
-      spendAllowanceKrw: limit,
-      reference: "synthetic",
-      observedAt: NOW,
-      validUntil: EXP,
-    };
+  const pp = pricing();
+  if (legacyPrices)
+    for (const price of pp.prices) {
+      price.model = "openai/gpt-6-sol";
+      price.provider = "openai";
+    }
+  const fp = {
+    id: crypto.randomUUID(),
+    environment: "preview" as const,
+    state: "trial_credit" as const,
+    existingPaymentPath: true as const,
+    autoRecharge: false as const,
+    spendAllowanceKrw: limit,
+    reference: "synthetic",
+    observedAt: NOW,
+    validUntil: EXP,
+  };
   if (metadata === "missing_sku")
     pp.prices = pp.prices.filter((p) => p.sku !== "model_output_tokens");
   if (metadata !== "none") {
@@ -1189,4 +1195,32 @@ test("unpriced model preserves technical bounds, admission durability and actual
   expect(g.db.sqlite.query("SELECT state FROM v2_execution_admissions").get()).toEqual({
     state: "prepared",
   });
+});
+
+test("Gemini executes with legacy GPT pricing observed as incomplete, without rewriting historical proof", async () => {
+  const f = await fixture(100, undefined, false, "full", true),
+    a = await f.admit();
+  const before = JSON.stringify(f.pp);
+  expect(a.admission.request.plan.model).toBe("google/gemini-3.8-flash");
+  const gateway = createLlmGateway(
+    { APP_ENV: "preview", AI_GATEWAY_ID: "synthetic", AI: { run: async () => response() } },
+    { attemptLedger: a.ledger },
+  );
+  await gateway.call(
+    "screening",
+    PRIVATE_INPUT,
+    "synthetic-request",
+    async () => true,
+    undefined,
+    f.binding.invocationId,
+  );
+  expect(
+    f.db.sqlite
+      .query("SELECT pricing_status,charged_krw FROM v2_execution_cost_observations")
+      .get(),
+  ).toEqual({ pricing_status: "incomplete", charged_krw: null });
+  expect(JSON.stringify(f.pp)).toBe(before);
+  expect(
+    f.db.sqlite.query("SELECT payload_json FROM v2_runtime_proofs WHERE id=?").get(f.pp.id),
+  ).toEqual({ payload_json: JSON.stringify(pricingProofSchema.parse(f.pp)) });
 });

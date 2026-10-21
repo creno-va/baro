@@ -1,5 +1,6 @@
 import type { ExecutionPlan } from "../../db/v2-paid-runtime";
 import { runtimeDigest } from "../../db/v2-paid-runtime";
+import { MODEL_CONTEXT_TOKENS, MODEL_OUTPUT_TOKENS } from "../../model-policy";
 import { digest } from "../files/binary";
 import { MODEL_ID } from "../llm-gateway/prompts";
 import {
@@ -23,8 +24,8 @@ export function configuredMediaPolicy(
     return (
       b.basis === "verified_model_context_limit" &&
       b.vision === null &&
-      b.modelContextTokenLimit <= 1_050_000 &&
-      b.modelOutputTokenLimit <= 128_000 &&
+      b.modelContextTokenLimit <= MODEL_CONTEXT_TOKENS &&
+      b.modelOutputTokenLimit <= MODEL_OUTPUT_TOKENS &&
       b.modelOutputTokenLimit >= VISION_OUTPUT_TOKENS &&
       b.modelContextTokenLimit > VISION_OUTPUT_TOKENS &&
       b.modelContextTokenLimit - VISION_OUTPUT_TOKENS <= b.modelInputTokenLimit &&

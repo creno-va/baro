@@ -1,6 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
 import { convertV4MiniflareOptions, Miniflare } from "miniflare";
-import historical from "../docs/operations/AI-RUNTIME-OBSERVATION.json";
 import {
   initializeEmptyPhysicalStorage,
   initializeEmptyStorage,
@@ -13,6 +12,7 @@ import {
 } from "../scripts/provision-ai-budget";
 import { createV2StorageCapacityRepository } from "../src/server/db/v2-storage-capacity";
 import { createTestDatabase } from "./helpers/d1";
+import historical from "./helpers/gemini-observation";
 import { copySyntheticD1 } from "./helpers/native-d1";
 import { fixture, intent } from "./helpers/storage-capacity";
 

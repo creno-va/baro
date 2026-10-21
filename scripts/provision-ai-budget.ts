@@ -16,6 +16,14 @@ import {
   createV2RuntimeRefreshRepository,
   runtimeRefreshSchema,
 } from "../src/server/db/v2-runtime-refresh";
+import {
+  LEGACY_MODEL_ID,
+  MODEL_CONTEXT_TOKENS,
+  MODEL_ID,
+  MODEL_OUTPUT_REFERENCE,
+  MODEL_OUTPUT_TOKENS,
+  MODEL_REFERENCE,
+} from "../src/server/model-policy";
 import type { initializeEmptyPhysicalStorage, initializeEmptyStorage } from "./initialize-storage";
 import { remoteBudgetD1 } from "./remote-budget-d1";
 
@@ -49,11 +57,17 @@ export const observationSchema = z.strictObject({
     authority: z.string().min(1).max(200),
     referenceUrl: z.literal("https://global.ibk.co.kr/en/services/ExchangeRate/USD"),
   }),
-  model: z.literal("openai/gpt-6-sol"),
-  contextTokens: z.literal(1050000),
-  maximumOutputTokens: z.literal(128000),
-  modelReference: z.literal("https://developers.cloudflare.com/ai/models/openai/gpt-6-sol/"),
-  outputReference: z.literal("https://developers.openai.com/api/docs/models/gpt-6-sol"),
+  model: z.enum([MODEL_ID, LEGACY_MODEL_ID]),
+  contextTokens: z.number().int().positive(),
+  maximumOutputTokens: z.number().int().positive(),
+  modelReference: z.enum([
+    MODEL_REFERENCE,
+    "https://developers.cloudflare.com/ai/models/openai/gpt-6-sol/",
+  ]),
+  outputReference: z.enum([
+    MODEL_OUTPUT_REFERENCE,
+    "https://developers.openai.com/api/docs/models/gpt-6-sol",
+  ]),
 });
 export type AiRuntimeObservation = z.infer<typeof observationSchema>;
 
@@ -70,27 +84,33 @@ export const modelCapabilitySchema = observationSchema
     modelReference: true,
     outputReference: true,
   })
+  .extend({
+    model: z.literal(MODEL_ID),
+    contextTokens: z.literal(MODEL_CONTEXT_TOKENS),
+    maximumOutputTokens: z.literal(MODEL_OUTPUT_TOKENS),
+    modelReference: z.literal(MODEL_REFERENCE),
+    outputReference: z.literal(MODEL_OUTPUT_REFERENCE),
+  })
   .strip();
 
-export function modelBounds(
-  observation: z.infer<typeof modelCapabilitySchema>,
-  evidenceHash: string,
-) {
+export function modelBounds(observation: unknown, evidenceHash: string) {
+  const capability = modelCapabilitySchema.parse(observation);
   return {
+    model: MODEL_ID,
     bounds: {
       basis: "verified_model_context_limit",
-      tokenizerRevision: "gpt-6-sol-context-2026-10-07",
-      textTokensUpperBound: 1050000,
+      tokenizerRevision: "gemini-3.8-flash-context-v1",
+      textTokensUpperBound: MODEL_CONTEXT_TOKENS,
       framingTokensUpperBound: 0,
       vision: null,
-      modelInputTokenLimit: 1050000,
-      modelContextTokenLimit: observation.contextTokens,
-      modelOutputTokenLimit: observation.maximumOutputTokens,
-      checkedAt: observation.checkedAt,
-      validUntil: observation.validUntil,
+      modelInputTokenLimit: MODEL_CONTEXT_TOKENS,
+      modelContextTokenLimit: capability.contextTokens,
+      modelOutputTokenLimit: capability.maximumOutputTokens,
+      checkedAt: capability.checkedAt,
+      validUntil: capability.validUntil,
     },
     evidenceHash,
-    verifiedAt: observation.checkedAt,
+    verifiedAt: capability.checkedAt,
   };
 }
 export function pricing(
