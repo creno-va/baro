@@ -21,7 +21,7 @@ import { parsePrecedent, precedentCandidates } from "./precedents";
 import { assertCanonicalUrl, guideUrl, OFFICIAL_CATALOG } from "./registry";
 import { safeLegalSchemaDiagnostic } from "./schema-diagnostics";
 import { makeChunk } from "./source";
-import { parseStatute, selectStatute } from "./statutes";
+import { type LawCandidate, parseStatute, selectStatuteHistory } from "./statutes";
 import { createBoundedTransport, type Transport } from "./transport";
 
 type Repo = ReturnType<typeof createV2OfficialSourceRepository>;
@@ -158,7 +158,7 @@ export function createV2LegalRetrieval(
       };
       // Verified statute candidates are scoped to this invocation's fixed dates.
       // Failures are never memoized; fresh cache discovery/hash checks still run.
-      const candidates = new Map<string, ReturnType<typeof selectStatute>>();
+      const candidates = new Map<string, LawCandidate>();
       async function selectedStatute(
         plan: Extract<(typeof body.plans)[number], { kind: "statute" }>,
       ) {
@@ -179,8 +179,13 @@ export function createV2LegalRetrieval(
           if (access.signal?.aborted) throw new RetrievalFailure("cancelled");
           return cached;
         }
-        const candidate = selectStatute(
+        const candidate = await selectStatuteHistory(
           await json(url, "moleg_eflaw_list", boundedAccess),
+          async (page) => {
+            const next = new URL(url);
+            next.searchParams.set("page", String(page));
+            return json(next, "moleg_eflaw_list", boundedAccess);
+          },
           plan,
           body.asOfDate,
           new Date(Date.parse(body.now) + 9 * 3600000).toISOString().slice(0, 10),
@@ -191,6 +196,7 @@ export function createV2LegalRetrieval(
       for (const plan of body.plans) {
         const chunks: SourceChunk[] = [];
         let reason: SourceOutcome["reason"] = null;
+        let searchTruncated: boolean | undefined;
         try {
           if (!(await safePermit(access.authorize))) throw new RetrievalFailure("not_authorized");
           if (
@@ -248,6 +254,9 @@ export function createV2LegalRetrieval(
                 lawUrl("lawSearch.do", "prec", {
                   query: plan.query,
                   search: "2",
+                  // Official court corpus supports the JSON detail contract.
+                  // Unfiltered newest rows can instead be HTML-only tax rulings.
+                  datSrcNm: "대법원",
                   display: String(plan.limit),
                   page: "1",
                   sort: "ddes",
@@ -260,7 +269,10 @@ export function createV2LegalRetrieval(
               plan.limit,
             );
             if (!candidates.rows.length) throw new RetrievalFailure("no_results");
-            if (candidates.truncated) reason = "history_incomplete";
+            // Unlike statute history, precedent discovery need not enumerate
+            // every result to verify the selected original. Preserve coverage
+            // separately so a valid top-N judgment remains usable as a source.
+            searchTruncated = candidates.truncated;
             for (const candidate of candidates.rows) {
               if (candidate.데이터출처명 === "국세법령정보시스템") {
                 reason = "unsupported_format";
@@ -334,6 +346,7 @@ export function createV2LegalRetrieval(
             availability: chunks.length ? (reason ? "limited" : "verified") : "unavailable",
             reason,
             chunks,
+            ...(searchTruncated === undefined ? {} : { searchTruncated }),
           });
         } catch (error) {
           const failure =

@@ -7,7 +7,7 @@ export function safeReturnPath(
 ): string | null {
   if (!value || value.length > 500 || /[%\\\\\s?#]/.test(value)) return null;
   const customer =
-    /^\/(app|cases(?:\/(?:new|[A-Za-z0-9_-]+(?:\/(?:intake|summary|files|timeline|actions|reports))?))?)\/?$/.test(
+    /^\/(app|cases(?:\/(?:new|[A-Za-z0-9_-]+(?:\/(?:intake|summary|files|timeline|actions|precedents|reports))?))?)\/?$/.test(
       value,
     );
   const lawyer = value === "/lawyer" || value === "/lawyer/";

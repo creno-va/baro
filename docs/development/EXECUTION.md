@@ -28,6 +28,7 @@
 | --- | --- | --- | --- |
 | 사진 근거·PDF 리포트 | AI/자료, #312 | 2026-10-21 직접 요청, codex/312-photo-evidence-pdf. #307 첨부 UI·#304 법률 범위 분리, migration 없음 | 상해/진단서 관찰·확인 지침, 선택 사진·출처와 HTML→PDF, PDF만 저장. quick/build·브라우저·native 조판 CI 후 별도 PR 병합; 외부 모델/배포 인수 별도 |
 | Gemini 모델·질문 하네스 | AI / #305 | 2026-10-21 사용자 승인, 별도 codex/305-gemini-flash-pipeline worktree. #304 법률 API와 PR303 UI 범위 분리 | ADR-0016·고정 평가·quick/build·CI 검증 후 별도 PR 병합. 실제 모델·배포 인수는 별도 receipt |
+| 사건 관련 판례 탐색 | 법률/UI / #308·PR311 | 2026-10-21 직접 기능 구현 요청. 선행 PR306 직접 승인 후 main bab5c76 통합. 별도 페이지/API·주제 추천·서명 원문 조회 구현, 로컬 workerd/D1 실제 공식 판례6건 검색/읽기 성공 | quick/build·관련 회귀·브라우저/접근성 및 정확한 PR head CI 증거를 #308에 기록. PR311 병합·preview/production 반영은 각각의 승인/검증 조건 유지 |
 | 업로드·물리 용량 | 자료 모듈 + 총괄, #58 | PR230→229→235와0014가04f25f8에 포함돼 배포됨. production storage 초기화 성공; 실제 업로드/ZIP/cleanup은 이번 receipt에 없음 | 물리 inventory/writer 경계를 유지하며 남은 자료 경로의 구현·실제 증거를 구분 |
 | 비용 관측 분리 | 비용 모듈 + 총괄, #57 | PR247/259 병합; preview71892c5·schema0016에서 기술 admission과 선택적 관측 분리, 기존 원장 보존 확인. 가격/funding 없는 물리 bootstrap도 구현·로컬 검증 | 기존 관측·hold·원장/보안/기술 상한 보존. 비용 차단 재도입 금지. 실제 preview 핵심 흐름은 아래 단일 추적표에서 별도 인수 |
 | 릴리스 증거 | 총괄, #19/#71 | 04f25f8 동일 SHA CI·preview·production 성공, 실제 일반 채팅·리포트/PDF/HTML 확인 | 이번 관측 분리의 새 PR/배포 증거를 별도 기록. 기존 성공을 새 변경 또는 전체 MVP 완료로 확대하지 않음 |
@@ -79,6 +80,17 @@ PR247의 코드·0015·배포 도구·문서 변경은 병합됐다. PR248은 �
 배포 진행 상태는 GitHub run의 실제 SHA·결과로 확인하며 다른 세션의 진행 중 배포를 중복 실행하지 않는다.
 
 ## 검증과 배포
+
+### 2026-10-21 법률 API 신뢰성 정비 (#304)
+
+현재 정비 채팅 / `codex/304-legal-retrieval-reliability`. 공식 법원 corpus 필터와 검색 범위/
+원문 검증 분리로 정상 판결문을 사용할 수 있게 한다. 형법·근로기준법의100행 초과 시행
+이력은 최대5페이지로 완전히 확인하며 요청30회/workspace12회·권한·취소·인용 검증을
+유지한다. 일반 상담 문서를 바로잡되 실제 update_pending은 정상으로 위장하지 않는다.
+[실제 공식 응답과 잔여 조건](../quality/LEGAL-API-RELIABILITY-2026-10-21.md)을 따르며
+local-workerd 성공을 remote Worker/제품 E2E로 확대하지 않는다. 운영1059887에는 기존
+redirect 수정도 미배포 상태다. 같은 SHA 검증과 #71 배포 gate를 보존한다. UI PR303과
+랜딩·모델·공급자·공유 DB schema는 이 브랜치에서 변경하지 않는다.
 
 ### 2026-10-21 UI·동의 흐름 정비 (#302)
 

@@ -15,6 +15,12 @@ test("login and consent retain only allowed local case paths and the selected ro
     "/consent?returnTo=%2Fcases%2Fsynthetic-case%2Ffiles",
   );
   expect(sessionDestination({ user, needsConsent: false }, path)).toBe(path);
+  const research = "/cases/synthetic-case/precedents";
+  expect(safeReturnPath(research, "customer")).toBe(research);
+  expect(safeReturnPath(research, "lawyer")).toBeNull();
+  expect(sessionDestination({ user, needsConsent: true }, research)).toBe(
+    "/consent?returnTo=%2Fcases%2Fsynthetic-case%2Fprecedents",
+  );
   expect(
     sessionDestination({ user: { ...user, accountType: "lawyer" }, needsConsent: false }, path),
   ).toBe("/lawyer");

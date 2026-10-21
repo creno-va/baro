@@ -17,8 +17,8 @@ import {
   createWorkspacePipeline,
   type WorkspaceContext,
 } from "../src/server/modules/workspace/pipeline";
-import capturedGuide from "./fixtures/legal/v2/captured-guide-structure.json";
 import families from "./fixtures/legal/v2/families.json";
+import { syntheticGeneralGuide } from "./helpers/synthetic-legal-guide";
 
 const approved = {
   pass: true,
@@ -117,7 +117,7 @@ test("limited guide is never bound or restored as a verified citation", async ()
     const service = createV2LegalRetrieval({ LAW_API_OC: "synthetic-only" }, repository, {
       bindCitation: (c) => repository.bindCitation(f.guard, c),
       transport: async () =>
-        new Response(capturedGuide.body, { headers: { "content-type": "text/html" } }),
+        new Response(syntheticGeneralGuide, { headers: { "content-type": "text/html" } }),
     });
     const output = await service.retrieve(
       f.input(
@@ -153,8 +153,8 @@ test("a newly observed guide limitation revokes earlier bindings even at the sam
       transport: async () =>
         new Response(
           pending
-            ? capturedGuide.body
-            : capturedGuide.body.replace(/향후\s*업데이트\s*예정/g, "합성 검증 안내"),
+            ? syntheticGeneralGuide
+            : syntheticGeneralGuide.replace(/향후\s*업데이트\s*예정/g, "합성 검증 안내"),
           { headers: { "content-type": "text/html" } },
         ),
     });

@@ -1,10 +1,15 @@
 import { expect, test } from "bun:test";
 import { convertV4MiniflareOptions, Miniflare } from "miniflare";
 import { NOW, syntheticDetail, syntheticList } from "../scripts/benchmarks/retrieval/harness";
-import { inspectLegalV2, readinessV2Plans } from "../scripts/legal-readiness-v2";
+import {
+  inspectLegalV2,
+  legalDiagnosticReceipt,
+  legalReadinessScope,
+  readinessV2Plans,
+} from "../scripts/legal-readiness-v2";
 import { workspaceGuidePlans } from "../src/server/modules/legal-retrieval/v2/workspace-plans";
-import capturedGuide from "./fixtures/legal/v2/captured-guide-structure.json";
 import precedents from "./fixtures/legal/v2/precedents.json";
+import { syntheticGeneralGuide } from "./helpers/synthetic-legal-guide";
 
 function responses(pending = false) {
   const eflaw_list = structuredClone(syntheticList),
@@ -22,8 +27,8 @@ function responses(pending = false) {
     prec_list: JSON.parse(list.response.body),
     prec_detail: { PrecService: JSON.parse(detail.response.body).판례정보 },
     guide: pending
-      ? capturedGuide.body
-      : capturedGuide.body.replace(/향후\s*업데이트\s*예정/g, "합성 검증 안내"),
+      ? syntheticGeneralGuide
+      : syntheticGeneralGuide.replace(/향후\s*업데이트\s*예정/g, "합성 검증 안내"),
   };
 }
 function transport(input: ReturnType<typeof responses>) {
@@ -93,6 +98,32 @@ test("pending guide alone leaves claim integrity untested", async () => {
   });
   expect(receipt.sources).toHaveLength(1);
 });
+
+test("core-source diagnostic verifies bounded originals without claiming full-source readiness", async () => {
+  const selected = legalReadinessScope("core_sources");
+  const payload = responses(true);
+  payload.prec_list.PrecSearch.totalCnt = 200;
+  const observed = await inspectLegalV2({ LAW_API_OC: "synthetic-private-only" }, NOW, {
+    plans: selected.plans,
+    transport: transport(payload),
+  });
+  expect(observed.status).toBe("failed");
+  expect(observed.outcomes.map((o) => o.kind)).toEqual(["statute", "precedent"]);
+  expect(observed.outcomes[1]).toMatchObject({
+    availability: "verified",
+    reason: null,
+    searchTruncated: true,
+  });
+  expect(legalDiagnosticReceipt(observed)).toMatchObject({
+    status: "diagnostic_passed",
+    checkedClaimCount: 2,
+    claimIntegrity: true,
+    durationMs: expect.any(Number),
+  });
+  expect(
+    observed.requestObservations.every((o) => Number.isInteger(o.durationMs) && o.durationMs >= 0),
+  ).toBe(true);
+});
 test("unavailable sources leave claim integrity untested", async () => {
   const receipt = await inspectLegalV2({ LAW_API_OC: "synthetic-private-only" }, NOW, {
     transport: async () => new Response(null, { status: 403 }),
@@ -112,6 +143,7 @@ test("unavailable sources leave claim integrity untested", async () => {
       httpStatus: 403,
       contentType: "missing",
       transport: "response",
+      durationMs: expect.any(Number),
     })),
   );
 });
@@ -131,6 +163,7 @@ test("readiness separates HTTP rejection from JSON error envelopes without retai
       httpStatus: 200,
       contentType: "json",
       transport: "response",
+      durationMs: expect.any(Number),
     })),
   );
   expect(receipt.claimIntegrity).toBeNull();
@@ -185,8 +218,20 @@ test("readiness preserves transport failures and does not record exception or un
   });
   expect(receipt.requests).toBe(2);
   expect(receipt.requestObservations).toEqual([
-    { endpoint: "statute_list", httpStatus: null, contentType: null, transport: "failed" },
-    { endpoint: "statute_list", httpStatus: 403, contentType: "other", transport: "response" },
+    {
+      endpoint: "statute_list",
+      httpStatus: null,
+      contentType: null,
+      transport: "failed",
+      durationMs: expect.any(Number),
+    },
+    {
+      endpoint: "statute_list",
+      httpStatus: 403,
+      contentType: "other",
+      transport: "response",
+      durationMs: expect.any(Number),
+    },
   ]);
   expect(JSON.stringify(receipt)).not.toContain(privateValue);
 });
