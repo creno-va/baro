@@ -3,6 +3,10 @@ import io
 import re
 import subprocess
 import tempfile
+import hashlib
+import time
+import urllib.request
+import urllib.error
 from pathlib import Path
 from PIL import Image
 from report import render, resource
@@ -47,3 +51,42 @@ for url in ["file:///etc/passwd", "http://127.0.0.1/", "https://example.com/priv
 # Render every page for the same-SHA visual review artifact.
 subprocess.run(["pdftoppm", "-scale-to", "1600", "-png", str(output), str(root / "report-page")], check=True)
 print("Offline HTML/PDF: Korean text, selected images, masking, blocked resources and page rendering passed.")
+
+
+# Exercise the real private HTTP ingress/hash/subprocess/PDF/cleanup path too.
+server = subprocess.Popen(["node", "/app/server.mjs"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+try:
+    for attempt in range(100):
+        try:
+            with urllib.request.urlopen("http://127.0.0.1:8080/ready", timeout=1) as ready:
+                assert ready.status == 200
+            break
+        except OSError:
+            time.sleep(0.05)
+    else:
+        raise AssertionError("private server did not start")
+    body = source.encode("utf-8")
+    headers = {"x-baro-capability": "a" * 64, "x-baro-bytes": str(len(body)), "x-baro-hash": hashlib.sha256(body).hexdigest()}
+    request = urllib.request.Request("http://127.0.0.1:8080/report", data=body, headers=headers, method="POST")
+    with urllib.request.urlopen(request, timeout=30) as response:
+        assert response.headers.get_content_type() == "application/pdf"
+        received = response.read(24_000_001)
+        assert received.startswith(b"%PDF-") and len(received) <= 24_000_000
+    for attempt in range(100):
+        if not list(Path("/tmp").glob("baro-job-*")):
+            break
+        time.sleep(0.05)
+    else:
+        raise AssertionError("private job material was not cleaned")
+    for override in [{"x-baro-capability": "invalid"}, {"x-baro-bytes": "20000001"}]:
+        request = urllib.request.Request("http://127.0.0.1:8080/report", data=b"x", headers={**headers, **override}, method="POST")
+        try:
+            urllib.request.urlopen(request, timeout=3)
+        except urllib.error.HTTPError as error:
+            assert error.code == 400
+        else:
+            raise AssertionError("invalid private request accepted")
+    print("Private HTTP HTML -> native subprocess -> PDF and material cleanup passed.")
+finally:
+    server.terminate()
+    server.wait(timeout=5)

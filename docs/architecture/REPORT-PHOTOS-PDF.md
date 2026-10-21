@@ -26,6 +26,6 @@ Vision은 보이는 상태, 문서 기재, 확인 필요를 한국어로 구분�
 ## 검증
 
 - `tests/reports-photos.test.ts`: 실제 SQL/암호화에서 관찰→본문, 선택→HTML/PDF 입력, 마스킹 무IO, 다른 소유자/중복/제외/버전 변경 거절, native 실행 관측.
-- `services/file-processor/report-test.py`: 실제 앱 HTML과 한글 TTF로 오프라인 Linux 조판, 한글 추출·사진·가림·외부 리소스 차단, 모든 PDF 페이지 PNG 생성.
+- `services/file-processor/report-test.py`: 실제 앱 HTML과 한글 TTF로 오프라인 Linux 조판, 한글 추출·사진·가림·외부 리소스 차단, 모든 PDF 페이지 PNG 생성. 실제 private HTTP hash 입력→Python 조판→PDF 응답·임시 자료 cleanup도 검증한다.
 - `Report rendering` CI는 합성 입력만 사용해 pinned native layer를 검증하며 PDF/PNG를 검토용 artifact로 남긴다. `validate:native/full`에도 같은 fixture가 포함된다.
 - 브라우저는 PDF 단일 저장·사진 선택 저장/미리보기·접근 변경·진행 시간·삭제 흐름을 확인한다. 실제 Gemini 사진 품질과 preview/production 배포는 별도 외부 인수이며 로컬 대역으로 대체하지 않는다.

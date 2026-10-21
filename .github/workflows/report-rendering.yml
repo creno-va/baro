@@ -48,8 +48,6 @@ jobs:
           python3 -m venv "$RUNNER_TEMP/baro-report-python"
           "$RUNNER_TEMP/baro-report-python/bin/python" -m pip install --require-hashes --only-binary=:all: -r tests/browser/requirements.txt
           echo "$RUNNER_TEMP/baro-report-python/bin" >> "$GITHUB_PATH"
-      - name: Unit and integration regressions on Linux
-        run: bun test
       - name: Build the pinned PDF runtime layer
         run: docker build --target office-runtime -f services/file-processor/Dockerfile -t baro-report-rendering .
       - name: Render and inspect offline PDF
@@ -57,8 +55,11 @@ jobs:
           docker run --rm --network none --user node --memory 6g --cpus 1 --pids-limit 128 --cap-drop ALL --read-only --tmpfs /tmp:rw,nosuid,nodev,size=256m \
             -v "$PWD/.wrangler/report-native:/report-fixture" \
             -v "$PWD/services/file-processor/report.py:/app/report.py:ro" \
+            -v "$PWD/services/file-processor/server.mjs:/app/server.mjs:ro" \
             -v "$PWD/services/file-processor/report-test.py:/app/report-test.py:ro" \
             baro-report-rendering python3 /app/report-test.py
+      - name: Unit and integration regressions on Linux
+        run: bun test
       - name: Retain synthetic PDF and rendered pages for visual review
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
