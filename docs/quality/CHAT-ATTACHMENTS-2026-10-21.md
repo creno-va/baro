@@ -36,3 +36,21 @@ Bun1.4.0 `bun ci` 완료. 관련 단위53개 통과: 저장 메시지의 첨부 
 이후 커밋은 이 검증 기록만 갱신한다. [PR310](https://github.com/creno-va/baro/pull/310)의
 최종 head/CI는 PR 본문 및 이슈 receipt에 기록한다. 실제 OAuth·모델 호출·배포는
 이번 검증에 포함하지 않으며 합성 결과를 #71 전체 실제 인수로 확대하지 않는다.
+
+
+## 최신 법률·판례·사진/PDF 통합 검증
+
+main `1b10fc6a4021eeb61a8b1ee5b8015df81f60e4ad`(PR306·311·313)을 전용 worktree에
+충돌 없이 병합한 제품 head `24c2a47e83d6312dfba004c58137a00c7f04b740`을 검사했다.
+Workspace와 workspace client의 blob은 기존 검토 headcdf72a1과 동일하다. upstream의 판례
+탭·사진/PDF client 필드·모델별 원장과 PDF만 저장하는 계약을 보존했다.
+
+- Bun1.4.0 `bun ci`, `validate:quick`(quick 계약19개), `validate:build` 통과.
+- 기존 workspace53개와 판례 contract/API·사진/HTML25개: 관련 단위78개 통과.
+- 합성 브라우저: 첨부7개, 판례4개, 리포트 통합3개(새 사건→자료→PDF→삭제,
+  큰 원본 복구, peer revision 재생성) 통과.
+- 최종 통합 빌드의 Workers CSP 브라우저1개 통과.
+
+이후 변경은 이 검증 기록 문서뿐이다. 새 PR head의 GitHub CI 및 정상 병합 receipt는
+PR310과 #307에 기록한다. 수동 full·provider 호출·preview/production 배포는 중복 실행하지
+않으며 #71의 동일 SHA 외부 인수·운영자 승인 경계를 유지한다.

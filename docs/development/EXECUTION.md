@@ -175,3 +175,11 @@ M2/M3/M6의 완료 이력은 유지하고 새 정비 마일스톤은 만들지 �
 따르며 실제 provider/OAuth/배포 인수는 #71과 구분한다. [PR310](https://github.com/creno-va/baro/pull/310)으로 제출했고 최신 main76643b7을 통합한
 제품 head8c7919f의 quick·관련 단위·빌드를 통과했다. main 병합·배포는 조율 채팅과 현재
 사용자 승인 범위를 따른다.
+
+
+PR306·311·313이 main1b10fc6에 통합된 뒤 첨부 담당이 같은 main을 PR310에 충돌 없이
+병합했다. 제품 head24c2a47의 quick·관련 단위78개·빌드와 첨부7/판례4/리포트3/CSP1
+합성 브라우저를 통과했다. 첨부·기본 자료 projection과 판례/사진/PDF 경계를 보존하며
+새 head CI 확인 후 현재 사용자 AGENTS의 검증 PR 병합 범위로 정상 통합한다. 별도
+full·배포·실제 외부 성공을 이 검사로 대신하지 않는다. 최종 head/CI/main receipt는 #307과
+PR310을 따른다.
