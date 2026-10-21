@@ -512,7 +512,7 @@ test("real workspace DTOs preserve server-validated text and use entity revision
     if (path.includes("/messages?"))
       return Response.json({
         items: [
-          userMessage,
+          { ...userMessage, selectedFileIds: ["synthetic-persisted-attachment"] },
           {
             ...assistantMessage,
             safety: validated ? "validated" : "unvalidated",
@@ -531,6 +531,7 @@ test("real workspace DTOs preserve server-validated text and use entity revision
   };
   const api = createWorkspaceApi(transport);
   const view = await api.get(workspace.id);
+  expect(view.messages[0]?.selectedFileIds).toEqual(["synthetic-persisted-attachment"]);
   expect(view.case.summary).toBe(summary.overview);
   expect(view.messages[1]?.text).toBe(assistantMessage.text);
   expect(view.messages[1]?.citations?.[0]?.url).toBe(guide.url);

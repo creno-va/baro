@@ -10,5 +10,7 @@ const identity = opaqueIdSchema.safeParse(Astro.params.caseId);
 if (!identity.success) return Astro.redirect("/cases");
 // biome-ignore lint/correctness/noUnusedVariables: Astro template reads frontmatter.
 const caseId = identity.data;
+// biome-ignore lint/correctness/noUnusedVariables: Astro template reads frontmatter.
+const evidenceOnly = Astro.url.searchParams.get("evidence") === "1";
 ---
-<CaseLayout title="사건 자료"><Workspace caseId={caseId} tab="files" client:load /></CaseLayout>
+<CaseLayout title="사건 자료"><Workspace caseId={caseId} tab="files" evidenceOnly={evidenceOnly} client:load /></CaseLayout>

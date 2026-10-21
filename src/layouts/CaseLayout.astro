@@ -16,6 +16,8 @@ const environment =
   env.APP_ENV === "production" ? "production" : env.APP_ENV === "preview" ? "preview" : "local";
 // Only case-service pages preview explicitly fetched private recordings.
 Astro.csp?.insertDirective("media-src 'self' data:");
+// Unsent chat photos are local object URLs; allow previews only on case pages.
+Astro.csp?.insertDirective("img-src 'self' data: blob:");
 ---
 <AppLayout title={`${title} · BARO`} description="사건의 사실관계와 상담 준비를 차근차근 정리하세요." role="user" availableRoutes={["/app", "/cases", "/lawyers", "/settings"]} contentClass="case-shell">
     <slot />

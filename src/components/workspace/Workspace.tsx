@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { type SyntheticEvent, useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../../client/api";
+import { validateUpload } from "../../client/api/files";
 import type {
   FileUploadProgress,
   FileView,
@@ -30,6 +31,7 @@ import { BrandMark } from "../ui/brand";
 import { Button, ButtonLink } from "../ui/button";
 import { CaseMaterials } from "./CaseMaterials";
 import { CaseNavigation } from "./CaseNavigation";
+import { ChatAttachments } from "./ChatAttachments";
 import { ElapsedTime } from "./ElapsedTime";
 import { FileReview } from "./FileReview";
 import { fileFailureLabel, fileProcessingLabel, uploadProgressLabel } from "./processing-progress";
@@ -80,7 +82,15 @@ function download(blob: Blob, name: string) {
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
 
-export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: WorkspaceTab }) {
+export function Workspace({
+  caseId,
+  tab = "chat",
+  evidenceOnly = false,
+}: {
+  caseId: string;
+  tab?: WorkspaceTab;
+  evidenceOnly?: boolean;
+}) {
   const [view, setView] = useState<CustomerWorkspaceView | null>(null);
   const [error, setError] = useState<ReturnType<typeof problem> | null>(null);
   const [busy, setBusy] = useState("");
@@ -88,6 +98,9 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
   const messageLength = [...draft.trim()].length;
   const messageTooLong = messageLength > 10000;
   const [selected, setSelected] = useState<string[]>([]);
+  const [localAttachments, setLocalAttachments] = useState<File[]>([]);
+  const [chatAttachments, setChatAttachments] = useState<FileView[]>([]);
+  const [queuedSend, setQueuedSend] = useState(false);
   const [notice, setNotice] = useState("");
   const [uploadReadbackPending, setUploadReadbackPending] = useState(false);
   const [preview, setPreview] = useState<FileView | null>(null);
@@ -145,6 +158,9 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
     setView(null);
     setDraft("");
     setSelected([]);
+    setLocalAttachments([]);
+    setChatAttachments([]);
+    setQueuedSend(false);
     setPreview(null);
     setDeleteFile(null);
     setEntry(null);
@@ -181,6 +197,9 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
 
   const apply = useCallback((next: WorkspaceView) => {
     setView(next);
+    setChatAttachments((files) =>
+      files.map((file) => next.files.find((item) => item.id === file.id) ?? file),
+    );
     setAcceptedFileRetries([]);
     setSelected((ids) =>
       ids.filter((id) => next.files.some((file) => file.id === id && file.status === "ready")),
@@ -189,8 +208,11 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
   }, []);
   const fileReviewError = useCallback((cause: unknown) => showError(cause, true), [showError]);
   const readView = useCallback(
-    () => (tab === "files" ? api.workspace.getFiles(caseId) : api.workspace.get(caseId)),
-    [caseId, tab],
+    () =>
+      tab === "files"
+        ? api.workspace.getFiles(caseId, { evidence: evidenceOnly })
+        : api.workspace.get(caseId),
+    [caseId, tab, evidenceOnly],
   );
   const load = useCallback(async () => {
     const serial = ++latest.current;
@@ -264,14 +286,14 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
     }
   }, [caseId, tab, ready, view]);
   useEffect(() => {
-    if (!draft.trim()) return;
+    if (!draft.trim() && !localAttachments.length && !chatAttachments.length) return;
     const warn = (event: BeforeUnloadEvent) => {
       event.preventDefault();
       event.returnValue = "";
     };
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
-  }, [draft]);
+  }, [draft, localAttachments.length, chatAttachments.length]);
   const latestMessage = view?.messages.at(-1);
   const latestMessageContent = latestMessage
     ? `${latestMessage.id}:${latestMessage.status}:${latestMessage.text}`
@@ -329,6 +351,30 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
       window.visualViewport?.removeEventListener("resize", fit);
     };
   }, [preview, deleteFile, entry]);
+
+  useEffect(() => {
+    if (!queuedSend || busy || !ready || !view || localAttachments.length) return;
+    if (
+      !canMutate ||
+      view.case.stage !== "active" ||
+      error ||
+      chatAttachments.some(
+        (file) =>
+          !view.files.some((item) => item.id === file.id) ||
+          file.status === "failed" ||
+          file.uploadRejection,
+      )
+    ) {
+      setQueuedSend(false);
+      setNotice("첨부 파일을 확인해 주세요. 입력은 보존됐으며 메시지는 보내지 않았어요.");
+      return;
+    }
+    if (
+      chatAttachments.every((file) => file.status === "ready") &&
+      !view.messages.some((message) => message.status === "pending")
+    )
+      draftInput.current?.form?.requestSubmit();
+  }, [queuedSend, busy, ready, canMutate, view, error, chatAttachments, localAttachments.length]);
 
   async function run(key: string, action: (epoch: number) => Promise<void>) {
     const readOrDelete = ["refresh", "history", "original", "delete", "file-preview"].includes(key);
@@ -450,21 +496,71 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
       </div>
     );
   }
+  function chooseAttachments(files: File[]) {
+    if (lock.current || queuedSend || view?.case.stage !== "active") return;
+    try {
+      const chosen = [...localAttachments];
+      for (const file of files) {
+        validateUpload(file);
+        if (
+          !chosen.some(
+            (item) =>
+              item.name === file.name &&
+              item.size === file.size &&
+              item.lastModified === file.lastModified,
+          )
+        )
+          chosen.push(file);
+      }
+      if (chosen.length + chatAttachments.length + selected.length > V2_LIMITS.originalCount)
+        throw { code: "VALIDATION_ERROR", message: "한 번에 첨부할 파일은 100개 이하여야 해요." };
+      setLocalAttachments(chosen);
+    } catch (cause) {
+      showError(cause, true);
+    }
+  }
   async function send(event: SyntheticEvent) {
     event.preventDefault();
-    if (readonly || !view || !draft.trim() || messageTooLong) return;
-    const text = draft.trim();
+    if (
+      readonly ||
+      !view ||
+      lock.current ||
+      messageTooLong ||
+      view.messages.some((message) => message.status === "pending") ||
+      (!draft.trim() && !selected.length && !localAttachments.length && !chatAttachments.length)
+    )
+      return;
+    if (localAttachments.length) {
+      if (!uploadConsent) return;
+      setQueuedSend(true);
+      const complete = await upload(localAttachments);
+      if (!complete) setQueuedSend(false);
+      return;
+    }
+    if (
+      chatAttachments.some(
+        (file) =>
+          file.status !== "ready" ||
+          !view.files.some((item) => item.id === file.id && item.status === "ready"),
+      )
+    ) {
+      setQueuedSend(true);
+      return;
+    }
+    setQueuedSend(false);
+    const text = draft.trim() || "첨부한 파일에서 사건과 관련된 내용을 확인하고 정리해 주세요.";
+    const fileIds = [...new Set([...selected, ...chatAttachments.map((file) => file.id)])];
     followingChat.current = true;
     await run("send", async (epoch) => {
       if (
         !sendAttempt.current ||
         sendAttempt.current.text !== text ||
-        JSON.stringify(sendAttempt.current.selectedFileIds) !== JSON.stringify(selected)
+        JSON.stringify(sendAttempt.current.selectedFileIds) !== JSON.stringify(fileIds)
       )
         sendAttempt.current = {
           expectedRevision: view.case.revision,
           text,
-          selectedFileIds: selected,
+          selectedFileIds: fileIds,
         };
       const next = await api.workspace.sendMessage(caseId, sendAttempt.current);
       if (!(await verify()) || !current(epoch)) return;
@@ -472,6 +568,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
       sendAttempt.current = null;
       setDraft("");
       setSelected([]);
+      setChatAttachments([]);
       setNotice("메시지를 저장했어요.");
     });
   }
@@ -501,6 +598,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
   async function upload(files: FileList | File[] | null) {
     if (!uploadConsent || view?.case.stage !== "active" || lock.current || !files?.length) return;
     const chosen = Array.from(files);
+    let complete = false;
     const uploadEpoch = ticket();
     const startedAt = Date.now();
     const first = chosen[0];
@@ -521,7 +619,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
       try {
         for (const file of chosen) {
           if (!current(epoch)) return;
-          await api.files.upload(
+          const uploaded = await api.files.upload(
             caseId,
             file,
             (value) => {
@@ -538,6 +636,13 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
           );
           if (!alive(epoch)) return;
           completed++;
+          if (tab === "chat") {
+            setChatAttachments((items) => [
+              ...items.filter((item) => item.id !== uploaded.id),
+              uploaded,
+            ]);
+            setLocalAttachments((items) => items.filter((item) => item !== file));
+          }
           // The upload API already checked this exact file after its ACK. A
           // later whole-workspace read failure must never resend accepted files.
           setRetryUploads(chosen.slice(completed));
@@ -551,15 +656,17 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
         }
         if (!current(epoch)) return;
         setRetryUploads([]);
+        complete = true;
         if (refreshed)
           setNotice("자료를 저장했어요. 처리 상태와 확인 가능한 범위를 확인해 주세요.");
       } catch (cause) {
         if (!current(epoch)) return;
         // A definitive format rejection needs a changed file. Preserve only
         // later selections; ambiguous responses retain the exact same input.
-        setRetryUploads(
-          chosen.slice(completed + (problem(cause).code === "FILE_REJECTED" ? 1 : 0)),
-        );
+        const rejected = problem(cause).code === "FILE_REJECTED";
+        setRetryUploads(chosen.slice(completed + (rejected ? 1 : 0)));
+        if (tab === "chat" && rejected)
+          setLocalAttachments((items) => items.filter((item) => item !== chosen[completed]));
         throw cause;
       }
     });
@@ -567,6 +674,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
       setUploadProgress(null);
       if (uploadInput.current) uploadInput.current.value = "";
     }
+    return complete;
   }
   async function startEntry() {
     if (!view || readonly) return;
@@ -659,6 +767,14 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
     );
   const base = `/cases/${encodeURIComponent(caseId)}`;
   const readyFiles = view?.files.filter((file) => file.status === "ready") ?? [];
+  const evidenceIds = new Set(
+    [
+      ...(view?.facts?.flatMap((fact) => fact.references) ?? []),
+      ...(view?.messages
+        .filter((message) => message.role === "assistant" && message.status === "complete")
+        .flatMap((message) => message.references ?? []) ?? []),
+    ].flatMap((ref) => (ref.kind === "user_material" ? [ref.fileId] : [])),
+  );
   const pendingResponse = view?.messages.some((message) => message.status === "pending");
   return (
     <div className={`workspace workspace--${tab}`}>
@@ -666,13 +782,18 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
       <input
         ref={uploadInput}
         id="workspace-upload"
-        aria-label="업로드할 파일 선택"
+        aria-label={tab === "chat" ? "사진 또는 파일 첨부" : undefined}
         type="file"
         hidden
         multiple
-        disabled={!!busy || !uploadConsent || view?.case.stage !== "active"}
+        disabled={!!busy || (tab !== "chat" && !uploadConsent) || view?.case.stage !== "active"}
         accept=".txt,.pdf,.doc,.docx,.hwp,.hwpx,.xls,.xlsx,.ppt,.pptx,image/*,audio/*,video/*"
-        onChange={(event) => void upload(event.target.files)}
+        onChange={(event) => {
+          if (tab === "chat") {
+            chooseAttachments(Array.from(event.target.files ?? []));
+            event.target.value = "";
+          } else void upload(event.target.files);
+        }}
       />
       <CaseNavigation
         caseId={caseId}
@@ -914,6 +1035,30 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                           </time>
                         </div>
                         <p>{message.text}</p>
+                        {!!message.selectedFileIds?.length && (
+                          <ul
+                            className="workspace-message-attachments"
+                            aria-label="메시지 첨부 파일"
+                          >
+                            {message.selectedFileIds.map((id) => (
+                              <li key={id}>
+                                <a href={`${base}/files?file=${encodeURIComponent(id)}`}>
+                                  <Paperclip size={15} />{" "}
+                                  {view.files.find((file) => file.id === id)?.name ??
+                                    "삭제되었거나 확인할 수 없는 첨부 파일"}
+                                </a>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                        {message.role === "assistant" &&
+                          message.status === "complete" &&
+                          message.references?.some((ref) => ref.kind === "user_material") && (
+                            <p className="workspace-evidence-notice">
+                              첨부 자료를 근거로 활용했어요.{" "}
+                              <a href={`${base}/files?evidence=1`}>자료 탭에서 확인하기</a>
+                            </p>
+                          )}
                         {!!message.warnings?.length && (
                           <ul aria-label="응답 검증 경고" className="workspace-error">
                             {message.warnings.map((warning) => (
@@ -974,8 +1119,69 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                     ))}
                     <div className="workspace-chat-end" ref={chatEnd} />
                   </div>
-                  <form className="workspace-composer" onSubmit={(event) => void send(event)}>
+                  <form
+                    className="workspace-composer"
+                    onSubmit={(event) => void send(event)}
+                    onDragOver={(event) => {
+                      if (event.dataTransfer.types.includes("Files")) event.preventDefault();
+                    }}
+                    onDrop={(event) => {
+                      if (event.dataTransfer.files.length) {
+                        event.preventDefault();
+                        if (!readonly) chooseAttachments(Array.from(event.dataTransfer.files));
+                      }
+                    }}
+                    onPaste={(event) => {
+                      if (event.clipboardData.files.length) {
+                        event.preventDefault();
+                        if (!readonly) chooseAttachments(Array.from(event.clipboardData.files));
+                      }
+                    }}
+                  >
                     <div className="workspace-composer-surface">
+                      <ChatAttachments
+                        local={localAttachments}
+                        uploaded={chatAttachments}
+                        disabled={!!busy || readonly || queuedSend}
+                        removeLocal={(file) => {
+                          setLocalAttachments((items) => items.filter((item) => item !== file));
+                          setRetryUploads((items) => items.filter((item) => item !== file));
+                        }}
+                        removeUploaded={(id) =>
+                          setChatAttachments((items) => items.filter((item) => item.id !== id))
+                        }
+                      />
+                      {!!localAttachments.length && (
+                        <label className="workspace-consent">
+                          <input
+                            type="checkbox"
+                            checked={uploadConsent}
+                            disabled={!!busy || readonly || queuedSend}
+                            onChange={(event) => setUploadConsent(event.target.checked)}
+                          />
+                          첨부한 파일의 자동 처리에 동의합니다.
+                        </label>
+                      )}
+                      {(busy === "upload" || queuedSend) && (
+                        <div className="workspace-chat-upload-status" role="status">
+                          <LoaderCircle size={16} className="workspace-spin" />
+                          <span>
+                            {uploadProgress
+                              ? `${uploadProgress.fileName} · ${uploadProgressLabel(uploadProgress.value)}`
+                              : "첨부 파일을 처리하고 있어요. 준비되면 메시지를 보내요."}
+                          </span>
+                          {!busy && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setQueuedSend(false)}
+                            >
+                              전송 대기 취소
+                            </Button>
+                          )}
+                        </div>
+                      )}
                       {!!readyFiles.length && (
                         <details className="workspace-evidence">
                           <summary>
@@ -983,7 +1189,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                             {selected.length > 0 && <span>{selected.length}개 선택</span>}
                             <ChevronDown size={15} />
                           </summary>
-                          <fieldset disabled={!!busy || readonly}>
+                          <fieldset disabled={!!busy || readonly || queuedSend}>
                             <legend>대화에 함께 사용할 자료</legend>
                             <div className="workspace-file-choices">
                               {readyFiles.map((file) => (
@@ -1014,7 +1220,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                         id="workspace-message"
                         rows={2}
                         value={draft}
-                        disabled={readonly || busy === "send"}
+                        disabled={readonly || busy === "send" || queuedSend}
                         onChange={(event) => setDraft(event.target.value)}
                         placeholder="추가로 기억나는 사실이나 궁금한 점을 이야기해 주세요."
                         aria-describedby="workspace-message-length workspace-chat-notice"
@@ -1027,7 +1233,12 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                             !busy &&
                             !pendingResponse &&
                             !readonly &&
-                            draft.trim() &&
+                            !queuedSend &&
+                            (draft.trim() ||
+                              selected.length ||
+                              localAttachments.length ||
+                              chatAttachments.length) &&
+                            (!localAttachments.length || uploadConsent) &&
                             !messageTooLong
                           ) {
                             event.preventDefault();
@@ -1036,14 +1247,31 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                         }}
                       />
                       <div className="workspace-composer-footer">
-                        <a className="workspace-attach" href={`${base}/files`}>
-                          <Plus size={19} /> 자료 추가
-                        </a>
+                        <button
+                          type="button"
+                          className="workspace-attach"
+                          disabled={!!busy || readonly || queuedSend}
+                          onClick={() => uploadInput.current?.click()}
+                        >
+                          <Plus size={19} /> 사진·파일 첨부
+                        </button>
                         <Button
                           className="workspace-send"
                           type="submit"
                           disabled={
-                            !!busy || !draft.trim() || messageTooLong || readonly || pendingResponse
+                            !!busy ||
+                            queuedSend ||
+                            (!draft.trim() &&
+                              !selected.length &&
+                              !localAttachments.length &&
+                              !chatAttachments.length) ||
+                            (!!localAttachments.length && !uploadConsent) ||
+                            messageTooLong ||
+                            readonly ||
+                            pendingResponse ||
+                            chatAttachments.some(
+                              (file) => file.status === "failed" || !!file.uploadRejection,
+                            )
                           }
                         >
                           {busy === "send" ? (
@@ -1061,6 +1289,9 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                         " · 10,000자 이하로 줄여 주세요. 입력한 내용은 그대로 남아 있어요."}
                     </p>
                     <p className="workspace-chat-notice" id="workspace-chat-notice">
+                      사진·파일은 여기에 끌어놓거나 붙여넣을 수 있어요. 근거로 활용한 자료는 자료
+                      탭에서 확인해요.
+                      <br />
                       BARO는 AI로 사실을 정리하며 법률 판단을 대신하지 않아요.
                       <br className="workspace-mobile-break" /> 중요한 내용은 원본과 전문가에게
                       확인해 주세요.
@@ -1072,10 +1303,30 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                 <>
                   <div className="workspace-section-heading" {...privateContent}>
                     <div>
-                      <h2>사건 자료</h2>
-                      <p>흩어진 자료를 한곳에 모아두세요.</p>
+                      <h2>{evidenceOnly ? "근거로 활용한 자료" : "사건 자료"}</h2>
+                      <p>채팅에 첨부한 파일을 확인하고, AI가 근거로 활용한 자료를 살펴보세요.</p>
                     </div>
                   </div>
+                  <div className="workspace-buttons" {...privateContent}>
+                    <ButtonLink
+                      href={`${base}/files`}
+                      variant={evidenceOnly ? "outline" : "secondary"}
+                    >
+                      전체 첨부 파일
+                    </ButtonLink>
+                    <ButtonLink
+                      href={`${base}/files?evidence=1`}
+                      variant={evidenceOnly ? "secondary" : "outline"}
+                    >
+                      근거로 활용한 자료
+                    </ButtonLink>
+                  </div>
+                  {evidenceOnly && (
+                    <p className="workspace-muted" {...privateContent}>
+                      저장된 사실과 최근 대화에서 근거로 활용한 자료예요. 이전 대화의 근거는 해당
+                      답변에서도 확인할 수 있어요.
+                    </p>
+                  )}
                   <div className="workspace-upload" {...privateContent}>
                     <div className="workspace-upload-intro">
                       <span className="workspace-upload-icon">
@@ -1147,81 +1398,94 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                       <p>자료 없이도 대화를 이어갈 수 있어요. 준비되면 원본을 추가하세요.</p>
                     </div>
                   )}
+                  {evidenceOnly && !view.files.some((file) => evidenceIds.has(file.id)) && (
+                    <p {...privateContent}>
+                      확인된 근거 자료가 아직 없어요. 전체 첨부 파일에서 원본과 처리 상태를 확인할
+                      수 있어요.
+                    </p>
+                  )}
                   <ul className="workspace-file-list">
-                    {view.files.map((file) => (
-                      <li key={file.id}>
-                        <div className="workspace-file-title" {...privateContent}>
-                          <FileText size={24} />
-                          <div>
-                            <h3>{file.name}</h3>
-                            <p>
-                              {size(file.sizeBytes)} ·{" "}
-                              <span className={`workspace-status workspace-status--${file.status}`}>
-                                {file.uploadRejection ? "등록 거절" : fileStatus[file.status]}
-                              </span>
-                            </p>
+                    {view.files
+                      .filter((file) => !evidenceOnly || evidenceIds.has(file.id))
+                      .map((file) => (
+                        <li key={file.id}>
+                          <div className="workspace-file-title" {...privateContent}>
+                            <FileText size={24} />
+                            <div>
+                              <h3>{file.name}</h3>
+                              {evidenceIds.has(file.id) && (
+                                <span className="workspace-evidence-notice">근거로 활용됨</span>
+                              )}
+                              <p>
+                                {size(file.sizeBytes)} ·{" "}
+                                <span
+                                  className={`workspace-status workspace-status--${file.status}`}
+                                >
+                                  {file.uploadRejection ? "등록 거절" : fileStatus[file.status]}
+                                </span>
+                              </p>
+                            </div>
                           </div>
-                        </div>
-                        <p className="workspace-coverage" {...privateContent}>
-                          {file.coverage || "추출 범위는 처리가 끝난 뒤 확인할 수 있어요."}
-                        </p>
-                        {file.processing && ["processing", "waiting"].includes(file.status) && (
-                          <div className="workspace-muted" {...privateContent}>
-                            <p>{fileProcessingLabel(file.processing)}</p>
-                            <p>
-                              <ElapsedTime
-                                startedAt={file.processing.updatedAt}
-                                label="마지막 상태 갱신 후"
-                              />
-                            </p>
-                          </div>
-                        )}
-                        {!file.processing &&
-                          !file.uploadRejection &&
-                          file.createdAt &&
-                          ["uploading", "processing", "waiting"].includes(file.status) && (
+                          <p className="workspace-coverage" {...privateContent}>
+                            {file.coverage || "추출 범위는 처리가 끝난 뒤 확인할 수 있어요."}
+                          </p>
+                          {file.processing && ["processing", "waiting"].includes(file.status) && (
+                            <div className="workspace-muted" {...privateContent}>
+                              <p>{fileProcessingLabel(file.processing)}</p>
+                              <p>
+                                <ElapsedTime
+                                  startedAt={file.processing.updatedAt}
+                                  label="마지막 상태 갱신 후"
+                                />
+                              </p>
+                            </div>
+                          )}
+                          {!file.processing &&
+                            !file.uploadRejection &&
+                            file.createdAt &&
+                            ["uploading", "processing", "waiting"].includes(file.status) && (
+                              <p className="workspace-muted" {...privateContent}>
+                                <ElapsedTime startedAt={file.createdAt} label="자료 등록 후" />
+                              </p>
+                            )}
+                          {file.status === "failed" && (
                             <p className="workspace-muted" {...privateContent}>
-                              <ElapsedTime startedAt={file.createdAt} label="자료 등록 후" />
+                              {fileFailureLabel(file)}
                             </p>
                           )}
-                        {file.status === "failed" && (
-                          <p className="workspace-muted" {...privateContent}>
-                            {fileFailureLabel(file)}
-                          </p>
-                        )}
-                        {file.status === "uploading" && (
-                          <p className="workspace-muted" {...privateContent}>
-                            {file.uploadRejection
-                              ? "파일 등록이 거절됐어요. 암호·보호를 해제하거나 지원하는 형식으로 저장한 파일을 새로 선택해 주세요."
-                              : "등록이 아직 완료되지 않았어요. 전송이 중단된 경우 같은 원본을 다시 선택해 이어서 저장할 수 있어요. 파일 거절 안내를 받았다면 수정한 파일을 새로 선택해 주세요. 만료된 업로드는 삭제한 뒤 다시 추가할 수 있어요."}
-                          </p>
-                        )}
-                        <div className="workspace-buttons">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            disabled={!!busy}
-                            onClick={() => {
-                              void run("file-preview", async () => {
-                                setPreview(file);
-                                setOriginal(null);
-                              });
-                            }}
-                          >
-                            자료 확인
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            {...privateContent}
-                            disabled={!!busy || !ready}
-                            onClick={() => setDeleteFile(file)}
-                          >
-                            삭제
-                          </Button>
-                        </div>
-                      </li>
-                    ))}
+                          {file.status === "uploading" && (
+                            <p className="workspace-muted" {...privateContent}>
+                              {file.uploadRejection
+                                ? "파일 등록이 거절됐어요. 암호·보호를 해제하거나 지원하는 형식으로 저장한 파일을 새로 선택해 주세요."
+                                : "등록이 아직 완료되지 않았어요. 전송이 중단된 경우 같은 원본을 다시 선택해 이어서 저장할 수 있어요. 파일 거절 안내를 받았다면 수정한 파일을 새로 선택해 주세요. 만료된 업로드는 삭제한 뒤 다시 추가할 수 있어요."}
+                            </p>
+                          )}
+                          <div className="workspace-buttons">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={!!busy}
+                              onClick={() => {
+                                void run("file-preview", async () => {
+                                  setPreview(file);
+                                  setOriginal(null);
+                                });
+                              }}
+                            >
+                              자료 확인
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              {...privateContent}
+                              disabled={!!busy || !ready}
+                              onClick={() => setDeleteFile(file)}
+                            >
+                              삭제
+                            </Button>
+                          </div>
+                        </li>
+                      ))}
                   </ul>
                 </>
               )}

@@ -1194,3 +1194,83 @@
   color: var(--muted-foreground);
   font-size: 0.75rem;
 }
+.workspace-attach {
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font-family: inherit;
+}
+.workspace-attach:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.workspace-chat-attachments {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: 8px;
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+}
+.workspace .workspace-chat-attachments li {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.workspace .workspace-chat-attachments li > img,
+.workspace .workspace-chat-attachments li > svg {
+  width: 42px;
+  height: 42px;
+  object-fit: cover;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+.workspace .workspace-chat-attachments li > span {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 0.8rem;
+}
+.workspace-chat-attachments small {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted-foreground);
+  font-size: 0.72rem;
+}
+.workspace-chat-upload-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-block: 10px;
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}
+.workspace .workspace-chat-upload-status > :where(span) {
+  flex: 1;
+  min-width: 0;
+}
+.workspace-message-attachments {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.workspace-message-attachments a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 8px;
+  overflow-wrap: anywhere;
+}
+.workspace-evidence-notice {
+  color: var(--primary);
+  font-size: 0.8rem;
+}

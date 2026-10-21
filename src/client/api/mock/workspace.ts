@@ -322,6 +322,7 @@ export function createWorkspaceMock(runtime: WorkspaceMockRuntime) {
               id: crypto.randomUUID(),
               role: "user",
               text: body.text.trim(),
+              selectedFileIds: [...body.selectedFileIds] as string[],
               status: "complete",
               createdAt,
             },

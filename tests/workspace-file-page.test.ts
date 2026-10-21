@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { createWorkspaceApi } from "../src/client/api/workspace";
-import { workspace } from "./fixtures/contracts/v2";
+import { assistantMessage, summary, workspace } from "./fixtures/contracts/v2";
 
 const metadata = (id: string, status = "ready") => ({
   id,
@@ -200,4 +200,33 @@ test("files-page upload keeps reservation, original bytes and exact ACK readback
     "selected",
   );
   expect([lists, reservations, parts, completes]).toEqual([3, 1, 1, 1]);
+});
+
+test("explicit evidence view reads bounded references with the same final workspace fence", async () => {
+  const calls: string[] = [];
+  const ref = {
+    kind: "user_material",
+    fileId: "used-original",
+    fileRevision: 2,
+    position: { kind: "document", page: 1, paragraph: null, table: null },
+  } as const;
+  const client = createWorkspaceApi(async (path) => {
+    calls.push(path);
+    if (path.endsWith("/workspace")) return Response.json(workspace);
+    if (path.endsWith("/files"))
+      return Response.json([metadata("used-original"), metadata("unused-original")]);
+    if (path.endsWith("/summary")) return Response.json(summary);
+    if (path.includes("/messages?"))
+      return Response.json({
+        items: [{ ...assistantMessage, references: [ref] }],
+        nextCursor: null,
+      });
+    throw new Error("Unexpected body or unrelated collection read");
+  });
+  const view = await client.getFiles(workspace.id, { evidence: true });
+  expect(view.messages[0]?.references).toEqual([ref]);
+  expect(view.facts).toEqual(summary.facts);
+  expect(view.files).toHaveLength(2);
+  expect(calls).toHaveLength(5);
+  expect(calls.at(-1)).toContain("/workspace");
 });

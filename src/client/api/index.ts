@@ -130,7 +130,7 @@ export const api = {
   }>("cases"),
   workspace: domain<{
     get(id: string): Promise<WorkspaceView>;
-    getFiles(id: string): Promise<WorkspaceView>;
+    getFiles(id: string, options?: { evidence?: boolean }): Promise<WorkspaceView>;
     loadMore(id: string, collection: "messages" | "actions" | "timeline"): Promise<WorkspaceView>;
     sendMessage(
       id: string,
