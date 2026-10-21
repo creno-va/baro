@@ -9,7 +9,15 @@ import { ApiModeNotice } from "./ApiModeNotice";
 import { AssetPhoto, downloadLawyerAsset } from "./AssetPhoto";
 import { FIELD_LABELS } from "./labels";
 import { contactLinks, directionLinks } from "./links";
-export function Profile({ id, preview = false }: { id: string; preview?: boolean }) {
+export function Profile({
+  id,
+  preview = false,
+  directoryHref = "/lawyers",
+}: {
+  id: string;
+  preview?: boolean;
+  directoryHref?: string;
+}) {
   const [lawyer, setLawyer] = useState<LawyerView | null>(null);
   const [error, setError] = useState("");
   const [missing, setMissing] = useState(false);
@@ -35,7 +43,7 @@ export function Profile({ id, preview = false }: { id: string; preview?: boolean
   }, [id, reload]);
   return (
     <div className="lawyer-public-detail space-y-6">
-      <a className="ui-button ui-button--ghost" href="/lawyers">
+      <a className="ui-button ui-button--ghost" href={directoryHref}>
         변호사 목록으로
       </a>
       <ApiModeNotice preview={preview} />

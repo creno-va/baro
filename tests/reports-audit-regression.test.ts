@@ -580,9 +580,9 @@ test("corrected material facts retain user-edit attribution", async () => {
   const report = await f.reports.get(f.actor.ownerId, f.workspaceId);
   const canonical = await createV2ReportsRepository(f.core).read(f.actor, report.id);
   expect(canonical?.body.facts[0]?.userEdited).toBe(true);
-  expect(report.content).toContain(`${fact.text}\n[사용자 교정 · 자료 관찰 · 미확인`);
+  expect(report.content).toContain(`${fact.text}\n[사용자가 수정한 내용 · 자료 관찰 · 미확인`);
   const factSection = report.content.split("사실·주장·출처")[1]?.split("미확인 사항")[0] ?? "";
-  expect(factSection).toContain("사용자 교정");
+  expect(factSection).toContain("사용자가 수정한 내용");
   const { reportText, buildReportSource } = await import("../src/server/modules/reports/source");
   const source = await buildReportSource(f.core, f.actor, f.workspaceId, []);
   const withFlag = reportText(source.body, source.coverage);
@@ -593,6 +593,6 @@ test("corrected material facts retain user-edit attribution", async () => {
   expect(withFlag).not.toBe(withoutFlag);
   const html = await f.reports.html(f.actor.ownerId, report.id);
   expect(html).toContain(fact.text);
-  expect(html).toContain("[사용자 교정 · 자료 관찰 · 미확인");
+  expect(html).toContain("[사용자가 수정한 내용 · 자료 관찰 · 미확인");
   f.db.close();
 });

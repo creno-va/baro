@@ -8,6 +8,7 @@ import {
 import type {
   ActionView,
   CaseView,
+  FileReviewView,
   FileView,
   MessageView,
   SessionView,
@@ -19,7 +20,7 @@ export type WorkspaceMockData = {
   messages: MessageView[];
   actions: ActionView[];
   timeline: TimelineView[];
-  pending?: Record<string, { at: number; failed: boolean }>;
+  pending?: Record<string, { at: number; failed: boolean; selectedFileIds?: string[] }>;
 };
 export type WorkspaceMockState = {
   session: SessionView;
@@ -194,6 +195,45 @@ export function ensureMockWorkspace(state: WorkspaceMockState, id: string) {
           userEdited: false,
         });
       }
+      if (!pending.failed && item.summaryDetails) {
+        const reviews = (state.fileReviews ?? {}) as Record<string, FileReviewView>;
+        for (const fileId of pending.selectedFileIds ?? []) {
+          const file = state.files[id]?.find((file) => file.id === fileId);
+          if (file?.status !== "ready") continue;
+          const review = reviews[fileId];
+          const values = review?.observations.map((row) => row.value) ?? [
+            {
+              text: file.extractedText,
+              included: true,
+              userEdited: false,
+              certainty: "observed" as const,
+              position: { kind: "document" as const, page: 1, paragraph: null, table: null },
+            },
+          ];
+          for (const value of values
+            .filter((value) => value.included && value.text.trim())
+            .slice(0, 5)) {
+            if (item.summaryDetails.facts.length >= 300) break;
+            item.summaryDetails.facts.push({
+              id: crypto.randomUUID(),
+              text: [...value.text].slice(0, 2000).join(""),
+              attribution: "user_material",
+              certainty: value.certainty,
+              significance: "neutral",
+              references: [
+                {
+                  kind: "user_material",
+                  fileId,
+                  fileRevision: review?.file.revision ?? file.revision ?? 1,
+                  position: value.position,
+                },
+              ],
+              conflictingFactIds: [],
+              userEdited: value.userEdited,
+            });
+          }
+        }
+      }
       message.text = pending.failed
         ? "예시 응답 생성에 실패했어요."
         : "추가한 내용을 저장했어요. 날짜·당사자·자료 원본을 확인하고, 불확실하거나 불리할 수 있는 사실도 함께 정리해 주세요. 이 응답은 합성 API 예시이며 실제 AI 분석이나 법률 판단이 아닙니다.";
@@ -294,7 +334,11 @@ export function createWorkspaceMock(runtime: WorkspaceMockRuntime) {
             },
           );
           data.pending ??= {};
-          data.pending[assistantId] = { at: Date.now() + 1200, failed: fault === "chat_failed" };
+          data.pending[assistantId] = {
+            at: Date.now() + 1200,
+            failed: fault === "chat_failed",
+            selectedFileIds: body.selectedFileIds as string[],
+          };
           touchMockCase(state, id);
         } else if (match[3] && request.method === "POST") {
           const message = data.messages.find(

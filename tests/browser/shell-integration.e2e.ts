@@ -1,6 +1,130 @@
 import { expect, type Page, test } from "@playwright/test";
 import { openReportOptions } from "../helpers/report-controls";
 
+test("long service content fits narrow screens and the menu stays closable after scrolling in landscape", async ({
+  page,
+}) => {
+  test.setTimeout(120000);
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.addInitScript(() => {
+    const now = new Date().toISOString();
+    const id = "responsive-long-case";
+    const text = "SYNTHETIC-LONG-CONTENT-".repeat(9);
+    const values = {
+      session: {
+        user: { id: "responsive-owner", name: text, accountType: "customer" },
+        needsConsent: false,
+      },
+      cases: {
+        [id]: {
+          id,
+          title: text.slice(0, 160),
+          subjectContext: "individual",
+          stage: "active",
+          revision: 1,
+          updatedAt: now,
+          summary: text.repeat(20),
+          schemaVersion: "2",
+        },
+      },
+      caseOwners: { [id]: "responsive-owner" },
+      workspace: {
+        [id]: {
+          messages: [
+            {
+              id: "long-message",
+              role: "assistant",
+              text: text.repeat(8),
+              status: "complete",
+              createdAt: now,
+            },
+          ],
+          actions: [{ id: "long-action", title: text, detail: text.repeat(4), done: false }],
+          timeline: [
+            { id: "long-timeline", date: "2026-10-21", title: text, detail: text.repeat(4) },
+          ],
+        },
+      },
+      files: {
+        [id]: [
+          {
+            id: "long-file",
+            name: `${text}.txt`,
+            mimeType: "text/plain",
+            sizeBytes: 100,
+            status: "ready",
+            coverage: text,
+            extractedText: text.repeat(5),
+          },
+        ],
+      },
+    };
+    for (const [key, value] of Object.entries(values))
+      localStorage.setItem(`baro-api-mock-v1:${key}`, JSON.stringify(value));
+  });
+  for (const width of [320, 901, 1024]) {
+    await page.setViewportSize({ width, height: 760 });
+    for (const path of [
+      "/cases",
+      "/settings",
+      "/cases/responsive-long-case",
+      "/cases/responsive-long-case/files",
+      "/cases/responsive-long-case/timeline",
+      "/cases/responsive-long-case/actions",
+      "/cases/responsive-long-case/reports",
+    ]) {
+      await page.goto(path);
+      await expect(page.locator("astro-island[ssr]")).toHaveCount(0);
+      await expect(
+        page
+          .getByRole("main")
+          .getByText(/SYNTHETIC-LONG-CONTENT-/)
+          .first(),
+      ).toBeVisible();
+      if (path === "/settings") {
+        for (const selector of [
+          ".settings-refresh",
+          ".settings-report-link",
+          ".settings-case-delete",
+        ]) {
+          const target = page.locator(selector).first();
+          await expect(target).toBeVisible();
+          const bounds = await target.boundingBox();
+          expect(bounds?.height).toBeGreaterThanOrEqual(44);
+          expect(bounds?.width).toBeGreaterThanOrEqual(44);
+        }
+      }
+      if (path.endsWith("/reports")) {
+        const regenerate = page.getByRole("button", { name: "새 버전 만들기", exact: true });
+        await expect(regenerate).toBeEnabled();
+        expect((await regenerate.boundingBox())?.height).toBeLessThanOrEqual(44);
+      }
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+        ),
+        `${path} at ${width}`,
+      ).toBe(true);
+      await page.screenshot({ path: `.wrangler/ui-second-${width}-${path.split("/").at(-1)}.png` });
+    }
+  }
+  await page.setViewportSize({ width: 720, height: 400 });
+  const opener = page.getByRole("button", { name: "메뉴 열기", exact: true });
+  await opener.click();
+  const menu = page.getByRole("dialog", { name: "메뉴", exact: true });
+  await menu.getByRole("link", { name: "도움말", exact: true }).focus();
+  await page.keyboard.press("End");
+  await expect.poll(() => menu.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+  const close = menu.getByRole("button", { name: "닫기", exact: true });
+  const bounds = await close.boundingBox();
+  expect(bounds?.y).toBeGreaterThanOrEqual(0);
+  expect((bounds?.y ?? 0) + (bounds?.height ?? 0)).toBeLessThanOrEqual(400);
+  await page.screenshot({ path: ".wrangler/ui-302-menu-landscape.png" });
+  await close.click();
+  await expect(menu).not.toBeVisible();
+  await expect(opener).toBeFocused();
+});
+
 test("customer login consent logout share the product shell without external API requests", async ({
   page,
 }) => {
@@ -21,7 +145,6 @@ test("customer login consent logout share the product shell without external API
   await page.getByRole("checkbox", { name: /이용약관, 개인정보/ }).check();
   await page.getByRole("checkbox", { name: "만 14세 이상입니다." }).check();
   await page.getByRole("button", { name: "동의하고 계속하기" }).click();
-  await page.getByRole("link", { name: "내 화면으로 계속하기" }).click();
   await expect(page).toHaveURL(/\/app$/);
   await expect(page.getByRole("textbox", { name: "지금까지 있었던 일" })).toBeVisible();
   await page.reload();
@@ -52,7 +175,6 @@ test("customer completes intake workspace original ZIP report and cascading dele
   await page.getByRole("checkbox", { name: /이용약관, 개인정보/ }).check();
   await page.getByRole("checkbox", { name: "만 14세 이상입니다." }).check();
   await page.getByRole("button", { name: "동의하고 계속하기" }).click();
-  await page.getByRole("link", { name: "내 화면으로 계속하기" }).click();
   await expect(page).toHaveURL(/\/app$/);
   await page
     .getByLabel("지금까지 있었던 일")
@@ -85,6 +207,21 @@ test("customer completes intake workspace original ZIP report and cascading dele
   await expect(page.locator(".workspace-status--ready")).toBeVisible({ timeout: 15000 });
   await page.getByRole("link", { name: "타임라인", exact: true }).click();
   await page.getByRole("button", { name: "일정 추가" }).click();
+  for (const viewport of [
+    { width: 320, height: 760 },
+    { width: 1440, height: 900 },
+  ]) {
+    await page.setViewportSize(viewport);
+    const modal = await page.getByRole("dialog").boundingBox();
+    expect(modal).not.toBeNull();
+    expect(Math.abs((modal?.x ?? 0) + (modal?.width ?? 0) / 2 - viewport.width / 2)).toBeLessThan(
+      2,
+    );
+    expect(Math.abs((modal?.y ?? 0) + (modal?.height ?? 0) / 2 - viewport.height / 2)).toBeLessThan(
+      2,
+    );
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
   await page.getByLabel("어떤 일이 있었나요?").fill("반환 약속 확인");
   await page.getByLabel("날짜 (모르면 비워 두세요)").fill("2026-10-01");
   await page.getByRole("button", { name: "타임라인 저장" }).click();
@@ -108,12 +245,78 @@ test("customer completes intake workspace original ZIP report and cascading dele
   await page.screenshot({ path: ".wrangler/customer-integration-390.png", fullPage: true });
   await page.goto("/settings");
   await page.getByRole("button", { name: "사건 삭제", exact: true }).click();
+  for (const viewport of [
+    { width: 320, height: 760 },
+    { width: 1440, height: 900 },
+  ]) {
+    await page.setViewportSize(viewport);
+    const modal = await page.getByRole("dialog").boundingBox();
+    expect(modal).not.toBeNull();
+    expect(Math.abs((modal?.x ?? 0) + (modal?.width ?? 0) / 2 - viewport.width / 2)).toBeLessThan(
+      2,
+    );
+    expect(Math.abs((modal?.y ?? 0) + (modal?.height ?? 0) / 2 - viewport.height / 2)).toBeLessThan(
+      2,
+    );
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
   await page.getByLabel("삭제 확인 — DELETE 입력").fill("DELETE");
   await page.getByRole("button", { name: "삭제 요청 확인" }).click();
   await expect(page.getByRole("dialog")).not.toBeVisible();
   await page.goto(`${casePath}/reports`);
   await expect(page.getByRole("alert")).toBeVisible();
   expect(requests).toEqual([]);
+});
+
+test("service screens reflow at phone, tablet and desktop widths", async ({ page }) => {
+  test.setTimeout(120000);
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      "baro-api-mock-v1:session",
+      JSON.stringify({
+        user: { id: "responsive-customer", name: "합성 고객", accountType: "customer" },
+        needsConsent: false,
+      }),
+    );
+  });
+  for (const viewport of [
+    { width: 320, height: 760 },
+    { width: 390, height: 844 },
+    { width: 900, height: 768 },
+    { width: 1440, height: 900 },
+  ]) {
+    await page.setViewportSize(viewport);
+    for (const path of [
+      "/app",
+      "/cases",
+      "/cases/new",
+      "/lawyers",
+      "/settings",
+      "/help",
+      "/policies/terms",
+    ]) {
+      await page.goto(path);
+      await expect(page.locator("astro-island[ssr]")).toHaveCount(0);
+      if (path === "/app" || path === "/cases/new")
+        await expect(page.getByLabel("지금까지 있었던 일")).toBeEnabled();
+      if (path === "/lawyers")
+        await expect(page.getByRole("link", { name: "김예시", exact: true })).toBeVisible();
+      if (path === "/settings")
+        await expect(page.getByRole("button", { name: "다시 확인", exact: true })).toBeEnabled();
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+        ),
+        `${path} at ${viewport.width}`,
+      ).toBe(true);
+    }
+    await page.goto("/help#limits");
+    if (viewport.width <= 900) {
+      const target = await page.locator("#limits").boundingBox();
+      const header = await page.locator(".app-header").boundingBox();
+      expect(target?.y).toBeGreaterThanOrEqual((header?.y ?? 0) + (header?.height ?? 0));
+    }
+  }
 });
 
 async function openCustomerHome(page: Page) {

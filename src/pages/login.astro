@@ -32,23 +32,27 @@ const errorMessage = oauthErrors.includes("account_not_linked")
       </a>
       <span>로그인 · 회원가입</span>
     </nav>
-    <section class="login-content" aria-labelledby="login-title">
+    <div class="login-content">
       <header class="login-intro">
-        <h1 id="login-title">법률 고민의 시작,<br />바로와 함께.</h1>
         <Brand />
+        <p class="login-intro__headline">법률 고민의 시작, <br />바로와 함께.</p>
         <p class="login-intro__caption">막막한 순간부터, 다음 한 걸음까지.</p>
       </header>
-      {oauthFailed && <p class="form-error login-callback-error" role="alert">{errorMessage}</p>}
-      <AuthButtons client:load />
-    </section>
-    <footer class="login-footer">
-      <a class="login-help" href="/help">로그인에 어려움이 있나요?</a>
-      <p>처음이라면, 로그인 후 바로 가입할 수 있어요.</p>
-      <div class="login-policy-links">
-        <a href="/policies/terms">이용약관</a>
-        <span aria-hidden="true">·</span>
-        <a href="/policies/privacy">개인정보 처리방침</a>
-      </div>
-    </footer>
+      <section class="login-panel" aria-labelledby="login-title">
+        <h1 id="login-title">로그인 · 회원가입</h1>
+        <p class="login-panel__description">이용 유형을 선택하고 소셜 계정으로 시작하세요.</p>
+        {oauthFailed && <p class="form-error login-callback-error" role="alert">{errorMessage}</p>}
+        <AuthButtons client:load />
+        <footer class="login-footer">
+          <p>처음이라면, 로그인 후 가입을 이어갈 수 있어요.</p>
+          <div class="login-policy-links">
+            <a href="/policies/terms">이용약관</a>
+            <span aria-hidden="true">·</span>
+            <a href="/policies/privacy">개인정보 처리방침</a>
+          </div>
+          <a class="login-help" href="/help">로그인에 어려움이 있나요?</a>
+        </footer>
+      </section>
+    </div>
   </main>
 </BaseLayout>

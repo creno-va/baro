@@ -149,17 +149,14 @@ test("successful OAuth return consumes its selected role once and preserves retu
   await page.goto("/login?returnTo=/settings");
   await page.getByRole("radio", { name: "변호사", exact: true }).check();
   await page.getByRole("button", { name: "Google로 계속하기", exact: true }).click();
-  await expect(page).toHaveURL(/\/consent\?.*loginAttempt=/);
+  await expect(page).toHaveURL(/\/settings$/);
   await expect.poll(() => writes).toBe(1);
   expect(new URL(callback, "http://localhost").searchParams.get("returnTo")).toBe("/settings");
   expect(role).toBe("lawyer");
   expect(await page.evaluate(() => sessionStorage.getItem("baro-account-type"))).toBeNull();
   const after = writes;
   await page.reload();
-  await expect(page.getByRole("link", { name: "내 화면으로 계속하기" })).toHaveAttribute(
-    "href",
-    "/settings",
-  );
+  await expect(page).toHaveURL(/\/settings$/);
   expect(writes).toBe(after);
 });
 
@@ -308,10 +305,7 @@ test("normal OAuth state/callback and SQL session apply the chosen lawyer role o
     await page.getByRole("checkbox", { name: /이용약관, 개인정보 처리방침/ }).check();
     await page.getByRole("checkbox", { name: "만 14세 이상입니다." }).check();
     await page.getByRole("button", { name: "동의하고 계속하기" }).click();
-    await expect(page.getByRole("link", { name: "내 화면으로 계속하기" })).toHaveAttribute(
-      "href",
-      "/settings",
-    );
+    await expect(page).toHaveURL(/\/settings$/);
   } finally {
     child.stdin.end();
     child.kill();

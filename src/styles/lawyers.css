@@ -2,6 +2,19 @@
 .lawyer-profile {
   overflow-wrap: anywhere;
 }
+.lawyer-editor .page-header {
+  padding-top: 0;
+  align-items: center;
+}
+.lawyer-editor .page-header__action {
+  flex-shrink: 0;
+}
+@media (max-width: 900px) {
+  .lawyer-editor .page-header {
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+}
 .lawyer-field {
   display: grid;
   gap: 0.5rem;

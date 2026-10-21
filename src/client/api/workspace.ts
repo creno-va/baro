@@ -105,6 +105,7 @@ const messageSources = {
 };
 const fileViewSchema = z.object({
   id: z.string(),
+  revision: z.number().int().positive().optional(),
   name: z.string(),
   mimeType: z.string(),
   sizeBytes: z.number(),

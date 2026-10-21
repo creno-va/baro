@@ -1,10 +1,11 @@
-import { ArrowRight, FolderOpen, MessageCircle, Plus, RotateCw } from "lucide-react";
+import { ArrowRight, FolderOpen, MessageCircle, Plus, RotateCw, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../../client/api";
 import type { CaseView } from "../../client/api/types";
 import type { CaseStatus } from "../../contracts";
 import { Button, ButtonLink } from "../ui/button";
 import { StatePanel } from "../ui/state-panel";
+import { CaseDeleteDialog } from "./CaseDeleteDialog";
 import { caseHref, ErrorPanel } from "./common";
 import { useCustomerAccess } from "./useCustomerAccess";
 
@@ -29,10 +30,13 @@ export function CaseList() {
   const [items, setItems] = useState<CaseView[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<unknown>(null);
+  const [deleting, setDeleting] = useState<CaseView | null>(null);
+  const [notice, setNotice] = useState("");
   const request = useRef(0);
   const { ready, version, verify, ticket, current, alive, deny } = useCustomerAccess(
     () => {
       setItems([]);
+      setDeleting(null);
       setError(null);
       ++request.current;
     },
@@ -83,7 +87,10 @@ export function CaseList() {
           </ButtonLink>
         </div>
       </div>
-      {loading && !error && <StatePanel variant="loading" title="사건 목록을 불러오고 있어요." />}
+      {notice && <p role="status">{notice}</p>}
+      {loading && !items.length && !error && (
+        <StatePanel variant="loading" title="사건 목록을 불러오고 있어요." />
+      )}
       {error ? (
         <ErrorPanel error={error} retry={() => void load()} />
       ) : ready && !loading && items.length === 0 ? (
@@ -138,9 +145,29 @@ export function CaseList() {
                   </span>
                 </footer>
               </a>
+              <Button
+                className="case-list-delete"
+                variant="ghost"
+                aria-label={`${item.title} 사건 삭제`}
+                onClick={() => setDeleting(item)}
+              >
+                <Trash2 size={16} aria-hidden="true" />
+                사건 삭제
+              </Button>
             </li>
           ))}
         </ul>
+      )}
+      {deleting && (
+        <CaseDeleteDialog
+          item={deleting}
+          onClose={() => setDeleting(null)}
+          onDeleted={() => {
+            setItems((old) => old.filter((item) => item.id !== deleting.id));
+            setDeleting(null);
+            setNotice("사건 삭제를 접수했어요. 원격 자료 정리는 별도 절차로 진행돼요.");
+          }}
+        />
       )}
     </section>
   );

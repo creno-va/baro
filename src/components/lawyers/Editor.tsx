@@ -498,20 +498,22 @@ export function Editor() {
       <PageHeader
         title="내 변호사 프로필"
         description="소개와 연락처를 작성하고, 공개할 정보를 직접 관리하세요."
+        action={
+          <div className="flex flex-wrap gap-3">
+            <a className="ui-button ui-button--outline" href="/lawyers">
+              변호사 디렉터리
+            </a>
+            {saved?.published && canMutate && (
+              <a
+                className="ui-button ui-button--outline"
+                href={`/lawyers/${encodeURIComponent(saved.id)}`}
+              >
+                내 공개 프로필 보기
+              </a>
+            )}
+          </div>
+        }
       />
-      <div className="flex flex-wrap gap-3">
-        <a className="ui-button ui-button--outline" href="/lawyers">
-          변호사 디렉터리
-        </a>
-        {saved?.published && canMutate && (
-          <a
-            className="ui-button ui-button--outline"
-            href={`/lawyers/${encodeURIComponent(saved.id)}`}
-          >
-            내 공개 프로필 보기
-          </a>
-        )}
-      </div>
       {error && (
         <StatePanel
           variant={

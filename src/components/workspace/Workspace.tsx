@@ -24,9 +24,11 @@ import type { CustomerWorkspaceView } from "../../client/api/workspace";
 import { accessHref } from "../../client/return-path";
 import { V2_LIMITS } from "../../contracts/v2";
 import { CaseDetail } from "../analysis/CaseDetail";
+import { CaseDeleteDialog } from "../intake/CaseDeleteDialog";
 import { useCustomerAccess } from "../intake/useCustomerAccess";
 import { BrandMark } from "../ui/brand";
 import { Button, ButtonLink } from "../ui/button";
+import { CaseMaterials } from "./CaseMaterials";
 import { CaseNavigation } from "./CaseNavigation";
 import { ElapsedTime } from "./ElapsedTime";
 import { FileReview } from "./FileReview";
@@ -94,6 +96,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
     null,
   );
   const [original, setOriginal] = useState<{ url: string; type: string } | null>(null);
+  const [deletingCase, setDeletingCase] = useState(false);
   const [uploadConsent, setUploadConsent] = useState(false);
   const [retryUploads, setRetryUploads] = useState<File[]>([]);
   const [acceptedFileRetries, setAcceptedFileRetries] = useState<string[]>([]);
@@ -116,11 +119,14 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
   const dialog = useRef<HTMLDialogElement>(null);
   const reviewDirty = useRef(false);
   const reviewBusy = useRef(false);
+  const [reviewState, setReviewState] = useState({ dirty: false, busy: false });
   const fileReviewBusyChanged = useCallback((busy: boolean) => {
     reviewBusy.current = busy;
+    setReviewState((old) => ({ ...old, busy }));
   }, []);
   const fileReviewDirtyChanged = useCallback((dirty: boolean) => {
     reviewDirty.current = dirty;
+    setReviewState((old) => ({ ...old, dirty }));
   }, []);
   const followingChat = useRef(true);
   const chatEnd = useRef<HTMLDivElement>(null);
@@ -130,6 +136,7 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
   const acknowledgedTimeline = useRef(false);
   const [timelineRecovery, setTimelineRecovery] = useState(false);
   const purge = useCallback(() => {
+    setDeletingCase(false);
     ++latest.current;
     operationError.current = null;
     acknowledgedTimeline.current = false;
@@ -468,6 +475,29 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
       setNotice("메시지를 저장했어요.");
     });
   }
+  async function reflectMaterial(fileId: string) {
+    if (reviewDirty.current || reviewBusy.current) return;
+    await run("reflect-material", async (epoch) => {
+      const currentView = await api.workspace.get(caseId);
+      if (!(await verify(false, true)) || !current(epoch)) return;
+      const text =
+        "선택한 자료의 포함된 교정 내용을 기존 사실과 대조해 사건의 사실·관련 인물·타임라인을 정리해 주세요. 원문에 없는 내용은 추측하지 말고, 달라진 내용과 확인할 부분을 알려 주세요.";
+      if (
+        !sendAttempt.current ||
+        sendAttempt.current.selectedFileIds[0] !== fileId ||
+        sendAttempt.current.text !== text
+      )
+        sendAttempt.current = {
+          expectedRevision: currentView.case.revision,
+          text,
+          selectedFileIds: [fileId],
+        };
+      await api.workspace.sendMessage(caseId, sendAttempt.current);
+      if (!(await verify()) || !current(epoch)) return;
+      sendAttempt.current = null;
+      window.location.assign(base);
+    });
+  }
   async function upload(files: FileList | File[] | null) {
     if (!uploadConsent || view?.case.stage !== "active" || lock.current || !files?.length) return;
     const chosen = Array.from(files);
@@ -653,6 +683,20 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
         active={tab}
         fileCount={ready ? view?.files.length : undefined}
       />
+      {ready && view && (
+        <div className="workspace-case-tools">
+          <Button variant="ghost" disabled={!!busy} onClick={() => setDeletingCase(true)}>
+            사건 삭제
+          </Button>
+        </div>
+      )}
+      {deletingCase && ready && view && (
+        <CaseDeleteDialog
+          item={view.case}
+          onClose={() => setDeletingCase(false)}
+          onDeleted={() => window.location.replace("/cases")}
+        />
+      )}
       <div className="workspace-feedback" aria-live="polite" aria-atomic="true">
         {notice || (busy === "file-retry" ? "자료 처리 요청을 확인하고 있어요…" : "")}
       </div>
@@ -1342,9 +1386,10 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                     자료의 처리 상태는 이 화면에서 확인할 수 있어요. 사건 요약은 요약 페이지에서
                     확인해 주세요.
                   </p>
-                  <a href={`${base}/summary`}>
+                  <a className="workspace-summary-link" href={`${base}/summary?from=files`}>
                     요약 검토하기 <ArrowRight size={14} />
                   </a>
+                  <CaseMaterials caseId={caseId} files={view.files} />
                 </section>
               ) : (
                 <details className="workspace-context">
@@ -1359,9 +1404,10 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                       <p className="workspace-summary">
                         {view.case.summary || "확인한 요약이 아직 없어요."}
                       </p>
-                      <a href={`${base}/summary`}>
+                      <a className="workspace-summary-link" href={`${base}/summary?from=${tab}`}>
                         요약 검토하기 <ArrowRight size={14} />
                       </a>
+                      <CaseMaterials caseId={caseId} files={view.files} facts={view.facts} />
                     </section>
                     {!!view.facts?.length && (
                       <section>
@@ -1538,7 +1584,24 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
               onBusyChange={fileReviewBusyChanged}
               refreshVersion={`${view?.case.revision ?? 0}:${preview.status}`}
             />
+            {preview.status === "ready" && (
+              <div className="workspace-material-apply">
+                <p>
+                  교정을 저장한 뒤 자료 내용을 대화로 보내면 사건의 사실을 함께 정리해요. 긴 자료는
+                  일부만 참고할 수 있으니 전체 원문도 확인하세요. 저장한 리포트는 새 버전에서 갱신할
+                  수 있어요.
+                </p>
+              </div>
+            )}
             <div className="workspace-buttons">
+              {preview.status === "ready" && (
+                <Button
+                  disabled={!!busy || readonly || reviewState.dirty || reviewState.busy}
+                  onClick={() => void reflectMaterial(preview.id)}
+                >
+                  자료 내용 반영하기 <ArrowRight size={16} />
+                </Button>
+              )}
               <Button
                 variant="outline"
                 disabled={!!busy || !ready || preview.status === "uploading"}
@@ -1548,7 +1611,10 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                     if (!(await verify()) || !current(epoch)) return;
                     const type =
                       blob.type === "application/octet-stream" ? preview.mimeType : blob.type;
-                    const safe = /^(image\/(png|jpeg|webp|gif|bmp))$/.test(type);
+                    const safe =
+                      /^(image\/(png|jpeg|webp|gif|bmp)|audio\/(mpeg|mp4|x-m4a|wav|x-wav|ogg|webm)|video\/(mp4|webm|ogg))$/.test(
+                        type,
+                      );
                     if (safe) {
                       const url = await new Promise<string>((resolve, reject) => {
                         const reader = new FileReader();
@@ -1590,7 +1656,16 @@ export function Workspace({ caseId, tab = "chat" }: { caseId: string; tab?: Work
                 닫기
               </Button>
             </div>
-            {original && <img src={original.url} alt={`${preview.name} 원본 미리보기`} />}
+            {original &&
+              (original.type.startsWith("audio/") ? (
+                // biome-ignore lint/a11y/useMediaCaption: Private source recording; editable transcript is shown above, no verified timed captions exist.
+                <audio controls src={original.url} aria-label={`${preview.name} 원음 듣기`} />
+              ) : original.type.startsWith("video/") ? (
+                // biome-ignore lint/a11y/useMediaCaption: Private source video; extracted text is shown above, no verified timed captions exist.
+                <video controls src={original.url} aria-label={`${preview.name} 원본 영상`} />
+              ) : (
+                <img src={original.url} alt={`${preview.name} 원본 미리보기`} />
+              ))}
             {error && (
               <p role="alert" className="workspace-error">
                 {error.message}

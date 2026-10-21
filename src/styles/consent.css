@@ -1,0 +1,131 @@
+.consent-page {
+  width: min(1120px, 100%);
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+  padding: 28px 40px;
+}
+.consent-navigation {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+.consent-navigation > a:last-child {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--muted-foreground);
+  font-size: 14px;
+}
+.consent-page > astro-island {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  padding-block: 48px;
+}
+.consent-content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 480px);
+  gap: clamp(40px, 6vw, 80px);
+  width: 100%;
+  align-items: start;
+}
+.consent-intro h1 {
+  font-size: clamp(28px, 3vw, 40px);
+  line-height: 1.4;
+}
+.consent-intro > p:last-child {
+  font-size: 15px;
+  color: var(--muted-foreground);
+  word-break: keep-all;
+}
+.consent-form {
+  min-width: 0;
+  gap: 12px;
+}
+.consent-form label {
+  padding: 20px;
+  border-radius: 14px;
+  cursor: pointer;
+}
+.consent-form label:has(input:checked) {
+  border-color: var(--primary);
+  background: var(--secondary);
+}
+.consent-form label > span {
+  min-width: 0;
+}
+.consent-form label strong {
+  font-size: 15px;
+  font-weight: 650;
+}
+.consent-description {
+  display: block;
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--muted-foreground);
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+.consent-form input {
+  margin: 2px 0 0;
+}
+.consent-policy-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin-bottom: 12px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+.consent-policy-links a,
+.consent-cancel {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+}
+.consent-cancel {
+  justify-content: center;
+  color: var(--muted-foreground);
+  font-size: 14px;
+}
+.consent-status {
+  width: 100%;
+  text-align: center;
+  color: var(--muted-foreground);
+}
+.consent-status h1 {
+  color: var(--foreground);
+}
+@media (max-width: 800px) {
+  .consent-page {
+    padding: 20px 24px;
+  }
+  .consent-page > astro-island {
+    align-items: start;
+    padding-block: 40px;
+  }
+  .consent-content {
+    grid-template-columns: minmax(0, 560px);
+    justify-content: center;
+    gap: 24px;
+  }
+  .consent-intro h1 br {
+    display: none;
+  }
+  .consent-intro h1 {
+    font-size: 28px;
+  }
+}
+@media (max-width: 480px) {
+  .consent-page {
+    padding-inline: 20px;
+  }
+  .consent-form label {
+    padding: 16px;
+  }
+  .consent-policy-links {
+    gap: 0 12px;
+  }
+}

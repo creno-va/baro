@@ -19,7 +19,6 @@ test("common login and B intake flow through C workspace and D report with origi
   await page.getByLabel("이용약관, 개인정보 처리방침, AI 이용 고지를 확인하고 동의합니다.").check();
   await page.getByLabel("만 14세 이상입니다.").check();
   await page.getByRole("button", { name: "동의하고 계속하기" }).click();
-  await page.getByRole("link", { name: "내 화면으로 계속하기" }).click();
   await page.goto("/cases/new");
   await page
     .getByLabel("지금까지 있었던 일")

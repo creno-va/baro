@@ -1,4 +1,5 @@
 ---
+import { directoryReturnHref } from "../../components/lawyers/navigation";
 // biome-ignore lint/correctness/noUnusedImports: Astro template reads the island.
 import { Profile } from "../../components/lawyers/Profile";
 import { opaqueIdSchema } from "../../contracts";
@@ -12,7 +13,9 @@ if (!parsed.success) return Astro.redirect("/lawyers");
 const id = parsed.data;
 // biome-ignore lint/correctness/noUnusedVariables: Astro template reads the prop.
 const preview = Astro.url.hostname !== "baro.site";
+// biome-ignore lint/correctness/noUnusedVariables: Astro template reads the prop.
+const directoryHref = directoryReturnHref(Astro.url.search);
 ---
 <AppLayout title="변호사 프로필" description="공개된 변호사 소개와 연락처를 확인하세요." role="visitor" availableRoutes={["/", "/lawyers"]}>
-  <Profile id={id} preview={preview} client:load />
+  <Profile id={id} preview={preview} directoryHref={directoryHref} client:load />
 </AppLayout>
