@@ -3,7 +3,9 @@
 - 사용자 직접 요청: 2026-10-21 현재 정비 채팅.
 - 작업: [#308](https://github.com/creno-va/baro/issues/308).
 - 선행: [PR306](https://github.com/creno-va/baro/pull/306)의 CI 성공 및 main 통합.
-- 현재 단계: 선행 승인 대기 중 독립 wire 계약·합성 fixture·설계. 제품 endpoint/서비스/UI는 미구현.
+- 선행 병합: PR306 → main `bab5c7646093c1667284d2a2e32b3033f7d8653a` (2026-10-21 직접 승인).
+- 현재 단계: 독립 페이지·API·읽기 증명·공식 원문 검증 구현. 사용자 직접 요청 범위의 기능 확장이며
+  기존 정비 범위·운영 공개/배포 gate를 일괄 해제하지 않는다. 배포 상태는 #308/#71 receipt를 따른다.
 
 ## 사용 흐름
 
@@ -17,7 +19,7 @@
 3. 목록에는 사건명·법원·사건번호·선고일·확인 시각, 검색에 사용한 쟁점, 검증 원문 발췌를 표시한다.
    유사도 백분율이나 승소/동일 결과를 표시하지 않는다. 검색 일부 여부와 확인 못한 주제를 구분한다.
 4. 결과 선택 시 해당 원문의 제한된 본문을 읽고 공식 전체 원문을 새 창에서 열 수 있다.
-   ‘같은 쟁점이어도 계약 내용·경위·증거·판단 시점이 다를 수 있어요’와 비교할 자료 안내를 제공한다.
+   사실관계 동일성·승소 판단 결과가 아님을 안내하고, 긴 원문은 일부 표시와 공식 전체 원문을 구분한다.
 
 추천은 확인 요약의 명시된 쟁점과 검토된 별칭을 서버에서 대응한다. 모호한 부분은 미확인 상태로
 유지한다. 개인 사건과 판례의 사실관계를 AI가 완전히 비교했다고 표시하지 않는다. 선택한 공개
@@ -36,7 +38,7 @@
 
 ## HTTP와 접근
 
-wire schema는 `src/contracts/v2/precedent-research.ts`다. 독립 계약 작업 중에는 API에 연결하지 않는다.
+wire schema는 `src/contracts/v2/precedent-research.ts`다. 선행 PR306 통합 뒤 API에 연결했다.
 
 | 경로 | 내용 |
 | --- | --- |
@@ -61,10 +63,21 @@ wire schema는 `src/contracts/v2/precedent-research.ts`다. 독립 계약 작업
 ## 병행 작업과 검증
 
 새 `precedent-research` 서비스/API/클라이언트/컴포넌트/CSS와 전용 page를 우선 사용한다.
-공유 연결은 API router와 CaseNavigation의 판례 메뉴로 최소화한다. Workspace.tsx·composer와
-client/api/types.ts는 수정하지 않는 방향으로 첨부 #307 담당에게 전달한다.
+공유 연결은 API router와 CaseNavigation의 판례 메뉴, 인증 복귀 allowlist·SummaryReview의 고정 복귀 탭 목록,
+모바일 사건 메뉴의 3열 배치로 제한한다. Workspace.tsx·composer·client/api/types.ts는 변경하지 않는다.
 
 소유권·동의·역할·삭제·revision race, 악의적 query/URL/토큰, 캐시 원문/metadata 변조, 만료,
 요약 재확인 필요 상태, 무응답/429/5xx/빈 결과/부분 결과·취소를 실제 SQLite/API 테스트로 검증한다.
 브라우저는 데스크탑/모바일·키보드·긴 판결명/원문·로딩/실패·목록/본문·계정 전환을 확인한다.
 실제 공식 서버 요청과 합성 UI/fixture 결과 및 배포 Worker 결과는 별도 기록한다.
+
+## 2026-10-21 실제 공식 서버 검증
+
+12:08:01 UTC, 합성 확인 사건·로컬 D1·**실제 workerd**에서 제품 Hono 경로를 호출했다.
+GET context → 공개 주제 `lease`/`loan` 검색 → 반환된 각 readToken으로 읽기를 수행했다.
+판례6건 모두 공식 원문 확인 및 읽기 성공, 인용 metadata와 정확한 발췌 span 일치,
+검색 일부 표시 보존. 외부8요청, 전체2,208ms. 실제 LAW_API_OC는 로컬 binding에만 주입했으며
+키/인증 URL/원문/사건번호/토큰/예외 원문은 receipt에 기록하지 않았다.
+
+이 결과는 배포 Worker·운영 credential·사용자 SSO·모델 호출·운영 원격 D1의 검증이 아니다.
+같은 SHA의 main/full·preview smoke와 #71 운영 승인 조건은 별도로 유지한다.

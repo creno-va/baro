@@ -25,7 +25,9 @@ export function SummaryReview({ caseId }: { caseId: string }) {
   useEffect(() => {
     // Accept a fixed workspace tab only; never navigate to an arbitrary URL.
     const tab = new URLSearchParams(window.location.search).get("from");
-    setReturnHref(["files", "timeline", "actions"].includes(tab ?? "") ? `${base}/${tab}` : base);
+    setReturnHref(
+      ["files", "timeline", "actions", "precedents"].includes(tab ?? "") ? `${base}/${tab}` : base,
+    );
   }, [base]);
   const [summary, setSummary] = useState("");
   const [factEdits, setFactEdits] = useState<
