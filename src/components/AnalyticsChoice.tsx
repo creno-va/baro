@@ -34,6 +34,7 @@ export function AnalyticsChoice({
         <>
           <button
             type="button"
+            className="ui-button ui-button--outline"
             disabled={!ready}
             onClick={() => {
               analyticsOptIn();
@@ -45,6 +46,7 @@ export function AnalyticsChoice({
           </button>
           <button
             type="button"
+            className="ui-button ui-button--ghost"
             disabled={!ready}
             onClick={() => {
               analyticsOptOut();
@@ -56,9 +58,13 @@ export function AnalyticsChoice({
         </>
       ) : (
         <>
-          <p aria-live="polite">{opted ? "선택 지표 동의됨" : "선택 지표 수집 안 함"}</p>
+          <p className="analytics-choice-status" data-enabled={opted} aria-live="polite">
+            {opted ? "✓ 선택 지표 동의됨" : "선택 지표 수집 안 함"}
+          </p>
           <button
             type="button"
+            className="ui-button ui-button--outline"
+            aria-pressed={opted}
             onClick={() => {
               if (opted) analyticsOptOut();
               else analyticsOptIn();

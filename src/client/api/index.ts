@@ -144,7 +144,7 @@ export const api = {
     ): Promise<WorkspaceView>;
   }>("workspace"),
   files: domain<{
-    list(id: string): Promise<FileView[]>;
+    list(id: string, options?: { metadataOnly?: boolean }): Promise<FileView[]>;
     review(id: string, fileId: string, afterOrdinal?: number): Promise<FileReviewView>;
     saveReview(
       id: string,

@@ -8,6 +8,7 @@ import {
   v2OriginalManifestSchema,
   v2ReportBodySchema,
 } from "../../../contracts/v2";
+import { secondsLabel } from "../../../utils/time";
 import { type Actor, aliveWorkspace, readSnapshot, type V2Core } from "../../db/v2-core";
 import { createV2FileStagingRepository } from "../../db/v2-file-staging";
 import { createV2FilesRepository } from "../../db/v2-files";
@@ -63,7 +64,10 @@ function coverageText(value: V2Coverage | null) {
       gaps.length
         ? ` (${gaps
             .slice(0, 20)
-            .map((i) => `${i.startSeconds}–${i.endSeconds}초 ${labels[i.status]}`)
+            .map(
+              (i) =>
+                `${secondsLabel(i.startSeconds)}–${secondsLabel(i.endSeconds)}초 ${labels[i.status]}`,
+            )
             .join(
               ", ",
             )}${gaps.length > 20 ? `, 추가 ${gaps.length - 20}개 구간은 자료 화면에서 확인` : ""})`
@@ -91,7 +95,7 @@ function coverageText(value: V2Coverage | null) {
         .slice(0, 20)
         .map(
           (frame) =>
-            `${frame.timestampSeconds}초 · 프레임 ${frame.frameIndex} ${labels[frame.status]}`,
+            `${secondsLabel(frame.timestampSeconds)}초 · 프레임 ${frame.frameIndex} ${labels[frame.status]}`,
         )
         .join(
           ", ",
@@ -442,9 +446,9 @@ export const sourcePositionText = (p: V2SourcePosition) =>
   p.kind === "document"
     ? `${p.page}쪽${p.paragraph ? ` · ${p.paragraph}번째 문단` : ""}${p.table ? ` · 표 ${p.table.index}, 행 ${p.table.row}, 열 ${p.table.column}` : ""}`
     : p.kind === "audio"
-      ? `${p.startSeconds}–${p.endSeconds}초`
+      ? `${secondsLabel(p.startSeconds)}–${secondsLabel(p.endSeconds)}초`
       : p.kind === "video"
-        ? `${p.timestampSeconds}초 · 프레임 ${p.frameIndex} · ${p.sampling === "one_second" ? "1초 표본" : "장면 전환 표본"}`
+        ? `${secondsLabel(p.timestampSeconds)}초 · 프레임 ${p.frameIndex} · ${p.sampling === "one_second" ? "1초 표본" : "장면 전환 표본"}`
         : "이미지 관찰";
 
 type ReportDisplayContext = {
@@ -477,7 +481,9 @@ export function reportText(
     const question = matches.length === 1 ? matches[0] : undefined;
     // Historical bodies may not retain their question metadata. Preserve their
     // revision and source kind without exposing IDs or guessing a question order.
-    return `${question ? `${question.round}차 질문 ${question.number}번 답변` : "추가 질문에 대한 답변"} · 입력 버전 ${revision}`;
+    return question
+      ? `${question.round}차 질문 ${question.number}번 답변`
+      : "추가 질문에 대한 답변";
   };
   const factLabel = (id: string) => `사실 ${body.facts.findIndex((fact) => fact.id === id) + 1}`;
   const citationLabel = (id: string) =>
@@ -486,11 +492,11 @@ export function reportText(
     references
       .map((ref) =>
         ref.kind === "user_material"
-          ? `${body.selectedFiles.find((file) => file.id === ref.fileId)?.name ?? ref.fileId} · 자료 버전 ${ref.fileRevision} · ${sourcePositionText(ref.position)}`
+          ? `${body.selectedFiles.find((file) => file.id === ref.fileId)?.name ?? "참조 자료"} · ${sourcePositionText(ref.position)}`
           : ref.kind === "user_message"
             ? "추가 대화의 사용자 진술"
             : ref.kind === "intake_narrative"
-              ? `입력 버전 ${ref.intakeRevision}`
+              ? "처음 입력한 이야기"
               : ref.kind === "intake_answer"
                 ? answerLabel(ref.questionId, ref.intakeRevision)
                 : citationLabel(ref.citationId),
@@ -506,7 +512,7 @@ export function reportText(
     "사실·주장·출처",
     ...body.facts.map(
       (fact) =>
-        `${factLabel(fact.id)} · ${fact.text}\n[${fact.userEdited ? "사용자 교정 · " : ""}${labels[fact.attribution]} · ${certainty[fact.certainty]} · ${refs(fact.references)}${fact.conflictingFactIds.length ? ` · 상반 항목: ${fact.conflictingFactIds.map(factLabel).join(", ")}` : ""}]`,
+        `${factLabel(fact.id)} · ${fact.text}\n[${[fact.userEdited ? "사용자가 수정한 내용" : "", labels[fact.attribution], fact.certainty === "reported" || (fact.certainty === "observed" && fact.attribution === "user_material") ? "" : certainty[fact.certainty], refs(fact.references)].filter(Boolean).join(" · ")}${fact.conflictingFactIds.length ? ` · 상반 항목: ${fact.conflictingFactIds.map(factLabel).join(", ")}` : ""}]`,
     ),
     "",
     "미확인 사항",

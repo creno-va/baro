@@ -115,6 +115,7 @@ export async function handleFileReviewMock(
             : o;
         });
         current.file.revision++;
+        file.revision = current.file.revision;
         item.revision++;
         current.workspaceRevision = item.revision;
         store[fileId] = current;

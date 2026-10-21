@@ -134,15 +134,24 @@ export function useCustomerAccess(
   );
   useEffect(() => {
     mounted.current = true;
-    const refresh = () => {
-      void verify(true)
+    let refreshing = false;
+    const refresh = (hide = false) => {
+      // Browsers emit focus, pageshow and visibility together. One foreground
+      // check preserves the editor while explicit peer changes still hide it.
+      if (refreshing && !hide) return;
+      refreshing = true;
+      void verify(hide)
         .then((ok) => {
           if (ok) setVersion((value) => value + 1);
         })
         .catch((cause) => {
           if (mounted.current) callbacks.current.report(cause);
+        })
+        .finally(() => {
+          refreshing = false;
         });
     };
+    const foreground = () => refresh();
     const visible = () => {
       if (!document.hidden) refresh();
     };
@@ -155,11 +164,11 @@ export function useCustomerAccess(
           if (mounted.current) callbacks.current.report(cause);
         });
     }, 15000);
-    refresh();
-    window.addEventListener("focus", refresh);
-    window.addEventListener("pageshow", refresh);
+    refresh(true);
+    window.addEventListener("focus", foreground);
+    window.addEventListener("pageshow", foreground);
     const changed = (event: Event) => {
-      if (!isExplicitSignOut(event)) return refresh();
+      if (!isExplicitSignOut(event)) return refresh(true);
       deny();
       callbacks.current.report(new ApiError("UNAUTHENTICATED", "로그인이 필요해요."));
     };
@@ -171,7 +180,7 @@ export function useCustomerAccess(
         event.key === "better-auth.message" ||
         event.key === "baro-session-changed"
       )
-        refresh();
+        refresh(true);
     };
     window.addEventListener("storage", storage);
     window.addEventListener("baro-session-changed", changed);
@@ -183,8 +192,8 @@ export function useCustomerAccess(
       latestCheck.current = null;
       sessionLookup.current = null;
       clearInterval(timer);
-      window.removeEventListener("focus", refresh);
-      window.removeEventListener("pageshow", refresh);
+      window.removeEventListener("focus", foreground);
+      window.removeEventListener("pageshow", foreground);
       window.removeEventListener("storage", storage);
       window.removeEventListener("baro-session-changed", changed);
       document.removeEventListener("visibilitychange", visible);

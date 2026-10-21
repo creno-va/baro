@@ -104,30 +104,26 @@ test("structured facts, contradictions and gaps save after confirmation and rema
   await expect(page.getByRole("heading", { name: "사실·모순·정보 공백 확인" })).toBeVisible();
   await page.getByLabel("사실 내용", { exact: true }).first().fill("원본 확인 후 수정한 반환 연도");
   await page.getByLabel("확인 상태", { exact: true }).first().selectOption("conflicting");
-  await page.getByLabel("모순되는 사실 선택").selectOption("fact-1");
+  await page.getByRole("checkbox", { name: "반환 약속은 2026년이라는 진술" }).check();
   await page
     .getByLabel("확인할 정보 공백 (한 줄에 하나)")
     .fill("합성 증인의 설명 확인\n정확한 월과 일 확인");
-  await page.getByRole("button", { name: "수정 내용 저장", exact: true }).click();
-  await expect(page.getByRole("button", { name: "수정 내용 저장", exact: true })).toBeHidden();
+  await page.getByRole("button", { name: "수정 내용 저장하고 적용", exact: true }).click();
+  await expect(page.getByText("수정한 요약이 저장됐어요.", { exact: true })).toBeVisible();
   await page.reload();
   await expect(page.getByLabel("사실 내용", { exact: true }).first()).toHaveValue(
     "원본 확인 후 수정한 반환 연도",
   );
   await expect(page.getByLabel("확인 상태", { exact: true }).first()).toHaveValue("conflicting");
-  await expect(page.getByLabel("모순되는 사실 선택")).toHaveValues(["fact-1"]);
+  await expect(page.getByRole("checkbox", { name: "반환 약속은 2026년이라는 진술" })).toBeChecked();
   await expect(page.getByLabel("확인할 정보 공백 (한 줄에 하나)")).toHaveValue(
     "합성 증인의 설명 확인\n정확한 월과 일 확인",
   );
-  await page.getByLabel("요약이 내가 이야기한 사실과 맞는지 확인했어요.").check();
-  await page.getByRole("button", { name: "요약 확인하고 계속" }).click();
-  await page.getByRole("button", { name: "확인하고 사건 열기" }).click();
+  await page.getByRole("link", { name: "작업 공간으로 돌아가기", exact: true }).last().click();
   await expect(page).toHaveURL(base);
   await page.goto(`${base}/summary`);
   await expect(page.getByLabel("사실 내용", { exact: true }).first()).toBeEditable();
-  await page.getByLabel("요약이 내가 이야기한 사실과 맞는지 확인했어요.").check();
-  await page.getByRole("button", { name: "요약 확인하고 계속" }).click();
-  await page.getByRole("button", { name: "확인하고 사건 열기" }).click();
+  await page.getByRole("link", { name: "작업 공간으로 돌아가기", exact: true }).last().click();
   await expect(page).toHaveURL(base);
 });
 
@@ -250,7 +246,9 @@ test("structured drafts and file corrections retain their base revision across a
   await expect(page.getByLabel("사실 내용", { exact: true }).first()).toHaveValue(
     "아직 저장하지 않은 사실 초안",
   );
-  await expect(page.getByRole("button", { name: "수정 내용 저장", exact: true })).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "수정 내용 저장하고 적용", exact: true }),
+  ).toBeDisabled();
   await page.getByRole("button", { name: "최신 내용 불러오기", exact: true }).click();
   await expect(page.getByLabel("요약 편집")).toHaveValue("다른 탭에서 저장한 요약");
   await page.evaluate(async () => {
@@ -293,31 +291,31 @@ test("structured drafts and file corrections retain their base revision across a
 test("material correction retries a lost committed response without duplicating the revision", async ({
   page,
 }) => {
+  // Instrument the transport factory before the lazy client is constructed.
+  // Replacing a facade in a later module instance does not reliably inject loss.
+  await page.route("**/src/client/api/files.ts*", async (route) => {
+    const response = await route.fetch();
+    const body = await response.text();
+    await route.fulfill({
+      response,
+      body: `${body}\nconst originalLossFactory = createFilesApi;\nlet loseFirstPatch = true;\ncreateFilesApi = (transport) => originalLossFactory(async (path, init) => {\nconst response = await transport(path, init);\nif (init?.method === 'PATCH' && response.ok && loseFirstPatch) { loseFirstPatch = false; window.syntheticLostReviewResponses = (window.syntheticLostReviewResponses ?? 0) + 1; throw Object.assign(new Error('합성 응답 유실'), { code: 'UNAVAILABLE', retryable: true }); }\nreturn response;\n});\n`,
+    });
+  });
   await seed(page);
   await page.goto(`${base}/files?file=file-one`);
   const input = page.getByLabel("확인·교정한 내용");
   await input.fill("응답 유실 뒤에도 한 번만 저장한 교정");
-  await page.evaluate(async () => {
-    const apiPath = "/src/client/api/index.ts";
-    const errorPath = "/src/client/api/core.ts";
-    const filesPath = "/src/client/api/files.ts";
-    const { api } = await import(apiPath);
-    const { ApiError, apiRequest } = await import(errorPath);
-    const { createFilesApi } = await import(filesPath);
-    let first = true;
-    api.files = createFilesApi(async (path: string, init?: RequestInit) => {
-      const response = await apiRequest(path, init);
-      if (init?.method === "PATCH" && response.ok && first) {
-        first = false;
-        throw new ApiError("UNAVAILABLE", "합성 응답 유실", true);
-      }
-      return response;
-    });
-  });
   await page.getByRole("button", { name: "교정 내용 저장", exact: true }).click();
   await expect(
     page.getByRole("region", { name: "자료 내용 검토" }).getByRole("alert"),
   ).toBeVisible();
+  expect(
+    await page.evaluate(
+      () =>
+        (window as typeof window & { syntheticLostReviewResponses?: number })
+          .syntheticLostReviewResponses,
+    ),
+  ).toBe(1);
   await expect(input).toHaveValue("응답 유실 뒤에도 한 번만 저장한 교정");
   await page.getByRole("button", { name: "교정 내용 저장", exact: true }).click();
   await expect(page.getByText("교정 내용을 저장했어요. 새로 접속해도 유지됩니다.")).toBeVisible();

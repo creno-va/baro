@@ -3,6 +3,7 @@ import type { V2Coverage, V2FileObservation } from "../src/contracts/v2";
 import { snapshotStatements } from "../src/server/db/v2-core";
 import { createV2DeletionRepository } from "../src/server/db/v2-deletion";
 import { createFileReviewService } from "../src/server/modules/files/review";
+import { readWorkspaceContext } from "../src/server/modules/workspace/context";
 import { fixture, uploaded } from "./helpers/file-processing-fixture";
 import { readyFile, reportFixture } from "./helpers/report-fixture";
 import { reportHttpFixture } from "./helpers/report-http-fixture";
@@ -95,6 +96,27 @@ test("bounded material correction preserves original, pages, coverage and surviv
     original: { text: "원본 추출 0 · 010-1234-5678", userEdited: false },
   });
   expect(reopened.observations[1]?.value.included).toBe(false);
+  const context = await readWorkspaceContext(f.core, f.actor, f.workspaceId, {
+    schemaVersion: "2",
+    id: crypto.randomUUID(),
+    operationId: crypto.randomUUID(),
+    workspaceRevision: f.rev(),
+    createdAt: f.actor.now,
+    role: "user",
+    text: "교정한 합성 자료를 기존 사실과 대조해 주세요.",
+    selectedFileIds: [fileId],
+  });
+  expect(
+    context.materials.some((material) => material.text === "사용자 교정한 금액은 300만원"),
+  ).toBe(true);
+  expect(context.materials.some((material) => material.text.startsWith("원본 추출 1 ·"))).toBe(
+    false,
+  );
+  expect(context.materials[0]?.reference).toMatchObject({
+    kind: "user_material",
+    fileId,
+    fileRevision: reopened.file.revision,
+  });
   expect((await service().read(a, f.workspaceId, fileId, 7)).observations).toHaveLength(1);
   const report = await f.reports.get(a, f.workspaceId);
   expect(report.content).toContain("사용자 교정한 금액은 300만원");

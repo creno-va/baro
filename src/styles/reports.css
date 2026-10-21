@@ -496,6 +496,29 @@
 .report-workspace footer a {
   color: inherit;
 }
+.report-workspace .report-footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px 20px;
+  font-size: 0.85rem;
+}
+.report-workspace .report-footer-links a {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.report-workspace .report-footer-links .report-return-link {
+  color: var(--primary);
+  padding: 10px 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-weight: 650;
+  text-decoration: none;
+}
 .report-workspace .report-stale {
   color: #785425;
   background: #fff8e9;
