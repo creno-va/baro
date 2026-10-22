@@ -270,6 +270,68 @@ test("reservation and identical part replay are idempotent; changed bytes confli
   ).rejects.toThrow("CONFLICT");
   expect(f.db.sqlite.query("SELECT count(*) AS n FROM v2_upload_parts").get()).toEqual({ n: 1 });
 });
+test("finalized reservation replay recovers its original identity after expiry without reopening writes or weakening request/owner guards", async () => {
+  const f = await fixture(),
+    key = crypto.randomUUID(),
+    bytes = new TextEncoder().encode("synthetic finalized original");
+  const body = {
+    name: "합성.txt",
+    byteLength: bytes.byteLength,
+    mediaType: "text/plain",
+    autoProcessConsentVersion: CURRENT_POLICY_VERSIONS.aiNoticeVersion,
+  };
+  const original = await f.service.reserve(f.actor.ownerId, f.workspaceId, 1, key, body);
+  const part = await f.service.putPart(
+    f.actor.ownerId,
+    f.workspaceId,
+    original.fileId,
+    original.uploadSession,
+    0,
+    new Response(bytes).body,
+  );
+  await f.service.complete(f.actor.ownerId, f.workspaceId, original.fileId, {
+    expectedRevision: f.rev(),
+    uploadSession: original.uploadSession,
+    manifest: { byteLength: bytes.byteLength, contentHash: hex(sha256(bytes)), parts: [part] },
+  });
+  f.setNow(new Date(Date.parse(NOW) + 2 * 3600000).toISOString());
+  const before = f.bucket.calls.put;
+  expect(await f.service.reserve(f.actor.ownerId, f.workspaceId, 1, key, body)).toEqual(original);
+  expect(f.bucket.calls.put).toBe(before);
+  await expect(
+    f.service.resumeUpload(f.actor.ownerId, f.workspaceId, original.fileId),
+  ).rejects.toThrow("NOT_FOUND");
+  await expect(
+    f.service.putPart(
+      f.actor.ownerId,
+      f.workspaceId,
+      original.fileId,
+      original.uploadSession,
+      0,
+      new Response(bytes).body,
+    ),
+  ).rejects.toThrow("NOT_FOUND");
+  await expect(
+    f.service.reserve(f.actor.ownerId, f.workspaceId, 1, key, { ...body, name: "different.txt" }),
+  ).rejects.toThrow("CONFLICT");
+  await expect(f.service.reserve(crypto.randomUUID(), f.workspaceId, 1, key, body)).rejects.toThrow(
+    "NOT_FOUND",
+  );
+  expect(
+    f.db.sqlite
+      .query("SELECT state,expires_at FROM v2_upload_sessions WHERE id=?")
+      .get(original.uploadSession),
+  ).toEqual({ state: "finalized", expires_at: original.expiresAt });
+  expect(
+    f.db.sqlite
+      .query("SELECT stored_count,reserved_count FROM v2_case_original_usage WHERE workspace_id=?")
+      .get(f.workspaceId),
+  ).toEqual({ stored_count: 1, reserved_count: 0 });
+  await f.service.remove(f.actor.ownerId, f.workspaceId, original.fileId, f.rev(), 2);
+  await expect(f.service.reserve(f.actor.ownerId, f.workspaceId, 1, key, body)).rejects.toThrow(
+    "CONFLICT",
+  );
+});
 test("concurrent part admission publishes exactly one ciphertext/receipt without over-reserving bytes", async () => {
   const f = await fixture();
   const s = await reserved(f, 5);

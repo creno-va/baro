@@ -93,11 +93,11 @@ async function fixture() {
     },
   });
   const receipts: string[] = [];
-  const client = (request = transport) =>
+  const client = (request = transport, recover = true) =>
     createFilesClient<UploadMetadata, never>({
       scope: createSessionScope(),
       request,
-      recovery: { ownerId: f.owner.userId, storage, fingerprint },
+      ...(recover ? { recovery: { ownerId: f.owner.userId, storage, fingerprint } } : {}),
       newKey: () => crypto.randomUUID(),
       onUploadAcknowledged: (id) => receipts.push(id),
       openUpload: async (_file, signal) =>
@@ -342,6 +342,46 @@ test("a deleted accepted file is not silently replaced, but its confirmed exact 
       .upload(f.workspace.id, f.source, undefined, { resolveConflict: true, metadataOnly: true });
     expect(result.id).not.toBe(row.id);
     expect(result.status).toBe("waiting");
+  } finally {
+    f.db.close();
+  }
+});
+
+test("a lost mobile reservation receipt recovers the exact file already completed by the default web client, even after session expiry", async () => {
+  const f = await fixture();
+  try {
+    let lost = false;
+    const request: WorkspaceTransport = async (path, init) => {
+      const response = await f.transport(path, init);
+      if (!lost && response.ok && init?.method === "POST" && path.endsWith("/files")) {
+        lost = true;
+        throw new Error("SYNTHETIC_LOST_MOBILE_RESERVATION");
+      }
+      return response;
+    };
+    await expect(f.client(request).upload(f.workspace.id, f.source)).rejects.toBeDefined();
+    const original = [...f.records.values()];
+    expect(JSON.parse(original[0] ?? "{}").fileId).toBeUndefined();
+    const web = await f
+      .client(f.transport, false)
+      .upload(f.workspace.id, f.source, undefined, { metadataOnly: true });
+    f.setNow(new Date(Date.parse(f.now) + 2 * 3600000).toISOString());
+    const mobile = await f
+      .client()
+      .upload(f.workspace.id, f.source, undefined, { metadataOnly: true });
+    expect(mobile.id).toBe(web.id);
+    expect(mobile.status).toBe("waiting");
+    expect(
+      f.db.sqlite.query("SELECT id FROM v2_files WHERE workspace_id=?").all(f.workspace.id),
+    ).toHaveLength(1);
+    expect(f.records.size).toBe(0);
+    expect(
+      f.db.sqlite
+        .query(
+          "SELECT stored_count,reserved_count FROM v2_case_original_usage WHERE workspace_id=?",
+        )
+        .get(f.workspace.id),
+    ).toEqual({ stored_count: 1, reserved_count: 0 });
   } finally {
     f.db.close();
   }

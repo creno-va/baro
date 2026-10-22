@@ -450,7 +450,14 @@ export function createFilesService(core: V2Core, deps: FileServiceDependencies) 
           )
           .first<{ id: string; file_id: string }>();
         if (!row) throw new FileError("CONFLICT");
-        const u = await session(ownerId, workspaceId, row.file_id, row.id, true);
+        // A lost reservation ACK can be retried after another signed client has
+        // finalized the same file. Recover its admitted identity through this
+        // exact owner/key/request hash, without re-opening or extending a lease.
+        const previous = await session(ownerId, workspaceId, row.file_id, row.id);
+        const u =
+          previous.state === "finalized"
+            ? previous
+            : await session(ownerId, workspaceId, row.file_id, row.id, true);
         return {
           schemaVersion: "2" as const,
           fileId: u.file_id,
