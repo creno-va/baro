@@ -11,6 +11,13 @@ export interface SessionState {
   busy: boolean;
   consent: ConsentStatus | null;
   error: string | null;
+  authPurpose?: "reauthenticate";
+  reauthentication?: {
+    providers: Provider[];
+    verified: boolean;
+    checking: boolean;
+    error: string | null;
+  };
 }
 export function createSessionModel(dependencies: {
   scope: SessionScope;
@@ -18,13 +25,18 @@ export function createSessionModel(dependencies: {
   getConsent: () => Promise<ConsentStatus>;
   saveConsent: (input: ConsentInput) => Promise<unknown>;
   login: {
-    start(provider: Provider, role: AccountType): Promise<NativeLoginResult>;
+    start(
+      provider: Provider,
+      role: AccountType,
+      purpose?: "reauthenticate",
+    ): Promise<NativeLoginResult>;
     complete(raw: string): Promise<NativeLoginResult>;
     cancel(): Promise<void>;
   };
   ownsReturn: (raw: string) => Promise<boolean>;
   signOut: () => Promise<{ serverRevoked: boolean }>;
   openPolicy: (policy: "terms" | "privacy" | "ai") => Promise<void>;
+  readReauthentication?: (ownerId: string) => Promise<{ providers: Provider[]; verified: boolean }>;
 }) {
   let state: SessionState = {
     phase: "checking",
@@ -38,17 +50,57 @@ export function createSessionModel(dependencies: {
   let paused = false;
   let loggingOut = false;
   let returnLookups = 0;
+  let pendingReauthentication = false;
   const subscribers = new Set<() => void>();
   const publish = (next: SessionState) => {
     state = next;
     for (const listener of subscribers) listener();
   };
   const current = (captured: number) => captured === version;
+  const ordinary = () => {
+    const { reauthentication: _proof, authPurpose: _purpose, ...rest } = state;
+    return rest;
+  };
+  async function loadReauthentication() {
+    const ownerId = state.session?.user?.id;
+    if (
+      !ownerId ||
+      !["ready", "consent"].includes(state.phase) ||
+      state.reauthentication?.checking ||
+      !dependencies.readReauthentication
+    )
+      return;
+    const captured = version;
+    publish({
+      ...state,
+      reauthentication: { providers: [], verified: false, checking: true, error: null },
+    });
+    try {
+      const result = await dependencies.readReauthentication(ownerId);
+      if (current(captured) && state.session?.user?.id === ownerId)
+        publish({ ...state, reauthentication: { ...result, checking: false, error: null } });
+    } catch (error) {
+      if (!current(captured)) return;
+      if (error instanceof ApiError && error.code === "UNAUTHENTICATED") {
+        fail(captured, error);
+        return;
+      }
+      publish({
+        ...state,
+        reauthentication: {
+          providers: [],
+          verified: false,
+          checking: false,
+          error: errorMessage(error),
+        },
+      });
+    }
+  }
   const fail = (captured: number, error: unknown) => {
     if (!current(captured)) return;
     dependencies.scope.transition(null);
     publish({
-      ...state,
+      ...ordinary(),
       phase: "error",
       session: null,
       consent: null,
@@ -74,7 +126,7 @@ export function createSessionModel(dependencies: {
         : null,
     );
     publish({
-      ...state,
+      ...ordinary(),
       session,
       consent,
       role: session.user?.accountType ?? state.role,
@@ -82,9 +134,21 @@ export function createSessionModel(dependencies: {
       error: null,
       phase: !session.user ? "anonymous" : session.needsConsent ? "consent" : "ready",
     });
+    if (pendingReauthentication && session.user) {
+      pendingReauthentication = false;
+      await loadReauthentication();
+    }
   };
-  const checking = (phase: "checking" | "authorizing") =>
-    publish({ ...state, phase, busy: true, session: null, consent: null, error: null });
+  const checking = (phase: "checking" | "authorizing", purpose?: "reauthenticate") =>
+    publish({
+      ...ordinary(),
+      phase,
+      busy: true,
+      session: null,
+      consent: null,
+      error: null,
+      ...(purpose ? { authPurpose: purpose } : {}),
+    });
   async function refresh() {
     if (paused || state.busy || loggingOut || returnLookups) return;
     const captured = ++version;
@@ -104,6 +168,7 @@ export function createSessionModel(dependencies: {
       };
     },
     refresh,
+    loadReauthentication,
     selectRole(role: AccountType) {
       if (state.busy || (state.phase !== "anonymous" && state.phase !== "error")) return;
       publish({ ...state, role });
@@ -112,6 +177,7 @@ export function createSessionModel(dependencies: {
       if (state.busy || loggingOut || returnLookups) return;
       const captured = ++version,
         role = state.role;
+      pendingReauthentication = false;
       dependencies.scope.invalidate();
       checking("authorizing");
       try {
@@ -123,6 +189,42 @@ export function createSessionModel(dependencies: {
         );
       } catch (error) {
         fail(captured, error);
+      }
+    },
+    async reauthenticate(provider: Provider) {
+      if (
+        state.busy ||
+        loggingOut ||
+        returnLookups ||
+        !state.session?.user ||
+        !["ready", "consent"].includes(state.phase)
+      )
+        return;
+      if (!state.reauthentication?.providers.includes(provider)) {
+        publish({ ...state, error: "연결된 로그인 수단을 먼저 확인해 주세요." });
+        return;
+      }
+      const role = state.session.user.accountType,
+        captured = ++version;
+      pendingReauthentication = false;
+      dependencies.scope.invalidate();
+      checking("authorizing", "reauthenticate");
+      try {
+        const result = await dependencies.login.start(provider, role, "reauthenticate");
+        if (!current(captured)) return;
+        pendingReauthentication = result.type === "verified" && Boolean(result.reauthentication);
+        await apply(
+          result.type === "verified" ? result.session : await dependencies.readSession(),
+          captured,
+        );
+      } catch (error) {
+        if (!current(captured)) return;
+        try {
+          await apply(await dependencies.readSession(), captured);
+          if (current(captured)) publish({ ...state, error: errorMessage(error) });
+        } catch (readError) {
+          fail(captured, readError);
+        }
       }
     },
     async receiveReturn(raw: string) {
@@ -143,6 +245,7 @@ export function createSessionModel(dependencies: {
       try {
         const result = await dependencies.login.complete(raw);
         if (!current(captured)) return;
+        pendingReauthentication = result.type === "verified" && Boolean(result.reauthentication);
         await apply(
           result.type === "verified" ? result.session : await dependencies.readSession(),
           captured,
@@ -152,6 +255,7 @@ export function createSessionModel(dependencies: {
       }
     },
     async cancelLogin() {
+      pendingReauthentication = false;
       const captured = ++version;
       checking("checking");
       try {
@@ -194,6 +298,7 @@ export function createSessionModel(dependencies: {
     async signOut() {
       if (state.busy) return;
       loggingOut = true;
+      pendingReauthentication = false;
       const captured = ++version;
       dependencies.scope.invalidate();
       checking("checking");

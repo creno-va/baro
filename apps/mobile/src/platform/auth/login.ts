@@ -2,7 +2,10 @@ import { ApiError } from "@baro/api-client";
 import type { AccountType, Provider } from "@baro/client-core";
 import {
   type MobileAuthExchange,
+  type MobileReauthPrepare,
+  type MobileReauthReceipt,
   mobileAuthExchangeResponseSchema,
+  mobileReauthReceiptSchema,
 } from "@baro/contracts/mobile-auth";
 import type { ClientSession } from "@baro/contracts/session";
 import type { MobileConfig } from "../../../config/environment";
@@ -12,9 +15,10 @@ import {
   type PendingAuthStore,
   parseNativeAuthReturn,
 } from "./attempt";
+import type { ReauthenticationStore } from "./reauthentication";
 
 export type NativeLoginResult =
-  | { type: "verified"; session: ClientSession }
+  | { type: "verified"; session: ClientSession; reauthentication?: MobileReauthReceipt }
   | { type: "cancelled" }
   | { type: "ignored" };
 const unavailable = () =>
@@ -43,9 +47,16 @@ export function createNativeLogin(dependencies: {
   exchange: (input: MobileAuthExchange) => Promise<unknown>;
   readSession: () => Promise<ClientSession>;
   setAccountType: (accountType: AccountType) => Promise<unknown>;
+  reauthentication?: {
+    prepare(input: MobileReauthPrepare, ownerId: string): Promise<unknown>;
+    verify(input: { attemptId: string; verifier: string }): Promise<unknown>;
+    access(): Promise<{ ownerTag: string }>;
+    proof: ReauthenticationStore;
+  };
 }) {
   let version = 0;
   let activeAttemptId: string | undefined;
+  let activePurpose: "login" | "reauthenticate" | undefined;
   // undefined allows recovery after a cold start; null explicitly retires all
   // stored returns while a replacement/cancellation is being persisted.
   let acceptedAttempt: string | null | undefined;
@@ -66,9 +77,9 @@ export function createNativeLogin(dependencies: {
     ensure(captured);
     if (acceptedAttempt !== undefined && acceptedAttempt !== returned.attemptId)
       return { type: "ignored" };
-    if (!attempt || attempt.attemptId !== returned.attemptId || attempt.purpose !== "login")
-      return { type: "ignored" };
+    if (!attempt || attempt.attemptId !== returned.attemptId) return { type: "ignored" };
     activeAttemptId = attempt.attemptId;
+    activePurpose = attempt.purpose;
     const identity = `${captured}:${returned.attemptId}`;
     const previous = completions.get(identity);
     if (previous) return previous;
@@ -76,9 +87,58 @@ export function createNativeLogin(dependencies: {
       if (returned.type === "error") {
         await dependencies.attempts.clear(attempt.attemptId);
         ensure(captured);
-        await dependencies.resetCredentials();
+        if (attempt.purpose === "login") await dependencies.resetCredentials();
+        else await dependencies.reauthentication?.proof.clear();
         ensure(captured);
         throw unavailable();
+      }
+      if (attempt.purpose === "reauthenticate") {
+        const reauth = dependencies.reauthentication,
+          prepared = attempt.reauthentication;
+        if (!reauth || !prepared) throw unavailable();
+        const original = await dependencies.readSession();
+        ensure(captured);
+        if (!original.user) throw cancelled();
+        const access = await reauth.access();
+        ensure(captured);
+        if (access.ownerTag !== prepared.ownerTag) throw cancelled();
+        try {
+          mobileAuthExchangeResponseSchema.parse(
+            await dependencies.exchange({
+              attemptId: attempt.attemptId,
+              code: returned.code,
+              verifier: attempt.verifier,
+              purpose: "reauthenticate",
+            }),
+          );
+        } catch (error) {
+          ensure(captured);
+          if (
+            !(error instanceof ApiError) ||
+            !["UNAVAILABLE", "UNAUTHENTICATED"].includes(error.code)
+          )
+            throw safe(error);
+          // A consumed code is recoverable only through this attempt's exact signed new OAuth session.
+        }
+        const receipt = mobileReauthReceiptSchema.parse(
+          await reauth.verify({ attemptId: attempt.attemptId, verifier: attempt.verifier }),
+        );
+        ensure(captured);
+        if (receipt.ownerTag !== prepared.ownerTag || receipt.startedAt !== prepared.startedAt)
+          throw cancelled();
+        const session = await dependencies.readSession();
+        ensure(captured);
+        if (session.user?.id !== original.user.id) throw cancelled();
+        await reauth.proof.put({ ...receipt, attemptId: attempt.attemptId });
+        ensure(captured);
+        await dependencies.attempts.clear(attempt.attemptId);
+        ensure(captured);
+        activeAttemptId = undefined;
+        activePurpose = undefined;
+        acceptedAttempt = null;
+        const result: NativeLoginResult = { type: "verified", session, reauthentication: receipt };
+        verifiedReturn = { version: captured, attemptId: attempt.attemptId, result };
+        return result;
       }
       let session: ClientSession | undefined;
       try {
@@ -111,6 +171,7 @@ export function createNativeLogin(dependencies: {
       await dependencies.attempts.clear(attempt.attemptId);
       ensure(captured);
       if (activeAttemptId === attempt.attemptId) activeAttemptId = undefined;
+      activePurpose = undefined;
       acceptedAttempt = null;
       const result: NativeLoginResult = { type: "verified", session: verified };
       verifiedReturn = { version: captured, attemptId: attempt.attemptId, result };
@@ -128,13 +189,19 @@ export function createNativeLogin(dependencies: {
   };
   return {
     complete,
-    async start(provider: Provider, accountType: AccountType): Promise<NativeLoginResult> {
+    async start(
+      provider: Provider,
+      accountType: AccountType,
+      purpose?: "reauthenticate",
+    ): Promise<NativeLoginResult> {
       const captured = ++version;
       acceptedAttempt = null;
       verifiedReturn = undefined;
       dependencies.dismissBrowser();
+      activePurpose = purpose ?? "login";
       try {
-        await dependencies.resetCredentials();
+        if (!purpose) await dependencies.resetCredentials();
+        await dependencies.reauthentication?.proof.clear();
         ensure(captured);
         const previous = await dependencies.attempts.load();
         ensure(captured);
@@ -144,17 +211,37 @@ export function createNativeLogin(dependencies: {
         ensure(captured);
         const attemptId = dependencies.newId();
         activeAttemptId = attemptId;
+        let receipt: MobileReauthReceipt | undefined;
+        if (purpose) {
+          if (!dependencies.reauthentication) throw unavailable();
+          const current = await dependencies.readSession();
+          ensure(captured);
+          if (!current.user) throw cancelled();
+          receipt = mobileReauthReceiptSchema.parse(
+            await dependencies.reauthentication.prepare(
+              { attemptId, challenge: proof.challenge, provider },
+              current.user.id,
+            ),
+          );
+          ensure(captured);
+        }
         await dependencies.attempts.put({
           attemptId,
           verifier: proof.verifier,
           createdAt: dependencies.now(),
           provider,
           accountType,
-          purpose: "login",
+          purpose: purpose ?? "login",
+          ...(receipt ? { reauthentication: receipt } : {}),
         });
         ensure(captured);
         acceptedAttempt = attemptId;
-        const callbackURL = nativeCallbackURL(dependencies.config, attemptId, proof.challenge);
+        const callbackURL = nativeCallbackURL(
+          dependencies.config,
+          attemptId,
+          proof.challenge,
+          purpose,
+        );
         const errorCallback = new URL(callbackURL);
         errorCallback.searchParams.set("error", "oauth");
         const authorization = await dependencies.authorize({
@@ -184,9 +271,11 @@ export function createNativeLogin(dependencies: {
           acceptedAttempt = null;
           await dependencies.attempts.clear(attemptId);
           ensure(captured);
-          await dependencies.resetCredentials();
+          if (!purpose) await dependencies.resetCredentials();
+          await dependencies.reauthentication?.proof.clear();
           ensure(captured);
           activeAttemptId = undefined;
+          activePurpose = undefined;
           return { type: "cancelled" };
         }
         return await complete(returned.url);
@@ -195,20 +284,33 @@ export function createNativeLogin(dependencies: {
         throw safe(error);
       }
     },
-    async cancel() {
+    async cancel(options: { signOut?: true } = {}) {
       const captured = ++version;
       acceptedAttempt = null;
       verifiedReturn = undefined;
       const attemptId = activeAttemptId;
+      const purpose = activePurpose;
       activeAttemptId = undefined;
+      activePurpose = undefined;
       dependencies.dismissBrowser();
       try {
+        const pending = attemptId
+          ? Promise.resolve({ attemptId, purpose })
+          : dependencies.attempts.load();
         await Promise.all([
-          dependencies.resetCredentials(),
+          options.signOut
+            ? dependencies.resetCredentials()
+            : (async () => {
+                const attempt = await pending;
+                ensure(captured);
+                if ((purpose ?? attempt?.purpose) !== "reauthenticate")
+                  await dependencies.resetCredentials();
+              })(),
+          dependencies.reauthentication?.proof.clear(),
           (async () => {
-            const pending = attemptId ? { attemptId } : await dependencies.attempts.load();
+            const attempt = await pending;
             ensure(captured);
-            if (pending) await dependencies.attempts.clear(pending.attemptId);
+            if (attempt) await dependencies.attempts.clear(attempt.attemptId);
           })(),
         ]);
       } catch (error) {

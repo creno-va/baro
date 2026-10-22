@@ -145,4 +145,14 @@ opaque UUID를 필수 저장/readback하고 응답 유실·feature 재생성에�
 확정 ACK에서 선택 사건·분석/입력을 비우고 scope를 폐기한 뒤 fresh 세션/목록을 읽는다.
 후속 조회나 key cleanup 실패로 이미 접수한 삭제를 다시 새 작업으로 보내지 않는다.
 물리 자료 정리 완료를 접수와 혼동하지 않으며 미정산 원장/hold와 다른 미해결 작업 key를
-지우지 않는다. 계정 탈퇴/reauth는 이 사건 삭제와 별개인 M3/M6 잔여다.
+지우지 않는다. 계정 탈퇴는 이 사건 삭제와 별개인 M6 잔여다.
+
+## 같은 계정 재인증
+
+계정 화면의 `재인증 로그인 수단 확인`은 실제 연결된 provider를 읽는다. 동의 전에도
+사용할 수 있으며 재인증은 기존 cookie·역할을 보존한다. 서버 준비 receipt를 nonce/PKCE와
+SecureStore에 저장한 뒤 외부 브라우저를 열고, 복귀 시 정확한 새 OAuth 세션의 proof를
+검증한다. 응답 유실·cold 복귀·marker 쓰기 실패도 이 proof 없이 성공으로 처리하지 않는다.
+취소는 기존 로그인을 유지하고 로그아웃은 인증 cookie/pending/marker를 지운다. 미해결
+사건 작업 key는 보존한다. 기기 marker만으로 계정 삭제 권한을 부여하지 않으며 서버의
+fresh access가 정본이다. 합성 제공자·SQL/HTTP·RN 검증과 실제 두 OS OAuth 인수는 별개다.

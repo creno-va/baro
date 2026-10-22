@@ -19,6 +19,8 @@ export function SessionScreen({
   onSignOut,
   onBrowse,
   onPolicy,
+  onReauthenticate,
+  onReadReauthentication,
 }: {
   state: SessionState;
   onRole: (role: AccountType) => void;
@@ -29,6 +31,8 @@ export function SessionScreen({
   onSignOut: () => void;
   onBrowse: () => void;
   onPolicy: (policy: Policy) => void;
+  onReauthenticate?: (provider: Provider) => void;
+  onReadReauthentication?: () => void;
 }) {
   return (
     <Screen>
@@ -47,7 +51,9 @@ export function SessionScreen({
               kind: "loading",
               title:
                 state.phase === "authorizing"
-                  ? "로그인을 확인하고 있어요"
+                  ? state.authPurpose === "reauthenticate"
+                    ? "현재 계정을 다시 인증하고 있어요"
+                    : "로그인을 확인하고 있어요"
                   : "이용 상태를 확인하고 있어요",
               description:
                 state.phase === "authorizing"
@@ -55,7 +61,12 @@ export function SessionScreen({
                   : "잠시만 기다려 주세요.",
             }}
           />
-          {state.phase === "authorizing" ? <Button label="로그인 취소" onPress={onCancel} /> : null}
+          {state.phase === "authorizing" ? (
+            <Button
+              label={state.authPurpose === "reauthenticate" ? "재인증 취소" : "로그인 취소"}
+              onPress={onCancel}
+            />
+          ) : null}
         </>
       ) : null}
       {state.phase === "anonymous" || state.phase === "error" ? (
@@ -103,7 +114,46 @@ export function SessionScreen({
         </Card>
       ) : null}
       {state.phase === "ready" || state.phase === "consent" ? (
-        <Button label="로그아웃" disabled={state.busy} onPress={onSignOut} />
+        <>
+          {onReauthenticate && state.session?.user ? (
+            <Card>
+              <Text variant="heading">현재 계정 다시 인증</Text>
+              <Text>
+                민감한 계정 작업 전에 같은 계정으로 다시 인증해 주세요. 취소해도 기존 로그인은
+                유지돼요.
+              </Text>
+              {state.reauthentication?.checking ? (
+                <Text accessibilityLiveRegion="polite">연결된 로그인 수단을 확인하고 있어요.</Text>
+              ) : null}
+              {state.reauthentication?.error ? (
+                <Text accessibilityRole="alert">{state.reauthentication.error}</Text>
+              ) : null}
+              {state.reauthentication?.verified ? (
+                <Text>이 계정의 최근 재인증을 확인했어요.</Text>
+              ) : null}
+              {state.reauthentication &&
+              !state.reauthentication.checking &&
+              !state.reauthentication.error &&
+              !state.reauthentication.providers.length ? (
+                <Text>연결된 로그인 수단이 없어요.</Text>
+              ) : null}
+              <Button
+                label="재인증 로그인 수단 확인"
+                disabled={state.busy || state.reauthentication?.checking === true}
+                onPress={() => onReadReauthentication?.()}
+              />
+              {state.reauthentication?.providers.map((provider) => (
+                <Button
+                  key={provider}
+                  label={`${{ google: "Google", naver: "네이버", kakao: "카카오" }[provider]}로 같은 계정 다시 인증`}
+                  disabled={state.busy}
+                  onPress={() => onReauthenticate(provider)}
+                />
+              ))}
+            </Card>
+          ) : null}
+          <Button label="로그아웃" disabled={state.busy} onPress={onSignOut} />
+        </>
       ) : null}
       <Button label="변호사 탐색" onPress={onBrowse} />
     </Screen>
