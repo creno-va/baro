@@ -1,4 +1,4 @@
-# BARO mobile — M4 진행
+# BARO mobile — M5 자료 연결
 
 Expo SDK 58 / React Native 0.88.0 / React 19.3.0 / Expo Router 기반 iOS·Android 앱이다.
 현재 시작·이용 안내·공개 변호사 목록/이름 검색·잘못된 경로 화면을 제공한다. 공개 목록은
@@ -121,7 +121,7 @@ M1의 실제 결과와 미완료 native 항목은 [#330](https://github.com/cren
 서버 revision 충돌은 미저장 입력을 보존하고 명시적인 최신 내용 사용으로 해결한다.
 다른 화면으로 이동하거나 앱을 종료하면 미저장 입력은 사라진다. v1은 저장된 분석의
 사용자 진술/AI 정리/미확인·타임라인·쟁점/한계·자료·다음 단계·당시 출처와 범위/긴급 안내·
-불완전/실패를 읽으며 자동 재분석하지 않는다. 자료 업로드·처리 검토·리포트 저장은 M5 잔여다.
+불완전/실패를 읽으며 자동 재분석하지 않는다. 자료는 `/files`에서 관리하며 리포트 화면은 M5 잔여다.
 
 불확실 mutation key와 owner/revision metadata는 `.case-operations` SecureStore service에
 별도로 보관한다. 물리 key는 fingerprint이며 UUID/허용 metadata 이외의 값·잠김·손상·
@@ -132,8 +132,8 @@ silent write는 실패한다. 인증 reset에서 지우지 않으며 사실/답�
 원래 action revision으로 편집 재시도를 묶는다. job 저장은 opaque hint이며 실제 서버 job이
 정본이다. `/workspace?caseId=<opaque ID>`는 같은 fresh 고객 gate 아래 대화·검증 실패/
 명시적 재시도·사실/모순/근거·타임라인 편집·다음 행동 체크와 기록 추가 조회를 연결한다.
-자료는 공통 metadata reader로 이름/상태를 읽고 준비된 자료를 대화에 선택한다. 파일 IO나
-처리 범위 검토를 완료로 표시하지 않는다. 새 요약은 `/cases` 검토·확인으로 이어진다.
+자료는 공통 metadata reader로 이름/상태를 읽고 준비된 자료를 대화에 선택한다. 추가·검토·
+원본 저장은 `/files`로 연결한다. 새 요약은 `/cases` 검토·확인으로 이어진다.
 응답 유실 때 입력과 원래 revision을 메모리에 보존하며 명시적인 같은 요청 재시도만
 허용한다. 확정 ACK 뒤 조회 실패는 해당 입력을 비우고 최신 조회를 제공한다. background/
 blur에서 IO·poll을 중단한다. background 대기는 같은 fresh owner만 입력을 복원하며,
@@ -166,12 +166,35 @@ snapshot은 유지되며 소유 화면은 완료/취소/이탈 때 `release`, �
 `clear`를 연결해야 한다. clear는 열려 있는 reader부터 닫고 삭제 실패를 재시도 대상으로
 보존한다. 인증 key나 `.case-operations`를 지우지 않는다. 로컬 합성100MB/1GB byte/hash
 검사는 통과했으며 native 기기 IO·선택 권한/공간 부족·전체 메모리 인수는 별도다.
-현재 이 adapter를 소비하는 native upload/review/report 모델·화면 연결은 후속이다.
+`/files?caseId=<opaque ID>`는 이 adapter로 선택·진행·유실 복구·명시적 충돌 재시작을 연결한다.
 공통 files client에는 opt-in `recovery`가 있으며 `.case-operations`는 예약/완료 UUID·원래
 revision·file ID·입력 hash만 필수 저장한다. token·manifest·파일 이름/원문을 저장하지 않는다.
 완료 응답 유실 뒤 같은 서버 file ID로 확인하고 ordinary retry에서 CAS를 바꾸지 않는다.
 확인된 충돌/만료/정확한404 뒤 사용자의 명시적 재시작에만 `resolveConflict: true`를 전달한다.
-이 계약을 실제 native 화면과 연결하고 원본 다운로드/기기 cleanup을 구현하는 일은 남아 있다.
+완료 ACK와 후속 목록 조회를 구분해 접수한 파일을 새 업로드로 재전송하지 않는다.
 로컬 합성 디스크 검사는 루트에서 `bun scripts/mobile-file-io-probe.ts --large`로 재현한다.
 기본은100MB이며 `--large`는100MB와1GB를 순차 생성/검사한 뒤 임시 파일을 지운다.
 출력은 byte 수·일치/메모리 관측·handle 수치뿐이며 실제 사용자 자료를 읽지 않는다.
+
+## 자료 화면·원본 다운로드
+
+자료 화면은 실제 files client·sealed credential/owner/generation transport를 사용한다.
+기존 자료는 동의 갱신 전에도 조회/원본 저장/삭제할 수 있고 추가·처리·교정은 최신 동의가
+필요하다. 서버 처리 중 상태만 활성 화면에서 갱신하며 명시적 처리 재시도를 제공한다.
+문서 페이지·영상 표본·음성 구간의 coverage는100개씩 교체 표시하고 관찰의 원본/교정·
+불확실성/제외·위치를 구분한다. 한 관찰씩 원래 file/workspace revision으로 저장하며 서버의
+미완료 교정은 이어서 저장/남은 교정 중단으로 처리한다. 삭제는 DELETE 확인을 요구한다.
+
+원본은 `expo/fetch`의 redirect:error/credentials:omit과 기존 cookie writer를 거쳐 받는다.
+응답 body를 앱 전용 무작위 경로에256KiB 이하 write로 순차 기록하며 전체 binary의
+arrayBuffer/blob/base64 변환을 하지 않는다. 길이·실제 디스크 크기와 네트워크/디스크 재읽기의
+증분 SHA256을 대조해 같은 길이의 저장 손상도 공개 전에 거절한다.
+파일 URI는 adapter 내부에만 두고 화면은 opaque handle로 명시적 File.preview/Expo Sharing을
+호출한다. 외부 앱에 전달한 복사본은 서버 삭제로 회수하지 못한다. 취소/이탈·startup·
+로그아웃/계정·역할·동의 변경에서 private cache를 정리하고 IO/presentation 완료를 기다린다.
+background checking은 신원을 숨기고 fresh 같은 계정만 source를 복원한다. native handoff는
+외부 앱이 읽는 동안 유지한 뒤 앱 복귀 시 handle을 폐기하며 실패한 삭제는 재시도한다.
+root의 캐시 정리 실패는 파일 기능에서 재시도하고 공개 탐색/로그인을 막지 않는다.
+
+합성 Hono/SQL/AES·바이트/컴포넌트 검증과 실제 기기의 선택 권한·외부 앱·저장 공간·native
+SDK 메모리 검증은 구분한다. 리포트 편집/사진 선택/PDF·HTML·ZIP 화면은 M5 후속이다.

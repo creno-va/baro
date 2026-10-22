@@ -1,9 +1,11 @@
-import { ApiError, type UploadReader } from "@baro/api-client";
+import { ApiError, type UploadMetadata, type UploadReader } from "@baro/api-client";
 import { V2_LIMITS } from "@baro/contracts/v2";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
 
 export const NATIVE_READ_BYTES = 256 * 1024;
+/** Object identity resolves inside the native adapter; pure consumers see no URI/path. */
+export type NativeUploadSource = Readonly<UploadMetadata>;
 export interface NativeReadHandle {
   size: number | null;
   offset: number | null;
