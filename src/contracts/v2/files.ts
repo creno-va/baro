@@ -12,16 +12,16 @@ import {
   v2CountSchema,
   v2FailureCodeSchema,
   v2HashSchema,
+  v2JobPhaseSchema,
   v2JsonRequestSchema,
   v2VersionSchema,
 } from "./common";
 import { v2SourcePositionSchema } from "./sources";
-import { v2JobSchema } from "./workspace";
 
 /** Last observed active job state, not an ETA or a processing start timestamp. */
 export const v2FileProcessingSchema = z.strictObject({
   status: z.enum(["queued", "running", "validating"]),
-  phase: v2JobSchema.shape.phase,
+  phase: v2JobPhaseSchema,
   updatedAt: timestampSchema,
 });
 export type V2FileProcessing = z.infer<typeof v2FileProcessingSchema>;

@@ -19,6 +19,7 @@ import {
   v2FactSchema,
   v2FactsForSourcesSchema,
   v2FileProbeSchema,
+  v2FileProcessingSchema,
   v2FileSchema,
   v2IntakeSchema,
   v2JobSchema,
@@ -332,6 +333,29 @@ test("chat selection and jobs bind revision and target kind without exposing int
   rejects(v2JobSchema, { ...job, status: "completed", progressPercent: 99, phase: "finished" });
   accepts(v2JobSchema, { ...job, status: "completed", progressPercent: 100, phase: "finished" });
   accepts(v2JobSchema, { ...job, status: "failed", failure: "MODEL_UNAVAILABLE", retryable: true });
+});
+
+test("file progress and jobs retain the same complete phase vocabulary", () => {
+  const phases = [
+    "admission",
+    "extracting",
+    "transcribing",
+    "observing",
+    "retrieving",
+    "generating",
+    "validating",
+    "assembling",
+    "finished",
+  ];
+  const progress = { status: "running", updatedAt: job.updatedAt };
+  for (const phase of phases) {
+    accepts(v2FileProcessingSchema, { ...progress, phase });
+    accepts(v2JobSchema, { ...job, phase });
+  }
+  for (const phase of ["", "unknown", "completed"]) {
+    rejects(v2FileProcessingSchema, { ...progress, phase });
+    rejects(v2JobSchema, { ...job, phase });
+  }
 });
 
 test("timeline precision and navigation action categories prohibit impossible dates and strategy fields", () => {
