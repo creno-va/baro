@@ -251,3 +251,67 @@ test("failed ACK-key cleanup preserves the successful report projection and same
   expect((await f.create().save("case_a", review, 1)).revision).toBe(2);
   expect(f.captured()?.headers?.["idempotency-key"]).toBe(key);
 });
+
+test("explicit initial intent recovers an oversized first report by exclusion and replays null CAS after a lost ACK", async () => {
+  const f = await fixture();
+  for (let ordinal = 0; ordinal < 20; ordinal++) {
+    const row = crypto.randomUUID(),
+      observation = crypto.randomUUID();
+    const payload = await f.core.encrypt("v2_file_observations", row, f.actor.ownerId, 2, {
+      id: observation,
+      text: `${ordinal} 합성 자료 ${"가".repeat(1900)}`,
+      position: { kind: "document", page: 1, paragraph: ordinal + 1, table: null },
+      certainty: "uncertain",
+      userEdited: false,
+      included: true,
+    });
+    f.db.sqlite
+      .query(
+        "INSERT INTO v2_file_observations(id,entity_id,file_id,revision,file_revision,ordinal,encrypted_payload) VALUES(?,?,?,2,2,?,?)",
+      )
+      .run(row, observation, f.selectedFileId, ordinal, payload);
+  }
+  const response = await f.app.request(
+    `/api/v2/cases/${f.workspaceId}/reports`,
+    { headers: { cookie: f.cookie } },
+    f.env,
+  );
+  expect(response.status).toBe(413);
+  expect(((await response.json()) as { error: { code: string } }).error.code).toBe(
+    "EXPORT_LIMIT_EXCEEDED",
+  );
+  expect(f.db.sqlite.query("SELECT count(*) AS n FROM v2_reports").get()).toEqual({ n: 0 });
+  const first = f.create();
+  f.lose();
+  await expect(first.api.generate(f.workspaceId, [f.selectedFileId], null)).rejects.toMatchObject({
+    code: "UNAVAILABLE",
+  });
+  first.scope.invalidate();
+  const fresh = f.create(),
+    committed = await fresh.api.get(f.workspaceId);
+  const replay = await fresh.api.generate(f.workspaceId, [f.selectedFileId], null);
+  expect(replay.id).toBe(committed.id);
+  expect(replay.revision).toBe(1);
+  expect(replay.excludedFileIds).toEqual([f.selectedFileId]);
+  expect(replay.content).not.toContain("가".repeat(100));
+  expect(JSON.parse(f.writes[0]?.body ?? "{}").expectedRevision).toBeNull();
+  expect(f.writes[1]).toEqual(f.writes[0]);
+  expect(f.db.sqlite.query("SELECT count(*) AS n FROM v2_reports").get()).toEqual({ n: 1 });
+  await expect(fresh.api.generate(f.workspaceId, [f.selectedFileId], null)).rejects.toMatchObject({
+    code: "CONFLICT",
+  });
+  expect(f.db.sqlite.query("SELECT count(*) AS n FROM v2_reports").get()).toEqual({ n: 1 });
+});
+
+test("an explicit initial report intent cannot replace a peer-created report or admit another owner", async () => {
+  const f = await fixture();
+  const peer = await f.reports.get(f.actor.ownerId, f.workspaceId);
+  await expect(f.create().api.generate(f.workspaceId, [], null)).rejects.toMatchObject({
+    code: "CONFLICT",
+  });
+  await expect(
+    f.create("foreign_owner").api.generate(f.workspaceId, [], null),
+  ).rejects.toBeDefined();
+  expect((await f.reports.get(f.actor.ownerId, f.workspaceId)).id).toBe(peer.id);
+  expect(f.db.sqlite.query("SELECT count(*) AS n FROM v2_reports").get()).toEqual({ n: 1 });
+});

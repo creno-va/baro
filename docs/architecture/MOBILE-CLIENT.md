@@ -339,7 +339,8 @@ breaking change는 기존 경로 유지 또는 명시적 새 버전으로 다룬
 ### 네이티브 리포트 요청 복구
 
 공통 reports client의 `recovery`는 native opt-in이다. 저장과 새 초안 생성은 화면에서
-확인한 명시적 report revision을 요구하며 owner·경로·method·정확한 body의 해시로
+확인한 명시적 report revision을 요구한다. 첫 초안이 아직 없을 때만 생성에 `null`을
+명시해 absence CAS를 사용하며 기존 리포트가 생겼다면 서버가 거절한다. owner·경로·method·정확한 body의 해시로
 SecureStore의 불투명 UUID를 찾는다. 응답 유실/재생성 뒤 같은 입력·원래 revision의
 명시적 재시도는 같은 key를 사용하고, metadata GET으로 이미 전송한 basis를 바꾸지 않는다.
 본문·마스킹·사진/자료 선택·URI·token은 복구 저장소에 기록하지 않는다.

@@ -114,7 +114,7 @@ export function createReportsClient<Download>(dependencies: {
       })
     : undefined;
   const revisions = new Map<string, number>();
-  const generations = new Map<string, { selection: string; revision: number | undefined }>();
+  const generations = new Map<string, { selection: string; revision: number | null | undefined }>();
   const saves = new Map<string, { revision: number | undefined }>();
   const pending = new Map<string, { fingerprint: string; key: string }>();
   const accept = (value: unknown, caseId: string): ReportView => {
@@ -128,7 +128,14 @@ export function createReportsClient<Download>(dependencies: {
   async function write(id: string, method: "PATCH" | "POST", body: unknown) {
     if (
       recovery &&
-      !z.object({ expectedRevision: z.number().int().positive() }).safeParse(body).success
+      !z
+        .object({
+          expectedRevision:
+            method === "POST"
+              ? z.number().int().positive().nullable()
+              : z.number().int().positive(),
+        })
+        .safeParse(body).success
     )
       throw new ApiError("VALIDATION_ERROR", "화면에서 확인한 리포트 버전을 다시 확인해 주세요.");
     const fingerprint = JSON.stringify(body),
@@ -242,7 +249,7 @@ export function createReportsClient<Download>(dependencies: {
         throw cause;
       }
     },
-    async generate(id: string, excludedFileIds?: string[], expectedRevision?: number) {
+    async generate(id: string, excludedFileIds?: string[], expectedRevision?: number | null) {
       if (recovery && expectedRevision === undefined)
         throw new ApiError("VALIDATION_ERROR", "화면에서 확인한 리포트 버전을 다시 확인해 주세요.");
       const selection = JSON.stringify({ excludedFileIds }),
