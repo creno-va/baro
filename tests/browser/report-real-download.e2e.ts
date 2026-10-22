@@ -3,7 +3,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { expect, test } from "@playwright/test";
-import { openReportOptions } from "../helpers/report-controls";
+import { openReportEditor, openReportOptions } from "../helpers/report-controls";
 
 test("ReportReview uses signed real SQL routes and saves a Korean font PDF from the reviewed HTML document", async ({
   page,
@@ -51,6 +51,7 @@ test("ReportReview uses signed real SQL routes and saves a Korean font PDF from 
     await context.addCookies([seed.cookie]);
     await page.setViewportSize({ width: 375, height: 812 });
     await page.goto(`${seed.origin}/cases/${seed.caseId}/reports`);
+    await openReportEditor(page);
     const editor = page.getByRole("textbox", { name: "리포트 내용 편집" });
     await expect(editor).toBeVisible();
     const paragraphs = Array.from(

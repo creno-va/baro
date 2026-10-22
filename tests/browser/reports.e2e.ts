@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
-import { openReportOptions } from "../helpers/report-controls";
+import { openReportEditor, openReportOptions } from "../helpers/report-controls";
 
 // Dedicated D port under either the main browser config or the standalone config.
 test.use({ baseURL: `http://127.0.0.1:${process.env.BARO_REPORT_TEST_PORT ?? 4343}` });
@@ -53,6 +53,7 @@ async function prepareSavedPdf(page: import("@playwright/test").Page) {
 const evidence = process.env.BARO_REPORT_EVIDENCE_DIR;
 test("same-tab signout immediately clears report preview and saved ZIP", async ({ page }) => {
   await page.goto("/cases/case-demo/reports");
+  await openReportEditor(page);
   const editor = page.getByRole("textbox", { name: "리포트 내용 편집" });
   await expect(editor).toBeVisible();
   await prepareSavedPdf(page);
@@ -76,6 +77,7 @@ test("peer account switch clears dirty report, selected originals, confirmation 
   context,
 }) => {
   await page.goto("/cases/case-demo/reports");
+  await openReportEditor(page);
   const editor = page.getByRole("textbox", { name: "리포트 내용 편집" });
   await expect(editor).toBeVisible();
   await prepareSavedPdf(page);
@@ -113,6 +115,7 @@ test("same owner role change purges report edits and exports after peer-tab noti
   context,
 }) => {
   await page.goto("/cases/case-demo/reports");
+  await openReportEditor(page);
   const editor = page.getByRole("textbox", { name: "리포트 내용 편집" });
   await expect(editor).toBeVisible();
   await prepareSavedPdf(page);
@@ -166,6 +169,7 @@ test("review, masking, exclusions, PDF-only downloads and persistent cascading d
       external.push(new URL(request.url()).origin);
   });
   await page.goto("/cases/case-demo/reports");
+  await openReportEditor(page);
   await expect(page.getByRole("textbox", { name: "리포트 내용 편집" })).toBeVisible();
   await page
     .getByRole("textbox", { name: "리포트 내용 편집" })
@@ -177,6 +181,7 @@ test("review, masking, exclusions, PDF-only downloads and persistent cascading d
   await page.getByRole("button", { name: "검토 내용 저장" }).click();
   await expect(page.getByRole("status")).toContainText("검토 내용을 저장");
   await page.reload();
+  await openReportEditor(page);
   await expect(page.getByRole("textbox", { name: "리포트 내용 편집" })).toHaveValue(
     /합성 검토 내용/,
   );
@@ -278,6 +283,7 @@ test("mobile layout, keyboard cancel, failure and retry use the same components"
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "사건 삭제", exact: true })).toBeFocused();
   await page.goto("/cases/case-demo/reports");
+  await openReportEditor(page);
   await expect(page.getByRole("textbox", { name: "리포트 내용 편집" })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true,
@@ -295,6 +301,7 @@ test("mobile layout, keyboard cancel, failure and retry use the same components"
   await expect(
     page.getByRole("status").filter({ hasText: "새 리포트 생성과 수정은 필수 동의 후" }),
   ).toBeVisible();
+  await openReportEditor(page);
   await expect(page.getByRole("textbox", { name: "리포트 내용 편집" })).toBeDisabled();
   await page.evaluate(() => {
     const key = "baro.reports.browser-test.v1";
@@ -303,6 +310,7 @@ test("mobile layout, keyboard cancel, failure and retry use the same components"
     localStorage.setItem(key, JSON.stringify(state));
   });
   await page.reload();
+  await openReportEditor(page);
   await expect(page.getByRole("textbox", { name: "리포트 내용 편집" })).toBeVisible();
   const editor = page.getByRole("textbox", { name: "리포트 내용 편집" });
   await editor.fill("저장되지 않은 검토 내용");

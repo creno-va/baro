@@ -51,6 +51,7 @@ test("application, login and case screens share local brand and remain usable at
   await page.goto("/app");
   await expect(page.getByRole("heading", { name: "어떤 일이 있었나요?" })).toBeVisible();
   await expect(page.locator("astro-island[ssr]")).toHaveCount(0);
+  await expect(page.locator(".app-frame--product")).toHaveCount(0);
   await page.screenshot({ path: ".wrangler/home-desktop.png", fullPage: true });
   await page.goto("/login");
   await expect(page.getByRole("button", { name: "Google로 계속하기" })).toBeVisible();
@@ -73,7 +74,7 @@ test("application, login and case screens share local brand and remain usable at
   await expect(page.getByRole("button", { name: "저장하고 계속" })).toBeEnabled();
   await expect(page.getByRole("button", { name: "저장하고 계속" })).toHaveCSS(
     "background-color",
-    "rgb(34, 108, 219)",
+    "rgb(35, 100, 232)",
   );
   await page.goto("/cases");
   await expect(page.getByRole("heading", { name: "아직 정리한 사건이 없어요" })).toBeVisible();

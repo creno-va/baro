@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { openReportOptions } from "../helpers/report-controls";
+import { openReportEditor, openReportOptions } from "../helpers/report-controls";
 
 test.skip(
   process.env.BARO_WORKSPACE_SHARED_UI !== "true",
@@ -159,6 +159,7 @@ test("uploaded long mock material can be reviewed, edited and excluded after rel
   await review.getByText("원본 추출 내용", { exact: true }).nth(0).click();
   await expect(review.locator("fieldset").nth(0).locator("details p")).toHaveText("a".repeat(5000));
   await page.goto("/cases/synthetic-material-case/reports");
+  await openReportEditor(page);
   const report = page.getByRole("textbox", { name: "리포트 내용 편집" });
   await expect(report).toHaveValue(/Synthetic corrected first chunk/);
   await expect(report).not.toHaveValue(/Synthetic second chunk/);

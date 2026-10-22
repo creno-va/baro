@@ -450,119 +450,127 @@ export function SummaryReview({ caseId }: { caseId: string }) {
                   {summaryTooLong && <p role="alert">요약은 5,000자까지 입력할 수 있어요.</p>}
                 </div>
                 {item.summaryDetails && (
-                  <section aria-label="구조화된 사실 편집">
-                    <h2>사실·모순·정보 공백 확인</h2>
-                    <p id="fact-certainty-help" className="intake-muted">
-                      내가 설명한 내용은 ‘사용자 진술’, 기억이나 근거를 더 확인해야 하면 ‘아직
-                      확인하지 못했어요’를 선택하세요.
-                    </p>
-                    {item.summaryDetails.facts.map((fact) => {
-                      const edit = factEdits[fact.id] ?? fact;
-                      const update = (change: Partial<typeof edit>) => {
-                        setFactEdits((old) => ({
-                          ...old,
-                          [fact.id]: {
-                            text: edit.text,
-                            certainty:
-                              change.text !== undefined && edit.certainty === "observed"
-                                ? "uncertain"
-                                : edit.certainty,
-                            conflictingFactIds: edit.conflictingFactIds,
-                            ...change,
-                          },
-                        }));
-                        setChecked(false);
-                        setConfirming(false);
-                      };
-                      return (
-                        <fieldset
-                          key={fact.id}
-                          disabled={locked || fact.attribution === "official_source"}
-                        >
-                          <legend>
-                            {fact.significance === "unfavorable" ? "불리한 사실 · " : ""}
-                            {fact.attribution === "official_source"
-                              ? "공식 출처 사실 (직접 변경할 수 없음)"
-                              : "사용자가 확인할 사실"}
-                          </legend>
-                          <label htmlFor={`fact-${fact.id}`}>사실 내용</label>
-                          <Textarea
-                            id={`fact-${fact.id}`}
-                            rows={Math.min(8, Math.max(3, Math.ceil(edit.text.length / 40)))}
-                            value={edit.text}
-                            onChange={(e) => update({ text: e.target.value })}
-                          />
-                          {[...edit.text].length > 2000 && (
-                            <p role="alert">사실 내용은 2,000자까지 입력할 수 있어요.</p>
-                          )}
-                          <label>
-                            확인 상태
-                            <select
-                              aria-label="확인 상태"
-                              aria-describedby="fact-certainty-help"
-                              value={edit.certainty}
-                              onChange={(e) => {
-                                const certainty = e.target.value as V2Fact["certainty"];
-                                update({
-                                  certainty,
-                                  conflictingFactIds:
-                                    certainty === "conflicting" ? edit.conflictingFactIds : [],
-                                });
-                              }}
-                            >
-                              {fact.attribution === "user_statement" && (
-                                <option value="reported">사용자 진술</option>
-                              )}
-                              {edit.certainty === "observed" && (
-                                <option value="observed">자료에서 관찰됨</option>
-                              )}
-                              <option value="uncertain">아직 확인하지 못했어요</option>
-                              <option value="conflicting">다른 사실과 모순</option>
-                            </select>
-                          </label>
-                          {edit.certainty === "conflicting" && (
-                            <fieldset className="summary-conflicts">
-                              <legend>
-                                모순되는 사실 선택 · {edit.conflictingFactIds.length}개 선택
-                              </legend>
-                              {item.summaryDetails?.facts
-                                .filter((v) => v.id !== fact.id)
-                                .map((v) => (
-                                  <label
-                                    key={v.id}
-                                    data-selected={edit.conflictingFactIds.includes(v.id)}
-                                  >
-                                    <input
-                                      type="checkbox"
-                                      checked={edit.conflictingFactIds.includes(v.id)}
-                                      onChange={(event) =>
-                                        update({
-                                          conflictingFactIds: event.target.checked
-                                            ? [...edit.conflictingFactIds, v.id]
-                                            : edit.conflictingFactIds.filter((id) => id !== v.id),
-                                        })
-                                      }
-                                    />
-                                    <span>{v.text}</span>
-                                  </label>
-                                ))}
-                            </fieldset>
-                          )}
-                        </fieldset>
-                      );
-                    })}
-                    <label htmlFor="summary-unknowns">확인할 정보 공백 (한 줄에 하나)</label>
-                    <Textarea
-                      id="summary-unknowns"
-                      value={unknownsDraft ?? item.summaryDetails.unknowns.join("\n")}
-                      disabled={locked}
-                      onChange={(e) => {
-                        setUnknownsDraft(e.target.value);
-                        setChecked(false);
-                        setConfirming(false);
-                      }}
-                    />
-                  </section>
+                  <details
+                    className="summary-facts"
+                    open={editingActive || item.summaryDetails.revision > 1 || undefined}
+                  >
+                    <summary>
+                      사실별로 검토·수정하기 <span>{item.summaryDetails.facts.length}개 사실</span>
+                    </summary>
+                    <section aria-label="구조화된 사실 편집">
+                      <h2>사실·모순·정보 공백 확인</h2>
+                      <p id="fact-certainty-help" className="intake-muted">
+                        내가 설명한 내용은 ‘사용자 진술’, 기억이나 근거를 더 확인해야 하면 ‘아직
+                        확인하지 못했어요’를 선택하세요.
+                      </p>
+                      {item.summaryDetails.facts.map((fact) => {
+                        const edit = factEdits[fact.id] ?? fact;
+                        const update = (change: Partial<typeof edit>) => {
+                          setFactEdits((old) => ({
+                            ...old,
+                            [fact.id]: {
+                              text: edit.text,
+                              certainty:
+                                change.text !== undefined && edit.certainty === "observed"
+                                  ? "uncertain"
+                                  : edit.certainty,
+                              conflictingFactIds: edit.conflictingFactIds,
+                              ...change,
+                            },
+                          }));
+                          setChecked(false);
+                          setConfirming(false);
+                        };
+                        return (
+                          <fieldset
+                            key={fact.id}
+                            disabled={locked || fact.attribution === "official_source"}
+                          >
+                            <legend>
+                              {fact.significance === "unfavorable" ? "불리한 사실 · " : ""}
+                              {fact.attribution === "official_source"
+                                ? "공식 출처 사실 (직접 변경할 수 없음)"
+                                : "사용자가 확인할 사실"}
+                            </legend>
+                            <label htmlFor={`fact-${fact.id}`}>사실 내용</label>
+                            <Textarea
+                              id={`fact-${fact.id}`}
+                              rows={Math.min(8, Math.max(3, Math.ceil(edit.text.length / 40)))}
+                              value={edit.text}
+                              onChange={(e) => update({ text: e.target.value })}
+                            />
+                            {[...edit.text].length > 2000 && (
+                              <p role="alert">사실 내용은 2,000자까지 입력할 수 있어요.</p>
+                            )}
+                            <label>
+                              확인 상태
+                              <select
+                                aria-label="확인 상태"
+                                aria-describedby="fact-certainty-help"
+                                value={edit.certainty}
+                                onChange={(e) => {
+                                  const certainty = e.target.value as V2Fact["certainty"];
+                                  update({
+                                    certainty,
+                                    conflictingFactIds:
+                                      certainty === "conflicting" ? edit.conflictingFactIds : [],
+                                  });
+                                }}
+                              >
+                                {fact.attribution === "user_statement" && (
+                                  <option value="reported">사용자 진술</option>
+                                )}
+                                {edit.certainty === "observed" && (
+                                  <option value="observed">자료에서 관찰됨</option>
+                                )}
+                                <option value="uncertain">아직 확인하지 못했어요</option>
+                                <option value="conflicting">다른 사실과 모순</option>
+                              </select>
+                            </label>
+                            {edit.certainty === "conflicting" && (
+                              <fieldset className="summary-conflicts">
+                                <legend>
+                                  모순되는 사실 선택 · {edit.conflictingFactIds.length}개 선택
+                                </legend>
+                                {item.summaryDetails?.facts
+                                  .filter((v) => v.id !== fact.id)
+                                  .map((v) => (
+                                    <label
+                                      key={v.id}
+                                      data-selected={edit.conflictingFactIds.includes(v.id)}
+                                    >
+                                      <input
+                                        type="checkbox"
+                                        checked={edit.conflictingFactIds.includes(v.id)}
+                                        onChange={(event) =>
+                                          update({
+                                            conflictingFactIds: event.target.checked
+                                              ? [...edit.conflictingFactIds, v.id]
+                                              : edit.conflictingFactIds.filter((id) => id !== v.id),
+                                          })
+                                        }
+                                      />
+                                      <span>{v.text}</span>
+                                    </label>
+                                  ))}
+                              </fieldset>
+                            )}
+                          </fieldset>
+                        );
+                      })}
+                      <label htmlFor="summary-unknowns">확인할 정보 공백 (한 줄에 하나)</label>
+                      <Textarea
+                        id="summary-unknowns"
+                        value={unknownsDraft ?? item.summaryDetails.unknowns.join("\n")}
+                        disabled={locked}
+                        onChange={(e) => {
+                          setUnknownsDraft(e.target.value);
+                          setChecked(false);
+                          setConfirming(false);
+                        }}
+                      />
+                    </section>
+                  </details>
                 )}
                 {dirty ? (
                   <div className="intake-scene-tools">
@@ -637,7 +645,11 @@ export function SummaryReview({ caseId }: { caseId: string }) {
                     </label>
                     <Button
                       className="intake-scene-primary"
-                      onClick={() => setConfirming(true)}
+                      aria-haspopup="dialog"
+                      onClick={(event) => {
+                        event.currentTarget.focus();
+                        setConfirming(true);
+                      }}
                       disabled={
                         !canMutate ||
                         busy ||

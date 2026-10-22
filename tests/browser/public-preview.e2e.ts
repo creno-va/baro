@@ -2,6 +2,7 @@ import { type ChildProcess, spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
+import { openReportEditor } from "../helpers/report-controls";
 
 const origin = "http://127.0.0.1:4362";
 test.use({ baseURL: origin });
@@ -137,6 +138,7 @@ test("intake opens an active workspace with lawyer navigation and report control
   await expect(page.locator(".workspace-action-list input").first()).toBeEnabled();
   await tabs.getByRole("link", { name: "리포트 보기" }).click();
   await expect(page.getByRole("button", { name: "새 버전 만들기" })).toBeEnabled();
+  await openReportEditor(page);
   await expect(page.getByRole("textbox", { name: "리포트 내용 편집" })).toBeEnabled();
   await expect(page.getByRole("button", { name: "검토 내용 저장" })).toBeEnabled();
   await expect(page.getByRole("button", { name: "PDF 다운로드" })).toBeDisabled();
