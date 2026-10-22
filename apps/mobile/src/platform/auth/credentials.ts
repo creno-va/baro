@@ -80,7 +80,13 @@ export function createNativeCredentials(dependencies: {
         throw unavailable();
       },
       getItemAsync: (key) => io(() => dependencies.storage.getItemAsync(key)),
-      setItemAsync: (key, value) => io(() => dependencies.storage.setItemAsync(key, value)),
+      setItemAsync: (key, value) =>
+        io(async () => {
+          await dependencies.storage.setItemAsync(key, value);
+          // Stop at the first missing chunk, before the SDK can write later
+          // fragments or a marker that would hide a partial native-store failure.
+          if ((await dependencies.storage.getItemAsync(key)) !== value) throw unavailable();
+        }),
     };
     const managed = dependencies.manageStorage(storage);
     const serial = <T>(operation: () => Promise<T>) => {

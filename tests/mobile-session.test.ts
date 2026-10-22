@@ -229,3 +229,21 @@ test("cancellation retires an in-flight login result and policy link failures re
   expect(model.getSnapshot().error).toContain("다시 시도");
   expect(model.getSnapshot().error).not.toContain("SYNTHETIC_PRIVATE_LINK_DETAIL");
 });
+
+test("opening the system browser retires private work once without aborting its current auth exchange", async () => {
+  const f = fixture(owner("a")),
+    gate = deferred<ClientSession>();
+  f.dependencies.login.start = async () => ({ type: "verified", session: await gate.promise });
+  const model = createSessionModel(f.dependencies);
+  await model.refresh();
+  const old = f.scope.signal();
+  const login = model.signIn("google");
+  expect(old.aborted).toBe(true);
+  const auth = f.scope.signal();
+  model.pause();
+  expect(auth.aborted).toBe(false);
+  await model.resume();
+  gate.resolve(owner("b"));
+  await login;
+  expect(model.getSnapshot().session?.user?.id).toBe("b");
+});

@@ -46,8 +46,19 @@ export async function signOutNative(dependencies: {
     } catch {
       sameOrigin = false;
     }
+    let accepted = false;
+    if (
+      response.ok &&
+      sameOrigin &&
+      response.headers.get("content-type")?.includes("application/json")
+    ) {
+      const value: unknown = await response.json().catch(() => null);
+      accepted = Boolean(
+        value && typeof value === "object" && "success" in value && value.success === true,
+      );
+    }
     await response.body?.cancel().catch(() => {});
-    return { serverRevoked: response.ok && sameOrigin };
+    return { serverRevoked: accepted };
   } catch {
     return { serverRevoked: false };
   }

@@ -1,17 +1,17 @@
 /** Ephemeral handoff only: no return URL enters route params, storage or logs. */
 export function createAuthReturnQueue() {
-  let pending: string | undefined;
+  let pending: string[] = [];
   let receiver: ((raw: string) => Promise<void>) | undefined;
   const flush = () => {
-    const raw = pending,
-      target = receiver;
-    if (!raw || !target) return;
-    pending = undefined;
-    void target(raw).catch(() => {});
+    const target = receiver;
+    if (!target) return;
+    const queued = pending;
+    pending = [];
+    for (const raw of queued) void target(raw).catch(() => {});
   };
   return {
     push(raw: string) {
-      pending = raw;
+      pending = [...new Set([...pending, raw])].slice(-4);
       flush();
     },
     subscribe(next: (raw: string) => Promise<void>) {

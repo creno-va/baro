@@ -112,6 +112,7 @@ export function createSessionModel(dependencies: {
       if (state.busy || loggingOut || returnLookups) return;
       const captured = ++version,
         role = state.role;
+      dependencies.scope.invalidate();
       checking("authorizing");
       try {
         const result = await dependencies.login.start(provider, role);
@@ -137,6 +138,7 @@ export function createSessionModel(dependencies: {
         returnLookups--;
       }
       const captured = ++version;
+      dependencies.scope.invalidate();
       checking("authorizing");
       try {
         const result = await dependencies.login.complete(raw);
@@ -229,8 +231,11 @@ export function createSessionModel(dependencies: {
     },
     pause() {
       paused = true;
+      // Private work was retired before authorization began. Backgrounding the
+      // system browser must not abort its current cookie exchange or role IO.
+      if (state.phase === "authorizing") return;
       dependencies.scope.invalidate();
-      if (state.phase === "authorizing" || loggingOut || returnLookups) return;
+      if (loggingOut || returnLookups) return;
       version++;
       publish({
         ...state,
