@@ -314,6 +314,12 @@ workspace·자료·리포트·나머지 domain을 순차 추출한다. 첫 단�
   저장소가 잠겨도 공개 목록은 익명으로 조회한다. 실제 SDK 분할/expiry/중단 정리와 합성
   native transport 경계를 검사하며 브라우저 로그인/coordinator/기기 증거는 다음 단계다.
 
+- 독립 M2 `codex/335-lawyer-public-contract`는 웹에서 사용하던 변호사 self-profile의 순수
+  schema/DTO·준비/중복 저장 helper를 `@baro/contracts/v2/self-profile` 정본으로 옮긴다.
+  기존 서버 경로는 호환 re-export하고 JPEG metadata byte 처리는 기존 adapter에 둔다.
+  웹 facade/mock은 공개 계약만 import한다. wire·서버 의미와 웹 UI를 보존하며 이 계약을
+  먼저 통합한 뒤 프로필/자산 공통 client를 추출한다. M2 전체는 아직 인수하지 않는다.
+
 ## 참고
 
 - [Expo workspace 구성](https://docs.expo.dev/guides/monorepos/)
