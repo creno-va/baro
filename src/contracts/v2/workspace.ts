@@ -162,6 +162,11 @@ export const v2ActionSchema = z
       action.references.some((ref) => ref.kind === "official_source"),
     "Official-guide action needs a source",
   );
+/** Additive action/timeline response metadata, never part of the encrypted entity.
+ * A replay returns its original operation revision, not the current workspace. */
+export const v2EntityMutationReceiptSchema = z.object({
+  committedWorkspaceRevision: revisionSchema,
+});
 export const v2ActionUpdateRequestSchema = z.strictObject({
   expectedRevision: revisionSchema,
   status: z.enum(["todo", "done", "skipped"]),

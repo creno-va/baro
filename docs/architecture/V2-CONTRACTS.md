@@ -220,3 +220,17 @@ snapshot·숨은 plaintext export를 만들지 않는다. journal은 삭제 전 
 새 계약·migration 검증, v1 upgrade/read/delete 회귀, 다중 역할·비밀자료 차단을 함께 통과해야
 한다. P0.3 외부/정책 승인과 새 서비스 공개 근거를 별도로 확인하며 건강 상태 200이나 화면
 스크린샷만으로 실제 모델·공개 승인·삭제 완료를 주장하지 않는다.
+
+## 행동·타임라인 저장 후 읽기 (#317)
+
+행동 수정·타임라인 추가/수정 응답은 기존 entity 필드를 보존하고
+`committedWorkspaceRevision`을 추가한다. 이 값은 같은 원자적 쓰기와 멱등 영수증에
+기록한 workspace revision이다. 재시도는 그 작업의 원래 revision을 반환하며 조회 시점의
+revision으로 바꾸지 않는다. 암호화 entity에는 응답 metadata를 저장하지 않는다.
+
+클라이언트는 보유 snapshot N, 영수증 N+1, 새 workspace 조회 N+1이 일치하고 실행 중
+job이 없을 때만 변경한 목록을 다시 읽는다. 자료 metadata와 최종 workspace 조회 및 UI의
+앞뒤 세션 검증은 유지한다. peer 변경·오래된 재시도·영수증 없는 응답·조회 중 revision 변경은
+전체 재조회로 복귀한다. 열린 pagination 범위를 보존하며 새 read replica/공유 캐시를
+추가하지 않는다. intake와 summary 읽기의 최초 권한·복호화 후/fragment별 최종 fence는
+repository가 소유하고 중복 service 조회만 제거한다.

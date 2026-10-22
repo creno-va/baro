@@ -387,13 +387,13 @@ test("canonical summary read, save and confirmation separate fresh authorization
   }
 });
 
-test("canonical timeline save measures the complete client readback and final session check", async () => {
+test("timeline save rereads only its collection while keeping file, revision and session fences", async () => {
   const f = await fixture();
   let before = f.view;
   for (const method of ["POST", "PUT"] as const) {
     f.reset();
     // The successful Workspace.run/saveEntry path checks session before writing
-    // and after saveTimeline's full get(). No UI authorization fence is skipped.
+    // and after saveTimeline's fenced readback. No UI authorization fence is skipped.
     await f.session();
     const entry =
       method === "PUT"
@@ -413,12 +413,12 @@ test("canonical timeline save measures the complete client readback and final se
     expect(after.timeline.find((entry) => entry.title === "합성 추가 일정")?.detail).toBe(
       method === "PUT" ? "수정한 합성 내용" : "처음 저장한 합성 내용",
     );
-    expect(f.rows).toHaveLength(12);
+    expect(f.rows).toHaveLength(8);
     expect(f.rows.filter((row) => row.method !== "GET")).toHaveLength(1);
     const write = f.rows.find((row) => row.method === method);
     if (!write) throw new Error("Missing measured write");
     expect(f.rows.at(-1)?.route).toBe("session");
-    expect(f.rows.filter((row) => row.startedMs >= write.completedMs)).toHaveLength(10);
+    expect(f.rows.filter((row) => row.startedMs >= write.completedMs)).toHaveLength(6);
     expect(
       f.rows.map(({ route, method, calls, statements }) => ({ route, method, calls, statements })),
     ).toEqual([
@@ -430,12 +430,8 @@ test("canonical timeline save measures the complete client readback and final se
         statements: method === "POST" ? 18 : 19,
       },
       { route: "workspace", method: "GET", calls: 5, statements: 5 },
-      { route: "intake", method: "GET", calls: 8, statements: 9 },
-      { route: "messages", method: "GET", calls: 8, statements: 8 },
-      { route: "actions", method: "GET", calls: 8, statements: 8 },
       { route: "timeline", method: "GET", calls: 8, statements: 8 },
       { route: "files", method: "GET", calls: 8, statements: 8 },
-      { route: "summary", method: "GET", calls: 12, statements: 12 },
       { route: "workspace", method: "GET", calls: 5, statements: 5 },
       { route: "latest_job", method: "GET", calls: 6, statements: 6 },
       { route: "session", method: "GET", calls: 3, statements: 5 },
@@ -462,7 +458,7 @@ test("canonical timeline save measures the complete client readback and final se
   }
 });
 
-test("canonical action save retains the full readback and both session checks", async () => {
+test("action save rereads only its collection and keeps both session checks", async () => {
   const f = await fixture();
   const action = f.view.actions[0];
   if (!action) throw new Error("Missing synthetic action");
@@ -472,15 +468,21 @@ test("canonical action save retains the full readback and both session checks", 
   await f.session();
   expect(next.actions.find((value) => value.id === action.id)?.done).toBe(true);
   expect(next.case.revision).toBe(f.view.case.revision + 1);
-  // Same synthetic fixture before these two query merges: 100 calls / 112 SQL.
-  expect(f.rows).toHaveLength(12);
+  expect(next.messages).toEqual(f.view.messages);
+  expect(next.timeline).toEqual(f.view.timeline);
+  expect(next.facts).toEqual(f.view.facts);
+  expect(
+    f.rows.filter((row) => ["intake", "summary", "messages", "timeline"].includes(row.route)),
+  ).toHaveLength(0);
+  // Same integrated baseline before selective readback: 87 calls / 99 SQL.
+  expect(f.rows).toHaveLength(8);
   expect(f.rows.find((row) => row.method === "PUT")).toMatchObject({ calls: 13, statements: 20 });
   expect(f.rows.find((row) => row.route === "latest_job")).toMatchObject({
     calls: 6,
     statements: 6,
   });
-  expect(f.rows.reduce((sum, row) => sum + row.calls, 0)).toBe(87);
-  expect(f.rows.reduce((sum, row) => sum + row.statements, 0)).toBe(99);
+  expect(f.rows.reduce((sum, row) => sum + row.calls, 0)).toBe(51);
+  expect(f.rows.reduce((sum, row) => sum + row.statements, 0)).toBe(62);
   if (process.env.BARO_WORKSPACE_LOAD_METRICS === "true")
     console.info(
       JSON.stringify({
@@ -851,4 +853,130 @@ test("canonical files-page focus retains fresh session boundaries without summar
         statements: f.rows.reduce((sum, row) => sum + row.statements, 0),
       }),
     );
+});
+
+test("a peer write after action commit invalidates selective readback", async () => {
+  const f = await fixture();
+  let inject = true;
+  const client = createWorkspaceApi(async (path, init) => {
+    const response = await f.transport(path, init);
+    if (init?.method === "PUT" && inject) {
+      inject = false;
+      const current = await f.service.find(f.owner.userId, f.workspace.id);
+      await f.service.createTimeline(f.owner.userId, f.workspace.id, crypto.randomUUID(), {
+        expectedRevision: current.workspaceRevision,
+        date: null,
+        datePrecision: "unknown",
+        event: "다른 탭에서 추가한 사실",
+      });
+    }
+    return response;
+  }, null);
+  const before = await client.get(f.workspace.id);
+  f.reset();
+  const next = await client.setAction(f.workspace.id, before.actions[0]?.id ?? "", true);
+  expect(next.case.revision).toBe(before.case.revision + 2);
+  expect(next.timeline.some((entry) => entry.title === "다른 탭에서 추가한 사실")).toBe(true);
+  expect(f.rows.some((row) => row.route === "intake")).toBe(true);
+  expect(f.rows.some((row) => row.route === "summary")).toBe(true);
+});
+
+test("lost acknowledgement replay retains its original commit revision after a peer write", async () => {
+  const f = await fixture();
+  let lose = true;
+  const receipts: number[] = [];
+  const client = createWorkspaceApi(async (path, init) => {
+    const response = await f.transport(path, init);
+    if (init?.method === "PUT") {
+      const body = (await response.clone().json()) as { committedWorkspaceRevision: number };
+      receipts.push(body.committedWorkspaceRevision);
+      if (lose) {
+        lose = false;
+        await response.arrayBuffer();
+        throw new Error("synthetic lost acknowledgement");
+      }
+    }
+    return response;
+  }, null);
+  const before = await client.get(f.workspace.id);
+  const actionId = before.actions[0]?.id ?? "";
+  await expect(client.setAction(f.workspace.id, actionId, true)).rejects.toThrow(
+    "lost acknowledgement",
+  );
+  const current = await f.service.find(f.owner.userId, f.workspace.id);
+  await f.service.createTimeline(f.owner.userId, f.workspace.id, crypto.randomUUID(), {
+    expectedRevision: current.workspaceRevision,
+    date: null,
+    datePrecision: "unknown",
+    event: "응답 유실 뒤 다른 탭의 변경",
+  });
+  f.reset();
+  const next = await client.setAction(f.workspace.id, actionId, true);
+  expect(receipts).toEqual([before.case.revision + 1, before.case.revision + 1]);
+  expect(next.case.revision).toBe(before.case.revision + 2);
+  expect(next.timeline.some((entry) => entry.title === "응답 유실 뒤 다른 탭의 변경")).toBe(true);
+  expect(f.rows.some((row) => row.route === "intake")).toBe(true);
+  expect((await f.service.actions(f.owner.userId, f.workspace.id))[0]?.revision).toBe(2);
+});
+
+test("a revision change during selective collection read triggers complete recovery", async () => {
+  const f = await fixture();
+  let changed = false;
+  f.afterSql((statements) => {
+    if (changed || !statements.some((sql) => sql.startsWith("SELECT * FROM v2_actions"))) return;
+    changed = true;
+    f.db.sqlite
+      .query("UPDATE v2_workspaces SET revision=revision+1 WHERE id=?")
+      .run(f.workspace.id);
+  });
+  f.reset();
+  const next = await f.client.setAction(f.workspace.id, f.view.actions[0]?.id ?? "", true);
+  expect(changed).toBe(true);
+  expect(next.case.revision).toBe(f.view.case.revision + 2);
+  expect(next.actions[0]?.done).toBe(true);
+  expect(f.rows.some((row) => row.route === "intake")).toBe(true);
+});
+
+test("account deletion during selective readback never returns retained private collections", async () => {
+  const f = await fixture();
+  let changed = false;
+  f.afterSql((statements) => {
+    if (changed || !statements.some((sql) => sql.startsWith("SELECT * FROM v2_actions"))) return;
+    changed = true;
+    f.db.sqlite.query("INSERT INTO v2_tombstones VALUES('account',?,?)").run(f.owner.userId, f.now);
+  });
+  const cause = await f.client.setAction(f.workspace.id, f.view.actions[0]?.id ?? "", true).then(
+    () => null,
+    (error: unknown) => error,
+  );
+  expect(changed).toBe(true);
+  expect(cause).toBeInstanceOf(Error);
+  expect(["NOT_FOUND", "UNAVAILABLE", "UNAUTHENTICATED"]).toContain(
+    (cause as { code: string }).code,
+  );
+});
+
+test("timeline create and edit receipts preserve the actual commit across replay", async () => {
+  const f = await fixture();
+  const owner = f.owner.userId,
+    id = f.workspace.id;
+  const key = crypto.randomUUID();
+  const input = {
+    expectedRevision: f.view.case.revision,
+    date: null,
+    datePrecision: "unknown",
+    event: "영수증 확인",
+  };
+  const created = await f.service.createTimeline(owner, id, key, input);
+  expect(created.committedWorkspaceRevision).toBe(f.view.case.revision + 1);
+  const editKey = crypto.randomUUID();
+  const edit = { ...input, expectedRevision: created.revision, event: "영수증 수정" };
+  const edited = await f.service.editTimeline(owner, id, created.id, editKey, edit);
+  expect(edited.committedWorkspaceRevision).toBe(f.view.case.revision + 2);
+  expect((await f.service.createTimeline(owner, id, key, input)).committedWorkspaceRevision).toBe(
+    created.committedWorkspaceRevision,
+  );
+  expect(
+    (await f.service.editTimeline(owner, id, created.id, editKey, edit)).committedWorkspaceRevision,
+  ).toBe(edited.committedWorkspaceRevision);
 });

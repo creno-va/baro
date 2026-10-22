@@ -96,7 +96,12 @@ export function createWorkspaceService(core: V2Core, deps: WorkspaceDependencies
     const replay = await accounting.findOperation(actor(ownerId), route, a.key, a.requestHash);
     if (replay?.kind === "conflict") throw new WorkspaceError("IDEMPOTENCY_CONFLICT");
     const current = await find(ownerId, id);
-    return { receipt: { ...a, route, kind }, replay: replay?.kind === "replay", current };
+    return {
+      receipt: { ...a, route, kind },
+      replay: replay?.kind === "replay",
+      replayRevision: replay?.kind === "replay" ? replay.operation.revision : null,
+      current,
+    };
   };
   const replayCreate = async (ownerId: string, key: string, raw: unknown) => {
     const { turnstileToken: _, ...business } = v2CreateCaseRequestSchema.parse(raw);
@@ -316,14 +321,17 @@ export function createWorkspaceService(core: V2Core, deps: WorkspaceDependencies
       return find(ownerId, id);
     },
     async intake(ownerId: string, id: string) {
-      await find(ownerId, id);
-      return workspace.metadata(actor(ownerId), id);
+      // metadata owns the initial owner/tombstone read and the post-decrypt fence.
+      const value = await workspace.metadata(actor(ownerId), id);
+      if (!value) throw new WorkspaceError("NOT_FOUND");
+      return value;
     },
     async summaryAvailable(ownerId: string, id: string) {
       return workspace.summaryAvailable(actor(ownerId), id);
     },
     async *summary(ownerId: string, id: string) {
-      await find(ownerId, id);
+      opaqueIdSchema.parse(id);
+      // The repository rereads the current owner/summary and fences every fragment.
       yield* workspace.summaryFragments(actor(ownerId), id);
     },
     async answers(ownerId: string, id: string, key: string, raw: unknown) {
@@ -484,7 +492,7 @@ export function createWorkspaceService(core: V2Core, deps: WorkspaceDependencies
         row.encrypted_payload,
         v2ActionSchema,
       );
-      if (m.replay) return value;
+      if (m.replay) return { ...value, committedWorkspaceRevision: m.replayRevision };
       if (
         body.expectedRevision !== row.revision ||
         !(await workspace.writeAction(
@@ -495,7 +503,12 @@ export function createWorkspaceService(core: V2Core, deps: WorkspaceDependencies
         ))
       )
         throw new WorkspaceError("STALE_REVISION");
-      return { ...value, revision: row.revision + 1, status: body.status };
+      return {
+        ...value,
+        revision: row.revision + 1,
+        status: body.status,
+        committedWorkspaceRevision: g.expectedRevision + 1,
+      };
     },
     async createTimeline(ownerId: string, id: string, key: string, raw: unknown) {
       const body = v2TimelineEditRequestSchema.parse(raw);
@@ -511,7 +524,7 @@ export function createWorkspaceService(core: V2Core, deps: WorkspaceDependencies
           )
           .first<{ id: string; revision: number; encrypted_payload: string }>();
         if (!row) throw new WorkspaceError("NOT_FOUND");
-        return core.decrypt(
+        const value = await core.decrypt(
           "v2_timeline",
           row.id,
           ownerId,
@@ -519,6 +532,7 @@ export function createWorkspaceService(core: V2Core, deps: WorkspaceDependencies
           row.encrypted_payload,
           v2TimelineEntrySchema,
         );
+        return { ...value, committedWorkspaceRevision: m.replayRevision };
       }
       const g = await guard(ownerId, id, body.expectedRevision);
       const entry = v2TimelineEntrySchema.parse({
@@ -534,7 +548,7 @@ export function createWorkspaceService(core: V2Core, deps: WorkspaceDependencies
       });
       if (!(await workspace.writeTimeline(g, entry, null, m.receipt)))
         throw new WorkspaceError("STALE_REVISION");
-      return entry;
+      return { ...entry, committedWorkspaceRevision: g.expectedRevision + 1 };
     },
     async editTimeline(ownerId: string, id: string, entryId: string, key: string, raw: unknown) {
       const body = v2TimelineEditRequestSchema.parse(raw);
@@ -565,7 +579,7 @@ export function createWorkspaceService(core: V2Core, deps: WorkspaceDependencies
         row.encrypted_payload,
         v2TimelineEntrySchema,
       );
-      if (m.replay) return value;
+      if (m.replay) return { ...value, committedWorkspaceRevision: m.replayRevision };
       const updated = {
         ...value,
         revision: row.revision + 1,
@@ -580,7 +594,7 @@ export function createWorkspaceService(core: V2Core, deps: WorkspaceDependencies
         !(await workspace.writeTimeline(g, updated, row.revision, m.receipt))
       )
         throw new WorkspaceError("STALE_REVISION");
-      return updated;
+      return { ...updated, committedWorkspaceRevision: g.expectedRevision + 1 };
     },
     async state(ownerId: string, id: string, key: string, raw: unknown) {
       const body = v2WorkspaceStateRequestSchema.parse(raw);

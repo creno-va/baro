@@ -3,6 +3,7 @@ import { caseDetailResponseSchema, opaqueIdSchema } from "../../contracts";
 import {
   v2AcceptedOperationSchema,
   v2ActionSchema,
+  v2EntityMutationReceiptSchema,
   v2FactReferenceSchema,
   v2FailureCodeSchema,
   v2FileProcessingSchema,
@@ -244,6 +245,11 @@ export function createWorkspaceApi(
     recovery = 0,
     more?: "messages" | "actions" | "timeline",
     filesOnly: boolean | "evidence" = false,
+    readback?: {
+      previousRevision: number;
+      committedRevision: number;
+      collection: "actions" | "timeline";
+    },
   ): Promise<CustomerWorkspaceView> {
     const response = await request(`${base(id)}/workspace`);
     if (response.status === 404) {
@@ -339,7 +345,18 @@ export function createWorkspaceApi(
         timeline: [],
       };
     }
-    const cached = snapshots.get(id);
+    const previous = snapshots.get(id);
+    // A commit receipt identifies the one local write. Reuse other collections only
+    // when both fresh workspace reads match that exact next revision. Replays and
+    // peer/job changes that advanced farther take the normal full read path.
+    const partial = Boolean(
+      readback &&
+        previous?.revision === readback.previousRevision &&
+        readback.committedRevision === readback.previousRevision + 1 &&
+        w.workspaceRevision === readback.committedRevision &&
+        !w.currentJobId,
+    );
+    const cached = partial && previous ? { ...previous, revision: w.workspaceRevision } : previous;
     const limits = historyLimits.get(id) ?? { messages: 500, actions: 1000, timeline: 1000 };
     let [intake, messagesRaw, actionsRaw, timelineRaw, fileViews] = await Promise.all([
       cached?.revision === w.workspaceRevision
@@ -350,12 +367,12 @@ export function createWorkspaceApi(
           ? extendPage(cached.messagesRaw, (cursor) => allMessages(id, cursor))
           : Promise.resolve(cached.messagesRaw)
         : allMessages(id, null, limits.messages),
-      cached?.revision === w.workspaceRevision
+      cached?.revision === w.workspaceRevision && !(partial && readback?.collection === "actions")
         ? more === "actions"
           ? extendPage(cached.actionsRaw, (cursor) => allEntities(id, "actions", cursor))
           : Promise.resolve(cached.actionsRaw)
         : allEntities(id, "actions", null, limits.actions),
-      cached?.revision === w.workspaceRevision
+      cached?.revision === w.workspaceRevision && !(partial && readback?.collection === "timeline")
         ? more === "timeline"
           ? extendPage(cached.timelineRaw, (cursor) => allEntities(id, "timeline", cursor))
           : Promise.resolve(cached.timelineRaw)
@@ -549,6 +566,27 @@ export function createWorkspaceApi(
       notices: summary?.notices ?? [],
     };
   }
+  async function mutationReadback(
+    id: string,
+    previousRevision: number | undefined,
+    acknowledged: unknown,
+    collection: "actions" | "timeline",
+  ) {
+    const receipt = v2EntityMutationReceiptSchema.safeParse(acknowledged);
+    return get(
+      id,
+      0,
+      undefined,
+      false,
+      previousRevision !== undefined && receipt.success
+        ? {
+            previousRevision,
+            committedRevision: receipt.data.committedWorkspaceRevision,
+            collection,
+          }
+        : undefined,
+    );
+  }
   async function allMessages(id: string, after: string | null = null, limit = 500) {
     const items: z.infer<typeof messageTextSchema>[] = [];
     let cursor = after;
@@ -686,8 +724,10 @@ export function createWorkspaceApi(
               "PUT",
             );
       pendingActions.set(signature, { done, init });
+      const previousRevision = snapshots.get(id)?.revision;
+      let acknowledged: unknown;
       try {
-        await workspaceJson(request, route, init);
+        acknowledged = await workspaceJson(request, route, init);
       } catch (cause) {
         if (
           (cause as { code?: string }).code === "CONFLICT" &&
@@ -696,7 +736,7 @@ export function createWorkspaceApi(
           pendingActions.delete(signature);
         throw cause;
       }
-      const next = await get(id);
+      const next = await mutationReadback(id, previousRevision, acknowledged, "actions");
       if (pendingActions.get(signature)?.init === init) pendingActions.delete(signature);
       return next;
     },
@@ -723,8 +763,10 @@ export function createWorkspaceApi(
         init = workspaceMutation(route, body, entry.id ? "PUT" : "POST");
         pendingTimelines.set(signature, init);
       }
+      const previousRevision = snapshots.get(id)?.revision;
+      let acknowledged: unknown;
       try {
-        await workspaceJson(request, route, init);
+        acknowledged = await workspaceJson(request, route, init);
       } catch (cause) {
         if (
           (cause as { code?: string }).code === "CONFLICT" &&
@@ -733,7 +775,7 @@ export function createWorkspaceApi(
           pendingTimelines.delete(signature);
         throw cause;
       }
-      const next = await get(id);
+      const next = await mutationReadback(id, previousRevision, acknowledged, "timeline");
       pendingTimelines.delete(signature);
       return next;
     },
