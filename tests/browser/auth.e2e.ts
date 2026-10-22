@@ -1,5 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
+import { syntheticConsentStatus } from "../fixtures/consent-status";
 
 test.beforeEach(async ({ page }) => {
   await page.route("**/api/me/session", (route) =>
@@ -113,7 +114,7 @@ for (const [accountType, returnTo, destination] of [
     let writes = 0;
     await page.route("**/api/me/consent", (route) => {
       if (route.request().method() !== "GET") writes++;
-      return route.fulfill({ json: { needsConsent: false } });
+      return route.fulfill({ json: syntheticConsentStatus(false) });
     });
     const content = await page.request.get(`/consent?returnTo=${encodeURIComponent(returnTo)}`);
     expect(await content.text()).not.toContain("시작 전에");
@@ -127,7 +128,9 @@ for (const [accountType, returnTo, destination] of [
 test("required consent fits desktop and phone and policy links preserve the form", async ({
   page,
 }) => {
-  await page.route("**/api/me/consent", (route) => route.fulfill({ json: { needsConsent: true } }));
+  await page.route("**/api/me/consent", (route) =>
+    route.fulfill({ json: syntheticConsentStatus(true) }),
+  );
   for (const viewport of [
     { width: 1440, height: 900 },
     { width: 320, height: 760 },
@@ -197,7 +200,7 @@ test("keyboard role selection reaches the lawyer destination after a synthetic O
     route.fulfill({ json: { accountType: "lawyer" } }),
   );
   await page.route("**/api/me/consent", (route) =>
-    route.fulfill({ json: { needsConsent: false } }),
+    route.fulfill({ json: syntheticConsentStatus(false) }),
   );
   await page.goto("/login");
   const customer = page.getByRole("radio", { name: /고객/ });
@@ -238,7 +241,9 @@ test("provider errors are recoverable and a synthetic redirect reaches consent",
           },
     );
   });
-  await page.route("**/api/me/consent", (route) => route.fulfill({ json: { needsConsent: true } }));
+  await page.route("**/api/me/consent", (route) =>
+    route.fulfill({ json: syntheticConsentStatus(true) }),
+  );
   await page.goto("/login");
   await page.locator("astro-island[ssr]").waitFor({ state: "detached" });
   await page.getByRole("button", { name: "Kakao로 계속하기" }).click();
@@ -263,14 +268,14 @@ test("consent loading failure retries; keyboard checks gate save, failure recove
         await route.abort("failed");
         return;
       }
-      await route.fulfill({ json: { needsConsent: true } });
+      await route.fulfill({ json: syntheticConsentStatus(true) });
       return;
     }
     writes++;
     if (writes === 1) {
       await pending;
       await route.abort("failed");
-    } else await route.fulfill({ json: { needsConsent: false } });
+    } else await route.fulfill({ json: syntheticConsentStatus(false) });
   });
   await page.goto("/consent");
   await expect(page.getByRole("alert")).toContainText("동의 상태를 불러오지 못했어요.");
@@ -363,7 +368,7 @@ test("an expired session during consent saving returns to login", async ({ page 
     route.fulfill(
       route.request().method() === "PUT"
         ? { status: 401, json: { error: { code: "UNAUTHENTICATED" } } }
-        : { json: { needsConsent: true } },
+        : { json: syntheticConsentStatus(true) },
     ),
   );
   await page.goto("/consent");

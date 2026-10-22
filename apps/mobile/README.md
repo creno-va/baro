@@ -1,8 +1,9 @@
-# BARO mobile — M1
+# BARO mobile — M2 진행
 
 Expo SDK 58 / React Native 0.88.0 / React 19.3.0 / Expo Router 기반 iOS·Android 앱이다.
-현재 시작·이용 안내·잘못된 경로 화면과 기본 상태 UI를 제공한다. 로그인·사건 저장·API
-호출은 M2~M3 이후 연결한다. 합성 로그인이나 실제 사건 데이터는 포함하지 않는다.
+현재 시작·이용 안내·공개 변호사 목록/이름 검색·잘못된 경로 화면을 제공한다. 공개 목록은
+설정된 API를 실제 조회하며 화면에 예시 데이터를 대체 표시하지 않는다. 로그인·사건 저장은
+M3~M4에서 연결한다. 프로필 상세·기타 필터·직접 연락은 후속 기능 단계에서 계속한다.
 
 ## 개발
 
@@ -36,8 +37,8 @@ CocoaPods가 있는 환경에서 `bun run --cwd apps/mobile ios`로 생성·컴�
 
 `EXPO_PUBLIC_API_URL`은 preview/production에서 해당 origin만 허용한다. local에서는
 loopback·사설 LAN 주소만 허용하며 Android emulator는 `http://10.0.2.2:4321`을 사용한다.
-실기기는 개발 PC의 LAN 주소와 접근 가능한 로컬 서버가 필요하다. M1은 URL 설정만 검증하고
-네트워크 요청을 보내지 않는다. 식별자는 스토어 등록 전 잠정값이며 OTA는 비활성화되어 있다.
+실기기는 개발 PC의 LAN 주소와 접근 가능한 로컬 서버가 필요하다. 목록 화면은 이 주소의
+실제 API를 조회한다. 식별자는 스토어 등록 전 잠정값이며 OTA는 비활성화되어 있다.
 
 ## 소유 경계와 UI 변경
 
@@ -47,6 +48,8 @@ loopback·사설 LAN 주소만 허용하며 Android emulator는 `http://10.0.2.2
 - `src/ui`, `src/theme`: 기본 컴포넌트와 임시 시각 토큰. 웹 디자인 인계는 M7에서 반영.
 - `src/composition`: 검증된 공개 설정 주입. 향후 platform adapter를 여기에서 조립.
 - `@baro/contracts`: 기존 `src/contracts` 정본의 명시적 public export. 서버 pipeline 제외.
+- `@baro/api-client`, `@baro/client-core`: 웹과 같은 HTTP/오류/DTO/계약. 플랫폼 cookie·저장은 adapter 소유.
+- `src/features/directory`: 요청 취소·새 검색 우선·기존 페이지 보존·cursor 재시도의 순수 model과 RN 목록.
 
 웹의 `src/pages`, `src/components`, `src/layouts`, `src/styles`, `src/client`는 이 작업에서
 변경하지 않는다. 공유 package/lock/CI 변경은 기반 PR을 먼저 통합한다. 전체 단계는
@@ -55,7 +58,8 @@ loopback·사설 LAN 주소만 허용하며 Android emulator는 `http://10.0.2.2
 ## 검증
 
 `mobile:check`는 계약·앱·설정·테스트 타입, import 경계, 계약/환경 실패 시나리오와 RN
-컴포넌트 동작을 검사한다. RN Jest 테스트는 `tests/*.ui.tsx`에 두어 root Bun 테스트와 분리한다.
+컴포넌트 동작과 공통 client/계정 generation·검색 취소/페이지 회귀를 검사한다. RN Jest 테스트는
+`tests/*.ui.tsx`에 두어 root Bun 테스트와 분리한다.
 `mobile:bundle`은 두 OS의 실제 Metro/Hermes bundle을 만든다. `bunx expo-doctor`는 이
 폴더에서 실행한다. 기존 웹 회귀는 루트 `validate:quick`, `validate:build`로 확인한다.
 

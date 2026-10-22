@@ -1,3 +1,4 @@
+import { createSessionClient } from "@baro/api-client";
 import type { ConsentInput } from "../../contracts/consent";
 import { authClient } from "../auth";
 import { accessHref, returnPathFromLocation } from "../return-path";
@@ -18,18 +19,21 @@ export const roleStart = (session: SessionView) =>
         : "/app";
 let pendingSelection: { attempt: string; ownerId: string; promise: Promise<unknown> } | undefined;
 let pendingRead: Promise<SessionView> | undefined;
+const wireSession = createSessionClient((options) => request("session.http", undefined, options));
 if (typeof window !== "undefined") {
   window.addEventListener("baro-session-changed", () => {
     pendingRead = undefined;
+    wireSession.invalidate();
   });
   window.addEventListener("storage", () => {
     pendingRead = undefined;
+    wireSession.invalidate();
   });
 }
 function readSession() {
   // Share simultaneous shell/island reads, without caching settled permissions.
   if (!pendingRead) {
-    const pending = request<SessionView>("session.get", undefined, { path: "/api/me/session" });
+    const pending = apiMode === "mock" ? request<SessionView>("session.get") : wireSession.get();
     pendingRead = pending;
     void pending
       .finally(() => {
@@ -73,15 +77,8 @@ export const sessionApi = {
           pendingSelection = {
             attempt,
             ownerId,
-            promise: request(
-              "session.accountType",
-              { accountType },
-              {
-                path: "/api/me/account-type",
-                method: "PUT",
-                body: { accountType },
-              },
-            )
+            promise: wireSession
+              .setAccountType(accountType)
               .then((value) => {
                 if (sessionStorage.getItem("baro-account-type") === raw)
                   sessionStorage.removeItem("baro-account-type");
@@ -134,22 +131,20 @@ export const sessionApi = {
     return undefined;
   },
   getConsent: () =>
-    request<{ required: ConsentInput; consent: unknown; needsConsent: boolean }>(
-      "session.getConsent",
-      undefined,
-      { path: "/api/me/consent" },
-    ),
+    apiMode === "real"
+      ? wireSession.getConsent()
+      : request<{ required: ConsentInput; consent: unknown; needsConsent: boolean }>(
+          "session.getConsent",
+          undefined,
+          { path: "/api/me/consent" },
+        ),
   async saveConsent(input: ConsentInput): Promise<SessionView> {
     if (apiMode === "mock") {
       const session = await request<SessionView>("session.saveConsent", input);
       notifySessionChanged();
       return session;
     }
-    await request("session.saveConsent", input, {
-      path: "/api/me/consent",
-      method: "PUT",
-      body: input,
-    });
+    await wireSession.saveConsent(input);
     const session = await sessionApi.get();
     notifySessionChanged();
     return session;

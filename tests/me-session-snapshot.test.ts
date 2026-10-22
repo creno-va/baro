@@ -1,4 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
+import { sessionViewSchema } from "@baro/contracts/session";
 import { drizzle } from "drizzle-orm/d1";
 import { api } from "../src/server/api";
 import { readAccountType, saveAccountType } from "../src/server/auth/account-type";
@@ -11,10 +12,7 @@ import { seedTestSession } from "./helpers/session";
 
 const databases: Awaited<ReturnType<typeof createTestDatabase>>[] = [];
 async function sessionBody(response: Response) {
-  return (await response.json()) as {
-    user: { id: string; name: string; accountType: string } | null;
-    needsConsent: boolean;
-  };
+  return sessionViewSchema.parse(await response.json());
 }
 afterEach(() => {
   for (const database of databases.splice(0)) database.close();

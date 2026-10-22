@@ -23,7 +23,8 @@
     "./v2/usage": "./v2/usage.ts",
     "./v2/precedent-research": "./v2/precedent-research.ts",
     "./v2/precedent-topics": "./v2/precedent-topics.ts",
-    "./v1": "./client.ts"
+    "./v1": "./client.ts",
+    "./session": "./session.ts"
   },
   "dependencies": {
     "zod": "4.6.5"

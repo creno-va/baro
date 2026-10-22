@@ -1,8 +1,8 @@
 # RN + Expo 모바일 실행 계획
 
-- Status: M0 및 M1 기반 코드 main 통합; M1 최종 검증은 #330의 SHA별 기록 참조
+- Status: M1 인수 완료; 전체 네이티브 앱화 #334 / M2 공통 client #335 진행
 - Updated: 2026-10-22
-- Tracking: 계획 [#328](https://github.com/creno-va/baro/issues/328), M1 [#330](https://github.com/creno-va/baro/issues/330)
+- Tracking: 전체 [#334](https://github.com/creno-va/baro/issues/334), 계획 [#328](https://github.com/creno-va/baro/issues/328), M1 [#330](https://github.com/creno-va/baro/issues/330), M2 [#335](https://github.com/creno-va/baro/issues/335)
 - Decision: [ADR-0017](../adr/0017-expo-mobile-and-shared-client-boundaries.md)
 - Architecture: [공통 코드와 모바일 경계](../architecture/MOBILE-CLIENT.md)
 
@@ -13,6 +13,11 @@
 `e6401de9657f8fd062fb913fe7d3945adec068fd`에 병합했다. 이어진 직접 요청으로 M1
 `apps/mobile`·Bun workspace·공통 계약 export를 #330에서 구현한다. 로그인·실기기·
 스토어 출시 인수와 구분한다.
+
+이후 사용자가 모바일 네이티브 앱 전체 완성을 지속 목표로 지시했다. #334에서 M2~M8의
+전체 기능·기기·배포 인수를 추적한다. 단계 일부나 합성 테스트 통과를 전체 목표 완료로
+축소하지 않는다. 독립 구현을 계속하며 실제 외부·서명·스토어 결정은 구체적인 결과물과
+필요 필드를 마련해 요청한다.
 
 후속 목표는 기존 BARO 고객/변호사 기능의 iOS/Android 제공이다. 고객 핵심 흐름을 먼저
 완성하고 기본 UI로 기능을 검증한 뒤 모바일 시각 디자인을 정교화한다. push 알림,
@@ -157,11 +162,10 @@ CI, 기존 client facade는 한 공유 기반 PR 담당이 순서대로 통합�
 모듈 소유권을 유지한다. 같은 파일에 열린 PR이 있으면 먼저 통합하고 그 main을 기준으로
 작업한다. 다른 채팅에 자동 메시지를 보내지 않고 이 문서를 인계 자료로 제공한다.
 
-현재 구현 이슈는 **#330 M1: Expo 앱 기반과 계약 workspace export**다. 인수 범위는 웹
-경로 유지, 명시적인 계약 export, iOS/Android 개발 빌드, 독립 typecheck/CI와 기본 상태
-화면이다. native 컴파일 증거를 이슈에 기록하기 전 전체 M1 인수 완료로 표시하지 않는다.
-다음 단계는 M2 transport 주입 client이며 M1 통합 이후 별도 이슈로 진행한다.
-인증 실연결·실제 자료 처리·최종 시각 디자인은 이 첫 PR의 완료 조건에 섞지 않는다.
+현재 구현 이슈는 **#335 M2 공통 API client·client-core**다. #330은 두 OS native 개발
+빌드 receipt와 quick/build/계약/UI 증거를 확인해 인수했다. M2 첫 단위는 공통 DTO·오류·
+transport 및 session/consent·공개 디렉터리와 모바일 목록/검색이다. 다음 단위에서 사건·
+workspace·자료·리포트·나머지 domain을 순차 추출한다. 첫 단위만으로 M2 전체를 종료하지 않는다.
 
 ## 6. M0 계획 당시 조사·검증 기록
 
@@ -202,6 +206,27 @@ CI, 기존 client facade는 한 공유 기반 PR 담당이 순서대로 통합�
 - 로컬에는 전체 Xcode·Android SDK·JDK가 없어 native 컴파일은 수동 GitHub workflow로
   인수한다. native 성공 receipt 전까지 #330을 OPEN으로 유지한다. 실제 기기·외부 로그인·
   자료 처리·스토어 제출·공개 배포는 이 단계에서 수행하지 않는다.
+
+## 8. M1 인수와 M2 진행
+
+- [native39772947035](https://github.com/creno-va/baro/actions/runs/39772947035)는 앱 source
+  `d75701860f3809b20e1ec5456a947f2b77fae1a9`의 iOS simulator Debug·Android debug 모두 성공.
+  두 receipt의 SHA/preview/Expo58.0.17/RN0.88.0을 확인했다. 스토어 서명·배포는 수행하지 않았다.
+- 호환성 PR333은 main `6e6fd9c2c59f291ed388b321ecf6aaad5f14936d`에 병합, main CI 성공.
+  앱·공개 계약 실행 소스는 native 검사 SHA와 동일했다. #330은 M1 범위로 종료했다.
+- [full39775420895](https://github.com/creno-va/baro/actions/runs/39775420895)는 브라우저
+  161개 통과 뒤 production workerd 시작 시 schema chunk 초기화 순서 오류로 실패했다.
+  M2에서 files가 workspace job 객체의 초기화에 의존하지 않도록 같은 phase enum을
+  common 정본으로 추출했다. wire 값은 보존한다. `validate:build`에 실제 로컬 workerd
+  시작/익명 로그인 HTML 검사를 추가해 dry-run만 통과하는 회귀를 잡는다.
+- 브랜치 `codex/335-shared-client-foundation`, 기준 main `6e6fd9c`.
+  공통 DTO/progress·안전한 오류·주입 HTTP·session/consent·directory를 추출하고 기존 웹
+  facade가 소비한다. 모바일 공개 목록은 실제 API adapter를 사용하며 취소·새 검색·cursor
+  오류·재시도·페이지 추가를 model에서 처리한다. 인증/사건 연결은 M3~M4에서 계속한다.
+- 추가 `bun audit`는 upstream 미패치 advisory 3건으로 실패했다. npm 최신 버전에도 수정이
+  없음을 확인했으며 [#339](https://github.com/creno-va/baro/issues/339)에서 artifact 도달성·
+  검증된 보완/patch와 release 보안 인수를 추적한다. audit 실패나 전체 보안 인수를 성공으로
+  바꾸지 않고 독립 기능 구현을 계속한다.
 
 ## 참고
 

@@ -26,6 +26,8 @@
       "devDependencies": {
         "@astrojs/check": "0.9.10",
         "@axe-core/playwright": "4.13.0",
+        "@baro/api-client": "workspace:*",
+        "@baro/client-core": "workspace:*",
         "@baro/contracts": "workspace:*",
         "@biomejs/biome": "2.5.15",
         "@playwright/test": "1.63.0",
@@ -44,10 +46,13 @@
       "version": "0.1.0",
       "dependencies": {
         "@babel/runtime": "7.29.10",
+        "@baro/api-client": "workspace:*",
+        "@baro/client-core": "workspace:*",
         "@baro/contracts": "workspace:*",
         "@expo/metro-runtime": "58.0.15",
         "expo": "58.0.17",
         "expo-constants": "58.0.13",
+        "expo-crypto": "58.0.7",
         "expo-dev-client": "58.0.14",
         "expo-linking": "58.0.14",
         "expo-router": "58.0.25",
@@ -66,6 +71,22 @@
         "jest": "30.5.2",
         "jest-expo": "58.0.12",
         "typescript": "6.0.3",
+      },
+    },
+    "packages/api-client": {
+      "name": "@baro/api-client",
+      "version": "0.0.0",
+      "dependencies": {
+        "@baro/client-core": "workspace:*",
+        "@baro/contracts": "workspace:*",
+        "zod": "4.6.5",
+      },
+    },
+    "packages/client-core": {
+      "name": "@baro/client-core",
+      "version": "0.0.0",
+      "dependencies": {
+        "@baro/contracts": "workspace:*",
       },
     },
     "src/contracts": {
@@ -302,6 +323,10 @@
     "@babel/traverse": ["@babel/traverse@7.29.10", "", { "dependencies": { "@babel/code-frame": "^7.29.7", "@babel/generator": "^7.29.8", "@babel/helper-globals": "^7.29.7", "@babel/parser": "^7.29.9", "@babel/template": "^7.29.7", "@babel/types": "^7.29.8", "debug": "^4.3.1" } }, "sha512-B3lYAs2nkKskbgQ1nfy8Ma9ao9Q1rntTAQHrzzyDuj+TSO+X3le6PfWwqDvodsb+OumE10eMFfuMCTQSQ5iuIQ=="],
 
     "@babel/types": ["@babel/types@7.29.8", "", { "dependencies": { "@babel/helper-string-parser": "^7.29.7", "@babel/helper-validator-identifier": "^7.29.7" } }, "sha512-Vj1jF3cPfxg7OAfoI7QnVKLoILlm2JF9pnVHrX8qx7AHMiYWT+NDAA7jChlNgRS4WTLc/fD1lXLmPixluj+3Gg=="],
+
+    "@baro/api-client": ["@baro/api-client@workspace:packages/api-client"],
+
+    "@baro/client-core": ["@baro/client-core@workspace:packages/client-core"],
 
     "@baro/contracts": ["@baro/contracts@workspace:src/contracts"],
 
@@ -1310,6 +1335,8 @@
     "expo-asset": ["expo-asset@58.0.18", "", { "dependencies": { "@expo/image-utils": "^0.12.5", "expo-constants": "~58.0.13" }, "peerDependencies": { "expo": "*", "react": "*", "react-native": "*" } }, "sha512-Cc49mpDd81hIIKw1DVDkL52a/S6MJlHLA+LirUHNR7qJJfopoHrSypg9rRuqvCUVW7/JKvXKqbFX43NynpVzmg=="],
 
     "expo-constants": ["expo-constants@58.0.13", "", { "dependencies": { "@expo/env": "~2.5.3", "@expo/require-utils": "^58.0.4" }, "peerDependencies": { "expo": "*", "react-native": "*" } }, "sha512-zUj1rcnYg0O2wKF9L32ToEtFujc5OkslZJ4lWeg+fEwoPMLVwldn6kdEkX8zx31KgSwF94Ey1mIFdFX8Brp73Q=="],
+
+    "expo-crypto": ["expo-crypto@58.0.7", "", { "peerDependencies": { "expo": "*" } }, "sha512-g+4i4UpqQ5jNy1VPRvVVvr9aIdh8WwvxbpwL2ntiSESDRsXyVSeb8JM6tHVdC3b9J2nGxjtrhrsaWOo0jbSxlA=="],
 
     "expo-dev-client": ["expo-dev-client@58.0.14", "", { "dependencies": { "expo-dev-launcher": "~58.0.14", "expo-dev-menu": "~58.0.11", "expo-dev-menu-interface": "~58.0.1", "expo-manifests": "~58.0.1", "expo-updates-interface": "~58.0.1" }, "peerDependencies": { "expo": "*" } }, "sha512-gyzONNNS/SLZdxFdDshgzc0Uxxt2i+MjYwOQX3LNvr3pXFtYHYM9kza8MpdYOqhqGvWnA4BebeBWq3T1hjt9nQ=="],
 

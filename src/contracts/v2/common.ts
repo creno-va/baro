@@ -1,6 +1,19 @@
 import { z } from "zod";
 import { displayText, opaqueIdSchema, timestampSchema } from "../common";
 
+/** Shared directly by jobs and files so bundle chunks do not depend on job initialization order. */
+export const v2JobPhaseSchema = z.enum([
+  "admission",
+  "extracting",
+  "transcribing",
+  "observing",
+  "retrieving",
+  "generating",
+  "validating",
+  "assembling",
+  "finished",
+]);
+
 export const V2_CONTRACT_VERSION = "2" as const;
 /** New intake generation policy; stored legacy batches keep their original limits below. */
 export const V2_INTAKE_POLICY = { followupRounds: 2, questionsPerBatch: 3 } as const;

@@ -1,4 +1,5 @@
 import { expect, type Page, type Route, test } from "@playwright/test";
+import { syntheticConsentStatus } from "../fixtures/consent-status";
 import { guidance } from "../fixtures/contracts";
 
 const caseId = "11111111-1111-4111-8111-111111111111";
@@ -29,7 +30,7 @@ async function wire(page: Page, handler: (route: Route, path: string) => Promise
           needsConsent: false,
         },
       });
-    if (path === "/api/me/consent") return route.fulfill({ json: { needsConsent: false } });
+    if (path === "/api/me/consent") return route.fulfill({ json: syntheticConsentStatus(false) });
     if (path === "/api/cases" || path === "/api/v2/cases")
       return route.fulfill({ json: { items: [], nextCursor: null } });
     if (path === `/api${casePath}`) return route.fulfill({ json: detail });

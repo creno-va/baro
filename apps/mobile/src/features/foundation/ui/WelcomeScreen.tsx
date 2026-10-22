@@ -8,9 +8,11 @@ import type { FoundationModel } from "../model";
 export function WelcomeScreen({
   model,
   onContinue,
+  onBrowse,
 }: {
   model: FoundationModel;
   onContinue: () => void;
+  onBrowse?: () => void;
 }) {
   return (
     <Screen>
@@ -37,9 +39,10 @@ export function WelcomeScreen({
             <Text>대화, 사진과 문서, 시간순 기록을 모아 상담을 준비할 수 있어요.</Text>
           </Card>
           <Text variant="muted">
-            모바일 서비스 연결을 준비하고 있어요. 지금은 이용 안내를 확인할 수 있어요.
+            변호사 목록과 이용 안내를 확인할 수 있어요. 로그인과 사건 정리는 준비 중이에요.
           </Text>
           <Button label="이용 안내 보기" onPress={onContinue} />
+          {onBrowse ? <Button label="변호사 탐색" onPress={onBrowse} /> : null}
         </>
       )}
       <Text variant="muted">

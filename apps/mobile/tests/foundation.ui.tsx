@@ -25,7 +25,7 @@ test("welcome offers navigation without pretending login or case creation is con
   );
   await fireEvent.press(screen.getByRole("button", { name: "이용 안내 보기" }));
   expect(onContinue).toHaveBeenCalledTimes(1);
-  expect(screen.getByText(/모바일 서비스 연결을 준비/)).toBeTruthy();
+  expect(screen.getByText(/로그인과 사건 정리는 준비 중/)).toBeTruthy();
   expect(screen.queryByRole("button", { name: "로그인" })).toBeNull();
 });
 
