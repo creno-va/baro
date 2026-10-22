@@ -1,4 +1,4 @@
-# BARO mobile — M2 진행
+# BARO mobile — M2/M3 진행
 
 Expo SDK 58 / React Native 0.88.0 / React 19.3.0 / Expo Router 기반 iOS·Android 앱이다.
 현재 시작·이용 안내·공개 변호사 목록/이름 검색·잘못된 경로 화면을 제공한다. 공개 목록은
@@ -46,7 +46,8 @@ loopback·사설 LAN 주소만 허용하며 Android emulator는 `http://10.0.2.2
 - `src/features/foundation/model.ts`: 플랫폼과 화면에서 독립된 상태·공통 계약 소비.
 - `src/features/foundation/ui`: props와 명령 callback을 받는 RN 화면.
 - `src/ui`, `src/theme`: 기본 컴포넌트와 임시 시각 토큰. 웹 디자인 인계는 M7에서 반영.
-- `src/composition`: 검증된 공개 설정 주입. 향후 platform adapter를 여기에서 조립.
+- `src/composition`: 검증된 공개 설정·환경별 SecureStore와 HTTP adapter 조립.
+- `src/platform/auth`: 기기 cookie 저장·고정 Origin·갱신/만료·세션 generation 격리.
 - `@baro/contracts`: 기존 `src/contracts` 정본의 명시적 public export. 서버 pipeline 제외.
 - `@baro/api-client`, `@baro/client-core`: 웹과 같은 HTTP/오류/DTO/계약. 플랫폼 cookie·저장은 adapter 소유.
 - `src/features/directory`: 요청 취소·새 검색 우선·기존 페이지 보존·cursor 재시도의 순수 model과 RN 목록.
@@ -54,6 +55,21 @@ loopback·사설 LAN 주소만 허용하며 Android emulator는 `http://10.0.2.2
 웹의 `src/pages`, `src/components`, `src/layouts`, `src/styles`, `src/client`는 이 작업에서
 변경하지 않는다. 공유 package/lock/CI 변경은 기반 PR을 먼저 통합한다. 전체 단계는
 [실행 계획](../../docs/development/MOBILE-EXECUTION.md)을 따른다.
+
+## 인증 저장 경계
+
+SecureStore는 환경별 keychain service/namespace와 `WHEN_UNLOCKED_THIS_DEVICE_ONLY`를 사용한다.
+고정 Better Auth Expo1.7.7의 공개 cookie codec/storage adapter를 공유하고 session cache를 권한으로
+사용하지 않는다. native HTTP가 Cookie/Origin을 직접 설정하고 credentials omit·redirect error를
+사용한다. 성공/실패 응답의 Set-Cookie를 한 경로에서 저장하며 SDK에 전달하는 응답에서는 제거해
+중복 writer를 만들지 않는다. 로그인 연결에서는 `disableCache: true`와 `disableRedirect: true`를
+사용해야 하며 SDK 자동 cookie callback 경로를 사용하지 않는다.
+
+credential 교체/로그아웃은 `credentials.reset()`으로 scope를 먼저 폐기한 뒤 인증 cookie/cache만
+지운다. 오래된 네트워크/기기 IO는 다음 jar에 쓸 수 없고, 저장 오류·readback 불일치 시 private
+요청은 실패한다. reset이 실패하면 성공을 표시하지 않으며 재시도로 복구한다. 미해결 사건 작업
+key 저장소는 별도이며 지우지 않는다. 공개 목록은 이 저장소와 독립된 익명 transport다.
+실제 OAuth 브라우저·앱 복귀/coordinator·동의/역할 UI 연결과 기기 검증은 #346의 후속 단계다.
 
 ## 검증
 
