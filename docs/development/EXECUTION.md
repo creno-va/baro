@@ -33,7 +33,7 @@ M1 앱 기반·공통 계약 공유를 #330에서 인수했다. 후속 사용자
 
 | 작업 | 담당/이슈 | 현재 상태·blocker | 다음 행동 |
 | --- | --- | --- | --- |
-| 모바일 전체 구현·M2/M3 | 모바일 담당 / #334·#335·#346 (M1 #330 인수) | 공통 client PR340~345·계약350과 native 인증347~349·로그인/동의·lifecycle UI351 main `c577612` 통합. a1ad098 두 OS native39809756054 성공. `codex/346-native-challenge`에서 웹 UI/CSP와 분리한 제한 Hono HTML·WebView 및 실제 사건 admission 회귀 검증 중 | challenge quick/build/Metro와 정확한 PR head CI 확인 후 통합. reauth·M2 프로필/자산·M4~M8을 계속한다. 실제 공급자/기기·#339 보안·#71 공개 인수를 유지 |
+| 모바일 전체 구현·M2/M3 | 모바일 담당 / #334·#335·#346 (M1 #330 인수) | M3 native 인증347~349·로그인/동의351·challenge352 main `1cd9aa5` 통합. c577612 두 OS native39821350045 성공. `codex/335-shared-lawyer-client`에서 M2 잔여 프로필/자산 client와 계정 전환·저장/응답 유실 경계를 검증 중 | 기존 웹 프로필/자산·quick/build/두 OS Metro와 정확한 PR CI 뒤 M2 인수. M3 reauth·M4~M8, 실제 공급자/기기·#339 보안·#71 공개 인수를 계속한다 |
 | DB·HTTP 왕복 축소 | 성능 조율 / #317 | 선행 UI·법률·모델·첨부·리포트 PR을 main c2258b88에 통합, 필수 PR/main CI 성공. 별도 codex/317-db-roundtrips에서 합성 호출 수 재측정 | commit revision 기반 행동·타임라인 선택 재조회, 중복 domain 읽기와 단일 공개 목록 lead sample 제거. fresh auth/삭제/CAS/멱등성 및 관측 전용 비용 정책 보존. 회귀·quick/build/DB 검증 후 PR, 실제 원격 성능·배포는 #71 별도 |
 | 사진 근거·PDF 리포트 | AI/자료, #312 | 2026-10-21 직접 요청, codex/312-photo-evidence-pdf. #307 첨부 UI·#304 법률 범위 분리, migration 없음 | 상해/진단서 관찰·확인 지침, 선택 사진·출처와 HTML→PDF, PDF만 저장. quick/build·브라우저·native 조판 CI 후 별도 PR 병합; 외부 모델/배포 인수 별도 |
 | Gemini 모델·질문 하네스 | AI / #305 | 2026-10-21 사용자 승인, 별도 codex/305-gemini-flash-pipeline worktree. #304 법률 API와 PR303 UI 범위 분리 | ADR-0016·고정 평가·quick/build·CI 검증 후 별도 PR 병합. 실제 모델·배포 인수는 별도 receipt |

@@ -22,6 +22,10 @@ export type {
   OperationRequestOptions,
 } from "./http";
 export { createJsonRequester, isApiPath } from "./http";
+export type { LawyerAssetView, LawyerUploadReader, LawyerUploadStorage } from "./lawyer-assets";
+export { createLawyerAssetsClient, validateLawyerUpload } from "./lawyer-assets";
+export type { LawyerView } from "./lawyers";
+export { createLawyersClient, fromVerified, lawyerErrorMessage, rotateLawyers } from "./lawyers";
 export { createPrecedentsClient } from "./precedents";
 export type { DomainRequest, DomainRequestInit, ReportArtifact, ReportSave } from "./reports";
 export { createReportsClient, reportSaveSchema } from "./reports";

@@ -51,6 +51,7 @@ loopback·사설 LAN 주소만 허용하며 Android emulator는 `http://10.0.2.2
 - `src/platform/auth`: 기기 cookie 저장·고정 Origin·갱신/만료·세션 generation 격리.
 - `@baro/contracts`: 기존 `src/contracts` 정본의 명시적 public export. 서버 pipeline 제외.
 - `@baro/api-client`, `@baro/client-core`: 웹과 같은 HTTP/오류/DTO/계약. 플랫폼 cookie·저장은 adapter 소유.
+- `getMobileApi().lawyers`: 공통 프로필 JSON client. 공개 조회는 익명 transport, 본인 저장/공개 전환은 native credential transport를 사용. 파일 선택/캐시/공유는 M5/M6에서 source/upload/download port에 연결.
 - `src/features/directory`: 요청 취소·새 검색 우선·기존 페이지 보존·cursor 재시도의 순수 model과 RN 목록.
 
 웹의 `src/pages`, `src/components`, `src/layouts`, `src/styles`, `src/client`는 이 작업에서

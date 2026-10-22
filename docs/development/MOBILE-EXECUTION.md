@@ -361,8 +361,8 @@ workspace·자료·리포트·나머지 domain을 순차 추출한다. 첫 단�
 
 - 로그인 UI PR351은 head `f8e72e4` CI39820802132 성공 후 main
   `c57761246a0841aad56307c673363b6aa88766ed`에 정상 병합했다. 해당 SHA의 native
-  run39821350045 Android Debug 성공 receipt를 확인했다. iOS는 진행 중이며 이전
-  a1ad098의 두 OS 컴파일과 현재 UI 컴파일을 구분한다. 서명/배포/실기기 인수는 아니다.
+  run39821350045 Android Debug/iOS simulator Debug가 모두 성공했다. 두 receipt의
+  sourceSha/preview API와 서명·배포 없음도 확인했다. 실기기 인수는 아니다.
 - `codex/346-native-challenge`는 별도 Hono HTML과 제한 WebView를 연결한다. 웹 UI와
   Astro CSP를 바꾸지 않고 응답별 nonce, 고정 위젯 action·현재 시도·private bridge secret을
   사용한다. auth cookie/사건 입력은 WebView에 전달하지 않으며 secret/token은 저장하지
@@ -374,6 +374,28 @@ workspace·자료·리포트·나머지 domain을 순차 추출한다. 첫 단�
   성공으로 표현하지 않는다. frozen install·quick(모바일/공통111개·RN18개·서버42개),
   기존 사건/인증/동의48개·production build/workerd 시작·두 OS Metro를 통과했다.
   사건 화면의 port 소비는 M4, reauth와 M3 실제 인수는 잔여다.
+
+- challenge PR352는 head `5b92068` CI39825256288 성공 후 main
+  `1cd9aa59067a27787e2d89d89567e3ddacca8a31`에 정상 병합했다. M3 reauth/실제 기기 및
+  M4 사건 화면의 challenge port 소비는 잔여다.
+- `codex/335-shared-lawyer-client`는 M2의 남은 프로필/자산 client를 공유한다. 프로필
+  공개/본인 조회·저장·공개 전환, 자산 목록/삭제·예약/원본 전송·응답 유실 복구를 추출하고
+  웹 File/Blob/hash/sessionStorage만 adapter에 둔다. 모바일 프로필 JSON은 기존 native
+  transport와 공통 factory를 소비한다. 실제 파일 선택/캐시/공유 IO와 모바일 편집 화면은
+  M5/M6이며 이번 공통 client 인수와 구분한다.
+- 업로드의 현재 소유권은 합치기 전 매번 조회하고 예약의 profile hint는 실제 인증 owner의
+  SQL profile과 대조해 거절만 한다. 이전 key/revision의 멱등 replay와 asset별 실제 권한은
+  유지한다. 새 불확실 기록 key는 fingerprint로 만들고, 브라우저의 기존 v1 기록은 원래
+  요청 key로 복구한 뒤 성공/확정 거절에서만 정리한다. required native storage는 write/readback
+  실패를 예약 전에 거절한다. scope 간 늦은 저장 IO를 직렬화하며 미해결 기록을 보존한다.
+
+
+- 이 M2 단위는 frozen install·quick(모바일/공통122개·RN18개·필수 서버42개), 관련 실제
+  SQL/도메인·공통 client74개와 웹 편집/복구/디렉터리37개, production build/workerd 시작,
+  두 OS Metro를 통과했다. 디렉터리 취소가 일반 연결 오류로 바뀌던 추출 회귀를 기존 검사에서
+  재현해 호출자의 AbortSignal을 우선 전파하도록 보완했다. 패키지/웹 facade의 공통 소비는
+  session/directory/cases/workspace/files/reports/account/precedents/lawyers 전체를 대조했다.
+  M2 인수는 이 순수 client/adapter 경계이며 실제 파일/기기/전체 화면 인수는 M3~M8이다.
 
 ## 참고
 

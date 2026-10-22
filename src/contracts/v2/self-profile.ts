@@ -1,6 +1,9 @@
 import { z } from "zod";
 import { v2ExternalConsultationUrlSchema, v2LegalFieldSchema, v2RegionSchema } from "./lawyers";
 
+/** Optional denial-only binding for global asset reservation endpoints. Never authenticates an owner. */
+export const EXPECTED_PROFILE_HEADER = "x-baro-expected-profile";
+
 export const selfAssetUrl = (profileId: string, assetId: string) =>
   `/api/v2/lawyers/self-service/${encodeURIComponent(profileId)}/assets/${encodeURIComponent(assetId)}`;
 const assetPath = z

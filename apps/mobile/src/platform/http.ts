@@ -2,10 +2,12 @@ import {
   ApiError,
   createDirectoryClient,
   createJsonRequester,
+  createLawyersClient,
   createSessionClient,
+  type DomainRequest,
   type HttpTransport,
 } from "@baro/api-client";
-import { createSessionScope, type SessionScope } from "@baro/client-core";
+import { createSessionBoundClient, createSessionScope, type SessionScope } from "@baro/client-core";
 import type { MobileConfig } from "../../config/environment";
 
 export function createMobileApi(dependencies: {
@@ -37,10 +39,24 @@ export function createMobileApi(dependencies: {
     newKey: dependencies.newKey,
     transport: anonymous,
   });
+  const domainRequest: DomainRequest = (path, init = {}) =>
+    request({
+      path,
+      ...init,
+      ...(init.headers?.["idempotency-key"] ? { key: init.headers["idempotency-key"] } : {}),
+    });
+  const publicDomainRequest: DomainRequest = (path, init = {}) => publicRequest({ path, ...init });
   return {
     scope,
     request,
     directory: createDirectoryClient(publicRequest),
+    lawyers: createSessionBoundClient(scope, () =>
+      createLawyersClient({
+        scope,
+        request: domainRequest,
+        publicRequest: publicDomainRequest,
+      }),
+    ),
     session: createSessionClient(request, scope),
   };
 }
