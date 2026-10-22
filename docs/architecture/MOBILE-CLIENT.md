@@ -261,6 +261,12 @@ write/readback, 예약 ACK 뒤 file ID 저장, 완료 전 CAS/key 저장을 검�
 지우지 않고 만료/삭제 정리는 기존 서버가 담당한다. 이 공유 계약을 소비하는 native files
 화면·원본 다운로드와 앱 수명 cleanup은 후속으로 연결한다.
 
+예약 응답/file ID 저장 유실 뒤 다른 signed client가 같은 pending 파일을 완료한 경우에도,
+서버는 원래 owner/key/request hash의 예약 replay에서 finalized file ID를 돌려준다. 기존
+session DTO와 만료 시각은 보존하며 lease를 다시 열거나 연장하지 않는다. resume/part 쓰기는
+기존 open·만료·동의 guard를 그대로 검사하고 삭제된 파일·다른 owner/본문은 복구하지 않는다.
+완료된 파일의 오래된 예약을 새 admission으로 해석해 중복 저장하지 않는다.
+
 처리는 서버에서 계속되고, 앱 복귀 시 upload/job 상태를 재조회한다. 사용자 재시도와
 중복 실행을 구분하며 같은 작업의 key를 유지한다. 앱이 백그라운드에서도 계속 전송된다고
 가정하지 않는다. OS가 파일 URI 접근을 철회한 경우 재선택·검증 경로를 제공한다.
