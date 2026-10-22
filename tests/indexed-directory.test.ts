@@ -8,6 +8,7 @@ import { prepareV2RestoreReplay } from "../src/server/modules/deletion/restore";
 import { createDirectoryMaintenance } from "../src/server/modules/lawyers/directory-maintenance";
 import { createSelfProfileService } from "../src/server/modules/lawyers/self-profile";
 import { createTestDatabase } from "./helpers/d1";
+import { countD1Calls } from "./helpers/d1-call-count";
 import { DIRECTORY_NOW, directoryOptions, directorySeedSql } from "./helpers/directory-index";
 import { publicationFixture } from "./helpers/lawyer-publication";
 import { seedTestSession } from "./helpers/session";
@@ -256,4 +257,19 @@ test("verified public cards keep qualification status; a private self version su
   await self.saveMine(f.owner.userId, { ...blank, name: "Private draft" });
   expect((await index.page({ limit: 20 })).items).toEqual([]);
   expect((await createDirectoryMaintenance(f.core).batch()).indexed).toBe(0);
+});
+
+test("empty facet-only pages keep both pivot ranges and final epoch fence without lead sampling", async () => {
+  const db = await createTestDatabase();
+  databases.push(db);
+  const f = { db };
+  const meter = countD1Calls(f.db.binding);
+  const index = createIndexedDirectory(createV2Core(meter.binding, publicCipher), directoryOptions);
+  const page = await index.page({ limit: 20 });
+  expect(page.items).toEqual([]);
+  expect(page.nextCursor).toBeNull();
+  expect(meter.work).toEqual({ calls: 4, statements: 4 });
+  meter.reset();
+  await index.page({ region: "seoul", legalField: "civil", limit: 20 });
+  expect(meter.work.calls).toBe(4);
 });

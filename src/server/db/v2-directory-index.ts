@@ -70,6 +70,8 @@ export function createIndexedDirectory(
   });
   const chooseLead = async (query: DirectorySearch) => {
     const leads = leadSources(query);
+    // With no name there is only one indexed lead; sampling cannot change it.
+    if (leads.length === 1) return leads[0];
     // At most four capped samples. COUNT(*) would itself enumerate a large set.
     const counts = await Promise.all(
       leads.map(async (lead) => {
