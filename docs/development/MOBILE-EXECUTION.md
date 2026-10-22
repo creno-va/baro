@@ -421,6 +421,31 @@ workspace·자료·리포트·나머지 domain을 순차 추출한다. 첫 단�
   UI에 준비 중을 표시하며 #354를 OPEN으로 보존한다. 이 후속과 M3 reauth·M5~M8을
   계속한다. native 컴파일 receipt와 실제 기기 인수는 별도로 기록한다.
 
+- 사건/intake PR355는 head `1b838d1`의 필수 Quality gate Check Run/유일 CI job 성공 후
+  main `a0d2deb9955bbb3e9fecda6f6fc00e7bc9a47aa2`에 정상 병합했다. workflow aggregate
+  상태와의 차이는 #354 receipt를 따른다. 같은 SHA의 두 OS native39831543461을 요청했고
+  진행 중인 기존 실행을 계속 추적한다. native ABI·스토어 서명·배포 변경은 없다.
+- `codex/354-workspace-recovery`는 UI 소비 전 공통 선행이다. native가 `recovery` port를
+  선택하면 현재 owner·정확한 path/body/method의 fingerprint로 UUID key를 필수 저장하고
+  readback한 뒤 전송한다. 새 client도 원래 body/revision/key를 복원하며 scope 사이의
+  늦은 IO를 직렬화한다. 미확인 전송을 새 revision으로 자동 재전송하지 않는다.
+- 검증된 서버 acknowledgement는 후속 화면 조회 전에 `onAcknowledged`로 알리고,
+  전체 조회가 성공한 뒤 key를 정리한다. 응답/후속 조회 유실은 key를 유지하고 확정된
+  acknowledgement 뒤 cleanup 실패는 작업을 실패로 돌려 중복 전송하지 않는다. native
+  action 편집은 선택적인 entity revision 노출과 명시적 원래 revision을 사용한다.
+  기본 웹 경로/DTO와 HTTP 즉시 dispatch는 유지한다. 실패 job 재시도도
+  명시적 원래 revision을 선택해 새 client의 최신 job 조회 뒤 같은 key/body로 복구한다.
+- 기기 저장 allowlist는 workspace 요청 UUID·opaque job hint만 추가한다. 채팅/사건 내용은
+  저장하지 않는다. 새 복구 회귀는 실제 Hono·암호화 SQL의 채팅/일정/행동과 다른 계정 거절을
+  확인한다. 채팅 readiness/admission만 명시적 합성 대역이며 실제 AI/외부 인수는 아니다.
+  RN 작업공간 UI와 v1 분석 상세/삭제는 이 공통 선행을 main에 통합한 뒤 계속 구현한다.
+- 이 공통 단위의 frozen/quick(공통·모바일146개·RN20개·필수 서버42개), 기존 domain/client
+  회귀135개, 신규 workspace 복구11개와 native storage 확장 검사가 통과했다. production
+  build/workerd 시작·두 OS Metro와 웹 shared2개·draft/자료 snapshot23개도 통과했다.
+  최초 일반 conversation 설정의 shared2개는 의도된 opt-in skip이었으며, 해당 fixture 설정과
+  `BARO_WORKSPACE_SHARED_UI=true`로2개 실제 실행 성공을 확인했다. 실제 외부 인수가 아니다.
+  a0d2deb native39831543461의 Android는 성공했고 iOS는 기록 시점 컴파일 중이다.
+
 ## 참고
 
 - [Expo workspace 구성](https://docs.expo.dev/guides/monorepos/)

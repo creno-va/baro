@@ -101,3 +101,19 @@ test("new operations cannot overtake a pending storage write and a fresh adapter
   });
   expect(await fresh.getItem(key)).toBe(value);
 });
+
+test("native workspace recovery stores only UUID request keys and opaque job IDs", async () => {
+  const f = fixture(),
+    request = `baro-workspace-request:${"b".repeat(64)}`,
+    job = "baro-workspace-job:case_a";
+  await f.storage.setItem(request, value);
+  await f.storage.setItem(job, "job_a");
+  expect(await f.storage.getItem(job)).toBe("job_a");
+  await expect(
+    f.storage.setItem(request, JSON.stringify({ text: "비공개 입력" })),
+  ).rejects.toMatchObject({ code: "UNAVAILABLE" });
+  await expect(f.storage.setItem(job, "비공개 입력")).rejects.toMatchObject({
+    code: "UNAVAILABLE",
+  });
+  expect(f.records.size).toBe(2);
+});

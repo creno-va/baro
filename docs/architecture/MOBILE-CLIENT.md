@@ -1,6 +1,6 @@
 # 모바일 클라이언트와 공통 코드 구조
 
-- Status: M1 인수; M2 프로필/자산 잔여, M3 로그인/동의 통합·challenge 연결 중
+- Status: M1/M2 인수; M3 실제 인증 잔여, M4 고객 사건/작업공간 연결 중
 - Updated: 2026-10-23
 - Decision: [ADR-0017](../adr/0017-expo-mobile-and-shared-client-boundaries.md)
 - Execution: [모바일 실행 계획](../development/MOBILE-EXECUTION.md), [#328](https://github.com/creno-va/baro/issues/328)
