@@ -1,11 +1,11 @@
-import { z } from "zod";
-import { directoryPageSchema } from "../../../contracts/v2";
 import {
   emptySelfProfile,
   isDuplicateProfileSave,
   profileReady,
   selfProfileSchema,
-} from "../../../server/modules/lawyers/self-profile-contract";
+} from "@baro/contracts/v2/self-profile";
+import { z } from "zod";
+import { directoryPageSchema } from "../../../contracts/v2";
 import { LawyerApiError, type LawyerFilters, type LawyerView, rotateLawyers } from "../lawyers";
 import { readStore, registerMockHandlers, requireSession, writeStore } from "./runtime";
 

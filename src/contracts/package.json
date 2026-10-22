@@ -25,7 +25,8 @@
     "./v2/precedent-topics": "./v2/precedent-topics.ts",
     "./v1": "./client.ts",
     "./session": "./session.ts",
-    "./mobile-auth": "./mobile-auth.ts"
+    "./mobile-auth": "./mobile-auth.ts",
+    "./v2/self-profile": "./v2/self-profile.ts"
   },
   "dependencies": {
     "zod": "4.6.5"

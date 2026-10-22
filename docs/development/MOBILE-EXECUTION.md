@@ -316,6 +316,11 @@ workspace·자료·리포트·나머지 domain을 순차 추출한다. 첫 단�
   저장소가 잠겨도 공개 목록은 익명으로 조회한다. 실제 SDK 분할/expiry/중단 정리와 합성
   native transport 경계를 검사하며 브라우저 로그인/coordinator/기기 증거는 다음 단계다.
 
+- 독립 M2 `codex/335-lawyer-public-contract`는 웹에서 사용하던 변호사 self-profile의 순수
+  schema/DTO·준비/중복 저장 helper를 `@baro/contracts/v2/self-profile` 정본으로 옮긴다.
+  기존 서버 경로는 호환 re-export하고 JPEG metadata byte 처리는 기존 adapter에 둔다.
+  웹 facade/mock은 공개 계약만 import한다. wire·서버 의미와 웹 UI를 보존하며 이 계약을
+  먼저 통합한 뒤 프로필/자산 공통 client를 추출한다. M2 전체는 아직 인수하지 않는다.
 - Credential adapter PR348은 head `99dff82` CI39812154878 성공 후 main
   `86c94b2b2e2c686ff0dd72681d36161fa0303f03`에 정상 병합했다. mobile69개·RN/실제 SDK7개·
   quick42·빌드·두 OS Metro를 통과했다. native ABI 의존성/plugin은 위 a1ad098과 동일하다.
@@ -327,6 +332,10 @@ workspace·자료·리포트·나머지 domain을 순차 추출한다. 첫 단�
   검사했다. 새 auth protocol14개·모바일 공통83개·RN/실제 SDK8개·quick42·production
   workerd 시작·두 OS Metro가 통과했다. 앱 복귀 routing/foreground·로그인/역할/동의 화면·
   reauth/challenge는 후속이다.
+
+- 로그인 protocol PR349는 head `3627761` CI39815218470의 필수 check 완료를 확인하고
+  main `c4f85cca65ea4c98367f17f25465221c619c915f`에 정상 병합했다. 화면/lifecycle는
+  후속 검증 단위로 보존하며 실제 제공자·기기 인수로 확대하지 않는다.
 
 ## 참고
 

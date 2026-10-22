@@ -1,4 +1,5 @@
 import { createDirectoryClient } from "@baro/api-client";
+import { type SelfProfile, selfProfileSchema } from "@baro/contracts/v2/self-profile";
 import { z } from "zod";
 import {
   type DirectoryPage,
@@ -6,10 +7,6 @@ import {
   v2PortfolioAssetSchema,
   v2PublicLawyerSchema,
 } from "../../contracts/v2";
-import {
-  type SelfProfile,
-  selfProfileSchema,
-} from "../../server/modules/lawyers/self-profile-contract";
 import {
   apiMode,
   apiRequest,
