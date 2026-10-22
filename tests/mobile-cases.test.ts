@@ -157,6 +157,32 @@ function fixture() {
     },
   };
 }
+test("workspace review navigation resolves an opaque case ID through fresh API reads without creating or advancing a case", async () => {
+  const f = fixture();
+  await settled();
+  f.summary();
+  await f.model.open(base.id);
+  expect(f.model.getSnapshot()).toMatchObject({
+    view: "detail",
+    item: { id: base.id, stage: "summary" },
+    summary: summary.overview,
+  });
+  expect(f.counts()).toMatchObject({ calls: 0, advances: 0, confirmations: 0 });
+  f.stop();
+});
+test("leaving the route discards unwatched private input before logout and same-owner login", async () => {
+  const f = fixture();
+  await settled();
+  f.model.newCase();
+  f.model.setNarrative(narrative);
+  f.stop();
+  f.session({ ...owner(), phase: "anonymous", session: null });
+  f.session(owner());
+  const stop = f.model.start();
+  await settled();
+  expect(f.model.getSnapshot().narrative).toBe("");
+  stop();
+});
 test("a committed creation stays in detail if the following questions read fails, so retry cannot create another case", async () => {
   const f = fixture();
   await settled();

@@ -139,6 +139,7 @@ export function createWorkspaceClient(dependencies: {
   recovery?: WorkspaceRecovery;
   /** Opt-in wire entity revisions so a native editor can retain its original revision across recreation. */
   includeActionRevisions?: boolean;
+  includeSummaryConfirmation?: boolean;
   onAcknowledged?: (receipt: WorkspaceAcknowledgement) => void;
 }) {
   const generation = dependencies.scope.snapshot();
@@ -572,6 +573,13 @@ export function createWorkspaceClient(dependencies: {
       updatedAt: w.updatedAt,
       summary: summary?.overview ?? "",
       schemaVersion: "2",
+      ...(dependencies.includeSummaryConfirmation
+        ? {
+            summaryNeedsConfirmation: Boolean(
+              summary && w.confirmedSummaryRevision !== summary.revision,
+            ),
+          }
+        : {}),
     };
     return {
       case: caseView,

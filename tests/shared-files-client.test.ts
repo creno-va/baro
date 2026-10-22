@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import {
+  createFileMetadataReader,
   createFilesClient,
   type UploadMetadata,
   type UploadReader,
@@ -10,6 +11,43 @@ import { V2_LIMITS } from "@baro/contracts/v2/common";
 
 const source = { name: "합성.txt", type: "text/plain", size: 3, uri: "synthetic://opaque" };
 const hash = "b".repeat(64);
+test("metadata-only reader shares pagination and status mapping without opening any upload, coverage or download port", async () => {
+  const paths: string[] = [];
+  const reader = createFileMetadataReader(async (path, init) => {
+    paths.push(path);
+    expect(init?.method ?? "GET").toBe("GET");
+    if (paths.length === 1)
+      return Response.json(
+        Array.from({ length: 20 }, (_, index) => ({
+          id: `f_${index}`,
+          revision: 2,
+          name: `합성${index}.txt`,
+          declaredMediaType: "text/plain",
+          byteLength: 3,
+          status: index === 0 ? "deleting" : "ready",
+        })),
+      );
+    expect(path).toBe("/api/v2/cases/case_a/files?afterId=f_19");
+    return Response.json([
+      {
+        id: "f_20",
+        revision: 4,
+        name: "합성 실패.txt",
+        declaredMediaType: "text/plain",
+        byteLength: 3,
+        status: "failed",
+        canRetry: true,
+        failure: "FILE_PROCESSING_FAILED",
+      },
+    ]);
+  });
+  const values = await reader("case_a");
+  expect(values).toHaveLength(20);
+  expect(paths).toHaveLength(2);
+  expect(values[0]).toMatchObject({ status: "ready", extractedText: "", revision: 2 });
+  expect(values.at(-1)).toMatchObject({ status: "failed", canRetry: true });
+  expect(values[0]?.coverage).toContain("처리 범위");
+});
 function fixture(
   options: {
     fingerprint?: () => Promise<string>;

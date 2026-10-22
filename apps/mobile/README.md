@@ -1,10 +1,10 @@
-# BARO mobile — M2/M3 진행
+# BARO mobile — M4 진행
 
 Expo SDK 58 / React Native 0.88.0 / React 19.3.0 / Expo Router 기반 iOS·Android 앱이다.
 현재 시작·이용 안내·공개 변호사 목록/이름 검색·잘못된 경로 화면을 제공한다. 공개 목록은
 설정된 API를 실제 조회하며 화면에 예시 데이터를 대체 표시하지 않는다. 기존 3사 로그인·
-고객/변호사 선택·필수 동의·내 계정·로그아웃을 native 화면으로 연결한다. 사건 저장은
-M4에서 계속한다. 프로필 상세·기타 필터·직접 연락은 후속 기능 단계에서 계속한다.
+고객/변호사 선택·필수 동의·내 계정·로그아웃과 고객 사건/질문/요약·작업공간을 native 화면으로
+연결한다. v1 분석 상세/삭제와 프로필 상세·기타 필터·직접 연락은 후속으로 계속한다.
 
 ## 개발
 
@@ -117,8 +117,8 @@ M1의 실제 결과와 미완료 native 항목은 [#330](https://github.com/cren
 `/cases`는 fresh 고객 세션·동의 gate 아래 사건 목록/생성·서버 저장분 재개·차례별 질문·
 모름/건너뛰기·요약 text/사실 수정·확인을 제공한다. 처리 중인 작업만 활성 화면에서 조회한다.
 서버 revision 충돌은 미저장 입력을 보존하고 명시적인 최신 내용 사용으로 해결한다.
-화면을 완전히 나가거나 앱을 종료하면 미저장 입력은 사라질 수 있다. 작업공간 채팅·자료/
-리포트 및 v1 분석 상세/삭제는 #354의 후속이며 구현한 것처럼 표시하지 않는다.
+다른 화면으로 이동하거나 앱을 종료하면 미저장 입력은 사라진다. v1 분석 상세/삭제는
+#354의 후속이며 자료 업로드·처리 검토·리포트 저장은 M5 잔여다.
 
 불확실 mutation key와 owner/revision metadata는 `.case-operations` SecureStore service에
 별도로 보관한다. 물리 key는 fingerprint이며 UUID/허용 metadata 이외의 값·잠김·손상·
@@ -127,4 +127,12 @@ silent write는 실패한다. 인증 reset에서 지우지 않으며 사실/답�
 공통 `createWorkspaceClient`의 native `recovery` port는 같은 저장소의 fingerprint/UUID
 형식을 사용한다. `onAcknowledged`와 화면 재조회 완료를 구분하고, `includeActionRevisions`와
 원래 action revision으로 편집 재시도를 묶는다. job 저장은 opaque hint이며 실제 서버 job이
-정본이다. 이 공통 선행을 소비하는 RN 작업공간 화면은 #354의 다음 구현 단위다.
+정본이다. `/workspace?caseId=<opaque ID>`는 같은 fresh 고객 gate 아래 대화·검증 실패/
+명시적 재시도·사실/모순/근거·타임라인 편집·다음 행동 체크와 기록 추가 조회를 연결한다.
+자료는 공통 metadata reader로 이름/상태를 읽고 준비된 자료를 대화에 선택한다. 파일 IO나
+처리 범위 검토를 완료로 표시하지 않는다. 새 요약은 `/cases` 검토·확인으로 이어진다.
+응답 유실 때 입력과 원래 revision을 메모리에 보존하며 명시적인 같은 요청 재시도만
+허용한다. 확정 ACK 뒤 조회 실패는 해당 입력을 비우고 최신 조회를 제공한다. background/
+blur에서 IO·poll을 중단한다. background 대기는 같은 fresh owner만 입력을 복원하며,
+세션 구독이 끝나는 화면 이탈에서는 입력을 버려 이탈 중 로그아웃 뒤 되살리지 않는다.
+실제 기기 인수는 별도다.

@@ -446,6 +446,33 @@ workspace·자료·리포트·나머지 domain을 순차 추출한다. 첫 단�
   `BARO_WORKSPACE_SHARED_UI=true`로2개 실제 실행 성공을 확인했다. 실제 외부 인수가 아니다.
   a0d2deb native39831543461의 Android는 성공했고 iOS는 기록 시점 컴파일 중이다.
 
+### RN 작업공간 연결
+
+- 공통 복구 PR356은 정확한 head `12d650b` CI39834804297 성공 후 main `51d2c9d`에
+  정상 병합했다. 기존 사건/intake main `a0d2deb`의 native39831543461은 두 OS 모두
+  성공했다. 이 컴파일은 새 작업공간 UI나 실제 기기/OAuth/AI 성공의 증거가 아니다.
+- `codex/354-native-workspace`는 `/cases`에서 `/workspace`로 이어지는 RN model/화면을
+  연결한다. fresh 고객 owner/동의 gate와 blur/background 취소를 유지하며 대화·실패/
+  명시적 재시도·사실/모순/자료 근거·타임라인 추가/수정·행동 완료·기록 추가 조회를 제공한다.
+- mutation의 원래 body/revision을 메모리에 보존하고 불확실 응답에는 같은 요청 재시도만
+  제공한다. 확정 acknowledgement는 후속 조회 전에 해당 editor를 비우며, 조회 실패가
+  새 전송으로 이어지지 않는다. 다른 계정·익명·역할 변경에서 이전 입력을 버리고, fresh
+  동일 owner일 때만 background 대기의 메모리 입력을 복원한다. 화면 이탈은 입력을 버린다.
+  이탈 중 구독하지 못한 로그아웃 후 같은 계정으로 돌아와도 과거 입력을 복구하지 않는다.
+  미저장 내용은 기기 디스크/로그/URL에 쓰지 않는다.
+- 새 요약이 생기면 서버가 intake 검토 상태로 되돌리는 실제 Hono/SQL 계약을 따른다.
+  기존 cases client의 summary stage를 그대로 사용해 편집/확인 화면으로 이어지며 확인 전
+  다음 메시지를 막는다. 서버의 처리/실패·quota·권한과 관측 전용 비용 정책을 보존한다.
+- 파일 목록의 공통 metadata reader는 기존 files client와 같은 pagination/상태 매핑을
+  사용한다. native 업로드/download 가짜 port를 만들지 않고 이름·상태·선택만 연결한다.
+  M5의 업로드·처리 범위 검토·리포트 저장은 잔여이며 v1 분석 상세/삭제와 함께 후속 추적한다.
+  웹 pages/components/layouts/styles·서버·DB schema는 수정하지 않는다.
+- frozen install·quick(모바일/공통163개·RN24개·필수 서버42개), 추가 domain 회귀66개,
+  production build/workerd와 두 OS Metro가 통과했다. 웹 shared2개·draft/자료23개도
+  실제 실행해 통과했다. 첫23개 묶음은 draft 보존1건이 실패했으나 제품/테스트 수정 없이
+  단독1개 및 같은 전체23개 재실행이 통과했다. 원인은 확정하지 않고 초기 실패를 보존한다.
+  실제 OAuth/AI/기기·서명·배포 증거가 아니며 새 UI의 native 컴파일은 통합 SHA로 별도 추적한다.
+
 ## 참고
 
 - [Expo workspace 구성](https://docs.expo.dev/guides/monorepos/)

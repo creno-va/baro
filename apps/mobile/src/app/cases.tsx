@@ -1,5 +1,6 @@
-import { useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useMemo, useSyncExternalStore } from "react";
+import { opaqueIdSchema } from "@baro/contracts/v1";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from "react";
 import { createNativeCases } from "../composition/cases";
 import { getSessionModel } from "../composition/session";
 import { type CasesModel, createCasesModel } from "../features/cases/model";
@@ -29,11 +30,27 @@ function ConnectedCases({ session }: { session: SessionModel }) {
 function ObservedCases({ model }: { model: CasesModel }) {
   const router = useRouter(),
     state = useSyncExternalStore(model.subscribe, model.getSnapshot);
+  const params = useLocalSearchParams<{ reviewCaseId?: string }>();
+  const opened = useRef(false);
+  useEffect(() => {
+    const id = opaqueIdSchema.safeParse(params.reviewCaseId);
+    if (!opened.current && id.success && state.gate === "ready" && !state.busy) {
+      opened.current = true;
+      void model.open(id.data);
+    }
+  }, [model, params.reviewCaseId, state.gate, state.busy]);
   useFocusEffect(
     useCallback(() => {
       void getSessionModel().refresh();
       return model.start();
     }, [model]),
   );
-  return <CasesScreen state={state} actions={model} onSession={() => router.push("/session")} />;
+  return (
+    <CasesScreen
+      state={state}
+      actions={model}
+      onSession={() => router.push("/session")}
+      onWorkspace={(caseId) => router.push({ pathname: "/workspace", params: { caseId } })}
+    />
+  );
 }

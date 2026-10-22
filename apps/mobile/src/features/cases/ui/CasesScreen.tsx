@@ -10,10 +10,12 @@ export function CasesScreen({
   state,
   actions,
   onSession,
+  onWorkspace,
 }: {
   state: CasesState;
   actions: CasesModel;
   onSession: () => void;
+  onWorkspace?: (caseId: string) => void;
 }) {
   if (state.gate !== "ready")
     return (
@@ -53,6 +55,12 @@ export function CasesScreen({
             ? "새 사건 정리"
             : (item?.title ?? "사건 확인")}
       </Text>
+      {state.view !== "list" ? (
+        <Text variant="muted">
+          다른 화면으로 이동하거나 앱을 종료하면 미저장 입력은 사라져요. 저장한 내용은 내 사건에서
+          다시 확인할 수 있어요.
+        </Text>
+      ) : null}
       {state.error ? <Text accessibilityRole="alert">{state.error}</Text> : null}
       {state.busy ? <Text accessibilityRole="progressbar">요청을 확인하고 있어요.</Text> : null}
       {state.busy ? <Button label="진행 중인 요청 중단" onPress={actions.cancel} /> : null}
@@ -329,9 +337,13 @@ export function CasesScreen({
               ) : (
                 <>
                   <Text>{item.summary || "사건 기록이 저장됐어요."}</Text>
-                  <Text variant="muted">
-                    작업공간의 채팅·타임라인·행동은 다음 연결 작업에서 제공해요.
-                  </Text>
+                  {item.schemaVersion === "2" && onWorkspace ? (
+                    <Button
+                      label="사건 작업공간 열기"
+                      disabled={state.busy}
+                      onPress={() => onWorkspace(item.id)}
+                    />
+                  ) : null}
                 </>
               )}
               {item.summaryDetails?.notices.map((notice) => (
