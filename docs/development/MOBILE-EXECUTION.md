@@ -227,6 +227,45 @@ workspace·자료·리포트·나머지 domain을 순차 추출한다. 첫 단�
   없음을 확인했으며 [#339](https://github.com/creno-va/baro/issues/339)에서 artifact 도달성·
   검증된 보완/patch와 release 보안 인수를 추적한다. audit 실패나 전체 보안 인수를 성공으로
   바꾸지 않고 독립 기능 구현을 계속한다.
+- 공통 기반 PR340은 main `0d5b984393744a271f6ef6a0d4df651fbc7327ec`에 통합했다.
+  [native39782039545](https://github.com/creno-va/baro/actions/runs/39782039545)의 iOS·Android
+  개발 빌드와 두 receipt를 확인했다. 실제 기기/OAuth 성공과는 구분한다.
+- 다음 `codex/335-shared-cases-client`는 사건/list·intake 질문/답변·요약 저장/확인을
+  `createCasesClient`로 추출한다. 웹 facade와 DOM challenge는 유지하고 해시·UUID·저장·
+  challenge를 port로 주입한다. 동일 쓰기는 합치고 저장 실패 전 쓰기 차단, 재시작 후 동일
+  key/revision 재사용, owner별 격리, 계정 전환 시 HTTP/challenge 취소를 검사한다.
+  frozen install·quick·build(실제 workerd 시작)·두 OS Metro bundle·mobile check가 통과했다.
+  사건/intake 회귀 31개와 기존 웹 저장/사건 회귀 25개를 검사했다.
+  실제 native SecureStore/challenge 연결과 고객 화면은 M3~M4에서 계속한다.
+
+- 사건/intake PR341은 CI39789064504(head `bfdbacb`) 성공 후 main
+  `6a2b5008c3b1092a0cc60d3b1af08b8204199f8a`에 squash 병합했다.
+- `codex/335-shared-workspace-client`는 `createWorkspaceClient`로 채팅·행동·타임라인과
+  projection/pagination/revision readback을 분리한다. metadata 목록·비동기 job ID 힌트를
+  주입하고 상태/멱등성 key를 instance에 격리한다. 동일 쓰기 병행 합치기·계정 전환 취소·
+  저장 장애 후 서버 최신 job 복구를 검사한다. 원문은 복구 저장소에 넣지 않는다.
+  관련 domain 회귀190개·브라우저 초안/복구35개·frozen install/quick/build/두 OS bundle가
+  통과했다. 같은 계정에서 메서드를 감싼 참조는 유지하고, 계정 변경 시 새 instance로
+  전환하도록 공통 binding 회귀도 보완했다. 앱 재시작 시 workspace 쓰기의 durable key
+  복구와 실제 native IO는 후속 단계다.
+
+- 작업공간 PR342는 CI39790764136(head `8b66c4a`) 성공 뒤 main
+  `9e33f8df702cd33ac95242b177f210d4bd04b994`에 병합했다.
+- `codex/335-shared-files-client`는 metadata/coverage·교정·처리/삭제·chunk 업로드를
+  `createFilesClient`로 추출한다. 브라우저 File/stream hash는 facade에 남기고 generic
+  source·reader/hash/part/close·download를 주입한다. 크기/해시·같은 source 병행 업로드·
+  계정 전환 후 hash/원본 응답 취소를 검사한다. native picker/cache/byte IO와 앱 재시작
+  업로드/교정 복구는 M5 연결 단계에서 계속한다. 관련 domain/바이트 회귀140개·웹 첨부/검토
+  41개·frozen install/quick/build(실제 workerd 시작)/두 OS Metro bundle이 통과했다.
+
+- 자료 PR343은 CI39792089726(head `969cdac`) 성공 후 main
+  `a7f1601225b3759c400e7b9be500dfb1546d9f40`에 병합했다.
+- `codex/335-shared-reports-client`는 리포트 생성/검토·revision·immutable ZIP 선택과
+  PDF/ZIP header·HTML marker 검증을 공통화한다. platform artifact reader/discard를
+  주입하고 계정 전환 중 byte/JSON 응답을 차단한다. 응답 유실 후 metadata refresh나
+  선택 왕복도 원래 key/body/basis로 복구한다. source/서명 SQL/바이트 회귀75개·웹 revision
+  5개/통합3개/실제 SQL PDF 다운로드1개와 frozen/quick/build/두 OS bundle이 통과했다.
+  PDF 검증은 번들 Python(pypdf)을 사용했다. native cache/열기/공유·재시작 복구는 M5다.
 
 ## 참고
 

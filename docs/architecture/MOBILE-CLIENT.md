@@ -103,11 +103,11 @@ React 버전을 임의로 바꾸거나 모든 버전을 강제로 hoist하지 �
 | `src/contracts/` | 이미 공유 Zod 정본 | 파일 이동 없이 workspace export·클라이언트 entry 검증 |
 | `src/client/api/types.ts`, `errors.ts`, `workspace-progress.ts` | 화면 DTO·안전한 오류·상태 문구 | 순수 부분부터 client-core/API로 추출; 기존 경로 re-export 유지 |
 | `src/client/api/core.ts` | `import.meta.env`, 상대 URL, same-origin cookie, mock import | 환경/transport 주입; mock은 명시적 테스트 조립으로 분리 |
-| `src/client/api/workspace.ts` | transport 주입 가능, module-level mutation key 상태 | API 요청/순수 변환 분리; 상태는 owner+session 단위 client instance로 이동 |
+| `src/client/api/workspace.ts` | 웹 facade·metadata 목록·복구 job 저장 adapter | `createWorkspaceClient`로 projection/채팅/행동/타임라인 추출; mutation/revision cache는 session instance에 격리 |
 | `src/client/api/session.ts`, `src/client/auth.ts` | window/storage 이벤트, 웹 OAuth callback, sessionStorage | 웹 구현 유지; 같은 session 결과 계약을 쓰는 모바일 adapter 추가 |
-| `src/client/api/cases.ts` | sessionStorage·document·Turnstile dialog와 사건 요청 혼합 | 사건 요청과 draft/재시도 규칙 추출, challenge port 분리 |
-| `src/client/api/files.ts` | browser File/Blob/stream hash와 chunk 업로드 | metadata/상태는 공유, byte 읽기·hash·upload IO는 플랫폼 adapter |
-| `src/client/api/reports.ts`, `src/components/reports/download.ts` | 데이터 요청과 browser Blob 다운로드 | 리포트 작업 계약 공유, 파일 저장/열기/공유는 모바일 adapter |
+| `src/client/api/cases.ts`, `challenge.ts` | 웹 facade·storage/hash·DOM challenge adapter | `packages/api-client/src/cases.ts` factory에 사건/intake와 재시도 상태를 추출, native는 동일 계약의 port를 주입 |
+| `src/client/api/files.ts` | 웹 File/Blob/stream adapter | `createFilesClient`에 metadata/교정/처리/chunk 절차 추출, source/reader·hash·download IO 주입 |
+| `src/client/api/reports.ts`, `src/components/reports/download.ts` | 웹 Blob/download adapter | `createReportsClient`로 생성/검토/revision·artifact 형식 검사 공유, 파일 저장/열기/공유는 플랫폼 adapter |
 
 각 추출 PR은 기존 import를 보존하는 facade와 필요한 기존 회귀를 포함한다. 웹 화면은
 같은 동작을 유지하면서 새 공통 구현을 호출하게 한다. 웹 담당이 같은 파일을 변경 중이면

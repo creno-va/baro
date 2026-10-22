@@ -1,190 +1,39 @@
-import { z } from "zod";
-import type { ReportView } from "./types";
+import {
+  createReportsClient as createSharedReportsClient,
+  type DomainRequestInit as SharedRequestInit,
+} from "@baro/api-client";
+import { createSessionBoundClient } from "@baro/client-core";
+import { browserSessionScope } from "./context";
 
-export type DomainRequestInit = {
-  method?: string;
-  body?: unknown;
-  headers?: Record<string, string>;
-  responseType?: "blob";
-};
+export type { ReportSave } from "@baro/api-client";
+export { reportSaveSchema } from "@baro/api-client";
+export type DomainRequestInit = SharedRequestInit & { responseType?: "blob" };
 export type DomainRequest = <T>(path: string, init?: DomainRequestInit) => Promise<T>;
-const reportSchema = z.object({
-  id: z.string().min(1),
-  caseId: z.string().min(1),
-  revision: z.number().int().positive(),
-  title: z.string(),
-  content: z.string().max(30000),
-  updatedAt: z.iso.datetime(),
-  stale: z.boolean(),
-  excludedFileIds: z.array(z.string()),
-  maskIdentifiers: z.boolean(),
-  includedPhotoIds: z.array(z.string()).max(12).optional(),
-  photoCandidates: z
-    .array(z.object({ id: z.string(), name: z.string(), revision: z.number().int().positive() }))
-    .max(100)
-    .optional(),
-  basis: z
-    .object({
-      workspaceRevision: z.number().int().positive(),
-      summaryRevision: z.number().int().positive(),
-      generatedAt: z.iso.datetime(),
-    })
-    .optional(),
-  pdfAvailable: z.boolean().optional(),
-  savedZip: z
-    .object({
-      id: z.string().min(1),
-      fileCount: z.number().int().min(1).max(100),
-      createdAt: z.iso.datetime(),
-    })
-    .optional(),
-});
-export const reportSaveSchema = z.object({
-  content: z.string().trim().min(1, "내용을 입력해 주세요.").max(30000),
-  maskIdentifiers: z.boolean(),
-  includedPhotoIds: z
-    .array(z.string())
-    .max(12)
-    .refine((ids) => new Set(ids).size === ids.length)
-    .optional(),
-  excludedFileIds: z
-    .array(z.string())
-    .max(100)
-    .refine((ids) => new Set(ids).size === ids.length),
-});
-export type ReportSave = z.infer<typeof reportSaveSchema>;
+
 export function createReportsClient(request: DomainRequest) {
-  const revisions = new Map<string, number>();
-  const generations = new Map<string, { selection: string; revision: number | undefined }>();
-  const pending = new Map<string, { fingerprint: string; key: string }>();
-  const accept = (value: unknown): ReportView => {
-    const report = reportSchema.parse(value);
-    revisions.set(report.caseId, report.revision);
-    return report;
-  };
-  const path = (id: string) => `/api/v2/cases/${encodeURIComponent(id)}/reports`;
-  async function write(id: string, method: "PATCH" | "POST", body: unknown) {
-    const identity = `${method}:${id}`,
-      fingerprint = JSON.stringify(body);
-    let previous = pending.get(identity);
-    if (!previous || previous.fingerprint !== fingerprint) {
-      previous = { fingerprint, key: crypto.randomUUID() };
-      pending.set(identity, previous);
-    }
-    // Retain the key after a lost response. A retry must replay the same version,
-    // while changed edits/source revision identify a new operation.
-    const report = accept(
-      await request<unknown>(path(id), {
-        method,
-        body,
-        headers: { "idempotency-key": previous.key },
-      }),
-    );
-    pending.delete(identity);
-    return report;
-  }
-  async function binary(url: string, type: string, body?: unknown, key?: string) {
-    const result = await request<Blob>(url, {
-      ...(body
-        ? { method: "POST", body, headers: { "idempotency-key": key ?? crypto.randomUUID() } }
-        : {}),
-      responseType: "blob",
-    });
-    if (!(result instanceof Blob) || result.type.split(";")[0] !== type || !result.size)
-      throw new Error("다운로드 파일을 확인하지 못했어요. 다시 시도해 주세요.");
-    const signature = new Uint8Array(await result.slice(0, 5).arrayBuffer());
-    if (
-      type === "application/pdf"
-        ? String.fromCharCode(...signature) !== "%PDF-"
-        : signature[0] !== 0x50 || signature[1] !== 0x4b || signature[2] !== 3 || signature[3] !== 4
-    )
-      throw new Error("다운로드 형식이 올바르지 않아요.");
-    return result;
-  }
-  return {
-    async get(id: string) {
-      return accept(await request<unknown>(path(id)));
-    },
-    async save(id: string, input: ReportSave, expectedRevision = revisions.get(id)) {
-      return write(id, "PATCH", {
-        ...reportSaveSchema.parse(input),
-        expectedRevision,
-      });
-    },
-    async generate(id: string, excludedFileIds?: string[], expectedRevision?: number) {
-      const selection = JSON.stringify({ excludedFileIds }),
-        previous = generations.get(id),
-        revision =
-          expectedRevision !== undefined
-            ? expectedRevision
-            : previous?.selection === selection
-              ? previous.revision
-              : revisions.get(id);
-      generations.set(id, { selection, revision });
-      try {
-        const report = await write(id, "POST", {
-          expectedRevision: revision,
-          ...(excludedFileIds ? { excludedFileIds } : {}),
-        });
-        generations.delete(id);
-        return report;
-      } catch (cause) {
-        // A definite conflict can be retried with a newly loaded version. Keep the
-        // original basis for ambiguous failures so a metadata GET cannot fork it.
-        if ((cause as { code?: string })?.code === "STALE_REVISION") generations.delete(id);
-        throw cause;
-      }
-    },
-    async pdf(id: string) {
-      return binary(`/api/v2/reports/${encodeURIComponent(id)}/pdf`, "application/pdf");
-    },
-    async savedZip(id: string) {
-      return binary(`/api/v2/reports/${encodeURIComponent(id)}/zip`, "application/zip");
-    },
-    async html(id: string) {
-      const result = await request<Blob>(`/api/v2/reports/${encodeURIComponent(id)}/html`, {
-        responseType: "blob",
-      });
-      if (
-        !(result instanceof Blob) ||
-        result.type.split(";")[0] !== "text/html" ||
-        !result.size ||
-        result.size > 30_000_000
-      )
-        throw new Error("HTML 리포트를 확인하지 못했어요. 다시 시도해 주세요.");
-      const text = await result.text();
-      if (!text.startsWith("<!doctype html>") || !text.includes('data-baro-report="1"'))
-        throw new Error("HTML 리포트 형식이 올바르지 않아요.");
-      return result;
-    },
-    async zip(id: string, selectedFileIds: string[]) {
-      const ids = z
-        .array(z.string().min(1))
-        .min(1, "원본을 선택해 주세요.")
-        .max(100)
-        .refine((values) => new Set(values).size === values.length)
-        .parse(selectedFileIds);
-      const body = { selectedFileIds: ids },
-        identity = `ZIP:${id}`,
-        fingerprint = JSON.stringify(body);
-      let operation = pending.get(identity);
-      if (!operation || operation.fingerprint !== fingerprint) {
-        operation = { fingerprint, key: crypto.randomUUID() };
-        pending.set(identity, operation);
-      }
-      // Repeated downloads and retries after a lost response reuse the same
-      // immutable package. Changed selections create a separate operation.
-      return binary(
-        `/api/v2/reports/${encodeURIComponent(id)}/zip`,
-        "application/zip",
-        body,
-        operation.key,
-      );
-    },
-  };
+  return createSessionBoundClient(browserSessionScope, () =>
+    createSharedReportsClient<Blob>({
+      request,
+      scope: browserSessionScope,
+      newKey: () => crypto.randomUUID(),
+      download: async (path, options) => {
+        const result = await request<Blob>(path, { ...options, responseType: "blob" });
+        if (!(result instanceof Blob))
+          throw new Error("다운로드 파일을 확인하지 못했어요. 다시 시도해 주세요.");
+        return {
+          value: result,
+          mimeType: result.type,
+          size: result.size,
+          read: async (start, end) => new Uint8Array(await result.slice(start, end).arrayBuffer()),
+          text: () => result.text(),
+          discard: () => {},
+        };
+      },
+    }),
+  );
 }
 
-/** Native fetch boundary shared with the workspace/files domain factories. */
+/** Browser Response/Blob boundary; common clients receive JSON and artifact ports. */
 export type ApiRequest = (path: string, init?: RequestInit) => Promise<Response>;
 export function domainRequest(request: ApiRequest): DomainRequest {
   return async <T>(path: string, init: DomainRequestInit = {}) => {
@@ -194,6 +43,7 @@ export function domainRequest(request: ApiRequest): DomainRequest {
       method: init.method ?? "GET",
       headers,
       cache: "no-store",
+      ...(init.signal ? { signal: init.signal } : {}),
       ...(init.body !== undefined ? { body: JSON.stringify(init.body) } : {}),
     });
     if (!response.ok) {
