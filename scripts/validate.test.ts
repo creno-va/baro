@@ -6,6 +6,10 @@ test("quick validation never builds, starts browsers, containers, remote calls o
   const commands = validationCommands("quick");
   expect(commands).toContainEqual(["bun", "run", "typecheck"]);
   expect(commands).toContainEqual(["bun", "run", "lint"]);
+  expect(commands.some((command) => command.includes("tests/native-auth-codes.test.ts"))).toBe(
+    true,
+  );
+  expect(commands.some((command) => command.includes("tests/native-auth-http.test.ts"))).toBe(true);
   expect(commands).not.toContainEqual(["bun", "test"]);
   expect(commands.flat().join(" ")).not.toMatch(
     /playwright|docker|wrangler|audit|gitleaks|build|deploy\.ts/,

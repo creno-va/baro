@@ -242,3 +242,23 @@ test("scheduled auth cleanup removes expired/malformed grants and preserves othe
     f.db.sqlite.query("SELECT value FROM app_metadata WHERE key=?").get("other-module:synthetic"),
   ).toEqual({ value: "preserve-exactly" });
 });
+
+test("expiry is rechecked after asynchronous proof verification before consuming the grant", async () => {
+  const f = await fixture();
+  let reads = 0;
+  const store = createNativeAuthCodeStore({
+    db: f.db.binding,
+    issuer: f.issuer,
+    secret: f.session.env.BETTER_AUTH_SECRET,
+    now: () => f.now() + (++reads >= 3 ? NATIVE_AUTH_CODE_TTL_MS : 0),
+  });
+  const issued = await store.issue(f.input);
+  await expect(store.exchange({ ...issued, verifier })).rejects.toMatchObject({
+    name: "NativeAuthProofError",
+  });
+  expect(
+    f.db.sqlite
+      .query("SELECT count(*) n FROM app_metadata WHERE key LIKE 'native-auth:v1:%'")
+      .get(),
+  ).toEqual({ n: 1 });
+});

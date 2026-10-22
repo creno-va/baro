@@ -49,15 +49,15 @@ export async function createOAuthFixture(
     },
   });
 
-  async function begin() {
+  async function begin(callbackURL = "/consent", errorCallbackURL = "/login") {
     const response = await auth.handler(
       new Request(`${env.BETTER_AUTH_URL}/api/auth/sign-in/social`, {
         method: "POST",
         headers: { "content-type": "application/json", origin: env.BETTER_AUTH_URL },
         body: JSON.stringify({
           provider: providerId,
-          callbackURL: "/consent",
-          errorCallbackURL: "/login",
+          callbackURL,
+          errorCallbackURL,
           disableRedirect: true,
         }),
       }),

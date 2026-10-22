@@ -5,6 +5,7 @@ import {
   mobileAuthExchangeSchema,
   mobileAuthStartSchema,
 } from "../../contracts/mobile-auth";
+import { AuthConfigurationError } from "./env";
 import { AUTH_RETENTION_MS, RECENT_OAUTH_MS } from "./policy";
 
 export const NATIVE_AUTH_CODE_TTL_MS = 60_000;
@@ -52,7 +53,7 @@ async function digest(value: string) {
   ).join("");
 }
 const activeSession = `EXISTS(SELECT 1 FROM session s JOIN user u ON u.id=s.user_id
-  WHERE s.id=? AND s.user_id=? AND s.expires_at>? AND s.created_at>?
+  WHERE s.id=? AND s.user_id=? AND s.expires_at>? AND s.created_at>? AND s.created_at<=?
   AND s.oauth_authenticated_at IS NOT NULL AND s.oauth_authenticated_at<=? AND s.oauth_authenticated_at>=?
   AND NOT EXISTS(SELECT 1 FROM v2_tombstones t WHERE t.target_kind='account' AND t.target_id=s.user_id))`;
 
@@ -72,7 +73,8 @@ export function createNativeAuthCodeStore(dependencies: {
   issuer: string;
   now?: () => number;
 }) {
-  if (dependencies.secret.length < 32) throw new NativeAuthProofError();
+  if (typeof dependencies.secret !== "string" || dependencies.secret.length < 32)
+    throw new AuthConfigurationError("BETTER_AUTH_SECRET");
   const issuer = new URL(dependencies.issuer).origin;
   const now = dependencies.now ?? Date.now;
   const namespace = digest(issuer).then((hash) => `native-auth:v1:${hash}:`);
@@ -102,6 +104,7 @@ export function createNativeAuthCodeStore(dependencies: {
     userId,
     time,
     time - AUTH_RETENTION_MS,
+    time,
     time,
     time - RECENT_OAUTH_MS,
   ];
@@ -194,12 +197,15 @@ export function createNativeAuthCodeStore(dependencies: {
         payload.attemptId !== request.data.attemptId
       )
         throw new NativeAuthProofError();
+      const consumedAt = now();
+      if (record.expiresAt <= consumedAt || record.expiresAt > consumedAt + NATIVE_AUTH_CODE_TTL_MS)
+        throw new NativeAuthProofError();
       // A valid proof consumes once and rechecks the exact active OAuth session atomically.
       const consumed = await dependencies.db
         .prepare(
           `DELETE FROM app_metadata WHERE key=? AND value=? AND ${activeSession} RETURNING key`,
         )
-        .bind(storageKey, row.value, ...sessionArgs(payload.sessionId, payload.userId, time))
+        .bind(storageKey, row.value, ...sessionArgs(payload.sessionId, payload.userId, consumedAt))
         .first<{ key: string }>();
       if (!consumed) throw new NativeAuthProofError();
       return payload.cookie;

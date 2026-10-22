@@ -2,7 +2,7 @@
 
 - Status: M1 인수 완료; 전체 네이티브 앱화 #334 / M2 공통 client #335 진행
 - Updated: 2026-10-22
-- Tracking: 전체 [#334](https://github.com/creno-va/baro/issues/334), 계획 [#328](https://github.com/creno-va/baro/issues/328), M1 [#330](https://github.com/creno-va/baro/issues/330), M2 [#335](https://github.com/creno-va/baro/issues/335)
+- Tracking: native 인증 [#346](https://github.com/creno-va/baro/issues/346), 전체 [#334](https://github.com/creno-va/baro/issues/334), 계획 [#328](https://github.com/creno-va/baro/issues/328), M1 [#330](https://github.com/creno-va/baro/issues/330), M2 [#335](https://github.com/creno-va/baro/issues/335)
 - Decision: [ADR-0017](../adr/0017-expo-mobile-and-shared-client-boundaries.md)
 - Architecture: [공통 코드와 모바일 경계](../architecture/MOBILE-CLIENT.md)
 
@@ -266,6 +266,27 @@ workspace·자료·리포트·나머지 domain을 순차 추출한다. 첫 단�
   선택 왕복도 원래 key/body/basis로 복구한다. source/서명 SQL/바이트 회귀75개·웹 revision
   5개/통합3개/실제 SQL PDF 다운로드1개와 frozen/quick/build/두 OS bundle이 통과했다.
   PDF 검증은 번들 Python(pypdf)을 사용했다. native cache/열기/공유·재시작 복구는 M5다.
+
+## 9. M3 인증 시작 (#346)
+
+`codex/346-native-auth-foundation`은 선행 session/consent/cases PR340·341의 main/CI를
+기준으로 독립 진행한다. M2 #335의 프로필/자산과 PR345의 필수 check 최종 반영은 별도
+잔여로 보존한다. PR345 Actions success와 Check Run in_progress가 달라 정상 병합 대기 중이다.
+
+첫 단위는 canonical nonce/code/S256 교환과 encrypted one-use grant, 기존3사 Better Auth
+callback/state proxy, Hono exchange, owner 삭제·restore·cron 정리다. code는60초이며 재사용,
+다른 nonce/verifier/issuer, 세션 폐기·만료·보관 상한을 거절한다. raw cookie/provider 오류를
+복귀 URL이나 진단에 싣지 않는다. auth origin을 입력 헤더로 바꾸거나 CSRF를 끄지 않는다.
+서버 단위의 실제 state/SQL 검증은 provider 교환/프로필만 합성 대역이며 실제 제공자 성공이 아니다.
+
+Expo integration1.7.7은 기존 Better Auth와 맞추고 SecureStore58.0.2·Network58.0.4·
+WebBrowser58.0.6·WebView14.0.1을 SDK58에 맞춰 고정한다. native cookie jar/시도 저장·
+외부 브라우저·cold/warm·역할/동의·challenge UI와 두 OS 실제 인수는 이후 계속한다.
+이 단위의 native ABI 빌드도 새 source SHA에서 별도 receipt로 검사한다.
+서버 auth/삭제/restore 단위78개, 기존 웹 auth17개·session2개·설정5개를 검증했다.
+frozen/quick40개(이 중 code/HTTP20개)·실제 workerd 시작 build·DB fresh/upgrade·
+두 OS Metro bundle·Expo Doctor20/20이 통과했다. 새 dependency 구성에서도 raw audit은
+기존 미패치3건으로 실패했고 #339를 유지한다. native 화면·실제 provider/기기·배포 성공은 아니다.
 
 ## 참고
 
