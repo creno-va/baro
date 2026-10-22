@@ -5,3 +5,7 @@
 # The same two synthetic paths in the squash commit of PR #96.
 252cbc290fef90b6badc49cd08f7b345c3b29503:tests/v2-storage-capacity-repository.test.ts:generic-api-key:401
 252cbc290fef90b6badc49cd08f7b345c3b29503:tests/v2-storage-capacity-repository.test.ts:generic-api-key:586
+# Synthetic object-path rejection fixtures; exact historical findings only.
+e1028b13ff5ff1b85621961e77042f2b6652fd58:tests/asset-processing-service.test.ts:generic-api-key:416
+cb0b6c79877022f201dcb49b10fef7ac690ee93e:tests/v2-storage-capacity-repository.test.ts:generic-api-key:317
+cb0b6c79877022f201dcb49b10fef7ac690ee93e:tests/v2-storage-capacity-repository.test.ts:generic-api-key:343
