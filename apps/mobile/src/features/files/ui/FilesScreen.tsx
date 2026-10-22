@@ -28,11 +28,13 @@ export function FilesScreen({
   actions,
   onSession,
   onWorkspace,
+  onReports,
 }: {
   state: FilesState;
   actions: FilesModel;
   onSession(): void;
   onWorkspace(): void;
+  onReports?(): void;
 }) {
   const [restart, setRestart] = useState(false);
   if (state.gate !== "ready")
@@ -364,6 +366,9 @@ export function FilesScreen({
             onPress={actions.closeReview}
           />
         </Card>
+      ) : null}
+      {onReports ? (
+        <Button label="상담 준비 리포트로 이동" disabled={busy} onPress={onReports} />
       ) : null}
       <Button label="사건 작업공간으로" disabled={busy} onPress={onWorkspace} />
     </Screen>
