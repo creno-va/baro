@@ -11,6 +11,6 @@
     "skipLibCheck": true,
     "noEmit": true
   },
-  "include": ["client.ts", "v2/**/*.ts"],
+  "include": ["client.ts", "v2/**/*.ts", "mobile-auth.ts"],
   "exclude": ["node_modules"]
 }
