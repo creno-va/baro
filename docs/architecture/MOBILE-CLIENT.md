@@ -351,3 +351,21 @@ SecureStore의 불투명 UUID를 찾는다. 응답 유실/재생성 뒤 같은 �
 새 쓰기 전송을 막고, auth reset은 미확정 key를 삭제하지 않는다. 기존 workspace와
 prepare/complete 잠금을 공유하되 `baro-reports-request:<hash>` namespace로 분리한다.
 기본 웹 facade/wire에는 이 opt-in을 적용하지 않는다.
+
+### 리포트 소비 화면
+
+네이티브 reports 모델은 서버 저장본과 편집 draft를 분리하고, 원래 report revision으로
+저장·새 초안을 요청한다. 본문/자료 제외가 함께 바뀌면 먼저 본문을 저장하고 제외 선택을
+남겨 다음 저장에서 출처로 재구성한다. 성공 ACK 뒤 검토 확인을 해제하며 충돌/응답 유실은
+편집을 보존한다. 초기 기술 한도는 파일 metadata를 읽고 사용자가 제외할 자료를 고른 뒤
+명시적 null intent로 복구한다. 전체 자료/본문을 축약해 한도를 우회하지 않는다.
+
+PDF·HTML·ZIP은 실제 sealed expo/fetch→private streamed cache·독립 readback SHA256과
+공통 artifact signature/HTML marker 검사를 거쳐 opaque handle로 전달한다. HTML을 앱
+WebView에서 실행하지 않으며 사용자가 OS 열기/공유를 선택한다. 원본 ZIP은 마스킹과
+독립적인 가림 없는 원본 확인을 요구하고, photo source는 native 원본 열기로 확인한다.
+일반 JSON 조회는 디스크 정리 실패에 의존하지 않으며 binary 작업만 private cache 준비를
+기다린다. 앱 background/owner 변경 시 UI를 숨기고, handoff는 종료 뒤 정리한다. 미저장
+본문·선택은 영속화하지 않는다. 같은 화면의 background 전환에서는 숨긴 draft를 메모리에
+보존하고, fresh owner/권한과 저장본을 읽은 뒤 같은 버전이면 복원한다. 다른 버전이면 원래
+입력을 보존하고 충돌로 안내한다. 계정·권한 변경/로그아웃·route 종료에서는 폐기한다.

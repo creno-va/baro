@@ -72,6 +72,7 @@ function Connected({ id }: { id: string }) {
       state={state}
       actions={model}
       onSession={() => router.push("/session")}
+      onReports={() => router.replace({ pathname: "/reports", params: { caseId: id } })}
       onWorkspace={() => router.replace({ pathname: "/workspace", params: { caseId: id } })}
     />
   );

@@ -32,6 +32,7 @@ export default function RootLayout() {
         <Stack.Screen name="cases" options={{ title: "내 사건" }} />
         <Stack.Screen name="workspace" options={{ title: "사건 작업공간" }} />
         <Stack.Screen name="files" options={{ title: "사건 자료" }} />
+        <Stack.Screen name="reports" options={{ title: "상담 준비 리포트" }} />
         <Stack.Screen name="+not-found" options={{ title: "페이지 안내" }} />
       </Stack>
     </SafeAreaProvider>

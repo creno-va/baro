@@ -33,6 +33,7 @@ export function WorkspaceScreen({
   onReview,
   onCitation,
   onFiles,
+  onReports,
 }: {
   state: WorkspaceState;
   actions: WorkspaceModel;
@@ -40,6 +41,7 @@ export function WorkspaceScreen({
   onReview(): void;
   onCitation(url: string): void;
   onFiles?: () => void;
+  onReports?: () => void;
 }) {
   const [section, setSection] = useState<"messages" | "facts" | "actions" | "timeline" | "files">(
     "messages",
@@ -397,6 +399,7 @@ export function WorkspaceScreen({
               ) : null}
               {section === "files" ? (
                 <>
+                  {onReports ? <Button label="상담 준비 리포트" onPress={onReports} /> : null}
                   {onFiles ? <Button label="자료 추가·검토·원본 저장" onPress={onFiles} /> : null}
                   <Text>
                     저장된 자료의 이름과 처리 상태를 확인하고 대화에 사용할 자료를 선택해 주세요.
