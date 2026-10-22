@@ -144,3 +144,17 @@ test("native workspace recovery stores only UUID request keys and opaque job IDs
   });
   expect(f.records.size).toBe(2);
 });
+
+test("native report recovery admits only UUID request receipts under hashed identities", async () => {
+  const f = fixture(),
+    request = `baro-reports-request:${"c".repeat(64)}`;
+  await f.storage.setItem(request, value);
+  expect(await f.storage.getItem(request)).toBe(value);
+  for (const unsafe of [
+    "SYNTHETIC_PRIVATE_CONTENT",
+    JSON.stringify({ content: "합성 검토 본문" }),
+    "file:///private/cache/report.pdf",
+  ])
+    await expect(f.storage.setItem(request, unsafe)).rejects.toMatchObject({ code: "UNAVAILABLE" });
+  expect([...f.records.values()]).toEqual([value]);
+});

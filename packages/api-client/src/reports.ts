@@ -1,6 +1,9 @@
 import type { ReportView, SessionScope } from "@baro/client-core";
 import { z } from "zod";
 import { ApiError } from "./errors";
+import { createWorkspaceRecovery, type WorkspaceRecovery } from "./workspace-recovery";
+
+export type ReportRecovery = WorkspaceRecovery;
 
 export interface DomainRequestInit {
   method?: string;
@@ -75,6 +78,8 @@ export function createReportsClient<Download>(dependencies: {
   coalesceWrites?: "credential-scope";
   signal?: AbortSignal;
   newKey: () => string;
+  /** Native opt-in: durable opaque keys; mutations must supply the displayed revision. */
+  recovery?: ReportRecovery;
 }) {
   const generation = dependencies.scope.snapshot();
   const signal = dependencies.signal
@@ -99,6 +104,15 @@ export function createReportsClient<Download>(dependencies: {
       throw error;
     }
   };
+  const recovery = dependencies.recovery
+    ? createWorkspaceRecovery({
+        recovery: dependencies.recovery,
+        scope: dependencies.scope,
+        ensureCurrent,
+        newKey: dependencies.newKey,
+        namespace: "reports",
+      })
+    : undefined;
   const revisions = new Map<string, number>();
   const generations = new Map<string, { selection: string; revision: number | undefined }>();
   const saves = new Map<string, { revision: number | undefined }>();
@@ -112,6 +126,11 @@ export function createReportsClient<Download>(dependencies: {
   };
   const path = (id: string) => `/api/v2/cases/${encodeURIComponent(id)}/reports`;
   async function write(id: string, method: "PATCH" | "POST", body: unknown) {
+    if (
+      recovery &&
+      !z.object({ expectedRevision: z.number().int().positive() }).safeParse(body).success
+    )
+      throw new ApiError("VALIDATION_ERROR", "화면에서 확인한 리포트 버전을 다시 확인해 주세요.");
     const fingerprint = JSON.stringify(body),
       identity = `${method}:${id}:${fingerprint}`;
     let previous = pending.get(identity);
@@ -121,14 +140,18 @@ export function createReportsClient<Download>(dependencies: {
     }
     // Retain the key after a lost response. A retry must replay the same version,
     // while changed edits/source revision identify a new operation.
+    const prepared = recovery ? await recovery.prepare(path(id), body, method) : undefined;
     const report = accept(
       await request<unknown>(path(id), {
         method,
         body,
-        headers: { "idempotency-key": previous.key },
+        headers: prepared
+          ? Object.fromEntries(new Headers(prepared.headers).entries())
+          : { "idempotency-key": previous.key },
       }),
       id,
     );
+    if (prepared) await recovery?.complete(prepared);
     pending.delete(identity);
     return report;
   }
@@ -137,11 +160,16 @@ export function createReportsClient<Download>(dependencies: {
     type: string,
     body?: unknown,
     key?: string,
+    headers?: Record<string, string>,
   ): Promise<Download> {
     ensureCurrent();
     const result = await dependencies.download(url, {
       ...(body
-        ? { method: "POST", body, headers: { "idempotency-key": key ?? dependencies.newKey() } }
+        ? {
+            method: "POST",
+            body,
+            headers: { ...headers, "idempotency-key": key ?? dependencies.newKey() },
+          }
         : {}),
       signal,
     });
@@ -192,6 +220,8 @@ export function createReportsClient<Download>(dependencies: {
       return accept(await request<unknown>(path(id)), id);
     },
     async save(id: string, input: ReportSave, expectedRevision?: number) {
+      if (recovery && expectedRevision === undefined)
+        throw new ApiError("VALIDATION_ERROR", "화면에서 확인한 리포트 버전을 다시 확인해 주세요.");
       const normalized = reportSaveSchema.parse(input);
       const identity = `${id}:${JSON.stringify(normalized)}`;
       const previous = saves.get(identity);
@@ -213,6 +243,8 @@ export function createReportsClient<Download>(dependencies: {
       }
     },
     async generate(id: string, excludedFileIds?: string[], expectedRevision?: number) {
+      if (recovery && expectedRevision === undefined)
+        throw new ApiError("VALIDATION_ERROR", "화면에서 확인한 리포트 버전을 다시 확인해 주세요.");
       const selection = JSON.stringify({ excludedFileIds }),
         generationIdentity = `${id}:${selection}`,
         previous = generations.get(generationIdentity),
@@ -264,11 +296,16 @@ export function createReportsClient<Download>(dependencies: {
       }
       // Repeated downloads and retries after a lost response reuse the same
       // immutable package. Changed selections create a separate operation.
+      const url = `/api/v2/reports/${encodeURIComponent(id)}/zip`;
+      const prepared = recovery ? await recovery.prepare(url, body) : undefined;
       return artifact(
-        `/api/v2/reports/${encodeURIComponent(id)}/zip`,
+        url,
         "application/zip",
         body,
-        operation.key,
+        prepared
+          ? (new Headers(prepared.headers).get("idempotency-key") ?? operation.key)
+          : operation.key,
+        prepared ? Object.fromEntries(new Headers(prepared.headers).entries()) : undefined,
       );
     },
   };

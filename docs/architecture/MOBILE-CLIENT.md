@@ -335,3 +335,18 @@ breaking change는 기존 경로 유지 또는 명시적 새 버전으로 다룬
 
 자동 에이전트/채팅/스케줄은 만들지 않는다. 다른 채팅에 메시지를 보낼 때는 사용자의
 명시적 전달 지시를 따른다. 이 문서·PR의 소유권 표를 공통 인계 자료로 사용한다.
+
+### 네이티브 리포트 요청 복구
+
+공통 reports client의 `recovery`는 native opt-in이다. 저장과 새 초안 생성은 화면에서
+확인한 명시적 report revision을 요구하며 owner·경로·method·정확한 body의 해시로
+SecureStore의 불투명 UUID를 찾는다. 응답 유실/재생성 뒤 같은 입력·원래 revision의
+명시적 재시도는 같은 key를 사용하고, metadata GET으로 이미 전송한 basis를 바꾸지 않는다.
+본문·마스킹·사진/자료 선택·URI·token은 복구 저장소에 기록하지 않는다.
+
+검증된 저장/생성 응답을 받으면 key를 정리한다. 정리 실패는 성공 응답을 실패로 바꾸지
+않고 기존 key를 남긴다. ZIP은 immutable report ID와 정확한 원본 선택별 key를 유지해
+재다운로드/재시작에도 같은 패키지를 조회한다. 저장소 잠김·silent write 손실·오염은
+새 쓰기 전송을 막고, auth reset은 미확정 key를 삭제하지 않는다. 기존 workspace와
+prepare/complete 잠금을 공유하되 `baro-reports-request:<hash>` namespace로 분리한다.
+기본 웹 facade/wire에는 이 opt-in을 적용하지 않는다.
