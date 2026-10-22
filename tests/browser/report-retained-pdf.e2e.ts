@@ -56,6 +56,7 @@ test("stored real PDF and report remain readable after source change/re-consent,
     await openReportEditor(page);
     const editor = page.getByRole("textbox", { name: "리포트 내용 편집" });
     await expect(editor).toBeVisible();
+    await page.locator(".report-basis > summary").click();
     await expect(page.getByText(/생성 기준: 요약 1/)).toBeVisible();
     const originalText = await editor.inputValue();
     const reviewed = page.getByRole("checkbox", { name: "내용·식별정보·선택한 사진을 확인했어요" });
@@ -70,6 +71,7 @@ test("stored real PDF and report remain readable after source change/re-consent,
       200,
     );
     await page.reload();
+    await openReportEditor(page);
     await expect(editor).toHaveValue(originalText);
     await expect(editor).toBeDisabled();
     await expect(page.getByText(/새 리포트 생성과 수정은 필수 동의 후/)).toBeVisible();

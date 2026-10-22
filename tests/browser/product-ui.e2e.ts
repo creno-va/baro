@@ -177,6 +177,10 @@ test("mobile chat keeps the composer visible and every case destination reachabl
   await expect(page.getByRole("dialog")).toBeVisible();
   await page.getByRole("dialog").getByRole("button", { name: "취소", exact: true }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "사건 삭제", exact: true })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".case-options")).not.toHaveAttribute("open");
+  await expect(page.locator(".case-options summary")).toBeFocused();
 });
 
 test("reports start in reading mode and retain editing through a focus check", async ({ page }) => {

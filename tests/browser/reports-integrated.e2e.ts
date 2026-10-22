@@ -95,6 +95,7 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
     page.getByRole("status").filter({ hasText: "검토 내용을 저장했어요." }),
   ).toBeVisible();
   await page.reload();
+  await openReportEditor(page);
   await expect(editor).toHaveValue(/합성 API 예시/);
   await expect(editor).not.toHaveValue(/제외 원본.txt/);
   await expect(editor).not.toHaveValue(/사용자가 검토한 합성 사실/);
@@ -168,7 +169,7 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
   expect(await originalCount()).toBeGreaterThan(0);
   const peer = await context.newPage();
   await peer.goto(`${accountCasePath}/reports`);
-  await openReportEditor(page);
+  await openReportEditor(peer);
   await expect(peer.getByRole("textbox", { name: "리포트 내용 편집" })).toBeVisible();
   const previousMarker = await page.evaluate(() => localStorage.getItem("baro-session-changed"));
   await page.goto("/settings");
@@ -252,7 +253,6 @@ test("oversized mock source shows first-report recovery and preserves the full o
   await expect(
     page.getByRole("heading", { name: "자료를 줄여 첫 리포트를 만들어요" }),
   ).toBeVisible();
-  await openReportEditor(page);
   await expect(page.getByRole("textbox", { name: "리포트 내용 편집" })).toBeHidden();
   expect(
     await page.evaluate(() => JSON.parse(localStorage.getItem("baro-api-mock-v1:reports") ?? "{}")),
@@ -264,6 +264,7 @@ test("oversized mock source shows first-report recovery and preserves the full o
   await expect(editor).toBeVisible();
   await expect(editor).toContainText("연락과 전달");
   await page.reload();
+  await openReportEditor(page);
   await expect(editor).toBeVisible();
   const saved = await page.evaluate(() => {
     const files = JSON.parse(localStorage.getItem("baro-api-mock-v1:files") ?? "{}");

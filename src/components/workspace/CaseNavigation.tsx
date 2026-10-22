@@ -39,7 +39,15 @@ export function CaseNavigation({
       <header className="workspace-header">
         <h1 title={title}>{title}</h1>
         {action && (
-          <details className="case-options">
+          <details
+            className="case-options"
+            onKeyDown={(event) => {
+              if (event.key !== "Escape" || !event.currentTarget.open) return;
+              event.currentTarget.open = false;
+              event.currentTarget.querySelector("summary")?.focus();
+              event.stopPropagation();
+            }}
+          >
             <summary aria-label="사건 관리">
               <MoreHorizontal size={22} aria-hidden="true" />
             </summary>
