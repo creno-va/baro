@@ -83,6 +83,10 @@ for (const viewport of [
       let workspaceReads = 0;
       let holdNextSession = false;
       let releaseSession: (() => void) | undefined;
+      const releaseHeldSession = () => {
+        releaseSession?.();
+        releaseSession = undefined;
+      };
       const mutations: { path: string; body: string | null; key: string | undefined }[] = [];
       await context.route("**/api/**", async (route) => {
         const request = route.request();
@@ -193,7 +197,7 @@ for (const viewport of [
       const sessionReads = () =>
         page.evaluate(
           () =>
-            (window as Window & { customerSessionReads: { calls: number; pending: number } })
+            (window as unknown as { customerSessionReads: { calls: number; pending: number } })
               .customerSessionReads,
         );
       const settled = async () => {
@@ -218,8 +222,7 @@ for (const viewport of [
       await expect.poll(async () => (await sessionReads()).calls).toBeGreaterThan(callsBeforeFocus);
       expect(sessionRequests).toBe(sharedRequests);
       await expect(editor).toHaveValue("네트워크 장애 후에도 보존할 요약 초안");
-      releaseSession?.();
-      releaseSession = undefined;
+      releaseHeldSession();
       await settled();
       // Sharing ends when the read settles. Ordinary focus must now observe a
       // fresh outage and preserve the same owner's unsaved draft.
@@ -254,8 +257,7 @@ for (const viewport of [
       await page.evaluate(() =>
         (window as Window & { customerSessionPoll?: () => void }).customerSessionPoll?.(),
       );
-      releaseSession?.();
-      releaseSession = undefined;
+      releaseHeldSession();
       await expect.poll(() => workspaceReads).toBeGreaterThan(readsBeforeRetry);
       await expect(editor).toHaveValue("네트워크 장애 후에도 보존할 요약 초안");
       await editor.fill("다른 계정으로 저장되면 안 되는 요약 초안");
