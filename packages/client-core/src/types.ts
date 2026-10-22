@@ -21,6 +21,7 @@ export type CaseView = {
   summary: string;
   schemaVersion?: "1" | "2";
   summaryDetails?: V2Summary;
+  summaryNeedsConfirmation?: boolean;
 };
 export type QuestionView = {
   id: string;

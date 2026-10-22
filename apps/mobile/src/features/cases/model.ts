@@ -251,7 +251,8 @@ export function createCasesModel(dependencies: {
       sync();
       return () => {
         unsubscribe();
-        if (state.gate === "ready" && owner) parked = { owner, state: { ...state, busy: false } };
+        parked = undefined;
+        owner = undefined;
         retire();
         publish(empty());
       };
@@ -292,9 +293,14 @@ export function createCasesModel(dependencies: {
       }
       return mutate((api) => api.create(parsed.data));
     },
-    async open(item: CaseView) {
+    async open(item: CaseView | string) {
       if (state.gate !== "ready" || state.busy) return;
       renew();
+      if (typeof item === "string") {
+        publish({ ...state, conflict: false });
+        await mutate((api) => api.get(item));
+        return;
+      }
       publish({
         ...state,
         view: "detail",

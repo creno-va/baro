@@ -1,12 +1,15 @@
 import { expect, test } from "bun:test";
 import {
   ApiError,
+  createCasesClient,
+  createJsonRequester,
   createWorkspaceClient,
   type WorkspaceAcknowledgement,
   type WorkspaceTransport,
 } from "@baro/api-client";
 import { createSessionScope } from "@baro/client-core";
 import { Hono } from "hono";
+import { createWorkspaceModel } from "../apps/mobile/src/features/workspace/model";
 import { createCaseOperationStorage } from "../apps/mobile/src/platform/storage/case-operations";
 import type { ApiEnvironment } from "../src/server/api/errors";
 import { meApi } from "../src/server/api/me";
@@ -77,6 +80,7 @@ async function fixture() {
       request,
       listFiles: async () => [],
       includeActionRevisions,
+      includeSummaryConfirmation: true,
       recovery: { ownerId: f.owner.userId, storage, fingerprint },
       onAcknowledged: (r) => receipts.push(r),
     });
@@ -86,6 +90,8 @@ async function fixture() {
     client,
     records,
     receipts,
+    storage,
+    fingerprint,
     cookie: (value: string) => {
       cookie = value;
     },
@@ -161,6 +167,123 @@ test("a fresh native client replays the real admitted chat key/body after lost A
       f.db.sqlite.query("SELECT count(*) n FROM session WHERE user_id=?").get(other.userId),
     ).toEqual({ n: 1 });
   } finally {
+    f.db.close();
+  }
+});
+
+test("native workspace → summary review → confirmation uses real Hono/SQL and the existing case stage projection", async () => {
+  const f = await fixture();
+  try {
+    expect((await f.client().get(f.workspace.id)).case.summaryNeedsConfirmation).toBe(false);
+    await runCustomerJob(f, "chat_response");
+    const next = await f.client().get(f.workspace.id);
+    expect(next.case.stage).toBe("intake");
+    expect(next.case.summaryNeedsConfirmation).toBe(true);
+    const scope = createSessionScope();
+    const json = createJsonRequester({
+      scope,
+      transport: (path, init) => f.transport(path, init),
+      newKey: () => crypto.randomUUID(),
+    });
+    const cases = () =>
+      createCasesClient({
+        mode: "real",
+        scope,
+        storage: f.storage,
+        fingerprint: f.fingerprint,
+        newKey: () => crypto.randomUUID(),
+        challenge: async () => {
+          throw new Error("NO_CHALLENGE_FOR_REVIEW");
+        },
+        request: (_op, _input, options = {}) => {
+          if (!options.path) throw new Error("MISSING_REAL_PATH");
+          return json({ ...options, path: options.path });
+        },
+      });
+    const native = cases(),
+      review = await native.get(f.workspace.id);
+    expect(review.stage).toBe("summary");
+    expect(review.summaryDetails?.overview).toBe(next.case.summary);
+    const confirmed = await native.confirmSummary(f.workspace.id, {
+      expectedRevision: review.revision,
+    });
+    expect(confirmed.stage).toBe("active");
+    expect((await f.client().get(f.workspace.id)).case.summaryNeedsConfirmation).toBe(false);
+  } finally {
+    f.db.close();
+  }
+});
+
+test("RN workspace model clears an acknowledged timeline editor before a real Hono projection failure and refreshes exactly one SQL event", async () => {
+  const f = await fixture();
+  let stop = () => {};
+  try {
+    const scope = createSessionScope();
+    let written = false,
+      loseRead = true;
+    const request: WorkspaceTransport = async (path, init) => {
+      if (written && loseRead && path.endsWith("/workspace")) {
+        loseRead = false;
+        return Response.json({}, { status: 503 });
+      }
+      const response = await f.transport(path, init);
+      if (init?.method === "POST" && path.endsWith("/timeline")) {
+        expect(response.ok).toBe(true);
+        written = true;
+      }
+      return response;
+    };
+    const model = createWorkspaceModel({
+      caseId: f.workspace.id,
+      session: {
+        getSnapshot: () => ({
+          phase: "ready",
+          busy: false,
+          role: "customer",
+          consent: null,
+          error: null,
+          session: {
+            user: { id: f.owner.userId, name: "합성 고객", accountType: "customer" },
+            needsConsent: false,
+          },
+        }),
+        subscribe: () => () => {},
+        refresh: async () => {},
+      },
+      createClient: (signal, ownerId, onAcknowledged) =>
+        createWorkspaceClient({
+          scope,
+          signal,
+          request,
+          includeActionRevisions: true,
+          newKey: () => crypto.randomUUID(),
+          listFiles: async () => [],
+          recovery: { ownerId, storage: f.storage, fingerprint: f.fingerprint },
+          onAcknowledged,
+        }),
+    });
+    let ready = () => {};
+    const loaded = new Promise<void>((done) => {
+      ready = done;
+    });
+    const unsubscribe = model.subscribe(() => {
+      if (model.getSnapshot().value && !model.getSnapshot().busy) ready();
+    });
+    stop = model.start();
+    await loaded;
+    unsubscribe();
+    model.editTimeline();
+    model.changeTimeline({ title: "RN 합성 기록" });
+    await model.saveTimeline();
+    expect(model.getSnapshot()).toMatchObject({ timeline: null, pending: null, busy: false });
+    expect(model.getSnapshot().error).not.toBeNull();
+    await model.replay();
+    await model.refresh();
+    expect(
+      model.getSnapshot().value?.timeline.filter((entry) => entry.title === "RN 합성 기록"),
+    ).toHaveLength(1);
+  } finally {
+    stop();
     f.db.close();
   }
 });

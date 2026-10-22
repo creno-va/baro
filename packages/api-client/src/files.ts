@@ -172,6 +172,100 @@ export function splitObservationEdits(input: z.infer<typeof v2ObservationEditInp
   return batches;
 }
 
+/** Metadata reads require no upload/download ports. The caller owns credential and signal fencing. */
+export function createFileMetadataReader(request: WorkspaceTransport) {
+  const { workspaceJson } = createWorkspaceOperations(() => {
+    throw new Error("READ_ONLY");
+  });
+  return (id: string) => readFiles(id, { metadataOnly: true }, request, workspaceJson);
+}
+async function readFiles(
+  id: string,
+  options: { metadataOnly?: true },
+  request: WorkspaceTransport,
+  workspaceJson: ReturnType<typeof createWorkspaceOperations>["workspaceJson"],
+  revisions = new Map<string, number>(),
+  uploadHashes = new Map<string, string | undefined>(),
+): Promise<FileView[]> {
+  const base = (value: string) => `/api/v2/cases/${encodeURIComponent(value)}`;
+  let cursor: string | undefined;
+  const output: FileView[] = [];
+  do {
+    const raw = await workspaceJson(
+      request,
+      `${base(id)}/files${cursor ? `?afterId=${encodeURIComponent(cursor)}` : ""}`,
+    );
+    const views = z.array(fileViewSchema).safeParse(raw);
+    if (views.success) {
+      for (const file of views.data) uploadHashes.set(`${id}:${file.id}`, file.uploadContentHash);
+      // An empty terminal metadata page also matches this legacy view schema.
+      return [...output, ...views.data];
+    }
+    const rows = z.array(metadataSchema).parse(raw);
+    for (const row of rows) {
+      revisions.set(`${id}:${row.id}`, row.revision);
+      uploadHashes.set(`${id}:${row.id}`, row.contentHash);
+      if (row.status === "deleting") continue;
+      const file: FileView = {
+        id: row.id,
+        revision: row.revision,
+        name: row.name,
+        mimeType: row.declaredMediaType,
+        sizeBytes: row.byteLength,
+        status:
+          row.status === "ready"
+            ? "ready"
+            : row.status === "failed"
+              ? "failed"
+              : row.status === "reserved" || row.status === "uploading"
+                ? "uploading"
+                : row.status === "processing" ||
+                    (row.status === "queued" &&
+                      row.processing &&
+                      row.processing.status !== "queued")
+                  ? "processing"
+                  : "waiting",
+        coverage:
+          options.metadataOnly && row.status === "ready"
+            ? "자료 확인에서 처리 범위를 확인할 수 있어요."
+            : "처리 결과는 아직 확인할 수 없어요.",
+        extractedText: "",
+        canStartProcessing: row.status === "uploaded",
+        canRetry: row.canRetry ?? false,
+        createdAt: row.createdAt,
+        failure: row.failure,
+        uploadRejection: row.uploadRejection,
+        processing: row.processing,
+      };
+      if (row.status === "ready" && !options.metadataOnly) {
+        const detail = await request(
+          `${base(id)}/files/${encodeURIComponent(row.id)}?view=coverage`,
+        );
+        if (detail.ok) {
+          const parsed = z
+            .strictObject({
+              id: metadataSchema.shape.id,
+              revision: metadataSchema.shape.revision,
+              status: z.literal("ready"),
+              coverage: v2CoverageSchema,
+            })
+            .parse(await detail.json());
+          if (parsed.id !== row.id || parsed.revision !== row.revision)
+            throw workspaceError(
+              "UNAVAILABLE",
+              "자료가 갱신되어 최신 목록을 다시 불러와 주세요.",
+              true,
+            );
+          file.coverage = coverageLabel(parsed.coverage);
+        } else await workspaceResponse(detail);
+      }
+      output.push(file);
+    }
+    cursor = rows.length === 20 ? rows.at(-1)?.id : undefined;
+  } while (cursor && output.length < 1000);
+  return output;
+}
+
 export function createFilesClient<Source extends UploadMetadata, Download>(dependencies: {
   request: WorkspaceTransport;
   scope: SessionScope;
@@ -234,84 +328,8 @@ export function createFilesClient<Source extends UploadMetadata, Download>(depen
       .parse(await workspaceJson(request, `${base(id)}/workspace`));
     return "workspaceRevision" in value ? value.workspaceRevision : value.case.revision;
   }
-  async function list(id: string, options: { metadataOnly?: true } = {}): Promise<FileView[]> {
-    let cursor: string | undefined;
-    const output: FileView[] = [];
-    do {
-      const raw = await workspaceJson(
-        request,
-        `${base(id)}/files${cursor ? `?afterId=${encodeURIComponent(cursor)}` : ""}`,
-      );
-      const views = z.array(fileViewSchema).safeParse(raw);
-      if (views.success) {
-        for (const file of views.data) uploadHashes.set(`${id}:${file.id}`, file.uploadContentHash);
-        // An empty terminal metadata page also matches this legacy view schema.
-        return [...output, ...views.data];
-      }
-      const rows = z.array(metadataSchema).parse(raw);
-      for (const row of rows) {
-        revisions.set(`${id}:${row.id}`, row.revision);
-        uploadHashes.set(`${id}:${row.id}`, row.contentHash);
-        if (row.status === "deleting") continue;
-        const file: FileView = {
-          id: row.id,
-          revision: row.revision,
-          name: row.name,
-          mimeType: row.declaredMediaType,
-          sizeBytes: row.byteLength,
-          status:
-            row.status === "ready"
-              ? "ready"
-              : row.status === "failed"
-                ? "failed"
-                : row.status === "reserved" || row.status === "uploading"
-                  ? "uploading"
-                  : row.status === "processing" ||
-                      (row.status === "queued" &&
-                        row.processing &&
-                        row.processing.status !== "queued")
-                    ? "processing"
-                    : "waiting",
-          coverage:
-            options.metadataOnly && row.status === "ready"
-              ? "자료 확인에서 처리 범위를 확인할 수 있어요."
-              : "처리 결과는 아직 확인할 수 없어요.",
-          extractedText: "",
-          canStartProcessing: row.status === "uploaded",
-          canRetry: row.canRetry ?? false,
-          createdAt: row.createdAt,
-          failure: row.failure,
-          uploadRejection: row.uploadRejection,
-          processing: row.processing,
-        };
-        if (row.status === "ready" && !options.metadataOnly) {
-          const detail = await request(
-            `${base(id)}/files/${encodeURIComponent(row.id)}?view=coverage`,
-          );
-          if (detail.ok) {
-            const parsed = z
-              .strictObject({
-                id: metadataSchema.shape.id,
-                revision: metadataSchema.shape.revision,
-                status: z.literal("ready"),
-                coverage: v2CoverageSchema,
-              })
-              .parse(await detail.json());
-            if (parsed.id !== row.id || parsed.revision !== row.revision)
-              throw workspaceError(
-                "UNAVAILABLE",
-                "자료가 갱신되어 최신 목록을 다시 불러와 주세요.",
-                true,
-              );
-            file.coverage = coverageLabel(parsed.coverage);
-          } else await workspaceResponse(detail);
-        }
-        output.push(file);
-      }
-      cursor = rows.length === 20 ? rows.at(-1)?.id : undefined;
-    } while (cursor && output.length < 1000);
-    return output;
-  }
+  const list = (id: string, options: { metadataOnly?: true } = {}) =>
+    readFiles(id, options, request, workspaceJson, revisions, uploadHashes);
   const pendingUploads = new WeakMap<Source, Map<string, Promise<FileView>>>();
   async function upload(
     id: string,
