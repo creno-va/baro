@@ -246,3 +246,68 @@ test("native key write failure occurs before any mutation HTTP and default web d
   expect(sent).toBe(true);
   await expect(pending).rejects.toMatchObject({ code: "UNAVAILABLE" });
 });
+
+test("a retry editor can replay its captured revision after a new job snapshot advanced the workspace", async () => {
+  const f = store(),
+    writes: RequestInit[] = [];
+  let revision = workspace.workspaceRevision,
+    loseRead = false;
+  const request: WorkspaceTransport = async (path, init = {}) => {
+    if (init.method === "POST") {
+      writes.push(init);
+      if (writes.length === 1) {
+        revision++;
+        loseRead = true;
+      }
+      return Response.json({
+        operationId: job.operationId,
+        jobId: job.id,
+        status: "queued",
+        retryAfter: 2,
+      });
+    }
+    if (path.endsWith("/workspace")) {
+      if (loseRead) {
+        loseRead = false;
+        return Response.json({}, { status: 503 });
+      }
+      return Response.json({ ...workspace, workspaceRevision: revision });
+    }
+    if (path.endsWith("/intake")) return Response.json(intake);
+    if (path.endsWith("/summary")) return Response.json(summary);
+    if (path.endsWith("/workspace-jobs/latest"))
+      return Response.json(
+        writes.length
+          ? job
+          : {
+              ...job,
+              status: "failed",
+              phase: "admission",
+              failure: "MODEL_UNAVAILABLE",
+              retryable: true,
+              attempts: 1,
+            },
+      );
+    if (path.includes("/messages?") || path.endsWith("/actions") || path.endsWith("/timeline"))
+      return Response.json({ items: [], nextCursor: null });
+    throw new Error("SYNTHETIC_UNKNOWN_PATH");
+  };
+  const make = () =>
+    createWorkspaceClient({
+      request,
+      scope: createSessionScope(),
+      newKey: () => crypto.randomUUID(),
+      listFiles: async () => [],
+      recovery: { ownerId: "owner_a", storage: f.storage, fingerprint },
+    });
+  await expect(
+    make().retryMessage(workspace.id, `job:${job.id}`, workspace.workspaceRevision),
+  ).rejects.toMatchObject({ code: "UNAVAILABLE" });
+  await make().retryMessage(workspace.id, `job:${job.id}`, workspace.workspaceRevision);
+  expect(writes).toHaveLength(2);
+  expect(writes[0]?.body).toBe(writes[1]?.body);
+  expect(new Headers(writes[0]?.headers).get("idempotency-key")).toBe(
+    new Headers(writes[1]?.headers).get("idempotency-key"),
+  );
+  expect(f.records.size).toBe(0);
+});

@@ -720,7 +720,7 @@ export function createWorkspaceClient(dependencies: {
       pendingMessages.delete(signature);
       return next;
     },
-    async retryMessage(id: string, messageId: string) {
+    async retryMessage(id: string, messageId: string, expectedRevision?: number) {
       // mock has the same request route; real recovers current failed job after reload.
       if (!messageJobs.has(messageId)) await get(id);
       const job = messageJobs.get(messageId);
@@ -728,7 +728,7 @@ export function createWorkspaceClient(dependencies: {
         ? `workspace-jobs/${encodeURIComponent(job.jobId)}/retry`
         : `messages/${encodeURIComponent(messageId)}/retry`;
       if (job) {
-        const body = { expectedRevision: job.revision };
+        const body = { expectedRevision: expectedRevision ?? job.revision };
         const init = recovery
           ? await recovery.prepare(`${base(id)}/${path}`, body)
           : workspaceMutation(`${base(id)}/${path}`, body);
