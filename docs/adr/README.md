@@ -39,6 +39,7 @@ Accepted 내용을 바꿀 때 새 ADR을 만들고 대체 범위를 명시한다
 | [0014](./0014-mvp-two-roles-and-api-mock-first.md) | 고객·변호사 MVP와 API mock 우선 병렬 개발 | Accepted; 0007 MVP 심사 범위 부분 대체 |
 | [0016](./0016-gemini-flash-thinking-pipeline.md) | Gemini Flash thinking pipeline | Accepted; 사용자 지시에 따른 모델·질문 하네스 전환 |
 | [0015](./0015-maintenance-and-operating-policy.md) | MVP 운영 기준과 정비 인수 경계 | Accepted; 질문·비용·승인·검색 부분 대체 |
+| [0017](./0017-expo-mobile-and-shared-client-boundaries.md) | Expo 모바일 앱과 공통 클라이언트 경계 | Accepted target; 구조·실행 계획 작성, 앱 구현·실기기 인수 미착수 |
 
 ## v2 부분 대체 관계
 
@@ -52,6 +53,7 @@ Accepted 내용을 바꿀 때 새 ADR을 만들고 대체 범위를 명시한다
 | 0004 | 0015 | 과거 spend limit 설정 지시 대체 / 기존 공급자·모델·결제 설정·실제 비용 관측 유지 |
 | 0005 | 0006,0008,0013 | workspace·객체 삭제·다차원 사용량/예산 확장 / guardedwrite·outbox·비중복 userquota·실제 retry 비용·공개 gate 유지 |
 | 0013 | 0015 | 비용 금액·관측 누락/만료·월할당·refresh·비용 IO 차단 폐지 / 비용 기록·사용량·물리 용량·권한 유지 |
+| 0002,0012,0015 | 0017 | 직접 요청한 RN/Expo 클라이언트 추가·공통 토큰/플랫폼별 UI / 기존 웹 경로·Workers API·모듈 소유권·비용 관측 정책 유지 |
 
 v1 데이터·계약·읽기/삭제는 그대로 유지하고 v2 추가 schema/contract는 선행 PR을 통합한다.
 신규 ADR의 Accepted는 사용자가 승인한 방향이며 P0.3 또는 v2 마일스톤 완료의 증거가 아니다.
