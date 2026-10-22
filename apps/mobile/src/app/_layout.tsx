@@ -16,6 +16,7 @@ export default function RootLayout() {
       >
         <Stack.Screen name="index" options={{ title: "BARO" }} />
         <Stack.Screen name="guide" options={{ title: "이용 안내" }} />
+        <Stack.Screen name="directory" options={{ title: "변호사 탐색" }} />
         <Stack.Screen name="+not-found" options={{ title: "페이지 안내" }} />
       </Stack>
     </SafeAreaProvider>

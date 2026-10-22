@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import { expect, test } from "@playwright/test";
+import { syntheticConsentStatus } from "../fixtures/consent-status";
 
 test("signed SQL session completes the real consent API through the browser, then logout removes access", async ({
   page,
@@ -107,7 +108,7 @@ test("persisted role changes invalidate peer navigation without sharing session 
     await route.fulfill({ json: { accountType } });
   });
   await context.route("**/api/me/consent", (route) =>
-    route.fulfill({ json: { needsConsent: false } }),
+    route.fulfill({ json: syntheticConsentStatus(false) }),
   );
   await context.route("**/api/auth/sign-in/social", (route) =>
     route.fulfill({

@@ -73,9 +73,10 @@ BARO는 사용자가 변호사의 프로필을 살펴보고 직접 연락하며,
 
 2026-10-22 사용자 결정으로 모바일은 RN + Expo를 채택했습니다. 웹 UI 개편과 분리하여
 [공통 코드 구조](./docs/architecture/MOBILE-CLIENT.md)와 [단계별 실행 계획](./docs/development/MOBILE-EXECUTION.md)을
-따릅니다. M1은 `apps/mobile`의 Expo 앱 기반과 `@baro/contracts` 공유를 구현합니다.
+따릅니다. `apps/mobile`의 Expo 기반·공통 계약과 두 OS 개발 빌드를 인수했고, M2에서
+공통 client·모바일 공개 목록을 연결합니다. 전체 네이티브 앱화는 [#334](https://github.com/creno-va/baro/issues/334)로 계속 추적합니다.
 [모바일 개발 안내](./apps/mobile/README.md)에서 실행·검증 명령을 확인할 수 있습니다.
-인증/API 연결·실기기·스토어 인수는 후속 단계입니다.
+인증·사건 기능·실기기·스토어 인수는 후속 단계입니다.
 
 웹/API 제품 코드는 Workers Web API 와 binding을 사용합니다. Bun은 도구·테스트용이며
 Node filesystem/process는 별도 Container 처리 서비스에만 허용합니다. v2 저장소/

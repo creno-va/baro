@@ -90,7 +90,7 @@ non-critical 표현 품질 점수는 추세를 보되 위 안전 게이트를 �
 | `bun run validate:changed [base-ref]` | 관련 단위/계약 검사. 기본 origin/main 대비 현재 작업 파일, staged/unstaged/untracked 포함 |
 | `bun run validate:unit` | 모든 단위/통합 테스트 |
 | `bun run validate:browser [base-ref]` | production build/bundle, 변경 기능 Playwright, 실제 build CSP. 최초 `bunx playwright install chromium` 필요 |
-| `bun run validate:build` | production build·bundle·Cloudflare dry-run |
+| `bun run validate:build` | production build·bundle·Cloudflare dry-run·local workerd 시작/익명 로그인 HTML |
 | `bun run validate:db` | schema drift·fresh/upgrade 테스트·로컬 migration/import 재실행 |
 | `bun run validate:native` | linux/amd64 Docker build 및 네트워크 차단 fixture/performance 검사. Docker 필요 |
 | `bun run validate:security` | `bun audit` 및 Gitleaks 전체 HEAD 이력(redact=100). Gitleaks 8.30.1 필요 |

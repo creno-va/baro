@@ -1,7 +1,7 @@
+import { createDirectoryClient } from "@baro/api-client";
 import { z } from "zod";
 import {
   type DirectoryPage,
-  directoryPageSchema,
   type V2PublicLawyer,
   v2PortfolioAssetSchema,
   v2PublicLawyerSchema,
@@ -79,20 +79,17 @@ export function fromVerified(p: V2PublicLawyer): LawyerView {
     verificationStatus: "verified",
   };
 }
+const publicDirectory = createDirectoryClient((options) =>
+  sharedRequest("lawyers.http", undefined, options),
+);
+
 const real = {
   async listPage(
     filters: LawyerFilters = {},
     cursor?: string,
     signal?: AbortSignal,
   ): Promise<DirectoryPage> {
-    const params = new URLSearchParams({ limit: "20" });
-    if (filters.query?.trim()) params.set("name", filters.query.trim());
-    if (filters.region) params.set("region", filters.region);
-    if (filters.practiceArea) params.set("legalField", filters.practiceArea);
-    if (cursor) params.set("cursor", cursor);
-    return directoryPageSchema.parse(
-      await request(`/api/v2/lawyers/directory?${params}`, "GET", undefined, signal),
-    );
+    return publicDirectory.listPage(filters, cursor, signal);
   },
   async list(filters: LawyerFilters = {}, signal?: AbortSignal) {
     return (await real.listPage(filters, undefined, signal)).items;

@@ -101,4 +101,10 @@ test("public contract and mobile imports cannot cross server/browser boundaries"
       "const secret = process.env.SECRET;",
     ),
   ).not.toEqual([]);
+  for (const source of [
+    'import React from "react";',
+    'const io = fetch("/api/me");',
+    'import { x } from "../../../apps/mobile/src/ui/Text";',
+  ])
+    expect(mobileBoundaryFindings("packages/api-client/src/example.ts", source)).not.toEqual([]);
 });

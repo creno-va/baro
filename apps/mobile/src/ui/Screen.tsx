@@ -1,18 +1,22 @@
 import type { PropsWithChildren } from "react";
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet } from "react-native";
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { tokens } from "../theme/tokens";
 
-export function Screen({ children }: PropsWithChildren) {
+export function Screen({ children, scroll = true }: PropsWithChildren<{ scroll?: boolean }>) {
   return (
     <SafeAreaView style={styles.fill} edges={["left", "right", "bottom"]}>
       <KeyboardAvoidingView
         style={styles.fill}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
-        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content}>
-          {children}
-        </ScrollView>
+        {scroll ? (
+          <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content}>
+            {children}
+          </ScrollView>
+        ) : (
+          <View style={[styles.content, { flex: 1 }]}>{children}</View>
+        )}
       </KeyboardAvoidingView>
     </SafeAreaView>
   );

@@ -1,3 +1,4 @@
+import { posix } from "node:path";
 import ts from "typescript";
 
 const forbiddenGlobals = new Set([
@@ -43,7 +44,13 @@ export function sourceImports(source: string): string[] {
 export function mobileBoundaryFindings(path: string, source: string): string[] {
   const findings: string[] = [];
   const contract = path.startsWith("src/contracts/");
+  const shared = path.startsWith("packages/");
   for (const specifier of sourceImports(source)) {
+    if ((shared || path.startsWith("apps/mobile/")) && specifier.startsWith(".")) {
+      const prefix = shared ? `${path.split("/").slice(0, 2).join("/")}/src/` : "apps/mobile/";
+      const target = posix.normalize(posix.join(posix.dirname(path), specifier));
+      if (!target.startsWith(prefix)) findings.push("relative import escapes its workspace source");
+    }
     if (specifier === "@baro/contracts")
       findings.push("use explicit public contract subpaths; package root is legacy-only");
     if (
@@ -55,6 +62,14 @@ export function mobileBoundaryFindings(path: string, source: string): string[] {
       findings.push(`forbidden import: ${specifier}`);
     if (contract && !specifier.startsWith(".") && specifier !== "zod")
       findings.push(`nonportable contract import: ${specifier}`);
+    if (
+      shared &&
+      !specifier.startsWith(".") &&
+      specifier !== "zod" &&
+      !specifier.startsWith("@baro/contracts/") &&
+      specifier !== "@baro/client-core"
+    )
+      findings.push(`nonportable shared import: ${specifier}`);
     if (contract && /(?:^|\/)pipeline(?:\.|$)/.test(specifier))
       findings.push("internal pipeline entered public contract graph");
     if (
@@ -68,6 +83,12 @@ export function mobileBoundaryFindings(path: string, source: string): string[] {
   function visit(node: ts.Node) {
     if (ts.isIdentifier(node) && forbiddenGlobals.has(node.text))
       findings.push(`platform global: ${node.text}`);
+    if (
+      shared &&
+      ts.isIdentifier(node) &&
+      ["fetch", "XMLHttpRequest", "FormData"].includes(node.text)
+    )
+      findings.push(`shared IO must use an adapter: ${node.text}`);
     if (ts.isIdentifier(node) && node.text === "process") {
       const parent = node.parent;
       const expression = parent?.parent;

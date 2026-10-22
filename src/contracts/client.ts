@@ -5,3 +5,4 @@ export * from "./consent";
 export * from "./deletion";
 export * from "./questions";
 export * from "./results";
+export * from "./session";

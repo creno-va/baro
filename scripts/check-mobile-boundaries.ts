@@ -40,6 +40,18 @@ for await (const file of new Bun.Glob("apps/mobile/{src,config}/**/*.{ts,tsx}").
     ),
   );
 }
+for await (const file of new Bun.Glob("packages/*/src/**/*.{ts,tsx}").scan(".")) {
+  const source = await Bun.file(file).text();
+  failures.push(...mobileBoundaryFindings(file, source).map((message) => `${file}: ${message}`));
+  for (const specifier of sourceImports(source)) {
+    if (specifier.startsWith("@baro/contracts/")) {
+      const entry = manifest.exports[`./${specifier.slice("@baro/contracts/".length)}`];
+      if (!entry) failures.push(`${file}: nonpublic contract import: ${specifier}`);
+    }
+    if (file.startsWith("packages/client-core/") && specifier === "@baro/client-core")
+      failures.push(`${file}: shared core cannot import itself through a package cycle`);
+  }
+}
 if (failures.length) throw new Error(failures.join("\n"));
 console.log(
   `Mobile boundaries passed; ${visited.size} canonical contract modules, no server/DOM/internal pipeline dependencies`,

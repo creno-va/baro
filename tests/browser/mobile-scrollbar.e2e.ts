@@ -1,4 +1,5 @@
 import { expect, type Page, test } from "@playwright/test";
+import { syntheticConsentStatus } from "../fixtures/consent-status";
 
 // Playwright normally hides Chromium's scrollbars in headless mode, which
 // removes the exact 15px boundary observed on the deployed mobile page.
@@ -44,7 +45,7 @@ test("320px pages fit clientWidth including a classic vertical scrollbar gutter"
     route.fulfill({ json: { items: [], nextCursor: null } }),
   );
   await page.route("**/api/me/consent", (route) =>
-    route.fulfill({ json: { needsConsent: false } }),
+    route.fulfill({ json: syntheticConsentStatus(false) }),
   );
   await page.route("**/api/me", (route) => route.fulfill({ status: 401, json: {} }));
   for (const path of ["/", "/app", "/login", "/cases", "/cases/new", "/settings"]) {

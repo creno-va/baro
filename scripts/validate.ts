@@ -36,6 +36,7 @@ export function validationCommands(profile: string, root = process.cwd()): Comma
     ["bun", "run", "build:production"],
     ["bun", "run", "bundle:check"],
     ["bun", "run", "cf:dry-run"],
+    ["bun", "scripts/check-built-runtime.ts"],
   ];
   const database = [
     ["bun", "run", "db:check"],

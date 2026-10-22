@@ -9,6 +9,7 @@ export default function HomeRoute() {
     <WelcomeScreen
       model={createFoundationModel(readMobileConfig)}
       onContinue={() => router.push("/guide")}
+      onBrowse={() => router.push("/directory")}
     />
   );
 }

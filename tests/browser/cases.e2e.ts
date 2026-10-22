@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import { expect, type Page, test } from "@playwright/test";
+import { syntheticConsentStatus } from "../fixtures/consent-status";
 
 async function challenge(page: Page) {
   await page.addInitScript(() => {
@@ -35,7 +36,7 @@ test("intake validates code points, blocks duplicates, preserves replay key and 
     }),
   );
   await page.route("**/api/me/consent", (route) =>
-    route.fulfill({ json: { needsConsent: false } }),
+    route.fulfill({ json: syntheticConsentStatus(false) }),
   );
   let calls = 0;
   const keys: string[] = [];
