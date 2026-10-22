@@ -175,6 +175,8 @@ export function splitObservationEdits(input: z.infer<typeof v2ObservationEditInp
 export function createFilesClient<Source extends UploadMetadata, Download>(dependencies: {
   request: WorkspaceTransport;
   scope: SessionScope;
+  /** Only opt in when the adapter controls credential changes through this scope. */
+  coalesceWrites?: "credential-scope";
   signal?: AbortSignal;
   newKey: () => string;
   openUpload: (source: Source, signal: AbortSignal) => Promise<UploadReader>;
@@ -319,6 +321,8 @@ export function createFilesClient<Source extends UploadMetadata, Download>(depen
   ): Promise<FileView> {
     ensureCurrent();
     validateUpload(file);
+    if (dependencies.coalesceWrites !== "credential-scope")
+      return uploadOnce(id, file, onProgress, options);
     let pending = pendingUploads.get(file);
     if (!pending) {
       pending = new Map();
@@ -366,11 +370,15 @@ export function createFilesClient<Source extends UploadMetadata, Download>(depen
       // Reconcile interrupted uploads before freezing a new reservation's CAS.
       // Background processing can publish while this paginated list is read.
       // An existing ambiguous attempt retains its exact key and revision.
-      const attempt = uploads.get(identity) ?? {
-        expectedRevision: await workspaceRevision(id),
-        key: dependencies.newKey(),
-      };
-      uploads.set(identity, attempt);
+      let attempt = uploads.get(identity);
+      if (!attempt) {
+        const revision = await workspaceRevision(id);
+        attempt = uploads.get(identity) ?? {
+          expectedRevision: revision,
+          key: dependencies.newKey(),
+        };
+        uploads.set(identity, attempt);
+      }
       const input = {
         name,
         byteLength: file.size,

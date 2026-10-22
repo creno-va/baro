@@ -1,4 +1,5 @@
 import type { SessionScope } from "@baro/client-core";
+import { EXPECTED_OWNER_HEADER } from "@baro/contracts/session";
 import { ApiError, responseError } from "./errors";
 
 export type HttpTransport = (path: string, init: RequestInit) => Promise<Response>;
@@ -7,6 +8,7 @@ export interface JsonRequestOptions {
   method?: string;
   body?: unknown;
   key?: string;
+  expectedOwner?: string;
   signal?: AbortSignal;
 }
 export type JsonRequest = <T = unknown>(options: JsonRequestOptions) => Promise<T>;
@@ -64,6 +66,11 @@ export function createJsonRequester(dependencies: {
       throw new ApiError("VALIDATION_ERROR", "전송할 내용을 확인해 주세요.");
     }
     const headers: Record<string, string> = {};
+    if (options.expectedOwner !== undefined) {
+      if (!options.expectedOwner || options.expectedOwner.length > 128)
+        throw new ApiError("VALIDATION_ERROR", "이용 계정을 다시 확인해 주세요.");
+      headers[EXPECTED_OWNER_HEADER] = encodeURIComponent(options.expectedOwner);
+    }
     const contentType = encoded ? encoded.contentType : "application/json";
     if (contentType) headers["content-type"] = contentType;
     if (method !== "GET" && method !== "HEAD")

@@ -13,6 +13,7 @@ const hash = "b".repeat(64);
 function fixture(
   options: {
     fingerprint?: () => Promise<string>;
+    coalesceWrites?: "credential-scope";
     part?: UploadReader["part"];
     close?: () => void;
     request?: WorkspaceTransport;
@@ -60,6 +61,7 @@ function fixture(
   const client = createFilesClient<UploadMetadata & { uri: string }, string>({
     request,
     scope,
+    ...(options.coalesceWrites ? { coalesceWrites: options.coalesceWrites } : {}),
     newKey: () => crypto.randomUUID(),
     openUpload: async () => {
       opened++;
@@ -108,7 +110,7 @@ test("parallel uploads of the same source share one reader and admission", async
   const fingerprint = new Promise<string>((done) => {
     release = done;
   });
-  const f = fixture({ fingerprint: () => fingerprint });
+  const f = fixture({ coalesceWrites: "credential-scope", fingerprint: () => fingerprint });
   const first = f.client.upload("synthetic_case", source);
   const second = f.client.upload("synthetic_case", source);
   release(hash);

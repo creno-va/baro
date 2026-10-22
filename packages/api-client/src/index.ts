@@ -1,3 +1,5 @@
+export type { UsageSummary } from "./account";
+export { createAccountClient } from "./account";
 export type { AnswersInput, CaseOperationStorage, QuestionRound, QuestionsResult } from "./cases";
 export {
   answersInputSchema,
@@ -20,6 +22,7 @@ export type {
   OperationRequestOptions,
 } from "./http";
 export { createJsonRequester, isApiPath } from "./http";
+export { createPrecedentsClient } from "./precedents";
 export type { DomainRequest, DomainRequestInit, ReportArtifact, ReportSave } from "./reports";
 export { createReportsClient, reportSaveSchema } from "./reports";
 export { createSessionClient } from "./session";

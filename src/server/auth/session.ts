@@ -1,4 +1,5 @@
 import type { Context } from "hono";
+import { EXPECTED_OWNER_HEADER } from "../../contracts/session";
 import type { ApiEnvironment } from "../api/errors";
 import { getAuth } from ".";
 
@@ -15,5 +16,13 @@ export async function getSession(context: Context<ApiEnvironment>) {
     context.header("set-cookie", cookie, { append: true });
   }
   context.header("cache-control", "no-store");
+  const expected = context.req.header(EXPECTED_OWNER_HEADER);
+  if (expected !== undefined) {
+    try {
+      if (expected.length > 1536 || decodeURIComponent(expected) !== response?.user.id) return null;
+    } catch {
+      return null;
+    }
+  }
   return response;
 }

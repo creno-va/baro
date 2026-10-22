@@ -267,26 +267,40 @@ workspace·자료·리포트·나머지 domain을 순차 추출한다. 첫 단�
   5개/통합3개/실제 SQL PDF 다운로드1개와 frozen/quick/build/두 OS bundle이 통과했다.
   PDF 검증은 번들 Python(pypdf)을 사용했다. native cache/열기/공유·재시작 복구는 M5다.
 
-## 9. M3 인증 시작 (#346)
+- 리포트 PR344는 CI39793983093(head `2a2d1c8`) 성공 후 main
+  `eefe3ff2aadaa117f42eaebcb248d215838ad1dc`에 병합했다.
+- `codex/335-shared-account-precedents`는 사용량·삭제·서버 OAuth freshness와 재인증
+  port, 판례 canonical topic/revision/read-proof client를 공유한다. 로컬 marker는 실제
+  서버 freshness를 대체하지 않으며 mock 삭제 readiness는 명시 fixture만 허용한다.
+  성공한 삭제는 private scope를 즉시 폐기하고 캐시 정리 실패가 삭제 재요청을 만들지 않는다.
+  판례 요청도 계정/화면 전환 후 실행·응답을 차단하며 법률 upstream 호출 경계는 보존한다.
+  공통/실제 SQL 삭제·사용량/판례 회귀69개·웹 설정5개/판례4개와 frozen/quick/build/
+  두 OS Metro bundle이 통과했다. 사건 삭제의 과거 ZIP 응답은 새 scope 폐기에 따라
+  UNAUTHENTICATED로 거절하며 원본을 새 화면으로 전달하지 않는다.
 
-`codex/346-native-auth-foundation`은 선행 session/consent/cases PR340·341의 main/CI를
-기준으로 독립 진행한다. M2 #335의 프로필/자산과 PR345의 필수 check 최종 반영은 별도
-잔여로 보존한다. PR345 Actions success와 Check Run in_progress가 달라 정상 병합 대기 중이다.
+- 웹 UI PR336의 계정별 사건 요청 검사를 보존하고, 브라우저 쿠키 변경 알림 전의
+  workspace/자료/리포트/삭제 요청이 이전 사용자의 pending promise에 합쳐지는 회귀를
+  보완한다. 기본 쓰기는 서버 권한을 각각 확인하고, credential 교체를 scope와 원자적으로
+  제어하는 adapter만 병행 합치기를 선택한다. 사건 생성은 challenge 전 owner를 실제
+  서버 세션과 대조한다. hint는 거절만 가능하며 다른 계정의 권한 부여/세션 폐기는 못 한다.
+  합성 두 계정의 실제 SQL/Hono challenge 전환과 네 모듈 회귀를 quick/mobile 검사에 유지한다.
 
-첫 단위는 canonical nonce/code/S256 교환과 encrypted one-use grant, 기존3사 Better Auth
-callback/state proxy, Hono exchange, owner 삭제·restore·cron 정리다. code는60초이며 재사용,
-다른 nonce/verifier/issuer, 세션 폐기·만료·보관 상한을 거절한다. raw cookie/provider 오류를
-복귀 URL이나 진단에 싣지 않는다. auth origin을 입력 헤더로 바꾸거나 CSRF를 끄지 않는다.
-서버 단위의 실제 state/SQL 검증은 provider 교환/프로필만 합성 대역이며 실제 제공자 성공이 아니다.
+## 9. M3 native 인증 기반
 
-Expo integration1.7.7은 기존 Better Auth와 맞추고 SecureStore58.0.2·Network58.0.4·
-WebBrowser58.0.6·WebView14.0.1을 SDK58에 맞춰 고정한다. native cookie jar/시도 저장·
-외부 브라우저·cold/warm·역할/동의·challenge UI와 두 OS 실제 인수는 이후 계속한다.
-이 단위의 native ABI 빌드도 새 source SHA에서 별도 receipt로 검사한다.
-서버 auth/삭제/restore 단위78개, 기존 웹 auth17개·session2개·설정5개를 검증했다.
-frozen/quick40개(이 중 code/HTTP20개)·실제 workerd 시작 build·DB fresh/upgrade·
-두 OS Metro bundle·Expo Doctor20/20이 통과했다. 새 dependency 구성에서도 raw audit은
-기존 미패치3건으로 실패했고 #339를 유지한다. native 화면·실제 provider/기기·배포 성공은 아니다.
+- #346의 server bridge PR347은 head `0a7255a` CI39806771230 성공 후 main
+  `a1ad098288037f62ea0356a08d91d74f9b1ceb64`에 정상 병합했다. 기존 3사 OAuth를
+  유지하고 callback에는 세션 cookie 대신 60초 일회용 code와 attemptId만 전달한다.
+  verifier/S256·issuer·실제 session/owner·만료를 검사하고 app_metadata의 분리 namespace에
+  암호화 저장한다. 삭제/복원/cron 정리와 기존 cookie 갱신을 보존한다. schema 변경은 없다.
+- native grant 14개/실제 Better Auth·Hono·SQL 6개, quick40·빌드·DB drift/fresh/upgrade·
+  두 OS Metro/Doctor20개와 기존 웹 인증/세션/설정24개를 검사했다. provider HTTP만 합성
+  대역이며 실제 외부 OAuth/실기기 성공으로 표현하지 않는다. SecureStore/Network/브라우저/
+  제한 WebView 의존성의 native 컴파일을 수동 workflow에서 확인한다.
+- SecureStore cookie jar·cold/warm 복귀·foreground/로그아웃 coordinator와 로그인/역할/
+  동의/challenge UI는 후속 구현이다. M2 프로필/자산과 M3 전체 인수를 열어 둔다.
+  두 OS 개발 빌드는 native39809756054에서 검사 중이다. raw audit 미패치3건은 #339에 유지한다.
+  PR345의 과거 Actions success/Check Run in_progress 불일치 증거는 보존하며 실제 계정 격리
+  보완·main 통합의 새 head를 다시 검사한다.
 
 ## 참고
 

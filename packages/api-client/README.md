@@ -17,7 +17,7 @@ instances. `createDirectoryClient` validates canonical filters/cursor and respon
 Malformed responses and untrusted server messages become safe public errors.
 
 The web retains its existing facade/mock composition; mobile has no implicit mock fallback.
-Account, lawyer profiles and precedent research remain #335 extraction units.
+Lawyer profiles/assets remain the final #335 extraction unit.
 Run `bun run clients:check`, `mobile:check`, and
 the existing web/domain tests when moving a module.
 
@@ -42,7 +42,7 @@ session permissions. Use a fresh feature instance after that signal is aborted.
 
 `createWorkspaceClient`는 채팅/행동/타임라인 projection·pagination·revision readback을 공유한다.
 HTTP·UUID·metadata-only `listFiles`·비동기 jobStorage를 주입하며, 모든 cache와 쓰기 key는
-instance에 묶인다. 같은 쓰기는 진행 중 한 번으로 합치고, 계정/화면 종료는 HTTP와 결과를
+instance에 묶인다. 기본적으로 각 쓰기는 실제 서버 권한을 확인하며, 계정/화면 종료는 HTTP와 결과를
 취소한다. jobStorage는 owner별 namespace의 opaque job ID 힌트이며, 권한과 최신 상태는
 항상 서버가 확인한다. 저장 실패 시에도 최신 job 조회로 복구한다. mutation key는 현재
 instance 내 응답 유실을 복구하며, 앱 재시작까지의 durable 쓰기 복구는 native adapter와
@@ -53,7 +53,7 @@ M4 고객 흐름에서 별도 인수한다. 상담 원문·메시지는 이 job 
 `openUpload` reader가 전체 SHA-256·bounded part body/hash·close를 담당한다. 공통 코드는
 browser File/Blob/stream을 호출하지 않는다. reader는 immutable bytes를 읽고 abort를
 준수해야 하며 native adapter는 앱 전용 cache/원본 정리와 재시작 복구를 별도로 구현한다.
-같은 source 객체의 병행 업로드는 한 번만 열고 보낸다. hash/part 크기를 검증하고 계정
+자격정보를 직접 관리하는 adapter만 같은 source 병행 업로드를 합칠 수 있다. hash/part 크기를 검증하고 계정
 전환 후 추가 admission/progress/result를 차단한다. close 오류는 성공한 업로드를 다시
 접수하게 만들지 않으며 adapter의 cache 정리 경로에서 처리한다.
 
@@ -65,3 +65,20 @@ Successful values transfer to the platform's open/share/cache lifecycle. No Blob
 is embedded in the common client. Ambiguous review/generation retries keep the same basis/key even
 after metadata refresh or a temporary selection change. State is session-local; restart persistence
 and actual native export IO remain M5 acceptance work.
+
+`createAccountClient` shares usage projection, owner-tagged deletion and server OAuth freshness
+checks; marker reads, reauthentication and post-delete cleanup are adapter ports. It never accepts
+a fixture-only delete flag unless explicitly opted in by test composition. Only a validated server
+acknowledgement invalidates the private scope; cleanup errors cannot turn a committed deletion into
+a second request. Recreate private clients after deletion. The server still enforces all permissions.
+`createPrecedentsClient` validates canonical topic/revision/read-proof requests and responses, with
+session and feature cancellation. It calls BARO HTTP only and never a legal upstream API.
+
+Ambient browser cookies can change before a session notification. Workspace, file, report and
+account writes therefore reach the server independently by default. Only an adapter that owns
+credential replacement atomically through its scope may opt into `coalesceWrites: "credential-scope"`.
+The browser facades do not opt in. Opaque recovery keys still survive ambiguous responses.
+Case creation captures the preflight owner and sends an encoded `x-baro-expected-owner` hint
+after challenge completion. The server compares it with the actual session; it can only deny
+a stale intent, never grant access or revoke another owner's valid session. Session consent/role
+requests use the last verified owner when available. Native credential storage is a separate M3 task.

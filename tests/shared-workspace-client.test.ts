@@ -36,6 +36,7 @@ function deferred<T>() {
 function fixture(
   options: {
     scope?: ReturnType<typeof createSessionScope>;
+    coalesceWrites?: "credential-scope";
     listFiles?: () => Promise<[]>;
     jobStorage?: CaseOperationStorage;
     request?: WorkspaceTransport;
@@ -62,6 +63,7 @@ function fixture(
   const client = createWorkspaceClient({
     request,
     scope,
+    ...(options.coalesceWrites ? { coalesceWrites: options.coalesceWrites } : {}),
     newKey: () => crypto.randomUUID(),
     listFiles: options.listFiles ?? (async () => []),
     ...(options.jobStorage ? { jobStorage: options.jobStorage } : {}),
@@ -121,6 +123,7 @@ test("parallel identical writes share one admission before asynchronous job pers
     release = deferred<void>();
   const records = new Map<string, string>();
   const f = fixture({
+    coalesceWrites: "credential-scope",
     jobStorage: {
       getItem: async (key) => records.get(key) ?? null,
       setItem: async (key, value) => {

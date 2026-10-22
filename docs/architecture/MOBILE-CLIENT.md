@@ -109,6 +109,8 @@ React 버전을 임의로 바꾸거나 모든 버전을 강제로 hoist하지 �
 | `src/client/api/files.ts` | 웹 File/Blob/stream adapter | `createFilesClient`에 metadata/교정/처리/chunk 절차 추출, source/reader·hash·download IO 주입 |
 | `src/client/api/reports.ts`, `src/components/reports/download.ts` | 웹 Blob/download adapter | `createReportsClient`로 생성/검토/revision·artifact 형식 검사 공유, 파일 저장/열기/공유는 플랫폼 adapter |
 
+| `src/client/api/account.ts`, `precedents.ts` | 웹 재인증/marker·mock 조립 adapter | 사용량/삭제/freshness·판례 wire client와 session 취소를 공유 |
+
 각 추출 PR은 기존 import를 보존하는 facade와 필요한 기존 회귀를 포함한다. 웹 화면은
 같은 동작을 유지하면서 새 공통 구현을 호출하게 한다. 웹 담당이 같은 파일을 변경 중이면
 그 PR의 CI·main 병합을 먼저 확인하고 해당 모듈만 추출한다. 모든 웹 개편 종료를 선행
