@@ -34,7 +34,13 @@ export { createLawyerAssetsClient, validateLawyerUpload } from "./lawyer-assets"
 export type { LawyerView } from "./lawyers";
 export { createLawyersClient, fromVerified, lawyerErrorMessage, rotateLawyers } from "./lawyers";
 export { createPrecedentsClient } from "./precedents";
-export type { DomainRequest, DomainRequestInit, ReportArtifact, ReportSave } from "./reports";
+export type {
+  DomainRequest,
+  DomainRequestInit,
+  ReportArtifact,
+  ReportRecovery,
+  ReportSave,
+} from "./reports";
 export { createReportsClient, reportSaveSchema } from "./reports";
 export { createSessionClient } from "./session";
 export type { UploadRecovery, UploadRecoveryRecord } from "./upload-recovery";

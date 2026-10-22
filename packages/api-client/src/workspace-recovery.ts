@@ -23,6 +23,7 @@ export function createWorkspaceRecovery(options: {
   scope: SessionScope;
   ensureCurrent(): void;
   newKey(): string;
+  namespace?: "workspace" | "reports";
 }) {
   const { recovery, ensureCurrent } = options;
   if (!recovery.ownerId || recovery.ownerId.length > 128) throw failed();
@@ -69,7 +70,7 @@ export function createWorkspaceRecovery(options: {
       }
       ensureCurrent();
       if (!/^[a-f0-9]{64}$/.test(fingerprint)) throw failed();
-      const identity = `baro-workspace-request:${fingerprint}`;
+      const identity = `baro-${options.namespace ?? "workspace"}-request:${fingerprint}`;
       const key = await lock(identity, async () => {
         const existing = await recovery.storage.getItem(identity);
         ensureCurrent();

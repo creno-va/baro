@@ -16,6 +16,7 @@ const failed = () =>
 function kind(key: string) {
   if (/^baro-upload-operation:[a-f0-9]{64}$/.test(key)) return "upload";
   if (/^baro-workspace-request:[a-f0-9]{64}$/.test(key)) return "request";
+  if (/^baro-reports-request:[a-f0-9]{64}$/.test(key)) return "request";
   if (/^baro-workspace-job:[A-Za-z0-9_.-]{1,128}$/.test(key)) return "job";
   if (/^baro-cases-request:[A-Za-z0-9_:/.-]{1,600}:[a-f0-9]{64}$/.test(key)) return "request";
   if (key.startsWith("baro-cases-wire:") && uuid.safeParse(key.slice(16)).success) return "wire";
