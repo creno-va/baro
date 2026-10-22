@@ -35,6 +35,10 @@ v2 구현을 시작할 때는 [실행 계획](./development/V2-EXECUTION.md)과
 누락/만료·월할당·refresh·유지비·비용 IO로 기능/배포를 막지 않으며 사용자 재지시 전 재도입하지
 않는다. 정책과 실제 구현/배포 잔여를 구분하고 [ADR-0015](./adr/0015-maintenance-and-operating-policy.md)를 우선한다.
 
+2026-10-22 직접 요청한 모바일 개발은 [ADR-0017](./adr/0017-expo-mobile-and-shared-client-boundaries.md),
+[공통 코드 구조](./architecture/MOBILE-CLIENT.md), [단계별 실행 계획](./development/MOBILE-EXECUTION.md)을 따른다.
+웹 UI 개편은 기존 담당이 유지한다. 현재 모바일 문서는 구현 목표이며 앱·실기기 인수 완료를 뜻하지 않는다.
+
 ## 책임과 우선순위
 
 | 정본 | 답하는 질문 |

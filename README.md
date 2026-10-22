@@ -71,6 +71,10 @@ BARO는 사용자가 변호사의 프로필을 살펴보고 직접 연락하며,
 | Legal source | 공식 법령·공식 판례·공식기관 안내의 검증된 원문 |
 | Delivery | 최소 GitHub CI, 명령으로 요청하는 preview/production 수동 배포 |
 
+2026-10-22 사용자 결정으로 모바일은 RN + Expo를 채택했습니다. 웹 UI 개편과 분리하여
+[공통 코드 구조](./docs/architecture/MOBILE-CLIENT.md)와 [단계별 실행 계획](./docs/development/MOBILE-EXECUTION.md)을
+먼저 정리하며, 앱 구현·실기기·스토어 인수는 아직 시작하지 않았습니다.
+
 웹/API 제품 코드는 Workers Web API 와 binding을 사용합니다. Bun은 도구·테스트용이며
 Node filesystem/process는 별도 Container 처리 서비스에만 허용합니다. v2 저장소/
 처리/모델 capability는 아직 live 미검증입니다. [ADR](./docs/adr/README.md)이 기존
