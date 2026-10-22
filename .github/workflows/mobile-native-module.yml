@@ -1,0 +1,94 @@
+name: Mobile native module verification
+
+on:
+  pull_request:
+    paths:
+      - apps/mobile/modules/**
+      - tests/native/mobile-download/**
+      - scripts/mobile-native-download-probe.ts
+      - .github/workflows/mobile-native-module.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-module-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  compile:
+    name: Native module ${{ matrix.platform }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: android
+            runner: ubuntu-latest
+          - platform: ios
+            runner: macos-26
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 40
+    env:
+      EXPO_PUBLIC_APP_ENV: preview
+      EXPO_PUBLIC_API_URL: https://preview.baro.site
+      EXPO_NO_TELEMETRY: "1"
+      CI: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: apps/mobile/.node-version
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: .bun-version
+      - name: Setup Java
+        if: matrix.platform == 'android'
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: "17"
+      - run: bun ci
+      - name: Compile exact PR native source
+        run: bun run mobile:native ${{ matrix.platform }}
+      - name: Android bounded native HTTP and file IO with 128MiB heap
+        if: matrix.platform == 'android'
+        working-directory: apps/mobile/android
+        run: |
+          ./gradlew :baro-private-download:testDebugUnitTest --no-daemon
+          test -s ../modules/baro-private-download/android/build/test-results/testDebugUnitTest/TEST-site.baro.download.DiskTransferStoreTest.xml
+          python3 - <<'PYTHON'
+          import json, pathlib, xml.etree.ElementTree as ET
+          report=ET.parse('../modules/baro-private-download/android/build/test-results/testDebugUnitTest/TEST-site.baro.download.DiskTransferStoreTest.xml').getroot()
+          receipts=[]
+          for node in report.iter('system-out'):
+            for line in (node.text or '').splitlines():
+              if line.startswith('{"platform":"JVM-native-core"'):
+                receipts.append(json.loads(line))
+          assert {r['size'] for r in receipts} == {100000000,1000000000}
+          assert all(r['maxHeapBytes'] <= 134217728 and r['maxCopyBytes'] <= 65536 and not r['appDeviceAcceptance'] for r in receipts)
+          target=pathlib.Path('../../../.wrangler/mobile-native-pr')
+          target.mkdir(parents=True,exist_ok=True)
+          (target/'jvm-core.json').write_text(json.dumps({'platform':'JVM-native-core','receipts':receipts},indent=2)+'\n')
+          PYTHON
+      - name: Apple native HTTP 100MB and 1GB bytes, memory and cleanup
+        if: matrix.platform == 'ios'
+        shell: bash
+        run: |
+          mkdir -p .wrangler/mobile-native-pr
+          bun scripts/mobile-native-download-probe.ts --large | tee .wrangler/mobile-native-pr/apple-core.json
+      - name: Record scoped verification receipt
+        env:
+          SOURCE_SHA: ${{ github.event.pull_request.head.sha }}
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          mkdir -p .wrangler/mobile-native-pr
+          node -e 'const fs=require("node:fs"); fs.writeFileSync(".wrangler/mobile-native-pr/receipt-"+process.env.PLATFORM+".json", JSON.stringify({sourceSha:process.env.SOURCE_SHA, platform:process.env.PLATFORM, kind:"pull-request-native-compile-and-core-probe", compilePassed:true, coreProbePassed:true, appRuntimeVerified:false, storeSigned:false, deployed:false}, null, 2)+"\n")'
+      - name: Retain compile and core probe identity
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: native-module-${{ matrix.platform }}-${{ github.event.pull_request.head.sha }}
+          path: .wrangler/mobile-native-pr/*.json
+          if-no-files-found: error

@@ -1,0 +1,23 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+group = 'site.baro'
+version = '0.1.0'
+android {
+  namespace 'site.baro.download'
+  defaultConfig { versionCode 1; versionName '0.1.0' }
+  testOptions.unitTests.all { maxHeapSize = '128m' }
+}
+// Use the app's existing RN network library/version, never a second cookie store.
+def rnManifest = providers.exec {
+  workingDir rootProject.projectDir
+  commandLine 'node', '--print', "require.resolve('react-native/package.json')"
+}.standardOutput.asText.get().trim()
+def rnCatalog = new File(new File(rnManifest).parentFile, 'gradle/libs.versions.toml').text
+def okhttpMatch = (rnCatalog =~ /(?m)^okhttp = "([^"]+)"/)
+if (!okhttpMatch.find()) throw new GradleException('RN_OKHTTP_VERSION_MISSING')
+dependencies {
+  implementation "com.squareup.okhttp3:okhttp:${okhttpMatch.group(1)}"
+  testImplementation 'junit:junit:4.13.2'
+}
