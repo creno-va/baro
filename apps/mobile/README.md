@@ -123,3 +123,8 @@ M1의 실제 결과와 미완료 native 항목은 [#330](https://github.com/cren
 불확실 mutation key와 owner/revision metadata는 `.case-operations` SecureStore service에
 별도로 보관한다. 물리 key는 fingerprint이며 UUID/허용 metadata 이외의 값·잠김·손상·
 silent write는 실패한다. 인증 reset에서 지우지 않으며 사실/답변/보안 token은 저장하지 않는다.
+
+공통 `createWorkspaceClient`의 native `recovery` port는 같은 저장소의 fingerprint/UUID
+형식을 사용한다. `onAcknowledged`와 화면 재조회 완료를 구분하고, `includeActionRevisions`와
+원래 action revision으로 편집 재시도를 묶는다. job 저장은 opaque hint이며 실제 서버 job이
+정본이다. 이 공통 선행을 소비하는 RN 작업공간 화면은 #354의 다음 구현 단위다.

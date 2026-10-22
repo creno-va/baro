@@ -8,6 +8,7 @@ import type {
   WorkspaceView,
 } from "@baro/client-core";
 import { workspaceProgressText } from "@baro/client-core";
+import { EXPECTED_OWNER_HEADER } from "@baro/contracts/session";
 import { caseDetailResponseSchema, opaqueIdSchema } from "@baro/contracts/v1";
 import {
   v2AcceptedOperationSchema,
@@ -31,6 +32,7 @@ import {
   workspaceError,
   workspaceResponse,
 } from "./workspace-http";
+import { createWorkspaceRecovery, type WorkspaceRecovery } from "./workspace-recovery";
 
 const messageSources = {
   references: z.array(v2FactReferenceSchema).default([]),
@@ -113,6 +115,13 @@ function parseView(value: unknown): WorkspaceView {
   return { ...parsed.data, case: { ...caseFields, ...(schemaVersion ? { schemaVersion } : {}) } };
 }
 export type CustomerWorkspaceView = WorkspaceView;
+export interface WorkspaceAcknowledgement {
+  kind: "message" | "retry" | "action" | "timeline";
+  caseId: string;
+  resourceId?: string;
+  jobId?: string;
+  committedWorkspaceRevision?: number;
+}
 export function createWorkspaceClient(dependencies: {
   request: WorkspaceTransport;
   scope: SessionScope;
@@ -126,6 +135,11 @@ export function createWorkspaceClient(dependencies: {
   ) => Promise<FileView[]>;
   /** Recovery hint only; the server's owner-checked latest job remains authoritative. */
   jobStorage?: CaseOperationStorage | null;
+  /** Native-owned credentials only. Required durable write/readback precedes mutation dispatch. */
+  recovery?: WorkspaceRecovery;
+  /** Opt-in wire entity revisions so a native editor can retain its original revision across recreation. */
+  includeActionRevisions?: boolean;
+  onAcknowledged?: (receipt: WorkspaceAcknowledgement) => void;
 }) {
   const generation = dependencies.scope.snapshot();
   const signal = dependencies.signal
@@ -141,6 +155,14 @@ export function createWorkspaceClient(dependencies: {
     try {
       const response = await dependencies.request(path, {
         ...init,
+        ...(dependencies.recovery
+          ? {
+              headers: {
+                ...Object.fromEntries(new Headers(init.headers)),
+                [EXPECTED_OWNER_HEADER]: encodeURIComponent(dependencies.recovery.ownerId),
+              },
+            }
+          : {}),
         signal: init.signal ? AbortSignal.any([init.signal, signal]) : signal,
       });
       ensureCurrent();
@@ -152,6 +174,22 @@ export function createWorkspaceClient(dependencies: {
   };
   const storage = dependencies.jobStorage;
   const { workspaceJson, workspaceMutation } = createWorkspaceOperations(dependencies.newKey);
+  const recovery = dependencies.recovery
+    ? createWorkspaceRecovery({
+        recovery: dependencies.recovery,
+        scope: dependencies.scope,
+        ensureCurrent,
+        newKey: dependencies.newKey,
+      })
+    : undefined;
+  const notifyAcknowledgement = (receipt: WorkspaceAcknowledgement) => {
+    ensureCurrent();
+    try {
+      dependencies.onAcknowledged?.(receipt);
+    } catch {
+      /* An observer cannot undo a committed acknowledgement. */
+    }
+  };
   const files = {
     list: async (id: string, options: { metadataOnly: true }) => {
       ensureCurrent();
@@ -506,6 +544,7 @@ export function createWorkspaceClient(dependencies: {
       actionRevisions.set(`${id}:${item.id}`, item.revision);
       return {
         id: item.id,
+        ...(dependencies.includeActionRevisions ? { revision: item.revision } : {}),
         title: item.title,
         detail: `${item.instructions}\n${item.caution}`,
         done: item.status === "done",
@@ -636,12 +675,13 @@ export function createWorkspaceClient(dependencies: {
     return { items: [...page.items, ...next.items], nextCursor: next.nextCursor };
   }
   async function mutation(id: string, path: string, body: unknown, method = "POST") {
-    await workspaceJson(
-      request,
-      `${base(id)}/${path}`,
-      workspaceMutation(`${base(id)}/${path}`, body, method),
-    );
-    return get(id);
+    const init = recovery
+      ? await recovery.prepare(`${base(id)}/${path}`, body, method)
+      : workspaceMutation(`${base(id)}/${path}`, body, method);
+    await workspaceJson(request, `${base(id)}/${path}`, init);
+    const next = await get(id);
+    await recovery?.complete(init);
+    return next;
   }
   const client = {
     get,
@@ -664,12 +704,19 @@ export function createWorkspaceClient(dependencies: {
     ) {
       const path = `${base(id)}/messages`;
       const signature = JSON.stringify({ id, input });
-      const init = pendingMessages.get(signature) ?? workspaceMutation(path, input);
+      const init =
+        pendingMessages.get(signature) ??
+        (recovery ? await recovery.prepare(path, input) : workspaceMutation(path, input));
       pendingMessages.set(signature, init);
       const value = await workspaceJson(request, path, init);
       const accepted = v2AcceptedOperationSchema.safeParse(value);
-      if (accepted.success) await rememberJob(id, accepted.data.jobId);
+      if (accepted.success) {
+        notifyAcknowledgement({ kind: "message", caseId: id, jobId: accepted.data.jobId });
+        await rememberJob(id, accepted.data.jobId);
+      } else if (recovery)
+        throw workspaceError("UNAVAILABLE", "전송 결과를 다시 확인해 주세요.", true);
       const next = await get(id);
+      await recovery?.complete(init);
       pendingMessages.delete(signature);
       return next;
     },
@@ -681,33 +728,44 @@ export function createWorkspaceClient(dependencies: {
         ? `workspace-jobs/${encodeURIComponent(job.jobId)}/retry`
         : `messages/${encodeURIComponent(messageId)}/retry`;
       if (job) {
+        const body = { expectedRevision: job.revision };
+        const init = recovery
+          ? await recovery.prepare(`${base(id)}/${path}`, body)
+          : workspaceMutation(`${base(id)}/${path}`, body);
         const accepted = v2AcceptedOperationSchema.parse(
-          await workspaceJson(
-            request,
-            `${base(id)}/${path}`,
-            workspaceMutation(`${base(id)}/${path}`, { expectedRevision: job.revision }),
-          ),
+          await workspaceJson(request, `${base(id)}/${path}`, init),
         );
+        notifyAcknowledgement({
+          kind: "retry",
+          caseId: id,
+          resourceId: messageId,
+          jobId: accepted.jobId,
+        });
         await rememberJob(id, accepted.jobId);
+        const next = await get(id);
+        await recovery?.complete(init);
+        return next;
       } else return mutation(id, path, {});
-      return get(id);
     },
-    async setAction(id: string, actionId: string, done: boolean) {
+    async setAction(id: string, actionId: string, done: boolean, expectedRevision?: number) {
       if (!actionRevisions.has(`${id}:${actionId}`)) await get(id);
       const route = `${base(id)}/actions/${encodeURIComponent(actionId)}`;
-      const signature = JSON.stringify({ id, actionId });
+      const signature = JSON.stringify({
+        id,
+        actionId,
+        ...(expectedRevision !== undefined ? { expectedRevision } : {}),
+      });
       const pending = pendingActions.get(signature);
+      const body = {
+        expectedRevision: expectedRevision ?? actionRevisions.get(`${id}:${actionId}`) ?? 1,
+        status: done ? "done" : "todo",
+      };
       const init =
         pending?.done === done
           ? pending.init
-          : workspaceMutation(
-              route,
-              {
-                expectedRevision: actionRevisions.get(`${id}:${actionId}`) ?? 1,
-                status: done ? "done" : "todo",
-              },
-              "PUT",
-            );
+          : recovery
+            ? await recovery.prepare(route, body, "PUT")
+            : workspaceMutation(route, body, "PUT");
       pendingActions.set(signature, { done, init });
       const previousRevision = snapshots.get(id)?.revision;
       let acknowledged: unknown;
@@ -721,7 +779,18 @@ export function createWorkspaceClient(dependencies: {
           pendingActions.delete(signature);
         throw cause;
       }
+      const receipt = v2EntityMutationReceiptSchema.safeParse(acknowledged);
+      if (receipt.success)
+        notifyAcknowledgement({
+          kind: "action",
+          caseId: id,
+          resourceId: actionId,
+          ...receipt.data,
+        });
+      else if (recovery)
+        throw workspaceError("UNAVAILABLE", "저장 결과를 다시 확인해 주세요.", true);
       const next = await mutationReadback(id, previousRevision, acknowledged, "actions");
+      await recovery?.complete(init);
       if (pendingActions.get(signature)?.init === init) pendingActions.delete(signature);
       return next;
     },
@@ -745,7 +814,10 @@ export function createWorkspaceClient(dependencies: {
           datePrecision: entry.date ? (entry.datePrecision ?? "day") : "unknown",
           event: entry.detail ? `${entry.title}\n${entry.detail}` : entry.title,
         };
-        init = workspaceMutation(route, body, entry.id ? "PUT" : "POST");
+        const method = entry.id ? "PUT" : "POST";
+        init = recovery
+          ? await recovery.prepare(route, body, method)
+          : workspaceMutation(route, body, method);
         pendingTimelines.set(signature, init);
       }
       const previousRevision = snapshots.get(id)?.revision;
@@ -760,7 +832,18 @@ export function createWorkspaceClient(dependencies: {
           pendingTimelines.delete(signature);
         throw cause;
       }
+      const receipt = v2EntityMutationReceiptSchema.safeParse(acknowledged);
+      if (receipt.success)
+        notifyAcknowledgement({
+          kind: "timeline",
+          caseId: id,
+          ...(entry.id ? { resourceId: entry.id } : {}),
+          ...receipt.data,
+        });
+      else if (recovery)
+        throw workspaceError("UNAVAILABLE", "저장 결과를 다시 확인해 주세요.", true);
       const next = await mutationReadback(id, previousRevision, acknowledged, "timeline");
+      await recovery?.complete(init);
       pendingTimelines.delete(signature);
       return next;
     },

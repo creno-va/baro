@@ -43,7 +43,13 @@ export type MessageView = {
   citations?: { id: string; title: string; url: string }[];
   warnings?: string[];
 };
-export type ActionView = { id: string; title: string; detail: string; done: boolean };
+export type ActionView = {
+  id: string;
+  revision?: number;
+  title: string;
+  detail: string;
+  done: boolean;
+};
 export type TimelineView = {
   id: string;
   revision?: number | undefined;

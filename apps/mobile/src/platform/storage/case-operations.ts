@@ -14,6 +14,8 @@ const failed = () =>
     true,
   );
 function kind(key: string) {
+  if (/^baro-workspace-request:[a-f0-9]{64}$/.test(key)) return "request";
+  if (/^baro-workspace-job:[A-Za-z0-9_.-]{1,128}$/.test(key)) return "job";
   if (/^baro-cases-request:[A-Za-z0-9_:/.-]{1,600}:[a-f0-9]{64}$/.test(key)) return "request";
   if (key.startsWith("baro-cases-wire:") && uuid.safeParse(key.slice(16)).success) return "wire";
   throw failed();
@@ -23,7 +25,9 @@ function validate(key: string, value: string) {
   const valid =
     kind(key) === "request"
       ? uuid.safeParse(value).success
-      : wire.safeParse(JSON.parse(value)).success;
+      : kind(key) === "job"
+        ? /^[A-Za-z0-9_.-]{1,128}$/.test(value)
+        : wire.safeParse(JSON.parse(value)).success;
   if (!valid) throw failed();
 }
 /** No clearing API: auth reset must not discard unresolved operations. One queue survives auth generations. */
