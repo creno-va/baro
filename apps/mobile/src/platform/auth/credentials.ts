@@ -172,3 +172,4 @@ export function createNativeCredentials(dependencies: {
   };
 }
 export type NativeCredentials = ReturnType<typeof createNativeCredentials>;
+export type NativeCredentialFrame = ReturnType<NativeCredentials["capture"]>;
