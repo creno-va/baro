@@ -278,6 +278,27 @@ workspace·자료·리포트·나머지 domain을 순차 추출한다. 첫 단�
   두 OS Metro bundle이 통과했다. 사건 삭제의 과거 ZIP 응답은 새 scope 폐기에 따라
   UNAUTHENTICATED로 거절하며 원본을 새 화면으로 전달하지 않는다.
 
+- 웹 UI PR336의 계정별 사건 요청 검사를 보존하고, 브라우저 쿠키 변경 알림 전의
+  workspace/자료/리포트/삭제 요청이 이전 사용자의 pending promise에 합쳐지는 회귀를
+  보완한다. 기본 쓰기는 서버 권한을 각각 확인하고, credential 교체를 scope와 원자적으로
+  제어하는 adapter만 병행 합치기를 선택한다. 사건 생성은 challenge 전 owner를 실제
+  서버 세션과 대조한다. hint는 거절만 가능하며 다른 계정의 권한 부여/세션 폐기는 못 한다.
+  합성 두 계정의 실제 SQL/Hono challenge 전환과 네 모듈 회귀를 quick/mobile 검사에 유지한다.
+
+## 9. M3 native 인증 기반
+
+- #346의 server bridge PR347은 head `0a7255a` CI39806771230 성공 후 main
+  `a1ad098288037f62ea0356a08d91d74f9b1ceb64`에 정상 병합했다. 기존 3사 OAuth를
+  유지하고 callback에는 세션 cookie 대신 60초 일회용 code와 attemptId만 전달한다.
+  verifier/S256·issuer·실제 session/owner·만료를 검사하고 app_metadata의 분리 namespace에
+  암호화 저장한다. 삭제/복원/cron 정리와 기존 cookie 갱신을 보존한다. schema 변경은 없다.
+- native grant 14개/실제 Better Auth·Hono·SQL 6개, quick40·빌드·DB drift/fresh/upgrade·
+  두 OS Metro/Doctor20개와 기존 웹 인증/세션/설정24개를 검사했다. provider HTTP만 합성
+  대역이며 실제 외부 OAuth/실기기 성공으로 표현하지 않는다. SecureStore/Network/브라우저/
+  제한 WebView 의존성의 native 컴파일을 수동 workflow에서 확인한다.
+- SecureStore cookie jar·cold/warm 복귀·foreground/로그아웃 coordinator와 로그인/역할/
+  동의/challenge UI는 후속 구현이다. M2 프로필/자산과 M3 전체 인수를 열어 둔다.
+
 ## 참고
 
 - [Expo workspace 구성](https://docs.expo.dev/guides/monorepos/)

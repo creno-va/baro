@@ -71,6 +71,8 @@ export function createReportsClient<Download>(dependencies: {
     options: DomainRequestInit & { signal: AbortSignal },
   ) => Promise<ReportArtifact<Download>>;
   scope: SessionScope;
+  /** Only opt in when the adapter controls credential changes through this scope. */
+  coalesceWrites?: "credential-scope";
   signal?: AbortSignal;
   newKey: () => string;
 }) {
@@ -287,7 +289,11 @@ export function createReportsClient<Download>(dependencies: {
             throw error;
           }
         };
-        if (key !== "save" && key !== "generate" && key !== "zip") return invoke();
+        if (
+          dependencies.coalesceWrites !== "credential-scope" ||
+          (key !== "save" && key !== "generate" && key !== "zip")
+        )
+          return invoke();
         const identity = JSON.stringify([key, args]);
         const previous = pendingWrites.get(identity);
         if (previous) return previous;

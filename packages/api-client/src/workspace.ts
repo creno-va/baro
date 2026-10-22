@@ -116,6 +116,8 @@ export type CustomerWorkspaceView = WorkspaceView;
 export function createWorkspaceClient(dependencies: {
   request: WorkspaceTransport;
   scope: SessionScope;
+  /** Only opt in when the adapter controls credential changes through this scope. */
+  coalesceWrites?: "credential-scope";
   signal?: AbortSignal;
   newKey: () => string;
   listFiles: (
@@ -781,7 +783,12 @@ export function createWorkspaceClient(dependencies: {
             throw error;
           }
         };
-        if (typeof key !== "string" || !writes.has(key)) return invoke();
+        if (
+          dependencies.coalesceWrites !== "credential-scope" ||
+          typeof key !== "string" ||
+          !writes.has(key)
+        )
+          return invoke();
         const identity = JSON.stringify([key, args]);
         const previous = pendingWrites.get(identity);
         if (previous) return previous;

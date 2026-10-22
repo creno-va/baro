@@ -46,11 +46,18 @@ function artifact(overrides: Partial<ReportArtifact<string>> = {}) {
 function client(
   download: () => Promise<ReportArtifact<string>>,
   request: DomainRequest = async <T>() => report() as T,
+  coalesceWrites?: "credential-scope",
 ) {
   const scope = createSessionScope();
   return {
     scope,
-    api: createReportsClient({ request, download, scope, newKey: () => crypto.randomUUID() }),
+    api: createReportsClient({
+      request,
+      download,
+      scope,
+      newKey: () => crypto.randomUUID(),
+      ...(coalesceWrites ? { coalesceWrites } : {}),
+    }),
   };
 }
 
@@ -140,6 +147,7 @@ test("parallel generations share one admission and a foreign case projection is 
       }
       return { ...report(), caseId: "foreign_case" } as T;
     },
+    "credential-scope",
   );
   const first = f.api.generate(id),
     second = f.api.generate(id);

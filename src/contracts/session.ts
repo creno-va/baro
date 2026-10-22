@@ -1,5 +1,8 @@
 import { z } from "zod";
 
+/** Revocation hint only; it never supplies authentication or permissions. */
+export const EXPECTED_OWNER_HEADER = "x-baro-expected-owner";
+
 export const clientAccountTypeSchema = z.enum(["customer", "lawyer"]);
 export const sessionViewSchema = z.object({
   user: z

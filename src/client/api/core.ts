@@ -16,6 +16,7 @@ export interface RequestOptions {
   method?: string;
   body?: unknown;
   key?: string;
+  expectedOwner?: string;
   signal?: AbortSignal;
 }
 export async function request<T>(

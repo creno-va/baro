@@ -563,6 +563,7 @@ export function createCasesClient(
             method: "POST",
             body: { ...input, jurisdiction: "KR", turnstileToken },
             key,
+            expectedOwner: owner,
           }),
         );
         const item = view(w, await metadata(w.id));

@@ -11,6 +11,7 @@ import { ApiError } from "./errors";
 import type { JsonRequest } from "./http";
 
 export function createSessionClient(request: JsonRequest, scope?: SessionScope) {
+  let knownOwner: string | undefined;
   let pending: { generation: number | undefined; promise: Promise<ClientSession> } | undefined;
   return {
     async get(): Promise<ClientSession> {
@@ -30,10 +31,17 @@ export function createSessionClient(request: JsonRequest, scope?: SessionScope) 
       const session = await pending.promise;
       if (generation !== undefined && !scope?.isCurrent(generation))
         throw new ApiError("UNAUTHENTICATED", "이용 계정이 변경됐어요. 다시 확인해 주세요.");
+      knownOwner = session.user?.id;
       return { ...session, user: session.user ? { ...session.user } : null };
     },
     async getConsent() {
-      return decode(consentStatusSchema, await request({ path: "/api/me/consent" }));
+      return decode(
+        consentStatusSchema,
+        await request({
+          path: "/api/me/consent",
+          ...(knownOwner ? { expectedOwner: knownOwner } : {}),
+        }),
+      );
     },
     async saveConsent(input: ConsentInput) {
       const parsed = consentInputSchema.safeParse(input);
@@ -45,6 +53,7 @@ export function createSessionClient(request: JsonRequest, scope?: SessionScope) 
           path: "/api/me/consent",
           method: "PUT",
           body: parsed.data,
+          ...(knownOwner ? { expectedOwner: knownOwner } : {}),
         }),
       );
     },
@@ -56,11 +65,13 @@ export function createSessionClient(request: JsonRequest, scope?: SessionScope) 
         path: "/api/me/account-type",
         method: "PUT",
         body: { accountType: parsed.data },
+        ...(knownOwner ? { expectedOwner: knownOwner } : {}),
       });
       return decode(clientAccountTypeSchema, value?.accountType);
     },
     invalidate() {
       pending = undefined;
+      knownOwner = undefined;
       scope?.invalidate();
     },
   };

@@ -25,6 +25,8 @@ export type UsageSummary = UsageView & {
 export function createAccountClient(dependencies: {
   request: DomainRequest;
   scope: SessionScope;
+  /** Only opt in when the adapter controls credential changes through this scope. */
+  coalesceWrites?: "credential-scope";
   newKey: () => string;
   readReauthentication: () => Promise<unknown>;
   reauthenticate: (provider: Provider) => Promise<void>;
@@ -103,7 +105,10 @@ export function createAccountClient(dependencies: {
       ensureCurrent();
       if (confirmation !== "DELETE") throw new Error("삭제 확인란에 DELETE를 입력해 주세요.");
       const identity = `${schemaVersion}:${id}`;
-      const previous = pendingCaseDeletes.get(identity);
+      const previous =
+        dependencies.coalesceWrites === "credential-scope"
+          ? pendingCaseDeletes.get(identity)
+          : undefined;
       if (previous) return previous;
       const task = (async () => {
         const key = pendingDeletes.get(identity) ?? dependencies.newKey();
@@ -117,7 +122,8 @@ export function createAccountClient(dependencies: {
         pendingDeletes.delete(identity);
         await deleted("case");
       })();
-      pendingCaseDeletes.set(identity, task);
+      if (dependencies.coalesceWrites === "credential-scope")
+        pendingCaseDeletes.set(identity, task);
       try {
         await task;
       } finally {
@@ -127,7 +133,8 @@ export function createAccountClient(dependencies: {
     async deleteAccount(confirmation: string) {
       ensureCurrent();
       if (confirmation !== "DELETE") throw new Error("삭제 확인란에 DELETE를 입력해 주세요.");
-      if (pendingAccountDelete) return pendingAccountDelete;
+      if (dependencies.coalesceWrites === "credential-scope" && pendingAccountDelete)
+        return pendingAccountDelete;
       const task = (async () => {
         const result = await request<unknown>("/api/me", {
           method: "DELETE",
@@ -137,7 +144,7 @@ export function createAccountClient(dependencies: {
         accountDeletionResponseSchema.parse(result);
         await deleted("account");
       })();
-      pendingAccountDelete = task;
+      if (dependencies.coalesceWrites === "credential-scope") pendingAccountDelete = task;
       try {
         await task;
       } finally {

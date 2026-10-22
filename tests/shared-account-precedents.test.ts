@@ -29,6 +29,7 @@ function account(
     api: createAccountClient({
       request,
       scope,
+      ...(options.coalesceWrites ? { coalesceWrites: options.coalesceWrites } : {}),
       newKey: () => crypto.randomUUID(),
       readReauthentication: async () => options.marker,
       reauthenticate: async () => {
@@ -193,6 +194,7 @@ for (const kind of ["case", "account"] as const)
         });
       },
       {
+        coalesceWrites: "credential-scope",
         onDeleted: () => {
           notifications++;
         },
