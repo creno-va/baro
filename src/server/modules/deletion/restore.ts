@@ -268,7 +268,7 @@ export function prepareV2RestoreReplay(
   for (const [targetKind, table] of Object.entries(tables)) {
     if (targetKind === "account")
       sql.push(
-        `DELETE FROM app_metadata WHERE key IN (SELECT 'account-type:'||json_extract(value,'$.target_id') FROM json_each(${j}) WHERE json_extract(value,'$.target_kind')='account')`,
+        `DELETE FROM app_metadata WHERE key IN (SELECT 'account-type:'||json_extract(value,'$.target_id') FROM json_each(${j}) WHERE json_extract(value,'$.target_kind')='account') OR (key>='native-auth:v1:' AND key<'native-auth:v1;' AND json_extract(CASE WHEN json_valid(app_metadata.value) THEN app_metadata.value ELSE '{}' END,'$.userId') IN (SELECT json_extract(value,'$.target_id') FROM json_each(${j}) WHERE json_extract(value,'$.target_kind')='account'))`,
       );
     sql.push(
       `DELETE FROM ${table} WHERE id IN (SELECT json_extract(value,'$.target_id') FROM json_each(${j}) WHERE json_extract(value,'$.target_kind')=${literal(targetKind)})`,

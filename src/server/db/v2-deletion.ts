@@ -121,8 +121,8 @@ export function createV2DeletionRepository(core: V2Core) {
         // predicate and atomic batch preserve it on rejection or SQL failure.
         const rows = await core.binding.batch<{ id: string }>([
           core.statement(
-            `DELETE FROM app_metadata WHERE key=? AND EXISTS(SELECT 1 FROM user WHERE id=?) AND ${sessionGuard}`,
-            [`account-type:${actor.ownerId}`, actor.ownerId, ...args],
+            `DELETE FROM app_metadata WHERE (key=? OR (key>='native-auth:v1:' AND key<'native-auth:v1;' AND json_extract(CASE WHEN json_valid(value) THEN value ELSE '{}' END,'$.userId')=?)) AND EXISTS(SELECT 1 FROM user WHERE id=?) AND ${sessionGuard}`,
+            [`account-type:${actor.ownerId}`, actor.ownerId, actor.ownerId, ...args],
           ),
           core.statement(`DELETE FROM user WHERE id=? AND ${sessionGuard} RETURNING id`, [
             actor.ownerId,
