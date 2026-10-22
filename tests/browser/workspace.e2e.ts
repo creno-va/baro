@@ -12,6 +12,28 @@ test.skip(
 const key = "baro-c-contract-test-state";
 const base = "/cases/synthetic-case";
 
+async function useSessionHttpTransport(page: Page) {
+  await page.evaluate(async () => {
+    const corePath = "/src/client/api/core.ts";
+    const { apiMode, registerMockHandlers } = (await import(
+      corePath
+    )) as typeof import("../../src/client/api/core");
+    if (apiMode !== "mock") return;
+    // Linux full uses PUBLIC_API_MODE=mock. Keep the real sessionApi reader and
+    // forward only its synthetic session transport to the intercepted HTTP route.
+    const sessionPath = "/src/client/api/mock/session.ts";
+    const casesPath = "/src/client/api/mock/cases.ts";
+    await Promise.all([import(sessionPath), import(casesPath)]);
+    registerMockHandlers({
+      "session.get": async () => {
+        const response = await fetch("/api/me/session", { credentials: "same-origin" });
+        if (!response.ok) throw new Error("Synthetic session HTTP unavailable");
+        return response.json();
+      },
+    });
+  });
+}
+
 for (const pending of ["none", "file", "message"] as const)
   test(`definitive refusal stops polling without hiding other pending work: ${pending}`, async ({
     page,
@@ -228,19 +250,25 @@ for (const scenario of [
     await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
     await page.mouse.down();
     if (scenario !== "normal") {
+      // Ordinary focus preserves the trusted screen and exact pointer geometry.
+      // The selected file must still wait for the fresh access check below.
       await expect(
-        page.getByRole("heading", { name: "사건을 불러오는 중", exact: true }),
+        page.getByRole("heading", { name: "대여금 반환 관련 자료 정리", exact: true }),
       ).toBeVisible();
       await expect(opener).toBeVisible();
       expect(await opener.boundingBox()).toEqual(bounds);
-      await expect(page.getByText("private-preview-19.pdf", { exact: true })).toBeHidden();
-      await expect(page.getByText("private-preview-0.pdf", { exact: true })).toBeHidden();
-      await expect(page.getByText("private synthetic preview coverage").first()).toBeHidden();
-      await expect(page.getByRole("button", { name: "삭제", exact: true }).first()).toBeHidden();
-      await expect(page.getByLabel("선택 자료의 자동 처리에 동의합니다.")).toBeHidden();
+      await expect(
+        page.getByRole("heading", { name: "private-preview-19.pdf", exact: true }),
+      ).toBeVisible();
+      await expect(
+        page.getByRole("heading", { name: "private-preview-0.pdf", exact: true }),
+      ).toBeVisible();
+      await expect(page.getByText("private synthetic preview coverage").first()).toBeVisible();
+      await expect(page.getByRole("button", { name: "삭제", exact: true }).first()).toBeVisible();
+      await expect(page.getByLabel("선택 자료의 자동 처리에 동의합니다.")).toBeVisible();
       await expect(
         page.getByRole("complementary", { name: "사건 요약 및 준비 현황" }),
-      ).toBeHidden();
+      ).toBeVisible();
       expect(await opener.getAttribute("title")).toBeNull();
       expect(await opener.getAttribute("aria-label")).toBeNull();
     }
@@ -353,7 +381,7 @@ for (const outcome of ["lawyer", "signed-out", "other-owner", "not-found", "unav
             };
           for (const check of pending) check.resolve(saved.session);
         };
-        window.dispatchEvent(new Event("focus"));
+        window.dispatchEvent(new Event("baro-session-changed"));
       },
       { key, outcome },
     );
@@ -642,12 +670,16 @@ for (const scenario of [
     await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
     await page.mouse.down();
     if (scenario !== "normal") {
-      await expect(page.getByRole("heading", { name: "사건을 불러오는 중" })).toBeVisible();
+      // Ordinary focus preserves the trusted screen and exact pointer geometry.
+      // The selected file must still wait for the fresh access check below.
+      await expect(
+        page.getByRole("heading", { name: "대여금 반환 관련 자료 정리", exact: true }),
+      ).toBeVisible();
       await expect(retry).toBeVisible();
-      await expect(page.getByText("selected-private.pdf", { exact: true }).first()).toBeHidden();
-      await expect(page.getByText("first-private.pdf", { exact: true }).first()).toBeHidden();
-      await expect(page.getByRole("heading", { name: "selected-private.pdf" })).toBeHidden();
-      await expect(page.getByText("private synthetic coverage").first()).toBeHidden();
+      await expect(page.getByText("selected-private.pdf", { exact: true }).first()).toBeVisible();
+      await expect(page.getByText("first-private.pdf", { exact: true }).first()).toBeVisible();
+      await expect(page.getByRole("heading", { name: "selected-private.pdf" })).toBeVisible();
+      await expect(page.getByText("private synthetic coverage").first()).toBeVisible();
       expect(await retry.getAttribute("title")).toBeNull();
       expect(await retry.getAttribute("aria-label")).toBeNull();
       expect(await retry.boundingBox()).toEqual(bounds);
@@ -1222,7 +1254,7 @@ for (const result of ["same-owner", "other-owner", "consent", "unavailable"] as 
       };
     });
     // The operating system may focus Safari during a pointer gesture. No private
-    // workspace content or paid request may escape the pending session check.
+    // request may escape the pending check; ordinary focus preserves the owner UI.
     await retry.evaluate((button) =>
       button.addEventListener(
         "pointerdown",
@@ -1237,8 +1269,10 @@ for (const result of ["same-owner", "other-owner", "consent", "unavailable"] as 
     if (!bounds) throw new Error("Missing synthetic retry button");
     await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
     await page.mouse.down();
-    await expect(page.getByRole("heading", { name: "사건을 불러오는 중" })).toBeVisible();
-    await expect(page.getByRole("log", { name: "사건 대화" })).toBeHidden();
+    await expect(
+      page.getByRole("heading", { name: "대여금 반환 관련 자료 정리", exact: true }),
+    ).toBeVisible();
+    await expect(page.getByRole("log", { name: "사건 대화" })).toBeVisible();
     await page.mouse.up();
     expect(
       await page.evaluate(() => (window as unknown as { retryCalls: number }).retryCalls),
@@ -1258,35 +1292,48 @@ for (const result of ["same-owner", "other-owner", "consent", "unavailable"] as 
     ).toBe(result === "same-owner" ? 1 : 0);
   });
 
-test("chat retry survives overlapping focus, pageshow and visibility checks", async ({ page }) => {
+test("chat retry shares in-flight session HTTP across foreground events and reads fresh after settling", async ({
+  page,
+}) => {
   await page.goto(base);
   await expect(page.getByRole("heading", { name: "이제, 하나씩 풀어가요." })).toBeVisible();
-  await page.evaluate((key) => {
+  const session = await page.evaluate((key) => {
     const saved = JSON.parse(localStorage.getItem(key) ?? "{}");
     saved.faults = { "workspace.sendMessage": ["chat_failed"] };
     localStorage.setItem(key, JSON.stringify(saved));
+    return saved.session;
   }, key);
   await page.getByLabel("추가 사실 또는 질문").fill("동시 세션 확인 중 재시도할 합성 질문입니다.");
   await page.getByRole("button", { name: "보내기", exact: true }).click();
   await expect(page.getByRole("button", { name: "응답 다시 시도" })).toBeVisible();
+  let sessionRequests = 0;
+  let release!: () => void;
+  const pending = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let hold = true;
+  await page.route("**/api/me/session", async (route) => {
+    sessionRequests++;
+    if (hold) await pending;
+    await route.fulfill({ json: session });
+  });
+  await useSessionHttpTransport(page);
   await page.evaluate(async () => {
-    const path = "/tests/helpers/workspace-client-fixture.ts";
-    const { api } = (await import(path)) as typeof import("../helpers/workspace-client-fixture");
-    const original = api.session.get;
-    const owner = await original();
-    const state = window as unknown as {
-      chatSessionChecks: number;
-      chatRetryCalls: number;
-      finishChatPreflight: () => void;
-    };
+    const fixturePath = "/tests/helpers/workspace-client-fixture.ts";
+    const sessionPath = "/src/client/api/session.ts";
+    const { api } = (await import(
+      fixturePath
+    )) as typeof import("../helpers/workspace-client-fixture");
+    const { sessionApi } = (await import(
+      sessionPath
+    )) as typeof import("../../src/client/api/session");
+    const state = window as unknown as { chatSessionChecks: number; chatRetryCalls: number };
     state.chatSessionChecks = 0;
     state.chatRetryCalls = 0;
+    // Only the session dependency uses real same-origin HTTP; workspace/AI remain synthetic.
     api.session.get = () => {
-      if (++state.chatSessionChecks === 1)
-        return new Promise((resolve) => {
-          state.finishChatPreflight = () => resolve(owner);
-        });
-      return original();
+      state.chatSessionChecks++;
+      return sessionApi.get();
     };
     const retry = api.workspace.retryMessage;
     api.workspace.retryMessage = async (...args: Parameters<typeof retry>) => {
@@ -1295,29 +1342,138 @@ test("chat retry survives overlapping focus, pageshow and visibility checks", as
     };
   });
   await page.getByRole("button", { name: "응답 다시 시도" }).click();
-  await expect
-    .poll(() =>
-      page.evaluate(() => (window as unknown as { chatSessionChecks: number }).chatSessionChecks),
-    )
-    .toBe(1);
+  await expect.poll(() => sessionRequests).toBe(1);
   await page.evaluate(() => {
     window.dispatchEvent(new Event("focus"));
     window.dispatchEvent(new PageTransitionEvent("pageshow"));
     document.dispatchEvent(new Event("visibilitychange"));
   });
+  // One mutation check plus one coalesced foreground check both participate in
+  // the same pending session HTTP request. Foreground does not hide trusted UI.
   await expect
     .poll(() =>
       page.evaluate(() => (window as unknown as { chatSessionChecks: number }).chatSessionChecks),
     )
-    .toBe(4);
-  await page.evaluate(() =>
-    (window as unknown as { finishChatPreflight: () => void }).finishChatPreflight(),
-  );
+    .toBe(2);
+  expect(sessionRequests).toBe(1);
+  await expect(page.getByRole("log", { name: "사건 대화" })).toBeVisible();
+  expect(
+    await page.evaluate(() => (window as unknown as { chatRetryCalls: number }).chatRetryCalls),
+  ).toBe(0);
+  hold = false;
+  release();
   await expect(page.getByText("이 응답은 합성 API 예시", { exact: false })).toBeVisible();
   expect(
     await page.evaluate(() => (window as unknown as { chatRetryCalls: number }).chatRetryCalls),
   ).toBe(1);
+  const before = sessionRequests;
+  const concurrent = await page.evaluate(async () => {
+    const path = "/tests/helpers/workspace-client-fixture.ts";
+    const { api } = (await import(path)) as typeof import("../helpers/workspace-client-fixture");
+    return Promise.all([api.session.get(), api.session.get()]);
+  });
+  expect(sessionRequests).toBe(before + 1);
+  expect(concurrent).toEqual([session, session]);
+  await page.evaluate(async () => {
+    const path = "/tests/helpers/workspace-client-fixture.ts";
+    const { api } = (await import(path)) as typeof import("../helpers/workspace-client-fixture");
+    await api.session.get();
+    await api.session.get();
+  });
+  expect(sessionRequests).toBe(before + 3);
 });
+
+for (const outcome of ["other-owner", "lawyer", "signed-out"] as const)
+  test(`ordinary focus reads fresh session HTTP and rejects a late original: ${outcome}`, async ({
+    page,
+  }) => {
+    await page.goto(`${base}/files`);
+    await page.getByLabel("선택 자료의 자동 처리에 동의합니다.").check();
+    await page.getByLabel("업로드할 파일 선택", { exact: true }).setInputFiles({
+      name: "private-session-original.txt",
+      mimeType: "text/plain",
+      buffer: Buffer.from("권한 변경 뒤 표시하거나 내려받으면 안 되는 합성 원본"),
+    });
+    await expect(page.getByText("결과 확인 가능", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "자료 확인", exact: true }).click();
+    await expect(page.getByRole("dialog")).toBeVisible();
+    let session = await page.evaluate((key) => {
+      const saved = JSON.parse(localStorage.getItem(key) ?? "{}");
+      saved.caseOwners = { "synthetic-case": saved.session.user.id };
+      localStorage.setItem(key, JSON.stringify(saved));
+      return saved.session;
+    }, key);
+    let sessionRequests = 0;
+    await page.route("**/api/me/session", async (route) => {
+      sessionRequests++;
+      await route.fulfill({ json: session });
+    });
+    await useSessionHttpTransport(page);
+    await page.evaluate(async () => {
+      const fixturePath = "/tests/helpers/workspace-client-fixture.ts";
+      const sessionPath = "/src/client/api/session.ts";
+      const { api } = (await import(
+        fixturePath
+      )) as typeof import("../helpers/workspace-client-fixture");
+      const { sessionApi } = (await import(
+        sessionPath
+      )) as typeof import("../../src/client/api/session");
+      api.session.get = sessionApi.get;
+      // Establish a settled real session read before ordinary focus changes owner/role.
+      await api.session.get();
+      const readOriginal = api.files.original;
+      const state = window as unknown as { originalReads: number; releaseLateOriginal: () => void };
+      state.originalReads = 0;
+      api.files.original = async (...args: Parameters<typeof readOriginal>) => {
+        const blob = await readOriginal(...args);
+        state.originalReads++;
+        return new Promise<Blob>((resolve) => {
+          state.releaseLateOriginal = () => resolve(blob);
+        });
+      };
+    });
+    expect(sessionRequests).toBe(1);
+    const downloads: string[] = [];
+    page.on("download", (download) => downloads.push(download.suggestedFilename()));
+    await page.getByRole("button", { name: "원본 확인 · 다운로드", exact: true }).click();
+    await expect
+      .poll(() =>
+        page.evaluate(() => (window as unknown as { originalReads: number }).originalReads),
+      )
+      .toBe(1);
+    expect(sessionRequests).toBe(2);
+    session = structuredClone(session);
+    if (outcome === "other-owner") session.user.id = "other-http-owner";
+    if (outcome === "lawyer") session.user.accountType = "lawyer";
+    if (outcome === "signed-out") session.user = null;
+    await page.evaluate(
+      ({ key, session }) => {
+        const saved = JSON.parse(localStorage.getItem(key) ?? "{}");
+        saved.session = session;
+        localStorage.setItem(key, JSON.stringify(saved));
+        // No explicit invalidation: settled permissions must be read again on focus.
+        window.dispatchEvent(new Event("focus"));
+      },
+      { key, session },
+    );
+    await expect.poll(() => sessionRequests).toBeGreaterThan(2);
+    await expect(page.getByRole("dialog")).not.toBeVisible();
+    await expect(page.getByText("private-session-original.txt", { exact: true })).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: "원본 확인 · 다운로드", exact: true }),
+    ).toHaveCount(0);
+    const afterDenial = sessionRequests;
+    await page.evaluate(() =>
+      (window as unknown as { releaseLateOriginal: () => void }).releaseLateOriginal(),
+    );
+    await expect.poll(() => sessionRequests).toBeGreaterThan(afterDenial);
+    await expect(page.getByRole("alert").first()).toBeVisible();
+    await expect(page.getByRole("dialog")).not.toBeVisible();
+    expect(downloads).toEqual([]);
+    expect(
+      await page.evaluate(() => (window as unknown as { originalReads: number }).originalReads),
+    ).toBe(1);
+  });
 
 for (const order of ["foreground-first", "background-first"] as const)
   for (const result of [
@@ -1484,7 +1640,10 @@ for (const result of ["same-owner", "other-owner", "unavailable"] as const)
       };
       window.dispatchEvent(new Event("focus"));
     });
-    await expect(page.getByRole("heading", { name: "사건을 불러오는 중" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "대여금 반환 관련 자료 정리", exact: true }),
+    ).toBeVisible();
+    await expect(page.getByLabel("선택 자료의 자동 처리에 동의합니다.")).toBeChecked();
     const original = Buffer.from("파일 선택창 복귀 중에도 보존할 합성 원본");
     await chooser.setFiles({ name: "선택 복귀.txt", mimeType: "text/plain", buffer: original });
     expect(
@@ -1705,9 +1864,20 @@ test("workspace panels keep their navigation, readable layouts and accessible co
 }) => {
   await page.goto(base);
   await expect(page.getByRole("heading", { name: "이제, 하나씩 풀어가요." })).toBeVisible();
-  await expect(page.getByRole("navigation", { name: "사건 메뉴" }).getByRole("link")).toHaveCount(
-    5,
-  );
+  const navigation = page.getByRole("navigation", { name: "사건 메뉴" });
+  await expect(navigation.getByRole("link")).toHaveCount(6);
+  for (const [name, path] of [
+    ["대화", ""],
+    ["자료 0", "/files"],
+    ["타임라인", "/timeline"],
+    ["다음 행동", "/actions"],
+    ["판례", "/precedents"],
+    ["리포트 보기", "/reports"],
+  ] as const)
+    await expect(navigation.getByRole("link", { name, exact: true })).toHaveAttribute(
+      "href",
+      `${base}${path}`,
+    );
   await captureCaseViewports(page, "chat-welcome");
   await page
     .getByLabel("추가 사실 또는 질문")
