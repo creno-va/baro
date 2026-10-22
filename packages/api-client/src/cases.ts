@@ -550,11 +550,12 @@ export function createCasesClient(
         throw new ApiError("NOT_FOUND", "사건을 찾을 수 없어요.");
       // A changed cookie can precede the app's session notification. Resolve the owner
       // before joining an in-flight creation so an old account cannot block a new one.
-      const identity = JSON.stringify([session.user.id, input]);
+      const owner = session.user.id;
+      const identity = JSON.stringify([owner, input]);
       const existing = pendingCreates.get(identity);
       if (existing) return existing;
       const pending = (async () => {
-        const key = await mutationKey(`cases.create:${session.user.id}`, input);
+        const key = await mutationKey(`cases.create:${owner}`, input);
         const turnstileToken = await securityToken();
         const w = v2WorkspaceSchema.parse(
           await request("cases.create", input, {
