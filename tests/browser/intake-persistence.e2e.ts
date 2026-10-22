@@ -257,6 +257,7 @@ async function summaryFixture(page: Page) {
   });
   await page.goto(`/cases/${id}/summary`);
   await expect(page.getByRole("textbox", { name: "요약 편집", exact: true })).toBeVisible();
+  await page.locator(".summary-facts > summary").click();
   return writes;
 }
 

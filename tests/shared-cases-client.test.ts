@@ -246,7 +246,7 @@ test("session-bound facade refreshes held method references and retries failed c
   expect(factories).toBe(2);
 });
 
-test("parallel creation is coalesced before asynchronous key persistence and challenge", async () => {
+test("parallel creation checks each owner before coalescing key persistence and challenge", async () => {
   const { storage } = memoryStorage();
   let creates = 0,
     challenges = 0,
@@ -280,8 +280,50 @@ test("parallel creation is coalesced before asynchronous key persistence and cha
   const [one, two] = await Promise.all([cases.create(input), cases.create({ ...input })]);
   expect(one.id).toBe(two.id);
   expect(creates).toBe(1);
-  expect(ownerReads).toBe(1);
+  expect(ownerReads).toBe(2);
   expect(challenges).toBe(1);
+});
+
+test("an unannounced owner switch cannot join a pending mutation for the previous owner's case", async () => {
+  const { storage } = memoryStorage();
+  let owner = "synthetic_owner_a";
+  let reached!: () => void, release!: () => void;
+  const started = new Promise<void>((resolve) => {
+    reached = resolve;
+  });
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const request: OperationRequest = async <T>(operation: string) => {
+    if (operation === "cases.intake") return metadata() as T;
+    if (operation === "cases.workspace") {
+      if (owner !== "synthetic_owner_a") throw new ApiError("NOT_FOUND", "합성 다른 계정의 사건");
+      reached();
+      await gate;
+      throw new ApiError("UNAVAILABLE", "합성 이전 요청 종료", true);
+    }
+    throw new Error("UNEXPECTED_TEST_OPERATION");
+  };
+  const cases = client(request, storage);
+  const old = cases.advance(id, { expectedRevision: 1 });
+  void old.catch(() => {});
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await started;
+    owner = "synthetic_owner_b";
+    await expect(
+      Promise.race([
+        cases.advance(id, { expectedRevision: 1 }),
+        new Promise((_, reject) => {
+          timeout = setTimeout(() => reject(new Error("OWNER_CHECK_NOT_REACHED")), 1000);
+        }),
+      ]),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  } finally {
+    clearTimeout(timeout);
+    release();
+    await old.catch(() => {});
+  }
 });
 
 test("a cached key cannot bypass required storage after the device store becomes unavailable", async () => {

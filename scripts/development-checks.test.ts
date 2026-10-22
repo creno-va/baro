@@ -132,6 +132,12 @@ test("shared UI excludes corpus flows and a missing feature test fails explicitl
   expect(browserTargets(["src/styles/global.css"], browserTests)).not.toContain(
     "tests/browser/evals.e2e.ts",
   );
+  expect(browserTargets(["src/styles/product.css"], browserTests)).toEqual(
+    browserTests.filter((file) => !file.endsWith("/evals.e2e.ts")).sort(),
+  );
+  expect(() => browserTargets(["src/styles/product.css"], [])).toThrow(
+    "BROWSER_FEATURE_TEST_MISSING",
+  );
   expect(() => browserTargets(["src/pages/cases/new.astro"], [])).toThrow(
     "BROWSER_FEATURE_TEST_MISSING",
   );
@@ -241,6 +247,8 @@ test("browser config and fixture-only edits select their actual consumers", () =
     ["tests/helpers/report-http-fixture.ts", "report-html"],
     ["tests/helpers/customer-browser-server.ts", "customer-real"],
     ["tests/helpers/workspace-client-fixture.ts", "workspace-shared"],
+    ["tests/helpers/case-ui-capture.ts", "workspace"],
+    ["tests/helpers/case-ui-capture.ts", "reports-integrated"],
     ["tests/helpers/customer-completion.playwright.config.ts", "customer-completion"],
     ["tests/browser/conversation.config.ts", "conversation-home"],
     ["tests/browser/intake103.config.ts", "intake103"],

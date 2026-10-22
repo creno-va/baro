@@ -1,4 +1,4 @@
-import { ArrowRight, ChevronDown, Info, MapPin, Search, UserRound } from "lucide-react";
+import { ArrowRight, ChevronDown, Info, MapPin, Search } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, lawyerErrorMessage } from "../../client/api/lawyers";
 import type { DirectoryItem } from "../../contracts/v2";
@@ -80,27 +80,16 @@ export function Directory({ preview = false }: { preview?: boolean }) {
     <div className="lawyer-directory">
       <div className="directory-intro">
         <PageHeader
-          eyebrow="함께할 전문가를 찾는 첫걸음"
+          eyebrow="내 기준으로 선택하는 전문가"
           title="변호사 찾기"
           description="분야와 지역을 살펴보고, 원하는 변호사에게 직접 연락하세요."
         />
-        <div className="directory-illustration" aria-hidden="true">
-          <div className="directory-illustration__profile">
-            <UserRound size={48} strokeWidth={1.5} />
-          </div>
-          <span className="directory-illustration__search">
-            <Search size={26} strokeWidth={2.2} />
-          </span>
-        </div>
       </div>
       <ApiModeNotice preview={preview} />
       <Card className="directory-search">
-        <CardHeader>
-          <CardTitle>어떤 변호사를 찾고 계신가요?</CardTitle>
-          <p>필요한 분야와 가까운 지역부터 살펴보세요.</p>
-        </CardHeader>
         <CardContent>
           <form
+            aria-label="변호사 검색"
             className="directory-search__form"
             onSubmit={(event) => {
               event.preventDefault();
@@ -130,46 +119,53 @@ export function Directory({ preview = false }: { preview?: boolean }) {
                 />
               </span>
             </label>
-            <label className="directory-search__field">
-              <span>지역</span>
-              <span className="directory-search__select">
-                <select
-                  disabled={!ready}
-                  value={filters.region}
-                  onChange={(event) => setFilters({ ...filters, region: event.target.value })}
-                >
-                  <option value="">전체 지역</option>
-                  {Object.entries(REGION_LABELS).map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown size={18} aria-hidden="true" />
-              </span>
-            </label>
-            <label className="directory-search__field">
-              <span>분야</span>
-              <span className="directory-search__select">
-                <select
-                  disabled={!ready}
-                  value={filters.legalField}
-                  onChange={(event) => setFilters({ ...filters, legalField: event.target.value })}
-                >
-                  <option value="">전체 분야</option>
-                  {Object.entries(FIELD_LABELS).map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown size={18} aria-hidden="true" />
-              </span>
-            </label>
+            <div className="directory-search__filters">
+              <label className="directory-search__field">
+                <span>지역</span>
+                <span className="directory-search__select">
+                  <select
+                    disabled={!ready}
+                    value={filters.region}
+                    onChange={(event) => setFilters({ ...filters, region: event.target.value })}
+                  >
+                    <option value="">전체 지역</option>
+                    {Object.entries(REGION_LABELS).map(([value, label]) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown size={18} aria-hidden="true" />
+                </span>
+              </label>
+              <label className="directory-search__field">
+                <span>분야</span>
+                <span className="directory-search__select">
+                  <select
+                    disabled={!ready}
+                    value={filters.legalField}
+                    onChange={(event) => setFilters({ ...filters, legalField: event.target.value })}
+                  >
+                    <option value="">전체 분야</option>
+                    {Object.entries(FIELD_LABELS).map(([value, label]) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown size={18} aria-hidden="true" />
+                </span>
+              </label>
+            </div>
             <div className="directory-search__submit">
-              <Button type="submit" disabled={!ready} className="directory-search__button">
+              <Button
+                type="submit"
+                aria-label="검색"
+                disabled={!ready}
+                className="directory-search__button"
+              >
                 <Search size={18} aria-hidden="true" />
-                검색
+                <span>검색</span>
               </Button>
             </div>
           </form>

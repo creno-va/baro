@@ -164,7 +164,7 @@ test("year, month, day and unknown precision survive actual editor reconnect", a
   ]) {
     await page.goto(`${base}/timeline`);
     await page.getByRole("button", { name: "일정 추가" }).click();
-    await page.getByLabel("날짜 정밀도").selectOption(precision ?? "unknown");
+    await page.getByLabel("날짜를 얼마나 기억하시나요?").selectOption(precision ?? "unknown");
     if (date) await page.getByLabel("날짜 (모르면 비워 두세요)").fill(date);
     await page.getByLabel("어떤 일이 있었나요?").fill(`정밀도 ${precision}`);
     await page.getByRole("button", { name: "타임라인 저장" }).click();

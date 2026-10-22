@@ -329,6 +329,12 @@ export function AccountSettings() {
           <RefreshCw aria-hidden="true" size={16} /> 다시 확인
         </button>
       </header>
+      <nav className="settings-jump" aria-label="설정 바로가기">
+        <a href="#settings-usage-title">사용량</a>
+        {accountType === "customer" && <a href="#settings-cases-title">보관한 사건</a>}
+        <a href="#settings-help-title">도움말과 정책</a>
+        <a href="#settings-danger-title">계정 관리</a>
+      </nav>
       {(busy || checking) && (
         <p className="settings-loading settings-progress" role="status">
           <RefreshCw size={15} aria-hidden="true" /> {busy || "계정 접근 상태 확인 중…"}
@@ -427,7 +433,8 @@ export function AccountSettings() {
             </p>
           )}
         </div>
-        <div className="settings-usage-guide">
+        <details className="settings-usage-guide">
+          <summary>파일별 한도와 처리 안내</summary>
           <p className="settings-muted">
             사건별 원본은 최대 100개·5GB예요. 문서·이미지 100MB, 음성·영상 1GB, PDF 500쪽, 미디어
             60분 한도를 적용해요. 실제 처리 용량이나 서비스 장애로 자동 처리가 대기할 수 있어요.
@@ -435,7 +442,7 @@ export function AccountSettings() {
           <a className="settings-text-link" href="/help#limits">
             한도와 대기 도움말 <ChevronRight size={16} aria-hidden="true" />
           </a>
-        </div>
+        </details>
       </section>
       <div className="settings-details-grid">
         {accountType === "customer" && (

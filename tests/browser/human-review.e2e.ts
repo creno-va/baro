@@ -109,7 +109,11 @@ test("active summary shows materials, visible conflict choices, saves and return
           .filter((node) => {
             const r = node.getBoundingClientRect();
             return (
-              r.width > 0 && r.right > innerWidth + 1 && getComputedStyle(node).position !== "fixed"
+              r.width > 0 &&
+              r.right > innerWidth + 1 &&
+              getComputedStyle(node).position !== "fixed" &&
+              // Case destinations intentionally scroll inside the bounded navigation row.
+              !node.closest(".workspace-tabs")
             );
           })
           .map((node) => ({

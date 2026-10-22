@@ -3,7 +3,6 @@ import { api, LawyerApiError, type LawyerView, lawyerErrorMessage } from "../../
 import type { V2Office } from "../../contracts/v2";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
-import { PageHeader } from "../ui/page-header";
 import { StatePanel } from "../ui/state-panel";
 import { ApiModeNotice } from "./ApiModeNotice";
 import { AssetPhoto, downloadLawyerAsset } from "./AssetPhoto";
@@ -78,14 +77,28 @@ export function ProfileContent({
   const [assetError, setAssetError] = useState("");
   return (
     <div className="space-y-6 lawyer-profile">
-      <PageHeader title={lawyer.name || "프로필 미리보기"} description={lawyer.officeName} />
-      <AssetPhoto
-        profileId={lawyer.id}
-        assetId={lawyer.photoAssetId}
-        fallback={lawyer.photoUrl}
-        alt={`${lawyer.name} 프로필 사진`}
-        privateRead={privateRead}
-      />
+      <header className="lawyer-profile-hero">
+        <AssetPhoto
+          profileId={lawyer.id}
+          assetId={lawyer.photoAssetId}
+          fallback={lawyer.photoUrl}
+          alt={`${lawyer.name} 프로필 사진`}
+          privateRead={privateRead}
+        />
+        <div>
+          <p className="eyebrow">공개 프로필</p>
+          <h1>{lawyer.name || "프로필 미리보기"}</h1>
+          <p>{lawyer.officeName}</p>
+          <p className="lawyer-profile-fields">
+            {lawyer.practiceAreas
+              .map((field) => FIELD_LABELS[field as keyof typeof FIELD_LABELS] ?? field)
+              .join(" · ")}
+          </p>
+        </div>
+        <a className="ui-button ui-button--primary" href="#lawyer-contact">
+          연락처 보기
+        </a>
+      </header>
       <p className="text-sm text-muted-foreground">
         본인 작성 정보입니다. 역할 선택과 프로필 등록은 변호사 자격 확인을 의미하지 않습니다.
       </p>
@@ -104,7 +117,7 @@ export function ProfileContent({
           </p>
         </CardContent>
       </Card>
-      <Card>
+      <Card id="lawyer-contact">
         <CardHeader>
           <CardTitle>직접 연락</CardTitle>
         </CardHeader>
