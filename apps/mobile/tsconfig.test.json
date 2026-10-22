@@ -1,6 +1,6 @@
 {
   "extends": "./tsconfig.json",
-  "compilerOptions": { "types": ["react", "react-native", "jest"] },
+  "compilerOptions": { "types": ["react", "react-native", "jest", "node"] },
   "include": ["tests/**/*.tsx", "expo-env.d.ts"],
   "exclude": ["node_modules", "dist", "android", "ios"]
 }

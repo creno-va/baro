@@ -32,12 +32,14 @@ export function WorkspaceScreen({
   onSession,
   onReview,
   onCitation,
+  onFiles,
 }: {
   state: WorkspaceState;
   actions: WorkspaceModel;
   onSession(): void;
   onReview(): void;
   onCitation(url: string): void;
+  onFiles?: () => void;
 }) {
   const [section, setSection] = useState<"messages" | "facts" | "actions" | "timeline" | "files">(
     "messages",
@@ -395,9 +397,10 @@ export function WorkspaceScreen({
               ) : null}
               {section === "files" ? (
                 <>
+                  {onFiles ? <Button label="자료 추가·검토·원본 저장" onPress={onFiles} /> : null}
                   <Text>
                     저장된 자료의 이름과 처리 상태를 확인하고 대화에 사용할 자료를 선택해 주세요.
-                    업로드·처리 범위 검토·리포트 저장은 후속 단계에서 연결해요.
+                    자료 추가·검토·원본 저장 화면에서 파일을 관리할 수 있어요.
                   </Text>
                   {value.files.length === 0 ? <Text>저장된 자료가 없어요.</Text> : null}
                   {value.files.map((file) => (

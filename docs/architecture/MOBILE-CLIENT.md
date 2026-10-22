@@ -240,7 +240,8 @@ close/abort는 진행 중/대기 part를 폐기한다. snapshot은 명시적 rel
 handle13/13·121/121 open/close, 각각951ms·10,059ms였다. 이는 실제 디스크를 읽은 로컬 port
 측정이며 native SDK의 기기 성능·메모리/URI 권한 인수가 아니다. OS picker의 cache copy는
 JS 바깥에서 수행되므로 큰 파일 복사/공간 부족과 취소 정리는 두 OS에서 추가 인수한다.
-native 화면의 files client 조립·앱 수명/owner에 따른 clear 연결과 업로드/리포트 UI는 M5 후속이다.
+native `/files`는 이 source와 recovery를 조립해 업로드/검토·원본 저장에 연결한다. 리포트 UI와
+실제 기기 IO/메모리 인수는 M5 후속이다.
 `bun scripts/mobile-file-io-probe.ts --large`로 위 합성 디스크 검사를 수동 재현하며 CI의
 빠른 검사에서는1GB 파일을 생성하지 않는다.
 
@@ -258,8 +259,8 @@ write/readback, 예약 ACK 뒤 file ID 저장, 완료 전 CAS/key 저장을 검�
 접수를 실패로 바꾸지 않는다. ordinary retry는 CAS를 갱신하지 않는다. `resolveConflict: true`는
 확인된409·만료 session/예약의404·정확한 원래 파일의404 이후 사용자 명시적 결정에만 쓴다.
 역할/owner/동의 오류나 목록 누락만으로 새 예약을 만들지 않는다. 이전 서버 예약·원장·hold를
-지우지 않고 만료/삭제 정리는 기존 서버가 담당한다. 이 공유 계약을 소비하는 native files
-화면·원본 다운로드와 앱 수명 cleanup은 후속으로 연결한다.
+지우지 않고 만료/삭제 정리는 기존 서버가 담당한다. native files 화면은 같은 계약을 소비하고
+background 확인 중 source만 같은 fresh owner/권한에 복원하며 화면 이탈에서는 버린다.
 
 예약 응답/file ID 저장 유실 뒤 다른 signed client가 같은 pending 파일을 완료한 경우에도,
 서버는 원래 owner/key/request hash의 예약 replay에서 finalized file ID를 돌려준다. 기존
@@ -274,6 +275,29 @@ session DTO와 만료 시각은 보존하며 lease를 다시 열거나 연장하
 PDF는 서버가 생성한 검증된 결과를 내려받아 열기/공유한다. 임시 파일은 앱 private cache에
 두고 취소·만료·계정 전환·다음 시작 시 정리한다. 사용자 요청으로 외부 앱에 전달된 복사본은
 서버 삭제로 회수된다고 표시하지 않는다. 앱이 임의로 공개 URL을 발급하지 않는다.
+
+`createNativeFiles`는 실제 `expo/fetch`와 sealed cookie writer를 공유한다. 네이티브 SDK의
+redirect:error·credentials:omit을 사용하고 모든 요청/응답을 owner hint·generation으로
+검사한다. 원본 response body는 private 무작위 파일에 최대256KiB write로 순차 기록하며
+전체 binary arrayBuffer/blob/base64 변환을 하지 않는다. 전송 압축은 decoded byte 수로
+상한을 적용하고 길이/디스크 크기와 네트워크/디스크 재읽기의 증분 SHA256을 대조한다.
+URI는 adapter에만 두고
+opaque handle의 명시적 preview/share 직전에도 owner를 재검사한다. SDK의 native buffer·
+실제 기기 메모리는 이 JS write 상한으로 증명되지 않으므로 별도 인수한다.
+
+startup·로그아웃/계정/역할/동의 변경·화면 이탈에서는 source/download cache를 폐기하고
+진행 중 IO/preview가 끝난 뒤 파일을 삭제한다. background checking은 개인 화면만 숨기고,
+이미 native handoff를 시작한 파일은 외부 앱이 읽는 동안 유지한 뒤 복귀 시 정리한다.
+정리 실패는 파일 기능에서 재시도하고 공개 탐색/로그인을 막지 않으며 미해결 작업 key는
+지우지 않는다. `.auth`·`.case-operations` SecureStore와 plaintext private cache는 별개다.
+순수 모델의 NativeUploadSource 타입은 Expo SDK import와 분리해 Workers/DOM 전역 타입이
+계약 검사에 섞이지 않도록 한다. Node 타입은 Jest 테스트 설정에만 추가했다.
+
+파일 검토는 coverage를100개씩 교체 표시하고 관찰은 서버 cursor의 앞/뒤 페이지로 탐색한다.
+다른 revision의 페이지를 섞지 않으며 전체 관찰을 누적 렌더하지 않는다. 단일 관찰의 원문/
+교정·위치·불확실성/제외와 서버의 미완료 교정 이어가기/중단을 제공한다. 미저장 교정은
+background/이탈 시 버리고 서버 저장분을 다시 읽는다. 동의 갱신 전에도 기존 자료의 읽기·
+원본 저장·삭제는 가능하고 업로드/처리/교정은 최신 동의가 필요하다.
 
 ### 상태·초안·앱 수명
 

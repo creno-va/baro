@@ -1,10 +1,11 @@
-import { ApiError, type UploadMetadata, type UploadReader, validateUpload } from "@baro/api-client";
+import { ApiError, type UploadReader, validateUpload } from "@baro/api-client";
 import * as DocumentPicker from "expo-document-picker";
 import { Directory, File, FileMode, Paths } from "expo-file-system";
-import { createNativeUploadReader } from "./upload-reader";
+import { createNativeUploadReader, type NativeUploadSource } from "./upload-reader";
 
 /** Opaque object identity resolves to a private file; no URI/path is exposed to a model or UI. */
-export type NativeUploadSource = Readonly<UploadMetadata>;
+export type { NativeUploadSource } from "./upload-reader";
+
 const unavailable = () =>
   new ApiError(
     "UNAVAILABLE",
