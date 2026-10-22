@@ -3,6 +3,7 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { drizzle } from "drizzle-orm/d1";
 import { authSchema } from "../db/schema";
 import { parseAuthEnvironment } from "./env";
+import { createNativeExpoIntegration, nativeAuthCallbackBase } from "./native-expo";
 import { AUTH_RETENTION_MS, SESSION_EXPIRES_SECONDS, SESSION_UPDATE_SECONDS } from "./policy";
 
 function discardProviderCredentials<T extends Record<string, unknown>>(account: T): T {
@@ -20,12 +21,14 @@ function createConfiguredAuth(env: Env) {
   const config = parseAuthEnvironment(env);
   const database = drizzle(env.DB, { schema: authSchema });
   const origin = new URL(config.BETTER_AUTH_URL).origin;
+  const nativeCallback = nativeAuthCallbackBase(env.APP_ENV);
 
   return betterAuth({
     appName: "BARO",
     baseURL: config.BETTER_AUTH_URL,
     secret: config.BETTER_AUTH_SECRET,
-    trustedOrigins: [origin],
+    trustedOrigins: [origin, ...(nativeCallback ? [`${new URL(nativeCallback).protocol}//`] : [])],
+    plugins: [createNativeExpoIntegration(env)],
     onAPIError: { errorURL: `${origin}/login` },
     // Adapter errors can include SQL parameters and provider tokens; keep them out of logs.
     logger: { disabled: true },

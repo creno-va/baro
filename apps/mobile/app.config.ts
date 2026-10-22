@@ -15,7 +15,7 @@ const config: ExpoConfig = {
   userInterfaceStyle: "light",
   ios: { bundleIdentifier: target.applicationId, supportsTablet: true },
   android: { package: target.applicationId },
-  plugins: ["expo-router", "expo-dev-client"],
+  plugins: ["expo-router", "expo-dev-client", "expo-secure-store", "expo-web-browser"],
   experiments: { typedRoutes: true },
   updates: { enabled: false },
 };

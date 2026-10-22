@@ -57,9 +57,9 @@ export async function deleteAccount(
       ),
     db
       .prepare(
-        "DELETE FROM app_metadata WHERE key=? AND EXISTS(SELECT 1 FROM deletion_jobs WHERE id=? AND target_type='account' AND target_id=?)",
+        "DELETE FROM app_metadata WHERE (key=? OR (key>='native-auth:v1:' AND key<'native-auth:v1;' AND json_extract(CASE WHEN json_valid(value) THEN value ELSE '{}' END,'$.userId')=?)) AND EXISTS(SELECT 1 FROM deletion_jobs WHERE id=? AND target_type='account' AND target_id=?)",
       )
-      .bind(`account-type:${ownerId}`, jobId, ownerId),
+      .bind(`account-type:${ownerId}`, ownerId, jobId, ownerId),
     db
       .prepare(
         `DELETE FROM user WHERE id=? AND EXISTS(SELECT 1 FROM deletion_jobs WHERE id=? AND target_type='account' AND target_id=?)`,
@@ -205,7 +205,13 @@ export async function replayDeletionJournal(db: D1Database, input: unknown) {
           job.expires_at,
         ),
       ...(job.target_type === "account"
-        ? [db.prepare("DELETE FROM app_metadata WHERE key=?").bind(`account-type:${job.target_id}`)]
+        ? [
+            db
+              .prepare(
+                "DELETE FROM app_metadata WHERE key=? OR (key>='native-auth:v1:' AND key<'native-auth:v1;' AND json_extract(CASE WHEN json_valid(value) THEN value ELSE '{}' END,'$.userId')=?)",
+              )
+              .bind(`account-type:${job.target_id}`, job.target_id),
+          ]
         : []),
       db
         .prepare(

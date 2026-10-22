@@ -166,6 +166,16 @@ state/nonce·시도 식별·취소·만료·cold start/이미 열린 앱을 포�
 `oauthAuthenticatedAt`은 실제 서버 OAuth 성공으로만 설정하고 모바일 값으로 대체하지
 않는다. 고객/변호사 선택과 동의, 기존 데이터의 읽기와 재동의 후 mutation 경계를 보존한다.
 
+M3 구현은 Better Auth1.7.7 Expo의 state proxy를 사용하되 세션 cookie를 URL에 싣는
+callback hook은 one-use code 교환으로 교체한다. 앱은 SecureStore의 32-byte verifier와
+시도 nonce를 먼저 만들고 S256 challenge를 callback에 묶는다. `disableRedirect: true`로
+시작한 뒤 외부 브라우저를 직접 열어 복귀 code를 `/api/mobile/auth/exchange`에 제출한다.
+코드는60초 만료·정확한 session/user·issuer·nonce·PKCE에 묶이며 한 번만 소비한다.
+세션 cookie는 암호화된 `native-auth:v1:` 임시 metadata와 HTTPS Set-Cookie에서만 다룬다.
+계정 삭제/restore replay는 owner grant를 지우고 기존 auth cron이 만료/손상 grant를 정리한다.
+서버의 Origin/CSRF·OAuth freshness·기존3사/계정 연결 규칙은 유지한다. 실제 native
+SecureStore/브라우저·cold/warm 복귀와 동의/역할 UI는 #346에서 후속 연결·인수한다.
+
 ### Turnstile
 
 새 사건 생성에 필요한 Turnstile은 native JS만으로 실행할 수 없다. BARO의 제한된 HTTPS

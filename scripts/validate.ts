@@ -31,6 +31,8 @@ export function validationCommands(profile: string, root = process.cwd()): Comma
       "scripts/validate.test.ts",
       "scripts/deploy.test.ts",
       "scripts/verify-release.test.ts",
+      "tests/native-auth-codes.test.ts",
+      "tests/native-auth-http.test.ts",
     ],
   ];
   const build = [

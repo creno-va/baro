@@ -2,7 +2,7 @@
 
 - Status: M1 인수 완료; 전체 네이티브 앱화 #334 / M2 공통 client #335 진행
 - Updated: 2026-10-22
-- Tracking: 전체 [#334](https://github.com/creno-va/baro/issues/334), 계획 [#328](https://github.com/creno-va/baro/issues/328), M1 [#330](https://github.com/creno-va/baro/issues/330), M2 [#335](https://github.com/creno-va/baro/issues/335)
+- Tracking: native 인증 [#346](https://github.com/creno-va/baro/issues/346), 전체 [#334](https://github.com/creno-va/baro/issues/334), 계획 [#328](https://github.com/creno-va/baro/issues/328), M1 [#330](https://github.com/creno-va/baro/issues/330), M2 [#335](https://github.com/creno-va/baro/issues/335)
 - Decision: [ADR-0017](../adr/0017-expo-mobile-and-shared-client-boundaries.md)
 - Architecture: [공통 코드와 모바일 경계](../architecture/MOBILE-CLIENT.md)
 
@@ -298,6 +298,9 @@ workspace·자료·리포트·나머지 domain을 순차 추출한다. 첫 단�
   제한 WebView 의존성의 native 컴파일을 수동 workflow에서 확인한다.
 - SecureStore cookie jar·cold/warm 복귀·foreground/로그아웃 coordinator와 로그인/역할/
   동의/challenge UI는 후속 구현이다. M2 프로필/자산과 M3 전체 인수를 열어 둔다.
+  두 OS 개발 빌드는 native39809756054에서 검사 중이다. raw audit 미패치3건은 #339에 유지한다.
+  PR345의 과거 Actions success/Check Run in_progress 불일치 증거는 보존하며 실제 계정 격리
+  보완·main 통합의 새 head를 다시 검사한다.
 
 ## 참고
 
