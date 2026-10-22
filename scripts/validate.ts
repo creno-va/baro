@@ -33,6 +33,8 @@ export function validationCommands(profile: string, root = process.cwd()): Comma
       "scripts/verify-release.test.ts",
       "tests/native-auth-codes.test.ts",
       "tests/native-auth-http.test.ts",
+      "tests/native-reauth.test.ts",
+      "tests/native-reauth-http.test.ts",
     ],
   ];
   const build = [

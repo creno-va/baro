@@ -178,7 +178,13 @@ callback hook은 one-use code 교환으로 교체한다. 앱은 SecureStore의 3
 계정 삭제/restore replay는 owner grant를 지우고 기존 auth cron이 만료/손상 grant를 정리한다.
 서버의 Origin/CSRF·OAuth freshness·기존3사/계정 연결 규칙은 유지한다. 실제 native
 SecureStore/브라우저·cold/warm 복귀와 동의/역할 UI는 PR348·349·351에 통합했다.
-reauth와 실제 제공자/기기 인수는 #346에 남는다.
+reauth의 서버 선행은 signed 기존 세션의 `/api/mobile/auth/reauth/prepare`, callback의
+선택적 `purpose=reauthenticate`, signed 새 세션의 `/api/mobile/auth/reauth/verify`다.
+준비는 기존 연결 provider·원래 session/user·nonce/challenge와10분 TTL에 묶어 별도 암호화
+namespace `native-reauth:v1:`에 보관한다. callback은 같은 owner의 실제 새 OAuth 세션만
+인정하고 교환도 purpose/원래 owner를 대조한다. 기존 쿠키가 남았거나 recentOAuth라는
+이유만으로 재인증 성공으로 보지 않으며 verify가 같은 nonce/verifier와 정확한 새 세션을
+확인한다. native proof/재인증 UI 소비와 실제 제공자/기기 인수는 #346의 후속이다.
 
 ### Turnstile
 

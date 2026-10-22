@@ -57,7 +57,7 @@ export async function deleteAccount(
       ),
     db
       .prepare(
-        "DELETE FROM app_metadata WHERE (key=? OR (key>='native-auth:v1:' AND key<'native-auth:v1;' AND json_extract(CASE WHEN json_valid(value) THEN value ELSE '{}' END,'$.userId')=?)) AND EXISTS(SELECT 1 FROM deletion_jobs WHERE id=? AND target_type='account' AND target_id=?)",
+        "DELETE FROM app_metadata WHERE (key=? OR (((key>='native-auth:v1:' AND key<'native-auth:v1;') OR (key>='native-reauth:v1:' AND key<'native-reauth:v1;')) AND json_extract(CASE WHEN json_valid(value) THEN value ELSE '{}' END,'$.userId')=?)) AND EXISTS(SELECT 1 FROM deletion_jobs WHERE id=? AND target_type='account' AND target_id=?)",
       )
       .bind(`account-type:${ownerId}`, ownerId, jobId, ownerId),
     db
@@ -208,7 +208,7 @@ export async function replayDeletionJournal(db: D1Database, input: unknown) {
         ? [
             db
               .prepare(
-                "DELETE FROM app_metadata WHERE key=? OR (key>='native-auth:v1:' AND key<'native-auth:v1;' AND json_extract(CASE WHEN json_valid(value) THEN value ELSE '{}' END,'$.userId')=?)",
+                "DELETE FROM app_metadata WHERE key=? OR (((key>='native-auth:v1:' AND key<'native-auth:v1;') OR (key>='native-reauth:v1:' AND key<'native-reauth:v1;')) AND json_extract(CASE WHEN json_valid(value) THEN value ELSE '{}' END,'$.userId')=?)",
               )
               .bind(`account-type:${job.target_id}`, job.target_id),
           ]

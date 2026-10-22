@@ -1,4 +1,5 @@
 import { cleanupNativeAuthCodes } from "./native-codes";
+import { cleanupNativeReauthentication } from "./native-reauth";
 import { AUTH_RETENTION_MS } from "./policy";
 
 // No profile, token, SQL parameters or query results leave this maintenance boundary.
@@ -12,6 +13,7 @@ export async function cleanupAuthData(database: D1Database, now = Date.now()): P
         .run();
     }
     await cleanupNativeAuthCodes(database, now);
+    await cleanupNativeReauthentication(database, now);
   } catch {
     // Cron failures must remain observable without retaining the adapter's SQL,
     // parameter values or original stack/cause in platform exception logging.
