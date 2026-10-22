@@ -52,7 +52,7 @@ class BaroPrivateDownloadModule : Module() {
     AsyncFunction("release") Coroutine { id: String -> withContext(Dispatchers.IO) {
       try { if (owned.contains(id)) { store().release(id); owned.remove(id) }; Unit } catch (_: Exception) { throw PrivateDownloadException() }
     } }
-    AsyncFunction("clear") Coroutine { withContext(Dispatchers.IO) {
+    AsyncFunction("clear") Coroutine { -> withContext(Dispatchers.IO) {
       try { store().clear() } catch (_: Exception) { throw PrivateDownloadException() }
     } }
     OnDestroy {
