@@ -774,7 +774,11 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
                         </Button>
                         <Button
                           variant="ghost"
-                          onClick={() => setExit(true)}
+                          aria-haspopup="dialog"
+                          onClick={(event) => {
+                            event.currentTarget.focus();
+                            setExit(true);
+                          }}
                           disabled={busy || leaving}
                         >
                           나중에 이어하기

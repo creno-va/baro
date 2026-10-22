@@ -184,6 +184,7 @@
   scrollbar-width: thin;
   border-color: var(--product-line);
   padding-bottom: 1px;
+  padding-right: 4px;
 }
 .app-frame.app-frame--product .workspace-tabs a {
   flex: 0 0 auto;
@@ -194,6 +195,9 @@
 }
 .app-frame.app-frame--product .workspace-tabs a[aria-current] {
   color: var(--product-blue);
+}
+.app-frame.app-frame--product .workspace-tabs a:focus-visible {
+  outline-offset: -2px;
 }
 .app-frame.app-frame--product .case-options {
   position: relative;

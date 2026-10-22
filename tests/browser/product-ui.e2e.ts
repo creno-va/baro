@@ -169,7 +169,12 @@ test("mobile chat keeps the composer visible and every case destination reachabl
   const menu = page.getByRole("navigation", { name: "사건 메뉴", exact: true });
   await menu.getByRole("link", { name: "리포트 보기" }).click();
   await expect(page).toHaveURL(`${base}/reports`);
-  await expect(menu.getByRole("link", { name: "리포트 보기" })).toBeInViewport();
+  const selected = menu.getByRole("link", { name: "리포트 보기" });
+  await expect(selected).toBeInViewport({ ratio: 1 });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await expect(selected).toBeInViewport({ ratio: 1 });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(selected).toBeInViewport({ ratio: 1 });
   await menu.getByRole("link", { name: "대화", exact: true }).click();
   await expect(page).toHaveURL(base);
   await page.locator(".case-options summary").click();
@@ -181,6 +186,35 @@ test("mobile chat keeps the composer visible and every case destination reachabl
   await page.keyboard.press("Escape");
   await expect(page.locator(".case-options")).not.toHaveAttribute("open");
   await expect(page.locator(".case-options summary")).toBeFocused();
+  await page.goto("/cases");
+  const remove = page.getByRole("button", {
+    name: "돌려받지 못한 보증금, 함께 정리한 이야기 사건 삭제",
+    exact: true,
+  });
+  await remove.click();
+  await page.getByRole("dialog").getByRole("button", { name: "취소", exact: true }).click();
+  await expect(remove).toBeFocused();
+});
+
+test("mobile workspace dialogs return focus to their own opener", async ({ page }) => {
+  await seed(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  for (const [route, label] of [
+    [`${base}/timeline`, "일정 추가"],
+    [`${base}/timeline`, "편집"],
+    [`${base}/files`, "자료 확인"],
+    [`${base}/files`, "삭제"],
+  ] as const) {
+    await page.goto(route);
+    await hydrated(page);
+    const opener = page.getByRole("button", { name: label, exact: true });
+    await opener.click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible();
+    await dialog.getByLabel("닫기", { exact: true }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect.soft(opener, label).toBeFocused();
+  }
 });
 
 test("reports start in reading mode and retain editing through a focus check", async ({ page }) => {
@@ -219,6 +253,13 @@ test("initial summary reveals structured corrections on request and saves before
   await expect(page.getByRole("textbox", { name: "사실 내용", exact: true })).toHaveValue(
     "원본에서 다시 확인한 합성 사실입니다.",
   );
+  await page.reload();
+  await expect(page.getByRole("textbox", { name: "사실 내용", exact: true })).toBeVisible();
+  await confirmation.check();
+  const continueButton = page.getByRole("button", { name: "요약 확인하고 계속", exact: true });
+  await continueButton.click();
+  await page.getByRole("dialog").getByRole("button", { name: "취소", exact: true }).click();
+  await expect(continueButton).toBeFocused();
 });
 
 test("product navigation and reading surfaces support keyboard access and enlarged text", async ({
@@ -229,6 +270,11 @@ test("product navigation and reading surfaces support keyboard access and enlarg
   for (const route of [
     "/cases",
     base,
+    `${base}/summary`,
+    `${base}/files`,
+    `${base}/timeline`,
+    `${base}/actions`,
+    `${base}/precedents`,
     `${base}/reports`,
     "/lawyers",
     "/lawyers/example-lawyer-seoul",
@@ -239,16 +285,30 @@ test("product navigation and reading surfaces support keyboard access and enlarg
     expect((await new AxeBuilder({ page }).include("main").analyze()).violations, route).toEqual(
       [],
     );
+    await page.evaluate(() => {
+      // Resize actual text, including pixel-based styles, without multiplying
+      // inherited sizes as descendants are visited.
+      const elements = [...document.querySelectorAll<HTMLElement>("main *")];
+      const sizes = elements.map((element) =>
+        Number.parseFloat(getComputedStyle(element).fontSize),
+      );
+      elements.forEach((element, index) => {
+        element.style.fontSize = `${(sizes[index] ?? 16) * 2}px`;
+      });
+    });
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+      ),
+      route,
+    ).toBe(true);
+    const notice = page.locator(".case-notice");
+    if (await notice.count()) {
+      await notice.scrollIntoViewIfNeeded();
+      await expect(notice).toBeInViewport({ ratio: 1 });
+      await page.evaluate(() => window.scrollTo(0, 0));
+    }
+    if (route === base)
+      await page.screenshot({ path: ".wrangler/ui332/chat-390-text-200.png", fullPage: true });
   }
-  await page.goto(base);
-  await hydrated(page);
-  await page.evaluate(() => {
-    document.documentElement.style.fontSize = "200%";
-  });
-  expect(
-    await page.evaluate(
-      () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
-    ),
-  ).toBe(true);
-  await page.screenshot({ path: ".wrangler/ui332/chat-390-text-200.png", fullPage: true });
 });

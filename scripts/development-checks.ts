@@ -82,6 +82,10 @@ export function browserTargets(files: string[], available: string[]): string[] {
     [/^src\/client\/api\/mock\/file-review\.ts$/, reportFlows],
     [/^playwright\.config\.ts$/, /\.e2e\.ts$/],
     [
+      /^tests\/helpers\/case-ui-capture\.ts$/,
+      /\/(?:workspace|reports-integrated)\.e2e\.ts$/,
+    ],
+    [
       /^tests\/(?:browser\/(?:reports(?:-account-real|-integrated)?|report-real-download|material-report|account-session-recovery)\.config\.ts|helpers\/reports?[^/]*\.ts)$/,
       reportFlows,
     ],
@@ -100,7 +104,7 @@ export function browserTargets(files: string[], available: string[]): string[] {
       /\/(?:auth|session|cases|analysis|settings|reports|legacy-case-recovery)\.e2e\.ts$/,
     ],
     [
-      /src\/(worker\.|layouts\/|styles\/(global|shell)|server\/(router\.|api\/index)|components\/ui\/|client\/api\/(core|types|index|mock\/runtime))/,
+      /src\/(worker\.|layouts\/|styles\/(global|shell|product)|server\/(router\.|api\/index)|components\/ui\/|client\/api\/(core|types|index|mock\/runtime))/,
       /\.e2e\.ts$/,
     ],
     [

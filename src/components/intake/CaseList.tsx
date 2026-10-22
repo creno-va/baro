@@ -153,7 +153,11 @@ export function CaseList() {
                 className="case-list-delete"
                 variant="ghost"
                 aria-label={`${item.title} 사건 삭제`}
-                onClick={() => setDeleting(item)}
+                aria-haspopup="dialog"
+                onClick={(event) => {
+                  event.currentTarget.focus();
+                  setDeleting(item);
+                }}
               >
                 <Trash2 size={16} aria-hidden="true" />
                 사건 삭제

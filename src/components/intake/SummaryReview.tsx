@@ -450,7 +450,10 @@ export function SummaryReview({ caseId }: { caseId: string }) {
                   {summaryTooLong && <p role="alert">요약은 5,000자까지 입력할 수 있어요.</p>}
                 </div>
                 {item.summaryDetails && (
-                  <details className="summary-facts" open={editingActive || undefined}>
+                  <details
+                    className="summary-facts"
+                    open={editingActive || item.summaryDetails.revision > 1 || undefined}
+                  >
                     <summary>
                       사실별로 검토·수정하기 <span>{item.summaryDetails.facts.length}개 사실</span>
                     </summary>
@@ -642,7 +645,11 @@ export function SummaryReview({ caseId }: { caseId: string }) {
                     </label>
                     <Button
                       className="intake-scene-primary"
-                      onClick={() => setConfirming(true)}
+                      aria-haspopup="dialog"
+                      onClick={(event) => {
+                        event.currentTarget.focus();
+                        setConfirming(true);
+                      }}
                       disabled={
                         !canMutate ||
                         busy ||

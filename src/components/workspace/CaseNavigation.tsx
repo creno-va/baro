@@ -10,6 +10,18 @@ const menus = [
   { id: "reports", label: "리포트", path: "/reports" },
 ] as const;
 
+function revealDestination(nav: HTMLElement, link: HTMLElement) {
+  if (nav.scrollWidth <= nav.clientWidth) return;
+  const container = nav.getBoundingClientRect();
+  const destination = link.getBoundingClientRect();
+  // DOM rectangles include CSS zoom while scrollLeft uses layout pixels.
+  const scale = container.width / nav.offsetWidth || 1;
+  if (destination.left < container.left)
+    nav.scrollLeft += (destination.left - container.left) / scale - 4;
+  else if (destination.right > container.right)
+    nav.scrollLeft += (destination.right - container.right) / scale + 4;
+}
+
 export function CaseNavigation({
   caseId,
   title,
@@ -27,9 +39,21 @@ export function CaseNavigation({
   const navigation = useRef<HTMLElement>(null);
   useEffect(() => {
     const nav = navigation.current;
-    const selected = nav?.querySelector<HTMLElement>('[aria-current="page"]');
-    if (nav && selected && nav.scrollWidth > nav.clientWidth)
-      nav.scrollLeft = Math.max(0, selected.offsetLeft - 12);
+    if (!nav) return;
+    const revealCurrent = () => {
+      if (!nav.isConnected) return;
+      const focused = document.activeElement;
+      const selected =
+        focused instanceof HTMLElement && nav.contains(focused)
+          ? focused
+          : nav.querySelector<HTMLElement>('[aria-current="page"]');
+      if (selected) revealDestination(nav, selected);
+    };
+    revealCurrent();
+    const observer = new ResizeObserver(revealCurrent);
+    observer.observe(nav);
+    void document.fonts.ready.then(revealCurrent);
+    return () => observer.disconnect();
   }, []);
   return (
     <div className="case-navigation">
@@ -55,7 +79,18 @@ export function CaseNavigation({
           </details>
         )}
       </header>
-      <nav ref={navigation} className="workspace-tabs" aria-label="사건 메뉴">
+      <nav
+        ref={navigation}
+        className="workspace-tabs"
+        aria-label="사건 메뉴"
+        onFocus={(event) => {
+          const nav = event.currentTarget;
+          const link = event.target;
+          requestAnimationFrame(() => {
+            if (nav.isConnected && document.activeElement === link) revealDestination(nav, link);
+          });
+        }}
+      >
         {menus.map(({ id, label, path }) => (
           <a
             key={id}

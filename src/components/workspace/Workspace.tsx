@@ -805,7 +805,15 @@ export function Workspace({
         fileCount={ready ? view?.files.length : undefined}
         action={
           ready && view ? (
-            <Button variant="ghost" disabled={!!busy} onClick={() => setDeletingCase(true)}>
+            <Button
+              variant="ghost"
+              disabled={!!busy}
+              aria-haspopup="dialog"
+              onClick={(event) => {
+                event.currentTarget.focus();
+                setDeletingCase(true);
+              }}
+            >
               사건 삭제
             </Button>
           ) : undefined
@@ -1465,7 +1473,9 @@ export function Workspace({
                               variant="outline"
                               size="sm"
                               disabled={!!busy}
-                              onClick={() => {
+                              aria-haspopup="dialog"
+                              onClick={(event) => {
+                                event.currentTarget.focus();
                                 void run("file-preview", async () => {
                                   setPreview(file);
                                   setOriginal(null);
@@ -1479,7 +1489,11 @@ export function Workspace({
                               size="sm"
                               {...privateContent}
                               disabled={!!busy || !ready}
-                              onClick={() => setDeleteFile(file)}
+                              aria-haspopup="dialog"
+                              onClick={(event) => {
+                                event.currentTarget.focus();
+                                setDeleteFile(file);
+                              }}
                             >
                               삭제
                             </Button>
@@ -1499,7 +1513,11 @@ export function Workspace({
                     <Button
                       variant="default"
                       disabled={!!busy || readonly}
-                      onClick={() => void startEntry()}
+                      aria-haspopup="dialog"
+                      onClick={(event) => {
+                        event.currentTarget.focus();
+                        void startEntry();
+                      }}
                     >
                       <Plus size={17} />
                       일정 추가
@@ -1530,12 +1548,14 @@ export function Workspace({
                             variant="ghost"
                             size="sm"
                             disabled={!!busy || readonly}
-                            onClick={() =>
+                            aria-haspopup="dialog"
+                            onClick={(event) => {
+                              event.currentTarget.focus();
                               setEntry({
                                 ...item,
                                 expectedRevision: item.revision ?? view.case.revision,
-                              })
-                            }
+                              });
+                            }}
                           >
                             편집
                           </Button>

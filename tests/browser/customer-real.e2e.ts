@@ -382,7 +382,11 @@ for (const viewport of [
           );
         const checkTabs = async () => {
           for (const link of await links.all()) {
+            // The case menu is a bounded horizontal scroller at narrow
+            // effective widths. Keyboard focus must reveal every destination.
+            await link.focus();
             await expect(link).toBeVisible();
+            await expect(link).toBeInViewport({ ratio: 1 });
             const bounds = await link.boundingBox();
             expect(bounds).not.toBeNull();
             expect(bounds?.x).toBeGreaterThanOrEqual(0);
@@ -393,10 +397,11 @@ for (const viewport of [
           for (let index = 1; index < (await links.count()); index++) {
             await page.keyboard.press("Tab");
             await expect(links.nth(index)).toBeFocused();
+            await expect(links.nth(index)).toBeInViewport({ ratio: 1 });
           }
         };
         await checkTabs();
-        expect(await rows()).toBeGreaterThan(1);
+        expect(await rows()).toBe(1);
         await page.evaluate(() => {
           document.documentElement.style.zoom = "1";
         });

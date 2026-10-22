@@ -177,16 +177,17 @@ test("successful OAuth return consumes its selected role once and preserves retu
   await page.goto("/login?returnTo=/settings");
   await page.getByRole("radio", { name: "변호사", exact: true }).check();
   await page.getByRole("button", { name: "Google로 계속하기", exact: true }).click();
-  // Read sessionStorage only after the destination document has finished loading.
-  await page.waitForURL(/\/settings$/, { waitUntil: "load" });
-  await expect(page).toHaveURL(/\/settings$/);
+  // A returnTo=/settings query also ends with /settings. Wait for the actual
+  // destination pathname before reloading so callback navigation can finish.
+  await page.waitForURL((url) => url.pathname === "/settings", { waitUntil: "load" });
+  await expect(page).toHaveURL((url) => url.pathname === "/settings");
   await expect.poll(() => writes).toBe(1);
   expect(new URL(callback, "http://localhost").searchParams.get("returnTo")).toBe("/settings");
   expect(role).toBe("lawyer");
   expect(await page.evaluate(() => sessionStorage.getItem("baro-account-type"))).toBeNull();
   const after = writes;
   await page.reload();
-  await expect(page).toHaveURL(/\/settings$/);
+  await expect(page).toHaveURL((url) => url.pathname === "/settings");
   expect(writes).toBe(after);
 });
 
