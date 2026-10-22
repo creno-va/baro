@@ -379,7 +379,9 @@ test("pending workspace files keep polling after a transient failure and stop on
   await expect(page.getByRole("alert")).toBeVisible();
   await expect.poll(reads, { timeout: 6000 }).toBe(3);
   await expect(page.getByRole("alert")).toHaveCount(0);
-  await expect(page.getByText("합성 처리 자료.txt", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "합성 처리 자료.txt", exact: true }),
+  ).toBeVisible();
   await expect(page.getByText("결과 확인 가능", { exact: true })).toBeVisible();
   // Two polling periods pass without any further workspace read after completion.
   await page.waitForTimeout(3800);
@@ -466,6 +468,7 @@ type InitialGenerationState = {
   polls: number;
   advances: number;
   postflightPending: boolean;
+  sessionCalls: number;
   sessionReads: number;
   releasePostflight?: () => void;
 };
@@ -499,18 +502,26 @@ async function initialGeneration(
     async ({ published, options }) => {
       const corePath = "/src/client/api/core.ts";
       const mockPath = "/src/client/api/mock/cases.ts";
+      const apiPath = "/src/client/api/index.ts";
       const { registerMockHandlers, ApiError } = await import(corePath);
       const { casesMockHandlers } = await import(mockPath);
+      const { api } = await import(apiPath);
       const state: InitialGenerationState = {
         ready: false,
         polls: 0,
         advances: 0,
         postflightPending: false,
+        sessionCalls: 0,
         sessionReads: 0,
       };
       (window as unknown as { initialGeneration: InitialGenerationState }).initialGeneration =
         state;
       let started = false;
+      const session = api.session.get.bind(api.session);
+      api.session.get = async () => {
+        if (started) state.sessionCalls++;
+        return session();
+      };
       registerMockHandlers({
         "cases.advance": (input: unknown) => {
           state.advances++;
@@ -546,7 +557,12 @@ async function initialGenerationState(page: Page) {
   return page.evaluate(() => {
     const state = (window as unknown as { initialGeneration: InitialGenerationState })
       .initialGeneration;
-    return { polls: state.polls, advances: state.advances, sessionReads: state.sessionReads };
+    return {
+      polls: state.polls,
+      advances: state.advances,
+      sessionCalls: state.sessionCalls,
+      sessionReads: state.sessionReads,
+    };
   });
 }
 
@@ -599,7 +615,7 @@ test("initial question generation resumes after a transient polling failure with
   expect((await initialGenerationState(page)).polls).toBeGreaterThan(1);
 });
 
-test("initial question generation recovers when focus supersedes its session check", async ({
+test("initial question generation recovers when focus shares its in-flight session check", async ({
   page,
 }) => {
   await initialGeneration(page, { pausePostflight: true });
@@ -613,16 +629,25 @@ test("initial question generation recovers when focus supersedes its session che
       ),
     )
     .toBe(true);
+  const callsBeforeFocus = (await initialGenerationState(page)).sessionCalls;
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
   await expect
-    .poll(async () => (await initialGenerationState(page)).sessionReads)
-    .toBeGreaterThan(1);
+    .poll(async () => (await initialGenerationState(page)).sessionCalls)
+    .toBeGreaterThan(callsBeforeFocus);
+  // Foreground verification participates, but shares the held lookup rather
+  // than creating another request or revealing questions before completion.
+  expect((await initialGenerationState(page)).sessionReads).toBe(1);
+  await expect(page.getByRole("heading", { name: "이 일은 언제 시작됐나요?" })).toHaveCount(0);
   await page.evaluate(() => {
     (
       window as unknown as { initialGeneration: InitialGenerationState }
     ).initialGeneration.releasePostflight?.();
   });
   await publishInitialQuestions(page);
+  // Completed reads grant no cached permissions to the later polling checks.
+  await expect
+    .poll(async () => (await initialGenerationState(page)).sessionReads)
+    .toBeGreaterThan(1);
 });
 
 test("initial question recovery never reveals the previous account after a session switch", async ({
@@ -639,15 +664,27 @@ test("initial question recovery never reveals the previous account after a sessi
         needsConsent: false,
       }),
     );
-    window.dispatchEvent(new Event("focus"));
+    window.dispatchEvent(
+      new StorageEvent("storage", {
+        key: "baro-api-mock-v1:session",
+        newValue: localStorage.getItem("baro-api-mock-v1:session"),
+      }),
+    );
   });
+  await expect
+    .poll(async () => (await initialGenerationState(page)).sessionReads)
+    .toBeGreaterThan(1);
   await expect(page.getByRole("alert")).toBeVisible();
-  await page.evaluate(() => {
+  await page.evaluate(async () => {
     const state = (window as unknown as { initialGeneration: InitialGenerationState })
       .initialGeneration;
     state.ready = true;
     state.releasePostflight?.();
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+    );
   });
+  await expect(page.getByRole("alert")).toBeVisible();
   await expect(page.getByRole("heading", { name: "이 일은 언제 시작됐나요?" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "질문 시작하기" })).toHaveCount(0);
   await expect(page.getByRole("textbox", { name: "답변", exact: true })).toHaveCount(0);
