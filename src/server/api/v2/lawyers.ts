@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { idempotencyKeySchema, opaqueIdSchema, revisionSchema } from "../../../contracts";
 import type { V2ErrorCode } from "../../../contracts/v2";
+import { EXPECTED_PROFILE_HEADER } from "../../../contracts/v2/self-profile";
 import { readAccountType } from "../../auth/account-type";
 import { lawyerAccess } from "../../auth/roles";
 import { createCaseDataCipher } from "../../crypto";
@@ -338,6 +339,15 @@ export function createLawyersApi(
       const match = c.req.header("if-match");
       if (!match || !/^[1-9]\d*$/.test(match)) throw new LawyerError("STALE_REVISION");
       const key = idempotencyKeySchema.parse(c.req.header("idempotency-key"));
+      const hint = c.req.header(EXPECTED_PROFILE_HEADER);
+      let expectedProfileId: string | undefined;
+      if (hint !== undefined) {
+        try {
+          expectedProfileId = opaqueIdSchema.parse(decodeURIComponent(hint));
+        } catch {
+          throw new LawyerError("NOT_FOUND");
+        }
+      }
       return c.json(
         await (await assets(c.env, a.ownerId)).reserve(
           a.ownerId,
@@ -345,6 +355,7 @@ export function createLawyersApi(
           key,
           await c.req.json(),
           scope,
+          expectedProfileId,
         ),
         201,
       );

@@ -269,6 +269,7 @@ export function createLawyerAssetsService(core: V2Core, deps: LawyerAssetDepende
       key: string,
       input: unknown,
       group: "verification" | "portfolio",
+      expectedProfileId?: string,
     ) {
       const request = v2LawyerAssetUploadRequestSchema.parse(input);
       await allow(ownerId);
@@ -286,6 +287,8 @@ export function createLawyerAssetsService(core: V2Core, deps: LawyerAssetDepende
         )
         .first<{ id: string; revision: number }>();
       if (!p) throw new LawyerError("STALE_REVISION");
+      if (expectedProfileId !== undefined && p.id !== expectedProfileId)
+        throw new LawyerError("NOT_FOUND");
       const requestHash = await digest(
         new TextEncoder().encode(JSON.stringify({ expectedProfileRevision, request })),
       );

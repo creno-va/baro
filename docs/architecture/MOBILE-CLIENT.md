@@ -111,6 +111,8 @@ React 버전을 임의로 바꾸거나 모든 버전을 강제로 hoist하지 �
 
 | `src/client/api/account.ts`, `precedents.ts` | 웹 재인증/marker·mock 조립 adapter | 사용량/삭제/freshness·판례 wire client와 session 취소를 공유 |
 | `src/server/modules/lawyers/self-profile-contract.ts` | 웹도 소비하던 순수 공개 프로필 schema/DTO | `@baro/contracts/v2/self-profile` 정본으로 이동, 기존 서버 경로는 re-export; JPEG byte 처리는 기존 adapter 유지 |
+| `src/client/api/lawyers.ts` | 기존 File/Blob·hash·sessionStorage/mock facade | `createLawyersClient`·`createLawyerAssetsClient`로 프로필/공개 전환·자산 목록/삭제·예약/원본·재시도 공유; immutable source/read/upload/download/storage port 주입 |
+
 
 각 추출 PR은 기존 import를 보존하는 facade와 필요한 기존 회귀를 포함한다. 웹 화면은
 같은 동작을 유지하면서 새 공통 구현을 호출하게 한다. 웹 담당이 같은 파일을 변경 중이면

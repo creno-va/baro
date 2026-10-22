@@ -1,135 +1,47 @@
-import { createDirectoryClient } from "@baro/api-client";
-import { type SelfProfile, selfProfileSchema } from "@baro/contracts/v2/self-profile";
-import { z } from "zod";
 import {
-  type DirectoryPage,
-  type V2PublicLawyer,
-  v2PortfolioAssetSchema,
-  v2PublicLawyerSchema,
-} from "../../contracts/v2";
-import {
-  apiMode,
-  apiRequest,
-  ApiError as LawyerApiError,
-  responseError,
-  request as sharedRequest,
-} from "./core";
+  createLawyersClient,
+  createLawyerAssetsClient as createSharedLawyerAssetsClient,
+  type DomainRequest,
+  type LawyerAssetView,
+  type LawyerView,
+  validateLawyerUpload,
+} from "@baro/api-client";
+import { createSessionBoundClient } from "@baro/client-core";
+import type { DirectoryPage } from "../../contracts/v2";
+import { browserSessionScope } from "./context";
+import { apiMode, apiRequest, responseError, request as sharedRequest } from "./core";
 
+export type { LawyerAssetView, LawyerView } from "@baro/api-client";
+export { fromVerified, lawyerErrorMessage, rotateLawyers } from "@baro/api-client";
 export { ApiError as LawyerApiError } from "./core";
-
-export type LawyerView = Omit<SelfProfile, "region" | "practiceAreas"> & {
-  region: string;
-  practiceAreas: string[];
-};
 export type LawyerFilters = { region?: string; practiceArea?: string; query?: string };
-export function lawyerErrorMessage(error: unknown) {
-  if (error instanceof LawyerApiError && error.code === "CONFLICT")
-    return "다른 화면에서 변경됐어요. 최신 프로필을 불러온 후 다시 저장해 주세요.";
-  return error instanceof LawyerApiError
-    ? error.message
-    : "요청을 처리하지 못했어요. 잠시 후 다시 시도해 주세요.";
+async function checkedAssetRequest(path: string, init: RequestInit = {}) {
+  const response = await apiRequest(path, init);
+  if (!response.ok) throw await responseError(response);
+  return response;
 }
-export function rotateLawyers(items: LawyerView[]) {
-  const sorted = [...items].sort((a, b) => a.id.localeCompare(b.id));
-  if (!sorted.length) return sorted;
-  const day = Math.floor((Date.now() + 9 * 60 * 60 * 1000) / 86400000);
-  const offset = day % sorted.length;
-  return [...sorted.slice(offset), ...sorted.slice(0, offset)];
-}
-async function request(
-  path: string,
-  method = "GET",
-  body?: unknown,
-  signal?: AbortSignal,
-): Promise<unknown> {
-  return sharedRequest("lawyers.http", undefined, {
-    path,
-    method,
-    ...(signal ? { signal } : {}),
-    ...(body === undefined ? {} : { body }),
-  });
-}
-export function fromVerified(p: V2PublicLawyer): LawyerView {
-  return {
-    id: p.id,
-    revision: p.approvedRevision,
-    name: p.content.name,
-    introduction: p.content.introduction,
-    officeName: p.content.office.name,
-    address: [p.content.office.address, p.content.office.addressDetail].filter(Boolean).join(" "),
-    region: p.content.office.region,
-    practiceAreas: p.content.legalFields,
-    phone: p.content.contact.phone ?? "",
-    email: p.content.contact.email ?? "",
-    website: p.content.contact.consultationUrl ?? "",
-    photoUrl: `/api/v2/lawyers/${encodeURIComponent(p.id)}/assets/${encodeURIComponent(p.content.photoAssetId)}`,
-    portfolio: p.content.portfolio.map((i) => ({
-      id: i.id,
-      title: i.title,
-      url:
-        i.kind === "text"
-          ? null
-          : `/api/v2/lawyers/${encodeURIComponent(p.id)}/assets/${encodeURIComponent(i.assetId)}`,
-      ...(i.kind === "text" ? { text: i.text } : {}),
-    })),
-    published: true,
-    verificationStatus: "verified",
+function jsonRequest(send: typeof checkedAssetRequest): DomainRequest {
+  return async <T>(path: string, init = {}) => {
+    const options: import("@baro/api-client").DomainRequestInit = init;
+    const response = await send(path, {
+      cache: "no-store",
+      method: options.method ?? "GET",
+      headers: {
+        ...(options.body === undefined ? {} : { "content-type": "application/json" }),
+        ...options.headers,
+      },
+      ...(options.signal ? { signal: options.signal } : {}),
+      ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
+    });
+    return (response.status === 204 ? undefined : await response.json()) as T;
   };
 }
-const publicDirectory = createDirectoryClient((options) =>
-  sharedRequest("lawyers.http", undefined, options),
+const real = createSessionBoundClient(browserSessionScope, () =>
+  createLawyersClient({
+    scope: browserSessionScope,
+    request: jsonRequest(checkedAssetRequest),
+  }),
 );
-
-const real = {
-  async listPage(
-    filters: LawyerFilters = {},
-    cursor?: string,
-    signal?: AbortSignal,
-  ): Promise<DirectoryPage> {
-    return publicDirectory.listPage(filters, cursor, signal);
-  },
-  async list(filters: LawyerFilters = {}, signal?: AbortSignal) {
-    return (await real.listPage(filters, undefined, signal)).items;
-  },
-  async get(id: string): Promise<LawyerView> {
-    try {
-      return selfProfileSchema.parse(
-        await request(`/api/v2/lawyers/self-service/${encodeURIComponent(id)}`),
-      );
-    } catch (error) {
-      if (!(error instanceof LawyerApiError) || error.code !== "NOT_FOUND") throw error;
-      return fromVerified(
-        v2PublicLawyerSchema.parse(await request(`/api/v2/lawyers/${encodeURIComponent(id)}`)),
-      );
-    }
-  },
-  async getMine(): Promise<LawyerView> {
-    const profile = selfProfileSchema.parse(await request("/api/v2/me/lawyer/self-profile"));
-    return profile;
-  },
-  async saveMine(profile: LawyerView): Promise<LawyerView> {
-    const saved = selfProfileSchema.parse(
-      await request("/api/v2/me/lawyer/self-profile", "PUT", { profile }),
-    );
-    return saved;
-  },
-  async publishMine(
-    published: boolean,
-    current?: Pick<LawyerView, "id" | "revision">,
-  ): Promise<LawyerView> {
-    const mine = current ?? (await real.getMine());
-    const expectedRevision = mine.revision;
-    const profile = selfProfileSchema.parse(
-      await request("/api/v2/me/lawyer/self-profile/publication", "POST", {
-        published,
-        expectedRevision,
-        profileId: mine.id,
-        consent: published,
-      }),
-    );
-    return profile;
-  },
-};
 async function adapter() {
   if (apiMode === "mock") {
     if (import.meta.env.PUBLIC_API_MODE === "mock") await import("./mock/lawyers");
@@ -184,228 +96,75 @@ export const lawyers = {
     return (await adapter()).publishMine(published, current);
   },
 };
-export type LawyerAssetView = {
-  id: string;
-  revision: number;
-  status: string;
-  purpose?: string;
-  kind: "image" | "pdf";
-};
-const assetEnvelope = z.object({
-  assetId: z.string(),
-  revision: z.number(),
-  value: z.union([
-    v2PortfolioAssetSchema,
-    z.object({ request: z.object({ mediaType: z.string() }) }),
-  ]),
-});
-function assetView(raw: unknown): LawyerAssetView {
-  const row = assetEnvelope.parse(raw);
-  return {
-    id: row.assetId,
-    revision: row.revision,
-    status: "status" in row.value ? row.value.status : "reserved",
-    kind:
-      "kind" in row.value
-        ? row.value.kind
-        : row.value.request.mediaType === "application/pdf"
-          ? "pdf"
-          : "image",
-  };
+async function hashBytes(bytes: Uint8Array<ArrayBuffer>) {
+  return Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
 }
-async function checkedAssetRequest(path: string, init: RequestInit = {}) {
-  const response = await apiRequest(path, init);
-  if (!response.ok) throw await responseError(response);
-  return response;
+function assetClient(send = checkedAssetRequest) {
+  return createSharedLawyerAssetsClient<File, Blob>({
+    scope: browserSessionScope,
+    request: jsonRequest(send),
+    newKey: () => crypto.randomUUID(),
+    fingerprintText: (text) => hashBytes(new TextEncoder().encode(text)),
+    open: async (file) => ({
+      fingerprint: async () => hashBytes(new Uint8Array(await file.arrayBuffer())),
+      body: async () => ({ body: file, byteLength: file.size }),
+      close: () => {},
+    }),
+    uploadContent: async (path, input) =>
+      (
+        await send(path, {
+          method: "PUT",
+          signal: input.signal,
+          headers: {
+            "content-type": "application/octet-stream",
+            "if-match": String(input.revision),
+          },
+          body: input.body,
+        })
+      ).json(),
+    download: async (path, init) => ({
+      value: await (await send(path, { ...(init.signal ? { signal: init.signal } : {}) })).blob(),
+      discard: () => {},
+    }),
+    storage: {
+      getItem: (key, legacy) =>
+        sessionStorage.getItem(key) ?? (legacy ? sessionStorage.getItem(legacy) : null),
+      setItem: (key, value) => sessionStorage.setItem(key, value),
+      removeItem: (key, legacy) => {
+        sessionStorage.removeItem(key);
+        if (legacy) sessionStorage.removeItem(legacy);
+      },
+    },
+  });
 }
-const uploadAttemptSchema = z.object({
-  key: z.string().uuid(),
-  expectedRevision: z.number().int().positive(),
-  assetId: z.string().optional(),
-  assetRevision: z.number().int().positive().optional(),
-});
-type UploadAttempt = z.infer<typeof uploadAttemptSchema>;
-const uploadPrefix = "baro-lawyer-upload-v1:";
-
-/** Each client retains only uncertain uploads; session storage survives a page reload. */
+/** Existing File/Blob/sessionStorage facade. Common protocol receives platform ports only. */
 export function createLawyerUploadClient(send = checkedAssetRequest) {
-  const attempts = new Map<string, UploadAttempt>();
-  const active = new Map<string, Promise<LawyerAssetView>>();
-  function remember(identity: string, attempt: UploadAttempt | null) {
-    if (attempt) attempts.set(identity, attempt);
-    else attempts.delete(identity);
-    try {
-      if (attempt) sessionStorage.setItem(uploadPrefix + identity, JSON.stringify(attempt));
-      else sessionStorage.removeItem(uploadPrefix + identity);
-    } catch {
-      /* Storage can be disabled; same-page recovery still works. */
-    }
-  }
-  function recalled(identity: string) {
-    const cached = attempts.get(identity);
-    if (cached) return cached;
-    try {
-      const stored = sessionStorage.getItem(uploadPrefix + identity);
-      return stored ? uploadAttemptSchema.parse(JSON.parse(stored)) : undefined;
-    } catch {
-      return undefined;
-    }
-  }
+  const client = createSessionBoundClient(browserSessionScope, () => assetClient(send));
   return {
     async upload(
       profileId: string,
       file: File,
       purpose: "profile_photo" | "portfolio",
     ): Promise<LawyerAssetView> {
-      if (
-        !["image/jpeg", "image/png", "image/webp", "application/pdf"].includes(file.type) ||
-        !file.size ||
-        file.size > 100_000_000 ||
-        (purpose === "profile_photo" && file.type === "application/pdf")
-      )
-        throw new LawyerApiError(
-          "VALIDATION_ERROR",
-          "사진은 JPEG·PNG·WebP, 자료는 이미지·PDF 100MB 이하로 선택해 주세요.",
-        );
+      validateLawyerUpload(file, purpose);
       if (apiMode === "mock") {
         if (import.meta.env.PUBLIC_API_MODE === "mock") await import("./mock/lawyers");
         return sharedRequest("lawyers.uploadAsset", { profileId, file, purpose });
       }
-      const name = file.name.trim();
-      const hash = Array.from(
-        new Uint8Array(await crypto.subtle.digest("SHA-256", await file.arrayBuffer())),
-      )
-        .map((byte) => byte.toString(16).padStart(2, "0"))
-        .join("");
-      const identity = JSON.stringify([profileId, purpose, name, file.type, file.size, hash]);
-      const pending = active.get(identity);
-      if (pending) return pending;
-      const run = async () => {
-        const mine = z
-          .object({ profileId: z.string(), revision: z.number() })
-          .parse(await (await send("/api/v2/me/lawyer/profile")).json());
-        if (mine.profileId !== profileId)
-          throw new LawyerApiError("NOT_FOUND", "본인 프로필만 변경할 수 있어요.");
-        const attempt = recalled(identity) ?? {
-          key: crypto.randomUUID(),
-          expectedRevision: mine.revision,
-        };
-        remember(identity, attempt);
-        let recovered: LawyerAssetView | undefined;
-        if (attempt.assetId) {
-          try {
-            const value = assetEnvelope.shape.value.parse(
-              await (
-                await send(
-                  `/api/v2/me/lawyer/portfolio-assets/${encodeURIComponent(attempt.assetId)}`,
-                )
-              ).json(),
-            );
-            recovered = assetView({
-              assetId: attempt.assetId,
-              revision: "revision" in value ? value.revision : attempt.assetRevision,
-              value,
-            });
-          } catch (error) {
-            if (error instanceof LawyerApiError && error.code === "NOT_FOUND")
-              remember(identity, null);
-            throw error;
-          }
-        }
-        let reserved = recovered;
-        if (!reserved) {
-          try {
-            reserved = assetView(
-              await (
-                await send("/api/v2/me/lawyer/portfolio-assets", {
-                  method: "POST",
-                  headers: {
-                    "content-type": "application/json",
-                    "if-match": String(attempt.expectedRevision),
-                    "idempotency-key": attempt.key,
-                  },
-                  body: JSON.stringify({
-                    purpose,
-                    name,
-                    byteLength: file.size,
-                    mediaType: file.type,
-                  }),
-                })
-              ).json(),
-            );
-          } catch (error) {
-            // A definitive reservation conflict cannot be retried with its stale
-            // revision. Unknown outcomes keep the key to recover a committed upload.
-            if (error instanceof LawyerApiError && error.code === "CONFLICT")
-              remember(identity, null);
-            throw error;
-          }
-        }
-        if (reserved.status === "deleting")
-          throw new LawyerApiError("NOT_FOUND", "자료가 삭제 중이에요. 자료 상태를 확인해 주세요.");
-        attempt.assetId = reserved.id;
-        attempt.assetRevision = reserved.revision;
-        remember(identity, attempt);
-        if (reserved.status !== "reserved") {
-          remember(identity, null);
-          return { ...reserved, purpose };
-        }
-        const result = {
-          ...assetView(
-            await (
-              await send(`/api/v2/me/lawyer/assets/${encodeURIComponent(reserved.id)}/content`, {
-                method: "PUT",
-                headers: {
-                  "content-type": "application/octet-stream",
-                  "if-match": String(reserved.revision),
-                },
-                body: file,
-              })
-            ).json(),
-          ),
-          purpose,
-        };
-        remember(identity, null);
-        return result;
-      };
-      const task = run().finally(() => active.delete(identity));
-      active.set(identity, task);
-      return task;
+      return client.upload(profileId, file, purpose);
     },
   };
 }
-
+const assets = createSessionBoundClient(browserSessionScope, () => assetClient());
 export const lawyerAssets = {
   async list(): Promise<LawyerAssetView[]> {
     if (apiMode === "mock") {
       if (import.meta.env.PUBLIC_API_MODE === "mock") await import("./mock/lawyers");
       return sharedRequest("lawyers.assets");
     }
-    const items: LawyerAssetView[] = [];
-    let cursor: string | null = null;
-    do {
-      const params = new URLSearchParams();
-      if (cursor) params.set("cursor", cursor);
-      const response = await checkedAssetRequest(
-        `/api/v2/me/lawyer/self-profile/assets${params.size ? `?${params}` : ""}`,
-      );
-      const page = z
-        .object({
-          items: z.array(
-            z.object({
-              id: z.string(),
-              revision: z.number(),
-              status: z.string(),
-              purpose: z.string(),
-            }),
-          ),
-          nextCursor: z.string().nullable(),
-        })
-        .parse(await response.json());
-      items.push(...page.items.map((item) => ({ ...item, kind: "image" as const })));
-      cursor = page.nextCursor;
-    } while (cursor);
-    return items;
+    return assets.list();
   },
   upload: createLawyerUploadClient().upload,
   async remove(assetId: string, revision: number): Promise<void> {
@@ -414,11 +173,7 @@ export const lawyerAssets = {
       await sharedRequest("lawyers.removeAsset", { assetId, revision });
       return;
     }
-    await checkedAssetRequest(`/api/v2/me/lawyer/portfolio-assets/${encodeURIComponent(assetId)}`, {
-      method: "DELETE",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ expectedRevision: revision }),
-    });
+    return assets.remove(assetId, revision);
   },
   async blob(profileId: string, assetId: string, privateRead = false): Promise<Blob> {
     if (apiMode === "mock") {
@@ -432,11 +187,7 @@ export const lawyerAssets = {
         type: data.type,
       });
     }
-    const path = privateRead
-      ? `/api/v2/me/lawyer/self-profile/assets/${encodeURIComponent(assetId)}/content`
-      : `/api/v2/lawyers/self-service/${encodeURIComponent(profileId)}/assets/${encodeURIComponent(assetId)}`;
-    return (await checkedAssetRequest(path)).blob();
+    return assets.blob(profileId, assetId, privateRead);
   },
 };
-// Domain facade; A's shared index re-exports this instance without a second UI implementation.
 export const api = { lawyers };

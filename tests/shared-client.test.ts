@@ -10,6 +10,33 @@ import { createSessionScope } from "@baro/client-core";
 import { CURRENT_POLICY_VERSIONS } from "@baro/contracts/consent";
 import { ApiError as WebApiError } from "../src/client/api/errors";
 
+test("domain revision headers cannot replace the captured operation key or expected owner", async () => {
+  const input = {
+    "if-match": "7",
+    "idempotency-key": "stale-key",
+    "x-baro-expected-owner": "foreign",
+  };
+  const request = createJsonRequester({
+    newKey: () => "unused",
+    transport: async (_path, init) => {
+      const headers = new Headers(init.headers);
+      expect(headers.get("if-match")).toBe("7");
+      expect(headers.get("idempotency-key")).toBe("captured-key");
+      expect(headers.get("x-baro-expected-owner")).toBe("actual-owner");
+      return Response.json({ accepted: true });
+    },
+  });
+  await request({
+    path: "/api/v2/me/lawyer/portfolio-assets",
+    method: "POST",
+    headers: input,
+    key: "captured-key",
+    expectedOwner: "actual-owner",
+    body: {},
+  });
+  expect(input["x-baro-expected-owner"]).toBe("foreign");
+});
+
 test("web and mobile share safe errors and preserve the exact mutation body/key without automatic replay", async () => {
   const calls: { path: string; init: RequestInit }[] = [];
   let fail = true;

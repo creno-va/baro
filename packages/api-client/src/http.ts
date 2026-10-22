@@ -7,6 +7,7 @@ export interface JsonRequestOptions {
   path: string;
   method?: string;
   body?: unknown;
+  headers?: Record<string, string>;
   key?: string;
   expectedOwner?: string;
   signal?: AbortSignal;
@@ -65,7 +66,7 @@ export function createJsonRequester(dependencies: {
     } catch {
       throw new ApiError("VALIDATION_ERROR", "전송할 내용을 확인해 주세요.");
     }
-    const headers: Record<string, string> = {};
+    const headers: Record<string, string> = { ...options.headers };
     if (options.expectedOwner !== undefined) {
       if (!options.expectedOwner || options.expectedOwner.length > 128)
         throw new ApiError("VALIDATION_ERROR", "이용 계정을 다시 확인해 주세요.");
