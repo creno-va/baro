@@ -390,6 +390,16 @@ test("pending workspace files keep polling after a transient failure and stop on
 
 async function capture(page: Page, name: string) {
   const { default: AxeBuilder } = await import("@axe-core/playwright");
+  // Check settled colors after scene, view-transition and status entrances.
+  // Loading dots keep animating; they must not block the accessibility audit.
+  await page.evaluate(() =>
+    Promise.all(
+      document
+        .getAnimations()
+        .filter((animation) => animation.effect?.getTiming().iterations !== Infinity)
+        .map((animation) => animation.finished.catch(() => undefined)),
+    ),
+  );
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await page.evaluate(() => {
     if (document.activeElement instanceof HTMLElement) document.activeElement.blur();

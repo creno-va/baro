@@ -8,6 +8,15 @@ export async function captureCaseViewports(page: Page, name: string, selector = 
     { name: "mobile", width: 390, height: 844 },
   ]) {
     await page.setViewportSize(viewport);
+    // Audit the settled appearance, including scene and cross-page entrances.
+    await page.evaluate(() =>
+      Promise.all(
+        document
+          .getAnimations()
+          .filter((animation) => animation.effect?.getTiming().iterations !== Infinity)
+          .map((animation) => animation.finished.catch(() => undefined)),
+      ),
+    );
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,
     );

@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { expect, type Page, test } from "@playwright/test";
 import { CURRENT_POLICY_VERSIONS } from "../../src/contracts/consent";
+import { openReportEditor } from "../helpers/report-controls";
 
 async function trackSessionReads(page: Page) {
   await page.evaluate(async () => {
@@ -176,16 +177,17 @@ test("successful OAuth return consumes its selected role once and preserves retu
   await page.goto("/login?returnTo=/settings");
   await page.getByRole("radio", { name: "변호사", exact: true }).check();
   await page.getByRole("button", { name: "Google로 계속하기", exact: true }).click();
-  // Read sessionStorage only after the destination document has finished loading.
-  await page.waitForURL(/\/settings$/, { waitUntil: "load" });
-  await expect(page).toHaveURL(/\/settings$/);
+  // A returnTo=/settings query also ends with /settings. Wait for the actual
+  // destination pathname before reloading so callback navigation can finish.
+  await page.waitForURL((url) => url.pathname === "/settings", { waitUntil: "load" });
+  await expect(page).toHaveURL((url) => url.pathname === "/settings");
   await expect.poll(() => writes).toBe(1);
   expect(new URL(callback, "http://localhost").searchParams.get("returnTo")).toBe("/settings");
   expect(role).toBe("lawyer");
   expect(await page.evaluate(() => sessionStorage.getItem("baro-account-type"))).toBeNull();
   const after = writes;
   await page.reload();
-  await expect(page).toHaveURL(/\/settings$/);
+  await expect(page).toHaveURL((url) => url.pathname === "/settings");
   expect(writes).toBe(after);
 });
 
@@ -237,6 +239,7 @@ test("a temporary session lookup outage preserves report edits and explicit sign
     return route.fulfill({ status: 404, json: {} });
   });
   await page.goto("/cases/synthetic-report-outage/reports");
+  await openReportEditor(page);
   const editor = page.getByRole("textbox", { name: "리포트 내용 편집" });
   await expect(editor).toHaveValue("Saved report");
   await editor.fill("Unsaved report correction");
@@ -372,6 +375,7 @@ test("a confirmed account change clears the report draft and explains why", asyn
     return route.fulfill({ status: 404, json: {} });
   });
   await page.goto("/cases/synthetic-report-switch/reports");
+  await openReportEditor(page);
   const editor = page.getByRole("textbox", { name: "리포트 내용 편집" });
   await expect(editor).toHaveValue("Saved report");
   await editor.fill("Unsaved report correction");
@@ -446,6 +450,7 @@ for (const lateResponse of ["failure", "signed-out"] as const) {
     });
     try {
       await page.goto("/cases/synthetic-report-late/reports");
+      await openReportEditor(page);
       const editor = page.getByRole("textbox", { name: "리포트 내용 편집" });
       await expect(editor).toHaveValue("Saved report");
       await editor.fill("Unsaved current report correction");

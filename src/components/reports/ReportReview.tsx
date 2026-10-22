@@ -26,6 +26,7 @@ export function ReportReview({ caseId }: { caseId: string }) {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [preview, setPreview] = useState(false);
+  const [editing, setEditing] = useState(false);
   const [savedPreview, setSavedPreview] = useState("");
   const [regenerate, setRegenerate] = useState(false);
   const [reloadConfirm, setReloadConfirm] = useState(false);
@@ -59,6 +60,7 @@ export function ReportReview({ caseId }: { caseId: string }) {
     setExportExhausted(false);
     setFiles([]);
     setContent("");
+    setEditing(false);
     setMask(false);
     setExcluded([]);
     setIncludedPhotos([]);
@@ -359,6 +361,17 @@ export function ReportReview({ caseId }: { caseId: string }) {
           <h2>전달할 리포트를 준비해요</h2>
           <p>내용을 확인하고, 필요한 자료만 골라 다운로드하세요.</p>
         </header>
+        <nav className="report-steps" aria-label="리포트 준비 순서">
+          <a href="#report-editor-heading">
+            <span>1</span>내용 확인
+          </a>
+          <a href="#report-options">
+            <span>2</span>개인정보·자료
+          </a>
+          <a href="#report-export-heading">
+            <span>3</span>다운로드
+          </a>
+        </nav>
         {(busy || accessChecking) && (
           <p role="status" className="report-progress">
             {progressText}
@@ -436,11 +449,14 @@ export function ReportReview({ caseId }: { caseId: string }) {
                     </time>
                   </p>
                   {report.basis && (
-                    <p className="report-meta">
-                      생성 기준: 요약 {report.basis.summaryRevision} · 사건{" "}
-                      {report.basis.workspaceRevision} ·{" "}
-                      {new Date(report.basis.generatedAt).toLocaleString("ko-KR")}
-                    </p>
+                    <details className="report-basis">
+                      <summary>생성 기준 보기</summary>
+                      <p className="report-meta">
+                        생성 기준: 요약 {report.basis.summaryRevision} · 사건{" "}
+                        {report.basis.workspaceRevision} ·{" "}
+                        {new Date(report.basis.generatedAt).toLocaleString("ko-KR")}
+                      </p>
+                    </details>
                   )}
                 </div>
                 <button
@@ -461,26 +477,47 @@ export function ReportReview({ caseId }: { caseId: string }) {
                   다운로드할 수 있어요.
                 </p>
               )}
-              <div className="report-paper">
-                <label htmlFor="report-content" className="sr-only">
-                  리포트 내용 편집
-                </label>
-                <textarea
-                  id="report-content"
-                  rows={12}
-                  maxLength={30000}
-                  value={content}
-                  disabled={Boolean(busy) || needsConsent}
-                  onChange={(e) => {
-                    setContent(e.target.value);
-                    setReviewed(false);
-                  }}
-                  aria-describedby="report-content-count"
-                />
-                <p className="report-editor-count" id="report-content-count">
-                  {content.length.toLocaleString()} / 30,000자
-                  {dirty ? " · 저장하지 않은 변경" : " · 저장됨"}
-                </p>
+              <section
+                className="report-read-content"
+                aria-label="리포트 검토 본문"
+                hidden={editing}
+              >
+                {content}
+              </section>
+              <div className="report-edit-panel">
+                <button
+                  type="button"
+                  className="report-edit-toggle"
+                  aria-expanded={editing}
+                  aria-controls="report-edit-fields"
+                  onClick={() => setEditing((value) => !value)}
+                >
+                  {editing ? "수정 닫기" : "리포트 내용 수정하기"}
+                  <ChevronDown size={16} aria-hidden="true" />
+                </button>
+                <div id="report-edit-fields" hidden={!editing}>
+                  <div className="report-paper">
+                    <label htmlFor="report-content" className="sr-only">
+                      리포트 내용 편집
+                    </label>
+                    <textarea
+                      id="report-content"
+                      rows={12}
+                      maxLength={30000}
+                      value={content}
+                      disabled={Boolean(busy) || needsConsent}
+                      onChange={(e) => {
+                        setContent(e.target.value);
+                        setReviewed(false);
+                      }}
+                      aria-describedby="report-content-count"
+                    />
+                    <p className="report-editor-count" id="report-content-count">
+                      {content.length.toLocaleString()} / 30,000자
+                      {dirty ? " · 저장하지 않은 변경" : " · 저장됨"}
+                    </p>
+                  </div>
+                </div>
               </div>
               <div className="report-editor-tools">
                 <button
@@ -524,7 +561,7 @@ export function ReportReview({ caseId }: { caseId: string }) {
                 </button>
               </div>
             </section>
-            <details className="report-options">
+            <details className="report-options" id="report-options">
               <summary>
                 <Settings2 size={19} aria-hidden="true" />
                 <span>

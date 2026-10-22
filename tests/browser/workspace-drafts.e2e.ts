@@ -117,10 +117,10 @@ test("date precision and long valid timeline titles remain editable", async ({ p
   await title.press("Backspace");
   await expect(title).toHaveValue("가".repeat(399));
   expect(await title.evaluate((input: HTMLInputElement) => input.validity.tooLong)).toBe(false);
-  await page.getByLabel("날짜 정밀도").selectOption("day");
+  await page.getByLabel("날짜를 얼마나 기억하시나요?").selectOption("day");
   await expect(page.getByLabel("날짜 (모르면 비워 두세요)")).toHaveValue("");
   await page.getByLabel("날짜 (모르면 비워 두세요)").fill("2026-10-06");
-  await page.getByLabel("날짜 정밀도").selectOption("month");
+  await page.getByLabel("날짜를 얼마나 기억하시나요?").selectOption("month");
   await expect(page.getByLabel("날짜 (모르면 비워 두세요)")).toHaveValue("2026-10");
   await title.fill("😀".repeat(1999));
   await page.getByLabel("상세 내용").fill("내용");
