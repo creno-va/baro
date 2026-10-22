@@ -14,6 +14,22 @@ import { CaseMaterials } from "../workspace/CaseMaterials";
 import { BackToCases, ErrorPanel } from "./common";
 import { useCustomerAccess } from "./useCustomerAccess";
 
+type ConfirmationReturn = {
+  caseId: string;
+  workspaceRevision: number;
+  summaryRevision: number | null;
+  href: string;
+};
+
+function matchesConfirmation(item: CaseView, intent: ConfirmationReturn) {
+  return (
+    item.id === intent.caseId &&
+    item.stage === "active" &&
+    item.revision === intent.workspaceRevision &&
+    (item.summaryDetails?.revision ?? null) === intent.summaryRevision
+  );
+}
+
 export function SummaryReview({ caseId }: { caseId: string }) {
   const [item, setItem] = useState<CaseView | null>(null);
   const [activeEditor, setActiveEditor] = useState(false);
@@ -42,6 +58,18 @@ export function SummaryReview({ caseId }: { caseId: string }) {
   const [confirming, setConfirming] = useState(false);
   const [recovering, setRecovering] = useState(false);
   const acknowledged = useRef(false);
+  const confirmationReturn = useRef<ConfirmationReturn | null>(null);
+  const currentCaseId = useRef(caseId);
+  if (currentCaseId.current !== caseId) {
+    currentCaseId.current = caseId;
+    confirmationReturn.current = null;
+  }
+  useEffect(
+    () => () => {
+      confirmationReturn.current = null;
+    },
+    [],
+  );
   const draftDirty = useRef(false);
   const pending = useRef(false);
   const request = useRef(0);
@@ -54,6 +82,7 @@ export function SummaryReview({ caseId }: { caseId: string }) {
     () => {
       ++request.current;
       acknowledged.current = false;
+      confirmationReturn.current = null;
       setRecovering(false);
       setItem(null);
       setActiveEditor(false);
@@ -96,6 +125,7 @@ export function SummaryReview({ caseId }: { caseId: string }) {
       // A background refresh must not advance the revision of a lost-response
       // retry. Explicit conflict recovery may replace that original request.
       if (pending.current || (failedOperation.current && !replaceDraft)) return;
+      if (replaceDraft) confirmationReturn.current = null;
       const serial = ++request.current;
       let epoch = ticket();
       setLoading(true);
@@ -113,6 +143,15 @@ export function SummaryReview({ caseId }: { caseId: string }) {
         // An earlier focus read must not replace a newer read or completed write.
         if (serial !== request.current) return;
         if (!(await verify()) || !current(epoch) || serial !== request.current) return;
+        if (currentCaseId.current !== caseId) return;
+        const intent = confirmationReturn.current;
+        confirmationReturn.current = null;
+        if (intent && matchesConfirmation(next, intent)) {
+          acknowledged.current = false;
+          setRecovering(false);
+          window.location.assign(intent.href);
+          return;
+        }
         if (
           !replaceDraft &&
           !acknowledged.current &&
@@ -174,6 +213,7 @@ export function SummaryReview({ caseId }: { caseId: string }) {
   }, [dirty]);
   async function save() {
     if (!item || pending.current || !summary.trim() || summaryTooLong || factTooLong) return;
+    confirmationReturn.current = null;
     ++request.current;
     setLoading(false);
     const epoch = ticket();
@@ -246,6 +286,15 @@ export function SummaryReview({ caseId }: { caseId: string }) {
   }
   async function confirm(explicitActiveApply = false) {
     if (!item || (!checked && !explicitActiveApply) || dirty || pending.current) return;
+    confirmationReturn.current = null;
+    // Confirm's CAS commits exactly one workspace revision. Keep the explicit
+    // return intent separate from ordinary saves and active-summary editing.
+    const intent: ConfirmationReturn = {
+      caseId,
+      workspaceRevision: item.revision + 1,
+      summaryRevision: item.summaryDetails?.revision ?? null,
+      href: returnHref,
+    };
     ++request.current;
     setLoading(false);
     const epoch = ticket();
@@ -256,15 +305,24 @@ export function SummaryReview({ caseId }: { caseId: string }) {
       if (!(await verify(false, true)) || !current(epoch)) return;
       failedOperation.current = "confirm";
       const next = await api.cases.confirmSummary(caseId, { expectedRevision: item.revision });
+      if (!alive(epoch) || currentCaseId.current !== caseId) return;
       acknowledged.current = true;
+      confirmationReturn.current = matchesConfirmation(next, intent) ? intent : null;
       failedOperation.current = null;
       setRecovering(true);
-      if (!(await verify()) || !current(epoch)) return;
+      if (!(await verify()) || !current(epoch) || currentCaseId.current !== caseId) return;
       acknowledged.current = false;
       setRecovering(false);
       failedOperation.current = null;
+      if (!confirmationReturn.current) {
+        setError(
+          new ApiError("CONFLICT", "다른 화면에서 요약이 바뀌었어요. 최신 내용을 확인해 주세요."),
+        );
+        return;
+      }
+      confirmationReturn.current = null;
       setItem(next);
-      window.location.assign(returnHref);
+      window.location.assign(intent.href);
     } catch (cause) {
       if (alive(epoch)) {
         if (["UNAUTHENTICATED", "NOT_FOUND"].includes((cause as { code?: string }).code ?? ""))
