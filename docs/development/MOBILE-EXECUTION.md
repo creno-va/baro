@@ -216,8 +216,8 @@ workspace·자료·리포트·나머지 domain을 순차 추출한다. 첫 단�
   앱·공개 계약 실행 소스는 native 검사 SHA와 동일했다. #330은 M1 범위로 종료했다.
 - [full39775420895](https://github.com/creno-va/baro/actions/runs/39775420895)는 브라우저
   161개 통과 뒤 production workerd 시작 시 schema chunk 초기화 순서 오류로 실패했다.
-  M2에서 files가 workspace job 객체의 초기화에 의존하지 않도록 같은 phase enum을
-  common 정본으로 추출했다. wire 값은 보존한다. `validate:build`에 실제 로컬 workerd
+  검증된 선행 PR338(main `6a60587`)의 같은 phase enum common 추출을 통합해 files의
+  workspace/job 초기화 의존을 제거했다. wire 값은 보존한다. M2는 `validate:build`에 실제 로컬 workerd
   시작/익명 로그인 HTML 검사를 추가해 dry-run만 통과하는 회귀를 잡는다.
 - 브랜치 `codex/335-shared-client-foundation`, 기준 main `6e6fd9c`.
   공통 DTO/progress·안전한 오류·주입 HTTP·session/consent·directory를 추출하고 기존 웹

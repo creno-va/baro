@@ -1,6 +1,5 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, type Page, test } from "@playwright/test";
-import { syntheticConsentStatus } from "../fixtures/consent-status";
 
 async function openInteractiveFixture(
   page: Page,
@@ -47,7 +46,7 @@ test("application, login and case screens share local brand and remain usable at
     route.fulfill({ status: 404, json: { error: { code: "NOT_FOUND" } } }),
   );
   await page.route("**/api/me/consent", (route) =>
-    route.fulfill({ json: syntheticConsentStatus(false) }),
+    route.fulfill({ json: { needsConsent: false } }),
   );
   await page.goto("/app");
   await expect(page.getByRole("heading", { name: "어떤 일이 있었나요?" })).toBeVisible();
