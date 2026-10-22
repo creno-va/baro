@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { ApiError } from "@baro/api-client";
 import { createSessionScope } from "@baro/client-core";
 import { CURRENT_POLICY_VERSIONS } from "@baro/contracts/consent";
 import type { ClientSession } from "@baro/contracts/session";
@@ -246,4 +247,96 @@ test("opening the system browser retires private work once without aborting its 
   gate.resolve(owner("b"));
   await login;
   expect(model.getSnapshot().session?.user?.id).toBe("b");
+});
+
+test("reauthentication discovery failures do not block ordinary use and old-owner discovery is retired", async () => {
+  const f = fixture(owner("a"));
+  f.dependencies.readReauthentication = async () => {
+    throw new ApiError("UNAVAILABLE", "연결을 확인해 주세요.", true);
+  };
+  const model = createSessionModel(f.dependencies);
+  await model.refresh();
+  await model.loadReauthentication();
+  expect(model.getSnapshot()).toMatchObject({
+    phase: "ready",
+    session: { user: { id: "a" } },
+    reauthentication: { checking: false, verified: false, error: "연결을 확인해 주세요." },
+  });
+  const gate = deferred<{ providers: ["google"]; verified: boolean }>();
+  f.dependencies.readReauthentication = () => gate.promise;
+  const old = model.loadReauthentication();
+  model.pause();
+  f.setSession(owner("b"));
+  await model.resume();
+  gate.resolve({ providers: ["google"], verified: true });
+  await old;
+  expect(model.getSnapshot()).toMatchObject({ phase: "ready", session: { user: { id: "b" } } });
+  expect(model.getSnapshot().reauthentication).toBeUndefined();
+});
+
+test("reauthentication permits only linked providers, hides private work and refreshes proof after foreground", async () => {
+  const f = fixture(owner("a", true));
+  let calls = 0,
+    discovery = 0;
+  const gate = deferred<void>();
+  f.dependencies.readReauthentication = async () => ({
+    providers: ["naver"],
+    verified: ++discovery > 1,
+  });
+  f.dependencies.login.start = async (provider, role, purpose) => {
+    expect([provider, role, purpose]).toEqual(["naver", "customer", "reauthenticate"]);
+    calls++;
+    await gate.promise;
+    return {
+      type: "verified",
+      session: owner("a", true),
+      reauthentication: { ownerTag: "a".repeat(64), startedAt: 10 },
+    };
+  };
+  const model = createSessionModel(f.dependencies);
+  await model.refresh();
+  await model.loadReauthentication();
+  await model.reauthenticate("google");
+  expect(calls).toBe(0);
+  const old = f.scope.signal(),
+    pending = model.reauthenticate("naver");
+  expect(old.aborted).toBe(true);
+  expect(model.getSnapshot()).toMatchObject({
+    phase: "authorizing",
+    authPurpose: "reauthenticate",
+    session: null,
+  });
+  model.pause();
+  gate.resolve();
+  await pending;
+  expect(model.getSnapshot()).toMatchObject({ phase: "checking", session: null });
+  await model.resume();
+  expect(model.getSnapshot()).toMatchObject({
+    phase: "consent",
+    reauthentication: { providers: ["naver"], verified: true },
+  });
+});
+
+test("reauthentication cancellation keeps the actual old session and ignores late verification", async () => {
+  const f = fixture(owner("a")),
+    gate = deferred<void>();
+  f.dependencies.readReauthentication = async () => ({ providers: ["kakao"], verified: false });
+  f.dependencies.login.start = async () => {
+    await gate.promise;
+    return {
+      type: "verified",
+      session: owner("late"),
+      reauthentication: { ownerTag: "a".repeat(64), startedAt: 10 },
+    };
+  };
+  f.dependencies.login.cancel = async () => {};
+  const model = createSessionModel(f.dependencies);
+  await model.refresh();
+  await model.loadReauthentication();
+  const pending = model.reauthenticate("kakao");
+  await model.cancelLogin();
+  gate.resolve();
+  await pending;
+  expect(model.getSnapshot()).toMatchObject({ phase: "ready", session: { user: { id: "a" } } });
+  expect(model.getSnapshot().reauthentication).toBeUndefined();
 });

@@ -1,9 +1,10 @@
+import { deletionAccessSchema } from "@baro/contracts/deletion";
 import { randomUUID } from "expo-crypto";
 import * as WebBrowser from "expo-web-browser";
 import { createNativeLogin } from "../platform/auth/login";
 import { createNativeSocialAuthorization } from "../platform/auth/social";
 import { getMobileApi } from "./api";
-import { getPendingAuthStore, newNativeProof } from "./auth-attempt";
+import { getPendingAuthStore, getReauthenticationStore, newNativeProof } from "./auth-attempt";
 import { readMobileConfig } from "./config";
 import { getMobileCredentials } from "./credentials";
 
@@ -48,6 +49,20 @@ export function getNativeLogin() {
         return api.session.get();
       },
       setAccountType: (value) => api.session.setAccountType(value),
+      reauthentication: {
+        proof: getReauthenticationStore(),
+        prepare: (body, ownerId) =>
+          api.request({
+            path: "/api/mobile/auth/reauth/prepare",
+            method: "POST",
+            body,
+            expectedOwner: ownerId,
+          }),
+        verify: (body) =>
+          api.request({ path: "/api/mobile/auth/reauth/verify", method: "POST", body }),
+        access: async () =>
+          deletionAccessSchema.parse(await api.request({ path: "/api/me/deletion" })),
+      },
     });
   }
   return login;

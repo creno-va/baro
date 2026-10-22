@@ -52,6 +52,12 @@ function ConnectedSession({ model }: { model: SessionModel }) {
       onPolicy={(policy) => {
         void model.openPolicy(policy);
       }}
+      onReauthenticate={(provider) => {
+        void model.reauthenticate(provider);
+      }}
+      onReadReauthentication={() => {
+        void model.loadReauthentication();
+      }}
     />
   );
 }

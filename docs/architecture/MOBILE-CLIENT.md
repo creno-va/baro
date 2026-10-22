@@ -184,7 +184,18 @@ reauth의 서버 선행은 signed 기존 세션의 `/api/mobile/auth/reauth/prep
 namespace `native-reauth:v1:`에 보관한다. callback은 같은 owner의 실제 새 OAuth 세션만
 인정하고 교환도 purpose/원래 owner를 대조한다. 기존 쿠키가 남았거나 recentOAuth라는
 이유만으로 재인증 성공으로 보지 않으며 verify가 같은 nonce/verifier와 정확한 새 세션을
-확인한다. native proof/재인증 UI 소비와 실제 제공자/기기 인수는 #346의 후속이다.
+확인한다. 서버 선행 PR359는 main `6f79774`와 head CI39847136702에 통합했다.
+
+네이티브 재인증은 기존 cookie를 보존하고 연결된 provider만 선택한다. 준비 receipt와
+nonce/verifier는 `.auth` SecureStore에 필수 저장/readback한 뒤 브라우저를 연다. 복귀는
+purpose를 포함한 교환·서버 verify·같은 owner의 fresh 세션 확인을 모두 거쳐야 성공한다.
+역할을 다시 쓰지 않는다. cookie 저장 뒤 응답 유실·proof 쓰기 실패·cold 재개는 정확한
+새 세션의 proof로만 복구하며 이전 세션이 로그인됐다는 이유로 성공하지 않는다.
+완료 marker는 ownerTag/startedAt/attemptId만 저장하고 민감 작업 권한은 서버의 fresh
+access 응답과 공통 account client가 결정한다. 취소는 기존 로그인을 유지하지만 명시적
+로그아웃은 pending/marker/cookie를 지우며 `.case-operations`는 보존한다. 동의 전에도
+재인증은 가능하고 조회 실패는 일반 계정 사용을 막지 않는다. 합성 Hono/SQL·RN 화면
+검증과 실제 제공자/기기 인수는 구분하며 후자는 #346에 남긴다.
 
 ### Turnstile
 

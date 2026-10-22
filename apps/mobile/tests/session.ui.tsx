@@ -124,3 +124,34 @@ test("retry, logout and public browsing are explicit commands", async () => {
   await fireEvent.press(screen.getByRole("button", { name: "이용 상태 다시 확인" }));
   expect(p.onRetry).toHaveBeenCalledTimes(1);
 });
+
+test("reauthentication is available before consent, lists only linked providers and hides identity while authorizing", async () => {
+  const p = { ...props(consent), onReauthenticate: jest.fn(), onReadReauthentication: jest.fn() };
+  const view = await render(<SessionScreen {...p} />, { wrapper });
+  await fireEvent.press(screen.getByRole("button", { name: "재인증 로그인 수단 확인" }));
+  expect(p.onReadReauthentication).toHaveBeenCalledTimes(1);
+  await view.rerender(
+    <SessionScreen
+      {...p}
+      state={{
+        ...consent,
+        reauthentication: { providers: ["naver"], verified: true, checking: false, error: null },
+      }}
+    />,
+  );
+  expect(screen.getByText("이 계정의 최근 재인증을 확인했어요.")).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "Google로 같은 계정 다시 인증" })).toBeNull();
+  await fireEvent.press(screen.getByRole("button", { name: "네이버로 같은 계정 다시 인증" }));
+  expect(p.onReauthenticate).toHaveBeenCalledWith("naver");
+  await view.rerender(
+    <SessionScreen
+      {...p}
+      state={{ ...anonymous, phase: "authorizing", authPurpose: "reauthenticate", busy: true }}
+    />,
+  );
+  expect(screen.queryByText("합성 계정 이름님")).toBeNull();
+  expect(screen.queryByText("이 계정의 최근 재인증을 확인했어요.")).toBeNull();
+  expect(screen.queryByRole("button", { name: "로그인 취소" })).toBeNull();
+  await fireEvent.press(screen.getByRole("button", { name: "재인증 취소" }));
+  expect(p.onCancel).toHaveBeenCalledTimes(1);
+});

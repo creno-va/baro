@@ -1,10 +1,12 @@
 import { ApiError } from "@baro/api-client";
 import type { AccountType, Provider } from "@baro/client-core";
 import {
+  type MobileReauthReceipt,
   mobileAuthAttemptIdSchema,
   mobileAuthReturnSchema,
   mobileAuthStartSchema,
   mobileAuthVerifierSchema,
+  mobileReauthReceiptSchema,
 } from "@baro/contracts/mobile-auth";
 import type { MobileConfig } from "../../../config/environment";
 
@@ -16,17 +18,28 @@ export interface PendingAuthAttempt {
   accountType: AccountType;
   provider: Provider;
   purpose: "login" | "reauthenticate";
+  reauthentication?: MobileReauthReceipt;
 }
 export type NativeAuthReturn =
   | { type: "success"; attemptId: string; code: string }
   | { type: "error"; attemptId: string };
 
 export const nativeCallbackBase = (config: MobileConfig) => `${config.scheme}://auth/callback`;
-export function nativeCallbackURL(config: MobileConfig, attemptId: string, challenge: string) {
-  const input = mobileAuthStartSchema.parse({ attemptId, challenge });
+export function nativeCallbackURL(
+  config: MobileConfig,
+  attemptId: string,
+  challenge: string,
+  purpose?: "reauthenticate",
+) {
+  const input = mobileAuthStartSchema.parse({
+    attemptId,
+    challenge,
+    ...(purpose ? { purpose } : {}),
+  });
   const url = new URL(nativeCallbackBase(config));
   url.searchParams.set("attemptId", input.attemptId);
   url.searchParams.set("challenge", input.challenge);
+  if (input.purpose) url.searchParams.set("purpose", input.purpose);
   return url.href;
 }
 /** Parse before any routing, diagnostics or exchange. Never accept cookie/token URL fields. */
@@ -67,7 +80,9 @@ function parseAttempt(input: unknown): PendingAuthAttempt | null {
   const value = input as Record<string, unknown>;
   if (
     Object.keys(value).sort().join(",") !==
-      "accountType,attemptId,createdAt,provider,purpose,verifier" ||
+      (value.purpose === "reauthenticate"
+        ? "accountType,attemptId,createdAt,provider,purpose,reauthentication,verifier"
+        : "accountType,attemptId,createdAt,provider,purpose,verifier") ||
     !mobileAuthAttemptIdSchema.safeParse(value.attemptId).success ||
     !mobileAuthVerifierSchema.safeParse(value.verifier).success ||
     typeof value.createdAt !== "number" ||
@@ -76,6 +91,11 @@ function parseAttempt(input: unknown): PendingAuthAttempt | null {
     (value.accountType !== "customer" && value.accountType !== "lawyer") ||
     (value.provider !== "google" && value.provider !== "naver" && value.provider !== "kakao") ||
     (value.purpose !== "login" && value.purpose !== "reauthenticate")
+  )
+    return null;
+  if (
+    value.purpose === "reauthenticate" &&
+    !mobileReauthReceiptSchema.safeParse(value.reauthentication).success
   )
     return null;
   return value as unknown as PendingAuthAttempt;

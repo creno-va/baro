@@ -7,9 +7,29 @@ import {
 import * as SecureStore from "expo-secure-store";
 import { createPendingAuthStore } from "../platform/auth/attempt";
 import { createNativeProof } from "../platform/auth/proof";
+import { createReauthenticationStore } from "../platform/auth/reauthentication";
 import { readMobileConfig } from "./config";
 
 let store: ReturnType<typeof createPendingAuthStore> | undefined;
+let reauthentication: ReturnType<typeof createReauthenticationStore> | undefined;
+export function getReauthenticationStore() {
+  if (!reauthentication) {
+    const config = readMobileConfig();
+    const options: SecureStore.SecureStoreOptions = {
+      keychainService: `${config.applicationId}.auth`,
+      keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
+    };
+    reauthentication = createReauthenticationStore({
+      key: `baro_${config.environment}_reauth_proof`,
+      storage: {
+        getItemAsync: (key) => SecureStore.getItemAsync(key, options),
+        setItemAsync: (key, value) => SecureStore.setItemAsync(key, value, options),
+        deleteItemAsync: (key) => SecureStore.deleteItemAsync(key, options),
+      },
+    });
+  }
+  return reauthentication;
+}
 export function getPendingAuthStore() {
   if (!store) {
     const config = readMobileConfig();

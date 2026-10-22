@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test";
+import { createAccountClient } from "@baro/api-client";
 import { createSessionScope } from "@baro/client-core";
+import { deletionAccessSchema } from "@baro/contracts/deletion";
 import { splitSetCookieHeader } from "better-auth/cookies";
 import { Hono } from "hono";
 import { resolveMobileConfig } from "../apps/mobile/config/environment";
@@ -10,6 +12,7 @@ import {
 } from "../apps/mobile/src/platform/auth/attempt";
 import { createNativeCredentials } from "../apps/mobile/src/platform/auth/credentials";
 import { createNativeLogin } from "../apps/mobile/src/platform/auth/login";
+import { createReauthenticationStore } from "../apps/mobile/src/platform/auth/reauthentication";
 import { signOutNative } from "../apps/mobile/src/platform/auth/sign-out";
 import { createNativeTransport } from "../apps/mobile/src/platform/auth/transport";
 import { createMobileApi } from "../apps/mobile/src/platform/http";
@@ -49,15 +52,52 @@ for (const provider of ["google", "naver", "kakao"] as const)
         codec: {
           header: (value) =>
             value ? ((JSON.parse(value) as { cookie?: string }).cookie ?? "") : "",
-          merge: (header) =>
-            JSON.stringify({
-              cookie: splitSetCookieHeader(header)
-                .map((item) => item.split(";")[0])
-                .join("; "),
-            }),
+          merge: (header, previous) => {
+            const map = new Map<string, string>();
+            const cookie = previous
+              ? ((JSON.parse(previous) as { cookie?: string }).cookie ?? "")
+              : "";
+            for (const entry of cookie.split(/;\s*/)) {
+              const at = entry.indexOf("=");
+              if (at > 0) map.set(entry.slice(0, at), entry.slice(at + 1));
+            }
+            for (const entry of splitSetCookieHeader(header)) {
+              const first = entry.split(";")[0] ?? "",
+                at = first.indexOf("=");
+              if (at <= 0) continue;
+              const name = first.slice(0, at),
+                value = first.slice(at + 1);
+              if (!value) map.delete(name);
+              else map.set(name, value);
+            }
+            return JSON.stringify({
+              cookie: [...map].map(([name, value]) => `${name}=${value}`).join("; "),
+            });
+          },
         },
       });
-      const nativeFetch = async (url: string, init: RequestInit) => app.request(url, init, f.env);
+      let loseExchangeBody = false,
+        lostBodies = 0;
+      const nativeFetch = async (url: string, init: RequestInit) => {
+        const response = await app.request(url, init, f.env);
+        if (loseExchangeBody && new URL(url).pathname === "/api/mobile/auth/exchange") {
+          loseExchangeBody = false;
+          lostBodies++;
+          // Real SQL consumes the grant and the real transport durably saves
+          // Set-Cookie, then JSON reading fails as it can on a dropped stream.
+          return new Proxy(response, {
+            get(target, key) {
+              if (key === "json")
+                return async () => {
+                  throw new Error("SYNTHETIC_DROPPED_BODY");
+                };
+              const value = Reflect.get(target, key, target);
+              return typeof value === "function" ? value.bind(target) : value;
+            },
+          });
+        }
+        return response;
+      };
       const transport = createNativeTransport({ config, credentials, fetch: nativeFetch });
       const client = createMobileApi({
         config,
@@ -70,6 +110,10 @@ for (const provider of ["google", "naver", "kakao"] as const)
         key: "baro_local_auth_attempt",
         storage,
         now: Date.now,
+      });
+      const reauthentication = createReauthenticationStore({
+        key: "baro_local_reauth_proof",
+        storage,
       });
       const readSession = () => {
         client.session.invalidate();
@@ -121,6 +165,20 @@ for (const provider of ["google", "naver", "kakao"] as const)
         },
         readSession,
         setAccountType: (role) => client.session.setAccountType(role),
+        reauthentication: {
+          proof: reauthentication,
+          prepare: (body, ownerId) =>
+            client.request({
+              path: "/api/mobile/auth/reauth/prepare",
+              method: "POST",
+              body,
+              expectedOwner: ownerId,
+            }),
+          verify: (body) =>
+            client.request({ path: "/api/mobile/auth/reauth/verify", method: "POST", body }),
+          access: async () =>
+            deletionAccessSchema.parse(await client.request({ path: "/api/me/deletion" })),
+        },
       });
       model = createSessionModel({
         scope,
@@ -129,6 +187,19 @@ for (const provider of ["google", "naver", "kakao"] as const)
         getConsent: () => client.session.getConsent(),
         saveConsent: (input) => client.session.saveConsent(input),
         openPolicy: async () => {},
+        readReauthentication: async (ownerId) => {
+          const account = createAccountClient({
+            scope,
+            newKey: () => crypto.randomUUID(),
+            request: (path, init = {}) => client.request({ ...init, path, expectedOwner: ownerId }),
+            readReauthentication: () => reauthentication.load(),
+            reauthenticate: async (provider) => {
+              await model.reauthenticate(provider);
+            },
+          });
+          const access = await account.deletionAccess();
+          return { providers: access.providers, verified: access.canDelete };
+        },
         ownsReturn: async (raw) => {
           const returned = parseNativeAuthReturn(raw, config),
             pending = await attempts.load();
@@ -139,7 +210,7 @@ for (const provider of ["google", "naver", "kakao"] as const)
             config,
             scope,
             credentials,
-            cancelLogin: () => login.cancel(),
+            cancelLogin: () => login.cancel({ signOut: true }),
             fetch: nativeFetch,
           }),
       });
@@ -160,11 +231,29 @@ for (const provider of ["google", "naver", "kakao"] as const)
         role: "lawyer",
         session: { needsConsent: false },
       });
+      await model.loadReauthentication();
+      expect(model.getSnapshot().reauthentication).toMatchObject({
+        providers: [provider],
+        verified: false,
+      });
+      loseExchangeBody = provider === "naver";
+      await model.reauthenticate(provider);
+      await incoming;
+      expect(model.getSnapshot()).toMatchObject({
+        phase: "ready",
+        role: "lawyer",
+        reauthentication: { verified: true },
+      });
+      expect(grants).toBe(2);
+      expect(f.exchanges()).toBe(2);
+      expect(lostBodies).toBe(provider === "naver" ? 1 : 0);
+      expect(await reauthentication.load()).not.toBeNull();
       const cookie = await credentials.capture().cookie();
       await model.signOut();
       expect(model.getSnapshot()).toMatchObject({ phase: "anonymous", error: null });
       expect(await credentials.capture().cookie()).toBe("");
       expect(await attempts.load()).toBeNull();
+      expect(await reauthentication.load()).toBeNull();
       const old = await app.request("/api/me/session", { headers: { cookie } }, f.env);
       expect(((await old.json()) as { user: unknown }).user).toBeNull();
       expect(disk.get("synthetic_unresolved_case_key")).toBe("opaque-key");

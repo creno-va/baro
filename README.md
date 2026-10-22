@@ -76,7 +76,7 @@ BARO는 사용자가 변호사의 프로필을 살펴보고 직접 연락하며,
 따릅니다. `apps/mobile`의 Expo 기반·공통 계약/client를 인수했고, native 인증·동의/challenge와
 고객 사건·질문/요약·작업공간을 연결합니다. 전체 네이티브 앱화는 [#334](https://github.com/creno-va/baro/issues/334)로 계속 추적합니다.
 [모바일 개발 안내](./apps/mobile/README.md)에서 실행·검증 명령을 확인할 수 있습니다.
-재인증·자료/리포트·나머지 기능과 실제 제공자/기기·스토어 인수는 후속 단계입니다.
+기존 계정을 보존하는 재인증을 연결하며, 자료/리포트·나머지 기능과 실제 제공자/기기·스토어 인수는 후속 단계입니다.
 
 웹/API 제품 코드는 Workers Web API 와 binding을 사용합니다. Bun은 도구·테스트용이며
 Node filesystem/process는 별도 Container 처리 서비스에만 허용합니다. v2 저장소/
