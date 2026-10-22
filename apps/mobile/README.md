@@ -2,8 +2,9 @@
 
 Expo SDK 58 / React Native 0.88.0 / React 19.3.0 / Expo Router 기반 iOS·Android 앱이다.
 현재 시작·이용 안내·공개 변호사 목록/이름 검색·잘못된 경로 화면을 제공한다. 공개 목록은
-설정된 API를 실제 조회하며 화면에 예시 데이터를 대체 표시하지 않는다. 로그인·사건 저장은
-M3~M4에서 연결한다. 프로필 상세·기타 필터·직접 연락은 후속 기능 단계에서 계속한다.
+설정된 API를 실제 조회하며 화면에 예시 데이터를 대체 표시하지 않는다. 기존 3사 로그인·
+고객/변호사 선택·필수 동의·내 계정·로그아웃을 native 화면으로 연결한다. 사건 저장은
+M4에서 계속한다. 프로필 상세·기타 필터·직접 연락은 후속 기능 단계에서 계속한다.
 
 ## 개발
 
@@ -62,7 +63,8 @@ SecureStore는 환경별 keychain service/namespace와 `WHEN_UNLOCKED_THIS_DEVIC
 고정 Better Auth Expo1.7.7의 공개 cookie codec/storage adapter를 공유하고 session cache를 권한으로
 사용하지 않는다. native HTTP가 Cookie/Origin을 직접 설정하고 credentials omit·redirect error를
 사용한다. 성공/실패 응답의 Set-Cookie를 한 경로에서 저장하며 SDK에 전달하는 응답에서는 제거해
-중복 writer를 만들지 않는다. 로그인 연결에서는 `disableCache: true`와 `disableRedirect: true`를
+중복 writer를 만들지 않는다. Expo native response의 원본 IO·clone을 보존하고 RN의 legacy
+Response 생성자로 stream을 재구성하지 않는다. 로그인 연결에서는 `disableCache: true`와 `disableRedirect: true`를
 사용해야 하며 SDK 자동 cookie callback 경로를 사용하지 않는다.
 
 credential 교체/로그아웃은 `credentials.reset()`으로 scope를 먼저 폐기한 뒤 인증 cookie/cache만
@@ -72,7 +74,12 @@ key 저장소는 별도이며 지우지 않는다. 공개 목록은 이 저장�
 `getNativeLogin`은 기기에 먼저 저장한 nonce/verifier·시스템 브라우저·고정 proxy·일회용 code
 교환과 실제 owner/role 확인을 조립한다. callback에는 code/attemptId만 받고 foreign/중복/
 extra cookie/token 필드를 거절한다. 응답 유실 시 code를 자동 재전송하지 않으며 새 서버
-세션으로만 복구한다. 앱 복귀 routing/foreground·동의/역할 UI·reauth/challenge 연결과
+세션으로만 복구한다. `/session`의 역할/로그인·동의·내 계정 화면은 독립 model을 소비한다. `+native-intent`는
+정확한 callback을 최대4개의 임시 handoff에만 담고 query/fragment를 router로 넘기지 않는다.
+foreground에서는 실제 세션을 다시 확인하고 background/로그아웃/변경에서 개인 요청을
+폐기한다. 시스템 브라우저 인증 중에는 이미 폐기한 개인 IO와 현재 인증 교환을 구분한다.
+로그아웃은 저장된 cookie를 먼저 제거한 뒤 캡처한 원래 세션만 서버에서 폐기하며 늦은
+응답 cookie를 받지 않는다. 원격 폐기/로컬 저장 실패는 구분한다. reauth/challenge 연결과
 실제 제공자/기기 검증은 #346의 후속 단계다.
 
 ## 검증

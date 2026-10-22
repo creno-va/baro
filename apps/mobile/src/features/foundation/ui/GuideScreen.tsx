@@ -21,9 +21,9 @@ export function GuideScreen({ onBack }: { onBack: () => void }) {
       <StatePanel
         state={{
           kind: "empty",
-          title: "모바일 연결 준비 중",
+          title: "지금 이용할 수 있는 기능",
           description:
-            "아직 앱에서 로그인하거나 사건을 저장할 수 없어요. 서비스 연결 후 이용할 수 있어요.",
+            "로그인과 필수 확인, 변호사 탐색을 이용할 수 있어요. 사건 정리와 자료 저장은 준비 중이에요.",
         }}
       />
       <Button label="처음으로" onPress={onBack} />

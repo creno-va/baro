@@ -4,6 +4,21 @@ import type { NativeCredentialFrame, NativeCredentials } from "./credentials";
 
 const denied = () => new ApiError("UNAVAILABLE", "안전한 서버 연결을 확인하지 못했어요.", true);
 
+function withoutSetCookie(response: Response): Response {
+  const headers = new Headers(response.headers);
+  headers.delete("set-cookie");
+  // Expo's native fetch supports streams, while RN's global Response constructor
+  // does not accept a ReadableStream. Keep the original IO and native receiver.
+  return new Proxy(response, {
+    get(target, key) {
+      if (key === "headers") return headers;
+      if (key === "clone") return () => withoutSetCookie(target.clone());
+      const value = Reflect.get(target, key, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
+}
+
 /** One cookie writer for Hono and Better Auth; native fetch never owns a second jar. */
 export function createNativeTransport(dependencies: {
   config: MobileConfig;
@@ -57,15 +72,9 @@ export function createNativeTransport(dependencies: {
       await response.body?.cancel().catch(() => {});
       throw error;
     }
-    const safeHeaders = new Headers(response.headers);
-    safeHeaders.delete("set-cookie");
     // The Expo SDK must not write the same cookies again in its success hook.
     // Its public storage/codec remains shared; disable its session cache and use
     // sign-in with disableRedirect. Logout uses this transport before reset.
-    return new Response(response.body, {
-      status: response.status,
-      statusText: response.statusText,
-      headers: safeHeaders,
-    });
+    return withoutSetCookie(response);
   };
 }

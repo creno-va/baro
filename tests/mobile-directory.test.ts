@@ -98,3 +98,23 @@ test("native transport uses the configured API origin and never silently sends a
   });
   await expect(redirected.directory.listPage()).rejects.toMatchObject({ code: "UNAVAILABLE" });
 });
+
+test("auth transitions do not abort an unrelated anonymous directory read", async () => {
+  let resolve!: (value: Response) => void;
+  let signal: AbortSignal | null | undefined;
+  const api = createMobileApi({
+    config: resolveMobileConfig({ environment: "preview" }),
+    newKey: () => "synthetic",
+    fetch: async (_input, init) => {
+      signal = init.signal;
+      return new Promise<Response>((done) => {
+        resolve = done;
+      });
+    },
+  });
+  const pending = api.directory.listPage();
+  api.scope.invalidate();
+  expect(signal?.aborted).not.toBe(true);
+  resolve(Response.json(page("공개 유지")));
+  expect((await pending).items[0]?.name).toBe("공개 유지");
+});
