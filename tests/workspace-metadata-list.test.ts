@@ -62,7 +62,7 @@ test("seven ready materials avoid coverage hydration in cold, warm and post-muta
   const f = await fixture();
   const first = await f.client.get(f.workspaceId);
   // Before this change: 16 HTTP / 138 D1 / 139 SQL, including seven coverage reads.
-  expect(f.work()).toEqual({ http: 9, calls: 68, statements: 69, coverage: 0 });
+  expect(f.work()).toEqual({ http: 9, calls: 64, statements: 65, coverage: 0 });
   expect(first.files).toHaveLength(7);
   expect(first.files.every((file) => file.status === "ready" && !!file.name)).toBe(true);
   expect(
@@ -84,8 +84,9 @@ test("seven ready materials avoid coverage hydration in cold, warm and post-muta
     expect.objectContaining({ title: "합성 일정", detail: "합성 저장 뒤 조회" }),
   );
   expect(saved.files).toEqual(first.files);
-  // Before: 17 HTTP / 148 D1 / 156 SQL. The mutation and all readback fences remain.
-  expect(f.work()).toEqual({ http: 10, calls: 78, statements: 86, coverage: 0 });
+  // Before #317: 10 HTTP / 78 D1 / 86 SQL. Only the changed timeline is reread;
+  // file metadata and both workspace revision fences remain.
+  expect(f.work()).toEqual({ http: 6, calls: 42, statements: 49, coverage: 0 });
 
   f.reset();
   const reportMaterials = await createFilesApi(f.transport).list(f.workspaceId);

@@ -40,3 +40,14 @@ schema/migration·새 공급자/모델·비용 정책·원장·hold·기술 quot
 기록한다. 변경 범위의 API·source/owner·삭제·CAS·멱등 재시도·draft·pagination
 회귀와 quick/build/DB를 확인한다. 같은 SHA의 실제 preview/production 및 외부
 성능 검증은 #71의 별도 gate이며 이번 로컬 수치를 배포 성과로 사용하지 않는다.
+
+## 통합 full 후속
+
+PR318은 main `3c6330c74152099fbdf92628c65b038b48f0fa3c`로 병합됐다.
+[full39706326269](https://github.com/creno-va/baro/actions/runs/39706326269)는
+3258pass/5fail이며 실패로 보존한다. intake-save-work 4건과 workspace-metadata-list
+1건이 이전 호출 수를 기대했다. 후속 `codex/317-roundtrip-metrics`에서 제품 코드나
+경쟁/보안 조건을 바꾸지 않고 계측 기대값을 갱신한다. 답변 저장은 HTTP8회를 유지하며
+D1 52→50/SQL71→69, 자료7개 사건의 cold 조회는 D1 68→64/SQL69→65,
+타임라인 저장은 HTTP10→6/D1 78→42/SQL86→49다. 실제 계측한 경로별 기대값과
+privacy/timing 검사는 유지하며 변경 없는 같은 SHA full을 재실행하지 않는다.
