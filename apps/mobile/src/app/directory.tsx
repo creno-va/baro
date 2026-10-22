@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useSyncExternalStore } from "react";
+import { router, useFocusEffect } from "expo-router";
+import { useCallback, useMemo, useSyncExternalStore } from "react";
 import { getMobileApi } from "../composition/api";
 import { createDirectoryModel } from "../features/directory/model";
 import { DirectoryScreen } from "../features/directory/ui/DirectoryScreen";
@@ -26,16 +27,19 @@ export default function DirectoryRoute() {
 function ConnectedDirectory({ client }: { client: MobileApi }) {
   const model = useMemo(() => createDirectoryModel(client.directory), [client]);
   const state = useSyncExternalStore(model.subscribe, model.getSnapshot);
-  useEffect(() => {
-    void model.search("");
-    return model.stop;
-  }, [model]);
+  useFocusEffect(
+    useCallback(() => {
+      void model.refresh();
+      return model.stop;
+    }, [model]),
+  );
   return (
     <DirectoryScreen
       state={state}
-      onSearch={(query) => {
-        void model.search(query);
+      onSearch={(filters) => {
+        void model.search(filters);
       }}
+      onSelect={(id) => router.push({ pathname: "/lawyer", params: { id } })}
       onMore={() => {
         void model.more();
       }}
@@ -43,7 +47,7 @@ function ConnectedDirectory({ client }: { client: MobileApi }) {
         void model.retry();
       }}
       onRefresh={() => {
-        void model.search(state.query);
+        void model.refresh();
       }}
     />
   );

@@ -118,3 +118,34 @@ test("auth transitions do not abort an unrelated anonymous directory read", asyn
   resolve(Response.json(page("공개 유지")));
   expect((await pending).items[0]?.name).toBe("공개 유지");
 });
+
+test("region/field/query filters stay bound to paging/retry and fresh failed searches clear old cards", async () => {
+  const seen: unknown[] = [];
+  const cursor = "synthetic_cursor_abcdefghijklmnopqrstuvwxyz";
+  const model = createDirectoryModel({
+    listPage: async (filters, next) => {
+      seen.push({ ...filters, cursor: next });
+      if (seen.length === 2) throw new ApiError("VALIDATION_ERROR", "만료된 검색");
+      if (seen.length === 4) throw new ApiError("UNAVAILABLE", "서버 연결 실패");
+      return page("서울 민사", cursor);
+    },
+  });
+  const filters = { query: " 이름 ", region: "seoul", practiceArea: "civil" };
+  await model.search(filters);
+  filters.region = "busan";
+  await model.more();
+  await model.retry();
+  expect(seen).toEqual([
+    { query: "이름", region: "seoul", practiceArea: "civil", cursor: undefined },
+    { query: "이름", region: "seoul", practiceArea: "civil", cursor },
+    { query: "이름", region: "seoul", practiceArea: "civil", cursor: undefined },
+  ]);
+  await model.refresh();
+  expect(model.getSnapshot()).toMatchObject({
+    phase: "error",
+    region: "seoul",
+    practiceArea: "civil",
+    items: [],
+    nextCursor: null,
+  });
+});
