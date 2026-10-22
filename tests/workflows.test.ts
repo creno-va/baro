@@ -37,6 +37,7 @@ test("local and every CI Bun host use the same pinned stable toolchain", async (
 test("all workflow actions use immutable commits and valid YAML", async () => {
   for (const file of [
     "ci.yml",
+    "mobile-native.yml",
     "full-validation.yml",
     "cost-operations.yml",
     "directory-reindex.yml",
@@ -164,6 +165,35 @@ interface DeploymentStep {
   with?: Record<string, string>;
   env?: Record<string, string>;
 }
+
+test("mobile native verification is manual, immutable and cannot deploy", async () => {
+  const text = await Bun.file(".github/workflows/mobile-native.yml").text();
+  const workflow = Bun.YAML.parse(text) as {
+    on: Record<string, unknown>;
+    permissions: Record<string, string>;
+    jobs: {
+      native: {
+        if: string;
+        env: Record<string, string>;
+        strategy: { matrix: { include: { platform: string }[] } };
+        steps: DeploymentStep[];
+      };
+    };
+  };
+  expect(Object.keys(workflow.on)).toEqual(["workflow_dispatch"]);
+  expect(workflow.permissions).toEqual({ contents: "read" });
+  const job = workflow.jobs.native;
+  expect(job.if).toBe("github.ref == 'refs/heads/main'");
+  expect(job.strategy.matrix.include.map((entry) => entry.platform)).toEqual(["android", "ios"]);
+  expect(job.env.EXPO_PUBLIC_APP_ENV).toBe("preview");
+  expect(job.env.EXPO_PUBLIC_API_URL).toBe("https://preview.baro.site");
+  expect(text).not.toMatch(/secrets\.|continue-on-error|(?:bunx|npx) wrangler .*deploy|eas submit/);
+  const commands = job.steps.flatMap((step) => (step.run ? [step.run] : []));
+  expect(commands.join("\n")).toContain('git merge-base --is-ancestor "$TARGET_SHA" origin/main');
+  expect(commands).toContain("bun run mobile:native ${{ matrix.platform }}");
+  const artifact = job.steps.find((step) => step.uses?.startsWith("actions/upload-artifact@"));
+  expect(artifact?.with?.path).toBe(".wrangler/mobile-build/receipt-${{ matrix.platform }}.json");
+});
 async function deploymentWorkflow(environment: "preview" | "production") {
   return Bun.YAML.parse(await Bun.file(`.github/workflows/deploy-${environment}.yml`).text()) as {
     on: { workflow_dispatch?: { inputs: Record<string, unknown> } };

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { opaqueIdSchema, revisionSchema, timestampSchema } from "../index";
+import { opaqueIdSchema, revisionSchema, timestampSchema } from "../common";
 import { v2LegalFieldSchema, v2RegionSchema } from "./lawyers";
 
 export const directoryCursorSchema = z

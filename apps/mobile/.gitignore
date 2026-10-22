@@ -1,0 +1,9 @@
+.expo/
+android/
+ios/
+dist/
+coverage/
+*.tsbuildinfo
+*.keystore
+*.mobileprovision
+*.p12

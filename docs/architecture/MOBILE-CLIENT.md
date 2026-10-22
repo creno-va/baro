@@ -1,10 +1,11 @@
 # 모바일 클라이언트와 공통 코드 구조
 
-- Status: 구현 목표; 패키지·앱은 아직 생성하지 않음
+- Status: M1 앱·계약 workspace 구현; 공통 client·인증·기능·최종 디자인은 후속 목표
 - Updated: 2026-10-22
 - Decision: [ADR-0017](../adr/0017-expo-mobile-and-shared-client-boundaries.md)
 - Execution: [모바일 실행 계획](../development/MOBILE-EXECUTION.md), [#328](https://github.com/creno-va/baro/issues/328)
 - 조사 기준: `bdc50a0af2f9adb3a6864f7cccf0983dcac771ee`; 구현 착수 때 최신 main과 대조한다.
+- M1 구현 기준: PR329 병합 main `e6401de9657f8fd062fb913fe7d3945adec068fd`, [#330](https://github.com/creno-va/baro/issues/330).
 
 ## 1. 범위와 구조
 
@@ -16,6 +17,8 @@ iOS/Android에 기존 고객·변호사 기능을 순차 제공한다. 사건 �
 초기 서버는 기존 Workers/Hono, Better Auth, D1, R2, Workflows를 재사용한다. 앱은 HTTPS
 API만 호출하며 DB·R2 binding·공급자 secret·모델/법률 API에 직접 접근하지 않는다. 이 문서의
 경로 중 현재 없는 것은 모두 향후 구현 목표이며 빈 패키지를 선행 생성하지 않는다.
+현재는 `apps/mobile`과 `src/contracts` workspace만 존재한다. `packages/*`·platform
+adapter는 M2 이후 실제 추출/연결할 때 추가한다. [앱 개발 안내](../../apps/mobile/README.md)를 따른다.
 
 ```text
 baro/
@@ -46,7 +49,7 @@ baro/
 └── package.json / bun.lock                 # 점진적 workspace, 단일 lockfile
 ```
 
-workspace 후보 경로는 `apps/*`, `packages/*`, `src/contracts`다. 웹 루트와 기존 실행
+현재 workspace 경로는 `apps/*`, `src/contracts`이며 `packages/*`는 후속 후보이다. 웹 루트와 기존 실행
 명령은 유지한다. 별도 workspace 도구·대규모 파일 이동은 필요가 생길 때 검토한다.
 Expo는 Bun workspace와 monorepo 구성을 지원하며 기본 Metro 설정을 우선 사용한다.
 [Expo monorepos](https://docs.expo.dev/guides/monorepos/)

@@ -1,0 +1,32 @@
+{
+  "name": "@baro/contracts",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    "./common": "./common.ts",
+    "./consent": "./consent.ts",
+    "./cases": "./cases.ts",
+    "./questions": "./questions.ts",
+    "./results": "./results.ts",
+    "./deletion": "./deletion.ts",
+    "./v2": "./v2/index.ts",
+    "./v2/common": "./v2/common.ts",
+    "./v2/intake": "./v2/intake.ts",
+    "./v2/workspace": "./v2/workspace.ts",
+    "./v2/files": "./v2/files.ts",
+    "./v2/reports": "./v2/reports.ts",
+    "./v2/directory": "./v2/directory.ts",
+    "./v2/lawyers": "./v2/lawyers.ts",
+    "./v2/sources": "./v2/sources.ts",
+    "./v2/usage": "./v2/usage.ts",
+    "./v2/precedent-research": "./v2/precedent-research.ts",
+    "./v2/precedent-topics": "./v2/precedent-topics.ts",
+    "./v1": "./client.ts"
+  },
+  "dependencies": {
+    "zod": "4.6.5"
+  },
+  "main": "./index.ts"
+}
