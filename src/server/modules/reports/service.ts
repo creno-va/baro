@@ -53,7 +53,8 @@ export const saveReportSchema = z.strictObject({
     .refine((ids) => new Set(ids).size === ids.length),
 });
 export const generateReportSchema = z.strictObject({
-  expectedRevision: z.number().int().positive().optional(),
+  // Explicit initial intent: null expects no prior report. Omission preserves web compatibility.
+  expectedRevision: z.number().int().positive().nullable().optional(),
   excludedFileIds: z
     .array(opaqueIdSchema)
     .max(100)
@@ -526,7 +527,12 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
         return view(a, id);
       }
       const prior = await latest(a, caseId);
-      if (value.expectedRevision !== undefined && value.expectedRevision !== prior?.revision)
+      if (
+        (value.expectedRevision === null && prior) ||
+        (value.expectedRevision !== undefined &&
+          value.expectedRevision !== null &&
+          value.expectedRevision !== prior?.revision)
+      )
         throw new ReportError("STALE_REVISION");
       const source = await buildReportSource(
         core,
