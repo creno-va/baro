@@ -13,11 +13,14 @@ contracts, and explicit `@baro/contracts/v2` / `@baro/contracts/v2/<module>` pat
 expose v2. Bare `@baro/contracts`, internal `pipeline.ts` and unrestricted wildcard
 exports are excluded from the client package. Use only named public subpaths.
 
-The package `main` retains `index.ts` solely for existing relative directory
-imports such as `../../contracts`. Without this separate legacy entry, the web
-bundler can accidentally redirect server imports to the client barrel. Web callers
-need not migrate their imports during the UI redesign. Both the production web
-build and native Metro builds verify this resolution boundary.
+The sibling `src/contracts.ts` forwards legacy relative imports such as
+`../../contracts` to the original `index.ts`. It keeps Playwright's ESM resolver
+from returning the workspace directory itself as an unsupported directory import.
+The package `main` also retains `index.ts` for tools that resolve the directory.
+Without these legacy entries the web bundler can redirect server imports to the
+client barrel. Web callers need not migrate imports during the UI redesign.
+Verify production web/Metro builds and `bunx playwright test --list` when changing
+these entries; browser discovery requires no browser launch or external API.
 
 Run `bun run contracts:check` for portable types and `bun run mobile:check` for
 transitive public-export boundaries and contract identity/strictness tests.

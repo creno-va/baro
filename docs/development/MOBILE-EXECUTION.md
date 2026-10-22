@@ -1,6 +1,6 @@
 # RN + Expo 모바일 실행 계획
 
-- Status: M0 계획 통합 완료; M1 앱 기반·계약 공유 구현/검증 중
+- Status: M0 및 M1 기반 코드 main 통합; M1 최종 검증은 #330의 SHA별 기록 참조
 - Updated: 2026-10-22
 - Tracking: 계획 [#328](https://github.com/creno-va/baro/issues/328), M1 [#330](https://github.com/creno-va/baro/issues/330)
 - Decision: [ADR-0017](../adr/0017-expo-mobile-and-shared-client-boundaries.md)
@@ -190,6 +190,12 @@ CI, 기존 client facade는 한 공유 기반 PR 담당이 순서대로 통합�
 - 웹 번들러의 상대경로 directory import를 보존하기 위해 package `main`은 기존 `index.ts`를
   유지하고 public package export는 `/v1`, `/v2` 등 명시적 subpath만 제공한다. bare package
   root와 pipeline은 공개하지 않는다. 기존 웹/서버 import 142곳을 일괄 수정하지 않는다.
+- 구현 PR331은 [PR head CI](https://github.com/creno-va/baro/actions/runs/39772663202) 성공 뒤
+  main `d75701860f3809b20e1ec5456a947f2b77fae1a9`에 병합했다.
+  [수동 full](https://github.com/creno-va/baro/actions/runs/39772951000)은 단위·DB·웹 build 뒤
+  Playwright의 workspace directory import 해석에서 실패했다. 이를 재현하고
+  `src/contracts.ts` 호환 barrel로 기존 호출부를 보존했다. 수정 후 테스트 수집 437개/44파일
+  통과. full 재검증은 수정된 main SHA에서 수행하며 실패 이력을 성공으로 덮지 않는다.
 - 현재 로컬 검증: 독립 typecheck, public 계약 19개 모듈의 transitive 경계, 계약/환경 회귀
   5개와 RN 컴포넌트 4개, iOS/Android Metro bundle 통과. 최종 커밋의 quick/build·CI 증거는
   #330 및 구현 PR에 기록한다. bundle 통과를 native 컴파일로 표현하지 않는다.
