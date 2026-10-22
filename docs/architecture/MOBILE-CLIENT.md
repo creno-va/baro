@@ -1,6 +1,6 @@
 # 모바일 클라이언트와 공통 코드 구조
 
-- Status: M1 인수; M2 프로필/자산 잔여, M3 서버 교환 통합·native credential 연결 중
+- Status: M1 인수; M2 프로필/자산 잔여, M3 로그인/동의 통합·challenge 연결 중
 - Updated: 2026-10-23
 - Decision: [ADR-0017](../adr/0017-expo-mobile-and-shared-client-boundaries.md)
 - Execution: [모바일 실행 계획](../development/MOBILE-EXECUTION.md), [#328](https://github.com/creno-va/baro/issues/328)
@@ -175,7 +175,8 @@ callback hook은 one-use code 교환으로 교체한다. 앱은 SecureStore의 3
 세션 cookie는 암호화된 `native-auth:v1:` 임시 metadata와 HTTPS Set-Cookie에서만 다룬다.
 계정 삭제/restore replay는 owner grant를 지우고 기존 auth cron이 만료/손상 grant를 정리한다.
 서버의 Origin/CSRF·OAuth freshness·기존3사/계정 연결 규칙은 유지한다. 실제 native
-SecureStore/브라우저·cold/warm 복귀와 동의/역할 UI는 #346에서 후속 연결·인수한다.
+SecureStore/브라우저·cold/warm 복귀와 동의/역할 UI는 PR348·349·351에 통합했다.
+reauth와 실제 제공자/기기 인수는 #346에 남는다.
 
 ### Turnstile
 
@@ -183,7 +184,18 @@ SecureStore/브라우저·cold/warm 복귀와 동의/역할 UI는 #346에서 후
 challenge 페이지를 WebView로 여는 adapter를 검증한다. 앱은 허용된 페이지의 결과만 받고
 서버는 기존 siteverify를 수행한다. navigation/메시지 출처·시도 대응·토큰 만료/재사용·취소를
 검사하고 토큰을 로그·영속 초안에 저장하지 않는다. 웹 전체를 WebView로 감싸지 않는다.
-실제 구현은 기존 built CSP를 유지하는 방식으로 검증한다.
+Hono의 `/api/mobile/challenge?attemptId=UUID`는 공개 sitekey로 위젯만 렌더하며 auth
+cookie·개인 입력을 읽지 않는다. 응답별 nonce CSP를 쓰고 Astro의 기존 CSP/화면은 바꾸지
+않는다. bridge의 32바이트 비밀값은 native의 상위 frame 주입 이후에만 메시지에 포함되며
+시도/현재 URL/scope와 함께 검사한다. Android는 frame flag 누락·origin만 반환·상위 URL을
+대신 반환하는 메시지 경로가 있으므로 URL만으로 신뢰하지 않는다.
+
+WebView의 origin whitelist 불일치는 자체 guard 전에 Linking을 호출하므로 `[*]`로 모든
+이동을 guard에 보내고, guard에서 고정 페이지·Cloudflare iframe·필요한 about frame만
+허용한다. 상위 이동은 canonical 페이지만 허용하고 Android의 frame 정보 누락 시에는
+상위 URL 변경에서 닫는다. 주입 script 자체도 정확한 현재 URL을 확인한다. auth cookie는
+공유하지 않고 파일 접근·혼합 콘텐츠·팝업/다운로드를 허용하지 않는다. 라이브러리 실제
+navigation helper와 RN host, 제품 HTML/CSP 브라우저 검증을 각각 유지한다.
 [Cloudflare 모바일 구현](https://developers.cloudflare.com/turnstile/get-started/mobile-implementation/)
 
 ### 파일·리포트

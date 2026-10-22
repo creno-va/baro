@@ -1,7 +1,7 @@
 # RN + Expo 모바일 실행 계획
 
 - Status: M1 인수 완료; 전체 네이티브 앱화 #334 / M2 공통 client #335 진행
-- Updated: 2026-10-22
+- Updated: 2026-10-23
 - Tracking: native 인증 [#346](https://github.com/creno-va/baro/issues/346), 전체 [#334](https://github.com/creno-va/baro/issues/334), 계획 [#328](https://github.com/creno-va/baro/issues/328), M1 [#330](https://github.com/creno-va/baro/issues/330), M2 [#335](https://github.com/creno-va/baro/issues/335)
 - Decision: [ADR-0017](../adr/0017-expo-mobile-and-shared-client-boundaries.md)
 - Architecture: [공통 코드와 모바일 경계](../architecture/MOBILE-CLIENT.md)
@@ -357,6 +357,23 @@ workspace·자료·리포트·나머지 domain을 순차 추출한다. 첫 단�
   RN/실제 SDK14개·필수서버42개), production workerd 시작과 두 OS Metro가 통과했다.
   실제 제공자·실기기, reauth/challenge와
   M3 전체 인수는 잔여이며 이 단위의 체크/PR receipt를 #346에 기록한다.
+
+
+- 로그인 UI PR351은 head `f8e72e4` CI39820802132 성공 후 main
+  `c57761246a0841aad56307c673363b6aa88766ed`에 정상 병합했다. 해당 SHA의 native
+  run39821350045 Android Debug 성공 receipt를 확인했다. iOS는 진행 중이며 이전
+  a1ad098의 두 OS 컴파일과 현재 UI 컴파일을 구분한다. 서명/배포/실기기 인수는 아니다.
+- `codex/346-native-challenge`는 별도 Hono HTML과 제한 WebView를 연결한다. 웹 UI와
+  Astro CSP를 바꾸지 않고 응답별 nonce, 고정 위젯 action·현재 시도·private bridge secret을
+  사용한다. auth cookie/사건 입력은 WebView에 전달하지 않으며 secret/token은 저장하지
+  않는다. scope/feature 취소·120초 만료·실패·늦은 메시지를 폐기한다. Android의 frame/출처
+  정보 한계를 secret+상위 URL 확인으로 보완하고 라이브러리 자동 외부 Linking을 막는다.
+- 새 model/HTML/실제 Hono-SQL 사건 admission 9개, RN host·실제 WebView navigation helper
+  4개와 제품 HTML/CSP 브라우저 4개를 합성 제공자로 검사했다. 기존 siteverify의
+  hostname/action/만료·재사용/실제 공급자 실패 guard를 유지하며 실제 Cloudflare/기기
+  성공으로 표현하지 않는다. frozen install·quick(모바일/공통111개·RN18개·서버42개),
+  기존 사건/인증/동의48개·production build/workerd 시작·두 OS Metro를 통과했다.
+  사건 화면의 port 소비는 M4, reauth와 M3 실제 인수는 잔여다.
 
 ## 참고
 
