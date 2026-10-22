@@ -1,6 +1,6 @@
 # @baro/api-client
 
-Shared JSON requests, safe public errors and wire clients for session/consent, cases/intake/workspace/files and the public
+Shared JSON requests, safe public errors and wire clients for session/consent, cases/intake/workspace/files/reports and the public
 lawyer directory. Inject transport, UUID creation and optional body encoding. Web credentials
 and multipart bodies belong to the browser adapter; native API origin and session storage
 belong to native adapters. No global fetch, React, cookie configuration or environment reads
@@ -17,7 +17,7 @@ instances. `createDirectoryClient` validates canonical filters/cursor and respon
 Malformed responses and untrusted server messages become safe public errors.
 
 The web retains its existing facade/mock composition; mobile has no implicit mock fallback.
-Reports and remaining domains are subsequent #335 extraction units.
+Account, lawyer profiles and precedent research remain #335 extraction units.
 Run `bun run clients:check`, `mobile:check`, and
 the existing web/domain tests when moving a module.
 
@@ -53,3 +53,12 @@ browser File/Blob/stream을 호출하지 않는다. reader는 immutable bytes를
 같은 source 객체의 병행 업로드는 한 번만 열고 보낸다. hash/part 크기를 검증하고 계정
 전환 후 추가 admission/progress/result를 차단한다. close 오류는 성공한 업로드를 다시
 접수하게 만들지 않으며 adapter의 cache 정리 경로에서 처리한다.
+
+`createReportsClient<Download>` shares report review/generation and immutable ZIP selection keys.
+JSON requests and `ReportArtifact<Download>` are injected. Artifacts verify MIME/size and a bounded
+PDF/ZIP header or the existing HTML marker; failed/stale verification calls `discard`. The adapter
+owns streaming/private cache, aborts and partial-download cleanup before returning a handle.
+Successful values transfer to the platform's open/share/cache lifecycle. No Blob/URI implementation
+is embedded in the common client. Ambiguous review/generation retries keep the same basis/key even
+after metadata refresh or a temporary selection change. State is session-local; restart persistence
+and actual native export IO remain M5 acceptance work.

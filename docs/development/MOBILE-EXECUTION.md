@@ -258,6 +258,15 @@ workspace·자료·리포트·나머지 domain을 순차 추출한다. 첫 단�
   업로드/교정 복구는 M5 연결 단계에서 계속한다. 관련 domain/바이트 회귀140개·웹 첨부/검토
   41개·frozen install/quick/build(실제 workerd 시작)/두 OS Metro bundle이 통과했다.
 
+- 자료 PR343은 CI39792089726(head `969cdac`) 성공 후 main
+  `a7f1601225b3759c400e7b9be500dfb1546d9f40`에 병합했다.
+- `codex/335-shared-reports-client`는 리포트 생성/검토·revision·immutable ZIP 선택과
+  PDF/ZIP header·HTML marker 검증을 공통화한다. platform artifact reader/discard를
+  주입하고 계정 전환 중 byte/JSON 응답을 차단한다. 응답 유실 후 metadata refresh나
+  선택 왕복도 원래 key/body/basis로 복구한다. source/서명 SQL/바이트 회귀75개·웹 revision
+  5개/통합3개/실제 SQL PDF 다운로드1개와 frozen/quick/build/두 OS bundle이 통과했다.
+  PDF 검증은 번들 Python(pypdf)을 사용했다. native cache/열기/공유·재시작 복구는 M5다.
+
 ## 참고
 
 - [Expo workspace 구성](https://docs.expo.dev/guides/monorepos/)

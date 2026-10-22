@@ -20,6 +20,8 @@ export type {
   OperationRequestOptions,
 } from "./http";
 export { createJsonRequester, isApiPath } from "./http";
+export type { DomainRequest, DomainRequestInit, ReportArtifact, ReportSave } from "./reports";
+export { createReportsClient, reportSaveSchema } from "./reports";
 export { createSessionClient } from "./session";
 export type { CustomerWorkspaceView } from "./workspace";
 export { createWorkspaceClient, workspaceViewSchema } from "./workspace";
