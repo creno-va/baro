@@ -10,6 +10,12 @@ export interface JsonRequestOptions {
   signal?: AbortSignal;
 }
 export type JsonRequest = <T = unknown>(options: JsonRequestOptions) => Promise<T>;
+export type OperationRequestOptions = Omit<JsonRequestOptions, "path"> & { path?: string };
+export type OperationRequest = <T = unknown>(
+  operation: string,
+  input?: unknown,
+  options?: OperationRequestOptions,
+) => Promise<T>;
 export interface EncodedBody {
   body: BodyInit;
   contentType?: string;
@@ -35,12 +41,17 @@ export function createJsonRequester(dependencies: {
   return async <T>(options: JsonRequestOptions): Promise<T> => {
     if (!isApiPath(options.path))
       throw new ApiError("VALIDATION_ERROR", "요청 경로를 확인해 주세요.");
-    options.signal?.throwIfAborted();
+    const signal = dependencies.scope
+      ? options.signal
+        ? AbortSignal.any([options.signal, dependencies.scope.signal()])
+        : dependencies.scope.signal()
+      : options.signal;
+    signal?.throwIfAborted();
     const generation = dependencies.scope?.snapshot();
     const ensureCurrent = () => {
-      options.signal?.throwIfAborted();
       if (generation !== undefined && !dependencies.scope?.isCurrent(generation))
         throw new ApiError("UNAUTHENTICATED", "이용 계정이 변경됐어요. 다시 확인해 주세요.");
+      signal?.throwIfAborted();
     };
     const method = options.method ?? "GET";
     let encoded: EncodedBody | undefined;
@@ -62,7 +73,7 @@ export function createJsonRequester(dependencies: {
       response = await dependencies.transport(options.path, {
         method,
         headers,
-        ...(options.signal ? { signal: options.signal } : {}),
+        ...(signal ? { signal } : {}),
         ...(encoded ? { body: encoded.body } : {}),
       });
     } catch (error) {

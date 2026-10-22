@@ -227,6 +227,16 @@ workspace·자료·리포트·나머지 domain을 순차 추출한다. 첫 단�
   없음을 확인했으며 [#339](https://github.com/creno-va/baro/issues/339)에서 artifact 도달성·
   검증된 보완/patch와 release 보안 인수를 추적한다. audit 실패나 전체 보안 인수를 성공으로
   바꾸지 않고 독립 기능 구현을 계속한다.
+- 공통 기반 PR340은 main `0d5b984393744a271f6ef6a0d4df651fbc7327ec`에 통합했다.
+  [native39782039545](https://github.com/creno-va/baro/actions/runs/39782039545)의 iOS·Android
+  개발 빌드와 두 receipt를 확인했다. 실제 기기/OAuth 성공과는 구분한다.
+- 다음 `codex/335-shared-cases-client`는 사건/list·intake 질문/답변·요약 저장/확인을
+  `createCasesClient`로 추출한다. 웹 facade와 DOM challenge는 유지하고 해시·UUID·저장·
+  challenge를 port로 주입한다. 동일 쓰기는 합치고 저장 실패 전 쓰기 차단, 재시작 후 동일
+  key/revision 재사용, owner별 격리, 계정 전환 시 HTTP/challenge 취소를 검사한다.
+  frozen install·quick·build(실제 workerd 시작)·두 OS Metro bundle·mobile check가 통과했다.
+  사건/intake 회귀 31개와 기존 웹 저장/사건 회귀 25개를 검사했다.
+  실제 native SecureStore/challenge 연결과 고객 화면은 M3~M4에서 계속한다.
 
 ## 참고
 

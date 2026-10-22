@@ -32,6 +32,7 @@ export async function request<T>(
         throw error;
       });
     await mockHandlersReady;
+    options.signal?.throwIfAborted();
     return mockRequest<T>(operation, input, key);
   }
   if (!options.path) throw new ApiError("UNAVAILABLE", "실제 API 연결을 준비하고 있어요.", true);

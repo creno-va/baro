@@ -2,6 +2,51 @@ import { spawn } from "node:child_process";
 import { expect, type Page, test } from "@playwright/test";
 import { syntheticConsentStatus } from "../fixtures/consent-status";
 
+test("a session change closes a pending challenge without admitting the old creation", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    Object.assign(window, {
+      turnstile: { render: () => "synthetic-pending-widget", remove: () => {} },
+    });
+  });
+  let signedIn = true,
+    writes = 0;
+  await page.route("**/api/me/session", (route) =>
+    route.fulfill({
+      json: {
+        user: signedIn
+          ? { id: "synthetic-owner", name: "합성 고객", accountType: "customer" }
+          : null,
+        needsConsent: false,
+      },
+    }),
+  );
+  await page.route("**/api/me/consent", (route) =>
+    route.fulfill({ json: syntheticConsentStatus(false) }),
+  );
+  await page.route("**/api/v2/cases", (route) => {
+    writes++;
+    return route.fulfill({ status: 503, json: { error: { code: "UNAVAILABLE" } } });
+  });
+  await page.goto("/cases/new");
+  await page
+    .getByRole("textbox")
+    .fill("세션 전환 중인 보안 확인이 새 계정의 사건을 만들지 않는지 확인하는 합성 입력입니다.");
+  await page.getByRole("button", { name: "저장하고 계속" }).click();
+  await expect(page.getByRole("dialog", { name: "보안 확인" })).toBeVisible();
+  signedIn = false;
+  await page.evaluate(() =>
+    window.dispatchEvent(
+      new CustomEvent("baro-session-changed", { detail: { reason: "signout" } }),
+    ),
+  );
+  await expect(page.getByRole("dialog", { name: "보안 확인" })).toHaveCount(0);
+  await expect(page.getByRole("textbox")).toBeDisabled();
+  await expect(page.getByRole("textbox")).toHaveValue("");
+  expect(writes).toBe(0);
+});
+
 async function challenge(page: Page) {
   await page.addInitScript(() => {
     let callback: ((token: string) => void) | undefined;
