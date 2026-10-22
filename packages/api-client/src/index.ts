@@ -9,6 +9,8 @@ export {
 export type { DirectoryFilters } from "./directory";
 export { createDirectoryClient } from "./directory";
 export { ApiError, errorMessage, responseError } from "./errors";
+export type { UploadMetadata, UploadReader } from "./files";
+export { createFilesClient, fileViewSchema, splitObservationEdits, validateUpload } from "./files";
 export type {
   EncodedBody,
   HttpTransport,

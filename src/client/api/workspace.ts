@@ -9,7 +9,7 @@ import { createFilesApi } from "./files";
 
 export type { CustomerWorkspaceView, WorkspaceTransport } from "@baro/api-client";
 export { workspaceError, workspaceResponse, workspaceViewSchema } from "@baro/api-client";
-// Compatibility helpers for the browser files adapter; domain instances use their own registry.
+// Explicit legacy helpers; workspace/files domain instances use their own registry.
 export const { workspaceJson, workspaceMutation } = createWorkspaceOperations(() =>
   crypto.randomUUID(),
 );

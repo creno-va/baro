@@ -249,6 +249,15 @@ workspace·자료·리포트·나머지 domain을 순차 추출한다. 첫 단�
   전환하도록 공통 binding 회귀도 보완했다. 앱 재시작 시 workspace 쓰기의 durable key
   복구와 실제 native IO는 후속 단계다.
 
+- 작업공간 PR342는 CI39790764136(head `8b66c4a`) 성공 뒤 main
+  `9e33f8df702cd33ac95242b177f210d4bd04b994`에 병합했다.
+- `codex/335-shared-files-client`는 metadata/coverage·교정·처리/삭제·chunk 업로드를
+  `createFilesClient`로 추출한다. 브라우저 File/stream hash는 facade에 남기고 generic
+  source·reader/hash/part/close·download를 주입한다. 크기/해시·같은 source 병행 업로드·
+  계정 전환 후 hash/원본 응답 취소를 검사한다. native picker/cache/byte IO와 앱 재시작
+  업로드/교정 복구는 M5 연결 단계에서 계속한다. 관련 domain/바이트 회귀140개·웹 첨부/검토
+  41개·frozen install/quick/build(실제 workerd 시작)/두 OS Metro bundle이 통과했다.
+
 ## 참고
 
 - [Expo workspace 구성](https://docs.expo.dev/guides/monorepos/)

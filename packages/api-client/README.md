@@ -1,6 +1,6 @@
 # @baro/api-client
 
-Shared JSON requests, safe public errors and wire clients for session/consent, cases/intake/workspace and the public
+Shared JSON requests, safe public errors and wire clients for session/consent, cases/intake/workspace/files and the public
 lawyer directory. Inject transport, UUID creation and optional body encoding. Web credentials
 and multipart bodies belong to the browser adapter; native API origin and session storage
 belong to native adapters. No global fetch, React, cookie configuration or environment reads
@@ -17,7 +17,7 @@ instances. `createDirectoryClient` validates canonical filters/cursor and respon
 Malformed responses and untrusted server messages become safe public errors.
 
 The web retains its existing facade/mock composition; mobile has no implicit mock fallback.
-Files/reports and remaining domains are subsequent #335 extraction units.
+Reports and remaining domains are subsequent #335 extraction units.
 Run `bun run clients:check`, `mobile:check`, and
 the existing web/domain tests when moving a module.
 
@@ -44,3 +44,12 @@ instance에 묶인다. 같은 쓰기는 진행 중 한 번으로 합치고, 계�
 항상 서버가 확인한다. 저장 실패 시에도 최신 job 조회로 복구한다. mutation key는 현재
 instance 내 응답 유실을 복구하며, 앱 재시작까지의 durable 쓰기 복구는 native adapter와
 M4 고객 흐름에서 별도 인수한다. 상담 원문·메시지는 이 job store에 보관하지 않는다.
+
+`createFilesClient<Source, Download>`는 자료 목록/coverage·처리 재시도·교정·삭제·chunk 업로드
+계약을 공유한다. `UploadMetadata` 외의 source와 다운로드 결과는 플랫폼 타입이며,
+`openUpload` reader가 전체 SHA-256·bounded part body/hash·close를 담당한다. 공통 코드는
+browser File/Blob/stream을 호출하지 않는다. reader는 immutable bytes를 읽고 abort를
+준수해야 하며 native adapter는 앱 전용 cache/원본 정리와 재시작 복구를 별도로 구현한다.
+같은 source 객체의 병행 업로드는 한 번만 열고 보낸다. hash/part 크기를 검증하고 계정
+전환 후 추가 admission/progress/result를 차단한다. close 오류는 성공한 업로드를 다시
+접수하게 만들지 않으며 adapter의 cache 정리 경로에서 처리한다.
