@@ -8,7 +8,7 @@ import {
   revisionSchema,
   timestampSchema,
 } from "../common";
-import { v2FailureCodeSchema, v2IdListSchema, v2VersionSchema } from "./common";
+import { v2FailureCodeSchema, v2IdListSchema, v2JobPhaseSchema, v2VersionSchema } from "./common";
 import { v2FactReferenceSchema, v2OfficialCitationSchema } from "./sources";
 
 export const v2CreateCaseRequestSchema = z.strictObject({
@@ -219,17 +219,7 @@ export const v2JobSchema = z
       "cancelled",
       "superseded",
     ]),
-    phase: z.enum([
-      "admission",
-      "extracting",
-      "transcribing",
-      "observing",
-      "retrieving",
-      "generating",
-      "validating",
-      "assembling",
-      "finished",
-    ]),
+    phase: v2JobPhaseSchema,
     progressPercent: z.number().int().min(0).max(100),
     attempts: z.number().int().min(0).max(10),
     failure: v2FailureCodeSchema.nullable(),

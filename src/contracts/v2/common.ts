@@ -23,6 +23,18 @@ export const V2_LIMITS = {
 export const v2VersionSchema = z.literal(V2_CONTRACT_VERSION);
 export const v2CountSchema = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
 export const v2HashSchema = z.string().regex(/^[a-f0-9]{64}$/);
+// File progress and jobs share this leaf without depending on each other's initialization.
+export const v2JobPhaseSchema = z.enum([
+  "admission",
+  "extracting",
+  "transcribing",
+  "observing",
+  "retrieving",
+  "generating",
+  "validating",
+  "assembling",
+  "finished",
+]);
 export const v2FailureCodeSchema = z.enum([
   "MODEL_UNAVAILABLE",
   "MODEL_SCHEMA_INVALID",
