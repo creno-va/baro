@@ -1,4 +1,6 @@
 import { afterEach, expect, test } from "bun:test";
+import { createWorkspaceClient } from "@baro/api-client";
+import { createSessionScope } from "@baro/client-core";
 import { Hono } from "hono";
 import { casesApi } from "../src/client/api/cases";
 import { createFilesApi as createClientFilesApi } from "../src/client/api/files";
@@ -291,14 +293,21 @@ test("real chat receipt replay and latest-job lookup recover a lost ACK after fa
   expect((await f.transport(path, init)).status).toBe(202);
   let lostRead = true;
   const writes: RequestInit[] = [];
-  const retrying = createWorkspaceApi(async (route, request) => {
-    if (route === path && request?.method === "POST") writes.push(request);
-    if (route.endsWith("/workspace") && lostRead) {
-      lostRead = false;
-      return Response.json({ error: { code: "UNAVAILABLE" } }, { status: 503 });
-    }
-    return f.transport(route, request);
-  }, null);
+  // Supply this synthetic admission's key explicitly. Unrelated client instances
+  // must not recover it from a module-global cache shared across accounts.
+  const retrying = createWorkspaceClient({
+    scope: createSessionScope(),
+    newKey: () => key,
+    listFiles: (id, options) => createClientFilesApi(f.transport).list(id, options),
+    request: async (route, request) => {
+      if (route === path && request?.method === "POST") writes.push(request);
+      if (route.endsWith("/workspace") && lostRead) {
+        lostRead = false;
+        return Response.json({ error: { code: "UNAVAILABLE" } }, { status: 503 });
+      }
+      return f.transport(route, request);
+    },
+  });
   await expect(retrying.sendMessage(w.id, body)).rejects.toMatchObject({ code: "UNAVAILABLE" });
   expect((await retrying.sendMessage(w.id, body)).messages.at(-1)?.status).toBe("pending");
   expect(writes).toHaveLength(2);

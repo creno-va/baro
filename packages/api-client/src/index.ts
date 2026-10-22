@@ -19,3 +19,7 @@ export type {
 } from "./http";
 export { createJsonRequester, isApiPath } from "./http";
 export { createSessionClient } from "./session";
+export type { CustomerWorkspaceView } from "./workspace";
+export { createWorkspaceClient, workspaceViewSchema } from "./workspace";
+export type { WorkspaceTransport } from "./workspace-http";
+export { createWorkspaceOperations, workspaceError, workspaceResponse } from "./workspace-http";
