@@ -81,10 +81,7 @@ export function browserTargets(files: string[], available: string[]): string[] {
     [/^src\/client\/api\/mock\/file-review\.ts$/, caseFlows],
     [/^src\/client\/api\/mock\/file-review\.ts$/, reportFlows],
     [/^playwright\.config\.ts$/, /\.e2e\.ts$/],
-    [
-      /^tests\/helpers\/case-ui-capture\.ts$/,
-      /\/(?:workspace|reports-integrated)\.e2e\.ts$/,
-    ],
+    [/^tests\/helpers\/case-ui-capture\.ts$/, /\/(?:workspace|reports-integrated)\.e2e\.ts$/],
     [
       /^tests\/(?:browser\/(?:reports(?:-account-real|-integrated)?|report-real-download|material-report|account-session-recovery)\.config\.ts|helpers\/reports?[^/]*\.ts)$/,
       reportFlows,
