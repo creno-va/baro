@@ -96,6 +96,8 @@ export function createCasesClient(
     mode: "real" | "mock";
     scope: SessionScope;
     signal?: AbortSignal;
+    /** Native read-only presentation; preserve default web DTOs. */
+    includeLegacyDetails?: boolean;
     newKey: () => string;
     fingerprint: (value: string) => Promise<string>;
     challenge: (signal: AbortSignal) => Promise<string>;
@@ -602,6 +604,7 @@ export function createCasesClient(
           summary: "기존 사건 기록",
           updatedAt: old.completedAt ?? old.startedAt ?? new Date().toISOString(),
           schemaVersion: "1",
+          ...(dependencies.includeLegacyDetails ? { legacyDetail: old } : {}),
         };
       }
       const m = await metadata(id);

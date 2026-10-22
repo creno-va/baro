@@ -1,3 +1,4 @@
+import type { CaseDetail } from "@baro/contracts/cases";
 import type { ClientSession } from "@baro/contracts/session";
 import type {
   V2Coverage,
@@ -22,6 +23,7 @@ export type CaseView = {
   schemaVersion?: "1" | "2";
   summaryDetails?: V2Summary;
   summaryNeedsConfirmation?: boolean;
+  legacyDetail?: CaseDetail;
 };
 export type QuestionView = {
   id: string;

@@ -1,5 +1,6 @@
 import { opaqueIdSchema } from "@baro/contracts/v1";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import * as WebBrowser from "expo-web-browser";
 import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from "react";
 import { createNativeCases } from "../composition/cases";
 import { getSessionModel } from "../composition/session";
@@ -51,6 +52,15 @@ function ObservedCases({ model }: { model: CasesModel }) {
       actions={model}
       onSession={() => router.push("/session")}
       onWorkspace={(caseId) => router.push({ pathname: "/workspace", params: { caseId } })}
+      onOpenLink={(url) => {
+        try {
+          const parsed = new URL(url);
+          if (parsed.protocol === "https:" && !parsed.username && !parsed.password)
+            void WebBrowser.openBrowserAsync(parsed.href).catch(() => {});
+        } catch {
+          /* Contract-validated HTTPS only. */
+        }
+      }}
     />
   );
 }
