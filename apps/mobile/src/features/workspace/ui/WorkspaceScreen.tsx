@@ -34,6 +34,7 @@ export function WorkspaceScreen({
   onCitation,
   onFiles,
   onReports,
+  onPrecedents,
 }: {
   state: WorkspaceState;
   actions: WorkspaceModel;
@@ -42,6 +43,7 @@ export function WorkspaceScreen({
   onCitation(url: string): void;
   onFiles?: () => void;
   onReports?: () => void;
+  onPrecedents?: () => void;
 }) {
   const [section, setSection] = useState<"messages" | "facts" | "actions" | "timeline" | "files">(
     "messages",
@@ -132,6 +134,9 @@ export function WorkspaceScreen({
               <Text>다음 대화 전에 사건 요약을 검토·확인해 주세요.</Text>
               <Button label="요약 검토·확인하기" disabled={state.busy} onPress={onReview} />
             </Card>
+          ) : null}
+          {value.case.schemaVersion === "2" && onPrecedents ? (
+            <Button label="사건 판례 탐색" onPress={onPrecedents} disabled={state.busy} />
           ) : null}
           {value.case.schemaVersion === "1" ? (
             <>
