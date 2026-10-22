@@ -21,6 +21,7 @@ export function validationCommands(profile: string, root = process.cwd()): Comma
     ["bun", "run", "boundaries:check"],
     ["bun", "run", "lint"],
     ["bun", "run", "typecheck"],
+    ["bun", "run", "mobile:check"],
     [
       "bun",
       "test",

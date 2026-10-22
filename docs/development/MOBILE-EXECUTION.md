@@ -1,17 +1,18 @@
 # RN + Expo 모바일 실행 계획
 
-- Status: 계획 작성; M1 이후 미착수
+- Status: M0 계획 통합 완료; M1 앱 기반·계약 공유 구현/검증 중
 - Updated: 2026-10-22
-- Tracking: [#328](https://github.com/creno-va/baro/issues/328)
+- Tracking: 계획 [#328](https://github.com/creno-va/baro/issues/328), M1 [#330](https://github.com/creno-va/baro/issues/330)
 - Decision: [ADR-0017](../adr/0017-expo-mobile-and-shared-client-boundaries.md)
 - Architecture: [공통 코드와 모바일 경계](../architecture/MOBILE-CLIENT.md)
 
 ## 1. 이번 요청과 완료 범위
 
 사용자는 RN + Expo를 선택했고, 웹 UI 전면 개편은 다른 채팅에서 진행하므로 모바일의
-공통 코드 구조와 단계별 실행 계획을 먼저 요청했다. 이번 변경은 문서만 작성한다.
-`apps/mobile`·workspace·패키지·제품 코드는 아직 생성/수정하지 않았으며 앱 빌드·로그인·
-실기기·스토어 출시를 완료했다고 주장하지 않는다.
+공통 코드 구조와 단계별 실행 계획을 먼저 요청했다. 계획 PR329는 CI 성공 후 main
+`e6401de9657f8fd062fb913fe7d3945adec068fd`에 병합했다. 이어진 직접 요청으로 M1
+`apps/mobile`·Bun workspace·공통 계약 export를 #330에서 구현한다. 로그인·실기기·
+스토어 출시 인수와 구분한다.
 
 후속 목표는 기존 BARO 고객/변호사 기능의 iOS/Android 제공이다. 고객 핵심 흐름을 먼저
 완성하고 기본 UI로 기능을 검증한 뒤 모바일 시각 디자인을 정교화한다. push 알림,
@@ -65,9 +66,11 @@ M5를 합치면 사진 첨부→처리 확인→리포트 공유까지 이어진
 4. 모바일 개발 빌드/단위·컴포넌트 검사와 기존 quick/build를 CI에 구분해 연결한다.
    `validate:native`는 기존 파일 처리기 검사이므로 모바일 빌드 증거로 사용하지 않는다.
 
-새 검사 명령 이름/CI job은 구현 PR에서 확정한다. 현재 존재하지 않는 모바일 명령을
-실행 가능한 명령으로 기록하지 않는다. Expo development build를 기본으로 하고 초기에는
-로컬 빌드로 검증할 수 있다. EAS 계정·유료 서비스·자동 배포를 필수 전제로 만들지 않는다.
+M1 구현 명령은 `contracts:check`, `mobile:check`, `mobile:bundle`, `mobile:native`다.
+자동 quick은 타입·import 경계·계약/환경·RN 컴포넌트만 검사한다. native 컴파일은 별도
+수동 `Mobile native builds (manual)` workflow에서 정확한 main SHA로 실행한다.
+[앱 개발 안내](../../apps/mobile/README.md)를 따른다. EAS 계정·유료 서비스·자동 배포를
+필수 전제로 만들지 않는다. 기존 `validate:native`는 서버 자료 처리기용이다.
 
 ### M2: 공유 코드는 한 모듈씩
 
@@ -154,12 +157,13 @@ CI, 기존 client facade는 한 공유 기반 PR 담당이 순서대로 통합�
 모듈 소유권을 유지한다. 같은 파일에 열린 PR이 있으면 먼저 통합하고 그 main을 기준으로
 작업한다. 다른 채팅에 자동 메시지를 보내지 않고 이 문서를 인계 자료로 제공한다.
 
-다음 구현 이슈는 **M1: Expo 앱 기반과 계약 workspace export**다. 인수 범위는 웹 경로
-유지, 명시적인 계약 export, iOS/Android 개발 빌드, 독립 typecheck/CI와 기본 상태 화면이다.
-인증 실연결·실제 자료 처리·최종 시각 디자인을 이 첫 PR의 완료 조건에 섞지 않는다.
-해당 이슈 생성 시 기존 작업 그래프/마일스톤과 조율하고 실제 번호·선행 PR을 기록한다.
+현재 구현 이슈는 **#330 M1: Expo 앱 기반과 계약 workspace export**다. 인수 범위는 웹
+경로 유지, 명시적인 계약 export, iOS/Android 개발 빌드, 독립 typecheck/CI와 기본 상태
+화면이다. native 컴파일 증거를 이슈에 기록하기 전 전체 M1 인수 완료로 표시하지 않는다.
+다음 단계는 M2 transport 주입 client이며 M1 통합 이후 별도 이슈로 진행한다.
+인증 실연결·실제 자료 처리·최종 시각 디자인은 이 첫 PR의 완료 조건에 섞지 않는다.
 
-## 6. 이번 조사·검증 기록
+## 6. M0 계획 당시 조사·검증 기록
 
 - 작업 브랜치: `codex/328-mobile-architecture-plan`.
 - 조사/분기 기준: clean `origin/main` = `bdc50a0af2f9adb3a6864f7cccf0983dcac771ee`.
@@ -173,6 +177,25 @@ CI, 기존 client facade는 한 공유 기반 PR 담당이 순서대로 통합�
 - 기준 SHA의 GitHub Quality gate는 성공, 별도 Full validation은 실패 상태였다.
   이 문서 작업에서 기존 full 실패를 수정/성공 처리하지 않으며 제품 코드도 시작하지 않는다.
 - 기능 구현·SDK 버전 확정·native build·실제 OAuth/파일·스토어 제출·배포는 아직 수행하지 않았다.
+
+## 7. M1 구현과 검증 기록
+
+- 브랜치 `codex/330-expo-foundation`, 기준 main `e6401de9657f8fd062fb913fe7d3945adec068fd`.
+- PR329는 최신 main 통합 head `e680cc533a615a1a6375b5506b50cb66b1550479`의
+  [Quality gate](https://github.com/creno-va/baro/actions/runs/39770609573) 성공을 확인하고 정상 병합했다.
+- Bun 1.4.0과 Node 24.22.1을 임시 도구 경로에 준비한 뒤 `bun ci`, `bun run work:next`를
+  실행했다. 기존 작업 그래프 56개·cycle 없음. 열린 모바일 구현 PR이 없어 #330을 등록했다.
+- Expo SDK 58.0.17, RN 0.88.0, React 19.3.0을 고정했다. React 버전은 기존 웹과 동일하다.
+  workspace의 이전 isolated 설치를 정리한 hoisted 설치에서 Expo doctor 20/20 통과했다.
+- 웹 번들러의 상대경로 directory import를 보존하기 위해 package `main`은 기존 `index.ts`를
+  유지하고 public package export는 `/v1`, `/v2` 등 명시적 subpath만 제공한다. bare package
+  root와 pipeline은 공개하지 않는다. 기존 웹/서버 import 142곳을 일괄 수정하지 않는다.
+- 현재 로컬 검증: 독립 typecheck, public 계약 19개 모듈의 transitive 경계, 계약/환경 회귀
+  5개와 RN 컴포넌트 4개, iOS/Android Metro bundle 통과. 최종 커밋의 quick/build·CI 증거는
+  #330 및 구현 PR에 기록한다. bundle 통과를 native 컴파일로 표현하지 않는다.
+- 로컬에는 전체 Xcode·Android SDK·JDK가 없어 native 컴파일은 수동 GitHub workflow로
+  인수한다. native 성공 receipt 전까지 #330을 OPEN으로 유지한다. 실제 기기·외부 로그인·
+  자료 처리·스토어 제출·공개 배포는 이 단계에서 수행하지 않는다.
 
 ## 참고
 

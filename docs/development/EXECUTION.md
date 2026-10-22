@@ -13,10 +13,11 @@
 비용의 금액·가격/FX/funding 누락/만료·월할당·수동 refresh·유지비·비용 예약 IO로 기능이나
 배포를 막지 않는다. 새 직접 사용자 지시 전 재도입 금지이며, [현행 정책과 적용 상태](../operations/PREBETA-COST-POLICY.md)를 따른다.
 
-2026-10-22 직접 요청으로 RN + Expo 모바일 개발 준비를 별도 범위로 추가했다.
-현재 요청 산출물은 [공통 코드 구조](../architecture/MOBILE-CLIENT.md)와
-[실행 계획](./MOBILE-EXECUTION.md), [ADR-0017](../adr/0017-expo-mobile-and-shared-client-boundaries.md)이다.
-웹 UI 전면 개편은 다른 채팅의 기존 소유권을 유지하며 앱 구현은 단계별 후속 작업이다.
+2026-10-22 직접 요청으로 RN + Expo 모바일 개발을 별도 범위로 추가했다.
+[공통 코드 구조](../architecture/MOBILE-CLIENT.md), [실행 계획](./MOBILE-EXECUTION.md),
+[ADR-0017](../adr/0017-expo-mobile-and-shared-client-boundaries.md)을 PR329로 통합한 뒤
+M1 앱 기반·공통 계약 공유를 #330에서 구현한다. 웹 UI 전면 개편은 다른 채팅의 기존
+소유권을 유지하며 인증/API 실연결·최종 디자인·배포는 후속 단계다.
 
 1. README·이슈 명세를 읽고 bun run work:next로 GitHub 선행 구현·열린 PR·작업자를 확인한다.
 2. 선행 구현 PR의 검토·필수 CI·main 병합 후 제품 코드를 시작한다. 실제 외부 인수로 열린
@@ -31,7 +32,7 @@
 
 | 작업 | 담당/이슈 | 현재 상태·blocker | 다음 행동 |
 | --- | --- | --- | --- |
-| 모바일 공통 구조·실행 계획 | 모바일 계획 채팅 / #328 | 2026-10-22 사용자 RN/Expo 확정. `codex/328-mobile-architecture-plan`에서 문서 작성; 앱 미생성. 로컬 Bun 부재로 work:next/quick 실행 불가, GitHub 읽기·문서 정적 검사로 구분 | 문서 검토·통합 후 M1 앱 기반/계약 export 이슈 착수. 웹 UI·공유 lock/계약·인증 모듈 소유권 준수, 실제 OAuth/기기/스토어 인수는 후속 |
+| 모바일 M1 앱 기반·계약 | 모바일 담당 / #330 (계획 #328, PR329 병합) | `codex/330-expo-foundation`, 기준 main `e6401de`. 앱 shell·환경·UI/model 분리·contracts export·경계 검사 구현. 네이티브 컴파일 증거는 이슈의 정확한 SHA/수동 workflow 결과로 인수 | quick·웹 build·두 OS Metro·수동 native build 확인 후 M1 인수. 웹 화면·스타일 경로 유지. M2 transport, M3 인증 및 실제 기기/스토어 인수는 별도 |
 | DB·HTTP 왕복 축소 | 성능 조율 / #317 | 선행 UI·법률·모델·첨부·리포트 PR을 main c2258b88에 통합, 필수 PR/main CI 성공. 별도 codex/317-db-roundtrips에서 합성 호출 수 재측정 | commit revision 기반 행동·타임라인 선택 재조회, 중복 domain 읽기와 단일 공개 목록 lead sample 제거. fresh auth/삭제/CAS/멱등성 및 관측 전용 비용 정책 보존. 회귀·quick/build/DB 검증 후 PR, 실제 원격 성능·배포는 #71 별도 |
 | 사진 근거·PDF 리포트 | AI/자료, #312 | 2026-10-21 직접 요청, codex/312-photo-evidence-pdf. #307 첨부 UI·#304 법률 범위 분리, migration 없음 | 상해/진단서 관찰·확인 지침, 선택 사진·출처와 HTML→PDF, PDF만 저장. quick/build·브라우저·native 조판 CI 후 별도 PR 병합; 외부 모델/배포 인수 별도 |
 | Gemini 모델·질문 하네스 | AI / #305 | 2026-10-21 사용자 승인, 별도 codex/305-gemini-flash-pipeline worktree. #304 법률 API와 PR303 UI 범위 분리 | ADR-0016·고정 평가·quick/build·CI 검증 후 별도 PR 병합. 실제 모델·배포 인수는 별도 receipt |

@@ -1,0 +1,74 @@
+# BARO mobile — M1
+
+Expo SDK 58 / React Native 0.88.0 / React 19.3.0 / Expo Router 기반 iOS·Android 앱이다.
+현재 시작·이용 안내·잘못된 경로 화면과 기본 상태 UI를 제공한다. 로그인·사건 저장·API
+호출은 M2~M3 이후 연결한다. 합성 로그인이나 실제 사건 데이터는 포함하지 않는다.
+
+## 개발
+
+저장소 루트에서 `.bun-version`의 Bun과 이 폴더 `.node-version`의 Node를 사용한다.
+workspace는 단일 `bun.lock`과 hoisted 설치를 사용한다. 개별 폴더에서 별도 lockfile을
+만들지 않는다. 이전 isolated 설치가 남아 Expo doctor가 중복 native 모듈을 보고하면
+해당 checkout의 root/app `node_modules`만 제거하고 `bun ci`로 재설치한다.
+
+```sh
+bun ci
+bun run mobile:check
+bun run mobile:bundle
+bun run mobile:start
+```
+
+개발 클라이언트를 먼저 기기/시뮬레이터에 설치한다. Expo Go를 인수 기준으로 사용하지 않는다.
+Android SDK·JDK 17이 있는 환경에서 `bun run --cwd apps/mobile android`, macOS의 Xcode와
+CocoaPods가 있는 환경에서 `bun run --cwd apps/mobile ios`로 생성·컴파일·실행한다.
+생성된 `android/`, `ios/`, `.expo/`, `dist/`는 Git에 추가하지 않는다.
+
+## 공개 환경 설정
+
+`apps/mobile/.env.example`을 참고해 필요한 공개 값만 `.env.local`에 설정한다.
+`EXPO_PUBLIC_*`는 bundle에 노출된다. secret·토큰·사건 원문을 넣지 않는다.
+
+| 환경 | EXPO_PUBLIC_APP_ENV | 기본 API | 앱 식별자 / scheme |
+| --- | --- | --- | --- |
+| 로컬 | local (기본) | http://127.0.0.1:4321 | site.baro.app.dev / baro-dev |
+| Preview | preview | https://preview.baro.site | site.baro.app.preview / baro-preview |
+| Production | production | https://baro.site | site.baro.app / baro |
+
+`EXPO_PUBLIC_API_URL`은 preview/production에서 해당 origin만 허용한다. local에서는
+loopback·사설 LAN 주소만 허용하며 Android emulator는 `http://10.0.2.2:4321`을 사용한다.
+실기기는 개발 PC의 LAN 주소와 접근 가능한 로컬 서버가 필요하다. M1은 URL 설정만 검증하고
+네트워크 요청을 보내지 않는다. 식별자는 스토어 등록 전 잠정값이며 OTA는 비활성화되어 있다.
+
+## 소유 경계와 UI 변경
+
+- `src/app`: Expo Router와 화면 조합.
+- `src/features/foundation/model.ts`: 플랫폼과 화면에서 독립된 상태·공통 계약 소비.
+- `src/features/foundation/ui`: props와 명령 callback을 받는 RN 화면.
+- `src/ui`, `src/theme`: 기본 컴포넌트와 임시 시각 토큰. 웹 디자인 인계는 M7에서 반영.
+- `src/composition`: 검증된 공개 설정 주입. 향후 platform adapter를 여기에서 조립.
+- `@baro/contracts`: 기존 `src/contracts` 정본의 명시적 public export. 서버 pipeline 제외.
+
+웹의 `src/pages`, `src/components`, `src/layouts`, `src/styles`, `src/client`는 이 작업에서
+변경하지 않는다. 공유 package/lock/CI 변경은 기반 PR을 먼저 통합한다. 전체 단계는
+[실행 계획](../../docs/development/MOBILE-EXECUTION.md)을 따른다.
+
+## 검증
+
+`mobile:check`는 계약·앱·설정·테스트 타입, import 경계, 계약/환경 실패 시나리오와 RN
+컴포넌트 동작을 검사한다. RN Jest 테스트는 `tests/*.ui.tsx`에 두어 root Bun 테스트와 분리한다.
+`mobile:bundle`은 두 OS의 실제 Metro/Hermes bundle을 만든다. `bunx expo-doctor`는 이
+폴더에서 실행한다. 기존 웹 회귀는 루트 `validate:quick`, `validate:build`로 확인한다.
+
+수동 GitHub workflow `Mobile native builds (manual)`는 정확한 main SHA를 받아 preview
+설정으로 Android debug APK와 iOS simulator Debug 앱을 컴파일한다. Android는 기본 debug
+키를 사용하며 스토어 서명·업로드·배포를 하지 않는다. 성공 시 platform/SHA를 포함하는
+receipt를 artifact로 남긴다. 로컬에서도 다음 명령으로 같은 컴파일을 실행할 수 있다.
+
+```sh
+EXPO_PUBLIC_APP_ENV=preview bun run mobile:native android
+EXPO_PUBLIC_APP_ENV=preview bun run mobile:native ios
+```
+
+타입/단위 테스트, Metro 번들, native 컴파일, 실제 기기 실행은 각각 다른 검증이다.
+M1의 실제 결과와 미완료 native 항목은 [#330](https://github.com/creno-va/baro/issues/330)에
+기록한다. 실제 OAuth·기기 키보드/접근성·서명·스토어 인수는 완료로 간주하지 않는다.

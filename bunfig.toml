@@ -1,0 +1,3 @@
+# Preserve the web install layout and one native module instance per Expo app.
+[install]
+linker = "hoisted"
