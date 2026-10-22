@@ -386,3 +386,20 @@ URL에는 공개 프로필의 값만 사용하고 사건/메시지·쿠키/token
 
 이 범위는 기본 RN UI/합성 HTTP·SQL 회귀다. 실제 OS 연락 앱·브라우저·두 역할 기기 인수와
 본인 편집/판례/설정·계정 삭제, M7/M8 및 #339/#71의 남은 조건은 별도로 추적한다.
+
+### M6 사건 판례
+
+RN 판례 화면은 `precedent-research`의 context/search/read를 그대로 소비한다. 현행 계약은
+주제1~2개와 최대6건·발췌이며 자유 검색어/cursor를 새로 만들지 않는다. 화면 진입은 사건과
+요약의 context만 조회하고 실제 공식 검색과 원문/외부 사이트 열기는 사용자 조작으로 시작한다.
+추천 주제와 모든 주제를 선택할 수 있으며 완전/일부/없음/확인 불가·top-N/본문 발췌를 구분한다.
+
+native JSON adapter는 expected owner와 feature/scope/요청 취소를 함께 적용한다. 검색은
+원래 workspace/summary revision·공개 topic ID만, 읽기는 해당 결과의 readToken·workspace
+revision만 본문에 보낸다. 사건 진술·token은 URL에 넣지 않는다. 응답의 원래 revision/주제와
+출처 ID/hash·정확한 공식 URL을 대조한다. 공식 사이트 열기도 signed read를 새로 확인한다.
+계정·동의·역할·background/route 전환, 새 요청·충돌/404에서 이전 사건/결과·원문을 폐기한다.
+검색을 자동 반복하거나 legal-retrieval 밖에서 공식 법률 API를 호출하지 않는다.
+
+합성 Hono/암호화 SQL와 법률 transport 대역은 실제 공식 제공자/기기 인수와 다르다.
+실제 앱·API SHA의 동작과 #346/#369/#71·M7/M8 조건은 별도로 유지한다.

@@ -49,6 +49,7 @@ function ConnectedWorkspace({ caseId, session }: { caseId: string; session: Sess
       onSession={() => router.push("/session")}
       onFiles={() => router.push({ pathname: "/files", params: { caseId } })}
       onReports={() => router.push({ pathname: "/reports", params: { caseId } })}
+      onPrecedents={() => router.push({ pathname: "/precedents", params: { caseId } })}
       onReview={() => router.push({ pathname: "/cases", params: { reviewCaseId: caseId } })}
       onCitation={(url) => {
         try {
