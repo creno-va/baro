@@ -111,3 +111,15 @@ EXPO_PUBLIC_APP_ENV=preview bun run mobile:native ios
 타입/단위 테스트, Metro 번들, native 컴파일, 실제 기기 실행은 각각 다른 검증이다.
 M1의 실제 결과와 미완료 native 항목은 [#330](https://github.com/creno-va/baro/issues/330)에
 기록한다. 실제 OAuth·기기 키보드/접근성·서명·스토어 인수는 완료로 간주하지 않는다.
+
+## 고객 사건 연결
+
+`/cases`는 fresh 고객 세션·동의 gate 아래 사건 목록/생성·서버 저장분 재개·차례별 질문·
+모름/건너뛰기·요약 text/사실 수정·확인을 제공한다. 처리 중인 작업만 활성 화면에서 조회한다.
+서버 revision 충돌은 미저장 입력을 보존하고 명시적인 최신 내용 사용으로 해결한다.
+화면을 완전히 나가거나 앱을 종료하면 미저장 입력은 사라질 수 있다. 작업공간 채팅·자료/
+리포트 및 v1 분석 상세/삭제는 #354의 후속이며 구현한 것처럼 표시하지 않는다.
+
+불확실 mutation key와 owner/revision metadata는 `.case-operations` SecureStore service에
+별도로 보관한다. 물리 key는 fingerprint이며 UUID/허용 metadata 이외의 값·잠김·손상·
+silent write는 실패한다. 인증 reset에서 지우지 않으며 사실/답변/보안 token은 저장하지 않는다.

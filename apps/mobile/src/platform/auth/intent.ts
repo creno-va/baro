@@ -13,7 +13,7 @@ export function rewriteNativeIntent(
     }
     const url = new URL(path, "https://native.invalid");
     // No incoming query, fragment, cookie, token or code enters Expo Router.
-    return ["/", "/guide", "/directory", "/session"].includes(url.pathname)
+    return ["/", "/guide", "/directory", "/session", "/cases"].includes(url.pathname)
       ? url.pathname
       : "/session";
   } catch {

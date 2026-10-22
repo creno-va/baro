@@ -41,3 +41,9 @@ test("return handoff is bounded, ephemeral, deduplicated and detachable", async 
   });
   expect(seen.at(-1)).toBe("cold-again");
 });
+
+test("incoming case links expose only the private gate path, never supplied case text", () => {
+  expect(
+    rewriteNativeIntent("/cases?facts=SYNTHETIC_PRIVATE#token=private", config, () => {}),
+  ).toBe("/cases");
+});

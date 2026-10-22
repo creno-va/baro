@@ -23,7 +23,7 @@ export function GuideScreen({ onBack }: { onBack: () => void }) {
           kind: "empty",
           title: "지금 이용할 수 있는 기능",
           description:
-            "로그인과 필수 확인, 변호사 탐색을 이용할 수 있어요. 사건 정리와 자료 저장은 준비 중이에요.",
+            "로그인과 필수 동의, 사건 생성·질문·요약 확인, 변호사 탐색을 이용할 수 있어요. 작업공간 채팅·자료·리포트는 준비 중이에요.",
         }}
       />
       <Button label="처음으로" onPress={onBack} />

@@ -1,6 +1,6 @@
 # RN + Expo 모바일 실행 계획
 
-- Status: M1 인수 완료; 전체 네이티브 앱화 #334 / M2 공통 client #335 진행
+- Status: M1/M2 인수; 전체 #334 / M3 실제 인증 잔여 #346 / M4 고객 흐름 #354 진행
 - Updated: 2026-10-23
 - Tracking: native 인증 [#346](https://github.com/creno-va/baro/issues/346), 전체 [#334](https://github.com/creno-va/baro/issues/334), 계획 [#328](https://github.com/creno-va/baro/issues/328), M1 [#330](https://github.com/creno-va/baro/issues/330), M2 [#335](https://github.com/creno-va/baro/issues/335)
 - Decision: [ADR-0017](../adr/0017-expo-mobile-and-shared-client-boundaries.md)
@@ -396,6 +396,30 @@ workspace·자료·리포트·나머지 domain을 순차 추출한다. 첫 단�
   재현해 호출자의 AbortSignal을 우선 전파하도록 보완했다. 패키지/웹 facade의 공통 소비는
   session/directory/cases/workspace/files/reports/account/precedents/lawyers 전체를 대조했다.
   M2 인수는 이 순수 client/adapter 경계이며 실제 파일/기기/전체 화면 인수는 M3~M8이다.
+
+## 10. M4 고객 사건 연결
+
+- M2 최종 PR353은 head `1a9dce2` CI39827918942 성공 후 main
+  `e49c76e88fd0d3d1b1331a423be0bfa453785ca8`에 정상 병합했다. #335의 모든 공통
+  client/adapter 인수 항목을 파일·회귀로 대조해 종료했다. 실제 파일 IO/화면/기기는 후속이다.
+- #354의 `codex/354-native-cases`는 인증 jar와 다른 SecureStore service/namespace에
+  fingerprint key·UUID·owner/revision metadata만 저장한다. allowlist 밖 payload/손상/
+  잠김/silent write/delete 손실을 거절하고 IO를 직렬화한다. 앱 사실/대화/token을 저장하지
+  않으며 auth reset이 불확실 작업 key를 지우지 않는다.
+- `/cases`는 고객/fresh owner/동의 gate를 통해 목록·보안 확인 생성·기존 서버 저장분 재개,
+  차례별3개 답변·모름/건너뛰기·요약과 사실 text/미확인 내용 수정·확인을 연결한다. 처리
+  중에만 활성 화면에서 조회하고 background/blur에서 이전 IO/조회를 중단한다. 동의/로그인
+  오류는 세션을 재확인한다. 임시 중단 시 입력은 메모리에서만 보관하며 같은 owner의 fresh
+  gate에서만 복원한다. 화면을 완전히 나가거나 앱을 종료할 때 미저장 내용은 사라질 수 있다.
+- 사건 생성 acknowledgement 뒤 질문 조회가 실패해도 저장된 detail에 남아 새 생성을
+  반복하지 않는다. POST 응답 유실은 같은 durable key로 실제 Hono/SQL에서1건만 생성함을
+  확인했다. 다른 revision이 있으면 입력을 덮어쓰지 않고 명시적인 최신 내용 사용을 요구한다.
+- native 모델/저장/실제 Hono·SQL 생성11개와 RN 화면2개, 기존 사건/질문/소유권38개,
+  frozen/quick(공통·모바일134개·RN20개·필수 서버42개), production build/workerd·두 OS
+  Metro가 통과했다. 실제 provider/Turnstile/기기 성공으로 확대하지 않는다.
+- 이번 단위는 작업공간 채팅/타임라인/행동, v1 분석 상세·삭제를 아직 연결하지 않는다.
+  UI에 준비 중을 표시하며 #354를 OPEN으로 보존한다. 이 후속과 M3 reauth·M5~M8을
+  계속한다. native 컴파일 receipt와 실제 기기 인수는 별도로 기록한다.
 
 ## 참고
 
