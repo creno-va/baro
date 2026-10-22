@@ -1,4 +1,5 @@
-import { useState } from "react";
+import type { DirectoryFilters } from "@baro/api-client";
+import { useEffect, useState } from "react";
 import { FlatList, View } from "react-native";
 import { tokens } from "../../../theme/tokens";
 import { Button } from "../../../ui/Button";
@@ -7,11 +8,14 @@ import { Screen } from "../../../ui/Screen";
 import { StatePanel } from "../../../ui/StatePanel";
 import { Text } from "../../../ui/Text";
 import { TextField } from "../../../ui/TextField";
+import { fieldLabels, regionLabels } from "../labels";
 import type { DirectoryState } from "../model";
+import { DirectoryFilter } from "./Filter";
 
 export interface DirectoryScreenProps {
   state: DirectoryState;
-  onSearch: (query: string) => void;
+  onSearch: (filters: DirectoryFilters) => void;
+  onSelect: (id: string) => void;
   onMore: () => void;
   onRetry: () => void;
   onRefresh: () => void;
@@ -22,36 +26,61 @@ export function DirectoryScreen({
   onMore,
   onRetry,
   onRefresh,
+  onSelect,
 }: DirectoryScreenProps) {
   const [query, setQuery] = useState(state.query);
+  const [region, setRegion] = useState(state.region);
+  const [practiceArea, setPracticeArea] = useState(state.practiceArea);
+  useEffect(() => {
+    setQuery(state.query);
+    setRegion(state.region);
+    setPracticeArea(state.practiceArea);
+  }, [state.query, state.region, state.practiceArea]);
+  const search = () => onSearch({ query, region, practiceArea });
   const loading = state.phase === "loading";
   return (
     <Screen scroll={false}>
-      <Text variant="heading" accessibilityRole="header">
-        변호사 탐색
-      </Text>
-      <Text variant="muted">공개 프로필을 살펴보고 상담을 준비해 보세요.</Text>
-      <TextField
-        label="이름으로 검색"
-        value={query}
-        onChangeText={setQuery}
-        maxLength={100}
-        returnKeyType="search"
-        onSubmitEditing={() => onSearch(query)}
-        autoCorrect={false}
-      />
-      <Button label="검색" onPress={() => onSearch(query)} />
-      {state.error ? (
-        <StatePanel
-          state={{
-            kind: "error",
-            title: "목록을 불러오지 못했어요",
-            description: state.error,
-            retry: { label: "다시 시도", run: onRetry },
-          }}
-        />
-      ) : null}
       <FlatList
+        ListHeaderComponent={
+          <View style={{ gap: tokens.space.control, paddingBottom: tokens.space.section }}>
+            <Text variant="heading" accessibilityRole="header">
+              변호사 탐색
+            </Text>
+            <Text variant="muted">공개 프로필을 살펴보고 상담을 준비해 보세요.</Text>
+            <DirectoryFilter
+              label="지역"
+              value={region}
+              labels={regionLabels}
+              onChange={setRegion}
+            />
+            <DirectoryFilter
+              label="분야"
+              value={practiceArea}
+              labels={fieldLabels}
+              onChange={setPracticeArea}
+            />
+            <TextField
+              label="이름으로 검색"
+              value={query}
+              onChangeText={setQuery}
+              maxLength={100}
+              returnKeyType="search"
+              onSubmitEditing={search}
+              autoCorrect={false}
+            />
+            <Button label="검색" onPress={search} />
+            {state.error ? (
+              <StatePanel
+                state={{
+                  kind: "error",
+                  title: "목록을 불러오지 못했어요",
+                  description: state.error,
+                  retry: { label: "다시 시도", run: onRetry },
+                }}
+              />
+            ) : null}
+          </View>
+        }
         style={{ flex: 1 }}
         data={state.items}
         keyExtractor={(item) => item.id}
@@ -66,9 +95,18 @@ export function DirectoryScreen({
             </Text>
             <Text>{item.officeName}</Text>
             <Text variant="muted">{item.introduction}</Text>
+            <Text>
+              {regionLabels[item.region]} ·{" "}
+              {item.practiceAreas.map((key) => fieldLabels[key]).join(" · ")}
+            </Text>
             <Text variant="muted">
               {item.verificationStatus === "verified" ? "자격 확인 프로필" : "본인 작성 프로필"}
             </Text>
+            <Button
+              label={`${item.name} 공개 프로필 보기`}
+              disabled={loading && !state.loadingMore}
+              onPress={() => onSelect(item.id)}
+            />
           </Card>
         )}
         ListEmptyComponent={
@@ -83,10 +121,14 @@ export function DirectoryScreen({
                     }
                   : {
                       kind: "empty",
-                      title: state.query ? "검색 결과가 없어요" : "공개된 프로필을 준비하고 있어요",
-                      description: state.query
-                        ? "다른 이름으로 검색하거나 검색어를 지워 주세요."
-                        : "공개된 변호사 프로필이 생기면 이곳에서 확인할 수 있어요.",
+                      title:
+                        state.query || state.region || state.practiceArea
+                          ? "검색 결과가 없어요"
+                          : "공개된 프로필을 준비하고 있어요",
+                      description:
+                        state.query || state.region || state.practiceArea
+                          ? "이름·지역·분야 조건을 바꿔 다시 검색해 주세요."
+                          : "공개된 변호사 프로필이 생기면 이곳에서 확인할 수 있어요.",
                     }
               }
             />

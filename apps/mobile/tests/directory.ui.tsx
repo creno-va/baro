@@ -7,6 +7,8 @@ import { DirectoryScreen } from "../src/features/directory/ui/DirectoryScreen";
 const initial: DirectoryState = {
   phase: "ready",
   query: "",
+  region: "",
+  practiceArea: "",
   items: [],
   nextCursor: null,
   error: null,
@@ -29,12 +31,18 @@ test("directory exposes labelled search, empty state, safe error retry, and user
   const search = jest.fn(),
     more = jest.fn(),
     retry = jest.fn();
-  const props = { onSearch: search, onMore: more, onRetry: retry, onRefresh: jest.fn() };
+  const props = {
+    onSearch: search,
+    onMore: more,
+    onRetry: retry,
+    onRefresh: jest.fn(),
+    onSelect: jest.fn(),
+  };
   const view = await render(<DirectoryScreen state={initial} {...props} />, { wrapper });
   expect(screen.getByRole("header", { name: "공개된 프로필을 준비하고 있어요" })).toBeTruthy();
   await fireEvent.changeText(screen.getByLabelText("이름으로 검색"), "합성 이름");
   await fireEvent.press(screen.getByRole("button", { name: "검색" }));
-  expect(search).toHaveBeenCalledWith("합성 이름");
+  expect(search).toHaveBeenCalledWith({ query: "합성 이름", region: "", practiceArea: "" });
   await view.rerender(
     <DirectoryScreen
       state={{ ...initial, phase: "error", error: "다시 확인해 주세요." }}
@@ -70,4 +78,45 @@ test("directory exposes labelled search, empty state, safe error retry, and user
   expect(screen.queryByText("자격 확인 프로필")).toBeNull();
   await fireEvent.press(screen.getByRole("button", { name: "더 보기" }));
   expect(more).toHaveBeenCalledTimes(1);
+});
+
+test("directory selects labelled region/field filters and profile navigation stays explicit", async () => {
+  const search = jest.fn(),
+    select = jest.fn();
+  await render(
+    <DirectoryScreen
+      state={{
+        ...initial,
+        items: [
+          {
+            id: "public_a",
+            revision: 1,
+            name: "합성 변호사",
+            officeName: "합성 사무소",
+            introduction: "합성 소개",
+            region: "seoul",
+            practiceAreas: ["civil"],
+            photoUrl: null,
+            photoAssetId: null,
+            verificationStatus: "self_declared",
+          },
+        ],
+      }}
+      onSearch={search}
+      onSelect={select}
+      onRefresh={jest.fn()}
+      onMore={jest.fn()}
+      onRetry={jest.fn()}
+    />,
+    { wrapper },
+  );
+  await fireEvent.press(screen.getByRole("button", { name: "지역: 전체" }));
+  await fireEvent.press(screen.getByRole("radio", { name: "지역 서울" }));
+  await fireEvent.press(screen.getByRole("button", { name: "분야: 전체" }));
+  await fireEvent.press(screen.getByRole("radio", { name: "분야 민사" }));
+  await fireEvent.press(screen.getByRole("button", { name: "검색" }));
+  expect(search).toHaveBeenCalledWith({ query: "", region: "seoul", practiceArea: "civil" });
+  expect(select).not.toHaveBeenCalled();
+  await fireEvent.press(screen.getByRole("button", { name: "합성 변호사 공개 프로필 보기" }));
+  expect(select).toHaveBeenCalledWith("public_a");
 });
