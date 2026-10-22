@@ -11,10 +11,10 @@ async function fixture() {
       const headers = new Headers(init.headers);
       headers.set("cookie", f.cookie);
       headers.set("origin", f.env.BETTER_AUTH_URL);
-      if (init.method === "POST")
+      if (init.method === "POST" || init.method === "PATCH")
         posts.push({ body: String(init.body), key: headers.get("idempotency-key") });
       const response = await f.app.request(path, { ...init, headers }, f.env);
-      if (init.method === "POST" && response.ok && loseResponse) {
+      if ((init.method === "POST" || init.method === "PATCH") && response.ok && loseResponse) {
         loseResponse = false;
         throw new Error("Synthetic generation response loss");
       }
@@ -88,3 +88,27 @@ test("changed source selections identify a fresh generation after an ambiguous f
   expect(f.posts[1]?.key).not.toBe(f.posts[0]?.key);
   expect(JSON.parse(f.posts[1]?.body ?? "{}").expectedRevision).toBe(committed.revision);
 });
+
+for (const explicit of [false, true])
+  test(`review save response-loss retry preserves its basis across refresh (explicit=${explicit})`, async () => {
+    const f = await fixture();
+    const displayed = await f.client.get(f.workspaceId);
+    const input = {
+      content: "Synthetic reviewed report",
+      excludedFileIds: [],
+      maskIdentifiers: false,
+    };
+    f.lose();
+    await expect(
+      f.client.save(f.workspaceId, input, explicit ? displayed.revision : undefined),
+    ).rejects.toThrow("Synthetic generation response loss");
+    const committed = await f.client.get(f.workspaceId);
+    const replay = await f.client.save(
+      f.workspaceId,
+      input,
+      explicit ? displayed.revision : undefined,
+    );
+    expect(replay.revision).toBe(committed.revision);
+    expect(f.posts[1]).toEqual(f.posts[0]);
+    expect((await f.reports.get(f.actor.ownerId, f.workspaceId)).revision).toBe(committed.revision);
+  });
