@@ -176,6 +176,8 @@ test("successful OAuth return consumes its selected role once and preserves retu
   await page.goto("/login?returnTo=/settings");
   await page.getByRole("radio", { name: "변호사", exact: true }).check();
   await page.getByRole("button", { name: "Google로 계속하기", exact: true }).click();
+  // Read sessionStorage only after the destination document has finished loading.
+  await page.waitForURL(/\/settings$/, { waitUntil: "load" });
   await expect(page).toHaveURL(/\/settings$/);
   await expect.poll(() => writes).toBe(1);
   expect(new URL(callback, "http://localhost").searchParams.get("returnTo")).toBe("/settings");
