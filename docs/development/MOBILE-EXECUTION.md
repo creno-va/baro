@@ -267,6 +267,17 @@ workspace·자료·리포트·나머지 domain을 순차 추출한다. 첫 단�
   5개/통합3개/실제 SQL PDF 다운로드1개와 frozen/quick/build/두 OS bundle이 통과했다.
   PDF 검증은 번들 Python(pypdf)을 사용했다. native cache/열기/공유·재시작 복구는 M5다.
 
+- 리포트 PR344는 CI39793983093(head `2a2d1c8`) 성공 후 main
+  `eefe3ff2aadaa117f42eaebcb248d215838ad1dc`에 병합했다.
+- `codex/335-shared-account-precedents`는 사용량·삭제·서버 OAuth freshness와 재인증
+  port, 판례 canonical topic/revision/read-proof client를 공유한다. 로컬 marker는 실제
+  서버 freshness를 대체하지 않으며 mock 삭제 readiness는 명시 fixture만 허용한다.
+  성공한 삭제는 private scope를 즉시 폐기하고 캐시 정리 실패가 삭제 재요청을 만들지 않는다.
+  판례 요청도 계정/화면 전환 후 실행·응답을 차단하며 법률 upstream 호출 경계는 보존한다.
+  공통/실제 SQL 삭제·사용량/판례 회귀69개·웹 설정5개/판례4개와 frozen/quick/build/
+  두 OS Metro bundle이 통과했다. 사건 삭제의 과거 ZIP 응답은 새 scope 폐기에 따라
+  UNAUTHENTICATED로 거절하며 원본을 새 화면으로 전달하지 않는다.
+
 ## 참고
 
 - [Expo workspace 구성](https://docs.expo.dev/guides/monorepos/)

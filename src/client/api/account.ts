@@ -1,115 +1,41 @@
-import { z } from "zod";
-import { deletionAccessSchema } from "../../contracts";
-import { v2UsageSchema } from "../../contracts/v2";
+import { createAccountClient as createSharedAccountClient } from "@baro/api-client";
+import { createSessionBoundClient } from "@baro/client-core";
 import { authClient } from "../auth";
+import { browserSessionScope } from "./context";
+import { apiMode } from "./core";
 import { type ApiRequest, type DomainRequest, domainRequest } from "./reports";
 import { notifySessionChanged } from "./session";
-import type { UsageView } from "./types";
 
-const count = z.object({ used: z.number().nonnegative(), limit: z.number().positive() });
-const usageViewSchema = z.object({
-  newCases: count,
-  aiResponses: count,
-  mediaMinutes: count,
-  storageBytes: count,
-});
-export type UsageSummary = UsageView & {
-  resetAt?: string;
-  waitReasons?: string[];
-  includesReservations?: boolean;
-};
-export function createAccountClient(request: DomainRequest) {
-  let ownerTag: string | null = null;
-  return {
-    async usage(): Promise<UsageSummary> {
-      const result = await request<unknown>("/api/v2/me/usage");
-      const wire = v2UsageSchema.safeParse(result);
-      if (wire.success) {
-        const value = wire.data;
-        return {
-          ...usageViewSchema.parse({
-            newCases: {
-              used: value.newCases.used + value.newCases.reserved,
-              limit: value.newCases.limit,
-            },
-            aiResponses: {
-              used: value.aiResponses.used + value.aiResponses.reserved,
-              limit: value.aiResponses.limit,
-            },
-            storageBytes: {
-              used: value.storageBytes.used + value.storageBytes.reserved,
-              limit: value.storageBytes.limit,
-            },
-            mediaMinutes: {
-              used: (value.mediaSeconds.used + value.mediaSeconds.reserved) / 60,
-              limit: value.mediaSeconds.limit / 60,
-            },
-          }),
-          resetAt: value.resetAt,
-          waitReasons: value.waitReasons,
-          includesReservations: true,
-        };
-      }
-      return usageViewSchema.parse(result);
-    },
-    async deleteCase(id: string, confirmation: string, schemaVersion: "1" | "2" = "2") {
-      if (confirmation !== "DELETE") throw new Error("삭제 확인란에 DELETE를 입력해 주세요.");
-      await request(
-        `/api/${schemaVersion === "1" ? "cases" : "v2/cases"}/${encodeURIComponent(id)}`,
-        {
-          method: "DELETE",
-          headers: { "idempotency-key": crypto.randomUUID() },
-        },
-      );
-      if (typeof window !== "undefined") notifySessionChanged();
-    },
-    async deleteAccount(confirmation: string) {
-      if (confirmation !== "DELETE") throw new Error("삭제 확인란에 DELETE를 입력해 주세요.");
-      const result = await request<unknown>("/api/me", {
-        method: "DELETE",
-        body: { confirmation },
-        ...(ownerTag ? { headers: { "x-baro-deletion-owner": ownerTag } } : {}),
-      });
-      z.object({ status: z.literal("accepted") }).parse(result);
-      if (typeof window !== "undefined") notifySessionChanged();
-    },
-    async deletionAccess() {
-      const result = await request<unknown>("/api/me/deletion");
-      const access = deletionAccessSchema.extend({ mock: z.boolean().optional() }).parse(result);
-      ownerTag = access.ownerTag;
-      let marker: { ownerTag?: string; startedAt?: number } | null = null;
-      try {
-        const raw =
-          typeof sessionStorage === "undefined"
-            ? null
-            : sessionStorage.getItem("baro.account-reauth.v1");
-        marker = raw ? JSON.parse(raw) : null;
-      } catch {
-        marker = null;
-      }
-      const canDelete =
-        access.mock === true ||
-        Boolean(
-          marker?.ownerTag === access.ownerTag &&
-            access.recentOAuth &&
-            access.authenticatedAt &&
-            typeof marker?.startedAt === "number" &&
-            Date.parse(access.authenticatedAt) >= marker.startedAt,
-        );
-      const { mock: _mock, ...view } = access;
-      return { ...view, canDelete };
-    },
-    async reauthenticate(provider: "google" | "naver" | "kakao") {
-      const result = await authClient.signIn.social({
-        provider,
-        callbackURL: "/settings",
-        errorCallbackURL: "/settings?error=oauth",
-      });
-      if (result.error) throw new Error("재인증을 시작하지 못했어요. 다시 시도해 주세요.");
-    },
-  };
+export type { UsageSummary } from "@baro/api-client";
+export function createAccountClient(
+  request: DomainRequest,
+  options: { allowMockDeletion?: boolean } = {},
+) {
+  return createSessionBoundClient(browserSessionScope, () =>
+    createSharedAccountClient({
+      request,
+      scope: browserSessionScope,
+      newKey: () => crypto.randomUUID(),
+      allowMockDeletion: options.allowMockDeletion ?? apiMode === "mock",
+      readReauthentication: async () => {
+        if (typeof sessionStorage === "undefined") return null;
+        const raw = sessionStorage.getItem("baro.account-reauth.v1");
+        return raw ? JSON.parse(raw) : null;
+      },
+      reauthenticate: async (provider) => {
+        const result = await authClient.signIn.social({
+          provider,
+          callbackURL: "/settings",
+          errorCallbackURL: "/settings?error=oauth",
+        });
+        if (result.error) throw new Error("재인증을 시작하지 못했어요. 다시 시도해 주세요.");
+      },
+      onDeleted: () => {
+        if (typeof window !== "undefined") notifySessionChanged();
+      },
+    }),
+  );
 }
-
 export function createAccountApi(request: ApiRequest) {
   return createAccountClient(domainRequest(request));
 }

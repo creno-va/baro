@@ -17,7 +17,7 @@ instances. `createDirectoryClient` validates canonical filters/cursor and respon
 Malformed responses and untrusted server messages become safe public errors.
 
 The web retains its existing facade/mock composition; mobile has no implicit mock fallback.
-Account, lawyer profiles and precedent research remain #335 extraction units.
+Lawyer profiles/assets remain the final #335 extraction unit.
 Run `bun run clients:check`, `mobile:check`, and
 the existing web/domain tests when moving a module.
 
@@ -62,3 +62,11 @@ Successful values transfer to the platform's open/share/cache lifecycle. No Blob
 is embedded in the common client. Ambiguous review/generation retries keep the same basis/key even
 after metadata refresh or a temporary selection change. State is session-local; restart persistence
 and actual native export IO remain M5 acceptance work.
+
+`createAccountClient` shares usage projection, owner-tagged deletion and server OAuth freshness
+checks; marker reads, reauthentication and post-delete cleanup are adapter ports. It never accepts
+a fixture-only delete flag unless explicitly opted in by test composition. Only a validated server
+acknowledgement invalidates the private scope; cleanup errors cannot turn a committed deletion into
+a second request. Recreate private clients after deletion. The server still enforces all permissions.
+`createPrecedentsClient` validates canonical topic/revision/read-proof requests and responses, with
+session and feature cancellation. It calls BARO HTTP only and never a legal upstream API.

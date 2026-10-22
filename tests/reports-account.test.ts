@@ -102,7 +102,7 @@ function fixture() {
     removed,
     request,
     reports: createReportsClient(request),
-    account: createAccountClient(request),
+    account: createAccountClient(request, { allowMockDeletion: true }),
   };
 }
 test("accepted deletion sends opaque shared invalidation; failed or ambiguous responses do not", async () => {
@@ -569,7 +569,10 @@ test("deleting a case while its original is loading prevents a late ZIP download
       },
     }),
   );
-  await expect(reports.zip(report.id, ["file-demo"])).rejects.toMatchObject({ code: "NOT_FOUND" });
+  // Successful deletion retires the shared private scope before the late ZIP can return.
+  await expect(reports.zip(report.id, ["file-demo"])).rejects.toMatchObject({
+    code: "UNAUTHENTICATED",
+  });
 });
 
 test("retry after a lost report mutation response replays the committed version instead of generating twice", async () => {
