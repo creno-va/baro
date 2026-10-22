@@ -22,11 +22,14 @@ const storedSchema = z.strictObject({
     .max(44000)
     .regex(/^[A-Za-z0-9_-]+$/),
 });
-const payloadSchema = mobileAuthStartSchema.extend({
-  sessionId: z.string().min(1).max(128),
-  userId: z.string().min(1).max(128),
-  cookie: z.string().min(1).max(16000),
-});
+const payloadSchema = mobileAuthStartSchema
+  .extend({
+    sessionId: z.string().min(1).max(128),
+    userId: z.string().min(1).max(128),
+    cookie: z.string().min(1).max(16000),
+    originalSessionId: z.string().min(1).max(128).optional(),
+  })
+  .refine((value) => Boolean(value.originalSessionId) === (value.purpose === "reauthenticate"));
 export class NativeAuthProofError extends Error {
   constructor() {
     super("NATIVE_AUTH_PROOF_INVALID");
@@ -116,7 +119,14 @@ export function createNativeAuthCodeStore(dependencies: {
       JSON.stringify([issuer, storageKey, record.expiresAt, record.userId, record.sessionId, 1]),
     );
   return {
-    async issue(raw: MobileAuthStart & { sessionId: string; userId: string; cookie: string }) {
+    async issue(
+      raw: MobileAuthStart & {
+        sessionId: string;
+        userId: string;
+        cookie: string;
+        originalSessionId?: string;
+      },
+    ) {
       const payload = payloadSchema.parse(raw);
       const code = encode(crypto.getRandomValues(new Uint8Array(32)));
       const prefix = await namespace;
@@ -156,7 +166,10 @@ export function createNativeAuthCodeStore(dependencies: {
       }
       return { code, attemptId: payload.attemptId };
     },
-    async exchange(raw: MobileAuthExchange): Promise<string> {
+    async exchange(
+      raw: MobileAuthExchange,
+      actor?: { userId: string; sessionId: string },
+    ): Promise<string> {
       const request = mobileAuthExchangeSchema.safeParse(raw);
       if (!request.success) throw new NativeAuthProofError();
       const storageKey = (await namespace) + (await digest(request.data.code));
@@ -194,7 +207,12 @@ export function createNativeAuthCodeStore(dependencies: {
       if (
         difference ||
         challenge.length !== payload.challenge.length ||
-        payload.attemptId !== request.data.attemptId
+        payload.attemptId !== request.data.attemptId ||
+        payload.purpose !== request.data.purpose ||
+        (payload.purpose === "reauthenticate" &&
+          (actor?.userId !== payload.userId ||
+            (actor?.sessionId !== payload.originalSessionId &&
+              actor?.sessionId !== payload.sessionId)))
       )
         throw new NativeAuthProofError();
       const consumedAt = now();

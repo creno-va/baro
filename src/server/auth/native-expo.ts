@@ -2,6 +2,7 @@ import { expo } from "@better-auth/expo";
 import { createAuthMiddleware } from "better-auth/api";
 import { mobileAuthStartSchema } from "../../contracts/mobile-auth";
 import { createNativeAuthCodeStore } from "./native-codes";
+import { createNativeReauthentication } from "./native-reauth";
 
 export function nativeAuthCallbackBase(environment: string): string | null {
   const scheme = { local: "baro-dev", preview: "baro-preview", production: "baro" }[environment];
@@ -93,10 +94,14 @@ export function createNativeExpoIntegration(env: Env) {
               const parsed = mobileAuthStartSchema.parse({
                 attemptId: target.searchParams.get("attemptId"),
                 challenge: target.searchParams.get("challenge"),
+                ...(target.searchParams.has("purpose")
+                  ? { purpose: target.searchParams.get("purpose") }
+                  : {}),
               });
               if (
                 target.searchParams.getAll("attemptId").length !== 1 ||
-                target.searchParams.getAll("challenge").length !== 1
+                target.searchParams.getAll("challenge").length !== 1 ||
+                target.searchParams.getAll("purpose").length > 1
               )
                 throw new Error("NATIVE_AUTH_CALLBACK_INVALID");
               failure.searchParams.set("attemptId", parsed.attemptId);
@@ -104,6 +109,17 @@ export function createNativeExpoIntegration(env: Env) {
               const cookie = ctx.context.responseHeaders?.get("set-cookie");
               if (!session || !cookie || target.searchParams.has("error"))
                 throw new Error("NATIVE_AUTH_CALLBACK_FAILED");
+              const reauthentication =
+                parsed.purpose === "reauthenticate"
+                  ? await createNativeReauthentication({
+                      db: env.DB,
+                      issuer: env.BETTER_AUTH_URL,
+                      secret: env.BETTER_AUTH_SECRET,
+                    }).authorize(parsed, typeof ctx.params?.id === "string" ? ctx.params.id : "", {
+                      sessionId: session.session.id,
+                      userId: session.user.id,
+                    })
+                  : undefined;
               const result = await createNativeAuthCodeStore({
                 db: env.DB,
                 issuer: env.BETTER_AUTH_URL,
@@ -113,6 +129,9 @@ export function createNativeExpoIntegration(env: Env) {
                 sessionId: session.session.id,
                 userId: session.user.id,
                 cookie,
+                ...(reauthentication
+                  ? { originalSessionId: reauthentication.originalSessionId }
+                  : {}),
               });
               const redirect = new URL(callbackBase);
               redirect.searchParams.set("attemptId", result.attemptId);

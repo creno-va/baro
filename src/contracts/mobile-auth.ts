@@ -8,6 +8,7 @@ export const mobileAuthCodeSchema = proof;
 export const mobileAuthStartSchema = z.strictObject({
   attemptId: mobileAuthAttemptIdSchema,
   challenge: mobileAuthChallengeSchema,
+  purpose: z.literal("reauthenticate").optional(),
 });
 export const mobileAuthReturnSchema = z.strictObject({
   attemptId: mobileAuthAttemptIdSchema,
@@ -17,7 +18,23 @@ export const mobileAuthExchangeSchema = z.strictObject({
   attemptId: mobileAuthAttemptIdSchema,
   code: mobileAuthCodeSchema,
   verifier: mobileAuthVerifierSchema,
+  purpose: z.literal("reauthenticate").optional(),
 });
+export const mobileReauthPrepareSchema = z.strictObject({
+  attemptId: mobileAuthAttemptIdSchema,
+  challenge: mobileAuthChallengeSchema,
+  provider: z.enum(["google", "naver", "kakao"]),
+});
+export const mobileReauthProofSchema = z.strictObject({
+  attemptId: mobileAuthAttemptIdSchema,
+  verifier: mobileAuthVerifierSchema,
+});
+export const mobileReauthReceiptSchema = z.strictObject({
+  ownerTag: z.string().regex(/^[a-f0-9]{64}$/),
+  startedAt: z.number().int().nonnegative(),
+});
+export type MobileReauthPrepare = z.infer<typeof mobileReauthPrepareSchema>;
+export type MobileReauthReceipt = z.infer<typeof mobileReauthReceiptSchema>;
 export const mobileAuthExchangeResponseSchema = z.strictObject({ status: z.literal("accepted") });
 export type MobileAuthStart = z.infer<typeof mobileAuthStartSchema>;
 export type MobileAuthExchange = z.infer<typeof mobileAuthExchangeSchema>;

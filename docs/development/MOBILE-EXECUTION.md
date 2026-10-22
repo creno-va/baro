@@ -496,6 +496,39 @@ workspace·자료·리포트·나머지 domain을 순차 추출한다. 첫 단�
   다른 signed owner 및 실제 DB 역할 변경의 거절·fresh session, RN model의 선택 사건 제거를
   검증했다. 합성 fixture 성공이며 실제 OAuth/AI/기기·서명/배포 인수를 의미하지 않는다.
 
+### M3 재인증의 원래 계정·새 세션 증거
+
+- 고객 v1/삭제 PR358은 head `5dbff4f` CI39842058806 성공 뒤 main `f854061`에 정상
+  통합했다. 해당 source의 native39842510191은 두 OS 성공이며 receipt에서 정확한 SHA·
+  preview API·development-debug·서명/배포 없음을 확인했다. 실제 제공자/기기 인수와 구분한다.
+- `codex/346-native-reauth`는 RN 소비 전 서버 선행 계약이다. signed native 원래 세션이
+  `/api/mobile/auth/reauth/prepare`로 nonce/PKCE challenge와 연결된 기존 provider를 준비한다.
+  app_metadata의 별도 `native-reauth:v1` namespace에 암호화하며 쿠키·제공자 token·verifier·
+  사건 내용은 저장하지 않는다. 원래 세션의 새 준비는 이전 준비를 폐기하고 보안 TTL은10분이다.
+- callback의 `purpose=reauthenticate`는 실제 OAuth 사용자·provider·nonce/challenge와 현재
+  활성 원래 세션을 대조한다. 같은 계정의 새 OAuth 세션이어야 하며, 준비 이후의 실제
+  oauth_authenticated_at을 확인한다. 기존 로그인 callback/wire는 기본값으로 유지한다.
+- 일회용 교환은 재인증 purpose와 signed 원래/new 세션 owner를 추가 대조한다. 목적을
+  빼거나 다른 계정으로 교환해도 grant를 소비/전달하지 않는다. 브라우저에서 다른 계정을
+  선택하면 native grant가 발급되지 않으며 기존 native 세션과 peer 세션을 폐기하지 않는다.
+- `/api/mobile/auth/reauth/verify`는 signed 새 세션과 nonce/verifier가 같은 준비를 가리키는지
+  확인하고 기존 삭제 client와 같은 ownerTag/startedAt을 반환한다. 기존 로그인 쿠키의 존재나
+  단순한 recentOAuth만으로 응답 유실을 성공으로 간주하지 않는다. 새 교환 응답을 잃었어도
+  실제 새 쿠키가 저장된 경우에만 이 증거를 다시 확인할 수 있다.
+- TTL/폐기·변조·동시 callback·다른 owner/provider·목적 변경과 실제 Hono/SQL callback을
+  합성 공급자 대역으로 검증한다. 계정 삭제·journal/복원·정기 정리는 이 owner의 namespace도
+  제거하며 다른 owner·비용 원장/hold·미해결 사건 key는 보존한다. schema/migration 변경은 없다.
+  native SecureStore proof/취소·cold/warm 복귀·UI는 이 계약 통합 뒤 연결한다.
+- 근거는 기존 [RFC8252](https://www.rfc-editor.org/rfc/rfc8252) 외부 브라우저/PKCE와
+  [RFC9700](https://www.rfc-editor.org/rfc/rfc9700) 보안 지침이며 새 공급자/결제·CORS 완화는 없다.
+- frozen/quick(모바일/공통175개·RN28개·필수 서버56개), 관련 인증/삭제54개, production
+  build/workerd·두 OS Metro·validate:db의 drift/마이그레이션 회귀와 웹 settings5·세션 복구15개가
+  통과했다. 신규14개는 합성 제공자와 실제 Hono/암호화 SQL이며 실제 OAuth 성공은 아니다.
+- preview `/api/health/live`가 보고한 API SHA는 `57121d2378cb5fd8d0e8761899672be00dcaf59f`다.
+  native auth 선행 `a1ad098`은 그 SHA의 ancestor가 아님을 확인했다. 현재 앱 compile과 API의
+  실제 호환 인수를 혼동하지 않는다. native API를 포함한 검증 SHA의 preview 배포와 두 OS
+  실제 흐름은 #71/M8·#346·#354에서 별도로 추적하며 기존 공개/운영 gate를 우회하지 않는다.
+
 ## 참고
 
 - [Expo workspace 구성](https://docs.expo.dev/guides/monorepos/)
