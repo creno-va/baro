@@ -1,6 +1,8 @@
 import { createSessionScope } from "@baro/client-core";
 import { getCookie, getSetCookie, storageAdapter } from "@better-auth/expo/client";
+import { resolveMobileConfig } from "../config/environment";
 import { createNativeCredentials } from "../src/platform/auth/credentials";
+import { createNativeTransport } from "../src/platform/auth/transport";
 
 test("the pinned Expo cookie/storage codecs round-trip chunks, expiry and credential reset", async () => {
   const disk = new Map<string, string>();
@@ -112,5 +114,46 @@ test("silent native chunk and marker write loss cannot leave orphan credential f
     expect(await credentials.capture().cookie()).toBe("");
   } finally {
     errors.mockRestore();
+  }
+});
+
+test("native response bodies survive the RN legacy Response constructor without buffering or losing clone behavior", async () => {
+  const disk = new Map<string, string>();
+  const credentials = createNativeCredentials({
+    scope: createSessionScope(),
+    namespace: "baro_preview_auth",
+    storage: {
+      getItemAsync: async (key) => disk.get(key) ?? null,
+      setItemAsync: async (key, value) => {
+        disk.set(key, value);
+      },
+    },
+    manageStorage: storageAdapter,
+    codec: { header: getCookie, merge: getSetCookie },
+  });
+  const OriginalResponse = globalThis.Response;
+  const response = new OriginalResponse(JSON.stringify({ synthetic: "preserved" }), {
+    headers: {
+      "content-type": "application/json",
+      "set-cookie": "better-auth.session_token=synthetic; Max-Age=3600",
+    },
+  });
+  const legacy = jest.requireActual("whatwg-fetch") as { Response: typeof Response };
+  const transport = createNativeTransport({
+    config: resolveMobileConfig({ environment: "preview" }),
+    credentials,
+    fetch: async () => response,
+  });
+  try {
+    // Expo58 replaces fetch with its native streaming implementation but keeps
+    // RN's global whatwg-fetch Response. That constructor cannot take streams.
+    globalThis.Response = legacy.Response;
+    const result = await transport("/api/me/session", {});
+    expect(result.headers.get("set-cookie")).toBeNull();
+    expect(await result.clone().json()).toEqual({ synthetic: "preserved" });
+    expect(await result.json()).toEqual({ synthetic: "preserved" });
+    expect(result.bodyUsed).toBe(true);
+  } finally {
+    globalThis.Response = OriginalResponse;
   }
 });

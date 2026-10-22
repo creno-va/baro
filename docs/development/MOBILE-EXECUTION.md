@@ -337,6 +337,27 @@ workspace·자료·리포트·나머지 domain을 순차 추출한다. 첫 단�
   main `c4f85cca65ea4c98367f17f25465221c619c915f`에 정상 병합했다. 화면/lifecycle는
   후속 검증 단위로 보존하며 실제 제공자·기기 인수로 확대하지 않는다.
 
+- 변호사 계약 PR350은 head `5555911` CI39818163285 성공 후 main
+  `8dce35dace2e3e0d0b6a8f05ec5aea371e57b5bc`에 정상 병합했다. 관련54개·main 통합
+  frozen/quick/build/두 OS Metro가 통과했다. 이 계약을 소비하는 profile/assets client가 M2 잔여다.
+- `codex/346-native-session-ui`는 선행 protocol의 실제 main에서 로그인·고객/변호사 선택·
+  필수 정책/14세 확인·내 계정·로그아웃과 cold/warm routing/foreground를 연결한다.
+  URI의 query/fragment는 route에 넘기지 않고 최대4개 임시 handoff에서 matching nonce만
+  소비한다. 오래된 세션/동의/로그인 결과를 거절하고 인증 브라우저 전환이 현재 교환을
+  취소하지 않게 한다. 공개 목록은 auth scope와 독립된 익명 요청으로 유지한다.
+- 로그아웃은 기기 cookie를 검증해 먼저 지우고 캡처한 세션만 실제 Hono에서 폐기한다.
+  실패한 원격 acknowledgement/로컬 저장은 구분하고 새 계정에 과거 응답 cookie를 적용하지
+  않는다. 실제 SDK의 silent chunk+marker 손실로 orphan이 남는 회귀를 재현하여 각 raw
+  쓰기를 즉시 읽어 확인하고 첫 누락 뒤 추가 fragment 쓰기를 멈추도록 보완했다.
+  설치된 Expo58 native fetch와 RN의 legacy Response 생성자 조합에서도 본문 재구성 시
+  JSON이 유실됨을 재현해, 원본 native receiver/clone/stream을 유지하며 cookie header만
+  가리는 방식으로 수정했다. Node 응답만의 성공으로 native 응답 호환을 주장하지 않는다.
+- 제공자 HTTP/브라우저만 합성 대역인 3사 통합은 실제 Better Auth·code/PKCE·Hono·SQL·
+  warm 중복 복귀·role/consent/logout을 확인한다. 로컬 frozen/quick(공통/모바일102개·
+  RN/실제 SDK14개·필수서버42개), production workerd 시작과 두 OS Metro가 통과했다.
+  실제 제공자·실기기, reauth/challenge와
+  M3 전체 인수는 잔여이며 이 단위의 체크/PR receipt를 #346에 기록한다.
+
 ## 참고
 
 - [Expo workspace 구성](https://docs.expo.dev/guides/monorepos/)
