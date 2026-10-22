@@ -302,6 +302,18 @@ workspace·자료·리포트·나머지 domain을 순차 추출한다. 첫 단�
   PR345의 과거 Actions success/Check Run in_progress 불일치 증거는 보존하며 실제 계정 격리
   보완·main 통합의 새 head를 다시 검사한다.
 
+- 사용량/삭제·판례와 ambient-cookie 권한 확인 보완 PR345는 head `b89da6c`
+  CI39810149876 완료를 확인하고 main `e51d4db179bb3ef48b374c4ae70ece6b3a5a1e4d`에
+  정상 병합했다. 관련 domain155개·추가 공통54개·웹41개와 전용 판례4개, quick42/
+  build/두 OS Metro가 통과했다. 일반 dev 설정의 판례 fixture 누락 실패는 전용 mock
+  integration 설정으로4개 통과해 구분했다. M2 프로필/자산은 잔여다.
+- `codex/346-native-credentials`는 환경별 SecureStore·고정 API Origin·Cookie/Set-Cookie
+  갱신/만료를 연결한다. SDK 공개 codec/분할 저장을 그대로 쓰고 HTTP를 cookie의 단일
+  writer로 삼는다. reset은 scope 폐기 후 인증 jar/cache만 지우며 이전 응답·저장 분할 IO가
+  새 계정에 쓸 수 없다. SDK가 삼킨 저장 오류와 silent write도 readback/오류 상태로 거절한다.
+  저장소가 잠겨도 공개 목록은 익명으로 조회한다. 실제 SDK 분할/expiry/중단 정리와 합성
+  native transport 경계를 검사하며 브라우저 로그인/coordinator/기기 증거는 다음 단계다.
+
 ## 참고
 
 - [Expo workspace 구성](https://docs.expo.dev/guides/monorepos/)

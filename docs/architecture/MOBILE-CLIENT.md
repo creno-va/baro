@@ -1,7 +1,7 @@
 # 모바일 클라이언트와 공통 코드 구조
 
-- Status: M1 인수; M2 공통 client 기반·공개 목록 구현, 나머지 기능/인증은 후속 진행
-- Updated: 2026-10-22
+- Status: M1 인수; M2 프로필/자산 잔여, M3 서버 교환 통합·native credential 연결 중
+- Updated: 2026-10-23
 - Decision: [ADR-0017](../adr/0017-expo-mobile-and-shared-client-boundaries.md)
 - Execution: [모바일 실행 계획](../development/MOBILE-EXECUTION.md), [#328](https://github.com/creno-va/baro/issues/328)
 - 조사 기준: `bdc50a0af2f9adb3a6864f7cccf0983dcac771ee`; 구현 착수 때 최신 main과 대조한다.
