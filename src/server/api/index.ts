@@ -16,6 +16,7 @@ import { feedbackApi } from "./feedback";
 import { healthApi } from "./health";
 import { meApi } from "./me";
 import { mobileAuthApi } from "./mobile-auth";
+import { createMobileChallengeApi } from "./mobile-challenge";
 import { requestBodyLimit } from "./request-body-limit";
 import { retryApi } from "./retry";
 import { workspaceDeleteApi } from "./v2/delete";
@@ -86,6 +87,10 @@ export const api = new Hono<ApiEnvironment>()
   .use("*", requestBodyLimit)
   .all("/auth/*", async (context) => getAuth(context.env).handler(context.req.raw))
   .route("/mobile/auth", mobileAuthApi)
+  .route(
+    "/mobile",
+    createMobileChallengeApi({ siteKey: import.meta.env.PUBLIC_TURNSTILE_SITE_KEY }),
+  )
   .route("/health", healthApi)
   .route("/v2/lawyers", createDirectoryApi())
   .route("/v2/me", usageApi)

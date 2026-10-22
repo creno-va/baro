@@ -2,6 +2,7 @@ import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import { MobileChallengePortal } from "../composition/challenge";
 import { startSessionLifecycle } from "../composition/lifecycle";
 import { tokens } from "../theme/tokens";
 
@@ -16,6 +17,7 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <StatusBar style="dark" />
+      <MobileChallengePortal />
       <Stack
         screenOptions={{
           headerTintColor: tokens.color.text,

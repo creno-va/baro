@@ -79,8 +79,15 @@ extra cookie/token 필드를 거절한다. 응답 유실 시 code를 자동 재�
 foreground에서는 실제 세션을 다시 확인하고 background/로그아웃/변경에서 개인 요청을
 폐기한다. 시스템 브라우저 인증 중에는 이미 폐기한 개인 IO와 현재 인증 교환을 구분한다.
 로그아웃은 저장된 cookie를 먼저 제거한 뒤 캡처한 원래 세션만 서버에서 폐기하며 늦은
-응답 cookie를 받지 않는다. 원격 폐기/로컬 저장 실패는 구분한다. reauth/challenge 연결과
-실제 제공자/기기 검증은 #346의 후속 단계다.
+응답 cookie를 받지 않는다. 원격 폐기/로컬 저장 실패는 구분한다. reauth와 실제 제공자/기기
+검증은 #346의 후속 단계다.
+
+`mobileSecurityToken(signal)`은 새 사건 생성의 공통 challenge port다. 별도 Hono HTML
+`/api/mobile/challenge`만 WebView로 열고 auth cookie·사건 입력을 전달하지 않는다. 시도별
+32바이트 비밀값은 native 주입 뒤 메시지에서 대조하고 URL/초안/로그에 저장하지 않는다.
+요청 취소·계정 scope 폐기·120초 만료 시 위젯을 닫는다. 허용 URL 밖 이동은 차단하며
+라이브러리의 자동 외부 브라우저 열기를 피하도록 모든 URL을 자체 guard에 전달한다.
+실제 서버 siteverify를 그대로 사용한다. 고객 사건 화면에서 이 port를 소비하는 작업은 M4다.
 
 ## 검증
 
