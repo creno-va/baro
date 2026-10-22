@@ -19,7 +19,12 @@ const access = {
 };
 function account(
   request: DomainRequest,
-  options: { marker?: unknown; mock?: boolean; onDeleted?: () => void } = {},
+  options: {
+    marker?: unknown;
+    mock?: boolean;
+    onDeleted?: () => void;
+    coalesceWrites?: "credential-scope";
+  } = {},
 ) {
   const scope = createSessionScope();
   let reauth = 0;
