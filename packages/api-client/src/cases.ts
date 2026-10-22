@@ -447,6 +447,7 @@ export function createCasesClient(
     throw snapshotUnavailable();
   }
 
+  const pendingCreates = new Map<string, Promise<CaseView>>();
   const casesApi = {
     async list(): Promise<CaseView[]> {
       if (apiMode === "mock") return request("cases.list");
@@ -547,19 +548,33 @@ export function createCasesClient(
         throw new ApiError("CONSENT_REQUIRED", "필수 동의를 확인해 주세요.");
       if (session.user.accountType !== "customer")
         throw new ApiError("NOT_FOUND", "사건을 찾을 수 없어요.");
-      const key = await mutationKey(`cases.create:${session.user.id}`, input);
-      const turnstileToken = await securityToken();
-      const w = v2WorkspaceSchema.parse(
-        await request("cases.create", input, {
-          path: "/api/v2/cases",
-          method: "POST",
-          body: { ...input, jurisdiction: "KR", turnstileToken },
-          key,
-        }),
-      );
-      const item = view(w, await metadata(w.id));
-      await forgetMutation(key);
-      return item;
+      // A changed cookie can precede the app's session notification. Resolve the owner
+      // before joining an in-flight creation so an old account cannot block a new one.
+      const identity = JSON.stringify([session.user.id, input]);
+      const existing = pendingCreates.get(identity);
+      if (existing) return existing;
+      const pending = (async () => {
+        const key = await mutationKey(`cases.create:${session.user.id}`, input);
+        const turnstileToken = await securityToken();
+        const w = v2WorkspaceSchema.parse(
+          await request("cases.create", input, {
+            path: "/api/v2/cases",
+            method: "POST",
+            body: { ...input, jurisdiction: "KR", turnstileToken },
+            key,
+          }),
+        );
+        const item = view(w, await metadata(w.id));
+        await forgetMutation(key);
+        return item;
+      })();
+      pendingCreates.set(identity, pending);
+      void pending
+        .finally(() => {
+          if (pendingCreates.get(identity) === pending) pendingCreates.delete(identity);
+        })
+        .catch(() => {});
+      return pending;
     },
     async get(id: string): Promise<CaseView> {
       if (apiMode === "mock") return request("cases.get", { id });
@@ -768,7 +783,7 @@ export function createCasesClient(
       return async (...args: unknown[]) => {
         ensureCurrent();
         const schema = typeof key === "string" ? mutationSchemas.get(key) : undefined;
-        if (schema) {
+        if (schema && (key !== "create" || apiMode === "mock")) {
           const position = key === "create" ? 0 : 1;
           const normalized = [...args];
           normalized[position] = validate(schema, args[position]);

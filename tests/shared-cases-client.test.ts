@@ -246,7 +246,7 @@ test("session-bound facade refreshes held method references and retries failed c
   expect(factories).toBe(2);
 });
 
-test("parallel creation is coalesced before asynchronous key persistence and challenge", async () => {
+test("parallel creation checks each owner before coalescing key persistence and challenge", async () => {
   const { storage } = memoryStorage();
   let creates = 0,
     challenges = 0,
@@ -280,7 +280,7 @@ test("parallel creation is coalesced before asynchronous key persistence and cha
   const [one, two] = await Promise.all([cases.create(input), cases.create({ ...input })]);
   expect(one.id).toBe(two.id);
   expect(creates).toBe(1);
-  expect(ownerReads).toBe(1);
+  expect(ownerReads).toBe(2);
   expect(challenges).toBe(1);
 });
 
