@@ -12,7 +12,7 @@ export {
 export type { DirectoryFilters } from "./directory";
 export { createDirectoryClient } from "./directory";
 export { ApiError, errorMessage, responseError } from "./errors";
-export type { UploadMetadata, UploadReader } from "./files";
+export type { FileUploadOptions, UploadMetadata, UploadReader } from "./files";
 export {
   createFileMetadataReader,
   createFilesClient,
@@ -37,6 +37,8 @@ export { createPrecedentsClient } from "./precedents";
 export type { DomainRequest, DomainRequestInit, ReportArtifact, ReportSave } from "./reports";
 export { createReportsClient, reportSaveSchema } from "./reports";
 export { createSessionClient } from "./session";
+export type { UploadRecovery, UploadRecoveryRecord } from "./upload-recovery";
+export { uploadRecoveryRecordSchema } from "./upload-recovery";
 export type { CustomerWorkspaceView, WorkspaceAcknowledgement } from "./workspace";
 export { createWorkspaceClient, workspaceViewSchema } from "./workspace";
 export type { WorkspaceTransport } from "./workspace-http";

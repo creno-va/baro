@@ -7,6 +7,33 @@ const fingerprint = async (input: string) =>
   Buffer.from(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(input))).toString(
     "hex",
   );
+
+test("native upload recovery admits only strict opaque revision/receipt metadata and rejects tokens or source contents", async () => {
+  const f = fixture(),
+    key = `baro-upload-operation:${"d".repeat(64)}`;
+  const record = {
+    version: 1,
+    reservationKey: value,
+    expectedRevision: 1,
+    fileId: "opaque_file",
+    complete: { key: value, expectedRevision: 2, requestHash: "a".repeat(64) },
+  };
+  await f.storage.setItem(key, JSON.stringify(record));
+  expect(JSON.parse((await f.storage.getItem(key)) ?? "{}")).toEqual(record);
+  for (const extra of [
+    { uploadSession: "SYNTHETIC_PRIVATE" },
+    { name: "합성 파일 이름" },
+    { manifest: {} },
+    { facts: "합성 원문" },
+  ])
+    await expect(
+      f.storage.setItem(key, JSON.stringify({ ...record, ...extra })),
+    ).rejects.toBeDefined();
+  await expect(
+    f.storage.setItem(key, JSON.stringify({ ...record, fileId: undefined })),
+  ).rejects.toBeDefined();
+  expect([...f.records.values()].join("").includes("SYNTHETIC_PRIVATE")).toBe(false);
+});
 function fixture() {
   const records = new Map<string, string>();
   let mode = "",

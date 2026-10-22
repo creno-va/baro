@@ -240,9 +240,26 @@ close/abort는 진행 중/대기 part를 폐기한다. snapshot은 명시적 rel
 handle13/13·121/121 open/close, 각각951ms·10,059ms였다. 이는 실제 디스크를 읽은 로컬 port
 측정이며 native SDK의 기기 성능·메모리/URI 권한 인수가 아니다. OS picker의 cache copy는
 JS 바깥에서 수행되므로 큰 파일 복사/공간 부족과 취소 정리는 두 OS에서 추가 인수한다.
-실제 files client·작업 복구·앱 수명/owner에 따른 clear 연결과 업로드/리포트 UI는 M5 후속이다.
+native 화면의 files client 조립·앱 수명/owner에 따른 clear 연결과 업로드/리포트 UI는 M5 후속이다.
 `bun scripts/mobile-file-io-probe.ts --large`로 위 합성 디스크 검사를 수동 재현하며 CI의
 빠른 검사에서는1GB 파일을 생성하지 않는다.
+
+공통 files client의 선택적 `recovery`는 owner/path/정규화된 예약 입력의 SHA256으로 작업을
+식별한다. `.case-operations`의 `baro-upload-operation:<hash>` 값은 version·예약 UUID/원래
+revision·서버 file ID·완료 UUID/원래 revision·완료 입력 hash·확인된 충돌 상태만 허용한다.
+파일 이름/URI·업로드 세션 token·manifest/사실/본문은 저장하지 않는다. 입장 전 required
+write/readback, 예약 ACK 뒤 file ID 저장, 완료 전 CAS/key 저장을 검사한다. 새 client는 원래
+키/본문/revision으로 예약을 복구하고 signed upload-session을 다시 읽으며 bytes를 재선택해
+검증한다. 같은 in-flight 작업은 storage 단위로 공유하고 모든 IO/반환은 generation을 확인한다.
+
+완료 응답 유실 뒤에는 저장된 정확한 file ID의 signed 상태를 읽는다. 이름/크기로 다른
+파일을 골라 성공으로 보지 않으며 최종 metadata가 provisional hash를 manifest로 옮기는
+서버 의미를 유지한다. ACK callback과 후속 목록 조회를 구분하고 확정 조회 뒤 cleanup 실패는
+접수를 실패로 바꾸지 않는다. ordinary retry는 CAS를 갱신하지 않는다. `resolveConflict: true`는
+확인된409·만료 session/예약의404·정확한 원래 파일의404 이후 사용자 명시적 결정에만 쓴다.
+역할/owner/동의 오류나 목록 누락만으로 새 예약을 만들지 않는다. 이전 서버 예약·원장·hold를
+지우지 않고 만료/삭제 정리는 기존 서버가 담당한다. 이 공유 계약을 소비하는 native files
+화면·원본 다운로드와 앱 수명 cleanup은 후속으로 연결한다.
 
 처리는 서버에서 계속되고, 앱 복귀 시 upload/job 상태를 재조회한다. 사용자 재시도와
 중복 실행을 구분하며 같은 작업의 key를 유지한다. 앱이 백그라운드에서도 계속 전송된다고

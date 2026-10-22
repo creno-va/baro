@@ -166,7 +166,12 @@ snapshot은 유지되며 소유 화면은 완료/취소/이탈 때 `release`, �
 `clear`를 연결해야 한다. clear는 열려 있는 reader부터 닫고 삭제 실패를 재시도 대상으로
 보존한다. 인증 key나 `.case-operations`를 지우지 않는다. 로컬 합성100MB/1GB byte/hash
 검사는 통과했으며 native 기기 IO·선택 권한/공간 부족·전체 메모리 인수는 별도다.
-현재 이 adapter를 소비하는 upload/review/report 모델·화면과 서버 작업 복구는 후속이다.
+현재 이 adapter를 소비하는 native upload/review/report 모델·화면 연결은 후속이다.
+공통 files client에는 opt-in `recovery`가 있으며 `.case-operations`는 예약/완료 UUID·원래
+revision·file ID·입력 hash만 필수 저장한다. token·manifest·파일 이름/원문을 저장하지 않는다.
+완료 응답 유실 뒤 같은 서버 file ID로 확인하고 ordinary retry에서 CAS를 바꾸지 않는다.
+확인된 충돌/만료/정확한404 뒤 사용자의 명시적 재시작에만 `resolveConflict: true`를 전달한다.
+이 계약을 실제 native 화면과 연결하고 원본 다운로드/기기 cleanup을 구현하는 일은 남아 있다.
 로컬 합성 디스크 검사는 루트에서 `bun scripts/mobile-file-io-probe.ts --large`로 재현한다.
 기본은100MB이며 `--large`는100MB와1GB를 순차 생성/검사한 뒤 임시 파일을 지운다.
 출력은 byte 수·일치/메모리 관측·handle 수치뿐이며 실제 사용자 자료를 읽지 않는다.

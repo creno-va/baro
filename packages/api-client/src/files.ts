@@ -6,6 +6,7 @@ import type {
   SessionScope,
 } from "@baro/client-core";
 import { CURRENT_POLICY_VERSIONS } from "@baro/contracts/consent";
+import { EXPECTED_OWNER_HEADER } from "@baro/contracts/session";
 import {
   V2_LIMITS,
   type V2Coverage,
@@ -21,6 +22,11 @@ import {
 } from "@baro/contracts/v2";
 import { z } from "zod";
 import {
+  createUploadRecovery,
+  type UploadRecovery,
+  type UploadRecoveryRecord,
+} from "./upload-recovery";
+import {
   createWorkspaceOperations,
   type WorkspaceTransport,
   workspaceError,
@@ -31,6 +37,11 @@ export interface UploadMetadata {
   name: string;
   size: number;
   type: string;
+}
+export interface FileUploadOptions {
+  metadataOnly?: true;
+  /** Explicit user decision after a confirmed CAS conflict, expired session or exact-file 404. */
+  resolveConflict?: true;
 }
 /** The adapter owns immutable byte reads, streaming hash and bounded part buffers. */
 export interface UploadReader {
@@ -275,6 +286,8 @@ export function createFilesClient<Source extends UploadMetadata, Download>(depen
   newKey: () => string;
   openUpload: (source: Source, signal: AbortSignal) => Promise<UploadReader>;
   download: (response: Response, signal: AbortSignal) => Promise<Download>;
+  recovery?: UploadRecovery;
+  onUploadAcknowledged?: (fileId: string) => void;
 }) {
   const generation = dependencies.scope.snapshot();
   const signal = dependencies.signal
@@ -288,8 +301,12 @@ export function createFilesClient<Source extends UploadMetadata, Download>(depen
   const request: WorkspaceTransport = async (path, init = {}) => {
     ensureCurrent();
     try {
+      const headers = new Headers(init.headers);
+      if (dependencies.recovery)
+        headers.set(EXPECTED_OWNER_HEADER, encodeURIComponent(dependencies.recovery.ownerId));
       const response = await dependencies.request(path, {
         ...init,
+        ...(dependencies.recovery ? { headers } : {}),
         signal: init.signal ? AbortSignal.any([init.signal, signal]) : signal,
       });
       ensureCurrent();
@@ -300,6 +317,9 @@ export function createFilesClient<Source extends UploadMetadata, Download>(depen
     }
   };
   const { workspaceJson, workspaceMutation } = createWorkspaceOperations(dependencies.newKey);
+  const recovery = dependencies.recovery
+    ? createUploadRecovery({ recovery: dependencies.recovery, ensureCurrent })
+    : undefined;
 
   const revisions = new Map<string, number>();
   const uploadHashes = new Map<string, string | undefined>();
@@ -335,7 +355,7 @@ export function createFilesClient<Source extends UploadMetadata, Download>(depen
     id: string,
     file: Source,
     onProgress?: (value: FileUploadProgress) => void,
-    options: { metadataOnly?: true } = {},
+    options: FileUploadOptions = {},
   ): Promise<FileView> {
     ensureCurrent();
     validateUpload(file);
@@ -346,7 +366,11 @@ export function createFilesClient<Source extends UploadMetadata, Download>(depen
       pending = new Map();
       pendingUploads.set(file, pending);
     }
-    const identity = JSON.stringify([id, options.metadataOnly === true]);
+    const identity = JSON.stringify([
+      id,
+      options.metadataOnly === true,
+      options.resolveConflict === true,
+    ]);
     const previous = pending.get(identity);
     if (previous) return previous;
     const task = uploadOnce(id, file, onProgress, options);
@@ -361,7 +385,7 @@ export function createFilesClient<Source extends UploadMetadata, Download>(depen
     id: string,
     file: Source,
     onProgress?: (value: FileUploadProgress) => void,
-    options: { metadataOnly?: true } = {},
+    options: FileUploadOptions = {},
   ): Promise<FileView> {
     ensureCurrent();
     validateUpload(file);
@@ -383,6 +407,7 @@ export function createFilesClient<Source extends UploadMetadata, Download>(depen
         throw workspaceError("UNAVAILABLE", "파일 확인 정보를 준비하지 못했어요.", true);
       ensureCurrent();
       progress("preparing");
+      if (recovery) return await uploadRecovering(id, file, reader, contentHash, progress, options);
       const identity = `${id}:${name}:${file.size}:${contentHash}`;
       const current = await list(id, options);
       // Reconcile interrupted uploads before freezing a new reservation's CAS.
@@ -510,6 +535,216 @@ export function createFilesClient<Source extends UploadMetadata, Download>(depen
         /* Adapter owns orphan/cache cleanup. */
       }
     }
+  }
+  async function uploadRecovering(
+    id: string,
+    file: Source,
+    reader: UploadReader,
+    contentHash: string,
+    progress: (stage: FileUploadProgress["stage"], completedBytes?: number) => void,
+    options: FileUploadOptions,
+  ): Promise<FileView> {
+    if (!recovery) throw workspaceError("UNAVAILABLE", "업로드 복구 정보를 확인해 주세요.");
+    const path = `${base(id)}/files`;
+    const input = v2UploadReservationRequestSchema.parse({
+      name: file.name.trim(),
+      byteLength: file.size,
+      mediaType: file.type.split(";")[0]?.trim().toLowerCase() || "application/octet-stream",
+      autoProcessConsentVersion: CURRENT_POLICY_VERSIONS.aiNoticeVersion,
+      contentHash,
+    });
+    const identity = await recovery.identity(path, input);
+    return recovery.run(identity, async () => {
+      let record: UploadRecoveryRecord | null = await recovery.load(identity);
+      if (record?.conflict && options.resolveConflict) {
+        // Only an explicit caller decision after a confirmed conflict/expiry/404 may refresh CAS.
+        if (record.conflict !== "complete") record = null;
+        else {
+          delete record.complete;
+          delete record.conflict;
+        }
+      }
+      if (!record) {
+        record = {
+          version: 1,
+          reservationKey: dependencies.newKey(),
+          expectedRevision: await workspaceRevision(id),
+        };
+        await recovery.save(identity, record);
+      }
+      const operation = record;
+      let acknowledged = false;
+      const acknowledge = () => {
+        ensureCurrent();
+        if (acknowledged) return;
+        acknowledged = true;
+        try {
+          dependencies.onUploadAcknowledged?.(operation.fileId as string);
+        } catch {
+          /* Display state cannot undo an accepted upload. */
+        }
+        ensureCurrent();
+      };
+      const known = async () => {
+        const value = (await list(id, options)).find((row) => row.id === operation.fileId);
+        if (!value) {
+          // A paginated/temporarily stale list is not proof that an uncertain
+          // upload disappeared. Only an explicit 404 for this exact file permits
+          // a later, explicit new reservation; auth/role/other failures do not.
+          const response = await request(
+            `${path}/${encodeURIComponent(operation.fileId as string)}?view=coverage`,
+          );
+          if (response.status === 404) {
+            operation.conflict = "missing";
+            await recovery.save(identity, operation);
+          }
+          await workspaceResponse(response);
+          throw workspaceError(
+            "UNAVAILABLE",
+            "원래 업로드 상태를 확인하지 못했어요. 최신 목록을 확인해 주세요.",
+            true,
+          );
+        }
+        if (
+          value.name !== input.name ||
+          value.sizeBytes !== file.size ||
+          (uploadHashes.get(`${id}:${value.id}`) !== undefined &&
+            uploadHashes.get(`${id}:${value.id}`) !== contentHash) ||
+          (value.status === "uploading" && uploadHashes.get(`${id}:${value.id}`) !== contentHash)
+        )
+          throw workspaceError(
+            "UNAVAILABLE",
+            "원래 파일과 일치하는 업로드 자료를 확인하지 못했어요.",
+            true,
+          );
+        if (value.uploadRejection)
+          throw workspaceError("FILE_REJECTED", "파일 형식과 내용을 확인한 뒤 다시 선택해 주세요.");
+        if (value.status === "uploading") return null;
+        // Finalized metadata moves the provisional hash into the private manifest.
+        // Reconcile only this operation's persisted server file ID, never a name/size search.
+        acknowledge();
+        await recovery.complete(identity);
+        ensureCurrent();
+        return value;
+      };
+      let session: z.infer<typeof v2UploadSessionSchema>;
+      if (operation.fileId) {
+        const completed = await known();
+        if (completed) return completed;
+        const response = await request(
+          `${path}/${encodeURIComponent(operation.fileId)}/upload-session`,
+        );
+        if (response.status === 404) {
+          operation.conflict = "reservation";
+          await recovery.save(identity, operation);
+        }
+        session = v2UploadSessionSchema.parse(await (await workspaceResponse(response)).json());
+      } else {
+        try {
+          const response = await request(path, {
+            method: "POST",
+            body: JSON.stringify(input),
+            headers: {
+              "content-type": "application/json",
+              "idempotency-key": operation.reservationKey,
+              "if-match": String(operation.expectedRevision),
+            },
+          });
+          if (response.status === 404) {
+            operation.conflict = "reservation";
+            await recovery.save(identity, operation);
+          }
+          session = v2UploadSessionSchema.parse(await (await workspaceResponse(response)).json());
+        } catch (error) {
+          if ((error as { code?: string }).code === "CONFLICT") {
+            operation.conflict = "reservation";
+            await recovery.save(identity, operation);
+          }
+          throw error;
+        }
+        operation.fileId = session.fileId;
+        await recovery.save(identity, operation);
+      }
+      if (session.fileId !== operation.fileId || session.reservedBytes !== file.size)
+        throw workspaceError("UNAVAILABLE", "원래 파일의 업로드 상태를 다시 확인해 주세요.", true);
+      const completed = await known();
+      if (completed) return completed;
+      const parts = [];
+      progress("uploading");
+      for (let start = 0, index = 0; start < file.size; start += session.chunkBytes, index++) {
+        const end = Math.min(start + session.chunkBytes, file.size),
+          chunk = await reader.part(start, end);
+        ensureCurrent();
+        if (chunk.byteLength !== end - start || !v2HashSchema.safeParse(chunk.contentHash).success)
+          throw workspaceError(
+            "UNAVAILABLE",
+            "파일 조각을 확인하지 못했어요. 다시 선택해 주세요.",
+            true,
+          );
+        await workspaceJson(
+          request,
+          `${path}/${encodeURIComponent(session.fileId)}/parts/${index}`,
+          {
+            method: "PUT",
+            body: chunk.body,
+            headers: {
+              "content-type": "application/octet-stream",
+              "x-upload-session": session.uploadSession,
+            },
+          },
+        );
+        parts.push({ index, byteLength: chunk.byteLength, contentHash: chunk.contentHash });
+        progress("uploading", end);
+      }
+      const manifest = { byteLength: file.size, contentHash, parts };
+      const requestHash = await recovery.fingerprint(
+        JSON.stringify({ uploadSession: session.uploadSession, manifest }),
+      );
+      if (!operation.complete) {
+        operation.complete = {
+          key: dependencies.newKey(),
+          expectedRevision: await workspaceRevision(id),
+          requestHash,
+        };
+        await recovery.save(identity, operation);
+      } else if (operation.complete.requestHash !== requestHash)
+        throw workspaceError("UNAVAILABLE", "원래 업로드와 일치하는 파일을 다시 선택해 주세요.");
+      const commit = operation.complete;
+      progress("checking", file.size);
+      try {
+        const ack = z
+          .object({
+            fileId: z.string(),
+            revision: z.number().int().positive(),
+            status: z.enum(["uploaded", "queued", "processing", "ready", "failed"]),
+            processingQueued: z.boolean(),
+          })
+          .parse(
+            await workspaceJson(request, `${path}/${encodeURIComponent(session.fileId)}/complete`, {
+              method: "POST",
+              body: JSON.stringify({
+                expectedRevision: commit.expectedRevision,
+                uploadSession: session.uploadSession,
+                manifest,
+              }),
+              headers: { "content-type": "application/json", "idempotency-key": commit.key },
+            }),
+          );
+        if (ack.fileId !== operation.fileId)
+          throw workspaceError("UNAVAILABLE", "업로드 접수를 확인하지 못했어요.", true);
+      } catch (error) {
+        if ((error as { code?: string }).code === "CONFLICT") {
+          operation.conflict = "complete";
+          await recovery.save(identity, operation);
+        }
+        throw error;
+      }
+      acknowledge();
+      progress("confirming", file.size);
+      const value = await known();
+      if (!value) throw workspaceError("UNAVAILABLE", "파일 저장 상태를 다시 확인해 주세요.", true);
+      return value;
+    });
   }
   async function saveSingleReview(
     id: string,
