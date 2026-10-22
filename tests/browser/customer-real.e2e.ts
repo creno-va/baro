@@ -78,6 +78,8 @@ for (const viewport of [
         droppedConfirm = false,
         droppedTimeline = false;
       let apiInFlight = 0;
+      let sessionRequests = 0;
+      let failedSessions = 0;
       let workspaceReads = 0;
       let holdNextSession = false;
       let releaseSession: (() => void) | undefined;
@@ -90,6 +92,7 @@ for (const viewport of [
           return;
         }
         ++apiInFlight;
+        if (path === "/api/me/session") ++sessionRequests;
         if (path.endsWith("/workspace")) ++workspaceReads;
         try {
           if (path === "/api/me/session" && holdNextSession) {
@@ -99,6 +102,7 @@ for (const viewport of [
             });
           }
           if (path === "/api/me/session" && sessionUnavailable) {
+            ++failedSessions;
             await route.abort("failed");
             return;
           }
@@ -166,8 +170,79 @@ for (const viewport of [
       await page.reload();
       await expect(editor).toHaveValue("직접 수정한 합성 브라우저 요약입니다.");
       await editor.fill("네트워크 장애 후에도 보존할 요약 초안");
+      await expect.poll(() => apiInFlight).toBe(0);
+      await page.evaluate(async () => {
+        const path = "/src/client/api/session.ts";
+        const { sessionApi } = (await import(
+          path
+        )) as typeof import("../../src/client/api/session");
+        await sessionApi.get();
+        const reads = { calls: 0, pending: 0 };
+        (window as Window & { customerSessionReads?: typeof reads }).customerSessionReads = reads;
+        const get = sessionApi.get;
+        sessionApi.get = async () => {
+          ++reads.calls;
+          ++reads.pending;
+          try {
+            return await get();
+          } finally {
+            --reads.pending;
+          }
+        };
+      });
+      const sessionReads = () =>
+        page.evaluate(
+          () =>
+            (window as Window & { customerSessionReads: { calls: number; pending: number } })
+              .customerSessionReads,
+        );
+      const settled = async () => {
+        await expect
+          .poll(async () => ({ network: apiInFlight, pending: (await sessionReads()).pending }))
+          .toEqual({ network: 0, pending: 0 });
+      };
+      // A genuine client read is held so the foreground check must share its
+      // HTTP request, while still participating in access verification.
+      holdNextSession = true;
+      await page.evaluate(async () => {
+        const path = "/src/client/api/session.ts";
+        const { sessionApi } = (await import(
+          path
+        )) as typeof import("../../src/client/api/session");
+        void sessionApi.get().catch(() => {});
+      });
+      await expect.poll(() => !!releaseSession).toBe(true);
+      const sharedRequests = sessionRequests;
+      const callsBeforeFocus = (await sessionReads()).calls;
+      await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+      await expect.poll(async () => (await sessionReads()).calls).toBeGreaterThan(callsBeforeFocus);
+      expect(sessionRequests).toBe(sharedRequests);
+      await expect(editor).toHaveValue("네트워크 장애 후에도 보존할 요약 초안");
+      releaseSession?.();
+      releaseSession = undefined;
+      await settled();
+      // Sharing ends when the read settles. Ordinary focus must now observe a
+      // fresh outage and preserve the same owner's unsaved draft.
+      const requestsBeforeOutage = sessionRequests;
       sessionUnavailable = true;
       await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+      await expect.poll(() => sessionRequests).toBeGreaterThan(requestsBeforeOutage);
+      await expect.poll(() => failedSessions).toBeGreaterThan(0);
+      await expect(page.getByRole("alert")).toContainText("연결하지 못했어요");
+      await expect(editor).toHaveValue("네트워크 장애 후에도 보존할 요약 초안");
+      await settled();
+      // Explicit peer invalidation hides private content even during an
+      // outage. Recovery may restore the draft only after owner verification.
+      const failuresBeforeInvalidation = failedSessions;
+      await page.evaluate(() =>
+        window.dispatchEvent(
+          new StorageEvent("storage", {
+            key: "baro-session-changed",
+            newValue: "synthetic-session-invalidation",
+          }),
+        ),
+      );
+      await expect.poll(() => failedSessions).toBeGreaterThan(failuresBeforeInvalidation);
       await expect(editor).not.toBeVisible();
       await expect(page.getByRole("alert")).toContainText("연결하지 못했어요");
       sessionUnavailable = false;
@@ -296,6 +371,45 @@ for (const viewport of [
       expect(
         await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
       ).toBe(true);
+      if (viewport.width === 1280) {
+        const tabs = page.getByRole("navigation", { name: "사건 메뉴", exact: true });
+        const links = tabs.getByRole("link");
+        const rows = () =>
+          links.evaluateAll(
+            (items) => new Set(items.map((item) => item.getBoundingClientRect().top)).size,
+          );
+        const checkTabs = async () => {
+          for (const link of await links.all()) {
+            await expect(link).toBeVisible();
+            const bounds = await link.boundingBox();
+            expect(bounds).not.toBeNull();
+            expect(bounds?.x).toBeGreaterThanOrEqual(0);
+            expect((bounds?.x ?? 0) + (bounds?.width ?? 0)).toBeLessThanOrEqual(viewport.width);
+          }
+          await links.first().focus();
+          await expect(links.first()).toBeFocused();
+          for (let index = 1; index < (await links.count()); index++) {
+            await page.keyboard.press("Tab");
+            await expect(links.nth(index)).toBeFocused();
+          }
+        };
+        await checkTabs();
+        expect(await rows()).toBeGreaterThan(1);
+        await page.evaluate(() => {
+          document.documentElement.style.zoom = "1";
+        });
+        await expect
+          .poll(() =>
+            page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+          )
+          .toBe(true);
+        await checkTabs();
+        expect(await rows()).toBe(1);
+        await page.screenshot({
+          path: testInfo.outputPath("customer-real-desktop.png"),
+          fullPage: true,
+        });
+      }
       const saved = await page.evaluate(
         async ({ modulePath, id }) => {
           const { api } = await import(modulePath);
