@@ -34,7 +34,6 @@ export function createMobileApi(dependencies: {
   });
   // Public browsing remains available when the device's credential store is locked.
   const publicRequest = createJsonRequester({
-    scope,
     newKey: dependencies.newKey,
     transport: anonymous,
   });

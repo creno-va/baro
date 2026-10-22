@@ -14,19 +14,21 @@ function wrapper({ children }: { children: ReactNode }) {
   return <SafeAreaProvider initialMetrics={metrics}>{children}</SafeAreaProvider>;
 }
 
-test("welcome offers navigation without pretending login or case creation is connected", async () => {
+test("welcome exposes implemented login and public navigation through commands", async () => {
   const onContinue = jest.fn();
+  const onSignIn = jest.fn();
   await render(
     <WelcomeScreen
       model={{ kind: "available", questionHint: "합성 질문 안내" }}
       onContinue={onContinue}
+      onSignIn={onSignIn}
     />,
     { wrapper },
   );
   await fireEvent.press(screen.getByRole("button", { name: "이용 안내 보기" }));
   expect(onContinue).toHaveBeenCalledTimes(1);
-  expect(screen.getByText(/로그인과 사건 정리는 준비 중/)).toBeTruthy();
-  expect(screen.queryByRole("button", { name: "로그인" })).toBeNull();
+  await fireEvent.press(screen.getByRole("button", { name: "로그인·내 계정" }));
+  expect(onSignIn).toHaveBeenCalledTimes(1);
 });
 
 test("invalid configuration blocks navigation and shows a safe error", async () => {

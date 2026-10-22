@@ -10,6 +10,7 @@ export default function HomeRoute() {
       model={createFoundationModel(readMobileConfig)}
       onContinue={() => router.push("/guide")}
       onBrowse={() => router.push("/directory")}
+      onSignIn={() => router.push("/session")}
     />
   );
 }
