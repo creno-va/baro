@@ -316,7 +316,7 @@ export function SummaryReview({ caseId }: { caseId: string }) {
       failedOperation.current = null;
       if (!confirmationReturn.current) {
         setError(
-          new ApiError("CONFLICT", "다른 화면에서 요약이 바뀌었어요. 최신 내용을 확인해 주세요."),
+          new ApiError("CONFLICT", "사건 내용이 바뀌었어요. 최신 내용을 확인해 주세요."),
         );
         return;
       }

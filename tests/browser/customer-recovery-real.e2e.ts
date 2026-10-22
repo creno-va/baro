@@ -34,6 +34,7 @@ async function summarySnapshot(page: Page, id: string) {
 }
 
 async function expectConfirmedWorkspace(page: Page, id: string) {
+  await page.waitForURL(new RegExp(`/cases/${id}$`), { waitUntil: "load" });
   await expect(page).toHaveURL(new RegExp(`/cases/${id}$`));
   const panel = page.getByRole("complementary", { name: "사건 요약 및 준비 현황" });
   await expect(panel).toBeVisible();
@@ -210,6 +211,7 @@ for (const { operation, loseSession, recovery } of scenarios) {
           }
         }
         if (recovery === "files") {
+          await page.waitForURL(new RegExp(`/cases/${info.id}/files$`), { waitUntil: "load" });
           await expect(page).toHaveURL(new RegExp(`/cases/${info.id}/files$`));
           await expect(page.getByRole("heading", { name: "사건 자료", exact: true })).toBeVisible();
         } else await expectConfirmedWorkspace(page, info.id);
