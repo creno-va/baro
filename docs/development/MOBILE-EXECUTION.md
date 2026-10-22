@@ -238,6 +238,17 @@ workspace·자료·리포트·나머지 domain을 순차 추출한다. 첫 단�
   사건/intake 회귀 31개와 기존 웹 저장/사건 회귀 25개를 검사했다.
   실제 native SecureStore/challenge 연결과 고객 화면은 M3~M4에서 계속한다.
 
+- 사건/intake PR341은 CI39789064504(head `bfdbacb`) 성공 후 main
+  `6a2b5008c3b1092a0cc60d3b1af08b8204199f8a`에 squash 병합했다.
+- `codex/335-shared-workspace-client`는 `createWorkspaceClient`로 채팅·행동·타임라인과
+  projection/pagination/revision readback을 분리한다. metadata 목록·비동기 job ID 힌트를
+  주입하고 상태/멱등성 key를 instance에 격리한다. 동일 쓰기 병행 합치기·계정 전환 취소·
+  저장 장애 후 서버 최신 job 복구를 검사한다. 원문은 복구 저장소에 넣지 않는다.
+  관련 domain 회귀190개·브라우저 초안/복구35개·frozen install/quick/build/두 OS bundle가
+  통과했다. 같은 계정에서 메서드를 감싼 참조는 유지하고, 계정 변경 시 새 instance로
+  전환하도록 공통 binding 회귀도 보완했다. 앱 재시작 시 workspace 쓰기의 durable key
+  복구와 실제 native IO는 후속 단계다.
+
 ## 참고
 
 - [Expo workspace 구성](https://docs.expo.dev/guides/monorepos/)

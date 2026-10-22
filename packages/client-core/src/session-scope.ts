@@ -39,13 +39,20 @@ export function createSessionBoundClient<T extends object>(
     }
   };
   return new Proxy(current, {
+    set(_target, key, value) {
+      refresh();
+      return Reflect.set(current, key, value);
+    },
     get(_target, key) {
       refresh();
       const value = Reflect.get(current, key);
       if (typeof value !== "function") return value;
+      const readGeneration = generation;
       return (...args: unknown[]) => {
         refresh();
-        const method = Reflect.get(current, key);
+        // A held method remains callable when wrapped within the same instance.
+        // Only an identity change redirects it to the fresh account's method.
+        const method = generation === readGeneration ? value : Reflect.get(current, key);
         if (typeof method !== "function") throw new Error("CLIENT_METHOD_UNAVAILABLE");
         return Reflect.apply(method, current, args);
       };

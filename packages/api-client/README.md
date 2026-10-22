@@ -1,6 +1,6 @@
 # @baro/api-client
 
-Shared JSON requests, safe public errors and wire clients for session/consent, cases/intake and the public
+Shared JSON requests, safe public errors and wire clients for session/consent, cases/intake/workspace and the public
 lawyer directory. Inject transport, UUID creation and optional body encoding. Web credentials
 and multipart bodies belong to the browser adapter; native API origin and session storage
 belong to native adapters. No global fetch, React, cookie configuration or environment reads
@@ -17,7 +17,7 @@ instances. `createDirectoryClient` validates canonical filters/cursor and respon
 Malformed responses and untrusted server messages become safe public errors.
 
 The web retains its existing facade/mock composition; mobile has no implicit mock fallback.
-Workspace/files/reports and remaining domains are subsequent #335 extraction units.
+Files/reports and remaining domains are subsequent #335 extraction units.
 Run `bun run clients:check`, `mobile:check`, and
 the existing web/domain tests when moving a module.
 
@@ -36,3 +36,11 @@ captured session generation. Invalidate the stable app scope on auth/lifecycle t
 abort its HTTP/challenge work and recreate private domain instances.
 An optional instance signal cancels a feature's work when it closes without granting or changing
 session permissions. Use a fresh feature instance after that signal is aborted.
+
+`createWorkspaceClient`는 채팅/행동/타임라인 projection·pagination·revision readback을 공유한다.
+HTTP·UUID·metadata-only `listFiles`·비동기 jobStorage를 주입하며, 모든 cache와 쓰기 key는
+instance에 묶인다. 같은 쓰기는 진행 중 한 번으로 합치고, 계정/화면 종료는 HTTP와 결과를
+취소한다. jobStorage는 owner별 namespace의 opaque job ID 힌트이며, 권한과 최신 상태는
+항상 서버가 확인한다. 저장 실패 시에도 최신 job 조회로 복구한다. mutation key는 현재
+instance 내 응답 유실을 복구하며, 앱 재시작까지의 durable 쓰기 복구는 native adapter와
+M4 고객 흐름에서 별도 인수한다. 상담 원문·메시지는 이 job store에 보관하지 않는다.
