@@ -9,7 +9,9 @@ import {
 import type { CaseView } from "@baro/client-core";
 import type { SessionModel, SessionState } from "../session/model";
 
-type Client = ReturnType<typeof createCasesClient>;
+type Client = ReturnType<typeof createCasesClient> & {
+  deleteCase?: (id: string, confirmation: string, schemaVersion: "1" | "2") => Promise<void>;
+};
 type Answer = AnswersInput["answers"][number];
 export interface CasesState {
   gate: "checking" | "login" | "consent" | "role" | "ready" | "error";
@@ -27,6 +29,9 @@ export interface CasesState {
   busy: boolean;
   error: string | null;
   conflict: boolean;
+  deleteConfirmation: string;
+  deleteUncertain: boolean;
+  notice: string | null;
 }
 const empty = (): CasesState => ({
   gate: "checking",
@@ -44,6 +49,9 @@ const empty = (): CasesState => ({
   busy: false,
   error: null,
   conflict: false,
+  deleteConfirmation: "",
+  deleteUncertain: false,
+  notice: null,
 });
 function gate(session: SessionState): CasesState["gate"] {
   if (session.phase === "error") return "error";
@@ -59,7 +67,7 @@ function gate(session: SessionState): CasesState["gate"] {
 }
 export function createCasesModel(dependencies: {
   session: Pick<SessionModel, "getSnapshot" | "subscribe" | "refresh">;
-  createClient: (signal: AbortSignal) => Client;
+  createClient: (signal: AbortSignal, ownerId: string, onDeleted: (id: string) => void) => Client;
   schedule?: (callback: () => void, ms: number) => () => void;
 }) {
   let state = empty(),
@@ -89,7 +97,11 @@ export function createCasesModel(dependencies: {
   function renew() {
     retire();
     controller = new AbortController();
-    client = dependencies.createClient(controller.signal);
+    const captured = version;
+    if (owner)
+      client = dependencies.createClient(controller.signal, owner, (id) => {
+        if (current(captured) && state.item?.id === id) acknowledgeDeletion();
+      });
   }
   const current = (value: number) =>
     value === version && state.gate === "ready" && !controller?.signal.aborted;
@@ -101,6 +113,20 @@ export function createCasesModel(dependencies: {
           state.unknowns !== (state.item.summaryDetails?.unknowns ?? []).join("\n")),
     );
   const dirty = () => Object.keys(state.answers).length > 0 || summaryDirty();
+  function clearSelected(notice: string) {
+    parked = undefined;
+    retire();
+    publish({
+      ...empty(),
+      gate: "ready",
+      notice,
+    });
+  }
+  function acknowledgeDeletion() {
+    clearSelected(
+      "삭제 요청이 접수됐어요. 사건 목록에서 확인해 주세요. 관련 자료 정리는 서버에서 이어질 수 있어요.",
+    );
+  }
   function fail(captured: number, error: unknown) {
     if (!current(captured)) return;
     cancelPoll?.();
@@ -109,6 +135,13 @@ export function createCasesModel(dependencies: {
       retire();
       publish(empty());
       void dependencies.session.refresh();
+      return;
+    }
+    if (error instanceof ApiError && error.code === "NOT_FOUND" && state.view === "detail") {
+      clearSelected("사건을 찾을 수 없어요. 목록에서 다시 확인해 주세요.");
+      // The same owner may have changed role; the server deliberately maps that denial to NOT_FOUND.
+      void dependencies.session.refresh();
+      void refresh();
       return;
     }
     publish({
@@ -196,7 +229,7 @@ export function createCasesModel(dependencies: {
     void refresh();
   }
   async function mutate(action: (api: Client) => Promise<CaseView | QuestionsResult>) {
-    if (state.gate !== "ready" || state.busy || state.conflict) return;
+    if (state.gate !== "ready" || state.busy || state.conflict || state.deleteUncertain) return;
     if (!client) renew();
     const api = client,
       captured = version;
@@ -269,12 +302,14 @@ export function createCasesModel(dependencies: {
         answers: {},
         facts: {},
         conflict: false,
+        deleteConfirmation: "",
+        deleteUncertain: false,
       });
       void refresh();
     },
     newCase() {
       if (state.gate !== "ready" || state.busy) return;
-      publish({ ...state, view: "create", error: null });
+      publish({ ...state, view: "create", error: null, notice: null });
     },
     setNarrative(narrative: string) {
       if (!state.busy && state.gate === "ready") publish({ ...state, narrative });
@@ -296,6 +331,7 @@ export function createCasesModel(dependencies: {
     async open(item: CaseView | string) {
       if (state.gate !== "ready" || state.busy) return;
       renew();
+      publish({ ...state, deleteConfirmation: "", deleteUncertain: false, notice: null });
       if (typeof item === "string") {
         publish({ ...state, conflict: false });
         await mutate((api) => api.get(item));
@@ -394,6 +430,35 @@ export function createCasesModel(dependencies: {
         return Promise.resolve();
       }
       return mutate((api) => api.confirmSummary(item.id, { expectedRevision: item.revision }));
+    },
+    setDeleteConfirmation(deleteConfirmation: string) {
+      if (state.gate === "ready" && !state.busy && !state.deleteUncertain)
+        publish({ ...state, deleteConfirmation });
+    },
+    async deleteCase() {
+      const item = state.item;
+      if (state.gate !== "ready" || state.busy || !item || !item.schemaVersion) return;
+      if (state.deleteConfirmation !== "DELETE") {
+        publish({ ...state, error: "삭제 확인란에 DELETE를 입력해 주세요." });
+        return;
+      }
+      if (!client) renew();
+      const api = client,
+        captured = version,
+        capturedOwner = owner;
+      if (!api?.deleteCase) {
+        publish({ ...state, error: "삭제 기능을 사용할 수 없어요. 앱 설정을 확인해 주세요." });
+        return;
+      }
+      cancelPoll?.();
+      publish({ ...state, busy: true, deleteUncertain: true, error: null });
+      try {
+        await api.deleteCase(item.id, "DELETE", item.schemaVersion);
+        if (current(captured)) acknowledgeDeletion();
+        if (owner === capturedOwner && state.gate === "ready" && !state.item) await refresh();
+      } catch (error) {
+        fail(captured, error);
+      }
     },
     cancel() {
       if (state.gate !== "ready") return;

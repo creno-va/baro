@@ -2,6 +2,7 @@ import type { Provider, SessionScope, UsageView } from "@baro/client-core";
 import { accountDeletionResponseSchema, deletionAccessSchema } from "@baro/contracts/deletion";
 import { v2UsageSchema } from "@baro/contracts/v2";
 import { z } from "zod";
+import { createCaseDeletionClient } from "./case-deletion";
 import { ApiError } from "./errors";
 import type { DomainRequest, DomainRequestInit } from "./reports";
 
@@ -55,8 +56,6 @@ export function createAccountClient(dependencies: {
       throw error;
     }
   };
-  const pendingDeletes = new Map<string, string>();
-  const pendingCaseDeletes = new Map<string, Promise<void>>();
   let pendingAccountDelete: Promise<void> | undefined;
   const deleted = async (kind: "case" | "account") => {
     ensureCurrent();
@@ -101,35 +100,13 @@ export function createAccountClient(dependencies: {
       }
       return usageViewSchema.parse(result);
     },
-    async deleteCase(id: string, confirmation: string, schemaVersion: "1" | "2" = "2") {
-      ensureCurrent();
-      if (confirmation !== "DELETE") throw new Error("삭제 확인란에 DELETE를 입력해 주세요.");
-      const identity = `${schemaVersion}:${id}`;
-      const previous =
-        dependencies.coalesceWrites === "credential-scope"
-          ? pendingCaseDeletes.get(identity)
-          : undefined;
-      if (previous) return previous;
-      const task = (async () => {
-        const key = pendingDeletes.get(identity) ?? dependencies.newKey();
-        pendingDeletes.set(identity, key);
-        const result = await request(
-          `/api/${schemaVersion === "1" ? "cases" : "v2/cases"}/${encodeURIComponent(id)}`,
-          { method: "DELETE", headers: { "idempotency-key": key } },
-        );
-        // v1 uses 204; current v2 acknowledges accepted cleanup with JSON.
-        if (result !== undefined) accountDeletionResponseSchema.parse(result);
-        pendingDeletes.delete(identity);
-        await deleted("case");
-      })();
-      if (dependencies.coalesceWrites === "credential-scope")
-        pendingCaseDeletes.set(identity, task);
-      try {
-        await task;
-      } finally {
-        if (pendingCaseDeletes.get(identity) === task) pendingCaseDeletes.delete(identity);
-      }
-    },
+    deleteCase: createCaseDeletionClient({
+      request,
+      scope: dependencies.scope,
+      newKey: dependencies.newKey,
+      ...(dependencies.coalesceWrites ? { coalesceWrites: dependencies.coalesceWrites } : {}),
+      onDeleted: () => deleted("case"),
+    }).deleteCase,
     async deleteAccount(confirmation: string) {
       ensureCurrent();
       if (confirmation !== "DELETE") throw new Error("삭제 확인란에 DELETE를 입력해 주세요.");

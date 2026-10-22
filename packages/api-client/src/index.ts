@@ -1,5 +1,6 @@
 export type { UsageSummary } from "./account";
 export { createAccountClient } from "./account";
+export { createCaseDeletionClient } from "./case-deletion";
 export type { AnswersInput, CaseOperationStorage, QuestionRound, QuestionsResult } from "./cases";
 export {
   answersInputSchema,

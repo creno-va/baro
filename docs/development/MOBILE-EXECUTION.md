@@ -473,6 +473,29 @@ workspace·자료·리포트·나머지 domain을 순차 추출한다. 첫 단�
   단독1개 및 같은 전체23개 재실행이 통과했다. 원인은 확정하지 않고 초기 실패를 보존한다.
   실제 OAuth/AI/기기·서명·배포 증거가 아니며 새 UI의 native 컴파일은 통합 SHA로 별도 추적한다.
 
+### 기존 사건 읽기·삭제 연결
+
+- 선행 RN 작업공간 PR357은 head `523f967` CI39838256020 성공 뒤 main `00c9969`에
+  정상 병합했다. 같은 SHA native39838641046은 두 OS 성공이며 이 source의
+  native 컴파일과 이후 v1/삭제 source·실제 기기 증거를 구분한다.
+- `codex/354-native-legacy-cases`는 공통 cases client에서 이미 검증한 v1 CaseDetail을
+  native 선택형 `legacyDetail`로 노출한다. 기본 웹 DTO는 유지한다. 저장된 사용자 진술·
+  AI 정리·미확인·타임라인·쟁점/한계·자료/행동·당시 출처와 정책 안내·질문 대기/실패를
+  RN에서 읽는다. GET 이외의 분석/답변/재시도 요청을 자동 실행하지 않는다.
+- 계정 client의 기존 사건 삭제를 독립 공통 factory로 공유한다. native는 빈 DELETE 본문과
+  owner/path/method별 opaque UUID를 필수 저장/readback하고 feature 재생성 뒤 같은 key로
+  재시도한다. 다른 signed owner·취소 뒤 늦은 응답·잠김/저장 실패·잘못된 ACK는 성공을
+  알리지 않는다. 확정 삭제 뒤 cleanup 실패는 성공을 실패로 돌리지 않는다.
+- RN은 DELETE 직접 확인과 결과 불확실/같은 요청 확인을 제공한다. ACK에서 선택 사건과
+  분석/입력을 비운 뒤 scope를 폐기하고 세션/목록을 다시 읽는다. 후속 목록 실패·삭제된
+  사건의404·계정 변경에서 이전 개인 내용을 되살리지 않는다. 물리 cleanup 완료를 접수로
+  대신하지 않으며 비용 원장/hold·다른 미해결 key를 지우지 않는다. 계정 탈퇴/reauth는 별도다.
+- frozen install·quick(모바일/공통175개·RN28개·필수 서버42개)·production build/workerd·두 OS Metro가 통과했다. 추가 삭제/server
+  회귀21개와 웹 세션 복구15개·legacy11개·settings5개도 통과했다. 실제 Hono/암호화 SQL에서
+  저장된 guidance 읽기(자동 재분석 없음), v1/v2 삭제의 ACK 유실·같은 key/빈 본문 재시도,
+  다른 signed owner 및 실제 DB 역할 변경의 거절·fresh session, RN model의 선택 사건 제거를
+  검증했다. 합성 fixture 성공이며 실제 OAuth/AI/기기·서명/배포 인수를 의미하지 않는다.
+
 ## 참고
 
 - [Expo workspace 구성](https://docs.expo.dev/guides/monorepos/)

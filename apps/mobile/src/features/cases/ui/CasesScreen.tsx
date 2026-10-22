@@ -5,17 +5,20 @@ import { Screen } from "../../../ui/Screen";
 import { Text } from "../../../ui/Text";
 import { TextField } from "../../../ui/TextField";
 import type { CasesModel, CasesState } from "../model";
+import { LegacyCaseDetails } from "./LegacyCaseDetails";
 
 export function CasesScreen({
   state,
   actions,
   onSession,
   onWorkspace,
+  onOpenLink,
 }: {
   state: CasesState;
   actions: CasesModel;
   onSession: () => void;
   onWorkspace?: (caseId: string) => void;
+  onOpenLink?: (url: string) => void;
 }) {
   if (state.gate !== "ready")
     return (
@@ -39,7 +42,7 @@ export function CasesScreen({
       </Screen>
     );
   const q = state.questions,
-    blocked = state.busy || state.conflict,
+    blocked = state.busy || state.conflict || state.deleteUncertain,
     item = state.item;
   const questions = q?.rounds?.length
     ? q.questions.filter((question) =>
@@ -62,6 +65,7 @@ export function CasesScreen({
         </Text>
       ) : null}
       {state.error ? <Text accessibilityRole="alert">{state.error}</Text> : null}
+      {state.notice ? <Text accessibilityLiveRegion="polite">{state.notice}</Text> : null}
       {state.busy ? <Text accessibilityRole="progressbar">요청을 확인하고 있어요.</Text> : null}
       {state.busy ? <Button label="진행 중인 요청 중단" onPress={actions.cancel} /> : null}
       {state.view === "list" ? (
@@ -168,10 +172,14 @@ export function CasesScreen({
             />
           ) : null}
           {item.schemaVersion === "1" ? (
-            <Text>
-              기존 사건의 저장 기록이에요. 앱 진입으로 다시 분석하지 않아요. 분석 상세·삭제 화면은
-              이어서 연결하고 있어요.
-            </Text>
+            item.legacyDetail ? (
+              <LegacyCaseDetails
+                detail={item.legacyDetail}
+                {...(onOpenLink ? { onOpenLink } : {})}
+              />
+            ) : (
+              <Text>기존 사건의 저장된 상세 결과를 확인하고 있어요.</Text>
+            )
           ) : null}
           {q ? (
             <>
@@ -275,7 +283,8 @@ export function CasesScreen({
               ) : null}
             </>
           ) : null}
-          {item.stage === "summary" || item.stage === "active" || item.stage === "archived" ? (
+          {item.schemaVersion !== "1" &&
+          (item.stage === "summary" || item.stage === "active" || item.stage === "archived") ? (
             <>
               <Text variant="heading" accessibilityRole="header">
                 저장된 요약
@@ -340,7 +349,7 @@ export function CasesScreen({
                   {item.schemaVersion === "2" && onWorkspace ? (
                     <Button
                       label="사건 작업공간 열기"
-                      disabled={state.busy}
+                      disabled={state.busy || state.deleteUncertain}
                       onPress={() => onWorkspace(item.id)}
                     />
                   ) : null}
@@ -352,6 +361,37 @@ export function CasesScreen({
                 </Text>
               ))}
             </>
+          ) : null}
+          {item.schemaVersion ? (
+            <Card>
+              <Text variant="heading">이 사건 삭제</Text>
+              <Text>
+                사건과 연결된 자료·분석 결과를 삭제 요청해요. 되돌릴 수 없어요. 관련 자료 정리는
+                서버에서 이어질 수 있어요.
+              </Text>
+              {state.deleteUncertain ? (
+                <Text>
+                  삭제 응답이 불확실해요. 같은 삭제 요청으로 다시 확인하거나 최신 내용을 읽어
+                  주세요.
+                </Text>
+              ) : null}
+              <TextField
+                label="사건 삭제 확인 (DELETE 입력)"
+                value={state.deleteConfirmation}
+                autoCapitalize="characters"
+                autoCorrect={false}
+                maxLength={6}
+                editable={!state.busy && !state.deleteUncertain}
+                onChangeText={actions.setDeleteConfirmation}
+              />
+              <Button
+                label={state.deleteUncertain ? "같은 삭제 요청 다시 확인" : "이 사건 삭제 요청"}
+                disabled={state.busy || state.deleteConfirmation !== "DELETE"}
+                onPress={() => {
+                  void actions.deleteCase();
+                }}
+              />
+            </Card>
           ) : null}
         </>
       ) : null}

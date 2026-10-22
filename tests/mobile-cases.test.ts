@@ -38,6 +38,12 @@ function fixture() {
     refreshes = 0,
     confirmations = 0,
     advances = 0;
+  let missing = false,
+    deleted = false,
+    deleteFailure: unknown,
+    deleteDelay: Promise<void> | undefined,
+    failList = false;
+  const deletions: { id: string; confirmation: string; schemaVersion: "1" | "2" }[] = [];
   let questions: QuestionsResult = {
     questions: [1, 2, 3, 4, 5, 6].map((n) => ({
       id: `q${n}`,
@@ -79,11 +85,15 @@ function fixture() {
         poll = undefined;
       };
     },
-    createClient: () => ({
-      list: async () => [structuredClone(item)],
+    createClient: (_signal, _owner, onDeleted) => ({
+      list: async () => {
+        if (failList) throw new ApiError("UNAVAILABLE", "합성 목록 읽기 실패");
+        return deleted ? [] : [structuredClone(item)];
+      },
       get: async () => {
         reads++;
         await getDelay;
+        if (missing) throw new ApiError("NOT_FOUND", "합성 서버 접근 거절");
         return structuredClone(item);
       },
       create: async () => {
@@ -122,6 +132,13 @@ function fixture() {
         item = { ...item, stage: "active", revision: item.revision + 1 };
         return structuredClone(item);
       },
+      deleteCase: async (id, confirmation, schemaVersion) => {
+        deletions.push({ id, confirmation, schemaVersion });
+        await deleteDelay;
+        if (deleteFailure) throw deleteFailure;
+        deleted = true;
+        onDeleted(id);
+      },
     }),
   });
   const stop = model.start();
@@ -140,6 +157,19 @@ function fixture() {
     },
     counts: () => ({ calls, reads, refreshes, confirmations, advances }),
     saved,
+    deletions,
+    deleteFailure(cause?: unknown) {
+      deleteFailure = cause;
+    },
+    holdDelete(delay: Promise<void>) {
+      deleteDelay = delay;
+    },
+    failList() {
+      failList = true;
+    },
+    missing() {
+      missing = true;
+    },
     poll: () => poll,
     summary() {
       item = {
@@ -322,5 +352,91 @@ test("acknowledged answer saving remains busy until its fresh case read complete
   release();
   await saving;
   expect(f.model.getSnapshot().busy).toBe(false);
+  f.stop();
+});
+test("deletion requires typed confirmation and removes selected private state even if the following list read fails", async () => {
+  const f = fixture();
+  await settled();
+  await f.model.open(base);
+  await f.model.deleteCase();
+  expect(f.deletions).toEqual([]);
+  f.model.setDeleteConfirmation("DELETE");
+  f.failList();
+  await f.model.deleteCase();
+  expect(f.deletions).toEqual([{ id: base.id, confirmation: "DELETE", schemaVersion: "2" }]);
+  expect(f.model.getSnapshot()).toMatchObject({
+    view: "list",
+    item: null,
+    questions: null,
+    summary: "",
+    answers: {},
+    facts: {},
+    deleteConfirmation: "",
+    deleteUncertain: false,
+  });
+  expect(f.model.getSnapshot().notice).toContain("삭제 요청");
+  f.stop();
+});
+test("an uncertain deletion keeps its exact target and prevents other mutations until explicit replay or leaving", async () => {
+  const f = fixture();
+  await settled();
+  await f.model.open(base);
+  f.model.setDeleteConfirmation("DELETE");
+  f.deleteFailure(new ApiError("UNAVAILABLE", "합성 응답 유실"));
+  await f.model.deleteCase();
+  expect(f.model.getSnapshot().deleteUncertain).toBe(true);
+  expect(f.model.getSnapshot().item?.id).toBe(base.id);
+  f.model.setDeleteConfirmation("");
+  await f.model.advance();
+  expect(f.counts().advances).toBe(0);
+  f.deleteFailure();
+  await f.model.deleteCase();
+  expect(f.deletions[1]).toEqual(f.deletions[0]);
+  expect(f.model.getSnapshot().item).toBeNull();
+  f.stop();
+});
+test("cancelling deletion retires an eventual acknowledgement; account changes cannot revive the previous target", async () => {
+  const f = fixture();
+  await settled();
+  await f.model.open(base);
+  f.model.setDeleteConfirmation("DELETE");
+  let release = () => {};
+  f.holdDelete(
+    new Promise<void>((done) => {
+      release = done;
+    }),
+  );
+  const removing = f.model.deleteCase();
+  await settled();
+  f.model.cancel();
+  expect(f.model.getSnapshot().deleteUncertain).toBe(true);
+  f.session(owner("b"));
+  await settled();
+  release();
+  await removing;
+  expect(f.model.getSnapshot()).toMatchObject({
+    view: "list",
+    item: null,
+    deleteConfirmation: "",
+    deleteUncertain: false,
+    notice: null,
+  });
+  f.stop();
+});
+test("a missing selected case clears its private view and rechecks session because role denials also map to NOT_FOUND", async () => {
+  const f = fixture();
+  await settled();
+  await f.model.open(base);
+  f.model.setDeleteConfirmation("DELETE");
+  f.missing();
+  await f.model.refresh();
+  expect(f.model.getSnapshot()).toMatchObject({
+    gate: "login",
+    item: null,
+    deleteConfirmation: "",
+    answers: {},
+    facts: {},
+  });
+  expect(f.counts().refreshes).toBe(1);
   f.stop();
 });
