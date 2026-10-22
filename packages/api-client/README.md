@@ -29,9 +29,10 @@ durable store cannot start a write. Only opaque keys, owner/revision metadata an
 persist; editor text stays in the in-flight instance. Native storage adapters must encode/hash
 logical keys to meet their OS key naming restrictions.
 
-Same-input pending writes coalesce before async storage or challenge work. Real case creation
-resolves the current owner for every attempt before coalescing within that owner, including when
-an account cookie changes before the app receives a session notification. Ambiguous responses
+Same-input case creation coalesces before async storage or challenge work. Real case creation
+resolves the current owner for every attempt before coalescing within that owner. Other real
+writes reach their live owner/workspace checks instead of joining a pending editor input,
+including when an account cookie changes before the app receives a session notification. Ambiguous responses
 retain the key and exact wire revision; another owner gets a separate key while the original
 owner can resume the unresolved operation. Every HTTP boundary and final result checks the
 captured session generation. Invalidate the stable app scope on auth/lifecycle transitions to

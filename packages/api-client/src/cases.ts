@@ -784,7 +784,9 @@ export function createCasesClient(
       return async (...args: unknown[]) => {
         ensureCurrent();
         const schema = typeof key === "string" ? mutationSchemas.get(key) : undefined;
-        if (schema && (key !== "create" || apiMode === "mock")) {
+        // Real writes must reach their live owner/workspace authorization checks.
+        // Only creation coalesces afterward, within the verified owner above.
+        if (schema && apiMode === "mock") {
           const position = key === "create" ? 0 : 1;
           const normalized = [...args];
           normalized[position] = validate(schema, args[position]);
