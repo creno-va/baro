@@ -1,6 +1,33 @@
 import { spawn } from "node:child_process";
-import { expect, test } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 import { CURRENT_POLICY_VERSIONS } from "../../src/contracts/consent";
+
+async function trackSessionReads(page: Page) {
+  await page.evaluate(async () => {
+    const path = "/src/client/api/session.ts";
+    const { sessionApi } = (await import(path)) as typeof import("../../src/client/api/session");
+    const tracker = window as unknown as {
+      accountSessionReads: { calls: number; settled: number };
+    };
+    tracker.accountSessionReads = { calls: 0, settled: 0 };
+    const get = sessionApi.get;
+    sessionApi.get = async (...args: Parameters<typeof get>) => {
+      tracker.accountSessionReads.calls++;
+      try {
+        return await get(...args);
+      } finally {
+        tracker.accountSessionReads.settled++;
+      }
+    };
+  });
+  return () =>
+    page.evaluate(() => {
+      const { calls, settled } = (
+        window as unknown as { accountSessionReads: { calls: number; settled: number } }
+      ).accountSessionReads;
+      return { calls, pending: calls - settled };
+    });
+}
 
 for (const role of ["customer", "lawyer"] as const) {
   test(`settings loads ${role} resources and offers legacy cases their existing detail`, async ({
@@ -357,6 +384,7 @@ for (const lateResponse of ["failure", "signed-out"] as const) {
     page,
   }) => {
     let phase: "ready" | "late" | "current" = "ready";
+    let ownerId = "synthetic-owner";
     let held = 0;
     let settled = 0;
     let fresh = 0;
@@ -391,7 +419,7 @@ for (const lateResponse of ["failure", "signed-out"] as const) {
         if (phase === "current") fresh++;
         return route.fulfill({
           json: {
-            user: { id: "synthetic-owner", name: "Synthetic", accountType: "customer" },
+            user: { id: ownerId, name: "Synthetic", accountType: "customer" },
             needsConsent: false,
           },
         });
@@ -419,16 +447,40 @@ for (const lateResponse of ["failure", "signed-out"] as const) {
       const editor = page.getByRole("textbox", { name: "리포트 내용 편집" });
       await expect(editor).toHaveValue("Saved report");
       await editor.fill("Unsaved current report correction");
+      const sessionReads = await trackSessionReads(page);
       phase = "late";
       await page.evaluate(() => window.dispatchEvent(new Event("focus")));
-      // Both the navigation and report owner check are pending in the first wave.
-      await expect.poll(() => held).toBeGreaterThanOrEqual(2);
-      phase = "current";
+      // Shell and report must both verify, while sharing one pending HTTP read.
+      await expect.poll(async () => (await sessionReads()).calls).toBeGreaterThanOrEqual(2);
+      await expect.poll(() => held).toBe(1);
+      const firstWave = await sessionReads();
       await page.evaluate(() => window.dispatchEvent(new Event("focus")));
-      await expect.poll(() => fresh).toBeGreaterThanOrEqual(2);
+      await expect
+        .poll(async () => (await sessionReads()).calls)
+        .toBeGreaterThanOrEqual(firstWave.calls + 2);
+      expect(held).toBe(1);
+      expect(fresh).toBe(0);
+      await expect(page.getByRole("status")).toContainText("계정 접근 상태 확인 중…");
+      await expect(editor).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "검토 내용 저장", exact: true })).toHaveCount(
+        0,
+      );
+      phase = "current";
+      // An explicit peer invalidation bypasses the old pending read. Focus alone
+      // cannot create a newer authoritative response while that read is pending.
+      await page.evaluate(() =>
+        window.dispatchEvent(
+          new StorageEvent("storage", {
+            key: "baro-session-changed",
+            newValue: "synthetic-report-session-invalidation",
+          }),
+        ),
+      );
+      await expect.poll(() => fresh).toBeGreaterThan(0);
       await expect(page.getByRole("button", { name: "검토 내용 저장", exact: true })).toBeEnabled();
       release();
-      await expect.poll(() => settled).toBe(held);
+      await expect.poll(() => settled).toBe(1);
+      await expect.poll(async () => (await sessionReads()).pending).toBe(0);
       await page.evaluate(
         () =>
           new Promise<void>((resolve) =>
@@ -438,6 +490,21 @@ for (const lateResponse of ["failure", "signed-out"] as const) {
       await expect(editor).toHaveValue("Unsaved current report correction");
       await expect(page.getByRole("alert")).toHaveCount(0);
       await expect(page.getByRole("button", { name: "검토 내용 저장", exact: true })).toBeEnabled();
+      const recoveredReads = fresh;
+      await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+      await expect.poll(() => fresh).toBeGreaterThan(recoveredReads);
+      await expect.poll(async () => (await sessionReads()).pending).toBe(0);
+      await expect(editor).toHaveValue("Unsaved current report correction");
+      await expect(page.getByRole("button", { name: "검토 내용 저장", exact: true })).toBeEnabled();
+      // Sharing is limited to in-flight reads: a later real owner change still
+      // revokes the editor rather than reusing the recovered owner's permission.
+      ownerId = "synthetic-next-owner";
+      await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+      await expect(editor).toHaveCount(0);
+      await expect(page.getByRole("alert")).toContainText("계정 또는 접근 상태가 변경됐어요.");
+      await expect(page.getByRole("button", { name: "검토 내용 저장", exact: true })).toHaveCount(
+        0,
+      );
     } finally {
       release();
     }
@@ -448,6 +515,7 @@ for (const failure of ["http", "network", "invalid-json"] as const) {
   test(
     "obsolete settings session failure preserves the recovered view: " + failure,
     async ({ page }) => {
+      let fresh = 0;
       let deletionReads = 0,
         held = false,
         settled = false,
@@ -482,6 +550,7 @@ for (const failure of ["http", "network", "invalid-json"] as const) {
             settled = true;
             return;
           }
+          if (held) fresh++;
           return route.fulfill({
             json: {
               user: { id: "synthetic-owner", name: "Synthetic", accountType: "customer" },
@@ -517,26 +586,60 @@ for (const failure of ["http", "network", "invalid-json"] as const) {
           return route.fulfill({ json: { items: [], nextCursor: null, previews: [] } });
         return route.fulfill({ status: 404, json: {} });
       });
-      await page.goto("/settings");
-      await expect.poll(() => held).toBe(true);
-      await page.evaluate(() => {
-        window.dispatchEvent(new PageTransitionEvent("pagehide", { persisted: true }));
-        window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true }));
-      });
-      const link = page.getByRole("link", { name: "Synthetic legacy case", exact: true });
-      await expect(link).toBeVisible();
-      await expect(page.getByRole("button", { name: "google로 재인증" })).toBeEnabled();
-      release();
-      await expect.poll(() => settled).toBe(true);
-      await page.evaluate(
-        () =>
-          new Promise<void>((resolve) =>
-            requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
-          ),
-      );
-      await expect(link).toBeVisible();
-      await expect(page.getByRole("alert")).toHaveCount(0);
-      await expect(page.getByRole("button", { name: "google로 재인증" })).toBeEnabled();
+      try {
+        await page.goto("/settings");
+        await expect.poll(() => held).toBe(true);
+        const sessionReads = await trackSessionReads(page);
+        await page.evaluate(() => {
+          window.dispatchEvent(new PageTransitionEvent("pagehide", { persisted: true }));
+          window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true }));
+        });
+        // Restoring the page participates in session verification but shares the
+        // held HTTP request until an explicit account invalidation arrives.
+        await expect.poll(async () => (await sessionReads()).calls).toBeGreaterThan(0);
+        expect(fresh).toBe(0);
+        const sharedReads = await sessionReads();
+        await page.evaluate(() => {
+          window.dispatchEvent(
+            new StorageEvent("storage", {
+              key: "baro-session-changed",
+              newValue: "synthetic-settings-session-invalidation",
+            }),
+          );
+          window.dispatchEvent(new PageTransitionEvent("pagehide", { persisted: true }));
+          window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true }));
+        });
+        await expect
+          .poll(async () => (await sessionReads()).calls)
+          .toBeGreaterThan(sharedReads.calls);
+        await expect.poll(() => fresh).toBeGreaterThan(0);
+        const link = page.getByRole("link", { name: "Synthetic legacy case", exact: true });
+        await expect(link).toBeVisible();
+        await expect(page.getByRole("button", { name: "google로 재인증" })).toBeEnabled();
+        release();
+        await expect.poll(() => settled).toBe(true);
+        await expect.poll(async () => (await sessionReads()).pending).toBe(0);
+        await page.evaluate(
+          () =>
+            new Promise<void>((resolve) =>
+              requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+            ),
+        );
+        await expect(link).toBeVisible();
+        await expect(page.getByRole("alert")).toHaveCount(0);
+        await expect(page.getByRole("button", { name: "google로 재인증" })).toBeEnabled();
+        const recoveredReads = fresh;
+        await page.evaluate(() => {
+          window.dispatchEvent(new PageTransitionEvent("pagehide", { persisted: true }));
+          window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true }));
+        });
+        await expect.poll(() => fresh).toBeGreaterThan(recoveredReads);
+        await expect(link).toBeVisible();
+        await expect(page.getByRole("alert")).toHaveCount(0);
+        await expect(page.getByRole("button", { name: "google로 재인증" })).toBeEnabled();
+      } finally {
+        release();
+      }
     },
   );
 }
