@@ -225,6 +225,25 @@ File과 native URI는 adapter 내부에 둔다. 기존 예약·part·contentHash
 읽기와 incremental hash 가능 여부를 먼저 실측한다. 미지원 크기를 성공으로 표시하거나
 상한을 조용히 낮추지 않고 재현 결과와 사용자 안내를 남긴다.
 
+M5 #361의 `getNativeUploadSources()`는 SDK58 DocumentPicker58.0.4의 cache copy를 앱 전용
+임의 ID 경로로 옮긴다. source 객체에는 name/size/type만 노출하며 실제 URI는 adapter에
+보관한다. 읽기 handle은 `FileMode.ReadOnly`, 단일 native read는256KiB 이하다. noble
+SHA2562.4.0을 점진적으로 계산하고 서버의8MiB 조각마다 hash를 보관해 실제 part의 hash와
+다시 대조한다. 같은 길이로 내용이 바뀐 경우도 전송 body를 반환하지 않는다. 부분 읽기는
+모으되 빈/과잉/잘못된 offset과 크기 변경을 거절하며 모든 handle은 finally에서 닫는다.
+close/abort는 진행 중/대기 part를 폐기한다. snapshot은 명시적 release/clear에서 reader를
+먼저 닫고 삭제한다. 삭제 실패는 다음 정리까지 보존하며 첫 사용 시 자기 namespace의
+고아 cache만 정리한다. source를 URI 문자열이나 새 metadata 객체로 복제해 재사용할 수 없다.
+
+2026-10-23 합성 로컬 파일 port 실측은100,000,000·1,000,000,000bytes에서 독립 Node SHA256과
+전체 fingerprint/조각 재결합이 일치했다. 최대 read262,144bytes·part8,388,608bytes,
+handle13/13·121/121 open/close, 각각951ms·10,059ms였다. 이는 실제 디스크를 읽은 로컬 port
+측정이며 native SDK의 기기 성능·메모리/URI 권한 인수가 아니다. OS picker의 cache copy는
+JS 바깥에서 수행되므로 큰 파일 복사/공간 부족과 취소 정리는 두 OS에서 추가 인수한다.
+실제 files client·작업 복구·앱 수명/owner에 따른 clear 연결과 업로드/리포트 UI는 M5 후속이다.
+`bun scripts/mobile-file-io-probe.ts --large`로 위 합성 디스크 검사를 수동 재현하며 CI의
+빠른 검사에서는1GB 파일을 생성하지 않는다.
+
 처리는 서버에서 계속되고, 앱 복귀 시 upload/job 상태를 재조회한다. 사용자 재시도와
 중복 실행을 구분하며 같은 작업의 key를 유지한다. 앱이 백그라운드에서도 계속 전송된다고
 가정하지 않는다. OS가 파일 URI 접근을 철회한 경우 재선택·검증 경로를 제공한다.

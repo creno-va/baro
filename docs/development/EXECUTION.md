@@ -33,7 +33,7 @@ M1 앱 기반·공통 계약 공유를 #330에서 인수했다. 후속 사용자
 
 | 작업 | 담당/이슈 | 현재 상태·blocker | 다음 행동 |
 | --- | --- | --- | --- |
-| 모바일 전체 구현·M3 재인증 | 모바일 담당 / #334·#346 (M4 #354 외부 잔여) | v1 읽기/삭제 PR358 main `f854061`·head CI39842058806, 같은 SHA native39842510191 두 OS 성공. 재인증 서버 PR359 main `6f79774`·head CI39847136702 통합. `codex/346-native-reauth-ui`에서 이를 소비하는 RN 재인증/기기 proof·UI와 취소/유실/cold 복귀를 검증 중 | RN 소비 PR 검증·통합 후 M5 첨부/리포트를 진행한다. preview API는 health 기준 `57121d2`여서 native API 호환 배포/실제 기기·M6~M8·#339·#71은 유지 |
+| 모바일 전체 구현·M5 파일 IO | 모바일 담당 / #334·#361 (M3 #346·M4 #354 외부 잔여) | 재인증 서버 PR359 main `6f79774`·head CI39847136702와 RN 소비 PR360 main `6aeacfc`·head CI39849386723 통합. 같은 SHA native39849734585 진행 중. `codex/361-native-file-io`에서 SDK58 파일 선택/private snapshot·범위 읽기·SHA256/정리 adapter 검증. 로컬 합성100MB/1GB 파일 전체 hash/part 일치·256KiB read/8MiB part 확인 | 파일 IO PR 검증·통합 뒤 실제 files client/업로드 복구·검토/리포트 UI 연결. preview API는 health 기준 `57121d2`여서 native API 호환 배포/실제 기기·M6~M8·#339·#71은 유지 |
 | DB·HTTP 왕복 축소 | 성능 조율 / #317 | 선행 UI·법률·모델·첨부·리포트 PR을 main c2258b88에 통합, 필수 PR/main CI 성공. 별도 codex/317-db-roundtrips에서 합성 호출 수 재측정 | commit revision 기반 행동·타임라인 선택 재조회, 중복 domain 읽기와 단일 공개 목록 lead sample 제거. fresh auth/삭제/CAS/멱등성 및 관측 전용 비용 정책 보존. 회귀·quick/build/DB 검증 후 PR, 실제 원격 성능·배포는 #71 별도 |
 | 사진 근거·PDF 리포트 | AI/자료, #312 | 2026-10-21 직접 요청, codex/312-photo-evidence-pdf. #307 첨부 UI·#304 법률 범위 분리, migration 없음 | 상해/진단서 관찰·확인 지침, 선택 사진·출처와 HTML→PDF, PDF만 저장. quick/build·브라우저·native 조판 CI 후 별도 PR 병합; 외부 모델/배포 인수 별도 |
 | Gemini 모델·질문 하네스 | AI / #305 | 2026-10-21 사용자 승인, 별도 codex/305-gemini-flash-pipeline worktree. #304 법률 API와 PR303 UI 범위 분리 | ADR-0016·고정 평가·quick/build·CI 검증 후 별도 PR 병합. 실제 모델·배포 인수는 별도 receipt |

@@ -156,3 +156,17 @@ SecureStore에 저장한 뒤 외부 브라우저를 열고, 복귀 시 정확한
 취소는 기존 로그인을 유지하고 로그아웃은 인증 cookie/pending/marker를 지운다. 미해결
 사건 작업 key는 보존한다. 기기 marker만으로 계정 삭제 권한을 부여하지 않으며 서버의
 fresh access가 정본이다. 합성 제공자·SQL/HTTP·RN 검증과 실제 두 OS OAuth 인수는 별개다.
+
+## 파일 IO 기반 (M5 진행)
+
+`getNativeUploadSources()`는 OS document picker와 전용 private cache snapshot을 제공한다.
+선택 객체의 name/size/type 뒤 실제 URI는 숨긴다. `openUpload`는256KiB 이하 범위 읽기와
+incremental SHA256으로 서버8MiB part를 검증한다. reader close 뒤에도 명시적 재시도에 쓸
+snapshot은 유지되며 소유 화면은 완료/취소/이탈 때 `release`, 계정 전환/다음 시작 때
+`clear`를 연결해야 한다. clear는 열려 있는 reader부터 닫고 삭제 실패를 재시도 대상으로
+보존한다. 인증 key나 `.case-operations`를 지우지 않는다. 로컬 합성100MB/1GB byte/hash
+검사는 통과했으며 native 기기 IO·선택 권한/공간 부족·전체 메모리 인수는 별도다.
+현재 이 adapter를 소비하는 upload/review/report 모델·화면과 서버 작업 복구는 후속이다.
+로컬 합성 디스크 검사는 루트에서 `bun scripts/mobile-file-io-probe.ts --large`로 재현한다.
+기본은100MB이며 `--large`는100MB와1GB를 순차 생성/검사한 뒤 임시 파일을 지운다.
+출력은 byte 수·일치/메모리 관측·handle 수치뿐이며 실제 사용자 자료를 읽지 않는다.
