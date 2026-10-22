@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { openReportEditor } from "../helpers/report-controls";
 
 const progressReport = {
   id: "synthetic-progress-report",
@@ -59,6 +60,7 @@ async function progressFixture(
     return route.fulfill({ status: 404, json: {} });
   });
   await page.goto("/cases/synthetic-progress-case/reports");
+  await openReportEditor(page);
   await expect(page.getByRole("textbox", { name: "리포트 내용 편집" })).toHaveValue(
     progressReport.content,
   );
@@ -92,6 +94,7 @@ test("PDF elapsed wait retains the reviewed draft and exposes PDF as the only sa
   await expect(page.locator(".report-progress")).toContainText("요청 시작 후 65초");
   response.release();
   expect((await download).suggestedFilename()).toMatch(/\.pdf$/);
+  await openReportEditor(page);
   await expect(page.getByRole("textbox", { name: "리포트 내용 편집" })).toHaveValue(
     progressReport.content,
   );
@@ -234,6 +237,7 @@ test("focus refresh preserves unsaved text and generation refreshes material cho
     return route.fulfill({ status: 404, json: {} });
   });
   await page.goto("/cases/synthetic-refresh/reports");
+  await openReportEditor(page);
   const editor = page.getByRole("textbox", { name: "리포트 내용 편집" });
   await expect(editor).toHaveValue("저장된 합성 본문 1");
   await editor.fill("저장하지 않은 독립 상담 질문");
@@ -319,6 +323,7 @@ test("initial report limit allows exclusions before any report exists", async ({
   ).toBeVisible();
   await page.getByRole("checkbox", { name: /큰 합성 자료/ }).check();
   await page.getByRole("button", { name: "선택 자료를 제외하고 생성" }).click();
+  await openReportEditor(page);
   await expect(page.getByRole("textbox", { name: "리포트 내용 편집" })).toHaveValue(
     "제외 후 생성한 합성 리포트",
   );

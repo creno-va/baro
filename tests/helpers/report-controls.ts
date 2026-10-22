@@ -1,5 +1,11 @@
 import { expect, type Page } from "@playwright/test";
 
+export async function openReportEditor(page: Page) {
+  const toggle = page.locator(".report-edit-toggle");
+  await expect(toggle).toBeVisible();
+  if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
+}
+
 export async function openReportOptions(page: Page) {
   const options = page
     .locator("details")

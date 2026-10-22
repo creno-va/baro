@@ -1,0 +1,808 @@
+/* Product-only composition. The landing and the /app composer keep their own design. */
+.app-frame.app-frame--product {
+  --product-blue: #2364e8;
+  --product-ink: #191f28;
+  --product-subtle: #f6f8fb;
+  --product-line: #edf0f4;
+  --product-radius: 20px;
+  color: var(--product-ink);
+}
+.app-frame.app-frame--product .app-surface::before {
+  display: none;
+}
+.app-frame.app-frame--product .app-surface > main {
+  width: min(1100px, calc(100% - 96px));
+  max-width: 1100px;
+  padding-top: 48px;
+  padding-bottom: 40px;
+}
+.app-frame.app-frame--product :where(h1, h2, h3, p) {
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+.app-frame.app-frame--product :where(.page-header, .stories-heading, .settings-heading) {
+  margin: 0 0 32px;
+  padding: 0;
+  align-items: center;
+}
+.app-frame.app-frame--product :where(.page-header h1, .stories-heading h1, .settings-heading h1) {
+  margin: 0 0 12px;
+  font-size: clamp(28px, 2.6vw, 36px);
+  line-height: 1.3;
+  font-weight: 730;
+  letter-spacing: -0.045em;
+  color: var(--product-ink);
+}
+.app-frame.app-frame--product :where(.eyebrow, .intake-eyebrow, .settings-eyebrow) {
+  display: block;
+  margin: 0 0 12px;
+  color: var(--product-blue);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+.app-frame.app-frame--product
+  :where(.page-header__description, .stories-heading .intake-muted, .settings-heading p) {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.75;
+  color: var(--muted-foreground);
+}
+.app-frame.app-frame--product .ui-button {
+  min-height: 44px;
+  height: auto;
+  white-space: normal;
+}
+.app-frame.app-frame--product .ui-button--primary {
+  background: var(--product-blue);
+}
+.app-frame.app-frame--product :where(.case-utilities, .case-notice) {
+  font-size: 12px;
+}
+.app-frame.app-frame--product :where([id]) {
+  scroll-margin-top: 96px;
+}
+
+/* Saved stories are a reading list with separate, non-overlapping management actions. */
+.app-frame.app-frame--product .intake-list .intake-toolbar {
+  padding-bottom: 20px;
+  margin-bottom: 0;
+  border-color: var(--product-line);
+}
+.app-frame.app-frame--product .intake-list .intake-case-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+}
+.app-frame.app-frame--product .intake-case-grid > li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--product-line);
+}
+.app-frame.app-frame--product .intake-list .intake-case-card {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  align-items: start;
+  gap: 20px;
+  padding: 20px 12px;
+  border: 0;
+  border-radius: 16px;
+  box-shadow: none;
+  height: auto;
+  transition: background 160ms;
+}
+.app-frame.app-frame--product .intake-list .intake-case-card:hover {
+  background: var(--product-subtle);
+  transform: none;
+  box-shadow: none;
+}
+.app-frame.app-frame--product .intake-case-card > .stories-card-top {
+  display: block;
+  margin: 2px 0 0;
+}
+.app-frame.app-frame--product .stories-card-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+}
+.app-frame.app-frame--product .intake-case-card > .stories-card-content {
+  display: block;
+  min-width: 0;
+}
+.app-frame.app-frame--product .stories-card-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.app-frame.app-frame--product .stories-card-context {
+  margin: 0;
+}
+.app-frame.app-frame--product .intake-list :where(.intake-case-card) h2 {
+  font-size: 19px;
+  line-height: 1.55;
+  margin: 0 0 8px;
+}
+.app-frame.app-frame--product .intake-list :where(.intake-case-card) p {
+  -webkit-line-clamp: 1;
+  margin: 0;
+  font-size: 14px;
+}
+.app-frame.app-frame--product .intake-list .intake-case-card footer {
+  border: 0;
+  padding: 0;
+  margin: 14px 0 0;
+  gap: 16px;
+}
+.app-frame.app-frame--product .intake-case-grid .case-list-delete {
+  position: static;
+  margin: 0 4px 0 0;
+  padding: 10px 12px;
+  min-width: 44px;
+  font-size: 12px;
+}
+.app-frame.app-frame--product .intake-list .intake-empty {
+  margin-top: 24px;
+  padding: 56px 24px;
+  background: var(--product-subtle);
+}
+
+/* One stable case header. All destinations remain available in a single scrollable row. */
+.app-frame.app-frame--product .case-navigation {
+  margin-bottom: 28px;
+}
+.app-frame.app-frame--product .workspace-back {
+  font-size: 13px;
+  margin: -12px 0 8px;
+}
+.app-frame.app-frame--product .workspace-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 0 0 20px;
+}
+.app-frame.app-frame--product .workspace-header h1 {
+  flex: 1;
+  min-width: 0;
+  font-size: clamp(20px, 2vw, 26px);
+  line-height: 1.5;
+  font-weight: 680;
+}
+.app-frame.app-frame--product .workspace-tabs {
+  position: relative;
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: flex-start;
+  gap: 24px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+  border-color: var(--product-line);
+  padding-bottom: 1px;
+}
+.app-frame.app-frame--product .workspace-tabs a {
+  flex: 0 0 auto;
+  min-width: 44px;
+  min-height: 48px;
+  font-size: 14px;
+  padding: 12px 2px;
+}
+.app-frame.app-frame--product .workspace-tabs a[aria-current] {
+  color: var(--product-blue);
+}
+.app-frame.app-frame--product .case-options {
+  position: relative;
+  flex-shrink: 0;
+  z-index: 5;
+}
+.app-frame.app-frame--product .case-options > summary {
+  display: grid;
+  place-items: center;
+  list-style: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  cursor: pointer;
+  color: var(--muted-foreground);
+}
+.app-frame.app-frame--product .case-options > summary::-webkit-details-marker {
+  display: none;
+}
+.app-frame.app-frame--product .case-options:where([open]) > summary,
+.app-frame.app-frame--product .case-options > summary:where(:hover) {
+  background: var(--muted);
+}
+.app-frame.app-frame--product .case-options > div {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  min-width: 140px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card);
+  box-shadow: 0 8px 24px #191f2810;
+}
+.app-frame.app-frame--product .case-options .ui-button {
+  width: 100%;
+  color: var(--destructive);
+}
+.app-frame.app-frame--product .workspace-grid {
+  max-width: 840px;
+  gap: 28px;
+}
+.app-frame.app-frame--product .workspace-section-heading {
+  margin-bottom: 24px;
+}
+.app-frame.app-frame--product .workspace-section-heading h2 {
+  font-size: 25px;
+  margin-bottom: 8px;
+}
+.app-frame.app-frame--product .workspace-chat-welcome {
+  padding: 32px 0 16px;
+}
+.app-frame.app-frame--product .workspace-upload {
+  border: 1px dashed #d4deed;
+  background: var(--product-subtle);
+  border-radius: var(--product-radius);
+}
+.app-frame.app-frame--product .workspace-empty {
+  padding: 40px 20px;
+}
+.app-frame.app-frame--product .workspace-context-content {
+  gap: 24px;
+}
+
+/* Compact search leaves the results in view, including at tablet sidebar boundaries. */
+.app-frame.app-frame--product :where(.lawyer-directory, .lawyer-public-detail, .lawyer-editor) {
+  width: 100%;
+  max-width: none;
+  padding-top: 0;
+}
+.app-frame.app-frame--product .lawyer-directory {
+  container: directory / inline-size;
+}
+.app-frame.app-frame--product .directory-intro {
+  margin-bottom: 28px;
+  min-height: 0;
+}
+.app-frame.app-frame--product .directory-intro .page-header {
+  margin-bottom: 0;
+}
+.app-frame.app-frame--product .directory-search {
+  border: 0;
+  border-radius: var(--product-radius);
+  background: var(--product-subtle);
+  box-shadow: none;
+  margin-bottom: 28px;
+}
+.app-frame.app-frame--product .directory-search .ui-card__content {
+  padding: 22px;
+}
+.app-frame.app-frame--product .directory-search__form {
+  grid-template-columns: minmax(180px, 1.5fr) repeat(2, minmax(125px, 1fr)) auto;
+  gap: 12px;
+}
+.app-frame.app-frame--product .directory-search__filters {
+  display: contents;
+}
+.app-frame.app-frame--product .directory-search :where(input, select) {
+  min-height: 48px;
+  background: var(--card);
+  border-color: #e1e6ee;
+  border-radius: 12px;
+}
+.app-frame.app-frame--product .directory-results-heading {
+  margin: 0 0 20px;
+}
+.app-frame.app-frame--product .directory-results-heading h2 {
+  font-size: 18px;
+}
+.app-frame.app-frame--product .directory-results {
+  gap: 20px;
+}
+.app-frame.app-frame--product .directory-profile {
+  box-shadow: none;
+  border-color: var(--product-line);
+  border-radius: var(--product-radius);
+}
+.app-frame.app-frame--product .directory-profile__header {
+  padding: 24px 24px 0;
+}
+.app-frame.app-frame--product .directory-profile__content {
+  padding: 18px 24px 0;
+}
+.app-frame.app-frame--product .directory-disclosure {
+  background: transparent;
+  border-top: 1px solid var(--product-line);
+  border-radius: 0;
+  padding: 20px 0;
+}
+.app-frame.app-frame--product .lawyer-profile-hero {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 24px;
+  padding: 12px 0 28px;
+  border-bottom: 1px solid var(--product-line);
+}
+.app-frame.app-frame--product .lawyer-profile-hero :where(.lawyer-photo, .lawyer-avatar) {
+  width: 96px;
+  height: 96px;
+  padding: 12px;
+  border-radius: 24px;
+}
+.app-frame.app-frame--product .lawyer-profile-hero img.lawyer-photo {
+  padding: 0;
+}
+.app-frame.app-frame--product .lawyer-profile-hero h1 {
+  font-size: 32px;
+  margin: 0 0 8px;
+}
+.app-frame.app-frame--product .lawyer-profile-hero p {
+  margin: 0;
+  font-size: 15px;
+}
+.app-frame.app-frame--product .lawyer-profile-hero .eyebrow {
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+.app-frame.app-frame--product .lawyer-profile-fields {
+  margin-top: 8px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+.app-frame.app-frame--product .lawyer-profile > .ui-card {
+  border: 0;
+  border-bottom: 1px solid var(--product-line);
+  border-radius: 0;
+  box-shadow: none;
+}
+.app-frame.app-frame--product
+  .lawyer-profile
+  > .ui-card
+  > :where(.ui-card__header, .ui-card__content) {
+  padding-inline: 0;
+}
+.app-frame.app-frame--product .lawyer-editor :where(.ui-card) {
+  border-radius: var(--product-radius);
+  box-shadow: none;
+}
+.app-frame.app-frame--product .lawyer-editor form > fieldset > .lawyer-toolbar {
+  position: sticky;
+  bottom: 0;
+  padding: 16px 0;
+  background: var(--card);
+  z-index: 2;
+}
+
+/* Account management uses sections rather than a wall of nested cards. */
+.app-frame.app-frame--product .settings-jump,
+.app-frame.app-frame--product .report-steps {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 0 0 32px;
+}
+.app-frame.app-frame--product .settings-jump a {
+  display: inline-flex;
+  align-items: center;
+  padding: 10px 16px;
+  min-height: 44px;
+  border-radius: 12px;
+  background: var(--product-subtle);
+  font-size: 13px;
+  text-decoration: none;
+}
+.app-frame.app-frame--product .settings-card {
+  border: 0;
+  border-bottom: 1px solid var(--product-line);
+  border-radius: 0;
+  padding: 8px 0 28px;
+  margin-bottom: 28px;
+}
+.app-frame.app-frame--product .settings-section-heading {
+  margin-bottom: 20px;
+}
+.app-frame.app-frame--product .settings-section-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+}
+.app-frame.app-frame--product .settings-card h2 {
+  font-size: 19px;
+}
+.app-frame.app-frame--product .usage-grid {
+  gap: 12px;
+}
+.app-frame.app-frame--product .usage-item {
+  padding: 18px;
+  border-radius: 16px;
+  background: var(--product-subtle);
+}
+.app-frame.app-frame--product .usage-item-value {
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: 12px 0;
+}
+.app-frame.app-frame--product .usage-item-value b {
+  font-size: 27px;
+}
+.app-frame.app-frame--product .usage-item-limit {
+  display: inline;
+  width: auto;
+  font-size: 12px;
+}
+.app-frame.app-frame--product .settings-usage-guide {
+  padding-top: 0;
+  border: 0;
+}
+.app-frame.app-frame--product .settings-usage-guide > summary {
+  min-height: 44px;
+  padding: 12px 0;
+  font-size: 13px;
+  cursor: pointer;
+  color: var(--muted-foreground);
+}
+.app-frame.app-frame--product .settings-details-grid {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+}
+.app-frame.app-frame--product .settings-links {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 32px;
+}
+.app-frame.app-frame--product .settings-danger-content {
+  padding: 0;
+  background: transparent;
+}
+
+/* Review first, with explicit access to structured editing and export options. */
+.app-frame.app-frame--product .intake-summary-scene {
+  max-width: 860px;
+  margin-inline: auto;
+}
+.app-frame.app-frame--product .intake-summary-scene .intake-scene-heading {
+  padding: 8px 0 24px;
+  text-align: left;
+}
+.app-frame.app-frame--product .intake-summary-scene .intake-scene-emblem {
+  display: none;
+}
+.app-frame.app-frame--product .intake-summary-scene .intake-scene-heading h1 {
+  font-size: clamp(26px, 3vw, 34px);
+}
+.app-frame.app-frame--product .intake-summary-scene .intake-scene-composer {
+  border-radius: var(--product-radius);
+  border-color: var(--product-line);
+  box-shadow: none;
+}
+.app-frame.app-frame--product .summary-facts {
+  margin: 20px 0;
+  padding: 0 20px;
+  border: 1px solid var(--product-line);
+  border-radius: 16px;
+}
+.app-frame.app-frame--product .summary-facts > summary {
+  padding: 18px 0;
+  min-height: 56px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 14px;
+}
+.app-frame.app-frame--product .summary-facts > summary span {
+  margin-left: 8px;
+  font-size: 12px;
+  color: var(--muted-foreground);
+  font-weight: 400;
+}
+.app-frame.app-frame--product .summary-facts > section {
+  padding-bottom: 20px;
+}
+.app-frame.app-frame--product .summary-facts h2 {
+  font-size: 18px;
+}
+.app-frame.app-frame--product .report-canvas {
+  max-width: 840px;
+}
+.app-frame.app-frame--product .report-heading {
+  text-align: left;
+  padding: 0;
+  margin: 0 0 24px;
+}
+.app-frame.app-frame--product .report-heading-icon {
+  display: none;
+}
+.app-frame.app-frame--product .report-heading h2 {
+  font-size: clamp(25px, 3vw, 32px);
+}
+.app-frame.app-frame--product .report-steps {
+  padding: 0 0 24px;
+  border-bottom: 1px solid var(--product-line);
+  gap: 24px;
+}
+.app-frame.app-frame--product .report-steps a {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  font-size: 13px;
+  text-decoration: none;
+}
+.app-frame.app-frame--product .report-steps a > span {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  color: var(--product-blue);
+  background: var(--secondary);
+  font-size: 12px;
+}
+.app-frame.app-frame--product .report-read-content {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.95;
+  font-size: 15px;
+  padding: 28px;
+  border: 1px solid var(--product-line);
+  border-radius: var(--product-radius);
+}
+.app-frame.app-frame--product :where(.report-edit-toggle, .report-basis > summary) {
+  width: fit-content;
+  cursor: pointer;
+  min-height: 44px;
+  padding-block: 12px;
+  font-size: 13px;
+  color: var(--muted-foreground);
+}
+.app-frame.app-frame--product .report-edit-toggle {
+  border: 0;
+  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.app-frame.app-frame--product .report-basis p {
+  max-width: 340px;
+}
+.app-frame.app-frame--product .report-basis > summary {
+  font-size: 12px;
+}
+.app-frame.app-frame--product .report-paper {
+  box-shadow: none;
+  border-color: var(--product-line);
+}
+.app-frame.app-frame--product .report-options {
+  border-radius: 16px;
+  border-color: var(--product-line);
+}
+.app-frame.app-frame--product .report-export {
+  display: block;
+  padding: 28px;
+  border-radius: var(--product-radius);
+  background: var(--product-subtle);
+}
+
+@media (min-width: 901px) and (max-width: 1100px) {
+  .app-frame.app-frame--product {
+    padding-left: 0;
+    padding-top: 72px;
+  }
+  .app-frame.app-frame--product .app-header {
+    width: 100%;
+    bottom: auto;
+    background: #fffffff5;
+    border-bottom: 1px solid var(--product-line);
+  }
+  .app-frame.app-frame--product .app-header__inner {
+    min-height: 72px;
+    padding: 12px 28px;
+    justify-content: space-between;
+  }
+  .app-frame.app-frame--product .sidebar-desktop {
+    display: none;
+  }
+  .app-frame.app-frame--product .app-menu-trigger {
+    display: inline-flex;
+  }
+  .app-frame.app-frame--product .app-surface {
+    min-height: calc(100dvh - 72px);
+  }
+}
+@container directory (max-width: 720px) {
+  .app-frame.app-frame--product .directory-search__form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .app-frame.app-frame--product .directory-search__submit {
+    align-self: end;
+  }
+  .app-frame.app-frame--product .directory-search__button {
+    width: 100%;
+  }
+}
+@media (max-width: 1100px) {
+  .app-frame.app-frame--product .app-surface > main {
+    width: calc(100% - 64px);
+    padding-top: 32px;
+  }
+}
+@media (max-width: 640px) {
+  .app-frame.app-frame--product .app-surface > main {
+    width: calc(100% - 40px);
+    padding-top: 24px;
+  }
+  .app-frame.app-frame--product :where(.page-header, .stories-heading, .settings-heading) {
+    margin-bottom: 24px;
+  }
+  .app-frame.app-frame--product .intake-list .intake-toolbar .intake-actions {
+    display: flex;
+    width: auto;
+    flex-wrap: wrap;
+  }
+  .app-frame.app-frame--product .intake-list .intake-toolbar {
+    gap: 12px;
+  }
+  .app-frame.app-frame--product .intake-case-grid > li {
+    gap: 0;
+    grid-template-columns: minmax(0, 1fr);
+    padding-block: 8px;
+  }
+  .app-frame.app-frame--product .intake-list .intake-case-card {
+    gap: 12px;
+    padding: 16px 0 8px;
+    grid-template-columns: 36px minmax(0, 1fr);
+  }
+  .app-frame.app-frame--product .stories-card-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 12px;
+  }
+  .app-frame.app-frame--product .intake-list :where(.intake-case-card) h2 {
+    font-size: 17px;
+  }
+  .app-frame.app-frame--product .intake-case-grid .case-list-delete {
+    justify-self: end;
+    margin: 0;
+  }
+  .app-frame.app-frame--product .workspace-back {
+    margin-top: -8px;
+  }
+  .app-frame.app-frame--product .workspace-header {
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .app-frame.app-frame--product .workspace-header h1 {
+    font-size: 18px;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+  }
+  .app-frame.app-frame--product .workspace-tabs {
+    gap: 20px;
+  }
+  .app-frame.app-frame--product .workspace-tabs a {
+    font-size: 13px;
+  }
+  .app-frame.app-frame--product .workspace-chat-welcome {
+    padding: 8px 0;
+  }
+  .app-frame.app-frame--product .workspace-chat-welcome .brand-mark {
+    width: 32px;
+    height: 36px;
+  }
+  .app-frame.app-frame--product .workspace-chat-welcome h2 {
+    font-size: 25px;
+    margin-top: 12px;
+  }
+  .app-frame.app-frame--product .workspace-messages {
+    padding-top: 0;
+  }
+  .app-frame.app-frame--product .workspace-section-heading h2 {
+    font-size: 23px;
+  }
+  .app-frame.app-frame--product .directory-search .ui-card__content {
+    padding: 16px;
+  }
+  .app-frame.app-frame--product .directory-search__form {
+    grid-template-columns: minmax(0, 1fr) 48px;
+  }
+  .app-frame.app-frame--product .directory-search__form > .directory-search__field {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .app-frame.app-frame--product .directory-search__filters {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-column: 1 / -1;
+    grid-row: 2;
+    gap: 12px;
+  }
+  .app-frame.app-frame--product .directory-search__filters > .directory-search__field {
+    grid-column: auto;
+  }
+  .app-frame.app-frame--product .directory-search__submit {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .app-frame.app-frame--product .directory-search__button {
+    min-width: 0;
+    min-height: 48px;
+    padding: 12px;
+  }
+  .app-frame.app-frame--product .directory-search__button > span {
+    display: none;
+  }
+  .app-frame.app-frame--product .directory-search__field > span:first-child {
+    font-size: 12px;
+  }
+  .app-frame.app-frame--product .directory-results-heading {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .app-frame.app-frame--product .lawyer-profile-hero {
+    grid-template-columns: 72px minmax(0, 1fr);
+    gap: 16px;
+  }
+  .app-frame.app-frame--product .lawyer-profile-hero :where(.lawyer-photo, .lawyer-avatar) {
+    width: 72px;
+    height: 72px;
+    border-radius: 20px;
+  }
+  .app-frame.app-frame--product .lawyer-profile-hero h1 {
+    font-size: 27px;
+  }
+  .app-frame.app-frame--product .lawyer-profile-hero > a {
+    grid-column: 1 / -1;
+  }
+  .app-frame.app-frame--product .settings-heading {
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+  .app-frame.app-frame--product .usage-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .app-frame.app-frame--product .usage-item {
+    padding: 14px;
+  }
+  .app-frame.app-frame--product .usage-item-label {
+    gap: 5px;
+  }
+  .app-frame.app-frame--product .usage-item-label svg {
+    display: none;
+  }
+  .app-frame.app-frame--product .settings-links {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .app-frame.app-frame--product .report-steps {
+    gap: 4px 12px;
+    padding-bottom: 16px;
+    margin-bottom: 24px;
+  }
+  .app-frame.app-frame--product .report-steps a {
+    gap: 5px;
+    font-size: 12px;
+  }
+  .app-frame.app-frame--product .report-read-content {
+    padding: 20px;
+    font-size: 14px;
+  }
+  .app-frame.app-frame--product .report-export {
+    padding: 20px;
+  }
+  .app-frame.app-frame--product .intake-summary-scene .intake-scene-heading {
+    padding-top: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-frame.app-frame--product .intake-list .intake-case-card {
+    transition: none;
+  }
+}

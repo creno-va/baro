@@ -1,4 +1,5 @@
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, MoreHorizontal } from "lucide-react";
+import { type ReactNode, useEffect, useRef } from "react";
 
 const menus = [
   { id: "chat", label: "대화", path: "" },
@@ -14,22 +15,39 @@ export function CaseNavigation({
   title,
   active,
   fileCount,
+  action,
 }: {
   caseId: string;
   title: string;
   active: (typeof menus)[number]["id"];
   fileCount?: number | undefined;
+  action?: ReactNode;
 }) {
   const base = `/cases/${encodeURIComponent(caseId)}`;
+  const navigation = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const nav = navigation.current;
+    const selected = nav?.querySelector<HTMLElement>('[aria-current="page"]');
+    if (nav && selected && nav.scrollWidth > nav.clientWidth)
+      nav.scrollLeft = Math.max(0, selected.offsetLeft - 12);
+  }, []);
   return (
     <div className="case-navigation">
       <a className="workspace-back" href="/cases">
         <ArrowLeft size={16} aria-hidden="true" /> 내 사건
       </a>
       <header className="workspace-header">
-        <h1>{title}</h1>
+        <h1 title={title}>{title}</h1>
+        {action && (
+          <details className="case-options">
+            <summary aria-label="사건 관리">
+              <MoreHorizontal size={22} aria-hidden="true" />
+            </summary>
+            <div>{action}</div>
+          </details>
+        )}
       </header>
-      <nav className="workspace-tabs" aria-label="사건 메뉴">
+      <nav ref={navigation} className="workspace-tabs" aria-label="사건 메뉴">
         {menus.map(({ id, label, path }) => (
           <a
             key={id}

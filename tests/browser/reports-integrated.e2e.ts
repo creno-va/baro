@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 import { captureCaseViewports } from "../helpers/case-ui-capture";
-import { openReportOptions } from "../helpers/report-controls";
+import { openReportEditor, openReportOptions } from "../helpers/report-controls";
 
 // Uses the actual product pages and shared facade, with no component/API alias or injected seed.
 test.skip(process.env.BARO_D_SHARED_API !== "true", "Run the explicit shared mock configuration.");
@@ -69,6 +69,7 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
   }
   await expect(page.getByText("결과 확인 가능", { exact: true })).toHaveCount(2);
   await page.goto(`${casePath}/reports`);
+  await openReportEditor(page);
   const editor = page.getByRole("textbox", { name: "리포트 내용 편집" });
   await expect(editor).toBeVisible();
   await expect(
@@ -167,6 +168,7 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
   expect(await originalCount()).toBeGreaterThan(0);
   const peer = await context.newPage();
   await peer.goto(`${accountCasePath}/reports`);
+  await openReportEditor(page);
   await expect(peer.getByRole("textbox", { name: "리포트 내용 편집" })).toBeVisible();
   const previousMarker = await page.evaluate(() => localStorage.getItem("baro-session-changed"));
   await page.goto("/settings");
@@ -250,12 +252,14 @@ test("oversized mock source shows first-report recovery and preserves the full o
   await expect(
     page.getByRole("heading", { name: "자료를 줄여 첫 리포트를 만들어요" }),
   ).toBeVisible();
+  await openReportEditor(page);
   await expect(page.getByRole("textbox", { name: "리포트 내용 편집" })).toBeHidden();
   expect(
     await page.evaluate(() => JSON.parse(localStorage.getItem("baro-api-mock-v1:reports") ?? "{}")),
   ).toEqual({});
   await page.getByRole("checkbox", { name: "긴 합성 자료.txt · 리포트에서 제외" }).check();
   await page.getByRole("button", { name: "선택 자료를 제외하고 생성" }).click();
+  await openReportEditor(page);
   const editor = page.getByRole("textbox", { name: "리포트 내용 편집" });
   await expect(editor).toBeVisible();
   await expect(editor).toContainText("연락과 전달");
@@ -299,6 +303,7 @@ test("regeneration after focus refresh cannot replace an unseen peer report", as
     put("reports", {});
   });
   await page.goto("/cases/synthetic-generation-case/reports");
+  await openReportEditor(page);
   const editor = page.getByRole("textbox", { name: "리포트 내용 편집" });
   await expect(editor).toBeVisible();
   const displayed = await editor.inputValue();

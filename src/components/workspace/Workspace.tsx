@@ -803,14 +803,14 @@ export function Workspace({
         }
         active={tab}
         fileCount={ready ? view?.files.length : undefined}
+        action={
+          ready && view ? (
+            <Button variant="ghost" disabled={!!busy} onClick={() => setDeletingCase(true)}>
+              사건 삭제
+            </Button>
+          ) : undefined
+        }
       />
-      {ready && view && (
-        <div className="workspace-case-tools">
-          <Button variant="ghost" disabled={!!busy} onClick={() => setDeletingCase(true)}>
-            사건 삭제
-          </Button>
-        </div>
-      )}
       {deletingCase && ready && view && (
         <CaseDeleteDialog
           item={view.case}
@@ -1977,7 +1977,7 @@ export function Workspace({
         )}
         {entry && ready && (
           <form onSubmit={(event) => void saveEntry(event)}>
-            <label htmlFor="timeline-precision">날짜 정밀도</label>
+            <label htmlFor="timeline-precision">날짜를 얼마나 기억하시나요?</label>
             <select
               id="timeline-precision"
               value={entry.datePrecision ?? (entry.date ? "day" : "unknown")}

@@ -119,31 +119,35 @@ export function CaseList() {
                   <span className="stories-card-icon">
                     <MessageCircle size={23} strokeWidth={1.7} aria-hidden="true" />
                   </span>
-                  <span className={`intake-tag stories-stage--${item.stage}`}>
-                    {item.schemaVersion === "1" ? "기존 기록" : stageLabels[item.stage]}
-                  </span>
                 </div>
-                <span className="stories-card-context">
-                  {item.subjectContext === "company" ? "기업 사건" : "개인 사건"}
-                </span>
-                <h2>{item.title}</h2>
-                <p>{item.summary || "저장한 질문에서 이어서 정리할 수 있어요."}</p>
-                <footer>
-                  <time dateTime={item.updatedAt}>
-                    {new Date(item.updatedAt).toLocaleDateString("ko-KR", {
-                      timeZone: "Asia/Seoul",
-                    })}{" "}
-                    수정
-                  </time>
-                  <span>
-                    {item.stage === "intake"
-                      ? "이어 답하기"
-                      : item.stage === "summary"
-                        ? "요약 확인"
-                        : "사건 열기"}
-                    <ArrowRight size={16} aria-hidden="true" />
-                  </span>
-                </footer>
+                <div className="stories-card-content">
+                  <div className="stories-card-meta">
+                    <span className={`intake-tag stories-stage--${item.stage}`}>
+                      {item.schemaVersion === "1" ? "기존 기록" : stageLabels[item.stage]}
+                    </span>
+                    <span className="stories-card-context">
+                      {item.subjectContext === "company" ? "기업 사건" : "개인 사건"}
+                    </span>
+                  </div>
+                  <h2>{item.title}</h2>
+                  <p>{item.summary || "저장한 질문에서 이어서 정리할 수 있어요."}</p>
+                  <footer>
+                    <time dateTime={item.updatedAt}>
+                      {new Date(item.updatedAt).toLocaleDateString("ko-KR", {
+                        timeZone: "Asia/Seoul",
+                      })}{" "}
+                      수정
+                    </time>
+                    <span>
+                      {item.stage === "intake"
+                        ? "이어 답하기"
+                        : item.stage === "summary"
+                          ? "요약 확인"
+                          : "사건 열기"}
+                      <ArrowRight size={16} aria-hidden="true" />
+                    </span>
+                  </footer>
+                </div>
               </a>
               <Button
                 className="case-list-delete"

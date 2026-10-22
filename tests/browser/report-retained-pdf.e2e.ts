@@ -1,6 +1,7 @@
 import { type ChildProcess, spawn } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { expect, test } from "@playwright/test";
+import { openReportEditor } from "../helpers/report-controls";
 
 test("stored real PDF and report remain readable after source change/re-consent, while mutations and deleted material are fenced", async ({
   page,
@@ -52,6 +53,7 @@ test("stored real PDF and report remain readable after source change/re-consent,
     });
     await context.addCookies([seed.cookie]);
     await page.goto(`${seed.origin}/cases/${seed.caseId}/reports`);
+    await openReportEditor(page);
     const editor = page.getByRole("textbox", { name: "리포트 내용 편집" });
     await expect(editor).toBeVisible();
     await expect(page.getByText(/생성 기준: 요약 1/)).toBeVisible();

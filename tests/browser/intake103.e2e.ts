@@ -390,6 +390,17 @@ test("pending workspace files keep polling after a transient failure and stop on
 
 async function capture(page: Page, name: string) {
   const { default: AxeBuilder } = await import("@axe-core/playwright");
+  // Check the settled text colors, rather than a frame inside the status fade-in.
+  await page.locator(".intake-scene-status").evaluateAll((elements) =>
+    Promise.all(
+      elements.flatMap((element) =>
+        element
+          .getAnimations()
+          .filter((animation) => animation.effect?.getTiming().iterations !== Infinity)
+          .map((animation) => animation.finished.catch(() => undefined)),
+      ),
+    ),
+  );
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await page.evaluate(() => {
     if (document.activeElement instanceof HTMLElement) document.activeElement.blur();

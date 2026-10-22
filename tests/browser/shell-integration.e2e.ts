@@ -1,5 +1,5 @@
 import { expect, type Page, test } from "@playwright/test";
-import { openReportOptions } from "../helpers/report-controls";
+import { openReportEditor, openReportOptions } from "../helpers/report-controls";
 
 test("long service content fits narrow screens and the menu stays closable after scrolling in landscape", async ({
   page,
@@ -229,6 +229,7 @@ test("customer completes intake workspace original PDF report and cascading dele
   await page.reload();
   await expect(page.getByText("2026-10-01", { exact: true })).toBeVisible();
   await page.goto(`${casePath}/reports`);
+  await openReportEditor(page);
   await expect(page.getByLabel("리포트 내용 편집")).toBeVisible();
   await openReportOptions(page);
   await expect(page.getByRole("checkbox", { name: "PDF에 근거 사진 포함" })).toBeDisabled();

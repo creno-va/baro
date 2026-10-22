@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { expect, type Page, test } from "@playwright/test";
 import { CURRENT_POLICY_VERSIONS } from "../../src/contracts/consent";
+import { openReportEditor } from "../helpers/report-controls";
 
 async function trackSessionReads(page: Page) {
   await page.evaluate(async () => {
@@ -237,6 +238,7 @@ test("a temporary session lookup outage preserves report edits and explicit sign
     return route.fulfill({ status: 404, json: {} });
   });
   await page.goto("/cases/synthetic-report-outage/reports");
+  await openReportEditor(page);
   const editor = page.getByRole("textbox", { name: "리포트 내용 편집" });
   await expect(editor).toHaveValue("Saved report");
   await editor.fill("Unsaved report correction");
@@ -372,6 +374,7 @@ test("a confirmed account change clears the report draft and explains why", asyn
     return route.fulfill({ status: 404, json: {} });
   });
   await page.goto("/cases/synthetic-report-switch/reports");
+  await openReportEditor(page);
   const editor = page.getByRole("textbox", { name: "리포트 내용 편집" });
   await expect(editor).toHaveValue("Saved report");
   await editor.fill("Unsaved report correction");
@@ -446,6 +449,7 @@ for (const lateResponse of ["failure", "signed-out"] as const) {
     });
     try {
       await page.goto("/cases/synthetic-report-late/reports");
+      await openReportEditor(page);
       const editor = page.getByRole("textbox", { name: "리포트 내용 편집" });
       await expect(editor).toHaveValue("Saved report");
       await editor.fill("Unsaved current report correction");
