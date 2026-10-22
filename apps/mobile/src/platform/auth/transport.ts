@@ -1,6 +1,6 @@
 import { ApiError, type HttpTransport } from "@baro/api-client";
 import type { MobileConfig } from "../../../config/environment";
-import type { NativeCredentials } from "./credentials";
+import type { NativeCredentialFrame, NativeCredentials } from "./credentials";
 
 const denied = () => new ApiError("UNAVAILABLE", "안전한 서버 연결을 확인하지 못했어요.", true);
 
@@ -8,6 +8,7 @@ const denied = () => new ApiError("UNAVAILABLE", "안전한 서버 연결을 확
 export function createNativeTransport(dependencies: {
   config: MobileConfig;
   credentials: NativeCredentials;
+  frame?: NativeCredentialFrame;
   fetch: (input: string, init: RequestInit) => Promise<Response>;
 }): HttpTransport {
   return async (path, init) => {
@@ -25,7 +26,7 @@ export function createNativeTransport(dependencies: {
       !url.pathname.startsWith("/api/")
     )
       throw denied();
-    const frame = dependencies.credentials.capture();
+    const frame = dependencies.frame ?? dependencies.credentials.capture();
     const cookie = await frame.cookie();
     init.signal?.throwIfAborted();
     const headers = new Headers(init.headers);

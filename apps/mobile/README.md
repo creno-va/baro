@@ -69,7 +69,11 @@ credential 교체/로그아웃은 `credentials.reset()`으로 scope를 먼저 �
 지운다. 오래된 네트워크/기기 IO는 다음 jar에 쓸 수 없고, 저장 오류·readback 불일치 시 private
 요청은 실패한다. reset이 실패하면 성공을 표시하지 않으며 재시도로 복구한다. 미해결 사건 작업
 key 저장소는 별도이며 지우지 않는다. 공개 목록은 이 저장소와 독립된 익명 transport다.
-실제 OAuth 브라우저·앱 복귀/coordinator·동의/역할 UI 연결과 기기 검증은 #346의 후속 단계다.
+`getNativeLogin`은 기기에 먼저 저장한 nonce/verifier·시스템 브라우저·고정 proxy·일회용 code
+교환과 실제 owner/role 확인을 조립한다. callback에는 code/attemptId만 받고 foreign/중복/
+extra cookie/token 필드를 거절한다. 응답 유실 시 code를 자동 재전송하지 않으며 새 서버
+세션으로만 복구한다. 앱 복귀 routing/foreground·동의/역할 UI·reauth/challenge 연결과
+실제 제공자/기기 검증은 #346의 후속 단계다.
 
 ## 검증
 

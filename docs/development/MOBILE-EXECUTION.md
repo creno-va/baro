@@ -298,7 +298,9 @@ workspace·자료·리포트·나머지 domain을 순차 추출한다. 첫 단�
   제한 WebView 의존성의 native 컴파일을 수동 workflow에서 확인한다.
 - SecureStore cookie jar·cold/warm 복귀·foreground/로그아웃 coordinator와 로그인/역할/
   동의/challenge UI는 후속 구현이다. M2 프로필/자산과 M3 전체 인수를 열어 둔다.
-  두 OS 개발 빌드는 native39809756054에서 검사 중이다. raw audit 미패치3건은 #339에 유지한다.
+  두 OS 개발 빌드 native39809756054는 a1ad098의 Android Debug/iOS simulator Debug 모두
+  성공했다. receipt의 SHA/preview API/Expo58.0.17/RN0.88.0과 서명/배포 없음을 확인했다.
+  raw audit 미패치3건은 #339에 유지한다.
   PR345의 과거 Actions success/Check Run in_progress 불일치 증거는 보존하며 실제 계정 격리
   보완·main 통합의 새 head를 다시 검사한다.
 
@@ -313,6 +315,18 @@ workspace·자료·리포트·나머지 domain을 순차 추출한다. 첫 단�
   새 계정에 쓸 수 없다. SDK가 삼킨 저장 오류와 silent write도 readback/오류 상태로 거절한다.
   저장소가 잠겨도 공개 목록은 익명으로 조회한다. 실제 SDK 분할/expiry/중단 정리와 합성
   native transport 경계를 검사하며 브라우저 로그인/coordinator/기기 증거는 다음 단계다.
+
+- Credential adapter PR348은 head `99dff82` CI39812154878 성공 후 main
+  `86c94b2b2e2c686ff0dd72681d36161fa0303f03`에 정상 병합했다. mobile69개·RN/실제 SDK7개·
+  quick42·빌드·두 OS Metro를 통과했다. native ABI 의존성/plugin은 위 a1ad098과 동일하다.
+- `codex/346-native-auth-flow`는 SecureStore pending attempt/verifier의 필수 저장/readback·
+  10분 만료·조건부 삭제, 엄격한 복귀 URL·nonce/code, native entropy/S256과 수동 SDK 로그인을
+  연결한다. 브라우저는 고정 BARO proxy와 base return URI만 사용하며 SDK 자동 cookie 복귀와
+  기본 redirect hook은 끈다. 중복 code 교환·브라우저 취소·cold 복구·계정/역할 재검증과 응답
+  유실 후 새 서버 세션 확인을 port/model에서 처리한다. 실제 SDK authorization fixture를
+  검사했다. 새 auth protocol14개·모바일 공통83개·RN/실제 SDK8개·quick42·production
+  workerd 시작·두 OS Metro가 통과했다. 앱 복귀 routing/foreground·로그인/역할/동의 화면·
+  reauth/challenge는 후속이다.
 
 ## 참고
 
