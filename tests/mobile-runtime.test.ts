@@ -11,6 +11,11 @@ import {
 import { mobileBoundaryFindings } from "../scripts/mobile-boundaries";
 import { productEntryOverlay } from "../scripts/mobile-runtime";
 import { createRuntimeFixture, repeatedDigest } from "../scripts/mobile-runtime-fixture";
+import {
+  androidRuntimeOptions,
+  emulatorStartupIssues,
+  metroNodeOptions,
+} from "../scripts/mobile-runtime-host";
 import { runtimeReceiptSchema, verifyRuntimeReceipt } from "../scripts/mobile-runtime-receipt";
 
 const config: RuntimeConfig = {
@@ -20,6 +25,49 @@ const config: RuntimeConfig = {
   origin: RUNTIME_ORIGIN,
 };
 const fixture = createRuntimeFixture(config);
+test("real Node localhost listener binds the IPv4 address used by native deep links", async () => {
+  const node = Bun.which("node");
+  if (!node) throw new Error("PINNED_NODE_REQUIRED");
+  const child = Bun.spawn(
+    [
+      node,
+      "--input-type=module",
+      "-e",
+      'import {createServer} from "node:net"; const s=createServer(); s.listen(0,"localhost",()=>{console.log(JSON.stringify(s.address()));s.close();});',
+    ],
+    {
+      stdout: "pipe",
+      stderr: "pipe",
+      env: { ...process.env, NODE_OPTIONS: metroNodeOptions("--dns-result-order=ipv6first") },
+    },
+  );
+  const timeout = setTimeout(() => child.kill(), 3000);
+  try {
+    const output = await new Response(child.stdout).text();
+    expect(await child.exited).toBe(0);
+    expect(JSON.parse(output)).toMatchObject({ address: "127.0.0.1", family: "IPv4" });
+  } finally {
+    clearTimeout(timeout);
+  }
+});
+test("runtime AVD configuration is restricted to the fresh owned name and explicit host resources", () => {
+  expect(androidRuntimeOptions("baro_runtime_012345abcdef")).toContain("2048");
+  for (const name of ["personal-phone", "../other", "baro_runtime_012345abcdef -read-only"])
+    expect(() => androidRuntimeOptions(name)).toThrow();
+});
+test("emulator diagnostic output contains fixed failure codes and excludes raw paths/tokens/stacks", () => {
+  const input =
+    "Not enough RAM; KVM permission denied; failed to initialize Vulkan; error while loading shared libraries; synthetic_token=private\n at /private/fixture/path";
+  const classified = emulatorStartupIssues(input);
+  expect(classified).toEqual([
+    "RAM_UNAVAILABLE",
+    "ACCELERATION_UNAVAILABLE",
+    "GPU_INITIALIZATION_FAILED",
+    "HOST_LIBRARY_MISSING",
+  ]);
+  expect(JSON.stringify(classified)).not.toContain("synthetic_token");
+  expect(emulatorStartupIssues("unknown stack /private/fixture/path")).toEqual([]);
+});
 test("isolated probe public config replacement keeps Node/secret/dynamic environment reads forbidden", () => {
   const path = "apps/mobile/runtime-probe/run.ts";
   expect(

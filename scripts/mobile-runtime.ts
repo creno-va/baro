@@ -7,6 +7,11 @@ import {
   type RuntimeConfig,
 } from "../apps/mobile/runtime-probe/protocol";
 import { createRuntimeFixture } from "./mobile-runtime-fixture";
+import {
+  androidRuntimeOptions,
+  emulatorStartupIssues,
+  metroNodeOptions,
+} from "./mobile-runtime-host";
 import { verifyRuntimeReceipt } from "./mobile-runtime-receipt";
 
 const sha256 = (text: string) => createHash("sha256").update(text).digest("hex");
@@ -44,6 +49,7 @@ async function main() {
     CI: "1",
     EXPO_NO_TELEMETRY: "1",
     EXPO_NO_DEV_MENU: "1",
+    EXPO_NO_TYPESCRIPT_SETUP: "1",
     EXPO_PUBLIC_APP_ENV: "local",
     EXPO_PUBLIC_API_URL: RUNTIME_ORIGIN,
     EXPO_PUBLIC_NATIVE_PROBE_SOURCE_SHA: sourceSha,
@@ -110,7 +116,12 @@ async function main() {
         "--minify",
         "--clear",
       ],
-      { cwd: mobile, env, stdout: log, stderr: log },
+      {
+        cwd: mobile,
+        env: { ...env, NODE_OPTIONS: metroNodeOptions(process.env.NODE_OPTIONS) },
+        stdout: log,
+        stderr: log,
+      },
     );
     children.add(metro);
     await waitFor(async () => {
@@ -154,6 +165,8 @@ async function main() {
   const android = process.env.ANDROID_HOME ?? process.env.ANDROID_SDK_ROOT ?? "";
   const adb = resolve(android, "platform-tools/adb");
   const sdk = resolve(android, "cmdline-tools/latest/bin/avdmanager");
+  const emulatorLog = resolve(out, "private-emulator.log");
+  let bootCompleted = false;
   let peakRssBytes = 0,
     memorySamples = 0;
   async function sampleMemory() {
@@ -233,6 +246,10 @@ config.watchFolders=[${JSON.stringify(root)}];
 config.resolver.extraNodeModules={${["contracts", "api-client", "client-core", "design-tokens"].map((name) => `${JSON.stringify(`@baro/${name}`)}:${JSON.stringify(resolve(work, name === "contracts" ? "src/contracts" : `packages/${name}`))}`).join(",")}};
 module.exports=config;\n`;
     await writeFile(resolve(mobile, "metro.config.cjs"), metroSource);
+    phase = "metro-preflight";
+    console.log(`Runtime ${platform}: verify IPv4 Metro readiness before compile`);
+    await startMetro();
+    await stopMetro();
     console.log(`Runtime ${platform}: compile isolated local development app`);
     phase = "compile";
     await command(["bun", "scripts/mobile-native-build.ts", platform, "--runtime-local"], {
@@ -248,33 +265,22 @@ module.exports=config;\n`;
       await command([sdk, "create", "avd", "-n", avd, "-k", image, "--device", "pixel_6"], {
         input: "no\n",
       });
-      const log = Bun.file(resolve(out, "private-emulator.log"));
-      emulator = Bun.spawn(
-        [
-          resolve(android, "emulator/emulator"),
-          "-avd",
-          avd,
-          "-port",
-          "5580",
-          "-no-window",
-          "-no-audio",
-          "-no-boot-anim",
-          "-no-snapshot",
-          "-wipe-data",
-          "-gpu",
-          "swiftshader_indirect",
-        ],
-        { env, stdout: log, stderr: log },
-      );
+      const log = Bun.file(emulatorLog);
+      emulator = Bun.spawn([resolve(android, "emulator/emulator"), ...androidRuntimeOptions(avd)], {
+        env,
+        stdout: log,
+        stderr: log,
+      });
       children.add(emulator);
       device = "emulator-5580";
       await waitFor(async () => {
+        if (emulator?.exitCode !== null) throw new Error("RUNTIME_EMULATOR_EXITED");
         try {
-          return (
+          bootCompleted =
             (await command([adb, "-s", device, "shell", "getprop", "sys.boot_completed"], {
               timeout: 5000,
-            })) === "1"
-          );
+            })) === "1";
+          return bootCompleted;
         } catch {
           return false;
         }
@@ -340,8 +346,9 @@ module.exports=config;\n`;
     await writeFile(resolve(mobile, "src/runtime-probe/original-home.tsx"), home);
     await writeFile(resolve(mobile, "src/app/index.tsx"), overlay);
     console.log(`Runtime ${platform}: mount instrumented product home`);
-    phase = "product-home-layout";
+    phase = "product-metro";
     await startMetro();
+    phase = "product-home-layout";
     await openApp();
     await waitFor(async () => {
       await sampleMemory();
@@ -355,8 +362,9 @@ module.exports=config;\n`;
     manifest.main = "./runtime-probe/entry.tsx";
     await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
     console.log(`Runtime ${platform}: execute real native module and SDK IO`);
-    phase = "native-probe";
+    phase = "probe-metro";
     await startMetro();
+    phase = "native-probe";
     await openApp();
     await waitFor(async () => {
       if (fixture.state.failure) throw new Error(fixture.state.failure.code);
@@ -434,9 +442,19 @@ module.exports=config;\n`;
     const log = metroLog ? await readFile(metroLog, "utf8").catch(() => "") : "";
     const unresolvedModule =
       log.match(/Unable to resolve module\s+([A-Za-z0-9_@/.-]{1,180})\s+from/)?.[1] ?? null;
+    const host =
+      platform === "android"
+        ? {
+            emulatorExitCode: emulator?.exitCode ?? null,
+            bootCompleted,
+            emulatorStartupIssues: emulatorStartupIssues(
+              await readFile(emulatorLog, "utf8").catch(() => ""),
+            ),
+          }
+        : null;
     await writeFile(
       resolve(out, `failure-${platform}.json`),
-      `${JSON.stringify({ sourceSha, platform, phase, code, unresolvedModule, productLayoutObserved: !!fixture.state.productMount, nativeResultObserved: !!fixture.state.result, remoteApiVerified: false, oauthVerified: false }, null, 2)}\n`,
+      `${JSON.stringify({ sourceSha, platform, phase, code, unresolvedModule, host, productLayoutObserved: !!fixture.state.productMount, nativeResultObserved: !!fixture.state.result, remoteApiVerified: false, oauthVerified: false }, null, 2)}\n`,
     );
     throw error;
   } finally {
@@ -448,7 +466,7 @@ module.exports=config;\n`;
       await command(["xcrun", "simctl", "delete", device]).catch(() => {});
     }
     if (emulator) {
-      emulator.kill();
+      if (emulator.exitCode === null) emulator.kill();
       await emulator.exited;
       children.delete(emulator);
     }
