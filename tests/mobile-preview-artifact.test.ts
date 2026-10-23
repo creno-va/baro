@@ -333,6 +333,7 @@ const syntheticHomeUiResult = () =>
     guideButtonFullyHittable: true,
     guideTapVerified: true,
     guideTitleObserved: true,
+    currentFeatureDescriptionObserved: true,
     returnButtonFullyHittable: true,
     returnTapVerified: true,
     homeReturnObserved: true,
@@ -355,6 +356,7 @@ test("XCTest success requires one strict complete observation; empty/duplicate o
     { homeSwipes: 0 },
     { guideSwipes: 25 },
     { guideTapVerified: false },
+    { currentFeatureDescriptionObserved: false },
     { homeReturnObserved: false },
     { privateDataAccess: true },
     { authenticationNavigation: true },
@@ -370,6 +372,12 @@ test("XCTest failure observation retains only known assertion and bounded diagno
     "synthetic-secret\nXCTAssertTrue failed - BARO_GUIDE_MISSING\nSwiftCompile command failed",
   );
   expect(proof.assertionCode).toBe("BARO_GUIDE_MISSING");
+  const usage = observeHomeUiFailure(
+    "xcodebuild: error: Invalid -test-iterations argument synthetic-private-path",
+  );
+  expect(usage.cliUsageError).toBe(true);
+  expect(usage.cliErrorTopics).toEqual(["test-iterations"]);
+  expect(JSON.stringify(usage)).not.toContain("synthetic-private-path");
   expect(proof.swiftCompilationFailure).toBe(true);
   const compiler = observeHomeUiFailure(
     "/synthetic-private/HomeUITests.swift:48:12: error: cannot find XCUIApplication in scope secret-payload",

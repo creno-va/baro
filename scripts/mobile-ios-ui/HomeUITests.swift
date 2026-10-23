@@ -46,6 +46,8 @@ final class BaroHomeUITests: XCTestCase {
     XCTAssertTrue(app.staticTexts["상담 준비는 이렇게 진행돼요."].waitForExistence(timeout: 30), "BARO_GUIDE_MISSING")
     let back = app.buttons["처음으로"]
     let guideSwipes = try reach(back, in: app)
+    let featureCopy = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "사건 화면에서 자료를 올리고 처리 내용을 확인하거나")).firstMatch
+    XCTAssertTrue(featureCopy.exists, "BARO_GUIDE_FEATURE_COPY_MISSING")
     back.tap()
     XCTAssertTrue(home.waitForExistence(timeout: 30), "BARO_HOME_RETURN_MISSING")
     XCTAssertFalse(app.staticTexts["상담 준비는 이렇게 진행돼요."].exists, "BARO_GUIDE_STILL_VISIBLE")
@@ -58,6 +60,7 @@ final class BaroHomeUITests: XCTestCase {
       "guideButtonFullyHittable": true,
       "guideTapVerified": true,
       "guideTitleObserved": true,
+      "currentFeatureDescriptionObserved": true,
       "returnButtonFullyHittable": true,
       "returnTapVerified": true,
       "homeReturnObserved": true,
