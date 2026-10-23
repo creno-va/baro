@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "kind": "preview-development-app",
+  "sourceSha": "c2fa3f23394a349bf7cf7d33dee64a433d29e634",
+  "platform": "ios",
+  "environment": "preview",
+  "apiOrigin": "https://preview.baro.site",
+  "apiObservation": {
+    "status": "observed",
+    "observedAt": "2026-10-23T07:36:50.512Z",
+    "sourceSha": "57121d2378cb5fd8d0e8761899672be00dcaf59f"
+  },
+  "versionName": "0.1.0",
+  "buildVersion": "1",
+  "expo": "58.0.17",
+  "reactNative": "0.88.0",
+  "applicationId": "site.baro.app.preview",
+  "minimumOS": "16.4",
+  "installTarget": "ios-simulator",
+  "architectures": [
+    "x86_64",
+    "arm64"
+  ],
+  "signing": {
+    "kind": "simulator-only",
+    "codeSignature": "ad-hoc"
+  },
+  "artifact": {
+    "name": "baro-preview-ios-simulator-c2fa3f23394a349bf7cf7d33dee64a433d29e634.zip",
+    "bytes": 51547245,
+    "sha256": "7721df5c8ce0f1bbba46791cd9107a58652ee7b91d298de6a0c3cf6b6fe6be79"
+  },
+  "compiledFont": {
+    "kind": "compiled-resource-only",
+    "family": "BaroMobile",
+    "sha256": "3ae12c1281a84901b32d8c5f0e43fd6c4f8a5b7fd4ccbde66cfbe9f07cde05e8",
+    "weights": [
+      400,
+      600,
+      700
+    ],
+    "glyphs": 14757,
+    "codepoints": 14336,
+    "hangul": 11172,
+    "licenseEmbedded": true,
+    "compiledBytesMatch": true,
+    "appRuntimeVerified": false
+  },
+  "compatibility": "runtime-smoke-required",
+  "requiresMetro": true,
+  "binaryMetadataVerified": true,
+  "appRuntimeVerified": false,
+  "remoteApiVerified": false,
+  "physicalDeviceVerified": false,
+  "storeSigned": false,
+  "deployed": false
+}

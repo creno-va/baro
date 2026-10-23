@@ -226,7 +226,14 @@ async function main() {
       ]);
     } else {
       await command(["xcrun", "simctl", "terminate", device, "site.baro.app.dev"]).catch(() => {});
-      await command(["xcrun", "simctl", "openurl", device, url]);
+      await command([
+        "node",
+        resolve(work, "scripts/mobile-runtime-ios-launch.cjs"),
+        "--open",
+        device,
+        avd,
+        url,
+      ]);
     }
   }
   async function screenshot(name: string) {
@@ -359,8 +366,9 @@ module.exports=config;\n`;
     console.log(`Runtime ${platform}: mount instrumented product home`);
     phase = "product-metro";
     await startMetro();
-    phase = "product-home-layout";
+    phase = "product-launch";
     await openApp();
+    phase = "product-home-layout";
     await waitFor(async () => {
       await sampleMemory();
       return fixture.state.productMount !== null;
@@ -465,7 +473,7 @@ module.exports=config;\n`;
         : null;
     await writeFile(
       resolve(out, `failure-${platform}.json`),
-      `${JSON.stringify({ sourceSha, platform, phase, code, unresolvedModule, host, productLayoutObserved: !!fixture.state.productMount, nativeResultObserved: !!fixture.state.result, remoteApiVerified: false, oauthVerified: false }, null, 2)}\n`,
+      `${JSON.stringify({ sourceSha, platform, phase, code, unresolvedModule, host, metroBundleObserved: /\b(?:iOS|Android) Bundled\b/.test(log), processRssSamples: memorySamples, productLayoutObserved: !!fixture.state.productMount, nativeResultObserved: !!fixture.state.result, remoteApiVerified: false, oauthVerified: false }, null, 2)}\n`,
     );
     throw error;
   } finally {

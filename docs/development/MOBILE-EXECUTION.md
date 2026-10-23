@@ -535,6 +535,35 @@ workspace·자료·리포트·나머지 domain을 순차 추출한다. 첫 단�
   실제 호환 인수를 혼동하지 않는다. native API를 포함한 검증 SHA의 preview 배포와 두 OS
   실제 흐름은 #71/M8·#346·#354에서 별도로 추적하며 기존 공개/운영 gate를 우회하지 않는다.
 
+## 2026-10-23 전달물·toolchain 보완 관측
+
+- PR389의 실제 SDK preflight39915601362는 Build Tools37.0.0에서 AOSP 정상/손상 APK의
+  검증/거부와 소유 AVD discovery를 확인했다. Home 계측 overlay는 두 OS 실제 Metro export를
+  통과했다. 이는 emulator boot나 제품/IPC 성공이 아니며 mainc2fa3f2 runtime39916204937의
+  Android15 실제 Home/IPC·SDK100MB/1GB IO 성공 receipt를 실물 대조했다. iOS는 compile 뒤
+  Home 대기 terminal FAILURE이며 raw openurl과 Expo CLI의 소유 Simulator schemeapproval 준비
+  차이를 보강하고 실제 실행으로 확인한다. 이전 runtime의 AVD_INVALID/Home 대기 실패는 보존한다.
+- preview39916208240의 Android job은 sourcec2fa3f23394a349bf7cf7d33dee64a433d29e634에서
+  성공했다. [실제 개발 APK](https://github.com/creno-va/baro/actions/runs/39916208240/artifacts/12485482082)는
+  162,497,066bytes/SHA256 `636c11b03079ab5ddfedc6ce7dcc9a0941c9990ff577ba195a4db761889a98b9`다.
+  전체 파일 hash·ZIP native arm64-v8a/x86_64·포함 TTF hash를 실제 다운로드와 독립 대조했다.
+  SDK aapt/apksig가 applicationId site.baro.app.preview/version0.1.0/build1/minimumAPI24와
+  실제 debug certificate를 검증했다. Metro 필요 앱이며 설치 대상의 실제 동작은 별도다.
+  iOS/workflow도 성공했으며 ZIP51,547,245bytes·Info.plist/실제 Mach-O x86_64·arm64·ad-hoc와
+  포함 TTF·전체 hash를 실제 다운로드와 대조했다. [지속 증거](../quality/MOBILE-NATIVE-RUNTIME-2026-10-23.md)에
+  두 OS preview receipt와 Android 실제 runtime receipt·합성 화면을 보존한다.
+- API health 관측2026-10-23T07:22:39.444Z는57121d2이며 native auth 이전 SHA다. 이 앱의
+  원격 로그인·API 호환 성공으로 표현하지 않는다. 실제 원격·물리 기기·스토어/#71은 남아 있다.
+- PR390은 원래 registry version/SRI/LICENSE를 보존한 CJS patch와 전체 설치 tree/실제
+  consumer resolution·원본/수정본 Node 회귀를 main1a6c54d에 통합했다. CI39917339321과
+  main CI39917819068이 성공했다. [patch 범위](../../patches/README.md)와
+  [#339 receipt](https://github.com/creno-va/baro/issues/339#issuecomment-6359737994)를 따른다.
+  현재 웹/Worker3개 출력 module graph와 Android1455/iOS1464 sources에 advisory 패키지가
+  없고 제품15개 route가 모두 포함됐음을 확인했다. 실제 Expo 인증서 라이브러리의 합성
+  검증·서명/Node 독립 검증, 실제 offline Expo HTTP manifest/JS bundle 두 OS200도 인수했다.
+  이 증거는 c2fa3f2 이전 source native 실행을 패치 후 native 성공으로 바꾸지 않는다.
+  raw audit high2건과 forge browser dist/map 미패치·실제 native/SDK/full 보안 인수는 OPEN이다.
+
 ## 참고
 
 ### M8 로컬 실행 증거의 범위 (#385)

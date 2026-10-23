@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { createHash } from "node:crypto";
+import { createRequire } from "node:module";
 import {
   DOWNLOAD_BYTES,
   OWNER_COOKIE,
@@ -28,6 +29,56 @@ const config: RuntimeConfig = {
   origin: RUNTIME_ORIGIN,
 };
 const fixture = createRuntimeFixture(config);
+const { validateOwnedIosDevice } = createRequire(import.meta.url)(
+  "../scripts/mobile-runtime-ios-launch.cjs",
+) as {
+  validateOwnedIosDevice(inventory: unknown, udid: string, name: string): void;
+};
+test("iOS launch preparation accepts only the created booted UUID/name pair", () => {
+  const udid = "15a64c18-fd51-4f83-8205-4c917a245e6b",
+    name = "baro_runtime_012345abcdef";
+  const inventory = { devices: { syntheticOS: [{ udid, name, state: "Booted" }] } };
+  expect(() => validateOwnedIosDevice(inventory, udid, name)).not.toThrow();
+  for (const changed of [
+    { udid: "25a64c18-fd51-4f83-8205-4c917a245e6b", name, state: "Booted" },
+    { udid, name: "personal-simulator", state: "Booted" },
+    { udid, name, state: "Shutdown" },
+  ])
+    expect(() =>
+      validateOwnedIosDevice({ devices: { syntheticOS: [changed] } }, udid, name),
+    ).toThrow("RUNTIME_OWNED_IOS_DEVICE_REQUIRED");
+  expect(() => validateOwnedIosDevice(inventory, "../outside", name)).toThrow();
+});
+test("pinned Expo iOS launcher API loads in a real Node process without accessing a simulator", async () => {
+  const node = Bun.which("node");
+  if (!node) throw new Error("PINNED_NODE_REQUIRED");
+  const child = Bun.spawn([node, "scripts/mobile-runtime-ios-launch.cjs", "--self-test"], {
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const output = await new Response(child.stdout).text();
+  expect(await child.exited).toBe(0);
+  expect(output.trim()).toBe("IOS_RUNTIME_LAUNCH_API_READY");
+});
+test("remote launch targets fail before any simulator command and emit only a fixed code", async () => {
+  const node = Bun.which("node");
+  if (!node) throw new Error("PINNED_NODE_REQUIRED");
+  const child = Bun.spawn(
+    [
+      node,
+      "scripts/mobile-runtime-ios-launch.cjs",
+      "--open",
+      "15a64c18-fd51-4f83-8205-4c917a245e6b",
+      "baro_runtime_012345abcdef",
+      "https://outside.invalid/private-synthetic-value",
+    ],
+    { stdout: "pipe", stderr: "pipe" },
+  );
+  const error = await new Response(child.stderr).text();
+  expect(await child.exited).toBe(1);
+  expect(error.trim()).toBe("RUNTIME_IOS_LOCAL_DEVELOPMENT_URL_REQUIRED");
+  expect(error).not.toContain("private-synthetic-value");
+});
 test("manual native launch URL carries Expo's noninteractive controls and survives the adb device shell", async () => {
   const url = runtimeDevelopmentUrl(),
     parsed = new URL(url);

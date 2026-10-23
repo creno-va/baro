@@ -1,0 +1,103 @@
+{
+  "version": 1,
+  "kind": "local-development-runtime",
+  "sourceSha": "c2fa3f23394a349bf7cf7d33dee64a433d29e634",
+  "platform": "android",
+  "environment": "local",
+  "apiOrigin": "http://127.0.0.1:8765",
+  "applicationId": "site.baro.app.dev",
+  "device": {
+    "kind": "emulator",
+    "model": "sdk_gphone64_x86_64",
+    "osVersion": "15"
+  },
+  "productEntry": {
+    "kind": "instrumented-home-layout-only",
+    "originalSha256": "c2b09ab674dd4340ba2501e0520aea86e6041c8301075a7bbfbb0b35523364f5",
+    "overlaySha256": "cd5dabb9f034a8a068d6301f1441e98dd5066d5cb92859f2ebc29fd8202cbfd0",
+    "layout": {
+      "width": 411.4285583496094,
+      "height": 809.5238037109375
+    },
+    "screenshot": "product-home-android.png"
+  },
+  "probeEntry": {
+    "kind": "alternate-entry-real-native-sdk",
+    "path": "apps/mobile/runtime-probe/entry.tsx",
+    "sha256": "d6f62f2726fd00e95212c11d99ba6d39424cdf14555542137044f6fb6491958d"
+  },
+  "metroOverlaySha256": "61766699b248516f7adb832de08ad047bedd263c530d962c4cfdf2cf985d4ecb",
+  "assets": {
+    "kind": "compiled-resource-only",
+    "family": "BaroMobile",
+    "sha256": "3ae12c1281a84901b32d8c5f0e43fd6c4f8a5b7fd4ccbde66cfbe9f07cde05e8",
+    "weights": [
+      400,
+      600,
+      700
+    ],
+    "glyphs": 14757,
+    "codepoints": 14336,
+    "hangul": 11172,
+    "licenseEmbedded": true,
+    "compiledBytesMatch": true,
+    "appRuntimeVerified": false
+  },
+  "result": {
+    "version": 1,
+    "sourceSha": "c2fa3f23394a349bf7cf7d33dee64a433d29e634",
+    "platform": "android",
+    "upload": {
+      "bytes": 100000000,
+      "sha256": "83d30385a4a11980275dc23de3fb49ff37b906cc841efa048a96c62d90ff3b5f"
+    },
+    "download": {
+      "bytes": 1000000000,
+      "sha256": "c81ea537d85888c161118b7ac8dc75be6cdeaf291790cb36ab34f3c7833e9abc"
+    },
+    "nativeMaxCopyBytes": 65536,
+    "nativeCalls": 5,
+    "sdkSourceReadback": true,
+    "sdkDownloadReadback": true,
+    "secureStoreReadback": true,
+    "unresolvedKeyPreserved": true,
+    "cancelUploadBytesReceived": 24576,
+    "unauthorizedRejected": true,
+    "crossOriginRejected": true,
+    "ownerChangeRejected": true,
+    "peerCookiePreserved": true,
+    "sourceClearRejectedActiveUpload": true,
+    "sourceFilesRemaining": 0,
+    "downloadFilesRemaining": 0,
+    "nativeFilesRemaining": 0,
+    "documentPickerVerified": false,
+    "oauthVerified": false,
+    "remoteApiVerified": false,
+    "physicalDeviceVerified": false,
+    "storeSigned": false,
+    "deployed": false
+  },
+  "transport": {
+    "requestCount": 5,
+    "rejectedHeaders": 0,
+    "upload": {
+      "bytes": 100000000,
+      "sha256": "83d30385a4a11980275dc23de3fb49ff37b906cc841efa048a96c62d90ff3b5f"
+    },
+    "downloadedBytes": 1000000000,
+    "delayedStarted": true,
+    "cancelUploadStarted": true,
+    "cancelUploadBytes": 24576
+  },
+  "memory": {
+    "metric": "sampled-process-rss",
+    "peakObservedBytes": 381427712,
+    "samples": 440,
+    "wholeRunPeakProven": false,
+    "jsHeapLimitProven": false
+  },
+  "productJourneysVerified": false,
+  "accessibilityVerified": false,
+  "storeSigned": false,
+  "deployed": false
+}
