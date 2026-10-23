@@ -134,3 +134,15 @@ JS의 local 환경 선택이 이 native binding을 바꾸지 않는다. SDK 준�
 없다는 명확한 조건이며, 묶인 UNKNOWN의 모든 원인을 확정한 것은 아니다.
 preview/production origin guard는 유지하고 별도 site.baro.app.dev/서명된 local Simulator
 profile로 전체 IO를 검증해야 한다. 기존 preview full-runtime 경로를 변경 없이 반복하지 않는다.
+
+새 iOS runtime은 `mobile-runtime.yml`의 ios 선택에서 local dev profile을 Xcode own-app
+Simulator signing으로 컴파일한다. 실제 NativeModule/preview·production origin guard는 수정하지
+않는다. source 청결 검사를 마친 별도 checkout에서 compile을 먼저 수행하고 그 뒤 tracked
+Metro overlay를 적용한다. preview pinned binary를 local IO에 넘기는 CLI 요청은 SDK/fixture
+시작 전에 고정 code로 거부한다. 이전 Home/receipt 해석은 그대로 지원한다.
+
+local control schema/context는 preview와 별도이며 dev 앱 ID·loopback API·빈 host entitlement·
+No-Team ad-hoc·자기 namespace만 허용한다. Xcode의 실제 XML/DER를 읽기 전 기대값을 관측
+성공으로 기록하지 않는다. compiler exit0 이후 unaccepted ZIP/inspection과 후속 실제 metadata를
+소유 checkout 정리 전에 allowlist로 복사한다. 이후 runtime 실패 시 같은 원본을 재검증할 수
+있으며 build 로그를 artifact에 내보내지 않는다. 새 local profile의 실제 실행 결과는 별도로 인수한다.
