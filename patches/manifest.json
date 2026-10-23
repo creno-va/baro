@@ -1,0 +1,117 @@
+{
+  "version": 1,
+  "rawAuditRequired": true,
+  "packages": [
+    {
+      "name": "braces",
+      "version": "3.0.3",
+      "registryIntegrity": "sha512-yQbXgO/OSZVD2IsiLlro+7Hf6Q18EJrKSEsdoMzKePKXct3gvD8oLcOQdIzGupr5Fj+EDe8gO/lxc1BzfMpxvA==",
+      "patch": "patches/braces@3.0.3.patch",
+      "patchSha256": "7af713af51d9136ba4e9254bda9720a7acb0faae10f3993d9682f84ce938a366",
+      "beforeTreeSha256": "31bc598bd435c483e9bce3da8a2b7ccd97784584aa3646f611186d9e0a00ac73",
+      "afterTreeSha256": "a1329e7a0b496db890745bbe8f5001c7b24009bde3a586164ae399a4b2949c27",
+      "entryPoint": "index.js",
+      "licenseSha256": "35bdd8a44339719441900fb50fbefc5e2dca1ca662cbaed7a687de842c8b70f2",
+      "coverage": "bounded-commonjs-traversal",
+      "changes": [
+        {
+          "path": "lib/compile.js",
+          "beforeSha256": "dc98f22eee3d511785d92a00758d5f0d48efed5f5813bdecc2de430c529b5c9f",
+          "afterSha256": "2de4c7465459366989e4726fb70e54c6980c5b941c0615660ca0d520858adeac"
+        },
+        {
+          "path": "lib/constants.js",
+          "beforeSha256": "c18ac5adb57308f1ce42a28552da3a31f5d83709743ebd9a636336813a744d4b",
+          "afterSha256": "fc3db282b8a5b8b8a55cda2e85ba05f0c49da138edc76227454d3f3cbc76d5fb"
+        },
+        {
+          "path": "lib/expand.js",
+          "beforeSha256": "41ccc196ebfa7b7781a634e721eb744e4e7bcb54cba427a7e3d6806a1b9e58f7",
+          "afterSha256": "e7ba50105a206523f36d07bec1e52de0b6e154c0b92fc164933397f5f943e7ad"
+        },
+        {
+          "path": "lib/parse.js",
+          "beforeSha256": "e572166565f15fa6ad9865ae49d678218e32aabfd1b3720f6d0d43d39800d310",
+          "afterSha256": "4b78b42b8cc0cdef26149512064a4e39c2e08393b7cce1cdca67ae532c792408"
+        },
+        {
+          "path": "lib/stringify.js",
+          "beforeSha256": "379f22d77bfa1478341ccd49c5e4267464aabcbba03558bab332aac23fc6f23a",
+          "afterSha256": "96dac196755cf3d8843211afc513912d183304b1d282853434ecd33216f25ac1"
+        },
+        {
+          "path": "lib/utils.js",
+          "beforeSha256": "b5a7596aa67730412b3c029ef09e84e6b67b8e445cffd35d1d295549c89066c7",
+          "afterSha256": "842a352ae809da6d5e819d66c6ce64eb498a037e067ba69bd5c68f4bce21dddd"
+        }
+      ],
+      "unmodifiedBrowserDistributions": [],
+      "source": "https://github.com/advisories/GHSA-vfj7-8cjw-p6xm",
+      "consumers": [
+        {
+          "name": "micromatch",
+          "version": "4.0.8",
+          "entryPoint": "index.js"
+        }
+      ]
+    },
+    {
+      "name": "node-forge",
+      "version": "1.4.0",
+      "registryIntegrity": "sha512-LarFH0+6VfriEhqMMcLX2F7SwSXeWwnEAJEsYm5QKWchiVYVvJyV9v7UDvUv+w5HO23ZpQTXDv/GxdDdMyOuoQ==",
+      "patch": "patches/node-forge@1.4.0.patch",
+      "patchSha256": "8d266e6ccb1a0079868002d25b34726f7d0152212ef335ad1ddb20357f9201b3",
+      "beforeTreeSha256": "0f7eccb60abe54fbb129532f52c28d1ce8f2c5b221c9d942500b221c531d75fe",
+      "afterTreeSha256": "264fe2f0fb52c6043558d3c68a8432f40e34202405023688a9919c69092e5ae0",
+      "entryPoint": "lib/index.js",
+      "licenseSha256": "f63ff0e4e239244aa79280da2dd4811a0469e5e201caf5cbc0d97c3a1dff8e82",
+      "coverage": "commonjs-rsa-verifier-only",
+      "changes": [
+        {
+          "path": "lib/rsa.js",
+          "beforeSha256": "fd4740238145ec26470eb3f06a627c72039538ce1307dbdce40521f94dfd0a50",
+          "afterSha256": "f2ecaedd70fa7939cc8ea79f30f339af402f28b85e996245d45c6404a954ec78"
+        }
+      ],
+      "unmodifiedBrowserDistributions": [
+        {
+          "path": "dist/forge.all.min.js",
+          "sha256": "cb9ba4045a81825f8edb646c38d53a1ac30ce07665bf26042c8dea86d7208642"
+        },
+        {
+          "path": "dist/forge.all.min.js.map",
+          "sha256": "0b21eb8fb1c124e963d564b6462177331027f6e739f48e73184e0f6a81cac3f1"
+        },
+        {
+          "path": "dist/forge.min.js",
+          "sha256": "d9b9074e6861200d676e25dcfe97889db5e8f4150bb766d29c491ad709a51b58"
+        },
+        {
+          "path": "dist/forge.min.js.map",
+          "sha256": "5f11be794b0ad083ce9b2bcee1079e7ee1f0771d37beb90d6f13b2b9a8a0eba3"
+        },
+        {
+          "path": "dist/prime.worker.min.js",
+          "sha256": "877bd31b0cc79ecb9163649034fbafaeec45e8e2861fc4fa9fb11335f28c4ef9"
+        },
+        {
+          "path": "dist/prime.worker.min.js.map",
+          "sha256": "73f786b89ef54b00e0cfb6969b2881e7cffa77b4be3f03e998f70993290716a8"
+        }
+      ],
+      "source": "https://github.com/nitrog7/forge/commit/85446800199c4995d3cd4b0ab5a8409df4455859",
+      "consumers": [
+        {
+          "name": "@expo/cli",
+          "version": "58.1.14",
+          "entryPoint": "build/src/index.js"
+        },
+        {
+          "name": "@expo/code-signing-certificates",
+          "version": "0.0.7",
+          "entryPoint": "build/main.js"
+        }
+      ]
+    }
+  ]
+}
