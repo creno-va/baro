@@ -1,0 +1,79 @@
+{
+  "version": 1,
+  "kind": "ios-device-sdk-unsigned-compile-preflight",
+  "sourceSha": "87dec1597b5f2d8766c349d09b974303d11f68d8",
+  "observedAt": "2026-10-23T22:30:33.500Z",
+  "platform": "ios",
+  "buildSdk": "iphoneos",
+  "nativeConfiguration": "Release",
+  "applicationId": "site.baro.app.preview",
+  "environment": "preview",
+  "apiOrigin": "https://preview.baro.site",
+  "apiObservation": {
+    "status": "observed",
+    "observedAt": "2026-10-23T22:30:33.955Z",
+    "sourceSha": "f91244151c94d871423e9f2fe6fda5a70bf0e668"
+  },
+  "versionName": "0.1.0",
+  "buildVersion": "1",
+  "expo": "58.0.17",
+  "reactNative": "0.88.0",
+  "minimumOS": "16.4",
+  "sdkVersion": "26.5",
+  "architectures": [
+    "arm64"
+  ],
+  "infoPlistSha256": "076d4e8d6b2dae483eaa1166882ee0a5d083a8eacf775ca5555d30472728760d",
+  "executableSha256": "71742e8d6226ea1e6e103cc8a8bb475479c7aa271522560899f5e2e2f3e031b7",
+  "signing": {
+    "codeSignature": "none",
+    "developmentTeamProvided": false,
+    "provisioningProfilePresent": false
+  },
+  "embeddedBundle": {
+    "path": "main.jsbundle",
+    "format": "hermes-bytecode",
+    "bytes": 3581976,
+    "sha256": "17a2d185d2b6392668092d7b2f8db6481c604bd55553005c863e193a382ff1b5",
+    "generatedJavascriptSha256": "8e7b6302e59a239978b2df3feb451cd5cf45eea73a3e9dc668c5ce1f8b0cf3a1",
+    "sourceMapSha256": "d33f356d3cd31d10014a150a9614c46f7ea41134d5c4a7cc80fa809ce6595e01",
+    "archiveBytesMatch": true,
+    "productEntry": "expo-router/entry",
+    "productSourceObserved": true,
+    "probeSourceAbsent": true,
+    "sourceMapPackaged": false,
+    "sourceModules": 1464
+  },
+  "compiledFont": {
+    "kind": "compiled-resource-only",
+    "family": "BaroMobile",
+    "sha256": "3ae12c1281a84901b32d8c5f0e43fd6c4f8a5b7fd4ccbde66cfbe9f07cde05e8",
+    "weights": [
+      400,
+      600,
+      700
+    ],
+    "glyphs": 14757,
+    "codepoints": 14336,
+    "hangul": 11172,
+    "licenseEmbedded": true,
+    "compiledBytesMatch": true,
+    "appRuntimeVerified": false
+  },
+  "artifact": {
+    "name": "baro-ios-device-sdk-unprovisioned-87dec1597b5f2d8766c349d09b974303d11f68d8.zip",
+    "bytes": 13808079,
+    "sha256": "9275ce0e0ac442b31c70397afac01285860e4f1ecfdd133dac28be518419b491"
+  },
+  "requiresMetro": false,
+  "binaryMetadataVerified": true,
+  "appleDeveloperCredentialsUsed": false,
+  "installableOnPhysicalDevice": false,
+  "appRuntimeVerified": false,
+  "remoteApiVerified": false,
+  "physicalDeviceVerified": false,
+  "oauthVerified": false,
+  "storeSigned": false,
+  "storeSubmitted": false,
+  "deployed": false
+}

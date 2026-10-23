@@ -1,0 +1,118 @@
+{
+  "toolingSourceSha": "ca8ea4f14fb3cccef4dc60f32247c99328a6f06b",
+  "phase": "native-auth-cancel-xcuitest",
+  "code": "INTERNAL_IOS_VERIFICATION_COMMAND_FAILED",
+  "lastCommand": {
+    "exitCode": 65,
+    "timedOut": false,
+    "category": "COMMAND_FAILED"
+  },
+  "uiTestFailure": {
+    "cliUsageError": false,
+    "cliErrorTopics": [],
+    "compilerLocations": [],
+    "testHostConfigurationFailure": false,
+    "assertionCode": null,
+    "swiftCompilationFailure": false,
+    "projectGeneratorUnavailable": false,
+    "signingFailure": false,
+    "runnerLaunchFailure": false
+  },
+  "authCancelFailure": {
+    "lastStage": {
+      "provider": "google",
+      "stage": "browser-presented"
+    },
+    "status": {
+      "provider": "google",
+      "systemWebViewVisible": true,
+      "browserWindowGeometryVerified": true,
+      "dismissCandidates": [
+        {
+          "control": "cancel",
+          "scope": "navigation-bar",
+          "count": 0,
+          "uniqueFullyHittable": false,
+          "outsideWebContent": false,
+          "absentBeforeAuthentication": true
+        },
+        {
+          "control": "done",
+          "scope": "navigation-bar",
+          "count": 0,
+          "uniqueFullyHittable": false,
+          "outsideWebContent": false,
+          "absentBeforeAuthentication": true
+        },
+        {
+          "control": "close",
+          "scope": "navigation-bar",
+          "count": 0,
+          "uniqueFullyHittable": false,
+          "outsideWebContent": false,
+          "absentBeforeAuthentication": true
+        },
+        {
+          "control": "cancel",
+          "scope": "toolbar",
+          "count": 0,
+          "uniqueFullyHittable": false,
+          "outsideWebContent": false,
+          "absentBeforeAuthentication": true
+        },
+        {
+          "control": "done",
+          "scope": "toolbar",
+          "count": 1,
+          "uniqueFullyHittable": true,
+          "outsideWebContent": false,
+          "absentBeforeAuthentication": true
+        },
+        {
+          "control": "close",
+          "scope": "toolbar",
+          "count": 0,
+          "uniqueFullyHittable": false,
+          "outsideWebContent": false,
+          "absentBeforeAuthentication": true
+        },
+        {
+          "control": "cancel",
+          "scope": "application",
+          "count": 1,
+          "uniqueFullyHittable": true,
+          "outsideWebContent": false,
+          "absentBeforeAuthentication": true
+        },
+        {
+          "control": "done",
+          "scope": "application",
+          "count": 1,
+          "uniqueFullyHittable": true,
+          "outsideWebContent": false,
+          "absentBeforeAuthentication": true
+        },
+        {
+          "control": "close",
+          "scope": "application",
+          "count": 0,
+          "uniqueFullyHittable": false,
+          "outsideWebContent": false,
+          "absentBeforeAuthentication": true
+        }
+      ],
+      "authorizingVisible": true,
+      "startUnavailableVisible": false,
+      "retryVisible": false,
+      "appForeground": true
+    },
+    "assertionCode": "BARO_AUTH_SYSTEM_DISMISS_MISSING"
+  },
+  "nativeProcessLaunchVerified": false,
+  "homeContentVerified": false,
+  "remoteApiVerified": false,
+  "oauthVerified": false,
+  "physicalDeviceVerified": false,
+  "storeSigned": false,
+  "deployed": false
+}

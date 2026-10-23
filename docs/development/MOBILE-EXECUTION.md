@@ -141,9 +141,10 @@ metadata/signature·전체 byte/hash receipt를 남긴다. 설치/Metro 연결�
 표현하지 않으며 실제 물리 기기·원격 API/OAuth·#339/#71의 인수를 생략하지 않는다.
 
 독립적인 [실기기 SDK 사전 검사](./MOBILE-INTERNAL-PREVIEW.md)는 signing을 끈
-`Release`/`iphoneos`/arm64 compile과 실제 Mach-O platform·HBC/font 대조를 준비한다.
+`Release`/`iphoneos`/arm64 compile과 실제 Mach-O platform·HBC/font를 대조한다.
+PR434/main87dec15의 actual40032490751 SUCCESS와 원본 ZIP/receipt·독립 재검사를 좁게 인수했다.
 현재 Simulator 경로를 대체하지 않으며 성공 실행 후에도 출력은 unprovisioned ZIP이다.
-설치·physical runtime·Apple 계정/서명·스토어 인수는 별도이고 실제 결과 전 성공으로 표시하지 않는다.
+설치·physical runtime·Apple 계정/서명·스토어 인수는 별도이며 실제 기기 실행 성공으로 표시하지 않는다.
 
 공통 변경은 repository 기준의 `bun ci` → `bun run validate:quick`과 관련 실패 회귀를
 수행한다. 웹 bundle에 영향이 있으면 `validate:build`, schema 변경이 실제로 있을 때만

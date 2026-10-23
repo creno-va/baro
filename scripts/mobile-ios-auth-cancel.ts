@@ -23,29 +23,29 @@ export function iosAuthenticationPrivacyBoundary() {
     },
   };
 }
-const providerResult = z
-  .strictObject({
-    provider: z.enum(["google", "naver", "kakao"]),
-    initialAnonymousObserved: z.literal(true),
-    osPromptHandled: z.boolean(),
-    systemWebViewObserved: z.literal(true),
-    dismissButtonHittable: z.literal(true),
-    systemDismissTapped: z.literal(true),
-    dismissControl: z.enum(["cancel", "done", "close"]),
-    dismissScope: z.enum(["navigation-bar", "toolbar", "browser-window-chrome"]),
-    nativeDismissControlVerified: z.literal(true),
-    webContentExcluded: z.literal(true),
-    webViewFrameExcluded: z.literal(true),
-    dismissControlAbsentBeforeAuthentication: z.literal(true),
-    browserWindowGeometryVerified: z.literal(true),
-    webViewDismissed: z.literal(true),
-    anonymousReturnObserved: z.literal(true),
-    errorStateAbsent: z.literal(true),
-    consentStateAbsent: z.literal(true),
-  })
-  .refine(
-    (value) => value.dismissScope !== "browser-window-chrome" || value.dismissControl === "cancel",
-  );
+const providerResult = z.strictObject({
+  provider: z.enum(["google", "naver", "kakao"]),
+  initialAnonymousObserved: z.literal(true),
+  osPromptHandled: z.boolean(),
+  systemWebViewObserved: z.literal(true),
+  dismissButtonHittable: z.literal(true),
+  systemDismissTapped: z.literal(true),
+  dismissControl: z.literal("cancel"),
+  dismissScope: z.literal("snapshot-native-window"),
+  nativeDismissControlVerified: z.literal(true),
+  webContentExcluded: z.literal(true),
+  webViewFrameExcluded: z.boolean(),
+  snapshotTraversalComplete: z.literal(true),
+  snapshotControlMatched: z.literal(true),
+  webViewAncestorExcluded: z.literal(true),
+  keyboardAncestorExcluded: z.literal(true),
+  dismissControlAbsentBeforeAuthentication: z.literal(true),
+  browserWindowGeometryVerified: z.literal(true),
+  webViewDismissed: z.literal(true),
+  anonymousReturnObserved: z.literal(true),
+  errorStateAbsent: z.literal(true),
+  consentStateAbsent: z.literal(true),
+});
 export const iosAuthCancelResultSchema = z.strictObject({
   kind: z.literal("ios-anonymous-provider-browser-cancellation"),
   applicationId: z.literal("site.baro.app.preview"),
@@ -94,6 +94,24 @@ const statusSchema = z
     provider: z.enum(["google", "naver", "kakao"]),
     systemWebViewVisible: z.boolean(),
     browserWindowGeometryVerified: z.boolean(),
+    cancelOwnership: z
+      .strictObject({
+        traversalComplete: z.boolean(),
+        webViewObserved: z.boolean(),
+        nativeCancelCount: z.number().int().min(0).max(256),
+        queriedControlMatched: z.boolean(),
+        webViewAncestorExcluded: z.boolean(),
+        keyboardAncestorExcluded: z.boolean(),
+      })
+      .refine((value) =>
+        value.queriedControlMatched
+          ? value.traversalComplete &&
+            value.webViewObserved &&
+            value.nativeCancelCount === 1 &&
+            value.webViewAncestorExcluded &&
+            value.keyboardAncestorExcluded
+          : !value.webViewAncestorExcluded && !value.keyboardAncestorExcluded,
+      ),
     dismissCandidates: z
       .array(dismissCandidateSchema)
       .length(9)

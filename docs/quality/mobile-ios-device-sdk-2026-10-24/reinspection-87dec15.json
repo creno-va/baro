@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "kind": "independent-ios-device-sdk-artifact-reinspection",
+  "recordedAt": "2026-10-23T22:38:10.809283Z",
+  "workflowRunId": "40032490751",
+  "sourceSha": "87dec1597b5f2d8766c349d09b974303d11f68d8",
+  "originalReceiptSha256": "bf3f71fc097ef475fa96e75b1f29b17faba41ddfa184d77ed92fa65d5aca4bde",
+  "originalReceiptObservedAt": "2026-10-23T22:30:33.500Z",
+  "artifact": {
+    "name": "baro-ios-device-sdk-unprovisioned-87dec1597b5f2d8766c349d09b974303d11f68d8.zip",
+    "bytes": 13808079,
+    "sha256": "9275ce0e0ac442b31c70397afac01285860e4f1ecfdd133dac28be518419b491"
+  },
+  "acceptedAndUnacceptedArchivesIdentical": true,
+  "actualPlistAndExecutableReinspected": true,
+  "machoPlatform": "iphoneos",
+  "machoArchitecture": "arm64",
+  "machoMinimumOS": "16.4",
+  "machoSdkVersion": "26.5",
+  "machoCodeSignaturePresent": false,
+  "packagedHbcBytesAndHashReinspected": true,
+  "compiledFontBytesGlyphsWeightsLicenseReinspected": true,
+  "privateKeysProfilesSourceMapsAndRootSignatureAbsent": true,
+  "privateSourceMapRebuilt": false,
+  "productGraphRebuilt": false,
+  "appInstalledOrRun": false,
+  "physicalDeviceVerified": false,
+  "storeSigned": false
+}

@@ -19,11 +19,15 @@ function observation() {
       systemWebViewObserved: true,
       dismissButtonHittable: true,
       systemDismissTapped: true,
-      dismissControl: "close",
-      dismissScope: "navigation-bar",
+      dismissControl: "cancel",
+      dismissScope: "snapshot-native-window",
       nativeDismissControlVerified: true,
       webContentExcluded: true,
-      webViewFrameExcluded: true,
+      webViewFrameExcluded: false,
+      snapshotTraversalComplete: true,
+      snapshotControlMatched: true,
+      webViewAncestorExcluded: true,
+      keyboardAncestorExcluded: true,
       dismissControlAbsentBeforeAuthentication: true,
       browserWindowGeometryVerified: true,
       webViewDismissed: true,
@@ -105,7 +109,10 @@ test("system browser cancellation requires one complete result for all providers
     { providers: value.providers.map((provider) => ({ ...provider, dismissControl: "sign-in" })) },
     { providers: value.providers.map((provider) => ({ ...provider, webContentExcluded: false })) },
     {
-      providers: value.providers.map((provider) => ({ ...provider, webViewFrameExcluded: false })),
+      providers: value.providers.map((provider) => ({
+        ...provider,
+        webViewAncestorExcluded: false,
+      })),
     },
     {
       providers: value.providers.map((provider) => ({
@@ -140,37 +147,44 @@ test("system browser cancellation requires one complete result for all providers
   ])
     expect(() => parseIosAuthCancelResult(encode({ ...value, ...patch }))).toThrow();
 });
-test("native-bar styles and a newly appeared frame-separated Cancel cannot relax the return proof", () => {
-  for (const dismissControl of ["cancel", "done", "close"] as const)
-    for (const dismissScope of ["navigation-bar", "toolbar"] as const) {
-      const value = observation();
-      value.providers = value.providers.map((provider) => ({
-        ...provider,
-        dismissControl,
-        dismissScope,
-      }));
-      expect(parseIosAuthCancelResult(encode(value)).providers[0]?.dismissControl).toBe(
-        dismissControl,
-      );
+test("native snapshot ownership is mandatory even when WebView bounds overlap the system Cancel", () => {
+  for (const webViewFrameExcluded of [false, true]) {
+    const value = observation();
+    value.providers = value.providers.map((provider) => ({ ...provider, webViewFrameExcluded }));
+    expect(parseIosAuthCancelResult(encode(value)).providers[0]?.dismissScope).toBe(
+      "snapshot-native-window",
+    );
+    for (const field of [
+      "snapshotTraversalComplete",
+      "snapshotControlMatched",
+      "webViewAncestorExcluded",
+      "keyboardAncestorExcluded",
+    ])
       expect(() =>
-        parseIosAuthCancelResult(encode({ ...value, coldAnonymousReturnObserved: false })),
+        parseIosAuthCancelResult(
+          encode({
+            ...value,
+            providers: value.providers.map((provider) => ({ ...provider, [field]: false })),
+          }),
+        ),
       ).toThrow();
-    }
+  }
   const value = observation();
-  value.providers = value.providers.map((provider) => ({
-    ...provider,
-    dismissControl: "cancel",
-    dismissScope: "browser-window-chrome",
-  }));
-  expect(parseIosAuthCancelResult(encode(value)).providers[0]?.dismissScope).toBe(
-    "browser-window-chrome",
-  );
   for (const dismissControl of ["done", "close"])
     expect(() =>
       parseIosAuthCancelResult(
         encode({
           ...value,
           providers: value.providers.map((provider) => ({ ...provider, dismissControl })),
+        }),
+      ),
+    ).toThrow();
+  for (const dismissScope of ["application", "navigation-bar", "toolbar", "browser-window-chrome"])
+    expect(() =>
+      parseIosAuthCancelResult(
+        encode({
+          ...value,
+          providers: value.providers.map((provider) => ({ ...provider, dismissScope })),
         }),
       ),
     ).toThrow();
@@ -189,6 +203,14 @@ test("failed native auth observation exports only fixed stage/provider/assertion
     provider: "google",
     systemWebViewVisible: false,
     browserWindowGeometryVerified: false,
+    cancelOwnership: {
+      traversalComplete: false,
+      webViewObserved: false,
+      nativeCancelCount: 0,
+      queriedControlMatched: false,
+      webViewAncestorExcluded: false,
+      keyboardAncestorExcluded: false,
+    },
     dismissCandidates: ["navigation-bar", "toolbar", "application"].flatMap((scope) =>
       ["cancel", "done", "close"].map((control) => ({
         scope,
@@ -239,6 +261,34 @@ test("failed native auth observation exports only fixed stage/provider/assertion
   ).status;
   if (!parsedSeparated) throw Error("fixed geometry diagnosis missing");
   expect(separated).toEqual(parsedSeparated);
+  const nativeOwnership = {
+    ...separated,
+    cancelOwnership: {
+      traversalComplete: true,
+      webViewObserved: true,
+      nativeCancelCount: 1,
+      queriedControlMatched: true,
+      webViewAncestorExcluded: true,
+      keyboardAncestorExcluded: true,
+    },
+  };
+  expect(
+    observeIosAuthCancelFailure(`BARO_AUTH_CANCEL_STATUS:${JSON.stringify(nativeOwnership)}`).status
+      ?.cancelOwnership.queriedControlMatched,
+  ).toBe(true);
+  for (const patch of [
+    { traversalComplete: false },
+    { webViewObserved: false },
+    { nativeCancelCount: 2 },
+    { webViewAncestorExcluded: false },
+    { keyboardAncestorExcluded: false },
+    { rawSnapshot: "private" },
+  ])
+    expect(
+      observeIosAuthCancelFailure(
+        `BARO_AUTH_CANCEL_STATUS:${JSON.stringify({ ...nativeOwnership, cancelOwnership: { ...nativeOwnership.cancelOwnership, ...patch } })}`,
+      ).status,
+    ).toBeNull();
   for (const patch of [
     { browserWindowGeometryVerified: false },
     { systemWebViewVisible: false },
