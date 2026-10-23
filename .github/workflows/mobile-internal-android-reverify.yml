@@ -1,0 +1,86 @@
+name: Mobile preserved Android verification (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_sha:
+        description: Full main tooling SHA; reverify pinned compiled binary without recompiling
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: mobile-internal-android-reverify-${{ inputs.target_sha }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      TARGET_SHA: ${{ inputs.target_sha }}
+      EXPO_PUBLIC_APP_ENV: preview
+      EXPO_PUBLIC_API_URL: https://preview.baro.site
+      CI: '1'
+    steps:
+      - run: '[[ "$TARGET_SHA" =~ ^[a-f0-9]{40}$ ]]'
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.target_sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - run: |
+          test "$(git rev-parse HEAD)" = "$TARGET_SHA"
+          git merge-base --is-ancestor "$TARGET_SHA" origin/main
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: apps/mobile/.node-version
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: .bun-version
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - run: bun ci
+      - run: bun run security:patches
+      - name: Verify successful immutable tooling CI
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bun scripts/verify-release.ts "$TARGET_SHA" --ci-only
+      - name: Resolve immutable inspection input
+        id: input
+        run: |
+          bun -e 'import{androidInspectionInputSchema}from"./scripts/mobile-internal-android-reverify";const m=androidInspectionInputSchema.parse(await Bun.file("tests/fixtures/android-internal-inspection.json").json());await Bun.write(process.env.GITHUB_OUTPUT,`artifact=${m.artifactId}\n`);'
+      - name: Download exact preserved binary and generated files
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          INPUT_ARTIFACT_ID: ${{ steps.input.outputs.artifact }}
+        run: |
+          mkdir -p .wrangler/android-inspection-input
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$INPUT_ARTIFACT_ID" > .wrangler/private-android-artifact.json
+          bun -e 'const p=await Bun.file("tests/fixtures/android-internal-inspection.json").json(),a=await Bun.file(".wrangler/private-android-artifact.json").json();if(String(a.id)!==p.artifactId||a.name!==p.artifactName||a.expired||String(a.workflow_run?.id)!==p.workflowRunId||a.workflow_run?.head_sha!==p.sourceSha)throw Error("PINNED_ANDROID_ARTIFACT_PROVENANCE_MISMATCH");'
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$INPUT_ARTIFACT_ID/zip" > .wrangler/private-android-input.zip
+          unzip -q .wrangler/private-android-input.zip -d .wrangler/android-inspection-input
+      - name: Reverify actual signature, metadata, Hermes and compiled font resources
+        run: bun scripts/mobile-internal-android-reverify.ts
+      - name: Save reverified binary with separate source and verification receipts
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: mobile-internal-android-reverified-${{ inputs.target_sha }}
+          path: |
+            .wrangler/mobile-internal-android-reverified/baro-internal-preview-android-*.apk
+            .wrangler/mobile-internal-android-reverified/receipt-android.json
+            .wrangler/mobile-internal-android-reverified/verification.json
+          if-no-files-found: error
+      - name: Preserve fixed failure classification
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: mobile-internal-android-reverification-failure-${{ inputs.target_sha }}
+          path: .wrangler/mobile-internal-android-reverified/failure.json
+          if-no-files-found: ignore
