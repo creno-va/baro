@@ -120,3 +120,41 @@ Team/prefix·다른 group·wildcard를 더하지 않는다. 원본 ZIP·Info.pli
 명시 group과 application identifier의 우선순위를 설명한다. 이 참고를 Simulator 실험의
 성공 보장으로 해석하지 않는다. `group-only` 사본의 로컬 Mac signature/entitlement readback은
 통과했지만 실제 SDK 초기화·실행·큰 IO/물리 기기·store 성공은 별도이며 원인은 미확정이다.
+
+## 실제 OS 직접 실행 거절과 Xcode signing control
+
+PR400/main `64afcfb9353accbc6d0108313c83b46f71ced919`·main CI39945732408 SUCCESS 뒤
+[SDK39946286601](https://github.com/creno-va/baro/actions/runs/39946286601)은 terminal FAILURE다.
+[baseline](./mobile-ios-host-2026-10-23/baseline-64afcfb.json)·
+[group-only signing](./mobile-ios-host-2026-10-23/signing-64afcfb.json)·
+[실패](./mobile-ios-host-2026-10-23/failure-64afcfb.json)를 보존한다.
+signed-direct-launch/APP_DIRECT_LAUNCH exit1, FBSOpenApplicationServiceErrorDomain code1의
+실제 OS 거절이므로 URL wrapper만의 문제로 해석하지 않는다. signed SDK report는 없고
+일반 앱 서명 변경의 성공 근거도 아니다.
+
+다음 control은 수동 codesign profile을 더 추측하지 않고 실제 Xcode의 Simulator signing
+machinery로 새 앱을 컴파일한다. [Apple DTS의 Simulator ad-hoc 설명](https://developer.apple.com/forums/thread/826882)은
+Simulator에서 Apple Development signing identity를 요구하지 않는 범위를 설명한다.
+실제 iPhone/스토어 profile·계정·심사 승인과 구분하며 이 문서를 성공 보장으로 사용하지 않는다.
+
+```sh
+gh workflow run mobile-ios-xcode-control.yml --ref main -f target_sha=<full40-main-sha>
+```
+
+이 경로는 fresh CI checkout·known preview/Simulator에만 열리는 별도 `--xcode-control`다.
+normal/native defaults의 CODE_SIGNING_ALLOWED=NO와 기존 pinned-binary 전후 비교는 유지한다.
+actual generated app target의 비어 있는 entitlements 파일만 표준 own-app keychain placeholder로
+바꾸고 Xcode가 확장하도록 한다. identity `-`/빈 Team/profile·manual Simulator signing을 명시하며
+provisioning 업데이트를 요청하거나 실제 인증서/private key를 선택하지 않는다. 자식 환경은
+명시한 OS/Ruby 도구와 preview 값만 전달하고 dotenv·credential·Node preload는 제외한다.
+
+compiler 출력은 private log에 보존하고 artifact로 내보내지 않는다. 실제 Info/ABI·양식과
+ad-hoc/no-Team signature, 각 ABI의 expanded own-group/표준 debugger entitlement readback을
+검사한 뒤 strict control sidecar와 기존 개발 ZIP byte/hash를 기록한다. 예상 밖 Team/group/
+wildcard·device/production identity는 인수하지 않는다. 실제 값·관측 시각은 조작하지 않는다.
+
+fresh same-source archive와 control sidecar의 byte/hash·실제 추출 Info/executable hash를
+대조하고 새 소유 Simulator에서 기존 SDK entry/factories를 한 번 관측한다. 이 모드에서는
+컴파일된 앱을 수동으로 재서명하지 않는다. baseline report와 control signing·컴파일 ZIP을
+각각 보존하고 성공 전 일반 앱 설정을 바꾸지 않는다. 실제 SecureStore 성공은 아직 미확정이며
+full native IO·실제 OAuth/API·physical/store·#339/#71의 인수를 대신하지 않는다.

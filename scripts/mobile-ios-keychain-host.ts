@@ -10,6 +10,7 @@ import {
 } from "../apps/mobile/runtime-probe/ios-keychain-protocol";
 import { RUNTIME_ORIGIN } from "../apps/mobile/runtime-probe/protocol";
 import { signSimulatorApp, simulatorIdentity } from "./mobile-ios-simulator-signing";
+import { verifyFreshXcodeControlBinary } from "./mobile-ios-xcode-control";
 import { verifyPreviewArtifact } from "./mobile-preview-artifact";
 import { metroNodeOptions, runtimeDevelopmentUrl } from "./mobile-runtime-host";
 
@@ -117,6 +118,8 @@ export async function preserveIosReadiness(
   return report;
 }
 async function main() {
+  const xcodeControl = process.argv[2] === "--xcode-control";
+  if (process.argv.length !== (xcodeControl ? 3 : 2)) throw new Error("IOS_HOST_MODE_REQUIRED");
   if (process.platform !== "darwin") throw new Error("IOS_HOST_MAC_REQUIRED");
   const sourceSha = process.env.TARGET_SHA;
   if (!/^[a-f0-9]{40}$/.test(sourceSha ?? "")) throw new Error("IOS_HOST_IMMUTABLE_SHA_REQUIRED");
@@ -242,7 +245,10 @@ async function main() {
     if ((await command(["git", "rev-parse", "HEAD"])) !== sourceSha)
       throw new Error("IOS_HOST_CHECKOUT_MISMATCH");
     await command(["git", "diff", "--exit-code", "HEAD"]);
-    const binary = await verifyIosHostBinary(root, resolve(root, ".wrangler/ios-keychain-input"));
+    const binary = xcodeControl
+      ? await verifyFreshXcodeControlBinary(root, sourceSha as string)
+      : await verifyIosHostBinary(root, resolve(root, ".wrangler/ios-keychain-input"));
+    const control = "control" in binary.manifest ? binary.manifest.control : null;
     await assertIosNativeInputs(root, binary.manifest.sourceSha, sourceSha as string);
     await command(["git", "worktree", "add", "--detach", work, sourceSha as string]);
     ownedCheckout = true;
@@ -272,6 +278,23 @@ async function main() {
       ),
       "site.baro.app.preview",
     );
+    if (control) {
+      const info = simulatorIdentity(
+        JSON.parse(
+          await command(["plutil", "-convert", "json", "-o", "-", resolve(app, "Info.plist")]),
+        ),
+        "site.baro.app.preview",
+      );
+      if (
+        createHash("sha256")
+          .update(await readFile(resolve(app, "Info.plist")))
+          .digest("hex") !== control.infoPlistSha256 ||
+        createHash("sha256")
+          .update(await readFile(resolve(app, info.CFBundleExecutable)))
+          .digest("hex") !== control.executableSha256
+      )
+        throw new Error("IOS_HOST_CONTROL_BINARY_METADATA_MISMATCH");
+    }
     phase = "metro";
     const reservation = Bun.serve({
       hostname: "127.0.0.1",
@@ -370,6 +393,18 @@ async function main() {
     }
     phase = "baseline";
     await launch();
+    if (control) {
+      const baseline = iosReadinessReportSchema.parse(reports.baseline);
+      await writeFile(
+        resolve(base, "receipt.json"),
+        `${JSON.stringify({ version: 1, kind: "xcode-simulator-sdk-control", toolingSourceSha: sourceSha, binarySourceSha: binary.manifest.sourceSha, binaryArtifact: binary.manifest, device: { model: type.name, osVersion: runtime.version }, baseline, simulatorSdkReady: baseline.allSucceeded, entitlementRootCauseProven: false, fullNativeIoVerified: false, productJourneysVerified: false, remoteApiVerified: false, oauthVerified: false, physicalDeviceVerified: false, storeSigned: false, deployed: false }, null, 2)}\n`,
+      );
+      if (!baseline.allSucceeded) throw new Error("IOS_HOST_XCODE_CONTROL_SDK_FAILED");
+      console.log(
+        "Actual Xcode Simulator SDK control passed; full IO/OAuth/physical/store acceptance remains separate",
+      );
+      return;
+    }
     phase = "signing";
     console.log("IOS_HOST_STAGE", phase);
     await command(["xcrun", "simctl", "terminate", device, "site.baro.app.preview"], {

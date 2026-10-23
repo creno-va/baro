@@ -29,6 +29,13 @@ import {
   simulatorIdentity,
   verifySimulatorEntitlements,
 } from "../scripts/mobile-ios-simulator-signing";
+import {
+  verifyFreshXcodeControlBinary,
+  xcodeControlEntitlements,
+  xcodeControlEnvironment,
+  xcodeControlReceiptSchema,
+  xcodeSimulatorControlArguments,
+} from "../scripts/mobile-ios-xcode-control";
 import { productEntryOverlay } from "../scripts/mobile-runtime";
 import { createRuntimeFixture, repeatedDigest } from "../scripts/mobile-runtime-fixture";
 import {
@@ -699,5 +706,115 @@ test("pinned input byte attestation rejects modified archives without installing
     );
   } finally {
     await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("Xcode signing control stays in a fresh preview CI context without accounts, profiles or broader entitlements", () => {
+  const input = {
+    GITHUB_ACTIONS: "true",
+    EXPO_PUBLIC_APP_ENV: "preview",
+    EXPO_PUBLIC_API_URL: "https://preview.baro.site",
+    TARGET_SHA: "a".repeat(40),
+    PATH: "/synthetic/bin",
+    GEM_HOME: "/synthetic/gems",
+    APPLE_ID: "synthetic-private",
+    GITHUB_TOKEN: "synthetic-private",
+    DEVELOPMENT_TEAM: "synthetic-private",
+    NODE_OPTIONS: "--require /private/synthetic",
+  };
+  const env = xcodeControlEnvironment(input);
+  expect(env).toMatchObject({
+    TARGET_SHA: "a".repeat(40),
+    EXPO_PUBLIC_APP_ENV: "preview",
+    GEM_HOME: "/synthetic/gems",
+    EXPO_NO_DOTENV: "1",
+  });
+  expect(JSON.stringify(env)).not.toContain("synthetic-private");
+  expect(JSON.stringify(env)).not.toContain("/private/synthetic");
+  for (const change of [
+    { GITHUB_ACTIONS: "false" },
+    { EXPO_PUBLIC_APP_ENV: "production" },
+    { EXPO_PUBLIC_API_URL: "http://127.0.0.1:8765" },
+    { TARGET_SHA: "main" },
+  ])
+    expect(() => xcodeControlEnvironment({ ...input, ...change })).toThrow();
+  expect(xcodeSimulatorControlArguments).toContain("CODE_SIGN_IDENTITY=-");
+  expect(xcodeSimulatorControlArguments).toContain("DEVELOPMENT_TEAM=");
+  expect(xcodeSimulatorControlArguments).toContain("PROVISIONING_PROFILE_SPECIFIER=");
+  expect(xcodeSimulatorControlArguments.join(" ")).not.toContain("allowProvisioningUpdates");
+  const own = {
+    "keychain-access-groups": ["site.baro.app.preview"] as ["site.baro.app.preview"],
+    "get-task-allow": true,
+  };
+  expect(xcodeControlEntitlements(own)).toEqual(own);
+  for (const invalid of [
+    { ...own, "com.apple.developer.team-identifier": "synthetic-team" },
+    { ...own, "keychain-access-groups": ["*"] },
+    { ...own, "keychain-access-groups": ["site.baro.app.preview", "site.baro.app.dev"] },
+    { ...own, "application-identifier": "synthetic-team.site.baro.app.preview" },
+  ])
+    expect(() => xcodeControlEntitlements(invalid)).toThrow("XCODE_CONTROL_ENTITLEMENTS_MISMATCH");
+});
+test("fresh Xcode archive attestation binds source and exact bytes without accepting synthetic data as an installed app", async () => {
+  const root = await mkdtemp(resolve(tmpdir(), "baro-xcode-control-bytes-"));
+  try {
+    const source = "a".repeat(40),
+      handoff = resolve(root, ".wrangler/mobile-handoff"),
+      build = resolve(root, ".wrangler/mobile-build"),
+      bytes = Buffer.from("synthetic-not-an-app-archive");
+    await mkdir(handoff, { recursive: true });
+    await mkdir(build, { recursive: true });
+    const preview = await Bun.file(
+      "docs/quality/mobile-runtime-2026-10-23/preview-ios.json",
+    ).json();
+    preview.sourceSha = source;
+    preview.artifact = {
+      name: `baro-preview-ios-simulator-${source}.zip`,
+      bytes: bytes.length,
+      sha256: createHash("sha256").update(bytes).digest("hex"),
+    };
+    const control = {
+      version: 1,
+      kind: "xcode-simulator-signing-control",
+      sourceSha: source,
+      observedAt: new Date().toISOString(),
+      applicationId: "site.baro.app.preview",
+      signature: "ad-hoc",
+      teamIdentifier: "not set",
+      architectures: ["arm64"],
+      entitlements: { "keychain-access-groups": ["site.baro.app.preview"], "get-task-allow": true },
+      executableSha256: "b".repeat(64),
+      infoPlistSha256: "c".repeat(64),
+      appRuntimeVerified: false,
+      physicalDeviceVerified: false,
+      storeSigned: false,
+      deployed: false,
+    };
+    await writeFile(resolve(handoff, "receipt-ios.json"), JSON.stringify(preview));
+    await writeFile(resolve(handoff, preview.artifact.name), bytes);
+    await writeFile(resolve(build, "xcode-control-ios.json"), JSON.stringify(control));
+    expect(
+      (await verifyFreshXcodeControlBinary(root, source)).manifest.control.appRuntimeVerified,
+    ).toBe(false);
+    expect(() =>
+      xcodeControlReceiptSchema.parse({ ...control, physicalDeviceVerified: true }),
+    ).toThrow();
+    await writeFile(
+      resolve(handoff, preview.artifact.name),
+      Buffer.from("modified-synthetic-archive"),
+    );
+    await expect(verifyFreshXcodeControlBinary(root, source)).rejects.toThrow(
+      "XCODE_CONTROL_ARCHIVE_BYTES_MISMATCH",
+    );
+    await writeFile(resolve(handoff, preview.artifact.name), bytes);
+    await writeFile(
+      resolve(build, "xcode-control-ios.json"),
+      JSON.stringify({ ...control, sourceSha: "b".repeat(40) }),
+    );
+    await expect(verifyFreshXcodeControlBinary(root, source)).rejects.toThrow(
+      "XCODE_CONTROL_SOURCE_OR_SIGNATURE_MISMATCH",
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
   }
 });
