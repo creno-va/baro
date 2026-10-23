@@ -51,8 +51,20 @@ export function inspectIosUiHelp(help: string, toolingSourceSha: string, observe
     physicalDeviceVerified: false,
   });
 }
-async function main() {
-  const source = process.env.TARGET_SHA;
+export const iosLargestContentSize = "accessibility-extra-extra-extra-large" as const;
+export function verifyIosContentSizeReadback(output: string) {
+  if (output.trim() !== iosLargestContentSize)
+    throw Error("INTERNAL_IOS_CONTENT_SIZE_READBACK_MISMATCH");
+  return iosLargestContentSize;
+}
+export function iosInternalObservationOptions(args: string[]) {
+  if (!args.length) return { home: false, largeFont: false };
+  if (args[0] === "--home" && args.length === 1) return { home: true, largeFont: false };
+  if (args[0] === "--home" && args[1] === "--large-font" && args.length === 2)
+    return { home: true, largeFont: true };
+  throw Error("INTERNAL_IOS_VERIFICATION_MODE_REQUIRED");
+}
+export async function readIosUiCapabilities(source: string) {
   if (
     process.platform !== "darwin" ||
     process.env.GITHUB_ACTIONS !== "true" ||
@@ -62,8 +74,6 @@ async function main() {
   const git = Bun.spawn(["git", "rev-parse", "HEAD"], { stdout: "pipe", stderr: "ignore" }),
     head = (await new Response(git.stdout).text()).trim();
   if ((await git.exited) || head !== source) throw Error("IOS_UI_SDK_SOURCE_MISMATCH");
-  const path = resolve(".wrangler/mobile-internal-ios-reverify/ui-capabilities.json");
-  if (await Bun.file(path).exists()) throw Error("IOS_UI_SDK_FRESH_OUTPUT_REQUIRED");
   const child = Bun.spawn(["/usr/bin/xcrun", "simctl", "help", "ui"], {
       stdout: "pipe",
       stderr: "pipe",
@@ -77,13 +87,18 @@ async function main() {
     if (await child.exited) throw Error("IOS_UI_SDK_HELP_UNAVAILABLE");
     const help = `${out}\n${err}`;
     if (!help.trim()) throw Error("IOS_UI_SDK_HELP_EMPTY");
-    const result = inspectIosUiHelp(help, source as string, new Date().toISOString());
-    await mkdir(resolve(".wrangler/mobile-internal-ios-reverify"), { recursive: true });
-    await writeFile(path, `${JSON.stringify(result, null, 2)}\n`, { flag: "wx" });
-    console.log("IOS_SIMULATOR_UI_SDK_DOCUMENTATION_OBSERVED_NO_DEVICE_STATE_CHANGED");
+    return inspectIosUiHelp(help, source, new Date().toISOString());
   } finally {
     clearTimeout(timer);
   }
+}
+async function main() {
+  const path = resolve(".wrangler/mobile-internal-ios-reverify/ui-capabilities.json");
+  if (await Bun.file(path).exists()) throw Error("IOS_UI_SDK_FRESH_OUTPUT_REQUIRED");
+  const result = await readIosUiCapabilities(process.env.TARGET_SHA ?? "");
+  await mkdir(resolve(".wrangler/mobile-internal-ios-reverify"), { recursive: true });
+  await writeFile(path, `${JSON.stringify(result, null, 2)}\n`, { flag: "wx" });
+  console.log("IOS_SIMULATOR_UI_SDK_DOCUMENTATION_OBSERVED_NO_DEVICE_STATE_CHANGED");
 }
 if (import.meta.main)
   await main().catch(() => {

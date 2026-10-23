@@ -13,6 +13,12 @@ on:
         default: false
         type: boolean
 
+      large_font:
+        description: Read back the largest accessibility content-size category and restart anonymous Home
+        required: false
+        default: false
+        type: boolean
+
 permissions:
   contents: read
   actions: read
@@ -33,7 +39,13 @@ jobs:
       CI: '1'
       EXPO_NO_TELEMETRY: '1'
     steps:
-      - run: '[[ "$TARGET_SHA" =~ ^[a-f0-9]{40}$ ]]'
+      - name: Validate source and observation options
+        env:
+          OBSERVE_HOME: ${{ inputs.smoke }}
+          OBSERVE_LARGE_FONT: ${{ inputs.large_font }}
+        run: |
+          [[ "$TARGET_SHA" =~ ^[a-f0-9]{40}$ ]]
+          if [ "$OBSERVE_LARGE_FONT" = "true" ]; then test "$OBSERVE_HOME" = "true"; fi
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.target_sha }}
@@ -73,13 +85,19 @@ jobs:
       - name: Reverify original metadata and optionally observe anonymous cold launches
         env:
           OBSERVE_HOME: ${{ inputs.smoke }}
+          OBSERVE_LARGE_FONT: ${{ inputs.large_font }}
         run: |
           args=()
           if [ "$OBSERVE_HOME" = "true" ]; then args+=(--home); fi
+          if [ "$OBSERVE_LARGE_FONT" = "true" ]; then args+=(--large-font); fi
           bun scripts/mobile-internal-ios-reverify.ts "${args[@]}"
           if [ "$OBSERVE_HOME" = "true" ]; then
             test -s .wrangler/mobile-internal-ios-reverify/home.json
             test -s .wrangler/mobile-internal-ios-reverify/home-ios.png
+          fi
+          if [ "$OBSERVE_LARGE_FONT" = "true" ]; then
+            test -s .wrangler/mobile-internal-ios-reverify/large-font.json
+            test -s .wrangler/mobile-internal-ios-reverify/large-font-ios.png
           fi
       - name: Observe SDK UI command documentation without reading or changing device state
         run: bun scripts/mobile-ios-ui-capabilities.ts
@@ -96,4 +114,6 @@ jobs:
             .wrangler/mobile-internal-ios-reverify/home-ios.png
             .wrangler/mobile-internal-ios-reverify/failure.json
             .wrangler/mobile-internal-ios-reverify/ui-capabilities.json
+            .wrangler/mobile-internal-ios-reverify/large-font.json
+            .wrangler/mobile-internal-ios-reverify/large-font-ios.png
           if-no-files-found: warn

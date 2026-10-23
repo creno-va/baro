@@ -29,9 +29,16 @@ import { internalIosEnvironment } from "../scripts/mobile-internal-ios-build";
 import {
   assertIosBundledInputs,
   verifyIosColdLaunchReceipt,
+  verifyIosLargeFontReceipt,
   verifyPinnedInternalIosInput,
 } from "../scripts/mobile-internal-ios-input";
-import { inspectIosUiHelp, iosUiCapabilitiesSchema } from "../scripts/mobile-ios-ui-capabilities";
+import {
+  inspectIosUiHelp,
+  iosInternalObservationOptions,
+  iosLargestContentSize,
+  iosUiCapabilitiesSchema,
+  verifyIosContentSizeReadback,
+} from "../scripts/mobile-ios-ui-capabilities";
 import {
   observePreviewApi,
   parseAndroidBadging,
@@ -68,6 +75,34 @@ test("SDK UI documentation reports only exact known categories and cannot claim 
     "physicalDeviceVerified",
   ])
     expect(iosUiCapabilitiesSchema.safeParse({ ...result, [field]: true }).success).toBe(false);
+});
+test("large iOS font observation requires Home and exact SDK native category readback", () => {
+  expect(iosInternalObservationOptions([])).toEqual({ home: false, largeFont: false });
+  expect(iosInternalObservationOptions(["--home"])).toEqual({ home: true, largeFont: false });
+  expect(iosInternalObservationOptions(["--home", "--large-font"])).toEqual({
+    home: true,
+    largeFont: true,
+  });
+  for (const args of [
+    ["--large-font"],
+    ["--home", "--unknown"],
+    ["--home", "--large-font", "--home"],
+    ["--large-font", "--home"],
+  ])
+    expect(() => iosInternalObservationOptions(args)).toThrow(
+      "INTERNAL_IOS_VERIFICATION_MODE_REQUIRED",
+    );
+  expect(verifyIosContentSizeReadback(`  ${iosLargestContentSize}\n`)).toBe(iosLargestContentSize);
+  for (const value of [
+    "",
+    "large",
+    "accessibility-extra-extra-large",
+    `value: ${iosLargestContentSize}`,
+    `${iosLargestContentSize}\nprivate data`,
+  ])
+    expect(() => verifyIosContentSizeReadback(value)).toThrow(
+      "INTERNAL_IOS_CONTENT_SIZE_READBACK_MISMATCH",
+    );
 });
 test("pinned iOS input integrity rejects changed compiler receipts and archives before any SDK action", async () => {
   const root = await mkdtemp(resolve(tmpdir(), "baro-ios-pin-test-")),
@@ -218,6 +253,52 @@ test("iOS cold-launch observations bind the compiler archive and cannot claim Ho
     expect(() =>
       verifyIosColdLaunchReceipt({ ...value, ...patch }, sourceSha, tooling, identity),
     ).toThrow();
+});
+test("iOS large-font receipt binds baseline binary/device and cannot overstate semantic scale or accessibility", async () => {
+  const baseline = await Bun.file(
+    "docs/quality/mobile-internal-ios-2026-10-23/home-fd86914.json",
+  ).json();
+  const { coldLaunches: _launches, distinctColdLaunchPids: _distinct, ...common } = baseline;
+  const value = {
+    ...common,
+    kind: "ios-bundled-large-font-observation",
+    requestedContentSize: iosLargestContentSize,
+    contentSizeBeforeRestart: iosLargestContentSize,
+    contentSizeAfterRestart: iosLargestContentSize,
+    sdkHelpSha256: "f".repeat(64),
+    nativeContentSizeReadbackVerified: true,
+    processRestarted: true,
+    elapsedSeconds: 15,
+    samePidReadbackSamples: 3,
+    semanticTextScaleProven: false,
+    screenshot: { ...baseline.screenshot, name: "large-font-ios.png" },
+  };
+  expect(verifyIosLargeFontReceipt(value, baseline).semanticTextScaleProven).toBe(false);
+  for (const patch of [
+    { binarySourceSha: sourceSha },
+    { toolingSourceSha: sourceSha },
+    { archiveSha256: "f".repeat(64) },
+    { compilerReceiptSha256: "f".repeat(64) },
+    { device: { ...baseline.device, osVersion: "99.0" } },
+    { contentSizeAfterRestart: "large" },
+    { contentSizeBeforeRestart: "large" },
+    { elapsedSeconds: 14 },
+    { samePidReadbackSamples: 2 },
+    { processRestarted: false },
+    { semanticTextScaleProven: true },
+    { accessibilityVerified: true },
+    { homeContentVerified: true },
+    { visualReviewRequired: false },
+    { metroGuardRequests: 1 },
+    { remoteApiVerified: true },
+    { oauthVerified: true },
+    { physicalDeviceVerified: true },
+    { storeSigned: true },
+    { deployed: true },
+    { nativeContentSizeReadbackVerified: false },
+    { unknownPrivatePayload: "synthetic-secret" },
+  ])
+    expect(() => verifyIosLargeFontReceipt({ ...value, ...patch }, baseline)).toThrow();
 });
 const badging =
   "package: name='site.baro.app.preview' versionCode='1' versionName='0.1.0' platformBuildVersionName='16'\nsdkVersion:'24'\ntargetSdkVersion:'36'\napplication-debuggable\nnative-code: 'arm64-v8a' 'x86_64'\n";
