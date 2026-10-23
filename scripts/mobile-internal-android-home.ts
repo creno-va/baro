@@ -3,6 +3,8 @@ import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { z } from "zod";
 import {
+  type androidGuideUiReceiptSchema,
+  androidGuideUiValidationFields,
   androidHomeObservationOptions,
   verifyAndroidGuideUiReceipt,
 } from "./mobile-android-guide-ui";
@@ -83,6 +85,7 @@ async function main() {
     metroRequests = 0,
     bootCompleted = false,
     baseHomeVerified = false,
+    receiptValidationFields: string[] = [],
     lastGuideObservation: ReturnType<typeof anonymousGuideUiObservation> | null = null,
     lastPublicObservation: ReturnType<typeof publicDirectoryUiObservation> | null = null,
     lastHomeObservation: ReturnType<typeof bundledAndroidHomeObservation> | null = null;
@@ -318,6 +321,9 @@ async function main() {
     }
     if (guideUi) {
       capture.disable();
+      const screenshotsSuppressedBeforeNavigation = !capture.allowed;
+      if (!screenshotsSuppressedBeforeNavigation)
+        throw Error("BUNDLED_GUIDE_SCREENSHOT_GUARD_REQUIRED");
       phase = "guide-ui-font-readback";
       const fontScaleBefore = Number(
         (await shell(["settings", "get", "system", "font_scale"])).trim(),
@@ -377,6 +383,7 @@ async function main() {
       if (metroRequests) throw Error("BUNDLED_HOME_UNEXPECTED_METRO_REQUEST");
       if (!/^\d+(?:\s+\d+)*$/.test((await shell(["pidof", appId])).trim()))
         throw Error("BUNDLED_HOME_PROCESS_REQUIRED");
+      phase = "guide-ui-proof";
       const baselineBytes = await readFile(resolve(out, "receipt.json")),
         baseline = JSON.parse(baselineBytes.toString()),
         identity = {
@@ -406,6 +413,7 @@ async function main() {
           guideDismissedObserved: true,
           controlBoundsWithinScreen: true,
           rawHierarchyExported: false,
+          screenshotsSuppressedBeforeNavigation,
           publicDataNavigation: false,
           authenticationNavigation: false,
           metroServerStarted: false,
@@ -420,7 +428,7 @@ async function main() {
           physicalDeviceVerified: false,
           storeSigned: false,
           deployed: false,
-        },
+        } satisfies z.input<typeof androidGuideUiReceiptSchema>,
         identity,
       );
       await writeFile(resolve(out, "guide-ui.json"), `${JSON.stringify(proof, null, 2)}\n`, {
@@ -536,6 +544,7 @@ async function main() {
       console.log("ACTUAL_PUBLIC_DIRECTORY_UI_OBSERVED_NO_PROFILE_VALUES_RECORDED");
     }
   } catch (error) {
+    if (phase === "guide-ui-proof") receiptValidationFields = androidGuideUiValidationFields(error);
     const known = new Set([
         "BUNDLED_HOME_HIERARCHY_REQUIRED",
         "BUNDLED_HOME_VERIFIED_SOURCE_REQUIRED",
@@ -552,6 +561,7 @@ async function main() {
         "BUNDLED_HOME_COMMAND_FAILED",
         "BUNDLED_HOME_FONT_SCALE_MISMATCH",
         "BUNDLED_GUIDE_FEATURE_COPY_NOT_OBSERVED",
+        "BUNDLED_GUIDE_SCREENSHOT_GUARD_REQUIRED",
         "BUNDLED_GUIDE_CONTROL_REQUIRED",
         "BUNDLED_GUIDE_CONTROL_NOT_FOUND",
         "BUNDLED_GUIDE_SCROLL_NOT_OBSERVED",
@@ -575,7 +585,7 @@ async function main() {
     }
     await writeFile(
       resolve(out, "failure.json"),
-      `${JSON.stringify({ toolingSourceSha: sourceSha, phase, code: known.has(message) ? message : "BUNDLED_HOME_FAILED", emulatorBootVerified: bootCompleted, lastHomeObservation, lastPublicObservation, lastGuideObservation, publicScreenshotsSuppressed: !capture.allowed, emulatorStartupIssues: emulatorStartupIssues(await readFile(log, "utf8").catch(() => "")), sdkHomeLaunchVerified: baseHomeVerified, largeFontVerified: false, physicalDeviceVerified: false, storeSigned: false, deployed: false }, null, 2)}\n`,
+      `${JSON.stringify({ toolingSourceSha: sourceSha, phase, code: known.has(message) ? message : "BUNDLED_HOME_FAILED", emulatorBootVerified: bootCompleted, lastHomeObservation, lastPublicObservation, lastGuideObservation, receiptValidationFields, publicScreenshotsSuppressed: !capture.allowed, emulatorStartupIssues: emulatorStartupIssues(await readFile(log, "utf8").catch(() => "")), sdkHomeLaunchVerified: baseHomeVerified, largeFontVerified: false, physicalDeviceVerified: false, storeSigned: false, deployed: false }, null, 2)}\n`,
       { flag: "wx" },
     );
     throw new Error("BUNDLED_HOME_FAILED");

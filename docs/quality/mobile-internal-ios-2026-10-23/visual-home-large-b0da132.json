@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "kind": "updated-ios-home-and-largest-font-visual-observation",
+  "binarySourceSha": "171989e8cf8fd48119d20f58a45f2dca7dd45e64",
+  "toolingSourceSha": "b0da1329fe92ed30f9a74f2451373ef74e242d1d",
+  "workflowRunId": "40009294558",
+  "reviewedAt": "2026-10-23T19:29:19.824Z",
+  "archiveSha256": "f8e218df820cdaa2c222b10474124b7265b73c4de43a146a3459181cd4fde356",
+  "compilerReceiptSha256": "77d157201a02eda89372ef3ef850895a2478f14047ea2024b7877db3ac62bcce",
+  "homeScreenshot": {
+    "name": "home-ios.png",
+    "bytes": 219234,
+    "sha256": "d67ac86195bf23cfda7f8e1100e0b12ee97f03f6e74a851013698a891d031608"
+  },
+  "largeFontScreenshot": {
+    "name": "large-font-ios.png",
+    "bytes": 162688,
+    "sha256": "1d26f2d69b74af70202ac2f7be02f478506d7851ade32bd1ddee98da7f09a0e5"
+  },
+  "initialHomeContentVerified": true,
+  "hangulHomeCardsVisible": true,
+  "configurationErrorVisible": false,
+  "hangulEnlargementAndWrappingVisible": true,
+  "headingDominatesInitialViewport": true,
+  "scrollReachabilityEvidence": "home-ui-b0da132.json",
+  "homeGuideScrollAndTapVerifiedByXCTest": true,
+  "currentFeatureDescriptionObservedByXCTest": true,
+  "guidePixelsReviewed": false,
+  "initialViewportPixelsOnly": true,
+  "layoutUsabilityAccepted": false,
+  "allScreensVerified": false,
+  "accessibilityVerified": false,
+  "semanticTextScaleProven": false,
+  "remoteApiVerified": false,
+  "oauthVerified": false,
+  "physicalDeviceVerified": false,
+  "storeSigned": false,
+  "deployed": false
+}

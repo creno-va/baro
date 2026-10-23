@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test";
 import {
+  androidGuideUiReceiptSchema,
+  androidGuideUiValidationFields,
   androidHomeObservationOptions,
   verifyAndroidGuideUiReceipt,
 } from "../scripts/mobile-android-guide-ui";
@@ -237,4 +239,23 @@ test("Android Guide UI receipt binds original APK and baseline; it cannot claim 
     { deployed: true },
   ])
     expect(() => verifyAndroidGuideUiReceipt({ ...value, ...patch }, identity)).toThrow();
+});
+
+test("the actual missing screenshot guard field yields a bounded validation field without private input", () => {
+  const result = androidGuideUiReceiptSchema.safeParse({ unknownPrivateInput: "synthetic-token" });
+  expect(result.success).toBe(false);
+  if (!result.success) {
+    const fields = androidGuideUiValidationFields(result.error);
+    expect(fields.length).toBeLessThanOrEqual(8);
+    expect(JSON.stringify(fields)).not.toContain("synthetic-token");
+    expect(JSON.stringify(fields)).not.toContain("unknownPrivateInput");
+  }
+  const flag = androidGuideUiReceiptSchema
+    .pick({ screenshotsSuppressedBeforeNavigation: true })
+    .safeParse({});
+  if (!flag.success)
+    expect(androidGuideUiValidationFields(flag.error)).toEqual([
+      "screenshotsSuppressedBeforeNavigation",
+    ]);
+  expect(androidGuideUiValidationFields(Error("synthetic-token"))).toEqual([]);
 });
