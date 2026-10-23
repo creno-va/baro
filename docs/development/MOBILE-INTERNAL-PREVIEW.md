@@ -134,3 +134,20 @@ sdk_gphone64_x86_64에서 두 cold launch 모두 제목/첫 카드가 보이고 
 실제 PNG174,841bytes/SHA25661135c992afe141c03cf13c1fd324eb9241a659bbfd4ff39aeb1c5b627c4640e을
 직접 확인해 브랜드/한글 Home 표시를 대조했다. Metro 요청0·adb reverse 없음이며 원본 binary
 source dedcd0e의 동일 APK다. 실제 폰·전체 화면/IO/API/OAuth·store 인수는 이 관측에 포함되지 않는다.
+
+## Android Home 글자 확대 관측 (#379)
+
+```sh
+gh workflow run mobile-internal-android-reverify.yml --ref main -f target_sha=<full40-main-sha> -f smoke=true -f large_font=true
+```
+
+이 선택은 일반 Home의 두 cold launch receipt를 먼저 보존한 뒤 소유 Emulator의 Android
+font_scale을2.0으로 설정하고 실제 readback2를 확인한다. 같은 앱을 다시 시작해 Home 제목과
+구성 오류 부재를 관측하고 실제 large-font PNG·hash·시각을 별도 JSON으로 기록한다.
+제품 route·primitive·웹/공통 토큰은 수정하지 않는다. 명시적으로 요청한 JSON/PNG가 없으면
+workflow가 실패하며 기존 tooling이 옵션을 무시한 경우를 성공으로 처리하지 않는다.
+
+확대 단계가 실패해도 앞선 일반 Home 관측을 지우지 않는다. 설정은 새 소유 Emulator에만
+적용하고 종료 후 AVD를 정리한다. raw UI hierarchy·로그·실제 계정/사건은 업로드하지 않는다.
+실제 실행과 PNG 대조 전 성공으로 표시하지 않으며 Home만의 관측은 전체 화면·회전·키보드·
+TalkBack/VoiceOver·두 OS/물리 기기 접근성 인수를 대신하지 않는다.

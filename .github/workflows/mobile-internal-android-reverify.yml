@@ -12,6 +12,11 @@ on:
         required: true
         default: false
         type: boolean
+      large_font:
+        description: Also observe Android font_scale2 on the anonymous Home; requires smoke=true
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -32,6 +37,9 @@ jobs:
       EXPO_PUBLIC_API_URL: https://preview.baro.site
       CI: '1'
     steps:
+      - name: Require runtime smoke for font enlargement
+        if: inputs.large_font && !inputs.smoke
+        run: exit 1
       - run: '[[ "$TARGET_SHA" =~ ^[a-f0-9]{40}$ ]]'
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -81,7 +89,12 @@ jobs:
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platform-tools' 'emulator' 'system-images;android-35;google_apis;x86_64'
       - name: Observe actual bundled Home without Metro
         if: inputs.smoke
-        run: bun scripts/mobile-internal-android-home.ts
+        run: bun scripts/mobile-internal-android-home.ts ${{ inputs.large_font && '--large-font' || '' }}
+      - name: Require the explicitly requested enlarged-font observation
+        if: inputs.large_font
+        run: |
+          test -s .wrangler/mobile-internal-android-runtime/large-font.json
+          test -s .wrangler/mobile-internal-android-runtime/large-font.png
       - name: Save reverified binary with separate source and verification receipts
         if: always() && steps.verify.outcome == 'success'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -102,6 +115,8 @@ jobs:
             .wrangler/mobile-internal-android-runtime/failure.json
             .wrangler/mobile-internal-android-runtime/home.png
             .wrangler/mobile-internal-android-runtime/failure.png
+            .wrangler/mobile-internal-android-runtime/large-font.json
+            .wrangler/mobile-internal-android-runtime/large-font.png
           if-no-files-found: ignore
       - name: Preserve fixed failure classification
         if: failure()
