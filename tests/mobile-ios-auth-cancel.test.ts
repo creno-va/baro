@@ -8,6 +8,19 @@ import {
 } from "../scripts/mobile-ios-auth-cancel";
 import { iosInternalObservationOptions } from "../scripts/mobile-ios-ui-capabilities";
 
+function queryOwnership() {
+  return {
+    applicationCancelCount: 1,
+    webViewCount: 1,
+    webViewsQueried: 1,
+    webDescendantCancelCount: 0,
+    keyboardCount: 0,
+    keyboardsQueried: 0,
+    keyboardDescendantCancelCount: 0,
+    queriesComplete: true,
+    verified: true,
+  };
+}
 function observation() {
   return {
     kind: "ios-anonymous-provider-browser-cancellation",
@@ -20,14 +33,11 @@ function observation() {
       dismissButtonHittable: true,
       systemDismissTapped: true,
       dismissControl: "cancel",
-      dismissScope: "snapshot-native-window",
+      dismissScope: "native-query-exclusion",
       nativeDismissControlVerified: true,
       webContentExcluded: true,
       webViewFrameExcluded: false,
-      snapshotTraversalComplete: true,
-      snapshotControlMatched: true,
-      snapshotRootScope: "window",
-      snapshotInspectedNodes: 12,
+      cancelOwnership: queryOwnership(),
       webViewAncestorExcluded: true,
       keyboardAncestorExcluded: true,
       dismissControlAbsentBeforeAuthentication: true,
@@ -149,52 +159,38 @@ test("system browser cancellation requires one complete result for all providers
   ])
     expect(() => parseIosAuthCancelResult(encode({ ...value, ...patch }))).toThrow();
 });
-test("native snapshot ownership is mandatory even when WebView bounds overlap the system Cancel", () => {
+test("native query ownership excludes every browser/keyboard Cancel without relying on frame overlap", () => {
   for (const webViewFrameExcluded of [false, true]) {
     const value = observation();
     value.providers = value.providers.map((provider) => ({ ...provider, webViewFrameExcluded }));
     expect(parseIosAuthCancelResult(encode(value)).providers[0]?.dismissScope).toBe(
-      "snapshot-native-window",
+      "native-query-exclusion",
     );
-    for (const field of [
-      "snapshotTraversalComplete",
-      "snapshotControlMatched",
-      "webViewAncestorExcluded",
-      "keyboardAncestorExcluded",
+    for (const patch of [
+      { applicationCancelCount: 2 },
+      { webViewCount: 0 },
+      { webViewCount: 9 },
+      { webViewsQueried: 0 },
+      { webDescendantCancelCount: 1 },
+      { keyboardCount: 1 },
+      { keyboardDescendantCancelCount: 1 },
+      { queriesComplete: false },
+      { verified: false },
+      { rawHierarchy: "private" },
     ])
       expect(() =>
         parseIosAuthCancelResult(
           encode({
             ...value,
-            providers: value.providers.map((provider) => ({ ...provider, [field]: false })),
+            providers: value.providers.map((provider) => ({
+              ...provider,
+              cancelOwnership: { ...provider.cancelOwnership, ...patch },
+            })),
           }),
         ),
       ).toThrow();
   }
   const value = observation();
-  const applicationRoot = {
-    ...value,
-    providers: value.providers.map((provider) => ({
-      ...provider,
-      snapshotRootScope: "application",
-    })),
-  };
-  expect(parseIosAuthCancelResult(encode(applicationRoot)).providers[0]?.snapshotRootScope).toBe(
-    "application",
-  );
-  for (const patch of [
-    { snapshotRootScope: "none" },
-    { snapshotInspectedNodes: 0 },
-    { snapshotInspectedNodes: 20001 },
-  ])
-    expect(() =>
-      parseIosAuthCancelResult(
-        encode({
-          ...value,
-          providers: value.providers.map((provider) => ({ ...provider, ...patch })),
-        }),
-      ),
-    ).toThrow();
   for (const dismissControl of ["done", "close"])
     expect(() =>
       parseIosAuthCancelResult(
@@ -204,7 +200,13 @@ test("native snapshot ownership is mandatory even when WebView bounds overlap th
         }),
       ),
     ).toThrow();
-  for (const dismissScope of ["application", "navigation-bar", "toolbar", "browser-window-chrome"])
+  for (const dismissScope of [
+    "application",
+    "navigation-bar",
+    "toolbar",
+    "browser-window-chrome",
+    "snapshot-native-window",
+  ])
     expect(() =>
       parseIosAuthCancelResult(
         encode({
@@ -229,17 +231,15 @@ test("failed native auth observation exports only fixed stage/provider/assertion
     systemWebViewVisible: false,
     browserWindowGeometryVerified: false,
     cancelOwnership: {
-      traversalComplete: false,
-      webViewObserved: false,
-      nativeCancelCount: 0,
-      rootScope: "none",
-      inspectedNodes: 0,
-      applicationSnapshotNodes: 0,
-      largestWindowSnapshotNodes: 0,
-      windowSnapshotsAttempted: 0,
-      queriedControlMatched: false,
-      webViewAncestorExcluded: false,
-      keyboardAncestorExcluded: false,
+      applicationCancelCount: 0,
+      webViewCount: 0,
+      webViewsQueried: 0,
+      webDescendantCancelCount: 0,
+      keyboardCount: 0,
+      keyboardsQueried: 0,
+      keyboardDescendantCancelCount: 0,
+      queriesComplete: false,
+      verified: false,
     },
     dismissCandidates: ["navigation-bar", "toolbar", "application"].flatMap((scope) =>
       ["cancel", "done", "close"].map((control) => ({
@@ -293,34 +293,20 @@ test("failed native auth observation exports only fixed stage/provider/assertion
   expect(separated).toEqual(parsedSeparated);
   const nativeOwnership = {
     ...separated,
-    cancelOwnership: {
-      traversalComplete: true,
-      webViewObserved: true,
-      nativeCancelCount: 1,
-      rootScope: "window",
-      inspectedNodes: 12,
-      applicationSnapshotNodes: 1,
-      largestWindowSnapshotNodes: 12,
-      windowSnapshotsAttempted: 1,
-      queriedControlMatched: true,
-      webViewAncestorExcluded: true,
-      keyboardAncestorExcluded: true,
-    },
+    cancelOwnership: queryOwnership(),
   };
   expect(
     observeIosAuthCancelFailure(`BARO_AUTH_CANCEL_STATUS:${JSON.stringify(nativeOwnership)}`).status
-      ?.cancelOwnership.queriedControlMatched,
+      ?.cancelOwnership.verified,
   ).toBe(true);
   for (const patch of [
-    { traversalComplete: false },
-    { webViewObserved: false },
-    { nativeCancelCount: 2 },
-    { webViewAncestorExcluded: false },
-    { keyboardAncestorExcluded: false },
+    { queriesComplete: false },
+    { webViewCount: 0 },
+    { applicationCancelCount: 2 },
+    { webDescendantCancelCount: 1 },
+    { keyboardDescendantCancelCount: 1 },
+    { webViewsQueried: 0 },
     { rawSnapshot: "private" },
-    { rootScope: "none" },
-    { inspectedNodes: 0 },
-    { windowSnapshotsAttempted: 9 },
   ])
     expect(
       observeIosAuthCancelFailure(

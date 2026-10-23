@@ -528,18 +528,16 @@ URL·cookie·state·토큰·계정/원문 화면은 내보내지 않는다.
 
 세 제공자의 표시/취소/복귀와 cold 상태가 모두 확인된 단일 strict 결과만 성공으로 인정한다.
 source/tooling/compiler ZIP/receipt·기기 identity는 같은 실행의 Home baseline과 묶는다.
-현재 닫기 컨트롤은 인증 전 없었던 고정 `Cancel`의 유일하고 완전히 hittable한 query와,
-메모리에서 얻은 app root와 최대8개 현재 window의 [공개 snapshot](https://developer.apple.com/documentation/xcuiautomation/xcuielementsnapshotproviding/snapshot())의
-[children 관계](https://developer.apple.com/documentation/xcuiautomation/xcuielementsnapshot)를 직접 대조한다.
-WebView/keyboard 하위 branch 전체를 제외하고 나머지 native tree를 깊이128/방문20,000개/
-자식5,000개 이내에서 빠짐없이 순회한다. WebView가 실제 존재하고 native Cancel이 정확히1개이며
-그 frame이 실제 query와 일치해야 `snapshot-native-window` scope로 선택한다.
-선택한 snapshot root 종류·검사 node 수와 app/최대 window node 수·window 시도 횟수만 남긴다. raw snapshot·
-WebView/keyboard의 label/value·실제 frame/hierarchy는 내보내지 않는다.
-동일 app의 foreground window/가시 WebView와 인증 전 부재·hittability는 계속 요구한다.
-WebView frame이 native control을 포함할 수 있어 `webViewFrameExcluded`는 실제 boolean을 남기며,
-대신 snapshot 순회/컨트롤 일치·WebView/keyboard 조상 제외를 모두 true로 요구한다.
-소속을 입증하지 않은 application/bar scope나 Done/Close를 취소로 선택하지 않는다.
+현재 닫기 컨트롤은 인증 전 없었던 고정 `Cancel`의 유일하고 완전히 hittable한 query를 사용한다.
+[공개 descendant query](https://developer.apple.com/documentation/xcuiautomation/xcuielement/descendants(matching:))로
+현재 WebView1~8개와 keyboard0~8개를 모두 조회하고, 그 어느 button 하위 query에도 `Cancel`이
+없어야 한다. 관측한 수/실제 조회 수 일치·모든 query 완료·WebView/keyboard Cancel count0과
+application Cancel1을 strict `cancelOwnership`으로 요구한다. 고정 label 일치 count만 읽으며
+브라우저의 실제 label/value·snapshot/hierarchy·URL은 내보내지 않는다.
+foreground/window/가시 WebView·인증 전 부재/hittability도 계속 확인한다.
+이 조건을 통과한 `native-query-exclusion` scope만 선택하고 Done/Close·무제한 application
+scope를 취소로 선택하지 않는다. WebView frame 겹침은 실제 boolean으로 유지한다.
+app/window snapshot의 전체성을 가정하지 않으며 다음 실제 검증 전 성공을 표시하지 않는다.
 단일 결과 누락/중복, 부분 제공자, raw 값 또는 OAuth 성공으로의 확대는 거절한다.
 준비/합성 회귀는 실제 통과가 아니며 exact main CI 뒤 수동 실행 결과를 인수한다.
 기존 실제 OS audit·전체 기기/VoiceOver/TalkBack·계정 인증/역할/동의·store/#334/#346/#339/#71은 보존한다.
@@ -737,3 +735,46 @@ Cancel·WebView/keyboard 조상 제외·query/frame 일치가 입증된 root만 
 고정 aggregate count를 남기며 raw snapshot/URL/계정 화면은 내보내지 않는다. generic global 버튼
 탭·임의 좌표나 private API로 대체하지 않는다. 두 OS 새 조건의 exact CI/main·실제 실행 전 성공을
 주장하지 않고 실제 계정/기기/store·Apple 방향 결정과 전체 gate를 보존한다.
+
+### Android 실제 세 제공자 취소·익명 복귀 인수
+
+[actual40038397811 attempt2](https://github.com/creno-va/baro/actions/runs/40038397811/attempts/2)는
+source`318df0c131b7ffaf794300c128d69ad168bdb8e5`에서 SUCCESS다.
+attempt1은 앱 재검증 뒤 SDK system-image ZIP 읽기 오류로 멈춰 Emulator/Chrome fixture/auth에
+도달하지 않았다. [고정 installer 실패](../quality/mobile-internal-android-2026-10-23/auth-cancel-sdk-failure-318df0c-attempt1.json)를
+보존하고 손상된 임시 설치물이 없는 새 hosted VM에서 한 번만 재실행했다.
+[GitHub의 hosted VM 조건](https://docs.github.com/en/actions/concepts/runners/github-hosted-runners)을
+확인했으며 관측 timeout 때문의 재시작이 아니다. 새 실행은 SDK 준비와 모든 후속 검사를 통과했다.
+
+[원본 취소 proof](../quality/mobile-internal-android-2026-10-23/auth-cancel-ui-318df0c.json)의 관측 시각은
+2026-10-23T23:26:38.916Z이고 SHA256은
+`3c79491debc8103e722de5e9ae83630d1fe052b829400dd15ed6ced4a37fd8a3`다.
+같은 실행의 [Home baseline](../quality/mobile-internal-android-2026-10-23/auth-cancel-home-318df0c.json)과
+[metadata](../quality/mobile-internal-android-2026-10-23/auth-cancel-verification-318df0c.json)의 전체 hash/
+원본171989e APK57,133,550bytes·receipt·같은 Android15 Emulator identity를 독립 대조했다.
+Google/Naver/Kakao 각각 anonymous UI·실제 Chrome CustomTabActivity·WebView/native close의
+geometry 제외·시스템 BACK1회·앱 foreground/익명 복귀·오류/동의 부재와 마지막 force-stop/relaunch
+뒤 익명 상태를 확인했다. Chrome124.0.6367.219/userdebug·단일 --disable-fre readback·파일 삭제가
+기록됐고 root/debug-app/global·TLS/web-security·계정/동의 UI 변경은 없었다.
+consumerFirstRunVerified/accountLoginPerformed/callbackExchangeVerified/providerAcceptanceVerified/
+oauthVerified/physicalDeviceVerified는 모두 false다. 실제 계정 로그인·SecureStore pending 삭제의
+직접 계측·물리 기기/현재 소비자 browser·전체 OAuth/스토어 인수로 확대하지 않는다.
+
+### iOS snapshot 범위 실패와 query 제외 검증
+
+같은 source의 [actual40038388554](https://github.com/creno-va/baro/actions/runs/40038388554)는 FAILURE다.
+[원본](../quality/mobile-internal-ios-2026-10-23/auth-cancel-failure-318df0c.json)은 Google query에서
+WebView/새 Cancel이 보이고 hittable/geometry=true이지만, app snapshot66개 node·window3개/
+최대62개 node에서 WebView/native Cancel을 찾지 못한 사실을 남겼다. 원본 SHA256은
+`6b48d52e01bef71fdd336e5f6fefad17c9816d986bff7a4dce1702bf87c1bdbc`다.
+[Home](../quality/mobile-internal-ios-2026-10-23/auth-cancel-home-318df0c.json)와
+[metadata](../quality/mobile-internal-ios-2026-10-23/auth-cancel-verification-318df0c.json)를 별도 보존했고
+원본 ZIP/receipt byte/hash·bundled input 동일성을 독립 대조했다. 아무것도 누르지 않았으며
+취소/복귀는 미인수다. 특정 OS service 소유나 snapshot 원인을 추정으로 확정하지 않는다.
+
+후속은 전체 snapshot을 선택 근거로 삼는 코드를 제거하고 위의 직접 descendant query 제외를
+사용한다. 유일 새 Cancel이 실제 WebView/keyboard button 하위에 없다는 것을 현재 query로 확인하고
+frame 겹침을 조작하지 않는다. 기존 foreground/hittability·세 제공자 취소/익명 복귀·cold restart·
+privacy latch는 유지한다. 이전 snapshot/count 원본을 새 schema로 고치지 않으며 exact CI/main 뒤
+바뀐 query 조건을 실제 검증한다. Android 성공 범위를 유지하고 iOS/계정 OAuth·기기/store와
+#334/#346/#339/#71 전체 인수는 계속 OPEN이다.

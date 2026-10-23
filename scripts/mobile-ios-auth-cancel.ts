@@ -23,6 +23,44 @@ export function iosAuthenticationPrivacyBoundary() {
     },
   };
 }
+const cancelQueryOwnershipSchema = z
+  .strictObject({
+    applicationCancelCount: z.number().int().min(0).max(256),
+    webViewCount: z.number().int().min(0).max(256),
+    webViewsQueried: z.number().int().min(0).max(8),
+    webDescendantCancelCount: z.number().int().min(0).max(4096),
+    keyboardCount: z.number().int().min(0).max(256),
+    keyboardsQueried: z.number().int().min(0).max(8),
+    keyboardDescendantCancelCount: z.number().int().min(0).max(4096),
+    queriesComplete: z.boolean(),
+    verified: z.boolean(),
+  })
+  .refine(
+    (value) =>
+      value.webViewsQueried <= value.webViewCount && value.keyboardsQueried <= value.keyboardCount,
+  )
+  .refine(
+    (value) =>
+      !value.queriesComplete ||
+      (value.webViewCount > 0 &&
+        value.webViewCount <= 8 &&
+        value.webViewsQueried === value.webViewCount &&
+        value.keyboardCount <= 8 &&
+        value.keyboardsQueried === value.keyboardCount),
+  )
+  .refine(
+    (value) =>
+      value.verified ===
+      (value.queriesComplete &&
+        value.applicationCancelCount === 1 &&
+        value.webViewCount > 0 &&
+        value.webViewCount <= 8 &&
+        value.webViewsQueried === value.webViewCount &&
+        value.keyboardCount <= 8 &&
+        value.keyboardsQueried === value.keyboardCount &&
+        value.webDescendantCancelCount === 0 &&
+        value.keyboardDescendantCancelCount === 0),
+  );
 const providerResult = z.strictObject({
   provider: z.enum(["google", "naver", "kakao"]),
   initialAnonymousObserved: z.literal(true),
@@ -31,14 +69,11 @@ const providerResult = z.strictObject({
   dismissButtonHittable: z.literal(true),
   systemDismissTapped: z.literal(true),
   dismissControl: z.literal("cancel"),
-  dismissScope: z.literal("snapshot-native-window"),
+  dismissScope: z.literal("native-query-exclusion"),
   nativeDismissControlVerified: z.literal(true),
   webContentExcluded: z.literal(true),
   webViewFrameExcluded: z.boolean(),
-  snapshotTraversalComplete: z.literal(true),
-  snapshotControlMatched: z.literal(true),
-  snapshotRootScope: z.enum(["application", "window"]),
-  snapshotInspectedNodes: z.number().int().positive().max(20000),
+  cancelOwnership: cancelQueryOwnershipSchema.refine((value) => value.verified),
   webViewAncestorExcluded: z.literal(true),
   keyboardAncestorExcluded: z.literal(true),
   dismissControlAbsentBeforeAuthentication: z.literal(true),
@@ -96,32 +131,7 @@ const statusSchema = z
     provider: z.enum(["google", "naver", "kakao"]),
     systemWebViewVisible: z.boolean(),
     browserWindowGeometryVerified: z.boolean(),
-    cancelOwnership: z
-      .strictObject({
-        traversalComplete: z.boolean(),
-        webViewObserved: z.boolean(),
-        nativeCancelCount: z.number().int().min(0).max(257),
-        rootScope: z.enum(["none", "application", "window"]),
-        inspectedNodes: z.number().int().min(0).max(20001),
-        applicationSnapshotNodes: z.number().int().min(0).max(20001),
-        largestWindowSnapshotNodes: z.number().int().min(0).max(20001),
-        windowSnapshotsAttempted: z.number().int().min(0).max(8),
-        queriedControlMatched: z.boolean(),
-        webViewAncestorExcluded: z.boolean(),
-        keyboardAncestorExcluded: z.boolean(),
-      })
-      .refine((value) =>
-        value.queriedControlMatched
-          ? value.traversalComplete &&
-            value.rootScope !== "none" &&
-            value.inspectedNodes > 0 &&
-            value.inspectedNodes <= 20000 &&
-            value.webViewObserved &&
-            value.nativeCancelCount === 1 &&
-            value.webViewAncestorExcluded &&
-            value.keyboardAncestorExcluded
-          : !value.webViewAncestorExcluded && !value.keyboardAncestorExcluded,
-      ),
+    cancelOwnership: cancelQueryOwnershipSchema,
     dismissCandidates: z
       .array(dismissCandidateSchema)
       .length(9)
