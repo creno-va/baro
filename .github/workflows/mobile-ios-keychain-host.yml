@@ -67,4 +67,7 @@ jobs:
           path: |
             .wrangler/ios-keychain-host/receipt.json
             .wrangler/ios-keychain-host/failure.json
+            .wrangler/ios-keychain-host/baseline.json
+            .wrangler/ios-keychain-host/signed.json
+            .wrangler/ios-keychain-host/signing.json
           if-no-files-found: warn

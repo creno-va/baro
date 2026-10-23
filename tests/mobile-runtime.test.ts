@@ -18,7 +18,12 @@ import {
   UPLOAD_BYTES,
 } from "../apps/mobile/runtime-probe/protocol";
 import { mobileBoundaryFindings } from "../scripts/mobile-boundaries";
-import { assertIosNativeInputs, verifyIosHostBinary } from "../scripts/mobile-ios-keychain-host";
+import {
+  assertIosNativeInputs,
+  iosHostCommandFailure,
+  preserveIosReadiness,
+  verifyIosHostBinary,
+} from "../scripts/mobile-ios-keychain-host";
 import {
   simulatorEntitlements,
   simulatorIdentity,
@@ -47,10 +52,11 @@ const config: RuntimeConfig = {
   origin: RUNTIME_ORIGIN,
 };
 const fixture = createRuntimeFixture(config);
-const { validateOwnedIosDevice } = createRequire(import.meta.url)(
+const { validateOwnedIosDevice, iosLaunchFailureCode } = createRequire(import.meta.url)(
   "../scripts/mobile-runtime-ios-launch.cjs",
 ) as {
   validateOwnedIosDevice(inventory: unknown, udid: string, name: string): void;
+  iosLaunchFailureCode(error: unknown): string;
 };
 test("iOS launch preparation accepts only the created booted UUID/name pair", () => {
   const udid = "15a64c18-fd51-4f83-8205-4c917a245e6b",
@@ -481,6 +487,67 @@ test("SDK error observations contain fixed categories and readiness cannot omit 
       operations: value.operations.map((op, index) => (index ? op : { ...op, ok: false })),
     }),
   ).toThrow();
+});
+test("a later host failure cannot discard an observed baseline or persist another run's report", async () => {
+  const directory = await mkdtemp(resolve(tmpdir(), "baro-ios-partial-"));
+  const baseline = {
+    version: 1,
+    kind: "simulator-sdk-readiness",
+    sourceSha: "a".repeat(40),
+    phase: "baseline",
+    operations: iosReadinessStages.map((stage) => ({ stage, ok: false, category: "UNKNOWN" })),
+    allSucceeded: false,
+    externalFetchAttempts: 0,
+  };
+  try {
+    await preserveIosReadiness(directory, baseline, "a".repeat(40), "baseline");
+    // The signed install can fail before any final receipt is written.
+    await expect(
+      preserveIosReadiness(
+        directory,
+        { ...baseline, phase: "signed", sourceSha: "b".repeat(40) },
+        "a".repeat(40),
+        "signed",
+      ),
+    ).rejects.toThrow("IOS_HOST_REPORT_IDENTITY_MISMATCH");
+    expect(await Bun.file(resolve(directory, "baseline.json")).json()).toEqual(baseline);
+    expect(await Bun.file(resolve(directory, "signed.json")).exists()).toBe(false);
+    await expect(
+      preserveIosReadiness(
+        directory,
+        { ...baseline, rawStack: "private-synthetic" },
+        "a".repeat(40),
+        "baseline",
+      ),
+    ).rejects.toThrow();
+    expect(await Bun.file(resolve(directory, "baseline.json")).json()).toEqual(baseline);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+test("host command failure categories cannot expose stderr, paths, signing data or raw errors", () => {
+  const secret = "synthetic-private-value /private/fixture";
+  expect(iosHostCommandFailure(`ApplicationVerificationFailed ${secret}`, false)).toBe(
+    "SIGNATURE_REJECTED",
+  );
+  expect(iosHostCommandFailure(`FBSOpenApplicationServiceErrorDomain ${secret}`, false)).toBe(
+    "LAUNCH_DENIED",
+  );
+  expect(iosHostCommandFailure(secret, true)).toBe("COMMAND_TIMEOUT");
+  expect(iosHostCommandFailure(secret, false)).toBe("UNKNOWN");
+  expect(iosHostCommandFailure(`RUNTIME_IOS_LAUNCH_FAILED ${secret}`, false)).toBe("LAUNCH_FAILED");
+  const signature = iosLaunchFailureCode(
+    Object.assign(new Error(secret), { stderr: `ApplicationVerificationFailed ${secret}` }),
+  );
+  expect(signature).toBe("RUNTIME_IOS_APPLICATION_SIGNATURE_REJECTED");
+  expect(iosHostCommandFailure(signature, false)).toBe("SIGNATURE_REJECTED");
+  expect(iosLaunchFailureCode(new Error(`FBSOpenApplicationServiceErrorDomain ${secret}`))).toBe(
+    "RUNTIME_IOS_APPLICATION_LAUNCH_DENIED",
+  );
+  expect(iosLaunchFailureCode(new Error(secret))).toBe("RUNTIME_IOS_LAUNCH_FAILED");
+  expect(iosLaunchFailureCode(new Error("SYNTHETIC_PRIVATE_CAPS"))).toBe(
+    "RUNTIME_IOS_LAUNCH_FAILED",
+  );
 });
 test("a Home-only receipt preserves exact identity and cannot claim later native IO success", async () => {
   const full = await Bun.file("docs/quality/mobile-runtime-2026-10-23/receipt-android.json").json();

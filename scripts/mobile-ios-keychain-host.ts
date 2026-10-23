@@ -78,6 +78,35 @@ export async function verifyIosHostBinary(root: string, input: string) {
     throw new Error("IOS_HOST_BINARY_BYTES_CHANGED");
   return { manifest, receipt, zip };
 }
+export function iosHostCommandFailure(stderr: string, timedOut: boolean) {
+  if (timedOut) return "COMMAND_TIMEOUT" as const;
+  if (
+    /ApplicationVerificationFailed|Failed to verify code signature|0xe80080|valid provisioning profile|SIGNATURE_REJECTED/i.test(
+      stderr,
+    )
+  )
+    return "SIGNATURE_REJECTED" as const;
+  if (/FBSOpenApplicationService|RBSRequestError|not allowed to launch|LAUNCH_DENIED/i.test(stderr))
+    return "LAUNCH_DENIED" as const;
+  if (/RUNTIME_IOS_SCHEME_APPROVAL_NOT_CONFIRMED/.test(stderr))
+    return "SCHEME_APPROVAL_FAILED" as const;
+  if (/RUNTIME_IOS_LAUNCH_FAILED/.test(stderr)) return "LAUNCH_FAILED" as const;
+  return "UNKNOWN" as const;
+}
+export async function preserveIosReadiness(
+  directory: string,
+  value: unknown,
+  sourceSha: string,
+  phase: "baseline" | "signed",
+) {
+  const report = iosReadinessReportSchema.parse(value);
+  if (report.sourceSha !== sourceSha || report.phase !== phase)
+    throw new Error("IOS_HOST_REPORT_IDENTITY_MISMATCH");
+  await writeFile(resolve(directory, `${phase}.json`), `${JSON.stringify(report, null, 2)}\n`, {
+    flag: "wx",
+  });
+  return report;
+}
 async function main() {
   if (process.platform !== "darwin") throw new Error("IOS_HOST_MAC_REQUIRED");
   const sourceSha = process.env.TARGET_SHA;
@@ -89,6 +118,10 @@ async function main() {
     work = resolve(out, "checkout"),
     mobile = resolve(work, "apps/mobile"),
     name = `baro_runtime_${nonce.replaceAll("-", "").slice(0, 12)}`;
+  for (const file of ["baseline", "signed", "signing", "receipt", "failure"]) {
+    if (await Bun.file(resolve(base, `${file}.json`)).exists())
+      throw new Error("IOS_HOST_FRESH_OUTPUT_REQUIRED");
+  }
   await mkdir(out, { recursive: true });
   const env = {
     ...process.env,
@@ -107,18 +140,40 @@ async function main() {
       delete (env as Record<string, string | undefined>)[key];
   }
   const children = new Set<ReturnType<typeof Bun.spawn>>();
-  async function command(args: string[], options: { cwd?: string; timeout?: number } = {}) {
+  let failedCommand: {
+    stage: string;
+    exitCode: number;
+    category: ReturnType<typeof iosHostCommandFailure>;
+  } | null = null;
+  async function command(
+    args: string[],
+    options: { cwd?: string; timeout?: number; stage?: string } = {},
+  ) {
+    const stage = options.stage ?? "HOST_COMMAND";
+    if (!/^[A-Z][A-Z0-9_]{1,39}$/.test(stage)) throw new Error("IOS_HOST_COMMAND_STAGE_REQUIRED");
+    failedCommand = null;
     const child = Bun.spawn(args, {
       cwd: options.cwd ?? root,
       env,
       stdout: "pipe",
-      stderr: "ignore",
+      stderr: "pipe",
     });
     children.add(child);
-    const timer = setTimeout(() => child.kill(), options.timeout ?? 120000);
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      child.kill();
+    }, options.timeout ?? 120000);
     try {
-      const result = await new Response(child.stdout).text();
-      if (await child.exited) throw new Error("IOS_HOST_COMMAND_FAILED");
+      const [result, stderr] = await Promise.all([
+        new Response(child.stdout).text(),
+        new Response(child.stderr).text(),
+      ]);
+      const exitCode = await child.exited;
+      if (timedOut || exitCode !== 0) {
+        failedCommand = { stage, exitCode, category: iosHostCommandFailure(stderr, timedOut) };
+        throw new Error(`IOS_HOST_${stage}_FAILED`);
+      }
       return result.trim();
     } finally {
       clearTimeout(timer);
@@ -148,7 +203,12 @@ async function main() {
         const report = iosReadinessReportSchema.parse(await request.json());
         if (report.sourceSha !== sourceSha || report.phase !== activePhase)
           return new Response(null, { status: 400 });
-        reports[activePhase] = report;
+        reports[activePhase] = await preserveIosReadiness(
+          base,
+          report,
+          sourceSha as string,
+          activePhase,
+        );
         return Response.json({ ok: true });
       } catch {
         return new Response(null, { status: 400 });
@@ -252,25 +312,47 @@ async function main() {
     await command(["xcrun", "simctl", "boot", device]);
     await command(["xcrun", "simctl", "bootstatus", device, "-b"], { timeout: 240000 });
     async function launch() {
-      await command(["xcrun", "simctl", "install", device, app]);
+      phase = `${activePhase}-stop`;
+      console.log("IOS_HOST_STAGE", phase);
+      await command(["xcrun", "simctl", "terminate", device, "site.baro.app.preview"], {
+        stage: "APP_STOP",
+        timeout: 15000,
+      }).catch(() => {
+        failedCommand = null;
+      });
+      phase = `${activePhase}-install`;
+      console.log("IOS_HOST_STAGE", phase);
+      await command(["xcrun", "simctl", "install", device, app], { stage: "APP_INSTALL" });
       const url = runtimeDevelopmentUrl().replace("baro-dev:", "baro-preview:");
-      await command(["xcrun", "simctl", "terminate", device, "site.baro.app.preview"]).catch(
-        () => {},
+      phase = `${activePhase}-launch`;
+      console.log("IOS_HOST_STAGE", phase);
+      await command(
+        [
+          "node",
+          resolve(root, "scripts/mobile-runtime-ios-launch.cjs"),
+          "--open",
+          device,
+          name,
+          url,
+        ],
+        { stage: "APP_LAUNCH" },
       );
-      await command([
-        "node",
-        resolve(root, "scripts/mobile-runtime-ios-launch.cjs"),
-        "--open",
-        device,
-        name,
-        url,
-      ]);
+      phase = `${activePhase}-sdk-result`;
+      console.log("IOS_HOST_STAGE", phase);
       await wait(async () => !!reports[activePhase], 180000);
     }
     phase = "baseline";
     await launch();
     phase = "signing";
+    console.log("IOS_HOST_STAGE", phase);
+    await command(["xcrun", "simctl", "terminate", device, "site.baro.app.preview"], {
+      stage: "APP_STOP",
+      timeout: 15000,
+    }).catch(() => {
+      failedCommand = null;
+    });
     const signing = await signSimulatorApp(app, "site.baro.app.preview");
+    await writeFile(resolve(base, "signing.json"), `${JSON.stringify(signing, null, 2)}\n`);
     activePhase = iosHostPhaseSchema.parse("signed");
     phase = "signed";
     await launch();
@@ -294,7 +376,7 @@ async function main() {
         : "IOS_HOST_CHECK_FAILED";
     await writeFile(
       resolve(base, "failure.json"),
-      `${JSON.stringify({ sourceSha, phase, code, baselineObserved: !!reports.baseline, signedObserved: !!reports.signed, remoteApiVerified: false, oauthVerified: false, physicalDeviceVerified: false, storeSigned: false }, null, 2)}\n`,
+      `${JSON.stringify({ sourceSha, phase, code, failedCommand, baselineObserved: !!reports.baseline, signedObserved: !!reports.signed, remoteApiVerified: false, oauthVerified: false, physicalDeviceVerified: false, storeSigned: false }, null, 2)}\n`,
     );
     throw new Error(code);
   } finally {

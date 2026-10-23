@@ -20,6 +20,31 @@ function sdk() {
   if (typeof api.openUrlAsync !== "function") throw new Error("RUNTIME_IOS_LAUNCH_API_REQUIRED");
   return api;
 }
+function iosLaunchFailureCode(error) {
+  const message = error instanceof Error ? error.message : "";
+  if (
+    new Set([
+      "RUNTIME_OWNED_IOS_DEVICE_REQUIRED",
+      "RUNTIME_IOS_LAUNCH_SDK_CHANGED",
+      "RUNTIME_IOS_LAUNCH_API_REQUIRED",
+      "RUNTIME_IOS_LAUNCH_ARGUMENTS_REQUIRED",
+      "RUNTIME_IOS_LOCAL_DEVELOPMENT_URL_REQUIRED",
+      "RUNTIME_IOS_SCHEME_APPROVAL_NOT_CONFIRMED",
+    ]).has(message)
+  )
+    return message;
+  const stderr = error && typeof error.stderr === "string" ? error.stderr : "";
+  const detail = `${message}\n${stderr}`;
+  if (
+    /code signature.*(?:invalid|rejected)|Invalid code signature|0xe80080|ApplicationVerificationFailed/i.test(
+      detail,
+    )
+  )
+    return "RUNTIME_IOS_APPLICATION_SIGNATURE_REJECTED";
+  if (/FBSOpenApplicationService|RBSRequestError|not allowed to launch/i.test(detail))
+    return "RUNTIME_IOS_APPLICATION_LAUNCH_DENIED";
+  return "RUNTIME_IOS_LAUNCH_FAILED";
+}
 async function main() {
   const [mode, udid, name, rawUrl] = process.argv.slice(2);
   const api = sdk();
@@ -65,13 +90,9 @@ async function main() {
   )
     throw new Error("RUNTIME_IOS_SCHEME_APPROVAL_NOT_CONFIRMED");
 }
-module.exports = { validateOwnedIosDevice };
+module.exports = { validateOwnedIosDevice, iosLaunchFailureCode };
 if (require.main === module)
   main().catch((error) => {
-    console.error(
-      error instanceof Error && /^[A-Z][A-Z0-9_]{1,79}$/.test(error.message)
-        ? error.message
-        : "RUNTIME_IOS_LAUNCH_FAILED",
-    );
+    console.error(iosLaunchFailureCode(error));
     process.exitCode = 1;
   });
