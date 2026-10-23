@@ -49,6 +49,7 @@ function ConnectedSession({ model }: { model: SessionModel }) {
         void model.signOut();
       }}
       onBrowse={() => router.push("/directory")}
+      onSettings={() => router.push("/settings")}
       onPolicy={(policy) => {
         void model.openPolicy(policy);
       }}

@@ -216,7 +216,21 @@ export function createNativeAccountClient(dependencies: {
   }
   return {
     usage: () => safe(() => account.usage()),
-    deletionAccess: () => safe(() => account.deletionAccess()),
+    deletionAccess: () =>
+      safe(async () => {
+        const access = await account.deletionAccess(),
+          prior = await load(await key());
+        return {
+          ...access,
+          canDelete:
+            access.canDelete &&
+            (!prior ||
+              (prior.state === "attempted" &&
+                prior.ownerTag === access.ownerTag &&
+                access.authenticatedAt !== null &&
+                Date.parse(access.authenticatedAt) > Date.parse(prior.authenticatedAt))),
+        };
+      }),
     reauthenticate: (provider: Provider) => safe(() => account.reauthenticate(provider)),
     deletionState: () =>
       safe(async () => {

@@ -2,7 +2,11 @@ import { expect, test } from "bun:test";
 import { ApiError, createJsonRequester } from "@baro/api-client";
 import { createSessionScope } from "@baro/client-core";
 import { Hono } from "hono";
+import { resolveMobileConfig } from "../apps/mobile/config/environment";
+import { createAccountCleanup } from "../apps/mobile/src/platform/account/cleanup";
 import { createNativeAccountClient } from "../apps/mobile/src/platform/account/client";
+import { createNativeCredentials } from "../apps/mobile/src/platform/auth/credentials";
+import { createNativeTransport } from "../apps/mobile/src/platform/auth/transport";
 import { createCaseOperationStorage } from "../apps/mobile/src/platform/storage/case-operations";
 import { accountDeleteApi } from "../src/server/api/account-delete";
 import type { ApiEnvironment } from "../src/server/api/errors";
@@ -93,6 +97,10 @@ async function fixture() {
     });
   };
   return {
+    app,
+    env,
+    tag,
+    now,
     db,
     owner,
     peer,
@@ -144,6 +152,86 @@ test("actual signed account deletion loses ACK after primary SQL deletion: resta
     expect(f.counts()).toEqual({ notified: 0, cleaned: 0 });
     expect(await f.storage.getItem(otherKey)).toBe(otherValue);
     expect(f.records.size).toBe(2);
+  } finally {
+    f.db.close();
+  }
+});
+
+test("actual signed SQL deletion ACK runs credential cleanup while retaining peer data and unresolved operation records", async () => {
+  const f = await fixture();
+  try {
+    const disk = new Map<string, string>(),
+      scope = createSessionScope();
+    const credentials = createNativeCredentials({
+      scope,
+      namespace: "baro_preview_auth",
+      storage: {
+        getItemAsync: async (key) => disk.get(key) ?? null,
+        setItemAsync: async (key, value) => {
+          disk.set(key, value);
+        },
+      },
+      manageStorage: (storage) => storage,
+      // The native Jest composition separately verifies the pinned Expo chunk/cookie codecs.
+      codec: {
+        header: (value) => (value ? ((JSON.parse(value) as { cookie?: string }).cookie ?? "") : ""),
+        merge: (header) => JSON.stringify({ cookie: header }),
+      },
+    });
+    await credentials.capture().accept(f.owner.cookie);
+    const transport = createNativeTransport({
+      config: {
+        ...resolveMobileConfig({ environment: "preview" }),
+        apiBaseUrl: f.env.BETTER_AUTH_URL,
+      },
+      credentials,
+      fetch: async (url, init) => f.app.request(new URL(url).pathname, init, f.env),
+    });
+    const otherKey = `baro-reports-request:${"b".repeat(64)}`,
+      otherValue = crypto.randomUUID();
+    await f.storage.setItem(otherKey, otherValue);
+    let accepted = 0,
+      files = 0;
+    const client = createNativeAccountClient({
+      scope,
+      signal: new AbortController().signal,
+      ownerId: f.owner.userId,
+      request: createJsonRequester({ scope, transport, newKey: () => crypto.randomUUID() }),
+      storage: f.storage,
+      fingerprint,
+      newKey: () => crypto.randomUUID(),
+      readReauthentication: async () => ({ ownerTag: f.tag, startedAt: f.now - 1000 }),
+      reauthenticate: async () => {},
+      onAccepted: () => {
+        accepted++;
+      },
+      cleanup: createAccountCleanup({
+        resetPrivateFiles: async () => {
+          files++;
+        },
+        cancelLogin: async () => credentials.reset(),
+      }),
+    });
+    expect(await client.deleteAccount("DELETE")).toEqual({
+      status: "accepted",
+      cleanupFailed: false,
+    });
+    expect({ accepted, files }).toEqual({ accepted: 1, files: 1 });
+    expect(await credentials.capture().cookie()).toBe("");
+    expect([...disk.values()].every((value) => value === "{}")).toBe(true);
+    expect(await f.storage.getItem(otherKey)).toBe(otherValue);
+    expect(f.records.size).toBe(1);
+    expect(f.db.sqlite.query("SELECT count(*) n FROM user WHERE id=?").get(f.owner.userId)).toEqual(
+      { n: 0 },
+    );
+    expect(f.db.sqlite.query("SELECT count(*) n FROM user WHERE id=?").get(f.peer.userId)).toEqual({
+      n: 1,
+    });
+    expect(
+      f.db.sqlite
+        .query("SELECT count(*) n FROM deletion_jobs WHERE target_id=?")
+        .get(f.owner.userId),
+    ).toEqual({ n: 1 });
   } finally {
     f.db.close();
   }

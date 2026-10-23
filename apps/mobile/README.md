@@ -54,6 +54,7 @@ loopback·사설 LAN 주소만 허용하며 Android emulator는 `http://10.0.2.2
 - `@baro/api-client`, `@baro/client-core`: 웹과 같은 HTTP/오류/DTO/계약. 플랫폼 cookie·저장은 adapter 소유.
 - `getMobileApi().lawyers`: 공통 프로필 JSON client. 공개 조회는 익명 transport, 본인 저장/공개 전환은 native credential transport를 사용. 파일 선택/캐시/공유는 M5/M6에서 source/upload/download port에 연결.
 - `src/features/directory`: 요청 취소·새 검색 우선·기존 페이지 보존·cursor 재시도의 순수 model과 RN 목록.
+- `src/features/settings`: 두 역할의 서버 사용량·정책·같은 계정 재인증·literal 삭제와 미확정/접수/로컬 정리 상태. `/session`에서 진입한다.
 
 웹의 `src/pages`, `src/components`, `src/layouts`, `src/styles`, `src/client`는 이 작업에서
 변경하지 않는다. 공유 package/lock/CI 변경은 기반 PR을 먼저 통합한다. 전체 단계는
@@ -219,6 +220,21 @@ SDK/IPC 메모리 검증은 구분한다. 리포트 편집/사진 선택/PDF·HT
 충돌로 안내한다. 로그아웃·계정/권한 변경·화면 이탈·앱 종료에서는 미저장 초안을 버린다.
 private 경로/token은 화면이나 URL에 노출하지 않는다. 실제 공유·기기 메모리/권한과 API
 호환 배포는 fixture/Metro/컴파일과 별도로 #361/#334에서 인수한다.
+
+## 사용량·설정과 계정 삭제
+
+`/settings`는 fresh 계정의 실제 기술 한도·예약 사용량·KST 일일 초기화와 정책 문서를
+표시한다. 저장 공간은 일일 초기화 대상이 아니다. 동의 갱신 중에도 기존 정책 확인과
+인증된 계정 삭제는 가능하다. 연결된 provider로 같은 계정을 재인증하고 `DELETE`를
+직접 입력해야 삭제한다. 미확정 요청은 새 서버 OAuth 시각과 별도 명시적 재확인을
+요구하며 자동 전송하지 않는다. 401/익명 상태만으로 삭제 성공을 만들지 않는다.
+
+검증된 ACK와 기기의 파일/credential 정리를 구분한다. 실제 NativeLogin cancel/reset은
+cookie/cache·재인증 proof·대기 로그인만 정리하며 다른 미해결 작업 key는 보존한다.
+파일 정리 실패도 credential 정리 시도를 건너뛰지 않고, 새 auth generation이 시작되면
+그 계정의 저장소를 지우지 않는다. 잠시 화면을 떠난 뒤에도 관측한 접수/정리 결과를
+구분하고 새 계정에서는 이전 상태를 숨긴다. 실제 기기의 Keychain/Keystore·OAuth와
+서버 삭제 job·스토어/릴리스 인수는 합성 RN/HTTP/SQL 검증과 별개다.
 
 ## 대용량 native 네트워크 IO
 
