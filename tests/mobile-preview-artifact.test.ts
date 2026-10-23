@@ -4,6 +4,11 @@ import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
 import {
+  verifyCompiledAndroidBundle,
+  verifyCompiledAndroidProvenance,
+  verifyPinnedCompiledAndroidInput,
+} from "../scripts/mobile-android-compiled-input";
+import {
   androidCertificateDigest,
   runAndroidSignatureProbe,
 } from "../scripts/mobile-android-signature";
@@ -16,6 +21,7 @@ import {
   internalAndroidEnvironment,
   internalAndroidFailureCategory,
 } from "../scripts/mobile-internal-android-build";
+import { androidCompiledReverificationSchema } from "../scripts/mobile-internal-android-compiled-reverify";
 import {
   generatedAndroidReleaseFiles,
   internalAndroidVerificationFailure,
@@ -1002,4 +1008,162 @@ test("internal iOS receipts bind Release Simulator identity and cannot claim run
     { signing: { kind: "simulator-only", codeSignature: "none" } },
   ])
     expect(() => verifyInternalIosArtifact({ ...candidate, ...changes }, source)).toThrow();
+});
+
+test("successful Android provenance rejects a failed compiler, another workflow/source/run and expired artifacts", () => {
+  const pin = {
+      version: 1,
+      sourceSha,
+      workflowRunId: "123",
+      artifactId: "456",
+      artifactName: `mobile-internal-android-${sourceSha}`,
+      receiptSha256: "b".repeat(64),
+    },
+    run = {
+      id: 123,
+      head_sha: sourceSha,
+      path: ".github/workflows/mobile-internal-android.yml",
+      status: "completed",
+      conclusion: "success",
+    },
+    artifact = {
+      id: 456,
+      name: pin.artifactName,
+      expired: false,
+      workflow_run: { id: 123, head_sha: sourceSha },
+    };
+  expect(verifyCompiledAndroidProvenance(pin, run, artifact).sourceSha).toBe(sourceSha);
+  for (const patch of [
+    { conclusion: "failure" },
+    { status: "in_progress" },
+    { path: ".github/workflows/mobile-internal-ios.yml" },
+    { head_sha: "f".repeat(40) },
+    { id: 789 },
+  ])
+    expect(() => verifyCompiledAndroidProvenance(pin, { ...run, ...patch }, artifact)).toThrow();
+  for (const patch of [
+    { id: 789 },
+    { name: "foreign-artifact" },
+    { expired: true },
+    { workflow_run: { id: 789, head_sha: sourceSha } },
+    { workflow_run: { id: 123, head_sha: "f".repeat(40) } },
+  ])
+    expect(() => verifyCompiledAndroidProvenance(pin, run, { ...artifact, ...patch })).toThrow();
+});
+test("compiled Android pin rejects modified original receipts or APK bytes before SDK work", async () => {
+  const root = await mkdtemp(resolve(tmpdir(), "baro-compiled-android-test-")),
+    input = resolve(root, "input"),
+    body = Buffer.from([1, 2, 3, 4]),
+    hash = (b: Uint8Array | string) => new Bun.CryptoHasher("sha256").update(b).digest("hex");
+  try {
+    await mkdir(resolve(root, "tests/fixtures"), { recursive: true });
+    await mkdir(input);
+    const original = await Bun.file(
+        "docs/quality/mobile-internal-android-2026-10-23/receipt-171989e.json",
+      ).json(),
+      name = `baro-internal-preview-android-${sourceSha}.apk`,
+      receipt = {
+        ...original,
+        sourceSha,
+        artifact: { name, bytes: body.length, sha256: hash(body) },
+      },
+      raw = JSON.stringify(receipt),
+      pin = {
+        version: 1,
+        sourceSha,
+        workflowRunId: "123",
+        artifactId: "456",
+        artifactName: `mobile-internal-android-${sourceSha}`,
+        receiptSha256: hash(raw),
+      };
+    await writeFile(
+      resolve(root, "tests/fixtures/android-internal-preview.json"),
+      JSON.stringify(pin),
+    );
+    await writeFile(resolve(input, "receipt-android.json"), raw);
+    await writeFile(resolve(input, name), body);
+    expect((await verifyPinnedCompiledAndroidInput(root, input)).receipt.sourceSha).toBe(sourceSha);
+    await writeFile(resolve(input, name), Buffer.from([1, 2, 3, 5]));
+    await expect(verifyPinnedCompiledAndroidInput(root, input)).rejects.toThrow(
+      "COMPILED_ANDROID_APK_CHANGED",
+    );
+    await writeFile(resolve(input, name), body);
+    await writeFile(resolve(input, "receipt-android.json"), `${raw} `);
+    await expect(verifyPinnedCompiledAndroidInput(root, input)).rejects.toThrow(
+      "COMPILED_ANDROID_RECEIPT_CHANGED",
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+test("compiled Android HBC integrity rejects other payload/header, missing or duplicate entries and packaged maps", () => {
+  const hbc = Buffer.from("c61fbc03c103191f01020304", "hex"),
+    expected = {
+      bytes: hbc.length,
+      sha256: new Bun.CryptoHasher("sha256").update(hbc).digest("hex"),
+    };
+  expect(() =>
+    verifyCompiledAndroidBundle(hbc, expected, ["assets/index.android.bundle"]),
+  ).not.toThrow();
+  for (const paths of [
+    [],
+    ["assets/index.android.bundle", "assets/index.android.bundle"],
+    ["assets/index.android.bundle", "private-source.map"],
+  ])
+    expect(() => verifyCompiledAndroidBundle(hbc, expected, paths)).toThrow(
+      "COMPILED_ANDROID_HBC_MISMATCH",
+    );
+  expect(() =>
+    verifyCompiledAndroidBundle(Buffer.from([1, 2, 3]), expected, ["assets/index.android.bundle"]),
+  ).toThrow();
+});
+test("compiled Android verification keeps original compiler graph scope and rejects runtime or regenerated proof claims", async () => {
+  const pin = await Bun.file("tests/fixtures/android-internal-preview.json").json(),
+    receipt = await Bun.file(
+      "docs/quality/mobile-internal-android-2026-10-23/receipt-171989e.json",
+    ).json(),
+    value = {
+      version: 1,
+      kind: "reverified-compiled-android-binary",
+      toolingSourceSha: sourceSha,
+      binarySourceSha: pin.sourceSha,
+      input: pin,
+      observedAt: "2026-10-24T00:00:00.000Z",
+      originalReceiptUnchanged: true,
+      bundledInputParityVerified: true,
+      sdkBinaryMetadataVerified: true,
+      compiledHbcBytesVerified: true,
+      graphFromPinnedCompilerReceipt: true,
+      sourceMapRebuilt: false,
+      retainedGeneratedBundleCompared: false,
+      sdkBuildToolsVersion: "36.1.0",
+      actualCertificateSha256: receipt.signing.certificateSha256,
+      recompiled: false,
+      resigned: false,
+      apiObservation: receipt.apiObservation,
+      appRuntimeVerified: false,
+      remoteApiVerified: false,
+      physicalDeviceVerified: false,
+      storeSigned: false,
+      deployed: false,
+    };
+  expect(androidCompiledReverificationSchema.parse(value).sourceMapRebuilt).toBe(false);
+  for (const patch of [
+    { originalReceiptUnchanged: false },
+    { graphFromPinnedCompilerReceipt: false },
+    { retainedGeneratedBundleCompared: true },
+    { sourceMapRebuilt: true },
+    { binarySourceSha: sourceSha },
+    { actualCertificateSha256: "f".repeat(64) },
+    { recompiled: true },
+    { resigned: true },
+    { appRuntimeVerified: true },
+    { remoteApiVerified: true },
+    { physicalDeviceVerified: true },
+    { storeSigned: true },
+    { deployed: true },
+  ])
+    expect(androidCompiledReverificationSchema.safeParse({ ...value, ...patch }).success).toBe(
+      false,
+    );
 });

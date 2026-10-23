@@ -337,6 +337,30 @@ gh workflow run mobile-internal-android-reverify.yml --ref main -f target_sha=<f
 PR422/main171989e·CI40005978910의 Guide 문구 교정은 새 앱 source에만 적용된다. 기존 ff5c208/dedcd0e의
 관측을 수정된 앱 인수로 쓰지 않으며, 새 source의 두 OS compile/원본 pin·실제 smoke가 필요하다.
 
+### 성공한 Android compiler 원본 재검증
+
+새 [compiler40006344034](https://github.com/creno-va/baro/actions/runs/40006344034)/source171989e은 SUCCESS다.
+[원본 receipt](../quality/mobile-internal-android-2026-10-23/receipt-171989e.json)를 그대로 보존한다.
+APK57,133,550bytes/SHA256cd93c333e98f9f371c013197210a9a6ebc041f94bea9b5b56cc38da6ad9ffb42와
+원본 receipt SHA2568b7877c75fb4ec2ab46fbb53b9dd7415026f6b27c375397c2d7995ab29a2b4d9를 독립 대조했다.
+이것은 새 문구를 포함한 compile/metadata 인수이며 실제 설치/화면 인수는 별도다.
+
+```sh
+gh workflow run mobile-internal-android-compiled-reverify.yml --ref main -f target_sha=<full40-main-tooling-sha> -f smoke=true -f large_font=true -f guide_ui=true -f public_directory=false
+```
+
+[성공한 compiler 입력](../../tests/fixtures/android-internal-preview.json)은 원본 run/path·successful
+terminal 상태·source·artifact ID/name·receipt 전체 hash·APK 전체 bytes/hash에 묶는다.
+새 경로는 bundled source 입력 동일성 뒤 실제 SDK signature/manifest·packaged HBC bytes/유일한 entry·
+map 미포함·compiled font를 재검증하고 원본 receipt를 byte-identical로 복사한다. 현재 SDK 버전/인증서와
+현재 health/시각은 별도 sidecar에 기록한다. graph는 고정 compiler receipt의 사실이며 새 생성 HBC를
+비교하거나 source map을 재생성했다고 표시하지 않는다. 재컴파일/재서명도 하지 않는다.
+
+기존 preserved inspection workflow/입력과 이전 실패는 보존한다. Home/Guide consumer는 두 종류의
+strict metadata 결과 중 실제 선택한 하나만 검증하며 다른 source의 receipt/APK를 섞지 않는다.
+원본 입력이 실패·진행 중인 compiler이거나 artifact 만료/변조·다른 SHA/workflow·파일 hash 불일치면
+SDK/기기 단계 전에 거부한다. 새 경로의 실제 Emulator/Home/Guide 성공은 실행 후 인수한다.
+
 ## 내부 전달 기준과 설치
 
 | 전달물 | 앱 source·version/build | binary metadata | 실제 설치/초기 Home 관측 |
