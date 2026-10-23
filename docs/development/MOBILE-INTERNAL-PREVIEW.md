@@ -286,3 +286,9 @@ xcrun simctl delete "$baro_preview_device"
 #397은 두 OS 내부 bundled 전달물과 초기 실행·설치 안내의 독립 인수다.
 전체 #334와 실제 앱 native IO #385, 인증/역할/사용자 여정 #346/#354/#361/#369,
 전체 UI/접근성·물리 기기 #379, 보안/최종 릴리스 #339/#71은 각각 남아 있다.
+
+iOS 글자 확대의 후속 준비로 재검증 workflow는 실제 SDK의 `simctl help ui` 문서를 읽고
+명시적으로 발견한 content_size 명령/알려진 category 식별자와 문서 hash만 별도 JSON에 남긴다.
+사용자 기기 상태를 읽거나 변경하지 않으며 원문 도움말·runtime 로그·사용자 값은 업로드하지
+않는다. 지원되지 않은 명령을 추측해 실행하지 않고 이 관측을 글자 확대/앱/접근성 성공으로
+표시하지 않는다. 실제 category 설정·readback·앱 재시작/PNG 대조는 다음 관측으로 구분한다.
