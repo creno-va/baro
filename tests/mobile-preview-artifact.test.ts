@@ -371,6 +371,14 @@ test("XCTest failure observation retains only known assertion and bounded diagno
   );
   expect(proof.assertionCode).toBe("BARO_GUIDE_MISSING");
   expect(proof.swiftCompilationFailure).toBe(true);
+  const compiler = observeHomeUiFailure(
+    "/synthetic-private/HomeUITests.swift:48:12: error: cannot find XCUIApplication in scope secret-payload",
+  );
+  expect(compiler.compilerLocations).toEqual([
+    { line: 48, column: 12, category: "SDK_SYMBOL_UNAVAILABLE" },
+  ]);
+  expect(JSON.stringify(compiler)).not.toContain("synthetic-private");
+  expect(JSON.stringify(compiler)).not.toContain("secret-payload");
   expect(JSON.stringify(proof)).not.toContain("synthetic-secret");
   expect(observeHomeUiFailure("compiler source echo BARO_HOME_MISSING").assertionCode).toBeNull();
   expect(

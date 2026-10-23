@@ -171,7 +171,27 @@ export function observeHomeUiFailure(detail: string) {
   const reported = detail.match(
     /XCTAssert[A-Za-z]+ failed[^\r\n]*? - (BARO_[A-Z0-9_]+)(?:[^A-Z0-9_]|$)/,
   )?.[1];
+  const compilerLocations = [
+    ...detail.matchAll(/HomeUITests\.swift:(\d{1,4}):(\d{1,4}): error: ([^\r\n]*)/g),
+  ]
+    .slice(0, 3)
+    .map((match) => ({
+      line: Number(match[1]),
+      column: Number(match[2]),
+      category: /actor-isolated|MainActor/.test(match[3] ?? "")
+        ? "ACTOR_ISOLATION"
+        : /cannot find .* in scope|no such module/.test(match[3] ?? "")
+          ? "SDK_SYMBOL_UNAVAILABLE"
+          : /has no member/.test(match[3] ?? "")
+            ? "SDK_MEMBER_UNAVAILABLE"
+            : "UNCLASSIFIED_COMPILER_DIAGNOSTIC",
+    }));
   return {
+    compilerLocations,
+    testHostConfigurationFailure:
+      /requires a host application|without a host application|does not have a host app|TEST_TARGET_NAME.*not|No test host/.test(
+        detail,
+      ),
     assertionCode: assertionCodes.find((code) => code === reported) ?? null,
     swiftCompilationFailure:
       /(?:SwiftCompile|SwiftEmitModule).*failed|emit-module command failed/.test(detail),
