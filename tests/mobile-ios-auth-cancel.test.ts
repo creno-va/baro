@@ -17,8 +17,12 @@ function observation() {
       initialAnonymousObserved: true,
       osPromptHandled: false,
       systemWebViewObserved: true,
-      cancelButtonHittable: true,
-      systemCancelTapped: true,
+      dismissButtonHittable: true,
+      systemDismissTapped: true,
+      dismissControl: "close",
+      dismissScope: "navigation-bar",
+      nativeDismissControlVerified: true,
+      webContentExcluded: true,
       webViewDismissed: true,
       anonymousReturnObserved: true,
       errorStateAbsent: true,
@@ -92,6 +96,17 @@ test("system browser cancellation requires one complete result for all providers
     {
       providers: value.providers.map((provider) => ({ ...provider, url: "synthetic-private-url" })),
     },
+    {
+      providers: value.providers.map((provider) => ({ ...provider, dismissScope: "application" })),
+    },
+    { providers: value.providers.map((provider) => ({ ...provider, dismissControl: "sign-in" })) },
+    { providers: value.providers.map((provider) => ({ ...provider, webContentExcluded: false })) },
+    {
+      providers: value.providers.map((provider) => ({
+        ...provider,
+        nativeDismissControlVerified: false,
+      })),
+    },
     { coldAnonymousReturnObserved: false },
     { accountLoginPerformed: true },
     { credentialsEntered: true },
@@ -100,6 +115,23 @@ test("system browser cancellation requires one complete result for all providers
     { rawHierarchy: "synthetic-private" },
   ])
     expect(() => parseIosAuthCancelResult(encode({ ...value, ...patch }))).toThrow();
+});
+test("all supported dismiss styles remain native-bar scoped; style aliases cannot relax the return proof", () => {
+  for (const dismissControl of ["cancel", "done", "close"] as const)
+    for (const dismissScope of ["navigation-bar", "toolbar"] as const) {
+      const value = observation();
+      value.providers = value.providers.map((provider) => ({
+        ...provider,
+        dismissControl,
+        dismissScope,
+      }));
+      expect(parseIosAuthCancelResult(encode(value)).providers[0]?.dismissControl).toBe(
+        dismissControl,
+      );
+      expect(() =>
+        parseIosAuthCancelResult(encode({ ...value, coldAnonymousReturnObserved: false })),
+      ).toThrow();
+    }
 });
 test("failed native auth observation exports only fixed stage/provider/assertion categories", () => {
   const value = observeIosAuthCancelFailure(
@@ -114,7 +146,15 @@ test("failed native auth observation exports only fixed stage/provider/assertion
   const status = {
     provider: "google",
     systemWebViewVisible: false,
-    systemCancelVisible: false,
+    dismissCandidates: ["navigation-bar", "toolbar", "application"].flatMap((scope) =>
+      ["cancel", "done", "close"].map((control) => ({
+        scope,
+        control,
+        count: 0,
+        uniqueFullyHittable: false,
+        outsideWebContent: false,
+      })),
+    ),
     authorizingVisible: false,
     startUnavailableVisible: true,
     retryVisible: true,
@@ -129,6 +169,25 @@ test("failed native auth observation exports only fixed stage/provider/assertion
       `BARO_AUTH_CANCEL_STATUS:${JSON.stringify({ ...status, url: "private" })}`,
     ).status,
   ).toBeNull();
+  for (const dismissCandidates of [
+    status.dismissCandidates.slice(1),
+    [...status.dismissCandidates].reverse(),
+    status.dismissCandidates.map((candidate) => ({ ...candidate, uniqueFullyHittable: true })),
+    status.dismissCandidates.map((candidate) => ({ ...candidate, rawLabel: "private" })),
+  ])
+    expect(
+      observeIosAuthCancelFailure(
+        `BARO_AUTH_CANCEL_STATUS:${JSON.stringify({ ...status, dismissCandidates })}`,
+      ).status,
+    ).toBeNull();
+  expect(
+    observeIosAuthCancelFailure("XCTAssertTrue failed - BARO_AUTH_SYSTEM_CANCEL_MISSING")
+      .assertionCode,
+  ).toBe("BARO_AUTH_SYSTEM_CANCEL_MISSING");
+  expect(
+    observeIosAuthCancelFailure("XCTAssertNotNil failed - BARO_AUTH_SYSTEM_DISMISS_MISSING")
+      .assertionCode,
+  ).toBe("BARO_AUTH_SYSTEM_DISMISS_MISSING");
   expect(
     observeIosAuthCancelFailure("compiler echo BARO_AUTH_SYSTEM_WEBVIEW_MISSING").assertionCode,
   ).toBeNull();

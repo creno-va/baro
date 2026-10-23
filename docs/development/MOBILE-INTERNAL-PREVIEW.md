@@ -509,7 +509,7 @@ store/#334/#379/#339/#71은 OPEN이다. 원본 metadata/기본/확대 proof의 �
 iOS 수동 재검증 workflow의 `auth_cancel=true`는 `smoke=true`만 함께 허용하고
 `large_font`, `ui_test`, `accessibility_audit`와는 함께 실행하지 않는다.
 명령은 `--home --auth-cancel`이다. 기본 Home 관측 뒤 원본 source171989e 앱의
-실제 로그인 화면에서 Google/Naver/Kakao 버튼을 각각1회 누르고 시스템 WebView·hittable Cancel,
+실제 로그인 화면에서 Google/Naver/Kakao 버튼을 각각1회 누르고 시스템 WebView·hittable한 네이티브 닫기 컨트롤,
 취소 뒤 비로그인 UI·오류/동의 상태 부재와 마지막 cold restart 뒤 비로그인 상태를 검사한다.
 기존 독립 XCTest runner target을 사용하며 앱은 재컴파일/재서명하지 않는다.
 
@@ -528,6 +528,34 @@ URL·cookie·state·토큰·계정/원문 화면은 내보내지 않는다.
 
 세 제공자의 표시/취소/복귀와 cold 상태가 모두 확인된 단일 strict 결과만 성공으로 인정한다.
 source/tooling/compiler ZIP/receipt·기기 identity는 같은 실행의 Home baseline과 묶는다.
+닫기 컨트롤은 native navigation bar/toolbar 안의 고정 Cancel/Done/Close 후보에서만 고른다.
+WebView의 같은 이름 버튼과 겹치는 후보를 제외하고, 화면 안에 완전히 hittable한 유일한 후보만 누른다.
+application 전체의 같은 이름 버튼 조회는 고정 진단용이며 조작에 쓰지 않는다.
+proof는 실제 `dismissControl`/`dismissScope`와 native 범위·web content 제외를 요구한다.
 단일 결과 누락/중복, 부분 제공자, raw 값 또는 OAuth 성공으로의 확대는 거절한다.
 준비/합성 회귀는 실제 통과가 아니며 exact main CI 뒤 수동 실행 결과를 인수한다.
 기존 실제 OS audit·전체 기기/VoiceOver/TalkBack·계정 인증/역할/동의·store/#334/#346/#339/#71은 보존한다.
+
+### 첫 실제 취소 검사 실패와 닫기 컨트롤 수정
+
+[실제40025525181](https://github.com/creno-va/baro/actions/runs/40025525181)는 tooling
+`8480fa6cdc7da56d90814bf572f262bfcf40d381`에서 FAILURE였다.
+[원본 실패](../quality/mobile-internal-ios-2026-10-23/auth-cancel-failure-8480fa6.json)는
+Google/provider-tapped 뒤 `BARO_AUTH_SYSTEM_CANCEL_MISSING`, xcodebuild65/timedOut=false다.
+Swift compilation/signing/runner launch 분류는 false이며 성공한 취소/복귀 proof는 없다.
+코드 순서상 WebView 존재 검사를 지난 뒤지만 당시 실제 닫기 label/scope·hittability는
+기록되지 않아 정확한 원인은 확정하지 않는다. 제공자 로그인 성공/실패로 해석하지 않는다.
+
+[같은 실행의 Home](../quality/mobile-internal-ios-2026-10-23/auth-cancel-home-8480fa6.json)과
+[metadata](../quality/mobile-internal-ios-2026-10-23/auth-cancel-verification-8480fa6.json)를 따로 보존했고,
+compiler receipt/ZIP 전체 hash·source171989e/8480fa6 bundled parity를 독립 재검증했다.
+실패 JSON 원본 hash는`6328e6791eb62e90aff9ed3a28f7948f865116043015f883cf7853ea5b9c938b`이다.
+현재 실패는 이전 정상 Home/Guide OS audit40020635912를 취소하지 않으며 auth 인수는 OPEN이다.
+
+기존 테스트의 전역 `Cancel` 단일 이름 가정을 제거한다.
+[Apple의 Safari dismiss 종류](https://developer.apple.com/documentation/safariservices/sfsafariviewcontroller/dismissbuttonstyle-swift.enum)와
+[navigation bar 설명](https://developer.apple.com/documentation/safariservices/sfsafariviewcontroller/dismissbuttonstyle-swift.property)에
+맞춰 고정 종류와 native bar 범위를 조회하고 선택 종류/범위를 결과에 남긴다.
+없거나 모호하면 known category/count/hittability·web 제외 boolean만 기록하고 실패한다.
+이 변경은 실제 style이 Close였음을 입증하지 않으며 새 SDK 실행 전 성공으로 표시하지 않는다.
+같은 실패 조건을 그대로 재실행하지 않고 변경한 컨트롤 선택 조건을 exact CI/main 뒤 검증한다.

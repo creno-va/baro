@@ -9,6 +9,76 @@ final class BaroAuthCancelUITests: XCTestCase {
   }
 
   @MainActor
+  private func fullyHittable(_ element: XCUIElement, in app: XCUIApplication) -> Bool {
+    guard element.exists, element.isHittable else { return false }
+    let frame = element.frame, intersection = frame.intersection(app.windows.firstMatch.frame)
+    return frame.width > 0 && frame.height > 0
+      && intersection.width >= frame.width * 0.95 && intersection.height >= frame.height * 0.95
+  }
+
+  private let dismissLabels = [("cancel", "Cancel"), ("done", "Done"), ("close", "Close")]
+  private struct DismissSelection { let element: XCUIElement; let control: String; let scope: String }
+
+  @MainActor
+  private func outsideWebContent(_ element: XCUIElement, label: String, app: XCUIApplication) -> Bool {
+    let webViews = app.webViews
+    guard webViews.count <= 8 else { return false }
+    for web in webViews.allElementsBoundByIndex {
+      let matches = web.buttons.matching(NSPredicate(format: "label == %@", label))
+      guard matches.count <= 16 else { return false }
+      for button in matches.allElementsBoundByIndex {
+        let overlap = element.frame.intersection(button.frame)
+        if !overlap.isNull && overlap.width >= element.frame.width * 0.9
+          && overlap.height >= element.frame.height * 0.9 { return false }
+      }
+    }
+    return true
+  }
+
+  @MainActor
+  private func nativeDismiss(_ app: XCUIApplication) -> DismissSelection? {
+    var candidates: [DismissSelection] = []
+    var seen: Set<String> = []
+    for (scope, buttons) in [("navigation-bar", app.navigationBars.buttons), ("toolbar", app.toolbars.buttons)] {
+      for (control, label) in dismissLabels {
+        let matches = buttons.matching(NSPredicate(format: "label == %@", label))
+        guard matches.count == 1 else { continue }
+        let element = matches.firstMatch
+        guard fullyHittable(element, in: app), outsideWebContent(element, label: label, app: app) else { continue }
+        let frame = element.frame
+        let signature = "\(control):\(frame.minX):\(frame.minY):\(frame.width):\(frame.height)"
+        if seen.insert(signature).inserted { candidates.append(DismissSelection(element: element, control: control, scope: scope)) }
+      }
+    }
+    return candidates.count == 1 ? candidates[0] : nil
+  }
+
+  @MainActor
+  private func reportStatus(_ provider: String, app: XCUIApplication) throws {
+    var candidates: [[String: Any]] = []
+    // Application-wide matches are diagnostics only; never use them for tapping.
+    for (scope, buttons) in [("navigation-bar", app.navigationBars.buttons), ("toolbar", app.toolbars.buttons), ("application", app.buttons)] {
+      for (control, label) in dismissLabels {
+        let matches = buttons.matching(NSPredicate(format: "label == %@", label)), count = matches.count
+        let unique = count == 1
+        candidates.append(["control": control, "scope": scope, "count": count,
+          "uniqueFullyHittable": unique && fullyHittable(matches.firstMatch, in: app),
+          "outsideWebContent": unique && outsideWebContent(matches.firstMatch, label: label, app: app)])
+      }
+    }
+    let status: [String: Any] = [
+      "provider": provider, "systemWebViewVisible": app.webViews.firstMatch.exists,
+      "dismissCandidates": candidates,
+      "authorizingVisible": app.staticTexts["로그인을 확인하고 있어요"].exists,
+      "startUnavailableVisible": app.staticTexts["로그인을 시작하지 못했어요. 다시 시도해 주세요."].exists,
+      "retryVisible": app.buttons["이용 상태 다시 확인"].exists,
+      "appForeground": app.state == .runningForeground
+    ]
+    let data = try JSONSerialization.data(withJSONObject: status, options: [.sortedKeys])
+    print("BARO_AUTH_CANCEL_STATUS:" + String(decoding: data, as: UTF8.self))
+  }
+
+  @MainActor
   private func reach(_ element: XCUIElement, in app: XCUIApplication) throws {
     XCTAssertTrue(element.waitForExistence(timeout: 30), "BARO_AUTH_CONTROL_MISSING")
     let scroll = app.scrollViews.firstMatch
@@ -81,23 +151,19 @@ final class BaroAuthCancelUITests: XCTestCase {
         }
         if browser.waitForExistence(timeout: 1) { break }
       }
-      if !browser.exists {
-        let status: [String: Any] = [
-          "provider": provider, "systemWebViewVisible": false,
-          "systemCancelVisible": app.buttons["Cancel"].exists,
-          "authorizingVisible": app.staticTexts["로그인을 확인하고 있어요"].exists,
-          "startUnavailableVisible": app.staticTexts["로그인을 시작하지 못했어요. 다시 시도해 주세요."].exists,
-          "retryVisible": app.buttons["이용 상태 다시 확인"].exists,
-          "appForeground": app.state == .runningForeground
-        ]
-        let statusData = try JSONSerialization.data(withJSONObject: status, options: [.sortedKeys])
-        print("BARO_AUTH_CANCEL_STATUS:" + String(decoding: statusData, as: UTF8.self))
-      }
+      if !browser.exists { try reportStatus(provider, app: app) }
       XCTAssertTrue(browser.exists, "BARO_AUTH_SYSTEM_WEBVIEW_MISSING")
-      let cancel = app.buttons["Cancel"]
-      XCTAssertTrue(cancel.waitForExistence(timeout: 10) && cancel.isHittable, "BARO_AUTH_SYSTEM_CANCEL_MISSING")
       stage(provider, "browser-presented")
-      cancel.tap()
+      var dismissal = nativeDismiss(app)
+      for _ in 0..<10 {
+        if dismissal != nil { break }
+        Thread.sleep(forTimeInterval: 0.5)
+        dismissal = nativeDismiss(app)
+      }
+      if dismissal == nil { try reportStatus(provider, app: app) }
+      XCTAssertNotNil(dismissal, "BARO_AUTH_SYSTEM_DISMISS_MISSING")
+      guard let dismissal else { return }
+      dismissal.element.tap()
       stage(provider, "cancel-tapped")
       let gone = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: browser)
       XCTAssertEqual(XCTWaiter.wait(for: [gone], timeout: 30), .completed, "BARO_AUTH_WEBVIEW_NOT_DISMISSED")
@@ -107,7 +173,9 @@ final class BaroAuthCancelUITests: XCTestCase {
       results.append([
         "provider": provider, "initialAnonymousObserved": true,
         "osPromptHandled": permissionHandled, "systemWebViewObserved": true,
-        "cancelButtonHittable": true, "systemCancelTapped": true,
+        "dismissButtonHittable": true, "systemDismissTapped": true,
+        "dismissControl": dismissal.control, "dismissScope": dismissal.scope,
+        "nativeDismissControlVerified": true, "webContentExcluded": true,
         "webViewDismissed": true, "anonymousReturnObserved": true,
         "errorStateAbsent": true, "consentStateAbsent": true
       ])

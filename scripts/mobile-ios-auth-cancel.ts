@@ -28,8 +28,12 @@ const providerResult = z.strictObject({
   initialAnonymousObserved: z.literal(true),
   osPromptHandled: z.boolean(),
   systemWebViewObserved: z.literal(true),
-  cancelButtonHittable: z.literal(true),
-  systemCancelTapped: z.literal(true),
+  dismissButtonHittable: z.literal(true),
+  systemDismissTapped: z.literal(true),
+  dismissControl: z.enum(["cancel", "done", "close"]),
+  dismissScope: z.enum(["navigation-bar", "toolbar"]),
+  nativeDismissControlVerified: z.literal(true),
+  webContentExcluded: z.literal(true),
   webViewDismissed: z.literal(true),
   anonymousReturnObserved: z.literal(true),
   errorStateAbsent: z.literal(true),
@@ -68,10 +72,26 @@ const stageSchema = z.strictObject({
     "cold-restart",
   ]),
 });
+const dismissCandidateSchema = z
+  .strictObject({
+    control: z.enum(["cancel", "done", "close"]),
+    scope: z.enum(["navigation-bar", "toolbar", "application"]),
+    count: z.number().int().min(0).max(256),
+    uniqueFullyHittable: z.boolean(),
+    outsideWebContent: z.boolean(),
+  })
+  .refine((value) => value.count === 1 || (!value.uniqueFullyHittable && !value.outsideWebContent));
 const statusSchema = z.strictObject({
   provider: z.enum(["google", "naver", "kakao"]),
-  systemWebViewVisible: z.literal(false),
-  systemCancelVisible: z.boolean(),
+  systemWebViewVisible: z.boolean(),
+  dismissCandidates: z
+    .array(dismissCandidateSchema)
+    .length(9)
+    .refine(
+      (values) =>
+        values.map((value) => `${value.scope}:${value.control}`).join(",") ===
+        "navigation-bar:cancel,navigation-bar:done,navigation-bar:close,toolbar:cancel,toolbar:done,toolbar:close,application:cancel,application:done,application:close",
+    ),
   authorizingVisible: z.boolean(),
   startUnavailableVisible: z.boolean(),
   retryVisible: z.boolean(),
@@ -92,6 +112,7 @@ const assertionCodes = [
   "BARO_AUTH_OS_PROMPT_UNRECOGNIZED",
   "BARO_AUTH_SYSTEM_WEBVIEW_MISSING",
   "BARO_AUTH_SYSTEM_CANCEL_MISSING",
+  "BARO_AUTH_SYSTEM_DISMISS_MISSING",
   "BARO_AUTH_WEBVIEW_NOT_DISMISSED",
 ] as const;
 export function observeIosAuthCancelFailure(output: string) {
