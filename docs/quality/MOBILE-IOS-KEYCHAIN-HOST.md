@@ -218,3 +218,27 @@ gh workflow run mobile-ios-xcode-reverify.yml --ref main -f target_sha=<full40-m
 모든 ABI 대조를 필수로 한다. 그 후 새 소유 Simulator에서 기존 SDK factories를 실제 실행한다.
 기본 CODE_SIGNING_ALLOWED=NO는 유지한다. 실제 SDK 전 실행 성공을 표시하지 않고 전체 native
 IO·OAuth/API·physical/store·#339/#71의 인수는 별도로 유지한다.
+
+## 실제 SDK 준비 성공과 full IO 연결
+
+PR409/main `238624b0862f48e949eae552337918368200a5be`의 main CI39971436573 뒤
+[실제 SDK39971796394](https://github.com/creno-va/baro/actions/runs/39971796394)는 SUCCESS다.
+[원본 metadata 재검증](./mobile-ios-host-2026-10-23/verification-238624b.json)·
+[양 ABI control](./mobile-ios-host-2026-10-23/control-238624b.json)·
+[실제 SDK receipt](./mobile-ios-host-2026-10-23/sdk-238624b.json)를 보존한다.
+binary source7294145를 재컴파일/재서명하지 않았고 iPhone16/iOS26.5의 새 소유 Simulator에서
+native/source/download-cache clear, credential reset/store/readback, 복구 key write/readback,
+직접 SecureStore readback와 cleanup의8항목이 모두 성공했다. 외부 fetch 시도는0이다.
+이 성공은 과거 실패의 단일 원인 확정이나 대용량 IO·실제 사용자 여정 성공이 아니다.
+
+```sh
+gh workflow run mobile-ios-xcode-reverify.yml --ref main -f target_sha=<full40-main-tooling-sha> -f full_runtime=true
+```
+
+선택적 full runtime은 같은 고정 compiler ZIP 전체 hash·native 입력 동일성과 추출 앱의 실제
+Info/executable·양 ABI XML/DER·host signature·폰트를 다시 확인하고 새 소유 Simulator에 설치한다.
+제품 Home은 layout 계측 사본, 이후 IO는 별도 probe entry와 합성 loopback API로 실행한다.
+preview 앱 ID와 local JS/API 환경을 각각 기록하며 Metro는 실행별 cache를 사용한다.
+Home/full receipt는 binary source·tooling/JS source·원본 archive hash·재컴파일/재서명 없음의
+증거를 포함한다. 기본 dev compile 경로와 기존 receipt는 유지한다. 실행 전에 full IO 성공을
+표시하지 않으며 원격/API·OAuth·physical·접근성/전체 화면·스토어는 여전히 별도 인수다.
