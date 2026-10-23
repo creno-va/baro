@@ -11,6 +11,7 @@ import {
 import {
   observeHomeUiFailure,
   runIosHomeUiTest,
+  verifyIosAccessibilityReceipt,
   verifyIosHomeUiReceipt,
 } from "./mobile-ios-home-ui-test";
 import {
@@ -26,7 +27,9 @@ import { observePreviewApi } from "./mobile-preview-artifact";
 const hash = (b: Uint8Array) => createHash("sha256").update(b).digest("hex");
 async function main() {
   if (process.platform !== "darwin") throw new Error("INTERNAL_IOS_MAC_REQUIRED");
-  const { home, largeFont, uiTest } = iosInternalObservationOptions(process.argv.slice(2));
+  const { home, largeFont, uiTest, accessibilityAudit } = iosInternalObservationOptions(
+    process.argv.slice(2),
+  );
   const root = process.cwd(),
     env = internalIosEnvironment(process.env),
     tooling = env.TARGET_SHA as string,
@@ -42,6 +45,7 @@ async function main() {
     "large-font.json",
     "large-font-ios.png",
     "home-ui-test.json",
+    "accessibility-audit.json",
   ])
     if (await Bun.file(resolve(base, name)).exists())
       throw new Error("INTERNAL_IOS_FRESH_OUTPUT_REQUIRED");
@@ -345,7 +349,13 @@ async function main() {
       console.log("INTERNAL_IOS_LARGE_FONT_READBACK_OBSERVED_VISUAL_REVIEW_REQUIRED");
       if (uiTest) {
         phase = "large-font-home-guide-xcuitest";
-        const observation = await runIosHomeUiTest({ root, owned, device, command });
+        const { accessibilityResult, ...observation } = await runIosHomeUiTest({
+          root,
+          owned,
+          device,
+          command,
+          accessibilityAudit,
+        });
         if (guardRequests) throw Error("INTERNAL_IOS_UNEXPECTED_METRO_REQUEST");
         const proof = verifyIosHomeUiReceipt(
           {
@@ -383,6 +393,25 @@ async function main() {
           flag: "wx",
         });
         console.log("INTERNAL_IOS_LARGE_FONT_HOME_GUIDE_UI_TEST_OBSERVED");
+        if (accessibilityAudit) {
+          phase = "large-font-home-guide-accessibility-audit";
+          const auditProof = verifyIosAccessibilityReceipt(
+            {
+              ...proof,
+              kind: "ios-bundled-large-font-home-guide-accessibility-audit",
+              result: accessibilityResult,
+            },
+            proof,
+          );
+          await writeFile(
+            resolve(base, "accessibility-audit.json"),
+            `${JSON.stringify(auditProof, null, 2)}\n`,
+            { flag: "wx" },
+          );
+          if (!auditProof.result.auditPassed)
+            throw Error("INTERNAL_IOS_ACCESSIBILITY_ISSUES_FOUND");
+          console.log("INTERNAL_IOS_SCOPED_ACCESSIBILITY_AUDIT_PASSED");
+        }
       }
     }
   } catch (error) {
@@ -392,6 +421,9 @@ async function main() {
         "INTERNAL_IOS_UI_TEST_GENERATOR_VERSION_REQUIRED",
         "INTERNAL_IOS_UI_TEST_SINGLE_RESULT_REQUIRED",
         "INTERNAL_IOS_UI_TEST_IDENTITY_MISMATCH",
+        "INTERNAL_IOS_AUDIT_SINGLE_RESULT_REQUIRED",
+        "INTERNAL_IOS_AUDIT_IDENTITY_MISMATCH",
+        "INTERNAL_IOS_ACCESSIBILITY_ISSUES_FOUND",
         "INTERNAL_IOS_CONTENT_SIZE_UNSUPPORTED",
         "INTERNAL_IOS_CONTENT_SIZE_READBACK_MISMATCH",
         "INTERNAL_IOS_LARGE_FONT_IDENTITY_MISMATCH",

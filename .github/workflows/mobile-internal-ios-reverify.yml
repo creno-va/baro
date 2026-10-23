@@ -25,6 +25,12 @@ on:
         default: false
         type: boolean
 
+      accessibility_audit:
+        description: Audit anonymous Home/Guide viewports using iOS accessibility APIs; any issue fails
+        required: false
+        default: false
+        type: boolean
+
 permissions:
   contents: read
   actions: read
@@ -50,10 +56,12 @@ jobs:
           OBSERVE_HOME: ${{ inputs.smoke }}
           OBSERVE_LARGE_FONT: ${{ inputs.large_font }}
           OBSERVE_UI_TEST: ${{ inputs.ui_test }}
+          OBSERVE_ACCESSIBILITY_AUDIT: ${{ inputs.accessibility_audit }}
         run: |
           [[ "$TARGET_SHA" =~ ^[a-f0-9]{40}$ ]]
           if [ "$OBSERVE_LARGE_FONT" = "true" ]; then test "$OBSERVE_HOME" = "true"; fi
           if [ "$OBSERVE_UI_TEST" = "true" ]; then test "$OBSERVE_LARGE_FONT" = "true"; fi
+          if [ "$OBSERVE_ACCESSIBILITY_AUDIT" = "true" ]; then test "$OBSERVE_UI_TEST" = "true"; fi
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.target_sha }}
@@ -95,11 +103,13 @@ jobs:
           OBSERVE_HOME: ${{ inputs.smoke }}
           OBSERVE_LARGE_FONT: ${{ inputs.large_font }}
           OBSERVE_UI_TEST: ${{ inputs.ui_test }}
+          OBSERVE_ACCESSIBILITY_AUDIT: ${{ inputs.accessibility_audit }}
         run: |
           args=()
           if [ "$OBSERVE_HOME" = "true" ]; then args+=(--home); fi
           if [ "$OBSERVE_LARGE_FONT" = "true" ]; then args+=(--large-font); fi
           if [ "$OBSERVE_UI_TEST" = "true" ]; then args+=(--ui-test); fi
+          if [ "$OBSERVE_ACCESSIBILITY_AUDIT" = "true" ]; then args+=(--accessibility-audit); fi
           bun scripts/mobile-internal-ios-reverify.ts "${args[@]}"
           if [ "$OBSERVE_HOME" = "true" ]; then
             test -s .wrangler/mobile-internal-ios-reverify/home.json
@@ -111,6 +121,9 @@ jobs:
           fi
           if [ "$OBSERVE_UI_TEST" = "true" ]; then
             test -s .wrangler/mobile-internal-ios-reverify/home-ui-test.json
+          fi
+          if [ "$OBSERVE_ACCESSIBILITY_AUDIT" = "true" ]; then
+            test -s .wrangler/mobile-internal-ios-reverify/accessibility-audit.json
           fi
       - name: Observe SDK UI command documentation without reading or changing device state
         run: bun scripts/mobile-ios-ui-capabilities.ts
@@ -128,6 +141,7 @@ jobs:
             .wrangler/mobile-internal-ios-reverify/failure.json
             .wrangler/mobile-internal-ios-reverify/ui-capabilities.json
             .wrangler/mobile-internal-ios-reverify/home-ui-test.json
+            .wrangler/mobile-internal-ios-reverify/accessibility-audit.json
             .wrangler/mobile-internal-ios-reverify/large-font.json
             .wrangler/mobile-internal-ios-reverify/large-font-ios.png
           if-no-files-found: warn
