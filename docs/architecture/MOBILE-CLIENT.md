@@ -504,3 +504,19 @@ Apple upload 응답도 serial data delegate에서 한도를 검사하며 complet
 payload와 response만 지운다. 원래 source와 미해결 서버 key는 소비자가 별도 수명으로 보존한다.
 이 producer의 SDK bridge/cleanup 회귀와 실제 local HTTP 코어100MB 바이트/서버 독립 해시·
 RSS/JVM heap proof, 두 OS compile은 실제 RN source lease·기기 IPC·API 시연과 구분한다.
+
+### M7 웹 정본에서 생성하는 시각 토큰
+
+웹 #332의 `docs/design/PRODUCT-UI.md` 인계를 따라 `@baro/design-tokens`는 기존 product.css/
+global.css를 정본으로 읽어 순수 색상·card radius·minimum control size를 생성한다. product
+blue/ink/subtle/line과20px radius·44px 최소 조작 영역을 보존하며, surface/보조 본문/status
+색은 같은 global 정본에서 읽는다. 짧은 hex의 표현만 정규화하고 별도 native 팔레트를
+수작업으로 만들지 않는다. `design:generate`는 package TS만 쓰며 웹 파일은 변경하지 않는다.
+생성물에는 React/DOM/Expo/Workers/파일 IO 의존성이 없고 portable ES 타입만 사용한다.
+
+`design:check`는 normal quick의 mobile gate에서 생성물 drift, 누락·중복/viewport별 모호한
+토큰, 지원하지 않는 CSS 형식과 본문·보조 본문·status/주 행동의 필수 대비를 검사한다.
+레이아웃만 바꾸는 responsive 규칙은 토큰 변화로 취급하지 않는다. 장식용 약한 구분선을
+본문 또는 유일한 조작 경계로 쓰지는 않는다. native primitive는 producer exact CI/main 뒤
+48dp target·font scaling·긴 한글·키보드/safe area를 유지하며 소비한다. 폰트/화면·탐색 및
+실제 VoiceOver/TalkBack/기기 인수는 이 데이터·합성 대비 검사와 별도로 #379/M7에서 진행한다.

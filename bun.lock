@@ -100,6 +100,10 @@
         "@baro/contracts": "workspace:*",
       },
     },
+    "packages/design-tokens": {
+      "name": "@baro/design-tokens",
+      "version": "0.0.0",
+    },
     "src/contracts": {
       "name": "@baro/contracts",
       "version": "0.0.0",
@@ -340,6 +344,8 @@
     "@baro/client-core": ["@baro/client-core@workspace:packages/client-core"],
 
     "@baro/contracts": ["@baro/contracts@workspace:src/contracts"],
+
+    "@baro/design-tokens": ["@baro/design-tokens@workspace:packages/design-tokens"],
 
     "@baro/mobile": ["@baro/mobile@workspace:apps/mobile"],
 
