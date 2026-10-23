@@ -475,3 +475,20 @@ await를 두지 않는다. 새 로그인/재인증의 동기 scope 폐기와 cre
 사용해 경계를 검사한다. signed Hono/SQL 검증은 primary 삭제·peer 보존·삭제 job과 실제
 credential reset을 확인한다. SecureStore 물리 기기, 실제 OAuth·삭제·앱/API 호환 배포·
 두 OS 런타임/릴리스 인수는 이 offline 증거와 구분하며 #346/#361/#369/#334에서 계속 추적한다.
+
+### M6 본인 프로필 자산의 native 업로드 포트
+
+공통 `createLawyerAssetsClient`는 선택 `uploadContentFromSource`가 있으면 `reader.body()`나
+기존 `uploadContent`를 호출하기 전에 opaque source·검증된 fingerprint·byteLength·예약한
+asset revision·scope/기능 signal을 전달한다. 기존100MB 단일 content PUT·live 본인 profile
+확인·expected-profile 헤더·original reservation key/CAS·미확정 복구 순서를 유지한다.
+native 포트가 실패하면 JS body 경로로 되돌아가지 않는다. 포트가 없으면 기존 웹 adapter는
+같은 body/PUT 경로를 사용한다. 합성 포트 회귀는 실제 native 네트워크/메모리 증거가 아니다.
+
+native consumer는 앱 소유 불변 파일과 기대 크기/해시를 검증하고 captured credential·owner/
+generation을 적용하며, 업로드 IO/descriptor가 끝난 뒤 source를 정리해야 한다. 반환되는
+JSON은 기존 asset envelope 검증을 거친다. ACK 유실 뒤 같은 intent를 읽어 이미 committed인
+자산이면 파일 본문을 다시 보내지 않는다. 공개 `lawyerUploadAttemptSchema`는 기존 opaque
+key·expectedRevision·선택 assetId/revision만 허용하며 native 저장소가 동일 형식으로 검증한다.
+Cookie/proof/경로/파일 이름을 복구 record에 추가하지 않는다. 이 producer의 exact CI/main
+뒤 native100MB upload·private read·본인 프로필 RN UI를 순차 연결한다.
