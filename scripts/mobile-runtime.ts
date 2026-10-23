@@ -17,6 +17,7 @@ import {
   runtimeDevelopmentUrl,
 } from "./mobile-runtime-host";
 import { extractPinnedIosRuntime, preparePinnedIosRuntime } from "./mobile-runtime-ios-binary";
+import { observeIosLauncherFailure } from "./mobile-runtime-ios-observation";
 import { preflightMetroBundle } from "./mobile-runtime-metro";
 import { verifyRuntimeHomeReceipt, verifyRuntimeReceipt } from "./mobile-runtime-receipt";
 
@@ -72,9 +73,16 @@ async function main() {
   const children = new Set<ReturnType<typeof Bun.spawn>>();
   await mkdir(out, { recursive: true });
   let counter = 0;
+  let iosLauncherFailure: ReturnType<typeof observeIosLauncherFailure> | null = null;
   async function command(
     args: string[],
-    options: { cwd?: string; input?: string; timeout?: number; compile?: boolean } = {},
+    options: {
+      cwd?: string;
+      input?: string;
+      timeout?: number;
+      compile?: boolean;
+      iosLauncher?: boolean;
+    } = {},
   ) {
     const log = Bun.file(resolve(out, `private-command-${platform}-${++counter}.log`));
     const child = Bun.spawn(args, {
@@ -85,10 +93,23 @@ async function main() {
       stdin: options.input === undefined ? "ignore" : new Blob([options.input]),
     });
     children.add(child);
-    const timer = setTimeout(() => child.kill(), options.timeout ?? 120000);
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      child.kill();
+    }, options.timeout ?? 120000);
     try {
       const output = options.compile ? "" : await new Response(child.stdout).text();
-      if (await child.exited) throw new Error("RUNTIME_COMMAND_FAILED");
+      if ((await child.exited) || timedOut) {
+        if (options.iosLauncher) {
+          iosLauncherFailure = observeIosLauncherFailure(
+            await log.text().catch(() => ""),
+            timedOut,
+          );
+          throw new Error(iosLauncherFailure.code);
+        }
+        throw new Error("RUNTIME_COMMAND_FAILED");
+      }
       return output.trim();
     } finally {
       clearTimeout(timer);
@@ -230,7 +251,7 @@ async function main() {
       /* Missing samples are not represented as zero usage or fabricated peak. */
     }
   }
-  async function openApp() {
+  async function openApp(entry: "product" | "probe") {
     const url = runtimeDevelopmentUrl(pinnedIos ? "preview" : "dev");
     if (platform === "android") {
       await command([adb, "-s", device, "shell", "am", "force-stop", applicationId]);
@@ -250,17 +271,23 @@ async function main() {
       ]);
     } else {
       await command(["xcrun", "simctl", "terminate", device, applicationId]).catch(() => {});
-      phase = "ios-app-id-launch";
-      await command(["xcrun", "simctl", "launch", device, applicationId]);
-      phase = "ios-development-url-launch";
-      await command([
-        "node",
-        resolve(work, "scripts/mobile-runtime-ios-launch.cjs"),
-        "--open",
-        device,
-        avd,
-        url,
-      ]);
+      if (entry === "product") {
+        phase = "ios-app-id-launch";
+        await command(["xcrun", "simctl", "launch", device, applicationId]);
+      }
+      // Send a probe restart directly to its target URL instead of explicitly launching first.
+      phase = entry === "product" ? "ios-development-url-launch" : "ios-probe-url-launch";
+      await command(
+        [
+          "node",
+          resolve(work, "scripts/mobile-runtime-ios-launch.cjs"),
+          "--open",
+          device,
+          avd,
+          url,
+        ],
+        { iosLauncher: true },
+      );
     }
   }
   async function screenshot(name: string) {
@@ -413,7 +440,7 @@ module.exports=config;\n`;
       bundleHttpPreflight.product = await preflightMetroBundle(platform);
     }
     phase = "product-launch";
-    await openApp();
+    await openApp("product");
     phase = "product-home-layout";
     await waitFor(async () => {
       await sampleMemory();
@@ -474,7 +501,7 @@ module.exports=config;\n`;
       bundleHttpPreflight.probe = await preflightMetroBundle(platform);
     }
     phase = "native-probe";
-    await openApp();
+    await openApp("probe");
     phase = "native-probe";
     await waitFor(async () => {
       if (fixture.state.failure) throw new Error(fixture.state.failure.code);
@@ -581,6 +608,16 @@ module.exports=config;\n`;
           probeFailure: fixture.state.failure,
           metroBundleObserved: /\b(?:iOS|Android) Bundled\b/.test(log),
           bundleHttpPreflight,
+          iosLauncherFailure,
+          partialTransport: {
+            requestCount: fixture.state.requestCount,
+            rejectedHeaders: fixture.state.rejectedHeaders,
+            upload: fixture.state.upload,
+            downloadedBytes: fixture.state.downloadedBytes,
+            delayedStarted: fixture.state.delayedStarted,
+            cancelUploadStarted: fixture.state.cancelUploadStarted,
+            cancelUploadBytes: fixture.state.cancelUploadBytes,
+          },
           processRssSamples: memorySamples,
           productLayoutObserved: !!fixture.state.productMount,
           nativeResultObserved: !!fixture.state.result,

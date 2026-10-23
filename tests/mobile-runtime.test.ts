@@ -50,6 +50,7 @@ import {
   quoteAdbShellArgument,
   runtimeDevelopmentUrl,
 } from "../scripts/mobile-runtime-host";
+import { observeIosLauncherFailure } from "../scripts/mobile-runtime-ios-observation";
 import {
   localMetroBundleUrl,
   metroHttpProofSchema,
@@ -68,6 +69,24 @@ const config: RuntimeConfig = {
   origin: RUNTIME_ORIGIN,
 };
 const fixture = createRuntimeFixture(config);
+test("native launcher observations retain only an exact fixed code, timeout and bounded known domains", () => {
+  const secret = "synthetic-private-token /private/synthetic";
+  const detail = `${secret}\nRUNTIME_IOS_OPEN_URL_FAILED\nIOS_RUNTIME_FAILURE_DOMAIN NSOSStatusErrorDomain -10814\nUnknownPrivateDomain Code=42\nNSPOSIXErrorDomain Code=999999999999999999`;
+  expect(observeIosLauncherFailure(detail, false)).toEqual({
+    code: "RUNTIME_IOS_OPEN_URL_FAILED",
+    timedOut: false,
+    domains: [{ domain: "NSOSStatusErrorDomain", code: -10814 }],
+  });
+  expect(JSON.stringify(observeIosLauncherFailure(detail, false))).not.toContain(secret);
+  expect(observeIosLauncherFailure("UNKNOWN_PRIVATE_CAPS", true)).toEqual({
+    code: "RUNTIME_IOS_LAUNCH_COMMAND_TIMEOUT",
+    timedOut: true,
+    domains: [],
+  });
+  expect(
+    observeIosLauncherFailure(`prefix RUNTIME_IOS_OPEN_URL_FAILED ${secret}`, false).code,
+  ).toBe("RUNTIME_IOS_LAUNCH_FAILED");
+});
 test("bundle HTTP preflight restricts every generated launch URL to the owned IPv4 Metro and distinguishes bytes from app execution", async () => {
   const url = "http://127.0.0.1:8081/.expo/.virtual-metro-entry.bundle?platform=ios&dev=false";
   expect(localMetroBundleUrl(url, "ios")).toBe(url);
