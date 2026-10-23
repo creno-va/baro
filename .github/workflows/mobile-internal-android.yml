@@ -67,5 +67,10 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: mobile-internal-android-failure-${{ inputs.target_sha }}
-          path: .wrangler/mobile-internal-android/failure-android.json
+          path: |
+            .wrangler/mobile-internal-android/failure-android.json
+            .wrangler/mobile-internal-android/inspection/inspection.json
+            .wrangler/mobile-internal-android/inspection/compiled-android-*.apk
+            .wrangler/mobile-internal-android/inspection/generated-index.android.bundle
+            .wrangler/mobile-internal-android/inspection/font-faces.xml
           if-no-files-found: ignore
