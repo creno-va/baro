@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "kind": "local-ios-native-runtime-visual-observation",
+  "sourceSha": "9a369bc0c92498b0a01dc0ddc4cb71d534a623c6",
+  "workflowRunId": "39996169996",
+  "reviewedAt": "2026-10-23T18:15:17.979Z",
+  "productHomeScreenshot": {
+    "name": "product-home-ios.png",
+    "bytes": 221375,
+    "sha256": "4e03890d0c5d4cee05b5e6e545116302bf5514f2ab37cf7340baab7fda560b2d"
+  },
+  "nativeProbeScreenshot": {
+    "name": "native-probe-ios.png",
+    "bytes": 84025,
+    "sha256": "0b025ae1a8076cc3825e3e5392927b880a673091e675d76c03a8593681fa1ba5"
+  },
+  "instrumentedInitialHomeVisible": true,
+  "hangulHomeCardsVisible": true,
+  "configurationErrorVisible": false,
+  "probePassedMarkerVisible": true,
+  "initialViewportOnly": true,
+  "completeScrollableScreenVerified": false,
+  "productJourneysVerified": false,
+  "accessibilityVerified": false,
+  "documentPickerVerified": false,
+  "remoteApiVerified": false,
+  "oauthVerified": false,
+  "physicalDeviceVerified": false,
+  "storeSigned": false,
+  "deployed": false
+}

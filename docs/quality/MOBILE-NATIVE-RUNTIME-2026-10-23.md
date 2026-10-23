@@ -1,6 +1,7 @@
 # 모바일 실제 실행·내부 개발 앱 증거
 
-관측 대상 source는 `c2fa3f23394a349bf7cf7d33dee64a433d29e634`다. PR389의
+최초 Android 관측 source는 `c2fa3f23394a349bf7cf7d33dee64a433d29e634`이고,
+iOS local 후속은 `9a369bc0c92498b0a01dc0ddc4cb71d534a623c6`다. 각 실행의 source/entry를 구분한다. PR389의
 Quality gate39915601296/SDK host39915601362와 main CI39915841507이 성공했다.
 [이슈385](https://github.com/creno-va/baro/issues/385)에서 이전 실패와 현재 범위를 보존한다.
 웹 소유 경로·제품 router·server/schema를 변경하지 않은 검증이다.
@@ -146,3 +147,31 @@ No-Team ad-hoc·자기 namespace만 허용한다. Xcode의 실제 XML/DER를 읽
 성공으로 기록하지 않는다. compiler exit0 이후 unaccepted ZIP/inspection과 후속 실제 metadata를
 소유 checkout 정리 전에 allowlist로 복사한다. 이후 runtime 실패 시 같은 원본을 재검증할 수
 있으며 build 로그를 artifact에 내보내지 않는다. 새 local profile의 실제 실행 결과는 별도로 인수한다.
+
+
+## iOS local native runtime 실제 완료와 독립 #385 인수
+
+PR417/main9a369bc·CI39995718447 뒤 [실제39996169996](https://github.com/creno-va/baro/actions/runs/39996169996)은
+terminal SUCCESS다. [원본 receipt](./mobile-runtime-2026-10-23/receipt-ios-9a369bc.json)를 strict schema로
+재검증하고 양쪽 transport/result의 전체 byte/hash·요청/취소 수치를 대조했다. iPhone16/iOS26.5,
+site.baro.app.dev의 실제 local 개발 앱이며 Home 계측 후 별도 probe entry에서 SDK/native IO를 실행했다.
+
+100,000,000bytes upload SHA256은 `83d30385a4a11980275dc23de3fb49ff37b906cc841efa048a96c62d90ff3b5f`,
+1,000,000,000bytes download는 `c81ea537d85888c161118b7ac8dc75be6cdeaf291790cb36ab34f3c7833e9abc`다.
+실제 native upload/download 요청5회·최대 복사65,536bytes, 취소 upload523,800bytes,
+SDK source/download·SecureStore readback·미확정 key/peer cookie 보존·401/Origin/owner 차단·
+전송 중 source clear 거부와 source/download/native 파일0개 정리를 확인했다. 요청5회는 전체 IPC 횟수가 아니다.
+Home layout393×852, RSS239표본 중 최대 관측764,526,592bytes이며 전체 peak나 JS heap 한도를 증명하지 않는다.
+
+[원본 compiler inspection](./mobile-runtime-2026-10-23/inspection-ios-9a369bc.json)의 accepted=false는
+compile 직후 사실로 보존한다. 원본 ZIP51,295,775bytes/SHA2569f40af9eb77c77c95ef9ea3052aab9a052b78e082c79ecce1b0109be72d357ca를
+독립 대조했다. 후속 [실제 signing metadata](./mobile-runtime-2026-10-23/control-ios-9a369bc.json)와 runtime 안의
+nativeSigning이 동일하다. 양 ABI의 Xcode 생성 자기 dev namespace XML/DER와 빈 host entitlements·
+No-Team ad-hoc를 인수했으며 Apple 계정/실제 Team/store 서명이 아니다. preview/production origin guard는 유지했다.
+
+실제 Home/합성 probe passed PNG도 직접 대조하고 [별도 시각 관측](./mobile-runtime-2026-10-23/visual-ios-9a369bc.json)에
+hash/시각/초기 viewport 범위를 보존했다. 원본 auto receipt와 이전 실패·관측 시각은 고치지 않았다.
+Android c2fa3f2와 iOS9a369bc는 별도 source/probe/tooling이며 같은 build로 합치지 않는다. 제품/native module 입력은
+두 source 사이 동일하고 probe·도구 보완은 각 실행 source에 묶는다. 실제 두 OS local Home·IPC/SDK IO·
+receipt 실물 확인과 내부 전달의 독립 #385 범위는 인수한다. 실제 DocumentPicker/공유/원격 API/OAuth·
+전체 제품 여정/접근성·physical/store·#339/#71과 전체 목표 #334는 OPEN이다.

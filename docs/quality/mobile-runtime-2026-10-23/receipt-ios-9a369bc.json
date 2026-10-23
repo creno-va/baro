@@ -1,0 +1,159 @@
+{
+  "version": 1,
+  "kind": "local-development-runtime",
+  "sourceSha": "9a369bc0c92498b0a01dc0ddc4cb71d534a623c6",
+  "platform": "ios",
+  "environment": "local",
+  "apiOrigin": "http://127.0.0.1:8765",
+  "applicationId": "site.baro.app.dev",
+  "nativeSigning": {
+    "version": 1,
+    "kind": "local-xcode-simulator-signing-control",
+    "sourceSha": "9a369bc0c92498b0a01dc0ddc4cb71d534a623c6",
+    "toolingSourceSha": "9a369bc0c92498b0a01dc0ddc4cb71d534a623c6",
+    "observedAt": "2026-10-23T17:56:29.983Z",
+    "applicationId": "site.baro.app.dev",
+    "signature": "ad-hoc",
+    "teamIdentifier": "not set",
+    "architectures": [
+      "x86_64",
+      "arm64"
+    ],
+    "entitlements": {
+      "keychain-access-groups": [
+        "FAKETEAMID.site.baro.app.dev"
+      ],
+      "application-identifier": "FAKETEAMID.site.baro.app.dev"
+    },
+    "entitlementsSource": "simulator-macho-xml-and-der",
+    "signatureEntitlements": {},
+    "sectionHashes": [
+      {
+        "architecture": "x86_64",
+        "xmlSha256": "6b75945e190752829a6b72d0cc8972a84864009d2755aa088e3c9332ba755a49",
+        "derSha256": "3a5d9f8bcaf3788f4ff79738df3bf21cb270665a657e9761f854c5e1caafdea5"
+      },
+      {
+        "architecture": "arm64",
+        "xmlSha256": "6b75945e190752829a6b72d0cc8972a84864009d2755aa088e3c9332ba755a49",
+        "derSha256": "3a5d9f8bcaf3788f4ff79738df3bf21cb270665a657e9761f854c5e1caafdea5"
+      }
+    ],
+    "executableSha256": "9526fce5b52b1c8aa28d3339a75ba7f2f5a876a2eb1bc358556d19b3b227cb26",
+    "infoPlistSha256": "4895b885cb80de869cd263ebcee25fd843fc00ae8e9d65ff11f597ffb31e073f",
+    "appRuntimeVerified": false,
+    "physicalDeviceVerified": false,
+    "storeSigned": false,
+    "deployed": false,
+    "environment": "local",
+    "apiOrigin": "http://127.0.0.1:8765"
+  },
+  "bundleHttpPreflight": {
+    "product": {
+      "kind": "metro-http-response-only",
+      "bytes": 6035366,
+      "sha256": "0885145c4a3884e4a2d742305db2ba833afd4f80f0919f97152276aef1e37826",
+      "appExecutionVerified": false
+    },
+    "probe": {
+      "kind": "metro-http-response-only",
+      "bytes": 4192196,
+      "sha256": "a6c299e43d4f4a88943280a0f87106b82cbd5c9859953b94bced32d7e14ff63d",
+      "appExecutionVerified": false
+    }
+  },
+  "device": {
+    "kind": "simulator",
+    "model": "iPhone 16",
+    "osVersion": "26.5"
+  },
+  "productEntry": {
+    "kind": "instrumented-home-layout-only",
+    "originalSha256": "c2b09ab674dd4340ba2501e0520aea86e6041c8301075a7bbfbb0b35523364f5",
+    "overlaySha256": "cd5dabb9f034a8a068d6301f1441e98dd5066d5cb92859f2ebc29fd8202cbfd0",
+    "layout": {
+      "width": 393,
+      "height": 852
+    },
+    "screenshot": "product-home-ios.png"
+  },
+  "probeEntry": {
+    "kind": "alternate-entry-real-native-sdk",
+    "path": "apps/mobile/runtime-probe/entry.tsx",
+    "sha256": "d4f50a5a1a17195e3ac07c776aea970f804df2f81277eb12093d6f8ffb27bd22"
+  },
+  "metroOverlaySha256": "e42ca424a908447b4a23766785722890f90abcf77e2ba8cad00f6ff364b26cb3",
+  "assets": {
+    "kind": "compiled-resource-only",
+    "family": "BaroMobile",
+    "sha256": "3ae12c1281a84901b32d8c5f0e43fd6c4f8a5b7fd4ccbde66cfbe9f07cde05e8",
+    "weights": [
+      400,
+      600,
+      700
+    ],
+    "glyphs": 14757,
+    "codepoints": 14336,
+    "hangul": 11172,
+    "licenseEmbedded": true,
+    "compiledBytesMatch": true,
+    "appRuntimeVerified": false
+  },
+  "result": {
+    "version": 1,
+    "sourceSha": "9a369bc0c92498b0a01dc0ddc4cb71d534a623c6",
+    "platform": "ios",
+    "upload": {
+      "bytes": 100000000,
+      "sha256": "83d30385a4a11980275dc23de3fb49ff37b906cc841efa048a96c62d90ff3b5f"
+    },
+    "download": {
+      "bytes": 1000000000,
+      "sha256": "c81ea537d85888c161118b7ac8dc75be6cdeaf291790cb36ab34f3c7833e9abc"
+    },
+    "nativeMaxCopyBytes": 65536,
+    "nativeCalls": 5,
+    "sdkSourceReadback": true,
+    "sdkDownloadReadback": true,
+    "secureStoreReadback": true,
+    "unresolvedKeyPreserved": true,
+    "cancelUploadBytesReceived": 523800,
+    "unauthorizedRejected": true,
+    "crossOriginRejected": true,
+    "ownerChangeRejected": true,
+    "peerCookiePreserved": true,
+    "sourceClearRejectedActiveUpload": true,
+    "sourceFilesRemaining": 0,
+    "downloadFilesRemaining": 0,
+    "nativeFilesRemaining": 0,
+    "documentPickerVerified": false,
+    "oauthVerified": false,
+    "remoteApiVerified": false,
+    "physicalDeviceVerified": false,
+    "storeSigned": false,
+    "deployed": false
+  },
+  "transport": {
+    "requestCount": 5,
+    "rejectedHeaders": 0,
+    "upload": {
+      "bytes": 100000000,
+      "sha256": "83d30385a4a11980275dc23de3fb49ff37b906cc841efa048a96c62d90ff3b5f"
+    },
+    "downloadedBytes": 1000000000,
+    "delayedStarted": true,
+    "cancelUploadStarted": true,
+    "cancelUploadBytes": 523800
+  },
+  "memory": {
+    "metric": "sampled-process-rss",
+    "peakObservedBytes": 764526592,
+    "samples": 239,
+    "wholeRunPeakProven": false,
+    "jsHeapLimitProven": false
+  },
+  "productJourneysVerified": false,
+  "accessibilityVerified": false,
+  "storeSigned": false,
+  "deployed": false
+}

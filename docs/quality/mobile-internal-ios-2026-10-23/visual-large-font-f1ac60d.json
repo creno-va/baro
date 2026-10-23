@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "kind": "ios-largest-content-size-initial-viewport-visual-observation",
+  "binarySourceSha": "ff5c208d07f63459cb53ef040fd6e9e26007709d",
+  "toolingSourceSha": "f1ac60dd2a94341825928d8c8ed9f337b9f1e6d2",
+  "workflowRunId": "40000381723",
+  "reviewedAt": "2026-10-23T18:15:17.979Z",
+  "archiveSha256": "40305a809554b104041fbac52b154faea42dcab9b446119f0fd572b6078617d2",
+  "compilerReceiptSha256": "a813f7643f83905476064428a017dde026f3efa6b61519fb789d5572cdb11872",
+  "baselineScreenshot": {
+    "name": "home-ios.png",
+    "bytes": 219614,
+    "sha256": "4b484917854e166aeb0dd7c3af5ca06b39e7a8788c177749b846a131a9008ea7"
+  },
+  "largeFontScreenshot": {
+    "name": "large-font-ios.png",
+    "bytes": 163252,
+    "sha256": "1b95bcb98ca2e86b9271a1e03018c27d1c68a24b857dee7d37c5343a4946fe25"
+  },
+  "requestedContentSize": "accessibility-extra-extra-extra-large",
+  "nativeReadbackBeforeAndAfterRestart": true,
+  "hangulEnlargementAndWrappingVisible": true,
+  "headingDominatesInitialViewport": true,
+  "cardsAndActionsBelowInitialViewport": true,
+  "initialViewportOnly": true,
+  "completeScrollableScreenVerified": false,
+  "scrollReachabilityVerified": false,
+  "layoutUsabilityAccepted": false,
+  "semanticTextScaleProven": false,
+  "accessibilityVerified": false,
+  "productJourneysVerified": false,
+  "remoteApiVerified": false,
+  "oauthVerified": false,
+  "physicalDeviceVerified": false,
+  "storeSigned": false,
+  "deployed": false
+}
