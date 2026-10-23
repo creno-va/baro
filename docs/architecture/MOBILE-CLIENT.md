@@ -505,6 +505,44 @@ payload와 response만 지운다. 원래 source와 미해결 서버 key는 소�
 이 producer의 SDK bridge/cleanup 회귀와 실제 local HTTP 코어100MB 바이트/서버 독립 해시·
 RSS/JVM heap proof, 두 OS compile은 실제 RN source lease·기기 IPC·API 시연과 구분한다.
 
+### M6 본인 프로필의 native 소비
+
+`composition/profile`은 공통 `createLawyersClient`와 `createLawyerAssetsClient`에
+captured native credential/expected owner, feature+scope signal, required operation storage,
+source lease와 native IO를 주입한다. 플랫폼과 무관한 `features/profile/model`은 Expo SDK를
+import하지 않는다. 본문/revision·필드 mask·준비 완료·자격 표시 계약은 기존 공통 계약을 따른다.
+웹 `src/pages/components/layouts/styles`는 이 소비 변경에서 수정하지 않는다.
+
+`/profile`은 본인 편집·초안 저장·공개/철회·사진/포트폴리오 연결·비공개 자료 준비/열기/공유·
+참조 해제 후 삭제를 제공한다. 공개는 clean 저장본과 필수 입력·명시적 공개 항목 동의가
+필요하다. ready 처리 완료 전에는 연결/열기하지 않는다. 저장본과 입력이 참조하는 자료는
+바로 삭제하지 않으며 literal DELETE 뒤 새 asset 목록의 부재로 접수 상태를 확인한다.
+원격 purge와 외부 앱에 전달된 복사본 회수는 주장하지 않는다.
+
+source adapter는 native IO 동안 opaque source identity를 lease한다. 실제 기기 URI를
+모델에 노출하지 않고 생성한 UUID basename만 native PUT에 넘긴다. 동시 release/clear는
+같은 retire 작업을 기다리며 cancel → native 종료 → reader close → unlink 순서를 지킨다.
+100MB source의 JS body fallback은 금지한다. 응답은 native 65,536bytes 상한과 작은 JSON
+content-type을 확인하고 owned cache에 adopt·독립 크기/hash 검사한 후 파싱·정리한다.
+private sanitized read도 기존 native disk transfer 경로를 재사용한다.
+
+응답 유실은 자동 write retry로 바꾸지 않는다. 화면 내 원래 save body·publication basis·
+asset revision을 보존하고 fresh read로 exact duplicate/다음 공개 revision/asset 부재를 확인한다.
+불명확한 요청은 별도 수동 재확인만 허용한다. 더 최신 revision은 입력을 덮지 않고 명시적인
+discard/reload를 요구한다. asset 삭제 확인은 관계없는 미저장 본문을 버리지 않는다.
+본문은 같은 화면 메모리에만 두며 route/앱 재시작은 서버 조회부터 시작한다. 업로드만 공통
+opaque recovery schema의 key/expectedRevision/assetId/assetRevision을 환경별 SecureStore에
+남긴다. 계정 전환/cleanup은 다른 소유자의 미확정 작업 key를 삭제하지 않는다.
+
+세션 checking은 private 내용을 숨기며 같은 소유자의 fresh lawyer 세션만 입력을 복구한다.
+picker background는 별도 취소 신호로 그 소유자를 기다리고 다른 계정/역할/동의 상태·화면
+이탈에서는 폐기한다. server ROLE_REQUIRED는 공통 adapter의 NOT_FOUND로 전달되므로
+그 접근 거부도 private 입력을 지우고 세션을 새로 조회한다. 동의 갱신은 기존 읽기만 허용한다.
+
+회귀는 순수 모델, native job/cache/credential, Expo source retire 경합, 실제 composition과
+required storage, captured-cookie Hono/SQLite·sanitized fixture, RN 화면의 explicit 확인을
+구분해 검증한다. 이 합성 포트/로컬 SQL 결과는 실제 기기 IPC·OAuth·공급자·스토어 인수가 아니다.
+
 ### M7 웹 정본에서 생성하는 시각 토큰
 
 웹 #332의 `docs/design/PRODUCT-UI.md` 인계를 따라 `@baro/design-tokens`는 기존 product.css/

@@ -34,6 +34,25 @@ test("native upload recovery admits only strict opaque revision/receipt metadata
   ).rejects.toBeDefined();
   expect([...f.records.values()].join("").includes("SYNTHETIC_PRIVATE")).toBe(false);
 });
+test("native lawyer intent uses the shared strict opaque record and preserves unrelated operations", async () => {
+  const f = fixture(),
+    name = `baro-lawyer-upload-v2:${"b".repeat(64)}`;
+  const record = { key: value, expectedRevision: 1, assetId: "asset_a", assetRevision: 2 };
+  await f.storage.setItem(key, value);
+  await f.storage.setItem(name, JSON.stringify(record));
+  expect(JSON.parse((await f.storage.getItem(name)) ?? "null")).toEqual(record);
+  for (const extra of [{ token: "PRIVATE" }, { sourceName: "PRIVATE" }, { profile: "PRIVATE" }])
+    await expect(
+      f.storage.setItem(name, JSON.stringify({ ...record, ...extra })),
+    ).rejects.toMatchObject({ code: "UNAVAILABLE" });
+  await f.storage.removeItem(name);
+  expect(await f.storage.getItem(key)).toBe(value);
+  expect(
+    [...f.records.keys()].every((name) =>
+      /^baro_preview_case_operations\.[a-f0-9]{64}$/.test(name),
+    ),
+  ).toBe(true);
+});
 function fixture() {
   const records = new Map<string, string>();
   let mode = "",

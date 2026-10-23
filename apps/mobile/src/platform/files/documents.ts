@@ -15,7 +15,11 @@ const unavailable = () =>
 export function createExpoUploadSources(dependencies: { namespace: string; newId: () => string }) {
   if (!/^[A-Za-z0-9_-]{1,80}$/.test(dependencies.namespace)) throw unavailable();
   const root = new Directory(Paths.cache, dependencies.namespace);
-  const owned = new Map<NativeUploadSource, { file: File; readers: Set<UploadReader> }>();
+  type Activity = { cancel(): void; done: Promise<void> };
+  type Entry = { file: File; readers: Set<UploadReader>; activities: Set<Activity> };
+  const owned = new Map<NativeUploadSource, Entry>(),
+    removed = new Map<NativeUploadSource, Entry>(),
+    retiring = new Map<NativeUploadSource, Promise<void>>();
   const pendingCleanup = new Set<File>();
   let initialized = false,
     version = 0,
@@ -35,13 +39,30 @@ export function createExpoUploadSources(dependencies: { namespace: string; newId
     if (!root.exists) throw unavailable();
     initialized = true;
   };
-  const remove = async (source: NativeUploadSource) => {
-    const entry = owned.get(source);
-    if (!entry) return;
+  const remove = (source: NativeUploadSource): Promise<void> => {
+    const pending = retiring.get(source);
+    if (pending) return pending;
+    const entry = owned.get(source) ?? removed.get(source);
+    if (!entry) return Promise.resolve();
     owned.delete(source);
-    await Promise.all([...entry.readers].map((reader) => reader.close()));
-    pendingCleanup.add(entry.file);
-    cleanup();
+    removed.set(source, entry);
+    const task = Promise.resolve()
+      .then(async () => {
+        for (const activity of entry.activities) activity.cancel();
+        await Promise.all([...entry.activities].map((activity) => activity.done));
+        const readers = await Promise.allSettled(
+          [...entry.readers].map((reader) => reader.close()),
+        );
+        if (readers.some((result) => result.status === "rejected")) throw unavailable();
+        removed.delete(source);
+        pendingCleanup.add(entry.file);
+        cleanup();
+      })
+      .finally(() => {
+        retiring.delete(source);
+      });
+    retiring.set(source, task);
+    return task;
   };
   return {
     async select(signal: AbortSignal): Promise<NativeUploadSource | null> {
@@ -108,7 +129,7 @@ export function createExpoUploadSources(dependencies: { namespace: string; newId
         temporary = undefined;
         ensure();
         if (!target.exists || target.size !== source.size) throw unavailable();
-        owned.set(source, { file: target, readers: new Set() });
+        owned.set(source, { file: target, readers: new Set(), activities: new Set() });
         target = undefined;
         return source;
       } catch (error) {
@@ -122,6 +143,52 @@ export function createExpoUploadSources(dependencies: { namespace: string; newId
         throw unavailable();
       } finally {
         selecting = false;
+      }
+    },
+    async withNativeSource<T>(
+      source: NativeUploadSource,
+      signal: AbortSignal,
+      consume: (context: { sourceName: string; signal: AbortSignal }) => Promise<T>,
+    ): Promise<T> {
+      const entry = owned.get(source),
+        captured = version;
+      const controller = new AbortController(),
+        combined = AbortSignal.any([signal, controller.signal]);
+      const ensure = () => {
+        combined.throwIfAborted();
+        if (
+          !entry ||
+          captured !== version ||
+          owned.get(source) !== entry ||
+          !entry.file.exists ||
+          entry.file.size !== source.size
+        )
+          throw unavailable();
+      };
+      let complete!: () => void;
+      const activity = {
+        cancel: () => controller.abort(),
+        done: new Promise<void>((resolve) => {
+          complete = resolve;
+        }),
+      };
+      try {
+        ensure();
+        if (!entry) throw unavailable();
+        // Only a generated filename leaves the adapter. Never expose the SDK URI or an arbitrary source path.
+        const sourceName = entry.file.name;
+        if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(sourceName))
+          throw unavailable();
+        entry.activities.add(activity);
+        const value = await consume({ sourceName, signal: combined });
+        ensure();
+        return value;
+      } catch (error) {
+        if (error instanceof ApiError) throw error;
+        throw unavailable();
+      } finally {
+        entry?.activities.delete(activity);
+        complete();
       }
     },
     async openUpload(source: NativeUploadSource, signal: AbortSignal): Promise<UploadReader> {
@@ -160,7 +227,10 @@ export function createExpoUploadSources(dependencies: { namespace: string; newId
       version++;
       try {
         initialize();
-        await Promise.all([...owned.keys()].map(remove));
+        const results = await Promise.allSettled(
+          [...new Set([...owned.keys(), ...removed.keys(), ...retiring.keys()])].map(remove),
+        );
+        if (results.some((result) => result.status === "rejected")) throw unavailable();
         cleanup();
       } catch {
         throw unavailable();

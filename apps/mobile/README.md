@@ -52,7 +52,7 @@ loopback·사설 LAN 주소만 허용하며 Android emulator는 `http://10.0.2.2
 - `src/platform/auth`: 기기 cookie 저장·고정 Origin·갱신/만료·세션 generation 격리.
 - `@baro/contracts`: 기존 `src/contracts` 정본의 명시적 public export. 서버 pipeline 제외.
 - `@baro/api-client`, `@baro/client-core`: 웹과 같은 HTTP/오류/DTO/계약. 플랫폼 cookie·저장은 adapter 소유.
-- `getMobileApi().lawyers`: 공통 프로필 JSON client. 공개 조회는 익명 transport, 본인 저장/공개 전환은 native credential transport를 사용. 파일 선택/캐시/공유는 M5/M6에서 source/upload/download port에 연결.
+- `getMobileApi().lawyers`: 공통 프로필 JSON client. 공개 조회는 익명 transport, 본인 저장/공개 전환은 native credential transport를 사용. `/profile`의 본인 편집·공개/철회·자산 업로드/비공개 미리보기/참조 해제·삭제는 공통 client와 native IO port로 연결. 아래 프로필 경계를 따른다.
 - `src/features/directory`: 요청 취소·새 검색 우선·기존 페이지 보존·cursor 재시도의 순수 model과 RN 목록.
 - `src/features/settings`: 두 역할의 서버 사용량·정책·같은 계정 재인증·literal 삭제와 미확정/접수/로컬 정리 상태. `/session`에서 진입한다.
 
@@ -147,7 +147,7 @@ opaque UUID를 필수 저장/readback하고 응답 유실·feature 재생성에�
 확정 ACK에서 선택 사건·분석/입력을 비우고 scope를 폐기한 뒤 fresh 세션/목록을 읽는다.
 후속 조회나 key cleanup 실패로 이미 접수한 삭제를 다시 새 작업으로 보내지 않는다.
 물리 자료 정리 완료를 접수와 혼동하지 않으며 미정산 원장/hold와 다른 미해결 작업 key를
-지우지 않는다. 계정 탈퇴는 이 사건 삭제와 별개인 M6 잔여다.
+지우지 않는다. 계정 탈퇴는 이 사건 삭제와 별개이며 설정 화면의 fresh reauth·literal 확인 경로를 따른다.
 
 ## 같은 계정 재인증
 
@@ -250,3 +250,30 @@ native-module PR workflow에서 128MiB JVM 힙으로 같은 바이트를 검사�
 모듈/해당 fixture 변경 PR에만 두 OS 앱을 컴파일한다. [모듈 안내](./modules/baro-private-download/README.md)의
 borrowed fileId·cancel/release/clear 계약을 따른다. 메인 앱/두 OS 기기·API 메모리와 실제
 provider 시연, 서명·스토어 인수는 별개다.
+
+
+## 본인 변호사 프로필
+
+변호사 계정의 내 계정 → 내 변호사 프로필 관리에서 소개·사무소·연락처·지역/분야·
+사진·글/링크/파일 포트폴리오를 편집한다. 저장과 공개/철회는 별도 동작이다. 공개에는
+저장 완료·필수 입력·노출 항목 동의와 명시적 확인이 필요하며 역할 선택은 자격 확인이 아니다.
+
+파일 선택은 SDK cache의 불변 스냅샷을 소유하며 native PUT에는 생성 UUID basename·크기·
+SHA-256만 전달한다. 선택 파일의 JS 전체 body/SDK fetch fallback은 없다. source lease는
+native 취소/종료를 기다린 뒤 삭제한다. 작은 JSON 응답도 owned cache에 옮겨 독립 hash를
+검사한 뒤 읽고 지운다. 구형 개발 앱은 최신 개발 앱 설치 안내로 실패한다.
+
+업로드 완료와 처리 완료를 구분한다. `ready` 자료만 연결/비공개 열기·공유할 수 있고,
+연결 후 프로필 저장이 필요하다. 현재 저장본·입력에서 참조한 자료는 참조 해제와 저장 후
+literal `DELETE`로 삭제한다. 삭제 접수와 원격 purge 완료는 구분한다.
+
+저장/공개/삭제 ACK 유실은 자동 재전송하지 않는다. 화면 메모리의 원래 body/revision을
+보존하고 새 조회로 결과를 확인하거나 사용자가 같은 요청을 직접 확인한다. 앱/화면 재시작은
+현재 서버 값을 읽으며 미확정 업로드 key/revision은 환경별 SecureStore에 보존한다.
+프로필 본문·파일명·기기 URI는 그 복구 레코드에 저장하지 않는다. 세션 확인 중에는 private
+입력을 숨기고 같은 소유자의 fresh 세션에만 복구한다. 다른 계정/역할·접근 거부·route 이탈은
+본문·handle을 버린다. picker의 일시 background 복귀는 fresh 같은 소유자를 기다리며 자동
+업로드하지 않는다. 동의 갱신 중에는 기존 프로필/ready 자료 읽기만 유지한다.
+
+`mobile:check`는 순수 모델·captured native transport/Hono/SQLite·RN 화면·합성 SDK composition을
+검사한다. native core/compile 증거와 실제 앱 IPC·두 OS 기기/API·스토어 인수는 구분한다.

@@ -45,6 +45,9 @@ jest.mock("expo-file-system", () => ({
     get size() {
       return mockFiles.get(this.uri)?.byteLength ?? 0;
     }
+    get name() {
+      return this.uri.split("/").at(-1) ?? "";
+    }
     delete() {
       if (!mockIgnoreDelete) mockFiles.delete(this.uri);
     }
@@ -87,6 +90,51 @@ const asset = {
 const signal = () => new AbortController().signal;
 const create = () =>
   createExpoUploadSources({ namespace: "baro_preview_uploads", newId: () => id });
+
+test("native source leases expose only generated filenames and clear waits for a concurrently retiring source", async () => {
+  const sources = create(),
+    source = await sources.select(signal());
+  if (!source) throw new Error("SYNTHETIC_PICK_REQUIRED");
+  let finish!: () => void,
+    entered!: () => void,
+    aborted = false;
+  const ready = new Promise<void>((resolve) => {
+    entered = resolve;
+  });
+  const held = new Promise<void>((resolve) => {
+    finish = resolve;
+  });
+  const transfer = sources
+    .withNativeSource(source, signal(), async (context) => {
+      expect(context.sourceName).toBe(id);
+      expect("uri" in context).toBe(false);
+      context.signal.addEventListener("abort", () => {
+        aborted = true;
+      });
+      entered();
+      await held;
+      return "native-finished";
+    })
+    .catch((error: unknown) => error);
+  await ready;
+  const release = sources.release(source);
+  let cleared = false;
+  const clear = sources.clear().then(() => {
+    cleared = true;
+  });
+  for (let i = 0; i < 15; i++) await Promise.resolve();
+  expect(aborted).toBe(true);
+  expect(cleared).toBe(false);
+  expect(mockFiles.has(`${root}/${id}`)).toBe(true);
+  await expect(
+    sources.withNativeSource({ ...source }, signal(), async () => "forged"),
+  ).rejects.toMatchObject({ code: "UNAVAILABLE" });
+  finish();
+  await release;
+  await clear;
+  expect(await transfer).toMatchObject({ code: "UNAVAILABLE" });
+  expect(mockFiles.has(`${root}/${id}`)).toBe(false);
+});
 beforeEach(() => {
   mockFiles.clear();
   mockDirectories.clear();

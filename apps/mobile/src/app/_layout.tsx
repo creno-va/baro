@@ -32,6 +32,7 @@ export default function RootLayout() {
         <Stack.Screen name="precedents" options={{ title: "사건 판례 탐색" }} />
         <Stack.Screen name="session" options={{ title: "로그인·내 계정" }} />
         <Stack.Screen name="settings" options={{ title: "사용량·설정" }} />
+        <Stack.Screen name="profile" options={{ title: "내 변호사 프로필" }} />
         <Stack.Screen name="cases" options={{ title: "내 사건" }} />
         <Stack.Screen name="workspace" options={{ title: "사건 작업공간" }} />
         <Stack.Screen name="files" options={{ title: "사건 자료" }} />

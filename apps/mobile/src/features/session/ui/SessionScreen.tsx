@@ -22,6 +22,7 @@ export function SessionScreen({
   onReauthenticate,
   onReadReauthentication,
   onSettings,
+  onProfile,
 }: {
   state: SessionState;
   onRole: (role: AccountType) => void;
@@ -35,6 +36,7 @@ export function SessionScreen({
   onReauthenticate?: (provider: Provider) => void;
   onReadReauthentication?: () => void;
   onSettings?: () => void;
+  onProfile?: () => void;
 }) {
   return (
     <Screen>
@@ -159,6 +161,9 @@ export function SessionScreen({
       ) : null}
       <Button label="변호사 탐색" onPress={onBrowse} />
       {onSettings ? <Button label="사용량·설정" onPress={onSettings} /> : null}
+      {onProfile && state.session?.user?.accountType === "lawyer" ? (
+        <Button label="내 변호사 프로필 관리" onPress={onProfile} />
+      ) : null}
     </Screen>
   );
 }
