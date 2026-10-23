@@ -1,6 +1,7 @@
 import { Button } from "../../../ui/Button";
 import { Card } from "../../../ui/Card";
 import { Choice } from "../../../ui/Choice";
+import { Disclosure } from "../../../ui/Disclosure";
 import { Screen } from "../../../ui/Screen";
 import { Text } from "../../../ui/Text";
 import { TextField } from "../../../ui/TextField";
@@ -154,104 +155,138 @@ export function ReportsScreen({
               </Text>
             ) : null}
             <Text>출처·자료 처리 범위·확인하지 못한 항목을 본문과 함께 검토해 주세요.</Text>
-            <TextField
-              label="리포트 본문"
-              value={draft.content}
-              multiline
-              maxLength={30000}
-              editable={editable}
-              autoCorrect={false}
-              autoCapitalize="none"
-              onChangeText={(content) => actions.change({ content })}
-            />
-            <Text>{draft.content.length.toLocaleString()} / 30,000자</Text>
           </Card>
-          <Card>
-            <Text variant="heading" accessibilityRole="header">
-              식별정보와 근거 사진
-            </Text>
-            <Choice
-              label="식별정보 자동 가림"
-              checked={draft.maskIdentifiers}
-              disabled={!editable}
-              onPress={() => actions.change({ maskIdentifiers: !draft.maskIdentifiers })}
-            />
-            <Text>
-              자동 가림은 모든 개인정보를 찾아내지 못할 수 있어요. 가림을 켜면 선택을 보존하면서
-              근거 사진 전체를 출력에서 제외합니다. 가림을 꺼서 사진을 넣을 때는 사진 속 식별정보도
-              직접 확인해 주세요.
-            </Text>
-            <Text>
-              출력 근거 사진 {draft.maskIdentifiers ? 0 : (draft.includedPhotoIds?.length ?? 0)}개 ·
-              최대 12개. 실제 크기·처리 한도는 서버에서 확인합니다.
-            </Text>
-            {(report.photoCandidates ?? []).map((photo) => (
-              <Card key={photo.id}>
-                <Text>
-                  {photo.name} · 자료 버전 {photo.revision}
+          <Disclosure
+            key={`${report.id}:${report.revision}`}
+            title={state.canWrite ? "본문·가림·사진·자료 편집" : "본문·가림·사진·자료 설정 확인"}
+            summary={
+              dirty
+                ? "저장하지 않은 수정이 있어요. 저장하거나 현재 저장 상태를 다시 확인해 주세요."
+                : "내용과 출력 설정을 바꾸려면 펼쳐서 편집해 주세요."
+            }
+            keepOpen={dirty || state.conflict || state.exportExhausted || state.busy === "save"}
+            preview={
+              <Card>
+                <Text variant="heading" accessibilityRole="header">
+                  검토할 본문
                 </Text>
-                <Button
-                  label={`${photo.name} 사진 원본 열어 확인`}
-                  disabled={busy}
-                  onPress={() => {
-                    void actions.openPhoto(photo.id);
-                  }}
-                />
-                <Choice
-                  label={`${photo.name} 리포트 사진으로 포함`}
-                  checked={draft.includedPhotoIds?.includes(photo.id) ?? false}
-                  disabled={
-                    !editable ||
-                    draft.maskIdentifiers ||
-                    draft.excludedFileIds.includes(photo.id) ||
-                    (!draft.includedPhotoIds?.includes(photo.id) &&
-                      (draft.includedPhotoIds?.length ?? 0) >= 12)
-                  }
-                  onPress={() => actions.photo(photo.id)}
-                />
+                <Text>
+                  식별정보 자동 가림 {draft.maskIdentifiers ? "켜짐" : "꺼짐"} · 출력 근거 사진{" "}
+                  {draft.maskIdentifiers ? 0 : (draft.includedPhotoIds?.length ?? 0)}개 · 제외 자료{" "}
+                  {draft.excludedFileIds.length}개
+                </Text>
+                <Text variant="muted">
+                  검토용 본문에는 식별정보가 보일 수 있어요. 자동 가림은 모든 개인정보를 찾아내지
+                  못하므로 전달 전에 가림·사진·출처를 확인해 주세요.
+                </Text>
+                <Text selectable>{draft.content}</Text>
               </Card>
-            ))}
-            {!report.photoCandidates?.length ? (
-              <Text>
-                현재 버전에 포함할 수 있는 사진이 없어요. 자료 처리와 최신 버전을 확인해 주세요.
+            }
+          >
+            <Card>
+              <Text variant="heading" accessibilityRole="header">
+                본문 수정
               </Text>
-            ) : null}
-          </Card>
-          <Card>
-            <Text variant="heading" accessibilityRole="header">
-              리포트 자료 제외
-            </Text>
-            <Text>
-              자료 제외를 저장하면 본문이 출처 기준으로 다시 구성됩니다. 본문 편집과 제외를 함께
-              바꿨다면 본문을 먼저 저장한 뒤 제외를 다시 저장해 주세요. 이전 검토 버전은 서버에
-              보존돼요.
-            </Text>
-            {state.files.map((file) => (
-              <Choice
-                key={file.id}
-                label={`${file.name} 리포트에서 제외`}
-                checked={draft.excludedFileIds.includes(file.id)}
-                disabled={!editable}
-                onPress={() => actions.exclude(file.id)}
+              <TextField
+                label="리포트 본문"
+                value={draft.content}
+                multiline
+                maxLength={30000}
+                editable={editable}
+                autoCorrect={false}
+                autoCapitalize="none"
+                onChangeText={(content) => actions.change({ content })}
               />
-            ))}
-            <Button
-              label={
-                state.exportExhausted && !dirty
-                  ? "검토 내용을 보존하고 새 버전 저장"
-                  : "검토 내용 저장"
-              }
-              disabled={!editable || (!dirty && !state.exportExhausted) || !draft.content.trim()}
-              onPress={() => {
-                void actions.save();
-              }}
-            />
-            <Button
-              label="최신 사건으로 새 초안 만들기"
-              disabled={busy || !state.canWrite}
-              onPress={actions.askGenerate}
-            />
-          </Card>
+              <Text>{draft.content.length.toLocaleString()} / 30,000자</Text>
+            </Card>
+            <Card>
+              <Text variant="heading" accessibilityRole="header">
+                식별정보와 근거 사진
+              </Text>
+              <Choice
+                label="식별정보 자동 가림"
+                checked={draft.maskIdentifiers}
+                disabled={!editable}
+                onPress={() => actions.change({ maskIdentifiers: !draft.maskIdentifiers })}
+              />
+              <Text>
+                자동 가림은 모든 개인정보를 찾아내지 못할 수 있어요. 가림을 켜면 선택을 보존하면서
+                근거 사진 전체를 출력에서 제외합니다. 가림을 꺼서 사진을 넣을 때는 사진 속
+                식별정보도 직접 확인해 주세요.
+              </Text>
+              <Text>
+                출력 근거 사진 {draft.maskIdentifiers ? 0 : (draft.includedPhotoIds?.length ?? 0)}개
+                · 최대 12개. 실제 크기·처리 한도는 서버에서 확인합니다.
+              </Text>
+              {(report.photoCandidates ?? []).map((photo) => (
+                <Card key={photo.id}>
+                  <Text>
+                    {photo.name} · 자료 버전 {photo.revision}
+                  </Text>
+                  <Button
+                    label={`${photo.name} 사진 원본 열어 확인`}
+                    disabled={busy}
+                    onPress={() => {
+                      void actions.openPhoto(photo.id);
+                    }}
+                  />
+                  <Choice
+                    label={`${photo.name} 리포트 사진으로 포함`}
+                    checked={draft.includedPhotoIds?.includes(photo.id) ?? false}
+                    disabled={
+                      !editable ||
+                      draft.maskIdentifiers ||
+                      draft.excludedFileIds.includes(photo.id) ||
+                      (!draft.includedPhotoIds?.includes(photo.id) &&
+                        (draft.includedPhotoIds?.length ?? 0) >= 12)
+                    }
+                    onPress={() => actions.photo(photo.id)}
+                  />
+                </Card>
+              ))}
+              {!report.photoCandidates?.length ? (
+                <Text>
+                  현재 버전에 포함할 수 있는 사진이 없어요. 자료 처리와 최신 버전을 확인해 주세요.
+                </Text>
+              ) : null}
+            </Card>
+            <Card>
+              <Text variant="heading" accessibilityRole="header">
+                리포트 자료 제외
+              </Text>
+              <Text>
+                자료 제외를 저장하면 본문이 출처 기준으로 다시 구성됩니다. 본문 편집과 제외를 함께
+                바꿨다면 본문을 먼저 저장한 뒤 제외를 다시 저장해 주세요. 이전 검토 버전은 서버에
+                보존돼요.
+              </Text>
+              {state.files.map((file) => (
+                <Choice
+                  key={file.id}
+                  label={`${file.name} 리포트에서 제외`}
+                  checked={draft.excludedFileIds.includes(file.id)}
+                  disabled={!editable}
+                  onPress={() => actions.exclude(file.id)}
+                />
+              ))}
+              <Button
+                variant="primary"
+                label={
+                  state.exportExhausted && !dirty
+                    ? "검토 내용을 보존하고 새 버전 저장"
+                    : "검토 내용 저장"
+                }
+                disabled={!editable || (!dirty && !state.exportExhausted) || !draft.content.trim()}
+                onPress={() => {
+                  void actions.save();
+                }}
+              />
+            </Card>
+          </Disclosure>
+          <Button
+            label="최신 사건으로 새 초안 만들기"
+            disabled={busy || !state.canWrite}
+            onPress={actions.askGenerate}
+          />
           {state.confirm === "generate" ? (
             <Card>
               <Text variant="heading">새 초안을 만들까요?</Text>

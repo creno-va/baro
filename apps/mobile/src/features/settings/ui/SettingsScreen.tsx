@@ -1,6 +1,7 @@
 import type { Provider } from "@baro/client-core";
 import { Button } from "../../../ui/Button";
 import { Card } from "../../../ui/Card";
+import { Disclosure } from "../../../ui/Disclosure";
 import { Screen } from "../../../ui/Screen";
 import { Text } from "../../../ui/Text";
 import { TextField } from "../../../ui/TextField";
@@ -78,6 +79,7 @@ export function SettingsScreen({
               <Text>{state.profile.role === "lawyer" ? "변호사" : "고객"} 계정</Text>
             </Card>
           ) : null}
+          {state.error ? <Text accessibilityRole="alert">{state.error}</Text> : null}
           <Card>
             <Text variant="heading" accessibilityRole="header">
               내 사용량
@@ -124,85 +126,99 @@ export function SettingsScreen({
             ) : null}
           </Card>
           <Card>
-            <Text variant="heading" accessibilityRole="header">
-              계정 삭제
-            </Text>
-            <Text>
-              계정과 사건, 업로드 자료의 삭제를 요청해요. 되돌릴 수 없으니 필요한 자료를 먼저 저장해
-              주세요.
-            </Text>
-            {state.notice === "unconfirmed" ? (
-              <Text accessibilityRole="alert">
-                이전 삭제 요청의 결과를 확인하지 못했어요. 이미 처리됐을 수도 있어요. 자동으로 다시
-                보내지 않아요. 같은 계정으로 새로 재인증한 뒤 현재 상태를 확인하고, 직접 다시 확인을
-                선택해 주세요.
+            <Disclosure
+              title="계정 삭제 관리"
+              summary="되돌릴 수 없는 요청이에요. 연결된 계정의 새 재인증과 DELETE 확인이 필요해요."
+              keepOpen={
+                state.notice === "unconfirmed" ||
+                state.deletionState === "unconfirmed" ||
+                !!state.confirmation ||
+                !!state.action ||
+                !!state.error
+              }
+            >
+              <Text variant="heading" accessibilityRole="header">
+                계정 삭제
               </Text>
-            ) : null}
-            {state.deletionBusy ? (
-              <Text accessibilityLiveRegion="polite">
-                연결된 로그인 수단과 이전 요청을 확인하고 있어요.
+              <Text>
+                계정과 사건, 업로드 자료의 삭제를 요청해요. 되돌릴 수 없으니 필요한 자료를 먼저
+                저장해 주세요.
               </Text>
-            ) : null}
-            {state.deletion ? (
-              <>
-                <Text>
-                  {state.deletion.canDelete
-                    ? "같은 계정의 최근 재인증을 확인했어요. 삭제 요청 시 다시 검증해요."
-                    : "삭제할 계정으로 다시 인증해 주세요."}
+              {state.notice === "unconfirmed" ? (
+                <Text accessibilityRole="alert">
+                  이전 삭제 요청의 결과를 확인하지 못했어요. 이미 처리됐을 수도 있어요. 자동으로
+                  다시 보내지 않아요. 같은 계정으로 새로 재인증한 뒤 현재 상태를 확인하고, 직접 다시
+                  확인을 선택해 주세요.
                 </Text>
-                {!state.deletion.providers.length ? (
+              ) : null}
+              {state.deletionBusy ? (
+                <Text accessibilityLiveRegion="polite">
+                  연결된 로그인 수단과 이전 요청을 확인하고 있어요.
+                </Text>
+              ) : null}
+              {state.deletion ? (
+                <>
                   <Text>
-                    연결된 로그인 수단을 확인하지 못했어요. 내 계정에서 로그인 상태를 확인해 주세요.
+                    {state.deletion.canDelete
+                      ? "같은 계정의 최근 재인증을 확인했어요. 삭제 요청 시 다시 검증해요."
+                      : "삭제할 계정으로 다시 인증해 주세요."}
                   </Text>
-                ) : null}
-                {state.deletion.providers.map((provider) => (
-                  <Button
-                    key={provider}
-                    label={`${providerLabel[provider]}로 같은 계정 다시 인증`}
-                    disabled={busy}
-                    onPress={() => {
-                      void actions.reauthenticate(provider);
-                    }}
+                  {!state.deletion.providers.length ? (
+                    <Text>
+                      연결된 로그인 수단을 확인하지 못했어요. 내 계정에서 로그인 상태를 확인해
+                      주세요.
+                    </Text>
+                  ) : null}
+                  {state.deletion.providers.map((provider) => (
+                    <Button
+                      key={provider}
+                      label={`${providerLabel[provider]}로 같은 계정 다시 인증`}
+                      disabled={busy}
+                      onPress={() => {
+                        void actions.reauthenticate(provider);
+                      }}
+                    />
+                  ))}
+                  <TextField
+                    label="계정 삭제 확인 (DELETE)"
+                    value={state.confirmation}
+                    autoCapitalize="characters"
+                    autoCorrect={false}
+                    maxLength={6}
+                    editable={!busy}
+                    onChangeText={actions.confirm}
                   />
-                ))}
-                <TextField
-                  label="계정 삭제 확인 (DELETE)"
-                  value={state.confirmation}
-                  autoCapitalize="characters"
-                  autoCorrect={false}
-                  maxLength={6}
-                  editable={!busy}
-                  onChangeText={actions.confirm}
-                />
-                {state.deletionState === "unconfirmed" ? (
-                  <Button
-                    variant="danger"
-                    label="미확정 삭제 요청 직접 다시 확인"
-                    disabled={busy || !state.deletion.canDelete || state.confirmation !== "DELETE"}
-                    accessibilityHint="새 재인증이 필요하며 이전 요청이 이미 처리됐을 수도 있어요."
-                    onPress={() => {
-                      void actions.retryUnconfirmed();
-                    }}
-                  />
-                ) : (
-                  <Button
-                    variant="danger"
-                    label="내 계정 삭제 요청"
-                    disabled={
-                      busy ||
-                      state.deletionState !== "none" ||
-                      !state.deletion.canDelete ||
-                      state.confirmation !== "DELETE"
-                    }
-                    accessibilityHint="계정과 사건 자료를 삭제하는 되돌릴 수 없는 요청이에요."
-                    onPress={() => {
-                      void actions.deleteAccount();
-                    }}
-                  />
-                )}
-              </>
-            ) : null}
-            {state.error ? <Text accessibilityRole="alert">{state.error}</Text> : null}
+                  {state.deletionState === "unconfirmed" ? (
+                    <Button
+                      variant="danger"
+                      label="미확정 삭제 요청 직접 다시 확인"
+                      disabled={
+                        busy || !state.deletion.canDelete || state.confirmation !== "DELETE"
+                      }
+                      accessibilityHint="새 재인증이 필요하며 이전 요청이 이미 처리됐을 수도 있어요."
+                      onPress={() => {
+                        void actions.retryUnconfirmed();
+                      }}
+                    />
+                  ) : (
+                    <Button
+                      variant="danger"
+                      label="내 계정 삭제 요청"
+                      disabled={
+                        busy ||
+                        state.deletionState !== "none" ||
+                        !state.deletion.canDelete ||
+                        state.confirmation !== "DELETE"
+                      }
+                      accessibilityHint="계정과 사건 자료를 삭제하는 되돌릴 수 없는 요청이에요."
+                      onPress={() => {
+                        void actions.deleteAccount();
+                      }}
+                    />
+                  )}
+                </>
+              ) : null}
+            </Disclosure>
           </Card>
           <Button
             label="사용량·삭제 준비 상태 새로 확인"

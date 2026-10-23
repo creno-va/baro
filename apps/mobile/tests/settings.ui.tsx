@@ -42,6 +42,8 @@ test("settings shows reserved usage and KST reset; literal input and explicit pr
   expect(screen.getByText("AI 응답: 5 / 200회")).toBeTruthy();
   expect(screen.getByText("일일 사용량 초기화: 2026-10-24 00:00 (한국 시간)")).toBeTruthy();
   expect(screen.getByText(/예약 사용량을 포함/)).toBeTruthy();
+  expect(screen.queryByLabelText("계정 삭제 확인 (DELETE)")).toBeNull();
+  await fireEvent.press(screen.getByRole("button", { name: "계정 삭제 관리" }));
   const button = screen.getByRole("button", { name: "내 계정 삭제 요청" });
   expect(button.props.accessibilityState.disabled).toBe(true);
   await fireEvent.press(button);
@@ -127,6 +129,7 @@ test("consent renewal preserves deletion and policy access; background hides all
     />,
   );
   expect(screen.getByText(/계정 삭제와 정책 확인은 계속/)).toBeTruthy();
+  await fireEvent.press(screen.getByRole("button", { name: "계정 삭제 관리" }));
   expect(screen.getByRole("button", { name: "Google로 같은 계정 다시 인증" })).toBeTruthy();
   await fireEvent.press(screen.getByRole("button", { name: "필수 동의 확인" }));
   expect(onSession).toHaveBeenCalledTimes(1);
@@ -139,4 +142,34 @@ test("consent renewal preserves deletion and policy access; background hides all
     expect(screen.queryByLabelText("계정 삭제 확인 (DELETE)")).toBeNull();
     expect(screen.getByRole("button", { name: "이용약관 읽기" })).toBeTruthy();
   }
+});
+
+test("reauthentication/unknown results stay visible and opening management never invokes account deletion", async () => {
+  const handlers = actions();
+  const view = await render(
+    <SettingsScreen
+      state={{ ...initial, action: "reauthenticate" }}
+      actions={handlers}
+      onSession={jest.fn()}
+    />,
+  );
+  expect(screen.getByLabelText("계정 삭제 확인 (DELETE)")).toBeTruthy();
+  expect(screen.getByRole("button", { name: "계정 삭제 관리" })).toBeDisabled();
+  await fireEvent.press(screen.getByRole("button", { name: "계정 삭제 관리" }));
+  expect(handlers.deleteAccount).not.toHaveBeenCalled();
+  expect(handlers.reauthenticate).not.toHaveBeenCalled();
+  await view.rerender(<SettingsScreen state={initial} actions={handlers} onSession={jest.fn()} />);
+  expect(screen.getByLabelText("계정 삭제 확인 (DELETE)")).toBeTruthy();
+  await fireEvent.press(screen.getByRole("button", { name: "계정 삭제 관리" }));
+  expect(screen.queryByLabelText("계정 삭제 확인 (DELETE)")).toBeNull();
+  await view.rerender(
+    <SettingsScreen
+      state={{ ...initial, notice: "unconfirmed", deletionState: "unconfirmed" }}
+      actions={handlers}
+      onSession={jest.fn()}
+    />,
+  );
+  expect(screen.getByRole("button", { name: "미확정 삭제 요청 직접 다시 확인" })).toBeTruthy();
+  expect(handlers.deleteAccount).not.toHaveBeenCalled();
+  expect(handlers.retryUnconfirmed).not.toHaveBeenCalled();
 });

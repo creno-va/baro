@@ -614,3 +614,28 @@ iOS UIAppFonts·전체 embedded OFL을 확인하고 `assets` receipt를 포함�
 
 근거: [Expo local/variable fonts](https://docs.expo.dev/develop/user-interface/fonts/)와
 기존 [웹 폰트 원본·OFL](../../public/fonts/README.md). 생성/파일 검증을 기기 렌더 증거로 쓰지 않는다.
+
+
+### M7 읽기·선택적 편집과 계정 관리
+
+native Disclosure는 expanded/disabled와 완전한 제목/hint,48dp 이상 조작 영역을 제공하는
+표현 컴포넌트다. 펼치기/접기는 feature action·IO를 부르지 않고 draft·revision·파일 handle·
+복구 key를 소유하지 않는다. critical 상태에서는 keepOpen으로 내용을 유지하고 그 상태가
+끝나도 사용자가 읽던 관리를 갑자기 닫지 않는다. 최종 기기 focus/스크린리더 인수와 구분한다.
+
+리포트는 본문 Text 읽기와 저장된 가림/사진/자료 제외 설정을 먼저 보여 주고 선택적으로
+편집을 연다. 본문은 사용자 검토용이며 식별정보가 보일 수 있다는 고지와 자동 가림 한계를
+계속 보여 준다. dirty/conflict·exportExhausted·저장 중에는 편집을 숨기지 않는다. 검증된 새
+report revision이 오면 읽기 상태로 돌아가며, 충돌/미저장 상태는 같은 모델 입력을 유지한다.
+불러오기/새 초안 확인·오류/진행·검토 acknowledgement·원본 ZIP 고지·다운로드/준비한 파일의
+열기/공유는 disclosure 밖에 두고 기존 eligible/explicit guard를 그대로 사용한다.
+
+설정은 사용량/정책을 우선 두고 계정 삭제 관리만 선택적으로 연다. 미확정/재인증·삭제
+진행/literal 입력·오류는 관리를 펼쳐 유지한다. accepted/cleanup-failed와 비인증/확인 중
+분기는 기존대로 private 입력/삭제 제어보다 우선한다. UI를 여는 것만으로 재인증·삭제·
+자동 retry를 실행하지 않는다. 기존 consent/owner/fresh OAuth·원래 key와 서버 검증은 변경하지 않는다.
+
+회귀는 renderer의 명시적 열기·확인·disabled/expanded, 미저장/충돌·버전 변경·한도 복구,
+재인증/미확정 노출과 private gate를 검사한다. 해당 UI source의 새 실제 두 OS 앱/API·
+기기 글자 확대/키보드/VoiceOver/TalkBack 증거는 별도로 기록하며 선행0823b8b의 font/app
+compile receipt를 이 후속 UI까지 검사한 증거로 확대하지 않는다.
