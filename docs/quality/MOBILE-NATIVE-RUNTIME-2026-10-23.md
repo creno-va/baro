@@ -120,3 +120,17 @@ probe 전환 보완은 첫 Home에만 SDK와 같은 직접 app-ID launch를 유�
 실제 단일 원인으로 확정하지 않는다. 일반 제품 entry·native module·probe 코드는 바꾸지 않는다.
 실패 시 Node helper의 정확한 고정 code·허용 OS domain/범위 내 정수·timeout과 그 시점의
 합성 transport 수치만 보존한다. 원문 stderr·stack·argv/URL·cookie나 token은 내보내지 않는다.
+
+PR415/main3b7f97b·CI39988776736 뒤 [실제39989258051](https://github.com/creno-va/baro/actions/runs/39989258051)은
+Home와 probe URL 전환을 통과했고 native-probe/PROBE_UPLOAD_100MB_FAILED로 종료됐다.
+[원본 실패](./mobile-runtime-2026-10-23/failure-ios-3b7f97b.json)는 iosLauncherFailure=null,
+RSS119표본·partial transport requestCount/rejectedHeaders/downloadedBytes=0·upload=null을 보존한다.
+세부 단계가 아직 묶여 있어 UNKNOWN을 특정 SDK 오류로 바꾸거나 IO 완료로 표시하지 않는다.
+
+현재 사용한 binary7294145의 Bundle ID는 site.baro.app.preview다. 실제 module factory는
+이 ID에서 expectedOrigin=https://preview.baro.site를 고정하고 store는 HTTP loopback을 거부한다.
+JS의 local 환경 선택이 이 native binding을 바꾸지 않는다. SDK 준비·계측 Home에는 network IO가
+없어 해당 성공과 모순되지 않는다. 이는 재사용한 preview binary로 loopback IO를 검증할 수
+없다는 명확한 조건이며, 묶인 UNKNOWN의 모든 원인을 확정한 것은 아니다.
+preview/production origin guard는 유지하고 별도 site.baro.app.dev/서명된 local Simulator
+profile로 전체 IO를 검증해야 한다. 기존 preview full-runtime 경로를 변경 없이 반복하지 않는다.
