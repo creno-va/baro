@@ -34,11 +34,12 @@ export function verifyCompiledAndroidFontFaces(xmlTree: string, fontId: string) 
     throw new Error("ANDROID_FONT_COMPILED_FACES_REQUIRED");
   const weightSet = new Set<number>();
   for (const face of faces) {
-    const reference = face.match(/:font\(0x[0-9a-f]+\)=@(0x[0-9a-f]+)$/m)?.[1],
+    const references = [...face.matchAll(/:font\(0x[0-9a-f]+\)=@(0x[0-9a-f]+)$/gm)],
       weights = [...face.matchAll(/:fontWeight\(0x[0-9a-f]+\)=(\d+)$/gm)],
       weight = Number(weights[0]?.[1]);
     if (
-      reference !== fontId ||
+      references.length !== 1 ||
+      references[0]?.[1] !== fontId ||
       weights.length !== 1 ||
       ![400, 600, 700].includes(weight) ||
       weightSet.has(weight) ||
