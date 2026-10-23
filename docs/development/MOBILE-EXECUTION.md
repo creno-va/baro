@@ -2,7 +2,7 @@
 
 - Status: M1/M2 인수; 전체 #334 / M3 실제 인증 잔여 #346 / M4 고객 흐름 #354 진행
 - Updated: 2026-10-23
-- Tracking: native 인증 [#346](https://github.com/creno-va/baro/issues/346), 전체 [#334](https://github.com/creno-va/baro/issues/334), 계획 [#328](https://github.com/creno-va/baro/issues/328), M1 [#330](https://github.com/creno-va/baro/issues/330), M2 [#335](https://github.com/creno-va/baro/issues/335)
+- Tracking: native 인증 [#346](https://github.com/creno-va/baro/issues/346), 전체 [#334](https://github.com/creno-va/baro/issues/334), 계획 [#328](https://github.com/creno-va/baro/issues/328), M1 [#330](https://github.com/creno-va/baro/issues/330), M2 [#335](https://github.com/creno-va/baro/issues/335), M7 토큰·primitive [#379](https://github.com/creno-va/baro/issues/379)
 - Decision: [ADR-0017](../adr/0017-expo-mobile-and-shared-client-boundaries.md)
 - Architecture: [공통 코드와 모바일 경계](../architecture/MOBILE-CLIENT.md)
 
