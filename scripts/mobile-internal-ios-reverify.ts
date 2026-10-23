@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { copyFile, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import type { z } from "zod";
 import { internalIosEnvironment } from "./mobile-internal-ios-build";
 import {
   assertIosBundledInputs,
@@ -8,6 +9,14 @@ import {
   verifyIosLargeFontReceipt,
   verifyPinnedInternalIosInput,
 } from "./mobile-internal-ios-input";
+import {
+  iosAuthCancelBaseSchema,
+  type iosAuthCancelReceiptSchema,
+  iosAuthenticationPrivacyBoundary,
+  observeIosAuthCancelFailure,
+  runIosAuthCancelUiTest,
+  verifyIosAuthCancelReceipt,
+} from "./mobile-ios-auth-cancel";
 import {
   observeHomeUiFailure,
   runIosHomeUiTest,
@@ -27,7 +36,7 @@ import { observePreviewApi } from "./mobile-preview-artifact";
 const hash = (b: Uint8Array) => createHash("sha256").update(b).digest("hex");
 async function main() {
   if (process.platform !== "darwin") throw new Error("INTERNAL_IOS_MAC_REQUIRED");
-  const { home, largeFont, uiTest, accessibilityAudit } = iosInternalObservationOptions(
+  const { home, largeFont, uiTest, accessibilityAudit, authCancel } = iosInternalObservationOptions(
     process.argv.slice(2),
   );
   const root = process.cwd(),
@@ -46,10 +55,12 @@ async function main() {
     "large-font-ios.png",
     "home-ui-test.json",
     "accessibility-audit.json",
+    "auth-cancel-ui.json",
   ])
     if (await Bun.file(resolve(base, name)).exists())
       throw new Error("INTERNAL_IOS_FRESH_OUTPUT_REQUIRED");
   await mkdir(owned, { recursive: true });
+  const privacy = iosAuthenticationPrivacyBoundary();
   let checkout = false,
     device = "",
     phase = "source",
@@ -57,9 +68,11 @@ async function main() {
     guardRequests = 0,
     guard: ReturnType<typeof Bun.serve> | undefined,
     uiTestFailure: ReturnType<typeof observeHomeUiFailure> | null = null,
+    authCancelFailure: ReturnType<typeof observeIosAuthCancelFailure> | null = null,
     lastCommand: { exitCode: number; timedOut: boolean; category: string } | null = null;
   async function command(args: string[], cwd = root, timeout = 120000) {
     lastCommand = null;
+    privacy.assertCommandAllowed(args);
     const c = Bun.spawn(args, { cwd, env, stdout: "pipe", stderr: "pipe" });
     let expired = false;
     const timer = setTimeout(() => {
@@ -72,10 +85,13 @@ async function main() {
           new Response(c.stderr).text(),
         ]),
         exit = await c.exited;
-      await writeFile(resolve(owned, `private-command-${sequence++}.log`), `${out}\n${err}`);
+      if (privacy.persistCommandLogs)
+        await writeFile(resolve(owned, `private-command-${sequence++}.log`), `${out}\n${err}`);
       if (exit !== 0 || expired) {
-        if (phase === "large-font-home-guide-xcuitest")
+        if (phase === "large-font-home-guide-xcuitest" || phase === "native-auth-cancel-xcuitest")
           uiTestFailure = observeHomeUiFailure(`${out}\n${err}`);
+        if (phase === "native-auth-cancel-xcuitest")
+          authCancelFailure = observeIosAuthCancelFailure(`${out}\n${err}`);
         lastCommand = {
           exitCode: exit,
           timedOut: expired,
@@ -294,6 +310,39 @@ async function main() {
       flag: "wx",
     });
     console.log("INTERNAL_IOS_COLD_LAUNCH_OBSERVED_VISUAL_REVIEW_REQUIRED");
+    if (authCancel) {
+      phase = "native-auth-cancel-xcuitest";
+      privacy.enterAuthentication();
+      const explicitScreenshotsSuppressedBeforeNavigation = !privacy.explicitScreenshotReadsAllowed,
+        hostRawCommandLogsPersistedAfterBoundary = privacy.persistCommandLogs;
+      if (
+        !explicitScreenshotsSuppressedBeforeNavigation ||
+        hostRawCommandLogsPersistedAfterBoundary
+      )
+        throw Error("INTERNAL_IOS_AUTH_PRIVACY_BOUNDARY_REQUIRED");
+      const observation = await runIosAuthCancelUiTest({ root, owned, device, command });
+      if (guardRequests) throw Error("INTERNAL_IOS_UNEXPECTED_METRO_REQUEST");
+      const proof = verifyIosAuthCancelReceipt(
+        {
+          ...iosAuthCancelBaseSchema.strip().parse(receipt),
+          kind: "ios-bundled-anonymous-auth-cancellation",
+          observedAt: new Date().toISOString(),
+          ...observation,
+          explicitScreenshotsSuppressedBeforeNavigation,
+          hostRawCommandLogsPersistedAfterBoundary,
+          rawXcresultExported: false,
+          rawUiHierarchyExported: false,
+          uiTestRunnerCompiled: true,
+          productRecompiled: false,
+          productResigned: false,
+        } satisfies z.input<typeof iosAuthCancelReceiptSchema>,
+        receipt,
+      );
+      await writeFile(resolve(base, "auth-cancel-ui.json"), `${JSON.stringify(proof, null, 2)}\n`, {
+        flag: "wx",
+      });
+      console.log("INTERNAL_IOS_ANONYMOUS_AUTH_CANCELLATION_OBSERVED");
+    }
     if (largeFont) {
       phase = "large-font-sdk-capabilities";
       const capabilities = await readIosUiCapabilities(tooling);
@@ -421,6 +470,11 @@ async function main() {
         "INTERNAL_IOS_UI_TEST_GENERATOR_VERSION_REQUIRED",
         "INTERNAL_IOS_UI_TEST_SINGLE_RESULT_REQUIRED",
         "INTERNAL_IOS_UI_TEST_IDENTITY_MISMATCH",
+        "INTERNAL_IOS_AUTH_SINGLE_RESULT_REQUIRED",
+        "INTERNAL_IOS_AUTH_IDENTITY_MISMATCH",
+        "INTERNAL_IOS_AUTH_OWNED_MAC_CI_REQUIRED",
+        "INTERNAL_IOS_AUTH_SCREENSHOT_FORBIDDEN",
+        "INTERNAL_IOS_AUTH_PRIVACY_BOUNDARY_REQUIRED",
         "INTERNAL_IOS_AUDIT_SINGLE_RESULT_REQUIRED",
         "INTERNAL_IOS_AUDIT_IDENTITY_MISMATCH",
         "INTERNAL_IOS_ACCESSIBILITY_ISSUES_FOUND",
@@ -447,7 +501,7 @@ async function main() {
       ]);
     await writeFile(
       resolve(base, "failure.json"),
-      `${JSON.stringify({ toolingSourceSha: tooling, phase, code: known.has(code) ? code : xcodeControlBuildFailure(error), lastCommand, uiTestFailure, nativeProcessLaunchVerified: false, homeContentVerified: false, remoteApiVerified: false, oauthVerified: false, physicalDeviceVerified: false, storeSigned: false, deployed: false }, null, 2)}\n`,
+      `${JSON.stringify({ toolingSourceSha: tooling, phase, code: known.has(code) ? code : xcodeControlBuildFailure(error), lastCommand, uiTestFailure, authCancelFailure, nativeProcessLaunchVerified: false, homeContentVerified: false, remoteApiVerified: false, oauthVerified: false, physicalDeviceVerified: false, storeSigned: false, deployed: false }, null, 2)}\n`,
       { flag: "wx" },
     );
     throw new Error("INTERNAL_IOS_REVERIFY_FAILED");

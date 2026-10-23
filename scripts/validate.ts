@@ -37,6 +37,7 @@ export function validationCommands(profile: string, root = process.cwd()): Comma
       "tests/native-reauth.test.ts",
       "tests/native-reauth-http.test.ts",
       "tests/mobile-ios-accessibility.test.ts",
+      "tests/mobile-ios-auth-cancel.test.ts",
     ],
   ];
   const build = [
