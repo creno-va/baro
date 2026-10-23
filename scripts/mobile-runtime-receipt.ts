@@ -7,6 +7,7 @@ import {
   UPLOAD_BYTES,
 } from "../apps/mobile/runtime-probe/protocol";
 import { repeatedDigest } from "./mobile-runtime-fixture";
+import { metroHttpProofSchema } from "./mobile-runtime-metro";
 
 const hash = z.string().regex(/^[a-f0-9]{64}$/);
 export const pinnedRuntimeBinarySchema = z.strictObject({
@@ -32,6 +33,9 @@ export const runtimeReceiptSchema = z.strictObject({
   apiOrigin: z.literal(RUNTIME_ORIGIN),
   applicationId: z.enum(["site.baro.app.dev", "site.baro.app.preview"]),
   nativeBinary: pinnedRuntimeBinarySchema.optional(),
+  bundleHttpPreflight: z
+    .strictObject({ product: metroHttpProofSchema, probe: metroHttpProofSchema })
+    .optional(),
   device: z.strictObject({
     kind: z.enum(["emulator", "simulator"]),
     model: z.string().min(1).max(160),
@@ -115,6 +119,7 @@ export const runtimeHomeReceiptSchema = z.strictObject({
   platform: z.enum(["android", "ios"]),
   applicationId: z.enum(["site.baro.app.dev", "site.baro.app.preview"]),
   nativeBinary: pinnedRuntimeBinarySchema.optional(),
+  bundleHttpPreflight: metroHttpProofSchema.optional(),
   device: runtimeReceiptSchema.shape.device,
   productEntry: runtimeReceiptSchema.shape.productEntry,
   assets: runtimeReceiptSchema.shape.assets,
