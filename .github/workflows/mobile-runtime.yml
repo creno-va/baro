@@ -87,6 +87,15 @@ jobs:
             .wrangler/mobile-runtime/product-home-${{ matrix.platform }}.png
             .wrangler/mobile-runtime/native-probe-${{ matrix.platform }}.png
           if-no-files-found: error
+      - name: Preserve observed Home separately when later native IO fails
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: mobile-home-only-${{ matrix.platform }}-${{ inputs.target_sha }}
+          path: |
+            .wrangler/mobile-runtime/home-${{ matrix.platform }}.json
+            .wrangler/mobile-runtime/product-home-${{ matrix.platform }}.png
+          if-no-files-found: ignore
       - name: Save safe failure classification
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

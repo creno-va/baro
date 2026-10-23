@@ -17,6 +17,7 @@ import {
   PEER_COOKIE,
   PROBE_OWNER,
   probeResultSchema,
+  RUNTIME_ORIGIN,
   type RuntimeConfig,
   runtimeConfigSchema,
   UPLOAD_BYTES,
@@ -36,6 +37,15 @@ export function probeConfig(): RuntimeConfig {
   return runtimeConfigSchema.parse({
     version: 1,
     origin: local.apiBaseUrl,
+    sourceSha: process.env.EXPO_PUBLIC_NATIVE_PROBE_SOURCE_SHA,
+    nonce: process.env.EXPO_PUBLIC_NATIVE_PROBE_NONCE,
+  });
+}
+/** Local nonce control for the separate Simulator SDK experiment; no API transport override. */
+export function diagnosticControlConfig(): RuntimeConfig {
+  return runtimeConfigSchema.parse({
+    version: 1,
+    origin: RUNTIME_ORIGIN,
     sourceSha: process.env.EXPO_PUBLIC_NATIVE_PROBE_SOURCE_SHA,
     nonce: process.env.EXPO_PUBLIC_NATIVE_PROBE_NONCE,
   });
@@ -159,13 +169,19 @@ export async function runNativeProbe(config: RuntimeConfig, step: (name: string)
   });
   const path = (id: string) => `/api/v2/cases/probe_case/files/${id}/content`;
   try {
-    step("native-ready");
+    step("native-clear");
     await jobs.clear();
+    step("source-clear");
     await sources.clear();
+    step("download-cache-clear");
     await cache.clear();
+    step("credential-reset");
     await credentials.reset();
+    step("credential-store-readback");
     await ownerCookie();
+    step("recovery-key-write");
     await storage.setItem(sentinelKey, sentinel);
+    step("recovery-key-readback");
     requireValue((await storage.getItem(sentinelKey)) === sentinel, "PROBE_RECOVERY_WRITE");
     step("upload-100mb");
     input = await writeSource();

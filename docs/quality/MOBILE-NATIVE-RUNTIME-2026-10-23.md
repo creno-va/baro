@@ -66,3 +66,19 @@ CJS toolchain 보완 PR390/main1a6c54d와 CI39917339321/main CI39917819068은 �
 [패치 범위](../../patches/README.md)와 [#339의 도달성·회귀 증거](https://github.com/creno-va/baro/issues/339#issuecomment-6359737994)를
 따른다. 원본 audit high2건과 forge browser dist/map 미패치·이 보완 뒤 native/SDK/full 보안은
 OPEN이다. c2fa3f2의 실행을 후속 toolchain 패치 source의 native 성공으로 바꾸지 않는다.
+
+## 후속 source31597a8·previewf912441 관측
+
+source31597a8의 두 OS build39921868056은 native/compiled font·preview handoff 모두
+성공했고 두 파일의 실제 전체 byte/hash·metadata/ABI/font를 대조했다. 이후 iOS runtime
+39921864348은 Home layout/bundle/RSS를 관측한 뒤 native-ready에서 실패했다.
+[실제 분류](./mobile-runtime-2026-10-23/failure-ios-31597a8.json)와
+[SDK 초기화 진단](./MOBILE-IOS-KEYCHAIN-HOST.md)을 따른다. 기존c2fa3f2 Home 실패와
+source315의 Home 진행을 구분하며 native IO 전체 성공으로 표시하지 않는다.
+
+preview39926450135가 f91244151c94d871423e9f2fe6fda5a70bf0e668을 반영했고 실제 strict
+SHA/schema/correlation smoke와 native API의 malformed400/비로그인401을 확인했다.
+원본 preview artifact의 packaging 시각57121d2 관측은 고치지 않는다. 앱315/API f912441의
+실제 인증된 사용자 여정은 별도다. production은57121d2로 관측됐으며 새 배포하지 않았다.
+full39926453700은 정확한f912에서 unit3690/browser454/DB/eval/build/CSP를 통과한 뒤
+raw audit high2건으로 실패했다. 성공한 full receipt·후속 processor native 검사로 확대하지 않는다.

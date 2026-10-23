@@ -16,7 +16,7 @@ import {
   quoteAdbShellArgument,
   runtimeDevelopmentUrl,
 } from "./mobile-runtime-host";
-import { verifyRuntimeReceipt } from "./mobile-runtime-receipt";
+import { verifyRuntimeHomeReceipt, verifyRuntimeReceipt } from "./mobile-runtime-receipt";
 
 const sha256 = (text: string) => createHash("sha256").update(text).digest("hex");
 export function productEntryOverlay() {
@@ -358,6 +358,9 @@ module.exports=config;\n`;
       osVersion = runtime.version;
       deviceModel = type.name;
     }
+    const assets = JSON.parse(
+      await readFile(resolve(work, `.wrangler/mobile-build/assets-${platform}.json`), "utf8"),
+    );
     const home = await readFile(resolve(mobile, "src/app/index.tsx"), "utf8"),
       overlay = productEntryOverlay();
     await mkdir(resolve(mobile, "src/runtime-probe"));
@@ -374,6 +377,42 @@ module.exports=config;\n`;
       return fixture.state.productMount !== null;
     }, 180000);
     await screenshot("product-home");
+    const homeReceipt = verifyRuntimeHomeReceipt(
+      {
+        version: 1,
+        kind: "instrumented-home-only",
+        sourceSha,
+        platform,
+        applicationId: "site.baro.app.dev",
+        device: {
+          kind: platform === "android" ? "emulator" : "simulator",
+          model: deviceModel,
+          osVersion,
+        },
+        productEntry: {
+          kind: "instrumented-home-layout-only",
+          originalSha256: sha256(home),
+          overlaySha256: sha256(overlay),
+          layout: fixture.state.productMount,
+          screenshot: `product-home-${platform}.png`,
+        },
+        assets,
+        nativeIoVerified: false,
+        productJourneysVerified: false,
+        accessibilityVerified: false,
+        remoteApiVerified: false,
+        oauthVerified: false,
+        physicalDeviceVerified: false,
+        storeSigned: false,
+        deployed: false,
+      },
+      config.sourceSha,
+      platform,
+    );
+    await writeFile(
+      resolve(out, `home-${platform}.json`),
+      JSON.stringify(homeReceipt, null, 2) + "\n",
+    );
     await stopMetro();
     const manifestPath = resolve(mobile, "package.json"),
       manifest = JSON.parse(await readFile(manifestPath, "utf8"));
@@ -394,9 +433,6 @@ module.exports=config;\n`;
     const result = probeResultSchema.parse(fixture.state.result);
     if (result.platform !== platform || !memorySamples || fixture.state.rejectedHeaders)
       throw new Error("RUNTIME_EVIDENCE_INCOMPLETE");
-    const assets = JSON.parse(
-      await readFile(resolve(work, `.wrangler/mobile-build/assets-${platform}.json`), "utf8"),
-    );
     const receipt = {
       version: 1,
       kind: "local-development-runtime",
@@ -473,7 +509,25 @@ module.exports=config;\n`;
         : null;
     await writeFile(
       resolve(out, `failure-${platform}.json`),
-      `${JSON.stringify({ sourceSha, platform, phase, code, unresolvedModule, host, metroBundleObserved: /\b(?:iOS|Android) Bundled\b/.test(log), processRssSamples: memorySamples, productLayoutObserved: !!fixture.state.productMount, nativeResultObserved: !!fixture.state.result, remoteApiVerified: false, oauthVerified: false }, null, 2)}\n`,
+      `${JSON.stringify(
+        {
+          sourceSha,
+          platform,
+          phase,
+          code,
+          unresolvedModule,
+          host,
+          probeFailure: fixture.state.failure,
+          metroBundleObserved: /\b(?:iOS|Android) Bundled\b/.test(log),
+          processRssSamples: memorySamples,
+          productLayoutObserved: !!fixture.state.productMount,
+          nativeResultObserved: !!fixture.state.result,
+          remoteApiVerified: false,
+          oauthVerified: false,
+        },
+        null,
+        2,
+      )}\n`,
     );
     throw error;
   } finally {

@@ -1,6 +1,14 @@
 import { expect, test } from "bun:test";
 import { createHash } from "node:crypto";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
+import { tmpdir } from "node:os";
+import { resolve } from "node:path";
+import { probeFailureCategory } from "../apps/mobile/runtime-probe/failures";
+import {
+  iosReadinessReportSchema,
+  iosReadinessStages,
+} from "../apps/mobile/runtime-probe/ios-keychain-protocol";
 import {
   DOWNLOAD_BYTES,
   OWNER_COOKIE,
@@ -10,6 +18,12 @@ import {
   UPLOAD_BYTES,
 } from "../apps/mobile/runtime-probe/protocol";
 import { mobileBoundaryFindings } from "../scripts/mobile-boundaries";
+import { assertIosNativeInputs, verifyIosHostBinary } from "../scripts/mobile-ios-keychain-host";
+import {
+  simulatorEntitlements,
+  simulatorIdentity,
+  verifySimulatorEntitlements,
+} from "../scripts/mobile-ios-simulator-signing";
 import { productEntryOverlay } from "../scripts/mobile-runtime";
 import { createRuntimeFixture, repeatedDigest } from "../scripts/mobile-runtime-fixture";
 import {
@@ -20,7 +34,11 @@ import {
   quoteAdbShellArgument,
   runtimeDevelopmentUrl,
 } from "../scripts/mobile-runtime-host";
-import { runtimeReceiptSchema, verifyRuntimeReceipt } from "../scripts/mobile-runtime-receipt";
+import {
+  runtimeReceiptSchema,
+  verifyRuntimeHomeReceipt,
+  verifyRuntimeReceipt,
+} from "../scripts/mobile-runtime-receipt";
 
 const config: RuntimeConfig = {
   version: 1,
@@ -405,4 +423,166 @@ test("manual workflow preserves product entry and only uploads scoped receipts a
   expect(workflow).not.toContain("private-command");
   for (const line of workflow.split("\n").filter((line) => line.includes("uses:")))
     expect(line).toMatch(/@[a-f0-9]{40}/);
+});
+
+test("Simulator signing rejects physical/production identity, traversal and broader access groups", () => {
+  const info = {
+    CFBundleIdentifier: "site.baro.app.preview",
+    CFBundleSupportedPlatforms: ["iPhoneSimulator"],
+    DTPlatformName: "iphonesimulator",
+    CFBundleExecutable: "BAROPreview",
+  };
+  expect(simulatorIdentity(info, "site.baro.app.preview").CFBundleIdentifier).toBe(
+    "site.baro.app.preview",
+  );
+  for (const invalid of [
+    { ...info, CFBundleSupportedPlatforms: ["iPhoneOS"] },
+    { ...info, DTPlatformName: "iphoneos" },
+    { ...info, CFBundleIdentifier: "site.baro.app" },
+    { ...info, CFBundleExecutable: "../outside" },
+  ])
+    expect(() => simulatorIdentity(invalid, "site.baro.app.preview")).toThrow();
+  const entitlements = simulatorEntitlements("site.baro.app.preview");
+  expect(verifySimulatorEntitlements(entitlements, "site.baro.app.preview")).toEqual(entitlements);
+  for (const invalid of [
+    { ...entitlements, "keychain-access-groups": ["*"] },
+    { ...entitlements, "com.apple.developer.team-identifier": "synthetic-team" },
+    { ...entitlements, "keychain-access-groups": ["site.baro.app.preview", "site.baro.app"] },
+  ])
+    expect(() => verifySimulatorEntitlements(invalid, "site.baro.app.preview")).toThrow();
+});
+test("SDK error observations contain fixed categories and readiness cannot omit or reorder failed work", () => {
+  const error = Object.assign(
+    new Error("A required entitlement isn't present. synthetic-private-value /private/fixture"),
+    { code: "ERR_KEY_CHAIN", stack: "synthetic-stack" },
+  );
+  expect(probeFailureCategory(error)).toBe("KEYCHAIN_ENTITLEMENT_MISSING");
+  expect(probeFailureCategory({ code: "PRIVATE_DOWNLOAD_FAILED", message: "private" })).toBe(
+    "PRIVATE_TRANSFER_FAILURE",
+  );
+  const value = {
+    version: 1,
+    kind: "simulator-sdk-readiness",
+    sourceSha: "a".repeat(40),
+    phase: "baseline",
+    operations: iosReadinessStages.map((stage) => ({ stage, ok: true })),
+    allSucceeded: true,
+    externalFetchAttempts: 0,
+  };
+  expect(iosReadinessReportSchema.parse(value).allSucceeded).toBe(true);
+  expect(() => iosReadinessReportSchema.parse({ ...value, externalFetchAttempts: 1 })).toThrow();
+  expect(() =>
+    iosReadinessReportSchema.parse({ ...value, operations: [...value.operations].reverse() }),
+  ).toThrow();
+  expect(() => iosReadinessReportSchema.parse({ ...value, rawStack: "synthetic-stack" })).toThrow();
+  expect(() =>
+    iosReadinessReportSchema.parse({
+      ...value,
+      operations: value.operations.map((op, index) => (index ? op : { ...op, ok: false })),
+    }),
+  ).toThrow();
+});
+test("a Home-only receipt preserves exact identity and cannot claim later native IO success", async () => {
+  const full = await Bun.file("docs/quality/mobile-runtime-2026-10-23/receipt-android.json").json();
+  const home = {
+    version: 1,
+    kind: "instrumented-home-only",
+    sourceSha: full.sourceSha,
+    platform: full.platform,
+    applicationId: full.applicationId,
+    device: full.device,
+    productEntry: full.productEntry,
+    assets: full.assets,
+    nativeIoVerified: false,
+    productJourneysVerified: false,
+    accessibilityVerified: false,
+    remoteApiVerified: false,
+    oauthVerified: false,
+    physicalDeviceVerified: false,
+    storeSigned: false,
+    deployed: false,
+  };
+  expect(verifyRuntimeHomeReceipt(home, full.sourceSha, "android").nativeIoVerified).toBe(false);
+  expect(() =>
+    verifyRuntimeHomeReceipt({ ...home, nativeIoVerified: true }, full.sourceSha, "android"),
+  ).toThrow();
+  expect(() => verifyRuntimeHomeReceipt(home, full.sourceSha, "ios")).toThrow();
+});
+test("binary reuse permits JS-only changes and rejects any native input drift before creating a device", async () => {
+  const directory = await mkdtemp(resolve(tmpdir(), "baro-ios-inputs-"));
+  async function git(args: string[]) {
+    const child = Bun.spawn(["git", ...args], { cwd: directory, stdout: "pipe", stderr: "ignore" });
+    const output = await new Response(child.stdout).text();
+    if (await child.exited) throw new Error("SYNTHETIC_GIT_FAILED");
+    return output.trim();
+  }
+  async function commit() {
+    await git(["add", "."]);
+    await git([
+      "-c",
+      "user.name=BARO synthetic fixture",
+      "-c",
+      "user.email=synthetic@baro.invalid",
+      "commit",
+      "-m",
+      "synthetic fixture",
+    ]);
+    return git(["rev-parse", "HEAD"]);
+  }
+  try {
+    await git(["init"]);
+    await mkdir(resolve(directory, "apps/mobile/modules"), { recursive: true });
+    await mkdir(resolve(directory, "apps/mobile/src"), { recursive: true });
+    await writeFile(resolve(directory, "apps/mobile/modules/native.swift"), "native-v1");
+    await writeFile(resolve(directory, "apps/mobile/src/view.ts"), "js-v1");
+    const binary = await commit();
+    await writeFile(resolve(directory, "apps/mobile/src/view.ts"), "js-v2");
+    const js = await commit();
+    await expect(assertIosNativeInputs(directory, binary, js)).resolves.toBeUndefined();
+    await writeFile(resolve(directory, "apps/mobile/modules/native.swift"), "native-v2");
+    const native = await commit();
+    await expect(assertIosNativeInputs(directory, binary, native)).rejects.toThrow(
+      "IOS_HOST_NATIVE_INPUTS_DIFFER",
+    );
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+test("pinned input byte attestation rejects modified archives without installing anything", async () => {
+  const directory = await mkdtemp(resolve(tmpdir(), "baro-ios-bytes-")),
+    input = resolve(directory, "input");
+  try {
+    await mkdir(resolve(directory, "tests/fixtures"), { recursive: true });
+    await mkdir(input);
+    const manifest = await Bun.file("tests/fixtures/ios-host-binary.json").json(),
+      receipt = await Bun.file("docs/quality/mobile-runtime-2026-10-23/preview-ios.json").json(),
+      body = new Uint8Array([1, 2, 3, 4]);
+    manifest.zipBytes = body.length;
+    manifest.zipSha256 = createHash("sha256").update(body).digest("hex");
+    receipt.sourceSha = manifest.sourceSha;
+    receipt.artifact = {
+      name: manifest.zipName,
+      bytes: manifest.zipBytes,
+      sha256: manifest.zipSha256,
+    };
+    manifest.receiptSha256 = createHash("sha256").update(JSON.stringify(receipt)).digest("hex");
+    await writeFile(
+      resolve(directory, "tests/fixtures/ios-host-binary.json"),
+      JSON.stringify(manifest),
+    );
+    await writeFile(resolve(input, "receipt-ios.json"), JSON.stringify(receipt));
+    await writeFile(resolve(input, manifest.zipName), body);
+    expect((await verifyIosHostBinary(directory, input)).manifest.zipBytes).toBe(4);
+    await writeFile(resolve(input, manifest.zipName), new Uint8Array([1, 2, 3, 5]));
+    await expect(verifyIosHostBinary(directory, input)).rejects.toThrow(
+      "IOS_HOST_BINARY_BYTES_CHANGED",
+    );
+    await writeFile(resolve(input, manifest.zipName), body);
+    await writeFile(resolve(input, "receipt-ios.json"), JSON.stringify(receipt) + " ");
+    await expect(verifyIosHostBinary(directory, input)).rejects.toThrow(
+      "IOS_HOST_RECEIPT_BYTES_CHANGED",
+    );
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
 });
