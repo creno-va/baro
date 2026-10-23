@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { probeFailureCategorySchema } from "./failures";
 
 export const RUNTIME_ORIGIN = "http://127.0.0.1:8765";
 export const UPLOAD_BYTES = 100_000_000;
@@ -49,4 +50,5 @@ export const probeResultSchema = z.strictObject({
 export type ProbeResult = z.infer<typeof probeResultSchema>;
 export const probeFailureSchema = z.strictObject({
   code: z.string().regex(/^[A-Z][A-Z0-9_]{1,79}$/),
+  category: probeFailureCategorySchema.optional(),
 });

@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "sourceSha": "31597a874e437904ae3c28a1dc189fab911fc742",
+  "workflowRunId": "39921868056",
+  "artifactName": "mobile-preview-development-ios-31597a874e437904ae3c28a1dc189fab911fc742",
+  "artifactUrl": "https://github.com/creno-va/baro/actions/runs/39921868056/artifacts/12488986511",
+  "zipName": "baro-preview-ios-simulator-31597a874e437904ae3c28a1dc189fab911fc742.zip",
+  "zipBytes": 51547245,
+  "zipSha256": "b0dfb9fcbff21dbce7dd517499bb9e582aede613507daaad18df2e4056180cd1",
+  "receiptSha256": "23a83e5f4bed96736c6e6272cc8098405bc77d07bdc29b4b115cbf34f35cca51"
+}

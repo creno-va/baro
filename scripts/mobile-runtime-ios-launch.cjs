@@ -30,8 +30,10 @@ async function main() {
   if (mode !== "--open" || process.argv.length !== 6)
     throw new Error("RUNTIME_IOS_LAUNCH_ARGUMENTS_REQUIRED");
   const url = new URL(rawUrl);
+  const allowed = { "baro-dev:": "site.baro.app.dev", "baro-preview:": "site.baro.app.preview" };
+  const appId = allowed[url.protocol];
   if (
-    url.protocol !== "baro-dev:" ||
+    !appId ||
     url.hostname !== "expo-development-client" ||
     url.searchParams.get("url") !== "http://127.0.0.1:8081"
   )
@@ -45,7 +47,7 @@ async function main() {
   validateOwnedIosDevice(inventory, udid, name);
   // Use Expo's pinned simulator scheme-approval preparation, restricted to our fresh device.
   // This does not grant OAuth, application consent, local-network or physical-device permissions.
-  await api.openUrlAsync({ udid }, { url: rawUrl, appId: "site.baro.app.dev" });
+  await api.openUrlAsync({ udid }, { url: rawUrl, appId });
   const approvalPath = resolve(
     homedir(),
     "Library/Developer/CoreSimulator/Devices",
@@ -58,7 +60,9 @@ async function main() {
       stdio: ["ignore", "pipe", "ignore"],
     }),
   );
-  if (approval["com.apple.CoreSimulator.CoreSimulatorBridge-->baro-dev"] !== "site.baro.app.dev")
+  if (
+    approval[`com.apple.CoreSimulator.CoreSimulatorBridge-->${url.protocol.slice(0, -1)}`] !== appId
+  )
     throw new Error("RUNTIME_IOS_SCHEME_APPROVAL_NOT_CONFIRMED");
 }
 module.exports = { validateOwnedIosDevice };

@@ -91,3 +91,37 @@ export function verifyRuntimeReceipt(
     throw new Error("RUNTIME_RECEIPT_IDENTITY_OR_TRANSPORT_MISMATCH");
   return receipt;
 }
+
+export const runtimeHomeReceiptSchema = z.strictObject({
+  version: z.literal(1),
+  kind: z.literal("instrumented-home-only"),
+  sourceSha: z.string().regex(/^[a-f0-9]{40}$/),
+  platform: z.enum(["android", "ios"]),
+  applicationId: z.literal("site.baro.app.dev"),
+  device: runtimeReceiptSchema.shape.device,
+  productEntry: runtimeReceiptSchema.shape.productEntry,
+  assets: runtimeReceiptSchema.shape.assets,
+  nativeIoVerified: z.literal(false),
+  productJourneysVerified: z.literal(false),
+  accessibilityVerified: z.literal(false),
+  remoteApiVerified: z.literal(false),
+  oauthVerified: z.literal(false),
+  physicalDeviceVerified: z.literal(false),
+  storeSigned: z.literal(false),
+  deployed: z.literal(false),
+});
+export function verifyRuntimeHomeReceipt(
+  value: unknown,
+  sourceSha: string,
+  platform: "android" | "ios",
+) {
+  const result = runtimeHomeReceiptSchema.parse(value);
+  if (
+    result.sourceSha !== sourceSha ||
+    result.platform !== platform ||
+    result.device.kind !== (platform === "android" ? "emulator" : "simulator") ||
+    result.productEntry.screenshot !== `product-home-${platform}.png`
+  )
+    throw new Error("RUNTIME_HOME_RECEIPT_IDENTITY_MISMATCH");
+  return result;
+}

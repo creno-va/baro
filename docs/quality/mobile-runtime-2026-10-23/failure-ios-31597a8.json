@@ -1,0 +1,14 @@
+{
+  "sourceSha": "31597a874e437904ae3c28a1dc189fab911fc742",
+  "platform": "ios",
+  "phase": "native-probe",
+  "code": "PROBE_NATIVE_READY_FAILED",
+  "unresolvedModule": null,
+  "host": null,
+  "metroBundleObserved": true,
+  "processRssSamples": 26,
+  "productLayoutObserved": true,
+  "nativeResultObserved": false,
+  "remoteApiVerified": false,
+  "oauthVerified": false
+}

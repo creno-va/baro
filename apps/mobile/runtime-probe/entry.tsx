@@ -1,6 +1,7 @@
 import { registerRootComponent } from "expo";
 import { useEffect, useState } from "react";
 import { Text, View } from "react-native";
+import { probeFailureCategory } from "./failures";
 import { ProbeFailure, probeConfig, report, runNativeProbe } from "./run";
 
 // Explicit alternate entry for the isolated manual runtime checkout. Never imported by product routes.
@@ -24,7 +25,9 @@ function RuntimeProbe() {
           ? error.code
           : `PROBE_${phase.replaceAll("-", "_").toUpperCase()}_FAILED`;
       setStep(code);
-      await report(config, "failure", { code }).catch(() => {});
+      await report(config, "failure", { code, category: probeFailureCategory(error) }).catch(
+        () => {},
+      );
     });
   }, []);
   return (
