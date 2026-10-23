@@ -1,0 +1,6 @@
+{
+  "extends": "../../src/contracts/tsconfig.json",
+  "compilerOptions": { "lib": ["ES2024"] },
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules"]
+}
