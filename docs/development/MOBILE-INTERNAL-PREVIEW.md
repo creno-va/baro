@@ -503,3 +503,31 @@ Simulator 앱은 여전히 No-Team/ad-hoc 원본이고 앱 재컴파일·재서�
 Android TalkBack·키보드/회전·물리 기기·모든 역할/상태·실제 OAuth/private API와
 store/#334/#379/#339/#71은 OPEN이다. 원본 metadata/기본/확대 proof의 포괄적인
 `accessibilityVerified=false`를 바꾸지 않고 OS 감사의 좁은 결과를 별도로 보존한다.
+
+## iOS 비로그인 시스템 브라우저 취소 (#346)
+
+iOS 수동 재검증 workflow의 `auth_cancel=true`는 `smoke=true`만 함께 허용하고
+`large_font`, `ui_test`, `accessibility_audit`와는 함께 실행하지 않는다.
+명령은 `--home --auth-cancel`이다. 기본 Home 관측 뒤 원본 source171989e 앱의
+실제 로그인 화면에서 Google/Naver/Kakao 버튼을 각각1회 누르고 시스템 WebView·hittable Cancel,
+취소 뒤 비로그인 UI·오류/동의 상태 부재와 마지막 cold restart 뒤 비로그인 상태를 검사한다.
+기존 독립 XCTest runner target을 사용하며 앱은 재컴파일/재서명하지 않는다.
+
+테스트는 fresh owned Simulator와 기존 ephemeral system browser 경로만 사용한다.
+알려진 BARO domain의 OS Continue prompt가 있으면 한 번 처리하고,
+제공자 계정 선택·비밀번호/코드 입력·로그인 제출·약관 동의는 수행하지 않는다.
+WebView 존재는 제공자 페이지의 client 설정 수용이나 실제 OAuth 성공을 뜻하지 않는다.
+실제 callback/교환·SecureStore pending 삭제의 직접 계측·두 역할/동의·실기기 인수는 별도다.
+
+호스트는 인증 진입 **전** 명시적 screenshot 명령과 raw command log 저장을 되돌릴 수 없게 차단한다.
+원본 XCTest 출력은 메모리에서 고정 provider/stage/assertion·알려진 UI 상태 boolean만 대조한다.
+SDK가 만든 private runner build/xcresult는 성공/실패 모두 소유 임시 폴더에서 제거하며 업로드하지 않는다.
+이는 OS 내부가 일시적 진단 자료를 생성하지 않는다는 주장이 아니다.
+artifact는 기존 인증 전 Home PNG/receipt와 `auth-cancel-ui.json` 또는 고정 `failure.json`만 허용한다.
+URL·cookie·state·토큰·계정/원문 화면은 내보내지 않는다.
+
+세 제공자의 표시/취소/복귀와 cold 상태가 모두 확인된 단일 strict 결과만 성공으로 인정한다.
+source/tooling/compiler ZIP/receipt·기기 identity는 같은 실행의 Home baseline과 묶는다.
+단일 결과 누락/중복, 부분 제공자, raw 값 또는 OAuth 성공으로의 확대는 거절한다.
+준비/합성 회귀는 실제 통과가 아니며 exact main CI 뒤 수동 실행 결과를 인수한다.
+기존 실제 OS audit·전체 기기/VoiceOver/TalkBack·계정 인증/역할/동의·store/#334/#346/#339/#71은 보존한다.
