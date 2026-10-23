@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "kind": "unaccepted-xcode-simulator-output",
+  "sourceSha": "7294145021bf39a8de3dc61cb7e1fe36dfbddd85",
+  "observedAt": "2026-10-23T13:37:11.522Z",
+  "applicationId": "site.baro.app.preview",
+  "nativeCompileSucceeded": true,
+  "archive": {
+    "name": "unaccepted-simulator-7294145021bf39a8de3dc61cb7e1fe36dfbddd85.zip",
+    "bytes": 51300173,
+    "sha256": "ca5087491b2b0c225323360603aebf9c9b0fe4e79dbecf5131ab907e335e5b4b"
+  },
+  "infoPlistSha256": "403c339a2d1f2f99202bf9f5b856e349669ae1abd3f86c395064a47a40e87916",
+  "executableSha256": "1e2090fd007a1af925751cc3bea13fbc03ea922c09a779785e557949db6e2a89",
+  "accepted": false,
+  "signatureAccepted": false,
+  "sdkReadinessVerified": false,
+  "physicalDeviceVerified": false,
+  "storeSigned": false,
+  "deployed": false
+}

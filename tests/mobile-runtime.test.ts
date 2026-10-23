@@ -30,12 +30,14 @@ import {
   verifySimulatorEntitlements,
 } from "../scripts/mobile-ios-simulator-signing";
 import {
+  verifySimulatorBuildPlatform,
   verifyXcodeControlBinary,
   xcodeControlBuildFailure,
   xcodeControlEntitlements,
   xcodeControlEnvironment,
   xcodeControlReceiptSchema,
   xcodeEntitlementShape,
+  xcodeHostSignatureEntitlementsSchema,
   xcodeSimulatorControlArguments,
 } from "../scripts/mobile-ios-xcode-control";
 import { productEntryOverlay } from "../scripts/mobile-runtime";
@@ -782,6 +784,7 @@ test("Xcode signing control stays in a fresh preview CI context without accounts
   expect(xcodeSimulatorControlArguments).toContain("DEVELOPMENT_TEAM=");
   expect(xcodeSimulatorControlArguments).toContain("PROVISIONING_PROFILE_SPECIFIER=");
   expect(xcodeSimulatorControlArguments.join(" ")).not.toContain("allowProvisioningUpdates");
+  expect(xcodeSimulatorControlArguments.join(" ")).not.toContain("FAKETEAMID");
   const own = {
     "keychain-access-groups": ["FAKETEAMID.site.baro.app.preview"] as [
       "FAKETEAMID.site.baro.app.preview",
@@ -794,8 +797,31 @@ test("Xcode signing control stays in a fresh preview CI context without accounts
     { ...own, "keychain-access-groups": ["*"] },
     { ...own, "keychain-access-groups": ["site.baro.app.preview", "site.baro.app.dev"] },
     { ...own, "application-identifier": "synthetic-team.site.baro.app.preview" },
+    { ...own, "keychain-access-groups": ["FAKETEAMID.site.baro.app.dev"] },
   ])
     expect(() => xcodeControlEntitlements(invalid)).toThrow("XCODE_CONTROL_ENTITLEMENTS_MISMATCH");
+});
+test("simulated rights never become host signature privileges or authorize a non-Simulator binary", () => {
+  expect(xcodeHostSignatureEntitlementsSchema.parse({})).toEqual({});
+  expect(() =>
+    xcodeHostSignatureEntitlementsSchema.parse({
+      "keychain-access-groups": ["FAKETEAMID.site.baro.app.preview"],
+    }),
+  ).toThrow();
+  expect(() => xcodeControlEntitlements({})).toThrow("XCODE_CONTROL_ENTITLEMENTS_MISMATCH");
+  expect(() =>
+    verifySimulatorBuildPlatform("cmd LC_BUILD_VERSION\n  platform IOSSIMULATOR\n"),
+  ).not.toThrow();
+  for (const bad of [
+    "platform IOS\n",
+    "platform MACOS\n",
+    "platform MACCATALYST\n",
+    "platform IOSSIMULATOR\nplatform IOS\n",
+    "",
+  ])
+    expect(() => verifySimulatorBuildPlatform(bad)).toThrow(
+      "XCODE_CONTROL_MACHO_SIMULATOR_REQUIRED",
+    );
 });
 test("fresh Xcode archive attestation binds source and exact bytes without accepting synthetic data as an installed app", async () => {
   const root = await mkdtemp(resolve(tmpdir(), "baro-xcode-control-bytes-"));

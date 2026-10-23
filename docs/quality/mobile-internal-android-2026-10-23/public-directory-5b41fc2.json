@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "kind": "bundled-android-public-directory-ui-only",
+  "toolingSourceSha": "5b41fc217b1cc87729714a41c4f8980af01059d0",
+  "binarySourceSha": "dedcd0e13e8c7263edcd78f53f3f1da980f273c8",
+  "observedAt": "2026-10-23T13:47:21.980Z",
+  "applicationId": "site.baro.app.preview",
+  "binary": {
+    "name": "baro-internal-preview-android-dedcd0e13e8c7263edcd78f53f3f1da980f273c8.apk",
+    "bytes": 57133498,
+    "sha256": "1f5b9d7d6cb43bbe7b21d8ee4554dd1d357c1bb3fb363d8d29a5ed06a765d446"
+  },
+  "apiOrigin": "https://preview.baro.site",
+  "apiHealthObservation": {
+    "status": "observed",
+    "observedAt": "2026-10-23T13:45:28.297Z",
+    "sourceSha": "f91244151c94d871423e9f2fe6fda5a70bf0e668"
+  },
+  "publicDirectoryUiObserved": true,
+  "headingObserved": true,
+  "state": {
+    "headingVisible": true,
+    "loadingVisible": false,
+    "errorVisible": false,
+    "readyEmpty": true,
+    "readyProfileCard": false
+  },
+  "readOnly": true,
+  "searchSubmitted": false,
+  "retryInvoked": false,
+  "profileDetailOpened": false,
+  "screenshotsSuppressedBeforeNavigation": true,
+  "profileValuesRecorded": false,
+  "httpTransportSeparatelyObserved": false,
+  "metroServerStarted": false,
+  "metroRequests": 0,
+  "authenticatedJourneysVerified": false,
+  "oauthVerified": false,
+  "physicalDeviceVerified": false,
+  "storeSigned": false,
+  "deployed": false
+}

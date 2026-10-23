@@ -127,7 +127,7 @@ export function xcodeControlEnvironment(input: Record<string, string | undefined
   ];
   return {
     ...Object.fromEntries(names.filter((k) => input[k] !== undefined).map((k) => [k, input[k]])),
-    TARGET_SHA: input.TARGET_SHA,
+    TARGET_SHA: input.TARGET_SHA as string,
     EXPO_PUBLIC_APP_ENV: "preview",
     EXPO_PUBLIC_API_URL: "https://preview.baro.site",
     CI: "1",
@@ -245,35 +245,47 @@ export async function configureGeneratedXcodeControl(ios: string, projectName: s
     '<?xml version="1.0" encoding="UTF-8"?><plist version="1.0"><dict><key>keychain-access-groups</key><array><string>$(AppIdentifierPrefix)$(PRODUCT_BUNDLE_IDENTIFIER)</string></array></dict></plist>\n',
   );
 }
-export const xcodeControlReceiptSchema = z.strictObject({
-  version: z.literal(2),
-  kind: z.literal("xcode-simulator-signing-control"),
-  sourceSha: z.string().regex(/^[a-f0-9]{40}$/),
-  toolingSourceSha: z.string().regex(/^[a-f0-9]{40}$/),
-  observedAt: z.iso.datetime(),
-  applicationId: z.literal("site.baro.app.preview"),
-  signature: z.literal("ad-hoc"),
-  teamIdentifier: z.literal("not set"),
-  architectures: z.array(z.enum(["arm64", "x86_64"])).min(1),
-  entitlements: xcodeControlEntitlementsSchema,
-  entitlementsSource: z.literal("simulator-macho-xml-and-der"),
-  signatureEntitlements: xcodeHostSignatureEntitlementsSchema,
-  sectionHashes: z
-    .array(
-      z.strictObject({
-        architecture: z.enum(["arm64", "x86_64"]),
-        xmlSha256: z.string().regex(/^[a-f0-9]{64}$/),
-        derSha256: z.string().regex(/^[a-f0-9]{64}$/),
-      }),
-    )
-    .min(1),
-  executableSha256: z.string().regex(/^[a-f0-9]{64}$/),
-  infoPlistSha256: z.string().regex(/^[a-f0-9]{64}$/),
-  appRuntimeVerified: z.literal(false),
-  physicalDeviceVerified: z.literal(false),
-  storeSigned: z.literal(false),
-  deployed: z.literal(false),
-});
+export const xcodeControlReceiptSchema = z
+  .strictObject({
+    version: z.literal(2),
+    kind: z.literal("xcode-simulator-signing-control"),
+    sourceSha: z.string().regex(/^[a-f0-9]{40}$/),
+    toolingSourceSha: z.string().regex(/^[a-f0-9]{40}$/),
+    observedAt: z.iso.datetime(),
+    applicationId: z.literal("site.baro.app.preview"),
+    signature: z.literal("ad-hoc"),
+    teamIdentifier: z.literal("not set"),
+    architectures: z
+      .array(z.enum(["arm64", "x86_64"]))
+      .min(1)
+      .max(2),
+    entitlements: xcodeControlEntitlementsSchema,
+    entitlementsSource: z.literal("simulator-macho-xml-and-der"),
+    signatureEntitlements: xcodeHostSignatureEntitlementsSchema,
+    sectionHashes: z
+      .array(
+        z.strictObject({
+          architecture: z.enum(["arm64", "x86_64"]),
+          xmlSha256: z.string().regex(/^[a-f0-9]{64}$/),
+          derSha256: z.string().regex(/^[a-f0-9]{64}$/),
+        }),
+      )
+      .min(1)
+      .max(2),
+    executableSha256: z.string().regex(/^[a-f0-9]{64}$/),
+    infoPlistSha256: z.string().regex(/^[a-f0-9]{64}$/),
+    appRuntimeVerified: z.literal(false),
+    physicalDeviceVerified: z.literal(false),
+    storeSigned: z.literal(false),
+    deployed: z.literal(false),
+  })
+  .refine(
+    (v) =>
+      new Set(v.architectures).size === v.architectures.length &&
+      new Set(v.sectionHashes.map((s) => s.architecture)).size === v.architectures.length &&
+      v.sectionHashes.length === v.architectures.length &&
+      v.sectionHashes.every((s) => v.architectures.includes(s.architecture)),
+  );
 export async function attestXcodeSimulatorControl(
   root: string,
   sourceSha: string,
