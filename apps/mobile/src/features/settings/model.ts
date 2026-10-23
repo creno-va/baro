@@ -100,6 +100,28 @@ export function createSettingsModel(dependencies: {
       publish({ ...empty(), notice: notice() });
       void dependencies.session.refresh();
     };
+    // Read durable facts before network IO: a fast 401 must not hide a known
+    // unconfirmed intent, and an accepted record must not issue a new account read.
+    let pending: SettingsState["deletionState"] = null;
+    try {
+      pending = await api.deletionState();
+      if (!current(captured)) return;
+      const ownerId = dependencies.session.getSnapshot().session?.user?.id;
+      if (pending === "accepted") {
+        if (ownerId) receipt = { ownerId, notice: "cleanup-failed", cleaning: false };
+        publish({ ...empty(), gate: "ready", notice: notice(), deletionState: "accepted" });
+        return;
+      }
+      uncertainOwner = pending === "unconfirmed" ? ownerId : undefined;
+      publish({ ...state, deletionState: pending, notice: notice() });
+    } catch (error) {
+      if (!current(captured)) return;
+      if (error instanceof ApiError && error.code === "UNAUTHENTICATED") {
+        lostAuth();
+        return;
+      }
+      publish({ ...state, deletionBusy: false, error: errorMessage(error) });
+    }
     await Promise.all([
       state.needsConsent
         ? Promise.resolve()
@@ -116,38 +138,28 @@ export function createSettingsModel(dependencies: {
               }
               publish({ ...state, usageBusy: false, usageError: errorMessage(error) });
             }),
-      api
-        .deletionState()
-        .then(async (pending) => {
-          if (!current(captured)) return;
-          if (pending === "accepted") {
-            const ownerId = dependencies.session.getSnapshot().session?.user?.id;
-            if (ownerId) receipt = { ownerId, notice: "cleanup-failed", cleaning: false };
-            publish({ ...empty(), gate: "ready", notice: notice(), deletionState: "accepted" });
-            return;
-          }
-          uncertainOwner =
-            pending === "unconfirmed"
-              ? dependencies.session.getSnapshot().session?.user?.id
-              : undefined;
-          const access = await api.deletionAccess();
-          if (!current(captured) || receipt) return;
-          publish({
-            ...state,
-            deletion: { providers: [...access.providers], canDelete: access.canDelete },
-            deletionState: pending,
-            deletionBusy: false,
-            notice: pending === "unconfirmed" ? "unconfirmed" : null,
-          });
-        })
-        .catch((error: unknown) => {
-          if (!current(captured) || receipt) return;
-          if (error instanceof ApiError && error.code === "UNAUTHENTICATED") {
-            lostAuth();
-            return;
-          }
-          publish({ ...state, deletionBusy: false, error: errorMessage(error) });
-        }),
+      pending === null
+        ? Promise.resolve()
+        : api
+            .deletionAccess()
+            .then((access) => {
+              if (!current(captured) || receipt) return;
+              publish({
+                ...state,
+                deletion: { providers: [...access.providers], canDelete: access.canDelete },
+                deletionState: pending,
+                deletionBusy: false,
+                notice: pending === "unconfirmed" ? "unconfirmed" : null,
+              });
+            })
+            .catch((error: unknown) => {
+              if (!current(captured) || receipt) return;
+              if (error instanceof ApiError && error.code === "UNAUTHENTICATED") {
+                lostAuth();
+                return;
+              }
+              publish({ ...state, deletionBusy: false, error: errorMessage(error) });
+            }),
     ]);
   }
   function observe() {

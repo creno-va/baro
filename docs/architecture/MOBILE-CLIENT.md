@@ -468,6 +468,8 @@ await를 두지 않는다. 새 로그인/재인증의 동기 scope 폐기와 cre
 검사가 다른 계정의 jar를 보호한다. 미해결 사건/리포트·업로드 key는 전역 삭제하지 않는다.
 접수와 정리 실패를 구분하고 화면 background/foreground 사이의 실제 정리 결과도 유지한다.
 다른 계정의 fresh 세션이 오면 이전 계정의 접수/미확정 안내·개인 입력을 없앤다.
+화면 재진입 시 durable 기록을 네트워크보다 먼저 읽어 빠른401이 미확정 사실을 가리지
+않게 한다. accepted 기록이 있으면 추가 계정 조회/삭제 없이 접수·남은 정리를 안내한다.
 
 합성 RN composition은 실제 NativeLogin·credential adapter와 고정 Expo chunk/cookie codec을
 사용해 경계를 검사한다. signed Hono/SQL 검증은 primary 삭제·peer 보존·삭제 job과 실제

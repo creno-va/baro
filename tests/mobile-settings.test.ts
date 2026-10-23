@@ -116,6 +116,8 @@ function fixture() {
             requests.push(options);
             if (options.path.endsWith("/usage")) {
               await usageWait;
+              if (mode === "unauthenticated")
+                throw new ApiError("UNAUTHENTICATED", "합성 세션 만료");
               if (mode === "usage")
                 throw new ApiError("UNAVAILABLE", "합성 사용량 조회 실패", true);
               return {
@@ -405,4 +407,31 @@ test("unconfirmed request stays uncertain through an anonymous read, clears for 
   await until(() => !f.model.getSnapshot().deletionBusy);
   expect(f.model.getSnapshot().notice).toBeNull();
   stop();
+});
+
+test("cold accepted metadata sends no account read; a fast usage 401 cannot hide durable uncertainty", async () => {
+  for (const accepted of [true, false]) {
+    const f = fixture();
+    f.mode(accepted ? "cleanup" : "drop");
+    const stop = f.model.start();
+    await until(() => !f.model.getSnapshot().deletionBusy);
+    f.model.confirm("DELETE");
+    await f.model.deleteAccount();
+    stop();
+    const before = f.requests.length;
+    f.mode("unauthenticated");
+    const model = f.createModel(),
+      again = model.start();
+    await until(() => model.getSnapshot().notice === (accepted ? "cleanup-failed" : "unconfirmed"));
+    if (accepted) expect(f.requests).toHaveLength(before);
+    else {
+      await until(() => f.counts().refreshes > 0);
+      expect(model.getSnapshot()).toMatchObject({
+        gate: "checking",
+        notice: "unconfirmed",
+        profile: null,
+      });
+    }
+    again();
+  }
 });
