@@ -290,8 +290,14 @@ export async function attestXcodeSimulatorControl(
   root: string,
   sourceSha: string,
   toolingSourceSha = sourceSha,
+  configuration: "Debug" | "Release" = "Debug",
 ) {
-  const products = resolve(root, ".wrangler/mobile-build/ios/Build/Products/Debug-iphonesimulator"),
+  if (configuration !== "Debug" && configuration !== "Release")
+    throw new Error("XCODE_CONTROL_CONFIGURATION_REQUIRED");
+  const products = resolve(
+      root,
+      `.wrangler/mobile-build/ios/Build/Products/${configuration}-iphonesimulator`,
+    ),
     apps = (await readdir(products)).filter((p) => p.endsWith(".app"));
   if (apps.length !== 1 || !apps[0]) throw new Error("XCODE_CONTROL_APP_AMBIGUOUS");
   const app = resolve(products, apps[0]),

@@ -185,3 +185,29 @@ SUCCESS다. [공개 UI receipt](../quality/mobile-internal-android-2026-10-23/pu
 실제 상태는 ready-empty이며 loading/error는 false다. 검색/재시도/상세를 실행하지 않았고
 공개 데이터 진입 전 screenshot reader를 차단했다. 공개 프로필의 실제 card 분기는 이번
 관측에 없으며 HTTP transport 별도 계측·OAuth/private API·physical/store 인수와 구분한다.
+
+## iOS Simulator bundled preview 준비 (#397)
+
+```sh
+gh workflow run mobile-internal-ios.yml --ref main -f target_sha=<full40-main-sha>
+```
+
+별도 수동 경로는 성공한 main CI의 정확한 SHA와 깨끗한 소유 checkout에서만 실행한다.
+preview 앱 ID/API·기본 expo-router 제품 entry를 유지하고 Xcode Release/iphonesimulator로
+컴파일한다. Debug 개발 앱이나 계측 probe entry를 내부 전달 앱으로 대체하지 않는다.
+[Expo의 로컬 Release 안내](https://docs.expo.dev/guides/local-app-development/)와 잠근 Expo/RN의
+실제 Xcode bundle script에 따라 Hermes bundle과 private source map을 생성한다.
+private map/로그는 전달하지 않으며 zip 내 map·probe source graph·bundle 변조를 거부한다.
+중간 JavaScript와 compiled HBC는 서로 다른 산출물이므로 각각의 해시를 기록한다.
+compiled app의 HBC와 ZIP에서 다시 읽은 HBC가 같음을 확인한다.
+
+서명은 #394에서 실제 SDK 준비가 검증된 Xcode Simulator own-group/No-Team ad-hoc 경로다.
+양 ABI의 Simulator platform·host signature·XML/DER와 내장 폰트를 필수로 검사하며 실제
+Apple 계정/인증서/private key·스토어 profile을 사용하거나 iPhone IPA를 만들지 않는다.
+기존 Debug 기본값과 Android 전달물은 그대로다. native compile exit0 뒤 원본 ZIP/hash를
+먼저 unaccepted inspection으로 보존해 후속 검사 실패를 성공으로 덮어쓰지 않는다.
+
+이 도구의 receipt는 Release/embedded bundle/signature/font/byte/hash만 인수하며
+appRuntimeVerified=false를 고정한다. 실제 compile/산출물 검증과 이후 Metro 없는 소유
+Simulator 설치/부팅·초기 화면 대조를 완료하기 전 iOS 전달 인수 성공으로 표시하지 않는다.
+원격 API/OAuth·physical·전체 화면/접근성·store 및 #339/#71은 별도 인수로 유지한다.
