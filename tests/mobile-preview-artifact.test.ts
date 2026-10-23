@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import {
+  androidSignerDigest,
   observePreviewApi,
   parseAndroidBadging,
   previewArtifactSchema,
@@ -52,6 +53,31 @@ const candidate = () => ({
   physicalDeviceVerified: false,
   storeSigned: false,
   deployed: false,
+});
+test("Android signer identity accepts official numbered and v3.1 SDK-range labels but rejects distinct certificates", () => {
+  const digest = "a1".repeat(32);
+  expect(androidSignerDigest(`Signer #1 certificate SHA-256 digest: ${digest}\n`)).toBe(digest);
+  expect(
+    androidSignerDigest(
+      `Signer (minSdkVersion=33, maxSdkVersion=2147483647) certificate SHA-256 digest: ${digest}\nSigner (minSdkVersion=24, maxSdkVersion=32) certificate SHA-256 digest: ${digest.toUpperCase()}\n`,
+    ),
+  ).toBe(digest);
+  expect(
+    androidSignerDigest(
+      `Signer (minSdkVersion=33 (dev release=true), maxSdkVersion=2147483647) certificate SHA-256 digest: ${digest}\n`,
+    ),
+  ).toBe(digest);
+  expect(() =>
+    androidSignerDigest(
+      `Signer #1 certificate SHA-256 digest: ${digest}\nSigner #2 certificate SHA-256 digest: ${"b2".repeat(32)}\n`,
+    ),
+  ).toThrow();
+  for (const value of [
+    "",
+    `Source Stamp Signer certificate SHA-256 digest: ${digest}`,
+    `Signer #1 public key SHA-256 digest: ${digest}`,
+  ])
+    expect(() => androidSignerDigest(value)).toThrow();
 });
 test("preview receipt binds exact source, environment, application, actual metadata and artifact identity", () => {
   const receipt = verifyPreviewArtifact(candidate(), sourceSha, "android");

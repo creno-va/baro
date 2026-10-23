@@ -357,6 +357,14 @@ receipt 회귀와 이 실제 OS 실행은 구분하며 실행 전에는 runtime 
 실제 DocumentPicker UI·열기/공유 sheet·OAuth/원격 API·물리 기기·접근성/전체 사용자 여정·
 내부 preview 전달·스토어 서명/배포는 이 실행의 미검증 항목으로 유지한다.
 
+Metro localhost는 Node DNS 순서에 따라 IPv6에만 열릴 수 있어, runner가 IPv4 우선 옵션으로
+native/adb reverse의 `127.0.0.1` 주소에 맞춘다. native compile 전에 실제 `/status` 준비를
+확인하고 서버를 닫는다. 서버의 자동 TS 파일 수정은 격리 검증에서 끄며 별도 strict typecheck는
+유지한다. 제품/probe Metro 준비와 제품 home layout 대기는 각각의 phase로 기록한다.
+소유 AVD에는 RAM2048MiB·2코어·SwiftShader/Vulkan 비활성 설정을 명시하고, 조기 종료를
+즉시 실패로 감지한다. 실패 receipt에는 boot 여부/exit code와 정해진 시작 문제 코드만 포함한다.
+이 설정은 Android boot 성공을 가정하거나 기존 실패를 지우지 않으며 실제 재실행으로 확인한다.
+
 ## 내부 preview 개발 앱 전달
 
 `Mobile native builds (manual)`에 main의 full40 `target_sha`를 넣는다. 일반 preview 앱을
@@ -372,6 +380,9 @@ release/스토어 제출물이 아니다. 로컬 runtime probe 앱/entry를 포�
 기본 식별자는 `site.baro.app.preview`다. iOS Simulator ZIP은 iPhone 설치용 IPA가 아니다.
 새 Apple/Google 배포 identity·EAS 계정/서비스·자동 배포는 도입하지 않는다. 실제 min OS/ABI는
 receipt를 따르며 소스의 기대값만으로 실행 지원을 선언하지 않는다.
+Android 인증서 검사는 apksigner의 numbered 및 v3.1 SDK 범위 label을 처리한다. 같은 인증서의
+범위별 반복만 합치며 다른 인증서가 발견되면 전달을 거부한다. signature 검증 자체는
+apksigner의 실제 성공을 요구하며 label 파싱을 위해 생략하지 않는다.
 
 1. artifact를 내려받아 압축을 풀고 receipt의 `sourceSha`와 파일 이름·byte/hash를 확인한다.
    macOS/Linux에서는 `shasum -a 256 <apk-or-zip>`으로 비교한다.

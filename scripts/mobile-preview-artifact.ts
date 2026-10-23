@@ -98,6 +98,18 @@ export function parseAndroidBadging(value: string) {
     architectures,
   };
 }
+/** apksigner uses SDK-range labels for v3.1. Repeated ranges must keep the same debug certificate. */
+export function androidSignerDigest(value: string) {
+  const matches = [
+    ...value.matchAll(
+      /^(?:Signer #\d+|Signer \(minSdkVersion=\d+(?: \(dev release=true\))?, maxSdkVersion=\d+\)) certificate SHA-256 digest:\s*([a-f0-9]{64})\s*$/gim,
+    ),
+  ];
+  const certificates = [...new Set(matches.map((match) => match[1]?.toLowerCase()))];
+  if (certificates.length !== 1 || !certificates[0])
+    throw new Error("PREVIEW_ANDROID_SIGNER_REQUIRED");
+  return certificates[0];
+}
 export function simulatorSignature(exitCode: number, report: string): "none" | "ad-hoc" {
   if (exitCode !== 0 && report.includes("code object is not signed at all")) return "none";
   if (
@@ -182,10 +194,9 @@ async function main() {
     const tools = resolve(sdk, "build-tools", version),
       apk = resolve(mobile, "android/app/build/outputs/apk/debug/app-debug.apk");
     metadata = parseAndroidBadging(await command([resolve(tools, "aapt"), "dump", "badging", apk]));
-    const cert = (await command([resolve(tools, "apksigner"), "verify", "--print-certs", apk]))
-      .match(/Signer #1 certificate SHA-256 digest:\s*([a-f0-9]{64})/i)?.[1]
-      ?.toLowerCase();
-    if (!cert) throw new Error("PREVIEW_ANDROID_SIGNER_REQUIRED");
+    const cert = androidSignerDigest(
+      await command([resolve(tools, "apksigner"), "verify", "--print-certs", apk]),
+    );
     signing = { kind: "android-debug", certificateSha256: cert };
     await copyFile(apk, artifact);
   } else {
