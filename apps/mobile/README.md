@@ -328,3 +328,31 @@ plugin으로 앱에 포함하고 Text/TextField·Stack header에 사용한다. �
 진행·literal 입력·오류가 있으면 관리를 펼쳐 두고, 삭제 접수/정리 결과는 별도 화면 상태로
 계속 표시한다. 펼치기/접기는 표시 상태만 바꾸며 저장/삭제/재인증이나 복구 key 제거를
 실행하지 않는다. owner·동의·원래 revision·동일 요청 확인은 기존 모델과 client가 소유한다.
+
+## 수동 로컬 runtime 검증 (#385)
+
+`Mobile local runtime (manual)` workflow는 main의 full40 SHA만 받고, 해당 커밋의 별도
+임시 worktree에서 `site.baro.app.dev` 개발 앱을 빌드한다. 기본 `mobile:native`의 preview
+제약은 유지한다. `mobile:runtime android|ios`만 `--runtime-local`과 정확한
+`http://127.0.0.1:8765` 환경으로 빌드를 호출한다. Android는 새 소유 AVD와 adb reverse,
+iOS는 새 소유 Simulator를 사용하고 실행 후 제거한다. 개인 기기/기존 simulator는 선택하지 않는다.
+
+제품의 `expo-router/entry`와 home 코드를 먼저 실행한다. 임시 checkout에서만 원래 home을
+동일 상대 import 깊이에 복사하고 onLayout wrapper를 씌워 실제 native layout과 합성 화면
+스크린샷을 기록한다. 이는 계측된 공개 home의 mount 증거이며 전체 화면 조작/로그인 인수가 아니다.
+그 뒤 임시 manifest의 main만 `runtime-probe/entry.tsx`로 바꾼다. 정본 manifest/router는
+바뀌지 않고 probe는 일반 앱 bundle의 import 그래프에 들어가지 않는다.
+
+probe는 실제 Expo SecureStore/파일 SDK·등록된 native module을 사용한다. synthetic picker
+결과만 주입하고 실제 private snapshot/reader·100MB native PUT·1GB native download·SDK
+독립 hash/readback·401/Origin fence·계정 변경·전송 중 source clear/취소·파일 정리를 검사한다.
+loopback fixture는 nonce control과 synthetic cookie/Origin/owner를 구분하고 받은 전체 byte/hash를
+독립 대조한다. credentials reset 뒤에도 미확정 operation key가 남는지 확인한 후 자기 probe key만
+제거한다. 실제 사건/토큰/공급자/유료 호출은 사용하지 않는다.
+
+성공한 workflow는 source·OS/모델·앱/entry/overlay hash·compiled font·전송 결과·관측 RSS와
+두 합성 스크린샷만 내보낸다. process RSS 표본의 최대값을 전체 peak나 JS heap 한도의 증명으로
+확대하지 않는다. raw runtime/Metro 로그는 artifact에 넣지 않는다. `mobile:check`의 offline fixture/
+receipt 회귀와 이 실제 OS 실행은 구분하며 실행 전에는 runtime 성공을 선언하지 않는다.
+실제 DocumentPicker UI·열기/공유 sheet·OAuth/원격 API·물리 기기·접근성/전체 사용자 여정·
+내부 preview 전달·스토어 서명/배포는 이 실행의 미검증 항목으로 유지한다.

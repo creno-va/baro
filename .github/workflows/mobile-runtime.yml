@@ -1,0 +1,85 @@
+name: Mobile local runtime (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_sha:
+        description: Immutable main SHA; isolated local emulator/simulator only
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mobile-runtime-${{ inputs.target_sha }}
+  cancel-in-progress: false
+
+jobs:
+  runtime:
+    name: Mobile ${{ matrix.platform }} local runtime
+    if: github.ref == 'refs/heads/main'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: android
+            runner: ubuntu-latest
+          - platform: ios
+            runner: macos-26
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 55
+    env:
+      TARGET_SHA: ${{ inputs.target_sha }}
+      CI: "1"
+      EXPO_NO_TELEMETRY: "1"
+    steps:
+      - name: Validate candidate
+        shell: bash
+        run: '[[ "$TARGET_SHA" =~ ^[a-f0-9]{40}$ ]]'
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.target_sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Verify candidate ancestry
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD)" = "$TARGET_SHA"
+          git merge-base --is-ancestor "$TARGET_SHA" origin/main
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: apps/mobile/.node-version
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: .bun-version
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        if: matrix.platform == 'android'
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Prepare owned Android emulator runtime
+        if: matrix.platform == 'android'
+        shell: bash
+        run: |
+          sudo chmod a+rw /dev/kvm
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platform-tools' 'emulator' 'system-images;android-35;google_apis;x86_64'
+      - run: bun ci
+      - name: Compile and execute isolated local app
+        run: bun run mobile:runtime ${{ matrix.platform }}
+      - name: Save scoped runtime receipt and synthetic screenshots
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: mobile-runtime-${{ matrix.platform }}-${{ inputs.target_sha }}
+          path: |
+            .wrangler/mobile-runtime/receipt-${{ matrix.platform }}.json
+            .wrangler/mobile-runtime/product-home-${{ matrix.platform }}.png
+            .wrangler/mobile-runtime/native-probe-${{ matrix.platform }}.png
+          if-no-files-found: error
+      - name: Save safe failure classification
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: mobile-runtime-failure-${{ matrix.platform }}-${{ inputs.target_sha }}
+          path: .wrangler/mobile-runtime/failure-${{ matrix.platform }}.json
+          if-no-files-found: warn

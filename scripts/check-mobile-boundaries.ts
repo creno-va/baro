@@ -33,7 +33,9 @@ for (const [key, entry] of Object.entries(manifest.exports)) {
     failures.push(`contract export must be explicit: ${key}`);
   else await walk(resolve(contractsRoot, entry));
 }
-for await (const file of new Bun.Glob("apps/mobile/{src,config}/**/*.{ts,tsx}").scan(".")) {
+for await (const file of new Bun.Glob("apps/mobile/{src,config,runtime-probe}/**/*.{ts,tsx}").scan(
+  ".",
+)) {
   failures.push(
     ...mobileBoundaryFindings(file, await Bun.file(file).text()).map(
       (message) => `${file}: ${message}`,

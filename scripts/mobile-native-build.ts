@@ -5,7 +5,13 @@ import { verifyCompiledMobileFont } from "./mobile-native-assets";
 const platform = process.argv[2];
 if (platform !== "android" && platform !== "ios")
   throw new Error("Usage: bun run mobile:native android|ios");
-if (process.env.EXPO_PUBLIC_APP_ENV !== "preview")
+const runtimeLocal = process.argv[3] === "--runtime-local";
+if (
+  runtimeLocal
+    ? process.env.EXPO_PUBLIC_APP_ENV !== "local" ||
+      process.env.EXPO_PUBLIC_API_URL !== "http://127.0.0.1:8765"
+    : process.env.EXPO_PUBLIC_APP_ENV !== "preview"
+)
   throw new Error("Native verification must explicitly target preview");
 
 const root = process.cwd();

@@ -12,7 +12,11 @@ const unavailable = () =>
     "파일을 준비하지 못했어요. 저장 공간과 접근 권한을 확인하고 다시 선택해 주세요.",
     true,
   );
-export function createExpoUploadSources(dependencies: { namespace: string; newId: () => string }) {
+export function createExpoUploadSources(dependencies: {
+  namespace: string;
+  newId: () => string;
+  pick?: typeof DocumentPicker.getDocumentAsync;
+}) {
   if (!/^[A-Za-z0-9_-]{1,80}$/.test(dependencies.namespace)) throw unavailable();
   const root = new Directory(Paths.cache, dependencies.namespace);
   type Activity = { cancel(): void; done: Promise<void> };
@@ -80,7 +84,7 @@ export function createExpoUploadSources(dependencies: { namespace: string; newId
         cleanup();
         // The picker copies external/provider bytes to app cache. Move that owned
         // snapshot rather than reading a provider URI after its permission expires.
-        const result = await DocumentPicker.getDocumentAsync({
+        const result = await (dependencies.pick ?? DocumentPicker.getDocumentAsync)({
           copyToCacheDirectory: true,
           multiple: false,
           type: "*/*",
