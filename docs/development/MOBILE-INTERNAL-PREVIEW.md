@@ -236,3 +236,53 @@ receipt 전체 hash를 묶는다. 새 검증은 ZIP 전체 hash·현재 bundled 
 최소15초의 표본을 기록하지만 Home 내용은 homeContentVerified=false/visualReviewRequired=true다.
 PNG를 실제로 대조한 시각 관측을 별도로 남기며 전체 구간의 연속 생존·전체 기능/접근성·
 OAuth/물리 기기/스토어 인수로 확대하지 않는다. 첫 실제 smoke 결과는 실행 후 기록한다.
+
+PR414/mainfd86914·CI39987437927 뒤 [실제39987887841](https://github.com/creno-va/baro/actions/runs/39987887841)은
+SUCCESS다. [metadata 재검증](../quality/mobile-internal-ios-2026-10-23/verification-fd86914.json)과
+[cold launch 원본](../quality/mobile-internal-ios-2026-10-23/home-fd86914.json)을 보존한다.
+iPhone16/iOS26.5의 각 새 PID를3회 읽었고 실제 경과 시간은25/54초, Metro 요청은0이다.
+실제 PNG220,647bytes/SHA256b26d9c5dc645149ab4d398ba0ec22f84bd554e6f38f95491a09b3065d0d40e82를
+직접 대조해 BARO/한글 Home 카드와 구성 오류 부재를 확인했다.
+[별도 시각 관측](../quality/mobile-internal-ios-2026-10-23/visual-home-fd86914.json)을 추가하고 자동
+receipt의 homeContentVerified=false와 원래 관측 시각·API health·compiler source는 바꾸지 않았다.
+초기 viewport의 확인이며 전체 스크롤/기능/접근성·native IO·실제 API/OAuth·physical/store는 별도다.
+
+## 내부 전달 기준과 설치
+
+| 전달물 | 앱 source·version/build | binary metadata | 실제 설치/초기 Home 관측 |
+| --- | --- | --- | --- |
+| Android APK | dedcd0e / 0.1.0·1 | minimum API24, arm64-v8a/x86_64, embedded HBC, 공개 template development certificate | Android15 Emulator / tooling478a904·39957216861, Metro 요청0. 별도 글자 확대·공개 ready-empty 관측 보존 |
+| iOS Simulator ZIP | ff5c208 / 0.1.0·1 | minimum iOS16.4, arm64/x86_64, embedded HBC, No-Team Simulator ad-hoc | iPhone16/iOS26.5 Simulator / toolingfd86914·39987887841, 두 cold launch·Metro 요청0·Home PNG 대조 |
+
+두 앱은 `https://preview.baro.site`를 사용한다. 연결된 receipt의 API health source는f912441이며
+각 관측 시각을 그대로 보존한다. health source를 실제 앱의 HTTP 전송 계측이나 인증된 전체
+API 호환 성공으로 확대하지 않는다. 앱/검증 도구/API의 서로 다른 SHA를 하나로 합치지 않는다.
+Android 실제 폰·iPhone IPA/개발자 서명·스토어 제출은 아직 이 내부 전달 범위에 포함되지 않는다.
+실제 폰 모델/OS와 기존 Apple Developer/Google Play 계정은 사용자 확인 대기 상태다.
+
+Android는 위 APK를 선택한 기기에 설치하고 앱 ID `site.baro.app.preview`로 실행한다.
+iOS ZIP은 Xcode Simulator 환경에서 아래와 같이 새 소유 기기에 설치할 수 있다.
+`<runtime-id>`에는 `xcrun simctl list runtimes`로 확인한 사용 가능한 iOS runtime ID를 넣는다.
+각 변수는 이번 설치에서 생성한 경로/기기만 가리킨다.
+
+```sh
+xcrun simctl list runtimes
+baro_preview_dir="$(mktemp -d -t baro-preview)"
+ditto -x -k "<ios-simulator-zip-path>" "$baro_preview_dir"
+baro_preview_device="$(xcrun simctl create baro_internal_preview com.apple.CoreSimulator.SimDeviceType.iPhone-16 '<runtime-id>')"
+xcrun simctl boot "$baro_preview_device"
+xcrun simctl bootstatus "$baro_preview_device" -b
+xcrun simctl install "$baro_preview_device" "$baro_preview_dir/BAROPreview.app"
+xcrun simctl launch "$baro_preview_device" site.baro.app.preview
+```
+
+검토가 끝난 뒤에는 위에서 생성한 기기만 정리한다.
+
+```sh
+xcrun simctl shutdown "$baro_preview_device"
+xcrun simctl delete "$baro_preview_device"
+```
+
+#397은 두 OS 내부 bundled 전달물과 초기 실행·설치 안내의 독립 인수다.
+전체 #334와 실제 앱 native IO #385, 인증/역할/사용자 여정 #346/#354/#361/#369,
+전체 UI/접근성·물리 기기 #379, 보안/최종 릴리스 #339/#71은 각각 남아 있다.

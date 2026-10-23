@@ -1,0 +1,42 @@
+{
+  "sourceSha": "3b7f97b97a779687a4017adcb14398d57705d416",
+  "platform": "ios",
+  "phase": "native-probe",
+  "code": "PROBE_UPLOAD_100MB_FAILED",
+  "unresolvedModule": null,
+  "host": null,
+  "probeFailure": {
+    "code": "PROBE_UPLOAD_100MB_FAILED",
+    "category": "UNKNOWN"
+  },
+  "metroBundleObserved": true,
+  "bundleHttpPreflight": {
+    "product": {
+      "kind": "metro-http-response-only",
+      "bytes": 6035366,
+      "sha256": "8b17b0cc3b88a09a4706710c18dbdc7deced02a90f9163caa6e6fd88b47789f6",
+      "appExecutionVerified": false
+    },
+    "probe": {
+      "kind": "metro-http-response-only",
+      "bytes": 4192196,
+      "sha256": "18b0777693acdf62e1d6cf10410d4bc790d819827accac8229b2f411f7de91fa",
+      "appExecutionVerified": false
+    }
+  },
+  "iosLauncherFailure": null,
+  "partialTransport": {
+    "requestCount": 0,
+    "rejectedHeaders": 0,
+    "upload": null,
+    "downloadedBytes": 0,
+    "delayedStarted": false,
+    "cancelUploadStarted": false,
+    "cancelUploadBytes": 0
+  },
+  "processRssSamples": 119,
+  "productLayoutObserved": true,
+  "nativeResultObserved": false,
+  "remoteApiVerified": false,
+  "oauthVerified": false
+}

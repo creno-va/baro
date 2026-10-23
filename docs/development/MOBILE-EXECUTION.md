@@ -181,7 +181,7 @@ M1 #330과 M2 #335는 인수·종료했다. M3~M7의 인증/기능 model·공유
 | 기능 M4~M6 / #354/#361/#369 | 사건/workspace·자료/리포트·판례/공개 탐색·본인 프로필/설정의 model·HTTP·RN·native adapter 구현/합성 회귀 | 실제 인증 계정의 저장/재개·처리/공유/열기·철회/삭제와 실제 기기 picker·장애/취소 |
 | 모바일 UI M7 / #379 | 웹 정본 토큰의 순수 공유·native primitive/폰트/브랜드·화면 위계, 실제 Android Home/OS font_scale2와 PNG 대조 | 전체 화면/상태·키보드/회전·큰 글자·VoiceOver/TalkBack·물리 기기 인수 |
 | 앱 IPC/IO M8 / #385 | Android c2fa3f2의 계측 Home·100MB/1GB loopback byte/hash/정리, iOS7294145 binary의 SDK 초기화8항목·a191ae1/39982855183의 실제 계측 Home/한글 PNG 대조 | 같은 iOS run은 probe 전환 URL 실행 실패로 전체FAILURE·native result 없음. 세부 오류/부분 IO 관측을 먼저 좁히고 full native IO 완료를 별도로 인수 |
-| 내부 전달 M8 / #397 | Android 원본 dedcd0e bundled APK의 SDK signature/HBC/font·Metro 없는 두 cold launch/Home·글자 확대·공개 목록 ready-empty. iOS ff5c208/39980418548의 실제 Release/HBC/font/signature 검증 | iOS 원본 compiler ZIP을 고정해 Metro 없는 설치/두 cold launch·초기 화면을 별도 관측. 두 OS 실제 폰·전체 private 여정·store 서명/승인은 별도 |
+| 내부 전달 M8 / #397 | Android dedcd0e APK와 iOS ff5c208 Simulator ZIP의 실제 Release/HBC/font/signature, 양 OS Metro 없는 두 cold launch/Home PNG 대조·설치 안내. iOS 실제39987887841·toolingfd86914 인수 | 독립 내부 전달 범위 인수. 두 OS 실제 폰·전체 private 여정·store 서명/승인과 #334/#385/#379/#346/#339/#71은 별도 |
 | 보안/전체 릴리스 / #339/#71 | 원본 version/SRI/LICENSE를 보존한 CJS 보완·실제 consumer/회귀·배포 증거의 분리 | raw node-forge high1건과 browser dist/map 잔여·최종 후보 full/preview/운영자 승인·법률/외부/스토어 인수 |
 
 iOS full runtime의 [이전 실패](../quality/mobile-runtime-2026-10-23/failure-ios-80e538c.json)와
