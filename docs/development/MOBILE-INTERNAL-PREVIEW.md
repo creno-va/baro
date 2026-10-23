@@ -559,3 +559,50 @@ compiler receipt/ZIP 전체 hash·source171989e/8480fa6 bundled parity를 독립
 없거나 모호하면 known category/count/hittability·web 제외 boolean만 기록하고 실패한다.
 이 변경은 실제 style이 Close였음을 입증하지 않으며 새 SDK 실행 전 성공으로 표시하지 않는다.
 같은 실패 조건을 그대로 재실행하지 않고 변경한 컨트롤 선택 조건을 exact CI/main 뒤 검증한다.
+
+### native bar 선택 조건의 실제 실패
+
+PR433/main`6825328f4e7896cbd4a6d469371deec034764263`·CI40029042232 뒤
+[actual40029347550](https://github.com/creno-va/baro/actions/runs/40029347550)도 FAILURE다.
+[원본 고정 진단](../quality/mobile-internal-ios-2026-10-23/auth-cancel-failure-6825328.json)은
+Google/browser-presented·systemWebViewVisible=true 뒤 `BARO_AUTH_SYSTEM_DISMISS_MISSING`,
+xcodebuild65/timedOut=false를 기록한다. navigation-bar/toolbar의 세 종류 후보는 모두0개다.
+application 범위의 Cancel은1개/fullyHittable=true/동일 label web button 중첩 제외=true였으나
+진단 전용이므로 누르지 않았다. 이 boolean은 모든 WebView frame과의 분리를 입증하지 않는다.
+취소·비로그인 복귀·다른 두 제공자 및 실제 OAuth 성공은 인수하지 않는다.
+원본 실패 JSON SHA256은`d34f75a2e6d97f34d9a548eac74f2ec96bef450cfd4e3aa30c08a1d27bf87184`다.
+다음 수정은 실제 관측된 browser 구조에서 안전한 컨트롤 범위를 검증한 뒤 진행하며,
+이전 실패와 원본 앱171989e·독립 Home/Guide 접근성 성공은 보존한다.
+
+## iOS 실기기 SDK의 서명 없는 컴파일 사전 검사 (#334)
+
+현재 Simulator ZIP과 별개로 `mobile-ios-device-sdk.yml` 수동 workflow를 준비한다.
+성공한 main CI의 full40 SHA에 한해 다음처럼 요청한다. 실제 실행 결과 전에는 컴파일 성공으로
+표시하지 않는다.
+
+```sh
+gh workflow run mobile-ios-device-sdk.yml --ref main -f target_sha=<full40-main-sha>
+```
+
+fresh 소유 checkout에서 같은 Expo 제품 entry·공통 패키지를 생성하고 `Release`/`iphoneos`/
+`generic/platform=iOS`/`arm64`로 컴파일한다. 서명·team·profile을 명시적으로 끄고 provisioning
+updates·계정 접근·설치·archive/export/submit은 요청하지 않는다. Simulator의 entitlement/서명
+보정 도구는 호출하지 않으며 기존 Simulator compiler/receipt를 수정하지 않는다.
+child 환경은 preview와 도구에 필요한 OS 항목만 전달하고 credential·dotenv·bundle entry/SDK/서명
+override를 거절한다. Metro cache·private source map·전체 도구 로그는 소유 임시 경로에 한정한다.
+
+실제 Info.plist의 preview ID/scheme·최소 iOS16.4·iPhoneOS·iPhone/iPad·폰트를 검사한다.
+실행 파일의 Mach-O header/load commands에서 thin arm64 executable·LC_BUILD_VERSION의 iOS
+platform2·최소 OS와 실제 CLI SDK 일치를 확인하고 Simulator/Catalyst·LC_CODE_SIGNATURE를 거절한다.
+기본 앱 서명이나 provisioning profile·키·source map이 포함되면 ZIP을 내보내기 전에 실패한다.
+생성/앱/ZIP Hermes bytes와 private map의 실제 제품 graph·compiled font/license를 대조한다.
+whole ZIP byte/hash와 source/SDK를 별도 strict receipt에 기록한다. 실패 시 고정 phase/code만
+보존하며 전체 build log/xcresult/private map을 artifact에 포함하지 않는다.
+
+출력 이름은 `baro-ios-device-sdk-unprovisioned-<sha>.zip`이다. 이는 설치 가능한 IPA가 아니며
+receipt의 installation/runtime/physical/OAuth/store signing/submission/deployment는 모두 false다.
+컴파일 가능한 target 여부와 실제 기기 실행·계정/서명·스토어 인수를 구분한다.
+[Apple의 기기 실행 안내](https://help.apple.com/xcode/mac/current/en.lproj/dev5a825a1ca.html)와
+[Expo의 local build 안내](https://docs.expo.dev/guides/local-app-overview/)에 따라 실제 기기 실행의
+서명/provisioning 검증은 별도다. 개발자 계정과 기기 모델/OS는 사용자 확인 대기이며 부재로
+단정하지 않는다. 웹 UI·제품/공통 계약·서버와 #334/#346/#339/#71의 전체 인수는 유지한다.
