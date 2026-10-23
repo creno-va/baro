@@ -390,11 +390,25 @@ Guide 전체 성공으로 확대하지 않는다. [PNG 대조](../quality/mobile
 향후 proof 검증 실패는 허용된 최상위 필드명만 기록하며 입력 값/원문 hierarchy는 내보내지 않는다.
 기존 실패/시각은 바꾸지 않고 교정된 source의 새 actual 실행으로 최종 Guide 결과를 인수한다.
 
+PR426/main346c920·CI40013909663 뒤 [Android40014252649](https://github.com/creno-va/baro/actions/runs/40014252649)은
+terminal SUCCESS다. [SDK metadata](../quality/mobile-internal-android-2026-10-23/verification-346c920.json),
+[Home](../quality/mobile-internal-android-2026-10-23/home-346c920.json),
+[font2](../quality/mobile-internal-android-2026-10-23/large-font-346c920.json),
+[완전한 Guide proof](../quality/mobile-internal-android-2026-10-23/guide-ui-346c920.json)를 원본 그대로 보존했다.
+Android15/sdk_gphone64_x86_64의 OS scale을 전후2로 읽고 Home/Guide 각1회 scroll·고정 버튼 tap·
+교정 문구·Home 복귀/Guide 사라짐을 확인했다. 첫 이동 전 캡처 차단·이후 PNG 미수출·Metro0다.
+
+Guide proof의 APK bytes/hash·binary/tooling/device·baseline 및 metadata 전체 hash를 별도로 대조했다.
+원본 compiler receipt도 byte-identical다. [PNG 시각 대조](../quality/mobile-internal-android-2026-10-23/visual-home-large-346c920.json)는
+초기 Home/확대만 확인하며 Guide pixel 대조와 전체 UI/접근성·실제 API/OAuth·physical/store를 주장하지 않는다.
+이전 dd3e84e의 final receipt 실패는 수정하지 않고 성공한 새 실행으로 독립 #424를 인수한다.
+같은 앱 source171989e의 두 OS 내부 전달/익명 Home·확대·안내 조작을 인수하며 전체 #334/#379는 OPEN이다.
+
 ## 내부 전달 기준과 설치
 
 | 전달물 | 앱 source·version/build | binary metadata | 실제 설치/초기 Home 관측 |
 | --- | --- | --- | --- |
-| Android APK | 171989e / 0.1.0·1 | minimum API24, arm64-v8a/x86_64, embedded HBC, 공개 template development certificate | Android15 Emulator / toolingdd3e84e·40011547920의 Home/font2·Metro0는 보존. 이후 Guide receipt 실패는 별도. 이전 dedcd0e 공개 ready-empty 기록 유지 |
+| Android APK | 171989e / 0.1.0·1 | minimum API24, arm64-v8a/x86_64, embedded HBC, 공개 template development certificate | Android15 Emulator / tooling346c920·40014252649의 Home/font2/Guide 왕복·교정 문구·Metro0·초기 PNG 대조. 이전 dedcd0e 공개 ready-empty/실패 기록 유지 |
 | iOS Simulator ZIP | 171989e / 0.1.0·1 | minimum iOS16.4, arm64/x86_64, embedded HBC, No-Team Simulator ad-hoc | iPhone16/iOS26.5 Simulator / toolingb0da132·40009294558, 두 cold launch·최대 글자/Guide 왕복·교정 문구·Metro0·초기 PNG 대조 |
 
 두 앱은 `https://preview.baro.site`를 사용한다. 연결된 receipt의 API health source는f912441이며

@@ -179,9 +179,9 @@ M1 #330과 M2 #335는 인수·종료했다. M3~M7의 인증/기능 model·공유
 | 공통 기반 M1/M2 | workspace·순수 wire/schema·client-core/API client·플랫폼 IO 경계와 회귀, 두 OS 개발 빌드 | 새 앱/기존 서버의 실제 인증된 전체 여정과 최종 후보 호환표 |
 | 인증 M3 / #346 | 기존 계정을 보존하는 native session/credential·역할/동의·로그인/재인증/로그아웃·challenge 연결 | Google/Naver/Kakao 실제 로그인·cold/warm 복귀·만료/전환·두 역할/동의·실제 Turnstile |
 | 기능 M4~M6 / #354/#361/#369 | 사건/workspace·자료/리포트·판례/공개 탐색·본인 프로필/설정의 model·HTTP·RN·native adapter 구현/합성 회귀 | 실제 인증 계정의 저장/재개·처리/공유/열기·철회/삭제와 실제 기기 picker·장애/취소 |
-| 모바일 UI M7 / #379 | 웹 정본 토큰의 순수 공유·native primitive/폰트/브랜드, Android Home/font2·iOS 최대 category/PNG. 새 source171989e의 actual40009294558에서 Home5/Guide6 scroll·hittable button tap·교정 안내/복귀 인수 | Android 신규 source의 최종 Guide proof 교정/재실행과 전체 역할/화면/상태·키보드/회전·VoiceOver/TalkBack·물리 기기 인수 |
+| 모바일 UI M7 / #379 | 웹 정본 토큰/primitive/폰트/브랜드와 source171989e의 실제 두 OS Home·글자 확대·Guide 왕복/교정 문구 인수. iOS40009294558 Home5/Guide6 scroll·hittable tap, Android40014252649 font2·Home/Guide 각1회 scroll/tap·캡처 차단·Metro0 | 전체 역할/화면/상태·키보드/회전·VoiceOver/TalkBack·물리 기기와 실제 인증된 여정 인수 |
 | 앱 IPC/IO M8 / #385 | Android c2fa3f2/39916204937와 iOS local9a369bc/39996169996의 실제 계측 Home·100MB upload/1GB download 전체 byte/hash·native IPC/SDK/SecureStore·취소/owner/401/Origin·파일0개 정리. 별도 source·RSS·signing/PNG 실물 대조 | 독립 local runtime 범위 인수. 실제 picker/공유·원격 API/OAuth·전체 제품 여정/접근성·physical/store/#339/#71/#334는 별도 |
-| 내부 전달 M8 / #397 | 기존 dedcd0e/ff5c208의 인수를 보존하고 새 source171989e 두 OS Release compile/원본 hash 인수. iOS actual40009294558은 Home/최대 글자/Guide 왕복 성공. Android actual40011547920의 Home/font2는 보존하며 이후 final Guide proof 실패는 별도 | 독립 내부 전달 범위 인수. 두 OS 실제 폰·전체 private 여정·store 서명/승인과 #334/#379/#346/#339/#71은 별도 |
+| 내부 전달 M8 / #397 | 기존 dedcd0e/ff5c208의 인수를 보존하고 새 source171989e 두 OS Release compile/원본 hash 인수. iOS actual40009294558은 Home/최대 글자/Guide 왕복 성공. Android actual40014252649도 Home/font2/Guide 왕복 성공. 이전40011547920의 final receipt 실패는 별도 보존 | 독립 내부 전달 범위 인수. 두 OS 실제 폰·전체 private 여정·store 서명/승인과 #334/#379/#346/#339/#71은 별도 |
 | 보안/전체 릴리스 / #339/#71 | 원본 version/SRI/LICENSE를 보존한 CJS 보완·실제 consumer/회귀·배포 증거의 분리 | raw node-forge high1건과 browser dist/map 잔여·최종 후보 full/preview/운영자 승인·법률/외부/스토어 인수 |
 
 iOS full runtime의 [이전 실패](../quality/mobile-runtime-2026-10-23/failure-ios-80e538c.json)와
