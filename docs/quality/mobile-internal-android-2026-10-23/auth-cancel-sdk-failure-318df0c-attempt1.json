@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "kind": "android-auth-prerequisite-sdk-install-failure",
+  "workflowRunId": "40038397811",
+  "runAttempt": 1,
+  "sourceSha": "318df0c131b7ffaf794300c128d69ad168bdb8e5",
+  "recordedAt": "2026-10-23T23:23:05.200252Z",
+  "installerWarningAt": "2026-10-23T23:15:03.1330229Z",
+  "phase": "prepare-owned-android-runtime",
+  "code": "SDK_IMAGE_ZIP_READ_FAILED",
+  "installerExitCode": 1,
+  "package": "system-images;android-35;google_apis;x86_64",
+  "compiledBinaryReverificationSucceeded": true,
+  "binarySourceSha": "171989e8cf8fd48119d20f58a45f2dca7dd45e64",
+  "emulatorBootVerified": false,
+  "chromeFixtureExecuted": false,
+  "authNavigationPerformed": false,
+  "oauthVerified": false,
+  "physicalDeviceVerified": false,
+  "storeSigned": false,
+  "rawSdkLogIncludedInThisRecord": false,
+  "rawStackIncludedInThisRecord": false
+}
