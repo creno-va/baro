@@ -1,0 +1,151 @@
+name: Mobile compiled Android verification (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_sha:
+        description: Full main tooling SHA; reverify pinned compiled binary without recompiling
+        required: true
+        type: string
+      smoke:
+        description: Also install and observe the real bundled Home on a fresh Emulator without Metro
+        required: true
+        default: false
+        type: boolean
+      large_font:
+        description: Also observe Android font_scale2 on the anonymous Home; requires smoke=true
+        required: true
+        default: false
+        type: boolean
+      public_directory:
+        description: Observe only public directory UI state without profile values or screenshots; requires smoke=true
+        required: true
+        default: false
+        type: boolean
+
+      guide_ui:
+        description: Scroll and tap anonymous Home/Guide at font_scale2; excludes public directory
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: mobile-internal-android-compiled-reverify-${{ inputs.target_sha }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      TARGET_SHA: ${{ inputs.target_sha }}
+      EXPO_PUBLIC_APP_ENV: preview
+      EXPO_PUBLIC_API_URL: https://preview.baro.site
+      CI: '1'
+    steps:
+      - name: Require runtime smoke for optional UI checks
+        if: (inputs.large_font || inputs.public_directory) && !inputs.smoke
+        run: exit 1
+      - name: Require isolated large-font Home for Guide UI
+        if: inputs.guide_ui && (!inputs.smoke || !inputs.large_font || inputs.public_directory)
+        run: exit 1
+      - run: '[[ "$TARGET_SHA" =~ ^[a-f0-9]{40}$ ]]'
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.target_sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - run: |
+          test "$(git rev-parse HEAD)" = "$TARGET_SHA"
+          git merge-base --is-ancestor "$TARGET_SHA" origin/main
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: apps/mobile/.node-version
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: .bun-version
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - run: bun ci
+      - run: bun run security:patches
+      - name: Verify successful immutable tooling CI
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bun scripts/verify-release.ts "$TARGET_SHA" --ci-only
+      - name: Resolve successful compiler input
+        id: input
+        run: |
+          bun -e 'import{androidCompiledInputSchema}from"./scripts/mobile-android-compiled-input";const p=androidCompiledInputSchema.parse(await Bun.file("tests/fixtures/android-internal-preview.json").json());await Bun.write(process.env.GITHUB_OUTPUT,`artifact=${p.artifactId}\nrun=${p.workflowRunId}\n`);'
+      - name: Verify successful compiler provenance and download original input
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          INPUT_ARTIFACT_ID: ${{ steps.input.outputs.artifact }}
+          INPUT_RUN_ID: ${{ steps.input.outputs.run }}
+        run: |
+          mkdir -p .wrangler/android-compiled-input
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$INPUT_RUN_ID" > .wrangler/private-android-compiler-run.json
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$INPUT_ARTIFACT_ID" > .wrangler/private-android-compiler-artifact.json
+          bun -e 'import{verifyCompiledAndroidProvenance}from"./scripts/mobile-android-compiled-input";verifyCompiledAndroidProvenance(await Bun.file("tests/fixtures/android-internal-preview.json").json(),await Bun.file(".wrangler/private-android-compiler-run.json").json(),await Bun.file(".wrangler/private-android-compiler-artifact.json").json());'
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$INPUT_ARTIFACT_ID/zip" > .wrangler/private-android-compiled-input.zip
+          unzip -q .wrangler/private-android-compiled-input.zip -d .wrangler/android-compiled-input
+      - name: Reverify actual signature, metadata, Hermes and compiled font resources
+        id: verify
+        run: bun scripts/mobile-internal-android-compiled-reverify.ts
+      - name: Prepare owned Android runtime
+        if: inputs.smoke
+        run: |
+          sudo chmod a+rw /dev/kvm
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platform-tools' 'emulator' 'system-images;android-35;google_apis;x86_64'
+      - name: Observe actual bundled Home without Metro
+        if: inputs.smoke
+        run: bun scripts/mobile-internal-android-home.ts ${{ inputs.large_font && '--large-font' || '' }} ${{ inputs.public_directory && '--public-directory' || '' }} ${{ inputs.guide_ui && '--guide-ui' || '' }}
+      - name: Require the explicitly requested enlarged-font observation
+        if: inputs.large_font
+        run: |
+          test -s .wrangler/mobile-internal-android-runtime/large-font.json
+          test -s .wrangler/mobile-internal-android-runtime/large-font.png
+      - name: Require the explicitly requested Guide UI observation
+        if: inputs.guide_ui
+        run: test -s .wrangler/mobile-internal-android-runtime/guide-ui.json
+      - name: Require the explicitly requested public UI observation
+        if: inputs.public_directory
+        run: test -s .wrangler/mobile-internal-android-runtime/public-directory.json
+      - name: Save reverified binary with separate source and verification receipts
+        if: always() && steps.verify.outcome == 'success'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: mobile-internal-android-compiled-reverified-${{ inputs.target_sha }}
+          path: |
+            .wrangler/mobile-internal-android-reverified/baro-internal-preview-android-*.apk
+            .wrangler/mobile-internal-android-reverified/receipt-android.json
+            .wrangler/mobile-internal-android-reverified/verification.json
+          if-no-files-found: error
+      - name: Save scoped Home observation and synthetic first-run screenshot
+        if: inputs.smoke && always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: mobile-internal-android-compiled-home-${{ inputs.target_sha }}
+          path: |
+            .wrangler/mobile-internal-android-runtime/receipt.json
+            .wrangler/mobile-internal-android-runtime/failure.json
+            .wrangler/mobile-internal-android-runtime/home.png
+            .wrangler/mobile-internal-android-runtime/failure.png
+            .wrangler/mobile-internal-android-runtime/large-font.json
+            .wrangler/mobile-internal-android-runtime/large-font.png
+            .wrangler/mobile-internal-android-runtime/public-directory.json
+            .wrangler/mobile-internal-android-runtime/guide-ui.json
+          if-no-files-found: ignore
+      - name: Preserve fixed failure classification
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: mobile-internal-android-reverification-failure-${{ inputs.target_sha }}
+          path: .wrangler/mobile-internal-android-reverified/failure.json
+          if-no-files-found: ignore

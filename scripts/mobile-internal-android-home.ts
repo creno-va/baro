@@ -8,6 +8,7 @@ import {
 } from "./mobile-android-guide-ui";
 import { verifyInternalAndroidArtifact } from "./mobile-internal-android-artifact";
 import { internalAndroidEnvironment } from "./mobile-internal-android-build";
+import { androidCompiledReverificationSchema } from "./mobile-internal-android-compiled-reverify";
 import { androidReverificationSchema } from "./mobile-internal-android-reverify";
 import {
   anonymousGuideControl,
@@ -125,9 +126,10 @@ async function main() {
   }
   try {
     const verificationBytes = await readFile(resolve(input, "verification.json")),
-      verification = androidReverificationSchema.parse(JSON.parse(verificationBytes.toString()));
+      verification = z
+        .union([androidReverificationSchema, androidCompiledReverificationSchema])
+        .parse(JSON.parse(verificationBytes.toString()));
     if (
-      verification.kind !== "reverified-preserved-android-binary" ||
       verification.toolingSourceSha !== sourceSha ||
       !verification.bundledInputParityVerified ||
       !verification.sdkBinaryMetadataVerified
