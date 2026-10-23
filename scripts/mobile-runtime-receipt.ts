@@ -6,6 +6,7 @@ import {
   RUNTIME_ORIGIN,
   UPLOAD_BYTES,
 } from "../apps/mobile/runtime-probe/protocol";
+import { localXcodeControlReceiptSchema } from "./mobile-ios-xcode-control";
 import { repeatedDigest } from "./mobile-runtime-fixture";
 import { metroHttpProofSchema } from "./mobile-runtime-metro";
 
@@ -33,6 +34,7 @@ export const runtimeReceiptSchema = z.strictObject({
   apiOrigin: z.literal(RUNTIME_ORIGIN),
   applicationId: z.enum(["site.baro.app.dev", "site.baro.app.preview"]),
   nativeBinary: pinnedRuntimeBinarySchema.optional(),
+  nativeSigning: localXcodeControlReceiptSchema.optional(),
   bundleHttpPreflight: z
     .strictObject({ product: metroHttpProofSchema, probe: metroHttpProofSchema })
     .optional(),
@@ -119,6 +121,7 @@ export const runtimeHomeReceiptSchema = z.strictObject({
   platform: z.enum(["android", "ios"]),
   applicationId: z.enum(["site.baro.app.dev", "site.baro.app.preview"]),
   nativeBinary: pinnedRuntimeBinarySchema.optional(),
+  nativeSigning: localXcodeControlReceiptSchema.optional(),
   bundleHttpPreflight: metroHttpProofSchema.optional(),
   device: runtimeReceiptSchema.shape.device,
   productEntry: runtimeReceiptSchema.shape.productEntry,
@@ -152,10 +155,21 @@ function verifyRuntimeBinaryIdentity(
   value: {
     applicationId: string;
     nativeBinary?: z.infer<typeof pinnedRuntimeBinarySchema> | undefined;
+    nativeSigning?: z.infer<typeof localXcodeControlReceiptSchema> | undefined;
   },
   sourceSha: string,
   platform: "android" | "ios",
 ) {
+  if (value.nativeSigning) {
+    if (
+      platform !== "ios" ||
+      value.applicationId !== "site.baro.app.dev" ||
+      value.nativeBinary ||
+      value.nativeSigning.sourceSha !== sourceSha ||
+      value.nativeSigning.toolingSourceSha !== sourceSha
+    )
+      throw new Error("RUNTIME_LOCAL_SIGNING_IDENTITY_MISMATCH");
+  }
   if (value.nativeBinary) {
     if (
       platform !== "ios" ||
