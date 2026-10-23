@@ -528,10 +528,15 @@ URL·cookie·state·토큰·계정/원문 화면은 내보내지 않는다.
 
 세 제공자의 표시/취소/복귀와 cold 상태가 모두 확인된 단일 strict 결과만 성공으로 인정한다.
 source/tooling/compiler ZIP/receipt·기기 identity는 같은 실행의 Home baseline과 묶는다.
-닫기 컨트롤은 native navigation bar/toolbar 안의 고정 Cancel/Done/Close 후보에서만 고른다.
-WebView의 같은 이름 버튼과 겹치는 후보를 제외하고, 화면 안에 완전히 hittable한 유일한 후보만 누른다.
-application 전체의 같은 이름 버튼 조회는 고정 진단용이며 조작에 쓰지 않는다.
-proof는 실제 `dismissControl`/`dismissScope`와 native 범위·web content 제외를 요구한다.
+닫기 컨트롤은 native navigation bar/toolbar의 고정 Cancel/Done/Close와 아래의 제한된
+`browser-window-chrome` Cancel을 대조한다. 모든 경로에서 인증 전 해당 고정 label의 버튼이
+없었음을 먼저 확인한다. 현재 foreground window 안에 보이는1~8개 WebView의 모든 frame을
+조회하고, 그 어느 frame과도 면적이 겹치지 않으며 화면 안에 완전히 hittable한 유일 후보만 누른다.
+frame/geometry를 확인하지 못하면 실패한다. 중복 scope의 같은 컨트롤은 메모리에서만 합친다.
+`browser-window-chrome`은 application query의 정확한 Cancel1개에만 허용하며 다른 종류·좌표
+탭·provider web 버튼은 허용하지 않는다. 기존 same-label web button 중첩 제외보다 강한 조건이다.
+proof는 실제 `dismissControl`/`dismissScope`와 인증 전 부재·browser window geometry·
+모든 WebView frame 제외의 세 추가 true를 요구한다. application이라는 무제한 scope는 거절한다.
 단일 결과 누락/중복, 부분 제공자, raw 값 또는 OAuth 성공으로의 확대는 거절한다.
 준비/합성 회귀는 실제 통과가 아니며 exact main CI 뒤 수동 실행 결과를 인수한다.
 기존 실제 OS audit·전체 기기/VoiceOver/TalkBack·계정 인증/역할/동의·store/#334/#346/#339/#71은 보존한다.
@@ -573,6 +578,13 @@ application 범위의 Cancel은1개/fullyHittable=true/동일 label web button �
 원본 실패 JSON SHA256은`d34f75a2e6d97f34d9a548eac74f2ec96bef450cfd4e3aa30c08a1d27bf87184`다.
 다음 수정은 실제 관측된 browser 구조에서 안전한 컨트롤 범위를 검증한 뒤 진행하며,
 이전 실패와 원본 앱171989e·독립 Home/Guide 접근성 성공은 보존한다.
+
+후속 `codex/346-ios-webview-separated-dismiss`는 이 실패에서 새롭게 관측한 application Cancel을
+위의 인증 전 부재·전체 WebView frame 분리·foreground window·unique/hittable 조건으로 검증한다.
+기존 native bar 후보도 같은 강화 조건을 통과해야 한다. 고정 실패 진단은 geometry/인증 전 부재
+boolean을 추가하되 실제 frame·label·URL·hierarchy·계정 화면은 내보내지 않는다.
+새 scope를 허용했다는 이유만으로 성공으로 표시하지 않으며 exact CI/main 뒤 실제 실행으로
+취소·익명 복귀·cold restart를 모두 확인해야 한다. 이전 원본 JSON을 새 schema에 맞춰 고치지 않는다.
 
 ## iOS 실기기 SDK의 서명 없는 컴파일 사전 검사 (#334)
 

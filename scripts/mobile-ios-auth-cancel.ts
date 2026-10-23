@@ -23,22 +23,29 @@ export function iosAuthenticationPrivacyBoundary() {
     },
   };
 }
-const providerResult = z.strictObject({
-  provider: z.enum(["google", "naver", "kakao"]),
-  initialAnonymousObserved: z.literal(true),
-  osPromptHandled: z.boolean(),
-  systemWebViewObserved: z.literal(true),
-  dismissButtonHittable: z.literal(true),
-  systemDismissTapped: z.literal(true),
-  dismissControl: z.enum(["cancel", "done", "close"]),
-  dismissScope: z.enum(["navigation-bar", "toolbar"]),
-  nativeDismissControlVerified: z.literal(true),
-  webContentExcluded: z.literal(true),
-  webViewDismissed: z.literal(true),
-  anonymousReturnObserved: z.literal(true),
-  errorStateAbsent: z.literal(true),
-  consentStateAbsent: z.literal(true),
-});
+const providerResult = z
+  .strictObject({
+    provider: z.enum(["google", "naver", "kakao"]),
+    initialAnonymousObserved: z.literal(true),
+    osPromptHandled: z.boolean(),
+    systemWebViewObserved: z.literal(true),
+    dismissButtonHittable: z.literal(true),
+    systemDismissTapped: z.literal(true),
+    dismissControl: z.enum(["cancel", "done", "close"]),
+    dismissScope: z.enum(["navigation-bar", "toolbar", "browser-window-chrome"]),
+    nativeDismissControlVerified: z.literal(true),
+    webContentExcluded: z.literal(true),
+    webViewFrameExcluded: z.literal(true),
+    dismissControlAbsentBeforeAuthentication: z.literal(true),
+    browserWindowGeometryVerified: z.literal(true),
+    webViewDismissed: z.literal(true),
+    anonymousReturnObserved: z.literal(true),
+    errorStateAbsent: z.literal(true),
+    consentStateAbsent: z.literal(true),
+  })
+  .refine(
+    (value) => value.dismissScope !== "browser-window-chrome" || value.dismissControl === "cancel",
+  );
 export const iosAuthCancelResultSchema = z.strictObject({
   kind: z.literal("ios-anonymous-provider-browser-cancellation"),
   applicationId: z.literal("site.baro.app.preview"),
@@ -79,24 +86,36 @@ const dismissCandidateSchema = z
     count: z.number().int().min(0).max(256),
     uniqueFullyHittable: z.boolean(),
     outsideWebContent: z.boolean(),
+    absentBeforeAuthentication: z.boolean(),
   })
   .refine((value) => value.count === 1 || (!value.uniqueFullyHittable && !value.outsideWebContent));
-const statusSchema = z.strictObject({
-  provider: z.enum(["google", "naver", "kakao"]),
-  systemWebViewVisible: z.boolean(),
-  dismissCandidates: z
-    .array(dismissCandidateSchema)
-    .length(9)
-    .refine(
-      (values) =>
-        values.map((value) => `${value.scope}:${value.control}`).join(",") ===
-        "navigation-bar:cancel,navigation-bar:done,navigation-bar:close,toolbar:cancel,toolbar:done,toolbar:close,application:cancel,application:done,application:close",
-    ),
-  authorizingVisible: z.boolean(),
-  startUnavailableVisible: z.boolean(),
-  retryVisible: z.boolean(),
-  appForeground: z.boolean(),
-});
+const statusSchema = z
+  .strictObject({
+    provider: z.enum(["google", "naver", "kakao"]),
+    systemWebViewVisible: z.boolean(),
+    browserWindowGeometryVerified: z.boolean(),
+    dismissCandidates: z
+      .array(dismissCandidateSchema)
+      .length(9)
+      .refine(
+        (values) =>
+          values.map((value) => `${value.scope}:${value.control}`).join(",") ===
+          "navigation-bar:cancel,navigation-bar:done,navigation-bar:close,toolbar:cancel,toolbar:done,toolbar:close,application:cancel,application:done,application:close",
+      ),
+    authorizingVisible: z.boolean(),
+    startUnavailableVisible: z.boolean(),
+    retryVisible: z.boolean(),
+    appForeground: z.boolean(),
+  })
+  .refine(
+    (value) =>
+      value.browserWindowGeometryVerified ||
+      value.dismissCandidates.every((candidate) => !candidate.outsideWebContent),
+  )
+  .refine(
+    (value) =>
+      !value.browserWindowGeometryVerified || (value.systemWebViewVisible && value.appForeground),
+  );
 const assertionCodes = [
   "BARO_AUTH_CONTROL_MISSING",
   "BARO_AUTH_SCROLL_MISSING",

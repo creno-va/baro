@@ -20,31 +20,50 @@ final class BaroAuthCancelUITests: XCTestCase {
   private struct DismissSelection { let element: XCUIElement; let control: String; let scope: String }
 
   @MainActor
-  private func outsideWebContent(_ element: XCUIElement, label: String, app: XCUIApplication) -> Bool {
+  private func browserWebFrames(_ app: XCUIApplication) -> [CGRect]? {
+    guard app.state == .runningForeground, app.windows.firstMatch.exists else { return nil }
+    let window = app.windows.firstMatch.frame
+    guard window.width > 0 && window.height > 0 else { return nil }
     let webViews = app.webViews
-    guard webViews.count <= 8 else { return false }
+    guard webViews.count > 0 && webViews.count <= 8 else { return nil }
+    var frames: [CGRect] = []
     for web in webViews.allElementsBoundByIndex {
-      let matches = web.buttons.matching(NSPredicate(format: "label == %@", label))
-      guard matches.count <= 16 else { return false }
-      for button in matches.allElementsBoundByIndex {
-        let overlap = element.frame.intersection(button.frame)
-        if !overlap.isNull && overlap.width >= element.frame.width * 0.9
-          && overlap.height >= element.frame.height * 0.9 { return false }
-      }
+      let frame = web.frame, visible = frame.intersection(window)
+      guard frame.minX.isFinite && frame.minY.isFinite && frame.width.isFinite && frame.height.isFinite,
+        frame.width > 0 && frame.height > 0,
+        visible.width >= frame.width * 0.95 && visible.height >= frame.height * 0.95 else { return nil }
+      frames.append(frame)
     }
-    return true
+    return frames
   }
 
   @MainActor
-  private func nativeDismiss(_ app: XCUIApplication) -> DismissSelection? {
+  private func outsideEveryWebView(_ element: XCUIElement, frames: [CGRect]?) -> Bool {
+    guard let frames, !frames.isEmpty else { return false }
+    let frame = element.frame
+    guard frame.minX.isFinite && frame.minY.isFinite && frame.width.isFinite && frame.height.isFinite,
+      frame.width > 0 && frame.height > 0 else { return false }
+    return frames.allSatisfy {
+      let overlap = frame.intersection($0)
+      return overlap.isNull || overlap.width <= 0 || overlap.height <= 0
+    }
+  }
+
+  @MainActor
+  private func nativeDismiss(_ app: XCUIApplication, absentBefore: Set<String>) -> DismissSelection? {
+    guard let webFrames = browserWebFrames(app) else { return nil }
     var candidates: [DismissSelection] = []
     var seen: Set<String> = []
-    for (scope, buttons) in [("navigation-bar", app.navigationBars.buttons), ("toolbar", app.toolbars.buttons)] {
+    for (scope, buttons) in [("navigation-bar", app.navigationBars.buttons), ("toolbar", app.toolbars.buttons), ("browser-window-chrome", app.buttons)] {
       for (control, label) in dismissLabels {
+        // Run40029347550 found Cancel only in the application query, not either native bar query.
+        // This scope allows only a newly appeared Cancel, strictly outside every WebView.
+        if scope == "browser-window-chrome" && control != "cancel" { continue }
+        guard absentBefore.contains(control) else { continue }
         let matches = buttons.matching(NSPredicate(format: "label == %@", label))
         guard matches.count == 1 else { continue }
         let element = matches.firstMatch
-        guard fullyHittable(element, in: app), outsideWebContent(element, label: label, app: app) else { continue }
+        guard fullyHittable(element, in: app), outsideEveryWebView(element, frames: webFrames) else { continue }
         let frame = element.frame
         let signature = "\(control):\(frame.minX):\(frame.minY):\(frame.width):\(frame.height)"
         if seen.insert(signature).inserted { candidates.append(DismissSelection(element: element, control: control, scope: scope)) }
@@ -54,21 +73,23 @@ final class BaroAuthCancelUITests: XCTestCase {
   }
 
   @MainActor
-  private func reportStatus(_ provider: String, app: XCUIApplication) throws {
+  private func reportStatus(_ provider: String, app: XCUIApplication, absentBefore: Set<String>) throws {
     var candidates: [[String: Any]] = []
-    // Application-wide matches are diagnostics only; never use them for tapping.
+    let frames = browserWebFrames(app)
+    // Fixed counts/booleans only. Never export frames, labels, hierarchy or provider page text.
     for (scope, buttons) in [("navigation-bar", app.navigationBars.buttons), ("toolbar", app.toolbars.buttons), ("application", app.buttons)] {
       for (control, label) in dismissLabels {
         let matches = buttons.matching(NSPredicate(format: "label == %@", label)), count = matches.count
         let unique = count == 1
         candidates.append(["control": control, "scope": scope, "count": count,
           "uniqueFullyHittable": unique && fullyHittable(matches.firstMatch, in: app),
-          "outsideWebContent": unique && outsideWebContent(matches.firstMatch, label: label, app: app)])
+          "outsideWebContent": unique && outsideEveryWebView(matches.firstMatch, frames: frames),
+          "absentBeforeAuthentication": absentBefore.contains(control)])
       }
     }
     let status: [String: Any] = [
       "provider": provider, "systemWebViewVisible": app.webViews.firstMatch.exists,
-      "dismissCandidates": candidates,
+      "dismissCandidates": candidates, "browserWindowGeometryVerified": frames != nil,
       "authorizingVisible": app.staticTexts["로그인을 확인하고 있어요"].exists,
       "startUnavailableVisible": app.staticTexts["로그인을 시작하지 못했어요. 다시 시도해 주세요."].exists,
       "retryVisible": app.buttons["이용 상태 다시 확인"].exists,
@@ -132,6 +153,12 @@ final class BaroAuthCancelUITests: XCTestCase {
       anonymous(app)
       let signIn = app.buttons[label]
       try reach(signIn, in: app)
+      var absentBefore: Set<String> = []
+      for (control, label) in dismissLabels {
+        if app.buttons.matching(NSPredicate(format: "label == %@", label)).count == 0 {
+          absentBefore.insert(control)
+        }
+      }
       stage(provider, "provider-ready")
       signIn.tap()
       stage(provider, "provider-tapped")
@@ -151,16 +178,16 @@ final class BaroAuthCancelUITests: XCTestCase {
         }
         if browser.waitForExistence(timeout: 1) { break }
       }
-      if !browser.exists { try reportStatus(provider, app: app) }
+      if !browser.exists { try reportStatus(provider, app: app, absentBefore: absentBefore) }
       XCTAssertTrue(browser.exists, "BARO_AUTH_SYSTEM_WEBVIEW_MISSING")
       stage(provider, "browser-presented")
-      var dismissal = nativeDismiss(app)
+      var dismissal = nativeDismiss(app, absentBefore: absentBefore)
       for _ in 0..<10 {
         if dismissal != nil { break }
         Thread.sleep(forTimeInterval: 0.5)
-        dismissal = nativeDismiss(app)
+        dismissal = nativeDismiss(app, absentBefore: absentBefore)
       }
-      if dismissal == nil { try reportStatus(provider, app: app) }
+      if dismissal == nil { try reportStatus(provider, app: app, absentBefore: absentBefore) }
       XCTAssertNotNil(dismissal, "BARO_AUTH_SYSTEM_DISMISS_MISSING")
       guard let dismissal else { return }
       dismissal.element.tap()
@@ -176,6 +203,8 @@ final class BaroAuthCancelUITests: XCTestCase {
         "dismissButtonHittable": true, "systemDismissTapped": true,
         "dismissControl": dismissal.control, "dismissScope": dismissal.scope,
         "nativeDismissControlVerified": true, "webContentExcluded": true,
+        "webViewFrameExcluded": true, "dismissControlAbsentBeforeAuthentication": true,
+        "browserWindowGeometryVerified": true,
         "webViewDismissed": true, "anonymousReturnObserved": true,
         "errorStateAbsent": true, "consentStateAbsent": true
       ])

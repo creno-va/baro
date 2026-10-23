@@ -23,6 +23,9 @@ function observation() {
       dismissScope: "navigation-bar",
       nativeDismissControlVerified: true,
       webContentExcluded: true,
+      webViewFrameExcluded: true,
+      dismissControlAbsentBeforeAuthentication: true,
+      browserWindowGeometryVerified: true,
       webViewDismissed: true,
       anonymousReturnObserved: true,
       errorStateAbsent: true,
@@ -102,6 +105,27 @@ test("system browser cancellation requires one complete result for all providers
     { providers: value.providers.map((provider) => ({ ...provider, dismissControl: "sign-in" })) },
     { providers: value.providers.map((provider) => ({ ...provider, webContentExcluded: false })) },
     {
+      providers: value.providers.map((provider) => ({ ...provider, webViewFrameExcluded: false })),
+    },
+    {
+      providers: value.providers.map((provider) => ({
+        ...provider,
+        dismissControlAbsentBeforeAuthentication: false,
+      })),
+    },
+    {
+      providers: value.providers.map((provider) => ({
+        ...provider,
+        browserWindowGeometryVerified: false,
+      })),
+    },
+    {
+      providers: value.providers.map((provider) => ({
+        ...provider,
+        dismissScope: "browser-window-chrome",
+      })),
+    },
+    {
       providers: value.providers.map((provider) => ({
         ...provider,
         nativeDismissControlVerified: false,
@@ -116,7 +140,7 @@ test("system browser cancellation requires one complete result for all providers
   ])
     expect(() => parseIosAuthCancelResult(encode({ ...value, ...patch }))).toThrow();
 });
-test("all supported dismiss styles remain native-bar scoped; style aliases cannot relax the return proof", () => {
+test("native-bar styles and a newly appeared frame-separated Cancel cannot relax the return proof", () => {
   for (const dismissControl of ["cancel", "done", "close"] as const)
     for (const dismissScope of ["navigation-bar", "toolbar"] as const) {
       const value = observation();
@@ -132,6 +156,24 @@ test("all supported dismiss styles remain native-bar scoped; style aliases canno
         parseIosAuthCancelResult(encode({ ...value, coldAnonymousReturnObserved: false })),
       ).toThrow();
     }
+  const value = observation();
+  value.providers = value.providers.map((provider) => ({
+    ...provider,
+    dismissControl: "cancel",
+    dismissScope: "browser-window-chrome",
+  }));
+  expect(parseIosAuthCancelResult(encode(value)).providers[0]?.dismissScope).toBe(
+    "browser-window-chrome",
+  );
+  for (const dismissControl of ["done", "close"])
+    expect(() =>
+      parseIosAuthCancelResult(
+        encode({
+          ...value,
+          providers: value.providers.map((provider) => ({ ...provider, dismissControl })),
+        }),
+      ),
+    ).toThrow();
 });
 test("failed native auth observation exports only fixed stage/provider/assertion categories", () => {
   const value = observeIosAuthCancelFailure(
@@ -146,6 +188,7 @@ test("failed native auth observation exports only fixed stage/provider/assertion
   const status = {
     provider: "google",
     systemWebViewVisible: false,
+    browserWindowGeometryVerified: false,
     dismissCandidates: ["navigation-bar", "toolbar", "application"].flatMap((scope) =>
       ["cancel", "done", "close"].map((control) => ({
         scope,
@@ -153,6 +196,7 @@ test("failed native auth observation exports only fixed stage/provider/assertion
         count: 0,
         uniqueFullyHittable: false,
         outsideWebContent: false,
+        absentBeforeAuthentication: true,
       })),
     ),
     authorizingVisible: false,
@@ -178,6 +222,32 @@ test("failed native auth observation exports only fixed stage/provider/assertion
     expect(
       observeIosAuthCancelFailure(
         `BARO_AUTH_CANCEL_STATUS:${JSON.stringify({ ...status, dismissCandidates })}`,
+      ).status,
+    ).toBeNull();
+  const separated = {
+    ...status,
+    systemWebViewVisible: true,
+    browserWindowGeometryVerified: true,
+    dismissCandidates: status.dismissCandidates.map((candidate) =>
+      candidate.scope === "application" && candidate.control === "cancel"
+        ? { ...candidate, count: 1, uniqueFullyHittable: true, outsideWebContent: true }
+        : candidate,
+    ),
+  };
+  const parsedSeparated = observeIosAuthCancelFailure(
+    `BARO_AUTH_CANCEL_STATUS:${JSON.stringify(separated)}`,
+  ).status;
+  if (!parsedSeparated) throw Error("fixed geometry diagnosis missing");
+  expect(separated).toEqual(parsedSeparated);
+  for (const patch of [
+    { browserWindowGeometryVerified: false },
+    { systemWebViewVisible: false },
+    { appForeground: false },
+    { rawFrames: "private" },
+  ])
+    expect(
+      observeIosAuthCancelFailure(
+        `BARO_AUTH_CANCEL_STATUS:${JSON.stringify({ ...separated, ...patch })}`,
       ).status,
     ).toBeNull();
   expect(
