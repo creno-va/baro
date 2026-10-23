@@ -115,6 +115,19 @@ async function main() {
     }
   }
   async function startMetro() {
+    if (platform === "ios") {
+      // A healthy status response alone cannot identify the process that owns the port.
+      try {
+        const reservation = Bun.serve({
+          hostname: "127.0.0.1",
+          port: 8081,
+          fetch: () => new Response(null, { status: 503 }),
+        });
+        await reservation.stop(true);
+      } catch {
+        throw new Error("RUNTIME_METRO_PORT_UNAVAILABLE");
+      }
+    }
     metroLog = resolve(out, `private-metro-${platform}-${++counter}.log`);
     const log = Bun.file(metroLog);
     metro = Bun.spawn(
