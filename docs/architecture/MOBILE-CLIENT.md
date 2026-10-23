@@ -425,3 +425,27 @@ JS bridge는 URI/bytes 대신 opaque fileId·size/SHA·HTTP metadata만 받는�
 파일을 owned cache로 이동·독립 readback 검증·abort retirement에 연결한 뒤 반환해야 한다.
 기존 원본/리포트 소비 경로 교체는 producer의 exact-head 두 OS compile/main 통합 후 진행한다.
 standalone macOS 코어 RSS와 128MiB JVM heap proof는 실제 iOS/Android 앱 기기 인수가 아니다.
+
+### M6 native 계정 삭제의 미확정 요청
+
+`platform/account`는 기존 공통 account client를 소비하되 native 삭제 intent의 기기 보관을
+필수로 한다. ownerId를 해시한 namespace에 version·opaque ownerTag/UUID key·서버 인증 시각·attempted/
+accepted만 저장하고 write/readback을 확인한다. attempted는 전송 전에 기록한 intent이며
+서버 도달·삭제 성공의 증거가 아니다. Cookie/OAuth proof·제공자 token·이름/사건 내용은
+보관하지 않는다. auth/cache reset은 미해결 intent나 다른 작업 key를 제거하지 않는다.
+
+현행 `DELETE /api/me`는 primary 삭제와 세션 폐기 뒤 ACK하며 익명 receipt 조회나 멱등
+ACK replay를 제공하지 않는다. 응답 유실은 성공으로 표시하지 않고 일반 삭제 재전송을
+거부한다. 별도 명시적 재확인에서만 같은 서버 ownerTag와 local/server 재인증 증거를 새로
+확인하고 원래 literal body/key를 보낸다. 재확인은 직전 전송의 서버 인증 시각보다 새 OAuth
+인증을 요구하며 그 사실을 다음 미확정 intent에 보존한다. 기기 시각으로 인증을 만들지 않는다. key는 client 복구 식별이며 서버 멱등성을 뜻하지
+않는다. 기존 계정이 이미 삭제됐으면 fresh 읽기의401도 성공으로 간주하거나 자동 resend하지
+않는다. 새로운 계정의 credential이나 ownerTag로 이전 intent를 다시 보내지 않는다.
+
+검증된 ACK 뒤 scope를 폐기하고 accepted 사실·후처리 실패를 구분한다. cleanup consumer는
+새 auth generation이 시작되면 다른 계정의 credential을 지우지 않도록 제공된 fence를 매
+await/IO에서 다시 확인한다. 관측한 ACK는 cleanup/metadata removal 실패로 실패가 되지 않는다.
+usage는 canonical v2 wire를 검증하고 실제 기술 counter/reservation·resetAt을 보존한다.
+
+이 producer는 실제 RN 설정 화면/credential cleanup에 아직 연결하지 않는다. exact-head
+CI/main 통합 뒤 native consumer를 연결하며 실제 OAuth·삭제·기기/릴리스 인수는 별도다.

@@ -158,3 +158,30 @@ test("native report recovery admits only UUID request receipts under hashed iden
     await expect(f.storage.setItem(request, unsafe)).rejects.toMatchObject({ code: "UNAVAILABLE" });
   expect([...f.records.values()]).toEqual([value]);
 });
+
+test("native account deletion storage accepts only opaque intent/ACK facts and preserves other unresolved namespaces", async () => {
+  const f = fixture(),
+    accountKey = `baro-account-deletion:${"b".repeat(64)}`;
+  const record = {
+    version: 1,
+    ownerTag: "a".repeat(64),
+    key: value,
+    authenticatedAt: "2026-10-23T00:00:00.000Z",
+    state: "attempted",
+  };
+  await f.storage.setItem(key, value);
+  await f.storage.setItem(accountKey, JSON.stringify(record));
+  for (const extra of [
+    { cookie: "SYNTHETIC_PRIVATE" },
+    { provider: "google" },
+    { ownerId: "owner_a" },
+    { profile: {} },
+    { startedAt: 1 },
+  ])
+    await expect(
+      f.storage.setItem(accountKey, JSON.stringify({ ...record, ...extra })),
+    ).rejects.toMatchObject({ code: "UNAVAILABLE" });
+  await f.storage.setItem(accountKey, JSON.stringify({ ...record, state: "accepted" }));
+  await f.storage.removeItem(accountKey);
+  expect(await f.storage.getItem(key)).toBe(value);
+});
