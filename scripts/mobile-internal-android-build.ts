@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { copyFile, mkdir, readFile, stat, symlink, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { verifyArchivedAndroidFont } from "./mobile-android-font";
 import { androidBuildTools, runAndroidSignatureProbe } from "./mobile-android-signature";
 import {
   inspectEmbeddedAndroidBundle,
@@ -13,7 +14,6 @@ import {
   internalAndroidVerificationFailure,
   preserveCompiledAndroidInspection,
 } from "./mobile-internal-android-inspection";
-import { verifyCompiledMobileFont } from "./mobile-native-assets";
 import { observePreviewApi, parseAndroidPackage } from "./mobile-preview-artifact";
 import { metroNodeOptions } from "./mobile-runtime-host";
 
@@ -219,7 +219,7 @@ async function main() {
     phase = "bundle-and-graph";
     const bundle = inspectEmbeddedAndroidBundle(compiled, packaged, sourceMap, paths);
     phase = "compiled-font";
-    const font = await verifyCompiledMobileFont("android", work, "Release");
+    const font = await verifyArchivedAndroidFont(root, apk, resolve(tools.path, "aapt2"));
     const name = `baro-internal-preview-android-${sourceSha}.apk`,
       artifact = resolve(base, name);
     await copyFile(apk, artifact);

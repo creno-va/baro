@@ -1,0 +1,12 @@
+{
+  "sourceSha": "dedcd0e13e8c7263edcd78f53f3f1da980f273c8",
+  "phase": "compiled-font",
+  "code": "COMPILED_FONT_READ_FAILED",
+  "invalidFields": [],
+  "failedTool": null,
+  "appRuntimeVerified": false,
+  "remoteApiVerified": false,
+  "physicalDeviceVerified": false,
+  "storeSigned": false,
+  "deployed": false
+}

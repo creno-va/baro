@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "kind": "unaccepted-android-inspection",
+  "sourceSha": "dedcd0e13e8c7263edcd78f53f3f1da980f273c8",
+  "observedAt": "2026-10-23T12:17:11.620Z",
+  "apk": {
+    "name": "compiled-android-dedcd0e13e8c7263edcd78f53f3f1da980f273c8.apk",
+    "bytes": 57133498,
+    "sha256": "1f5b9d7d6cb43bbe7b21d8ee4554dd1d357c1bb3fb363d8d29a5ed06a765d446"
+  },
+  "generatedBundle": {
+    "name": "generated-index.android.bundle",
+    "relativePath": "generated/assets/react/release/index.android.bundle",
+    "bytes": 3570012,
+    "sha256": "560828218deb61a066af38f152b7fa9ef44fbcbf958a84b0ebbe45f68393e2f7"
+  },
+  "graph": {
+    "sourceMapSha256": "6270d62b78759e54f01d7d3910cda07d1f36ef19cda24d2808789ff850870d46",
+    "sourceModules": 1455,
+    "productHomeSourceObserved": true,
+    "probeSourceAbsent": true
+  },
+  "fontDeclaration": {
+    "name": "font-faces.xml",
+    "bytes": 446,
+    "sha256": "94378260414167031926c4c8da4432c1e77d48d6f999c15e024a38d138d4944b"
+  },
+  "accepted": false,
+  "binaryMetadataVerified": false,
+  "appRuntimeVerified": false,
+  "remoteApiVerified": false,
+  "physicalDeviceVerified": false,
+  "storeSigned": false,
+  "deployed": false
+}

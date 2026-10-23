@@ -39,6 +39,7 @@ test("all workflow actions use immutable commits and valid YAML", async () => {
     "ci.yml",
     "mobile-native.yml",
     "mobile-internal-android.yml",
+    "mobile-internal-android-reverify.yml",
     "mobile-runtime.yml",
     "mobile-ios-keychain-host.yml",
     "full-validation.yml",
