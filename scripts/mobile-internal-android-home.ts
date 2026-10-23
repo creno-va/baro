@@ -41,6 +41,8 @@ export function bundledAndroidHomeObservation(xml: string) {
   };
 }
 async function main() {
+  const largeFont = process.argv[2] === "--large-font";
+  if (process.argv.length !== (largeFont ? 3 : 2)) throw new Error("BUNDLED_HOME_MODE_REQUIRED");
   const root = process.cwd(),
     sourceSha = z
       .string()
@@ -67,6 +69,7 @@ async function main() {
     guard: ReturnType<typeof Bun.serve> | undefined,
     metroRequests = 0,
     bootCompleted = false,
+    baseHomeVerified = false,
     lastHomeObservation: ReturnType<typeof bundledAndroidHomeObservation> | null = null;
   async function bytes(args: string[], input?: string) {
     const child = Bun.spawn(args, {
@@ -233,6 +236,67 @@ async function main() {
       { flag: "wx" },
     );
     console.log("ACTUAL_BUNDLED_ANDROID_HOME_OBSERVED_WITHOUT_METRO");
+    baseHomeVerified = true;
+    if (largeFont) {
+      phase = "large-font-setting";
+      await shell(["settings", "put", "system", "font_scale", "2.0"]);
+      const fontScale = Number((await shell(["settings", "get", "system", "font_scale"])).trim());
+      if (fontScale !== 2) throw new Error("BUNDLED_HOME_FONT_SCALE_MISMATCH");
+      await shell(["am", "force-stop", appId]);
+      const launch = await shell(["am", "start", "-W", "-n", `${appId}/${appId}.MainActivity`]);
+      if (!/^Status:\s*ok\r?$/m.test(launch))
+        throw new Error("BUNDLED_HOME_ACTIVITY_LAUNCH_FAILED");
+      phase = "large-font-home";
+      await wait(async () => {
+        try {
+          await shell(["rm", "-f", "/sdcard/baro-internal-home.xml"]);
+          await shell(["uiautomator", "dump", "--compressed", "/sdcard/baro-internal-home.xml"]);
+          lastHomeObservation = bundledAndroidHomeObservation(
+            await shell(["cat", "/sdcard/baro-internal-home.xml"]),
+          );
+          return lastHomeObservation.titleVisible && !lastHomeObservation.foundationErrorVisible;
+        } catch {
+          return false;
+        }
+      }, 120000);
+      const png = await bytes([adb, "-s", device, "exec-out", "screencap", "-p"]);
+      if (png.length < 24 || Buffer.from(png.subarray(0, 8)).toString("hex") !== "89504e470d0a1a0a")
+        throw new Error("BUNDLED_HOME_SCREENSHOT_REQUIRED");
+      if (metroRequests !== 0) throw new Error("BUNDLED_HOME_UNEXPECTED_METRO_REQUEST");
+      await writeFile(resolve(out, "large-font.png"), png, { flag: "wx" });
+      await writeFile(
+        resolve(out, "large-font.json"),
+        `${JSON.stringify(
+          {
+            version: 1,
+            kind: "bundled-android-large-font-home-only",
+            toolingSourceSha: sourceSha,
+            binarySourceSha: receipt.sourceSha,
+            observedAt: new Date().toISOString(),
+            applicationId: appId,
+            binary: receipt.artifact,
+            androidFontScaleSettingReadback: fontScale,
+            homeObservation: lastHomeObservation,
+            metroServerStarted: false,
+            metroRequests,
+            screenshot: { name: "large-font.png", bytes: png.length, sha256: hash(png) },
+            allScreensVerified: false,
+            keyboardVerified: false,
+            rotationVerified: false,
+            talkBackVerified: false,
+            voiceOverVerified: false,
+            remoteApiVerified: false,
+            physicalDeviceVerified: false,
+            storeSigned: false,
+            deployed: false,
+          },
+          null,
+          2,
+        )}\n`,
+        { flag: "wx" },
+      );
+      console.log("ACTUAL_ANDROID_LARGE_FONT_HOME_OBSERVED_OTHER_ACCESSIBILITY_UNVERIFIED");
+    }
   } catch (error) {
     const known = new Set([
         "BUNDLED_HOME_HIERARCHY_REQUIRED",
@@ -248,6 +312,7 @@ async function main() {
         "BUNDLED_HOME_SCREENSHOT_REQUIRED",
         "BUNDLED_HOME_UNEXPECTED_METRO_REQUEST",
         "BUNDLED_HOME_COMMAND_FAILED",
+        "BUNDLED_HOME_FONT_SCALE_MISMATCH",
       ]),
       message = error instanceof Error ? error.message : "";
     if (bootCompleted && emulator?.exitCode === null) {
@@ -263,7 +328,7 @@ async function main() {
     }
     await writeFile(
       resolve(out, "failure.json"),
-      `${JSON.stringify({ toolingSourceSha: sourceSha, phase, code: known.has(message) ? message : "BUNDLED_HOME_FAILED", emulatorBootVerified: bootCompleted, lastHomeObservation, emulatorStartupIssues: emulatorStartupIssues(await readFile(log, "utf8").catch(() => "")), sdkHomeLaunchVerified: false, physicalDeviceVerified: false, storeSigned: false, deployed: false }, null, 2)}\n`,
+      `${JSON.stringify({ toolingSourceSha: sourceSha, phase, code: known.has(message) ? message : "BUNDLED_HOME_FAILED", emulatorBootVerified: bootCompleted, lastHomeObservation, emulatorStartupIssues: emulatorStartupIssues(await readFile(log, "utf8").catch(() => "")), sdkHomeLaunchVerified: baseHomeVerified, largeFontVerified: false, physicalDeviceVerified: false, storeSigned: false, deployed: false }, null, 2)}\n`,
       { flag: "wx" },
     );
     throw new Error("BUNDLED_HOME_FAILED");
