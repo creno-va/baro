@@ -31,6 +31,7 @@ import {
   verifyIosColdLaunchReceipt,
   verifyPinnedInternalIosInput,
 } from "../scripts/mobile-internal-ios-input";
+import { inspectIosUiHelp, iosUiCapabilitiesSchema } from "../scripts/mobile-ios-ui-capabilities";
 import {
   observePreviewApi,
   parseAndroidBadging,
@@ -41,6 +42,33 @@ import {
 } from "../scripts/mobile-preview-artifact";
 
 const sourceSha = "a".repeat(40);
+test("SDK UI documentation reports only exact known categories and cannot claim device or accessibility observations", () => {
+  const secret = "synthetic-private-token",
+    result = inspectIosUiHelp(
+      `synthetic SDK help\ncontent_size [value]\nvalues: accessibility-extra-extra-extra-large\n${secret}\nunknown-private-category`,
+      sourceSha,
+      "2026-10-24T00:00:00.000Z",
+    );
+  expect(result.contentSizeOperationAdvertised).toBe(true);
+  expect(result.advertisedContentSizes).toEqual(["accessibility-extra-extra-extra-large"]);
+  expect(JSON.stringify(result)).not.toContain(secret);
+  expect(result.nativeDeviceStateChanged).toBe(false);
+  const absent = inspectIosUiHelp(
+    "synthetic not_content_size extra-large-suffix",
+    sourceSha,
+    "2026-10-24T00:00:00.000Z",
+  );
+  expect(absent.contentSizeOperationAdvertised).toBe(false);
+  expect(absent.advertisedContentSizes).toEqual([]);
+  for (const field of [
+    "nativeDeviceStateRead",
+    "nativeDeviceStateChanged",
+    "appRuntimeVerified",
+    "accessibilityVerified",
+    "physicalDeviceVerified",
+  ])
+    expect(iosUiCapabilitiesSchema.safeParse({ ...result, [field]: true }).success).toBe(false);
+});
 test("pinned iOS input integrity rejects changed compiler receipts and archives before any SDK action", async () => {
   const root = await mkdtemp(resolve(tmpdir(), "baro-ios-pin-test-")),
     input = resolve(root, "input"),
