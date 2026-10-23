@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "kind": "preview-development-app",
+  "sourceSha": "c2fa3f23394a349bf7cf7d33dee64a433d29e634",
+  "platform": "android",
+  "environment": "preview",
+  "apiOrigin": "https://preview.baro.site",
+  "apiObservation": {
+    "status": "observed",
+    "observedAt": "2026-10-23T07:22:39.444Z",
+    "sourceSha": "57121d2378cb5fd8d0e8761899672be00dcaf59f"
+  },
+  "versionName": "0.1.0",
+  "buildVersion": "1",
+  "expo": "58.0.17",
+  "reactNative": "0.88.0",
+  "applicationId": "site.baro.app.preview",
+  "minimumOS": "24",
+  "installTarget": "android-device-or-emulator",
+  "architectures": [
+    "arm64-v8a",
+    "x86_64"
+  ],
+  "signing": {
+    "kind": "android-debug",
+    "certificateSha256": "fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c",
+    "verifier": "android-sdk-apksig",
+    "buildTools": "37.0.0"
+  },
+  "artifact": {
+    "name": "baro-preview-android-c2fa3f23394a349bf7cf7d33dee64a433d29e634.apk",
+    "bytes": 162497066,
+    "sha256": "636c11b03079ab5ddfedc6ce7dcc9a0941c9990ff577ba195a4db761889a98b9"
+  },
+  "compiledFont": {
+    "kind": "compiled-resource-only",
+    "family": "BaroMobile",
+    "sha256": "3ae12c1281a84901b32d8c5f0e43fd6c4f8a5b7fd4ccbde66cfbe9f07cde05e8",
+    "weights": [
+      400,
+      600,
+      700
+    ],
+    "glyphs": 14757,
+    "codepoints": 14336,
+    "hangul": 11172,
+    "licenseEmbedded": true,
+    "compiledBytesMatch": true,
+    "appRuntimeVerified": false
+  },
+  "compatibility": "runtime-smoke-required",
+  "requiresMetro": true,
+  "binaryMetadataVerified": true,
+  "appRuntimeVerified": false,
+  "remoteApiVerified": false,
+  "physicalDeviceVerified": false,
+  "storeSigned": false,
+  "deployed": false
+}

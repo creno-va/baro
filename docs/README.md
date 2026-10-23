@@ -37,7 +37,8 @@ v2 구현을 시작할 때는 [실행 계획](./development/V2-EXECUTION.md)과
 
 2026-10-22 직접 요청한 모바일 개발은 [ADR-0017](./adr/0017-expo-mobile-and-shared-client-boundaries.md),
 [공통 코드 구조](./architecture/MOBILE-CLIENT.md), [단계별 실행 계획](./development/MOBILE-EXECUTION.md)을 따른다.
-웹 UI 개편은 기존 담당이 유지한다. 현재 모바일 문서는 구현 목표이며 앱·실기기 인수 완료를 뜻하지 않는다.
+웹 UI 개편은 기존 담당이 유지한다. [실제 실행·내부 전달 증거](./quality/MOBILE-NATIVE-RUNTIME-2026-10-23.md)의
+source/OS·실행 범위와 미검증 항목을 구분하며 현재 모바일 문서를 전체 앱·실기기 인수로 확대하지 않는다.
 
 제품 화면의 정보 위계·반응형 기준과 모바일에 인계할 토큰은 [제품 UI 개편](./design/PRODUCT-UI.md)을 따른다.
 

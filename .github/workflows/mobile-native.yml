@@ -66,6 +66,8 @@ jobs:
           java-version: "17"
       - name: Install frozen dependencies
         run: bun ci
+      - name: Attest installed toolchain patches and actual consumers
+        run: bun run security:patches
       - name: Verify source and Metro bundles
         run: |
           bun run mobile:check

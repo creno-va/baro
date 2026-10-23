@@ -8,6 +8,16 @@ on:
         required: true
         type: string
 
+      platform:
+        description: OS to verify; default both preserves two-OS acceptance
+        required: true
+        default: both
+        type: choice
+        options:
+          - both
+          - android
+          - ios
+
 permissions:
   contents: read
 
@@ -22,12 +32,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - platform: android
-            runner: ubuntu-latest
-          - platform: ios
-            runner: macos-26
-    runs-on: ${{ matrix.runner }}
+        platform: ${{ fromJSON(inputs.platform == 'ios' && '["ios"]' || inputs.platform == 'android' && '["android"]' || '["android","ios"]') }}
+    runs-on: ${{ matrix.platform == 'ios' && 'macos-26' || 'ubuntu-latest' }}
     timeout-minutes: 55
     env:
       TARGET_SHA: ${{ inputs.target_sha }}
@@ -65,6 +71,11 @@ jobs:
           sudo chmod a+rw /dev/kvm
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platform-tools' 'emulator' 'system-images;android-35;google_apis;x86_64'
       - run: bun ci
+      - name: Attest installed toolchain patches and actual consumers
+        run: bun run security:patches
+      - name: Check pinned Expo simulator launch API before native compile
+        if: matrix.platform == 'ios'
+        run: node scripts/mobile-runtime-ios-launch.cjs --self-test
       - name: Compile and execute isolated local app
         run: bun run mobile:runtime ${{ matrix.platform }}
       - name: Save scoped runtime receipt and synthetic screenshots
