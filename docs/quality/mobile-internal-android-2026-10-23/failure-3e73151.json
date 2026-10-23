@@ -1,0 +1,11 @@
+{
+  "sourceSha": "3e73151a3a049968819adcfabfeb50c1b645b79c",
+  "phase": "verify-binary",
+  "code": "INTERNAL_ANDROID_BUILD_FAILED",
+  "failedTool": null,
+  "appRuntimeVerified": false,
+  "remoteApiVerified": false,
+  "physicalDeviceVerified": false,
+  "storeSigned": false,
+  "deployed": false
+}

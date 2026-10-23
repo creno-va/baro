@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
@@ -16,6 +16,11 @@ import {
   internalAndroidEnvironment,
   internalAndroidFailureCategory,
 } from "../scripts/mobile-internal-android-build";
+import {
+  generatedAndroidReleaseFiles,
+  internalAndroidVerificationFailure,
+  preserveCompiledAndroidInspection,
+} from "../scripts/mobile-internal-android-inspection";
 import {
   observePreviewApi,
   parseAndroidBadging,
@@ -389,4 +394,79 @@ test("actual SDK-generated Hermes bytes must match the packaged copy and exclude
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test("a post-compile verification failure preserves unaccepted bytes and graph facts without private map content", async () => {
+  const root = await mkdtemp(resolve(tmpdir(), "baro-compiled-inspection-")),
+    mobile = resolve(root, "mobile"),
+    build = resolve(mobile, "android/app/build");
+  try {
+    const files = {
+      "outputs/apk/release/app-release.apk": "synthetic-not-a-real-apk",
+      "generated/assets/createBundleReleaseJsAndAssets/index.android.bundle":
+        "synthetic-not-real-hbc",
+      "generated/sourcemaps/react/release/index.android.bundle.map": JSON.stringify({
+        sources: ["src/app/index.tsx", "runtime-probe/entry.tsx"],
+        sourcesContent: ["synthetic-private-map-content"],
+      }),
+    };
+    for (const [path, body] of Object.entries(files)) {
+      await mkdir(dirname(resolve(build, path)), { recursive: true });
+      await writeFile(resolve(build, path), body);
+    }
+    const result = await preserveCompiledAndroidInspection(resolve(root, "out"), mobile, sourceSha);
+    expect(result.receipt).toMatchObject({
+      kind: "unaccepted-android-inspection",
+      accepted: false,
+      binaryMetadataVerified: false,
+      appRuntimeVerified: false,
+      graph: { sourceModules: 2, productHomeSourceObserved: true, probeSourceAbsent: false },
+    });
+    expect(await readFile(resolve(root, "out/inspection", result.receipt.apk.name), "utf8")).toBe(
+      files["outputs/apk/release/app-release.apk"],
+    );
+    expect(JSON.stringify(result.receipt)).not.toContain("synthetic-private-map-content");
+    expect(() => verifyInternalAndroidArtifact(result.receipt, sourceSha)).toThrow();
+    expect(result.files.bundle).toBe(
+      resolve(build, "generated/assets/createBundleReleaseJsAndAssets/index.android.bundle"),
+    );
+    await expect(
+      preserveCompiledAndroidInspection(resolve(root, "out"), mobile, sourceSha),
+    ).rejects.toThrow();
+    await mkdir(resolve(build, "generated/assets/react/release"), { recursive: true });
+    await writeFile(
+      resolve(build, "generated/assets/react/release/index.android.bundle"),
+      "second-output",
+    );
+    await expect(generatedAndroidReleaseFiles(build)).rejects.toThrow(
+      "INTERNAL_ANDROID_GENERATED_OUTPUT_AMBIGUOUS",
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+test("post-compile failure export preserves only fixed codes and allowed metadata issue fields", () => {
+  const detail = "synthetic-private /private/fixture";
+  expect(internalAndroidVerificationFailure(new Error("COMPILED_FONT_READ_FAILED"))).toEqual({
+    code: "COMPILED_FONT_READ_FAILED",
+    invalidFields: [],
+  });
+  expect(
+    internalAndroidVerificationFailure(Object.assign(new Error(detail), { code: "ENOENT" })),
+  ).toEqual({ code: "INTERNAL_ANDROID_FILE_MISSING", invalidFields: [] });
+  let error: unknown;
+  try {
+    verifyInternalAndroidArtifact(
+      { ...candidate(), kind: "internal-bundled-preview-app", applicationId: detail },
+      sourceSha,
+    );
+  } catch (value) {
+    error = value;
+  }
+  const exported = internalAndroidVerificationFailure(error);
+  expect(exported.invalidFields).toContain("applicationId");
+  expect(JSON.stringify(exported)).not.toContain(detail);
+  expect(internalAndroidVerificationFailure(new Error("SYNTHETIC_PRIVATE_CAPS")).code).toBe(
+    "INTERNAL_ANDROID_BUILD_FAILED",
+  );
 });

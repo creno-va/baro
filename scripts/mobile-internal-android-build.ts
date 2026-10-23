@@ -8,6 +8,11 @@ import {
   internalAndroidDevelopmentCertificate,
   verifyInternalAndroidArtifact,
 } from "./mobile-internal-android-artifact";
+import {
+  generatedAndroidReleaseFiles,
+  internalAndroidVerificationFailure,
+  preserveCompiledAndroidInspection,
+} from "./mobile-internal-android-inspection";
 import { verifyCompiledMobileFont } from "./mobile-native-assets";
 import { observePreviewApi, parseAndroidPackage } from "./mobile-preview-artifact";
 import { metroNodeOptions } from "./mobile-runtime-host";
@@ -80,7 +85,10 @@ async function main() {
   if (
     (await Bun.file(resolve(base, "receipt-android.json")).exists()) ||
     (await Bun.file(resolve(base, "failure-android.json")).exists()) ||
-    (await Bun.file(resolve(base, `baro-internal-preview-android-${sourceSha}.apk`)).exists())
+    (await Bun.file(resolve(base, `baro-internal-preview-android-${sourceSha}.apk`)).exists()) ||
+    (await Bun.file(resolve(base, "inspection/inspection.json")).exists()) ||
+    (await Bun.file(resolve(base, "inspection/generated-index.android.bundle")).exists()) ||
+    (await Bun.file(resolve(base, `inspection/compiled-android-${sourceSha}.apk`)).exists())
   )
     throw new Error("INTERNAL_ANDROID_FRESH_OUTPUT_REQUIRED");
   await mkdir(owned, { recursive: true });
@@ -180,41 +188,44 @@ async function main() {
       resolve(mobile, "android"),
       2400000,
     );
-    phase = "verify-binary";
+    phase = "preserve-compiled-inspection";
+    await preserveCompiledAndroidInspection(base, mobile, sourceSha as string);
+    phase = "apk-badging";
     console.log("INTERNAL_ANDROID_STAGE", phase);
     const apk = resolve(mobile, "android/app/build/outputs/apk/release/app-release.apk");
     const badging = await text([resolve(tools.path, "aapt"), "dump", "badging", apk]),
       metadata = parseAndroidPackage(badging);
     const activity = badging.match(/^launchable-activity: name='([^']+)'/m)?.[1];
+    phase = "apk-signature";
     const certificate = await runAndroidSignatureProbe(work, tools.path, text, apk);
     if (certificate !== internalAndroidDevelopmentCertificate)
       throw new Error("INTERNAL_ANDROID_TEMPLATE_CERTIFICATE_REQUIRED");
+    phase = "bundle-extract";
     const packaged = (await command(
       ["unzip", "-p", apk, "assets/index.android.bundle"],
       root,
       120000,
       true,
     )) as Uint8Array;
-    const compiled = await readFile(
-      resolve(mobile, "android/app/build/generated/assets/react/release/index.android.bundle"),
-    );
-    const sourceMap = JSON.parse(
-      await readFile(
-        resolve(
-          mobile,
-          "android/app/build/generated/sourcemaps/react/release/index.android.bundle.map",
-        ),
-        "utf8",
-      ),
-    );
+    phase = "generated-output-discovery";
+    const generated = await generatedAndroidReleaseFiles(resolve(mobile, "android/app/build"));
+    if (!generated.bundle || !generated.map)
+      throw new Error("INTERNAL_ANDROID_GENERATED_OUTPUT_MISSING");
+    phase = "compiled-bundle-read";
+    const compiled = await readFile(generated.bundle);
+    phase = "source-map-read";
+    const sourceMap = JSON.parse(await readFile(generated.map, "utf8"));
     const paths = (await text(["unzip", "-Z1", apk])).split(/\r?\n/);
+    phase = "bundle-and-graph";
     const bundle = inspectEmbeddedAndroidBundle(compiled, packaged, sourceMap, paths);
+    phase = "compiled-font";
     const font = await verifyCompiledMobileFont("android", work, "Release");
     const name = `baro-internal-preview-android-${sourceSha}.apk`,
       artifact = resolve(base, name);
     await copyFile(apk, artifact);
     const hash = createHash("sha256");
     for await (const chunk of createReadStream(artifact)) hash.update(chunk);
+    phase = "receipt";
     const receipt = verifyInternalAndroidArtifact(
       {
         version: 1,
@@ -265,10 +276,10 @@ async function main() {
     console.log(
       "Internal bundled preview APK verified; actual launch/API/OAuth/physical/store acceptance remains separate",
     );
-  } catch {
+  } catch (error) {
     await writeFile(
       resolve(base, "failure-android.json"),
-      `${JSON.stringify({ sourceSha, phase, code: "INTERNAL_ANDROID_BUILD_FAILED", failedTool, appRuntimeVerified: false, remoteApiVerified: false, physicalDeviceVerified: false, storeSigned: false, deployed: false }, null, 2)}\n`,
+      `${JSON.stringify({ sourceSha, phase, ...internalAndroidVerificationFailure(error), failedTool, appRuntimeVerified: false, remoteApiVerified: false, physicalDeviceVerified: false, storeSigned: false, deployed: false }, null, 2)}\n`,
       { flag: "wx" },
     );
     throw new Error("INTERNAL_ANDROID_BUILD_FAILED");
