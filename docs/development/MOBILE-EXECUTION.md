@@ -177,7 +177,7 @@ M1 #330과 M2 #335는 인수·종료했다. M3~M7의 인증/기능 model·공유
 | 범위 | 인수한 사실 | 남은 실제 인수 |
 | --- | --- | --- |
 | 공통 기반 M1/M2 | workspace·순수 wire/schema·client-core/API client·플랫폼 IO 경계와 회귀, 두 OS 개발 빌드 | 새 앱/기존 서버의 실제 인증된 전체 여정과 최종 후보 호환표 |
-| 인증 M3 / #346 | 기존 계정을 보존하는 native session/credential·역할/동의·로그인/재인증/로그아웃·challenge 연결 | Google/Naver/Kakao 실제 로그인·cold/warm 복귀·만료/전환·두 역할/동의·실제 Turnstile |
+| 인증 M3 / #346 | 기존 계정을 보존하는 native session/credential·역할/동의·로그인/재인증/로그아웃·challenge 연결. [현재 preview HTTP 진입](../quality/MOBILE-NATIVE-AUTH-2026-10-24.md)은 세 제공자별 시작200·canonical authorization·프록시302/동일 목적지/browser state 설정 확인 | 제공자 페이지/실제 계정 인증·두 OS cold/warm 복귀·만료/전환·두 역할/동의·실제 Turnstile. HTTP 진입 관측은 실제 OAuth 성공이 아님 |
 | 기능 M4~M6 / #354/#361/#369 | 사건/workspace·자료/리포트·판례/공개 탐색·본인 프로필/설정의 model·HTTP·RN·native adapter 구현/합성 회귀 | 실제 인증 계정의 저장/재개·처리/공유/열기·철회/삭제와 실제 기기 picker·장애/취소 |
 | 모바일 UI M7 / #379 | 웹 정본 토큰/primitive/폰트/브랜드와 source171989e의 실제 두 OS Home·글자 확대·Guide 왕복/교정 문구 인수. iOS40009294558 Home5/Guide6 scroll·hittable tap, Android40014252649 font2·Home/Guide 각1회 scroll/tap·캡처 차단·Metro0 | 전체 역할/화면/상태·키보드/회전·VoiceOver/TalkBack·물리 기기와 실제 인증된 여정 인수 |
 | 앱 IPC/IO M8 / #385 | Android c2fa3f2/39916204937와 iOS local9a369bc/39996169996의 실제 계측 Home·100MB upload/1GB download 전체 byte/hash·native IPC/SDK/SecureStore·취소/owner/401/Origin·파일0개 정리. 별도 source·RSS·signing/PNG 실물 대조 | 독립 local runtime 범위 인수. 실제 picker/공유·원격 API/OAuth·전체 제품 여정/접근성·physical/store/#339/#71/#334는 별도 |
