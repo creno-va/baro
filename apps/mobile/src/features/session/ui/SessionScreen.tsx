@@ -21,6 +21,7 @@ export function SessionScreen({
   onPolicy,
   onReauthenticate,
   onReadReauthentication,
+  onSettings,
 }: {
   state: SessionState;
   onRole: (role: AccountType) => void;
@@ -33,6 +34,7 @@ export function SessionScreen({
   onPolicy: (policy: Policy) => void;
   onReauthenticate?: (provider: Provider) => void;
   onReadReauthentication?: () => void;
+  onSettings?: () => void;
 }) {
   return (
     <Screen>
@@ -156,6 +158,7 @@ export function SessionScreen({
         </>
       ) : null}
       <Button label="변호사 탐색" onPress={onBrowse} />
+      {onSettings ? <Button label="사용량·설정" onPress={onSettings} /> : null}
     </Screen>
   );
 }

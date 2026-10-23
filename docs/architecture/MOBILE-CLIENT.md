@@ -454,5 +454,22 @@ ACK replay를 제공하지 않는다. 응답 유실은 성공으로 표시하지
 await/IO에서 다시 확인한다. 관측한 ACK는 cleanup/metadata removal 실패로 실패가 되지 않는다.
 usage는 canonical v2 wire를 검증하고 실제 기술 counter/reservation·resetAt을 보존한다.
 
-이 producer는 실제 RN 설정 화면/credential cleanup에 아직 연결하지 않는다. exact-head
-CI/main 통합 뒤 native consumer를 연결하며 실제 OAuth·삭제·기기/릴리스 인수는 별도다.
+`/settings`는 이 계약을 소비하며 두 역할의 canonical 사용량(예약 포함)·KST reset과 정책,
+연결된 provider 재인증·literal DELETE·별도 미확정 재확인을 표시한다. 필수 동의 갱신은
+usage에만 적용하며 인증된 계정 삭제와 정책 열기를 막지 않는다. 삭제 준비 조회도 이전
+intent보다 새 실제 서버 OAuth 시각이 있어야 재확인을 허용한다. 오래된 시각·다른 owner·
+잠긴 저장소에서는 새 삭제를 보내지 않는다. 정책은 고정 API origin의 기존 문서를 명시적으로
+열고 브라우저 실패를 안전하게 표시한다. 비용 관측 상태로 버튼을 잠그지 않는다.
+
+ACK를 확인하면 이름·usage·확인 입력을 지우고 접수 사실을 먼저 표시한 뒤 private 파일
+IO 정리를 기다린다. 파일 정리 실패도 native 로그인 취소/credential·proof·대기 로그인 정리
+시도를 건너뛰지 않는다. 각 await 뒤 새 scope를 검사하고 마지막 native cancel/reset 직전에는
+await를 두지 않는다. 새 로그인/재인증의 동기 scope 폐기와 credential writer의 generation
+검사가 다른 계정의 jar를 보호한다. 미해결 사건/리포트·업로드 key는 전역 삭제하지 않는다.
+접수와 정리 실패를 구분하고 화면 background/foreground 사이의 실제 정리 결과도 유지한다.
+다른 계정의 fresh 세션이 오면 이전 계정의 접수/미확정 안내·개인 입력을 없앤다.
+
+합성 RN composition은 실제 NativeLogin·credential adapter와 고정 Expo chunk/cookie codec을
+사용해 경계를 검사한다. signed Hono/SQL 검증은 primary 삭제·peer 보존·삭제 job과 실제
+credential reset을 확인한다. SecureStore 물리 기기, 실제 OAuth·삭제·앱/API 호환 배포·
+두 OS 런타임/릴리스 인수는 이 offline 증거와 구분하며 #346/#361/#369/#334에서 계속 추적한다.
