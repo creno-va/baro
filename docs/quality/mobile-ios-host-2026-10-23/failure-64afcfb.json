@@ -1,0 +1,22 @@
+{
+  "sourceSha": "64afcfb9353accbc6d0108313c83b46f71ced919",
+  "phase": "signed-direct-launch",
+  "code": "IOS_HOST_APP_DIRECT_LAUNCH_FAILED",
+  "failedCommand": {
+    "stage": "APP_DIRECT_LAUNCH",
+    "exitCode": 1,
+    "category": "LAUNCH_DENIED",
+    "iosDomains": [
+      {
+        "domain": "FBSOpenApplicationServiceErrorDomain",
+        "code": 1
+      }
+    ]
+  },
+  "baselineObserved": true,
+  "signedObserved": false,
+  "remoteApiVerified": false,
+  "oauthVerified": false,
+  "physicalDeviceVerified": false,
+  "storeSigned": false
+}
