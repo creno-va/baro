@@ -217,3 +217,17 @@ SDK 메모리 검증은 구분한다. 리포트 편집/사진 선택/PDF·HTML·
 충돌로 안내한다. 로그아웃·계정/권한 변경·화면 이탈·앱 종료에서는 미저장 초안을 버린다.
 private 경로/token은 화면이나 URL에 노출하지 않는다. 실제 공유·기기 메모리/권한과 API
 호환 배포는 fixture/Metro/컴파일과 별도로 #361/#334에서 인수한다.
+
+## 대용량 native 네트워크 IO producer
+
+`modules/baro-private-download`는 네트워크 응답을 JS byte-event queue 대신 native private
+디스크로 받는 로컬 Expo 모듈이다. 원본/리포트 composition 소비는 두 OS native PR 검증과
+통합 뒤 별도 연결한다. 현재의 256KiB JS 디스크 쓰기만으로 SDK 네트워크 큐 메모리 상한을
+입증하지 않으며 지원 파일 크기를 줄여 대체하지 않는다.
+
+`bun run mobile:native:probe`는 macOS의 Swift 코어로 실제 local HTTP 100MB/1GB와 독립
+해시·RSS·취소·리다이렉트/쿠키 격리·gzip·오류/시작 정리를 검사한다. Android 코어 JUnit은
+native-module PR workflow에서 128MiB JVM 힙으로 같은 바이트를 검사한다. 이 workflow는
+모듈/해당 fixture 변경 PR에만 두 OS 앱을 컴파일한다. [모듈 안내](./modules/baro-private-download/README.md)의
+borrowed fileId·cancel/release/clear 계약을 따른다. 메인 앱/두 OS 기기·API 메모리와 실제
+provider 시연, 서명·스토어 인수는 별개다.

@@ -1,6 +1,6 @@
 .expo/
-android/
-ios/
+/android/
+/ios/
 dist/
 coverage/
 *.tsbuildinfo

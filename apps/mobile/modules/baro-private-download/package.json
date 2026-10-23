@@ -1,0 +1,7 @@
+{
+  "name": "baro-private-download",
+  "version": "0.1.0",
+  "private": true,
+  "description": "BARO private bounded native network to disk transfer",
+  "license": "UNLICENSED"
+}

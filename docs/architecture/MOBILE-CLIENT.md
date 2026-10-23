@@ -403,3 +403,25 @@ revision만 본문에 보낸다. 사건 진술·token은 URL에 넣지 않는다
 
 합성 Hono/암호화 SQL와 법률 transport 대역은 실제 공식 제공자/기기 인수와 다르다.
 실제 앱·API SHA의 동작과 #346/#369/#71·M7/M8 조건은 별도로 유지한다.
+
+### 네이티브 네트워크→디스크 경계 (#361)
+
+고정 SDK58 fetch는 native byte event를 JS ReadableStream에 enqueue하며 consumer/disk의
+수요를 native pump에 전달하지 않는다. 256KiB write 단위와 upload part 프로브는 다운로드
+네트워크 큐의 메모리 상한 증거가 아니다. 지원하는 1GB 원본/대용량 ZIP을 유지하며
+`apps/mobile/modules/baro-private-download`의 native producer를 먼저 검증한다.
+
+Android는 기존 RN OkHttp의 쿠키/인증 저장·리다이렉트·자동 재전송·cache를 해제하고 64KiB
+copy/hash로 private 파일을 쓴다. Apple은 ephemeral URLSession download task의 OS 파일을
+이동하고 64KiB로 해시를 검증한다. 앱 bundle/package ID로 API origin을 고정하며 dev만
+private/local origin을 허용한다. 임의 목적지/파일명·URL credential은 허용하지 않는다.
+
+JS bridge는 URI/bytes 대신 opaque fileId·size/SHA·HTTP metadata만 받는다. 오류 본문만
+64KiB 이하로 전달해 안전한 기존 오류 reader가 처리한다. process registry는 React reload를
+넘어 기존 작업을 보존하고 module별 소유 작업만 폐기한다. startup/reset clear는 이전 IO가
+끝난 뒤 인지한 orphan만 지운다. 미해결 서버 operation/hold와 credential 저장소는 건드리지 않는다.
+
+소비자는 captured credential frame/owner/generation으로 응답 cookie를 처리하고, 빌린 native
+파일을 owned cache로 이동·독립 readback 검증·abort retirement에 연결한 뒤 반환해야 한다.
+기존 원본/리포트 소비 경로 교체는 producer의 exact-head 두 OS compile/main 통합 후 진행한다.
+standalone macOS 코어 RSS와 128MiB JVM heap proof는 실제 iOS/Android 앱 기기 인수가 아니다.
