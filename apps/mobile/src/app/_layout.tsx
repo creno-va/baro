@@ -20,6 +20,7 @@ export default function RootLayout() {
       <MobileChallengePortal />
       <Stack
         screenOptions={{
+          headerTitleStyle: { fontFamily: tokens.type.body.fontFamily, fontWeight: "600" },
           headerTintColor: tokens.color.text,
           headerStyle: { backgroundColor: tokens.color.surface },
           contentStyle: { backgroundColor: tokens.color.background },

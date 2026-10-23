@@ -27,6 +27,7 @@ test("welcome exposes implemented login and public navigation through commands",
   );
   await fireEvent.press(screen.getByRole("button", { name: "이용 안내 보기" }));
   expect(onContinue).toHaveBeenCalledTimes(1);
+  expect(screen.getByRole("header", { name: "BARO" })).toBeTruthy();
   await fireEvent.press(screen.getByRole("button", { name: "로그인·내 계정" }));
   expect(onSignIn).toHaveBeenCalledTimes(1);
 });

@@ -585,3 +585,32 @@ list 스크롤 props를 검사한다. Yoga의 실제 줄바꿈/기기 font·키�
 기본 font scaling과 multiline 동작은 [RN Text](https://reactnative.dev/docs/text),
 [TextInput](https://reactnative.dev/docs/textinput), [Pressable](https://reactnative.dev/docs/pressable)의
 플랫폼 계약을 따르며 설치된 SDK/RN 타입과 Metro 양 OS 출력을 함께 확인한다.
+
+
+### M7 기존 폰트·브랜드 정본의 native 자산
+
+기존 웹 소유의 Pretendard WOFF2/OFL과 shared SVG는 이동·수정하지 않는다. 생성 도구는
+native TTF·PNG/icon과 source/output digest manifest만 `apps/mobile/assets`에 쓴다. TTF는
+BaroMobile이라는 별도 family/PostScript prefix로 변환하며 기존14,336-codepoint cmap과
+한글11,172자·wght45–930/named instance9개를 보존한다. 원래 copyright와 전체 OFL은
+별도 텍스트와 TTF name13 license metadata에 남긴다. timestamp를 manifest에 만들지 않는다.
+
+폰트 변환은 Python>=3.10/fonttools4.66.1/brotli1.2.0의 도구 작업이며 `--check`는 재생성
+전체 byte를 비교한다. 평소 quick은 Python을 설치하지 않고 실제 source/output hash·TTF
+경계/이름/굵기·cmap/OFL, PNG density/크기/opaque icon을 검사한다. brand는 기존 설치된
+sharp0.35.5로 SVG를 rasterize하며 logo64/128/192와 white1024px icon을 생성한다. native
+표현에 SVG path 사본·원격 asset/provider를 추가하지 않는다.
+
+설치된 expo-font58 config plugin이 local variable TTF를 포함한다. Android는 BaroMobile의
+400/600/700 normal/wght 정의, iOS는 내부 family/named instance로 같은 Text/TextInput·
+Stack header를 표시한다. OS font scaling은 유지하며 font loading으로 제품을 차단하지 않는다.
+개발 앱 재빌드가 필요하다. SDK58의 variable/named instance 지원과 설치된 plugin 타입/
+생성 XML·등록 코드·UIAppFonts를 확인하며 이전 SDK가 지원한다고 확대하지 않는다.
+
+native build는 compiled APK/app에서 실제 font byte가 source와 같은지, Android 굵기 선언·
+iOS UIAppFonts·전체 embedded OFL을 확인하고 `assets` receipt를 포함한다. 그 receipt는
+`compiled-resource-only`/`appRuntimeVerified:false`이며 실제 앱 IPC/폰트 선택·기기 글자
+확대/키보드/회전·VoiceOver/TalkBack·스토어/외부 API는 별도 M7/M8 인수로 유지한다.
+
+근거: [Expo local/variable fonts](https://docs.expo.dev/develop/user-interface/fonts/)와
+기존 [웹 폰트 원본·OFL](../../public/fonts/README.md). 생성/파일 검증을 기기 렌더 증거로 쓰지 않는다.

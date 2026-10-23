@@ -76,7 +76,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p .wrangler/mobile-build
-          node -e 'const fs=require("node:fs"); const p=require("./apps/mobile/package.json"); fs.writeFileSync(".wrangler/mobile-build/receipt-${{ matrix.platform }}.json", JSON.stringify({sourceSha:process.env.TARGET_SHA, platform:"${{ matrix.platform }}", environment:"preview", apiOrigin:process.env.EXPO_PUBLIC_API_URL, version:p.version, expo:p.dependencies.expo, reactNative:p.dependencies["react-native"], kind:"development-debug", storeSigned:false, deployed:false}, null, 2)+"\n")'
+          node -e 'const fs=require("node:fs"); const p=require("./apps/mobile/package.json"); const assets=JSON.parse(fs.readFileSync(".wrangler/mobile-build/assets-${{ matrix.platform }}.json","utf8")); fs.writeFileSync(".wrangler/mobile-build/receipt-${{ matrix.platform }}.json", JSON.stringify({sourceSha:process.env.TARGET_SHA, platform:"${{ matrix.platform }}", environment:"preview", apiOrigin:process.env.EXPO_PUBLIC_API_URL, version:p.version, expo:p.dependencies.expo, reactNative:p.dependencies["react-native"], kind:"development-debug", assets, appRuntimeVerified:false, storeSigned:false, deployed:false}, null, 2)+"\n")'
       - name: Save build receipt
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

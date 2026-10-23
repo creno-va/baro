@@ -1,3 +1,4 @@
+import { Brand } from "../../../ui/Brand";
 import { Button } from "../../../ui/Button";
 import { Card } from "../../../ui/Card";
 import { Screen } from "../../../ui/Screen";
@@ -20,6 +21,7 @@ export function WelcomeScreen({
 }) {
   return (
     <Screen>
+      <Brand />
       <Text variant="title" accessibilityRole="header">
         내 상황을 차근차근 정리해요.
       </Text>

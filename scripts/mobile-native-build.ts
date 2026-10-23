@@ -1,5 +1,6 @@
 import { readdir } from "node:fs/promises";
 import { resolve } from "node:path";
+import { verifyCompiledMobileFont } from "./mobile-native-assets";
 
 const platform = process.argv[2];
 if (platform !== "android" && platform !== "ios")
@@ -55,6 +56,7 @@ if (platform === "android") {
     mobileRoot,
   );
 }
+await verifyCompiledMobileFont(platform, root);
 console.log(
   `Native ${platform} debug build completed; no store signing, upload or deployment performed`,
 );
