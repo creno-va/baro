@@ -21,16 +21,50 @@ const hash = (size: number) => {
   return value.digest("hex");
 };
 let unexpectedCookie = false,
-  redirected = 0;
+  redirected = 0,
+  dispatched = 0;
 const server = Bun.serve({
   hostname: "127.0.0.1",
   port: 0,
   idleTimeout: 0,
-  fetch(request) {
+  async fetch(request) {
+    dispatched++;
     const url = new URL(request.url);
     const expectedCookie = url.pathname.endsWith("/jar") ? "" : "baro_probe=synthetic_explicit";
     if ((request.headers.get("cookie") ?? "") !== expectedCookie) unexpectedCookie = true;
     if (url.pathname === "/api/target") redirected++;
+    if (request.method === "PUT") {
+      if (
+        request.headers.get("if-match") !== "7" ||
+        request.headers.get("content-type") !== "application/octet-stream"
+      )
+        throw new Error("NATIVE_UPLOAD_HEADERS_CHANGED");
+      if (url.pathname.includes("asset_slow")) await Bun.sleep(1500);
+      const reader = request.body?.getReader(),
+        digest = createHash("sha256");
+      let size = 0;
+      if (!reader) return new Response(null, { status: 400 });
+      try {
+        while (true) {
+          const next = await reader.read();
+          if (next.done) break;
+          digest.update(next.value);
+          size += next.value.length;
+          if (url.pathname.includes("asset_slow")) await Bun.sleep(4);
+        }
+      } catch {
+        return new Response(null, { status: 499 });
+      }
+      if (url.pathname.includes("asset_redirect"))
+        return new Response(null, { status: 307, headers: { location: "/api/target" } });
+      if (url.pathname.includes("asset_error"))
+        return Response.json({ error: { code: "UNAUTHENTICATED" } }, { status: 401 });
+      if (url.pathname.includes("asset_oversize")) return new Response("x".repeat(65_537));
+      return Response.json(
+        { uploadedSize: size, uploadedHash: digest.digest("hex") },
+        { headers: { "set-cookie": "download_probe=synthetic; Path=/" } },
+      );
+    }
     if (url.pathname === "/api/redirect")
       return new Response(null, { status: 307, headers: { location: "/api/target" } });
     if (url.pathname === "/api/error")
@@ -84,13 +118,33 @@ type Receipt = {
   setCookieReturned: boolean;
   responseCookieStored: boolean;
   errorCodeOnly: boolean;
+  uploadedSize: number;
+  uploadedHash: string;
 };
 const receipts: { scenario: string; receipt: Receipt }[] = [];
-async function probe(scenario: string, path: string, maximum: number, mode = "get") {
-  const child = Bun.spawn([binary, server.url.origin, path, String(maximum), mode, directory], {
-    stdout: "pipe",
-    stderr: "pipe",
-  });
+async function probe(
+  scenario: string,
+  path: string,
+  maximum: number,
+  mode = "get",
+  uploadSize = 1_000_000,
+) {
+  const child = Bun.spawn(
+    [
+      binary,
+      server.url.origin,
+      path,
+      String(maximum),
+      mode,
+      directory,
+      String(uploadSize),
+      hash(uploadSize),
+    ],
+    {
+      stdout: "pipe",
+      stderr: "pipe",
+    },
+  );
   const [output, error, code] = await Promise.all([
     new Response(child.stdout).text(),
     new Response(child.stderr).text(),
@@ -139,6 +193,54 @@ try {
   const gzip = await probe("gzip", "/api/gzip", chunk.length);
   if (!gzip.success || gzip.size !== chunk.length || gzip.sha256 !== hash(chunk.length))
     throw new Error("NATIVE_GZIP_FAILED");
+  const uploadSize = process.argv.includes("--large") ? 100_000_000 : 1_000_000;
+  const uploadPath = "/api/v2/me/lawyer/assets/asset_a/content";
+  const upload = await probe("upload-bytes", uploadPath, 65_536, "upload", uploadSize);
+  if (
+    !upload.success ||
+    upload.uploadedSize !== uploadSize ||
+    upload.uploadedHash !== hash(uploadSize) ||
+    upload.peakResidentBytes > 192 * 1024 * 1024
+  )
+    throw new Error("NATIVE_UPLOAD_BYTES_OR_MEMORY_FAILED");
+  for (const mode of [
+    "upload-hash",
+    "upload-size",
+    "upload-path",
+    "upload-symlink",
+    "upload-invalid-header",
+  ]) {
+    const before = dispatched;
+    if ((await probe(mode, uploadPath, 65_536, mode)).success)
+      throw new Error(`NATIVE_UPLOAD_REJECTION_FAILED:${mode}`);
+    if (dispatched !== before) throw new Error(`NATIVE_UPLOAD_PREFLIGHT_DISPATCHED:${mode}`);
+  }
+  for (const [mode, asset] of [
+    ["upload-redirect", "asset_redirect"],
+    ["upload-oversize", "asset_oversize"],
+    ["upload-cancel", "asset_slow"],
+  ] as const) {
+    if (
+      (
+        await probe(
+          mode,
+          `/api/v2/me/lawyer/assets/${asset}/content`,
+          65_536,
+          mode,
+          mode === "upload-cancel" ? 100_000_000 : 1_000_000,
+        )
+      ).success
+    )
+      throw new Error(`NATIVE_UPLOAD_REJECTION_FAILED:${mode}`);
+  }
+  const uploadError = await probe(
+    "upload-error",
+    "/api/v2/me/lawyer/assets/asset_error/content",
+    65_536,
+    "upload-error",
+  );
+  if (!uploadError.success || uploadError.status !== 401 || !uploadError.errorCodeOnly)
+    throw new Error("NATIVE_UPLOAD_ERROR_METADATA_FAILED");
   if (unexpectedCookie || redirected) throw new Error("NATIVE_ORIGIN_OR_COOKIE_LEAK");
   console.log(
     JSON.stringify(

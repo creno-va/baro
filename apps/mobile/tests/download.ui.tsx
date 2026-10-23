@@ -247,12 +247,12 @@ test("an unavailable preview remains actionable and a failed native open retains
   });
   expect(mockData.size).toBe(1);
   mockOpenFailure = false;
-  (mockDeleteFailure = false),
-    (mockDigestFailure = false),
-    (mockOpenCount = 0),
-    (mockDigestCount = 0);
-  let mockDigestDelay: Promise<void> | undefined;
-  let mockMoveDelay: Promise<void> | undefined;
+  mockDeleteFailure = false;
+  mockDigestFailure = false;
+  mockOpenCount = 0;
+  mockDigestCount = 0;
+  mockDigestDelay = undefined;
+  mockMoveDelay = undefined;
   await cache.clear();
   expect(mockData.size).toBe(0);
 });
@@ -326,9 +326,11 @@ test("cache clear waits for native digest completion and cannot publish a file v
 });
 test("missing-module startup cleanup removes recognized native orphans and preserves unexpected/unrelated files", () => {
   seedNative();
+  mockData.set(`${nativeRoot}/${nativeId}.upload`, new Uint8Array([1]));
   mockData.set("file:///app/cache/unrelated", new Uint8Array([1]));
   clearNativeTransferOrphans();
   expect(mockData.has(`${nativeRoot}/${nativeId}.bin`)).toBe(false);
+  expect(mockData.has(`${nativeRoot}/${nativeId}.upload`)).toBe(false);
   expect(mockData.has("file:///app/cache/unrelated")).toBe(true);
   mockData.set(`${nativeRoot}/unexpected`, new Uint8Array([1]));
   expect(() => clearNativeTransferOrphans()).toThrow();
