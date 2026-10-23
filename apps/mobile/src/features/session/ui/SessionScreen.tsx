@@ -198,6 +198,7 @@ function ConsentChoices({
       <Button label="개인정보 처리방침 읽기" disabled={busy} onPress={() => onPolicy("privacy")} />
       <Button label="AI 이용 고지 읽기" disabled={busy} onPress={() => onPolicy("ai")} />
       <Button
+        variant="primary"
         label={busy ? "동의 저장 중" : "동의하고 계속하기"}
         disabled={busy || !policies || !over14}
         onPress={() => onConsent({ policies, over14 })}

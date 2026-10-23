@@ -4,15 +4,23 @@ import { tokens } from "../theme/tokens";
 export function Text({
   variant = "body",
   style,
+  allowFontScaling = true,
+  maxFontSizeMultiplier = 0,
   ...props
 }: TextProps & { variant?: "body" | "title" | "heading" | "muted" }) {
-  return <NativeText {...props} style={[styles.base, styles[variant], style]} />;
+  return (
+    <NativeText
+      {...props}
+      allowFontScaling={allowFontScaling}
+      maxFontSizeMultiplier={maxFontSizeMultiplier}
+      style={[styles.base, styles[variant], style]}
+    />
+  );
 }
-
 const styles = StyleSheet.create({
-  base: { color: tokens.color.text, fontSize: 16, lineHeight: 26 },
+  base: { color: tokens.color.text, ...tokens.type.body, minWidth: 0 },
   body: {},
-  title: { fontSize: 30, lineHeight: 40, fontWeight: "700" },
-  heading: { fontSize: 20, lineHeight: 30, fontWeight: "600" },
+  title: { ...tokens.type.title, fontWeight: "700" },
+  heading: { ...tokens.type.heading, fontWeight: "600" },
   muted: { color: tokens.color.muted },
 });

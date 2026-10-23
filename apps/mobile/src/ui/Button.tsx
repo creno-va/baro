@@ -7,9 +7,16 @@ export interface ButtonProps {
   onPress: () => void;
   disabled?: boolean;
   accessibilityHint?: string;
+  variant?: "primary" | "secondary" | "danger";
 }
 
-export function Button({ label, onPress, disabled = false, accessibilityHint }: ButtonProps) {
+export function Button({
+  label,
+  onPress,
+  disabled = false,
+  accessibilityHint,
+  variant = "secondary",
+}: ButtonProps) {
   return (
     <Pressable
       accessibilityRole="button"
@@ -20,26 +27,53 @@ export function Button({ label, onPress, disabled = false, accessibilityHint }: 
       onPress={onPress}
       style={({ pressed }) => [
         styles.button,
-        pressed && styles.pressed,
+        styles[variant],
+        pressed && !disabled && (variant === "primary" ? styles.primaryPressed : styles.pressed),
         disabled && styles.disabled,
       ]}
     >
-      <Text style={styles.label}>{label}</Text>
+      <Text
+        style={[
+          styles.label,
+          variant === "primary" && styles.onPrimary,
+          variant === "danger" && styles.dangerLabel,
+          disabled && styles.disabledLabel,
+        ]}
+      >
+        {label}
+      </Text>
     </Pressable>
   );
 }
-
 const styles = StyleSheet.create({
   button: {
-    minHeight: 48,
+    minHeight: tokens.control.minimumSize,
+    minWidth: tokens.control.minimumSize,
     borderRadius: tokens.radius.control,
-    backgroundColor: tokens.color.primary,
-    paddingVertical: 14,
-    paddingHorizontal: 20,
+    borderWidth: 1,
+    paddingVertical: 13,
+    paddingHorizontal: 18,
     alignItems: "center",
     justifyContent: "center",
+    alignSelf: "stretch",
   },
-  label: { color: tokens.color.onPrimary, fontWeight: "600", textAlign: "center" },
-  pressed: { opacity: 0.82 },
-  disabled: { opacity: 0.5 },
+  primary: { backgroundColor: tokens.color.primary, borderColor: tokens.color.primary },
+  secondary: { backgroundColor: tokens.color.surface, borderColor: tokens.color.controlBorder },
+  danger: { backgroundColor: tokens.color.surface, borderColor: tokens.color.danger },
+  primaryPressed: {
+    backgroundColor: tokens.color.primaryPressed,
+    borderColor: tokens.color.primaryPressed,
+  },
+  pressed: { backgroundColor: tokens.color.subtle },
+  disabled: { backgroundColor: tokens.color.subtle, borderColor: tokens.color.line },
+  label: {
+    fontWeight: "600",
+    textAlign: "center",
+    alignSelf: "stretch",
+    flexShrink: 1,
+    minWidth: 0,
+  },
+  onPrimary: { color: tokens.color.onPrimary },
+  dangerLabel: { color: tokens.color.danger },
+  disabledLabel: { color: tokens.color.muted },
 });

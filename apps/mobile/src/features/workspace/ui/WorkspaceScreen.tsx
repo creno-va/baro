@@ -225,6 +225,7 @@ export function WorkspaceScreen({
                     onChangeText={actions.setText}
                   />
                   <Button
+                    variant="primary"
                     label="내용 보내기"
                     disabled={
                       blocked ||
@@ -387,6 +388,7 @@ export function WorkspaceScreen({
                         />
                       ) : null}
                       <Button
+                        variant="primary"
                         label="타임라인 저장"
                         disabled={blocked}
                         onPress={() => {

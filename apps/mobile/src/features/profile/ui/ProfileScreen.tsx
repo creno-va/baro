@@ -271,6 +271,7 @@ export function ProfileScreen({
                     {state.selected.name} · {Math.ceil(state.selected.size / 1_000_000)}MB
                   </Text>
                   <Button
+                    variant="primary"
                     label="선택한 자료 업로드·저장 상태 확인"
                     disabled={!editable}
                     onPress={() => {
@@ -360,6 +361,7 @@ export function ProfileScreen({
                 </Card>
               ) : null}
               <Button
+                variant="primary"
                 label="프로필 저장"
                 disabled={!editable || state.conflict || !profileDirty(state)}
                 onPress={() => {
@@ -426,6 +428,7 @@ export function ProfileScreen({
                 </Text>
               )}
               <Button
+                variant={state.confirm.kind === "publish" ? "primary" : "danger"}
                 label="확인하고 진행"
                 disabled={
                   busy ||

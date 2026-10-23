@@ -70,7 +70,12 @@ export function CasesScreen({
       {state.busy ? <Button label="진행 중인 요청 중단" onPress={actions.cancel} /> : null}
       {state.view === "list" ? (
         <>
-          <Button label="새 사건 만들기" onPress={actions.newCase} disabled={state.busy} />
+          <Button
+            variant="primary"
+            label="새 사건 만들기"
+            onPress={actions.newCase}
+            disabled={state.busy}
+          />
           <Button
             label="사건 목록 새로 확인"
             onPress={() => {
@@ -146,6 +151,7 @@ export function CasesScreen({
             있어요.
           </Text>
           <Button
+            variant="primary"
             label="보안 확인하고 사건 저장"
             disabled={state.busy}
             onPress={() => {
@@ -255,6 +261,7 @@ export function CasesScreen({
               })}
               {questions.length ? (
                 <Button
+                  variant="primary"
                   label="이 차례의 답변 저장"
                   disabled={blocked || q.processing === true}
                   onPress={() => {
@@ -336,6 +343,7 @@ export function CasesScreen({
                     }}
                   />
                   <Button
+                    variant="primary"
                     label="요약 확인하고 계속"
                     disabled={blocked}
                     onPress={() => {
@@ -348,6 +356,7 @@ export function CasesScreen({
                   <Text>{item.summary || "사건 기록이 저장됐어요."}</Text>
                   {item.schemaVersion === "2" && onWorkspace ? (
                     <Button
+                      variant="primary"
                       label="사건 작업공간 열기"
                       disabled={state.busy || state.deleteUncertain}
                       onPress={() => onWorkspace(item.id)}
@@ -385,6 +394,7 @@ export function CasesScreen({
                 onChangeText={actions.setDeleteConfirmation}
               />
               <Button
+                variant="danger"
                 label={state.deleteUncertain ? "같은 삭제 요청 다시 확인" : "이 사건 삭제 요청"}
                 disabled={state.busy || state.deleteConfirmation !== "DELETE"}
                 onPress={() => {

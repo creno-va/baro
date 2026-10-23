@@ -47,7 +47,7 @@ loopback·사설 LAN 주소만 허용하며 Android emulator는 `http://10.0.2.2
 - `src/app`: Expo Router와 화면 조합.
 - `src/features/foundation/model.ts`: 플랫폼과 화면에서 독립된 상태·공통 계약 소비.
 - `src/features/foundation/ui`: props와 명령 callback을 받는 RN 화면.
-- `src/ui`, `src/theme`: 기본 컴포넌트와 임시 시각 토큰. 웹 디자인 인계는 M7에서 반영.
+- `src/ui`, `src/theme`: 웹 정본의 @baro/design-tokens를 소비하는 native primitive. 밀도·48dp target·type scale은 native adapter가 소유하며 폰트/실제 기기 시각 인수는 M7에서 이어 간다.
 - `src/composition`: 검증된 공개 설정·환경별 SecureStore와 HTTP adapter 조립.
 - `src/platform/auth`: 기기 cookie 저장·고정 Origin·갱신/만료·세션 generation 격리.
 - `@baro/contracts`: 기존 `src/contracts` 정본의 명시적 public export. 서버 pipeline 제외.
@@ -277,3 +277,22 @@ literal `DELETE`로 삭제한다. 삭제 접수와 원격 purge 완료는 구분
 
 `mobile:check`는 순수 모델·captured native transport/Hono/SQLite·RN 화면·합성 SDK composition을
 검사한다. native core/compile 증거와 실제 앱 IPC·두 OS 기기/API·스토어 인수는 구분한다.
+
+
+## 공통 시각 표현
+
+`theme/tokens`는 @baro/design-tokens의 product blue/ink/subtle/line·surface/status·20dp card
+의미를 소비한다. 화면 바탕은 subtle이며 밀도·type scale·최소48dp 조작 영역은 native에서
+정한다. 좁은 화면은16dp, 일반20dp, 태블릿32dp 좌우 여백과 최대720dp 읽기 열을 사용한다.
+
+Button 기본은 보조 행동이며 primary/secondary/danger로 저장·검색·계속/삭제의 위계를
+표시한다. disabled/pressed에서 label opacity를 낮추지 않고 대비를 유지한다. Choice는
+체크/선택 symbol·완전한 label·checked/disabled 상태를 함께 제공한다. 입력의 유일한
+경계는 장식 구분선보다 진하게 표시하고 focus border·multiline 상단 정렬·readonly 상태를
+보존한다. Text/TextField 기본은 OS 글자 확대를 허용하고 최대 배율/줄 수/높이를 제한하지
+않는다. Card와 조작 영역도 고정 높이를 두지 않는다.
+
+Screen은 Stack의 상단 inset과 별도로 좌우/하단 safe area, 문서 스크롤 또는 FlatList의
+단일 스크롤 소유, 입력 처리·drag 키보드 닫기를 유지한다. 추가 header overlay가 있는
+화면은 keyboardOffset을 전달할 수 있다. 실제 두 OS 키보드·회전/큰 글자·VoiceOver/TalkBack과
+글꼴/브랜드·최종 화면 검토는 RN renderer의 props/이벤트 검사와 구분해 #379에서 추적한다.
