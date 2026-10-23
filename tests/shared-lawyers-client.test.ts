@@ -4,6 +4,7 @@ import {
   createLawyerAssetsClient,
   createLawyersClient,
   type DomainRequest,
+  lawyerUploadAttemptSchema,
 } from "@baro/api-client";
 import { createSessionScope } from "@baro/client-core";
 import { EXPECTED_PROFILE_HEADER, emptySelfProfile } from "@baro/contracts/v2/self-profile";
@@ -55,7 +56,11 @@ const uploadedAsset = {
   failure: null,
 };
 function uploadFixture(
-  options: { beforeWrite?: () => Promise<void>; beforePut?: () => Promise<void> } = {},
+  options: {
+    beforeWrite?: () => Promise<void>;
+    beforePut?: () => Promise<void>;
+    native?: boolean;
+  } = {},
 ) {
   const records = new Map<string, string>(),
     keys: string[] = [];
@@ -66,6 +71,15 @@ function uploadFixture(
     puts = 0,
     uploaded = false,
     dropStorage = false;
+  let bodies = 0;
+  const nativeCalls: {
+    path: string;
+    source: typeof source;
+    byteLength: number;
+    contentHash: string;
+    revision: number;
+    signal: AbortSignal;
+  }[] = [];
   const reserved = {
     assetId: "asset_a",
     revision: 1,
@@ -87,6 +101,16 @@ function uploadFixture(
     return (uploaded ? uploadedAsset : reserved.value) as T;
   };
   function client(scope = createSessionScope()) {
+    const put = async () => {
+      puts++;
+      await options.beforePut?.();
+      uploaded = true;
+      if (fail === "content") {
+        fail = "";
+        throw new ApiError("UNAVAILABLE", "합성 응답 유실", true);
+      }
+      return { assetId: "asset_a", revision: 2, value: uploadedAsset };
+    };
     const api = createLawyerAssetsClient<typeof source, string>({
       scope,
       request,
@@ -106,21 +130,36 @@ function uploadFixture(
       },
       open: async (value) => ({
         fingerprint: () => hash(value.bytes),
-        body: async () => ({ body: value.bytes, byteLength: value.size }),
+        body: async () => {
+          bodies++;
+          if (options.native) throw new Error("JS_WHOLE_FILE_BODY_MUST_NOT_RUN");
+          return { body: value.bytes, byteLength: value.size };
+        },
         close: () => {
           closed++;
         },
       }),
       uploadContent: async () => {
-        puts++;
-        await options.beforePut?.();
-        uploaded = true;
-        if (fail === "content") {
-          fail = "";
-          throw new ApiError("UNAVAILABLE", "합성 응답 유실", true);
-        }
-        return { assetId: "asset_a", revision: 2, value: uploadedAsset };
+        if (options.native) throw new Error("JS_CONTENT_UPLOAD_MUST_NOT_RUN");
+        return put();
       },
+      ...(options.native
+        ? {
+            uploadContentFromSource: async (
+              path: string,
+              input: {
+                source: typeof source;
+                byteLength: number;
+                contentHash: string;
+                revision: number;
+                signal: AbortSignal;
+              },
+            ) => {
+              nativeCalls.push({ path, ...input });
+              return put();
+            },
+          }
+        : {}),
       download: async () => ({ value: "synthetic-handle", discard: () => {} }),
     });
     return { api, scope };
@@ -130,6 +169,8 @@ function uploadFixture(
     request,
     records,
     keys,
+    nativeCalls,
+    bodies: () => bodies,
     fail: (value: string) => {
       fail = value;
     },
@@ -142,6 +183,92 @@ function uploadFixture(
     counts: () => ({ closed, reservations, puts }),
   };
 }
+
+test("native content port receives opaque source and captured hash/size/revision before any JS body materialization", async () => {
+  const f = uploadFixture({ native: true });
+  expect((await f.client().api.upload("profile_a", source, "portfolio")).status).toBe("uploaded");
+  expect(f.nativeCalls).toHaveLength(1);
+  expect(f.nativeCalls[0]).toMatchObject({
+    path: "/api/v2/me/lawyer/assets/asset_a/content",
+    byteLength: 3,
+    contentHash: await hash(source.bytes),
+    revision: 1,
+  });
+  expect(f.nativeCalls[0]?.source).toBe(source);
+  expect(f.nativeCalls[0]?.signal.aborted).toBe(false);
+  expect(f.bodies()).toBe(0);
+  expect(f.records.size).toBe(0);
+  expect(f.counts()).toEqual({ closed: 1, reservations: 1, puts: 1 });
+});
+
+test("native ACK loss preserves the same opaque intent, reads committed asset after restart and never falls back to JS bytes", async () => {
+  const f = uploadFixture({ native: true });
+  f.fail("content");
+  await expect(f.client().api.upload("profile_a", source, "portfolio")).rejects.toMatchObject({
+    code: "UNAVAILABLE",
+  });
+  expect(f.records.size).toBe(1);
+  const recorded = [...f.records.values()][0];
+  expect(recorded).toBeString();
+  expect(lawyerUploadAttemptSchema.safeParse(JSON.parse(recorded ?? "{}")).success).toBe(true);
+  expect(JSON.stringify([...f.records])).not.toContain(source.name);
+  expect((await f.client().api.upload("profile_a", source, "portfolio")).status).toBe("uploaded");
+  expect(f.nativeCalls).toHaveLength(1);
+  expect(f.bodies()).toBe(0);
+  expect(new Set(f.keys).size).toBe(1);
+  expect(f.records.size).toBe(0);
+});
+
+test("native content port failure or a late owner transition never enables JS fallback or clears uncertain intent", async () => {
+  const started = deferred<void>(),
+    pause = deferred<void>();
+  const f = uploadFixture({
+    native: true,
+    beforePut: async () => {
+      started.resolve();
+      await pause.promise;
+    },
+  });
+  const client = f.client(),
+    task = client.api.upload("profile_a", source, "portfolio");
+  void task.catch(() => {});
+  await started.promise;
+  client.scope.invalidate();
+  pause.resolve();
+  await expect(task).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
+  expect(f.nativeCalls[0]?.signal.aborted).toBe(true);
+  expect(f.records.size).toBe(1);
+  expect(f.bodies()).toBe(0);
+  const failed = uploadFixture({
+    native: true,
+    beforePut: async () => {
+      throw new ApiError("UNAVAILABLE", "합성 native IO 실패", true);
+    },
+  });
+  await expect(failed.client().api.upload("profile_a", source, "portfolio")).rejects.toMatchObject({
+    code: "UNAVAILABLE",
+  });
+  expect(failed.bodies()).toBe(0);
+  expect(failed.records.size).toBe(1);
+});
+
+test("public native upload recovery validator admits only existing opaque logical intent facts", () => {
+  const record = {
+    key: crypto.randomUUID(),
+    expectedRevision: 1,
+    assetId: "asset_a",
+    assetRevision: 2,
+  };
+  expect(lawyerUploadAttemptSchema.parse(record)).toEqual(record);
+  for (const value of [
+    { ...record, token: "synthetic-token" },
+    { ...record, fileUri: "file:///synthetic/private" },
+    { ...record, expectedRevision: 0 },
+    { ...record, assetId: "file:///synthetic/private" },
+    { ...record, assetId: "x".repeat(129) },
+  ])
+    expect(lawyerUploadAttemptSchema.safeParse(value).success).toBe(false);
+});
 
 test("native-shaped byte sources recover uncertain reservations/content after a new scope without duplicate upload", async () => {
   for (const stage of ["reserve", "content"]) {

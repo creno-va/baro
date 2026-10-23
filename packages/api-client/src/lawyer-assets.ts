@@ -1,4 +1,5 @@
 import type { SessionScope } from "@baro/client-core";
+import { opaqueIdSchema } from "@baro/contracts/common";
 import {
   v2HashSchema,
   v2LawyerAssetUploadRequestSchema,
@@ -29,16 +30,18 @@ export interface LawyerUploadStorage {
   setItem(key: string, value: string): Promise<void> | void;
   removeItem(key: string, legacyKey?: string): Promise<void> | void;
 }
-const uploadAttemptSchema = z.strictObject({
+/** Opaque client recovery facts only; native storage can validate without a second schema. */
+export const lawyerUploadAttemptSchema = z.strictObject({
   key: z.uuid(),
   expectedRevision: z.number().int().positive(),
-  assetId: z.string().min(1).optional(),
+  assetId: opaqueIdSchema.optional(),
   assetRevision: z.number().int().positive().optional(),
 });
-type Attempt = z.infer<typeof uploadAttemptSchema>;
+export type LawyerUploadAttempt = z.infer<typeof lawyerUploadAttemptSchema>;
+type Attempt = LawyerUploadAttempt;
 const states = new WeakMap<SessionScope, { records: Map<string, Attempt>; io: Promise<unknown> }>();
 const envelope = z.object({
-  assetId: z.string(),
+  assetId: opaqueIdSchema,
   revision: z.number(),
   value: z.union([
     v2PortfolioAssetSchema,
@@ -90,6 +93,18 @@ export function createLawyerAssetsClient<Source extends UploadMetadata, Download
     uploadContent: (
       path: string,
       input: { body: BodyInit; byteLength: number; revision: number; signal: AbortSignal },
+    ) => Promise<unknown>;
+    /** Optional native HTTP port, called before reader.body(). No JS whole-file body or fallback.
+     * The adapter must enforce immutable source size/hash, owner/epoch and descriptor cleanup. */
+    uploadContentFromSource?: (
+      path: string,
+      input: {
+        source: Source;
+        byteLength: number;
+        contentHash: string;
+        revision: number;
+        signal: AbortSignal;
+      },
     ) => Promise<unknown>;
     download: (
       path: string,
@@ -175,7 +190,7 @@ export function createLawyerAssetsClient<Source extends UploadMetadata, Download
       try {
         const raw = await dependencies.storage?.getItem(key, legacy);
         if (raw) {
-          const parsed = uploadAttemptSchema.safeParse(JSON.parse(raw));
+          const parsed = lawyerUploadAttemptSchema.safeParse(JSON.parse(raw));
           if (!parsed.success) throw unavailable();
           result = parsed.data;
         }
@@ -226,7 +241,7 @@ export function createLawyerAssetsClient<Source extends UploadMetadata, Download
             key: dependencies.newKey(),
             expectedRevision: mine.revision,
           };
-          if (!uploadAttemptSchema.safeParse(attempt).success) throw unavailable();
+          if (!lawyerUploadAttemptSchema.safeParse(attempt).success) throw unavailable();
           await remember(key, legacy, attempt);
           let reserved: LawyerAssetView | undefined;
           if (attempt.assetId) {
@@ -281,14 +296,30 @@ export function createLawyerAssetsClient<Source extends UploadMetadata, Download
             await remember(key, legacy, null);
             return { ...reserved, purpose };
           }
-          const body = await currentReader.body();
-          ensure();
-          if (body.byteLength !== metadata.size)
-            throw new ApiError("VALIDATION_ERROR", "선택한 파일이 변경됐어요. 다시 선택해 주세요.");
-          const raw = await dependencies.uploadContent(
-            `/api/v2/me/lawyer/assets/${encodeURIComponent(reserved.id)}/content`,
-            { ...body, revision: reserved.revision, signal },
-          );
+          const path = `/api/v2/me/lawyer/assets/${encodeURIComponent(reserved.id)}/content`;
+          let raw: unknown;
+          if (dependencies.uploadContentFromSource) {
+            raw = await dependencies.uploadContentFromSource(path, {
+              source,
+              byteLength: metadata.size,
+              contentHash: hash,
+              revision: reserved.revision,
+              signal,
+            });
+          } else {
+            const body = await currentReader.body();
+            ensure();
+            if (body.byteLength !== metadata.size)
+              throw new ApiError(
+                "VALIDATION_ERROR",
+                "선택한 파일이 변경됐어요. 다시 선택해 주세요.",
+              );
+            raw = await dependencies.uploadContent(path, {
+              ...body,
+              revision: reserved.revision,
+              signal,
+            });
+          }
           ensure();
           const result = { ...assetView(raw), purpose };
           await remember(key, legacy, null);
