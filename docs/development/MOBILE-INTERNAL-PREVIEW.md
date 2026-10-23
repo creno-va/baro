@@ -102,3 +102,28 @@ APK에 들어 있으면 거절한다. packaged HBC를 자기 자신과 비교하
 새 전달 receipt를 만든다. 원본 unaccepted report는 수정하지 않고 별도의 verification sidecar에
 원본 run·두 source·새 관측 시각을 기록한다. 정상 빌드도 같은 리소스 해석기를 사용한다.
 Metro 없는 Home 실행·실제 API/OAuth·physical/store 검증은 이 receipt가 인수하지 않는다.
+
+## 실제 SDK 재검증과 Metro 없는 Home 관측
+
+PR403/main `dfd05f2426356c62cc2bb873f776b0f8f05e1029`·main CI39955426563 SUCCESS 뒤
+[수동 SDK39955771243](https://github.com/creno-va/baro/actions/runs/39955771243)이 SUCCESS다.
+[binary receipt](../quality/mobile-internal-android-2026-10-23/receipt-dfd05f2.json)와
+[별도 verification](../quality/mobile-internal-android-2026-10-23/verification-dfd05f2.json)을 보존한다.
+실제 SDK37 apksig/certificate·metadata/strict identity·1455-module graph 요약·생성/packaged HBC·
+compiled font 인수가 통과했다. APK는 원본 dedcd0e의 동일57,133,498bytes/hash이며 새로운
+빌드로 표시하지 않는다. requiresMetro=false이고 실제 Home/runtime·API/OAuth·physical/store는 미검증이다.
+
+```sh
+gh workflow run mobile-internal-android-reverify.yml --ref main -f target_sha=<full40-main-sha> -f smoke=true
+```
+
+선택한 smoke는 실제 SDK 재검증 뒤 같은 APK를 새 소유 Android35 Emulator에 설치한다.
+Metro 프로세스나 adb reverse를 만들지 않고 host8081에는 503 거절 guard만 둔다. 원래
+Home/route에 계측·fixture를 삽입하지 않는다. 실제 Activity 직접 실행·app PID·자기 package의
+유효한 Home 제목/첫 카드 UI hierarchy를 두 차례 force-stop/cold launch에서 관측한다.
+기존 구성 오류 화면은 인수하지 않으며 첫 실행 실제 PNG와 source/hash를 별도로 기록한다.
+
+raw UI hierarchy·emulator 로그·AVD 데이터는 업로드하지 않는다. 실패는 phase와 고정 code만
+보존하고 소유 Emulator/guard/AVD를 정리한다. Home smoke가 실패해도 앞선 SDK 검증의
+receipt와 바이너리는 별도 artifact로 보존한다. 실제 Home 실행 전 해당 성공을 표시하지 않으며
+전체 화면/IO·API/OAuth·physical/store·접근성·#339/#71의 인수는 별도다.

@@ -7,6 +7,11 @@ on:
         description: Full main tooling SHA; reverify pinned compiled binary without recompiling
         required: true
         type: string
+      smoke:
+        description: Also install and observe the real bundled Home on a fresh Emulator without Metro
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -20,7 +25,7 @@ jobs:
   verify:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     env:
       TARGET_SHA: ${{ inputs.target_sha }}
       EXPO_PUBLIC_APP_ENV: preview
@@ -67,8 +72,18 @@ jobs:
           gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$INPUT_ARTIFACT_ID/zip" > .wrangler/private-android-input.zip
           unzip -q .wrangler/private-android-input.zip -d .wrangler/android-inspection-input
       - name: Reverify actual signature, metadata, Hermes and compiled font resources
+        id: verify
         run: bun scripts/mobile-internal-android-reverify.ts
+      - name: Prepare owned Android runtime
+        if: inputs.smoke
+        run: |
+          sudo chmod a+rw /dev/kvm
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platform-tools' 'emulator' 'system-images;android-35;google_apis;x86_64'
+      - name: Observe actual bundled Home without Metro
+        if: inputs.smoke
+        run: bun scripts/mobile-internal-android-home.ts
       - name: Save reverified binary with separate source and verification receipts
+        if: always() && steps.verify.outcome == 'success'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: mobile-internal-android-reverified-${{ inputs.target_sha }}
@@ -77,6 +92,17 @@ jobs:
             .wrangler/mobile-internal-android-reverified/receipt-android.json
             .wrangler/mobile-internal-android-reverified/verification.json
           if-no-files-found: error
+      - name: Save scoped Home observation and synthetic first-run screenshot
+        if: inputs.smoke && always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: mobile-internal-android-home-${{ inputs.target_sha }}
+          path: |
+            .wrangler/mobile-internal-android-runtime/receipt.json
+            .wrangler/mobile-internal-android-runtime/failure.json
+            .wrangler/mobile-internal-android-runtime/home.png
+            .wrangler/mobile-internal-android-runtime/failure.png
+          if-no-files-found: ignore
       - name: Preserve fixed failure classification
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

@@ -23,6 +23,25 @@ export const androidInspectionInputSchema = z.strictObject({
   artifactName: z.string().regex(/^mobile-internal-android-failure-[a-f0-9]{40}$/),
   inspectionSha256: digest,
 });
+export const androidReverificationSchema = z
+  .strictObject({
+    version: z.literal(1),
+    kind: z.literal("reverified-preserved-android-binary"),
+    toolingSourceSha: sha,
+    binarySourceSha: sha,
+    input: androidInspectionInputSchema,
+    observedAt: z.iso.datetime(),
+    originalInspectionAccepted: z.literal(false),
+    bundledInputParityVerified: z.literal(true),
+    retainedGeneratedBundleCompared: z.literal(true),
+    sdkBinaryMetadataVerified: z.literal(true),
+    appRuntimeVerified: z.literal(false),
+    remoteApiVerified: z.literal(false),
+    physicalDeviceVerified: z.literal(false),
+    storeSigned: z.literal(false),
+    deployed: z.literal(false),
+  })
+  .refine((v) => v.binarySourceSha === v.input.sourceSha);
 export const preservedAndroidInspectionSchema = z.strictObject({
   version: z.literal(1),
   kind: z.literal("unaccepted-android-inspection"),
@@ -233,7 +252,7 @@ async function main() {
     await writeFile(
       resolve(out, "verification.json"),
       `${JSON.stringify(
-        {
+        androidReverificationSchema.parse({
           version: 1,
           kind: "reverified-preserved-android-binary",
           toolingSourceSha: toolingSha,
@@ -249,7 +268,7 @@ async function main() {
           physicalDeviceVerified: false,
           storeSigned: false,
           deployed: false,
-        },
+        }),
         null,
         2,
       )}\n`,

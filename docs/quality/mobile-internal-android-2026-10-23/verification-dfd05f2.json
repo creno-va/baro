@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "kind": "reverified-preserved-android-binary",
+  "toolingSourceSha": "dfd05f2426356c62cc2bb873f776b0f8f05e1029",
+  "binarySourceSha": "dedcd0e13e8c7263edcd78f53f3f1da980f273c8",
+  "input": {
+    "version": 1,
+    "sourceSha": "dedcd0e13e8c7263edcd78f53f3f1da980f273c8",
+    "workflowRunId": "39950492600",
+    "artifactId": "12501370366",
+    "artifactName": "mobile-internal-android-failure-dedcd0e13e8c7263edcd78f53f3f1da980f273c8",
+    "inspectionSha256": "d6d2b9bb1d62ec6ca1819ad665fbc4503bdbc3b806fa5236c240472a132c12f6"
+  },
+  "observedAt": "2026-10-23T12:46:17.482Z",
+  "originalInspectionAccepted": false,
+  "bundledInputParityVerified": true,
+  "retainedGeneratedBundleCompared": true,
+  "sdkBinaryMetadataVerified": true,
+  "appRuntimeVerified": false,
+  "remoteApiVerified": false,
+  "physicalDeviceVerified": false,
+  "storeSigned": false,
+  "deployed": false
+}
