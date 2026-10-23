@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "family": "BaroMobile",
+  "source": "public/fonts/PretendardVariable.woff2",
+  "sourceSha256": "9599f12fd42fc0bce1cd50b47a0c022e108d7aa64dd0d1bb0ed44f3282d900b4",
+  "licenseSha256": "85fce85e25260b03777bf10373d3bd9363b9da96d9e0ca86a280dd37ed7667a0",
+  "outputSha256": "3ae12c1281a84901b32d8c5f0e43fd6c4f8a5b7fd4ccbde66cfbe9f07cde05e8",
+  "glyphs": 14757,
+  "codepoints": 14336,
+  "hangul": 11172,
+  "tools": {
+    "fonttools": "4.66.1",
+    "brotli": "1.2.0"
+  }
+}

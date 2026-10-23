@@ -296,3 +296,22 @@ Screen은 Stack의 상단 inset과 별도로 좌우/하단 safe area, 문서 스
 단일 스크롤 소유, 입력 처리·drag 키보드 닫기를 유지한다. 추가 header overlay가 있는
 화면은 keyboardOffset을 전달할 수 있다. 실제 두 OS 키보드·회전/큰 글자·VoiceOver/TalkBack과
 글꼴/브랜드·최종 화면 검토는 RN renderer의 props/이벤트 검사와 구분해 #379에서 추적한다.
+
+
+## 로컬 폰트·브랜드
+
+기존 `public/fonts/PretendardVariable.woff2`와 OFL, `public/brand/logo.svg`는 정본으로 읽기만
+한다. 모바일 [폰트](./assets/fonts/README.md)와 [브랜드](./assets/brand/README.md) 산출물을
+생성하고 `mobile:assets:check`에서 source/output hash·TTF 이름/굵기/한글·OFL·PNG 형식/
+크기를 검사한다. fonttools의 별도 `--check`는 실제 재생성 결과와 전체 byte를 비교한다.
+
+native font family는 BaroMobile이며 원본 cmap/굵기 축·named instance를 유지한다. 원래
+copyright/OFL은 복사본과 TTF license metadata에 보존한다. 설치된 expo-font58의 config
+plugin으로 앱에 포함하고 Text/TextField·Stack header에 사용한다. 웹/CDN 요청이나 폰트
+비동기 대기 gate는 추가하지 않는다. 로고는 원본에서 만든 density PNG와 opaque app icon을
+사용하고 접근 가능한 BARO 이름 옆 장식 이미지로만 출력한다. 설정 변경 뒤 개발 앱을 새로
+빌드해야 하며 Expo Go/기존 설치의 성공으로 대신하지 않는다.
+
+`mobile:native`는 실제 compiled APK/app에서 TTF byte와 license를 대조하고 Android400/600/700
+선언·iOS UIAppFonts를 확인해 receipt에 `compiled-resource-only`, `appRuntimeVerified:false`를
+남긴다. 이는 실제 기기 폰트·큰 글자·스크린리더나 API/OAuth 성공의 증거가 아니다.

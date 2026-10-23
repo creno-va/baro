@@ -1,4 +1,5 @@
 import { designTokens } from "@baro/design-tokens";
+import { BARO_FONT_FAMILY } from "./font";
 
 // Press feedback changes the surface, never the opacity of readable labels.
 function darken(hex: string) {
@@ -22,7 +23,7 @@ export const tokens = {
   radius: { control: 12, card: designTokens.radius.card },
   control: { minimumSize: Math.max(48, designTokens.control.minimumSize) },
   type: {
-    body: { fontSize: 16, lineHeight: 26 },
+    body: { fontFamily: BARO_FONT_FAMILY, fontSize: 16, lineHeight: 26 },
     title: { fontSize: 28, lineHeight: 38 },
     heading: { fontSize: 20, lineHeight: 30 },
   },

@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "source": "public/brand/logo.svg",
+  "sourceSha256": "62a9350c6538fd572dfae9a6dcd2b0d981291ec602d4b1b31be6cf080055aef0",
+  "sharp": "0.35.5",
+  "outputs": {
+    "logo.png": {
+      "width": 64,
+      "height": 64,
+      "sha256": "5babf408fd2d15c3f7ee63c24e69de17aa2fac530c5e7eb38a692b00e2aeda98"
+    },
+    "logo@2x.png": {
+      "width": 128,
+      "height": 128,
+      "sha256": "dec03da799936df07f22c7de273bacd5a41da424f97f8a4d1b010fbfe5de9191"
+    },
+    "logo@3x.png": {
+      "width": 192,
+      "height": 192,
+      "sha256": "bbdfcf88444ef75b5741d7f942a22bd709158836e9f26afcd2a61cf348ff2072"
+    },
+    "icon.png": {
+      "width": 1024,
+      "height": 1024,
+      "sha256": "79a3c42ebd0582ec666ab7fccf7f4b7314abc6d79a30f72302a849d043349277"
+    }
+  }
+}
