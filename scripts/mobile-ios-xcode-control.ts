@@ -5,6 +5,86 @@ import { z } from "zod";
 import { simulatorIdentity } from "./mobile-ios-simulator-signing";
 import { simulatorSignature, verifyPreviewArtifact } from "./mobile-preview-artifact";
 
+export function xcodeControlBuildFailure(error: unknown, detail = "") {
+  const message = error instanceof Error ? error.message : "";
+  const known = new Set([
+    "XCODE_CONTROL_GENERATED_CAPABILITIES_CHANGED",
+    "XCODE_CONTROL_REGULAR_GENERATED_FILE_REQUIRED",
+    "XCODE_CONTROL_ENTITLEMENTS_MISMATCH",
+    "XCODE_CONTROL_METADATA_TOOL_FAILED",
+    "XCODE_CONTROL_APP_AMBIGUOUS",
+    "XCODE_CONTROL_ADHOC_REQUIRED",
+    "XCODE_CONTROL_SIMULATOR_ARCH_REQUIRED",
+    "XCODE_CONTROL_ARCH_ENTITLEMENTS_DIFFER",
+    "XCODE_CONTROL_CHECKOUT_MISMATCH",
+    "XCODE_CONTROL_FRESH_OUTPUT_REQUIRED",
+    "COMPILED_FONT_BYTES_OR_LICENSE_CHANGED",
+    "COMPILED_FONT_READ_FAILED",
+    "IOS_FONT_DECLARATION_MISSING",
+    "IOS_COMPILED_APP_MISSING",
+    "XCODE_CONTROL_TEAM_REQUIRED",
+    "XCODE_CONTROL_PROFILE_REQUIRED",
+    "XCODE_CONTROL_IDENTITY_REQUIRED",
+    "XCODE_CONTROL_LINK_FAILED",
+    "XCODE_CONTROL_SCRIPT_FAILED",
+    "XCODE_CONTROL_COMPILE_FAILED",
+    "XCODE_CONTROL_SIGN_FAILED",
+    "IOS_SIMULATOR_IDENTITY_REQUIRED",
+    "PREVIEW_SIMULATOR_DISTRIBUTION_IDENTITY_UNEXPECTED",
+  ]);
+  if (known.has(message)) return message;
+  for (const [code, pattern] of [
+    ["XCODE_CONTROL_TEAM_REQUIRED", /requires a development team/i],
+    ["XCODE_CONTROL_PROFILE_REQUIRED", /error:.*provisioning profile/i],
+    ["XCODE_CONTROL_IDENTITY_REQUIRED", /error:.*signing certificate|No signing certificate/i],
+    [
+      "XCODE_CONTROL_LINK_FAILED",
+      /Undefined symbols for architecture|ld:.*(?:error|not found)|linker command failed/i,
+    ],
+    [
+      "XCODE_CONTROL_SCRIPT_FAILED",
+      /PhaseScriptExecution .* failed|Command PhaseScriptExecution failed/i,
+    ],
+    [
+      "XCODE_CONTROL_COMPILE_FAILED",
+      /error:.*(?:file not found|could not build module|cannot find|no such module)/i,
+    ],
+    ["XCODE_CONTROL_SIGN_FAILED", /Command CodeSign failed|code object is not signed at all/i],
+  ] as const)
+    if (pattern.test(detail)) return code;
+  return "XCODE_CONTROL_BUILD_FAILED";
+}
+/** Only public metadata shape is retained; unknown keys and all entitlement values stay private. */
+export function xcodeEntitlementShape(value: unknown) {
+  const object =
+    value && typeof value === "object" && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : {};
+  const names = [
+    "keychain-access-groups",
+    "application-identifier",
+    "com.apple.application-identifier",
+    "get-task-allow",
+    "com.apple.security.get-task-allow",
+    "com.apple.developer.team-identifier",
+    "com.apple.security.cs.allow-jit",
+    "com.apple.security.cs.debugger",
+  ];
+  const keys = Object.keys(object),
+    groups = object["keychain-access-groups"];
+  return {
+    knownKeys: keys.filter((k) => names.includes(k)).sort(),
+    unknownKeyCount: keys.filter((k) => !names.includes(k)).length,
+    ownKeychainGroupOnly:
+      Array.isArray(groups) && groups.length === 1 && groups[0] === "site.baro.app.preview",
+    keychainGroupCount: Array.isArray(groups) ? groups.length : null,
+    ownApplicationIdentifier: object["application-identifier"] === "site.baro.app.preview",
+    ownAppleApplicationIdentifier:
+      object["com.apple.application-identifier"] === "site.baro.app.preview",
+    strictAccepted: xcodeControlEntitlementsSchema.safeParse(value).success,
+  };
+}
+
 export const xcodeSimulatorControlArguments = [
   "CODE_SIGNING_ALLOWED=YES",
   "CODE_SIGN_IDENTITY=-",
@@ -76,6 +156,61 @@ async function command(args: string[]) {
   }
 }
 const sha256 = (body: Uint8Array) => createHash("sha256").update(body).digest("hex");
+export async function preserveCompiledXcodeControl(root: string, sourceSha: string) {
+  z.string()
+    .regex(/^[a-f0-9]{40}$/)
+    .parse(sourceSha);
+  const products = resolve(root, ".wrangler/mobile-build/ios/Build/Products/Debug-iphonesimulator"),
+    apps = (await readdir(products)).filter((p) => p.endsWith(".app"));
+  if (apps.length !== 1 || !apps[0]) throw new Error("XCODE_CONTROL_APP_AMBIGUOUS");
+  const app = resolve(products, apps[0]),
+    info = simulatorIdentity(
+      JSON.parse(
+        (
+          await command([
+            "/usr/bin/plutil",
+            "-convert",
+            "json",
+            "-o",
+            "-",
+            resolve(app, "Info.plist"),
+          ])
+        ).stdout,
+      ),
+      "site.baro.app.preview",
+    ),
+    base = resolve(root, ".wrangler/ios-xcode-control"),
+    name = `unaccepted-simulator-${sourceSha}.zip`,
+    zip = resolve(base, name);
+  if (await Bun.file(zip).exists()) throw new Error("XCODE_CONTROL_FRESH_OUTPUT_REQUIRED");
+  await command(["/usr/bin/ditto", "-c", "-k", "--sequesterRsrc", "--keepParent", app, zip]);
+  const body = await readFile(zip);
+  await writeFile(
+    resolve(base, "inspection.json"),
+    `${JSON.stringify(
+      {
+        version: 1,
+        kind: "unaccepted-xcode-simulator-output",
+        sourceSha,
+        observedAt: new Date().toISOString(),
+        applicationId: info.CFBundleIdentifier,
+        nativeCompileSucceeded: true,
+        archive: { name, bytes: body.length, sha256: sha256(body) },
+        infoPlistSha256: sha256(await readFile(resolve(app, "Info.plist"))),
+        executableSha256: sha256(await readFile(resolve(app, info.CFBundleExecutable))),
+        accepted: false,
+        signatureAccepted: false,
+        sdkReadinessVerified: false,
+        physicalDeviceVerified: false,
+        storeSigned: false,
+        deployed: false,
+      },
+      null,
+      2,
+    )}\n`,
+    { flag: "wx" },
+  );
+}
 export async function configureGeneratedXcodeControl(ios: string, projectName: string) {
   if (process.platform !== "darwin" || !/^[A-Za-z][A-Za-z0-9_]*$/.test(projectName))
     throw new Error("XCODE_CONTROL_OWNED_SIMULATOR_PROJECT_REQUIRED");
@@ -151,9 +286,15 @@ export async function attestXcodeSimulatorControl(root: string, sourceSha: strin
       app,
     ]);
     await writeFile(file, output.stdout, { flag: "wx" });
-    const parsed = xcodeControlEntitlements(
-      JSON.parse((await command(["/usr/bin/plutil", "-convert", "json", "-o", "-", file])).stdout),
+    const decoded = JSON.parse(
+      (await command(["/usr/bin/plutil", "-convert", "json", "-o", "-", file])).stdout,
     );
+    await writeFile(
+      resolve(root, `.wrangler/ios-xcode-control/entitlement-shape-${arch}.json`),
+      `${JSON.stringify({ sourceSha, architecture: arch, observedAt: new Date().toISOString(), ...xcodeEntitlementShape(decoded) }, null, 2)}\n`,
+      { flag: "wx" },
+    );
+    const parsed = xcodeControlEntitlements(decoded);
     if (entitlements && JSON.stringify(entitlements) !== JSON.stringify(parsed))
       throw new Error("XCODE_CONTROL_ARCH_ENTITLEMENTS_DIFFER");
     entitlements = parsed;

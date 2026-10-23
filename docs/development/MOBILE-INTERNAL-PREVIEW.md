@@ -127,3 +127,10 @@ raw UI hierarchy·emulator 로그·AVD 데이터는 업로드하지 않는다. �
 보존하고 소유 Emulator/guard/AVD를 정리한다. Home smoke가 실패해도 앞선 SDK 검증의
 receipt와 바이너리는 별도 artifact로 보존한다. 실제 Home 실행 전 해당 성공을 표시하지 않으며
 전체 화면/IO·API/OAuth·physical/store·접근성·#339/#71의 인수는 별도다.
+
+PR404/main478a904·CI39956914163 뒤 [실제39957216861](https://github.com/creno-va/baro/actions/runs/39957216861)이
+SUCCESS다. [Home receipt](../quality/mobile-internal-android-2026-10-23/home-478a904.json)의 Android15
+sdk_gphone64_x86_64에서 두 cold launch 모두 제목/첫 카드가 보이고 구성 오류는 없었다.
+실제 PNG174,841bytes/SHA25661135c992afe141c03cf13c1fd324eb9241a659bbfd4ff39aeb1c5b627c4640e을
+직접 확인해 브랜드/한글 Home 표시를 대조했다. Metro 요청0·adb reverse 없음이며 원본 binary
+source dedcd0e의 동일 APK다. 실제 폰·전체 화면/IO/API/OAuth·store 인수는 이 관측에 포함되지 않는다.
