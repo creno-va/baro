@@ -618,3 +618,34 @@ receipt의 installation/runtime/physical/OAuth/store signing/submission/deployme
 [Expo의 local build 안내](https://docs.expo.dev/guides/local-app-overview/)에 따라 실제 기기 실행의
 서명/provisioning 검증은 별도다. 개발자 계정과 기기 모델/OS는 사용자 확인 대기이며 부재로
 단정하지 않는다. 웹 UI·제품/공통 계약·서버와 #334/#346/#339/#71의 전체 인수는 유지한다.
+
+## Android 비로그인 Custom Tab 취소 (#346)
+
+`mobile-internal-android-reverify.yml`의 `smoke=true`/`auth_cancel=true`는 기존 확대·Guide·
+공개 탐색 mode와 함께 실행하지 않는다. 원본171989e APK/compiler/receipt와 tooling source의
+제품 입력 동일성·실제 SDK metadata/HBC/font를 먼저 확인하고 fresh owned Emulator의 두 cold
+Home 실행을 관측한다. 인증 전 Home PNG/receipt는 유지하며 그 뒤 캡처를 비가역 차단한다.
+
+실제 BARO package의 enabled/clickable·고정 exact label·유일하고 viewport 안에 있는 앱 버튼만
+선택해 로그인 화면과 Google/Naver/Kakao를 각각 한 번 연다. raw XML과 activity dump는 메모리에서만
+해석하고 장치 임시 XML은 각 읽기 후 삭제한다. Chrome의 정확한 CustomTabActivity가 foreground인지,
+고정 native `close_button` ImageButton이 유일하고 모든 WebView frame 밖에 있는지 확인한다.
+그 조건을 통과해야 시스템 `KEYCODE_BACK`을 한 번 보내며 Chrome의 페이지 버튼을 누르지 않는다.
+[Android Custom Tabs 안내](https://developer.android.com/develop/ui/views/layout/webapps/overview-of-android-custom-tabs)와
+[Chromium의 native toolbar 구현](https://chromium.googlesource.com/chromium/src/+/7d71422e2724a49c144465b5e0880318f634a99b/chrome/android/java/src/org/chromium/chrome/browser/customtabs/features/toolbar/CustomTabToolbar.java)을
+대조했으며 실제 runner의 browser/package/UI가 다르면 검사 실패로 남긴다.
+
+Chrome 미설치·첫 실행 화면·다른/모호한 foreground와 native control/geometry 부재를 정상 취소로
+대체하지 않는다. browser 첫 실행 약관·계정/비밀번호/코드·제공자 로그인/동의 버튼은 조작하지 않는다.
+시작·취소 뒤 BARO의 익명 gate·오류/동의/로그인 상태 부재와 실제 foreground 복귀, 세 제공자 후
+force-stop/relaunch·Home에서 다시 익명 gate를 확인해야 단일 strict proof를 만든다.
+원본 APK/verification/Home receipt의 전체 hash·tooling/binary source·같은 Emulator identity에 묶는다.
+인증 이후에는 failure 경로를 포함해 screencap/screenrecord/bugreport/logcat을 거절한다.
+adb stdout/stderr·raw XML/dump·URL/state·계정 화면/텍스트를 artifact에 남기지 않고 실패는 고정
+stage/provider와 상태 boolean만 내보낸다. 소유 Emulator와 AVD/cache만 정리한다.
+
+허용 artifact는 인증 전 Home PNG/receipt와 별도 `auth-cancel-ui.json` 또는 고정 `failure.json`이다.
+현재는 구현/합성 준비 단계이며 exact CI/main 뒤 수동 실제 결과 전 성공을 표시하지 않는다.
+Custom Tab 표시/취소는 제공자 설정 수용·계정 로그인·callback/교환·SecureStore pending 삭제의
+직접 계측이 아니다. 실제 계정·두 역할/필수 동의/challenge·cold/warm 인증 복귀·물리 기기/store와
+Apple 공급자 방향 결정·#334/#346/#339/#71은 별도 인수로 남긴다. 웹 UI/앱·서버·공통 계약은 바꾸지 않는다.

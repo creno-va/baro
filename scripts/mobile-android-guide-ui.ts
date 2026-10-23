@@ -4,14 +4,18 @@ import { internalAndroidArtifactSchema } from "./mobile-internal-android-artifac
 export function androidHomeObservationOptions(options: string[]) {
   const largeFont = options.includes("--large-font"),
     publicDirectory = options.includes("--public-directory"),
-    guideUi = options.includes("--guide-ui");
+    guideUi = options.includes("--guide-ui"),
+    authCancel = options.includes("--auth-cancel");
   if (
     new Set(options).size !== options.length ||
-    options.some((o) => !["--large-font", "--public-directory", "--guide-ui"].includes(o)) ||
-    (guideUi && (!largeFont || publicDirectory))
+    options.some(
+      (o) => !["--large-font", "--public-directory", "--guide-ui", "--auth-cancel"].includes(o),
+    ) ||
+    (guideUi && (!largeFont || publicDirectory)) ||
+    (authCancel && (largeFont || publicDirectory || guideUi))
   )
     throw Error("BUNDLED_HOME_MODE_REQUIRED");
-  return { largeFont, publicDirectory, guideUi };
+  return { largeFont, publicDirectory, guideUi, authCancel };
 }
 const digest = z.string().regex(/^[a-f0-9]{64}$/),
   source = z.string().regex(/^[a-f0-9]{40}$/);
