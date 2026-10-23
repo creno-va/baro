@@ -470,3 +470,36 @@ raw hierarchy/element label/xcresult·private runner 로그는 artifact allowlis
 보존하고 앱 문제를 수정한다. 검사 통과도 전체 화면/기능·VoiceOver 실제 조작·Android TalkBack·
 회전/키보드·물리 기기 인수를 대신하지 않는다. [Apple의 검사 범위와 한계](https://developer.apple.com/documentation/accessibility/performing-accessibility-audits-for-your-app)를 따른다.
 실제 OAuth/역할/동의·원격 private 여정·스토어와 #334/#379/#339/#71은 별도다.
+
+### 실제 OS 검사 결과 (2026-10-24 KST)
+
+[PR429](https://github.com/creno-va/baro/pull/429)의 exact head
+`1c1279a6a3250cc2fc7400d7034ab5cb039a215c`는 [CI40019931865](https://github.com/creno-va/baro/actions/runs/40019931865)가 성공했고,
+정상 병합한 main `90a2f58a0d928d35e85c7cc9d094feecff85c8d7`도
+[CI40020277557](https://github.com/creno-va/baro/actions/runs/40020277557)이 성공했다.
+그 정확한 도구 SHA의 [실제40020635912](https://github.com/creno-va/baro/actions/runs/40020635912)는 SUCCESS이며,
+원본 앱 source171989e·compiler40006340014·ZIP24,102,101bytes/hash와 compiler receipt 전체 hash를 재검증했다.
+앱 입력 동일성·양 ABI metadata/HBC/font·SDK signing 재확인은 [별도 metadata 관측](../quality/mobile-internal-ios-2026-10-23/verification-90a2f58.json)에 보존한다.
+Simulator 앱은 여전히 No-Team/ad-hoc 원본이고 앱 재컴파일·재서명이나 배포는 없었다.
+
+- iPhone16/iOS26.5의 익명 fresh Simulator에서 [기본 두 cold launch](../quality/mobile-internal-ios-2026-10-23/home-90a2f58.json)는73/19초·각 PID3표본,
+  [최대 글자 크기](../quality/mobile-internal-ios-2026-10-23/large-font-90a2f58.json)는 category 설정/readback·재시작/재readback·20초/PID3표본이었다.
+- [일반 XCTest 조작](../quality/mobile-internal-ios-2026-10-23/home-ui-90a2f58.json)은 Home4/Guide6 scroll·완전히 hittable한 버튼 tap·현재 기능 설명·Home 복귀를 확인했다.
+  OS 감사의 화면 변경 영향과 분리된 별도 테스트다. Metro 시작/요청은0이었다.
+- [OS audit 원본](../quality/mobile-internal-ios-2026-10-23/accessibility-90a2f58.json)은2026-10-23T20:46:30.395Z 관측이다.
+  최대 category 전후 readback과 같은 runner/device identity를 일반 UI proof에 묶고,
+  Home 초기/행동·Guide 초기/행동의 네 viewport에서 대비·Dynamic Type·요소 탐지·조작 영역·설명·잘림·traits를 요청했다.
+  네 결과 모두 completed=true·보고 issue0/findings=[]이며 전체 합계0·auditPassed=true다.
+  raw hierarchy/xcresult는 내보내지 않았고 알려지지 않은 issue를 버리는 필터는 없다.
+- Swift driver hash는`82e4d0b2150a2b964bd05ccc6179a5980db0b5f454d526938bd9dc2f93c81ffb`,
+  generator는`c40739496c11c52dbb15844b1f4143fdb5112be4e43bebea2e8a6b8074473a18`/xcodeproj1.28.1이다.
+  감사 JSON의 원본 hash는`1939a3cf309c8ec36c04cf08da5220fd60bbf9a926e8f83d57d0342ddbe6e6f2`다.
+- [Home/확대 PNG 실물 대조](../quality/mobile-internal-ios-2026-10-23/visual-home-large-90a2f58.json)는 별도 관측이다.
+  정상 Home/한글 카드와 확대·줄바꿈을 보았고 두 파일 전체 byte/hash를 대조했다.
+  최대 크기의 제목이 초기 viewport를 크게 차지하는 사실과 Guide pixel 미대조를 보존한다.
+
+자동 검사는 이 네 viewport의 보고 결과만 인수한다. 중간 scroll 위치나 모든 화면을 검사했다고
+추정하지 않으며 이 결과로 전체 접근성/VoiceOver 실제 조작을 완료 처리하지 않는다.
+Android TalkBack·키보드/회전·물리 기기·모든 역할/상태·실제 OAuth/private API와
+store/#334/#379/#339/#71은 OPEN이다. 원본 metadata/기본/확대 proof의 포괄적인
+`accessibilityVerified=false`를 바꾸지 않고 OS 감사의 좁은 결과를 별도로 보존한다.
