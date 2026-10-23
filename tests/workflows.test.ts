@@ -38,6 +38,7 @@ test("all workflow actions use immutable commits and valid YAML", async () => {
   for (const file of [
     "ci.yml",
     "mobile-native.yml",
+    "mobile-internal-android.yml",
     "mobile-runtime.yml",
     "mobile-ios-keychain-host.yml",
     "full-validation.yml",

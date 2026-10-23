@@ -87,14 +87,14 @@ export function verifyPreviewArtifact(
     throw new Error("PREVIEW_ARTIFACT_IDENTITY_MISMATCH");
   return receipt;
 }
-export function parseAndroidBadging(value: string) {
+export function parseAndroidPackage(value: string) {
   const pkg = value.match(
     /^package:\s+name='([^']+)' versionCode='([^']+)' versionName='([^']+)'/m,
   );
   const minimumOS = value.match(/^sdkVersion:'([0-9]+)'/m)?.[1];
   const architecture = value.match(/^native-code:\s*(.+)$/m)?.[1] ?? "";
   const architectures = [...architecture.matchAll(/'([^']+)'/g)].map((match) => match[1]);
-  if (!pkg || !minimumOS || !value.includes("application-debuggable") || !architectures.length)
+  if (!pkg || !minimumOS || !architectures.length)
     throw new Error("PREVIEW_ANDROID_METADATA_MISSING");
   return {
     applicationId: pkg[1],
@@ -102,7 +102,13 @@ export function parseAndroidBadging(value: string) {
     versionName: pkg[3],
     minimumOS,
     architectures,
+    debuggable: value.includes("application-debuggable"),
   };
+}
+export function parseAndroidBadging(value: string) {
+  const { debuggable, ...metadata } = parseAndroidPackage(value);
+  if (!debuggable) throw new Error("PREVIEW_ANDROID_METADATA_MISSING");
+  return metadata;
 }
 export function simulatorSignature(exitCode: number, report: string): "none" | "ad-hoc" {
   if (exitCode !== 0 && report.includes("code object is not signed at all")) return "none";

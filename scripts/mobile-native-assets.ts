@@ -10,7 +10,13 @@ async function bytesFrom(command: string[]) {
   return bytes;
 }
 /** Compiled resources only: does not claim an RN/device/font-rendering session. */
-export async function verifyCompiledMobileFont(platform: "android" | "ios", root: string) {
+export async function verifyCompiledMobileFont(
+  platform: "android" | "ios",
+  root: string,
+  configuration: "Debug" | "Release" = "Debug",
+) {
+  if (configuration !== "Debug" && configuration !== "Release")
+    throw new Error("COMPILED_FONT_CONFIGURATION_REQUIRED");
   const mobile = resolve(root, "apps/mobile"),
     source = await readFile(resolve(mobile, "assets/fonts/BaroMobile.ttf"));
   const inspected = inspectMobileFont(source),
@@ -30,13 +36,16 @@ export async function verifyCompiledMobileFont(platform: "android" | "ios", root
     compiled = await bytesFrom([
       "unzip",
       "-p",
-      resolve(mobile, "android/app/build/outputs/apk/debug/app-debug.apk"),
+      resolve(
+        mobile,
+        `android/app/build/outputs/apk/${configuration.toLowerCase()}/app-${configuration.toLowerCase()}.apk`,
+      ),
       "res/font/baro_mobile.ttf",
     ]);
   } else {
     const products = resolve(
         root,
-        ".wrangler/mobile-build/ios/Build/Products/Debug-iphonesimulator",
+        `.wrangler/mobile-build/ios/Build/Products/${configuration}-iphonesimulator`,
       ),
       apps = (await readdir(products)).filter((name) => name.endsWith(".app"));
     if (apps.length !== 1 || !apps[0]) throw new Error("IOS_COMPILED_APP_MISSING");
