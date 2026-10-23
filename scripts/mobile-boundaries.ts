@@ -93,12 +93,17 @@ export function mobileBoundaryFindings(path: string, source: string): string[] {
       const parent = node.parent;
       const expression = parent?.parent;
       const allowed =
-        path === "apps/mobile/src/composition/config.ts" &&
         ts.isPropertyAccessExpression(parent) &&
         ts.isPropertyAccessExpression(expression) &&
-        ["process.env.EXPO_PUBLIC_APP_ENV", "process.env.EXPO_PUBLIC_API_URL"].includes(
-          expression.getText(file),
-        );
+        ((path === "apps/mobile/src/composition/config.ts" &&
+          ["process.env.EXPO_PUBLIC_APP_ENV", "process.env.EXPO_PUBLIC_API_URL"].includes(
+            expression.getText(file),
+          )) ||
+          (path === "apps/mobile/runtime-probe/run.ts" &&
+            [
+              "process.env.EXPO_PUBLIC_NATIVE_PROBE_SOURCE_SHA",
+              "process.env.EXPO_PUBLIC_NATIVE_PROBE_NONCE",
+            ].includes(expression.getText(file))));
       if (!allowed) findings.push("Node process outside Expo public config replacement");
     }
     ts.forEachChild(node, visit);

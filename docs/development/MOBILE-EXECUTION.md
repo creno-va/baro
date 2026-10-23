@@ -531,6 +531,26 @@ workspace·자료·리포트·나머지 domain을 순차 추출한다. 첫 단�
 
 ## 참고
 
+### M8 로컬 실행 증거의 범위 (#385)
+
+PR384 main77ecb45/CI39900023599 SUCCESS 뒤 실제 RN→native module→SDK 파일/credential IO의
+검증 공백을 잇는다. `mobile-runtime.yml`은 immutable main SHA·별도 임시 worktree·새 소유
+Android Emulator/iOS Simulator에서 local 개발 앱을 빌드한다. 제품 home에는 임시 layout
+계측만 추가하고 원본/overlay hash와 스크린샷을 남긴다. 후속 native probe는 임시 manifest의
+별도 entry에서 실행하며 정본 router·웹 소유 파일·server/schema를 바꾸지 않는다.
+
+실제 SDK private source snapshot/hash/readback·SecureStore·native 100MB PUT/1GB download·
+401/Origin fence·owner 변경·source clear 취소/cleanup과 미확정 key 보존을 합성 loopback에서
+대조한다. fixture는 native로 받은 전체 byte/hash를 별도로 검증하며 receipt는 다른 SHA/OS,
+누락된 IO/cleanup·확장된 인수 주장을 거부한다. 메모리는 process RSS의 관측 표본이며 전체 peak/
+JS heap 한도 증명이 아니다. raw runtime 로그/개인 자료/토큰을 artifact에 올리지 않는다.
+
+이 절차의 구현/offline 성공과 실제 OS 실행 결과는 구분한다. native compile/font receipt는
+compiled-resource-only이고, 계측된 home mount도 전체 제품 사용자 여정 인수가 아니다.
+실제 OAuth/원격 API·기기 DocumentPicker/공유/열기·물리 기기/접근성·내부 preview 전달·스토어 및
+#339/#71의 기존 조건은 OPEN으로 유지한다. 실제 workflow 성공/receipt 실물을 확인한 SHA만
+후속 issue 기록에 추가하며 실패 원인/조건 변경 없이 같은 외부 실행을 반복하지 않는다.
+
 - [Expo workspace 구성](https://docs.expo.dev/guides/monorepos/)
 - [Expo 개발 빌드](https://docs.expo.dev/develop/development-builds/introduction/)
 - [Better Auth Expo 연동](https://better-auth.com/docs/integrations/expo)

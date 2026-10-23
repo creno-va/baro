@@ -91,6 +91,37 @@ const signal = () => new AbortController().signal;
 const create = () =>
   createExpoUploadSources({ namespace: "baro_preview_uploads", newId: () => id });
 
+test("explicit picker port keeps private cache validation and does not call the default picker", async () => {
+  const picker = jest.fn(async () => ({
+    canceled: false as const,
+    assets: [{ ...asset, lastModified: 0 }],
+  }));
+  const sources = createExpoUploadSources({
+    namespace: "baro_preview_uploads",
+    newId: () => id,
+    pick: picker,
+  });
+  const selected = await sources.select(signal());
+  expect(selected).toEqual({ name: asset.name, type: asset.mimeType, size: 3 });
+  expect(mockPick).not.toHaveBeenCalled();
+  expect(picker).toHaveBeenCalledWith({
+    copyToCacheDirectory: true,
+    multiple: false,
+    type: "*/*",
+    base64: false,
+  });
+  await sources.clear();
+  const invalid = createExpoUploadSources({
+    namespace: "baro_preview_uploads",
+    newId: () => id,
+    pick: async () => ({
+      canceled: false,
+      assets: [{ ...asset, lastModified: 0, uri: "file:///outside/fixture.txt" }],
+    }),
+  });
+  await expect(invalid.select(signal())).rejects.toMatchObject({ code: "UNAVAILABLE" });
+});
+
 test("native source leases expose only generated filenames and clear waits for a concurrently retiring source", async () => {
   const sources = create(),
     source = await sources.select(signal());
