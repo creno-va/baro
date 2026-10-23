@@ -1,6 +1,8 @@
+import { createHash as mockCreateHash } from "node:crypto";
 import { ReadableStream as NodeStream } from "node:stream/web";
 import { TextDecoder as MockTextDecoder } from "node:util";
 import { createExpoDownloads } from "../src/platform/files/expo-download";
+import { clearNativeTransferOrphans } from "../src/platform/files/native-cache";
 
 const mockData = new Map<string, Uint8Array>(),
   mockDirectories = new Set<string>();
@@ -9,7 +11,12 @@ const mockAvailable = jest.fn(),
   mockCanPreview = jest.fn(),
   mockPreview = jest.fn();
 let mockOpenFailure = false,
-  mockDeleteFailure = false;
+  mockDeleteFailure = false,
+  mockDigestFailure = false,
+  mockOpenCount = 0,
+  mockDigestCount = 0;
+let mockDigestDelay: Promise<void> | undefined;
+let mockMoveDelay: Promise<void> | undefined;
 const path = (...parts: unknown[]) =>
   parts
     .map((part) => (typeof part === "object" && part !== null && "uri" in part ? part.uri : part))
@@ -32,6 +39,11 @@ jest.mock("expo-file-system", () => ({
     create() {
       mockDirectories.add(this.uri);
     }
+    list() {
+      return [...mockData.keys()]
+        .filter((key) => key.startsWith(`${this.uri}/`))
+        .map((key) => new (jest.requireMock("expo-file-system").File)(key));
+    }
     delete() {
       if (mockDeleteFailure) throw new Error("SYNTHETIC_PRIVATE_DELETE");
       mockDirectories.delete(this.uri);
@@ -46,6 +58,26 @@ jest.mock("expo-file-system", () => ({
     get exists() {
       return mockData.has(this.uri);
     }
+    get name() {
+      return this.uri.split("/").at(-1) ?? "";
+    }
+    async move(destination: { uri: string }) {
+      await mockMoveDelay;
+      const value = mockData.get(this.uri);
+      if (!value || mockData.has(destination.uri)) throw new Error("SYNTHETIC_MOVE_FAILED");
+      mockData.set(destination.uri, value);
+      mockData.delete(this.uri);
+      this.uri = destination.uri;
+    }
+    async digest(algorithm: string) {
+      mockDigestCount++;
+      await mockDigestDelay;
+      if (mockDigestFailure) throw new Error("SYNTHETIC_PRIVATE_DIGEST_FAILED");
+      expect(algorithm).toBe("SHA-256");
+      return mockCreateHash("sha256")
+        .update(mockData.get(this.uri) ?? new Uint8Array())
+        .digest("hex");
+    }
     get size() {
       return mockData.get(this.uri)?.byteLength ?? 0;
     }
@@ -58,6 +90,7 @@ jest.mock("expo-file-system", () => ({
       mockData.delete(this.uri);
     }
     open(mode: string) {
+      mockOpenCount++;
       if (mockOpenFailure) throw new Error("SYNTHETIC_PRIVATE_PERMISSION");
       const name = this.uri;
       return {
@@ -120,6 +153,11 @@ beforeEach(() => {
   mockDirectories.clear();
   mockOpenFailure = false;
   mockDeleteFailure = false;
+  mockDigestFailure = false;
+  mockDigestDelay = undefined;
+  mockMoveDelay = undefined;
+  mockOpenCount = 0;
+  mockDigestCount = 0;
   mockAvailable.mockReset().mockResolvedValue(true);
   mockCanPreview.mockReset().mockResolvedValue(true);
   mockShare.mockReset().mockResolvedValue(undefined);
@@ -209,7 +247,112 @@ test("an unavailable preview remains actionable and a failed native open retains
   });
   expect(mockData.size).toBe(1);
   mockOpenFailure = false;
-  mockDeleteFailure = false;
+  (mockDeleteFailure = false),
+    (mockDigestFailure = false),
+    (mockOpenCount = 0),
+    (mockDigestCount = 0);
+  let mockDigestDelay: Promise<void> | undefined;
+  let mockMoveDelay: Promise<void> | undefined;
   await cache.clear();
   expect(mockData.size).toBe(0);
+});
+
+const nativeId = "59d91bc4-f715-4205-bc78-60995cb26de4",
+  nativeRoot = "file:///app/cache/baro_native_transfers";
+const seedNative = () => {
+  const value = new Uint8Array([37, 80, 68, 70, 45]);
+  mockDirectories.add(nativeRoot);
+  mockData.set(`${nativeRoot}/${nativeId}.bin`, value);
+  return {
+    fileId: nativeId,
+    size: value.length,
+    sha256: mockCreateHash("sha256").update(value).digest("hex"),
+    mimeType: "application/pdf",
+    disposition: "attachment; filename*=UTF-8''..%2Fsecret.pdf",
+  };
+};
+test("Expo adoption moves an opaque native file and separately hashes on disk without reading bytes into JS", async () => {
+  const value = seedNative(),
+    cache = create();
+  const artifact = await cache.adopt(value, new AbortController().signal, 1000000000);
+  expect(mockData.has(`${nativeRoot}/${nativeId}.bin`)).toBe(false);
+  expect(mockData.has(`${root}/${id}.pdf`)).toBe(true);
+  expect(mockDigestCount).toBe(1);
+  expect(mockOpenCount).toBe(0);
+  expect(Object.keys(artifact.value).sort()).toEqual(["mimeType", "sha256", "size"]);
+  expect(await artifact.read(0, 5)).toEqual(new Uint8Array([37, 80, 68, 70, 45]));
+  await artifact.discard();
+  expect(mockData.size).toBe(0);
+});
+test("corrupt metadata or unavailable SDK digest cannot fall back to full JS reads and adopted targets are removed", async () => {
+  const value = seedNative(),
+    cache = create();
+  await expect(
+    cache.adopt({ ...value, sha256: "f".repeat(64) }, new AbortController().signal, 1000),
+  ).rejects.toMatchObject({ code: "UNAVAILABLE" });
+  expect(mockData.size).toBe(0);
+  expect(mockOpenCount).toBe(0);
+  seedNative();
+  mockDigestFailure = true;
+  await expect(cache.adopt(value, new AbortController().signal, 1000)).rejects.toMatchObject({
+    code: "UNAVAILABLE",
+  });
+  expect(mockData.size).toBe(0);
+  expect(mockOpenCount).toBe(0);
+});
+test("cache clear waits for native digest completion and cannot publish a file verified after abort", async () => {
+  let release!: () => void;
+  mockDigestDelay = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const value = seedNative(),
+    cache = create(),
+    pending = cache
+      .adopt(value, new AbortController().signal, 1000)
+      .catch((error: unknown) => error);
+  for (let i = 0; i < 40 && !mockDigestCount; i++) await Promise.resolve();
+  expect(mockDigestCount).toBe(1);
+  let done = false;
+  const clearing = cache.clear().then(() => {
+    done = true;
+  });
+  await Promise.resolve();
+  expect(done).toBe(false);
+  expect(mockData.has(`${root}/${id}.pdf`)).toBe(true);
+  release();
+  await clearing;
+  expect(await pending).toBeInstanceOf(Error);
+  expect(mockData.size).toBe(0);
+});
+test("missing-module startup cleanup removes recognized native orphans and preserves unexpected/unrelated files", () => {
+  seedNative();
+  mockData.set("file:///app/cache/unrelated", new Uint8Array([1]));
+  clearNativeTransferOrphans();
+  expect(mockData.has(`${nativeRoot}/${nativeId}.bin`)).toBe(false);
+  expect(mockData.has("file:///app/cache/unrelated")).toBe(true);
+  mockData.set(`${nativeRoot}/unexpected`, new Uint8Array([1]));
+  expect(() => clearNativeTransferOrphans()).toThrow();
+  expect(mockData.has(`${nativeRoot}/unexpected`)).toBe(true);
+});
+
+test("concurrent adoption cannot reserve the same destination or delete the other transfer's owned target", async () => {
+  const first = seedNative(),
+    secondId = "5c0dba77-178e-44b4-a3a8-bcb3526f83cb";
+  mockData.set(`${nativeRoot}/${secondId}.bin`, new Uint8Array([37, 80, 68, 70, 45]));
+  let finish!: () => void;
+  mockMoveDelay = new Promise<void>((resolve) => {
+    finish = resolve;
+  });
+  const cache = create(),
+    pending = cache.adopt(first, new AbortController().signal, 1000);
+  for (let i = 0; i < 10; i++) await Promise.resolve();
+  await expect(
+    cache.adopt({ ...first, fileId: secondId }, new AbortController().signal, 1000),
+  ).rejects.toMatchObject({ code: "UNAVAILABLE" });
+  finish();
+  const artifact = await pending;
+  expect(mockData.has(`${root}/${id}.pdf`)).toBe(true);
+  expect(await artifact.read(0, 5)).toEqual(new Uint8Array([37, 80, 68, 70, 45]));
+  await artifact.discard();
+  expect(mockData.has(`${nativeRoot}/${secondId}.bin`)).toBe(true);
 });

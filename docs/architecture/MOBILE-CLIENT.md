@@ -276,14 +276,14 @@ PDF는 서버가 생성한 검증된 결과를 내려받아 열기/공유한다.
 두고 취소·만료·계정 전환·다음 시작 시 정리한다. 사용자 요청으로 외부 앱에 전달된 복사본은
 서버 삭제로 회수된다고 표시하지 않는다. 앱이 임의로 공개 URL을 발급하지 않는다.
 
-`createNativeFiles`는 실제 `expo/fetch`와 sealed cookie writer를 공유한다. 네이티브 SDK의
-redirect:error·credentials:omit을 사용하고 모든 요청/응답을 owner hint·generation으로
-검사한다. 원본 response body는 private 무작위 파일에 최대256KiB write로 순차 기록하며
-전체 binary arrayBuffer/blob/base64 변환을 하지 않는다. 전송 압축은 decoded byte 수로
-상한을 적용하고 길이/디스크 크기와 네트워크/디스크 재읽기의 증분 SHA256을 대조한다.
-URI는 adapter에만 두고
-opaque handle의 명시적 preview/share 직전에도 owner를 재검사한다. SDK의 native buffer·
-실제 기기 메모리는 이 JS write 상한으로 증명되지 않으므로 별도 인수한다.
+`createNativeFiles`의 JSON/업로드 part는 기존 `expo/fetch`·sealed cookie writer를 유지한다.
+원본과 PDF/HTML/ZIP download는 captured frame·Origin/owner/generation·epoch와 native
+HTTP→disk lease를 사용해 성공 body/bytes를 JS HTTP queue에 넣지 않는다. async move 뒤
+크기와 고정 SDK의 별도 native SHA256(read64KiB)으로 readback을 확인한다. 보고서 signature와
+최대30MB HTML marker는 private artifact에서 검증한다. 원본 metadata에 해시가 있으면 그
+해시도 대조한다. 큰 binary arrayBuffer/blob/base64 변환·SDK byte fallback을 만들지 않는다.
+URI는 adapter에만 두고 opaque handle의 명시적 preview/share 직전 owner를 재검사한다.
+native 코어/compile·SDK source/합성 port 증거와 실제 두 OS 앱 IPC/메모리 인수는 구분한다.
 
 startup·로그아웃/계정/역할/동의 변경·화면 이탈에서는 source/download cache를 폐기하고
 진행 중 IO/preview가 끝난 뒤 파일을 삭제한다. background checking은 개인 화면만 숨기고,
@@ -409,7 +409,8 @@ revision만 본문에 보낸다. 사건 진술·token은 URL에 넣지 않는다
 고정 SDK58 fetch는 native byte event를 JS ReadableStream에 enqueue하며 consumer/disk의
 수요를 native pump에 전달하지 않는다. 256KiB write 단위와 upload part 프로브는 다운로드
 네트워크 큐의 메모리 상한 증거가 아니다. 지원하는 1GB 원본/대용량 ZIP을 유지하며
-`apps/mobile/modules/baro-private-download`의 native producer를 먼저 검증한다.
+`apps/mobile/modules/baro-private-download` producer의 exact 두 OS compile을 PR370에서
+검증/main 통합한 뒤 공통 원본 포트 PR374와 함께 composition에서 소비한다.
 
 Android는 기존 RN OkHttp의 쿠키/인증 저장·리다이렉트·자동 재전송·cache를 해제하고 64KiB
 copy/hash로 private 파일을 쓴다. Apple은 ephemeral URLSession download task의 OS 파일을
@@ -426,7 +427,10 @@ native HTTP-to-disk로 전달한다. 생략한 웹 경로는 기존 GET/응답 a
 포트는 자체 서버 권한·bytes 검증과 abort retirement를 소유하며 기존 scope fence도 보존한다.
 소비자는 captured credential frame/owner/generation으로 응답 cookie를 처리하고, 빌린 native
 파일을 owned cache로 이동·독립 readback 검증·abort retirement에 연결한 뒤 반환해야 한다.
-기존 원본/리포트 소비 경로 교체는 producer의 exact-head 두 OS compile/main 통합 후 진행한다.
+원본/리포트 소비자는 async move와 별도 SDK native SHA256 readback을 기다리며, clear도 그 IO
+종료 뒤 unlink한다. 없음/불일치·취소·새 epoch/계정은 handle을 공개하지 않는다. startup은
+등록된 native IO를 먼저 drain하고, 모듈이 없으면 인지한 orphan만 정리한 뒤 다운로드에
+최신 개발 앱을 요구한다. 미해결 서버 key/hold는 건드리지 않는다.
 standalone macOS 코어 RSS와 128MiB JVM heap proof는 실제 iOS/Android 앱 기기 인수가 아니다.
 
 ### M6 native 계정 삭제의 미확정 요청

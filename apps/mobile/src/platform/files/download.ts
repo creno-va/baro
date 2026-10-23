@@ -12,6 +12,8 @@ export interface DownloadDiskFile {
   size(): number;
   write(bytes: Uint8Array): Promise<void>;
   finish(): void;
+  /** Separate native streaming readback; only the digest crosses JS. */
+  fingerprint?(): Promise<string>;
   open(): NativeReadHandle;
   text(): Promise<string>;
   remove(): void;
@@ -32,6 +34,7 @@ export function createPrivateDownloads(disk: {
   initialize(): void;
   cleanup?(): void;
   create(mimeType: string, disposition: string): DownloadDiskFile;
+  adopt?(fileId: string, mimeType: string, disposition: string): Promise<DownloadDiskFile>;
 }) {
   const files = new Map<PrivateDownload, DownloadDiskFile>(),
     cleanup = new Set<DownloadDiskFile>();
@@ -86,7 +89,75 @@ export function createPrivateDownloads(disk: {
       if (!set.size) activities.delete(file);
     });
   };
+  function publishArtifact(
+    file: DownloadDiskFile,
+    size: number,
+    mimeType: string,
+    digest: string,
+    combined: AbortSignal,
+  ): ReportArtifact<PrivateDownload> {
+    const value: PrivateDownload = Object.freeze({
+      size,
+      mimeType,
+      sha256: digest,
+    });
+    files.set(value, file);
+    const retire = () => {
+      void discard(value).catch(() => {});
+    };
+    combined.addEventListener("abort", retire, { once: true });
+    retireHooks.set(value, () => combined.removeEventListener("abort", retire));
+    const owned = () => {
+      const current = files.get(value);
+      if (!current || current.size() !== size) throw failed();
+      return current;
+    };
+    return {
+      value,
+      size,
+      mimeType,
+      read: (start: number, end: number) =>
+        activity(value, async () => {
+          if (
+            !Number.isSafeInteger(start) ||
+            !Number.isSafeInteger(end) ||
+            start < 0 ||
+            end < start ||
+            end > size ||
+            end - start > NATIVE_READ_BYTES
+          )
+            throw failed();
+          const handle = owned().open();
+          try {
+            if (handle.size !== size) throw failed();
+            handle.offset = start;
+            const bytes = await handle.readBytes(end - start);
+            owned();
+            if (bytes.byteLength !== end - start || handle.size !== size) throw failed();
+            return bytes;
+          } finally {
+            handle.close();
+          }
+        }),
+      text: () =>
+        activity(value, async () => {
+          if (size > 30_000_000) throw failed();
+          const text = await owned().text();
+          owned();
+          return text;
+        }),
+      discard: () => safe(() => discard(value)),
+    };
+  }
   async function fingerprint(file: DownloadDiskFile, size: number, ensure: () => void) {
+    ensure();
+    if (file.size() !== size) throw failed();
+    if (file.fingerprint) {
+      const digest = await file.fingerprint();
+      ensure();
+      if (file.size() !== size || !/^[a-f0-9]{64}$/.test(digest)) throw failed();
+      return digest;
+    }
     const handle = file.open(),
       hash = sha256.create();
     try {
@@ -114,6 +185,94 @@ export function createPrivateDownloads(disk: {
     }
   }
   return {
+    async adopt(
+      input: {
+        fileId: string;
+        size: number;
+        sha256: string;
+        mimeType: string;
+        disposition: string;
+      },
+      signal: AbortSignal,
+      maximum: number,
+    ): Promise<ReportArtifact<PrivateDownload>> {
+      input = { ...input };
+      const captured = generation,
+        abort = new AbortController(),
+        combined = AbortSignal.any([signal, abort.signal]);
+      const ensure = () => {
+        combined.throwIfAborted();
+        if (captured !== generation) throw failed();
+      };
+      const task = Promise.resolve().then(() =>
+        safe(async () => {
+          let file: DownloadDiskFile | undefined,
+            accepted = false;
+          try {
+            ensure();
+            if (
+              !disk.adopt ||
+              !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(
+                input.fileId,
+              ) ||
+              !Number.isSafeInteger(maximum) ||
+              maximum <= 0 ||
+              !Number.isSafeInteger(input.size) ||
+              input.size <= 0 ||
+              input.size > maximum ||
+              !/^[a-f0-9]{64}$/.test(input.sha256) ||
+              !/^[a-z0-9.+-]+\/[a-z0-9.+-]+$/.test(input.mimeType)
+            )
+              throw failed();
+            initialize();
+            clean();
+            file = await disk.adopt(input.fileId, input.mimeType, input.disposition);
+            ensure();
+            file.finish();
+            if ((await fingerprint(file, input.size, ensure)) !== input.sha256) throw failed();
+            ensure();
+            const artifact = publishArtifact(
+              file,
+              input.size,
+              input.mimeType,
+              input.sha256,
+              combined,
+            );
+            accepted = true;
+            return artifact;
+          } finally {
+            if (file && !accepted) {
+              try {
+                file.finish();
+              } catch {}
+              cleanup.add(file);
+              try {
+                clean();
+              } catch {
+                /* Keep failed cleanup for the next explicit reset. */
+              }
+            }
+          }
+        }),
+      );
+      const transfer = { abort, done: task };
+      transfers.add(transfer);
+      let artifact: ReportArtifact<PrivateDownload> | undefined;
+      try {
+        artifact = await task;
+        ensure();
+        return artifact;
+      } catch {
+        if (artifact) {
+          try {
+            await discard(artifact.value);
+          } catch {}
+        }
+        throw failed();
+      } finally {
+        transfers.delete(transfer);
+      }
+    },
     async receive(
       response: Response,
       signal: AbortSignal,
@@ -186,59 +345,9 @@ export function createPrivateDownloads(disk: {
           const digest = bytesToHex(hash.digest());
           if ((await fingerprint(file, size, ensure)) !== digest) throw failed();
           ensure();
-          const value: PrivateDownload = Object.freeze({
-            size,
-            mimeType,
-            sha256: digest,
-          });
-          files.set(value, file);
-          const retire = () => {
-            void discard(value).catch(() => {});
-          };
-          combined.addEventListener("abort", retire, { once: true });
-          retireHooks.set(value, () => combined.removeEventListener("abort", retire));
+          const artifact = publishArtifact(file, size, mimeType, digest, combined);
           accepted = true;
-          const owned = () => {
-            const current = files.get(value);
-            if (!current || current.size() !== size) throw failed();
-            return current;
-          };
-          return {
-            value,
-            size,
-            mimeType,
-            read: (start: number, end: number) =>
-              activity(value, async () => {
-                if (
-                  !Number.isSafeInteger(start) ||
-                  !Number.isSafeInteger(end) ||
-                  start < 0 ||
-                  end < start ||
-                  end > size ||
-                  end - start > NATIVE_READ_BYTES
-                )
-                  throw failed();
-                const handle = owned().open();
-                try {
-                  if (handle.size !== size) throw failed();
-                  handle.offset = start;
-                  const bytes = await handle.readBytes(end - start);
-                  owned();
-                  if (bytes.byteLength !== end - start || handle.size !== size) throw failed();
-                  return bytes;
-                } finally {
-                  handle.close();
-                }
-              }),
-            text: () =>
-              activity(value, async () => {
-                if (size > 30_000_000) throw failed();
-                const text = await owned().text();
-                owned();
-                return text;
-              }),
-            discard: () => safe(() => discard(value)),
-          };
+          return artifact;
         } finally {
           combined.removeEventListener("abort", cancel);
           hash.destroy();

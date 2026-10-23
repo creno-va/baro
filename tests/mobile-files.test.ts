@@ -526,3 +526,17 @@ test("a conflicted review receipt is not a save ACK and editing another row cann
   expect(f.model.getSnapshot().edit).toBeNull();
   f.stop();
 });
+
+test("native original readback must match the server original hash when metadata supplies it", async () => {
+  const f = fixture();
+  await tick();
+  const rows = f.files.get("a") ?? [];
+  if (!rows[0]) throw new Error("MISSING_SYNTHETIC_FILE");
+  rows[0].uploadContentHash = "b".repeat(64);
+  await f.model.refresh();
+  await f.model.original("file_a");
+  expect(f.model.getSnapshot().download).toBeNull();
+  expect(f.model.getSnapshot().error).toContain("해시");
+  expect(f.discarded).toHaveLength(1);
+  f.stop();
+});
