@@ -15,6 +15,9 @@ import {
   androidRuntimeOptions,
   emulatorStartupIssues,
   metroNodeOptions,
+  ownedAndroidPaths,
+  quoteAdbShellArgument,
+  runtimeDevelopmentUrl,
 } from "../scripts/mobile-runtime-host";
 import { runtimeReceiptSchema, verifyRuntimeReceipt } from "../scripts/mobile-runtime-receipt";
 
@@ -25,6 +28,31 @@ const config: RuntimeConfig = {
   origin: RUNTIME_ORIGIN,
 };
 const fixture = createRuntimeFixture(config);
+test("manual native launch URL carries Expo's noninteractive controls and survives the adb device shell", async () => {
+  const url = runtimeDevelopmentUrl(),
+    parsed = new URL(url);
+  expect(parsed.searchParams.get("url")).toBe("http://127.0.0.1:8081");
+  for (const flag of [
+    "__expo_disable_fab",
+    "__expo_disable_auto_launch",
+    "__expo_disable_onboarding",
+  ])
+    expect(parsed.searchParams.get(flag)).toBe("1");
+  const value = `${url}&literal='synthetic value'`;
+  const child = Bun.spawn(["sh", "-c", `printf '%s' ${quoteAdbShellArgument(value)}`], {
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  expect(await new Response(child.stdout).text()).toBe(value);
+  expect(await child.exited).toBe(0);
+});
+test("AVD manager and emulator share explicitly owned home locations", () => {
+  const paths = ownedAndroidPaths("/synthetic/baro-runtime");
+  expect(paths.environment.ANDROID_AVD_HOME).toBe(paths.avdHome);
+  expect(paths.environment.ANDROID_USER_HOME).toBe(paths.userHome);
+  expect(paths.environment.ANDROID_EMULATOR_HOME).toBe(paths.userHome);
+  expect(paths.avdHome.startsWith("/synthetic/baro-runtime/")).toBe(true);
+});
 test("real Node localhost listener binds the IPv4 address used by native deep links", async () => {
   const node = Bun.which("node");
   if (!node) throw new Error("PINNED_NODE_REQUIRED");

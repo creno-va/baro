@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "sourceCommit": "184702d9d18877edf9e5296c4e191cf0aa2b5fbb",
+  "sourceDirectory": "https://android.googlesource.com/platform/tools/apksig/+/184702d9d18877edf9e5296c4e191cf0aa2b5fbb/src/test/resources/com/android/apksig/",
+  "certificateSha256": "fb5dbd3c669af9fc236c6991e6387b7f11ff0590997f22d0f5c74ff40e04fca8",
+  "files": [
+    {
+      "name": "v2-only-with-rsa-pkcs1-sha256-2048.apk",
+      "bytes": 4134,
+      "sha256": "b11e85df088c3474b2d0f266f1a4863744162fc44b4b53a87d3432f03dce25c6",
+      "valid": true
+    },
+    {
+      "name": "v2-only-with-rsa-pkcs1-sha256-2048-sig-does-not-verify.apk",
+      "bytes": 4134,
+      "sha256": "ae2f6bf5ae1cf510cc871f0e81bf8577c986362717e91d3bccb63d642760d02e",
+      "valid": false
+    }
+  ]
+}

@@ -1,6 +1,9 @@
 import { expect, test } from "bun:test";
 import {
-  androidSignerDigest,
+  androidCertificateDigest,
+  runAndroidSignatureProbe,
+} from "../scripts/mobile-android-signature";
+import {
   observePreviewApi,
   parseAndroidBadging,
   previewArtifactSchema,
@@ -27,7 +30,12 @@ const candidate = () => ({
   expo: "58.0.17",
   reactNative: "0.88.0",
   installTarget: "android-device-or-emulator",
-  signing: { kind: "android-debug", certificateSha256: "1".repeat(64) },
+  signing: {
+    kind: "android-debug",
+    certificateSha256: "1".repeat(64),
+    verifier: "android-sdk-apksig",
+    buildTools: "36.1.0",
+  },
   artifact: {
     name: `baro-preview-android-${sourceSha}.apk`,
     bytes: 100000000,
@@ -54,30 +62,54 @@ const candidate = () => ({
   storeSigned: false,
   deployed: false,
 });
-test("Android signer identity accepts official numbered and v3.1 SDK-range labels but rejects distinct certificates", () => {
+test("structured SDK signature report rejects missing verification and multiple certificate identities", () => {
   const digest = "a1".repeat(32);
-  expect(androidSignerDigest(`Signer #1 certificate SHA-256 digest: ${digest}\n`)).toBe(digest);
   expect(
-    androidSignerDigest(
-      `Signer (minSdkVersion=33, maxSdkVersion=2147483647) certificate SHA-256 digest: ${digest}\nSigner (minSdkVersion=24, maxSdkVersion=32) certificate SHA-256 digest: ${digest.toUpperCase()}\n`,
-    ),
+    androidCertificateDigest({
+      version: 1,
+      kind: "apk-verified",
+      certificateSha256: [digest, digest],
+    }),
   ).toBe(digest);
-  expect(
-    androidSignerDigest(
-      `Signer (minSdkVersion=33 (dev release=true), maxSdkVersion=2147483647) certificate SHA-256 digest: ${digest}\n`,
-    ),
-  ).toBe(digest);
-  expect(() =>
-    androidSignerDigest(
-      `Signer #1 certificate SHA-256 digest: ${digest}\nSigner #2 certificate SHA-256 digest: ${"b2".repeat(32)}\n`,
-    ),
-  ).toThrow();
   for (const value of [
-    "",
-    `Source Stamp Signer certificate SHA-256 digest: ${digest}`,
-    `Signer #1 public key SHA-256 digest: ${digest}`,
+    { version: 1, kind: "sdk-api-ready" },
+    { version: 1, kind: "apk-fixture-verified-api24", certificateSha256: [digest] },
+    { version: 1, kind: "apk-verified", certificateSha256: [] },
+    { version: 1, kind: "apk-verified", certificateSha256: [digest, "b2".repeat(32)] },
+    `Signer #1 certificate SHA-256 digest: ${digest}`,
   ])
-    expect(() => androidSignerDigest(value)).toThrow();
+    expect(() => androidCertificateDigest(value)).toThrow();
+});
+test("SDK preflight cannot substitute for verification of the requested APK", async () => {
+  const calls: string[][] = [];
+  await runAndroidSignatureProbe("/synthetic project", "/synthetic sdk", async (args) => {
+    calls.push(args);
+    return JSON.stringify({ version: 1, kind: "sdk-api-ready" });
+  });
+  expect(calls[0]?.at(-1)).toBe("--self-test");
+  await expect(
+    runAndroidSignatureProbe(
+      "/synthetic project",
+      "/synthetic sdk",
+      async () => JSON.stringify({ version: 1, kind: "sdk-api-ready" }),
+      "/synthetic.apk",
+    ),
+  ).rejects.toThrow();
+  const value = await runAndroidSignatureProbe(
+    "/synthetic project",
+    "/synthetic sdk",
+    async (args) => {
+      calls.push(args);
+      return JSON.stringify({
+        version: 1,
+        kind: "apk-verified",
+        certificateSha256: ["a1".repeat(32)],
+      });
+    },
+    "/synthetic.apk",
+  );
+  expect(calls.at(-1)?.at(-1)).toBe("/synthetic.apk");
+  expect(value).toBe("a1".repeat(32));
 });
 test("preview receipt binds exact source, environment, application, actual metadata and artifact identity", () => {
   const receipt = verifyPreviewArtifact(candidate(), sourceSha, "android");
@@ -190,4 +222,24 @@ test("manual preview build only uploads public development binary and scoped rec
     expect(path.trim()).toMatch(
       /^\.wrangler\/mobile-handoff\/(?:baro-preview-\*\.(?:apk|zip)|receipt-\$\{\{ matrix.platform \}\}\.json)$/,
     );
+});
+test("AOSP signature fixture bytes are pinned, licensed and limited to the separate SDK fixture job", async () => {
+  const root = "tests/fixtures/android-signature/",
+    manifest = (await Bun.file(`${root}manifest.json`).json()) as {
+      sourceCommit: string;
+      files: { name: string; bytes: number; sha256: string; valid: boolean }[];
+    };
+  expect(manifest.sourceCommit).toMatch(/^[a-f0-9]{40}$/);
+  expect(manifest.files.map((file) => file.valid)).toEqual([true, false]);
+  for (const file of manifest.files) {
+    const body = await Bun.file(`${root}${file.name}`).arrayBuffer();
+    expect(body.byteLength).toBe(file.bytes);
+    expect(new Bun.CryptoHasher("sha256").update(body).digest("hex")).toBe(file.sha256);
+  }
+  expect(await Bun.file(`${root}LICENSE`).text()).toContain("Apache License");
+  const workflow = await Bun.file(".github/workflows/mobile-android-host.yml").text();
+  expect(workflow).toContain("github.event.pull_request.head.sha");
+  expect(workflow).not.toContain("mobile:native");
+  for (const line of workflow.split("\n").filter((line) => line.includes("uses:")))
+    expect(line).toMatch(/@[a-f0-9]{40}/);
 });

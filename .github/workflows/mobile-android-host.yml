@@ -1,0 +1,47 @@
+name: Mobile Android host preflight
+
+on:
+  pull_request:
+    paths:
+      - scripts/java/**
+      - scripts/mobile-android-*.ts
+      - scripts/mobile-runtime-host.ts
+      - tests/fixtures/android-signature/**
+      - .github/workflows/mobile-android-host.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mobile-android-host-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: apps/mobile/.node-version
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: .bun-version
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: "17"
+      - run: bun ci
+      - name: Prepare test SDK image
+        run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "emulator" "system-images;android-35;google_apis;x86_64"'
+      - name: Real SDK signature fixtures and owned AVD discovery
+        run: bun scripts/mobile-android-host-probe.ts
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: mobile-android-host-${{ github.event.pull_request.head.sha }}
+          path: .wrangler/android-host/receipt.json
+          if-no-files-found: error

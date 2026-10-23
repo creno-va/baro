@@ -364,6 +364,11 @@ native/adb reverse의 `127.0.0.1` 주소에 맞춘다. native compile 전에 실
 소유 AVD에는 RAM2048MiB·2코어·SwiftShader/Vulkan 비활성 설정을 명시하고, 조기 종료를
 즉시 실패로 감지한다. 실패 receipt에는 boot 여부/exit code와 정해진 시작 문제 코드만 포함한다.
 이 설정은 Android boot 성공을 가정하거나 기존 실패를 지우지 않으며 실제 재실행으로 확인한다.
+AVD home/user/emulator 경로는 소유 output directory로 맞추고 SDK가 만든 AVD를 emulator가
+실제로 탐색하는지 compile 전에 확인한다. 수동 development-client URL에도 Expo의
+onboarding/FAB/자동 메뉴 숨김 flag를 붙인다. adb device shell의 URL 구분 문자는 literal로
+보존한다. PR의 좁은 SDK host 검사는 실제 signature fixture·소유 AVD 탐색만 확인하며
+emulator 부팅·BARO UI/native IPC는 별도 manual runtime에서 인수한다.
 
 ## 내부 preview 개발 앱 전달
 
@@ -380,9 +385,10 @@ release/스토어 제출물이 아니다. 로컬 runtime probe 앱/entry를 포�
 기본 식별자는 `site.baro.app.preview`다. iOS Simulator ZIP은 iPhone 설치용 IPA가 아니다.
 새 Apple/Google 배포 identity·EAS 계정/서비스·자동 배포는 도입하지 않는다. 실제 min OS/ABI는
 receipt를 따르며 소스의 기대값만으로 실행 지원을 선언하지 않는다.
-Android 인증서 검사는 apksigner의 numbered 및 v3.1 SDK 범위 label을 처리한다. 같은 인증서의
-범위별 반복만 합치며 다른 인증서가 발견되면 전달을 거부한다. signature 검증 자체는
-apksigner의 실제 성공을 요구하며 label 파싱을 위해 생략하지 않는다.
+Android 인증서는 설치된 SDK apksig API의 실제 서명 검증 결과와 DER certificate hash를
+JSON으로 읽는다. 같은 인증서만 합치고 다른 인증서는 거부한다. SDK API 준비·공식 합성
+fixture 검사는 실제 BARO APK 검증과 다른 report kind로 구분하며, 전달 receipt에는 사용한
+build-tools 버전을 기록한다. 실제 APK 검증은 manifest의 지원 범위를 그대로 확인한다.
 
 1. artifact를 내려받아 압축을 풀고 receipt의 `sourceSha`와 파일 이름·byte/hash를 확인한다.
    macOS/Linux에서는 `shasum -a 256 <apk-or-zip>`으로 비교한다.

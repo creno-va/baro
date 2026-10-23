@@ -70,6 +70,9 @@ jobs:
         run: |
           bun run mobile:check
           bun run mobile:bundle
+      - name: Verify Android SDK signature API before native compile
+        if: matrix.platform == 'android'
+        run: bun scripts/mobile-preview-artifact.ts android --preflight
       - name: Compile native development app
         run: bun run mobile:native ${{ matrix.platform }}
       - name: Package preview development app and actual binary identity

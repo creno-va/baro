@@ -9,8 +9,12 @@ import {
 import { createRuntimeFixture } from "./mobile-runtime-fixture";
 import {
   androidRuntimeOptions,
+  createOwnedAndroidAvd,
   emulatorStartupIssues,
   metroNodeOptions,
+  ownedAndroidPaths,
+  quoteAdbShellArgument,
+  runtimeDevelopmentUrl,
 } from "./mobile-runtime-host";
 import { verifyRuntimeReceipt } from "./mobile-runtime-receipt";
 
@@ -19,14 +23,16 @@ export function productEntryOverlay() {
   return `import { useRef } from "react";
 import { View } from "react-native";
 import OriginalHome from "../runtime-probe/original-home";
+import { productMountSchema } from "../../runtime-probe/protocol";
 export default function ObservedHome() {
   const sent = useRef(false);
   return <View style={{flex:1}} onLayout={({nativeEvent:{layout}}) => {
-    if (sent.current) return;
+    const size=productMountSchema.safeParse({width:layout.width,height:layout.height});
+    if (sent.current || !size.success) return;
     sent.current = true;
     void fetch("${RUNTIME_ORIGIN}/probe/mounted", {
       method:"POST", headers:{"content-type":"application/json", "x-baro-probe-run":process.env.EXPO_PUBLIC_NATIVE_PROBE_NONCE ?? ""},
-      body:JSON.stringify({width:layout.width,height:layout.height})
+      body:JSON.stringify(size.data)
     }).catch(() => {});
   }}><OriginalHome /></View>;
 }
@@ -54,6 +60,7 @@ async function main() {
     EXPO_PUBLIC_API_URL: RUNTIME_ORIGIN,
     EXPO_PUBLIC_NATIVE_PROBE_SOURCE_SHA: sourceSha,
     EXPO_PUBLIC_NATIVE_PROBE_NONCE: nonce,
+    ...(platform === "android" ? ownedAndroidPaths(out).environment : {}),
   };
   const children = new Set<ReturnType<typeof Bun.spawn>>();
   await mkdir(out, { recursive: true });
@@ -200,7 +207,7 @@ async function main() {
     }
   }
   async function openApp() {
-    const url = `baro-dev://expo-development-client/?url=${encodeURIComponent("http://127.0.0.1:8081")}`;
+    const url = runtimeDevelopmentUrl();
     if (platform === "android") {
       await command([adb, "-s", device, "shell", "am", "force-stop", "site.baro.app.dev"]);
       await command([
@@ -214,7 +221,7 @@ async function main() {
         "-a",
         "android.intent.action.VIEW",
         "-d",
-        url,
+        quoteAdbShellArgument(url),
         "site.baro.app.dev",
       ]);
     } else {
@@ -250,6 +257,14 @@ module.exports=config;\n`;
     console.log(`Runtime ${platform}: verify IPv4 Metro readiness before compile`);
     await startMetro();
     await stopMetro();
+    if (platform === "android") {
+      phase = "avd-preflight";
+      if (!android) throw new Error("RUNTIME_ANDROID_SDK_REQUIRED");
+      await createOwnedAndroidAvd(android, out, avd, (args, input) =>
+        command(args, input === undefined ? {} : { input }),
+      );
+      console.log("Runtime android: owned AVD path/discovery verified before compile");
+    }
     console.log(`Runtime ${platform}: compile isolated local development app`);
     phase = "compile";
     await command(["bun", "scripts/mobile-native-build.ts", platform, "--runtime-local"], {
@@ -261,10 +276,6 @@ module.exports=config;\n`;
     phase = "owned-device";
     if (platform === "android") {
       if (!android) throw new Error("RUNTIME_ANDROID_SDK_REQUIRED");
-      const image = "system-images;android-35;google_apis;x86_64";
-      await command([sdk, "create", "avd", "-n", avd, "-k", image, "--device", "pixel_6"], {
-        input: "no\n",
-      });
       const log = Bun.file(emulatorLog);
       emulator = Bun.spawn([resolve(android, "emulator/emulator"), ...androidRuntimeOptions(avd)], {
         env,
