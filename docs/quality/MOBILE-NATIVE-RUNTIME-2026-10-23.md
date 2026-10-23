@@ -98,3 +98,18 @@ redirect·외부 origin/port·다른 platform·source map URL·크기 초과·HT
 응답의 byte/hash만 기록한다. HTTP 성공은 appExecutionVerified=false이며 실제 Home layout과
 native probe 결과가 별도로 와야 인수한다. 원본 실패를 지우지 않고 조건 변경 후 검증한다.
 새 기본 제품/native 입력·웹 UI·실제 사용자·OAuth/API/physical/store·#339/#71은 바꾸지 않는다.
+
+PR412/maina191ae1·CI39982489829 뒤 [실제39982855183](https://github.com/creno-va/baro/actions/runs/39982855183)은
+SDK 준비·실제 product bundle6,035,366bytes·probe bundle4,192,196bytes HTTP 검사를 통과했다.
+iPhone16/iOS26.5의 [계측 Home receipt](./mobile-runtime-2026-10-23/home-ios-a191ae1.json)와
+[PNG 시각 관측](./mobile-runtime-2026-10-23/visual-home-ios-a191ae1.json)을 확인해 BARO/한글 카드
+표시와 구성 오류 부재를 대조했다. 전체 스크롤 화면·글자 확대·접근성을 인수한 것은 아니다.
+binary source7294145/JS·tooling sourcea191ae1의 Metro 필요 개발 앱이며 별도 Releaseff5c208의
+standalone 부팅 증거로 사용하지 않는다.
+
+전체 run은 이후 ios-development-url-launch/RUNTIME_COMMAND_FAILED로 terminal FAILURE다.
+[원본 실패](./mobile-runtime-2026-10-23/failure-ios-a191ae1.json)는 productLayoutObserved=true,
+nativeResultObserved=false·RSS3표본과 두 HTTP proof를 담는다. probe 전환의 Node helper 세부
+코드와 그 시점의 부분 native transport는 보존되지 않아 소급 복구하거나 단일 원인으로 확정하지 않는다.
+HTTP 수신·Home 표시·native IO 완료를 각각 구분하며 다음 #385 작업은 이 고정 오류와 전환 단계를
+먼저 좁힌다. 실제 native IO/API/OAuth·physical/store와 #339/#71은 OPEN이다.

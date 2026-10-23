@@ -1,0 +1,66 @@
+{
+  "version": 1,
+  "kind": "instrumented-home-only",
+  "sourceSha": "a191ae13c2f72e19292f8229815a7eedfea151d1",
+  "platform": "ios",
+  "applicationId": "site.baro.app.preview",
+  "nativeBinary": {
+    "kind": "pinned-xcode-simulator-control",
+    "applicationId": "site.baro.app.preview",
+    "binarySourceSha": "7294145021bf39a8de3dc61cb7e1fe36dfbddd85",
+    "toolingSourceSha": "a191ae13c2f72e19292f8229815a7eedfea151d1",
+    "compilerRunId": "39959879946",
+    "archiveSha256": "ca5087491b2b0c225323360603aebf9c9b0fe4e79dbecf5131ab907e335e5b4b",
+    "infoPlistSha256": "403c339a2d1f2f99202bf9f5b856e349669ae1abd3f86c395064a47a40e87916",
+    "executableSha256": "1e2090fd007a1af925751cc3bea13fbc03ea922c09a779785e557949db6e2a89",
+    "nativeInputsMatch": true,
+    "simulatorRightsVerified": true,
+    "recompiled": false,
+    "resigned": false
+  },
+  "bundleHttpPreflight": {
+    "kind": "metro-http-response-only",
+    "bytes": 6035366,
+    "sha256": "f2c5b9b8708c4e8cd079b7090393d16b092aac374072ab163ab9ae32709d0a67",
+    "appExecutionVerified": false
+  },
+  "device": {
+    "kind": "simulator",
+    "model": "iPhone 16",
+    "osVersion": "26.5"
+  },
+  "productEntry": {
+    "kind": "instrumented-home-layout-only",
+    "originalSha256": "c2b09ab674dd4340ba2501e0520aea86e6041c8301075a7bbfbb0b35523364f5",
+    "overlaySha256": "cd5dabb9f034a8a068d6301f1441e98dd5066d5cb92859f2ebc29fd8202cbfd0",
+    "layout": {
+      "width": 393,
+      "height": 852
+    },
+    "screenshot": "product-home-ios.png"
+  },
+  "assets": {
+    "kind": "compiled-resource-only",
+    "family": "BaroMobile",
+    "sha256": "3ae12c1281a84901b32d8c5f0e43fd6c4f8a5b7fd4ccbde66cfbe9f07cde05e8",
+    "weights": [
+      400,
+      600,
+      700
+    ],
+    "glyphs": 14757,
+    "codepoints": 14336,
+    "hangul": 11172,
+    "licenseEmbedded": true,
+    "compiledBytesMatch": true,
+    "appRuntimeVerified": false
+  },
+  "nativeIoVerified": false,
+  "productJourneysVerified": false,
+  "accessibilityVerified": false,
+  "remoteApiVerified": false,
+  "oauthVerified": false,
+  "physicalDeviceVerified": false,
+  "storeSigned": false,
+  "deployed": false
+}

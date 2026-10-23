@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "kind": "instrumented-ios-home-visual-observation",
+  "sourceSha": "a191ae13c2f72e19292f8229815a7eedfea151d1",
+  "binarySourceSha": "7294145021bf39a8de3dc61cb7e1fe36dfbddd85",
+  "workflowRunId": "39982855183",
+  "reviewedAt": "2026-10-23T16:20:55.657Z",
+  "screenshot": {
+    "name": "product-home-ios.png",
+    "bytes": 220474,
+    "sha256": "9c0a31563d1695bebc2d821e97e484a148317e50da5b41d3d75733959d3298b3"
+  },
+  "brandVisible": true,
+  "hangulHomeCardsVisible": true,
+  "configurationErrorVisible": false,
+  "instrumentedHome": true,
+  "completeScrollableScreenVerified": false,
+  "nativeIoVerified": false,
+  "bundledStandaloneVerified": false,
+  "productJourneysVerified": false,
+  "accessibilityVerified": false,
+  "remoteApiVerified": false,
+  "oauthVerified": false,
+  "physicalDeviceVerified": false,
+  "storeSigned": false,
+  "deployed": false
+}

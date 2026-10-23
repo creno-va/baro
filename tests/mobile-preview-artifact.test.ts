@@ -27,6 +27,11 @@ import {
 } from "../scripts/mobile-internal-ios-artifact";
 import { internalIosEnvironment } from "../scripts/mobile-internal-ios-build";
 import {
+  assertIosBundledInputs,
+  verifyIosColdLaunchReceipt,
+  verifyPinnedInternalIosInput,
+} from "../scripts/mobile-internal-ios-input";
+import {
   observePreviewApi,
   parseAndroidBadging,
   parseAndroidPackage,
@@ -36,6 +41,156 @@ import {
 } from "../scripts/mobile-preview-artifact";
 
 const sourceSha = "a".repeat(40);
+test("pinned iOS input integrity rejects changed compiler receipts and archives before any SDK action", async () => {
+  const root = await mkdtemp(resolve(tmpdir(), "baro-ios-pin-test-")),
+    input = resolve(root, "input"),
+    body = Buffer.from([1, 2, 3, 4]);
+  const hash = (b: Uint8Array | string) => new Bun.CryptoHasher("sha256").update(b).digest("hex");
+  try {
+    await mkdir(resolve(root, "tests/fixtures"), { recursive: true });
+    await mkdir(input);
+    const original = await Bun.file(
+      "docs/quality/mobile-internal-ios-2026-10-23/receipt-ff5c208.json",
+    ).json();
+    const name = `baro-internal-preview-ios-simulator-${sourceSha}.zip`,
+      receipt = {
+        ...original,
+        sourceSha,
+        control: { ...original.control, sourceSha, toolingSourceSha: sourceSha },
+        artifact: { name, bytes: body.length, sha256: hash(body) },
+      },
+      raw = JSON.stringify(receipt),
+      pin = {
+        version: 1,
+        sourceSha,
+        workflowRunId: "123456789",
+        artifactId: "123456789",
+        artifactName: `mobile-internal-ios-${sourceSha}`,
+        receiptSha256: hash(raw),
+      };
+    await writeFile(resolve(root, "tests/fixtures/ios-internal-preview.json"), JSON.stringify(pin));
+    await writeFile(resolve(input, "receipt-ios.json"), raw);
+    await writeFile(resolve(input, name), body);
+    expect((await verifyPinnedInternalIosInput(root, input)).receipt.sourceSha).toBe(sourceSha);
+    await writeFile(resolve(input, name), Buffer.from([1, 2, 3, 5]));
+    await expect(verifyPinnedInternalIosInput(root, input)).rejects.toThrow(
+      "INTERNAL_IOS_ARCHIVE_CHANGED",
+    );
+    await writeFile(resolve(input, name), body);
+    await writeFile(resolve(input, "receipt-ios.json"), `${raw} `);
+    await expect(verifyPinnedInternalIosInput(root, input)).rejects.toThrow(
+      "INTERNAL_IOS_RECEIPT_CHANGED",
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+test("bundled iOS reuse allows documentation changes but rejects JS drift as well as native drift", async () => {
+  const root = await mkdtemp(resolve(tmpdir(), "baro-ios-bundled-inputs-"));
+  async function git(args: string[]) {
+    const c = Bun.spawn(["git", ...args], { cwd: root, stdout: "pipe", stderr: "ignore" }),
+      out = await new Response(c.stdout).text();
+    if (await c.exited) throw Error("SYNTHETIC_GIT_FAILED");
+    return out.trim();
+  }
+  async function commit() {
+    await git(["add", "."]);
+    await git([
+      "-c",
+      "user.name=BARO synthetic fixture",
+      "-c",
+      "user.email=synthetic@baro.invalid",
+      "commit",
+      "-m",
+      "synthetic fixture",
+    ]);
+    return git(["rev-parse", "HEAD"]);
+  }
+  try {
+    await git(["init"]);
+    await mkdir(resolve(root, "apps/mobile/src"), { recursive: true });
+    await writeFile(resolve(root, "apps/mobile/src/index.ts"), "v1");
+    await writeFile(resolve(root, "apps/mobile/README.md"), "fixture");
+    const binary = await commit();
+    await writeFile(resolve(root, "apps/mobile/README.md"), "documentation");
+    const docs = await commit();
+    await expect(assertIosBundledInputs(root, binary, docs)).resolves.toBeUndefined();
+    await writeFile(resolve(root, "apps/mobile/src/index.ts"), "v2");
+    const changed = await commit();
+    await expect(assertIosBundledInputs(root, binary, changed)).rejects.toThrow(
+      "INTERNAL_IOS_BUNDLED_INPUTS_CHANGED",
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+test("iOS cold-launch observations bind the compiler archive and cannot claim Home, continuity or full runtime acceptance", () => {
+  const identity = { archiveSha256: "c".repeat(64), compilerReceiptSha256: "d".repeat(64) },
+    tooling = "b".repeat(40);
+  const value = {
+    version: 1,
+    kind: "ios-bundled-cold-launch-observation",
+    binarySourceSha: sourceSha,
+    toolingSourceSha: tooling,
+    observedAt: "2026-10-24T00:00:00.000Z",
+    applicationId: "site.baro.app.preview",
+    nativeConfiguration: "Release",
+    requiresMetro: false,
+    ...identity,
+    device: { kind: "simulator", model: "synthetic iPhone", osVersion: "26.5" },
+    coldLaunches: [
+      { ordinal: 1, elapsedSeconds: 15, samePidReadbackSamples: 3 },
+      { ordinal: 2, elapsedSeconds: 15, samePidReadbackSamples: 3 },
+    ],
+    nativeProcessLaunchVerified: true,
+    distinctColdLaunchPids: true,
+    wholeIntervalContinuityProven: false,
+    metroStarted: false,
+    metroGuardRequests: 0,
+    anonymousFreshInstall: true,
+    publicDataNavigation: false,
+    screenshot: { name: "home-ios.png", bytes: 100, sha256: "e".repeat(64) },
+    homeContentVerified: false,
+    visualReviewRequired: true,
+    productJourneysVerified: false,
+    accessibilityVerified: false,
+    httpTransportSeparatelyObserved: false,
+    remoteApiVerified: false,
+    oauthVerified: false,
+    physicalDeviceVerified: false,
+    storeSigned: false,
+    deployed: false,
+  };
+  expect(verifyIosColdLaunchReceipt(value, sourceSha, tooling, identity).homeContentVerified).toBe(
+    false,
+  );
+  for (const patch of [
+    { binarySourceSha: "f".repeat(40) },
+    { archiveSha256: "f".repeat(64) },
+    { compilerReceiptSha256: "f".repeat(64) },
+    { homeContentVerified: true },
+    { visualReviewRequired: false },
+    { wholeIntervalContinuityProven: true },
+    { metroStarted: true },
+    { metroGuardRequests: 1 },
+    { requiresMetro: true },
+    { nativeConfiguration: "Debug" },
+    { remoteApiVerified: true },
+    { oauthVerified: true },
+    { physicalDeviceVerified: true },
+    { storeSigned: true },
+    { deployed: true },
+    {
+      coldLaunches: [
+        { ordinal: 1, elapsedSeconds: 14, samePidReadbackSamples: 3 },
+        { ordinal: 2, elapsedSeconds: 15, samePidReadbackSamples: 3 },
+      ],
+    },
+  ])
+    expect(() =>
+      verifyIosColdLaunchReceipt({ ...value, ...patch }, sourceSha, tooling, identity),
+    ).toThrow();
+});
 const badging =
   "package: name='site.baro.app.preview' versionCode='1' versionName='0.1.0' platformBuildVersionName='16'\nsdkVersion:'24'\ntargetSdkVersion:'36'\napplication-debuggable\nnative-code: 'arm64-v8a' 'x86_64'\n";
 const candidate = () => ({

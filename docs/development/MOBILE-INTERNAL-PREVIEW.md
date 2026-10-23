@@ -211,3 +211,28 @@ Apple 계정/인증서/private key·스토어 profile을 사용하거나 iPhone 
 appRuntimeVerified=false를 고정한다. 실제 compile/산출물 검증과 이후 Metro 없는 소유
 Simulator 설치/부팅·초기 화면 대조를 완료하기 전 iOS 전달 인수 성공으로 표시하지 않는다.
 원격 API/OAuth·physical·전체 화면/접근성·store 및 #339/#71은 별도 인수로 유지한다.
+
+PR411/mainff5c208·CI39980051064 뒤 [실제39980418548](https://github.com/creno-va/baro/actions/runs/39980418548)은
+SUCCESS다. [원본 compiler receipt](../quality/mobile-internal-ios-2026-10-23/receipt-ff5c208.json)와
+[검증 전 inspection](../quality/mobile-internal-ios-2026-10-23/inspection-ff5c208.json)을 각각 보존한다.
+ZIP24,102,166bytes/SHA25640305a809554b104041fbac52b154faea42dcab9b446119f0fd572b6078617d2,
+HBC3,581,924bytes/SHA2562a5caf19e7c611aca1c3ac4f2e7add88f143c4d17828d6b4cf5fc236ebfd523b다.
+제품 source1464개·probe/map 제외·실제 양 ABI Simulator XML/DER·No-Team host signature·font를
+인수했다. minimum iOS16.4/Expo58.0.17/RN0.88.0이며 실제 부팅은 이 compile receipt에 없다.
+
+```sh
+gh workflow run mobile-internal-ios-reverify.yml --ref main -f target_sha=<full40-main-tooling-sha> -f smoke=true
+```
+
+[고정 compiler 입력](../../tests/fixtures/ios-internal-preview.json)은 성공한 원본 workflow/run/artifact와
+receipt 전체 hash를 묶는다. 새 검증은 ZIP 전체 hash·현재 bundled JS/native/공유 입력 동일성·
+실제 추출 signature/양 ABI XML·DER·font/HBC를 재검증한다. 원래 receipt의 시각/API 관측과 source를
+고치지 않고 새 tooling/health 관측을 sidecar에 기록한다. graph는 고정한 compiler receipt의
+사실이며 private source map을 다시 만들었다고 표시하지 않는다. 재컴파일/재서명은 하지 않는다.
+
+선택한 smoke는 새 소유 iPhone16 Simulator에 원본 앱만 설치하고 두 cold launch의 PID를
+각각3회 읽는다. Metro를 시작하지 않고 loopback8081의 별도 감시 응답 횟수가0이어야 한다.
+익명 초기 화면만 캡처하며 공개 데이터/로그인으로 이동하지 않는다. receipt는 process launch와
+최소15초의 표본을 기록하지만 Home 내용은 homeContentVerified=false/visualReviewRequired=true다.
+PNG를 실제로 대조한 시각 관측을 별도로 남기며 전체 구간의 연속 생존·전체 기능/접근성·
+OAuth/물리 기기/스토어 인수로 확대하지 않는다. 첫 실제 smoke 결과는 실행 후 기록한다.

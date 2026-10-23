@@ -1,0 +1,29 @@
+{
+  "sourceSha": "a191ae13c2f72e19292f8229815a7eedfea151d1",
+  "platform": "ios",
+  "phase": "ios-development-url-launch",
+  "code": "RUNTIME_COMMAND_FAILED",
+  "unresolvedModule": null,
+  "host": null,
+  "probeFailure": null,
+  "metroBundleObserved": true,
+  "bundleHttpPreflight": {
+    "product": {
+      "kind": "metro-http-response-only",
+      "bytes": 6035366,
+      "sha256": "f2c5b9b8708c4e8cd079b7090393d16b092aac374072ab163ab9ae32709d0a67",
+      "appExecutionVerified": false
+    },
+    "probe": {
+      "kind": "metro-http-response-only",
+      "bytes": 4192196,
+      "sha256": "1efd98e686b7cd657e058ef39dcdf98ba00e7651c20443994677bc48746e8c86",
+      "appExecutionVerified": false
+    }
+  },
+  "processRssSamples": 3,
+  "productLayoutObserved": true,
+  "nativeResultObserved": false,
+  "remoteApiVerified": false,
+  "oauthVerified": false
+}
