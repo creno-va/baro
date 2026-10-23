@@ -176,6 +176,45 @@ attestation/font의 실제 phase와 마지막 command exit를 분리한다. priv
 Xcode exit0 뒤 own preview Simulator Info를 확인한 compiled app을 검증 전 unaccepted ZIP으로
 보존한다. archive/Info/executable 전체 hash·source·새 archive 관측 시각을 기록하며 signature/
 SDK/physical/store 인수로 표시하지 않는다. 후속 strict entitlement 검사보다 먼저 각 ABI의
-알려진 public key 존재 여부·own-group 일치/개수·unknown key 개수만 기록한다. 실제 값·unknown
-key 이름·raw XML/stack/log는 업로드하지 않는다. 예상 밖 entitlement를 자동 승인하지 않는다.
+알려진 public key 존재 여부·own-group 일치/개수·unknown key 개수만 기록한다. 별도 진단 JSON에는
+실제 값·unknown key 이름을 담지 않고 raw XML/stack/log도 업로드하지 않는다. 보존 ZIP에는
+자기 앱의 원래 서명 metadata가 포함된다. 예상 밖 entitlement를 자동 승인하지 않는다.
 동일 출력의 후속 metadata 재검증이 가능하도록 실패 사실과 binary provenance를 함께 보존한다.
+
+## 실제 Simulator XML/DER 섹션과 host signature의 구분
+
+PR405/main7294145·CI39959565886 뒤 [실제39959879946](https://github.com/creno-va/baro/actions/runs/39959879946)은
+xcodebuild exit0 뒤 attest-compiled-output/XCODE_CONTROL_ENTITLEMENTS_MISMATCH로 실패했다.
+[원본 실패](./mobile-ios-host-2026-10-23/failure-7294145.json)·
+[unaccepted inspection](./mobile-ios-host-2026-10-23/inspection-7294145.json)·
+[signature shape](./mobile-ios-host-2026-10-23/signature-shape-7294145.json)를 보존한다.
+원본 ZIP51,300,173bytes/SHA256ca5087491b2b0c225323360603aebf9c9b0fe4e79dbecf5131ab907e335e5b4b은
+변경하지 않았고 signature shape의 빈 dictionary가 Simulator 권한 부재를 뜻한다고 단정하지 않는다.
+
+실제 Mac SDK의 lipo/vtool/segedit/plutil/derq로 arm64·x86_64를 각각 조사했다.
+host code signature는 비어 있고 Mach-O __TEXT,__entitlements(XML)·__TEXT,__ents_der(DER)는
+서로 같은 application-identifier/keychain-access-groups 두 항목을 가진다. 값은 이 빌드의
+Xcode가 자동 기록한 FAKETEAMID.site.baro.app.preview다. 이는 Simulator namespace 관측이며
+Team 빌드 인자는 빈 값, 실제 signature TeamIdentifier는 not set이다. 이 값을 Team 인자로
+설정하거나 실제 계정/권한 증거로 사용하지 않는다. [Apple QA1710](https://developer.apple.com/library/archive/qa/qa1710/_index.html)은
+application identifier의 Xcode 생성 원칙을, [Apple Security의 SecTask 소스](https://github.com/apple-oss-distributions/Security/blob/main/sectask/SecTask.c)는
+Simulator 처리 경로를 별도로 보여 준다. 위 namespace와 두 섹션의 동일성은 자체 실물 관측이다.
+
+[로컬 eb84d1e metadata 관측](./mobile-ios-host-2026-10-23/local-control-eb84d1e.json)은
+실제 No-Team ad-hoc signature·각 ABI의 IOSSIMULATOR build platform·엄격한 own namespace·
+XML/DER 및 ABI 간 동일성·Info/executable hash를 인수했다. 기존31597a8 executable의 전체
+SHA25676fd1c14690aa72d35cf9bfa3243b8e244fc6eacd2aea9d2aab1290e25b1ab0e을 확인한 뒤
+두 ABI의 해당 섹션이 없음을 별도로 관측했다. 로컬 관측은 SDK 준비/새 native compile 성공이 아니다.
+
+```sh
+gh workflow run mobile-ios-xcode-reverify.yml --ref main -f target_sha=<full40-main-tooling-sha>
+```
+
+수동 재검증은 원본 run/artifact ID·inspection/ZIP 전체 hash·native 입력 동일성을 먼저 확인한다.
+원본 binary source7294145의 별도 소유 checkout에서 검증·폰트 검사·package CLI의 HEAD 일치
+검사를 수행해 source를 바꾸지 않고 다시 포장한다. 새 tooling source는 별도 기록한다.
+원본 앱을 재컴파일·재서명하지 않으며 host signature에는 IOS keychain group을 요구하지 않는다.
+대신 빈 host entitlement·Simulator build platform·자기 preview의 정확한 XML/DER namespace와
+모든 ABI 대조를 필수로 한다. 그 후 새 소유 Simulator에서 기존 SDK factories를 실제 실행한다.
+기본 CODE_SIGNING_ALLOWED=NO는 유지한다. 실제 SDK 전 실행 성공을 표시하지 않고 전체 native
+IO·OAuth/API·physical/store·#339/#71의 인수는 별도로 유지한다.

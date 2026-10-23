@@ -179,3 +179,9 @@ compiled preview API 설정과 immutable 제품 client가 내보내는 실제 re
 transport를 별도로 계측한 증거로 표시하지 않는다. health 관측 source/시각은 해당 health
 요청의 사실로 분리한다. 실제 실행 전 public UI 성공으로 표시하지 않고 실제 OAuth/인증 여정·
 private API·physical/store·전체 접근성/#339/#71은 별도로 유지한다.
+
+PR408/main5b41fc2·CI39963435347 뒤 [실제39963766414](https://github.com/creno-va/baro/actions/runs/39963766414)이
+SUCCESS다. [공개 UI receipt](../quality/mobile-internal-android-2026-10-23/public-directory-5b41fc2.json)의
+실제 상태는 ready-empty이며 loading/error는 false다. 검색/재시도/상세를 실행하지 않았고
+공개 데이터 진입 전 screenshot reader를 차단했다. 공개 프로필의 실제 card 분기는 이번
+관측에 없으며 HTTP transport 별도 계측·OAuth/private API·physical/store 인수와 구분한다.

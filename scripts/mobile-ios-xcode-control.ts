@@ -31,6 +31,10 @@ export function xcodeControlBuildFailure(error: unknown, detail = "") {
     "XCODE_CONTROL_SIGN_FAILED",
     "IOS_SIMULATOR_IDENTITY_REQUIRED",
     "PREVIEW_SIMULATOR_DISTRIBUTION_IDENTITY_UNEXPECTED",
+    "XCODE_CONTROL_HOST_ENTITLEMENTS_MISMATCH",
+    "XCODE_CONTROL_MACHO_SIMULATOR_REQUIRED",
+    "XCODE_CONTROL_SIMULATOR_SECTIONS_REQUIRED",
+    "XCODE_CONTROL_XML_DER_DIFFER",
   ]);
   if (known.has(message)) return message;
   for (const [code, pattern] of [
@@ -76,11 +80,14 @@ export function xcodeEntitlementShape(value: unknown) {
     knownKeys: keys.filter((k) => names.includes(k)).sort(),
     unknownKeyCount: keys.filter((k) => !names.includes(k)).length,
     ownKeychainGroupOnly:
-      Array.isArray(groups) && groups.length === 1 && groups[0] === "site.baro.app.preview",
+      Array.isArray(groups) &&
+      groups.length === 1 &&
+      groups[0] === observedSimulatorApplicationIdentifier,
     keychainGroupCount: Array.isArray(groups) ? groups.length : null,
-    ownApplicationIdentifier: object["application-identifier"] === "site.baro.app.preview",
+    ownApplicationIdentifier:
+      object["application-identifier"] === observedSimulatorApplicationIdentifier,
     ownAppleApplicationIdentifier:
-      object["com.apple.application-identifier"] === "site.baro.app.preview",
+      object["com.apple.application-identifier"] === observedSimulatorApplicationIdentifier,
     strictAccepted: xcodeControlEntitlementsSchema.safeParse(value).success,
   };
 }
@@ -120,7 +127,7 @@ export function xcodeControlEnvironment(input: Record<string, string | undefined
   ];
   return {
     ...Object.fromEntries(names.filter((k) => input[k] !== undefined).map((k) => [k, input[k]])),
-    TARGET_SHA: input.TARGET_SHA,
+    TARGET_SHA: input.TARGET_SHA as string,
     EXPO_PUBLIC_APP_ENV: "preview",
     EXPO_PUBLIC_API_URL: "https://preview.baro.site",
     CI: "1",
@@ -129,13 +136,18 @@ export function xcodeControlEnvironment(input: Record<string, string | undefined
     EXPO_NO_TYPESCRIPT_SETUP: "1",
   };
 }
+// Observed in both XML/DER sections of compiler source7294145. This is not a real Apple Team.
+export const observedSimulatorApplicationIdentifier = "FAKETEAMID.site.baro.app.preview";
 export const xcodeControlEntitlementsSchema = z.strictObject({
-  "keychain-access-groups": z.tuple([z.literal("site.baro.app.preview")]),
-  "application-identifier": z.literal("site.baro.app.preview").optional(),
-  "com.apple.application-identifier": z.literal("site.baro.app.preview").optional(),
-  "get-task-allow": z.boolean().optional(),
-  "com.apple.security.get-task-allow": z.boolean().optional(),
+  "keychain-access-groups": z.tuple([z.literal(observedSimulatorApplicationIdentifier)]),
+  "application-identifier": z.literal(observedSimulatorApplicationIdentifier),
 });
+export const xcodeHostSignatureEntitlementsSchema = z.strictObject({});
+export function verifySimulatorBuildPlatform(output: string) {
+  const platforms = [...output.matchAll(/^\s*platform\s+(\w+)\s*$/gm)];
+  if (platforms.length !== 1 || platforms[0]?.[1] !== "IOSSIMULATOR")
+    throw new Error("XCODE_CONTROL_MACHO_SIMULATOR_REQUIRED");
+}
 export function xcodeControlEntitlements(value: unknown) {
   const result = xcodeControlEntitlementsSchema.safeParse(value);
   if (!result.success) throw new Error("XCODE_CONTROL_ENTITLEMENTS_MISMATCH");
@@ -233,24 +245,52 @@ export async function configureGeneratedXcodeControl(ios: string, projectName: s
     '<?xml version="1.0" encoding="UTF-8"?><plist version="1.0"><dict><key>keychain-access-groups</key><array><string>$(AppIdentifierPrefix)$(PRODUCT_BUNDLE_IDENTIFIER)</string></array></dict></plist>\n',
   );
 }
-export const xcodeControlReceiptSchema = z.strictObject({
-  version: z.literal(1),
-  kind: z.literal("xcode-simulator-signing-control"),
-  sourceSha: z.string().regex(/^[a-f0-9]{40}$/),
-  observedAt: z.iso.datetime(),
-  applicationId: z.literal("site.baro.app.preview"),
-  signature: z.literal("ad-hoc"),
-  teamIdentifier: z.literal("not set"),
-  architectures: z.array(z.enum(["arm64", "x86_64"])).min(1),
-  entitlements: xcodeControlEntitlementsSchema,
-  executableSha256: z.string().regex(/^[a-f0-9]{64}$/),
-  infoPlistSha256: z.string().regex(/^[a-f0-9]{64}$/),
-  appRuntimeVerified: z.literal(false),
-  physicalDeviceVerified: z.literal(false),
-  storeSigned: z.literal(false),
-  deployed: z.literal(false),
-});
-export async function attestXcodeSimulatorControl(root: string, sourceSha: string) {
+export const xcodeControlReceiptSchema = z
+  .strictObject({
+    version: z.literal(2),
+    kind: z.literal("xcode-simulator-signing-control"),
+    sourceSha: z.string().regex(/^[a-f0-9]{40}$/),
+    toolingSourceSha: z.string().regex(/^[a-f0-9]{40}$/),
+    observedAt: z.iso.datetime(),
+    applicationId: z.literal("site.baro.app.preview"),
+    signature: z.literal("ad-hoc"),
+    teamIdentifier: z.literal("not set"),
+    architectures: z
+      .array(z.enum(["arm64", "x86_64"]))
+      .min(1)
+      .max(2),
+    entitlements: xcodeControlEntitlementsSchema,
+    entitlementsSource: z.literal("simulator-macho-xml-and-der"),
+    signatureEntitlements: xcodeHostSignatureEntitlementsSchema,
+    sectionHashes: z
+      .array(
+        z.strictObject({
+          architecture: z.enum(["arm64", "x86_64"]),
+          xmlSha256: z.string().regex(/^[a-f0-9]{64}$/),
+          derSha256: z.string().regex(/^[a-f0-9]{64}$/),
+        }),
+      )
+      .min(1)
+      .max(2),
+    executableSha256: z.string().regex(/^[a-f0-9]{64}$/),
+    infoPlistSha256: z.string().regex(/^[a-f0-9]{64}$/),
+    appRuntimeVerified: z.literal(false),
+    physicalDeviceVerified: z.literal(false),
+    storeSigned: z.literal(false),
+    deployed: z.literal(false),
+  })
+  .refine(
+    (v) =>
+      new Set(v.architectures).size === v.architectures.length &&
+      new Set(v.sectionHashes.map((s) => s.architecture)).size === v.architectures.length &&
+      v.sectionHashes.length === v.architectures.length &&
+      v.sectionHashes.every((s) => v.architectures.includes(s.architecture)),
+  );
+export async function attestXcodeSimulatorControl(
+  root: string,
+  sourceSha: string,
+  toolingSourceSha = sourceSha,
+) {
   const products = resolve(root, ".wrangler/mobile-build/ios/Build/Products/Debug-iphonesimulator"),
     apps = (await readdir(products)).filter((p) => p.endsWith(".app"));
   if (apps.length !== 1 || !apps[0]) throw new Error("XCODE_CONTROL_APP_AMBIGUOUS");
@@ -270,7 +310,8 @@ export async function attestXcodeSimulatorControl(root: string, sourceSha: strin
     architectures = (await command(["/usr/bin/lipo", "-archs", executable])).stdout
       .trim()
       .split(/\s+/);
-  let entitlements: unknown;
+  let entitlements: unknown, signatureEntitlements: unknown;
+  const sectionHashes = [];
   for (const arch of architectures) {
     if (!["arm64", "x86_64"].includes(arch))
       throw new Error("XCODE_CONTROL_SIMULATOR_ARCH_REQUIRED");
@@ -286,29 +327,77 @@ export async function attestXcodeSimulatorControl(root: string, sourceSha: strin
       app,
     ]);
     await writeFile(file, output.stdout, { flag: "wx" });
-    const decoded = JSON.parse(
+    const signed = JSON.parse(
       (await command(["/usr/bin/plutil", "-convert", "json", "-o", "-", file])).stdout,
     );
+    const signatureParsed = xcodeHostSignatureEntitlementsSchema.safeParse(signed);
+    if (!signatureParsed.success) throw new Error("XCODE_CONTROL_HOST_ENTITLEMENTS_MISMATCH");
+    if (
+      signatureEntitlements &&
+      JSON.stringify(signatureEntitlements) !== JSON.stringify(signatureParsed.data)
+    )
+      throw new Error("XCODE_CONTROL_ARCH_ENTITLEMENTS_DIFFER");
+    signatureEntitlements = signatureParsed.data;
+    verifySimulatorBuildPlatform(
+      (await command(["/usr/bin/xcrun", "vtool", "-arch", arch, "-show-build", executable])).stdout,
+    );
+    const thin = resolve(root, `.wrangler/mobile-build/private-thin-${arch}`),
+      xml = resolve(root, `.wrangler/mobile-build/private-sim-${arch}.xml`),
+      der = resolve(root, `.wrangler/mobile-build/private-sim-${arch}.der`),
+      decodedDer = resolve(root, `.wrangler/mobile-build/private-sim-der-${arch}.xml`);
+    for (const path of [thin, xml, der, decodedDer])
+      if (await Bun.file(path).exists()) throw new Error("XCODE_CONTROL_FRESH_OUTPUT_REQUIRED");
+    await command(["/usr/bin/lipo", executable, "-thin", arch, "-output", thin]);
+    await command(["/usr/bin/xcrun", "segedit", thin, "-extract", "__TEXT", "__entitlements", xml]);
+    await command(["/usr/bin/xcrun", "segedit", thin, "-extract", "__TEXT", "__ents_der", der]);
+    const xmlBytes = await readFile(xml),
+      derBytes = await readFile(der);
+    if (!xmlBytes.length || !derBytes.length || xmlBytes.length > 65536 || derBytes.length > 65536)
+      throw new Error("XCODE_CONTROL_SIMULATOR_SECTIONS_REQUIRED");
+    await writeFile(
+      decodedDer,
+      (await command(["/usr/bin/derq", "query", "-i", der, "-x"])).stdout,
+      { flag: "wx" },
+    );
+    const decoded = JSON.parse(
+        (await command(["/usr/bin/plutil", "-convert", "json", "-o", "-", xml])).stdout,
+      ),
+      fromDer = xcodeControlEntitlements(
+        JSON.parse(
+          (await command(["/usr/bin/plutil", "-convert", "json", "-o", "-", decodedDer])).stdout,
+        ),
+      );
     await writeFile(
       resolve(root, `.wrangler/ios-xcode-control/entitlement-shape-${arch}.json`),
       `${JSON.stringify({ sourceSha, architecture: arch, observedAt: new Date().toISOString(), ...xcodeEntitlementShape(decoded) }, null, 2)}\n`,
       { flag: "wx" },
     );
     const parsed = xcodeControlEntitlements(decoded);
+    if (JSON.stringify(parsed) !== JSON.stringify(fromDer))
+      throw new Error("XCODE_CONTROL_XML_DER_DIFFER");
     if (entitlements && JSON.stringify(entitlements) !== JSON.stringify(parsed))
       throw new Error("XCODE_CONTROL_ARCH_ENTITLEMENTS_DIFFER");
     entitlements = parsed;
+    sectionHashes.push({
+      architecture: arch,
+      xmlSha256: sha256(xmlBytes),
+      derSha256: sha256(derBytes),
+    });
   }
   const receipt = xcodeControlReceiptSchema.parse({
-    version: 1,
+    version: 2,
     kind: "xcode-simulator-signing-control",
     sourceSha,
+    toolingSourceSha,
     observedAt: new Date().toISOString(),
     applicationId: info.CFBundleIdentifier,
     signature: "ad-hoc",
     teamIdentifier: "not set",
     architectures,
     entitlements,
+    entitlementsSource: "simulator-macho-xml-and-der",
+    signatureEntitlements,
+    sectionHashes,
     executableSha256: sha256(await readFile(executable)),
     infoPlistSha256: sha256(await readFile(infoPath)),
     appRuntimeVerified: false,
@@ -323,7 +412,7 @@ export async function attestXcodeSimulatorControl(root: string, sourceSha: strin
   );
   return receipt;
 }
-export async function verifyFreshXcodeControlBinary(root: string, sourceSha: string) {
+export async function verifyXcodeControlBinary(root: string, sourceSha: string) {
   const input = resolve(root, ".wrangler/mobile-handoff"),
     receiptBytes = await readFile(resolve(input, "receipt-ios.json")),
     receipt = verifyPreviewArtifact(JSON.parse(receiptBytes.toString()), sourceSha, "ios");
@@ -347,8 +436,9 @@ export async function verifyFreshXcodeControlBinary(root: string, sourceSha: str
     receipt,
     zip,
     manifest: {
-      kind: "fresh-current-source-xcode-control",
+      kind: "verified-xcode-control-preview",
       sourceSha,
+      toolingSourceSha: control.toolingSourceSha,
       zipName: receipt.artifact.name,
       zipBytes: bytes.byteLength,
       zipSha256: receipt.artifact.sha256,
