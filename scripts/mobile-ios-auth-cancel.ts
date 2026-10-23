@@ -6,19 +6,22 @@ import { iosColdLaunchReceiptSchema } from "./mobile-internal-ios-input";
 import { xcodeSimulatorControlArguments } from "./mobile-ios-xcode-control";
 
 export function iosAuthenticationPrivacyBoundary() {
-  let beforeAuthentication = true;
+  let beforeSensitiveNavigation = true;
   return {
     get persistCommandLogs() {
-      return beforeAuthentication;
+      return beforeSensitiveNavigation;
     },
     get explicitScreenshotReadsAllowed() {
-      return beforeAuthentication;
+      return beforeSensitiveNavigation;
+    },
+    enterPublicData() {
+      beforeSensitiveNavigation = false;
     },
     enterAuthentication() {
-      beforeAuthentication = false;
+      beforeSensitiveNavigation = false;
     },
     assertCommandAllowed(args: readonly string[]) {
-      if (!beforeAuthentication && args.includes("screenshot"))
+      if (!beforeSensitiveNavigation && args.includes("screenshot"))
         throw Error("INTERNAL_IOS_AUTH_SCREENSHOT_FORBIDDEN");
     },
   };

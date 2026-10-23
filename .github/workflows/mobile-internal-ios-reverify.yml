@@ -37,6 +37,12 @@ on:
         default: false
         type: boolean
 
+      public_directory:
+        description: Public directory synthetic ASCII search, keyboard dismissal and window rotation; no profile values exported
+        required: false
+        default: false
+        type: boolean
+
 permissions:
   contents: read
   actions: read
@@ -64,11 +70,19 @@ jobs:
           OBSERVE_UI_TEST: ${{ inputs.ui_test }}
           OBSERVE_ACCESSIBILITY_AUDIT: ${{ inputs.accessibility_audit }}
           OBSERVE_AUTH_CANCEL: ${{ inputs.auth_cancel }}
+          OBSERVE_PUBLIC_DIRECTORY: ${{ inputs.public_directory }}
         run: |
           [[ "$TARGET_SHA" =~ ^[a-f0-9]{40}$ ]]
           if [ "$OBSERVE_LARGE_FONT" = "true" ]; then test "$OBSERVE_HOME" = "true"; fi
           if [ "$OBSERVE_UI_TEST" = "true" ]; then test "$OBSERVE_LARGE_FONT" = "true"; fi
           if [ "$OBSERVE_ACCESSIBILITY_AUDIT" = "true" ]; then test "$OBSERVE_UI_TEST" = "true"; fi
+          if [ "$OBSERVE_PUBLIC_DIRECTORY" = "true" ]; then
+            test "$OBSERVE_HOME" = "true"
+            test "$OBSERVE_AUTH_CANCEL" != "true"
+            test "$OBSERVE_LARGE_FONT" != "true"
+            test "$OBSERVE_UI_TEST" != "true"
+            test "$OBSERVE_ACCESSIBILITY_AUDIT" != "true"
+          fi
           if [ "$OBSERVE_AUTH_CANCEL" = "true" ]; then
             test "$OBSERVE_HOME" = "true"
             test "$OBSERVE_LARGE_FONT" != "true"
@@ -118,6 +132,7 @@ jobs:
           OBSERVE_UI_TEST: ${{ inputs.ui_test }}
           OBSERVE_ACCESSIBILITY_AUDIT: ${{ inputs.accessibility_audit }}
           OBSERVE_AUTH_CANCEL: ${{ inputs.auth_cancel }}
+          OBSERVE_PUBLIC_DIRECTORY: ${{ inputs.public_directory }}
         run: |
           args=()
           if [ "$OBSERVE_HOME" = "true" ]; then args+=(--home); fi
@@ -125,6 +140,7 @@ jobs:
           if [ "$OBSERVE_UI_TEST" = "true" ]; then args+=(--ui-test); fi
           if [ "$OBSERVE_ACCESSIBILITY_AUDIT" = "true" ]; then args+=(--accessibility-audit); fi
           if [ "$OBSERVE_AUTH_CANCEL" = "true" ]; then args+=(--auth-cancel); fi
+          if [ "$OBSERVE_PUBLIC_DIRECTORY" = "true" ]; then args+=(--public-directory); fi
           bun scripts/mobile-internal-ios-reverify.ts "${args[@]}"
           if [ "$OBSERVE_HOME" = "true" ]; then
             test -s .wrangler/mobile-internal-ios-reverify/home.json
@@ -142,6 +158,9 @@ jobs:
           fi
           if [ "$OBSERVE_AUTH_CANCEL" = "true" ]; then
             test -s .wrangler/mobile-internal-ios-reverify/auth-cancel-ui.json
+          fi
+          if [ "$OBSERVE_PUBLIC_DIRECTORY" = "true" ]; then
+            test -s .wrangler/mobile-internal-ios-reverify/directory-ui.json
           fi
       - name: Observe SDK UI command documentation without reading or changing device state
         run: bun scripts/mobile-ios-ui-capabilities.ts
@@ -161,6 +180,7 @@ jobs:
             .wrangler/mobile-internal-ios-reverify/home-ui-test.json
             .wrangler/mobile-internal-ios-reverify/accessibility-audit.json
             .wrangler/mobile-internal-ios-reverify/auth-cancel-ui.json
+            .wrangler/mobile-internal-ios-reverify/directory-ui.json
             .wrangler/mobile-internal-ios-reverify/large-font.json
             .wrangler/mobile-internal-ios-reverify/large-font-ios.png
           if-no-files-found: warn

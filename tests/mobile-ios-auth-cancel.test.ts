@@ -81,6 +81,7 @@ test("auth-cancel requires an isolated Home smoke and excludes large font, audit
     uiTest: false,
     accessibilityAudit: false,
     authCancel: true,
+    publicDirectory: false,
   });
   for (const args of [
     ["--auth-cancel"],

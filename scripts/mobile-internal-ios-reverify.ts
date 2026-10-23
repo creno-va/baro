@@ -18,6 +18,13 @@ import {
   verifyIosAuthCancelReceipt,
 } from "./mobile-ios-auth-cancel";
 import {
+  iosDirectoryBaseSchema,
+  type iosDirectoryReceiptSchema,
+  observeIosDirectoryFailure,
+  runIosDirectoryUiTest,
+  verifyIosDirectoryReceipt,
+} from "./mobile-ios-directory-ui";
+import {
   observeHomeUiFailure,
   runIosHomeUiTest,
   verifyIosAccessibilityReceipt,
@@ -36,9 +43,8 @@ import { observePreviewApi } from "./mobile-preview-artifact";
 const hash = (b: Uint8Array) => createHash("sha256").update(b).digest("hex");
 async function main() {
   if (process.platform !== "darwin") throw new Error("INTERNAL_IOS_MAC_REQUIRED");
-  const { home, largeFont, uiTest, accessibilityAudit, authCancel } = iosInternalObservationOptions(
-    process.argv.slice(2),
-  );
+  const { home, largeFont, uiTest, accessibilityAudit, authCancel, publicDirectory } =
+    iosInternalObservationOptions(process.argv.slice(2));
   const root = process.cwd(),
     env = internalIosEnvironment(process.env),
     tooling = env.TARGET_SHA as string,
@@ -56,6 +62,7 @@ async function main() {
     "home-ui-test.json",
     "accessibility-audit.json",
     "auth-cancel-ui.json",
+    "directory-ui.json",
   ])
     if (await Bun.file(resolve(base, name)).exists())
       throw new Error("INTERNAL_IOS_FRESH_OUTPUT_REQUIRED");
@@ -69,6 +76,7 @@ async function main() {
     guard: ReturnType<typeof Bun.serve> | undefined,
     uiTestFailure: ReturnType<typeof observeHomeUiFailure> | null = null,
     authCancelFailure: ReturnType<typeof observeIosAuthCancelFailure> | null = null,
+    directoryFailure: ReturnType<typeof observeIosDirectoryFailure> | null = null,
     lastCommand: { exitCode: number; timedOut: boolean; category: string } | null = null;
   async function command(args: string[], cwd = root, timeout = 120000) {
     lastCommand = null;
@@ -92,6 +100,8 @@ async function main() {
           uiTestFailure = observeHomeUiFailure(`${out}\n${err}`);
         if (phase === "native-auth-cancel-xcuitest")
           authCancelFailure = observeIosAuthCancelFailure(`${out}\n${err}`);
+        if (phase === "public-directory-xcuitest")
+          directoryFailure = observeIosDirectoryFailure(`${out}\n${err}`);
         lastCommand = {
           exitCode: exit,
           timedOut: expired,
@@ -343,6 +353,39 @@ async function main() {
       });
       console.log("INTERNAL_IOS_ANONYMOUS_AUTH_CANCELLATION_OBSERVED");
     }
+    if (publicDirectory) {
+      phase = "public-directory-xcuitest";
+      privacy.enterPublicData();
+      const explicitScreenshotsSuppressedBeforeNavigation = !privacy.explicitScreenshotReadsAllowed,
+        hostRawCommandLogsPersistedAfterBoundary = privacy.persistCommandLogs;
+      if (
+        !explicitScreenshotsSuppressedBeforeNavigation ||
+        hostRawCommandLogsPersistedAfterBoundary
+      )
+        throw Error("INTERNAL_IOS_DIRECTORY_PRIVACY_BOUNDARY_REQUIRED");
+      const observation = await runIosDirectoryUiTest({ root, owned, device, command });
+      if (guardRequests) throw Error("INTERNAL_IOS_UNEXPECTED_METRO_REQUEST");
+      const proof = verifyIosDirectoryReceipt(
+        {
+          ...iosDirectoryBaseSchema.strip().parse(receipt),
+          kind: "ios-bundled-public-directory-input-observation",
+          observedAt: new Date().toISOString(),
+          ...observation,
+          explicitScreenshotsSuppressedBeforeNavigation,
+          hostRawCommandLogsPersistedAfterBoundary,
+          rawXcresultExported: false,
+          rawUiHierarchyExported: false,
+          uiTestRunnerCompiled: true,
+          productRecompiled: false,
+          productResigned: false,
+        } satisfies z.input<typeof iosDirectoryReceiptSchema>,
+        receipt,
+      );
+      await writeFile(resolve(base, "directory-ui.json"), `${JSON.stringify(proof, null, 2)}\n`, {
+        flag: "wx",
+      });
+      console.log("INTERNAL_IOS_PUBLIC_DIRECTORY_INPUT_OBSERVED");
+    }
     if (largeFont) {
       phase = "large-font-sdk-capabilities";
       const capabilities = await readIosUiCapabilities(tooling);
@@ -475,6 +518,10 @@ async function main() {
         "INTERNAL_IOS_AUTH_OWNED_MAC_CI_REQUIRED",
         "INTERNAL_IOS_AUTH_SCREENSHOT_FORBIDDEN",
         "INTERNAL_IOS_AUTH_PRIVACY_BOUNDARY_REQUIRED",
+        "INTERNAL_IOS_DIRECTORY_RESULT_REQUIRED",
+        "INTERNAL_IOS_DIRECTORY_IDENTITY_MISMATCH",
+        "INTERNAL_IOS_DIRECTORY_OWNED_MAC_CI_REQUIRED",
+        "INTERNAL_IOS_DIRECTORY_PRIVACY_BOUNDARY_REQUIRED",
         "INTERNAL_IOS_AUDIT_SINGLE_RESULT_REQUIRED",
         "INTERNAL_IOS_AUDIT_IDENTITY_MISMATCH",
         "INTERNAL_IOS_ACCESSIBILITY_ISSUES_FOUND",
@@ -501,7 +548,7 @@ async function main() {
       ]);
     await writeFile(
       resolve(base, "failure.json"),
-      `${JSON.stringify({ toolingSourceSha: tooling, phase, code: known.has(code) ? code : xcodeControlBuildFailure(error), lastCommand, uiTestFailure, authCancelFailure, nativeProcessLaunchVerified: false, homeContentVerified: false, remoteApiVerified: false, oauthVerified: false, physicalDeviceVerified: false, storeSigned: false, deployed: false }, null, 2)}\n`,
+      `${JSON.stringify({ toolingSourceSha: tooling, phase, code: known.has(code) ? code : xcodeControlBuildFailure(error), lastCommand, uiTestFailure, authCancelFailure, directoryFailure, nativeProcessLaunchVerified: false, homeContentVerified: false, remoteApiVerified: false, oauthVerified: false, physicalDeviceVerified: false, storeSigned: false, deployed: false }, null, 2)}\n`,
       { flag: "wx" },
     );
     throw new Error("INTERNAL_IOS_REVERIFY_FAILED");
