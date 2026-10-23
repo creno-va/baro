@@ -1,0 +1,44 @@
+{
+  "observedAt": "2026-10-23T20:15:04.942Z",
+  "environment": "preview",
+  "accountLoginPerformed": false,
+  "providerPageFetched": false,
+  "nativeReturnVerified": false,
+  "providers": [
+    {
+      "provider": "google",
+      "startStatus": 200,
+      "authorizationValid": true,
+      "stateCookiePresent": false,
+      "proxyStatus": 302,
+      "proxyRedirectIdentical": true,
+      "proxyStateCookiePresent": true,
+      "error": "none"
+    },
+    {
+      "provider": "naver",
+      "startStatus": 200,
+      "authorizationValid": true,
+      "stateCookiePresent": false,
+      "proxyStatus": 302,
+      "proxyRedirectIdentical": true,
+      "proxyStateCookiePresent": true,
+      "error": "none"
+    },
+    {
+      "provider": "kakao",
+      "startStatus": 200,
+      "authorizationValid": true,
+      "stateCookiePresent": false,
+      "proxyStatus": 302,
+      "proxyRedirectIdentical": true,
+      "proxyStateCookiePresent": true,
+      "error": "none"
+    }
+  ],
+  "health": {
+    "status": 200,
+    "ready": true,
+    "release": "f91244151c94d871423e9f2fe6fda5a70bf0e668"
+  }
+}
