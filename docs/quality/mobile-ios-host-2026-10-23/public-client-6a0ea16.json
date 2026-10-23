@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "kind": "public-shared-client-preview-read-only",
+  "observedAt": "2026-10-23T10:04:46.569Z",
+  "clientSourceSha": "6a0ea16b57644283d6b0c7e63f9c974e50466705",
+  "apiSourceSha": "f91244151c94d871423e9f2fe6fda5a70bf0e668",
+  "environment": "preview",
+  "publicDirectory": {
+    "requests": 1,
+    "status": 200,
+    "sharedResponseSchemaVerified": true,
+    "cookiesAuthorizationAndSetCookieAbsent": true
+  },
+  "nativeSdk": false,
+  "authenticatedJourneys": false,
+  "oauth": false,
+  "physicalDevice": false
+}

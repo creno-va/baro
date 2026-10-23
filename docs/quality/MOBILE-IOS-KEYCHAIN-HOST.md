@@ -53,3 +53,25 @@ full runtime은 유효한 제품 Home layout과 합성 화면을 관측하면 �
 
 기존 `nativeCalls`는 관측한 native upload/download 요청 횟수다. reserve/cancel/release나
 SDK 파일 read를 포함하는 전체 IPC/파일 IO 호출 수로 해석하지 않는다.
+
+## 첫 SDK host 실행과 보완
+
+PR395/main `6a0ea16b57644283d6b0c7e63f9c974e50466705`의
+[main CI39935544965](https://github.com/creno-va/baro/actions/runs/39935544965)는 SUCCESS다.
+[SDK host39935901874](https://github.com/creno-va/baro/actions/runs/39935901874)는 terminal
+FAILURE다. [원본 실패 receipt](./mobile-ios-host-2026-10-23/failure-6a0ea16.json)는
+baselineObserved=true, signedObserved=false, phase=signed/IOS_HOST_COMMAND_FAILED다.
+control flow상 서명 helper 반환 뒤 재설치/실행 중 실패했지만 명령별 원인은 기록되지 않았다.
+baseline 작업별 결과와 signing readback도 최종 receipt 전에 별도 저장하지 않아 복구할 수 없다.
+이를 실제 SecureStore 성공/실패나 원인 확정으로 해석하지 않는다.
+
+보완 runner는 nonce/source/phase/schema를 검사한 baseline/signed report를 수신 즉시
+별도 파일로 보존한다. 실제 signing 결과도 후속 설치 전에 저장한다. 명령 실패는 고정된
+작업명·exit code·timeout/signature/launch 등 allowlist category만 담고 stderr/argv를 내보내지 않는다.
+기존 앱을 종료한 뒤 설치하도록 순서를 고치며, 기존 실패와 조건 변경 후의 실행을 구분한다.
+Home-only/full native IO·원격 OAuth·physical/store의 인수 경계는 그대로다.
+
+별도 [공통 클라이언트 공개 조회 관측](./mobile-ios-host-2026-10-23/public-client-6a0ea16.json)은
+2026-10-23T10:04:46.569Z에 실제 preview f912441의 공개 directory GET1회/200과 현재 공유
+response schema를 통과했다. 반환 프로필 원문·식별자는 저장하지 않았다. Node/Bun의
+읽기 전용 검사이며 실제 native SDK/인증 여정/OAuth/물리 기기 성공이 아니다.

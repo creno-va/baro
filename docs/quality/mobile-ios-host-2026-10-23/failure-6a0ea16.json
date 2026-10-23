@@ -1,0 +1,11 @@
+{
+  "sourceSha": "6a0ea16b57644283d6b0c7e63f9c974e50466705",
+  "phase": "signed",
+  "code": "IOS_HOST_COMMAND_FAILED",
+  "baselineObserved": true,
+  "signedObserved": false,
+  "remoteApiVerified": false,
+  "oauthVerified": false,
+  "physicalDeviceVerified": false,
+  "storeSigned": false
+}
