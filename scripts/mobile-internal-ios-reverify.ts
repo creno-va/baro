@@ -9,6 +9,11 @@ import {
   verifyPinnedInternalIosInput,
 } from "./mobile-internal-ios-input";
 import {
+  observeHomeUiFailure,
+  runIosHomeUiTest,
+  verifyIosHomeUiReceipt,
+} from "./mobile-ios-home-ui-test";
+import {
   iosInternalObservationOptions,
   iosLargestContentSize,
   readIosUiCapabilities,
@@ -21,7 +26,7 @@ import { observePreviewApi } from "./mobile-preview-artifact";
 const hash = (b: Uint8Array) => createHash("sha256").update(b).digest("hex");
 async function main() {
   if (process.platform !== "darwin") throw new Error("INTERNAL_IOS_MAC_REQUIRED");
-  const { home, largeFont } = iosInternalObservationOptions(process.argv.slice(2));
+  const { home, largeFont, uiTest } = iosInternalObservationOptions(process.argv.slice(2));
   const root = process.cwd(),
     env = internalIosEnvironment(process.env),
     tooling = env.TARGET_SHA as string,
@@ -36,6 +41,7 @@ async function main() {
     "home-ios.png",
     "large-font.json",
     "large-font-ios.png",
+    "home-ui-test.json",
   ])
     if (await Bun.file(resolve(base, name)).exists())
       throw new Error("INTERNAL_IOS_FRESH_OUTPUT_REQUIRED");
@@ -46,6 +52,7 @@ async function main() {
     sequence = 0,
     guardRequests = 0,
     guard: ReturnType<typeof Bun.serve> | undefined,
+    uiTestFailure: ReturnType<typeof observeHomeUiFailure> | null = null,
     lastCommand: { exitCode: number; timedOut: boolean; category: string } | null = null;
   async function command(args: string[], cwd = root, timeout = 120000) {
     lastCommand = null;
@@ -63,6 +70,8 @@ async function main() {
         exit = await c.exited;
       await writeFile(resolve(owned, `private-command-${sequence++}.log`), `${out}\n${err}`);
       if (exit !== 0 || expired) {
+        if (phase === "large-font-home-guide-xcuitest")
+          uiTestFailure = observeHomeUiFailure(`${out}\n${err}`);
         lastCommand = {
           exitCode: exit,
           timedOut: expired,
@@ -334,10 +343,55 @@ async function main() {
         flag: "wx",
       });
       console.log("INTERNAL_IOS_LARGE_FONT_READBACK_OBSERVED_VISUAL_REVIEW_REQUIRED");
+      if (uiTest) {
+        phase = "large-font-home-guide-xcuitest";
+        const observation = await runIosHomeUiTest({ root, owned, device, command });
+        if (guardRequests) throw Error("INTERNAL_IOS_UNEXPECTED_METRO_REQUEST");
+        const proof = verifyIosHomeUiReceipt(
+          {
+            version: 1,
+            kind: "ios-bundled-large-font-home-guide-ui-observation",
+            binarySourceSha: receipt.binarySourceSha,
+            toolingSourceSha: tooling,
+            observedAt: new Date().toISOString(),
+            applicationId: receipt.applicationId,
+            archiveSha256: receipt.archiveSha256,
+            compilerReceiptSha256: receipt.compilerReceiptSha256,
+            device: receipt.device,
+            requiresMetro: false,
+            metroStarted: false,
+            metroGuardRequests: 0,
+            anonymousFreshInstall: true,
+            ...observation,
+            productRecompiled: false,
+            productResigned: false,
+            uiTestRunnerCompiled: true,
+            rawUiHierarchyExported: false,
+            rawXcresultExported: false,
+            accessibilityVerified: false,
+            productJourneysVerified: false,
+            remoteApiVerified: false,
+            oauthVerified: false,
+            physicalDeviceVerified: false,
+            storeSigned: false,
+            deployed: false,
+          },
+          receipt,
+          large,
+        );
+        await writeFile(resolve(base, "home-ui-test.json"), `${JSON.stringify(proof, null, 2)}\n`, {
+          flag: "wx",
+        });
+        console.log("INTERNAL_IOS_LARGE_FONT_HOME_GUIDE_UI_TEST_OBSERVED");
+      }
     }
   } catch (error) {
     const code = error instanceof Error ? error.message : "",
       known = new Set([
+        "INTERNAL_IOS_UI_TEST_OWNED_MAC_CI_REQUIRED",
+        "INTERNAL_IOS_UI_TEST_GENERATOR_VERSION_REQUIRED",
+        "INTERNAL_IOS_UI_TEST_SINGLE_RESULT_REQUIRED",
+        "INTERNAL_IOS_UI_TEST_IDENTITY_MISMATCH",
         "INTERNAL_IOS_CONTENT_SIZE_UNSUPPORTED",
         "INTERNAL_IOS_CONTENT_SIZE_READBACK_MISMATCH",
         "INTERNAL_IOS_LARGE_FONT_IDENTITY_MISMATCH",
@@ -361,7 +415,7 @@ async function main() {
       ]);
     await writeFile(
       resolve(base, "failure.json"),
-      `${JSON.stringify({ toolingSourceSha: tooling, phase, code: known.has(code) ? code : xcodeControlBuildFailure(error), lastCommand, nativeProcessLaunchVerified: false, homeContentVerified: false, remoteApiVerified: false, oauthVerified: false, physicalDeviceVerified: false, storeSigned: false, deployed: false }, null, 2)}\n`,
+      `${JSON.stringify({ toolingSourceSha: tooling, phase, code: known.has(code) ? code : xcodeControlBuildFailure(error), lastCommand, uiTestFailure, nativeProcessLaunchVerified: false, homeContentVerified: false, remoteApiVerified: false, oauthVerified: false, physicalDeviceVerified: false, storeSigned: false, deployed: false }, null, 2)}\n`,
       { flag: "wx" },
     );
     throw new Error("INTERNAL_IOS_REVERIFY_FAILED");

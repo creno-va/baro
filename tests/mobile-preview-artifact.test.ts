@@ -33,6 +33,11 @@ import {
   verifyPinnedInternalIosInput,
 } from "../scripts/mobile-internal-ios-input";
 import {
+  observeHomeUiFailure,
+  parseHomeGuideUiResult,
+  verifyIosHomeUiReceipt,
+} from "../scripts/mobile-ios-home-ui-test";
+import {
   inspectIosUiHelp,
   iosInternalObservationOptions,
   iosLargestContentSize,
@@ -77,13 +82,30 @@ test("SDK UI documentation reports only exact known categories and cannot claim 
     expect(iosUiCapabilitiesSchema.safeParse({ ...result, [field]: true }).success).toBe(false);
 });
 test("large iOS font observation requires Home and exact SDK native category readback", () => {
-  expect(iosInternalObservationOptions([])).toEqual({ home: false, largeFont: false });
-  expect(iosInternalObservationOptions(["--home"])).toEqual({ home: true, largeFont: false });
+  expect(iosInternalObservationOptions([])).toEqual({
+    home: false,
+    largeFont: false,
+    uiTest: false,
+  });
+  expect(iosInternalObservationOptions(["--home"])).toEqual({
+    home: true,
+    largeFont: false,
+    uiTest: false,
+  });
   expect(iosInternalObservationOptions(["--home", "--large-font"])).toEqual({
     home: true,
     largeFont: true,
+    uiTest: false,
+  });
+  expect(iosInternalObservationOptions(["--home", "--large-font", "--ui-test"])).toEqual({
+    home: true,
+    largeFont: true,
+    uiTest: true,
   });
   for (const args of [
+    ["--home --large-font --ui-test"],
+    ["--ui-test"],
+    ["--home", "--ui-test"],
     ["--large-font"],
     ["--home", "--unknown"],
     ["--home", "--large-font", "--home"],
@@ -300,6 +322,135 @@ test("iOS large-font receipt binds baseline binary/device and cannot overstate s
   ])
     expect(() => verifyIosLargeFontReceipt({ ...value, ...patch }, baseline)).toThrow();
 });
+
+const syntheticHomeUiResult = () =>
+  ({
+    kind: "ios-anonymous-home-guide-xcuitest",
+    applicationId: "site.baro.app.preview",
+    homeSwipes: 4,
+    guideSwipes: 6,
+    homeTitleObserved: true,
+    guideButtonFullyHittable: true,
+    guideTapVerified: true,
+    guideTitleObserved: true,
+    returnButtonFullyHittable: true,
+    returnTapVerified: true,
+    homeReturnObserved: true,
+    publicDataNavigation: false,
+    authenticationNavigation: false,
+    privateDataAccess: false,
+  }) as const;
+test("XCTest success requires one strict complete observation; empty/duplicate output or private payload cannot pass", () => {
+  const result = syntheticHomeUiResult(),
+    marker = `BARO_HOME_UI_RESULT:${JSON.stringify(result)}`;
+  expect(parseHomeGuideUiResult(`private compiler chatter\n${marker}\n`)).toEqual(result);
+  for (const raw of [
+    "** TEST SUCCEEDED **",
+    `${marker}\n${marker}`,
+    "BARO_HOME_UI_RESULT:broken",
+    `prefix ${marker}`,
+  ])
+    expect(() => parseHomeGuideUiResult(raw)).toThrow();
+  for (const patch of [
+    { homeSwipes: 0 },
+    { guideSwipes: 25 },
+    { guideTapVerified: false },
+    { homeReturnObserved: false },
+    { privateDataAccess: true },
+    { authenticationNavigation: true },
+    { publicDataNavigation: true },
+    { rawHierarchy: "synthetic-private" },
+  ])
+    expect(() =>
+      parseHomeGuideUiResult(`BARO_HOME_UI_RESULT:${JSON.stringify({ ...result, ...patch })}`),
+    ).toThrow();
+});
+test("XCTest failure observation retains only known assertion and bounded diagnostic categories", () => {
+  const proof = observeHomeUiFailure(
+    "synthetic-secret\nXCTAssertTrue failed - BARO_GUIDE_MISSING\nSwiftCompile command failed",
+  );
+  expect(proof.assertionCode).toBe("BARO_GUIDE_MISSING");
+  expect(proof.swiftCompilationFailure).toBe(true);
+  const compiler = observeHomeUiFailure(
+    "/synthetic-private/HomeUITests.swift:48:12: error: cannot find XCUIApplication in scope secret-payload",
+  );
+  expect(compiler.compilerLocations).toEqual([
+    { line: 48, column: 12, category: "SDK_SYMBOL_UNAVAILABLE" },
+  ]);
+  expect(JSON.stringify(compiler)).not.toContain("synthetic-private");
+  expect(JSON.stringify(compiler)).not.toContain("secret-payload");
+  expect(JSON.stringify(proof)).not.toContain("synthetic-secret");
+  expect(observeHomeUiFailure("compiler source echo BARO_HOME_MISSING").assertionCode).toBeNull();
+  expect(
+    observeHomeUiFailure("XCTAssertTrue failed - BARO_PRIVATE_TOKEN").assertionCode,
+  ).toBeNull();
+  expect(
+    observeHomeUiFailure("XCTAssertTrue failed - BARO_GUIDE_MISSING_SUFFIX").assertionCode,
+  ).toBeNull();
+});
+test("iOS UI receipt binds baseline and large-font source/device, without claiming complete accessibility", async () => {
+  const baseline = await Bun.file(
+      "docs/quality/mobile-internal-ios-2026-10-23/home-f1ac60d.json",
+    ).json(),
+    large = await Bun.file(
+      "docs/quality/mobile-internal-ios-2026-10-23/large-font-f1ac60d.json",
+    ).json();
+  const value = {
+    version: 1,
+    kind: "ios-bundled-large-font-home-guide-ui-observation",
+    binarySourceSha: baseline.binarySourceSha,
+    toolingSourceSha: baseline.toolingSourceSha,
+    observedAt: "2026-10-24T00:00:00.000Z",
+    applicationId: baseline.applicationId,
+    archiveSha256: baseline.archiveSha256,
+    compilerReceiptSha256: baseline.compilerReceiptSha256,
+    device: baseline.device,
+    requiresMetro: false,
+    metroStarted: false,
+    metroGuardRequests: 0,
+    anonymousFreshInstall: true,
+    contentSizeBeforeTest: iosLargestContentSize,
+    contentSizeAfterTest: iosLargestContentSize,
+    swiftTestSha256: "c".repeat(64),
+    projectGeneratorSha256: "d".repeat(64),
+    projectGeneratorVersion: "1.27.0",
+    productRecompiled: false,
+    productResigned: false,
+    uiTestRunnerCompiled: true,
+    rawUiHierarchyExported: false,
+    rawXcresultExported: false,
+    result: syntheticHomeUiResult(),
+    accessibilityVerified: false,
+    productJourneysVerified: false,
+    remoteApiVerified: false,
+    oauthVerified: false,
+    physicalDeviceVerified: false,
+    storeSigned: false,
+    deployed: false,
+  };
+  expect(verifyIosHomeUiReceipt(value, baseline, large).result.homeSwipes).toBe(4);
+  for (const patch of [
+    { binarySourceSha: sourceSha },
+    { toolingSourceSha: sourceSha },
+    { archiveSha256: "f".repeat(64) },
+    { compilerReceiptSha256: "f".repeat(64) },
+    { device: { ...baseline.device, osVersion: "99" } },
+    { contentSizeAfterTest: "large" },
+    { accessibilityVerified: true },
+    { productJourneysVerified: true },
+    { metroGuardRequests: 1 },
+    { rawUiHierarchyExported: true },
+    { rawXcresultExported: true },
+    { productRecompiled: true },
+    { oauthVerified: true },
+    { physicalDeviceVerified: true },
+  ])
+    expect(() => verifyIosHomeUiReceipt({ ...value, ...patch }, baseline, large)).toThrow();
+  expect(() =>
+    verifyIosHomeUiReceipt(value, baseline, { ...large, toolingSourceSha: sourceSha }),
+  ).toThrow();
+});
+
 const badging =
   "package: name='site.baro.app.preview' versionCode='1' versionName='0.1.0' platformBuildVersionName='16'\nsdkVersion:'24'\ntargetSdkVersion:'36'\napplication-debuggable\nnative-code: 'arm64-v8a' 'x86_64'\n";
 const candidate = () => ({

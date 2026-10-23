@@ -277,6 +277,33 @@ SUCCESS다. [baseline 원본](../quality/mobile-internal-ios-2026-10-23/home-f1a
 스크롤로 행동에 도달하는지·전체 확대 사용성은 아직 확인하지 않았으며 정확한 배율/접근성 통과로
 표현하지 않는다. #379/#334는 OPEN이다.
 
+### iOS 최대 글자 크기 실제 조작 검증
+
+```sh
+gh workflow run mobile-internal-ios-reverify.yml --ref main -f target_sha=<full40-main-tooling-sha> -f smoke=true -f large_font=true -f ui_test=true
+```
+
+`ui_test`는 일반 Home/확대 PNG·원본 receipt를 먼저 보존하고 같은 새 소유 Simulator에서
+별도 Xcode UI test runner를 컴파일한다. 원본 제품 앱은 재컴파일/재서명하지 않는다.
+Apple의 bundle-ID 기반 `XCUIApplication`과 실제 scroll/hittability/tap API로 익명 Home의
+이용 안내 버튼까지 최대24번 스크롤하고, 버튼이 화면 안에 거의 전부 보이며 hit 가능한지
+확인한 뒤 정적 Guide를 연다. Guide의 처음으로 버튼에도 도달·터치해 Home 복귀를 확인한다.
+디렉터리/로그인/private route를 열지 않으며 실제 API/OAuth·전체 접근성을 인수하지 않는다.
+
+Xcode exit0만으로는 통과하지 않는다. 한 번의 완전한 고정 JSON 표식과 전후 OS category
+readback, baseline/확대의 binary·tooling·compiler/archive·device 일치가 필요하다.
+`home-ui-test.json`만 추가로 export하며 private build/test log·UI hierarchy·xcresult/자동
+attachment는 소유 임시 폴더에서 정리하고 공개 artifact에 넣지 않는다. XCTest 실패는 고정
+assertion code와 제한된 compile/서명/runner 분류만 남긴다. 실제 UI 성공은 실행 후 인수한다.
+
+원본 Guide에는 자료 업로드/리포트 저장을 준비 중으로 설명한 오래된 문구가 있다. 이 원본의
+조작 검증을 최신 기능 안내/최종 앱 인수로 확대하지 않으며 후속 문구 수정·새 앱 source의
+bundled compile/동일 UI 검증이 필요하다. 확대 스크롤/조작·전체 화면/역할·키보드/회전·
+VoiceOver/TalkBack·물리 기기/스토어와 #379/#334는 별도 잔여다.
+
+참고: [XCUIApplication](https://developer.apple.com/documentation/xcuiautomation/xcuiapplication),
+[실제 테스트 실행](https://developer.apple.com/documentation/xcode/running-tests-and-interpreting-results).
+
 ## 내부 전달 기준과 설치
 
 | 전달물 | 앱 source·version/build | binary metadata | 실제 설치/초기 Home 관측 |
