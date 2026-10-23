@@ -361,12 +361,41 @@ strict metadata 결과 중 실제 선택한 하나만 검증하며 다른 source
 원본 입력이 실패·진행 중인 compiler이거나 artifact 만료/변조·다른 SHA/workflow·파일 hash 불일치면
 SDK/기기 단계 전에 거부한다. 새 경로의 실제 Emulator/Home/Guide 성공은 실행 후 인수한다.
 
+### 수정된 source171989e의 실제 관측
+
+PR423/mainb0da132·CI40008989427 뒤 [iOS40009294558](https://github.com/creno-va/baro/actions/runs/40009294558)은 SUCCESS다.
+[metadata](../quality/mobile-internal-ios-2026-10-23/verification-b0da132.json),
+[Home](../quality/mobile-internal-ios-2026-10-23/home-b0da132.json),
+[확대](../quality/mobile-internal-ios-2026-10-23/large-font-b0da132.json),
+[실제 Guide 조작](../quality/mobile-internal-ios-2026-10-23/home-ui-b0da132.json)을 원본 그대로 보존한다.
+iPhone16/iOS26.5의 Home 두 PID는 각3표본/55·20초, 확대 재시작은3표본/21초다.
+XCTest는 최대 category를 전후 읽고 Home5회/Guide6회 scroll, 화면 안의 hit 가능한 버튼 tap·교정된
+자료/리포트 안내·Guide 진입/복귀를 확인했다. Swift/Ruby source 전체 hash도 실제 결과와 대조했다.
+
+[별도 PNG 대조](../quality/mobile-internal-ios-2026-10-23/visual-home-large-b0da132.json)는 한글 Home/확대 초기
+viewport만 직접 확인했다. Guide pixel은 캡처/대조하지 않았으며 조작/교정 문구의 증거는 XCTest다.
+전체 역할/화면·키보드/회전·VoiceOver·physical/store·실제 API/OAuth를 인수한 것은 아니다.
+이전 ff5c208의 관측과 CLI exit64 실패는 그대로 보존하며 새 성공을 이전 실패의 확정 원인 증거로 쓰지 않는다.
+
+PR425/maindd3e84e·CI40011219285 뒤 [Android40011547920](https://github.com/creno-va/baro/actions/runs/40011547920)은
+SDK metadata와 [원본 receipt 유지](../quality/mobile-internal-android-2026-10-23/verification-dd3e84e.json),
+[Home](../quality/mobile-internal-android-2026-10-23/home-dd3e84e.json)·[font2](../quality/mobile-internal-android-2026-10-23/large-font-dd3e84e.json)를
+보존한 뒤 Guide의 마지막 receipt 생성 단계에서 terminal FAILURE다.
+[원본 실패](../quality/mobile-internal-android-2026-10-23/failure-ui-dd3e84e.json)의 마지막 고정 관측은 Home 복귀 상태다.
+새 SDK37.0.0 signature/manifest/HBC/font 재검증과 원본 receipt byte 일치는 별도 성공 사실이며
+Guide 전체 성공으로 확대하지 않는다. [PNG 대조](../quality/mobile-internal-android-2026-10-23/visual-home-large-dd3e84e.json)도 초기 Home/확대만 확인했다.
+
+생성 객체에서 필수 screenshotsSuppressedBeforeNavigation 필드가 빠진 코드 오류를 확인했다.
+첫 이동 전 실제 guard 상태를 기록하고 생성 객체에 strict schema의 TypeScript input 검사를 적용한다.
+향후 proof 검증 실패는 허용된 최상위 필드명만 기록하며 입력 값/원문 hierarchy는 내보내지 않는다.
+기존 실패/시각은 바꾸지 않고 교정된 source의 새 actual 실행으로 최종 Guide 결과를 인수한다.
+
 ## 내부 전달 기준과 설치
 
 | 전달물 | 앱 source·version/build | binary metadata | 실제 설치/초기 Home 관측 |
 | --- | --- | --- | --- |
-| Android APK | dedcd0e / 0.1.0·1 | minimum API24, arm64-v8a/x86_64, embedded HBC, 공개 template development certificate | Android15 Emulator / tooling478a904·39957216861, Metro 요청0. 별도 글자 확대·공개 ready-empty 관측 보존 |
-| iOS Simulator ZIP | ff5c208 / 0.1.0·1 | minimum iOS16.4, arm64/x86_64, embedded HBC, No-Team Simulator ad-hoc | iPhone16/iOS26.5 Simulator / toolingfd86914·39987887841, 두 cold launch·Metro 요청0·Home PNG 대조 |
+| Android APK | 171989e / 0.1.0·1 | minimum API24, arm64-v8a/x86_64, embedded HBC, 공개 template development certificate | Android15 Emulator / toolingdd3e84e·40011547920의 Home/font2·Metro0는 보존. 이후 Guide receipt 실패는 별도. 이전 dedcd0e 공개 ready-empty 기록 유지 |
+| iOS Simulator ZIP | 171989e / 0.1.0·1 | minimum iOS16.4, arm64/x86_64, embedded HBC, No-Team Simulator ad-hoc | iPhone16/iOS26.5 Simulator / toolingb0da132·40009294558, 두 cold launch·최대 글자/Guide 왕복·교정 문구·Metro0·초기 PNG 대조 |
 
 두 앱은 `https://preview.baro.site`를 사용한다. 연결된 receipt의 API health source는f912441이며
 각 관측 시각을 그대로 보존한다. health source를 실제 앱의 HTTP 전송 계측이나 인증된 전체
@@ -398,11 +427,11 @@ xcrun simctl delete "$baro_preview_device"
 ```
 
 #397은 두 OS 내부 bundled 전달물과 초기 실행·설치 안내의 독립 인수다.
-전체 #334와 실제 앱 native IO #385, 인증/역할/사용자 여정 #346/#354/#361/#369,
+local native IO #385도 독립 인수를 완료했다. 전체 #334와 인증/역할/사용자 여정 #346/#354/#361/#369,
 전체 UI/접근성·물리 기기 #379, 보안/최종 릴리스 #339/#71은 각각 남아 있다.
 
-iOS 글자 확대의 후속 준비로 재검증 workflow는 실제 SDK의 `simctl help ui` 문서를 읽고
+별도 SDK documentation step은 실제 SDK의 `simctl help ui` 문서를 읽고
 명시적으로 발견한 content_size 명령/알려진 category 식별자와 문서 hash만 별도 JSON에 남긴다.
 사용자 기기 상태를 읽거나 변경하지 않으며 원문 도움말·runtime 로그·사용자 값은 업로드하지
 않는다. 지원되지 않은 명령을 추측해 실행하지 않고 이 관측을 글자 확대/앱/접근성 성공으로
-표시하지 않는다. 실제 category 설정·readback·앱 재시작/PNG 대조는 다음 관측으로 구분한다.
+표시하지 않는다. 위의 실제 category 설정·readback·앱 재시작/PNG/조작 결과와 SDK 문서 JSON만의 범위를 구분한다.

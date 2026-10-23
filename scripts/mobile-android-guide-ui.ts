@@ -86,3 +86,17 @@ export function verifyAndroidGuideUiReceipt(
     throw Error("BUNDLED_GUIDE_IDENTITY_MISMATCH");
   return result;
 }
+
+export function androidGuideUiValidationFields(error: unknown) {
+  if (!(error instanceof z.ZodError)) return [];
+  return [
+    ...new Set(
+      error.issues
+        .map((issue) => issue.path[0])
+        .filter(
+          (field): field is string =>
+            typeof field === "string" && Object.hasOwn(androidGuideUiReceiptSchema.shape, field),
+        ),
+    ),
+  ].slice(0, 8);
+}

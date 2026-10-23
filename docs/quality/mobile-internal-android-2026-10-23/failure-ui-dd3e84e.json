@@ -1,0 +1,25 @@
+{
+  "toolingSourceSha": "dd3e84eb803aa525e40a758fa5c3aaad325e6396",
+  "phase": "guide-ui-return",
+  "code": "BUNDLED_HOME_FAILED",
+  "emulatorBootVerified": true,
+  "lastHomeObservation": {
+    "titleVisible": true,
+    "firstCardVisible": true,
+    "foundationErrorVisible": false
+  },
+  "lastPublicObservation": null,
+  "lastGuideObservation": {
+    "homeTitleVisible": true,
+    "guideTitleVisible": false,
+    "currentFeatureDescriptionVisible": false,
+    "configurationErrorVisible": false
+  },
+  "publicScreenshotsSuppressed": true,
+  "emulatorStartupIssues": [],
+  "sdkHomeLaunchVerified": true,
+  "largeFontVerified": false,
+  "physicalDeviceVerified": false,
+  "storeSigned": false,
+  "deployed": false
+}
