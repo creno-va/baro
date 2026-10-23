@@ -201,3 +201,51 @@ test("narrow and rotated large-font shells retain full content, responsive paddi
   ).toHaveLength(0);
   expect(screen.getByText("목록이 스크롤을 소유해요")).toBeTruthy();
 });
+
+test("disclosure opens only presentation, keeps the complete label/state and never dispatches a child action automatically", async () => {
+  const { Disclosure } = require("../src/ui/Disclosure") as typeof import("../src/ui/Disclosure");
+  const command = jest.fn();
+  await render(
+    <Disclosure
+      title={long}
+      summary="필요할 때 확인해 주세요."
+      preview={<Text>저장된 읽기 내용</Text>}
+    >
+      <Button label="명시적 요청" onPress={command} />
+    </Disclosure>,
+  );
+  const control = screen.getByRole("button", { name: long });
+  expect(control.props.accessibilityState.expanded).toBe(false);
+  expect(screen.getByText("저장된 읽기 내용")).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "명시적 요청" })).toBeNull();
+  await fireEvent.press(control);
+  expect(screen.getByRole("button", { name: long }).props.accessibilityState.expanded).toBe(true);
+  expect(command).not.toHaveBeenCalled();
+  await fireEvent.press(screen.getByRole("button", { name: "명시적 요청" }));
+  expect(command).toHaveBeenCalledTimes(1);
+  await fireEvent.press(screen.getByRole("button", { name: long }));
+  expect(screen.getByText("저장된 읽기 내용")).toBeTruthy();
+  expect(command).toHaveBeenCalledTimes(1);
+});
+test("critical disclosure stays exposed through a pending state and remains open when the pending state resolves until a deliberate close", async () => {
+  const { Disclosure } = require("../src/ui/Disclosure") as typeof import("../src/ui/Disclosure");
+  const view = await render(
+    <Disclosure title="요청 결과" summary="확인 중이에요." keepOpen>
+      <Text>확인해야 할 결과</Text>
+    </Disclosure>,
+  );
+  await fireEvent.press(screen.getByRole("button", { name: "요청 결과" }));
+  expect(screen.getByText("확인해야 할 결과")).toBeTruthy();
+  expect(screen.getByRole("button", { name: "요청 결과" }).props.accessibilityState).toMatchObject({
+    expanded: true,
+    disabled: true,
+  });
+  await view.rerender(
+    <Disclosure title="요청 결과" summary="상태를 확인했어요.">
+      <Text>확인해야 할 결과</Text>
+    </Disclosure>,
+  );
+  expect(screen.getByText("확인해야 할 결과")).toBeTruthy();
+  await fireEvent.press(screen.getByRole("button", { name: "요청 결과" }));
+  expect(screen.queryByText("확인해야 할 결과")).toBeNull();
+});

@@ -315,3 +315,16 @@ plugin으로 앱에 포함하고 Text/TextField·Stack header에 사용한다. �
 `mobile:native`는 실제 compiled APK/app에서 TTF byte와 license를 대조하고 Android400/600/700
 선언·iOS UIAppFonts를 확인해 receipt에 `compiled-resource-only`, `appRuntimeVerified:false`를
 남긴다. 이는 실제 기기 폰트·큰 글자·스크린리더나 API/OAuth 성공의 증거가 아니다.
+
+
+## 읽기와 선택적 관리
+
+리포트는 검토할 본문과 저장된 가림/사진/자료 제외 설정을 먼저 읽고, 본문·출력 설정을
+선택해 편집한다. 미저장 수정·충돌·다운로드 준비 한도 복구·저장 중에는 편집을 펼쳐 두며,
+모델이 새 저장 revision을 확인한 뒤 읽기로 돌아간다. 가림 경고·오류/진행 상태·새 초안/
+불러오기 확인·원본 ZIP 고지와 준비된 파일 열기·공유는 편집 안에 숨기지 않는다.
+
+설정은 사용량·정책을 우선 보여 주고 계정 삭제 관리를 선택해 연다. 미확정/재인증·삭제
+진행·literal 입력·오류가 있으면 관리를 펼쳐 두고, 삭제 접수/정리 결과는 별도 화면 상태로
+계속 표시한다. 펼치기/접기는 표시 상태만 바꾸며 저장/삭제/재인증이나 복구 key 제거를
+실행하지 않는다. owner·동의·원래 revision·동일 요청 확인은 기존 모델과 client가 소유한다.

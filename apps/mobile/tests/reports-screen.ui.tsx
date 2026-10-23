@@ -109,6 +109,9 @@ test("native report editor presents basis and controlled photo/mask/exclusion ch
   const f = fixture(),
     result = await render(f.view(), { wrapper });
   expect(screen.getByText("사건 버전 7 · 확인 요약 버전 2 기준")).toBeTruthy();
+  expect(screen.getByText("비공개 합성 본문")).toBeTruthy();
+  expect(screen.queryByLabelText("리포트 본문")).toBeNull();
+  await fireEvent.press(screen.getByRole("button", { name: "본문·가림·사진·자료 편집" }));
   expect(screen.getByRole("button", { name: "검토 내용 저장" })).toBeDisabled();
   await fireEvent.changeText(screen.getByLabelText("리포트 본문"), "변경 본문");
   expect(f.a.change).toHaveBeenCalledWith({ content: "변경 본문" });
@@ -178,6 +181,7 @@ test("consent-only mode preserves stored exports and checking never renders priv
       { wrapper },
     );
   expect(screen.getByRole("button", { name: "최신 사건으로 새 초안 만들기" })).toBeDisabled();
+  await fireEvent.press(screen.getByRole("button", { name: "본문·가림·사진·자료 설정 확인" }));
   expect(screen.getByRole("checkbox", { name: "식별정보 자동 가림" })).toBeDisabled();
   expect(screen.getByRole("button", { name: "PDF를 기기에 저장" })).not.toBeDisabled();
   expect(screen.getByRole("button", { name: "저장된 HTML을 기기에 저장" })).not.toBeDisabled();
@@ -194,3 +198,32 @@ function requireReport(state: ReportsState) {
   if (!state.report) throw new Error("MISSING_SCREEN_REPORT");
   return state.report;
 }
+
+test("dirty/conflicting editor cannot be hidden; validated new revision returns to reading and export exhaustion exposes its original explicit recovery action", async () => {
+  const f = fixture(),
+    draft = { ...requireDraft(f.state), content: "보존할 미저장 본문" };
+  const result = await render(f.view({ ...f.state, draft, conflict: true }), { wrapper });
+  expect(screen.getByDisplayValue(draft.content)).toBeTruthy();
+  const toggle = screen.getByRole("button", { name: "본문·가림·사진·자료 편집" });
+  expect(toggle).toBeDisabled();
+  await fireEvent.press(toggle);
+  expect(screen.getByDisplayValue(draft.content)).toBeTruthy();
+  expect(screen.getByRole("button", { name: "검토 내용 저장" })).toBeDisabled();
+  expect(f.a.save).not.toHaveBeenCalled();
+  await result.rerender(
+    f.view({
+      ...f.state,
+      report: { ...requireReport(f.state), revision: 3, content: draft.content },
+      draft,
+    }),
+  );
+  expect(screen.queryByLabelText("리포트 본문")).toBeNull();
+  expect(screen.getByText(draft.content)).toBeTruthy();
+  expect(f.a.save).not.toHaveBeenCalled();
+  await result.rerender(f.view({ ...f.state, exportExhausted: true }));
+  const recovery = screen.getByRole("button", { name: "검토 내용을 보존하고 새 버전 저장" });
+  expect(recovery).not.toBeDisabled();
+  expect(f.a.save).not.toHaveBeenCalled();
+  await fireEvent.press(recovery);
+  expect(f.a.save).toHaveBeenCalledTimes(1);
+});
