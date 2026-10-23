@@ -151,3 +151,31 @@ workflow가 실패하며 기존 tooling이 옵션을 무시한 경우를 성공�
 적용하고 종료 후 AVD를 정리한다. raw UI hierarchy·로그·실제 계정/사건은 업로드하지 않는다.
 실제 실행과 PNG 대조 전 성공으로 표시하지 않으며 Home만의 관측은 전체 화면·회전·키보드·
 TalkBack/VoiceOver·두 OS/물리 기기 접근성 인수를 대신하지 않는다.
+
+PR406/mainbf88d0d·CI39960471564 뒤 [실제39960797413](https://github.com/creno-va/baro/actions/runs/39960797413)이
+SUCCESS다. [확대 관측](../quality/mobile-internal-android-2026-10-23/large-font-bf88d0d.json)의
+font_scale readback2와 실제 PNG218,078bytes/SHA25642a7f2263f63012afe965175213c146d0ea0bf1f839ac83ea146d4e5b70687b0을
+직접 대조해 원래 Home 제목·카드의 한글 확대/줄바꿈을 확인했다. 모든 글자가 정확히2배로
+렌더링됐다는 측정이나 다른 화면·TalkBack/VoiceOver·실제 기기의 인수는 아니다.
+
+## 실제 공개 탐색 UI의 안전한 관측 (#407)
+
+```sh
+gh workflow run mobile-internal-android-reverify.yml --ref main -f target_sha=<full40-main-sha> -f smoke=true -f public_directory=true
+```
+
+일반 Home 관측을 보존한 뒤 같은 pinned/reverified APK의 원래 공개 탐색 버튼을 한 번 누른다.
+자기 preview package의 enabled/clickable·유일한 label과 실제 viewport 안 bounds만 사용한다.
+검색·재시도·프로필 상세·로그인·사건 mutation은 실행하지 않는다. loading/구성 오류/목록 오류와
+ready-empty 또는 ready-profile-card의 고정 UI 상태만 구분한다. API 오류는 즉시 실패로 남기고
+정상 상태로 대체하지 않는다. 목록 아래로의 swipe는 최대4회이며 추가 검색/재시도를 누르지 않는다.
+
+공개 데이터 진입 전 screenshot reader를 비가역적으로 비활성화한다. 이후 실패 경로에서도 SDK
+스크린샷을 읽지 않으며 raw UI hierarchy·이름/ID/소개/연락처·로그를 artifact에 담지 않는다.
+사전 anonymous Home/확대 PNG와 고정 상태 boolean·phase/code·source만 보존한다.
+명시 요청한 public-directory JSON이 없으면 workflow가 실패한다.
+
+compiled preview API 설정과 immutable 제품 client가 내보내는 실제 ready UI의 관측이며 HTTP
+transport를 별도로 계측한 증거로 표시하지 않는다. health 관측 source/시각은 해당 health
+요청의 사실로 분리한다. 실제 실행 전 public UI 성공으로 표시하지 않고 실제 OAuth/인증 여정·
+private API·physical/store·전체 접근성/#339/#71은 별도로 유지한다.
