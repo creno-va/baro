@@ -1,0 +1,17 @@
+{
+  "sourceSha": "716d9e563266138f5f8525c55605a91c43c71bb0",
+  "phase": "signed-launch",
+  "code": "IOS_HOST_APP_LAUNCH_FAILED",
+  "failedCommand": {
+    "stage": "APP_LAUNCH",
+    "exitCode": 1,
+    "category": "LAUNCH_FAILED",
+    "iosDomains": []
+  },
+  "baselineObserved": true,
+  "signedObserved": false,
+  "remoteApiVerified": false,
+  "oauthVerified": false,
+  "physicalDeviceVerified": false,
+  "storeSigned": false
+}

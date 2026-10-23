@@ -52,12 +52,18 @@ const config: RuntimeConfig = {
   origin: RUNTIME_ORIGIN,
 };
 const fixture = createRuntimeFixture(config);
-const { validateOwnedIosDevice, iosLaunchFailureCode, iosFailureDomains } = createRequire(
-  import.meta.url,
-)("../scripts/mobile-runtime-ios-launch.cjs") as {
+const {
+  validateOwnedIosDevice,
+  iosLaunchFailureCode,
+  iosFailureDomains,
+  iosFailureDetail,
+  iosLaunchStage,
+} = createRequire(import.meta.url)("../scripts/mobile-runtime-ios-launch.cjs") as {
   validateOwnedIosDevice(inventory: unknown, udid: string, name: string): void;
   iosLaunchFailureCode(error: unknown): string;
   iosFailureDomains(detail: string): { domain: string; code: number }[];
+  iosFailureDetail(error: unknown): string;
+  iosLaunchStage(code: string, operation: () => unknown): Promise<unknown>;
 };
 test("iOS launch preparation accepts only the created booted UUID/name pair", () => {
   const udid = "15a64c18-fd51-4f83-8205-4c917a245e6b",
@@ -457,6 +463,39 @@ test("Simulator signing rejects physical/production identity, traversal and broa
     { ...entitlements, "keychain-access-groups": ["site.baro.app.preview", "site.baro.app"] },
   ])
     expect(() => verifySimulatorEntitlements(invalid, "site.baro.app.preview")).toThrow();
+});
+test("a group-only Simulator experiment cannot claim an application identifier, Team or shared group", () => {
+  const value = simulatorEntitlements("site.baro.app.preview", "group-only");
+  expect(value).toEqual({ "keychain-access-groups": ["site.baro.app.preview"] });
+  expect(verifySimulatorEntitlements(value, "site.baro.app.preview", "group-only")).toEqual(value);
+  for (const invalid of [
+    { ...value, "application-identifier": "site.baro.app.preview" },
+    { ...value, "com.apple.developer.team-identifier": "synthetic-team" },
+    { "keychain-access-groups": ["site.baro.app.preview", "site.baro.app.dev"] },
+  ])
+    expect(() =>
+      verifySimulatorEntitlements(invalid, "site.baro.app.preview", "group-only"),
+    ).toThrow();
+});
+test("the launcher preserves a fixed stage and only parses bounded known domains from native Buffer errors", async () => {
+  const privateText = "synthetic-private /private/fixture";
+  const original = Object.assign(new Error(privateText), {
+    stderr: Buffer.from(
+      `An error was encountered (domain=NSPOSIXErrorDomain, code=153): ${privateText}\nError Domain=NSOSStatusErrorDomain Code=-10814`,
+    ),
+  });
+  const failure = await iosLaunchStage("RUNTIME_IOS_OPEN_URL_FAILED", () => {
+    throw original;
+  }).catch((error) => error);
+  expect(iosLaunchFailureCode(failure)).toBe("RUNTIME_IOS_OPEN_URL_FAILED");
+  const domains = iosFailureDomains(iosFailureDetail(failure));
+  expect(domains).toEqual([
+    { domain: "NSPOSIXErrorDomain", code: 153 },
+    { domain: "NSOSStatusErrorDomain", code: -10814 },
+  ]);
+  expect(JSON.stringify({ code: iosLaunchFailureCode(failure), domains })).not.toContain(
+    privateText,
+  );
 });
 test("SDK error observations contain fixed categories and readiness cannot omit or reorder failed work", () => {
   const error = Object.assign(

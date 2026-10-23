@@ -97,3 +97,26 @@ signed-launch/APP_LAUNCH exit1 LAUNCH_FAILED로 종료돼 signed SDK report는 �
 실패 시 공개할 OS 진단은 알려진 NSError domain8종·범위 내 정수 code 최대4개만 허용하고
 중복·알 수 없는 domain·범위 밖 숫자·원문 stderr/argv/stack/SQL·private 값을 내보내지 않는다.
 일반 앱 build/sign 설정과 실제 사용자/물리 기기·원격 API는 바꾸지 않는다.
+
+## 새 설치 결과와 명시적 group-only 후속 실험
+
+PR398/main `716d9e563266138f5f8525c55605a91c43c71bb0`의 main CI39940703999는 SUCCESS,
+[SDK host39941004115](https://github.com/creno-va/baro/actions/runs/39941004115)는 terminal FAILURE다.
+[baseline](./mobile-ios-host-2026-10-23/baseline-716d9e5.json)·
+[signing](./mobile-ios-host-2026-10-23/signing-716d9e5.json)·
+[실패](./mobile-ios-host-2026-10-23/failure-716d9e5.json)를 보존한다.
+signed 새 설치 뒤 URL launch wrapper가 exit1/LAUNCH_FAILED로 종료됐고 signed SDK 결과는 없다.
+domains[]만으로 원인을 특정하지 않는다. 기존 parser가 simctl의 comma/lowercase-code 형식과
+Buffer stderr를 놓치는 빈틈도 확인해, 실제 원인과 parser 보완을 구분한다.
+
+후속 runner는 app ID 직접 launch와 제한된 loopback URL 열기/approval readback 단계를
+각각 기록한다. 내부 NSError는 알려진 domain·정수 code만 보존한다. 실제 Simulator 사본에는
+원래 `app-and-group` profile/default와 별도로 `group-only` profile을 명시한다. 이 실험의
+권한은 known preview/dev bundle의 단일 own keychain group뿐이며 application-identifier,
+Team/prefix·다른 group·wildcard를 더하지 않는다. 원본 ZIP·Info.plist/앱 ID는 그대로이고
+양 ABI readback으로 실제 profile을 확인한다. 일반 앱 build/sign 설정은 바꾸지 않는다.
+
+[Apple의 access-group 설명](https://developer.apple.com/documentation/security/sharing-access-to-keychain-items-among-a-collection-of-apps)은
+명시 group과 application identifier의 우선순위를 설명한다. 이 참고를 Simulator 실험의
+성공 보장으로 해석하지 않는다. `group-only` 사본의 로컬 Mac signature/entitlement readback은
+통과했지만 실제 SDK 초기화·실행·큰 IO/물리 기기·store 성공은 별도이며 원인은 미확정이다.

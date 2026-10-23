@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "kind": "simulator-sdk-readiness",
+  "sourceSha": "716d9e563266138f5f8525c55605a91c43c71bb0",
+  "phase": "baseline",
+  "operations": [
+    {
+      "stage": "native-clear",
+      "ok": true
+    },
+    {
+      "stage": "source-clear",
+      "ok": true
+    },
+    {
+      "stage": "download-cache-clear",
+      "ok": true
+    },
+    {
+      "stage": "credential-reset",
+      "ok": false,
+      "category": "UNKNOWN"
+    },
+    {
+      "stage": "credential-store-readback",
+      "ok": false,
+      "category": "UNKNOWN"
+    },
+    {
+      "stage": "recovery-key-write-readback",
+      "ok": false,
+      "category": "UNKNOWN"
+    },
+    {
+      "stage": "secure-store-direct-readback",
+      "ok": false,
+      "category": "KEYCHAIN_ENTITLEMENT_MISSING"
+    },
+    {
+      "stage": "cleanup",
+      "ok": false,
+      "category": "UNKNOWN"
+    }
+  ],
+  "allSucceeded": false,
+  "externalFetchAttempts": 0
+}

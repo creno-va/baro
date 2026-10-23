@@ -5,6 +5,8 @@ import { z } from "zod";
 import { simulatorSignature } from "./mobile-preview-artifact";
 
 export const simulatorAppIdSchema = z.enum(["site.baro.app.dev", "site.baro.app.preview"]);
+export const simulatorSigningProfileSchema = z.enum(["app-and-group", "group-only"]);
+type SimulatorSigningProfile = z.infer<typeof simulatorSigningProfileSchema>;
 export function simulatorIdentity(value: unknown, expected: string) {
   const info = z
     .object({
@@ -22,26 +24,46 @@ export function simulatorIdentity(value: unknown, expected: string) {
     throw new Error("IOS_SIMULATOR_IDENTITY_REQUIRED");
   return info;
 }
-export function simulatorEntitlements(appId: string) {
+export function simulatorEntitlements(
+  appId: string,
+  profile: SimulatorSigningProfile = "app-and-group",
+) {
   const identifier = simulatorAppIdSchema.parse(appId);
+  if (simulatorSigningProfileSchema.parse(profile) === "group-only")
+    return { "keychain-access-groups": [identifier] as [typeof identifier] };
   return {
     "application-identifier": identifier,
     "keychain-access-groups": [identifier] as [typeof identifier],
   };
 }
-export function verifySimulatorEntitlements(value: unknown, appId: string) {
-  const expected = simulatorEntitlements(appId);
+export function verifySimulatorEntitlements(
+  value: unknown,
+  appId: string,
+  profile: SimulatorSigningProfile = "app-and-group",
+) {
+  const identifier = simulatorAppIdSchema.parse(appId);
+  if (simulatorSigningProfileSchema.parse(profile) === "group-only")
+    return z
+      .strictObject({ "keychain-access-groups": z.tuple([z.literal(identifier)]) })
+      .parse(value);
   const result = z
     .strictObject({
-      "application-identifier": z.literal(expected["application-identifier"]),
-      "keychain-access-groups": z.tuple([z.literal(expected["application-identifier"])]),
+      "application-identifier": z.literal(identifier),
+      "keychain-access-groups": z.tuple([z.literal(identifier)]),
     })
     .parse(value);
   return result;
 }
-export function simulatorEntitlementPlist(appId: string) {
-  const value = simulatorEntitlements(appId);
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n<plist version="1.0"><dict><key>application-identifier</key><string>${value["application-identifier"]}</string><key>keychain-access-groups</key><array><string>${value["application-identifier"]}</string></array></dict></plist>\n`;
+export function simulatorEntitlementPlist(
+  appId: string,
+  profile: SimulatorSigningProfile = "app-and-group",
+) {
+  const identifier = simulatorAppIdSchema.parse(appId);
+  const application =
+    simulatorSigningProfileSchema.parse(profile) === "app-and-group"
+      ? `<key>application-identifier</key><string>${identifier}</string>`
+      : "";
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n<plist version="1.0"><dict>${application}<key>keychain-access-groups</key><array><string>${identifier}</string></array></dict></plist>\n`;
 }
 async function command(args: string[], input?: string, stage = "COMMAND") {
   const child = Bun.spawn(args, {
@@ -63,7 +85,12 @@ async function command(args: string[], input?: string, stage = "COMMAND") {
 }
 const hash = (value: Uint8Array) => createHash("sha256").update(value).digest("hex");
 /** Only an owned copy of a compiled iPhoneSimulator app; no Apple identity/private key is used. */
-export async function signSimulatorApp(app: string, expectedId: string) {
+export async function signSimulatorApp(
+  app: string,
+  expectedId: string,
+  profile: SimulatorSigningProfile = "app-and-group",
+) {
+  simulatorSigningProfileSchema.parse(profile);
   if (process.platform !== "darwin") throw new Error("IOS_SIMULATOR_MAC_REQUIRED");
   const metadata = await lstat(app);
   if (!metadata.isDirectory() || metadata.isSymbolicLink() || !app.endsWith(".app"))
@@ -97,8 +124,11 @@ export async function signSimulatorApp(app: string, expectedId: string) {
     .split(/\s+/);
   if (!architectures.length || architectures.some((arch) => !["arm64", "x86_64"].includes(arch)))
     throw new Error("IOS_SIMULATOR_ARCHITECTURE_REQUIRED");
-  const entitlementPath = resolve(dirname(app), `baro-simulator-${info.CFBundleIdentifier}.plist`);
-  await writeFile(entitlementPath, simulatorEntitlementPlist(info.CFBundleIdentifier), {
+  const entitlementPath = resolve(
+    dirname(app),
+    `baro-simulator-${info.CFBundleIdentifier}-${profile}.plist`,
+  );
+  await writeFile(entitlementPath, simulatorEntitlementPlist(info.CFBundleIdentifier, profile), {
     flag: "wx",
   });
   await command([
@@ -141,14 +171,15 @@ export async function signSimulatorApp(app: string, expectedId: string) {
         )
       ).stdout,
     );
-    verifySimulatorEntitlements(decoded, info.CFBundleIdentifier);
+    verifySimulatorEntitlements(decoded, info.CFBundleIdentifier, profile);
   }
   if (!beforeInfo.equals(await readFile(plistPath))) throw new Error("IOS_SIMULATOR_INFO_CHANGED");
   return {
     kind: "local-simulator-ad-hoc-keychain" as const,
+    profile,
     applicationId: info.CFBundleIdentifier,
     architectures,
-    entitlements: simulatorEntitlements(info.CFBundleIdentifier),
+    entitlements: simulatorEntitlements(info.CFBundleIdentifier, profile),
     executableBeforeSha256: before,
     executableAfterSha256: hash(await readFile(executable)),
     infoPlistSha256: hash(beforeInfo),
