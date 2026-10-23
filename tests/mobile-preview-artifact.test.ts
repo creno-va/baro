@@ -92,25 +92,35 @@ test("large iOS font observation requires Home and exact SDK native category rea
     home: false,
     largeFont: false,
     uiTest: false,
+    accessibilityAudit: false,
   });
   expect(iosInternalObservationOptions(["--home"])).toEqual({
     home: true,
     largeFont: false,
     uiTest: false,
+    accessibilityAudit: false,
   });
   expect(iosInternalObservationOptions(["--home", "--large-font"])).toEqual({
     home: true,
     largeFont: true,
     uiTest: false,
+    accessibilityAudit: false,
   });
   expect(iosInternalObservationOptions(["--home", "--large-font", "--ui-test"])).toEqual({
     home: true,
     largeFont: true,
     uiTest: true,
+    accessibilityAudit: false,
   });
+  expect(
+    iosInternalObservationOptions(["--home", "--large-font", "--ui-test", "--accessibility-audit"]),
+  ).toEqual({ home: true, largeFont: true, uiTest: true, accessibilityAudit: true });
   for (const args of [
     ["--home --large-font --ui-test"],
     ["--ui-test"],
+    ["--accessibility-audit"],
+    ["--home", "--large-font", "--accessibility-audit"],
+    ["--home", "--large-font", "--ui-test", "--unknown"],
     ["--home", "--ui-test"],
     ["--large-font"],
     ["--home", "--unknown"],

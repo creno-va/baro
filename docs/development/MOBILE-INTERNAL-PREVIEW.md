@@ -449,3 +449,24 @@ local native IO #385도 독립 인수를 완료했다. 전체 #334와 인증/역
 사용자 기기 상태를 읽거나 변경하지 않으며 원문 도움말·runtime 로그·사용자 값은 업로드하지
 않는다. 지원되지 않은 명령을 추측해 실행하지 않고 이 관측을 글자 확대/앱/접근성 성공으로
 표시하지 않는다. 위의 실제 category 설정·readback·앱 재시작/PNG/조작 결과와 SDK 문서 JSON만의 범위를 구분한다.
+
+## iOS OS 접근성 검사 (#379)
+
+`accessibility_audit=true`는 위 iOS 수동 재검증 workflow에서 `smoke`, `large_font`,
+`ui_test`가 모두 true일 때만 허용한다. 로컬 인수된 source171989e 원본 Simulator 앱을
+재컴파일/재서명하지 않고 별도 XCTest runner로 홈/이용 안내의 초기/행동 viewport 네 곳을 검사한다.
+Apple의 [공개 XCTest API](https://developer.apple.com/documentation/xcuiautomation/xcuiapplication/performaccessibilityaudit(for:_:))로
+대비·Dynamic Type·요소 탐지·조작 영역·설명·글자 잘림·traits를 요청한다.
+내부 명령은 `--home --large-font --ui-test --accessibility-audit`이며 순서/선행 옵션을 생략할 수 없다.
+
+XCTest issue handler는 원문 element 설명/첨부를 고정 분류·개수로 대체한다.
+보고된 모든 issue는 집계하며 알 수 없는 항목도 `other`로 보존한다. `accessibility-audit.json`은
+네 viewport와 요청한 일곱 검사, 각 집계와 전체 합계·성공 판정을 검증하고 원본 binary/tooling,
+runner hash·기기·최대 category 전후 readback을 같은 실행의 Home/Guide proof에 묶는다.
+문제가 하나라도 있으면 결과 파일을 먼저 저장한 뒤 workflow를 실패로 끝낸다.
+raw hierarchy/element label/xcresult·private runner 로그는 artifact allowlist에 없다.
+
+이 경로의 준비/합성 회귀는 OS 검사 성공이 아니다. 실제 수동 실행 뒤 고정 결과와 실패를
+보존하고 앱 문제를 수정한다. 검사 통과도 전체 화면/기능·VoiceOver 실제 조작·Android TalkBack·
+회전/키보드·물리 기기 인수를 대신하지 않는다. [Apple의 검사 범위와 한계](https://developer.apple.com/documentation/accessibility/performing-accessibility-audits-for-your-app)를 따른다.
+실제 OAuth/역할/동의·원격 private 여정·스토어와 #334/#379/#339/#71은 별도다.

@@ -3,6 +3,10 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { basename, resolve } from "node:path";
 import { z } from "zod";
 import { iosColdLaunchReceiptSchema, iosLargeFontReceiptSchema } from "./mobile-internal-ios-input";
+import {
+  iosAccessibilityResultSchema,
+  parseIosAccessibilityResult,
+} from "./mobile-ios-accessibility";
 import { iosLargestContentSize, verifyIosContentSizeReadback } from "./mobile-ios-ui-capabilities";
 import { xcodeSimulatorControlArguments } from "./mobile-ios-xcode-control";
 
@@ -86,10 +90,37 @@ export function verifyIosHomeUiReceipt(
   }
   return result;
 }
+export const iosAccessibilityReceiptSchema = iosHomeUiReceiptSchema
+  .omit({ kind: true, result: true })
+  .extend({
+    kind: z.literal("ios-bundled-large-font-home-guide-accessibility-audit"),
+    result: iosAccessibilityResultSchema,
+  });
+export function verifyIosAccessibilityReceipt(value: unknown, homeUi: unknown) {
+  const result = iosAccessibilityReceiptSchema.parse(value),
+    home = iosHomeUiReceiptSchema.parse(homeUi);
+  for (const key of [
+    "binarySourceSha",
+    "toolingSourceSha",
+    "archiveSha256",
+    "compilerReceiptSha256",
+    "swiftTestSha256",
+    "projectGeneratorSha256",
+    "projectGeneratorVersion",
+    "contentSizeBeforeTest",
+    "contentSizeAfterTest",
+    "observedAt",
+  ] as const)
+    if (result[key] !== home[key]) throw Error("INTERNAL_IOS_AUDIT_IDENTITY_MISMATCH");
+  if (JSON.stringify(result.device) !== JSON.stringify(home.device))
+    throw Error("INTERNAL_IOS_AUDIT_IDENTITY_MISMATCH");
+  return result;
+}
 export async function runIosHomeUiTest(context: {
   root: string;
   owned: string;
   device: string;
+  accessibilityAudit?: boolean;
   command: (args: string[], cwd?: string, timeout?: number) => Promise<string>;
 }) {
   if (
@@ -134,6 +165,9 @@ export async function runIosHomeUiTest(context: {
       "-parallel-testing-enabled",
       "NO",
       "-only-testing:BaroHomeUITests/BaroHomeUITests/testLargestFontHomeAndGuide",
+      ...(context.accessibilityAudit
+        ? ["-only-testing:BaroHomeUITests/BaroHomeUITests/testLargestFontHomeAndGuideAccessibility"]
+        : []),
       ...xcodeSimulatorControlArguments,
     ],
     project,
@@ -151,6 +185,9 @@ export async function runIosHomeUiTest(context: {
     projectGeneratorSha256: hash(ruby),
     projectGeneratorVersion: version,
     result,
+    accessibilityResult: context.accessibilityAudit
+      ? parseIosAccessibilityResult(output)
+      : undefined,
   };
 }
 
@@ -166,6 +203,8 @@ const assertionCodes = [
   "BARO_GUIDE_FEATURE_COPY_MISSING",
   "BARO_HOME_RETURN_MISSING",
   "BARO_GUIDE_STILL_VISIBLE",
+  "BARO_AUDIT_OS_UNSUPPORTED",
+  "BARO_AUDIT_EXECUTION_FAILED",
 ] as const;
 export function observeHomeUiFailure(detail: string) {
   const reported = detail.match(

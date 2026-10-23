@@ -58,18 +58,19 @@ export function verifyIosContentSizeReadback(output: string) {
   return iosLargestContentSize;
 }
 export function iosInternalObservationOptions(args: string[]) {
-  if (!args.length) return { home: false, largeFont: false, uiTest: false };
+  if (!args.length)
+    return { home: false, largeFont: false, uiTest: false, accessibilityAudit: false };
   if (args[0] === "--home" && args.length === 1)
-    return { home: true, largeFont: false, uiTest: false };
+    return { home: true, largeFont: false, uiTest: false, accessibilityAudit: false };
   if (args[0] === "--home" && args[1] === "--large-font" && args.length === 2)
-    return { home: true, largeFont: true, uiTest: false };
+    return { home: true, largeFont: true, uiTest: false, accessibilityAudit: false };
   if (
-    args.length === 3 &&
+    (args.length === 3 || (args.length === 4 && args[3] === "--accessibility-audit")) &&
     args[0] === "--home" &&
     args[1] === "--large-font" &&
     args[2] === "--ui-test"
   )
-    return { home: true, largeFont: true, uiTest: true };
+    return { home: true, largeFont: true, uiTest: true, accessibilityAudit: args.length === 4 };
   throw Error("INTERNAL_IOS_VERIFICATION_MODE_REQUIRED");
 }
 export async function readIosUiCapabilities(source: string) {
