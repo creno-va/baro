@@ -15,8 +15,8 @@
     "build:preview": "cross-env CLOUDFLARE_ENV=preview astro build",
     "build:production": "cross-env CLOUDFLARE_ENV=production astro build",
     "preview": "astro preview",
-    "lint": "biome check src packages scripts tests .github/scripts apps/mobile/src apps/mobile/config apps/mobile/runtime-probe apps/mobile/tests apps/mobile/app.config.ts apps/mobile/package.json apps/mobile/tsconfig.json apps/mobile/tsconfig.test.json apps/mobile/tsconfig.config.json apps/mobile/metro.config.cjs apps/mobile/jest.config.cjs astro.config.ts drizzle.config.ts playwright.config.ts playwright.csp.config.ts package.json tsconfig.json tsconfig.tools.json wrangler.jsonc wrangler.ui.jsonc",
-    "lint:fix": "biome check --write src packages scripts tests .github/scripts apps/mobile/src apps/mobile/config apps/mobile/runtime-probe apps/mobile/tests apps/mobile/app.config.ts apps/mobile/package.json apps/mobile/tsconfig.json apps/mobile/tsconfig.test.json apps/mobile/tsconfig.config.json apps/mobile/metro.config.cjs apps/mobile/jest.config.cjs astro.config.ts drizzle.config.ts playwright.config.ts playwright.csp.config.ts package.json tsconfig.json tsconfig.tools.json wrangler.jsonc wrangler.ui.jsonc",
+    "lint": "biome check src packages scripts tests .github/scripts apps/mobile/src apps/mobile/config apps/mobile/runtime-probe apps/mobile/tests apps/mobile/app.config.ts apps/mobile/package.json apps/mobile/tsconfig.json apps/mobile/tsconfig.test.json apps/mobile/tsconfig.config.json apps/mobile/metro.config.cjs apps/mobile/jest.config.cjs astro.config.ts drizzle.config.ts playwright.config.ts playwright.csp.config.ts package.json patches/manifest.json tsconfig.json tsconfig.tools.json wrangler.jsonc wrangler.ui.jsonc",
+    "lint:fix": "biome check --write src packages scripts tests .github/scripts apps/mobile/src apps/mobile/config apps/mobile/runtime-probe apps/mobile/tests apps/mobile/app.config.ts apps/mobile/package.json apps/mobile/tsconfig.json apps/mobile/tsconfig.test.json apps/mobile/tsconfig.config.json apps/mobile/metro.config.cjs apps/mobile/jest.config.cjs astro.config.ts drizzle.config.ts playwright.config.ts playwright.csp.config.ts package.json patches/manifest.json tsconfig.json tsconfig.tools.json wrangler.jsonc wrangler.ui.jsonc",
     "typecheck": "astro check && tsc --noEmit && tsc --noEmit -p tsconfig.tools.json",
     "test": "bun test",
     "test:ui": "bun run build:production && bun scripts/full-browser.ts",
@@ -60,7 +60,8 @@
     "clients:check": "tsc --noEmit -p packages/client-core/tsconfig.json && tsc --noEmit -p packages/api-client/tsconfig.json",
     "mobile:assets:check": "bun scripts/check-mobile-assets.ts",
     "mobile:assets:brand": "bun scripts/build-mobile-brand.ts",
-    "mobile:runtime": "bun scripts/mobile-runtime.ts"
+    "mobile:runtime": "bun scripts/mobile-runtime.ts",
+    "security:patches": "bun scripts/check-toolchain-patches.ts && bun test tests/toolchain-patches.test.ts"
   },
   "dependencies": {
     "@astrojs/cloudflare": "14.3.3",
@@ -103,5 +104,9 @@
   "overrides": {
     "esbuild": "0.28.2",
     "sharp": "0.35.5"
+  },
+  "patchedDependencies": {
+    "braces@3.0.3": "patches/braces@3.0.3.patch",
+    "node-forge@1.4.0": "patches/node-forge@1.4.0.patch"
   }
 }
