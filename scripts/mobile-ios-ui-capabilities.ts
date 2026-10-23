@@ -58,6 +58,15 @@ export function verifyIosContentSizeReadback(output: string) {
   return iosLargestContentSize;
 }
 export function iosInternalObservationOptions(args: string[]) {
+  if (args.length === 2 && args[0] === "--home" && args[1] === "--public-directory")
+    return {
+      home: true,
+      largeFont: false,
+      uiTest: false,
+      accessibilityAudit: false,
+      authCancel: false,
+      publicDirectory: true,
+    };
   if (args.length === 2 && args[0] === "--home" && args[1] === "--auth-cancel")
     return {
       home: true,
@@ -65,6 +74,7 @@ export function iosInternalObservationOptions(args: string[]) {
       uiTest: false,
       accessibilityAudit: false,
       authCancel: true,
+      publicDirectory: false,
     };
   if (!args.length)
     return {
@@ -73,6 +83,7 @@ export function iosInternalObservationOptions(args: string[]) {
       uiTest: false,
       accessibilityAudit: false,
       authCancel: false,
+      publicDirectory: false,
     };
   if (args[0] === "--home" && args.length === 1)
     return {
@@ -81,6 +92,7 @@ export function iosInternalObservationOptions(args: string[]) {
       uiTest: false,
       accessibilityAudit: false,
       authCancel: false,
+      publicDirectory: false,
     };
   if (args[0] === "--home" && args[1] === "--large-font" && args.length === 2)
     return {
@@ -89,6 +101,7 @@ export function iosInternalObservationOptions(args: string[]) {
       uiTest: false,
       accessibilityAudit: false,
       authCancel: false,
+      publicDirectory: false,
     };
   if (
     (args.length === 3 || (args.length === 4 && args[3] === "--accessibility-audit")) &&
@@ -102,6 +115,7 @@ export function iosInternalObservationOptions(args: string[]) {
       uiTest: true,
       accessibilityAudit: args.length === 4,
       authCancel: false,
+      publicDirectory: false,
     };
   throw Error("INTERNAL_IOS_VERIFICATION_MODE_REQUIRED");
 }

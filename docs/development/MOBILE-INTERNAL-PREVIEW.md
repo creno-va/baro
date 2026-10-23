@@ -778,3 +778,58 @@ frame 겹침을 조작하지 않는다. 기존 foreground/hittability·세 제�
 privacy latch는 유지한다. 이전 snapshot/count 원본을 새 schema로 고치지 않으며 exact CI/main 뒤
 바뀐 query 조건을 실제 검증한다. Android 성공 범위를 유지하고 iOS/계정 OAuth·기기/store와
 #334/#346/#339/#71 전체 인수는 계속 OPEN이다.
+
+## iOS 공개 탐색 입력·키보드·회전 검증 준비 (#379)
+
+`mobile-internal-ios-reverify.yml`의 `smoke=true/public_directory=true`는 원본171989e
+Simulator 앱을 다시 빌드하거나 재서명하지 않는 독립 수동 모드다. auth_cancel/large_font/
+ui_test/accessibility_audit와 함께 실행할 수 없다. 성공한 정확한 main CI 뒤 다음처럼 실행한다.
+
+```sh
+gh workflow run mobile-internal-ios-reverify.yml --ref main -f target_sha=<full40-main-tooling-sha> -f smoke=true -f public_directory=true
+```
+
+Home의 고정 탐색 버튼으로 진입하고 공개 목록의 준비 완료 상태만 empty/cards enum으로
+확인한다. 고정 합성 ASCII 문자열을 검색란에 입력하며 키보드가 나타났을 때 입력란이 가려지지
+않는지, 키보드 submit 뒤 키보드가 닫히고 필터된 빈 결과가 표시되는지 확인한다. 합성 입력과
+일치하는 실제 프로필이 있으면 이 빈 결과 시나리오는 실패하며 임의 이름 검색으로 바꾸지 않는다.
+가로·세로 전환마다 실제 앱 창의 종횡 크기 변화·입력 유지·입력란까지 스크롤하여 조작 가능함을
+검사하고 native back으로 Home에 돌아온다. Apple의 [orientation API](https://developer.apple.com/documentation/xcuiautomation/xcuidevice/orientation)는
+기기 방향과 앱 UI 방향을 구분하므로 방향 명령 자체를 회전 성공으로 인수하지 않는다.
+
+공개 탐색 **이전**부터 명시적 screenshot과 host 원본 command log 저장을 되돌릴 수 없게
+차단한다. XCTest 원본 출력은 메모리에서 고정 enum/boolean과 알려진 assertion code로만
+분류하고 private runner/xcresult는 finally에서 삭제한다. artifact는 기존 pre-public Home PNG와
+metadata/원본 ZIP/receipt 및 `directory-ui.json`만 보존한다. 공개 이름·사무실·소개·ID·input 값·
+원본 hierarchy·xcresult/stack은 내보내지 않는다. 프로필·연락 버튼은 열지 않고 서버 mutation도
+수행하지 않는다. 실제 HTTP transport/원격 API 성공, 한국어 키보드, VoiceOver, 전체 화면/역할,
+물리 기기·스토어와 전체 #334/#379 인수는 별도다. 현재 문단은 검증 도구의 준비 상태이며 실제
+Simulator 성공 증거는 해당 run의 strict proof를 따로 인수한 뒤 기록한다.
+
+
+## iOS 세 제공자 브라우저 취소 실제 인수 (#346)
+
+PR439/main `97c214443a2698743443496c7a9c94036aa63c94`의 CI40040850507 SUCCESS 뒤
+[실제40041077753](https://github.com/creno-va/baro/actions/runs/40041077753)는 terminal SUCCESS다.
+[원본 proof](../quality/mobile-internal-ios-2026-10-23/auth-cancel-ui-97c2144.json)의 관측 시각은
+2026-10-23T23:50:42.075Z, 전체 SHA256은
+`3a9011b0b710f80ec807d509481cec26759e07d050d42b5656f6c63a9dc3464b`다.
+[Home baseline](../quality/mobile-internal-ios-2026-10-23/auth-cancel-home-97c2144.json)과
+[metadata](../quality/mobile-internal-ios-2026-10-23/auth-cancel-verification-97c2144.json)의 binary/tooling/device identity,
+원본171989e ZIP24,102,101bytes/전체 SHA와 원본 compiler receipt77d157…/전체 SHA,
+해당 main의 Swift149051…·Ruby c4073949… 실제 source hash를 독립 대조했다.
+
+fresh iPhone16/iOS26.5 Simulator에서 Google/Naver/Kakao마다 시스템 WebView·유일한 새
+hittable Cancel을 확인했다. 각각 관측한 WebView3/2/2개를 모두 query하고 모든 WebView의
+Cancel descendant0·keyboard0·query complete를 검사한 뒤 Cancel을 눌렀다. WebView 소멸·
+앱 foreground·익명/오류와 동의 화면 부재를 확인하고 마지막 앱 terminate/재실행/Home→Session에서도
+익명 복귀를 확인했다. 세 제공자 모두 OS Continue prompt 처리는 없었다.
+`webViewFrameExcluded=false`는 그대로 보존한다. 전체 WebView 사각형과 겹치지 않는다는
+증거가 아니며, 공개 descendant query로 웹/키보드 자식이 아님을 확인한 좁은 선택 범위다.
+이전8480fa6/6825328/ca8ea4f/9dbb2ee/318df0c 실패와 snapshot/query 불일치 사실은 보존한다.
+
+명시적 screenshot과 host 원본 command log 저장은 인증 진입 전에 차단했고 원본 xcresult/
+hierarchy는 내보내지 않았다. 기존 pre-auth Home PNG만 포함한다. 앱 재컴파일·재서명·Metro는
+없다. 실제 계정 입력/동의·callback 교환·제공자 수락·SecureStore pending 삭제의 직접 계측·
+실기기·전체 OAuth 성공은 아니다. 두 OS 취소 경로 인수와 별도로 #346/#334·보안 #339·릴리스
+#71은 OPEN이다. Apple 추가 방향은 사용자 결정 대기이며 이 성공으로 승인된 것으로 처리하지 않는다.
