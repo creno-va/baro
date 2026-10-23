@@ -96,6 +96,7 @@ export function PrecedentsScreen({
             onPress={() => setAllTopics(!allTopics)}
           />
           <Button
+            variant="primary"
             label="선택 주제로 판례 검색"
             disabled={!!busy || state.topics.length < 1}
             onPress={() => {

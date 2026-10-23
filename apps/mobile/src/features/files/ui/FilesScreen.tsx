@@ -109,6 +109,7 @@ export function FilesScreen({
             </Text>
           ) : null}
           <Button
+            variant="primary"
             label={state.pendingUpload ? "같은 파일의 업로드 결과 다시 확인" : "선택한 파일 업로드"}
             disabled={busy || !state.canWrite || state.uploadConflict}
             onPress={() => {
@@ -234,6 +235,7 @@ export function FilesScreen({
             onChangeText={actions.confirm}
           />
           <Button
+            variant="danger"
             label="확인한 자료 삭제 요청"
             disabled={busy || state.confirmation !== "DELETE"}
             onPress={() => {
@@ -333,6 +335,7 @@ export function FilesScreen({
                 onPress={() => actions.changeEdit({ included: !state.edit?.included })}
               />
               <Button
+                variant="primary"
                 label="원래 버전으로 교정 저장"
                 disabled={busy || state.reviewConflict || !state.canWrite}
                 onPress={() => {

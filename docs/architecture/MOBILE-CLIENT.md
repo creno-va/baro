@@ -139,10 +139,10 @@ AttachmentRow로 시작한다. 한국어 입력·글자 확대·safe area·키�
 `space.controlGap`, `radius.control`, `type.body`다. 웹의 CSS와 RN의 스타일 값은
 각각 변환하며 CSS rem/폰트 확대를 숫자로 기계적으로 복제하지 않는다.
 
-웹 개편 중 현재 시각 값은 웹 담당의 정본을 따른다. 모바일은 theme adapter 뒤에서
-기본 값을 사용하고 웹 정본의 특정 commit을 기록한다. M7 전환 PR에서 합의한 값을
-design-tokens 한 곳으로 옮기고 웹/RN 출력을 함께 검증한다. 그 이후 두 값 사본을
-각각 수정하지 않는다. 브랜드·폰트 원본은 기존 `public/brand`, `public/fonts` 소유를
+웹 시각 값은 웹 담당의 정본을 따른다. PR380(main `e94b20a6`)부터 portable 값은
+실제 웹 CSS에서 @baro/design-tokens로 생성·drift 검사하며 native theme가 이를 소비한다.
+웹 CSS·DOM과 native 스타일은 공유하지 않고 숫자 밀도/type scale은 native adapter가 소유한다.
+팔레트 사본을 각각 수정하지 않는다. 브랜드·폰트 원본은 기존 `public/brand`, `public/fonts` 소유를
 유지하고 모바일 산출물은 그 원본에서 생성·검증한다. 자산 정본 이동은 별도 조율한다.
 
 최종 모바일 UI 수정은 feature의 `ui`, 공통 `ui`, `theme`가 중심이다. 화면 순서가
@@ -558,3 +558,30 @@ blue/ink/subtle/line과20px radius·44px 최소 조작 영역을 보존하며, s
 본문 또는 유일한 조작 경계로 쓰지는 않는다. native primitive는 producer exact CI/main 뒤
 48dp target·font scaling·긴 한글·키보드/safe area를 유지하며 소비한다. 폰트/화면·탐색 및
 실제 VoiceOver/TalkBack/기기 인수는 이 데이터·합성 대비 검사와 별도로 #379/M7에서 진행한다.
+
+
+### M7 native theme·primitive 소비
+
+선행 PR380/381의 exact CI/main 뒤 native adapter는 @baro/design-tokens를 직접 의존한다.
+product blue/ink/subtle/line·surface·muted/status/card radius는 생성물에서 읽으며 native의
+48dp 조작 영역·type scale·16/20/32dp 반응형 여백·720dp 읽기 폭만 별도로 정의한다.
+pressed primary는 정본 색에서 어둡게 계산하고 label opacity는 낮추지 않는다. 유일한
+input/선택 경계는 충분한 대비가 있는 muted를 쓰며 line은 card의 장식 구분선에만 쓴다.
+
+Button은 기본 secondary와 명시적 primary/danger로 주/보조/삭제 동작을 구분한다. 변경은
+feature ui의 variant뿐이며 모델·권한/동의·원래 revision·확인/미확정 복구를 바꾸지 않는다.
+Choice는 symbol과 label/checked/disabled를 함께 전달하며 색만으로 선택을 표시하지 않는다.
+Text/TextField 기본은 OS font scaling·배율 상한 없음·자연 줄바꿈을 유지하고 Card/Button은
+고정 높이를 두지 않는다. TextField는 caller focus/blur·style을 보존하고 readonly/큰 글자·
+multiline 상단 정렬과 focus border를 함께 처리한다. Screen은 기존 Stack top inset/하단·
+좌우 safe area와 한 스크롤 소유를 유지하며 입력 처리와 drag 키보드 닫기를 제공한다.
+
+회귀는 정본 의미·본문/pressed/disabled label4.5:1·유일한 조작 경계3:1 대비, RN responder의
+pressed·disabled 방지, 체크/라디오 상태, focus/readonly, 합성320dp/2배 글자/회전과 safe area·
+list 스크롤 props를 검사한다. Yoga의 실제 줄바꿈/기기 font·키보드/VoiceOver/TalkBack 성공을
+이 renderer 검사로 주장하지 않는다. 글꼴·브랜드 자산과 최종 화면별 시각·탐색 인수는
+기존 웹 원본 소유권을 보존하며 #379/M7·M8에서 이어 간다.
+
+기본 font scaling과 multiline 동작은 [RN Text](https://reactnative.dev/docs/text),
+[TextInput](https://reactnative.dev/docs/textinput), [Pressable](https://reactnative.dev/docs/pressable)의
+플랫폼 계약을 따르며 설치된 SDK/RN 타입과 Metro 양 OS 출력을 함께 확인한다.

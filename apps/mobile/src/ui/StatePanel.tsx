@@ -24,7 +24,7 @@ export function StatePanel({ state }: { state: ScreenState }) {
       </Text>
       <Text variant="muted">{state.description}</Text>
       {state.kind === "error" && state.retry ? (
-        <Button label={state.retry.label} onPress={state.retry.run} />
+        <Button variant="primary" label={state.retry.label} onPress={state.retry.run} />
       ) : null}
     </View>
   );

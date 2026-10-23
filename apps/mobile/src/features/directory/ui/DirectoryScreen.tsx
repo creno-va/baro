@@ -68,7 +68,7 @@ export function DirectoryScreen({
               onSubmitEditing={search}
               autoCorrect={false}
             />
-            <Button label="검색" onPress={search} />
+            <Button variant="primary" label="검색" onPress={search} />
             {state.error ? (
               <StatePanel
                 state={{

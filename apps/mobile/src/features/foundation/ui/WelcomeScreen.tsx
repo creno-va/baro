@@ -46,7 +46,7 @@ export function WelcomeScreen({
             로그인과 필수 동의 후 사건을 저장하고 질문·요약을 이어 볼 수 있어요.
           </Text>
           <Button label="이용 안내 보기" onPress={onContinue} />
-          {onBrowse ? <Button label="변호사 탐색" onPress={onBrowse} /> : null}
+          {onBrowse ? <Button variant="primary" label="변호사 탐색" onPress={onBrowse} /> : null}
           {onSignIn ? <Button label="로그인·내 계정" onPress={onSignIn} /> : null}
           {onCases ? <Button label="내 사건 정리" onPress={onCases} /> : null}
         </>

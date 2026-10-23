@@ -115,6 +115,7 @@ export function ReportsScreen({
             />
           ))}
           <Button
+            variant="primary"
             label="선택한 자료를 제외하고 첫 초안 생성"
             disabled={busy || !state.canWrite || !state.initialExcluded.length}
             onPress={() => {
@@ -284,6 +285,7 @@ export function ReportsScreen({
               onPress={() => actions.reviewed(!state.reviewed)}
             />
             <Button
+              variant="primary"
               label="PDF를 기기에 저장"
               disabled={!reportDownloadAllowed(state, "pdf")}
               onPress={() => {

@@ -176,6 +176,7 @@ export function SettingsScreen({
                 />
                 {state.deletionState === "unconfirmed" ? (
                   <Button
+                    variant="danger"
                     label="미확정 삭제 요청 직접 다시 확인"
                     disabled={busy || !state.deletion.canDelete || state.confirmation !== "DELETE"}
                     accessibilityHint="새 재인증이 필요하며 이전 요청이 이미 처리됐을 수도 있어요."
@@ -185,6 +186,7 @@ export function SettingsScreen({
                   />
                 ) : (
                   <Button
+                    variant="danger"
                     label="내 계정 삭제 요청"
                     disabled={
                       busy ||
