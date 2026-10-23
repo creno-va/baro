@@ -1,0 +1,112 @@
+{
+  "version": 1,
+  "kind": "internal-bundled-preview-app",
+  "sourceSha": "171989e8cf8fd48119d20f58a45f2dca7dd45e64",
+  "platform": "ios",
+  "environment": "preview",
+  "apiOrigin": "https://preview.baro.site",
+  "apiObservation": {
+    "status": "observed",
+    "observedAt": "2026-10-23T19:01:43.931Z",
+    "sourceSha": "f91244151c94d871423e9f2fe6fda5a70bf0e668"
+  },
+  "versionName": "0.1.0",
+  "buildVersion": "1",
+  "expo": "58.0.17",
+  "reactNative": "0.88.0",
+  "applicationId": "site.baro.app.preview",
+  "minimumOS": "16.4",
+  "installTarget": "ios-simulator",
+  "architectures": [
+    "x86_64",
+    "arm64"
+  ],
+  "signing": {
+    "kind": "simulator-only",
+    "codeSignature": "ad-hoc"
+  },
+  "artifact": {
+    "name": "baro-internal-preview-ios-simulator-171989e8cf8fd48119d20f58a45f2dca7dd45e64.zip",
+    "bytes": 24102101,
+    "sha256": "f8e218df820cdaa2c222b10474124b7265b73c4de43a146a3459181cd4fde356"
+  },
+  "compiledFont": {
+    "kind": "compiled-resource-only",
+    "family": "BaroMobile",
+    "sha256": "3ae12c1281a84901b32d8c5f0e43fd6c4f8a5b7fd4ccbde66cfbe9f07cde05e8",
+    "weights": [
+      400,
+      600,
+      700
+    ],
+    "glyphs": 14757,
+    "codepoints": 14336,
+    "hangul": 11172,
+    "licenseEmbedded": true,
+    "compiledBytesMatch": true,
+    "appRuntimeVerified": false
+  },
+  "compatibility": "runtime-smoke-required",
+  "requiresMetro": false,
+  "binaryMetadataVerified": true,
+  "appRuntimeVerified": false,
+  "remoteApiVerified": false,
+  "physicalDeviceVerified": false,
+  "storeSigned": false,
+  "deployed": false,
+  "nativeConfiguration": "Release",
+  "control": {
+    "version": 2,
+    "kind": "xcode-simulator-signing-control",
+    "sourceSha": "171989e8cf8fd48119d20f58a45f2dca7dd45e64",
+    "toolingSourceSha": "171989e8cf8fd48119d20f58a45f2dca7dd45e64",
+    "observedAt": "2026-10-23T19:01:43.130Z",
+    "applicationId": "site.baro.app.preview",
+    "signature": "ad-hoc",
+    "teamIdentifier": "not set",
+    "architectures": [
+      "x86_64",
+      "arm64"
+    ],
+    "entitlements": {
+      "keychain-access-groups": [
+        "FAKETEAMID.site.baro.app.preview"
+      ],
+      "application-identifier": "FAKETEAMID.site.baro.app.preview"
+    },
+    "entitlementsSource": "simulator-macho-xml-and-der",
+    "signatureEntitlements": {},
+    "sectionHashes": [
+      {
+        "architecture": "x86_64",
+        "xmlSha256": "52b17581e78eaec7d4aea51bd44998e18b5b9a977c59d2c3eaee057c64be26f4",
+        "derSha256": "cb57c846ebff2330edb1bee67b09dd2c5d1323d026791e5ef4dacd73e4ec93af"
+      },
+      {
+        "architecture": "arm64",
+        "xmlSha256": "52b17581e78eaec7d4aea51bd44998e18b5b9a977c59d2c3eaee057c64be26f4",
+        "derSha256": "cb57c846ebff2330edb1bee67b09dd2c5d1323d026791e5ef4dacd73e4ec93af"
+      }
+    ],
+    "executableSha256": "38abdfae5505a4e0a4bd4671bb59c64cc82ed643e452614d22e2b35549df8696",
+    "infoPlistSha256": "f11ff44690377a600ad247f7761088d374529beb18f451d1d8d6183395be4c92",
+    "appRuntimeVerified": false,
+    "physicalDeviceVerified": false,
+    "storeSigned": false,
+    "deployed": false
+  },
+  "embeddedBundle": {
+    "path": "main.jsbundle",
+    "format": "hermes-bytecode",
+    "bytes": 3581976,
+    "sha256": "17a2d185d2b6392668092d7b2f8db6481c604bd55553005c863e193a382ff1b5",
+    "generatedJavascriptSha256": "8e7b6302e59a239978b2df3feb451cd5cf45eea73a3e9dc668c5ce1f8b0cf3a1",
+    "sourceMapSha256": "96d16bdc4603355766123850483c07925a214fb204c8196df88bcbf3a650caea",
+    "archiveBytesMatch": true,
+    "productEntry": "expo-router/entry",
+    "productSourceObserved": true,
+    "probeSourceAbsent": true,
+    "sourceMapPackaged": false,
+    "sourceModules": 1464
+  }
+}

@@ -310,6 +310,14 @@ Xcode command exit64로 terminal FAILURE다. [원본 실패](../quality/mobile-i
 구분하며 전체 UI 성공으로 표시하지 않는다. 불필요한 test-iterations 옵션을 제거하고 CLI error의
 고정 topic 분류를 보강한다. 해당 옵션을 이전 실패의 확정 원인으로 표시하지 않는다.
 
+새 앱 source171989e의 [iOS compile40006340014](https://github.com/creno-va/baro/actions/runs/40006340014)은 SUCCESS다.
+[원본 receipt](../quality/mobile-internal-ios-2026-10-23/receipt-171989e.json)·[compile 직후 inspection](../quality/mobile-internal-ios-2026-10-23/inspection-171989e.json)을 보존한다.
+ZIP24,102,101bytes/SHA256f8e218df820cdaa2c222b10474124b7265b73c4de43a146a3459181cd4fde356와
+원본 receipt 전체 SHA25677d157201a02eda89372ef3ef850895a2478f14047ea2024b7877db3ac62bcce를 독립 대조했다.
+HBC3,581,976bytes·product source1464·probe/maps 제외·font/양 ABI Simulator signature는 compile 범위다.
+고정 입력은 성공한 이 원본으로 갱신하고 기존 ff5c208 receipt/부팅 기록은 그대로 보존한다.
+새 앱의 실제 Home/확대/Guide 조작은 후속 실행으로만 인수한다.
+
 ### Android 확대 안내 조작
 
 ```sh
