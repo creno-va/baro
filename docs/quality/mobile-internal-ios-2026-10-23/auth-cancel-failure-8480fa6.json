@@ -1,0 +1,36 @@
+{
+  "toolingSourceSha": "8480fa6cdc7da56d90814bf572f262bfcf40d381",
+  "phase": "native-auth-cancel-xcuitest",
+  "code": "INTERNAL_IOS_VERIFICATION_COMMAND_FAILED",
+  "lastCommand": {
+    "exitCode": 65,
+    "timedOut": false,
+    "category": "COMMAND_FAILED"
+  },
+  "uiTestFailure": {
+    "cliUsageError": false,
+    "cliErrorTopics": [],
+    "compilerLocations": [],
+    "testHostConfigurationFailure": false,
+    "assertionCode": null,
+    "swiftCompilationFailure": false,
+    "projectGeneratorUnavailable": false,
+    "signingFailure": false,
+    "runnerLaunchFailure": false
+  },
+  "authCancelFailure": {
+    "lastStage": {
+      "provider": "google",
+      "stage": "provider-tapped"
+    },
+    "status": null,
+    "assertionCode": "BARO_AUTH_SYSTEM_CANCEL_MISSING"
+  },
+  "nativeProcessLaunchVerified": false,
+  "homeContentVerified": false,
+  "remoteApiVerified": false,
+  "oauthVerified": false,
+  "physicalDeviceVerified": false,
+  "storeSigned": false,
+  "deployed": false
+}
