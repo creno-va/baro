@@ -82,3 +82,19 @@ SHA/schema/correlation smoke와 native API의 malformed400/비로그인401을 �
 실제 인증된 사용자 여정은 별도다. production은57121d2로 관측됐으며 새 배포하지 않았다.
 full39926453700은 정확한f912에서 unit3690/browser454/DB/eval/build/CSP를 통과한 뒤
 raw audit high2건으로 실패했다. 성공한 full receipt·후속 processor native 검사로 확대하지 않는다.
+
+## 보존한 iOS binary의 후속 실행
+
+PR410/main80e538c·CI39977798108 뒤 [실제39978231736](https://github.com/creno-va/baro/actions/runs/39978231736)은
+SDK 준비 단계는 성공했으나 full runtime이 product-home-layout/RUNTIME_WAIT_EXPIRED로 실패했다.
+[SDK 원본 receipt](./mobile-ios-host-2026-10-23/sdk-80e538c.json)와
+[full 실패 분류](./mobile-runtime-2026-10-23/failure-ios-80e538c.json)를 각각 보존한다.
+RSS42표본이 있으나 Metro bundle 완료·제품 layout·native result는 관측되지 않았다.
+이 실패를 SecureStore 재실패, native IO 실패 또는 과거 실패의 단일 원인으로 해석하지 않는다.
+
+후속 runner는 성공한 SDK host의 직접 app-ID launch→제한된 development URL 순서를 적용한다.
+각 iOS entry는 실제 loopback Expo manifest와 launchAsset bundle HTTP를 먼저 검사한다.
+redirect·외부 origin/port·다른 platform·source map URL·크기 초과·HTML/HTTP 오류를 거부하고
+응답의 byte/hash만 기록한다. HTTP 성공은 appExecutionVerified=false이며 실제 Home layout과
+native probe 결과가 별도로 와야 인수한다. 원본 실패를 지우지 않고 조건 변경 후 검증한다.
+새 기본 제품/native 입력·웹 UI·실제 사용자·OAuth/API/physical/store·#339/#71은 바꾸지 않는다.

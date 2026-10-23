@@ -1,0 +1,15 @@
+{
+  "sourceSha": "80e538c864b77ec89753e370a5f00c2d7c63629f",
+  "platform": "ios",
+  "phase": "product-home-layout",
+  "code": "RUNTIME_WAIT_EXPIRED",
+  "unresolvedModule": null,
+  "host": null,
+  "probeFailure": null,
+  "metroBundleObserved": false,
+  "processRssSamples": 42,
+  "productLayoutObserved": false,
+  "nativeResultObserved": false,
+  "remoteApiVerified": false,
+  "oauthVerified": false
+}

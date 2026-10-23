@@ -51,6 +51,11 @@ import {
   runtimeDevelopmentUrl,
 } from "../scripts/mobile-runtime-host";
 import {
+  localMetroBundleUrl,
+  metroHttpProofSchema,
+  preflightMetroBundle,
+} from "../scripts/mobile-runtime-metro";
+import {
   runtimeReceiptSchema,
   verifyRuntimeHomeReceipt,
   verifyRuntimeReceipt,
@@ -63,6 +68,68 @@ const config: RuntimeConfig = {
   origin: RUNTIME_ORIGIN,
 };
 const fixture = createRuntimeFixture(config);
+test("bundle HTTP preflight restricts every generated launch URL to the owned IPv4 Metro and distinguishes bytes from app execution", async () => {
+  const url = "http://127.0.0.1:8081/.expo/.virtual-metro-entry.bundle?platform=ios&dev=false";
+  expect(localMetroBundleUrl(url, "ios")).toBe(url);
+  for (const bad of [
+    url.replace("127.0.0.1", "outside.invalid"),
+    url.replace("http:", "https:"),
+    url.replace(":8081", ":8082"),
+    url.replace("?platform=ios", "?platform=android"),
+    url.replace("127.0.0.1", "user:private@127.0.0.1"),
+    `${url}#private`,
+    url.replace(".bundle?", ".map?"),
+  ])
+    expect(() => localMetroBundleUrl(bad, "ios")).toThrow();
+  const seen: string[] = [],
+    js = "synthetic generated JavaScript response; never executed";
+  const proof = await preflightMetroBundle("ios", async (input, init) => {
+    seen.push(input);
+    expect(init?.redirect).toBe("error");
+    if (seen.length === 1) {
+      expect(new Headers(init?.headers).get("expo-platform")).toBe("ios");
+      return Response.json({ launchAsset: { url } });
+    }
+    return new Response(js, {
+      headers: { "content-type": "application/javascript; charset=UTF-8" },
+    });
+  });
+  expect(seen).toEqual(["http://127.0.0.1:8081/", url]);
+  expect(proof.bytes).toBe(js.length);
+  expect(proof.sha256).toBe(createHash("sha256").update(js).digest("hex"));
+  expect(proof.appExecutionVerified).toBe(false);
+  expect(metroHttpProofSchema.safeParse({ ...proof, appExecutionVerified: true }).success).toBe(
+    false,
+  );
+});
+test("Metro HTML, failure responses, oversized manifests and external launch assets cannot pass or trigger external fetches", async () => {
+  for (const response of [
+    new Response("synthetic HTML", { headers: { "content-type": "text/html" } }),
+    new Response("synthetic private stack", { status: 500 }),
+    Response.json({ launchAsset: { url: "https://outside.invalid/private" } }),
+    Response.json({
+      launchAsset: { url: "http://127.0.0.1:8081/main.bundle?platform=ios" },
+      padding: "x".repeat(262144),
+    }),
+  ]) {
+    let calls = 0;
+    await expect(
+      preflightMetroBundle("ios", async () => {
+        calls++;
+        return response;
+      }),
+    ).rejects.toThrow();
+    expect(calls).toBe(1);
+  }
+  let calls = 0;
+  await expect(
+    preflightMetroBundle("ios", async () =>
+      ++calls === 1
+        ? Response.json({ launchAsset: { url: "http://127.0.0.1:8081/main.bundle?platform=ios" } })
+        : new Response("synthetic compilation error", { status: 500 }),
+    ),
+  ).rejects.toThrow("RUNTIME_METRO_BUNDLE_HTTP_FAILED");
+});
 const {
   validateOwnedIosDevice,
   iosLaunchFailureCode,

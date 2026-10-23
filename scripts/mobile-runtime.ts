@@ -17,6 +17,7 @@ import {
   runtimeDevelopmentUrl,
 } from "./mobile-runtime-host";
 import { extractPinnedIosRuntime, preparePinnedIosRuntime } from "./mobile-runtime-ios-binary";
+import { preflightMetroBundle } from "./mobile-runtime-metro";
 import { verifyRuntimeHomeReceipt, verifyRuntimeReceipt } from "./mobile-runtime-receipt";
 
 const sha256 = (text: string) => createHash("sha256").update(text).digest("hex");
@@ -182,6 +183,10 @@ async function main() {
   let bootCompleted = false;
   let peakRssBytes = 0,
     memorySamples = 0;
+  const bundleHttpPreflight: {
+    product?: Awaited<ReturnType<typeof preflightMetroBundle>>;
+    probe?: Awaited<ReturnType<typeof preflightMetroBundle>>;
+  } = {};
   async function sampleMemory() {
     try {
       let kb = 0;
@@ -232,6 +237,9 @@ async function main() {
       ]);
     } else {
       await command(["xcrun", "simctl", "terminate", device, applicationId]).catch(() => {});
+      phase = "ios-app-id-launch";
+      await command(["xcrun", "simctl", "launch", device, applicationId]);
+      phase = "ios-development-url-launch";
       await command([
         "node",
         resolve(work, "scripts/mobile-runtime-ios-launch.cjs"),
@@ -387,6 +395,10 @@ module.exports=config;\n`;
     console.log(`Runtime ${platform}: mount instrumented product home`);
     phase = "product-metro";
     await startMetro();
+    if (platform === "ios") {
+      phase = "product-bundle-http";
+      bundleHttpPreflight.product = await preflightMetroBundle(platform);
+    }
     phase = "product-launch";
     await openApp();
     phase = "product-home-layout";
@@ -403,6 +415,9 @@ module.exports=config;\n`;
         platform,
         applicationId,
         ...(pinned ? { nativeBinary: pinned.evidence } : {}),
+        ...(bundleHttpPreflight.product
+          ? { bundleHttpPreflight: bundleHttpPreflight.product }
+          : {}),
         device: {
           kind: platform === "android" ? "emulator" : "simulator",
           model: deviceModel,
@@ -441,8 +456,13 @@ module.exports=config;\n`;
     console.log(`Runtime ${platform}: execute real native module and SDK IO`);
     phase = "probe-metro";
     await startMetro();
+    if (platform === "ios") {
+      phase = "probe-bundle-http";
+      bundleHttpPreflight.probe = await preflightMetroBundle(platform);
+    }
     phase = "native-probe";
     await openApp();
+    phase = "native-probe";
     await waitFor(async () => {
       if (fixture.state.failure) throw new Error(fixture.state.failure.code);
       await sampleMemory();
@@ -461,6 +481,14 @@ module.exports=config;\n`;
       apiOrigin: RUNTIME_ORIGIN,
       applicationId,
       ...(pinned ? { nativeBinary: pinned.evidence } : {}),
+      ...(bundleHttpPreflight.product && bundleHttpPreflight.probe
+        ? {
+            bundleHttpPreflight: {
+              product: bundleHttpPreflight.product,
+              probe: bundleHttpPreflight.probe,
+            },
+          }
+        : {}),
       device: {
         kind: platform === "android" ? "emulator" : "simulator",
         model: deviceModel,
@@ -539,6 +567,7 @@ module.exports=config;\n`;
           host,
           probeFailure: fixture.state.failure,
           metroBundleObserved: /\b(?:iOS|Android) Bundled\b/.test(log),
+          bundleHttpPreflight,
           processRssSamples: memorySamples,
           productLayoutObserved: !!fixture.state.productMount,
           nativeResultObserved: !!fixture.state.result,
