@@ -6,6 +6,11 @@ import { verifyInternalAndroidArtifact } from "./mobile-internal-android-artifac
 import { internalAndroidEnvironment } from "./mobile-internal-android-build";
 import { androidReverificationSchema } from "./mobile-internal-android-reverify";
 import {
+  anonymousScreenshotGuard,
+  publicDirectoryButton,
+  publicDirectoryUiObservation,
+} from "./mobile-public-directory-observation";
+import {
   androidRuntimeOptions,
   createOwnedAndroidAvd,
   emulatorStartupIssues,
@@ -41,8 +46,14 @@ export function bundledAndroidHomeObservation(xml: string) {
   };
 }
 async function main() {
-  const largeFont = process.argv[2] === "--large-font";
-  if (process.argv.length !== (largeFont ? 3 : 2)) throw new Error("BUNDLED_HOME_MODE_REQUIRED");
+  const options = process.argv.slice(2),
+    largeFont = options.includes("--large-font"),
+    publicDirectory = options.includes("--public-directory");
+  if (
+    new Set(options).size !== options.length ||
+    options.some((o) => !["--large-font", "--public-directory"].includes(o))
+  )
+    throw new Error("BUNDLED_HOME_MODE_REQUIRED");
   const root = process.cwd(),
     sourceSha = z
       .string()
@@ -70,6 +81,7 @@ async function main() {
     metroRequests = 0,
     bootCompleted = false,
     baseHomeVerified = false,
+    lastPublicObservation: ReturnType<typeof publicDirectoryUiObservation> | null = null,
     lastHomeObservation: ReturnType<typeof bundledAndroidHomeObservation> | null = null;
   async function bytes(args: string[], input?: string) {
     const child = Bun.spawn(args, {
@@ -98,6 +110,9 @@ async function main() {
   const text = async (args: string[], input?: string) =>
     new TextDecoder().decode(await bytes(args, input));
   const shell = (args: string[]) => text([adb, "-s", device, "shell", ...args]);
+  const capture = anonymousScreenshotGuard(() =>
+    bytes([adb, "-s", device, "exec-out", "screencap", "-p"]),
+  );
   async function wait(check: () => Promise<boolean>, timeout: number) {
     const end = Date.now() + timeout;
     while (Date.now() < end) {
@@ -187,7 +202,7 @@ async function main() {
         throw new Error("BUNDLED_HOME_PROCESS_REQUIRED");
       observations.push({ coldLaunch: attempt, ...observed });
       if (attempt === 1) {
-        const png = await bytes([adb, "-s", device, "exec-out", "screencap", "-p"]);
+        const png = await capture.read();
         if (
           png.length < 24 ||
           Buffer.from(png.subarray(0, 8)).toString("hex") !== "89504e470d0a1a0a"
@@ -259,7 +274,7 @@ async function main() {
           return false;
         }
       }, 120000);
-      const png = await bytes([adb, "-s", device, "exec-out", "screencap", "-p"]);
+      const png = await capture.read();
       if (png.length < 24 || Buffer.from(png.subarray(0, 8)).toString("hex") !== "89504e470d0a1a0a")
         throw new Error("BUNDLED_HOME_SCREENSHOT_REQUIRED");
       if (metroRequests !== 0) throw new Error("BUNDLED_HOME_UNEXPECTED_METRO_REQUEST");
@@ -297,6 +312,113 @@ async function main() {
       );
       console.log("ACTUAL_ANDROID_LARGE_FONT_HOME_OBSERVED_OTHER_ACCESSIBILITY_UNVERIFIED");
     }
+    if (publicDirectory) {
+      // No screenshots may be taken after this point, including every failure path.
+      capture.disable();
+      phase = "public-directory-prepare";
+      await shell(["settings", "put", "system", "font_scale", "1.0"]);
+      await shell(["am", "force-stop", appId]);
+      const launch = await shell(["am", "start", "-W", "-n", `${appId}/${appId}.MainActivity`]);
+      if (!/^Status:\s*ok\r?$/m.test(launch))
+        throw new Error("BUNDLED_HOME_ACTIVITY_LAUNCH_FAILED");
+      const width = screenshot.readUInt32BE(16),
+        height = screenshot.readUInt32BE(20);
+      async function hierarchy() {
+        await shell(["rm", "-f", "/sdcard/baro-internal-home.xml"]);
+        await shell(["uiautomator", "dump", "--compressed", "/sdcard/baro-internal-home.xml"]);
+        return shell(["cat", "/sdcard/baro-internal-home.xml"]);
+      }
+      await wait(async () => {
+        try {
+          const observed = bundledAndroidHomeObservation(await hierarchy());
+          return observed.titleVisible && !observed.foundationErrorVisible;
+        } catch {
+          return false;
+        }
+      }, 120000);
+      let target: ReturnType<typeof publicDirectoryButton> = null;
+      for (let attempt = 0; attempt < 4; attempt++) {
+        target = publicDirectoryButton(await hierarchy(), width, height);
+        if (target) break;
+        await shell([
+          "input",
+          "swipe",
+          String(Math.floor(width / 2)),
+          String(Math.floor(height * 0.8)),
+          String(Math.floor(width / 2)),
+          String(Math.floor(height * 0.25)),
+          "500",
+        ]);
+      }
+      if (!target) throw new Error("BUNDLED_PUBLIC_BUTTON_NOT_FOUND");
+      phase = "public-directory-navigation";
+      await shell(["input", "tap", String(target.x), String(target.y)]);
+      let headingObserved = false,
+        scrolls = 0;
+      await wait(async () => {
+        let current: ReturnType<typeof publicDirectoryUiObservation>;
+        try {
+          current = publicDirectoryUiObservation(await hierarchy());
+        } catch {
+          return false;
+        }
+        lastPublicObservation = current;
+        headingObserved ||= current.headingVisible;
+        if (current.errorVisible) throw new Error("BUNDLED_PUBLIC_API_UI_ERROR");
+        if (current.readyEmpty && current.readyProfileCard)
+          throw new Error("BUNDLED_PUBLIC_STATE_AMBIGUOUS");
+        if (headingObserved && (current.readyEmpty || current.readyProfileCard)) return true;
+        if (!current.loadingVisible && scrolls++ < 4)
+          await shell([
+            "input",
+            "swipe",
+            String(Math.floor(width / 2)),
+            String(Math.floor(height * 0.8)),
+            String(Math.floor(width / 2)),
+            String(Math.floor(height * 0.25)),
+            "500",
+          ]);
+        return false;
+      }, 120000);
+      if (metroRequests !== 0) throw new Error("BUNDLED_HOME_UNEXPECTED_METRO_REQUEST");
+      await writeFile(
+        resolve(out, "public-directory.json"),
+        `${JSON.stringify(
+          {
+            version: 1,
+            kind: "bundled-android-public-directory-ui-only",
+            toolingSourceSha: sourceSha,
+            binarySourceSha: receipt.sourceSha,
+            observedAt: new Date().toISOString(),
+            applicationId: appId,
+            binary: receipt.artifact,
+            apiOrigin: receipt.apiOrigin,
+            apiHealthObservation: receipt.apiObservation,
+            publicDirectoryUiObserved: true,
+            headingObserved,
+            state: lastPublicObservation,
+            readOnly: true,
+            searchSubmitted: false,
+            retryInvoked: false,
+            profileDetailOpened: false,
+            screenshotsSuppressedBeforeNavigation: true,
+            profileValuesRecorded: false,
+            httpTransportSeparatelyObserved: false,
+            metroServerStarted: false,
+            metroRequests,
+            authenticatedJourneysVerified: false,
+            oauthVerified: false,
+            physicalDeviceVerified: false,
+            storeSigned: false,
+            deployed: false,
+          },
+          null,
+          2,
+        )}\n`,
+        { flag: "wx" },
+      );
+      console.log("ACTUAL_PUBLIC_DIRECTORY_UI_OBSERVED_NO_PROFILE_VALUES_RECORDED");
+    }
   } catch (error) {
     const known = new Set([
         "BUNDLED_HOME_HIERARCHY_REQUIRED",
@@ -313,12 +435,16 @@ async function main() {
         "BUNDLED_HOME_UNEXPECTED_METRO_REQUEST",
         "BUNDLED_HOME_COMMAND_FAILED",
         "BUNDLED_HOME_FONT_SCALE_MISMATCH",
+        "BUNDLED_PUBLIC_HIERARCHY_REQUIRED",
+        "BUNDLED_PUBLIC_VIEWPORT_REQUIRED",
+        "BUNDLED_PUBLIC_BUTTON_NOT_FOUND",
+        "BUNDLED_PUBLIC_API_UI_ERROR",
+        "BUNDLED_PUBLIC_STATE_AMBIGUOUS",
+        "BUNDLED_PUBLIC_SCREENSHOT_FORBIDDEN",
       ]),
       message = error instanceof Error ? error.message : "";
-    if (bootCompleted && emulator?.exitCode === null) {
-      const image = await bytes([adb, "-s", device, "exec-out", "screencap", "-p"]).catch(
-        () => null,
-      );
+    if (capture.allowed && bootCompleted && emulator?.exitCode === null) {
+      const image = await capture.read().catch(() => null);
       if (
         image &&
         image.length >= 24 &&
@@ -328,7 +454,7 @@ async function main() {
     }
     await writeFile(
       resolve(out, "failure.json"),
-      `${JSON.stringify({ toolingSourceSha: sourceSha, phase, code: known.has(message) ? message : "BUNDLED_HOME_FAILED", emulatorBootVerified: bootCompleted, lastHomeObservation, emulatorStartupIssues: emulatorStartupIssues(await readFile(log, "utf8").catch(() => "")), sdkHomeLaunchVerified: baseHomeVerified, largeFontVerified: false, physicalDeviceVerified: false, storeSigned: false, deployed: false }, null, 2)}\n`,
+      `${JSON.stringify({ toolingSourceSha: sourceSha, phase, code: known.has(message) ? message : "BUNDLED_HOME_FAILED", emulatorBootVerified: bootCompleted, lastHomeObservation, lastPublicObservation, publicScreenshotsSuppressed: !capture.allowed, emulatorStartupIssues: emulatorStartupIssues(await readFile(log, "utf8").catch(() => "")), sdkHomeLaunchVerified: baseHomeVerified, largeFontVerified: false, physicalDeviceVerified: false, storeSigned: false, deployed: false }, null, 2)}\n`,
       { flag: "wx" },
     );
     throw new Error("BUNDLED_HOME_FAILED");

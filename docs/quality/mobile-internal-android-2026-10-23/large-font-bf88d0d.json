@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "kind": "bundled-android-large-font-home-only",
+  "toolingSourceSha": "bf88d0d0563438d81b184e385d7444323ec66cf7",
+  "binarySourceSha": "dedcd0e13e8c7263edcd78f53f3f1da980f273c8",
+  "observedAt": "2026-10-23T13:25:59.856Z",
+  "applicationId": "site.baro.app.preview",
+  "binary": {
+    "name": "baro-internal-preview-android-dedcd0e13e8c7263edcd78f53f3f1da980f273c8.apk",
+    "bytes": 57133498,
+    "sha256": "1f5b9d7d6cb43bbe7b21d8ee4554dd1d357c1bb3fb363d8d29a5ed06a765d446"
+  },
+  "androidFontScaleSettingReadback": 2,
+  "homeObservation": {
+    "titleVisible": true,
+    "firstCardVisible": true,
+    "foundationErrorVisible": false
+  },
+  "metroServerStarted": false,
+  "metroRequests": 0,
+  "screenshot": {
+    "name": "large-font.png",
+    "bytes": 218078,
+    "sha256": "42a7f2263f63012afe965175213c146d0ea0bf1f839ac83ea146d4e5b70687b0"
+  },
+  "allScreensVerified": false,
+  "keyboardVerified": false,
+  "rotationVerified": false,
+  "talkBackVerified": false,
+  "voiceOverVerified": false,
+  "remoteApiVerified": false,
+  "physicalDeviceVerified": false,
+  "storeSigned": false,
+  "deployed": false
+}
