@@ -1,7 +1,7 @@
 # RN + Expo 모바일 실행 계획
 
-- Status: M1/M2 인수; 전체 #334 / M3 실제 인증 잔여 #346 / M4 고객 흐름 #354 진행
-- Updated: 2026-10-23
+- Status: M1/M2 인수; M3~M7 구현 통합 / M8 실제 runtime·내부 전달 검증 / 전체 #334 진행
+- Updated: 2026-10-24 KST
 - Tracking: native 인증 [#346](https://github.com/creno-va/baro/issues/346), 전체 [#334](https://github.com/creno-va/baro/issues/334), 계획 [#328](https://github.com/creno-va/baro/issues/328), M1 [#330](https://github.com/creno-va/baro/issues/330), M2 [#335](https://github.com/creno-va/baro/issues/335), M7 토큰·primitive [#379](https://github.com/creno-va/baro/issues/379)
 - Decision: [ADR-0017](../adr/0017-expo-mobile-and-shared-client-boundaries.md)
 - Architecture: [공통 코드와 모바일 경계](../architecture/MOBILE-CLIENT.md)
@@ -11,7 +11,7 @@
 사용자는 RN + Expo를 선택했고, 웹 UI 전면 개편은 다른 채팅에서 진행하므로 모바일의
 공통 코드 구조와 단계별 실행 계획을 먼저 요청했다. 계획 PR329는 CI 성공 후 main
 `e6401de9657f8fd062fb913fe7d3945adec068fd`에 병합했다. 이어진 직접 요청으로 M1
-`apps/mobile`·Bun workspace·공통 계약 export를 #330에서 구현한다. 로그인·실기기·
+`apps/mobile`·Bun workspace·공통 계약 export를 #330에서 구현·인수했다. 로그인·실기기·
 스토어 출시 인수와 구분한다.
 
 이후 사용자가 모바일 네이티브 앱 전체 완성을 지속 목표로 지시했다. #334에서 M2~M8의
@@ -168,10 +168,35 @@ CI, 기존 client facade는 한 공유 기반 PR 담당이 순서대로 통합�
 모듈 소유권을 유지한다. 같은 파일에 열린 PR이 있으면 먼저 통합하고 그 main을 기준으로
 작업한다. 다른 채팅에 자동 메시지를 보내지 않고 이 문서를 인계 자료로 제공한다.
 
-현재 구현 이슈는 **#335 M2 공통 API client·client-core**다. #330은 두 OS native 개발
-빌드 receipt와 quick/build/계약/UI 증거를 확인해 인수했다. M2 첫 단위는 공통 DTO·오류·
-transport 및 session/consent·공개 디렉터리와 모바일 목록/검색이다. 다음 단위에서 사건·
-workspace·자료·리포트·나머지 domain을 순차 추출한다. 첫 단위만으로 M2 전체를 종료하지 않는다.
+M1 #330과 M2 #335는 인수·종료했다. M3~M7의 인증/기능 model·공유 client·native adapter와
+모바일 화면 구현은 main에 통합됐고 현재 작업은 M8 runtime·내부 전달 검증이다.
+구현 통합을 실제 역할별 사용자 여정·물리 기기·전체 접근성·스토어 인수 완료로 확대하지 않는다.
+아래는 2026-10-24 KST의 관측 범위이며 실행별 최신 증거는 [실행 기준](./EXECUTION.md)과
+연결된 원본 receipt/이슈를 따른다. 아래 M0/M1 조사·이전 실행 기록은 당시 사실로 보존한다.
+
+| 범위 | 인수한 사실 | 남은 실제 인수 |
+| --- | --- | --- |
+| 공통 기반 M1/M2 | workspace·순수 wire/schema·client-core/API client·플랫폼 IO 경계와 회귀, 두 OS 개발 빌드 | 새 앱/기존 서버의 실제 인증된 전체 여정과 최종 후보 호환표 |
+| 인증 M3 / #346 | 기존 계정을 보존하는 native session/credential·역할/동의·로그인/재인증/로그아웃·challenge 연결 | Google/Naver/Kakao 실제 로그인·cold/warm 복귀·만료/전환·두 역할/동의·실제 Turnstile |
+| 기능 M4~M6 / #354/#361/#369 | 사건/workspace·자료/리포트·판례/공개 탐색·본인 프로필/설정의 model·HTTP·RN·native adapter 구현/합성 회귀 | 실제 인증 계정의 저장/재개·처리/공유/열기·철회/삭제와 실제 기기 picker·장애/취소 |
+| 모바일 UI M7 / #379 | 웹 정본 토큰의 순수 공유·native primitive/폰트/브랜드·화면 위계, 실제 Android Home/OS font_scale2와 PNG 대조 | 전체 화면/상태·키보드/회전·큰 글자·VoiceOver/TalkBack·물리 기기 인수 |
+| 앱 IPC/IO M8 / #385 | Android c2fa3f2의 계측 Home·100MB/1GB loopback byte/hash/정리, iOS7294145 binary의 실제 SDK 초기화8항목 | iOS full Home/native IO는80e538c에서 Home 대기 실패. PR412/a191ae1·CI39982489829 뒤 보강한39982855183 실행 결과를 별도 인수 |
+| 내부 전달 M8 / #397 | Android 원본 dedcd0e bundled APK의 SDK signature/HBC/font·Metro 없는 두 cold launch/Home·글자 확대·공개 목록 ready-empty | iOS Release compile39980418548 결과와 Metro 없는 설치/초기 화면 대조. 두 OS 실제 폰·전체 private 여정·store 서명/승인은 별도 |
+| 보안/전체 릴리스 / #339/#71 | 원본 version/SRI/LICENSE를 보존한 CJS 보완·실제 consumer/회귀·배포 증거의 분리 | raw node-forge high1건과 browser dist/map 잔여·최종 후보 full/preview/운영자 승인·법률/외부/스토어 인수 |
+
+iOS full runtime의 [이전 실패](../quality/mobile-runtime-2026-10-23/failure-ios-80e538c.json)와
+[별도 SDK 성공](../quality/mobile-ios-host-2026-10-23/sdk-80e538c.json)을 함께 보존한다.
+원본 바이너리와 tooling/JS source를 구분하고 HTTP bundle 수신만으로 앱 실행을 인수하지 않는다.
+준비된 전달물은 [내부 preview 절차](./MOBILE-INTERNAL-PREVIEW.md)를 따르며 Simulator ZIP은
+iPhone IPA/스토어 앱이 아니다. 실제 폰 모델/OS·기존 개발자/배포 계정은 사용자 확인 대기 중이며
+부재로 단정하지 않는다. 현재 M8 검증은 웹 UI·제품/native 입력을 유지한다.
+
+2026-10-24 KST [보안 후속 관측](https://github.com/creno-va/baro/issues/339#issuecomment-6368313820)에서
+[braces advisory](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm)의 철회 시각
+2026-10-23T12:53:02Z를 확인했다. 이는 patch release나 기존 depth guard 제거 근거가 아니다.
+[node-forge advisory](https://github.com/advisories/GHSA-86w9-cpqp-85rv)는 active/first_patched_version=null,
+원본 audit는 high1건/exit1이다. 과거 full39926453700/f912441의 당시 high2건 실패는 수정하지 않으며
+동일한 보안 blocker에서 변경 없는 full 재실행이나 raw gate 우회를 하지 않는다.
 
 ## 6. M0 계획 당시 조사·검증 기록
 
