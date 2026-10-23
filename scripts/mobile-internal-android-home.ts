@@ -11,6 +11,10 @@ import {
   verifyAndroidAuthCancelReceipt,
 } from "./mobile-android-auth-cancel";
 import {
+  type AndroidChromeFixture,
+  prepareOwnedChromeFixture,
+} from "./mobile-android-chrome-fixture";
+import {
   type androidGuideUiReceiptSchema,
   androidGuideUiValidationFields,
   androidHomeObservationOptions,
@@ -102,6 +106,7 @@ async function main() {
     receiptValidationFields: string[] = [],
     lastGuideObservation: ReturnType<typeof anonymousGuideUiObservation> | null = null,
     lastAuthObservation: AndroidAuthDiagnostic | null = null,
+    lastChromeFixture: AndroidChromeFixture | null = null,
     lastPublicObservation: ReturnType<typeof publicDirectoryUiObservation> | null = null,
     lastHomeObservation: ReturnType<typeof bundledAndroidHomeObservation> | null = null;
   const authPrivacy = androidAuthenticationPrivacyBoundary();
@@ -132,7 +137,8 @@ async function main() {
   }
   const text = async (args: string[], input?: string) =>
     new TextDecoder().decode(await bytes(args, input));
-  const shell = (args: string[]) => text([adb, "-s", device, "shell", ...args]);
+  const shell = (args: string[], input?: string) =>
+    text([adb, "-s", device, "shell", ...args], input);
   const capture = anonymousScreenshotGuard(() =>
     bytes([adb, "-s", device, "exec-out", "screencap", "-p"]),
   );
@@ -461,17 +467,33 @@ async function main() {
       const screenshotsSuppressedBeforeNavigation = !capture.allowed;
       if (!screenshotsSuppressedBeforeNavigation || !authPrivacy.entered)
         throw Error("ANDROID_AUTH_BOUNDARY_REQUIRED");
-      const results = await observeAndroidAuthCancellation({
+      phase = "auth-cancel-chrome-fixture";
+      const chrome = await prepareOwnedChromeFixture({
         shell,
-        width: screenshot.readUInt32BE(16),
-        height: screenshot.readUInt32BE(20),
-        boundaryEntered: authPrivacy.entered,
-        screenshotsSuppressed: screenshotsSuppressedBeforeNavigation,
-        diagnostic(value) {
-          lastAuthObservation = value;
-          phase = `auth-cancel-${value.stage}`;
-        },
+        deviceSerial: device,
+        avdName: avd,
+        freshOwnedEmulator: bootCompleted && baseHomeVerified && emulator?.exitCode === null,
       });
+      let results: Awaited<ReturnType<typeof observeAndroidAuthCancellation>>;
+      try {
+        results = await observeAndroidAuthCancellation({
+          shell,
+          width: screenshot.readUInt32BE(16),
+          height: screenshot.readUInt32BE(20),
+          boundaryEntered: authPrivacy.entered,
+          screenshotsSuppressed: screenshotsSuppressedBeforeNavigation,
+          diagnostic(value) {
+            lastAuthObservation = value;
+            phase = `auth-cancel-${value.stage}`;
+          },
+        });
+      } finally {
+        const observationPhase = phase;
+        phase = "auth-cancel-chrome-fixture-cleanup";
+        lastChromeFixture = await chrome.finish();
+        phase = observationPhase;
+      }
+      if (!lastChromeFixture) throw Error("ANDROID_CHROME_FLAG_CLEANUP_FAILED");
       if (metroRequests) throw Error("BUNDLED_HOME_UNEXPECTED_METRO_REQUEST");
       phase = "auth-cancel-proof";
       const baselineBytes = await readFile(resolve(out, "receipt.json")),
@@ -492,6 +514,7 @@ async function main() {
           observedAt: new Date().toISOString(),
           applicationId: appId,
           browserPackage: "com.android.chrome",
+          browserFixture: lastChromeFixture,
           providers: results,
           coldAnonymousReturnObserved: true,
           explicitScreenshotsSuppressedBeforeNavigation: screenshotsSuppressedBeforeNavigation,
@@ -668,7 +691,7 @@ async function main() {
     }
     await writeFile(
       resolve(out, "failure.json"),
-      `${JSON.stringify({ toolingSourceSha: sourceSha, phase, code: phase.startsWith("auth-cancel") ? androidAuthFailureCode(error) : known.has(message) ? message : "BUNDLED_HOME_FAILED", emulatorBootVerified: bootCompleted, lastHomeObservation, lastPublicObservation, lastGuideObservation, lastAuthObservation, receiptValidationFields, publicScreenshotsSuppressed: !capture.allowed, emulatorStartupIssues: emulatorStartupIssues(await readFile(log, "utf8").catch(() => "")), sdkHomeLaunchVerified: baseHomeVerified, largeFontVerified: false, physicalDeviceVerified: false, storeSigned: false, deployed: false }, null, 2)}\n`,
+      `${JSON.stringify({ toolingSourceSha: sourceSha, phase, code: phase.startsWith("auth-cancel") ? androidAuthFailureCode(error) : known.has(message) ? message : "BUNDLED_HOME_FAILED", emulatorBootVerified: bootCompleted, lastHomeObservation, lastPublicObservation, lastGuideObservation, lastAuthObservation, lastChromeFixture, receiptValidationFields, publicScreenshotsSuppressed: !capture.allowed, emulatorStartupIssues: emulatorStartupIssues(await readFile(log, "utf8").catch(() => "")), sdkHomeLaunchVerified: baseHomeVerified, largeFontVerified: false, physicalDeviceVerified: false, storeSigned: false, deployed: false }, null, 2)}\n`,
       { flag: "wx" },
     );
     throw new Error("BUNDLED_HOME_FAILED");

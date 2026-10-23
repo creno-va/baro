@@ -529,11 +529,12 @@ URL·cookie·state·토큰·계정/원문 화면은 내보내지 않는다.
 세 제공자의 표시/취소/복귀와 cold 상태가 모두 확인된 단일 strict 결과만 성공으로 인정한다.
 source/tooling/compiler ZIP/receipt·기기 identity는 같은 실행의 Home baseline과 묶는다.
 현재 닫기 컨트롤은 인증 전 없었던 고정 `Cancel`의 유일하고 완전히 hittable한 query와,
-메모리에서 얻은 [공개 snapshot](https://developer.apple.com/documentation/xcuiautomation/xcuielementsnapshotproviding/snapshot())의
+메모리에서 얻은 app root와 최대8개 현재 window의 [공개 snapshot](https://developer.apple.com/documentation/xcuiautomation/xcuielementsnapshotproviding/snapshot())의
 [children 관계](https://developer.apple.com/documentation/xcuiautomation/xcuielementsnapshot)를 직접 대조한다.
 WebView/keyboard 하위 branch 전체를 제외하고 나머지 native tree를 깊이128/방문20,000개/
 자식5,000개 이내에서 빠짐없이 순회한다. WebView가 실제 존재하고 native Cancel이 정확히1개이며
-그 frame이 실제 query와 일치해야 `snapshot-native-window` scope로 선택한다. raw snapshot·
+그 frame이 실제 query와 일치해야 `snapshot-native-window` scope로 선택한다.
+선택한 snapshot root 종류·검사 node 수와 app/최대 window node 수·window 시도 횟수만 남긴다. raw snapshot·
 WebView/keyboard의 label/value·실제 frame/hierarchy는 내보내지 않는다.
 동일 app의 foreground window/가시 WebView와 인증 전 부재·hittability는 계속 요구한다.
 WebView frame이 native control을 포함할 수 있어 `webViewFrameExcluded`는 실제 boolean을 남기며,
@@ -684,7 +685,7 @@ adb stdout/stderr·raw XML/dump·URL/state·계정 화면/텍스트를 artifact�
 stage/provider와 상태 boolean만 내보낸다. 소유 Emulator와 AVD/cache만 정리한다.
 
 허용 artifact는 인증 전 Home PNG/receipt와 별도 `auth-cancel-ui.json` 또는 고정 `failure.json`이다.
-현재는 구현/합성 준비 단계이며 exact CI/main 뒤 수동 실제 결과 전 성공을 표시하지 않는다.
+구현/합성과 실제 성공을 구분하며 exact CI/main 뒤 수동 실제 결과 전 성공을 표시하지 않는다.
 Custom Tab 표시/취소는 제공자 설정 수용·계정 로그인·callback/교환·SecureStore pending 삭제의
 직접 계측이 아니다. 실제 계정·두 역할/필수 동의/challenge·cold/warm 인증 복귀·물리 기기/store와
 Apple 공급자 방향 결정·#334/#346/#339/#71은 별도 인수로 남긴다. 웹 UI/앱·서버·공통 계약은 바꾸지 않는다.
@@ -699,3 +700,40 @@ PR436/main21213cb·CI40034599325 뒤 [actual40034804614](https://github.com/cren
 legacy fixture·parity/서명/HBC/font·성공한 compiler provenance gate는 완화하지 않는다.
 구형 workflow의 auth_cancel 입력은 제거하고 합성 검사는 실제 compiler script 연결도 확인한다.
 같은 실패 경로를 재실행하지 않으며 정확한 새 main CI 뒤 올바른 compiler 입력으로 실제 실행한다.
+
+### 현재 두 OS의 브라우저 준비/소속 관측
+
+PR437/main9dbb2ee·CI40035594827 뒤 Android
+[actual40035889527](https://github.com/creno-va/baro/actions/runs/40035889527)은 원본171989e APK/receipt·
+SDK metadata/HBC/font와 두 cold Home를 통과한 뒤 Google 진입의 Chrome FirstRunActivity에서 멈췄다.
+[고정 실패](../quality/mobile-internal-android-2026-10-23/auth-cancel-browser-failure-9dbb2ee.json)는
+chromeFirstRunForeground=true, Custom Tab/native close/geometry=false, 캡처 차단=true다.
+[Home](../quality/mobile-internal-android-2026-10-23/auth-cancel-home-9dbb2ee.json)와
+[metadata](../quality/mobile-internal-android-2026-10-23/auth-cancel-verification-9dbb2ee.json)를 별도 보존했다.
+첫 실행을 취소 성공으로 바꾸지 않으며 native Custom Tab 취소/익명 복귀는 인수하지 않았다.
+
+후속 fixture는 fresh owned CI Emulator의 serial/AVD/살아 있는 소유 process와 userdebug/eng를
+요구하고 기존 command line 파일을 거절한다. preinstalled Chrome 버전을 숫자로 읽고 force-stop 후
+정확히 `_ --disable-fre` 한 줄만 shell stdin/tee로 설정한다. 직접 byte readback과 실제 관측 후 파일
+삭제/부재를 검증해야 strict receipt를 반환한다. 인증 전 screenshot/raw-log 차단은 계속 적용한다.
+[Chromium 공개 초기화 코드](https://chromium.googlesource.com/chromium/src/+/main/base/android/java/src/org/chromium/base/CommandLineInitUtil.java)의
+userdebug/eng command line 지원과
+[공식 Android 디버깅 안내](https://chromium.googlesource.com/chromium/src/+/main/docs/android_debugging_instructions.md)의
+테스트 switch를 사용한다. root/debug-app/global 설정·TLS/web-security·계정은 바꾸지 않고
+첫 실행/약관·제공자 계정/동의 버튼을 누르지 않는다. flag가 적용되지 않거나 다른 UI면 기존 기준으로 실패한다.
+자동화 fixture의 실제 Chrome 버전·단일 switch/hash·읽기·파일 삭제 확인과
+consumerFirstRunVerified=false를 성공 proof/해당 실패의 별도 필드에 남긴다. 실제 사용자 기기의
+Chrome 초기 설정이나 실제 OAuth 성공을 이 fixture로 인수하지 않는다.
+
+같은 source의 iOS [actual40035878294](https://github.com/creno-va/baro/actions/runs/40035878294)도 실패다.
+[고정 원본](../quality/mobile-internal-ios-2026-10-23/auth-cancel-failure-9dbb2ee.json)은
+Google/browser-presented·query WebView/window geometry=true·Cancel1/hittable=true이나 app root
+snapshot에서 webViewObserved=false/nativeCancelCount0을 기록한다. root가 완전히 비었거나
+특정 OS service 소유라는 원인은 아직 입증하지 않았다. 아무것도 누르지 않았고 취소/복귀는 미인수다.
+[Home](../quality/mobile-internal-ios-2026-10-23/auth-cancel-home-9dbb2ee.json)와
+[metadata](../quality/mobile-internal-ios-2026-10-23/auth-cancel-verification-9dbb2ee.json)를 따로 보존했다.
+후속은 app뿐 아니라 현재 app window의 공개 snapshot을 각각 검사하고, 실제 WebView·유일 native
+Cancel·WebView/keyboard 조상 제외·query/frame 일치가 입증된 root만 허용한다. scope/검사 node 수와
+고정 aggregate count를 남기며 raw snapshot/URL/계정 화면은 내보내지 않는다. generic global 버튼
+탭·임의 좌표나 private API로 대체하지 않는다. 두 OS 새 조건의 exact CI/main·실제 실행 전 성공을
+주장하지 않고 실제 계정/기기/store·Apple 방향 결정과 전체 gate를 보존한다.

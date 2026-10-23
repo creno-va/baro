@@ -37,6 +37,8 @@ const providerResult = z.strictObject({
   webViewFrameExcluded: z.boolean(),
   snapshotTraversalComplete: z.literal(true),
   snapshotControlMatched: z.literal(true),
+  snapshotRootScope: z.enum(["application", "window"]),
+  snapshotInspectedNodes: z.number().int().positive().max(20000),
   webViewAncestorExcluded: z.literal(true),
   keyboardAncestorExcluded: z.literal(true),
   dismissControlAbsentBeforeAuthentication: z.literal(true),
@@ -98,7 +100,12 @@ const statusSchema = z
       .strictObject({
         traversalComplete: z.boolean(),
         webViewObserved: z.boolean(),
-        nativeCancelCount: z.number().int().min(0).max(256),
+        nativeCancelCount: z.number().int().min(0).max(257),
+        rootScope: z.enum(["none", "application", "window"]),
+        inspectedNodes: z.number().int().min(0).max(20001),
+        applicationSnapshotNodes: z.number().int().min(0).max(20001),
+        largestWindowSnapshotNodes: z.number().int().min(0).max(20001),
+        windowSnapshotsAttempted: z.number().int().min(0).max(8),
         queriedControlMatched: z.boolean(),
         webViewAncestorExcluded: z.boolean(),
         keyboardAncestorExcluded: z.boolean(),
@@ -106,6 +113,9 @@ const statusSchema = z
       .refine((value) =>
         value.queriedControlMatched
           ? value.traversalComplete &&
+            value.rootScope !== "none" &&
+            value.inspectedNodes > 0 &&
+            value.inspectedNodes <= 20000 &&
             value.webViewObserved &&
             value.nativeCancelCount === 1 &&
             value.webViewAncestorExcluded &&

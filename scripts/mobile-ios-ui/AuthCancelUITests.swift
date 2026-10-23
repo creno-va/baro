@@ -17,7 +17,7 @@ final class BaroAuthCancelUITests: XCTestCase {
   }
 
   private let dismissLabels = [("cancel", "Cancel"), ("done", "Done"), ("close", "Close")]
-  private struct DismissSelection { let element: XCUIElement; let frameExcluded: Bool }
+  private struct DismissSelection { let element: XCUIElement; let frameExcluded: Bool; let rootScope: String; let inspectedNodes: Int }
   private struct CancelOwnership {
     var traversalComplete = false
     var webViewObserved = false
@@ -25,6 +25,11 @@ final class BaroAuthCancelUITests: XCTestCase {
     var queriedControlMatched = false
     var webViewAncestorExcluded = false
     var keyboardAncestorExcluded = false
+    var rootScope = "none"
+    var inspectedNodes = 0
+    var applicationSnapshotNodes = 0
+    var largestWindowSnapshotNodes = 0
+    var windowSnapshotsAttempted = 0
   }
 
   @MainActor
@@ -58,9 +63,10 @@ final class BaroAuthCancelUITests: XCTestCase {
   }
 
   @MainActor
-  private func cancelOwnership(_ app: XCUIApplication) -> CancelOwnership {
+  private func cancelOwnershipIn(_ element: XCUIElement, app: XCUIApplication, scope: String) -> CancelOwnership {
     var result = CancelOwnership()
-    guard let root = try? app.snapshot() else { return result }
+    result.rootScope = scope
+    guard let root = try? element.snapshot() else { return result }
     var visited = 0
     var nativeFrames: [CGRect] = []
     // Snapshot values/hierarchy remain in process memory only. Never print/attach them.
@@ -83,9 +89,11 @@ final class BaroAuthCancelUITests: XCTestCase {
       }
       return true
     }
-    guard walk(root, webAncestor: false, keyboardAncestor: false, depth: 0) else { return CancelOwnership() }
-    result.traversalComplete = true
+    let complete = walk(root, webAncestor: false, keyboardAncestor: false, depth: 0)
+    result.inspectedNodes = visited
     result.nativeCancelCount = nativeFrames.count
+    guard complete else { return result }
+    result.traversalComplete = true
     let matches = app.buttons.matching(NSPredicate(format: "label == %@", "Cancel"))
     guard result.webViewObserved && matches.count == 1 && nativeFrames.count == 1, let native = nativeFrames.first else { return result }
     let frame = matches.firstMatch.frame
@@ -98,6 +106,28 @@ final class BaroAuthCancelUITests: XCTestCase {
   }
 
   @MainActor
+  private func cancelOwnership(_ app: XCUIApplication) -> CancelOwnership {
+    var selected = cancelOwnershipIn(app, app: app, scope: "application")
+    let applicationNodes = selected.inspectedNodes
+    selected.applicationSnapshotNodes = applicationNodes
+    if selected.queriedControlMatched { return selected }
+    let windows = app.windows
+    guard windows.count <= 8 else { return CancelOwnership() }
+    var largestWindowNodes = 0, attempts = 0
+    for window in windows.allElementsBoundByIndex {
+      let observed = cancelOwnershipIn(window, app: app, scope: "window")
+      attempts += 1
+      largestWindowNodes = max(largestWindowNodes, observed.inspectedNodes)
+      if observed.queriedControlMatched { selected = observed; break }
+      if observed.inspectedNodes > selected.inspectedNodes { selected = observed }
+    }
+    selected.applicationSnapshotNodes = applicationNodes
+    selected.largestWindowSnapshotNodes = largestWindowNodes
+    selected.windowSnapshotsAttempted = attempts
+    return selected
+  }
+
+  @MainActor
   private func nativeDismiss(_ app: XCUIApplication, absentBefore: Set<String>) -> DismissSelection? {
     guard absentBefore.contains("cancel"), let webFrames = browserWebFrames(app) else { return nil }
     let matches = app.buttons.matching(NSPredicate(format: "label == %@", "Cancel"))
@@ -105,7 +135,7 @@ final class BaroAuthCancelUITests: XCTestCase {
     let ownership = cancelOwnership(app)
     guard ownership.traversalComplete && ownership.webViewObserved && ownership.nativeCancelCount == 1
       && ownership.queriedControlMatched && ownership.webViewAncestorExcluded && ownership.keyboardAncestorExcluded else { return nil }
-    return DismissSelection(element: matches.firstMatch, frameExcluded: outsideEveryWebView(matches.firstMatch, frames: webFrames))
+    return DismissSelection(element: matches.firstMatch, frameExcluded: outsideEveryWebView(matches.firstMatch, frames: webFrames), rootScope: ownership.rootScope, inspectedNodes: ownership.inspectedNodes)
   }
 
   @MainActor
@@ -131,7 +161,11 @@ final class BaroAuthCancelUITests: XCTestCase {
         "webViewObserved": ownership.webViewObserved, "nativeCancelCount": ownership.nativeCancelCount,
         "queriedControlMatched": ownership.queriedControlMatched,
         "webViewAncestorExcluded": ownership.webViewAncestorExcluded,
-        "keyboardAncestorExcluded": ownership.keyboardAncestorExcluded],
+        "keyboardAncestorExcluded": ownership.keyboardAncestorExcluded,
+        "rootScope": ownership.rootScope, "inspectedNodes": ownership.inspectedNodes,
+        "applicationSnapshotNodes": ownership.applicationSnapshotNodes,
+        "largestWindowSnapshotNodes": ownership.largestWindowSnapshotNodes,
+        "windowSnapshotsAttempted": ownership.windowSnapshotsAttempted],
       "authorizingVisible": app.staticTexts["로그인을 확인하고 있어요"].exists,
       "startUnavailableVisible": app.staticTexts["로그인을 시작하지 못했어요. 다시 시도해 주세요."].exists,
       "retryVisible": app.buttons["이용 상태 다시 확인"].exists,
@@ -247,6 +281,7 @@ final class BaroAuthCancelUITests: XCTestCase {
         "nativeDismissControlVerified": true, "webContentExcluded": true,
         "webViewFrameExcluded": dismissal.frameExcluded, "dismissControlAbsentBeforeAuthentication": true,
         "snapshotTraversalComplete": true, "snapshotControlMatched": true,
+        "snapshotRootScope": dismissal.rootScope, "snapshotInspectedNodes": dismissal.inspectedNodes,
         "webViewAncestorExcluded": true, "keyboardAncestorExcluded": true,
         "browserWindowGeometryVerified": true,
         "webViewDismissed": true, "anonymousReturnObserved": true,

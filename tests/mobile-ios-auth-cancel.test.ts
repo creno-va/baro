@@ -26,6 +26,8 @@ function observation() {
       webViewFrameExcluded: false,
       snapshotTraversalComplete: true,
       snapshotControlMatched: true,
+      snapshotRootScope: "window",
+      snapshotInspectedNodes: 12,
       webViewAncestorExcluded: true,
       keyboardAncestorExcluded: true,
       dismissControlAbsentBeforeAuthentication: true,
@@ -170,6 +172,29 @@ test("native snapshot ownership is mandatory even when WebView bounds overlap th
       ).toThrow();
   }
   const value = observation();
+  const applicationRoot = {
+    ...value,
+    providers: value.providers.map((provider) => ({
+      ...provider,
+      snapshotRootScope: "application",
+    })),
+  };
+  expect(parseIosAuthCancelResult(encode(applicationRoot)).providers[0]?.snapshotRootScope).toBe(
+    "application",
+  );
+  for (const patch of [
+    { snapshotRootScope: "none" },
+    { snapshotInspectedNodes: 0 },
+    { snapshotInspectedNodes: 20001 },
+  ])
+    expect(() =>
+      parseIosAuthCancelResult(
+        encode({
+          ...value,
+          providers: value.providers.map((provider) => ({ ...provider, ...patch })),
+        }),
+      ),
+    ).toThrow();
   for (const dismissControl of ["done", "close"])
     expect(() =>
       parseIosAuthCancelResult(
@@ -207,6 +232,11 @@ test("failed native auth observation exports only fixed stage/provider/assertion
       traversalComplete: false,
       webViewObserved: false,
       nativeCancelCount: 0,
+      rootScope: "none",
+      inspectedNodes: 0,
+      applicationSnapshotNodes: 0,
+      largestWindowSnapshotNodes: 0,
+      windowSnapshotsAttempted: 0,
       queriedControlMatched: false,
       webViewAncestorExcluded: false,
       keyboardAncestorExcluded: false,
@@ -267,6 +297,11 @@ test("failed native auth observation exports only fixed stage/provider/assertion
       traversalComplete: true,
       webViewObserved: true,
       nativeCancelCount: 1,
+      rootScope: "window",
+      inspectedNodes: 12,
+      applicationSnapshotNodes: 1,
+      largestWindowSnapshotNodes: 12,
+      windowSnapshotsAttempted: 1,
       queriedControlMatched: true,
       webViewAncestorExcluded: true,
       keyboardAncestorExcluded: true,
@@ -283,6 +318,9 @@ test("failed native auth observation exports only fixed stage/provider/assertion
     { webViewAncestorExcluded: false },
     { keyboardAncestorExcluded: false },
     { rawSnapshot: "private" },
+    { rootScope: "none" },
+    { inspectedNodes: 0 },
+    { windowSnapshotsAttempted: 9 },
   ])
     expect(
       observeIosAuthCancelFailure(
