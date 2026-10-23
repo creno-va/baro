@@ -380,6 +380,9 @@ release/스토어 제출물이 아니다. 로컬 runtime probe 앱/entry를 포�
 기본 식별자는 `site.baro.app.preview`다. iOS Simulator ZIP은 iPhone 설치용 IPA가 아니다.
 새 Apple/Google 배포 identity·EAS 계정/서비스·자동 배포는 도입하지 않는다. 실제 min OS/ABI는
 receipt를 따르며 소스의 기대값만으로 실행 지원을 선언하지 않는다.
+Android 인증서 검사는 apksigner의 numbered 및 v3.1 SDK 범위 label을 처리한다. 같은 인증서의
+범위별 반복만 합치며 다른 인증서가 발견되면 전달을 거부한다. signature 검증 자체는
+apksigner의 실제 성공을 요구하며 label 파싱을 위해 생략하지 않는다.
 
 1. artifact를 내려받아 압축을 풀고 receipt의 `sourceSha`와 파일 이름·byte/hash를 확인한다.
    macOS/Linux에서는 `shasum -a 256 <apk-or-zip>`으로 비교한다.
