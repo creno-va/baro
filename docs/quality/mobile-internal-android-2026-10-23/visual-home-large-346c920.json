@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "kind": "updated-android-initial-home-and-large-font-visual-observation",
+  "binarySourceSha": "171989e8cf8fd48119d20f58a45f2dca7dd45e64",
+  "toolingSourceSha": "346c920c6b2d671ea7c0a8738ea07206d031c8fd",
+  "workflowRunId": "40014252649",
+  "reviewedAt": "2026-10-23T19:56:41.500Z",
+  "binary": {
+    "name": "baro-internal-preview-android-171989e8cf8fd48119d20f58a45f2dca7dd45e64.apk",
+    "bytes": 57133550,
+    "sha256": "cd93c333e98f9f371c013197210a9a6ebc041f94bea9b5b56cc38da6ad9ffb42"
+  },
+  "homeScreenshot": {
+    "name": "home.png",
+    "bytes": 168933,
+    "sha256": "c42726f471535430fc70d80d059158ad0e396636755679935981e1225c319267"
+  },
+  "largeFontScreenshot": {
+    "name": "large-font.png",
+    "bytes": 218727,
+    "sha256": "d966eab51758e89e6bfbf8b69e682034f3a5fcb1c7094d242954bdadb6e28217"
+  },
+  "initialHomeContentVerified": true,
+  "hangulHomeCardsVisible": true,
+  "configurationErrorVisible": false,
+  "enlargementAndWrappingVisible": true,
+  "initialViewportPixelsOnly": true,
+  "guideUiReceiptAccepted": true,
+  "guideUiEvidence": "guide-ui-346c920.json",
+  "guidePixelsReviewed": false,
+  "screenshotAfterNavigationExported": false,
+  "allScreensVerified": false,
+  "accessibilityVerified": false,
+  "semanticTextScaleProven": false,
+  "remoteApiVerified": false,
+  "oauthVerified": false,
+  "physicalDeviceVerified": false,
+  "storeSigned": false,
+  "deployed": false
+}
