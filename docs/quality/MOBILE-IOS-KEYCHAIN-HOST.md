@@ -250,3 +250,9 @@ compiler exit0 뒤 원본 ZIP/inspection을 먼저 보존하고 후속 실패에
 별도 artifact에 남긴다. private build 로그·actual keychain/인증서/private key는 전달하지 않는다.
 Home/full receipt는 같은 source의 local signing proof를 묶는다. 실행 전 성공으로 표시하지 않고
 실제 원격/API·OAuth·physical·접근성/전체 화면·스토어는 여전히 별도 인수다.
+
+
+PR417/main9a369bc·CI39995718447 뒤 실제 local runtime39996169996이 SUCCESS다.
+[원본 runtime/signing/ZIP·실물 대조](./MOBILE-NATIVE-RUNTIME-2026-10-23.md#ios-local-native-runtime-실제-완료와-독립-385-인수)는
+site.baro.app.dev의 계측 Home·실제 SDK/native100MB upload/1GB download·SecureStore·권한/정리 범위다.
+기존 preview SDK8항목과 source/profile을 섞지 않으며 실제 API/OAuth·physical/store 인수는 아니다.

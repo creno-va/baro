@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "kind": "local-xcode-simulator-signing-control",
+  "sourceSha": "9a369bc0c92498b0a01dc0ddc4cb71d534a623c6",
+  "toolingSourceSha": "9a369bc0c92498b0a01dc0ddc4cb71d534a623c6",
+  "observedAt": "2026-10-23T17:56:29.983Z",
+  "applicationId": "site.baro.app.dev",
+  "signature": "ad-hoc",
+  "teamIdentifier": "not set",
+  "architectures": [
+    "x86_64",
+    "arm64"
+  ],
+  "entitlements": {
+    "keychain-access-groups": [
+      "FAKETEAMID.site.baro.app.dev"
+    ],
+    "application-identifier": "FAKETEAMID.site.baro.app.dev"
+  },
+  "entitlementsSource": "simulator-macho-xml-and-der",
+  "signatureEntitlements": {},
+  "sectionHashes": [
+    {
+      "architecture": "x86_64",
+      "xmlSha256": "6b75945e190752829a6b72d0cc8972a84864009d2755aa088e3c9332ba755a49",
+      "derSha256": "3a5d9f8bcaf3788f4ff79738df3bf21cb270665a657e9761f854c5e1caafdea5"
+    },
+    {
+      "architecture": "arm64",
+      "xmlSha256": "6b75945e190752829a6b72d0cc8972a84864009d2755aa088e3c9332ba755a49",
+      "derSha256": "3a5d9f8bcaf3788f4ff79738df3bf21cb270665a657e9761f854c5e1caafdea5"
+    }
+  ],
+  "executableSha256": "9526fce5b52b1c8aa28d3339a75ba7f2f5a876a2eb1bc358556d19b3b227cb26",
+  "infoPlistSha256": "4895b885cb80de869cd263ebcee25fd843fc00ae8e9d65ff11f597ffb31e073f",
+  "appRuntimeVerified": false,
+  "physicalDeviceVerified": false,
+  "storeSigned": false,
+  "deployed": false,
+  "environment": "local",
+  "apiOrigin": "http://127.0.0.1:8765"
+}

@@ -265,6 +265,18 @@ Metro 요청은 계속0이어야 한다. `smoke=false`의 확대 요청·지원�
 자동 receipt는 Home 내용·정확한 배율·전체 접근성 인수를 주장하지 않는다. PNG 시각 대조와
 실제 두 역할/화면·키보드/회전·VoiceOver/TalkBack·physical/store는 별도다. 실제 확대 실행 결과는 실행 후 기록한다.
 
+PR419/mainf1ac60d·CI39999943507 뒤 [실제40000381723](https://github.com/creno-va/baro/actions/runs/40000381723)은
+SUCCESS다. [baseline 원본](../quality/mobile-internal-ios-2026-10-23/home-f1ac60d.json)의 두 PID는 각3회/
+실제21·88초, [확대 원본](../quality/mobile-internal-ios-2026-10-23/large-font-f1ac60d.json)은 재시작한 새 PID를
+3회/25초 관측했다. 가장 큰 category를 재시작 전후 그대로 읽었고 Metro 요청은0이다.
+[metadata 재검증](../quality/mobile-internal-ios-2026-10-23/verification-f1ac60d.json)은 원본 compiler/ZIP을 보존한다.
+
+실제 PNG를 직접 대조한 [별도 시각 관측](../quality/mobile-internal-ios-2026-10-23/visual-large-font-f1ac60d.json)은
+한글 확대·줄바꿈을 확인한다. 제목이 초기 viewport 대부분을 차지하고 카드/행동은 화면 아래로 이동한다.
+확대 PNG163,252bytes/SHA2561b95bcb98ca2e86b9271a1e03018c27d1c68a24b857dee7d37c5343a4946fe25다.
+스크롤로 행동에 도달하는지·전체 확대 사용성은 아직 확인하지 않았으며 정확한 배율/접근성 통과로
+표현하지 않는다. #379/#334는 OPEN이다.
+
 ## 내부 전달 기준과 설치
 
 | 전달물 | 앱 source·version/build | binary metadata | 실제 설치/초기 Home 관측 |
