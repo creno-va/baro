@@ -528,15 +528,17 @@ URL·cookie·state·토큰·계정/원문 화면은 내보내지 않는다.
 
 세 제공자의 표시/취소/복귀와 cold 상태가 모두 확인된 단일 strict 결과만 성공으로 인정한다.
 source/tooling/compiler ZIP/receipt·기기 identity는 같은 실행의 Home baseline과 묶는다.
-닫기 컨트롤은 native navigation bar/toolbar의 고정 Cancel/Done/Close와 아래의 제한된
-`browser-window-chrome` Cancel을 대조한다. 모든 경로에서 인증 전 해당 고정 label의 버튼이
-없었음을 먼저 확인한다. 현재 foreground window 안에 보이는1~8개 WebView의 모든 frame을
-조회하고, 그 어느 frame과도 면적이 겹치지 않으며 화면 안에 완전히 hittable한 유일 후보만 누른다.
-frame/geometry를 확인하지 못하면 실패한다. 중복 scope의 같은 컨트롤은 메모리에서만 합친다.
-`browser-window-chrome`은 application query의 정확한 Cancel1개에만 허용하며 다른 종류·좌표
-탭·provider web 버튼은 허용하지 않는다. 기존 same-label web button 중첩 제외보다 강한 조건이다.
-proof는 실제 `dismissControl`/`dismissScope`와 인증 전 부재·browser window geometry·
-모든 WebView frame 제외의 세 추가 true를 요구한다. application이라는 무제한 scope는 거절한다.
+현재 닫기 컨트롤은 인증 전 없었던 고정 `Cancel`의 유일하고 완전히 hittable한 query와,
+메모리에서 얻은 [공개 snapshot](https://developer.apple.com/documentation/xcuiautomation/xcuielementsnapshotproviding/snapshot())의
+[children 관계](https://developer.apple.com/documentation/xcuiautomation/xcuielementsnapshot)를 직접 대조한다.
+WebView/keyboard 하위 branch 전체를 제외하고 나머지 native tree를 깊이128/방문20,000개/
+자식5,000개 이내에서 빠짐없이 순회한다. WebView가 실제 존재하고 native Cancel이 정확히1개이며
+그 frame이 실제 query와 일치해야 `snapshot-native-window` scope로 선택한다. raw snapshot·
+WebView/keyboard의 label/value·실제 frame/hierarchy는 내보내지 않는다.
+동일 app의 foreground window/가시 WebView와 인증 전 부재·hittability는 계속 요구한다.
+WebView frame이 native control을 포함할 수 있어 `webViewFrameExcluded`는 실제 boolean을 남기며,
+대신 snapshot 순회/컨트롤 일치·WebView/keyboard 조상 제외를 모두 true로 요구한다.
+소속을 입증하지 않은 application/bar scope나 Done/Close를 취소로 선택하지 않는다.
 단일 결과 누락/중복, 부분 제공자, raw 값 또는 OAuth 성공으로의 확대는 거절한다.
 준비/합성 회귀는 실제 통과가 아니며 exact main CI 뒤 수동 실행 결과를 인수한다.
 기존 실제 OS audit·전체 기기/VoiceOver/TalkBack·계정 인증/역할/동의·store/#334/#346/#339/#71은 보존한다.
@@ -586,11 +588,29 @@ boolean을 추가하되 실제 frame·label·URL·hierarchy·계정 화면은 �
 새 scope를 허용했다는 이유만으로 성공으로 표시하지 않으며 exact CI/main 뒤 실제 실행으로
 취소·익명 복귀·cold restart를 모두 확인해야 한다. 이전 원본 JSON을 새 schema에 맞춰 고치지 않는다.
 
+
+### 실제 frame 분리 실패와 snapshot 소속 검증
+
+PR435/mainca8ea4f·CI40032746542 뒤 [actual40032994784](https://github.com/creno-va/baro/actions/runs/40032994784)는 FAILURE다.
+[원본 실패](../quality/mobile-internal-ios-2026-10-23/auth-cancel-failure-ca8ea4f.json)는
+Google/browser-presented·WebView/window geometry=true, 인증 전 없었던 Cancel1개/hittable=true,
+모든 WebView frame 제외=false와 `BARO_AUTH_SYSTEM_DISMISS_MISSING`를 기록한다. native toolbar의
+Done1개도 hittable/영역 제외=false였으며 실제 소속/용도는 확정하지 않았다. 어느 것도 누르지 않았다.
+원본 실패 SHA256은`5da554e4b8c68c0caf6376e6c7d371bebf19e18bc3831c523f57d839866893b5`다.
+[Home](../quality/mobile-internal-ios-2026-10-23/auth-cancel-home-ca8ea4f.json)와
+[metadata](../quality/mobile-internal-ios-2026-10-23/auth-cancel-verification-ca8ea4f.json)를 따로 보존했다.
+원본 Simulator ZIP/receipt의 고정 byte/hash와 제품 입력 동일성을 독립 재대조했다.
+
+화면 frame의 중첩은 접근성 부모 관계가 아니다. 후속 `codex/346-ios-snapshot-dismiss`는 위의
+공개 snapshot에서 native Cancel의 실제 조상을 확인한다. WebView/keyboard 하위는 통째 제외하고
+다른 toolbar Done을 인증 취소로 해석하지 않는다. 모든 기존 실패·원본 앱/독립 audit는 보존하며,
+새 조건의 actual runner compile/세 제공자 취소·익명 복귀/cold restart 전에는 성공으로 기록하지 않는다.
+
 ## iOS 실기기 SDK의 서명 없는 컴파일 사전 검사 (#334)
 
-현재 Simulator ZIP과 별개로 `mobile-ios-device-sdk.yml` 수동 workflow를 준비한다.
-성공한 main CI의 full40 SHA에 한해 다음처럼 요청한다. 실제 실행 결과 전에는 컴파일 성공으로
-표시하지 않는다.
+현재 Simulator ZIP과 별개로 `mobile-ios-device-sdk.yml` 수동 workflow를 제공한다.
+PR434/main87dec15·CI40032179484 뒤 실제40032490751은 SUCCESS이며 아래 범위로 인수했다.
+성공한 main CI의 full40 SHA에 한해 다음처럼 요청한다.
 
 ```sh
 gh workflow run mobile-ios-device-sdk.yml --ref main -f target_sha=<full40-main-sha>
@@ -619,9 +639,28 @@ receipt의 installation/runtime/physical/OAuth/store signing/submission/deployme
 서명/provisioning 검증은 별도다. 개발자 계정과 기기 모델/OS는 사용자 확인 대기이며 부재로
 단정하지 않는다. 웹 UI·제품/공통 계약·서버와 #334/#346/#339/#71의 전체 인수는 유지한다.
 
+
+### 실제 iPhone SDK 컴파일 인수 범위
+
+[actual40032490751](https://github.com/creno-va/baro/actions/runs/40032490751)는 source
+`87dec1597b5f2d8766c349d09b974303d11f68d8`의 원본
+[receipt](../quality/mobile-ios-device-sdk-2026-10-24/receipt-87dec15.json)와
+[inspection](../quality/mobile-ios-device-sdk-2026-10-24/inspection-87dec15.json)을 남겼다.
+관측 시각은2026-10-23T22:30:33.500Z이며 원본 receipt SHA256은
+`bf3f71fc097ef475fa96e75b1f29b17faba41ddfa184d77ed92fa65d5aca4bde`다.
+ZIP13,808,079bytes/SHA`9275ce0e0ac442b31c70397afac01285860e4f1ecfdd133dac28be518419b491`와
+unaccepted 원본이 byte-identical임을 확인했다. 실제 ZIP에서 plist·thin arm64 executable의
+platform iOS/SDK26.5/min16.4·서명 load command 부재, HBC3,581,976bytes/
+SHA`17a2d185d2b6392668092d7b2f8db6481c604bd55553005c863e193a382ff1b5`, 폰트/OFL을 다시 읽어 대조했다.
+키/profile/source map/루트 서명 부재도 독립 검사했으며
+[재검사 범위](../quality/mobile-ios-device-sdk-2026-10-24/reinspection-87dec15.json)를 별도로 보존했다.
+private source map/제품 graph는 재생성하지 않았고 그 graph 증거는 원본 compiler receipt의 것이다.
+로컬 전달물은 `.wrangler/mobile-delivery/87dec15/ios-device-sdk/`에 보존했다.
+이는 실기기 SDK 컴파일의 좁은 인수이며 설치/앱 실행·실제 폰·Apple 계정/서명·store 인수가 아니다.
+
 ## Android 비로그인 Custom Tab 취소 (#346)
 
-`mobile-internal-android-reverify.yml`의 `smoke=true`/`auth_cancel=true`는 기존 확대·Guide·
+`mobile-internal-android-compiled-reverify.yml`의 `smoke=true`/`auth_cancel=true`는 기존 확대·Guide·
 공개 탐색 mode와 함께 실행하지 않는다. 원본171989e APK/compiler/receipt와 tooling source의
 제품 입력 동일성·실제 SDK metadata/HBC/font를 먼저 확인하고 fresh owned Emulator의 두 cold
 Home 실행을 관측한다. 인증 전 Home PNG/receipt는 유지하며 그 뒤 캡처를 비가역 차단한다.
@@ -649,3 +688,14 @@ stage/provider와 상태 boolean만 내보낸다. 소유 Emulator와 AVD/cache�
 Custom Tab 표시/취소는 제공자 설정 수용·계정 로그인·callback/교환·SecureStore pending 삭제의
 직접 계측이 아니다. 실제 계정·두 역할/필수 동의/challenge·cold/warm 인증 복귀·물리 기기/store와
 Apple 공급자 방향 결정·#334/#346/#339/#71은 별도 인수로 남긴다. 웹 UI/앱·서버·공통 계약은 바꾸지 않는다.
+
+### Android 첫 진입의 compiler 경로 오류
+
+PR436/main21213cb·CI40034599325 뒤 [actual40034804614](https://github.com/creno-va/baro/actions/runs/40034804614)는
+구형 inspection workflow에서 실행돼 [bundled-input-parity 실패](../quality/mobile-internal-android-2026-10-23/auth-cancel-input-failure-21213cb.json)로 끝났다.
+이는 기존 dedcd0e 입력과 현재171989e 제품 입력이 다른 것을 정상 거절한 것으로, Emulator·브라우저·
+취소 단계에 도달하지 않았다. 현재 성공한 compiler의 원본171989e APK/receipt를 사용하는
+`mobile-internal-android-compiled-reverify.yml`로 auth_cancel 입력/격리 조건/결과 경로를 옮긴다.
+legacy fixture·parity/서명/HBC/font·성공한 compiler provenance gate는 완화하지 않는다.
+구형 workflow의 auth_cancel 입력은 제거하고 합성 검사는 실제 compiler script 연결도 확인한다.
+같은 실패 경로를 재실행하지 않으며 정확한 새 main CI 뒤 올바른 compiler 입력으로 실제 실행한다.

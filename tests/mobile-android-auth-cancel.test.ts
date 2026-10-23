@@ -24,7 +24,7 @@ const browser = (extra = "") =>
   );
 test("manual auth workflow exports only scoped receipts and pre-auth PNG paths, never raw device dumps", async () => {
   const workflow = Bun.YAML.parse(
-    await Bun.file(".github/workflows/mobile-internal-android-reverify.yml").text(),
+    await Bun.file(".github/workflows/mobile-internal-android-compiled-reverify.yml").text(),
   ) as {
     on: Record<string, unknown>;
     permissions: Record<string, string>;
@@ -47,10 +47,22 @@ test("manual auth workflow exports only scoped receipts and pre-auth PNG paths, 
     ),
   ).toBe(true);
   const output = workflow.jobs.verify.steps.find((step) =>
-    step.with?.name?.startsWith("mobile-internal-android-home-"),
+    step.with?.name?.startsWith("mobile-internal-android-compiled-home-"),
   )?.with?.path;
   expect(output).toContain(".wrangler/mobile-internal-android-runtime/auth-cancel-ui.json");
   expect(output).not.toMatch(/\*|xml|log|xcresult|dump/);
+  const legacy = Bun.YAML.parse(
+    await Bun.file(".github/workflows/mobile-internal-android-reverify.yml").text(),
+  ) as { on: { workflow_dispatch: { inputs: Record<string, unknown> } } };
+  expect(legacy.on.workflow_dispatch.inputs.auth_cancel).toBeUndefined();
+  expect(
+    workflow.jobs.verify.steps.some(
+      (step) => step.run === "bun scripts/mobile-internal-android-compiled-reverify.ts",
+    ),
+  ).toBe(true);
+  const commands = workflow.jobs.verify.steps.map((step) => step.run ?? "").join("\n");
+  expect(commands).toContain("tests/fixtures/android-internal-preview.json");
+  expect(commands).toContain("verifyCompiledAndroidProvenance");
 });
 test("auth capture boundary is irreversible and rejects screenshots and raw diagnostics before any UI action", async () => {
   const privacy = androidAuthenticationPrivacyBoundary();

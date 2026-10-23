@@ -1,0 +1,10 @@
+{
+  "toolingSourceSha": "21213cb128e08aa33c8b8649718e8e6588f2c55a",
+  "phase": "bundled-input-parity",
+  "code": "INTERNAL_ANDROID_TOOL_FAILED",
+  "invalidFields": [],
+  "appRuntimeVerified": false,
+  "physicalDeviceVerified": false,
+  "storeSigned": false,
+  "deployed": false
+}

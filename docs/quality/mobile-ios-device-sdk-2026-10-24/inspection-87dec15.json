@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "kind": "unaccepted-ios-device-sdk-output",
+  "sourceSha": "87dec1597b5f2d8766c349d09b974303d11f68d8",
+  "observedAt": "2026-10-23T22:30:33.222Z",
+  "nativeCompileSucceeded": true,
+  "platform": "iphoneos",
+  "architectures": [
+    "arm64"
+  ],
+  "codeSignature": "none",
+  "archive": {
+    "name": "unaccepted-ios-device-sdk-87dec1597b5f2d8766c349d09b974303d11f68d8.zip",
+    "bytes": 13808079,
+    "sha256": "9275ce0e0ac442b31c70397afac01285860e4f1ecfdd133dac28be518419b491"
+  },
+  "accepted": false,
+  "appRuntimeVerified": false,
+  "physicalDeviceVerified": false,
+  "storeSigned": false,
+  "storeSubmitted": false,
+  "deployed": false
+}
