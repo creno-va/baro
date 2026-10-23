@@ -304,6 +304,39 @@ VoiceOver/TalkBack·물리 기기/스토어와 #379/#334는 별도 잔여다.
 참고: [XCUIApplication](https://developer.apple.com/documentation/xcuiautomation/xcuiapplication),
 [실제 테스트 실행](https://developer.apple.com/documentation/xcode/running-tests-and-interpreting-results).
 
+첫 XCTest [실제40005659811](https://github.com/creno-va/baro/actions/runs/40005659811)/tooling3346573은
+Xcode command exit64로 terminal FAILURE다. [원본 실패](../quality/mobile-internal-ios-2026-10-23/failure-ui-3346573.json)의
+기존 고정 분류에는 특정 CLI 옵션의 원인이 보존되지 않았다. baseline/확대 성공과 UI 조작 완료는
+구분하며 전체 UI 성공으로 표시하지 않는다. 불필요한 test-iterations 옵션을 제거하고 CLI error의
+고정 topic 분류를 보강한다. 해당 옵션을 이전 실패의 확정 원인으로 표시하지 않는다.
+
+새 앱 source171989e의 [iOS compile40006340014](https://github.com/creno-va/baro/actions/runs/40006340014)은 SUCCESS다.
+[원본 receipt](../quality/mobile-internal-ios-2026-10-23/receipt-171989e.json)·[compile 직후 inspection](../quality/mobile-internal-ios-2026-10-23/inspection-171989e.json)을 보존한다.
+ZIP24,102,101bytes/SHA256f8e218df820cdaa2c222b10474124b7265b73c4de43a146a3459181cd4fde356와
+원본 receipt 전체 SHA25677d157201a02eda89372ef3ef850895a2478f14047ea2024b7877db3ac62bcce를 독립 대조했다.
+HBC3,581,976bytes·product source1464·probe/maps 제외·font/양 ABI Simulator signature는 compile 범위다.
+고정 입력은 성공한 이 원본으로 갱신하고 기존 ff5c208 receipt/부팅 기록은 그대로 보존한다.
+새 앱의 실제 Home/확대/Guide 조작은 후속 실행으로만 인수한다.
+
+### Android 확대 안내 조작
+
+```sh
+gh workflow run mobile-internal-android-reverify.yml --ref main -f target_sha=<full40-main-tooling-sha> -f smoke=true -f large_font=true -f guide_ui=true -f public_directory=false
+```
+
+이 선택은 같은 새 소유 Emulator의 OS font_scale2와 Home baseline/확대 관측을 보존한 뒤,
+고정 안내/처음으로 버튼의 유일한 enabled/clickable·화면 내 bounds만 좌표로 변환한다.
+각 화면 최대24회 스크롤·tap과 Guide/Home 제목 전환·Guide 사라짐 및 전후 OS readback을 확인한다.
+두 OS의 새 실행에서는 교정된 사건 화면 자료/리포트 안내 문구가 실제 native 접근성 요소에 있는지도 확인한다.
+`guide-ui.json`은 원본 APK/source·현재 tooling·metadata 재검증/hash·baseline/hash·device에 묶는다.
+원문 hierarchy/개인 값은 기록하지 않으며 화면 안 bounds/tap 완료를 전체 접근성으로 확대하지 않는다.
+`guide_ui`는 large_font/smoke가 필요하고 public_directory와 함께 요청하면 기기 작업 전에 거부한다.
+기존 공개 화면의 불가역 screenshot guard는 유지하고 Guide 조작도 첫 tap 전 캡처를 영구 차단한다.
+기존 Home/확대 PNG는 이미 보존되며 이후 실패에도 새 화면 캡처를 export하지 않는다. 실제 UI 성공은 새 compiler 입력/실행 후 인수한다.
+
+PR422/main171989e·CI40005978910의 Guide 문구 교정은 새 앱 source에만 적용된다. 기존 ff5c208/dedcd0e의
+관측을 수정된 앱 인수로 쓰지 않으며, 새 source의 두 OS compile/원본 pin·실제 smoke가 필요하다.
+
 ## 내부 전달 기준과 설치
 
 | 전달물 | 앱 source·version/build | binary metadata | 실제 설치/초기 Home 관측 |

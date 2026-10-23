@@ -2,10 +2,16 @@ import { createHash, randomUUID } from "node:crypto";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { z } from "zod";
+import {
+  androidHomeObservationOptions,
+  verifyAndroidGuideUiReceipt,
+} from "./mobile-android-guide-ui";
 import { verifyInternalAndroidArtifact } from "./mobile-internal-android-artifact";
 import { internalAndroidEnvironment } from "./mobile-internal-android-build";
 import { androidReverificationSchema } from "./mobile-internal-android-reverify";
 import {
+  anonymousGuideControl,
+  anonymousGuideUiObservation,
   anonymousScreenshotGuard,
   publicDirectoryButton,
   publicDirectoryUiObservation,
@@ -46,14 +52,9 @@ export function bundledAndroidHomeObservation(xml: string) {
   };
 }
 async function main() {
-  const options = process.argv.slice(2),
-    largeFont = options.includes("--large-font"),
-    publicDirectory = options.includes("--public-directory");
-  if (
-    new Set(options).size !== options.length ||
-    options.some((o) => !["--large-font", "--public-directory"].includes(o))
-  )
-    throw new Error("BUNDLED_HOME_MODE_REQUIRED");
+  const { largeFont, publicDirectory, guideUi } = androidHomeObservationOptions(
+    process.argv.slice(2),
+  );
   const root = process.cwd(),
     sourceSha = z
       .string()
@@ -65,7 +66,7 @@ async function main() {
     sdk = env.ANDROID_HOME ?? env.ANDROID_SDK_ROOT;
   if (!sdk || process.env.GITHUB_ACTIONS !== "true")
     throw new Error("BUNDLED_HOME_FRESH_CI_SDK_REQUIRED");
-  for (const name of ["receipt.json", "failure.json", "home.png"])
+  for (const name of ["receipt.json", "failure.json", "home.png", "guide-ui.json"])
     if (await Bun.file(resolve(out, name)).exists())
       throw new Error("BUNDLED_HOME_FRESH_OUTPUT_REQUIRED");
   await mkdir(out, { recursive: true });
@@ -81,6 +82,7 @@ async function main() {
     metroRequests = 0,
     bootCompleted = false,
     baseHomeVerified = false,
+    lastGuideObservation: ReturnType<typeof anonymousGuideUiObservation> | null = null,
     lastPublicObservation: ReturnType<typeof publicDirectoryUiObservation> | null = null,
     lastHomeObservation: ReturnType<typeof bundledAndroidHomeObservation> | null = null;
   async function bytes(args: string[], input?: string) {
@@ -312,6 +314,118 @@ async function main() {
       );
       console.log("ACTUAL_ANDROID_LARGE_FONT_HOME_OBSERVED_OTHER_ACCESSIBILITY_UNVERIFIED");
     }
+    if (guideUi) {
+      capture.disable();
+      phase = "guide-ui-font-readback";
+      const fontScaleBefore = Number(
+        (await shell(["settings", "get", "system", "font_scale"])).trim(),
+      );
+      if (fontScaleBefore !== 2) throw Error("BUNDLED_HOME_FONT_SCALE_MISMATCH");
+      const width = screenshot.readUInt32BE(16),
+        height = screenshot.readUInt32BE(20);
+      async function hierarchy() {
+        await shell(["rm", "-f", "/sdcard/baro-internal-home.xml"]);
+        await shell(["uiautomator", "dump", "--compressed", "/sdcard/baro-internal-home.xml"]);
+        const value = await shell(["cat", "/sdcard/baro-internal-home.xml"]);
+        lastGuideObservation = anonymousGuideUiObservation(value);
+        return value;
+      }
+      async function reach(action: "open-guide" | "return-home") {
+        for (let swipes = 0; swipes <= 24; swipes++) {
+          const target = anonymousGuideControl(await hierarchy(), width, height, action);
+          if (target) return { target, swipes };
+          if (swipes < 24)
+            await shell([
+              "input",
+              "swipe",
+              String(Math.floor(width / 2)),
+              String(Math.floor(height * 0.8)),
+              String(Math.floor(width / 2)),
+              String(Math.floor(height * 0.25)),
+              "500",
+            ]);
+        }
+        throw Error("BUNDLED_GUIDE_CONTROL_NOT_FOUND");
+      }
+      phase = "guide-ui-open";
+      const guide = await reach("open-guide");
+      if (!guide.swipes) throw Error("BUNDLED_GUIDE_SCROLL_NOT_OBSERVED");
+      await shell(["input", "tap", String(guide.target.x), String(guide.target.y)]);
+      await wait(
+        async () => anonymousGuideUiObservation(await hierarchy()).guideTitleVisible,
+        120000,
+      );
+      phase = "guide-ui-return";
+      const home = await reach("return-home");
+      if (!anonymousGuideUiObservation(await hierarchy()).currentFeatureDescriptionVisible)
+        throw Error("BUNDLED_GUIDE_FEATURE_COPY_NOT_OBSERVED");
+      await shell(["input", "tap", String(home.target.x), String(home.target.y)]);
+      await wait(async () => {
+        const observed = anonymousGuideUiObservation(await hierarchy());
+        return (
+          observed.homeTitleVisible &&
+          !observed.guideTitleVisible &&
+          !observed.configurationErrorVisible
+        );
+      }, 120000);
+      const fontScaleAfter = Number(
+        (await shell(["settings", "get", "system", "font_scale"])).trim(),
+      );
+      if (fontScaleAfter !== 2) throw Error("BUNDLED_HOME_FONT_SCALE_MISMATCH");
+      if (metroRequests) throw Error("BUNDLED_HOME_UNEXPECTED_METRO_REQUEST");
+      if (!/^\d+(?:\s+\d+)*$/.test((await shell(["pidof", appId])).trim()))
+        throw Error("BUNDLED_HOME_PROCESS_REQUIRED");
+      const baselineBytes = await readFile(resolve(out, "receipt.json")),
+        baseline = JSON.parse(baselineBytes.toString()),
+        identity = {
+          toolingSourceSha: sourceSha,
+          binarySourceSha: receipt.sourceSha,
+          binary: receipt.artifact,
+          verificationSha256: hash(verificationBytes),
+          baselineReceiptSha256: hash(baselineBytes),
+          device: baseline.device,
+        };
+      const proof = verifyAndroidGuideUiReceipt(
+        {
+          version: 1,
+          kind: "bundled-android-large-font-home-guide-ui-only",
+          ...identity,
+          observedAt: new Date().toISOString(),
+          applicationId: appId,
+          fontScaleBefore,
+          fontScaleAfter,
+          homeSwipes: guide.swipes,
+          guideSwipes: home.swipes,
+          guideButtonTapVerified: true,
+          guideTitleObserved: true,
+          currentFeatureDescriptionObserved: true,
+          returnButtonTapVerified: true,
+          homeReturnObserved: true,
+          guideDismissedObserved: true,
+          controlBoundsWithinScreen: true,
+          rawHierarchyExported: false,
+          publicDataNavigation: false,
+          authenticationNavigation: false,
+          metroServerStarted: false,
+          metroRequests: 0,
+          allScreensVerified: false,
+          keyboardVerified: false,
+          rotationVerified: false,
+          talkBackVerified: false,
+          voiceOverVerified: false,
+          remoteApiVerified: false,
+          oauthVerified: false,
+          physicalDeviceVerified: false,
+          storeSigned: false,
+          deployed: false,
+        },
+        identity,
+      );
+      await writeFile(resolve(out, "guide-ui.json"), `${JSON.stringify(proof, null, 2)}\n`, {
+        flag: "wx",
+      });
+      console.log("ACTUAL_ANDROID_LARGE_FONT_HOME_GUIDE_UI_OBSERVED");
+    }
     if (publicDirectory) {
       // No screenshots may be taken after this point, including every failure path.
       capture.disable();
@@ -435,6 +549,11 @@ async function main() {
         "BUNDLED_HOME_UNEXPECTED_METRO_REQUEST",
         "BUNDLED_HOME_COMMAND_FAILED",
         "BUNDLED_HOME_FONT_SCALE_MISMATCH",
+        "BUNDLED_GUIDE_FEATURE_COPY_NOT_OBSERVED",
+        "BUNDLED_GUIDE_CONTROL_REQUIRED",
+        "BUNDLED_GUIDE_CONTROL_NOT_FOUND",
+        "BUNDLED_GUIDE_SCROLL_NOT_OBSERVED",
+        "BUNDLED_GUIDE_IDENTITY_MISMATCH",
         "BUNDLED_PUBLIC_HIERARCHY_REQUIRED",
         "BUNDLED_PUBLIC_VIEWPORT_REQUIRED",
         "BUNDLED_PUBLIC_BUTTON_NOT_FOUND",
@@ -454,7 +573,7 @@ async function main() {
     }
     await writeFile(
       resolve(out, "failure.json"),
-      `${JSON.stringify({ toolingSourceSha: sourceSha, phase, code: known.has(message) ? message : "BUNDLED_HOME_FAILED", emulatorBootVerified: bootCompleted, lastHomeObservation, lastPublicObservation, publicScreenshotsSuppressed: !capture.allowed, emulatorStartupIssues: emulatorStartupIssues(await readFile(log, "utf8").catch(() => "")), sdkHomeLaunchVerified: baseHomeVerified, largeFontVerified: false, physicalDeviceVerified: false, storeSigned: false, deployed: false }, null, 2)}\n`,
+      `${JSON.stringify({ toolingSourceSha: sourceSha, phase, code: known.has(message) ? message : "BUNDLED_HOME_FAILED", emulatorBootVerified: bootCompleted, lastHomeObservation, lastPublicObservation, lastGuideObservation, publicScreenshotsSuppressed: !capture.allowed, emulatorStartupIssues: emulatorStartupIssues(await readFile(log, "utf8").catch(() => "")), sdkHomeLaunchVerified: baseHomeVerified, largeFontVerified: false, physicalDeviceVerified: false, storeSigned: false, deployed: false }, null, 2)}\n`,
       { flag: "wx" },
     );
     throw new Error("BUNDLED_HOME_FAILED");

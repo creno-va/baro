@@ -15,6 +15,7 @@ export const homeGuideUiResultSchema = z.strictObject({
   guideButtonFullyHittable: z.literal(true),
   guideTapVerified: z.literal(true),
   guideTitleObserved: z.literal(true),
+  currentFeatureDescriptionObserved: z.literal(true),
   returnButtonFullyHittable: z.literal(true),
   returnTapVerified: z.literal(true),
   homeReturnObserved: z.literal(true),
@@ -132,8 +133,6 @@ export async function runIosHomeUiTest(context: {
       resolve(project, "private-results.xcresult"),
       "-parallel-testing-enabled",
       "NO",
-      "-test-iterations",
-      "1",
       "-only-testing:BaroHomeUITests/BaroHomeUITests/testLargestFontHomeAndGuide",
       ...xcodeSimulatorControlArguments,
     ],
@@ -164,6 +163,7 @@ const assertionCodes = [
   "BARO_CONFIGURATION_ERROR",
   "BARO_LARGE_FONT_SCROLL_NOT_OBSERVED",
   "BARO_GUIDE_MISSING",
+  "BARO_GUIDE_FEATURE_COPY_MISSING",
   "BARO_HOME_RETURN_MISSING",
   "BARO_GUIDE_STILL_VISIBLE",
 ] as const;
@@ -186,7 +186,25 @@ export function observeHomeUiFailure(detail: string) {
             ? "SDK_MEMBER_UNAVAILABLE"
             : "UNCLASSIFIED_COMPILER_DIAGNOSTIC",
     }));
+  const cliErrors = detail
+    .split(/\r?\n/)
+    .filter((line) => line.includes("xcodebuild: error:"))
+    .join("\n");
+  const cliTopics = [
+    ["test-iterations", /test-iterations/],
+    ["only-testing", /only-testing/],
+    ["test-host", /host application|target application|test host/i],
+    ["scheme", /\bscheme\b/i],
+    ["destination", /\bdestination\b/i],
+    ["project", /\bproject\b/i],
+    ["signing", /signing|provisioning/i],
+  ] as const;
+  const cliErrorTopics = cliTopics
+    .filter(([, pattern]) => pattern.test(cliErrors))
+    .map(([topic]) => topic);
   return {
+    cliUsageError: /xcodebuild: error:|Usage: xcodebuild/.test(detail),
+    cliErrorTopics,
     compilerLocations,
     testHostConfigurationFailure:
       /requires a host application|without a host application|does not have a host app|TEST_TARGET_NAME.*not|No test host/.test(

@@ -1,0 +1,26 @@
+{
+  "toolingSourceSha": "33465738a71dab40f8edc47cd1eb65a8e83ef196",
+  "phase": "large-font-home-guide-xcuitest",
+  "code": "INTERNAL_IOS_VERIFICATION_COMMAND_FAILED",
+  "lastCommand": {
+    "exitCode": 64,
+    "timedOut": false,
+    "category": "COMMAND_FAILED"
+  },
+  "uiTestFailure": {
+    "compilerLocations": [],
+    "testHostConfigurationFailure": false,
+    "assertionCode": null,
+    "swiftCompilationFailure": false,
+    "projectGeneratorUnavailable": false,
+    "signingFailure": false,
+    "runnerLaunchFailure": false
+  },
+  "nativeProcessLaunchVerified": false,
+  "homeContentVerified": false,
+  "remoteApiVerified": false,
+  "oauthVerified": false,
+  "physicalDeviceVerified": false,
+  "storeSigned": false,
+  "deployed": false
+}

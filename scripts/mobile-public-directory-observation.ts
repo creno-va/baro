@@ -50,13 +50,13 @@ function nodes(xml: string) {
     })
     .filter((v) => v !== null);
 }
-export function publicDirectoryButton(xml: string, width: number, height: number) {
+function fixedButton(xml: string, width: number, height: number, label: string) {
   if (![width, height].every((n) => Number.isInteger(n) && n > 0 && n <= 8192))
     throw new Error("BUNDLED_PUBLIC_VIEWPORT_REQUIRED");
   const candidates = nodes(xml).filter(
     (n) =>
       n.clickable &&
-      n.labels.includes("변호사 탐색") &&
+      n.labels.includes(label) &&
       n.bounds.x2 <= width &&
       n.bounds.y2 <= height &&
       n.bounds.x2 - n.bounds.x1 >= 80 &&
@@ -67,6 +67,30 @@ export function publicDirectoryButton(xml: string, width: number, height: number
   return bounds
     ? { x: Math.floor((bounds.x1 + bounds.x2) / 2), y: Math.floor((bounds.y1 + bounds.y2) / 2) }
     : null;
+}
+export function publicDirectoryButton(xml: string, width: number, height: number) {
+  return fixedButton(xml, width, height, "변호사 탐색");
+}
+export function anonymousGuideControl(
+  xml: string,
+  width: number,
+  height: number,
+  action: "open-guide" | "return-home",
+) {
+  if (action !== "open-guide" && action !== "return-home")
+    throw Error("BUNDLED_GUIDE_CONTROL_REQUIRED");
+  return fixedButton(xml, width, height, action === "open-guide" ? "이용 안내 보기" : "처음으로");
+}
+export function anonymousGuideUiObservation(xml: string) {
+  const labels = nodes(xml).flatMap((n) => n.labels);
+  return {
+    homeTitleVisible: labels.includes("내 상황을 차근차근 정리해요."),
+    guideTitleVisible: labels.includes("상담 준비는 이렇게 진행돼요."),
+    currentFeatureDescriptionVisible: labels.some((label) =>
+      label?.includes("사건 화면에서 자료를 올리고 처리 내용을 확인하거나"),
+    ),
+    configurationErrorVisible: labels.includes("앱을 열 수 없어요"),
+  };
 }
 export function publicDirectoryUiObservation(xml: string) {
   const labels = nodes(xml).flatMap((n) => n.labels),

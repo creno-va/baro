@@ -23,6 +23,12 @@ on:
         default: false
         type: boolean
 
+      guide_ui:
+        description: Scroll and tap anonymous Home/Guide at font_scale2; excludes public directory
+        required: false
+        default: false
+        type: boolean
+
 permissions:
   contents: read
   actions: read
@@ -44,6 +50,9 @@ jobs:
     steps:
       - name: Require runtime smoke for optional UI checks
         if: (inputs.large_font || inputs.public_directory) && !inputs.smoke
+        run: exit 1
+      - name: Require isolated large-font Home for Guide UI
+        if: inputs.guide_ui && (!inputs.smoke || !inputs.large_font || inputs.public_directory)
         run: exit 1
       - run: '[[ "$TARGET_SHA" =~ ^[a-f0-9]{40}$ ]]'
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -94,12 +103,15 @@ jobs:
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platform-tools' 'emulator' 'system-images;android-35;google_apis;x86_64'
       - name: Observe actual bundled Home without Metro
         if: inputs.smoke
-        run: bun scripts/mobile-internal-android-home.ts ${{ inputs.large_font && '--large-font' || '' }} ${{ inputs.public_directory && '--public-directory' || '' }}
+        run: bun scripts/mobile-internal-android-home.ts ${{ inputs.large_font && '--large-font' || '' }} ${{ inputs.public_directory && '--public-directory' || '' }} ${{ inputs.guide_ui && '--guide-ui' || '' }}
       - name: Require the explicitly requested enlarged-font observation
         if: inputs.large_font
         run: |
           test -s .wrangler/mobile-internal-android-runtime/large-font.json
           test -s .wrangler/mobile-internal-android-runtime/large-font.png
+      - name: Require the explicitly requested Guide UI observation
+        if: inputs.guide_ui
+        run: test -s .wrangler/mobile-internal-android-runtime/guide-ui.json
       - name: Require the explicitly requested public UI observation
         if: inputs.public_directory
         run: test -s .wrangler/mobile-internal-android-runtime/public-directory.json
@@ -126,6 +138,7 @@ jobs:
             .wrangler/mobile-internal-android-runtime/large-font.json
             .wrangler/mobile-internal-android-runtime/large-font.png
             .wrangler/mobile-internal-android-runtime/public-directory.json
+            .wrangler/mobile-internal-android-runtime/guide-ui.json
           if-no-files-found: ignore
       - name: Preserve fixed failure classification
         if: failure()
