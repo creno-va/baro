@@ -103,6 +103,10 @@ Apple 4.8의 추가 로그인 선택지 요구와 예외를 검토하고, 필요
 구체적인 변경안을 준비한다. 이를 막연한 모든 개발 중단 조건으로 사용하지 않는다.
 [Apple App Review Guidelines 4.8](https://developer.apple.com/app-store/review/guidelines/#login-services)
 
+2026-10-24 KST에 현행 정책·현재3사/strict 계약·token 폐기/삭제를 대조한
+[Apple 로그인 결정안](./MOBILE-APPLE-LOGIN-DECISION.md)을 준비했다. 상태는 제안/사용자 승인 대기이며,
+문서 병합을 새 공급자·token 장기 보관·공개 출시 승인으로 해석하지 않는다. 기존3사 검증은 계속한다.
+
 ### M4~M6: 기본 화면으로 실제 흐름 완성
 
 - loading/empty/error/offline/consent/permission/pending/conflict를 각 화면의 fixture로 둔다.
