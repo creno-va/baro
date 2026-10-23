@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "kind": "unaccepted-internal-ios-output",
+  "sourceSha": "ff5c208d07f63459cb53ef040fd6e9e26007709d",
+  "observedAt": "2026-10-23T16:04:25.972Z",
+  "nativeConfiguration": "Release",
+  "nativeCompileSucceeded": true,
+  "archive": {
+    "name": "unaccepted-internal-ios-simulator-ff5c208d07f63459cb53ef040fd6e9e26007709d.zip",
+    "bytes": 24102166,
+    "sha256": "40305a809554b104041fbac52b154faea42dcab9b446119f0fd572b6078617d2"
+  },
+  "infoPlistSha256": "f11ff44690377a600ad247f7761088d374529beb18f451d1d8d6183395be4c92",
+  "executableSha256": "1189187d23886288671ebfdea1e5a6617b82a2710ddd582b47d3db7eff0e6fa0",
+  "accepted": false,
+  "bundleVerified": false,
+  "signatureAccepted": false,
+  "appRuntimeVerified": false,
+  "physicalDeviceVerified": false,
+  "storeSigned": false,
+  "deployed": false
+}
