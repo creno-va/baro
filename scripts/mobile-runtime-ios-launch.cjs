@@ -30,6 +30,9 @@ function iosLaunchFailureCode(error) {
       "RUNTIME_IOS_LAUNCH_ARGUMENTS_REQUIRED",
       "RUNTIME_IOS_LOCAL_DEVELOPMENT_URL_REQUIRED",
       "RUNTIME_IOS_SCHEME_APPROVAL_NOT_CONFIRMED",
+      "RUNTIME_IOS_DEVICE_INVENTORY_FAILED",
+      "RUNTIME_IOS_OPEN_URL_FAILED",
+      "RUNTIME_IOS_SCHEME_APPROVAL_READ_FAILED",
     ]).has(message)
   )
     return message;
@@ -57,7 +60,7 @@ function iosFailureDomains(detail) {
     "NSCocoaErrorDomain",
   ];
   const expression = new RegExp(
-    `\\b(${names.join("|")})\\b\\s+(?:Code\\s*[=:]\\s*)?(-?\\d{1,10})(?!\\d)`,
+    `\\b(${names.join("|")})\\b[,\\s]+(?:[Cc]ode\\s*[=:]\\s*)?(-?\\d{1,10})(?!\\d)`,
     "g",
   );
   const result = [];
@@ -69,6 +72,25 @@ function iosFailureDomains(detail) {
     if (result.length === 4) break;
   }
   return result;
+}
+function iosFailureDetail(error) {
+  const original = error && error.cause ? error.cause : error;
+  const message =
+    original && typeof original.message === "string" ? original.message.slice(0, 8192) : "";
+  const stderr =
+    original && typeof original.stderr === "string"
+      ? original.stderr.slice(0, 8192)
+      : original && Buffer.isBuffer(original.stderr)
+        ? original.stderr.subarray(0, 8192).toString("utf8")
+        : "";
+  return `${message}\n${stderr}`;
+}
+async function iosLaunchStage(code, operation) {
+  try {
+    return await operation();
+  } catch (error) {
+    throw new Error(code, { cause: error });
+  }
 }
 async function main() {
   const [mode, udid, name, rawUrl] = process.argv.slice(2);
@@ -88,38 +110,50 @@ async function main() {
     url.searchParams.get("url") !== "http://127.0.0.1:8081"
   )
     throw new Error("RUNTIME_IOS_LOCAL_DEVELOPMENT_URL_REQUIRED");
-  const inventory = JSON.parse(
-    execFileSync("xcrun", ["simctl", "list", "devices", "--json"], {
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"],
-    }),
+  const inventory = await iosLaunchStage("RUNTIME_IOS_DEVICE_INVENTORY_FAILED", () =>
+    JSON.parse(
+      execFileSync("xcrun", ["simctl", "list", "devices", "--json"], {
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "ignore"],
+      }),
+    ),
   );
   validateOwnedIosDevice(inventory, udid, name);
   // Use Expo's pinned simulator scheme-approval preparation, restricted to our fresh device.
   // This does not grant OAuth, application consent, local-network or physical-device permissions.
-  await api.openUrlAsync({ udid }, { url: rawUrl, appId });
+  await iosLaunchStage("RUNTIME_IOS_OPEN_URL_FAILED", () =>
+    api.openUrlAsync({ udid }, { url: rawUrl, appId }),
+  );
   const approvalPath = resolve(
     homedir(),
     "Library/Developer/CoreSimulator/Devices",
     udid,
     "data/Library/Preferences/com.apple.launchservices.schemeapproval.plist",
   );
-  const approval = JSON.parse(
-    execFileSync("plutil", ["-convert", "json", "-o", "-", approvalPath], {
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"],
-    }),
+  const approval = await iosLaunchStage("RUNTIME_IOS_SCHEME_APPROVAL_READ_FAILED", () =>
+    JSON.parse(
+      execFileSync("plutil", ["-convert", "json", "-o", "-", approvalPath], {
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "ignore"],
+      }),
+    ),
   );
   if (
     approval[`com.apple.CoreSimulator.CoreSimulatorBridge-->${url.protocol.slice(0, -1)}`] !== appId
   )
     throw new Error("RUNTIME_IOS_SCHEME_APPROVAL_NOT_CONFIRMED");
 }
-module.exports = { validateOwnedIosDevice, iosLaunchFailureCode, iosFailureDomains };
+module.exports = {
+  validateOwnedIosDevice,
+  iosLaunchFailureCode,
+  iosFailureDomains,
+  iosFailureDetail,
+  iosLaunchStage,
+};
 if (require.main === module)
   main().catch((error) => {
     console.error(iosLaunchFailureCode(error));
-    const detail = `${error instanceof Error ? error.message : ""}\n${error && typeof error.stderr === "string" ? error.stderr : ""}`;
+    const detail = iosFailureDetail(error);
     for (const { domain, code } of iosFailureDomains(detail))
       console.error(`IOS_RUNTIME_FAILURE_DOMAIN ${domain} ${code}`);
     process.exitCode = 1;

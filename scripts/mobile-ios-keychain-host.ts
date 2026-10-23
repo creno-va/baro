@@ -85,6 +85,10 @@ export async function verifyIosHostBinary(root: string, input: string) {
 }
 export function iosHostCommandFailure(stderr: string, timedOut: boolean) {
   if (timedOut) return "COMMAND_TIMEOUT" as const;
+  if (/RUNTIME_IOS_OPEN_URL_FAILED/.test(stderr)) return "URL_OPEN_FAILED" as const;
+  if (/RUNTIME_IOS_SCHEME_APPROVAL_READ_FAILED/.test(stderr))
+    return "APPROVAL_READ_FAILED" as const;
+  if (/RUNTIME_IOS_DEVICE_INVENTORY_FAILED/.test(stderr)) return "DEVICE_INVENTORY_FAILED" as const;
   if (
     /ApplicationVerificationFailed|Failed to verify code signature|0xe80080|valid provisioning profile|SIGNATURE_REJECTED/i.test(
       stderr,
@@ -342,6 +346,11 @@ async function main() {
       console.log("IOS_HOST_STAGE", phase);
       await command(["xcrun", "simctl", "install", device, app], { stage: "APP_INSTALL" });
       const url = runtimeDevelopmentUrl().replace("baro-dev:", "baro-preview:");
+      phase = `${activePhase}-direct-launch`;
+      console.log("IOS_HOST_STAGE", phase);
+      await command(["xcrun", "simctl", "launch", device, "site.baro.app.preview"], {
+        stage: "APP_DIRECT_LAUNCH",
+      });
       phase = `${activePhase}-launch`;
       console.log("IOS_HOST_STAGE", phase);
       await command(
@@ -369,7 +378,7 @@ async function main() {
     }).catch(() => {
       failedCommand = null;
     });
-    const signing = await signSimulatorApp(app, "site.baro.app.preview");
+    const signing = await signSimulatorApp(app, "site.baro.app.preview", "group-only");
     await writeFile(resolve(base, "signing.json"), `${JSON.stringify(signing, null, 2)}\n`);
     activePhase = iosHostPhaseSchema.parse("signed");
     phase = "signed";
