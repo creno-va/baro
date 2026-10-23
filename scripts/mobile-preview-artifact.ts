@@ -3,6 +3,7 @@ import { createReadStream } from "node:fs";
 import { copyFile, mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { basename, resolve } from "node:path";
 import { z } from "zod";
+import { androidBuildTools, runAndroidSignatureProbe } from "./mobile-android-signature";
 
 const sha = z.string().regex(/^[a-f0-9]{40}$/),
   digest = z.string().regex(/^[a-f0-9]{64}$/);
@@ -28,7 +29,12 @@ export const previewArtifactSchema = z.strictObject({
   installTarget: z.enum(["android-device-or-emulator", "ios-simulator"]),
   architectures: z.array(z.enum(["arm64-v8a", "x86_64", "arm64"])).min(1),
   signing: z.discriminatedUnion("kind", [
-    z.strictObject({ kind: z.literal("android-debug"), certificateSha256: digest }),
+    z.strictObject({
+      kind: z.literal("android-debug"),
+      certificateSha256: digest,
+      verifier: z.literal("android-sdk-apksig"),
+      buildTools: nativeVersion,
+    }),
     z.strictObject({
       kind: z.literal("simulator-only"),
       codeSignature: z.enum(["none", "ad-hoc"]),
@@ -98,18 +104,6 @@ export function parseAndroidBadging(value: string) {
     architectures,
   };
 }
-/** apksigner uses SDK-range labels for v3.1. Repeated ranges must keep the same debug certificate. */
-export function androidSignerDigest(value: string) {
-  const matches = [
-    ...value.matchAll(
-      /^(?:Signer #\d+|Signer \(minSdkVersion=\d+(?: \(dev release=true\))?, maxSdkVersion=\d+\)) certificate SHA-256 digest:\s*([a-f0-9]{64})\s*$/gim,
-    ),
-  ];
-  const certificates = [...new Set(matches.map((match) => match[1]?.toLowerCase()))];
-  if (certificates.length !== 1 || !certificates[0])
-    throw new Error("PREVIEW_ANDROID_SIGNER_REQUIRED");
-  return certificates[0];
-}
 export function simulatorSignature(exitCode: number, report: string): "none" | "ad-hoc" {
   if (exitCode !== 0 && report.includes("code object is not signed at all")) return "none";
   if (
@@ -176,6 +170,17 @@ async function main() {
   if ((await command(["git", "rev-parse", "HEAD"])) !== sourceSha)
     throw new Error("PREVIEW_ARTIFACT_SOURCE_MISMATCH");
   await command(["git", "diff", "--exit-code", "HEAD"]);
+  if (process.argv[3] === "--preflight") {
+    if (platform !== "android") throw new Error("PREVIEW_ANDROID_PREFLIGHT_ONLY");
+    const sdk = process.env.ANDROID_HOME ?? process.env.ANDROID_SDK_ROOT;
+    if (!sdk) throw new Error("PREVIEW_ANDROID_SDK_REQUIRED");
+    const tools = await androidBuildTools(sdk);
+    await runAndroidSignatureProbe(root, tools.path, command);
+    console.log(
+      `Android SDK signature API ready (build tools ${tools.version}); no APK acceptance claimed`,
+    );
+    return;
+  }
   const manifest = JSON.parse(await readFile(resolve(mobile, "package.json"), "utf8"));
   if (manifest.main !== "expo-router/entry")
     throw new Error("PREVIEW_ARTIFACT_PRODUCT_ENTRY_REQUIRED");
@@ -186,18 +191,19 @@ async function main() {
   if (platform === "android") {
     const sdk = process.env.ANDROID_HOME ?? process.env.ANDROID_SDK_ROOT;
     if (!sdk) throw new Error("PREVIEW_ANDROID_SDK_REQUIRED");
-    const versions = (await readdir(resolve(sdk, "build-tools")))
-      .filter((value) => /^\d+\.\d+\.\d+$/.test(value))
-      .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
-    const version = versions.at(-1);
-    if (!version) throw new Error("PREVIEW_ANDROID_TOOLS_REQUIRED");
-    const tools = resolve(sdk, "build-tools", version),
+    const tools = await androidBuildTools(sdk),
       apk = resolve(mobile, "android/app/build/outputs/apk/debug/app-debug.apk");
-    metadata = parseAndroidBadging(await command([resolve(tools, "aapt"), "dump", "badging", apk]));
-    const cert = androidSignerDigest(
-      await command([resolve(tools, "apksigner"), "verify", "--print-certs", apk]),
+    metadata = parseAndroidBadging(
+      await command([resolve(tools.path, "aapt"), "dump", "badging", apk]),
     );
-    signing = { kind: "android-debug", certificateSha256: cert };
+    const cert = await runAndroidSignatureProbe(root, tools.path, command, apk);
+    if (!cert) throw new Error("PREVIEW_ANDROID_SIGNER_REQUIRED");
+    signing = {
+      kind: "android-debug",
+      certificateSha256: cert,
+      verifier: "android-sdk-apksig",
+      buildTools: tools.version,
+    };
     await copyFile(apk, artifact);
   } else {
     if (process.platform !== "darwin") throw new Error("PREVIEW_IOS_XCODE_REQUIRED");
