@@ -356,3 +356,34 @@ loopback fixture는 nonce control과 synthetic cookie/Origin/owner를 구분하�
 receipt 회귀와 이 실제 OS 실행은 구분하며 실행 전에는 runtime 성공을 선언하지 않는다.
 실제 DocumentPicker UI·열기/공유 sheet·OAuth/원격 API·물리 기기·접근성/전체 사용자 여정·
 내부 preview 전달·스토어 서명/배포는 이 실행의 미검증 항목으로 유지한다.
+
+## 내부 preview 개발 앱 전달
+
+`Mobile native builds (manual)`에 main의 full40 `target_sha`를 넣는다. 일반 preview 앱을
+컴파일하고 `mobile-preview-development-<platform>-<sha>` artifact에 APK 또는 Simulator 앱 ZIP과
+`receipt-<platform>.json`을 남긴다. 이는 Metro에 연결하는 development client이며 standalone
+release/스토어 제출물이 아니다. 로컬 runtime probe 앱/entry를 포함한 전달물로 바꾸지 않는다.
+
+| 전달물 | 설치 대상 | 실제 산출물에서 확인하는 항목 | 남은 인수 |
+| --- | --- | --- | --- |
+| `baro-preview-android-<sha>.apk` | 지원 API/ABI의 Android 기기·Emulator | applicationId/versionCode/versionName·최소 API·포함 ABI·debuggable·서명 인증서 hash·전체 APK byte/hash | 실제 물리 기기·원격 API/OAuth/전체 여정 |
+| `baro-preview-ios-simulator-<sha>.zip` | macOS/Xcode의 호환 iOS Simulator | Info.plist의 Simulator platform·최소 OS/version/build·Mach-O ABI·실제 none/ad-hoc 서명 상태·ZIP byte/hash | 물리 iPhone 서명/배포·원격 API/OAuth/전체 여정 |
+
+기본 식별자는 `site.baro.app.preview`다. iOS Simulator ZIP은 iPhone 설치용 IPA가 아니다.
+새 Apple/Google 배포 identity·EAS 계정/서비스·자동 배포는 도입하지 않는다. 실제 min OS/ABI는
+receipt를 따르며 소스의 기대값만으로 실행 지원을 선언하지 않는다.
+
+1. artifact를 내려받아 압축을 풀고 receipt의 `sourceSha`와 파일 이름·byte/hash를 확인한다.
+   macOS/Linux에서는 `shasum -a 256 <apk-or-zip>`으로 비교한다.
+2. 별도 checkout을 해당 SHA로 맞추고 `bun ci`를 실행한다. Metro도 같은 source여야 한다.
+   `EXPO_PUBLIC_APP_ENV=preview EXPO_PUBLIC_API_URL=https://preview.baro.site bun run mobile:start --lan`
+   으로 개발 서버를 연다. 기기는 개발 서버에 연결할 수 있는 네트워크를 사용한다.
+3. Android는 원하는 기기를 명시해 `adb -s <device-serial> install -r <apk>`로 설치한다.
+   서명/버전 불일치를 우회하거나 앱을 자동 삭제하지 않는다. iOS는 ZIP에서 나온 `.app`을
+   `xcrun simctl install <simulator-udid> <app-path>`로 설치한다. 앱에서 해당 Metro URL을 연다.
+4. `apiObservation`은 패키징 시점의 preview health SHA 관측일 뿐이다. unavailable도 사실대로
+   기록한다. `compatibility=runtime-smoke-required`이며 해당 앱/API 조합의 실제 로그인·두 역할·
+   자료/리포트·재인증/삭제와 #339/#71 인수를 마치기 전 원격 동작·출시 완료로 표현하지 않는다.
+
+정확한 artifact/실행 결과는 #385에 연결한다. source/OS/설정이 다른 로컬 probe receipt나
+이전 native compile을 새 preview 앱·물리 기기 성공으로 확대하지 않는다.
