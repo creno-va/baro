@@ -30,6 +30,9 @@ import {
   verifySimulatorEntitlements,
 } from "../scripts/mobile-ios-simulator-signing";
 import {
+  localXcodeControlEntitlements,
+  localXcodeControlEnvironment,
+  localXcodeControlReceiptSchema,
   verifySimulatorBuildPlatform,
   verifyXcodeControlBinary,
   xcodeControlBuildFailure,
@@ -69,6 +72,91 @@ const config: RuntimeConfig = {
   origin: RUNTIME_ORIGIN,
 };
 const fixture = createRuntimeFixture(config);
+test("local Simulator control accepts only the explicit CI loopback profile and its separate own namespace", async () => {
+  const env = {
+    GITHUB_ACTIONS: "true",
+    TARGET_SHA: config.sourceSha,
+    EXPO_PUBLIC_APP_ENV: "local",
+    EXPO_PUBLIC_API_URL: RUNTIME_ORIGIN,
+    PATH: "/synthetic/bin",
+    APPLE_ID: "synthetic-private",
+    DEVELOPMENT_TEAM: "synthetic-private",
+    GITHUB_TOKEN: "synthetic-private",
+    NODE_OPTIONS: "--require /private/synthetic",
+  };
+  expect(localXcodeControlEnvironment(env).EXPO_PUBLIC_API_URL).toBe(RUNTIME_ORIGIN);
+  expect(JSON.stringify(localXcodeControlEnvironment(env))).not.toContain("synthetic-private");
+  expect(JSON.stringify(localXcodeControlEnvironment(env))).not.toContain("/private/synthetic");
+  for (const patch of [
+    { GITHUB_ACTIONS: "false" },
+    { TARGET_SHA: "main" },
+    { EXPO_PUBLIC_APP_ENV: "preview" },
+    { EXPO_PUBLIC_APP_ENV: "production" },
+    { EXPO_PUBLIC_API_URL: "https://preview.baro.site" },
+    { EXPO_PUBLIC_API_URL: "http://127.0.0.1:9999" },
+  ])
+    expect(() => localXcodeControlEnvironment({ ...env, ...patch })).toThrow();
+  const rights = {
+    "keychain-access-groups": ["FAKETEAMID.site.baro.app.dev"],
+    "application-identifier": "FAKETEAMID.site.baro.app.dev",
+  };
+  expect(localXcodeControlEntitlements(rights)["application-identifier"]).toBe(
+    "FAKETEAMID.site.baro.app.dev",
+  );
+  expect(() => xcodeControlEntitlements(rights)).toThrow();
+  expect(() =>
+    localXcodeControlEntitlements({
+      "keychain-access-groups": ["FAKETEAMID.site.baro.app.preview"],
+      "application-identifier": "FAKETEAMID.site.baro.app.preview",
+    }),
+  ).toThrow();
+  const preview = await Bun.file(
+    "docs/quality/mobile-ios-host-2026-10-23/control-238624b.json",
+  ).json();
+  const local = {
+    ...preview,
+    version: 1,
+    kind: "local-xcode-simulator-signing-control",
+    sourceSha: config.sourceSha,
+    toolingSourceSha: config.sourceSha,
+    applicationId: "site.baro.app.dev",
+    environment: "local",
+    apiOrigin: RUNTIME_ORIGIN,
+    entitlements: rights,
+  };
+  expect(localXcodeControlReceiptSchema.parse(local).applicationId).toBe("site.baro.app.dev");
+  expect(() => xcodeControlReceiptSchema.parse(local)).toThrow();
+  const value = { ...candidate(), nativeSigning: local };
+  expect(verifyRuntimeReceipt(value, config.sourceSha, "ios").nativeSigning?.kind).toBe(
+    "local-xcode-simulator-signing-control",
+  );
+  expect(() =>
+    verifyRuntimeReceipt(
+      { ...value, nativeSigning: { ...local, sourceSha: "b".repeat(40) } },
+      config.sourceSha,
+      "ios",
+    ),
+  ).toThrow("RUNTIME_LOCAL_SIGNING_IDENTITY_MISMATCH");
+  for (const patch of [
+    { applicationId: "site.baro.app.preview" },
+    { entitlements: preview.entitlements },
+    { apiOrigin: "https://preview.baro.site" },
+    { teamIdentifier: "synthetic-team" },
+    { appRuntimeVerified: true },
+  ])
+    expect(() => localXcodeControlReceiptSchema.parse({ ...local, ...patch })).toThrow();
+});
+test("preview native binaries are refused for local IO before any SDK command or fixture listener", async () => {
+  const child = Bun.spawn(
+    [process.execPath, "scripts/mobile-runtime.ts", "ios", "--pinned-xcode-control"],
+    { env: { ...process.env, TARGET_SHA: config.sourceSha }, stdout: "pipe", stderr: "pipe" },
+  );
+  const out = await new Response(child.stdout).text(),
+    err = await new Response(child.stderr).text();
+  expect(await child.exited).toBe(1);
+  expect(out).toBe("");
+  expect(err.trim()).toBe("RUNTIME_LOCAL_NATIVE_PROFILE_REQUIRED");
+});
 test("native launcher observations retain only an exact fixed code, timeout and bounded known domains", () => {
   const secret = "synthetic-private-token /private/synthetic";
   const detail = `${secret}\nRUNTIME_IOS_OPEN_URL_FAILED\nIOS_RUNTIME_FAILURE_DOMAIN NSOSStatusErrorDomain -10814\nUnknownPrivateDomain Code=42\nNSPOSIXErrorDomain Code=999999999999999999`;

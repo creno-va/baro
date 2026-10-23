@@ -232,13 +232,21 @@ native/source/download-cache clear, credential reset/store/readback, 복구 key 
 이 성공은 과거 실패의 단일 원인 확정이나 대용량 IO·실제 사용자 여정 성공이 아니다.
 
 ```sh
-gh workflow run mobile-ios-xcode-reverify.yml --ref main -f target_sha=<full40-main-tooling-sha> -f full_runtime=true
+gh workflow run mobile-runtime.yml --ref main -f target_sha=<full40-main-sha> -f platform=ios
 ```
 
-선택적 full runtime은 같은 고정 compiler ZIP 전체 hash·native 입력 동일성과 추출 앱의 실제
-Info/executable·양 ABI XML/DER·host signature·폰트를 다시 확인하고 새 소유 Simulator에 설치한다.
-제품 Home은 layout 계측 사본, 이후 IO는 별도 probe entry와 합성 loopback API로 실행한다.
-preview 앱 ID와 local JS/API 환경을 각각 기록하며 Metro는 실행별 cache를 사용한다.
-Home/full receipt는 binary source·tooling/JS source·원본 archive hash·재컴파일/재서명 없음의
-증거를 포함한다. 기본 dev compile 경로와 기존 receipt는 유지한다. 실행 전에 full IO 성공을
-표시하지 않으며 원격/API·OAuth·physical·접근성/전체 화면·스토어는 여전히 별도 인수다.
+초기 full runtime은 고정 preview binary와 local JS/API를 조합해 Home 표시까지 관측했다.
+후속3b7f97b 실행의 업로드 단계에서 preview native origin 고정과 loopback 검증 조건의 차이를
+확인했다. 이 [이전 실패들](./MOBILE-NATIVE-RUNTIME-2026-10-23.md)을 보존하며 preview 재검증의
+full_runtime 옵션은 제거한다. SDK 준비 검사는 기존 원본 preview binary/양 ABI/폰트를 그대로
+사용하고 native IO는 위의 별도 local dev 프로필로 실행한다.
+
+iOS full runtime은 깨끗한 소유 source에서 site.baro.app.dev·local API127.0.0.1:8765를 명시해
+실제 Xcode No-Team Simulator 앱을 컴파일한 뒤 Metro overlay를 적용한다. preview/production
+native origin guard·일반 native build 기본 NO는 유지한다. local context·own-app namespace는
+preview schema와 분리하며 실제 확장 값/양 ABI XML·DER·빈 host signature·font를 검증한다.
+validation의 namespace 기대값을 실제 관측이나 Apple 계정/Team으로 표현하지 않는다.
+compiler exit0 뒤 원본 ZIP/inspection을 먼저 보존하고 후속 실패에도 allowlist metadata만
+별도 artifact에 남긴다. private build 로그·actual keychain/인증서/private key는 전달하지 않는다.
+Home/full receipt는 같은 source의 local signing proof를 묶는다. 실행 전 성공으로 표시하지 않고
+실제 원격/API·OAuth·physical·접근성/전체 화면·스토어는 여전히 별도 인수다.

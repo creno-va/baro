@@ -1,8 +1,10 @@
-import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import {
+  attestLocalXcodeSimulatorControl,
   attestXcodeSimulatorControl,
   configureGeneratedXcodeControl,
+  localXcodeControlEnvironment,
   preserveCompiledXcodeControl,
   xcodeControlBuildFailure,
   xcodeControlEnvironment,
@@ -13,8 +15,9 @@ import { verifyCompiledMobileFont } from "./mobile-native-assets";
 const platform = process.argv[2];
 if (platform !== "android" && platform !== "ios")
   throw new Error("Usage: bun run mobile:native android|ios");
-const runtimeLocal = process.argv[3] === "--runtime-local";
-const xcodeControl = process.argv[3] === "--xcode-control";
+const localControl = process.argv[3] === "--runtime-xcode-control";
+const runtimeLocal = process.argv[3] === "--runtime-local" || localControl;
+const xcodeControl = process.argv[3] === "--xcode-control" || localControl;
 if (xcodeControl && (platform !== "ios" || process.platform !== "darwin"))
   throw new Error("XCODE_CONTROL_SIMULATOR_ONLY");
 if (
@@ -27,8 +30,15 @@ if (
 
 const root = process.cwd();
 const mobileRoot = resolve(root, "apps/mobile");
-const childEnvironment = xcodeControl ? xcodeControlEnvironment(process.env) : process.env;
-const controlBase = resolve(root, ".wrangler/ios-xcode-control");
+const childEnvironment = localControl
+  ? localXcodeControlEnvironment(process.env)
+  : xcodeControl
+    ? xcodeControlEnvironment(process.env)
+    : process.env;
+const controlBase = resolve(
+  root,
+  localControl ? ".wrangler/ios-local-xcode-control" : ".wrangler/ios-xcode-control",
+);
 let phase = "source-check",
   lastCommand: { tool: string; exitCode: number } | null = null;
 async function run(args: string[], cwd = root) {
@@ -39,20 +49,38 @@ async function run(args: string[], cwd = root) {
   }
   const child = Bun.spawn(args, {
     cwd,
-    stdout: xcodeControl ? Bun.file(log) : "inherit",
-    stderr: xcodeControl ? Bun.file(log) : "inherit",
+    stdout: xcodeControl ? "pipe" : "inherit",
+    stderr: xcodeControl ? "pipe" : "inherit",
     env: childEnvironment,
   });
+  let detail = "";
+  if (xcodeControl) {
+    const [out, err] = await Promise.all([
+      new Response(child.stdout).text(),
+      new Response(child.stderr).text(),
+    ]);
+    detail = `${out}\n${err}`;
+    await writeFile(log, detail, { flag: "wx" });
+  }
   const code = await child.exited;
   if (xcodeControl) lastCommand = { tool: args[0] ?? "unknown", exitCode: code };
   if (code) {
-    if (xcodeControl) throw new Error(xcodeControlBuildFailure(null, await readFile(log, "utf8")));
+    if (xcodeControl) throw new Error(xcodeControlBuildFailure(null, detail));
     throw new Error(`${args[0]} failed with exit ${code}`);
   }
 }
 async function main(platform: "android" | "ios") {
   if (xcodeControl) {
-    if (await Bun.file(resolve(root, ".wrangler/mobile-build/xcode-control-ios.json")).exists())
+    if (
+      await Bun.file(
+        resolve(
+          root,
+          localControl
+            ? ".wrangler/mobile-build/xcode-control-local-ios.json"
+            : ".wrangler/mobile-build/xcode-control-ios.json",
+        ),
+      ).exists()
+    )
       throw new Error("XCODE_CONTROL_FRESH_OUTPUT_REQUIRED");
     const head = Bun.spawn(["git", "rev-parse", "HEAD"], { stdout: "pipe", stderr: "ignore" });
     if (
@@ -112,9 +140,15 @@ async function main(platform: "android" | "ios") {
     );
     if (xcodeControl) {
       phase = "preserve-compiled-output";
-      await preserveCompiledXcodeControl(root, process.env.TARGET_SHA as string);
+      await preserveCompiledXcodeControl(
+        root,
+        process.env.TARGET_SHA as string,
+        localControl ? "local" : "preview",
+      );
       phase = "attest-compiled-output";
-      await attestXcodeSimulatorControl(root, process.env.TARGET_SHA as string);
+      if (localControl)
+        await attestLocalXcodeSimulatorControl(root, process.env.TARGET_SHA as string);
+      else await attestXcodeSimulatorControl(root, process.env.TARGET_SHA as string);
     }
   }
   phase = "compiled-font";

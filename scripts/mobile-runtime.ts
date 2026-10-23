@@ -1,11 +1,12 @@
 import { createHash, randomUUID } from "node:crypto";
-import { mkdir, readdir, readFile, symlink, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readdir, readFile, symlink, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import {
   probeResultSchema,
   RUNTIME_ORIGIN,
   type RuntimeConfig,
 } from "../apps/mobile/runtime-probe/protocol";
+import { localXcodeControlReceiptSchema } from "./mobile-ios-xcode-control";
 import { createRuntimeFixture } from "./mobile-runtime-fixture";
 import {
   androidRuntimeOptions,
@@ -16,7 +17,6 @@ import {
   quoteAdbShellArgument,
   runtimeDevelopmentUrl,
 } from "./mobile-runtime-host";
-import { extractPinnedIosRuntime, preparePinnedIosRuntime } from "./mobile-runtime-ios-binary";
 import { observeIosLauncherFailure } from "./mobile-runtime-ios-observation";
 import { preflightMetroBundle } from "./mobile-runtime-metro";
 import { verifyRuntimeHomeReceipt, verifyRuntimeReceipt } from "./mobile-runtime-receipt";
@@ -48,10 +48,10 @@ async function main() {
     sourceSha = process.env.TARGET_SHA;
   if ((platform !== "android" && platform !== "ios") || !/^[a-f0-9]{40}$/.test(sourceSha ?? ""))
     throw new Error("RUNTIME_PLATFORM_AND_IMMUTABLE_SHA_REQUIRED");
-  const pinnedIos = process.argv[3] === "--pinned-xcode-control";
-  if (process.argv.length !== (pinnedIos ? 4 : 3) || (pinnedIos && platform !== "ios"))
-    throw new Error("RUNTIME_VERIFICATION_MODE_REQUIRED");
-  const applicationId = pinnedIos ? "site.baro.app.preview" : "site.baro.app.dev";
+  if (process.argv[3] === "--pinned-xcode-control")
+    throw new Error("RUNTIME_LOCAL_NATIVE_PROFILE_REQUIRED");
+  if (process.argv.length !== 3) throw new Error("RUNTIME_VERIFICATION_MODE_REQUIRED");
+  const applicationId = "site.baro.app.dev";
   const root = process.cwd(),
     out = resolve(root, ".wrangler/mobile-runtime"),
     nonce = randomUUID();
@@ -74,6 +74,24 @@ async function main() {
   await mkdir(out, { recursive: true });
   let counter = 0;
   let iosLauncherFailure: ReturnType<typeof observeIosLauncherFailure> | null = null;
+  let localSigning: ReturnType<typeof localXcodeControlReceiptSchema.parse> | undefined;
+  async function preserveLocalCompiler() {
+    const target = resolve(out, "ios-local-compiler");
+    await mkdir(target, { recursive: true });
+    for (const name of [
+      "inspection.json",
+      "failure.json",
+      "entitlement-shape-arm64.json",
+      "entitlement-shape-x86_64.json",
+      `unaccepted-local-simulator-${sourceSha}.zip`,
+    ]) {
+      const input = resolve(work, ".wrangler/ios-local-xcode-control", name);
+      if (await Bun.file(input).exists()) await copyFile(input, resolve(target, name));
+    }
+    const control = resolve(work, ".wrangler/mobile-build/xcode-control-local-ios.json");
+    if (await Bun.file(control).exists())
+      await copyFile(control, resolve(target, "xcode-control-local-ios.json"));
+  }
   async function command(
     args: string[],
     options: {
@@ -252,7 +270,7 @@ async function main() {
     }
   }
   async function openApp(entry: "product" | "probe") {
-    const url = runtimeDevelopmentUrl(pinnedIos ? "preview" : "dev");
+    const url = runtimeDevelopmentUrl();
     if (platform === "android") {
       await command([adb, "-s", device, "shell", "am", "force-stop", applicationId]);
       await command([
@@ -304,11 +322,29 @@ async function main() {
     await command(["git", "merge-base", "--is-ancestor", sourceSha as string, "origin/main"], {
       cwd: root,
     });
-    phase = "native-binary-source";
-    const pinned = pinnedIos ? await preparePinnedIosRuntime(root, sourceSha as string) : null;
     await command(["git", "worktree", "add", "--detach", work, sourceSha as string], { cwd: root });
     ownedCheckout = true;
     await symlink(resolve(root, "node_modules"), resolve(work, "node_modules"), "dir");
+    if (platform === "ios") {
+      // Signing control requires a clean owned source; compile before the tracked Metro overlay.
+      phase = "compile-signed-local-ios";
+      try {
+        await command(["bun", "scripts/mobile-native-build.ts", "ios", "--runtime-xcode-control"], {
+          timeout: 1800000,
+          compile: true,
+        });
+      } finally {
+        await preserveLocalCompiler();
+      }
+      localSigning = localXcodeControlReceiptSchema.parse(
+        JSON.parse(
+          await readFile(
+            resolve(work, ".wrangler/mobile-build/xcode-control-local-ios.json"),
+            "utf8",
+          ),
+        ),
+      );
+    }
     // Resolve symlinked Bun workspace packages inside this exact isolated checkout.
     const metroSource = `const {getDefaultConfig}=require("expo/metro-config");
 const config=getDefaultConfig(__dirname);
@@ -319,7 +355,7 @@ config.resolver.extraNodeModules={${["contracts", "api-client", "client-core", "
 module.exports=config;\n`;
     await writeFile(resolve(mobile, "metro.config.cjs"), metroSource);
     phase = "metro-preflight";
-    console.log(`Runtime ${platform}: verify IPv4 Metro readiness before compile`);
+    console.log(`Runtime ${platform}: verify owned IPv4 Metro readiness`);
     await startMetro();
     await stopMetro();
     if (platform === "android") {
@@ -330,13 +366,7 @@ module.exports=config;\n`;
       );
       console.log("Runtime android: owned AVD path/discovery verified before compile");
     }
-    if (pinned) {
-      phase = "verify-pinned-compiled-app";
-      await extractPinnedIosRuntime(work, pinned, command);
-      console.log(
-        "Runtime ios: original compiler binary reverified without recompilation or resigning",
-      );
-    } else {
+    if (platform === "android") {
       console.log(`Runtime ${platform}: compile isolated local development app`);
       phase = "compile";
       await command(["bun", "scripts/mobile-native-build.ts", platform, "--runtime-local"], {
@@ -454,7 +484,7 @@ module.exports=config;\n`;
         sourceSha,
         platform,
         applicationId,
-        ...(pinned ? { nativeBinary: pinned.evidence } : {}),
+        ...(localSigning ? { nativeSigning: localSigning } : {}),
         ...(bundleHttpPreflight.product
           ? { bundleHttpPreflight: bundleHttpPreflight.product }
           : {}),
@@ -520,7 +550,7 @@ module.exports=config;\n`;
       environment: "local",
       apiOrigin: RUNTIME_ORIGIN,
       applicationId,
-      ...(pinned ? { nativeBinary: pinned.evidence } : {}),
+      ...(localSigning ? { nativeSigning: localSigning } : {}),
       ...(bundleHttpPreflight.product && bundleHttpPreflight.probe
         ? {
             bundleHttpPreflight: {

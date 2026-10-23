@@ -7,11 +7,6 @@ on:
         description: Full main tooling SHA; pinned Simulator compiler output, no recompilation or resigning
         required: true
         type: string
-      full_runtime:
-        description: Also run instrumented Home and native large IO against the loopback fixture
-        required: false
-        default: false
-        type: boolean
 
 permissions:
   contents: read
@@ -73,9 +68,6 @@ jobs:
         run: bun scripts/mobile-ios-xcode-reverify.ts
       - name: Observe SDK readiness without changing the binary
         run: bun scripts/mobile-ios-keychain-host.ts --pinned-xcode-control
-      - name: Execute Home and native IO using the original compiled binary
-        if: inputs.full_runtime
-        run: bun scripts/mobile-runtime.ts ios --pinned-xcode-control
       - name: Preserve scoped original-source observations
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
