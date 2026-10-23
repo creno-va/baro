@@ -56,6 +56,10 @@ jobs:
           if bun scripts/mobile-native-build.ts ios --xcode-control > .wrangler/ios-xcode-control/private-build.log 2>&1; then
             echo 'XCODE_SIMULATOR_CONTROL_COMPILED'
           else
+            if test -s .wrangler/ios-xcode-control/failure.json; then
+              echo 'XCODE_CONTROL_SCOPED_FAILURE_RECORDED'
+              exit 1
+            fi
             bun -e 'const s=await Bun.file(".wrangler/ios-xcode-control/private-build.log").text();const code=/requires a development team/i.test(s)?"XCODE_CONTROL_TEAM_REQUIRED":/provisioning profile/i.test(s)?"XCODE_CONTROL_PROFILE_REQUIRED":/signing certificate/i.test(s)?"XCODE_CONTROL_IDENTITY_REQUIRED":"XCODE_CONTROL_BUILD_FAILED";await Bun.write(".wrangler/ios-xcode-control/failure.json",JSON.stringify({sourceSha:process.env.TARGET_SHA,phase:"compile-and-signing-control",code,physicalDeviceVerified:false,storeSigned:false,deployed:false},null,2)+"\n");console.error(code);process.exitCode=1;'
           fi
       - name: Preserve compiled control identity and archive
@@ -69,6 +73,9 @@ jobs:
           name: mobile-ios-xcode-control-${{ inputs.target_sha }}
           path: |
             .wrangler/ios-xcode-control/failure.json
+            .wrangler/ios-xcode-control/inspection.json
+            .wrangler/ios-xcode-control/unaccepted-simulator-*.zip
+            .wrangler/ios-xcode-control/entitlement-shape-*.json
             .wrangler/mobile-build/xcode-control-ios.json
             .wrangler/mobile-handoff/receipt-ios.json
             .wrangler/mobile-handoff/baro-preview-ios-simulator-*.zip

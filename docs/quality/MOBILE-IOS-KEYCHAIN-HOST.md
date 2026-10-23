@@ -158,3 +158,24 @@ fresh same-source archive와 control sidecar의 byte/hash·실제 추출 Info/ex
 컴파일된 앱을 수동으로 재서명하지 않는다. baseline report와 control signing·컴파일 ZIP을
 각각 보존하고 성공 전 일반 앱 설정을 바꾸지 않는다. 실제 SecureStore 성공은 아직 미확정이며
 full native IO·실제 OAuth/API·physical/store·#339/#71의 인수를 대신하지 않는다.
+
+## Xcode control의 실패 관측 보강
+
+[실제 control39954434294](https://github.com/creno-va/baro/actions/runs/39954434294)은
+2026-10-23T12:35:48Z~12:57:40Z의 compile/signing step에서 terminal FAILURE다.
+[원본 safe 실패](./mobile-ios-host-2026-10-23/failure-a74f27f.json)는 XCODE_CONTROL_BUILD_FAILED만
+담아 compiler exit와 후속 metadata attestation 중 어디서 실패했는지 확정할 수 없다.
+private build log와 바이너리는 artifact에 남지 않아 소급 복구하지 못했다. Team/권한·SDK
+초기화의 특정 원인이나 Xcode control의 성공으로 해석하지 않는다.
+
+후속 도구는 source/prebuild/pods/workspace/generated-entitlements/xcode-build/출력 보존/
+attestation/font의 실제 phase와 마지막 command exit를 분리한다. private phase log는 업로드하지
+않고 link/script/compile/sign 및 기존 metadata 오류를 고정 allowlist code로만 분류한다.
+기존 normal build와 CODE_SIGNING_ALLOWED=NO는 그대로다.
+
+Xcode exit0 뒤 own preview Simulator Info를 확인한 compiled app을 검증 전 unaccepted ZIP으로
+보존한다. archive/Info/executable 전체 hash·source·새 archive 관측 시각을 기록하며 signature/
+SDK/physical/store 인수로 표시하지 않는다. 후속 strict entitlement 검사보다 먼저 각 ABI의
+알려진 public key 존재 여부·own-group 일치/개수·unknown key 개수만 기록한다. 실제 값·unknown
+key 이름·raw XML/stack/log는 업로드하지 않는다. 예상 밖 entitlement를 자동 승인하지 않는다.
+동일 출력의 후속 metadata 재검증이 가능하도록 실패 사실과 binary provenance를 함께 보존한다.

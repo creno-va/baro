@@ -31,9 +31,11 @@ import {
 } from "../scripts/mobile-ios-simulator-signing";
 import {
   verifyFreshXcodeControlBinary,
+  xcodeControlBuildFailure,
   xcodeControlEntitlements,
   xcodeControlEnvironment,
   xcodeControlReceiptSchema,
+  xcodeEntitlementShape,
   xcodeSimulatorControlArguments,
 } from "../scripts/mobile-ios-xcode-control";
 import { productEntryOverlay } from "../scripts/mobile-runtime";
@@ -86,6 +88,41 @@ test("iOS launch preparation accepts only the created booted UUID/name pair", ()
       validateOwnedIosDevice({ devices: { syntheticOS: [changed] } }, udid, name),
     ).toThrow("RUNTIME_OWNED_IOS_DEVICE_REQUIRED");
   expect(() => validateOwnedIosDevice(inventory, "../outside", name)).toThrow();
+});
+test("Xcode control failure retains only known compiler categories and entitlement shape, never unknown values", () => {
+  const privateDetail = "synthetic-private /private/fixture";
+  for (const [detail, code] of [
+    [`${privateDetail}\nUndefined symbols for architecture arm64`, "XCODE_CONTROL_LINK_FAILED"],
+    [
+      `${privateDetail}\nCommand PhaseScriptExecution failed with a nonzero exit code`,
+      "XCODE_CONTROL_SCRIPT_FAILED",
+    ],
+    [`${privateDetail}\nCommand CodeSign failed`, "XCODE_CONTROL_SIGN_FAILED"],
+  ] as const) {
+    expect(xcodeControlBuildFailure(new Error(privateDetail), detail)).toBe(code);
+    expect(xcodeControlBuildFailure(new Error(code))).toBe(code);
+  }
+  expect(xcodeControlBuildFailure(new Error("XCODE_CONTROL_ENTITLEMENTS_MISMATCH"))).toBe(
+    "XCODE_CONTROL_ENTITLEMENTS_MISMATCH",
+  );
+  expect(xcodeControlBuildFailure(new Error("SYNTHETIC_PRIVATE_CAPS"), privateDetail)).toBe(
+    "XCODE_CONTROL_BUILD_FAILED",
+  );
+  const shape = xcodeEntitlementShape({
+    "keychain-access-groups": [privateDetail],
+    "com.apple.developer.team-identifier": privateDetail,
+    [privateDetail]: true,
+  });
+  expect(shape).toMatchObject({
+    keychainGroupCount: 1,
+    ownKeychainGroupOnly: false,
+    unknownKeyCount: 1,
+    strictAccepted: false,
+  });
+  expect(JSON.stringify(shape)).not.toContain(privateDetail);
+  expect(
+    xcodeEntitlementShape({ "keychain-access-groups": ["site.baro.app.preview"] }).strictAccepted,
+  ).toBe(true);
 });
 test("pinned Expo iOS launcher API loads in a real Node process without accessing a simulator", async () => {
   const node = Bun.which("node");

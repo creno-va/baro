@@ -1,0 +1,8 @@
+{
+  "sourceSha": "a74f27f27fca65b4dd30b7f074671f6746e87e62",
+  "phase": "compile-and-signing-control",
+  "code": "XCODE_CONTROL_BUILD_FAILED",
+  "physicalDeviceVerified": false,
+  "storeSigned": false,
+  "deployed": false
+}
