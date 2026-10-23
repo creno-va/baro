@@ -1,4 +1,9 @@
-import { ApiError, type CaseOperationStorage, uploadRecoveryRecordSchema } from "@baro/api-client";
+import {
+  ApiError,
+  type CaseOperationStorage,
+  lawyerUploadAttemptSchema,
+  uploadRecoveryRecordSchema,
+} from "@baro/api-client";
 import { z } from "zod";
 import { nativeAccountDeletionRecordSchema } from "../account/recovery";
 
@@ -15,6 +20,7 @@ const failed = () =>
     true,
   );
 function kind(key: string) {
+  if (/^baro-lawyer-upload-v2:[a-f0-9]{64}$/.test(key)) return "lawyer";
   if (/^baro-account-deletion:[a-f0-9]{64}$/.test(key)) return "account";
   if (/^baro-upload-operation:[a-f0-9]{64}$/.test(key)) return "upload";
   if (/^baro-workspace-request:[a-f0-9]{64}$/.test(key)) return "request";
@@ -27,15 +33,17 @@ function kind(key: string) {
 function validate(key: string, value: string) {
   if (value.length > 1024) throw failed();
   const valid =
-    kind(key) === "account"
-      ? nativeAccountDeletionRecordSchema.safeParse(JSON.parse(value)).success
-      : kind(key) === "upload"
-        ? uploadRecoveryRecordSchema.safeParse(JSON.parse(value)).success
-        : kind(key) === "request"
-          ? uuid.safeParse(value).success
-          : kind(key) === "job"
-            ? /^[A-Za-z0-9_.-]{1,128}$/.test(value)
-            : wire.safeParse(JSON.parse(value)).success;
+    kind(key) === "lawyer"
+      ? lawyerUploadAttemptSchema.safeParse(JSON.parse(value)).success
+      : kind(key) === "account"
+        ? nativeAccountDeletionRecordSchema.safeParse(JSON.parse(value)).success
+        : kind(key) === "upload"
+          ? uploadRecoveryRecordSchema.safeParse(JSON.parse(value)).success
+          : kind(key) === "request"
+            ? uuid.safeParse(value).success
+            : kind(key) === "job"
+              ? /^[A-Za-z0-9_.-]{1,128}$/.test(value)
+              : wire.safeParse(JSON.parse(value)).success;
   if (!valid) throw failed();
 }
 /** No clearing API: auth reset must not discard unresolved operations. One queue survives auth generations. */

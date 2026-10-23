@@ -10,17 +10,25 @@ export function DirectoryFilter({
   value,
   labels,
   onChange,
+  disabled = false,
+  emptyLabel = "전체",
 }: {
   label: string;
   value: string;
   labels: Record<string, string>;
   onChange(value: string): void;
+  disabled?: boolean;
+  emptyLabel?: string;
 }) {
   const [visible, setVisible] = useState(false);
   const close = () => setVisible(false);
   return (
     <>
-      <Button label={`${label}: ${labels[value] ?? "전체"}`} onPress={() => setVisible(true)} />
+      <Button
+        label={`${label}: ${labels[value] ?? emptyLabel}`}
+        disabled={disabled}
+        onPress={() => setVisible(true)}
+      />
       <Modal visible={visible} transparent animationType="fade" onRequestClose={close}>
         <View
           style={{
@@ -47,7 +55,7 @@ export function DirectoryFilter({
               keyboardShouldPersistTaps="handled"
               contentContainerStyle={{ gap: tokens.space.control }}
             >
-              {[["", "전체"], ...Object.entries(labels)].map(([key = "", title = ""]) => (
+              {[["", emptyLabel], ...Object.entries(labels)].map(([key = "", title = ""]) => (
                 <Choice
                   key={key}
                   label={`${label} ${title}`}
