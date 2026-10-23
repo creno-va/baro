@@ -1,0 +1,20 @@
+{
+  "kind": "local-simulator-ad-hoc-keychain",
+  "applicationId": "site.baro.app.preview",
+  "architectures": [
+    "x86_64",
+    "arm64"
+  ],
+  "entitlements": {
+    "application-identifier": "site.baro.app.preview",
+    "keychain-access-groups": [
+      "site.baro.app.preview"
+    ]
+  },
+  "executableBeforeSha256": "76fd1c14690aa72d35cf9bfa3243b8e244fc6eacd2aea9d2aab1290e25b1ab0e",
+  "executableAfterSha256": "7cf9036817e821bf084037d0dd6c95d5ae0d09bab934927986b015f30acb59b5",
+  "infoPlistSha256": "403c339a2d1f2f99202bf9f5b856e349669ae1abd3f86c395064a47a40e87916",
+  "everyArchitectureVerified": true,
+  "storeSigned": false,
+  "physicalDeviceVerified": false
+}

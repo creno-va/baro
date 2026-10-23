@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { mkdir, readdir, readFile, symlink, writeFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 import { resolve } from "node:path";
 import { z } from "zod";
 import {
@@ -11,6 +12,10 @@ import { RUNTIME_ORIGIN } from "../apps/mobile/runtime-probe/protocol";
 import { signSimulatorApp, simulatorIdentity } from "./mobile-ios-simulator-signing";
 import { verifyPreviewArtifact } from "./mobile-preview-artifact";
 import { metroNodeOptions, runtimeDevelopmentUrl } from "./mobile-runtime-host";
+
+const { iosFailureDomains } = createRequire(import.meta.url)("./mobile-runtime-ios-launch.cjs") as {
+  iosFailureDomains(detail: string): { domain: string; code: number }[];
+};
 
 export const iosHostBinarySchema = z.strictObject({
   version: z.literal(1),
@@ -144,6 +149,7 @@ async function main() {
     stage: string;
     exitCode: number;
     category: ReturnType<typeof iosHostCommandFailure>;
+    iosDomains: { domain: string; code: number }[];
   } | null = null;
   async function command(
     args: string[],
@@ -171,7 +177,12 @@ async function main() {
       ]);
       const exitCode = await child.exited;
       if (timedOut || exitCode !== 0) {
-        failedCommand = { stage, exitCode, category: iosHostCommandFailure(stderr, timedOut) };
+        failedCommand = {
+          stage,
+          exitCode,
+          category: iosHostCommandFailure(stderr, timedOut),
+          iosDomains: iosFailureDomains(stderr),
+        };
         throw new Error(`IOS_HOST_${stage}_FAILED`);
       }
       return result.trim();
@@ -320,6 +331,13 @@ async function main() {
       }).catch(() => {
         failedCommand = null;
       });
+      if (activePhase === "signed") {
+        phase = "signed-uninstall-baseline";
+        console.log("IOS_HOST_STAGE", phase);
+        await command(["xcrun", "simctl", "uninstall", device, "site.baro.app.preview"], {
+          stage: "APP_UNINSTALL",
+        });
+      }
       phase = `${activePhase}-install`;
       console.log("IOS_HOST_STAGE", phase);
       await command(["xcrun", "simctl", "install", device, app], { stage: "APP_INSTALL" });
