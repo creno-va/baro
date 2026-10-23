@@ -130,6 +130,12 @@ M5는 우선 사진·문서의 전체 흐름을 연결하고 기존 지원 음�
 
 ## 4. 검증과 릴리스
 
+M8 내부 전달은 기존 수동 native preview 빌드에서 APK/Simulator app ZIP과 실제 binary
+metadata/signature·전체 byte/hash receipt를 남긴다. 설치/Metro 연결은 [앱 안내](../../apps/mobile/README.md)의
+내부 preview 개발 앱 절차를 따른다. 앱 source와 패키징 시점 API health SHA 관측을 분리하고
+`runtime-smoke-required`로 유지한다. Simulator/개발 client를 물리 iPhone/standalone/store 앱으로
+표현하지 않으며 실제 물리 기기·원격 API/OAuth·#339/#71의 인수를 생략하지 않는다.
+
 공통 변경은 repository 기준의 `bun ci` → `bun run validate:quick`과 관련 실패 회귀를
 수행한다. 웹 bundle에 영향이 있으면 `validate:build`, schema 변경이 실제로 있을 때만
 기존 DB 담당과 `validate:db`를 수행한다. 전체 브라우저·처리기 native 검사를 모바일의
