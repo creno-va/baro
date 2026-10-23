@@ -10,11 +10,17 @@ import { fetch as expoFetch } from "expo/fetch";
 import { CryptoDigestAlgorithm, digestStringAsync, randomUUID } from "expo-crypto";
 import { createNativeTransport } from "../platform/auth/transport";
 import type { PrivateDownload } from "../platform/files/download";
+import { createNativeFileTransfer } from "../platform/files/native-transfer";
 import { checkReportResponse, createReportHttp } from "../platform/reports/http";
 import { getCaseOperationStorage } from "./cases";
 import { readMobileConfig } from "./config";
 import { getMobileCredentials } from "./credentials";
-import { createNativeFiles, getNativeDownloads, privateFilesReady } from "./files";
+import {
+  createNativeFiles,
+  getNativeDiskJobs,
+  getNativeDownloads,
+  privateFilesReady,
+} from "./files";
 
 export function createNativeReports(signal: AbortSignal, ownerId: string) {
   const { scope, credentials } = getMobileCredentials(),
@@ -25,10 +31,24 @@ export function createNativeReports(signal: AbortSignal, ownerId: string) {
     if (!scope.isCurrent(generation))
       throw new ApiError("UNAUTHENTICATED", "계정을 다시 확인해 주세요.");
   };
+  const config = readMobileConfig(),
+    frame = credentials.capture();
+  const download = createNativeFileTransfer({
+    origin: config.apiBaseUrl,
+    ownerId,
+    scope,
+    signal: combined,
+    frame,
+    jobs: getNativeDiskJobs,
+    ready: privateFilesReady,
+    cache: getNativeDownloads(),
+    maximum: V2_LIMITS.accountStorageBytes,
+    checkResponse: checkReportResponse,
+  });
   const transport = createNativeTransport({
-    config: readMobileConfig(),
+    config,
     credentials,
-    frame: credentials.capture(),
+    frame,
     fetch: (url, init) => expoFetch(url, init),
   });
   const request: WorkspaceTransport = async (path, init = {}) => {
@@ -54,30 +74,7 @@ export function createNativeReports(signal: AbortSignal, ownerId: string) {
       storage: getCaseOperationStorage(),
       fingerprint: (value) => digestStringAsync(CryptoDigestAlgorithm.SHA256, value),
     },
-    download: async (path, options) => {
-      await privateFilesReady();
-      ensure();
-      const response = await request(path, {
-        method: options.method ?? "GET",
-        headers: { ...options.headers, "content-type": "application/json" },
-        ...(options.body !== undefined ? { body: JSON.stringify(options.body) } : {}),
-        signal: options.signal,
-      });
-      await checkReportResponse(response);
-      ensure();
-      const artifact = await getNativeDownloads().receive(
-        response,
-        combined,
-        V2_LIMITS.accountStorageBytes,
-      );
-      try {
-        ensure();
-        return artifact;
-      } catch (error) {
-        await Promise.resolve(artifact.discard()).catch(() => {});
-        throw error;
-      }
-    },
+    download,
   });
   const listFiles = createFileMetadataReader(request);
   return {

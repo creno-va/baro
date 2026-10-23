@@ -186,10 +186,12 @@ revision·file ID·입력 hash만 필수 저장한다. token·manifest·파일 �
 불확실성/제외·위치를 구분한다. 한 관찰씩 원래 file/workspace revision으로 저장하며 서버의
 미완료 교정은 이어서 저장/남은 교정 중단으로 처리한다. 삭제는 DELETE 확인을 요구한다.
 
-원본은 `expo/fetch`의 redirect:error/credentials:omit과 기존 cookie writer를 거쳐 받는다.
-응답 body를 앱 전용 무작위 경로에256KiB 이하 write로 순차 기록하며 전체 binary의
-arrayBuffer/blob/base64 변환을 하지 않는다. 길이·실제 디스크 크기와 네트워크/디스크 재읽기의
-증분 SHA256을 대조해 같은 길이의 저장 손상도 공개 전에 거절한다.
+원본과 PDF/HTML/ZIP은 captured cookie frame·Origin/owner/epoch를 native disk lease에
+연결한다. 원본은 공통 client의 fetch 전 포트를 사용해 JS HTTP body/byte-event queue를
+만들지 않는다. native 파일을 앱 소유 무작위 경로로 이동한 뒤 고정 SDK의 별도 SHA256
+streaming API(read64KiB)와 실제 크기로 다시 검증한다. 파일 크기는 기존 기술 상한을
+유지하며 큰 binary의 arrayBuffer/blob/base64 변환이나 SDK-byte fallback을 사용하지 않는다.
+리포트 signature·HTML marker/최대30MB text 검증도 기존 공통 client에서 수행한다.
 파일 URI는 adapter 내부에만 두고 화면은 opaque handle로 명시적 File.preview/Expo Sharing을
 호출한다. 외부 앱에 전달한 복사본은 서버 삭제로 회수하지 못한다. 취소/이탈·startup·
 로그아웃/계정·역할·동의 변경에서 private cache를 정리하고 IO/presentation 완료를 기다린다.
@@ -198,7 +200,7 @@ background checking은 신원을 숨기고 fresh 같은 계정만 source를 복�
 root의 캐시 정리 실패는 파일 기능에서 재시도하고 공개 탐색/로그인을 막지 않는다.
 
 합성 Hono/SQL/AES·바이트/컴포넌트 검증과 실제 기기의 선택 권한·외부 앱·저장 공간·native
-SDK 메모리 검증은 구분한다. 리포트 편집/사진 선택/PDF·HTML·ZIP 화면은 M5 후속이다.
+SDK/IPC 메모리 검증은 구분한다. 리포트 편집/사진 선택/PDF·HTML·ZIP 연결은 아래를 따른다.
 
 ## 리포트 검토·다운로드
 
@@ -218,12 +220,13 @@ SDK 메모리 검증은 구분한다. 리포트 편집/사진 선택/PDF·HTML·
 private 경로/token은 화면이나 URL에 노출하지 않는다. 실제 공유·기기 메모리/권한과 API
 호환 배포는 fixture/Metro/컴파일과 별도로 #361/#334에서 인수한다.
 
-## 대용량 native 네트워크 IO producer
+## 대용량 native 네트워크 IO
 
 `modules/baro-private-download`는 네트워크 응답을 JS byte-event queue 대신 native private
-디스크로 받는 로컬 Expo 모듈이다. 원본/리포트 composition 소비는 두 OS native PR 검증과
-통합 뒤 별도 연결한다. 현재의 256KiB JS 디스크 쓰기만으로 SDK 네트워크 큐 메모리 상한을
-입증하지 않으며 지원 파일 크기를 줄여 대체하지 않는다.
+디스크로 받는 로컬 Expo 모듈이다. PR370의 exact 두 OS compile/main 통합과 공통 원본
+포트 PR374 뒤 composition에서 소비한다. 단순 JS write 상한으로 네트워크 큐 메모리를
+입증하지 않으며 지원 파일 크기를 줄여 대체하지 않는다. reset은 native 전송·파일 이동/검증
+종료 뒤 cache를 정리하며, 모듈이 없으면 startup orphan 정리 후 최신 개발 앱 설치를 안내한다.
 
 `bun run mobile:native:probe`는 macOS의 Swift 코어로 실제 local HTTP 100MB/1GB와 독립
 해시·RSS·취소·리다이렉트/쿠키 격리·gzip·오류/시작 정리를 검사한다. Android 코어 JUnit은

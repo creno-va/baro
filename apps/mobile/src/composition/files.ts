@@ -1,9 +1,4 @@
-import {
-  ApiError,
-  createFilesClient,
-  type ReportArtifact,
-  type WorkspaceTransport,
-} from "@baro/api-client";
+import { ApiError, createFilesClient, type WorkspaceTransport } from "@baro/api-client";
 import { EXPECTED_OWNER_HEADER } from "@baro/contracts/session";
 import { V2_LIMITS } from "@baro/contracts/v2";
 import { fetch as expoFetch } from "expo/fetch";
@@ -12,14 +7,33 @@ import { createNativeTransport } from "../platform/auth/transport";
 import { createExpoUploadSources } from "../platform/files/documents";
 import type { PrivateDownload } from "../platform/files/download";
 import { createExpoDownloads } from "../platform/files/expo-download";
+import { clearNativeTransferOrphans } from "../platform/files/native-cache";
+import { createNativeDiskJobs } from "../platform/files/native-jobs";
+import { readNativeDiskPort, requireNativeDiskPort } from "../platform/files/native-module";
+import { createNativeFileTransfer } from "../platform/files/native-transfer";
 import { getCaseOperationStorage } from "./cases";
 import { readMobileConfig } from "./config";
 import { getMobileCredentials } from "./credentials";
 
 let sources: ReturnType<typeof createExpoUploadSources> | undefined;
 let downloads: ReturnType<typeof createExpoDownloads> | undefined;
+let diskJobs: ReturnType<typeof createNativeDiskJobs> | undefined;
+export function getNativeDiskJobs() {
+  diskJobs ??= createNativeDiskJobs(requireNativeDiskPort());
+  return diskJobs;
+}
+async function clearNativeDownloads() {
+  if (!diskJobs) {
+    const port = readNativeDiskPort();
+    if (port) diskJobs = createNativeDiskJobs(port);
+  }
+  if (diskJobs) await diskJobs.clear();
+  else clearNativeTransferOrphans();
+  await getNativeDownloads().clear();
+}
 let pendingReset: Promise<void> = Promise.resolve();
-let resetFailed = false;
+let resetFailed = false,
+  resetStarted = false;
 export function getNativeDownloads() {
   if (!downloads)
     downloads = createExpoDownloads(
@@ -29,12 +43,13 @@ export function getNativeDownloads() {
   return downloads;
 }
 export function resetPrivateFiles() {
+  resetStarted = true;
   pendingReset = pendingReset
     .catch(() => {})
     .then(async () => {
       const results = await Promise.allSettled([
-        getNativeUploadSources().clear(),
-        getNativeDownloads().clear(),
+        Promise.resolve().then(() => getNativeUploadSources().clear()),
+        Promise.resolve().then(clearNativeDownloads),
       ]);
       resetFailed = results.some((result) => result.status === "rejected");
       if (resetFailed)
@@ -47,6 +62,7 @@ export function resetPrivateFiles() {
   return pendingReset;
 }
 export async function privateFilesReady() {
+  if (!resetStarted) await resetPrivateFiles();
   if (resetFailed) await resetPrivateFiles();
   let observed: Promise<void>;
   do {
@@ -78,10 +94,23 @@ export function createNativeFiles(
     if (!scope.isCurrent(generation))
       throw new ApiError("UNAUTHENTICATED", "계정을 다시 확인해 주세요.");
   };
+  const config = readMobileConfig(),
+    frame = credentials.capture();
+  const original = createNativeFileTransfer({
+    origin: config.apiBaseUrl,
+    ownerId,
+    scope,
+    signal: combined,
+    frame,
+    jobs: getNativeDiskJobs,
+    ready: privateFilesReady,
+    cache: getNativeDownloads(),
+    maximum: V2_LIMITS.mediaBytes,
+  });
   const transport = createNativeTransport({
-    config: readMobileConfig(),
+    config,
     credentials,
-    frame: credentials.capture(),
+    frame,
     fetch: (url, init) => expoFetch(url, init),
   });
   const request: WorkspaceTransport = async (path, init = {}) => {
@@ -111,16 +140,18 @@ export function createNativeFiles(
     openUpload: (source: import("../platform/files/documents").NativeUploadSource, abort) =>
       getNativeUploadSources().openUpload(source, abort),
     onUploadAcknowledged,
-    download: async (response, abort): Promise<PrivateDownload> => {
-      let artifact: ReportArtifact<PrivateDownload> | undefined;
+    downloadOriginal: async (path, abort) => {
+      const artifact = await original(path, { signal: abort });
       try {
-        artifact = await getNativeDownloads().receive(response, abort, V2_LIMITS.mediaBytes);
         ensure();
         return artifact.value;
       } catch (error) {
-        if (artifact) await Promise.resolve(artifact.discard()).catch(() => {});
+        await Promise.resolve(artifact.discard()).catch(() => {});
         throw error;
       }
+    },
+    download: async (): Promise<PrivateDownload> => {
+      throw new ApiError("UNAVAILABLE", "네이티브 파일 저장 경로를 확인해 주세요.", true);
     },
   });
   return client;

@@ -645,6 +645,8 @@ export function createFilesModel(dependencies: {
         }
         if (value.size !== file.sizeBytes)
           throw new ApiError("UNAVAILABLE", "서버 원본과 파일 크기가 달라 다시 확인해 주세요.");
+        if (file.uploadContentHash !== undefined && value.sha256 !== file.uploadContentHash)
+          throw new ApiError("UNAVAILABLE", "서버 원본과 파일 해시가 달라 다시 확인해 주세요.");
         publish({ ...state, download: { value, file }, busy: null });
         value = undefined;
       } catch (error) {

@@ -1,8 +1,8 @@
 # Private native disk transfer
 
-Producer for #361. This module is not yet consumed by the original/report composition; the
-consumer must be integrated only after the exact PR native compilation succeeds. Current
-Expo fetch byte-event downloads do not establish a bounded end-to-end JS network queue.
+Native disk transfer for #361. The original/report composition consumes it after producer
+PR370 exact iOS/Android compilation and shared original port PR374 were merged. Successful
+HTTP bytes do not enter an Expo fetch byte-event queue or a JS Response body.
 
 The Android core uses the app's pinned RN OkHttp with no cookie jar/authenticator, redirects,
 HTTP retry or disk cache. It copies/decompresses into an app-private file using 64KiB and
@@ -16,8 +16,8 @@ The package/bundle identifier fixes the permitted origin: `site.baro.app.preview
 preview.baro.site, `site.baro.app` only baro.site, and `site.baro.app.dev` only local/private
 network origins. Native validation also rejects userinfo, fragments, non-API paths, unsafe
 normalization and unexpected credential headers. The JS credential frame remains the only
-cookie writer: a future consumer must accept returned Set-Cookie only through its captured
-current frame, then discard that header before publishing any artifact metadata.
+cookie writer: the consumer accepts returned Set-Cookie only through its captured current
+frame, then discards that header before publishing artifact metadata.
 
 `reserve` registers synchronously before `download`; cancellation cannot overtake registration.
 `release` waits for native IO to end and unlinks the temporary file. A process-wide registry
@@ -28,8 +28,10 @@ is retryable. The module never clears unresolved server operation keys/holds.
 The bridge returns `fileId`, byte count, digest, MIME/HTTP metadata and the observed copy window.
 It returns neither URI nor binary/base64 data. Only bounded non-success JSON/text error metadata
 crosses the bridge. A consumer borrows the fixed `baro_native_transfers/<fileId>.bin` under the
-app cache, must move it to the owned private cache and bind the adopted handle to the lease
-signal before returning. The temporary path is released even on success. No caller filename
+app cache. It moves it to owned private cache, compares actual size and a separate pinned SDK
+native streaming SHA256 readback (64KiB), and binds the adopted handle to the lease signal.
+Reset waits for native transfer, asynchronous move and readback IO before unlink. Report
+signature/bounded HTML text checks remain separate validated reads from the private file. The temporary path is released even on success. No caller filename
 or server URL becomes a filesystem destination. No SDK-byte fallback or size reduction is
 allowed when this native module is unavailable.
 
