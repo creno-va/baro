@@ -1,11 +1,25 @@
 import { expect, test } from "bun:test";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { createRequire } from "node:module";
+import { tmpdir } from "node:os";
+import { dirname, resolve } from "node:path";
 import {
   androidCertificateDigest,
   runAndroidSignatureProbe,
 } from "../scripts/mobile-android-signature";
 import {
+  inspectEmbeddedAndroidBundle,
+  internalAndroidDevelopmentCertificate,
+  verifyInternalAndroidArtifact,
+} from "../scripts/mobile-internal-android-artifact";
+import {
+  internalAndroidEnvironment,
+  internalAndroidFailureCategory,
+} from "../scripts/mobile-internal-android-build";
+import {
   observePreviewApi,
   parseAndroidBadging,
+  parseAndroidPackage,
   previewArtifactSchema,
   simulatorSignature,
   verifyPreviewArtifact,
@@ -242,4 +256,137 @@ test("AOSP signature fixture bytes are pinned, licensed and limited to the separ
   expect(workflow).not.toContain("mobile:native");
   for (const line of workflow.split("\n").filter((line) => line.includes("uses:")))
     expect(line).toMatch(/@[a-f0-9]{40}/);
+});
+
+test("bundled internal receipts distinguish configuration, development identity and unverified runtime", () => {
+  const release = parseAndroidPackage(badging.replace("application-debuggable\n", ""));
+  expect(release.debuggable).toBe(false);
+  expect(() => parseAndroidBadging(badging.replace("application-debuggable\n", ""))).toThrow();
+  const value = {
+    ...candidate(),
+    ...release,
+    kind: "internal-bundled-preview-app",
+    nativeConfiguration: "Release",
+    launchableActivity: "site.baro.app.preview.MainActivity",
+    requiresMetro: false,
+    signing: { ...candidate().signing, certificateSha256: internalAndroidDevelopmentCertificate },
+    artifact: { ...candidate().artifact, name: `baro-internal-preview-android-${sourceSha}.apk` },
+    embeddedBundle: {
+      path: "assets/index.android.bundle",
+      format: "hermes-bytecode",
+      bytes: 100,
+      sha256: "b".repeat(64),
+      compiledBytesMatch: true,
+      productEntry: "expo-router/entry",
+      productSourceObserved: true,
+      probeSourceAbsent: true,
+      sourceMapPackaged: false,
+      sourceModules: 1,
+    },
+  };
+  expect(verifyInternalAndroidArtifact(value, sourceSha)).toMatchObject({
+    requiresMetro: false,
+    appRuntimeVerified: false,
+    storeSigned: false,
+  });
+  for (const mutation of [
+    { requiresMetro: true },
+    { debuggable: true },
+    { storeSigned: true },
+    { appRuntimeVerified: true },
+    { applicationId: "site.baro.app" },
+    { signing: { ...value.signing, certificateSha256: "1".repeat(64) } },
+  ])
+    expect(() => verifyInternalAndroidArtifact({ ...value, ...mutation }, sourceSha)).toThrow();
+  expect(() => verifyInternalAndroidArtifact(value, "c".repeat(40))).toThrow();
+});
+test("internal build rejects alternate entry/target and supplies only explicit nonsecret tool environment", () => {
+  const input = {
+    EXPO_PUBLIC_APP_ENV: "preview",
+    EXPO_PUBLIC_API_URL: "https://preview.baro.site",
+    PATH: "/synthetic/bin",
+    HOME: "/synthetic/home",
+    ANDROID_HOME: "/synthetic/sdk",
+    JAVA_HOME: "/synthetic/jdk",
+    GITHUB_TOKEN: "synthetic-private",
+    PRIVATE_KEY: "synthetic-private",
+    COOKIE: "synthetic-private",
+    EXPO_PUBLIC_NATIVE_PROBE_NONCE: "synthetic-private",
+    NODE_OPTIONS: "--require /private/synthetic",
+  };
+  const result = internalAndroidEnvironment(input);
+  expect(result).toMatchObject({
+    EXPO_PUBLIC_APP_ENV: "preview",
+    EXPO_PUBLIC_API_URL: "https://preview.baro.site",
+    ANDROID_HOME: "/synthetic/sdk",
+    JAVA_HOME: "/synthetic/jdk",
+    EXPO_NO_DOTENV: "1",
+  });
+  expect(JSON.stringify(result)).not.toContain("synthetic-private");
+  expect(result.NODE_OPTIONS).not.toContain("/private/synthetic");
+  for (const mutation of [
+    { EXPO_PUBLIC_APP_ENV: "production" },
+    { EXPO_PUBLIC_API_URL: "http://127.0.0.1:8765" },
+    { ENTRY_FILE: "runtime-probe/entry.tsx" },
+  ])
+    expect(() => internalAndroidEnvironment({ ...input, ...mutation })).toThrow();
+  expect(internalAndroidFailureCategory("Unable to resolve module synthetic-private", false)).toBe(
+    "METRO_MODULE_NOT_FOUND",
+  );
+  expect(internalAndroidFailureCategory("synthetic-private", true)).toBe("COMMAND_TIMEOUT");
+  expect(internalAndroidFailureCategory("synthetic-private", false)).toBe("UNKNOWN");
+});
+test("actual SDK-generated Hermes bytes must match the packaged copy and exclude alternate graph or maps", async () => {
+  const root = await mkdtemp(resolve(tmpdir(), "baro-internal-hbc-"));
+  try {
+    const require = createRequire(import.meta.url),
+      compilerRoot = dirname(
+        require.resolve("hermes-compiler/package.json", {
+          paths: [require.resolve("react-native/package.json")],
+        }),
+      );
+    const compiler = resolve(
+      compilerRoot,
+      "hermesc",
+      process.platform === "darwin" ? "osx-bin" : "linux64-bin",
+      "hermesc",
+    );
+    const input = resolve(root, "synthetic.js"),
+      output = resolve(root, "synthetic.hbc");
+    await writeFile(input, "globalThis.__baro_internal_fixture = true;\n");
+    const child = Bun.spawn([compiler, "-emit-binary", "-out", output, input], {
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    expect(await child.exited).toBe(0);
+    const bytes = await readFile(output),
+      map = { sources: ["src/app/index.tsx"] },
+      paths = ["assets/index.android.bundle"];
+    expect(inspectEmbeddedAndroidBundle(bytes, bytes, map, paths)).toMatchObject({
+      format: "hermes-bytecode",
+      compiledBytesMatch: true,
+      sourceMapPackaged: false,
+    });
+    const changed = Buffer.from(bytes);
+    changed[changed.length - 1] = (changed[changed.length - 1] ?? 0) ^ 1;
+    expect(() => inspectEmbeddedAndroidBundle(bytes, changed, map, paths)).toThrow(
+      "INTERNAL_ANDROID_BUNDLE_BYTES_MISMATCH",
+    );
+    expect(() =>
+      inspectEmbeddedAndroidBundle(
+        bytes,
+        bytes,
+        { sources: [...map.sources, "runtime-probe/entry.tsx"] },
+        paths,
+      ),
+    ).toThrow("INTERNAL_ANDROID_PRODUCT_GRAPH_REQUIRED");
+    expect(() =>
+      inspectEmbeddedAndroidBundle(bytes, bytes, map, [
+        ...paths,
+        "assets/index.android.bundle.map",
+      ]),
+    ).toThrow("INTERNAL_ANDROID_PRODUCT_GRAPH_REQUIRED");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });

@@ -77,3 +77,28 @@ test("missing weight declarations or substituted archived bytes cannot produce a
     await rm(f.root, { recursive: true, force: true });
   }
 });
+
+test("Release font verification cannot accidentally accept a valid neighboring Debug APK", async () => {
+  const f = await fixture();
+  try {
+    const debug = resolve(f.root, "apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk"),
+      release = resolve(
+        f.root,
+        "apps/mobile/android/app/build/outputs/apk/release/app-release.apk",
+      );
+    await mkdir(dirname(release), { recursive: true });
+    await f.archive(true);
+    await copyFile(debug, release);
+    await f.archive(false);
+    await expect(verifyCompiledMobileFont("android", f.root, "Release")).rejects.toThrow(
+      "COMPILED_FONT_BYTES_OR_LICENSE_CHANGED",
+    );
+    await copyFile(debug, release);
+    expect(await verifyCompiledMobileFont("android", f.root, "Release")).toMatchObject({
+      compiledBytesMatch: true,
+      appRuntimeVerified: false,
+    });
+  } finally {
+    await rm(f.root, { recursive: true, force: true });
+  }
+});
