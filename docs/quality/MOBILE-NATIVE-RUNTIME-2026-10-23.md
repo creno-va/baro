@@ -113,3 +113,10 @@ nativeResultObserved=false·RSS3표본과 두 HTTP proof를 담는다. probe 전
 코드와 그 시점의 부분 native transport는 보존되지 않아 소급 복구하거나 단일 원인으로 확정하지 않는다.
 HTTP 수신·Home 표시·native IO 완료를 각각 구분하며 다음 #385 작업은 이 고정 오류와 전환 단계를
 먼저 좁힌다. 실제 native IO/API/OAuth·physical/store와 #339/#71은 OPEN이다.
+
+probe 전환 보완은 첫 Home에만 SDK와 같은 직접 app-ID launch를 유지하고 probe 재시작은
+제한된 target URL로 바로 전달한다. 잠근 Expo controller 소스에는 직접 launch 때 직전 bundle을
+복원하는 분기가 있어 명시적 launch와 뒤따른 URL의 중복 조건을 없앤다. 이것을 이전 실패의
+실제 단일 원인으로 확정하지 않는다. 일반 제품 entry·native module·probe 코드는 바꾸지 않는다.
+실패 시 Node helper의 정확한 고정 code·허용 OS domain/범위 내 정수·timeout과 그 시점의
+합성 transport 수치만 보존한다. 원문 stderr·stack·argv/URL·cookie나 token은 내보내지 않는다.

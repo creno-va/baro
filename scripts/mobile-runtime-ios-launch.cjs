@@ -20,22 +20,23 @@ function sdk() {
   if (typeof api.openUrlAsync !== "function") throw new Error("RUNTIME_IOS_LAUNCH_API_REQUIRED");
   return api;
 }
+const iosLaunchFailureCodes = [
+  "RUNTIME_OWNED_IOS_DEVICE_REQUIRED",
+  "RUNTIME_IOS_LAUNCH_SDK_CHANGED",
+  "RUNTIME_IOS_LAUNCH_API_REQUIRED",
+  "RUNTIME_IOS_LAUNCH_ARGUMENTS_REQUIRED",
+  "RUNTIME_IOS_LOCAL_DEVELOPMENT_URL_REQUIRED",
+  "RUNTIME_IOS_SCHEME_APPROVAL_NOT_CONFIRMED",
+  "RUNTIME_IOS_DEVICE_INVENTORY_FAILED",
+  "RUNTIME_IOS_OPEN_URL_FAILED",
+  "RUNTIME_IOS_SCHEME_APPROVAL_READ_FAILED",
+  "RUNTIME_IOS_APPLICATION_SIGNATURE_REJECTED",
+  "RUNTIME_IOS_APPLICATION_LAUNCH_DENIED",
+  "RUNTIME_IOS_LAUNCH_FAILED",
+];
 function iosLaunchFailureCode(error) {
   const message = error instanceof Error ? error.message : "";
-  if (
-    new Set([
-      "RUNTIME_OWNED_IOS_DEVICE_REQUIRED",
-      "RUNTIME_IOS_LAUNCH_SDK_CHANGED",
-      "RUNTIME_IOS_LAUNCH_API_REQUIRED",
-      "RUNTIME_IOS_LAUNCH_ARGUMENTS_REQUIRED",
-      "RUNTIME_IOS_LOCAL_DEVELOPMENT_URL_REQUIRED",
-      "RUNTIME_IOS_SCHEME_APPROVAL_NOT_CONFIRMED",
-      "RUNTIME_IOS_DEVICE_INVENTORY_FAILED",
-      "RUNTIME_IOS_OPEN_URL_FAILED",
-      "RUNTIME_IOS_SCHEME_APPROVAL_READ_FAILED",
-    ]).has(message)
-  )
-    return message;
+  if (iosLaunchFailureCodes.includes(message)) return message;
   const stderr = error && typeof error.stderr === "string" ? error.stderr : "";
   const detail = `${message}\n${stderr}`;
   if (
@@ -144,6 +145,7 @@ async function main() {
     throw new Error("RUNTIME_IOS_SCHEME_APPROVAL_NOT_CONFIRMED");
 }
 module.exports = {
+  iosLaunchFailureCodes,
   validateOwnedIosDevice,
   iosLaunchFailureCode,
   iosFailureDomains,
