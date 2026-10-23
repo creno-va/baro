@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "kind": "pinned-xcode-simulator-metadata-only",
+  "toolingSourceSha": "238624b0862f48e949eae552337918368200a5be",
+  "binarySourceSha": "7294145021bf39a8de3dc61cb7e1fe36dfbddd85",
+  "input": {
+    "version": 1,
+    "sourceSha": "7294145021bf39a8de3dc61cb7e1fe36dfbddd85",
+    "workflowRunId": "39959879946",
+    "artifactId": "12504912688",
+    "artifactName": "mobile-ios-xcode-control-7294145021bf39a8de3dc61cb7e1fe36dfbddd85",
+    "inspectionSha256": "1fb4f7bc84e9a47f3b826def43ca5cd4820b9db139b5e64679a03e123fc26c92"
+  },
+  "observedAt": "2026-10-23T14:42:16.734Z",
+  "originalInspectionAccepted": false,
+  "nativeInputParityVerified": true,
+  "compiledAppBytesUnchanged": true,
+  "hostSignatureAndSimulatedSectionsVerified": true,
+  "recompiled": false,
+  "resigned": false,
+  "sdkReadinessVerified": false,
+  "physicalDeviceVerified": false,
+  "storeSigned": false,
+  "deployed": false
+}

@@ -47,8 +47,14 @@ export async function createOwnedAndroidAvd(
     throw new Error("RUNTIME_AVD_DISCOVERY_FAILED");
   return paths;
 }
-export function runtimeDevelopmentUrl() {
-  const url = new URL("baro-dev://expo-development-client/");
+export function runtimeDevelopmentUrl(profile: "dev" | "preview" = "dev") {
+  if (profile !== "dev" && profile !== "preview")
+    throw new Error("RUNTIME_DEVELOPMENT_PROFILE_REQUIRED");
+  const url = new URL(
+    profile === "preview"
+      ? "baro-preview://expo-development-client/"
+      : "baro-dev://expo-development-client/",
+  );
   url.searchParams.set("url", "http://127.0.0.1:8081");
   for (const flag of [
     "__expo_disable_fab",

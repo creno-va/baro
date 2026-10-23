@@ -9,6 +9,20 @@ import {
 import { repeatedDigest } from "./mobile-runtime-fixture";
 
 const hash = z.string().regex(/^[a-f0-9]{64}$/);
+export const pinnedRuntimeBinarySchema = z.strictObject({
+  kind: z.literal("pinned-xcode-simulator-control"),
+  applicationId: z.literal("site.baro.app.preview"),
+  binarySourceSha: z.string().regex(/^[a-f0-9]{40}$/),
+  toolingSourceSha: z.string().regex(/^[a-f0-9]{40}$/),
+  compilerRunId: z.string().regex(/^\d+$/),
+  archiveSha256: hash,
+  infoPlistSha256: hash,
+  executableSha256: hash,
+  nativeInputsMatch: z.literal(true),
+  simulatorRightsVerified: z.literal(true),
+  recompiled: z.literal(false),
+  resigned: z.literal(false),
+});
 export const runtimeReceiptSchema = z.strictObject({
   version: z.literal(1),
   kind: z.literal("local-development-runtime"),
@@ -16,7 +30,8 @@ export const runtimeReceiptSchema = z.strictObject({
   platform: z.enum(["android", "ios"]),
   environment: z.literal("local"),
   apiOrigin: z.literal(RUNTIME_ORIGIN),
-  applicationId: z.literal("site.baro.app.dev"),
+  applicationId: z.enum(["site.baro.app.dev", "site.baro.app.preview"]),
+  nativeBinary: pinnedRuntimeBinarySchema.optional(),
   device: z.strictObject({
     kind: z.enum(["emulator", "simulator"]),
     model: z.string().min(1).max(160),
@@ -89,6 +104,7 @@ export function verifyRuntimeReceipt(
     receipt.result.download.sha256 !== repeatedDigest(DOWNLOAD_BYTES)
   )
     throw new Error("RUNTIME_RECEIPT_IDENTITY_OR_TRANSPORT_MISMATCH");
+  verifyRuntimeBinaryIdentity(receipt, sourceSha, platform);
   return receipt;
 }
 
@@ -97,7 +113,8 @@ export const runtimeHomeReceiptSchema = z.strictObject({
   kind: z.literal("instrumented-home-only"),
   sourceSha: z.string().regex(/^[a-f0-9]{40}$/),
   platform: z.enum(["android", "ios"]),
-  applicationId: z.literal("site.baro.app.dev"),
+  applicationId: z.enum(["site.baro.app.dev", "site.baro.app.preview"]),
+  nativeBinary: pinnedRuntimeBinarySchema.optional(),
   device: runtimeReceiptSchema.shape.device,
   productEntry: runtimeReceiptSchema.shape.productEntry,
   assets: runtimeReceiptSchema.shape.assets,
@@ -123,5 +140,24 @@ export function verifyRuntimeHomeReceipt(
     result.productEntry.screenshot !== `product-home-${platform}.png`
   )
     throw new Error("RUNTIME_HOME_RECEIPT_IDENTITY_MISMATCH");
+  verifyRuntimeBinaryIdentity(result, sourceSha, platform);
   return result;
+}
+function verifyRuntimeBinaryIdentity(
+  value: {
+    applicationId: string;
+    nativeBinary?: z.infer<typeof pinnedRuntimeBinarySchema> | undefined;
+  },
+  sourceSha: string,
+  platform: "android" | "ios",
+) {
+  if (value.nativeBinary) {
+    if (
+      platform !== "ios" ||
+      value.applicationId !== value.nativeBinary.applicationId ||
+      value.nativeBinary.toolingSourceSha !== sourceSha
+    )
+      throw new Error("RUNTIME_PINNED_BINARY_IDENTITY_MISMATCH");
+  } else if (value.applicationId !== "site.baro.app.dev")
+    throw new Error("RUNTIME_PINNED_BINARY_PROOF_REQUIRED");
 }

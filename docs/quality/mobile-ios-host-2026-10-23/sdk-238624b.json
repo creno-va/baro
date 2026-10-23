@@ -1,0 +1,118 @@
+{
+  "version": 1,
+  "kind": "xcode-simulator-sdk-control",
+  "toolingSourceSha": "238624b0862f48e949eae552337918368200a5be",
+  "binarySourceSha": "7294145021bf39a8de3dc61cb7e1fe36dfbddd85",
+  "binaryArtifact": {
+    "kind": "verified-xcode-control-preview",
+    "sourceSha": "7294145021bf39a8de3dc61cb7e1fe36dfbddd85",
+    "toolingSourceSha": "238624b0862f48e949eae552337918368200a5be",
+    "zipName": "baro-preview-ios-simulator-7294145021bf39a8de3dc61cb7e1fe36dfbddd85.zip",
+    "zipBytes": 51300173,
+    "zipSha256": "875a9fe17395126d30213eea50a1b45de94e5cface0803500f6874cc2933318b",
+    "receiptSha256": "8129edfc28ad4cc0f4615cb96ca1431e31bcea7f3fb9d32426baf705358e8fb4",
+    "control": {
+      "version": 2,
+      "kind": "xcode-simulator-signing-control",
+      "sourceSha": "7294145021bf39a8de3dc61cb7e1fe36dfbddd85",
+      "toolingSourceSha": "238624b0862f48e949eae552337918368200a5be",
+      "observedAt": "2026-10-23T14:42:09.133Z",
+      "applicationId": "site.baro.app.preview",
+      "signature": "ad-hoc",
+      "teamIdentifier": "not set",
+      "architectures": [
+        "x86_64",
+        "arm64"
+      ],
+      "entitlements": {
+        "keychain-access-groups": [
+          "FAKETEAMID.site.baro.app.preview"
+        ],
+        "application-identifier": "FAKETEAMID.site.baro.app.preview"
+      },
+      "entitlementsSource": "simulator-macho-xml-and-der",
+      "signatureEntitlements": {},
+      "sectionHashes": [
+        {
+          "architecture": "x86_64",
+          "xmlSha256": "52b17581e78eaec7d4aea51bd44998e18b5b9a977c59d2c3eaee057c64be26f4",
+          "derSha256": "cb57c846ebff2330edb1bee67b09dd2c5d1323d026791e5ef4dacd73e4ec93af"
+        },
+        {
+          "architecture": "arm64",
+          "xmlSha256": "52b17581e78eaec7d4aea51bd44998e18b5b9a977c59d2c3eaee057c64be26f4",
+          "derSha256": "cb57c846ebff2330edb1bee67b09dd2c5d1323d026791e5ef4dacd73e4ec93af"
+        }
+      ],
+      "executableSha256": "1e2090fd007a1af925751cc3bea13fbc03ea922c09a779785e557949db6e2a89",
+      "infoPlistSha256": "403c339a2d1f2f99202bf9f5b856e349669ae1abd3f86c395064a47a40e87916",
+      "appRuntimeVerified": false,
+      "physicalDeviceVerified": false,
+      "storeSigned": false,
+      "deployed": false
+    }
+  },
+  "compilerInput": {
+    "version": 1,
+    "sourceSha": "7294145021bf39a8de3dc61cb7e1fe36dfbddd85",
+    "workflowRunId": "39959879946",
+    "artifactId": "12504912688",
+    "artifactName": "mobile-ios-xcode-control-7294145021bf39a8de3dc61cb7e1fe36dfbddd85",
+    "inspectionSha256": "1fb4f7bc84e9a47f3b826def43ca5cd4820b9db139b5e64679a03e123fc26c92"
+  },
+  "device": {
+    "model": "iPhone 16",
+    "osVersion": "26.5"
+  },
+  "baseline": {
+    "version": 1,
+    "kind": "simulator-sdk-readiness",
+    "sourceSha": "238624b0862f48e949eae552337918368200a5be",
+    "phase": "baseline",
+    "operations": [
+      {
+        "stage": "native-clear",
+        "ok": true
+      },
+      {
+        "stage": "source-clear",
+        "ok": true
+      },
+      {
+        "stage": "download-cache-clear",
+        "ok": true
+      },
+      {
+        "stage": "credential-reset",
+        "ok": true
+      },
+      {
+        "stage": "credential-store-readback",
+        "ok": true
+      },
+      {
+        "stage": "recovery-key-write-readback",
+        "ok": true
+      },
+      {
+        "stage": "secure-store-direct-readback",
+        "ok": true
+      },
+      {
+        "stage": "cleanup",
+        "ok": true
+      }
+    ],
+    "allSucceeded": true,
+    "externalFetchAttempts": 0
+  },
+  "simulatorSdkReady": true,
+  "entitlementRootCauseProven": false,
+  "fullNativeIoVerified": false,
+  "productJourneysVerified": false,
+  "remoteApiVerified": false,
+  "oauthVerified": false,
+  "physicalDeviceVerified": false,
+  "storeSigned": false,
+  "deployed": false
+}

@@ -176,6 +176,9 @@ test("manual native launch URL carries Expo's noninteractive controls and surviv
   });
   expect(await new Response(child.stdout).text()).toBe(value);
   expect(await child.exited).toBe(0);
+  const preview = new URL(runtimeDevelopmentUrl("preview"));
+  expect(preview.protocol).toBe("baro-preview:");
+  expect(preview.searchParams.toString()).toBe(parsed.searchParams.toString());
 });
 test("AVD manager and emulator share explicitly owned home locations", () => {
   const paths = ownedAndroidPaths("/synthetic/baro-runtime");
@@ -473,6 +476,92 @@ test("receipt rejects wrong source/platform, missing IO/cleanup and expanded acc
       "ios",
     ),
   ).toThrow();
+});
+test("reused Simulator runtime receipts bind the tooling source and require explicit unchanged-binary evidence", () => {
+  const full = candidate();
+  const nativeBinary = {
+    kind: "pinned-xcode-simulator-control",
+    applicationId: "site.baro.app.preview",
+    binarySourceSha: "b".repeat(40),
+    toolingSourceSha: config.sourceSha,
+    compilerRunId: "123456789",
+    archiveSha256: "c".repeat(64),
+    infoPlistSha256: "d".repeat(64),
+    executableSha256: "e".repeat(64),
+    nativeInputsMatch: true,
+    simulatorRightsVerified: true,
+    recompiled: false,
+    resigned: false,
+  } as const;
+  const preview = { ...full, applicationId: "site.baro.app.preview", nativeBinary };
+  expect(verifyRuntimeReceipt(preview, config.sourceSha, "ios").nativeBinary?.binarySourceSha).toBe(
+    "b".repeat(40),
+  );
+  const home = {
+    version: 1,
+    kind: "instrumented-home-only",
+    sourceSha: full.sourceSha,
+    platform: full.platform,
+    applicationId: preview.applicationId,
+    nativeBinary,
+    device: full.device,
+    productEntry: full.productEntry,
+    assets: full.assets,
+    nativeIoVerified: false,
+    productJourneysVerified: false,
+    accessibilityVerified: false,
+    remoteApiVerified: false,
+    oauthVerified: false,
+    physicalDeviceVerified: false,
+    storeSigned: false,
+    deployed: false,
+  };
+  expect(verifyRuntimeHomeReceipt(home, config.sourceSha, "ios").nativeBinary).toEqual(
+    nativeBinary,
+  );
+  for (const value of [preview, home]) {
+    const verify =
+      value.kind === "instrumented-home-only" ? verifyRuntimeHomeReceipt : verifyRuntimeReceipt;
+    expect(() => verify({ ...value, nativeBinary: undefined }, config.sourceSha, "ios")).toThrow(
+      "RUNTIME_PINNED_BINARY_PROOF_REQUIRED",
+    );
+    expect(() =>
+      verify({ ...value, applicationId: "site.baro.app.dev" }, config.sourceSha, "ios"),
+    ).toThrow("RUNTIME_PINNED_BINARY_IDENTITY_MISMATCH");
+    expect(() =>
+      verify(
+        { ...value, nativeBinary: { ...nativeBinary, toolingSourceSha: "f".repeat(40) } },
+        config.sourceSha,
+        "ios",
+      ),
+    ).toThrow("RUNTIME_PINNED_BINARY_IDENTITY_MISMATCH");
+    for (const field of [
+      "nativeInputsMatch",
+      "simulatorRightsVerified",
+      "recompiled",
+      "resigned",
+    ] as const)
+      expect(() =>
+        verify(
+          { ...value, nativeBinary: { ...nativeBinary, [field]: !nativeBinary[field] } },
+          config.sourceSha,
+          "ios",
+        ),
+      ).toThrow();
+  }
+  expect(() =>
+    verifyRuntimeReceipt(
+      {
+        ...preview,
+        platform: "android",
+        device: { ...full.device, kind: "emulator" },
+        productEntry: { ...full.productEntry, screenshot: "product-home-android.png" },
+        result: { ...full.result, platform: "android" },
+      },
+      config.sourceSha,
+      "android",
+    ),
+  ).toThrow("RUNTIME_PINNED_BINARY_IDENTITY_MISMATCH");
 });
 test("manual workflow preserves product entry and only uploads scoped receipts and synthetic screenshots", async () => {
   const manifest = await Bun.file("apps/mobile/package.json").json();

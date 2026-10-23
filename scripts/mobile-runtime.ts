@@ -16,6 +16,7 @@ import {
   quoteAdbShellArgument,
   runtimeDevelopmentUrl,
 } from "./mobile-runtime-host";
+import { extractPinnedIosRuntime, preparePinnedIosRuntime } from "./mobile-runtime-ios-binary";
 import { verifyRuntimeHomeReceipt, verifyRuntimeReceipt } from "./mobile-runtime-receipt";
 
 const sha256 = (text: string) => createHash("sha256").update(text).digest("hex");
@@ -45,6 +46,10 @@ async function main() {
     sourceSha = process.env.TARGET_SHA;
   if ((platform !== "android" && platform !== "ios") || !/^[a-f0-9]{40}$/.test(sourceSha ?? ""))
     throw new Error("RUNTIME_PLATFORM_AND_IMMUTABLE_SHA_REQUIRED");
+  const pinnedIos = process.argv[3] === "--pinned-xcode-control";
+  if (process.argv.length !== (pinnedIos ? 4 : 3) || (pinnedIos && platform !== "ios"))
+    throw new Error("RUNTIME_VERIFICATION_MODE_REQUIRED");
+  const applicationId = pinnedIos ? "site.baro.app.preview" : "site.baro.app.dev";
   const root = process.cwd(),
     out = resolve(root, ".wrangler/mobile-runtime"),
     nonce = randomUUID();
@@ -60,6 +65,7 @@ async function main() {
     EXPO_PUBLIC_API_URL: RUNTIME_ORIGIN,
     EXPO_PUBLIC_NATIVE_PROBE_SOURCE_SHA: sourceSha,
     EXPO_PUBLIC_NATIVE_PROBE_NONCE: nonce,
+    EXPO_METRO_CACHE_OUTPUT_DIR: resolve(out, `metro-cache-${platform}-${nonce}`),
     ...(platform === "android" ? ownedAndroidPaths(out).environment : {}),
   };
   const children = new Set<ReturnType<typeof Bun.spawn>>();
@@ -187,14 +193,14 @@ async function main() {
           "shell",
           "dumpsys",
           "meminfo",
-          "site.baro.app.dev",
+          applicationId,
         ]);
         kb = Number(mem.match(/TOTAL RSS:\s*(\d+)/)?.[1] ?? 0);
       } else {
         const rows = await command(["xcrun", "simctl", "spawn", device, "launchctl", "list"]);
         const row = rows
           .split("\n")
-          .find((line) => line.includes("UIKitApplication:site.baro.app.dev["));
+          .find((line) => line.includes(`UIKitApplication:${applicationId}[`));
         const pid = row?.trim().split(/\s+/)[0];
         if (pid && /^\d+$/.test(pid)) kb = Number(await command(["ps", "-o", "rss=", "-p", pid]));
       }
@@ -207,9 +213,9 @@ async function main() {
     }
   }
   async function openApp() {
-    const url = runtimeDevelopmentUrl();
+    const url = runtimeDevelopmentUrl(pinnedIos ? "preview" : "dev");
     if (platform === "android") {
-      await command([adb, "-s", device, "shell", "am", "force-stop", "site.baro.app.dev"]);
+      await command([adb, "-s", device, "shell", "am", "force-stop", applicationId]);
       await command([
         adb,
         "-s",
@@ -222,10 +228,10 @@ async function main() {
         "android.intent.action.VIEW",
         "-d",
         quoteAdbShellArgument(url),
-        "site.baro.app.dev",
+        applicationId,
       ]);
     } else {
-      await command(["xcrun", "simctl", "terminate", device, "site.baro.app.dev"]).catch(() => {});
+      await command(["xcrun", "simctl", "terminate", device, applicationId]).catch(() => {});
       await command([
         "node",
         resolve(work, "scripts/mobile-runtime-ios-launch.cjs"),
@@ -250,6 +256,8 @@ async function main() {
     await command(["git", "merge-base", "--is-ancestor", sourceSha as string, "origin/main"], {
       cwd: root,
     });
+    phase = "native-binary-source";
+    const pinned = pinnedIos ? await preparePinnedIosRuntime(root, sourceSha as string) : null;
     await command(["git", "worktree", "add", "--detach", work, sourceSha as string], { cwd: root });
     ownedCheckout = true;
     await symlink(resolve(root, "node_modules"), resolve(work, "node_modules"), "dir");
@@ -257,6 +265,8 @@ async function main() {
     const metroSource = `const {getDefaultConfig}=require("expo/metro-config");
 const config=getDefaultConfig(__dirname);
 config.watchFolders=[${JSON.stringify(root)}];
+config.cacheVersion=${JSON.stringify(`baro-runtime-${platform}-${sourceSha}-${nonce}`)};
+config.fileMapCacheDirectory=${JSON.stringify(resolve(out, `metro-file-map-${platform}-${nonce}`))};
 config.resolver.extraNodeModules={${["contracts", "api-client", "client-core", "design-tokens"].map((name) => `${JSON.stringify(`@baro/${name}`)}:${JSON.stringify(resolve(work, name === "contracts" ? "src/contracts" : `packages/${name}`))}`).join(",")}};
 module.exports=config;\n`;
     await writeFile(resolve(mobile, "metro.config.cjs"), metroSource);
@@ -272,12 +282,20 @@ module.exports=config;\n`;
       );
       console.log("Runtime android: owned AVD path/discovery verified before compile");
     }
-    console.log(`Runtime ${platform}: compile isolated local development app`);
-    phase = "compile";
-    await command(["bun", "scripts/mobile-native-build.ts", platform, "--runtime-local"], {
-      timeout: 1800000,
-      compile: true,
-    });
+    if (pinned) {
+      phase = "verify-pinned-compiled-app";
+      await extractPinnedIosRuntime(work, pinned, command);
+      console.log(
+        "Runtime ios: original compiler binary reverified without recompilation or resigning",
+      );
+    } else {
+      console.log(`Runtime ${platform}: compile isolated local development app`);
+      phase = "compile";
+      await command(["bun", "scripts/mobile-native-build.ts", platform, "--runtime-local"], {
+        timeout: 1800000,
+        compile: true,
+      });
+    }
     let osVersion = "",
       deviceModel = "";
     phase = "owned-device";
@@ -383,7 +401,8 @@ module.exports=config;\n`;
         kind: "instrumented-home-only",
         sourceSha,
         platform,
-        applicationId: "site.baro.app.dev",
+        applicationId,
+        ...(pinned ? { nativeBinary: pinned.evidence } : {}),
         device: {
           kind: platform === "android" ? "emulator" : "simulator",
           model: deviceModel,
@@ -440,7 +459,8 @@ module.exports=config;\n`;
       platform,
       environment: "local",
       apiOrigin: RUNTIME_ORIGIN,
-      applicationId: "site.baro.app.dev",
+      applicationId,
+      ...(pinned ? { nativeBinary: pinned.evidence } : {}),
       device: {
         kind: platform === "android" ? "emulator" : "simulator",
         model: deviceModel,
