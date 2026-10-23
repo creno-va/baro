@@ -11,6 +11,7 @@ import {
   observeAndroidAuthCancellation,
   verifyAndroidAuthCancelReceipt,
 } from "../scripts/mobile-android-auth-cancel";
+import { chromeTestCommandLineSha256 } from "../scripts/mobile-android-chrome-fixture";
 import { androidHomeObservationOptions } from "../scripts/mobile-android-guide-ui";
 
 const xml = (...parts: string[]) => `<?xml version="1.0"?><hierarchy>${parts.join("")}</hierarchy>`;
@@ -199,6 +200,22 @@ test("auth mode is isolated and strict receipts bind original artifact and every
     observedAt: "2026-10-24T00:00:00.000Z",
     applicationId: "site.baro.app.preview",
     browserPackage: "com.android.chrome",
+    browserFixture: {
+      kind: "owned-emulator-preinstalled-chrome-test-fixture",
+      buildType: "userdebug",
+      chromeVersion: "130.0.6723.58",
+      switches: ["--disable-fre"],
+      commandLineSha256: chromeTestCommandLineSha256,
+      commandLineReadbackVerified: true,
+      commandLineRemovedVerified: true,
+      consumerFirstRunVerified: false,
+      consentUiUsed: false,
+      accountsConfigured: false,
+      rootAdbUsed: false,
+      debugAppSettingsChanged: false,
+      tlsChecksChanged: false,
+      webSecurityChanged: false,
+    },
     providers: ["google", "naver", "kakao"].map((provider) => ({
       provider,
       initialAnonymousObserved: true,

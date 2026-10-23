@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "kind": "bundled-android-home-only",
+  "toolingSourceSha": "9dbb2eeec9e78ffed6e3030e30ce5bfeccfac92f",
+  "binarySourceSha": "171989e8cf8fd48119d20f58a45f2dca7dd45e64",
+  "observedAt": "2026-10-23T22:50:04.311Z",
+  "applicationId": "site.baro.app.preview",
+  "binary": {
+    "name": "baro-internal-preview-android-171989e8cf8fd48119d20f58a45f2dca7dd45e64.apk",
+    "bytes": 57133550,
+    "sha256": "cd93c333e98f9f371c013197210a9a6ebc041f94bea9b5b56cc38da6ad9ffb42"
+  },
+  "verificationSha256": "6d3f21a2c3a7e5f1ff2d712df09c6e5bd1bb3f49a6087e9c9e9bf4df3fd81f86",
+  "device": {
+    "kind": "owned-emulator",
+    "model": "sdk_gphone64_x86_64",
+    "osVersion": "15"
+  },
+  "emulatorBootVerified": true,
+  "sdkHomeLaunchVerified": true,
+  "homeObservations": [
+    {
+      "coldLaunch": 1,
+      "titleVisible": true,
+      "firstCardVisible": true,
+      "foundationErrorVisible": false
+    },
+    {
+      "coldLaunch": 2,
+      "titleVisible": true,
+      "firstCardVisible": true,
+      "foundationErrorVisible": false
+    }
+  ],
+  "metroServerStarted": false,
+  "metroRequests": 0,
+  "adbReverseConfigured": false,
+  "screenshot": {
+    "name": "home.png",
+    "bytes": 168933,
+    "sha256": "c42726f471535430fc70d80d059158ad0e396636755679935981e1225c319267"
+  },
+  "fullNativeIoVerified": false,
+  "productJourneysVerified": false,
+  "remoteApiVerified": false,
+  "oauthVerified": false,
+  "physicalDeviceVerified": false,
+  "storeSigned": false,
+  "deployed": false
+}

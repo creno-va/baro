@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "kind": "ios-bundled-cold-launch-observation",
+  "binarySourceSha": "171989e8cf8fd48119d20f58a45f2dca7dd45e64",
+  "toolingSourceSha": "9dbb2eeec9e78ffed6e3030e30ce5bfeccfac92f",
+  "observedAt": "2026-10-23T22:52:13.980Z",
+  "applicationId": "site.baro.app.preview",
+  "nativeConfiguration": "Release",
+  "requiresMetro": false,
+  "archiveSha256": "f8e218df820cdaa2c222b10474124b7265b73c4de43a146a3459181cd4fde356",
+  "compilerReceiptSha256": "77d157201a02eda89372ef3ef850895a2478f14047ea2024b7877db3ac62bcce",
+  "device": {
+    "kind": "simulator",
+    "model": "iPhone 16",
+    "osVersion": "26.5"
+  },
+  "coldLaunches": [
+    {
+      "ordinal": 1,
+      "elapsedSeconds": 19,
+      "samePidReadbackSamples": 3
+    },
+    {
+      "ordinal": 2,
+      "elapsedSeconds": 50,
+      "samePidReadbackSamples": 3
+    }
+  ],
+  "nativeProcessLaunchVerified": true,
+  "distinctColdLaunchPids": true,
+  "wholeIntervalContinuityProven": false,
+  "metroStarted": false,
+  "metroGuardRequests": 0,
+  "anonymousFreshInstall": true,
+  "publicDataNavigation": false,
+  "screenshot": {
+    "name": "home-ios.png",
+    "bytes": 220837,
+    "sha256": "9677524b3bccafc20b7c4a58cffe064d86364f7b80f8c507494649d36670d74a"
+  },
+  "homeContentVerified": false,
+  "visualReviewRequired": true,
+  "productJourneysVerified": false,
+  "accessibilityVerified": false,
+  "httpTransportSeparatelyObserved": false,
+  "remoteApiVerified": false,
+  "oauthVerified": false,
+  "physicalDeviceVerified": false,
+  "storeSigned": false,
+  "deployed": false
+}

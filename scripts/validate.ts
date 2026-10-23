@@ -40,6 +40,7 @@ export function validationCommands(profile: string, root = process.cwd()): Comma
       "tests/mobile-ios-auth-cancel.test.ts",
       "tests/mobile-ios-device-sdk.test.ts",
       "tests/mobile-android-auth-cancel.test.ts",
+      "tests/mobile-android-chrome-fixture.test.ts",
     ],
   ];
   const build = [

@@ -1,0 +1,43 @@
+{
+  "toolingSourceSha": "9dbb2eeec9e78ffed6e3030e30ce5bfeccfac92f",
+  "phase": "auth-cancel-browser",
+  "code": "ANDROID_AUTH_BROWSER_REQUIRED",
+  "emulatorBootVerified": true,
+  "lastHomeObservation": {
+    "titleVisible": true,
+    "firstCardVisible": true,
+    "foundationErrorVisible": false
+  },
+  "lastPublicObservation": null,
+  "lastGuideObservation": null,
+  "lastAuthObservation": {
+    "provider": "google",
+    "stage": "browser",
+    "app": {
+      "anonymousGatePresent": false,
+      "authorizingPresent": false,
+      "errorPresent": false,
+      "consentPresent": false,
+      "authenticatedPresent": false
+    },
+    "activity": {
+      "appForeground": false,
+      "chromeCustomTabForeground": false,
+      "chromeFirstRunForeground": true,
+      "foregroundAmbiguous": false
+    },
+    "browser": {
+      "webViewGeometryVerified": false,
+      "uniqueNativeCloseControl": false,
+      "closeControlOutsideEveryWebView": false
+    }
+  },
+  "receiptValidationFields": [],
+  "publicScreenshotsSuppressed": true,
+  "emulatorStartupIssues": [],
+  "sdkHomeLaunchVerified": true,
+  "largeFontVerified": false,
+  "physicalDeviceVerified": false,
+  "storeSigned": false,
+  "deployed": false
+}

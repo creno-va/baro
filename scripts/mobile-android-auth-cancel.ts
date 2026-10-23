@@ -1,5 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import {
+  androidChromeFixtureSchema,
+  knownAndroidChromeFixtureFailure,
+} from "./mobile-android-chrome-fixture";
 import { androidGuideUiReceiptSchema } from "./mobile-android-guide-ui";
 
 const appId = "site.baro.app.preview";
@@ -197,6 +201,7 @@ export const androidAuthCancelReceiptSchema = identitySchema.extend({
   observedAt: z.iso.datetime(),
   applicationId: z.literal(appId),
   browserPackage: z.literal("com.android.chrome"),
+  browserFixture: androidChromeFixtureSchema,
   providers: z
     .array(providerResult)
     .length(3)
@@ -268,6 +273,8 @@ export const androidAuthDiagnosticSchema = z.strictObject({
 });
 export type AndroidAuthDiagnostic = z.infer<typeof androidAuthDiagnosticSchema>;
 export function androidAuthFailureCode(error: unknown) {
+  const chromeFailure = knownAndroidChromeFixtureFailure(error);
+  if (chromeFailure) return chromeFailure;
   const code = error instanceof Error ? error.message : "";
   return new Set([
     "ANDROID_AUTH_CAPTURE_FORBIDDEN",
