@@ -75,3 +75,25 @@ Home-only/full native IO·원격 OAuth·physical/store의 인수 경계는 그�
 2026-10-23T10:04:46.569Z에 실제 preview f912441의 공개 directory GET1회/200과 현재 공유
 response schema를 통과했다. 반환 프로필 원문·식별자는 저장하지 않았다. Node/Bun의
 읽기 전용 검사이며 실제 native SDK/인증 여정/OAuth/물리 기기 성공이 아니다.
+
+## 보존된 baseline SDK 결과와 signed-launch 실패
+
+PR396/main `15b97d302f4667dc61d9023cc6b5da839ccdb985`의 main CI39938363992는 SUCCESS,
+[SDK host39938658226](https://github.com/creno-va/baro/actions/runs/39938658226)는 terminal FAILURE다.
+수신 즉시 저장한 [baseline](./mobile-ios-host-2026-10-23/baseline-15b97d3.json)에서 실제
+native/source/download-cache clear3개는 성공, credential reset/store·recovery·cleanup은
+UNKNOWN 실패, 직접 SecureStore는 KEYCHAIN_ENTITLEMENT_MISSING 실패다. 외부 fetch 시도는0이다.
+wrapper가 감춘 UNKNOWN을 직접 SDK 오류와 같다고 단정하지 않는다.
+
+[signing readback](./mobile-ios-host-2026-10-23/signing-15b97d3.json)은 같은 원본 executable과
+Info.plist hash, x86_64/arm64의 최소 own-app entitlement·ad-hoc 검증을 보존한다.
+실제 signed 설치는 완료됐으나 [실패 receipt](./mobile-ios-host-2026-10-23/failure-15b97d3.json)의
+signed-launch/APP_LAUNCH exit1 LAUNCH_FAILED로 종료돼 signed SDK report는 없다.
+이 결과를 서명 보완 성공이나 full runtime 성공으로 해석하지 않는다.
+
+후속 검사는 소유 Simulator에서 합성 baseline 앱만 uninstall한 뒤 signed 사본을 새로
+설치한다. 덮어쓰기 이후의 launch와 first-install 조건을 구분하며 signing 원인은 미확정으로
+유지한다. 같은 원본 binary/native 입력/nonce·JS와 최소 entitlement를 보존한다.
+실패 시 공개할 OS 진단은 알려진 NSError domain8종·범위 내 정수 code 최대4개만 허용하고
+중복·알 수 없는 domain·범위 밖 숫자·원문 stderr/argv/stack/SQL·private 값을 내보내지 않는다.
+일반 앱 build/sign 설정과 실제 사용자/물리 기기·원격 API는 바꾸지 않는다.

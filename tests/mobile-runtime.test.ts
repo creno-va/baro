@@ -52,11 +52,12 @@ const config: RuntimeConfig = {
   origin: RUNTIME_ORIGIN,
 };
 const fixture = createRuntimeFixture(config);
-const { validateOwnedIosDevice, iosLaunchFailureCode } = createRequire(import.meta.url)(
-  "../scripts/mobile-runtime-ios-launch.cjs",
-) as {
+const { validateOwnedIosDevice, iosLaunchFailureCode, iosFailureDomains } = createRequire(
+  import.meta.url,
+)("../scripts/mobile-runtime-ios-launch.cjs") as {
   validateOwnedIosDevice(inventory: unknown, udid: string, name: string): void;
   iosLaunchFailureCode(error: unknown): string;
+  iosFailureDomains(detail: string): { domain: string; code: number }[];
 };
 test("iOS launch preparation accepts only the created booted UUID/name pair", () => {
   const udid = "15a64c18-fd51-4f83-8205-4c917a245e6b",
@@ -548,6 +549,14 @@ test("host command failure categories cannot expose stderr, paths, signing data 
   expect(iosLaunchFailureCode(new Error("SYNTHETIC_PRIVATE_CAPS"))).toBe(
     "RUNTIME_IOS_LAUNCH_FAILED",
   );
+  const domains = iosFailureDomains(
+    `Error Domain=NSOSStatusErrorDomain Code=-10814 "${secret}" UserInfo={NSPOSIXErrorDomain Code=5}\nIOS_RUNTIME_FAILURE_DOMAIN NSOSStatusErrorDomain -10814\nUnknownPrivateDomain Code=42\nNSCocoaErrorDomain Code=999999999999999999`,
+  );
+  expect(domains).toEqual([
+    { domain: "NSOSStatusErrorDomain", code: -10814 },
+    { domain: "NSPOSIXErrorDomain", code: 5 },
+  ]);
+  expect(JSON.stringify(domains)).not.toContain(secret);
 });
 test("a Home-only receipt preserves exact identity and cannot claim later native IO success", async () => {
   const full = await Bun.file("docs/quality/mobile-runtime-2026-10-23/receipt-android.json").json();

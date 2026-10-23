@@ -45,6 +45,31 @@ function iosLaunchFailureCode(error) {
     return "RUNTIME_IOS_APPLICATION_LAUNCH_DENIED";
   return "RUNTIME_IOS_LAUNCH_FAILED";
 }
+function iosFailureDomains(detail) {
+  const names = [
+    "NSOSStatusErrorDomain",
+    "NSPOSIXErrorDomain",
+    "FBSOpenApplicationServiceErrorDomain",
+    "RBSRequestErrorDomain",
+    "LSApplicationWorkspaceErrorDomain",
+    "MIInstallerErrorDomain",
+    "IXUserPresentableErrorDomain",
+    "NSCocoaErrorDomain",
+  ];
+  const expression = new RegExp(
+    `\\b(${names.join("|")})\\b\\s+(?:Code\\s*[=:]\\s*)?(-?\\d{1,10})(?!\\d)`,
+    "g",
+  );
+  const result = [];
+  for (const match of detail.matchAll(expression)) {
+    const code = Number(match[2]);
+    if (!Number.isInteger(code) || code < -2147483648 || code > 4294967295) continue;
+    if (!result.some((item) => item.domain === match[1] && item.code === code))
+      result.push({ domain: match[1], code });
+    if (result.length === 4) break;
+  }
+  return result;
+}
 async function main() {
   const [mode, udid, name, rawUrl] = process.argv.slice(2);
   const api = sdk();
@@ -90,9 +115,12 @@ async function main() {
   )
     throw new Error("RUNTIME_IOS_SCHEME_APPROVAL_NOT_CONFIRMED");
 }
-module.exports = { validateOwnedIosDevice, iosLaunchFailureCode };
+module.exports = { validateOwnedIosDevice, iosLaunchFailureCode, iosFailureDomains };
 if (require.main === module)
   main().catch((error) => {
     console.error(iosLaunchFailureCode(error));
+    const detail = `${error instanceof Error ? error.message : ""}\n${error && typeof error.stderr === "string" ? error.stderr : ""}`;
+    for (const { domain, code } of iosFailureDomains(detail))
+      console.error(`IOS_RUNTIME_FAILURE_DOMAIN ${domain} ${code}`);
     process.exitCode = 1;
   });
