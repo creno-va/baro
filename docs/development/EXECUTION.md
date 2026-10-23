@@ -33,8 +33,9 @@ M1 앱 기반·공통 계약 공유를 #330에서 인수했다. 후속 사용자
 
 | 작업 | 담당/이슈 | 현재 상태·blocker | 다음 행동 |
 | --- | --- | --- | --- |
-| 모바일 전체 구현·M5 native network IO | 모바일 담당 / #334·#361 | PR368 main `1b6eb4f`·CI39865521739 및 native39865864799 두 OS 성공/receipt 확인. `codex/361-native-network-io`의 native disk producer, macOS1GB/RSS 약19MB·JVM128MiB 코어·범위/취소/쿠키/정리 검증 통과 | producer PR의 두 OS compile/CI/main 뒤 원본·리포트 cache 소비 연결. M6 공개 탐색 PR371·판례 PR372 통합; 실제 앱/API·기기/M7/M8·#339·#71은 유지 |
+| 모바일 전체 구현·M5 native network IO | 모바일 담당 / #334·#361 | PR370 head `82691d7`·CI39875105534·native39875105580 두 OS compile/core probe 및 receipt 확인, main `c324842` 통합. Swift13개·JVM128MiB100MB/1GB 코어와 JS lease 통과 | 원본·리포트 cache 소비 연결. 실제 앱 IPC/기기 메모리·API/공급자/M7/M8·#339·#71은 유지 |
 | 모바일 M6 공개 탐색·판례 | 모바일 담당 / #334·#369 | PR371 main `a7e4bad`·CI39873595704, PR372 main `045b0bc`·head `54d8e59`·CI39874823751 성공 통합. 공개 주제1~2·context/search/signed read·공식 링크와 범위/실패 상태, Hono/SQL·owner/취소 회귀·quick275/RN53/server56·build/두 OS Metro 통과 | M5 producer와 독립 통합. 본인 프로필·usage/계정 삭제·실제 기기/M7/M8 잔여 |
+| 모바일 M6 계정 계약 | 모바일 담당 / #334·#369 | `codex/369-native-account-contract`: 기기 intent/readback·새 owner/재인증·미확정/ACK/후처리 분리, canonical usage. 합성 및 실제 signed Hono/SQL에서 삭제 후 ACK 유실/peer cookie 거절 검증 | quick/build·두 OS Metro·exact PR CI/main 뒤 RN usage/설정·삭제 소비. M5 producer PR370은 독립 통합; 실제 기기/M7/M8 잔여 |
 | DB·HTTP 왕복 축소 | 성능 조율 / #317 | 선행 UI·법률·모델·첨부·리포트 PR을 main c2258b88에 통합, 필수 PR/main CI 성공. 별도 codex/317-db-roundtrips에서 합성 호출 수 재측정 | commit revision 기반 행동·타임라인 선택 재조회, 중복 domain 읽기와 단일 공개 목록 lead sample 제거. fresh auth/삭제/CAS/멱등성 및 관측 전용 비용 정책 보존. 회귀·quick/build/DB 검증 후 PR, 실제 원격 성능·배포는 #71 별도 |
 | 사진 근거·PDF 리포트 | AI/자료, #312 | 2026-10-21 직접 요청, codex/312-photo-evidence-pdf. #307 첨부 UI·#304 법률 범위 분리, migration 없음 | 상해/진단서 관찰·확인 지침, 선택 사진·출처와 HTML→PDF, PDF만 저장. quick/build·브라우저·native 조판 CI 후 별도 PR 병합; 외부 모델/배포 인수 별도 |
 | Gemini 모델·질문 하네스 | AI / #305 | 2026-10-21 사용자 승인, 별도 codex/305-gemini-flash-pipeline worktree. #304 법률 API와 PR303 UI 범위 분리 | ADR-0016·고정 평가·quick/build·CI 검증 후 별도 PR 병합. 실제 모델·배포 인수는 별도 receipt |
