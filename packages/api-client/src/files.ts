@@ -286,6 +286,8 @@ export function createFilesClient<Source extends UploadMetadata, Download>(depen
   newKey: () => string;
   openUpload: (source: Source, signal: AbortSignal) => Promise<UploadReader>;
   download: (response: Response, signal: AbortSignal) => Promise<Download>;
+  /** Native HTTP-to-disk must begin before a JS fetch body exists. The port owns authority, bytes and abort retirement. */
+  downloadOriginal?: (path: string, signal: AbortSignal) => Promise<Download>;
   recovery?: UploadRecovery;
   onUploadAcknowledged?: (fileId: string) => void;
 }) {
@@ -925,9 +927,12 @@ export function createFilesClient<Source extends UploadMetadata, Download>(depen
       return next;
     },
     async original(id: string, fileId: string) {
-      const response = await workspaceResponse(
-        await request(`${base(id)}/files/${encodeURIComponent(fileId)}/content`),
-      );
+      const path = `${base(id)}/files/${encodeURIComponent(fileId)}/content`;
+      if (dependencies.downloadOriginal) {
+        ensureCurrent();
+        return dependencies.downloadOriginal(path, signal);
+      }
+      const response = await workspaceResponse(await request(path));
       ensureCurrent();
       return dependencies.download(response, signal);
     },

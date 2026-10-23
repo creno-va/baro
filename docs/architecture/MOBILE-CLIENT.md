@@ -421,6 +421,9 @@ JS bridge는 URI/bytes 대신 opaque fileId·size/SHA·HTTP metadata만 받는�
 넘어 기존 작업을 보존하고 module별 소유 작업만 폐기한다. startup/reset clear는 이전 IO가
 끝난 뒤 인지한 orphan만 지운다. 미해결 서버 operation/hold와 credential 저장소는 건드리지 않는다.
 
+원본 client의 선택형 `downloadOriginal(path, signal)` 포트는 JS fetch를 시작하기 전에
+native HTTP-to-disk로 전달한다. 생략한 웹 경로는 기존 GET/응답 adapter 계약을 유지한다.
+포트는 자체 서버 권한·bytes 검증과 abort retirement를 소유하며 기존 scope fence도 보존한다.
 소비자는 captured credential frame/owner/generation으로 응답 cookie를 처리하고, 빌린 native
 파일을 owned cache로 이동·독립 readback 검증·abort retirement에 연결한 뒤 반환해야 한다.
 기존 원본/리포트 소비 경로 교체는 producer의 exact-head 두 OS compile/main 통합 후 진행한다.
