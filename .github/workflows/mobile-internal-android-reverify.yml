@@ -29,6 +29,12 @@ on:
         default: false
         type: boolean
 
+      auth_cancel:
+        description: Existing provider Custom Tab cancellation only; no account input; excludes other UI modes
+        required: false
+        default: false
+        type: boolean
+
 permissions:
   contents: read
   actions: read
@@ -53,6 +59,9 @@ jobs:
         run: exit 1
       - name: Require isolated large-font Home for Guide UI
         if: inputs.guide_ui && (!inputs.smoke || !inputs.large_font || inputs.public_directory)
+        run: exit 1
+      - name: Require isolated anonymous auth cancellation
+        if: inputs.auth_cancel && (!inputs.smoke || inputs.large_font || inputs.public_directory || inputs.guide_ui)
         run: exit 1
       - run: '[[ "$TARGET_SHA" =~ ^[a-f0-9]{40}$ ]]'
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -103,7 +112,10 @@ jobs:
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platform-tools' 'emulator' 'system-images;android-35;google_apis;x86_64'
       - name: Observe actual bundled Home without Metro
         if: inputs.smoke
-        run: bun scripts/mobile-internal-android-home.ts ${{ inputs.large_font && '--large-font' || '' }} ${{ inputs.public_directory && '--public-directory' || '' }} ${{ inputs.guide_ui && '--guide-ui' || '' }}
+        run: bun scripts/mobile-internal-android-home.ts ${{ inputs.large_font && '--large-font' || '' }} ${{ inputs.public_directory && '--public-directory' || '' }} ${{ inputs.guide_ui && '--guide-ui' || '' }} ${{ inputs.auth_cancel && '--auth-cancel' || '' }}
+      - name: Require the explicitly requested auth cancellation observation
+        if: inputs.auth_cancel
+        run: test -s .wrangler/mobile-internal-android-runtime/auth-cancel-ui.json
       - name: Require the explicitly requested enlarged-font observation
         if: inputs.large_font
         run: |
@@ -139,6 +151,7 @@ jobs:
             .wrangler/mobile-internal-android-runtime/large-font.png
             .wrangler/mobile-internal-android-runtime/public-directory.json
             .wrangler/mobile-internal-android-runtime/guide-ui.json
+            .wrangler/mobile-internal-android-runtime/auth-cancel-ui.json
           if-no-files-found: ignore
       - name: Preserve fixed failure classification
         if: failure()

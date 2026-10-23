@@ -3,6 +3,14 @@ import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { z } from "zod";
 import {
+  type AndroidAuthDiagnostic,
+  type androidAuthCancelReceiptSchema,
+  androidAuthenticationPrivacyBoundary,
+  androidAuthFailureCode,
+  observeAndroidAuthCancellation,
+  verifyAndroidAuthCancelReceipt,
+} from "./mobile-android-auth-cancel";
+import {
   type androidGuideUiReceiptSchema,
   androidGuideUiValidationFields,
   androidHomeObservationOptions,
@@ -55,7 +63,7 @@ export function bundledAndroidHomeObservation(xml: string) {
   };
 }
 async function main() {
-  const { largeFont, publicDirectory, guideUi } = androidHomeObservationOptions(
+  const { largeFont, publicDirectory, guideUi, authCancel } = androidHomeObservationOptions(
     process.argv.slice(2),
   );
   const root = process.cwd(),
@@ -69,7 +77,13 @@ async function main() {
     sdk = env.ANDROID_HOME ?? env.ANDROID_SDK_ROOT;
   if (!sdk || process.env.GITHUB_ACTIONS !== "true")
     throw new Error("BUNDLED_HOME_FRESH_CI_SDK_REQUIRED");
-  for (const name of ["receipt.json", "failure.json", "home.png", "guide-ui.json"])
+  for (const name of [
+    "receipt.json",
+    "failure.json",
+    "home.png",
+    "guide-ui.json",
+    "auth-cancel-ui.json",
+  ])
     if (await Bun.file(resolve(out, name)).exists())
       throw new Error("BUNDLED_HOME_FRESH_OUTPUT_REQUIRED");
   await mkdir(out, { recursive: true });
@@ -87,9 +101,12 @@ async function main() {
     baseHomeVerified = false,
     receiptValidationFields: string[] = [],
     lastGuideObservation: ReturnType<typeof anonymousGuideUiObservation> | null = null,
+    lastAuthObservation: AndroidAuthDiagnostic | null = null,
     lastPublicObservation: ReturnType<typeof publicDirectoryUiObservation> | null = null,
     lastHomeObservation: ReturnType<typeof bundledAndroidHomeObservation> | null = null;
+  const authPrivacy = androidAuthenticationPrivacyBoundary();
   async function bytes(args: string[], input?: string) {
+    authPrivacy.assertCommandAllowed(args);
     const child = Bun.spawn(args, {
         cwd: root,
         env: childEnv,
@@ -436,6 +453,72 @@ async function main() {
       });
       console.log("ACTUAL_ANDROID_LARGE_FONT_HOME_GUIDE_UI_OBSERVED");
     }
+    if (authCancel) {
+      // Irreversible before any session/auth UI, including every failure path.
+      capture.disable();
+      authPrivacy.enterAuthentication();
+      phase = "auth-cancel-boundary";
+      const screenshotsSuppressedBeforeNavigation = !capture.allowed;
+      if (!screenshotsSuppressedBeforeNavigation || !authPrivacy.entered)
+        throw Error("ANDROID_AUTH_BOUNDARY_REQUIRED");
+      const results = await observeAndroidAuthCancellation({
+        shell,
+        width: screenshot.readUInt32BE(16),
+        height: screenshot.readUInt32BE(20),
+        boundaryEntered: authPrivacy.entered,
+        screenshotsSuppressed: screenshotsSuppressedBeforeNavigation,
+        diagnostic(value) {
+          lastAuthObservation = value;
+          phase = `auth-cancel-${value.stage}`;
+        },
+      });
+      if (metroRequests) throw Error("BUNDLED_HOME_UNEXPECTED_METRO_REQUEST");
+      phase = "auth-cancel-proof";
+      const baselineBytes = await readFile(resolve(out, "receipt.json")),
+        baseline = JSON.parse(baselineBytes.toString()),
+        identity = {
+          toolingSourceSha: sourceSha,
+          binarySourceSha: receipt.sourceSha,
+          binary: receipt.artifact,
+          verificationSha256: hash(verificationBytes),
+          baselineReceiptSha256: hash(baselineBytes),
+          device: baseline.device,
+        };
+      const proof = verifyAndroidAuthCancelReceipt(
+        {
+          ...identity,
+          version: 1,
+          kind: "android-anonymous-custom-tab-cancellation",
+          observedAt: new Date().toISOString(),
+          applicationId: appId,
+          browserPackage: "com.android.chrome",
+          providers: results,
+          coldAnonymousReturnObserved: true,
+          explicitScreenshotsSuppressedBeforeNavigation: screenshotsSuppressedBeforeNavigation,
+          adbCommandOutputPersisted: false,
+          rawHierarchyExported: false,
+          rawLogcatRead: false,
+          accountLoginPerformed: false,
+          credentialsEntered: false,
+          callbackExchangeVerified: false,
+          providerAcceptanceVerified: false,
+          privateDataAccess: false,
+          publicDataNavigation: false,
+          authenticationNavigation: true,
+          metroRequests: 0,
+          physicalDeviceVerified: false,
+          remoteApiVerified: false,
+          oauthVerified: false,
+          storeSigned: false,
+          deployed: false,
+        } satisfies z.input<typeof androidAuthCancelReceiptSchema>,
+        identity,
+      );
+      await writeFile(resolve(out, "auth-cancel-ui.json"), `${JSON.stringify(proof, null, 2)}\n`, {
+        flag: "wx",
+      });
+      console.log("ACTUAL_ANDROID_ANONYMOUS_CUSTOM_TAB_CANCELLATION_OBSERVED");
+    }
     if (publicDirectory) {
       // No screenshots may be taken after this point, including every failure path.
       capture.disable();
@@ -585,7 +668,7 @@ async function main() {
     }
     await writeFile(
       resolve(out, "failure.json"),
-      `${JSON.stringify({ toolingSourceSha: sourceSha, phase, code: known.has(message) ? message : "BUNDLED_HOME_FAILED", emulatorBootVerified: bootCompleted, lastHomeObservation, lastPublicObservation, lastGuideObservation, receiptValidationFields, publicScreenshotsSuppressed: !capture.allowed, emulatorStartupIssues: emulatorStartupIssues(await readFile(log, "utf8").catch(() => "")), sdkHomeLaunchVerified: baseHomeVerified, largeFontVerified: false, physicalDeviceVerified: false, storeSigned: false, deployed: false }, null, 2)}\n`,
+      `${JSON.stringify({ toolingSourceSha: sourceSha, phase, code: phase.startsWith("auth-cancel") ? androidAuthFailureCode(error) : known.has(message) ? message : "BUNDLED_HOME_FAILED", emulatorBootVerified: bootCompleted, lastHomeObservation, lastPublicObservation, lastGuideObservation, lastAuthObservation, receiptValidationFields, publicScreenshotsSuppressed: !capture.allowed, emulatorStartupIssues: emulatorStartupIssues(await readFile(log, "utf8").catch(() => "")), sdkHomeLaunchVerified: baseHomeVerified, largeFontVerified: false, physicalDeviceVerified: false, storeSigned: false, deployed: false }, null, 2)}\n`,
       { flag: "wx" },
     );
     throw new Error("BUNDLED_HOME_FAILED");
