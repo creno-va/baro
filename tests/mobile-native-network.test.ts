@@ -5,6 +5,7 @@ import {
   type NativeDiskPort,
   type NativeDiskRequest,
   type NativeDiskResult,
+  type NativeDiskUploadRequest,
 } from "../apps/mobile/src/platform/files/native-jobs";
 
 const request: NativeDiskRequest = {
@@ -60,6 +61,7 @@ function fixture() {
   };
   return {
     jobs: createNativeDiskJobs(native),
+    native,
     valid,
     reserved,
     canceled,
@@ -73,6 +75,113 @@ function fixture() {
     },
   };
 }
+
+const uploadRequest = (): NativeDiskUploadRequest => ({
+  url: "https://preview.baro.site/api/v2/me/lawyer/assets/asset_a/content",
+  origin: "https://preview.baro.site",
+  method: "PUT",
+  maximum: 65536,
+  headers: {
+    origin: "https://preview.baro.site",
+    "content-type": "application/octet-stream",
+    "if-match": "7",
+  },
+  sourceName: "59d91bc4-f715-4205-bc78-60995cb26de4",
+  byteLength: 100_000_000,
+  contentHash: "a".repeat(64),
+});
+test("native upload leases only source metadata and bounded JSON response; caller mutation cannot replace captured input", async () => {
+  const f = fixture(),
+    calls: NativeDiskUploadRequest[] = [];
+  f.download(async () => {
+    throw new Error("DOWNLOAD_MUST_NOT_FALL_BACK");
+  });
+  f.native.upload = async (id, input) => {
+    calls.push(input);
+    return { ...f.valid(id), size: 108, headers: { "content-type": "application/json" } };
+  };
+  const input = uploadRequest(),
+    original = structuredClone(input);
+  const task = f.jobs.runUpload(input, new AbortController().signal, async (value) => value.size);
+  input.sourceName = crypto.randomUUID();
+  input.byteLength = 1;
+  input.headers["if-match"] = "99";
+  expect(await task).toBe(108);
+  expect(f.jobs.supportsUpload).toBe(true);
+  expect(calls).toEqual([original]);
+  expect(f.released).toEqual(f.reserved);
+  expect(JSON.stringify(calls)).not.toContain("file://");
+});
+test("older native apps fail upload before reservation and never fall back to a JS/body download", async () => {
+  const f = fixture();
+  expect(f.jobs.supportsUpload).toBe(false);
+  await expect(
+    f.jobs.runUpload(uploadRequest(), new AbortController().signal, async () => "unused"),
+  ).rejects.toMatchObject({
+    code: "UNAVAILABLE",
+    message: expect.stringContaining("최신 개발 앱"),
+  });
+  expect(f.reserved).toEqual([]);
+});
+test("native upload validates the exact asset endpoint, UUID source, existing 100MB limit and expected hash before registration", async () => {
+  const f = fixture();
+  f.native.upload = async () => {
+    throw new Error("MUST_NOT_DISPATCH");
+  };
+  const original = uploadRequest();
+  for (const patch of [
+    { url: "https://preview.baro.site/api/other" },
+    { url: `${original.url}?foreign=1` },
+    { sourceName: "../outside" },
+    { sourceName: original.sourceName.toUpperCase() },
+    { byteLength: 100_000_001 },
+    { byteLength: 0 },
+    { contentHash: "not-a-hash" },
+  ])
+    await expect(
+      f.jobs.runUpload(
+        { ...original, ...patch },
+        new AbortController().signal,
+        async () => "unused",
+      ),
+    ).rejects.toBeInstanceOf(ApiError);
+  expect(f.reserved).toEqual([]);
+});
+test("reset cancels upload and waits for actual native completion before release and clear", async () => {
+  const f = fixture(),
+    gate = deferred<unknown>();
+  let consumed = false;
+  f.native.upload = async () => gate.promise;
+  const task = f.jobs.runUpload(uploadRequest(), new AbortController().signal, async () => {
+    consumed = true;
+    return "unused";
+  });
+  void task.catch(() => {});
+  await tick();
+  const clear = f.jobs.clear();
+  await tick();
+  expect(f.canceled).toEqual(f.reserved);
+  expect(f.clears()).toBe(0);
+  expect(f.released).toEqual([]);
+  gate.resolve({ ...f.valid(f.reserved[0] ?? "missing"), size: 108 });
+  await expect(task).rejects.toBeInstanceOf(ApiError);
+  await clear;
+  expect(consumed).toBe(false);
+  expect(f.released).toEqual(f.reserved);
+  expect(f.clears()).toBe(1);
+});
+test("successful upload response cannot exceed native JSON metadata limit before consumption", async () => {
+  const f = fixture();
+  let consumed = false;
+  f.native.upload = async (id) => ({ ...f.valid(id), size: 65537 });
+  await expect(
+    f.jobs.runUpload(uploadRequest(), new AbortController().signal, async () => {
+      consumed = true;
+    }),
+  ).rejects.toBeInstanceOf(ApiError);
+  expect(consumed).toBe(false);
+  expect(f.released).toEqual(f.reserved);
+});
 test("native transfers lease only bounded metadata and always release their opaque file after adoption", async () => {
   const f = fixture();
   const value = await f.jobs.run(request, new AbortController().signal, async (result, context) => {

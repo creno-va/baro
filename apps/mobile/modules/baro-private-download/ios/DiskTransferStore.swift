@@ -1,5 +1,6 @@
 import Foundation
 import CryptoKit
+import Darwin
 
 let nativeCopyBytes = 65_536
 private let errorBytes = 65_536
@@ -11,7 +12,9 @@ struct DiskTransferInput {
   let headers: [String: String]
   let body: String?
   let maximum: Int64
+  var upload: DiskUploadSource? = nil
 }
+struct DiskUploadSource { let sourceName: String; let byteLength: Int64; let contentHash: String }
 struct DiskTransferResult {
   let status: Int
   let headers: [String: String]
@@ -22,17 +25,22 @@ struct DiskTransferResult {
   let maxCopyBytes: Int
   func wire(fileId: String) -> [String: Any] { ["status": status, "headers": headers, "size": Double(size), "sha256": sha256, "fileId": uri.isEmpty ? "" : fileId, "body": body, "maxCopyBytes": maxCopyBytes] }
 }
-private let allowedRequestHeaders: Set<String> = ["cookie", "origin", "x-baro-expected-owner", "idempotency-key", "content-type", "accept"]
+private let allowedRequestHeaders: Set<String> = ["cookie", "origin", "x-baro-expected-owner", "idempotency-key", "content-type", "accept", "if-match"]
 private let allowedResponseHeaders: Set<String> = ["content-type", "content-length", "content-disposition", "content-encoding", "set-cookie", "etag"]
 
 /** Foreground URLSession download writes to an OS file, never to a JS byte queue. */
 final class DiskTransferStore: @unchecked Sendable {
   private let root: URL
   private let expectedOrigin: String?
+  private let uploadRoot: URL
   private let lock = NSLock()
   private var jobs: [String: DiskTransferJob] = [:]
   private var clearing = false
-  init(cacheRoot: URL, expectedOrigin: String? = nil) { root = cacheRoot.appendingPathComponent("baro_native_transfers", isDirectory: true); self.expectedOrigin = expectedOrigin }
+  init(cacheRoot: URL, expectedOrigin: String? = nil) {
+    root = cacheRoot.appendingPathComponent("baro_native_transfers", isDirectory: true); self.expectedOrigin = expectedOrigin
+    let environment = expectedOrigin == "https://baro.site" ? "production" : expectedOrigin == "https://preview.baro.site" ? "preview" : "local"
+    uploadRoot = cacheRoot.resolvingSymlinksInPath().appendingPathComponent("baro_\(environment)_private_uploads", isDirectory: true)
+  }
   private func verifyRoot(create: Bool) throws {
     if !FileManager.default.fileExists(atPath: root.path) {
       if !create { return }
@@ -50,8 +58,8 @@ final class DiskTransferStore: @unchecked Sendable {
     try verifyRoot(create: true)
     let id = UUID().uuidString.lowercased()
     let file = root.appendingPathComponent(id + ".bin")
-    guard !FileManager.default.fileExists(atPath: file.path) else { throw PrivateTransferFailure() }
-    jobs[id] = DiskTransferJob(file: file, expectedOrigin: expectedOrigin)
+    guard !FileManager.default.fileExists(atPath: file.path), !FileManager.default.fileExists(atPath: file.deletingPathExtension().appendingPathExtension("upload").path) else { throw PrivateTransferFailure() }
+    jobs[id] = DiskTransferJob(file: file, uploadRoot: uploadRoot, expectedOrigin: expectedOrigin)
     return id
   }
   func download(id: String, input: DiskTransferInput, completion: @escaping (Result<DiskTransferResult, Error>) -> Void) {
@@ -70,6 +78,7 @@ final class DiskTransferStore: @unchecked Sendable {
     job.whenFinished { [self] in
       do {
         if FileManager.default.fileExists(atPath: job.file.path) { try FileManager.default.removeItem(at: job.file) }
+        if FileManager.default.fileExists(atPath: job.payload.path) { try FileManager.default.removeItem(at: job.payload) }
         lock.lock(); if jobs[id] === job { jobs.removeValue(forKey: id) }; lock.unlock()
         completion(true)
       } catch { completion(false) }
@@ -92,7 +101,8 @@ final class DiskTransferStore: @unchecked Sendable {
           for file in try FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: [.isRegularFileKey, .isSymbolicLinkKey]) {
             let values = try file.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
             let name = file.lastPathComponent
-            guard name.hasSuffix(".bin"), let id = UUID(uuidString: String(name.dropLast(4))), id.uuidString.lowercased() == String(name.dropLast(4)),
+            let suffix = name.hasSuffix(".bin") ? ".bin" : name.hasSuffix(".upload") ? ".upload" : ""
+            guard !suffix.isEmpty, let id = UUID(uuidString: String(name.dropLast(suffix.count))), id.uuidString.lowercased() == String(name.dropLast(suffix.count)),
               values.isRegularFile == true, values.isSymbolicLink != true else { throw PrivateTransferFailure() }
             try FileManager.default.removeItem(at: file)
           }
@@ -104,8 +114,10 @@ final class DiskTransferStore: @unchecked Sendable {
   func close() { lock.lock(); let active = Array(jobs.values); lock.unlock(); active.forEach { $0.cancel() } }
 }
 
-private final class DiskTransferJob: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
+private final class DiskTransferJob: NSObject, URLSessionDownloadDelegate, URLSessionDataDelegate, @unchecked Sendable {
   let file: URL
+  let payload: URL
+  private let uploadRoot: URL
   private let expectedOrigin: String?
   private let lock = NSLock()
   private var started = false, canceled = false, finished = false
@@ -113,15 +125,25 @@ private final class DiskTransferJob: NSObject, URLSessionDownloadDelegate, @unch
   private var completion: ((Result<DiskTransferResult, Error>) -> Void)?
   private var waiters: [() -> Void] = []
   private var session: URLSession?
-  private var task: URLSessionDownloadTask?
+  private var task: URLSessionTask?
   private var staged: DiskTransferResult?
-  init(file: URL, expectedOrigin: String?) { self.file = file; self.expectedOrigin = expectedOrigin }
+  private var responseSink: FileHandle?, uploadResponse: HTTPURLResponse?
+  private var responseSize: Int64 = 0, uploadCopy = 0
+  init(file: URL, uploadRoot: URL, expectedOrigin: String?) {
+    self.file = file; self.payload = file.deletingPathExtension().appendingPathExtension("upload")
+    self.uploadRoot = uploadRoot; self.expectedOrigin = expectedOrigin
+  }
   func start(input: DiskTransferInput, completion: @escaping (Result<DiskTransferResult, Error>) -> Void) {
     lock.lock()
     guard !started && !canceled && !finished else { lock.unlock(); completion(.failure(PrivateTransferFailure())); return }
     started = true; self.input = input; self.completion = completion; lock.unlock()
+    DispatchQueue.global(qos: .utility).async { [self] in prepare(input) }
+  }
+  private func prepare(_ input: DiskTransferInput) {
     do {
       let url = try validate(input, expectedOrigin: expectedOrigin)
+      if let upload = input.upload { try stageUpload(upload) }
+      try ensure()
       let config = URLSessionConfiguration.ephemeral
       config.httpCookieStorage = nil; config.httpShouldSetCookies = false
       config.urlCredentialStorage = nil; config.urlCache = nil
@@ -134,7 +156,7 @@ private final class DiskTransferJob: NSObject, URLSessionDownloadDelegate, @unch
       for (name, value) in input.headers { request.setValue(value, forHTTPHeaderField: name) }
       request.setValue("identity", forHTTPHeaderField: "Accept-Encoding")
       if let body = input.body { request.httpBody = Data(body.utf8) }
-      let task = session.downloadTask(with: request)
+      let task: URLSessionTask = input.upload == nil ? session.downloadTask(with: request) : session.uploadTask(with: request, fromFile: payload)
       lock.lock()
       if canceled { lock.unlock(); session.invalidateAndCancel(); finish(.failure(PrivateTransferFailure())); return }
       self.session = session; self.task = task; lock.unlock(); task.resume()
@@ -153,6 +175,8 @@ private final class DiskTransferJob: NSObject, URLSessionDownloadDelegate, @unch
     lock.lock()
     guard !finished else { lock.unlock(); return }
     let accepted: Result<DiskTransferResult, Error> = canceled ? .failure(PrivateTransferFailure()) : result
+    try? responseSink?.close(); responseSink = nil
+    try? FileManager.default.removeItem(at: payload)
     // Mark finished only after IO in didFinishDownloading has returned on the serial delegate queue.
     if case .failure = accepted { try? FileManager.default.removeItem(at: file) }
     finished = true
@@ -207,8 +231,86 @@ private final class DiskTransferJob: NSObject, URLSessionDownloadDelegate, @unch
     } catch { staged = nil }
   }
   func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+    if input?.upload != nil, error == nil {
+      do {
+        try responseSink?.close(); responseSink = nil
+        try ensure()
+        guard let response = uploadResponse else { throw PrivateTransferFailure() }
+        let headers = try responseHeaders(response)
+        if (200..<300).contains(response.statusCode) {
+          let (size, hash, maximumRead) = try fingerprint(maximum: Int64(errorBytes))
+          staged = DiskTransferResult(status: response.statusCode, headers: headers, size: size, sha256: hash, uri: file.absoluteString, body: "", maxCopyBytes: max(uploadCopy, maximumRead))
+        } else {
+          let data = try Data(contentsOf: file)
+          guard data.count <= errorBytes else { throw PrivateTransferFailure() }
+          staged = DiskTransferResult(status: response.statusCode, headers: headers, size: 0, sha256: "", uri: "", body: String(decoding: data, as: UTF8.self), maxCopyBytes: max(uploadCopy, data.count))
+        }
+      } catch { staged = nil }
+    }
     if error == nil, let staged = staged { finish(.success(staged)) }
     else { finish(.failure(PrivateTransferFailure())) }
+  }
+  // Upload task response data is bounded native metadata; never accumulated by a completion-handler Data buffer.
+  func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive response: URLResponse, completionHandler: @escaping (URLSession.ResponseDisposition) -> Void) {
+    do {
+      try ensure()
+      guard input?.upload != nil, let response = response as? HTTPURLResponse,
+        response.url == URL(string: input?.url ?? ""), !(300..<400).contains(response.statusCode),
+        response.expectedContentLength <= Int64(errorBytes) else { throw PrivateTransferFailure() }
+      _ = try responseHeaders(response)
+      let fd = Darwin.open(file.path, O_WRONLY | O_CREAT | O_EXCL, S_IRUSR | S_IWUSR)
+      guard fd >= 0 else { throw PrivateTransferFailure() }
+      responseSink = FileHandle(fileDescriptor: fd, closeOnDealloc: true)
+      try protect(file)
+      uploadResponse = response
+      completionHandler(.allow)
+    } catch { completionHandler(.cancel); cancel() }
+  }
+  func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
+    do {
+      try ensure()
+      guard let sink = responseSink, responseSize + Int64(data.count) <= Int64(errorBytes) else { throw PrivateTransferFailure() }
+      try sink.write(contentsOf: data); responseSize += Int64(data.count)
+    } catch { cancel() }
+  }
+  private func stageUpload(_ upload: DiskUploadSource) throws {
+    let rootValues = try uploadRoot.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
+    let source = uploadRoot.appendingPathComponent(upload.sourceName)
+    let values = try source.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey])
+    guard rootValues.isDirectory == true, rootValues.isSymbolicLink != true,
+      uploadRoot.resolvingSymlinksInPath() == uploadRoot.standardizedFileURL,
+      values.isRegularFile == true, values.isSymbolicLink != true, values.fileSize == Int(upload.byteLength),
+      let stream = InputStream(url: source) else { throw PrivateTransferFailure() }
+    let fd = Darwin.open(payload.path, O_WRONLY | O_CREAT | O_EXCL, S_IRUSR | S_IWUSR)
+    guard fd >= 0 else { throw PrivateTransferFailure() }
+    let output = FileHandle(fileDescriptor: fd, closeOnDealloc: true)
+    stream.open(); defer { stream.close(); try? output.close() }
+    try protect(payload)
+    var hash = SHA256(), buffer = [UInt8](repeating: 0, count: nativeCopyBytes), size: Int64 = 0
+    while true {
+      try ensure()
+      let count = stream.read(&buffer, maxLength: buffer.count)
+      if count == 0 { break }
+      guard count > 0, size + Int64(count) <= upload.byteLength else { throw PrivateTransferFailure() }
+      let data = Data(buffer.prefix(count)); try output.write(contentsOf: data); hash.update(data: data)
+      size += Int64(count); uploadCopy = max(uploadCopy, count)
+    }
+    guard size == upload.byteLength, hash.finalize().map({ String(format: "%02x", $0) }).joined() == upload.contentHash else { throw PrivateTransferFailure() }
+  }
+  private func protect(_ url: URL) throws {
+    #if os(iOS) || os(tvOS)
+    try FileManager.default.setAttributes([.protectionKey: FileProtectionType.complete], ofItemAtPath: url.path)
+    #endif
+  }
+  private func responseHeaders(_ response: HTTPURLResponse) throws -> [String: String] {
+    var headers: [String: String] = [:]
+    for name in allowedResponseHeaders {
+      if let value = response.value(forHTTPHeaderField: name) {
+        guard value.utf8.count <= 32_768 else { throw PrivateTransferFailure() }
+        headers[name] = value
+      }
+    }
+    return headers
   }
   private func fingerprint(maximum: Int64) throws -> (Int64, String, Int) {
     guard let stream = InputStream(url: file) else { throw PrivateTransferFailure() }
@@ -242,7 +344,7 @@ private func validate(_ input: DiskTransferInput, expectedOrigin: String?) throw
     url.path.hasPrefix("/api/"), url.scheme == origin.scheme, url.host?.lowercased() == origin.host?.lowercased(),
     effectivePort(url) == effectivePort(origin), allowedOrigin(url, expectedOrigin: expectedOrigin),
     expectedOrigin == nil || input.origin == expectedOrigin,
-    !url.path.contains("\\"), !url.path.components(separatedBy: "/").contains(where: { $0 == "." || $0 == ".." }), ["GET", "POST"].contains(input.method),
+    !url.path.contains("\\"), !url.path.components(separatedBy: "/").contains(where: { $0 == "." || $0 == ".." }), ["GET", "POST", "PUT"].contains(input.method),
     input.maximum > 0 && input.maximum <= 9_007_199_254_740_991, (input.body?.utf8.count ?? 0) <= 65_536,
     input.method != "GET" || input.body == nil else { throw PrivateTransferFailure() }
   var lower: [String: String] = [:]
@@ -253,5 +355,12 @@ private func validate(_ input: DiskTransferInput, expectedOrigin: String?) throw
     lower[key] = value
   }
   guard lower["origin"] == input.origin else { throw PrivateTransferFailure() }
+  if input.method == "PUT" {
+    guard let upload = input.upload, input.body == nil, input.maximum == Int64(errorBytes), url.query == nil,
+      url.path.range(of: "^/api/v2/me/lawyer/assets/[A-Za-z0-9_-]{1,128}/content$", options: .regularExpression) != nil,
+      let id = UUID(uuidString: upload.sourceName), id.uuidString.lowercased() == upload.sourceName,
+      (1...100_000_000).contains(upload.byteLength), upload.contentHash.range(of: "^[a-f0-9]{64}$", options: .regularExpression) != nil,
+      lower["content-type"] == "application/octet-stream", lower["if-match"]?.range(of: "^[1-9][0-9]*$", options: .regularExpression) != nil else { throw PrivateTransferFailure() }
+  } else if input.upload != nil { throw PrivateTransferFailure() }
   return url
 }

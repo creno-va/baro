@@ -18,6 +18,14 @@ class DownloadInput : Record {
   @Field var body: String? = null
   @Field var maximum: Double = 0.0
 }
+class UploadInput : Record {
+  @Field var url: String = ""
+  @Field var origin: String = ""
+  @Field var headers: Map<String, String> = emptyMap()
+  @Field var sourceName: String = ""
+  @Field var byteLength: Double = 0.0
+  @Field var contentHash: String = ""
+}
 private class PrivateDownloadException : CodedException("PRIVATE_DOWNLOAD_FAILED")
 class BaroPrivateDownloadModule : Module() {
   companion object {
@@ -46,6 +54,14 @@ class BaroPrivateDownloadModule : Module() {
         try {
           if (retired || !owned.contains(id) || !input.maximum.isFinite() || input.maximum % 1.0 != 0.0 || input.maximum !in 1.0..9007199254740991.0) throw TransferFailure()
           store().download(id, TransferRequest(input.url, input.origin, input.method, input.headers, input.body, input.maximum.toLong())).wire(id)
+        } catch (_: Exception) { throw PrivateDownloadException() }
+      }
+    }
+    AsyncFunction("upload") Coroutine { id: String, input: UploadInput ->
+      withContext(Dispatchers.IO) {
+        try {
+          if (retired || !owned.contains(id) || !input.byteLength.isFinite() || input.byteLength % 1.0 != 0.0 || input.byteLength !in 1.0..100000000.0) throw TransferFailure()
+          store().download(id, TransferRequest(input.url, input.origin, "PUT", input.headers, null, 65536, TransferUpload(input.sourceName, input.byteLength.toLong(), input.contentHash))).wire(id)
         } catch (_: Exception) { throw PrivateDownloadException() }
       }
     }

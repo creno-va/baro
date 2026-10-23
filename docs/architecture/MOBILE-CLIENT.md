@@ -492,3 +492,15 @@ JSON은 기존 asset envelope 검증을 거친다. ACK 유실 뒤 같은 intent�
 key·expectedRevision·선택 assetId/revision만 허용하며 native 저장소가 동일 형식으로 검증한다.
 Cookie/proof/경로/파일 이름을 복구 record에 추가하지 않는다. 이 producer의 exact CI/main
 뒤 native100MB upload·private read·본인 프로필 RN UI를 순차 연결한다.
+
+`BaroPrivateDownload.upload`는 기존 process-wide job/epoch에 native PUT을 추가한다. 앱 ID가
+고정한 cache의 `baro_<environment>_private_uploads/<UUID>`만 읽고, symlink/경로 조작을
+거절한다. 64KiB copy로 exclusive `<transferId>.upload`에 실제 크기/해시를 검증한 뒤
+Android one-shot RequestBody·Apple URLSession uploadTask(fromFile)로 보낸다. endpoint는
+기존 본인 자산 content PUT으로 제한하고 If-Match와 기존100MB 기술 상한을 유지한다.
+응답은64KiB native JSON/error file로 제한하고 요청/응답 binary를 JS body로 만들지 않는다.
+Apple upload 응답도 serial data delegate에서 한도를 검사하며 completion-handler Data
+누적을 사용하지 않는다. cancel/clear는 staging·network/descriptor 종료를 기다리고 임시
+payload와 response만 지운다. 원래 source와 미해결 서버 key는 소비자가 별도 수명으로 보존한다.
+이 producer의 SDK bridge/cleanup 회귀와 실제 local HTTP 코어100MB 바이트/서버 독립 해시·
+RSS/JVM heap proof, 두 OS compile은 실제 RN source lease·기기 IPC·API 시연과 구분한다.

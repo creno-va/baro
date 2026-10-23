@@ -62,16 +62,20 @@ jobs:
           python3 - <<'PYTHON'
           import json, pathlib, xml.etree.ElementTree as ET
           report=ET.parse('../modules/baro-private-download/android/build/test-results/testDebugUnitTest/TEST-site.baro.download.DiskTransferStoreTest.xml').getroot()
-          receipts=[]
+          receipts=[]; uploads=[]
           for node in report.iter('system-out'):
             for line in (node.text or '').splitlines():
               if line.startswith('{"platform":"JVM-native-core"'):
                 receipts.append(json.loads(line))
+              if line.startswith('{"platform":"JVM-native-upload-core"'):
+                uploads.append(json.loads(line))
           assert {r['size'] for r in receipts} == {100000000,1000000000}
           assert all(r['maxHeapBytes'] <= 134217728 and r['maxCopyBytes'] <= 65536 and not r['appDeviceAcceptance'] for r in receipts)
+          assert len(uploads) == 1 and uploads[0]['size'] == 100000000
+          assert all(r['maxHeapBytes'] <= 134217728 and r['maxCopyBytes'] <= 65536 and not r['appDeviceAcceptance'] for r in uploads)
           target=pathlib.Path('../../../.wrangler/mobile-native-pr')
           target.mkdir(parents=True,exist_ok=True)
-          (target/'jvm-core.json').write_text(json.dumps({'platform':'JVM-native-core','receipts':receipts},indent=2)+'\n')
+          (target/'jvm-core.json').write_text(json.dumps({'platform':'JVM-native-core','receipts':receipts,'uploadReceipts':uploads},indent=2)+'\n')
           PYTHON
       - name: Apple native HTTP 100MB and 1GB bytes, memory and cleanup
         if: matrix.platform == 'ios'

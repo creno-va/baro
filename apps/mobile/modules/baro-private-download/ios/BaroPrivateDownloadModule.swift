@@ -8,6 +8,14 @@ private struct DownloadInput: Record {
   @Field var body: String? = nil
   @Field var maximum: Double = 0
 }
+private struct UploadInput: Record {
+  @Field var url: String = ""
+  @Field var origin: String = ""
+  @Field var headers: [String: String] = [:]
+  @Field var sourceName: String = ""
+  @Field var byteLength: Double = 0
+  @Field var contentHash: String = ""
+}
 public final class BaroPrivateDownloadModule: Module {
   private static let sharedLock = NSLock()
   private static var shared: DiskTransferStore?
@@ -47,6 +55,19 @@ public final class BaroPrivateDownloadModule: Module {
         input.maximum >= 1, input.maximum <= 9_007_199_254_740_991 else { promise.reject("PRIVATE_DOWNLOAD_FAILED", "PRIVATE_DOWNLOAD_FAILED"); return }
       do {
         try self.store().download(id: id, input: DiskTransferInput(url: input.url, origin: input.origin, method: input.method, headers: input.headers, body: input.body, maximum: Int64(input.maximum))) { result in
+          switch result {
+          case .success(let value): promise.resolve(value.wire(fileId: id))
+          case .failure: promise.reject("PRIVATE_DOWNLOAD_FAILED", "PRIVATE_DOWNLOAD_FAILED")
+          }
+        }
+      } catch { promise.reject("PRIVATE_DOWNLOAD_FAILED", "PRIVATE_DOWNLOAD_FAILED") }
+    }
+    AsyncFunction("upload") { (id: String, input: UploadInput, promise: Promise) in
+      self.ownedLock.lock(); let owns = !self.retired && self.owned.contains(id); self.ownedLock.unlock()
+      guard owns, input.byteLength.isFinite, input.byteLength.rounded(.towardZero) == input.byteLength,
+        input.byteLength >= 1, input.byteLength <= 100_000_000 else { promise.reject("PRIVATE_DOWNLOAD_FAILED", "PRIVATE_DOWNLOAD_FAILED"); return }
+      do {
+        try self.store().download(id: id, input: DiskTransferInput(url: input.url, origin: input.origin, method: "PUT", headers: input.headers, body: nil, maximum: 65_536, upload: DiskUploadSource(sourceName: input.sourceName, byteLength: Int64(input.byteLength), contentHash: input.contentHash))) { result in
           switch result {
           case .success(let value): promise.resolve(value.wire(fileId: id))
           case .failure: promise.reject("PRIVATE_DOWNLOAD_FAILED", "PRIVATE_DOWNLOAD_FAILED")

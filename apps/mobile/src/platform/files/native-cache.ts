@@ -19,11 +19,12 @@ export function clearNativeTransferOrphans() {
   const folder = root();
   if (!folder.exists) return;
   for (const entry of folder.list()) {
-    if (
-      !(entry instanceof File) ||
-      !entry.name.endsWith(".bin") ||
-      !validId(entry.name.slice(0, -4))
-    )
+    const suffix = entry.name.endsWith(".bin")
+      ? ".bin"
+      : entry.name.endsWith(".upload")
+        ? ".upload"
+        : "";
+    if (!(entry instanceof File) || !suffix || !validId(entry.name.slice(0, -suffix.length)))
       throw failed();
     entry.delete();
     if (entry.exists) throw failed();
