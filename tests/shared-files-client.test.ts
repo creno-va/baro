@@ -55,6 +55,7 @@ function fixture(
     part?: UploadReader["part"];
     close?: () => void;
     request?: WorkspaceTransport;
+    downloadOriginal?: (path: string, signal: AbortSignal) => Promise<string>;
   } = {},
 ) {
   const scope = createSessionScope();
@@ -119,6 +120,7 @@ function fixture(
       };
     },
     download: async () => "synthetic-private-cache-uri",
+    ...(options.downloadOriginal ? { downloadOriginal: options.downloadOriginal } : {}),
   });
   return { client, scope, requests, opened: () => opened, closed: () => closed };
 }
@@ -210,4 +212,62 @@ test("late original downloads cannot cross an account boundary", async () => {
   f.scope.invalidate();
   release(new Response("synthetic original"));
   await expect(pending).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
+});
+
+test("native original port starts before any JS body fetch and receives the canonical path/owned cancellation", async () => {
+  const calls: string[] = [],
+    signals: AbortSignal[] = [];
+  const f = fixture({
+    downloadOriginal: async (path, signal) => {
+      calls.push(path);
+      signals.push(signal);
+      return "opaque-native-handle";
+    },
+  });
+  expect(await f.client.original("case_a", "file a")).toBe("opaque-native-handle");
+  expect(calls).toEqual(["/api/v2/cases/case_a/files/file%20a/content"]);
+  expect(f.requests).toEqual([]);
+  f.scope.invalidate();
+  expect(signals[0]?.aborted).toBe(true);
+  await expect(f.client.original("case_a", "file_a")).rejects.toMatchObject({
+    code: "UNAUTHENTICATED",
+  });
+  expect(calls).toHaveLength(1);
+});
+
+test("late native original results cannot publish after the owner changes even if the port ignores abort", async () => {
+  let resolve!: (value: string) => void, signal: AbortSignal | undefined;
+  const f = fixture({
+    downloadOriginal: async (_path, abort) => {
+      signal = abort;
+      return new Promise<string>((done) => {
+        resolve = done;
+      });
+    },
+  });
+  const pending = f.client.original("case_a", "file_a");
+  f.scope.invalidate();
+  resolve("old-owned-handle");
+  await expect(pending).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
+  expect(signal?.aborted).toBe(true);
+  expect(f.requests).toEqual([]);
+});
+
+test("omitting the native port preserves the web original GET/status and response adapter contract", async () => {
+  const f = fixture({
+    request: async () =>
+      new Response("synthetic-original", {
+        headers: { "content-type": "application/octet-stream" },
+      }),
+  });
+  expect(await f.client.original("case_a", "file_a")).toBe("synthetic-private-cache-uri");
+  expect(f.requests).toHaveLength(1);
+  expect(f.requests[0]?.path).toBe("/api/v2/cases/case_a/files/file_a/content");
+  expect(f.requests[0]?.init?.method ?? "GET").toBe("GET");
+  const denied = fixture({
+    request: async () => Response.json({ error: { code: "NOT_FOUND" } }, { status: 404 }),
+  });
+  await expect(denied.client.original("case_a", "file_a")).rejects.toMatchObject({
+    code: "NOT_FOUND",
+  });
 });
