@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { z } from "zod";
 import { verifyInternalIosArtifact } from "./mobile-internal-ios-artifact";
+import { iosLargestContentSize } from "./mobile-ios-ui-capabilities";
 
 const sha = z.string().regex(/^[a-f0-9]{40}$/),
   digest = z.string().regex(/^[a-f0-9]{64}$/);
@@ -115,5 +116,43 @@ export function verifyIosColdLaunchReceipt(
     result.compilerReceiptSha256 !== identity.compilerReceiptSha256
   )
     throw new Error("INTERNAL_IOS_COLD_LAUNCH_IDENTITY_MISMATCH");
+  return result;
+}
+
+export const iosLargeFontReceiptSchema = iosColdLaunchReceiptSchema
+  .omit({
+    coldLaunches: true,
+    distinctColdLaunchPids: true,
+  })
+  .extend({
+    kind: z.literal("ios-bundled-large-font-observation"),
+    requestedContentSize: z.literal(iosLargestContentSize),
+    contentSizeBeforeRestart: z.literal(iosLargestContentSize),
+    contentSizeAfterRestart: z.literal(iosLargestContentSize),
+    sdkHelpSha256: digest,
+    nativeContentSizeReadbackVerified: z.literal(true),
+    processRestarted: z.literal(true),
+    elapsedSeconds: z.number().int().min(15),
+    samePidReadbackSamples: z.literal(3),
+    semanticTextScaleProven: z.literal(false),
+    screenshot: z.strictObject({
+      name: z.literal("large-font-ios.png"),
+      bytes: z.number().int().positive(),
+      sha256: digest,
+    }),
+  });
+export function verifyIosLargeFontReceipt(
+  value: unknown,
+  baseline: z.infer<typeof iosColdLaunchReceiptSchema>,
+) {
+  const result = iosLargeFontReceiptSchema.parse(value);
+  if (
+    result.binarySourceSha !== baseline.binarySourceSha ||
+    result.toolingSourceSha !== baseline.toolingSourceSha ||
+    result.archiveSha256 !== baseline.archiveSha256 ||
+    result.compilerReceiptSha256 !== baseline.compilerReceiptSha256 ||
+    JSON.stringify(result.device) !== JSON.stringify(baseline.device)
+  )
+    throw Error("INTERNAL_IOS_LARGE_FONT_IDENTITY_MISMATCH");
   return result;
 }

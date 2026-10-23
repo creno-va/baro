@@ -247,6 +247,24 @@ iPhone16/iOS26.5의 각 새 PID를3회 읽었고 실제 경과 시간은25/54초
 receipt의 homeContentVerified=false와 원래 관측 시각·API health·compiler source는 바꾸지 않았다.
 초기 viewport의 확인이며 전체 스크롤/기능/접근성·native IO·실제 API/OAuth·physical/store는 별도다.
 
+### iOS 큰 글자 관측
+
+PR418/maind57266a·CI39997516170 뒤 [SDK 관측39997880067](https://github.com/creno-va/baro/actions/runs/39997880067)은
+SUCCESS다. [원본 SDK capability](../quality/mobile-internal-ios-2026-10-23/ui-capabilities-d57266a.json)는
+`content_size`와 `accessibility-extra-extra-extra-large` 지원 문서만 인수하며 기기 변경·앱 실행 증거가 아니다.
+
+```sh
+gh workflow run mobile-internal-ios-reverify.yml --ref main -f target_sha=<full40-main-tooling-sha> -f smoke=true -f large_font=true
+```
+
+이 선택은 일반 Home의 두 cold launch/PNG를 먼저 보존하고 같은 새 소유 Simulator에서
+SDK 지원을 다시 확인한 뒤 가장 큰 접근성 category를 설정한다. 설정값을 읽고 앱을 종료·재시작하여
+서로 다른 PID/3회 생존 표본을 확인한 다음 category를 다시 읽는다. 익명 초기 화면만 별도
+`large-font-ios.png`로 캡처하고 원본 binary/receipt·tooling/device/hash와 `large-font.json`에 묶는다.
+Metro 요청은 계속0이어야 한다. `smoke=false`의 확대 요청·지원되지 않는 category·불일치 readback은 거부한다.
+자동 receipt는 Home 내용·정확한 배율·전체 접근성 인수를 주장하지 않는다. PNG 시각 대조와
+실제 두 역할/화면·키보드/회전·VoiceOver/TalkBack·physical/store는 별도다. 실제 확대 실행 결과는 실행 후 기록한다.
+
 ## 내부 전달 기준과 설치
 
 | 전달물 | 앱 source·version/build | binary metadata | 실제 설치/초기 Home 관측 |

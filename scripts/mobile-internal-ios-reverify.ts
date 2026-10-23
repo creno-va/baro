@@ -5,8 +5,15 @@ import { internalIosEnvironment } from "./mobile-internal-ios-build";
 import {
   assertIosBundledInputs,
   verifyIosColdLaunchReceipt,
+  verifyIosLargeFontReceipt,
   verifyPinnedInternalIosInput,
 } from "./mobile-internal-ios-input";
+import {
+  iosInternalObservationOptions,
+  iosLargestContentSize,
+  readIosUiCapabilities,
+  verifyIosContentSizeReadback,
+} from "./mobile-ios-ui-capabilities";
 import { attestXcodeSimulatorControl, xcodeControlBuildFailure } from "./mobile-ios-xcode-control";
 import { verifyCompiledMobileFont } from "./mobile-native-assets";
 import { observePreviewApi } from "./mobile-preview-artifact";
@@ -14,9 +21,7 @@ import { observePreviewApi } from "./mobile-preview-artifact";
 const hash = (b: Uint8Array) => createHash("sha256").update(b).digest("hex");
 async function main() {
   if (process.platform !== "darwin") throw new Error("INTERNAL_IOS_MAC_REQUIRED");
-  const home = process.argv[2] === "--home";
-  if (process.argv.length !== (home ? 3 : 2))
-    throw new Error("INTERNAL_IOS_VERIFICATION_MODE_REQUIRED");
+  const { home, largeFont } = iosInternalObservationOptions(process.argv.slice(2));
   const root = process.cwd(),
     env = internalIosEnvironment(process.env),
     tooling = env.TARGET_SHA as string,
@@ -29,6 +34,8 @@ async function main() {
     "failure.json",
     "home.json",
     "home-ios.png",
+    "large-font.json",
+    "large-font-ios.png",
   ])
     if (await Bun.file(resolve(base, name)).exists())
       throw new Error("INTERNAL_IOS_FRESH_OUTPUT_REQUIRED");
@@ -196,8 +203,7 @@ async function main() {
         samePidReadbackSamples: number;
       }[] = [],
       pids: string[] = [];
-    for (const ordinal of [1, 2]) {
-      phase = `cold-launch-${ordinal}`;
+    async function observeLaunch(ordinal: number) {
       await command(["xcrun", "simctl", "terminate", device, "site.baro.app.preview"]).catch(
         () => {},
       );
@@ -216,11 +222,15 @@ async function main() {
           throw new Error("INTERNAL_IOS_PROCESS_NOT_RUNNING");
         if (guardRequests) throw new Error("INTERNAL_IOS_UNEXPECTED_METRO_REQUEST");
       }
-      observations.push({
+      return {
         ordinal,
         elapsedSeconds: Math.floor((Date.now() - started) / 1000),
         samePidReadbackSamples: 3,
-      });
+      };
+    }
+    for (const ordinal of [1, 2]) {
+      phase = `cold-launch-${ordinal}`;
+      observations.push(await observeLaunch(ordinal));
     }
     if (new Set(pids).size !== 2) throw new Error("INTERNAL_IOS_DISTINCT_COLD_STARTS_REQUIRED");
     phase = "anonymous-initial-screen";
@@ -271,9 +281,66 @@ async function main() {
       flag: "wx",
     });
     console.log("INTERNAL_IOS_COLD_LAUNCH_OBSERVED_VISUAL_REVIEW_REQUIRED");
+    if (largeFont) {
+      phase = "large-font-sdk-capabilities";
+      const capabilities = await readIosUiCapabilities(tooling);
+      if (
+        !capabilities.contentSizeOperationAdvertised ||
+        !capabilities.advertisedContentSizes.includes(iosLargestContentSize)
+      )
+        throw Error("INTERNAL_IOS_CONTENT_SIZE_UNSUPPORTED");
+      phase = "large-font-set-readback";
+      await command(["xcrun", "simctl", "ui", device, "content_size", iosLargestContentSize]);
+      const before = verifyIosContentSizeReadback(
+        await command(["xcrun", "simctl", "ui", device, "content_size"]),
+      );
+      phase = "large-font-restart";
+      const observed = await observeLaunch(3);
+      if (new Set(pids).size !== 3) throw Error("INTERNAL_IOS_DISTINCT_COLD_STARTS_REQUIRED");
+      const after = verifyIosContentSizeReadback(
+        await command(["xcrun", "simctl", "ui", device, "content_size"]),
+      );
+      phase = "large-font-anonymous-screen";
+      await command([
+        "xcrun",
+        "simctl",
+        "io",
+        device,
+        "screenshot",
+        resolve(base, "large-font-ios.png"),
+      ]);
+      const image = await readFile(resolve(base, "large-font-ios.png"));
+      if (guardRequests) throw Error("INTERNAL_IOS_UNEXPECTED_METRO_REQUEST");
+      const { coldLaunches: _launches, distinctColdLaunchPids: _distinct, ...common } = receipt;
+      const large = verifyIosLargeFontReceipt(
+        {
+          ...common,
+          kind: "ios-bundled-large-font-observation",
+          observedAt: new Date().toISOString(),
+          requestedContentSize: iosLargestContentSize,
+          contentSizeBeforeRestart: before,
+          contentSizeAfterRestart: after,
+          sdkHelpSha256: capabilities.helpSha256,
+          nativeContentSizeReadbackVerified: true,
+          processRestarted: true,
+          elapsedSeconds: observed.elapsedSeconds,
+          samePidReadbackSamples: observed.samePidReadbackSamples,
+          semanticTextScaleProven: false,
+          screenshot: { name: "large-font-ios.png", bytes: image.length, sha256: hash(image) },
+        },
+        receipt,
+      );
+      await writeFile(resolve(base, "large-font.json"), `${JSON.stringify(large, null, 2)}\n`, {
+        flag: "wx",
+      });
+      console.log("INTERNAL_IOS_LARGE_FONT_READBACK_OBSERVED_VISUAL_REVIEW_REQUIRED");
+    }
   } catch (error) {
     const code = error instanceof Error ? error.message : "",
       known = new Set([
+        "INTERNAL_IOS_CONTENT_SIZE_UNSUPPORTED",
+        "INTERNAL_IOS_CONTENT_SIZE_READBACK_MISMATCH",
+        "INTERNAL_IOS_LARGE_FONT_IDENTITY_MISMATCH",
         "INTERNAL_IOS_CHECKOUT_MISMATCH",
         "INTERNAL_IOS_PIN_IDENTITY_MISMATCH",
         "INTERNAL_IOS_RECEIPT_CHANGED",
