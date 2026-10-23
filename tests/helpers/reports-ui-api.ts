@@ -1,10 +1,10 @@
 // Browser-only test composition of the real D domain factories and mock handlers.
 // Product code never imports this module. No fixture is imported into a product component.
 
-import { createAccountApi } from "../../src/client/api/account";
+import { createAccountClient } from "../../src/client/api/account";
 import { createAccountMock } from "../../src/client/api/mock/account";
 import { createReportsMock, type ReportMockState } from "../../src/client/api/mock/reports";
-import { createReportsApi } from "../../src/client/api/reports";
+import { createReportsApi, domainRequest } from "../../src/client/api/reports";
 
 const key = "baro.reports.browser-test.v1";
 const realAccountKey = "baro.reports-test.real-account";
@@ -70,7 +70,11 @@ async function request(path: string, init?: RequestInit) {
 export const api = {
   session: { get: async () => read().session },
   reports: createReportsApi(request),
-  account: createAccountApi(request),
+  account: createAccountClient(domainRequest(request), {
+    // Only the explicitly injected synthetic handlers may grant mock deletion readiness.
+    // The signed-session/Hono fixture must still require real reauthentication evidence.
+    allowMockDeletion: sessionStorage.getItem(realAccountKey) !== "true",
+  }),
   cases: {
     list: async () => {
       const state = read();
