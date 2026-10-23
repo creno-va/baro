@@ -10,7 +10,8 @@ import {
 } from "../apps/mobile/runtime-probe/ios-keychain-protocol";
 import { RUNTIME_ORIGIN } from "../apps/mobile/runtime-probe/protocol";
 import { signSimulatorApp, simulatorIdentity } from "./mobile-ios-simulator-signing";
-import { verifyFreshXcodeControlBinary } from "./mobile-ios-xcode-control";
+import { verifyXcodeControlBinary } from "./mobile-ios-xcode-control";
+import { verifyPinnedXcodeCompilerInput } from "./mobile-ios-xcode-input";
 import { verifyPreviewArtifact } from "./mobile-preview-artifact";
 import { metroNodeOptions, runtimeDevelopmentUrl } from "./mobile-runtime-host";
 
@@ -118,7 +119,8 @@ export async function preserveIosReadiness(
   return report;
 }
 async function main() {
-  const xcodeControl = process.argv[2] === "--xcode-control";
+  const pinnedXcodeControl = process.argv[2] === "--pinned-xcode-control";
+  const xcodeControl = process.argv[2] === "--xcode-control" || pinnedXcodeControl;
   if (process.argv.length !== (xcodeControl ? 3 : 2)) throw new Error("IOS_HOST_MODE_REQUIRED");
   if (process.platform !== "darwin") throw new Error("IOS_HOST_MAC_REQUIRED");
   const sourceSha = process.env.TARGET_SHA;
@@ -245,10 +247,24 @@ async function main() {
     if ((await command(["git", "rev-parse", "HEAD"])) !== sourceSha)
       throw new Error("IOS_HOST_CHECKOUT_MISMATCH");
     await command(["git", "diff", "--exit-code", "HEAD"]);
+    const compilerInput = pinnedXcodeControl
+      ? await verifyPinnedXcodeCompilerInput(root, resolve(root, ".wrangler/ios-xcode-input"))
+      : null;
     const binary = xcodeControl
-      ? await verifyFreshXcodeControlBinary(root, sourceSha as string)
+      ? await verifyXcodeControlBinary(
+          root,
+          compilerInput?.manifest.sourceSha ?? (sourceSha as string),
+        )
       : await verifyIosHostBinary(root, resolve(root, ".wrangler/ios-keychain-input"));
     const control = "control" in binary.manifest ? binary.manifest.control : null;
+    if (
+      control &&
+      (control.toolingSourceSha !== sourceSha ||
+        (compilerInput &&
+          (control.infoPlistSha256 !== compilerInput.inspection.infoPlistSha256 ||
+            control.executableSha256 !== compilerInput.inspection.executableSha256)))
+    )
+      throw new Error("IOS_HOST_CONTROL_SOURCE_OR_PIN_MISMATCH");
     await assertIosNativeInputs(root, binary.manifest.sourceSha, sourceSha as string);
     await command(["git", "worktree", "add", "--detach", work, sourceSha as string]);
     ownedCheckout = true;
@@ -397,7 +413,7 @@ async function main() {
       const baseline = iosReadinessReportSchema.parse(reports.baseline);
       await writeFile(
         resolve(base, "receipt.json"),
-        `${JSON.stringify({ version: 1, kind: "xcode-simulator-sdk-control", toolingSourceSha: sourceSha, binarySourceSha: binary.manifest.sourceSha, binaryArtifact: binary.manifest, device: { model: type.name, osVersion: runtime.version }, baseline, simulatorSdkReady: baseline.allSucceeded, entitlementRootCauseProven: false, fullNativeIoVerified: false, productJourneysVerified: false, remoteApiVerified: false, oauthVerified: false, physicalDeviceVerified: false, storeSigned: false, deployed: false }, null, 2)}\n`,
+        `${JSON.stringify({ version: 1, kind: "xcode-simulator-sdk-control", toolingSourceSha: sourceSha, binarySourceSha: binary.manifest.sourceSha, binaryArtifact: binary.manifest, compilerInput: compilerInput?.manifest ?? null, device: { model: type.name, osVersion: runtime.version }, baseline, simulatorSdkReady: baseline.allSucceeded, entitlementRootCauseProven: false, fullNativeIoVerified: false, productJourneysVerified: false, remoteApiVerified: false, oauthVerified: false, physicalDeviceVerified: false, storeSigned: false, deployed: false }, null, 2)}\n`,
       );
       if (!baseline.allSucceeded) throw new Error("IOS_HOST_XCODE_CONTROL_SDK_FAILED");
       console.log(

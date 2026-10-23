@@ -30,7 +30,7 @@ import {
   verifySimulatorEntitlements,
 } from "../scripts/mobile-ios-simulator-signing";
 import {
-  verifyFreshXcodeControlBinary,
+  verifyXcodeControlBinary,
   xcodeControlBuildFailure,
   xcodeControlEntitlements,
   xcodeControlEnvironment,
@@ -121,7 +121,10 @@ test("Xcode control failure retains only known compiler categories and entitleme
   });
   expect(JSON.stringify(shape)).not.toContain(privateDetail);
   expect(
-    xcodeEntitlementShape({ "keychain-access-groups": ["site.baro.app.preview"] }).strictAccepted,
+    xcodeEntitlementShape({
+      "keychain-access-groups": ["FAKETEAMID.site.baro.app.preview"],
+      "application-identifier": "FAKETEAMID.site.baro.app.preview",
+    }).strictAccepted,
   ).toBe(true);
 });
 test("pinned Expo iOS launcher API loads in a real Node process without accessing a simulator", async () => {
@@ -780,8 +783,10 @@ test("Xcode signing control stays in a fresh preview CI context without accounts
   expect(xcodeSimulatorControlArguments).toContain("PROVISIONING_PROFILE_SPECIFIER=");
   expect(xcodeSimulatorControlArguments.join(" ")).not.toContain("allowProvisioningUpdates");
   const own = {
-    "keychain-access-groups": ["site.baro.app.preview"] as ["site.baro.app.preview"],
-    "get-task-allow": true,
+    "keychain-access-groups": ["FAKETEAMID.site.baro.app.preview"] as [
+      "FAKETEAMID.site.baro.app.preview",
+    ],
+    "application-identifier": "FAKETEAMID.site.baro.app.preview" as const,
   };
   expect(xcodeControlEntitlements(own)).toEqual(own);
   for (const invalid of [
@@ -811,15 +816,24 @@ test("fresh Xcode archive attestation binds source and exact bytes without accep
       sha256: createHash("sha256").update(bytes).digest("hex"),
     };
     const control = {
-      version: 1,
+      version: 2,
       kind: "xcode-simulator-signing-control",
       sourceSha: source,
+      toolingSourceSha: source,
       observedAt: new Date().toISOString(),
       applicationId: "site.baro.app.preview",
       signature: "ad-hoc",
       teamIdentifier: "not set",
       architectures: ["arm64"],
-      entitlements: { "keychain-access-groups": ["site.baro.app.preview"], "get-task-allow": true },
+      entitlements: {
+        "keychain-access-groups": ["FAKETEAMID.site.baro.app.preview"],
+        "application-identifier": "FAKETEAMID.site.baro.app.preview",
+      },
+      entitlementsSource: "simulator-macho-xml-and-der",
+      signatureEntitlements: {},
+      sectionHashes: [
+        { architecture: "arm64", xmlSha256: "b".repeat(64), derSha256: "c".repeat(64) },
+      ],
       executableSha256: "b".repeat(64),
       infoPlistSha256: "c".repeat(64),
       appRuntimeVerified: false,
@@ -830,9 +844,9 @@ test("fresh Xcode archive attestation binds source and exact bytes without accep
     await writeFile(resolve(handoff, "receipt-ios.json"), JSON.stringify(preview));
     await writeFile(resolve(handoff, preview.artifact.name), bytes);
     await writeFile(resolve(build, "xcode-control-ios.json"), JSON.stringify(control));
-    expect(
-      (await verifyFreshXcodeControlBinary(root, source)).manifest.control.appRuntimeVerified,
-    ).toBe(false);
+    expect((await verifyXcodeControlBinary(root, source)).manifest.control.appRuntimeVerified).toBe(
+      false,
+    );
     expect(() =>
       xcodeControlReceiptSchema.parse({ ...control, physicalDeviceVerified: true }),
     ).toThrow();
@@ -840,7 +854,7 @@ test("fresh Xcode archive attestation binds source and exact bytes without accep
       resolve(handoff, preview.artifact.name),
       Buffer.from("modified-synthetic-archive"),
     );
-    await expect(verifyFreshXcodeControlBinary(root, source)).rejects.toThrow(
+    await expect(verifyXcodeControlBinary(root, source)).rejects.toThrow(
       "XCODE_CONTROL_ARCHIVE_BYTES_MISMATCH",
     );
     await writeFile(resolve(handoff, preview.artifact.name), bytes);
@@ -848,7 +862,7 @@ test("fresh Xcode archive attestation binds source and exact bytes without accep
       resolve(build, "xcode-control-ios.json"),
       JSON.stringify({ ...control, sourceSha: "b".repeat(40) }),
     );
-    await expect(verifyFreshXcodeControlBinary(root, source)).rejects.toThrow(
+    await expect(verifyXcodeControlBinary(root, source)).rejects.toThrow(
       "XCODE_CONTROL_SOURCE_OR_SIGNATURE_MISMATCH",
     );
   } finally {
