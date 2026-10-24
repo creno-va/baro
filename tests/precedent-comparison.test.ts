@@ -8,6 +8,7 @@ import {
 } from "../src/contracts/v2/precedent-comparison";
 import {
   checkPrecedentComparison,
+  inspectPrecedentComparison,
   precedentComparisonScore,
 } from "../src/server/modules/legal-retrieval/research/comparison";
 import fixture from "./fixtures/legal/research/synthetic-search.json";
@@ -99,7 +100,6 @@ test("original UTF-16 spans use excerpt offsets and reject wrong quotations or a
   expect(checkPrecedentComparison(valid, facts, source)).toEqual(valid);
   for (const evidence of [
     { text: "임대차", startUtf16: 18, endUtf16: 21 },
-    { text: "👩", startUtf16: 0, endUtf16: 2 },
     { text: source.excerpt.text.slice(1, 2), startUtf16: 11, endUtf16: 12 },
   ]) {
     const value = draft(1);
@@ -109,11 +109,78 @@ test("original UTF-16 spans use excerpt offsets and reject wrong quotations or a
     expect(checkPrecedentComparison(value, facts, source)).toBeNull();
   }
 });
+test("unique exact source quotes repair numeric offsets only, before semantic audit", () => {
+  const value = draft(1);
+  const first = value.metrics[0];
+  if (!first) throw new Error("Missing synthetic metric");
+  first.precedentEvidence = [{ text: "대여금", startUtf16: 1, endUtf16: 4 }];
+  const result = inspectPrecedentComparison(value, facts, source);
+  expect(result.observation).toEqual({ reason: "accepted", validSpans: 0, uniqueExactSpans: 1 });
+  expect(result.draft).toEqual(draft(1));
+  expect(value.metrics[0]?.precedentEvidence[0]?.startUtf16).toBe(1);
+  first.precedentEvidence = [{ text: "👩🏽‍💻", startUtf16: 0, endUtf16: 1 }];
+  expect(checkPrecedentComparison(value, facts, source)?.metrics[0]?.precedentEvidence[0]).toEqual({
+    text: "👩🏽‍💻",
+    startUtf16: 10,
+    endUtf16: 17,
+  });
+});
+test("ambiguous, invented or unread quotes never acquire fabricated coordinates", () => {
+  const value = draft(1);
+  const first = value.metrics[0];
+  if (!first) throw new Error("Missing synthetic metric");
+  first.precedentEvidence = [{ text: "대여금", startUtf16: 0, endUtf16: 1 }];
+  const repeated = {
+    ...source,
+    excerpt: {
+      text: "대여금과 대여금",
+      startUtf16: 10,
+      endUtf16: 18,
+      fullLengthUtf16: 30,
+      truncated: true,
+    },
+  };
+  expect(inspectPrecedentComparison(value, facts, repeated)).toMatchObject({
+    draft: null,
+    observation: { reason: "source_quote_ambiguous" },
+  });
+  first.precedentEvidence = [{ text: "읽지 않은 뒤쪽 원문", startUtf16: 100, endUtf16: 110 }];
+  expect(inspectPrecedentComparison(value, facts, source)).toMatchObject({
+    draft: null,
+    observation: { reason: "source_quote_missing" },
+  });
+  first.precedentEvidence = [{ text: "대여금을 반환할 의무가 있다", startUtf16: 0, endUtf16: 10 }];
+  expect(checkPrecedentComparison(value, facts, source)).toBeNull();
+  const serialized = JSON.stringify(inspectPrecedentComparison(value, facts, source).observation);
+  expect(serialized).not.toContain("대여금");
+  expect(serialized).not.toContain("synthetic");
+});
+test("quote parsing preserves whitespace and cannot turn an altered case quote into evidence", () => {
+  const value = draft(1);
+  const first = value.metrics[0];
+  if (!first) throw new Error("Missing synthetic metric");
+  first.caseEvidence = [{ factId: "synthetic_fact", text: "대여금을 " }];
+  first.precedentEvidence = [{ text: " 대여금 ", startUtf16: 0, endUtf16: 1 }];
+  const result = checkPrecedentComparison(value, facts, source);
+  expect(result?.metrics[0]?.caseEvidence[0]?.text).toBe("대여금을 ");
+  const start = source.excerpt.text.indexOf(" 대여금 ") + source.excerpt.startUtf16;
+  expect(result?.metrics[0]?.precedentEvidence[0]).toEqual({
+    text: " 대여금 ",
+    startUtf16: start,
+    endUtf16: start + 5,
+  });
+  first.caseEvidence[0] = { factId: "synthetic_fact", text: " 대여금을" };
+  expect(inspectPrecedentComparison(value, facts, source)).toMatchObject({
+    draft: null,
+    observation: { reason: "case_quote_mismatch" },
+  });
+});
 test("uncertain/conflicting facts and official text cannot become confirmed case-side matches", () => {
   for (const changed of [
     { certainty: "uncertain" },
     { certainty: "conflicting" },
     { attribution: "official_source" },
+    { attribution: "ai_organization" },
   ] as const)
     expect(
       checkPrecedentComparison(

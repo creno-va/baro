@@ -31,18 +31,23 @@ export const precedentComparisonSourceSchema = v2PrecedentReadResponseSchema.pic
   citation: true,
   excerpt: true,
 });
+// Quoted evidence is not display prose: never trim or normalize its exact bytes.
+const exactQuote = z
+  .string()
+  .refine(
+    (value) =>
+      value.trim().length > 0 && [...value].length <= 1000 && !/<\/?[a-z!][^>]*>/i.test(value),
+  );
 export const precedentComparisonMetricSchema = z
   .strictObject({
     criterion: precedentCriterionSchema,
     verdict: z.enum(["yes", "no", "unknown"]),
     explanation: displayText(350),
-    caseEvidence: z
-      .array(z.strictObject({ factId: opaqueIdSchema, text: displayText(1000) }))
-      .max(3),
+    caseEvidence: z.array(z.strictObject({ factId: opaqueIdSchema, text: exactQuote })).max(3),
     precedentEvidence: z
       .array(
         z.strictObject({
-          text: displayText(1000),
+          text: exactQuote,
           startUtf16: z.number().int().nonnegative(),
           endUtf16: z.number().int().positive(),
         }),

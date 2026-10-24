@@ -60,6 +60,7 @@ export class SyntheticProbe extends DurableObject<ProbeEnv> {
       const metrics: ProbeOutcome["metrics"] = [];
       const providerFailures: z.infer<typeof probeProviderFailureSchema>[] = [];
       const mediaChecks: NonNullable<ProbeOutcome["mediaChecks"]> = [];
+      const comparisonEvidence: NonNullable<ProbeOutcome["comparisonEvidence"]> = [];
       let legal: ReturnType<typeof createSyntheticLegalLookup> | null = null;
       let material: ReturnType<typeof createSyntheticMaterialLookup> | null = null;
       let comparisonSource: NonNullable<ProbeOutcome["comparisonChecks"]>["source"] = null;
@@ -221,6 +222,7 @@ export class SyntheticProbe extends DurableObject<ProbeEnv> {
           },
         });
         const pipeline = createWorkspacePipeline(gateway, {
+          observeComparisonEvidence: (observation) => comparisonEvidence.push(observation),
           reserve: async () => reserve(),
           invocation: () => crypto.randomUUID(),
           lookup: async (tools) => {
@@ -296,6 +298,7 @@ export class SyntheticProbe extends DurableObject<ProbeEnv> {
             metrics,
             providerFailures,
             comparisonChecks,
+            comparisonEvidence,
           };
         }
         if (active.featureCase === "material_chat" && material) {
@@ -402,6 +405,9 @@ export class SyntheticProbe extends DurableObject<ProbeEnv> {
           providerFailures,
           ...(mediaChecks.length ? { mediaChecks } : {}),
           ...(policy?.success ? { policyFailure: policy.data } : {}),
+          ...(this.env.READINESS_FEATURE_CASE === "precedent_compare"
+            ? { comparisonEvidence }
+            : {}),
           ...(legal && this.env.READINESS_FEATURE_CASE === "legal_chat"
             ? { legalChecks: legal.snapshot(0) }
             : {}),

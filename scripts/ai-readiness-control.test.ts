@@ -71,6 +71,7 @@ test("comparison success needs a verified real source, grounded indicators, fixe
       },
       sourceFailures: [],
     },
+    comparisonEvidence: [{ reason: "accepted", validSpans: 1, uniqueExactSpans: 1 }],
   };
   const schema = probeReportFor(scope);
   expect(schema.safeParse(value).success).toBe(true);
@@ -91,6 +92,19 @@ test("comparison success needs a verified real source, grounded indicators, fixe
         .success,
     ).toBe(false);
   expect(schema.safeParse({ ...value, comparisonChecks: undefined }).success).toBe(false);
+  expect(schema.safeParse({ ...value, comparisonEvidence: undefined }).success).toBe(false);
+  expect(
+    schema.safeParse({
+      ...value,
+      comparisonEvidence: [{ reason: "unknown_case_fact", validSpans: 0, uniqueExactSpans: 0 }],
+    }).success,
+  ).toBe(false);
+  expect(
+    schema.safeParse({
+      ...value,
+      comparisonEvidence: [{ ...value.comparisonEvidence[0], text: "private sentinel" }],
+    }).success,
+  ).toBe(false);
   expect(
     schema.safeParse({
       ...value,
