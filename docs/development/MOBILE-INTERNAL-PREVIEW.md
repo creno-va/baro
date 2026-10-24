@@ -1628,3 +1628,35 @@ HBC의 실제 전체 bytes/hash·magic과 compiled font bytes를 원래 receipt�
 build witness는 원래 compiler attestation 범위이며 로컬에서 새로 서명/컴파일하지 않았다.
 새 UI의 실제 줄바꿈·큰 글자/Guide·한글 IME·VoiceOver·로그인·물리 기기·store 인수는
 이 원본 pin 이후 별도로 검증한다. 이전9436 앱의 성공과 실패는 해당 source의 역사로 보존한다.
+
+
+### 새 UI Android 실제 Home·큰 글자·Guide 관측
+
+PR501/main331bedf·CI40110158332 뒤 [actual40110473196](https://github.com/creno-va/baro/actions/runs/40110473196)은
+SUCCESS다. source c8215b8의 원본 APK/receipt를 재컴파일·재서명하지 않고 실제 SDK의
+서명·metadata·HBC·compiled font를 재검증했다. owned Android15에서 PackageManager
+2 handler와 PixelLauncher3 연속 표본 뒤 native Home cold2회·Metro0을 관측했다.
+font scale2를 readback하고 실제 Home→스크롤→Guide→스크롤→Home 왕복을 확인했다.
+
+[원래 Home 영수증](../quality/mobile-native-c8215b8/android-runtime-40110473196/receipt.json),
+[큰 글자](../quality/mobile-native-c8215b8/android-runtime-40110473196/large-font.json),
+[Guide 조작](../quality/mobile-native-c8215b8/android-runtime-40110473196/guide-ui.json),
+[SDK 재검증](../quality/mobile-native-c8215b8/android-runtime-40110473196/verification.json),
+[로컬 byte·identity 결합](../quality/mobile-native-c8215b8/android-runtime-40110473196/local-preservation.json)을
+보존한다. 인증/공개 탐색 전 [기본 PNG](../quality/mobile-native-c8215b8/android-runtime-40110473196/home.png)와
+[2배 글자 PNG](../quality/mobile-native-c8215b8/android-runtime-40110473196/large-font.png)만 남았다.
+
+두 PNG를 직접 검토했다. 제목/본문·카드는 표시되지만 한글 어절 내부의 행 분리가 남는다.
+Android `balanced`를 단어 단위 줄바꿈 성공 또는 typography 전체 인수로 표시하지 않는다.
+Guide 이후 screenshot/raw hierarchy는 export하지 않았다. 새 source의 한글 IME·reader·
+private 전체 화면·OAuth·physical/store 인수는 별도다.
+
+
+새 source의 독립 [Android input40110948812](https://github.com/creno-va/baro/actions/runs/40110948812)도
+SUCCESS다. workflow head1906321과 target/tooling331bedf·binaryc8215b8은 구분한다.
+원본 APK/receipt·SDK 재검증 hash·Home cold2의 receipt·device와
+[실제 입력 proof](../quality/mobile-native-c8215b8/android-input-40110948812/directory-input.json)를
+[독립 결합](../quality/mobile-native-c8215b8/android-input-40110948812/local-preservation.json)했다.
+공개 검색창의 ASCII 합성 값 유지·IME 위 초점·유일한 실제 software Search 탭·키보드 닫힘·
+가로/세로 입력 유지/도달·Home 복귀를 확인했다. 한글 IME·HTTP transport 독립 증명·프로필
+값/연락/원격 mutation·인증/비공개 접근·reader·physical/store 검증은 아니다.

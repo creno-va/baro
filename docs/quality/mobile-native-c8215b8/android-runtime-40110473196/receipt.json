@@ -1,0 +1,82 @@
+{
+  "version": 1,
+  "kind": "bundled-android-home-only",
+  "toolingSourceSha": "331bedfef34f88ce8a6a35a8386f556e5eb56b0e",
+  "binarySourceSha": "c8215b886848b102c506b40e2176498455d63668",
+  "observedAt": "2026-10-24T16:14:49.004Z",
+  "applicationId": "site.baro.app.preview",
+  "binary": {
+    "name": "baro-internal-preview-android-c8215b886848b102c506b40e2176498455d63668.apk",
+    "bytes": 57219402,
+    "sha256": "367dcca9db6456e7e4a2d71f905c63f2dd09b5996cdd5b6e1901611bb6ca36ab"
+  },
+  "verificationSha256": "87ec103a1c284bb1c860a1d0e8b44cb21a94d311f3ad6beb3261fd89f8092213",
+  "device": {
+    "kind": "owned-emulator",
+    "model": "sdk_gphone64_x86_64",
+    "osVersion": "15"
+  },
+  "emulatorBootVerified": true,
+  "sdkHomeLaunchVerified": true,
+  "packageManagerReady": {
+    "kind": "owned-android-package-manager-readiness",
+    "observedAt": "2026-10-24T16:14:20.418Z",
+    "handlersCompleted": [
+      "foreground",
+      "background"
+    ],
+    "handlerTimeoutsMs": [
+      15000,
+      15000
+    ],
+    "commandsCompleted": 2,
+    "sharedFirstColdBudgetMaxMs": 120000,
+    "rootCauseConfirmed": false,
+    "launcherReadinessVerified": false,
+    "dialogDismissed": false
+  },
+  "launcherBaseline": {
+    "kind": "owned-android-launcher-readiness",
+    "launcherKind": "pixel",
+    "samples": 3,
+    "consecutiveReadySamples": 3,
+    "foregroundMatchedBeforeAndAfterReadySamples": true,
+    "launcherRootVisibleInReadySamples": true,
+    "systemErrorDialogAbsentInSamples": true,
+    "productLaunched": false,
+    "dialogDismissed": false,
+    "launcherChanged": false,
+    "rawHierarchyExported": false
+  },
+  "homeObservations": [
+    {
+      "coldLaunch": 1,
+      "titleVisible": true,
+      "firstCardVisible": true,
+      "foundationErrorVisible": false,
+      "systemErrorDialogObserved": false
+    },
+    {
+      "coldLaunch": 2,
+      "titleVisible": true,
+      "firstCardVisible": true,
+      "foundationErrorVisible": false,
+      "systemErrorDialogObserved": false
+    }
+  ],
+  "metroServerStarted": false,
+  "metroRequests": 0,
+  "adbReverseConfigured": false,
+  "screenshot": {
+    "name": "home.png",
+    "bytes": 163991,
+    "sha256": "ca456e03fcf0bc0982548ef0b88e0e21fef966c1403d74a28290c44cb3d769e3"
+  },
+  "fullNativeIoVerified": false,
+  "productJourneysVerified": false,
+  "remoteApiVerified": false,
+  "oauthVerified": false,
+  "physicalDeviceVerified": false,
+  "storeSigned": false,
+  "deployed": false
+}

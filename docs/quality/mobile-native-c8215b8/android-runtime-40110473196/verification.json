@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "kind": "reverified-compiled-android-binary",
+  "toolingSourceSha": "331bedfef34f88ce8a6a35a8386f556e5eb56b0e",
+  "binarySourceSha": "c8215b886848b102c506b40e2176498455d63668",
+  "input": {
+    "version": 1,
+    "sourceSha": "c8215b886848b102c506b40e2176498455d63668",
+    "workflowRunId": "40107257648",
+    "artifactId": "12565612897",
+    "artifactName": "mobile-internal-android-c8215b886848b102c506b40e2176498455d63668",
+    "receiptSha256": "b079c1d3309bbbfd953276dd61925733173f67e5db20993173d010067304fef6"
+  },
+  "observedAt": "2026-10-24T16:12:56.188Z",
+  "originalReceiptUnchanged": true,
+  "bundledInputParityVerified": true,
+  "sdkBinaryMetadataVerified": true,
+  "compiledHbcBytesVerified": true,
+  "graphFromPinnedCompilerReceipt": true,
+  "sourceMapRebuilt": false,
+  "retainedGeneratedBundleCompared": false,
+  "sdkBuildToolsVersion": "37.0.0",
+  "actualCertificateSha256": "fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c",
+  "recompiled": false,
+  "resigned": false,
+  "apiObservation": {
+    "status": "observed",
+    "observedAt": "2026-10-24T16:12:56.829Z",
+    "sourceSha": "3942f5ac48a7f43c9d4e66cedee57d5948e6ceed"
+  },
+  "appRuntimeVerified": false,
+  "remoteApiVerified": false,
+  "physicalDeviceVerified": false,
+  "storeSigned": false,
+  "deployed": false
+}
