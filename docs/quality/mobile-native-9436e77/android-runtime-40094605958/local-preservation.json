@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "kind": "preserved-failed-android-auth-run",
+  "verifiedAt": "2026-10-24T12:56:30.215Z",
+  "workflowRunId": 40094605958,
+  "workflowConclusion": "failure",
+  "toolingSourceSha": "90fc3ceb181174ad820cf7340534fb2585ffc09e",
+  "binarySourceSha": "9436e770240fcebd03f3ab66c42222c5343cf412",
+  "originalCompilerRunId": 40092725450,
+  "artifacts": {
+    "homeArtifactId": 12560616230,
+    "reverifiedArtifactId": 12560477396
+  },
+  "originalApkUnchanged": true,
+  "originalCompilerReceiptUnchanged": true,
+  "verificationSha256": "3f2c541573c6f5a3684f0b2d054a4a901e04a28f9350ad4b213821a2b6c96a37",
+  "homeReceiptSha256": "3b83fd7fbe966d8d38bca1a788e906cac2cecec7823bdafb9d03e70bcc88a46f",
+  "failureSha256": "059b70ac9d282e287997da81975b6b11291df36631d335e252115897b2a6289f",
+  "homePng": {
+    "bytes": 174322,
+    "sha256": "6658868956696d5ae1597e4c5df35a4908326d8289b6a92b84c6eb38fd2f798d",
+    "width": 1080,
+    "height": 2400
+  },
+  "sdkHomeLaunchVerified": true,
+  "coldHomeObservations": 2,
+  "authCancellationVerified": false,
+  "rootCauseConfirmed": false,
+  "appAuthFailureConfirmed": false,
+  "observedFailure": {
+    "phase": "auth-cancel-browser",
+    "code": "ANDROID_AUTH_VALIDATION_FAILED",
+    "provider": "google",
+    "operation": "file-read",
+    "exitCode": 1,
+    "hierarchyOutcome": "unknown"
+  },
+  "rawHierarchyExported": false,
+  "providerLoginVerified": false,
+  "physicalDeviceVerified": false,
+  "storeSigned": false,
+  "deployed": false
+}

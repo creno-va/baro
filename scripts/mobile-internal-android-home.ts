@@ -550,6 +550,11 @@ async function main() {
       try {
         results = await observeAndroidAuthCancellation({
           shell,
+          dumpHierarchy: async (file) => {
+            lastPostBoundaryHierarchyDump = null;
+            await shell(["uiautomator", "dump", "--compressed", file]);
+            return lastPostBoundaryHierarchyDump ?? "unknown";
+          },
           width: screenshot.readUInt32BE(16),
           height: screenshot.readUInt32BE(20),
           boundaryEntered: authPrivacy.entered,

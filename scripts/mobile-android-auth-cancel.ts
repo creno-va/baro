@@ -1,9 +1,14 @@
-import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import {
+  type AndroidAuthHierarchyDiagnostic,
+  androidAuthHierarchyDiagnosticSchema,
+  readAndroidAuthHierarchy,
+} from "./mobile-android-auth-hierarchy";
 import {
   androidChromeFixtureSchema,
   knownAndroidChromeFixtureFailure,
 } from "./mobile-android-chrome-fixture";
+import type { AndroidHierarchyDumpOutcome } from "./mobile-android-command-observation";
 import { androidGuideUiReceiptSchema } from "./mobile-android-guide-ui";
 
 const appId = "site.baro.app.preview";
@@ -239,6 +244,7 @@ export function verifyAndroidAuthCancelReceipt(value: unknown, expected: Identit
   return result;
 }
 export const androidAuthDiagnosticSchema = z.strictObject({
+  hierarchy: androidAuthHierarchyDiagnosticSchema.nullable().optional(),
   provider: z.enum(providers).nullable(),
   stage: z.enum([
     "open-session",
@@ -293,23 +299,30 @@ export function androidAuthFailureCode(error: unknown) {
     "ANDROID_AUTH_BROWSER_REQUIRED",
     "ANDROID_AUTH_RETURN_REQUIRED",
     "ANDROID_AUTH_COLD_LAUNCH_FAILED",
+    "ANDROID_AUTH_DUMP_FAILED",
+    "ANDROID_AUTH_DUMP_UNCONFIRMED",
+    "ANDROID_AUTH_HIERARCHY_READ_FAILED",
+    "ANDROID_AUTH_HIERARCHY_CLEANUP_FAILED",
   ]).has(code)
     ? code
     : "ANDROID_AUTH_VALIDATION_FAILED";
 }
 export async function observeAndroidAuthCancellation(context: {
   shell: (args: string[]) => Promise<string>;
+  dumpHierarchy?: (file: string) => Promise<AndroidHierarchyDumpOutcome>;
   width: number;
   height: number;
   boundaryEntered: boolean;
   screenshotsSuppressed: boolean;
   diagnostic: (value: AndroidAuthDiagnostic) => void;
+  /** Deterministic clock for unit fixtures; the native runner uses the default one-second pause. */
+  pause?: () => Promise<void>;
 }) {
   if (!context.boundaryEntered || !context.screenshotsSuppressed)
     throw Error("ANDROID_AUTH_BOUNDARY_REQUIRED");
   const { shell, width, height } = context;
   viewport(width, height);
-  const file = `/data/local/tmp/baro-auth-${randomUUID()}.xml`;
+  let hierarchyDiagnostic: AndroidAuthHierarchyDiagnostic | null = null;
   let provider: Provider | null = null,
     stage: AndroidAuthDiagnostic["stage"] = "open-session";
   let app: AndroidAuthDiagnostic["app"] = null,
@@ -317,26 +330,41 @@ export async function observeAndroidAuthCancellation(context: {
     browser: AndroidAuthDiagnostic["browser"] = null;
   const report = () =>
     context.diagnostic(
-      androidAuthDiagnosticSchema.parse({ provider, stage, app, activity, browser }),
+      androidAuthDiagnosticSchema.parse({
+        provider,
+        stage,
+        app,
+        activity,
+        browser,
+        hierarchy: hierarchyDiagnostic,
+      }),
     );
   async function hierarchy() {
-    try {
-      await shell(["uiautomator", "dump", "--compressed", file]);
-      return await shell(["cat", file]);
-    } finally {
-      await shell(["rm", "-f", file]).catch(() => {});
-    }
+    return readAndroidAuthHierarchy({
+      shell,
+      ...(context.dumpHierarchy ? { dumpHierarchy: context.dumpHierarchy } : {}),
+      diagnostic(value) {
+        hierarchyDiagnostic = value;
+        if (value.outcome !== "saved") {
+          app = null;
+          browser = null;
+        }
+        report();
+      },
+    });
   }
   async function foreground() {
     activity = androidAuthActivityObservation(await shell(["dumpsys", "activity", "activities"]));
     return activity;
   }
   async function pause() {
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    if (context.pause) await context.pause();
+    else await new Promise((resolve) => setTimeout(resolve, 1000));
   }
   async function reach(control: keyof typeof labels) {
     for (let count = 0; count <= 24; count++) {
       const xml = await hierarchy();
+      if (xml === null) continue;
       app = androidAnonymousAuthObservation(xml);
       report();
       if (!(await foreground()).appForeground) throw Error("ANDROID_AUTH_CONTROL_NOT_FOUND");
@@ -357,7 +385,12 @@ export async function observeAndroidAuthCancellation(context: {
   }
   async function anonymous() {
     for (let attempt = 0; attempt < 20; attempt++) {
-      app = androidAnonymousAuthObservation(await hierarchy());
+      const xml = await hierarchy();
+      if (xml === null) {
+        await pause();
+        continue;
+      }
+      app = androidAnonymousAuthObservation(xml);
       await foreground();
       report();
       if (
@@ -400,6 +433,10 @@ export async function observeAndroidAuthCancellation(context: {
       const observedActivity = await foreground();
       stage = "browser";
       const xml = await hierarchy();
+      if (xml === null) {
+        await pause();
+        continue;
+      }
       app = androidAnonymousAuthObservation(xml);
       browser = androidCustomTabControls(xml, width, height);
       report();

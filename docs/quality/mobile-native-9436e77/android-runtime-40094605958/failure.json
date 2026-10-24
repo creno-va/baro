@@ -1,0 +1,111 @@
+{
+  "toolingSourceSha": "90fc3ceb181174ad820cf7340534fb2585ffc09e",
+  "phase": "auth-cancel-browser",
+  "code": "ANDROID_AUTH_VALIDATION_FAILED",
+  "launcherBaseline": {
+    "kind": "owned-android-launcher-readiness",
+    "launcherKind": "pixel",
+    "samples": 3,
+    "consecutiveReadySamples": 3,
+    "foregroundMatchedBeforeAndAfterReadySamples": true,
+    "launcherRootVisibleInReadySamples": true,
+    "systemErrorDialogAbsentInSamples": true,
+    "productLaunched": false,
+    "dialogDismissed": false,
+    "launcherChanged": false,
+    "rawHierarchyExported": false
+  },
+  "lastLauncherBaselineDiagnostic": {
+    "stage": "sample",
+    "launcherKind": "pixel",
+    "samples": 3,
+    "consecutiveReadySamples": 3,
+    "foregroundBefore": true,
+    "foregroundAfter": true,
+    "rootVisible": true,
+    "systemErrorDialogObserved": false,
+    "dumpConfirmed": true,
+    "cleanupFailed": false,
+    "failureCode": null
+  },
+  "prePublicStartupCommandFailures": {
+    "count": 0,
+    "first": null,
+    "last": null
+  },
+  "lastLauncherHierarchyDump": "saved",
+  "lastHomeSystemErrorDialogObserved": false,
+  "postBoundaryCommandFailures": {
+    "count": 1,
+    "first": {
+      "operation": "file-read",
+      "category": "nonzero-exit",
+      "exitCode": 1,
+      "timedOut": false
+    },
+    "last": {
+      "operation": "file-read",
+      "category": "nonzero-exit",
+      "exitCode": 1,
+      "timedOut": false
+    }
+  },
+  "lastPostBoundaryHierarchyDump": "unknown",
+  "emulatorBootVerified": true,
+  "lastHomeObservation": {
+    "titleVisible": true,
+    "firstCardVisible": true,
+    "foundationErrorVisible": false
+  },
+  "lastPublicObservation": null,
+  "lastDirectoryInputObservation": null,
+  "lastGuideObservation": null,
+  "lastAuthObservation": {
+    "provider": "google",
+    "stage": "browser",
+    "app": {
+      "anonymousGatePresent": false,
+      "authorizingPresent": true,
+      "errorPresent": false,
+      "consentPresent": false,
+      "authenticatedPresent": false
+    },
+    "activity": {
+      "appForeground": true,
+      "chromeCustomTabForeground": false,
+      "chromeFirstRunForeground": false,
+      "foregroundAmbiguous": false
+    },
+    "browser": {
+      "webViewGeometryVerified": false,
+      "uniqueNativeCloseControl": false,
+      "closeControlOutsideEveryWebView": false
+    }
+  },
+  "lastChromeFixture": {
+    "kind": "owned-emulator-preinstalled-chrome-test-fixture",
+    "buildType": "userdebug",
+    "chromeVersion": "124.0.6367.219",
+    "switches": [
+      "--disable-fre"
+    ],
+    "commandLineSha256": "51f795358d9763ded89e91dd7b2729f9b64b022c60348161fc63f6f21b2accff",
+    "commandLineReadbackVerified": true,
+    "commandLineRemovedVerified": true,
+    "consumerFirstRunVerified": false,
+    "consentUiUsed": false,
+    "accountsConfigured": false,
+    "rootAdbUsed": false,
+    "debugAppSettingsChanged": false,
+    "tlsChecksChanged": false,
+    "webSecurityChanged": false
+  },
+  "receiptValidationFields": [],
+  "publicScreenshotsSuppressed": true,
+  "emulatorStartupIssues": [],
+  "sdkHomeLaunchVerified": true,
+  "largeFontVerified": false,
+  "physicalDeviceVerified": false,
+  "storeSigned": false,
+  "deployed": false
+}
