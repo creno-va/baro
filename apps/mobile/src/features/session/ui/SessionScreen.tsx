@@ -1,5 +1,6 @@
-import type { AccountType, Provider } from "@baro/client-core";
+import type { AccountType, MobileProvider } from "@baro/client-core";
 import { useState } from "react";
+import { AppleSignInButton } from "../../../ui/AppleSignInButton";
 import { Button } from "../../../ui/Button";
 import { Card } from "../../../ui/Card";
 import { Choice } from "../../../ui/Choice";
@@ -26,14 +27,14 @@ export function SessionScreen({
 }: {
   state: SessionState;
   onRole: (role: AccountType) => void;
-  onSignIn: (provider: Provider) => void;
+  onSignIn: (provider: MobileProvider) => void;
   onCancel: () => void;
   onRetry: () => void;
   onConsent: (input: { policies: boolean; over14: boolean }) => void;
   onSignOut: () => void;
   onBrowse: () => void;
   onPolicy: (policy: Policy) => void;
-  onReauthenticate?: (provider: Provider) => void;
+  onReauthenticate?: (provider: MobileProvider) => void;
   onReadReauthentication?: () => void;
   onSettings?: () => void;
   onProfile?: () => void;
@@ -92,9 +93,37 @@ export function SessionScreen({
             onPress={() => onRole("lawyer")}
           />
           <Text variant="muted">이용 유형 선택은 변호사 자격 확인을 뜻하지 않아요.</Text>
-          <Button label="Google로 로그인" onPress={() => onSignIn("google")} />
-          <Button label="네이버로 로그인" onPress={() => onSignIn("naver")} />
-          <Button label="카카오로 로그인" onPress={() => onSignIn("kakao")} />
+          {state.authentication?.checking ? <Text>로그인 수단을 확인하고 있어요.</Text> : null}
+          {state.authentication?.error ? (
+            <Text accessibilityRole="alert">{state.authentication.error}</Text>
+          ) : null}
+          {state.authentication &&
+          !state.authentication.checking &&
+          !state.authentication.providers.length ? (
+            <Button label="로그인 수단 다시 확인" onPress={onRetry} />
+          ) : null}
+          {(state.authentication?.providers ?? ["google", "naver", "kakao"]).map((provider) =>
+            provider === "apple" ? (
+              <AppleSignInButton
+                key={provider}
+                disabled={state.busy}
+                onPress={() => onSignIn(provider)}
+              />
+            ) : (
+              <Button
+                key={provider}
+                label={`${{ google: "Google", naver: "네이버", kakao: "카카오" }[provider]}로 로그인`}
+                disabled={state.busy}
+                onPress={() => onSignIn(provider)}
+              />
+            ),
+          )}
+          {state.authentication?.providers.includes("apple") ? (
+            <Text variant="muted">
+              기존 계정이 있다면 연결했던 로그인 수단을 사용해 주세요. Apple의 이메일 비공개
+              선택만으로 다른 계정이 자동 연결되지는 않아요.
+            </Text>
+          ) : null}
         </>
       ) : null}
       {state.phase === "consent" && state.consent && state.session?.user ? (
@@ -146,14 +175,24 @@ export function SessionScreen({
                 disabled={state.busy || state.reauthentication?.checking === true}
                 onPress={() => onReadReauthentication?.()}
               />
-              {state.reauthentication?.providers.map((provider) => (
-                <Button
-                  key={provider}
-                  label={`${{ google: "Google", naver: "네이버", kakao: "카카오" }[provider]}로 같은 계정 다시 인증`}
-                  disabled={state.busy}
-                  onPress={() => onReauthenticate(provider)}
-                />
-              ))}
+              {state.reauthentication?.providers.map((provider) =>
+                provider === "apple" ? (
+                  <AppleSignInButton
+                    key={provider}
+                    kind="continue"
+                    disabled={state.busy}
+                    accessibilityHint="연결된 같은 Apple 계정으로 다시 인증해요. 취소하면 이전 로그인은 유지돼요."
+                    onPress={() => onReauthenticate(provider)}
+                  />
+                ) : (
+                  <Button
+                    key={provider}
+                    label={`${{ google: "Google", naver: "네이버", kakao: "카카오" }[provider]}로 같은 계정 다시 인증`}
+                    disabled={state.busy}
+                    onPress={() => onReauthenticate(provider)}
+                  />
+                ),
+              )}
             </Card>
           ) : null}
           <Button label="로그아웃" disabled={state.busy} onPress={onSignOut} />

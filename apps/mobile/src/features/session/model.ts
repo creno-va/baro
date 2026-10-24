@@ -1,5 +1,5 @@
-import { ApiError, errorMessage } from "@baro/api-client";
-import type { AccountType, Provider, SessionScope } from "@baro/client-core";
+import { ApiError, errorMessage, type MobileAuthProtocol } from "@baro/api-client";
+import type { AccountType, MobileProvider, SessionScope } from "@baro/client-core";
 import { type ConsentInput, consentInputSchema } from "@baro/contracts/consent";
 import type { ClientSession, ConsentStatus } from "@baro/contracts/session";
 import type { NativeLoginResult } from "../../platform/auth/login";
@@ -11,9 +11,15 @@ export interface SessionState {
   busy: boolean;
   consent: ConsentStatus | null;
   error: string | null;
+  authentication?: {
+    providers: MobileProvider[];
+    contractVersion?: 1 | 2;
+    checking: boolean;
+    error: string | null;
+  };
   authPurpose?: "reauthenticate";
   reauthentication?: {
-    providers: Provider[];
+    providers: MobileProvider[];
     verified: boolean;
     checking: boolean;
     error: string | null;
@@ -24,9 +30,10 @@ export function createSessionModel(dependencies: {
   readSession: () => Promise<ClientSession>;
   getConsent: () => Promise<ConsentStatus>;
   saveConsent: (input: ConsentInput) => Promise<unknown>;
+  readAuthentication?: () => Promise<MobileAuthProtocol>;
   login: {
     start(
-      provider: Provider,
+      provider: MobileProvider,
       role: AccountType,
       purpose?: "reauthenticate",
     ): Promise<NativeLoginResult>;
@@ -36,7 +43,9 @@ export function createSessionModel(dependencies: {
   ownsReturn: (raw: string) => Promise<boolean>;
   signOut: () => Promise<{ serverRevoked: boolean }>;
   openPolicy: (policy: "terms" | "privacy" | "ai") => Promise<void>;
-  readReauthentication?: (ownerId: string) => Promise<{ providers: Provider[]; verified: boolean }>;
+  readReauthentication?: (
+    ownerId: string,
+  ) => Promise<{ providers: MobileProvider[]; verified: boolean }>;
 }) {
   let state: SessionState = {
     phase: "checking",
@@ -45,8 +54,12 @@ export function createSessionModel(dependencies: {
     busy: false,
     consent: null,
     error: null,
+    ...(dependencies.readAuthentication
+      ? { authentication: { providers: [], checking: true, error: null } }
+      : {}),
   };
   let version = 0;
+  let authenticationVersion = 0;
   let paused = false;
   let loggingOut = false;
   let returnLookups = 0;
@@ -57,6 +70,23 @@ export function createSessionModel(dependencies: {
     for (const listener of subscribers) listener();
   };
   const current = (captured: number) => captured === version;
+  async function loadAuthentication() {
+    if (!dependencies.readAuthentication) return;
+    const captured = ++authenticationVersion;
+    publish({ ...state, authentication: { providers: [], checking: true, error: null } });
+    try {
+      const protocol = await dependencies.readAuthentication();
+      if (captured === authenticationVersion)
+        publish({ ...state, authentication: { ...protocol, checking: false, error: null } });
+    } catch (error) {
+      // Public capability failures do not invalidate a separately verified private session.
+      if (captured === authenticationVersion)
+        publish({
+          ...state,
+          authentication: { providers: [], checking: false, error: errorMessage(error) },
+        });
+    }
+  }
   const ordinary = () => {
     const { reauthentication: _proof, authPurpose: _purpose, ...rest } = state;
     return rest;
@@ -153,11 +183,13 @@ export function createSessionModel(dependencies: {
     if (paused || state.busy || loggingOut || returnLookups) return;
     const captured = ++version;
     checking("checking");
+    const authentication = loadAuthentication();
     try {
       await apply(await dependencies.readSession(), captured);
     } catch (error) {
       fail(captured, error);
     }
+    await authentication;
   }
   return {
     getSnapshot: () => state,
@@ -173,8 +205,15 @@ export function createSessionModel(dependencies: {
       if (state.busy || (state.phase !== "anonymous" && state.phase !== "error")) return;
       publish({ ...state, role });
     },
-    async signIn(provider: Provider) {
+    async signIn(provider: MobileProvider) {
       if (state.busy || loggingOut || returnLookups) return;
+      if (
+        state.authentication &&
+        (state.authentication.checking || !state.authentication.providers.includes(provider))
+      ) {
+        publish({ ...state, error: "사용할 수 있는 로그인 수단을 다시 확인해 주세요." });
+        return;
+      }
       const captured = ++version,
         role = state.role;
       pendingReauthentication = false;
@@ -191,7 +230,7 @@ export function createSessionModel(dependencies: {
         fail(captured, error);
       }
     },
-    async reauthenticate(provider: Provider) {
+    async reauthenticate(provider: MobileProvider) {
       if (
         state.busy ||
         loggingOut ||

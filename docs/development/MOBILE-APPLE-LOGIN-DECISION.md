@@ -354,3 +354,38 @@ production build/local workerd와 양 OS Metro export다. native proof/기존 �
 화면은 여전히 기존3사이며 삭제 factory/SecureStore namespace·owner별 정리와 cold/warm
 반환 분기·공식 Apple 버튼을 함께 조립한 뒤 capability 기반 UI를 노출한다. 미확정·만료
 기록의 사용자 복구와 실제 설정/두 OS 기기 검증도 남아 있다.
+
+## native UI 조립 초안 — 아직 병합/실제 인수 전
+
+`codex/346-native-apple-ui`는 main8fb0db3을 통합했다. 공식 Apple PNG 1x/2x/3x를
+변경하지 않고 `AppleSignInButton`에서 사용하며, 자산 출처/DMG hash/라이선스는
+`apps/mobile/assets/auth/APPLE-ARTWORK.txt`에 보존한다. 광고된 provider만 표시하고
+공개 capability 조회는 credential/scope와 분리한다. 공개 조회 오류가 별도로 확인한
+private session을 해제하거나 legacy 지원으로 바뀌지 않는다.
+
+삭제 proof의 실제 SecureStore namespace와 시스템 브라우저/SDK·독립 completion
+requester를 조립했다. cookie writer revision은 scope의 foreground 전환과 구분한다.
+이전 삭제의 따뜻한 복귀는 같은 writer일 때만 정리하고, 새 owner는 cookie를 읽거나
+쓰기 전에 정리를 건너뛴다. 앱 재시작으로 binding을 잃으면 삭제 접수와 기기 정리 실패를
+구분하며, 실제 서버 조회로 비로그인이 확인된 상태에서만 사용자가 기기 정보를 직접
+정리할 수 있다. 미확정 작업 저장소는 지우지 않는다. 정리 도중 새 로그인이 시작되면
+중단하며 새 reset revision을 이전 요청의 것으로 잘못 재등록하지 않는다.
+
+계정 삭제 화면은 provider 선택·literal DELETE를 인증 전에 요구하고, 접수/취소/미확정,
+Apple 연결 해제와 기기 정리·저장 실패를 따로 표시한다. normal/deletion 반환은 journal로
+분기하고, 비동기 lookup 중 startup refresh가 정상 로그인 교환을 덮지 않도록 막는다.
+Expo Router에는 고정 화면 경로만 전달하며 code/verifier/owner ID를 route param에 넣지
+않는다. 이전 서버와 이전 방식의 미확정 삭제 복구 수단은 유지한다.
+
+현재 **만료된 미확정 proof가 동일 owner의 새 삭제 시도를 막는 경로가 남아 있어 UI를
+병합하지 않는다.** 다음 auth producer에서 활성 인증의 종료와 실제 계정 삭제 결과를
+분리하는 additive activity 계약을 추가한다. 만료 intent는 exact-row CAS로 종료하고
+삭제 결과는 unknown으로 보존하며, 종료를 취소/접수로 꾸미지 않는다. 기존 OAuth/교환·
+영수증 TTL과 owner·PKCE 검증은 유지한다. 새 capability는 명시적 feature 협의로만
+광고하여 이전 strict v2 응답을 보존한다. producer의 CI/main 통합 뒤 소비한다.
+
+현재 초안의 검증은 frozen/quick(공통501/60files·RN102/24suites·server243),
+production build/local workerd, 양 OS Metro export다. 설치된 SDK를 이용한 합성
+coordinator 검증3건은 정상 정리·시스템 브라우저 중 owner 교체·cold 복구와 명시적
+비로그인 정리를 다룬다. 실제 Apple/기기·최신 native compile/화면 인수·공개 출시를
+완료한 결과가 아니며, source6201112 artifact를 이 새 JS/UI의 증거로 재사용하지 않는다.

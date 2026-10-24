@@ -1,0 +1,11 @@
+Sign in with Apple official white Logo-only PNG, unchanged 1x/2x/3x.
+Copyright Apple Inc. All rights reserved.
+
+Source: https://devimages-cdn.apple.com/design/resources/download/Logo-Sign-in-with-Apple.dmg
+Official resource index: https://developer.apple.com/design/resources/
+DMG SHA256: 99fba5c8a294a86653294b3766d7ce21dde47cc75a77367659c45ea168699af6
+License: Apple Developer Artwork License Agreement for Sign in with Apple, EA1677 1/30/2020.
+The account owner confirmed Apple Developer Program membership on 2026-10-24.
+Use is limited to the Sign in with Apple UI of the BARO app and its corresponding versions,
+under the artwork license and Apple's Human Interface Guidelines. Not a standalone icon library.
+No developer credential, Team ID, key, token or external login proof is included here.

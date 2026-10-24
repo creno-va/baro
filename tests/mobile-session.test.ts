@@ -14,10 +14,12 @@ const owner = (id: string, needsConsent = false): ClientSession => ({
 });
 function deferred<T>() {
   let resolve!: (value: T) => void;
-  const promise = new Promise<T>((done) => {
+  let reject!: (error: unknown) => void;
+  const promise = new Promise<T>((done, fail) => {
     resolve = done;
+    reject = fail;
   });
-  return { promise, resolve };
+  return { promise, resolve, reject };
 }
 function fixture(initial = anonymous) {
   let session = initial,
@@ -339,4 +341,136 @@ test("reauthentication cancellation keeps the actual old session and ignores lat
   await pending;
   expect(model.getSnapshot()).toMatchObject({ phase: "ready", session: { user: { id: "a" } } });
   expect(model.getSnapshot().reauthentication).toBeUndefined();
+});
+
+test("public capability failure preserves a verified private owner and never turns into legacy availability", async () => {
+  const f = fixture(owner("a")),
+    gate = deferred<{ contractVersion: 2; providers: ["apple"] }>();
+  f.dependencies.readAuthentication = () => gate.promise;
+  const model = createSessionModel(f.dependencies),
+    refresh = model.refresh();
+  for (let step = 0; step < 20 && model.getSnapshot().phase !== "ready"; step++)
+    await Promise.resolve();
+  expect(model.getSnapshot().session?.user?.id).toBe("a");
+  const generation = f.scope.snapshot();
+  // Even a public 401 is not private-session expiry evidence.
+  gate.reject(new ApiError("UNAUTHENTICATED", "합성 공개 계약 오류", true, 401));
+  await refresh;
+  expect(model.getSnapshot()).toMatchObject({
+    phase: "ready",
+    session: { user: { id: "a" } },
+    authentication: { providers: [], checking: false },
+  });
+  expect(model.getSnapshot().authentication?.error).toBeTruthy();
+  expect(f.scope.snapshot()).toBe(generation);
+});
+
+test("an unavailable advertised-provider list blocks sign-in without invalidating credentials or inventing a fallback", async () => {
+  const f = fixture();
+  let logins = 0;
+  f.dependencies.readAuthentication = async () => {
+    throw new ApiError("UNAVAILABLE", "합성 서버 장애", true, 503);
+  };
+  f.dependencies.login.start = async () => {
+    logins++;
+    return { type: "cancelled" };
+  };
+  const model = createSessionModel(f.dependencies);
+  await model.refresh();
+  const generation = f.scope.snapshot();
+  await model.signIn("google");
+  await model.signIn("apple");
+  expect(logins).toBe(0);
+  expect(f.scope.snapshot()).toBe(generation);
+  expect(model.getSnapshot().authentication?.providers).toEqual([]);
+});
+
+test("the newest public capability read wins across foreground checks and v2 can advertise Apple", async () => {
+  const f = fixture(),
+    first = deferred<{ contractVersion: 2; providers: ["apple"] }>();
+  let reads = 0;
+  f.dependencies.readAuthentication = async () =>
+    ++reads === 1 ? first.promise : { contractVersion: 1, providers: ["google", "naver", "kakao"] };
+  const model = createSessionModel(f.dependencies),
+    pending = model.refresh();
+  for (let step = 0; step < 20 && model.getSnapshot().busy; step++) await Promise.resolve();
+  await model.refresh();
+  first.resolve({ contractVersion: 2, providers: ["apple"] });
+  await pending;
+  expect(model.getSnapshot().authentication).toMatchObject({
+    contractVersion: 1,
+    providers: ["google", "naver", "kakao"],
+    checking: false,
+  });
+  f.dependencies.readAuthentication = async () => ({ contractVersion: 2, providers: ["apple"] });
+  await model.refresh();
+  let requested: string | undefined;
+  f.dependencies.login.start = async (provider) => {
+    requested = provider;
+    return { type: "cancelled" };
+  };
+  await model.signIn("apple");
+  expect(requested).toBe("apple");
+});
+
+test("special-return lookup reserves the cold foreground gate before delegating a normal login", async () => {
+  const f = fixture(),
+    gate = deferred<boolean>(),
+    done = deferred<void>(),
+    queue = createAuthReturnQueue();
+  const model = createSessionModel(f.dependencies);
+  queue.push("synthetic-return");
+  let foreground: ((state: string) => void) | undefined;
+  const unsubscribe = model.subscribe(() => {
+    if (model.getSnapshot().session?.user?.id === "returned") done.resolve();
+  });
+  const stop = bindSessionLifecycle({
+    model,
+    returns: queue,
+    currentState: () => "active",
+    subscribe: (callback) => {
+      foreground = callback;
+      return () => {};
+    },
+    receiveSpecialReturn: () => gate.promise,
+  });
+  foreground?.("active");
+  expect(f.stats().reads).toBe(0);
+  gate.resolve(false);
+  await done.promise;
+  expect(model.getSnapshot().session?.user?.id).toBe("returned");
+  stop();
+  unsubscribe();
+});
+
+test("an owned deletion return never reaches normal auth exchange and releases foreground checking", async () => {
+  const f = fixture(owner("current")),
+    gate = deferred<boolean>(),
+    done = deferred<void>(),
+    queue = createAuthReturnQueue();
+  f.dependencies.login.complete = async () => {
+    throw new Error("MUST_NOT_EXCHANGE_AUTH_CODE");
+  };
+  f.dependencies.ownsReturn = async () => {
+    throw new Error("MUST_NOT_LOOK_UP_NORMAL_ATTEMPT");
+  };
+  const model = createSessionModel(f.dependencies);
+  queue.push("synthetic-deletion-return");
+  const unsubscribe = model.subscribe(() => {
+    if (model.getSnapshot().phase === "ready") done.resolve();
+  });
+  const stop = bindSessionLifecycle({
+    model,
+    returns: queue,
+    currentState: () => "active",
+    subscribe: () => () => {},
+    receiveSpecialReturn: () => gate.promise,
+  });
+  expect(f.stats().reads).toBe(0);
+  gate.resolve(true);
+  await done.promise;
+  expect(model.getSnapshot().session?.user?.id).toBe("current");
+  expect(f.stats().reads).toBe(1);
+  stop();
+  unsubscribe();
 });

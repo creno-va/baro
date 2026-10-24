@@ -31,6 +31,16 @@ function ConnectedSettings({ session }: { session: SessionModel }) {
     [session],
   );
   const state = useSyncExternalStore(model.subscribe, model.getSnapshot);
+  const sessionState = useSyncExternalStore(session.subscribe, session.getSnapshot);
+  const authentication = sessionState.authentication;
+  const deletionMode =
+    !authentication || authentication.checking
+      ? "checking"
+      : authentication.error
+        ? "unavailable"
+        : authentication.contractVersion === 2
+          ? "v2"
+          : "legacy";
   useFocusEffect(
     useCallback(() => {
       let stop: (() => void) | undefined;
@@ -53,5 +63,13 @@ function ConnectedSettings({ session }: { session: SessionModel }) {
       };
     }, [model, session]),
   );
-  return <SettingsScreen state={state} actions={model} onSession={() => router.push("/session")} />;
+  return (
+    <SettingsScreen
+      state={state}
+      actions={model}
+      deletionMode={deletionMode}
+      onDeletion={() => router.push("/account-deletion")}
+      onSession={() => router.push("/session")}
+    />
+  );
 }

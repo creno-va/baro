@@ -11,7 +11,12 @@ import { readMobileConfig } from "./config";
 let client: MobileAuthClient | undefined;
 export function getMobileAuthClient() {
   client ??= createMobileAuthClient({
-    request: getMobileApi().request,
+    request: (options) => {
+      const api = getMobileApi();
+      return options.path === "/api/mobile/auth/capabilities"
+        ? api.publicRequest(options)
+        : api.request(options);
+    },
     completionRequest: createJsonRequester({
       newKey: randomUUID,
       transport: createNativeDeletionTransport({
