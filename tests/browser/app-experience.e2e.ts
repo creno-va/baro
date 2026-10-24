@@ -43,6 +43,33 @@ async function fits(page: Page) {
   ).toBe(true);
 }
 
+test("press feedback keeps the pointer target fixed with motion enabled", async ({ page }) => {
+  await session(page);
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/cases");
+  await settled(page);
+  const opener = page.getByRole("button", {
+    name: `${stories[0]?.title} 사건 삭제`,
+    exact: true,
+  });
+  await opener.scrollIntoViewIfNeeded();
+  const before = await opener.boundingBox();
+  if (!before) throw new Error("Missing synthetic delete button");
+  await page.mouse.move(before.x + before.width / 2, before.y + before.height / 2);
+  await page.mouse.down();
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      ),
+  );
+  await expect(opener).toHaveCSS("transform", "none");
+  expect(await opener.boundingBox()).toEqual(before);
+  await page.mouse.up();
+  await expect(page.getByRole("dialog")).toBeVisible();
+});
+
 test("recent stories scroll independently while account controls stay visible at desktop heights", async ({
   page,
 }) => {

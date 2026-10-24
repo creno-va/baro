@@ -2020,7 +2020,7 @@ test("workspace panels keep their navigation, readable layouts and accessible co
     ["자료 0", "/files"],
     ["타임라인", "/timeline"],
     ["다음 행동", "/actions"],
-    ["판례", "/precedents"],
+    ["유사 판례", "/precedents"],
     ["리포트 보기", "/reports"],
   ] as const)
     await expect(navigation.getByRole("link", { name, exact: true })).toHaveAttribute(
