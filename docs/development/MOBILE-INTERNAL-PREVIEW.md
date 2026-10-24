@@ -1459,3 +1459,14 @@ node-forge high가 함께 보고됐다. 공식 advisory에서 Zod4.6.6·fast-uri
 8.12.2를 확인했다. 이 신규 관측을 숨기지 않으며 #339의 별도 공유 의존성 수정이 선행이다.
 본 native 후보는 draft로 보존하고 보안 producer 통합/rebase 후 exact CI·새 compiler를 진행한다.
 현재 원본4ba1d39의 metadata/compile/실패를 새 보완의 성공으로 표시하지 않는다.
+
+보안 producer PR454는 최종 headc5e4374… CI40062890300 SUCCESS 뒤
+main `cfaed191714f9b4e59679f230bd2cb0723e05691`에 정상 통합됐고 main CI40063084067도
+SUCCESS다. native 후보는 이를 merge 통합했으며 사용자 README 로컬 수정은 보존했다.
+통합 후 frozen/quick119개·모바일/공통419개·RN88개·production build/workerd·두 OS Metro가
+통과했다. 통합 후 raw audit 원문은 producer의 after.json과 byte가 같고 node-forge/CLI
+Zod3 high2개를 보존한다. 전체 unit3803개는 보안 producer에서 통과한 범위로 구분한다.
+
+후보의 최종 exact PR/main CI 뒤 새 Simulator compiler를 요청하여 native3파일이 실제
+소스에서 compile됐는지 인수한다. 기존4ba1d39 pin은 새 성공 원본과 별도이며 아직 바꾸지
+않았다. 새 native compile/앱 literal·소프트 Search·회전 및 한국어/전체 기기/릴리스는 미검증이다.
