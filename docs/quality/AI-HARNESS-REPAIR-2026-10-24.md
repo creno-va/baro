@@ -635,3 +635,67 @@ revocations after the earlier refresh. Eight added cases cover before/after-guar
 manifest replacement and late file/policy consent loss at both write boundaries.
 All87 focused cases (35 execution cases) then passed. These are synthetic SQL/AES
 failure tests, not evidence of an actual customer source replacement or breach.
+
+
+## Integrated da9 preview and retained publication retry
+
+PR492 finaleb976ec3 passed focused87/quick302/DB fresh+upgrade/full4194/build and
+CI40101624271; normal squash main e1b7b54 CI40102031237 passed. PR494 integrated
+that main: exact89b0c063 passed frozen/quick302/full4206 across385 files with172656
+assertions/build and CI40102057543. Normal squash main
+`da9cc6d2bb3dd9b0a8e24793f44443206ceb2abd` passed CI40102819415 and
+[preview40103079485](https://github.com/creno-va/baro/actions/runs/40103079485).
+The [configuration receipt](./ai-harness-2026-10-24/preview-da9cc6d.json) has actual
+checkedAt14:38:57.480Z; observation warnings are retained. Production is unchanged.
+RN main hold was released after deployment success.
+
+Original synthetic audio208526B/PDF25842B/video66723B downloads match their local
+source bytes. On this changed preview, one explicit audio retry started14:40:01Z:
+extract10.195s, interpret6.570s, unit preparation2.292s succeeded. Publication
+preparation then failed DB_OPERATION_FAILED3.248s at14:40:23Z. No unchanged
+retry, transcript accuracy or ready-file success is claimed.
+
+The actual-SQL/AES regression retained an earlier publication header, coverage
+parts, observations/derivatives or a sealed snapshot, then started a new explicit
+runtime. All four failed with the same DB_OPERATION_FAILED at staging.begin:
+the immutable snapshot unique key `(purpose,target_id,revision)` was occupied,
+while the new attempt reused sourceFileRevision+1. This is a concrete local
+reproduction matching the live stage/error; the live provider cause is not
+claimed from raw exception/SQL output. Old observations/derivatives also reserve
+their version namespace and must remain intact.
+
+The candidate allocates a fresh output revision above the existing coverage,
+observation and derivative revisions with one indexed read. Its encrypted
+immutable publication plan carries that revision through operational fence
+refresh, staging, seal, file metadata encryption and publication. Source revision,
+manifest, current owner/consent/lease checks and per-operation quota are unchanged.
+Older plans omit the optional field and keep their original exact version;
+replays reuse the same plan. Completed replay checks the actual output revision
+and the exact published job/runtime/fencing binding. No schema/migration or
+installed mobile/public DTO changes; no old snapshot/part/result/hold deletion
+or timestamp rewrite.
+
+The five focused retry cases include the real workerd D1 binding, seeded before
+upload and used for both complete processing attempts; native/R2/model ports
+are explicit offline adapters. An initial attempt to clone already-processed
+physical writer state was rejected by the existing physical-binding trigger;
+the test now starts native D1 before upload and never bypasses that trigger.
+This local test is not actual Container/STT/vision success. The canonical
+one/two-page fixture adds exactly one DB call/SQL (655/839 and1161/1466), keeping
+312/561 original authorization boundaries. Final broad checks, exact-head CI and
+changed-preview ready media acceptance remain outstanding.
+
+
+PR497 exactb08e5c9 passed frozen/finalquick303/full4212 across385 files with172781
+assertions, DB schema/fresh/upgrade and build/local built Worker. CI40104481099
+passed; normal squash main ebd90a0935e6783f5e7738fed482c3425537cadd passed
+mainCI40104728606. This does not claim that the changed product retry is ready.
+
+Meanwhile a single changed-condition da9 PDF attempt passed extract0/interpret0
+but failed extract1 at14:52:41Z. The normalized startup event was
+instance_unavailable196ms. The follow-up
+[native ordering repair](./NATIVE-STARTUP-REPAIR-2026-10-24.md#idle-timeout-order-after-a-confirmed-allocation)
+reproduces an idle-before-start error and moves idle configuration after
+confirmed readiness with unchanged cleanup, cancellation and physical limits.
+The RN session keeps the main merge interval while these independent fixes are
+integrated for one final same-SHA preview. No source failure or original is removed.

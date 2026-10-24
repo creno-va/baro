@@ -243,3 +243,46 @@ test("Settings caption diagnostics accept only bounded consistent candidate coun
   expect(parseControl({ ...value, textCount: 0, selection: "none" })?.selection).toBe("none");
   expect(parseControl({ ...value, cellCount: 2, selection: "cell" })).toBeNull();
 });
+
+test("owner-aware diagnostic permits duplicate captions only with unique actionable owners and verified overlap", async () => {
+  const historical = (
+    await Bun.file("docs/quality/mobile-native-9436e77/ios-korean-40103849176/failure.json").json()
+  ).koreanDirectoryFailure.setupControl;
+  const parseControl = (v: unknown) =>
+    observeIosKoreanDirectoryFailure(`BARO_KOREAN_SETUP_CONTROL:${JSON.stringify(v)}`).setupControl;
+  expect<unknown>(parseControl(historical)).toEqual(historical);
+  expect(parseControl({ ...historical, ownersOverlap: true, selection: "cell" })?.selection).toBe(
+    "cell",
+  );
+  expect(
+    parseControl({ ...historical, ownersOverlap: false, selection: "ambiguous" })?.selection,
+  ).toBe("ambiguous");
+  for (const patch of [
+    { ownersOverlap: false, selection: "cell" },
+    { ownersOverlap: true, selection: "text" },
+    { ownersOverlap: "true", selection: "cell" },
+    { ownersOverlap: true, selection: "button" },
+    { ownersOverlap: true, cellCount: 2, selection: "cell" },
+    { ownersOverlap: true, cellCount: 0, buttonCount: 2, selection: "button" },
+    { ownersOverlap: true, cellCount: 0, buttonCount: 0, selection: "text" },
+    { ownersOverlap: false, cellCount: 0, buttonCount: 0, selection: "ambiguous" },
+    { ownersOverlap: true, selection: "cell", rawFrame: [0, 1, 2, 3] },
+  ])
+    expect(parseControl({ ...historical, ...patch })).toBeNull();
+  expect(
+    parseControl({ ...historical, ownersOverlap: true, cellCount: 0, selection: "button" })
+      ?.selection,
+  ).toBe("button");
+  const workflow = parse(
+    await Bun.file(".github/workflows/mobile-internal-ios-reverify.yml").text(),
+  );
+  const step = workflow.jobs.verify.steps.find(
+    (s: { name?: string }) => s.name === "Require Apple Foundation Settings owner policy",
+  );
+  expect(step.if).toBe("inputs.korean_directory");
+  expect(step.env.BARO_IOS_SETTINGS_OWNER_REQUIRED).toBe("1");
+  expect(step.run).toBe("bun test tests/mobile-ios-korean-settings-owner.test.ts");
+  expect(await Bun.file("scripts/validate.ts").text()).toContain(
+    '"tests/mobile-ios-korean-settings-owner.test.ts"',
+  );
+});

@@ -33,6 +33,7 @@ test("actual processor class coordinates distinct DOs through persisted RPC befo
           },
           monitor() { return monitored; },
           async setInactivityTimeout(duration) {
+            if (!running) throw new Error("there is no container instance that can be provided to this durable object");
             if (duration !== 300000) throw new Error("synthetic changed idle budget");
           },
           async destroy() {
