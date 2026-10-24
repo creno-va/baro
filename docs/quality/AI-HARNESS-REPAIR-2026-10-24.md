@@ -1050,3 +1050,9 @@ and law adapters, not live model/legal calls. The fast CI profile now includes
 the offline legacy journal/preflight regressions. Same-SHA CI/deployment and
 actual retained-model acceptance remain pending; remote3b005f3 still has0016.
 Unissued external services, latency, security and public release gates remain.
+
+
+After integrating RN PR510/main92f4232f, both fast-test lists and the latest
+mobile/AI execution rows were preserved. Frozen install and quick373/40files/
+3829 assertions passed. RN's new Android/iOS compiler dispatches are pinned to
+92f4232f and do not establish actual device acceptance for this server repair.
