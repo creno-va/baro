@@ -321,8 +321,11 @@ for (const audio of [false, true])
     ).toEqual({ state: "final", transport: "response" });
     if (!audio)
       expect(f.wires[0]).toMatchObject({
-        reasoning_effort: "low",
-        max_completion_tokens: 4000,
+        generationConfig: {
+          thinkingConfig: { thinkingLevel: "LOW" },
+          mediaResolution: "MEDIA_RESOLUTION_LOW",
+          maxOutputTokens: 4000,
+        },
       });
     const restored = await createV2FilesRepository(f.core).read(
       { ownerId: f.actor.ownerId, now: new Date().toISOString() },

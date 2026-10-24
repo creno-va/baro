@@ -178,6 +178,7 @@ export function createMediaGateway(
     // Reconstruct from the reserved bytes: even a trusted callback cannot alter
     // the model payload between its digest/bounds proof and actual dispatch.
     let timer: ReturnType<typeof setTimeout> | undefined;
+    let deadlineExpired = false;
     let stop: (() => void) | undefined;
     try {
       if (
@@ -206,7 +207,10 @@ export function createMediaGateway(
           stop = () => reject(new ProcessingError("JOB_TIMEOUT"));
           if (access.signal.aborted) stop();
           else access.signal.addEventListener("abort", stop, { once: true });
-          timer = setTimeout(stop, options.timeoutMs ?? 60000);
+          timer = setTimeout(() => {
+            deadlineExpired = true;
+            stop?.();
+          }, options.timeoutMs ?? 60000);
         }),
       ]);
       await options.costs.after(permit, { transport: "response", rawUsage: raw });
@@ -218,7 +222,10 @@ export function createMediaGateway(
         const issue = gatewayRequestIssue(error);
         options.observeFailure?.({
           phase: model === WHISPER_MODEL ? "asr" : "vision",
-          category: dependencyCategory(error),
+          category:
+            deadlineExpired && error instanceof ProcessingError && error.code === "JOB_TIMEOUT"
+              ? "provider_timeout"
+              : dependencyCategory(error),
           httpStatus: providerStatus(error),
           ...(issue ? { requestIssue: issue } : {}),
         });
@@ -330,7 +337,7 @@ export function createMediaGateway(
           return (
             !!capability &&
             capability.model === MODEL_ID &&
-            capability.wire === "chat_image_url" &&
+            capability.wire === "native_inline_data" &&
             (isDocumentedVisionSupport(capability) ||
               ("validUntil" in capability &&
                 Number.isFinite(Date.parse(capability.validUntil)) &&
