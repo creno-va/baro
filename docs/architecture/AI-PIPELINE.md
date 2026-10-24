@@ -81,8 +81,13 @@ Gateway의 payload logging은 비활성화하고 현재 OFF인 Gateway·사용�
 status, failure code만 허용한다. 사용자 입력·답변·결과·prompt 본문·법률 검색어에
 개인 식별 내용이 있으면 기록하지 않는다.
 모든 호출에서 `gateway:{id,collectLog:false,skipCache:true}`를 명시하고 Gateway 설정도
-검증한다. 호출 shape는 초기 모델의 Chat Completions와 `response_format`으로 고정하며
-reasoning은 생성 `low`·감사 `medium`, 출력 상한은 단계별로 둔다. Responses 형식을 혼합하지 않는다.
+검증한다. 생성/vision은 Chat Completions와 `response_format`을 사용하고,
+감사/검증은 같은 binding의 native GenerateContent `contents/systemInstruction`과
+`generationConfig.responseMimeType/responseJsonSchema/thinkingConfig`를 사용한다.
+reasoning은 생성 `low`·감사 `MEDIUM`, 출력 상한은 단계별로 보존한다. 한 요청에서
+두 포맷을 혼합하거나 실패 후 다른 포맷으로 자동 재시도하지 않는다. 실행 예약과
+replay의 wire identity는 실제 전송 바이트를 해시한다. private planner의 canonical
+schema/출력 예산 표현은 provider 전송 형식과 구분한다.
 모델 catalog 지원과 실제 JSON Schema 응답은 #15/#27의 live 합성 요청으로 검증한다.
 provider 보존/무학습 설정은 Gateway 로그 설정과 별도로 법률/계약 검증 대상이다.
 
