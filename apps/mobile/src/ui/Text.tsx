@@ -6,6 +6,8 @@ export function Text({
   style,
   allowFontScaling = true,
   maxFontSizeMultiplier = 0,
+  lineBreakStrategyIOS = "hangul-word",
+  textBreakStrategy = "balanced",
   ...props
 }: TextProps & { variant?: "body" | "title" | "heading" | "muted" }) {
   return (
@@ -13,6 +15,8 @@ export function Text({
       {...props}
       allowFontScaling={allowFontScaling}
       maxFontSizeMultiplier={maxFontSizeMultiplier}
+      lineBreakStrategyIOS={lineBreakStrategyIOS}
+      textBreakStrategy={textBreakStrategy}
       style={[styles.base, styles[variant], style]}
     />
   );
