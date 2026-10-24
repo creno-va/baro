@@ -114,7 +114,10 @@ test("long service content fits narrow screens and the menu stays closable after
   const menu = page.getByRole("dialog", { name: "메뉴", exact: true });
   await menu.getByRole("link", { name: "도움말", exact: true }).focus();
   await page.keyboard.press("End");
-  await expect.poll(() => menu.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+  await expect
+    .poll(() => menu.locator(".ui-dialog__content").evaluate((element) => element.scrollTop))
+    .toBeGreaterThan(0);
+  expect(await menu.evaluate((element) => element.scrollTop)).toBe(0);
   const close = menu.getByRole("button", { name: "닫기", exact: true });
   const bounds = await close.boundingBox();
   expect(bounds?.y).toBeGreaterThanOrEqual(0);

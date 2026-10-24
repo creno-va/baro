@@ -12,9 +12,6 @@
 .app-frame .app-surface:has(.conversation-main) {
   background: var(--card);
 }
-.app-frame .app-surface > main {
-  animation: app-page-enter var(--app-enter) var(--app-ease) both;
-}
 .app-frame .app-header {
   background: #fff;
   border-right: 1px solid var(--app-line);
@@ -416,18 +413,10 @@
     transform: none;
   }
 }
-@keyframes app-page-enter {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
 @keyframes app-dialog-enter {
   from {
     opacity: 0;
-    transform: translateY(8px) scale(0.98);
+    transform: scale(0.98);
   }
   to {
     opacity: 1;
