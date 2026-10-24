@@ -1243,3 +1243,74 @@ pre-public failure.png1080×2400/160,946bytes/8eb06120…의 실물에는 익명
 같은 조건을 재실행하지 않고, 다음 Android 범위에서 소유 Emulator가 product 진입 전에
 launcher/system의 응답 baseline을 충족하는지 확인하도록 보강한다. ANR dialog를 닫거나
 Wait를 눌러 성공을 강제하지 않는다. 원래 물리 자원·time/attempt와 privacy 경계를 유지한다.
+
+## 소유 Emulator의 product 진입 전 Launcher 관측 baseline (#379)
+
+PR449 최종 head54b14c5…·CI40056459709 SUCCESS를 main4ba1d39로 정상 통합했고 main
+CI40056748012 SUCCESS 뒤 새 compiler Android40056943689/iOS40056945553을 시작했다.
+이 기록 시점 두 run은 같은 실행에서 compile 중이다. 관측 timeout으로 재시작하지 않는다.
+
+새 Android 도구는 APK 설치 후 product 첫 실행 전에 기본 HOME component를 read-only
+resolve한다. [PackageManagerShellCommand](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-15.0.0_r5/services/core/java/com/android/server/pm/PackageManagerShellCommand.java)의
+실제 출력 계약에 따라 `--components --user 0`을 사용하며, priority 요약이 포함되는
+`--brief` 출력을 단일 component로 오인하지 않는다. fresh owned Emulator/AVD·아직 product/공개 capture boundary 진입 전 조건을
+요구하며 현재 SDK Pixel/AOSP Launcher를 구분한다. 같은 resolved component가 접근성 root
+read 전후 foreground에 있고, root가 표시된 양수 영역이며 system error dialog가 없는 상태를
+3회 연속 관측해야 통과한다. 준비되지 않은 sample은 연속 개수를 초기화하고 최대10 sample을
+넘지 않는다. 이는 관측한 시점의 준비 조건이며 Launcher의 모든 기능/이후 전체 수명 liveness 증거가 아니다.
+
+[Android15r5 AppNotRespondingDialog](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-15.0.0_r5/services/core/java/com/android/server/am/AppNotRespondingDialog.java)의
+고정 aerr_close/aerr_wait/aerr_report resource ID를 이용해 시스템 오류 dialog를 구분한다.
+dialog가 있으면 즉시 실패하며 HOME/Wait/Close 탭·프로세스 종료·Launcher 변경으로 제거하지
+않는다. Launcher를 새로 실행하는 intent도 추가하지 않는다. raw label/component/계층/stack는
+보존하지 않고 준비 enum/boolean/count와 고정 command 실패 사실만 남긴다. UUID XML은 매회
+finally에서 삭제하고 삭제 실패도 성공으로 처리하지 않는다.
+
+baseline과 첫 product cold-launch는 기존120초 wait deadline을 공유해 baseline 뒤 새120초를
+더 주지 않는다. baseline command는 남은 deadline/최대15초, XML 정리는 최대5초이며 기존
+native command120초보다 늘리지 않는다. 첫 Home command도 남은 시간을 사용한다. 두 번째
+cold Home은 기존처럼120초다. 성공 Home receipt에 strict baseline과 각 Home의 system-error
+dialog 미관측 사실을 기록한다. 준비 뒤 첫/두번째 Home에서 aerr dialog가 나타나면 일반
+Home timeout으로 감추지 않고 BUNDLED_HOME_SYSTEM_ERROR_DIALOG로 실패한다.
+
+합성 clock/shell 회귀는 유일 HOME·전후 foreground/연속 개수·false root/중복 foreground·
+ANR/dump/read/delete 실패·늦은 deadline·10 sample 상한·무상호작용·raw 비출력을 검사한다.
+실제 Launcher ANR의 원인이나 새 baseline의 실제 성공을 이 테스트만으로 확정하지 않는다.
+정확한 main CI·새 제품의 성공 원본 pin 뒤 실제 SDK/Emulator에서 인수해야 하며 기존 실패와
+전체 #334/#379/#346/#339/#71 및 웹/제품·공통 계약/DB·공급자/비용 정책은 보존한다.
+
+### native draft 앱의 새 Android compiler 원본
+
+같은 source4ba1d39의 [compiler40056943689](https://github.com/creno-va/baro/actions/runs/40056943689)는
+terminal SUCCESS다. artifact12546340990의 성공 run/source/name/만료 아님과 [원본 receipt](../quality/mobile-internal-android-2026-10-24/compiler-receipt-4ba1d39.json)의
+SHA256 `62491baa2d383fc941498af4b1313abb39d04336a8ec034d81f676ef40f5ff22`를 대조했다.
+APK57,134,306bytes의 전체 SHA256은 `9d9ec567b048de7eecd0b58ec4ce710c12dc5040d972b185f3c3786295aa6a7c`다.
+[독립 대조](../quality/mobile-internal-android-2026-10-24/compiler-independent-4ba1d39.json)는 원본 full byte·
+실제 aapt2 package/launch/min24·arm64-v8a+x86_64/non-debug metadata, HBC3,570,820bytes/
+7691d8de…·graph1456·font byte/family400/600/700·map/key 부재를 확인했다.
+compiler의 개발 cert attestation은 그대로 보존하며 local cert 독립 readback은 아직 false다.
+후속 fresh SDK 재검증에서 actual signer를 대조해야 한다. 내부 전달 경로
+`.wrangler/mobile-delivery/4ba1d39/android`에 원본 APK/receipt를 보존한다.
+
+이 원본 pin과 Launcher 도구를 exact main CI로 통합한 후 새 native draft 앱의 실제
+입력/소프트 Search/회전을 관측한다. compiler 성공은 native 값·Launcher baseline·입력 누락
+해결의 증거가 아니다. iOS40056945553은 이 기록 시점 같은 run에서 컴파일 중이며 성공
+원본/pin 전에는 b3eea74를 native draft 새 앱으로 재사용하지 않는다.
+
+### 같은 native draft 앱의 iOS compiler 원본
+
+이후 같은 source4ba1d39의 [iOS40056945553](https://github.com/creno-va/baro/actions/runs/40056945553)도
+terminal SUCCESS로 끝났다. 성공 run/source·artifact12545939612/name/만료 아님과 [원본 receipt](../quality/mobile-internal-ios-2026-10-24/compiler-receipt-4ba1d39.json)의
+SHA256 `3d8aadcfd5c51143c7bb369de76b6dda0e005659cc8a04e5ced78591a9f939de`를 대조했다.
+ZIP24,102,583bytes의 전체 SHA256은 `b09aa64aeb75c84f01c43f867d993d297c76321cd53de00be5baf6a1edaaae75`다.
+
+[독립 대조](../quality/mobile-internal-ios-2026-10-24/compiler-independent-4ba1d39.json)는 03:29:34.909Z에
+소유 임시 사본에서 actual codesign strict/all-architectures·ad-hoc/No-Team, arm64/x86_64
+Simulator platform·Mach-O XML/DER/서명 entitlements·plist/실행 hash를 원본 control과
+대조했다. 제품 재컴파일/재서명 없이 사본을 삭제했다. HBC3,582,780bytes/6d045006…·graph1465·
+실제 font byte/400·600·700·min16.4/phone+tablet·map/key/profile 부재도 확인했다.
+[중간 inspection](../quality/mobile-internal-ios-2026-10-24/compiler-inspection-4ba1d39.json)의 accepted=false는
+원래대로 보존하고 성공 receipt와 구분한다. 내부 전달 경로 `.wrangler/mobile-delivery/4ba1d39/ios`에도
+원본 ZIP/receipt를 보존한다. 두 OS 성공 pin 통합/exact main CI 뒤 이 native draft 앱으로
+actual 입력/소프트 Search·키보드/회전을 검증한다. metadata/compile 성공을 입력 누락 해결·
+한국어/reader·계정/API·실기기/스토어 성공으로 재명명하지 않는다.

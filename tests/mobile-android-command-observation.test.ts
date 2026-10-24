@@ -75,6 +75,17 @@ test("native command diagnostics classify only fixed operations and reject paylo
 test("UIAutomator saved/idle/root diagnostics use fixed stdout and stderr signatures without retaining either", () => {
   const saved = `UI hierchary dumped to: ${file}\n`;
   expect(androidHierarchyDumpOutcome(saved, "", file)).toBe("saved");
+  const launcherFile = file.replace("baro-directory-", "baro-launcher-");
+  expect(
+    androidHierarchyDumpOutcome(`UI hierchary dumped to: ${launcherFile}\n`, "", launcherFile),
+  ).toBe("saved");
+  expect(
+    androidHierarchyDumpOutcome(
+      "",
+      "",
+      "/sdcard/baro-launcher-------------------------------------.xml",
+    ),
+  ).toBe("unknown");
   expect(androidHierarchyDumpOutcome("", "ERROR: could not get idle state.\n", file)).toBe(
     "idle-timeout",
   );
