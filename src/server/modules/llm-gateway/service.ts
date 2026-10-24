@@ -82,7 +82,10 @@ function wireSchema(schema: unknown): unknown {
     if ("not" in input && Object.keys(input).length === 1) return { type: "string" }; // Empty text-question options remain maxItems=0.
     return Object.fromEntries(
       Object.entries(input)
-        .filter(([key]) => key !== "$schema")
+        // Defaults are server parsing annotations, not generation constraints.
+        // Gemini accepts a JSON Schema subset; keep required/defaulted fields
+        // mandatory while omitting the unsupported annotation on the wire.
+        .filter(([key]) => key !== "$schema" && key !== "default")
         // Zod discriminated unions emit oneOf; the provider supports anyOf.
         // Server-side Zod parsing still enforces the original exact union.
         .map(([key, value]) =>

@@ -28,6 +28,7 @@ export const probeProviderFailureSchema = z.strictObject({
       "thinking_configuration",
       "thinking_output_limit",
       "unsupported_parameter",
+      "schema_complexity",
       "schema_constraint",
     ])
     .optional(),
