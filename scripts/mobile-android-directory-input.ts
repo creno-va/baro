@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { androidAuthActivityObservation } from "./mobile-android-auth-cancel";
+import { androidHierarchyDumpOutcome } from "./mobile-android-command-observation";
 import { androidDirectorySoftwareSearch } from "./mobile-android-directory-search";
 import { androidGuideUiReceiptSchema } from "./mobile-android-guide-ui";
 import {
@@ -15,6 +16,7 @@ const codes = [
   "ANDROID_DIRECTORY_BOUNDARY_REQUIRED",
   "ANDROID_DIRECTORY_OWNED_EMULATOR_REQUIRED",
   "ANDROID_DIRECTORY_HIERARCHY_INVALID",
+  "ANDROID_DIRECTORY_DUMP_OUTPUT_INVALID",
   "ANDROID_DIRECTORY_DISPLAY_INVALID",
   "ANDROID_DIRECTORY_ROTATION_INVALID",
   "ANDROID_DIRECTORY_FOREGROUND_MISSING",
@@ -357,6 +359,9 @@ export interface AndroidDirectoryDiagnostic {
   displayShape: ReturnType<typeof androidDirectoryDisplayShape> | null;
   input: { present: boolean; focused: boolean; retained: boolean } | null;
   softwareSearchBeforeTap: ReturnType<typeof androidDirectorySoftwareSearch>["diagnostic"] | null;
+  primaryFailureCode: ReturnType<typeof androidDirectoryFailureCode> | null;
+  rotationRestoreFailureCode: ReturnType<typeof androidDirectoryFailureCode> | null;
+  hierarchyCleanupFailureCode: ReturnType<typeof androidDirectoryFailureCode> | null;
 }
 export async function observeAndroidDirectoryInput(context: {
   shell: (args: string[]) => Promise<string>;
@@ -381,12 +386,18 @@ export async function observeAndroidDirectoryInput(context: {
   let lastDisplay: ReturnType<typeof androidDirectoryDisplay> | null = null;
   let lastDisplayShape: ReturnType<typeof androidDirectoryDisplayShape> | null = null;
   let softwareSearchBeforeTap: AndroidDirectoryDiagnostic["softwareSearchBeforeTap"] = null;
+  let primaryFailureCode: AndroidDirectoryDiagnostic["primaryFailureCode"] = null;
+  let rotationRestoreFailureCode: AndroidDirectoryDiagnostic["rotationRestoreFailureCode"] = null;
+  let hierarchyCleanupFailureCode: AndroidDirectoryDiagnostic["hierarchyCleanupFailureCode"] = null;
   const report = (value: ReturnType<typeof androidDirectoryInputObservation> | null = null) =>
     context.diagnostic({
       stage,
       display: lastDisplay,
       displayShape: lastDisplayShape,
       softwareSearchBeforeTap,
+      primaryFailureCode,
+      rotationRestoreFailureCode,
+      hierarchyCleanupFailureCode,
       input: value
         ? { present: !!value.input, focused: value.focused, retained: value.syntheticInputRetained }
         : null,
@@ -399,18 +410,38 @@ export async function observeAndroidDirectoryInput(context: {
       throw Error("ANDROID_DIRECTORY_FOREGROUND_MISSING");
   }
   async function hierarchy(allWindows = false) {
+    let xml: string | undefined;
+    let failed = false,
+      cleanupFailed = false;
+    let failure: unknown, cleanupFailure: unknown;
     try {
-      await shell([
+      const dumped = await shell([
         "uiautomator",
         "dump",
         "--compressed",
         ...(allWindows ? ["--windows"] : []),
         file,
       ]);
-      return await shell(["cat", file]);
+      if (androidHierarchyDumpOutcome(dumped, "", file) !== "saved")
+        throw Error("ANDROID_DIRECTORY_DUMP_OUTPUT_INVALID");
+      xml = await shell(["cat", file]);
+    } catch (error) {
+      failed = true;
+      failure = error;
     } finally {
-      await shell(["rm", "-f", file]);
+      try {
+        await shell(["rm", "-f", file]);
+      } catch (error) {
+        cleanupFailed = true;
+        cleanupFailure = error;
+        hierarchyCleanupFailureCode = androidDirectoryFailureCode(error);
+        report();
+      }
     }
+    if (failed) throw failure;
+    if (cleanupFailed) throw cleanupFailure;
+    if (xml === undefined) throw Error("ANDROID_DIRECTORY_HIERARCHY_INVALID");
+    return xml;
   }
   async function display() {
     const output = await shell(["dumpsys", "window", "displays"]);
@@ -481,6 +512,9 @@ export async function observeAndroidDirectoryInput(context: {
     report();
   }
   let result: z.input<typeof resultSchema> | undefined;
+  let executionFailed = false,
+    restorationFailed = false;
+  let executionError: unknown, restorationError: unknown;
   try {
     await shell(["wm", "user-rotation", "lock", "0"]);
     await poll(async () => {
@@ -632,8 +666,22 @@ export async function observeAndroidDirectoryInput(context: {
       systemBackCount: 1,
       rotationPreferenceRestored: true,
     };
+  } catch (error) {
+    executionFailed = true;
+    executionError = error;
+    primaryFailureCode = androidDirectoryFailureCode(error);
+    report();
   } finally {
-    await restoreRotation();
+    try {
+      await restoreRotation();
+    } catch (error) {
+      restorationFailed = true;
+      restorationError = error;
+      rotationRestoreFailureCode = androidDirectoryFailureCode(error);
+      report();
+    }
   }
+  if (executionFailed) throw executionError;
+  if (restorationFailed) throw restorationError;
   return resultSchema.parse(result);
 }

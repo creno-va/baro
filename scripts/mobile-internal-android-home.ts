@@ -15,6 +15,11 @@ import {
   prepareOwnedChromeFixture,
 } from "./mobile-android-chrome-fixture";
 import {
+  type AndroidHierarchyDumpOutcome,
+  androidPostBoundaryCommandFailures,
+  runAndroidHomeCommand,
+} from "./mobile-android-command-observation";
+import {
   type AndroidDirectoryDiagnostic,
   androidDirectoryFailureCode,
   type androidDirectoryReceiptSchema,
@@ -118,30 +123,22 @@ async function main() {
     lastPublicObservation: ReturnType<typeof publicDirectoryUiObservation> | null = null,
     lastHomeObservation: ReturnType<typeof bundledAndroidHomeObservation> | null = null;
   const authPrivacy = androidAuthenticationPrivacyBoundary();
+  const commandFailures = androidPostBoundaryCommandFailures();
+  let lastPostBoundaryHierarchyDump: AndroidHierarchyDumpOutcome | null = null;
   async function bytes(args: string[], input?: string) {
     authPrivacy.assertCommandAllowed(args);
-    const child = Bun.spawn(args, {
-        cwd: root,
-        env: childEnv,
-        stdin: input === undefined ? "ignore" : "pipe",
-        stdout: "pipe",
-        stderr: "pipe",
-      }),
-      timer = setTimeout(() => child.kill(), 120000);
-    if (input !== undefined) {
-      child.stdin?.write(input);
-      child.stdin?.end();
-    }
-    try {
-      const [body] = await Promise.all([
-        new Response(child.stdout).arrayBuffer(),
-        new Response(child.stderr).arrayBuffer(),
-      ]);
-      if (await child.exited) throw new Error("BUNDLED_HOME_COMMAND_FAILED");
-      return new Uint8Array(body);
-    } finally {
-      clearTimeout(timer);
-    }
+    return runAndroidHomeCommand({
+      args,
+      cwd: root,
+      env: childEnv,
+      ...(input === undefined ? {} : { input }),
+      onFailure(failure) {
+        if (authPrivacy.entered) commandFailures.record(failure);
+      },
+      onHierarchyDump(outcome) {
+        if (authPrivacy.entered) lastPostBoundaryHierarchyDump = outcome;
+      },
+    });
   }
   const text = async (args: string[], input?: string) =>
     new TextDecoder().decode(await bytes(args, input));
@@ -768,7 +765,7 @@ async function main() {
     }
     await writeFile(
       resolve(out, "failure.json"),
-      `${JSON.stringify({ toolingSourceSha: sourceSha, phase, code: phase.startsWith("directory-input") ? androidDirectoryFailureCode(error) : phase.startsWith("auth-cancel") ? androidAuthFailureCode(error) : known.has(message) ? message : "BUNDLED_HOME_FAILED", emulatorBootVerified: bootCompleted, lastHomeObservation, lastPublicObservation, lastDirectoryInputObservation, lastGuideObservation, lastAuthObservation, lastChromeFixture, receiptValidationFields, publicScreenshotsSuppressed: !capture.allowed, emulatorStartupIssues: emulatorStartupIssues(await readFile(log, "utf8").catch(() => "")), sdkHomeLaunchVerified: baseHomeVerified, largeFontVerified: false, physicalDeviceVerified: false, storeSigned: false, deployed: false }, null, 2)}\n`,
+      `${JSON.stringify({ toolingSourceSha: sourceSha, phase, code: phase.startsWith("directory-input") ? androidDirectoryFailureCode(error) : phase.startsWith("auth-cancel") ? androidAuthFailureCode(error) : known.has(message) ? message : "BUNDLED_HOME_FAILED", postBoundaryCommandFailures: commandFailures.snapshot(), lastPostBoundaryHierarchyDump, emulatorBootVerified: bootCompleted, lastHomeObservation, lastPublicObservation, lastDirectoryInputObservation, lastGuideObservation, lastAuthObservation, lastChromeFixture, receiptValidationFields, publicScreenshotsSuppressed: !capture.allowed, emulatorStartupIssues: emulatorStartupIssues(await readFile(log, "utf8").catch(() => "")), sdkHomeLaunchVerified: baseHomeVerified, largeFontVerified: false, physicalDeviceVerified: false, storeSigned: false, deployed: false }, null, 2)}\n`,
       { flag: "wx" },
     );
     throw new Error("BUNDLED_HOME_FAILED");

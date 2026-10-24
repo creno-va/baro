@@ -1,0 +1,113 @@
+{
+  "toolingSourceSha": "741697f450ec01762c7126d359a921b6f46b84e1",
+  "phase": "public-directory-xcuitest",
+  "code": "INTERNAL_IOS_VERIFICATION_COMMAND_FAILED",
+  "lastCommand": {
+    "exitCode": 65,
+    "timedOut": false,
+    "category": "COMMAND_FAILED"
+  },
+  "uiTestFailure": null,
+  "authCancelFailure": null,
+  "directoryFailure": {
+    "status": {
+      "stage": "typed-check",
+      "inputState": "other",
+      "appForeground": true,
+      "keyboardObserved": true,
+      "inputSignature": {
+        "stringObserved": true,
+        "expectedLengthMatches": false,
+        "caseFoldMatches": false,
+        "whitespaceRemovalMatches": false,
+        "dashNormalizationMatches": false,
+        "compatibilityNormalizationMatches": false,
+        "knownNormalizationMatches": false,
+        "expectedSubsequenceOnly": true,
+        "containsKnownPayload": false,
+        "allKnownSegmentsPresent": false,
+        "knownDigitSuffixMatches": true,
+        "containsHangul": false,
+        "matchesFixedFieldLabel": false,
+        "onlyExpectedScalarsAfterCaseFold": true
+      }
+    },
+    "history": [
+      {
+        "stage": "before-input",
+        "inputState": "empty",
+        "appForeground": true,
+        "keyboardObserved": true,
+        "inputSignature": {
+          "stringObserved": true,
+          "expectedLengthMatches": false,
+          "caseFoldMatches": false,
+          "whitespaceRemovalMatches": false,
+          "dashNormalizationMatches": false,
+          "compatibilityNormalizationMatches": false,
+          "knownNormalizationMatches": false,
+          "expectedSubsequenceOnly": false,
+          "containsKnownPayload": false,
+          "allKnownSegmentsPresent": false,
+          "knownDigitSuffixMatches": false,
+          "containsHangul": false,
+          "matchesFixedFieldLabel": false,
+          "onlyExpectedScalarsAfterCaseFold": false
+        }
+      },
+      {
+        "stage": "after-input",
+        "inputState": "other",
+        "appForeground": true,
+        "keyboardObserved": true,
+        "inputSignature": {
+          "stringObserved": true,
+          "expectedLengthMatches": false,
+          "caseFoldMatches": false,
+          "whitespaceRemovalMatches": false,
+          "dashNormalizationMatches": false,
+          "compatibilityNormalizationMatches": false,
+          "knownNormalizationMatches": false,
+          "expectedSubsequenceOnly": true,
+          "containsKnownPayload": false,
+          "allKnownSegmentsPresent": false,
+          "knownDigitSuffixMatches": true,
+          "containsHangul": false,
+          "matchesFixedFieldLabel": false,
+          "onlyExpectedScalarsAfterCaseFold": true
+        }
+      },
+      {
+        "stage": "typed-check",
+        "inputState": "other",
+        "appForeground": true,
+        "keyboardObserved": true,
+        "inputSignature": {
+          "stringObserved": true,
+          "expectedLengthMatches": false,
+          "caseFoldMatches": false,
+          "whitespaceRemovalMatches": false,
+          "dashNormalizationMatches": false,
+          "compatibilityNormalizationMatches": false,
+          "knownNormalizationMatches": false,
+          "expectedSubsequenceOnly": true,
+          "containsKnownPayload": false,
+          "allKnownSegmentsPresent": false,
+          "knownDigitSuffixMatches": true,
+          "containsHangul": false,
+          "matchesFixedFieldLabel": false,
+          "onlyExpectedScalarsAfterCaseFold": true
+        }
+      }
+    ],
+    "searchControl": null,
+    "assertionCode": "BARO_DIRECTORY_TYPED_INPUT_MISMATCH"
+  },
+  "nativeProcessLaunchVerified": false,
+  "homeContentVerified": false,
+  "remoteApiVerified": false,
+  "oauthVerified": false,
+  "physicalDeviceVerified": false,
+  "storeSigned": false,
+  "deployed": false
+}

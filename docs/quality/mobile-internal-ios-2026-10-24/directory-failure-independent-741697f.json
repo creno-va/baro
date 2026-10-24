@@ -1,0 +1,38 @@
+{
+  "toolingSourceSha": "741697f450ec01762c7126d359a921b6f46b84e1",
+  "binarySourceSha": "b3eea741010b572158a01fc50b51e58aa13344c6",
+  "originalArchiveAndCompilerReceiptMatched": true,
+  "baselineAndMetadataMatched": true,
+  "actualSimulatorControlMatched": true,
+  "homePngBytesMatched": true,
+  "failureSha256": "4622197cb9bbbd25b32d3c453f925b4e1ba889aa0029dcd6b24d645ef7e1bdd1",
+  "assertionCode": "BARO_DIRECTORY_TYPED_INPUT_MISMATCH",
+  "status": {
+    "stage": "typed-check",
+    "inputState": "other",
+    "appForeground": true,
+    "keyboardObserved": true,
+    "inputSignature": {
+      "stringObserved": true,
+      "expectedLengthMatches": false,
+      "caseFoldMatches": false,
+      "whitespaceRemovalMatches": false,
+      "dashNormalizationMatches": false,
+      "compatibilityNormalizationMatches": false,
+      "knownNormalizationMatches": false,
+      "expectedSubsequenceOnly": true,
+      "containsKnownPayload": false,
+      "allKnownSegmentsPresent": false,
+      "knownDigitSuffixMatches": true,
+      "containsHangul": false,
+      "matchesFixedFieldLabel": false,
+      "onlyExpectedScalarsAfterCaseFold": true
+    }
+  },
+  "softwareSearchReached": false,
+  "listRenderIsolationSufficient": false,
+  "rootCauseConfirmed": false,
+  "unchangedRetryPerformed": false,
+  "remoteApiVerified": false,
+  "physicalDeviceVerified": false
+}
