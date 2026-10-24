@@ -83,3 +83,10 @@ export function syntheticToolContext(
   }[feature];
   return context;
 }
+export function syntheticLegalContext(): WorkspaceContext {
+  const context = syntheticChatContext();
+  if (!context.latestMessage) throw new Error("Synthetic message unavailable");
+  context.latestMessage.text =
+    "민법 제598조 내용을 공식 원문에서 확인한 뒤, 읽은 조문의 문장을 출처와 함께 그대로 인용해 주세요. 사건에 대한 법률 판단이나 전략은 요청하지 않습니다.";
+  return context;
+}
