@@ -294,3 +294,9 @@ DELETE·지원 provider·원래 owner를 전달한다. 삭제의 exchange/status
 합성 대역의 응답 행렬과 기존3사 실제 Better Auth/Hono/SQLite callback을 결합해 삭제 후
 무세션 결과 복구·one-use 재교환 거절을 검사한다. 실제 제공자 로그인이나 native 저장소/화면
 성공은 아니며 다음 단계에서 capability UI·Apple 버튼·pending 저장소·credential 정리를 연결한다.
+
+공통 client의 최신 maineb57a03 통합 검증: `bun ci` lock 변경 없음, quick source 회귀243개,
+전체 로컬 unit3986개/371파일/170925 assertions, 새 shared mobile-auth19개/86 assertions,
+production build/bundle/dry-run·실제 로컬 workerd와 양 OS Metro export 통과.
+Metro 입력에 변화가 없는 AI server 통합은 실제 native/기기 증거로 승격하지 않는다.
+모바일 화면·저장소·삭제 정리 adapter와 실제 Apple/기기 인수는 후속이다.
