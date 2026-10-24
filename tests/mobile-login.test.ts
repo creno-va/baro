@@ -307,3 +307,73 @@ test("a warm Linking completion wins before AuthSession dismissal without cleari
   expect(f.stats().resets).toBe(1);
   expect(f.stats().exchanges).toBe(1);
 });
+
+test("Apple login requires advertised v2 support and persists it before browser IO", async () => {
+  const f = fixture();
+  f.dependencies.capabilities = async () => ({ contractVersion: 2, providers: ["apple"] });
+  const authorize = f.dependencies.authorize;
+  f.dependencies.authorize = async (input) => {
+    expect(input.provider).toBe("apple");
+    expect(await f.attempts.load()).toMatchObject({ provider: "apple", contractVersion: 2 });
+    return authorize(input);
+  };
+  expect(await createNativeLogin(f.dependencies).start("apple", "lawyer")).toMatchObject({
+    type: "verified",
+    session: { user: { accountType: "lawyer" } },
+  });
+  expect(f.stats()).toEqual({ exchanges: 1, roles: 1, resets: 1, reads: 2 });
+});
+
+test("unsupported or unavailable capabilities never clear credentials/verifier or start OAuth", async () => {
+  for (const mode of ["missing", "legacy", "v2-disabled", "unavailable"] as const) {
+    const f = fixture();
+    const pending = {
+      attemptId,
+      verifier,
+      createdAt: 1000,
+      provider: "google" as const,
+      accountType: "customer" as const,
+      purpose: "login" as const,
+    };
+    await f.attempts.put(pending);
+    if (mode === "legacy")
+      f.dependencies.capabilities = async () => ({
+        contractVersion: 1,
+        providers: ["google", "naver", "kakao"],
+      });
+    if (mode === "v2-disabled")
+      f.dependencies.capabilities = async () => ({
+        contractVersion: 2,
+        providers: ["google", "naver", "kakao"],
+      });
+    if (mode === "unavailable")
+      f.dependencies.capabilities = async () => {
+        throw new ApiError("UNAVAILABLE", "합성 capability 연결 실패", true);
+      };
+    f.dependencies.authorize = async () => {
+      throw new Error("MUST_NOT_AUTHORIZE");
+    };
+    await expect(
+      createNativeLogin(f.dependencies).start("apple", "customer"),
+    ).rejects.toMatchObject({ code: "UNAVAILABLE" });
+    expect(f.stats()).toEqual({ exchanges: 0, roles: 0, resets: 0, reads: 0 });
+    expect(await f.attempts.load()).toEqual(pending);
+  }
+});
+
+test("a cancelled slow capability lookup cannot clear credentials or open a replacement browser", async () => {
+  const f = fixture(),
+    cap = deferred<{ contractVersion: 2; providers: ["apple"] }>();
+  f.dependencies.capabilities = () => cap.promise;
+  f.dependencies.authorize = async () => {
+    throw new Error("MUST_NOT_AUTHORIZE");
+  };
+  const login = createNativeLogin(f.dependencies),
+    start = login.start("apple", "customer");
+  await login.cancel();
+  const afterCancel = f.stats();
+  cap.resolve({ contractVersion: 2, providers: ["apple"] });
+  await expect(start).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
+  expect(f.stats()).toEqual(afterCancel);
+  expect(await f.attempts.load()).toBeNull();
+});

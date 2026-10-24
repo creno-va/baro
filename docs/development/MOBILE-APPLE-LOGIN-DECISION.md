@@ -319,3 +319,38 @@ JSON, contract2만 보낸다. fetch는 credentials omit·redirect error·no-stor
 credential/사건 작업 저장 불변을 검사한다. 실제 OS cookie jar 전송/기기 로그인 성공이나
 삭제 UI·pending 저장·owner별 정리까지 인수한 결과는 아니다. 후속 모바일 소비에서
 삭제 pending을 일반 로그인 pending과 분리하고 결과를 확인한 owner만 정리해야 한다.
+
+## native v2 인증·삭제 복구 포트
+
+PR477 main33dd244·main CI40080412168 SUCCESS 뒤 `codex/346-native-provider-v2`에서
+일반 로그인 factory와 조립을 공통 capability/재인증 client에 연결한다. 지원 확인 실패나
+Apple 미광고를 기존 cookie/verifier 삭제보다 먼저 거절한다. 새 pending에는 협의한 v2를
+저장하며 기존3사 pending의 field 집합/JSON은 보존한다. Apple pending에는 v2가 필수이고
+알 수 없는 버전은 거절한다. cold return은 저장한 버전으로 검증한다. SDK가 credential
+준비를 기다리는 동안 계정이 바뀌면 새 jar를 capture하거나 OAuth IO를 보내기 전에 중단한다.
+
+새 `deletion-attempt.ts`와 `deletion.ts`는 **후속 UI/기기 조립용 포트**다. 일반 로그인
+pending과 분리한 최대4개/1900 UTF-8 byte의 journal을 주입한 저장소에 보관한다.
+이는 앱이 정한 항목 상한이며 플랫폼의 정확한 최대 용량을 측정한 결과가 아니다.
+미확정 proof를 덮어쓰거나 만료/로그아웃/다른 owner 때문에 자동 제거하지 않는다.
+다른 owner 기록은 함께 보존한다. accepted/cancelled만 최종 기록이 되며 accepted proof는
+토큰 없는 결과로 바뀐다. 정리 완료/다른 owner 때문에 정리를 건너뛴 결과와 취소 결과는
+사용자의 명시적 확인 뒤에만 제거할 수 있다. 저장·readback 실패/손상은 안전한 오류로
+표시하며 원본을 삭제하지 않는다.
+
+삭제 factory는 literal DELETE·v2·연결된 provider·현재 owner guard를 확인하고 proof를
+저장한 뒤 prepare/브라우저로 진행한다. 돌아온 code는 **삭제** exchange에만 보낸다.
+유실/사용된 code는 같은 proof의 status 한 번으로만 복구하며 인증 exchange나 삭제를
+재전송하지 않는다. 브라우저 취소 뒤에도 서버 cancel의 accepted 승자를 보존한다.
+401/404/503·영수증 만료·불명 nonce·복귀 유실은 삭제 성공이나 취소로 바꾸지 않는다.
+서버 ACK 뒤 기기 저장/정리가 실패하면 접수 사실과 localSaved/cleanup 실패를 분리한다.
+초기 unconfirmed 철회 관측은 confirmed로 갱신될 수 있으며 늦은 관측이 이미 확인한
+철회를 지우지 않는다. 제공자 token/code는 journal에 저장하지 않는다.
+
+검증은 frozen/quick(공통480/58files·RN90·server243), unit4032/375files/171569 assertions,
+production build/local workerd와 양 OS Metro export다. native proof/기존 로그인 선택
+회귀47/762와 설치된 실제 SDK를 쓰는 합성 Naver/Apple 요청·credential 대기 중 owner 교체
+거절을 포함한다. 실제 OAuth·native SecureStore·callback/OS runtime 성공은 아니다.
+화면은 여전히 기존3사이며 삭제 factory/SecureStore namespace·owner별 정리와 cold/warm
+반환 분기·공식 Apple 버튼을 함께 조립한 뒤 capability 기반 UI를 노출한다. 미확정·만료
+기록의 사용자 복구와 실제 설정/두 OS 기기 검증도 남아 있다.

@@ -12,9 +12,10 @@ export function createNativeSocialAuthorization(dependencies: {
   credentials: NativeCredentials;
   fetch: (url: string, init: RequestInit) => Promise<Response>;
 }): Authorize {
-  return async (input) => {
+  return async (input, ensureCurrent) => {
     try {
       await dependencies.credentials.ready();
+      ensureCurrent?.();
       const frame = dependencies.credentials.capture();
       const transport = createNativeTransport({ ...dependencies, frame });
       const expo = expoClient({

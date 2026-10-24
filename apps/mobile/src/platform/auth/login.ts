@@ -1,8 +1,8 @@
-import { ApiError } from "@baro/api-client";
-import type { AccountType, Provider } from "@baro/client-core";
+import { ApiError, type MobileAuthProtocol } from "@baro/api-client";
+import type { AccountType, MobileProvider } from "@baro/client-core";
 import {
   type MobileAuthExchange,
-  type MobileReauthPrepare,
+  type MobileReauthPrepareV2,
   type MobileReauthReceipt,
   mobileAuthExchangeResponseSchema,
   mobileReauthReceiptSchema,
@@ -34,11 +34,15 @@ export function createNativeLogin(dependencies: {
   newId: () => string;
   proof: () => Promise<{ verifier: string; challenge: string }>;
   resetCredentials: () => Promise<void>;
-  authorize: (input: {
-    provider: Provider;
-    callbackURL: string;
-    errorCallbackURL: string;
-  }) => Promise<{ url: string; oauthState?: string }>;
+  capabilities?: () => Promise<MobileAuthProtocol>;
+  authorize: (
+    input: {
+      provider: MobileProvider;
+      callbackURL: string;
+      errorCallbackURL: string;
+    },
+    ensureCurrent?: () => void,
+  ) => Promise<{ url: string; oauthState?: string }>;
   openBrowser: (
     url: string,
     returnURL: string,
@@ -48,9 +52,16 @@ export function createNativeLogin(dependencies: {
   readSession: () => Promise<ClientSession>;
   setAccountType: (accountType: AccountType) => Promise<unknown>;
   reauthentication?: {
-    prepare(input: MobileReauthPrepare, ownerId: string): Promise<unknown>;
-    verify(input: { attemptId: string; verifier: string }): Promise<unknown>;
-    access(): Promise<{ ownerTag: string }>;
+    prepare(
+      input: MobileReauthPrepareV2,
+      ownerId: string,
+      protocol: MobileAuthProtocol,
+    ): Promise<unknown>;
+    verify(
+      input: { attemptId: string; verifier: string },
+      protocol: MobileAuthProtocol,
+    ): Promise<unknown>;
+    access(ownerId: string, protocol: MobileAuthProtocol): Promise<{ ownerTag: string }>;
     proof: ReauthenticationStore;
   };
 }) {
@@ -78,6 +89,10 @@ export function createNativeLogin(dependencies: {
     if (acceptedAttempt !== undefined && acceptedAttempt !== returned.attemptId)
       return { type: "ignored" };
     if (!attempt || attempt.attemptId !== returned.attemptId) return { type: "ignored" };
+    const protocol: MobileAuthProtocol =
+      attempt.contractVersion === 2
+        ? { contractVersion: 2, providers: [attempt.provider] }
+        : { contractVersion: 1, providers: ["google", "naver", "kakao"] };
     activeAttemptId = attempt.attemptId;
     activePurpose = attempt.purpose;
     const identity = `${captured}:${returned.attemptId}`;
@@ -99,7 +114,7 @@ export function createNativeLogin(dependencies: {
         const original = await dependencies.readSession();
         ensure(captured);
         if (!original.user) throw cancelled();
-        const access = await reauth.access();
+        const access = await reauth.access(original.user.id, protocol);
         ensure(captured);
         if (access.ownerTag !== prepared.ownerTag) throw cancelled();
         try {
@@ -121,7 +136,10 @@ export function createNativeLogin(dependencies: {
           // A consumed code is recoverable only through this attempt's exact signed new OAuth session.
         }
         const receipt = mobileReauthReceiptSchema.parse(
-          await reauth.verify({ attemptId: attempt.attemptId, verifier: attempt.verifier }),
+          await reauth.verify(
+            { attemptId: attempt.attemptId, verifier: attempt.verifier },
+            protocol,
+          ),
         );
         ensure(captured);
         if (receipt.ownerTag !== prepared.ownerTag || receipt.startedAt !== prepared.startedAt)
@@ -190,7 +208,7 @@ export function createNativeLogin(dependencies: {
   return {
     complete,
     async start(
-      provider: Provider,
+      provider: MobileProvider,
       accountType: AccountType,
       purpose?: "reauthenticate",
     ): Promise<NativeLoginResult> {
@@ -200,6 +218,16 @@ export function createNativeLogin(dependencies: {
       dependencies.dismissBrowser();
       activePurpose = purpose ?? "login";
       try {
+        // Check support before clearing an existing cookie or verifier. Failure is never legacy support.
+        const protocol: MobileAuthProtocol = dependencies.capabilities
+          ? await dependencies.capabilities()
+          : { contractVersion: 1, providers: ["google", "naver", "kakao"] };
+        ensure(captured);
+        if (
+          !protocol.providers.some((value) => value === provider) ||
+          (provider === "apple" && protocol.contractVersion !== 2)
+        )
+          throw new ApiError("UNAVAILABLE", "이 로그인 수단은 현재 사용할 수 없어요.", true);
         if (!purpose) await dependencies.resetCredentials();
         await dependencies.reauthentication?.proof.clear();
         ensure(captured);
@@ -221,6 +249,7 @@ export function createNativeLogin(dependencies: {
             await dependencies.reauthentication.prepare(
               { attemptId, challenge: proof.challenge, provider },
               current.user.id,
+              protocol,
             ),
           );
           ensure(captured);
@@ -232,6 +261,7 @@ export function createNativeLogin(dependencies: {
           provider,
           accountType,
           purpose: purpose ?? "login",
+          ...(protocol.contractVersion === 2 ? { contractVersion: 2 as const } : {}),
           ...(receipt ? { reauthentication: receipt } : {}),
         });
         ensure(captured);
@@ -244,11 +274,14 @@ export function createNativeLogin(dependencies: {
         );
         const errorCallback = new URL(callbackURL);
         errorCallback.searchParams.set("error", "oauth");
-        const authorization = await dependencies.authorize({
-          provider,
-          callbackURL,
-          errorCallbackURL: errorCallback.href,
-        });
+        const authorization = await dependencies.authorize(
+          {
+            provider,
+            callbackURL,
+            errorCallbackURL: errorCallback.href,
+          },
+          () => ensure(captured),
+        );
         ensure(captured);
         const proxy = new URL("/api/auth/expo-authorization-proxy", dependencies.config.apiBaseUrl);
         proxy.searchParams.set("authorizationURL", authorization.url);
