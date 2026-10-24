@@ -1,0 +1,59 @@
+name: Manual synthetic Gemini acceptance
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_sha:
+        description: Exact current main SHA with successful CI; isolated synthetic Worker only
+        required: true
+        type: string
+      confirmation:
+        description: Type single-synthetic-probe to allow at most three model attempts
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: baro-synthetic-ai-readiness
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    if: github.ref == 'refs/heads/main' && github.sha == inputs.candidate_sha && inputs.confirmation == 'single-synthetic-probe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: preview
+      deployment: false
+    steps:
+      - name: Checkout exact accepted candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: .bun-version
+      - name: Install frozen dependencies and verify candidate CI
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          bun ci
+          bun scripts/verify-release.ts "$GITHUB_SHA" --ci-only
+      - name: Run explicitly requested live synthetic acceptance
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: 9e844969d0c44b2449f3951d1f301654
+          READINESS_CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+        run: bun scripts/run-ai-readiness.ts
+      - name: Save finite observation without prompts or provider bodies
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ai-synthetic-${{ inputs.candidate_sha }}
+          path: .wrangler/readiness/ai.json
+          if-no-files-found: error
+          retention-days: 7
