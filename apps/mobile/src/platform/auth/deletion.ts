@@ -3,6 +3,7 @@ import type { MobileProvider } from "@baro/client-core";
 import {
   type MobileDeletionOutcome,
   mobileDeletionOutcomeSchema,
+  mobileDeletionPrepareReceiptSchema,
   mobileDeletionStartSchema,
 } from "@baro/contracts/mobile-deletion";
 import type { MobileConfig } from "../../../config/environment";
@@ -10,6 +11,7 @@ import { nativeCallbackBase, parseNativeAuthReturn } from "./attempt";
 import type {
   DeletionAttemptRecord,
   DeletionAttemptStore,
+  DeletionProofRecord,
   PendingDeletionAttempt,
 } from "./deletion-attempt";
 import type { createNativeLogin } from "./login";
@@ -25,6 +27,7 @@ export type NativeDeletionResult =
       localSaved: boolean;
     }
   | { type: "cancelled"; attemptId: string; ownerId: string }
+  | { type: "inactive"; attemptId: string; ownerId: string; observedAt: string }
   | { type: "unknown"; attemptId: string }
   | { type: "ignored" };
 const unavailable = () =>
@@ -65,6 +68,13 @@ export function createNativeDeletion(dependencies: {
   ): Promise<NativeDeletionResult> {
     if (record.state === "cancelled")
       return { type: "cancelled", attemptId: record.attemptId, ownerId: record.ownerId };
+    if (record.state === "inactive")
+      return {
+        type: "inactive",
+        attemptId: record.attemptId,
+        ownerId: record.ownerId,
+        observedAt: record.observedAt,
+      };
     return coalesce(`cleanup:${record.attemptId}`, async () => {
       let cleanup = record.cleanup,
         localSaved = true;
@@ -92,7 +102,7 @@ export function createNativeDeletion(dependencies: {
     });
   }
   async function accepted(
-    record: PendingDeletionAttempt,
+    record: DeletionProofRecord,
     input: unknown,
   ): Promise<NativeDeletionResult> {
     const outcome = mobileDeletionOutcomeSchema.parse(input);
@@ -114,7 +124,7 @@ export function createNativeDeletion(dependencies: {
     }
     return settled(saved);
   }
-  async function inspect(record: PendingDeletionAttempt): Promise<NativeDeletionResult> {
+  async function inspect(record: DeletionProofRecord): Promise<NativeDeletionResult> {
     try {
       return await accepted(
         record,
@@ -124,20 +134,46 @@ export function createNativeDeletion(dependencies: {
         ),
       );
     } catch {
-      return unknown(record.attemptId);
+      return record.state === "inactive" ? settled(record) : unknown(record.attemptId);
     }
   }
   const status = (id: string) =>
     coalesce(`status:${id}`, async () => {
       const record = await read(id);
       if (!record) return { type: "ignored" };
-      return record.state === "pending" ? inspect(record) : settled(record);
+      return record.state === "pending" || record.state === "inactive"
+        ? inspect(record)
+        : settled(record);
+    });
+  const reconcile = (id: string) =>
+    coalesce(`reconcile:${id}`, async () => {
+      const record = await read(id);
+      if (!record) return { type: "ignored" };
+      if (record.state !== "pending") return status(id);
+      const result = await inspect(record);
+      if (result.type !== "unknown" || !record.activity) return result;
+      try {
+        const observation = await dependencies.client.deletionActivity({
+          attemptId: id,
+          verifier: record.verifier,
+          ownerTag: record.ownerTag,
+          ...record.activity,
+        });
+        if (observation.status !== "inactive") return unknown(id);
+        // Commit may have won the activity CAS race. Prefer its receipt while still valid.
+        const final = await inspect(record);
+        if (final.type !== "unknown") return final;
+        const saved = await dependencies.attempts.observeInactive(id, observation);
+        return saved.state === "pending" ? unknown(id) : settled(saved);
+      } catch {
+        return unknown(id);
+      }
     });
   const cancel = (id: string) =>
     coalesce(`cancel:${id}`, async () => {
       const record = await read(id);
       if (!record) return { type: "ignored" };
-      if (record.state !== "pending") return settled(record);
+      if (record.state !== "pending") return status(id);
       try {
         const result = await dependencies.client.cancelDeletion(
           { attemptId: id, verifier: record.verifier },
@@ -157,7 +193,7 @@ export function createNativeDeletion(dependencies: {
     return coalesce(`return:${returned.attemptId}`, async () => {
       const record = await read(returned.attemptId);
       if (!record) return { type: "ignored" };
-      if (record.state !== "pending") return settled(record);
+      if (record.state !== "pending") return status(record.attemptId);
       if (returned.type === "error") return inspect(record);
       try {
         return await accepted(
@@ -176,6 +212,7 @@ export function createNativeDeletion(dependencies: {
   return {
     complete,
     status,
+    reconcile,
     cancel,
     async start(
       provider: MobileProvider,
@@ -191,7 +228,11 @@ export function createNativeDeletion(dependencies: {
         const guard = dependencies.begin(ownerId),
           protocol = await dependencies.client.capabilities();
         guard.ensureCurrent();
-        if (protocol.contractVersion !== 2 || !protocol.providers.some((p) => p === provider))
+        if (
+          protocol.contractVersion !== 2 ||
+          protocol.deletionActivity !== 1 ||
+          !protocol.providers.some((p) => p === provider)
+        )
           throw unavailable();
         const access = await dependencies.client.deletionAccess(protocol, ownerId);
         guard.ensureCurrent();
@@ -211,21 +252,29 @@ export function createNativeDeletion(dependencies: {
           verifier: proof.verifier,
           createdAt: dependencies.now(),
         };
-        await dependencies.attempts.put(record);
-        pending = record;
+        await dependencies.attempts.preflight(record);
         guard.ensureCurrent();
-        const prepared = await dependencies.client.prepareDeletion(
-          protocol,
-          {
-            attemptId: record.attemptId,
-            challenge: proof.challenge,
-            provider,
-            confirmation: "DELETE",
-          },
-          ownerId,
+        const prepared = mobileDeletionPrepareReceiptSchema.parse(
+          await dependencies.client.prepareDeletion(
+            protocol,
+            {
+              attemptId: record.attemptId,
+              challenge: proof.challenge,
+              provider,
+              confirmation: "DELETE",
+            },
+            ownerId,
+          ),
         );
         guard.ensureCurrent();
         if (prepared.ownerTag !== record.ownerTag) throw unavailable();
+        const durable: PendingDeletionAttempt = {
+          ...record,
+          activity: { startedAt: prepared.startedAt, activityProof: prepared.activityProof },
+        };
+        await dependencies.attempts.put(durable);
+        pending = durable;
+        guard.ensureCurrent();
         const callback = new URL(nativeCallbackBase(dependencies.config));
         for (const [key, value] of Object.entries(
           mobileDeletionStartSchema.parse({

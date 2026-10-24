@@ -1,5 +1,4 @@
-import { ApiError, createAccountClient } from "@baro/api-client";
-import { randomUUID } from "expo-crypto";
+import { ApiError } from "@baro/api-client";
 import { Linking } from "react-native";
 import { createSessionModel } from "../features/session/model";
 import { parseNativeAuthReturn } from "../platform/auth/attempt";
@@ -9,6 +8,7 @@ import { getPendingAuthStore, getReauthenticationStore } from "./auth-attempt";
 import { readMobileConfig } from "./config";
 import { getMobileCredentials } from "./credentials";
 import { getNativeLogin } from "./login";
+import { getMobileAuthClient } from "./mobile-auth";
 
 let model: ReturnType<typeof createSessionModel> | undefined;
 export function getSessionModel() {
@@ -26,27 +26,31 @@ export function getSessionModel() {
       },
       getConsent: () => api.session.getConsent(),
       saveConsent: (input) => api.session.saveConsent(input),
+      readAuthentication: () => getMobileAuthClient().capabilities(),
       readReauthentication: async (ownerId) => {
-        const account = createAccountClient({
-          scope,
-          newKey: randomUUID,
-          request: (path, init = {}) =>
-            api.request({
-              ...init,
-              path,
-              expectedOwner: ownerId,
-              ...(init.headers?.["idempotency-key"]
-                ? { key: init.headers["idempotency-key"] }
-                : {}),
-            }),
-          readReauthentication: () => getReauthenticationStore().load(),
-          reauthenticate: async (provider) => {
-            if (!model) throw new ApiError("UNAVAILABLE", "계정을 다시 확인해 주세요.", true);
-            await model.reauthenticate(provider);
-          },
+        const auth = getMobileAuthClient();
+        const protocol = await auth.capabilities().catch(() => {
+          // A public capability error is not evidence that the current private session expired.
+          throw new ApiError(
+            "UNAVAILABLE",
+            "로그인 수단을 확인하지 못했어요. 다시 확인해 주세요.",
+            true,
+          );
         });
-        const access = await account.deletionAccess();
-        return { providers: access.providers, verified: access.canDelete };
+        const access = await auth.deletionAccess(protocol, ownerId);
+        const marker = await getReauthenticationStore()
+          .load()
+          .catch(() => null);
+        return {
+          providers: access.providers,
+          verified: Boolean(
+            marker?.ownerTag === access.ownerTag &&
+              access.recentOAuth &&
+              access.authenticatedAt &&
+              marker &&
+              Date.parse(access.authenticatedAt) >= marker.startedAt,
+          ),
+        };
       },
       ownsReturn: async (raw) => {
         const returned = parseNativeAuthReturn(raw, config);

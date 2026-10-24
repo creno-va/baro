@@ -155,3 +155,56 @@ test("reauthentication is available before consent, lists only linked providers 
   await fireEvent.press(screen.getByRole("button", { name: "재인증 취소" }));
   expect(p.onCancel).toHaveBeenCalledTimes(1);
 });
+
+test("Apple uses the official scalable native button only when the server advertises it", async () => {
+  const p = props({
+    ...anonymous,
+    authentication: {
+      contractVersion: 2,
+      providers: ["google", "apple"],
+      checking: false,
+      error: null,
+    },
+  });
+  const view = await render(<SessionScreen {...p} />, { wrapper });
+  await fireEvent.press(screen.getByRole("button", { name: "Apple로 로그인" }));
+  expect(p.onSignIn).toHaveBeenCalledWith("apple");
+  expect(screen.queryByRole("button", { name: "네이버로 로그인" })).toBeNull();
+  expect(screen.getByText(/다른 계정이 자동 연결되지는 않아요/)).toBeTruthy();
+  const label = screen.getByText("Apple로 로그인");
+  expect(label.props.allowFontScaling).toBe(true);
+  expect(label.props.maxFontSizeMultiplier).toBe(0);
+  await view.rerender(
+    <SessionScreen
+      {...p}
+      state={{
+        ...anonymous,
+        authentication: {
+          providers: [],
+          checking: false,
+          error: "로그인 수단을 확인하지 못했어요.",
+        },
+      }}
+    />,
+  );
+  expect(screen.queryByRole("button", { name: "Apple로 로그인" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Google로 로그인" })).toBeNull();
+  await fireEvent.press(screen.getByRole("button", { name: "로그인 수단 다시 확인" }));
+  expect(p.onRetry).toHaveBeenCalledTimes(1);
+});
+
+test("linked Apple reauthentication keeps approved title and explains same-account intent", async () => {
+  const p = {
+    ...props({
+      ...consent,
+      reauthentication: { providers: ["apple"], verified: false, checking: false, error: null },
+    }),
+    onReauthenticate: jest.fn(),
+  };
+  await render(<SessionScreen {...p} />, { wrapper });
+  const button = screen.getByRole("button", { name: "Apple로 계속하기" });
+  expect(button.props.accessibilityHint).toContain("같은 Apple 계정");
+  await fireEvent.press(button);
+  expect(p.onReauthenticate).toHaveBeenCalledWith("apple");
+  expect(screen.queryByRole("button", { name: "Google로 같은 계정 다시 인증" })).toBeNull();
+});

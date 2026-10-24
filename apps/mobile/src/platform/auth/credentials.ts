@@ -43,6 +43,9 @@ export function createNativeCredentials(dependencies: {
   let ready: Promise<void> = Promise.resolve();
   let faulted = false;
   let faults = 0;
+  // Unlike a foreground scope epoch, this changes only when the cookie writer
+  // starts replacing credentials. It never identifies or authenticates an owner.
+  let revision = 0;
   let current: ReturnType<typeof view> | undefined;
 
   function ensure(generation: number, recovery = false) {
@@ -128,6 +131,7 @@ export function createNativeCredentials(dependencies: {
       accept: (header: string | null) =>
         serial(async () => {
           if (!header) return;
+          revision++;
           const previous = await managed.getItemAsync(cookieKey);
           ensure(generation, recovery);
           let value: string;
@@ -147,6 +151,8 @@ export function createNativeCredentials(dependencies: {
   }
   return {
     namespace: dependencies.namespace,
+    revision: () => revision,
+    isRevisionCurrent: (value: number) => value === revision,
     capture() {
       const generation = dependencies.scope.snapshot();
       if (!current || current.generation !== generation) current = view(generation);
@@ -156,6 +162,7 @@ export function createNativeCredentials(dependencies: {
     ready: () => ready,
     /** Invalidate synchronously before awaiting old IO or clearing the next jar. */
     reset() {
+      revision++;
       dependencies.scope.invalidate();
       const generation = dependencies.scope.snapshot();
       const previous = ready;

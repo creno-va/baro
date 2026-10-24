@@ -4,7 +4,11 @@ import {
   mobileAuthV2ProviderSchema,
   mobileAuthVerifierSchema,
 } from "@baro/contracts/mobile-auth";
-import { mobileDeletionOutcomeSchema } from "@baro/contracts/mobile-deletion";
+import {
+  mobileDeletionActivitySchema,
+  mobileDeletionOutcomeSchema,
+  mobileDeletionPrepareReceiptSchema,
+} from "@baro/contracts/mobile-deletion";
 import { z } from "zod";
 
 const identity = {
@@ -18,6 +22,12 @@ const pendingSchema = z.strictObject({
   ownerTag: mobileDeletionOutcomeSchema.shape.ownerTag,
   provider: mobileAuthV2ProviderSchema,
   createdAt: z.number().int().nonnegative(),
+  activity: mobileDeletionPrepareReceiptSchema.omit({ ownerTag: true }).optional(),
+});
+const inactiveSchema = pendingSchema.extend({
+  state: z.literal("inactive"),
+  activity: mobileDeletionPrepareReceiptSchema.omit({ ownerTag: true }),
+  observedAt: mobileDeletionActivitySchema.shape.observedAt,
 });
 const acceptedSchema = z.strictObject({
   ...identity,
@@ -27,6 +37,7 @@ const acceptedSchema = z.strictObject({
 });
 const recordSchema = z.discriminatedUnion("state", [
   pendingSchema,
+  inactiveSchema,
   acceptedSchema,
   z.strictObject({ ...identity, state: z.literal("cancelled") }),
 ]);
@@ -38,6 +49,7 @@ const journalSchema = z.strictObject({
     .refine((records) => new Set(records.map((r) => r.attemptId)).size === records.length),
 });
 export type PendingDeletionAttempt = z.infer<typeof pendingSchema>;
+export type DeletionProofRecord = PendingDeletionAttempt | z.infer<typeof inactiveSchema>;
 export type DeletionAttemptRecord = z.infer<typeof recordSchema>;
 const unavailable = () =>
   new ApiError(
@@ -75,10 +87,41 @@ export function createDeletionAttemptStore(dependencies: {
       ? { version: 2 as const, records: [] }
       : journalSchema.parse(JSON.parse(raw));
   };
-  const write = async (records: DeletionAttemptRecord[]) => {
-    const value = JSON.stringify(journalSchema.parse({ version: 2, records }));
-    // Each platform's native secure store receives a bounded item, never an unbounded account history.
+  const encoded = (records: DeletionAttemptRecord[]) =>
+    JSON.stringify(journalSchema.parse({ version: 2, records }));
+  const requireBounded = (value: string) => {
     if (new TextEncoder().encode(value).length > 1900) throw conflict();
+  };
+  const checkInsert = (records: DeletionAttemptRecord[], record: PendingDeletionAttempt) => {
+    if (
+      records.length >= 4 ||
+      records.some(
+        (r) =>
+          r.attemptId === record.attemptId ||
+          (r.ownerId === record.ownerId && r.state === "pending"),
+      )
+    )
+      throw conflict();
+    // Reserve room for every signed pending's future observation. A full journal must not trap it.
+    requireBounded(
+      encoded(
+        [...records, record].map((value) =>
+          value.state === "pending" && value.activity
+            ? {
+                ...value,
+                state: "inactive",
+                activity: value.activity,
+                observedAt: "9999-12-31T23:59:59.999Z",
+              }
+            : value,
+        ),
+      ),
+    );
+  };
+  const write = async (records: DeletionAttemptRecord[]) => {
+    const value = encoded(records);
+    // Each platform's native secure store receives a bounded item, never an unbounded account history.
+    requireBounded(value);
     await dependencies.storage.setItemAsync(dependencies.key, value);
     if ((await dependencies.storage.getItemAsync(dependencies.key)) !== value) throw unavailable();
   };
@@ -97,19 +140,20 @@ export function createDeletionAttemptStore(dependencies: {
   }
   return {
     list: () => serial(async () => (await read()).records),
+    preflight: (input: PendingDeletionAttempt) =>
+      serial(async () => {
+        const record = pendingSchema.parse(input);
+        checkInsert((await read()).records, {
+          ...record,
+          // Size reservation only; no unsigned/provisional receipt is ever written.
+          activity: { startedAt: Number.MAX_SAFE_INTEGER, activityProof: "0".repeat(64) },
+        });
+      }),
     put: (input: PendingDeletionAttempt) =>
       serial(async () => {
         const record = pendingSchema.parse(input),
           journal = await read();
-        if (
-          journal.records.length >= 4 ||
-          journal.records.some(
-            (r) =>
-              r.attemptId === record.attemptId ||
-              (r.ownerId === record.ownerId && r.state === "pending"),
-          )
-        )
-          throw conflict();
+        checkInsert(journal.records, record);
         await write([...journal.records, record]);
       }),
     accept: (attemptId: string, input: unknown) =>
@@ -118,7 +162,8 @@ export function createDeletionAttemptStore(dependencies: {
         return update(attemptId, (current) => {
           if (
             current.state === "cancelled" ||
-            (current.state === "pending" && current.ownerTag !== outcome.ownerTag) ||
+            ((current.state === "pending" || current.state === "inactive") &&
+              current.ownerTag !== outcome.ownerTag) ||
             (current.state === "accepted" &&
               (current.outcome.ownerTag !== outcome.ownerTag ||
                 (current.outcome.appleRevocation === "not_linked") !==
@@ -147,12 +192,33 @@ export function createDeletionAttemptStore(dependencies: {
         update(attemptId, (current) => {
           // A locally observed accepted result can never become a cancellation.
           const record: DeletionAttemptRecord =
-            current.state === "pending"
+            current.state === "pending" || current.state === "inactive"
               ? { state: "cancelled", attemptId, ownerId: current.ownerId }
               : current;
           return { record, result: record };
         }),
       ),
+    observeInactive: (attemptId: string, input: unknown) =>
+      serial(() => {
+        const observation = mobileDeletionActivitySchema.parse(input);
+        if (observation.attemptId !== attemptId || observation.status !== "inactive")
+          throw conflict();
+        return update<DeletionAttemptRecord>(attemptId, (current) => {
+          // A concurrently saved positive result always wins over an activity observation.
+          if (current.state === "accepted" || current.state === "cancelled")
+            return { record: current, result: current };
+          if (!current.activity) throw conflict();
+          const record = inactiveSchema.parse({
+            ...current,
+            state: "inactive",
+            observedAt:
+              current.state === "inactive" && current.observedAt > observation.observedAt
+                ? current.observedAt
+                : observation.observedAt,
+          });
+          return { record, result: record };
+        });
+      }),
     markCleanup: (attemptId: string, cleanup: z.infer<typeof acceptedSchema>["cleanup"]) =>
       serial(() =>
         update(attemptId, (current) => {
@@ -167,7 +233,7 @@ export function createDeletionAttemptStore(dependencies: {
           return { record, result: record };
         }),
       ),
-    /** Explicit acknowledgement only; pending proof cannot be forgotten through this API. */
+    /** Explicit acknowledgement only; inactive observation is not a deletion outcome. */
     acknowledge: (attemptId: string) =>
       serial(async () => {
         const journal = await read(),

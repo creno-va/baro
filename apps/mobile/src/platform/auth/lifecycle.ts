@@ -6,22 +6,33 @@ export function bindSessionLifecycle(dependencies: {
   returns: ReturnType<typeof createAuthReturnQueue>;
   currentState: () => string | null;
   subscribe: (listener: (state: string) => void) => () => void;
+  receiveSpecialReturn?: (raw: string) => Promise<boolean>;
 }) {
   let live = true;
+  let pendingReturns = 0;
   const resume = () => {
-    if (live && dependencies.currentState() === "active") void dependencies.model.resume();
+    if (live && !pendingReturns && dependencies.currentState() === "active")
+      void dependencies.model.resume();
   };
   if (dependencies.currentState() !== "active") dependencies.model.pause();
   const unsubscribeReturn = dependencies.returns.subscribe(async (raw) => {
-    await dependencies.model.receiveReturn(raw);
-    resume();
+    pendingReturns++;
+    try {
+      const handled = dependencies.receiveSpecialReturn
+        ? await dependencies.receiveSpecialReturn(raw)
+        : false;
+      if (!handled) await dependencies.model.receiveReturn(raw);
+    } finally {
+      pendingReturns--;
+      resume();
+    }
   });
   const unsubscribe = dependencies.subscribe((state) => {
     if (state === "active") resume();
     else dependencies.model.pause();
   });
-  // A queued cold return begins its ownership lookup synchronously and prevents
-  // this foreground refresh from superseding the exchange.
+  // A queued cold return reserves this gate synchronously, including while a
+  // separate deletion journal is being checked before the normal auth lookup.
   resume();
   return () => {
     live = false;

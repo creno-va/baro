@@ -173,3 +173,26 @@ test("reauthentication/unknown results stay visible and opening management never
   expect(handlers.deleteAccount).not.toHaveBeenCalled();
   expect(handlers.retryUnconfirmed).not.toHaveBeenCalled();
 });
+
+test("v2/settings capability failure cannot silently enable legacy deletion; old uncertain recovery stays available", async () => {
+  const handlers = actions(),
+    onDeletion = jest.fn(),
+    props = { actions: handlers, onSession: jest.fn(), onDeletion };
+  const view = await render(<SettingsScreen {...props} deletionMode="v2" state={initial} />);
+  await fireEvent.press(screen.getByRole("button", { name: "계정 삭제 관리" }));
+  expect(screen.queryByRole("button", { name: "내 계정 삭제 요청" })).toBeNull();
+  await fireEvent.press(screen.getByRole("button", { name: "계정 삭제 화면으로 이동" }));
+  expect(onDeletion).toHaveBeenCalledTimes(1);
+  await view.rerender(<SettingsScreen {...props} deletionMode="unavailable" state={initial} />);
+  expect(screen.queryByRole("button", { name: "내 계정 삭제 요청" })).toBeNull();
+  expect(handlers.deleteAccount).not.toHaveBeenCalled();
+  await view.rerender(
+    <SettingsScreen
+      {...props}
+      deletionMode="v2"
+      state={{ ...initial, notice: "unconfirmed", deletionState: "unconfirmed" }}
+    />,
+  );
+  expect(screen.getByRole("button", { name: "미확정 삭제 요청 직접 다시 확인" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "계정 삭제 화면으로 이동" })).toBeTruthy();
+});

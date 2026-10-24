@@ -24,6 +24,7 @@ const input: PendingDeletionAttempt = {
   provider: "apple",
   verifier,
   createdAt: 1000,
+  activity: { startedAt: 999, activityProof: "d".repeat(64) },
 };
 const outcome = {
   contractVersion: 2 as const,
@@ -47,6 +48,8 @@ function fixture(provider: MobileProvider = "apple") {
     calls: string[] = [];
   let available = true,
     legacy = false,
+    feature = true,
+    signed = true,
     linked = true,
     current = true,
     failPrepare = false,
@@ -77,13 +80,17 @@ function fixture(provider: MobileProvider = "apple") {
         if (legacy) throw new ApiError("NOT_FOUND", "합성 이전 서버", false, 404);
         return {
           contractVersion: 2,
+          ...(feature ? { deletionActivity: 1 } : {}),
           providers: available
             ? ["google", "naver", "kakao", "apple"]
             : ["google", "naver", "kakao"],
         } as T;
       }
       expect(request.expectedOwner).toBe(ownerId);
-      expect(request.headers).toEqual({ "x-baro-auth-contract": "2" });
+      expect(request.headers).toEqual({
+        "x-baro-auth-contract": "2",
+        ...(request.path.endsWith("/prepare") ? { "x-baro-deletion-activity": "1" } : {}),
+      });
       if (request.path === "/api/me/deletion")
         return {
           contractVersion: 2,
@@ -93,7 +100,7 @@ function fixture(provider: MobileProvider = "apple") {
           providers: linked ? [provider] : ["google"],
         } as T;
       expect(request.path).toBe("/api/mobile/auth/deletion/prepare");
-      expect(await store.list()).toEqual([pendingInput]);
+      expect(await store.list()).toEqual([]);
       expect(request.body).toEqual({
         attemptId: id,
         provider,
@@ -102,7 +109,11 @@ function fixture(provider: MobileProvider = "apple") {
       });
       if (failPrepare) throw new ApiError("UNAVAILABLE", "합성 준비 응답 유실", true);
       if (swapAfterPrepare) current = false;
-      return { ownerTag: tag, startedAt: 999 } as T;
+      return {
+        ownerTag: tag,
+        startedAt: 999,
+        ...(signed ? { activityProof: "d".repeat(64) } : {}),
+      } as T;
     },
     completionRequest: async <T>(request: JsonRequestOptions): Promise<T> => {
       calls.push(request.path);
@@ -194,6 +205,8 @@ function fixture(provider: MobileProvider = "apple") {
     set(value: {
       available?: boolean;
       legacy?: boolean;
+      feature?: boolean;
+      signed?: boolean;
       linked?: boolean;
       failPrepare?: boolean;
       swapAfterPrepare?: boolean;
@@ -207,6 +220,8 @@ function fixture(provider: MobileProvider = "apple") {
     }) {
       if (value.available !== undefined) available = value.available;
       if (value.legacy !== undefined) legacy = value.legacy;
+      if (value.feature !== undefined) feature = value.feature;
+      if (value.signed !== undefined) signed = value.signed;
       if (value.linked !== undefined) linked = value.linked;
       if (value.failPrepare !== undefined) failPrepare = value.failPrepare;
       if (value.swapAfterPrepare !== undefined) swapAfterPrepare = value.swapAfterPrepare;
@@ -228,7 +243,7 @@ function fixture(provider: MobileProvider = "apple") {
 }
 
 for (const provider of ["google", "naver", "kakao", "apple"] as const) {
-  test(`v2 deletion persists proof before prepare/browser and accepts only the receipt before cleanup: ${provider}`, async () => {
+  test(`v2 deletion persists signed prepare receipt before OAuth/browser and accepts only the receipt before cleanup: ${provider}`, async () => {
     const f = fixture(provider);
     expect(await f.create().start(provider, "DELETE", ownerId)).toMatchObject({
       type: "accepted",
@@ -256,7 +271,12 @@ test("literal DELETE, advertised v2 and linked provider are required before inte
     code: "VALIDATION_ERROR",
   });
   expect(invalid.calls).toEqual([]);
-  for (const settings of [{ available: false }, { legacy: true }, { linked: false }]) {
+  for (const settings of [
+    { available: false },
+    { legacy: true },
+    { linked: false },
+    { feature: false },
+  ]) {
     const f = fixture();
     f.set(settings);
     await expect(f.create().start("apple", "DELETE", ownerId)).rejects.toBeInstanceOf(ApiError);
@@ -269,15 +289,12 @@ test("literal DELETE, advertised v2 and linked provider are required before inte
   }
 });
 
-test("prepare loss or owner change retains proof without authorizing another account", async () => {
-  for (const settings of [{ failPrepare: true }, { swapAfterPrepare: true }]) {
+test("prepare loss, absent signature or owner change never starts OAuth or leaves an unsigned blocked journal", async () => {
+  for (const settings of [{ failPrepare: true }, { signed: false }, { swapAfterPrepare: true }]) {
     const f = fixture();
     f.set(settings);
-    expect(await f.create().start("apple", "DELETE", ownerId)).toEqual({
-      type: "unknown",
-      attemptId: id,
-    });
-    expect(await f.store.list()).toEqual([input]);
+    await expect(f.create().start("apple", "DELETE", ownerId)).rejects.toBeInstanceOf(ApiError);
+    expect(await f.store.list()).toEqual([]);
     expect(f.calls).not.toContain("authorize");
     expect(f.calls).not.toContain("browser");
   }
@@ -386,4 +403,127 @@ test("even well-shaped foreign-owner receipts cannot acknowledge deletion or tri
   expect(await f.create().complete(callback)).toEqual({ type: "unknown", attemptId: id });
   expect(await f.store.list()).toEqual([input]);
   expect(f.calls).not.toContain("cleanup");
+});
+
+const observation = {
+  contractVersion: 2 as const,
+  attemptId: id,
+  status: "inactive" as const,
+  outcome: "unknown" as const,
+  observedAt: "2026-10-24T12:00:00.000Z",
+};
+test("explicit expired reconciliation retains original signed proof and unknown outcome; a different nonce can start", async () => {
+  const f = fixture();
+  await f.store.put(input);
+  f.dependencies.client.deletionStatus = async () => {
+    f.calls.push("status");
+    throw new ApiError("UNAUTHENTICATED", "SYNTHETIC_EXPIRED", false, 401);
+  };
+  f.dependencies.client.deletionActivity = async (value) => {
+    f.calls.push("activity");
+    expect(value).toEqual({ attemptId: id, verifier, ownerTag: tag, ...input.activity });
+    return observation;
+  };
+  expect(await f.create().reconcile(id)).toEqual({
+    type: "inactive",
+    attemptId: id,
+    ownerId,
+    observedAt: observation.observedAt,
+  });
+  expect(f.calls).toEqual(["status", "activity", "status"]);
+  expect(await f.store.list()).toEqual([
+    {
+      ...input,
+      activity: { startedAt: 999, activityProof: "d".repeat(64) },
+      state: "inactive",
+      observedAt: observation.observedAt,
+    },
+  ]);
+  await f.store.put({ ...input, attemptId: other });
+  expect((await f.store.list()).map((record) => record.state)).toEqual(["inactive", "pending"]);
+  expect(f.calls).not.toContain("cleanup");
+  expect(f.disk.get("cookie")).toBe("SYNTHETIC_COOKIE");
+});
+
+for (const mode of ["active", "error", "legacy"] as const) {
+  test(`reconciliation cannot invent an inactive/cancelled/deleted result: ${mode}`, async () => {
+    const f = fixture();
+    const { activity: _activity, ...legacy } = input;
+    const record = mode === "legacy" ? legacy : input;
+    await f.store.put(record);
+    let reads = 0;
+    f.dependencies.client.deletionStatus = async () => {
+      reads++;
+      throw new Error("SYNTHETIC_EXPIRED");
+    };
+    f.dependencies.client.deletionActivity = async () => {
+      f.calls.push("activity");
+      if (mode !== "active") throw new Error("SYNTHETIC_UNAVAILABLE");
+      return { ...observation, status: "active" };
+    };
+    expect(await f.create().reconcile(id)).toEqual({ type: "unknown", attemptId: id });
+    expect(await f.store.list()).toEqual([record]);
+    expect(reads).toBe(1);
+    expect(f.calls).toEqual(mode === "legacy" ? [] : ["activity"]);
+    await expect(f.store.acknowledge(id)).rejects.toMatchObject({ code: "CONFLICT" });
+    await expect(f.store.put({ ...input, attemptId: other })).rejects.toMatchObject({
+      code: "CONFLICT",
+    });
+  });
+}
+
+test("commit winning during activity observation remains accepted; no fabricated cancellation or inactive downgrade", async () => {
+  for (const concurrentSave of [false, true]) {
+    const f = fixture();
+    await f.store.put(input);
+    let reads = 0;
+    f.dependencies.client.deletionStatus = async () => {
+      if (++reads === 1 || concurrentSave) throw new Error("SYNTHETIC_RESPONSE_LOST");
+      return outcome;
+    };
+    f.dependencies.client.deletionActivity = async () => {
+      if (concurrentSave) await f.store.accept(id, outcome);
+      return observation;
+    };
+    expect(await f.create().reconcile(id)).toMatchObject({
+      type: "accepted",
+      outcome,
+      cleanup: "complete",
+    });
+    expect((await f.store.list())[0]?.state).toBe("accepted");
+    expect(reads).toBe(2);
+    expect(f.calls).toEqual(["cleanup"]);
+  }
+});
+
+test("inactive record can still recover a valid late receipt, but no missing response erases its unknown observation", async () => {
+  const f = fixture();
+  await f.store.put(input);
+  await f.store.observeInactive(id, observation);
+  f.set({ statusError: 401 });
+  expect(await f.create().complete(callback)).toMatchObject({
+    type: "inactive",
+    observedAt: observation.observedAt,
+  });
+  expect(f.calls.some((path) => path.endsWith("/exchange"))).toBe(false);
+  f.set({ statusError: 0 });
+  expect(await f.create().reconcile(id)).toMatchObject({ type: "accepted", outcome });
+  expect(f.calls).toContain("cleanup");
+});
+
+test("pending collision and storage write failure stop before OAuth; signed pending is required before browser", async () => {
+  const duplicate = fixture();
+  await duplicate.store.put({ ...input, attemptId: other });
+  await expect(duplicate.create().start("apple", "DELETE", ownerId)).rejects.toMatchObject({
+    code: "CONFLICT",
+  });
+  expect(duplicate.calls.some((path) => path.endsWith("/prepare"))).toBe(false);
+  const locked = fixture();
+  locked.set({ failStorage: true });
+  await expect(locked.create().start("apple", "DELETE", ownerId)).rejects.toMatchObject({
+    code: "UNAVAILABLE",
+  });
+  expect(await locked.store.list()).toEqual([]);
+  expect(locked.calls).not.toContain("authorize");
+  expect(locked.calls).not.toContain("browser");
 });

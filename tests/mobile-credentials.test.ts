@@ -339,3 +339,21 @@ test("native transport and the shared session client preserve real Hono role, co
     db.close();
   }
 });
+
+test("cookie revision retires synchronously on reset and stale accepts cannot replace it; foreground scopes alone do not", async () => {
+  const f = fixture();
+  await f.credentials.capture().accept("synthetic=a");
+  const revision = f.credentials.revision(),
+    stale = f.credentials.capture();
+  f.scope.invalidate();
+  expect(f.credentials.isRevisionCurrent(revision)).toBe(true);
+  await expect(stale.accept("synthetic=stale")).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
+  expect(f.credentials.revision()).toBe(revision);
+  const reset = f.credentials.reset();
+  expect(f.credentials.isRevisionCurrent(revision)).toBe(false);
+  const replacement = f.credentials.revision();
+  await reset;
+  expect(f.credentials.revision()).toBe(replacement);
+  await f.credentials.capture().accept(null);
+  expect(f.credentials.revision()).toBe(replacement);
+});

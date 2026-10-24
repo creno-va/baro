@@ -49,6 +49,7 @@ export function createMobileApi(dependencies: {
   return {
     scope,
     request,
+    publicRequest,
     directory: createDirectoryClient(publicRequest),
     lawyers: createSessionBoundClient(scope, () =>
       createLawyersClient({

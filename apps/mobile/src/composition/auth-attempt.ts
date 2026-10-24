@@ -6,12 +6,31 @@ import {
 } from "expo-crypto";
 import * as SecureStore from "expo-secure-store";
 import { createPendingAuthStore } from "../platform/auth/attempt";
+import { createDeletionAttemptStore } from "../platform/auth/deletion-attempt";
 import { createNativeProof } from "../platform/auth/proof";
 import { createReauthenticationStore } from "../platform/auth/reauthentication";
 import { readMobileConfig } from "./config";
 
 let store: ReturnType<typeof createPendingAuthStore> | undefined;
 let reauthentication: ReturnType<typeof createReauthenticationStore> | undefined;
+let deletion: ReturnType<typeof createDeletionAttemptStore> | undefined;
+export function getDeletionAttemptStore() {
+  if (!deletion) {
+    const config = readMobileConfig();
+    const options: SecureStore.SecureStoreOptions = {
+      keychainService: `${config.applicationId}.auth`,
+      keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
+    };
+    deletion = createDeletionAttemptStore({
+      key: `baro_${config.environment}_deletion_proofs`,
+      storage: {
+        getItemAsync: (key) => SecureStore.getItemAsync(key, options),
+        setItemAsync: (key, value) => SecureStore.setItemAsync(key, value, options),
+      },
+    });
+  }
+  return deletion;
+}
 export function getReauthenticationStore() {
   if (!reauthentication) {
     const config = readMobileConfig();
