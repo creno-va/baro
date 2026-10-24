@@ -255,3 +255,35 @@ The finite native-materials receipt records actual job times and reference. It i
 not deployed Cloudflare Container/product/OAuth or full/security acceptance. No model
 calls occurred. The manual chat_tools selector lets a changed chat candidate test
 only the four affected cases, retaining each case's durable counter and observations.
+
+[Legal core40076630844](https://github.com/creno-va/baro/actions/runs/40076630844)
+on exact main3e81310 used the existing preview LAW_API_OC through the manual
+environment-readiness adapter. Five actual official API requests returned HTTP200;
+three statute/precedent sources and three exact quotation integrity checks passed.
+The precedent search remained truncated and that limitation is preserved. The
+finite receipt is recorded as preview-credential-ci-adapter/runtimeWorker=false;
+this is source adapter evidence, not Gemini legal chat or product acceptance. The
+known pending guide was excluded rather than retried under unchanged conditions.
+
+The separate manual legal_chat case tests a single public request (민법 제598조)
+through the actual Workers workspace pipeline: Gemini requests the source, the
+existing legal-retrieval module fetches and verifies it, the regenerated answer's
+quotation/spans are validated, then an independent Gemini audit must pass. A passed
+receipt requires actual HTTP reservations, a verified source, an accepted quotation
+and a final audit; a schema-valid answer alone cannot pass. The existing durable
+model cap remains3 and official HTTP requests are capped9. Other statutes, guides,
+precedents and private queries are refused before HTTP in this isolated diagnostic.
+
+Only this selected case temporarily receives the existing legal credential on the
+isolated probe Worker. The runner deletes that Worker secret in finally and marks
+cleanup failure as failure; product secrets are never changed. Fixed-scope deletion,
+off-scope zero HTTP, bounded failed requests, finite reports and replay/provenance
+checks have offline coverage. No issued keys or actual success is claimed for the
+four external services that the user confirmed are not yet provisioned.
+
+Web legal citations now show a separate title/original-link card next to the
+external-tool cards, using only the existing public citation fields. No verification
+timestamp or effective date is inferred from fields that this view does not carry.
+The isolated browser fixture labels its synthetic citation, checks the exact
+original link and clickability, and audits desktop/mobile overflow/accessibility.
+This UI fixture is not evidence of an actual verified legal answer.

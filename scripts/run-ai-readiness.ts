@@ -8,6 +8,7 @@ import {
   type ProbeReply,
   verifyProbeExchange,
 } from "./ai-readiness-control";
+import { deleteSyntheticLawCredential } from "./ai-readiness-secrets";
 
 async function git(args: string[]): Promise<string> {
   const child = Bun.spawn(["git", ...args], { stdout: "pipe", stderr: "pipe" });
@@ -16,6 +17,7 @@ async function git(args: string[]): Promise<string> {
   return stdout;
 }
 let stage = "source-verification";
+let cleanupLawCredential: (() => Promise<void>) | null = null;
 try {
   const candidate = process.env.READINESS_CANDIDATE_SHA ?? "";
   const featureCase = featureCaseSchema.parse(
@@ -35,6 +37,9 @@ try {
       "scripts/ai-readiness-fixture.ts",
       "scripts/ai-readiness-control.ts",
       "scripts/ai-readiness.wrangler.jsonc",
+      "scripts/ai-readiness-legal.ts",
+      "scripts/ai-readiness-secrets.ts",
+      "scripts/run-ai-readiness.ts",
       "tests/fixtures/media/image-markers.jpg",
       "tests/fixtures/media/speech-ko.wav",
       "src/server",
@@ -134,6 +139,17 @@ try {
   ).join("");
   stage = "token-registration";
   await wrangler(["secret", "put", "READINESS_TOKEN"], token);
+  if (featureCase === "legal_chat") {
+    const credential = process.env.LAW_API_OC;
+    if (!credential?.trim()) throw new Error("Synthetic legal credential unavailable");
+    const scope = {
+      accountId: process.env.CLOUDFLARE_ACCOUNT_ID ?? "",
+      token: process.env.CLOUDFLARE_API_TOKEN ?? "",
+    };
+    cleanupLawCredential = () => deleteSyntheticLawCredential(scope);
+    stage = "legal-credential-registration";
+    await wrangler(["secret", "put", "LAW_API_OC"], credential);
+  }
   stage = "authentication-check";
   const unauthenticated = await fetch(`${origin}/probe`, {
     method: "POST",
@@ -199,4 +215,15 @@ try {
     }),
   );
   process.exitCode = 1;
+} finally {
+  if (cleanupLawCredential) {
+    try {
+      await cleanupLawCredential();
+    } catch {
+      console.error(
+        JSON.stringify({ check: "isolated-probe-legal-credential-cleanup", status: "failed" }),
+      );
+      process.exitCode = 1;
+    }
+  }
 }
