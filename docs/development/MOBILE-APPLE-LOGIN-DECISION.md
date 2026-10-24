@@ -97,7 +97,8 @@ revoke 실패/응답 유실을 성공으로 표시하지 않으며 BARO 데이�
 
 [Apple의 웹 설정 안내](https://developer.apple.com/help/account/capabilities/configure-sign-in-with-apple-for-the-web/)에 따라
 Sign in with Apple을 활성화한 primary App ID와 Services ID, 등록 domain/return URL을 조율한다.
-Apple Developer 관리 권한·키가 실제로 있는지는 사용자 확인 대기다. private key·client secret을
+Apple Developer Program 회원 계정 보유는 사용자에게 확인했다. 실제 관리 권한·Services ID·키
+설정은 미확인이다. private key·client secret을
 채팅/이슈/PR/artifact에 올리지 않는다. preview/production 환경과 app identifier·callback을 각각 대조한다.
 
 사용자가 **Apple 로그인 추가 승인 (권장)**으로 응답했다. 위1→2/5→3/4/6 순서로
@@ -355,7 +356,7 @@ production build/local workerd와 양 OS Metro export다. native proof/기존 �
 반환 분기·공식 Apple 버튼을 함께 조립한 뒤 capability 기반 UI를 노출한다. 미확정·만료
 기록의 사용자 복구와 실제 설정/두 OS 기기 검증도 남아 있다.
 
-## native UI 조립 초안 — 아직 병합/실제 인수 전
+## native UI 조립 — PR482 병합, 실제 제공자/기기 인수 전
 
 `codex/346-native-apple-ui`는 선행 auth PR484/main65cc78c와 독립 웹 업로드 PR485/main
 d3f4e49를 통합했다. 공식 Apple PNG 1x/2x/3x를
@@ -383,7 +384,7 @@ Expo Router에는 고정 화면 경로만 전달하며 code/verifier/owner ID를
 오류이며 legacy 삭제로 바꾸지 않는다. 공개 provider 로그인은 기존 capability를 따른다.
 기존 OAuth/교환·영수증 TTL과 owner·PKCE 검증은 유지한다.
 
-현재 초안의 검증은 frozen/quick(공통501/60files·RN102/24suites·server243),
+초기 초안의 검증은 frozen/quick(공통501/60files·RN102/24suites·server243),
 production build/local workerd, 양 OS Metro export다. 설치된 SDK를 이용한 합성
 coordinator 검증3건은 정상 정리·시스템 브라우저 중 owner 교체·cold 복구와 명시적
 비로그인 정리를 다룬다. 실제 Apple/기기·최신 native compile/화면 인수·공개 출시를
@@ -460,3 +461,16 @@ PR484 exact head6586223의 CI40091147033와 병합 main65cc78c의 CI40091361352�
 export다. 새 signed 순서·관측·모델/저장소 회귀38건/597 assertions와 실제 SDK 조립/
 화면 회귀10건도 포함한다. 웹 UI 소유 경로는 수정하지 않았다. 새 JS/자산의 native
 컴파일·runtime 검증은 후속이며 이전 source6201112 앱을 이 변경의 증거로 쓰지 않는다.
+
+PR482는 exact head6ddc1ee·CI40092177537 성공 뒤 main9436e77에 병합됐고,
+main CI40092440802도 성공했다. 이 새 소스의 내장 제품 번들 컴파일은 Android
+[40092725450](https://github.com/creno-va/baro/actions/runs/40092725450)와 iOS Simulator
+[40092729846](https://github.com/creno-va/baro/actions/runs/40092729846)로 요청했다.
+결과가 나오기 전 native 컴파일·실행 성공으로 간주하지 않는다.
+
+배포된 preview d3f4e49에서 무세션 GET3회로 기본 strict capability 응답과 명시적
+activity1 협의·private/no-store·Set-Cookie 부재를 확인한
+[공개 계약 관측](../quality/mobile-native-9436e77/public-capabilities-d3f4e49.json)을 보존한다.
+현재 광고된 provider는 Google·네이버·카카오이며 Apple은 광고되지 않았다. 원인이
+미설정인지 특정 key 조건인지는 이 공개 응답으로 판단하지 않는다. 실제 인증·native IO나
+preview를 앱 소스9436e77로 배포했다는 증거가 아니다.
