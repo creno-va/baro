@@ -11,10 +11,18 @@ import {
 } from "../src/server/modules/file-processing/transport";
 import { digest } from "../src/server/modules/files/binary";
 import { createMediaGateway } from "../src/server/modules/llm-gateway/transcription";
+import { countD1Calls } from "./helpers/d1-call-count";
 import { fixture, uploaded } from "./helpers/file-processing-fixture";
 
 const signal = () => new AbortController().signal;
-async function setup(options: { before?: () => void; after?: () => void; corrupt?: boolean } = {}) {
+async function setup(
+  options: {
+    before?: () => void;
+    after?: () => void;
+    corrupt?: boolean;
+    wrapDatabase?: (database: D1Database) => D1Database;
+  } = {},
+) {
   const f = await fixture({
     probe: async (input) => {
       await new Response(input.open()).arrayBuffer();
@@ -62,7 +70,9 @@ async function setup(options: { before?: () => void; after?: () => void; corrupt
       new Date(Date.parse(f.actor.now) + 300000).toISOString(),
     ),
   ).not.toBeNull();
-  f.core = createV2Core(f.db.binding, f.core.cipher, { applicationCostLimitsEnabled: false });
+  f.core = createV2Core(options.wrapDatabase?.(f.db.binding) ?? f.db.binding, f.core.cipher, {
+    applicationCostLimitsEnabled: false,
+  });
   let nativeCalls = 0;
   const receipts: string[] = [];
   // Explicit offline adapter. This tests lifecycle/fencing/AES/storage publication,
@@ -178,6 +188,190 @@ async function setup(options: { before?: () => void; after?: () => void; corrupt
     nativeState: () => ({ running, starts }),
   };
 }
+
+async function publicationFixture(options: Parameters<typeof setup>[0] = {}) {
+  const f = await setup(options);
+  await f.execution.initialize();
+  for (let unit = 0; unit < 2; unit++) {
+    await f.execution.extractUnit(unit, signal());
+    await f.execution.interpretArtifact(unit, 0, signal());
+    await f.execution.prepareUnit(unit, signal());
+  }
+  const prepared = await f.execution.preparePublication(2, signal());
+  return { ...f, prepared };
+}
+
+for (const mutation of [
+  "intake",
+  "summary",
+  "workspace_job",
+  "archive",
+  "file_revision",
+  "file_consent",
+  "policy_consent",
+  "lease_fencing",
+  "file_deleted",
+] as const)
+  test(`file publication context refresh refuses ${mutation} and retains staged evidence`, async () => {
+    const f = await publicationFixture();
+    const header = () =>
+      f.db.sqlite
+        .query(
+          "SELECT workspace_revision,encrypted_payload,written_parts FROM v2_private_snapshots WHERE purpose='file_coverage' AND target_id=?",
+        )
+        .get(f.u.session.fileId);
+    const before = header();
+    await uploaded(f, new TextEncoder().encode("another synthetic source"));
+    const query = (sql: string, ...values: (string | number)[]) =>
+      f.db.sqlite.query(sql).run(...values);
+    if (mutation === "intake")
+      query("UPDATE v2_workspaces SET intake_revision=intake_revision+1 WHERE id=?", f.workspaceId);
+    if (mutation === "summary")
+      query(
+        "UPDATE v2_workspaces SET confirmed_summary_revision=coalesce(confirmed_summary_revision,0)+1 WHERE id=?",
+        f.workspaceId,
+      );
+    if (mutation === "workspace_job")
+      query(
+        "UPDATE v2_workspaces SET current_job_id=? WHERE id=?",
+        crypto.randomUUID(),
+        f.workspaceId,
+      );
+    if (mutation === "archive")
+      query(
+        "UPDATE v2_workspaces SET status='archived',archived_from='intake',current_job_id=NULL WHERE id=?",
+        f.workspaceId,
+      );
+    if (mutation === "file_revision")
+      query("UPDATE v2_files SET revision=revision+1 WHERE id=?", f.u.session.fileId);
+    if (mutation === "file_consent")
+      query("DELETE FROM v2_consents WHERE file_id=?", f.u.session.fileId);
+    if (mutation === "policy_consent")
+      query("DELETE FROM user_consents WHERE user_id=?", f.actor.ownerId);
+    if (mutation === "lease_fencing")
+      query("UPDATE v2_jobs SET fencing=fencing+1 WHERE id=?", f.jobId);
+    if (mutation === "file_deleted")
+      query(
+        "INSERT INTO v2_tombstones(target_kind,target_id,deleted_at) VALUES('file',?,?)",
+        f.u.session.fileId,
+        f.actor.now,
+      );
+    await expect(f.execution.stageCoveragePart(0, signal())).rejects.toMatchObject({
+      code: mutation === "lease_fencing" ? "FILE_PROCESSING_FAILED" : "STALE_REVISION",
+    });
+    expect(header()).toEqual(before);
+    expect(f.nativeCalls()).toBe(2);
+  });
+
+for (const mutation of ["file_consent", "lease_fencing"] as const)
+  test(`atomic refresh rejects ${mutation} revoked after its fresh guard`, async () => {
+    let measured!: ReturnType<typeof countD1Calls>;
+    const f = await publicationFixture({
+      wrapDatabase: (database) => {
+        measured = countD1Calls(database);
+        return measured.binding;
+      },
+    });
+    await uploaded(f, new TextEncoder().encode("another synthetic source"));
+    let changed = false;
+    measured.before((statements) => {
+      if (changed || !statements.some((sql) => sql.includes("s.workspace_revision BETWEEN")))
+        return;
+      changed = true;
+      if (mutation === "file_consent")
+        f.db.sqlite.query("DELETE FROM v2_consents WHERE file_id=?").run(f.u.session.fileId);
+      else f.db.sqlite.query("UPDATE v2_jobs SET fencing=fencing+1 WHERE id=?").run(f.jobId);
+    });
+    await expect(f.execution.stageCoveragePart(0, signal())).rejects.toMatchObject({
+      code: "STALE_REVISION",
+    });
+    expect(changed).toBe(true);
+    expect(f.nativeCalls()).toBe(2);
+  });
+
+for (const phase of ["refresh", "coverage", "publication", "continuous"] as const)
+  test(`bounded ${phase} CAS races preserve the source and never repeat interpretation`, async () => {
+    let measured!: ReturnType<typeof countD1Calls>;
+    const f = await publicationFixture({
+      wrapDatabase: (database) => {
+        measured = countD1Calls(database);
+        return measured.binding;
+      },
+    });
+    if (phase === "refresh")
+      await uploaded(f, new TextEncoder().encode("another synthetic source"));
+    let races = 0;
+    const target =
+      phase === "refresh"
+        ? "s.workspace_revision BETWEEN"
+        : phase === "publication"
+          ? "(SELECT count(*) FROM v2_file_observations WHERE snapshot_id=?)"
+          : "s.written_parts=? AND s.written_bytes=?";
+    measured.before((statements) => {
+      if (
+        races >= (phase === "continuous" ? 3 : 1) ||
+        !statements.some((sql) => sql.includes(target))
+      )
+        return;
+      // The stable workspace metadata uses AAD revision1. File publication
+      // advances only its operational revision, exactly as this race does.
+      f.db.sqlite
+        .query("UPDATE v2_workspaces SET revision=revision+1 WHERE id=?")
+        .run(f.workspaceId);
+      races++;
+    });
+    if (phase === "continuous") {
+      await expect(f.execution.stageCoveragePart(0, signal())).rejects.toMatchObject({
+        code: "STALE_REVISION",
+      });
+    } else {
+      for (let part = 0; part < f.prepared.partCount; part++)
+        await f.execution.stageCoveragePart(part, signal());
+      for (let unit = 0; unit < 2; unit++) {
+        const pages = await f.execution.resultPages(unit, 0);
+        for (let page = 0; page < pages.pageCount; page++)
+          await f.execution.stageResultPage(unit, 0, page, signal());
+      }
+      expect((await f.execution.publish(signal())).status).toBe("ready");
+    }
+    expect(races).toBe(phase === "continuous" ? 3 : 1);
+    expect(f.nativeCalls()).toBe(2);
+  });
+
+for (const phase of ["preparation_replay", "coverage", "results", "publication"] as const)
+  test(`another file upload during ${phase} cannot discard an already interpreted source`, async () => {
+    const f = await setup();
+    await f.execution.initialize();
+    for (let unit = 0; unit < 2; unit++) {
+      await f.execution.extractUnit(unit, signal());
+      await f.execution.interpretArtifact(unit, 0, signal());
+      await f.execution.prepareUnit(unit, signal());
+    }
+    const prepared = await f.execution.preparePublication(2, signal());
+    const concurrentUpload = () =>
+      uploaded(f, new TextEncoder().encode("another synthetic source"));
+    if (phase === "preparation_replay") {
+      await concurrentUpload();
+      expect(await f.execution.preparePublication(2, signal())).toEqual(prepared);
+    }
+    if (phase === "coverage") await concurrentUpload();
+    for (let part = 0; part < prepared.partCount; part++)
+      await f.execution.stageCoveragePart(part, signal());
+    if (phase === "results") await concurrentUpload();
+    for (let unit = 0; unit < 2; unit++) {
+      const pages = await f.execution.resultPages(unit, 0);
+      for (let page = 0; page < pages.pageCount; page++)
+        await f.execution.stageResultPage(unit, 0, page, signal());
+    }
+    if (phase === "publication") await concurrentUpload();
+    expect((await f.execution.publish(signal())).status).toBe("ready");
+    const result = await createV2FilesRepository(f.core).read(f.actor, f.u.session.fileId);
+    expect(result?.observations.map((value) => value.text)).toEqual([
+      "first synthetic page",
+      "second synthetic page",
+    ]);
+    expect(f.nativeCalls()).toBe(2);
+  });
 
 test("actual SQLite/AES two-unit extraction stages bounded rows and atomically publishes complete coverage", async () => {
   const f = await setup();

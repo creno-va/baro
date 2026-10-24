@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { opaqueIdSchema } from "../../contracts";
+import { CURRENT_POLICY_VERSIONS } from "../../contracts/consent";
 import {
   positionMatchesProbe,
   type V2Derivative,
@@ -21,7 +22,17 @@ import {
   type V2Core,
   type WorkspaceGuard,
 } from "./v2-core";
+import { jobAlive } from "./v2-jobs";
 import { completeLeaseStatements, type JobLease, leasePredicate } from "./v2-workspace";
+
+export const filePublicationContextSchema = z.strictObject({
+  revision: z.number().int().positive(),
+  status: z.enum(["intake", "active"]),
+  intakeRevision: z.number().int().positive(),
+  summaryRevision: z.number().int().positive().nullable(),
+  currentJobId: opaqueIdSchema.nullable(),
+});
+export type FilePublicationContext = z.infer<typeof filePublicationContextSchema>;
 
 const metadataSchema = z.strictObject({
   name: v2FileSchema.shape.name,
@@ -48,6 +59,70 @@ export function createV2FileStagingRepository(core: V2Core) {
       )
       .first<FileRow>();
   return {
+    /** File extraction is source-bound. Refresh only its operational workspace
+     * fence while its original context and exact live file lease still match.
+     * Snapshot/file revisions and encrypted payloads are never rewritten here. */
+    refreshWorkspace(
+      g: WorkspaceGuard,
+      input: {
+        fileId: string;
+        fileRevision: number;
+        coverageSnapshotId: string;
+        context: FilePublicationContext;
+      },
+      lease: JobLease,
+    ) {
+      return safe(async () => {
+        g = parse(guardSchema, g);
+        const context = parse(filePublicationContextSchema, input.context);
+        if (g.expectedRevision < context.revision) return false;
+        parse(opaqueIdSchema, input.fileId);
+        parse(opaqueIdSchema, input.coverageSnapshotId);
+        parse(z.number().int().positive(), input.fileRevision);
+        const execution = leasePredicate(lease, input.fileId, input.fileRevision, g.now);
+        const claimId = crypto.randomUUID();
+        return core.changed([
+          core.claim(
+            g,
+            claimId,
+            `${execution.sql} AND w.status=? AND w.intake_revision=? AND w.confirmed_summary_revision IS ? AND w.current_job_id IS ?
+             AND EXISTS(SELECT 1 FROM v2_jobs j JOIN v2_operations o ON o.id=j.operation_id WHERE j.id=? AND o.owner_id=w.owner_id AND j.workspace_id=w.id AND ${jobAlive})
+             AND EXISTS(SELECT 1 FROM v2_files f WHERE f.id=? AND f.workspace_id=w.id AND f.revision=? AND f.current_job_id=? AND f.state IN ('queued','processing') AND f.manifest_snapshot_id IS NOT NULL)
+             AND EXISTS(SELECT 1 FROM v2_private_snapshots s WHERE s.id=? AND s.owner_id=w.owner_id AND s.workspace_id=w.id AND s.purpose='file_coverage' AND s.target_id=? AND s.revision=? AND s.state IN ('staging','sealed') AND s.lease_job_id=? AND s.lease_fencing=? AND s.workspace_revision BETWEEN ? AND ?)
+             AND EXISTS(SELECT 1 FROM v2_consents WHERE owner_id=w.owner_id AND file_id=? AND kind='auto_processing' AND version=?)
+             AND EXISTS(SELECT 1 FROM user_consents consent WHERE consent.user_id=w.owner_id AND consent.terms_version=? AND consent.privacy_version=? AND consent.ai_notice_version=? AND consent.over_14_confirmed=1)`,
+            [
+              ...execution.values,
+              context.status,
+              context.intakeRevision,
+              context.summaryRevision,
+              context.currentJobId,
+              lease.jobId,
+              input.fileId,
+              input.fileRevision,
+              lease.jobId,
+              input.coverageSnapshotId,
+              input.fileId,
+              input.fileRevision + 1,
+              lease.jobId,
+              lease.fencing,
+              context.revision,
+              g.expectedRevision,
+              input.fileId,
+              CURRENT_POLICY_VERSIONS.aiNoticeVersion,
+              CURRENT_POLICY_VERSIONS.termsVersion,
+              CURRENT_POLICY_VERSIONS.privacyVersion,
+              CURRENT_POLICY_VERSIONS.aiNoticeVersion,
+            ],
+          ),
+          core.statement(
+            `UPDATE v2_private_snapshots SET workspace_revision=? WHERE id=? AND ${sqlClaim}`,
+            [g.expectedRevision, input.coverageSnapshotId, claimId],
+          ),
+          core.finish(claimId),
+        ]);
+      });
+    },
     stagePage(
       g: WorkspaceGuard,
       input: {

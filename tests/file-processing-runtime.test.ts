@@ -276,12 +276,14 @@ for (const pageCount of [1, 2])
     // Counts are local method calls, not network time or native rows read.
     // Native capacity admission and its post-wait fence add two fresh
     // authorization reads per extracted unit, without removing earlier guards.
-    expect(stages.reduce((sum, stage) => sum + stage.calls, 0)).toBe(pageCount === 1 ? 647 : 1152);
+    // Immutable publication-plan replay adds three reads and two fresh guards.
+    // File-only operational fence refresh adds four/five atomic batches.
+    expect(stages.reduce((sum, stage) => sum + stage.calls, 0)).toBe(pageCount === 1 ? 654 : 1160);
     expect(stages.reduce((sum, stage) => sum + stage.statements, 0)).toBe(
-      pageCount === 1 ? 823 : 1447,
+      pageCount === 1 ? 838 : 1465,
     );
     expect(stages.reduce((sum, stage) => sum + stage.authorizations, 0)).toBe(
-      pageCount === 1 ? 310 : 559,
+      pageCount === 1 ? 312 : 561,
     );
     // The exact existing SQLite/AES/R2 runtime keeps all calls and guards. Phase
     // observation counts method awaits only, including their ledger/fence work.
