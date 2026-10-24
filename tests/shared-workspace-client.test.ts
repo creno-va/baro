@@ -6,7 +6,15 @@ import {
   type WorkspaceTransport,
 } from "@baro/api-client";
 import { createSessionBoundClient, createSessionScope } from "@baro/client-core";
-import { intake, job, summary, workspace } from "./fixtures/contracts/v2";
+import {
+  assistantMessage,
+  citation,
+  intake,
+  job,
+  precedent,
+  summary,
+  workspace,
+} from "./fixtures/contracts/v2";
 
 const message = { expectedRevision: 3, text: "합성 질문입니다.", selectedFileIds: [] };
 test("a wrapped held method retains its implementation until the account changes", async () => {
@@ -40,6 +48,7 @@ function fixture(
     listFiles?: () => Promise<[]>;
     jobStorage?: CaseOperationStorage;
     request?: WorkspaceTransport;
+    messages?: unknown[];
   } = {},
 ) {
   const scope = options.scope ?? createSessionScope();
@@ -56,7 +65,9 @@ function fixture(
     if (path.endsWith("/intake")) return Response.json(intake);
     if (path.endsWith("/summary")) return Response.json(summary);
     if (path.endsWith("/workspace-jobs/latest")) return Response.json(job);
-    if (path.includes("/messages?") || path.endsWith("/actions") || path.endsWith("/timeline"))
+    if (path.includes("/messages?"))
+      return Response.json({ items: options.messages ?? [], nextCursor: null });
+    if (path.endsWith("/actions") || path.endsWith("/timeline"))
       return Response.json({ items: [], nextCursor: null });
     throw new Error("UNEXPECTED_SYNTHETIC_PATH");
   };
@@ -70,6 +81,41 @@ function fixture(
   });
   return { client, scope, requests };
 }
+
+test("displayed statute labels distinguish articles without changing source identities or HTTP data", async () => {
+  const citations = [
+    { ...citation, id: "source-598", sourceId: "article-598", title: "민법", article: "제598조" },
+    { ...citation, id: "source-603", sourceId: "article-603", title: "민법", article: "제603조" },
+    {
+      ...citation,
+      id: "already-named",
+      sourceId: "article-named",
+      title: "민법 제600조",
+      article: "제600조",
+    },
+    { ...precedent, title: "판례의 기존 제목" },
+  ];
+  const input = {
+    ...assistantMessage,
+    citations,
+    references: citations.map((c) => ({ kind: "official_source" as const, citationId: c.id })),
+  };
+  const original = JSON.stringify(input);
+  const view = await fixture({ messages: [input] }).client.get(workspace.id);
+  const projected = view.messages[0]?.citations ?? [];
+  expect(projected.map((c) => c.title)).toEqual([
+    "민법 · 제598조",
+    "민법 · 제603조",
+    "민법 제600조",
+    "판례의 기존 제목",
+  ]);
+  expect(projected.map(({ id, url }) => ({ id, url }))).toEqual(
+    citations.map(({ id, url }) => ({ id, url })),
+  );
+  for (const item of projected) expect(Object.keys(item).sort()).toEqual(["id", "title", "url"]);
+  expect(JSON.stringify(input)).toBe(original);
+  expect(view.messages[0]?.references).toEqual(input.references);
+});
 
 test("an owner change aborts pending metadata and rejects the old projection", async () => {
   const entered = deferred<void>(),

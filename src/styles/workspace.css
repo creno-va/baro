@@ -350,7 +350,8 @@
   padding: 12px 0 max(10px, env(safe-area-inset-bottom));
   background: linear-gradient(180deg, #ffffff00, #fff 14px, #fff);
 }
-.workspace-composer:has(.workspace-evidence[open]) {
+.workspace-composer:has(.workspace-evidence[open]),
+.workspace:has(.workspace-tool-details[open]) .workspace-composer {
   position: static;
 }
 .workspace-composer-surface {
@@ -371,14 +372,14 @@
     0 6px 32px #3182f60d,
     0 0 0 3px #3182f608;
 }
-.workspace-composer textarea {
+.case-shell .workspace-composer textarea {
   min-height: 5rem;
   max-height: 13.75rem;
   padding: 8px 5px;
   border: 0;
   border-radius: 0;
   background: transparent;
-  font-size: 0.93rem;
+  font-size: max(1rem, 16px);
   line-height: 1.8;
   color: #202838;
   outline: 0;
