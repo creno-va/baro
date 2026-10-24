@@ -18,6 +18,9 @@ const labels = {
 export function androidAuthenticationPrivacyBoundary() {
   let entered = false;
   return {
+    enterPublicData() {
+      entered = true;
+    },
     enterAuthentication() {
       entered = true;
     },

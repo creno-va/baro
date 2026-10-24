@@ -833,3 +833,41 @@ hierarchy는 내보내지 않았다. 기존 pre-auth Home PNG만 포함한다. �
 없다. 실제 계정 입력/동의·callback 교환·제공자 수락·SecureStore pending 삭제의 직접 계측·
 실기기·전체 OAuth 성공은 아니다. 두 OS 취소 경로 인수와 별도로 #346/#334·보안 #339·릴리스
 #71은 OPEN이다. Apple 추가 방향은 사용자 결정 대기이며 이 성공으로 승인된 것으로 처리하지 않는다.
+
+## Android 공개 탐색 입력·키보드·회전 검증 준비 (#379)
+
+`mobile-internal-android-compiled-reverify.yml`의 `smoke=true/directory_input=true`는
+원본171989e APK를 유지하는 독립 수동 모드다. large_font/public_directory/guide_ui/auth_cancel과
+함께 실행하지 않는다. 성공한 정확한 main CI 뒤 실행한다.
+
+```sh
+gh workflow run mobile-internal-android-compiled-reverify.yml --ref main -f target_sha=<full40-main-tooling-sha> -f smoke=true -f large_font=false -f public_directory=false -f directory_input=true
+```
+
+fresh owned AVD·실제 부팅/기본 Home·실행 중인 소유 Emulator가 확인된 경우에만 동작한다.
+공개 진입 전에 screenshot guard와 adb capture/raw diagnostic 명령 guard를 비가역 차단한다.
+원본 APK/receipt·metadata와 Home baseline의 SHA/device를 별도로 바인딩하고 새 앱 compile/
+resign·Chrome/account 설정을 하지 않는다. 기존 Android 취소 proof318df0c와 source를 섞지 않는다.
+공유 capture guard에 public-data 진입 메서드만 추가했으며 기존 인증 진입 메서드는 유지한다.
+
+고정 이름 검색란은 BARO 소유의 유일한 native EditText·활성/가시 상태·화면 안 bounds로만
+선택한다. 실제 키보드 표시와 표시 영역은 Android15의 `dumpsys window displays`에 있는
+단일 DisplayFrames·단일 IME InsetsSource에서 읽는다. 입력란 focus 뒤에는 스크롤하지 않고
+IME가 실제 visible인지와 입력란 bottom이 IME top 위인지 검사한다. 합성 ASCII 입력과
+**hardware KEYCODE_ENTER**로 submit하고 키보드가 닫힌 뒤 필터된 빈 결과를 요구한다.
+소프트 키보드 검색 키의 직접 탭·한국어 IME·실제 HTTP transport까지 검증했다는 뜻은 아니다.
+합성 검색에 실제 결과가 있으면 이 빈 결과 시나리오는 실패하며 다른 이름으로 우회하지 않는다.
+
+[WindowManager shell](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-15.0.0_r5/services/core/java/com/android/server/wm/WindowManagerShellCommand.java)의
+user-rotation lock0→lock1→lock0을 소유 Emulator에만 적용한다. 설정 readback만으로 통과시키지
+않고 실제 DisplayFrames rotation/종횡·가로/세로 native app window·같은 입력값 유지/입력란
+도달을 확인한다. 정확한 화면 pixel 크기 교환을 요구하고 ambiguous display/IME 상태는 거절한다.
+검증 뒤 BACK1로 Home에 돌아온다. finally에서 원래 free/lock과 user_rotation 값을 복구·readback하며
+복구 실패 시 성공 proof를 만들지 않는다. 사용자 물리 기기·전역 host 설정은 대상으로 삼지 않는다.
+
+원본 hierarchy/dumpsys는 메모리에서 고정 boolean/enum/수치로만 분류하며 명령 출력·공개
+프로필 값/ID·input 값·XML/stack은 artifact에 쓰지 않는다. 소유 Emulator 내 UUID XML은
+매회 finally에서 지운다. 기존 pre-public Home PNG와 `directory-input.json`·고정 실패 JSON만
+해당 allowlist로 내보낸다. profile/contact·remote mutation·auth/private 화면은 열지 않는다.
+현재 문단은 도구 준비 상태이며 actual 성공은 exact CI/main 뒤 별도 run/proof를 인수해야 한다.
+전체 화면/역할·TalkBack/VoiceOver·한국어 키보드·실기기/store·#334/#379/#339/#71은 별도다.

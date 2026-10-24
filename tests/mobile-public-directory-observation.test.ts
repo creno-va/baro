@@ -93,18 +93,21 @@ test("Guide UI mode requires large font and cannot cross the public screenshot b
     publicDirectory: false,
     guideUi: false,
     authCancel: false,
+    directoryInput: false,
   });
   expect(androidHomeObservationOptions(["--guide-ui", "--large-font"])).toEqual({
     largeFont: true,
     publicDirectory: false,
     guideUi: true,
     authCancel: false,
+    directoryInput: false,
   });
   expect(androidHomeObservationOptions(["--large-font", "--public-directory"])).toEqual({
     largeFont: true,
     publicDirectory: true,
     guideUi: false,
     authCancel: false,
+    directoryInput: false,
   });
   for (const args of [
     ["--guide-ui"],

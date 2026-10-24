@@ -43,7 +43,7 @@ test("manual auth workflow exports only scoped receipts and pre-auth PNG paths, 
     workflow.jobs.verify.steps.some(
       (step) =>
         step.if ===
-          "inputs.auth_cancel && (!inputs.smoke || inputs.large_font || inputs.public_directory || inputs.guide_ui)" &&
+          "inputs.auth_cancel && (!inputs.smoke || inputs.large_font || inputs.public_directory || inputs.guide_ui || inputs.directory_input)" &&
         step.run === "exit 1",
     ),
   ).toBe(true);
