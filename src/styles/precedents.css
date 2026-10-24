@@ -259,6 +259,25 @@
   font-size: 0.9rem;
   line-height: 1.95;
 }
+.precedent-comparison {
+  margin-top: 24px;
+}
+.precedent-comparison ol {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+.precedent-comparison summary {
+  min-height: 44px;
+  cursor: pointer;
+}
+.precedent-comparison blockquote {
+  margin: 12px 0;
+  border-inline-start: 2px solid var(--border);
+  padding-inline-start: 12px;
+  white-space: pre-wrap;
+}
 @media (max-width: 767px) {
   .precedent-topics {
     grid-template-columns: repeat(2, minmax(0, 1fr));

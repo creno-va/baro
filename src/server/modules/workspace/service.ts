@@ -13,6 +13,11 @@ import {
   v2TimelineEditRequestSchema,
   v2WorkspaceStateRequestSchema,
 } from "../../../contracts/v2";
+import {
+  type V2PrecedentComparisonRequest,
+  v2PrecedentComparisonRequestSchema,
+  v2PrecedentComparisonStateSchema,
+} from "../../../contracts/v2/precedent-comparison";
 import { createV2AccountingRepository } from "../../db/v2-accounting";
 import { type Actor, type V2Core, V2RepositoryError } from "../../db/v2-core";
 import { canRetryV2Job } from "../../db/v2-job-retry";
@@ -23,7 +28,8 @@ import type { PreparedPaidHold } from "../../db/v2-paid-statements";
 import { createV2SummaryEditsRepository } from "../../db/v2-summary-edits";
 import { type Admission, createV2WorkspaceRepository } from "../../db/v2-workspace";
 import { dependencyStep } from "../../dependency-diagnostics";
-import { storedMessageSchema } from "./stored-message";
+import { readBoundSource } from "../legal-retrieval/v2/bound-sources";
+import { type StoredUserMessage, storedMessageSchema } from "./stored-message";
 
 export class WorkspaceError extends Error {
   constructor(
@@ -46,8 +52,12 @@ export type WorkspaceJobInput = {
   kind: "intake_questions" | "intake_summary" | "chat_response";
   jobId: string;
   admission: Admission;
-  chat?: { id: string; request: z.infer<typeof v2MessageRequestSchema> };
-  retryMessage?: import("../../../contracts/v2").V2UserMessage;
+  chat?: {
+    id: string;
+    request: z.infer<typeof v2MessageRequestSchema>;
+    precedentComparisonRequest?: V2PrecedentComparisonRequest;
+  };
+  retryMessage?: StoredUserMessage;
 };
 export type WorkspaceDependencies = {
   clock?: () => string;
@@ -133,12 +143,16 @@ export function createWorkspaceService(core: V2Core, deps: WorkspaceDependencies
     key: string,
     body: unknown,
     kind: WorkspaceJobInput["kind"],
+    comparison?: V2PrecedentComparisonRequest,
   ) => {
     const request =
       kind === "chat_response"
         ? v2MessageRequestSchema.parse(body)
         : v2IntakeAdvanceRequestSchema.parse(body);
-    const a = await admission(key, request);
+    const a = await admission(
+      key,
+      comparison ? { request, precedentComparisonRequest: comparison } : request,
+    );
     const responseKind =
       kind === "chat_response"
         ? "chat"
@@ -161,7 +175,11 @@ export function createWorkspaceService(core: V2Core, deps: WorkspaceDependencies
       throw new WorkspaceError("USER_QUOTA_EXCEEDED");
     const chat =
       kind === "chat_response"
-        ? { id: crypto.randomUUID(), request: v2MessageRequestSchema.parse(body) }
+        ? {
+            id: crypto.randomUUID(),
+            request: v2MessageRequestSchema.parse(body),
+            ...(comparison ? { precedentComparisonRequest: comparison } : {}),
+          }
         : undefined;
     const input: WorkspaceJobInput = {
       ownerId,
@@ -261,6 +279,9 @@ export function createWorkspaceService(core: V2Core, deps: WorkspaceDependencies
             )
           : undefined;
       if (job.kind === "chat_response" && !prior) throw new WorkspaceError("NOT_FOUND");
+      // A comparison must be explicitly requested again against a freshly selected
+      // source/current summary, never reinterpret a prior source capability.
+      if (prior?.precedentComparisonRequest) throw new WorkspaceError("REVIEW_REQUIRED");
       const prepared = await dependencyStep("retry_admission", async () =>
         deps.prepareJob?.({
           ownerId,
@@ -449,6 +470,21 @@ export function createWorkspaceService(core: V2Core, deps: WorkspaceDependencies
     },
     send: (ownerId: string, id: string, key: string, body: unknown) =>
       enqueue(ownerId, id, key, body, "chat_response"),
+    comparePrecedent: (ownerId: string, id: string, key: string, raw: unknown) => {
+      const request = v2PrecedentComparisonRequestSchema.parse(raw);
+      return enqueue(
+        ownerId,
+        id,
+        key,
+        {
+          expectedRevision: request.expectedRevision,
+          text: "선택한 판례와 확인한 사건 사실을 항목별로 비교해 주세요.",
+          selectedFileIds: [],
+        },
+        "chat_response",
+        request,
+      );
+    },
     async toolResults(ownerId: string, id: string, rawMessageId: string) {
       const messageId = opaqueIdSchema.parse(rawMessageId);
       const current = await find(ownerId, id);
@@ -477,6 +513,71 @@ export function createWorkspaceService(core: V2Core, deps: WorkspaceDependencies
       )
         throw new WorkspaceError("STALE_REVISION");
       return message.role === "assistant" ? (message.toolResults ?? []) : [];
+    },
+    async precedentComparison(ownerId: string, id: string, rawJobId: string) {
+      const jobId = opaqueIdSchema.parse(rawJobId);
+      const current = await find(ownerId, id);
+      const job = await jobs.find(actor(ownerId), jobId);
+      if (
+        !job ||
+        job.kind !== "chat_response" ||
+        job.target.kind !== "workspace" ||
+        job.target.caseId !== id
+      )
+        throw new WorkspaceError("NOT_FOUND");
+      const sourceRequest = await workspace.userMessage(actor(ownerId), id, job.operationId);
+      if (!sourceRequest?.precedentComparisonRequest) throw new WorkspaceError("NOT_FOUND");
+      if (job.status !== "completed") {
+        await find(ownerId, id);
+        return v2PrecedentComparisonStateSchema.parse({
+          schemaVersion: "2",
+          job,
+          comparison: null,
+          stale: false,
+        });
+      }
+      const read = () =>
+        core
+          .statement(
+            "SELECT id,revision,encrypted_payload FROM v2_messages WHERE workspace_id=? AND operation_id=? AND role='assistant' AND safety='validated' LIMIT 1",
+            [id, job.operationId],
+          )
+          .first<{ id: string; revision: number; encrypted_payload: string }>();
+      const row = await read();
+      if (!row) throw new WorkspaceError("NOT_FOUND");
+      const stored = await core.decrypt(
+        "v2_messages",
+        row.id,
+        ownerId,
+        row.revision,
+        row.encrypted_payload,
+        storedMessageSchema(deps.guideHosts),
+      );
+      if (stored.role !== "assistant" || !stored.precedentComparison)
+        throw new WorkspaceError("NOT_FOUND");
+      const comparison = stored.precedentComparison;
+      const source = await readBoundSource(
+        core,
+        id,
+        comparison.source.citation.id,
+        actor(ownerId).now,
+        deps.guideHosts,
+      );
+      const after = await read();
+      if (
+        (await find(ownerId, id)).workspaceRevision !== current.workspaceRevision ||
+        after?.encrypted_payload !== row.encrypted_payload
+      )
+        throw new WorkspaceError("STALE_REVISION");
+      return v2PrecedentComparisonStateSchema.parse({
+        schemaVersion: "2",
+        job,
+        comparison,
+        stale:
+          current.workspaceRevision !== comparison.publishedWorkspaceRevision ||
+          current.confirmedSummaryRevision !== comparison.summaryRevision ||
+          !source,
+      });
     },
     async messages(
       ownerId: string,

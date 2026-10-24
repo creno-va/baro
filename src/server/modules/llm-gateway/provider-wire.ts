@@ -14,6 +14,7 @@ export function providerWire(input: {
       "baro_workspace_chat_v2",
       "baro_workspace_questions_v2",
       "baro_workspace_summary_v2",
+      "baro_workspace_precedent_compare_v2",
       "baro_minimize_v1",
       "baro_screening_v1",
       "baro_structure_v1",

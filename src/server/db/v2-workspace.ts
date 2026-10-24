@@ -25,11 +25,13 @@ import {
   v2SummaryEditForFactsSchema,
   v2SummarySchema,
   v2TimelineEntrySchema,
-  v2UserMessageSchema,
   v2WorkspaceSchema,
 } from "../../contracts/v2";
 import type { EnvelopeCipher } from "../crypto";
-import { publicStoredMessageSchema } from "../modules/workspace/stored-message";
+import {
+  publicStoredMessageSchema,
+  storedUserMessageSchema,
+} from "../modules/workspace/stored-message";
 import { usageDateKst } from "./repository";
 import {
   createV2AccountingRepository,
@@ -1184,7 +1186,7 @@ export function createV2WorkspaceRepository(
           actor.ownerId,
           row.revision,
           row.encrypted_payload,
-          v2UserMessageSchema,
+          storedUserMessageSchema,
         );
         return (await findWorkspace(actor, workspaceId))?.workspaceRevision ===
           current.workspaceRevision

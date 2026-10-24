@@ -20,6 +20,7 @@ export const executionDescriptorSchema = z.strictObject({
     "validation",
     "workspace_questions",
     "workspace_summary",
+    "workspace_precedent_compare",
     "workspace_chat",
     "workspace_audit",
   ]),

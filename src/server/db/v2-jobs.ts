@@ -12,6 +12,8 @@ import {
   v2OperationQuotaSchema,
   v2UserMessageSchema,
 } from "../../contracts/v2";
+import type { V2PrecedentComparisonRequest } from "../../contracts/v2/precedent-comparison";
+import { storedUserMessageSchema } from "../modules/workspace/stored-message";
 import { usageDateKst } from "./repository";
 import {
   operationStatements,
@@ -443,7 +445,11 @@ export function createV2JobsRepository(core: V2Core) {
       admission: Admission,
       jobId: string,
       kind: "intake_questions" | "intake_summary" | "chat_response",
-      chat?: { id: string; request: V2MessageRequest },
+      chat?: {
+        id: string;
+        request: V2MessageRequest;
+        precedentComparisonRequest?: V2PrecedentComparisonRequest;
+      },
       paid?: PreparedPaidHold,
     ) {
       return safe(async () => {
@@ -499,7 +505,18 @@ export function createV2JobsRepository(core: V2Core) {
             text: request.text,
             selectedFileIds: request.selectedFileIds,
           });
-          envelope = await core.encrypt("v2_messages", message.id, g.ownerId, 1, message);
+          const stored = storedUserMessageSchema.parse({
+            ...message,
+            ...(chat.precedentComparisonRequest
+              ? { precedentComparisonRequest: chat.precedentComparisonRequest }
+              : {}),
+          });
+          if (
+            stored.precedentComparisonRequest &&
+            stored.precedentComparisonRequest.expectedRevision !== g.expectedRevision
+          )
+            return false;
+          envelope = await core.encrypt("v2_messages", message.id, g.ownerId, 1, stored);
         } else if (chat) return false;
         const route = `/api/v2/cases/${g.workspaceId}/${responseKind}`;
         const answered =
@@ -514,8 +531,17 @@ export function createV2JobsRepository(core: V2Core) {
           core.claim(
             g,
             claimId,
-            `${predicate.sql} AND (${paid?.predicate.sql ?? (core.applicationCostLimitsEnabled ? "NOT EXISTS(SELECT 1 FROM v2_runtime_controls)" : "0")}) AND ${lifecycle} AND w.current_job_id IS NULL AND NOT EXISTS(SELECT 1 FROM v2_idempotency WHERE owner_id=w.owner_id AND route=? AND key=? AND expires_at>?)`,
-            [...predicate.values, ...(paid?.predicate.values ?? []), route, admission.key, g.now],
+            `${predicate.sql} AND (${paid?.predicate.sql ?? (core.applicationCostLimitsEnabled ? "NOT EXISTS(SELECT 1 FROM v2_runtime_controls)" : "0")}) AND ${lifecycle} ${chat?.precedentComparisonRequest ? "AND w.confirmed_summary_revision=?" : ""} AND w.current_job_id IS NULL AND NOT EXISTS(SELECT 1 FROM v2_idempotency WHERE owner_id=w.owner_id AND route=? AND key=? AND expires_at>?)`,
+            [
+              ...predicate.values,
+              ...(paid?.predicate.values ?? []),
+              ...(chat?.precedentComparisonRequest
+                ? [chat.precedentComparisonRequest.summaryRevision]
+                : []),
+              route,
+              admission.key,
+              g.now,
+            ],
           ),
           ...operationStatements(
             core,

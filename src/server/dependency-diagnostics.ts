@@ -105,6 +105,7 @@ export function reportCostObservationFailure(phaseInput: string, error: unknown)
     "validation",
     "workspace_questions",
     "workspace_summary",
+    "workspace_precedent_compare",
     "workspace_chat",
     "workspace_audit",
   ].includes(phaseInput)
@@ -139,6 +140,7 @@ export function reportProviderFailure(failure: {
     ...legacyPhases,
     "workspace_questions",
     "workspace_summary",
+    "workspace_precedent_compare",
     "workspace_chat",
     "workspace_audit",
     "workspace_actions",

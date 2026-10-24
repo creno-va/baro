@@ -13,6 +13,10 @@ import {
   v2TimelineEntrySchema,
   v2ToolResultsSchema,
 } from "../../contracts/v2";
+import {
+  type V2PrecedentComparison,
+  v2PrecedentComparisonSchema,
+} from "../../contracts/v2/precedent-comparison";
 import { capturePublicationSourceAuthority } from "../modules/legal-retrieval/v2/publication-authority";
 import {
   createWorkspacePublicationDiagnostics,
@@ -44,6 +48,7 @@ export function createV2WorkspaceResponseRepository(
         actions: V2Action[];
         timeline: V2TimelineEntry[];
         toolResults?: V2ToolResult[];
+        precedentComparison?: V2PrecedentComparison;
       },
       onFailure?: (failure: WorkspacePublicationFailure) => void,
     ) {
@@ -59,6 +64,9 @@ export function createV2WorkspaceResponseRepository(
         const actions = parse(z.array(v2ActionSchema).max(5), input.actions);
         const timeline = parse(z.array(v2TimelineEntrySchema).max(5), input.timeline);
         const toolResults = parse(v2ToolResultsSchema, input.toolResults ?? []);
+        const comparison = input.precedentComparison
+          ? parse(v2PrecedentComparisonSchema, input.precedentComparison)
+          : undefined;
         diagnostics.at("confirmed_summary");
         const current = await core
           .statement(
@@ -68,6 +76,21 @@ export function createV2WorkspaceResponseRepository(
           .first<{ confirmed_summary_revision: number | null }>();
         const revision = current?.confirmed_summary_revision;
         if (!revision) return diagnostics.reject("summary_unconfirmed");
+        if (
+          comparison &&
+          (comparison.summaryRevision !== revision ||
+            comparison.publishedWorkspaceRevision !== g.expectedRevision + 1 ||
+            facts.length ||
+            parties.length ||
+            actions.length ||
+            timeline.length ||
+            !message.citations.some(
+              (citation) =>
+                citation.id === comparison.source.citation.id &&
+                JSON.stringify(citation) === JSON.stringify(comparison.source.citation),
+            ))
+        )
+          return diagnostics.reject("reference_unauthorized");
         const references = [
           ...message.references,
           ...facts.flatMap((f) => f.references),
@@ -241,6 +264,7 @@ export function createV2WorkspaceResponseRepository(
         const payload = await core.encrypt("v2_messages", message.id, g.ownerId, 1, {
           ...message,
           ...(toolResults.length ? { toolResults } : {}),
+          ...(comparison ? { precedentComparison: comparison } : {}),
         });
         statements.push(
           core.statement(

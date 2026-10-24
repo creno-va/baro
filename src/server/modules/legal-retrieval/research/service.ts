@@ -1,5 +1,6 @@
 import { opaqueIdSchema } from "../../../../contracts";
 import { v2SummarySchema } from "../../../../contracts/v2";
+import { v2PrecedentComparisonRequestSchema } from "../../../../contracts/v2/precedent-comparison";
 import {
   type V2PrecedentSearchResponse,
   type V2PrecedentTopic,
@@ -92,6 +93,73 @@ export function createPrecedentResearchService(
     if (summaryRevision !== undefined && row.summaryRevision !== summaryRevision)
       throw new PrecedentResearchError("CONFLICT");
     return { ...row, summaryRevision: row.summaryRevision, snapshotId: row.snapshotId };
+  }
+  async function readOriginal(
+    ownerId: string,
+    id: string,
+    raw: unknown,
+    executionRevision?: number,
+  ) {
+    const request = v2PrecedentReadRequestSchema.parse(raw);
+    await scope(ownerId, id, executionRevision ?? request.expectedRevision);
+    const currentTime = now();
+    const proof = await verifyResearchToken(
+      env.BETTER_AUTH_SECRET,
+      request.readToken,
+      Date.parse(currentTime),
+    );
+    if (
+      !proof ||
+      proof.ownerId !== ownerId ||
+      proof.workspaceId !== id ||
+      proof.revision !== request.expectedRevision
+    )
+      throw new PrecedentResearchError("NOT_FOUND");
+    const load = () =>
+      core
+        .statement(
+          `SELECT s.* FROM v2_official_sources s WHERE s.source_id=? AND s.source_type='precedent' AND s.extractor_version=?
+        AND s.fetched_at<=? AND s.verified_at<=? AND s.expires_at>? AND length(CAST(s.body AS BLOB))<=? AND ${NO_NEWER_CONFLICTING_SOURCE_SQL} AND ${NOT_LIMITED_SQL}`,
+          [
+            proof.sourceId,
+            EXTRACTOR_VERSION,
+            currentTime,
+            currentTime,
+            currentTime,
+            MAX_SOURCE_BYTES,
+          ],
+        )
+        .first<SourceRow>();
+    const row = await load();
+    if (!row) throw new PrecedentResearchError("NOT_FOUND");
+    const source = decodeSource(row);
+    const rebuilt = await makeChunk(
+      source,
+      new Date(Date.parse(currentTime) + 9 * 3600000).toISOString().slice(0, 10),
+    );
+    const citation = { ...rebuilt.citation, id: proof.citationId, verifiedAt: proof.verifiedAt };
+    if (
+      rebuilt.source.sourceId !== source.sourceId ||
+      rebuilt.source.contentHash !== source.contentHash ||
+      rebuilt.source.expiresAt !== source.expiresAt ||
+      source.rightsProvenance !== OFFICIAL_CATALOG[1].rights ||
+      source.verifiedAt !== proof.verifiedAt ||
+      (await textHash(JSON.stringify(citation))) !== proof.citationHash
+    )
+      throw new PrecedentResearchError("NOT_FOUND");
+    const response = v2PrecedentReadResponseSchema.parse({
+      schemaVersion: "2",
+      workspaceRevision: request.expectedRevision,
+      citation,
+      excerpt: researchExcerpt(source.body, [], 4000),
+    });
+    // Source hashing yields: fence the exact current original and case again.
+    if (JSON.stringify(await load()) !== JSON.stringify(row))
+      throw new PrecedentResearchError("NOT_FOUND");
+    await scope(ownerId, id, executionRevision ?? request.expectedRevision);
+    if (proof.expiresAt <= Date.parse(now()) || Date.parse(source.expiresAt) <= Date.parse(now()))
+      throw new PrecedentResearchError("NOT_FOUND");
+    return response;
   }
   return {
     async context(ownerId: string, id: string) {
@@ -220,67 +288,20 @@ export function createPrecedentResearchService(
       await scope(ownerId, id, request.expectedRevision, request.summaryRevision);
       return response;
     },
-    async read(ownerId: string, id: string, raw: unknown) {
-      const request = v2PrecedentReadRequestSchema.parse(raw);
-      await scope(ownerId, id, request.expectedRevision);
-      const currentTime = now();
-      const proof = await verifyResearchToken(
-        env.BETTER_AUTH_SECRET,
-        request.readToken,
-        Date.parse(currentTime),
+    read: (ownerId: string, id: string, raw: unknown) => readOriginal(ownerId, id, raw),
+    async readForExecution(ownerId: string, id: string, raw: unknown, executionRevision: number) {
+      const request = v2PrecedentComparisonRequestSchema.parse(raw);
+      if (executionRevision !== request.expectedRevision + 1)
+        throw new PrecedentResearchError("CONFLICT");
+      await scope(ownerId, id, executionRevision, request.summaryRevision);
+      const value = await readOriginal(
+        ownerId,
+        id,
+        { expectedRevision: request.expectedRevision, readToken: request.readToken },
+        executionRevision,
       );
-      if (
-        !proof ||
-        proof.ownerId !== ownerId ||
-        proof.workspaceId !== id ||
-        proof.revision !== request.expectedRevision
-      )
-        throw new PrecedentResearchError("NOT_FOUND");
-      const load = () =>
-        core
-          .statement(
-            `SELECT s.* FROM v2_official_sources s WHERE s.source_id=? AND s.source_type='precedent' AND s.extractor_version=?
-        AND s.fetched_at<=? AND s.verified_at<=? AND s.expires_at>? AND length(CAST(s.body AS BLOB))<=? AND ${NO_NEWER_CONFLICTING_SOURCE_SQL} AND ${NOT_LIMITED_SQL}`,
-            [
-              proof.sourceId,
-              EXTRACTOR_VERSION,
-              currentTime,
-              currentTime,
-              currentTime,
-              MAX_SOURCE_BYTES,
-            ],
-          )
-          .first<SourceRow>();
-      const row = await load();
-      if (!row) throw new PrecedentResearchError("NOT_FOUND");
-      const source = decodeSource(row);
-      const rebuilt = await makeChunk(
-        source,
-        new Date(Date.parse(currentTime) + 9 * 3600000).toISOString().slice(0, 10),
-      );
-      const citation = { ...rebuilt.citation, id: proof.citationId, verifiedAt: proof.verifiedAt };
-      if (
-        rebuilt.source.sourceId !== source.sourceId ||
-        rebuilt.source.contentHash !== source.contentHash ||
-        rebuilt.source.expiresAt !== source.expiresAt ||
-        source.rightsProvenance !== OFFICIAL_CATALOG[1].rights ||
-        source.verifiedAt !== proof.verifiedAt ||
-        (await textHash(JSON.stringify(citation))) !== proof.citationHash
-      )
-        throw new PrecedentResearchError("NOT_FOUND");
-      const response = v2PrecedentReadResponseSchema.parse({
-        schemaVersion: "2",
-        workspaceRevision: request.expectedRevision,
-        citation,
-        excerpt: researchExcerpt(source.body, [], 4000),
-      });
-      // Source hashing yields: fence the exact current original and case again.
-      if (JSON.stringify(await load()) !== JSON.stringify(row))
-        throw new PrecedentResearchError("NOT_FOUND");
-      await scope(ownerId, id, request.expectedRevision);
-      if (proof.expiresAt <= Date.parse(now()) || Date.parse(source.expiresAt) <= Date.parse(now()))
-        throw new PrecedentResearchError("NOT_FOUND");
-      return response;
+      await scope(ownerId, id, executionRevision, request.summaryRevision);
+      return value;
     },
   };
 }
