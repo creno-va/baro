@@ -168,7 +168,9 @@ export function PrecedentComparisonPanel({
         controller.signal,
       );
       if (!controller.signal.aborted && access.current(ticket)) {
-        setState(null);
+        // Foreground recovery may already have read this job's completed result
+        // while its initial POST acknowledgment was still in flight.
+        setState((current) => (current?.job.id === receipt.jobId ? current : null));
         setJobId(receipt.jobId);
         remember(receipt.jobId);
       }

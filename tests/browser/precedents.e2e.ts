@@ -437,3 +437,37 @@ test("comparison recovers a lost receipt without another POST and preserves work
   await expect(region).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "확인한 항목 일치율 25%" })).toHaveCount(0);
 });
+
+test("a delayed admission receipt cannot erase an already recovered completed comparison", async ({
+  page,
+}) => {
+  await selectComparison(page);
+  await page.evaluate(() => sessionStorage.setItem("synthetic-comparison-delay", "true"));
+  await page.getByRole("button", { name: "선택한 판례와 내 사건 비교" }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          typeof (window as unknown as { finishComparisonStart?: () => void })
+            .finishComparisonStart,
+      ),
+    )
+    .toBe("function");
+  await page.evaluate(() => {
+    sessionStorage.setItem("synthetic-comparison-done", "true");
+    window.dispatchEvent(new Event("focus"));
+  });
+  const region = page.getByRole("region", { name: "유사 판례 비교" });
+  await expect(region.getByRole("heading", { name: "확인한 항목 일치율 25%" })).toBeVisible();
+  await page.evaluate(() =>
+    (window as unknown as { finishComparisonStart: () => void }).finishComparisonStart(),
+  );
+  await expect(page.getByRole("button", { name: "선택한 판례와 내 사건 비교" })).toBeVisible();
+  await expect(region.getByRole("heading", { name: "확인한 항목 일치율 25%" })).toBeVisible();
+  await expect(region.getByRole("listitem")).toHaveCount(8);
+  expect(
+    await page.evaluate(
+      () => JSON.parse(sessionStorage.getItem("synthetic-comparison-keys") ?? "[]").length,
+    ),
+  ).toBe(1);
+});
