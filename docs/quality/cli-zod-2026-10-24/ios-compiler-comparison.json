@@ -1,0 +1,19 @@
+{
+  "observedAt": "2026-10-24T05:24:26.030992Z",
+  "sourceSha": "6201112438fea33ef761c053dfdc9fa500cbd407",
+  "platform": "ios",
+  "compilerRunId": "40063716187",
+  "localExport": {
+    "bytes": 3584844,
+    "sha256": "ad92f98cae16fca558adbc7165d0d9d3106c75a39bd0f4dba9167eaeb50c3454"
+  },
+  "compilerEmbeddedBundle": {
+    "bytes": 3584848,
+    "sha256": "bd7cbef8ef5dd8e51e6f2251491216f5bdadb90266ed646a3cbe2f0be68ff67f"
+  },
+  "fullByteHashMatches": false,
+  "normalizedComparisonPerformed": false,
+  "differenceCauseConfirmed": false,
+  "localGraphTransferredToCompilerProof": false,
+  "compiledGraphClosureProven": false
+}

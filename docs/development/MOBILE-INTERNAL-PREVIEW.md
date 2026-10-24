@@ -1500,3 +1500,53 @@ physical/store·#334/#379/#346/#339/#71 인수는 계속 OPEN이다.
 
 Android pin 추가 뒤 관련36개/3파일·frozen 설치를 유지한 quick121개/24파일(1568 assertions)과
 모바일/공통419개·RN88개가 통과했다. pin은 검증 입력이며 제품 binary를 바꾸지 않는다.
+
+### source6201112 Android 실제 software Search·회전 인수
+
+PR455 exact head75d64c5/CI40065171419, main171545a/CI40065472934 SUCCESS 뒤
+[실제40065665374](https://github.com/creno-va/baro/actions/runs/40065665374)는 SUCCESS다.
+새 compile/재서명 없이 기존 compiler40063714258의 APK57,136,454bytes/
+8da42d2b…와 receipt4d667d8c…를 그대로 사용했다. binary artifact12549222926과
+Home/proof artifact12549188108의 성공 실행·immutable tooling/source provenance를 대조했다.
+
+[실제 SDK 재검증](../quality/mobile-internal-android-2026-10-24/directory-software-verification-171545a.json)은
+SDK37 apksig의 기존 개발 인증서fac61745…와 metadata/HBC/font를 확인한다. 원본
+appRuntimeVerified=false를 바꾸지 않고, [별도 Home](../quality/mobile-internal-android-2026-10-24/directory-software-home-171545a.json)의
+Launcher 연속3 baseline·cold Home2·오류 dialog 미관측과 익명 Home PNG byte/hash를 대조했다.
+PNG는 목록 이동 전 화면을 직접 확인했으며 공개 목록/프로필 값 screenshot은 생성하지 않았다.
+
+[strict 입력 proof](../quality/mobile-internal-android-2026-10-24/directory-software-search-171545a.json)는
+current IME window의 유일 enabled/clickable Search를 실제 탭했다. 고정 ASCII literal 보존·
+키보드 위 input/닫힘·필터 empty, portrait1080×2400/r0↔landscape2400×1080/r1의 실제
+app window/같은 입력/접근 가능, BACK1 Home 복귀와 회전 설정 복원을 확인했다.
+[독립 대조](../quality/mobile-internal-android-2026-10-24/directory-software-independent-171545a.json)는
+proof5a7e1fbd…·metadata6aab49bf…·Home aa23b20f…의 전체 hash/원본 APK·receipt·schema/
+PNG/provenance를 검사했다. local source-map/HBC 불일치는 그대로 보존하며 이 성공으로
+local graph를 실제 compiler graph로 인수하지 않는다.
+
+이 성공은 Android15 소유 Emulator의 제한된 실제 UI 관측이다. 별도 HTTP transport·
+한국어 IME·TalkBack·전체 화면/역할·실제 OAuth·physical/store 인수는 아니다.
+iOS compiler40063716187의 결과와 기존 실패/보안 high2·#334/#346/#379/#339/#71은 별도다.
+
+### source6201112 iOS source build 성공 원본
+
+기존 동일 실행 [40063716187](https://github.com/creno-va/baro/actions/runs/40063716187)은 SUCCESS다.
+artifact12548714921의 [원본 receipt](../quality/mobile-internal-ios-2026-10-24/compiler-receipt-6201112.json)는
+ZIP21,544,574bytes/c5afcab4…·receipt55ce6e32…·HBC3,584,848bytes/bd7cbef8…·graph1465다.
+source build property·prebuilt RNCore/RN dependencies 비활성화, 정확한3파일 RN0.88.0 patch의
+manifest/patch hash와 두 .mm×arm64/x86_64 실제 CompileC 관측을 source compile receipt로 기록했다.
+이는 compiler의 제한된 소스 컴파일 attestation이며 nativeRuntimeVerified=false다.
+
+[독립 대조](../quality/mobile-internal-ios-2026-10-24/compiler-independent-6201112.json)는 성공
+run/artifact/source provenance·원본 ZIP/receipt byte/hash, 실제 codesign strict/all-architectures의
+ad-hoc/No-Team, arm64+x86_64 Simulator·XML/DER/서명 entitlements, plist/executable hash,
+min16.4/phone+tablet·font/OFL·HBC header/full hash·map/key/profile 부재를 확인했다.
+manifest/patch hash도 source6201112의 정본과 대조했다. 임시 사본만 제거하고 재컴파일/재서명은
+하지 않았다. 원본 ZIP/receipt는 `.wrangler/mobile-delivery/6201112/ios`에 보존했다.
+
+[local iOS HBC 비교](../quality/cli-zod-2026-10-24/ios-compiler-comparison.json)는
+같은 source의 local export3,584,844bytes/ad92f98c…와 실제 compiler3,584,848bytes/bd7cbef8…의
+불일치를 그대로 기록한다. 원인 확정/정규화 비교나 local graph proof의 compiler 인수는 없다.
+iOS pin을 이 성공 원본으로 갱신한 뒤 exact PR/main CI를 통과한 도구 SHA에서 고정 literal·
+실제 소프트 Search·회전을 확인한다. 이전4ba1d39 typed-check 실패를 해결 완료로 재분류하지 않는다.
+실제 OAuth·한국어/reader·physical/store·전체 보안/공개 gate는 계속 별도다.
