@@ -1,4 +1,3 @@
-import { deletionAccessSchema } from "@baro/contracts/deletion";
 import { randomUUID } from "expo-crypto";
 import * as WebBrowser from "expo-web-browser";
 import { createNativeLogin } from "../platform/auth/login";
@@ -7,13 +6,15 @@ import { getMobileApi } from "./api";
 import { getPendingAuthStore, getReauthenticationStore, newNativeProof } from "./auth-attempt";
 import { readMobileConfig } from "./config";
 import { getMobileCredentials } from "./credentials";
+import { getMobileAuthClient } from "./mobile-auth";
 
 let login: ReturnType<typeof createNativeLogin> | undefined;
 export function getNativeLogin() {
   if (!login) {
     const config = readMobileConfig();
     const { credentials } = getMobileCredentials();
-    const api = getMobileApi();
+    const api = getMobileApi(),
+      auth = getMobileAuthClient();
     login = createNativeLogin({
       config,
       attempts: getPendingAuthStore(),
@@ -21,6 +22,7 @@ export function getNativeLogin() {
       newId: randomUUID,
       proof: newNativeProof,
       resetCredentials: () => credentials.reset(),
+      capabilities: () => auth.capabilities(),
       authorize: createNativeSocialAuthorization({
         config,
         credentials,
@@ -51,17 +53,9 @@ export function getNativeLogin() {
       setAccountType: (value) => api.session.setAccountType(value),
       reauthentication: {
         proof: getReauthenticationStore(),
-        prepare: (body, ownerId) =>
-          api.request({
-            path: "/api/mobile/auth/reauth/prepare",
-            method: "POST",
-            body,
-            expectedOwner: ownerId,
-          }),
-        verify: (body) =>
-          api.request({ path: "/api/mobile/auth/reauth/verify", method: "POST", body }),
-        access: async () =>
-          deletionAccessSchema.parse(await api.request({ path: "/api/me/deletion" })),
+        prepare: (body, ownerId, protocol) => auth.prepareReauthentication(protocol, body, ownerId),
+        verify: (body, protocol) => auth.verifyReauthentication(protocol, body),
+        access: (ownerId, protocol) => auth.deletionAccess(protocol, ownerId),
       },
     });
   }

@@ -229,3 +229,62 @@ test("proof persistence rejects corrupt data and silent writes/deletes, then rec
   expect(await proof.load()).toBeNull();
   expect(disk.get("other_operation")).toBe("preserve");
 });
+
+test("Apple reauthentication uses the negotiated v2 prepare/access/verify without changing the original account", async () => {
+  const f = fixture(),
+    calls: string[] = [];
+  f.dependencies.capabilities = async () => ({ contractVersion: 2, providers: ["apple"] });
+  const reauth = f.dependencies.reauthentication!;
+  const prepare = reauth.prepare,
+    access = reauth.access,
+    verify = reauth.verify;
+  reauth.prepare = async (input, ownerId, protocol) => {
+    expect(protocol).toEqual({ contractVersion: 2, providers: ["apple"] });
+    expect(input.provider).toBe("apple");
+    calls.push("prepare");
+    return prepare(input, ownerId, protocol);
+  };
+  reauth.access = async (ownerId, protocol) => {
+    expect(ownerId).toBe("a");
+    expect(protocol.contractVersion).toBe(2);
+    calls.push("access");
+    return access(ownerId, protocol);
+  };
+  reauth.verify = async (input, protocol) => {
+    expect(protocol.contractVersion).toBe(2);
+    calls.push("verify");
+    return verify(input, protocol);
+  };
+  expect(await f.create().start("apple", "lawyer", "reauthenticate")).toMatchObject({
+    type: "verified",
+    session: owner(),
+    reauthentication: receipt,
+  });
+  expect(calls).toEqual(["prepare", "access", "verify"]);
+  expect(f.stats()).toEqual({ resets: 0, prepares: 1, exchanges: 1 });
+});
+
+test("an Apple cold return verifies the persisted protocol without requiring a new capability read", async () => {
+  const f = fixture();
+  await f.attempts.put({
+    attemptId,
+    verifier: "a".repeat(43),
+    createdAt: 1000,
+    provider: "apple",
+    contractVersion: 2,
+    accountType: "lawyer",
+    purpose: "reauthenticate",
+    reauthentication: receipt,
+  });
+  f.dependencies.capabilities = async () => {
+    throw new Error("MUST_NOT_RENEGOTIATE_COLD_RETURN");
+  };
+  const reauth = f.dependencies.reauthentication!,
+    verify = reauth.verify;
+  reauth.verify = async (input, protocol) => {
+    expect(protocol.contractVersion).toBe(2);
+    return verify(input, protocol);
+  };
+  expect(await f.create().complete(callback)).toMatchObject({ type: "verified", session: owner() });
+  expect(f.stats()).toEqual({ resets: 0, prepares: 0, exchanges: 1 });
+});
