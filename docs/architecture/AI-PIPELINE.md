@@ -28,9 +28,15 @@ batch에 적용한다. 마지막 모델 응답 후 역할·동의·원문·삭�
 동일 원문의 암호화 갱신만 경합한 경우 최대3회 source/CAS를 다시 확인하며 모델·quota·
 질문/시도 횟수·deadline을 초기화하지 않는다. 수량·가격 관측 유무는 이 게시 조건이 아니다.
 
-구형 structure는 native LOW와 공유 fact JSON 정의를 사용한다. prompt1.3은
+구형 비감사5단계는 native LOW, 독립 validation은 native MEDIUM을 명시한다.
+structure는 공유 fact JSON 정의를 사용한다. prompt1.3은
 배열 한도를 채우는 placeholder 대신 제공된 중요 사실과 명시적 unknowns만 정리하며,
 정확 원문·모순/불리한 사실·서버 의미 검증과 기존60초/4000토큰 한도를 유지한다.
+
+Workflow 종료 확인과 별개로 dispatched/unknown 모델 전송이 남아 있으면 HTTP와
+같은 D1 retry admission batch에서 새 시도 접수를 막아 횟수·idempotency·outbox를 보존한다.
+실제 terminal receipt 뒤 기존 허용 retry로 이어가며 provably-unsent 준비는 취소 가능하다.
+가격/수량 관측 누락은 이 기술 전송 조건과 무관하다.
 
 ## 단계
 

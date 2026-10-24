@@ -17,9 +17,13 @@ test.each([
     const data = { synthetic: "untrusted source text" };
     const canonical = prepareGatewayWireInput(phase, data);
     const actual = providerWire(canonical);
+    const system = canonical.messages[0]?.content,
+      user = canonical.messages[1]?.content;
+    if (typeof system !== "string" || typeof user !== "string")
+      throw new Error("SYNTHETIC_GATEWAY_MESSAGES_MISSING");
     expect(actual).toEqual({
-      systemInstruction: { parts: [{ text: canonical.messages[0]?.content }] },
-      contents: [{ role: "user", parts: [{ text: canonical.messages[1]?.content }] }],
+      systemInstruction: { parts: [{ text: system }] },
+      contents: [{ role: "user", parts: [{ text: user }] }],
       generationConfig: {
         maxOutputTokens: cap,
         responseMimeType: "application/json",

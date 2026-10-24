@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "environment": "preview",
+  "candidateSha": "64539ba87a459cbcd3e78445615cf415d4a90b84",
+  "observationSource": "manual_own_fixture_scoped_d1_read",
+  "checkedAt": "2026-10-24T20:38:57.138Z",
+  "analysisStatus": "failed",
+  "workflowAttempt": 2,
+  "failureCode": "MODEL_UNAVAILABLE",
+  "phase": "minimize",
+  "state": "unknown",
+  "transport": "unknown",
+  "modelExecutionVerified": false,
+  "productRetryClicks": 1,
+  "fixtureRecreated": false,
+  "limitsReset": false,
+  "workflowSteps": [
+    {
+      "phase": "initialize",
+      "startedAt": "2026-10-24T20:32:08Z",
+      "completedAt": "2026-10-24T20:32:09Z",
+      "durationMs": 1841
+    },
+    {
+      "phase": "minimize",
+      "startedAt": "2026-10-24T20:32:10Z",
+      "completedAt": "2026-10-24T20:33:12Z",
+      "displayedDurationSeconds": 62
+    }
+  ],
+  "unverified": [
+    "provider_terminal_outcome",
+    "native_structure_latency",
+    "completed_retained_guidance"
+  ]
+}

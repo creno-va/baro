@@ -100,6 +100,9 @@ export function usageDateKst(timestamp: string): string {
 const currentGuard = `EXISTS (SELECT 1 FROM cases c JOIN analyses a ON a.id = c.current_analysis_id
  WHERE c.user_id = ? AND c.id = ? AND a.id = ? AND c.input_revision = ?
  AND a.case_id = c.id AND a.input_revision = c.input_revision AND a.attempt = ? AND a.status = ?)`;
+const unresolvedAnalysisTransport = `EXISTS (SELECT 1 FROM legacy_ai_operations o
+ JOIN legacy_ai_attempts t ON t.operation_id=o.id
+ WHERE o.analysis_id=analyses.id AND t.state IN ('dispatched','unknown'))`;
 const guardValues = (g: AnalysisGuard) => [
   g.ownerId,
   g.caseId,
@@ -186,6 +189,18 @@ export function createDomainRepository(binding: D1Database, cipher: EnvelopeCiph
           .get();
         return row?.analysis ?? null;
       });
+    },
+    hasUnresolvedAnalysisTransport(ownerId: string, caseId: string, analysisId: string) {
+      return safe(async () =>
+        Boolean(
+          await statement(
+            `SELECT 1 FROM analyses WHERE id=? AND case_id=? AND
+            EXISTS(SELECT 1 FROM cases WHERE id=analyses.case_id AND user_id=? AND current_analysis_id=analyses.id)
+            AND ${unresolvedAnalysisTransport}`,
+            [parse(uuidSchema, analysisId), parse(uuidSchema, caseId), parse(ownerSchema, ownerId)],
+          ).first(),
+        ),
+      );
     },
     listCitations(ownerId: string, caseId: string) {
       return safe(async () =>
@@ -829,7 +844,7 @@ export function createDomainRepository(binding: D1Database, cipher: EnvelopeCiph
         parse(hashSchema, requestHash);
         parse(nowSchema, now);
         const instance = `${analysisId}-${attempt + 1}`;
-        const old = `id=? AND attempt=? AND status='failed' AND failure_code IN ('DISPATCH_FAILED','MODEL_UNAVAILABLE','LEGAL_SOURCE_UNAVAILABLE','ANALYSIS_TIMEOUT','INTERNAL_ERROR') AND EXISTS(SELECT 1 FROM cases WHERE id=? AND user_id=? AND current_analysis_id=? AND input_revision=?)`;
+        const old = `id=? AND attempt=? AND status='failed' AND failure_code IN ('DISPATCH_FAILED','MODEL_UNAVAILABLE','LEGAL_SOURCE_UNAVAILABLE','ANALYSIS_TIMEOUT','INTERNAL_ERROR') AND EXISTS(SELECT 1 FROM cases WHERE id=? AND user_id=? AND current_analysis_id=? AND input_revision=?) AND NOT ${unresolvedAnalysisTransport}`;
         const requestClaim = `EXISTS(SELECT 1 FROM idempotency_records WHERE user_id=? AND method='POST' AND route=? AND key=? AND request_hash=?)`;
         const requestValues = [ownerId, `/api/cases/${caseId}/retry`, key, requestHash];
         const claimed = `EXISTS(SELECT 1 FROM analyses a JOIN cases c ON c.current_analysis_id=a.id WHERE a.id=? AND a.attempt=? AND a.status='queued' AND a.workflow_instance_id=? AND c.user_id=? AND c.id=? AND c.input_revision=?) AND ${requestClaim}`;

@@ -1,0 +1,29 @@
+{
+  "receiptVersion": 1,
+  "environment": "preview",
+  "candidateSha": "64539ba87a459cbcd3e78445615cf415d4a90b84",
+  "requestedMode": "status",
+  "effectiveMode": "status",
+  "status": "present",
+  "code": "OK",
+  "creationInvoked": false,
+  "restAtomicity": "not_checked",
+  "analysisStatus": "screening",
+  "failureCode": null,
+  "workflowAttempt": 2,
+  "outboxStatus": "dispatched",
+  "resultKind": null,
+  "citationCount": 0,
+  "modelExecutionVerified": false,
+  "phases": [
+    {
+      "phase": "minimize",
+      "state": "dispatched",
+      "transport": null,
+      "count": 1
+    }
+  ],
+  "uiCreationVerified": false,
+  "externalAccountsCreated": false,
+  "sourceRunId": "40130221393"
+}

@@ -1173,3 +1173,65 @@ unit4321/394files/174147 assertions and production build/dry-run/local built
 Worker pass. Actual changed-source provider acceptance remains pending. The next live test
 must use the existing product's permitted explicit retry after the proven
 terminal receipt, preserving the original attempt and its failure.
+
+
+### Retained native-thinking follow-up after actual attempt2
+
+PR518 exact2201c5c4 CI40129013366, merged main64539ba CI40129543326 and
+preview40129729537 completed SUCCESS; configuration checkedAt is
+2026-10-24T20:31:03.855Z with no blockers. The same own synthetic case was
+reloaded in Safari and its product retry button clicked exactly once. UI
+input confirmation and finite status40130221393 show attempt2/dispatched with
+one minimize invocation. No fixture/counter/ledger was recreated or reset.
+RN517 subsequently merged main01dc9af and RN519 mainbcb155c5 without changing
+this serving preview or its App/API/DB inputs.
+
+Actual attempt2 stopped before structure: initialize20:32:08→09UTC (1.841s),
+minimize20:32:10→20:33:12UTC (displayed62s including persistence) exceeded the
+same60s phase bound. The product again displays MODEL_UNAVAILABLE. A read-only
+own-fixture scoped D1 console query records DB checkedAt
+2026-10-24T20:38:57.138Z: failed/attempt2/minimize/unknown/unknown. Source IDs,
+SQL, text and ciphertext are excluded from the finite observation. This is
+not a terminal provider receipt. The earlier native-structure latency hypothesis
+remains unverified because this execution did not reach structure. No third
+live attempt has been sent.
+
+The next transport change makes all five retained non-audit phases explicitly
+native LOW (minimize/screening/structure/questions/generation), with native
+MEDIUM independent validation unchanged. Previously only structure was native
+LOW in this retained chain. Four phase-policy tests fail before this change;
+five phase-policy/byte-identity tests pass after it. Every existing output cap,
+60s phase/10min attempt/max3 explicit attempts, shared AI200, privacy flag,
+public DTO and source/ledger fence remains. Accepted v2 questions/summary and
+workspace prompt2.6 remain unchanged. Native translation is a repair hypothesis;
+no claim is made that it caused the observed provider delays.
+
+Review also reproduced a retry-admission gap: a confirmed terminal Workflow
+could still have dispatched/unknown model transport, while HTTP accepted a new
+attempt which the dispatch ledger would later block. Two real signed Hono/SQL
+regressions first returned202 instead of409. HTTP now gives the existing
+INVALID_STATE/retryable response with a finite waiting message; the same
+unresolved-transport predicate guards every atomic retry admission write.
+Rejected requests create no idempotency result/outbox and burn no attempt.
+After a genuine terminal receipt, the same key admits exactly one next attempt
+and replays202 without another increment. Provably unsent preparations remain
+eligible. A historical queued retry with changed wire bytes remains blocked
+at dispatch until its real late receipt, preserving the old wire journal.
+These are technical transport/integrity guards, not cost-observation gates.
+
+Combined native gateway/runtime/ledger/fixture and signed retry checks pass
+132/8files/834 assertions offline. RN519/mainbcb155c5 is integrated. Frozen
+install, quick464/44files/4669 assertions, unit4332/395files/174273 assertions,
+production build/dry-run/local built Worker and DB schema drift/fresh/upgrade/
+native import/replay checks pass. An initial new-test optional-message type
+error was fixed before the final complete run. Exact PR/main/preview checks
+remain pending. A live
+third attempt is not permitted while attempt2 remains unresolved; previous
+unknowns, failures and true observations are preserved. Four unissued APIs,
+target/consent wiring, security/full-validation and public gates remain open.
+
+Read-only baro-preview Gateway Settings inspection confirms Retry Requests off,
+Collect Logs off and authenticated Gateway on. No settings, credentials,
+billing or retention were changed. A configured Gateway auto-retry is therefore
+not observed as the cause of these calls; native-thinking latency and the
+second actual provider terminal outcome remain unverified.
