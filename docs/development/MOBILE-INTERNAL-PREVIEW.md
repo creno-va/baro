@@ -1613,4 +1613,18 @@ container bytes가 달라도 투명 여백을 포함한 decoded RGBA가 원래 s
 이는 컴파일러의 실제 SDK attestation에 결합한 원본 byte 검증이며 새 Emulator의 SDK 재검증/
 렌더링·큰 글자/Guide·입력·실제 인증·physical/store 증거는 아니다. 기존9436 원본과 실제
 관측은 역사로 보존하고, 새 UI의 입력이 달라졌으므로 새 source와 pin 뒤 runtime을 검증한다.
-iOS pin은 해당 source 컴파일 원본을 별도로 확인한 뒤 갱신하며 아직 이전 원본이다.
+### 줄바꿈 UI source의 iOS 원본
+
+같은 source c8215b8의 [iOS compiler40107260341](https://github.com/creno-va/baro/actions/runs/40107260341)도
+SUCCESS다. [원래 receipt](../quality/mobile-native-c8215b8/receipt-ios.json)와
+[로컬 원본 결합](../quality/mobile-native-c8215b8/ios-local-original-verification.json)을 보존하고
+새 iOS pin을 사용한다. Simulator ZIP21,580,456B의 SHA256은
+`1a74438c10579c08e87e2e2040c4f07f76f8bb1abf493914b95407bb9b3076ba`다.
+HBC의 실제 전체 bytes/hash·magic과 compiled font bytes를 원래 receipt에 대조했다.
+공식 Apple3PNG는 투명 여백을 포함한 decoded RGBA와 전체 PNG bytes가 각각 source와 일치한다.
+원래 compiler run/head·성공 상태·workflow 경로·artifact identity와 receipt hash를 결합했다.
+
+이는 Simulator 원본의 정적 검증이다. SDK 서명/entitlements·양 architecture의 text-input
+build witness는 원래 compiler attestation 범위이며 로컬에서 새로 서명/컴파일하지 않았다.
+새 UI의 실제 줄바꿈·큰 글자/Guide·한글 IME·VoiceOver·로그인·물리 기기·store 인수는
+이 원본 pin 이후 별도로 검증한다. 이전9436 앱의 성공과 실패는 해당 source의 역사로 보존한다.
