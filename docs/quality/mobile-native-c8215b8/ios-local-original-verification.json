@@ -1,0 +1,84 @@
+{
+  "version": 1,
+  "kind": "local-original-ios-artifact-verification",
+  "verifiedAt": "2026-10-24T16:12:32.455Z",
+  "sourceSha": "c8215b886848b102c506b40e2176498455d63668",
+  "compilerRunId": 40107260341,
+  "artifactId": 12566470896,
+  "receiptSha256": "64289f840e769bb5011f56dd578286b257e26a06fa112909c36bc4c159736bb4",
+  "originalArchive": {
+    "name": "baro-internal-preview-ios-simulator-c8215b886848b102c506b40e2176498455d63668.zip",
+    "bytes": 21580456,
+    "sha256": "1a74438c10579c08e87e2e2040c4f07f76f8bb1abf493914b95407bb9b3076ba"
+  },
+  "embeddedBundle": {
+    "path": "BAROPreview.app/main.jsbundle",
+    "bytes": 3665808,
+    "sha256": "bf760ac8cca149e87818c5a04d0b1b2a06f17e04559a039b28f85a636feac5b5",
+    "originalBytesVerified": true
+  },
+  "compiledFontBytesVerified": true,
+  "appleArtwork": {
+    "scope": "decoded RGBA pixels including transparent padding; original source and compiled PNG bytes recorded separately",
+    "allThreeVariantsObserved": true,
+    "variants": [
+      {
+        "source": "apple-white.png",
+        "sourceSha256": "bb5f3fbda9dd637d16df9150d48acb1d8480b084ce928bc26cf2a219fa4af8b9",
+        "pixels": {
+          "width": 44,
+          "height": 44,
+          "channels": 4,
+          "sha256": "e30ad1f1f9719b4aaf668f56ce84b964255bfb73c0e6444d1cb25b2e0b479eb4"
+        },
+        "matches": [
+          {
+            "path": "BAROPreview.app/assets/assets/auth/apple-white.png",
+            "sha256": "bb5f3fbda9dd637d16df9150d48acb1d8480b084ce928bc26cf2a219fa4af8b9"
+          }
+        ]
+      },
+      {
+        "source": "apple-white@2x.png",
+        "sourceSha256": "8a8355cc5d9a2a0586f136952558953a8d4b6da821c78e57d89a985390f87f7a",
+        "pixels": {
+          "width": 88,
+          "height": 88,
+          "channels": 4,
+          "sha256": "36911b0fec86fc0b5040892a707453a62dfeb07a9b98e72d719a8805969e1a53"
+        },
+        "matches": [
+          {
+            "path": "BAROPreview.app/assets/assets/auth/apple-white@2x.png",
+            "sha256": "8a8355cc5d9a2a0586f136952558953a8d4b6da821c78e57d89a985390f87f7a"
+          }
+        ]
+      },
+      {
+        "source": "apple-white@3x.png",
+        "sourceSha256": "e9832e747ee3dfb0c56939480a82fe330bdaf5f061e7dd84a6a271bd13830dca",
+        "pixels": {
+          "width": 132,
+          "height": 132,
+          "channels": 4,
+          "sha256": "03ca77141a0ebcbd08c846721130d50c557ecb71355a393d91dcfdc414cf63d6"
+        },
+        "matches": [
+          {
+            "path": "BAROPreview.app/assets/assets/auth/apple-white@3x.png",
+            "sha256": "e9832e747ee3dfb0c56939480a82fe330bdaf5f061e7dd84a6a271bd13830dca"
+          }
+        ]
+      }
+    ]
+  },
+  "originalCompilerProvenanceVerified": true,
+  "sourceMapRebuilt": false,
+  "recompiled": false,
+  "resigned": false,
+  "appRuntimeVerified": false,
+  "providerLoginVerified": false,
+  "physicalDeviceVerified": false,
+  "storeSigned": false,
+  "deployed": false
+}
