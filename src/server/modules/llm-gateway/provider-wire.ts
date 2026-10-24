@@ -1,4 +1,4 @@
-/** Native audit, structured chat and retained structure avoid model-dependent compatibility
+/** Retained analysis and complex workspace paths avoid model-dependent compatibility
  * translation in the binding. No direct provider SDK/network path. */
 export function providerWire(input: {
   messages: { role: string; content: string }[];
@@ -10,9 +10,14 @@ export function providerWire(input: {
 }) {
   if (
     !input.extra_body &&
-    !["baro_workspace_chat_v2", "baro_structure_v1"].includes(
-      input.response_format.json_schema.name ?? "",
-    )
+    ![
+      "baro_workspace_chat_v2",
+      "baro_minimize_v1",
+      "baro_screening_v1",
+      "baro_structure_v1",
+      "baro_questions_v1",
+      "baro_generation_v1",
+    ].includes(input.response_format.json_schema.name ?? "")
   )
     return input;
   return {

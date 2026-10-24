@@ -16,6 +16,9 @@ test("quick validation never builds, starts browsers, containers, remote calls o
   expect(
     commands.some((command) => command.includes("tests/gemini-native-structure.test.ts")),
   ).toBe(true);
+  expect(commands.some((command) => command.includes("tests/gemini-native-legacy.test.ts"))).toBe(
+    true,
+  );
   expect(commands.some((command) => command.includes("tests/preview-legacy-fixture.test.ts"))).toBe(
     true,
   );

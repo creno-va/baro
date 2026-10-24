@@ -37,7 +37,7 @@ test("compact chat definitions preserve required fields, closed objects and lega
   ).toBe(false);
 });
 
-test("chat uses explicit native LOW while accepted simple generation requests remain unchanged", () => {
+test("chat uses explicit native LOW while accepted v2 questions and summary remain unchanged", () => {
   const wire = prepareGatewayWireInput("workspace_chat", {});
   const actual = providerWire(wire);
   expect(actual).toMatchObject({
@@ -50,7 +50,7 @@ test("chat uses explicit native LOW while accepted simple generation requests re
   });
   for (const key of ["messages", "reasoning_effort", "extra_body", "response_format"])
     expect(actual).not.toHaveProperty(key);
-  for (const phase of ["workspace_questions", "workspace_summary", "screening"] as const) {
+  for (const phase of ["workspace_questions", "workspace_summary"] as const) {
     const accepted = prepareGatewayWireInput(phase, {});
     expect(providerWire(accepted)).toBe(accepted);
   }

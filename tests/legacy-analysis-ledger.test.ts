@@ -316,7 +316,7 @@ test("a waiting clarification consumes one visible response and retains the ques
   await Promise.all(background);
 });
 
-test("an explicit retry cannot overlap unknown transport and can resume only after the late terminal receipt", async () => {
+test("an explicit retry with changed wire bytes cannot overlap unknown transport and resumes only after a late terminal receipt", async () => {
   const f = await journal(),
     handle = await f.ledger.beforeDispatch(f.request);
   if (!handle) throw new Error("NO_HANDLE");
@@ -341,13 +341,24 @@ test("an explicit retry cannot overlap unknown transport and can resume only aft
   const retry = await createLegacyAnalysisLedger({
     ...f.options,
     instanceId: `${f.identity.analysisId}-2`,
+    input: async () => ({ syntheticChangedWire: true }),
   });
-  const next = { ...f.request, invocationId: crypto.randomUUID() };
+  const next = {
+    ...f.request,
+    ...(await gatewayWireIdentity(
+      prepareGatewayWireInput("screening", { syntheticChangedWire: true }),
+    )),
+    invocationId: crypto.randomUUID(),
+  };
+  expect(next.wireInputSha256).not.toBe(f.request.wireInputSha256);
   expect(await retry.beforeDispatch(next)).toBeNull();
   await f.ledger.afterTransport(handle, receipt());
   const allowed = await retry.beforeDispatch(next);
   expect(allowed).not.toBeNull();
   expect(await f.ledger.confirmDispatch(handle)).toBe(false);
+  expect(
+    f.db.sqlite.query("SELECT wire_hash FROM legacy_ai_attempts WHERE id=?").get(handle.attemptId),
+  ).toEqual({ wire_hash: f.request.wireInputSha256 });
   expect(
     f.db.sqlite.query("SELECT workflow_attempt,quota_state FROM legacy_ai_operations").get(),
   ).toEqual({ workflow_attempt: 2, quota_state: "reserved" });
