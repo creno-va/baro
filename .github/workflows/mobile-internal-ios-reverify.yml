@@ -43,6 +43,12 @@ on:
         default: false
         type: boolean
 
+      korean_directory:
+        description: Owned Simulator Settings UI Korean 2-set, actual software jamo composition, edit, Search and rotation; no raw UI export
+        required: false
+        default: false
+        type: boolean
+
       input_reference:
         description: Separate synthetic UIKit input reference only; no product directory navigation or input acceptance
         required: false
@@ -78,8 +84,18 @@ jobs:
           OBSERVE_AUTH_CANCEL: ${{ inputs.auth_cancel }}
           OBSERVE_PUBLIC_DIRECTORY: ${{ inputs.public_directory }}
           OBSERVE_INPUT_REFERENCE: ${{ inputs.input_reference }}
+          OBSERVE_KOREAN_DIRECTORY: ${{ inputs.korean_directory }}
         run: |
           [[ "$TARGET_SHA" =~ ^[a-f0-9]{40}$ ]]
+          if [ "$OBSERVE_KOREAN_DIRECTORY" = "true" ]; then
+            test "$OBSERVE_HOME" = "true"
+            test "$OBSERVE_INPUT_REFERENCE" != "true"
+            test "$OBSERVE_PUBLIC_DIRECTORY" != "true"
+            test "$OBSERVE_AUTH_CANCEL" != "true"
+            test "$OBSERVE_LARGE_FONT" != "true"
+            test "$OBSERVE_UI_TEST" != "true"
+            test "$OBSERVE_ACCESSIBILITY_AUDIT" != "true"
+          fi
           if [ "$OBSERVE_INPUT_REFERENCE" = "true" ]; then
             test "$OBSERVE_HOME" = "true"
             test "$OBSERVE_PUBLIC_DIRECTORY" != "true"
@@ -154,6 +170,7 @@ jobs:
           OBSERVE_AUTH_CANCEL: ${{ inputs.auth_cancel }}
           OBSERVE_PUBLIC_DIRECTORY: ${{ inputs.public_directory }}
           OBSERVE_INPUT_REFERENCE: ${{ inputs.input_reference }}
+          OBSERVE_KOREAN_DIRECTORY: ${{ inputs.korean_directory }}
         run: |
           args=()
           if [ "$OBSERVE_HOME" = "true" ]; then args+=(--home); fi
@@ -163,6 +180,7 @@ jobs:
           if [ "$OBSERVE_AUTH_CANCEL" = "true" ]; then args+=(--auth-cancel); fi
           if [ "$OBSERVE_PUBLIC_DIRECTORY" = "true" ]; then args+=(--public-directory); fi
           if [ "$OBSERVE_INPUT_REFERENCE" = "true" ]; then args+=(--input-reference); fi
+          if [ "$OBSERVE_KOREAN_DIRECTORY" = "true" ]; then args+=(--korean-directory); fi
           bun scripts/mobile-internal-ios-reverify.ts "${args[@]}"
           if [ "$OBSERVE_HOME" = "true" ]; then
             test -s .wrangler/mobile-internal-ios-reverify/home.json
@@ -181,7 +199,7 @@ jobs:
           if [ "$OBSERVE_AUTH_CANCEL" = "true" ]; then
             test -s .wrangler/mobile-internal-ios-reverify/auth-cancel-ui.json
           fi
-          if [ "$OBSERVE_PUBLIC_DIRECTORY" = "true" ]; then
+          if [ "$OBSERVE_PUBLIC_DIRECTORY" = "true" ] || [ "$OBSERVE_KOREAN_DIRECTORY" = "true" ]; then
             test -s .wrangler/mobile-internal-ios-reverify/directory-ui.json
           fi
           if [ "$OBSERVE_INPUT_REFERENCE" = "true" ]; then
