@@ -95,6 +95,7 @@ async function setup(wrapDatabase: (database: D1Database) => D1Database = (db) =
     FILE_PROCESSOR: {
       idFromName: (id: string) => id,
       get: () => ({
+        prepareCapacity: async () => true,
         stopProcessing: async () => {
           stops++;
         },
@@ -397,14 +398,15 @@ test("asset runtime preserves current/source boundaries with guarded dispatch an
     // Three guarded dispatches each remove one call / three statements (90/120).
     // Isolating the optional month insert from required policy adds one call,
     // with the same two statements. All three fresh dispatch readbacks remain.
-    expect(measured.work).toEqual({ calls: 91, statements: 120 });
+    // Capacity admission and the final post-wait fence add two fresh job reads.
+    expect(measured.work).toEqual({ calls: 93, statements: 122 });
     expect({ dispatches, dispatchReadbacks, maintenancePolicyCalls, monthBucketCalls }).toEqual({
       dispatches: 3,
       dispatchReadbacks: 3,
       maintenancePolicyCalls: 1,
       monthBucketCalls: 1,
     });
-    expect(currentReads).toBe(31);
+    expect(currentReads).toBe(33);
     expect(originalSnapshotReads).toBe(5);
     expect(separateConsentReads).toBe(3);
     expect(f.nativeCalls()).toBe(1);

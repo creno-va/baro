@@ -209,6 +209,15 @@ Container는 문서/OCR/office 변환·오디오/영상 추출·PDF/ZIP 구성�
 일시 복호화하고 암호화 파생물만 반환한다. 원본 파일 안의 지시·링크·매크로·HTML은 실행
 명령이 아니며 외부 network/SSRF·prompt injection을 막는다.
 
+현재 native 물리 용량은 namespace 전체1개다. 업로드 probe, 추출, sanitize와 report는
+각각의 named attempt를 유지하되 같은 durable coordinator의 slot을 먼저 기다린다.
+대기 후 원본 stream을 열기 전에 현재 소유권·동의·source/job guard를 다시 검사한다.
+대기 시간은 기존265초 request/300초 job 한도에 포함하며 provider 재시도나 용량 증설이
+아니다. 종료/삭제는 native destroy 확인 뒤 exact token만 반환한다.265초 지난 slot도
+시간만으로 해제하지 않고 이전 attempt의 stopProcessing 확인을 요구한다. 중단 실패는
+slot과 기존 hold를 보존한다. coordinator는 원본·소유자·사건 정보 없이 DO identity,
+임의 token, 실제 획득 시각만 저장하며 자신은 Container를 시작하지 않는다.
+
 logical visible response를 하루200회 reservation에 묶고 internal phase/교정/retry는 사용자
 quota를 반복 차감하지 않는다. 모든 provider/ASR/Container attempt 비용은 실제 비용 원장에
 별도 반영한다. bounded phaseattempt·joblease·global 비용 예약과 snapshot 재사용을 둔다.

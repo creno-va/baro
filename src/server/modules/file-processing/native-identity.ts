@@ -1,3 +1,7 @@
+import { waitForProcessorCapacity } from "./container-capacity";
+import { ProcessingError } from "./protocol";
+import { authorize, type ProcessingAccess } from "./transport";
+
 /** The version proves that every native step uses the retained attempt name.
  * Older random Container IDs cannot be recovered from Workflow IDs. */
 export function nativeJobId(kind: "file" | "asset" | "probe") {
@@ -15,6 +19,13 @@ export function isNamedNativeRuntime(id: string) {
 export function namedProcessorPort(binding: Env["FILE_PROCESSOR"], runtimeId: string) {
   const native = binding.get(binding.idFromName(runtimeId));
   return {
+    prepare: async (access: ProcessingAccess) => {
+      const token = crypto.randomUUID();
+      await waitForProcessorCapacity(async () => {
+        if (!(await authorize(access))) throw new ProcessingError("STALE_REVISION");
+        return native.prepareCapacity(token);
+      }, access.signal);
+    },
     fetch: (request: Request) => native.fetch(request),
     stop: () => native.stopProcessing(),
   };

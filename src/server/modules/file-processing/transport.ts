@@ -72,6 +72,7 @@ async function hasDefinitiveRejection(response: Response): Promise<boolean> {
   }
 }
 export function createProcessorTransport(options: {
+  prepare?: (access: ProcessingAccess) => Promise<void>;
   fetch: (request: Request) => Promise<Response>;
   stop: () => Promise<void>;
   costs: ProcessingCosts;
@@ -87,6 +88,9 @@ export function createProcessorTransport(options: {
     },
     access: ProcessingAccess,
   ) => {
+    // Include capacity waiting in the same native request budget. The DO's
+    // own timeout also remains in place as a separate cleanup backstop.
+    access = { ...access, signal: AbortSignal.any([access.signal, AbortSignal.timeout(265_000)]) };
     if (!(await authorize(access))) throw new ProcessingError("STALE_REVISION");
     const permit = await options.costs.before(
       {
@@ -105,6 +109,10 @@ export function createProcessorTransport(options: {
     }
     let sent = false;
     try {
+      await options.prepare?.(access);
+      // Capacity waiting must precede the final owner/consent/source fence and
+      // opening the source stream. A queue slot conveys no permission to read.
+      if (!(await authorize(access))) throw new ProcessingError("STALE_REVISION");
       const path =
         kind === "probe"
           ? "/probe"
@@ -151,7 +159,7 @@ export function createProcessorTransport(options: {
       }
       return response;
     } catch (error) {
-      if (!(error instanceof ProcessingError))
+      if (!sent || !(error instanceof ProcessingError))
         await options.costs.after(permit, { transport: sent ? "unknown" : "not_sent" });
       if (error instanceof ProcessingError) throw error;
       throw new ProcessingError("FILE_PROCESSING_FAILED");

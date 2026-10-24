@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { expect, spyOn, test } from "bun:test";
 import { createCaseDataCipher } from "../src/server/crypto";
 import { decryptArtifact, encryptArtifact } from "../src/server/modules/file-processing/artifacts";
 import {
@@ -50,11 +50,17 @@ test("native unit fragment preserves 100000-page source identity without sending
   expect(processorManifestSchema.safeParse({ ...value, decodedFrameCount: 1 }).success).toBe(false);
 });
 async function fixture(
-  options: { reserve?: () => void; allowed?: boolean; records?: unknown[] } = {},
+  options: {
+    reserve?: () => void;
+    prepare?: () => Promise<void>;
+    allowed?: boolean;
+    records?: unknown[];
+  } = {},
 ) {
   let allowed = options.allowed ?? true,
     calls = 0,
-    stops = 0;
+    stops = 0,
+    opens = 0;
   const receipts: string[] = [];
   const contentHash = await digest(input);
   const manifest = {
@@ -92,6 +98,7 @@ async function fixture(
   };
   const transport = createProcessorTransport({
     costs,
+    ...(options.prepare ? { prepare: options.prepare } : {}),
     stop: async () => {
       stops++;
     },
@@ -119,12 +126,16 @@ async function fixture(
     source: {
       byteLength: input.byteLength,
       contentHash,
-      open: () => new Response(input.slice()).body!,
+      open: () => {
+        opens++;
+        return new Response(input.slice()).body!;
+      },
     },
     setAllowed(v: boolean) {
       allowed = v;
     },
     state: () => ({ calls, stops, receipts }),
+    opens: () => opens,
   };
 }
 test("actual AES artifact byte roundtrip binds owner/environment/file/revision/blob and rejects mutation", async () => {
@@ -155,6 +166,55 @@ test("actual AES artifact byte roundtrip binds owner/environment/file/revision/b
   const finalIndex = corrupted.length - 1;
   corrupted[finalIndex] = (corrupted[finalIndex] ?? 0) ^ 1;
   await expect(decryptArtifact(cipher, id, corrupted)).rejects.toThrow("FILE_REJECTED");
+});
+test("capacity wait precedes fresh consent validation and opening any private source bytes", async () => {
+  let revoke = () => {};
+  const f = await fixture({
+    prepare: async () => {
+      revoke();
+    },
+  });
+  revoke = () => f.setAllowed(false);
+  await expect(
+    f.transport.processUnit(f.source, f.access, {
+      manifest: async () => {},
+      artifact: async () => {},
+    }),
+  ).rejects.toThrow("STALE_REVISION");
+  expect(f.opens()).toBe(0);
+  expect(f.state()).toEqual({ calls: 0, stops: 1, receipts: ["not_sent"] });
+});
+
+test("failed capacity admission retains cleanup and a truthful not_sent receipt", async () => {
+  const f = await fixture({
+    prepare: async () => {
+      throw new Error("synthetic capacity unavailable");
+    },
+  });
+  await expect(f.transport.probe(f.source, f.access)).rejects.toThrow("FILE_PROCESSING_FAILED");
+  expect(f.opens()).toBe(0);
+  expect(f.state()).toEqual({ calls: 0, stops: 1, receipts: ["not_sent"] });
+});
+
+test("native request deadline covers capacity waiting before the source opens", async () => {
+  const deadline = new AbortController();
+  const timeout = spyOn(AbortSignal, "timeout").mockImplementation((milliseconds) => {
+    expect(milliseconds).toBe(265_000);
+    return deadline.signal;
+  });
+  try {
+    const f = await fixture({
+      prepare: async () => {
+        deadline.abort();
+      },
+    });
+    await expect(f.transport.probe(f.source, f.access)).rejects.toThrow("STALE_REVISION");
+    expect(timeout).toHaveBeenCalledTimes(1);
+    expect(f.opens()).toBe(0);
+    expect(f.state()).toEqual({ calls: 0, stops: 1, receipts: ["not_sent"] });
+  } finally {
+    timeout.mockRestore();
+  }
 });
 test("one artifact at a time with validated manifest/hash/order/completion", async () => {
   const f = await fixture();

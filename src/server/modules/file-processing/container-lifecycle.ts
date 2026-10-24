@@ -7,6 +7,7 @@ type ActiveRequest = {
   finishing: Promise<void> | null;
 };
 type NativeLifecyclePort = Omit<ProcessorContainerPort, "stop"> & {
+  reset?(): Promise<void>;
   isRevoked(): Promise<boolean>;
   persistRevoked(): Promise<void>;
   destroy(): Promise<void>;
@@ -72,7 +73,7 @@ export function createProcessorLifecycle(port: NativeLifecyclePort) {
               if (revoked || signal.aborted) throw new Error("REVOKED");
               // A reconstructed DO may still have an old native process. Every
               // unit starts on an empty instance, never on its leftover plaintext.
-              await processorStage("reset", () => port.destroy());
+              await processorStage("reset", () => (port.reset ?? port.destroy)());
               if (revoked || signal.aborted) throw new Error("REVOKED");
               await processorStage("startup", () => port.start(signal));
             })();

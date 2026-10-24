@@ -1,6 +1,7 @@
 const stages = [
   "revocation_read",
   "reset",
+  "capacity_wait",
   "startup",
   "dispatch",
   "response",
