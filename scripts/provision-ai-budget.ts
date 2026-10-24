@@ -532,7 +532,7 @@ export async function inspectAiRuntime(bindings: Partial<Record<RuntimeEnvironme
         ? await core
             .statement(`SELECT count(*) AS attempts,
           coalesce(sum(CASE WHEN state IN ('dispatched','unknown') THEN 1 ELSE 0 END),0) AS unresolvedTransport,
-          coalesce(sum(CASE WHEN EXISTS(SELECT 1 FROM legacy_ai_observations o WHERE o.attempt_id=a.id) THEN 1 ELSE 0 END),0) AS usageObserved,
+          coalesce(sum(CASE WHEN EXISTS(SELECT 1 FROM legacy_ai_observations o WHERE o.attempt_id=a.id) THEN 1 ELSE 0 END),0) AS receiptObserved,
           count(*) AS unpricedAttempts,NULL AS knownObservedKrw FROM legacy_ai_attempts a`)
             .first()
         : null;

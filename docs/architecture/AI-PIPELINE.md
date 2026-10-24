@@ -15,6 +15,14 @@
 따르며 실제 모델 지원/응답/안전 품질은 live 증거로 확인한다. model 이름이나 문서만으로
 vision·ASR·공급자 개인정보 조건을 통과한 것으로 기록하지 않는다.
 
+보존된 v1 답변/명시적 재시도는 `createLegacyAnalysisRuntime`에서 실제 분석 ID·입력 revision·
+Workflow attempt와 실행 원장을 연결한다. 별도 v2 workspace를 만들지 않는다. 논리 응답은
+기존 `v2_daily_usage`의 AI200을 공유하고, 질문 게시/완료에서 소비하며 실패/삭제에서 자기
+예약만 해제한다. unknown 공급자 호출은 새 시도와 겹치지 않으며, 늦은 응답은 삭제 뒤에도
+분리된 원장에 실제 시각/수량으로 남는다. 가격·수량 관측 IO 실패는 기술 dispatch 기록과
+구분한다. 원문과 프롬프트는 이 원장에 저장하지 않는다. 새 v1 질문은 prompt1.2에서 최대
+3개이며 한 번의 묶음만 유지한다. 과거 최대5개 결과의 읽기 계약은 그대로 보존한다.
+
 ## 단계
 
 ```mermaid
@@ -23,7 +31,7 @@ flowchart TD
   B --> C[지원 범위·긴급성]
   C -->|범위 밖/긴급| P[정책 결과]
   C --> D[사건 구조화·정보 공백]
-  D -->|질문 필요| E[최대 5개 질문 후 이벤트 대기]
+  D -->|질문 필요| E[최대 3개 질문 후 이벤트 대기]
   E --> D
   D --> F[공식 법령 검색]
   F --> G[근거 제한 결과 생성]
@@ -39,7 +47,7 @@ flowchart TD
 | 최소화 | 사용자 서술 | 분석에 필요한 문장, 마스킹 힌트 | 원문은 로그 금지 |
 | screening | 최소화 입력 | `inScope`, `urgency`, reason code | 불명확하면 질문, 안전 신호 우선 |
 | structure | 입력·답변 | 당사자 역할, 금액, 날짜, 약정, 이행, 증거, unknowns | 없는 사실을 채우지 않음 |
-| questions | unknowns | 0~5개의 영향도 높은 질문 | 5개 초과 거부 |
+| questions | unknowns | 새 생성은 최대3개의 질문, 기존5개 읽기 보존 | 새 생성3개 초과 거부 |
 | retrieval | 검색어·기준일 | 검증된 law chunks | 공식 출처 없으면 주장 금지 |
 | generation | 구조화 사건·chunks | 결과 초안 | 제공 근거 밖의 법률 주장 금지 |
 | validation | 초안·근거·정책 | pass, findings, sanitized result | critical finding이면 fail closed |

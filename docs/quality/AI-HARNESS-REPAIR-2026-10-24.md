@@ -980,3 +980,73 @@ article title, exact returned quotation and law.go.kr original link, with no
 case/timeline/action additions requested. This verifies a fresh source lookup
 path under2.6; its roughly2m20s duration remains a performance limitation. No
 unchanged failed request was replayed and no deadline was increased.
+
+## Deployed source readability and retained-analysis journal repair
+
+[PR509](https://github.com/creno-va/baro/pull/509) passed exact-head
+CI40118263799 and normally merged to main3b005f3. Main CI40118452372 and
+[same-SHA preview40118642567](https://github.com/creno-va/baro/actions/runs/40118642567)
+passed. The [original finite configuration receipt](./ai-harness-2026-10-24/preview-3b005f3.json)
+is checked at18:05:30.731Z with no blockers; absent cost observations are still
+warnings. Production remains unchanged. Main coordination was released after
+this preview completed; RN will compile the shared mapper under a new source pin.
+
+Reloading the existing synthetic chat confirmed distinct598/603/600 article
+labels and a compact empty composer. Opening the two previously saved DataHub
+cards showed readable not_configured notices/official guides and the composer
+scrolled away with the page. No new AI message was sent for these checks.
+Private screenshots were shown in chat, not published. Browser real/mock tests
+had independently checked two viewport sizes, stylesheet-order regression,
+font floor, accessibility and overflow; those are synthetic browser checks,
+separate from the actual Safari preview observations.
+
+[Issue506](https://github.com/creno-va/baro/issues/506) reproduces the actual
+retained AnalysisWorkflow factory failure before provider dispatch: preview
+requires an attempt ledger but the old factory supplied none. Its new factory
+connects an explicit server invocation to the exact immutable wire identity and
+a legacy-specific source/attempt journal. It does not fabricate a v2 workspace
+or convert old cases. Additive0017 was generated sequentially after0016, with
+RN confirming no competing schema work. Source pointers detach on deletion;
+technical exposure, stable detached billing principals and original observations
+remain. No prompt/input/output text is stored in the new journal.
+
+Before dispatch and final confirmation the runtime checks current case/analysis,
+revision, Workflow instance/attempt, plaintext-source digest, owner, current
+customer role/consent, deletion/tombstone and explicit-upgrade fences. One
+phase ordinal wins concurrent workers. Provider errors can use the original
+bounded retry path; unknown transport blocks overlap, including an explicit
+new Workflow attempt, until the actual late terminal receipt arrives. A newer
+explicit retry may cancel only an old preparation with no dispatch token.
+Nothing resets or erases an ambiguous provider call.
+
+The logical response uses the same v2_daily_usage AI200/day counter. Publication
+of questions or a result consumes its own reserved unit; failure/supersession/
+deletion releases only that operation's unit. An explicit retry retains the
+original request day and can reclaim a released unit within the same shared
+limit. Mandatory terminal transport is recorded separately before optional
+usage observations. Observation IO failure logs only a finite sanitized
+category and retries the observation once in the background; valid output is
+not failed and the model is not replayed. Missing quantity/price data stays
+unknown. No price/funding/FX/monthly gate was introduced.
+
+The existing single guarded analysis UPDATE may now fire a quota trigger. Its
+success check accepts a positive affected-row count for that unique target,
+including trigger writes, rather than treating a committed publication as a
+stale failure. Completed phases return completed and the Workflow stops there.
+Prompt1.2 limits newly generated legacy questions to3, with the bounded existing
+correction path; historical up-to5-question DTOs remain readable. The single
+legacy batch,24h answer wait, explicit maximum3 Workflow attempts,60s model-call
+and10min analysis limits are not expanded. No new model/provider is used.
+
+Local validation passed frozen install, quick319 on integrated3b005f3, full
+unit4279/390files/173624 assertions, production build/dry-run/local built Worker,
+DB drift/fresh/upgrade/import and replay, and offline50+60 with zero critical
+findings. Follow-up focused48 tests include the actual preview-mode runtime→
+encrypted publication→authenticated Hono readback, question waiting, policy
+results, unknown/late/deletion, source/owner revocation, daily200, immutable
+history, preserved old ciphertext/outstanding money/receipts through0017,
+observation failure and missing-journal preflight. These use synthetic provider
+and law adapters, not live model/legal calls. The fast CI profile now includes
+the offline legacy journal/preflight regressions. Same-SHA CI/deployment and
+actual retained-model acceptance remain pending; remote3b005f3 still has0016.
+Unissued external services, latency, security and public release gates remain.

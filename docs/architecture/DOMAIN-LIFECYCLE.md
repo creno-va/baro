@@ -57,6 +57,11 @@ active analysis는 한 case에 하나다. `cases.current_analysis_id`와 revisio
 
 최대 질문 5개는 **한 사건 전체 누적**이다. MVP는 한 번의 질문 묶음만 허용한다. 답변 후 추가 질문 루프를 실행하지 않고 부족한 정보는 `unknowns`로 결과에 남긴다. 질문 대기는 질문 생성 시각부터 24시간이다. 만료하면 `CLARIFICATION_EXPIRED`, retryable=false로 실패하고 새 사건을 안내한다.
 
+위5개는 과거 v1 저장 결과의 읽기 상한이다. 보존된 분석 경로의 새 생성은 prompt1.2부터
+한 묶음 최대3개로 제한한다. 두 번째 v1 질문 루프를 추가하지 않으며, 기존24시간 대기·
+명시적 retry3회·60초 모델 호출·10분 분석 deadline을 유지한다. v2의 최대2묶음×3개와
+공유 AI200/일 규칙을 초과하는 새 질문/호출 경로를 만들지 않는다.
+
 질문은 `{id, prompt, answerType:"text"|"choice", options:string[]}`이며 choice의 options는 2~6개, 질문 prompt 1~300자다. 서버 생성 ID는 묶음 안에서 unique다. 답변 요청은 `{inputRevision, answers:[{questionId, status:"answered"|"unknown"|"skipped", value?:string}]}`다. 모든 질문에 정확히 한 항목이 있어야 하며 unknown/skipped에는 value를 허용하지 않는다. answered text는 1~1,000자, choice는 options allowlist다.
 
 답변 admission은 소유권·대기 상태·revision·기한·idempotency를 검증한다. 단일 batch에서 기존 analysis를 superseded로 바꾸고 답변을 암호화해 저장, case.input_revision을 1 올리고 current analysis를 새 ID로 바꾼 뒤 queued/outbox를 만든다. 새 입력 envelope는 원 서술과 승인된 답변을 함께 가진다. 중복 전송은 같은 응답이고 늦은 답변은 409다. event에는 원문 대신 새 analysis ID와 revision만 보낸다. waitForEvent의 신호가 유실되어도 D1/outbox 정본에서 복구한다.

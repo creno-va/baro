@@ -1,5 +1,7 @@
 import { expect, spyOn, test } from "bun:test";
 import { inspectAiRuntime, modelBounds } from "../scripts/provision-ai-budget";
+import { caseDetailResponseSchema } from "../src/contracts";
+import { api } from "../src/server/api";
 import { createCaseDataCipher } from "../src/server/crypto";
 import { usageDateKst } from "../src/server/db/repository";
 import { MODEL_ID } from "../src/server/model-policy";
@@ -87,11 +89,14 @@ test("retained preview analysis completes through the actual runtime composition
     },
     retrieval: f.legal,
   });
+  let terminal: string | undefined;
   for (const phase of LEGACY_ANALYSIS_PHASES) {
     const result = await runtime.phase(phase);
+    terminal = result.status;
     if (["failed", "stopped", "waiting_for_answers"].includes(result.status)) break;
   }
   const saved = await f.repo.findCurrentAnalysis(f.session.userId, f.caseId);
+  expect(terminal).toBe("completed");
   expect(saved?.status).toBe("completed");
   expect(f.calls).toEqual(["minimize", "screening", "structure", "generation", "validation"]);
   await Promise.all(settlements);
@@ -108,6 +113,13 @@ test("retained preview analysis completes through the actual runtime composition
   expect(
     f.db.sqlite.query("SELECT responses_used,responses_reserved FROM v2_daily_usage").get(),
   ).toEqual({ responses_used: 1, responses_reserved: 0 });
+  const response = await api.request(
+    `/cases/${f.caseId}`,
+    { headers: { cookie: f.session.cookie } },
+    env,
+  );
+  expect(response.status).toBe(200);
+  expect(caseDetailResponseSchema.parse(await response.json()).result?.kind).toBe("guidance");
 });
 
 test("one immutable phase ordinal wins concurrent workers and cannot be replayed after transport", async () => {
@@ -554,7 +566,7 @@ test("technical plans and observation history cannot be rewritten or deleted", a
   ).toEqual({
     attempts: 1,
     unresolvedTransport: 0,
-    usageObserved: 1,
+    receiptObserved: 1,
     unpricedAttempts: 1,
     knownObservedKrw: null,
   });

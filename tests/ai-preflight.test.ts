@@ -147,6 +147,17 @@ test("the remote D1 transport sends only SELECT batches and exports no raw rows"
   expect(JSON.stringify(report)).not.toContain("payload_json");
 });
 
+test("an unmigrated legacy journal remains a technical preflight blocker", async () => {
+  const f = await fixture();
+  const old = await createTestDatabase({ throughMigration: "0016_unpriced_execution" });
+  databases.push(old);
+  const report = await inspectAiPreflight({ ...f.input, database: old.binding });
+  expect(report.status).toBe("blocked");
+  expect(report.checks.legacy_analysis_attempt_ledger_wired).toBe(false);
+  expect(report.blockers).toContain("legacy_analysis_attempt_ledger_wired");
+  expect(report.unverified).toContain("legacy-analysis-runtime");
+});
+
 test("all scope inspects the connected legacy journal without attesting actual provider/media execution", async () => {
   const f = await fixture(),
     report = await inspectAiPreflight(f.input);

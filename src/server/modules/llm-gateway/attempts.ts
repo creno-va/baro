@@ -40,8 +40,9 @@ export interface GatewayTransportReceipt {
 }
 
 /** Trusted server closures bind the handle to the durable job/revision/lease/plan.
- * No request-body adapter may supply this ledger. Absent price/funding proof denies
- * the hold; missing usage retains exposure rather than inventing a zero charge.
+ * No request-body adapter may supply this ledger. In observation-only mode price/
+ * funding metadata cannot deny technical execution; missing usage retains unknown
+ * exposure rather than inventing a zero charge.
  */
 export interface GatewayAttemptLedger {
   beforeDispatch(request: GatewayAttemptRequest): Promise<GatewayAttemptHandle | null>;
