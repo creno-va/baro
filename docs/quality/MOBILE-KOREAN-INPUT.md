@@ -9,8 +9,9 @@ source9436e77의3사 인증 취소 성공을 한국어 IME 인수로 확대하�
 현재 pin의 원본 Simulator 앱을 재컴파일/재서명하지 않는다. 성공한 main CI의 정확한 tooling
 SHA에서 기존 `mobile-internal-ios-reverify.yml`을 `smoke=true`, `korean_directory=true`로
 수동 실행한다. 나머지 관측 모드는 모두 false여야 하며 혼합/중복 flag는 거절한다.
-앱 source9436e77과 tooling SHA, 컴파일러 receipt·원본 ZIP hash·실제 Simulator OS/모델을
-각각 기록한다. 기기 SDK 무서명 컴파일은 이 런타임 검증을 대체하지 않는다.
+앱 source와 tooling SHA, 컴파일러 receipt·원본 ZIP hash·실제 Simulator OS/모델을
+각각 기록한다. 다음 실행은 줄바꿈 UI가 포함된 c8215b8 원본 pin을 사용하며, 아래 세 실패는
+이전9436 앱의 기록으로 보존한다. 기기 SDK 무서명 컴파일은 이 런타임 검증을 대체하지 않는다.
 
 1. 기존대로 fresh owned CI Simulator에 원본 앱을 설치해 anonymous Home cold2회·Metro0을
    확인하고 인증/공개 탐색 전 PNG만 남긴다.
