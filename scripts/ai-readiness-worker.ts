@@ -4,6 +4,7 @@ import { MODEL_ID } from "../src/server/model-policy";
 import { lookupCatalog } from "../src/server/modules/external-tools/catalog";
 import { createExternalTools } from "../src/server/modules/external-tools/service";
 import { ProcessingError } from "../src/server/modules/file-processing/protocol";
+import { researchExcerpt } from "../src/server/modules/legal-retrieval/research/topics";
 import { responseReceipt } from "../src/server/modules/llm-gateway/attempts";
 import {
   createLlmGateway,
@@ -30,6 +31,7 @@ import {
 } from "./ai-readiness-control";
 import {
   syntheticChatContext,
+  syntheticComparisonContext,
   syntheticIntakeContext,
   syntheticLegalContext,
   syntheticSummaryContext,
@@ -60,13 +62,14 @@ export class SyntheticProbe extends DurableObject<ProbeEnv> {
       const mediaChecks: NonNullable<ProbeOutcome["mediaChecks"]> = [];
       let legal: ReturnType<typeof createSyntheticLegalLookup> | null = null;
       let material: ReturnType<typeof createSyntheticMaterialLookup> | null = null;
+      let comparisonSource: NonNullable<ProbeOutcome["comparisonChecks"]>["source"] = null;
       try {
         const active = activeProvenance(this.env);
         if (!active) throw new ModelError("MODEL_UNAVAILABLE");
         if (active.featureCase === "material_chat") material = createSyntheticMaterialLookup();
-        if (active.featureCase === "legal_chat") {
+        if (active.featureCase === "legal_chat" || active.featureCase === "precedent_compare") {
           if (!this.env.LAW_API_OC?.trim()) throw new ModelError("MODEL_UNAVAILABLE");
-          legal = createSyntheticLegalLookup(this.env.LAW_API_OC);
+          legal = createSyntheticLegalLookup(this.env.LAW_API_OC, undefined, active.featureCase);
         }
         if (active.featureCase === "media" || active.featureCase === "video_media") {
           const video = active.featureCase === "video_media";
@@ -242,6 +245,59 @@ export class SyntheticProbe extends DurableObject<ProbeEnv> {
           ...(legal ? { retrieve: legal.retrieve } : {}),
           ...(material ? { readMaterials: material.readMaterials } : {}),
         });
+        if (active.featureCase === "precedent_compare" && legal) {
+          const context = await legal.retrieve(syntheticComparisonContext(), [
+            { kind: "precedent", concept: "대여금" },
+          ]);
+          const chunk = context.sourceRetrieval?.chunks.find(
+            (chunk) => chunk.citation.kind === "precedent",
+          );
+          if (chunk?.citation.kind !== "precedent") throw new ModelError("POLICY_REJECTED");
+          context.precedentComparison = {
+            basedOnWorkspaceRevision: 1,
+            summaryRevision: 1,
+            source: {
+              citation: chunk.citation,
+              excerpt: researchExcerpt(chunk.source.body, [], 4000),
+            },
+          };
+          const excerpt = context.precedentComparison.source.excerpt;
+          comparisonSource = {
+            officialId: chunk.citation.officialId,
+            contentHash: chunk.citation.contentHash,
+            verifiedAt: chunk.citation.verifiedAt,
+            excerptStartUtf16: excerpt.startUtf16,
+            excerptEndUtf16: excerpt.endUtf16,
+            fullLengthUtf16: excerpt.fullLengthUtf16,
+            truncated: excerpt.truncated,
+          };
+          const output = await pipeline.chat(context, PROBE_REQUEST_ID);
+          const result = "precedentComparison" in output ? output.precedentComparison : null;
+          const source = legal.snapshot(0);
+          const comparisonChecks = {
+            requests: source.requests,
+            verifiedSourceCount: source.verifiedSourceCount,
+            sourceFailures: source.sourceFailures,
+            metricCount: result?.metrics.length ?? null,
+            matchedCount: result?.matchedCount ?? null,
+            knownCount: result?.knownCount ?? null,
+            percentage: result?.percentage ?? null,
+            source: comparisonSource,
+          };
+          const valid =
+            !!result &&
+            result.metrics.length === 8 &&
+            result.knownCount > 0 &&
+            source.verifiedSourceCount > 0 &&
+            source.sourceFailures.length === 0;
+          return {
+            status: valid ? "passed" : "failed",
+            failure: valid ? null : "POLICY_REJECTED",
+            metrics,
+            providerFailures,
+            comparisonChecks,
+          };
+        }
         if (active.featureCase === "material_chat" && material) {
           const output = await pipeline.chat(material.context, PROBE_REQUEST_ID);
           const materialChecks = material.snapshot(output);
@@ -346,7 +402,23 @@ export class SyntheticProbe extends DurableObject<ProbeEnv> {
           providerFailures,
           ...(mediaChecks.length ? { mediaChecks } : {}),
           ...(policy?.success ? { policyFailure: policy.data } : {}),
-          ...(legal ? { legalChecks: legal.snapshot(0) } : {}),
+          ...(legal && this.env.READINESS_FEATURE_CASE === "legal_chat"
+            ? { legalChecks: legal.snapshot(0) }
+            : {}),
+          ...(legal && this.env.READINESS_FEATURE_CASE === "precedent_compare"
+            ? {
+                comparisonChecks: {
+                  source: comparisonSource,
+                  requests: legal.snapshot(0).requests,
+                  verifiedSourceCount: legal.snapshot(0).verifiedSourceCount,
+                  sourceFailures: legal.snapshot(0).sourceFailures,
+                  metricCount: null,
+                  matchedCount: null,
+                  knownCount: null,
+                  percentage: null,
+                },
+              }
+            : {}),
           ...(material ? { materialChecks: material.snapshot() } : {}),
         };
       }

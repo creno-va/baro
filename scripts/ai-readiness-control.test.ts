@@ -31,9 +31,88 @@ const configuration: ProbeConfiguration = {
 test("probe observation waits for existing workspace phase limits within its ten-minute job", () => {
   expect(probePostTimeoutMs("tools_property")).toBe(370_000);
   expect(probePostTimeoutMs("legal_chat")).toBe(490_000);
+  expect(probePostTimeoutMs("precedent_compare")).toBe(490_000);
   expect(probePostTimeoutMs("media")).toBe(190_000);
   expect(probePostTimeoutMs("video_media")).toBe(190_000);
   expect(probePostTimeoutMs("legal_chat")).toBeLessThan(600_000);
+});
+
+test("comparison success needs a verified real source, grounded indicators, fixed score and independent audit", async () => {
+  const original = (await harness().send("POST")).body as Record<string, unknown>;
+  const scope = { ...provenance, featureCase: "precedent_compare" as const };
+  const value = {
+    ...original,
+    ...scope,
+    attempts: 2,
+    metrics: ["workspace_precedent_compare", "workspace_audit"].map((phase) => ({
+      requestId: PROBE_REQUEST_ID,
+      model: "google/gemini-3.8-flash",
+      phase,
+      latencyMs: 1,
+      inputTokens: 1,
+      outputTokens: 1,
+      status: "success",
+    })),
+    comparisonChecks: {
+      requests: 2,
+      verifiedSourceCount: 1,
+      metricCount: 8,
+      matchedCount: 2,
+      knownCount: 3,
+      percentage: 25,
+      source: {
+        officialId: "90000000201",
+        contentHash: "c".repeat(64),
+        verifiedAt: "2026-10-01T00:00:00.000Z",
+        excerptStartUtf16: 0,
+        excerptEndUtf16: 4000,
+        fullLengthUtf16: 5000,
+        truncated: true,
+      },
+      sourceFailures: [],
+    },
+  };
+  const schema = probeReportFor(scope);
+  expect(schema.safeParse(value).success).toBe(true);
+  for (const change of [
+    { requests: 0 },
+    { verifiedSourceCount: 0 },
+    { metricCount: 7 },
+    { knownCount: 0 },
+    { knownCount: 1 },
+    { percentage: 100 },
+    { matchedCount: null },
+    { source: null },
+    { source: { ...value.comparisonChecks.source, verifiedAt: "2100-01-01T00:00:00.000Z" } },
+    { sourceFailures: ["unavailable"] },
+  ])
+    expect(
+      schema.safeParse({ ...value, comparisonChecks: { ...value.comparisonChecks, ...change } })
+        .success,
+    ).toBe(false);
+  expect(schema.safeParse({ ...value, comparisonChecks: undefined }).success).toBe(false);
+  expect(
+    schema.safeParse({
+      ...value,
+      metrics: value.metrics.map((m) => ({ ...m, phase: "workspace_precedent_compare" })),
+    }).success,
+  ).toBe(false);
+  expect(schema.safeParse({ ...value, observedText: "private sentinel" }).success).toBe(false);
+  expect(probeReportFor(provenance).safeParse({ ...value, ...provenance }).success).toBe(false);
+  expect(
+    schema.safeParse({
+      ...value,
+      status: "failed",
+      failure: "POLICY_REJECTED",
+      comparisonChecks: {
+        ...value.comparisonChecks,
+        metricCount: null,
+        matchedCount: null,
+        knownCount: null,
+        percentage: null,
+      },
+    }).success,
+  ).toBe(true);
 });
 
 test("authenticated forwarding binds the selected feature and rejects a cross-feature report", async () => {
