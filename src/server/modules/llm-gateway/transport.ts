@@ -28,7 +28,31 @@ async function boundedJson(response: Response, maximumBytes: number): Promise<un
 export async function gatewayResponse(value: unknown): Promise<unknown> {
   // Synthetic adapters can still return the already-decoded completion.
   if (!(value instanceof Response)) return value;
-  if (value.ok) return boundedJson(value, 1024 * 1024);
+  if (value.ok) {
+    const body = await boundedJson(value, 1024 * 1024);
+    if (body && typeof body === "object" && "success" in body) {
+      const envelope = body as Record<string, unknown>;
+      if (envelope.success === false) {
+        const failure = new Error("GATEWAY_PROVIDER_ERROR");
+        rememberDependencyFailure(
+          failure,
+          Array.isArray(envelope.errors) ? envelope.errors[0] : null,
+          "provider_request",
+        );
+        throw failure;
+      }
+      if (
+        envelope.success === true &&
+        envelope.result &&
+        typeof envelope.result === "object" &&
+        !Array.isArray(envelope.result) &&
+        !("choices" in envelope) &&
+        !("candidates" in envelope)
+      )
+        return envelope.result;
+    }
+    return body;
+  }
   const body = await boundedJson(value, 16 * 1024).catch(() => null);
   const record = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
   const nested = record.error ?? (Array.isArray(record.errors) ? record.errors[0] : null);

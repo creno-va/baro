@@ -17,6 +17,7 @@ import {
   responseReceipt,
   unavailableReceipt,
 } from "./attempts";
+import { readModelCompletion } from "./completion";
 import { MODEL_ID, type Phase, PROMPT_VERSION, prompts, WORKSPACE_PROMPT_VERSION } from "./prompts";
 import { gatewayResponse } from "./transport";
 import {
@@ -345,53 +346,26 @@ export function createLlmGateway(
           });
           throw new ModelError("MODEL_UNAVAILABLE");
         }
-        const completion = z
-          .object({
-            choices: z
-              .array(
-                z.object({
-                  message: z.object({
-                    content: z.string().nullable(),
-                    refusal: z.string().nullable().optional(),
-                  }),
-                  finish_reason: z.string(),
-                }),
-              )
-              .min(1)
-              .max(1),
-            usage: z
-              .object({
-                prompt_tokens: z.number().int().nonnegative(),
-                completion_tokens: z.number().int().nonnegative(),
-              })
-              .optional(),
-          })
-          .safeParse(raw);
+        const completion = readModelCompletion(raw);
         let output: unknown = null;
-        if (
-          completion.success &&
-          (completion.data.choices[0]?.message.refusal ||
-            completion.data.choices[0]?.finish_reason === "content_filter")
-        )
-          throw new ModelError("POLICY_REJECTED");
-        if (completion.success && completion.data.choices[0]?.finish_reason === "stop") {
+        if (completion?.refused) throw new ModelError("POLICY_REJECTED");
+        if (completion?.stopped) {
           try {
-            const content = completion.data.choices[0].message.content ?? "";
+            const content = completion.content ?? "";
             if (content.length <= 256 * 1024) output = envelope.parse(JSON.parse(content)).output;
           } catch {
             output = null;
           }
         }
         if (output !== null) {
+          const usage = responseReceipt(raw);
           options.observe?.({
             requestId,
             phase,
             model: MODEL_ID,
             latencyMs: Date.now() - start,
-            inputTokens: completion.success ? (completion.data.usage?.prompt_tokens ?? null) : null,
-            outputTokens: completion.success
-              ? (completion.data.usage?.completion_tokens ?? null)
-              : null,
+            inputTokens: usage.inputTokens,
+            outputTokens: usage.outputTokens,
             status: "success",
           });
           return output;

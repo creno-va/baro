@@ -20,8 +20,9 @@ export const runtimeFailureSchema = z.strictObject({
   stage: z.enum(["read-state", "acquire", "model", "write-report"]),
   category: z.enum(["type-error", "probe-runtime-error"]),
 });
+const probePhaseSchema = z.enum(["screening", "workspace_questions", "workspace_audit"]);
 export const probeProviderFailureSchema = z.strictObject({
-  phase: z.literal("screening"),
+  phase: probePhaseSchema,
   category: z.enum([
     "provider_schema",
     "provider_model",
@@ -58,7 +59,7 @@ const reportSchema = z
       .array(
         z.strictObject({
           requestId: z.literal(PROBE_REQUEST_ID),
-          phase: z.literal("screening"),
+          phase: probePhaseSchema,
           model: z.literal(MODEL_ID),
           latencyMs: z.number().finite().min(0),
           inputTokens: z.number().int().min(0).nullable(),
