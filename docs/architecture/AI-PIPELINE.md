@@ -218,6 +218,15 @@ Container는 문서/OCR/office 변환·오디오/영상 추출·PDF/ZIP 구성�
 slot과 기존 hold를 보존한다. coordinator는 원본·소유자·사건 정보 없이 DO identity,
 임의 token, 실제 획득 시각만 저장하며 자신은 Container를 시작하지 않는다.
 
+파일 coverage 공개 계획은 당시 사건 상태·현재 사건 job·intake/확정 요약 revision을
+암호화된 내부 계획에 고정한다. 같은 파일 revision·manifest·처리 lease/fencing·소유권·
+현재 동의가 유지되면 다른 파일 추가로 증가한 workspace revision에만 staging의 운영
+fence를 맞출 수 있다. coverage 내용, 파일/스냅샷 revision, 관측/생성 시각이나 비용
+기록은 변경하지 않는다. 각 atomic 변경에서 실제 workspace revision 경합이 관측될
+때만 최대3회 새 guard로 저장을 검사하며 native/model 호출은 반복하지 않는다.
+사건 상태/job/intake/요약 변경·삭제·동의 철회·lease 변경은 계속 거절한다. 이전 계획과
+일반 staging/모바일 요청의 strict 계약은 유지한다.
+
 logical visible response를 하루200회 reservation에 묶고 internal phase/교정/retry는 사용자
 quota를 반복 차감하지 않는다. 모든 provider/ASR/Container attempt 비용은 실제 비용 원장에
 별도 반영한다. bounded phaseattempt·joblease·global 비용 예약과 snapshot 재사용을 둔다.

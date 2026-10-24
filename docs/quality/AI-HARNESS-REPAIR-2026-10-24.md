@@ -580,3 +580,58 @@ owner/role/signout purges, readback-only recovery and session race fences remain
 The extended regression and22 related upload cases passed, including desktop/mobile
 screenshots and axe checks. This separate web repair makes no server, schema, installed
 mobile DTO or native input changes and does not call a paid provider.
+
+## Actual a748 processing failures and source-scoped publication
+
+The [a748 preview40095659537](https://github.com/creno-va/baro/actions/runs/40095659537)
+finished SUCCESS, with matching a748/schema0016,9 routes and the actual
+[configuration receipt](./ai-harness-2026-10-24/preview-a74835b.json) at12:57:39.707Z.
+The main hold was released afterward. Resuming the retained audio/PDF selections
+finalized the existing audio upload and admitted the PDF without duplicate audio.
+Both later processing jobs failed, while all five stored originals were preserved.
+Video was not retried under these unchanged processing conditions.
+
+Audio extract0 completed in7.983s and interpret0 returned saved in12.053s. Preparation
+continued, but coverage0 failed with STALE_REVISION at13:00:42UTC. A saved internal
+interpretation step does not attest transcript accuracy or a ready public file; those
+still require the actual reader/source checks. PDF extract0 completed in7.880s and
+interpret0 in3.409s; its second extraction failed at13:00:58UTC. Worker telemetry was
+startup/unknown5354ms. Native restart and final publication are separate remaining
+failures, not proof that the Gateway or every AI feature is unavailable.
+
+The publication race was reproduced with real SQLite/AES/R2-adapter processing by
+uploading a second file between coverage preparation/append, observation staging,
+and final publication. All three initially failed with STALE_REVISION. A fourth
+preparation replay exposed an immutable-plan content-hash mismatch after revision
+progress; the original encrypted plan/context is now reused on replay.
+
+The new private plan captures semantic workspace context. Only file_coverage staging
+may advance its operational workspace fence after fresh current source/owner/consent,
+unchanged status/current workspace job/intake/summary, and exact target lease/fencing
+checks. The SQL CAS repeats these fences atomically, including policy/file consent
+revocation after the earlier guard. Header payload, source/file revision, parts,
+timestamps, quota and cost evidence are unchanged. Generic staging, old plans lacking
+the context extension and installed client DTOs remain strict. A failed CAS is
+rechecked at most3 times only when a fresh read actually observes revision progress;
+integrity/authorization refusal or ambiguous DB failure never retries provider IO.
+
+Focused verification passed79 tests, including27 execution cases for replay, progress,
+late revocation, semantic context changes, deletion/fencing and bounded continuous
+races. Fresh install/quick276/DB schema/fresh/upgrade/unit4160 (382 files,172347
+assertions)/build with local built Worker passed before integrating the independently
+validated web PR489/main3ed0a59. The canonical processing fixture now measures
+654/838 calls/SQL for one page and1160/1465 for two, with312/561 original authorization
+reads. Extra work retains immutable-plan replay and atomic file-only fence checks.
+Fresh integrated CI/deployment and actual media acceptance remain required. Native
+startup is being investigated in the separate native-startup checkout; its underlying
+platform cause is still not established and there is no same-condition live retry.
+
+Self-review added explicit immutable manifest identity to that private context.
+Two additional regressions first demonstrated that a replaced manifest could pass
+the operational refresh. The manifest is now compared in the fresh source read and
+in SQL. A shared publication scope repeats exact source/context/file and current
+policy/file consent at observation staging and the final ready transaction, including
+revocations after the earlier refresh. Eight added cases cover before/after-guard
+manifest replacement and late file/policy consent loss at both write boundaries.
+All87 focused cases (35 execution cases) then passed. These are synthetic SQL/AES
+failure tests, not evidence of an actual customer source replacement or breach.
