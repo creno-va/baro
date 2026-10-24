@@ -1,6 +1,6 @@
 # 모바일 한국어 입력 인수
 
-2026-10-25 KST / #379·#334. 현재 상태는 **세 차례 실제 실행의 Settings 제어 탐색 실패, 한글 입력 미도달**이다.
+2026-10-25 KST / #379·#334. 현재 상태는 **네 차례 실제 실행의 Settings 제어 탐색 실패, 한글 입력 미도달**이다.
 기존 source6201112의 두 OS ASCII 입력/실제 software Search·회전 성공과
 source9436e77의3사 인증 취소 성공을 한국어 IME 인수로 확대하지 않는다.
 
@@ -10,7 +10,7 @@ source9436e77의3사 인증 취소 성공을 한국어 IME 인수로 확대하�
 SHA에서 기존 `mobile-internal-ios-reverify.yml`을 `smoke=true`, `korean_directory=true`로
 수동 실행한다. 나머지 관측 모드는 모두 false여야 하며 혼합/중복 flag는 거절한다.
 앱 source와 tooling SHA, 컴파일러 receipt·원본 ZIP hash·실제 Simulator OS/모델을
-각각 기록한다. 다음 실행은 줄바꿈 UI가 포함된 c8215b8 원본 pin을 사용하며, 아래 세 실패는
+각각 기록한다. 현재 실행은 줄바꿈 UI가 포함된 c8215b8 원본 pin을 사용하며, 아래 첫 세 실패는
 이전9436 앱의 기록으로 보존한다. 기기 SDK 무서명 컴파일은 이 런타임 검증을 대체하지 않는다.
 
 1. 기존대로 fresh owned CI Simulator에 원본 앱을 설치해 anonymous Home cold2회·Metro0을
@@ -130,3 +130,35 @@ owner 원칙으로 고른다. readback·실제 자모/공백 확정·삭제·추
 Standard/10-Key 존재·Korean 제목·Done의 제한된 count/boolean을 진단한다. 다른 layout은
 존재만 관측하고 선택하지 않으며 raw label/value/frame·UI hierarchy/xcresult는 export하지
 않는다. 다음 실제 관측은 새 c821 원본 compiler 검증/pin과 정확한 CI/main 이후다.
+
+
+## 네 번째 실행과 제품 없는 Settings 참고 검사
+
+PR501의 도구·PR502/main1906321 원본 pin·CI40110871760 뒤
+[actual40111078106](https://github.com/creno-va/baro/actions/runs/40111078106)은 **FAILURE**였다.
+새 c8215b8 원본/receipt·native cold2·device를 대조했다. Korean 제목과 hittable Done1은
+관측됐지만 layout의 cell/button/text는 모두0이었다. known-descendant 조회도 후보가 없고
+Standard/10-Key의 고정 표기도 관측되지 않았다. `BARO_KOREAN_LAYOUT_MISSING`·exit65이며
+조합 checkpoint는0이다. 정확한 OS 선택지 이름/구조와 제품 입력 실패는 확인되지 않았다.
+
+[원래 실패](./mobile-native-c8215b8/ios-korean-40111078106/failure.json),
+[Home](./mobile-native-c8215b8/ios-korean-40111078106/home.json),
+[metadata](./mobile-native-c8215b8/ios-korean-40111078106/verification.json),
+[탐색 전 PNG](./mobile-native-c8215b8/ios-korean-40111078106/home-ios.png)와
+[독립 원본 결합](./mobile-native-c8215b8/ios-korean-40111078106/local-preservation.json)을 보존한다.
+같은 조건으로 재실행하거나 다른 layout을 추측 선택하지 않았다.
+
+다음은 `mobile-ios-keyboard-reference.yml`의 독립 수동 참고 검사다. exact green main의
+도구만 사용해 새 owned iPhone16 Simulator를 만들고 **BARO 제품 앱이 실행 전후 모두 없는지**
+SDK inventory로 확인한다. 제품 앱/별도 reference app을 설치하지 않고 UI test runner만
+컴파일한다. 현재 제품 runner와 같은 Settings navigation helper를 사용해 Korean 제목과
+Done이 보이는 화면에 도달하며, layout 선택이나 제품 입력은 하지 않는다.
+
+이 별도 참고 검사는 Korean 화면 body 안에 완전히 들어오는 cell/button/static-text의
+**공개 OS 제어 이름·유형만** 최대32개/이름160자로 보존한다. navigation bar·값·identifier·
+좌표·부모/자식 관계·전체 hierarchy·screenshot·raw command log·xcresult는 export하지 않는다.
+이는 새 CI Simulator의 OS 설정 참고 범위이며, 임의 계정/제품 화면의 문자열을 정제해
+공개하는 기능이 아니다. 기존 제품/인증/공개 탐색 capture boundary는 그대로다.
+검사 뒤 해당 Simulator와 임시 build/results를 정리한다. 실제 선택지 관측 뒤 정확한
+제어를 연결하고 원래6자모/4checkpoint·공백 확정/삭제·추가·Search·회전을 다시 검증한다.
+참고 검사 자체는 한국어 입력·제품/로그인·physical/store 인수가 아니다.

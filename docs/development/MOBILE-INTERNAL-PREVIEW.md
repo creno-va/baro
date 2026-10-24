@@ -1660,3 +1660,28 @@ SUCCESS다. workflow head1906321과 target/tooling331bedf·binaryc8215b8은 구�
 공개 검색창의 ASCII 합성 값 유지·IME 위 초점·유일한 실제 software Search 탭·키보드 닫힘·
 가로/세로 입력 유지/도달·Home 복귀를 확인했다. 한글 IME·HTTP transport 독립 증명·프로필
 값/연락/원격 mutation·인증/비공개 접근·reader·physical/store 검증은 아니다.
+
+
+### 새 UI iOS 실제 최대 글자·Guide·accessibility API 관측
+
+PR502/main1906321·CI40110871760 뒤 [actual40111075770](https://github.com/creno-va/baro/actions/runs/40111075770)은
+SUCCESS다. product c8215b8의 원본 ZIP/receipt와 source/tooling·device·test Swift/Ruby hash를
+[독립 결합](../quality/mobile-native-c8215b8/ios-ui-40111075770/local-preservation.json)했다.
+iPhone16/iOS26.5에서 native Home cold2·Metro0, 최대 content-size 설정/readback·재시작,
+Home5swipe·Guide7swipe와 실제 Guide/복귀 button 조작이 통과했다.
+
+[Home](../quality/mobile-native-c8215b8/ios-ui-40111075770/home.json),
+[최대 글자](../quality/mobile-native-c8215b8/ios-ui-40111075770/large-font.json),
+[UI 조작](../quality/mobile-native-c8215b8/ios-ui-40111075770/home-ui-test.json)과
+[accessibility API](../quality/mobile-native-c8215b8/ios-ui-40111075770/accessibility-audit.json)를
+원본대로 보존한다. Home/Guide의 initial/action4viewport에 contrast·dynamic type·element
+detection·hit region·description·text clipped·trait7종 검사를 적용했고 관측 issue는0이다.
+검사 viewport/종류 밖의 전체 화면과 VoiceOver 인수로 확대하지 않는다.
+
+인증/탐색 전 [기본 PNG](../quality/mobile-native-c8215b8/ios-ui-40111075770/home-ios.png)와
+[최대 글자 PNG](../quality/mobile-native-c8215b8/ios-ui-40111075770/large-font-ios.png)를 직접 검토했다.
+기본 화면의 한글 어절 줄바꿈을 관찰했으며, 최대 글자에서는 제목이 초기 viewport 대부분을
+차지하고 카드/행동은 아래에 있다. 실제 스크롤 도달/왕복 성공과 전체 typography 사용성
+인수는 구분한다. 원래 homeContentVerified=false·visualReviewRequired=true·semanticTextScaleProven=false는
+바꾸지 않았다. 이후 screenshot/raw hierarchy/xcresult export 없이 bounded 결과만 보존했다.
+한글 IME·계정/private 전체·VoiceOver·physical/store는 별도 인수다.

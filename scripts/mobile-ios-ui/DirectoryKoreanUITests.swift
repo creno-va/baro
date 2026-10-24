@@ -88,7 +88,7 @@ extension BaroDirectoryUITests {
   }
 
   @MainActor
-  private func addKoreanKeyboard() {
+  private func openKoreanLayoutSettings() -> XCUIApplication? {
     let settings = XCUIApplication(bundleIdentifier: "com.apple.Preferences")
     settings.launch()
     XCTAssertTrue(settings.wait(for: .runningForeground, timeout: 30), "BARO_KOREAN_SETTINGS_MISSING")
@@ -109,9 +109,15 @@ extension BaroDirectoryUITests {
         print("BARO_KOREAN_SETUP_CONTROL:" + String(decoding: data, as: UTF8.self))
       }
       XCTAssertNotNil(control.element, "BARO_KOREAN_SETTINGS_CONTROL_MISSING")
-      guard let element = control.element else { return }
+      guard let element = control.element else { return nil }
       element.tap()
     }
+    return settings
+  }
+
+  @MainActor
+  private func addKoreanKeyboard() {
+    guard let settings = openKoreanLayoutSettings() else { return }
     print("BARO_KOREAN_SETUP_STAGE:layout")
     let aliases = ["2-Set", "2-Set (QWERTY)"]
     var layout = settingsControl(aliases, in: settings, deriveCellFromKnownLabel: true)
