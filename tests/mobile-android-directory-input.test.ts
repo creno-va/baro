@@ -95,7 +95,7 @@ function nativeFixture(
         if (command === "dumpsys window displays") return dump(rotation, keyboard);
         if (args[0] === "uiautomator") {
           allWindows = args.includes("--windows");
-          return "";
+          return `UI hierchary dumped to: ${args.at(-1)}\n`;
         }
         if (args[0] === "rm") return "";
         if (args[0] === "cat" && allWindows)
@@ -278,6 +278,63 @@ test("observer refuses unowned devices/boundaries before commands and restores t
   expect(switched.commands.some((c) => c.join(" ") === "input tap 980 2100")).toBe(false);
   expect(switched.state()).toEqual({ mode: "free", userRotation: 2 });
 });
+test("directory dump and cleanup errors retain the original failure and fail closed before reading an unconfirmed file", async () => {
+  for (const output of [
+    "",
+    "ERROR: could not get idle state.\n",
+    "UI hierchary dumped to: /unowned.xml\n",
+  ]) {
+    const fixture = nativeFixture(),
+      original = fixture.context.shell;
+    fixture.context.shell = async (args) => {
+      const result = await original(args);
+      return args[0] === "uiautomator" ? output : result;
+    };
+    await expect(observeAndroidDirectoryInput(fixture.context)).rejects.toThrow(
+      "ANDROID_DIRECTORY_DUMP_OUTPUT_INVALID",
+    );
+    expect(fixture.commands.some((args) => args[0] === "cat")).toBe(false);
+    expect(fixture.commands.some((args) => args[0] === "rm")).toBe(true);
+    expect(fixture.state()).toEqual({ mode: "free", userRotation: 2 });
+    expect(fixture.diagnostics.at(-1)).toEqual(
+      expect.objectContaining({
+        primaryFailureCode: "ANDROID_DIRECTORY_DUMP_OUTPUT_INVALID",
+        rotationRestoreFailureCode: null,
+        hierarchyCleanupFailureCode: null,
+      }),
+    );
+  }
+  const both = nativeFixture("lock", true, true);
+  await expect(observeAndroidDirectoryInput(both.context)).rejects.toThrow(
+    "synthetic-command-failed",
+  );
+  expect(both.diagnostics.at(-1)).toEqual(
+    expect.objectContaining({
+      primaryFailureCode: "ANDROID_DIRECTORY_COMMAND_FAILED",
+      rotationRestoreFailureCode: "ANDROID_DIRECTORY_ROTATION_RESTORE_FAILED",
+    }),
+  );
+  const cleanup = nativeFixture(),
+    original = cleanup.context.shell;
+  cleanup.context.shell = async (args) => {
+    const value = await original(args);
+    if (args[0] === "uiautomator") return "";
+    if (args[0] === "rm") throw Error("synthetic-private-remove-failure");
+    return value;
+  };
+  await expect(observeAndroidDirectoryInput(cleanup.context)).rejects.toThrow(
+    "ANDROID_DIRECTORY_DUMP_OUTPUT_INVALID",
+  );
+  expect(cleanup.diagnostics.at(-1)).toEqual(
+    expect.objectContaining({
+      primaryFailureCode: "ANDROID_DIRECTORY_DUMP_OUTPUT_INVALID",
+      hierarchyCleanupFailureCode: "ANDROID_DIRECTORY_COMMAND_FAILED",
+      rotationRestoreFailureCode: null,
+    }),
+  );
+  expect(JSON.stringify(cleanup.diagnostics)).not.toContain("synthetic-private-remove-failure");
+});
+
 test("strict proof binds original binary/compiler baseline/device and rejects broader claims or incomplete window rotation", async () => {
   const old = await Bun.file(
     "docs/quality/mobile-internal-android-2026-10-23/guide-ui-346c920.json",

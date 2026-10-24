@@ -1153,3 +1153,49 @@ Home PNG는 새 앱의 고정 익명 화면을 육안 확인했으며 공개 진
 원본 실패를 보존하고 native 명령의 고정 category/exit/timeout 진단을 보강한 뒤 바뀐 조건을
 검증한다. 같은 조건을 즉시 반복하지 않으며 이전171989e hardware Enter 성공을 새 source의
 입력/소프트 Search·회전 성공으로 적용하지 않는다. 새 iOS 원본 pin/actual 검증은 독립 진행한다.
+
+## Android native 명령·dump·정리 실패의 고정 진단 (#379)
+
+40053634921의 raw output을 복원하거나 정확한 실패 명령을 소급 확정하지 않는다. 후속
+`runAndroidHomeCommand`는 기존120초 상한·명시한 child 환경과 메모리 stdout/stderr 처리를
+유지하면서 고정 operation·exitCode·timedOut·nonzero/timeout/spawn-or-stream category를
+제공한다. device/명령 인자·경로·input·raw output/exception은 결과에 넣지 않는다. 공개/인증
+capture boundary 진입 뒤에만 실패 count·첫/마지막 실패를 보존한다. 이 순서는 발생 순서이며
+첫 실패가 항상 최종 제품 실패의 원인이라는 뜻은 아니다.
+
+host는 UIAutomator stdout/stderr에서 saved/idle-timeout/root-unavailable/unknown enum만
+추출한다. directory는 정확한 소유 UUID 파일의 saved 메시지가 확인되지 않으면 cat 전에
+실패한다. 임시 XML 삭제는 여전히 매번 시도한다. primaryFailureCode와 XML 삭제·회전
+복구 failureCode를 별도로 남기며 정리 실패가 최초 실행 오류를 덮지 않게 한다. 정리 실패도
+성공으로 처리하지 않는다. 기존 privacy gate·실제 입력/IME/Search/회전 조건과 mode 격리는 유지한다.
+
+합성 실제 subprocess의 stdin/반환 byte, exit7·시간 초과·spawn 실패·stderr idle signature,
+고정 schema의 raw 필드 거부와 failure 순서/복사본 격리를 확인한다. directory 합성 대역은
+저장 확인 실패 시 cat 차단·매회 삭제·회전 복구, 실행/정리 동시 실패의 원인 보존을 검사한다.
+이 증거는 실제 Android ready 실패 원인의 인수나 UI 성공이 아니다. 정상 PR/main CI 뒤
+바뀐 관측 조건으로 bounded 검증을 수행하며 native retry·상한 변경·hardware fallback은 추가하지 않는다.
+
+새 iOS 원본 pin은 PR447/main741697f·CI40054279128 SUCCESS 뒤 통합됐다. 새 앱b3eea74의
+[actual40054497761](https://github.com/creno-va/baro/actions/runs/40054497761)은 같은 run을 확인했고
+이후 terminal FAILURE로 끝났다. 상세는 아래와 같으며 관측 timeout으로 재시작하지 않았다. 이전171989e의 성공/실패와
+전체 한국어/reader·계정/API·physical/store·#334/#379/#346/#339/#71을 보존한다.
+
+### 렌더 분리 앱의 iOS typed-check 누락 재현
+
+40054497761의 [원본 실패](../quality/mobile-internal-ios-2026-10-24/directory-failure-741697f.json) SHA256은
+`4622197cb9bbbd25b32d3c453f925b4e1ba889aa0029dcd6b24d645ef7e1bdd1`다. 새 sourceb3eea74의
+원본 ZIP/receipt·[actual metadata](../quality/mobile-internal-ios-2026-10-24/directory-verification-741697f.json) control·
+[Home](../quality/mobile-internal-ios-2026-10-24/directory-home-741697f.json)/PNG byte/hash를 [독립 대조](../quality/mobile-internal-ios-2026-10-24/directory-failure-independent-741697f.json)했다.
+public-directory-xcuitest/typed-check·exit65/timeout=false, BARO_DIRECTORY_TYPED_INPUT_MISMATCH다.
+처음에는 빈 입력이고 타이핑 뒤 기대 문자열보다 짧은 subsequence·날짜 suffix 유지·case/공백/
+dash/compatibility 정규화 불일치를 관측했다. Search control은 null이며 소프트 Search를 찾거나
+탭하는 단계에는 도달하지 않았다. raw 입력/길이/계층은 출력하지 않았다.
+
+이는 PR444의 목록 렌더 분리만으로 충분하지 않았음을 증명하며 근본 원인을 확정하지는 않는다.
+동일 조건을 반복하지 않는다. 다음 제품 수정은 검색란의 per-key controlled value 되쓰기를
+제거하고, [RN TextInput public API](https://reactnative.dev/docs/textinput)의 defaultValue·onChangeText/
+native submit text를 이용해 native가 draft를 소유하게 하는 방향이다. 설치된 RN0.88의
+TextInput synchronization에서 string value가 native text를 다시 맞추는 조건도 읽었다.
+새 구현은 확정 query/필터가 바뀔 때만 초기화하고, 목록/로컬 필터 변경 중 입력·composition과
+최신 검색 버튼/native 제출 원문을 보존해야 한다. global TextField나 비교 literal·키보드 locale/
+타이핑 속도를 바꾸지 않는다. 제품 수정·새 compiler/원본 pin/actual 검증 전 해결 성공을 주장하지 않는다.
