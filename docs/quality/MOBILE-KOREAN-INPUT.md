@@ -235,3 +235,46 @@ public SDK model/API·시각/metadata hash와 cleanup 사실뿐이다. raw metad
 owned Simulator에만 수행하고 이후 정리한다. setup 결과의 layout identity·실제 한국어
 키 입력·제품 input 검증은 모두 false로 유지한다. 이는 새 앱 compile/pin 대기 중 준비
 단계를 분리해 검증하는 보조 경로이며, 실제 RN 앱의6자모/4checkpoint 인수를 대체하지 않는다.
+
+### Android 참고 실행의 시작 실패
+
+[40120710320](https://github.com/creno-va/baro/actions/runs/40120710320)은 source92f4232의 실제
+FAILURE다. SDK 준비/CI 검사는 통과했지만 도구가 `ANDROID_IME_REFERENCE_BOOTSTRAP_FAILED`로
+종료했고 receipt/metadata/cleanup artifact는0개였다. [로컬 관측](./mobile-keyboard-reference-40120710320/local-observation.json)은
+원래 producer receipt가 아니며 IME 등록 정보·Korean 지원·기기 인수로 사용하지 않는다.
+
+원본 source를 확인하면 command용 `internalAndroidEnvironment` allowlist가 TARGET_SHA를
+제외하는데 도구가 그 child env에서 source를 읽어 owned 디렉터리 생성 전 실패했다. 수정은
+원래 입력의 full SHA를 별도로 검증·보존하면서 command env의 secret 제외를 유지한다.
+합성 회귀는 source 보존과 invalid/missing SHA·SDK 거절 및 credential 비전달을 함께 확인한다.
+새 exact CI/main 뒤 변경된 도구로 실행하며 같은 실패 조건을 재시도하지 않는다.
+
+### iOS 설정 준비의 실제 성공
+
+source92f4232의 [setup 참고40120708133](https://github.com/creno-va/baro/actions/runs/40120708133)은
+SUCCESS다. prompt를 포함한 유일 list 안에서 별도 키보드 추가를 선택한 뒤 layout 후보 관측과
+Korean 목록 readback까지 통과했다. 이 실행은 product 없는 iPhone16/iOS26.5 owned Simulator의
+OS 준비만 확인한다. [원본 receipt](./mobile-keyboard-setup-reference-40120708133/receipt.json)와
+[cleanup](./mobile-keyboard-setup-reference-40120708133/cleanup.json)을 그대로 보존하며,
+[독립 결합](./mobile-keyboard-setup-reference-40120708133/local-preservation.json)에서 실제 run/artifact의
+source·성공·3개 Swift source 결합 hash와 Ruby generator hash를 대조했다.
+
+제품/reference 앱은 설치하지 않았고 account 입력·screenshot/raw log/xcresult export 없이
+Simulator와 임시 결과 정리를 확인했다. 원래 결과의 layout identity·Korean keyboard·제품 입력은
+false다. 기존 다섯 제품 실행의 실패를 바꾸지 않으며 새 앱 원본 pin 뒤 실제6자모/4checkpoint·
+공백 확정/삭제/추가·Search·회전으로 별도 인수한다.
+
+### Android SDK 입력기 등록 정보의 실제 관측
+
+수정된 source784d60d의 [40122015296](https://github.com/creno-va/baro/actions/runs/40122015296)은
+SUCCESS다. [원본 receipt](./mobile-keyboard-reference-40122015296/receipt.json)와
+[cleanup](./mobile-keyboard-reference-40122015296/cleanup.json),
+[source/run/artifact 결합](./mobile-keyboard-reference-40122015296/local-preservation.json)을 보존한다.
+Android35 Google APIs fresh image의 현재 default는 Gboard이며 등록 subtype144개 중 parser의
+Korean keyboard 조건과 일치하는 항목은0개였다. 다른 입력기1개/subtype1개도 관측했다.
+이는 등록 metadata의 사실이며 Gboard의 동적 언어 추가·실제 Korean 지원 부재를 입증하지 않는다.
+
+BARO/추가 키보드 앱·계정 없이 설정 변경/키tap0으로 실행했고 owned Emulator 종료·AVD 삭제·
+임시 파일 정리가 통과했다. raw metadata/계층/화면/log를 export하지 않았다. 다음은 이 SDK의
+공개 Gboard 언어 설정 경로를 별도로 관측한 뒤 실제 software key 조합을 준비하는 것이며,
+metadata 성공을 제품 입력이나 물리 기기의 한국어 인수로 확대하지 않는다.

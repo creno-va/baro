@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "kind": "ios-keyboard-setup-reference-receipt",
+  "referenceMode": "setup",
+  "toolingSourceSha": "92f4232f5eeeace39973992193952fdad8e79903",
+  "observedAt": "2026-10-24T18:35:22.496Z",
+  "device": {
+    "kind": "owned-simulator",
+    "model": "iPhone 16",
+    "osVersion": "26.5"
+  },
+  "swiftTestSha256": "ae926536495e4003c6937ee2087f214be9afc6da2fbf0c843f99ee5d3ffece0e",
+  "projectGeneratorSha256": "c40739496c11c52dbb15844b1f4143fdb5112be4e43bebea2e8a6b8074473a18",
+  "projectGeneratorVersion": "1.28.1",
+  "productAbsentBeforeAndAfter": true,
+  "productCompiled": false,
+  "productInstalled": false,
+  "referenceAppInstalled": false,
+  "uiTestRunnerCompiled": true,
+  "operatorAccountEntered": false,
+  "commandLogsExported": false,
+  "screenshotsExported": false,
+  "rawXcresultExported": false,
+  "productInputVerified": false,
+  "physicalDeviceVerified": false,
+  "result": {
+    "kind": "ios-owned-korean-keyboard-setup-reference-only",
+    "keyboardSetup": "owned-simulator-settings-ui",
+    "koreanListReadbackVerified": true,
+    "separateKeyboardChosen": true,
+    "settingsLayoutChoiceObserved": true,
+    "layoutIdentityVerified": false,
+    "productInputVerified": false,
+    "koreanKeyboardVerified": false,
+    "rawHierarchyExported": false,
+    "rawValuesExported": false,
+    "screenshotsExported": false,
+    "rawXcresultExported": false
+  },
+  "simulatorDeleted": true,
+  "privateResultsRemoved": true
+}
