@@ -474,3 +474,16 @@ activity1 협의·private/no-store·Set-Cookie 부재를 확인한
 현재 광고된 provider는 Google·네이버·카카오이며 Apple은 광고되지 않았다. 원인이
 미설정인지 특정 key 조건인지는 이 공개 응답으로 판단하지 않는다. 실제 인증·native IO나
 preview를 앱 소스9436e77로 배포했다는 증거가 아니다.
+
+Android compile40092725450은 SUCCESS다. 원본 APK57,219,314bytes·SHA256
+`a7b048e099ca9cf64a9865370ea035685c4f3f21505ab870628998c387ea5d30`와
+내장 Hermes3,653,896bytes·SHA256
+`b1da81a67fb09010906988367e3e877132cd18eb5edf368fc152958d3f413afe`를
+다운로드한 전체 원본에서 대조했다. CI compiler provenance·엄격한 receipt schema와
+폰트 byte, 공식 Apple PNG3종의 투명 여백 포함 RGBA pixel을 확인한
+[독립 원본 검사](../quality/mobile-native-9436e77/android-local-original-verification.json)와
+[원래 영수증](../quality/mobile-native-9436e77/receipt-android.json)을 보존한다.
+Android packaging은 PNG container byte를 바꾸므로 이 검사는 source PNG와 decoded pixel
+동일성이지 압축 PNG 전체 byte 동일성 주장이 아니다. 기존 verifier의 runtime 입력을 이
+artifact12560156134·원래 receipt SHA d74ee221…로 고정한다. 재컴파일/재서명은 하지 않았다.
+앱 실행·실제 제공자 로그인·물리 기기·store 성공은 아직 검증하지 않았다. iOS 결과는 별도다.
