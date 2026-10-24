@@ -377,3 +377,34 @@ capability. Historical receipts/observations are unchanged. Whisper, model ident
 one-image/1MiB/output4000 bounds,60s media limit and no-overlap settlement are unchanged.
 Finite media diagnostics distinguish an actual timer expiry from other failures.
 Actual native-image/video acceptance remains required.
+
+Exact main8fb0db3 [native media40084623164](https://github.com/creno-va/baro/actions/runs/40084623164)
+passed: native JPEG vision50051ms/602input/104output with the expected visible marker,
+Whisper2215ms/0/0 with the expected Korean spoken markers and one segment, both
+quality=processed. This is not a latency improvement claim; earlier observations
+and timeout failures remain preserved. The changed video's composed run is separate.
+
+The explicit [full9c40082313723](https://github.com/creno-va/baro/actions/runs/40082313723)
+failed in the workspace browser suite: the new tool-card test could not see its
+mock result;78 other workspace cases passed. Unit/DB/offline/build and the preceding
+browser suites had completed, but later CSP/security/audit/native stages were not
+reached. The existing separate raw-audit high2 observation is not this run's cause.
+No successful full receipt was produced.
+
+The isolated local UI run had used real HTTP; full's PUBLIC_API_MODE=mock deliberately
+handles apiRequest without fetch, so the test's Playwright route was never reached.
+The fixture now forwards only its exact synthetic tool-result endpoint from that
+mock HTTP adapter to the registered route, after reload. Both explicit mock and real
+HTTP modes passed the same desktop/mobile, exact-original-link, overflow and axe
+checks. Product requests and mock isolation are unchanged. A new exact-SHA full run
+is still required; these focused checks do not rewrite the failed full result.
+
+Exact main8fb0db3 [composed video40084771580](https://github.com/creno-va/baro/actions/runs/40084771580)
+passed the pinned Linux native stage and all three Gateway observations. The two
+actual scene frames at1.4s/index14 and3.2s/index32 matched their visible markers:
+9594ms/586input/28output and9139ms/586input/77output. Extracted0–8s audio passed
+Whisper5171ms/0/0 with its spoken markers and one segment. All three qualities were
+processed; providerFailures was empty and auth/replay guards passed. Tokens0/0 are
+observed ASR metadata, not a zero-cost claim. The old timeout receipt remains failed.
+This is actual composed synthetic native/Gateway evidence, not a deployed R2/OAuth/
+Cloudflare Container/full-product or public/legal approval.

@@ -1,0 +1,82 @@
+{
+  "version": 3,
+  "checkedAt": "2026-10-24T10:13:31.773Z",
+  "candidateSha": "8fb0db3f1f980bf8914a9ee99e0c784d4702fe78",
+  "featureCase": "video_media",
+  "probeSourceSha256": "0fc9ad89673d0d809e79559c8e75dfe6f6016ae3ad8b3b5a18be2d6dd68748b9",
+  "environment": "isolated-synthetic-worker",
+  "status": "passed",
+  "failure": null,
+  "runtimeWorker": true,
+  "attempts": 3,
+  "metricCoverage": "complete",
+  "metrics": [
+    {
+      "requestId": "00000000-0000-4000-8000-000000000027",
+      "phase": "vision",
+      "model": "google/gemini-3.8-flash",
+      "latencyMs": 9594,
+      "inputTokens": 586,
+      "outputTokens": 28,
+      "status": "success"
+    },
+    {
+      "requestId": "00000000-0000-4000-8000-000000000027",
+      "phase": "vision",
+      "model": "google/gemini-3.8-flash",
+      "latencyMs": 9139,
+      "inputTokens": 586,
+      "outputTokens": 77,
+      "status": "success"
+    },
+    {
+      "requestId": "00000000-0000-4000-8000-000000000027",
+      "phase": "asr",
+      "model": "@cf/openai/whisper-large-v3-turbo",
+      "latencyMs": 5171,
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "status": "success"
+    }
+  ],
+  "providerFailures": [],
+  "mediaChecks": [
+    {
+      "phase": "vision",
+      "quality": "processed",
+      "markerMatched": true,
+      "segmentCount": null,
+      "videoFrame": {
+        "timestampSeconds": 1.4,
+        "frameIndex": 14
+      }
+    },
+    {
+      "phase": "vision",
+      "quality": "processed",
+      "markerMatched": true,
+      "segmentCount": null,
+      "videoFrame": {
+        "timestampSeconds": 3.2,
+        "frameIndex": 32
+      }
+    },
+    {
+      "phase": "asr",
+      "quality": "processed",
+      "markerMatched": true,
+      "segmentCount": 1
+    }
+  ],
+  "unverified": [
+    "full-product-smoke",
+    "live-corpus-eval",
+    "oauth",
+    "legal",
+    "public-policy"
+  ],
+  "authenticationChecked": true,
+  "replayRejected": true,
+  "fixtureHashesWithheld": true,
+  "workflowRun": "https://github.com/creno-va/baro/actions/runs/40084771580"
+}

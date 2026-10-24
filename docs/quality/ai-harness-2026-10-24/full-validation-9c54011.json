@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "candidateSha": "9c5401103e94244c270f5d80d6d2f679132638e9",
+  "workflowRun": "https://github.com/creno-va/baro/actions/runs/40082313723",
+  "status": "failure",
+  "failureStage": "workspace_browser",
+  "failedCases": 1,
+  "passedWorkspaceCases": 78,
+  "laterCspSecurityAuditNative": "not_reached",
+  "successfulReleaseReceipt": false,
+  "paidModelCalls": 0,
+  "runStartedAt": "2026-10-24T09:31:48Z",
+  "runUpdatedAt": "2026-10-24T10:06:13Z"
+}
