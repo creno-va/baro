@@ -39,6 +39,12 @@ import {
   androidSystemErrorDialogObserved,
   observeAndroidLauncherBaseline,
 } from "./mobile-android-launcher-baseline";
+import {
+  type AndroidPackageReadinessDiagnostic,
+  androidPackageReadinessFailureCode,
+  type androidPackageReadinessSchema,
+  observeAndroidPackageReadiness,
+} from "./mobile-android-package-readiness";
 import { verifyInternalAndroidArtifact } from "./mobile-internal-android-artifact";
 import { internalAndroidEnvironment } from "./mobile-internal-android-build";
 import { androidCompiledReverificationSchema } from "./mobile-internal-android-compiled-reverify";
@@ -129,6 +135,8 @@ async function main() {
     lastDirectoryInputObservation: AndroidDirectoryDiagnostic | null = null,
     lastLauncherBaselineDiagnostic: AndroidLauncherDiagnostic | null = null,
     launcherBaseline: z.infer<typeof androidLauncherBaselineSchema> | null = null,
+    packageManagerReady: z.infer<typeof androidPackageReadinessSchema> | null = null,
+    lastPackageManagerDiagnostic: AndroidPackageReadinessDiagnostic | null = null,
     lastLauncherHierarchyDump: AndroidHierarchyDumpOutcome | null = null,
     lastHomeSystemErrorDialogObserved: boolean | null = null,
     lastPublicObservation: ReturnType<typeof publicDirectoryUiObservation> | null = null,
@@ -147,7 +155,11 @@ async function main() {
       ...(timeoutMs === undefined ? {} : { timeoutMs }),
       onFailure(failure) {
         if (authPrivacy.entered) commandFailures.record(failure);
-        if (phase.startsWith("launcher-baseline-") || /^cold-launch-[12]$/.test(phase))
+        if (
+          phase.startsWith("package-manager-") ||
+          phase.startsWith("launcher-baseline-") ||
+          /^cold-launch-[12]$/.test(phase)
+        )
           startupCommandFailures.record(failure);
       },
       onHierarchyDump(outcome) {
@@ -228,6 +240,20 @@ async function main() {
     await text([adb, "-s", device, "install", apk]);
     // Readiness and first product Home share the existing 120-second wait budget.
     const firstColdDeadline = Date.now() + 120000;
+    phase = "package-manager-foreground";
+    packageManagerReady = await observeAndroidPackageReadiness({
+      shell: (args, timeoutMs) => shell(args, undefined, timeoutMs),
+      deviceSerial: device,
+      avdName: avd,
+      freshOwnedEmulator: bootCompleted && emulator?.exitCode === null,
+      productLaunchStarted: false,
+      captureBoundaryEntered: authPrivacy.entered,
+      deadline: firstColdDeadline,
+      diagnostic(value) {
+        lastPackageManagerDiagnostic = value;
+        phase = `package-manager-${value.stage}`;
+      },
+    });
     phase = "launcher-baseline-resolve";
     launcherBaseline = await observeAndroidLauncherBaseline({
       shell: (args, timeoutMs) => shell(args, undefined, timeoutMs),
@@ -333,6 +359,7 @@ async function main() {
           },
           emulatorBootVerified: true,
           sdkHomeLaunchVerified: true,
+          packageManagerReady,
           launcherBaseline,
           homeObservations: observations,
           metroServerStarted: false,
@@ -838,7 +865,7 @@ async function main() {
     }
     await writeFile(
       resolve(out, "failure.json"),
-      `${JSON.stringify({ toolingSourceSha: sourceSha, phase, code: phase.startsWith("launcher-baseline-") ? androidLauncherFailureCode(error) : phase.startsWith("directory-input") ? androidDirectoryFailureCode(error) : phase.startsWith("auth-cancel") ? androidAuthFailureCode(error) : known.has(message) ? message : "BUNDLED_HOME_FAILED", launcherBaseline, lastLauncherBaselineDiagnostic, prePublicStartupCommandFailures: startupCommandFailures.snapshot(), lastLauncherHierarchyDump, lastHomeSystemErrorDialogObserved, postBoundaryCommandFailures: commandFailures.snapshot(), lastPostBoundaryHierarchyDump, emulatorBootVerified: bootCompleted, lastHomeObservation, lastPublicObservation, lastDirectoryInputObservation, lastGuideObservation, lastAuthObservation, lastChromeFixture, receiptValidationFields, publicScreenshotsSuppressed: !capture.allowed, emulatorStartupIssues: emulatorStartupIssues(await readFile(log, "utf8").catch(() => "")), sdkHomeLaunchVerified: baseHomeVerified, largeFontVerified: false, physicalDeviceVerified: false, storeSigned: false, deployed: false }, null, 2)}\n`,
+      `${JSON.stringify({ toolingSourceSha: sourceSha, phase, code: phase.startsWith("package-manager-") ? androidPackageReadinessFailureCode(error) : phase.startsWith("launcher-baseline-") ? androidLauncherFailureCode(error) : phase.startsWith("directory-input") ? androidDirectoryFailureCode(error) : phase.startsWith("auth-cancel") ? androidAuthFailureCode(error) : known.has(message) ? message : "BUNDLED_HOME_FAILED", packageManagerReady, lastPackageManagerDiagnostic, launcherBaseline, lastLauncherBaselineDiagnostic, prePublicStartupCommandFailures: startupCommandFailures.snapshot(), lastLauncherHierarchyDump, lastHomeSystemErrorDialogObserved, postBoundaryCommandFailures: commandFailures.snapshot(), lastPostBoundaryHierarchyDump, emulatorBootVerified: bootCompleted, lastHomeObservation, lastPublicObservation, lastDirectoryInputObservation, lastGuideObservation, lastAuthObservation, lastChromeFixture, receiptValidationFields, publicScreenshotsSuppressed: !capture.allowed, emulatorStartupIssues: emulatorStartupIssues(await readFile(log, "utf8").catch(() => "")), sdkHomeLaunchVerified: baseHomeVerified, largeFontVerified: false, physicalDeviceVerified: false, storeSigned: false, deployed: false }, null, 2)}\n`,
       { flag: "wx" },
     );
     throw new Error("BUNDLED_HOME_FAILED");
