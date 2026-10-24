@@ -40,6 +40,7 @@ try {
       "scripts/ai-readiness-control.ts",
       "scripts/ai-readiness.wrangler.jsonc",
       "scripts/ai-readiness-legal.ts",
+      "scripts/ai-readiness-materials.ts",
       "scripts/ai-readiness-secrets.ts",
       "scripts/run-ai-readiness.ts",
       "scripts/ai-readiness-video.ts",

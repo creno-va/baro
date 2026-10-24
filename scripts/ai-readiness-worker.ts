@@ -36,6 +36,7 @@ import {
   syntheticToolContext,
 } from "./ai-readiness-fixture";
 import { createSyntheticLegalLookup } from "./ai-readiness-legal";
+import { createSyntheticMaterialLookup } from "./ai-readiness-materials";
 
 interface ProbeEnv extends ProbeConfiguration {
   AI: GatewayBinding;
@@ -58,9 +59,11 @@ export class SyntheticProbe extends DurableObject<ProbeEnv> {
       const providerFailures: z.infer<typeof probeProviderFailureSchema>[] = [];
       const mediaChecks: NonNullable<ProbeOutcome["mediaChecks"]> = [];
       let legal: ReturnType<typeof createSyntheticLegalLookup> | null = null;
+      let material: ReturnType<typeof createSyntheticMaterialLookup> | null = null;
       try {
         const active = activeProvenance(this.env);
         if (!active) throw new ModelError("MODEL_UNAVAILABLE");
+        if (active.featureCase === "material_chat") material = createSyntheticMaterialLookup();
         if (active.featureCase === "legal_chat") {
           if (!this.env.LAW_API_OC?.trim()) throw new ModelError("MODEL_UNAVAILABLE");
           legal = createSyntheticLegalLookup(this.env.LAW_API_OC);
@@ -232,7 +235,24 @@ export class SyntheticProbe extends DurableObject<ProbeEnv> {
             );
           },
           ...(legal ? { retrieve: legal.retrieve } : {}),
+          ...(material ? { readMaterials: material.readMaterials } : {}),
         });
+        if (active.featureCase === "material_chat" && material) {
+          const output = await pipeline.chat(material.context, PROBE_REQUEST_ID);
+          const materialChecks = material.snapshot(output);
+          const valid =
+            materialChecks.readRequests > 0 &&
+            materialChecks.lastPageRead &&
+            materialChecks.answerMatched &&
+            materialChecks.sourcePositionMatched;
+          return {
+            status: valid ? "passed" : "failed",
+            failure: valid ? null : "POLICY_REJECTED",
+            metrics,
+            providerFailures,
+            materialChecks,
+          };
+        }
         if (active.featureCase === "legal_chat" && legal) {
           const output = await pipeline.chat(syntheticLegalContext(), PROBE_REQUEST_ID);
           const legalChecks = legal.snapshot(
@@ -322,6 +342,7 @@ export class SyntheticProbe extends DurableObject<ProbeEnv> {
           ...(mediaChecks.length ? { mediaChecks } : {}),
           ...(policy?.success ? { policyFailure: policy.data } : {}),
           ...(legal ? { legalChecks: legal.snapshot(0) } : {}),
+          ...(material ? { materialChecks: material.snapshot() } : {}),
         };
       }
     });

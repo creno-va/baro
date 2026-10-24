@@ -408,3 +408,14 @@ processed; providerFailures was empty and auth/replay guards passed. Tokens0/0 a
 observed ASR metadata, not a zero-cost claim. The old timeout receipt remains failed.
 This is actual composed synthetic native/Gateway evidence, not a deployed R2/OAuth/
 Cloudflare Container/full-product or public/legal approval.
+
+The separate material_chat diagnostic checks actual model-directed attachment
+reading. Only the first16 observations of a synthetic48-page document are initially
+supplied; the requested final-page amount/code are absent. A scoped, revision-checked
+read adapter can return at most two windows of32 observations in one round. Success
+requires an actual read reaching page48, the hidden answer markers, a matching
+file/revision/page reference and final independent audit, within three model calls.
+Reports contain only counts/booleans, never excerpts or answers. This adapter uses
+pre-extracted synthetic observations, not live D1/R2 or an actual48-page PDF. The
+separate real encrypted-reader/deletion/revision tests remain necessary; neither
+component substitutes for deployed product file/OAuth acceptance.
