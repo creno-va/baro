@@ -281,7 +281,7 @@ test("requested public-directory verification requires the Apple signature probe
     (step) => step.name === "Require actual Apple Foundation signature comparisons",
   );
   const entry = steps[index];
-  expect(entry?.if).toBe("inputs.public_directory");
+  expect(entry?.if).toBe("inputs.public_directory || inputs.input_reference");
   expect(entry?.env).toEqual({ BARO_IOS_DIRECTORY_SIGNATURE_REQUIRED: "1" });
   expect(entry?.run).toBe("bun test tests/mobile-ios-directory-signature.test.ts");
   expect(index).toBeGreaterThan(

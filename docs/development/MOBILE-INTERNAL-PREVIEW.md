@@ -1370,3 +1370,50 @@ reference 필드에서 같은 고정 입력을 한 번 관측하여 BARO/RN과 X
 필수 quick108개를 포함하며 문서 검사는112개 Markdown/17개 ADR을 확인했다.
 이번 변경은 원본 JSON/검증 기록뿐이며 제품·build·DB 변경이 없어 native build와
 schema migration/full browser를 재실행하지 않았다.
+
+### iOS 입력 누락의 별도 UIKit reference 진단
+
+PR451/main64829ed의 CI40060285018 SUCCESS 뒤 `codex/379-ios-input-reference`에서
+실제 iOS40059252212의 typed-check 실패를 좁힌다. `input_reference=true`/CLI
+`--home --input-reference`는 공개 directory·인증·글자 확대/audit와 결합할 수 없다.
+기존 pinned product4ba1d39의 metadata/익명 Home 두 cold launch를 확인한 같은 새 소유
+Simulator에서, 별도 `site.baro.test.input-reference` UIKit 앱과 XCTest runner만 컴파일한다.
+BARO 앱을 재컴파일/재서명하지 않으며 공개 탐색·계정/자료에 진입하지 않는다.
+
+reference는 plain UITextField(autocorrection off·sentences 기본 대문자화·Search return key)에
+기존 고정 `baro-mobile-smoke-20261024`를 typeText 한 번으로 입력하고 같은10초 bounded wait를
+사용한다. typing speed·paste·입력 정규화·추가 타이핑/재시도·키보드 설정 변경은 없다.
+별도 native editingChanged observer는 필드 text를 쓰지 않고 native .text의14개 고정 boolean
+signature와 최대100의 포화 event count만 UILabel의 accessibilityValue로 전달한다. XCTest가
+읽은 text value의 signature와 비교한다. 비교 함수는 기존 DirectoryUITests.swift의 정확한
+signature section을 두 source에 삽입하며 Apple Foundation 검사를 reference 모드에서도
+필수로 수행한다. [UITextField](https://developer.apple.com/documentation/uikit/uitextfield)·
+[editingChanged](https://developer.apple.com/documentation/uikit/uicontrol/event/editingchanged)·
+[typeText](https://developer.apple.com/documentation/xcuiautomation/xcuielement/typetext(_:))의
+기본 입력/관측 경로만 사용한다.
+
+reference는 커스텀 RN font/style·목록·network 부하를 포함하지 않는 별도 앱이다. 성공해도
+BARO/RN 부하에서의 XCTest 문제를 배제하지 못하며, 실패해도 BARO 버그 부재를 증명하지
+않는다. 목적은 동일한 누락 형태가 순수 UIKit에서도 관측되는지와 native/AX 비교가 일치하는지
+확인하는 것이다. reference observationCompleted는 입력 literal 일치 여부와 무관하며
+`productInputVerified=false`·`rootCauseConfirmed=false`를 강제한다. mismatch는 결과의
+boolean으로 남기고 성공한 제품 입력/소프트 Search proof로 바꾸지 않는다.
+
+reference 실행 전 capture latch를 영구 설정하여 raw command logs/explicit screenshot을
+차단한다. 원문·label·입력 길이·profile·raw hierarchy/xcresult를 artifact에 내보내지 않는다.
+`input-reference.json`에는 source hash(렌더된 app/test·signature·Ruby generator), generator
+version·원본 Home/source/device identity·고정 결과만 남긴다. 임시 project/results와 소유
+Simulator는 실패 때도 제거한다. 제품 화면 실패와 같은 조건의 제품 재실행을 대체하지 않으며
+정상 exact PR/main CI 후 이 별도 진단을 한 번 요청한다. 실제 UIKit compile/실행은 그
+workflow 결과로만 판정하며 로컬 syntax/schema/generator 검사와 구분한다.
+
+이 작업은 입력 누락 진단 도구다. 이전 실패 원본과 한국어 조합·VoiceOver/TalkBack·전체 역할/
+화면·실제 계정/API·physical/store·#334/#379/#346/#339/#71 인수를 유지한다. 웹 UI·제품
+source·공통 wire/DB·공급자/비용 정책과 production 배포를 변경하지 않는다.
+
+로컬 frozen install·quick113개/21파일(1507 assertions), 모바일/공통419개·RN88개와 tools TSC가
+통과했다. signature가 삽입된 실제 Swift 두 source의 frontend parse, Ruby syntax와 xcodeproj
+1.28.0으로 생성한 실제 두 target/source/dependency·TestTargetID/TEST_TARGET_NAME·scheme
+runnable/macro expansion/min16.4·Team 설정 부재를 확인했다. 로컬에는 iOS UIKit SDK가 없어
+이 결과는 UIKit typecheck/실행 증거가 아니다. 원본 product bundle 입력은 변경하지 않았으므로
+제품 build·DB migration·전체 browser는 재실행하지 않는다.
