@@ -421,7 +421,7 @@ test("topic suggestions exclude cited law text and excerpts preserve exact Unico
   );
 });
 
-async function comparisonFixture() {
+async function comparisonFixture(mislocatedQuote = false) {
   const f = await fixture();
   const other = await createTestDatabase();
   databases.push(other);
@@ -461,6 +461,15 @@ async function comparisonFixture() {
           },
         });
         if (wire.phase === "workspace_audit") beforeAudit?.();
+        if (wire.phase === "workspace_audit" && mislocatedQuote) {
+          const evidence = wire.data.draft.metrics[0].precedentEvidence[0];
+          const excerpt = wire.data.context.precedentComparison.source.excerpt;
+          expect(evidence).toEqual({
+            text: excerpt.text,
+            startUtf16: excerpt.startUtf16,
+            endUtf16: excerpt.endUtf16,
+          });
+        }
         const output =
           wire.phase === "workspace_audit"
             ? {
@@ -479,6 +488,25 @@ async function comparisonFixture() {
                   precedentEvidence: [],
                 })),
               };
+        if (
+          wire.phase === "workspace_precedent_compare" &&
+          mislocatedQuote &&
+          "metrics" in output
+        ) {
+          const first = output.metrics[0];
+          const fact = wire.data.facts[0];
+          if (!first || !fact) throw new Error("Missing synthetic evidence");
+          Object.assign(first, {
+            caseEvidence: [{ factId: fact.id, text: fact.text }],
+            precedentEvidence: [
+              {
+                text: wire.data.precedentComparison.source.excerpt.text,
+                startUtf16: 1,
+                endUtf16: 2,
+              },
+            ],
+          });
+        }
         return {
           choices: [{ finish_reason: "stop", message: { content: JSON.stringify({ output }) } }],
           usage: { prompt_tokens: 20, completion_tokens: 30 },
@@ -649,4 +677,43 @@ test("source corruption between admission and execution never dispatches a model
     await (await f.request(`/comparisons/${accepted.jobId}`)).json(),
   );
   expect(value.comparison).toBeNull();
+});
+
+test("unique numeric quote repair reaches independently audited immutable wire and private publication", async () => {
+  const f = await comparisonFixture(true);
+  const accepted = v2AcceptedOperationSchema.parse(await (await f.submit()).json());
+  const execution = await f.execute();
+  expect(execution).toMatchObject({
+    status: "completed",
+    comparisonEvidence: [{ reason: "accepted", validSpans: 0, uniqueExactSpans: 1 }],
+  });
+  expect(JSON.stringify(execution)).not.toContain("계약 이후");
+  expect(f.phases).toEqual(["workspace_precedent_compare", "workspace_audit"]);
+  const value = v2PrecedentComparisonStateSchema.parse(
+    await (await f.request(`/comparisons/${accepted.jobId}`)).json(),
+  );
+  const excerpt = value.comparison?.source.excerpt;
+  if (!excerpt) throw new Error("Missing synthetic published source");
+  expect(value.comparison?.metrics[0]?.precedentEvidence[0]).toEqual({
+    text: excerpt.text,
+    startUtf16: excerpt.startUtf16,
+    endUtf16: excerpt.endUtf16,
+  });
+  expect(value.comparison?.percentage).toBe(0);
+});
+
+test("corrected numeric quotes still cannot publish when the independent audit rejects meaning", async () => {
+  const f = await comparisonFixture(true);
+  f.rejectAudit();
+  const accepted = v2AcceptedOperationSchema.parse(await (await f.submit()).json());
+  expect((await f.execute()).status).toBe("failed");
+  const value = v2PrecedentComparisonStateSchema.parse(
+    await (await f.request(`/comparisons/${accepted.jobId}`)).json(),
+  );
+  expect(value.comparison).toBeNull();
+  expect(
+    (await f.service.messages(f.owner.userId, f.workspace.id)).filter(
+      (m) => m.role === "assistant",
+    ),
+  ).toHaveLength(0);
 });

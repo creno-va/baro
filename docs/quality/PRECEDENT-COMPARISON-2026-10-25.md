@@ -120,3 +120,49 @@ against the previous component and passes with the guard. All seven precedent
 browser tests, frozen/quick572, build/bundle/dry-run and local built workerd boot
 passed before incorporating the script-only acceptance parent. No provider call,
 retry limit, public contract, stored result or technical guard is changed.
+
+## First actual comparison and literal-evidence repair
+
+[Manual run40139011354](https://github.com/creno-va/baro/actions/runs/40139011354)
+on exact main5122e7a failed before independent audit. The official source was
+verified with two real public API requests. Gemini native comparison generation
+returned successfully twice (12,188ms/4,116 input/830 output and
+11,614ms/4,127 input/929 output); each draft failed the existing literal-evidence
+check. No comparison was published. The original
+[finite failed receipt](./ai-harness-2026-10-24/precedent-compare-5122-40139011354.json)
+is retained unchanged. Its generic `unsupported_fact` category does not establish
+which individual quote, coordinate or case reference failed. No unchanged-condition
+paid retry was made.
+
+As with the existing chat quotation resolver, comparison now corrects only numeric
+coordinates when the model's exact quote occurs uniquely in the exact verified
+excerpt it received. The original offset is retained when already valid. Quotes
+absent from the excerpt, repeated/overlapping ambiguous matches, malformed Unicode,
+unknown fact IDs, altered case quotes and uncertain/conflicting definitive matches
+still fail. Text, facts, source identity, scores and evidence scope are never
+rewritten or inferred. The corrected draft passes the same separate MEDIUM semantic
+audit and atomic source/owner/revision publication fence. Paid wire identity binds
+the actual corrected audit input; no old admission is rewritten.
+
+Case-side evidence is further restricted to `user_statement`/`user_material` facts;
+AI organization cannot masquerade as a user fact. Comparison prompt1.1 makes this
+explicit in generation and audit. Other prompt versions/wires and all model/token/
+attempt/time/AI200 limits remain unchanged. Old comparison wire proofs are not
+relabeled; a changed admission follows the existing explicit-current-source flow.
+
+Private Workflow/synthetic receipts add only a finite literal-check reason and
+counts of valid/uniquely resolved spans, capped and schema-checked. `accepted` here
+means literal integrity only, never approval of meaning or publication. A failed
+semantic audit still publishes nothing. Diagnostics contain no quote, fact ID,
+offset, source text, user/model content or arbitrary error message. Synthetic
+API/runtime tests exercise correction through the real immutable admission/audit
+wire and prove that rejection after correction still blocks publication.
+
+Frozen/quick602 (50 files/5,671 assertions), affected grounding/runtime/probe166
+tests (960 assertions), production build/bundle/dry-run/local built workerd and
+isolated probe bundling pass. New tests cover unique UTF-16/emoji offsets, ambiguous
+or unread quotes, input immutability and public/private projection. The changed
+candidate still requires a new bounded actual observation; numerical correction is
+not yet an established explanation or fix for the original live failure.
+The full unit suite passed 4,357 tests/396 files/174,534 assertions before the final
+AI-organization restriction; affected tests passed again with that stricter guard.

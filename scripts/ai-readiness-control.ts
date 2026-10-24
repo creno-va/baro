@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { MODEL_ID } from "../src/server/model-policy";
+import { comparisonEvidenceObservationSchema } from "../src/server/modules/legal-retrieval/research/comparison";
 import {
   type ModelMetric,
   WORKSPACE_MODEL_TIMEOUT_MS,
@@ -196,6 +197,7 @@ const reportSchema = z
     legalChecks: legalChecksSchema.optional(),
     materialChecks: materialChecksSchema.optional(),
     comparisonChecks: comparisonChecksSchema.optional(),
+    comparisonEvidence: z.array(comparisonEvidenceObservationSchema).max(3).optional(),
     unverified: z.tuple(
       unverified.map((value) => z.literal(value)) as [
         z.ZodLiteral<"full-product-smoke">,
@@ -221,6 +223,7 @@ const reportSchema = z
       (report.featureCase === "legal_chat" || report.legalChecks === undefined) &&
       (report.featureCase === "material_chat" || report.materialChecks === undefined) &&
       (report.featureCase === "precedent_compare" || report.comparisonChecks === undefined) &&
+      (report.featureCase === "precedent_compare" || report.comparisonEvidence === undefined) &&
       (report.featureCase === "video_media" ||
         report.mediaChecks?.every((check) => check.videoFrame === undefined) !== false) &&
       (report.status === "passed"
@@ -233,6 +236,7 @@ const reportSchema = z
               report.comparisonChecks.verifiedSourceCount > 0 &&
               report.comparisonChecks.sourceFailures.length === 0 &&
               report.comparisonChecks.metricCount === 8 &&
+              report.comparisonEvidence?.at(-1)?.reason === "accepted" &&
               report.comparisonChecks.source !== null &&
               Date.parse(report.comparisonChecks.source.verifiedAt) <=
                 Date.parse(report.checkedAt) &&
@@ -432,6 +436,7 @@ export interface ProbeOutcome {
   legalChecks?: z.infer<typeof legalChecksSchema>;
   materialChecks?: z.infer<typeof materialChecksSchema>;
   comparisonChecks?: z.infer<typeof comparisonChecksSchema>;
+  comparisonEvidence?: z.infer<typeof comparisonEvidenceObservationSchema>[];
 }
 export async function handleDurableProbe(
   request: Request,

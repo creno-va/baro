@@ -22,6 +22,10 @@ import { hasCurrentConsent } from "../modules/consent/service";
 import { lookupCatalog, lookupConfiguration } from "../modules/external-tools/catalog";
 import { createExternalTools } from "../modules/external-tools/service";
 import {
+  type ComparisonEvidenceObservation,
+  comparisonEvidenceObservationSchema,
+} from "../modules/legal-retrieval/research/comparison";
+import {
   createPrecedentResearchService,
   PrecedentResearchError,
 } from "../modules/legal-retrieval/research/service";
@@ -247,6 +251,7 @@ export async function runWorkspaceRuntime(
   });
   const legalRetrieval: ReturnType<typeof reportLegalRetrieval>[] = [];
   let quotationResolution: QuotationResolution | undefined;
+  const comparisonEvidence: ComparisonEvidenceObservation[] = [];
   const result = await executeWorkspace(core, params, instanceId, {
     guideHosts: GUIDE_HOSTS,
     authorize: (ownerId) => hasCustomerWorkspaceAccess(core, ownerId),
@@ -439,6 +444,10 @@ export async function runWorkspaceRuntime(
         observeQuotationResolution: (value) => {
           quotationResolution = safeQuotationResolution(value);
         },
+        observeComparisonEvidence: (value) => {
+          const parsed = comparisonEvidenceObservationSchema.safeParse(value);
+          if (parsed.success && comparisonEvidence.length < 3) comparisonEvidence.push(parsed.data);
+        },
         readMaterials: async (context, requests) => {
           await progress.enter("retrieval");
           const authorize = async () =>
@@ -552,5 +561,6 @@ export async function runWorkspaceRuntime(
     ...result,
     ...(legalRetrieval.length ? { legalRetrieval } : {}),
     ...(quotationResolution ? { quotationResolution } : {}),
+    ...(comparisonEvidence.length ? { comparisonEvidence } : {}),
   };
 }

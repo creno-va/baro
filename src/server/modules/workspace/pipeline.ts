@@ -30,7 +30,8 @@ import { type QuotationResolution, resolveQuotationSpans } from "../citation/quo
 import { claimReviewHash, type SourceClaim, validateV2Claims } from "../citation/v2-validate";
 import type { lookupCatalog } from "../external-tools/catalog";
 import {
-  checkPrecedentComparison,
+  type ComparisonEvidenceObservation,
+  inspectPrecedentComparison,
   precedentComparisonScore,
 } from "../legal-retrieval/research/comparison";
 import type { RetrievalOutput } from "../legal-retrieval/v2/contracts";
@@ -360,6 +361,7 @@ export function createWorkspacePipeline(
     reserve: (phase: Phase) => Promise<boolean>;
     invocation: (phase: Phase) => string;
     observeQuotationResolution?: (resolution: QuotationResolution) => void;
+    observeComparisonEvidence?: (observation: ComparisonEvidenceObservation) => void;
     retrieve?: (
       context: WorkspaceContext,
       requests: WorkspaceSourceRequest[],
@@ -511,7 +513,13 @@ export function createWorkspacePipeline(
           throw new ModelError("POLICY_REJECTED");
         return regenerateDraft(context, async (input) => {
           const raw = await call("workspace_precedent_compare", input, requestId);
-          const draft = checkPrecedentComparison(raw, context.facts, comparison.source);
+          const checked = inspectPrecedentComparison(raw, context.facts, comparison.source);
+          try {
+            deps.observeComparisonEvidence?.(checked.observation);
+          } catch {
+            /* Diagnostics never change acceptance. */
+          }
+          const draft = checked.draft;
           if (!draft) throw new WorkspaceOutputPolicyError("unsupported_fact");
           if (draft.metrics.some((metric) => prohibited(JSON.stringify(metric))))
             throw new WorkspaceOutputPolicyError("prohibited_content");
