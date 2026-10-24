@@ -37,7 +37,9 @@ export function androidHierarchyDumpOutcome(
 ): AndroidHierarchyDumpOutcome {
   if (
     stdout.length + stderr.length > 65536 ||
-    !/^\/sdcard\/baro-directory-[a-f0-9-]{36}\.xml$/.test(expectedFile)
+    !/^\/sdcard\/baro-(?:directory|launcher)-[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}\.xml$/.test(
+      expectedFile,
+    )
   )
     return "unknown";
   const lines = `${stdout}\n${stderr}`.split(/\r?\n/);

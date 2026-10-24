@@ -1,0 +1,58 @@
+{
+  "verificationObservedAt": "2026-10-24T03:25:15.523Z",
+  "sourceSha": "4ba1d390ed2511851f216fb02eff44687a87e7a2",
+  "successfulCompilerProvenanceVerified": true,
+  "runId": "40056943689",
+  "artifactId": "12546340990",
+  "receiptSha256": "62491baa2d383fc941498af4b1313abb39d04336a8ec034d81f676ef40f5ff22",
+  "artifact": {
+    "name": "baro-internal-preview-android-4ba1d390ed2511851f216fb02eff44687a87e7a2.apk",
+    "bytes": 57134306,
+    "sha256": "9d9ec567b048de7eecd0b58ec4ce710c12dc5040d972b185f3c3786295aa6a7c"
+  },
+  "bundle": {
+    "path": "assets/index.android.bundle",
+    "format": "hermes-bytecode",
+    "bytes": 3570820,
+    "sha256": "7691d8de354e5261705ad0f7f9319cc8b76e120ffcdf7dd324cefe3068a62374",
+    "compiledBytesMatch": true,
+    "productEntry": "expo-router/entry",
+    "productSourceObserved": true,
+    "probeSourceAbsent": true,
+    "sourceMapPackaged": false,
+    "sourceModules": 1456
+  },
+  "font": {
+    "kind": "compiled-resource-only",
+    "family": "BaroMobile",
+    "sha256": "3ae12c1281a84901b32d8c5f0e43fd6c4f8a5b7fd4ccbde66cfbe9f07cde05e8",
+    "weights": [
+      400,
+      600,
+      700
+    ],
+    "glyphs": 14757,
+    "codepoints": 14336,
+    "hangul": 11172,
+    "licenseEmbedded": true,
+    "compiledBytesMatch": true,
+    "appRuntimeVerified": false
+  },
+  "actualMetadata": {
+    "applicationId": "site.baro.app.preview",
+    "buildVersion": "1",
+    "versionName": "0.1.0",
+    "minimumOS": "24",
+    "architectures": [
+      "arm64-v8a",
+      "x86_64"
+    ],
+    "debuggable": false,
+    "badgingTool": "aapt2-minSdkVersion-field"
+  },
+  "certificateIndependentReadback": false,
+  "freshSdkSignatureReverificationStillRequired": true,
+  "appRuntimeVerified": false,
+  "physicalDeviceVerified": false,
+  "storeSigned": false
+}

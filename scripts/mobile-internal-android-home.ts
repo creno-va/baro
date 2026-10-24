@@ -32,6 +32,13 @@ import {
   androidHomeObservationOptions,
   verifyAndroidGuideUiReceipt,
 } from "./mobile-android-guide-ui";
+import {
+  type AndroidLauncherDiagnostic,
+  type androidLauncherBaselineSchema,
+  androidLauncherFailureCode,
+  androidSystemErrorDialogObserved,
+  observeAndroidLauncherBaseline,
+} from "./mobile-android-launcher-baseline";
 import { verifyInternalAndroidArtifact } from "./mobile-internal-android-artifact";
 import { internalAndroidEnvironment } from "./mobile-internal-android-build";
 import { androidCompiledReverificationSchema } from "./mobile-internal-android-compiled-reverify";
@@ -120,30 +127,39 @@ async function main() {
     lastAuthObservation: AndroidAuthDiagnostic | null = null,
     lastChromeFixture: AndroidChromeFixture | null = null,
     lastDirectoryInputObservation: AndroidDirectoryDiagnostic | null = null,
+    lastLauncherBaselineDiagnostic: AndroidLauncherDiagnostic | null = null,
+    launcherBaseline: z.infer<typeof androidLauncherBaselineSchema> | null = null,
+    lastLauncherHierarchyDump: AndroidHierarchyDumpOutcome | null = null,
+    lastHomeSystemErrorDialogObserved: boolean | null = null,
     lastPublicObservation: ReturnType<typeof publicDirectoryUiObservation> | null = null,
     lastHomeObservation: ReturnType<typeof bundledAndroidHomeObservation> | null = null;
   const authPrivacy = androidAuthenticationPrivacyBoundary();
   const commandFailures = androidPostBoundaryCommandFailures();
+  const startupCommandFailures = androidPostBoundaryCommandFailures();
   let lastPostBoundaryHierarchyDump: AndroidHierarchyDumpOutcome | null = null;
-  async function bytes(args: string[], input?: string) {
+  async function bytes(args: string[], input?: string, timeoutMs?: number) {
     authPrivacy.assertCommandAllowed(args);
     return runAndroidHomeCommand({
       args,
       cwd: root,
       env: childEnv,
       ...(input === undefined ? {} : { input }),
+      ...(timeoutMs === undefined ? {} : { timeoutMs }),
       onFailure(failure) {
         if (authPrivacy.entered) commandFailures.record(failure);
+        if (phase.startsWith("launcher-baseline-") || /^cold-launch-[12]$/.test(phase))
+          startupCommandFailures.record(failure);
       },
       onHierarchyDump(outcome) {
         if (authPrivacy.entered) lastPostBoundaryHierarchyDump = outcome;
+        if (phase.startsWith("launcher-baseline-")) lastLauncherHierarchyDump = outcome;
       },
     });
   }
-  const text = async (args: string[], input?: string) =>
-    new TextDecoder().decode(await bytes(args, input));
-  const shell = (args: string[], input?: string) =>
-    text([adb, "-s", device, "shell", ...args], input);
+  const text = async (args: string[], input?: string, timeoutMs?: number) =>
+    new TextDecoder().decode(await bytes(args, input, timeoutMs));
+  const shell = (args: string[], input?: string, timeoutMs?: number) =>
+    text([adb, "-s", device, "shell", ...args], input, timeoutMs);
   const capture = anonymousScreenshotGuard(() =>
     bytes([adb, "-s", device, "exec-out", "screencap", "-p"]),
   );
@@ -210,32 +226,82 @@ async function main() {
       throw new Error("BUNDLED_HOME_ADB_REVERSE_REFUSED");
     phase = "install";
     await text([adb, "-s", device, "install", apk]);
+    // Readiness and first product Home share the existing 120-second wait budget.
+    const firstColdDeadline = Date.now() + 120000;
+    phase = "launcher-baseline-resolve";
+    launcherBaseline = await observeAndroidLauncherBaseline({
+      shell: (args, timeoutMs) => shell(args, undefined, timeoutMs),
+      deviceSerial: device,
+      avdName: avd,
+      freshOwnedEmulator: bootCompleted && emulator?.exitCode === null,
+      productLaunchStarted: false,
+      captureBoundaryEntered: authPrivacy.entered,
+      deadline: firstColdDeadline,
+      diagnostic(value) {
+        lastLauncherBaselineDiagnostic = value;
+        phase = `launcher-baseline-${value.stage}`;
+      },
+    });
     const observations = [];
     for (let attempt = 1; attempt <= 2; attempt++) {
       phase = `cold-launch-${attempt}`;
-      await shell(["am", "force-stop", appId]);
-      const launched = await shell(["am", "start", "-W", "-n", `${appId}/${appId}.MainActivity`]);
+      lastHomeSystemErrorDialogObserved = null;
+      const deadline = attempt === 1 ? firstColdDeadline : Date.now() + 120000;
+      const coldShell = (args: string[]) => {
+        const remaining = deadline - Date.now();
+        if (remaining <= 0) throw Error("BUNDLED_HOME_WAIT_EXPIRED");
+        return shell(args, undefined, Math.min(120000, remaining));
+      };
+      await coldShell(["am", "force-stop", appId]);
+      const launched = await coldShell([
+        "am",
+        "start",
+        "-W",
+        "-n",
+        `${appId}/${appId}.MainActivity`,
+      ]);
       if (!/^Status:\s*ok\r?$/m.test(launched))
         throw new Error("BUNDLED_HOME_ACTIVITY_LAUNCH_FAILED");
       let observed: ReturnType<typeof bundledAndroidHomeObservation> | undefined;
-      await wait(async () => {
-        try {
-          await shell(["rm", "-f", "/sdcard/baro-internal-home.xml"]);
-          await shell(["uiautomator", "dump", "--compressed", "/sdcard/baro-internal-home.xml"]);
-          observed = bundledAndroidHomeObservation(
-            await shell(["cat", "/sdcard/baro-internal-home.xml"]),
-          );
-          lastHomeObservation = observed;
-          return (
-            observed.titleVisible && observed.firstCardVisible && !observed.foundationErrorVisible
-          );
-        } catch {
-          return false;
-        }
-      }, 120000);
-      if (!/^\d+(?:\s+\d+)*$/.test((await shell(["pidof", appId])).trim()))
+      await wait(
+        async () => {
+          try {
+            await coldShell(["rm", "-f", "/sdcard/baro-internal-home.xml"]);
+            await coldShell([
+              "uiautomator",
+              "dump",
+              "--compressed",
+              "/sdcard/baro-internal-home.xml",
+            ]);
+            const xml = await coldShell(["cat", "/sdcard/baro-internal-home.xml"]);
+            lastHomeSystemErrorDialogObserved = androidSystemErrorDialogObserved(xml);
+            if (lastHomeSystemErrorDialogObserved) throw Error("BUNDLED_HOME_SYSTEM_ERROR_DIALOG");
+            observed = bundledAndroidHomeObservation(xml);
+            lastHomeObservation = observed;
+            return (
+              Date.now() < deadline &&
+              observed.titleVisible &&
+              observed.firstCardVisible &&
+              !observed.foundationErrorVisible
+            );
+          } catch (error) {
+            if (
+              error instanceof Error &&
+              ["BUNDLED_HOME_SYSTEM_ERROR_DIALOG", "BUNDLED_HOME_WAIT_EXPIRED"].includes(
+                error.message,
+              )
+            )
+              throw error;
+            return false;
+          }
+        },
+        Math.max(1, deadline - Date.now()),
+      );
+      if (!/^\d+(?:\s+\d+)*$/.test((await coldShell(["pidof", appId])).trim()))
         throw new Error("BUNDLED_HOME_PROCESS_REQUIRED");
-      observations.push({ coldLaunch: attempt, ...observed });
+      if (lastHomeSystemErrorDialogObserved !== false)
+        throw Error("BUNDLED_HOME_HIERARCHY_REQUIRED");
+      observations.push({ coldLaunch: attempt, ...observed, systemErrorDialogObserved: false });
       if (attempt === 1) {
         const png = await capture.read();
         if (
@@ -267,6 +333,7 @@ async function main() {
           },
           emulatorBootVerified: true,
           sdkHomeLaunchVerified: true,
+          launcherBaseline,
           homeObservations: observations,
           metroServerStarted: false,
           metroRequests,
@@ -734,6 +801,7 @@ async function main() {
         "BUNDLED_HOME_ADB_REVERSE_REFUSED",
         "BUNDLED_HOME_EMULATOR_EXITED",
         "BUNDLED_HOME_WAIT_EXPIRED",
+        "BUNDLED_HOME_SYSTEM_ERROR_DIALOG",
         "BUNDLED_HOME_ACTIVITY_LAUNCH_FAILED",
         "BUNDLED_HOME_PROCESS_REQUIRED",
         "BUNDLED_HOME_SCREENSHOT_REQUIRED",
@@ -765,7 +833,7 @@ async function main() {
     }
     await writeFile(
       resolve(out, "failure.json"),
-      `${JSON.stringify({ toolingSourceSha: sourceSha, phase, code: phase.startsWith("directory-input") ? androidDirectoryFailureCode(error) : phase.startsWith("auth-cancel") ? androidAuthFailureCode(error) : known.has(message) ? message : "BUNDLED_HOME_FAILED", postBoundaryCommandFailures: commandFailures.snapshot(), lastPostBoundaryHierarchyDump, emulatorBootVerified: bootCompleted, lastHomeObservation, lastPublicObservation, lastDirectoryInputObservation, lastGuideObservation, lastAuthObservation, lastChromeFixture, receiptValidationFields, publicScreenshotsSuppressed: !capture.allowed, emulatorStartupIssues: emulatorStartupIssues(await readFile(log, "utf8").catch(() => "")), sdkHomeLaunchVerified: baseHomeVerified, largeFontVerified: false, physicalDeviceVerified: false, storeSigned: false, deployed: false }, null, 2)}\n`,
+      `${JSON.stringify({ toolingSourceSha: sourceSha, phase, code: phase.startsWith("launcher-baseline-") ? androidLauncherFailureCode(error) : phase.startsWith("directory-input") ? androidDirectoryFailureCode(error) : phase.startsWith("auth-cancel") ? androidAuthFailureCode(error) : known.has(message) ? message : "BUNDLED_HOME_FAILED", launcherBaseline, lastLauncherBaselineDiagnostic, prePublicStartupCommandFailures: startupCommandFailures.snapshot(), lastLauncherHierarchyDump, lastHomeSystemErrorDialogObserved, postBoundaryCommandFailures: commandFailures.snapshot(), lastPostBoundaryHierarchyDump, emulatorBootVerified: bootCompleted, lastHomeObservation, lastPublicObservation, lastDirectoryInputObservation, lastGuideObservation, lastAuthObservation, lastChromeFixture, receiptValidationFields, publicScreenshotsSuppressed: !capture.allowed, emulatorStartupIssues: emulatorStartupIssues(await readFile(log, "utf8").catch(() => "")), sdkHomeLaunchVerified: baseHomeVerified, largeFontVerified: false, physicalDeviceVerified: false, storeSigned: false, deployed: false }, null, 2)}\n`,
       { flag: "wx" },
     );
     throw new Error("BUNDLED_HOME_FAILED");
