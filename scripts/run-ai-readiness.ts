@@ -6,6 +6,7 @@ import {
   PROBE_PROTOCOL_VERSION,
   ProbeControlError,
   type ProbeReply,
+  probePostTimeoutMs,
   verifyProbeExchange,
 } from "./ai-readiness-control";
 import { deleteSyntheticLawCredential } from "./ai-readiness-secrets";
@@ -171,7 +172,7 @@ try {
     const response = await fetch(`${origin}/probe`, {
       method,
       headers: { authorization: `Bearer ${token}` },
-      signal: AbortSignal.timeout(method === "POST" ? 190_000 : 10_000),
+      signal: AbortSignal.timeout(method === "POST" ? probePostTimeoutMs(featureCase) : 10_000),
     });
     return { status: response.status, body: await response.json().catch(() => null) };
   };

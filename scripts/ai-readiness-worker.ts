@@ -9,6 +9,7 @@ import {
   createLlmGateway,
   type GatewayBinding,
   ModelError,
+  WORKSPACE_MODEL_TIMEOUT_MS,
 } from "../src/server/modules/llm-gateway/service";
 import { createMediaGateway } from "../src/server/modules/llm-gateway/transcription";
 import { documentedVisionSupport } from "../src/server/modules/llm-gateway/vision-wire";
@@ -201,6 +202,7 @@ export class SyntheticProbe extends DurableObject<ProbeEnv> {
           return { status: "passed", failure: null, metrics, providerFailures, mediaChecks };
         }
         const gateway = createLlmGateway(this.env, {
+          timeoutMs: WORKSPACE_MODEL_TIMEOUT_MS,
           observe: (m) => metrics.push(m),
           observeFailure: (failure) => {
             const safe = probeProviderFailureSchema.safeParse(failure);

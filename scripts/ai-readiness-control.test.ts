@@ -13,6 +13,7 @@ import {
   type ProbeReply,
   type ProbeStorage,
   type ProbeTransaction,
+  probePostTimeoutMs,
   probeReportFor,
   verifyProbeExchange,
 } from "./ai-readiness-control";
@@ -27,6 +28,13 @@ const configuration: ProbeConfiguration = {
   READINESS_PROBE_SHA256: provenance.probeSourceSha256,
   READINESS_TOKEN: "synthetic-local-token",
 };
+test("probe observation waits for existing workspace phase limits within its ten-minute job", () => {
+  expect(probePostTimeoutMs("tools_property")).toBe(370_000);
+  expect(probePostTimeoutMs("legal_chat")).toBe(490_000);
+  expect(probePostTimeoutMs("media")).toBe(190_000);
+  expect(probePostTimeoutMs("video_media")).toBe(190_000);
+  expect(probePostTimeoutMs("legal_chat")).toBeLessThan(600_000);
+});
 
 test("authenticated forwarding binds the selected feature and rejects a cross-feature report", async () => {
   const h = harness();

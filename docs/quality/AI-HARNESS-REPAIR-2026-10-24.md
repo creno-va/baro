@@ -338,3 +338,15 @@ selected scene positions are1.4s/index14 and3.2s/index32, audio0–8s. A pass re
 both visible markers and spoken markers at the three-attempt cap. Offline tamper
 tests and an actual local native extraction are distinct from the still-required
 Linux-native-plus-Gateway run and deployed Cloudflare Container/product path.
+
+Follow-up inspection found a test/runtime mismatch: workspace runtime already used
+120000ms (the existing PR248 policy), while the isolated probe accidentally used
+the generic gateway's60000ms default. The old property timeout receipt remains
+failed and unknown; it is not a proof that the application failed at its actual
+limit. Runtime and probe now import one120000ms constant. The application's value,
+five-minute phase lease, twenty-minute job limit, three attempts and no-overlap
+timeout behavior are unchanged. The outer probe observation deadline accommodates
+three existing phase limits plus the legal case's existing120s source deadline,
+within its ten-minute workflow; it never sends a second POST on ambiguity. This
+changed harness condition permits one new property acceptance, not an unchanged
+retry or an application timeout increase.

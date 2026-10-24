@@ -1,6 +1,9 @@
 import { z } from "zod";
 import { MODEL_ID } from "../src/server/model-policy";
-import type { ModelMetric } from "../src/server/modules/llm-gateway/service";
+import {
+  type ModelMetric,
+  WORKSPACE_MODEL_TIMEOUT_MS,
+} from "../src/server/modules/llm-gateway/service";
 import { workspaceAuditFindingSchema } from "../src/server/modules/llm-gateway/v2/schemas";
 
 export const PROBE_PROTOCOL_VERSION = 3 as const;
@@ -15,6 +18,13 @@ export const featureCaseSchema = z.enum([
   "legal_chat",
   "video_media",
 ]);
+/** Outer observation deadline accommodates existing phase limits without
+ * creating a second POST or extending the application's execution limits. */
+export function probePostTimeoutMs(feature: z.infer<typeof featureCaseSchema>) {
+  const phase =
+    feature === "media" || feature === "video_media" ? 60_000 : WORKSPACE_MODEL_TIMEOUT_MS;
+  return 3 * phase + (feature === "legal_chat" ? 120_000 : 0) + 10_000;
+}
 export const PROBE_REQUEST_ID = "00000000-0000-4000-8000-000000000027" as const;
 const candidateSchema = z.string().regex(/^[a-f0-9]{40}$/);
 const hashSchema = z.string().regex(/^[a-f0-9]{64}$/);
