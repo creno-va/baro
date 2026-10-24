@@ -83,6 +83,7 @@ export async function prepareVideoAssets(root: string, destination: string) {
 }
 
 if (import.meta.main) {
+  let stage = "prepare_input";
   try {
     const root = resolve(".wrangler/goal/ai-native-video");
     await mkdir(root, { recursive: true });
@@ -99,6 +100,7 @@ if (import.meta.main) {
       ]);
       if (exit !== 0) throw new Error("SYNTHETIC_VIDEO_NATIVE_FAILED");
     };
+    stage = "build_image";
     await run([
       "docker",
       "build",
@@ -110,6 +112,7 @@ if (import.meta.main) {
       "baro-ai-video-readiness",
       ".",
     ]);
+    stage = "process_video";
     await run([
       "docker",
       "run",
@@ -135,6 +138,7 @@ if (import.meta.main) {
       "process",
       "0",
     ]);
+    stage = "verify_artifacts";
     await prepareVideoAssets(root, resolve(".wrangler/goal/ai-probe-fixtures"));
     console.log(
       JSON.stringify({
@@ -148,7 +152,7 @@ if (import.meta.main) {
       }),
     );
   } catch {
-    console.error(JSON.stringify({ check: "synthetic-native-video", status: "failed" }));
+    console.error(JSON.stringify({ check: "synthetic-native-video", status: "failed", stage }));
     process.exitCode = 1;
   }
 }
