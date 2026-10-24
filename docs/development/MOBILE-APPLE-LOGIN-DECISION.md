@@ -501,3 +501,41 @@ PNG3종의 원본 byte/RGBA pixel을 확인한
 artifact12560595376의 accepted 앱만 후속 verifier 입력으로 고정하며 별도로 보존된
 unaccepted compile ZIP을 바꿔 쓰지 않는다. 제품 bundled inputs는 source9436e77과 같다.
 재컴파일/재서명·source map 재생성이나 실제 실행/Apple 로그인·물리 기기·store 인수가 아니다.
+
+새 Android binary9436e77/tooling90fc3ce의 실제 run40094605958은 **FAILURE**다.
+SDK 서명·metadata·Hermes/font 재검증과 Android15 Home cold2회는 통과했지만 Google
+브라우저 대기 단계에서 hierarchy file-read가 exit1로 실패했다. 당시 dump 분류는 unknown이며
+root/idle 문제 또는 앱 인증 실패를 확정하지 않는다. 원래
+[Home 영수증](../quality/mobile-native-9436e77/android-runtime-40094605958/receipt.json),
+[실패 분류](../quality/mobile-native-9436e77/android-runtime-40094605958/failure.json),
+[재검증 영수증](../quality/mobile-native-9436e77/android-runtime-40094605958/verification.json),
+[인증 전 Home PNG](../quality/mobile-native-9436e77/android-runtime-40094605958/home.png)와
+[전체 원본 결합 검사](../quality/mobile-native-9436e77/android-runtime-40094605958/local-preservation.json)를
+보존한다. workflow 성공이나 3사 인증 취소·실제 로그인 성공으로 바꾸지 않는다.
+
+후속 observer는 auth용 fresh owned sdcard 경로와 정확한 saved marker를 확인한 뒤에만
+파일을 읽는다. native command wrapper가 stdout/stderr를 함께 분류하며 unknown·dump/read
+오류는 즉시 실패한다. 알려진 root/idle 부재만 기존 poll 한 회로 소비하고, 파일은 매번
+엄격히 정리한다. 정리 오류가 읽기 오류를 덮거나 성공으로 숨겨지지 않는다. 안전한 fixed
+diagnostic으로 양쪽 실패를 보존하며 raw XML·URL·cookie·code는 저장하지 않는다.
+브라우저 foreground·WebView 밖 close control·Back1회·3사 순서·익명 복귀·cold 확인과
+기존 browser20회/command timeout·capture 억제는 유지한다. 같은 조건의 외부 재실행은 하지 않는다.
+
+iOS 새 binary9436e77/toolingff52c4d의 최초 runtime40095242747은 **SUCCESS**다.
+iPhone16/iOS26.5 Simulator에서 두 cold native launch, 기존 Google·네이버·카카오 각각의
+시스템 WebView·native 취소 control의 web/keyboard descendant 제외·실제 취소 tap·익명
+복귀와 cold 익명 복귀를 확인했다. 원래
+[취소 영수증](../quality/mobile-native-9436e77/ios-runtime-40095242747/auth-cancel-ui.json),
+[cold launch 영수증](../quality/mobile-native-9436e77/ios-runtime-40095242747/home.json),
+[metadata 재검증](../quality/mobile-native-9436e77/ios-runtime-40095242747/verification.json),
+[인증 전 Home PNG](../quality/mobile-native-9436e77/ios-runtime-40095242747/home-ios.png)와
+[원본 결합 검사](../quality/mobile-native-9436e77/ios-runtime-40095242747/local-preservation.json)를
+보존한다. PNG를 별도로 읽어 익명 Home 표시를 검토했지만, 원래 자동 영수증의
+homeContentVerified=false·visualReviewRequired=true를 바꾸지 않는다. 실제 계정 입력·callback
+교환·Apple 로그인·private 자료 접근·기기 글자 확대/reader·물리 기기·store 성공은 아니다.
+
+auth hierarchy 보완의 검증은 frozen/quick(공통523·RN106·server/도구276), 전체
+unit4141/382파일/172137 assertions와 focused33/375 assertions다. 실제 오류 분류·미확인
+파일 읽기 금지·primary/cleanup 실패 보존, 알려진 일시적 root/idle 후3사/Back/cold 복귀,
+지속 부재20회 거절을 합성 입력으로 검사한다. 이 수정 자체의 Android 실제 성공은 후속이다.
+PR488/main a74835b·CI40095465168도 통합했으며 제품 bundled inputs는9436e77과 동일하다.
