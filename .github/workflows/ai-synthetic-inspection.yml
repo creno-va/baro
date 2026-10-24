@@ -1,0 +1,55 @@
+name: Inspect retained synthetic AI probe
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_sha:
+        description: Existing probe candidate to inspect; never starts model calls
+        required: true
+        type: string
+      feature_case:
+        description: Existing retained feature case
+        required: true
+        type: choice
+        options: [workspace_questions, workspace_summary, workspace_chat, media, tools_business, tools_property, tools_registry, legal_chat, video_media, material_chat]
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: baro-synthetic-ai-readiness
+  cancel-in-progress: false
+jobs:
+  inspect:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment:
+      name: preview
+      deployment: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: .bun-version
+      - name: Install and verify inspection source CI
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          bun ci
+          bun scripts/verify-release.ts "$GITHUB_SHA" --ci-only
+      - name: Read retained status with temporary probe authentication
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: 9e844969d0c44b2449f3951d1f301654
+          INSPECT_CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          INSPECT_FEATURE_CASE: ${{ inputs.feature_case }}
+        run: bun scripts/ai-readiness-inspect.ts
+      - name: Save finite status and cleanup observation
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: retained-synthetic-probe-${{ github.run_id }}
+          path: .wrangler/readiness/inspection.json
+          if-no-files-found: error
+          retention-days: 7
