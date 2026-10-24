@@ -318,6 +318,8 @@ const koreanSeparateChoiceSchema = z
   .strictObject({
     koreanTitleObserved: z.boolean(),
     promptObserved: z.boolean(),
+    scopeKind: z.enum(["table", "collection", "missing", "ambiguous"]).optional(),
+    scopeCount: z.number().int().min(0).max(8).optional(),
     cellCount: z.number().int().min(0).max(8),
     buttonCount: z.number().int().min(0).max(8),
     ownersOverlap: z.boolean(),
@@ -337,6 +339,19 @@ const koreanSeparateChoiceSchema = z
       }).success
     )
       return false;
+    if (v.scopeKind !== undefined || v.scopeCount !== undefined) {
+      if (v.scopeKind === undefined || v.scopeCount === undefined) return false;
+      if (
+        v.scopeKind === "missing"
+          ? v.scopeCount !== 0
+          : v.scopeKind === "ambiguous"
+            ? v.scopeCount < 2
+            : v.scopeCount !== 1
+      )
+        return false;
+      if (v.scopeCount !== 1 && (v.cellCount !== 0 || v.buttonCount !== 0)) return false;
+      if (v.decision === "separate-keyboard" && v.scopeCount !== 1) return false;
+    }
     const actionable = v.selection === "cell" || v.selection === "button";
     return v.decision === "legacy-layout"
       ? !v.koreanTitleObserved || !v.promptObserved

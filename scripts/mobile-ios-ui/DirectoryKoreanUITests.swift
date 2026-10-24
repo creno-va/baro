@@ -124,19 +124,25 @@ extension BaroDirectoryUITests {
     // adding to English (US) or a separate keyboard, rather than a layout row.
     let titleObserved = settings.navigationBars["Korean"].exists
     let promptObserved = settings.staticTexts["Add to English (US) Keyboard"].exists
+    // Scope to the sole list containing the observed foreground prompt. A
+    // different list behind this screen can expose another Add New Keyboard.
+    let tables = settings.tables.containing(.staticText, identifier: "Add to English (US) Keyboard").allElementsBoundByIndex
+    let collections = settings.collectionViews.containing(.staticText, identifier: "Add to English (US) Keyboard").allElementsBoundByIndex
+    XCTAssertTrue(tables.count + collections.count <= 8, "BARO_KOREAN_SETTINGS_CANDIDATES_EXCEEDED")
+    let scopes = tables + collections
+    let scopeKind = scopes.isEmpty ? "missing" : scopes.count > 1 ? "ambiguous" : tables.count == 1 ? "table" : "collection"
+    let scope = scopes.count == 1 ? scopes.first : nil
     let choicePredicate = NSPredicate(format: "label == %@", "Add New Keyboard")
-    let separateCells = settings.cells.matching(choicePredicate)
-    let separateButtons = settings.buttons.matching(choicePredicate)
+    let separateCells = scope?.cells.matching(choicePredicate).allElementsBoundByIndex ?? []
+    let separateButtons = scope?.buttons.matching(choicePredicate).allElementsBoundByIndex ?? []
     XCTAssertTrue(separateCells.count <= 8 && separateButtons.count <= 8, "BARO_KOREAN_SETTINGS_CANDIDATES_EXCEEDED")
-    // A sheet can expose background controls too. Only fully hittable owners in
-    // the current window qualify, and the existing 95% owner policy still applies.
-    let activeCells = separateCells.allElementsBoundByIndex.filter { fullyHittable($0, in: settings) }
-    let activeButtons = separateButtons.allElementsBoundByIndex.filter { fullyHittable($0, in: settings) }
+    let activeCells = separateCells.filter { fullyHittable($0, in: settings) }
+    let activeButtons = separateButtons.filter { fullyHittable($0, in: settings) }
     let owner = koreanSettingsOwnerChoice(cells: activeCells.map { $0.frame }, buttons: activeButtons.map { $0.frame }, texts: [])
     let knownChooser = titleObserved && promptObserved
-    let actionable = owner.selection == "cell" || owner.selection == "button"
+    let actionable = scope != nil && (owner.selection == "cell" || owner.selection == "button")
     let decision = !knownChooser ? "legacy-layout" : actionable ? "separate-keyboard" : "blocked"
-    let choice: [String: Any] = ["koreanTitleObserved": titleObserved, "promptObserved": promptObserved, "cellCount": activeCells.count, "buttonCount": activeButtons.count, "ownersOverlap": owner.ownersOverlap, "selection": owner.selection, "decision": decision]
+    let choice: [String: Any] = ["koreanTitleObserved": titleObserved, "promptObserved": promptObserved, "scopeKind": scopeKind, "scopeCount": scopes.count, "cellCount": activeCells.count, "buttonCount": activeButtons.count, "ownersOverlap": owner.ownersOverlap, "selection": owner.selection, "decision": decision]
     if let data = try? JSONSerialization.data(withJSONObject: choice, options: [.sortedKeys]) {
       print("BARO_KOREAN_SEPARATE_CHOICE:" + String(decoding: data, as: UTF8.self))
     }

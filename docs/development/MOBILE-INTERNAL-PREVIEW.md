@@ -1708,3 +1708,23 @@ Guide 제어 도달을 검증한다. 제어가 처음부터 들어오는 tablet�
 기존 Home/Guide4viewport의7종 accessibility API audit는 별도 결과로 남기며 VoiceOver,
 landscape 전체 audit·Split View/Stage Manager·계정/private 전체·한글 IME·실물 iPad 인수가 아니다.
 현재는 도구/합성 회귀 준비이며 실제 iPad SDK 실행은 exact CI/main과 유효 원본 pin 뒤다.
+
+### 실제 iPad 최대 글자·Guide·회전 결과
+
+[actual40116876605](https://github.com/creno-va/baro/actions/runs/40116876605)는 SUCCESS다.
+product c8215b8·tooling7ec6352의 원본 ZIP/receipt·기기·runner hash·각 결과 identity를
+[독립 결합](../quality/mobile-native-c8215b8/ios-ipad-40116876605/local-preservation.json)했다.
+iPad Pro13(M4)/iOS26.5에서 cold2/Metro0·최대 category readback과 Home2swipe→Guide탭→
+가로 Guide3swipe/복귀탭→세로 Home2swipe/제어 도달이 통과했다.
+
+[UI 원본](../quality/mobile-native-c8215b8/ios-ipad-40116876605/home-ui-test.json)과
+[API audit](../quality/mobile-native-c8215b8/ios-ipad-40116876605/accessibility-audit.json)의
+4viewport×7종 issue0을 보존했다. [기본 PNG](../quality/mobile-native-c8215b8/ios-ipad-40116876605/home-ios.png)와
+[최대 글자 PNG](../quality/mobile-native-c8215b8/ios-ipad-40116876605/large-font-ios.png)는 각각 실제
+2064×2752px/전체 hash를 대조하고 직접 검토했다. 기본 화면의 중앙 배치·본문/행동 제어와
+최대 글자에서 제목/첫 카드 일부를 관찰했으며 이후 도달은 실제 스크롤/tap 결과로 구분한다.
+원래 homeContentVerified=false·semanticTextScaleProven=false는 수정하지 않는다.
+
+이는 해당 source의 익명 Home/Guide와 관측된 방향/viewport만의 인수다. VoiceOver·전체
+private/계정·한국어 IME·SplitView/StageManager·실물 iPad·store 인수가 아니다. 이후 shared
+client source가 변경되면 이 기존 원본을 새 source의 실제 검증으로 재사용하지 않는다.
