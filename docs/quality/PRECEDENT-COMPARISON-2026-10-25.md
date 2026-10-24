@@ -105,3 +105,18 @@ body, user/model text and credentials. Unrun or failed comparison counts remain
 null. Offline control/source/privacy tests and isolated Worker bundling validate
 the harness, not Gemini acceptance. Frozen/quick598 (50 files, 5,614 assertions)
 and 45 targeted probe tests pass before dispatch.
+
+## Delayed acknowledgment regression
+
+Foreground GET recovery can observe a completed comparison before the original
+POST acknowledgment arrives. Clearing the result when that same job's late receipt
+arrives erased a valid result without changing the job ID, so completed polling
+would not restart and the view remained pending. Admission now preserves state
+already read for the acknowledged job; a genuinely different job still clears it.
+
+A real Chromium test holds the synthetic POST receipt, recovers the complete
+eight-indicator result through foreground GET, then releases that receipt. It fails
+against the previous component and passes with the guard. All seven precedent
+browser tests, frozen/quick572, build/bundle/dry-run and local built workerd boot
+passed before incorporating the script-only acceptance parent. No provider call,
+retry limit, public contract, stored result or technical guard is changed.
