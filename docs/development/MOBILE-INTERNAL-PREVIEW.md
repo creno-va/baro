@@ -1728,3 +1728,18 @@ iPad Pro13(M4)/iOS26.5에서 cold2/Metro0·최대 category readback과 Home2swip
 이는 해당 source의 익명 Home/Guide와 관측된 방향/viewport만의 인수다. VoiceOver·전체
 private/계정·한국어 IME·SplitView/StageManager·실물 iPad·store 인수가 아니다. 이후 shared
 client source가 변경되면 이 기존 원본을 새 source의 실제 검증으로 재사용하지 않는다.
+
+### 공통 인용 제목 변경 후 새 Android 원본
+
+PR509의 공통 workspace client 변경을 포함한 source92f4232에서
+[Android compiler40120704046](https://github.com/creno-va/baro/actions/runs/40120704046)이 SUCCESS다.
+artifact12570963957의 [원본 receipt](../quality/mobile-native-92f4232/receipt-android.json)와
+[독립 대조](../quality/mobile-native-92f4232/android-local-original-verification.json)를 보존했다.
+APK57,219,770bytes·SHA `19f79990f697caa1d6e9fb320861fd92ecb4131903adc39b435b240d2e167352`,
+HBC3,654,352bytes·SHA `899699d32bc1f5c901b496309946a037d1d5236b477c66f4e5257223aec7086d`를
+원본 전체 byte와 대조했다. compiler run/artifact source·성공과 font byte·공식 Apple3PNG의
+decoded RGBA/투명 여백까지 일치하며 재compile/resign·Metro 재생성은 하지 않았다.
+
+이 원본 pin은 Android SDK metadata/서명 재검증과 실제 앱 관측의 입력이다. 이번 단계는
+설치/화면/계정·한국어 IME·실물/store 성공이 아니다. iOS compiler40120706028은 별도 진행 중이며
+기존 iOS pin/sourcec821를 새 source로 바꾸지 않는다. 양쪽 기존 성공/실패는 해당 source에 남긴다.

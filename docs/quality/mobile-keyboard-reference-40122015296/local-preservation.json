@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "kind": "local-android-ime-reference-source-binding",
+  "verifiedAt": "2026-10-24T18:48:16.168077+00:00",
+  "toolingSourceSha": "784d60de02492794868eee8c53d3836ce4fc4ca2",
+  "workflowRunId": 40122015296,
+  "artifactId": 12571319363,
+  "receiptSha256": "3802c599e5cc7b9a9a220e228988e07d0c7579484142d2dc5956c547a2240065",
+  "cleanupSha256": "f7ad79f8c88ad1d655d2308d6a4b71bcdad222d9a025efd23d3ca72135098e61",
+  "toolSourceSha256": "bc14d116583ee37b2796f38e3da971bd73c2c2af33736ad6ed178f74a80b7b49",
+  "referenceWorkflowProvenanceVerified": true,
+  "originalMetadataReconstructed": false,
+  "producerInventory": {
+    "methods": [
+      {
+        "vendor": "other",
+        "selectedDefault": false,
+        "registeredSubtypes": 1,
+        "registeredKoreanKeyboardSubtypes": 0
+      },
+      {
+        "vendor": "google-gboard",
+        "selectedDefault": true,
+        "registeredSubtypes": 144,
+        "registeredKoreanKeyboardSubtypes": 0
+      }
+    ],
+    "registeredSubtypeMetadataComplete": true,
+    "rawMetadataExported": false
+  },
+  "producerObservedAt": "2026-10-24T18:45:05.488Z",
+  "koreanSupportAbsenceProven": false,
+  "productInputVerified": false,
+  "physicalDeviceVerified": false,
+  "rawMetadataExported": false
+}
