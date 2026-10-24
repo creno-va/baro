@@ -44,5 +44,16 @@ prior monitor. The actual exported class also runs through real workerd DO/RPC a
 SQLite transactions with only ctx.container mocked. Its test covers two owners of
 the slot, fenced orphan cleanup, the same named attempt's next unit, future/expired
 and legacy alarms and the retry cap. No actual Cloudflare VM or paid AI success is
-claimed by these local tests. Fresh integrated validation, exact-head CI/deployment
-and actual resumed PDF/audio/video acceptance are still required.
+claimed by these local tests. Final integrated89b0c063 passed frozen install,
+quick302/full4206 tests across385 files (172656 assertions), build and
+[CI40102057543](https://github.com/creno-va/baro/actions/runs/40102057543). Normal
+PR494 squash produced main da9cc6d; mainCI40102819415 and same-SHA
+[preview40103079485](https://github.com/creno-va/baro/actions/runs/40103079485)
+passed. Its configuration receipt is at14:38:57.480Z.
+
+An explicit retained-audio retry at14:40:01Z passed native extract10.195s,
+interpret6.570s and unit preparation2.292s, then publication preparation failed
+with DB_OPERATION_FAILED after3.248s. This proves one actual direct-API extract,
+not a multi-unit restart or accurate transcript/ready file. No unchanged-condition
+retry was sent. PDF/video acceptance remains outstanding. The subsequent retained
+snapshot-version collision regression is recorded in the AI harness repair log.

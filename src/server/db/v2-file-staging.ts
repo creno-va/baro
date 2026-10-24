@@ -93,6 +93,7 @@ export function createV2FileStagingRepository(core: V2Core) {
         fileId: string;
         fileRevision: number;
         coverageSnapshotId: string;
+        outputRevision?: number;
         context: FilePublicationContext;
       },
       lease: JobLease,
@@ -104,6 +105,13 @@ export function createV2FileStagingRepository(core: V2Core) {
         parse(opaqueIdSchema, input.fileId);
         parse(opaqueIdSchema, input.coverageSnapshotId);
         parse(z.number().int().positive(), input.fileRevision);
+        const revision = parse(
+          z
+            .number()
+            .int()
+            .min(input.fileRevision + 1),
+          input.outputRevision ?? input.fileRevision + 1,
+        );
         const execution = leasePredicate(lease, input.fileId, input.fileRevision, g.now);
         const scope = publicationScope(context, input.fileId);
         const claimId = crypto.randomUUID();
@@ -125,7 +133,7 @@ export function createV2FileStagingRepository(core: V2Core) {
               lease.jobId,
               input.coverageSnapshotId,
               input.fileId,
-              input.fileRevision + 1,
+              revision,
               lease.jobId,
               lease.fencing,
               context.revision,
@@ -146,6 +154,7 @@ export function createV2FileStagingRepository(core: V2Core) {
         fileId: string;
         fileRevision: number;
         coverageSnapshotId: string;
+        outputRevision?: number;
         observationOrdinal: number;
         observations: readonly V2FileObservation[];
         derivativeOrdinal: number;
@@ -195,7 +204,13 @@ export function createV2FileStagingRepository(core: V2Core) {
           )
         )
           return false;
-        const revision = file.revision + 1;
+        const revision = parse(
+          z
+            .number()
+            .int()
+            .min(file.revision + 1),
+          input.outputRevision ?? file.revision + 1,
+        );
         const execution = leasePredicate(lease, file.id, file.revision, g.now);
         const scope = publicationScope(input.context, file.id);
         const claimId = crypto.randomUUID();
@@ -380,6 +395,7 @@ export function createV2FileStagingRepository(core: V2Core) {
         fileId: string;
         fileRevision: number;
         coverageSnapshotId: string;
+        outputRevision?: number;
         observationCount: number;
         derivativeCount: number;
         context?: FilePublicationContext;
@@ -408,7 +424,13 @@ export function createV2FileStagingRepository(core: V2Core) {
           metadataSchema,
         );
         if (!metadata.probe) return false;
-        const revision = file.revision + 1;
+        const revision = parse(
+          z
+            .number()
+            .int()
+            .min(file.revision + 1),
+          input.outputRevision ?? file.revision + 1,
+        );
         const encrypted = await core.encrypt("v2_files", file.id, g.ownerId, revision, metadata);
         const execution = leasePredicate(lease, file.id, file.revision, g.now);
         const scope = publicationScope(input.context, file.id);
