@@ -60,7 +60,6 @@ export async function startNativeProcessor(
   const total = AbortSignal.any([signal, AbortSignal.timeout(20_000)]);
   if (total.aborted) throw aborted();
   if (port.running()) throw new Error("Container still running after reset");
-  await abortable(port.configureIdle(), total);
   let allocated = false,
     starts = 0,
     generation = 0;
@@ -101,6 +100,7 @@ export async function startNativeProcessor(
         continue;
       }
     }
+    let healthy = false;
     try {
       const ping = AbortSignal.any([
         total,
@@ -112,9 +112,10 @@ export async function startNativeProcessor(
         const currentStop = readStop();
         if (currentStop || !port.running())
           throw currentStop?.error ?? new Error("Container exited before readiness");
-        return;
+        healthy = true;
+      } else {
+        allocated = true;
       }
-      allocated = true;
     } catch (error) {
       if (total.aborted) throw signal.aborted ? aborted() : deadline();
       lastError = error;
@@ -122,6 +123,22 @@ export async function startNativeProcessor(
       const observed = readStop();
       if (observed && !unavailable(observed.error))
         throw observed.error ?? new Error("Container exited before readiness");
+    }
+    if (healthy) {
+      // setInactivityTimeout addresses the current VM. Calling it before start
+      // can reject immediately while a destroyed instance is being replaced.
+      // The already-persisted cleanup alarm bounds this preparation phase.
+      try {
+        await abortable(port.configureIdle(), total);
+      } catch (error) {
+        if (total.aborted) throw signal.aborted ? aborted() : deadline();
+        throw error;
+      }
+      if (total.aborted || now() - began >= 20_000) throw signal.aborted ? aborted() : deadline();
+      const currentStop = readStop();
+      if (currentStop || !port.running())
+        throw currentStop?.error ?? new Error("Container exited before readiness");
+      return;
     }
     await wait(total);
   }
