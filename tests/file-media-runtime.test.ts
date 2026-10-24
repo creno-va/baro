@@ -275,7 +275,20 @@ async function setupImage(
     jobId: job.id,
   };
   const execution = await createFileProcessingRuntime(env, params, `${job.id}-1`, () => {});
-  return { ...f, core, env, calls, session, params, execution, service, original, models, wires };
+  return {
+    ...f,
+    core,
+    env,
+    calls,
+    session,
+    params,
+    execution,
+    service,
+    original,
+    models,
+    wires,
+    visionProfile: options.video ? ("video_frame" as const) : ("image" as const),
+  };
 }
 
 function wav() {
@@ -433,6 +446,13 @@ test("canonical video frame preserves sampled position and derivative with the s
   await f.execution.interpretArtifact(0, 0, signal());
   const output = await publish(f);
   expect(f.models).toEqual([MODEL_ID]);
+  expect(f.wires[0]).toMatchObject({
+    generationConfig: {
+      maxOutputTokens: 2000,
+      mediaResolution: "MEDIA_RESOLUTION_LOW",
+      thinkingConfig: { thinkingLevel: "LOW", includeThoughts: false },
+    },
+  });
   expect(output?.observations[0]).toMatchObject({
     text: "synthetic image observation",
     position: { kind: "video", timestampSeconds: 0, frameIndex: 0, sampling: "one_second" },
@@ -488,6 +508,26 @@ test("distinct video positions with identical JPEG bytes each retain a logical m
   ]);
 });
 
+for (const texts of [Array.from({ length: 7 }, () => "visible frame"), ["a".repeat(801)]])
+  test("oversized frame output keeps its original paid receipt without publishing or retrying", async () => {
+    const f = await setupImage({ video: true, result: { texts, quality: "processed" } });
+    await extracted(f);
+    await expect(f.execution.interpretArtifact(0, 0, signal())).rejects.toMatchObject({
+      code: "MODEL_SCHEMA_INVALID",
+    });
+    expect(f.calls.model).toBe(1);
+    expect(f.db.sqlite.query("SELECT count(*) n FROM v2_file_observations").get()).toEqual({
+      n: 0,
+    });
+    expect(
+      f.db.sqlite
+        .query("SELECT state,transport FROM v2_execution_admissions WHERE service='model'")
+        .get(),
+    ).toEqual({ state: "final", transport: "response" });
+    const file = await createV2FilesRepository(f.core).metadata(f.actor, f.params.fileId);
+    expect(file?.coverageSnapshotId).toBeNull();
+  });
+
 async function mediaLedger(f: Awaited<ReturnType<typeof setupImage>>) {
   const row = f.db.sqlite
     .query(
@@ -520,7 +560,7 @@ async function mediaLedger(f: Awaited<ReturnType<typeof setupImage>>) {
       deadlineAt: new Date(Date.parse(now) + 300000).toISOString(),
     }),
   });
-  const wire = prepareVisionWire(f.original);
+  const wire = prepareVisionWire(f.original, f.visionProfile);
   const bytes = new TextEncoder().encode(JSON.stringify(wire));
   const input = {
     service: "model" as const,
@@ -637,11 +677,15 @@ test("scoped unknown keeps both its own replay and an unproven next position blo
   const f = await setupImage({ reject: true });
   await extracted(f);
   const { gateway, access } = await mediaLedger(f);
-  await expect(gateway.observe(f.original, access, { unit: 0, index: 0 })).rejects.toMatchObject({
+  await expect(
+    gateway.observe(f.original, access, { unit: 0, index: 0 }, f.visionProfile),
+  ).rejects.toMatchObject({
     code: "MODEL_UNAVAILABLE",
   });
   for (const index of [0, 1])
-    await expect(gateway.observe(f.original, access, { unit: 0, index })).rejects.toMatchObject({
+    await expect(
+      gateway.observe(f.original, access, { unit: 0, index }, f.visionProfile),
+    ).rejects.toMatchObject({
       code: "BUDGET_UNAVAILABLE",
     });
   expect(f.calls.model).toBe(1);
@@ -733,7 +777,7 @@ test("completed first scope permits one concurrent next scope and its immutable 
   const f = await setupImage();
   await extracted(f);
   const first = await mediaLedger(f);
-  await first.gateway.observe(f.original, first.access, { unit: 0, index: 0 });
+  await first.gateway.observe(f.original, first.access, { unit: 0, index: 0 }, f.visionProfile);
   const one = await mediaLedger(f),
     two = await mediaLedger(f);
   const permits = await Promise.all([

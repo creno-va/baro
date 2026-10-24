@@ -699,3 +699,90 @@ reproduces an idle-before-start error and moves idle configuration after
 confirmed readiness with unchanged cleanup, cancellation and physical limits.
 The RN session keeps the main merge interval while these independent fixes are
 integrated for one final same-SHA preview. No source failure or original is removed.
+
+
+## Integrated d842 actual audio/PDF and lookup-only chat scope
+
+PR498 exact4b95d701 passed frozen/quick303/full4215 across385 files with172789
+assertions, build/local built Worker and CI40105018914; focused23/106 included
+the new idle-order rejection. Normal squash main
+`d8423c6e979b621d46027107aa1d0d4cbb99cf5f` passed CI40105259098 and
+[preview40105513572](https://github.com/creno-va/baro/actions/runs/40105513572).
+The [receipt](./ai-harness-2026-10-24/preview-d8423c6.json) retains actual
+checkedAt15:13:47.531Z and observation-only warnings. RN main hold was released
+after deployment success; production is unchanged.
+
+In the same authenticated synthetic product case, the retained208526B English
+audio now reached ready. The reader shows full0–6.515s processed coverage and
+three actual STT observations:0–1.32s “This is Synthetic Speech”,2–3.3s
+“Blue Box 17”,4–5.6s “Green Triangle 9” (as rendered). Both marker
+values match the synthetic TTS ground truth; digit normalization differs from the
+spoken word spelling. The26KB two-page PDF also reached ready: both pages are
+processed, Korean text is intact, BLUE BOX 17/ORANGE CIRCLE 42 and the final
+END OF SYNTHETIC DOCUMENT marker are present at their correct pages. Local
+private screenshots retain the actual UI, not a fixture-backed browser mock.
+The original failed attempts and all source bytes are retained. Video is now
+processing on this changed preview; its completion is not claimed here.
+
+A separate actual law-chat request on earlier da9 at15:05:09–15:06:31Z performed
+a verified statute retrieval but rejected its generated response. The safe
+receipt reports prohibited_content / action_text / strategy with
+canonicalRefusalOpening=false, rather than a failed legal API. No rejected text,
+source identifiers or private case/owner IDs are recorded here. The response was
+not published and the same request was not repeated unchanged.
+
+Inspection found that general chat instructions allowed optional preparation
+actions even for a request only asking to look up and explain existing law.
+The candidate workspace prompt2.5 directs read/lookup/quotation/explanation-only
+requests to text, references, sourceClaims and warnings, with empty structured
+addition arrays unless the user also supplies new case facts or requests an
+update/preparation task. Array maxima are ceilings, not quotas to fill. New
+actual facts still require their exact references. This narrows unnecessary
+generation without changing the content/privacy/strategy/fact/citation guards,
+independent audit, tool rounds, generation count, timeouts or retries. It adds
+no new model, provider or external target inference.
+
+Existing focused113 tests across3 files/549 assertions pass, including preserved
+action strategy rejection and factual/audit boundaries. Offline50 deterministic
+fixtures and60 scripted v2 scenarios have zero critical findings. These are
+scripted checks; actual prompt2.5 legal-chat quality remains unverified. Broad
+validation, exact-head CI and a changed-source actual lookup acceptance remain
+required before claiming this response is fixed.
+
+Prompt2.5 on b4e-integrated source passes frozen install, quick305, full unit4217
+across386 files/172812 assertions and build/local built Worker. No actual prompt2.5
+provider success is inferred from these checks.
+
+
+## Video artifact deadline and bounded frame observation profile
+
+The changed d842 video attempt started15:22:08Z. Native extraction succeeded
+in28.551s, followed by interpret0/0 in8.698s,0/1 in14.545s and0/2 in6.309s.
+Interpret0/3 started15:23:07Z and failed JOB_TIMEOUT at15:24:09Z under the
+existing60-second local media deadline (step elapsed about62s including its
+other work). No unchanged-condition retry was sent. The exact remote cause,
+late response and accuracy of the unpublished interpretation outputs are not
+inferred from the timeout. Its unknown/late accounting records, prior outputs
+and original file remain intact. Audio/PDF ready results are unaffected.
+
+The candidate adds a server-owned video_frame vision profile: one bounded JPEG,
+the same Gemini model through Cloudflare Gateway, LOW media and thinking,
+2000 output tokens, at most6 brief observations/800 characters each. It asks
+for frame-local visible facts and readable labels without inferring outside
+events, identities, dates, clinical conclusions or legal outcomes. The regular
+image/medical-document profile remains4000 tokens with its existing schema.
+Both retain the same60s deadline, no automatic paid retry, source authorization,
+artifact-position binding, maximum calls and conservative4000-token resource
+reservation. Each actual position still has its own logical invocation even
+when JPEG bytes repeat; this is not a cross-frame cache or fabricated reuse.
+
+Exact wire validation accepts only the two generated profiles; mixing a frame
+cap with another instruction or changing the cap is rejected. Wire/evidence
+hashes distinguish them. Overlong/excess frame output preserves its actual paid
+response but cannot publish observations or dispatch another request. The frame
+timeout regression retains unknown exposure and its late real response without
+re-dispatch. The isolated composed-video probe now uses this same frame profile.
+The current focused110 tests across4 files/910 assertions and the two manual
+probe contract tests pass. These local/scripted checks do not establish lower
+provider latency or actual complete video interpretation. Broad validation,
+exact-head CI and a single changed-request-profile actual acceptance remain.

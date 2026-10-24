@@ -13,7 +13,12 @@ import { readModelCompletion } from "./completion";
 import { MODEL_ID } from "./prompts";
 import type { GatewayBinding } from "./service";
 import { type GatewayRequestIssue, gatewayRequestIssue, gatewayResponse } from "./transport";
-import { isDocumentedVisionSupport, prepareVisionWire, type VisionCapability } from "./vision-wire";
+import {
+  isDocumentedVisionSupport,
+  prepareVisionWire,
+  type VisionCapability,
+  type VisionProfile,
+} from "./vision-wire";
 
 export const WHISPER_MODEL = "@cf/openai/whisper-large-v3-turbo" as const;
 const segmentSchema = z
@@ -39,6 +44,9 @@ const asrSchema = z.object({
 const visionSchema = z.strictObject({
   texts: z.array(z.string().min(1).max(5000)).max(20),
   quality: z.enum(["processed", "low_quality"]),
+});
+const frameVisionSchema = visionSchema.extend({
+  texts: z.array(z.string().min(1).max(800)).max(6),
 });
 const base64 = (bytes: Uint8Array) => {
   let encoded = "";
@@ -328,6 +336,7 @@ export function createMediaGateway(
       bytes: Uint8Array<ArrayBuffer>,
       access: ProcessingAccess,
       artifactScope?: ProcessingArtifactScope,
+      profile: VisionProfile = "image",
     ) {
       if (bytes.byteLength > MAX_ARTIFACT_BYTES || bytes[0] !== 0xff || bytes[1] !== 0xd8)
         throw new ProcessingError("FILE_REJECTED");
@@ -348,14 +357,16 @@ export function createMediaGateway(
         }
       };
       if (!(await permitted())) throw new ProcessingError("MODEL_UNAVAILABLE");
-      const wire = prepareVisionWire(bytes);
+      const wire = prepareVisionWire(bytes, profile);
       const raw = await dispatch(MODEL_ID, wire, null, access, permitted, artifactScope);
       const completion = readModelCompletion(raw);
       if (completion?.refused) throw new ProcessingError("POLICY_REJECTED");
       if (!completion?.stopped || !completion.content)
         throw new ProcessingError("MODEL_SCHEMA_INVALID");
       try {
-        return visionSchema.parse(JSON.parse(completion.content));
+        return (profile === "video_frame" ? frameVisionSchema : visionSchema).parse(
+          JSON.parse(completion.content),
+        );
       } catch {
         throw new ProcessingError("MODEL_SCHEMA_INVALID");
       }
