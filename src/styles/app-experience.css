@@ -87,14 +87,10 @@
   transition:
     background var(--app-fast) ease,
     border-color var(--app-fast) ease,
-    box-shadow var(--app-fast) ease,
-    transform var(--app-fast) var(--app-ease);
+    box-shadow var(--app-fast) ease;
 }
 .app-frame :where(button, a) > svg {
   flex-shrink: 0;
-}
-.app-frame :where(.ui-button, .primary-action, .secondary-action):active:not(:disabled) {
-  transform: scale(0.98);
 }
 .app-frame .ui-button[aria-busy="true"] {
   opacity: 0.85;
