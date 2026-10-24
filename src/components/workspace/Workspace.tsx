@@ -339,9 +339,9 @@ export function Workspace({
     if (!followingChat.current) return;
     chatEnd.current?.scrollIntoView({
       block: "end",
-      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
-        ? "instant"
-        : "smooth",
+      // Native smooth-scroll frames can outlive a user's move to earlier text.
+      // Use the same immediate following as progressive reply updates.
+      behavior: "instant",
     });
   }, [latestMessageContent, tab]);
   useEffect(() => {

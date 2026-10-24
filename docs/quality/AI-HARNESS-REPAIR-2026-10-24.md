@@ -1286,3 +1286,28 @@ reading scroll preservation, failed pending-refresh recovery with an unsent draf
 attachment processing/retry/consent and owner-change purging. Quick549 and
 production build/dry-run/local workerd passed. No provider calls or real customer
 content were used in these browser tests. No shared styles/DTO/RN/landing changed.
+
+### 2026-10-25 native intake actual acceptance and scroll follow-up
+
+PR521/main2803b4f6 preview40134295328 passed schema0017/foundation and9-route
+smoke. Configuration checkedAt2026-10-24T21:33:58.671Z has no blockers under
+observation-only cost policy. Same-source manual actual Gemini questions
+40134655160 passed with generation5788ms (1206 input/153 output tokens) and
+MEDIUM audit7927ms (1481/313). Summary40134813310 passed with generation6750ms
+(3282/411) and audit4442ms (1835/533). Each had exactly2 successful provider
+calls, no correction/provider/policy failures, and model google/gemini-3.8-flash.
+Exact sanitized receipts are preserved in native-intake-questions-40134655160.json
+and native-intake-summary-40134813310.json. These isolated synthetic inputs differ
+from the earlier slow private cases; they do not establish a matched-input
+improvement, every-case latency, final UI acceptance or overall MVP completion.
+
+PR525/main4fbcfcda introduced validated reply presentation. During integration with
+UI #522, the original reading-earlier browser check exposed2~9px of residual
+movement. Peer measurements isolated native smooth-scroll frames after the user
+scrolled upward, without another JavaScript scroll call. The root follow-up makes
+automatic latest-message following instant, consistent with progressive reply
+updates. It does not alter user-directed scrolling or weaken the original test.
+The original focused check passed3 independent repetitions, then all11 attachment/
+progressive/recovery browser scenarios passed. Frozen install, quick549 and
+production build/dry-run/local workerd passed. UI-owner-only CSS work and existing
+failures are preserved separately; source changes here touch only automatic follow.
