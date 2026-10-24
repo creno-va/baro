@@ -1,0 +1,58 @@
+{
+  "version": 3,
+  "checkedAt": "2026-10-24T07:52:46.136Z",
+  "candidateSha": "3e427aafad5136567895768f4e9a202ef003ef6f",
+  "featureCase": "media",
+  "probeSourceSha256": "d603aac80395e98c8c335437d0ef98a8d1b6fe0a561119b3109d73d92ee4c271",
+  "environment": "isolated-synthetic-worker",
+  "status": "passed",
+  "failure": null,
+  "runtimeWorker": true,
+  "attempts": 2,
+  "metricCoverage": "complete",
+  "metrics": [
+    {
+      "requestId": "00000000-0000-4000-8000-000000000027",
+      "phase": "vision",
+      "model": "google/gemini-3.8-flash",
+      "latencyMs": 4481,
+      "inputTokens": 602,
+      "outputTokens": 46,
+      "status": "success"
+    },
+    {
+      "requestId": "00000000-0000-4000-8000-000000000027",
+      "phase": "asr",
+      "model": "@cf/openai/whisper-large-v3-turbo",
+      "latencyMs": 2023,
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "status": "success"
+    }
+  ],
+  "providerFailures": [],
+  "mediaChecks": [
+    {
+      "phase": "vision",
+      "quality": "processed",
+      "markerMatched": true,
+      "segmentCount": null
+    },
+    {
+      "phase": "asr",
+      "quality": "processed",
+      "markerMatched": true,
+      "segmentCount": 1
+    }
+  ],
+  "unverified": [
+    "full-product-smoke",
+    "live-corpus-eval",
+    "oauth",
+    "legal",
+    "public-policy"
+  ],
+  "authenticationChecked": true,
+  "replayRejected": true,
+  "workflowRun": "https://github.com/creno-va/baro/actions/runs/40075712423"
+}

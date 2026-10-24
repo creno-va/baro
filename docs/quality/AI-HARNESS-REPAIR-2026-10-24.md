@@ -223,3 +223,27 @@ request issue to an optional observer; an observer exception cannot replace the
 processing failure or release its unresolved receipt. No provider body or generated
 text is attached. These diagnostics prepare actual per-feature failure analysis and
 are not success receipts.
+
+## Seven-feature actual results and chat-specific repair
+
+[Manual matrix40075712423](https://github.com/creno-va/baro/actions/runs/40075712423)
+on exact main3e427aa completed all seven independent feature cases. Questions and
+summary each passed generation plus independent audit (two attempts each). Image
+interpretation passed in4481ms with the visible green-triangle09 marker; Korean
+Whisper passed in2023ms with all spoken markers and one processed segment. Both media
+quality observations were processed, not invented fallback quality. Voice token0/0
+is the observed response metadata, not a statement of zero billed audio cost.
+
+Chat and all three external-tool groups failed the first workspace_chat dispatch
+with HTTP400/provider_request. No audit or external4API call was reached. The seven
+finite original receipts are preserved in this directory's ai-harness subfolder;
+no unchanged-condition model retry was made. This is not all-feature success.
+
+The changed chat candidate uses native LOW GenerateContent and reusable JSON Schema
+$defs/$ref for repeated fact/material unions, retaining server parsing and all
+existing limits. Simple questions/summary/vision requests and native MEDIUM audit
+remain unchanged. Zod's raw chat schema was19681 bytes inline versus11145 bytes
+with shared definitions before common provider projection; this is payload size,
+not a token/cost/latency prediction. JSON Schema roundtrip tests verify required
+fields and closed objects remain enforceable, and server max2 tool requests remains.
+Actual changed-condition chat/tool acceptance is still required.

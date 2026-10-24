@@ -1,7 +1,7 @@
 # LLM Gateway
 
 Pinned model: `google/gemini-3.8-flash`, Cloudflare AI binding / AI Gateway Unified Billing, Chat Completions.
-Text generation and vision use `reasoning_effort=low`; independent workspace audit and v1 validation use native GenerateContent `generationConfig.thinkingConfig` with `thinkingLevel=MEDIUM` and `includeThoughts=false`. Audit wire uses native contents/systemInstruction and responseMimeType/responseJsonSchema, without OpenAI compatibility controls. Exact wire receipts hash the same native bytes sent to the binding. Thinking remains internal. No fallback model, provider key, external search tool or unvalidated token streaming is enabled.
+Simple text generation and vision use `reasoning_effort=low`; workspace chat uses native LOW GenerateContent with reusable JSON Schema definitions; independent workspace audit and v1 validation use native GenerateContent `generationConfig.thinkingConfig` with `thinkingLevel=MEDIUM` and `includeThoughts=false`. Audit wire uses native contents/systemInstruction and responseMimeType/responseJsonSchema, without OpenAI compatibility controls. Exact wire receipts hash the same native bytes sent to the binding. Thinking remains internal. No fallback model, provider key, external search tool or unvalidated token streaming is enabled.
 
 Official support checked 2026-10-21:
 - https://developers.cloudflare.com/ai/models/google/gemini-3.8-flash/
