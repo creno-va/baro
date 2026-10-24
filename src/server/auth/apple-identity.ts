@@ -42,6 +42,11 @@ export async function appleLinkedSessionAllowed(
     (await findAppleLinkedIdentity(db, linked.subject))?.ownerId === ownerId
   );
 }
+export async function appleLinkedAccountUpdateAllowed(db: D1Database, inAppleCallback: boolean) {
+  if (!inAppleCallback) return true;
+  const linked = await linkedCallback();
+  return !linked || (await findAppleLinkedIdentity(db, linked.subject))?.ownerId === linked.ownerId;
+}
 
 /** Only an existing exact Apple subject supplies a missing email; no email-based owner guessing. */
 export async function findAppleLinkedIdentity(
@@ -103,7 +108,7 @@ export function bindAppleIdentity(
     idToken: verifier.idToken,
     requiresIdTokenNonce: true,
     // Only the browser callback carrying server state may establish Apple identity.
-    options: { ...provider.options, disableIdTokenSignIn: true },
+    options: { ...provider.options, disableIdTokenSignIn: true, overrideUserInfoOnSignIn: false },
     async createAuthorizationURL(input) {
       const nonce = nonceSchema.safeParse(input.idTokenNonce);
       if (!nonce.success) throw new Error("APPLE_AUTH_NONCE_REQUIRED");

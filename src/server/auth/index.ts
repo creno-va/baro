@@ -3,6 +3,7 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { drizzle } from "drizzle-orm/d1";
 import { authSchema } from "../db/schema";
 import {
+  appleLinkedAccountUpdateAllowed,
   appleLinkedSessionAllowed,
   createAppleIdentityBinding,
   isAppleLinkedCallback,
@@ -90,6 +91,17 @@ function createConfiguredAuth(env: Env) {
             return undefined;
           },
         },
+        update: {
+          before: async (_user, context) => {
+            if (
+              await isAppleLinkedCallback(
+                context?.path === "/callback/:id" && context.params?.id === "apple",
+              )
+            )
+              return false;
+            return undefined;
+          },
+        },
       },
       session: {
         create: {
@@ -147,7 +159,16 @@ function createConfiguredAuth(env: Env) {
           },
         },
         update: {
-          before: async (account) => ({ data: discardProviderCredentials(account) }),
+          before: async (account, context) => {
+            if (
+              !(await appleLinkedAccountUpdateAllowed(
+                env.DB,
+                context?.path === "/callback/:id" && context.params?.id === "apple",
+              ))
+            )
+              return false;
+            return { data: discardProviderCredentials(account) };
+          },
         },
       },
     },

@@ -467,10 +467,14 @@ test("fixture-only Apple registration uses real SDK POST/GET state and RSA valid
           )
           .run(crypto.randomUUID(), session.user.id);
       }
-      if (action === "move")
+      if (action === "move") {
+        expect(
+          db.sqlite.query("SELECT updated_at FROM account WHERE provider_id='apple'").get(),
+        ).toEqual({ updated_at: 1 });
         db.sqlite
           .query("UPDATE account SET user_id=? WHERE provider_id='apple'")
           .run(session.user.id);
+      }
     }
     expect(db.sqlite.query("SELECT COUNT(*) AS n FROM user").get()).toEqual({ n: 1 });
     expect(
