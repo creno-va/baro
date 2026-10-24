@@ -1,0 +1,14 @@
+{
+  "receiptVersion": 1,
+  "environment": "preview",
+  "candidateSha": "3da1a21c094205ab82c9ec7380ca73e18ebc15da",
+  "requestedMode": "status",
+  "effectiveMode": "status",
+  "status": "absent",
+  "code": "ABSENT",
+  "creationInvoked": false,
+  "restAtomicity": "not_checked",
+  "uiCreationVerified": false,
+  "externalAccountsCreated": false,
+  "sourceRunId": "40127969911"
+}
