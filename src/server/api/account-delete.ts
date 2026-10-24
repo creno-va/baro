@@ -1,6 +1,15 @@
 import { Hono } from "hono";
-import { accountDeletionRequestSchema, deletionAccessSchema } from "../../contracts";
+import {
+  accountDeletionRequestSchema,
+  deletionAccessSchema,
+  deletionAccessV2Schema,
+} from "../../contracts";
+import {
+  legacyMobileAuthProviderSchema,
+  mobileAuthV2ProviderSchema,
+} from "../../contracts/mobile-auth";
 import { getAuth } from "../auth";
+import { mobileAuthContract } from "../auth/mobile-contract";
 import { getSession, hasRecentOAuthAuthentication } from "../auth/session";
 import { deleteAccount, deletionOwnerTag } from "../modules/deletion/service";
 import { type ApiEnvironment, errorBody } from "./errors";
@@ -8,17 +17,28 @@ import { hasAllowedOrigin } from "./me";
 
 export const accountDeleteApi = new Hono<ApiEnvironment>()
   .get("/deletion", async (c) => {
+    c.header("cache-control", "private, no-store");
+    c.header("vary", "x-baro-auth-contract");
+    const version = mobileAuthContract(c.req.raw);
+    if (!version)
+      return c.json(errorBody(c, "VALIDATION_ERROR", "앱의 인증 설정을 확인해 주세요."), 400);
     const session = await getSession(c);
     if (!session) return c.json(errorBody(c, "UNAUTHENTICATED", "로그인이 필요해요."), 401);
     const accounts = await c.env.DB.prepare("SELECT provider_id FROM account WHERE user_id=?")
       .bind(session.user.id)
       .all<{ provider_id: string }>();
+    const providerSchema =
+      version === 2 ? mobileAuthV2ProviderSchema : legacyMobileAuthProviderSchema;
+    const providers = [...new Set(accounts.results.map((a) => a.provider_id))].filter(
+      (provider) => providerSchema.safeParse(provider).success,
+    );
     return c.json(
-      deletionAccessSchema.parse({
+      (version === 2 ? deletionAccessV2Schema : deletionAccessSchema).parse({
+        ...(version === 2 ? { contractVersion: 2 } : {}),
         ownerTag: await deletionOwnerTag(c.env.BETTER_AUTH_SECRET, session.user.id),
         recentOAuth: hasRecentOAuthAuthentication(session.session),
         authenticatedAt: session.session.oauthAuthenticatedAt?.toISOString() ?? null,
-        providers: accounts.results.map((a) => a.provider_id),
+        providers,
       }),
     );
   })

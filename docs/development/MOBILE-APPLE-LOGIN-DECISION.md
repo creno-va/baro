@@ -1,11 +1,13 @@
 # 모바일 Apple 로그인 결정안 (#346)
 
-- 상태: **제안 / 사용자 승인 대기**. Accepted ADR이나 공급자 추가 승인이 아니다.
+- 상태: **2026-10-24 사용자 직접 응답으로 Apple 로그인 추가 승인**.
+  기존 Google·네이버·카카오와 기존 계정·이전 앱 호환을 유지한다.
+  token 장기 보관·공개 출시는 이 승인에 포함하지 않는다. 구현/실제 인수 완료는 아니다.
 - 검토: 2026-10-24 KST. 코드 기준 main `8480fa6cdc7da56d90814bf572f262bfcf40d381`.
 - 범위: [모바일 실행 계획](./MOBILE-EXECUTION.md)의 M3 로그인 심사와 M8 제출 준비.
   기존 3사 검증·웹 UI 개편·원격 실행을 중단하는 조건이 아니다.
 
-## 결정 요청
+## 승인한 결정
 
 **권고: 기존 Google/Naver/Kakao를 유지하면서 Sign in with Apple을 모바일 로그인 선택지로 추가한다.**
 iOS 심사 대응과 같은 계정의 Android 접근을 함께 설계하되, 먼저 공통 계약/서버 선행 PR,
@@ -94,10 +96,27 @@ Sign in with Apple을 활성화한 primary App ID와 Services ID, 등록 domain/
 Apple Developer 관리 권한·키가 실제로 있는지는 사용자 확인 대기다. private key·client secret을
 채팅/이슈/PR/artifact에 올리지 않는다. preview/production 환경과 app identifier·callback을 각각 대조한다.
 
-사용자가 **공급자 추가 방향**을 승인한 뒤 위1→2/5→3/4/6 순서로 계약·서버·모바일 PR을
-인수한다. 실제 계정 설정과 배포는 기존 권한/preview·최종 full/#71 게이트를 따른다.
-이 문서와 PR을 병합해도 provider는 추가되지 않는다. 현재3사 테스트와 실행 중인 iOS 취소
-검사는 그대로 계속하며 #334/#346/#339/#71을 닫지 않는다.
+사용자가 **Apple 로그인 추가 승인 (권장)**으로 응답했다. 위1→2/5→3/4/6 순서로
+계약·서버·모바일 PR을 인수한다. 실제 계정 설정과 배포는 기존 권한/preview·최종 full/#71
+게이트를 따른다. 이 승인 기록과 계약 선행 PR만으로 Apple을 가용 공급자로 노출하지 않는다.
+현재3사 테스트와 진행 중인 native 입력 검증은 계속하며 #334/#346/#339/#71을 닫지 않는다.
+
+## v2 계약 선행 구현
+
+`GET /api/mobile/auth/capabilities`는 strict `{contractVersion:2, providers}`를 반환한다.
+이 단계의 가용 providers는 기존3사다. Apple은 서버 callback·계정·삭제/revoke 인수 후에만
+가용 목록에 추가한다. credential 유무를 전체 기존 인증 중단 조건으로 삼지 않는다.
+
+`GET /api/me/deletion`과 `POST /api/mobile/auth/reauth/{prepare,verify}`는
+`x-baro-auth-contract: 2`로 새 계약을 명시한다. 헤더 없음/`1`은 이전 strict3사 계약이고,
+알 수 없는 버전/중복 결합값은400이다. v2 삭제 응답은 `contractVersion:2`와 최대4개
+중복 없는 공급자를 포함한다. 이전 응답에는 새 필드/Apple enum을 보내지 않는다.
+가상 미래 Apple account row가 있는 합성 DB에서도 이전 앱의 삭제 접근 파싱을 유지한다.
+
+새 앱의 이전 서버 대응은 capability404일 때에만 명시적으로 legacy3사 모드를 선택하는
+후속 소비 계약이다. timeout/503/잘못된 응답을 Apple 지원 또는 성공으로 해석하지 않는다.
+이번 선행 구현에는 새 앱 소비나 실제 Apple 설정/로그인이 없다. Origin·owner·linked account·
+fresh OAuth·PKCE grant·token 폐기·삭제 worker는 계속 서버 정본이며 migration은 추가하지 않는다.
 
 결정 근거는 [AGENTS.md](../../AGENTS.md)의 “새 모델/공급자, 공개 정책 법률 승인, 사업자 정보,
 새 결제/자동 충전, production 공개 전환은 별도 결정이 필요하다”와

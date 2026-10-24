@@ -1,12 +1,15 @@
 import { splitSetCookieHeader } from "better-auth/cookies";
 import { Hono } from "hono";
 import {
+  mobileAuthCapabilitiesSchema,
   mobileAuthExchangeResponseSchema,
   mobileAuthExchangeSchema,
   mobileReauthPrepareSchema,
+  mobileReauthPrepareV2Schema,
   mobileReauthProofSchema,
   mobileReauthReceiptSchema,
 } from "../../contracts/mobile-auth";
+import { availableMobileAuthProviders, mobileAuthContract } from "../auth/mobile-contract";
 import { createNativeAuthCodeStore, NativeAuthProofError } from "../auth/native-codes";
 import { createNativeReauthentication } from "../auth/native-reauth";
 import { getSession } from "../auth/session";
@@ -51,20 +54,45 @@ export const mobileAuthApi = new Hono<ApiEnvironment>().post("/exchange", async 
   }
 });
 
+mobileAuthApi.get("/capabilities", (c) => {
+  c.header("cache-control", "private, no-store");
+  c.header("x-content-type-options", "nosniff");
+  return c.json(
+    mobileAuthCapabilitiesSchema.parse({
+      contractVersion: 2,
+      providers: availableMobileAuthProviders(),
+    }),
+  );
+});
+
 for (const operation of ["prepare", "verify"] as const)
   mobileAuthApi.post(`/reauth/${operation}`, async (c) => {
     c.header("cache-control", "private, no-store");
     c.header("x-content-type-options", "nosniff");
     if (!hasAllowedOrigin(c.req.raw, c.env.BETTER_AUTH_URL))
       return c.json(errorBody(c, "ORIGIN_NOT_ALLOWED", "허용되지 않은 요청이에요."), 403);
+    const version = mobileAuthContract(c.req.raw);
+    if (!version)
+      return c.json(errorBody(c, "VALIDATION_ERROR", "앱의 인증 설정을 확인해 주세요."), 400);
     const session = await getSession(c);
     if (!session) return c.json(errorBody(c, "UNAUTHENTICATED", "로그인이 필요해요."), 401);
     const input =
       operation === "prepare"
-        ? mobileReauthPrepareSchema.safeParse(await c.req.json().catch(() => null))
+        ? (version === 2 ? mobileReauthPrepareV2Schema : mobileReauthPrepareSchema).safeParse(
+            await c.req.json().catch(() => null),
+          )
         : mobileReauthProofSchema.safeParse(await c.req.json().catch(() => null));
     if (!input.success)
       return c.json(errorBody(c, "VALIDATION_ERROR", "재인증을 다시 시작해 주세요."), 400);
+    const requestedProvider = "provider" in input.data ? input.data.provider : undefined;
+    if (
+      requestedProvider &&
+      !availableMobileAuthProviders().some((provider) => provider === requestedProvider)
+    )
+      return c.json(
+        errorBody(c, "DEPENDENCY_UNAVAILABLE", "이 로그인 수단은 아직 사용할 수 없어요.", true),
+        503,
+      );
     try {
       const store = createNativeReauthentication({
         db: c.env.DB,
