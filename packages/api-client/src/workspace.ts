@@ -262,6 +262,16 @@ export function createWorkspaceClient(dependencies: {
       safety: z.literal("validated"),
       text: v2UserMessageSchema.shape.text,
       ...messageSources,
+      // Retain existing optional source location only while parsing the raw
+      // response. MessageView still projects exactly id/title/url below.
+      citations: z
+        .array(
+          messageSources.citations.unwrap().element.extend({
+            kind: z.string().max(50).optional(),
+            article: z.string().min(1).max(200).optional(),
+          }),
+        )
+        .default([]),
     }),
   ]);
   async function get(
@@ -461,7 +471,20 @@ export function createWorkspaceClient(dependencies: {
         status: "complete",
         createdAt: m.createdAt,
         ...(m.role === "assistant"
-          ? { references: m.references, citations: m.citations, warnings: m.warnings }
+          ? {
+              references: m.references,
+              citations: m.citations.map((citation) => ({
+                id: citation.id,
+                title:
+                  citation.kind === "statute" &&
+                  citation.article &&
+                  !citation.title.includes(citation.article)
+                    ? `${citation.title} · ${citation.article}`
+                    : citation.title,
+                url: citation.url,
+              })),
+              warnings: m.warnings,
+            }
           : { selectedFileIds: m.selectedFileIds }),
       }));
     let jobId = w.currentJobId ?? (await rememberedJob(id));
