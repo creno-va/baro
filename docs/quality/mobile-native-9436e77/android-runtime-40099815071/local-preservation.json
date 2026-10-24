@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "kind": "local-preserved-android-auth-cancellation-verification",
+  "verifiedAt": "2026-10-24T13:57:40.979Z",
+  "workflowRunId": 40099815071,
+  "workflowConclusion": "success",
+  "artifacts": {
+    "homeArtifactId": 12561913279,
+    "reverifiedArtifactId": 12562561164
+  },
+  "binarySourceSha": "9436e770240fcebd03f3ab66c42222c5343cf412",
+  "toolingSourceSha": "5c7442f8892b26e4eb854d5454f0116ac37fe664",
+  "originalCompilerRunId": 40092725450,
+  "originalApkUnchanged": true,
+  "originalCompilerReceiptUnchanged": true,
+  "verificationSha256": "f223758a38ed81e7207f7432867fd4df15af77c416fc1bbab389998d05fbf6c4",
+  "homeReceiptSha256": "9d48789da6f9ddd0c98c281900d734365e69752409675ee43ab92d65ddcb0cea",
+  "authReceiptSha256": "9b8dcf2605e609adb6fd05525b7d69af53ae8418922a54029078070e0d35d304",
+  "homePng": {
+    "bytes": 172697,
+    "sha256": "e9a1e29fbeada17c0ba05dd6ce8d6389df123596aa46dab219715feb0d2e64ca",
+    "width": 1080,
+    "height": 2400
+  },
+  "device": {
+    "kind": "owned-emulator",
+    "model": "sdk_gphone64_x86_64",
+    "osVersion": "15"
+  },
+  "coldNativeLaunches": 2,
+  "packageHandlersCompleted": [
+    "foreground",
+    "background"
+  ],
+  "launcherConsecutiveReadySamples": 3,
+  "providers": [
+    "google",
+    "naver",
+    "kakao"
+  ],
+  "strictAuthCancellationIdentityVerified": true,
+  "browserFirstRunBypassFixture": true,
+  "consumerFirstRunVerified": false,
+  "rootCauseConfirmed": false,
+  "recompiled": false,
+  "resigned": false,
+  "credentialsEntered": false,
+  "callbackExchangeVerified": false,
+  "providerAcceptanceVerified": false,
+  "oauthVerified": false,
+  "privateDataAccess": false,
+  "physicalDeviceVerified": false,
+  "storeSigned": false,
+  "deployed": false
+}

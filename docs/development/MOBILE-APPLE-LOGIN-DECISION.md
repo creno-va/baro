@@ -566,3 +566,22 @@ unit4161/383파일/172210 assertions, focused41/288 assertions다. 정확한 두
 남은 deadline에 따른 native/host timeout 감소, unowned/제품 실행 이후/불명 응답·기한 만료·
 clock rollback 거절과 기존 Launcher/observer 회귀를 검사한다. 이 보완의 실제 Emulator
 효과는 exact CI/main 이후 별도로 검증하며 성공을 선기록하지 않는다.
+
+PR491은 exact bffe979의 CI40099093090/preflight40099093013 성공 뒤 main5c7442f에
+병합됐고 main CI40099535920도 성공했다. 새 시작 조건의 Android
+[actual40099815071](https://github.com/creno-va/baro/actions/runs/40099815071)은 **SUCCESS**다.
+원본9436e77 APK/receipt와 전체 byte/hash, SDK metadata/signature/HBC/font 재검증을 결합했다.
+foreground/background package handler 완료 후 Pixel Launcher 연속3회 준비, 같은 APK의
+Home cold2회·Metro0을 확인했다. 기존3사 각각 Chrome Custom Tab foreground·WebView 밖
+유일 native 닫기 제어 존재·시스템 Back1회·앱/익명 복귀와 마지막 cold 익명 복귀를 확인했다.
+Chrome124.0.6367.219의 owned fixture는 `--disable-fre` 한 개를 readback/제거한 조건이며,
+일반 소비자의 첫 실행 안내·동의 화면을 검증한 결과는 아니다.
+
+[원래 Home 영수증](../quality/mobile-native-9436e77/android-runtime-40099815071/receipt.json),
+[취소 proof](../quality/mobile-native-9436e77/android-runtime-40099815071/auth-cancel-ui.json),
+[재검증](../quality/mobile-native-9436e77/android-runtime-40099815071/verification.json),
+[인증 전 PNG](../quality/mobile-native-9436e77/android-runtime-40099815071/home.png)와
+[로컬 결합 검사](../quality/mobile-native-9436e77/android-runtime-40099815071/local-preservation.json)를
+보존했다. 실제 계정 입력·callback 교환·provider 수락·Apple·private API·physical/store 인수는
+모두 false다. package handler 완료는 이번 조건의 성공 관측이며 이전 Launcher ANR의 원인
+또는 반복 안정성 증명이 아니다. 이전 실패 두 건의 원본과 원인 미확정 상태를 유지한다.

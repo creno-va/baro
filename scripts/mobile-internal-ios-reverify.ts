@@ -21,6 +21,7 @@ import {
   iosDirectoryBaseSchema,
   type iosDirectoryReceiptSchema,
   observeIosDirectoryFailure,
+  observeIosKoreanDirectoryFailure,
   runIosDirectoryUiTest,
   verifyIosDirectoryReceipt,
 } from "./mobile-ios-directory-ui";
@@ -51,7 +52,8 @@ async function main() {
   if (process.platform !== "darwin") throw new Error("INTERNAL_IOS_MAC_REQUIRED");
   const options = iosInternalObservationOptions(process.argv.slice(2)),
     { home, largeFont, uiTest, accessibilityAudit, authCancel, publicDirectory } = options,
-    inputReference = "inputReference" in options && options.inputReference === true;
+    inputReference = "inputReference" in options && options.inputReference === true,
+    koreanDirectory = "koreanDirectory" in options && options.koreanDirectory === true;
   const root = process.cwd(),
     env = internalIosEnvironment(process.env),
     tooling = env.TARGET_SHA as string,
@@ -85,8 +87,13 @@ async function main() {
     uiTestFailure: ReturnType<typeof observeHomeUiFailure> | null = null,
     authCancelFailure: ReturnType<typeof observeIosAuthCancelFailure> | null = null,
     directoryFailure: ReturnType<typeof observeIosDirectoryFailure> | null = null,
+    koreanDirectoryFailure: ReturnType<typeof observeIosKoreanDirectoryFailure> | null = null,
     inputReferenceFailure: ReturnType<typeof observeIosInputReferenceFailure> | null = null,
-    lastCommand: { exitCode: number; timedOut: boolean; category: string } | null = null;
+    lastCommand: {
+      exitCode: number;
+      timedOut: boolean;
+      category: string;
+    } | null = null;
   async function command(args: string[], cwd = root, timeout = 120000) {
     lastCommand = null;
     privacy.assertCommandAllowed(args);
@@ -109,8 +116,11 @@ async function main() {
           uiTestFailure = observeHomeUiFailure(`${out}\n${err}`);
         if (phase === "native-auth-cancel-xcuitest")
           authCancelFailure = observeIosAuthCancelFailure(`${out}\n${err}`);
-        if (phase === "public-directory-xcuitest")
+        if (phase === "public-directory-xcuitest") {
           directoryFailure = observeIosDirectoryFailure(`${out}\n${err}`);
+          if (koreanDirectory)
+            koreanDirectoryFailure = observeIosKoreanDirectoryFailure(`${out}\n${err}`);
+        }
         if (phase === "uikit-input-reference-xcuitest")
           inputReferenceFailure = observeIosInputReferenceFailure(`${out}\n${err}`);
         lastCommand = {
@@ -219,7 +229,11 @@ async function main() {
     }
     phase = "owned-simulator";
     const runtimes = JSON.parse(await command(["xcrun", "simctl", "list", "runtimes", "--json"]))
-        .runtimes as { identifier: string; version: string; isAvailable: boolean }[],
+        .runtimes as {
+        identifier: string;
+        version: string;
+        isAvailable: boolean;
+      }[],
       types = JSON.parse(await command(["xcrun", "simctl", "list", "devicetypes", "--json"]))
         .devicetypes as { identifier: string; name: string }[];
     const runtime = runtimes.filter((r) => r.isAvailable && r.identifier.includes(".iOS-")).at(-1),
@@ -403,7 +417,7 @@ async function main() {
       });
       console.log("INTERNAL_IOS_ANONYMOUS_AUTH_CANCELLATION_OBSERVED");
     }
-    if (publicDirectory) {
+    if (publicDirectory || koreanDirectory) {
       phase = "public-directory-xcuitest";
       privacy.enterPublicData();
       const explicitScreenshotsSuppressedBeforeNavigation = !privacy.explicitScreenshotReadsAllowed,
@@ -413,12 +427,21 @@ async function main() {
         hostRawCommandLogsPersistedAfterBoundary
       )
         throw Error("INTERNAL_IOS_DIRECTORY_PRIVACY_BOUNDARY_REQUIRED");
-      const observation = await runIosDirectoryUiTest({ root, owned, device, command });
+      const observation = await runIosDirectoryUiTest({
+        root,
+        owned,
+        device,
+        command,
+        korean: koreanDirectory,
+        captureSuppressed: !privacy.explicitScreenshotReadsAllowed && !privacy.persistCommandLogs,
+      });
       if (guardRequests) throw Error("INTERNAL_IOS_UNEXPECTED_METRO_REQUEST");
       const proof = verifyIosDirectoryReceipt(
         {
           ...iosDirectoryBaseSchema.strip().parse(receipt),
-          kind: "ios-bundled-public-directory-software-search-observation",
+          kind: koreanDirectory
+            ? "ios-bundled-public-directory-korean-composition-observation"
+            : "ios-bundled-public-directory-software-search-observation",
           observedAt: new Date().toISOString(),
           ...observation,
           explicitScreenshotsSuppressedBeforeNavigation,
@@ -603,7 +626,7 @@ async function main() {
       ]);
     await writeFile(
       resolve(base, "failure.json"),
-      `${JSON.stringify({ toolingSourceSha: tooling, phase, code: known.has(code) ? code : xcodeControlBuildFailure(error), lastCommand, uiTestFailure, authCancelFailure, directoryFailure, inputReferenceFailure, nativeProcessLaunchVerified: false, homeContentVerified: false, remoteApiVerified: false, oauthVerified: false, physicalDeviceVerified: false, storeSigned: false, deployed: false }, null, 2)}\n`,
+      `${JSON.stringify({ toolingSourceSha: tooling, phase, code: known.has(code) ? code : xcodeControlBuildFailure(error), lastCommand, uiTestFailure, authCancelFailure, directoryFailure, koreanDirectoryFailure, inputReferenceFailure, nativeProcessLaunchVerified: false, homeContentVerified: false, remoteApiVerified: false, oauthVerified: false, physicalDeviceVerified: false, storeSigned: false, deployed: false }, null, 2)}\n`,
       { flag: "wx" },
     );
     throw new Error("INTERNAL_IOS_REVERIFY_FAILED");
