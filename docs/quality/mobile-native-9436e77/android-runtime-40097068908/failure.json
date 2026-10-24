@@ -1,0 +1,47 @@
+{
+  "toolingSourceSha": "3d589a5ed4ff722045c05011dd674319c4b490f4",
+  "phase": "launcher-baseline-cleanup",
+  "code": "ANDROID_LAUNCHER_SYSTEM_ERROR_DIALOG",
+  "launcherBaseline": null,
+  "lastLauncherBaselineDiagnostic": {
+    "stage": "cleanup",
+    "launcherKind": "pixel",
+    "samples": 1,
+    "consecutiveReadySamples": 0,
+    "foregroundBefore": true,
+    "foregroundAfter": false,
+    "rootVisible": false,
+    "systemErrorDialogObserved": true,
+    "dumpConfirmed": true,
+    "cleanupFailed": false,
+    "failureCode": "ANDROID_LAUNCHER_SYSTEM_ERROR_DIALOG"
+  },
+  "prePublicStartupCommandFailures": {
+    "count": 0,
+    "first": null,
+    "last": null
+  },
+  "lastLauncherHierarchyDump": "saved",
+  "lastHomeSystemErrorDialogObserved": null,
+  "postBoundaryCommandFailures": {
+    "count": 0,
+    "first": null,
+    "last": null
+  },
+  "lastPostBoundaryHierarchyDump": null,
+  "emulatorBootVerified": true,
+  "lastHomeObservation": null,
+  "lastPublicObservation": null,
+  "lastDirectoryInputObservation": null,
+  "lastGuideObservation": null,
+  "lastAuthObservation": null,
+  "lastChromeFixture": null,
+  "receiptValidationFields": [],
+  "publicScreenshotsSuppressed": false,
+  "emulatorStartupIssues": [],
+  "sdkHomeLaunchVerified": false,
+  "largeFontVerified": false,
+  "physicalDeviceVerified": false,
+  "storeSigned": false,
+  "deployed": false
+}

@@ -3,6 +3,7 @@ import { z } from "zod";
 const operation = z.enum([
   "hierarchy-dump",
   "hierarchy-dump-all-windows",
+  "package-manager-wait",
   "file-read",
   "file-remove",
   "display-read",
@@ -67,6 +68,16 @@ export function androidNativeCommandOperation(args: readonly string[]): z.infer<
   )
     return "other";
   const command = args.slice(4);
+  if (
+    command.length === 4 &&
+    command[0] === "pm" &&
+    ["wait-for-handler", "wait-for-background-handler"].includes(command[1] ?? "") &&
+    command[2] === "--timeout" &&
+    /^\d{1,5}$/.test(command[3] ?? "") &&
+    Number(command[3]) >= 1 &&
+    Number(command[3]) <= 15000
+  )
+    return "package-manager-wait";
   if (command[0] === "uiautomator" && command[1] === "dump")
     return command.includes("--windows") ? "hierarchy-dump-all-windows" : "hierarchy-dump";
   if (command[0] === "cat") return "file-read";
