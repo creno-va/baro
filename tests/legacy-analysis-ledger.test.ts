@@ -641,3 +641,154 @@ for (const mode of ["out_of_scope", "urgent_redirect"] as const) {
     await Promise.all(background);
   });
 }
+
+async function validatedDraft() {
+  const f = await analysisFixture(),
+    env = environment(f),
+    background: Promise<void>[] = [];
+  const runtime = await createLegacyAnalysisRuntime(env, f.identity, `${f.identity.analysisId}-1`, {
+    retrieval: f.legal,
+    waitUntil: (work) => {
+      background.push(work);
+    },
+  });
+  for (const phase of LEGACY_ANALYSIS_PHASES.filter((p) => p !== "finish")) {
+    const result = await runtime.phase(phase);
+    if (["failed", "stopped", "completed", "waiting_for_answers"].includes(result.status))
+      throw new Error("DRAFT_NOT_VALIDATED");
+  }
+  await Promise.all(background);
+  return { ...f, env, runtime };
+}
+
+for (const change of ["role", "input", "tombstone", "upgrade"] as const) {
+  test(`a ${change} change after the last model response cannot publish a stale retained result`, async () => {
+    const f = await validatedDraft();
+    if (change === "role")
+      f.db.sqlite
+        .query("INSERT INTO app_metadata(key,value) VALUES(?,'lawyer')")
+        .run(`account-type:${f.session.userId}`);
+    if (change === "input") {
+      const original = JSON.parse((await f.repo.readInput(f.session.userId, f.caseId)) ?? "null");
+      original.narrative += " 이후 별도 조건이 추가되었다고 진술합니다.";
+      const encrypted = await (await createCaseDataCipher(f.env)).encrypt(
+        JSON.stringify(original),
+        { table: "cases", column: "encrypted_input", rowId: f.caseId, userId: f.session.userId },
+      );
+      f.db.sqlite.query("UPDATE cases SET encrypted_input=? WHERE id=?").run(encrypted, f.caseId);
+    }
+    if (change === "tombstone")
+      f.db.sqlite
+        .query("INSERT INTO v2_tombstones(target_kind,target_id,deleted_at) VALUES('account',?,?)")
+        .run(f.session.userId, new Date().toISOString());
+    if (change === "upgrade")
+      f.db.sqlite
+        .query(
+          "INSERT INTO v2_workspaces(id,owner_id,legacy_case_id,encrypted_payload,created_at,updated_at) VALUES(?,?,?,'synthetic',?,?)",
+        )
+        .run(
+          crypto.randomUUID(),
+          f.session.userId,
+          f.caseId,
+          new Date().toISOString(),
+          new Date().toISOString(),
+        );
+    await f.runtime.phase("finish");
+    expect(
+      (await f.repo.findCurrentAnalysis(f.session.userId, f.caseId))?.encryptedResult === null,
+    ).toBe(true);
+    expect(f.db.sqlite.query("SELECT count(*) AS n FROM citations").get()).toEqual({ n: 0 });
+    expect(f.calls).toHaveLength(5);
+    expect(
+      f.db.sqlite
+        .query(
+          "SELECT count(*) AS n FROM legacy_ai_attempts WHERE state='final' AND transport='response'",
+        )
+        .get(),
+    ).toEqual({ n: 5 });
+  });
+}
+
+for (const change of ["role", "rewrap"] as const) {
+  test(`publication rechecks a ${change} race inside the guarded DB write without repeating the model`, async () => {
+    const f = await validatedDraft();
+    const original = await f.repo.readInput(f.session.userId, f.caseId);
+    if (!original) throw new Error("NO_SOURCE");
+    const rewrapped = await (await createCaseDataCipher(f.env)).encrypt(original, {
+      table: "cases",
+      column: "encrypted_input",
+      rowId: f.caseId,
+      userId: f.session.userId,
+    });
+    const prepare = f.env.DB.prepare.bind(f.env.DB);
+    let changed = false;
+    f.env.DB.prepare = (sql) => {
+      const statement = prepare(sql),
+        bind = statement.bind.bind(statement);
+      if (sql.startsWith("UPDATE cases SET status="))
+        statement.bind = (...values) => {
+          if (values[0] === "completed" && !changed) {
+            changed = true;
+            if (change === "role")
+              f.db.sqlite
+                .query("INSERT INTO app_metadata(key,value) VALUES(?,'lawyer')")
+                .run(`account-type:${f.session.userId}`);
+            else
+              f.db.sqlite
+                .query("UPDATE cases SET encrypted_input=? WHERE id=?")
+                .run(rewrapped, f.caseId);
+          }
+          return bind(...values);
+        };
+      return statement;
+    };
+    const result = await f.runtime.phase("finish");
+    expect(changed).toBe(true);
+    const saved = await f.repo.findCurrentAnalysis(f.session.userId, f.caseId);
+    expect(saved?.encryptedResult !== null).toBe(change === "rewrap");
+    expect(result.status).toBe(change === "rewrap" ? "completed" : "stopped");
+    expect(f.calls).toHaveLength(5);
+    expect(
+      f.db.sqlite.query("SELECT responses_used,responses_reserved FROM v2_daily_usage").get(),
+    ).toEqual(
+      change === "rewrap"
+        ? { responses_used: 1, responses_reserved: 0 }
+        : { responses_used: 0, responses_reserved: 1 },
+    );
+  });
+}
+
+test("a role change during the last question call cannot publish a question batch", async () => {
+  const f = await analysisFixture("questions"),
+    env = environment(f),
+    background: Promise<void>[] = [];
+  env.AI = {
+    run: async (...args: Parameters<typeof f.binding.run>) => {
+      const response = await f.binding.run(...args);
+      if (f.calls.at(-1) === "questions")
+        f.db.sqlite
+          .query("INSERT INTO app_metadata(key,value) VALUES(?,'lawyer')")
+          .run(`account-type:${f.session.userId}`);
+      return response;
+    },
+  } as unknown as Env["AI"];
+  const runtime = await createLegacyAnalysisRuntime(env, f.identity, `${f.identity.analysisId}-1`, {
+    retrieval: f.legal,
+    waitUntil: (work) => {
+      background.push(work);
+    },
+  });
+  let terminal: string | undefined;
+  for (const phase of LEGACY_ANALYSIS_PHASES) {
+    const result = await runtime.phase(phase);
+    terminal = result.status;
+    if (["failed", "stopped", "completed", "waiting_for_answers"].includes(result.status)) break;
+  }
+  await Promise.all(background);
+  expect(terminal).toBe("stopped");
+  expect((await f.repo.findCurrentAnalysis(f.session.userId, f.caseId))?.status).not.toBe(
+    "waiting_for_answers",
+  );
+  expect((await f.repo.findCase(f.session.userId, f.caseId))?.questionsAsked).toBe(0);
+  expect(f.calls).toEqual(["minimize", "screening", "structure", "questions"]);
+});

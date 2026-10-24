@@ -77,5 +77,7 @@ export async function createLegacyAnalysisRuntime(
       },
     },
     options.retrieval ?? createLegalRetrieval(env, repo),
+    undefined,
+    { authorizePublication: () => ledger.publicationFence() },
   );
 }

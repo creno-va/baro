@@ -15,7 +15,11 @@ import {
   validationOutputSchema,
 } from "../../../contracts";
 import { createCaseDataCipher } from "../../crypto";
-import { type AnalysisGuard, usageDateKst } from "../../db/repository";
+import {
+  type AnalysisGuard,
+  type AnalysisPublicationFence,
+  usageDateKst,
+} from "../../db/repository";
 import * as tables from "../../db/schema";
 import { hasCurrentConsent } from "../consent/service";
 import { domainRepository } from "../intake/service";
@@ -67,6 +71,7 @@ export function createAnalysisExecution(
   gateway: Gateway,
   retrieval: Retrieval,
   clock = () => new Date().toISOString(),
+  options: { authorizePublication?: () => Promise<AnalysisPublicationFence | null> } = {},
 ) {
   async function load(readCheckpoint = true) {
     uuidSchema.parse(params.analysisId);
@@ -182,10 +187,20 @@ export function createAnalysisExecution(
     patch: Parameters<Awaited<ReturnType<typeof domainRepository>>["compareAndSetAnalysis"]>[1],
     now = clock(),
   ) {
-    const state = await load();
-    if (state.analysis.status !== status) throw new StaleAnalysis();
-    if (!(await state.repo.compareAndSetAnalysis(state.guard, patch, now)))
-      throw new StaleAnalysis();
+    const authorize = ["completed", "waiting_for_answers"].includes(patch.status)
+      ? options.authorizePublication
+      : undefined;
+    for (let attempt = 0; attempt < (authorize ? 3 : 1); attempt++) {
+      const state = await load();
+      if (state.analysis.status !== status) throw new StaleAnalysis();
+      const fence = authorize ? await authorize() : undefined;
+      if (authorize && !fence) throw new StaleAnalysis();
+      if (await state.repo.compareAndSetAnalysis(state.guard, patch, now, fence ?? undefined))
+        return;
+      // Refresh only the source/CAS predicate after an operational rewrap. No
+      // model call, schema correction, quota or processing deadline is reset.
+    }
+    throw new StaleAnalysis();
   }
   async function phase(name: ExecutionPhase) {
     try {
