@@ -1,0 +1,88 @@
+{
+  "version": 1,
+  "kind": "pinned-ios-bundled-metadata-only",
+  "binarySourceSha": "6201112438fea33ef761c053dfdc9fa500cbd407",
+  "toolingSourceSha": "062bdcdfcd968d3146c8478d68aa785c9b72fd9e",
+  "input": {
+    "version": 1,
+    "sourceSha": "6201112438fea33ef761c053dfdc9fa500cbd407",
+    "workflowRunId": "40063716187",
+    "artifactId": "12548714921",
+    "artifactName": "mobile-internal-ios-6201112438fea33ef761c053dfdc9fa500cbd407",
+    "receiptSha256": "55ce6e324debcc14d33f9d6769550c8105f142e718a4ecce5378e507902338a4"
+  },
+  "observedAt": "2026-10-24T05:32:39.917Z",
+  "bundledInputParityVerified": true,
+  "originalReceiptUnchanged": true,
+  "archiveSha256": "c5afcab4d3c704182ac42a6978a0f8e996db999ef39e3d8f97f8a34d394f8c20",
+  "compiledHbcBytesVerified": true,
+  "graphFromPinnedCompilerReceipt": true,
+  "sourceMapRebuilt": false,
+  "actualControl": {
+    "version": 2,
+    "kind": "xcode-simulator-signing-control",
+    "sourceSha": "6201112438fea33ef761c053dfdc9fa500cbd407",
+    "toolingSourceSha": "062bdcdfcd968d3146c8478d68aa785c9b72fd9e",
+    "observedAt": "2026-10-24T05:32:39.840Z",
+    "applicationId": "site.baro.app.preview",
+    "signature": "ad-hoc",
+    "teamIdentifier": "not set",
+    "architectures": [
+      "x86_64",
+      "arm64"
+    ],
+    "entitlements": {
+      "keychain-access-groups": [
+        "FAKETEAMID.site.baro.app.preview"
+      ],
+      "application-identifier": "FAKETEAMID.site.baro.app.preview"
+    },
+    "entitlementsSource": "simulator-macho-xml-and-der",
+    "signatureEntitlements": {},
+    "sectionHashes": [
+      {
+        "architecture": "x86_64",
+        "xmlSha256": "52b17581e78eaec7d4aea51bd44998e18b5b9a977c59d2c3eaee057c64be26f4",
+        "derSha256": "cb57c846ebff2330edb1bee67b09dd2c5d1323d026791e5ef4dacd73e4ec93af"
+      },
+      {
+        "architecture": "arm64",
+        "xmlSha256": "52b17581e78eaec7d4aea51bd44998e18b5b9a977c59d2c3eaee057c64be26f4",
+        "derSha256": "cb57c846ebff2330edb1bee67b09dd2c5d1323d026791e5ef4dacd73e4ec93af"
+      }
+    ],
+    "executableSha256": "35e8fa73fa5d717ffb85199012d5e9edb4d432183f34706cda2504e4789b5461",
+    "infoPlistSha256": "f11ff44690377a600ad247f7761088d374529beb18f451d1d8d6183395be4c92",
+    "appRuntimeVerified": false,
+    "physicalDeviceVerified": false,
+    "storeSigned": false,
+    "deployed": false
+  },
+  "compiledFont": {
+    "kind": "compiled-resource-only",
+    "family": "BaroMobile",
+    "sha256": "3ae12c1281a84901b32d8c5f0e43fd6c4f8a5b7fd4ccbde66cfbe9f07cde05e8",
+    "weights": [
+      400,
+      600,
+      700
+    ],
+    "glyphs": 14757,
+    "codepoints": 14336,
+    "hangul": 11172,
+    "licenseEmbedded": true,
+    "compiledBytesMatch": true,
+    "appRuntimeVerified": false
+  },
+  "apiObservation": {
+    "status": "observed",
+    "observedAt": "2026-10-24T05:32:40.276Z",
+    "sourceSha": "f91244151c94d871423e9f2fe6fda5a70bf0e668"
+  },
+  "recompiled": false,
+  "resigned": false,
+  "appRuntimeVerified": false,
+  "physicalDeviceVerified": false,
+  "storeSigned": false,
+  "deployed": false
+}
