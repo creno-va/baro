@@ -699,3 +699,52 @@ reproduces an idle-before-start error and moves idle configuration after
 confirmed readiness with unchanged cleanup, cancellation and physical limits.
 The RN session keeps the main merge interval while these independent fixes are
 integrated for one final same-SHA preview. No source failure or original is removed.
+
+
+## Integrated d842 actual audio/PDF and lookup-only chat scope
+
+PR498 exact4b95d701 passed frozen/quick303/full4215 across385 files with172789
+assertions, build/local built Worker and CI40105018914; focused23/106 included
+the new idle-order rejection. Normal squash main
+`d8423c6e979b621d46027107aa1d0d4cbb99cf5f` passed CI40105259098 and
+[preview40105513572](https://github.com/creno-va/baro/actions/runs/40105513572).
+The [receipt](./ai-harness-2026-10-24/preview-d8423c6.json) retains actual
+checkedAt15:13:47.531Z and observation-only warnings. RN main hold was released
+after deployment success; production is unchanged.
+
+In the same authenticated synthetic product case, the retained208526B English
+audio now reached ready. The reader shows full0–6.515s processed coverage and
+three actual STT observations:0–1.32s “This is Synthetic Speech”,2–3.3s
+“Blue Box17”,4–5.6s “Green Triangle9” (spacing/case as rendered). Both marker
+values match the synthetic TTS ground truth; digit normalization differs from the
+spoken word spelling. The26KB two-page PDF also reached ready: both pages are
+processed, Korean text is intact, BLUE BOX17/ORANGE CIRCLE42 and the final
+END OF SYNTHETIC DOCUMENT marker are present at their correct pages. Local
+private screenshots retain the actual UI, not a fixture-backed browser mock.
+The original failed attempts and all source bytes are retained. Video is now
+processing on this changed preview; its completion is not claimed here.
+
+A separate actual law-chat request on earlier da9 at15:05:09–15:06:31Z performed
+a verified statute retrieval but rejected its generated response. The safe
+receipt reports prohibited_content / action_text / strategy with
+canonicalRefusalOpening=false, rather than a failed legal API. No rejected text,
+source identifiers or private case/owner IDs are recorded here. The response was
+not published and the same request was not repeated unchanged.
+
+Inspection found that general chat instructions allowed optional preparation
+actions even for a request only asking to look up and explain existing law.
+The candidate workspace prompt2.5 directs read/lookup/quotation/explanation-only
+requests to text, references, sourceClaims and warnings, with empty structured
+addition arrays unless the user also supplies new case facts or requests an
+update/preparation task. Array maxima are ceilings, not quotas to fill. New
+actual facts still require their exact references. This narrows unnecessary
+generation without changing the content/privacy/strategy/fact/citation guards,
+independent audit, tool rounds, generation count, timeouts or retries. It adds
+no new model, provider or external target inference.
+
+Existing focused113 tests across3 files/549 assertions pass, including preserved
+action strategy rejection and factual/audit boundaries. Offline50 deterministic
+fixtures and60 scripted v2 scenarios have zero critical findings. These are
+scripted checks; actual prompt2.5 legal-chat quality remains unverified. Broad
+validation, exact-head CI and a changed-source actual lookup acceptance remain
+required before claiming this response is fixed.
