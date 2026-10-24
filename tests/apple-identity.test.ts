@@ -2,7 +2,10 @@ import { expect, test } from "bun:test";
 import { betterAuth } from "better-auth";
 import { supportsIdTokenSignIn } from "better-auth/oauth2";
 import { apple, google } from "better-auth/social-providers";
+import { CURRENT_POLICY_VERSIONS } from "../src/contracts/consent";
+import { api } from "../src/server/api";
 import { getAuth } from "../src/server/auth";
+import { saveAccountType } from "../src/server/auth/account-type";
 import { bindAppleIdentity, findAppleLinkedIdentity } from "../src/server/auth/apple-identity";
 import { createTestDatabase, testEnvironment } from "./helpers/d1";
 import { responseCookies } from "./helpers/oauth";
@@ -105,7 +108,7 @@ test("missing email resolves only the verified immutable subject and preserves l
   const bound = bindAppleIdentity(p.raw, async (subject) => {
     lookups++;
     expect(subject).toBe("synthetic-apple-subject");
-    return { email: "stored@example.test", emailVerified: false };
+    return { ownerId: "synthetic-owner", email: "stored@example.test", emailVerified: true };
   });
   const missing = await token({ email: undefined, email_verified: undefined });
   expect(
@@ -141,6 +144,7 @@ test("linked-subject SQL separates providers/owners, preserves verification and 
         .run(crypto.randomUUID(), userId, providerId);
     const expectedEmail = `${owner.userId}@example.test`;
     expect(await findAppleLinkedIdentity(db.binding, "synthetic-linked-subject")).toEqual({
+      ownerId: owner.userId,
       email: expectedEmail,
       emailVerified: true,
     });
@@ -148,6 +152,7 @@ test("linked-subject SQL separates providers/owners, preserves verification and 
       expect(await findAppleLinkedIdentity(db.binding, subject)).toBeNull();
     db.sqlite.query("UPDATE user SET email_verified=0 WHERE id=?").run(owner.userId);
     expect(await findAppleLinkedIdentity(db.binding, "synthetic-linked-subject")).toEqual({
+      ownerId: owner.userId,
       email: expectedEmail,
       emailVerified: false,
     });
@@ -259,6 +264,7 @@ test("fixture-only Apple registration uses real SDK POST/GET state and RSA valid
     let expected = "",
       exchanges = 0,
       includeEmail = true,
+      includeName = true,
       subject = "synthetic-apple-subject";
     p.validateAuthorizationCode = async () => {
       exchanges++;
@@ -300,7 +306,13 @@ test("fixture-only Apple registration uses real SDK POST/GET state and RSA valid
             origin: "https://appleid.apple.com",
             "content-type": "application/x-www-form-urlencoded",
           },
-          body: new URLSearchParams({ state: attempt.state, code: "synthetic-code" }),
+          body: new URLSearchParams({
+            state: attempt.state,
+            code: "synthetic-code",
+            ...(includeName
+              ? { user: JSON.stringify({ name: { firstName: "Synthetic", lastName: "Person" } }) }
+              : {}),
+          }),
         }),
       );
       expect(posted.status).toBe(302);
@@ -317,6 +329,13 @@ test("fixture-only Apple registration uses real SDK POST/GET state and RSA valid
       headers: new Headers({ cookie: responseCookies(accepted) }),
     });
     expect(session?.user.email).toBe("synthetic@privaterelay.appleid.com");
+    expect(session?.user.name).toBe("Synthetic Person");
+    const firstSessionResponse = await api.request(
+      "/me/session",
+      { headers: { cookie: responseCookies(accepted) } },
+      env,
+    );
+    expect(await firstSessionResponse.json()).toMatchObject({ needsConsent: true });
     // Apple is not in the production freshness allowlist until the remaining server producer is accepted.
     expect(session?.session.oauthAuthenticatedAt).toBeNull();
     const accounts = db.sqlite
@@ -327,6 +346,25 @@ test("fixture-only Apple registration uses real SDK POST/GET state and RSA valid
     expect(exchanges).toBe(1);
     if (!session) throw new Error("SYNTHETIC_OWNER_MISSING");
     includeEmail = false;
+    includeName = false;
+    await saveAccountType(db.binding, session.user.id, "lawyer");
+    db.sqlite
+      .query(
+        "INSERT INTO user_consents(user_id,terms_version,privacy_version,ai_notice_version,over_14_confirmed,consented_at) VALUES(?,?,?,?,1,?)",
+      )
+      .run(
+        session.user.id,
+        CURRENT_POLICY_VERSIONS.termsVersion,
+        CURRENT_POLICY_VERSIONS.privacyVersion,
+        CURRENT_POLICY_VERSIONS.aiNoticeVersion,
+        new Date().toISOString(),
+      );
+    const verifiedReturning = await callback(await begin());
+    const verifiedReturned = await auth.api.getSession({
+      headers: new Headers({ cookie: responseCookies(verifiedReturning) }),
+    });
+    expect(verifiedReturned?.user.id).toBe(session.user.id);
+    expect(verifiedReturned?.user.emailVerified).toBe(true);
     db.sqlite.query("UPDATE user SET email_verified=0 WHERE id=?").run(session.user.id);
     const returning = await callback(await begin());
     const returned = await auth.api.getSession({
@@ -335,6 +373,16 @@ test("fixture-only Apple registration uses real SDK POST/GET state and RSA valid
     expect(returned?.user.id).toBe(session.user.id);
     expect(returned?.user.email).toBe(session.user.email);
     expect(returned?.user.emailVerified).toBe(false);
+    expect(returned?.user.name).toBe(session.user.name);
+    const returningSessionResponse = await api.request(
+      "/me/session",
+      { headers: { cookie: responseCookies(returning) } },
+      env,
+    );
+    expect(await returningSessionResponse.json()).toMatchObject({
+      user: { id: session.user.id, accountType: "lawyer" },
+      needsConsent: false,
+    });
     subject = "unknown-subject";
     const unknown = await callback(await begin());
     expect(new URL(unknown.headers.get("location") ?? "", env.BETTER_AUTH_URL).pathname).toBe(
@@ -356,8 +404,54 @@ test("fixture-only Apple registration uses real SDK POST/GET state and RSA valid
     ).toBe("/login");
     await callback({ cookie: expired.cookie, state: "synthetic-invalid-state" });
     expect(exchanges).toBe(beforeInvalidState);
-    expect(db.sqlite.query("SELECT COUNT(*) AS n FROM session").get()).toEqual({ n: 2 });
+    expect(db.sqlite.query("SELECT COUNT(*) AS n FROM session").get()).toEqual({ n: 3 });
     expect(db.sqlite.query("SELECT COUNT(*) AS n FROM user").get()).toEqual({ n: 1 });
+    // Mutate the real SQL mapping after the verified lookup but before the SDK chooses/creates an owner.
+    const profile = p.getUserInfo;
+    let mutation: "unlink" | "move" | "delete" | null = null;
+    const peer = await seedTestSession(db);
+    p.getUserInfo = async (tokens) => {
+      const result = await profile(tokens),
+        action = mutation;
+      mutation = null;
+      if (!result || !action) throw new Error("SYNTHETIC_LINKED_RACE_REQUIRED");
+      if (action === "unlink")
+        db.sqlite.query("DELETE FROM account WHERE provider_id='apple'").run();
+      if (action === "move")
+        db.sqlite.query("UPDATE account SET user_id=? WHERE provider_id='apple'").run(peer.userId);
+      if (action === "delete") db.sqlite.query("DELETE FROM user WHERE id=?").run(session.user.id);
+      return result;
+    };
+    db.sqlite.query("UPDATE user SET email_verified=1 WHERE id=?").run(session.user.id);
+    for (const action of ["unlink", "move", "delete"] as const) {
+      mutation = action;
+      const response = await callback(await begin());
+      expect(
+        new URL(response.headers.get("location") ?? "", env.BETTER_AUTH_URL).pathname,
+      ).not.toBe("/consent");
+      expect(
+        db.sqlite.query("SELECT COUNT(*) AS n FROM session WHERE user_id=?").get(peer.userId),
+      ).toEqual({ n: 1 });
+      if (action === "unlink") {
+        expect(
+          db.sqlite.query("SELECT COUNT(*) AS n FROM account WHERE provider_id='apple'").get(),
+        ).toEqual({ n: 0 });
+        db.sqlite
+          .query(
+            "INSERT INTO account(id,user_id,provider_id,account_id,created_at,updated_at) VALUES(?,?,'apple','synthetic-apple-subject',1,1)",
+          )
+          .run(crypto.randomUUID(), session.user.id);
+      }
+      if (action === "move")
+        db.sqlite
+          .query("UPDATE account SET user_id=? WHERE provider_id='apple'")
+          .run(session.user.id);
+    }
+    expect(db.sqlite.query("SELECT COUNT(*) AS n FROM user").get()).toEqual({ n: 1 });
+    expect(
+      db.sqlite.query("SELECT COUNT(*) AS n FROM user WHERE id=?").get(session.user.id),
+    ).toEqual({ n: 0 });
+    expect(db.sqlite.query("SELECT COUNT(*) AS n FROM session").get()).toEqual({ n: 1 });
   } finally {
     db.close();
   }

@@ -1,4 +1,5 @@
 import type { BetterAuthPlugin } from "better-auth";
+import { getOAuthState } from "better-auth/api";
 import { type OAuthProvider, verifyProviderIdToken } from "better-auth/oauth2";
 import { z } from "zod";
 
@@ -8,8 +9,33 @@ const claimsSchema = z.object({
   exp: z.number().int().positive(),
   iat: z.number().int().nonnegative(),
 });
-const linkedIdentitySchema = z.object({ email: z.email().max(320), emailVerified: z.boolean() });
+const linkedIdentitySchema = z.object({
+  ownerId: z.string().min(1).max(128),
+  email: z.email().max(320),
+  emailVerified: z.boolean(),
+});
 type LinkedIdentity = z.infer<typeof linkedIdentitySchema>;
+// Keys are SDK request-local state objects, never client-supplied marker fields or durable tokens.
+const linkedCallbacks = new WeakMap<object, { ownerId: string; subject: string }>();
+async function linkedCallback() {
+  try {
+    const state = await getOAuthState();
+    return state ? (linkedCallbacks.get(state) ?? null) : null;
+  } catch {
+    return null;
+  }
+}
+export async function isAppleLinkedCallback() {
+  return Boolean(await linkedCallback());
+}
+export async function appleLinkedSessionAllowed(db: D1Database, ownerId: string) {
+  const linked = await linkedCallback();
+  if (!linked) return true;
+  return (
+    ownerId === linked.ownerId &&
+    (await findAppleLinkedIdentity(db, linked.subject))?.ownerId === ownerId
+  );
+}
 
 /** Only an existing exact Apple subject supplies a missing email; no email-based owner guessing. */
 export async function findAppleLinkedIdentity(
@@ -17,16 +43,17 @@ export async function findAppleLinkedIdentity(
   subject: string,
 ): Promise<LinkedIdentity | null> {
   const rows = await db
-    .prepare(`SELECT u.email,u.email_verified FROM account a JOIN user u ON u.id=a.user_id
+    .prepare(`SELECT u.id AS owner_id,u.email,u.email_verified FROM account a JOIN user u ON u.id=a.user_id
     WHERE a.provider_id='apple' AND a.account_id=?
     AND NOT EXISTS(SELECT 1 FROM v2_tombstones t WHERE t.target_kind='account' AND t.target_id=u.id)
     LIMIT 2`)
     .bind(subject)
-    .all<{ email: string; email_verified: number }>();
+    .all<{ owner_id: string; email: string; email_verified: number }>();
   if (rows.results.length !== 1) return null;
   const row = rows.results[0];
   if (!row || ![0, 1].includes(row.email_verified)) return null;
   const result = linkedIdentitySchema.safeParse({
+    ownerId: row.owner_id,
     email: row.email,
     emailVerified: row.email_verified === 1,
   });
@@ -90,7 +117,8 @@ export function bindAppleIdentity(
       if (!linked) return null;
       return {
         ...info,
-        user: { ...info.user, email: linked.email, emailVerified: linked.emailVerified },
+        // A stored email is not a new Apple email-verification claim and cannot authorize implicit linking.
+        user: { ...info.user, email: linked.email, emailVerified: false },
       };
     },
   };
@@ -104,7 +132,14 @@ export function createAppleIdentityBinding(db: D1Database): BetterAuthPlugin {
       return {
         context: {
           socialProviders: context.socialProviders.map((provider) =>
-            bindAppleIdentity(provider, (subject) => findAppleLinkedIdentity(db, subject)),
+            bindAppleIdentity(provider, async (subject) => {
+              const identity = await findAppleLinkedIdentity(db, subject);
+              if (!identity) return null;
+              const state = await getOAuthState();
+              if (!state) return null;
+              linkedCallbacks.set(state, { ownerId: identity.ownerId, subject });
+              return identity;
+            }),
           ),
         },
       };

@@ -2,7 +2,11 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { drizzle } from "drizzle-orm/d1";
 import { authSchema } from "../db/schema";
-import { createAppleIdentityBinding } from "./apple-identity";
+import {
+  appleLinkedSessionAllowed,
+  createAppleIdentityBinding,
+  isAppleLinkedCallback,
+} from "./apple-identity";
 import { parseAuthEnvironment } from "./env";
 import { createNativeExpoIntegration, nativeAuthCallbackBase } from "./native-expo";
 import { AUTH_RETENTION_MS, SESSION_EXPIRES_SECONDS, SESSION_UPDATE_SECONDS } from "./policy";
@@ -74,21 +78,32 @@ function createConfiguredAuth(env: Env) {
       },
     },
     databaseHooks: {
+      user: {
+        create: {
+          before: async () => {
+            if (await isAppleLinkedCallback()) return false;
+            return undefined;
+          },
+        },
+      },
       session: {
         create: {
-          before: async (session, context) => ({
-            data: {
-              ...session,
-              ipAddress: null,
-              userAgent: null,
-              // Only a completed provider callback can establish recent OAuth authentication.
-              oauthAuthenticatedAt:
-                context?.path === "/callback/:id" &&
-                ["google", "naver", "kakao"].includes(context.params?.id ?? "")
-                  ? new Date()
-                  : null,
-            },
-          }),
+          before: async (session, context) => {
+            if (!(await appleLinkedSessionAllowed(env.DB, session.userId))) return false;
+            return {
+              data: {
+                ...session,
+                ipAddress: null,
+                userAgent: null,
+                // Only a completed provider callback can establish recent OAuth authentication.
+                oauthAuthenticatedAt:
+                  context?.path === "/callback/:id" &&
+                  ["google", "naver", "kakao"].includes(context.params?.id ?? "")
+                    ? new Date()
+                    : null,
+              },
+            };
+          },
         },
         update: {
           before: async (session, context) => {
@@ -109,7 +124,10 @@ function createConfiguredAuth(env: Env) {
       },
       account: {
         create: {
-          before: async (account) => ({ data: discardProviderCredentials(account) }),
+          before: async (account) => {
+            if (await isAppleLinkedCallback()) return false;
+            return { data: discardProviderCredentials(account) };
+          },
         },
         update: {
           before: async (account) => ({ data: discardProviderCredentials(account) }),
