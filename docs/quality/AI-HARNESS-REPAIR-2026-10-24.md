@@ -1056,3 +1056,69 @@ After integrating RN PR510/main92f4232f, both fast-test lists and the latest
 mobile/AI execution rows were preserved. Frozen install and quick373/40files/
 3829 assertions passed. RN's new Android/iOS compiler dispatches are pinned to
 92f4232f and do not establish actual device acceptance for this server repair.
+
+## Preview0017, terminal publication races and bounded live fixture
+
+[PR511](https://github.com/creno-va/baro/pull/511) passed exact-head
+CI40120751353 and normally merged as main5464d3e. Main CI40120995732 and
+[same-SHA preview40121268066](https://github.com/creno-va/baro/actions/runs/40121268066)
+passed.0017 was applied at18:34:11Z; the [original finite configuration receipt](./ai-harness-2026-10-24/preview-5464d3e.json)
+is checked at18:38:30.940Z with no blockers and original monetary-observation
+warnings. Main coordination was released afterward. Production is unchanged.
+This is configuration/deployment evidence, not actual legacy model acceptance.
+
+Further review reproduced four stale publications after the last model response:
+role switch, changed plaintext at the same revision, account tombstone and an
+explicit v2 handoff. These are offline synthetic regressions against5464, not a
+claim that a customer incident occurred. The follow-up binds terminal question/
+result writes to the real ledger's current owner/customer/consent/source hash,
+Workflow/attempt, own reserved response unit and absence of active/unknown
+transport. Every dependent citation/status write receives that server-owned
+predicate in the same D1 batch. It adds no public DTO or migration. A current
+role change at the actual CAS also blocks publication; an unchanged-plaintext
+envelope rewrap succeeds after bounded source/CAS refresh with the same five
+model calls. A role change during the last question call cannot publish a batch.
+The seven publication regressions and actual-runtime fixture path pass locally.
+Full unit4307/392files/173833 assertions, quick439/41files/4229 assertions and
+production build/dry-run/local built Worker passed. CI/deployment and actual
+provider acceptance of this follow-up remain separate.
+
+The new manual preview fixture is restricted to the previously reviewed fixed
+synthetic profile, its latest private snapshot marker and current customer
+consent. It creates no account, consent or public Worker. One immutable intent
+and owner-derived stable UUIDv4 identities prevent a new case/budget per SHA.
+The actual runtime e2e exposed an initial draft UUID-version mismatch before
+any live creation; runtime UUIDv4 validation now precedes seeding. An atomic
+source/new-case-quota claim creates one encrypted v1 case/analysis/outbox and
+consumes one shared daily3 case unit. Existing scheduled product dispatch then
+uses the actual AnalysisWorkflow; the coordinator calls no model directly.
+Rerunning the workflow is status-only, and an existing/deleted fixture is never
+reset or recreated. No automatic CI/provider call or schedule was added.
+
+The coordinator verifies exact green current main, serving preview,0017 and the
+fixed preview DB/cron before writes; it requires a fresh REST atomicity proof.
+Its finite receipt strips source identities/text/ciphertext/SQL/errors and does
+not attest UI creation. Tests cover concurrent creation, current-role/consent
+revocation, shared v2/legacy last case slot, full quota, rollback, lost ACK,
+deletion latch and the actual outbox→runtime→publication path with synthetic
+model/law adapters. The existing customer fixture's source guard is shared,
+with its45 prior tests preserved. Legacy provider failures now use the existing
+approved finite phase/category/status log envelope; logging cannot replace a
+transport receipt. No privacy-boundary allowlist was weakened.
+
+At this point no live legacy fixture has been created or model request issued.
+Creation/recorded provider completion and human/UI review remain distinct. If
+the real pipeline requests clarification, that is a separate observed state;
+it is not recorded as a completed guidance chain. Source failures/unknowns and
+all existing failed jobs/receipts remain preserved. Four unissued services,
+target/consent integration, latency, security and public release gates remain.
+
+Read-only all-scope preflight40125726095 (coordinator main2327b2a, deployed
+candidate5464d3e) completed SUCCESS at2026-10-24T19:32:16.226Z. It reports
+configuration_ready, legacy ledger wired and no blockers; unavailable cost
+observations remain warnings. Live-provider/legacy-runtime acceptance is still
+explicitly unverified. The original failed preflight38555712783 is preserved;
+this new inspection followed actual runtime/schema changes and made no model call.
+
+RN515/main4e7cd875 integrated without shared-contract changes. Frozen install
+and quick451/42files/4521 assertions pass on the combined branch.
