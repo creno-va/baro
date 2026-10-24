@@ -45,6 +45,10 @@ export function normalizeTimelineDates(
     const texts = entry.factIds.length
       ? (corrections.length ? corrections : facts).map((fact) => fact.text)
       : entry.references.flatMap((ref) => {
+          if (ref.kind === "user_material")
+            return context.materials
+              .filter((material) => JSON.stringify(material.reference) === JSON.stringify(ref))
+              .map((material) => material.text);
           const text = readSource(ref);
           if (text !== null) return [text];
           if (ref.kind === "official_source")

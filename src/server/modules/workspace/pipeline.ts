@@ -30,6 +30,7 @@ import {
 } from "../llm-gateway/v2/schemas";
 import type { WorkspaceAuditFailure } from "./audit-diagnostics";
 import type { WorkspaceContentFailure } from "./content-diagnostics";
+import type { MaterialWindow, MaterialWindowRequest } from "./materials";
 import { normalizeTimelineDates } from "./timeline-dates";
 
 export type WorkspaceContext = {
@@ -48,6 +49,7 @@ export type WorkspaceContext = {
   sourceRetrieval?: RetrievalOutput;
   sourceCoverage?: Awaited<ReturnType<typeof projectWorkspaceSources>>["sourceCoverage"];
   sourceLookupPerformed?: boolean;
+  materialLookupPerformed?: boolean;
   history?: V2Message[];
   contextCoverage?: {
     factsPartial: boolean;
@@ -63,6 +65,7 @@ export type WorkspaceContext = {
     text: string;
     coverage: unknown;
   }[];
+  materialWindows?: Omit<MaterialWindow, "materials">[];
 };
 export type WorkspaceOutputPolicyReason =
   | "unauthorized_reference"
@@ -219,7 +222,13 @@ export function assertWorkspaceFacts(
     // Reported statements and extracted observations cannot gain invented numbers or facts.
     if (fact.attribution === "user_statement" || fact.attribution === "user_material") {
       const sources = fact.references
-        .map((ref) => sourceText(context, ref))
+        .flatMap((ref) =>
+          ref.kind === "user_material"
+            ? context.materials
+                .filter((material) => JSON.stringify(material.reference) === JSON.stringify(ref))
+                .map((material) => material.text)
+            : [sourceText(context, ref)],
+        )
         .filter((text): text is string => typeof text === "string");
       if (!sources.some((text) => text.includes(fact.text)))
         throw unsupported(
@@ -311,6 +320,10 @@ export function createWorkspacePipeline(
     retrieve?: (
       context: WorkspaceContext,
       requests: WorkspaceSourceRequest[],
+    ) => Promise<WorkspaceContext>;
+    readMaterials?: (
+      context: WorkspaceContext,
+      requests: MaterialWindowRequest[],
     ) => Promise<WorkspaceContext>;
   },
 ) {
@@ -443,6 +456,25 @@ export function createWorkspacePipeline(
         throw new ModelError("POLICY_REJECTED");
       context = { ...context, sourceLookupPerformed: false };
       let draft = workspaceChatOutputSchema.parse(await call("workspace_chat", context, requestId));
+      if (draft.requestedMaterials.length) {
+        if (
+          !deps.readMaterials ||
+          draft.requestedMaterials.some(
+            (request) =>
+              !context.references.files.some(
+                (file) => file.id === request.fileId && file.revision === request.fileRevision,
+              ),
+          )
+        )
+          throw new WorkspaceOutputPolicyError("unauthorized_reference");
+        context = {
+          ...(await deps.readMaterials(context, draft.requestedMaterials)),
+          materialLookupPerformed: true,
+        };
+        draft = workspaceChatOutputSchema.parse(await call("workspace_chat", context, requestId));
+        if (draft.requestedMaterials.length)
+          throw new WorkspaceOutputPolicyError("unauthorized_reference");
+      }
       if (draft.requestedSources.length) {
         context = (await deps.retrieve?.(context, draft.requestedSources)) ?? {
           ...context,
@@ -453,6 +485,8 @@ export function createWorkspacePipeline(
         if (draft.requestedSources.length)
           throw new WorkspaceOutputPolicyError("unauthorized_reference");
       }
+      if (draft.requestedMaterials.length)
+        throw new WorkspaceOutputPolicyError("unauthorized_reference");
       const factsChanged = normalizeNewFacts(context, draft.facts);
       assertWorkspaceFacts(context, draft.facts, draft.sourceClaims);
       assertWorkspaceReferences(context, [

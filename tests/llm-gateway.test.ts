@@ -59,6 +59,7 @@ test("explicit provider defaults remain compatible with server parsing and legac
         articles: [{ number: "750", branch: "0" }],
       },
     ],
+    requestedMaterials: [],
     sourceClaims: [],
     timeline: [],
   };

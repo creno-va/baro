@@ -37,6 +37,36 @@ be reset by changing its source hash. It is not full feature or release evidence
 No cost metadata refresh or new provider/key is introduced. Actual provider
 rejection and technical/security guards remain enforced.
 
+## Bounded material reading
+
+The model now receives initial observation windows and a positional catalogue,
+rather than silently stopping at the first8 observations. It may request up to two
+additional windows (32 observations each) from files already authorized in this
+conversation. Current selections precede recent historical attachments. Deleted or
+unavailable historical files are skipped; an explicitly selected unavailable file
+still fails. The catalogue and context are private model inputs, not new HTTP fields.
+
+Initial material input is bounded to192KiB; the extra read round retains at most
+384KiB of complete excerpts. Excerpts are not cut into misleading partial quotes.
+There is one material-tool round and at most one existing official-source round,
+followed by independent audit: at most four generation/audit phases under the
+existing20minute Workflow deadline. Each provider call retains its original retry,
+timeout, admission and durable accounting limits. Large documents/videos can remain
+partial; the prompt explicitly retains those unread ranges instead of claiming full
+coverage. This is not a full-file review guarantee.
+
+The reader rechecks owner, workspace, file revision/state, snapshot/ciphertext
+pointers and the exact observation rows across decryption; user exclusions never
+enter context. Multiple observations at one frame/page position remain separate
+exact sources, including uncertain user edits. A quote from a later observation at
+the same position is accepted, while a fabricated concatenated quote is rejected.
+Date checking similarly considers separate observations and preserves ambiguity.
+
+Prompt workspace2.3 changes the wire/evaluation identity. No public message DTO,
+mobile package, schema migration or installed-app parser is changed. Local tests
+cover later windows, excluded/corrected text, ownership/revision/deletion, continued
+attachments, duplicate-position quotes/dates and tool loops. External Gemini/media
+quality and deployed customer journeys still require their own observations.
 ## Live baseline and response boundaries
 
 [Manual run40067350279](https://github.com/creno-va/baro/actions/runs/40067350279)

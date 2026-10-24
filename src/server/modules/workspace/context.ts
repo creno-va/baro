@@ -3,7 +3,6 @@ import { timestampSchema } from "../../../contracts";
 import {
   type V2Intake,
   type V2UserMessage,
-  v2FileObservationSchema,
   v2MessageSchema,
   v2SummarySchema,
   v2UserMessageSchema,
@@ -16,6 +15,7 @@ import { textHash } from "../legal-retrieval/service";
 import { readBoundSource } from "../legal-retrieval/v2/bound-sources";
 import { EXTRACTOR_VERSION, type SourceChunk } from "../legal-retrieval/v2/contracts";
 import { projectWorkspaceSources } from "../legal-retrieval/v2/workspace-sources";
+import { conversationMaterialIds, MATERIAL_CONTEXT_BYTES, readMaterialWindow } from "./materials";
 import type { WorkspaceContext } from "./pipeline";
 
 /** Korea's request calendar is independent of stored UTC/event timestamps. */
@@ -169,14 +169,19 @@ export async function readWorkspaceContext(
   if (intake.status === "generating_questions") intake.status = "collecting";
   const files = createV2FilesRepository(core),
     materials: WorkspaceContext["materials"] = [],
+    materialWindows: NonNullable<WorkspaceContext["materialWindows"]> = [],
     fileReferences: WorkspaceContext["references"]["files"][number][] = [];
-  for (const fileId of latest?.selectedFileIds ?? []) {
+  let materialBytes = 0;
+  for (const fileId of conversationMaterialIds(latest, messages)) {
     const file = await files.metadata(actor, fileId);
     const belongs = await core
       .statement("SELECT id FROM v2_files WHERE id=? AND workspace_id=?", [fileId, id])
       .first();
-    if (!file || file.status !== "ready" || !belongs || !file.probe)
-      throw new Error("Selected material unavailable");
+    if (file?.status !== "ready" || !belongs || !file.probe) {
+      if (latest?.selectedFileIds.includes(fileId))
+        throw new Error("Selected material unavailable");
+      continue;
+    }
     const probe = file.probe;
     fileReferences.push({
       id: file.id,
@@ -186,40 +191,22 @@ export async function readWorkspaceContext(
       ...("durationSeconds" in probe ? { durationSeconds: probe.durationSeconds } : {}),
       ...("hasAudio" in probe ? { hasAudio: probe.hasAudio } : {}),
     });
-    const rows = (
-      await core
-        .statement(
-          "SELECT id,revision,encrypted_payload FROM v2_file_observations WHERE file_id=? AND file_revision=? ORDER BY ordinal LIMIT 8",
-          [file.id, file.revision],
-        )
-        .all<{ id: string; revision: number; encrypted_payload: string }>()
-    ).results;
-    for (const row of rows) {
-      const value = await core.decrypt(
-        "v2_file_observations",
-        row.id,
-        actor.ownerId,
-        row.revision,
-        row.encrypted_payload,
-        v2FileObservationSchema,
-      );
-      if (!value.included) continue;
-      materials.push({
-        reference: {
-          kind: "user_material",
-          fileId: file.id,
-          fileRevision: file.revision,
-          position: value.position,
-        },
-        text: value.text,
-        coverage: {
-          limitedTo: "first_eight_observations",
-          fullCoverageSnapshotId: file.coverageSnapshotId,
-          observationCertainty: value.certainty,
-          userEdited: value.userEdited,
-        },
-      });
-    }
+    const window = await readMaterialWindow(
+      core,
+      actor,
+      id,
+      {
+        fileId: file.id,
+        fileRevision: file.revision,
+        startOrdinal: 0,
+        count: 16,
+      },
+      MATERIAL_CONTEXT_BYTES - materialBytes,
+    );
+    const { materials: _loaded, ...windowMetadata } = window;
+    materialWindows.push(windowMetadata);
+    materials.push(...window.materials);
+    materialBytes += new TextEncoder().encode(JSON.stringify(window.materials)).byteLength;
   }
   if (!(await repo.findWorkspace(actor, id))) throw new Error("Workspace unavailable");
   const normalized = (message: V2UserMessage) => ({
@@ -259,5 +246,6 @@ export async function readWorkspaceContext(
       verifiedCitationIds: sources.citations.map((citation) => citation.id),
     },
     materials,
+    materialWindows,
   };
 }
