@@ -1,0 +1,49 @@
+{
+  "version": 2,
+  "checkedAt": "2026-10-24T06:18:02.615Z",
+  "candidateSha": "dd73eec00a04f5ee5cadda165d8e875bd5b9189a",
+  "probeSourceSha256": "ab5148aaaa1a310097171f2ee6813d07b59572c8468cbea519676dbe0644df5c",
+  "environment": "isolated-synthetic-worker",
+  "status": "failed",
+  "failure": "MODEL_UNAVAILABLE",
+  "runtimeWorker": true,
+  "attempts": 2,
+  "metricCoverage": "complete",
+  "metrics": [
+    {
+      "requestId": "00000000-0000-4000-8000-000000000027",
+      "phase": "workspace_questions",
+      "model": "google/gemini-3.8-flash",
+      "latencyMs": 7192,
+      "inputTokens": 1605,
+      "outputTokens": 245,
+      "status": "success"
+    },
+    {
+      "requestId": "00000000-0000-4000-8000-000000000027",
+      "phase": "workspace_audit",
+      "model": "google/gemini-3.8-flash",
+      "latencyMs": 3199,
+      "inputTokens": null,
+      "outputTokens": null,
+      "status": "failed"
+    }
+  ],
+  "providerFailures": [
+    {
+      "phase": "workspace_audit",
+      "category": "provider_request",
+      "httpStatus": 400
+    }
+  ],
+  "unverified": [
+    "full-product-smoke",
+    "live-corpus-eval",
+    "oauth",
+    "legal",
+    "public-policy"
+  ],
+  "authenticationChecked": true,
+  "replayRejected": true,
+  "workflowRun": "https://github.com/creno-va/baro/actions/runs/40069615300"
+}

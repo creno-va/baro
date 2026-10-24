@@ -4,31 +4,53 @@ export type GatewayRequestIssue =
   | "thinking_configuration"
   | "thinking_output_limit"
   | "unsupported_parameter"
+  | "schema_complexity"
   | "schema_constraint";
 const requestIssues = new WeakMap<object, GatewayRequestIssue>();
 export const gatewayRequestIssue = (error: unknown) =>
   error && typeof error === "object" ? requestIssues.get(error) : undefined;
 function rememberRequestIssue(error: object, raw: unknown) {
-  const message =
-    raw && typeof raw === "object" && "message" in raw && typeof raw.message === "string"
-      ? raw.message
-      : "";
+  // Cloudflare can wrap upstream messages in description, a string error, or
+  // nested errors/details. Inspect only bounded known fields and retain only
+  // the finite classification, never a body/message/cause on the thrown error.
+  let remaining = 16 * 1024;
+  const messages: string[] = [];
+  const visit = (value: unknown, depth: number) => {
+    if (!remaining || depth > 5) return;
+    if (typeof value === "string") {
+      const part = value.slice(0, remaining);
+      remaining -= part.length;
+      messages.push(part);
+    } else if (Array.isArray(value)) {
+      for (const item of value.slice(0, 8)) visit(item, depth + 1);
+    } else if (value && typeof value === "object") {
+      const record = value as Record<string, unknown>;
+      for (const key of ["message", "description", "error", "errors", "details"])
+        visit(record[key], depth + 1);
+    }
+  };
+  visit(raw, 0);
+  const message = messages.join("\n");
   const issue =
-    /(?:thinking|reasoning).*(?:budget|token).*(?:exceed|less than|greater than|max.output|max_completion)|(?:max.output|max_completion).*(?:thinking|reasoning)/i.test(
+    /too many states|too much branching|schema.*(?:too (?:large|complex)|complexity)|constraint.*(?:states|branching|complexity)/i.test(
       message,
     )
-      ? "thinking_output_limit"
-      : /reasoning_effort|thinking_level|thinkingBudget|thinking_config|thinking.*(?:unsupported|not supported)/i.test(
+      ? "schema_complexity"
+      : /(?:thinking|reasoning).*(?:budget|token).*(?:exceed|less than|greater than|max.output|max_completion)|(?:max.output|max_completion).*(?:thinking|reasoning)/i.test(
             message,
           )
-        ? "thinking_configuration"
-        : /(?:unsupported|unknown|unrecognized|not supported).*(?:parameter|field)|(?:parameter|field).*(?:unsupported|unknown|unrecognized|not supported)/i.test(
+        ? "thinking_output_limit"
+        : /reasoning_effort|thinking_level|thinkingBudget|thinking_config|thinking.*(?:unsupported|not supported)/i.test(
               message,
             )
-          ? "unsupported_parameter"
-          : /response_format|json.?schema|additionalProperties|anyOf|oneOf/i.test(message)
-            ? "schema_constraint"
-            : undefined;
+          ? "thinking_configuration"
+          : /(?:unsupported|unknown|unrecognized|not supported).*(?:parameter|field)|(?:parameter|field).*(?:unsupported|unknown|unrecognized|not supported)/i.test(
+                message,
+              )
+            ? "unsupported_parameter"
+            : /response_format|json.?schema|additionalProperties|anyOf|oneOf/i.test(message)
+              ? "schema_constraint"
+              : undefined;
   if (issue) requestIssues.set(error, issue);
 }
 
@@ -66,7 +88,7 @@ export async function gatewayResponse(value: unknown): Promise<unknown> {
       const envelope = body as Record<string, unknown>;
       if (envelope.success === false) {
         const failure = new Error("GATEWAY_PROVIDER_ERROR");
-        rememberRequestIssue(failure, Array.isArray(envelope.errors) ? envelope.errors[0] : null);
+        rememberRequestIssue(failure, envelope);
         rememberDependencyFailure(
           failure,
           Array.isArray(envelope.errors) ? envelope.errors[0] : null,
@@ -90,7 +112,7 @@ export async function gatewayResponse(value: unknown): Promise<unknown> {
   const record = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
   const nested = record.error ?? (Array.isArray(record.errors) ? record.errors[0] : null);
   const failure = Object.assign(new Error("GATEWAY_HTTP_ERROR"), { status: value.status });
-  rememberRequestIssue(failure, nested);
+  rememberRequestIssue(failure, body);
   const retryAfter = value.headers.get("retry-after");
   if (retryAfter !== null && /^\d+(?:\.\d+)?$/.test(retryAfter))
     Object.assign(failure, { retryAfter: Math.min(30, Number(retryAfter)) });
