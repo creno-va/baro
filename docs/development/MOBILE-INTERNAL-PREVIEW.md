@@ -1550,3 +1550,30 @@ manifest/patch hash도 source6201112의 정본과 대조했다. 임시 사본만
 iOS pin을 이 성공 원본으로 갱신한 뒤 exact PR/main CI를 통과한 도구 SHA에서 고정 literal·
 실제 소프트 Search·회전을 확인한다. 이전4ba1d39 typed-check 실패를 해결 완료로 재분류하지 않는다.
 실제 OAuth·한국어/reader·physical/store·전체 보안/공개 gate는 계속 별도다.
+
+### source6201112 iOS 실제 software Search·회전 결과
+
+PR457 head d30f871/CI40066243655·main062bdcd/CI40066418174 SUCCESS 뒤
+[실제40066597399](https://github.com/creno-va/baro/actions/runs/40066597399)는 SUCCESS다.
+artifact12548769470은 기존 compiler40063716187의 ZIP/receipt를 byte 그대로 사용하며,
+tooling062bdcd/product6201112를 분리한다. 이후 Apple 계약/서버 변경을 이 앱의 증거로
+포함하지 않는다. 재컴파일/재서명·속도/입력 문자열/대기 시간 완화·동일 조건 재시도는 없다.
+
+[원본 strict proof](../quality/mobile-internal-ios-2026-10-24/directory-software-search-062bdcd.json)는
+iPhone16 Simulator/iOS26.5에서 고정 ASCII literal 보존·키보드 위 input, 키보드 안의 유일한
+실제 Search button 탭·닫힘·필터 empty, landscape/portrait window·입력 보존/접근·Home 복귀를
+기록한다. [Home receipt](../quality/mobile-internal-ios-2026-10-24/directory-software-home-062bdcd.json)의
+cold launches/anonymous PNG와 [별도 SDK metadata](../quality/mobile-internal-ios-2026-10-24/directory-software-verification-062bdcd.json)의
+원본 actualControl을 대조했다. Home PNG220,906bytes/1dee7409…는 목록 이동 전 익명 화면으로
+직접 확인했고 원본 homeContentVerified=false를 수정하지 않았다. 공개 목록/프로필 값·raw
+hierarchy/xcresult/screenshot을 출력하지 않았다.
+
+[독립 대조](../quality/mobile-internal-ios-2026-10-24/directory-software-independent-062bdcd.json)는
+성공 run/artifact/source, 원본 ZIP/receipt hash, actual plist/executable/XML/DER control·Home PNG,
+immutable062의 Swift/프로젝트 생성기 hash와 strict 결과를 검사했다. proof012ae682…·
+Home339012c3…·metadata2c7915d2… 전체 hash를 보존한다. 원본 compiler receipt의 patch/source
+compile attestation은 유지하지만 이번 성공 하나로 backport만의 인과나 반복 안정성을 확정하지 않는다.
+
+이전4ba1d39의 typed-check/짧은 subsequence 실패와 과거 통과 뒤 재실패 이력은 그대로 남긴다.
+이번 제한된 조건에서 성공한 것이며 한국어 조합 IME·VoiceOver·HTTP 별도 계측·실제 계정/전체
+화면·physical/store·보안 high2·#334/#346/#379/#339/#71 전체 인수 완료는 아니다.
