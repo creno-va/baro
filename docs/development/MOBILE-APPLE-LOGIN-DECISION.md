@@ -121,3 +121,29 @@ fresh OAuth·PKCE grant·token 폐기·삭제 worker는 계속 서버 정본이�
 결정 근거는 [AGENTS.md](../../AGENTS.md)의 “새 모델/공급자, 공개 정책 법률 승인, 사업자 정보,
 새 결제/자동 충전, production 공개 전환은 별도 결정이 필요하다”와
 [ADR-0017](../adr/0017-expo-mobile-and-shared-client-boundaries.md)의 새 로그인 공급자 미결 항목이다.
+
+## 서버 identity binding 선행
+
+설치된 Better Auth/core1.7.7의 Apple raw adapter는 기본 authorization nonce 결합과
+redirect callback의 ID-token 신원 검증 완료 증거로 간주하지 않는다. 합성 raw helper 관측을
+전체 OAuth 우회/실제 계정 취약점 증명으로 해석하지 않는다. `apple-identity.ts`는 Apple만
+감싸고 기존3사 provider object를 그대로 유지한다. 아직 실제 `socialProviders.apple` 설정이나
+credential·가용성/freshness 허용 목록·native Apple 버튼은 추가하지 않는다.
+
+이 binding은 SDK가 생성해 OAuth state에 보관하는 nonce를 authorize URL로 전달하고,
+callback token을 공개 SDK verifier로 먼저 확인한 뒤 profile decode를 허용한다.
+issuer는 `https://appleid.apple.com`, audience는 고정 Services ID, algorithm은 RS256,
+nonce는 exact match이며 exp/iat/sub를 필수로 검사한다. 최대16KiB token·유효한 서버 nonce가
+없으면 key 조회 전에 거절한다. client-submitted idToken 로그인은 차단하고 custom verify
+옵션이 이 경계를 우회하지 못하게 한다. product 런타임에 Node filesystem/process/Bun을 넣지 않는다.
+
+합성 RSA 키와 실제 SDK callback/SQL을 사용하는 테스트는 서명 변조·issuer/audience/algorithm·
+nonce 누락/교차 시도·만료/누락 claim, POST→GET state·만료/변조/재사용과 provider token DB
+폐기를 검사한다. POST에 Lax cookie가 없고 다음 GET에 fixture cookie를 전달하는 구성은
+실제 Safari/system browser 동작을 검증한 것이 아니다. Apple JWKS/token endpoint·실제 계정·
+두 OS 복귀 성공도 아니다. Apple freshness는 아직 인정하지 않는다.
+
+첫 이름/relay claim의 검증과 이후 email/name 누락을 신원 실패로 오인하지 않는 기초를
+검사했지만, 동일 Apple subject의 기존 계정 조회·삭제 의도/요청 중 revoke·결과 분리·
+credential 준비·Apple POST browser relay·native 소비는 다음 producer/실제 인수에 남는다.
+이 선행을 정상 revoke나 전체 Apple 로그인 완료로 표시하지 않는다.
