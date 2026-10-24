@@ -68,6 +68,8 @@ macOS에서 수정 전 기존 집중11개는 성공했으므로 이를 red 재�
 
 수정 후 집중9개와 quick/build/local workerd가 성공했다. 추가 Workspace 전체 검사는 처음78개 성공/1개 실패였으며, AI 변경으로 메뉴의 실제 접근성 이름이 `판례`에서 `유사 판례`로 바뀌었는데 검사만 이전 이름을 요구하던 문제였다. href·메뉴 개수·나머지 흐름은 유지하고 해당 locator를 현재 label로 갱신했다. 후속 전체79개 결과와 최종 main SHA 수동 full은 #522에 기록한다.
 
+최종 UI 후보 main `b6bbdffaf3395704b035163a81dddfabe12b848f`의 full40141383527에서는 Linux에서도 Workspace79개가 모두 통과했다. 이어지는 reports-integrated 첫 시나리오는 두 번의 intake, PDF/ZIP, 여러 reload와 사건/계정 삭제를 하나의 기본30초 제한 안에 수행하다 마지막 설정 화면에서 deadline을 소진했다(3개 중2개 성공). 동일 소스의 로컬 검사는3개 성공, 긴 첫 흐름은20.4초였다. mock의 `canDelete` 계산과 실제 재인증 guard를 확인했으며 제품 삭제 조건은 변경하지 않는다. 긴 시나리오의 전체 예산만60초로 정하고 삭제 준비는 명시적5초 단언으로 확인해, 실제 준비 실패를 긴 전체 제한과 구분한다. 삭제·원본 제거·peer 비공개 내용 철회 단언도 유지한다. 이 full에서 후속 CSP/audit/native는 실행되지 않았으므로 성공으로 기록하지 않는다.
+
 ## 최종 합성 화면
 
 ![데스크톱 사건 목록과 고정 계정](./app-experience-2026-10-25/cases-desktop.png)
