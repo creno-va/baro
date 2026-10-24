@@ -1,11 +1,16 @@
 import { z } from "zod";
 import { timestampSchema, uuidSchema } from "../../../contracts";
-import { RECENT_OAUTH_MS } from "../../auth/policy";
+import { AUTH_RETENTION_MS, RECENT_OAUTH_MS } from "../../auth/policy";
 import { profilePublicationInstanceId } from "../lawyers/publication-execution";
 
 const DAY = 86_400_000;
 export const CLEANUP_ATTEMPTS = 8;
 export const CLEANUP_SETTLE_MS = 16 * 60_000;
+export type AccountDeletionCompletion = {
+  intent: { key: string; value: string; originalSessionId: string };
+  receipt: { key: string; value: string };
+  apple: { linked: boolean; revokeSubject?: string; singleSubject?: string };
+};
 // Include historical attempts even after old outboxes were garbage collected.
 export const workflowIdsSql = `SELECT a.id || '-' || n.attempt AS instance_id FROM analyses a
  JOIN cases c ON c.id=a.case_id JOIN (SELECT 1 AS attempt UNION SELECT 2 UNION SELECT 3) n
@@ -16,7 +21,19 @@ export async function deleteAccount(
   ownerId: string,
   sessionId: string,
   now: number,
+  completion?: AccountDeletionCompletion,
 ) {
+  if (
+    completion &&
+    (!/^native-reauth:v1:[a-f0-9]{64}:[a-f0-9]{64}$/.test(completion.intent.key) ||
+      completion.receipt.key !==
+        completion.intent.key.replace("native-reauth:", "native-deletion:") ||
+      !completion.intent.originalSessionId ||
+      completion.intent.originalSessionId.length > 128 ||
+      completion.intent.value.length > 16384 ||
+      completion.receipt.value.length > 16384)
+  )
+    throw new Error("ACCOUNT_DELETION_COMPLETION_INVALID");
   const jobId = crypto.randomUUID(),
     at = new Date(now).toISOString();
   const live = `EXISTS(SELECT 1 FROM session WHERE id=? AND user_id=? AND expires_at>?
@@ -36,13 +53,41 @@ export async function deleteAccount(
   // A new outbox admitted between read and batch makes this request retry safely.
   const publicationGuard =
     "NOT EXISTS(SELECT 1 FROM v2_outbox x JOIN v2_profiles p ON p.id=x.target_id WHERE x.kind='profile_publish' AND p.owner_id=u.id AND NOT EXISTS(SELECT 1 FROM json_each(?) WHERE json_extract(value,'$.outboxId')=x.id AND json_extract(value,'$.approvedRevision')=x.revision))";
+  const intentGuard = completion
+    ? ` AND EXISTS(SELECT 1 FROM app_metadata m WHERE m.key=? AND m.value=? AND json_extract(CASE WHEN json_valid(m.value) THEN m.value ELSE '{}' END,'$.operation')='delete-account' AND json_extract(CASE WHEN json_valid(m.value) THEN m.value ELSE '{}' END,'$.userId')=u.id AND json_extract(CASE WHEN json_valid(m.value) THEN m.value ELSE '{}' END,'$.sessionId')=? AND json_extract(CASE WHEN json_valid(m.value) THEN m.value ELSE '{}' END,'$.expiresAt')>?)
+    AND EXISTS(SELECT 1 FROM session s WHERE s.id=? AND s.user_id=u.id AND s.expires_at>? AND s.created_at>? AND s.created_at<=?)
+    AND NOT EXISTS(SELECT 1 FROM v2_tombstones t WHERE t.target_kind='account' AND t.target_id=u.id)`
+    : "";
+  const intentArgs = completion
+    ? [
+        completion.intent.key,
+        completion.intent.value,
+        completion.intent.originalSessionId,
+        now,
+        completion.intent.originalSessionId,
+        now,
+        now - AUTH_RETENTION_MS,
+        now,
+      ]
+    : [];
+  const appleGuard = completion
+    ? !completion.apple.linked
+      ? " AND NOT EXISTS(SELECT 1 FROM account WHERE user_id=u.id AND provider_id='apple')"
+      : `${completion.apple.revokeSubject ? " AND EXISTS(SELECT 1 FROM account WHERE user_id=u.id AND provider_id='apple' AND account_id=?)" : ""}${completion.apple.singleSubject ? " AND (SELECT count(*) FROM account WHERE user_id=u.id AND provider_id='apple')=1 AND EXISTS(SELECT 1 FROM account WHERE user_id=u.id AND provider_id='apple' AND account_id=?)" : ""}`
+    : "";
+  const appleArgs = completion
+    ? [
+        ...(completion.apple.revokeSubject ? [completion.apple.revokeSubject] : []),
+        ...(completion.apple.singleSubject ? [completion.apple.singleSubject] : []),
+      ]
+    : [];
   const result = await db.batch([
     db
       .prepare(`INSERT INTO deletion_jobs(id,target_type,target_id,deleted_at,workflow_instance_ids,primary_state,cleanup_state,attempts,expires_at)
       SELECT ?,'account',u.id,?,(SELECT json_group_array(instance_id) FROM (
         ${workflowIdsSql} WHERE c.user_id=u.id
         UNION SELECT o.instance_id FROM dispatch_outbox o JOIN analyses a ON a.id=o.analysis_id JOIN cases c ON c.id=a.case_id WHERE c.user_id=u.id
-      )),'deleted','pending',0,? FROM user u WHERE u.id=? AND ${publicationGuard} AND ${live}`)
+      )),'deleted','pending',0,? FROM user u WHERE u.id=? AND ${publicationGuard} AND ${live}${intentGuard}${appleGuard}`)
       .bind(
         jobId,
         at,
@@ -54,6 +99,8 @@ export async function deleteAccount(
         now,
         now - RECENT_OAUTH_MS,
         now,
+        ...intentArgs,
+        ...appleArgs,
       ),
     db
       .prepare(
@@ -70,6 +117,15 @@ export async function deleteAccount(
         "INSERT INTO v2_deletion_targets(journal_id,kind,target_id,ordinal) SELECT j.id,'job',json_extract(value,'$.runtimeId'),coalesce((SELECT max(ordinal)+1 FROM v2_deletion_targets WHERE journal_id=j.id),0)+CAST(json_each.key AS INTEGER) FROM json_each(?) JOIN v2_deletion_journals j ON j.target_kind='account' AND j.target_id=? WHERE EXISTS(SELECT 1 FROM deletion_jobs WHERE id=? AND target_type='account' AND target_id=?) ON CONFLICT(journal_id,kind,target_id) DO NOTHING",
       )
       .bind(inventory, ownerId, jobId, ownerId),
+    ...(completion
+      ? [
+          db
+            .prepare(
+              "INSERT INTO app_metadata(key,value,updated_at) SELECT ?,?,? WHERE EXISTS(SELECT 1 FROM deletion_jobs WHERE id=? AND target_type='account' AND target_id=?)",
+            )
+            .bind(completion.receipt.key, completion.receipt.value, at, jobId, ownerId),
+        ]
+      : []),
   ]);
   return result[0]?.meta.changes === 1;
 }

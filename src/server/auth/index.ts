@@ -6,6 +6,7 @@ import {
   appleLinkedAccountUpdateAllowed,
   appleLinkedSessionAllowed,
   createAppleIdentityBinding,
+  hasVerifiedAppleCallback,
   isAppleLinkedCallback,
 } from "./apple-identity";
 import { parseAuthEnvironment } from "./env";
@@ -122,7 +123,9 @@ function createConfiguredAuth(env: Env) {
                 // Only a completed provider callback can establish recent OAuth authentication.
                 oauthAuthenticatedAt:
                   context?.path === "/callback/:id" &&
-                  ["google", "naver", "kakao"].includes(context.params?.id ?? "")
+                  (["google", "naver", "kakao"].includes(context.params?.id ?? "") ||
+                    (context.params?.id === "apple" &&
+                      (await hasVerifiedAppleCallback(env.DB, session.userId))))
                     ? new Date()
                     : null,
               },

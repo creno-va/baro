@@ -1,4 +1,5 @@
 import { cleanupNativeAuthCodes } from "./native-codes";
+import { cleanupNativeDeletionReceipts } from "./native-deletion-receipt";
 import { cleanupNativeReauthentication } from "./native-reauth";
 import { AUTH_RETENTION_MS } from "./policy";
 
@@ -14,6 +15,7 @@ export async function cleanupAuthData(database: D1Database, now = Date.now()): P
     }
     await cleanupNativeAuthCodes(database, now);
     await cleanupNativeReauthentication(database, now);
+    await cleanupNativeDeletionReceipts(database, now);
   } catch {
     // Cron failures must remain observable without retaining the adapter's SQL,
     // parameter values or original stack/cause in platform exception logging.

@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { betterAuth } from "better-auth";
+import { createAuthMiddleware } from "better-auth/api";
 import { supportsIdTokenSignIn } from "better-auth/oauth2";
 import { apple, google } from "better-auth/social-providers";
 import { CURRENT_POLICY_VERSIONS } from "../src/contracts/consent";
@@ -11,7 +12,12 @@ import {
   bindAppleIdentity,
   findAppleLinkedIdentity,
   isAppleLinkedCallback,
+  takeAppleCallbackMaterial,
 } from "../src/server/auth/apple-identity";
+import { nativeAuthChallenge } from "../src/server/auth/native-codes";
+import { createNativeDeletionReceipts } from "../src/server/auth/native-deletion-receipt";
+import { nativeAuthCallbackBase } from "../src/server/auth/native-expo";
+import { createNativeReauthentication } from "../src/server/auth/native-reauth";
 import { createTestDatabase, testEnvironment } from "./helpers/d1";
 import { responseCookies } from "./helpers/oauth";
 import { seedTestSession } from "./helpers/session";
@@ -248,7 +254,10 @@ test("custom verifyIdToken cannot bypass the binding; concurrent attempts never 
   expect(await bound.getUserInfo({ idToken: first, expectedIdTokenNonce: secondNonce })).toBeNull();
 });
 
-async function fixtureAppleAuth(db: Awaited<ReturnType<typeof createTestDatabase>>) {
+async function fixtureAppleAuth(
+  db: Awaited<ReturnType<typeof createTestDatabase>>,
+  observeCleared?: (cleared: boolean) => void,
+) {
   const env = testEnvironment(db.binding),
     base = getAuth(env);
   expect((await base.$context).socialProviders.map((p) => p.id)).toEqual([
@@ -258,7 +267,7 @@ async function fixtureAppleAuth(db: Awaited<ReturnType<typeof createTestDatabase
   ]);
   const auth = betterAuth({
     ...base.options,
-    trustedOrigins: [env.BETTER_AUTH_URL, "https://appleid.apple.com"],
+    trustedOrigins: [env.BETTER_AUTH_URL, "baro-dev://", "https://appleid.apple.com"],
     socialProviders: { apple: { clientId: audience, clientSecret: "synthetic-only" } },
     plugins: [
       {
@@ -274,6 +283,19 @@ async function fixtureAppleAuth(db: Awaited<ReturnType<typeof createTestDatabase
         },
       },
       ...(base.options.plugins ?? []),
+      {
+        id: "synthetic-material-observer",
+        hooks: {
+          after: [
+            {
+              matcher: (ctx) => ctx.path === "/callback/:id",
+              handler: createAuthMiddleware(async () => {
+                observeCleared?.((await takeAppleCallbackMaterial()) === null);
+              }),
+            },
+          ],
+        },
+      },
     ],
   });
   const context = await auth.$context,
@@ -361,8 +383,8 @@ test("fixture-only Apple registration uses real SDK POST/GET state and RSA valid
       env,
     );
     expect(await firstSessionResponse.json()).toMatchObject({ needsConsent: true });
-    // Apple is not in the production freshness allowlist until the remaining server producer is accepted.
-    expect(session?.session.oauthAuthenticatedAt).toBeNull();
+    // Only this cryptographically verified, exact-linked-subject callback establishes freshness.
+    expect(session?.session.oauthAuthenticatedAt).toBeInstanceOf(Date);
     const accounts = db.sqlite
       .query("SELECT access_token,refresh_token,id_token FROM account")
       .all();
@@ -625,3 +647,131 @@ for (const localVerified of [false, true])
         db.close();
       }
     });
+
+for (const outcome of [
+  "confirmed",
+  "provider-error",
+  "missing-token",
+  "missing-config",
+  "no-intent",
+] as const)
+  test(`fixture Apple RSA callback supplies request-local deletion material and clears it on every exit: ${outcome}`, async () => {
+    const db = await createTestDatabase(),
+      originalFetch = globalThis.fetch;
+    try {
+      const cleared: boolean[] = [];
+      const { env, auth, p } = await fixtureAppleAuth(db, (value) => cleared.push(value));
+      let expected = "",
+        includeEmail = true;
+      p.validateAuthorizationCode = async () => ({
+        idToken: await token({
+          nonce: expected,
+          email: includeEmail ? "synthetic@privaterelay.appleid.com" : undefined,
+          email_verified: includeEmail ? true : undefined,
+        }),
+        ...(outcome === "missing-token"
+          ? {}
+          : {
+              accessToken: "synthetic-callback-access",
+              refreshToken: "synthetic-callback-refresh",
+            }),
+      });
+      const begin = async (callbackURL: string) => {
+        const response = await auth.handler(
+          new Request(`${env.BETTER_AUTH_URL}/api/auth/sign-in/social`, {
+            method: "POST",
+            headers: { origin: env.BETTER_AUTH_URL, "content-type": "application/json" },
+            body: JSON.stringify({
+              provider: "apple",
+              callbackURL,
+              errorCallbackURL: callbackURL,
+              disableRedirect: true,
+            }),
+          }),
+        );
+        const url = new URL(((await response.json()) as { url: string }).url);
+        expected = url.searchParams.get("nonce") ?? "";
+        return { cookie: responseCookies(response), state: url.searchParams.get("state") ?? "" };
+      };
+      const callback = async (start: { state: string; cookie: string }) =>
+        auth.handler(
+          new Request(
+            `${env.BETTER_AUTH_URL}/api/auth/callback/apple?${new URLSearchParams({ state: start.state, code: "synthetic-code" })}`,
+            { headers: { cookie: start.cookie } },
+          ),
+        );
+      const first = await callback(await begin("/consent")),
+        cookie = responseCookies(first),
+        owner = await auth.api.getSession({ headers: new Headers({ cookie }) });
+      if (!owner) throw new Error("SYNTHETIC_OWNER_MISSING");
+      expect(owner.session.oauthAuthenticatedAt).toBeInstanceOf(Date);
+      expect(cleared).toEqual([true]);
+      includeEmail = false;
+      const verifier = "a".repeat(43),
+        attemptId = crypto.randomUUID(),
+        challenge = await nativeAuthChallenge(verifier);
+      if (outcome !== "no-intent")
+        await createNativeReauthentication({
+          db: db.binding,
+          issuer: env.BETTER_AUTH_URL,
+          secret: env.BETTER_AUTH_SECRET,
+        }).prepareDeletion(
+          { attemptId, challenge, provider: "apple", confirmation: "DELETE" },
+          { userId: owner.user.id, sessionId: owner.session.id },
+        );
+      if (outcome !== "missing-config")
+        Object.assign(env, {
+          APPLE_CLIENT_ID: audience,
+          APPLE_CLIENT_SECRET: "synthetic-fixture-secret",
+        });
+      let revocations = 0;
+      globalThis.fetch = (async (url, options) => {
+        expect(url).toBe("https://appleid.apple.com/auth/revoke");
+        revocations++;
+        expect(db.sqlite.query("SELECT id FROM user WHERE id=?").get(owner.user.id)).toBeNull();
+        expect(new URLSearchParams(String(options?.body)).get("token")).toBe(
+          "synthetic-callback-refresh",
+        );
+        return new Response(outcome === "provider-error" ? "synthetic-private-error" : null, {
+          status: outcome === "provider-error" ? 400 : 200,
+        });
+      }) as typeof fetch;
+      const target = new URL(nativeAuthCallbackBase(env.APP_ENV) ?? "");
+      target.searchParams.set("attemptId", attemptId);
+      target.searchParams.set("challenge", challenge);
+      target.searchParams.set("purpose", "delete-account");
+      const response = await callback(await begin(target.href)),
+        returned = new URL(response.headers.get("location") ?? "");
+      expect(cleared).toEqual([true, true]);
+      expect(revocations).toBe(outcome === "confirmed" || outcome === "provider-error" ? 1 : 0);
+      if (outcome === "no-intent") {
+        expect(returned.searchParams.get("error")).toBe("oauth");
+        expect(returned.searchParams.has("code")).toBe(false);
+        expect(db.sqlite.query("SELECT id FROM user WHERE id=?").get(owner.user.id)).not.toBeNull();
+      } else {
+        expect([...returned.searchParams.keys()].sort()).toEqual(["attemptId", "code"]);
+        const receipt = await createNativeDeletionReceipts({
+          db: db.binding,
+          issuer: env.BETTER_AUTH_URL,
+          secret: env.BETTER_AUTH_SECRET,
+        }).exchange({ attemptId, verifier, code: returned.searchParams.get("code") });
+        expect(receipt.appleRevocation).toBe(outcome === "confirmed" ? "confirmed" : "unconfirmed");
+        expect(await auth.api.getSession({ headers: new Headers({ cookie }) })).toBeNull();
+      }
+      const stored =
+        JSON.stringify(db.sqlite.query("SELECT value FROM app_metadata").all()) +
+        JSON.stringify(
+          db.sqlite.query("SELECT access_token,refresh_token,id_token FROM account").all(),
+        );
+      for (const value of [
+        "synthetic-callback-refresh",
+        "synthetic-callback-access",
+        "synthetic-private-error",
+        "synthetic-fixture-secret",
+      ])
+        expect(stored).not.toContain(value);
+    } finally {
+      globalThis.fetch = originalFetch;
+      db.close();
+    }
+  });

@@ -1,5 +1,9 @@
 import { z } from "zod";
 import { mobileReauthPrepareV2Schema, mobileReauthProofSchema } from "../../contracts/mobile-auth";
+import {
+  mobileDeletionPrepareSchema,
+  mobileDeletionProofSchema,
+} from "../../contracts/mobile-deletion";
 import { AuthConfigurationError } from "./env";
 import { NativeAuthProofError, nativeAuthChallenge } from "./native-codes";
 import { AUTH_RETENTION_MS, RECENT_OAUTH_MS } from "./policy";
@@ -12,6 +16,7 @@ const envelopeSchema = z.strictObject({
   expiresAt: z.number().int().nonnegative(),
   userId: z.string().min(1).max(128),
   sessionId: z.string().min(1).max(128),
+  operation: z.literal("delete-account").optional(),
   iv: z.string().regex(/^[A-Za-z0-9_-]{16}$/),
   ciphertext: z
     .string()
@@ -22,6 +27,7 @@ const envelopeSchema = z.strictObject({
 const payloadSchema = mobileReauthPrepareV2Schema.extend({
   startedAt: z.number().int().nonnegative(),
   newSessionId: z.string().min(1).max(128).nullable(),
+  operation: z.literal("delete-account").optional(),
 });
 const encode = (bytes: Uint8Array) =>
   btoa(Array.from(bytes, (byte) => String.fromCharCode(byte)).join(""))
@@ -102,14 +108,28 @@ export function createNativeReauthentication(dependencies: {
   const storageKey = async (attemptId: string) => (await prefix) + (await digest(attemptId));
   const aad = (
     name: string,
-    record: Pick<z.infer<typeof envelopeSchema>, "userId" | "sessionId" | "expiresAt">,
+    record: Pick<
+      z.infer<typeof envelopeSchema>,
+      "userId" | "sessionId" | "expiresAt" | "operation"
+    >,
   ) =>
     encoder.encode(
-      JSON.stringify([issuer, name, record.userId, record.sessionId, record.expiresAt, 1]),
+      JSON.stringify([
+        issuer,
+        name,
+        record.userId,
+        record.sessionId,
+        record.expiresAt,
+        1,
+        ...(record.operation ? [record.operation] : []),
+      ]),
     );
   async function seal(
     name: string,
-    metadata: Pick<z.infer<typeof envelopeSchema>, "userId" | "sessionId" | "expiresAt">,
+    metadata: Pick<
+      z.infer<typeof envelopeSchema>,
+      "userId" | "sessionId" | "expiresAt" | "operation"
+    >,
     payload: z.infer<typeof payloadSchema>,
   ) {
     const iv = crypto.getRandomValues(new Uint8Array(12));
@@ -146,7 +166,8 @@ export function createNativeReauthentication(dependencies: {
       if (
         payload.attemptId !== attemptId ||
         payload.startedAt + NATIVE_REAUTH_TTL_MS !== envelope.expiresAt ||
-        payload.startedAt > time
+        payload.startedAt > time ||
+        payload.operation !== envelope.operation
       )
         throw new NativeAuthProofError();
       return { name, row: row.value, envelope, payload };
@@ -154,96 +175,161 @@ export function createNativeReauthentication(dependencies: {
       throw new NativeAuthProofError();
     }
   }
+  async function prepare(
+    input: z.infer<typeof mobileReauthPrepareV2Schema>,
+    actor: Actor,
+    operation: "reauthenticate" | "delete-account",
+  ) {
+    const time = now(),
+      name = await storageKey(input.attemptId);
+    const value = await seal(
+      name,
+      {
+        ...actor,
+        expiresAt: time + NATIVE_REAUTH_TTL_MS,
+        ...(operation === "delete-account" ? { operation } : {}),
+      },
+      {
+        ...input,
+        startedAt: time,
+        newSessionId: null,
+        ...(operation === "delete-account" ? { operation } : {}),
+      },
+    );
+    const low = await prefix,
+      high = `${low.slice(0, -1)};`;
+    const unusedReceipt =
+      operation === "delete-account"
+        ? " AND NOT EXISTS(SELECT 1 FROM app_metadata WHERE key=?)"
+        : "";
+    const unusedArgs =
+      operation === "delete-account" ? [name.replace("native-reauth:", "native-deletion:")] : [];
+    const result = await dependencies.db.batch([
+      dependencies.db
+        .prepare(
+          `DELETE FROM app_metadata WHERE key>=? AND key<? AND key<>? AND json_valid(value)=1 AND json_extract(CASE WHEN json_valid(value) THEN value ELSE '{}' END,'$.sessionId')=? AND ${active} AND ${linked}${unusedReceipt}`,
+        )
+        .bind(
+          low,
+          high,
+          name,
+          actor.sessionId,
+          ...activeArgs(actor, time),
+          actor.userId,
+          input.provider,
+          ...unusedArgs,
+        ),
+      dependencies.db
+        .prepare(
+          `INSERT INTO app_metadata(key,value,updated_at) SELECT ?,?,? WHERE ${active} AND ${linked}${unusedReceipt} ON CONFLICT(key) DO NOTHING`,
+        )
+        .bind(
+          name,
+          value,
+          new Date(time).toISOString(),
+          ...activeArgs(actor, time),
+          actor.userId,
+          input.provider,
+          ...unusedArgs,
+        ),
+    ]);
+    if (result[1]?.meta.changes !== 1) throw new NativeAuthProofError();
+    try {
+      await cleanupNativeReauthentication(dependencies.db, time);
+    } catch {
+      /* Maintenance cannot invalidate an accepted preparation. */
+    }
+    return { startedAt: time };
+  }
+  async function authorize(
+    input: { attemptId: string; challenge: string },
+    provider: string,
+    actor: Actor,
+    operation: "reauthenticate" | "delete-account",
+  ) {
+    const record = await read(input.attemptId),
+      { payload, envelope } = record;
+    if (
+      (payload.operation ?? "reauthenticate") !== operation ||
+      payload.newSessionId ||
+      envelope.userId !== actor.userId ||
+      payload.provider !== provider ||
+      payload.challenge !== input.challenge ||
+      envelope.sessionId === actor.sessionId
+    )
+      throw new NativeAuthProofError();
+    const value = await seal(record.name, envelope, {
+      ...payload,
+      newSessionId: actor.sessionId,
+    });
+    const time = now();
+    if (envelope.expiresAt <= time) throw new NativeAuthProofError();
+    const result = await dependencies.db
+      .prepare(
+        `UPDATE app_metadata SET value=?,updated_at=? WHERE key=? AND value=? AND ${active} AND ${fresh} AND ${linked}`,
+      )
+      .bind(
+        value,
+        new Date(time).toISOString(),
+        record.name,
+        record.row,
+        ...activeArgs({ userId: envelope.userId, sessionId: envelope.sessionId }, time),
+        ...freshArgs(actor, payload.startedAt, time),
+        actor.userId,
+        provider,
+      )
+      .run();
+    if (result.meta.changes !== 1) throw new NativeAuthProofError();
+    return {
+      originalSessionId: envelope.sessionId,
+      guard: { key: record.name, value, originalSessionId: envelope.sessionId },
+    };
+  }
   return {
-    async prepare(raw: unknown, actor: Actor) {
-      const input = mobileReauthPrepareV2Schema.parse(raw),
-        time = now(),
-        name = await storageKey(input.attemptId);
-      const value = await seal(
-        name,
-        { ...actor, expiresAt: time + NATIVE_REAUTH_TTL_MS },
-        { ...input, startedAt: time, newSessionId: null },
-      );
-      const low = await prefix,
-        high = `${low.slice(0, -1)};`;
-      const result = await dependencies.db.batch([
-        dependencies.db
-          .prepare(
-            `DELETE FROM app_metadata WHERE key>=? AND key<? AND key<>? AND json_valid(value)=1 AND json_extract(CASE WHEN json_valid(value) THEN value ELSE '{}' END,'$.sessionId')=? AND ${active} AND ${linked}`,
-          )
-          .bind(
-            low,
-            high,
-            name,
-            actor.sessionId,
-            ...activeArgs(actor, time),
-            actor.userId,
-            input.provider,
-          ),
-        dependencies.db
-          .prepare(
-            `INSERT INTO app_metadata(key,value,updated_at) SELECT ?,?,? WHERE ${active} AND ${linked} ON CONFLICT(key) DO NOTHING`,
-          )
-          .bind(
-            name,
-            value,
-            new Date(time).toISOString(),
-            ...activeArgs(actor, time),
-            actor.userId,
-            input.provider,
-          ),
-      ]);
-      if (result[1]?.meta.changes !== 1) throw new NativeAuthProofError();
-      try {
-        await cleanupNativeReauthentication(dependencies.db, time);
-      } catch {
-        /* Maintenance cannot invalidate an accepted preparation. */
-      }
-      return { startedAt: time };
+    prepare(raw: unknown, actor: Actor) {
+      return prepare(mobileReauthPrepareV2Schema.parse(raw), actor, "reauthenticate");
+    },
+    prepareDeletion(raw: unknown, actor: Actor) {
+      const { confirmation: _confirmation, ...input } = mobileDeletionPrepareSchema.parse(raw);
+      return prepare(input, actor, "delete-account");
     },
     async authorize(
       input: { attemptId: string; challenge: string },
       provider: string,
       actor: Actor,
     ) {
-      const record = await read(input.attemptId),
-        { payload, envelope } = record;
-      if (
-        payload.newSessionId ||
-        envelope.userId !== actor.userId ||
-        payload.provider !== provider ||
-        payload.challenge !== input.challenge ||
-        envelope.sessionId === actor.sessionId
-      )
-        throw new NativeAuthProofError();
-      const value = await seal(record.name, envelope, {
-        ...payload,
-        newSessionId: actor.sessionId,
-      });
-      const time = now();
-      if (envelope.expiresAt <= time) throw new NativeAuthProofError();
-      const result = await dependencies.db
-        .prepare(
-          `UPDATE app_metadata SET value=?,updated_at=? WHERE key=? AND value=? AND ${active} AND ${fresh} AND ${linked}`,
+      const result = await authorize(input, provider, actor, "reauthenticate");
+      return { originalSessionId: result.originalSessionId };
+    },
+    authorizeDeletion(
+      input: { attemptId: string; challenge: string },
+      provider: string,
+      actor: Actor,
+    ) {
+      return authorize(input, provider, actor, "delete-account");
+    },
+    async cancelDeletion(raw: unknown) {
+      const input = mobileDeletionProofSchema.parse(raw);
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const record = await read(input.attemptId);
+        if (
+          record.payload.operation !== "delete-account" ||
+          (await nativeAuthChallenge(input.verifier)) !== record.payload.challenge
         )
-        .bind(
-          value,
-          new Date(time).toISOString(),
-          record.name,
-          record.row,
-          ...activeArgs({ userId: envelope.userId, sessionId: envelope.sessionId }, time),
-          ...freshArgs(actor, payload.startedAt, time),
-          actor.userId,
-          provider,
-        )
-        .run();
-      if (result.meta.changes !== 1) throw new NativeAuthProofError();
-      return { originalSessionId: envelope.sessionId };
+          throw new NativeAuthProofError();
+        const result = await dependencies.db
+          .prepare("DELETE FROM app_metadata WHERE key=? AND value=?")
+          .bind(record.name, record.row)
+          .run();
+        if (result.meta.changes === 1) return true;
+      }
+      return false;
     },
     async verify(raw: unknown, actor: Actor) {
       const input = mobileReauthProofSchema.parse(raw),
         record = await read(input.attemptId);
       if (
+        record.payload.operation !== undefined ||
         record.envelope.userId !== actor.userId ||
         record.payload.newSessionId !== actor.sessionId ||
         (await nativeAuthChallenge(input.verifier)) !== record.payload.challenge
