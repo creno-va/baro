@@ -208,7 +208,8 @@ export function AppNavigation({
       );
     });
   const renderRecent = () =>
-    resolvedRole === "user" && (
+    resolvedRole === "user" &&
+    !session?.needsConsent && (
       <div className="sidebar-recent">
         <div className="sidebar-recent__heading">
           <p className="sidebar-caption">최근 이야기</p>

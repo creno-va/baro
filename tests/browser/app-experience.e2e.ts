@@ -316,3 +316,23 @@ test("Escape dismisses only the top dialog and restores focus inside its parent"
   await expect(parent).toHaveCount(0);
   await expect(opener).toBeFocused();
 });
+
+test("a pending consent shows its account action without pretending to load recent cases", async ({
+  page,
+}) => {
+  await session(page);
+  await page.route("**/api/me/session", (route) =>
+    route.fulfill({
+      json: {
+        user: { id: "synthetic-owner", name: "필수 확인 계정", accountType: "customer" },
+        needsConsent: true,
+      },
+    }),
+  );
+  await page.goto("/help");
+  await expect(page.locator(".sidebar-desktop .sidebar-profile")).toHaveAttribute(
+    "href",
+    "/consent",
+  );
+  await expect(page.locator(".sidebar-desktop .sidebar-recent")).toHaveCount(0);
+});
