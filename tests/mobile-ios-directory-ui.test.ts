@@ -73,7 +73,9 @@ test("public navigation irreversibly suppresses screenshots and host raw logs be
 });
 test("result requires observed input, keyboard, both window orientations and Home return without exporting public values", () => {
   const value = observation();
-  expect(value).toEqual(parseIosDirectoryResult(`private native chatter\n${encode(value)}`));
+  expect<unknown>(value).toEqual(
+    parseIosDirectoryResult(`private native chatter\n${encode(value)}`),
+  );
   expect(
     parseIosDirectoryResult(encode({ ...value, initialReadyState: "cards" })).initialReadyState,
   ).toBe("cards");
@@ -272,7 +274,12 @@ test("requested public-directory verification requires the Apple signature probe
   ) as {
     jobs: {
       verify: {
-        steps: { name?: string; if?: string; run?: string; env?: Record<string, string> }[];
+        steps: {
+          name?: string;
+          if?: string;
+          run?: string;
+          env?: Record<string, string>;
+        }[];
       };
     };
   };
