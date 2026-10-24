@@ -1597,3 +1597,20 @@ HBC3,665,732B는 원래 receipt와 일치하고 현재9436 Simulator HBC와도 �
 보존한다. private key·Team·provisioning을 사용하지 않았으며 출력은 실제 폰에 설치할 수 없는
 unprovisioned ZIP이다. Apple membership·실제 로그인·CJK 입력·reader·물리 기기 실행·store
 서명/제출/공개 출시 성공을 뜻하지 않는다. 원래 영수증의 false 범위를 유지한다.
+
+### 줄바꿈 UI source의 Android 원본
+
+PR496/main c8215b8·CI40107027393 뒤
+[compiler40107257648](https://github.com/creno-va/baro/actions/runs/40107257648)은 SUCCESS다.
+[원래 receipt](../quality/mobile-native-c8215b8/receipt-android.json)와
+[로컬 원본 결합](../quality/mobile-native-c8215b8/android-local-original-verification.json)을 보존하고
+새 Android pin을 사용한다. 원본 APK57,219,402B의 SHA256은
+`367dcca9db6456e7e4a2d71f905c63f2dd09b5996cdd5b6e1901611bb6ca36ab`다.
+HBC3,653,980B·SHA256 `230b6649ddd8adc4de10449c3fa2f2017db660874ae0c4c8fe296a08a308ea52`와
+compiled font bytes를 원래 receipt와 대조했다. 공식 Apple3PNG는 Android aapt 재직렬화 후
+container bytes가 달라도 투명 여백을 포함한 decoded RGBA가 원래 source와 같은지 확인했다.
+
+이는 컴파일러의 실제 SDK attestation에 결합한 원본 byte 검증이며 새 Emulator의 SDK 재검증/
+렌더링·큰 글자/Guide·입력·실제 인증·physical/store 증거는 아니다. 기존9436 원본과 실제
+관측은 역사로 보존하고, 새 UI의 입력이 달라졌으므로 새 source와 pin 뒤 runtime을 검증한다.
+iOS pin은 해당 source 컴파일 원본을 별도로 확인한 뒤 갱신하며 아직 이전 원본이다.

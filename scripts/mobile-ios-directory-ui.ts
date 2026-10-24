@@ -119,6 +119,7 @@ const assertionCodes = [
   "BARO_KOREAN_SETTINGS_CONTROL_MISSING",
   "BARO_KOREAN_SETTINGS_CANDIDATES_EXCEEDED",
   "BARO_KOREAN_LAYOUT_MISSING",
+  "BARO_KOREAN_LAYOUT_ACTIONABLE_OWNER_MISSING",
   "BARO_KOREAN_SETTINGS_DONE_MISSING",
   "BARO_KOREAN_SETTINGS_READBACK_MISSING",
   "BARO_KOREAN_KEY_MISSING",
@@ -237,11 +238,20 @@ const koreanStatusSchema = z.strictObject({
 });
 const koreanSetupControlSchema = z
   .strictObject({
-    stage: z.enum(["general", "keyboard", "keyboard-list", "add-keyboard", "korean"]),
+    stage: z.enum([
+      "general",
+      "keyboard",
+      "keyboard-list",
+      "add-keyboard",
+      "korean",
+      "layout",
+      "done",
+    ]),
     cellCount: z.number().int().min(0).max(8),
     buttonCount: z.number().int().min(0).max(8),
     textCount: z.number().int().min(0).max(8),
     ownersOverlap: z.boolean().optional(),
+    cellQuerySource: z.enum(["direct-label", "known-descendant"]).optional(),
     selection: z.enum(["cell", "button", "text", "none", "ambiguous"]),
     scrolls: z.number().int().min(0).max(12),
   })
@@ -279,6 +289,19 @@ const koreanSetupControlSchema = z
             : "none")
     );
   });
+const koreanLayoutStatusSchema = z
+  .strictObject({
+    stage: z.enum(["before-selection", "after-selection"]),
+    traitSelected: z.boolean(),
+    valueClass: z.enum(["absent", "selected", "unselected", "empty", "other"]),
+    doneButtonCount: z.number().int().min(0).max(8),
+    doneHittable: z.boolean(),
+    doneInNavigationBar: z.boolean(),
+    standardObserved: z.boolean(),
+    tenKeyObserved: z.boolean(),
+    koreanTitleObserved: z.boolean(),
+  })
+  .refine((v) => !v.doneHittable || v.doneButtonCount === 1);
 export function observeIosKoreanDirectoryFailure(output: string) {
   const prefix = "BARO_KOREAN_UI_STATUS:",
     history: z.infer<typeof koreanStatusSchema>[] = [];
@@ -324,8 +347,24 @@ export function observeIosKoreanDirectoryFailure(output: string) {
       /* Known counts only; never retain native labels or paths. */
     }
   }
+  const layoutPrefix = "BARO_KOREAN_LAYOUT_STATUS:";
+  let layoutStatus: z.infer<typeof koreanLayoutStatusSchema> | null = null;
+  for (const line of output
+    .split(/\r?\n/)
+    .filter((line) => line.startsWith(layoutPrefix))
+    .slice(-3)) {
+    try {
+      const parsed = koreanLayoutStatusSchema.safeParse(
+        JSON.parse(line.slice(layoutPrefix.length)),
+      );
+      if (parsed.success) layoutStatus = parsed.data;
+    } catch {
+      /* Only fixed state classes, counters and presence flags are retained. */
+    }
+  }
   return {
     history,
+    layoutStatus,
     setupControl,
     setupStage: setupStages.find((stage) => stage === lastSetup) ?? null,
     assertionCode: observeIosDirectoryFailure(output).assertionCode,

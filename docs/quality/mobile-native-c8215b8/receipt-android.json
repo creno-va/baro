@@ -1,0 +1,74 @@
+{
+  "version": 1,
+  "kind": "internal-bundled-preview-app",
+  "sourceSha": "c8215b886848b102c506b40e2176498455d63668",
+  "platform": "android",
+  "environment": "preview",
+  "apiOrigin": "https://preview.baro.site",
+  "apiObservation": {
+    "status": "observed",
+    "observedAt": "2026-10-24T15:47:01.230Z",
+    "sourceSha": "d8423c6e979b621d46027107aa1d0d4cbb99cf5f"
+  },
+  "versionName": "0.1.0",
+  "buildVersion": "1",
+  "expo": "58.0.17",
+  "reactNative": "0.88.0",
+  "applicationId": "site.baro.app.preview",
+  "minimumOS": "24",
+  "installTarget": "android-device-or-emulator",
+  "architectures": [
+    "arm64-v8a",
+    "x86_64"
+  ],
+  "signing": {
+    "kind": "android-debug",
+    "certificateSha256": "fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c",
+    "verifier": "android-sdk-apksig",
+    "buildTools": "37.0.0"
+  },
+  "artifact": {
+    "name": "baro-internal-preview-android-c8215b886848b102c506b40e2176498455d63668.apk",
+    "bytes": 57219402,
+    "sha256": "367dcca9db6456e7e4a2d71f905c63f2dd09b5996cdd5b6e1901611bb6ca36ab"
+  },
+  "compiledFont": {
+    "kind": "compiled-resource-only",
+    "family": "BaroMobile",
+    "sha256": "3ae12c1281a84901b32d8c5f0e43fd6c4f8a5b7fd4ccbde66cfbe9f07cde05e8",
+    "weights": [
+      400,
+      600,
+      700
+    ],
+    "glyphs": 14757,
+    "codepoints": 14336,
+    "hangul": 11172,
+    "licenseEmbedded": true,
+    "compiledBytesMatch": true,
+    "appRuntimeVerified": false
+  },
+  "compatibility": "runtime-smoke-required",
+  "requiresMetro": false,
+  "binaryMetadataVerified": true,
+  "appRuntimeVerified": false,
+  "remoteApiVerified": false,
+  "physicalDeviceVerified": false,
+  "storeSigned": false,
+  "deployed": false,
+  "nativeConfiguration": "Release",
+  "launchableActivity": "site.baro.app.preview.MainActivity",
+  "debuggable": false,
+  "embeddedBundle": {
+    "path": "assets/index.android.bundle",
+    "format": "hermes-bytecode",
+    "bytes": 3653980,
+    "sha256": "230b6649ddd8adc4de10449c3fa2f2017db660874ae0c4c8fe296a08a308ea52",
+    "compiledBytesMatch": true,
+    "productEntry": "expo-router/entry",
+    "productSourceObserved": true,
+    "probeSourceAbsent": true,
+    "sourceMapPackaged": false,
+    "sourceModules": 1471
+  }
+}
