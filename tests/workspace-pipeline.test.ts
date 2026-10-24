@@ -75,6 +75,52 @@ function pipeline(reply: (phase: Phase, input: unknown) => unknown | Promise<unk
   };
 }
 
+test("new choices omit built-in unknown/skip before audit without losing substantive negative answers", async () => {
+  const saved = context();
+  const draft = {
+    questions: [
+      {
+        id: "new",
+        prompt: "기록을 가지고 있나요?",
+        answerType: "choice",
+        options: ["가지고 있음", "기록이 없음", "잘 모르겠어요", "건너뛰기"],
+      },
+    ],
+  };
+  const p = pipeline((phase, input) => {
+    if (phase !== "workspace_audit") return draft;
+    expect(input).toMatchObject({
+      context: saved,
+      draft: { questions: [{ answerType: "choice", options: ["가지고 있음", "기록이 없음"] }] },
+    });
+    return approved;
+  });
+  const result = await p.value.questions(saved, "synthetic-readable-choices");
+  expect(result[0]?.options).toEqual(["가지고 있음", "기록이 없음"]);
+  expect(p.calls.map((call) => call.phase)).toEqual(["workspace_questions", "workspace_audit"]);
+  expect(saved.intake.batches[0]?.answers).toEqual([{ questionId: "q2", status: "unknown" }]);
+});
+
+test("reserved choices leaving fewer than two substantive answers become a valid free answer without regeneration", async () => {
+  const p = pipeline((phase) =>
+    phase === "workspace_audit"
+      ? approved
+      : {
+          questions: [
+            {
+              id: "new",
+              prompt: "돈을 받은 때가 언제쯤이었나요?",
+              answerType: "choice",
+              options: ["지난달 말쯤", "모름", "Skip"],
+            },
+          ],
+        },
+  );
+  const result = await p.value.questions(context(), "synthetic-free-answer");
+  expect(result[0]).toMatchObject({ answerType: "text", options: [] });
+  expect(p.calls).toHaveLength(2);
+});
+
 function confirmedChatContext(): WorkspaceContext {
   const saved = context();
   const summary = {

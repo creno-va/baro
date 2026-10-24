@@ -12,6 +12,8 @@ export function providerWire(input: {
     !input.extra_body &&
     ![
       "baro_workspace_chat_v2",
+      "baro_workspace_questions_v2",
+      "baro_workspace_summary_v2",
       "baro_minimize_v1",
       "baro_screening_v1",
       "baro_structure_v1",

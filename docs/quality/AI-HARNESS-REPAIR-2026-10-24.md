@@ -1235,3 +1235,30 @@ Collect Logs off and authenticated Gateway on. No settings, credentials,
 billing or retention were changed. A configured Gateway auto-retry is therefore
 not observed as the cause of these calls; native-thinking latency and the
 second actual provider terminal outcome remain unverified.
+
+### 2026-10-25 intake latency and plain-language follow-up (PR521)
+
+Direct user observation is confirmed by read-only private job/checkpoint metadata
+on the currently serving preview64539ba (no narratives, answers or identifiers
+are reproduced here). Two consecutive question batches took approximately141s
+and227s end to end; the latter included another generation/audit cycle. Summary
+took approximately178s, including116s in generation and49s in validation. These
+checkpoint intervals include the stage's admission/persistence work and are not
+claimed as isolated provider latency. No customer operation was retried or edited.
+
+Questions/summary now use explicit native LOW. Focused MEDIUM intake audits keep
+ALL input context and the existing independent audit/rejection predicates, but
+omit unrelated chat/material-tool/source-claim instructions. Workspace prompt2.7
+characters: questions4967→2931, summary3950→3116; audit7875→2946/3434 respectively.
+Schema sizes remain911/4601 bytes; reusable refs were not imposed where larger.
+These size reductions are measured locally, not proof of lower live latency.
+
+Natural Korean/approximate remembered dates replace machine-format demands.
+Only new generated choice options are normalized before audit to remove the UI's
+built-in unknown/skip labels. Substantive negative answers stay; fewer than two
+remaining choices become a schema-valid free answer without another model call.
+Saved answers and questions are unchanged. Evaluation identity includes both
+specialized audit wires and corpus workspace-v2-3. Focused109 tests and scripted
+50+60 evaluations passed; these are offline and do not establish live quality.
+A fixture adapter initially failed to recognize specialized audit prompts; it was
+fixed to select by the actual server phase before the successful evaluation.

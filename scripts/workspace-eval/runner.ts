@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { V2_INTAKE_POLICY, type V2Fact } from "../../src/contracts/v2";
-import { MODEL_ID, type Phase, prompts } from "../../src/server/modules/llm-gateway/prompts";
+import { MODEL_ID, type Phase, promptFor } from "../../src/server/modules/llm-gateway/prompts";
 import { providerWire } from "../../src/server/modules/llm-gateway/provider-wire";
 import {
   createLlmGateway,
@@ -78,6 +78,9 @@ export async function evaluationIdentity() {
       policy: V2_INTAKE_POLICY,
       wire: ["workspace_questions", "workspace_summary", "workspace_chat", "workspace_audit"].map(
         (phase) => providerWire(prepareGatewayWireInput(phase as Phase, {})),
+      ),
+      intakeAudits: ["workspace_questions", "workspace_summary"].map((phase) =>
+        providerWire(prepareGatewayWireInput("workspace_audit", { phase })),
       ),
     }),
   };
@@ -204,9 +207,11 @@ async function scenarioRun(s: Scenario, calls?: CapturedCall[]) {
           }
           const format = input.response_format as { json_schema: { name: string } } | undefined;
           const system = input.systemInstruction as { parts: { text: string }[] } | undefined;
+          const contents = input.contents as { parts: { text: string }[] }[] | undefined;
+          const data = contents ? JSON.parse(contents[0]?.parts[0]?.text ?? "{}").data : undefined;
           const isAudit =
             format?.json_schema.name.includes("workspace_audit") ||
-            system?.parts.some((part) => part.text.endsWith(prompts.workspace_audit));
+            system?.parts.some((part) => part.text.endsWith(promptFor("workspace_audit", data)));
           const response = calls
             ? stored?.response
             : completion(isAudit ? approvedAudit : s.scripted);

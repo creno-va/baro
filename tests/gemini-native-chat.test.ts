@@ -1,7 +1,10 @@
 import { expect, test } from "bun:test";
 import { z } from "zod";
 import { providerWire } from "../src/server/modules/llm-gateway/provider-wire";
-import { prepareGatewayWireInput } from "../src/server/modules/llm-gateway/service";
+import {
+  gatewayWireIdentity,
+  prepareGatewayWireInput,
+} from "../src/server/modules/llm-gateway/service";
 import { workspaceChatOutputSchema } from "../src/server/modules/llm-gateway/v2/schemas";
 
 const draft = {
@@ -37,7 +40,7 @@ test("compact chat definitions preserve required fields, closed objects and lega
   ).toBe(false);
 });
 
-test("chat uses explicit native LOW while accepted v2 questions and summary remain unchanged", () => {
+test("chat uses explicit native LOW", () => {
   const wire = prepareGatewayWireInput("workspace_chat", {});
   const actual = providerWire(wire);
   expect(actual).toMatchObject({
@@ -50,10 +53,6 @@ test("chat uses explicit native LOW while accepted v2 questions and summary rema
   });
   for (const key of ["messages", "reasoning_effort", "extra_body", "response_format"])
     expect(actual).not.toHaveProperty(key);
-  for (const phase of ["workspace_questions", "workspace_summary"] as const) {
-    const accepted = prepareGatewayWireInput(phase, {});
-    expect(providerWire(accepted)).toBe(accepted);
-  }
 });
 
 test("chat numeric grammar is compact but material windows remain range-checked before use", () => {
@@ -92,4 +91,64 @@ test("chat numeric grammar is compact but material windows remain range-checked 
       output: { ...valid, requestedMaterials: [{ ...valid.requestedMaterials[0], count: 1.5 }] },
     }).success,
   ).toBe(false);
+});
+
+test.each(["workspace_questions", "workspace_summary"] as const)(
+  "%s uses native LOW and its complete input in the admitted wire",
+  async (phase) => {
+    const data = { intake: { narrative: "합성 질문의 날짜는 지난달 말쯤입니다.", batches: [] } };
+    const wire = prepareGatewayWireInput(phase, data);
+    const actual = providerWire(wire) as Record<string, unknown>;
+    expect(actual).toMatchObject({
+      contents: [{ role: "user", parts: [{ text: wire.messages[1]?.content }] }],
+      generationConfig: {
+        maxOutputTokens: phase === "workspace_questions" ? 2400 : 10000,
+        thinkingConfig: { thinkingLevel: "LOW", includeThoughts: false },
+        responseJsonSchema: wire.response_format.json_schema.schema,
+      },
+    });
+    expect(actual).not.toHaveProperty("reasoning_effort");
+    expect(actual).not.toHaveProperty("messages");
+    const bytes = new TextEncoder().encode(JSON.stringify(actual));
+    const sha = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)), (b) =>
+      b.toString(16).padStart(2, "0"),
+    ).join("");
+    expect(await gatewayWireIdentity(wire)).toEqual({
+      inputBytes: bytes.byteLength,
+      wireInputSha256: sha,
+    });
+  },
+);
+
+test.each(["workspace_questions", "workspace_summary"] as const)(
+  "%s audit omits chat-only instructions while preserving MEDIUM and all source text",
+  (phase) => {
+    const context = {
+      intake: { narrative: "합성 불리한 진술", batches: [{ answers: [{ status: "unknown" }] }] },
+    };
+    const data = { phase, context, draft: { synthetic: "합성 초안" } };
+    const full = prepareGatewayWireInput("workspace_audit", {});
+    const wire = prepareGatewayWireInput("workspace_audit", data);
+    expect(wire.messages[0]?.content.length ?? Infinity).toBeLessThan(
+      (full.messages[0]?.content.length ?? 0) * 0.65,
+    );
+    expect(wire.messages[0]?.content).toContain("ALL supplied context");
+    expect(wire.messages[0]?.content).toContain("If any critical issue exists, pass=false");
+    expect(wire.messages[0]?.content).toContain("unknown/skipped");
+    expect(wire.messages[0]?.content).not.toContain("For workspace_chat:");
+    expect(JSON.parse(wire.messages[1]?.content ?? "{}").data).toEqual(data);
+    expect(providerWire(wire)).toMatchObject({
+      generationConfig: { thinkingConfig: { thinkingLevel: "MEDIUM", includeThoughts: false } },
+    });
+  },
+);
+
+test("unrecognized or nested user phase cannot select a narrower audit prompt", () => {
+  const full = prepareGatewayWireInput("workspace_audit", {}).messages[0]?.content;
+  for (const data of [
+    { phase: "invented" },
+    { context: { phase: "workspace_questions" } },
+    { phase: "workspace_chat" },
+  ])
+    expect(prepareGatewayWireInput("workspace_audit", data).messages[0]?.content).toBe(full);
 });

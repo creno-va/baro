@@ -15,6 +15,8 @@ Questions name a specific unresolved event, role, date, agreement or available r
 
 ## Harness and compatibility
 
+2026-10-25 direct user clarification: use everyday Korean and natural answers, never demand `YYYY-MM-DD` or technical legal terminology. Approximate remembered dates are acceptable. Unknown/skip are existing interface actions and must not be duplicated as generated choice options. Focused intake generation/audit prompts replace unrelated chat/tool instructions; generation stays native LOW and the separate audit stays MEDIUM with the complete supplied sources and the same acceptance checks. User pauses RN development and prioritizes web AI; broader screen UX belongs to the user's separate session.
+
 Keep strict output schemas, server-side factual/reference/policy/citation checks and a separate audit before publication. Current prompt/wire identity changes invalidate old evaluation receipts. The fixed workspace corpus adds concrete-question, contradictory-payment, absent-record and ambiguous-party scenarios; usability and uncertainty require explicit human review as well as deterministic checks.
 
 Current technical capacity (1,048,576 context; 65,536 output tokens) has its own documentary observation. Preserve the 2026-10-06 GPT account/cost observation and its dates and amounts. Deployment uses the current capability file, never old bounds relabeled as Gemini. New immutable plans bind model identity, historical plans without it remain readable, and mismatched cost evidence stays incomplete. No schema migration or cost gate is introduced.
