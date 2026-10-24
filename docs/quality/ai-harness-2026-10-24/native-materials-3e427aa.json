@@ -1,0 +1,13 @@
+{
+  "candidateSha": "3e427aafad5136567895768f4e9a202ef003ef6f",
+  "workflowRun": "https://github.com/creno-va/baro/actions/runs/40075714391",
+  "jobId": 120819309554,
+  "profile": "validate:native",
+  "runtimeLocation": "github-linux-docker",
+  "startedAt": "2026-10-24T07:54:47Z",
+  "completedAt": "2026-10-24T08:01:28Z",
+  "conclusion": "success",
+  "modelCalls": 0,
+  "deployedWorker": false,
+  "fullReleaseAccepted": false
+}

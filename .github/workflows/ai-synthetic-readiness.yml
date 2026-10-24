@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       feature_case:
-        description: One AI feature (max3), all seven (max21), or native_materials (no models)
+        description: One AI feature (max3), chat_tools (max12), all seven (max21), or native_materials (no models)
         required: true
         default: workspace_questions
         type: choice
@@ -17,6 +17,7 @@ on:
           - tools_property
           - tools_registry
           - all
+          - chat_tools
           - native_materials
       candidate_sha:
         description: Exact current main SHA with successful CI; isolated synthetic Worker only
@@ -43,7 +44,7 @@ jobs:
       fail-fast: false
       max-parallel: 1
       matrix:
-        feature_case: ${{ fromJSON(inputs.feature_case == 'all' && '["workspace_questions","workspace_summary","workspace_chat","media","tools_business","tools_property","tools_registry"]' || format('["{0}"]', inputs.feature_case)) }}
+        feature_case: ${{ fromJSON(inputs.feature_case == 'all' && '["workspace_questions","workspace_summary","workspace_chat","media","tools_business","tools_property","tools_registry"]' || inputs.feature_case == 'chat_tools' && '["workspace_chat","tools_business","tools_property","tools_registry"]' || format('["{0}"]', inputs.feature_case)) }}
     timeout-minutes: ${{ matrix.feature_case == 'native_materials' && 45 || 10 }}
     environment:
       name: preview

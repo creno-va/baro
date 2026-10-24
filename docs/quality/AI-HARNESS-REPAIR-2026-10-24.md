@@ -247,3 +247,11 @@ with shared definitions before common provider projection; this is payload size,
 not a token/cost/latency prediction. JSON Schema roundtrip tests verify required
 fields and closed objects remain enforceable, and server max2 tool requests remains.
 Actual changed-condition chat/tool acceptance is still required.
+
+[Native component40075714391](https://github.com/creno-va/baro/actions/runs/40075714391)
+on3e427aa succeeded through the actual pinned Linux Docker fixture profile, including
+document/office/HEIF, sampled video/audio, sanitization and report-native tests.
+The finite native-materials receipt records actual job times and reference. It is
+not deployed Cloudflare Container/product/OAuth or full/security acceptance. No model
+calls occurred. The manual chat_tools selector lets a changed chat candidate test
+only the four affected cases, retaining each case's durable counter and observations.
