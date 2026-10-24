@@ -1013,6 +1013,20 @@ test("partial upload readback failure retries only the unaccepted remainder", as
   await expect(page.getByRole("alert")).toContainText(
     "이미 접수된 자료는 다시 업로드하지 않아도 돼요",
   );
+  await page.getByRole("button", { name: "새로고침 · 다시 확인", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "accepted-first.txt", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "자료 확인", exact: true }).click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await page.getByRole("dialog").getByRole("button", { name: "닫기", exact: true }).last().click();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  const retry = page.getByRole("button", { name: "업로드 다시 시도", exact: true });
+  await expect(retry).toBeVisible();
+  await captureCaseViewports(page, "upload-retry-after-reading");
+  await page.getByLabel("선택 자료의 자동 처리에 동의합니다.").uncheck();
+  await expect(retry).toBeDisabled();
+  await page.getByLabel("선택 자료의 자동 처리에 동의합니다.").check();
   await page.getByRole("button", { name: "업로드 다시 시도", exact: true }).click();
   await expect(
     page.getByRole("heading", { name: "accepted-first.txt", exact: true }),
