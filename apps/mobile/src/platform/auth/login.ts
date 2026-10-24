@@ -35,11 +35,14 @@ export function createNativeLogin(dependencies: {
   proof: () => Promise<{ verifier: string; challenge: string }>;
   resetCredentials: () => Promise<void>;
   capabilities?: () => Promise<MobileAuthProtocol>;
-  authorize: (input: {
-    provider: MobileProvider;
-    callbackURL: string;
-    errorCallbackURL: string;
-  }) => Promise<{ url: string; oauthState?: string }>;
+  authorize: (
+    input: {
+      provider: MobileProvider;
+      callbackURL: string;
+      errorCallbackURL: string;
+    },
+    ensureCurrent?: () => void,
+  ) => Promise<{ url: string; oauthState?: string }>;
   openBrowser: (
     url: string,
     returnURL: string,
@@ -271,11 +274,14 @@ export function createNativeLogin(dependencies: {
         );
         const errorCallback = new URL(callbackURL);
         errorCallback.searchParams.set("error", "oauth");
-        const authorization = await dependencies.authorize({
-          provider,
-          callbackURL,
-          errorCallbackURL: errorCallback.href,
-        });
+        const authorization = await dependencies.authorize(
+          {
+            provider,
+            callbackURL,
+            errorCallbackURL: errorCallback.href,
+          },
+          () => ensure(captured),
+        );
         ensure(captured);
         const proxy = new URL("/api/auth/expo-authorization-proxy", dependencies.config.apiBaseUrl);
         proxy.searchParams.set("authorizationURL", authorization.url);
