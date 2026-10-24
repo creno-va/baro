@@ -224,9 +224,13 @@ for (const alteration of [
       }
       if (alteration === "ciphertext" || alteration === "expiry") {
         const envelope = JSON.parse(handle.metadata.value);
-        if (alteration === "ciphertext")
-          envelope.ciphertext = `A${envelope.ciphertext.slice(1, -1)}B`;
-        else envelope.expiresAt--;
+        if (alteration === "ciphertext") {
+          // Fixed letters can already match, or differ only in unused base64 padding bits.
+          // Flip an authenticated byte so every fixture actually changes the ciphertext.
+          const bytes = Buffer.from(envelope.ciphertext, "base64url");
+          bytes[0] = (bytes[0] ?? 0) ^ 1;
+          envelope.ciphertext = bytes.toString("base64url");
+        } else envelope.expiresAt--;
         f.db.sqlite
           .query("UPDATE app_metadata SET value=? WHERE key=?")
           .run(JSON.stringify(envelope), handle.metadata.key);
