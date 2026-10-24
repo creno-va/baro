@@ -1,0 +1,31 @@
+{
+  "reviewRecordedAt": "2026-10-24T02:58:39.781Z",
+  "toolingSourceSha": "139fd49c296c75dc9765b79d17e6ab8849b391e7",
+  "binarySourceSha": "b3eea741010b572158a01fc50b51e58aa13344c6",
+  "originalApkAndCompilerReceiptMatched": true,
+  "sdkMetadataReceiptMatched": true,
+  "actualCertificateSha256": "fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c",
+  "failureSha256": "f3fb0af69466fc93a694b6396d0851ba0e7ee0743c231b3a2dc57ef1e9fae8cd",
+  "phase": "cold-launch-1",
+  "code": "BUNDLED_HOME_WAIT_EXPIRED",
+  "screenshot": {
+    "name": "failure.png",
+    "bytes": 160946,
+    "sha256": "8eb061207a786faf46d4dceb7ce73511c096dc61a24f21d3f6c14ebcea4b2d6a",
+    "width": 1080,
+    "height": 2400,
+    "prePublicNavigation": true
+  },
+  "visualObservation": {
+    "pixelLauncherNotRespondingDialogVisible": true,
+    "anonymousBaroHomeVisibleBehindDialog": true,
+    "baroAnrAttributed": false,
+    "previousReadyFailureAttributed": false
+  },
+  "captureBoundaryReached": false,
+  "directoryInputReached": false,
+  "unchangedRetryPerformed": false,
+  "rootTechnicalCauseConfirmed": false,
+  "productJourneysVerified": false,
+  "physicalDeviceVerified": false
+}

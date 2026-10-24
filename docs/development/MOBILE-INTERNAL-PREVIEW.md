@@ -1205,8 +1205,8 @@ TextInput synchronization에서 string value가 native text를 다시 맞추는 
 PR448 head a8967a53…의 CI40055541365/Android host40055541370 SUCCESS 뒤 main
 `139fd49c296c75dc9765b79d17e6ab8849b391e7`로 정상 통합했고 main CI40055749791도 SUCCESS다.
 바뀐 고정 진단의 [Android actual40055905132](https://github.com/creno-va/baro/actions/runs/40055905132)을
-그 source139fd49/앱b3eea74로 한 차례 시작했다. 현재 같은 run native 관측 진행 중이며 이
-진단 관측을 아래 후속 제품 수정의 실제 입력 성공으로 적용하지 않는다.
+그 source139fd49/앱b3eea74로 한 차례 시작했고 이후 cold-launch-1에서 실패했다. 상세는 아래에
+보존하며 이 진단 관측을 후속 제품 수정의 실제 입력 성공으로 적용하지 않는다.
 
 `DirectoryQueryField`는 committedQuery를 TextField의 defaultValue로만 전달하고 native가
 편집 중인 draft를 소유한다. 앱은 per-key controlled value를 되쓰거나 draft setState를 하지
@@ -1227,3 +1227,19 @@ React 인스턴스 유지/확정 query·필터 변경 및 empty reset을 검사�
 회전 검사는 그대로 유지한다. 새 제품의 exact PR/main CI 뒤 양 OS compiler·성공 원본 pin을
 갱신하고 새 바이너리로 검증해야 한다. compiler/SDK/과거171989e·b3eea74 관측을 이 제품의
 실제 성공으로 재명명하지 않는다. 웹 UI·계약/DB·공급자/비용 정책과 전체 gate를 보존한다.
+
+### Android 공개 경계 전 Pixel Launcher 응답 없음
+
+40055905132는 terminal FAILURE이며 [원본 실패](../quality/mobile-internal-android-2026-10-24/launcher-failure-139fd49.json)의
+SHA256은 `f3fb0af69466fc93a694b6396d0851ba0e7ee0743c231b3a2dc57ef1e9fae8cd`다.
+cold-launch-1/BUNDLED_HOME_WAIT_EXPIRED이고 SDK Home 인수·공개 capture boundary·directory
+관측에는 도달하지 않았다. post-boundary 실패0/last dump null은 해당 경계에 진입하지 않은
+사실이며 모든 native 명령 성공을 뜻하지 않는다. [SDK metadata](../quality/mobile-internal-android-2026-10-24/launcher-verification-139fd49.json)·
+원본 APK/receipt와 [실패 PNG/독립 대조](../quality/mobile-internal-android-2026-10-24/launcher-failure-independent-139fd49.json)를 보존한다.
+
+pre-public failure.png1080×2400/160,946bytes/8eb06120…의 실물에는 익명 BARO Home이
+보이고 그 위에 Pixel Launcher isn't responding dialog가 떠 있다. BARO 자체 ANR이나
+이전40053634921 ready 실패의 같은 원인을 증명하지는 않는다. 이 앱은 PR449 이전b3eea74다.
+같은 조건을 재실행하지 않고, 다음 Android 범위에서 소유 Emulator가 product 진입 전에
+launcher/system의 응답 baseline을 충족하는지 확인하도록 보강한다. ANR dialog를 닫거나
+Wait를 눌러 성공을 강제하지 않는다. 원래 물리 자원·time/attempt와 privacy 경계를 유지한다.
