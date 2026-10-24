@@ -19,6 +19,8 @@ import {
   safeQuotationResolution,
 } from "../modules/citation/quotation-spans";
 import { hasCurrentConsent } from "../modules/consent/service";
+import { lookupCatalog, lookupConfiguration } from "../modules/external-tools/catalog";
+import { createExternalTools } from "../modules/external-tools/service";
 import { GUIDE_HOSTS } from "../modules/legal-retrieval/v2/registry";
 import { createV2LegalRetrieval } from "../modules/legal-retrieval/v2/service";
 import {
@@ -164,6 +166,7 @@ export function createWorkspaceDependencies(core: V2Core, env: Env): WorkspaceDe
       );
       const invocationId = crypto.randomUUID(),
         phase = phaseFor(input.kind);
+      context.lookupTools = lookupCatalog(lookupConfiguration(env));
       const binding: GatewayExecutionBinding = {
         ...proofs,
         operationId: input.admission.operationId,
@@ -213,6 +216,7 @@ export async function runWorkspaceRuntime(
     guideHosts: GUIDE_HOSTS,
     authorize: (ownerId) => hasCustomerWorkspaceAccess(core, ownerId),
     pipeline: async (job, lease, context, progress) => {
+      context.lookupTools = lookupCatalog(lookupConfiguration(env));
       const row = await core
         .statement(
           "SELECT h.attempt_id,p.payload_json,p.created_at,c.allocation_proof_id FROM v2_execution_job_holds h JOIN v2_execution_job_plans p ON p.id=h.plan_id JOIN v2_execution_attempts a ON a.id=h.attempt_id LEFT JOIN v2_runtime_controls c ON c.month=a.month AND c.environment=? WHERE h.job_id=? AND h.state='prepared' AND p.target_revision=? AND p.deadline_at>? ORDER BY h.attempt_id LIMIT 1",
@@ -317,6 +321,39 @@ export async function runWorkspaceRuntime(
       return createWorkspacePipeline(gateway, {
         reserve: async () => hasCustomerWorkspaceAccess(core, params.ownerId),
         invocation,
+        lookup: async (tools) => {
+          await progress.enter("retrieval");
+          const service = createExternalTools(lookupConfiguration(env));
+          const results = [];
+          for (const tool of tools) {
+            results.push(
+              await service.execute(tool, null, {
+                authorize: async () => {
+                  if (!(await hasCustomerWorkspaceAccess(core, params.ownerId))) return false;
+                  return !!(await core
+                    .statement(
+                      "SELECT id FROM v2_jobs WHERE id=? AND lease_token=? AND fencing=? AND lease_until>? AND status IN ('running','validating') AND EXISTS(SELECT 1 FROM v2_workspaces WHERE id=? AND owner_id=? AND current_job_id=v2_jobs.id AND revision=?)",
+                      [
+                        job.id,
+                        lease.token,
+                        lease.fencing,
+                        new Date().toISOString(),
+                        params.workspaceId,
+                        params.ownerId,
+                        params.workspaceRevision,
+                      ],
+                    )
+                    .first());
+                },
+                // Targets are never inferred from chat. Until a separate explicit
+                // target/recipient-consent flow exists, no network claim is issued.
+                reserve: async () => false,
+                signal: new AbortController().signal,
+              }),
+            );
+          }
+          return results;
+        },
         observeQuotationResolution: (value) => {
           quotationResolution = safeQuotationResolution(value);
         },

@@ -29,6 +29,7 @@ import {
   v2WorkspaceSchema,
 } from "../../contracts/v2";
 import type { EnvelopeCipher } from "../crypto";
+import { publicStoredMessageSchema } from "../modules/workspace/stored-message";
 import { usageDateKst } from "./repository";
 import {
   createV2AccountingRepository,
@@ -1220,7 +1221,7 @@ export function createV2WorkspaceRepository(
               actor.ownerId,
               row.revision,
               row.encrypted_payload,
-              v2MessageSchema(guideHosts),
+              publicStoredMessageSchema(guideHosts),
             ),
           ),
         );

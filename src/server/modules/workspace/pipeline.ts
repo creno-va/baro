@@ -2,13 +2,19 @@ import type {
   V2Fact,
   V2FactReference,
   V2Intake,
+  V2LookupToolId,
   V2Message,
   V2OfficialCitation,
   V2ReferenceContext,
   V2Summary,
+  V2ToolResult,
   V2UserMessage,
 } from "../../../contracts/v2";
-import { V2_INTAKE_POLICY, v2ReferenceIsAuthorized } from "../../../contracts/v2";
+import {
+  V2_INTAKE_POLICY,
+  v2ReferenceIsAuthorized,
+  v2ToolResultsSchema,
+} from "../../../contracts/v2";
 import {
   reportWorkspaceFactFailure,
   type WorkspaceFactFailure,
@@ -16,6 +22,7 @@ import {
 import type { ClaimFailure } from "../citation/claim-diagnostics";
 import { type QuotationResolution, resolveQuotationSpans } from "../citation/quotation-spans";
 import { claimReviewHash, type SourceClaim, validateV2Claims } from "../citation/v2-validate";
+import type { lookupCatalog } from "../external-tools/catalog";
 import type { RetrievalOutput } from "../legal-retrieval/v2/contracts";
 import type { WorkspaceSourceRequest } from "../legal-retrieval/v2/workspace-plans";
 import type { projectWorkspaceSources } from "../legal-retrieval/v2/workspace-sources";
@@ -51,6 +58,9 @@ export type WorkspaceContext = {
   sourceLookupPerformed?: boolean;
   materialLookupPerformed?: boolean;
   history?: V2Message[];
+  lookupTools?: ReturnType<typeof lookupCatalog>;
+  toolResults?: V2ToolResult[];
+  toolLookupPerformed?: boolean;
   contextCoverage?: {
     factsPartial: boolean;
     partiesPartial: boolean;
@@ -321,6 +331,7 @@ export function createWorkspacePipeline(
       context: WorkspaceContext,
       requests: WorkspaceSourceRequest[],
     ) => Promise<WorkspaceContext>;
+    lookup?: (tools: V2LookupToolId[]) => Promise<V2ToolResult[]>;
     readMaterials?: (
       context: WorkspaceContext,
       requests: MaterialWindowRequest[],
@@ -454,8 +465,30 @@ export function createWorkspacePipeline(
         !context.latestMessage
       )
         throw new ModelError("POLICY_REJECTED");
-      context = { ...context, sourceLookupPerformed: false };
+      context = {
+        ...context,
+        sourceLookupPerformed: false,
+        ...(context.lookupTools ? { toolLookupPerformed: false, toolResults: [] } : {}),
+      };
       let draft = workspaceChatOutputSchema.parse(await call("workspace_chat", context, requestId));
+      const toolsRequested = draft.requestedTools.length > 0;
+      if (toolsRequested) {
+        if (
+          !deps.lookup ||
+          new Set(draft.requestedTools).size !== draft.requestedTools.length ||
+          draft.requestedTools.some(
+            (tool) => !context.lookupTools?.some((entry) => entry.tool === tool),
+          )
+        )
+          throw new WorkspaceOutputPolicyError("unauthorized_reference");
+        const toolResults = v2ToolResultsSchema.parse(await deps.lookup(draft.requestedTools));
+        if (
+          toolResults.length !== draft.requestedTools.length ||
+          toolResults.some((result, index) => result.tool !== draft.requestedTools[index])
+        )
+          throw new WorkspaceOutputPolicyError("unauthorized_reference");
+        context = { ...context, toolResults, toolLookupPerformed: true };
+      }
       if (draft.requestedMaterials.length) {
         if (
           !deps.readMaterials ||
@@ -474,6 +507,8 @@ export function createWorkspacePipeline(
         draft = workspaceChatOutputSchema.parse(await call("workspace_chat", context, requestId));
         if (draft.requestedMaterials.length)
           throw new WorkspaceOutputPolicyError("unauthorized_reference");
+      } else if (toolsRequested) {
+        draft = workspaceChatOutputSchema.parse(await call("workspace_chat", context, requestId));
       }
       if (draft.requestedSources.length) {
         context = (await deps.retrieve?.(context, draft.requestedSources)) ?? {
@@ -485,7 +520,7 @@ export function createWorkspacePipeline(
         if (draft.requestedSources.length)
           throw new WorkspaceOutputPolicyError("unauthorized_reference");
       }
-      if (draft.requestedMaterials.length)
+      if (draft.requestedMaterials.length || draft.requestedTools.length)
         throw new WorkspaceOutputPolicyError("unauthorized_reference");
       const factsChanged = normalizeNewFacts(context, draft.facts);
       assertWorkspaceFacts(context, draft.facts, draft.sourceClaims);
@@ -652,6 +687,7 @@ export function createWorkspacePipeline(
       );
       return {
         ...draft,
+        toolResults: context.toolResults ?? [],
         citations: context.citations.filter((citation) => cited.has(citation.id)),
       };
     },

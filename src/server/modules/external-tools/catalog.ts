@@ -37,6 +37,14 @@ export interface LookupConfiguration {
   thecheatEncryptionKey?: string;
   datahubToken?: string;
 }
+export function lookupConfiguration(env: Env): LookupConfiguration {
+  return {
+    ...(env.HOMETAX_SERVICE_KEY ? { hometaxKey: env.HOMETAX_SERVICE_KEY } : {}),
+    ...(env.THECHEAT_API_KEY ? { thecheatKey: env.THECHEAT_API_KEY } : {}),
+    ...(env.THECHEAT_ENCRYPTION_KEY ? { thecheatEncryptionKey: env.THECHEAT_ENCRYPTION_KEY } : {}),
+    ...(env.DATAHUB_API_TOKEN ? { datahubToken: env.DATAHUB_API_TOKEN } : {}),
+  };
+}
 export function lookupCatalog(configuration: LookupConfiguration) {
   return Object.entries(lookupTools).map(([tool, value]) => ({
     tool: tool as V2LookupToolId,
