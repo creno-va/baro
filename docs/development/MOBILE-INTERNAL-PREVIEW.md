@@ -1685,3 +1685,26 @@ detection·hit region·description·text clipped·trait7종 검사를 적용했�
 인수는 구분한다. 원래 homeContentVerified=false·visualReviewRequired=true·semanticTextScaleProven=false는
 바꾸지 않았다. 이후 screenshot/raw hierarchy/xcresult export 없이 bounded 결과만 보존했다.
 한글 IME·계정/private 전체·VoiceOver·physical/store는 별도 인수다.
+
+
+### iPad 검증 경로 준비
+
+앱의 `supportsTablet=true`에 맞춰 수동 preserved iOS workflow의 `device_profile`을
+`iphone-16`(기존 기본값) 또는 `ipad-pro-13-m4`로 지정할 수 있다. 새 profile은 SDK inventory의
+정확한 `iPad Pro 13-inch (M4)` 하나를 요구하고 누락/중복/다른 기기로 대체하지 않는다.
+현재 tablet 검증 경로는 anonymous Home/Guide·글자 확대·API audit 범위다. 인증/공개 탐색/
+키보드 참고/한글 입력 모드를 tablet으로 섞으면 검증 도구가 거절하며 제품 앱 기능을
+제거하거나 변경하지 않는다.
+
+같은 원본 ZIP/receipt·bundled inputs parity 검증 뒤 owned iPad Simulator에서 cold2회·Metro0,
+최대 content-size readback을 그대로 수행한다. tablet 전용 UI test는 UIKit의 pad idiom과
+실제 window 방향을 확인하고 세로 Home→Guide 탭→가로 Guide→복귀 버튼 탭→세로 Home의
+Guide 제어 도달을 검증한다. 제어가 처음부터 들어오는 tablet에서는0 swipe도 가능하지만
+`reach`의 실제 bounds/hittability와 button tap은 필수다. iPhone의 기존 positive-scroll 조건과
+원래 receipt kind는 유지한다.
+
+새 결과 kind `ios-anonymous-tablet-home-guide-rotation-xcuitest`는 별도 회전/제어 상태와
+실제 tablet device identity에 결합한다. iPhone receipt를 tablet 성공으로 재해석하지 않는다.
+기존 Home/Guide4viewport의7종 accessibility API audit는 별도 결과로 남기며 VoiceOver,
+landscape 전체 audit·Split View/Stage Manager·계정/private 전체·한글 IME·실물 iPad 인수가 아니다.
+현재는 도구/합성 회귀 준비이며 실제 iPad SDK 실행은 exact CI/main과 유효 원본 pin 뒤다.

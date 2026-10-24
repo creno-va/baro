@@ -162,3 +162,33 @@ Done이 보이는 화면에 도달하며, layout 선택이나 제품 입력은 �
 검사 뒤 해당 Simulator와 임시 build/results를 정리한다. 실제 선택지 관측 뒤 정확한
 제어를 연결하고 원래6자모/4checkpoint·공백 확정/삭제·추가·Search·회전을 다시 검증한다.
 참고 검사 자체는 한국어 입력·제품/로그인·physical/store 인수가 아니다.
+
+
+## 실제 Settings 참고 결과와 후속 연결
+
+PR507/main eb7ea62의 CI40113858176 뒤
+[reference40114158334](https://github.com/creno-va/baro/actions/runs/40114158334)은 **SUCCESS**다.
+[원래 receipt](./mobile-keyboard-reference-40114158334/receipt.json),
+[cleanup](./mobile-keyboard-reference-40114158334/cleanup.json)과
+[원본 source/hash 결합](./mobile-keyboard-reference-40114158334/local-preservation.json)을 보존했다.
+정확한eb7ea62 git tree의 합친 Swift와 Ruby hash·workflow/artifact identity를 대조했다.
+제품 부재·Sim 삭제·private results 정리를 확인했으며 제품 입력·layout 선택은 하지 않았다.
+
+Korean 화면 body에서12개 공개 OS 제어 이름/유형을 관측했다. `Add to English (US) Keyboard`와
+`Add New Keyboard`가 있고, 후자는 cell2/button1/static-text1로 표현됐다. 기존 English/Emoji
+항목도 같은 snapshot에 있어 화면 안에 있다는 이유만으로 현재 조작 가능한 owner라고
+가정하지 않는다. 이는 이전 literal2-Set layout 조회가 현재의 별도 키보드 준비 선택지를
+처리하지 못한 증거이며, 제품의 한글 조합 실패 증거는 아니다.
+
+후속 제품 runner는 Korean 제목과 관측된 고정 prompt가 있는 경우에만 `Add New Keyboard`의
+실제 fully-hittable cell/button을 고른다. 쿼리 후보8개 상한과 기존 유일 owner·95% 겹침 정책을
+재사용하며 모호하거나 조작 불가능하면 실패한다. 이후 명시적 known layout이 있으면
+기존대로 선택하고, 없으면 **관측된 별도 키보드 추가 제어를 탭한 경우에만** OS 기본 layout을
+바꾸지 않은 채 Done·Korean 목록 readback으로 진행한다. unknown/다른 layout을 선택하거나
+일반적인 layout 실패를 건너뛰지 않는다. legacy 경로에서는 기존 layout 선택이 계속 필요하다.
+
+새 결과의 `separateKeyboardChosen`·`settingsLayoutChoiceObserved`는 실제 준비 경로를 구분한다.
+둘 모두 false이거나 한쪽만 있는 새 증거는 거부하고, 두 field가 없던 과거 fixture는 당시
+형태로 읽는다. 실제 보이는 자모6tap/4checkpoint·공백 확정/삭제·추가·software Search·회전과
+capture boundary는 유지한다. 따라서 OS 기본 layout이 맞지 않으면 실제 키/조합 검사에서
+실패하며, 참고 검사나 준비 단계만으로 한국어 입력을 완료 처리하지 않는다.
