@@ -557,3 +557,26 @@ Operating identity, actual membership, required terms and service approvals rema
 unprovided. The public DataHub guide search did not identify a current building address
 search contract; absence of a guide does not establish discontinuation. Keep these
 lookups unconfigured and the target/recipient-consent durable producer visibly pending.
+
+## Native capacity merge and upload retry visibility
+
+PR488 first passed exact6f2523a CI40094979622. The required latest-base rule rejected
+merge after RN's iOS evidence PR487 landed; no admin bypass was used. After integrating
+ff52c4d, exact5bc4df1 passed CI40095236994 and fresh frozen/quick/unit4127 (381 files,
+172069 assertions)/build, including built Worker workerd. Normal squash merge produced
+a74835b1b9577195e31380d12275b99acf7b00f5; main CI40095465168 passed. The manually
+dispatched same-SHA preview40095659537 is still running at this record's creation.
+It does not yet attest actual resumed video/audio/PDF success. RN holds main until
+preview deployment finishes, while native input evidence remains owned by that session.
+
+The actual file acceptance also exposed a web recovery defect: after a batch failed,
+its remaining File objects survived, but opening an already accepted file cleared
+the operation error and removed the only upload retry button nested inside that error.
+The new browser regression first failed at the missing retry button after refresh,
+file preview and close. Pending upload recovery is now rendered independently of the
+error alert, gated by current ready ownership, busy/readonly state and upload consent.
+Only the unaccepted remainder is retried. Accepted uploads, rejected-source exclusion,
+owner/role/signout purges, readback-only recovery and session race fences remain intact.
+The extended regression and22 related upload cases passed, including desktop/mobile
+screenshots and axe checks. This separate web repair makes no server, schema, installed
+mobile DTO or native input changes and does not call a paid provider.

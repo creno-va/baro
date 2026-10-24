@@ -851,15 +851,6 @@ export function Workspace({
                         : "입력한 내용은 보존돼요. 확인한 뒤 다시 시도해 주세요."}
           </p>
           <div className="workspace-buttons">
-            {!!retryUploads.length && (
-              <Button
-                variant="outline"
-                disabled={!!busy || readonly}
-                onClick={() => void upload(retryUploads)}
-              >
-                업로드 다시 시도
-              </Button>
-            )}
             {error.code === "UNAUTHENTICATED" ? (
               <ButtonLink href={accessHref("login")}>로그인</ButtonLink>
             ) : error.code === "CONSENT_REQUIRED" ? (
@@ -881,6 +872,20 @@ export function Workspace({
                 새로고침 · 다시 확인
               </Button>
             )}
+          </div>
+        </section>
+      )}
+      {ready && retryUploads.length > 0 && (
+        <section className="workspace-upload" aria-label="자료 업로드 이어하기">
+          <p>업로드가 끝나지 않은 선택 자료가 {retryUploads.length}개 있어요.</p>
+          <div className="workspace-buttons">
+            <Button
+              variant="outline"
+              disabled={!!busy || readonly || !uploadConsent}
+              onClick={() => void upload(retryUploads)}
+            >
+              업로드 다시 시도
+            </Button>
           </div>
         </section>
       )}
