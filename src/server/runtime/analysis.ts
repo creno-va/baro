@@ -1,3 +1,4 @@
+import { reportProviderFailure } from "../dependency-diagnostics";
 import { createLegacyAnalysisLedger } from "../modules/budget/legacy-analysis-ledger";
 import { createAnalysisExecution, type ExecutionPhase } from "../modules/case-structure/execution";
 import { domainRepository } from "../modules/intake/service";
@@ -42,6 +43,13 @@ export async function createLegacyAnalysisRuntime(
     },
   });
   const gateway = createLlmGateway(env, {
+    observeFailure: (failure) => {
+      try {
+        reportProviderFailure(failure);
+      } catch {
+        /* Diagnostics never replace transport receipts. */
+      }
+    },
     attemptLedger: ledger,
     requireAttemptLedger: true,
     ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }),

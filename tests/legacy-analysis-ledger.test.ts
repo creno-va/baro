@@ -437,6 +437,49 @@ test("actual gateway timeout retains unknown transport and records the late usag
   });
 });
 
+test("legacy provider failure diagnostics expose only finite phase/category/status and retain the receipt", async () => {
+  const f = await analysisFixture(),
+    env = environment(f),
+    background: Promise<void>[] = [];
+  env.AI = {
+    run: async () => {
+      throw Object.assign(new Error("Unauthorized PRIVATE_SYNTHETIC_UPSTREAM_TEXT"), {
+        status: 401,
+      });
+    },
+  } as unknown as Env["AI"];
+  const logs = spyOn(console, "error").mockImplementation(() => {});
+  try {
+    const runtime = await createLegacyAnalysisRuntime(
+      env,
+      f.identity,
+      `${f.identity.analysisId}-1`,
+      {
+        retrieval: f.legal,
+        waitUntil: (work) => {
+          background.push(work);
+        },
+      },
+    );
+    await runtime.phase("initialize");
+    expect((await runtime.phase("minimize")).status).toBe("failed");
+    await Promise.all(background);
+    expect(logs.mock.calls.map(([value]) => JSON.parse(String(value)))).toContainEqual({
+      event: "workspace_provider_failure",
+      phase: "minimize",
+      category: "provider_auth",
+      httpStatus: 401,
+    });
+    expect(JSON.stringify(logs.mock.calls)).not.toContain("PRIVATE_SYNTHETIC_UPSTREAM_TEXT");
+    expect(f.db.sqlite.query("SELECT state,transport FROM legacy_ai_attempts").get()).toEqual({
+      state: "final",
+      transport: "provider_error",
+    });
+  } finally {
+    logs.mockRestore();
+  }
+});
+
 test("usage observation IO failures do not fail valid output or erase mandatory transport evidence", async () => {
   const f = await analysisFixture(),
     env = environment(f),

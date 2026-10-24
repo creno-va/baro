@@ -823,3 +823,6 @@ test("receipt and workflow have fixed non-sensitive fields and no production or 
   expect(new TextDecoder().decode(child.stderr)).toBe("");
   expect(JSON.parse(new TextDecoder().decode(child.stdout)).code).toBe("CONFIGURATION_INVALID");
 });
+
+// Shared synthetic setup only; no live account or consent is created here.
+export { fixture as previewCustomerFixture };
