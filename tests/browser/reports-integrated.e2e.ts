@@ -12,6 +12,9 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
   baseURL,
   context,
 }) => {
+  // Two complete intakes, PDF/ZIP downloads, reloads and two deletion flows
+  // share this budget; individual readiness assertions retain their 5s limit.
+  test.setTimeout(60_000);
   const apiRequests: string[] = [],
     externalRequests: string[] = [];
   page.on("request", (request) => {
@@ -173,7 +176,9 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
   await expect(peer.getByRole("textbox", { name: "리포트 내용 편집" })).toBeVisible();
   const previousMarker = await page.evaluate(() => localStorage.getItem("baro-session-changed"));
   await page.goto("/settings");
-  await page.getByRole("button", { name: "계정과 모든 사건 삭제", exact: true }).click();
+  const deleteAccount = page.getByRole("button", { name: "계정과 모든 사건 삭제", exact: true });
+  await expect(deleteAccount).toBeEnabled({ timeout: 5000 });
+  await deleteAccount.click();
   await page.getByRole("textbox", { name: "삭제 확인 — DELETE 입력" }).fill("DELETE");
   await page.getByRole("button", { name: "삭제 요청 확인", exact: true }).click();
   await expect(page.getByRole("heading", { name: "계정 삭제를 접수했어요" })).toBeVisible();
