@@ -258,3 +258,32 @@ test("input signatures and bounded status history export booleans only and rejec
   expect(result.history).toHaveLength(8);
   expect(JSON.stringify(result)).not.toContain("synthetic-private");
 });
+
+test("requested public-directory verification requires the Apple signature probe before observing native UI", async () => {
+  const workflow = Bun.YAML.parse(
+    await Bun.file(".github/workflows/mobile-internal-ios-reverify.yml").text(),
+  ) as {
+    jobs: {
+      verify: {
+        steps: { name?: string; if?: string; run?: string; env?: Record<string, string> }[];
+      };
+    };
+  };
+  const steps = workflow.jobs.verify.steps;
+  const index = steps.findIndex(
+    (step) => step.name === "Require actual Apple Foundation signature comparisons",
+  );
+  const entry = steps[index];
+  expect(entry?.if).toBe("inputs.public_directory");
+  expect(entry?.env).toEqual({ BARO_IOS_DIRECTORY_SIGNATURE_REQUIRED: "1" });
+  expect(entry?.run).toBe("bun test tests/mobile-ios-directory-signature.test.ts");
+  expect(index).toBeGreaterThan(
+    steps.findIndex((step) => step.name === "Verify successful immutable tooling CI"),
+  );
+  expect(index).toBeLessThan(
+    steps.findIndex(
+      (step) =>
+        step.name === "Reverify original metadata and optionally observe anonymous cold launches",
+    ),
+  );
+});

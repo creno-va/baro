@@ -949,3 +949,26 @@ scalar/창 이름·raw 계층은 출력하지 않는다. 정규화는 진단 비
 고정 label을 검사한다. swiftc 없는 환경은 이 순수 probe만 skip하며 실제 Simulator 입력 성공으로
 세지 않는다. 로컬 probe 성공도 native TextInput/키보드/원격 API/VoiceOver 인수를 대체하지 않는다.
 새 정확한 CI/main 뒤 변경된 관측으로 확인하며 앱/웹·계약/DB와 #334/#379/#346/#339/#71은 유지한다.
+
+
+## Apple 비교 probe의 CI 실행 환경 교정 (#379)
+
+PR442 head91a8185의 CI40046897941/host40046897934는 SUCCESS였지만 mainc401986의
+[CI40047097734](https://github.com/creno-va/baro/actions/runs/40047097734)는 새 Swift 비교 probe에서
+실패했다. [고정 관측](../quality/mobile-internal-ios-2026-10-24/signature-ci-failure-c401986.json)은
+설정한 compiler timer45,000ms·test45,054.55ms·expected0/received143을 보존한다. timer와
+시간/exit가 일치하며 cold cache나 실제 compiler 오류까지 확정하지 않는다. 원본 compiler
+stdout/stderr는 probe가 수집하지 않았고 raw failed-step log/stack은 관측 JSON에 넣지 않았다.
+원본 main 실패를 SUCCESS로 바꾸지 않으며 이 상태에서 새 native run을 시작하지 않았다.
+
+후속 probe는 Apple Foundation이 설치된 macOS에서 컴파일한다. Linux quick은 이 비교 probe를
+skip하고 기존 타입/계약·보안 회귀를 유지한다. macOS local quick에서는 컴파일러가 있으면
+실행한다. 실제 iOS workflow는 public_directory 요청 시 immutable CI 확인 뒤, native 관측 전에
+`BARO_IOS_DIRECTORY_SIGNATURE_REQUIRED=1`로 반드시 실행한다. required 경로에서 Apple
+Swift가 없으면 고정 오류로 실패하며 skip하지 않는다. compile45초/run10초/test60초 bound는
+그대로다. Linux/corelibs 환경에서 통과한 것을 iOS 동작 증거로 쓰지 않는다.
+
+로컬 실제 macOS required 실행과 컴파일러가 없는 PATH의 required 실패를 각각 확인하고,
+workflow 계약 검사로 required flag/실행 순서를 검증한다. 비교 정규화/직접 native 입력·parser
+성공 인수 범위는 바뀌지 않는다. 새 exact main CI가 성공한 뒤에만 두 OS native 검증을
+시작한다. 앱/웹 UI·공통 계약/DB·Android 관측·공급자/비용 정책과 전체 #334/#379/#339/#71은 유지한다.

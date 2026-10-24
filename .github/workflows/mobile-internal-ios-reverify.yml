@@ -109,6 +109,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: bun scripts/verify-release.ts "$TARGET_SHA" --ci-only
+      - name: Require actual Apple Foundation signature comparisons
+        if: inputs.public_directory
+        env:
+          BARO_IOS_DIRECTORY_SIGNATURE_REQUIRED: '1'
+        run: bun test tests/mobile-ios-directory-signature.test.ts
       - name: Resolve pinned compiler input
         id: input
         run: |
