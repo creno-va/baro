@@ -137,6 +137,7 @@ const assertionCodes = [
   "BARO_KOREAN_KEY_MISSING",
   "BARO_KOREAN_KEY_OUTSIDE_KEYBOARD",
   "BARO_KOREAN_SWITCH_MISSING",
+  "BARO_KOREAN_SWITCH_CANDIDATES_EXCEEDED",
   "BARO_KOREAN_KEYBOARD_MISSING",
   "BARO_KOREAN_COMPOSITION_MISMATCH",
   "BARO_KOREAN_COMMIT_MISMATCH",
@@ -248,6 +249,49 @@ const koreanStatusSchema = z.strictObject({
   expectedValueMatches: z.boolean(),
   keyboardObserved: z.boolean(),
 });
+const koreanSwitchControlSchema = z
+  .strictObject({
+    scope: z.literal("app-system-keyboard-region"),
+    attempt: z.number().int().min(1).max(3),
+    buttonCount: z.number().int().min(0).max(8),
+    keyCount: z.number().int().min(0).max(8),
+    eligibleButtonCount: z.number().int().min(0).max(8),
+    eligibleKeyCount: z.number().int().min(0).max(8),
+    ownersOverlap: z.boolean(),
+    regionValid: z.boolean(),
+    selection: z.enum(["button", "key", "none", "ambiguous"]),
+    appForeground: z.boolean(),
+    keyboardObserved: z.boolean(),
+    actionAllowed: z.boolean(),
+  })
+  .refine((v) => {
+    if (v.eligibleButtonCount > v.buttonCount || v.eligibleKeyCount > v.keyCount) return false;
+    if (
+      !v.regionValid &&
+      (v.eligibleButtonCount !== 0 ||
+        v.eligibleKeyCount !== 0 ||
+        v.selection !== "none" ||
+        !v.ownersOverlap)
+    )
+      return false;
+    if (v.eligibleButtonCount + v.eligibleKeyCount <= 1 && !v.ownersOverlap) return false;
+    const ambiguous = v.eligibleButtonCount > 1 || v.eligibleKeyCount > 1 || !v.ownersOverlap;
+    const expected = ambiguous
+      ? "ambiguous"
+      : v.eligibleButtonCount === 1
+        ? "button"
+        : v.eligibleKeyCount === 1
+          ? "key"
+          : "none";
+    return (
+      v.selection === expected &&
+      v.actionAllowed ===
+        (v.appForeground &&
+          v.keyboardObserved &&
+          v.regionValid &&
+          (expected === "button" || expected === "key"))
+    );
+  });
 const koreanSetupControlSchema = z
   .strictObject({
     stage: z.enum([
@@ -434,9 +478,25 @@ export function observeIosKoreanDirectoryFailure(output: string) {
       /* No raw system labels or values in product diagnostics. */
     }
   }
+  const switchPrefix = "BARO_KOREAN_SWITCH_STATUS:";
+  let switchControl: z.infer<typeof koreanSwitchControlSchema> | undefined;
+  for (const line of output
+    .split(/\r?\n/)
+    .filter((line) => line.startsWith(switchPrefix))
+    .slice(-3)) {
+    try {
+      const parsed = koreanSwitchControlSchema.safeParse(
+        JSON.parse(line.slice(switchPrefix.length)),
+      );
+      if (parsed.success) switchControl = parsed.data;
+    } catch {
+      /* Only fixed control counts and state flags, never labels/values/geometry. */
+    }
+  }
   return {
     history,
     ...(separateChoice ? { separateChoice } : {}),
+    ...(switchControl ? { switchControl } : {}),
     layoutStatus,
     setupControl,
     setupStage: setupStages.find((stage) => stage === lastSetup) ?? null,

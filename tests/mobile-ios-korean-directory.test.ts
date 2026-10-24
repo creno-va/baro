@@ -361,7 +361,7 @@ test("the separate-keyboard decision is scoped to the observed Korean chooser an
     decision: "separate-keyboard",
   };
   const parseChoice = (value: unknown) =>
-    observeIosKoreanDirectoryFailure("BARO_KOREAN_SEPARATE_CHOICE:" + JSON.stringify(value))
+    observeIosKoreanDirectoryFailure(`BARO_KOREAN_SEPARATE_CHOICE:${JSON.stringify(value)}`)
       .separateChoice;
   expect<unknown>(parseChoice(v)).toEqual(v);
   expect(parseChoice({ ...v, cellCount: 1, selection: "cell" })?.selection).toBe("cell");
@@ -429,7 +429,7 @@ test("new chooser scope evidence requires exactly one prompt-anchored list and k
     scopeCount: 1,
   };
   const parseChoice = (v: unknown) =>
-    observeIosKoreanDirectoryFailure("BARO_KOREAN_SEPARATE_CHOICE:" + JSON.stringify(v))
+    observeIosKoreanDirectoryFailure(`BARO_KOREAN_SEPARATE_CHOICE:${JSON.stringify(v)}`)
       .separateChoice;
   expect<unknown>(parseChoice(base)).toEqual(base);
   expect(parseChoice({ ...base, scopeKind: "collection" })?.decision).toBe("separate-keyboard");
@@ -457,4 +457,89 @@ test("new chooser scope evidence requires exactly one prompt-anchored list and k
     await Bun.file("docs/quality/mobile-native-c8215b8/ios-korean-40116874262/failure.json").json()
   ).koreanDirectoryFailure.separateChoice;
   expect<unknown>(parseChoice(old)).toEqual(old);
+});
+
+test("keyboard-switch diagnostics permit only consistent bounded system-region owners and never promote a historical failure", async () => {
+  const base = {
+    scope: "app-system-keyboard-region",
+    attempt: 1,
+    buttonCount: 1,
+    keyCount: 0,
+    eligibleButtonCount: 1,
+    eligibleKeyCount: 0,
+    ownersOverlap: true,
+    regionValid: true,
+    selection: "button",
+    appForeground: true,
+    keyboardObserved: true,
+    actionAllowed: true,
+  };
+  const parse = (v: unknown) =>
+    observeIosKoreanDirectoryFailure(`BARO_KOREAN_SWITCH_STATUS:${JSON.stringify(v)}`)
+      .switchControl;
+  expect<unknown>(parse(base)).toEqual(base);
+  expect(parse({ ...base, keyCount: 1, eligibleKeyCount: 1 })?.selection).toBe("button");
+  expect(
+    parse({
+      ...base,
+      buttonCount: 0,
+      eligibleButtonCount: 0,
+      keyCount: 1,
+      eligibleKeyCount: 1,
+      selection: "key",
+    })?.actionAllowed,
+  ).toBe(true);
+  expect(parse({ ...base, appForeground: false, actionAllowed: false })?.actionAllowed).toBe(false);
+  expect(
+    parse({
+      ...base,
+      keyCount: 1,
+      eligibleKeyCount: 1,
+      ownersOverlap: false,
+      selection: "ambiguous",
+      actionAllowed: false,
+    })?.selection,
+  ).toBe("ambiguous");
+  expect(
+    parse({
+      ...base,
+      eligibleButtonCount: 0,
+      regionValid: false,
+      selection: "none",
+      actionAllowed: false,
+    })?.regionValid,
+  ).toBe(false);
+  for (const patch of [
+    { scope: "global-first-match" },
+    { attempt: 0 },
+    { attempt: 4 },
+    { buttonCount: 9 },
+    { eligibleButtonCount: 2 },
+    { buttonCount: 0 },
+    { ownersOverlap: false },
+    { actionAllowed: false },
+    { appForeground: false },
+    { keyboardObserved: false },
+    { regionValid: false },
+    { frame: [0, 0, 1, 1] },
+    { label: "synthetic-private" },
+    { input: "synthetic-private" },
+  ])
+    expect(parse({ ...base, ...patch })).toBeUndefined();
+  const old = (
+    await Bun.file("docs/quality/mobile-native-92f4232/ios-korean-40124377850/failure.json").json()
+  ).koreanDirectoryFailure;
+  const observed = observeIosKoreanDirectoryFailure(
+    "XCTAssertNotNil failed - BARO_KOREAN_SWITCH_MISSING",
+  );
+  expect(observed.switchControl).toBeUndefined();
+  expect(observed.history).toEqual(old.history);
+  expect(observed.assertionCode).toBe(old.assertionCode);
+  expect(
+    JSON.stringify(
+      observeIosKoreanDirectoryFailure(
+        `BARO_KOREAN_SWITCH_STATUS:${JSON.stringify({ ...base, label: "synthetic-private" })}`,
+      ),
+    ),
+  ).not.toContain("synthetic-private");
 });

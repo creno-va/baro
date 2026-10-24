@@ -1,0 +1,90 @@
+{
+  "version": 1,
+  "kind": "bundled-android-home-only",
+  "toolingSourceSha": "4e7cd8759f7f683b0532a2dff65f75a50c070f99",
+  "binarySourceSha": "92f4232f5eeeace39973992193952fdad8e79903",
+  "observedAt": "2026-10-24T19:51:19.663Z",
+  "applicationId": "site.baro.app.preview",
+  "binary": {
+    "name": "baro-internal-preview-android-92f4232f5eeeace39973992193952fdad8e79903.apk",
+    "bytes": 57219770,
+    "sha256": "19f79990f697caa1d6e9fb320861fd92ecb4131903adc39b435b240d2e167352"
+  },
+  "verificationSha256": "b093f0163b68cf27f5c3ba8bb970144cdaad6c56bc518235b71a0ef626c16e70",
+  "runtimeProfile": {
+    "kind": "aosp-api35",
+    "systemImage": "system-images;android-35;default;x86_64",
+    "apiLevel": 35,
+    "abi": "x86_64",
+    "avdImageReadbackVerified": true,
+    "runtimeApiReadbackVerified": true
+  },
+  "device": {
+    "kind": "owned-emulator",
+    "model": "Android SDK built for x86_64",
+    "osVersion": "15"
+  },
+  "emulatorBootVerified": true,
+  "sdkHomeLaunchVerified": true,
+  "packageManagerReady": {
+    "kind": "owned-android-package-manager-readiness",
+    "observedAt": "2026-10-24T19:50:57.100Z",
+    "handlersCompleted": [
+      "foreground",
+      "background"
+    ],
+    "handlerTimeoutsMs": [
+      15000,
+      15000
+    ],
+    "commandsCompleted": 2,
+    "sharedFirstColdBudgetMaxMs": 120000,
+    "rootCauseConfirmed": false,
+    "launcherReadinessVerified": false,
+    "dialogDismissed": false
+  },
+  "launcherBaseline": {
+    "kind": "owned-android-launcher-readiness",
+    "launcherKind": "aosp",
+    "samples": 3,
+    "consecutiveReadySamples": 3,
+    "foregroundMatchedBeforeAndAfterReadySamples": true,
+    "launcherRootVisibleInReadySamples": true,
+    "systemErrorDialogAbsentInSamples": true,
+    "productLaunched": false,
+    "dialogDismissed": false,
+    "launcherChanged": false,
+    "rawHierarchyExported": false
+  },
+  "homeObservations": [
+    {
+      "coldLaunch": 1,
+      "titleVisible": true,
+      "firstCardVisible": true,
+      "foundationErrorVisible": false,
+      "systemErrorDialogObserved": false
+    },
+    {
+      "coldLaunch": 2,
+      "titleVisible": true,
+      "firstCardVisible": true,
+      "foundationErrorVisible": false,
+      "systemErrorDialogObserved": false
+    }
+  ],
+  "metroServerStarted": false,
+  "metroRequests": 0,
+  "adbReverseConfigured": false,
+  "screenshot": {
+    "name": "home.png",
+    "bytes": 170744,
+    "sha256": "a6992c0ed526c3870a73259b142ac7bd28837ec9c31207ef941e68e7cce76cda"
+  },
+  "fullNativeIoVerified": false,
+  "productJourneysVerified": false,
+  "remoteApiVerified": false,
+  "oauthVerified": false,
+  "physicalDeviceVerified": false,
+  "storeSigned": false,
+  "deployed": false
+}

@@ -1,0 +1,131 @@
+{
+  "toolingSourceSha": "4e7cd8759f7f683b0532a2dff65f75a50c070f99",
+  "runtimeProfile": {
+    "kind": "aosp-api35",
+    "systemImage": "system-images;android-35;default;x86_64",
+    "apiLevel": 35,
+    "abi": "x86_64",
+    "avdImageReadbackVerified": true,
+    "runtimeApiReadbackVerified": true
+  },
+  "phase": "directory-input-typed",
+  "code": "ANDROID_DIRECTORY_SOFTWARE_SEARCH_MISSING",
+  "packageManagerReady": {
+    "kind": "owned-android-package-manager-readiness",
+    "observedAt": "2026-10-24T19:50:57.100Z",
+    "handlersCompleted": [
+      "foreground",
+      "background"
+    ],
+    "handlerTimeoutsMs": [
+      15000,
+      15000
+    ],
+    "commandsCompleted": 2,
+    "sharedFirstColdBudgetMaxMs": 120000,
+    "rootCauseConfirmed": false,
+    "launcherReadinessVerified": false,
+    "dialogDismissed": false
+  },
+  "lastPackageManagerDiagnostic": {
+    "stage": "complete",
+    "commandsCompleted": 2,
+    "timeoutMs": 15000,
+    "failureCode": null
+  },
+  "launcherBaseline": {
+    "kind": "owned-android-launcher-readiness",
+    "launcherKind": "aosp",
+    "samples": 3,
+    "consecutiveReadySamples": 3,
+    "foregroundMatchedBeforeAndAfterReadySamples": true,
+    "launcherRootVisibleInReadySamples": true,
+    "systemErrorDialogAbsentInSamples": true,
+    "productLaunched": false,
+    "dialogDismissed": false,
+    "launcherChanged": false,
+    "rawHierarchyExported": false
+  },
+  "lastLauncherBaselineDiagnostic": {
+    "stage": "sample",
+    "launcherKind": "aosp",
+    "samples": 3,
+    "consecutiveReadySamples": 3,
+    "foregroundBefore": true,
+    "foregroundAfter": true,
+    "rootVisible": true,
+    "systemErrorDialogObserved": false,
+    "dumpConfirmed": true,
+    "cleanupFailed": false,
+    "failureCode": null
+  },
+  "prePublicStartupCommandFailures": {
+    "count": 0,
+    "first": null,
+    "last": null
+  },
+  "lastLauncherHierarchyDump": "saved",
+  "lastHomeSystemErrorDialogObserved": false,
+  "postBoundaryCommandFailures": {
+    "count": 0,
+    "first": null,
+    "last": null
+  },
+  "lastPostBoundaryHierarchyDump": "saved",
+  "emulatorBootVerified": true,
+  "lastHomeObservation": {
+    "titleVisible": true,
+    "firstCardVisible": true,
+    "foundationErrorVisible": false
+  },
+  "lastPublicObservation": null,
+  "lastDirectoryInputObservation": {
+    "stage": "typed",
+    "display": {
+      "width": 1080,
+      "height": 2400,
+      "rotation": 0,
+      "imeSourceObserved": true,
+      "keyboardVisible": true,
+      "keyboardTop": 1499
+    },
+    "displayShape": {
+      "outputWithinBound": true,
+      "controllerCount": 1,
+      "displayFrameCount": 1,
+      "displayFrameMarkerCount": 1,
+      "rawDisplayFrameMarkerCount": 1,
+      "rawStateCount": 1,
+      "rawDisplayFrameCount": 1,
+      "rawSectionFound": true,
+      "rawImeMarkerCount": 1,
+      "rawImeSourceCount": 1,
+      "allImeSourceCount": 2
+    },
+    "softwareSearchBeforeTap": {
+      "imeComponentValid": true,
+      "defaultDisplayCount": 1,
+      "imeWindowCount": 1,
+      "matchingControlCount": 0,
+      "controlWithinImeWindow": false,
+      "controlBelowKeyboardTop": false,
+      "controlEnabledClickable": false,
+      "uniqueUsableControl": false
+    },
+    "primaryFailureCode": "ANDROID_DIRECTORY_SOFTWARE_SEARCH_MISSING",
+    "rotationRestoreFailureCode": null,
+    "hierarchyCleanupFailureCode": null,
+    "input": null
+  },
+  "lastGuideObservation": null,
+  "lastAuthObservation": null,
+  "lastChromeFixture": null,
+  "receiptValidationFields": [],
+  "publicScreenshotsSuppressed": true,
+  "emulatorStartupIssues": [],
+  "sdkHomeLaunchVerified": true,
+  "largeFontVerified": false,
+  "physicalDeviceVerified": false,
+  "storeSigned": false,
+  "deployed": false
+}

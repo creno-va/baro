@@ -1,0 +1,65 @@
+{
+  "version": 1,
+  "kind": "local-preserved-aosp-home-and-search-control-failure",
+  "verifiedAt": "2026-10-24T20:02:26.351Z",
+  "workflowRunId": 40127019803,
+  "workflowConclusion": "failure",
+  "artifacts": {
+    "homeArtifactId": 12572803534,
+    "verificationArtifactId": 12573248610
+  },
+  "referenceWorkflowProvenanceVerified": true,
+  "binarySourceSha": "92f4232f5eeeace39973992193952fdad8e79903",
+  "toolingSourceSha": "4e7cd8759f7f683b0532a2dff65f75a50c070f99",
+  "originalCompilerRunId": 40120704046,
+  "originalApkUnchanged": true,
+  "originalCompilerReceiptUnchanged": true,
+  "homeReceiptSha256": "cf4866c086ffc0c41c47be8f7b4d4b2029403c5acc64708787cbcca365be6816",
+  "verificationSha256": "b093f0163b68cf27f5c3ba8bb970144cdaad6c56bc518235b71a0ef626c16e70",
+  "failureSha256": "55e3b24a2e46c23a86fe021853ca4363ffda0467f0b344d536dc90eece33bb49",
+  "runtimeProfile": {
+    "kind": "aosp-api35",
+    "systemImage": "system-images;android-35;default;x86_64",
+    "apiLevel": 35,
+    "abi": "x86_64",
+    "avdImageReadbackVerified": true,
+    "runtimeApiReadbackVerified": true
+  },
+  "device": {
+    "kind": "owned-emulator",
+    "model": "Android SDK built for x86_64",
+    "osVersion": "15"
+  },
+  "coldHomeObservations": 2,
+  "launcherReadySamples": 3,
+  "homePng": {
+    "bytes": 170744,
+    "sha256": "a6992c0ed526c3870a73259b142ac7bd28837ec9c31207ef941e68e7cce76cda",
+    "width": 1080,
+    "height": 2400
+  },
+  "observedFailure": {
+    "phase": "directory-input-typed",
+    "code": "ANDROID_DIRECTORY_SOFTWARE_SEARCH_MISSING",
+    "matchingSoftwareSearchControls": 0
+  },
+  "sourceFlowInference": {
+    "fixedInputReadbackPollCompletedBeforeSearchLookup": true
+  },
+  "softwareSearchSubmitted": false,
+  "rotationAndReturnCompleted": false,
+  "pixelLauncherAnrCauseConfirmed": false,
+  "koreanKeyboardVerified": false,
+  "talkBackVerified": false,
+  "privateDataAccess": false,
+  "physicalDeviceVerified": false,
+  "oauthVerified": false,
+  "storeSigned": false,
+  "deployed": false,
+  "anonymousHomeVisualReview": {
+    "reviewedAt": "2026-10-24T20:04:20.950519+00:00",
+    "initialHomeReadabilityReviewed": true,
+    "hangulWordBoundarySplitsObserved": true,
+    "allTypographyOrControlsVerified": false
+  }
+}
