@@ -1,0 +1,96 @@
+{
+  "version": 1,
+  "recordedAt": "2026-10-24T16:37:37.636274+00:00",
+  "environment": "preview",
+  "candidateSha": "3942f5ac48a7f43c9d4e66cedee57d5948e6ceed",
+  "evidence": "authenticated-product-ui-and-workflow-dashboard",
+  "syntheticOnly": true,
+  "status": "ready",
+  "runtimeAttemptOrdinal": 3,
+  "nativeDurationMs": 23589,
+  "runtimeWindow": {
+    "startedAt": "2026-10-24T16:28:42Z",
+    "readyObservedAt": "2026-10-24T16:32:18Z"
+  },
+  "interpretationStepDurationsMs": [
+    9736,
+    26120,
+    32800,
+    11147,
+    9393,
+    8311,
+    5920,
+    5304,
+    6180,
+    22347,
+    11129
+  ],
+  "interpretationOrder": "audio-then-ten-video-frames",
+  "processedFramePositions": [
+    {
+      "seconds": 0,
+      "frameIndex": 0
+    },
+    {
+      "seconds": 1,
+      "frameIndex": 10
+    },
+    {
+      "seconds": 2,
+      "frameIndex": 20
+    },
+    {
+      "seconds": 3,
+      "frameIndex": 30
+    },
+    {
+      "seconds": 4,
+      "frameIndex": 40
+    },
+    {
+      "seconds": 5,
+      "frameIndex": 50
+    },
+    {
+      "seconds": 6,
+      "frameIndex": 60
+    },
+    {
+      "seconds": 7,
+      "frameIndex": 70
+    },
+    {
+      "seconds": 1.4,
+      "frameIndex": 14
+    },
+    {
+      "seconds": 3.2,
+      "frameIndex": 32
+    }
+  ],
+  "processedAudioRangeSeconds": [
+    0,
+    8
+  ],
+  "publishedTranscriptRangeSeconds": [
+    0,
+    6.36
+  ],
+  "checks": {
+    "allElevenCoverageEntriesProcessed": true,
+    "blueBox17Matched": true,
+    "orangeCircle42Matched": true,
+    "greenTriangle09Matched": true,
+    "koreanSpokenMarkersMatched": true,
+    "allPublishedObservationPagesRead": true,
+    "originalStreamPlayerAvailable": true,
+    "originalDownloadedBytes": 66723,
+    "originalDownloadByteEqual": true
+  },
+  "unverified": [
+    "video-grounded-chat",
+    "broad-legal-query-timeout-cause",
+    "four-unissued-external-services",
+    "full-security-public-acceptance"
+  ]
+}

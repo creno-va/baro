@@ -823,3 +823,87 @@ ambiguous PUT or failed status read. Application credentials are not addressed.
 GET propagation waits are bounded. Cleanup failure remains a failed observation
 with the retained snapshot, rather than discarding diagnostic evidence. Local
 adapters exercise these boundaries; actual retained status is still pending.
+
+
+## Actual completed-material chat and readable material references
+
+On preview3942, selecting the ready two-page PDF and English audio in the actual
+case chat produced a completed response16:20:54–16:21:13Z. Context1530ms,
+generation11271ms, independent audit5989ms and publication200ms completed. The
+answer matched BLUE BOX17 on page1, ORANGE CIRCLE42 on page2, Blue Box17 at
+2–3.3s and Green Triangle9 at4–5.6s. Four readable source links identified the
+exact two PDF pages and two audio intervals. This is deployed encrypted-file/model/
+publication/UI evidence, beyond the earlier pre-extracted material-chat probe.
+It does not attest video or repair the separate legal-chat timeout. The answer
+stated no case-fact or preparation-action addition; persisted UI checks are separate.
+The screenshot is local/private and is not published as a GitHub artifact.
+
+The response unnecessarily printed internal file UUIDs in its prose even though
+readable original-name links were already rendered below it. Prompt2.5.1 asks chat
+to describe material type plus page/time in prose and to keep exact internal IDs
+in structured references. It must not invent unsupplied original filenames. No
+additional filename/private metadata is sent to the model, and exact source binding,
+server validation and independent audit are unchanged. This presentation change
+is locally validated separately; the3942 response remains the actual observation.
+
+
+The status-only [inspection40111474268](https://github.com/creno-va/baro/actions/runs/40111474268)
+on normally merged main0a3162e passed after main CI40111242596. Its
+[original finite observation](./ai-harness-2026-10-24/inspection-video-3942.json)
+at16:25:31.728Z reports the target candidate/feature namespace started=false,
+reservedAttempts=0, no stored report and no terminal failure; temporary credential
+cleanup succeeded. This inspection issued zero model POSTs. The old failed POST's
+HTTP/envelope was not retained, so its dispatch/propagation cause and any other
+namespace are not inferred from the empty target state. No same-profile probe
+POST was reissued. The changed frame profile remains pending actual acceptance.
+
+The actual material-chat follow-up UI shows only the six original user facts,
+timeline0 and preparation actions0; synthetic markers were not added there.
+A separate narrow legal request specifying 민법 제598조 then produced an exact
+quotation and a readable official-source card linking the actual law.go.kr
+original. It completed at16:26:08Z on3942; detailed stage timings/source-request
+counts still require separate inspection. It does not erase the broad-query
+initial-generation timeout or establish its cause.
+
+Prompt2.5.1 validation: frozen install, quick307, focused60/3files/337 assertions,
+50 deterministic and60 scripted v2 cases with zero critical findings, and build/
+local built Worker passed. No actual2.5.1 provider or presentation result is claimed.
+
+
+## Actual product video ready on3942 and concise lookup dispatch candidate
+
+The actual uploaded video retry3 on3942 completed40 Workflow steps in about
+3m35s and published ready revision3. Native extraction16:28:42–16:29:06Z took
+23589ms. All11 interpretations completed: audio9736ms, then ten frame steps
+26120,32800,11147,9393,8311,5920,5304,6180,22347 and11129ms. The original
+60-second media deadline, call limits and independent per-position accounting
+were not increased. The [finite manual receipt](./ai-harness-2026-10-24/product-video-3942.json)
+labels its actual dashboard/UI basis, rather than representing an automated probe.
+This changed request profile passed; it does not prove the unique cause of the
+earlier timeout or a general latency guarantee.
+
+The product reader reports processed frames at0–7s in one-second steps and at
+1.4s/frame14 and3.2s/frame32, plus processed0–8s audio. Reading every observation
+page confirmed the blue-box17, orange-circle42 and green-triangle09 labels at
+their expected scenes, including the two scene-change samples. The Korean
+transcript at0–6.36s matched the synthetic spoken markers. Original streaming
+provided a video player without autoplay. A post-ready download at16:36:17Z
+contained66723 bytes and matched the retained synthetic original byte for byte.
+Failed jobs/unknown usage, old observations and original bytes remain preserved.
+Private screenshots were shown in chat and are not published to GitHub.
+
+Prompt2.6 additionally makes a source/tool/material-request round a concise
+dispatch draft: a short neutral progress sentence, the necessary lookup requests
+and empty proposed additions/claims. The existing server supplies evidence before
+the final answer is generated and independently audited. New user facts remain in
+context and can still produce requested supported final updates. This adds no
+model phase or retry and changes no validator, quota, timeout or retrieval authority.
+It is a targeted hypothesis for avoiding unnecessary hypothetical-answer work
+before lookup, not a proved cause or repair of the broad-query timeout. Actual
+changed-prompt source selection, citation, material chat and requested-update
+acceptance remain required. The readable material-ID guidance is retained.
+
+Prompt2.6 validation passed frozen install, quick307, focused60 across3files/337
+assertions, offline50 deterministic+60 scripted scenarios with zero critical
+findings, production build/dry-run/local built Worker and docs checks. These
+checks are offline; actual changed-prompt dispatch/answer quality is pending.
