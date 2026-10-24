@@ -419,3 +419,37 @@ Reports contain only counts/booleans, never excerpts or answers. This adapter us
 pre-extracted synthetic observations, not live D1/R2 or an actual48-page PDF. The
 separate real encrypted-reader/deletion/revision tests remain necessary; neither
 component substitutes for deployed product file/OAuth acceptance.
+
+## Material reading and deployed intake follow-up (2026-10-24)
+
+Exact main054b1e6 [material_chat40086793197](https://github.com/creno-va/baro/actions/runs/40086793197)
+passed all three Gateway calls:8051ms/12972input/604output,
+4376ms/16343input/255output and7365ms/7800input/788output. One actual read
+returned32 observations, reached page48, and matched the hidden answer and exact
+source position before independent audit. Auth/replay guards passed and providerFailures
+was empty. The finite [original receipt](./ai-harness-2026-10-24/material-chat-054b1e6.json)
+retains its real checkedAt; sourceManifest is withheld. This is still the pre-extracted
+fixture described above, not an actual uploaded48-page PDF or live D1/R2 acceptance.
+
+[Preview40086967281](https://github.com/creno-va/baro/actions/runs/40086967281)
+deployed exact054b1e6. The actual ready endpoint matched release/schema0016; foundation,
+all9 endpoint checks and text configuration readiness passed. Unavailable price/SKU
+observations were warnings, not blockers. No model call is implied by deployment smoke.
+
+In the existing authenticated Safari preview session, a new synthetic case produced
+three first-round questions, saved its answers, produced two second-round questions,
+and generated a matching summary after those answers. During the second-round
+publication, the page displayed NOT_FOUND. A read-only reload, without repeating a
+model request, recovered the saved answers and already-published questions. This is a
+product observation, not proof that every possible cause of that UI error is known.
+
+Inspection reproduced a concrete false404 path: metadata's post-decrypt fence returns
+null when intake revision changes, and service.intake previously converted every null
+to NOT_FOUND. The service now recovers only reads, at most three times, with a fresh
+owner/tombstone check after each rejected snapshot. Continuous changes yield a transient
+503; deleted/foreign workspaces remain denied. Four new expectations failed before the
+fix; all101 targeted tests across read races, intake saves, snapshot recovery and actual
+Hono/AES/SQLite load paths passed afterward. Frozen bun ci, validate:quick(server243)
+and validate:build/local workerd passed. No schema, mobile/shared DTO, model request,
+quota, execution hold or original provider observation changed. The fix still requires
+its own exact PR/main CI and deployment;054's live results do not attest the new code.

@@ -10,6 +10,7 @@ afterEach(() => {
 });
 async function fixture(
   change: (f: Awaited<ReturnType<typeof customerWorkspaceFixture>>, read: number) => void,
+  table: "v2_workspaces" | "v2_intakes" = "v2_workspaces",
 ) {
   const f = await customerWorkspaceFixture();
   databases.push(f.db);
@@ -18,7 +19,7 @@ async function fixture(
     encrypt: (text, context) => f.core.cipher.encrypt(text, context),
     async decrypt(envelope, context) {
       const text = await f.core.cipher.decrypt(envelope, context);
-      if (context.table === "v2_workspaces") change(f, ++reads);
+      if (context.table === table) change(f, ++reads);
       return text;
     },
   };
@@ -40,6 +41,49 @@ test("a job revision change during workspace decryption returns a fresh accessib
   expect(current.workspaceRevision).toBe(f.workspace.workspaceRevision + 1);
   expect(current.id).toBe(f.workspace.id);
   expect(f.reads()).toBe(2);
+});
+
+test("an intake publication during metadata decryption recovers a fresh accessible intake", async () => {
+  const f = await fixture((f, read) => {
+    if (read === 1)
+      f.db.sqlite.query("UPDATE v2_intakes SET revision=revision+1 WHERE id=?").run(f.workspace.id);
+  }, "v2_intakes");
+  const current = await f.service.intake(f.owner.userId, f.workspace.id);
+  expect(current.revision).toBe(2);
+  expect(f.reads()).toBe(2);
+});
+
+for (const target of ["workspace", "account"] as const) {
+  test(`a ${target} deletion during intake recovery still denies access`, async () => {
+    const f = await fixture((f, read) => {
+      if (read === 1)
+        f.db.sqlite
+          .query("UPDATE v2_intakes SET revision=revision+1 WHERE id=?")
+          .run(f.workspace.id);
+      else
+        f.db.sqlite
+          .query("INSERT INTO v2_tombstones(target_kind,target_id,deleted_at) VALUES(?,?,?)")
+          .run(target, target === "workspace" ? f.workspace.id : f.owner.userId, f.now);
+    }, "v2_intakes");
+    await expect(f.service.intake(f.owner.userId, f.workspace.id)).rejects.toThrow("NOT_FOUND");
+    expect(f.reads()).toBe(2);
+  });
+}
+
+test("foreign owners cannot trigger intake recovery or narrative decryption", async () => {
+  const f = await fixture(() => {}, "v2_intakes");
+  await expect(f.service.intake(crypto.randomUUID(), f.workspace.id)).rejects.toThrow("NOT_FOUND");
+  expect(f.reads()).toBe(0);
+});
+
+test("continuous intake publication is a bounded transient failure, never a false 404", async () => {
+  const f = await fixture((f) => {
+    f.db.sqlite.query("UPDATE v2_intakes SET revision=revision+1 WHERE id=?").run(f.workspace.id);
+  }, "v2_intakes");
+  await expect(f.service.intake(f.owner.userId, f.workspace.id)).rejects.toThrow(
+    "DB_OPERATION_FAILED",
+  );
+  expect(f.reads()).toBe(3);
 });
 
 for (const target of ["workspace", "account"] as const) {
