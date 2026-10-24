@@ -248,6 +248,24 @@ not a token/cost/latency prediction. JSON Schema roundtrip tests verify required
 fields and closed objects remain enforceable, and server max2 tool requests remains.
 Actual changed-condition chat/tool acceptance is still required.
 
+The compact/native LOW candidate did **not** repair chat. Exact main eb57a03
+[run40077233826](https://github.com/creno-va/baro/actions/runs/40077233826)
+failed its first generation with HTTP400/provider_request after21462ms. Its finite
+receipt is preserved; there was no tool call or independent audit. No unchanged
+condition retry was made.
+
+The next candidate removes numeric range grammar only from chat's provider schema.
+The schema contained17 bounded numbers, including maximum safe-integer revisions,
+UTF-16 spans, frame indices and material ordinals repeated across nested references.
+[Google's structured-output guidance](https://ai.google.dev/gemini-api/docs/structured-output)
+identifies numeric bounds as a cause of excessive constrained-decoder states. This
+is a changed-condition hypothesis, not a confirmed diagnosis. Integer types, closed
+objects, required properties and native LOW remain. The original server Zod schema
+still rejects invalid revisions, ranges and counts before retrieval/publication;
+tests demonstrate that distinction. Other already-accepted feature wire bytes and
+all token, attempt, ownership, consent and quota limits remain unchanged. Actual
+changed-condition acceptance is required before claiming repair.
+
 [Native component40075714391](https://github.com/creno-va/baro/actions/runs/40075714391)
 on3e427aa succeeded through the actual pinned Linux Docker fixture profile, including
 document/office/HEIF, sampled video/audio, sanitization and report-native tests.

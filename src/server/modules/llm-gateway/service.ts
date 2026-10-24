@@ -76,8 +76,8 @@ export interface ModelMetric {
   outputTokens: number | null;
   status: "success" | "failed";
 }
-function wireSchema(schema: unknown): unknown {
-  if (Array.isArray(schema)) return schema.map(wireSchema);
+function wireSchema(schema: unknown, compactNumbers = false): unknown {
+  if (Array.isArray(schema)) return schema.map((value) => wireSchema(value, compactNumbers));
   if (schema && typeof schema === "object") {
     const input = schema as Record<string, unknown>;
     if ("not" in input && Object.keys(input).length === 1) return { type: "string" }; // Empty text-question options remain maxItems=0.
@@ -94,6 +94,15 @@ function wireSchema(schema: unknown): unknown {
           ([key, value]) =>
             key !== "$schema" &&
             key !== "default" &&
+            // Chat repeats large revision/UTF-16/frame bounds inside unions.
+            // Gemini's numeric grammar can reject these before inference.
+            // Keep integers/types here and all range checks in server Zod.
+            !(
+              compactNumbers &&
+              ["minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum", "multipleOf"].includes(
+                key,
+              )
+            ) &&
             !(key === "maxItems" && typeof value === "number" && value > 0),
         )
         // Zod discriminated unions emit oneOf; the provider supports anyOf.
@@ -101,7 +110,7 @@ function wireSchema(schema: unknown): unknown {
         .map(([key, value]) =>
           key === "const"
             ? ["enum", [value]]
-            : [key === "oneOf" ? "anyOf" : key, wireSchema(value)],
+            : [key === "oneOf" ? "anyOf" : key, wireSchema(value, compactNumbers)],
         ),
     );
   }
@@ -120,6 +129,7 @@ export function prepareGatewayWireInput(phase: Phase, input: unknown, correction
       // Reuse definitions instead of duplicating their nested unions on the wire.
       ...(phase === "workspace_chat" ? { reused: "ref" as const } : {}),
     }),
+    phase === "workspace_chat",
   );
   return {
     messages: [
