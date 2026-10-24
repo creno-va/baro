@@ -95,6 +95,55 @@ test("tool cards distinguish unconfigured and test responses on desktop and mobi
   await expect(source).toHaveAttribute("href", "https://law.go.kr/LSW/lsInfoP.do?lsiSeq=284415");
   await expect(source).toHaveAttribute("rel", "noopener noreferrer");
   await source.click({ trial: true });
+  // Bundled case routes may deliver the shared case stylesheet after the page
+  // stylesheet. Reorder the actual existing sheet, preserving its CSP context.
+  expect(
+    await page.evaluate(() => {
+      for (const sheet of document.styleSheets) {
+        try {
+          if (
+            [...sheet.cssRules].some(
+              (rule) =>
+                rule instanceof CSSStyleRule && rule.selectorText === ".case-shell textarea",
+            )
+          ) {
+            const node = sheet.ownerNode;
+            if (!(node instanceof HTMLElement)) continue;
+            node.dataset.caseStyleOrderTest = "last";
+            document.body.appendChild(node);
+            return true;
+          }
+        } catch {
+          /* Cross-origin font styles do not own the case rules. */
+        }
+      }
+      return false;
+    }),
+  ).toBe(true);
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const node = [...document.styleSheets].at(-1)?.ownerNode;
+        return node instanceof HTMLElement && node.dataset.caseStyleOrderTest === "last";
+      }),
+    )
+    .toBe(true);
+  for (const viewport of [
+    { width: 1280, height: 900 },
+    { width: 390, height: 844 },
+  ]) {
+    await page.setViewportSize(viewport);
+    const composer = page.getByRole("textbox", { name: "추가 사실 또는 질문", exact: true });
+    await expect(composer).toBeVisible();
+    const box = await composer.boundingBox();
+    expect(box).not.toBeNull();
+    // The base case textarea must not turn an empty chat composer into a tall
+    // sticky panel that obscures the answer. Keep the mobile zoom-safe font.
+    expect(box?.height).toBeLessThanOrEqual(140);
+    expect(
+      await composer.evaluate((element) => Number.parseFloat(getComputedStyle(element).fontSize)),
+    ).toBeGreaterThanOrEqual(16);
+  }
   await captureCaseViewports(page, "tool-results");
 });
 
