@@ -147,7 +147,7 @@ test("the remote D1 transport sends only SELECT batches and exports no raw rows"
   expect(JSON.stringify(report)).not.toContain("payload_json");
 });
 
-test("all scope retains the legacy technical blocker and does not attest media composition", async () => {
+test("all scope inspects the connected legacy journal without attesting actual provider/media execution", async () => {
   const f = await fixture(),
     report = await inspectAiPreflight(f.input);
   expect(report.status).toBe("blocked");
@@ -155,7 +155,10 @@ test("all scope retains the legacy technical blocker and does not attest media c
   expect(report.budgetGroups.processing?.missingSkus).toContain("container_cpu_seconds");
   expect(report.budgetGroups.asr?.missingSkus).toEqual(["asr_seconds"]);
   expect(report.budgetGroups.storage?.missingSkus).toContain("r2_storage_gb_months");
-  expect(report.blockers).toContain("legacy_analysis_attempt_ledger_wired");
+  expect(report.blockers).not.toContain("legacy_analysis_attempt_ledger_wired");
+  expect(report.checks.legacy_analysis_attempt_ledger_wired).toBe(true);
+  expect(report.warnings).toContain("legacy_analysis_runtime_requires_separate_acceptance");
+  expect(report.unverified).toContain("legacy-analysis-runtime");
   expect(report.blockers).not.toContain("media_storage_vision_metering_wired");
   expect(report.checks.media_storage_vision_metering_wired).toBe("not_inspected");
   expect(report.warnings).toContain("media_runtime_requires_separate_acceptance");
@@ -287,8 +290,10 @@ test("observation-only deployment remains ready without cost provisioning or ref
   expect(empty.sqlite.serialize()).toEqual(before);
   expect(bounds.text).toBe(JSON.stringify(original));
   const all = await inspectAiPreflight({ ...f.input, database: empty.binding });
-  expect(all.status).toBe("blocked");
-  expect(all.blockers).toEqual(["legacy_analysis_attempt_ledger_wired"]);
+  expect(all.status).toBe("configuration_ready");
+  expect(all.blockers).toEqual([]);
+  expect(all.checks.legacy_analysis_attempt_ledger_wired).toBe(true);
+  expect(all.unverified).toContain("legacy-analysis-runtime");
   expect(all.checks.media_storage_vision_metering_wired).toBe("not_inspected");
   expect(all.warnings).toContain("media_runtime_requires_separate_acceptance");
   expect(all.unverified).toContain("media-storage-vision-capability-metering");

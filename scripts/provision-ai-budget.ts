@@ -461,7 +461,7 @@ export async function inspectAiRuntime(bindings: Partial<Record<RuntimeEnvironme
       (
         await core
           .statement(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('v2_storage_projections','v2_storage_carryover','v2_storage_funding_heads','v2_physical_blob_bindings','v2_execution_admissions','v2_execution_cost_observations')",
+            "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('v2_storage_projections','v2_storage_carryover','v2_storage_funding_heads','v2_physical_blob_bindings','v2_execution_admissions','v2_execution_cost_observations','legacy_ai_attempts','legacy_ai_observations')",
           )
           .all<{ name: string }>()
       ).results.map((r) => r.name),
@@ -527,6 +527,15 @@ export async function inspectAiRuntime(bindings: Partial<Record<RuntimeEnvironme
         `SELECT (SELECT count(*) FROM v2_blobs) AS recordedBlobs,(SELECT count(*) FROM v2_storage_paid_executions) AS storageExecutions,(SELECT count(*) FROM v2_jobs WHERE status IN ('queued','running','validating')) AS unfinishedJobs,${available.has("v2_physical_blob_bindings") ? "(SELECT count(*) FROM v2_physical_blob_bindings)" : "NULL"} AS physicalBindings`,
       )
       .first();
+    const legacyAnalysisObservations =
+      available.has("legacy_ai_attempts") && available.has("legacy_ai_observations")
+        ? await core
+            .statement(`SELECT count(*) AS attempts,
+          coalesce(sum(CASE WHEN state IN ('dispatched','unknown') THEN 1 ELSE 0 END),0) AS unresolvedTransport,
+          coalesce(sum(CASE WHEN EXISTS(SELECT 1 FROM legacy_ai_observations o WHERE o.attempt_id=a.id) THEN 1 ELSE 0 END),0) AS usageObserved,
+          count(*) AS unpricedAttempts,NULL AS knownObservedKrw FROM legacy_ai_attempts a`)
+            .first()
+        : null;
     results.push({
       environment,
       schema,
@@ -539,6 +548,7 @@ export async function inspectAiRuntime(bindings: Partial<Record<RuntimeEnvironme
       carryover,
       initializationPrerequisites,
       executionObservations,
+      legacyAnalysisObservations,
     });
   }
   return { mode: "status", observedAt: new Date().toISOString(), results };

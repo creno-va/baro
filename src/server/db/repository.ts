@@ -530,7 +530,10 @@ export function createDomainRepository(binding: D1Database, cipher: EnvelopeCiph
               ]
             : []),
         ]);
-        return result.at(-1)?.meta.changes === 1;
+        // This last UPDATE targets one guarded primary key. The journal's
+        // lifecycle trigger may also change its own quota rows; those writes
+        // must not make a committed transition look stale.
+        return (result.at(-1)?.meta.changes ?? 0) > 0;
       });
     },
     // Public source cache has no user/case relationship. #14 owns retrieval and source verification.
