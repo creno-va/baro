@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { androidAuthenticationPrivacyBoundary } from "../scripts/mobile-android-auth-cancel";
 import {
   androidDirectoryDisplay,
+  androidDirectoryDisplayShape,
   androidDirectoryFailureCode,
   androidDirectoryInputObservation,
   androidDirectoryReceiptSchema,
@@ -17,7 +18,7 @@ const xml = (...nodes: string[]) => `<?xml version="1.0"?><hierarchy>${nodes.joi
 const node = (extra: string, box = "[40,300][1000,450]", pkg = appId) =>
   `<node package="${pkg}" enabled="true" bounds="${box}" ${extra}/>`;
 const dump = (rotation = 0, keyboard = false) =>
-  `DisplayFrames w=${rotation === 1 ? 2400 : 1080} h=${rotation === 1 ? 1080 : 2400} r=${rotation}\n  InsetsSource id=3 type=ime frame=${keyboard ? "[0,1500][1080,2400]" : "[0,0][0,0]"} visible=${keyboard} flags= sideHint=BOTTOM boundingRects=null`;
+  `DisplayFrames w=${rotation === 1 ? 2400 : 1080} h=${rotation === 1 ? 1080 : 2400} r=${rotation}\n  WindowInsetsStateController\n    InsetsState\n      mDisplayFrame=Rect(0, 0 - ${rotation === 1 ? 2400 : 1080}, ${rotation === 1 ? 1080 : 2400})\n      InsetsSource id=3 type=ime frame=${keyboard ? "[0,1500][1080,2400]" : "[0,0][0,0]"} visible=${keyboard} flags= sideHint=BOTTOM boundingRects=null\n    Control map:`;
 function nativeFixture(
   previousMode: "free" | "lock" = "free",
   failForeground = false,
@@ -147,6 +148,7 @@ test("display observation rejects ambiguous or malformed native state and uses a
     width: 1080,
     height: 2400,
     rotation: 0,
+    imeSourceObserved: true,
     keyboardVisible: true,
     keyboardTop: 1500,
   });
@@ -154,7 +156,7 @@ test("display observation rejects ambiguous or malformed native state and uses a
   for (const output of [
     "",
     `${dump()}\n${dump()}`,
-    dump().replace("type=ime", "type=statusBars"),
+    dump().replace("type=ime", "mType=ime"),
     dump().replace("r=0", "r=4"),
     dump(0, true).replace("[0,1500][1080,2400]", "[0,1500][1081,2400]"),
     dump(0, true).replace("[0,1500][1080,2400]", "[0,0][0,0]"),
@@ -330,4 +332,53 @@ test("workflow gates the isolated mode and exports only fixed observation paths"
   )?.with?.path;
   expect(output).toContain("directory-input.json");
   expect(output).not.toMatch(/\*|xml|log|dump/);
+});
+
+test("display parser reads the single raw InsetsState and ignores duplicated provider diagnostics", () => {
+  const source =
+    "InsetsSource id=3 type=ime frame=[0,1500][1080,2400] visible=true flags= sideHint=BOTTOM boundingRects=null";
+  const output = `${dump(0, true)}\n      Provider diagnostic ${source}\n      private-window-title`;
+  expect(androidDirectoryDisplay(output).keyboardTop).toBe(1500);
+  const shape = androidDirectoryDisplayShape(output);
+  expect(shape.rawImeSourceCount).toBe(1);
+  expect(shape.allImeSourceCount).toBe(2);
+  expect(shape.controllerCount).toBe(1);
+  expect(shape.rawStateCount).toBe(1);
+  expect(shape.displayFrameCount).toBe(1);
+  expect(JSON.stringify(shape)).not.toContain("private-window-title");
+  for (const invalid of [
+    dump().replace("WindowInsetsStateController", "UnknownController"),
+    dump().replace("    InsetsState", "    UnknownState"),
+    dump().replace(
+      "mDisplayFrame=Rect(0, 0 - 1080, 2400)",
+      "mDisplayFrame=Rect(0, 0 - 2400, 1080)",
+    ),
+    dump().replace("Control map:", "Unknown map:"),
+    dump().replace("type=ime", "type=IME"),
+    dump().replace("type=ime", "type=ime|captionBar"),
+    dump().replace("    Control map:", `      ${source}\n    Control map:`),
+  ])
+    expect(() => androidDirectoryDisplay(invalid)).toThrow("ANDROID_DIRECTORY_DISPLAY_INVALID");
+});
+test("a complete dimension-matched raw state can initially have no IME source; partial or unknown IME state cannot mean hidden", () => {
+  const absent = dump()
+    .split("\n")
+    .filter((line) => !line.includes("InsetsSource"))
+    .join("\n");
+  expect(androidDirectoryDisplay(absent)).toEqual({
+    width: 1080,
+    height: 2400,
+    rotation: 0,
+    imeSourceObserved: false,
+    keyboardVisible: false,
+    keyboardTop: null,
+  });
+  expect(androidDirectoryDisplayShape(absent).rawImeSourceCount).toBe(0);
+  for (const invalid of [
+    absent.replace("    InsetsState", "unknown"),
+    absent.replace("mDisplayFrame=Rect(0, 0 - 1080, 2400)", "unknown"),
+    absent.replace("    Control map:", "      InsetsSource mType: ime\n    Control map:"),
+  ])
+    expect(() => androidDirectoryDisplay(invalid)).toThrow();
+  expect(androidDirectoryDisplayShape("x".repeat(4_000_001)).outputWithinBound).toBe(false);
 });

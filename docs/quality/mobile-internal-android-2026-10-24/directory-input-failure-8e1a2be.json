@@ -1,0 +1,28 @@
+{
+  "toolingSourceSha": "8e1a2be10c5ef8647e2b8b0f317038eaacd52d7f",
+  "phase": "directory-input-prepare",
+  "code": "ANDROID_DIRECTORY_DISPLAY_INVALID",
+  "emulatorBootVerified": true,
+  "lastHomeObservation": {
+    "titleVisible": true,
+    "firstCardVisible": true,
+    "foundationErrorVisible": false
+  },
+  "lastPublicObservation": null,
+  "lastDirectoryInputObservation": {
+    "stage": "prepare",
+    "display": null,
+    "input": null
+  },
+  "lastGuideObservation": null,
+  "lastAuthObservation": null,
+  "lastChromeFixture": null,
+  "receiptValidationFields": [],
+  "publicScreenshotsSuppressed": true,
+  "emulatorStartupIssues": [],
+  "sdkHomeLaunchVerified": true,
+  "largeFontVerified": false,
+  "physicalDeviceVerified": false,
+  "storeSigned": false,
+  "deployed": false
+}

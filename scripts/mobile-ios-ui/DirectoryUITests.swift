@@ -1,5 +1,41 @@
 import XCTest
 
+// BARO_DIRECTORY_SIGNATURE_BEGIN
+private func directoryInputSignature(_ observed: String?) -> [String: Bool] {
+  let expected = "baro-mobile-smoke-20261024"
+  let value = observed ?? ""
+  let lower = value.lowercased()
+  let withoutWhitespace = value.filter { !$0.isWhitespace }
+  func normalizeDashes(_ text: String) -> String {
+    text.map { "‐‑‒–—−﹣－".contains($0) ? "-" : String($0) }.joined()
+  }
+  let compatible = value.precomposedStringWithCompatibilityMapping
+  let normalized = normalizeDashes(compatible).lowercased().filter { !$0.isWhitespace }
+  var remaining = lower.makeIterator()
+  var next = remaining.next()
+  for character in expected where next != nil {
+    if character == next { next = remaining.next() }
+  }
+  let expectedScalars = Set(expected.unicodeScalars)
+  return [
+    "stringObserved": observed != nil,
+    "expectedLengthMatches": value.utf16.count == expected.utf16.count,
+    "caseFoldMatches": lower == expected,
+    "whitespaceRemovalMatches": withoutWhitespace == expected,
+    "dashNormalizationMatches": normalizeDashes(value) == expected,
+    "compatibilityNormalizationMatches": compatible == expected,
+    "knownNormalizationMatches": normalized == expected,
+    "expectedSubsequenceOnly": !value.isEmpty && next == nil,
+    "containsKnownPayload": lower.contains(expected),
+    "allKnownSegmentsPresent": ["baro", "mobile", "smoke", "20261024"].allSatisfy { lower.contains($0) },
+    "knownDigitSuffixMatches": value.trimmingCharacters(in: .whitespacesAndNewlines).hasSuffix("20261024"),
+    "containsHangul": value.unicodeScalars.contains { (0x1100...0x11ff).contains($0.value) || (0x3130...0x318f).contains($0.value) || (0xac00...0xd7af).contains($0.value) },
+    "matchesFixedFieldLabel": value == "이름으로 검색",
+    "onlyExpectedScalarsAfterCaseFold": !value.isEmpty && lower.unicodeScalars.allSatisfy { expectedScalars.contains($0) }
+  ]
+}
+// BARO_DIRECTORY_SIGNATURE_END
+
 /// Public directory only. Fixed synthetic input and enums; never inspect profile values.
 final class BaroDirectoryUITests: XCTestCase {
   @MainActor
@@ -41,8 +77,9 @@ final class BaroDirectoryUITests: XCTestCase {
   private func reportInput(_ stage: String, input: XCUIElement, app: XCUIApplication) {
     let expected = "baro-mobile-smoke-20261024"
     let sentence = "Baro-mobile-smoke-20261024"
+    let observed = input.exists ? input.value as? String : nil
     let state: String
-    if input.exists, let value = input.value as? String {
+    if let value = observed {
       if value.isEmpty { state = "empty" }
       else if value == expected { state = "literal" }
       else if value == sentence { state = "sentence-capitalized" }
@@ -51,7 +88,7 @@ final class BaroDirectoryUITests: XCTestCase {
     } else { state = "unavailable" }
     // Only enum/booleans. Never print value, label, length, hierarchy or profile content.
     let status: [String: Any] = [
-      "stage": stage, "inputState": state,
+      "stage": stage, "inputState": state, "inputSignature": directoryInputSignature(observed),
       "appForeground": app.state == .runningForeground,
       "keyboardObserved": app.keyboards.firstMatch.exists
     ]
@@ -97,6 +134,8 @@ final class BaroDirectoryUITests: XCTestCase {
     }, seconds: 10), "BARO_DIRECTORY_INPUT_OCCLUDED")
     let synthetic = "baro-mobile-smoke-20261024"
     reportInput("before-input", input: input, app: app)
+    let initialInput = input.value as? String
+    XCTAssertTrue(initialInput == nil || initialInput == "", "BARO_DIRECTORY_INITIAL_INPUT_NOT_EMPTY")
     input.typeText(synthetic)
     reportInput("after-input", input: input, app: app)
     let typedRetained = wait({ (input.value as? String) == synthetic }, seconds: 10)

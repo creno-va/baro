@@ -896,3 +896,56 @@ empty/literal/sentence-capitalized/prefix/other/unavailable enum과 foreground/k
 새 정확한 CI/main 뒤 변경한 대기·단계 관측으로 실제 재검증하며 이전 실패를 덮어쓰지 않는다.
 Android 독립 입력/회전 도구도 같은 #379에서 준비한다. 전체 M7/#334·실제 계정/OAuth·HTTP
 transport·한국어 입력·VoiceOver/TalkBack·물리 기기/store·#339/#71은 OPEN이다.
+
+## Android 공개 탐색 첫 실제 실패와 raw InsetsState 범위 (#379)
+
+PR441/main8e1a2be·CI40044599732 SUCCESS 뒤 [실제40044821282](https://github.com/creno-va/baro/actions/runs/40044821282)는
+2026-10-24T00:27:12Z terminal FAILURE다. [원본 실패](../quality/mobile-internal-android-2026-10-24/directory-input-failure-8e1a2be.json)는
+directory-input-prepare/ANDROID_DIRECTORY_DISPLAY_INVALID이며 SDK boot·기본 Home은 성공했다.
+[Home](../quality/mobile-internal-android-2026-10-24/directory-input-home-8e1a2be.json)·[metadata](../quality/mobile-internal-android-2026-10-24/directory-input-verification-8e1a2be.json)의
+identity/SHA와 원본171989e APK57,133,550bytes/전체 SHA·compiler receipt8b7877…를 독립 대조했다.
+실패 JSON 전체 SHA256은 `f0541f36516b01c0975e5a7812b593603b22f77d3e63f769bbb6541860ef5004`다.
+현재 source 순서상 첫 display 읽기에서 멈췄으며 공개 탐색·입력·키보드·회전 성공 proof는 없다.
+원본은 display=null뿐이어서 실제 marker/source 개수나 형식 차이를 확정하지 않는다.
+
+Android15의 [InsetsStateController.dump](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-15.0.0_r5/services/core/java/com/android/server/wm/InsetsStateController.java)는
+`WindowInsetsStateController` 안에 raw `InsetsState`를 출력하고 그 뒤 `Control map:`에 별도
+provider 진단을 출력한다. [InsetsState.dump](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-15.0.0_r5/core/java/android/view/InsetsState.java)는
+현재 source 목록만 순회한다. 후속 parser는 전체 출력의 IME 문구를 한 source로 가정하지 않고
+유일한 controller의 raw state만 읽는다. 단일 DisplayFrames와 같은 크기의 raw display frame·
+완전한 raw 구간을 요구한다. 아직 IME window/source가 없는 초기 상태도 이 완전한 구간에서만
+구분하며, 알 수 없는 IME 형식이나 중복 raw source는 hidden으로 대체하지 않는다.
+실제 focus 뒤에는 이전과 같이 visible IME/양수 bounds·입력란 비가림·정확한 입력 유지가 필수다.
+
+다음 실행의 실패를 구분할 수 있도록 parser **이전**에 controller/frame/raw state/IME marker·
+source 개수와 구간 존재 여부만 기록한다. 입력/창 이름·raw dumpsys/XML은 출력하지 않는다.
+형식 검증 실패 때 display는 null로 두어 이전 정상 값을 현재 상태로 오인하지 않게 한다.
+이 수정은 SDK 구조와 초기 상태에 맞춘 관측 계약이며 첫 실패의 원인을 확인한 것으로 표현하지
+않는다. 원래 실패·시각/byte/hash를 보존하고 새 exact CI/main 뒤 변경된 parser로 실제 확인한다.
+앱/웹 UI·공통 계약/권한/DB·Chrome/인증 설정과 전체 M7/#334/#346/#339/#71 인수는 불변이다.
+
+## iOS 입력 직후 불일치의 실제 관측 (#379)
+
+같은 main8e1a2be의 [실제40044821833](https://github.com/creno-va/baro/actions/runs/40044821833)도
+terminal FAILURE다. [원본](../quality/mobile-internal-ios-2026-10-24/directory-failure-8e1a2be.json)은
+exit65/timedOut=false·BARO_DIRECTORY_TYPED_INPUT_MISMATCH이며 마지막 status는
+typed-check/other·appForeground=true·keyboardObserved=true다. 실패 전체 SHA256은
+`12e78666842465b9edf3bcad176fd4bb6fe6723e5d3e1a1b4bad5a8d418adc6e`다.
+[Home](../quality/mobile-internal-ios-2026-10-24/directory-home-8e1a2be.json)·[metadata](../quality/mobile-internal-ios-2026-10-24/directory-verification-8e1a2be.json)의
+identity와 원본171989e ZIP24,102,101bytes/전체 SHA·receipt77d157…를 독립 대조했다.
+이번 실패 위치는 회전 전 입력 직후로 구분됐다. 원래 입력·회전 공용 assertion 실패06788cb도
+보존하며 새 관측으로 이전 실행의 정확한 실패 지점까지 소급 확정하지 않는다.
+
+other 분류만으로 문자 손실·입력기·자동 변환·native 값 표현 차이를 특정하지 않는다. 후속 도구는
+동일한 합성 입력을 유지하고, 입력 전 비어 있는지 확인한 뒤 고정 boolean 비교만 추가한다.
+길이 **일치 여부**·대소문자/공백/dash/호환 문자 정규화 **후 일치 여부**·기대 입력의 부분 수열/
+고정 부분 문자열·숫자 suffix·한글 범위·고정 label 일치 여부를 읽는다. 실제 값·길이·Unicode
+scalar/창 이름·raw 계층은 출력하지 않는다. 정규화는 진단 비교에만 쓰며 통과 조건이나 실제
+앱 입력/검색 값은 바꾸지 않는다. 값 불일치를 성공으로 대체하지 않는다.
+
+허용된 status 최근8줄의 bounded history를 보존해 입력 전/직후/대기 뒤를 비교한다. 기존 signature
+없는 status도 구분해서 읽고, unknown 필드·원문/숫자/부분 signature는 모두 버린다. 같은 Swift
+진단 함수를 Foundation에서 컴파일/실행해 nil·합성 대소문자/공백/dash/호환 문자·누락·한글/
+고정 label을 검사한다. swiftc 없는 환경은 이 순수 probe만 skip하며 실제 Simulator 입력 성공으로
+세지 않는다. 로컬 probe 성공도 native TextInput/키보드/원격 API/VoiceOver 인수를 대체하지 않는다.
+새 정확한 CI/main 뒤 변경된 관측으로 확인하며 앱/웹·계약/DB와 #334/#379/#346/#339/#71은 유지한다.

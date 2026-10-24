@@ -103,13 +103,17 @@ test("failure reporting retains only a known XCTest assertion code", () => {
     observeIosDirectoryFailure(
       "XCTAssertTrue failed - BARO_DIRECTORY_INPUT_OCCLUDED private details",
     ),
-  ).toEqual({ status: null, assertionCode: "BARO_DIRECTORY_INPUT_OCCLUDED" });
+  ).toEqual({ status: null, history: [], assertionCode: "BARO_DIRECTORY_INPUT_OCCLUDED" });
   for (const output of [
     "compiler echo BARO_DIRECTORY_INPUT_OCCLUDED",
     "XCTAssertTrue failed - BARO_DIRECTORY_PRIVATE",
     "private native chatter",
   ])
-    expect(observeIosDirectoryFailure(output)).toEqual({ status: null, assertionCode: null });
+    expect(observeIosDirectoryFailure(output)).toEqual({
+      status: null,
+      history: [],
+      assertionCode: null,
+    });
 });
 test("directory proof binds binary, compiler, tooling and device while preserving the narrow UI-only scope", async () => {
   const baseline = await Bun.file(
@@ -179,7 +183,11 @@ test("iOS failure diagnostics distinguish typing and rotation using only fixed s
         observeIosDirectoryFailure(
           `BARO_DIRECTORY_UI_STATUS:${JSON.stringify(observed)}\nXCTAssertTrue failed - BARO_DIRECTORY_TYPED_INPUT_MISMATCH`,
         ),
-      ).toEqual({ status: observed, assertionCode: "BARO_DIRECTORY_TYPED_INPUT_MISMATCH" });
+      ).toEqual({
+        status: observed,
+        history: [observed],
+        assertionCode: "BARO_DIRECTORY_TYPED_INPUT_MISMATCH",
+      });
     }
   for (const patch of [
     { stage: "private-value" },
@@ -201,4 +209,52 @@ test("iOS failure diagnostics distinguish typing and rotation using only fixed s
     "BARO_DIRECTORY_INPUT_NOT_RETAINED",
   ] as const)
     expect(observeIosDirectoryFailure(`XCTAssertTrue failed - ${code}`).assertionCode).toBe(code);
+});
+
+test("input signatures and bounded status history export booleans only and reject unknown fields or partial signatures", () => {
+  const inputSignature = {
+    stringObserved: true,
+    expectedLengthMatches: true,
+    caseFoldMatches: true,
+    whitespaceRemovalMatches: false,
+    dashNormalizationMatches: false,
+    compatibilityNormalizationMatches: false,
+    knownNormalizationMatches: true,
+    expectedSubsequenceOnly: true,
+    containsKnownPayload: true,
+    allKnownSegmentsPresent: true,
+    knownDigitSuffixMatches: true,
+    containsHangul: false,
+    matchesFixedFieldLabel: false,
+    onlyExpectedScalarsAfterCaseFold: true,
+  };
+  const status = {
+    stage: "typed-check" as const,
+    inputState: "other" as const,
+    appForeground: true,
+    keyboardObserved: true,
+    inputSignature,
+  };
+  const encodeStatus = (value: unknown) => `BARO_DIRECTORY_UI_STATUS:${JSON.stringify(value)}`;
+  expect(observeIosDirectoryFailure(encodeStatus(status)).status).toEqual(status);
+  for (const extra of [
+    { rawValue: "synthetic-private" },
+    { length: 24 },
+    { stringObserved: "synthetic-private" },
+  ])
+    expect(
+      observeIosDirectoryFailure(
+        encodeStatus({ ...status, inputSignature: { ...inputSignature, ...extra } }),
+      ).status,
+    ).toBeNull();
+  expect(
+    observeIosDirectoryFailure(
+      encodeStatus({ ...status, inputSignature: { stringObserved: true } }),
+    ).history,
+  ).toEqual([]);
+  const result = observeIosDirectoryFailure(
+    Array.from({ length: 10 }, () => encodeStatus(status)).join("\n"),
+  );
+  expect(result.history).toHaveLength(8);
+  expect(JSON.stringify(result)).not.toContain("synthetic-private");
 });
