@@ -34,6 +34,24 @@ const valid = {
     },
   ],
 };
+test("media HTTP failure diagnostics are finite and cannot replace the original processing failure", async () => {
+  const failures: unknown[] = [];
+  const s = setup({
+    run: async () =>
+      Response.json({ error: { message: "private provider sentinel" } }, { status: 429 }),
+    observeFailure: (failure) => {
+      failures.push(failure);
+      throw new Error("private observer sentinel");
+    },
+  });
+  await expect(s.gateway.transcribe(wav(), 0, 1, s.access)).rejects.toMatchObject({
+    code: "MODEL_UNAVAILABLE",
+  });
+  await Promise.all(s.pending);
+  expect(failures).toEqual([{ phase: "asr", category: "provider_rate", httpStatus: 429 }]);
+  expect(JSON.stringify(failures)).not.toContain("sentinel");
+  expect(s.state()).toBe(1);
+});
 function setup(
   options: {
     reserve?: () => void;
@@ -42,6 +60,7 @@ function setup(
     timeoutMs?: number;
     register?: () => void;
     after?: (receipt: { transport: string; rawUsage?: unknown }) => Promise<void>;
+    observeFailure?: NonNullable<Parameters<typeof createMediaGateway>[1]["observeFailure"]>;
   } = {},
 ) {
   let allowed = true,
@@ -89,6 +108,7 @@ function setup(
         capable
           ? { model: MODEL_ID, wire: "chat_image_url", validUntil: "2099-01-01T00:00:00Z" }
           : null,
+      ...(options.observeFailure ? { observeFailure: options.observeFailure } : {}),
     },
   );
   return {

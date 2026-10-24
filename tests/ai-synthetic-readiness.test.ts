@@ -1,7 +1,20 @@
 import { expect, test } from "bun:test";
-import { probeProviderFailureSchema } from "../scripts/ai-readiness-control";
+import {
+  probePolicyFailureSchema,
+  probeProviderFailureSchema,
+} from "../scripts/ai-readiness-control";
 
 test("provider observations accept only finite categories and never provider text", () => {
+  expect(
+    probePolicyFailureSchema.safeParse({
+      reason: "unsupported_fact",
+      factCategory: "source_text_mismatch",
+    }).success,
+  ).toBe(true);
+  expect(
+    probePolicyFailureSchema.safeParse({ reason: "audit_rejected", text: "private sentinel" })
+      .success,
+  ).toBe(false);
   expect(
     probeProviderFailureSchema.parse({
       phase: "screening",

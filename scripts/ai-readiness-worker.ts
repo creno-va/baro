@@ -12,7 +12,10 @@ import {
 } from "../src/server/modules/llm-gateway/service";
 import { createMediaGateway } from "../src/server/modules/llm-gateway/transcription";
 import { documentedVisionSupport } from "../src/server/modules/llm-gateway/vision-wire";
-import { createWorkspacePipeline } from "../src/server/modules/workspace/pipeline";
+import {
+  createWorkspacePipeline,
+  WorkspaceOutputPolicyError,
+} from "../src/server/modules/workspace/pipeline";
 import type { ProbeOutcome } from "./ai-readiness-control";
 import {
   activeProvenance,
@@ -21,6 +24,7 @@ import {
   PROBE_PROTOCOL_VERSION,
   PROBE_REQUEST_ID,
   type ProbeConfiguration,
+  probePolicyFailureSchema,
   probeProviderFailureSchema,
 } from "./ai-readiness-control";
 import {
@@ -70,6 +74,10 @@ export class SyntheticProbe extends DurableObject<ProbeEnv> {
             },
             waitUntil: (task) => this.ctx.waitUntil(task),
             visionCapability: async () => documentedVisionSupport(),
+            observeFailure: (failure) => {
+              const safe = probeProviderFailureSchema.safeParse(failure);
+              if (safe.success) providerFailures.push(safe.data);
+            },
           });
           const access = { authorize: async () => true, signal: new AbortController().signal };
           for (const phase of ["vision", "asr"] as const) {
@@ -212,6 +220,21 @@ export class SyntheticProbe extends DurableObject<ProbeEnv> {
           ? { status: "passed", failure: null, metrics, providerFailures }
           : { status: "failed", failure: "POLICY_REJECTED", metrics, providerFailures };
       } catch (error) {
+        const policy =
+          error instanceof WorkspaceOutputPolicyError
+            ? probePolicyFailureSchema.safeParse({
+                reason: error.reason,
+                ...(error.factFailure ? { factCategory: error.factFailure.category } : {}),
+                ...(error.auditFailure
+                  ? {
+                      auditCodes: error.auditFailure.findings.map(({ severity, code }) => ({
+                        severity,
+                        code,
+                      })),
+                    }
+                  : {}),
+              })
+            : null;
         return {
           status: "failed",
           failure:
@@ -225,6 +248,7 @@ export class SyntheticProbe extends DurableObject<ProbeEnv> {
           metrics,
           providerFailures,
           ...(mediaChecks.length ? { mediaChecks } : {}),
+          ...(policy?.success ? { policyFailure: policy.data } : {}),
         };
       }
     });

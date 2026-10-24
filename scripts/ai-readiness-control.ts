@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { MODEL_ID } from "../src/server/model-policy";
 import type { ModelMetric } from "../src/server/modules/llm-gateway/service";
+import { workspaceAuditFindingSchema } from "../src/server/modules/llm-gateway/v2/schemas";
 
 export const PROBE_PROTOCOL_VERSION = 3 as const;
 export const featureCaseSchema = z.enum([
@@ -64,6 +65,27 @@ export const probeProviderFailureSchema = z.strictObject({
   ]),
   httpStatus: z.number().int().min(400).max(599).nullable(),
 });
+export const probePolicyFailureSchema = z.strictObject({
+  reason: z.enum([
+    "unauthorized_reference",
+    "unsupported_fact",
+    "prohibited_content",
+    "question_repetition",
+    "audit_rejected",
+  ]),
+  factCategory: z
+    .enum([
+      "source_text_unavailable",
+      "source_text_mismatch",
+      "claim_text_missing",
+      "claim_reference_mismatch",
+    ])
+    .optional(),
+  auditCodes: z
+    .array(workspaceAuditFindingSchema.pick({ severity: true, code: true }))
+    .max(30)
+    .optional(),
+});
 const unverified = [
   "full-product-smoke",
   "live-corpus-eval",
@@ -109,6 +131,7 @@ const reportSchema = z
       .max(3),
     providerFailures: z.array(probeProviderFailureSchema).max(3).optional(),
     mediaChecks: mediaChecksSchema.optional(),
+    policyFailure: probePolicyFailureSchema.optional(),
     unverified: z.tuple(
       unverified.map((value) => z.literal(value)) as [
         z.ZodLiteral<"full-product-smoke">,
@@ -281,6 +304,7 @@ export interface ProbeOutcome {
   )[];
   providerFailures?: z.infer<typeof probeProviderFailureSchema>[];
   mediaChecks?: z.infer<typeof mediaChecksSchema>;
+  policyFailure?: z.infer<typeof probePolicyFailureSchema>;
 }
 export async function handleDurableProbe(
   request: Request,

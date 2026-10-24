@@ -216,3 +216,10 @@ native_materials (no model calls) to run the actual pinned Linux Container fixtu
 profile where Docker is available. It is component evidence only and creates no
 full-validation/release/#71 receipt. The all-seven selector remains limited to the
 seven AI cases and max21 reservations.
+
+Feature failures may retain only a finite policy reason/fact category/audit code list.
+Media Gateway HTTP diagnostics now expose the same sanitized category/status/finite
+request issue to an optional observer; an observer exception cannot replace the
+processing failure or release its unresolved receipt. No provider body or generated
+text is attached. These diagnostics prepare actual per-feature failure analysis and
+are not success receipts.
