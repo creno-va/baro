@@ -5,8 +5,10 @@ import {
   decodeKeyboardReferenceAppInventory,
   keyboardReferenceTestSelector,
   type keyboardSettingsReferenceResultSchema,
+  keyboardSetupReferenceTestSelector,
   observeKeyboardReferenceFailure,
   parseKeyboardSettingsReference,
+  parseKeyboardSetupReference,
 } from "../scripts/mobile-ios-keyboard-reference";
 
 function result(): z.infer<typeof keyboardSettingsReferenceResultSchema> {
@@ -80,7 +82,8 @@ test("the separate run uses only the Settings reference test and preserves the p
     "scripts/mobile-ios-ui/KeyboardSettingsReferenceUITests.swift",
   ).text();
   expect(swift).toContain("openKoreanLayoutSettings()");
-  expect(swift).not.toMatch(
+  const inspectOnly = swift.split("// The setup reference exercises")[0] ?? "";
+  expect(inspectOnly).not.toMatch(
     /\.value|\.identifier|\.debugDescription|\.screenshot\(|\.tap\(|\.typeText\(|UIPasteboard/,
   );
   const product = await Bun.file("scripts/mobile-ios-ui/DirectoryKoreanUITests.swift").text();
@@ -135,4 +138,39 @@ test("reference failures expose only fixed assertions and compiler booleans, nev
       .swiftCompilationFailure,
   ).toBe(true);
   expect(JSON.stringify(observeKeyboardReferenceFailure(output))).not.toContain("private");
+});
+
+test("OS setup references have a separate kind and cannot claim actual RN input or replace the inspect result", () => {
+  const v = {
+    kind: "ios-owned-korean-keyboard-setup-reference-only",
+    keyboardSetup: "owned-simulator-settings-ui",
+    koreanListReadbackVerified: true,
+    separateKeyboardChosen: true,
+    settingsLayoutChoiceObserved: false,
+    layoutIdentityVerified: false,
+    productInputVerified: false,
+    koreanKeyboardVerified: false,
+    rawHierarchyExported: false,
+    rawValuesExported: false,
+    screenshotsExported: false,
+    rawXcresultExported: false,
+  } as const;
+  const encode = (value: unknown) =>
+    "BARO_KEYBOARD_SETUP_REFERENCE_RESULT:" + JSON.stringify(value);
+  expect(parseKeyboardSetupReference(encode(v))).toEqual(v);
+  for (const patch of [
+    { kind: "ios-owned-korean-settings-control-reference-only" },
+    { koreanListReadbackVerified: false },
+    { separateKeyboardChosen: false },
+    { layoutIdentityVerified: true },
+    { productInputVerified: true },
+    { koreanKeyboardVerified: true },
+    { controls: [{ label: "private" }] },
+  ])
+    expect(() => parseKeyboardSetupReference(encode({ ...v, ...patch }))).toThrow();
+  expect(() => parseKeyboardSetupReference(encode(v) + "\n" + encode(v))).toThrow();
+  expect(() => parseKeyboardSettingsReference(encode(v))).toThrow();
+  expect(keyboardSetupReferenceTestSelector).toBe(
+    "-only-testing:BaroHomeUITests/BaroDirectoryUITests/testKoreanKeyboardSetupReference",
+  );
 });

@@ -40,3 +40,23 @@ extension BaroDirectoryUITests {
     print("BARO_KEYBOARD_REFERENCE_RESULT:" + String(decoding: try JSONSerialization.data(withJSONObject: result, options: [.sortedKeys]), as: UTF8.self))
   }
 }
+
+// The setup reference exercises only the shared OS preparation. It never
+// launches BARO or verifies a product TextInput, and its result kind is distinct.
+extension BaroDirectoryUITests {
+  @MainActor
+  func testKoreanKeyboardSetupReference() throws {
+    continueAfterFailure = false
+    guard let setup = addKoreanKeyboard() else { return }
+    let result: [String: Any] = [
+      "kind": "ios-owned-korean-keyboard-setup-reference-only",
+      "keyboardSetup": "owned-simulator-settings-ui", "koreanListReadbackVerified": true,
+      "separateKeyboardChosen": setup.separateKeyboardChosen,
+      "settingsLayoutChoiceObserved": setup.settingsLayoutChoiceObserved,
+      "layoutIdentityVerified": false, "productInputVerified": false, "koreanKeyboardVerified": false,
+      "rawHierarchyExported": false, "rawValuesExported": false,
+      "screenshotsExported": false, "rawXcresultExported": false
+    ]
+    print("BARO_KEYBOARD_SETUP_REFERENCE_RESULT:" + String(decoding: try JSONSerialization.data(withJSONObject: result, options: [.sortedKeys]), as: UTF8.self))
+  }
+}

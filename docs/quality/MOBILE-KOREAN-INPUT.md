@@ -1,6 +1,6 @@
 # 모바일 한국어 입력 인수
 
-2026-10-25 KST / #379·#334. 현재 상태는 **네 차례 실제 실행의 Settings 제어 탐색 실패, 한글 입력 미도달**이다.
+2026-10-25 KST / #379·#334. 현재 상태는 **다섯 차례 실제 실행의 Settings 제어 탐색 실패, 한글 입력 미도달**이다.
 기존 source6201112의 두 OS ASCII 입력/실제 software Search·회전 성공과
 source9436e77의3사 인증 취소 성공을 한국어 IME 인수로 확대하지 않는다.
 
@@ -131,7 +131,6 @@ Standard/10-Key 존재·Korean 제목·Done의 제한된 count/boolean을 진단
 존재만 관측하고 선택하지 않으며 raw label/value/frame·UI hierarchy/xcresult는 export하지
 않는다. 다음 실제 관측은 새 c821 원본 compiler 검증/pin과 정확한 CI/main 이후다.
 
-
 ## 네 번째 실행과 제품 없는 Settings 참고 검사
 
 PR501의 도구·PR502/main1906321 원본 pin·CI40110871760 뒤
@@ -163,7 +162,6 @@ Done이 보이는 화면에 도달하며, layout 선택이나 제품 입력은 �
 제어를 연결하고 원래6자모/4checkpoint·공백 확정/삭제·추가·Search·회전을 다시 검증한다.
 참고 검사 자체는 한국어 입력·제품/로그인·physical/store 인수가 아니다.
 
-
 ## 실제 Settings 참고 결과와 후속 연결
 
 PR507/main eb7ea62의 CI40113858176 뒤
@@ -192,3 +190,48 @@ Korean 화면 body에서12개 공개 OS 제어 이름/유형을 관측했다. `A
 형태로 읽는다. 실제 보이는 자모6tap/4checkpoint·공백 확정/삭제·추가·software Search·회전과
 capture boundary는 유지한다. 따라서 OS 기본 layout이 맞지 않으면 실제 키/조합 검사에서
 실패하며, 참고 검사나 준비 단계만으로 한국어 입력을 완료 처리하지 않는다.
+
+## 다섯 번째 실행의 분리된 owner와 조회 범위
+
+PR508/main7ec6352·CI40116651207 뒤
+[actual40116874262](https://github.com/creno-va/baro/actions/runs/40116874262)은 **FAILURE**였다.
+Korean 제목/고정 prompt는 보였고 eligible cell1/button1이 검출됐지만 서로95% 겹치지 않아
+`ambiguous/blocked`·`BARO_KOREAN_SEPARATE_CHOICE_MISSING`으로 멈췄다. 조합 checkpoint는0이다.
+다른 위치의 제어라는 사실은 확인됐지만 어느 제어가 전경/배경인지나 제품 입력 실패를
+확정하지 않는다.
+
+[원래 실패](./mobile-native-c8215b8/ios-korean-40116874262/failure.json),
+[Home](./mobile-native-c8215b8/ios-korean-40116874262/home.json),
+[metadata](./mobile-native-c8215b8/ios-korean-40116874262/verification.json),
+[탐색 전 PNG](./mobile-native-c8215b8/ios-korean-40116874262/home-ios.png)와
+[원본 결합](./mobile-native-c8215b8/ios-korean-40116874262/local-preservation.json)을 보존한다.
+다음은 고정 prompt `Add to English (US) Keyboard`를 포함한 table/collection 하나 안에서만
+제어를 조회한다. container 누락/중복·조작 불가·분리/중복 owner는 계속 거절하고 임의의
+첫 제어를 탭하지 않는다. 새 diagnostic은 scope 유형/개수만 추가하며 과거 unscoped 실패를
+해당 scope의 성공으로 재해석하지 않는다. 자모/수정/검색/회전 인수는 그대로다.
+
+## Android 제품 없는 IME 등록 정보 준비
+
+`mobile-android-ime-reference.yml`은 기존 Google APIs Android35 image의 fresh owned AVD를
+만들어 제품 부재와 실제 boot/AVD identity·PackageManager readiness를 확인한다.
+설치 없이 `ime list -a --user 0`·기본 IME의 read-only 설정 조회만 수행한다.
+[Android15 IME dump](https://github.com/aosp-mirror/platform_frameworks_base/blob/android15-release/core/java/android/view/inputmethod/InputMethodInfo.java)와
+[subtype dump](https://github.com/aosp-mirror/platform_frameworks_base/blob/android15-release/core/java/android/view/inputmethod/InputMethodSubtype.java)의
+개수/순번·locale/languageTag/mode가 완전하고 default가 등록 목록과 일치해야 한다.
+미지원 형식/누락은 실패로 남기며 한국어0개로 대체하지 않는다.
+
+출력은 Gboard/AOSP/other enum·현재 default 여부·등록 subtype/한국어 keyboard subtype 수,
+public SDK model/API·시각/metadata hash와 cleanup 사실뿐이다. raw metadata·component/package
+이름·locale·값·계층·screenshot·command log를 export하지 않는다. keyboard/언어 설정을
+바꾸거나 software key를 탭하지 않고, 별도 키보드 APK·계정·BARO 앱도 설치하지 않는다.
+프로세스 종료·owned AVD/임시 파일 정리에 실패하면 성공 receipt를 남기지 않는다.
+이는 해당 시점의 등록 정보이며0개가 동적 language download나 실제 한국어 지원 불가를
+뜻하지 않는다. 실제 software IME 조합·Android 제품 입력과 물리 기기 인수는 별도다.
+
+새 iOS 참고 workflow의 기본 `mode=inspect`는 기존 공개 OS 이름 관측을 유지한다.
+`mode=setup`은 별도 고정 test selector와 `ios-owned-korean-keyboard-setup-reference-only` kind로
+공유 Settings 준비 helper만 실행해 Korean 목록 readback까지 확인한다. 제품/reference 앱을
+설치·실행하지 않으며 raw label/값/계층/화면을 export하지 않는다. OS 언어 추가는 이번
+owned Simulator에만 수행하고 이후 정리한다. setup 결과의 layout identity·실제 한국어
+키 입력·제품 input 검증은 모두 false로 유지한다. 이는 새 앱 compile/pin 대기 중 준비
+단계를 분리해 검증하는 보조 경로이며, 실제 RN 앱의6자모/4checkpoint 인수를 대체하지 않는다.

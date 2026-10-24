@@ -1,0 +1,50 @@
+{
+  "toolingSourceSha": "7ec63528cf71bd5f035be78352d2a157f290b930",
+  "phase": "public-directory-xcuitest",
+  "code": "INTERNAL_IOS_VERIFICATION_COMMAND_FAILED",
+  "lastCommand": {
+    "exitCode": 65,
+    "timedOut": false,
+    "category": "COMMAND_FAILED"
+  },
+  "uiTestFailure": null,
+  "authCancelFailure": null,
+  "directoryFailure": {
+    "status": null,
+    "history": [],
+    "searchControl": null,
+    "assertionCode": "BARO_KOREAN_SEPARATE_CHOICE_MISSING"
+  },
+  "koreanDirectoryFailure": {
+    "history": [],
+    "separateChoice": {
+      "koreanTitleObserved": true,
+      "promptObserved": true,
+      "cellCount": 1,
+      "buttonCount": 1,
+      "ownersOverlap": false,
+      "selection": "ambiguous",
+      "decision": "blocked"
+    },
+    "layoutStatus": null,
+    "setupControl": {
+      "stage": "korean",
+      "cellCount": 1,
+      "buttonCount": 0,
+      "textCount": 1,
+      "ownersOverlap": true,
+      "selection": "cell",
+      "scrolls": 6
+    },
+    "setupStage": "layout",
+    "assertionCode": "BARO_KOREAN_SEPARATE_CHOICE_MISSING"
+  },
+  "inputReferenceFailure": null,
+  "nativeProcessLaunchVerified": false,
+  "homeContentVerified": false,
+  "remoteApiVerified": false,
+  "oauthVerified": false,
+  "physicalDeviceVerified": false,
+  "storeSigned": false,
+  "deployed": false
+}
