@@ -66,7 +66,27 @@ function object(value: unknown): Record<string, unknown> | null {
 /** Extract metering independently of choices/refusal/content/schema validity. */
 export function responseReceipt(raw: unknown): GatewayTransportReceipt {
   const value = object(raw);
-  const usage = object(value?.usage);
+  const native = value?.usage === undefined ? object(value?.usageMetadata) : null;
+  const nativePrompt = tokenCount(native?.promptTokenCount);
+  const nativeTotal = tokenCount(native?.totalTokenCount);
+  const nativeCandidates = tokenCount(native?.candidatesTokenCount);
+  const nativeThoughts = tokenCount(native?.thoughtsTokenCount);
+  // Total minus input includes thinking tokens; visible answer tokens alone do not.
+  const nativeOutput =
+    nativePrompt !== null && nativeTotal !== null && nativeTotal >= nativePrompt
+      ? nativeTotal - nativePrompt
+      : nativeCandidates !== null &&
+          nativeThoughts !== null &&
+          Number.isSafeInteger(nativeCandidates + nativeThoughts)
+        ? nativeCandidates + nativeThoughts
+        : null;
+  const usage = native
+    ? {
+        prompt_tokens: native.promptTokenCount,
+        completion_tokens: nativeOutput,
+        prompt_tokens_details: { cached_tokens: native.cachedContentTokenCount },
+      }
+    : object(value?.usage);
   const details = object(usage?.prompt_tokens_details);
   const counts = [
     usage?.prompt_tokens,
@@ -80,6 +100,19 @@ export function responseReceipt(raw: unknown): GatewayTransportReceipt {
   const serviceTier =
     tier === "default" || tier === "flex" || tier === "scale" || tier === "priority" ? tier : null;
   const malformed =
+    (native !== null &&
+      ([
+        native.promptTokenCount,
+        native.totalTokenCount,
+        native.candidatesTokenCount,
+        native.thoughtsTokenCount,
+        native.cachedContentTokenCount,
+      ].some((count) => count != null && tokenCount(count) === null) ||
+        (nativePrompt !== null && nativeTotal !== null && nativeTotal < nativePrompt) ||
+        (nativeCandidates !== null &&
+          nativeThoughts !== null &&
+          nativeOutput !== null &&
+          nativeCandidates + nativeThoughts > nativeOutput))) ||
     (value?.usage != null && usage === null) ||
     (usage?.prompt_tokens_details != null && details === null) ||
     counts.some((count) => count != null && tokenCount(count) === null) ||
@@ -89,7 +122,10 @@ export function responseReceipt(raw: unknown): GatewayTransportReceipt {
   return {
     transport: "response",
     providerRequestId:
-      typeof value?.id === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(value.id) ? value.id : null,
+      typeof (value?.id ?? value?.responseId) === "string" &&
+      /^[A-Za-z0-9_-]{1,128}$/.test(String(value?.id ?? value?.responseId))
+        ? String(value?.id ?? value?.responseId)
+        : null,
     inputTokens: inputTokens ?? null,
     outputTokens: outputTokens ?? null,
     cachedInputTokens: cachedInputTokens ?? null,
