@@ -1,0 +1,30 @@
+{
+  "toolingSourceSha": "139fd49c296c75dc9765b79d17e6ab8849b391e7",
+  "phase": "cold-launch-1",
+  "code": "BUNDLED_HOME_WAIT_EXPIRED",
+  "postBoundaryCommandFailures": {
+    "count": 0,
+    "first": null,
+    "last": null
+  },
+  "lastPostBoundaryHierarchyDump": null,
+  "emulatorBootVerified": true,
+  "lastHomeObservation": {
+    "titleVisible": false,
+    "firstCardVisible": false,
+    "foundationErrorVisible": false
+  },
+  "lastPublicObservation": null,
+  "lastDirectoryInputObservation": null,
+  "lastGuideObservation": null,
+  "lastAuthObservation": null,
+  "lastChromeFixture": null,
+  "receiptValidationFields": [],
+  "publicScreenshotsSuppressed": false,
+  "emulatorStartupIssues": [],
+  "sdkHomeLaunchVerified": false,
+  "largeFontVerified": false,
+  "physicalDeviceVerified": false,
+  "storeSigned": false,
+  "deployed": false
+}

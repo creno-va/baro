@@ -139,10 +139,14 @@ test("directory keeps draft edits outside filter renders and submits the final n
     );
     const before = filterRender.mock.calls.length;
     expect(before).toBeGreaterThan(0);
+    const field = screen.getByLabelText("이름으로 검색");
     for (const text of ["합", "합성", "합성 이름"]) {
       await fireEvent.changeText(screen.getByLabelText("이름으로 검색"), text);
     }
     expect(filterRender).toHaveBeenCalledTimes(before);
+    expect(screen.getByLabelText("이름으로 검색")).toBe(field);
+    expect(field.props.value).toBeUndefined();
+    expect(field.props.defaultValue).toBe("");
     await fireEvent.press(screen.getByRole("button", { name: "검색" }));
     expect(search).toHaveBeenLastCalledWith({ query: "합성 이름", region: "", practiceArea: "" });
     await fireEvent(screen.getByLabelText("이름으로 검색"), "submitEditing", {
@@ -153,7 +157,8 @@ test("directory keeps draft edits outside filter renders and submits the final n
       region: "",
       practiceArea: "",
     });
-    expect(screen.getByLabelText("이름으로 검색").props.value).toBe("합성 이름-마지막");
+    expect(screen.getByLabelText("이름으로 검색")).toBe(field);
+    expect(field.props.value).toBeUndefined();
     await fireEvent.press(screen.getByRole("button", { name: "검색" }));
     expect(search).toHaveBeenLastCalledWith({
       query: "합성 이름-마지막",
@@ -175,12 +180,14 @@ test("directory preserves unsent drafts through list/filter updates and resets o
     onRetry: jest.fn(),
   };
   const view = await render(<DirectoryScreen state={initial} {...props} />, { wrapper });
+  const field = screen.getByLabelText("이름으로 검색");
   await fireEvent.changeText(screen.getByLabelText("이름으로 검색"), "미제출 원문 － A");
   await view.rerender(<DirectoryScreen state={{ ...initial, phase: "loading" }} {...props} />);
-  expect(screen.getByLabelText("이름으로 검색").props.value).toBe("미제출 원문 － A");
+  expect(screen.getByLabelText("이름으로 검색")).toBe(field);
+  expect(field.props.value).toBeUndefined();
   await fireEvent.press(screen.getByRole("button", { name: "지역: 전체" }));
   await fireEvent.press(screen.getByRole("radio", { name: "지역 서울" }));
-  expect(screen.getByLabelText("이름으로 검색").props.value).toBe("미제출 원문 － A");
+  expect(screen.getByLabelText("이름으로 검색")).toBe(field);
   await fireEvent.press(screen.getByRole("button", { name: "검색" }));
   expect(search).toHaveBeenLastCalledWith({
     query: "미제출 원문 － A",
@@ -188,7 +195,10 @@ test("directory preserves unsent drafts through list/filter updates and resets o
     practiceArea: "",
   });
   await view.rerender(<DirectoryScreen state={{ ...initial, query: "확정 원문" }} {...props} />);
-  expect(screen.getByLabelText("이름으로 검색").props.value).toBe("확정 원문");
+  const committed = screen.getByLabelText("이름으로 검색");
+  expect(committed).not.toBe(field);
+  expect(committed.props.defaultValue).toBe("확정 원문");
+  expect(committed.props.value).toBeUndefined();
   await fireEvent.changeText(screen.getByLabelText("이름으로 검색"), "새 초안");
   await view.rerender(
     <DirectoryScreen
@@ -196,11 +206,18 @@ test("directory preserves unsent drafts through list/filter updates and resets o
       {...props}
     />,
   );
-  expect(screen.getByLabelText("이름으로 검색").props.value).toBe("확정 원문");
+  const filtered = screen.getByLabelText("이름으로 검색");
+  expect(filtered).not.toBe(committed);
+  expect(filtered.props.defaultValue).toBe("확정 원문");
   await fireEvent.press(screen.getByRole("button", { name: "검색" }));
   expect(search).toHaveBeenLastCalledWith({
     query: "확정 원문",
     region: "",
     practiceArea: "civil",
   });
+  await view.rerender(<DirectoryScreen state={initial} {...props} />);
+  expect(screen.getByLabelText("이름으로 검색")).not.toBe(filtered);
+  expect(screen.getByLabelText("이름으로 검색").props.defaultValue).toBe("");
+  await fireEvent.press(screen.getByRole("button", { name: "검색" }));
+  expect(search).toHaveBeenLastCalledWith({ query: "", region: "", practiceArea: "" });
 });
