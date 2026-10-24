@@ -43,5 +43,5 @@ raw audit·전체 보안/#339/#71 또는 모바일 #334 완료 주장이 아니�
 
 고정 Bun1.4.0의 `bun ci`와 quick115개/22파일·모바일/공통419개·RN88개, actual consumer/
 공통 계약·CJS 보완 회귀53개가 통과했다. production build/Worker dry-run·실제 local
-workerd 익명 login HTML과 두 OS Metro export도 통과했다. 전체 unit은 진행 중이며 해당
-결과를 확인한 후 정상 병합한다. 이 검증에 실제 OAuth/유료 공급자·production 배포는 없다.
+workerd 익명 login HTML과 두 OS Metro export도 통과했다. 전체 unit3803개/354파일(169042 assertions)도 통과했다. 정상 exact PR/main CI를
+확인한 뒤 통합한다. 이 검증에 실제 OAuth/유료 공급자·production 배포는 없다.
