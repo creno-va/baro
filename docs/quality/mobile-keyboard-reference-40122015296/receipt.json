@@ -1,0 +1,64 @@
+{
+  "version": 1,
+  "kind": "android-owned-ime-metadata-reference-only",
+  "toolingSourceSha": "784d60de02492794868eee8c53d3836ce4fc4ca2",
+  "observedAt": "2026-10-24T18:45:05.488Z",
+  "image": "system-images;android-35;google_apis;x86_64",
+  "device": {
+    "kind": "owned-emulator",
+    "apiLevel": 35,
+    "osVersion": "15",
+    "model": "sdk_gphone64_x86_64"
+  },
+  "productAbsentBeforeAndAfter": true,
+  "productInstalled": false,
+  "packageReadiness": {
+    "kind": "owned-android-package-manager-readiness",
+    "observedAt": "2026-10-24T18:45:05.225Z",
+    "handlersCompleted": [
+      "foreground",
+      "background"
+    ],
+    "handlerTimeoutsMs": [
+      15000,
+      15000
+    ],
+    "commandsCompleted": 2,
+    "sharedFirstColdBudgetMaxMs": 120000,
+    "rootCauseConfirmed": false,
+    "launcherReadinessVerified": false,
+    "dialogDismissed": false
+  },
+  "inventory": {
+    "methods": [
+      {
+        "vendor": "other",
+        "selectedDefault": false,
+        "registeredSubtypes": 1,
+        "registeredKoreanKeyboardSubtypes": 0
+      },
+      {
+        "vendor": "google-gboard",
+        "selectedDefault": true,
+        "registeredSubtypes": 144,
+        "registeredKoreanKeyboardSubtypes": 0
+      }
+    ],
+    "registeredSubtypeMetadataComplete": true,
+    "rawMetadataExported": false
+  },
+  "metadataSha256": "6c538f653ffaf0a45f9a563c6916e77692f49d133d42ef84ea2f22d8f38c1505",
+  "settingsChanged": false,
+  "softwareKeyTaps": 0,
+  "userAccountEntered": false,
+  "screenshotsExported": false,
+  "rawHierarchyExported": false,
+  "rawMetadataExported": false,
+  "rawCommandLogsExported": false,
+  "koreanKeyboardVerified": false,
+  "productInputVerified": false,
+  "physicalDeviceVerified": false,
+  "emulatorExited": true,
+  "avdDeleted": true,
+  "privateFilesRemoved": true
+}
