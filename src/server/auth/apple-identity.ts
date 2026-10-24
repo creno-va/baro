@@ -20,15 +20,21 @@ const linkedCallbacks = new WeakMap<object, { ownerId: string; subject: string }
 async function linkedCallback() {
   try {
     const state = await getOAuthState();
-    return state ? (linkedCallbacks.get(state) ?? null) : null;
+    if (!state) throw new Error("APPLE_LINKED_CALLBACK_CONTEXT_REQUIRED");
+    return linkedCallbacks.get(state) ?? null;
   } catch {
-    return null;
+    throw new Error("APPLE_LINKED_CALLBACK_CONTEXT_REQUIRED");
   }
 }
-export async function isAppleLinkedCallback() {
-  return Boolean(await linkedCallback());
+export async function isAppleLinkedCallback(inAppleCallback: boolean) {
+  return inAppleCallback && Boolean(await linkedCallback());
 }
-export async function appleLinkedSessionAllowed(db: D1Database, ownerId: string) {
+export async function appleLinkedSessionAllowed(
+  db: D1Database,
+  ownerId: string,
+  inAppleCallback: boolean,
+) {
+  if (!inAppleCallback) return true;
   const linked = await linkedCallback();
   if (!linked) return true;
   return (
@@ -67,7 +73,13 @@ export function bindAppleIdentity(
 ): OAuthProvider {
   if (provider.id !== "apple") return provider;
   const config = provider.idToken;
-  if (!config || "verify" in config || typeof config.audience !== "string" || !config.audience)
+  if (
+    !config ||
+    "verify" in config ||
+    typeof config.audience !== "string" ||
+    !config.audience ||
+    (provider.callbackPath && provider.callbackPath !== "/callback/apple")
+  )
     throw new Error("APPLE_IDENTITY_CONFIGURATION_REQUIRED");
   const verifier: OAuthProvider = {
     ...provider,

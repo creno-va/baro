@@ -80,8 +80,13 @@ function createConfiguredAuth(env: Env) {
     databaseHooks: {
       user: {
         create: {
-          before: async () => {
-            if (await isAppleLinkedCallback()) return false;
+          before: async (_user, context) => {
+            if (
+              await isAppleLinkedCallback(
+                context?.path === "/callback/:id" && context.params?.id === "apple",
+              )
+            )
+              return false;
             return undefined;
           },
         },
@@ -89,7 +94,14 @@ function createConfiguredAuth(env: Env) {
       session: {
         create: {
           before: async (session, context) => {
-            if (!(await appleLinkedSessionAllowed(env.DB, session.userId))) return false;
+            if (
+              !(await appleLinkedSessionAllowed(
+                env.DB,
+                session.userId,
+                context?.path === "/callback/:id" && context.params?.id === "apple",
+              ))
+            )
+              return false;
             return {
               data: {
                 ...session,
@@ -124,8 +136,13 @@ function createConfiguredAuth(env: Env) {
       },
       account: {
         create: {
-          before: async (account) => {
-            if (await isAppleLinkedCallback()) return false;
+          before: async (account, context) => {
+            if (
+              await isAppleLinkedCallback(
+                context?.path === "/callback/:id" && context.params?.id === "apple",
+              )
+            )
+              return false;
             return { data: discardProviderCredentials(account) };
           },
         },

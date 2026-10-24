@@ -6,7 +6,12 @@ import { CURRENT_POLICY_VERSIONS } from "../src/contracts/consent";
 import { api } from "../src/server/api";
 import { getAuth } from "../src/server/auth";
 import { saveAccountType } from "../src/server/auth/account-type";
-import { bindAppleIdentity, findAppleLinkedIdentity } from "../src/server/auth/apple-identity";
+import {
+  appleLinkedSessionAllowed,
+  bindAppleIdentity,
+  findAppleLinkedIdentity,
+  isAppleLinkedCallback,
+} from "../src/server/auth/apple-identity";
 import { createTestDatabase, testEnvironment } from "./helpers/d1";
 import { responseCookies } from "./helpers/oauth";
 import { seedTestSession } from "./helpers/session";
@@ -136,7 +141,7 @@ test("linked-subject SQL separates providers/owners, preserves verification and 
     for (const [providerId, userId] of [
       ["apple", owner.userId],
       ["google", peer.userId],
-    ])
+    ] as const)
       db.sqlite
         .query(
           "INSERT INTO account(id,user_id,provider_id,account_id,created_at,updated_at) VALUES(?,?,?,'synthetic-linked-subject',1,1)",
@@ -163,6 +168,21 @@ test("linked-subject SQL separates providers/owners, preserves verification and 
     db.sqlite.query("DELETE FROM account WHERE provider_id='apple'").run();
     expect(await findAppleLinkedIdentity(db.binding, "synthetic-linked-subject")).toBeNull();
     expect(db.sqlite.query("SELECT COUNT(*) AS n FROM user").get()).toEqual({ n: 2 });
+  } finally {
+    db.close();
+  }
+});
+test("missing Apple callback request context fails closed without changing unrelated authentication", async () => {
+  const db = await createTestDatabase();
+  try {
+    expect(await isAppleLinkedCallback(false)).toBe(false);
+    expect(await appleLinkedSessionAllowed(db.binding, "synthetic-owner", false)).toBe(true);
+    await expect(isAppleLinkedCallback(true)).rejects.toThrow(
+      "APPLE_LINKED_CALLBACK_CONTEXT_REQUIRED",
+    );
+    await expect(appleLinkedSessionAllowed(db.binding, "synthetic-owner", true)).rejects.toThrow(
+      "APPLE_LINKED_CALLBACK_CONTEXT_REQUIRED",
+    );
   } finally {
     db.close();
   }
@@ -228,39 +248,44 @@ test("custom verifyIdToken cannot bypass the binding; concurrent attempts never 
   expect(await bound.getUserInfo({ idToken: first, expectedIdTokenNonce: secondNonce })).toBeNull();
 });
 
+async function fixtureAppleAuth(db: Awaited<ReturnType<typeof createTestDatabase>>) {
+  const env = testEnvironment(db.binding),
+    base = getAuth(env);
+  expect((await base.$context).socialProviders.map((p) => p.id)).toEqual([
+    "google",
+    "naver",
+    "kakao",
+  ]);
+  const auth = betterAuth({
+    ...base.options,
+    trustedOrigins: [env.BETTER_AUTH_URL, "https://appleid.apple.com"],
+    socialProviders: { apple: { clientId: audience, clientSecret: "synthetic-only" } },
+    plugins: [
+      {
+        id: "synthetic-apple-jwks",
+        init(ctx) {
+          const p = ctx.socialProviders.find((entry) => entry.id === "apple");
+          if (!p) throw new Error("SYNTHETIC_APPLE_MISSING");
+          p.idToken = {
+            jwks: async () => keys.publicKey,
+            issuer: "https://appleid.apple.com",
+            audience,
+          };
+        },
+      },
+      ...(base.options.plugins ?? []),
+    ],
+  });
+  const context = await auth.$context,
+    p = context.socialProviders.find((entry) => entry.id === "apple");
+  if (!p) throw new Error("SYNTHETIC_APPLE_MISSING");
+  return { env, auth, p };
+}
+
 test("fixture-only Apple registration uses real SDK POST/GET state and RSA validation; replay/tamper cannot create a session", async () => {
   const db = await createTestDatabase();
   try {
-    const env = testEnvironment(db.binding),
-      base = getAuth(env);
-    expect((await base.$context).socialProviders.map((p) => p.id)).toEqual([
-      "google",
-      "naver",
-      "kakao",
-    ]);
-    const auth = betterAuth({
-      ...base.options,
-      trustedOrigins: [env.BETTER_AUTH_URL, "https://appleid.apple.com"],
-      socialProviders: { apple: { clientId: audience, clientSecret: "synthetic-only" } },
-      plugins: [
-        {
-          id: "synthetic-apple-jwks",
-          init(ctx) {
-            const p = ctx.socialProviders.find((entry) => entry.id === "apple");
-            if (!p) throw new Error("SYNTHETIC_APPLE_MISSING");
-            p.idToken = {
-              jwks: async () => keys.publicKey,
-              issuer: "https://appleid.apple.com",
-              audience,
-            };
-          },
-        },
-        ...(base.options.plugins ?? []),
-      ],
-    });
-    const context = await auth.$context,
-      p = context.socialProviders.find((entry) => entry.id === "apple");
-    if (!p) throw new Error("SYNTHETIC_APPLE_MISSING");
+    const { env, auth, p } = await fixtureAppleAuth(db);
     let expected = "",
       exchanges = 0,
       includeEmail = true,
@@ -456,3 +481,143 @@ test("fixture-only Apple registration uses real SDK POST/GET state and RSA valid
     db.close();
   }
 });
+
+test("concurrent existing-subject and first-signup callbacks keep request-local owner guards isolated", async () => {
+  const db = await createTestDatabase();
+  try {
+    const existing = await seedTestSession(db),
+      { env, auth, p } = await fixtureAppleAuth(db);
+    db.sqlite
+      .query(
+        "INSERT INTO account(id,user_id,provider_id,account_id,created_at,updated_at) VALUES(?,?,'apple','existing-subject',1,1)",
+      )
+      .run(crypto.randomUUID(), existing.userId);
+    const tokens = new Map<string, { idToken: string; accessToken: string }>();
+    p.validateAuthorizationCode = async ({ code }) => tokens.get(code) ?? null;
+    let release = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let arrivals = 0;
+    const profile = p.getUserInfo;
+    p.getUserInfo = async (input) => {
+      const result = await profile(input);
+      arrivals++;
+      if (arrivals === 2) release();
+      await gate;
+      return result;
+    };
+    const prepare = async (sub: string, email?: string) => {
+      const started = await auth.handler(
+        new Request(`${env.BETTER_AUTH_URL}/api/auth/sign-in/social`, {
+          method: "POST",
+          headers: { origin: env.BETTER_AUTH_URL, "content-type": "application/json" },
+          body: JSON.stringify({
+            provider: "apple",
+            callbackURL: "/consent",
+            errorCallbackURL: "/login",
+            disableRedirect: true,
+          }),
+        }),
+      );
+      const url = new URL(((await started.json()) as { url: string }).url),
+        code = crypto.randomUUID();
+      tokens.set(code, {
+        idToken: await token({ sub, email, nonce: url.searchParams.get("nonce") }),
+        accessToken: "synthetic-access",
+      });
+      const query = new URLSearchParams({ state: url.searchParams.get("state") ?? "", code });
+      return new Request(`${env.BETTER_AUTH_URL}/api/auth/callback/apple?${query}`, {
+        headers: { cookie: responseCookies(started) },
+      });
+    };
+    const old = await prepare("existing-subject"),
+      fresh = await prepare("new-subject", "new-apple@example.test");
+    const responses = await Promise.all([auth.handler(old), auth.handler(fresh)]);
+    for (const response of responses)
+      expect(new URL(response.headers.get("location") ?? "", env.BETTER_AUTH_URL).pathname).toBe(
+        "/consent",
+      );
+    const sessions = await Promise.all(
+      responses.map((response) =>
+        auth.api.getSession({ headers: new Headers({ cookie: responseCookies(response) }) }),
+      ),
+    );
+    expect(sessions[0]?.user.id).toBe(existing.userId);
+    expect(sessions[0]?.user.emailVerified).toBe(true);
+    expect(sessions[1]?.user.id).not.toBe(existing.userId);
+    expect(sessions[1]?.user.email).toBe("new-apple@example.test");
+    expect(db.sqlite.query("SELECT COUNT(*) AS n FROM user").get()).toEqual({ n: 2 });
+    expect(db.sqlite.query("SELECT COUNT(*) AS n FROM account").get()).toEqual({ n: 2 });
+  } finally {
+    db.close();
+  }
+});
+
+for (const localVerified of [false, true])
+  for (const providerVerified of [false, true])
+    test(`Apple same-email linking requires both proofs: local=${localVerified}, provider=${providerVerified}`, async () => {
+      const db = await createTestDatabase();
+      try {
+        const owner = await seedTestSession(db),
+          { env, auth, p } = await fixtureAppleAuth(db);
+        db.sqlite
+          .query("UPDATE user SET email_verified=? WHERE id=?")
+          .run(Number(localVerified), owner.userId);
+        db.sqlite
+          .query(
+            "INSERT INTO account(id,user_id,provider_id,account_id,created_at,updated_at) VALUES(?,?,'google','synthetic-google-subject',1,1)",
+          )
+          .run(crypto.randomUUID(), owner.userId);
+        const started = await auth.handler(
+          new Request(`${env.BETTER_AUTH_URL}/api/auth/sign-in/social`, {
+            method: "POST",
+            headers: { origin: env.BETTER_AUTH_URL, "content-type": "application/json" },
+            body: JSON.stringify({
+              provider: "apple",
+              callbackURL: "/consent",
+              errorCallbackURL: "/login",
+              disableRedirect: true,
+            }),
+          }),
+        );
+        const url = new URL(((await started.json()) as { url: string }).url);
+        p.validateAuthorizationCode = async () => ({
+          idToken: await token({
+            sub: "new-apple-subject",
+            email: `${owner.userId}@example.test`,
+            email_verified: String(providerVerified),
+            nonce: url.searchParams.get("nonce"),
+          }),
+          accessToken: "synthetic-access",
+        });
+        const query = new URLSearchParams({
+          state: url.searchParams.get("state") ?? "",
+          code: "synthetic-code",
+        });
+        const response = await auth.handler(
+          new Request(`${env.BETTER_AUTH_URL}/api/auth/callback/apple?${query}`, {
+            headers: { cookie: responseCookies(started) },
+          }),
+        );
+        if (localVerified && providerVerified) {
+          const session = await auth.api.getSession({
+            headers: new Headers({ cookie: responseCookies(response) }),
+          });
+          expect(session?.user.id).toBe(owner.userId);
+          expect(
+            db.sqlite.query("SELECT user_id FROM account WHERE provider_id='apple'").get(),
+          ).toEqual({ user_id: owner.userId });
+        } else {
+          expect(
+            new URL(response.headers.get("location") ?? "", env.BETTER_AUTH_URL).pathname,
+          ).toBe("/login");
+          expect(
+            db.sqlite.query("SELECT COUNT(*) AS n FROM account WHERE provider_id='apple'").get(),
+          ).toEqual({ n: 0 });
+        }
+        expect(db.sqlite.query("SELECT COUNT(*) AS n FROM user").get()).toEqual({ n: 1 });
+      } finally {
+        db.close();
+      }
+    });
