@@ -321,7 +321,7 @@ test("app hides the composer while session checks are pending or fail and suppor
     });
   });
   await page.goto("/app");
-  await expect(page.getByRole("status")).toContainText("로그인 상태를 확인");
+  await expect(page.getByRole("main").getByRole("status")).toContainText("로그인 상태를 확인");
   await expect(page.getByRole("textbox", { name: "지금까지 있었던 일" })).toHaveCount(0);
   release?.();
   await expect(page.locator("main").getByRole("alert")).toBeVisible();

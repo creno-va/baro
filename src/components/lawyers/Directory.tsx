@@ -4,6 +4,7 @@ import { api, lawyerErrorMessage } from "../../client/api/lawyers";
 import type { DirectoryItem } from "../../contracts/v2";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
+import { LoadingContent, Spinner } from "../ui/loading";
 import { PageHeader } from "../ui/page-header";
 import { StatePanel } from "../ui/state-panel";
 import { ApiModeNotice } from "./ApiModeNotice";
@@ -162,9 +163,10 @@ export function Directory({ preview = false }: { preview?: boolean }) {
                 type="submit"
                 aria-label="검색"
                 disabled={!ready}
+                aria-busy={busy}
                 className="directory-search__button"
               >
-                <Search size={18} aria-hidden="true" />
+                {busy ? <Spinner /> : <Search size={18} aria-hidden="true" />}
                 <span>검색</span>
               </Button>
             </div>
@@ -254,12 +256,18 @@ export function Directory({ preview = false }: { preview?: boolean }) {
           </Card>
         ))}
       </div>
-      {busy && <StatePanel variant="loading" title="공개 프로필을 불러오고 있어요." />}
+      {busy &&
+        (items.length ? (
+          <StatePanel variant="loading" title="공개 프로필을 더 불러오고 있어요." />
+        ) : (
+          <LoadingContent layout="directory" title="공개 프로필을 불러오고 있어요." />
+        ))}
       {nextCursor && !error && (
         <Button
           variant="outline"
           className="directory-more"
           disabled={busy}
+          loading={busy}
           onClick={() => void load(new URLSearchParams(query.current), nextCursor)}
         >
           더 보기

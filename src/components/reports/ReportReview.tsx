@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../../client/api";
 import type { ReportView as BaseReportView, FileView } from "../../client/api/types";
 import { isExplicitSignOut } from "../../client/session-events";
+import { LoadingContent, Spinner } from "../ui/loading";
 import { CaseNavigation } from "../workspace/CaseNavigation";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { createReportMarkup } from "./document";
@@ -374,8 +375,12 @@ export function ReportReview({ caseId }: { caseId: string }) {
         </nav>
         {(busy || accessChecking) && (
           <p role="status" className="report-progress">
+            <Spinner />
             {progressText}
           </p>
+        )}
+        {!report && !error && (busy || accessChecking) && (
+          <LoadingContent announce={false} layout="detail" title="리포트를 불러오고 있어요." />
         )}
         {error && !regenerate && !reloadConfirm && (
           <div className="report-error" role="alert">

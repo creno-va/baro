@@ -9,6 +9,7 @@ import { BrandMark } from "../ui/brand";
 import { Button, ButtonLink } from "../ui/button";
 import { Dialog } from "../ui/dialog";
 import { Textarea } from "../ui/form";
+import { LoadingContent } from "../ui/loading";
 import { StatePanel } from "../ui/state-panel";
 import { CaseMaterials } from "../workspace/CaseMaterials";
 import { BackToCases, ErrorPanel } from "./common";
@@ -348,7 +349,7 @@ export function SummaryReview({ caseId }: { caseId: string }) {
         <span>{editingActive ? "사건 요약 편집" : "요약 확인"}</span>
       </nav>
       {loading && !item && !error ? (
-        <StatePanel variant="loading" title="저장한 요약을 불러오고 있어요." />
+        <LoadingContent layout="detail" title="저장한 요약을 불러오고 있어요." />
       ) : null}
       {error ? (
         <ErrorPanel
@@ -577,6 +578,7 @@ export function SummaryReview({ caseId }: { caseId: string }) {
                     <Button
                       variant="outline"
                       onClick={() => void save()}
+                      loading={busy}
                       disabled={
                         !canMutate ||
                         busy ||
@@ -669,7 +671,7 @@ export function SummaryReview({ caseId }: { caseId: string }) {
                       title="이제 사건 정리를 시작할까요?"
                     >
                       <div className="intake-actions">
-                        <Button onClick={() => void confirm()} disabled={locked}>
+                        <Button onClick={() => void confirm()} disabled={locked} loading={busy}>
                           <Check size={18} aria-hidden="true" />
                           {busy ? "확인 중…" : "확인하고 사건 열기"}
                         </Button>

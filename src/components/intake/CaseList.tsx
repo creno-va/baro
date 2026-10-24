@@ -4,7 +4,7 @@ import { api } from "../../client/api";
 import type { CaseView } from "../../client/api/types";
 import type { CaseStatus } from "../../contracts";
 import { Button, ButtonLink } from "../ui/button";
-import { StatePanel } from "../ui/state-panel";
+import { LoadingContent } from "../ui/loading";
 import { CaseDeleteDialog } from "./CaseDeleteDialog";
 import { caseHref, ErrorPanel } from "./common";
 import { useCustomerAccess } from "./useCustomerAccess";
@@ -78,7 +78,12 @@ export function CaseList() {
           내가 정리하는 사건{ready && items.length > 0 && <strong>{items.length}</strong>}
         </span>
         <div className="intake-actions">
-          <Button variant="outline" disabled={loading} onClick={() => void load()}>
+          <Button
+            variant="outline"
+            disabled={loading}
+            loading={loading && !error}
+            onClick={() => void load()}
+          >
             <RotateCw size={16} aria-hidden="true" />
             새로 불러오기
           </Button>
@@ -89,7 +94,7 @@ export function CaseList() {
       </div>
       {notice && <p role="status">{notice}</p>}
       {loading && !items.length && !error && (
-        <StatePanel variant="loading" title="사건 목록을 불러오고 있어요." />
+        <LoadingContent title="사건 목록을 불러오고 있어요." />
       )}
       {error ? (
         <ErrorPanel error={error} retry={() => void load()} />

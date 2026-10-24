@@ -467,7 +467,9 @@ for (const lateResponse of ["failure", "signed-out"] as const) {
         .toBeGreaterThanOrEqual(firstWave.calls + 2);
       expect(held).toBe(1);
       expect(fresh).toBe(0);
-      await expect(page.getByRole("status")).toContainText("계정 접근 상태 확인 중…");
+      await expect(page.getByRole("main").getByRole("status")).toContainText(
+        "계정 접근 상태 확인 중…",
+      );
       await expect(editor).toHaveCount(0);
       await expect(page.getByRole("button", { name: "검토 내용 저장", exact: true })).toHaveCount(
         0,

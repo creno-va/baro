@@ -71,6 +71,8 @@ export function CaseDeleteDialog({
           취소
         </Button>
         <Button
+          variant="destructive"
+          loading={busy}
           disabled={!access.ready || busy || confirmation !== "DELETE"}
           onClick={() => void remove()}
         >
