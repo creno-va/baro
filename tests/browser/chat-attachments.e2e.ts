@@ -259,3 +259,116 @@ test("dragged and pasted files stay local until consent and sending", async ({ p
   );
   expect(await messages(page)).toEqual([]);
 });
+
+async function publishSyntheticReply(page: Page, text: string) {
+  await page.evaluate(
+    ({ id, text }) => {
+      const key = "baro-api-mock-v1:workspace";
+      const all = JSON.parse(localStorage.getItem(key) ?? "{}");
+      const data = all[id];
+      const message = data.messages.findLast((m: { role: string }) => m.role === "assistant");
+      message.status = "complete";
+      message.text = text;
+      delete data.pending?.[message.id];
+      localStorage.setItem(key, JSON.stringify(all));
+      window.dispatchEvent(new Event("focus"));
+    },
+    { id, text },
+  );
+}
+
+test("new validated replies reveal whole Korean/emoji graphemes, can finish immediately and restore without replay", async ({
+  page,
+}) => {
+  await seed(page);
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByLabel("추가 사실 또는 질문").fill("합성 대화 표시를 확인해 주세요.");
+  await page.getByRole("button", { name: "보내기", exact: true }).click();
+  await expect(page.locator(".workspace-message--assistant")).toHaveCount(1);
+  const text = "한글 👩🏽‍💻 가\u0301 🇰🇷 함께 확인해요.\n".repeat(40);
+  await publishSyntheticReply(page, text);
+  const reply = page.locator(".workspace-message--assistant p[data-reply-revealing]");
+  await expect(reply).toBeVisible();
+  const visible = await reply.innerText();
+  expect(visible.length).toBeGreaterThan(0);
+  expect(visible.length).toBeLessThan(text.length);
+  const boundaries = await page.evaluate((text) => {
+    let prefix = "";
+    return Array.from(
+      new Intl.Segmenter("ko", { granularity: "grapheme" }).segment(text),
+      (part) => (prefix += part.segment),
+    );
+  }, text);
+  expect(boundaries).toContain(visible);
+  await page.screenshot({ path: ".wrangler/chat-progressive-390.png", fullPage: true });
+  await page.getByRole("button", { name: "답변 전체 바로 보기" }).click();
+  await expect(reply).toHaveCount(0);
+  await expect(page.locator(".workspace-message--assistant > p")).toHaveText(text);
+  await page.reload();
+  await expect(page.locator(".workspace-message--assistant > p")).toHaveText(text);
+  await expect(page.locator("[data-reply-revealing]")).toHaveCount(0);
+  expect(await messages(page)).toHaveLength(2);
+});
+
+test("reduced motion shows the published answer immediately", async ({ page }) => {
+  await seed(page);
+  await page.getByLabel("추가 사실 또는 질문").fill("합성 모션 설정 검증입니다.");
+  await page.getByRole("button", { name: "보내기", exact: true }).click();
+  await expect(page.locator(".workspace-message--assistant")).toHaveCount(1);
+  const text = "기억나는 대로 편하게 말씀해 주세요. 합성 검증용 답변입니다.";
+  await publishSyntheticReply(page, text);
+  await expect(page.locator(".workspace-message--assistant > p")).toHaveText(text);
+  await expect(page.getByRole("button", { name: "답변 전체 바로 보기" })).toHaveCount(0);
+});
+
+test("a failed pending refresh recovers once and preserves the unsent draft", async ({ page }) => {
+  await seed(page);
+  await page.getByLabel("추가 사실 또는 질문").fill("저장할 합성 질문입니다.");
+  await page.getByRole("button", { name: "보내기", exact: true }).click();
+  await expect(page.locator(".workspace-message--assistant")).toHaveCount(1);
+  await page.getByLabel("추가 사실 또는 질문").fill("아직 보내지 않은 다음 질문");
+  await page.evaluate(() => {
+    localStorage.setItem(
+      "baro-api-mock-v1:faults",
+      JSON.stringify({ "workspace.get": ["UNAVAILABLE"] }),
+    );
+  });
+  await expect(page.getByText("이 응답은 합성 API 예시", { exact: false })).toBeVisible({
+    timeout: 15000,
+  });
+  await expect(page.getByLabel("추가 사실 또는 질문")).toHaveValue("아직 보내지 않은 다음 질문");
+  expect(
+    (await messages(page)).filter((m: { role: string }) => m.role === "assistant"),
+  ).toHaveLength(1);
+});
+
+test("reading earlier text keeps scroll position while the new reply grows; motion changes finish it", async ({
+  page,
+}) => {
+  await seed(page);
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await page.setViewportSize({ width: 390, height: 650 });
+  await page
+    .getByLabel("추가 사실 또는 질문")
+    .fill("앞서 기억한 합성 사건 내용을 적습니다. ".repeat(50));
+  await page.getByRole("button", { name: "보내기", exact: true }).click();
+  await expect(page.locator(".workspace-message--assistant")).toHaveCount(1);
+  await page.evaluate(() => {
+    window.scrollTo(0, 0);
+    window.dispatchEvent(new Event("scroll"));
+  });
+  const text = "한 문장씩 편하게 읽으실 수 있어요. 합성 검증입니다.\n".repeat(60);
+  await publishSyntheticReply(page, text);
+  const reply = page.locator(".workspace-message--assistant p[data-reply-revealing]");
+  await expect(reply).toHaveCount(1);
+  const start = (await reply.textContent())?.length ?? 0;
+  await expect
+    .poll(async () => (await reply.textContent())?.length ?? 0)
+    .toBeGreaterThan(start + 20);
+  expect(await page.evaluate(() => scrollY)).toBe(0);
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await expect(reply).toHaveCount(0);
+  await expect(page.locator(".workspace-message--assistant > p")).toHaveText(text);
+  expect(await page.evaluate(() => scrollY)).toBe(0);
+});
