@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "kind": "ios-simulator-ui-sdk-documentation",
+  "toolingSourceSha": "7ec63528cf71bd5f035be78352d2a157f290b930",
+  "observedAt": "2026-10-24T17:58:51.448Z",
+  "helpSha256": "6316d61db92c50ae849cbcfd66afd045ab91e83dbe7f5f9b50bd341ecb69da25",
+  "contentSizeOperationAdvertised": true,
+  "advertisedContentSizes": [
+    "extra-small",
+    "small",
+    "medium",
+    "large",
+    "extra-large",
+    "extra-extra-large",
+    "extra-extra-extra-large",
+    "accessibility-medium",
+    "accessibility-large",
+    "accessibility-extra-large",
+    "accessibility-extra-extra-large",
+    "accessibility-extra-extra-extra-large"
+  ],
+  "sdkDocumentationOnly": true,
+  "nativeDeviceStateRead": false,
+  "nativeDeviceStateChanged": false,
+  "appRuntimeVerified": false,
+  "accessibilityVerified": false,
+  "physicalDeviceVerified": false
+}

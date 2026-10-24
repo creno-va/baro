@@ -43,6 +43,28 @@ export function parseKeyboardSettingsReference(output: string) {
     JSON.parse(lines[0].slice("BARO_KEYBOARD_REFERENCE_RESULT:".length)),
   );
 }
+export const keyboardSetupReferenceResultSchema = z
+  .strictObject({
+    kind: z.literal("ios-owned-korean-keyboard-setup-reference-only"),
+    keyboardSetup: z.literal("owned-simulator-settings-ui"),
+    koreanListReadbackVerified: z.literal(true),
+    separateKeyboardChosen: z.boolean(),
+    settingsLayoutChoiceObserved: z.boolean(),
+    layoutIdentityVerified: z.literal(false),
+    productInputVerified: z.literal(false),
+    koreanKeyboardVerified: z.literal(false),
+    rawHierarchyExported: z.literal(false),
+    rawValuesExported: z.literal(false),
+    screenshotsExported: z.literal(false),
+    rawXcresultExported: z.literal(false),
+  })
+  .refine((v) => v.separateKeyboardChosen || v.settingsLayoutChoiceObserved);
+export function parseKeyboardSetupReference(output: string) {
+  const prefix = "BARO_KEYBOARD_SETUP_REFERENCE_RESULT:",
+    lines = output.split(/\r?\n/).filter((line) => line.startsWith(prefix));
+  if (lines.length !== 1 || !lines[0]) throw Error("IOS_KEYBOARD_REFERENCE_SINGLE_RESULT_REQUIRED");
+  return keyboardSetupReferenceResultSchema.parse(JSON.parse(lines[0].slice(prefix.length)));
+}
 export function assertKeyboardReferenceProductAbsent(apps: unknown) {
   if (
     !apps ||
@@ -87,6 +109,8 @@ export function observeKeyboardReferenceFailure(output: string) {
 }
 export const keyboardReferenceTestSelector =
   "-only-testing:BaroHomeUITests/BaroDirectoryUITests/testKoreanLayoutReference";
+export const keyboardSetupReferenceTestSelector =
+  "-only-testing:BaroHomeUITests/BaroDirectoryUITests/testKoreanKeyboardSetupReference";
 async function main() {
   if (
     process.platform !== "darwin" ||
@@ -94,6 +118,8 @@ async function main() {
     process.argv.length !== 2
   )
     throw Error("IOS_KEYBOARD_REFERENCE_FRESH_MAC_CI_REQUIRED");
+  const mode = process.env.BARO_IOS_KEYBOARD_REFERENCE_MODE ?? "inspect";
+  if (mode !== "inspect" && mode !== "setup") throw Error("IOS_KEYBOARD_REFERENCE_MODE_REQUIRED");
   const root = process.cwd(),
     env = internalIosEnvironment(process.env),
     source = env.TARGET_SHA!,
@@ -212,13 +238,16 @@ async function main() {
         "en",
         "-testRegion",
         "US",
-        keyboardReferenceTestSelector,
+        mode === "setup" ? keyboardSetupReferenceTestSelector : keyboardReferenceTestSelector,
         ...xcodeSimulatorControlArguments,
       ],
       owned,
       900000,
     );
-    const result = parseKeyboardSettingsReference(output);
+    const result =
+      mode === "setup"
+        ? parseKeyboardSetupReference(output)
+        : parseKeyboardSettingsReference(output);
     phase = "product-absence-after";
     assertKeyboardReferenceProductAbsent(
       await decodeKeyboardReferenceAppInventory(
@@ -228,7 +257,11 @@ async function main() {
     );
     acceptedReceipt = {
       version: 1,
-      kind: "ios-keyboard-settings-reference-receipt",
+      kind:
+        mode === "setup"
+          ? "ios-keyboard-setup-reference-receipt"
+          : "ios-keyboard-settings-reference-receipt",
+      referenceMode: mode,
       toolingSourceSha: source,
       observedAt: new Date().toISOString(),
       device: { kind: "owned-simulator", model: type.name, osVersion: runtime.version },

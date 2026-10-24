@@ -415,3 +415,46 @@ test("new setup path evidence cannot replace actual composition or silently disc
   ])
     expect(() => iosKoreanDirectoryResultSchema.parse({ ...result, ...patch })).toThrow();
 });
+
+test("new chooser scope evidence requires exactly one prompt-anchored list and keeps older unscoped failures intact", async () => {
+  const base = {
+    koreanTitleObserved: true,
+    promptObserved: true,
+    cellCount: 1,
+    buttonCount: 0,
+    ownersOverlap: true,
+    selection: "cell",
+    decision: "separate-keyboard",
+    scopeKind: "table",
+    scopeCount: 1,
+  };
+  const parseChoice = (v: unknown) =>
+    observeIosKoreanDirectoryFailure("BARO_KOREAN_SEPARATE_CHOICE:" + JSON.stringify(v))
+      .separateChoice;
+  expect<unknown>(parseChoice(base)).toEqual(base);
+  expect(parseChoice({ ...base, scopeKind: "collection" })?.decision).toBe("separate-keyboard");
+  for (const patch of [
+    { scopeCount: 0 },
+    { scopeCount: 2 },
+    { scopeKind: "missing" },
+    { scopeKind: "ambiguous" },
+    { scopeKind: "unknown" },
+    { scopeCount: 9 },
+    { parentIdentifier: "private" },
+  ])
+    expect(parseChoice({ ...base, ...patch })).toBeUndefined();
+  expect(
+    parseChoice({
+      ...base,
+      scopeKind: "missing",
+      scopeCount: 0,
+      cellCount: 0,
+      selection: "none",
+      decision: "blocked",
+    })?.decision,
+  ).toBe("blocked");
+  const old = (
+    await Bun.file("docs/quality/mobile-native-c8215b8/ios-korean-40116874262/failure.json").json()
+  ).koreanDirectoryFailure.separateChoice;
+  expect<unknown>(parseChoice(old)).toEqual(old);
+});
