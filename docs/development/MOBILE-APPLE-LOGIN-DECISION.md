@@ -487,3 +487,17 @@ Android packaging은 PNG container byte를 바꾸므로 이 검사는 source PNG
 동일성이지 압축 PNG 전체 byte 동일성 주장이 아니다. 기존 verifier의 runtime 입력을 이
 artifact12560156134·원래 receipt SHA d74ee221…로 고정한다. 재컴파일/재서명은 하지 않았다.
 앱 실행·실제 제공자 로그인·물리 기기·store 성공은 아직 검증하지 않았다. iOS 결과는 별도다.
+
+iOS Simulator compile40092729846도 SUCCESS다. 원래 receipt SHA256
+`7eca8b6ba896923f55c9f376c3bdd0818f60a3595dc994699dab8a67e771b5b0`와
+앱 ZIP21,580,352bytes·SHA256
+`4d7303fdd7bb2224dc3c3ef7ad28ff57c588bc9bc7053769dfc3623c6d0a51b0`,
+내장 Hermes3,665,732bytes·SHA256
+`654e59f889e83dd77a94ddb026ad4f2feafe38911cccb0f40f78f38bd0998c1b`를
+전체 원본에서 대조했다. 엄격한 compiler receipt와 provenance·폰트 byte 및 공식 Apple
+PNG3종의 원본 byte/RGBA pixel을 확인한
+[iOS 독립 검사](../quality/mobile-native-9436e77/ios-local-original-verification.json)와
+[원래 영수증](../quality/mobile-native-9436e77/receipt-ios.json)을 보존한다.
+artifact12560595376의 accepted 앱만 후속 verifier 입력으로 고정하며 별도로 보존된
+unaccepted compile ZIP을 바꿔 쓰지 않는다. 제품 bundled inputs는 source9436e77과 같다.
+재컴파일/재서명·source map 재생성이나 실제 실행/Apple 로그인·물리 기기·store 인수가 아니다.
