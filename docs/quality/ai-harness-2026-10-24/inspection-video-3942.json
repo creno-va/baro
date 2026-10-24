@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "mode": "status_only",
+  "checkedAt": "2026-10-24T16:25:31.728Z",
+  "candidateSha": "3942f5ac48a7f43c9d4e66cedee57d5948e6ceed",
+  "featureCase": "video_media",
+  "modelPostAttempts": 0,
+  "credentialCleanup": true,
+  "status": "observed",
+  "failure": null,
+  "snapshot": {
+    "started": false,
+    "reservedAttempts": 0,
+    "reportPresent": false,
+    "reportValid": null,
+    "activeProbeSourceSha256": "9759a08f19dbb7aa2c97c9899b6cee4a9c09ce8086dd05d8b8f51e8ebce3898e",
+    "terminalFailure": null,
+    "report": null
+  }
+}
