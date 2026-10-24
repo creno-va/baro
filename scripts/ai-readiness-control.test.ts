@@ -138,6 +138,58 @@ test("legal success requires real source requests, accepted quotation and indepe
   ).toBe(false);
   expect(schema.safeParse({ ...value, legalText: "private sentinel" }).success).toBe(false);
 });
+test("video success binds both scene positions and three successful model observations", async () => {
+  const original = (await harness().send("POST")).body as Record<string, unknown>;
+  const scope = { ...provenance, featureCase: "video_media" as const };
+  const value = {
+    ...original,
+    ...scope,
+    attempts: 3,
+    metrics: ["vision", "vision", "asr"].map((phase) => ({
+      requestId: PROBE_REQUEST_ID,
+      phase,
+      model: phase === "asr" ? "@cf/openai/whisper-large-v3-turbo" : "google/gemini-3.8-flash",
+      latencyMs: 1,
+      inputTokens: null,
+      outputTokens: null,
+      status: "success",
+    })),
+    mediaChecks: [
+      {
+        phase: "vision",
+        quality: "processed",
+        markerMatched: true,
+        segmentCount: null,
+        videoFrame: { timestampSeconds: 1.4, frameIndex: 14 },
+      },
+      {
+        phase: "vision",
+        quality: "processed",
+        markerMatched: true,
+        segmentCount: null,
+        videoFrame: { timestampSeconds: 3.2, frameIndex: 32 },
+      },
+      { phase: "asr", quality: "processed", markerMatched: true, segmentCount: 1 },
+    ],
+  };
+  const schema = probeReportFor(scope);
+  expect(schema.safeParse(value).success).toBe(true);
+  expect(
+    schema.safeParse({ ...value, mediaChecks: [...value.mediaChecks].reverse() }).success,
+  ).toBe(false);
+  expect(
+    schema.safeParse({
+      ...value,
+      mediaChecks: value.mediaChecks.map((c) => ({ ...c, markerMatched: false })),
+    }).success,
+  ).toBe(false);
+  expect(
+    schema.safeParse({ ...value, metrics: value.metrics.map((m) => ({ ...m, status: "failed" })) })
+      .success,
+  ).toBe(false);
+  expect(schema.safeParse({ ...value, attempts: 2 }).success).toBe(false);
+  expect(schema.safeParse({ ...value, framePixels: "private sentinel" }).success).toBe(false);
+});
 class MemoryStorage implements ProbeStorage {
   values = new Map<string, unknown>();
   private queue: Promise<void> = Promise.resolve();

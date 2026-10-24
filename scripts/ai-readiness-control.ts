@@ -13,6 +13,7 @@ export const featureCaseSchema = z.enum([
   "tools_property",
   "tools_registry",
   "legal_chat",
+  "video_media",
 ]);
 export const PROBE_REQUEST_ID = "00000000-0000-4000-8000-000000000027" as const;
 const candidateSchema = z.string().regex(/^[a-f0-9]{40}$/);
@@ -101,9 +102,15 @@ const mediaChecksSchema = z
       quality: z.enum(["processed", "low_quality"]),
       markerMatched: z.boolean(),
       segmentCount: z.number().int().min(0).max(1000).nullable(),
+      videoFrame: z
+        .strictObject({
+          timestampSeconds: z.number().min(0).max(8),
+          frameIndex: z.number().int().min(0).max(79),
+        })
+        .optional(),
     }),
   )
-  .max(2);
+  .max(3);
 const legalChecksSchema = z.strictObject({
   requests: z.number().int().min(0).max(9),
   verifiedSourceCount: z.number().int().min(0).max(10),
@@ -156,17 +163,37 @@ const reportSchema = z
       report.metrics.every(
         (metric) =>
           (metric.phase === "asr") === (metric.model === "@cf/openai/whisper-large-v3-turbo") &&
-          (report.featureCase === "media"
+          (report.featureCase === "media" || report.featureCase === "video_media"
             ? ["asr", "vision"].includes(metric.phase)
             : !["asr", "vision"].includes(metric.phase)),
       ) &&
       report.metricCoverage ===
         (report.metrics.length === report.attempts ? "complete" : "partial") &&
       (report.featureCase === "legal_chat" || report.legalChecks === undefined) &&
+      (report.featureCase === "video_media" ||
+        report.mediaChecks?.every((check) => check.videoFrame === undefined) !== false) &&
       (report.status === "passed"
         ? report.failure === null &&
           report.attempts > 0 &&
           report.metrics.at(-1)?.status === "success" &&
+          (report.featureCase !== "video_media" ||
+            (report.attempts === 3 &&
+              report.metrics.length === 3 &&
+              report.metrics.every(
+                (metric, i) =>
+                  metric.status === "success" && metric.phase === (i === 2 ? "asr" : "vision"),
+              ) &&
+              report.mediaChecks?.length === 3 &&
+              report.mediaChecks[0]?.phase === "vision" &&
+              report.mediaChecks[0]?.videoFrame?.timestampSeconds === 1.4 &&
+              report.mediaChecks[0]?.videoFrame?.frameIndex === 14 &&
+              report.mediaChecks[1]?.phase === "vision" &&
+              report.mediaChecks[1]?.videoFrame?.timestampSeconds === 3.2 &&
+              report.mediaChecks[1]?.videoFrame?.frameIndex === 32 &&
+              report.mediaChecks[2]?.phase === "asr" &&
+              report.mediaChecks[2]?.videoFrame === undefined &&
+              (report.mediaChecks[2]?.segmentCount ?? 0) > 0 &&
+              report.mediaChecks.every((check) => check.markerMatched))) &&
           (report.featureCase !== "legal_chat" ||
             (report.legalChecks !== undefined &&
               report.legalChecks.requests > 0 &&

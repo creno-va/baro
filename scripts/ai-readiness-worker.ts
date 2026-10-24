@@ -44,6 +44,9 @@ interface ProbeEnv extends ProbeConfiguration {
   READINESS_IMAGE_SHA256: string;
   READINESS_AUDIO_SHA256: string;
   LAW_API_OC?: string;
+  READINESS_VIDEO_ORANGE_SHA256?: string;
+  READINESS_VIDEO_GREEN_SHA256?: string;
+  READINESS_VIDEO_AUDIO_SHA256?: string;
 }
 
 // An isolated synthetic-only Worker. No application DB, cases or OAuth credentials.
@@ -61,7 +64,8 @@ export class SyntheticProbe extends DurableObject<ProbeEnv> {
           if (!this.env.LAW_API_OC?.trim()) throw new ModelError("MODEL_UNAVAILABLE");
           legal = createSyntheticLegalLookup(this.env.LAW_API_OC);
         }
-        if (active.featureCase === "media") {
+        if (active.featureCase === "media" || active.featureCase === "video_media") {
+          const video = active.featureCase === "video_media";
           let meter: { inputTokens: number | null; outputTokens: number | null } = {
             inputTokens: null,
             outputTokens: null,
@@ -88,10 +92,46 @@ export class SyntheticProbe extends DurableObject<ProbeEnv> {
             },
           });
           const access = { authorize: async () => true, signal: new AbortController().signal };
-          for (const phase of ["vision", "asr"] as const) {
+          const samples = video
+            ? [
+                {
+                  phase: "vision" as const,
+                  name: "video-orange.jpg",
+                  hash: this.env.READINESS_VIDEO_ORANGE_SHA256,
+                  videoFrame: { timestampSeconds: 1.4, frameIndex: 14 },
+                },
+                {
+                  phase: "vision" as const,
+                  name: "video-green.jpg",
+                  hash: this.env.READINESS_VIDEO_GREEN_SHA256,
+                  videoFrame: { timestampSeconds: 3.2, frameIndex: 32 },
+                },
+                {
+                  phase: "asr" as const,
+                  name: "video-speech.wav",
+                  hash: this.env.READINESS_VIDEO_AUDIO_SHA256,
+                  videoFrame: undefined,
+                },
+              ]
+            : [
+                {
+                  phase: "vision" as const,
+                  name: "image-markers.jpg",
+                  hash: this.env.READINESS_IMAGE_SHA256,
+                  videoFrame: undefined,
+                },
+                {
+                  phase: "asr" as const,
+                  name: "speech-ko.wav",
+                  hash: this.env.READINESS_AUDIO_SHA256,
+                  videoFrame: undefined,
+                },
+              ];
+          for (const sample of samples) {
+            const { phase } = sample;
             meter = { inputTokens: null, outputTokens: null };
             const response = await this.env.PROBE_FIXTURES.fetch(
-              `https://synthetic.invalid/${phase === "vision" ? "image-markers.jpg" : "speech-ko.wav"}`,
+              `https://synthetic.invalid/${sample.name}`,
             );
             if (!response.ok) throw new ModelError("MODEL_UNAVAILABLE");
             const bytes = new Uint8Array(await response.arrayBuffer());
@@ -99,28 +139,31 @@ export class SyntheticProbe extends DurableObject<ProbeEnv> {
               new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)),
               (b) => b.toString(16).padStart(2, "0"),
             ).join("");
-            if (
-              hash !==
-              (phase === "vision"
-                ? this.env.READINESS_IMAGE_SHA256
-                : this.env.READINESS_AUDIO_SHA256)
-            )
-              throw new ModelError("MODEL_UNAVAILABLE");
+            if (hash !== sample.hash) throw new ModelError("MODEL_UNAVAILABLE");
             const started = Date.now();
             let matched = false;
             try {
               if (phase === "vision") {
                 const output = await media.observe(bytes, access);
                 const text = output.texts.join(" ");
-                matched = /GREEN\s*TRIANGLE|초록|녹색/i.test(text) && /09|아홉/.test(text);
+                matched = video
+                  ? sample.videoFrame?.frameIndex === 14
+                    ? /ORANGE|주황|오렌지/i.test(text) &&
+                      /CIRCLE|원|동그라미/i.test(text) &&
+                      /42|마흔두|사십이/i.test(text)
+                    : /GREEN|초록|녹색/i.test(text) &&
+                      /TRIANGLE|삼각형/i.test(text) &&
+                      /09|9|아홉/i.test(text)
+                  : /GREEN\s*TRIANGLE|초록|녹색/i.test(text) && /09|아홉/.test(text);
                 mediaChecks.push({
                   phase,
                   quality: output.quality,
                   markerMatched: matched,
                   segmentCount: null,
+                  ...(sample.videoFrame ? { videoFrame: sample.videoFrame } : {}),
                 });
               } else {
-                const output = await media.transcribe(bytes, 0, 7.15, access);
+                const output = await media.transcribe(bytes, 0, video ? 8 : 7.15, access);
                 const text = output.text.replace(/\s|[.,]/g, "");
                 matched =
                   /파란상자/.test(text) &&

@@ -305,3 +305,36 @@ timestamp or effective date is inferred from fields that this view does not carr
 The isolated browser fixture labels its synthetic citation, checks the exact
 original link and clickability, and audits desktop/mobile overflow/accessibility.
 This UI fixture is not evidence of an actual verified legal answer.
+
+The numeric-grammar candidate on exact main1dbaf6d passed actual workspace chat
+[40080102636](https://github.com/creno-va/baro/actions/runs/40080102636): generation
+12671ms/11242input/1336output, independent audit6584ms/3377input/603output, two
+attempts. The previous HTTP400 receipts remain preserved; the changed candidate is
+accepted without claiming a unique historical root cause. A prepared JSON-mode
+contingency was not adopted or dispatched. Offline50 legacy fixtures/60 v2 scenarios
+reported zero critical findings; those remain scripted, not live model quality.
+
+The subsequent [tool groups40080234578](https://github.com/creno-va/baro/actions/runs/40080234578)
+passed business(HomeTax/TheCheat) and registry handling through requested-tools,
+trusted not_configured results, regeneration and independent audit (three attempts
+each). The earlier chat receipt was reused without another paid call. Property's
+two generations succeeded, but its independent audit timed out at the unchanged
+60000ms bound, with unknown usage retained. That group and the overall workflow are
+failed; no unchanged-condition retry or timeout/attempt-limit increase was made.
+No actual request to any of the four unprovisioned external services occurred.
+
+Actual [legal chat40080290646](https://github.com/creno-va/baro/actions/runs/40080290646)
+on1dbaf6d passed three Gemini calls, two official source requests, one verified
+source, one accepted exact quotation and independent audit. The source-failure list
+is empty. The workflow's temporary isolated credential cleanup also succeeded.
+The retained generic unverified/legal label refers to remaining broader legal and
+public approval, not a denial of this narrow source/quotation observation. These
+finite receipts do not prove a deployed product/OAuth/full-corpus/legal approval.
+
+The next separate video_media diagnostic connects the actual pinned native image's
+8-second synthetic video output to two Gemini frame observations and Whisper on its
+extracted audio. Native inventory/hash/position checks must pass before dispatch;
+selected scene positions are1.4s/index14 and3.2s/index32, audio0–8s. A pass requires
+both visible markers and spoken markers at the three-attempt cap. Offline tamper
+tests and an actual local native extraction are distinct from the still-required
+Linux-native-plus-Gateway run and deployed Cloudflare Container/product path.
