@@ -69,6 +69,21 @@ test("tool cards distinguish unconfigured and test responses on desktop and mobi
       }),
   );
   await page.reload();
+  await page.evaluate(async () => {
+    const path = "/src/client/api/core.ts";
+    const { apiMode, registerHttpMockHandler } = (await import(
+      path
+    )) as typeof import("../../src/client/api/core");
+    // Full validation uses PUBLIC_API_MODE=mock, whose HTTP adapter deliberately
+    // avoids fetch. Forward only this synthetic endpoint to the route above.
+    if (apiMode === "mock")
+      registerHttpMockHandler(async (request) =>
+        new URL(request.url).pathname ===
+        "/api/v2/cases/synthetic-case/messages/synthetic-tool-message/tool-results"
+          ? fetch(request)
+          : null,
+      );
+  });
   await page.getByText("공공·외부 조회 내역", { exact: true }).click();
   await expect(page.getByText("아직 연결되지 않음", { exact: true })).toBeVisible();
   await expect(page.getByText("테스트 응답 · 실제 조회 아님", { exact: true })).toBeVisible();

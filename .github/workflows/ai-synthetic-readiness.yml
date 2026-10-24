@@ -21,6 +21,7 @@ on:
           - native_materials
           - legal_chat
           - video_media
+          - material_chat
       candidate_sha:
         description: Exact current main SHA with successful CI; isolated synthetic Worker only
         required: true

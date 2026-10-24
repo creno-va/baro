@@ -81,10 +81,12 @@ Gateway의 payload logging은 비활성화하고 현재 OFF인 Gateway·사용�
 status, failure code만 허용한다. 사용자 입력·답변·결과·prompt 본문·법률 검색어에
 개인 식별 내용이 있으면 기록하지 않는다.
 모든 호출에서 `gateway:{id,collectLog:false,skipCache:true}`를 명시하고 Gateway 설정도
-검증한다. 간단한 생성/vision은 Chat Completions와 `response_format`을 사용하고,
-채팅·감사/검증은 같은 binding의 native GenerateContent `contents/systemInstruction`과
+검증한다. 간단한 생성은 Chat Completions와 `response_format`을 사용하고,
+채팅·vision·감사/검증은 같은 binding의 native GenerateContent `contents/systemInstruction`과
 `generationConfig.responseMimeType/responseJsonSchema/thinkingConfig`를 사용한다.
-채팅은 중복 참조 정의를 $defs/$ref로 공유한다. reasoning은 생성 `low`/채팅 `LOW`·감사 `MEDIUM`, 출력 상한은 단계별로 보존한다. 한 요청에서
+채팅은 중복 참조 정의를 $defs/$ref로 공유하고 numeric grammar 범위는 서버 Zod에서 검사한다.
+vision은 한 개의 bounded JPEG를 inlineData로 보내며 LOW thinking·MEDIA_RESOLUTION_LOW를
+명시한다. reasoning은 생성 `low`/채팅·vision `LOW`·감사 `MEDIUM`, 출력 상한은 단계별로 보존한다. 한 요청에서
 두 포맷을 혼합하거나 실패 후 다른 포맷으로 자동 재시도하지 않는다. 실행 예약과
 replay의 wire identity는 실제 전송 바이트를 해시한다. private planner의 canonical
 schema/출력 예산 표현은 provider 전송 형식과 구분한다.

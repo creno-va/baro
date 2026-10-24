@@ -198,6 +198,53 @@ test("video success binds both scene positions and three successful model observ
   expect(schema.safeParse({ ...value, attempts: 2 }).success).toBe(false);
   expect(schema.safeParse({ ...value, framePixels: "private sentinel" }).success).toBe(false);
 });
+test("material success requires an actual hidden-page read, matched answer/reference and final audit", async () => {
+  const original = (await harness().send("POST")).body as Record<string, unknown>;
+  const scope = { ...provenance, featureCase: "material_chat" as const };
+  const value = {
+    ...original,
+    ...scope,
+    attempts: 3,
+    metrics: ["workspace_chat", "workspace_chat", "workspace_audit"].map((phase) => ({
+      requestId: PROBE_REQUEST_ID,
+      phase,
+      model: "google/gemini-3.8-flash",
+      latencyMs: 1,
+      inputTokens: 1,
+      outputTokens: 1,
+      status: "success",
+    })),
+    materialChecks: {
+      readRequests: 1,
+      observationsRead: 32,
+      lastPageRead: true,
+      answerMatched: true,
+      sourcePositionMatched: true,
+    },
+  };
+  const schema = probeReportFor(scope);
+  expect(schema.safeParse(value).success).toBe(true);
+  for (const key of ["lastPageRead", "answerMatched", "sourcePositionMatched"])
+    expect(
+      schema.safeParse({ ...value, materialChecks: { ...value.materialChecks, [key]: false } })
+        .success,
+    ).toBe(false);
+  expect(
+    schema.safeParse({ ...value, materialChecks: { ...value.materialChecks, readRequests: 0 } })
+      .success,
+  ).toBe(false);
+  expect(
+    schema.safeParse({ ...value, materialChecks: { ...value.materialChecks, readRequests: 3 } })
+      .success,
+  ).toBe(false);
+  expect(
+    schema.safeParse({
+      ...value,
+      metrics: value.metrics.map((m) => ({ ...m, phase: "workspace_chat" })),
+    }).success,
+  ).toBe(false);
+  expect(schema.safeParse({ ...value, extractedText: "private sentinel" }).success).toBe(false);
+});
 class MemoryStorage implements ProbeStorage {
   values = new Map<string, unknown>();
   private queue: Promise<void> = Promise.resolve();
