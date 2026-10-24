@@ -36,8 +36,18 @@ export const v2ToolResultSchema = z
     (result) =>
       (["retrieved", "no_record", "test_data"].includes(result.status)
         ? result.observedAt !== null
-        : true) &&
-      (["retrieved", "no_record"].includes(result.status) || result.rows.length === 0),
+        : result.observedAt === null) &&
+      (result.status === "retrieved" ? result.rows.length > 0 : result.rows.length === 0) &&
+      result.sourceUrl ===
+        (
+          {
+            hometax_status: "https://www.data.go.kr/data/15081808/openapi.do",
+            thecheat: "https://apicenter.thecheat.co.kr/",
+            registry: "https://data.iros.go.kr/",
+            datahub_property: "https://dataapi.co.kr/",
+            datahub_building: "https://dataapi.co.kr/",
+          } as const
+        )[result.tool],
     "Unsuccessful lookup cannot contain factual result rows",
   );
 export type V2LookupToolId = z.infer<typeof v2LookupToolIdSchema>;

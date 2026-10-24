@@ -42,6 +42,8 @@ test("tool result contracts reject invented success rows, timestamps and arbitra
   for (const value of [
     { ...pending, rows: [{ label: "결과", value: "안전함" }] },
     { ...pending, status: "retrieved" },
+    { ...pending, observedAt: now },
+    { ...pending, sourceUrl: "https://dataapi.co.kr/" },
     { ...pending, sourceUrl: "https://untrusted.invalid/" },
     { ...pending, rawToken: "private-sentinel" },
   ])
