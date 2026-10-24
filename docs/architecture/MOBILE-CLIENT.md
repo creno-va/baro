@@ -433,7 +433,10 @@ native HTTP-to-disk로 전달한다. 생략한 웹 경로는 기존 GET/응답 a
 최신 개발 앱을 요구한다. 미해결 서버 key/hold는 건드리지 않는다.
 standalone macOS 코어 RSS와 128MiB JVM heap proof는 실제 iOS/Android 앱 기기 인수가 아니다.
 
-### M6 native 계정 삭제의 미확정 요청
+### M6 이전 계약의 native 계정 삭제 복구
+
+아래는 이전 서버와 이미 저장된 v1 미확정 요청의 복구 계약이다. PR482 이후 새 v2
+삭제는 다음 절의 별도 `/account-deletion` 조립을 사용하며 이전 미확정 복구는 유지한다.
 
 `platform/account`는 기존 공통 account client를 소비하되 native 삭제 intent의 기기 보관을
 필수로 한다. ownerId를 해시한 namespace에 version·opaque ownerTag/UUID key·서버 인증 시각·attempted/
@@ -475,6 +478,51 @@ await를 두지 않는다. 새 로그인/재인증의 동기 scope 폐기와 cre
 사용해 경계를 검사한다. signed Hono/SQL 검증은 primary 삭제·peer 보존·삭제 job과 실제
 credential reset을 확인한다. SecureStore 물리 기기, 실제 OAuth·삭제·앱/API 호환 배포·
 두 OS 런타임/릴리스 인수는 이 offline 증거와 구분하며 #346/#361/#369/#334에서 계속 추적한다.
+
+### M3/M6 v2 로그인 선택과 삭제 결과 분리
+
+정본은 `src/contracts/mobile-auth.ts`·`mobile-deletion.ts`, wire 소비는
+`packages/api-client/src/mobile-auth.ts`다. 공통 client는 저장소·React·브라우저를 소유하지
+않는다. `composition/mobile-auth.ts`는 공개 capability 요청·현재 owner를 검사하는 인증
+요청·무세션 삭제 completion 전송을 구분한다. 이전 strict 계약과 기존3사 Provider 타입을
+보존하고, 모바일 전용 `MobileProvider`의4사 union으로만 Apple을 소비한다. 실제 HTTP404만 legacy다.
+
+`features/session`은 광고된 provider와 private session을 독립 상태로 표시한다.
+`ui/AppleSignInButton`은 공식 자산과 표현만 담당한다. 계정 연결·PKCE·삭제 결과 판정은
+UI 컴포넌트로 옮기지 않는다. Apple 미광고·capability 오류는 실제 Apple 지원으로
+꾸미지 않으며 공개 조회 오류만으로 기존 private 세션을 해제하지 않는다.
+
+`platform/auth/deletion-attempt.ts`는 일반 로그인과 별도 SecureStore journal을 관리한다.
+`deletion.ts`는 provider/DELETE·owner guard·저장 확인·SDK/browser·proof completion 순서를
+조정한다. `composition/deletion.ts`가 실제 SDK와 시스템 브라우저를 연결하고,
+`features/account-deletion`은 사용자가 선택한 시작·조회·취소·기기 정리·기록 확인만 실행한다.
+route에는 고정 경로만 전달하며 code/verifier/ownerTag는 넣지 않는다.
+
+```mermaid
+flowchart TD
+  A["새 DELETE · 현재 owner/provider 확인"] --> B["signed prepare"]
+  B --> C["SecureStore 저장 · 정확한 readback"]
+  C --> D["OAuth · 서버의 원자적 삭제"]
+  D -->|"서버 영수증"| E["accepted · 기기 정리 상태 별도"]
+  D -->|"응답 유실"| P["pending · 삭제 결과 미확인"]
+  P -->|"유효한 영수증"| E
+  P -->|"서버 취소 ACK"| X["cancelled"]
+  P -->|"증명된 inactive 관측"| I["inactive · 삭제 결과 미확인"]
+  I -->|"유효한 영수증"| E
+  I -->|"새 DELETE · 새 UUID"| A
+```
+
+저장 공간·중복·같은 owner pending을 prepare 전에 검사하고, signed receipt의 저장/readback
+실패 때는 OAuth를 시작하지 않는다. 관측은 원래 verifier·서버 서명에 결합하며 현재 cookie와
+독립이다. 만료·401·알 수 없는 응답은 삭제/취소 증거가 아니다. inactive는 관측 시각의 인증
+활동 부재만 의미하며 원래 proof와 시각을 보존한다. accepted/cancelled는 관측보다 우선한다.
+이미 저장한 미확정 기록은 만료/로그아웃/owner 변경 때문에 자동 제거하지 않는다.
+
+warm 정리는 원래 owner와 cookie writer revision에 묶는다. 새 owner는 쿠키를 읽기 전에
+건너뛰고, cold 재시작으로 binding을 잃었으면 정리 실패를 별도로 표시한다. 사용자가 명시적으로
+선택한 cold 기기 정리는 서버가 비로그인을 확인한 상태에서만 허용한다. 미확정 작업 저장소는
+유지한다. UI 교체는 이 model/platform 경계를 보존한다. 실제 제공자/OS 저장소·기기 인수는
+[결정 및 검증 기록](../development/MOBILE-APPLE-LOGIN-DECISION.md)과 #346/#334를 따른다.
 
 ### M6 본인 프로필 자산의 native 업로드 포트
 

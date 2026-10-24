@@ -1,0 +1,83 @@
+{
+  "version": 1,
+  "kind": "local-original-android-artifact-verification",
+  "verifiedAt": "2026-10-24T12:27:46.450Z",
+  "sourceSha": "9436e770240fcebd03f3ab66c42222c5343cf412",
+  "compilerRunId": 40092725450,
+  "artifactId": 12560156134,
+  "receiptSha256": "d74ee221858a06cec6cfbcc9b9c98992c02be79b35a0b2a2a5a944fd7fb4b083",
+  "originalApk": {
+    "name": "baro-internal-preview-android-9436e770240fcebd03f3ab66c42222c5343cf412.apk",
+    "bytes": 57219314,
+    "sha256": "a7b048e099ca9cf64a9865370ea035685c4f3f21505ab870628998c387ea5d30"
+  },
+  "embeddedBundle": {
+    "path": "assets/index.android.bundle",
+    "bytes": 3653896,
+    "sha256": "b1da81a67fb09010906988367e3e877132cd18eb5edf368fc152958d3f413afe",
+    "originalBytesVerified": true
+  },
+  "compiledFontBytesVerified": true,
+  "appleArtwork": {
+    "scope": "decoded RGBA pixels including transparent padding; compiled PNG container bytes may differ",
+    "variants": [
+      {
+        "source": "apple-white.png",
+        "sourceSha256": "bb5f3fbda9dd637d16df9150d48acb1d8480b084ce928bc26cf2a219fa4af8b9",
+        "pixels": {
+          "width": 44,
+          "height": 44,
+          "channels": 4,
+          "sha256": "e30ad1f1f9719b4aaf668f56ce84b964255bfb73c0e6444d1cb25b2e0b479eb4"
+        },
+        "matches": [
+          {
+            "path": "res/aE.png",
+            "sha256": "8b3029343521c7fe3d5ee84b94f2bb0c14e334f28537b9bae6180fa52099d05f"
+          }
+        ]
+      },
+      {
+        "source": "apple-white@2x.png",
+        "sourceSha256": "8a8355cc5d9a2a0586f136952558953a8d4b6da821c78e57d89a985390f87f7a",
+        "pixels": {
+          "width": 88,
+          "height": 88,
+          "channels": 4,
+          "sha256": "36911b0fec86fc0b5040892a707453a62dfeb07a9b98e72d719a8805969e1a53"
+        },
+        "matches": [
+          {
+            "path": "res/TG.png",
+            "sha256": "f8178cb52ad925a299f6c9a30bea831d3446fdac4e24277f282ff6b5cc03511f"
+          }
+        ]
+      },
+      {
+        "source": "apple-white@3x.png",
+        "sourceSha256": "e9832e747ee3dfb0c56939480a82fe330bdaf5f061e7dd84a6a271bd13830dca",
+        "pixels": {
+          "width": 132,
+          "height": 132,
+          "channels": 4,
+          "sha256": "03ca77141a0ebcbd08c846721130d50c557ecb71355a393d91dcfdc414cf63d6"
+        },
+        "matches": [
+          {
+            "path": "res/2f.png",
+            "sha256": "1c0abefbdb41d97a1e74ff9d3282ecd96ac7e51df0cee2c03b08fda4475af856"
+          }
+        ]
+      }
+    ]
+  },
+  "originalCompilerProvenanceVerified": true,
+  "sourceMapRebuilt": false,
+  "recompiled": false,
+  "resigned": false,
+  "appRuntimeVerified": false,
+  "providerLoginVerified": false,
+  "physicalDeviceVerified": false,
+  "storeSigned": false,
+  "deployed": false
+}

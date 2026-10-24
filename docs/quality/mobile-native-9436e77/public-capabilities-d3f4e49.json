@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "checkedAt": "2026-10-24T12:10:07.146Z",
+  "appSourceSha": "9436e770240fcebd03f3ab66c42222c5343cf412",
+  "apiOrigin": "https://preview.baro.site",
+  "observedApiRelease": "d3f4e493d1aec0dd0dc9ecb3aa27490f0fea80e0",
+  "requests": 3,
+  "method": "GET",
+  "credentials": "omit",
+  "defaultShapePreserved": true,
+  "deletionActivity": 1,
+  "advertisedProviders": [
+    "google",
+    "naver",
+    "kakao"
+  ],
+  "noSetCookie": true,
+  "privateNoStore": true,
+  "providerLoginVerified": false,
+  "nativeRuntimeVerified": false,
+  "deployed": false
+}
