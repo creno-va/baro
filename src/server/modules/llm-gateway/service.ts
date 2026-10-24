@@ -19,7 +19,7 @@ import {
 } from "./attempts";
 import { readModelCompletion } from "./completion";
 import { MODEL_ID, type Phase, PROMPT_VERSION, prompts, WORKSPACE_PROMPT_VERSION } from "./prompts";
-import { gatewayResponse } from "./transport";
+import { gatewayRequestIssue, gatewayResponse } from "./transport";
 import {
   workspaceAuditOutputSchema,
   workspaceChatOutputSchema,
@@ -116,7 +116,13 @@ export function prepareGatewayWireInput(phase: Phase, input: unknown, correction
         }),
       },
     ],
-    reasoning_effort: phase === "workspace_audit" || phase === "validation" ? "medium" : "low",
+    ...(phase === "workspace_audit" || phase === "validation"
+      ? {
+          extra_body: {
+            google: { thinking_config: { thinking_level: "medium", include_thoughts: false } },
+          },
+        }
+      : { reasoning_effort: "low" as const }),
     max_completion_tokens: limits[phase],
     service_tier: "default",
     response_format: {
@@ -151,6 +157,7 @@ export function createLlmGateway(
       phase: Phase;
       category: DependencyCategory;
       httpStatus: number | null;
+      requestIssue?: ReturnType<typeof gatewayRequestIssue>;
     }) => void;
     timeoutMs?: number;
     attemptLedger?: GatewayAttemptLedger;
@@ -301,6 +308,7 @@ export function createLlmGateway(
             phase,
             category: timedOut ? "provider_timeout" : dependencyCategory(error),
             httpStatus: status,
+            ...(gatewayRequestIssue(error) ? { requestIssue: gatewayRequestIssue(error) } : {}),
           });
           try {
             await record(unavailableReceipt(status === null ? "unknown" : "provider_error"));

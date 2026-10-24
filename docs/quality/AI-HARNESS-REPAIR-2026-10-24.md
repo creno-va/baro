@@ -88,3 +88,24 @@ Native output metering includes thinking via total minus input; absent cache/tie
 observations remain unknown. Invalid usage metadata remains an invalid receipt
 instead of invalidating a schema-valid answer or triggering another paid correction.
 No production failure cause is inferred from this offline compatibility repair.
+
+## Reproduced independent audit failure
+
+[Manual run40068379225](https://github.com/creno-va/baro/actions/runs/40068379225)
+on exact mainca08250 generated questions successfully (5370ms,1605input/249output
+observed tokens) and then failed workspace_audit with HTTP400/provider_request in
+2158ms. [Original finite observation](./ai-harness-2026-10-24/questions-audit-ca08250.json)
+preserves the failure and two attempts. No unchanged-condition retry was made.
+This narrows the common failure to audit dispatch rather than basic generation or
+its question schema. The original privacy-safe receipt does not establish the
+provider's detailed rejection reason.
+
+The targeted wire change preserves medium thinking, independent audit, output caps,
+model identity and Gateway. It supplies Google's documented explicit thinking_config
+instead of the OpenAI compatibility reasoning_effort for validation/audit; mutually
+exclusive controls are never combined. include_thoughts=false prevents requesting
+thought summaries. The next changed-condition probe must confirm the actual result.
+Future HTTP failures can retain only a finite requestIssue (thinking configuration,
+thinking/output limit, unsupported parameter or schema constraint), never the body.
+Sources: [Google compatibility](https://ai.google.dev/gemini-api/docs/openai) and
+[model thinking support](https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash).
