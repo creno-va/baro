@@ -241,7 +241,7 @@ export async function runWorkspaceRuntime(
           created_at: string;
           allocation_proof_id: string;
         }>();
-      if (!row) throw new Error("Paid admission unavailable");
+      if (!row) throw new ModelError("MODEL_UNAVAILABLE");
       const original = paidHoldRequestSchema.parse(JSON.parse(row.payload_json));
       // Restore the same request-day input even when dispatch crosses midnight.
       // Lease, consent, source expiry and provider receipts still use the live clock.
@@ -300,7 +300,10 @@ export async function runWorkspaceRuntime(
                 row.attempt_id,
               )
             : null;
-          if (useInitial && !initial) throw new Error("Admission unavailable");
+          // A queued admission may predate the deployed prompt/wire/catalog.
+          // Never rewrite its proof or dispatch with it. A fresh explicit retry
+          // must obtain a new immutable admission under all existing guards.
+          if (useInitial && !initial) throw new ModelError("MODEL_UNAVAILABLE");
           initialUsed = true;
           const ledger = service.createLedger({
             binding,

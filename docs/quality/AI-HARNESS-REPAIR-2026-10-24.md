@@ -199,3 +199,12 @@ HTTP test adapter. They validate unconfigured results, not actual HomeTax/TheChe
 registry/DataHub records. A single all-seven manual matrix is serial, fail-fast=false,
 with max21 total model reservations. The fixture asset hashes are verified before
 media dispatch and no expected answers are added to model prompts.
+
+Queued admissions can predate a prompt/wire/catalog deployment. A failed restore now
+stops before any model dispatch with retryable MODEL_UNAVAILABLE instead of terminal
+INTERNAL_ERROR. A fresh explicit retry still creates/verifies a new immutable
+admission, checks all existing permission/revision/technical/unknown-exposure guards,
+and does not rewrite the old proof. Actual workerd tests cover a legitimate catalog
+configuration change between admission and dispatch in both cost modes: zero old
+model calls, unchanged old plan/payload/digest, successful new retry, and replay with
+no additional provider calls. Existing cost/unknown observations remain preserved.
