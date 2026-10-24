@@ -59,6 +59,38 @@ test("native login exposes the three existing providers and explicit self-declar
   expect(screen.getByText(/자격 확인을 뜻하지/)).toBeTruthy();
 });
 
+test("finishing customer login and consent exposes the case flow without offering it to a lawyer", async () => {
+  const onCases = jest.fn();
+  const ready: SessionState = {
+    ...consent,
+    phase: "ready",
+    session: {
+      user: { id: "a", name: "합성 계정 이름", accountType: "customer" },
+      needsConsent: false,
+    },
+  };
+  const view = await render(<SessionScreen {...props(anonymous)} onCases={onCases} />, { wrapper });
+  expect(screen.queryByRole("button", { name: "내 사건 정리 계속하기" })).toBeNull();
+  await view.rerender(<SessionScreen {...props(consent)} onCases={onCases} />);
+  expect(screen.queryByRole("button", { name: "내 사건 정리 계속하기" })).toBeNull();
+  await view.rerender(<SessionScreen {...props(ready)} onCases={onCases} />);
+  await fireEvent.press(screen.getByRole("button", { name: "내 사건 정리 계속하기" }));
+  expect(onCases).toHaveBeenCalledTimes(1);
+  await view.rerender(
+    <SessionScreen
+      {...props({
+        ...ready,
+        session: {
+          user: { id: "a", name: "합성 계정 이름", accountType: "lawyer" },
+          needsConsent: false,
+        },
+      })}
+      onCases={onCases}
+    />,
+  );
+  expect(screen.queryByRole("button", { name: "내 사건 정리 계속하기" })).toBeNull();
+});
+
 test("policy and age controls are independent requirements; busy submission disables them", async () => {
   const p = props(consent),
     view = await render(<SessionScreen {...p} />, { wrapper });

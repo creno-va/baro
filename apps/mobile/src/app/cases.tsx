@@ -32,16 +32,17 @@ function ObservedCases({ model }: { model: CasesModel }) {
   const router = useRouter(),
     state = useSyncExternalStore(model.subscribe, model.getSnapshot);
   const params = useLocalSearchParams<{ reviewCaseId?: string }>();
-  const opened = useRef(false);
+  const opened = useRef<string | null>(null);
   useEffect(() => {
     const id = opaqueIdSchema.safeParse(params.reviewCaseId);
-    if (!opened.current && id.success && state.gate === "ready" && !state.busy) {
-      opened.current = true;
+    if (id.success && opened.current !== id.data && state.gate === "ready" && !state.busy) {
+      opened.current = id.data;
       void model.open(id.data);
     }
   }, [model, params.reviewCaseId, state.gate, state.busy]);
   useFocusEffect(
     useCallback(() => {
+      opened.current = null;
       void getSessionModel().refresh();
       return model.start();
     }, [model]),
