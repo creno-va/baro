@@ -1,6 +1,6 @@
 # 모바일 한국어 입력 인수
 
-2026-10-25 KST / #379·#334. 현재 상태는 **두 실제 실행의 Settings 제어 탐색 실패, 한글 입력 미도달**이다.
+2026-10-25 KST / #379·#334. 현재 상태는 **세 차례 실제 실행의 Settings 제어 탐색 실패, 한글 입력 미도달**이다.
 기존 source6201112의 두 OS ASCII 입력/실제 software Search·회전 성공과
 source9436e77의3사 인증 취소 성공을 한국어 IME 인수로 확대하지 않는다.
 
@@ -102,3 +102,30 @@ rectangle12조건(중복 caption/유일 owner, 분리·중복 owner, caption-onl
 남기고 기존 field가 없던 실패 기록은 당시 규칙으로 읽어 과거 관측을 재해석하지 않는다.
 새 조건의 실제 실행은 정확한 CI/main 뒤다. UI PR496은 앱 입력을 바꾸므로 tooling의
 원본9436 trial을 먼저 dispatch한 뒤 별도 통합·새 컴파일/pin으로 인수한다.
+
+## 세 번째 실행의 layout 조회
+
+PR499/main b4e146d·CI40106184967 뒤
+[actual40106535873](https://github.com/creno-va/baro/actions/runs/40106535873)은 **FAILURE**였다.
+정확한 Swift/CoreGraphics owner policy probe는 통과했다. 실제 Settings의 Korean 항목은
+cell1/button0/text1·ownersOverlap=true·scroll6에서 선택했으나 다음 layout에서
+`BARO_KOREAN_LAYOUT_MISSING`으로 끝났다. 기존 layout 조회는 cell의 literal2-Set에만
+의존했다. 정확한 화면 표기/제어 유형·원인은 아직 미확정이며, BARO 입력창/조합은 미도달이다.
+
+[원래 실패](./mobile-native-9436e77/ios-korean-40106535873/failure.json),
+[Home](./mobile-native-9436e77/ios-korean-40106535873/home.json),
+[metadata 재검증](./mobile-native-9436e77/ios-korean-40106535873/verification.json),
+[탐색 전 PNG](./mobile-native-9436e77/ios-korean-40106535873/home-ios.png),
+[독립 결합](./mobile-native-9436e77/ios-korean-40106535873/local-preservation.json)을 보존했다.
+원본9436/도구b4e의 source와 범위를 유지하며 다음 c821 UI 앱의 한글 입력 증거로 재사용하지 않는다.
+
+후속은 고정 `2-Set`/`2-Set (QWERTY)`만 조회한다. 직접 cell label이 없으면
+[Apple의 containing query](https://developer.apple.com/documentation/xcuiautomation/xcuielementquery/containing(_:))로
+같은 고정 label의 descendant를 가진 실제 cell owner를 찾고 기존 유일성·95% 겹침을 유지한다.
+선택 상태를 확인할 actionable owner 없이 caption만 눌러 진행하지 않는다. Done도 같은
+owner 원칙으로 고른다. readback·실제 자모/공백 확정·삭제·추가/검색/회전 조건은 유지한다.
+
+선택 전후 traitSelected·value의 absent/selected/unselected/empty/other 분류, 알려진
+Standard/10-Key 존재·Korean 제목·Done의 제한된 count/boolean을 진단한다. 다른 layout은
+존재만 관측하고 선택하지 않으며 raw label/value/frame·UI hierarchy/xcresult는 export하지
+않는다. 다음 실제 관측은 새 c821 원본 compiler 검증/pin과 정확한 CI/main 이후다.
