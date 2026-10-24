@@ -20,6 +20,21 @@ export const runtimeFailureSchema = z.strictObject({
   stage: z.enum(["read-state", "acquire", "model", "write-report"]),
   category: z.enum(["type-error", "probe-runtime-error"]),
 });
+export const probeProviderFailureSchema = z.strictObject({
+  phase: z.literal("screening"),
+  category: z.enum([
+    "provider_schema",
+    "provider_model",
+    "provider_auth",
+    "provider_budget",
+    "provider_rate",
+    "provider_timeout",
+    "provider_request",
+    "provider_unavailable",
+    "unknown",
+  ]),
+  httpStatus: z.number().int().min(400).max(599).nullable(),
+});
 const unverified = [
   "full-product-smoke",
   "live-corpus-eval",
@@ -52,6 +67,7 @@ const reportSchema = z
         }),
       )
       .max(3),
+    providerFailures: z.array(probeProviderFailureSchema).max(3).optional(),
     unverified: z.tuple(
       unverified.map((value) => z.literal(value)) as [
         z.ZodLiteral<"full-product-smoke">,
@@ -192,6 +208,7 @@ export interface ProbeOutcome {
   status: "passed" | "failed";
   failure: "MODEL_UNAVAILABLE" | "MODEL_SCHEMA_INVALID" | "POLICY_REJECTED" | null;
   metrics: ModelMetric[];
+  providerFailures?: z.infer<typeof probeProviderFailureSchema>[];
 }
 export async function handleDurableProbe(
   request: Request,

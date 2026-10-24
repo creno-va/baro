@@ -13,6 +13,7 @@ import {
   PROBE_PROTOCOL_VERSION,
   PROBE_REQUEST_ID,
   type ProbeConfiguration,
+  probeProviderFailureSchema,
 } from "./ai-readiness-control";
 
 interface ProbeEnv extends ProbeConfiguration {
@@ -26,8 +27,15 @@ export class SyntheticProbe extends DurableObject<ProbeEnv> {
   override async fetch(request: Request): Promise<Response> {
     return handleDurableProbe(request, this.env, this.ctx.storage, async (reserve) => {
       const metrics: ModelMetric[] = [];
+      const providerFailures: z.infer<typeof probeProviderFailureSchema>[] = [];
       try {
-        const output = await createLlmGateway(this.env, { observe: (m) => metrics.push(m) }).call(
+        const output = await createLlmGateway(this.env, {
+          observe: (m) => metrics.push(m),
+          observeFailure: (failure) => {
+            const safe = probeProviderFailureSchema.safeParse(failure);
+            if (safe.success) providerFailures.push(safe.data);
+          },
+        }).call(
           "screening",
           {
             sentences: [
@@ -40,13 +48,14 @@ export class SyntheticProbe extends DurableObject<ProbeEnv> {
         );
         const expected = z.object({ inScope: z.literal(true), urgency: z.literal("none") });
         return expected.safeParse(output).success
-          ? { status: "passed", failure: null, metrics }
-          : { status: "failed", failure: "POLICY_REJECTED", metrics };
+          ? { status: "passed", failure: null, metrics, providerFailures }
+          : { status: "failed", failure: "POLICY_REJECTED", metrics, providerFailures };
       } catch (error) {
         return {
           status: "failed",
           failure: error instanceof ModelError ? error.code : "MODEL_UNAVAILABLE",
           metrics,
+          providerFailures,
         };
       }
     });
