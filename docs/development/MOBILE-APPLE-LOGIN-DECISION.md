@@ -539,3 +539,30 @@ unit4141/382파일/172137 assertions와 focused33/375 assertions다. 실제 오�
 파일 읽기 금지·primary/cleanup 실패 보존, 알려진 일시적 root/idle 후3사/Back/cold 복귀,
 지속 부재20회 거절을 합성 입력으로 검사한다. 이 수정 자체의 Android 실제 성공은 후속이다.
 PR488/main a74835b·CI40095465168도 통합했으며 제품 bundled inputs는9436e77과 동일하다.
+
+PR490은 exact87bd0e7의 CI40096564147/preflight40096564149 성공 뒤 main3d589a5에
+병합됐고 main CI40096868004도 성공했다. 새 observer 조건의 actual40097068908은
+제품 UI/인증 관측 전에 Pixel Launcher ANR로 **FAILURE**였다. `launcher-baseline-cleanup`의
+첫 sample에서 시스템 오류 대화상자를 확인했으며 Launcher baseline·Home·auth observer에
+대한 성공 증거는 없다. root/idle 보완이 실제 성공했거나 실패했다는 근거도 아니다.
+원래 [실패 분류](../quality/mobile-native-9436e77/android-runtime-40097068908/failure.json),
+[대화상자 PNG](../quality/mobile-native-9436e77/android-runtime-40097068908/failure.png),
+[바이너리 재검증](../quality/mobile-native-9436e77/android-runtime-40097068908/verification.json),
+[원본 결합 검사](../quality/mobile-native-9436e77/android-runtime-40097068908/local-preservation.json)를
+보존한다. 대화상자를 지우거나 같은 조건으로 재실행하지 않았다.
+
+후속 시작 조건은 설치 후 PackageManager foreground/background handler 대기를 한 번씩
+확인한다. Android15 AOSP의 [shell 명령과 반환 계약](https://android.googlesource.com/platform/frameworks/base/+/refs/heads/android15-release/services/core/java/com/android/server/pm/PackageManagerShellCommand.java)을
+사용하며 각 명령은 남은 deadline과 최대15초 안에서만 literal Success를 인정한다.
+두 명령의 대기는 기존 readiness+첫Home120초 예산을 공유한다. 불명 응답·실제 command 오류·
+기한 만료·clock rollback은 실패이고 자동 재시도/unsupported fallback은 없다.
+성공 metadata도 package handler 확인만 뜻하며 Launcher readiness/ANR 원인 증명은 아니다.
+기존 연속3회 Launcher 확인·ANR 즉시 실패·미해제 원칙·2CPU/2048MiB/API35·Chrome과
+auth20회/command timeout·same APK9436을 유지한다. PR489/main3ed0a59·CI40097247829의
+독립 웹UI 변경을 통합했으며 native 제품/bundled inputs는 바꾸지 않는다.
+
+시작 조건 보완의 offline 검증은 frozen/quick(공통523·RN106·server/도구296), 전체
+unit4161/383파일/172210 assertions, focused41/288 assertions다. 정확한 두 read-only 명령,
+남은 deadline에 따른 native/host timeout 감소, unowned/제품 실행 이후/불명 응답·기한 만료·
+clock rollback 거절과 기존 Launcher/observer 회귀를 검사한다. 이 보완의 실제 Emulator
+효과는 exact CI/main 이후 별도로 검증하며 성공을 선기록하지 않는다.
