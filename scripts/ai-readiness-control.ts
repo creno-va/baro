@@ -8,6 +8,9 @@ export const featureCaseSchema = z.enum([
   "workspace_summary",
   "workspace_chat",
   "media",
+  "tools_business",
+  "tools_property",
+  "tools_registry",
 ]);
 export const PROBE_REQUEST_ID = "00000000-0000-4000-8000-000000000027" as const;
 const candidateSchema = z.string().regex(/^[a-f0-9]{40}$/);

@@ -68,3 +68,18 @@ export function syntheticChatContext(): WorkspaceContext {
   context.references.messages = [{ id: context.latestMessage.id, workspaceRevision: 2 }];
   return context;
 }
+export function syntheticToolContext(
+  feature: "tools_business" | "tools_property" | "tools_registry",
+): WorkspaceContext {
+  const context = syntheticChatContext();
+  if (!context.latestMessage) throw new Error("Synthetic message unavailable");
+  context.latestMessage.text = {
+    tools_business:
+      "홈택스 사업자 상태 조회와 더치트 피해 등록 조회를 실행해 주세요. 인증정보와 조회 대상은 채팅에 입력하지 않았어요.",
+    tools_property:
+      "데이터허브 부동산 주소 조회와 건축물대장 조회를 실행하고, 실제로 읽은 원천 정보인지 구분해 주세요. 조회 대상은 아직 입력하지 않았어요.",
+    tools_registry:
+      "대법원 등기정보광장 API 조회를 실행하고, 실제로 조회됐는지와 서비스 연결 상태를 구분해 주세요.",
+  }[feature];
+  return context;
+}

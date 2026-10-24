@@ -1,6 +1,8 @@
 import { DurableObject } from "cloudflare:workers";
 import type { z } from "zod";
 import { MODEL_ID } from "../src/server/model-policy";
+import { lookupCatalog } from "../src/server/modules/external-tools/catalog";
+import { createExternalTools } from "../src/server/modules/external-tools/service";
 import { ProcessingError } from "../src/server/modules/file-processing/protocol";
 import { responseReceipt } from "../src/server/modules/llm-gateway/attempts";
 import {
@@ -25,6 +27,7 @@ import {
   syntheticChatContext,
   syntheticIntakeContext,
   syntheticSummaryContext,
+  syntheticToolContext,
 } from "./ai-readiness-fixture";
 
 interface ProbeEnv extends ProbeConfiguration {
@@ -148,7 +151,57 @@ export class SyntheticProbe extends DurableObject<ProbeEnv> {
         const pipeline = createWorkspacePipeline(gateway, {
           reserve: async () => reserve(),
           invocation: () => crypto.randomUUID(),
+          lookup: async (tools) => {
+            const external = createExternalTools(
+              {},
+              {
+                fetch: async () => {
+                  throw new Error("SYNTHETIC_EXTERNAL_NETWORK_FORBIDDEN");
+                },
+              },
+            );
+            return Promise.all(
+              tools.map((tool) =>
+                external.execute(tool, null, {
+                  authorize: async () => true,
+                  reserve: async () => false,
+                  signal: new AbortController().signal,
+                }),
+              ),
+            );
+          },
         });
+        if (
+          active.featureCase === "tools_business" ||
+          active.featureCase === "tools_property" ||
+          active.featureCase === "tools_registry"
+        ) {
+          const context = syntheticToolContext(active.featureCase);
+          context.lookupTools = lookupCatalog({});
+          const output = await pipeline.chat(context, PROBE_REQUEST_ID);
+          const expected = {
+            tools_business: ["hometax_status", "thecheat"],
+            tools_property: ["datahub_property", "datahub_building"],
+            tools_registry: ["registry"],
+          }[active.featureCase];
+          const valid =
+            output.toolResults.length === expected.length &&
+            expected.every((tool) =>
+              output.toolResults.some(
+                (result) =>
+                  result.tool === tool &&
+                  result.status === "not_configured" &&
+                  result.observedAt === null &&
+                  result.rows.length === 0,
+              ),
+            );
+          return {
+            status: valid ? "passed" : "failed",
+            failure: valid ? null : "POLICY_REJECTED",
+            metrics,
+            providerFailures,
+          };
+        }
         const valid =
           active.featureCase === "workspace_questions"
             ? (await pipeline.questions(syntheticIntakeContext(), PROBE_REQUEST_ID)).length >= 1

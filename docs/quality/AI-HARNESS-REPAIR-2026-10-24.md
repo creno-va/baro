@@ -168,8 +168,9 @@ candidate; it does not isolate one original HTTP400 cause or prove summary/chat,
 media, production serving, user-specific quality or external-provider acceptance.
 Final offline c90d47c quick151/full3866/build/workerd and exact CI40071608812 passed.
 
-Protocol3 adds a fixed feature selector (questions, summary, chat, media). Each
-exact candidate/feature has one durable run with at most three attempts; source-hash
+Protocol3 adds seven fixed feature cases (questions, summary, chat, media and three
+external-tool groups). Each
+exact candidate/feature has one durable run with at most three attempts (all-seven matrix: at most21 total); source-hash
 changes, replay, ambiguous POST or redeployment cannot reset that run. Selected case
 is part of provenance/control/authenticated forwarding and source identity. Automatic
 CI/full still never invokes a model. Manual dispatches serialize deployments of the
@@ -178,3 +179,23 @@ exact tracked-byte hashes, not user files. Media reports retain only latency, fi
 quality/segment-count and marker-match checks, never observed text or audio. Missing
 ASR confidence/timing remains low_quality; the probe must not invent it. There is no
 application DB/R2/OAuth or external4API credential in this isolated campaign.
+
+## Tool publication and feature campaign
+
+The follow-up combines the validated private tool-result producer and web cards
+with the manual acceptance selector. Existing strict installed-client messages
+remain unchanged; only the separate owner-checked endpoint exposes encrypted stored
+results. Readback rechecks the workspace/row after AES and account changes abort web
+requests. Desktop/mobile cards passed real Chromium/axe and were visually inspected.
+No database migration, mobile source or package change is made.
+
+An actual workerd regression caught added tool context missing from the immutable
+initial chat admission. Preparation and execution now initialize the same catalog,
+lookup flag and result array before wire hashing. Cost-enabled/observation-only
+chat outage/retry/full audit tests pass again; the guard was preserved. Catalog is
+sent only for chat, avoiding unrelated intake/summary input. Tool cases run the real
+Gemini planner/re-generation/audit with missing-key adapters and a forbidden external
+HTTP test adapter. They validate unconfigured results, not actual HomeTax/TheCheat/
+registry/DataHub records. A single all-seven manual matrix is serial, fail-fast=false,
+with max21 total model reservations. The fixture asset hashes are verified before
+media dispatch and no expected answers are added to model prompts.

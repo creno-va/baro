@@ -166,7 +166,11 @@ export function createWorkspaceDependencies(core: V2Core, env: Env): WorkspaceDe
       );
       const invocationId = crypto.randomUUID(),
         phase = phaseFor(input.kind);
-      context.lookupTools = lookupCatalog(lookupConfiguration(env));
+      if (input.kind === "chat_response") {
+        context.lookupTools = lookupCatalog(lookupConfiguration(env));
+        context.toolLookupPerformed = false;
+        context.toolResults = [];
+      }
       const binding: GatewayExecutionBinding = {
         ...proofs,
         operationId: input.admission.operationId,
@@ -216,7 +220,11 @@ export async function runWorkspaceRuntime(
     guideHosts: GUIDE_HOSTS,
     authorize: (ownerId) => hasCustomerWorkspaceAccess(core, ownerId),
     pipeline: async (job, lease, context, progress) => {
-      context.lookupTools = lookupCatalog(lookupConfiguration(env));
+      if (job.kind === "chat_response") {
+        context.lookupTools = lookupCatalog(lookupConfiguration(env));
+        context.toolLookupPerformed = false;
+        context.toolResults = [];
+      }
       const row = await core
         .statement(
           "SELECT h.attempt_id,p.payload_json,p.created_at,c.allocation_proof_id FROM v2_execution_job_holds h JOIN v2_execution_job_plans p ON p.id=h.plan_id JOIN v2_execution_attempts a ON a.id=h.attempt_id LEFT JOIN v2_runtime_controls c ON c.month=a.month AND c.environment=? WHERE h.job_id=? AND h.state='prepared' AND p.target_revision=? AND p.deadline_at>? ORDER BY h.attempt_id LIMIT 1",

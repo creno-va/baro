@@ -45,7 +45,7 @@ test("tool cards distinguish unconfigured and test responses on desktop and mobi
               sourceUrl: "https://www.data.go.kr/data/15081808/openapi.do",
               observedAt: null,
               rows: [],
-              notices: ["API 인증 설정이 없어 실제 조회를 실행하지 않았어요."],
+              notices: ["이 조회 서비스가 아직 연결되지 않아 실제 정보를 확인하지 못했어요."],
             },
             {
               id: "synthetic-tool-2",

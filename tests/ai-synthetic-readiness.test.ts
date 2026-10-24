@@ -25,6 +25,11 @@ test("live acceptance remains a separate manual action with exact candidate and 
     permissions: Record<string, string>;
     jobs: {
       probe: {
+        strategy: {
+          "max-parallel": number;
+          "fail-fast": boolean;
+          matrix: { feature_case: string };
+        };
         if: string;
         environment: { name: string; deployment: boolean };
         steps: { run?: string; uses?: string }[];
@@ -36,6 +41,11 @@ test("live acceptance remains a separate manual action with exact candidate and 
   expect(workflow.jobs.probe.if).toContain("github.sha == inputs.candidate_sha");
   expect(workflow.jobs.probe.if).toContain("single-synthetic-probe");
   expect(workflow.jobs.probe.environment).toEqual({ name: "preview", deployment: false });
+  expect(workflow.jobs.probe.strategy["max-parallel"]).toBe(1);
+  expect(workflow.jobs.probe.strategy["fail-fast"]).toBe(false);
+  expect(workflow.jobs.probe.strategy.matrix.feature_case).toContain("tools_business");
+  expect(workflow.jobs.probe.strategy.matrix.feature_case).toContain("tools_property");
+  expect(workflow.jobs.probe.strategy.matrix.feature_case).toContain("tools_registry");
   expect(workflow.jobs.probe.steps.some((step) => step.run?.includes("--ci-only"))).toBe(true);
   expect(
     workflow.jobs.probe.steps.some((step) => step.run === "bun scripts/run-ai-readiness.ts"),
