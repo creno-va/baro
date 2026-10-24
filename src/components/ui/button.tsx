@@ -1,6 +1,7 @@
 // Adapted from shadcn/ui (MIT), with native button semantics for Astro islands.
 import { cva, type VariantProps } from "class-variance-authority";
 import type { ComponentProps } from "react";
+import { Spinner } from "./loading";
 import { cn } from "./utils";
 
 export const buttonVariants = cva("ui-button", {
@@ -22,15 +23,22 @@ export function Button({
   variant,
   size,
   type = "button",
+  loading = false,
+  children,
   ...props
-}: ComponentProps<"button"> & VariantProps<typeof buttonVariants>) {
+}: ComponentProps<"button"> & VariantProps<typeof buttonVariants> & { loading?: boolean }) {
   return (
     <button
       data-slot="button"
       type={type}
       className={cn(buttonVariants({ variant, size }), className)}
       {...props}
-    />
+      disabled={props.disabled || loading}
+      aria-busy={loading || props["aria-busy"] || undefined}
+    >
+      {loading && <Spinner />}
+      {children}
+    </button>
   );
 }
 

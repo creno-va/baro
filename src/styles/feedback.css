@@ -1,0 +1,15 @@
+/* Component-owned motion also covers authentication screens outside AppLayout. */
+.ui-spinner {
+  flex-shrink: 0;
+  animation: ui-spin 900ms linear infinite;
+}
+@keyframes ui-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ui-spinner {
+    animation: none;
+  }
+}

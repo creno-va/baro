@@ -18,6 +18,7 @@ import { api, apiMode, roleStart } from "../../client/api";
 import { Brand } from "./brand";
 import { Button } from "./button";
 import { Sheet } from "./dialog";
+import { LoadingContent, Spinner } from "./loading";
 
 export type NavigationRole = "visitor" | "user" | "lawyer" | "moderator";
 export interface NavigationItem {
@@ -80,6 +81,7 @@ export function AppNavigation({
   const [ready, setReady] = useState(false);
   const [session, setSession] = useState<SessionView | null>(null);
   const [recent, setRecent] = useState<CaseView[]>([]);
+  const [recentState, setRecentState] = useState<"loading" | "ready" | "error">("loading");
   const [error, setError] = useState("");
   const [signingOut, setSigningOut] = useState(false);
   const sessionRequest = useRef(0);
@@ -97,18 +99,24 @@ export function AppNavigation({
         if (!current()) return;
         if (owner !== next.user?.id || next.needsConsent || next.user?.accountType !== "customer") {
           setRecent([]);
+          setRecentState("loading");
         }
         owner = next.user?.id;
         setSession(next);
         if (next.user?.accountType !== "customer" || next.needsConsent) return;
         try {
           const items = await api.cases.list();
-          if (current())
+          if (current()) {
             setRecent(
               [...items].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 5),
             );
+            setRecentState("ready");
+          }
         } catch {
-          if (current()) setRecent([]);
+          if (current()) {
+            setRecent([]);
+            setRecentState("error");
+          }
         }
       } catch {
         if (!current()) return;
@@ -208,60 +216,73 @@ export function AppNavigation({
             전체 보기 <ChevronRight size={13} aria-hidden="true" />
           </a>
         </div>
-        {recent.length ? (
-          <nav aria-label="최근 사건">
-            {recent.map((item) => (
-              <a
-                key={item.id}
-                href={caseLink(item)}
-                title={item.title}
-                className="sidebar-story"
-                aria-current={
-                  pathname === `/cases/${encodeURIComponent(item.id)}` ||
-                  pathname.startsWith(`/cases/${encodeURIComponent(item.id)}/`)
-                    ? "page"
-                    : undefined
-                }
-              >
-                <span className="sidebar-story__icon">
-                  <MessageCircle size={16} aria-hidden="true" />
-                </span>
-                <span className="sidebar-story__copy">
-                  <strong>{item.title}</strong>
-                  <span className="sidebar-story__meta">
-                    <span>
-                      {item.schemaVersion === "1"
-                        ? "기존 기록"
-                        : item.stage === "intake"
-                          ? "질문 답변 중"
-                          : item.stage === "summary"
-                            ? "요약 확인"
-                            : item.stage === "archived"
-                              ? "보관한 이야기"
-                              : "정리 중"}
-                    </span>
-                    <time dateTime={item.updatedAt}>
-                      {new Date(item.updatedAt).toLocaleDateString("ko-KR", {
-                        month: "numeric",
-                        day: "numeric",
-                        timeZone: "Asia/Seoul",
-                      })}
-                    </time>
-                  </span>
-                </span>
-              </a>
-            ))}
-          </nav>
-        ) : (
-          <div className="sidebar-empty">
-            <MessageCircle size={20} aria-hidden="true" />
-            <p>
-              나누던 이야기는 여기에.
-              <br />
-              언제든 이어서 정리할 수 있어요.
+        <section
+          className="sidebar-recent__list"
+          // biome-ignore lint/a11y/noNoninteractiveTabindex: Keyboard users must be able to scroll the bounded recent list.
+          tabIndex={0}
+          aria-label="최근 이야기 목록"
+        >
+          {recentState === "loading" ? (
+            <LoadingContent title="최근 이야기를 불러오는 중" />
+          ) : recentState === "error" ? (
+            <p className="sidebar-empty" role="status">
+              최근 이야기를 불러오지 못했어요. 전체 보기에서 다시 확인해 주세요.
             </p>
-          </div>
-        )}
+          ) : recent.length ? (
+            <nav aria-label="최근 사건">
+              {recent.map((item) => (
+                <a
+                  key={item.id}
+                  href={caseLink(item)}
+                  title={item.title}
+                  className="sidebar-story"
+                  aria-current={
+                    pathname === `/cases/${encodeURIComponent(item.id)}` ||
+                    pathname.startsWith(`/cases/${encodeURIComponent(item.id)}/`)
+                      ? "page"
+                      : undefined
+                  }
+                >
+                  <span className="sidebar-story__icon">
+                    <MessageCircle size={16} aria-hidden="true" />
+                  </span>
+                  <span className="sidebar-story__copy">
+                    <strong>{item.title}</strong>
+                    <span className="sidebar-story__meta">
+                      <span>
+                        {item.schemaVersion === "1"
+                          ? "기존 기록"
+                          : item.stage === "intake"
+                            ? "질문 답변 중"
+                            : item.stage === "summary"
+                              ? "요약 확인"
+                              : item.stage === "archived"
+                                ? "보관한 이야기"
+                                : "정리 중"}
+                      </span>
+                      <time dateTime={item.updatedAt}>
+                        {new Date(item.updatedAt).toLocaleDateString("ko-KR", {
+                          month: "numeric",
+                          day: "numeric",
+                          timeZone: "Asia/Seoul",
+                        })}
+                      </time>
+                    </span>
+                  </span>
+                </a>
+              ))}
+            </nav>
+          ) : (
+            <div className="sidebar-empty">
+              <MessageCircle size={20} aria-hidden="true" />
+              <p>
+                나누던 이야기는 여기에.
+                <br />
+                언제든 이어서 정리할 수 있어요.
+              </p>
+            </div>
+          )}
+        </section>
       </div>
     );
   const renderAccount = () => (
@@ -296,7 +317,7 @@ export function AppNavigation({
               onClick={() => void signOut()}
               disabled={signingOut}
             >
-              <LogOut size={18} aria-hidden="true" />
+              {signingOut ? <Spinner /> : <LogOut size={18} aria-hidden="true" />}
             </Button>
           </div>
           <a href="/login" className="sidebar-help">
@@ -352,14 +373,6 @@ export function AppNavigation({
             {renderLinks()}
           </nav>
           {renderRecent()}
-          <div className="sidebar-note">
-            <span>조금 더 가벼운 마음으로.</span>
-            <p>
-              복잡한 일의 시작부터
-              <br />
-              BARO가 함께 정리해요.
-            </p>
-          </div>
           {renderAccount()}
         </div>
       </header>

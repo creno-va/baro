@@ -3,6 +3,7 @@ import { api, LawyerApiError, type LawyerView, lawyerErrorMessage } from "../../
 import type { V2Office } from "../../contracts/v2";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
+import { LoadingContent } from "../ui/loading";
 import { StatePanel } from "../ui/state-panel";
 import { ApiModeNotice } from "./ApiModeNotice";
 import { AssetPhoto, downloadLawyerAsset } from "./AssetPhoto";
@@ -58,7 +59,7 @@ export function Profile({
           action={<Button onClick={() => setReload(reload + 1)}>다시 불러오기</Button>}
         />
       ) : !lawyer ? (
-        <StatePanel variant="loading" title="프로필을 불러오고 있어요." />
+        <LoadingContent layout="detail" title="프로필을 불러오고 있어요." />
       ) : (
         <ProfileContent lawyer={lawyer} />
       )}

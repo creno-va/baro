@@ -20,6 +20,7 @@ import { api } from "../client/api";
 import type { CaseView } from "../client/api/types";
 import { accountDeleted } from "../server/modules/analytics/browser";
 import { ConfirmDialog } from "./reports/ConfirmDialog";
+import { LoadingContent, Spinner } from "./ui/loading";
 
 const markerKey = "baro.account-reauth.v1";
 const superseded = () =>
@@ -322,11 +323,12 @@ export function AccountSettings() {
         </div>
         <button
           className="settings-refresh"
+          aria-busy={Boolean(busy) || checking}
           type="button"
           disabled={Boolean(busy) || checking}
           onClick={() => void load()}
         >
-          <RefreshCw aria-hidden="true" size={16} /> 다시 확인
+          {busy || checking ? <Spinner /> : <RefreshCw aria-hidden="true" size={16} />} 다시 확인
         </button>
       </header>
       <nav className="settings-jump" aria-label="설정 바로가기">
@@ -363,6 +365,9 @@ export function AccountSettings() {
             <Clock3 size={14} aria-hidden="true" /> 매일 자정 갱신
           </span>
         </div>
+        {!usage && (busy || checking) && (
+          <LoadingContent announce={false} layout="usage" title="이용 현황을 불러오고 있어요." />
+        )}
         {usage && !checking && (
           <div className="usage-grid">
             {(

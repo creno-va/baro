@@ -53,7 +53,13 @@ export function Dialog({
       className={cn("ui-dialog", variant === "sheet" && "ui-sheet")}
       aria-labelledby={titleId}
       aria-describedby={description ? descriptionId : undefined}
-      onCancel={() => onOpenChange(false)}
+      onCancel={(event) => {
+        // Keep native Escape consistent with the controlled close button. The
+        // owner may refuse dismissal while a mutation is still being accepted.
+        event.preventDefault();
+        event.stopPropagation();
+        onOpenChange(false);
+      }}
       onKeyDown={(event) => {
         if (event.key !== "Tab") return;
         const dialog = event.currentTarget;

@@ -1,0 +1,557 @@
+/* Loaded by AppLayout only. Landing styles, tokens and animation are independent. */
+.app-frame {
+  --app-canvas: #f5f7fb;
+  --app-line: #dce3ed;
+  --app-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --app-fast: 160ms;
+  --app-enter: 240ms;
+}
+.app-frame .app-surface {
+  background: var(--app-canvas);
+}
+.app-frame .app-surface:has(.conversation-main) {
+  background: var(--card);
+}
+.app-frame .app-surface > main {
+  animation: app-page-enter var(--app-enter) var(--app-ease) both;
+}
+.app-frame .app-header {
+  background: #fff;
+  border-right: 1px solid var(--app-line);
+  height: 100dvh;
+}
+.app-frame .app-header__inner {
+  flex: 0 0 auto;
+  min-height: 84px;
+}
+.app-frame .sidebar-desktop {
+  overflow: visible;
+  padding-bottom: max(16px, env(safe-area-inset-bottom));
+  gap: 16px;
+}
+.app-frame .app-nav--desktop {
+  flex: 0 0 auto;
+}
+.app-frame .app-nav__link--new {
+  margin-bottom: 8px;
+}
+.app-frame .sidebar-recent {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-height: 0;
+  margin: 0;
+  padding-top: 8px;
+}
+.sidebar-recent__heading {
+  flex: 0 0 auto;
+}
+.sidebar-recent__list {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scrollbar-width: thin;
+  scrollbar-color: #b6c3d5 transparent;
+  padding: 4px;
+  margin-inline: -4px;
+}
+.sidebar-recent__list:focus-visible {
+  outline-offset: -3px;
+  border-radius: 12px;
+}
+.app-frame .sidebar-account {
+  flex: 0 0 auto;
+  margin-top: auto;
+  padding-top: 8px;
+  border-top: 1px solid var(--app-line);
+  background: #fff;
+}
+.app-frame .sidebar-account__row {
+  border: 0;
+  margin-top: 0;
+}
+.app-frame :where(.ui-card, .settings-card, .report-paper, .intake-card) {
+  background: var(--card);
+  border-color: var(--app-line);
+  box-shadow: 0 3px 16px rgb(32 56 90 / 3%);
+}
+.app-frame :where(.page-header, .stories-heading, .settings-heading, .workspace-section-heading) {
+  gap: 24px 32px;
+}
+.app-frame :where(.page-header, .settings-heading) > div:first-child {
+  flex: 1;
+  min-width: 0;
+}
+.app-frame :where(.page-header__action, .settings-refresh) {
+  flex-shrink: 0;
+}
+.app-frame :where(.ui-button, .settings-refresh, .primary-action, .secondary-action) {
+  gap: 10px;
+  transition:
+    background var(--app-fast) ease,
+    border-color var(--app-fast) ease,
+    box-shadow var(--app-fast) ease,
+    transform var(--app-fast) var(--app-ease);
+}
+.app-frame :where(button, a) > svg {
+  flex-shrink: 0;
+}
+.app-frame :where(.ui-button, .primary-action, .secondary-action):active:not(:disabled) {
+  transform: scale(0.98);
+}
+.app-frame .ui-button[aria-busy="true"] {
+  opacity: 0.85;
+  cursor: wait;
+}
+.ui-button[aria-busy="true"] > svg:not(.ui-spinner) {
+  display: none;
+}
+.app-frame :where(.ui-button--outline, .settings-refresh) {
+  border-color: var(--app-line);
+  background: var(--card);
+}
+.app-frame :where(.ui-button--primary, .primary-action):hover:not(:disabled) {
+  background: #1d56c9;
+  box-shadow: 0 4px 12px rgb(35 100 232 / 16%);
+}
+.app-frame :where(.intake-actions, .workspace-buttons, .settings-actions, .report-actions) {
+  gap: 12px;
+}
+.app-frame .ui-dialog__content > :where(.intake-actions, .workspace-buttons, .actions):last-child {
+  padding-top: 20px;
+  margin-top: 24px;
+  margin-bottom: 0;
+  border-top: 1px solid var(--app-line);
+}
+.app-frame .ui-dialog__content > :where(button, a) + :where(button, a) {
+  margin-inline-start: 12px;
+}
+.app-frame.app-frame--product .intake-case-grid {
+  gap: 12px;
+  margin-top: 20px;
+}
+.app-frame.app-frame--product .intake-case-grid > li {
+  background: var(--card);
+  padding: 8px;
+  border: 1px solid var(--app-line);
+  border-radius: 20px;
+  box-shadow: 0 2px 10px rgb(32 56 90 / 2%);
+}
+.app-frame.app-frame--product .intake-case-grid .case-list-delete {
+  color: var(--muted-foreground);
+}
+.app-frame.app-frame--product .intake-case-grid .case-list-delete:hover {
+  background: #fff1f2;
+  color: var(--destructive);
+}
+.app-frame :where(.workspace-section-heading, .workspace-chat-welcome) p {
+  max-width: 58ch;
+}
+.app-frame .workspace-composer {
+  background: linear-gradient(180deg, #f5f7fb00, var(--app-canvas) 14px);
+}
+.app-frame .workspace-composer-surface {
+  background: var(--card);
+  border-color: #c5d1e2;
+  box-shadow: 0 6px 24px rgb(32 56 90 / 6%);
+}
+.app-frame .workspace-suggestions .ui-button {
+  background: var(--card);
+  border-color: var(--app-line);
+  text-align: left;
+}
+.app-frame .workspace .workspace-message--user {
+  background: #e5efff;
+  border: 1px solid #d4e3fb;
+}
+.app-frame.app-frame--product .settings-card {
+  padding: 28px;
+  border: 1px solid var(--app-line);
+  border-radius: 20px;
+}
+.app-frame.app-frame--product .directory-search {
+  background: var(--card);
+  border: 1px solid var(--app-line);
+}
+.app-frame .ui-dialog__content > p {
+  margin-bottom: 16px;
+}
+.app-frame .ui-dialog__content > p:first-child {
+  margin-top: 0;
+}
+.app-frame .ui-dialog__content > label {
+  display: block;
+  margin-top: 24px;
+}
+.app-frame .ui-dialog #case-delete-confirmation {
+  border-color: var(--input);
+}
+.app-frame .workspace-empty {
+  background: var(--card);
+  border: 1px dashed #c6d1e1;
+  border-radius: 20px;
+}
+.app-frame .workspace-message--assistant {
+  color: var(--foreground);
+}
+.app-frame .workspace-loading {
+  min-height: 260px;
+  border: 1px solid var(--app-line);
+  border-radius: 20px;
+  background: var(--card);
+}
+.app-frame .ui-state {
+  border-color: var(--app-line);
+  border-radius: 18px;
+}
+.app-frame .report-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.app-frame :where(.ui-state, .settings-progress, .workspace-feedback:not(:empty)) {
+  animation: app-state-enter var(--app-enter) var(--app-ease) both;
+}
+.ui-spinner,
+.app-frame .settings-progress > svg,
+.app-frame .ui-state--loading .ui-state__icon > svg {
+  animation: app-spin 900ms linear infinite;
+  flex-shrink: 0;
+}
+.ui-loading {
+  min-width: 0;
+  margin-block: 20px;
+}
+.ui-loading__label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted-foreground);
+  font-size: 14px;
+  margin: 0 0 16px;
+}
+.ui-loading__structure {
+  display: grid;
+  gap: 12px;
+}
+.ui-loading__item {
+  display: flex;
+  align-items: flex-start;
+  min-width: 0;
+  padding: 28px;
+  gap: 20px;
+  background: var(--card);
+  border: 1px solid var(--app-line);
+  border-radius: 20px;
+}
+.ui-loading__copy {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  gap: 16px;
+}
+.ui-loading .ui-skeleton {
+  background: #e3e9f2;
+  animation: app-skeleton 1600ms ease-in-out infinite;
+}
+.ui-loading__avatar {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 auto;
+  border-radius: 14px;
+}
+.ui-loading__title {
+  width: 52%;
+  min-height: 20px;
+}
+.ui-loading__line {
+  width: 90%;
+}
+.ui-loading__short {
+  width: 36%;
+}
+.ui-loading--directory .ui-loading__structure {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.ui-loading--directory .ui-loading__item {
+  min-height: 240px;
+}
+.ui-loading--detail .ui-loading__item {
+  min-height: 180px;
+}
+.ui-loading--usage .ui-loading__structure {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.sidebar-recent .ui-loading__label {
+  font-size: 12px;
+  padding: 8px;
+}
+.sidebar-recent .ui-loading__structure {
+  display: grid;
+  gap: 8px;
+}
+.sidebar-recent .ui-loading__item {
+  padding: 12px 8px;
+  gap: 10px;
+  border: 0;
+  background: transparent;
+}
+.sidebar-recent .ui-loading__avatar {
+  width: 28px;
+  height: 32px;
+}
+.sidebar-recent .ui-loading__short {
+  display: none;
+}
+.sidebar-recent .ui-loading__copy {
+  gap: 8px;
+}
+/* Native top-layer dialogs stay centered on the viewport, independent of page scroll. */
+.app-frame :where(.ui-dialog, .workspace-dialog, .report-modal) {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  max-height: calc(100dvh - 40px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-gutter: stable;
+  border-color: #d5deea;
+  border-radius: 24px;
+  background: #fff;
+  box-shadow: 0 24px 80px rgb(20 40 74 / 22%);
+}
+.app-frame :where(.ui-dialog, .workspace-dialog, .report-modal)[open] {
+  animation: app-dialog-enter var(--app-enter) var(--app-ease) both;
+}
+.app-frame :where(.ui-dialog, .workspace-dialog, .report-modal)::backdrop {
+  background: rgb(20 32 52 / 44%);
+  backdrop-filter: blur(4px);
+}
+.app-frame .ui-dialog__header {
+  padding: 28px 28px 0;
+  flex-shrink: 0;
+}
+.app-frame .ui-dialog__header > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.app-frame .ui-dialog__content {
+  padding: 24px 28px 28px;
+  overflow-wrap: anywhere;
+}
+.app-frame .ui-dialog:where(:not(.ui-sheet)) {
+  overflow: hidden;
+  scrollbar-gutter: auto;
+}
+.app-frame .ui-dialog:where(:not(.ui-sheet))[open] {
+  display: flex;
+  flex-direction: column;
+}
+.app-frame .ui-dialog:where(:not(.ui-sheet)) .ui-dialog__content {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-gutter: stable;
+}
+.app-frame .ui-dialog__content :where(input, textarea, select) {
+  max-width: 100%;
+}
+.app-frame .ui-sheet {
+  inset: 0 0 0 auto;
+  margin: 0;
+  max-height: 100dvh;
+  border-radius: 24px 0 0 24px;
+  height: 100dvh;
+  padding: 0;
+}
+.app-frame .ui-sheet[open] {
+  display: flex;
+  flex-direction: column;
+  animation-name: app-sheet-enter;
+}
+.app-frame .ui-sheet .ui-dialog__header {
+  flex-shrink: 0;
+  padding: 20px;
+  background: #fff;
+}
+.app-frame .ui-sheet .ui-dialog__content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  padding: 16px 20px max(20px, env(safe-area-inset-bottom));
+  overflow-y: auto;
+  background: #fff;
+}
+.app-frame .ui-sheet .app-nav {
+  flex: 0 0 auto;
+  margin-block: 12px 20px;
+}
+.app-frame .ui-sheet .sidebar-account {
+  margin-top: auto;
+}
+.app-frame .ui-sheet .sidebar-recent {
+  min-height: 120px;
+  margin-bottom: 16px;
+}
+@keyframes app-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes app-skeleton {
+  50% {
+    opacity: 0.45;
+  }
+}
+@keyframes app-state-enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes app-page-enter {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes app-dialog-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes app-sheet-enter {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (max-width: 1100px) {
+  .app-frame.app-frame--product .app-header {
+    height: auto;
+    border-right: 0;
+  }
+}
+@media (max-width: 900px) {
+  .app-frame .app-header {
+    height: auto;
+    border-right: 0;
+  }
+  .app-frame .app-header__inner {
+    min-height: 72px;
+  }
+}
+/* A short desktop window needs the same reachable menu as a landscape tablet. */
+@media (min-width: 901px) and (max-height: 560px) {
+  .app-frame.app-frame {
+    padding-left: 0;
+    padding-top: 72px;
+  }
+  .app-frame.app-frame .app-header {
+    width: 100%;
+    height: auto;
+    bottom: auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--app-line);
+  }
+  .app-frame.app-frame .app-header__inner {
+    min-height: 72px;
+    padding: 12px 24px;
+    justify-content: space-between;
+  }
+  .app-frame.app-frame .sidebar-desktop {
+    display: none;
+  }
+  .app-frame.app-frame .app-menu-trigger {
+    display: inline-flex;
+  }
+  .app-frame.app-frame .app-surface {
+    min-height: calc(100dvh - 72px);
+  }
+}
+@media (min-width: 1101px) and (max-height: 700px) {
+  .app-frame .app-header__inner {
+    min-height: 68px;
+    padding-block: 12px;
+  }
+  .app-frame .sidebar-desktop {
+    gap: 8px;
+    padding-bottom: 8px;
+  }
+  .app-frame .app-nav__link {
+    padding-block: 10px;
+    min-height: 44px;
+  }
+  .app-frame .app-nav__link--new {
+    margin-block: 0;
+  }
+}
+@media (max-width: 640px) {
+  .app-frame.app-frame--product .settings-card {
+    padding: 20px;
+  }
+  .app-frame :where(.page-header, .settings-heading, .workspace-section-heading) {
+    flex-wrap: wrap;
+    gap: 20px;
+  }
+  .app-frame.app-frame--product .intake-case-grid > li {
+    padding: 16px;
+  }
+  .app-frame.app-frame--product .intake-case-grid .case-list-delete {
+    margin-top: 12px;
+  }
+  .ui-loading__item {
+    padding: 20px;
+    gap: 12px;
+  }
+  .ui-loading--directory .ui-loading__structure {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ui-loading--usage .ui-loading__structure {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .app-frame :where(.ui-dialog, .workspace-dialog, .report-modal) {
+    max-height: calc(100dvh - 24px);
+    border-radius: 20px;
+  }
+  .app-frame .ui-dialog__header {
+    padding: 20px 20px 0;
+  }
+  .app-frame .ui-dialog__content {
+    padding: 20px;
+  }
+  .app-frame .ui-sheet {
+    max-height: 100dvh;
+    border-radius: 20px 0 0 20px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-frame *,
+  .app-frame *::before,
+  .app-frame *::after {
+    /* biome-ignore lint/complexity/noImportantStyles: User motion preference overrides every component animation. */
+    animation: none !important;
+    /* biome-ignore lint/complexity/noImportantStyles: User motion preference overrides component transitions. */
+    transition: none !important;
+    /* biome-ignore lint/complexity/noImportantStyles: Keep keyboard scrolling immediate when motion is reduced. */
+    scroll-behavior: auto !important;
+  }
+}

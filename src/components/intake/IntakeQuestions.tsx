@@ -9,6 +9,7 @@ import { BrandMark } from "../ui/brand";
 import { Button, ButtonLink } from "../ui/button";
 import { Dialog } from "../ui/dialog";
 import { Textarea } from "../ui/form";
+import { LoadingContent } from "../ui/loading";
 import { StatePanel } from "../ui/state-panel";
 import { BackToCases, ErrorPanel } from "./common";
 import { useCustomerAccess } from "./useCustomerAccess";
@@ -499,7 +500,7 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
         </span>
       </nav>
       {loading && !result && !error ? (
-        <StatePanel variant="loading" title="저장한 질문을 불러오고 있어요." />
+        <LoadingContent layout="detail" title="저장한 질문을 불러오고 있어요." />
       ) : null}
       {error ? (
         <ErrorPanel

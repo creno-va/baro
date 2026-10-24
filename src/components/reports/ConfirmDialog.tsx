@@ -1,4 +1,5 @@
 import { type ReactNode, useEffect, useId, useRef } from "react";
+import { Spinner } from "../ui/loading";
 export function ConfirmDialog({
   title,
   children,
@@ -37,7 +38,12 @@ export function ConfirmDialog({
       }}
     >
       <h2 id={id}>{title}</h2>
-      {busy && <p role="status">{busyLabel ?? "요청을 처리하고 있어요…"}</p>}
+      {busy && (
+        <p role="status" className="ui-loading__label">
+          <Spinner />
+          {busyLabel ?? "요청을 처리하고 있어요…"}
+        </p>
+      )}
       {children}
     </dialog>
   );

@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { cn } from "./utils";
+import "../../styles/feedback.css";
 
 export type StateVariant = "loading" | "empty" | "error" | "limit" | "permission" | "pending";
 const icons = {
@@ -43,7 +44,12 @@ export function StatePanel({
       aria-busy={variant === "loading"}
     >
       <span className="ui-state__icon">
-        <Icon aria-hidden="true" size={24} strokeWidth={1.75} />
+        <Icon
+          className={variant === "loading" ? "ui-spinner" : undefined}
+          aria-hidden="true"
+          size={24}
+          strokeWidth={1.75}
+        />
       </span>
       <div className="ui-state__body">
         <p className="ui-state__title">{title}</p>

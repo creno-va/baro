@@ -265,7 +265,7 @@ export function CaseInput({
                   {sessionError ? "로그인 상태를 확인해 주세요" : "로그인 상태 확인 중…"}
                 </Button>
               ) : canCreate ? (
-                <Button type="submit" disabled={busy || !valid}>
+                <Button type="submit" loading={busy} disabled={!valid}>
                   {busy ? "이야기를 저장하고 있어요…" : "저장하고 계속"}
                   <ArrowRight size={18} aria-hidden="true" />
                 </Button>
