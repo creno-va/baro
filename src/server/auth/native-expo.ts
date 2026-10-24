@@ -3,6 +3,7 @@ import { createAuthMiddleware } from "better-auth/api";
 import { deleteSessionCookie } from "better-auth/cookies";
 import { mobileAuthStartSchema } from "../../contracts/mobile-auth";
 import { mobileDeletionStartSchema } from "../../contracts/mobile-deletion";
+import { appleConfiguration } from "./apple-configuration";
 import { clearAppleCallbackMaterial } from "./apple-identity";
 import { completeNativeAccountDeletion } from "./native-account-deletion";
 import { createNativeAuthCodeStore } from "./native-codes";
@@ -16,8 +17,9 @@ const providerOrigins = new Map([
   ["https://accounts.google.com/o/oauth2/v2/auth", "google"],
   ["https://nid.naver.com/oauth2.0/authorize", "naver"],
   ["https://kauth.kakao.com/oauth/authorize", "kakao"],
+  ["https://appleid.apple.com/auth/authorize", "apple"],
 ]);
-function validAuthorizationProxy(request: Request, baseURL: string): boolean {
+function validAuthorizationProxy(request: Request, baseURL: string, allowApple: boolean): boolean {
   try {
     const incoming = new URL(request.url);
     if (incoming.searchParams.getAll("authorizationURL").length !== 1) return false;
@@ -31,6 +33,7 @@ function validAuthorizationProxy(request: Request, baseURL: string): boolean {
     const provider = providerOrigins.get(`${url.origin}${url.pathname}`);
     return Boolean(
       provider &&
+        (provider !== "apple" || allowApple) &&
         url.searchParams.get("redirect_uri") ===
           `${baseURL.replace(/\/$/, "")}/api/auth/callback/${provider}`,
     );
@@ -50,7 +53,7 @@ export function createNativeExpoIntegration(env: Env) {
     onRequest: async (request: Request) => {
       if (
         new URL(request.url).pathname.endsWith("/expo-authorization-proxy") &&
-        !validAuthorizationProxy(request, env.BETTER_AUTH_URL)
+        !validAuthorizationProxy(request, env.BETTER_AUTH_URL, Boolean(appleConfiguration(env)))
       )
         return {
           response: Response.json(
