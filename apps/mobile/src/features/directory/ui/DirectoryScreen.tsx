@@ -1,5 +1,5 @@
 import type { DirectoryFilters } from "@baro/api-client";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { FlatList, View } from "react-native";
 import { tokens } from "../../../theme/tokens";
 import { Button } from "../../../ui/Button";
@@ -7,9 +7,9 @@ import { Card } from "../../../ui/Card";
 import { Screen } from "../../../ui/Screen";
 import { StatePanel } from "../../../ui/StatePanel";
 import { Text } from "../../../ui/Text";
-import { TextField } from "../../../ui/TextField";
 import { fieldLabels, regionLabels } from "../labels";
 import type { DirectoryState } from "../model";
+import { DirectoryQueryField } from "./DirectoryQueryField";
 import { DirectoryFilter } from "./Filter";
 
 export interface DirectoryScreenProps {
@@ -28,15 +28,22 @@ export function DirectoryScreen({
   onRefresh,
   onSelect,
 }: DirectoryScreenProps) {
-  const [query, setQuery] = useState(state.query);
+  const queryDraft = useRef(state.query);
   const [region, setRegion] = useState(state.region);
   const [practiceArea, setPracticeArea] = useState(state.practiceArea);
   useEffect(() => {
-    setQuery(state.query);
+    queryDraft.current = state.query;
     setRegion(state.region);
     setPracticeArea(state.practiceArea);
   }, [state.query, state.region, state.practiceArea]);
-  const search = () => onSearch({ query, region, practiceArea });
+  const updateQueryDraft = useCallback((value: string) => {
+    queryDraft.current = value;
+  }, []);
+  const submitQuery = useCallback(
+    (query: string) => onSearch({ query, region, practiceArea }),
+    [onSearch, region, practiceArea],
+  );
+  const search = () => submitQuery(queryDraft.current);
   const loading = state.phase === "loading";
   return (
     <Screen scroll={false}>
@@ -59,14 +66,11 @@ export function DirectoryScreen({
               labels={fieldLabels}
               onChange={setPracticeArea}
             />
-            <TextField
-              label="이름으로 검색"
-              value={query}
-              onChangeText={setQuery}
-              maxLength={100}
-              returnKeyType="search"
-              onSubmitEditing={search}
-              autoCorrect={false}
+            <DirectoryQueryField
+              value={state.query}
+              committedFilterKey={JSON.stringify([state.region, state.practiceArea])}
+              onDraftChange={updateQueryDraft}
+              onSubmit={submitQuery}
             />
             <Button variant="primary" label="검색" onPress={search} />
             {state.error ? (

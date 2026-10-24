@@ -103,7 +103,12 @@ test("failure reporting retains only a known XCTest assertion code", () => {
     observeIosDirectoryFailure(
       "XCTAssertTrue failed - BARO_DIRECTORY_INPUT_OCCLUDED private details",
     ),
-  ).toEqual({ status: null, history: [], assertionCode: "BARO_DIRECTORY_INPUT_OCCLUDED" });
+  ).toEqual({
+    status: null,
+    history: [],
+    searchControl: null,
+    assertionCode: "BARO_DIRECTORY_INPUT_OCCLUDED",
+  });
   for (const output of [
     "compiler echo BARO_DIRECTORY_INPUT_OCCLUDED",
     "XCTAssertTrue failed - BARO_DIRECTORY_PRIVATE",
@@ -112,6 +117,7 @@ test("failure reporting retains only a known XCTest assertion code", () => {
     expect(observeIosDirectoryFailure(output)).toEqual({
       status: null,
       history: [],
+      searchControl: null,
       assertionCode: null,
     });
 });
@@ -186,6 +192,7 @@ test("iOS failure diagnostics distinguish typing and rotation using only fixed s
       ).toEqual({
         status: observed,
         history: [observed],
+        searchControl: null,
         assertionCode: "BARO_DIRECTORY_TYPED_INPUT_MISMATCH",
       });
     }
@@ -286,4 +293,84 @@ test("requested public-directory verification requires the Apple signature probe
         step.name === "Reverify original metadata and optionally observe anonymous cold launches",
     ),
   );
+});
+
+test("software Search controls require their own complete result and receipt kind while preserving historical newline receipts", async () => {
+  const legacy = await Bun.file(
+    "docs/quality/mobile-internal-ios-2026-10-24/directory-ui-45bc32f.json",
+  ).json();
+  const baseline = await Bun.file(
+    "docs/quality/mobile-internal-ios-2026-10-24/directory-home-45bc32f.json",
+  ).json();
+  expect(verifyIosDirectoryReceipt(legacy, baseline).kind).toBe(
+    "ios-bundled-public-directory-input-observation",
+  );
+  const software = {
+    ...observation(),
+    kind: "ios-public-directory-software-search-keyboard-rotation",
+    searchSubmitMethod: "software-keyboard-search",
+    searchSubmitControlKind: "button",
+    searchSubmitUniquePhysicalControl: true,
+    searchSubmitControlFullyHittable: true,
+    searchSubmitControlWithinKeyboard: true,
+    searchSubmitTapped: true,
+  };
+  for (const kind of ["button", "key"]) {
+    expect(
+      parseIosDirectoryResult(encode({ ...software, searchSubmitControlKind: kind })).kind,
+    ).toBe("ios-public-directory-software-search-keyboard-rotation");
+  }
+  const receipt = {
+    ...legacy,
+    kind: "ios-bundled-public-directory-software-search-observation",
+    result: software,
+  };
+  expect(verifyIosDirectoryReceipt(receipt, baseline).kind).toBe(
+    "ios-bundled-public-directory-software-search-observation",
+  );
+  for (const patch of [
+    { searchSubmitMethod: "newline" },
+    { searchSubmitControlKind: "global" },
+    { searchSubmitUniquePhysicalControl: false },
+    { searchSubmitControlFullyHittable: false },
+    { searchSubmitControlWithinKeyboard: false },
+    { searchSubmitTapped: false },
+    { label: "synthetic-private" },
+  ])
+    expect(() => parseIosDirectoryResult(encode({ ...software, ...patch }))).toThrow();
+  const { searchSubmitTapped: _, ...missing } = software;
+  expect(() => parseIosDirectoryResult(encode(missing))).toThrow();
+  expect(() => verifyIosDirectoryReceipt({ ...legacy, kind: receipt.kind }, baseline)).toThrow();
+  expect(() => verifyIosDirectoryReceipt({ ...receipt, kind: legacy.kind }, baseline)).toThrow();
+});
+test("software-keyboard diagnostics retain only bounded complete control counts and consistent physical aliases", () => {
+  const status = {
+    buttonCount: 1,
+    keyCount: 1,
+    buttonHittableCount: 1,
+    keyHittableCount: 1,
+    aliasesShareBounds: true,
+    uniquePhysicalControl: true,
+    keyboardVisible: true,
+    appForeground: true,
+  };
+  const encodeStatus = (value: unknown) => `BARO_DIRECTORY_SEARCH_STATUS:${JSON.stringify(value)}`;
+  expect(observeIosDirectoryFailure(encodeStatus(status)).searchControl).toEqual(status);
+  for (const patch of [
+    { buttonCount: 9 },
+    { keyCount: 0 },
+    { uniquePhysicalControl: false },
+    { aliasesShareBounds: false },
+    { rawLabel: "synthetic-private" },
+    { buttonCount: "private" },
+  ])
+    expect(
+      observeIosDirectoryFailure(encodeStatus({ ...status, ...patch })).searchControl,
+    ).toBeNull();
+  const separated = { ...status, aliasesShareBounds: false, uniquePhysicalControl: false };
+  expect(observeIosDirectoryFailure(encodeStatus(separated)).searchControl).toEqual(separated);
+  expect(
+    observeIosDirectoryFailure("XCTAssertNotNil failed - BARO_DIRECTORY_SOFTWARE_SEARCH_MISSING")
+      .assertionCode,
+  ).toBe("BARO_DIRECTORY_SOFTWARE_SEARCH_MISSING");
 });

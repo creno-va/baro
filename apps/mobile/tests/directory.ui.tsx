@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import type { DirectoryState } from "../src/features/directory/model";
 import { DirectoryScreen } from "../src/features/directory/ui/DirectoryScreen";
+import * as filters from "../src/features/directory/ui/Filter";
 
 const initial: DirectoryState = {
   phase: "ready",
@@ -119,4 +120,87 @@ test("directory selects labelled region/field filters and profile navigation sta
   expect(select).not.toHaveBeenCalled();
   await fireEvent.press(screen.getByRole("button", { name: "합성 변호사 공개 프로필 보기" }));
   expect(select).toHaveBeenCalledWith("public_a");
+});
+
+test("directory keeps draft edits outside filter renders and submits the final native text", async () => {
+  const filterRender = jest.spyOn(filters, "DirectoryFilter");
+  try {
+    const search = jest.fn();
+    await render(
+      <DirectoryScreen
+        state={initial}
+        onSearch={search}
+        onSelect={jest.fn()}
+        onRefresh={jest.fn()}
+        onMore={jest.fn()}
+        onRetry={jest.fn()}
+      />,
+      { wrapper },
+    );
+    const before = filterRender.mock.calls.length;
+    expect(before).toBeGreaterThan(0);
+    for (const text of ["합", "합성", "합성 이름"]) {
+      await fireEvent.changeText(screen.getByLabelText("이름으로 검색"), text);
+    }
+    expect(filterRender).toHaveBeenCalledTimes(before);
+    await fireEvent.press(screen.getByRole("button", { name: "검색" }));
+    expect(search).toHaveBeenLastCalledWith({ query: "합성 이름", region: "", practiceArea: "" });
+    await fireEvent(screen.getByLabelText("이름으로 검색"), "submitEditing", {
+      nativeEvent: { text: "합성 이름-마지막" },
+    });
+    expect(search).toHaveBeenLastCalledWith({
+      query: "합성 이름-마지막",
+      region: "",
+      practiceArea: "",
+    });
+    expect(screen.getByLabelText("이름으로 검색").props.value).toBe("합성 이름-마지막");
+    await fireEvent.press(screen.getByRole("button", { name: "검색" }));
+    expect(search).toHaveBeenLastCalledWith({
+      query: "합성 이름-마지막",
+      region: "",
+      practiceArea: "",
+    });
+  } finally {
+    filterRender.mockRestore();
+  }
+});
+
+test("directory preserves unsent drafts through list/filter updates and resets on committed filters", async () => {
+  const search = jest.fn();
+  const props = {
+    onSearch: search,
+    onSelect: jest.fn(),
+    onRefresh: jest.fn(),
+    onMore: jest.fn(),
+    onRetry: jest.fn(),
+  };
+  const view = await render(<DirectoryScreen state={initial} {...props} />, { wrapper });
+  await fireEvent.changeText(screen.getByLabelText("이름으로 검색"), "미제출 원문 － A");
+  await view.rerender(<DirectoryScreen state={{ ...initial, phase: "loading" }} {...props} />);
+  expect(screen.getByLabelText("이름으로 검색").props.value).toBe("미제출 원문 － A");
+  await fireEvent.press(screen.getByRole("button", { name: "지역: 전체" }));
+  await fireEvent.press(screen.getByRole("radio", { name: "지역 서울" }));
+  expect(screen.getByLabelText("이름으로 검색").props.value).toBe("미제출 원문 － A");
+  await fireEvent.press(screen.getByRole("button", { name: "검색" }));
+  expect(search).toHaveBeenLastCalledWith({
+    query: "미제출 원문 － A",
+    region: "seoul",
+    practiceArea: "",
+  });
+  await view.rerender(<DirectoryScreen state={{ ...initial, query: "확정 원문" }} {...props} />);
+  expect(screen.getByLabelText("이름으로 검색").props.value).toBe("확정 원문");
+  await fireEvent.changeText(screen.getByLabelText("이름으로 검색"), "새 초안");
+  await view.rerender(
+    <DirectoryScreen
+      state={{ ...initial, query: "확정 원문", practiceArea: "civil" }}
+      {...props}
+    />,
+  );
+  expect(screen.getByLabelText("이름으로 검색").props.value).toBe("확정 원문");
+  await fireEvent.press(screen.getByRole("button", { name: "검색" }));
+  expect(search).toHaveBeenLastCalledWith({
+    query: "확정 원문",
+    region: "",
+    practiceArea: "civil",
+  });
 });

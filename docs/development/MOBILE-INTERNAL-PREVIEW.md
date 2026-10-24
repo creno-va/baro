@@ -972,3 +972,81 @@ Swift가 없으면 고정 오류로 실패하며 skip하지 않는다. compile45
 workflow 계약 검사로 required flag/실행 순서를 검증한다. 비교 정규화/직접 native 입력·parser
 성공 인수 범위는 바뀌지 않는다. 새 exact main CI가 성공한 뒤에만 두 OS native 검증을
 시작한다. 앱/웹 UI·공통 계약/DB·Android 관측·공급자/비용 정책과 전체 #334/#379/#339/#71은 유지한다.
+
+## Android 공개 탐색 입력·키보드·회전 실제 인수 (#379)
+
+PR443/main `45bc32fc56fbce7987fa089e4a864ab95fc3bb97`·CI40048165288 SUCCESS 뒤
+[실제40048447253](https://github.com/creno-va/baro/actions/runs/40048447253)은 terminal SUCCESS다.
+[원본 strict proof](../quality/mobile-internal-android-2026-10-24/directory-input-45bc32f.json)의
+observedAt은2026-10-24T01:12:23.217Z, 전체 SHA256은
+`64a76850ecf594d71a47ea7395ab36e0aa0081d463e9908d0e63c3111bb71bdb`다.
+[Home](../quality/mobile-internal-android-2026-10-24/directory-input-home-45bc32f.json)·[metadata](../quality/mobile-internal-android-2026-10-24/directory-input-verification-45bc32f.json)의
+source·device·원본 byte/SHA와 proof의 metadata/Home receipt SHA를 독립 대조했다.
+원본171989e APK57,133,550bytes/cd93…와 compiler receipt8b7877…는 byte 그대로다.
+
+fresh owned Android15/sdk_gphone64_x86_64에서 초기 empty 상태·고정 native 이름 검색란·
+실제 IME visible/양수 영역과 입력란 비가림·합성 ASCII 정확한 입력을 확인했다. hardware
+Enter submit 뒤 IME 닫힘·필터된 빈 결과, 실제 display1080×2400/r0→2400×1080/r1→portrait와
+native app window 방향·동일 입력 유지/입력란 도달, BACK1 Home 복귀·원래 회전 preference
+복구/readback을 확인했다. Metro0·공개 진입 전 capture guard·raw hierarchy/dumpsys/output
+비출력·기기 XML 매회 삭제 조건을 유지했다. 프로필/연락·remote mutation·auth/private 접근은 없다.
+
+이것은 해당 Emulator/입력 방법의 실제 UI 인수다. 소프트 IME 검색 키의 직접 탭·한국어 조합·
+TalkBack/VoiceOver·실기기·전체 역할/화면·실제 HTTP transport/원격 API·OAuth/store 인수가 아니다.
+새 parser의 해당 실행 성공과 별도로 이전8e1a2be DISPLAY_INVALID 실패를 보존한다. 이전에는
+shape 개수가 없었으므로 그 실행의 정확한 원인을 소급 확정하지 않는다. 앱/웹·공유 계약/DB·
+권한/공급자/비용 정책과 전체 #334/#379/#346/#339/#71은 유지한다.
+
+같은 source의 [Apple Foundation 필수 step](../quality/mobile-internal-ios-2026-10-24/apple-signature-step-45bc32f.json)은
+01:09:38Z→01:09:52Z SUCCESS다. 이 step 관측은 #443의 실제 Apple 환경 배치만 인수하며
+별도 native 입력/키보드 proof와 구분한다.
+
+## iOS 공개 탐색 입력·키보드·회전 첫 실제 성공 (#379)
+
+같은 main45bc32f/CI40048165288의 [실제40048447226](https://github.com/creno-va/baro/actions/runs/40048447226)은
+terminal SUCCESS다. [원본 strict proof](../quality/mobile-internal-ios-2026-10-24/directory-ui-45bc32f.json)의
+observedAt은2026-10-24T01:19:17.070Z, 전체 SHA256은
+`83300c89b02b80ea07437b2604a0aa625d8937f29791aa6367348f2ac9878111`다.
+[Home](../quality/mobile-internal-ios-2026-10-24/directory-home-45bc32f.json)·[metadata](../quality/mobile-internal-ios-2026-10-24/directory-verification-45bc32f.json)의
+identity와 원본171989e ZIP24,102,101bytes/f8e218…·compiler receipt77d157…를 독립 대조했다.
+해당 main의 실제 Swift dc69bc58…·Ruby c4073949… source hash도 receipt와 일치한다.
+
+fresh iPhone16/iOS26.5 Simulator에서 초기 empty·실제 hittable 입력란·키보드 표시와 입력란
+비가림·정확한 합성 ASCII 입력을 확인했다. 키보드 submit/닫힘·필터된 빈 결과, 실제 landscape
+window와 입력란까지 스크롤한 뒤 값 유지/95% 노출·hittable, portrait 복귀와 같은 값/노출·
+native back/Home 복귀를 확인했다. 앱 재컴파일/재서명·Metro는 없고, 공개 진입 전 명시적
+screenshot/host raw output 저장 차단·xcresult/hierarchy 비출력을 유지했다. 프로필/연락·
+remote mutation·auth/private 접근은 없다. 비교 signature의 정규화는 통과에 사용하지 않았다.
+
+원래06788cb의 공용 assertion 실패와8e1a2be의 typed-check/other 실패를 보존한다. 이 첫
+성공으로 이전 불일치의 원인이나 앱 전체 안정성을 소급 확정하지 않는다. 초기 빈 값 guard·
+기존 literal 대기·회전 후 도달 순서가 포함된 현재 조건에서 실제 성공한 좁은 범위다.
+이전 입력 불일치가 있었으므로 동일 source/앱/조건의 [추가 확인40049505301](https://github.com/creno-va/baro/actions/runs/40049505301)을
+새 소유 Simulator에서 한 차례 진행했고 terminal FAILURE다. [원본 실패](../quality/mobile-internal-ios-2026-10-24/directory-consistency-failure-45bc32f.json)의
+SHA256은 `00d994b73018175d1b28aeac0570fdcd080615f9444245b30ce4f56136166289`이며,
+[Home](../quality/mobile-internal-ios-2026-10-24/directory-consistency-home-45bc32f.json)·[metadata](../quality/mobile-internal-ios-2026-10-24/directory-consistency-verification-45bc32f.json)와
+원본 ZIP/receipt byte/hash도 독립 대조했다. typed-check/other·exit65/timeout=false이며,
+처음에는 빈 값, 입력 뒤에는 더 짧은 subsequence·알려진 날짜 suffix 유지·case/공백/dash/compatibility
+정규화 불일치를 관측했다. 입력 값/길이/계층은 출력하지 않았다. 이는 누락 형태의 관측이며
+XCTest 주입과 앱의 렌더 경합 중 원인을 확정하지 않는다. 첫 성공은 보존하되 안정성 인수는 하지
+않는다. 같은 조건을 다시 실행하지 않으며 Android도 무관한 반복을 하지 않는다.
+
+소프트 키보드 검색 키의 직접 탭·한국어 조합·VoiceOver/TalkBack·전체 역할/화면·실제 HTTP
+transport/원격 API·계정/OAuth·물리 기기/store와 #334/#379/#346/#339/#71은 별도다.
+
+## 검색 입력 렌더 분리와 소프트 Search 관측 준비 (#379)
+
+`DirectoryQueryField`가 draft 상태를 소유하고 부모에는 ref로 전달하여 매 글자마다 목록·필터를
+렌더하지 않게 한다. 버튼은 최신 draft를, 키보드 제출은 `nativeEvent.text`를 그대로 사용한다.
+확정 query/필터 변경 시 초기화하고, 목록 phase 변경과 미제출 필터 선택에서는 draft를 유지한다.
+한글/전각 dash 등 원문을 정규화하지 않는다. 합성 UI 회귀는 이 동작과 필터 렌더 횟수를 확인하며
+실제 iOS 누락 해결을 증명하지 않는다. 제품 변경이므로 새 앱의 두 OS compiler 성공·원본 pin
+갱신·새 바이너리 실제 UI 검증을 순서대로 수행해야 한다. 기존171989e 관측을 새 앱에 적용하지 않는다.
+
+iOS runner는 native keyboard의 public `buttons`/`keys` query에서 Search/검색을 찾고, bounded
+개수·95% 키보드 내부/화면 노출·hittable·유일 물리 control을 확인해 직접 탭하도록 준비한다.
+button/key alias가 함께 있으면 두 frame의95% 겹침을 요구한다. newline fallback은 없고 입력
+literal 검사를 먼저 통과해야 한다. 진단은 고정 count/boolean만 남긴다. 새 software-search
+result/receipt kind는 필수 탭 증거를 요구하며 기존 newline receipt를 재명명하지 않는다.
+로컬 schema/Swift syntax 검증과 실제 UIKit 컴파일·Search 탭 성공은 구분한다. 후자는 아직 미검증이다.
+웹 UI·공통 계약/DB·권한/공급자/비용 정책은 변경하지 않는다.
