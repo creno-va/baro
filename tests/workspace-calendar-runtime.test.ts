@@ -7,6 +7,7 @@ import { createWorkspaceService } from "../src/server/modules/workspace/service"
 import { createWorkspaceDependencies, runWorkspaceRuntime } from "../src/server/runtime/workspace";
 import { createTestDatabase } from "./helpers/d1";
 import { countD1Calls } from "./helpers/d1-call-count";
+import { syntheticGatewayInput } from "./helpers/gateway-input";
 import observation from "./helpers/gemini-observation";
 import { seedTestSession } from "./helpers/session";
 
@@ -59,8 +60,8 @@ async function fixture(before: string, after: string, priced = false) {
     },
     AI: {
       run: async (_model: string, input: ReturnType<typeof prepareGatewayWireInput>) => {
-        const phase = input.response_format.json_schema.name;
-        calls.push({ phase, data: JSON.parse(input.messages[1]?.content ?? "null").data });
+        const { name: phase, data } = syntheticGatewayInput(input);
+        calls.push({ phase, data });
         if (providerReject)
           throw Object.assign(new Error("Synthetic definitive provider error"), { status: 401 });
         const output = phase.includes("audit")

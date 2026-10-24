@@ -31,6 +31,8 @@ for (const phase of Object.keys(prompts) as (keyof typeof prompts)[]) {
       }
       const node = value as Record<string, unknown>;
       if ("default" in node) violations.push(`${path} contains a server default annotation`);
+      if (typeof node.maxItems === "number" && node.maxItems > 0)
+        violations.push(`${path} expands a bounded array grammar`);
       if (node.type === "object" && node.properties) {
         const required = Array.isArray(node.required) ? node.required : [];
         for (const key of Object.keys(node.properties))

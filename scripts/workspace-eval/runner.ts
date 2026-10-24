@@ -1,9 +1,9 @@
 import { z } from "zod";
 import { V2_INTAKE_POLICY, type V2Fact } from "../../src/contracts/v2";
-import { MODEL_ID, type Phase } from "../../src/server/modules/llm-gateway/prompts";
+import { MODEL_ID, type Phase, prompts } from "../../src/server/modules/llm-gateway/prompts";
 import {
   createLlmGateway,
-  gatewayWireIdentity,
+  gatewayTransportIdentity,
   ModelError,
   prepareGatewayWireInput,
 } from "../../src/server/modules/llm-gateway/service";
@@ -195,20 +195,20 @@ async function scenarioRun(s: Scenario, calls?: CapturedCall[]) {
             !options.gateway.skipCache
           )
             throw new Error("EVAL_GATEWAY_CONTRACT");
-          const identity = await gatewayWireIdentity(
-            input as ReturnType<typeof prepareGatewayWireInput>,
-          );
+          const identity = await gatewayTransportIdentity(input);
           const stored = calls?.[cursor++];
           if (calls && (!stored || stored.wireInputSha256 !== identity.wireInputSha256)) {
             mismatch = true;
             throw new Error("EVAL_REPLAY_INPUT_MISMATCH");
           }
-          const format = input.response_format as { json_schema: { name: string } };
+          const format = input.response_format as { json_schema: { name: string } } | undefined;
+          const system = input.systemInstruction as { parts: { text: string }[] } | undefined;
+          const isAudit =
+            format?.json_schema.name.includes("workspace_audit") ||
+            system?.parts.some((part) => part.text.endsWith(prompts.workspace_audit));
           const response = calls
             ? stored?.response
-            : completion(
-                format.json_schema.name.includes("workspace_audit") ? approvedAudit : s.scripted,
-              );
+            : completion(isAudit ? approvedAudit : s.scripted);
           captured.push({
             wireInputSha256: identity.wireInputSha256,
             response: structuredClone(response),

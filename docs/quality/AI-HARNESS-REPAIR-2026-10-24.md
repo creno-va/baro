@@ -127,3 +127,32 @@ annotations while retaining all required properties and server validation. This 
 a changed-condition candidate requiring external verification, not accepted success.
 Google documents a supported schema subset and HTTP400 rejection for excessively
 complex schemas: [structured output](https://ai.google.dev/gemini-api/docs/structured-output).
+
+## Native audit transport candidate
+
+[Manual run40070563340](https://github.com/creno-va/baro/actions/runs/40070563340)
+on exact main01cf84b still failed audit HTTP400 after questions succeeded
+(7546ms,1605input/244output); audit1783ms, two attempts. The
+[original receipt](./ai-harness-2026-10-24/questions-audit-01cf84b.json) is retained.
+Default annotation removal is not an established failure cause. The GenerateContent
+reference explicitly describes defaults as ignored documentation annotations.
+
+Audit/validation now send native GenerateContent contents/systemInstruction,
+generationConfig.responseMimeType/responseJsonSchema and thinkingConfig MEDIUM
+through the same Cloudflare binding and Gateway. The existing independent audit,
+server schema, output caps, lease/admission and model identity remain. Exact wire
+identity hashes the native bytes actually dispatched; the canonical private planner
+retains its schema/output budget fields. Generation/vision stay on the already
+accepted Chat Completions wire. No runtime fallback retries another format. A new
+changed-condition manual probe is still required. HTTP error text may be non-JSON:
+a bounded text body is classified and discarded, never emitted as an error cause.
+
+Sources: [Cloudflare native binding](https://developers.cloudflare.com/ai/models/google/gemini-3.8-flash/),
+[GenerateContent configuration](https://ai.google.dev/api/generate-content).
+
+The same candidate avoids positive maxItems grammar expansion for nested arrays,
+as recommended in Google's structured-output complexity guidance. Existing server
+Zod bounds (including questions2×3 and audit findings30/IDs300), output token caps,
+required fields, closed objects and zero-item constraints remain unchanged. This is
+provider grammar projection, not authorization to publish larger arrays. The
+specific original HTTP400 cause remains unproven pending live verification.

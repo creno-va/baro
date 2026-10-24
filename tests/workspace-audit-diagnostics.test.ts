@@ -156,21 +156,21 @@ test("audit diagnostics reject arbitrary text, identifiers, offsets and reasons"
   ).toBe(false);
 });
 
-test("provider output requires bounded diagnostics but permits unknown without inventing evidence", () => {
+test("provider requires diagnostic fields while server enforces array bounds without expanding grammar states", () => {
   const wire = prepareGatewayWireInput("workspace_audit", { phase: "workspace_chat" });
   const schema = wire.response_format.json_schema.schema as {
     properties: {
       output: {
         properties: {
           findings: {
-            maxItems: number;
+            maxItems?: number;
             items: { required: string[]; additionalProperties: boolean };
           };
         };
       };
     };
   };
-  expect(schema.properties.output.properties.findings.maxItems).toBe(30);
+  expect(schema.properties.output.properties.findings.maxItems).toBeUndefined();
   expect(schema.properties.output.properties.findings.items.required).toEqual([
     "severity",
     "code",

@@ -12,6 +12,7 @@ import {
   runWorkspaceRuntime,
 } from "../src/server/runtime/workspace";
 import { createTestDatabase } from "./helpers/d1";
+import { syntheticGatewayInput } from "./helpers/gateway-input";
 import observation from "./helpers/gemini-observation";
 import { seedTestSession } from "./helpers/session";
 
@@ -67,11 +68,7 @@ async function fixture() {
     },
     AI: {
       async run(_model: string, input: Record<string, unknown>) {
-        const wire = input as {
-          messages: { content: string }[];
-          response_format: { json_schema: { name: string } };
-        };
-        const phase = wire.response_format.json_schema.name;
+        const { name: phase, data } = syntheticGatewayInput(input);
         calls.push(phase);
         const active = await core
           .statement(
@@ -82,7 +79,7 @@ async function fixture() {
         if (active) observedPhases.push(active);
         if (phaseDurationMs) setSystemTime(new Date(Date.now() + phaseDurationMs));
         if (transportError) throw new Error("Synthetic provider unavailable");
-        const context = JSON.parse(wire.messages[1]?.content ?? "null").data as WorkspaceContext;
+        const context = data as WorkspaceContext;
         let output: unknown;
         if (phase.includes("audit")) {
           output = {
