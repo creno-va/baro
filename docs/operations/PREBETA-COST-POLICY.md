@@ -149,6 +149,12 @@ preflight는 실제 구성·schema·SHA·환경 검사를 계속 수행하며 �
 legacy 분석의 attempt ledger 미연결은 기술 blocker로 보존하며, media 전체 미연결이라는
 과거 고정 단정은 제거한다. [검사 범위](../quality/AI-PREFLIGHT-AUDIT.md#2026-10-15-사전검사-범위-재대조)를 따른다.
 
+2026-10-25 #506의 로컬 후속 구현은 legacy 분석의 실제 ID/revision/Workflow를 전용 실행
+원장에 연결한다. 가격/funding/FX/월별 metadata는 새 선행 조건이 아니며, 기술 dispatch와
+AI200 예약은 유지한다. 수량 관측 실패도 valid output을 실패로 바꾸지 않는다. 새0017의
+schema·실제 조립·지연 응답/삭제 검증과 별도로 배포/실제 provider 인수가 필요하므로,
+기존 미연결 실패와 remote3b005f3의 상태는 그대로 보존한다.
+
 같은 날 GitHub 읽기 전용 조회에서 저장소 PUBLIC과 repo/preview/production 변수에 비용
 flag override가 없음을 재확인했다. 환경 변수는 공개 site key의 이름만 확인했으며 값·secret은
 출력하지 않았다. Cloudflare의 위 console 관측은 10월14일의 실제 증거로 보존하고 이번

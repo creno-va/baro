@@ -34,8 +34,9 @@ const phases: ExecutionPhase[] = [
 ];
 export async function analysisFixture(
   mode: "guidance" | "questions" | "out_of_scope" | "urgent_redirect" = "guidance",
+  databaseOptions: Parameters<typeof createTestDatabase>[0] = {},
 ) {
-  const db = await createTestDatabase();
+  const db = await createTestDatabase(databaseOptions);
   databases.push(db);
   const session = await seedTestSession(db, { consent: true });
   const workflow = {
@@ -143,6 +144,7 @@ export async function analysisFixture(
     caseId: admitted.response.caseId,
     execute,
     gateway,
+    binding,
     legal,
   };
 }
