@@ -60,7 +60,7 @@ mobileAuthApi.get("/capabilities", (c) => {
   return c.json(
     mobileAuthCapabilitiesSchema.parse({
       contractVersion: 2,
-      providers: availableMobileAuthProviders(),
+      providers: availableMobileAuthProviders(c.env),
     }),
   );
 });
@@ -87,7 +87,7 @@ for (const operation of ["prepare", "verify"] as const)
     const requestedProvider = "provider" in input.data ? input.data.provider : undefined;
     if (
       requestedProvider &&
-      !availableMobileAuthProviders().some((provider) => provider === requestedProvider)
+      !availableMobileAuthProviders(c.env).some((provider) => provider === requestedProvider)
     )
       return c.json(
         errorBody(c, "DEPENDENCY_UNAVAILABLE", "이 로그인 수단은 아직 사용할 수 없어요.", true),

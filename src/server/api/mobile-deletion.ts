@@ -33,7 +33,7 @@ export const mobileDeletionApi = new Hono<ApiEnvironment>()
       return c.json(errorBody(c, "VALIDATION_ERROR", "삭제 확인을 다시 입력해 주세요."), 400);
     const session = await getSession(c);
     if (!session) return c.json(errorBody(c, "UNAUTHENTICATED", "로그인이 필요해요."), 401);
-    if (!availableMobileAuthProviders().some((v) => v === input.data.provider))
+    if (!availableMobileAuthProviders(c.env).some((v) => v === input.data.provider))
       return c.json(
         errorBody(c, "DEPENDENCY_UNAVAILABLE", "이 로그인 수단은 아직 사용할 수 없어요.", true),
         503,

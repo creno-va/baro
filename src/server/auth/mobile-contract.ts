@@ -2,6 +2,7 @@ import {
   legacyMobileAuthProviderSchema,
   MOBILE_AUTH_CONTRACT_HEADER,
 } from "../../contracts/mobile-auth";
+import { appleConfiguration } from "./apple-configuration";
 
 /** Absence is the installed app/web legacy protocol; unknown versions never silently downgrade. */
 export function mobileAuthContract(request: Request): 1 | 2 | null {
@@ -9,7 +10,10 @@ export function mobileAuthContract(request: Request): 1 | 2 | null {
   return value === null || value === "1" ? 1 : value === "2" ? 2 : null;
 }
 
-/** Apple remains unavailable until callback, account and revocation producer acceptance. */
-export function availableMobileAuthProviders() {
-  return [...legacyMobileAuthProviderSchema.options];
+/** Capability is configured availability; actual provider login still requires external acceptance. */
+export function availableMobileAuthProviders(environment: Env) {
+  return [
+    ...legacyMobileAuthProviderSchema.options,
+    ...(appleConfiguration(environment) ? ["apple" as const] : []),
+  ];
 }

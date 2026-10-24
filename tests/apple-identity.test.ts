@@ -449,7 +449,7 @@ test("fixture-only Apple registration uses real SDK POST/GET state and RSA valid
     expect(
       new URL(expiredResponse.headers.get("location") ?? "", env.BETTER_AUTH_URL).pathname,
     ).toBe("/login");
-    await callback({ cookie: expired.cookie, state: "synthetic-invalid-state" });
+    await callback({ cookie: expired.cookie, state: "z".repeat(32) });
     expect(exchanges).toBe(beforeInvalidState);
     expect(db.sqlite.query("SELECT COUNT(*) AS n FROM session").get()).toEqual({ n: 3 });
     expect(db.sqlite.query("SELECT COUNT(*) AS n FROM user").get()).toEqual({ n: 1 });
