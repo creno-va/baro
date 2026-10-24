@@ -1,4 +1,4 @@
-export const PROMPT_VERSION = "1.2.0";
+export const PROMPT_VERSION = "1.3.0";
 export const WORKSPACE_PROMPT_VERSION = "2.6.0";
 export const POLICY_VERSION = "1.0.0";
 export { MODEL_ID } from "../../model-policy";
@@ -19,7 +19,7 @@ const workspaceCommon =
 export const prompts = {
   minimize: `${common} Split relevant statements into sentences, mask names, email, phone and account identifiers. Keep dates and amounts without inventing facts.`,
   screening: `${common} Only Korean personal monetary loans are in scope. Immediate danger and safety signals override loan guidance. Uncertain scope or urgency requires clarification.`,
-  structure: `${common} Organize only supplied facts. Preserve originalValue verbatim for every user fact. Use unknown confidence with null value when missing. Do not convert inferred organization into user facts.`,
+  structure: `${common} Organize only supplied facts. Preserve originalValue verbatim for every user fact. Array limits are ceilings, never targets: include each material supplied fact once in its relevant array and preserve contradictions and unfavorable facts. Use an empty array when no supported entries exist. Put specific missing or contradictory matters in unknowns once; do not generate placeholder facts for every possible field. Do not convert inferred organization into user facts.`,
   questions: `${common} Ask at most three necessary questions in one batch. Choice options must include no assumptions. Never ask for names, contact, account identifiers or credentials.`,
   generation: `${common} Use only supplied verified law chunks and citation IDs for legal information. User statements must be verbatim excerpts of the supplied minimized input. Separate AI organization and unknowns. No legal conclusion, deadline calculation, documents for submission or professional recommendation. Include uncertainty about historical applicability, official confirmation and AI notice.`,
   validation: `${common} Audit the draft against user input, structured facts and official chunks. Check every citation actually supports the linked explanation. Any unsupported fact, unverified or unrelated citation, policy violation, privacy leak or scope violation is critical: pass=false and sanitizedResult=null. Never silently approve critical findings.`,
