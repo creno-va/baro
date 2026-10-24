@@ -2,7 +2,7 @@ import type { V2Fact, V2FactReference } from "../../src/contracts/v2";
 import { v2IntakeSchema, v2SummarySchema } from "../../src/contracts/v2";
 import type { WorkspaceContext } from "../../src/server/modules/workspace/pipeline";
 
-export const CORPUS_VERSION = "workspace-v2-2";
+export const CORPUS_VERSION = "workspace-v2-3";
 export type Scenario = {
   id: string;
   phase: "workspace_questions" | "workspace_summary" | "workspace_chat";
@@ -376,10 +376,10 @@ export const workspaceScenarios: readonly Scenario[] = [
       id: "questions-specific-transfer-date",
       narrative: "송금 기록이 있습니다. 지난달쯤 보냈는데 날짜가 기억나지 않습니다.",
       prompt:
-        "송금 기록에서 해당 이체 날짜를 확인해 YYYY-MM-DD로 적어 주세요. 확인하기 어려우면 모름으로 답해 주세요.",
+        "돈을 보낸 때가 언제쯤이었나요? 송금 기록이 있다면 참고해도 좋아요. 지난달 말처럼 기억나는 대로 적어 주세요.",
       anchors: ["송금", "이체"],
-      answerCues: ["YYYY-MM-DD", "년", "월", "날짜"],
-      uncertaintyCues: ["모름", "어려우", "미확인"],
+      answerCues: ["언제", "년", "월", "날짜"],
+      uncertaintyCues: ["쯤", "기억나는", "대략"],
     },
     {
       id: "questions-conflicting-payment",

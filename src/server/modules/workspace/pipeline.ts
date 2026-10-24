@@ -38,6 +38,7 @@ import {
 import type { WorkspaceAuditFailure } from "./audit-diagnostics";
 import type { WorkspaceContentFailure } from "./content-diagnostics";
 import type { MaterialWindow, MaterialWindowRequest } from "./materials";
+import { normalizeIntakeQuestion } from "./questions";
 import { normalizeTimelineDates } from "./timeline-dates";
 
 export type WorkspaceContext = {
@@ -417,6 +418,9 @@ export function createWorkspacePipeline(
         const draft = workspaceQuestionsOutputSchema.parse(
           await call("workspace_questions", input, requestId),
         );
+        // Normalize only newly generated UI choices before independent audit.
+        // Saved questions/answers and the source context remain unchanged.
+        draft.questions = draft.questions.map(normalizeIntakeQuestion);
         if (
           draft.questions.some(
             (question) => prohibited(question.prompt) || question.options.some(prohibited),

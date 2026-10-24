@@ -44,6 +44,16 @@ export const retryApi = new Hono<ApiEnvironment>().post("/:caseId/retry", async 
       errorBody(c, "INVALID_STATE", "이전 분석이 종료되기를 기다려 주세요.", true),
       409,
     );
+  if (await repo.hasUnresolvedAnalysisTransport(access.ownerId, id.data, analysis.id))
+    return c.json(
+      errorBody(
+        c,
+        "INVALID_STATE",
+        "이전 AI 응답이 아직 확인되지 않았어요. 잠시 후 상태를 확인해 주세요.",
+        true,
+      ),
+      409,
+    );
   let committed = false;
   try {
     committed = await repo.retryAnalysis(

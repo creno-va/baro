@@ -141,15 +141,22 @@ test("Worker binding sends pinned structured model/privacy options and allowlist
       AI: {
         run: async (model, input, options) => {
           expect(model).toBe(MODEL_ID);
-          expect(input.reasoning_effort).toBe("low");
+          expect(input).toMatchObject({
+            generationConfig: {
+              thinkingConfig: { thinkingLevel: "LOW", includeThoughts: false },
+              responseMimeType: "application/json",
+              responseJsonSchema: { additionalProperties: false },
+            },
+          });
           expect(input).not.toHaveProperty("store");
-          expect(input.service_tier).toBe("default");
+          expect(input).not.toHaveProperty("service_tier");
           expect(input).not.toHaveProperty("temperature");
           expect(options).toEqual({
             gateway: { id: "synthetic-gateway", collectLog: false, skipCache: true },
             returnRawResponse: true,
           });
-          expect(JSON.stringify(input.response_format)).toContain('"strict":true');
+          expect(input).not.toHaveProperty("reasoning_effort");
+          expect(input).not.toHaveProperty("response_format");
           return completion(screening);
         },
       },

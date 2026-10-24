@@ -28,9 +28,15 @@ batch에 적용한다. 마지막 모델 응답 후 역할·동의·원문·삭�
 동일 원문의 암호화 갱신만 경합한 경우 최대3회 source/CAS를 다시 확인하며 모델·quota·
 질문/시도 횟수·deadline을 초기화하지 않는다. 수량·가격 관측 유무는 이 게시 조건이 아니다.
 
-구형 structure는 native LOW와 공유 fact JSON 정의를 사용한다. prompt1.3은
+구형 비감사5단계는 native LOW, 독립 validation은 native MEDIUM을 명시한다.
+structure는 공유 fact JSON 정의를 사용한다. prompt1.3은
 배열 한도를 채우는 placeholder 대신 제공된 중요 사실과 명시적 unknowns만 정리하며,
 정확 원문·모순/불리한 사실·서버 의미 검증과 기존60초/4000토큰 한도를 유지한다.
+
+Workflow 종료 확인과 별개로 dispatched/unknown 모델 전송이 남아 있으면 HTTP와
+같은 D1 retry admission batch에서 새 시도 접수를 막아 횟수·idempotency·outbox를 보존한다.
+실제 terminal receipt 뒤 기존 허용 retry로 이어가며 provably-unsent 준비는 취소 가능하다.
+가격/수량 관측 누락은 이 기술 전송 조건과 무관하다.
 
 ## 단계
 
@@ -98,12 +104,11 @@ Gateway의 payload logging은 비활성화하고 현재 OFF인 Gateway·사용�
 status, failure code만 허용한다. 사용자 입력·답변·결과·prompt 본문·법률 검색어에
 개인 식별 내용이 있으면 기록하지 않는다.
 모든 호출에서 `gateway:{id,collectLog:false,skipCache:true}`를 명시하고 Gateway 설정도
-검증한다. 간단한 생성은 Chat Completions와 `response_format`을 사용하고,
-채팅·vision·감사/검증은 같은 binding의 native GenerateContent `contents/systemInstruction`과
+검증한다. 모든 텍스트 생성·vision·감사/검증은 같은 binding의 native GenerateContent `contents/systemInstruction`과
 `generationConfig.responseMimeType/responseJsonSchema/thinkingConfig`를 사용한다.
 채팅은 중복 참조 정의를 $defs/$ref로 공유하고 numeric grammar 범위는 서버 Zod에서 검사한다.
 vision은 한 개의 bounded JPEG를 inlineData로 보내며 LOW thinking·MEDIA_RESOLUTION_LOW를
-명시한다. reasoning은 생성 `low`/채팅·vision `LOW`·감사 `MEDIUM`, 출력 상한은 단계별로 보존한다. 한 요청에서
+명시한다. reasoning은 생성·vision `LOW`·감사 `MEDIUM`, 출력 상한은 단계별로 보존한다. 한 요청에서
 두 포맷을 혼합하거나 실패 후 다른 포맷으로 자동 재시도하지 않는다. 실행 예약과
 replay의 wire identity는 실제 전송 바이트를 해시한다. private planner의 canonical
 schema/출력 예산 표현은 provider 전송 형식과 구분한다.

@@ -18,7 +18,13 @@ import {
   unavailableReceipt,
 } from "./attempts";
 import { readModelCompletion } from "./completion";
-import { MODEL_ID, type Phase, PROMPT_VERSION, prompts, WORKSPACE_PROMPT_VERSION } from "./prompts";
+import {
+  MODEL_ID,
+  type Phase,
+  PROMPT_VERSION,
+  promptFor,
+  WORKSPACE_PROMPT_VERSION,
+} from "./prompts";
 import { providerWire } from "./provider-wire";
 import { gatewayRequestIssue, gatewayResponse } from "./transport";
 import {
@@ -142,7 +148,7 @@ export function prepareGatewayWireInput(phase: Phase, input: unknown, correction
     messages: [
       {
         role: "system",
-        content: `BARO prompt ${phase.startsWith("workspace_") ? WORKSPACE_PROMPT_VERSION : PROMPT_VERSION}. ${prompts[phase]}`,
+        content: `BARO prompt ${phase.startsWith("workspace_") ? WORKSPACE_PROMPT_VERSION : PROMPT_VERSION}. ${promptFor(phase, input)}`,
       },
       {
         role: "user",

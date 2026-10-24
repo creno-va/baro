@@ -316,7 +316,7 @@ test("a waiting clarification consumes one visible response and retains the ques
   await Promise.all(background);
 });
 
-test("an explicit retry cannot overlap unknown transport and can resume only after the late terminal receipt", async () => {
+test("an explicit retry with changed wire bytes cannot overlap unknown transport and resumes only after a late terminal receipt", async () => {
   const f = await journal(),
     handle = await f.ledger.beforeDispatch(f.request);
   if (!handle) throw new Error("NO_HANDLE");
@@ -325,29 +325,35 @@ test("an explicit retry cannot overlap unknown transport and can resume only aft
   f.db.sqlite
     .query("UPDATE analyses SET status='failed',failure_code='MODEL_UNAVAILABLE' WHERE id=?")
     .run(f.identity.analysisId);
-  expect(
-    await f.repo.retryAnalysis(
-      f.session.userId,
-      f.caseId,
-      f.identity.analysisId,
-      1,
-      1,
-      crypto.randomUUID(),
-      "a".repeat(64),
-      new Date().toISOString(),
-    ),
-  ).toBe(true);
+  // A queued retry admitted by an older deployment must also remain blocked
+  // at the dispatch boundary; current HTTP/SQL admission is tested separately.
+  f.db.sqlite
+    .query(`UPDATE analyses SET attempt=2,workflow_instance_id=?,status='queued',
+    encrypted_context=NULL,started_at=NULL WHERE id=?`)
+    .run(`${f.identity.analysisId}-2`, f.identity.analysisId);
+  f.db.sqlite.query("UPDATE cases SET status='queued' WHERE id=?").run(f.caseId);
   await f.execute(2).phase("initialize");
   const retry = await createLegacyAnalysisLedger({
     ...f.options,
     instanceId: `${f.identity.analysisId}-2`,
+    input: async () => ({ syntheticChangedWire: true }),
   });
-  const next = { ...f.request, invocationId: crypto.randomUUID() };
+  const next = {
+    ...f.request,
+    ...(await gatewayWireIdentity(
+      prepareGatewayWireInput("screening", { syntheticChangedWire: true }),
+    )),
+    invocationId: crypto.randomUUID(),
+  };
+  expect(next.wireInputSha256).not.toBe(f.request.wireInputSha256);
   expect(await retry.beforeDispatch(next)).toBeNull();
   await f.ledger.afterTransport(handle, receipt());
   const allowed = await retry.beforeDispatch(next);
   expect(allowed).not.toBeNull();
   expect(await f.ledger.confirmDispatch(handle)).toBe(false);
+  expect(
+    f.db.sqlite.query("SELECT wire_hash FROM legacy_ai_attempts WHERE id=?").get(handle.attemptId),
+  ).toEqual({ wire_hash: f.request.wireInputSha256 });
   expect(
     f.db.sqlite.query("SELECT workflow_attempt,quota_state FROM legacy_ai_operations").get(),
   ).toEqual({ workflow_attempt: 2, quota_state: "reserved" });
@@ -355,6 +361,79 @@ test("an explicit retry cannot overlap unknown transport and can resume only aft
     f.db.sqlite.query("SELECT responses_used,responses_reserved FROM v2_daily_usage").get(),
   ).toEqual({ responses_used: 0, responses_reserved: 1 });
 });
+
+test.each(["dispatched", "unknown"] as const)(
+  "a terminal Workflow with %s model transport cannot burn an explicit retry attempt",
+  async (transport) => {
+    const f = await journal(),
+      handle = await f.ledger.beforeDispatch(f.request);
+    if (!handle) throw new Error("NO_HANDLE");
+    expect(await f.ledger.confirmDispatch(handle)).toBe(true);
+    if (transport === "unknown")
+      await f.ledger.afterTransport(handle, unavailableReceipt("unknown"));
+    f.db.sqlite
+      .query("UPDATE analyses SET status='failed',failure_code='MODEL_UNAVAILABLE' WHERE id=?")
+      .run(f.identity.analysisId);
+    f.db.sqlite.query("UPDATE cases SET status='failed' WHERE id=?").run(f.caseId);
+    const key = crypto.randomUUID(),
+      route = `/api/cases/${f.caseId}/retry`;
+    const retry = () =>
+      api.request(
+        `/cases/${f.caseId}/retry`,
+        {
+          method: "POST",
+          headers: {
+            cookie: f.session.cookie,
+            origin: f.env.BETTER_AUTH_URL,
+            "content-type": "application/json",
+            "idempotency-key": key,
+          },
+          body: JSON.stringify({ inputRevision: 1 }),
+        },
+        f.env,
+      );
+    const blocked = await retry();
+    expect(blocked.status).toBe(409);
+    expect(await blocked.json()).toMatchObject({
+      error: { code: "INVALID_STATE", retryable: true },
+    });
+    expect(
+      f.db.sqlite
+        .query("SELECT attempt,status FROM analyses WHERE id=?")
+        .get(f.identity.analysisId),
+    ).toEqual({ attempt: 1, status: "failed" });
+    expect(
+      f.db.sqlite
+        .query("SELECT count(*) AS count FROM idempotency_records WHERE route=?")
+        .get(route),
+    ).toEqual({ count: 0 });
+    expect(f.db.sqlite.query("SELECT count(*) AS count FROM dispatch_outbox").get()).toEqual({
+      count: 1,
+    });
+    // The SQL admission also protects callers that raced the friendly HTTP read.
+    expect(
+      await f.repo.retryAnalysis(
+        f.session.userId,
+        f.caseId,
+        f.identity.analysisId,
+        1,
+        1,
+        key,
+        "a".repeat(64),
+        new Date().toISOString(),
+      ),
+    ).toBe(false);
+    await f.ledger.afterTransport(handle, receipt());
+    const accepted = await retry();
+    expect(accepted.status).toBe(202);
+    expect((await retry()).status).toBe(202);
+    expect(
+      f.db.sqlite.query("SELECT attempt FROM analyses WHERE id=?").get(f.identity.analysisId),
+    ).toEqual({ attempt: 2 });
+    expect(f.calls).toEqual([]);
+    expect(f.db.sqlite.query("PRAGMA foreign_key_check").all()).toEqual([]);
+  },
+);
 
 test("an explicit retry cancels only an old provably unsent preparation", async () => {
   const f = await journal(),
