@@ -861,8 +861,11 @@ The actual material-chat follow-up UI shows only the six original user facts,
 timeline0 and preparation actions0; synthetic markers were not added there.
 A separate narrow legal request specifying 민법 제598조 then produced an exact
 quotation and a readable official-source card linking the actual law.go.kr
-original. It completed at16:26:08Z on3942; detailed stage timings/source-request
-counts still require separate inspection. It does not erase the broad-query
+original. It completed at16:26:08Z on3942: context911ms, generation9959ms,
+audit52168ms and publication137ms. There was no retrieval stage: this reused
+previously verified material and is not evidence of a new law API request.
+Quotation resolution reported valid_span1 and zero rejected/unavailable spans.
+It does not erase the broad-query
 initial-generation timeout or establish its cause.
 
 Prompt2.5.1 validation: frozen install, quick307, focused60/3files/337 assertions,
@@ -907,3 +910,61 @@ Prompt2.6 validation passed frozen install, quick307, focused60 across3files/337
 assertions, offline50 deterministic+60 scripted scenarios with zero critical
 findings, production build/dry-run/local built Worker and docs checks. These
 checks are offline; actual changed-prompt dispatch/answer quality is pending.
+
+## Actual prompt2.6 acceptance and source-card/composer readability
+
+[PR505](https://github.com/creno-va/baro/pull/505) normally merged as
+mainb9808b8 after exact-head CI40112543204; main CI40112762222 and manual preview
+[40113006857](https://github.com/creno-va/baro/actions/runs/40113006857) passed.
+The [original configuration receipt](./ai-harness-2026-10-24/preview-b9808b8.json)
+has no blockers; missing monetary observations remain warnings. Production is
+unchanged. The following are manual observations of the isolated synthetic case,
+not automated CI/provider tests. Private screenshots were shown in chat only.
+
+The same broad legal question completed16:54:12–16:54:45Z with exact Civil Act
+598/603 quotations and two official-original cards. Context8006ms,
+generation11681ms, audit11287ms and publication1012ms completed. Quotation
+resolution reported valid_span2, all rejected/unavailable counts0. No retrieval
+stage occurred, so this cached-source success does not establish fresh API
+dispatch performance or explain the earlier initial-generation timeout.
+
+A selected-video chat completed17:04:23–17:05:01Z and correctly identified the
+1.4s/frame14 orange circle42,3.2s/frame32 green triangle09 and7s/frame70 green
+triangle09, with exact readable frame links and an observed-window limitation.
+The prose contained no internal file identifiers. Context8962ms, generation9331ms,
+retrieval1605ms, generation8337ms, audit8549ms and publication739ms completed.
+The generic retrieval metric does not expose a per-window read count; no exact
+material-call count is inferred from it.
+
+An explicit synthetic user-statement/update request completed17:11:54–17:12:50Z:
+context9143ms, generation32023ms, audit8819ms, publication4735ms. Summary review
+showed exactly seven user-reported facts (the six originals plus the requested
+October24 copy-storage statement), followed by user confirmation. The workspace
+then displayed exactly one October24 timeline entry marked as needing user
+confirmation and one uncompleted preparation action about checking the copy's
+storage location. No diagram markers became facts. This verifies requested
+updates remain possible under the concise-dispatch instruction.
+
+The DataHub connection-status request completed17:25:19–17:28:47Z. Both property
+address and building-register cards reported not_configured, no returned factual
+rows, and the official dataapi.co.kr guide link. No real target lookup occurred.
+Context8791ms, generation84806ms, retrieval828ms, generation35267ms, audit76807ms
+and publication613ms completed. This successful response still took about3m28s;
+it is not a latency acceptance. The four unissued services and their runtime
+target/consent producer remain external integration work.
+
+Actual review also exposed two presentation defects: both statute cards were
+labelled only “민법”, and the shared case stylesheet could make the empty sticky
+composer220px tall, obscuring replies/tool disclosure controls. The shared
+client now derives distinct statute article labels from existing optional raw
+source fields while projecting the same id/title/url view and preserving HTTP
+contracts, source identity and validation. RN ownership was coordinated before
+this shared-file change; current native source parity requires new compilers.
+The web composer selector now wins in either stylesheet order, preserves a16px
+font floor and becomes static while tool details are open. A regression using
+the actual shared stylesheet loaded last failed at220px before the fix and
+passed at desktop/mobile widths afterward. Explicit real-adapter and mock
+browser tests, accessibility/overflow checks and build/local Worker passed;
+actual changed-UI preview acceptance remains pending deployment. After integrating
+RN main7ec63528, frozen install and quick319/37files/3035 assertions passed;
+focused shared-client/recovery22/3files/115 assertions and docs also passed.
