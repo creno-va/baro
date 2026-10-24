@@ -37,6 +37,7 @@ import {
 import { readWorkspaceContext, workspaceCalendar } from "../modules/workspace/context";
 import { createWorkspaceDispatcher } from "../modules/workspace/dispatch";
 import { executeWorkspace, type WorkspaceParams } from "../modules/workspace/execution";
+import { MATERIAL_CONTEXT_BYTES, readMaterialWindow } from "../modules/workspace/materials";
 import { createWorkspacePipeline, workspaceModelInput } from "../modules/workspace/pipeline";
 import type { WorkspaceDependencies } from "../modules/workspace/service";
 import { readProcessingProofs } from "./processing-proofs";
@@ -318,6 +319,52 @@ export async function runWorkspaceRuntime(
         invocation,
         observeQuotationResolution: (value) => {
           quotationResolution = safeQuotationResolution(value);
+        },
+        readMaterials: async (context, requests) => {
+          await progress.enter("retrieval");
+          const authorize = async () =>
+            (await hasCustomerWorkspaceAccess(core, params.ownerId)) &&
+            !!(await core
+              .statement(
+                "SELECT j.id FROM v2_jobs j JOIN v2_workspaces w ON w.id=? AND w.owner_id=? AND w.current_job_id=j.id AND w.revision=? WHERE j.id=? AND j.lease_token=? AND j.fencing=? AND j.lease_until>? AND j.status IN ('running','validating')",
+                [
+                  params.workspaceId,
+                  params.ownerId,
+                  params.workspaceRevision,
+                  job.id,
+                  lease.token,
+                  lease.fencing,
+                  new Date().toISOString(),
+                ],
+              )
+              .first());
+          if (!(await authorize())) throw new ModelError("MODEL_UNAVAILABLE");
+          const materials = [...context.materials];
+          const windows = [...(context.materialWindows ?? [])];
+          const seen = new Set(
+            materials.map((material) => JSON.stringify([material.reference, material.text])),
+          );
+          let bytes = new TextEncoder().encode(JSON.stringify(materials)).byteLength;
+          for (const request of requests) {
+            const window = await readMaterialWindow(
+              core,
+              { ownerId: params.ownerId, now: new Date().toISOString() },
+              params.workspaceId,
+              request,
+              MATERIAL_CONTEXT_BYTES * 2 - bytes,
+            );
+            const { materials: loaded, ...metadata } = window;
+            windows.push(metadata);
+            for (const material of loaded) {
+              const key = JSON.stringify([material.reference, material.text]);
+              if (seen.has(key)) continue;
+              seen.add(key);
+              materials.push(material);
+              bytes += new TextEncoder().encode(JSON.stringify(material)).byteLength;
+            }
+          }
+          if (!(await authorize())) throw new ModelError("MODEL_UNAVAILABLE");
+          return { ...context, materials, materialWindows: windows };
         },
         retrieve: async (context, requests) => {
           await progress.enter("retrieval");
