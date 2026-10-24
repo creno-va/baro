@@ -12,6 +12,7 @@ export const featureCaseSchema = z.enum([
   "tools_business",
   "tools_property",
   "tools_registry",
+  "legal_chat",
 ]);
 export const PROBE_REQUEST_ID = "00000000-0000-4000-8000-000000000027" as const;
 const candidateSchema = z.string().regex(/^[a-f0-9]{40}$/);
@@ -103,6 +104,12 @@ const mediaChecksSchema = z
     }),
   )
   .max(2);
+const legalChecksSchema = z.strictObject({
+  requests: z.number().int().min(0).max(9),
+  verifiedSourceCount: z.number().int().min(0).max(10),
+  acceptedQuotationCount: z.number().int().min(0).max(50),
+  sourceFailures: z.array(z.enum(["upstream_rejected", "schema_mismatch", "unavailable"])).max(2),
+});
 const reportSchema = z
   .strictObject({
     version: z.literal(PROBE_PROTOCOL_VERSION),
@@ -132,6 +139,7 @@ const reportSchema = z
     providerFailures: z.array(probeProviderFailureSchema).max(3).optional(),
     mediaChecks: mediaChecksSchema.optional(),
     policyFailure: probePolicyFailureSchema.optional(),
+    legalChecks: legalChecksSchema.optional(),
     unverified: z.tuple(
       unverified.map((value) => z.literal(value)) as [
         z.ZodLiteral<"full-product-smoke">,
@@ -154,10 +162,19 @@ const reportSchema = z
       ) &&
       report.metricCoverage ===
         (report.metrics.length === report.attempts ? "complete" : "partial") &&
+      (report.featureCase === "legal_chat" || report.legalChecks === undefined) &&
       (report.status === "passed"
         ? report.failure === null &&
           report.attempts > 0 &&
           report.metrics.at(-1)?.status === "success" &&
+          (report.featureCase !== "legal_chat" ||
+            (report.legalChecks !== undefined &&
+              report.legalChecks.requests > 0 &&
+              report.legalChecks.verifiedSourceCount > 0 &&
+              report.legalChecks.acceptedQuotationCount > 0 &&
+              report.legalChecks.sourceFailures.length === 0 &&
+              report.metrics.filter((metric) => metric.phase === "workspace_chat").length >= 2 &&
+              report.metrics.at(-1)?.phase === "workspace_audit")) &&
           (report.featureCase !== "media" ||
             (report.mediaChecks?.length === 2 &&
               report.mediaChecks[0]?.phase === "vision" &&
@@ -305,6 +322,7 @@ export interface ProbeOutcome {
   providerFailures?: z.infer<typeof probeProviderFailureSchema>[];
   mediaChecks?: z.infer<typeof mediaChecksSchema>;
   policyFailure?: z.infer<typeof probePolicyFailureSchema>;
+  legalChecks?: z.infer<typeof legalChecksSchema>;
 }
 export async function handleDurableProbe(
   request: Request,

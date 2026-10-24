@@ -35,6 +35,7 @@ import { ChatAttachments } from "./ChatAttachments";
 import { ElapsedTime } from "./ElapsedTime";
 import { FileReview } from "./FileReview";
 import { fileFailureLabel, fileProcessingLabel, uploadProgressLabel } from "./processing-progress";
+import { SourceCards } from "./SourceCards";
 import { referenceLabel, timelineDateLabel } from "./source-label";
 import { ToolResults } from "./ToolResults";
 import { timelineDateInput, timelineEventLength } from "./timeline-draft";
@@ -1079,15 +1080,7 @@ export function Workspace({
                           </ul>
                         )}
                         {!!message.citations?.length && (
-                          <ul aria-label="공식 출처">
-                            {message.citations.map((citation) => (
-                              <li key={citation.id}>
-                                <a href={citation.url} target="_blank" rel="noopener noreferrer">
-                                  {citation.title}
-                                </a>
-                              </li>
-                            ))}
-                          </ul>
+                          <SourceCards citations={message.citations} />
                         )}
                         {!!message.references?.length && (
                           <ul aria-label="답변에 사용한 자료">

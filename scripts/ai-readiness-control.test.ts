@@ -88,6 +88,56 @@ test("media reports require both semantic marker checks and model/phase agreemen
   ).toBe(false);
   expect(schema.safeParse({ ...value, observedText: "private sentinel" }).success).toBe(false);
 });
+test("legal success requires real source requests, accepted quotation and independent audit evidence", async () => {
+  const original = (await harness().send("POST")).body as Record<string, unknown>;
+  const scope = { ...provenance, featureCase: "legal_chat" as const };
+  const metric = {
+    requestId: PROBE_REQUEST_ID,
+    model: "google/gemini-3.8-flash",
+    latencyMs: 1,
+    inputTokens: 1,
+    outputTokens: 1,
+    status: "success",
+  };
+  const value = {
+    ...original,
+    ...scope,
+    attempts: 3,
+    metrics: ["workspace_chat", "workspace_chat", "workspace_audit"].map((phase) => ({
+      ...metric,
+      phase,
+    })),
+    legalChecks: {
+      requests: 2,
+      verifiedSourceCount: 1,
+      acceptedQuotationCount: 1,
+      sourceFailures: [],
+    },
+  };
+  const schema = probeReportFor(scope);
+  expect(schema.safeParse(value).success).toBe(true);
+  expect(schema.safeParse({ ...value, legalChecks: undefined }).success).toBe(false);
+  for (const key of ["requests", "verifiedSourceCount", "acceptedQuotationCount"])
+    expect(
+      schema.safeParse({ ...value, legalChecks: { ...value.legalChecks, [key]: 0 } }).success,
+    ).toBe(false);
+  expect(
+    schema.safeParse({
+      ...value,
+      legalChecks: { ...value.legalChecks, sourceFailures: ["unavailable"] },
+    }).success,
+  ).toBe(false);
+  expect(
+    schema.safeParse({
+      ...value,
+      metrics: value.metrics.map((m) => ({ ...m, phase: "workspace_chat" })),
+    }).success,
+  ).toBe(false);
+  expect(
+    probeReportFor(provenance).safeParse({ ...original, legalChecks: value.legalChecks }).success,
+  ).toBe(false);
+  expect(schema.safeParse({ ...value, legalText: "private sentinel" }).success).toBe(false);
+});
 class MemoryStorage implements ProbeStorage {
   values = new Map<string, unknown>();
   private queue: Promise<void> = Promise.resolve();

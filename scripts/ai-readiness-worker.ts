@@ -30,9 +30,11 @@ import {
 import {
   syntheticChatContext,
   syntheticIntakeContext,
+  syntheticLegalContext,
   syntheticSummaryContext,
   syntheticToolContext,
 } from "./ai-readiness-fixture";
+import { createSyntheticLegalLookup } from "./ai-readiness-legal";
 
 interface ProbeEnv extends ProbeConfiguration {
   AI: GatewayBinding;
@@ -41,6 +43,7 @@ interface ProbeEnv extends ProbeConfiguration {
   PROBE_FIXTURES: Fetcher;
   READINESS_IMAGE_SHA256: string;
   READINESS_AUDIO_SHA256: string;
+  LAW_API_OC?: string;
 }
 
 // An isolated synthetic-only Worker. No application DB, cases or OAuth credentials.
@@ -50,9 +53,14 @@ export class SyntheticProbe extends DurableObject<ProbeEnv> {
       const metrics: ProbeOutcome["metrics"] = [];
       const providerFailures: z.infer<typeof probeProviderFailureSchema>[] = [];
       const mediaChecks: NonNullable<ProbeOutcome["mediaChecks"]> = [];
+      let legal: ReturnType<typeof createSyntheticLegalLookup> | null = null;
       try {
         const active = activeProvenance(this.env);
         if (!active) throw new ModelError("MODEL_UNAVAILABLE");
+        if (active.featureCase === "legal_chat") {
+          if (!this.env.LAW_API_OC?.trim()) throw new ModelError("MODEL_UNAVAILABLE");
+          legal = createSyntheticLegalLookup(this.env.LAW_API_OC);
+        }
         if (active.featureCase === "media") {
           let meter: { inputTokens: number | null; outputTokens: number | null } = {
             inputTokens: null,
@@ -178,7 +186,26 @@ export class SyntheticProbe extends DurableObject<ProbeEnv> {
               ),
             );
           },
+          ...(legal ? { retrieve: legal.retrieve } : {}),
         });
+        if (active.featureCase === "legal_chat" && legal) {
+          const output = await pipeline.chat(syntheticLegalContext(), PROBE_REQUEST_ID);
+          const legalChecks = legal.snapshot(
+            output.sourceClaims.filter((c) => c.kind === "quotation").length,
+          );
+          const valid =
+            legalChecks.requests > 0 &&
+            legalChecks.verifiedSourceCount > 0 &&
+            legalChecks.acceptedQuotationCount > 0 &&
+            legalChecks.sourceFailures.length === 0;
+          return {
+            status: valid ? "passed" : "failed",
+            failure: valid ? null : "POLICY_REJECTED",
+            metrics,
+            providerFailures,
+            legalChecks,
+          };
+        }
         if (
           active.featureCase === "tools_business" ||
           active.featureCase === "tools_property" ||
@@ -249,6 +276,7 @@ export class SyntheticProbe extends DurableObject<ProbeEnv> {
           providerFailures,
           ...(mediaChecks.length ? { mediaChecks } : {}),
           ...(policy?.success ? { policyFailure: policy.data } : {}),
+          ...(legal ? { legalChecks: legal.snapshot(0) } : {}),
         };
       }
     });

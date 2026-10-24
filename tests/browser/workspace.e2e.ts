@@ -26,6 +26,13 @@ test("tool cards distinguish unconfigured and test responses on desktop and mobi
         text: "외부 조회의 연결 상태를 확인했어요.",
         status: "complete",
         createdAt: "2026-10-24T00:00:00.000Z",
+        citations: [
+          {
+            id: "synthetic-source",
+            title: "민법 제598조 · 출처 카드 합성 표시 검증",
+            url: "https://law.go.kr/LSW/lsInfoP.do?lsiSeq=284415",
+          },
+        ],
       },
     ];
     localStorage.setItem(key, JSON.stringify(state));
@@ -67,6 +74,12 @@ test("tool cards distinguish unconfigured and test responses on desktop and mobi
   await expect(page.getByText("테스트 응답 · 실제 조회 아님", { exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "제공 기관 안내" })).toHaveCount(2);
   await expect(page.locator(".workspace-tool-card").first().locator("time")).toHaveCount(0);
+  const source = page.getByRole("link", {
+    name: "민법 제598조 · 출처 카드 합성 표시 검증 원문 보기",
+  });
+  await expect(source).toHaveAttribute("href", "https://law.go.kr/LSW/lsInfoP.do?lsiSeq=284415");
+  await expect(source).toHaveAttribute("rel", "noopener noreferrer");
+  await source.click({ trial: true });
   await captureCaseViewports(page, "tool-results");
 });
 

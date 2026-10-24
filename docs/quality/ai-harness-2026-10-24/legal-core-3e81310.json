@@ -1,0 +1,67 @@
+{
+  "candidateSha": "3e81310aeaf0a532eb2b837ac6e479f1a656894e",
+  "checkedAt": "2026-10-24T08:05:06.818Z",
+  "environment": "preview-credential-ci-adapter",
+  "runtimeWorker": false,
+  "status": "diagnostic_passed",
+  "requests": 5,
+  "schemaVersion": "2",
+  "durationMs": 9028,
+  "reservations": 5,
+  "requestObservations": [
+    {
+      "endpoint": "statute_list",
+      "httpStatus": 200,
+      "contentType": "json",
+      "transport": "response",
+      "durationMs": 6501
+    },
+    {
+      "endpoint": "statute_detail",
+      "httpStatus": 200,
+      "contentType": "json",
+      "transport": "response",
+      "durationMs": 415
+    },
+    {
+      "endpoint": "precedent_list",
+      "httpStatus": 200,
+      "contentType": "json",
+      "transport": "response",
+      "durationMs": 327
+    },
+    {
+      "endpoint": "precedent_detail",
+      "httpStatus": 200,
+      "contentType": "json",
+      "transport": "response",
+      "durationMs": 359
+    },
+    {
+      "endpoint": "precedent_detail",
+      "httpStatus": 200,
+      "contentType": "json",
+      "transport": "response",
+      "durationMs": 573
+    }
+  ],
+  "upstreamRejections": [],
+  "outcomes": [
+    {
+      "kind": "statute",
+      "availability": "verified",
+      "reason": null
+    },
+    {
+      "kind": "precedent",
+      "availability": "verified",
+      "reason": null,
+      "searchTruncated": true
+    }
+  ],
+  "verifiedSourceCount": 3,
+  "checkedClaimCount": 3,
+  "claimIntegrity": true,
+  "scope": "core_sources",
+  "workflowRun": "https://github.com/creno-va/baro/actions/runs/40076630844"
+}

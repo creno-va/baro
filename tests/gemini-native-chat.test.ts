@@ -55,3 +55,41 @@ test("chat uses explicit native LOW while accepted simple generation requests re
     expect(providerWire(accepted)).toBe(accepted);
   }
 });
+
+test("chat numeric grammar is compact but material windows remain range-checked before use", () => {
+  const schema = prepareGatewayWireInput("workspace_chat", {}).response_format.json_schema.schema;
+  const encoded = JSON.stringify(schema);
+  for (const keyword of [
+    "minimum",
+    "maximum",
+    "exclusiveMinimum",
+    "exclusiveMaximum",
+    "multipleOf",
+  ])
+    expect(encoded).not.toContain(`"${keyword}"`);
+  const decoder = z.fromJSONSchema(schema as Parameters<typeof z.fromJSONSchema>[0]);
+  const valid = {
+    ...draft,
+    requestedMaterials: [{ fileId: "file_synthetic", fileRevision: 1, startOrdinal: 0, count: 1 }],
+  };
+  expect(workspaceChatOutputSchema.safeParse(valid).success).toBe(true);
+  for (const override of [
+    { fileRevision: 0 },
+    { startOrdinal: -1 },
+    { startOrdinal: 200001 },
+    { count: 33 },
+    { count: 0 },
+  ]) {
+    const candidate = {
+      ...valid,
+      requestedMaterials: [{ ...valid.requestedMaterials[0], ...override }],
+    };
+    expect(decoder.safeParse({ output: candidate }).success).toBe(true);
+    expect(workspaceChatOutputSchema.safeParse(candidate).success).toBe(false);
+  }
+  expect(
+    decoder.safeParse({
+      output: { ...valid, requestedMaterials: [{ ...valid.requestedMaterials[0], count: 1.5 }] },
+    }).success,
+  ).toBe(false);
+});
