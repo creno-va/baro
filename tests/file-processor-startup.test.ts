@@ -61,6 +61,20 @@ test("temporary allocation loss after destroy is retried before readiness, witho
   expect(f.state).toEqual({ running: true, starts: 3, pings: 1, idle: 1, time: 600 });
 });
 
+test("idle timeout is configured only on an allocated ready instance, including the next unit", async () => {
+  const f = fixture();
+  f.port.configureIdle = async () => {
+    if (!f.state.running) throw unavailable();
+    expect(f.state.pings).toBeGreaterThan(0);
+    f.state.idle++;
+  };
+  await f.run();
+  f.state.running = false;
+  await f.run();
+  expect(f.state.starts).toBe(2);
+  expect(f.state.idle).toBe(2);
+});
+
 test("asynchronous unavailable allocation can restart within the same bounded readiness phase", async () => {
   const f = fixture();
   f.port.ready = async () => {
@@ -117,9 +131,34 @@ test("provider rate refusal and idle configuration failure are not retried", asy
         throw new Error("you are requesting too many containers per second");
       };
     await expect(f.run()).rejects.toThrow();
-    expect(f.state.starts).toBe(phase === "idle" ? 0 : 1);
-    expect(f.state.pings).toBe(0);
+    expect(f.state.starts).toBe(1);
+    expect(f.state.pings).toBe(phase === "idle" ? 1 : 0);
   }
+});
+
+test("exit during idle configuration cannot admit source after a stale healthy ping", async () => {
+  const f = fixture();
+  f.port.configureIdle = async () => {
+    f.state.running = false;
+    f.monitors[0]?.reject(new Error("Container exited while setting idle timeout"));
+  };
+  await expect(f.run()).rejects.toThrow("Container exited");
+  expect(f.state.starts).toBe(1);
+});
+
+test("cancellation interrupts pending idle configuration without starting another process", async () => {
+  const f = fixture(),
+    signal = new AbortController(),
+    entered = pending();
+  f.port.configureIdle = async () => {
+    entered.resolve();
+    await pending().promise;
+  };
+  const execution = f.run(signal.signal);
+  await entered.promise;
+  signal.abort();
+  await expect(execution).rejects.toThrow("ABORTED");
+  expect(f.state.starts).toBe(1);
 });
 
 test("unavailable allocation stays within15seconds and50 start commands", async () => {

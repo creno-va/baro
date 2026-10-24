@@ -57,3 +57,33 @@ with DB_OPERATION_FAILED after3.248s. This proves one actual direct-API extract,
 not a multi-unit restart or accurate transcript/ready file. No unchanged-condition
 retry was sent. PDF/video acceptance remains outstanding. The subsequent retained
 snapshot-version collision regression is recorded in the AI harness repair log.
+
+
+## Idle timeout order after a confirmed allocation
+
+The changed da9 PDF retry started14:52:26Z. Its first extract8.581s, interpret2.305s
+and unit preparation2.306s succeeded; extract1 failed1.137s at14:52:41Z. The
+existing sanitized Worker event at14:52:41.156Z reports startup /
+instance_unavailable /196ms. No unchanged-condition retry was sent.
+
+Code inspection found configureIdle/setInactivityTimeout was called before start.
+[Cloudflare's API documentation](https://developers.cloudflare.com/containers/api/durable-object-container/#setinactivitytimeout)
+requires setting this on the instance after start. A new two-unit regression that
+rejects idle configuration while no instance exists reproduces the same
+unavailable failure before any start. This identifies an actual ordering error;
+final live PDF success still requires changed-preview acceptance.
+
+The helper now configures the unchanged300000ms idle timeout only after a
+successful readiness probe. The existing persisted cleanup deadline is already
+armed throughout startup. Idle-setting failure does not restart a process or
+retry configuration; cancellation/deadline, the current generation's monitor and
+actual running state are rechecked after the asynchronous idle call, before
+private bytes can be dispatched. The15s/50-start,20s/67-poll/5s-ping and physical
+single-instance limits stay unchanged.
+
+The15 startup cases pass, including the exact ordering red→green, exit during
+idle configuration and cancellation of a hung idle call. The actual-class
+workerd mock now rejects before-start idle calls too, and same-name next-unit
+processing passes. Focused23 tests across3 files/106 assertions pass; the native
+port is still mocked and no live VM/PDF success is inferred. Broad validation,
+exact-head CI and integrated same-SHA preview acceptance remain outstanding.

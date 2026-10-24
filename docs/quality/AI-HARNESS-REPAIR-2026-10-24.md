@@ -684,3 +684,18 @@ This local test is not actual Container/STT/vision success. The canonical
 one/two-page fixture adds exactly one DB call/SQL (655/839 and1161/1466), keeping
 312/561 original authorization boundaries. Final broad checks, exact-head CI and
 changed-preview ready media acceptance remain outstanding.
+
+
+PR497 exactb08e5c9 passed frozen/finalquick303/full4212 across385 files with172781
+assertions, DB schema/fresh/upgrade and build/local built Worker. CI40104481099
+passed; normal squash main ebd90a0935e6783f5e7738fed482c3425537cadd passed
+mainCI40104728606. This does not claim that the changed product retry is ready.
+
+Meanwhile a single changed-condition da9 PDF attempt passed extract0/interpret0
+but failed extract1 at14:52:41Z. The normalized startup event was
+instance_unavailable196ms. The follow-up
+[native ordering repair](./NATIVE-STARTUP-REPAIR-2026-10-24.md#idle-timeout-order-after-a-confirmed-allocation)
+reproduces an idle-before-start error and moves idle configuration after
+confirmed readiness with unchanged cleanup, cancellation and physical limits.
+The RN session keeps the main merge interval while these independent fixes are
+integrated for one final same-SHA preview. No source failure or original is removed.
