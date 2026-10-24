@@ -1470,3 +1470,33 @@ Zod3 high2개를 보존한다. 전체 unit3803개는 보안 producer에서 통�
 후보의 최종 exact PR/main CI 뒤 새 Simulator compiler를 요청하여 native3파일이 실제
 소스에서 compile됐는지 인수한다. 기존4ba1d39 pin은 새 성공 원본과 별도이며 아직 바꾸지
 않았다. 새 native compile/앱 literal·소프트 Search·회전 및 한국어/전체 기기/릴리스는 미검증이다.
+
+### source6201112의 새 Android 성공 원본
+
+[Android compiler40063714258](https://github.com/creno-va/baro/actions/runs/40063714258)은
+terminal SUCCESS다. 성공 source/run·artifact12548457928 provenance와
+[원본 receipt](../quality/mobile-internal-android-2026-10-24/compiler-receipt-6201112.json)의
+SHA256 `4d667d8c0b8ce8d555955033fca8ca47eb78b398b2b562a89c3d40a2e19cada0`를 대조했다.
+APK57,136,454bytes/full SHA256은 `8da42d2bef195281d6c9523264fe4339501361b17d9aa3e08d8981cf4f2e98c4`다.
+
+[독립 대조](../quality/mobile-internal-android-2026-10-24/compiler-independent-6201112.json)는
+원본 full byte·actual aapt2 package/version0.1.0/build1/min24·arm64-v8a+x86_64/non-debug,
+HBC3,572,932bytes/a767b40d…·graph1456·font byte/400·600·700/OFL·map/key 부재를 확인했다.
+compiler SDK37.0.0 cert attestation을 보존하며 local certificateIndependentReadback=false다.
+후속 fresh SDK signature 재검증이 필요하다. 원본 APK/receipt는 내부 전달 경로
+`.wrangler/mobile-delivery/6201112/android`에 byte 그대로 보존했다.
+
+[local export와의 비교](../quality/cli-zod-2026-10-24/android-compiler-comparison.json)는 같은
+source의 local HBC3,572,976bytes/747df74d…와 full byte/hash가 다름을 기록한다.
+정규화·차이 원인 확정이나 local graph→compiler proof 인수는 하지 않는다. 제품 pin만
+새 성공 compiler로 갱신하고 exact main CI 후 Launcher/Home·실제 software Search·회전을
+새 원본에서 검증한다. iOS40063716187은 같은 handle에서 계속 compile 중이며 성공 원본
+전에는 기존4ba1d39 pin/receipt를 바꾸거나 새 iOS backport 앱으로 재명명하지 않는다.
+
+CLI Zod3의 bounded schema/local graph [독립 관측](../quality/CLI-ZOD-OBSERVATION-2026-10-24.md)도
+같이 보존한다. 이는 앱/공통 계약·의존성 변경이 없는 검증 자료이며 source6201112의
+bundled-input parity를 유지한다. raw audit high2·한국어/reader·전체 역할/화면·계정/API·
+physical/store·#334/#379/#346/#339/#71 인수는 계속 OPEN이다.
+
+Android pin 추가 뒤 관련36개/3파일·frozen 설치를 유지한 quick121개/24파일(1568 assertions)과
+모바일/공통419개·RN88개가 통과했다. pin은 검증 입력이며 제품 binary를 바꾸지 않는다.
