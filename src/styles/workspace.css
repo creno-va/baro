@@ -1316,3 +1316,20 @@
   margin: 0;
   overflow-wrap: anywhere;
 }
+.workspace-source-cards {
+  display: grid;
+  gap: 8px;
+  padding: 0;
+  list-style: none;
+}
+.workspace-source-card {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow-wrap: anywhere;
+}
+.workspace-source-cards a {
+  justify-self: start;
+}
