@@ -6,9 +6,11 @@ import {
   PROBE_PROTOCOL_VERSION,
   ProbeControlError,
   type ProbeReply,
+  probePostTimeoutMs,
   verifyProbeExchange,
 } from "./ai-readiness-control";
 import { deleteSyntheticLawCredential } from "./ai-readiness-secrets";
+import { prepareVideoAssets } from "./ai-readiness-video";
 
 async function git(args: string[]): Promise<string> {
   const child = Bun.spawn(["git", ...args], { stdout: "pipe", stderr: "pipe" });
@@ -40,6 +42,10 @@ try {
       "scripts/ai-readiness-legal.ts",
       "scripts/ai-readiness-secrets.ts",
       "scripts/run-ai-readiness.ts",
+      "scripts/ai-readiness-video.ts",
+      ...(featureCase === "video_media"
+        ? ["services/file-processor", "tests/fixtures/media/scenes-speech.mp4"]
+        : []),
       "tests/fixtures/media/image-markers.jpg",
       "tests/fixtures/media/speech-ko.wav",
       "src/server",
@@ -66,6 +72,11 @@ try {
         .digest("hex"),
     })),
   );
+  const fixtureDirectory = resolve(".wrangler/goal/ai-probe-fixtures");
+  const videoHashes =
+    featureCase === "video_media"
+      ? await prepareVideoAssets(resolve(".wrangler/goal/ai-native-video"), fixtureDirectory)
+      : null;
   const probeHash = new Bun.CryptoHasher("sha256")
     .update(
       JSON.stringify({
@@ -73,6 +84,7 @@ try {
         featureCase,
         protocolVersion: PROBE_PROTOCOL_VERSION,
         sourceManifest,
+        ...(videoHashes ? { videoHashes } : {}),
       }),
     )
     .digest("hex");
@@ -84,7 +96,7 @@ try {
   definition.vars.READINESS_CANDIDATE_SHA = candidate;
   definition.vars.READINESS_FEATURE_CASE = featureCase;
   definition.vars.READINESS_PROBE_SHA256 = probeHash;
-  const fixtureDirectory = resolve(".wrangler/goal/ai-probe-fixtures");
+  if (videoHashes) Object.assign(definition.vars, videoHashes);
   for (const [name, variable] of [
     ["image-markers.jpg", "READINESS_IMAGE_SHA256"],
     ["speech-ko.wav", "READINESS_AUDIO_SHA256"],
@@ -160,7 +172,7 @@ try {
     const response = await fetch(`${origin}/probe`, {
       method,
       headers: { authorization: `Bearer ${token}` },
-      signal: AbortSignal.timeout(method === "POST" ? 190_000 : 10_000),
+      signal: AbortSignal.timeout(method === "POST" ? probePostTimeoutMs(featureCase) : 10_000),
     });
     return { status: response.status, body: await response.json().catch(() => null) };
   };
@@ -190,7 +202,9 @@ try {
   });
   await Bun.write(
     ".wrangler/readiness/ai.json",
-    `${JSON.stringify({ ...report, authenticationChecked: true, replayRejected: true, sourceManifest }, null, 2)}\n`,
+    // The full private manifest still binds the probe digest. Media fixture
+    // receipts prohibit publishing their individual input/frame/audio hashes.
+    `${JSON.stringify({ ...report, authenticationChecked: true, replayRejected: true, sourceManifest: sourceManifest.filter((item) => !item.path.startsWith("tests/fixtures/media/")), fixtureHashesWithheld: true }, null, 2)}\n`,
   );
   console.log(
     JSON.stringify({

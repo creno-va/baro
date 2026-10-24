@@ -76,6 +76,9 @@ export interface ModelMetric {
   outputTokens: number | null;
   status: "success" | "failed";
 }
+/** Existing workspace phase limit, shared with its isolated acceptance harness.
+ * Legacy callers retain the gateway's separate 60-second default. */
+export const WORKSPACE_MODEL_TIMEOUT_MS = 120_000;
 function wireSchema(schema: unknown, compactNumbers = false): unknown {
   if (Array.isArray(schema)) return schema.map((value) => wireSchema(value, compactNumbers));
   if (schema && typeof schema === "object") {
