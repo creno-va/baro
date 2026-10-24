@@ -1,5 +1,5 @@
 import { ApiError } from "@baro/api-client";
-import type { AccountType, Provider } from "@baro/client-core";
+import type { AccountType, MobileProvider } from "@baro/client-core";
 import {
   type MobileReauthReceipt,
   mobileAuthAttemptIdSchema,
@@ -16,7 +16,8 @@ export interface PendingAuthAttempt {
   verifier: string;
   createdAt: number;
   accountType: AccountType;
-  provider: Provider;
+  provider: MobileProvider;
+  contractVersion?: 2;
   purpose: "login" | "reauthenticate";
   reauthentication?: MobileReauthReceipt;
 }
@@ -78,18 +79,21 @@ export function parseNativeAuthReturn(raw: string, config: MobileConfig): Native
 function parseAttempt(input: unknown): PendingAuthAttempt | null {
   if (!input || typeof input !== "object" || Array.isArray(input)) return null;
   const value = input as Record<string, unknown>;
+  const expectedKeys = ["accountType", "attemptId", "createdAt", "provider", "purpose", "verifier"];
+  if (value.purpose === "reauthenticate") expectedKeys.push("reauthentication");
+  if (value.contractVersion === 2) expectedKeys.push("contractVersion");
   if (
-    Object.keys(value).sort().join(",") !==
-      (value.purpose === "reauthenticate"
-        ? "accountType,attemptId,createdAt,provider,purpose,reauthentication,verifier"
-        : "accountType,attemptId,createdAt,provider,purpose,verifier") ||
+    Object.keys(value).sort().join(",") !== expectedKeys.sort().join(",") ||
     !mobileAuthAttemptIdSchema.safeParse(value.attemptId).success ||
     !mobileAuthVerifierSchema.safeParse(value.verifier).success ||
     typeof value.createdAt !== "number" ||
     !Number.isSafeInteger(value.createdAt) ||
     value.createdAt < 0 ||
     (value.accountType !== "customer" && value.accountType !== "lawyer") ||
-    (value.provider !== "google" && value.provider !== "naver" && value.provider !== "kakao") ||
+    (value.provider !== "google" &&
+      value.provider !== "naver" &&
+      value.provider !== "kakao" &&
+      !(value.provider === "apple" && value.contractVersion === 2)) ||
     (value.purpose !== "login" && value.purpose !== "reauthenticate")
   )
     return null;

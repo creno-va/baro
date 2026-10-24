@@ -171,3 +171,29 @@ test("native entropy/S256 encoding matches independent bytes and the PKCE refere
       }),
     ).rejects.toMatchObject({ code: "UNAVAILABLE" });
 });
+
+test("v2 attempts retain the negotiated version across cold starts; legacy records remain byte compatible", async () => {
+  const f = fixture();
+  await f.store.put(attempt);
+  expect(f.disk.get("baro_preview_auth_attempt")).toBe(JSON.stringify(attempt));
+  for (const provider of ["google", "naver", "kakao", "apple"] as const) {
+    const input = { ...attempt, provider, contractVersion: 2 as const };
+    await f.store.put(input);
+    const cold = createPendingAuthStore({
+      key: "baro_preview_auth_attempt",
+      now: () => 1001,
+      storage: f.storage,
+    });
+    expect(await cold.load()).toEqual(input);
+  }
+  for (const input of [
+    { ...attempt, provider: "apple" },
+    { ...attempt, contractVersion: 1 },
+    { ...attempt, contractVersion: 3 },
+    { ...attempt, contractVersion: "2" },
+    { ...attempt, provider: "other", contractVersion: 2 },
+  ]) {
+    f.disk.set("baro_preview_auth_attempt", JSON.stringify(input));
+    expect(await f.store.load()).toBeNull();
+  }
+});
