@@ -17,6 +17,7 @@ import {
   runIosAuthCancelUiTest,
   verifyIosAuthCancelReceipt,
 } from "./mobile-ios-auth-cancel";
+import { resolveIosDeviceProfile, selectIosProfileDevice } from "./mobile-ios-device-profile";
 import {
   iosDirectoryBaseSchema,
   type iosDirectoryReceiptSchema,
@@ -54,6 +55,13 @@ async function main() {
     { home, largeFont, uiTest, accessibilityAudit, authCancel, publicDirectory } = options,
     inputReference = "inputReference" in options && options.inputReference === true,
     koreanDirectory = "koreanDirectory" in options && options.koreanDirectory === true;
+  const deviceProfile = resolveIosDeviceProfile(process.env.BARO_IOS_DEVICE_PROFILE, {
+    home,
+    authCancel,
+    publicDirectory,
+    inputReference,
+    koreanDirectory,
+  });
   const root = process.cwd(),
     env = internalIosEnvironment(process.env),
     tooling = env.TARGET_SHA as string,
@@ -237,7 +245,7 @@ async function main() {
       types = JSON.parse(await command(["xcrun", "simctl", "list", "devicetypes", "--json"]))
         .devicetypes as { identifier: string; name: string }[];
     const runtime = runtimes.filter((r) => r.isAvailable && r.identifier.includes(".iOS-")).at(-1),
-      type = types.find((t) => t.name === "iPhone 16");
+      type = selectIosProfileDevice(types, deviceProfile.model);
     if (!runtime || !type) throw new Error("INTERNAL_IOS_RUNTIME_REQUIRED");
     const name = `baro_runtime_${randomUUID().replaceAll("-", "").slice(0, 12)}`;
     device = await command([
@@ -520,6 +528,7 @@ async function main() {
           device,
           command,
           accessibilityAudit,
+          tablet: deviceProfile.tablet,
         });
         if (guardRequests) throw Error("INTERNAL_IOS_UNEXPECTED_METRO_REQUEST");
         const proof = verifyIosHomeUiReceipt(

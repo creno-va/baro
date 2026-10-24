@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "kind": "local-preserved-os-keyboard-reference-only",
+  "verifiedAt": "2026-10-24T17:14:41.691Z",
+  "workflowRunId": 40114158334,
+  "workflowConclusion": "success",
+  "artifactId": 12567913102,
+  "toolingSourceSha": "eb7ea62bb7edf978ea54048de05e7937ecbf776a",
+  "receiptSha256": "0fdadf4ce94fead300fc41f65794a0e9e74405c47780cd3331bee9908ea41b1b",
+  "cleanupSha256": "531c010ce362360c6d87f0bd8bfc9c0ea6a29ead21a8b00c6c88c8f8861a78db",
+  "originalRunnerSourceHashesVerified": true,
+  "device": {
+    "kind": "owned-simulator",
+    "model": "iPhone 16",
+    "osVersion": "26.5"
+  },
+  "publicOsControlCount": 12,
+  "separateKeyboardButtonCount": 1,
+  "addToEnglishChoiceObserved": true,
+  "productAbsentBeforeAndAfter": true,
+  "simulatorDeleted": true,
+  "privateResultsRemoved": true,
+  "layoutSelected": false,
+  "productInputVerified": false,
+  "koreanKeyboardVerified": false,
+  "physicalDeviceVerified": false,
+  "oauthVerified": false
+}
