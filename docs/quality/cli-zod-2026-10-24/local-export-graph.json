@@ -1,0 +1,39 @@
+{
+  "observedAt": "2026-10-24T04:57:29.941Z",
+  "sourceSha": "6201112438fea33ef761c053dfdc9fa500cbd407",
+  "kind": "local-product-export-zod-source-graph",
+  "observations": [
+    {
+      "platform": "android",
+      "sourceModules": 1456,
+      "hbcBytes": 3572976,
+      "hbcSha256": "747df74d5ee76e751eb843ea2fd7acba85b37c0f557168360794c66b546b8c8d",
+      "sourceMapSha256": "f9a5f6048f9e3f800c3ed8319fd4ae3a1cb8cbb09e03e40c1675f7f74498e3dd",
+      "sourceContentEntries": 1456,
+      "legacyZodSourceCount": 0,
+      "productZod4SourceCount": 93,
+      "expoCliSourceCount": 1,
+      "localExportOnly": true,
+      "compiledArtifactMatched": false
+    },
+    {
+      "platform": "ios",
+      "sourceModules": 1465,
+      "hbcBytes": 3584844,
+      "hbcSha256": "ad92f98cae16fca558adbc7165d0d9d3106c75a39bd0f4dba9167eaeb50c3454",
+      "sourceMapSha256": "b1ba027f838da4b3fc86a14a0e7d90c8f5b6ac93562c2ba8088fb909076182f7",
+      "sourceContentEntries": 1465,
+      "legacyZodSourceCount": 0,
+      "productZod4SourceCount": 93,
+      "expoCliSourceCount": 1,
+      "localExportOnly": true,
+      "compiledArtifactMatched": false
+    }
+  ],
+  "rawAuditPassed": false,
+  "remoteApiVerified": false,
+  "physicalDeviceVerified": false,
+  "rawSourceMapsPublished": false,
+  "sourceMapsGeneratedLocally": true,
+  "observedCliRuntimeModule": "@expo/cli/build/metro-require/require.js"
+}

@@ -1,0 +1,47 @@
+{
+  "observedAt": "2026-10-24T04:53:39.187Z",
+  "kind": "bounded-cli-zod-schema-observation",
+  "cliVersion": "58.1.14",
+  "cliZodVersion": "3.25.76",
+  "productZodVersion": "4.6.6",
+  "pluginAccepted": true,
+  "validOutputAccepted": true,
+  "commandAccepted": true,
+  "unknownCommandRejected": true,
+  "extraCommandFieldRejected": true,
+  "constrainedLegacy": {
+    "rejected": true,
+    "elementVisits": 512,
+    "issues": 513
+  },
+  "constrainedProduct": {
+    "rejected": true,
+    "elementVisits": 0,
+    "issues": 1
+  },
+  "malformedOutputs": [
+    {
+      "syntheticElements": 128,
+      "rejected": true,
+      "topLevelIssues": 128
+    },
+    {
+      "syntheticElements": 256,
+      "rejected": true,
+      "topLevelIssues": 256
+    },
+    {
+      "syntheticElements": 512,
+      "rejected": true,
+      "topLevelIssues": 512
+    }
+  ],
+  "arbitraryLargeInputTested": false,
+  "peakMemoryProven": false,
+  "networkStarted": false,
+  "devServerStarted": false,
+  "providerCalled": false,
+  "rawValuesExported": false,
+  "rawAuditPassed": false,
+  "entireCliReachabilityProven": false
+}
