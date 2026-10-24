@@ -15,6 +15,7 @@ const codes = [
   "ANDROID_DIRECTORY_IDENTITY_MISMATCH",
   "ANDROID_DIRECTORY_BOUNDARY_REQUIRED",
   "ANDROID_DIRECTORY_OWNED_EMULATOR_REQUIRED",
+  "ANDROID_DIRECTORY_RUNTIME_PROFILE_UNVERIFIED",
   "ANDROID_DIRECTORY_HIERARCHY_INVALID",
   "ANDROID_DIRECTORY_DUMP_OUTPUT_INVALID",
   "ANDROID_DIRECTORY_DISPLAY_INVALID",
@@ -359,6 +360,7 @@ export interface AndroidDirectoryDiagnostic {
   displayShape: ReturnType<typeof androidDirectoryDisplayShape> | null;
   input: { present: boolean; focused: boolean; retained: boolean } | null;
   softwareSearchBeforeTap: ReturnType<typeof androidDirectorySoftwareSearch>["diagnostic"] | null;
+  imeHierarchyMode: "compressed" | "uncompressed-aosp";
   primaryFailureCode: ReturnType<typeof androidDirectoryFailureCode> | null;
   rotationRestoreFailureCode: ReturnType<typeof androidDirectoryFailureCode> | null;
   hierarchyCleanupFailureCode: ReturnType<typeof androidDirectoryFailureCode> | null;
@@ -370,6 +372,11 @@ export async function observeAndroidDirectoryInput(context: {
   freshOwnedEmulator: boolean;
   screenshotsSuppressed: boolean;
   captureBoundaryEntered: boolean;
+  runtimeProfile?: {
+    kind: "aosp-api35" | "google-apis-api35";
+    avdImageReadbackVerified: boolean;
+    runtimeApiReadbackVerified: boolean;
+  };
   diagnostic: (value: AndroidDirectoryDiagnostic) => void;
 }) {
   if (!context.screenshotsSuppressed || !context.captureBoundaryEntered)
@@ -380,6 +387,15 @@ export async function observeAndroidDirectoryInput(context: {
     !/^baro_runtime_[a-f0-9]{12}$/.test(context.avdName)
   )
     throw Error("ANDROID_DIRECTORY_OWNED_EMULATOR_REQUIRED");
+  const profile = context.runtimeProfile;
+  if (
+    profile &&
+    (!profile.avdImageReadbackVerified ||
+      !profile.runtimeApiReadbackVerified ||
+      (profile.kind !== "aosp-api35" && profile.kind !== "google-apis-api35"))
+  )
+    throw Error("ANDROID_DIRECTORY_RUNTIME_PROFILE_UNVERIFIED");
+  const imeHierarchyMode = profile?.kind === "aosp-api35" ? "uncompressed-aosp" : "compressed";
   const shell = context.shell,
     file = `/sdcard/baro-directory-${randomUUID()}.xml`;
   let stage: AndroidDirectoryDiagnostic["stage"] = "prepare";
@@ -395,6 +411,7 @@ export async function observeAndroidDirectoryInput(context: {
       display: lastDisplay,
       displayShape: lastDisplayShape,
       softwareSearchBeforeTap,
+      imeHierarchyMode,
       primaryFailureCode,
       rotationRestoreFailureCode,
       hierarchyCleanupFailureCode,
@@ -418,7 +435,8 @@ export async function observeAndroidDirectoryInput(context: {
       const dumped = await shell([
         "uiautomator",
         "dump",
-        "--compressed",
+        // Keep normal app snapshots compressed; only the verified AOSP IME gets full nodes.
+        ...(!allWindows || imeHierarchyMode === "compressed" ? ["--compressed"] : []),
         ...(allWindows ? ["--windows"] : []),
         file,
       ]);

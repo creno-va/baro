@@ -1794,3 +1794,23 @@ PackageManager 두 handler, Launcher3/Pixel의 기존 연속3 sample·오류 dia
 키보드 설치나 사용자 기기 설정 변경은 하지 않는다. 실제 성공은 exact CI/main 뒤 별도
 실행으로 검증하며 새 profile 준비를 ANR 원인 해결·Gboard/Korean·OAuth·물리 기기 인수로
 확대하지 않는다.
+
+### AOSP 검색 키 계층 조회 보완
+
+[실제 AOSP40127019803](https://github.com/creno-va/baro/actions/runs/40127019803)은
+image/API readback·Launcher3 연속3회·Home cold2를 통과한 뒤, ASCII 입력 후 검색 키 후보0으로
+실패했다. 검색 키 tap·회전·Home 복귀와 한글 입력은 성공하지 않았다.
+
+[공식 DumpCommand](https://android.googlesource.com/platform/prebuilts/fullsdk/sources/+/88c7ff1cd72d6305ec59f97aadc2198cc2dc3592/android-34/com/android/commands/uiautomator/DumpCommand.java)는
+`--compressed` 여부에 따라 압축 계층을 설정한다.
+[Android15 LatinIME node provider](https://android.googlesource.com/platform/packages/inputmethods/LatinIME/+/refs/heads/android15-release/java/src/com/android/inputmethod/accessibility/KeyboardAccessibilityNodeProvider.java)는
+virtual key에 ACTION_CLICK을 추가하지만 clickable flag를 직접 설정하지 않는다.
+[조회 시각·원문 hash](../quality/ANDROID-IME-SOURCE-OBSERVATION-2026-10-25.json)는 정적 소스 관측이며,
+이 실행의 후보0 원인을 확정하거나 live node/action 성공을 증명하지 않는다.
+
+검증된 AOSP profile·AVD image·실제 API readback 조건에서 IME의 `--windows` 조회만 비압축으로
+수행한다. 일반 앱 계층과 기본 Google profile은 기존 압축 조회를 유지한다. 고정 진단에는
+현재 IME 노드·AOSP key·검색 key 개수와 실제 clickable flag만 추가하며, raw label·package·
+좌표·계층은 내보내지 않는다. class 일치만으로 클릭 가능하다고 처리하지 않는다.
+유일하고 enabled/clickable인 현재 IME 검색 키·실제 tap·키보드 닫힘·검색 결과·회전·Home 복귀의
+성공 조건은 유지한다. 후보가 없으면 실패하며 Enter나 고정 좌표로 대체하지 않는다.
