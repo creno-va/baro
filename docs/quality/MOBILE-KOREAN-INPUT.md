@@ -329,3 +329,32 @@ iPhone16/iOS26.5의 cold2/Metro0·원본 ZIP/receipt와 익명 Home PNG221,548by
 원래 failure의 nativeProcessLaunchVerified=false 등은 고치지 않는다. 다음은 전환 제어의
 system keyboard 영역·유일한 조작 owner와 bounded diagnostic을 확인하는 도구 보완이며,
 실제6자모/4checkpoint·공백/삭제/추가·Search/회전 인수를 유지한다.
+
+### iOS 전환 제어의 system keyboard 영역 준비
+
+고정 `Next keyboard` label은 유지하면서 app의 button/key 후보를 실제 software keyboard와
+그 아래 dock 영역으로 제한한다. portrait 창·충분한 keyboard 폭/높이·finite frame,
+95% 창 내부 노출과 hittable을 확인하며 keyboard 위의 앱 제어는 제외한다.
+각 유형의 유일한 owner만 허용하고 button/key alias는 양쪽 최대 폭/높이 기준95% 겹쳐야 한다.
+첫 전역 제어를 임의로 탭하지 않으며 raw 후보는 유형별 최대8개다.
+
+고정 scope·시도1~3·raw/eligible 개수·유형·겹침/영역/foreground/keyboard/actionAllowed bool만
+진단에 남긴다. 좌표·label·입력값·계층/화면/xcresult는 export하지 않는다. 이전 실패에 없는
+새 진단은 optional이며 과거 결과를 성공으로 다시 읽지 않는다. 실제 Swift의 순수 geometry
+함수를 Apple Foundation/CoreGraphics에서 직접 컴파일해 dock/내부/위쪽 앱 제어·중복/분리·
+잘못된 창·경계/비유한 frame·owner index를 검증한다. 이 검사는 실제 UIKit 제어 인수가 아니다.
+최대3회 언어 전환과 실제6자모/4checkpoint·수정/Search/회전은 유지하며 전환 뒤 실제 jamo
+노출만 bounded3초 확인한다. 새 exact CI/main 뒤 후속 실제 실행으로 결과를 확인한다.
+
+### 등록 준비 뒤 Gboard 설정 scope의 실제 실패
+
+[40127021886](https://github.com/creno-va/baro/actions/runs/40127021886)은 source4e7cd87에서
+FAILURE다. 등록 진단은 sample1/default component/complete였고, 이후 Settings 참고가
+`ANDROID_IME_REFERENCE_SETTINGS_SCOPE_REQUIRED`로 멈췄다. 이전 default 형식 실패를 재현한
+결과가 아니며, 대기를 실제 소비했거나 이전 실패 원인을 해결했다고도 단정하지 않는다.
+[원본 failure](./mobile-keyboard-reference-40127021886/failure.json),
+[cleanup](./mobile-keyboard-reference-40127021886/cleanup.json),
+[결합](./mobile-keyboard-reference-40127021886/local-preservation.json)을 보존한다.
+제목/메뉴의 raw 값·개수가 남지 않아 정확한 scope 거절 원인은 미확정이다. 언어 선택·제품
+입력은 하지 않았고 정리는 통과했다. 다음은 controlled OS 참고 진단의 보완이며 같은
+실패 조건을 그대로 반복하거나 모르는 제어를 탭해 인수하지 않는다.

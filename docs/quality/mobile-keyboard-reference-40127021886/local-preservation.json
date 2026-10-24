@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "kind": "local-gboard-settings-scope-failure-source-binding",
+  "verifiedAt": "2026-10-24T20:02:26.431106+00:00",
+  "toolingSourceSha": "4e7cd8759f7f683b0532a2dff65f75a50c070f99",
+  "workflowRunId": 40127021886,
+  "artifactId": 12572983167,
+  "workflowConclusion": "failure",
+  "referenceWorkflowProvenanceVerified": true,
+  "failureSha256": "b2c6bd7745463e3f4a6d43b7ab2ac5b36a5df8a4e64b13f1892f3e1d85c58895",
+  "cleanupSha256": "1a9e1ad2a32f6ff2b2adfc28459b83fa16bcaf7c388d78a4ac9816ea9d582979",
+  "toolSourceSha256": "443c45e30ff869cd7d58958852cde30d9b15b60fa0420088ab42e6f15dc4136d",
+  "observedFailure": {
+    "phase": "gboard-settings-reference",
+    "code": "ANDROID_IME_REFERENCE_SETTINGS_SCOPE_REQUIRED"
+  },
+  "imeRegistrationDiagnostic": {
+    "stage": "complete",
+    "defaultState": "component",
+    "samples": 1,
+    "uninitializedSamples": 0,
+    "emptyInventoryObserved": false,
+    "defaultUnregisteredObserved": false,
+    "failureCode": null
+  },
+  "rawTitleOrMenuValuesPreserved": false,
+  "exactScopeFailureCauseConfirmed": false,
+  "settingsScopeVerified": false,
+  "languageSelected": false,
+  "productInputVerified": false,
+  "physicalDeviceVerified": false,
+  "emulatorExited": true,
+  "avdDeleted": true,
+  "privateFilesRemoved": true
+}
