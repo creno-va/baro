@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test";
 import {
+  androidGboardSettingsActivity,
+  androidGboardSettingsControls,
   androidImeReferenceConfiguration,
   assertAndroidImeProductAbsent,
   inspectAndroidImeInventory,
@@ -135,4 +137,106 @@ test("explicit tooling source survives the isolated child environment without fo
   expect(() => androidImeReferenceConfiguration({ ...input, ANDROID_HOME: undefined })).toThrow(
     "ANDROID_IME_REFERENCE_EXPLICIT_SDK_SOURCE_REQUIRED",
   );
+});
+
+const settingsClass = "com.google.android.apps.inputmethod.latin.preference.SettingsActivity";
+const settingsComponent = `com.google.android.inputmethod.latin/${settingsClass}`;
+const settingsForeground = `topResumedActivity=ActivityRecord{synthetic u0 ${settingsComponent} t12}`;
+const settingsDump = () =>
+  dump(google, [{ locale: "en_US", tag: "en-US" }]).replace(
+    "private-reference-only",
+    settingsClass,
+  );
+function settingsXml(overrides = "") {
+  return `<?xml version="1.0"?><hierarchy><node package="com.google.android.inputmethod.latin" class="android.widget.TextView" enabled="true" text="Gboard"/><node package="com.google.android.inputmethod.latin" class="android.widget.TextView" enabled="true" text="Languages"/><node package="com.google.android.inputmethod.latin" class="android.widget.TextView" enabled="true" text="Preferences"/>${overrides}</hierarchy>`;
+}
+test("the Settings reference uses the selected SDK Gboard's explicit metadata activity, never a guessed or external component", () => {
+  expect(androidGboardSettingsActivity(settingsDump(), google)).toBe(settingsComponent);
+  expect(
+    androidGboardSettingsActivity(
+      settingsDump().replace(settingsClass, ".SettingsActivity"),
+      google,
+    ),
+  ).toBe(
+    "com.google.android.inputmethod.latin/com.google.android.inputmethod.latin.SettingsActivity",
+  );
+  expect(() => androidGboardSettingsActivity(dump(aosp, []), aosp)).toThrow(
+    "ANDROID_IME_REFERENCE_GBOARD_DEFAULT_REQUIRED",
+  );
+  for (const activity of ["null", "", "other.app/Injected", "$(synthetic)", "a".repeat(257)])
+    expect(() =>
+      androidGboardSettingsActivity(settingsDump().replace(settingsClass, activity), google),
+    ).toThrow();
+  expect(() =>
+    androidGboardSettingsActivity(
+      settingsDump().replace(
+        settingsClass,
+        `${settingsClass} mSettingsActivityName=${settingsClass}`,
+      ),
+      google,
+    ),
+  ).toThrow();
+});
+test("only fixed public menu counts leave the foreground SDK Settings scope, never arbitrary labels or EditText contents", () => {
+  const xml = settingsXml(
+    '<node package="com.google.android.inputmethod.latin" class="android.widget.EditText" enabled="true" text="synthetic-private-field"/><node package="com.google.android.inputmethod.latin" class="android.widget.TextView" enabled="true" text="synthetic-unknown-label"/><node package="other.app" class="android.widget.TextView" enabled="true" text="Theme"/>',
+  );
+  const result = androidGboardSettingsControls(xml, settingsForeground, settingsComponent);
+  expect(result.menuCounts.languages).toBe(1);
+  expect(result.menuCounts.preferences).toBe(1);
+  expect(result.menuCounts.theme).toBe(0);
+  expect(result.languageSelectionVerified).toBe(false);
+  expect(result.productInputVerified).toBe(false);
+  expect(result.rawLabelsExported).toBe(false);
+  expect(JSON.stringify(result)).not.toMatch(/synthetic|other.app|EditText|Gboard/);
+});
+test("an unknown, multiple or mismatched foreground and unproven Settings scope cannot export a menu result", () => {
+  for (const foreground of [
+    "",
+    `${settingsForeground}\n${settingsForeground}`,
+    settingsForeground.replace(settingsClass, "OtherActivity"),
+    settingsForeground.replace("com.google.android.inputmethod.latin/", "other.app/"),
+  ])
+    expect(() =>
+      androidGboardSettingsControls(settingsXml(), foreground, settingsComponent),
+    ).toThrow("ANDROID_IME_REFERENCE_SETTINGS_FOREGROUND_REQUIRED");
+  expect(() =>
+    androidGboardSettingsControls(settingsXml(), settingsForeground, "other.app/Injected"),
+  ).toThrow();
+  for (const xml of [
+    settingsXml().replace('text="Gboard"', 'text="unknown"'),
+    settingsXml().replace('text="Languages"', 'text="unknown"'),
+    settingsXml().replaceAll('enabled="true"', 'enabled="false"'),
+  ])
+    expect(() => androidGboardSettingsControls(xml, settingsForeground, settingsComponent)).toThrow(
+      "ANDROID_IME_REFERENCE_SETTINGS_SCOPE_REQUIRED",
+    );
+});
+test("unsupported or oversized hierarchy and duplicate attributes fail, and the mode defaults to metadata only", () => {
+  for (const xml of [
+    "",
+    settingsXml().replace("<hierarchy>", "<!DOCTYPE private><hierarchy>"),
+    settingsXml().replace('text="Gboard"', 'text="Gboard" text="other"'),
+    "x".repeat(1_000_001),
+    settingsXml("<node incomplete"),
+    settingsXml("</node>"),
+    settingsXml("<node>"),
+  ])
+    expect(() =>
+      androidGboardSettingsControls(xml, settingsForeground, settingsComponent),
+    ).toThrow();
+  const input = {
+    EXPO_PUBLIC_APP_ENV: "preview",
+    EXPO_PUBLIC_API_URL: "https://preview.baro.site",
+    TARGET_SHA: "a".repeat(40),
+    ANDROID_HOME: "/synthetic/sdk",
+  };
+  expect(androidImeReferenceConfiguration(input).mode).toBe("metadata");
+  expect(
+    androidImeReferenceConfiguration({ ...input, BARO_ANDROID_IME_REFERENCE_MODE: "settings" })
+      .mode,
+  ).toBe("settings");
+  expect(() =>
+    androidImeReferenceConfiguration({ ...input, BARO_ANDROID_IME_REFERENCE_MODE: "other" }),
+  ).toThrow("ANDROID_IME_REFERENCE_MODE_REQUIRED");
 });

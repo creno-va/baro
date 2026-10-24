@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "kind": "local-preserved-android-preproduct-launcher-failure",
+  "verifiedAt": "2026-10-24T19:05:24.140Z",
+  "workflowRunId": 40123131797,
+  "workflowConclusion": "failure",
+  "artifacts": {
+    "homeFailureArtifactId": 12571996789,
+    "reverifiedArtifactId": 12571981780
+  },
+  "binarySourceSha": "92f4232f5eeeace39973992193952fdad8e79903",
+  "toolingSourceSha": "ae73f467332c3d1333ed92be62e31a770e5f981e",
+  "originalCompilerRunId": 40120704046,
+  "originalApkUnchanged": true,
+  "originalCompilerReceiptUnchanged": true,
+  "verificationSha256": "ffbd4a56262e1e07a6f687162542f2509790fee7293cfa5512673efcb492eecd",
+  "failureSha256": "8dc43186a6428307ee2e9e72dac193452582783bddf276945e90e3445c03b50a",
+  "failureImagePreserved": false,
+  "observedFailure": {
+    "phase": "launcher-baseline-cleanup",
+    "code": "ANDROID_LAUNCHER_SYSTEM_ERROR_DIALOG",
+    "launcherKind": "pixel",
+    "samples": 1,
+    "systemErrorDialogObserved": true
+  },
+  "underlyingAnrCauseConfirmed": false,
+  "sdkHomeLaunchVerified": false,
+  "productInputReached": false,
+  "dialogDismissed": false,
+  "launcherChanged": false,
+  "credentialsEntered": false,
+  "privateDataAccess": false,
+  "physicalDeviceVerified": false,
+  "storeSigned": false,
+  "deployed": false
+}

@@ -7,6 +7,14 @@ on:
         description: Full green main tooling SHA; fresh SDK image, no product app or account
         required: true
         type: string
+      mode:
+        description: Registered metadata, or fixed public Gboard Settings menu counts; no language selection or product input
+        required: false
+        default: metadata
+        type: choice
+        options:
+          - metadata
+          - settings
 
 permissions:
   contents: read
@@ -23,6 +31,7 @@ jobs:
     timeout-minutes: 25
     env:
       TARGET_SHA: ${{ inputs.target_sha }}
+      BARO_ANDROID_IME_REFERENCE_MODE: ${{ inputs.mode || 'metadata' }}
       EXPO_PUBLIC_APP_ENV: preview
       EXPO_PUBLIC_API_URL: https://preview.baro.site
       CI: '1'

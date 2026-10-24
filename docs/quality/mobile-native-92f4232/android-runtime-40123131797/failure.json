@@ -1,0 +1,70 @@
+{
+  "toolingSourceSha": "ae73f467332c3d1333ed92be62e31a770e5f981e",
+  "phase": "launcher-baseline-cleanup",
+  "code": "ANDROID_LAUNCHER_SYSTEM_ERROR_DIALOG",
+  "packageManagerReady": {
+    "kind": "owned-android-package-manager-readiness",
+    "observedAt": "2026-10-24T19:00:12.876Z",
+    "handlersCompleted": [
+      "foreground",
+      "background"
+    ],
+    "handlerTimeoutsMs": [
+      15000,
+      15000
+    ],
+    "commandsCompleted": 2,
+    "sharedFirstColdBudgetMaxMs": 120000,
+    "rootCauseConfirmed": false,
+    "launcherReadinessVerified": false,
+    "dialogDismissed": false
+  },
+  "lastPackageManagerDiagnostic": {
+    "stage": "complete",
+    "commandsCompleted": 2,
+    "timeoutMs": 15000,
+    "failureCode": null
+  },
+  "launcherBaseline": null,
+  "lastLauncherBaselineDiagnostic": {
+    "stage": "cleanup",
+    "launcherKind": "pixel",
+    "samples": 1,
+    "consecutiveReadySamples": 0,
+    "foregroundBefore": true,
+    "foregroundAfter": false,
+    "rootVisible": false,
+    "systemErrorDialogObserved": true,
+    "dumpConfirmed": true,
+    "cleanupFailed": false,
+    "failureCode": "ANDROID_LAUNCHER_SYSTEM_ERROR_DIALOG"
+  },
+  "prePublicStartupCommandFailures": {
+    "count": 0,
+    "first": null,
+    "last": null
+  },
+  "lastLauncherHierarchyDump": "saved",
+  "lastHomeSystemErrorDialogObserved": null,
+  "postBoundaryCommandFailures": {
+    "count": 0,
+    "first": null,
+    "last": null
+  },
+  "lastPostBoundaryHierarchyDump": null,
+  "emulatorBootVerified": true,
+  "lastHomeObservation": null,
+  "lastPublicObservation": null,
+  "lastDirectoryInputObservation": null,
+  "lastGuideObservation": null,
+  "lastAuthObservation": null,
+  "lastChromeFixture": null,
+  "receiptValidationFields": [],
+  "publicScreenshotsSuppressed": false,
+  "emulatorStartupIssues": [],
+  "sdkHomeLaunchVerified": false,
+  "largeFontVerified": false,
+  "physicalDeviceVerified": false,
+  "storeSigned": false,
+  "deployed": false
+}

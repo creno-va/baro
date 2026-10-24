@@ -278,3 +278,19 @@ BARO/추가 키보드 앱·계정 없이 설정 변경/키tap0으로 실행했�
 임시 파일 정리가 통과했다. raw metadata/계층/화면/log를 export하지 않았다. 다음은 이 SDK의
 공개 Gboard 언어 설정 경로를 별도로 관측한 뒤 실제 software key 조합을 준비하는 것이며,
 metadata 성공을 제품 입력이나 물리 기기의 한국어 인수로 확대하지 않는다.
+
+### Gboard 공개 설정 참고 도구 준비
+
+동일 fresh owned image의 선택된 Gboard metadata에서 settings activity를 검증해
+[Android 공식 방식](https://developer.android.com/reference/android/view/inputmethod/InputMethodInfo#getSettingsActivity())의
+MAIN/명시적 component로만 연다. `mode=settings`는 전후 foreground가 그 activity와 일치하고
+Gboard 제목·알려진 설정 메뉴 둘 이상을 관측해야 고정 메뉴별 개수만 남긴다.
+언어 추가 경로는 [공식 안내](https://support.google.com/gboard/answer/7068494?hl=en)를 참고하되,
+이 첫 관측에서 Languages/keyboard/layout 선택이나 키 입력을 수행하지 않는다.
+
+raw label·EditText 값·resource ID·bounds·계층·화면·command log를 export하지 않으며 raw dump는
+소유 Emulator의 UUID 파일로만 잠깐 읽고 삭제/부재를 확인한다. 잘못된 package/activity·
+미확인/중복 foreground·미확인 저장 경로·잘못된 XML·제목/메뉴 scope 누락은 거절한다.
+기본 metadata 모드는 그대로이고 실제 keyboard preference 변경은 요청하지 않는다.
+이 준비는 제품 없는 고정 count 참고이며 실제 SDK 실행 성공이나 조작 가능한 owner·
+언어 추가·한국어 조합 인수가 아니다. 실제 실행은 새 exact CI/main 뒤 별도로 확인한다.
