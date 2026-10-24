@@ -1,7 +1,82 @@
 import { expect, test } from "bun:test";
 import type { WorkspaceTransport } from "@baro/api-client";
+import { FILE_TARGET_UPLOAD_CONSISTENCY, UPLOAD_CONSISTENCY_HEADER } from "@baro/contracts/v2";
 import { seedTestSession } from "./helpers/session";
 import { uploadRecoveryHttpFixture as fixture } from "./helpers/upload-recovery-http";
+
+for (const recover of [false, true])
+  test(`versioned completion crosses actual signed HTTP and a publication race; persisted recovery=${recover}`, async () => {
+    let f: Awaited<ReturnType<typeof fixture>>;
+    let probes = 0;
+    f = await fixture({
+      onProbe: () => {
+        probes++;
+        f.db.sqlite
+          .query("UPDATE v2_workspaces SET revision=revision+1 WHERE id=?")
+          .run(f.workspace.id);
+      },
+    });
+    try {
+      const writes: { path: string; headers: Headers }[] = [];
+      const request: WorkspaceTransport = async (path, init) => {
+        if (init?.method) writes.push({ path, headers: new Headers(init.headers) });
+        return f.transport(path, init);
+      };
+      const result = await f
+        .client(request, recover, undefined, {
+          completionConsistency: FILE_TARGET_UPLOAD_CONSISTENCY,
+        })
+        .upload(f.workspace.id, f.source, undefined, { metadataOnly: true });
+      expect(result.status).toBe("waiting");
+      expect(probes).toBe(1);
+      expect(writes.filter((w) => w.path.endsWith("/complete"))).toHaveLength(1);
+      for (const write of writes)
+        expect(write.headers.get(UPLOAD_CONSISTENCY_HEADER)).toBe(
+          write.path.endsWith("/complete") ? FILE_TARGET_UPLOAD_CONSISTENCY : null,
+        );
+      expect(f.db.sqlite.query("SELECT state FROM v2_upload_sessions").get()).toEqual({
+        state: "finalized",
+      });
+      expect(f.records.size).toBe(0);
+      const original = await f.fileService.content(f.owner.userId, f.workspace.id, result.id);
+      expect(new Uint8Array(await new Response(original.body).arrayBuffer())).toEqual(f.bytes);
+    } finally {
+      f.db.close();
+    }
+  });
+
+for (const mode of ["absent", "unsupported"] as const)
+  test(`HTTP completion ${mode} does not silently opt in to file-target consistency`, async () => {
+    let f: Awaited<ReturnType<typeof fixture>>;
+    let probes = 0;
+    f = await fixture({
+      onProbe: () => {
+        probes++;
+        f.db.sqlite
+          .query("UPDATE v2_workspaces SET revision=revision+1 WHERE id=?")
+          .run(f.workspace.id);
+      },
+    });
+    try {
+      const request: WorkspaceTransport = (path, init) => {
+        if (mode !== "unsupported" || !path.endsWith("/complete")) return f.transport(path, init);
+        const headers = new Headers(init?.headers);
+        headers.set(UPLOAD_CONSISTENCY_HEADER, "file-target-unsupported");
+        return f.transport(path, { ...init, headers });
+      };
+      await expect(
+        f
+          .client(request, false)
+          .upload(f.workspace.id, f.source, undefined, { metadataOnly: true }),
+      ).rejects.toMatchObject({ code: mode === "absent" ? "CONFLICT" : "VALIDATION_ERROR" });
+      expect(probes).toBe(mode === "absent" ? 1 : 0);
+      expect(f.db.sqlite.query("SELECT state FROM v2_upload_sessions").get()).toEqual({
+        state: "open",
+      });
+    } finally {
+      f.db.close();
+    }
+  });
 
 for (const failure of ["reservation", "part", "complete", "projection"] as const)
   test(`real signed Hono/SQL/AES upload survives lost ${failure} across client recreation with one stored original`, async () => {
