@@ -144,6 +144,34 @@ nonce 누락/교차 시도·만료/누락 claim, POST→GET state·만료/변조
 두 OS 복귀 성공도 아니다. Apple freshness는 아직 인정하지 않는다.
 
 첫 이름/relay claim의 검증과 이후 email/name 누락을 신원 실패로 오인하지 않는 기초를
-검사했지만, 동일 Apple subject의 기존 계정 조회·삭제 의도/요청 중 revoke·결과 분리·
+검사했으며, 동일 Apple subject의 계정 조회는 아래 보완으로 이어진다. 삭제 의도/요청 중 revoke·결과 분리·
 credential 준비·Apple POST browser relay·native 소비는 다음 producer/실제 인수에 남는다.
 이 선행을 정상 revoke나 전체 Apple 로그인 완료로 표시하지 않는다.
+
+## 동일 Apple subject의 기존 계정 보존
+
+JWT에 email이 없을 때에만 서명/nonce 검증 뒤 `account.provider_id='apple'`과 검증된 `sub`의
+정확한 연결을 조회한다. 살아 있는 단일 owner와 유효한 저장 이메일만 사용하며 tombstone·
+연결 해제·잘못된 저장값은 거절한다. Google 등 다른 provider의 같은 account_id나 이메일
+유사성으로 owner를 찾지 않는다. 이름이 다시 오지 않아도 기존 이름·역할·필수 동의를 유지한다.
+최초 가입의 정책/14세 동의는 Apple 성공으로 대신하지 않는다.
+
+저장 이메일은 새로운 Apple email-verification claim이 아니다. fallback의 provider 정보는
+emailVerified=false로 두고, 기존 local verification 값은 수정하지 않는다. 처음부터 제공된
+Apple 이메일은 기존 verified local/provider 조건과 allowDifferentEmails=false를 그대로 따른다.
+네 조합의 실제 SDK 합성 연결 행렬과 true/false 저장 상태를 각각 확인한다. relay 주소를 실제
+주소로 추정하거나 다른 owner의 자료를 합치지 않는다.
+
+검증/조회 뒤 SDK의 owner 선택 전에 연결 해제·owner 이동·삭제가 경쟁할 수 있다. SDK의
+request-local OAuth state 객체를 키로 하는 WeakMap에 원래 owner/sub만 잠시 결합한다.
+email fallback으로 새 user/account를 만들거나 user 정보를 갱신하지 못하게 한다. SDK가
+요구하는 account 보안 필드 갱신과 session 생성 전에는 같은 살아 있는 연결을 다시 확인한다.
+Apple callback 문맥이 없으면 실패로 처리하며 다른 인증 경로는 이
+상태를 읽지 않는다. client additionalData나 persisted state 필드를 권한 marker로 신뢰하지
+않고 provider token이나 새 durable payload도 저장하지 않는다. 실제 SDK/SQL 경쟁 검증에서
+다른 owner 로그인·삭제 계정 재생성을 거절했다. 동시 callback은 정상 신규 가입을 유지하고
+기존 owner marker가 다른 요청에 전파되지 않음을 확인했다.
+
+이것은 합성 RSA/JWKS·SDK/SQLite 인수이며 실제 Apple·두 OS 기기 성공은 아니다. Apple
+credential/provider/capability/freshness는 여전히 추가하지 않는다. 다음은 삭제 의도와 같은
+owner의 재인증을 묶은 request-local revoke·성공/미확인 결과 분리, 실제 설정과 native 소비다.

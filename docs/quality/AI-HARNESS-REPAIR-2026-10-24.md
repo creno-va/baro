@@ -109,3 +109,21 @@ Future HTTP failures can retain only a finite requestIssue (thinking configurati
 thinking/output limit, unsupported parameter or schema constraint), never the body.
 Sources: [Google compatibility](https://ai.google.dev/gemini-api/docs/openai) and
 [model thinking support](https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash).
+
+## Explicit thinking candidate did not resolve audit
+
+[Manual run40069615300](https://github.com/creno-va/baro/actions/runs/40069615300)
+on exact maindd73eec again generated questions (7192ms,1605input/245output)
+and failed audit with HTTP400/provider_request (3199ms), two total attempts.
+[Finite observation](./ai-harness-2026-10-24/questions-audit-dd73eec.json)
+preserves the original result. Explicit thinking configuration is not a proven fix.
+The first diagnostic read only error.message and missed wrapper descriptions/string
+errors. Bounded traversal of known wrapper fields now retains a finite category,
+including schema complexity, while discarding all original text.
+
+Workspace audit/chat output schemas include Zod default annotations absent from
+successful questions. The provider projection now removes these server-only
+annotations while retaining all required properties and server validation. This is
+a changed-condition candidate requiring external verification, not accepted success.
+Google documents a supported schema subset and HTTP400 rejection for excessively
+complex schemas: [structured output](https://ai.google.dev/gemini-api/docs/structured-output).

@@ -30,6 +30,7 @@ for (const phase of Object.keys(prompts) as (keyof typeof prompts)[]) {
         return;
       }
       const node = value as Record<string, unknown>;
+      if ("default" in node) violations.push(`${path} contains a server default annotation`);
       if (node.type === "object" && node.properties) {
         const required = Array.isArray(node.required) ? node.required : [];
         for (const key of Object.keys(node.properties))
