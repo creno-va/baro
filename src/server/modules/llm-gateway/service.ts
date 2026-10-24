@@ -19,6 +19,7 @@ import {
 } from "./attempts";
 import { readModelCompletion } from "./completion";
 import { MODEL_ID, type Phase, PROMPT_VERSION, prompts, WORKSPACE_PROMPT_VERSION } from "./prompts";
+import { providerWire } from "./provider-wire";
 import { gatewayRequestIssue, gatewayResponse } from "./transport";
 import {
   workspaceAuditOutputSchema,
@@ -84,7 +85,7 @@ function wireSchema(schema: unknown): unknown {
       Object.entries(input)
         // Defaults are server parsing annotations, not generation constraints.
         // Gemini accepts a JSON Schema subset; keep required/defaulted fields
-        // mandatory while omitting the unsupported annotation on the wire.
+        // mandatory while omitting this non-validation annotation on the wire.
         .filter(([key]) => key !== "$schema" && key !== "default")
         // Zod discriminated unions emit oneOf; the provider supports anyOf.
         // Server-side Zod parsing still enforces the original exact union.
@@ -141,7 +142,7 @@ export function prepareGatewayWireInput(phase: Phase, input: unknown, correction
 
 /** Identity only: neither byte length nor this digest proves a token/vision cost bound. */
 export async function gatewayWireIdentity(wireInput: ReturnType<typeof prepareGatewayWireInput>) {
-  const wireBytes = new TextEncoder().encode(JSON.stringify(wireInput));
+  const wireBytes = new TextEncoder().encode(JSON.stringify(providerWire(wireInput)));
   const digest = await crypto.subtle.digest("SHA-256", wireBytes);
   return {
     inputBytes: wireBytes.byteLength,
@@ -242,7 +243,7 @@ export function createLlmGateway(
           startRemote = resolve;
         }).then((allowed) =>
           allowed
-            ? env.AI.run(MODEL_ID, wireInput, {
+            ? env.AI.run(MODEL_ID, providerWire(wireInput), {
                 gateway: { id: env.AI_GATEWAY_ID, collectLog: false, skipCache: true },
                 returnRawResponse: true,
               }).then(gatewayResponse)

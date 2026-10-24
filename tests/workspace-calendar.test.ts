@@ -9,6 +9,7 @@ import {
   createWorkspacePipeline,
   workspaceModelInput,
 } from "../src/server/modules/workspace/pipeline";
+import { syntheticGatewayInput } from "./helpers/gateway-input";
 import { reportFixture } from "./helpers/report-fixture";
 
 const boundaries = [
@@ -98,10 +99,8 @@ test.each(["questions", "summary", "chat"] as const)(
       AI_GATEWAY_ID: "synthetic-calendar",
       AI: {
         run: async (_model, input) => {
-          const wire = input as ReturnType<typeof prepareGatewayWireInput>;
-          const name = wire.response_format.json_schema.name;
-          const data = JSON.parse(wire.messages[1]?.content ?? "null").data;
-          calls.push({ phase: name, data, system: wire.messages[0]?.content ?? "" });
+          const { name, data, system } = syntheticGatewayInput(input);
+          calls.push({ phase: name, data, system });
           const output = name.includes("audit") ? approved : outputs[`workspace_${kind}`];
           return {
             choices: [{ message: { content: JSON.stringify({ output }) }, finish_reason: "stop" }],

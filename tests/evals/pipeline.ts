@@ -16,6 +16,7 @@ import list from "../fixtures/legal/official-list.json";
 import detail from "../fixtures/legal/official-sample.json";
 import { createTestDatabase } from "../helpers/d1";
 import { type EvalFixture, type EvalObservation, reportFixture } from "../helpers/evals";
+import { syntheticGatewayInput } from "../helpers/gateway-input";
 import { seedTestSession } from "../helpers/session";
 
 export type Fault =
@@ -62,11 +63,9 @@ export async function runPipelineFixture(
     const statement = `${fixture.narrative.split(". ")[0]}.`;
     const binding: GatewayBinding = {
       async run(_model, input) {
-        const phase = (
-          input.response_format as { json_schema: { name: string } }
-        ).json_schema.name.replace(/^baro_|_v1$/g, "");
+        const { phase, data } = syntheticGatewayInput(input);
         calls.push(phase);
-        const data = JSON.parse((input.messages as { content: string }[])[1]?.content ?? "{}").data;
+
         let output: unknown;
         if (phase === "minimize")
           output = { schemaVersion: "1", sentences: [statement], maskingHints: [] };

@@ -14,6 +14,7 @@ import { guidance, questions } from "./fixtures/contracts";
 import list from "./fixtures/legal/official-list.json";
 import detail from "./fixtures/legal/official-sample.json";
 import { createTestDatabase } from "./helpers/d1";
+import { syntheticGatewayInput } from "./helpers/gateway-input";
 import { seedTestSession } from "./helpers/session";
 
 const databases: Awaited<ReturnType<typeof createTestDatabase>>[] = [];
@@ -52,12 +53,10 @@ export async function analysisFixture(
     wire: unknown[] = [];
   const binding: GatewayBinding = {
     async run(_model, input) {
-      const phase = (
-        input.response_format as { json_schema: { name: string } }
-      ).json_schema.name.replace(/^baro_|_v1$/g, "");
+      const { phase, data } = syntheticGatewayInput(input);
       calls.push(phase);
       wire.push(input);
-      const data = JSON.parse((input.messages as { content: string }[])[1]?.content ?? "{}").data;
+
       let output: unknown;
       if (phase === "minimize")
         output = {

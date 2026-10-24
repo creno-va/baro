@@ -11,6 +11,7 @@ import {
 import { guidance, questions } from "../fixtures/contracts";
 import list from "../fixtures/legal/official-list.json";
 import detail from "../fixtures/legal/official-sample.json";
+import { syntheticGatewayInput } from "../helpers/gateway-input";
 
 /** HTTP/auth/DB/gateway contract harness only, never a live model/platform-quality claim. */
 export async function syntheticWorkflow(env: Env) {
@@ -18,10 +19,8 @@ export async function syntheticWorkflow(env: Env) {
   let answered = false;
   const binding: GatewayBinding = {
     async run(_model, input) {
-      const phase = (
-        input.response_format as { json_schema: { name: string } }
-      ).json_schema.name.replace(/^baro_|_v1$/g, "");
-      const data = JSON.parse((input.messages as { content: string }[])[1]?.content ?? "{}").data;
+      const { phase, data } = syntheticGatewayInput(input);
+
       let output: unknown;
       if (phase === "minimize") {
         answered = data.narrative.includes('"answers"');

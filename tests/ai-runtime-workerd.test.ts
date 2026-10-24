@@ -31,6 +31,7 @@ import {
 } from "../src/server/runtime/workspace";
 import { signedSessionCookie, testEnvironment } from "./helpers/d1";
 import { measureD1Work } from "./helpers/d1-work";
+import { syntheticGatewayInput } from "./helpers/gateway-input";
 import observation from "./helpers/gemini-observation";
 import { nativeD1Transport, nativeD1TransportWorker } from "./helpers/native-d1-transport";
 import { createNativeFailureHistory, nativeFailure } from "./helpers/native-failure";
@@ -290,10 +291,8 @@ async function exerciseNativeRuntime(
               { error: { message: "Invalid schema for response_format: synthetic rejection" } },
               { status: 400 },
             );
-          const phase = (input.response_format as { json_schema: { name: string } }).json_schema
-            .name;
-          const messages = input.messages as { content: string }[];
-          const context = JSON.parse(messages[1]?.content ?? "null").data as WorkspaceContext;
+          const { name: phase, data } = syntheticGatewayInput(input);
+          const context = data as WorkspaceContext;
           let output: unknown;
           if (phase.includes("audit")) {
             output = {

@@ -54,7 +54,11 @@ function rememberRequestIssue(error: object, raw: unknown) {
   if (issue) requestIssues.set(error, issue);
 }
 
-async function boundedJson(response: Response, maximumBytes: number): Promise<unknown> {
+async function boundedJson(
+  response: Response,
+  maximumBytes: number,
+  errorText = false,
+): Promise<unknown> {
   const reader = response.body?.getReader();
   if (!reader) return null;
   const decoder = new TextDecoder();
@@ -68,7 +72,13 @@ async function boundedJson(response: Response, maximumBytes: number): Promise<un
       if (bytes > maximumBytes) throw new Error("GATEWAY_RESPONSE_TOO_LARGE");
       text += decoder.decode(part.value, { stream: true });
     }
-    return JSON.parse(text + decoder.decode());
+    text += decoder.decode();
+    try {
+      return JSON.parse(text);
+    } catch (error) {
+      if (errorText) return text;
+      throw error;
+    }
   } finally {
     void reader.cancel().catch(() => undefined);
     reader.releaseLock();
@@ -108,7 +118,7 @@ export async function gatewayResponse(value: unknown): Promise<unknown> {
     }
     return body;
   }
-  const body = await boundedJson(value, 16 * 1024).catch(() => null);
+  const body = await boundedJson(value, 16 * 1024, true).catch(() => null);
   const record = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
   const nested = record.error ?? (Array.isArray(record.errors) ? record.errors[0] : null);
   const failure = Object.assign(new Error("GATEWAY_HTTP_ERROR"), { status: value.status });
