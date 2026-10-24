@@ -88,6 +88,9 @@ reasoning은 생성 `low`·감사 `MEDIUM`, 출력 상한은 단계별로 보존
 두 포맷을 혼합하거나 실패 후 다른 포맷으로 자동 재시도하지 않는다. 실행 예약과
 replay의 wire identity는 실제 전송 바이트를 해시한다. private planner의 canonical
 schema/출력 예산 표현은 provider 전송 형식과 구분한다.
+중첩 배열의 양수 maxItems는 공급자의 grammar 상태 수를 크게 늘릴 수 있어 wire에서
+제거한다. 필수 필드·enum·union·닫힌 객체와 maxItems=0은 보존하며, 질문2×3을
+포함한 기존 배열 상한은 서버 Zod와 출력 token 상한에서 그대로 검사한다.
 모델 catalog 지원과 실제 JSON Schema 응답은 #15/#27의 live 합성 요청으로 검증한다.
 provider 보존/무학습 설정은 Gateway 로그 설정과 별도로 법률/계약 검증 대상이다.
 

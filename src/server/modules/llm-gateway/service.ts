@@ -86,7 +86,16 @@ function wireSchema(schema: unknown): unknown {
         // Defaults are server parsing annotations, not generation constraints.
         // Gemini accepts a JSON Schema subset; keep required/defaulted fields
         // mandatory while omitting this non-validation annotation on the wire.
-        .filter(([key]) => key !== "$schema" && key !== "default")
+        // Positive maxItems expands nested constrained-decoding states (audit
+        // has 30 findings/300 IDs; chat has nested unions). Keep these unchanged
+        // in server Zod and enforce the same output-token caps, without sending
+        // array-count grammar expansion. maxItems=0 still forbids text options.
+        .filter(
+          ([key, value]) =>
+            key !== "$schema" &&
+            key !== "default" &&
+            !(key === "maxItems" && typeof value === "number" && value > 0),
+        )
         // Zod discriminated unions emit oneOf; the provider supports anyOf.
         // Server-side Zod parsing still enforces the original exact union.
         .map(([key, value]) =>

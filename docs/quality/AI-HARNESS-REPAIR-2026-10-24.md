@@ -149,3 +149,10 @@ a bounded text body is classified and discarded, never emitted as an error cause
 
 Sources: [Cloudflare native binding](https://developers.cloudflare.com/ai/models/google/gemini-3.8-flash/),
 [GenerateContent configuration](https://ai.google.dev/api/generate-content).
+
+The same candidate avoids positive maxItems grammar expansion for nested arrays,
+as recommended in Google's structured-output complexity guidance. Existing server
+Zod bounds (including questions2×3 and audit findings30/IDs300), output token caps,
+required fields, closed objects and zero-item constraints remain unchanged. This is
+provider grammar projection, not authorization to publish larger arrays. The
+specific original HTTP400 cause remains unproven pending live verification.
