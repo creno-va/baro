@@ -132,9 +132,9 @@ export function prepareGatewayWireInput(phase: Phase, input: unknown, correction
     z.toJSONSchema(envelope, {
       io: "output",
       unrepresentable: "any",
-      // Chat repeats the same closed fact/material references in several arrays.
+      // Chat and retained structure repeat closed facts/references in several arrays.
       // Reuse definitions instead of duplicating their nested unions on the wire.
-      ...(phase === "workspace_chat" ? { reused: "ref" as const } : {}),
+      ...(phase === "workspace_chat" || phase === "structure" ? { reused: "ref" as const } : {}),
     }),
     phase === "workspace_chat",
   );

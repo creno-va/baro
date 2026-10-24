@@ -1122,3 +1122,54 @@ this new inspection followed actual runtime/schema changes and made no model cal
 
 RN515/main4e7cd875 integrated without shared-contract changes. Frozen install
 and quick451/42files/4521 assertions pass on the combined branch.
+
+
+### Retained analysis actual acceptance on main3da1a21
+
+PR516 exact headb2ee303 CI40127027802, merged main3da1a21 CI40127253670,
+and same-SHA preview40127467017 completed SUCCESS. The deployed schema remains
+0017; nine endpoint smoke checks pass and text preflight checkedAt is
+2026-10-24T20:01:44.310Z, configuration_ready/blockers0. This is configuration
+and deployment evidence, not final retained-model acceptance.
+
+Manual status40127969911 observed ABSENT without a write. Create40128016529
+verified REST atomicity and prepared exactly one encrypted synthetic case and
+outbox using its stable identity/shared daily case quota. No source identifiers
+or text are in the finite receipts. Safari's authenticated own-case list and
+retained detail view reached that fixture; creation was via the reviewed
+coordinator, not the product UI. Existing scheduled dispatch sent attempt1.
+
+Actual Workflow observations: initialize20:03:19→20:03:22UTC (2.679s),
+minimize8.904s and screening6.659s returned real responses. Structure ran from
+20:03:40 to20:04:44UTC and exceeded the original60s model phase limit. The
+product shows analysis failure/MODEL_UNAVAILABLE. Status40128100712 observed
+the two final responses plus in-flight structure; status40128193847 preserved
+structure unknown. Later status40128352184 records a genuine final structure
+response, proving late receipt settlement without replay. The original failed
+analysis remains failed: a late receipt does not publish a timed-out result.
+No second provider attempt, reset, recreated fixture or modified ledger was
+used to obtain these observations. Local UI proof is kept outside GitHub.
+
+A follow-up targets only structure: native LOW thinking instead of compatibility
+translation, one shared closed fact definition instead of six repeated copies,
+and prompt1.3's explicit sparse arrays/specific unknowns. Material facts,
+contradictions and unfavorable facts must still be preserved; no placeholder
+rows or duplicated facts are requested merely to fill array ceilings. All
+public fields, exact-originalValue and server semantic checks remain. Native
+output cap4000, phase60s, processing10min, explicit max3 attempts and AI200 are
+unchanged. Simple accepted requests and workspace prompt2.6 are unchanged.
+The actual transformed structure schema falls from2731 to1337 bytes with
+reused references; the provider transform still strips the same unsupported
+keywords as before. This is a latency hypothesis, not a claim that native
+transport caused or has fixed the observed timeout.
+
+Two focused regressions fail on3da1a21 and pass after the change. They compare
+expanded/compact schema acceptance, missing/extra/invalid fields, unchanged
+runtime refinements/array limits, explicit native LOW/cap, exact dispatched
+byte hash, privacy flags and native completion parsing. Combined gateway,
+actual runtime/ledger, audit/chat and fixture tests125/6files/774 assertions
+pass with synthetic adapters. Frozen install, quick453/43files/4543 assertions,
+unit4321/394files/174147 assertions and production build/dry-run/local built
+Worker pass. Actual changed-source provider acceptance remains pending. The next live test
+must use the existing product's permitted explicit retry after the proven
+terminal receipt, preserving the original attempt and its failure.

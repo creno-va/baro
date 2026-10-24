@@ -1,0 +1,22 @@
+{
+  "receiptVersion": 1,
+  "environment": "preview",
+  "candidateSha": "3da1a21c094205ab82c9ec7380ca73e18ebc15da",
+  "requestedMode": "create",
+  "effectiveMode": "create",
+  "status": "prepared",
+  "code": "OK",
+  "creationInvoked": true,
+  "restAtomicity": "verified_this_run",
+  "analysisStatus": "queued",
+  "failureCode": null,
+  "workflowAttempt": 1,
+  "outboxStatus": "pending",
+  "resultKind": null,
+  "citationCount": 0,
+  "modelExecutionVerified": false,
+  "phases": [],
+  "uiCreationVerified": false,
+  "externalAccountsCreated": false,
+  "sourceRunId": "40128016529"
+}
