@@ -1,0 +1,126 @@
+{
+  "version": 1,
+  "kind": "internal-bundled-preview-app",
+  "sourceSha": "9436e770240fcebd03f3ab66c42222c5343cf412",
+  "platform": "ios",
+  "environment": "preview",
+  "apiOrigin": "https://preview.baro.site",
+  "apiObservation": {
+    "status": "observed",
+    "observedAt": "2026-10-24T12:32:37.041Z",
+    "sourceSha": "d3f4e493d1aec0dd0dc9ecb3aa27490f0fea80e0"
+  },
+  "versionName": "0.1.0",
+  "buildVersion": "1",
+  "expo": "58.0.17",
+  "reactNative": "0.88.0",
+  "applicationId": "site.baro.app.preview",
+  "minimumOS": "16.4",
+  "installTarget": "ios-simulator",
+  "architectures": [
+    "x86_64",
+    "arm64"
+  ],
+  "signing": {
+    "kind": "simulator-only",
+    "codeSignature": "ad-hoc"
+  },
+  "artifact": {
+    "name": "baro-internal-preview-ios-simulator-9436e770240fcebd03f3ab66c42222c5343cf412.zip",
+    "bytes": 21580352,
+    "sha256": "4d7303fdd7bb2224dc3c3ef7ad28ff57c588bc9bc7053769dfc3623c6d0a51b0"
+  },
+  "compiledFont": {
+    "kind": "compiled-resource-only",
+    "family": "BaroMobile",
+    "sha256": "3ae12c1281a84901b32d8c5f0e43fd6c4f8a5b7fd4ccbde66cfbe9f07cde05e8",
+    "weights": [
+      400,
+      600,
+      700
+    ],
+    "glyphs": 14757,
+    "codepoints": 14336,
+    "hangul": 11172,
+    "licenseEmbedded": true,
+    "compiledBytesMatch": true,
+    "appRuntimeVerified": false
+  },
+  "compatibility": "runtime-smoke-required",
+  "requiresMetro": false,
+  "binaryMetadataVerified": true,
+  "appRuntimeVerified": false,
+  "remoteApiVerified": false,
+  "physicalDeviceVerified": false,
+  "storeSigned": false,
+  "deployed": false,
+  "nativeConfiguration": "Release",
+  "control": {
+    "version": 2,
+    "kind": "xcode-simulator-signing-control",
+    "sourceSha": "9436e770240fcebd03f3ab66c42222c5343cf412",
+    "toolingSourceSha": "9436e770240fcebd03f3ab66c42222c5343cf412",
+    "observedAt": "2026-10-24T12:32:36.376Z",
+    "applicationId": "site.baro.app.preview",
+    "signature": "ad-hoc",
+    "teamIdentifier": "not set",
+    "architectures": [
+      "x86_64",
+      "arm64"
+    ],
+    "entitlements": {
+      "keychain-access-groups": [
+        "FAKETEAMID.site.baro.app.preview"
+      ],
+      "application-identifier": "FAKETEAMID.site.baro.app.preview"
+    },
+    "entitlementsSource": "simulator-macho-xml-and-der",
+    "signatureEntitlements": {},
+    "sectionHashes": [
+      {
+        "architecture": "x86_64",
+        "xmlSha256": "52b17581e78eaec7d4aea51bd44998e18b5b9a977c59d2c3eaee057c64be26f4",
+        "derSha256": "cb57c846ebff2330edb1bee67b09dd2c5d1323d026791e5ef4dacd73e4ec93af"
+      },
+      {
+        "architecture": "arm64",
+        "xmlSha256": "52b17581e78eaec7d4aea51bd44998e18b5b9a977c59d2c3eaee057c64be26f4",
+        "derSha256": "cb57c846ebff2330edb1bee67b09dd2c5d1323d026791e5ef4dacd73e4ec93af"
+      }
+    ],
+    "executableSha256": "2d06dfadde50ad6274a27d63e434a9409adddd50f7e070668df31437a1de1d3f",
+    "infoPlistSha256": "f11ff44690377a600ad247f7761088d374529beb18f451d1d8d6183395be4c92",
+    "appRuntimeVerified": false,
+    "physicalDeviceVerified": false,
+    "storeSigned": false,
+    "deployed": false
+  },
+  "nativeTextInputPatch": {
+    "kind": "ios-text-input-patched-source-compile-only",
+    "reactNative": "0.88.0",
+    "patchSha256": "87869cb1cff68c5c134b8662eb5c818f53eb890b9183b0f14571e768e5e6e813",
+    "manifestSha256": "bd0f12c88b8c76fd54a20ddb99b563789dba68f7d30114cd3acfdea9262bc4fd",
+    "generatedSourceBuildPropertyVerified": true,
+    "prebuiltRnCoreDisabled": true,
+    "compiledArchitectures": [
+      "arm64",
+      "x86_64"
+    ],
+    "bothSourcesObservedForEveryArchitecture": true,
+    "nativeRuntimeVerified": false
+  },
+  "embeddedBundle": {
+    "path": "main.jsbundle",
+    "format": "hermes-bytecode",
+    "bytes": 3665732,
+    "sha256": "654e59f889e83dd77a94ddb026ad4f2feafe38911cccb0f40f78f38bd0998c1b",
+    "generatedJavascriptSha256": "6945a742b6e40c49e563e492ad6a2b09415bcfb1fae0f34e2c8321691ba318de",
+    "sourceMapSha256": "b0449e73e8f4a728cdc2e5bd61fa3af6cd46feab6ec300316935b3cabcc3a158",
+    "archiveBytesMatch": true,
+    "productEntry": "expo-router/entry",
+    "productSourceObserved": true,
+    "probeSourceAbsent": true,
+    "sourceMapPackaged": false,
+    "sourceModules": 1480
+  }
+}

@@ -1,8 +1,8 @@
 {
   "version": 1,
-  "sourceSha": "6201112438fea33ef761c053dfdc9fa500cbd407",
-  "workflowRunId": "40063716187",
-  "artifactId": "12548714921",
-  "artifactName": "mobile-internal-ios-6201112438fea33ef761c053dfdc9fa500cbd407",
-  "receiptSha256": "55ce6e324debcc14d33f9d6769550c8105f142e718a4ecce5378e507902338a4"
+  "sourceSha": "9436e770240fcebd03f3ab66c42222c5343cf412",
+  "workflowRunId": "40092729846",
+  "artifactId": "12560595376",
+  "artifactName": "mobile-internal-ios-9436e770240fcebd03f3ab66c42222c5343cf412",
+  "receiptSha256": "7eca8b6ba896923f55c9f376c3bdd0818f60a3595dc994699dab8a67e771b5b0"
 }
