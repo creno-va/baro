@@ -1,16 +1,17 @@
 import { expect, test } from "bun:test";
 import { androidAuthenticationPrivacyBoundary } from "../scripts/mobile-android-auth-cancel";
 import {
+  androidDirectoryBaseSchema,
   androidDirectoryDisplay,
   androidDirectoryDisplayShape,
   androidDirectoryFailureCode,
   androidDirectoryInputObservation,
-  androidDirectoryReceiptSchema,
   androidDirectoryRotation,
   directorySyntheticInput,
   observeAndroidDirectoryInput,
   verifyAndroidDirectoryReceipt,
 } from "../scripts/mobile-android-directory-input";
+import { androidDirectorySoftwareSearch } from "../scripts/mobile-android-directory-search";
 import { androidHomeObservationOptions } from "../scripts/mobile-android-guide-ui";
 
 const appId = "site.baro.app.preview";
@@ -19,10 +20,26 @@ const node = (extra: string, box = "[40,300][1000,450]", pkg = appId) =>
   `<node package="${pkg}" enabled="true" bounds="${box}" ${extra}/>`;
 const dump = (rotation = 0, keyboard = false) =>
   `DisplayFrames w=${rotation === 1 ? 2400 : 1080} h=${rotation === 1 ? 1080 : 2400} r=${rotation}\n  WindowInsetsStateController\n    InsetsState\n      mDisplayFrame=Rect(0, 0 - ${rotation === 1 ? 2400 : 1080}, ${rotation === 1 ? 1080 : 2400})\n      InsetsSource id=3 type=ime frame=${keyboard ? "[0,1500][1080,2400]" : "[0,0][0,0]"} visible=${keyboard} flags= sideHint=BOTTOM boundingRects=null\n    Control map:`;
+const imePackage = "com.android.inputmethod.latin";
+const imeComponent = `${imePackage}/.LatinIME`;
+const imeKey = (
+  extra = 'content-desc="Search" clickable="true"',
+  box = "[900,2000][1060,2200]",
+  pkg = imePackage,
+) => node(extra, box, pkg);
+const imeWindow = (
+  content: string,
+  type = "TYPE_INPUT_METHOD",
+  windowBounds = "[0,1500][1080,2400]",
+) => `<window type="${type}" bounds="${windowBounds}"><hierarchy>${content}</hierarchy></window>`;
+const windowsXml = (windows: string, id = "0") =>
+  `<?xml version="1.0"?><displays><display id="${id}">${windows}</display></displays>`;
 function nativeFixture(
   previousMode: "free" | "lock" = "free",
   failForeground = false,
   failRestore = false,
+  missingSearchControl = false,
+  imeChangesBeforeTap = false,
 ) {
   let rotation = 0,
     userRotation = 2,
@@ -32,6 +49,8 @@ function nativeFixture(
     keyboard = false,
     typed = false,
     submitted = false;
+  let allWindows = false;
+  let imeReads = 0;
   const commands: string[][] = [],
     diagnostics: unknown[] = [];
   return {
@@ -53,6 +72,10 @@ function nativeFixture(
         if (command === "wm user-rotation")
           return mode === "free" ? "free\n" : `lock ${userRotation}\n`;
         if (command === "settings get system user_rotation") return `${userRotation}\n`;
+        if (command === "settings get secure default_input_method") {
+          imeReads += 1;
+          return imeChangesBeforeTap && imeReads > 1 ? "com.other/.Other\n" : `${imeComponent}\n`;
+        }
         if (args[0] === "wm" && args[2] === "lock") {
           rotation = Number(args[3]);
           userRotation = rotation;
@@ -70,7 +93,13 @@ function nativeFixture(
           return `topResumedActivity=ActivityRecord{a u0 ${appId}/.MainActivity t3}`;
         }
         if (command === "dumpsys window displays") return dump(rotation, keyboard);
-        if (args[0] === "uiautomator" || args[0] === "rm") return "";
+        if (args[0] === "uiautomator") {
+          allWindows = args.includes("--windows");
+          return "";
+        }
+        if (args[0] === "rm") return "";
+        if (args[0] === "cat" && allWindows)
+          return windowsXml(imeWindow(missingSearchControl ? "" : imeKey()));
         if (args[0] === "cat")
           return xml(
             node(
@@ -92,7 +121,11 @@ function nativeFixture(
                 ]),
           );
         if (args[0] === "input" && args[1] === "tap") {
-          if (!directory) directory = true;
+          if (directory && typed && keyboard && args[2] === "980" && args[3] === "2100") {
+            submitted = true;
+            keyboard = false;
+            focused = false;
+          } else if (!directory) directory = true;
           else {
             focused = true;
             keyboard = true;
@@ -102,12 +135,6 @@ function nativeFixture(
         if (args[0] === "input" && args[1] === "text") {
           expect(args[2]).toBe(directorySyntheticInput);
           typed = true;
-          return "";
-        }
-        if (command === "input keyevent KEYCODE_ENTER") {
-          submitted = true;
-          keyboard = false;
-          focused = false;
           return "";
         }
         if (command === "input keyevent KEYCODE_BACK") {
@@ -214,6 +241,8 @@ test("observer refuses unowned devices/boundaries before commands and restores t
     const result = await observeAndroidDirectoryInput(fixture.context);
     expect(result.systemBackCount).toBe(1);
     expect(result.rotationPreferenceRestored).toBe(true);
+    expect(result.submitMethod).toBe("software-keyboard-search");
+    expect(fixture.commands.some((c) => c.includes("KEYCODE_ENTER"))).toBe(false);
     expect(result.landscapeDisplay).toEqual({ width: 2400, height: 1080, rotation: 1 });
     expect(fixture.state()).toEqual({ mode, userRotation: 2 });
     expect(
@@ -236,6 +265,18 @@ test("observer refuses unowned devices/boundaries before commands and restores t
   expect(androidDirectoryFailureCode(Error("private-url-state"))).toBe(
     "ANDROID_DIRECTORY_COMMAND_FAILED",
   );
+  const missing = nativeFixture("free", false, false, true);
+  await expect(observeAndroidDirectoryInput(missing.context)).rejects.toThrow(
+    "ANDROID_DIRECTORY_SOFTWARE_SEARCH_MISSING",
+  );
+  expect(missing.commands.some((c) => c.includes("KEYCODE_ENTER"))).toBe(false);
+  expect(missing.state()).toEqual({ mode: "free", userRotation: 2 });
+  const switched = nativeFixture("free", false, false, false, true);
+  await expect(observeAndroidDirectoryInput(switched.context)).rejects.toThrow(
+    "ANDROID_DIRECTORY_SOFTWARE_SEARCH_MISSING",
+  );
+  expect(switched.commands.some((c) => c.join(" ") === "input tap 980 2100")).toBe(false);
+  expect(switched.state()).toEqual({ mode: "free", userRotation: 2 });
 });
 test("strict proof binds original binary/compiler baseline/device and rejects broader claims or incomplete window rotation", async () => {
   const old = await Bun.file(
@@ -243,24 +284,8 @@ test("strict proof binds original binary/compiler baseline/device and rejects br
   ).json();
   const result = await observeAndroidDirectoryInput(nativeFixture().context);
   const value = {
-    ...androidDirectoryReceiptSchema
-      .omit({
-        kind: true,
-        result: true,
-        adbCommandOutputPersisted: true,
-        rawDumpsysExported: true,
-        publicDataNavigation: true,
-        profileOpened: true,
-        contactOpened: true,
-        remoteMutationPerformed: true,
-        authenticationNavigation: true,
-        privateDataAccess: true,
-        httpTransportSeparatelyObserved: true,
-        koreanKeyboardVerified: true,
-      })
-      .strip()
-      .parse(old),
-    kind: "bundled-android-public-directory-input-ui-only",
+    ...androidDirectoryBaseSchema.strip().parse(old),
+    kind: "bundled-android-public-directory-software-search-ui-only",
     result,
     adbCommandOutputPersisted: false,
     rawDumpsysExported: false,
@@ -274,7 +299,13 @@ test("strict proof binds original binary/compiler baseline/device and rejects br
     koreanKeyboardVerified: false,
   };
   const parsed = verifyAndroidDirectoryReceipt(value, old);
-  expect(parsed.result.submitMethod).toBe("hardware-enter");
+  expect(parsed.result.submitMethod).toBe("software-keyboard-search");
+  expect(() =>
+    verifyAndroidDirectoryReceipt(
+      { ...value, kind: "bundled-android-public-directory-input-ui-only" },
+      old,
+    ),
+  ).toThrow();
   for (const patch of [
     { toolingSourceSha: "a".repeat(40) },
     { binarySourceSha: "b".repeat(40) },
@@ -300,10 +331,65 @@ test("strict proof binds original binary/compiler baseline/device and rejects br
     { rotationPreferenceRestored: false },
     { systemBackCount: 2 },
     { query: directorySyntheticInput },
+    { searchControlTapped: false },
+    { searchControlInCurrentImeWindow: false },
+    { searchControlBelowKeyboardTop: false },
+    { searchControlUniqueEnabledClickable: false },
   ])
     expect(() =>
       verifyAndroidDirectoryReceipt({ ...value, result: { ...result, ...patch } }, old),
     ).toThrow();
+});
+
+test("software Search requires the current IME package, unique default-display input window and usable key bounds", () => {
+  const display = { width: 1080, height: 2400, keyboardVisible: true, keyboardTop: 1500 };
+  const observe = (xml: string, component = imeComponent, d = display) =>
+    androidDirectorySoftwareSearch(xml, d, component);
+  const valid = windowsXml(imeWindow(imeKey()));
+  expect(observe(valid).point).toEqual({ x: 980, y: 2100 });
+  expect(
+    observe(windowsXml(imeWindow(imeKey('text="검색" clickable="true"')))).point,
+  ).not.toBeNull();
+  for (const bad of [
+    windowsXml(imeWindow(imeKey()) + imeWindow(imeKey())),
+    windowsXml(imeWindow(imeKey() + imeKey())),
+    `<?xml version="1.0"?><displays><display id="0">${imeWindow(imeKey())}</display><display id="0">${imeWindow(imeKey())}</display></displays>`,
+    windowsXml(imeWindow(imeKey()), "1"),
+    windowsXml(imeWindow(imeKey(), "TYPE_APPLICATION")),
+    windowsXml(imeWindow(imeKey(undefined, undefined, appId))),
+    windowsXml(imeWindow(imeKey('text="Search" clickable="false"'))),
+    windowsXml(imeWindow(imeKey('text="Search" clickable="true" visible-to-user="false"'))),
+    windowsXml(imeWindow(imeKey('text="synthetic-private" clickable="true"'))),
+    windowsXml(imeWindow(imeKey(undefined, "[900,1400][1060,1490]"))),
+    windowsXml(imeWindow(imeKey(undefined, "[900,2000][1200,2200]"))),
+    windowsXml(imeWindow(imeKey(undefined, "[900,2000][900,2200]"))),
+    windowsXml(imeWindow(imeKey(), undefined, "[0,1500][1000,2400]")),
+    windowsXml(imeWindow(imeWindow(imeKey()))),
+  ])
+    expect(observe(bad).point).toBeNull();
+  expect(observe(valid, "synthetic-private").point).toBeNull();
+  expect(observe(valid, "com.other/.Other").point).toBeNull();
+  expect(observe(valid, imeComponent, { ...display, keyboardVisible: false }).point).toBeNull();
+  expect(observe(valid, imeComponent, { ...display, keyboardTop: -1 }).point).toBeNull();
+  expect(() => observe(valid.replace("<?xml", "<!DOCTYPE x><!ENTITY y>\n<?xml"))).toThrow();
+  const diagnostic = JSON.stringify(
+    observe(windowsXml(imeWindow(imeKey('text="synthetic-private" clickable="true"')))).diagnostic,
+  );
+  expect(diagnostic).not.toContain("synthetic-private");
+  expect(diagnostic).not.toContain(imePackage);
+});
+
+test("historical hardware Enter receipts remain readable and cannot be relabelled as software Search", async () => {
+  const legacy = await Bun.file(
+    "docs/quality/mobile-internal-android-2026-10-24/directory-input-45bc32f.json",
+  ).json();
+  expect(verifyAndroidDirectoryReceipt(legacy, legacy).result.submitMethod).toBe("hardware-enter");
+  expect(() =>
+    verifyAndroidDirectoryReceipt(
+      { ...legacy, kind: "bundled-android-public-directory-software-search-ui-only" },
+      legacy,
+    ),
+  ).toThrow();
 });
 test("workflow gates the isolated mode and exports only fixed observation paths", async () => {
   const workflow = Bun.YAML.parse(

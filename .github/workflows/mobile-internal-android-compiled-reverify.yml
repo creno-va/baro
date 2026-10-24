@@ -36,7 +36,7 @@ on:
         type: boolean
 
       directory_input:
-        description: Public directory ASCII input, hardware Enter, IME bounds and actual rotation; no profile values exported
+        description: Public directory ASCII input, current software IME Search tap, bounds and rotation; no profile values exported
         required: false
         default: false
         type: boolean

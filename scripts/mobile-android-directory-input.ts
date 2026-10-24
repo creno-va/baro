@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { androidAuthActivityObservation } from "./mobile-android-auth-cancel";
+import { androidDirectorySoftwareSearch } from "./mobile-android-directory-search";
 import { androidGuideUiReceiptSchema } from "./mobile-android-guide-ui";
 import {
   publicDirectoryButton,
@@ -23,6 +24,7 @@ const codes = [
   "ANDROID_DIRECTORY_KEYBOARD_MISSING",
   "ANDROID_DIRECTORY_INPUT_OCCLUDED",
   "ANDROID_DIRECTORY_INPUT_NOT_RETAINED",
+  "ANDROID_DIRECTORY_SOFTWARE_SEARCH_MISSING",
   "ANDROID_DIRECTORY_KEYBOARD_NOT_DISMISSED",
   "ANDROID_DIRECTORY_SEARCH_EMPTY_MISSING",
   "ANDROID_DIRECTORY_LANDSCAPE_MISSING",
@@ -223,59 +225,72 @@ export function androidDirectoryInputObservation(xml: string, width: number, hei
     homeTitle: labels.includes("내 상황을 차근차근 정리해요."),
   };
 }
+const resultBaseSchema = z.strictObject({
+  initialReadyState: z.enum(["empty", "cards"]),
+  inputBoundsWithinDisplay: z.literal(true),
+  keyboardObserved: z.literal(true),
+  focusedInputAboveKeyboard: z.literal(true),
+  syntheticAsciiInputRetained: z.literal(true),
+  submitMethod: z.literal("hardware-enter"),
+  keyboardDismissed: z.literal(true),
+  filteredEmptyStateObserved: z.literal(true),
+  portraitDisplay: displaySchema.refine((v) => v.rotation === 0 && v.height > v.width),
+  landscapeDisplay: displaySchema.refine((v) => v.rotation === 1 && v.width > v.height),
+  landscapeAppWindowObserved: z.literal(true),
+  landscapeInputRetained: z.literal(true),
+  landscapeInputReachable: z.literal(true),
+  portraitAppWindowObserved: z.literal(true),
+  portraitInputRetained: z.literal(true),
+  portraitInputReachable: z.literal(true),
+  homeReturnObserved: z.literal(true),
+  systemBackCount: z.literal(1),
+  rotationPreferenceRestored: z.literal(true),
+});
 const resultSchema = z
-  .strictObject({
-    initialReadyState: z.enum(["empty", "cards"]),
-    inputBoundsWithinDisplay: z.literal(true),
-    keyboardObserved: z.literal(true),
-    focusedInputAboveKeyboard: z.literal(true),
-    syntheticAsciiInputRetained: z.literal(true),
-    submitMethod: z.literal("hardware-enter"),
-    keyboardDismissed: z.literal(true),
-    filteredEmptyStateObserved: z.literal(true),
-    portraitDisplay: displaySchema.refine((v) => v.rotation === 0 && v.height > v.width),
-    landscapeDisplay: displaySchema.refine((v) => v.rotation === 1 && v.width > v.height),
-    landscapeAppWindowObserved: z.literal(true),
-    landscapeInputRetained: z.literal(true),
-    landscapeInputReachable: z.literal(true),
-    portraitAppWindowObserved: z.literal(true),
-    portraitInputRetained: z.literal(true),
-    portraitInputReachable: z.literal(true),
-    homeReturnObserved: z.literal(true),
-    systemBackCount: z.literal(1),
-    rotationPreferenceRestored: z.literal(true),
-  })
+  .discriminatedUnion("submitMethod", [
+    resultBaseSchema,
+    resultBaseSchema.extend({
+      submitMethod: z.literal("software-keyboard-search"),
+      searchControlInCurrentImeWindow: z.literal(true),
+      searchControlBelowKeyboardTop: z.literal(true),
+      searchControlUniqueEnabledClickable: z.literal(true),
+      searchControlTapped: z.literal(true),
+    }),
+  ])
   .refine(
     (v) =>
       v.portraitDisplay.width === v.landscapeDisplay.height &&
       v.portraitDisplay.height === v.landscapeDisplay.width,
   );
-export const androidDirectoryReceiptSchema = androidGuideUiReceiptSchema
-  .pick({
-    version: true,
-    toolingSourceSha: true,
-    binarySourceSha: true,
-    observedAt: true,
-    applicationId: true,
-    binary: true,
-    verificationSha256: true,
-    baselineReceiptSha256: true,
-    device: true,
-    rawHierarchyExported: true,
-    screenshotsSuppressedBeforeNavigation: true,
-    metroServerStarted: true,
-    metroRequests: true,
-    allScreensVerified: true,
-    talkBackVerified: true,
-    voiceOverVerified: true,
-    remoteApiVerified: true,
-    oauthVerified: true,
-    physicalDeviceVerified: true,
-    storeSigned: true,
-    deployed: true,
-  })
+export const androidDirectoryBaseSchema = androidGuideUiReceiptSchema.pick({
+  version: true,
+  toolingSourceSha: true,
+  binarySourceSha: true,
+  observedAt: true,
+  applicationId: true,
+  binary: true,
+  verificationSha256: true,
+  baselineReceiptSha256: true,
+  device: true,
+  rawHierarchyExported: true,
+  screenshotsSuppressedBeforeNavigation: true,
+  metroServerStarted: true,
+  metroRequests: true,
+  allScreensVerified: true,
+  talkBackVerified: true,
+  voiceOverVerified: true,
+  remoteApiVerified: true,
+  oauthVerified: true,
+  physicalDeviceVerified: true,
+  storeSigned: true,
+  deployed: true,
+});
+export const androidDirectoryReceiptSchema = androidDirectoryBaseSchema
   .extend({
-    kind: z.literal("bundled-android-public-directory-input-ui-only"),
+    kind: z.enum([
+      "bundled-android-public-directory-input-ui-only",
+      "bundled-android-public-directory-software-search-ui-only",
+    ]),
     adbCommandOutputPersisted: z.literal(false),
     rawDumpsysExported: z.literal(false),
     publicDataNavigation: z.literal(true),
@@ -287,7 +302,14 @@ export const androidDirectoryReceiptSchema = androidGuideUiReceiptSchema
     httpTransportSeparatelyObserved: z.literal(false),
     koreanKeyboardVerified: z.literal(false),
     result: resultSchema,
-  });
+  })
+  .refine(
+    (value) =>
+      (value.kind === "bundled-android-public-directory-input-ui-only" &&
+        value.result.submitMethod === "hardware-enter") ||
+      (value.kind === "bundled-android-public-directory-software-search-ui-only" &&
+        value.result.submitMethod === "software-keyboard-search"),
+  );
 export function verifyAndroidDirectoryReceipt(
   value: unknown,
   expected: Pick<
@@ -334,6 +356,7 @@ export interface AndroidDirectoryDiagnostic {
   display: ReturnType<typeof androidDirectoryDisplay> | null;
   displayShape: ReturnType<typeof androidDirectoryDisplayShape> | null;
   input: { present: boolean; focused: boolean; retained: boolean } | null;
+  softwareSearchBeforeTap: ReturnType<typeof androidDirectorySoftwareSearch>["diagnostic"] | null;
 }
 export async function observeAndroidDirectoryInput(context: {
   shell: (args: string[]) => Promise<string>;
@@ -357,11 +380,13 @@ export async function observeAndroidDirectoryInput(context: {
   let stage: AndroidDirectoryDiagnostic["stage"] = "prepare";
   let lastDisplay: ReturnType<typeof androidDirectoryDisplay> | null = null;
   let lastDisplayShape: ReturnType<typeof androidDirectoryDisplayShape> | null = null;
+  let softwareSearchBeforeTap: AndroidDirectoryDiagnostic["softwareSearchBeforeTap"] = null;
   const report = (value: ReturnType<typeof androidDirectoryInputObservation> | null = null) =>
     context.diagnostic({
       stage,
       display: lastDisplay,
       displayShape: lastDisplayShape,
+      softwareSearchBeforeTap,
       input: value
         ? { present: !!value.input, focused: value.focused, retained: value.syntheticInputRetained }
         : null,
@@ -373,9 +398,15 @@ export async function observeAndroidDirectoryInput(context: {
     )
       throw Error("ANDROID_DIRECTORY_FOREGROUND_MISSING");
   }
-  async function hierarchy() {
+  async function hierarchy(allWindows = false) {
     try {
-      await shell(["uiautomator", "dump", "--compressed", file]);
+      await shell([
+        "uiautomator",
+        "dump",
+        "--compressed",
+        ...(allWindows ? ["--windows"] : []),
+        file,
+      ]);
       return await shell(["cat", file]);
     } finally {
       await shell(["rm", "-f", file]);
@@ -514,7 +545,22 @@ export async function observeAndroidDirectoryInput(context: {
       async () => (await input()).syntheticInputRetained,
       "ANDROID_DIRECTORY_INPUT_NOT_RETAINED",
     );
-    await shell(["input", "keyevent", "KEYCODE_ENTER"]);
+    const currentIme = (await shell(["settings", "get", "secure", "default_input_method"])).trim();
+    const searchDisplay = await display();
+    const searchControl = androidDirectorySoftwareSearch(
+      await hierarchy(true),
+      searchDisplay,
+      currentIme,
+    );
+    softwareSearchBeforeTap = searchControl.diagnostic;
+    report();
+    await foreground();
+    if (
+      !searchControl.point ||
+      (await shell(["settings", "get", "secure", "default_input_method"])).trim() !== currentIme
+    )
+      throw Error("ANDROID_DIRECTORY_SOFTWARE_SEARCH_MISSING");
+    await shell(["input", "tap", String(searchControl.point.x), String(searchControl.point.y)]);
     stage = "submitted";
     await poll(
       async () => !(await display()).keyboardVisible,
@@ -567,7 +613,11 @@ export async function observeAndroidDirectoryInput(context: {
       keyboardObserved: true,
       focusedInputAboveKeyboard: true,
       syntheticAsciiInputRetained: true,
-      submitMethod: "hardware-enter",
+      submitMethod: "software-keyboard-search",
+      searchControlInCurrentImeWindow: true,
+      searchControlBelowKeyboardTop: true,
+      searchControlUniqueEnabledClickable: true,
+      searchControlTapped: true,
       keyboardDismissed: true,
       filteredEmptyStateObserved: true,
       portraitDisplay,
