@@ -786,3 +786,40 @@ The current focused110 tests across4 files/910 assertions and the two manual
 probe contract tests pass. These local/scripted checks do not establish lower
 provider latency or actual complete video interpretation. Broad validation,
 exact-head CI and a single changed-request-profile actual acceptance remain.
+
+
+## Main3942 observations and retained probe inspection
+
+PR500 exact4ba2ea5 passed frozen install, quick305, full unit4221 across386
+files/172850 assertions and build/local Worker. Normal squash main3942f5a passed
+[CI40108396524](https://github.com/creno-va/baro/actions/runs/40108396524) and
+[preview40108645938](https://github.com/creno-va/baro/actions/runs/40108645938).
+The [configuration receipt](./ai-harness-2026-10-24/preview-3942f5a.json) retains
+its actual15:55:09.962Z observation. This does not establish model success.
+
+The separate changed-profile video probe
+[40108643694](https://github.com/creno-va/baro/actions/runs/40108643694) prepared
+the real pinned native fixture successfully:80 decoded frames,8 one-second
+candidates,2 scene candidates,2 selected frames and8 seconds of audio. Its model
+exchange then failed MODEL_RESPONSE_INVALID at15:52:29.654Z. No finite model
+report artifact was written. Provider outcome, reserved attempts and failure
+stage remain unknown; this is not a proved frame-schema failure or success.
+No unchanged paid POST, durable-state reset or source-hash budget reset was made.
+
+The real product legal chat on3942 started16:05:24Z and completed with a failed
+result at16:07:25Z: context641ms, initial generation120416ms. The existing
+120-second phase deadline expired before official-source retrieval. It is
+different from da9's verified-statute/action-policy rejection, and does not
+establish that prompt2.5 repaired legal chat. Original jobs and accounting remain.
+
+A separate manual status-only workflow reads the retained isolated probe control
+without deploying code, resetting storage or POSTing a model call. It shares the
+probe concurrency group, validates the existing candidate/feature/source identity,
+and records reserved permits separately from proven provider requests. Only a
+strictly validated finite report may enter its artifact; raw stored content is
+excluded. The workflow rotates only the isolated Worker READINESS_TOKEN using
+the existing preview credential and removes that temporary secret even after an
+ambiguous PUT or failed status read. Application credentials are not addressed.
+GET propagation waits are bounded. Cleanup failure remains a failed observation
+with the retained snapshot, rather than discarding diagnostic evidence. Local
+adapters exercise these boundaries; actual retained status is still pending.
