@@ -233,6 +233,7 @@ export function createAnalysisExecution(
               helpLinks: [],
             });
             await transition("screening", { status: "completed", result });
+            return { analysisId: params.analysisId, status: "completed" as const };
           }
         }
         if (name === "structure" && !cp.structure) {
@@ -361,6 +362,7 @@ export function createAnalysisExecution(
           )
             throw new ModelError("POLICY_REJECTED");
           await transition("validating", { status: "completed", result });
+          return { analysisId: params.analysisId, status: "completed" as const };
         }
       }
       state = await load();

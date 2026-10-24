@@ -17,6 +17,7 @@ import {
   failureCodeSchema,
 } from "../../contracts";
 
+export * from "./legacy-ai-schema";
 export * from "./v2-directory-index-schema";
 export * from "./v2-execution-schema";
 export * from "./v2-runtime-refresh-schema";

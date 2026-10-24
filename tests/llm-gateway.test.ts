@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { questionOutputSchema } from "../src/contracts";
 import { MODEL_ID, prompts } from "../src/server/modules/llm-gateway/prompts";
 import {
   createLlmGateway,
@@ -14,6 +15,44 @@ const screening = { schemaVersion: "1", inScope: true, urgency: "none", reasonCo
 const completion = (output: unknown) => ({
   choices: [{ message: { content: JSON.stringify({ output }) }, finish_reason: "stop" }],
   usage: { prompt_tokens: 10, completion_tokens: 20 },
+});
+
+test("new legacy question batches enforce three while historical four-question DTOs remain readable", async () => {
+  const questions = Array.from({ length: 4 }, (_, i) => ({
+    id: `q${i + 1}`,
+    prompt: `합성 확인 질문 ${i + 1}`,
+    answerType: "text",
+    options: [],
+  }));
+  expect(questionOutputSchema.parse({ schemaVersion: "1", questions }).questions).toHaveLength(4);
+  let calls = 0,
+    corrections = 0;
+  const gateway = createLlmGateway(
+    {
+      AI_GATEWAY_ID: "synthetic",
+      AI: {
+        run: async () =>
+          completion({
+            schemaVersion: "1",
+            questions: ++calls === 1 ? questions : questions.slice(0, 3),
+          }),
+      },
+    },
+    { sleep: async () => {} },
+  );
+  const result = await gateway.call(
+    "questions",
+    {},
+    "synthetic-question-cap",
+    async () => true,
+    async () => {
+      corrections++;
+      return true;
+    },
+  );
+  expect(result).toEqual({ schemaVersion: "1", questions: questions.slice(0, 3) });
+  expect(calls).toBe(2);
+  expect(corrections).toBe(1);
 });
 for (const phase of Object.keys(prompts) as (keyof typeof prompts)[]) {
   test(`${phase} wire schema requires every object property, including defaulted fields`, () => {

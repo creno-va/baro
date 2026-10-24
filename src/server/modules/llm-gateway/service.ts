@@ -32,7 +32,11 @@ const schemas = {
   minimize: minimizedInputSchema,
   screening: screeningOutputSchema,
   structure: structuredCaseSchema,
-  questions: questionOutputSchema,
+  // Previously saved v1 batches of up to five remain readable. New generation
+  // uses the current three-question batch ceiling, without changing that DTO.
+  questions: questionOutputSchema.extend({
+    questions: questionOutputSchema.shape.questions.max(3),
+  }),
   generation: guidanceResultSchema,
   validation: validationOutputSchema,
   workspace_questions: workspaceQuestionsOutputSchema,

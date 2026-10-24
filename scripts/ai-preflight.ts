@@ -195,6 +195,7 @@ export async function inspectAiPreflight(input: {
   }
   let reservations: z.infer<typeof reservationSchema>[] | null = null;
   let schemaRead = false;
+  let legacyJournalAvailable = false;
   try {
     const response = await fetcher(`${target.origin}/api/health/ai-configuration`, {
       method: "GET",
@@ -257,6 +258,14 @@ export async function inspectAiPreflight(input: {
     check("schema_matches", baseline === journal.entries.at(-1)?.tag);
     schemaRead = true;
     check("database_read_available", true);
+    if (scope === "all") {
+      legacyJournalAvailable =
+        (await core
+          .statement(
+            "SELECT count(*) AS count FROM sqlite_master WHERE type='table' AND name IN ('legacy_ai_operations','legacy_ai_attempts','legacy_ai_observations')",
+          )
+          .first<number>("count")) === 3;
+    }
     const runtime = createV2PaidRuntimeRepository(core, environment);
     const exposure = await runtime.exposure(now);
     observeCost("current_month_active", exposure?.month === month && exposure.phase === "active");
@@ -339,9 +348,10 @@ export async function inspectAiPreflight(input: {
     else check("database_read_available", false);
   }
   if (scope === "all") {
-    // AnalysisWorkflow still creates the gateway without its required attempt
-    // ledger. Keep this known technical composition failure separate from costs.
-    check("legacy_analysis_attempt_ledger_wired", false);
+    // The actual AnalysisWorkflow now supplies the private legacy ledger. Its
+    // required schema is inspected, while external execution is not inferred.
+    check("legacy_analysis_attempt_ledger_wired", legacyJournalAvailable);
+    warnings.push("legacy_analysis_runtime_requires_separate_acceptance");
     // The current file runtime supplies costs, bounds and vision capability.
     // This metadata/SELECT inspector does not execute that composition, inspect
     // its per-call receipts or prove external success. Do not infer either a

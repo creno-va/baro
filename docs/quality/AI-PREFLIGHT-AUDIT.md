@@ -235,6 +235,13 @@ storage bounds 누락을 거부하는 테스트가 통과했다. 이는 위 제�
 기술 조합 누락이므로 `legacy_analysis_attempt_ledger_wired` blocker를 유지한다.
 이 항목을 제거하거나 legacy 재분석을 성공으로 표시하지 않는다.
 
+2026-10-25 #506 후속 구현에서는 실제 Workflow가 전용 legacy 실행 원장과 invocation ID를
+연결하고, 기존 AI200 counter를 공유하도록 수정했다. 실제 조립·replay·권한/source·
+timeout/late·삭제·관측 IO 실패의 오프라인 회귀를 수행한다. `all` 검사는 새0017의 필수
+원장3개 테이블을 SELECT로 확인하며, 이전 상수 false 진단을 그대로 현재 결과로 사용하지
+않는다. `legacy-analysis-runtime`은 여전히 unverified이고 별도 실제 인수가 필요하다.
+이 로컬 구현 설명은 과거 실패나 배포된3b005f3의 미연결 상태를 성공으로 바꾸지 않는다.
+
 `all`은 전체 실제 인수 검사가 아니다. metadata와 D1 SELECT만으로 원격 파일 처리·media
 capability·실제 사용량/정산·provider 성공을 확인할 수 없다. 별도 동일 SHA의 실제 자료·
 산출물·다운로드와 원장 관측 receipt가 필요하다. `text` 배포 smoke의 기존 binding·키·
