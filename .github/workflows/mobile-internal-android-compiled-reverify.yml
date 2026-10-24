@@ -35,6 +35,12 @@ on:
         default: false
         type: boolean
 
+      directory_input:
+        description: Public directory ASCII input, hardware Enter, IME bounds and actual rotation; no profile values exported
+        required: false
+        default: false
+        type: boolean
+
 permissions:
   contents: read
   actions: read
@@ -58,10 +64,13 @@ jobs:
         if: (inputs.large_font || inputs.public_directory) && !inputs.smoke
         run: exit 1
       - name: Require isolated large-font Home for Guide UI
-        if: inputs.guide_ui && (!inputs.smoke || !inputs.large_font || inputs.public_directory)
+        if: inputs.guide_ui && (!inputs.smoke || !inputs.large_font || inputs.public_directory || inputs.directory_input)
         run: exit 1
       - name: Require isolated anonymous auth cancellation
-        if: inputs.auth_cancel && (!inputs.smoke || inputs.large_font || inputs.public_directory || inputs.guide_ui)
+        if: inputs.auth_cancel && (!inputs.smoke || inputs.large_font || inputs.public_directory || inputs.guide_ui || inputs.directory_input)
+        run: exit 1
+      - name: Require isolated public directory input
+        if: inputs.directory_input && (!inputs.smoke || inputs.large_font || inputs.public_directory || inputs.guide_ui || inputs.auth_cancel)
         run: exit 1
       - run: '[[ "$TARGET_SHA" =~ ^[a-f0-9]{40}$ ]]'
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -114,7 +123,7 @@ jobs:
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platform-tools' 'emulator' 'system-images;android-35;google_apis;x86_64'
       - name: Observe actual bundled Home without Metro
         if: inputs.smoke
-        run: bun scripts/mobile-internal-android-home.ts ${{ inputs.large_font && '--large-font' || '' }} ${{ inputs.public_directory && '--public-directory' || '' }} ${{ inputs.guide_ui && '--guide-ui' || '' }} ${{ inputs.auth_cancel && '--auth-cancel' || '' }}
+        run: bun scripts/mobile-internal-android-home.ts ${{ inputs.large_font && '--large-font' || '' }} ${{ inputs.public_directory && '--public-directory' || '' }} ${{ inputs.guide_ui && '--guide-ui' || '' }} ${{ inputs.auth_cancel && '--auth-cancel' || '' }} ${{ inputs.directory_input && '--directory-input' || '' }}
       - name: Require the explicitly requested auth cancellation observation
         if: inputs.auth_cancel
         run: test -s .wrangler/mobile-internal-android-runtime/auth-cancel-ui.json
@@ -129,6 +138,9 @@ jobs:
       - name: Require the explicitly requested public UI observation
         if: inputs.public_directory
         run: test -s .wrangler/mobile-internal-android-runtime/public-directory.json
+      - name: Require public directory input proof
+        if: inputs.directory_input
+        run: test -s .wrangler/mobile-internal-android-runtime/directory-input.json
       - name: Save reverified binary with separate source and verification receipts
         if: always() && steps.verify.outcome == 'success'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -154,6 +166,7 @@ jobs:
             .wrangler/mobile-internal-android-runtime/public-directory.json
             .wrangler/mobile-internal-android-runtime/guide-ui.json
             .wrangler/mobile-internal-android-runtime/auth-cancel-ui.json
+            .wrangler/mobile-internal-android-runtime/directory-input.json
           if-no-files-found: ignore
       - name: Preserve fixed failure classification
         if: failure()

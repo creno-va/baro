@@ -15,6 +15,13 @@ import {
   prepareOwnedChromeFixture,
 } from "./mobile-android-chrome-fixture";
 import {
+  type AndroidDirectoryDiagnostic,
+  androidDirectoryFailureCode,
+  type androidDirectoryReceiptSchema,
+  observeAndroidDirectoryInput,
+  verifyAndroidDirectoryReceipt,
+} from "./mobile-android-directory-input";
+import {
   type androidGuideUiReceiptSchema,
   androidGuideUiValidationFields,
   androidHomeObservationOptions,
@@ -67,9 +74,8 @@ export function bundledAndroidHomeObservation(xml: string) {
   };
 }
 async function main() {
-  const { largeFont, publicDirectory, guideUi, authCancel } = androidHomeObservationOptions(
-    process.argv.slice(2),
-  );
+  const { largeFont, publicDirectory, guideUi, authCancel, directoryInput } =
+    androidHomeObservationOptions(process.argv.slice(2));
   const root = process.cwd(),
     sourceSha = z
       .string()
@@ -87,6 +93,7 @@ async function main() {
     "home.png",
     "guide-ui.json",
     "auth-cancel-ui.json",
+    "directory-input.json",
   ])
     if (await Bun.file(resolve(out, name)).exists())
       throw new Error("BUNDLED_HOME_FRESH_OUTPUT_REQUIRED");
@@ -107,6 +114,7 @@ async function main() {
     lastGuideObservation: ReturnType<typeof anonymousGuideUiObservation> | null = null,
     lastAuthObservation: AndroidAuthDiagnostic | null = null,
     lastChromeFixture: AndroidChromeFixture | null = null,
+    lastDirectoryInputObservation: AndroidDirectoryDiagnostic | null = null,
     lastPublicObservation: ReturnType<typeof publicDirectoryUiObservation> | null = null,
     lastHomeObservation: ReturnType<typeof bundledAndroidHomeObservation> | null = null;
   const authPrivacy = androidAuthenticationPrivacyBoundary();
@@ -542,6 +550,75 @@ async function main() {
       });
       console.log("ACTUAL_ANDROID_ANONYMOUS_CUSTOM_TAB_CANCELLATION_OBSERVED");
     }
+    if (directoryInput) {
+      capture.disable();
+      authPrivacy.enterPublicData();
+      phase = "directory-input-boundary";
+      const screenshotsSuppressedBeforeNavigation = !capture.allowed;
+      if (!screenshotsSuppressedBeforeNavigation || !authPrivacy.entered)
+        throw Error("ANDROID_DIRECTORY_BOUNDARY_REQUIRED");
+      const result = await observeAndroidDirectoryInput({
+        shell,
+        deviceSerial: device,
+        avdName: avd,
+        freshOwnedEmulator: bootCompleted && baseHomeVerified && emulator?.exitCode === null,
+        screenshotsSuppressed: screenshotsSuppressedBeforeNavigation,
+        captureBoundaryEntered: authPrivacy.entered,
+        diagnostic(value) {
+          lastDirectoryInputObservation = value;
+          phase = `directory-input-${value.stage}`;
+        },
+      });
+      if (metroRequests) throw Error("BUNDLED_HOME_UNEXPECTED_METRO_REQUEST");
+      phase = "directory-input-proof";
+      const baselineBytes = await readFile(resolve(out, "receipt.json")),
+        baseline = JSON.parse(baselineBytes.toString()),
+        identity = {
+          toolingSourceSha: sourceSha,
+          binarySourceSha: receipt.sourceSha,
+          binary: receipt.artifact,
+          verificationSha256: hash(verificationBytes),
+          baselineReceiptSha256: hash(baselineBytes),
+          device: baseline.device,
+        };
+      const proof = verifyAndroidDirectoryReceipt(
+        {
+          version: 1,
+          kind: "bundled-android-public-directory-input-ui-only",
+          ...identity,
+          observedAt: new Date().toISOString(),
+          applicationId: appId,
+          result,
+          rawHierarchyExported: false,
+          screenshotsSuppressedBeforeNavigation,
+          adbCommandOutputPersisted: false,
+          rawDumpsysExported: false,
+          publicDataNavigation: true,
+          profileOpened: false,
+          contactOpened: false,
+          remoteMutationPerformed: false,
+          authenticationNavigation: false,
+          privateDataAccess: false,
+          httpTransportSeparatelyObserved: false,
+          koreanKeyboardVerified: false,
+          metroServerStarted: false,
+          metroRequests: 0,
+          allScreensVerified: false,
+          talkBackVerified: false,
+          voiceOverVerified: false,
+          remoteApiVerified: false,
+          oauthVerified: false,
+          physicalDeviceVerified: false,
+          storeSigned: false,
+          deployed: false,
+        } satisfies z.input<typeof androidDirectoryReceiptSchema>,
+        identity,
+      );
+      await writeFile(resolve(out, "directory-input.json"), `${JSON.stringify(proof, null, 2)}\n`, {
+        flag: "wx",
+      });
+      console.log("ACTUAL_ANDROID_PUBLIC_DIRECTORY_INPUT_OBSERVED");
+    }
     if (publicDirectory) {
       // No screenshots may be taken after this point, including every failure path.
       capture.disable();
@@ -691,7 +768,7 @@ async function main() {
     }
     await writeFile(
       resolve(out, "failure.json"),
-      `${JSON.stringify({ toolingSourceSha: sourceSha, phase, code: phase.startsWith("auth-cancel") ? androidAuthFailureCode(error) : known.has(message) ? message : "BUNDLED_HOME_FAILED", emulatorBootVerified: bootCompleted, lastHomeObservation, lastPublicObservation, lastGuideObservation, lastAuthObservation, lastChromeFixture, receiptValidationFields, publicScreenshotsSuppressed: !capture.allowed, emulatorStartupIssues: emulatorStartupIssues(await readFile(log, "utf8").catch(() => "")), sdkHomeLaunchVerified: baseHomeVerified, largeFontVerified: false, physicalDeviceVerified: false, storeSigned: false, deployed: false }, null, 2)}\n`,
+      `${JSON.stringify({ toolingSourceSha: sourceSha, phase, code: phase.startsWith("directory-input") ? androidDirectoryFailureCode(error) : phase.startsWith("auth-cancel") ? androidAuthFailureCode(error) : known.has(message) ? message : "BUNDLED_HOME_FAILED", emulatorBootVerified: bootCompleted, lastHomeObservation, lastPublicObservation, lastDirectoryInputObservation, lastGuideObservation, lastAuthObservation, lastChromeFixture, receiptValidationFields, publicScreenshotsSuppressed: !capture.allowed, emulatorStartupIssues: emulatorStartupIssues(await readFile(log, "utf8").catch(() => "")), sdkHomeLaunchVerified: baseHomeVerified, largeFontVerified: false, physicalDeviceVerified: false, storeSigned: false, deployed: false }, null, 2)}\n`,
       { flag: "wx" },
     );
     throw new Error("BUNDLED_HOME_FAILED");

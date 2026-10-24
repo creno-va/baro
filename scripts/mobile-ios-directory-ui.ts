@@ -52,6 +52,9 @@ const assertionCodes = [
   "BARO_DIRECTORY_KEYBOARD_MISSING",
   "BARO_DIRECTORY_INPUT_OCCLUDED",
   "BARO_DIRECTORY_INPUT_NOT_RETAINED",
+  "BARO_DIRECTORY_TYPED_INPUT_MISMATCH",
+  "BARO_DIRECTORY_LANDSCAPE_INPUT_MISMATCH",
+  "BARO_DIRECTORY_PORTRAIT_INPUT_MISMATCH",
   "BARO_DIRECTORY_KEYBOARD_NOT_DISMISSED",
   "BARO_DIRECTORY_SEARCH_EMPTY_MISSING",
   "BARO_DIRECTORY_LANDSCAPE_MISSING",
@@ -59,11 +62,43 @@ const assertionCodes = [
   "BARO_DIRECTORY_BACK_MISSING",
   "BARO_DIRECTORY_HOME_RETURN_MISSING",
 ] as const;
+const inputStatusSchema = z.strictObject({
+  stage: z.enum([
+    "before-input",
+    "after-input",
+    "typed-check",
+    "landscape-check",
+    "portrait-check",
+  ]),
+  inputState: z.enum([
+    "empty",
+    "literal",
+    "sentence-capitalized",
+    "prefix",
+    "other",
+    "unavailable",
+  ]),
+  appForeground: z.boolean(),
+  keyboardObserved: z.boolean(),
+});
 export function observeIosDirectoryFailure(output: string) {
+  let status: z.infer<typeof inputStatusSchema> | null = null;
+  const prefix = "BARO_DIRECTORY_UI_STATUS:";
+  for (const line of output
+    .split(/\r?\n/)
+    .filter((line) => line.startsWith(prefix))
+    .slice(-8)) {
+    try {
+      const parsed = inputStatusSchema.safeParse(JSON.parse(line.slice(prefix.length)));
+      if (parsed.success) status = parsed.data;
+    } catch {
+      /* Discard all malformed or unknown text. */
+    }
+  }
   const code = output.match(
     /XCTAssert[A-Za-z]+ failed[^\r\n]*? - (BARO_DIRECTORY_[A-Z0-9_]+)(?:[^A-Z0-9_]|$)/,
   )?.[1];
-  return { assertionCode: assertionCodes.find((value) => value === code) ?? null };
+  return { status, assertionCode: assertionCodes.find((value) => value === code) ?? null };
 }
 export const iosDirectoryBaseSchema = iosAuthCancelBaseSchema;
 export const iosDirectoryReceiptSchema = iosDirectoryBaseSchema.extend({
