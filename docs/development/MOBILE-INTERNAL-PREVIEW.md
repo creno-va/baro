@@ -1794,3 +1794,22 @@ PackageManager 두 handler, Launcher3/Pixel의 기존 연속3 sample·오류 dia
 키보드 설치나 사용자 기기 설정 변경은 하지 않는다. 실제 성공은 exact CI/main 뒤 별도
 실행으로 검증하며 새 profile 준비를 ANR 원인 해결·Gboard/Korean·OAuth·물리 기기 인수로
 확대하지 않는다.
+
+### AOSP 실제 Home 이후 Search 제어 관측 실패
+
+source4e7cd87의 [40127019803](https://github.com/creno-va/baro/actions/runs/40127019803)은 전체
+FAILURE지만, 선택된 AOSP image/API35 readback·PackageManager 두 handler·Launcher3 연속3 sample과
+오류 dialog 부재, 실제 Home cold2/Metro0은 통과했다.
+[원래 Home](../quality/mobile-native-92f4232/android-aosp-input-40127019803/receipt.json),
+[실패](../quality/mobile-native-92f4232/android-aosp-input-40127019803/failure.json),
+[SDK 재검증](../quality/mobile-native-92f4232/android-aosp-input-40127019803/verification.json)과
+[원본 결합](../quality/mobile-native-92f4232/android-aosp-input-40127019803/local-preservation.json)을 보존한다.
+[탐색 전 PNG](../quality/mobile-native-92f4232/android-aosp-input-40127019803/home.png)는
+1080×2400px/170,744bytes·전체 hash를 대조하고 직접 확인했다. 초기 Home의 가독성은 보지만
+어절 내부 분리도 관측했으므로 `balanced`를 한글 typography 전체 인수로 표시하지 않는다.
+
+`directory-input-typed/ANDROID_DIRECTORY_SOFTWARE_SEARCH_MISSING`이며 default display1·IME
+window1 안의 Search 후보는0개였다. 코드 흐름상 고정 문자열 readback poll 뒤 단계라는 추론을
+별도로 표시하고, 최종 failure의 input=null 등은 바꾸지 않는다. Search tap·회전/복귀·Korean은
+인수하지 않았다. Pixel Launcher ANR 원인이 해결됐다는 의미가 아니며 오류 제어를 건드리지
+않은 다른 runtime 조건의 결과다. 다음 관측은 실제 IME action/접근성 노출을 확인하는 범위다.

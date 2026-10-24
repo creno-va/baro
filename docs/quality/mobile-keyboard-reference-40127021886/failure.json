@@ -1,0 +1,33 @@
+{
+  "toolingSourceSha": "4e7cd8759f7f683b0532a2dff65f75a50c070f99",
+  "phase": "gboard-settings-reference",
+  "code": "ANDROID_IME_REFERENCE_SETTINGS_SCOPE_REQUIRED",
+  "commandFailures": {
+    "count": 8,
+    "first": {
+      "operation": "other",
+      "category": "nonzero-exit",
+      "exitCode": 1,
+      "timedOut": false
+    },
+    "last": {
+      "operation": "other",
+      "category": "nonzero-exit",
+      "exitCode": 1,
+      "timedOut": false
+    }
+  },
+  "imeRegistrationDiagnostic": {
+    "stage": "complete",
+    "defaultState": "component",
+    "samples": 1,
+    "uninitializedSamples": 0,
+    "emptyInventoryObserved": false,
+    "defaultUnregisteredObserved": false,
+    "failureCode": null
+  },
+  "emulatorStartupIssues": [],
+  "rawCommandLogsExported": false,
+  "rawMetadataExported": false,
+  "productInputVerified": false
+}

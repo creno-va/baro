@@ -21,6 +21,37 @@ private func koreanSettingsOwnerChoice(cells: [CGRect], buttons: [CGRect], texts
 }
 // BARO_KOREAN_SETTINGS_OWNER_END
 
+// BARO_KOREAN_SWITCH_OWNER_BEGIN
+private func koreanKeyboardSwitchOwner(buttons: [CGRect], keys: [CGRect], keyboard: CGRect, window: CGRect) -> (selection: String, index: Int?, buttonCount: Int, keyCount: Int, ownersOverlap: Bool, regionValid: Bool) {
+  func valid(_ frame: CGRect) -> Bool {
+    [frame.minX, frame.minY, frame.width, frame.height].allSatisfy { $0.isFinite } && frame.width > 0 && frame.height > 0
+  }
+  guard buttons.count <= 8 && keys.count <= 8 else { return ("ambiguous", nil, 0, 0, false, false) }
+  guard valid(window) && valid(keyboard) else { return ("none", nil, 0, 0, true, false) }
+  let visibleKeyboard = keyboard.intersection(window)
+  let regionValid = window.height > window.width
+    && keyboard.width >= window.width * 0.9 && keyboard.height >= window.height * 0.15 && keyboard.minY > window.minY
+    && visibleKeyboard.width >= keyboard.width * 0.95 && visibleKeyboard.height >= keyboard.height * 0.95
+  guard regionValid else { return ("none", nil, 0, 0, true, false) }
+  func eligible(_ frame: CGRect) -> Bool {
+    guard valid(frame), frame.minY >= keyboard.minY else { return false }
+    let visible = frame.intersection(window)
+    return visible.width >= frame.width * 0.95 && visible.height >= frame.height * 0.95
+  }
+  let buttonOwners = buttons.enumerated().filter { eligible($0.element) }
+  let keyOwners = keys.enumerated().filter { eligible($0.element) }
+  var overlap = true
+  if buttonOwners.count == 1, keyOwners.count == 1, let button = buttonOwners.first?.element, let key = keyOwners.first?.element {
+    let shared = button.intersection(key)
+    overlap = shared.width >= Swift.max(button.width, key.width) * 0.95 && shared.height >= Swift.max(button.height, key.height) * 0.95
+  }
+  guard buttonOwners.count <= 1 && keyOwners.count <= 1 && overlap else { return ("ambiguous", nil, buttonOwners.count, keyOwners.count, overlap, true) }
+  if let button = buttonOwners.first { return ("button", button.offset, 1, keyOwners.count, overlap, true) }
+  if let key = keyOwners.first { return ("key", key.offset, 0, 1, overlap, true) }
+  return ("none", nil, 0, 0, true, true)
+}
+// BARO_KOREAN_SWITCH_OWNER_END
+
 // Appended to DirectoryUITests.swift in the owned runner only. No product changes.
 extension BaroDirectoryUITests {
   @MainActor
@@ -205,6 +236,29 @@ extension BaroDirectoryUITests {
   }
 
   @MainActor
+  private func koreanKeyboardSwitchControl(keyboard: XCUIElement, app: XCUIApplication, attempt: Int) -> XCUIElement? {
+    let predicate = NSPredicate(format: "label == %@", "Next keyboard")
+    let buttonQuery = app.buttons.matching(predicate), keyQuery = app.keys.matching(predicate)
+    XCTAssertTrue(buttonQuery.count <= 8 && keyQuery.count <= 8, "BARO_KOREAN_SWITCH_CANDIDATES_EXCEEDED")
+    guard buttonQuery.count <= 8 && keyQuery.count <= 8 else { return nil }
+    let buttons = buttonQuery.allElementsBoundByIndex.filter { fullyHittable($0, in: app) }
+    let keys = keyQuery.allElementsBoundByIndex.filter { fullyHittable($0, in: app) }
+    // The dock can be below the Keyboard AX subtree. Keep the same fixed label,
+    // but require a unique hittable owner in the actual lower system-keyboard region.
+    let choice = koreanKeyboardSwitchOwner(buttons: buttons.map { $0.frame }, keys: keys.map { $0.frame }, keyboard: keyboard.frame, window: app.windows.firstMatch.frame)
+    let foreground = app.state == .runningForeground, keyboardObserved = keyboard.exists
+    let actionAllowed = foreground && keyboardObserved && choice.regionValid && (choice.selection == "button" || choice.selection == "key")
+    let status: [String: Any] = ["scope": "app-system-keyboard-region", "attempt": attempt, "buttonCount": buttonQuery.count, "keyCount": keyQuery.count, "eligibleButtonCount": choice.buttonCount, "eligibleKeyCount": choice.keyCount, "ownersOverlap": choice.ownersOverlap, "regionValid": choice.regionValid, "selection": choice.selection, "appForeground": foreground, "keyboardObserved": keyboardObserved, "actionAllowed": actionAllowed]
+    if let data = try? JSONSerialization.data(withJSONObject: status, options: [.sortedKeys]) {
+      print("BARO_KOREAN_SWITCH_STATUS:" + String(decoding: data, as: UTF8.self))
+    }
+    guard actionAllowed, let index = choice.index else { return nil }
+    let owners = choice.selection == "button" ? buttons : keys
+    guard owners.indices.contains(index), app.state == .runningForeground, keyboard.exists, fullyHittable(owners[index], in: app) else { return nil }
+    return owners[index]
+  }
+
+  @MainActor
   func testPublicDirectoryKoreanCompositionAndRotation() throws {
     continueAfterFailure = false
     XCUIDevice.shared.orientation = .portrait
@@ -234,10 +288,12 @@ extension BaroDirectoryUITests {
     // Bounded language cycling; require visible jamo keys before any product input.
     var switches = 0
     while !keyboard.keys["ㅂ"].exists && switches < 3 {
-      let next = keyboard.buttons["Next keyboard"]
-      XCTAssertTrue(next.exists && next.isHittable, "BARO_KOREAN_SWITCH_MISSING")
+      let next = koreanKeyboardSwitchControl(keyboard: keyboard, app: app, attempt: switches + 1)
+      XCTAssertNotNil(next, "BARO_KOREAN_SWITCH_MISSING")
+      guard let next else { return }
       next.tap()
       switches += 1
+      _ = wait({ keyboard.keys["ㅂ"].exists && keyboard.keys["ㅏ"].exists }, seconds: 3)
     }
     XCTAssertTrue(keyboard.keys["ㅂ"].exists && keyboard.keys["ㅏ"].exists, "BARO_KOREAN_KEYBOARD_MISSING")
     XCTAssertTrue(fullyHittable(input, in: app) && input.frame.maxY <= keyboard.frame.minY, "BARO_DIRECTORY_INPUT_OCCLUDED")
