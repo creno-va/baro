@@ -112,7 +112,15 @@ export function prepareGatewayWireInput(phase: Phase, input: unknown, correction
   const envelope = z.strictObject({ output: schemas[phase] });
   // Strict provider output must include defaulted fields too; input schemas mark
   // them optional, which the provider rejects before generating a response.
-  const jsonSchema = wireSchema(z.toJSONSchema(envelope, { io: "output", unrepresentable: "any" }));
+  const jsonSchema = wireSchema(
+    z.toJSONSchema(envelope, {
+      io: "output",
+      unrepresentable: "any",
+      // Chat repeats the same closed fact/material references in several arrays.
+      // Reuse definitions instead of duplicating their nested unions on the wire.
+      ...(phase === "workspace_chat" ? { reused: "ref" as const } : {}),
+    }),
+  );
   return {
     messages: [
       {
