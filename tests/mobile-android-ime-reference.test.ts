@@ -215,6 +215,61 @@ test("an unknown, multiple or mismatched foreground and unproven Settings scope 
       "ANDROID_IME_REFERENCE_SETTINGS_SCOPE_REQUIRED",
     );
 });
+test("a rejected Settings scope can retain bounded fixed counts only after both foreground guards", () => {
+  const diagnostics: unknown[] = [];
+  const options = {
+    foregroundAfter: settingsForeground,
+    diagnostic: (value: unknown) => diagnostics.push(value),
+  };
+  const xml = settingsXml().replace('text="Gboard"', 'text="synthetic-private-title"');
+  expect(() =>
+    androidGboardSettingsControls(xml, settingsForeground, settingsComponent, options),
+  ).toThrow("ANDROID_IME_REFERENCE_SETTINGS_SCOPE_REQUIRED");
+  expect(diagnostics).toHaveLength(1);
+  expect(diagnostics[0]).toMatchObject({
+    foregroundBeforeVerified: true,
+    foregroundAfterVerified: true,
+    titleCount: 0,
+    menuCounts: { languages: 1, preferences: 1 },
+    strictScopeObserved: false,
+  });
+  expect(JSON.stringify(diagnostics)).not.toMatch(
+    /synthetic|com\.google|SettingsActivity|private-title/,
+  );
+  for (const patch of [
+    { foregroundAfter: "" },
+    { foregroundAfter: settingsForeground.replace(settingsClass, "OtherActivity") },
+  ]) {
+    diagnostics.length = 0;
+    expect(() =>
+      androidGboardSettingsControls(xml, settingsForeground, settingsComponent, {
+        ...options,
+        ...patch,
+      }),
+    ).toThrow("ANDROID_IME_REFERENCE_SETTINGS_FOREGROUND_REQUIRED");
+    expect(diagnostics).toHaveLength(0);
+  }
+  diagnostics.length = 0;
+  const tooMany = settingsXml(
+    Array(9)
+      .fill(
+        '<node package="com.google.android.inputmethod.latin" class="android.widget.TextView" enabled="true" text="Theme"/>',
+      )
+      .join(""),
+  );
+  expect(() =>
+    androidGboardSettingsControls(tooMany, settingsForeground, settingsComponent, options),
+  ).toThrow("ANDROID_IME_REFERENCE_SETTINGS_SCOPE_REQUIRED");
+  expect(diagnostics).toHaveLength(0);
+  const accepted = androidGboardSettingsControls(
+    settingsXml(),
+    settingsForeground,
+    settingsComponent,
+    options,
+  );
+  expect(accepted.gboardTitleObserved).toBe(true);
+  expect(diagnostics[0]).toMatchObject({ titleCount: 1, strictScopeObserved: true });
+});
 test("unsupported or oversized hierarchy and duplicate attributes fail, and the mode defaults to metadata only", () => {
   for (const xml of [
     "",

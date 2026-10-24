@@ -60,16 +60,17 @@ export function androidDirectorySoftwareSearch(xml: string, display: Display, co
     : null;
   const elements = [...windowBody.matchAll(/<node\b([^>]*)>/g)];
   if (elements.length > 10000) throw Error("ANDROID_DIRECTORY_HIERARCHY_INVALID");
-  const controls = elements
+  const imeNodes = elements
     .map((m) => attributes(m[1] ?? ""))
-    .filter(
-      (node) =>
-        ime &&
-        node.package === ime &&
-        [node.text, node["content-desc"]].some(
-          (label) => label === "검색" || label?.toLowerCase() === "search",
-        ),
-    );
+    .filter((node) => ime && node.package === ime);
+  const controls = imeNodes.filter(
+    (node) =>
+      ime &&
+      node.package === ime &&
+      [node.text, node["content-desc"]].some(
+        (label) => label === "검색" || label?.toLowerCase() === "search",
+      ),
+  );
   const control = controls.length === 1 ? controls[0] : undefined;
   const controlBox = control ? box(control.bounds, display.width, display.height) : null;
   const withinWindow =
@@ -96,6 +97,15 @@ export function androidDirectorySoftwareSearch(xml: string, display: Display, co
     defaultDisplayCount: displays.length,
     imeWindowCount: windows.length,
     matchingControlCount: controls.length,
+    // Fixed counts only: a class match is observation, never an ACTION_CLICK proof.
+    imeNodeCount: imeNodes.length,
+    aospKeyNodeCount: imeNodes.filter(
+      (node) => node.class === "com.android.inputmethod.keyboard.Key",
+    ).length,
+    aospSearchKeyCount: controls.filter(
+      (node) => node.class === "com.android.inputmethod.keyboard.Key",
+    ).length,
+    searchControlClickableFlag: control?.clickable === "true",
     controlWithinImeWindow: withinWindow,
     controlBelowKeyboardTop: belowKeyboardTop,
     controlEnabledClickable: enabledClickable,

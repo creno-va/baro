@@ -40,6 +40,7 @@ function nativeFixture(
   failRestore = false,
   missingSearchControl = false,
   imeChangesBeforeTap = false,
+  hideCompressedIme = false,
 ) {
   let rotation = 0,
     userRotation = 2,
@@ -50,6 +51,7 @@ function nativeFixture(
     typed = false,
     submitted = false;
   let allWindows = false;
+  let compressed = true;
   let imeReads = 0;
   const commands: string[][] = [],
     diagnostics: unknown[] = [];
@@ -95,11 +97,14 @@ function nativeFixture(
         if (command === "dumpsys window displays") return dump(rotation, keyboard);
         if (args[0] === "uiautomator") {
           allWindows = args.includes("--windows");
+          compressed = args.includes("--compressed");
           return `UI hierchary dumped to: ${args.at(-1)}\n`;
         }
         if (args[0] === "rm") return "";
         if (args[0] === "cat" && allWindows)
-          return windowsXml(imeWindow(missingSearchControl ? "" : imeKey()));
+          return windowsXml(
+            imeWindow(missingSearchControl || (hideCompressedIme && compressed) ? "" : imeKey()),
+          );
         if (args[0] === "cat")
           return xml(
             node(
@@ -434,6 +439,95 @@ test("software Search requires the current IME package, unique default-display i
   );
   expect(diagnostic).not.toContain("synthetic-private");
   expect(diagnostic).not.toContain(imePackage);
+});
+
+test("only verified AOSP gets an uncompressed IME snapshot, with no fallback from missing controls", async () => {
+  const profile = {
+    kind: "aosp-api35" as const,
+    avdImageReadbackVerified: true,
+    runtimeApiReadbackVerified: true,
+  };
+  for (const patch of [
+    { avdImageReadbackVerified: false },
+    { runtimeApiReadbackVerified: false },
+    { kind: "unknown" },
+  ]) {
+    const fixture = nativeFixture();
+    await expect(
+      observeAndroidDirectoryInput({
+        ...fixture.context,
+        runtimeProfile: { ...profile, ...patch } as typeof profile,
+      }),
+    ).rejects.toThrow("ANDROID_DIRECTORY_RUNTIME_PROFILE_UNVERIFIED");
+    expect(fixture.commands).toHaveLength(0);
+  }
+  const aosp = nativeFixture("free", false, false, false, false, true);
+  await observeAndroidDirectoryInput({ ...aosp.context, runtimeProfile: profile });
+  const snapshots = aosp.commands.filter((args) => args[0] === "uiautomator");
+  expect(snapshots.filter((args) => args.includes("--windows"))).toHaveLength(1);
+  expect(snapshots.filter((args) => args.includes("--windows"))[0]).not.toContain("--compressed");
+  expect(
+    snapshots
+      .filter((args) => !args.includes("--windows"))
+      .every((args) => args.includes("--compressed")),
+  ).toBe(true);
+  expect(
+    aosp.diagnostics.every(
+      (value) => (value as { imeHierarchyMode: string }).imeHierarchyMode === "uncompressed-aosp",
+    ),
+  ).toBe(true);
+  for (const runtimeProfile of [undefined, { ...profile, kind: "google-apis-api35" as const }]) {
+    const fixture = nativeFixture("free", false, false, false, false, true);
+    await expect(
+      observeAndroidDirectoryInput({
+        ...fixture.context,
+        ...(runtimeProfile ? { runtimeProfile } : {}),
+      }),
+    ).rejects.toThrow("ANDROID_DIRECTORY_SOFTWARE_SEARCH_MISSING");
+    expect(
+      fixture.commands
+        .filter((args) => args[0] === "uiautomator")
+        .every((args) => args.includes("--compressed")),
+    ).toBe(true);
+    expect(
+      fixture.commands.some(
+        (args) => args[0] === "input" && args[1] === "keyevent" && args[2] !== "KEYCODE_BACK",
+      ),
+    ).toBe(false);
+  }
+});
+
+test("fixed IME counts distinguish an observed AOSP virtual key without treating its class as clickable", () => {
+  const display = { width: 1080, height: 2400, keyboardVisible: true, keyboardTop: 1500 };
+  const key = imeKey(
+    'class="com.android.inputmethod.keyboard.Key" content-desc="Search" clickable="false"',
+  );
+  const result = androidDirectorySoftwareSearch(windowsXml(imeWindow(key)), display, imeComponent);
+  expect(result.point).toBeNull();
+  expect(result.diagnostic).toMatchObject({
+    imeNodeCount: 1,
+    aospKeyNodeCount: 1,
+    matchingControlCount: 1,
+    aospSearchKeyCount: 1,
+    searchControlClickableFlag: false,
+    controlEnabledClickable: false,
+    uniqueUsableControl: false,
+  });
+  const serialized = JSON.stringify(result.diagnostic);
+  expect(
+    Object.values(result.diagnostic).every(
+      (value) => typeof value === "number" || typeof value === "boolean",
+    ),
+  ).toBe(true);
+  expect(serialized).not.toContain(imePackage);
+  expect(serialized).not.toContain("keyboard.Key");
+  const foreign = androidDirectorySoftwareSearch(
+    windowsXml(imeWindow(key.replace(imePackage, appId))),
+    display,
+    imeComponent,
+  );
+  expect(foreign.diagnostic.imeNodeCount).toBe(0);
+  expect(foreign.diagnostic.aospKeyNodeCount).toBe(0);
 });
 
 test("historical hardware Enter receipts remain readable and cannot be relabelled as software Search", async () => {

@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "kind": "android-uiautomator-source-observation",
+  "observedAt": "2026-10-24T20:25:51.233665+00:00",
+  "sources": [
+    {
+      "name": "DumpCommand",
+      "url": "https://android.googlesource.com/platform/prebuilts/fullsdk/sources/+/88c7ff1cd72d6305ec59f97aadc2198cc2dc3592/android-34/com/android/commands/uiautomator/DumpCommand.java",
+      "httpStatus": 200,
+      "decodedSourceBytes": 4681,
+      "decodedSourceSha256": "da9ff50b21ea60d79c339e9c482c35b2a9b8a2677abc5efa7445acfa83897f03"
+    },
+    {
+      "name": "KeyboardAccessibilityNodeProvider",
+      "url": "https://android.googlesource.com/platform/packages/inputmethods/LatinIME/+/refs/heads/android15-release/java/src/com/android/inputmethod/accessibility/KeyboardAccessibilityNodeProvider.java",
+      "httpStatus": 200,
+      "decodedSourceBytes": 14251,
+      "decodedSourceSha256": "bc90eb27ca90866c16a3e28ca2e5c9f655ed93b4aaeeea2cff4b777655c349a1"
+    }
+  ],
+  "actualRuntimeCauseConfirmed": false,
+  "actualSearchVerified": false,
+  "scope": "Public primary-source metadata only; no live hierarchy or user input."
+}
