@@ -680,6 +680,11 @@ async function main() {
         throw Error("ANDROID_DIRECTORY_BOUNDARY_REQUIRED");
       const result = await observeAndroidDirectoryInput({
         shell,
+        runtimeProfile: {
+          kind: runtimeProfile.kind,
+          avdImageReadbackVerified,
+          runtimeApiReadbackVerified,
+        },
         deviceSerial: device,
         avdName: avd,
         freshOwnedEmulator: bootCompleted && baseHomeVerified && emulator?.exitCode === null,

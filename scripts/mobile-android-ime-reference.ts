@@ -290,25 +290,48 @@ export function androidGboardSettingsActivity(raw: string, selected: string) {
     throw Error("ANDROID_IME_REFERENCE_SETTINGS_ACTIVITY_REQUIRED");
   return `${pkg}/${activity.startsWith(".") ? pkg + activity : activity}`;
 }
+export interface AndroidGboardScopeDiagnostic {
+  foregroundBeforeVerified: true;
+  foregroundAfterVerified: boolean;
+  titleCount: number;
+  menuCounts: Record<string, number>;
+  strictScopeObserved: boolean;
+}
 /** Fixed public OS menu counts only, scoped to the observed SDK Gboard Settings activity. */
-export function androidGboardSettingsControls(xml: string, foreground: string, activity: string) {
-  if (
-    foreground.length > 4_000_000 ||
-    !component.test(activity) ||
-    !activity.startsWith("com.google.android.inputmethod.latin/")
-  )
-    throw Error("ANDROID_IME_REFERENCE_SETTINGS_FOREGROUND_REQUIRED");
-  const lines = foreground.split(/\r?\n/),
-    top = lines.filter((line) => /\btopResumedActivity\s*[=:]/.test(line)),
-    resumed = top.length ? top : lines.filter((line) => /\bmResumedActivity\s*[=:]/.test(line)),
-    observed =
-      resumed.length === 1
-        ? resumed[0]?.match(/\bu\d+\s+([A-Za-z][\w.]*)\/([A-Za-z.][\w.$]*)\s/)
-        : null,
-    expected = activity.split("/");
-  const observedClass = observed?.[2]?.startsWith(".") ? observed[1] + observed[2] : observed?.[2];
-  if (!observed || observed[1] !== expected[0] || observedClass !== expected[1])
-    throw Error("ANDROID_IME_REFERENCE_SETTINGS_FOREGROUND_REQUIRED");
+export function androidGboardSettingsControls(
+  xml: string,
+  foreground: string,
+  activity: string,
+  observation?: {
+    foregroundAfter?: string;
+    diagnostic?: (value: AndroidGboardScopeDiagnostic) => void;
+  },
+) {
+  assertGboardForeground(foreground, activity);
+  if (observation?.foregroundAfter !== undefined)
+    assertGboardForeground(observation.foregroundAfter, activity);
+  const expected = activity.split("/");
+  function assertGboardForeground(foreground: string, activity: string) {
+    if (
+      foreground.length > 4_000_000 ||
+      !component.test(activity) ||
+      !activity.startsWith("com.google.android.inputmethod.latin/")
+    )
+      throw Error("ANDROID_IME_REFERENCE_SETTINGS_FOREGROUND_REQUIRED");
+    const lines = foreground.split(/\r?\n/),
+      top = lines.filter((line) => /\btopResumedActivity\s*[=:]/.test(line)),
+      resumed = top.length ? top : lines.filter((line) => /\bmResumedActivity\s*[=:]/.test(line)),
+      observed =
+        resumed.length === 1
+          ? resumed[0]?.match(/\bu\d+\s+([A-Za-z][\w.]*)\/([A-Za-z.][\w.$]*)\s/)
+          : null,
+      expected = activity.split("/");
+    const observedClass = observed?.[2]?.startsWith(".")
+      ? observed[1] + observed[2]
+      : observed?.[2];
+    if (!observed || observed[1] !== expected[0] || observedClass !== expected[1])
+      throw Error("ANDROID_IME_REFERENCE_SETTINGS_FOREGROUND_REQUIRED");
+  }
   if (
     xml.length > 1_000_000 ||
     !xml.startsWith("<?xml") ||
@@ -367,13 +390,18 @@ export function androidGboardSettingsControls(xml: string, foreground: string, a
     menuCounts = Object.fromEntries(
       Object.entries(menuLabels).map(([key, label]) => [key, count(label)]),
     );
-  if (
-    titleCount < 1 ||
-    titleCount > 8 ||
-    Object.values(menuCounts).some((n) => n > 8) ||
-    Object.values(menuCounts).filter((n) => n > 0).length < 2
-  )
+  if (titleCount > 8 || Object.values(menuCounts).some((n) => n > 8))
     throw Error("ANDROID_IME_REFERENCE_SETTINGS_SCOPE_REQUIRED");
+  const strictScopeObserved =
+    titleCount >= 1 && Object.values(menuCounts).filter((n) => n > 0).length >= 2;
+  observation?.diagnostic?.({
+    foregroundBeforeVerified: true,
+    foregroundAfterVerified: observation.foregroundAfter !== undefined,
+    titleCount,
+    menuCounts,
+    strictScopeObserved,
+  });
+  if (!strictScopeObserved) throw Error("ANDROID_IME_REFERENCE_SETTINGS_SCOPE_REQUIRED");
   return {
     kind: "android-owned-gboard-settings-controls-reference-only" as const,
     settingsActivityForegroundVerified: true as const,
@@ -414,6 +442,7 @@ async function main() {
   const log = resolve(owned, "private-emulator.log");
   let hierarchyOutcome: AndroidHierarchyDumpOutcome | null = null;
   let imeRegistrationDiagnostic: AndroidImeRegistrationDiagnostic | null = null;
+  let gboardScopeDiagnostic: AndroidGboardScopeDiagnostic | null = null;
   async function command(args: string[], input?: string, timeoutMs?: number) {
     return new TextDecoder().decode(
       await runAndroidHomeCommand({
@@ -514,13 +543,12 @@ async function main() {
         if (hierarchyOutcome !== "saved")
           throw Error("ANDROID_IME_REFERENCE_SETTINGS_DUMP_UNCONFIRMED");
         const xml = await shell(["cat", file]);
-        settingsReference = androidGboardSettingsControls(xml, foreground, activity);
-        // Bind the observation to the foreground after the dump as well.
-        androidGboardSettingsControls(
-          xml,
-          await shell(["dumpsys", "activity", "activities"]),
-          activity,
-        );
+        settingsReference = androidGboardSettingsControls(xml, foreground, activity, {
+          foregroundAfter: await shell(["dumpsys", "activity", "activities"]),
+          diagnostic: (value) => {
+            gboardScopeDiagnostic = value;
+          },
+        });
       } finally {
         await shell(["rm", "-f", file]);
         await shell(["test", "!", "-e", file]);
@@ -586,6 +614,7 @@ async function main() {
               : "ANDROID_IME_REFERENCE_FAILED",
           commandFailures: failures.snapshot(),
           imeRegistrationDiagnostic,
+          gboardScopeDiagnostic,
           emulatorStartupIssues: emulatorStartupIssues(await readFile(log, "utf8").catch(() => "")),
           rawCommandLogsExported: false,
           rawMetadataExported: false,

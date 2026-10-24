@@ -1813,3 +1813,29 @@ window1 안의 Search 후보는0개였다. 코드 흐름상 고정 문자열 rea
 별도로 표시하고, 최종 failure의 input=null 등은 바꾸지 않는다. Search tap·회전/복귀·Korean은
 인수하지 않았다. Pixel Launcher ANR 원인이 해결됐다는 의미가 아니며 오류 제어를 건드리지
 않은 다른 runtime 조건의 결과다. 다음 관측은 실제 IME action/접근성 노출을 확인하는 범위다.
+
+### AOSP 검색 키 계층 조회 보완
+
+[실제 AOSP40127019803](https://github.com/creno-va/baro/actions/runs/40127019803)은
+image/API readback·Launcher3 연속3회·Home cold2를 통과한 뒤, ASCII 입력 후 검색 키 후보0으로
+실패했다. 검색 키 tap·회전·Home 복귀와 한글 입력은 성공하지 않았다.
+
+[공식 DumpCommand](https://android.googlesource.com/platform/prebuilts/fullsdk/sources/+/88c7ff1cd72d6305ec59f97aadc2198cc2dc3592/android-34/com/android/commands/uiautomator/DumpCommand.java)는
+`--compressed` 여부에 따라 압축 계층을 설정한다.
+[Android15 LatinIME node provider](https://android.googlesource.com/platform/packages/inputmethods/LatinIME/+/refs/heads/android15-release/java/src/com/android/inputmethod/accessibility/KeyboardAccessibilityNodeProvider.java)는
+virtual key에 ACTION_CLICK을 추가하지만 clickable flag를 직접 설정하지 않는다.
+[조회 시각·원문 hash](../quality/ANDROID-IME-SOURCE-OBSERVATION-2026-10-25.json)는 정적 소스 관측이며,
+이 실행의 후보0 원인을 확정하거나 live node/action 성공을 증명하지 않는다.
+
+검증된 AOSP profile·AVD image·실제 API readback 조건에서 IME의 `--windows` 조회만 비압축으로
+수행한다. 일반 앱 계층과 기본 Google profile은 기존 압축 조회를 유지한다. 고정 진단에는
+현재 IME 노드·AOSP key·검색 key 개수와 실제 clickable flag만 추가하며, raw label·package·
+좌표·계층은 내보내지 않는다. class 일치만으로 클릭 가능하다고 처리하지 않는다.
+유일하고 enabled/clickable인 현재 IME 검색 키·실제 tap·키보드 닫힘·검색 결과·회전·Home 복귀의
+성공 조건은 유지한다. 후보가 없으면 실패하며 Enter나 고정 좌표로 대체하지 않는다.
+
+Gboard 참고40127021886은 IME 등록 ready 뒤 Settings scope 검사에서 중단했다. 다음 진단은
+dump 전후의 명시적 Settings activity를 모두 확인한 뒤, 알려진 제목·메뉴별0~8개와
+`strictScopeObserved`만 실패 기록에 남긴다. 알 수 없는 제목/입력값/전체 계층을 기록하거나
+기존 title+메뉴2종 조건을 완화하지 않는다. foreground 불일치·구조 오류·개수 초과에서는
+진단을 내보내지 않는다. 실패 진단은 언어 선택·한국어 입력·제품 성공 receipt가 아니다.
