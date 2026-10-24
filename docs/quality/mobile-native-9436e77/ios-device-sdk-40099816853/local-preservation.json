@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "kind": "local-preserved-unsigned-device-sdk-verification",
+  "verifiedAt": "2026-10-24T14:20:24.146Z",
+  "workflowRunId": 40099816853,
+  "workflowConclusion": "success",
+  "artifactId": 12563580179,
+  "sourceSha": "5c7442f8892b26e4eb854d5454f0116ac37fe664",
+  "receiptSha256": "5910342a57e9c12ef0524cfd32db3b388b34655c5b6bf62de67a0589bc8f0c02",
+  "archive": {
+    "name": "baro-ios-device-sdk-unprovisioned-5c7442f8892b26e4eb854d5454f0116ac37fe664.zip",
+    "bytes": 12650920,
+    "sha256": "cbb9a74d7dd45ad92d08d8968bc6db1693bec82788aa53cdea0f94619f4e124d"
+  },
+  "actualMetadata": {
+    "minimumOS": "16.4",
+    "sdkVersion": "26.5",
+    "architecture": "arm64",
+    "platform": "iphoneos",
+    "codeSignature": "none",
+    "sha256": "74eb36908144191098bbab1219d3c8ec4d26c7d49400de0c646ef94dd3a3ddef"
+  },
+  "applicationId": "site.baro.app.preview",
+  "hermesBytecode": {
+    "bytes": 3665732,
+    "sha256": "654e59f889e83dd77a94ddb026ad4f2feafe38911cccb0f40f78f38bd0998c1b",
+    "originalReceiptMatch": true
+  },
+  "compiledFont": {
+    "sha256": "3ae12c1281a84901b32d8c5f0e43fd6c4f8a5b7fd4ccbde66cfbe9f07cde05e8",
+    "originalReceiptMatch": true
+  },
+  "sourceMapPackaged": false,
+  "provisioningProfilePresent": false,
+  "codeSignaturePresent": false,
+  "appleDeveloperCredentialsUsed": false,
+  "installableOnPhysicalDevice": false,
+  "appRuntimeVerified": false,
+  "physicalDeviceVerified": false,
+  "oauthVerified": false,
+  "storeSigned": false,
+  "deployed": false
+}

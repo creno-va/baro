@@ -1577,3 +1577,23 @@ compile attestation은 유지하지만 이번 성공 하나로 backport만의 �
 이전4ba1d39의 typed-check/짧은 subsequence 실패와 과거 통과 뒤 재실패 이력은 그대로 남긴다.
 이번 제한된 조건에서 성공한 것이며 한국어 조합 IME·VoiceOver·HTTP 별도 계측·실제 계정/전체
 화면·physical/store·보안 high2·#334/#346/#379/#339/#71 전체 인수 완료는 아니다.
+
+### 현재 source 입력의 unsigned iPhoneOS 재검증
+
+[actual40099816853](https://github.com/creno-va/baro/actions/runs/40099816853)은 main5c7442f
+(CI40099535920 SUCCESS)의 `Release`/`iphoneos`/arm64 컴파일을 **SUCCESS**로 마쳤다.
+앱 bundled inputs는 현재 Simulator/Android 원본 source9436e77과 동일하며, 이전87dec15/
+b3eea74 결과를 새 입력의 증거로 재사용하지 않았다. 실제 SDK26.5·minimum16.4와
+thin Mach-O platform2/arm64·signature 없음, Info.plist·HBC/font·원본 ZIP 전체 byte/hash를
+독립 대조했다. accepted ZIP12,650,920B의 SHA256은
+`cbb9a74d7dd45ad92d08d8968bc6db1693bec82788aa53cdea0f94619f4e124d`다.
+HBC3,665,732B는 원래 receipt와 일치하고 현재9436 Simulator HBC와도 같은 전체 bytes/hash다.
+이는 JS 입력의 byte 관측이며 서로 다른 SDK 실행 파일 또는 runtime 인수의 동일성 주장이 아니다.
+
+[원래 receipt](../quality/mobile-native-9436e77/ios-device-sdk-40099816853/receipt.json),
+[unaccepted inspection](../quality/mobile-native-9436e77/ios-device-sdk-40099816853/inspection.json),
+[독립 결합 검사](../quality/mobile-native-9436e77/ios-device-sdk-40099816853/local-preservation.json)와
+[Apple3PNG 원본 byte 대조](../quality/mobile-native-9436e77/ios-device-sdk-40099816853/artwork-verification.json)를
+보존한다. private key·Team·provisioning을 사용하지 않았으며 출력은 실제 폰에 설치할 수 없는
+unprovisioned ZIP이다. Apple membership·실제 로그인·CJK 입력·reader·물리 기기 실행·store
+서명/제출/공개 출시 성공을 뜻하지 않는다. 원래 영수증의 false 범위를 유지한다.

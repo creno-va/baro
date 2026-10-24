@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "kind": "unsigned-device-sdk-apple-artwork-original-bytes",
+  "verifiedAt": "2026-10-24T14:20:44.808949+00:00",
+  "sourceSha": "5c7442f8892b26e4eb854d5454f0116ac37fe664",
+  "archiveSha256": "cbb9a74d7dd45ad92d08d8968bc6db1693bec82788aa53cdea0f94619f4e124d",
+  "originalSourceFilesUnchanged": true,
+  "files": [
+    {
+      "source": "apps/mobile/assets/auth/apple-white.png",
+      "sha256": "bb5f3fbda9dd637d16df9150d48acb1d8480b084ce928bc26cf2a219fa4af8b9",
+      "matches": [
+        "BAROPreview.app/assets/assets/auth/apple-white.png"
+      ]
+    },
+    {
+      "source": "apps/mobile/assets/auth/apple-white@2x.png",
+      "sha256": "8a8355cc5d9a2a0586f136952558953a8d4b6da821c78e57d89a985390f87f7a",
+      "matches": [
+        "BAROPreview.app/assets/assets/auth/apple-white@2x.png"
+      ]
+    },
+    {
+      "source": "apps/mobile/assets/auth/apple-white@3x.png",
+      "sha256": "e9832e747ee3dfb0c56939480a82fe330bdaf5f061e7dd84a6a271bd13830dca",
+      "matches": [
+        "BAROPreview.app/assets/assets/auth/apple-white@3x.png"
+      ]
+    }
+  ],
+  "appRuntimeVerified": false,
+  "physicalDeviceVerified": false
+}

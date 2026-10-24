@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "kind": "local-preserved-ios-korean-setup-failure",
+  "verifiedAt": "2026-10-24T14:23:06.383Z",
+  "workflowRunId": 40101331106,
+  "workflowConclusion": "failure",
+  "artifactId": 12562488998,
+  "binarySourceSha": "9436e770240fcebd03f3ab66c42222c5343cf412",
+  "toolingSourceSha": "808a64383309616909ced22e6363fff0c0cfd094",
+  "originalCompilerRunId": 40092729846,
+  "originalArchiveUnchanged": true,
+  "originalCompilerReceiptUnchanged": true,
+  "verificationSha256": "47926780133394f27abc22589403486a4cbeca8553ac28e9367e5d4134b92812",
+  "homeReceiptSha256": "1923918c305bc3c02d8c71bfa7de523204fcd84cb9ddaefdfb2f19e9826c2ce8",
+  "failureSha256": "c527f5028db0e50447c2ba41a670ea1f384c8381eee7b80b58eb58dac4fd20a2",
+  "homePng": {
+    "bytes": 220235,
+    "sha256": "efc472909d5933abb85c89aecb5875370cd34650d4b0ed4b5b71dea45ce31632"
+  },
+  "device": {
+    "kind": "simulator",
+    "model": "iPhone 16",
+    "osVersion": "26.5"
+  },
+  "coldNativeLaunches": 2,
+  "setupStage": "add-keyboard",
+  "assertionCode": "BARO_KOREAN_SETTINGS_CONTROL_MISSING",
+  "compositionCheckpointsObserved": 0,
+  "koreanKeyboardVerified": false,
+  "productInputFailureConfirmed": false,
+  "rootCauseConfirmed": false,
+  "rawHierarchyExported": false,
+  "rawXcresultExported": false,
+  "physicalDeviceVerified": false,
+  "oauthVerified": false,
+  "storeSigned": false,
+  "deployed": false
+}
