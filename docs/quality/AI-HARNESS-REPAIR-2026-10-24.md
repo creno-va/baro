@@ -868,3 +868,42 @@ initial-generation timeout or establish its cause.
 Prompt2.5.1 validation: frozen install, quick307, focused60/3files/337 assertions,
 50 deterministic and60 scripted v2 cases with zero critical findings, and build/
 local built Worker passed. No actual2.5.1 provider or presentation result is claimed.
+
+
+## Actual product video ready on3942 and concise lookup dispatch candidate
+
+The actual uploaded video retry3 on3942 completed40 Workflow steps in about
+3m35s and published ready revision3. Native extraction16:28:42–16:29:06Z took
+23589ms. All11 interpretations completed: audio9736ms, then ten frame steps
+26120,32800,11147,9393,8311,5920,5304,6180,22347 and11129ms. The original
+60-second media deadline, call limits and independent per-position accounting
+were not increased. The [finite manual receipt](./ai-harness-2026-10-24/product-video-3942.json)
+labels its actual dashboard/UI basis, rather than representing an automated probe.
+This changed request profile passed; it does not prove the unique cause of the
+earlier timeout or a general latency guarantee.
+
+The product reader reports processed frames at0–7s in one-second steps and at
+1.4s/frame14 and3.2s/frame32, plus processed0–8s audio. Reading every observation
+page confirmed the blue-box17, orange-circle42 and green-triangle09 labels at
+their expected scenes, including the two scene-change samples. The Korean
+transcript at0–6.36s matched the synthetic spoken markers. Original streaming
+provided a video player without autoplay. A post-ready download at16:36:17Z
+contained66723 bytes and matched the retained synthetic original byte for byte.
+Failed jobs/unknown usage, old observations and original bytes remain preserved.
+Private screenshots were shown in chat and are not published to GitHub.
+
+Prompt2.6 additionally makes a source/tool/material-request round a concise
+dispatch draft: a short neutral progress sentence, the necessary lookup requests
+and empty proposed additions/claims. The existing server supplies evidence before
+the final answer is generated and independently audited. New user facts remain in
+context and can still produce requested supported final updates. This adds no
+model phase or retry and changes no validator, quota, timeout or retrieval authority.
+It is a targeted hypothesis for avoiding unnecessary hypothetical-answer work
+before lookup, not a proved cause or repair of the broad-query timeout. Actual
+changed-prompt source selection, citation, material chat and requested-update
+acceptance remain required. The readable material-ID guidance is retained.
+
+Prompt2.6 validation passed frozen install, quick307, focused60 across3files/337
+assertions, offline50 deterministic+60 scripted scenarios with zero critical
+findings, production build/dry-run/local built Worker and docs checks. These
+checks are offline; actual changed-prompt dispatch/answer quality is pending.
