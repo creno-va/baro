@@ -128,7 +128,7 @@ fresh OAuth·PKCE grant·token 폐기·삭제 worker는 계속 서버 정본이�
 redirect callback의 ID-token 신원 검증 완료 증거로 간주하지 않는다. 합성 raw helper 관측을
 전체 OAuth 우회/실제 계정 취약점 증명으로 해석하지 않는다. `apple-identity.ts`는 Apple만
 감싸고 기존3사 provider object를 그대로 유지한다. 아직 실제 `socialProviders.apple` 설정이나
-credential·가용성/freshness 허용 목록·native Apple 버튼은 추가하지 않는다.
+credential·가용성·native Apple 버튼은 추가하지 않는다. 이 선행 PR 자체는 freshness를 추가하지 않았다.
 
 이 binding은 SDK가 생성해 OAuth state에 보관하는 nonce를 authorize URL로 전달하고,
 callback token을 공개 SDK verifier로 먼저 확인한 뒤 profile decode를 허용한다.
@@ -141,7 +141,7 @@ nonce는 exact match이며 exp/iat/sub를 필수로 검사한다. 최대16KiB to
 nonce 누락/교차 시도·만료/누락 claim, POST→GET state·만료/변조/재사용과 provider token DB
 폐기를 검사한다. POST에 Lax cookie가 없고 다음 GET에 fixture cookie를 전달하는 구성은
 실제 Safari/system browser 동작을 검증한 것이 아니다. Apple JWKS/token endpoint·실제 계정·
-두 OS 복귀 성공도 아니다. Apple freshness는 아직 인정하지 않는다.
+두 OS 복귀 성공도 아니다. 이 선행 PR 자체는 Apple freshness를 인정하지 않았다.
 
 첫 이름/relay claim의 검증과 이후 email/name 누락을 신원 실패로 오인하지 않는 기초를
 검사했으며, 동일 Apple subject의 계정 조회는 아래 보완으로 이어진다. 삭제 의도/요청 중 revoke·결과 분리·
@@ -173,5 +173,61 @@ Apple callback 문맥이 없으면 실패로 처리하며 다른 인증 경로�
 기존 owner marker가 다른 요청에 전파되지 않음을 확인했다.
 
 이것은 합성 RSA/JWKS·SDK/SQLite 인수이며 실제 Apple·두 OS 기기 성공은 아니다. Apple
-credential/provider/capability/freshness는 여전히 추가하지 않는다. 다음은 삭제 의도와 같은
-owner의 재인증을 묶은 request-local revoke·성공/미확인 결과 분리, 실제 설정과 native 소비다.
+credential/provider/capability는 추가하지 않는다. 뒤의 삭제 producer가 검증된 callback freshness와
+request-local revoke·결과 분리를 추가하며, 실제 설정과 native 소비는 남아 있다.
+
+## 삭제 전용 callback·접근 철회 producer
+
+`codex/346-native-deletion-revoke`는 기존 일반 재인증과 별도의 삭제 의도를 추가한다.
+`POST /api/mobile/auth/deletion/prepare`는 같은 Origin·정확한 `x-baro-auth-contract: 2`,
+현재 세션·연결 공급자·literal `DELETE`, 새 attempt UUID와 PKCE challenge를 요구한다.
+삭제 전용 `purpose=delete-account` callback은 같은 owner의 새 fresh OAuth 세션만 인정한다.
+일반 로그인/재인증 의도와 교환할 수 없으며, 기존3사·이전 앱의 일반 재인증 envelope/AAD와
+응답 필드는 유지한다. Apple 준비는 아직 가용성이 없어503이며 합성 fixture에서만 직접 준비한다.
+
+삭제 intent의 정확한 암호문·원래 세션·새 세션 freshness·현재 Apple 연결 snapshot을 D1에서
+다시 확인한다. BARO user/session 삭제와 tokenless 완료 영수증 삽입을 기존 삭제 journal과
+**같은 batch**에서 수행한다. 영수증 충돌/저장 실패는 전체 삭제를 rollback한다.
+취소는 verifier로 증명한 intent의 CAS 삭제이며, 취소와 삭제 커밋 중 한쪽만 이긴다.
+커밋 뒤 취소는 accepted 결과를 반환하고, 알 수 없는/만료된 intent를 cancelled로 꾸미지 않는다.
+기존 삭제 worker·자료/발행 inventory·tombstone·복구 journal을 유지하며 migration은 추가하지 않는다.
+
+서명·issuer/audience/nonce와 정확한 Apple subject 연결을 검증한 callback만 서버 OAuth
+freshness를 부여한다. raw access/refresh token은 SDK의 요청별 state 객체를 키로 하는 WeakMap에
+잠시 두며 DB·OAuth state payload·기기·로그에 저장하지 않는다. native/web/실패 callback의
+종료 시 제거한다. 장기 token 보관 정책은 바꾸지 않는다.
+
+**BARO 삭제 커밋 뒤에만** 요청 중 획득한 token으로 Apple revoke endpoint를 최대1회 호출한다.
+[Apple revoke 명세](https://developer.apple.com/documentation/signinwithapplerestapi/revoke-tokens)의
+고정 HTTPS POST·form body, refresh 우선/access 대체, 최대10초·redirect 거절을 적용한다.
+문서의 empty HTTP200을 관측하고 삭제 직전 Apple 연결이 해당 subject 단1개였을 때에만
+전체 철회를 confirmed로 올린다. token/설정 부재·오류·timeout·응답 본문·여러 Apple 연결은
+unconfirmed다. 실패가 이미 커밋한 BARO 삭제를 취소하거나 재시도 token 저장을 만들지 않는다.
+
+영수증은 issuer·attempt·purpose·만료에 AES-GCM/HKDF로 결합한10분짜리 결과다.
+공개 값은 strict `{contractVersion:2,status:"accepted",ownerTag,appleRevocation}`이며
+철회 상태는 `not_linked|confirmed|unconfirmed`다. 연결이 있으면 초기값부터 unconfirmed로
+저장하므로 worker 중단/철회 결과 최종 저장 실패도 허위 성공이 되지 않는다. confirmed는
+하향하지 않으며 새로운 receiptId에 이전 완료 응답을 적용하지 않는다. 별도 pending 성공 상태는 없다.
+
+callback은 앱에 attemptId·일회용 완료 code만 반환하며 인증 grant를 발급하지 않고 서버 cookie를
+만료한다. `deletion/exchange`는 verifier+code로 결과를 한 번 교환한다. 응답 유실·동시 CAS 충돌은
+`deletion/status`로 같은 verifier가 결과만 재조회할 수 있다. 삭제 뒤에는 세션이 없어도
+status/exchange/cancel의 verifier+Origin+v2 검증이 필요하며 인증이나 계정 접근을 재발급하지 않는다.
+영수증 만료 뒤 unknown을 삭제 취소/실패/철회 성공으로 단정하지 않는 앱 소비가 후속 범위다.
+
+합성 RSA/JWKS·실제 Better Auth/SQLite/Hono 회귀에서 Apple callback→동일 owner 삭제→
+철회 요청 순서, 정확한 빈200/오류/token 부재, 모든 callback의 material 제거, DB token 미보관,
+기존3사 callback과 쿠키 만료, 코드 재사용·암호문/issuer/attempt/clock 변조, 동시 완료와
+취소·연결/세션 경합·원자 저장 rollback을 검증한다. 이것은 실제 Apple revoke/token endpoint
+성공이나 Safari/system browser·두 OS 기기 인수가 아니다.
+
+Apple credential/provider 등록·authorize proxy의 Apple allowlist·POST browser relay,
+capability 노출·모바일 UI/결과 복구/credential 제거·실제 계정/기기 검증은 다음 단계다.
+기존 웹 UI 파일을 변경하지 않으며 #334/#346/#379/#339/#71은 OPEN으로 보존한다.
+
+이번 producer의 로컬 검증: `bun ci` lock 변경 없음, `validate:quick`208개/29파일/2257 assertions,
+새 삭제/철회·Apple 회귀80개/587 assertions, auth·삭제/journal 포함178개/1450 assertions,
+`validate:build`·`validate:db`와 양 OS Metro export 통과. schema/migration 추가 없음.
+Metro는 로컬 bundle 검증이며 기존 실제 source6201112의 OS 증거를 현재 변경에 전이하지 않는다.
+raw audit high2건과 #339/#71 전체 gate·실제 OAuth/기기 인수는 별도로 유지한다.

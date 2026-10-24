@@ -27,7 +27,8 @@
     "./session": "./session.ts",
     "./mobile-auth": "./mobile-auth.ts",
     "./v2/self-profile": "./v2/self-profile.ts",
-    "./mobile-challenge": "./mobile-challenge.ts"
+    "./mobile-challenge": "./mobile-challenge.ts",
+    "./mobile-deletion": "./mobile-deletion.ts"
   },
   "dependencies": {
     "zod": "4.6.6"

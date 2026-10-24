@@ -1,6 +1,10 @@
 import { expo } from "@better-auth/expo";
 import { createAuthMiddleware } from "better-auth/api";
+import { deleteSessionCookie } from "better-auth/cookies";
 import { mobileAuthStartSchema } from "../../contracts/mobile-auth";
+import { mobileDeletionStartSchema } from "../../contracts/mobile-deletion";
+import { clearAppleCallbackMaterial } from "./apple-identity";
+import { completeNativeAccountDeletion } from "./native-account-deletion";
 import { createNativeAuthCodeStore } from "./native-codes";
 import { createNativeReauthentication } from "./native-reauth";
 
@@ -68,78 +72,104 @@ export function createNativeExpoIntegration(env: Env) {
                 context.path?.startsWith("/verify-email"),
             ),
           handler: createAuthMiddleware(async (ctx) => {
-            const location = ctx.context.responseHeaders?.get("location");
-            if (!callbackBase || !location) return;
-            let target: URL;
             try {
-              target = new URL(location);
-            } catch {
-              return;
-            }
-            const expected = new URL(callbackBase);
-            if (target.protocol !== expected.protocol) return;
-            const failure = new URL(callbackBase);
-            failure.searchParams.set("error", "oauth");
-            try {
-              if (
-                target.origin !== expected.origin ||
-                target.hostname !== expected.hostname ||
-                target.pathname !== expected.pathname ||
-                target.username ||
-                target.password ||
-                target.port ||
-                target.hash
-              )
-                throw new Error("NATIVE_AUTH_CALLBACK_INVALID");
-              const parsed = mobileAuthStartSchema.parse({
-                attemptId: target.searchParams.get("attemptId"),
-                challenge: target.searchParams.get("challenge"),
-                ...(target.searchParams.has("purpose")
-                  ? { purpose: target.searchParams.get("purpose") }
-                  : {}),
-              });
-              if (
-                target.searchParams.getAll("attemptId").length !== 1 ||
-                target.searchParams.getAll("challenge").length !== 1 ||
-                target.searchParams.getAll("purpose").length > 1
-              )
-                throw new Error("NATIVE_AUTH_CALLBACK_INVALID");
-              failure.searchParams.set("attemptId", parsed.attemptId);
-              const session = ctx.context.newSession;
-              const cookie = ctx.context.responseHeaders?.get("set-cookie");
-              if (!session || !cookie || target.searchParams.has("error"))
-                throw new Error("NATIVE_AUTH_CALLBACK_FAILED");
-              const reauthentication =
-                parsed.purpose === "reauthenticate"
-                  ? await createNativeReauthentication({
-                      db: env.DB,
-                      issuer: env.BETTER_AUTH_URL,
-                      secret: env.BETTER_AUTH_SECRET,
-                    }).authorize(parsed, typeof ctx.params?.id === "string" ? ctx.params.id : "", {
-                      sessionId: session.session.id,
-                      userId: session.user.id,
-                    })
-                  : undefined;
-              const result = await createNativeAuthCodeStore({
-                db: env.DB,
-                issuer: env.BETTER_AUTH_URL,
-                secret: env.BETTER_AUTH_SECRET,
-              }).issue({
-                ...parsed,
-                sessionId: session.session.id,
-                userId: session.user.id,
-                cookie,
-                ...(reauthentication
-                  ? { originalSessionId: reauthentication.originalSessionId }
-                  : {}),
-              });
-              const redirect = new URL(callbackBase);
-              redirect.searchParams.set("attemptId", result.attemptId);
-              redirect.searchParams.set("code", result.code);
-              ctx.setHeader("location", redirect.href);
-            } catch {
-              // No raw provider/SQL error, cookie or input URL enters diagnostics or the failure return.
-              ctx.setHeader("location", failure.href);
+              const location = ctx.context.responseHeaders?.get("location");
+              if (!callbackBase || !location) return;
+              let target: URL;
+              try {
+                target = new URL(location);
+              } catch {
+                return;
+              }
+              const expected = new URL(callbackBase);
+              if (target.protocol !== expected.protocol) return;
+              const failure = new URL(callbackBase);
+              failure.searchParams.set("error", "oauth");
+              try {
+                if (
+                  target.origin !== expected.origin ||
+                  target.hostname !== expected.hostname ||
+                  target.pathname !== expected.pathname ||
+                  target.username ||
+                  target.password ||
+                  target.port ||
+                  target.hash
+                )
+                  throw new Error("NATIVE_AUTH_CALLBACK_INVALID");
+                const parsed = (
+                  target.searchParams.get("purpose") === "delete-account"
+                    ? mobileDeletionStartSchema
+                    : mobileAuthStartSchema
+                ).parse({
+                  attemptId: target.searchParams.get("attemptId"),
+                  challenge: target.searchParams.get("challenge"),
+                  ...(target.searchParams.has("purpose")
+                    ? { purpose: target.searchParams.get("purpose") }
+                    : {}),
+                });
+                if (
+                  target.searchParams.getAll("attemptId").length !== 1 ||
+                  target.searchParams.getAll("challenge").length !== 1 ||
+                  target.searchParams.getAll("purpose").length > 1
+                )
+                  throw new Error("NATIVE_AUTH_CALLBACK_INVALID");
+                failure.searchParams.set("attemptId", parsed.attemptId);
+                const session = ctx.context.newSession;
+                const cookie = ctx.context.responseHeaders?.get("set-cookie");
+                if (!session || !cookie || target.searchParams.has("error"))
+                  throw new Error("NATIVE_AUTH_CALLBACK_FAILED");
+                if (parsed.purpose === "delete-account") {
+                  const completed = await completeNativeAccountDeletion(
+                    env,
+                    parsed,
+                    typeof ctx.params?.id === "string" ? ctx.params.id : "",
+                    { sessionId: session.session.id, userId: session.user.id },
+                  );
+                  deleteSessionCookie(ctx);
+                  const redirect = new URL(callbackBase);
+                  redirect.searchParams.set("attemptId", completed.attemptId);
+                  redirect.searchParams.set("code", completed.code);
+                  ctx.setHeader("location", redirect.href);
+                  return;
+                }
+                const reauthentication =
+                  parsed.purpose === "reauthenticate"
+                    ? await createNativeReauthentication({
+                        db: env.DB,
+                        issuer: env.BETTER_AUTH_URL,
+                        secret: env.BETTER_AUTH_SECRET,
+                      }).authorize(
+                        parsed,
+                        typeof ctx.params?.id === "string" ? ctx.params.id : "",
+                        {
+                          sessionId: session.session.id,
+                          userId: session.user.id,
+                        },
+                      )
+                    : undefined;
+                const result = await createNativeAuthCodeStore({
+                  db: env.DB,
+                  issuer: env.BETTER_AUTH_URL,
+                  secret: env.BETTER_AUTH_SECRET,
+                }).issue({
+                  ...parsed,
+                  sessionId: session.session.id,
+                  userId: session.user.id,
+                  cookie,
+                  ...(reauthentication
+                    ? { originalSessionId: reauthentication.originalSessionId }
+                    : {}),
+                });
+                const redirect = new URL(callbackBase);
+                redirect.searchParams.set("attemptId", result.attemptId);
+                redirect.searchParams.set("code", result.code);
+                ctx.setHeader("location", redirect.href);
+              } catch {
+                // No raw provider/SQL error, cookie or input URL enters diagnostics or the failure return.
+                ctx.setHeader("location", failure.href);
+              }
+            } finally {
+              await clearAppleCallbackMaterial();
             }
           }),
         },
