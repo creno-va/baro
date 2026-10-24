@@ -51,6 +51,11 @@ const guardSchema = z.strictObject({
   ),
 });
 export type AnalysisGuard = z.infer<typeof guardSchema>;
+/** Trusted runtime capability; never derived from an HTTP request body. */
+export interface AnalysisPublicationFence {
+  sql: string;
+  values: readonly unknown[];
+}
 const initialSchema = z.strictObject({
   ownerId: ownerSchema,
   caseId: uuidSchema,
@@ -407,6 +412,7 @@ export function createDomainRepository(binding: D1Database, cipher: EnvelopeCiph
         clarificationExpiresAt?: string;
       },
       now: string,
+      authorization?: AnalysisPublicationFence,
     ) {
       return safe(async () => {
         const g = parse(guardSchema, input);
@@ -461,10 +467,12 @@ export function createDomainRepository(binding: D1Database, cipher: EnvelopeCiph
           currentGuard +
           (p.status === "waiting_for_answers"
             ? " AND EXISTS (SELECT 1 FROM cases WHERE id=? AND questions_asked=0 AND input_revision=1)"
-            : "");
+            : "") +
+          (authorization ? ` AND (${authorization.sql})` : "");
         const transitionValues = [
           ...guardValues(g),
           ...(p.status === "waiting_for_answers" ? [g.caseId] : []),
+          ...(authorization?.values ?? []),
         ];
         const encryptedResult = p.result
           ? await cipher.encrypt(JSON.stringify(p.result), field(g, "encrypted_result"))

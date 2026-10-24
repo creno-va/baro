@@ -13,6 +13,9 @@ test("quick validation never builds, starts browsers, containers, remote calls o
   expect(commands.some((command) => command.includes("tests/legacy-analysis-ledger.test.ts"))).toBe(
     true,
   );
+  expect(commands.some((command) => command.includes("tests/preview-legacy-fixture.test.ts"))).toBe(
+    true,
+  );
   expect(commands).not.toContainEqual(["bun", "test"]);
   expect(commands.flat().join(" ")).not.toMatch(
     /playwright|docker|wrangler|audit|gitleaks|build|deploy\.ts/,

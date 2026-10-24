@@ -1,0 +1,102 @@
+{
+  "version": 1,
+  "checkedAt": "2026-10-24T19:32:16.226Z",
+  "environment": "preview",
+  "scope": "all",
+  "costPolicy": "observation_only",
+  "candidateSha": "5464d3ead8fbe81ecbc16f2be7762008c16c8858",
+  "month": "2026-10",
+  "status": "configuration_ready",
+  "checks": {
+    "worker_metadata_available": true,
+    "binding_DB": true,
+    "binding_AI": true,
+    "binding_WORKSPACE_PROCESSING": true,
+    "binding_ANALYSIS_WORKFLOW": true,
+    "binding_CASE_PRIVATE_R2": true,
+    "binding_PROFILE_PUBLIC_R2": true,
+    "binding_FILE_PROCESSOR": true,
+    "binding_FILE_PROCESSING": true,
+    "binding_ASSET_PROCESSING": true,
+    "binding_PROFILE_PUBLICATION": true,
+    "secret_CASE_DATA_KEY_V1": true,
+    "secret_BETTER_AUTH_SECRET": true,
+    "secret_LAW_API_OC": true,
+    "secret_TURNSTILE_SECRET_KEY": true,
+    "environment_matches": true,
+    "gateway_matches": true,
+    "auth_origin_matches": true,
+    "release_matches": true,
+    "database_matches": true,
+    "budget_cap_setting_valid": true,
+    "application_cost_limits_setting_valid": true,
+    "model_bounds": "secret_present",
+    "runtime_configuration_attested": true,
+    "schema_matches": true,
+    "database_read_available": true,
+    "current_month_active": true,
+    "model_paid_available": false,
+    "model_skus_complete": false,
+    "processing_paid_available": false,
+    "processing_skus_complete": false,
+    "asr_paid_available": false,
+    "asr_skus_complete": false,
+    "storage_paid_available": false,
+    "storage_skus_complete": false,
+    "legacy_analysis_attempt_ledger_wired": true,
+    "media_storage_vision_metering_wired": "not_inspected"
+  },
+  "budgetGroups": {
+    "model": {
+      "available": false,
+      "missingSkus": ["model_input_tokens", "model_output_tokens"]
+    },
+    "processing": {
+      "available": false,
+      "missingSkus": [
+        "container_cpu_seconds",
+        "container_memory_gib_seconds",
+        "container_disk_gb_seconds",
+        "r2_class_b_requests"
+      ]
+    },
+    "asr": {
+      "available": false,
+      "missingSkus": ["asr_seconds"]
+    },
+    "storage": {
+      "available": false,
+      "missingSkus": [
+        "r2_class_a_requests",
+        "r2_class_b_requests",
+        "r2_storage_gb_months",
+        "worker_requests",
+        "worker_cpu_ms",
+        "d1_rows_read",
+        "d1_rows_written"
+      ]
+    }
+  },
+  "blockers": [],
+  "warnings": [
+    "kst_month_rollover_cost_observation_only",
+    "model_paid_available_observation_unavailable",
+    "model_skus_complete_observation_unavailable",
+    "processing_paid_available_observation_unavailable",
+    "processing_skus_complete_observation_unavailable",
+    "asr_paid_available_observation_unavailable",
+    "asr_skus_complete_observation_unavailable",
+    "storage_paid_available_observation_unavailable",
+    "storage_skus_complete_observation_unavailable",
+    "legacy_analysis_runtime_requires_separate_acceptance",
+    "media_runtime_requires_separate_acceptance"
+  ],
+  "unverified": [
+    "live-provider-success",
+    "oauth-callbacks",
+    "secret-values",
+    "gateway-credit-and-provider-retention",
+    "legacy-analysis-runtime",
+    "media-storage-vision-capability-metering"
+  ]
+}

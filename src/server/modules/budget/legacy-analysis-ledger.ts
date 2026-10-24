@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { CURRENT_POLICY_VERSIONS } from "../../../contracts/consent";
 import { createCaseDataCipher } from "../../crypto";
-import { usageDateKst } from "../../db/repository";
+import { type AnalysisPublicationFence, usageDateKst } from "../../db/repository";
 import { runtimeDigest } from "../../db/v2-paid-runtime";
 import { reportCostObservationFailure } from "../../dependency-diagnostics";
 import type {
@@ -60,7 +60,9 @@ export async function createLegacyAnalysisLedger(options: {
   input(request: GatewayAttemptRequest): Promise<unknown>;
   waitUntil(work: Promise<void>): void;
   clock?: () => string;
-}): Promise<GatewayAttemptLedger> {
+}): Promise<
+  GatewayAttemptLedger & { publicationFence(): Promise<AnalysisPublicationFence | null> }
+> {
   const { env, params, instanceId } = options;
   const clock = options.clock ?? (() => new Date().toISOString());
   const statement = (sql: string, values: unknown[] = []) => env.DB.prepare(sql).bind(...values);
@@ -144,6 +146,23 @@ export async function createLegacyAnalysisLedger(options: {
   const active =
     "NOT EXISTS(SELECT 1 FROM legacy_ai_attempts WHERE operation_id=o.id AND state IN ('prepared','dispatched','unknown'))";
   return {
+    async publicationFence() {
+      const row = await source();
+      if (!row?.started_at) return null;
+      return {
+        sql: `${sourceExists} AND EXISTS(SELECT 1 FROM legacy_ai_operations o JOIN v2_billing_principals p ON p.id=o.principal_id
+          WHERE o.analysis_id=? AND o.case_id=? AND o.input_revision=? AND o.source_hash=? AND o.workflow_attempt=? AND o.quota_state='reserved' AND p.owner_id=? AND ${active})`,
+        values: [
+          ...guardValues(row),
+          params.analysisId,
+          row.case_id,
+          params.inputRevision,
+          row.hash,
+          row.attempt,
+          row.owner_id,
+        ],
+      };
+    },
     waitUntil: options.waitUntil,
     async beforeDispatch(request) {
       if (

@@ -127,7 +127,16 @@ export function reportProviderFailure(failure: {
   category: DependencyCategory;
   httpStatus: number | null;
 }) {
+  const legacyPhases = [
+    "minimize",
+    "screening",
+    "structure",
+    "questions",
+    "generation",
+    "validation",
+  ];
   const phase = [
+    ...legacyPhases,
     "workspace_questions",
     "workspace_summary",
     "workspace_chat",
