@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
+import { nativeTextInputCompileSchema } from "./mobile-ios-text-input-patch";
 import { xcodeControlReceiptSchema } from "./mobile-ios-xcode-control";
 import { previewArtifactSchema } from "./mobile-preview-artifact";
 
@@ -14,6 +15,7 @@ export const internalIosArtifactSchema = previewArtifactSchema.extend({
     codeSignature: z.literal("ad-hoc"),
   }),
   control: xcodeControlReceiptSchema,
+  nativeTextInputPatch: nativeTextInputCompileSchema.optional(),
   artifact: z.strictObject({
     name: z.string().regex(/^baro-internal-preview-ios-simulator-[a-f0-9]{40}\.zip$/),
     bytes: z.number().int().positive(),

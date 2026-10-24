@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "package": "react-native",
+  "packageVersion": "0.88.0",
+  "registryIntegrity": "sha512-v/wee0nYWcammMYBnSat/e3WY/5iaf9YQOMcBrfKT/wPApPPlHp94hgZovBtwhMuthR01yc/8cGn0FpFTE/C4A==",
+  "patch": "patches/react-native@0.88.0.patch",
+  "patchSha256": "87869cb1cff68c5c134b8662eb5c818f53eb890b9183b0f14571e768e5e6e813",
+  "beforeTreeSha256": "f3de0d1726c02373a81d27574b2362424e9afb632ece6c6ca99b9d664fbd8e47",
+  "afterTreeSha256": "00988ca85f7ddc457fafd0c37d1b50fa61516e508e7cc7f80b5ae06629ebbe19",
+  "licenseSha256": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93",
+  "upstreamPullRequest": "https://github.com/react/react-native/pull/59197",
+  "upstreamHeadSha": "a91468ffe62122bc49d964a08b493374f0af4775",
+  "upstreamMergedAtAdoption": false,
+  "coverage": "ios-attributed-text-comparison-source-only",
+  "changes": [
+    {
+      "path": "React/Fabric/Mounting/ComponentViews/TextInput/RCTTextInputComponentView.mm",
+      "beforeSha256": "796c5a19c1edcfa290f301ce0cbe67f42f9966336d90c210e1ab8b164c3f9f15",
+      "afterSha256": "d26bf0f3a3a35f127a750ac8e2051b9641a0706a5d44188c4719c22949efcc57"
+    },
+    {
+      "path": "ReactCommon/react/renderer/textlayoutmanager/platform/ios/react/renderer/textlayoutmanager/RCTAttributedTextUtils.h",
+      "beforeSha256": "784cc39d2b58cc12640d70d4a4aca84d25c0f6caf38c7a3155760701db5a0d13",
+      "afterSha256": "bc2e422f24d02257a264b775b344b3d04a01645088382e75fc7cc213e2f2b42a"
+    },
+    {
+      "path": "ReactCommon/react/renderer/textlayoutmanager/platform/ios/react/renderer/textlayoutmanager/RCTAttributedTextUtils.mm",
+      "beforeSha256": "9f33a4738ab714ec21b6384931d2de6dddc8ea605c2de5c7a97ab02fdff83817",
+      "afterSha256": "d9a8e44b0bfaac066632ca59a2625df2804634c6e317a736049d21c6c514bfb4"
+    }
+  ],
+  "nativeRuntimeVerified": false
+}

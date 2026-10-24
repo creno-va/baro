@@ -44,3 +44,29 @@ manifest signing은 요청의 `expo-expect-signature` header·project config와 
 
 Browser dist/map은 보완하지 않았으며 배포 module graph에 나타나면 별도 수정·검증이
 필요하다. 현재 후보의 byte/graph 대조 결과·시각·SHA와 native 호환 잔여는 #339에 기록한다.
+
+## iOS TextInput native source backport (#379)
+
+`react-native-ios-input.json`은 CJS 두 보완과 분리한 native3파일 범위다. RN0.88.0의
+version/registry SRI/원래 MIT LICENSE·전체 설치 tree를 보존·검사한다. 실제 모바일
+workspace가 같은 패키지를 resolve하는지도 확인한다. 허용 patch 집합은 기존 CJS2개와
+이 native1개뿐이며 raw audit 검사나 #339 잔여를 제거하지 않는다.
+
+후보는 [RN59197의 a91468ffe6](https://github.com/react/react-native/pull/59197/commits/a91468ffe62122bc49d964a08b493374f0af4775)의
+비교 경로만 이식했다. `defaultTextAttributes`/기존 typing attributes와 single-line의
+paragraph 비교를 다루고 기존4-argument 함수/실제 text·style 변경의 비교를 보존한다.
+후속59198의 state/selection replay는 포함하지 않는다. upstream은 이 검토 시점 미병합이며
+정식 fixed release나 BARO 원인 확정으로 표시하지 않는다.
+
+upstream과 registry source의 주석1줄·FrameworksGuard include 차이는 유지한다.
+Bun patch의 line offset 적용 때문에 최초 upstream hunk가 헤더 내부에 잘못 놓이는 것을
+검출했고 정확한 registry before/post-image로 hunk를 다시 생성했다. frozen 설치 후 모든
+post-image와 전체 tree를 확인하며 reverse patch가 원래 tree를 복원하는 회귀를 둔다.
+설치 byte 검사는 native 동작 증거가 아니다.
+
+`expo-build-properties`58.0.11은 Expo58의 권장 범위에 맞춰 iOS만
+`buildReactNativeFromSource=true`로 설정한다. prebuilt React.xcframework를 사용한 채
+native source patch가 반영됐다고 인수하지 않는다. 내부 iOS compiler는 생성 property·
+RNCore/Dependency prebuilt OFF와 두 .mm의 양 architecture CompileC 관측을 요구한다.
+새 compiler/runtime 성공 전에는 기존4ba1d39 앱/receipt를 새 보완 앱으로 재명명하지 않는다.
+전체 한국어 조합/접근성·실기기·계정/API·스토어 인수는 별도로 남는다.

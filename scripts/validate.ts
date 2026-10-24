@@ -41,6 +41,7 @@ export function validationCommands(profile: string, root = process.cwd()): Comma
       "tests/mobile-ios-directory-ui.test.ts",
       "tests/mobile-ios-directory-signature.test.ts",
       "tests/mobile-ios-input-reference.test.ts",
+      "tests/mobile-ios-text-input-patch.test.ts",
       "tests/mobile-ios-device-sdk.test.ts",
       "tests/mobile-android-auth-cancel.test.ts",
       "tests/mobile-android-directory-input.test.ts",

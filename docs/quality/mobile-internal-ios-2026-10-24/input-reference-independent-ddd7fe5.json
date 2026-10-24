@@ -1,0 +1,22 @@
+{
+  "verificationObservedAt": "2026-10-24T04:20:34.579Z",
+  "runId": "40061251226",
+  "toolingSourceSha": "ddd7fe5621f693478d716ce068e002618da7ea24",
+  "binarySourceSha": "4ba1d390ed2511851f216fb02eff44687a87e7a2",
+  "runAndArtifactProvenanceVerified": true,
+  "strictReferenceReceiptVerified": true,
+  "referenceReceiptSha256": "3989537cf9d969524e2be324efec8201b3d04eb7f0037ba53576711a77932d8c",
+  "originalArchiveAndCompilerReceiptMatched": true,
+  "baselineAndMetadataMatched": true,
+  "actualSimulatorControlMatched": true,
+  "homePngBytesMatched": true,
+  "renderedSwiftSignatureAndGeneratorSourceHashesMatched": true,
+  "signaturesAgree": true,
+  "knownLiteralSignatureMatched": true,
+  "nativeChangeEvents": 26,
+  "productDirectoryNavigated": false,
+  "productInputVerified": false,
+  "rootCauseConfirmed": false,
+  "physicalDeviceVerified": false,
+  "storeSigned": false
+}

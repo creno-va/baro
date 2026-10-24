@@ -1417,3 +1417,45 @@ source·공통 wire/DB·공급자/비용 정책과 production 배포를 변경�
 runnable/macro expansion/min16.4·Team 설정 부재를 확인했다. 로컬에는 iOS UIKit SDK가 없어
 이 결과는 UIKit typecheck/실행 증거가 아니다. 원본 product bundle 입력은 변경하지 않았으므로
 제품 build·DB migration·전체 browser는 재실행하지 않는다.
+
+### UIKit reference 실제 결과와 RN native 비교 후보
+
+PR452 최종 headae88a80… CI40060906295·main `ddd7fe5621f693478d716ce068e002618da7ea24`
+CI40061119740 SUCCESS 뒤 [UIKit40061251226](https://github.com/creno-va/baro/actions/runs/40061251226)이
+terminal SUCCESS다. [원본 reference](../quality/mobile-internal-ios-2026-10-24/input-reference-ddd7fe5.json)의
+SHA256은 `3989537cf9d969524e2be324efec8201b3d04eb7f0037ba53576711a77932d8c`다.
+iPhone16/iOS26.5에서 별도 UIKit 앱/runner를 실제 compile·실행했고 typeText1회,
+native change26회·AX/native14개 signature 일치를 확인했다. 양쪽 길이·whitespace/dash/
+compatibility 비교·고정 payload/segments/suffix가 모두 일치한다. 이 reference 관측에서는
+누락이 없었지만 productInputVerified/rootCauseConfirmed=false 원본을 유지한다.
+
+[Home](../quality/mobile-internal-ios-2026-10-24/input-reference-home-ddd7fe5.json)·
+[metadata](../quality/mobile-internal-ios-2026-10-24/input-reference-verification-ddd7fe5.json)·
+[독립 대조](../quality/mobile-internal-ios-2026-10-24/input-reference-independent-ddd7fe5.json)는
+성공 run/artifact12547687364 provenance, 원본4ba1d39 ZIP24,102,583bytes/full hash·compiler
+receipt·actualControl·Home PNG byte/hash와 immutable ddd7fe5의 렌더 app/test/signature/Ruby
+source hash를 대조했다. pre-public 익명 Home 실물도 확인했다. 실제 generator1.28.1이며
+로컬1.28.0의 wiring 검사와 구분한다. 공개 directory/계정에는 진입하지 않았다.
+
+[RN58904](https://github.com/react/react-native/issues/58904)의 빈 Fabric 입력 누락 보고와
+[미병합 PR59197](https://github.com/react/react-native/pull/59197)의 native 비교 후보를
+현재0.88.0 source에 대조했다. UIKit 성공은 모든 XCTest 문제나 BARO 원인을 확정하지
+않지만, 같은 literal의 제품 실패와 별도로 보존하여 native 비교 경로의 후보를 검증한다.
+`codex/379-ios-native-input-backport`는 native3파일 backport와 source build/compile 증거를
+준비한다. 자세한 고정 source/byte 경계는 [patch 기록](../../patches/README.md)을 따른다.
+
+기존4ba1d39 원본 pin은 보존한다. 새 제품 source의 성공 compiler·pin/exact CI 뒤 기존
+literal/소프트 Search·회전 실제 검증을 수행해야 하며, 현재 patch/tree·source property
+확인을 입력 누락 수정 성공으로 표시하지 않는다. 한국어/reader·전체 역할/화면·계정/API·
+physical/store·#334/#379/#346/#339/#71은 계속 OPEN이다. 웹 UI·공통 wire/DB·공급자/
+비용 정책·production은 바꾸지 않는다.
+
+후보의 frozen/quick117개·모바일/공통419개·RN88개·tools TSC·관련38개 회귀,
+production build/workerd와 두 OS Metro export는 통과했다. 실제 local prebuild의 property=true와
+Podfile의 RNCore/Dependency OFF 분기도 확인했다. 이는 native source compile/동작 성공이 아니다.
+
+이번 의존성 추가 뒤 raw audit에는 기존 main에도 있는 fast-uri·undici·zod 항목과 이전
+node-forge high가 함께 보고됐다. 공식 advisory에서 Zod4.6.6·fast-uri3.1.9·undici7.30.1/
+8.12.2를 확인했다. 이 신규 관측을 숨기지 않으며 #339의 별도 공유 의존성 수정이 선행이다.
+본 native 후보는 draft로 보존하고 보안 producer 통합/rebase 후 exact CI·새 compiler를 진행한다.
+현재 원본4ba1d39의 metadata/compile/실패를 새 보완의 성공으로 표시하지 않는다.
