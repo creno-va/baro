@@ -2,16 +2,24 @@ import { z } from "zod";
 import { MODEL_ID } from "../src/server/model-policy";
 import type { ModelMetric } from "../src/server/modules/llm-gateway/service";
 
-export const PROBE_PROTOCOL_VERSION = 2 as const;
+export const PROBE_PROTOCOL_VERSION = 3 as const;
+export const featureCaseSchema = z.enum([
+  "workspace_questions",
+  "workspace_summary",
+  "workspace_chat",
+  "media",
+]);
 export const PROBE_REQUEST_ID = "00000000-0000-4000-8000-000000000027" as const;
 const candidateSchema = z.string().regex(/^[a-f0-9]{40}$/);
 const hashSchema = z.string().regex(/^[a-f0-9]{64}$/);
 export const provenanceSchema = z.strictObject({
+  featureCase: featureCaseSchema,
   candidateSha: candidateSchema,
   probeSourceSha256: hashSchema,
 });
 export type ProbeProvenance = z.infer<typeof provenanceSchema>;
 export interface ProbeConfiguration {
+  READINESS_FEATURE_CASE?: string | undefined;
   READINESS_CANDIDATE_SHA?: string | undefined;
   READINESS_PROBE_SHA256?: string | undefined;
   READINESS_TOKEN?: string | undefined;
@@ -20,7 +28,15 @@ export const runtimeFailureSchema = z.strictObject({
   stage: z.enum(["read-state", "acquire", "model", "write-report"]),
   category: z.enum(["type-error", "probe-runtime-error"]),
 });
-const probePhaseSchema = z.enum(["screening", "workspace_questions", "workspace_audit"]);
+const probePhaseSchema = z.enum([
+  "screening",
+  "workspace_questions",
+  "workspace_summary",
+  "workspace_chat",
+  "workspace_audit",
+  "vision",
+  "asr",
+]);
 export const probeProviderFailureSchema = z.strictObject({
   phase: probePhaseSchema,
   requestIssue: z
@@ -52,11 +68,22 @@ const unverified = [
   "legal",
   "public-policy",
 ] as const;
+const mediaChecksSchema = z
+  .array(
+    z.strictObject({
+      phase: z.enum(["vision", "asr"]),
+      quality: z.enum(["processed", "low_quality"]),
+      markerMatched: z.boolean(),
+      segmentCount: z.number().int().min(0).max(1000).nullable(),
+    }),
+  )
+  .max(2);
 const reportSchema = z
   .strictObject({
     version: z.literal(PROBE_PROTOCOL_VERSION),
     checkedAt: z.iso.datetime(),
     candidateSha: candidateSchema,
+    featureCase: featureCaseSchema,
     probeSourceSha256: hashSchema,
     environment: z.literal("isolated-synthetic-worker"),
     status: z.enum(["passed", "failed"]),
@@ -69,7 +96,7 @@ const reportSchema = z
         z.strictObject({
           requestId: z.literal(PROBE_REQUEST_ID),
           phase: probePhaseSchema,
-          model: z.literal(MODEL_ID),
+          model: z.enum([MODEL_ID, "@cf/openai/whisper-large-v3-turbo"]),
           latencyMs: z.number().finite().min(0),
           inputTokens: z.number().int().min(0).nullable(),
           outputTokens: z.number().int().min(0).nullable(),
@@ -78,6 +105,7 @@ const reportSchema = z
       )
       .max(3),
     providerFailures: z.array(probeProviderFailureSchema).max(3).optional(),
+    mediaChecks: mediaChecksSchema.optional(),
     unverified: z.tuple(
       unverified.map((value) => z.literal(value)) as [
         z.ZodLiteral<"full-product-smoke">,
@@ -91,12 +119,24 @@ const reportSchema = z
   .refine(
     (report) =>
       report.metrics.length <= report.attempts &&
+      report.metrics.every(
+        (metric) =>
+          (metric.phase === "asr") === (metric.model === "@cf/openai/whisper-large-v3-turbo") &&
+          (report.featureCase === "media"
+            ? ["asr", "vision"].includes(metric.phase)
+            : !["asr", "vision"].includes(metric.phase)),
+      ) &&
       report.metricCoverage ===
         (report.metrics.length === report.attempts ? "complete" : "partial") &&
       (report.status === "passed"
         ? report.failure === null &&
           report.attempts > 0 &&
-          report.metrics.at(-1)?.status === "success"
+          report.metrics.at(-1)?.status === "success" &&
+          (report.featureCase !== "media" ||
+            (report.mediaChecks?.length === 2 &&
+              report.mediaChecks[0]?.phase === "vision" &&
+              report.mediaChecks[1]?.phase === "asr" &&
+              report.mediaChecks.every((check) => check.markerMatched)))
         : report.failure !== null),
     "Probe outcome and attempt evidence must agree",
   );
@@ -105,6 +145,7 @@ export function probeReportFor(provenance: ProbeProvenance) {
   return reportSchema.refine(
     (report) =>
       report.candidateSha === provenance.candidateSha &&
+      report.featureCase === provenance.featureCase &&
       report.probeSourceSha256 === provenance.probeSourceSha256,
     "Probe report provenance mismatch",
   );
@@ -112,6 +153,7 @@ export function probeReportFor(provenance: ProbeProvenance) {
 export const controlSchema = z.strictObject({
   protocolVersion: z.literal(PROBE_PROTOCOL_VERSION),
   activeCandidateSha: candidateSchema.nullable(),
+  activeFeatureCase: featureCaseSchema.nullable(),
   activeProbeSourceSha256: hashSchema.nullable(),
   configurationReady: z.boolean(),
   started: z.boolean(),
@@ -147,6 +189,7 @@ export function assertGitCandidate(candidate: string, head: string, status: stri
 }
 export function activeProvenance(env: ProbeConfiguration): ProbeProvenance | null {
   const parsed = provenanceSchema.safeParse({
+    featureCase: env.READINESS_FEATURE_CASE ?? "workspace_questions",
     candidateSha: env.READINESS_CANDIDATE_SHA,
     probeSourceSha256: env.READINESS_PROBE_SHA256,
   });
@@ -156,6 +199,7 @@ const headers = {
   candidate: "x-baro-probe-candidate",
   hash: "x-baro-probe-source",
   protocol: "x-baro-probe-protocol",
+  feature: "x-baro-probe-feature",
 } as const;
 export function authorizedProbeRequest(request: Request, env: ProbeConfiguration): Request | null {
   const active = activeProvenance(env);
@@ -170,6 +214,7 @@ export function authorizedProbeRequest(request: Request, env: ProbeConfiguration
   const forwarded = new Request(request);
   // Never trust provenance supplied by a caller, even an authenticated caller.
   forwarded.headers.set(headers.candidate, active.candidateSha);
+  forwarded.headers.set(headers.feature, active.featureCase);
   forwarded.headers.set(headers.hash, active.probeSourceSha256);
   forwarded.headers.set(headers.protocol, String(PROBE_PROTOCOL_VERSION));
   return forwarded;
@@ -178,6 +223,7 @@ export function requestMatchesActive(request: Request, active: ProbeProvenance |
   return (
     active !== null &&
     request.headers.get(headers.candidate) === active.candidateSha &&
+    request.headers.get(headers.feature) === active.featureCase &&
     request.headers.get(headers.hash) === active.probeSourceSha256 &&
     request.headers.get(headers.protocol) === String(PROBE_PROTOCOL_VERSION)
   );
@@ -193,6 +239,7 @@ export function decideProbeAction(body: unknown, expected: ProbeProvenance): Pro
   if (
     !state.configurationReady ||
     state.activeCandidateSha !== expected.candidateSha ||
+    state.activeFeatureCase !== expected.featureCase ||
     state.activeProbeSourceSha256 !== expected.probeSourceSha256
   )
     return { action: "blocked", reason: "ACTIVE_PROVENANCE_MISMATCH" };
@@ -217,8 +264,20 @@ export interface ProbeStorage extends ProbeTransaction {
 export interface ProbeOutcome {
   status: "passed" | "failed";
   failure: "MODEL_UNAVAILABLE" | "MODEL_SCHEMA_INVALID" | "POLICY_REJECTED" | null;
-  metrics: ModelMetric[];
+  metrics: (
+    | ModelMetric
+    | {
+        requestId: string;
+        phase: "vision" | "asr";
+        model: typeof MODEL_ID | "@cf/openai/whisper-large-v3-turbo";
+        latencyMs: number;
+        inputTokens: number | null;
+        outputTokens: number | null;
+        status: "success" | "failed";
+      }
+  )[];
   providerFailures?: z.infer<typeof probeProviderFailureSchema>[];
+  mediaChecks?: z.infer<typeof mediaChecksSchema>;
 }
 export async function handleDurableProbe(
   request: Request,
@@ -239,6 +298,7 @@ export async function handleDurableProbe(
       return Response.json({
         protocolVersion: PROBE_PROTOCOL_VERSION,
         activeCandidateSha: active?.candidateSha ?? null,
+        activeFeatureCase: active?.featureCase ?? null,
         activeProbeSourceSha256: active?.probeSourceSha256 ?? null,
         configurationReady: active !== null,
         started: (await storage.get("started")) === true,
@@ -270,6 +330,7 @@ export async function handleDurableProbe(
         if (
           !stored.success ||
           stored.data.candidateSha !== active.candidateSha ||
+          stored.data.featureCase !== active.featureCase ||
           stored.data.probeSourceSha256 !== active.probeSourceSha256 ||
           (await txn.get("started")) !== true ||
           calls >= 3

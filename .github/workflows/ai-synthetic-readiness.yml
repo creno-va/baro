@@ -3,6 +3,16 @@ name: Manual synthetic Gemini acceptance
 on:
   workflow_dispatch:
     inputs:
+      feature_case:
+        description: One feature; immutable per-candidate/per-feature three-attempt limit
+        required: true
+        default: workspace_questions
+        type: choice
+        options:
+          - workspace_questions
+          - workspace_summary
+          - workspace_chat
+          - media
       candidate_sha:
         description: Exact current main SHA with successful CI; isolated synthetic Worker only
         required: true
@@ -48,12 +58,13 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: 9e844969d0c44b2449f3951d1f301654
           READINESS_CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          READINESS_FEATURE_CASE: ${{ inputs.feature_case }}
         run: bun scripts/run-ai-readiness.ts
       - name: Save finite observation without prompts or provider bodies
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: ai-synthetic-${{ inputs.candidate_sha }}
+          name: ai-synthetic-${{ inputs.feature_case }}-${{ inputs.candidate_sha }}
           path: .wrangler/readiness/ai.json
           if-no-files-found: error
           retention-days: 7

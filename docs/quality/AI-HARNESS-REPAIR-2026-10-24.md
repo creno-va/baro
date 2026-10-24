@@ -156,3 +156,25 @@ Zod bounds (including questions2×3 and audit findings30/IDs300), output token c
 required fields, closed objects and zero-item constraints remain unchanged. This is
 provider grammar projection, not authorization to publish larger arrays. The
 specific original HTTP400 cause remains unproven pending live verification.
+
+## Actual native audit accepted
+
+[Manual run40072018097](https://github.com/creno-va/baro/actions/runs/40072018097)
+on exact main83f6972 passed actual workspace questions plus independent audit in two
+attempts. Questions6659ms/1587input/260output; audit7149ms/2368input/733output.
+[Finite receipt](./ai-harness-2026-10-24/questions-audit-83f6972.json) retains the
+actual observations. This accepts the combined native-wire/grammar-projection
+candidate; it does not isolate one original HTTP400 cause or prove summary/chat,
+media, production serving, user-specific quality or external-provider acceptance.
+Final offline c90d47c quick151/full3866/build/workerd and exact CI40071608812 passed.
+
+Protocol3 adds a fixed feature selector (questions, summary, chat, media). Each
+exact candidate/feature has one durable run with at most three attempts; source-hash
+changes, replay, ambiguous POST or redeployment cannot reset that run. Selected case
+is part of provenance/control/authenticated forwarding and source identity. Automatic
+CI/full still never invokes a model. Manual dispatches serialize deployments of the
+isolated worker. Image/WAV assets are locally authored/TTS synthetic fixtures with
+exact tracked-byte hashes, not user files. Media reports retain only latency, finite
+quality/segment-count and marker-match checks, never observed text or audio. Missing
+ASR confidence/timing remains low_quality; the probe must not invent it. There is no
+application DB/R2/OAuth or external4API credential in this isolated campaign.

@@ -18,6 +18,7 @@ import {
 } from "./ai-readiness-control";
 
 const provenance: ProbeProvenance = {
+  featureCase: "workspace_questions",
   candidateSha: "a".repeat(40),
   probeSourceSha256: "b".repeat(64),
 };
@@ -26,6 +27,67 @@ const configuration: ProbeConfiguration = {
   READINESS_PROBE_SHA256: provenance.probeSourceSha256,
   READINESS_TOKEN: "synthetic-local-token",
 };
+
+test("authenticated forwarding binds the selected feature and rejects a cross-feature report", async () => {
+  const h = harness();
+  const result = await h.send("POST");
+  const other = { ...provenance, featureCase: "workspace_summary" as const };
+  expect(probeReportFor(other).safeParse(result.body).success).toBe(false);
+  const env = { ...configuration, READINESS_FEATURE_CASE: "workspace_summary" };
+  const forwarded = request("POST", env);
+  expect(forwarded.headers.get("x-baro-probe-feature")).toBe("workspace_summary");
+  const state = await h.send("GET");
+  expect(decideProbeAction(state.body, other)).toEqual({
+    action: "blocked",
+    reason: "ACTIVE_PROVENANCE_MISMATCH",
+  });
+  expect(
+    (await reply(await handleDurableProbe(forwarded, configuration, h.storage, h.execute))).status,
+  ).toBe(409);
+  expect(h.counters.model).toBe(1);
+});
+
+test("media reports require both semantic marker checks and model/phase agreement without observed text", async () => {
+  const h = harness();
+  const original = (await h.send("POST")).body as Record<string, unknown>;
+  const scope = { ...provenance, featureCase: "media" as const };
+  const metric = {
+    requestId: PROBE_REQUEST_ID,
+    latencyMs: 1,
+    inputTokens: null,
+    outputTokens: null,
+    status: "success",
+  };
+  const value = {
+    ...original,
+    ...scope,
+    attempts: 2,
+    metrics: [
+      { ...metric, phase: "vision", model: "google/gemini-3.8-flash" },
+      { ...metric, phase: "asr", model: "@cf/openai/whisper-large-v3-turbo" },
+    ],
+    mediaChecks: [
+      { phase: "vision", quality: "processed", markerMatched: true, segmentCount: null },
+      { phase: "asr", quality: "low_quality", markerMatched: true, segmentCount: 0 },
+    ],
+  };
+  const schema = probeReportFor(scope);
+  expect(schema.safeParse(value).success).toBe(true);
+  expect(schema.safeParse({ ...value, mediaChecks: [] }).success).toBe(false);
+  expect(
+    schema.safeParse({
+      ...value,
+      mediaChecks: value.mediaChecks.map((c) => ({ ...c, markerMatched: false })),
+    }).success,
+  ).toBe(false);
+  expect(
+    schema.safeParse({
+      ...value,
+      metrics: value.metrics.map((m) => ({ ...m, model: "google/gemini-3.8-flash" })),
+    }).success,
+  ).toBe(false);
+  expect(schema.safeParse({ ...value, observedText: "private sentinel" }).success).toBe(false);
+});
 class MemoryStorage implements ProbeStorage {
   values = new Map<string, unknown>();
   private queue: Promise<void> = Promise.resolve();
