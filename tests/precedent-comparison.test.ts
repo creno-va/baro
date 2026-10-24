@@ -155,6 +155,26 @@ test("ambiguous, invented or unread quotes never acquire fabricated coordinates"
   expect(serialized).not.toContain("대여금");
   expect(serialized).not.toContain("synthetic");
 });
+test("quote parsing preserves whitespace and cannot turn an altered case quote into evidence", () => {
+  const value = draft(1);
+  const first = value.metrics[0];
+  if (!first) throw new Error("Missing synthetic metric");
+  first.caseEvidence = [{ factId: "synthetic_fact", text: "대여금을 " }];
+  first.precedentEvidence = [{ text: " 대여금 ", startUtf16: 0, endUtf16: 1 }];
+  const result = checkPrecedentComparison(value, facts, source);
+  expect(result?.metrics[0]?.caseEvidence[0]?.text).toBe("대여금을 ");
+  const start = source.excerpt.text.indexOf(" 대여금 ") + source.excerpt.startUtf16;
+  expect(result?.metrics[0]?.precedentEvidence[0]).toEqual({
+    text: " 대여금 ",
+    startUtf16: start,
+    endUtf16: start + 5,
+  });
+  first.caseEvidence[0] = { factId: "synthetic_fact", text: " 대여금을" };
+  expect(inspectPrecedentComparison(value, facts, source)).toMatchObject({
+    draft: null,
+    observation: { reason: "case_quote_mismatch" },
+  });
+});
 test("uncertain/conflicting facts and official text cannot become confirmed case-side matches", () => {
   for (const changed of [
     { certainty: "uncertain" },

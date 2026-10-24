@@ -143,6 +143,10 @@ still fail. Text, facts, source identity, scores and evidence scope are never
 rewritten or inferred. The corrected draft passes the same separate MEDIUM semantic
 audit and atomic source/owner/revision publication fence. Paid wire identity binds
 the actual corrected audit input; no old admission is rewritten.
+Evidence strings use a dedicated non-normalizing validator instead of the shared
+display-prose trimming validator. Leading/trailing spaces are preserved exactly;
+an altered case quote cannot become valid by silently trimming it. The existing
+Unicode length, nonempty and markup bounds remain enforced.
 
 Case-side evidence is further restricted to `user_statement`/`user_material` facts;
 AI organization cannot masquerade as a user fact. Comparison prompt1.1 makes this
@@ -166,3 +170,6 @@ candidate still requires a new bounded actual observation; numerical correction 
 not yet an established explanation or fix for the original live failure.
 The full unit suite passed 4,357 tests/396 files/174,534 assertions before the final
 AI-organization restriction; affected tests passed again with that stricter guard.
+Final quote-whitespace/type checks add one regression (51 targeted tests/481
+assertions); this is an additional literal-integrity condition, not a relaxed
+source-matching rule.
