@@ -2,6 +2,7 @@ import { deletionAccessSchema, deletionAccessV2Schema } from "@baro/contracts/de
 import {
   legacyMobileAuthProviderSchema,
   MOBILE_AUTH_CONTRACT_HEADER,
+  MOBILE_DELETION_ACTIVITY_HEADER,
   type MobileAuthProvider,
   mobileAuthCapabilitiesSchema,
   mobileReauthPrepareSchema,
@@ -10,9 +11,12 @@ import {
   mobileReauthReceiptSchema,
 } from "@baro/contracts/mobile-auth";
 import {
+  mobileDeletionActivityRequestSchema,
+  mobileDeletionActivitySchema,
   mobileDeletionCancelResponseSchema,
   mobileDeletionExchangeSchema,
   mobileDeletionOutcomeSchema,
+  mobileDeletionPrepareReceiptSchema,
   mobileDeletionPrepareSchema,
   mobileDeletionProofSchema,
 } from "@baro/contracts/mobile-deletion";
@@ -22,7 +26,7 @@ import type { JsonRequest } from "./http";
 
 export type MobileAuthProtocol =
   | { contractVersion: 1; providers: ("google" | "naver" | "kakao")[] }
-  | { contractVersion: 2; providers: MobileAuthProvider[] };
+  | z.infer<typeof mobileAuthCapabilitiesSchema>;
 const headers = { [MOBILE_AUTH_CONTRACT_HEADER]: "2" };
 const unavailable = () =>
   new ApiError("UNAVAILABLE", "서버의 인증 응답을 확인하지 못했어요. 다시 확인해 주세요.", true);
@@ -71,7 +75,10 @@ export function createMobileAuthClient(dependencies: {
     async capabilities(): Promise<MobileAuthProtocol> {
       let value: unknown;
       try {
-        value = await dependencies.request({ path: "/api/mobile/auth/capabilities" });
+        value = await dependencies.request({
+          path: "/api/mobile/auth/capabilities",
+          headers: { [MOBILE_DELETION_ACTIVITY_HEADER]: "1" },
+        });
       } catch (error) {
         // Never infer endpoint absence from a server error code, timeout or malformed successful body.
         if (error instanceof ApiError && error.httpStatus === 404)
@@ -120,16 +127,25 @@ export function createMobileAuthClient(dependencies: {
         }),
       );
     },
-    async prepareDeletion(protocol: MobileAuthProtocol, input: unknown, ownerId: string) {
+    async prepareDeletion(
+      protocol: MobileAuthProtocol,
+      input: unknown,
+      ownerId: string,
+    ): Promise<{ ownerTag: string; startedAt: number; activityProof?: string }> {
       requireV2(protocol);
       const body = parseInput(mobileDeletionPrepareSchema, input);
       supported(protocol, body.provider);
       return parse(
-        mobileReauthReceiptSchema,
+        protocol.contractVersion === 2 && protocol.deletionActivity === 1
+          ? mobileDeletionPrepareReceiptSchema
+          : mobileReauthReceiptSchema,
         await dependencies.request({
           path: "/api/mobile/auth/deletion/prepare",
           method: "POST",
-          headers,
+          headers:
+            protocol.contractVersion === 2 && protocol.deletionActivity === 1
+              ? { ...headers, [MOBILE_DELETION_ACTIVITY_HEADER]: "1" }
+              : headers,
           body,
           expectedOwner: ownerId,
         }),
@@ -174,6 +190,20 @@ export function createMobileAuthClient(dependencies: {
         }),
       );
       return result.status === "cancelled" ? result : boundOutcome(result, ownerTag);
+    },
+    async deletionActivity(input: unknown) {
+      const body = parseInput(mobileDeletionActivityRequestSchema, input);
+      const result = parse(
+        mobileDeletionActivitySchema,
+        await dependencies.completionRequest({
+          path: "/api/mobile/auth/deletion/activity",
+          method: "POST",
+          headers,
+          body,
+        }),
+      );
+      if (result.attemptId !== body.attemptId) throw unavailable();
+      return result;
     },
   };
 }

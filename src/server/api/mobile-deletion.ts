@@ -1,15 +1,19 @@
 import { Hono } from "hono";
 import {
   MOBILE_AUTH_CONTRACT_HEADER,
+  MOBILE_DELETION_ACTIVITY_HEADER,
   mobileReauthReceiptSchema,
 } from "../../contracts/mobile-auth";
 import {
+  mobileDeletionActivityRequestSchema,
   mobileDeletionExchangeSchema,
+  mobileDeletionPrepareReceiptSchema,
   mobileDeletionPrepareSchema,
   mobileDeletionProofSchema,
 } from "../../contracts/mobile-deletion";
 import { availableMobileAuthProviders } from "../auth/mobile-contract";
 import { NativeAuthProofError } from "../auth/native-codes";
+import { createNativeDeletionActivityProof } from "../auth/native-deletion-activity";
 import { createNativeDeletionReceipts } from "../auth/native-deletion-receipt";
 import { createNativeReauthentication } from "../auth/native-reauth";
 import { getSession } from "../auth/session";
@@ -44,12 +48,21 @@ export const mobileDeletionApi = new Hono<ApiEnvironment>()
         issuer: c.env.BETTER_AUTH_URL,
         secret: c.env.BETTER_AUTH_SECRET,
       }).prepareDeletion(input.data, { userId: session.user.id, sessionId: session.session.id });
-      return c.json(
-        mobileReauthReceiptSchema.parse({
-          ...prepared,
-          ownerTag: await deletionOwnerTag(c.env.BETTER_AUTH_SECRET, session.user.id),
-        }),
-      );
+      const receipt = mobileReauthReceiptSchema.parse({
+        ...prepared,
+        ownerTag: await deletionOwnerTag(c.env.BETTER_AUTH_SECRET, session.user.id),
+      });
+      if (c.req.header(MOBILE_DELETION_ACTIVITY_HEADER) !== "1") return c.json(receipt);
+      const activityProof = await createNativeDeletionActivityProof({
+        issuer: c.env.BETTER_AUTH_URL,
+        secret: c.env.BETTER_AUTH_SECRET,
+      }).sign({
+        attemptId: input.data.attemptId,
+        challenge: input.data.challenge,
+        ownerTag: receipt.ownerTag,
+        startedAt: receipt.startedAt,
+      });
+      return c.json(mobileDeletionPrepareReceiptSchema.parse({ ...receipt, activityProof }));
     } catch (error) {
       return error instanceof NativeAuthProofError
         ? c.json(errorBody(c, "UNAUTHENTICATED", "같은 계정으로 삭제를 다시 시작해 주세요."), 401)
@@ -64,20 +77,32 @@ export const mobileDeletionApi = new Hono<ApiEnvironment>()
           );
     }
   });
-for (const operation of ["exchange", "status", "cancel"] as const)
+for (const operation of ["exchange", "status", "cancel", "activity"] as const)
   mobileDeletionApi.post(`/${operation}`, async (c) => {
     const raw = await c.req.json().catch(() => null),
       input = (
-        operation === "exchange" ? mobileDeletionExchangeSchema : mobileDeletionProofSchema
+        operation === "exchange"
+          ? mobileDeletionExchangeSchema
+          : operation === "activity"
+            ? mobileDeletionActivityRequestSchema
+            : mobileDeletionProofSchema
       ).safeParse(raw);
     if (!input.success)
       return c.json(errorBody(c, "VALIDATION_ERROR", "삭제 결과를 다시 확인해 주세요."), 400);
-    const receipts = createNativeDeletionReceipts({
-      db: c.env.DB,
-      issuer: c.env.BETTER_AUTH_URL,
-      secret: c.env.BETTER_AUTH_SECRET,
-    });
     try {
+      if (operation === "activity")
+        return c.json(
+          await createNativeReauthentication({
+            db: c.env.DB,
+            issuer: c.env.BETTER_AUTH_URL,
+            secret: c.env.BETTER_AUTH_SECRET,
+          }).deletionActivity(input.data),
+        );
+      const receipts = createNativeDeletionReceipts({
+        db: c.env.DB,
+        issuer: c.env.BETTER_AUTH_URL,
+        secret: c.env.BETTER_AUTH_SECRET,
+      });
       if (operation === "exchange") return c.json(await receipts.exchange(input.data));
       const outcome = await receipts.status(input.data);
       if (outcome) return c.json(outcome, operation === "cancel" ? 202 : 200);

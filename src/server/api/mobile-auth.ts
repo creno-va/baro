@@ -1,6 +1,7 @@
 import { splitSetCookieHeader } from "better-auth/cookies";
 import { Hono } from "hono";
 import {
+  MOBILE_DELETION_ACTIVITY_HEADER,
   mobileAuthCapabilitiesSchema,
   mobileAuthExchangeResponseSchema,
   mobileAuthExchangeSchema,
@@ -61,6 +62,7 @@ mobileAuthApi.get("/capabilities", (c) => {
     mobileAuthCapabilitiesSchema.parse({
       contractVersion: 2,
       providers: availableMobileAuthProviders(c.env),
+      ...(c.req.header(MOBILE_DELETION_ACTIVITY_HEADER) === "1" ? { deletionActivity: 1 } : {}),
     }),
   );
 });

@@ -1,5 +1,10 @@
 import { expect, test } from "bun:test";
-import { createJsonRequester, createMobileAuthClient, type JsonRequest } from "@baro/api-client";
+import {
+  ApiError,
+  createJsonRequester,
+  createMobileAuthClient,
+  type JsonRequest,
+} from "@baro/api-client";
 import { createSessionScope } from "@baro/client-core";
 import { mobileDeletionOutcomeSchema } from "@baro/contracts/mobile-deletion";
 import { resolveMobileConfig } from "../apps/mobile/config/environment";
@@ -211,4 +216,43 @@ test("an old owner's delayed completion survives session deletion and owner chan
   expect(writes).toBe(priorWrites);
   expect(await credentials.capture().cookie()).toBe("synthetic-owner-B");
   expect(disk.get("unsettled_case_operations")).toBe("preserve");
+});
+
+test("signed activity is the same cookie-free exact-path POST and cannot leak its proof through redirect/query headers", async () => {
+  let calls = 0;
+  const activityPath = "/api/mobile/auth/deletion/activity";
+  const transport = createNativeDeletionTransport({
+    config,
+    fetch: async (url, init) => {
+      calls++;
+      expect(url).toBe(config.apiBaseUrl + activityPath);
+      expect(Object.fromEntries(new Headers(init.headers))).toEqual({
+        ...headers,
+        origin: config.apiBaseUrl,
+      });
+      expect(init.credentials).toBe("omit");
+      expect(init.redirect).toBe("error");
+      return Response.json(
+        { status: "inactive", outcome: "unknown" },
+        { headers: { "set-cookie": "SYNTHETIC_STALE_A" } },
+      );
+    },
+  });
+  const input = { ...proof, ownerTag: "a".repeat(64), startedAt: 1, activityProof: "b".repeat(64) };
+  const response = await transport(activityPath, {
+    method: "POST",
+    headers: {
+      ...headers,
+      cookie: "SYNTHETIC_B",
+      authorization: "SYNTHETIC_BEARER",
+      "x-baro-deletion-activity": "1",
+    },
+    body: JSON.stringify(input),
+  });
+  expect(response.headers.has("set-cookie")).toBe(false);
+  expect(response.clone().headers.has("set-cookie")).toBe(false);
+  await expect(
+    transport(`${activityPath}?activityProof=synthetic`, { method: "POST", headers }),
+  ).rejects.toBeInstanceOf(ApiError);
+  expect(calls).toBe(1);
 });

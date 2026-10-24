@@ -294,3 +294,127 @@ test("invalid proof/confirmation/owner binding cannot send completion credential
   ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
   expect(calls).toBe(0);
 });
+
+test("activity feature negotiation is explicit and a negotiated preparation cannot silently omit its observation proof", async () => {
+  const calls: JsonRequestOptions[] = [];
+  const expectedPrepared = { ...receipt, activityProof: "d".repeat(64) };
+  let prepared: unknown = expectedPrepared;
+  const request: JsonRequest = async <T>(options: JsonRequestOptions) => {
+    calls.push(options);
+    return (options.path.endsWith("capabilities") ? { ...v2, deletionActivity: 1 } : prepared) as T;
+  };
+  const client = createMobileAuthClient({ request, completionRequest: request }),
+    negotiated = await client.capabilities();
+  expect(calls[0]).toEqual({
+    path: "/api/mobile/auth/capabilities",
+    headers: { "x-baro-deletion-activity": "1" },
+  });
+  expect(negotiated).toMatchObject({ contractVersion: 2, deletionActivity: 1 });
+  expect(
+    await client.prepareDeletion(
+      negotiated,
+      { ...prepare, confirmation: "DELETE" },
+      "synthetic-owner",
+    ),
+  ).toEqual(expectedPrepared);
+  expect(calls[1]?.headers).toEqual({
+    "x-baro-auth-contract": "2",
+    "x-baro-deletion-activity": "1",
+  });
+  prepared = receipt;
+  await expect(
+    client.prepareDeletion(negotiated, { ...prepare, confirmation: "DELETE" }, "synthetic-owner"),
+  ).rejects.toBeInstanceOf(ApiError);
+  expect(calls).toHaveLength(3);
+  expect(
+    await client.prepareDeletion(v2, { ...prepare, confirmation: "DELETE" }, "synthetic-owner"),
+  ).toEqual(receipt);
+  expect(calls[3]?.headers).toEqual({ "x-baro-auth-contract": "2" });
+});
+
+for (const value of [true, 0, 2, "1"])
+  test(`unsupported activity metadata cannot become legacy support: ${JSON.stringify(value)}`, async () => {
+    let calls = 0;
+    const request: JsonRequest = async <T>() => {
+      calls++;
+      return { ...v2, deletionActivity: value } as T;
+    };
+    await expect(
+      createMobileAuthClient({ request, completionRequest: request }).capabilities(),
+    ).rejects.toBeInstanceOf(ApiError);
+    expect(calls).toBe(1);
+  });
+
+test("signed activity uses only the independent completion requester and binds the exact attempt without pretending an outcome", async () => {
+  const calls: JsonRequestOptions[] = [],
+    input = {
+      ...proof,
+      ownerTag: receipt.ownerTag,
+      startedAt: receipt.startedAt,
+      activityProof: "d".repeat(64),
+    };
+  const inactive = {
+    contractVersion: 2 as const,
+    attemptId: input.attemptId,
+    status: "inactive" as const,
+    outcome: "unknown" as const,
+    observedAt: "2026-10-24T00:00:00.000Z",
+  };
+  let result: unknown = inactive;
+  const client = createMobileAuthClient({
+    request: async () => {
+      throw new Error("MUST_NOT_READ_CURRENT_OWNER_JAR");
+    },
+    completionRequest: async <T>(options: JsonRequestOptions) => {
+      calls.push(options);
+      return result as T;
+    },
+  });
+  expect(await client.deletionActivity(input)).toEqual(inactive);
+  expect(calls[0]).toEqual({
+    path: "/api/mobile/auth/deletion/activity",
+    method: "POST",
+    headers: { "x-baro-auth-contract": "2" },
+    body: input,
+  });
+  for (const bad of [
+    { ...input, activityProof: undefined },
+    { ...input, ownerTag: "invalid" },
+    { ...input, extra: "SYNTHETIC_PRIVATE" },
+  ])
+    await expect(client.deletionActivity(bad)).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
+  expect(calls).toHaveLength(1);
+  for (const bad of [
+    {
+      contractVersion: 2,
+      attemptId: crypto.randomUUID(),
+      status: "inactive",
+      outcome: "unknown",
+      observedAt: "2026-10-24T00:00:00.000Z",
+    },
+    {
+      contractVersion: 2,
+      attemptId: input.attemptId,
+      status: "inactive",
+      outcome: "accepted",
+      observedAt: "2026-10-24T00:00:00.000Z",
+    },
+    {
+      contractVersion: 2,
+      attemptId: input.attemptId,
+      status: "cancelled",
+      outcome: "unknown",
+      observedAt: "2026-10-24T00:00:00.000Z",
+    },
+    {
+      contractVersion: 2,
+      attemptId: input.attemptId,
+      status: "inactive",
+      outcome: "unknown",
+      observedAt: "not-time",
+    },
+  ]) {
+    result = bad;
+    await expect(client.deletionActivity(input)).rejects.toBeInstanceOf(ApiError);
+  }
+});

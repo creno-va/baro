@@ -2,11 +2,13 @@ import { expect, test } from "bun:test";
 import { cleanupAuthData } from "../src/server/auth/cleanup";
 import { completeNativeAccountDeletion } from "../src/server/auth/native-account-deletion";
 import { nativeAuthChallenge } from "../src/server/auth/native-codes";
+import { createNativeDeletionActivityProof } from "../src/server/auth/native-deletion-activity";
 import {
   createNativeDeletionReceipts,
   NATIVE_DELETION_RECEIPT_TTL_MS,
 } from "../src/server/auth/native-deletion-receipt";
 import { createNativeReauthentication } from "../src/server/auth/native-reauth";
+import { deletionOwnerTag } from "../src/server/modules/deletion/service";
 import { createTestDatabase } from "./helpers/d1";
 import { seedTestSession } from "./helpers/session";
 
@@ -545,6 +547,248 @@ test("a provider success whose final receipt write is lost preserves committed d
       appleRevocation: "unconfirmed",
     });
   } finally {
+    f.db.close();
+  }
+});
+
+async function activityProof(f: Awaited<ReturnType<typeof fixture>>, startedAt = f.now()) {
+  const ownerTag = await deletionOwnerTag(f.options.secret, f.original.userId);
+  const activityProof = await createNativeDeletionActivityProof(f.options).sign({
+    attemptId: f.input.attemptId,
+    challenge: f.input.challenge,
+    ownerTag,
+    startedAt,
+  });
+  return { ...f.proof, ownerTag, startedAt, activityProof };
+}
+
+test("activity is an observation only; active bytes stay unchanged and expired CAS retires only the delete guard", async () => {
+  const f = await fixture();
+  try {
+    await f.auth.prepareDeletion(f.input, f.original);
+    const proof = await activityProof(f);
+    const row = f.db.sqlite
+      .query("SELECT key,value FROM app_metadata WHERE key LIKE 'native-reauth:v1:%'")
+      .get() as { key: string; value: string };
+    expect(await f.auth.deletionActivity(proof)).toEqual({
+      contractVersion: 2,
+      attemptId: f.input.attemptId,
+      status: "active",
+      outcome: "unknown",
+      observedAt: new Date(f.now()).toISOString(),
+    });
+    expect(f.db.sqlite.query("SELECT value FROM app_metadata WHERE key=?").get(row.key)).toEqual({
+      value: row.value,
+    });
+    f.advance(NATIVE_DELETION_RECEIPT_TTL_MS + 1);
+    await expect(f.auth.cancelDeletion(f.proof)).rejects.toThrow();
+    await expect(f.auth.authorizeDeletion(f.start, "google", f.fresh)).rejects.toThrow();
+    expect(await f.auth.deletionActivity(proof)).toEqual({
+      contractVersion: 2,
+      attemptId: f.input.attemptId,
+      status: "inactive",
+      outcome: "unknown",
+      observedAt: new Date(f.now()).toISOString(),
+    });
+    expect(f.db.sqlite.query("SELECT value FROM app_metadata WHERE key=?").get(row.key)).toBeNull();
+    expect(userExists(f)).toBe(true);
+    expect((await f.auth.deletionActivity(proof)).outcome).toBe("unknown");
+  } finally {
+    f.db.close();
+  }
+});
+
+for (const alteration of [
+  "signature",
+  "verifier",
+  "attempt",
+  "owner",
+  "started",
+  "issuer",
+  "secret",
+  "clock",
+] as const)
+  test(`activity proof is mandatory even after metadata cleanup and is scoped to its original context: ${alteration}`, async () => {
+    const f = await fixture();
+    try {
+      await f.auth.prepareDeletion(f.input, f.original);
+      const signed = await activityProof(f);
+      await f.auth.cancelDeletion(f.proof);
+      const input = { ...signed };
+      let auth = f.auth;
+      if (alteration === "signature")
+        input.activityProof =
+          (signed.activityProof[0] === "a" ? "b" : "a") + signed.activityProof.slice(1);
+      if (alteration === "verifier") input.verifier = "b".repeat(43);
+      if (alteration === "attempt") input.attemptId = crypto.randomUUID();
+      if (alteration === "owner") input.ownerTag = "b".repeat(64);
+      if (alteration === "started") input.startedAt--;
+      if (alteration === "issuer")
+        auth = createNativeReauthentication({
+          ...f.options,
+          issuer: "https://foreign.example.test",
+        });
+      if (alteration === "secret")
+        auth = createNativeReauthentication({
+          ...f.options,
+          secret: "different-synthetic-secret-at-least-32-characters",
+        });
+      if (alteration === "clock") f.advance(-1);
+      const queries = f.db.queryCount;
+      await expect(auth.deletionActivity(input)).rejects.toThrow();
+      expect(f.db.queryCount).toBe(queries);
+      expect(userExists(f)).toBe(true);
+    } finally {
+      f.db.close();
+    }
+  });
+
+for (const expired of [false, true])
+  test(`a valid observation proof never retires ordinary reauthentication: expired=${expired}`, async () => {
+    const f = await fixture();
+    try {
+      await f.auth.prepare(
+        { attemptId: f.input.attemptId, challenge: f.input.challenge, provider: "google" },
+        f.original,
+      );
+      const signed = await activityProof(f),
+        row = f.db.sqlite
+          .query("SELECT value FROM app_metadata WHERE key LIKE 'native-reauth:v1:%'")
+          .get();
+      if (expired) f.advance(NATIVE_DELETION_RECEIPT_TTL_MS + 1);
+      await expect(f.auth.deletionActivity(signed)).rejects.toThrow();
+      expect(
+        f.db.sqlite
+          .query("SELECT value FROM app_metadata WHERE key LIKE 'native-reauth:v1:%'")
+          .get(),
+      ).toEqual(row);
+      if (!expired) {
+        await f.auth.authorize(f.start, "google", f.fresh);
+        expect(await f.auth.verify(f.proof, f.fresh)).toEqual({ startedAt: signed.startedAt });
+      }
+    } finally {
+      f.db.close();
+    }
+  });
+
+test("already-deleted/expired receipt is still unknown to activity and receipt expiry is not extended", async () => {
+  const f = await fixture();
+  try {
+    await f.auth.prepareDeletion(f.input, f.original);
+    const signed = await activityProof(f);
+    await completeNativeAccountDeletion(f.owner.env, f.start, "google", f.fresh, {
+      now: f.now,
+      material: null,
+    });
+    expect(userExists(f)).toBe(false);
+    const receipt = f.db.sqlite
+      .query("SELECT key,value FROM app_metadata WHERE key LIKE 'native-deletion:v1:%'")
+      .get() as { key: string; value: string };
+    f.advance(NATIVE_DELETION_RECEIPT_TTL_MS + 1);
+    await expect(f.receipts.status(f.proof)).rejects.toThrow();
+    expect(await f.auth.deletionActivity(signed)).toMatchObject({
+      status: "inactive",
+      outcome: "unknown",
+    });
+    expect(
+      f.db.sqlite.query("SELECT value FROM app_metadata WHERE key=?").get(receipt.key),
+    ).toEqual({ value: receipt.value });
+    await expect(f.receipts.status(f.proof)).rejects.toThrow();
+  } finally {
+    f.db.close();
+  }
+});
+
+test("expired activity CAS can win after callback authorization and rolls back every deletion effect", async () => {
+  const f = await fixture();
+  try {
+    await f.auth.prepareDeletion(f.input, f.original);
+    const signed = await activityProof(f),
+      batch = f.db.binding.batch.bind(f.db.binding);
+    let intercepted = false;
+    f.db.binding.batch = async (statements) => {
+      if (!intercepted) {
+        intercepted = true;
+        f.advance(NATIVE_DELETION_RECEIPT_TTL_MS + 1);
+        expect((await f.auth.deletionActivity(signed)).status).toBe("inactive");
+      }
+      return batch(statements);
+    };
+    await expect(
+      completeNativeAccountDeletion(f.owner.env, f.start, "google", f.fresh, {
+        now: f.now,
+        material: null,
+      }),
+    ).rejects.toThrow();
+    expect(intercepted).toBe(true);
+    expect(userExists(f)).toBe(true);
+    expect(await f.receipts.status(f.proof)).toBeNull();
+    expect(
+      f.db.sqlite.query("SELECT count(*) n FROM v2_tombstones WHERE target_kind='account'").get(),
+    ).toEqual({ n: 0 });
+  } finally {
+    f.db.close();
+  }
+});
+
+test("a callback commit winning the expired cleanup race yields inactive/unknown, never a fabricated cancellation", async () => {
+  const f = await fixture();
+  const gate = () => {
+    let resolve!: () => void;
+    const promise = new Promise<void>((done) => {
+      resolve = done;
+    });
+    return { promise, resolve };
+  };
+  const reached = gate(),
+    release = gate();
+  try {
+    await f.auth.prepareDeletion(f.input, f.original);
+    const signed = await activityProof(f),
+      started = f.now();
+    const batch = f.db.binding.batch.bind(f.db.binding);
+    f.db.binding.batch = async (statements) => {
+      reached.resolve();
+      await release.promise;
+      return batch(statements);
+    };
+    const callback = completeNativeAccountDeletion(f.owner.env, f.start, "google", f.fresh, {
+      now: () => started,
+      material: null,
+    });
+    await reached.promise;
+    f.advance(NATIVE_DELETION_RECEIPT_TTL_MS + 1);
+    const prepare = f.db.binding.prepare.bind(f.db.binding);
+    f.db.binding.prepare = (sql) => {
+      const wrap = (statement: D1PreparedStatement): D1PreparedStatement => ({
+        first: statement.first.bind(statement),
+        all: statement.all.bind(statement),
+        raw: statement.raw.bind(statement),
+        bind: (...values: unknown[]) => wrap(statement.bind(...values)),
+        run: async <T>() => {
+          release.resolve();
+          await callback;
+          return statement.run<T>();
+        },
+      });
+      const statement = prepare(sql);
+      return sql === "DELETE FROM app_metadata WHERE key=? AND value=?"
+        ? wrap(statement)
+        : statement;
+    };
+    expect(await f.auth.deletionActivity(signed)).toMatchObject({
+      status: "inactive",
+      outcome: "unknown",
+    });
+    expect(userExists(f)).toBe(false);
+    expect(
+      f.db.sqlite
+        .query("SELECT count(*) n FROM app_metadata WHERE key LIKE 'native-deletion:v1:%'")
+        .get(),
+    ).toEqual({ n: 1 });
+    await expect(f.receipts.status(f.proof)).rejects.toThrow();
+  } finally {
+    release.resolve();
     f.db.close();
   }
 });
