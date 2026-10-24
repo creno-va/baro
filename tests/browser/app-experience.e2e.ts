@@ -252,3 +252,67 @@ test("directory and profile waits retain useful placeholders and search stays av
   await expect(page.getByRole("alert")).toContainText("현재 공개된 프로필이 아니에요.");
   await expect(page.locator(".ui-loading--detail")).toHaveCount(0);
 });
+
+test("Escape cannot hide a deletion request that the dialog owner is still waiting for", async ({
+  page,
+}) => {
+  await session(page);
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  let release = () => {};
+  let writes = 0;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route(`**/api/cases/${lastStory.id}`, async (route) => {
+    if (route.request().method() !== "DELETE") return route.fallback();
+    writes++;
+    await gate;
+    await route.fulfill({
+      status: 503,
+      json: { error: { code: "UNAVAILABLE", message: "합성 요청 실패", retryable: true } },
+    });
+  });
+  await page.goto("/cases");
+  await settled(page);
+  const opener = page.getByRole("button", { name: `${lastStory.title} 사건 삭제`, exact: true });
+  await opener.click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel("삭제하려면 DELETE를 입력해 주세요.").fill("DELETE");
+  await dialog.getByRole("button", { name: "사건 삭제", exact: true }).click();
+  await expect.poll(() => writes).toBe(1);
+  await expect(dialog.getByRole("button", { name: "삭제 접수 중…" })).toHaveAttribute(
+    "aria-busy",
+    "true",
+  );
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: "닫기", exact: true }).click();
+  await expect(dialog).toBeVisible();
+  expect(writes).toBe(1);
+  release();
+  await expect(dialog.getByRole("alert")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await expect(opener).toBeFocused();
+});
+
+test("Escape dismisses only the top dialog and restores focus inside its parent", async ({
+  page,
+}) => {
+  await session(page);
+  await page.goto("/__design-system");
+  await expect(page.locator("astro-island[ssr]")).toHaveCount(0);
+  const opener = page.getByRole("button", { name: "검토 안내 열기", exact: true });
+  await opener.click();
+  const parent = page.getByRole("dialog", { name: "검토 안내", exact: true });
+  const nestedOpener = parent.getByRole("button", { name: "추가 안내 열기", exact: true });
+  await nestedOpener.click();
+  await expect(page.getByRole("dialog", { name: "추가 안내", exact: true })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog", { name: "추가 안내", exact: true })).toHaveCount(0);
+  await expect(parent).toBeVisible();
+  await expect(nestedOpener).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(parent).toHaveCount(0);
+  await expect(opener).toBeFocused();
+});

@@ -17,3 +17,14 @@ an accessible label. StatePanel supports loading/empty/error/limit/permission/pe
 
 For tests only, `BARO_UI_TEST_FIXTURE=true` injects a synthetic showcase. This
 flag must not be set for deployment. Ordinary builds have no showcase route.
+
+`Spinner` is decorative and accompanies an operation label. `LoadingContent`
+reserves list, directory, detail or usage structure; set `announce={false}` when
+the screen already announces the same operation. `Button loading` disables
+mutations while showing progress. Replaceable read-only searches use `aria-busy`
+and a spinner instead. Reduced motion stops animation and keeps the status text.
+
+Product composition lives in AppLayout's `app-experience.css`; the landing must
+not import that file. Desktop menus pin the account and scroll only the recent
+list. Native Escape requests `onOpenChange`, allowing a pending-operation owner
+to refuse dismissal. Nested cancellation stays inside the top dialog.
