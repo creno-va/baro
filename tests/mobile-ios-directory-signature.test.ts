@@ -3,10 +3,14 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-// Pure Foundation probe only. This does not compile XCTest or verify native typing.
-test.skipIf(!Bun.which("swiftc"))(
+// Apple Foundation probe only. Linux/corelibs compilation does not verify iOS behavior.
+// The public-directory workflow requires this probe explicitly on its owned macOS SDK.
+const required = process.env.BARO_IOS_DIRECTORY_SIGNATURE_REQUIRED === "1";
+const appleSwift = process.platform === "darwin" ? Bun.which("swiftc") : null;
+test.skipIf(!required && !appleSwift)(
   "the exact Swift diagnostic classifies synthetic normalization, omissions and Hangul without returning values",
   async () => {
+    if (!appleSwift) throw Error("DIRECTORY_SIGNATURE_APPLE_SWIFT_REQUIRED");
     const source = await readFile("scripts/mobile-ios-ui/DirectoryUITests.swift", "utf8");
     const section = source
       .split("// BARO_DIRECTORY_SIGNATURE_BEGIN\n")[1]
@@ -46,7 +50,7 @@ for (value, key, required) in cases {
 print("DIRECTORY_SIGNATURE_PROBE_PASSED")
 `,
       );
-      const compiled = Bun.spawn([Bun.which("swiftc") ?? "swiftc", probe, "-o", binary], {
+      const compiled = Bun.spawn([appleSwift, probe, "-o", binary], {
         stdout: "ignore",
         stderr: "ignore",
       });
