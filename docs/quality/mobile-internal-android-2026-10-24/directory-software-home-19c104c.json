@@ -1,0 +1,65 @@
+{
+  "version": 1,
+  "kind": "bundled-android-home-only",
+  "toolingSourceSha": "19c104caaf8e616f16b874e9bb7593b66e153f60",
+  "binarySourceSha": "4ba1d390ed2511851f216fb02eff44687a87e7a2",
+  "observedAt": "2026-10-24T03:43:55.509Z",
+  "applicationId": "site.baro.app.preview",
+  "binary": {
+    "name": "baro-internal-preview-android-4ba1d390ed2511851f216fb02eff44687a87e7a2.apk",
+    "bytes": 57134306,
+    "sha256": "9d9ec567b048de7eecd0b58ec4ce710c12dc5040d972b185f3c3786295aa6a7c"
+  },
+  "verificationSha256": "eb24878edf0be2f7421407f8081e555d7fc4e17b3aae60d534e403c8c0c8ef94",
+  "device": {
+    "kind": "owned-emulator",
+    "model": "sdk_gphone64_x86_64",
+    "osVersion": "15"
+  },
+  "emulatorBootVerified": true,
+  "sdkHomeLaunchVerified": true,
+  "launcherBaseline": {
+    "kind": "owned-android-launcher-readiness",
+    "launcherKind": "pixel",
+    "samples": 3,
+    "consecutiveReadySamples": 3,
+    "foregroundMatchedBeforeAndAfterReadySamples": true,
+    "launcherRootVisibleInReadySamples": true,
+    "systemErrorDialogAbsentInSamples": true,
+    "productLaunched": false,
+    "dialogDismissed": false,
+    "launcherChanged": false,
+    "rawHierarchyExported": false
+  },
+  "homeObservations": [
+    {
+      "coldLaunch": 1,
+      "titleVisible": true,
+      "firstCardVisible": true,
+      "foundationErrorVisible": false,
+      "systemErrorDialogObserved": false
+    },
+    {
+      "coldLaunch": 2,
+      "titleVisible": true,
+      "firstCardVisible": true,
+      "foundationErrorVisible": false,
+      "systemErrorDialogObserved": false
+    }
+  ],
+  "metroServerStarted": false,
+  "metroRequests": 0,
+  "adbReverseConfigured": false,
+  "screenshot": {
+    "name": "home.png",
+    "bytes": 172539,
+    "sha256": "f93d75e23352971be623dc4681ff53925120c7f2e3879bd867f00c9831975259"
+  },
+  "fullNativeIoVerified": false,
+  "productJourneysVerified": false,
+  "remoteApiVerified": false,
+  "oauthVerified": false,
+  "physicalDeviceVerified": false,
+  "storeSigned": false,
+  "deployed": false
+}
