@@ -74,11 +74,11 @@ as historical; it does not silently update the score.
   tests passed again (177 tests/912 assertions). No provider calls run in these
   validation profiles. No database schema changed.
 
-Actual Gemini comparison against a live verified official judgment remains a
-separate external acceptance. Neither synthetic adapters nor existing intake/chat
-Gemini receipts establish that result. No production deployment or full-MVP/#71
-acceptance is claimed. Unissued four-service credentials and their target/recipient
-consent execution producer remain separate work under #458.
+Actual Gemini comparison against a live verified official judgment is recorded
+below as separate isolated synthetic acceptance. Local adapters and existing
+intake/chat receipts do not establish it. No production deployment, full customer
+journey or full-MVP/#71 acceptance is claimed. Unissued four-service credentials
+and their target/recipient consent execution producer remain separate #458 work.
 
 ## Bounded manual external check
 
@@ -166,10 +166,40 @@ Frozen/quick602 (50 files/5,671 assertions), affected grounding/runtime/probe166
 tests (960 assertions), production build/bundle/dry-run/local built workerd and
 isolated probe bundling pass. New tests cover unique UTF-16/emoji offsets, ambiguous
 or unread quotes, input immutability and public/private projection. The changed
-candidate still requires a new bounded actual observation; numerical correction is
-not yet an established explanation or fix for the original live failure.
+candidate required a changed-condition bounded actual observation. The generic
+original failure does not prove one specific failed quote or case reference.
 The full unit suite passed 4,357 tests/396 files/174,534 assertions before the final
 AI-organization restriction; affected tests passed again with that stricter guard.
 Final quote-whitespace/type checks add one regression (51 targeted tests/481
 assertions); this is an additional literal-integrity condition, not a relaxed
 source-matching rule.
+
+## Actual changed-candidate comparison accepted
+
+[Manual run40140675828](https://github.com/creno-va/baro/actions/runs/40140675828)
+on exact main1c098fe passed through actual Gemini native LOW comparison and separate
+MEDIUM audit. The original
+[finite receipt](./ai-harness-2026-10-24/precedent-compare-1c098-40140675828.json)
+is preserved unchanged, including its actual observation time/source manifest.
+Generation: 11,787ms, 4,130 input/983 output observed tokens. Audit: 8,620ms,
+5,107 input/1,566 output observed tokens. Exactly two successful model calls, no
+provider failure or additional generation; these are model durations, not total
+customer journey latency.
+
+Two actual public API requests verified the same official original624227 and
+content hash as the failed run. Three exact quotations needed numeric-coordinate
+resolution (`validSpans=0`, `uniqueExactSpans=3`); the corrected draft then passed
+independent semantic audit. Eight indicators yielded three comparable differences,
+zero matches and five unknowns: score0% with the fixed denominator, without inventing
+positive similarity. Original excerpt bounds0–4000/full4175 remain partial. No raw
+judgment, synthetic statement or generated answer is in the receipt.
+
+This accepts the changed comparison harness on this synthetic case and official
+excerpt, not every case's semantic correctness, a ranking of all precedents, legal
+approval or full deployed customer/OAuth/release acceptance. The first failed
+receipt/attempts remain unchanged. Preview e02 passed schema0017/foundation/9-route
+smoke in run40138523599, but predates this evidence repair. The subsequent combined
+preview must include the repaired model path and the independently owned disabled
+button target fix. Production is unchanged.
+Docs/evidence integration includes UX534/main393ba1e0 and passed frozen/quick603
+(50 files/5,674 assertions). That local result is not a full-validation receipt.
