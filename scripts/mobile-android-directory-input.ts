@@ -75,21 +75,95 @@ const displaySchema = z.strictObject({
   height: z.number().int().min(1).max(8192),
   rotation: z.number().int().min(0).max(3),
 });
-export function androidDirectoryDisplay(output: string) {
+function displayParts(output: string) {
   if (output.length > 4_000_000) throw Error("ANDROID_DIRECTORY_DISPLAY_INVALID");
+  const lines = output.split(/\r?\n/);
   const frames = [...output.matchAll(/\bDisplayFrames w=(\d+) h=(\d+) r=([0-3])\b/g)];
-  const ime = output
-    .split(/\r?\n/)
-    .filter((line) => /\bInsetsSource id=[a-f0-9]+ type=ime\b/.test(line));
-  const frame = frames[0],
-    source = ime[0];
-  if (frames.length !== 1 || ime.length !== 1 || !frame || !source)
+  const controllers = lines.flatMap((line, index) =>
+    line.trim() === "WindowInsetsStateController" ? [index] : [],
+  );
+  const start = controllers.length === 1 ? controllers[0] : undefined;
+  const end =
+    start === undefined
+      ? -1
+      : lines.findIndex((line, index) => index > start && line.trim() === "Control map:");
+  const raw = start !== undefined && end > start ? lines.slice(start + 1, end) : [];
+  const rawFrames = raw.flatMap((line) => {
+    const match = line.match(/\bmDisplayFrame=Rect\(0, 0 - (\d+), (\d+)\)/);
+    return match ? [match] : [];
+  });
+  const source = (line: string) => /\bInsetsSource id=[a-f0-9]+ type=ime(?:[ \t]|$)/.test(line);
+  return {
+    frames,
+    controllers,
+    rawFrames,
+    rawDisplayFrameMarkers: raw.filter((line) => /\bmDisplayFrame=/.test(line)),
+    rawStates: raw.filter((line) => line.trim() === "InsetsState"),
+    ime: raw.filter(source),
+    imeMarkers: raw.filter((line) => /\bime\b/i.test(line)),
+    allImeSources: lines.filter(source),
+    rawSectionFound: start !== undefined && end > start,
+  };
+}
+/** Counts/booleans only. Raw display/window output never leaves this module. */
+export function androidDirectoryDisplayShape(output: string) {
+  if (output.length > 4_000_000)
+    return {
+      outputWithinBound: false,
+      controllerCount: null,
+      displayFrameCount: null,
+      displayFrameMarkerCount: null,
+      rawDisplayFrameMarkerCount: null,
+      rawStateCount: null,
+      rawDisplayFrameCount: null,
+      rawSectionFound: false,
+      rawImeMarkerCount: null,
+      rawImeSourceCount: null,
+      allImeSourceCount: null,
+    };
+  const p = displayParts(output);
+  return {
+    outputWithinBound: true,
+    controllerCount: p.controllers.length,
+    displayFrameCount: p.frames.length,
+    displayFrameMarkerCount: [...output.matchAll(/\bDisplayFrames\b/g)].length,
+    rawDisplayFrameMarkerCount: p.rawDisplayFrameMarkers.length,
+    rawStateCount: p.rawStates.length,
+    rawDisplayFrameCount: p.rawFrames.length,
+    rawSectionFound: p.rawSectionFound,
+    rawImeMarkerCount: p.imeMarkers.length,
+    rawImeSourceCount: p.ime.length,
+    allImeSourceCount: p.allImeSources.length,
+  };
+}
+export function androidDirectoryDisplay(output: string) {
+  const parts = displayParts(output),
+    frame = parts.frames[0],
+    rawFrame = parts.rawFrames[0],
+    source = parts.ime[0];
+  if (
+    parts.frames.length !== 1 ||
+    parts.controllers.length !== 1 ||
+    !parts.rawSectionFound ||
+    parts.rawStates.length !== 1 ||
+    parts.rawFrames.length !== 1 ||
+    !frame ||
+    !rawFrame ||
+    parts.ime.length > 1 ||
+    parts.imeMarkers.length !== parts.ime.length
+  )
     throw Error("ANDROID_DIRECTORY_DISPLAY_INVALID");
   const display = displaySchema.parse({
     width: Number(frame[1]),
     height: Number(frame[2]),
     rotation: Number(frame[3]),
   });
+  if (Number(rawFrame[1]) !== display.width || Number(rawFrame[2]) !== display.height)
+    throw Error("ANDROID_DIRECTORY_DISPLAY_INVALID");
+  // A fresh display can have no IME source until the keyboard window exists.
+  // Absence is accepted only inside the complete, dimension-matched raw InsetsState.
+  if (!source)
+    return { ...display, imeSourceObserved: false, keyboardVisible: false, keyboardTop: null };
   const visible = source.match(/\bvisible=(true|false)\b/)?.[1],
     rect = source.match(/\bframe=(\[\d+,\d+\]\[\d+,\d+\])/)?.[1];
   if (!visible || !rect) throw Error("ANDROID_DIRECTORY_DISPLAY_INVALID");
@@ -97,6 +171,7 @@ export function androidDirectoryDisplay(output: string) {
   if (visible === "true" && !box) throw Error("ANDROID_DIRECTORY_DISPLAY_INVALID");
   return {
     ...display,
+    imeSourceObserved: true,
     keyboardVisible: visible === "true",
     keyboardTop: visible === "true" ? (box?.top ?? null) : null,
   };
@@ -257,6 +332,7 @@ export interface AndroidDirectoryDiagnostic {
     | "home-return"
     | "rotation-restore";
   display: ReturnType<typeof androidDirectoryDisplay> | null;
+  displayShape: ReturnType<typeof androidDirectoryDisplayShape> | null;
   input: { present: boolean; focused: boolean; retained: boolean } | null;
 }
 export async function observeAndroidDirectoryInput(context: {
@@ -280,10 +356,12 @@ export async function observeAndroidDirectoryInput(context: {
     file = `/sdcard/baro-directory-${randomUUID()}.xml`;
   let stage: AndroidDirectoryDiagnostic["stage"] = "prepare";
   let lastDisplay: ReturnType<typeof androidDirectoryDisplay> | null = null;
+  let lastDisplayShape: ReturnType<typeof androidDirectoryDisplayShape> | null = null;
   const report = (value: ReturnType<typeof androidDirectoryInputObservation> | null = null) =>
     context.diagnostic({
       stage,
       display: lastDisplay,
+      displayShape: lastDisplayShape,
       input: value
         ? { present: !!value.input, focused: value.focused, retained: value.syntheticInputRetained }
         : null,
@@ -304,7 +382,11 @@ export async function observeAndroidDirectoryInput(context: {
     }
   }
   async function display() {
-    lastDisplay = androidDirectoryDisplay(await shell(["dumpsys", "window", "displays"]));
+    const output = await shell(["dumpsys", "window", "displays"]);
+    lastDisplay = null;
+    lastDisplayShape = androidDirectoryDisplayShape(output);
+    report();
+    lastDisplay = androidDirectoryDisplay(output);
     report();
     return lastDisplay;
   }

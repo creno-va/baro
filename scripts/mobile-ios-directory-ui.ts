@@ -52,6 +52,7 @@ const assertionCodes = [
   "BARO_DIRECTORY_KEYBOARD_MISSING",
   "BARO_DIRECTORY_INPUT_OCCLUDED",
   "BARO_DIRECTORY_INPUT_NOT_RETAINED",
+  "BARO_DIRECTORY_INITIAL_INPUT_NOT_EMPTY",
   "BARO_DIRECTORY_TYPED_INPUT_MISMATCH",
   "BARO_DIRECTORY_LANDSCAPE_INPUT_MISMATCH",
   "BARO_DIRECTORY_PORTRAIT_INPUT_MISMATCH",
@@ -62,6 +63,22 @@ const assertionCodes = [
   "BARO_DIRECTORY_BACK_MISSING",
   "BARO_DIRECTORY_HOME_RETURN_MISSING",
 ] as const;
+const inputSignatureSchema = z.strictObject({
+  stringObserved: z.boolean(),
+  expectedLengthMatches: z.boolean(),
+  caseFoldMatches: z.boolean(),
+  whitespaceRemovalMatches: z.boolean(),
+  dashNormalizationMatches: z.boolean(),
+  compatibilityNormalizationMatches: z.boolean(),
+  knownNormalizationMatches: z.boolean(),
+  expectedSubsequenceOnly: z.boolean(),
+  containsKnownPayload: z.boolean(),
+  allKnownSegmentsPresent: z.boolean(),
+  knownDigitSuffixMatches: z.boolean(),
+  containsHangul: z.boolean(),
+  matchesFixedFieldLabel: z.boolean(),
+  onlyExpectedScalarsAfterCaseFold: z.boolean(),
+});
 const inputStatusSchema = z.strictObject({
   stage: z.enum([
     "before-input",
@@ -80,9 +97,11 @@ const inputStatusSchema = z.strictObject({
   ]),
   appForeground: z.boolean(),
   keyboardObserved: z.boolean(),
+  inputSignature: inputSignatureSchema.optional(),
 });
 export function observeIosDirectoryFailure(output: string) {
   let status: z.infer<typeof inputStatusSchema> | null = null;
+  const history: z.infer<typeof inputStatusSchema>[] = [];
   const prefix = "BARO_DIRECTORY_UI_STATUS:";
   for (const line of output
     .split(/\r?\n/)
@@ -90,7 +109,10 @@ export function observeIosDirectoryFailure(output: string) {
     .slice(-8)) {
     try {
       const parsed = inputStatusSchema.safeParse(JSON.parse(line.slice(prefix.length)));
-      if (parsed.success) status = parsed.data;
+      if (parsed.success) {
+        status = parsed.data;
+        history.push(parsed.data);
+      }
     } catch {
       /* Discard all malformed or unknown text. */
     }
@@ -98,7 +120,7 @@ export function observeIosDirectoryFailure(output: string) {
   const code = output.match(
     /XCTAssert[A-Za-z]+ failed[^\r\n]*? - (BARO_DIRECTORY_[A-Z0-9_]+)(?:[^A-Z0-9_]|$)/,
   )?.[1];
-  return { status, assertionCode: assertionCodes.find((value) => value === code) ?? null };
+  return { status, history, assertionCode: assertionCodes.find((value) => value === code) ?? null };
 }
 export const iosDirectoryBaseSchema = iosAuthCancelBaseSchema;
 export const iosDirectoryReceiptSchema = iosDirectoryBaseSchema.extend({

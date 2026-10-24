@@ -1,0 +1,28 @@
+{
+  "toolingSourceSha": "8e1a2be10c5ef8647e2b8b0f317038eaacd52d7f",
+  "phase": "public-directory-xcuitest",
+  "code": "INTERNAL_IOS_VERIFICATION_COMMAND_FAILED",
+  "lastCommand": {
+    "exitCode": 65,
+    "timedOut": false,
+    "category": "COMMAND_FAILED"
+  },
+  "uiTestFailure": null,
+  "authCancelFailure": null,
+  "directoryFailure": {
+    "status": {
+      "stage": "typed-check",
+      "inputState": "other",
+      "appForeground": true,
+      "keyboardObserved": true
+    },
+    "assertionCode": "BARO_DIRECTORY_TYPED_INPUT_MISMATCH"
+  },
+  "nativeProcessLaunchVerified": false,
+  "homeContentVerified": false,
+  "remoteApiVerified": false,
+  "oauthVerified": false,
+  "physicalDeviceVerified": false,
+  "storeSigned": false,
+  "deployed": false
+}
