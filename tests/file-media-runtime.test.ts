@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { convertV4MiniflareOptions, Miniflare } from "miniflare";
 import { modelBounds, modelCapabilitySchema } from "../scripts/provision-ai-budget";
 import { CURRENT_POLICY_VERSIONS } from "../src/contracts/consent";
 import { createV2Core } from "../src/server/db/v2-core";
@@ -9,6 +10,7 @@ import {
   processingArtifactScopeSchema,
   runtimeDigest,
 } from "../src/server/db/v2-paid-runtime";
+import { createV2StagingRepository } from "../src/server/db/v2-staging";
 import { configuredMediaPolicy } from "../src/server/modules/budget/media-capability";
 import { createProcessingBudgetService } from "../src/server/modules/budget/processing-ledger";
 import {
@@ -27,6 +29,8 @@ import { prepareVisionWire } from "../src/server/modules/llm-gateway/vision-wire
 import { createFileProcessingAdmission } from "../src/server/runtime/file-admission";
 import { fixture } from "./helpers/file-processing-fixture";
 import observation from "./helpers/gemini-observation";
+import { copySyntheticD1 } from "./helpers/native-d1";
+import { nativeD1Transport, nativeD1TransportWorker } from "./helpers/native-d1-transport";
 import { seedTestSession } from "./helpers/session";
 
 /** Canonical runtime/ledger with explicit offline native, R2 and model adapters.
@@ -40,19 +44,29 @@ async function setupImage(
     result?: unknown;
     reject?: boolean;
     afterModel?: () => void;
+    database?: D1Database;
   } = {},
 ) {
   const frameCount = options.videoFrames ?? 1;
   const f = await fixture();
-  const core = createV2Core(f.db.binding, f.core.cipher, {
-    applicationCostLimitsEnabled: false,
-    monthlyBudgetCapEnabled: false,
-  });
   f.db.sqlite
     .query(
       "INSERT INTO v2_physical_storage_capacity(environment,capacity_bytes) VALUES('preview',1000000)",
     )
     .run();
+  if (options.database) await copySyntheticD1(options.database, f.db.sqlite);
+  const binding = options.database ?? f.db.binding;
+  const core = createV2Core(binding, f.core.cipher, {
+    applicationCostLimitsEnabled: false,
+    monthlyBudgetCapEnabled: false,
+  });
+  const revision = async () => {
+    const value = await core
+      .statement("SELECT revision FROM v2_workspaces WHERE id=?", [f.workspaceId])
+      .first<number>("revision");
+    if (!value) throw new Error("Synthetic workspace missing");
+    return value;
+  };
   const original = options.audio ? wav() : new Uint8Array([255, 216, 255, 217]);
   const models: string[] = [];
   const wires: Record<string, unknown>[] = [];
@@ -72,7 +86,7 @@ async function setupImage(
     APP_ENV: "preview",
     APPLICATION_COST_LIMITS_ENABLED: "false",
     MONTHLY_BUDGET_CAP_ENABLED: "false",
-    DB: f.db.binding,
+    DB: binding,
     CASE_DATA_KEY_V1: btoa("k".repeat(32)).replace(/=+$/, ""),
     CASE_PRIVATE_R2: f.bucket.port,
     FILE_PROCESSING: {},
@@ -226,7 +240,7 @@ async function setupImage(
   const session = await service().reserve(
     f.actor.ownerId,
     f.workspaceId,
-    f.rev(),
+    await revision(),
     crypto.randomUUID(),
     {
       name: options.video ? "synthetic.mp4" : options.audio ? "synthetic.wav" : "synthetic.jpg",
@@ -244,14 +258,15 @@ async function setupImage(
     new Response(original).body,
   );
   const complete = await service().complete(f.actor.ownerId, f.workspaceId, session.fileId, {
-    expectedRevision: f.rev(),
+    expectedRevision: await revision(),
     uploadSession: session.uploadSession,
     manifest: { byteLength: original.length, contentHash: await digest(original), parts: [part] },
   });
   expect(complete.processingQueued).toBe(true);
-  const job = f.db.sqlite
-    .query("SELECT current_job_id AS id,revision FROM v2_files WHERE id=?")
-    .get(session.fileId) as { id: string; revision: number };
+  const job = await core
+    .statement("SELECT current_job_id AS id,revision FROM v2_files WHERE id=?", [session.fileId])
+    .first<{ id: string; revision: number }>();
+  if (!job) throw new Error("Synthetic file job missing");
   const params = {
     ownerId: f.actor.ownerId,
     workspaceId: f.workspaceId,
@@ -777,3 +792,121 @@ test("explicit retry starts a new runtime while preserving historical unscoped m
       .all(permit.attemptId),
   ).toEqual(before);
 });
+
+for (const stoppedAfter of [
+  "header",
+  "coverage",
+  "observations",
+  "sealed",
+  "workerd_sealed",
+] as const)
+  test(`explicit retry preserves prior ${stoppedAfter} publication and publishes a fresh revision`, async () => {
+    const stage = stoppedAfter === "workerd_sealed" ? "sealed" : stoppedAfter;
+    const native =
+      stoppedAfter === "workerd_sealed"
+        ? new Miniflare(
+            convertV4MiniflareOptions({
+              modules: true,
+              script: nativeD1TransportWorker,
+              compatibilityDate: "2026-10-01",
+              d1Databases: ["DB"],
+              cf: false,
+              unsafeRegisterWorker: false,
+            }),
+          )
+        : null;
+    try {
+      const f = await setupImage({
+        video: true,
+        ...(native ? { database: nativeD1Transport(native, "DB") } : {}),
+      });
+      await extracted(f);
+      await f.execution.interpretArtifact(0, 0, signal());
+      await f.execution.prepareUnit(0, signal());
+      const prepared = await f.execution.preparePublication(1, signal());
+      if (stage !== "header")
+        for (let i = 0; i < prepared.partCount; i++)
+          await f.execution.stageCoveragePart(i, signal());
+      if (stage === "observations" || stage === "sealed")
+        await f.execution.stageResultPage(0, 0, 0, signal());
+      const header = await f.core
+        .statement("SELECT * FROM v2_private_snapshots WHERE purpose='file_coverage'")
+        .first<{ id: string; revision: number }>();
+      if (!header) throw new Error("Synthetic staged header missing");
+      if (stage === "sealed")
+        expect(
+          await createV2StagingRepository(f.core).seal(
+            {
+              ...f.actor,
+              workspaceId: f.workspaceId,
+              expectedRevision:
+                (await f.core
+                  .statement("SELECT revision FROM v2_workspaces WHERE id=?", [f.workspaceId])
+                  .first<number>("revision")) ?? 0,
+            },
+            header.id,
+            {
+              schemaVersion: "2",
+              purpose: "file_coverage",
+              targetId: f.params.fileId,
+              revision: header.revision,
+            },
+            await f.execution.currentLease(),
+          ),
+        ).toBe(true);
+      await f.execution.fail(new ProcessingError("FILE_PROCESSING_FAILED"));
+      const retainedTables = [
+        "v2_private_snapshots",
+        "v2_private_parts",
+        "v2_file_observations",
+        "v2_file_derivatives",
+      ];
+      const retained = await Promise.all(
+        retainedTables.map(
+          async (table) =>
+            (await f.core.statement(`SELECT * FROM ${table} ORDER BY id`).all<{ id: string }>())
+              .results,
+        ),
+      );
+      const retry = createFileRetry(f.core, f.env, {});
+      expect(
+        (
+          await retry(f.actor.ownerId, f.workspaceId, f.params.fileId, {
+            expectedRevision: await f.core
+              .statement("SELECT revision FROM v2_workspaces WHERE id=?", [f.workspaceId])
+              .first<number>("revision"),
+            fileRevision: f.params.fileRevision,
+          })
+        )?.status,
+      ).toBe("queued");
+      f.execution = await createFileProcessingRuntime(
+        f.env,
+        f.params,
+        `${f.params.jobId}-2`,
+        () => {},
+      );
+      await extracted(f);
+      await f.execution.interpretArtifact(0, 0, signal());
+      const output = await publish(f);
+      if (!output) throw new Error("Synthetic retry publication missing");
+      expect(output?.revision).toBeGreaterThan(header.revision);
+      expect(output?.coverage).toMatchObject({ status: "complete" });
+      expect(output?.observations).toHaveLength(1);
+      expect(output?.derivatives).toHaveLength(1);
+      for (const [i, table] of retainedTables.entries())
+        for (const old of retained[i] ?? [])
+          expect(
+            await f.core
+              .statement(`SELECT * FROM ${table} WHERE id=?`, [old.id])
+              .first<{ id: string }>(),
+          ).toEqual(old);
+      expect(await f.execution.publish(signal())).toMatchObject({
+        status: "ready",
+        revision: output?.revision,
+      });
+      expect(await f.execution.initialize()).toEqual({ totalUnits: 0, status: "ready" });
+      expect(f.calls.model).toBe(2);
+    } finally {
+      await native?.dispose();
+    }
+  }, 120000);

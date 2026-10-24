@@ -278,9 +278,10 @@ for (const pageCount of [1, 2])
     // authorization reads per extracted unit, without removing earlier guards.
     // Immutable publication-plan replay adds three reads and two fresh guards.
     // File-only operational fence refresh adds four/five atomic batches.
-    expect(stages.reduce((sum, stage) => sum + stage.calls, 0)).toBe(pageCount === 1 ? 654 : 1160);
+    // Retained failed output namespaces require one indexed revision read.
+    expect(stages.reduce((sum, stage) => sum + stage.calls, 0)).toBe(pageCount === 1 ? 655 : 1161);
     expect(stages.reduce((sum, stage) => sum + stage.statements, 0)).toBe(
-      pageCount === 1 ? 838 : 1465,
+      pageCount === 1 ? 839 : 1466,
     );
     expect(stages.reduce((sum, stage) => sum + stage.authorizations, 0)).toBe(
       pageCount === 1 ? 312 : 561,
