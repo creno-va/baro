@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "kind": "local-android-ime-reference-failure-source-binding",
+  "verifiedAt": "2026-10-24T19:22:33.419293+00:00",
+  "toolingSourceSha": "2327b2af8acf8724d09895003824d2daf94fd6e1",
+  "workflowRunId": 40124380021,
+  "artifactId": 12572780026,
+  "workflowConclusion": "failure",
+  "referenceWorkflowProvenanceVerified": true,
+  "failureSha256": "2c4306123ffbd95472276d6697c36d46d71e6da0a1b47d532b22e7c638a5acc5",
+  "cleanupSha256": "31f3acd5bde4e55addd24f2730f9169913715f40f7a147b55cdf8922e31332da",
+  "toolSourceSha256": "448459b18fe2f24ea63f333409f15f4f10f40f621a690038fc2d2c240254f81e",
+  "observedFailure": {
+    "phase": "ime-metadata",
+    "code": "ANDROID_IME_REFERENCE_DEFAULT_FORMAT_INVALID"
+  },
+  "rawDefaultValuePreserved": false,
+  "exactDefaultStateOrCauseConfirmed": false,
+  "settingsVisitReached": false,
+  "metadataAccepted": false,
+  "productInputVerified": false,
+  "physicalDeviceVerified": false,
+  "emulatorExited": true,
+  "avdDeleted": true,
+  "privateFilesRemoved": true
+}

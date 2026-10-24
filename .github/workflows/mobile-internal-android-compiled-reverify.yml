@@ -40,6 +40,14 @@ on:
         required: false
         default: false
         type: boolean
+      runtime_profile:
+        description: Official SDK image; AOSP is only for isolated ASCII directory input, excludes auth/Gboard
+        required: false
+        default: google-apis-api35
+        type: choice
+        options:
+          - google-apis-api35
+          - aosp-api35
 
 permissions:
   contents: read
@@ -56,6 +64,7 @@ jobs:
     timeout-minutes: 30
     env:
       TARGET_SHA: ${{ inputs.target_sha }}
+      BARO_ANDROID_RUNTIME_PROFILE: ${{ inputs.runtime_profile || 'google-apis-api35' }}
       EXPO_PUBLIC_APP_ENV: preview
       EXPO_PUBLIC_API_URL: https://preview.baro.site
       CI: '1'
@@ -71,6 +80,9 @@ jobs:
         run: exit 1
       - name: Require isolated public directory input
         if: inputs.directory_input && (!inputs.smoke || inputs.large_font || inputs.public_directory || inputs.guide_ui || inputs.auth_cancel)
+        run: exit 1
+      - name: Require isolated ASCII input for AOSP profile
+        if: inputs.runtime_profile == 'aosp-api35' && (!inputs.smoke || !inputs.directory_input || inputs.large_font || inputs.public_directory || inputs.guide_ui || inputs.auth_cancel)
         run: exit 1
       - run: '[[ "$TARGET_SHA" =~ ^[a-f0-9]{40}$ ]]'
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -120,7 +132,12 @@ jobs:
         if: inputs.smoke
         run: |
           sudo chmod a+rw /dev/kvm
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platform-tools' 'emulator' 'system-images;android-35;google_apis;x86_64'
+          case "$BARO_ANDROID_RUNTIME_PROFILE" in
+            google-apis-api35) runtime_image='system-images;android-35;google_apis;x86_64' ;;
+            aosp-api35) runtime_image='system-images;android-35;default;x86_64' ;;
+            *) exit 1 ;;
+          esac
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platform-tools' 'emulator' "$runtime_image"
       - name: Observe actual bundled Home without Metro
         if: inputs.smoke
         run: bun scripts/mobile-internal-android-home.ts ${{ inputs.large_font && '--large-font' || '' }} ${{ inputs.public_directory && '--public-directory' || '' }} ${{ inputs.guide_ui && '--guide-ui' || '' }} ${{ inputs.auth_cancel && '--auth-cancel' || '' }} ${{ inputs.directory_input && '--directory-input' || '' }}

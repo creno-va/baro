@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "kind": "public-sdk-system-image-metadata-observation-only",
+  "observedAt": "2026-10-24T19:16:48.916061+00:00",
+  "source": "https://dl.google.com/android/repository/sys-img/android/sys-img2-4.xml",
+  "sourceHttpStatusObserved": 200,
+  "sourceMetadataBytes": 190717,
+  "sourceMetadataSha256": "3dcfa09ffd6f970ab344815e2d88020b31679fbfbcddb19bafa1821a5e16df08",
+  "localSourceFileModifiedAt": "2026-10-24T19:08:21.774404+00:00",
+  "packagePath": "system-images;android-35;default;x86_64",
+  "revision": {
+    "major": "2"
+  },
+  "licenseReference": "android-sdk-license",
+  "sdkImageDownloadedLocally": false,
+  "imageRuntimeVerified": false,
+  "launcherRootCauseConfirmed": false,
+  "productInputVerified": false,
+  "physicalDeviceVerified": false
+}

@@ -1,0 +1,24 @@
+{
+  "toolingSourceSha": "2327b2af8acf8724d09895003824d2daf94fd6e1",
+  "phase": "ime-metadata",
+  "code": "ANDROID_IME_REFERENCE_DEFAULT_FORMAT_INVALID",
+  "commandFailures": {
+    "count": 9,
+    "first": {
+      "operation": "other",
+      "category": "nonzero-exit",
+      "exitCode": 1,
+      "timedOut": false
+    },
+    "last": {
+      "operation": "other",
+      "category": "nonzero-exit",
+      "exitCode": 1,
+      "timedOut": false
+    }
+  },
+  "emulatorStartupIssues": [],
+  "rawCommandLogsExported": false,
+  "rawMetadataExported": false,
+  "productInputVerified": false
+}
