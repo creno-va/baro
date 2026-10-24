@@ -110,6 +110,8 @@ for (const change of [
   "url",
   "store",
   "extra",
+  "thinking",
+  "mime",
 ] as const)
   test(`vision execution rejects changed ${change}`, async () => {
     const value = await input();
@@ -123,8 +125,12 @@ for (const change of [
       wire: Record<string, unknown>;
     };
     const wire = mutable.wire as unknown as {
-      messages: [unknown, { content: [{ image_url: { detail: string; url: string } }] }];
-      max_completion_tokens: number;
+      contents: [{ parts: [{ inlineData: { data: string; mimeType: string } }] }];
+      generationConfig: {
+        mediaResolution: string;
+        maxOutputTokens: number;
+        thinkingConfig: { thinkingLevel: string };
+      };
       store: boolean;
       tools?: unknown[];
     };
@@ -134,14 +140,16 @@ for (const change of [
     if (change === "identity") mutable.identity = "0".repeat(64);
     if (change === "length") mutable.byteLength++;
     if (change === "duration") mutable.durationSeconds = 1;
-    if (change === "detail") wire.messages[1].content[0].image_url.detail = "high";
-    if (change === "output") wire.max_completion_tokens = 4001;
+    if (change === "detail") wire.generationConfig.mediaResolution = "MEDIA_RESOLUTION_HIGH";
+    if (change === "output") wire.generationConfig.maxOutputTokens = 4001;
     if (change === "url")
-      wire.messages[1].content[0].image_url.url = "https://example.test/private";
+      wire.contents[0].parts[0].inlineData.data = "https://example.test/private";
+    if (change === "thinking") wire.generationConfig.thinkingConfig.thinkingLevel = "HIGH";
+    if (change === "mime") wire.contents[0].parts[0].inlineData.mimeType = "image/png";
     if (change === "store") wire.store = true;
     if (change === "extra") wire.tools = [];
     // Mutated builder settings must fail even with a self-consistent input hash.
-    if (["detail", "output", "url", "store", "extra"].includes(change)) {
+    if (["detail", "output", "url", "store", "extra", "thinking", "mime"].includes(change)) {
       const bytes = new TextEncoder().encode(JSON.stringify(wire));
       mutable.byteLength = bytes.length;
       mutable.identity = await digest(bytes);

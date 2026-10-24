@@ -350,3 +350,30 @@ three existing phase limits plus the legal case's existing120s source deadline,
 within its ten-minute workflow; it never sends a second POST on ambiguity. This
 changed harness condition permits one new property acceptance, not an unchanged
 retry or an application timeout increase.
+
+On exact main9c54011 [property40082162759](https://github.com/creno-va/baro/actions/runs/40082162759)
+passed all three calls with the production-equivalent120s phase limit. Its first
+generation actually took99615ms (11600input/720output), followed by9959ms/11797/653
+and audit6425ms/3460/508. The older60s audit remains unknown/failed; this later pass
+does not reveal that historical call's eventual outcome. Auth/replay guards passed.
+
+[Video40082253954](https://github.com/creno-va/baro/actions/runs/40082253954)
+completed its actual pinned Linux native stage09:32:31–09:37:55UTC:80 decoded
+frames,8 one-second frames,2 scene frames and0–8s audio, with3 selected artifacts
+verified. The first Gemini frame observation then timed out at60000ms. Its usage
+remains unknown and the composed workflow failed after one call; no later frame or
+audio model call was reached. Native success and model failure are separate receipts.
+
+The changed vision candidate uses native inline JPEG data with explicit LOW thinking
+and MEDIA_RESOLUTION_LOW, fixed JSON output and the unchanged observation prompt.
+Cloudflare documents native contents input; Google documents global media resolution:
+[CF model](https://developers.cloudflare.com/ai/models/google/gemini-3.8-flash/),
+[media resolution](https://ai.google.dev/gemini-api/docs/generate-content/media-resolution).
+This removes the image compatibility translation and explicitly pins its intended
+low detail; it does not establish the old timeout's unique cause or a latency claim.
+The exact native builder remains the budget identity/byte validator, rejects remote
+URLs/additional instructions/mime/thinking/output changes, and requires native-wire
+capability. Historical receipts/observations are unchanged. Whisper, model identity,
+one-image/1MiB/output4000 bounds,60s media limit and no-overlap settlement are unchanged.
+Finite media diagnostics distinguish an actual timer expiry from other failures.
+Actual native-image/video acceptance remains required.
