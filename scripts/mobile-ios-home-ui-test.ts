@@ -7,6 +7,7 @@ import {
   iosAccessibilityResultSchema,
   parseIosAccessibilityResult,
 } from "./mobile-ios-accessibility";
+import { iosDeviceProfileModels } from "./mobile-ios-device-profile";
 import { iosLargestContentSize, verifyIosContentSizeReadback } from "./mobile-ios-ui-capabilities";
 import { xcodeSimulatorControlArguments } from "./mobile-ios-xcode-control";
 
@@ -27,11 +28,25 @@ export const homeGuideUiResultSchema = z.strictObject({
   authenticationNavigation: z.literal(false),
   privateDataAccess: z.literal(false),
 });
+export const tabletHomeGuideUiResultSchema = homeGuideUiResultSchema.extend({
+  kind: z.literal("ios-anonymous-tablet-home-guide-rotation-xcuitest"),
+  homeSwipes: z.number().int().min(0).max(24),
+  portraitHomeSwipes: z.number().int().min(0).max(24),
+  tabletIdiomObserved: z.literal(true),
+  landscapeGuideWindowObserved: z.literal(true),
+  landscapeReturnControlFullyHittable: z.literal(true),
+  portraitHomeWindowObserved: z.literal(true),
+  portraitGuideControlFullyHittable: z.literal(true),
+});
+const homeGuideResults = z.discriminatedUnion("kind", [
+  homeGuideUiResultSchema,
+  tabletHomeGuideUiResultSchema,
+]);
 export function parseHomeGuideUiResult(output: string) {
   const lines = output.split(/\r?\n/).filter((s) => s.startsWith("BARO_HOME_UI_RESULT:"));
   const line = lines[0];
   if (lines.length !== 1 || !line) throw Error("INTERNAL_IOS_UI_TEST_SINGLE_RESULT_REQUIRED");
-  return homeGuideUiResultSchema.parse(JSON.parse(line.slice("BARO_HOME_UI_RESULT:".length)));
+  return homeGuideResults.parse(JSON.parse(line.slice("BARO_HOME_UI_RESULT:".length)));
 }
 const digest = z.string().regex(/^[a-f0-9]{64}$/);
 export const iosHomeUiReceiptSchema = iosColdLaunchReceiptSchema
@@ -68,8 +83,16 @@ export const iosHomeUiReceiptSchema = iosColdLaunchReceiptSchema
     uiTestRunnerCompiled: z.literal(true),
     rawUiHierarchyExported: z.literal(false),
     rawXcresultExported: z.literal(false),
-    result: homeGuideUiResultSchema,
+    result: homeGuideResults,
   });
+function verifyHomeUiDeviceKind(home: z.infer<typeof iosHomeUiReceiptSchema>) {
+  const tablet = home.result.kind === "ios-anonymous-tablet-home-guide-rotation-xcuitest";
+  if (
+    (tablet && home.device.model !== iosDeviceProfileModels["ipad-pro-13-m4"]) ||
+    (!tablet && home.device.model.startsWith("iPad"))
+  )
+    throw Error("INTERNAL_IOS_UI_TEST_DEVICE_KIND_MISMATCH");
+}
 export function verifyIosHomeUiReceipt(
   value: unknown,
   baselineValue: unknown,
@@ -88,6 +111,7 @@ export function verifyIosHomeUiReceipt(
     )
       throw Error("INTERNAL_IOS_UI_TEST_IDENTITY_MISMATCH");
   }
+  verifyHomeUiDeviceKind(result);
   return result;
 }
 export const iosAccessibilityReceiptSchema = iosHomeUiReceiptSchema
@@ -99,6 +123,7 @@ export const iosAccessibilityReceiptSchema = iosHomeUiReceiptSchema
 export function verifyIosAccessibilityReceipt(value: unknown, homeUi: unknown) {
   const result = iosAccessibilityReceiptSchema.parse(value),
     home = iosHomeUiReceiptSchema.parse(homeUi);
+  verifyHomeUiDeviceKind(home);
   for (const key of [
     "binarySourceSha",
     "toolingSourceSha",
@@ -121,6 +146,7 @@ export async function runIosHomeUiTest(context: {
   owned: string;
   device: string;
   accessibilityAudit?: boolean;
+  tablet?: boolean;
   command: (args: string[], cwd?: string, timeout?: number) => Promise<string>;
 }) {
   if (
@@ -134,7 +160,14 @@ export async function runIosHomeUiTest(context: {
   const { command, device } = context,
     project = resolve(context.owned, "home-ui-test");
   await mkdir(project);
-  const swift = await readFile(resolve(import.meta.dir, "mobile-ios-ui/HomeUITests.swift")),
+  const phoneSwift = await readFile(resolve(import.meta.dir, "mobile-ios-ui/HomeUITests.swift")),
+    swift = context.tablet
+      ? Buffer.concat([
+          phoneSwift,
+          Buffer.from("\n"),
+          await readFile(resolve(import.meta.dir, "mobile-ios-ui/TabletHomeUITests.swift")),
+        ])
+      : phoneSwift,
     ruby = await readFile(resolve(import.meta.dir, "mobile-ios-ui/create-project.rb"));
   await writeFile(resolve(project, "HomeUITests.swift"), swift, { flag: "wx" });
   await writeFile(resolve(project, "create-project.rb"), ruby, { flag: "wx" });
@@ -164,7 +197,9 @@ export async function runIosHomeUiTest(context: {
       resolve(project, "private-results.xcresult"),
       "-parallel-testing-enabled",
       "NO",
-      "-only-testing:BaroHomeUITests/BaroHomeUITests/testLargestFontHomeAndGuide",
+      context.tablet
+        ? "-only-testing:BaroHomeUITests/BaroHomeUITests/testTabletLargestFontHomeGuideAndRotation"
+        : "-only-testing:BaroHomeUITests/BaroHomeUITests/testLargestFontHomeAndGuide",
       ...(context.accessibilityAudit
         ? ["-only-testing:BaroHomeUITests/BaroHomeUITests/testLargestFontHomeAndGuideAccessibility"]
         : []),
@@ -192,6 +227,9 @@ export async function runIosHomeUiTest(context: {
 }
 
 const assertionCodes = [
+  "BARO_TABLET_IDIOM_MISSING",
+  "BARO_TABLET_PORTRAIT_MISSING",
+  "BARO_TABLET_LANDSCAPE_MISSING",
   "BARO_STATIC_CONTROL_MISSING",
   "BARO_SCROLL_CONTAINER_MISSING",
   "BARO_STATIC_CONTROL_NOT_FULLY_HITTABLE",

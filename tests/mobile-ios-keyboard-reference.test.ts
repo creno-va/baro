@@ -84,8 +84,8 @@ test("the separate run uses only the Settings reference test and preserves the p
     /\.value|\.identifier|\.debugDescription|\.screenshot\(|\.tap\(|\.typeText\(|UIPasteboard/,
   );
   const product = await Bun.file("scripts/mobile-ios-ui/DirectoryKoreanUITests.swift").text();
-  expect(product).toContain("guard let settings = openKoreanLayoutSettings() else { return }");
-  expect(product).toContain('XCTAssertNotNil(layout.element, "BARO_KOREAN_LAYOUT_MISSING")');
+  expect(product).toContain("guard let settings = openKoreanLayoutSettings() else { return nil }");
+  expect(product).toContain('XCTAssertTrue(separateKeyboardChosen, "BARO_KOREAN_LAYOUT_MISSING")');
   expect(product).toContain('tapKoreanKey("ㅂ", keyboard: keyboard, app: app)');
 });
 

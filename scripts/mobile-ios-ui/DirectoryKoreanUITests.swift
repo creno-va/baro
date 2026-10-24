@@ -116,9 +116,40 @@ extension BaroDirectoryUITests {
   }
 
   @MainActor
-  private func addKoreanKeyboard() {
-    guard let settings = openKoreanLayoutSettings() else { return }
+  private func addKoreanKeyboard() -> (separateKeyboardChosen: Bool, settingsLayoutChoiceObserved: Bool)? {
+    guard let settings = openKoreanLayoutSettings() else { return nil }
+    defer { settings.terminate() }
     print("BARO_KOREAN_SETUP_STAGE:layout")
+    // Observed on the product-free iOS26.5 reference: Korean first offers
+    // adding to English (US) or a separate keyboard, rather than a layout row.
+    let titleObserved = settings.navigationBars["Korean"].exists
+    let promptObserved = settings.staticTexts["Add to English (US) Keyboard"].exists
+    let choicePredicate = NSPredicate(format: "label == %@", "Add New Keyboard")
+    let separateCells = settings.cells.matching(choicePredicate)
+    let separateButtons = settings.buttons.matching(choicePredicate)
+    XCTAssertTrue(separateCells.count <= 8 && separateButtons.count <= 8, "BARO_KOREAN_SETTINGS_CANDIDATES_EXCEEDED")
+    // A sheet can expose background controls too. Only fully hittable owners in
+    // the current window qualify, and the existing 95% owner policy still applies.
+    let activeCells = separateCells.allElementsBoundByIndex.filter { fullyHittable($0, in: settings) }
+    let activeButtons = separateButtons.allElementsBoundByIndex.filter { fullyHittable($0, in: settings) }
+    let owner = koreanSettingsOwnerChoice(cells: activeCells.map { $0.frame }, buttons: activeButtons.map { $0.frame }, texts: [])
+    let knownChooser = titleObserved && promptObserved
+    let actionable = owner.selection == "cell" || owner.selection == "button"
+    let decision = !knownChooser ? "legacy-layout" : actionable ? "separate-keyboard" : "blocked"
+    let choice: [String: Any] = ["koreanTitleObserved": titleObserved, "promptObserved": promptObserved, "cellCount": activeCells.count, "buttonCount": activeButtons.count, "ownersOverlap": owner.ownersOverlap, "selection": owner.selection, "decision": decision]
+    if let data = try? JSONSerialization.data(withJSONObject: choice, options: [.sortedKeys]) {
+      print("BARO_KOREAN_SEPARATE_CHOICE:" + String(decoding: data, as: UTF8.self))
+    }
+    XCTAssertNotEqual(decision, "blocked", "BARO_KOREAN_SEPARATE_CHOICE_MISSING")
+    guard decision != "blocked" else { return nil }
+    var separateKeyboardChosen = false
+    if decision == "separate-keyboard" {
+      let element = owner.selection == "cell" ? activeCells.first : activeButtons.first
+      XCTAssertNotNil(element, "BARO_KOREAN_SEPARATE_CHOICE_MISSING")
+      guard let element else { return nil }
+      element.tap()
+      separateKeyboardChosen = true
+    }
     let aliases = ["2-Set", "2-Set (QWERTY)"]
     var layout = settingsControl(aliases, in: settings, deriveCellFromKnownLabel: true)
     _ = wait({
@@ -130,12 +161,19 @@ extension BaroDirectoryUITests {
       print("BARO_KOREAN_SETUP_CONTROL:" + String(decoding: data, as: UTF8.self))
     }
     reportLayoutStatus("before-selection", settings: settings, element: layout.element)
-    XCTAssertNotNil(layout.element, "BARO_KOREAN_LAYOUT_MISSING")
-    XCTAssertTrue(layout.selection == "cell" || layout.selection == "button", "BARO_KOREAN_LAYOUT_ACTIONABLE_OWNER_MISSING")
-    guard let layoutElement = layout.element, layout.selection == "cell" || layout.selection == "button" else { return }
-    let alreadySelected = layoutElement.isSelected || (layoutElement.value as? String) == "1" || (layoutElement.value as? String) == "Selected"
-    if !alreadySelected { layoutElement.tap() }
-    reportLayoutStatus("after-selection", settings: settings, element: layoutElement)
+    let settingsLayoutChoiceObserved = layout.cells + layout.buttons + layout.texts > 0
+    if settingsLayoutChoiceObserved {
+      XCTAssertTrue(layout.selection == "cell" || layout.selection == "button", "BARO_KOREAN_LAYOUT_ACTIONABLE_OWNER_MISSING")
+      guard let layoutElement = layout.element, layout.selection == "cell" || layout.selection == "button" else { return nil }
+      let alreadySelected = layoutElement.isSelected || (layoutElement.value as? String) == "1" || (layoutElement.value as? String) == "Selected"
+      if !alreadySelected { layoutElement.tap() }
+      reportLayoutStatus("after-selection", settings: settings, element: layoutElement)
+    } else {
+      // Only the observed separate-keyboard path may retain the OS default.
+      // The actual visible jamo keys and all composition/edit checks remain mandatory.
+      XCTAssertTrue(separateKeyboardChosen, "BARO_KOREAN_LAYOUT_MISSING")
+      guard separateKeyboardChosen else { return nil }
+    }
     print("BARO_KOREAN_SETUP_STAGE:done")
     var done = settingsControl(["Done"], in: settings)
     _ = wait({ done = self.settingsControl(["Done"], in: settings); return done.selection != "none" }, seconds: 10)
@@ -144,11 +182,11 @@ extension BaroDirectoryUITests {
       print("BARO_KOREAN_SETUP_CONTROL:" + String(decoding: data, as: UTF8.self))
     }
     XCTAssertTrue(done.selection == "cell" || done.selection == "button", "BARO_KOREAN_SETTINGS_DONE_MISSING")
-    guard let doneElement = done.element, done.selection == "cell" || done.selection == "button" else { return }
+    guard let doneElement = done.element, done.selection == "cell" || done.selection == "button" else { return nil }
     doneElement.tap()
     print("BARO_KOREAN_SETUP_STAGE:readback")
     XCTAssertTrue(settings.cells.matching(NSPredicate(format: "label BEGINSWITH %@", "Korean")).firstMatch.waitForExistence(timeout: 10), "BARO_KOREAN_SETTINGS_READBACK_MISSING")
-    settings.terminate()
+    return (separateKeyboardChosen, settingsLayoutChoiceObserved)
   }
 
   @MainActor
@@ -165,7 +203,7 @@ extension BaroDirectoryUITests {
     continueAfterFailure = false
     XCUIDevice.shared.orientation = .portrait
     defer { XCUIDevice.shared.orientation = .portrait }
-    addKoreanKeyboard()
+    guard let keyboardSetup = addKoreanKeyboard() else { return }
     let app = XCUIApplication(bundleIdentifier: "site.baro.app.preview")
     app.terminate()
     app.launch()
@@ -238,6 +276,7 @@ extension BaroDirectoryUITests {
     let result: [String: Any] = [
       "kind": "ios-public-directory-korean-software-composition", "applicationId": "site.baro.app.preview",
       "initialReadyState": initialReadyState, "keyboardSetup": "owned-simulator-settings-ui", "keyboardLayout": "korean-2-set",
+      "separateKeyboardChosen": keyboardSetup.separateKeyboardChosen, "settingsLayoutChoiceObserved": keyboardSetup.settingsLayoutChoiceObserved,
       "softwareJamoTapCount": 6, "compositionCheckpoints": 4, "compositionRetained": true, "spaceCommitVerified": true,
       "spaceDeletionVerified": true, "appendAfterCommitVerified": true, "keyboardObserved": true, "focusedInputAboveKeyboard": true,
       "searchSubmitMethod": "software-keyboard-search", "searchSubmitControlKind": search.kind,
