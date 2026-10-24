@@ -1314,3 +1314,59 @@ Simulator platform·Mach-O XML/DER/서명 entitlements·plist/실행 hash를 원
 원본 ZIP/receipt를 보존한다. 두 OS 성공 pin 통합/exact main CI 뒤 이 native draft 앱으로
 actual 입력/소프트 Search·키보드/회전을 검증한다. metadata/compile 성공을 입력 누락 해결·
 한국어/reader·계정/API·실기기/스토어 성공으로 재명명하지 않는다.
+
+### 새 native draft 원본의 실제 두 OS 결과 (2026-10-24)
+
+PR450 최종 headcb49449…의 CI40058715770·Android host40058715868 성공 뒤 main
+`19c104caaf8e616f16b874e9bb7593b66e153f60`에 정상 통합했고
+[main CI40058970087](https://github.com/creno-va/baro/actions/runs/40058970087)이 SUCCESS다.
+제품은 두 OS 모두 `4ba1d390ed2511851f216fb02eff44687a87e7a2`의 원본이다.
+
+[Android40059250272](https://github.com/creno-va/baro/actions/runs/40059250272)는 terminal SUCCESS다.
+[원본 strict proof](../quality/mobile-internal-android-2026-10-24/directory-software-search-19c104c.json)의
+SHA256은 `36c1ad7a5386a026d64ec00bde1ea08edfc555a1b112e3ded954bb0cf2c74d64`다.
+Android15 소유 Emulator에서 입력 위 키보드·literal ASCII 보존, 현재 IME의 유일하고
+클릭 가능한 Search control/keyboard top 아래 bounds·직접 탭, 키보드 닫힘·검색 빈 상태,
+1080×2400/r0↔2400×1080/r1 actual display/app window·양방향 입력 보존/접근과 BACK1 Home
+복귀·rotation preference 복원을 확인했다. legacy hardware Enter 성공과 별도 kind다.
+
+[Home](../quality/mobile-internal-android-2026-10-24/directory-software-home-19c104c.json)의 Pixel
+Launcher baseline은 연속3 sample의 전후 foreground/root·system error dialog 미관측이며
+두 번 cold Home에서도 오류 dialog가 관측되지 않았다. dialog dismiss/HOME/Wait/Launcher
+전환·종료는 하지 않았다. 준비 시점의 관측이며 Launcher ANR의 원인이나 영구 안정성을
+확정하지 않는다. [SDK metadata](../quality/mobile-internal-android-2026-10-24/directory-software-verification-19c104c.json)는
+fresh Build Tools37.0.0 actual cert fac61745…·package/HBC/font를 재검증했다.
+[독립 대조](../quality/mobile-internal-android-2026-10-24/directory-software-independent-19c104c.json)는
+성공 run/artifact12546342997·12545784765 provenance, 원본 APK57,134,306bytes/full hash·
+compiler receipt, metadata/Home/proof 상호 hash와 Home PNG172,539bytes/full hash/1080×2400을
+실물 대조했다. pre-public 익명 Home PNG도 직접 확인했다. 공개 탐색 이후 raw XML/dumpsys/
+command output·screenshot은 내보내지 않았다.
+
+[iOS40059252212](https://github.com/creno-va/baro/actions/runs/40059252212)는 terminal FAILURE다.
+[원본 실패](../quality/mobile-internal-ios-2026-10-24/directory-failure-19c104c.json)의
+SHA256은 `39c50ac049cb1a65c57d965d57c0b229d64dcb2ce02ad856e2b40678627601b4`다.
+public-directory-xcuitest/exit65·timedOut=false, typed-check/other의
+BARO_DIRECTORY_TYPED_INPUT_MISMATCH다. 초기 empty 뒤 after-input/typed-check 모두
+expected보다 짧은 subsequence·고정 날짜 suffix 유지·expected scalar만 포함/정규화 불일치다.
+software Search에는 도달하지 않았으며 성공 proof는 없다. native draft 전환만으로도 입력 누락을
+해결하지 못했다. 이 진단만으로 제품/native/accessibility/XCTest 중 원인을 확정하지 않는다.
+
+[Home](../quality/mobile-internal-ios-2026-10-24/directory-home-19c104c.json)·
+[metadata](../quality/mobile-internal-ios-2026-10-24/directory-verification-19c104c.json)·
+[독립 대조](../quality/mobile-internal-ios-2026-10-24/directory-failure-independent-19c104c.json)는
+실패 run/artifact12546618461 provenance, 원본 ZIP24,102,583bytes/full hash·compiler receipt,
+actual Simulator control/plist/Mach-O XML/DER hash·Home PNG220,454bytes/full hash를 확인했다.
+iPhone16/iOS26.5의 별도 cold-launch receipt와 pre-public 익명 Home 실물을 확인하되
+homeContentVerified=false·visualReviewRequired=true 원본 필드는 바꾸지 않았다.
+
+동일 실패 조건의 재실행은 하지 않는다. 다음 진단은 제품 binary를 바꾸지 않는 별도 UIKit
+reference 필드에서 같은 고정 입력을 한 번 관측하여 BARO/RN과 XCTest/Simulator 경로를
+구분한다. reference 성공/실패도 제품 입력 수정 성공으로 표시하지 않는다.
+한국어 조합·VoiceOver/TalkBack·전체 화면/역할·HTTP transport/계정/OAuth·physical/store와
+전체 #334/#379/#346/#339/#71 인수는 계속 OPEN이다. 이전 실패 원본을 보존하며 웹 UI·
+공통 wire/DB·공급자/비용 정책·production 배포는 변경하지 않았다.
+
+로컬 frozen `bun ci`·`validate:quick`이 통과했다. 모바일/공통419개·RN UI88개와
+필수 quick108개를 포함하며 문서 검사는112개 Markdown/17개 ADR을 확인했다.
+이번 변경은 원본 JSON/검증 기록뿐이며 제품·build·DB 변경이 없어 native build와
+schema migration/full browser를 재실행하지 않았다.

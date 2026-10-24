@@ -1,0 +1,34 @@
+{
+  "verificationObservedAt": "2026-10-24T03:50:10.347Z",
+  "runId": "40059250272",
+  "toolingSourceSha": "19c104caaf8e616f16b874e9bb7593b66e153f60",
+  "binarySourceSha": "4ba1d390ed2511851f216fb02eff44687a87e7a2",
+  "successfulRunAndArtifactProvenanceVerified": true,
+  "strictDirectoryReceiptVerified": true,
+  "directoryReceiptSha256": "36c1ad7a5386a026d64ec00bde1ea08edfc555a1b112e3ded954bb0cf2c74d64",
+  "verificationSha256": "eb24878edf0be2f7421407f8081e555d7fc4e17b3aae60d534e403c8c0c8ef94",
+  "homeReceiptSha256": "0b1b347324f3d0117d3e9f5bb42a28079660c5a2a2c32368a60cb0ab1c15cf07",
+  "originalApkAndCompilerReceiptMatched": true,
+  "freshSdkMetadataReceiptVerified": true,
+  "actualCertificateSha256": "fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c",
+  "homeReceiptAndPngMatched": true,
+  "launcherBaselineReceiptVerified": true,
+  "homeSystemErrorDialogObserved": false,
+  "submitMethod": "software-keyboard-search",
+  "portraitDisplay": {
+    "width": 1080,
+    "height": 2400,
+    "rotation": 0
+  },
+  "landscapeDisplay": {
+    "width": 2400,
+    "height": 1080,
+    "rotation": 1
+  },
+  "rawHierarchyExported": false,
+  "koreanKeyboardVerified": false,
+  "httpTransportSeparatelyObserved": false,
+  "allScreensVerified": false,
+  "physicalDeviceVerified": false,
+  "storeSigned": false
+}

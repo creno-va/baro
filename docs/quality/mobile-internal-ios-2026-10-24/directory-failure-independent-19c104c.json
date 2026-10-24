@@ -1,0 +1,41 @@
+{
+  "verificationObservedAt": "2026-10-24T03:51:34.007Z",
+  "runId": "40059252212",
+  "runAndArtifactProvenanceVerified": true,
+  "toolingSourceSha": "19c104caaf8e616f16b874e9bb7593b66e153f60",
+  "binarySourceSha": "4ba1d390ed2511851f216fb02eff44687a87e7a2",
+  "originalArchiveAndCompilerReceiptMatched": true,
+  "baselineAndMetadataMatched": true,
+  "actualSimulatorControlMatched": true,
+  "homePngBytesMatched": true,
+  "failureSha256": "39c50ac049cb1a65c57d965d57c0b229d64dcb2ce02ad856e2b40678627601b4",
+  "assertionCode": "BARO_DIRECTORY_TYPED_INPUT_MISMATCH",
+  "status": {
+    "stage": "typed-check",
+    "inputState": "other",
+    "appForeground": true,
+    "keyboardObserved": true,
+    "inputSignature": {
+      "stringObserved": true,
+      "expectedLengthMatches": false,
+      "caseFoldMatches": false,
+      "whitespaceRemovalMatches": false,
+      "dashNormalizationMatches": false,
+      "compatibilityNormalizationMatches": false,
+      "knownNormalizationMatches": false,
+      "expectedSubsequenceOnly": true,
+      "containsKnownPayload": false,
+      "allKnownSegmentsPresent": false,
+      "knownDigitSuffixMatches": true,
+      "containsHangul": false,
+      "matchesFixedFieldLabel": false,
+      "onlyExpectedScalarsAfterCaseFold": true
+    }
+  },
+  "softwareSearchReached": false,
+  "nativeDraftSufficient": false,
+  "rootCauseConfirmed": false,
+  "unchangedRetryPerformed": false,
+  "remoteApiVerified": false,
+  "physicalDeviceVerified": false
+}
