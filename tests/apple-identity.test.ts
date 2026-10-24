@@ -3,9 +3,10 @@ import { betterAuth } from "better-auth";
 import { supportsIdTokenSignIn } from "better-auth/oauth2";
 import { apple, google } from "better-auth/social-providers";
 import { getAuth } from "../src/server/auth";
-import { bindAppleIdentity } from "../src/server/auth/apple-identity";
+import { bindAppleIdentity, findAppleLinkedIdentity } from "../src/server/auth/apple-identity";
 import { createTestDatabase, testEnvironment } from "./helpers/d1";
 import { responseCookies } from "./helpers/oauth";
+import { seedTestSession } from "./helpers/session";
 
 const audience = "synthetic-service-id",
   nonce = "a".repeat(32);
@@ -90,13 +91,76 @@ test("real RSA signature/claims/nonce verification precedes profile decoding, in
     emailVerified: true,
   });
   expect(p.lookups()).toBe(1);
-  // Missing email/name is passed only after verification; linked-subject lookup is a later producer.
+  // A standalone binder has no account adapter; even its missing-email profile must first verify.
   const returning = await p.bound.getUserInfo({
     idToken: await token({ email: undefined, email_verified: undefined }),
     expectedIdTokenNonce: nonce,
   });
   expect(returning?.user.email).toBeUndefined();
   expect(returning?.data).toMatchObject({ sub: "synthetic-apple-subject" });
+});
+test("missing email resolves only the verified immutable subject and preserves local verification without overriding an Apple claim", async () => {
+  const p = provider();
+  let lookups = 0;
+  const bound = bindAppleIdentity(p.raw, async (subject) => {
+    lookups++;
+    expect(subject).toBe("synthetic-apple-subject");
+    return { email: "stored@example.test", emailVerified: false };
+  });
+  const missing = await token({ email: undefined, email_verified: undefined });
+  expect(
+    await bound.getUserInfo({ idToken: missing, expectedIdTokenNonce: "b".repeat(32) }),
+  ).toBeNull();
+  expect(lookups).toBe(0);
+  const found = await bound.getUserInfo({ idToken: missing, expectedIdTokenNonce: nonce });
+  expect(found?.user).toMatchObject({ email: "stored@example.test", emailVerified: false });
+  expect(lookups).toBe(1);
+  const claimed = await bound.getUserInfo({ idToken: await token(), expectedIdTokenNonce: nonce });
+  expect(claimed?.user.email).toBe("synthetic@privaterelay.appleid.com");
+  expect(lookups).toBe(1);
+  expect(
+    await bindAppleIdentity(p.raw, async () => null).getUserInfo({
+      idToken: missing,
+      expectedIdTokenNonce: nonce,
+    }),
+  ).toBeNull();
+});
+test("linked-subject SQL separates providers/owners, preserves verification and denies deleted or unlinked accounts without creating users", async () => {
+  const db = await createTestDatabase();
+  try {
+    const owner = await seedTestSession(db),
+      peer = await seedTestSession(db);
+    for (const [providerId, userId] of [
+      ["apple", owner.userId],
+      ["google", peer.userId],
+    ])
+      db.sqlite
+        .query(
+          "INSERT INTO account(id,user_id,provider_id,account_id,created_at,updated_at) VALUES(?,?,?,'synthetic-linked-subject',1,1)",
+        )
+        .run(crypto.randomUUID(), userId, providerId);
+    const expectedEmail = `${owner.userId}@example.test`;
+    expect(await findAppleLinkedIdentity(db.binding, "synthetic-linked-subject")).toEqual({
+      email: expectedEmail,
+      emailVerified: true,
+    });
+    for (const subject of ["unknown", "' OR 1=1 --", ""])
+      expect(await findAppleLinkedIdentity(db.binding, subject)).toBeNull();
+    db.sqlite.query("UPDATE user SET email_verified=0 WHERE id=?").run(owner.userId);
+    expect(await findAppleLinkedIdentity(db.binding, "synthetic-linked-subject")).toEqual({
+      email: expectedEmail,
+      emailVerified: false,
+    });
+    db.sqlite
+      .query("INSERT INTO v2_tombstones(target_kind,target_id,deleted_at) VALUES('account',?,?)")
+      .run(owner.userId, new Date().toISOString());
+    expect(await findAppleLinkedIdentity(db.binding, "synthetic-linked-subject")).toBeNull();
+    db.sqlite.query("DELETE FROM account WHERE provider_id='apple'").run();
+    expect(await findAppleLinkedIdentity(db.binding, "synthetic-linked-subject")).toBeNull();
+    expect(db.sqlite.query("SELECT COUNT(*) AS n FROM user").get()).toEqual({ n: 2 });
+  } finally {
+    db.close();
+  }
 });
 for (const [name, changes] of Object.entries({
   issuer: { iss: "https://attacker.example.test" },
@@ -193,11 +257,18 @@ test("fixture-only Apple registration uses real SDK POST/GET state and RSA valid
       p = context.socialProviders.find((entry) => entry.id === "apple");
     if (!p) throw new Error("SYNTHETIC_APPLE_MISSING");
     let expected = "",
-      exchanges = 0;
+      exchanges = 0,
+      includeEmail = true,
+      subject = "synthetic-apple-subject";
     p.validateAuthorizationCode = async () => {
       exchanges++;
       return {
-        idToken: await token({ nonce: expected }),
+        idToken: await token({
+          nonce: expected,
+          sub: subject,
+          email: includeEmail ? "synthetic@privaterelay.appleid.com" : undefined,
+          email_verified: includeEmail ? true : undefined,
+        }),
         accessToken: "synthetic-access",
         refreshToken: "synthetic-refresh",
       };
@@ -254,6 +325,22 @@ test("fixture-only Apple registration uses real SDK POST/GET state and RSA valid
     expect(accounts).toEqual([{ access_token: null, refresh_token: null, id_token: null }]);
     await callback(first);
     expect(exchanges).toBe(1);
+    if (!session) throw new Error("SYNTHETIC_OWNER_MISSING");
+    includeEmail = false;
+    db.sqlite.query("UPDATE user SET email_verified=0 WHERE id=?").run(session.user.id);
+    const returning = await callback(await begin());
+    const returned = await auth.api.getSession({
+      headers: new Headers({ cookie: responseCookies(returning) }),
+    });
+    expect(returned?.user.id).toBe(session.user.id);
+    expect(returned?.user.email).toBe(session.user.email);
+    expect(returned?.user.emailVerified).toBe(false);
+    subject = "unknown-subject";
+    const unknown = await callback(await begin());
+    expect(new URL(unknown.headers.get("location") ?? "", env.BETTER_AUTH_URL).pathname).toBe(
+      "/login",
+    );
+    subject = "synthetic-apple-subject";
     const second = await begin();
     expected = "z".repeat(32);
     const denied = await callback(second);
@@ -269,7 +356,8 @@ test("fixture-only Apple registration uses real SDK POST/GET state and RSA valid
     ).toBe("/login");
     await callback({ cookie: expired.cookie, state: "synthetic-invalid-state" });
     expect(exchanges).toBe(beforeInvalidState);
-    expect(db.sqlite.query("SELECT COUNT(*) AS n FROM session").get()).toEqual({ n: 1 });
+    expect(db.sqlite.query("SELECT COUNT(*) AS n FROM session").get()).toEqual({ n: 2 });
+    expect(db.sqlite.query("SELECT COUNT(*) AS n FROM user").get()).toEqual({ n: 1 });
   } finally {
     db.close();
   }

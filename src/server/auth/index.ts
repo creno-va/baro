@@ -29,7 +29,7 @@ function createConfiguredAuth(env: Env) {
     baseURL: config.BETTER_AUTH_URL,
     secret: config.BETTER_AUTH_SECRET,
     trustedOrigins: [origin, ...(nativeCallback ? [`${new URL(nativeCallback).protocol}//`] : [])],
-    plugins: [createAppleIdentityBinding(), createNativeExpoIntegration(env)],
+    plugins: [createAppleIdentityBinding(env.DB), createNativeExpoIntegration(env)],
     onAPIError: { errorURL: `${origin}/login` },
     // Adapter errors can include SQL parameters and provider tokens; keep them out of logs.
     logger: { disabled: true },

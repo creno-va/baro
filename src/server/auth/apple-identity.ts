@@ -8,9 +8,36 @@ const claimsSchema = z.object({
   exp: z.number().int().positive(),
   iat: z.number().int().nonnegative(),
 });
+const linkedIdentitySchema = z.object({ email: z.email().max(320), emailVerified: z.boolean() });
+type LinkedIdentity = z.infer<typeof linkedIdentitySchema>;
+
+/** Only an existing exact Apple subject supplies a missing email; no email-based owner guessing. */
+export async function findAppleLinkedIdentity(
+  db: D1Database,
+  subject: string,
+): Promise<LinkedIdentity | null> {
+  const rows = await db
+    .prepare(`SELECT u.email,u.email_verified FROM account a JOIN user u ON u.id=a.user_id
+    WHERE a.provider_id='apple' AND a.account_id=?
+    AND NOT EXISTS(SELECT 1 FROM v2_tombstones t WHERE t.target_kind='account' AND t.target_id=u.id)
+    LIMIT 2`)
+    .bind(subject)
+    .all<{ email: string; email_verified: number }>();
+  if (rows.results.length !== 1) return null;
+  const row = rows.results[0];
+  if (!row || ![0, 1].includes(row.email_verified)) return null;
+  const result = linkedIdentitySchema.safeParse({
+    email: row.email,
+    emailVerified: row.email_verified === 1,
+  });
+  return result.success ? result.data : null;
+}
 
 /** Bind the installed SDK's Apple redirect flow to its server-generated OAuth-state nonce. */
-export function bindAppleIdentity(provider: OAuthProvider): OAuthProvider {
+export function bindAppleIdentity(
+  provider: OAuthProvider,
+  resolveLinkedIdentity?: (subject: string) => Promise<LinkedIdentity | null>,
+): OAuthProvider {
   if (provider.id !== "apple") return provider;
   const config = provider.idToken;
   if (!config || "verify" in config || typeof config.audience !== "string" || !config.audience)
@@ -55,17 +82,32 @@ export function bindAppleIdentity(provider: OAuthProvider): OAuthProvider {
         !(await verifyProviderIdToken(verifier, tokens.idToken, tokens.expectedIdTokenNonce))
       )
         return null;
-      return provider.getUserInfo(tokens);
+      const info = await provider.getUserInfo(tokens);
+      if (!info || info.user.email || !resolveLinkedIdentity) return info;
+      const claims = claimsSchema.safeParse(info.data);
+      if (!claims.success) return null;
+      const linked = await resolveLinkedIdentity(claims.data.sub);
+      if (!linked) return null;
+      return {
+        ...info,
+        user: { ...info.user, email: linked.email, emailVerified: linked.emailVerified },
+      };
     },
   };
 }
 
 /** Does not configure or advertise Apple; existing three providers pass through unchanged. */
-export function createAppleIdentityBinding(): BetterAuthPlugin {
+export function createAppleIdentityBinding(db: D1Database): BetterAuthPlugin {
   return {
     id: "baro-apple-identity",
     init(context) {
-      return { context: { socialProviders: context.socialProviders.map(bindAppleIdentity) } };
+      return {
+        context: {
+          socialProviders: context.socialProviders.map((provider) =>
+            bindAppleIdentity(provider, (subject) => findAppleLinkedIdentity(db, subject)),
+          ),
+        },
+      };
     },
   };
 }
