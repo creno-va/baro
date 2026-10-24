@@ -282,6 +282,7 @@ export async function executeWorkspace(
           parties: response.parties,
           actions: response.actions,
           timeline: response.timeline,
+          toolResults: response.toolResults,
         },
         (failure) => {
           publicationFailure = safeWorkspacePublicationFailure(failure);

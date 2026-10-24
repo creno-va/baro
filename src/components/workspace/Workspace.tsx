@@ -36,6 +36,7 @@ import { ElapsedTime } from "./ElapsedTime";
 import { FileReview } from "./FileReview";
 import { fileFailureLabel, fileProcessingLabel, uploadProgressLabel } from "./processing-progress";
 import { referenceLabel, timelineDateLabel } from "./source-label";
+import { ToolResults } from "./ToolResults";
 import { timelineDateInput, timelineEventLength } from "./timeline-draft";
 
 export type WorkspaceTab = "chat" | "files" | "timeline" | "actions";
@@ -1043,6 +1044,9 @@ export function Workspace({
                           </time>
                         </div>
                         <p>{message.text}</p>
+                        {message.role === "assistant" && message.status === "complete" && (
+                          <ToolResults caseId={caseId} messageId={message.id} />
+                        )}
                         {!!message.selectedFileIds?.length && (
                           <ul
                             className="workspace-message-attachments"

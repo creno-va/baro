@@ -182,7 +182,7 @@ test("a bounded chat audits the complete generation context without replacing it
   expect(calls[1]?.input).toEqual({
     phase: "workspace_chat",
     context: calls[0]?.input,
-    draft: { ...chatText(safe), requestedMaterials: [] },
+    draft: { ...chatText(safe), requestedMaterials: [], requestedTools: [] },
   });
   expect(saved).toEqual(before);
 });
