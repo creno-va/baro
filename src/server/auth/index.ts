@@ -2,6 +2,8 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { drizzle } from "drizzle-orm/d1";
 import { authSchema } from "../db/schema";
+import { createAppleCallbackBoundary, isAppleFormCallback } from "./apple-callback";
+import { appleConfiguration } from "./apple-configuration";
 import {
   appleLinkedAccountUpdateAllowed,
   appleLinkedSessionAllowed,
@@ -29,13 +31,22 @@ function createConfiguredAuth(env: Env) {
   const database = drizzle(env.DB, { schema: authSchema });
   const origin = new URL(config.BETTER_AUTH_URL).origin;
   const nativeCallback = nativeAuthCallbackBase(env.APP_ENV);
+  const apple = appleConfiguration(env);
 
   return betterAuth({
     appName: "BARO",
     baseURL: config.BETTER_AUTH_URL,
     secret: config.BETTER_AUTH_SECRET,
-    trustedOrigins: [origin, ...(nativeCallback ? [`${new URL(nativeCallback).protocol}//`] : [])],
-    plugins: [createAppleIdentityBinding(env.DB), createNativeExpoIntegration(env)],
+    trustedOrigins: (request) => [
+      origin,
+      ...(nativeCallback ? [`${new URL(nativeCallback).protocol}//`] : []),
+      ...(apple && isAppleFormCallback(request) ? ["https://appleid.apple.com"] : []),
+    ],
+    plugins: [
+      createAppleCallbackBoundary(),
+      createAppleIdentityBinding(env.DB),
+      createNativeExpoIntegration(env),
+    ],
     onAPIError: { errorURL: `${origin}/login` },
     // Adapter errors can include SQL parameters and provider tokens; keep them out of logs.
     logger: { disabled: true },
@@ -57,6 +68,7 @@ function createConfiguredAuth(env: Env) {
         clientId: config.KAKAO_CLIENT_ID,
         clientSecret: config.KAKAO_CLIENT_SECRET,
       },
+      ...(apple ? { apple: { clientId: apple.clientId, clientSecret: apple.clientSecret } } : {}),
     },
     account: {
       accountLinking: {
@@ -188,13 +200,22 @@ function createConfiguredAuth(env: Env) {
 
 type Auth = ReturnType<typeof createConfiguredAuth>;
 
-const authByDatabase = new WeakMap<D1Database, Auth>();
+const authByEnvironment = new WeakMap<
+  Env,
+  { auth: Auth; apple: ReturnType<typeof appleConfiguration> }
+>();
 
 export function getAuth(env: Env): Auth {
-  const cached = authByDatabase.get(env.DB);
-  if (cached) return cached;
+  const apple = appleConfiguration(env);
+  const cached = authByEnvironment.get(env);
+  if (
+    cached &&
+    cached.apple?.clientId === apple?.clientId &&
+    cached.apple?.clientSecret === apple?.clientSecret
+  )
+    return cached.auth;
 
   const auth = createConfiguredAuth(env);
-  authByDatabase.set(env.DB, auth);
+  authByEnvironment.set(env, { auth, apple });
   return auth;
 }

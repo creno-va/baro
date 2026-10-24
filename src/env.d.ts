@@ -17,6 +17,9 @@ interface Env {
   NAVER_CLIENT_SECRET: string;
   KAKAO_CLIENT_ID: string;
   KAKAO_CLIENT_SECRET: string;
+  APPLE_AUTH_ENABLED?: string;
+  APPLE_CLIENT_ID?: string;
+  APPLE_CLIENT_SECRET?: string;
   TURNSTILE_SECRET_KEY: string;
   CASE_DATA_KEY_V1: string;
   LAW_API_OC: string;

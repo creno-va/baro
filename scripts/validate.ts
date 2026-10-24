@@ -40,6 +40,8 @@ export function validationCommands(profile: string, root = process.cwd()): Comma
       "tests/native-reauth-http.test.ts",
       "tests/mobile-auth-versioning.test.ts",
       "tests/apple-identity.test.ts",
+      "tests/apple-configuration.test.ts",
+      "tests/apple-callback.test.ts",
       "tests/apple-revoke.test.ts",
       "tests/native-deletion.test.ts",
       "tests/native-deletion-http.test.ts",

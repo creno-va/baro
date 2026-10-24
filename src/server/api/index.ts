@@ -34,6 +34,7 @@ async function privateAuthResponse(context: Context<ApiEnvironment>, next: Next)
   await next();
   context.header("cache-control", "private, no-store");
   context.header("x-content-type-options", "nosniff");
+  context.header("referrer-policy", "no-referrer");
 }
 
 export const api = new Hono<ApiEnvironment>()

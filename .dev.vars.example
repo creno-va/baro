@@ -7,6 +7,10 @@ NAVER_CLIENT_ID=
 NAVER_CLIENT_SECRET=
 KAKAO_CLIENT_ID=
 KAKAO_CLIENT_SECRET=
+# Optional Apple server configuration. Keep disabled until Services ID/return URL/keys are verified.
+APPLE_AUTH_ENABLED=false
+APPLE_CLIENT_ID=
+APPLE_CLIENT_SECRET=
 TURNSTILE_SECRET_KEY=
 CASE_DATA_KEY_V1=
 LAW_API_OC=

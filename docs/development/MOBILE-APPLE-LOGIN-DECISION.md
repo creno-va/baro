@@ -34,7 +34,7 @@ BARO는 사건 저장·고객/변호사 계정을 세 소셜 제공자로 인증
 
 ## 단순 버튼 추가로 끝나지 않는 이유
 
-| 현재 정본 | 관측한 제약 | 필요한 선행 작업 |
+| 결정 당시 정본 | 관측한 제약 | 필요한 선행 작업 |
 | --- | --- | --- |
 | `packages/client-core/src/types.ts` | Provider가3사 union | Apple 소비 가능 범위와 이전 client 호환 계약 |
 | `src/contracts/mobile-auth.ts`, `src/contracts/deletion.ts` | 재인증 provider enum3사·삭제 접근 providers 최대3 | 선행 서버/계약 PR·새 앱과 이전 앱 응답 행렬 |
@@ -222,8 +222,9 @@ status/exchange/cancel의 verifier+Origin+v2 검증이 필요하며 인증이나
 취소·연결/세션 경합·원자 저장 rollback을 검증한다. 이것은 실제 Apple revoke/token endpoint
 성공이나 Safari/system browser·두 OS 기기 인수가 아니다.
 
-Apple credential/provider 등록·authorize proxy의 Apple allowlist·POST browser relay,
-capability 노출·모바일 UI/결과 복구/credential 제거·실제 계정/기기 검증은 다음 단계다.
+이 삭제 producer PR 자체에는 Apple credential/provider 등록·authorize proxy의 Apple allowlist·
+POST browser relay·capability 노출을 포함하지 않았다. 선택적 서버 연결은 다음 절에서 인수하며,
+모바일 UI/결과 복구/credential 제거·실제 계정/기기 검증은 후속이다.
 기존 웹 UI 파일을 변경하지 않으며 #334/#346/#379/#339/#71은 OPEN으로 보존한다.
 
 이번 producer의 로컬 검증: `bun ci` lock 변경 없음, `validate:quick`208개/29파일/2257 assertions,
@@ -231,3 +232,45 @@ capability 노출·모바일 UI/결과 복구/credential 제거·실제 계정/�
 `validate:build`·`validate:db`와 양 OS Metro export 통과. schema/migration 추가 없음.
 Metro는 로컬 bundle 검증이며 기존 실제 source6201112의 OS 증거를 현재 변경에 전이하지 않는다.
 raw audit high2건과 #339/#71 전체 gate·실제 OAuth/기기 인수는 별도로 유지한다.
+
+## 선택적 Apple 설정과 POST callback 연결
+
+후속 `codex/346-apple-callback-setup`는 Apple provider를 선택적으로 등록한다.
+`APPLE_AUTH_ENABLED=true`와 Services ID·client secret이 모두 준비돼야 가용 목록에 추가하며,
+기본값은 비활성이다. 실제 환경의 flag/키/계정·공개 운영 설정은 이 PR에서 바꾸지 않는다.
+누락·부분 설정·형식 오류·만료는 Apple만 비가용으로 처리하고 기존3사 설정/인증을 유지한다.
+
+[Apple client secret 명세](https://developer.apple.com/documentation/AccountOrganizationalDataSharing/creating-a-client-secret)에
+맞춰 ES256·10자리 key/team ID, audience·Services ID subject·iat/exp·최대15,777,000초와
+서명 길이를 구성 metadata로 검사한다. 이것은 개발자 서명 검증이나 Apple의 실제 credential
+수락 증거가 아니다. 실제 signature/key/도메인·return URL은 Apple endpoint/계정 설정에서
+별도 검증해야 한다. private key를 앱에 넣거나 실행 중 client secret을 생성하지 않는다.
+환경 객체별 auth cache는 Apple secret 교체·만료/비활성화를 반영하며 다른 환경의 설정을 공유하지 않는다.
+
+Apple의 정확한 `/api/auth/callback/apple` **POST**에만 `https://appleid.apple.com` Origin을
+추가로 신뢰한다. 같은 Apple Origin으로 sign-in/sign-out 등 다른 endpoint를 호출하는 것은
+거절하며 Origin·CSRF를 전역 해제하지 않는다. callback form은16KiB 이하, 단일 state/code,
+query/body 중복·불명확한 성공/실패 조합을 거절한다. frontchannel `id_token`과 posted email,
+raw provider error description을 SDK로 넘기지 않고 bounded 표시 이름만 보존한다.
+실제 신원은 token 교환 결과의 서명·nonce·subject 검증으로 판단한다.
+
+SDK의 form POST→고정 same-origin GET relay를 사용한다. POST에 Lax state cookie가 없어도
+다음 GET의 SDK signed state/cookie가 반드시 일치해야 한다. native authorize proxy는 설정된
+Apple의 정확한 authorize endpoint·같은 서버 callback만 허용한다. 모든 auth 응답에
+`Referrer-Policy: no-referrer`와 private no-store를 적용한다. SDK의 중간 GET에는 짧은 OAuth
+code/state·bounded 이름이 있을 수 있으므로 이를 로그/이슈/PR/artifact로 내보내지 않는다.
+앱으로 최종 전달하는 값은 여전히 일회용 PKCE code·attemptId뿐이다.
+
+합성 operator metadata와 RSA/JWKS, 실제 운영 provider 등록/SDK/proxy/POST/GET/Hono/SQLite
+경로로 정상 로그인·이후 email 누락·같은 owner 유지, 삭제/revoke, 취소·cookie 부재·nonce
+불일치, 설정 오류/만료·Origin scope·중복/크기/form 실패를 검사한다. 합성 developer secret은
+Apple 수락 credential이 아니며 provider token exchange/JWKS/revoke의 합성 대역을 실제
+Apple 성공으로 표시하지 않는다. 실제 Safari/system browser의 cookie 전달·cold/warm 복귀와
+개발자 설정/두 OS 기기 인수는 여전히 별도다. 모바일 capability 소비·Apple 버튼·삭제 결과
+복구 UI가 후속이며 기존 웹 UI는 변경하지 않는다.
+
+선택적 설정/POST 연결의 통합 로컬 검증(main3e427aa 포함): frozen 설치 lock 변경 없음,
+`validate:quick`243개/31파일/2528 assertions, Apple 설정·callback·identity63개/465 assertions,
+auth·기존 삭제/복구 journal216개/1752 assertions와 `validate:build`/로컬 workerd 통과.
+이 변경은 server/config만 다루며 native source·모바일 bundle·DB schema/query를 추가하지 않는다.
+이전에 통과한 OS/DB 증거를 새 실제 로그인/기기·전체 security/#71 인수로 전이하지 않는다.
