@@ -1,12 +1,23 @@
 import { expect, test } from "bun:test";
-import { MOBILE_AUTH_CONTRACT_HEADER } from "../src/contracts/mobile-auth";
 import {
+  MOBILE_AUTH_CONTRACT_HEADER,
+  MOBILE_DELETION_ACTIVITY_HEADER,
+} from "../src/contracts/mobile-auth";
+import {
+  mobileDeletionActivitySchema,
   mobileDeletionCancelResponseSchema,
   mobileDeletionOutcomeSchema,
+  mobileDeletionPrepareReceiptSchema,
 } from "../src/contracts/mobile-deletion";
 import { api } from "../src/server/api";
 import { createNativeAuthCodeStore, nativeAuthChallenge } from "../src/server/auth/native-codes";
+import { createNativeDeletionActivityProof } from "../src/server/auth/native-deletion-activity";
 import { nativeAuthCallbackBase } from "../src/server/auth/native-expo";
+import {
+  createNativeReauthentication,
+  NATIVE_REAUTH_TTL_MS,
+} from "../src/server/auth/native-reauth";
+import { deletionOwnerTag } from "../src/server/modules/deletion/service";
 import { createOAuthFixture, responseCookies, type SyntheticProvider } from "./helpers/oauth";
 
 const verifier = "a".repeat(43);
@@ -24,7 +35,12 @@ async function fixture(provider: SyntheticProvider = "google") {
   const call = (
     operation: string,
     body: unknown,
-    options: { cookie?: string; origin?: string | null; version?: string | null } = {},
+    options: {
+      cookie?: string;
+      origin?: string | null;
+      version?: string | null;
+      activity?: string;
+    } = {},
   ) =>
     api.request(
       `/mobile/auth/deletion/${operation}`,
@@ -33,6 +49,7 @@ async function fixture(provider: SyntheticProvider = "google") {
         headers: {
           "content-type": "application/json",
           ...(options.cookie ? { cookie: options.cookie } : {}),
+          ...(options.activity ? { [MOBILE_DELETION_ACTIVITY_HEADER]: options.activity } : {}),
           ...(options.origin === null ? {} : { origin: options.origin ?? f.env.BETTER_AUTH_URL }),
           ...(options.version === null
             ? {}
@@ -166,6 +183,177 @@ test("ordinary reauthentication and provider cancellation cannot accidentally co
       expect((await f.call("status", f.proof)).status).toBe(401);
     }
     expect((await f.call("cancel", f.proof)).status).toBe(200);
+  } finally {
+    f.database.close();
+  }
+});
+
+test("strict existing v2 capability/prepare envelopes stay unchanged unless the activity feature is explicitly requested", async () => {
+  const f = await fixture();
+  try {
+    for (const headers of [
+      {},
+      { [MOBILE_AUTH_CONTRACT_HEADER]: "2" },
+      { [MOBILE_DELETION_ACTIVITY_HEADER]: "1, 1" },
+    ]) {
+      const response = await api.request("/mobile/auth/capabilities", { headers }, f.env);
+      expect(Object.keys(await response.json()).sort()).toEqual(["contractVersion", "providers"]);
+    }
+    const feature = await api.request(
+      "/mobile/auth/capabilities",
+      { headers: { [MOBILE_DELETION_ACTIVITY_HEADER]: "1" } },
+      f.env,
+    );
+    expect(await feature.json()).toMatchObject({ contractVersion: 2, deletionActivity: 1 });
+    const old = await f.call("prepare", f.input, { cookie: f.cookie });
+    expect(Object.keys(await old.json()).sort()).toEqual(["ownerTag", "startedAt"]);
+    const next = { ...f.input, attemptId: crypto.randomUUID() };
+    const negotiated = await f.call("prepare", next, { cookie: f.cookie, activity: "1" });
+    expect(negotiated.status).toBe(200);
+    expect(mobileDeletionPrepareReceiptSchema.parse(await negotiated.json()).activityProof).toMatch(
+      /^[a-f0-9]{64}$/,
+    );
+  } finally {
+    f.database.close();
+  }
+});
+
+test("activity is proof-only/no-store and exposes neither account outcome nor credentials", async () => {
+  const f = await fixture();
+  try {
+    const prepared = await f.call("prepare", f.input, { cookie: f.cookie, activity: "1" });
+    const receipt = mobileDeletionPrepareReceiptSchema.parse(await prepared.json());
+    const input = { ...f.proof, ...receipt };
+    const response = await f.call("activity", input);
+    expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toContain("no-store");
+    expect(response.headers.has("set-cookie")).toBe(false);
+    const result = mobileDeletionActivitySchema.parse(await response.json());
+    expect(result).toMatchObject({
+      contractVersion: 2,
+      attemptId: f.input.attemptId,
+      status: "active",
+      outcome: "unknown",
+    });
+    expect(Object.keys(result).sort()).toEqual([
+      "attemptId",
+      "contractVersion",
+      "observedAt",
+      "outcome",
+      "status",
+    ]);
+    for (const version of [null, "1", "3"])
+      expect((await f.call("activity", input, { version })).status).toBe(400);
+    for (const origin of [null, "https://foreign.example.test"])
+      expect((await f.call("activity", input, { origin })).status).toBe(403);
+    expect((await f.call("activity", f.proof)).status).toBe(400);
+    expect((await f.call("activity", { ...input, verifier: "b".repeat(43) })).status).toBe(401);
+    expect((await f.call("activity", { ...input, token: "SYNTHETIC_PRIVATE" })).status).toBe(400);
+    const other = await f.call("activity", input, {
+      cookie: "better-auth.session_token=SYNTHETIC_FOREIGN",
+    });
+    expect(other.status).toBe(200);
+    expect(other.headers.has("set-cookie")).toBe(false);
+  } finally {
+    f.database.close();
+  }
+});
+
+test("a signed observation still works after cancellation/GC while an unproven missing nonce cannot be probed", async () => {
+  const f = await fixture();
+  try {
+    const receipt = mobileDeletionPrepareReceiptSchema.parse(
+      await (await f.call("prepare", f.input, { cookie: f.cookie, activity: "1" })).json(),
+    );
+    const input = { ...f.proof, ...receipt };
+    expect((await f.call("cancel", f.proof)).status).toBe(200);
+    expect(
+      mobileDeletionActivitySchema.parse(await (await f.call("activity", input)).json()),
+    ).toMatchObject({ status: "inactive", outcome: "unknown" });
+    expect((await f.call("status", f.proof)).status).toBe(401);
+    expect((await f.call("activity", { ...input, attemptId: crypto.randomUUID() })).status).toBe(
+      401,
+    );
+    expect((await f.call("activity", { ...input, activityProof: "0".repeat(64) })).status).toBe(
+      401,
+    );
+    expect(
+      f.database.sqlite
+        .query("SELECT count(*) n FROM app_metadata WHERE key LIKE 'native-reauth:v1:%'")
+        .get(),
+    ).toEqual({ n: 0 });
+  } finally {
+    f.database.close();
+  }
+});
+
+test("synthetic expired preparation can be retired over HTTP without extending cancel/receipt/auth TTLs", async () => {
+  const f = await fixture();
+  try {
+    const preparedAt = Date.now() - NATIVE_REAUTH_TTL_MS - 1000;
+    f.database.sqlite
+      .query("UPDATE session SET created_at=?,updated_at=? WHERE id=?")
+      .run(preparedAt - 1000, preparedAt - 1000, f.session.session.id);
+    const options = {
+      db: f.env.DB,
+      issuer: f.env.BETTER_AUTH_URL,
+      secret: f.env.BETTER_AUTH_SECRET,
+      now: () => preparedAt,
+    };
+    await createNativeReauthentication(options).prepareDeletion(f.input, {
+      userId: f.session.user.id,
+      sessionId: f.session.session.id,
+    });
+    const ownerTag = await deletionOwnerTag(options.secret, f.session.user.id),
+      activityProof = await createNativeDeletionActivityProof(options).sign({
+        attemptId: f.input.attemptId,
+        challenge: f.input.challenge,
+        ownerTag,
+        startedAt: preparedAt,
+      });
+    const input = { ...f.proof, ownerTag, startedAt: preparedAt, activityProof };
+    expect((await f.call("cancel", f.proof)).status).toBe(401);
+    const response = await f.call("activity", input);
+    expect(response.status).toBe(200);
+    expect(mobileDeletionActivitySchema.parse(await response.json())).toMatchObject({
+      status: "inactive",
+      outcome: "unknown",
+    });
+    expect((await f.call("status", f.proof)).status).toBe(401);
+    expect(
+      f.database.sqlite.query("SELECT id FROM user WHERE id=?").get(f.session.user.id),
+    ).not.toBeNull();
+  } finally {
+    f.database.close();
+  }
+});
+
+test("activity database failure is a safe unavailable error and never an inactive/cancelled/deleted result", async () => {
+  const f = await fixture();
+  try {
+    const receipt = mobileDeletionPrepareReceiptSchema.parse(
+      await (await f.call("prepare", f.input, { cookie: f.cookie, activity: "1" })).json(),
+    );
+    const prepare = f.env.DB.prepare;
+    f.env.DB.prepare = () => {
+      throw new Error("SYNTHETIC_PRIVATE_SQL_STACK");
+    };
+    try {
+      const response = await f.call("activity", { ...f.proof, ...receipt });
+      expect(response.status).toBe(503);
+      const body = await response.text();
+      expect(body).not.toContain("SYNTHETIC_PRIVATE_SQL_STACK");
+      expect(body).not.toContain(receipt.activityProof);
+      expect(body).not.toContain(receipt.ownerTag);
+      expect(body).not.toContain(verifier);
+    } finally {
+      f.env.DB.prepare = prepare;
+    }
+    expect(
+      f.database.sqlite
+        .query("SELECT count(*) n FROM app_metadata WHERE key LIKE 'native-reauth:v1:%'")
+        .get(),
+    ).toEqual({ n: 1 });
   } finally {
     f.database.close();
   }
